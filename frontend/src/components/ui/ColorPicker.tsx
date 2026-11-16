@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
+import { ChevronDownIcon } from '@heroicons/react/24/outline';
 
 interface ColorPickerProps {
   value: string | null;
@@ -55,14 +56,7 @@ export function ColorPicker({ value, onChange, label }: ColorPickerProps) {
           />
           <span className="text-sm text-gray-600 dark:text-gray-400">{selectedColor}</span>
         </div>
-        <svg
-          className={`w-5 h-5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
+        <ChevronDownIcon className={`w-5 h-5 text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
       </button>
 
       {isOpen && (

@@ -5,6 +5,8 @@
     "dividendsInterest": "Dividenden & Zinsen",
     "realizedGains": "Realisierte Gewinne",
     "ytd": "Seit Jahresbeginn",
+    "realizedKnownPart": "Bekannter Teil: {amount}",
+    "realizedUnknownReason": "Dieser Gewinn kann nicht berechnet werden: Die Position enthält Anteile, die ohne Kosten hinzugefügt wurden, daher sind die Kosten der verkauften Anteile unbekannt. Öffnen Sie die Transaktion, die sie hinzugefügt hat, und geben Sie ihren Preis ein.",
     "empty": "Keine Anlageerträge in diesem Jahr"
   },
   "register": {

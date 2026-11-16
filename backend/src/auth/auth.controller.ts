@@ -25,11 +25,16 @@ import {
 } from "@nestjs/swagger";
 import { Throttle } from "@nestjs/throttler";
 import { rateLimit } from "../common/throttle.util";
+import { clientIpOf } from "../common/client-ip.util";
 import { Response, Request as ExpressRequest } from "express";
 
 import { AuthService } from "./auth.service";
 import { TokenService } from "./token.service";
 import { OidcService } from "./oidc/oidc.service";
+import {
+  localAuthEnabled,
+  oidcPasswordLoginAllowed,
+} from "./oidc/oidc-password-login";
 import {
   isFreshAuthentication,
   isOidcReauthPurpose,
@@ -42,8 +47,11 @@ import { LoginDto } from "./dto/login.dto";
 import { ForgotPasswordDto } from "./dto/forgot-password.dto";
 import { ResetPasswordDto } from "./dto/reset-password.dto";
 import { VerifyEmailDto } from "./dto/verify-email.dto";
+import { ConfirmEmailChangeDto } from "./dto/confirm-email-change.dto";
 import { ResendVerificationDto } from "./dto/resend-verification.dto";
 import { VerifyTotpDto } from "./dto/verify-totp.dto";
+import { Disable2faDto } from "./dto/disable-2fa.dto";
+import { Reset2faDto } from "./dto/reset-2fa.dto";
 import { Setup2faDto } from "./dto/setup-2fa.dto";
 import { Setup2faInitDto } from "./dto/setup-2fa-init.dto";
 import {
@@ -65,6 +73,7 @@ import { DemoRestricted } from "../common/decorators/demo-restricted.decorator";
 import { DemoModeService } from "../common/demo-mode.service";
 import { generateCsrfToken, getCsrfCookieOptions } from "../common/csrf.util";
 import { encrypt, decrypt, derivePurposeKey } from "./crypto.util";
+import { LOGIN_DEVICE_MAX_AGE_MS } from "./login-device";
 import { withSystemContext } from "../common/db/with-context";
 import { tr } from "../i18n/translate";
 import { toDelegatedUserProfile, toUserProfile } from "../users/user-profile";
@@ -77,6 +86,7 @@ export class AuthController {
   private localAuthEnabled: boolean;
   private registrationEnabled: boolean;
   private force2fa: boolean;
+  private brandPanel: boolean;
   private useSecureCookies: boolean;
   private trustedDeviceCookieKey: string;
 
@@ -93,11 +103,7 @@ export class AuthController {
     private readonly dataSource: DataSource,
   ) {
     // Default to true if not explicitly set to 'false'
-    const localAuthSetting = this.configService.get<string>(
-      "LOCAL_AUTH_ENABLED",
-      "true",
-    );
-    this.localAuthEnabled = localAuthSetting.toLowerCase() !== "false";
+    this.localAuthEnabled = localAuthEnabled(this.configService);
     const registrationSetting = this.configService.get<string>(
       "REGISTRATION_ENABLED",
       "true",
@@ -108,6 +114,11 @@ export class AuthController {
       "false",
     );
     this.force2fa = force2faSetting.toLowerCase() === "true";
+    // Default to true if not explicitly set to 'false'
+    this.brandPanel =
+      this.configService
+        .get<string>("AUTH_BRAND_PANEL", "true")
+        .toLowerCase() !== "false";
     const disableHttpsHeaders =
       this.configService
         .get<string>("DISABLE_HTTPS_HEADERS", "false")
@@ -211,21 +222,48 @@ export class AuthController {
   private setAuthCookies(
     res: Response,
     accessToken: string,
-    refreshToken: string,
+    refreshToken: string | null,
     userId: string,
     rememberMe?: boolean,
   ) {
     res.cookie("auth_token", accessToken, this.getAccessCookieOptions());
-    res.cookie(
-      "refresh_token",
-      refreshToken,
-      this.getRefreshCookieOptions(rememberMe),
-    );
+    // `null` is a refresh answered inside the rotation grace (a second tab):
+    // the refresh cookie the first response set is the live one, keep it.
+    if (refreshToken !== null) {
+      res.cookie(
+        "refresh_token",
+        refreshToken,
+        this.getRefreshCookieOptions(rememberMe),
+      );
+    }
     res.cookie(
       "csrf_token",
       generateCsrfToken(userId, this.authService.getCsrfKey()),
       getCsrfCookieOptions(this.useSecureCookies),
     );
+  }
+
+  /**
+   * Mark this browser as known for the account (`./login-device`, #2181). The
+   * sign-in has already succeeded, so a failure here is logged, not thrown.
+   */
+  private async setLoginDeviceCookie(res: Response, userId: string) {
+    try {
+      const cookie = await this.authService.issueLoginDeviceCookie(userId);
+      if (!cookie) return;
+      res.cookie(cookie.name, cookie.value, {
+        httpOnly: true,
+        secure: this.useSecureCookies,
+        sameSite: "strict" as const,
+        maxAge: LOGIN_DEVICE_MAX_AGE_MS,
+        // Only the sign-in routes read it; no other request carries it.
+        path: "/api/v1/auth",
+      });
+    } catch (err) {
+      this.logger.warn(
+        `Could not issue the login device cookie for user ${userId}: ${(err as Error).message}`,
+      );
+    }
   }
 
   private clearAuthCookies(res: Response) {
@@ -256,7 +294,10 @@ export class AuthController {
   @ApiOperation({ summary: "Register a new user with local credentials" })
   @ApiResponse({ status: 403, description: "Local authentication is disabled" })
   @ApiResponse({ status: 429, description: "Too many requests" })
-  async register(@Body() registerDto: RegisterDto, @Res() res: Response) {
+  async register(
+    @Body() registerDto: RegisterDto,
+    @Res() res: Response,
+  ): Promise<void> {
     if (!this.localAuthEnabled) {
       throw new ForbiddenException(
         tr(
@@ -285,7 +326,11 @@ export class AuthController {
         result.user.firstName ?? "",
         result.verificationToken,
       );
-      return res.json({ verificationRequired: true });
+      // Not `return res.json(...)`: the value a @Res() handler returns still
+      // travels through the global ClassSerializerInterceptor, which would then
+      // walk the live response object. See the note on the login handler.
+      res.json({ verificationRequired: true });
+      return;
     }
 
     this.setAuthCookies(
@@ -294,6 +339,7 @@ export class AuthController {
       result.refreshToken!,
       result.user!.id,
     );
+    await this.setLoginDeviceCookie(res, result.user!.id);
     res.json({ user: result.user });
   }
 
@@ -349,7 +395,7 @@ export class AuthController {
     @Body() loginDto: LoginDto,
     @Request() req: ExpressRequest,
     @Res() res: Response,
-  ) {
+  ): Promise<void> {
     if (!this.localAuthEnabled) {
       throw new ForbiddenException(
         tr(
@@ -366,16 +412,27 @@ export class AuthController {
       loginDto,
       trustedDeviceRef,
       userAgent,
+      req.cookies,
     );
 
-    // If 2FA is required, return temp token without setting cookie
+    // If 2FA is required, return temp token without setting cookie.
+    //
+    // The response is sent and the handler returns nothing. Returning the value
+    // of `res.json(...)` -- the Express Response itself -- hands the live
+    // response to the global ClassSerializerInterceptor, which walks the object
+    // graph (`res` -> `socket` -> `_events`) and invokes the internal HTTP
+    // listeners it finds there, clearing Node's socket bookkeeping and killing
+    // the process with ERR_INTERNAL_ASSERTION in `detachSocket` after the reply
+    // is already on the wire. `res-handler-return.guard.spec.ts` holds this.
     if (result.requires2FA) {
-      return res.json({ requires2FA: true, tempToken: result.tempToken });
+      res.json({ requires2FA: true, tempToken: result.tempToken });
+      return;
     }
 
     // Email not verified yet: no cookies, tell the client to prompt a resend.
     if (result.emailNotVerified) {
-      return res.json({ emailNotVerified: true });
+      res.json({ emailNotVerified: true });
+      return;
     }
 
     this.setAuthCookies(
@@ -385,6 +442,7 @@ export class AuthController {
       result.user!.id,
       result.rememberMe,
     );
+    await this.setLoginDeviceCookie(res, result.user!.id);
     res.json({ user: result.user });
   }
 
@@ -609,6 +667,9 @@ export class AuthController {
       );
 
       this.setAuthCookies(res, accessToken, refreshToken, result.user.id);
+      // An SSO account allowed a password fallback (OIDC_ALLOW_PASSWORD_LOGIN)
+      // becomes known here too; issueLoginDeviceCookie refuses any other.
+      await this.setLoginDeviceCookie(res, result.user.id);
 
       // A re-authentication round trip ends here too: the code exchange above
       // verified state, nonce, issuer, audience and signature, and the account
@@ -677,6 +738,31 @@ export class AuthController {
         "OIDC callback error",
         error instanceof Error ? error.stack : undefined,
       );
+      // DIAGNOSTIC: openid-client wraps the failing back-channel HTTP response
+      // in `error.cause` (a fetch Response). The generic message ("unexpected
+      // HTTP response status code") hides the real status/body from the IdP
+      // token endpoint -- surface them so 5xx/3xx/HTML answers are diagnosable.
+      // `globalThis.` because `Response` here is express's type-only import;
+      // a bare `Response` only reaches the fetch class when the compiler can
+      // see that the import has no value, which per-file transpilation cannot.
+      const cause = (error as { cause?: unknown })?.cause;
+      if (cause instanceof globalThis.Response) {
+        let body: string;
+        try {
+          body = (await cause.clone().text()).slice(0, 2000);
+        } catch {
+          body = "<body already consumed>";
+        }
+        this.logger.error(
+          `OIDC back-channel response: ${cause.status} ${cause.statusText} ` +
+            `url=${cause.url || "?"} ` +
+            `content-type=${cause.headers.get("content-type") ?? "-"} ` +
+            `location=${cause.headers.get("location") ?? "-"} ` +
+            `body=${body}`,
+        );
+      } else if (cause) {
+        this.logger.error(`OIDC error cause: ${String(cause)}`);
+      }
       // Return generic error message to prevent information disclosure
       res.redirect(`${frontendUrl}/auth/callback?error=authentication_failed`);
     }
@@ -701,12 +787,14 @@ export class AuthController {
     return {
       local: this.localAuthEnabled,
       oidc: this.oidcService.enabled,
+      oidcPasswordLogin: oidcPasswordLoginAllowed(this.configService),
       registration: this.demoModeService.isDemo
         ? false
         : this.registrationEnabled,
       smtp: this.emailService.getStatus().configured,
       force2fa: this.demoModeService.isDemo ? false : this.force2fa,
       demo: this.demoModeService.isDemo,
+      brandPanel: this.brandPanel,
     };
   }
 
@@ -716,12 +804,19 @@ export class AuthController {
   @ApiBearerAuth()
   @ApiOperation({ summary: "Refresh CSRF token cookie" })
   async csrfRefresh(@Request() req, @Res() res: Response) {
+    const csrfToken = generateCsrfToken(
+      req.user.id,
+      this.authService.getCsrfKey(),
+    );
+    // Workers without Cookie Store cannot read Set-Cookie. Return the same
+    // session-bound token as JSON, protected by JWT authentication and CORS.
+    res.setHeader("Cache-Control", "no-store");
     res.cookie(
       "csrf_token",
-      generateCsrfToken(req.user.id, this.authService.getCsrfKey()),
+      csrfToken,
       getCsrfCookieOptions(this.useSecureCookies),
     );
-    res.json({ message: "CSRF token refreshed" });
+    res.json({ message: "CSRF token refreshed", csrfToken });
   }
 
   @Get("profile")
@@ -860,7 +955,7 @@ export class AuthController {
     }
 
     // M7: Per-email rate limiting (max 3 per email per hour)
-    if (!this.authService.checkForgotPasswordEmailLimit(dto.email)) {
+    if (!(await this.authService.checkForgotPasswordEmailLimit(dto.email))) {
       // SECURITY: Still return success to prevent account enumeration
       return {
         message:
@@ -935,6 +1030,20 @@ export class AuthController {
     return { message: "Email verified successfully. You can now log in." };
   }
 
+  @Post("confirm-email-change")
+  @AllowDelegate()
+  @SkipCsrf()
+  @DemoRestricted()
+  @Throttle({ default: { ttl: 900000, limit: rateLimit(5) } })
+  @ApiOperation({ summary: "Confirm a requested account email change" })
+  async confirmEmailChange(@Body() dto: ConfirmEmailChangeDto) {
+    await this.authService.confirmEmailChange(dto.token);
+    return {
+      message:
+        "Email address changed. Sign in again with your new email address.",
+    };
+  }
+
   @Post("resend-verification")
   @AllowDelegate()
   @SkipCsrf()
@@ -960,7 +1069,7 @@ export class AuthController {
     };
 
     // Per-email rate limiting (max 3 per email per hour)
-    if (!this.authService.checkVerificationEmailLimit(dto.email)) {
+    if (!(await this.authService.checkVerificationEmailLimit(dto.email))) {
       return genericResponse;
     }
 
@@ -992,8 +1101,10 @@ export class AuthController {
     @Res() res: Response,
   ) {
     const userAgent = req.headers["user-agent"] || "Unknown Device";
-    const rawIp = req.ip || req.socket?.remoteAddress;
-    const ipAddress = rawIp?.replace(/^::ffff:/, "");
+    // One reading of the client address for the whole deployment
+    // (`clientIpOf`): a second copy diverging on the `::ffff:` prefix would
+    // store the same machine under two spellings in two tables.
+    const ipAddress = clientIpOf(req) ?? undefined;
     const result = await this.authService.verify2FA(
       dto.tempToken,
       dto.code,
@@ -1009,6 +1120,7 @@ export class AuthController {
       result.user.id,
       result.rememberMe,
     );
+    await this.setLoginDeviceCookie(res, result.user.id);
 
     if (result.trustedDeviceRef) {
       // The trusted-device reference is a 64-byte random opaque identifier
@@ -1029,7 +1141,17 @@ export class AuthController {
       });
     }
 
-    res.json({ user: result.user });
+    // `usedBackupCode` and `backupCodesRemaining` ride along only on a sign-in
+    // by backup code; a TOTP sign-in's reply is unchanged.
+    res.json(
+      result.usedBackupCode
+        ? {
+            user: result.user,
+            usedBackupCode: true,
+            backupCodesRemaining: result.backupCodesRemaining,
+          }
+        : { user: result.user },
+    );
   }
 
   @Post("2fa/setup")
@@ -1060,9 +1182,42 @@ export class AuthController {
   @DemoRestricted()
   @Throttle({ default: { ttl: 900000, limit: rateLimit(5) } })
   @ApiBearerAuth()
-  @ApiOperation({ summary: "Disable 2FA with verification code" })
-  async disable2FA(@Request() req, @Body() dto: Setup2faDto) {
+  @ApiOperation({
+    summary: "Disable 2FA with an authenticator code or a backup code",
+  })
+  async disable2FA(@Request() req, @Body() dto: Disable2faDto) {
     return this.authService.disable2FA(req.user.realUserId, dto.code);
+  }
+
+  @Post("2fa/reset")
+  @UseGuards(AuthGuard("jwt"))
+  @AllowDelegate()
+  @DemoRestricted()
+  @Throttle({ default: { ttl: 900000, limit: rateLimit(5) } })
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary:
+      "Reset (replace) 2FA with the current password and an authenticator " +
+      "or backup code; allowed under FORCE_2FA",
+  })
+  async reset2FA(
+    @Request() req: ExpressRequest & { user: any },
+    @Body() dto: Reset2faDto,
+    @Res() res: Response,
+  ): Promise<void> {
+    // realUserId, as on every 2FA route: a delegate acting as an owner resets
+    // their OWN second factor, never the owner's. The session making the
+    // request is kept so the user can enroll again at once; every other
+    // session of theirs is revoked.
+    const result = await this.authService.reset2FA(
+      req.user.realUserId,
+      dto.currentPassword,
+      dto.code,
+      req.cookies?.["refresh_token"],
+    );
+    // The reset deleted every trusted device, this browser's included.
+    res.clearCookie("trusted_device");
+    res.json(result);
   }
 
   @Get("2fa/status")

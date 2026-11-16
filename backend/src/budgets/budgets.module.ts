@@ -4,7 +4,9 @@ import { Budget } from "./entities/budget.entity";
 import { BudgetCategory } from "./entities/budget-category.entity";
 import { BudgetPeriod } from "./entities/budget-period.entity";
 import { BudgetPeriodCategory } from "./entities/budget-period-category.entity";
-import { BudgetAlert } from "./entities/budget-alert.entity";
+import { BudgetBucket } from "./entities/budget-bucket.entity";
+import { BudgetPeriodBucket } from "./entities/budget-period-bucket.entity";
+import { Notification } from "../notification-center/entities/notification.entity";
 import { Transaction } from "../transactions/entities/transaction.entity";
 import { TransactionSplit } from "../transactions/entities/transaction-split.entity";
 import { Category } from "../categories/entities/category.entity";
@@ -18,6 +20,8 @@ import { BudgetPeriodService } from "./budget-period.service";
 import { BudgetPeriodCronService } from "./budget-period-cron.service";
 import { BudgetGeneratorService } from "./budget-generator.service";
 import { BudgetAlertService } from "./budget-alert.service";
+import { BudgetBucketsService } from "./budget-buckets.service";
+import { BudgetBucketReportsService } from "./budget-bucket-reports.service";
 import { BudgetReportsService } from "./budget-reports.service";
 import { BudgetTrendReportsService } from "./budget-trend-reports.service";
 import { BudgetHealthReportsService } from "./budget-health-reports.service";
@@ -27,6 +31,7 @@ import { NotificationsModule } from "../notifications/notifications.module";
 import { ActionHistoryModule } from "../action-history/action-history.module";
 import { ScheduledTransactionsModule } from "../scheduled-transactions/scheduled-transactions.module";
 import { CurrenciesModule } from "../currencies/currencies.module";
+import { NotificationCenterModule } from "../notification-center/notification-center.module";
 
 @Module({
   imports: [
@@ -35,7 +40,9 @@ import { CurrenciesModule } from "../currencies/currencies.module";
       BudgetCategory,
       BudgetPeriod,
       BudgetPeriodCategory,
-      BudgetAlert,
+      BudgetBucket,
+      BudgetPeriodBucket,
+      Notification,
       Transaction,
       TransactionSplit,
       Category,
@@ -53,6 +60,10 @@ import { CurrenciesModule } from "../currencies/currencies.module";
     // For ExchangeRateService: an occurrence's amount is in the occurrence's own
     // currency, which the budget converts into its own before totalling.
     CurrenciesModule,
+    // For NotificationService: every notification a budget produces goes
+    // through the one write door. Bare, not deferred: the notification centre
+    // depends on nothing, so this edge lies on no cycle.
+    NotificationCenterModule,
   ],
   providers: [
     BudgetsService,
@@ -64,6 +75,8 @@ import { CurrenciesModule } from "../currencies/currencies.module";
     BudgetHealthReportsService,
     BudgetActivityReportsService,
     BudgetReportsService,
+    BudgetBucketsService,
+    BudgetBucketReportsService,
   ],
   controllers: [BudgetsController],
   exports: [
@@ -72,6 +85,7 @@ import { CurrenciesModule } from "../currencies/currencies.module";
     BudgetGeneratorService,
     BudgetReportsService,
     BudgetAlertService,
+    BudgetBucketsService,
   ],
 })
 export class BudgetsModule {}

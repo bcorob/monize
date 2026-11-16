@@ -56,8 +56,23 @@ export async function createBackupEncryptStream(
   const salt = crypto.randomBytes(SALT_LENGTH);
   const noncePrefix = crypto.randomBytes(NONCE_PREFIX_LENGTH);
   const key = await deriveKey(password, salt);
-  const header = framedHeader(salt, noncePrefix);
+  return createFramedEncryptStream(
+    key,
+    framedHeader(salt, noncePrefix),
+    noncePrefix,
+  );
+}
 
+/**
+ * The frame sealer both framed versions share: `header` goes out first and is
+ * the AAD of every frame, and `key` seals them. v2 derives `key` from the
+ * password; v3 (`backup-key-wrap.ts`) derives it from a wrapped data key.
+ */
+export function createFramedEncryptStream(
+  key: Buffer,
+  header: Buffer,
+  noncePrefix: Buffer,
+): Transform {
   // Pending plaintext, at most one frame's worth. A local buffer that never
   // escapes this closure: the whole point of the format is that nothing else
   // accumulates.
@@ -141,12 +156,31 @@ export async function decryptFramedBackup(
   const salt = envelope.subarray(offset, offset + SALT_LENGTH);
   offset += SALT_LENGTH;
   const noncePrefix = envelope.subarray(offset, offset + NONCE_PREFIX_LENGTH);
-  offset += NONCE_PREFIX_LENGTH;
   const header = envelope.subarray(0, FRAMED_HEADER_LENGTH);
 
   // Frame boundaries are read before any key is derived: a malformed envelope
   // must not cost 100ms of scrypt to reject.
-  const frames: Array<{ start: number; end: number }> = [];
+  const frames = readFrameBoundaries(envelope, FRAMED_HEADER_LENGTH);
+  const key = await deriveKey(password, salt);
+  return openFrames(envelope, frames, key, header, noncePrefix);
+}
+
+export interface FrameBoundary {
+  start: number;
+  end: number;
+}
+
+/**
+ * Where each frame of a framed envelope starts and ends, refusing a short frame,
+ * a declared length that does not fit, or an envelope with no frames at all.
+ * Costs no key derivation, so every framed reader calls it first.
+ */
+export function readFrameBoundaries(
+  envelope: Buffer,
+  headerLength: number,
+): FrameBoundary[] {
+  let offset = headerLength;
+  const frames: FrameBoundary[] = [];
   while (offset < envelope.length) {
     if (offset + FRAME_LENGTH_BYTES > envelope.length) {
       throw new BackupDecryptionError(
@@ -173,8 +207,17 @@ export async function decryptFramedBackup(
       "Failed to decrypt backup: the file carries no frames",
     );
   }
+  return frames;
+}
 
-  const key = await deriveKey(password, salt);
+/** Opens every frame under `key`, the last one as final. */
+export function openFrames(
+  envelope: Buffer,
+  frames: FrameBoundary[],
+  key: Buffer,
+  header: Buffer,
+  noncePrefix: Buffer,
+): Buffer {
   const plaintext: Buffer[] = [];
   for (const [index, frame] of frames.entries()) {
     const final = index === frames.length - 1;

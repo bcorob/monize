@@ -34,6 +34,12 @@
     "dismiss": "Fermer",
     "dismissAriaLabel": "Fermer la notification de mise à jour"
   },
+  "jwtSecretBanner": {
+    "label": "JWT_SECRET est faible.",
+    "detail": "C'est une valeur d'exemple publiée ou trop prévisible : des jetons de session peuvent donc être falsifiés. Générez-en une robuste avec <code>openssl rand -base64 32</code>. La modifier rend inutilisables les codes des applications d'authentification et oublie les appareils de confiance : les utilisateurs se connectent avec un code de secours et reconfigurent la 2FA, et vous réinitialisez la 2FA dans <users>Gestion des utilisateurs</users> pour ceux qui n'en ont pas. Consultez d'abord <code>docs/backend/modules-and-runtime.md</code> (Changing JWT_SECRET).",
+    "dismiss": "Fermer",
+    "dismissAriaLabel": "Fermer l'avertissement JWT_SECRET"
+  },
   "actionHistory": {
     "title": "Historique des actions",
     "buttonAriaLabel": "Historique des actions",
@@ -58,6 +64,7 @@
       "tag": "Étiquette",
       "account": "Compte",
       "scheduled_transaction": "Planifiée",
+      "scheduled_posting": "Planifiée",
       "security": "Titre",
       "budget": "Budget",
       "custom_report": "Rapport"
@@ -79,7 +86,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "Réinvestissement de plus-value à long terme",
       "CAPITAL_GAIN_SHORT": "Plus-value à court terme",
       "CAPITAL_GAIN_LONG": "Plus-value à long terme",
-      "REDEEM": "Remboursement CD/obligation"
+      "REDEEM": "Remboursement CD/obligation",
+      "RETURN_OF_CAPITAL": "Remboursement de capital"
     },
     "descriptions": {
       "createdAccount": "Compte \"{name}\" créé",
@@ -99,6 +107,7 @@
       "deletedInvestmentReport": "Rapport d'investissement \"{name}\" supprimé",
       "createdPayee": "Bénéficiaire \"{name}\" créé",
       "updatedPayee": "Bénéficiaire \"{name}\" mis à jour",
+      "lookedUpPayeeContact": "Coordonnées du bénéficiaire « {name} » recherchées",
       "deletedPayee": "Bénéficiaire \"{name}\" supprimé",
       "createdReport": "Rapport \"{name}\" créé",
       "updatedReport": "Rapport \"{name}\" mis à jour",
@@ -106,6 +115,7 @@
       "createdScheduledTransaction": "Transaction planifiée \"{name}\" créée",
       "updatedScheduledTransaction": "Transaction planifiée \"{name}\" mise à jour",
       "deletedScheduledTransaction": "Transaction planifiée \"{name}\" supprimée",
+      "postedScheduledTransaction": "Transaction planifiée \"{name}\" comptabilisée",
       "createdSecurity": "Titre \"{symbol}\" créé",
       "updatedSecurity": "Titre \"{symbol}\" mis à jour",
       "deletedSecurity": "Titre \"{symbol}\" supprimé",
@@ -115,26 +125,23 @@
       "createdTransaction": "Transaction {payee} {amount} créée",
       "updatedTransaction": "Transaction {payee} {amount} mise à jour",
       "deletedTransaction": "Transaction {payee} {amount} supprimée",
+      "convertedToTransfer": "Transaction {payee} {amount} convertie en virement",
+      "convertedToTransaction": "Virement {payee} {amount} converti en transaction",
       "bulkUpdatedTransactions": "Mise à jour groupée de {count, plural, one {# transaction} other {# transactions}}",
       "createdTransfer": "Virement {amount} de {from} vers {to} créé",
       "createdInvestmentTransaction": "Transaction {action} créée",
       "updatedInvestmentTransaction": "Transaction {action} mise à jour",
       "deletedInvestmentTransaction": "Transaction {action} supprimée",
       "transferredSecurity": "Titre transféré entre comptes",
-      "updatedSecurityTransfer": "Transfert de titres mis à jour"
-    },
-    "timeAgo": {
-      "justNow": "à l'instant",
-      "minutes": "il y a {count} min",
-      "hours": "il y a {count} h",
-      "days": "il y a {count} j"
+      "updatedSecurityTransfer": "Transfert de titres mis à jour",
+      "ranTransactionRule": "Règle « {name} » exécutée sur {count, plural, one {# transaction} other {# transactions}}"
     },
     "undonePrefix": "Annulé : {description}",
     "redonePrefix": "Rétabli : {description}"
   },
   "pageHeader": {
-    "helpAriaLabel": "Ouvrir le wiki Monize pour obtenir de l'aide sur cette section",
-    "helpTooltip": "Ouvrir le wiki Monize pour obtenir de l'aide sur cette section"
+    "helpAriaLabel": "Aide pour cette page",
+    "helpTooltip": "Aide pour cette page"
   },
   "bootSplash": {
     "loading": "Chargement de Monize",
@@ -145,5 +152,17 @@
     "title": "Connexion impossible",
     "message": "Monize n'a pas pu joindre le serveur. Vérifiez votre connexion et réessayez.",
     "retry": "Réessayer"
+  },
+  "pushBanner": {
+    "enableTitle": "Activer les notifications ?",
+    "enableBody": "Monize peut vous rappeler vos factures et vos limites de budget sur cet appareil, même quand l'application est fermée. Votre navigateur vous demandera l'autorisation.",
+    "enableButton": "Activer",
+    "enabling": "Activation…",
+    "installIosTitle": "Ajoutez d'abord Monize à l'écran d'accueil.",
+    "installIosBody": "Sur iPhone et iPad, les notifications ne fonctionnent que depuis l'application installée. Touchez Partager, puis Sur l'écran d'accueil, et ouvrez Monize depuis là.",
+    "blockedTitle": "Les notifications sont bloquées pour Monize.",
+    "blockedBody": "Autorisez-les dans les paramètres de site de votre navigateur pour cette page. Monize ne peut pas redemander de lui-même.",
+    "blockedIosBody": "Ouvrez Réglages iOS, puis Notifications, puis Monize, et autorisez-les là. Si Monize n'y figure pas, retirez-le de l'écran d'accueil et ajoutez-le à nouveau.",
+    "dismiss": "Pas maintenant"
   }
 }

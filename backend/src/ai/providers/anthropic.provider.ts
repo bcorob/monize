@@ -10,27 +10,51 @@ import {
   AiToolStreamChunk,
   AiMessage,
   AiContentBlock,
+  AiWebSearchOptions,
+  AiWebSearchResponse,
   ModelVerificationResult,
 } from "./ai-provider.interface";
+import { anthropicTemperatureField } from "./anthropic-sampling.util";
 import { contentToPlainText, isContentBlocks } from "./content-blocks.util";
-import { longRunningFetch } from "./long-running-fetch";
+import { providerFetch } from "./long-running-fetch";
+import { unverifiedModelReason } from "./model-verification.util";
 import { toolsField } from "./tools-field.util";
+import {
+  anthropicWebSearchTool,
+  AnthropicWebSearchVariant,
+  isUnsupportedWebSearchVariantError,
+  otherAnthropicWebSearchVariant,
+  preferredAnthropicWebSearchVariant,
+  serverToolsField,
+} from "./web-search-tool.util";
+
+/**
+ * How many times a `pause_turn` (the server-side search loop yielding control
+ * before it is done) is resumed before the turn is treated as unanswered.
+ */
+const MAX_WEB_SEARCH_CONTINUATIONS = 1;
 
 export class AnthropicProvider implements AiProvider {
   readonly name = "anthropic";
   readonly supportsStreaming = true;
   readonly supportsToolUse = true;
+  readonly supportsWebSearch = true;
 
   private readonly logger = new Logger(AnthropicProvider.name);
   private readonly client: Anthropic;
   private readonly modelId: string;
 
-  constructor(apiKey: string, model?: string) {
+  constructor(
+    apiKey: string,
+    model?: string,
+    /** The egress-policy fetch; see `OpenAiProvider`'s constructor. */
+    fetchImpl: typeof fetch = providerFetch("public-only"),
+  ) {
     this.client = new Anthropic({
       apiKey,
       // Inject our long-running fetch wrapper so SDK calls inherit the
       // disabled bodyTimeout/headersTimeout. See long-running-fetch.ts.
-      fetch: longRunningFetch,
+      fetch: fetchImpl,
     });
     this.modelId = model || "claude-sonnet-4-20250514";
   }
@@ -168,9 +192,7 @@ export class AnthropicProvider implements AiProvider {
       max_tokens: request.maxTokens || 1024,
       system: this.toCachedSystem(request.systemPrompt),
       messages: this.toSimpleMessages(request.messages),
-      ...(request.temperature !== undefined && {
-        temperature: request.temperature,
-      }),
+      ...anthropicTemperatureField(this.modelId, request.temperature),
     });
 
     const textContent = response.content
@@ -189,6 +211,89 @@ export class AnthropicProvider implements AiProvider {
     };
   }
 
+  /**
+   * One tool-free completion with Anthropic's server-side web search enabled.
+   * The search runs on Anthropic's side: results arrive as
+   * `web_search_tool_result` blocks in the same response, and `usage`
+   * reports how many searches ran. Two things are handled here rather than
+   * left to the caller:
+   *
+   * - The tool type depends on the model, and the model is user-configured.
+   *   The preferred variant is guessed from the id; if the API rejects it,
+   *   the request is retried once with the other variant.
+   * - `stop_reason: "pause_turn"` means the server paused a long search loop.
+   *   The turn is resumed by sending the response content back as the
+   *   assistant turn, at most `MAX_WEB_SEARCH_CONTINUATIONS` times.
+   *
+   * `searched` is true only when at least one search *returned results*: an
+   * error result block carries an object (`{ error_code }`) instead of the
+   * result array, and a request that never searched has no such block.
+   */
+  async completeWithWebSearch(
+    request: AiCompletionRequest,
+    search: AiWebSearchOptions,
+  ): Promise<AiWebSearchResponse> {
+    const messages = this.toSimpleMessages(request.messages);
+    let variant: AnthropicWebSearchVariant = preferredAnthropicWebSearchVariant(
+      this.modelId,
+    );
+
+    const send = (turns: Anthropic.MessageParam[]) =>
+      this.client.messages.create({
+        model: this.modelId,
+        max_tokens: request.maxTokens || 1024,
+        system: this.toCachedSystem(request.systemPrompt),
+        messages: turns,
+        ...serverToolsField(anthropicWebSearchTool(variant, search)),
+        ...anthropicTemperatureField(this.modelId, request.temperature),
+      });
+
+    let response: Anthropic.Message;
+    try {
+      response = await send(messages);
+    } catch (error) {
+      if (!isUnsupportedWebSearchVariantError(error)) {
+        throw error;
+      }
+      variant = otherAnthropicWebSearchVariant(variant);
+      this.logger.log(
+        `web search tool variant rejected for model=${this.modelId}; retrying with ${variant}`,
+      );
+      response = await send(messages);
+    }
+
+    let searchCount = response.usage.server_tool_use?.web_search_requests ?? 0;
+    let searched = hasWebSearchResults(response.content);
+    let inputTokens = response.usage.input_tokens;
+    let outputTokens = response.usage.output_tokens;
+    let textContent = textOf(response.content);
+    let continuations = 0;
+    let turns = messages;
+
+    while (
+      response.stop_reason === "pause_turn" &&
+      continuations < MAX_WEB_SEARCH_CONTINUATIONS
+    ) {
+      continuations += 1;
+      turns = [...turns, { role: "assistant", content: response.content }];
+      response = await send(turns);
+      searchCount += response.usage.server_tool_use?.web_search_requests ?? 0;
+      searched = searched || hasWebSearchResults(response.content);
+      inputTokens += response.usage.input_tokens;
+      outputTokens += response.usage.output_tokens;
+      textContent = textOf(response.content);
+    }
+
+    return {
+      content: textContent,
+      usage: { inputTokens, outputTokens },
+      model: response.model,
+      provider: this.name,
+      searched: searched && searchCount > 0,
+      searchCount,
+    };
+  }
+
   async *stream(request: AiCompletionRequest): AsyncIterable<AiStreamChunk> {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 120000);
@@ -200,9 +305,7 @@ export class AnthropicProvider implements AiProvider {
           max_tokens: request.maxTokens || 1024,
           system: this.toCachedSystem(request.systemPrompt),
           messages: this.toSimpleMessages(request.messages),
-          ...(request.temperature !== undefined && {
-            temperature: request.temperature,
-          }),
+          ...anthropicTemperatureField(this.modelId, request.temperature),
         },
         { signal: controller.signal },
       );
@@ -236,9 +339,7 @@ export class AnthropicProvider implements AiProvider {
         description: tool.description,
         input_schema: tool.inputSchema as Anthropic.Tool.InputSchema,
       })),
-      ...(request.temperature !== undefined && {
-        temperature: request.temperature,
-      }),
+      ...anthropicTemperatureField(this.modelId, request.temperature),
     });
 
     const textContent = response.content
@@ -298,9 +399,7 @@ export class AnthropicProvider implements AiProvider {
           description: tool.description,
           input_schema: tool.inputSchema as Anthropic.Tool.InputSchema,
         })),
-        ...(request.temperature !== undefined && {
-          temperature: request.temperature,
-        }),
+        ...anthropicTemperatureField(this.modelId, request.temperature),
       });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -419,7 +518,6 @@ export class AnthropicProvider implements AiProvider {
       return { ok: true, model: this.modelId };
     } catch (error) {
       const status = (error as { status?: number })?.status;
-      const raw = error instanceof Error ? error.message : String(error);
       if (status === 404) {
         return {
           ok: false,
@@ -437,10 +535,28 @@ export class AnthropicProvider implements AiProvider {
       return {
         ok: false,
         model: this.modelId,
-        reason: `Could not verify model: ${raw}`,
+        reason: unverifiedModelReason(this.name, this.modelId, error, status),
       };
     } finally {
       clearTimeout(timeout);
     }
   }
+}
+
+function textOf(content: Anthropic.ContentBlock[]): string {
+  return content
+    .filter((block) => block.type === "text")
+    .map((block) => ("text" in block ? block.text : ""))
+    .join("");
+}
+
+/**
+ * A search that returned results carries an array; a failed search carries
+ * an error object. Only the array form counts as having searched.
+ */
+function hasWebSearchResults(content: Anthropic.ContentBlock[]): boolean {
+  return content.some(
+    (block) =>
+      block.type === "web_search_tool_result" && Array.isArray(block.content),
+  );
 }

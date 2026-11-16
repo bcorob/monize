@@ -60,6 +60,44 @@ export class OidcService implements OnModuleInit {
         `Discovered OIDC issuer: ${this.config.serverMetadata().issuer}`,
       );
 
+      // DIAGNOSTIC: with OIDC_DEBUG=true, log every back-channel HTTP call the
+      // library makes (discovery, token exchange, userinfo) with its real
+      // status/body. This is the "debug log" toggle for 503/non-conform token
+      // responses that never reach the app-level error handler with detail.
+      // Leave it OFF in normal operation -- it logs response bodies (tokens).
+      if (this.configService.get<string>("OIDC_DEBUG") === "true") {
+        this.config[client.customFetch] = async (url, options) => {
+          const started = Date.now();
+          const method =
+            (options as { method?: string } | undefined)?.method ?? "GET";
+          try {
+            const res = await fetch(url, options as RequestInit);
+            let body = "";
+            try {
+              body = (await res.clone().text()).slice(0, 2000);
+            } catch {
+              body = "<unreadable>";
+            }
+            this.logger.warn(
+              `[OIDC back-channel] ${method} ${url} -> ${res.status} ` +
+                `${res.statusText} (${Date.now() - started}ms) ` +
+                `content-type=${res.headers.get("content-type") ?? "-"} ` +
+                `location=${res.headers.get("location") ?? "-"} body=${body}`,
+            );
+            return res;
+          } catch (err) {
+            this.logger.error(
+              `[OIDC back-channel] ${method} ${url} -> transport error ` +
+                `after ${Date.now() - started}ms: ${(err as Error).message}`,
+            );
+            throw err;
+          }
+        };
+        this.logger.warn(
+          "OIDC_DEBUG enabled: back-channel requests will be logged (incl. token bodies)",
+        );
+      }
+
       this._enabled = true;
       this.logger.log("OIDC initialized successfully");
       return true;

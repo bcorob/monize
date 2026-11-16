@@ -4,19 +4,29 @@
     "subtitle": "KI-gestützte Analyse Ihrer Ausgabenmuster und Anomalien"
   },
   "list": {
-    "lastUpdated": "Zuletzt aktualisiert: {date} {time}",
     "refreshButton": "Insights aktualisieren",
-    "generating": "Wird generiert...",
+    "refreshAge": "({time})",
+    "summary": {
+      "active": "Aktive Insights",
+      "alerts": "Alarme",
+      "warnings": "Warnungen"
+    },
     "allTypes": "Alle Typen",
-    "allSeverities": "Alle Schweregrade",
+    "typeFilterLabel": "Typ",
+    "severityFilterLabel": "Schweregrad",
+    "severityFilter": {
+      "all": "Alle ({count})",
+      "alert": "Alarme ({count})",
+      "warning": "Warnungen ({count})",
+      "info": "Info ({count})"
+    },
     "showDismissed": "Ausgeblendete anzeigen",
     "emptyNoInsights": "Noch keine Insights generiert. Klicken Sie auf \"Insights aktualisieren\", um Ihre Ausgabenmuster zu analysieren.",
     "emptyFiltered": "Keine Insights entsprechen Ihren aktuellen Filtern.",
     "generateButton": "Insights generieren",
-    "alertCount": "{count, plural, one {# Alarm} other {# Alarme}}",
-    "warningCount": "{count, plural, one {# Warnung} other {# Warnungen}}",
     "errorLoadFailed": "Insights konnten nicht geladen werden. Bitte versuchen Sie es erneut.",
     "errorGenerateFailed": "Insights konnten nicht generiert werden. Stellen Sie sicher, dass ein KI-Anbieter konfiguriert ist.",
+    "errorDismissFailed": "Der Insight konnte nicht ausgeblendet werden. Bitte versuchen Sie es erneut.",
     "errorTimeout": "Die Generierung von Insights dauert länger als erwartet. Bitte warten Sie oder laden Sie die Seite neu."
   },
   "card": {

@@ -12,6 +12,7 @@ import { SecurityPrice, CreateSecurityPriceData } from '@/types/investment';
 import { useFormSubmitRef } from '@/hooks/useFormSubmitRef';
 import { useFormDirtyNotify } from '@/hooks/useFormDirtyNotify';
 import { FormActions } from '@/components/ui/FormActions';
+import { BondUnitHint } from '@/components/investments/BondUnitHint';
 
 const buildPriceSchema = (t: (key: string) => string) => z.object({
   priceDate: z.string().min(1, t('priceValidation.dateRequired')),
@@ -32,9 +33,11 @@ interface SecurityPriceFormProps {
   onCancel: () => void;
   onDirtyChange?: (isDirty: boolean) => void;
   submitRef?: MutableRefObject<(() => void) | null>;
+  /** The security's linked bond program: the form then says what a price of it is. */
+  bondProgramId?: string | null;
 }
 
-export function SecurityPriceForm({ price, onSubmit, onCancel, onDirtyChange, submitRef }: SecurityPriceFormProps) {
+export function SecurityPriceForm({ price, onSubmit, onCancel, onDirtyChange, submitRef, bondProgramId }: SecurityPriceFormProps) {
   const t = useTranslations('securities');
   const {
     register,
@@ -105,6 +108,8 @@ export function SecurityPriceForm({ price, onSubmit, onCancel, onDirtyChange, su
         )}
       />
 
+      <BondUnitHint programId={bondProgramId} showUnit={false} />
+
       <div className="grid grid-cols-2 gap-3">
         <Controller
           name="openPrice"
@@ -115,7 +120,6 @@ export function SecurityPriceForm({ price, onSubmit, onCancel, onDirtyChange, su
               decimalPlaces={6}
               min={0}
               error={errors.openPrice?.message}
-              placeholder={t('priceForm.optionalPlaceholder')}
               value={field.value}
               onChange={field.onChange}
               name={field.name}
@@ -133,7 +137,6 @@ export function SecurityPriceForm({ price, onSubmit, onCancel, onDirtyChange, su
               decimalPlaces={6}
               min={0}
               error={errors.highPrice?.message}
-              placeholder={t('priceForm.optionalPlaceholder')}
               value={field.value}
               onChange={field.onChange}
               name={field.name}
@@ -151,7 +154,6 @@ export function SecurityPriceForm({ price, onSubmit, onCancel, onDirtyChange, su
               decimalPlaces={6}
               min={0}
               error={errors.lowPrice?.message}
-              placeholder={t('priceForm.optionalPlaceholder')}
               value={field.value}
               onChange={field.onChange}
               name={field.name}
@@ -169,7 +171,6 @@ export function SecurityPriceForm({ price, onSubmit, onCancel, onDirtyChange, su
               decimalPlaces={0}
               min={0}
               error={errors.volume?.message}
-              placeholder={t('priceForm.optionalPlaceholder')}
               value={field.value}
               onChange={field.onChange}
               name={field.name}

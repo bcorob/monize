@@ -106,8 +106,12 @@ describe('AutoMergePayeesDialog', () => {
 
   it('renders the title, description and knobs when open', () => {
     render(<AutoMergePayeesDialog isOpen onClose={onClose} onSuccess={onSuccess} />);
-    expect(screen.getByText('Auto-Merge Payees')).toBeInTheDocument();
-    expect(screen.getByText('How it works')).toBeInTheDocument();
+    // Titled through Modal: the dialog is named by its title, and how the
+    // grouping works is the title's tooltip rather than a box in the body.
+    const dialog = screen.getByRole('dialog', { name: 'Auto-Merge Payees' });
+    expect(dialog).toHaveAccessibleDescription(/scans your payees and groups variants/);
+    expect(screen.queryByText('How it works')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
     expect(screen.getByText(/Minimum Group Size/)).toBeInTheDocument();
     expect(screen.getByText(/Similarity Threshold/)).toBeInTheDocument();
     expect(screen.getByText('Preview Groups')).toBeInTheDocument();
@@ -432,6 +436,8 @@ describe('AutoMergePayeesDialog', () => {
     await selectAllGroups();
     const groupToggles = screen.getAllByLabelText('Include this group');
     expect(groupToggles).toHaveLength(2);
+    // Each group's switch names its setting in visible text beside it.
+    expect(screen.getAllByText('Include this group', { selector: 'span' })).toHaveLength(2);
     await act(async () => {
       fireEvent.click(groupToggles[0]);
     });

@@ -494,7 +494,7 @@ export function GemStrategyReport() {
    * the report disagree, the body goes on showing the previous scenario's
    * signal, portfolio, transfer, allocation and history -- only the chart and
    * the settings tab swapped to skeletons. Keeping the rest on screen is the
-   * better read, a blank page loses the user's place, but `frontend/CLAUDE.md`
+   * better read, a blank page loses the user's place, but `docs/frontend/api-and-cache.md`
    * allows it only while the pixels *and* assistive technology both say the data
    * is stale. Mutations are already disabled; this is the other half.
    */
@@ -579,6 +579,7 @@ export function GemStrategyReport() {
       <GemWarningsBanner
         warnings={data.warnings}
         lookbackMonths={strategy.lookbackMonths}
+        assets={assets}
       />
 
       {tab === "overview" && (

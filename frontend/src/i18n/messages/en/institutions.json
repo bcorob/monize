@@ -30,11 +30,6 @@
       "actions": "Actions"
     },
     "accountCount": "{count, plural, =0 {No accounts} one {# account} other {# accounts}}",
-    "statusFilter": {
-      "all": "All",
-      "active": "Active",
-      "closed": "Closed"
-    },
     "actions": {
       "manageAccounts": "Accounts"
     },

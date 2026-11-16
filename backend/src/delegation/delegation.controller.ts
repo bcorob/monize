@@ -52,7 +52,7 @@ export class DelegationController {
    * Grantee-facing (own context, not @AllowDelegate): the owner's category
    * and payee pickers for a joint account's register, gated on the caller's
    * joint READ grant. See the reference-data policy in
-   * docs/future-plans/joint-accounts.md.
+   * docs/specs/joint-accounts.md.
    */
   @Get("joint-accounts/:accountId/reference-data")
   @ApiOperation({

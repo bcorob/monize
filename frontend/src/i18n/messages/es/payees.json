@@ -8,9 +8,11 @@
     "autoMergePayees": "Combinar beneficiarios automáticamente",
     "newPayee": "+ Nuevo beneficiario",
     "searchPlaceholder": "Buscar beneficiarios...",
+    "statusFilterLabel": "Estado",
     "statusAll": "Todos ({count})",
     "statusActive": "Activos ({count})",
     "statusInactive": "Inactivos ({count})",
+    "categoryFilterLabel": "Categoría predeterminada",
     "categoryFilterAll": "Todos los beneficiarios ({count})",
     "categoryFilterNoCategory": "Sin categoría predeterminada ({count})",
     "categoryFilterUncategorized": "Trans. sin categoría ({count})",
@@ -34,7 +36,8 @@
       "inactive": "Inactivos",
       "withoutCategory": "Sin categoría"
     },
-    "applyDefaultCategories": "Aplicar categorías predeterminadas"
+    "applyDefaultCategories": "Aplicar categorías predeterminadas",
+    "lookupSettings": "Ajustes de búsqueda de beneficiarios"
   },
   "list": {
     "columns": {
@@ -82,13 +85,27 @@
     "categoryLabel": "Categoría predeterminada",
     "notesLabel": "Notas (opcional)",
     "websiteLabel": "Sitio web",
+    "addressLabel": "Dirección",
+    "emailLabel": "Correo electrónico",
+    "phoneLabel": "Teléfono",
     "submitCreate": "Crear beneficiario",
     "submitUpdate": "Actualizar beneficiario",
     "applyCategoryLabel": "Aplicar esta categoría a las transacciones existentes",
     "applyCategoryNone": "No modificar las transacciones existentes",
     "applyCategoryUncategorized": "Solo transacciones sin categoría ({count})",
     "applyCategoryAll": "Todas las transacciones ({count})",
-    "applyCategoryHelp": "Las transferencias y las transacciones divididas nunca se modifican."
+    "applyCategoryHelp": "Las transferencias y las transacciones divididas nunca se modifican.",
+    "lookup": {
+      "button": "Buscar datos",
+      "searching": "Buscando datos de contacto...",
+      "suggested": "Sugerido por la búsqueda:",
+      "replaced": "Reemplazado por la búsqueda:",
+      "clear": "Deshacer los cambios de la búsqueda",
+      "nothingFound": "No se encontraron datos de contacto públicos para este nombre.",
+      "noProvider": "Configura una fuente en <link>Ajustes de búsqueda de beneficiarios</link> para encontrar datos de contacto.",
+      "failed": "No se pudo completar la búsqueda. Inténtelo de nuevo más tarde.",
+      "quotaExceeded": "Se han agotado las consultas de Google Places de este mes. Aumenta el límite en <link>Ajustes de búsqueda de beneficiarios</link> o espera al mes que viene."
+    }
   },
   "merge": {
     "title": "Fusionar beneficiario",
@@ -112,7 +129,6 @@
   },
   "categoryAutoAssign": {
     "title": "Asignar categorías predeterminadas automáticamente",
-    "howItWorksTitle": "Cómo funciona",
     "howItWorksBody": "Esta función analiza tu historial de transacciones para sugerir categorías predeterminadas para los beneficiarios. Examina qué categoría se usa con más frecuencia para cada beneficiario y sugiere asignarla como su categoría predeterminada para transacciones futuras. Siempre puedes cambiar la categoría predeterminada si lo necesitas.",
     "minTransactionsLabel": "Mínimo de transacciones: {count}",
     "minTransactionsHelp": "Considerar solo los beneficiarios con al menos esta cantidad de transacciones",
@@ -133,6 +149,7 @@
       "line2": "Intenta ajustar la configuración anterior."
     },
     "columns": {
+      "assign": "Asignar",
       "payee": "Beneficiario",
       "suggestedCategory": "Categoría sugerida",
       "match": "Coincidencia"
@@ -150,7 +167,6 @@
   },
   "autoMerge": {
     "title": "Combinar beneficiarios automáticamente",
-    "howItWorksTitle": "Cómo funciona",
     "howItWorksBody": "Esta función analiza sus beneficiarios y agrupa variantes en las que un nombre amplía a otro; por ejemplo, \"Lidl\", \"LIDL sp. z o.o.\" y \"LIDL WARSZAWA 0421\" se basan todos en \"Lidl\". Cada grupo se combina en un único beneficiario canónico y se crea un alias con comodín (como \"*LIDL*\") para que las importaciones futuras coincidan automáticamente. Los beneficiarios que solo comparten una palabra común (como \"Royal Electric\" y \"Royal City Nursery\") se mantienen separados. Revise y ajuste cada grupo antes de aplicarlo.",
     "backupRecommendation": "Recomendado: cree una <link>copia de seguridad</link> antes de realizar cambios.",
     "minGroupSizeLabel": "Tamaño mínimo del grupo: {count}",
@@ -210,7 +226,6 @@
   },
   "deactivateUnused": {
     "title": "Desactivar beneficiarios sin uso",
-    "howItWorksTitle": "Cómo funciona",
     "howItWorksBody": "Esta función busca beneficiarios que se usan poco y los desactiva. Los beneficiarios desactivados no aparecen en los menús de beneficiarios al crear transacciones, pero sus transacciones históricas se conservan. Puedes reactivar un beneficiario en cualquier momento desde la lista de beneficiarios.",
     "maxTransactionsLabel": "{count, plural, one {# transacción o menos} other {# transacciones o menos}}",
     "maxTransactionsHelp": "Incluir solo los beneficiarios con esta cantidad de transacciones o menos",
@@ -228,6 +243,7 @@
       "line2": "Intenta ajustar la configuración anterior."
     },
     "columns": {
+      "deactivate": "Desactivar",
       "payee": "Beneficiario",
       "transactions": "Transacciones",
       "lastUsed": "Último uso"
@@ -243,7 +259,7 @@
     }
   },
   "reactivate": {
-    "title": "¿Reactivar beneficiario?",
+    "title": "Reactivar beneficiario",
     "message": "El beneficiario \"{name}\" fue desactivado anteriormente. ¿Deseas reactivarlo para que aparezca nuevamente en los menús de beneficiarios?",
     "keepInactiveButton": "No, mantener inactivo",
     "reactivateButton": "Reactivar",
@@ -252,7 +268,7 @@
   "aliases": {
     "heading": "Alias",
     "description": "Los alias asignan nombres de beneficiarios importados a este beneficiario. Usa * como comodín (p. ej., \"STARBUCKS*\"). No distingue mayúsculas de minúsculas.",
-    "loading": "Cargando...",
+    "loading": "Cargando alias...",
     "noAliases": "No hay alias configurados",
     "removeTitle": "Eliminar alias",
     "removeButton": "Eliminar",
@@ -270,7 +286,10 @@
   },
   "selectCategoryPlaceholder": "Seleccionar categoría...",
   "validation": {
-    "nameRequired": "El nombre del beneficiario es obligatorio"
+    "nameRequired": "El nombre del beneficiario es obligatorio",
+    "emailInvalid": "Introduzca una dirección de correo electrónico válida",
+    "phoneInvalid": "Introduzca un número de teléfono válido",
+    "phoneNeedsCountryCode": "Añada el código de país, por ejemplo +1 206 448 8762"
   },
   "defaultCategoryBackfill": {
     "allConfirmTitle": "¿Aplicar categorías predeterminadas?",

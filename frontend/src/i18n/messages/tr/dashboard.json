@@ -1,8 +1,87 @@
 {
   "page": {
-    "welcomePrefix": "Hoş geldiniz",
-    "welcomeWithName": "Hoş geldiniz, {name}!",
-    "subtitle": "Finansal özetiniz burada"
+    "greeting": {
+      "morning": "Günaydın",
+      "morningWithName": "Günaydın, {name}",
+      "afternoon": "İyi günler",
+      "afternoonWithName": "İyi günler, {name}",
+      "evening": "İyi akşamlar",
+      "eveningWithName": "İyi akşamlar, {name}"
+    }
+  },
+  "hero": {
+    "label": "Net değer özeti",
+    "netWorth": "Net değer",
+    "changeThisMonth": "Bu ay {amount} <dir>{direction, select, up {arttı} other {azaldı}}</dir>",
+    "changeThisMonthWithPercent": "Bu ay {amount} · {percent} <dir>{direction, select, up {arttı} other {azaldı}}</dir>",
+    "assets": "<strong><value></value></strong> varlık",
+    "liabilities": "<strong><value></value></strong> borç",
+    "invested": "<strong><value></value></strong> yatırım",
+    "investedUnpriced": "{symbols} için güncel fiyat yok, bu nedenle bu varlıklar dahil edilmedi. Yatırımlar sayfasında fiyatları yenileyin veya menkul kıymetin fiyat geçmişine bir fiyat ekleyin.",
+    "portfolioLabel": "Portföy özeti",
+    "portfolioValueFor": "Portföy değeri <names>({accounts})</names>",
+    "portfolioEmpty": "Henüz yatırım hesabı yok. Portföyünüzü burada görmek için bir hesap ekleyin.",
+    "portfolioLoadFailed": "Portföyünüz yüklenemedi. Yeniden denemek için panoyu yenileyin.",
+    "portfolioChangeFailed": "Bu dönemdeki değişim yüklenemedi. Yeniden denemek için panoyu yenileyin.",
+    "changeOverWindow": "{amount} · {window} <dir>{direction, select, up {arttı} other {azaldı}}</dir>",
+    "holdings": "<strong><value></value></strong> varlık",
+    "cash": "<strong><value></value></strong> nakit",
+    "metricLine": "<strong><value></value></strong> {metric}",
+    "metricNames": {
+      "simpleReturn": "Basit Getiri",
+      "twr": "ZAG",
+      "mwr": "MWR",
+      "cagr": "BYOB"
+    },
+    "showSet": "{name} göster",
+    "cycleControls": "Ana bölümün neyi göstereceğini seçin",
+    "cagrUnavailable": "CAGR için bu hesaplarda en az bir yıllık yatırım geçmişi ve çekilenden fazla yatırılan tutar gerekir.",
+    "intradayUnavailable": "Bu varlıkların bazılarının gün içi fiyatı yok, bu nedenle bir günlük grafik çizilemiyor. Özelleştir bölümünden daha uzun bir dönem seçin."
+  },
+  "trivia": {
+    "title": "Bilgi notları",
+    "position": "{total} içinde {index}",
+    "previous": "Önceki bilgi",
+    "next": "Sonraki bilgi",
+    "empty": "Yeterli geçmiş oluştuğunda bilgi notları burada görünür: iki aylık net değer, fiyatı olan yatırımlar, birkaç aylık gider ve gelir ya da takip ettiğiniz garantiler. Liste her sabah yeniden oluşturulur.",
+    "off": "Yapay zeka bilgi notları kapalı. <link>AI Ayarları</link> bölümünden açın.",
+    "topics": {
+      "netWorth": "Net değer",
+      "investments": "Yatırımlar",
+      "spending": "Giderler",
+      "income": "Gelirler",
+      "activity": "Kayıtlarınız",
+      "warranties": "Garantiler"
+    },
+    "aiGenerated": "Rakamlarınızdan yapay zekayla yazıldı",
+    "facts": {
+      "netWorthSinceStart": "Net değeriniz {startMonth} ayında {startAmount} idi. O zamandan beri {startGain} arttı, yani yaklaşık {startMultiple} kat büyüdü.",
+      "netWorthBiggestJump": "{jumpMonth}, tek bir aydaki en büyük sıçramanız oldu. Net değer {jumpAmount} artarak {jumpPreviousMonth} ayındaki {jumpFrom} seviyesinden {jumpTo} seviyesine çıktı.",
+      "netWorthHighPoint": "En yüksek noktanız {peakMonth} ayında {peakAmount} idi. Şu an bunun {peakBelow} altındasınız.",
+      "netWorthAtHighPoint": "En yüksek noktanızdasınız: net değeriniz hiçbir zaman {currentHigh} seviyesinin üzerine çıkmadı.",
+      "netWorthBiggestDip": "En büyük düşüşünüz net değeri {dipFromMonth} ayındaki {dipFromAmount} seviyesinden {dipToMonth} ayında {dipToAmount} seviyesine indirdi, yani {dipPercent} düşüş.",
+      "netWorthBiggestDipRecovered": "En büyük düşüşünüz net değeri {dipFromMonth} ayındaki {dipFromAmount} seviyesinden {dipToMonth} ayında {dipToAmount} seviyesine indirdi. {dipRecoveredMonth} ayına kadar toparlandınız.",
+      "netWorthLargestAsset": "{assetName} {assetValue} değerinde, yani varlıklarınızın {assetPercent} kadarı.",
+      "investmentsShareOfAssets": "Yatırımlarınızın değeri {investmentsValue}, bu da varlıklarınızın {investmentsPercent} kadarı.",
+      "investmentsGain": "Yatırımlarınız {gainCostBasis} maliyet bazının {gainAmount} ({gainPercent}) üzerinde kazandı.",
+      "investmentsLoss": "Yatırımlarınız {gainCostBasis} maliyet bazının {gainAmount} ({gainPercent}) altında.",
+      "investmentsCagr": "Yatırımlarınızın yıllıklandırılmış getirisi yaklaşık {cagrPercent} (CAGR).",
+      "investmentsBiggestHolding": "En büyük varlığınız {holdingSymbol}, portföyün yaklaşık {holdingPercent} kadarı ({holdingAccounts} içinde {holdingValue}).",
+      "investmentsBestPerformer": "En iyi performans gösteren {bestSymbol}, {bestPercent} yükseldi. Maliyeti {bestCost} idi ve şimdi {bestValue} değerinde.",
+      "investmentsForeignAccount": "{foreignName} hesabınız {foreignCurrency} cinsinden tutuluyor. {foreignBalance} tutarındaki varlıkları yaklaşık {foreignRate} kuruyla {foreignConverted} eder.",
+      "investmentsLargestAccount": "En büyük yatırım hesabınız {largestName}, tutarı {largestValue}.",
+      "spendingTopCategory": "Son on iki ayda giderlerinizin en büyük kısmı {topCategoryName} kategorisine gitti: {topCategoryAmount}, yani {topCategoryPercent}.",
+      "spendingTopPayee": "Son on iki ayda en çok {topPayeeName} için harcadınız: {topPayeeAmount}.",
+      "spendingBiggestMonth": "{biggestSpendMonth}, son on iki ayın en çok harcama yaptığınız ayıydı: {biggestSpendAmount}.",
+      "incomeKeptShare": "Son on iki ayda gelen paranın {keptAmount} kadarını elinizde tuttunuz, bu gelirinizin {keptPercent} kadarı.",
+      "incomeSurplusMonths": "Son {windowMonths} ayın içinde gelenin çıkandan fazla olduğu aylar: {surplusMonths}.",
+      "incomeTopSource": "Son on iki ayda gelirinizin {topSourcePercent} kadarı {topSourceName} kaynağından geldi.",
+      "activityTransactions": "Kayıtlarınızdaki işlemler: {transactionCount}, {firstTransactionMonth} tarihine kadar uzanıyor.",
+      "activityPayees": "Monize'da tuttuğunuz alacaklılar: {payeeCount}. Kategoriler: {categoryCount}.",
+      "activityScheduled": "Monize'ın sizin için takip ettiği zamanlanmış işlemler: {scheduledCount}.",
+      "warrantiesCovered": "Takip ettiğiniz ve hâlâ geçerli olan garantiler: {warrantyCount}.",
+      "warrantiesNextExpiry": "Süresi dolacak bir sonraki garanti {nextWarrantyName}, {nextWarrantyMonth} ayında."
+    }
   },
   "favouriteAccounts": {
     "title": "Favori Hesaplar",
@@ -21,12 +100,10 @@
   "upcomingBills": {
     "title": "Yaklaşan Faturalar ve Ödemeler",
     "empty": "Hatırlatma pencereleri içinde vadesi geçmiş veya yaklaşan fatura, ödeme ya da transfer yok.",
-    "perReminderSettings": "Hatırlatma ayarlarına göre",
     "postTransaction": "Bu işlemi kaydet",
     "manual": "Manuel",
-    "manualTitle": "Manuel kayıt gerektirir",
     "negativeBalanceWarning": "Bu işlem hesap bakiyesinin sıfırın altına düşmesine yol açacak",
-    "viewAll": "Tüm fatura ve ödemeleri görüntüle",
+    "negativeBalanceLegend": "Hesabının bakiyesini sıfırın altına düşürür",
     "moreItems": "+{count} daha",
     "overdue": "Vadesi geçmiş",
     "today": "Bugün",
@@ -38,7 +115,23 @@
       "transfer": "Transfer",
       "reminder": "Hatırlatma",
       "unknown": "Bilinmiyor"
-    }
+    },
+    "scope": {
+      "dueSoon": "Yakında ödenecek",
+      "all": "Yaklaşan tümü"
+    },
+    "viewLabel": "Görünüm",
+    "viewList": "Liste",
+    "viewCalendar": "Takvim",
+    "previousMonth": "Önceki ay",
+    "nextMonth": "Sonraki ay",
+    "emptyAll": "Planlanmış etkin fatura, para yatırma veya transfer yok.",
+    "estimated": "Tahmini"
+  },
+  "cashFlowForecast": {
+    "title": "Nakit Akışı Tahmini",
+    "period": "Tahmin dönemi",
+    "loadFailed": "Bugünden sonraki bir tarihe sahip işlemler yüklenemedi, bu nedenle tahmin gösterilemiyor. Tekrar denemek için panoyu yeniden yükleyin."
   },
   "gettingStarted": {
     "title": "Başlarken",
@@ -76,8 +169,12 @@
     "title": "Harcama Analizleri",
     "empty": "Analiz bulunamadı. İlk analizinizi oluşturmak için Analizler sayfasını ziyaret edin.",
     "goToInsights": "Analizlere Git",
-    "viewAll": "Tüm analizleri görüntüle",
     "activeCount": "{count} aktif"
+  },
+  "warrantiesExpiring": {
+    "title": "Süresi yakında dolacak garantiler",
+    "empty": "Önümüzdeki 30 gün içinde süresi dolan bir şey yok",
+    "loadFailed": "Süresi dolmak üzere olan garantileriniz yüklenemedi. Yeniden denemek için panoyu yenileyin."
   },
   "topMovers": {
     "title": "En Çok Değişenler",
@@ -88,13 +185,20 @@
       "noLosers": "Bugün kaybedenler yok."
     },
     "dailyChange": "Günlük değişim",
+    "dailyChangeOn": "Günlük değişim · {date}",
     "openPriceHistory": "{symbol} fiyat geçmişi",
     "refreshPrices": "Fiyatları yenile",
     "viewPortfolio": "Portföyü görüntüle",
     "filter": {
-      "all": "Tümü",
-      "gainers": "Kazananlar",
-      "losers": "Kaybedenler"
+      "all": "Tümü ({count})",
+      "gainers": "Kazananlar ({count})",
+      "losers": "Kaybedenler ({count})",
+      "label": "Yön"
+    },
+    "metric": {
+      "label": "Göster",
+      "price": "Fiyat",
+      "holdings": "Pozisyonlar"
     }
   },
   "favouriteSecurities": {
@@ -102,15 +206,17 @@
     "empty": "Henüz favori menkul kıymet yok. <securitiesLink>Menkul Kıymetler sayfasını</securitiesLink> ziyaret edin ve burada takip etmek istediğiniz menkul kıymetleri yıldızlayın.",
     "noPriceYet": "Henüz fiyat yok",
     "dailyChange": "Günlük değişim",
+    "dailyChangeOn": "Günlük değişim · {date}",
     "openPriceHistory": "{symbol} fiyat geçmişi",
-    "refreshPrices": "Fiyatları yenile",
-    "manage": "Menkul kıymetleri yönet"
+    "refreshPrices": "Fiyatları yenile"
   },
   "netWorth": {
     "title": "Net Değer",
     "empty": "Henüz net değer verisi yok.",
-    "past12Months": "Son 12 ay",
-    "viewReport": "Tam raporu görüntüle"
+    "barStyle": "Çubuk stili",
+    "barStyleNetWorth": "Net değer",
+    "barStyleAccountType": "Hesap türüne göre",
+    "loadFailed": "Net değer geçmişiniz yüklenemedi. Tekrar denemek için panoyu yeniden yükleyin."
   },
   "assetsVsLiabilities": {
     "title": "Varlıklar ve Borçlar",
@@ -118,14 +224,22 @@
     "current": "Güncel",
     "netWorthLabel": "Net Değer",
     "assets": "Varlıklar",
-    "liabilities": "Borçlar"
+    "liabilities": "Borçlar",
+    "partialName": "{name} (kısmi)",
+    "viewCallouts": "Etiketler",
+    "viewLegend": "Gösterge"
   },
   "expensesPieChart": {
     "title": "Kategoriye Göre Giderler",
     "empty": "Bu dönem için gider verisi yok.",
     "total": "Toplam",
     "uncategorized": "Kategorisiz",
-    "other": "Diğer"
+    "other": "Diğer",
+    "insideOther": "{count, plural, other {Diğer içinde # kategori}}",
+    "topLevelOnly": "Üst düzey kategoriler",
+    "topLevelOnlyHint": "Alt kategorileri üst kategorisinde say",
+    "viewCallouts": "Etiketler",
+    "viewLegend": "Gösterge"
   },
   "incomeExpenses": {
     "title": "Gelir ve Giderler",
@@ -135,18 +249,85 @@
   },
   "customize": {
     "button": "Özelleştir",
-    "title": "Panoyu özelleştir",
-    "description": "Aşağıdaki düzen panonuzu yansıtır: widget'lar soldan sağa akar, büyük ekranlarda her satırda iki tane bulunur.",
     "moveEarlier": "{name} öğesini öne taşı",
     "moveLater": "{name} öğesini arkaya taşı",
-    "dragToReorder": "Widget'ları sürükleyerek yeniden düzenleyin veya ok düğmelerini kullanın.",
-    "hiddenWidgets": "Gizli widget'lar",
-    "hide": "{name} gizle",
-    "show": "{name} göster",
     "atLeastOne": "Panoda göstermek için en az bir widget seçin.",
     "reset": "Varsayılana sıfırla",
     "toasts": {
       "saveFailed": "Pano düzeni kaydedilemedi"
+    },
+    "hero": {
+      "title": "Pano başlığı",
+      "description": "Karşılamanın altındaki açılış rakamları ve grafik: net değeriniz, portföyünüz ya da her dakika ikisi arasında geçiş yapan Otomatik.",
+      "show": "Pano başlığını göster",
+      "range": "Grafik",
+      "set": "Göster",
+      "sets": {
+        "auto": "Otomatik",
+        "netWorth": "Net değer",
+        "portfolio": "Portföy değeri"
+      },
+      "metric": "Gösterge",
+      "metrics": {
+        "simpleReturn": "Basit Getiri",
+        "twr": "ZAG",
+        "mwr": "MWR",
+        "cagr": "BYOB"
+      }
+    }
+  },
+  "edit": {
+    "barLabel": "Panoyu düzenle",
+    "addWidget": "Widget ekle",
+    "heroSettings": "Başlık ayarları",
+    "done": "Tamam",
+    "phoneNote": "Widget boyutları daha geniş ekranlarda uygulanır.",
+    "remove": "{name} öğesini kaldır",
+    "grip": "{name} öğesini taşı",
+    "gripHint": "{name} öğesini taşımak için sürükleyin veya ok tuşlarına basın",
+    "moved": "{name}, {count} içinde {position}. konuma taşındı",
+    "removed": "{name} kaldırıldı",
+    "added": "{name} eklendi",
+    "resized": "{name} artık {size}",
+    "resizedBoth": "{name} artık {width} ve {height}",
+    "twoChanges": "{first}. {second}",
+    "placeholder": "Gösterecek bir şey olduğunda panoda görünür.",
+    "addTitle": "Widget ekle",
+    "addDescription": "Eklediğiniz widget panonun sonuna yerleşir. Tamam seçeneğini seçene kadar hiçbir şey kaydedilmez.",
+    "addEmpty": "Tüm widget'lar zaten panonuzda",
+    "addToSpace": "Widget ekle: bu alan ({width})",
+    "addSlotDescription": "Yalnızca bu alana sığan widget'lar listelenir ve seçtiğiniz widget alanı doldurur. Tamam seçeneğini seçene kadar hiçbir şey kaydedilmez.",
+    "addSlotEmpty": "Bu alana sığan gizli widget yok. Taşımak için bir widget'ı buraya sürükleyin.",
+    "resize": "{name} öğesini yeniden boyutlandır",
+    "resizeHint": "{name} öğesini yeniden boyutlandırmak için sürükleyin veya ok tuşlarına basın",
+    "widthLabel": "Genişlik",
+    "heightLabel": "Yükseklik",
+    "presetName": "{short}, {name}",
+    "widthOf": "{name} genişliği",
+    "heightOf": "{name} yüksekliği",
+    "widthShort": {
+      "third": "1/3",
+      "half": "1/2",
+      "twoThirds": "2/3",
+      "full": "Tam"
+    },
+    "widthName": {
+      "third": "Üçte bir genişlik",
+      "half": "Yarım genişlik",
+      "twoThirds": "Üçte iki genişlik",
+      "full": "Tam genişlik"
+    },
+    "heightShort": {
+      "auto": "Oto",
+      "compact": "S",
+      "standard": "M",
+      "tall": "L"
+    },
+    "heightName": {
+      "auto": "Otomatik yükseklik",
+      "compact": "Kompakt yükseklik",
+      "standard": "Standart yükseklik",
+      "tall": "Uzun yükseklik"
     }
   },
   "favouriteReports": {
@@ -156,22 +337,28 @@
   },
   "widgets": {
     "configure": "{name} yapılandır",
+    "asOf": "{date} itibarıyla",
     "done": "Tamam",
     "configSaveFailed": "Widget ayarları kaydedilemedi. Lütfen tekrar deneyin.",
     "timeframe": "Zaman aralığı",
     "accounts": "Hesaplar",
     "chartType": "Grafik türü",
     "view": "Görünüm",
+    "viewCalloutsHint": "Etiketler daha geniş bir ekran gerektirir. Sığmadıkları yerde gösterge gösterilir.",
     "displayName": "Görünen ad",
     "description": "Açıklama",
     "descriptionPlaceholder": "İsteğe bağlı bir açıklama ekleyin",
     "rangeLabels": {
+      "1d": "1D",
+      "1w": "1H",
+      "mtd": "AYB",
       "1m": "1M",
       "3m": "3M",
       "6m": "6M",
       "1y": "1Y",
       "2y": "2Y",
       "5y": "5Y",
+      "10y": "10Y",
       "ytd": "YTD",
       "all": "Tümü"
     }
@@ -179,7 +366,10 @@
   "portfolioValue": {
     "title": "Portföy Değeri",
     "empty": "Henüz gösterilecek yatırım geçmişi yok.",
-    "refresh": "Güncel değeri yenile"
+    "refresh": "Güncel değeri yenile",
+    "investmentResult": "Yatırım Sonucu",
+    "periodBreakdownInvestedTooltip": "Menkul kıymetlerin değeri bu dönemde {valueChange} değişti. Bunun {netInvested} kadarı satışlar düşüldükten sonra yatırılan tutardı ve {income} temettü ve faiz olarak ödendi. Hisselere yeniden yatırılan bir dağıtım her ikisinde de sayılır. Yukarıdaki rakam, yatırılmamış nakit hariç, yatırımların kendi kazancıdır.",
+    "notAvailable": "Yok"
   },
   "spendingByPayee": {
     "title": "Alacaklıya Göre Harcama",
@@ -225,14 +415,19 @@
       "MUTUAL_FUND": "Yatırım Fonları",
       "BOND": "Tahviller",
       "CASH": "Nakit"
-    }
+    },
+    "viewType": "Menkul kıymet türü",
+    "viewAssetClass": "Varlık sınıfı",
+    "otherAssetClasses": "Diğer",
+    "emptyAssetClass": "Henüz varlık sınıfı dökümü yok."
   },
   "geographicAllocation": {
     "title": "Coğrafi Dağılım",
     "empty": "Gösterilecek varlık yok.",
     "viewRegion": "Bölge",
     "viewExchange": "Borsa",
-    "viewCountry": "Ülke"
+    "viewCountry": "Ülke",
+    "listingBasisNote": "Her varlığın işlem gördüğü borsaya göre gruplanır. Fonların içini görmek için Ülke'ye geçin."
   },
   "recurringExpenses": {
     "title": "En Yüksek Tekrarlayan Giderler",
@@ -240,7 +435,9 @@
     "minOccurrences": "Minimum tekrar",
     "minOccurrencesOption": "{count} veya daha fazla",
     "occurrences": "{count} tekrar",
-    "monthlyEstimate": "Aylık Tahmin"
+    "monthlyEstimate": "Aylık Tahmin",
+    "viewCallouts": "Etiketler",
+    "viewLegend": "Gösterge"
   },
   "weekendVsWeekday": {
     "title": "Hafta Sonu - Hafta İçi Harcama",
@@ -249,5 +446,14 @@
     "weekdayLabel": "Hafta İçi",
     "viewOverview": "Genel Bakış",
     "viewByDay": "Güne Göre"
+  },
+  "cashFlowSankey": {
+    "title": "Nakit Akışı Sankey",
+    "empty": "Bu dönemde gelir, harcama veya transfer yok.",
+    "depth": "Ayrıntı",
+    "depthCategories": "Kategoriler",
+    "depthSubcategories": "Alt kategoriler",
+    "viewDiagram": "Diyagram",
+    "viewTable": "Tablo"
   }
 }

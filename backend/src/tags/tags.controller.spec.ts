@@ -1,10 +1,12 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { TagsController } from "./tags.controller";
 import { TagsService } from "./tags.service";
+import { DelegationService } from "../delegation/delegation.service";
 
 describe("TagsController", () => {
   let controller: TagsController;
   let mockTagsService: Record<string, jest.Mock>;
+  let mockDelegationService: { readableAccountIds: jest.Mock };
   const mockReq = { user: { id: "user-1" } };
 
   beforeEach(async () => {
@@ -16,9 +18,12 @@ describe("TagsController", () => {
       remove: jest.fn(),
       getTransactionCount: jest.fn(),
       getAllTransactionCounts: jest.fn(),
+      getUsage: jest.fn(),
       setTransactionTags: jest.fn(),
       setSplitTags: jest.fn(),
     };
+
+    mockDelegationService = { readableAccountIds: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [TagsController],
@@ -27,6 +32,7 @@ describe("TagsController", () => {
           provide: TagsService,
           useValue: mockTagsService,
         },
+        { provide: DelegationService, useValue: mockDelegationService },
       ],
     }).compile();
 
@@ -85,6 +91,38 @@ describe("TagsController", () => {
       expect(mockTagsService.getAllTransactionCounts).toHaveBeenCalledWith(
         "user-1",
       );
+    });
+  });
+
+  describe("getUsage()", () => {
+    it("reads every account for an owner", async () => {
+      const expected = { "tag-1": { lastUsed: "2026-09-30", count: 4 } };
+      mockTagsService.getUsage.mockResolvedValue(expected);
+
+      const result = await controller.getUsage(mockReq);
+
+      expect(result).toEqual(expected);
+      expect(mockTagsService.getUsage).toHaveBeenCalledWith(
+        "user-1",
+        undefined,
+      );
+      expect(mockDelegationService.readableAccountIds).not.toHaveBeenCalled();
+    });
+
+    it("narrows an acting delegate to their READ-granted accounts", async () => {
+      mockDelegationService.readableAccountIds.mockResolvedValue(["acc-a"]);
+      mockTagsService.getUsage.mockResolvedValue({});
+
+      await controller.getUsage({
+        user: { id: "owner-1", isActing: true, delegationId: "g1" },
+      });
+
+      expect(mockDelegationService.readableAccountIds).toHaveBeenCalledWith(
+        "g1",
+      );
+      expect(mockTagsService.getUsage).toHaveBeenCalledWith("owner-1", [
+        "acc-a",
+      ]);
     });
   });
 

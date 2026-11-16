@@ -3,10 +3,12 @@ import { render, screen } from '@/test/render';
 import { StatementPanel } from './StatementPanel';
 import type { StatementCycle } from '@/types/credit-card-detail';
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({ formatCurrency: (a: number) => `$${a.toFixed(2)}` }),
-}));
-vi.mock('@/hooks/useDateFormat', () => ({
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({ ...numberFormatMockDefaults(), formatCurrency: (a: number) => `$${a.toFixed(2)}` }),
+  };
+});vi.mock('@/hooks/useDateFormat', () => ({
   useDateFormat: () => ({ dateFormat: 'browser', datePattern: 'YYYY-MM-DD', formatDate: (d: Date) => `${d.getMonth() + 1}/${d.getDate()}` }),
 }));
 

@@ -6,7 +6,7 @@
       "category": "Categoria",
       "amount": "Importo",
       "schedule": "Pianificazione",
-      "auto": "Auto",
+      "auto": "Registrazione automatica",
       "actions": "Azioni"
     },
     "empty": {
@@ -22,8 +22,9 @@
     "modifiedBadge": "{count} modificate",
     "modifiedTitle": "{count, plural, one {# occorrenza futura modificata} other {# occorrenze future modificate}}",
     "modifiedAmountTitle": "Modificato per la prossima occorrenza",
+    "modifiedDateTitle": "Data modificata per questa occorrenza",
+    "splitBadge": "Suddivisione ({count})",
     "autoPostBadge": "Attivo",
-    "autoPostTitle": "Registrazione automatica alla scadenza",
     "inactiveSuffix": " — Inattiva",
     "actionTitles": {
       "post": "Registra transazione",
@@ -62,7 +63,8 @@
       "skipFailed": "Impossibile saltare l'occorrenza",
       "deleteFailed": "Eliminazione non riuscita"
     },
-    "foreignAmountTitle": "L'importo addebitato dal beneficiario, nella sua valuta"
+    "foreignAmountTitle": "L'importo addebitato dal beneficiario, nella sua valuta",
+    "estimatedLabel": "Stimato"
   },
   "filters": {
     "label": "Filtri",
@@ -74,9 +76,7 @@
     "accountsLabel": "Conti",
     "accountsPlaceholder": "Tutti i conti",
     "categoriesLabel": "Categorie",
-    "categoriesPlaceholder": "Tutte le categorie",
-    "collapseAriaLabel": "Comprimi filtri",
-    "expandAriaLabel": "Espandi filtri"
+    "categoriesPlaceholder": "Tutte le categorie"
   },
   "postDialog": {
     "title": "Registra transazione",
@@ -114,7 +114,8 @@
       "totalAmountRequired": "L'importo totale è obbligatorio",
       "splitsMinimum": "Le transazioni suddivise richiedono almeno 2 suddivisioni",
       "splitsTotal": "Gli importi delle suddivisioni devono corrispondere all'importo della transazione",
-      "fxRateUnavailable": "Non è disponibile alcun tasso di cambio da {from} a {to} per questa data."
+      "fxRateUnavailable": "Non è disponibile alcun tasso di cambio da {from} a {to} per questa data.",
+      "estimateUnknown": "L'importo stimato di questa occorrenza è sconosciuto. Inserisci l'importo per registrarla."
     },
     "latestPlaceholder": "Più recente: {price}",
     "descriptionPlaceholder": "Descrizione...",
@@ -127,18 +128,40 @@
       "noRateWarning": "Nessun tasso di cambio trovato da {from} a {to} il {date}. Scegli un'altra data oppure aggiorna i tassi.",
       "feeCaption": "Include una commissione per transazione estera del {percent}% ({fee}).",
       "totalInCurrency": "Totale in {currency}"
-    }
+    },
+    "estimatedHint": "Questo importo è una stima; modificalo con quanto hai effettivamente pagato. {detail}"
   },
   "occurrencePicker": {
     "title": "Seleziona data occorrenza",
-    "description": "Scegli quale occorrenza di \"{name}\" modificare:",
+    "description": "Scegli quale occorrenza di \"{name}\" modificare. Modificarne una qui sovrascrive solo quella data; ogni altra occorrenza continua a seguire la pianificazione. <guide>Scopri di più</guide>.",
     "modifiedBadge": "Modificata",
     "nextDueBadge": "Prossima scadenza",
     "dateMoved": "Data spostata da {date}",
     "amountChange": "Importo: {amount}",
     "categoryChange": "Categoria: {category}",
     "noteChange": "Nota: {note}",
-    "splitModified": "Suddivisione modificata"
+    "splitModified": "Suddivisione modificata",
+    "estimatedAmount": "Stimato: {amount}",
+    "estimateUnknown": "Stima sconosciuta"
+  },
+  "loanOccurrence": {
+    "loading": "Calcolo del pagamento di ogni scadenza.",
+    "loadFailed": "Non è stato possibile caricare il pagamento di ogni scadenza.",
+    "retry": "Riprova",
+    "amountUnknown": "Pagamento sconosciuto",
+    "notProjected": "Pagamento non calcolato così avanti",
+    "paymentChangesBadge": "Il pagamento cambia",
+    "editorUnknown": "Il pagamento di questa scadenza non può essere calcolato, quindi l'importo è vuoto. {reason}",
+    "editorLinesUnknown": "La ripartizione di questa scadenza tra capitale e interessi non può essere calcolata, quindi le righe partono da quelle della pianificazione. {reason}",
+    "amountRequired": "Inserisci l'importo di questa scadenza prima di salvare.",
+    "missing": {
+      "rate": "Nessun tasso di interesse registrato per il {date}. Aggiungilo alla cronologia dei tassi del prestito.",
+      "cadence": "La frequenza di pagamento del prestito ({frequency}) non può essere calcolata. Controlla la frequenza di pagamento del prestito.",
+      "overrideLines": "Le righe di questa scadenza non sono capitale, interessi e capitale aggiuntivo. Modifica le righe.",
+      "overrideOnSettledDebt": "Il prestito è estinto a questa data, quindi l'importo di questa scadenza non può essere diviso tra capitale e interessi. Modifica o ripristina la scadenza.",
+      "earlierOccurrence": "Dipende dalla scadenza del {date}, il cui pagamento non può essere calcolato.",
+      "unknown": "Il motivo non è stato indicato."
+    }
   },
   "overrideEditor": {
     "title": "Modifica occorrenza",
@@ -179,7 +202,9 @@
       "quantityRequired": "La quantità deve essere maggiore di zero",
       "priceRequired": "Il prezzo deve essere maggiore di zero",
       "totalAmountRequired": "L'importo totale è obbligatorio"
-    }
+    },
+    "estimatedHint": "Questo importo è la stima per questa occorrenza. Lascialo invariato e l'occorrenza continuerà a seguire la stima man mano che arrivano nuovi pagamenti. {detail}",
+    "keepEstimate": "Mantieni questo importo, anche se nuovi pagamenti cambiano la stima"
   },
   "form": {
     "tabs": {
@@ -205,7 +230,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "Reinvestimento plusvalenza a lungo termine",
       "CAPITAL_GAIN_SHORT": "Plusvalenza a breve termine",
       "CAPITAL_GAIN_LONG": "Plusvalenza a lungo termine",
-      "REDEEM": "Rimborso CD/obbligazione"
+      "REDEEM": "Rimborso CD/obbligazione",
+      "RETURN_OF_CAPITAL": "Rimborso di capitale"
     },
     "submitCreate": "Crea",
     "submitUpdate": "Aggiorna",
@@ -248,6 +274,7 @@
     "commissionLabel": "Commissione",
     "totalValueLabel": "Valore totale",
     "fundingAccountLabel": "Conto di finanziamento (opzionale)",
+    "fundingAccountTooltip": "Il conto in cui la liquidità di questa pianificazione si regola davvero, non il conto di intermediazione sopra: quello che la previsione del flusso di cassa addebita o accredita. Lascia vuoto per usare il conto di liquidità proprio dell'intermediazione.",
     "fundingAccountPlaceholder": "Usa la liquidità del conto (predefinito)",
     "fundingAccountHelp": "Usa la liquidità del conto investimento come predefinito. Scegli un altro conto per modellare contributo e acquisto.",
     "endConditionTitle": "Condizione di fine (opzionale)",
@@ -282,14 +309,21 @@
       "quantityRequired": "La quantità deve essere maggiore di zero",
       "priceRequired": "Il prezzo deve essere maggiore di zero",
       "totalAmountRequired": "L'importo totale è obbligatorio per questa azione",
-      "fxRateRequired": "Inserisci un importo nella valuta scelta prima di salvare. Non è ancora disponibile un tasso di cambio."
+      "fxRateRequired": "Inserisci un importo nella valuta scelta prima di salvare. Non è ancora disponibile un tasso di cambio.",
+      "estimateNeedsPayeeAndCategory": "Scegli un beneficiario e una categoria da cui stimare l'importo."
     },
     "fx": {
       "amountInCurrency": "Importo in {currency}",
       "estimateCaption": "Circa {total} al tasso 1 {from} = {rate} {to}.",
       "noRateWarning": "Nessun tasso di cambio trovato da {from} a {to}. Scegli un'altra valuta oppure inserisci l'importo in {to}.",
       "feeCaption": "Include una commissione per transazione estera del {percent}% ({fee})."
-    }
+    },
+    "estimateLabel": "Stima",
+    "estimateTooltip": "Calcola l'importo di ogni occorrenza dai pagamenti degli ultimi 24 mesi a questo beneficiario in questa categoria, mese per mese, così una bolletta che costa di più in alcuni mesi viene prevista in quel modo. Puoi sempre modificare qualsiasi occorrenza e confermi l'importo quando la registri.",
+    "estimateTooltipTransfer": "Calcola l'importo di ogni occorrenza dai trasferimenti degli ultimi 24 mesi verso questo conto. Quando il conto deve di più, il pagamento viene aumentato di conseguenza: per una carta di credito con giorno di chiusura e di scadenza, il pagamento dell'estratto chiuso e quello del ciclo in corso; altrimenti il prossimo pagamento. Puoi sempre modificare qualsiasi occorrenza e confermi l'importo al momento della registrazione.",
+    "estimateDelegateDisabled": "Solo il proprietario può attivare o disattivare la stima: legge i pagamenti di tutti i conti del proprietario.",
+    "estimatedAmountNote": "Calcolato automaticamente dallo storico dei pagamenti. {detail}",
+    "autoPostDisabledEstimate": "Un importo stimato si conferma quando lo registri, quindi non viene registrato automaticamente."
   },
   "postTransaction": {
     "minSplits": "Le transazioni suddivise richiedono almeno 2 suddivisioni",
@@ -308,10 +342,83 @@
     "EVERY4MONTHS": "Ogni 4 mesi",
     "SEMIANNUAL": "Due volte all'anno",
     "YEARLY": "Annuale",
-    "EVERY2YEARS": "Ogni 2 anni"
+    "EVERY2YEARS": "Ogni 2 anni",
+    "CUSTOM": "Personalizzata"
+  },
+  "customRecurrence": {
+    "title": "Si ripete",
+    "unitLabel": "Ripeti per",
+    "units": {
+      "WEEK": "Settimanale",
+      "MONTH": "Mensile",
+      "YEAR": "Annuale"
+    },
+    "every": "Ogni",
+    "intervalLabel": "Ripeti ogni",
+    "unitSuffix": {
+      "WEEK": "{interval, plural, one {settimana il} other {settimane il}}",
+      "MONTH": "{interval, plural, one {mese il} other {mesi il}}",
+      "YEAR": "{interval, plural, one {anno il} other {anni il}}"
+    },
+    "weekdaysLabel": "Giorni della settimana",
+    "monthDaysLabel": "Giorni del mese",
+    "lastDayChip": "Ultimo giorno",
+    "lastDay": "ultimo giorno",
+    "dayOfMonth": "{day, selectordinal, other {#}}",
+    "monthHint": "Un giorno oltre la fine di un mese breve cade nell'ultimo giorno del mese, e due giorni che cadono nella stessa data vengono registrati una sola volta.",
+    "datesLabel": "Date dell'anno",
+    "monthLabel": "Mese",
+    "dayLabel": "Giorno",
+    "addDate": "Aggiungi data",
+    "removeDate": "Rimuovi {date}",
+    "yearHint": "Il 29 febbraio cade il 28 febbraio negli anni che non lo hanno.",
+    "summary": {
+      "WEEK": "{interval, plural, one {Ogni settimana il {days}} other {Ogni # settimane il {days}}}",
+      "MONTH": "{interval, plural, one {Ogni mese il {days}} other {Ogni # mesi il {days}}}",
+      "YEAR": "{interval, plural, one {Ogni anno il {days}} other {Ogni # anni il {days}}}"
+    },
+    "errors": {
+      "noDays": {
+        "WEEK": "Scegli almeno un giorno della settimana.",
+        "MONTH": "Scegli almeno un giorno del mese.",
+        "YEAR": "Aggiungi almeno una data."
+      },
+      "interval": "Inserisci un numero da 1 a 12.",
+      "invalid": "Questo schema non può essere salvato. Scegli di nuovo i giorni."
+    },
+    "firstOccurrence": "Prima occorrenza: {date}",
+    "nextOccurrence": "Prossima occorrenza: {date}",
+    "nextOccurrenceOffPattern": "Prossima occorrenza: {date}. Questa data è fuori dallo schema; le occorrenze successive lo seguono.",
+    "orphanWarning": "{count, plural, one {# occorrenza modificata ({dates}) non rientra più in questo schema e verrà rimossa al salvataggio.} other {# occorrenze modificate ({dates}) non rientrano più in questo schema e verranno rimosse al salvataggio.}}",
+    "notForLoan": "Il pagamento di un prestito o di un mutuo non può usare una frequenza personalizzata; scegli una frequenza fissa.",
+    "notForPayroll": "Una fattura dello stipendio con limiti di trattenuta non può usare una frequenza personalizzata; scegli una frequenza fissa."
   },
   "validation": {
     "nameRequired": "Il nome è obbligatorio",
     "dueDateRequired": "La data di scadenza è obbligatoria"
+  },
+  "estimate": {
+    "thePayee": "questo beneficiario",
+    "theAccount": "il conto",
+    "theCategory": "questa categoria",
+    "basis": "Stimato da {count, plural, one {# pagamento} other {# pagamenti}}, l'ultimo il {date}.",
+    "basisWithGrowth": "Stimato da {count, plural, one {# pagamento} other {# pagamenti}}, l'ultimo il {date}, con una variazione su base annua del {growth}.",
+    "basisYear": "Media di {count, plural, one {# pagamento} other {# pagamenti}} negli ultimi 12 mesi, l'ultimo il {date}.",
+    "basisRecent": "Media {count, plural, one {dell'ultimo pagamento} other {degli ultimi # pagamenti}}, l'ultimo il {date}.",
+    "basisRecentWithGrowth": "Media {count, plural, one {dell'ultimo pagamento} other {degli ultimi # pagamenti}}, l'ultimo il {date}, con una variazione su base annua del {growth}.",
+    "basisSeasonal": "Media {count, plural, one {dell'ultimo pagamento} other {degli ultimi # pagamenti}}, adeguata alla stagione di ogni mese, l'ultimo il {date}.",
+    "basisSeasonalWithGrowth": "Media {count, plural, one {dell'ultimo pagamento} other {degli ultimi # pagamenti}}, adeguata alla stagione di ogni mese, l'ultimo il {date}, con una variazione su base annua del {growth}.",
+    "basisWithheld": "Stimato dallo storico dei pagamenti del beneficiario e della categoria.",
+    "basisWithheldTransfer": "Stimato dallo storico dei trasferimenti verso {account}.",
+    "raisedToBalance": "Aumentato per coprire quanto {account} deve per questo pagamento.",
+    "basisAndRaise": "{basis} {raised}",
+    "noHistoryTransfer": "Nessun trasferimento da questo conto verso {account} negli ultimi {months} mesi, quindi l'importo è sconosciuto. Inserisci l'importo di ogni occorrenza, o registra un trasferimento.",
+    "missingRateTransfer": "Nessun tasso di cambio da {from} a {to} per convertire un trasferimento passato o quanto deve {account}, quindi l'importo è sconosciuto. Aggiungi il tasso nella pagina Valute.",
+    "noBasisTransfer": "Scegli il conto di destinazione per stimare l'importo dai trasferimenti verso di esso.",
+    "pendingTransfer": "L'importo è calcolato dai trasferimenti verso questo conto e da quanto deve.",
+    "noHistory": "Nessun pagamento a {payee} in {category} negli ultimi {months} mesi, quindi l'importo è sconosciuto. Inserisci l'importo di ogni occorrenza oppure registra un pagamento.",
+    "missingRate": "Nessun tasso di cambio da {from} a {to} per convertire un pagamento passato, quindi l'importo è sconosciuto. Aggiungi il tasso nella pagina Valute.",
+    "noBasis": "Scegli un beneficiario e una categoria per stimare l'importo dal loro storico dei pagamenti.",
+    "pending": "L'importo viene calcolato dallo storico dei pagamenti del beneficiario e della categoria."
   }
 }

@@ -23,6 +23,11 @@ describe('computeInvestmentCashImpact', () => {
     expect(computeInvestmentCashImpact('DIVIDEND', 1, 25.5, 0)).toBe(25.5);
   });
 
+  it('credits a return of capital like a dividend (issue #1800)', () => {
+    expect(computeInvestmentCashImpact('RETURN_OF_CAPITAL', 0, 40, 0)).toBe(40);
+    expect(isInvestmentActionAllowedInSplit('RETURN_OF_CAPITAL')).toBe(true);
+  });
+
   it('returns 0 for REINVEST', () => {
     expect(computeInvestmentCashImpact('REINVEST', 5, 10, 0)).toBe(0);
   });

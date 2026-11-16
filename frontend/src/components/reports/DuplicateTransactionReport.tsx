@@ -9,18 +9,24 @@ import { builtInReportsApi } from '@/lib/built-in-reports';
 import { DuplicateGroup, DuplicateTransactionItem } from '@/types/built-in-reports';
 import { parseLocalDate } from '@/lib/utils';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
+import { useDateFormat } from '@/hooks/useDateFormat';
 import { useDateRange } from '@/hooks/useDateRange';
 import { DateRangeSelector } from '@/components/ui/DateRangeSelector';
-import { ExportDropdown } from '@/components/ui/ExportDropdown';
+import { ReportToolbarActions } from '@/components/reports/ReportToolbarActions';
 import { exportToCsv } from '@/lib/csv-export';
 import { useReportData } from '@/hooks/useReportData';
 import { ReportError } from '@/components/reports/ReportError';
+import { LinkifiedText } from '@/components/ui/LinkifiedText';
 import { useTranslations } from 'next-intl';
+import { quoteSearchValue } from '@/lib/search-query';
+import { CheckCircleIcon } from '@heroicons/react/24/outline';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 export function DuplicateTransactionReport() {
   const t = useTranslations('reports');
   const router = useRouter();
   const { formatCurrency } = useNumberFormat();
+  const { formatDate } = useDateFormat();
   const { dateRange, setDateRange, resolvedRange } = useDateRange({ defaultRange: '3m', alignment: 'day' });
   const [sensitivity, setSensitivity] = useState<'high' | 'medium' | 'low'>('medium');
 
@@ -37,7 +43,9 @@ export function DuplicateTransactionReport() {
   );
 
   const handleTransactionClick = (tx: DuplicateTransactionItem) => {
-    router.push(`/transactions?search=${encodeURIComponent(tx.payeeName || '')}`);
+    // An exact payee term, so "Costco" does not also open "Costco Gas Bar".
+    const search = tx.payeeName ? quoteSearchValue('payee', tx.payeeName) : '';
+    router.push(`/transactions?search=${encodeURIComponent(search)}`);
   };
 
   const getConfidenceStyles = (confidence: DuplicateGroup['confidence']) => {
@@ -63,20 +71,9 @@ export function DuplicateTransactionReport() {
     }
   };
 
-  if (error) {
-    return <ReportError onRetry={reload} />;
-  }
-
-  if (isLoading) {
-    return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6">
-        <div className="space-y-4">
-          <Skeleton className="h-8 w-1/3" />
-          <Skeleton className="h-64 w-full" />
-        </div>
-      </div>
-    );
-  }
+  // Loading and error render inside the tree below, never as an early return,
+  // so the toolbar stays mounted across a reload.
+  const dataUnavailable = isLoading || !!error;
 
   const summary = reportData?.summary || {
     totalGroups: 0,
@@ -132,6 +129,14 @@ export function DuplicateTransactionReport() {
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
+      {dataUnavailable ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+        </div>
+      ) : (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4">
           <div className="text-sm text-gray-500 dark:text-gray-400">{t('duplicateTransactions.potentialDuplicates')}</div>
@@ -159,6 +164,7 @@ export function DuplicateTransactionReport() {
           </div>
         </div>
       </div>
+      )}
 
       {/* Controls */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4">
@@ -168,7 +174,7 @@ export function DuplicateTransactionReport() {
             value={dateRange}
             onChange={setDateRange}
           />
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-stretch gap-3">
             <div className="flex items-center gap-2">
               <span className="text-sm text-gray-600 dark:text-gray-400">{t('duplicateTransactions.sensitivityLabel')}</span>
               <select
@@ -181,22 +187,28 @@ export function DuplicateTransactionReport() {
                 <option value="low">{t('duplicateTransactions.sensitivityLow')}</option>
               </select>
             </div>
-            <ExportDropdown onExportCsv={handleExportCsv} onExportPdf={handleExportPdf} disabled={duplicateGroups.length === 0} />
           </div>
+          <ReportToolbarActions
+            onExportCsv={handleExportCsv}
+            onExportPdf={handleExportPdf}
+            disabled={dataUnavailable || duplicateGroups.length === 0}
+          />
         </div>
       </div>
 
       {/* Duplicate Groups */}
-      {duplicateGroups.length === 0 ? (
+      {error ? (
+        <ReportError onRetry={reload} />
+      ) : isLoading ? (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6">
-          <div className="text-center py-8">
-            <svg className="h-12 w-12 mx-auto text-green-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <p className="text-gray-500 dark:text-gray-400">
-              {t('duplicateTransactions.empty')}
-            </p>
+          <div className="space-y-4">
+            <Skeleton className="h-8 w-1/3" />
+            <Skeleton className="h-64 w-full" />
           </div>
+        </div>
+      ) : duplicateGroups.length === 0 ? (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6">
+          <EmptyState icon={<CheckCircleIcon />} title={t('duplicateTransactions.empty')} />
         </div>
       ) : (
         <div className="space-y-4">
@@ -230,7 +242,7 @@ export function DuplicateTransactionReport() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-3">
                           <span className="text-sm text-gray-500 dark:text-gray-400">
-                            {format(parseLocalDate(tx.transactionDate), 'MMM d, yyyy')}
+                            {formatDate(tx.transactionDate)}
                           </span>
                           <span className="font-medium text-gray-900 dark:text-gray-100 truncate">
                             {tx.payeeName || t('duplicateTransactions.unknownPayee')}
@@ -238,7 +250,7 @@ export function DuplicateTransactionReport() {
                         </div>
                         {tx.description && (
                           <div className="text-sm text-gray-500 dark:text-gray-400 truncate mt-0.5">
-                            {tx.description}
+                            <LinkifiedText text={tx.description} />
                           </div>
                         )}
                         <div className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">

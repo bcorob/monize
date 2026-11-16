@@ -11,9 +11,76 @@
   "uploaded": "Pièce jointe ajoutée",
   "deleted": "Pièce jointe supprimée",
   "loadFailed": "Échec du chargement des pièces jointes",
+  "retry": "Réessayer",
   "uploadFailed": "Échec du téléversement de la pièce jointe",
   "deleteFailed": "Échec de la suppression de la pièce jointe",
   "tooLarge": "Le fichier est trop volumineux (maximum {max})",
   "unsupported": "Type de fichier non pris en charge. Autorisés : images ou PDF",
-  "tooMany": "Maximum {max} pièces jointes par transaction"
+  "tooMany": "Maximum {max} pièces jointes par transaction",
+  "fromWarranty": "De la garantie : {name}",
+  "fromLinkedWarranty": "D’une garantie liée",
+  "scan": {
+    "button": "Numériser un document",
+    "title": "Numériser un document",
+    "description": "Redressez et nettoyez la photo d’un document avant de la joindre.",
+    "analysing": "Recherche d’un document dans la photo…",
+    "failed": "Le document n’a pas pu être numérisé. Vous pouvez tout de même joindre la photo telle quelle.",
+    "viewEnhanced": "Améliorée",
+    "viewOriginal": "Original",
+    "rotate": "Pivoter",
+    "styleLabel": "Rendu",
+    "styles": {
+      "colour": "Couleur",
+      "grayscale": "Niveaux de gris",
+      "blackAndWhite": "Noir et blanc",
+      "none": "Aucune amélioration"
+    },
+    "styleHints": {
+      "colour": "Uniformise l’éclairage, renforce le contraste et affine le texte.",
+      "grayscale": "Le même nettoyage sans la couleur. Plus léger et sans la teinte que le papier prend en lumière artificielle.",
+      "blackAndWhite": "Encre et papier uniquement. Idéal pour le texte imprimé ; les photos et les logos seront aplatis.",
+      "none": "Redressé et recadré, sinon exactement tel que photographié. À utiliser quand l’amélioration abîme le sujet."
+    },
+    "adjustments": {
+      "brightness": "Luminosité ({value})",
+      "contrast": "Contraste ({value})"
+    },
+    "resetAdjustments": "Réinitialiser la luminosité et le contraste",
+    "adjustHint": "Passez à « Original » pour déplacer les coins si les bords sont incorrects.",
+    "updating": "Mise à jour de l’aperçu…",
+    "noDocumentFound": "Aucun bord de document n’a été trouvé, la photo entière a donc été utilisée. Passez à « Original » et placez les coins vous-même.",
+    "previewEnhancedAlt": "Aperçu du scan amélioré",
+    "previewOriginalAlt": "Aperçu de la photo d’origine",
+    "useEnhanced": "Utiliser la version améliorée",
+    "keepOriginal": "Conserver l’original seulement",
+    "retake": "Reprendre",
+    "cancel": "Annuler",
+    "originalTooLarge": "La photo d’origine dépasse {max}, seul le scan amélioré sera joint.",
+    "warnings": {
+      "blurry": "La photo semble floue. La reprendre donnera un scan plus net.",
+      "edgesOutsideFrame": "Le document touche le bord de la photo, un côté risque donc d’être coupé. Reprends la photo en laissant une marge autour de toute la page, sans qu’aucun côté ne touche le bord.",
+      "lowResolution": "Le scan est assez petit, les petits caractères peuvent être difficiles à lire."
+    },
+    "corners": {
+      "label": "Coins du document",
+      "topLeft": "Coin supérieur gauche",
+      "topRight": "Coin supérieur droit",
+      "bottomRight": "Coin inférieur droit",
+      "bottomLeft": "Coin inférieur gauche"
+    },
+    "originalKept": "original conservé"
+  },
+  "preview": {
+    "loading": "Chargement de l'aperçu…",
+    "failed": "L'aperçu n'a pas pu être chargé. Vous pouvez tout de même télécharger le fichier.",
+    "storeUnavailable": "Ce fichier se trouve dans un stockage auquel ce serveur ne peut pas accéder actuellement, il ne peut donc être ni prévisualisé ni téléchargé. Rien n'est perdu : demandez à votre administration de rétablir la configuration du stockage des pièces jointes.",
+    "unsupported": "Ce type de fichier ne peut pas être prévisualisé. Vous pouvez tout de même le télécharger.",
+    "fit": "Ajuster à l'écran",
+    "actualSize": "Taille réelle",
+    "versionLabel": "Version",
+    "zoomLabel": "Zoom",
+    "pageCount": "{count, plural, one {# page} other {# pages}}",
+    "page": "Page {page} sur {total}",
+    "open": "Aperçu de {name}"
+  }
 }

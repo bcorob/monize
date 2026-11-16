@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { z } from "zod";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 
 @Injectable()
 export class McpFinancialReviewPrompt {
@@ -10,14 +10,14 @@ export class McpFinancialReviewPrompt {
       {
         title: "Financial review",
         description: "Review finances for a period and provide insights",
-        argsSchema: {
+        argsSchema: z.object({
           period: z
             .string()
             .optional()
             .describe(
               "Time period to review (e.g., 'last month', 'Q1 2025', 'January 2025')",
             ),
-        },
+        }),
       },
       async (args) => {
         const period = args.period || "the current month";

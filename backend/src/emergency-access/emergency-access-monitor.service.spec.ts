@@ -238,8 +238,7 @@ describe("EmergencyAccessMonitorService", () => {
         for (const result of settingsRepo.find.mock.results) {
           if (result.type !== "return") continue;
           const rows = (await result.value) as
-            | { ownerUserId?: string }[]
-            | undefined;
+            { ownerUserId?: string }[] | undefined;
           const hit = rows?.find(
             (row) => wanted === undefined || row.ownerUserId === wanted,
           );
@@ -280,8 +279,7 @@ describe("EmergencyAccessMonitorService", () => {
             for (const result of settingsRepo.find.mock.results) {
               if (result.type !== "return") continue;
               const rows = (await result.value) as
-                | Record<string, unknown>[]
-                | undefined;
+                Record<string, unknown>[] | undefined;
               for (const row of rows ?? []) {
                 if (requireGranted && row.grantedAt == null) continue;
                 affected += 1;
@@ -587,6 +585,159 @@ describe("EmergencyAccessMonitorService", () => {
 
     expect(mintedCredentials()).toEqual([]);
     expect(emailService.sendMail).not.toHaveBeenCalled();
+  });
+
+  /**
+   * Step 1 holds the delivery lease step 1b takes.
+   *
+   * The grant claim decides which replica opens the cycle, not which one may send
+   * for it. A replica whose sweep read the owner's settings after the winner's
+   * claim committed went to step 1b, found the contacts the winner had not yet
+   * stamped, and won the lease uncontested because the winner never took it -- so
+   * the stored credential went out twice in the same minute.
+   */
+  describe("the delivery lease on a first grant", () => {
+    /** The service's `SEND_LEASE_MS`, restated so a changed window is a visible diff. */
+    const SEND_LEASE_MS = 10 * 60 * 1000;
+
+    function localDayKey(date: Date): string {
+      return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    }
+
+    function ownerDueForAGrant(): void {
+      settingsRepo.find.mockResolvedValue([
+        {
+          ownerUserId: userId,
+          enabled: true,
+          grantAfterDays: 14,
+          reminderAfterDays: 7,
+          messageCiphertext: null,
+          lastReminderSentAt: null,
+          grantedAt: null,
+        },
+      ]);
+      usersRepo.findOne.mockResolvedValue({
+        id: userId,
+        email: "owner@example.com",
+        firstName: "Owner",
+        lastName: "One",
+        isActive: true,
+        lastActivityAt: daysAgo(20),
+      });
+      contactsAre([
+        { id: "c1", firstName: "Carol", email: "carol@example.com" },
+        { id: "c2", firstName: "Dave", email: "dave@example.com" },
+      ]);
+    }
+
+    /** Indexes into `scopedManagerQuery`'s calls that are the grant claim. */
+    function grantClaimCallIndexes(): number[] {
+      return scopedManagerQuery.mock.calls.flatMap((call, index) =>
+        String(call[0]).includes("grant_generation = grant_generation + 1")
+          ? [index]
+          : [],
+      );
+    }
+
+    it("claims nothing and sends nothing while another replica holds the lease", async () => {
+      ownerDueForAGrant();
+      jobClaims.claimLease.mockResolvedValueOnce(null);
+
+      await service.runDailyCheck();
+
+      expect(jobClaims.claimLease).toHaveBeenCalledWith(
+        "emergency_access_grant_notify",
+        userId,
+        expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+        SEND_LEASE_MS,
+      );
+      // The conditional UPDATE never ran: the lease holder is delivering this
+      // owner's grant, so this replica stands down before touching the row.
+      expect(grantClaimCallIndexes()).toEqual([]);
+      expect(mintedCredentials()).toEqual([]);
+      expect(emailService.sendMail).not.toHaveBeenCalled();
+      expect(jobClaims.releaseLease).not.toHaveBeenCalled();
+    });
+
+    it("takes the lease before the grant claim and hands it back after delivery", async () => {
+      ownerDueForAGrant();
+      const before = localDayKey(new Date());
+
+      await service.runDailyCheck();
+
+      const after = localDayKey(new Date());
+      expect(emailService.sendMail).toHaveBeenCalledTimes(2);
+
+      expect(jobClaims.claimLease).toHaveBeenCalledTimes(1);
+      const [claimType, owner, dayKey, ttl] =
+        jobClaims.claimLease.mock.calls[0];
+      expect(claimType).toBe("emergency_access_grant_notify");
+      expect(owner).toBe(userId);
+      expect([before, after]).toContain(dayKey);
+      expect(ttl).toBe(SEND_LEASE_MS);
+
+      // Released by the token this attempt holds, under the key it was taken with.
+      expect(jobClaims.releaseLease).toHaveBeenCalledTimes(1);
+      expect(jobClaims.releaseLease).toHaveBeenCalledWith(
+        "emergency_access_grant_notify",
+        userId,
+        dayKey,
+        TEST_LEASE_TOKEN,
+      );
+
+      const claimIndexes = grantClaimCallIndexes();
+      expect(claimIndexes).toHaveLength(1);
+      const leaseTaken = jobClaims.claimLease.mock.invocationCallOrder[0];
+      const grantClaimed =
+        scopedManagerQuery.mock.invocationCallOrder[claimIndexes[0]];
+      const sendOrders = emailService.sendMail.mock.invocationCallOrder;
+      const leaseReleased = jobClaims.releaseLease.mock.invocationCallOrder[0];
+      expect(leaseTaken).toBeLessThan(grantClaimed);
+      expect(grantClaimed).toBeLessThan(Math.min(...sendOrders));
+      expect(Math.max(...sendOrders)).toBeLessThan(leaseReleased);
+    });
+
+    it("hands the lease back when another replica won the grant claim", async () => {
+      ownerDueForAGrant();
+      grantClaimWins = false;
+
+      await service.runDailyCheck();
+
+      expect(grantClaimCallIndexes()).toHaveLength(1);
+      expect(emailService.sendMail).not.toHaveBeenCalled();
+      expect(jobClaims.releaseLease).toHaveBeenCalledWith(
+        "emergency_access_grant_notify",
+        userId,
+        expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+        TEST_LEASE_TOKEN,
+      );
+    });
+
+    it("hands the grant back before the lease when nothing was delivered", async () => {
+      ownerDueForAGrant();
+      emailService.sendMail.mockRejectedValue(new Error("smtp down"));
+
+      await service.runDailyCheck();
+
+      const releaseGrantIndex = scopedManagerQuery.mock.calls.findIndex(
+        (call) => /SET granted_at = NULL/.test(String(call[0])),
+      );
+      expect(releaseGrantIndex).toBeGreaterThanOrEqual(0);
+      expect(jobClaims.releaseLease).toHaveBeenCalledTimes(1);
+      expect(
+        scopedManagerQuery.mock.invocationCallOrder[releaseGrantIndex],
+      ).toBeLessThan(jobClaims.releaseLease.mock.invocationCallOrder[0]);
+    });
+
+    it("keeps the grant when handing the lease back fails", async () => {
+      ownerDueForAGrant();
+      jobClaims.releaseLease.mockRejectedValueOnce(new Error("db blip"));
+
+      await service.runDailyCheck();
+
+      expect(emailService.sendMail).toHaveBeenCalledTimes(2);
+      expect(notifiedContactIds()).toEqual(["c1", "c2"]);
+    });
   });
 
   it("does not re-issue grants once granted_at is set", async () => {

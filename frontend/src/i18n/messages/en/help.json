@@ -1,0 +1,81 @@
+{
+  "learnMore": "Learn more",
+  "howThisWorks": "How this works",
+  "menu": {
+    "helpForPage": "Help for this page",
+    "search": "Search help",
+    "shortcuts": "Keyboard shortcuts",
+    "takeTour": "Take the tour",
+    "whatsNew": "What's new",
+    "shellMenu": "Desktop app menu",
+    "reportIssue": "Report an issue",
+    "discussions": "Discussions"
+  },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "palette": "Command palette",
+    "paletteKeys": "Ctrl/Cmd+K",
+    "search": "Search help",
+    "searchKeys": "?",
+    "undo": "Undo the last change",
+    "undoKeys": "Ctrl/Cmd+Z",
+    "redo": "Redo",
+    "redoKeys": "Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y",
+    "closeDialog": "Close the open dialog or panel",
+    "closeDialogKeys": "Esc"
+  },
+  "panel": {
+    "title": "Help",
+    "back": "Back",
+    "forward": "Forward",
+    "openOnline": "Open on monize.net",
+    "pin": "Pin the help panel so it stays open while you move between pages",
+    "unpin": "Unpin the help panel",
+    "expand": "Expand the help panel",
+    "collapse": "Shrink the help panel",
+    "resize": "Resize the help panel",
+    "resizeValue": "{width} pixels",
+    "close": "Close help",
+    "englishOnly": "This guide is in English.",
+    "loading": "Loading help",
+    "toc": {
+      "toggle": "On this page",
+      "label": "Sections on this page"
+    },
+    "error": {
+      "heading": "Help could not be loaded",
+      "body": "The guide did not load. Try again, or read this page on monize.net.",
+      "retry": "Try again"
+    },
+    "search": "Search the guide",
+    "tour": {
+      "prompt": "This page has a guided tour."
+    },
+    "version": "Guide for Monize {version}",
+    "latestOnline": "The latest guide is on monize.net"
+  },
+  "search": {
+    "title": "Search the guide",
+    "placeholder": "Search the guide",
+    "ariaLabel": "Search the guide",
+    "contextHeading": "Help for this screen",
+    "noResults": "No results for “{query}”",
+    "error": "Search failed. Try again.",
+    "hint": {
+      "navigate": "to navigate",
+      "select": "to select",
+      "close": "to close"
+    }
+  },
+  "markdown": {
+    "screenshot": "Screenshot",
+    "viewScreenshot": "View screenshot on monize.net",
+    "callout": {
+      "note": "Note",
+      "tip": "Tip",
+      "important": "Important",
+      "warning": "Warning",
+      "caution": "Caution"
+    }
+  }
+}

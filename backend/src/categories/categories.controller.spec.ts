@@ -3,6 +3,7 @@ import { CategoriesController } from "./categories.controller";
 import { CategoriesService } from "./categories.service";
 import { CategoryDetailService } from "./category-detail.service";
 import { JointCategoriesService } from "./joint-categories.service";
+import { DelegationService } from "../delegation/delegation.service";
 import { DEFAULT_CATEGORY_COUNTRY_CODES } from "./country-category-additions";
 
 describe("CategoriesController", () => {
@@ -16,6 +17,7 @@ describe("CategoriesController", () => {
   let mockJointCategoriesService: Partial<
     Record<keyof JointCategoriesService, jest.Mock>
   >;
+  let mockDelegationService: { readableAccountIds: jest.Mock };
   const mockReq = { user: { id: "user-1" } };
 
   beforeEach(async () => {
@@ -38,6 +40,7 @@ describe("CategoriesController", () => {
     mockJointCategoriesService = {
       create: jest.fn(),
     };
+    mockDelegationService = { readableAccountIds: jest.fn() };
 
     const module: TestingModule = await Test.createTestingModule({
       controllers: [CategoriesController],
@@ -54,6 +57,7 @@ describe("CategoriesController", () => {
           provide: JointCategoriesService,
           useValue: mockJointCategoriesService,
         },
+        { provide: DelegationService, useValue: mockDelegationService },
       ],
     }).compile();
 
@@ -61,15 +65,36 @@ describe("CategoriesController", () => {
   });
 
   describe("getDetail()", () => {
-    it("delegates to categoryDetailService.getDetail with userId and id", () => {
-      mockCategoryDetailService.getDetail!.mockReturnValue("detail");
+    it("delegates to categoryDetailService.getDetail with userId and id, unscoped for the owner", async () => {
+      mockCategoryDetailService.getDetail!.mockResolvedValue("detail");
 
-      const result = controller.getDetail(mockReq, "cat-1");
+      const result = await controller.getDetail(mockReq, "cat-1");
 
       expect(result).toBe("detail");
       expect(mockCategoryDetailService.getDetail).toHaveBeenCalledWith(
         "user-1",
         "cat-1",
+        undefined,
+      );
+      expect(mockDelegationService.readableAccountIds).not.toHaveBeenCalled();
+    });
+
+    it("scopes an acting delegate to their READ-granted accounts", async () => {
+      mockCategoryDetailService.getDetail!.mockResolvedValue("detail");
+      mockDelegationService.readableAccountIds.mockResolvedValue(["acc-a"]);
+
+      await controller.getDetail(
+        { user: { id: "owner-1", isActing: true, delegationId: "g1" } },
+        "cat-1",
+      );
+
+      expect(mockDelegationService.readableAccountIds).toHaveBeenCalledWith(
+        "g1",
+      );
+      expect(mockCategoryDetailService.getDetail).toHaveBeenCalledWith(
+        "owner-1",
+        "cat-1",
+        ["acc-a"],
       );
     });
   });

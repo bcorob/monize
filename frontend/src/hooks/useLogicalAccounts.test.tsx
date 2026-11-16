@@ -1,18 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { renderHook } from '@testing-library/react';
-import { NextIntlClientProvider } from 'next-intl';
+import { renderHook } from '@/test/render';
 import { useLogicalAccounts } from './useLogicalAccounts';
 import { Account } from '@/types/account';
 import { PortfolioSummary } from '@/types/investment';
-import messages from '@/i18n/messages/en/accounts.json';
-
-function wrapper({ children }: { children: React.ReactNode }) {
-  return (
-    <NextIntlClientProvider locale="en" messages={{ accounts: messages }}>
-      {children}
-    </NextIntlClientProvider>
-  );
-}
 
 const brokerage = {
   id: 'brok',
@@ -46,8 +36,7 @@ describe('useLogicalAccounts', () => {
   it('folds a pair and strips the localized suffix', () => {
     const { result } = renderHook(
       () => useLogicalAccounts([brokerage, cash], summary),
-      { wrapper },
-    );
+          );
 
     expect(result.current).toHaveLength(1);
     expect(result.current[0].displayName).toBe('TFSA');
@@ -59,8 +48,7 @@ describe('useLogicalAccounts', () => {
   it('leaves the combined value unknown while there is no portfolio summary', () => {
     const { result } = renderHook(
       () => useLogicalAccounts([brokerage, cash], null),
-      { wrapper },
-    );
+          );
 
     expect(result.current[0].combinedValue).toBeNull();
   });
@@ -69,8 +57,7 @@ describe('useLogicalAccounts', () => {
     const accounts = [brokerage, cash];
     const { result, rerender } = renderHook(
       () => useLogicalAccounts(accounts, summary),
-      { wrapper },
-    );
+          );
     const first = result.current;
 
     rerender();

@@ -1,7 +1,11 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { DataSource } from "typeorm";
 import { NotFoundException } from "@nestjs/common";
-import { AiInsightsService } from "./ai-insights.service";
+import {
+  AiInsightsService,
+  INSIGHT_GENERATION_LEASE_MS,
+} from "./ai-insights.service";
+import { PROVIDER_CALL_BUDGET_MS } from "../providers/provider-call-budget";
 import { AiInsight } from "../entities/ai-insight.entity";
 import { AiService } from "../ai.service";
 import { AiUsageService } from "../ai-usage.service";
@@ -16,6 +20,7 @@ import {
   createJobClaimMock,
   JobClaimMock,
   jobClaimProvider,
+  TEST_LEASE_TOKEN,
 } from "../../test-helpers/job-claim-testing";
 
 jest.mock("../../common/db/scoped-db", () =>
@@ -87,6 +92,8 @@ describe("AiInsightsService", () => {
       daysElapsedInMonth: 18,
       daysInMonth: 28,
       currency: "USD",
+      fxComplete: true,
+      missingRatePairs: [],
       ...overrides,
     };
   }
@@ -312,6 +319,44 @@ describe("AiInsightsService", () => {
       expect(jobClaims.claimLease.mock.calls.length).toBe(leasesBefore);
     });
 
+    it("re-reads the cooldown under the lease and stands down when another replica just generated", async () => {
+      // The race the second read closes: this replica read "no recent insight"
+      // while another was still generating, then won the lease as soon as the
+      // winner released it. By then the winner's rows are committed, so the
+      // read under the lease finds them. Without it, this replica generates and
+      // saves a duplicate set and pays the provider again.
+      const qb = mockQb();
+      qb.getOne
+        .mockResolvedValueOnce(null) // before the lease: nothing yet
+        .mockResolvedValueOnce(makeInsight()); // under the lease: the winner's row
+      qb.getMany.mockResolvedValue([makeInsight()]);
+      mockInsightRepo.createQueryBuilder.mockReturnValue(qb);
+      // The job-claim double is shared across this file (the others are rebuilt
+      // in beforeEach), so look only at the calls this test made.
+      const leasesBefore = jobClaims.claimLease.mock.calls.length;
+      const releasesBefore = jobClaims.releaseLease.mock.calls.length;
+
+      const result = await service.generateInsights(userId);
+
+      expect(jobClaims.claimLease.mock.calls.slice(leasesBefore)).toEqual([
+        [
+          "ai_insight_generation",
+          userId,
+          expect.any(String),
+          expect.any(Number),
+        ],
+      ]);
+      expect(qb.getOne).toHaveBeenCalledTimes(2);
+      expect(mockAggregatorService.computeAggregates).not.toHaveBeenCalled();
+      expect(mockAiService.complete).not.toHaveBeenCalled();
+      expect(mockInsightRepo.save).not.toHaveBeenCalled();
+      expect(result.insights).toHaveLength(1);
+      // Standing down still hands the lease back, by this attempt's token.
+      expect(jobClaims.releaseLease.mock.calls.slice(releasesBefore)).toEqual([
+        ["ai_insight_generation", userId, expect.any(String), TEST_LEASE_TOKEN],
+      ]);
+    });
+
     it("generates insights when no recent insights exist", async () => {
       const qb = mockQb();
       let callIndex = 0;
@@ -331,6 +376,52 @@ describe("AiInsightsService", () => {
       );
       expect(mockAiService.complete).toHaveBeenCalled();
       expect(mockInsightRepo.save).toHaveBeenCalled();
+    });
+
+    it("runs the generation under a renewed lease that outlasts the provider call (A26-L13)", async () => {
+      const qb = mockQb();
+      qb.getOne.mockResolvedValue(null);
+      qb.getMany.mockResolvedValue([]);
+      qb.getRawOne.mockResolvedValue(null);
+      mockInsightRepo.createQueryBuilder.mockReturnValue(qb);
+      const before = jobClaims.whileLeaseHeld.mock.calls.length;
+
+      await service.generateInsights(userId);
+
+      expect(INSIGHT_GENERATION_LEASE_MS).toBeGreaterThan(
+        PROVIDER_CALL_BUDGET_MS,
+      );
+      expect(jobClaims.whileLeaseHeld.mock.calls.slice(before)).toEqual([
+        [
+          "ai_insight_generation",
+          userId,
+          expect.any(String),
+          TEST_LEASE_TOKEN,
+          INSIGHT_GENERATION_LEASE_MS,
+          expect.any(Function),
+        ],
+      ]);
+    });
+
+    it("saves nothing when its lease was retaken while the provider ran (A26-L13)", async () => {
+      const qb = mockQb();
+      qb.getOne.mockResolvedValue(null);
+      qb.getMany.mockResolvedValue([]);
+      qb.getRawOne.mockResolvedValue(null);
+      mockInsightRepo.createQueryBuilder.mockReturnValue(qb);
+      jobClaims.holdsLease.mockResolvedValueOnce(false);
+
+      await service.generateInsights(userId);
+
+      expect(mockAiService.complete).toHaveBeenCalled();
+      expect(jobClaims.holdsLease).toHaveBeenCalledWith(
+        expect.anything(),
+        "ai_insight_generation",
+        userId,
+        expect.any(String),
+        TEST_LEASE_TOKEN,
+      );
+      expect(mockInsightRepo.save).not.toHaveBeenCalled();
     });
 
     it("appends a language directive when the user's language is not English", async () => {
@@ -382,6 +473,7 @@ describe("AiInsightsService", () => {
             {
               payeeName: "Netflix",
               payeeId: "payee-1",
+              currencyCode: "USD",
               amounts: [15.99, 15.99, 15.99],
               dates: ["2026-01-01", "2026-02-01", "2026-03-01"],
               frequency: "monthly",
@@ -881,6 +973,7 @@ describe("AiInsightsService", () => {
             {
               payeeName: "Netflix",
               payeeId: "payee-1",
+              currencyCode: "USD",
               amounts: [15.99, 15.99, 17.99],
               dates: ["2025-10-01", "2025-11-01", "2025-12-01"],
               frequency: "monthly",
@@ -901,6 +994,51 @@ describe("AiInsightsService", () => {
       expect(prompt).toContain("Netflix");
       expect(prompt).toContain("monthly");
       expect(prompt).toContain("current=17.99");
+    });
+
+    it("states a foreign recurring charge in the prompt's currency, naming what was billed", async () => {
+      const qb = mockQb();
+      qb.getOne.mockResolvedValue(null);
+      qb.getMany.mockResolvedValue([]);
+      qb.getRawOne.mockResolvedValue(null);
+      mockInsightRepo.createQueryBuilder.mockReturnValue(qb);
+
+      mockAggregatorService.computeAggregates!.mockResolvedValue(
+        makeAggregates({
+          recurringCharges: [
+            {
+              payeeName: "Spotify",
+              payeeId: "payee-2",
+              currencyCode: "EUR",
+              amounts: [10, 10, 12],
+              dates: ["2025-10-01", "2025-11-01", "2025-12-01"],
+              frequency: "monthly",
+              currentAmount: 12,
+              previousAmount: 10,
+              categoryName: "Entertainment",
+              categoryId: "cat-2",
+              converted: {
+                currency: "USD",
+                currentAmount: 13.2,
+                previousAmount: null,
+              },
+            },
+          ],
+        }),
+      );
+
+      await service.generateInsights(userId);
+
+      const prompt = mockAiService.complete!.mock.calls[0][1].messages[0]
+        .content as string;
+      // Converted where a rate exists, unknown where none does, never the
+      // billed 12 read as 12 USD; the change is the billed price's.
+      expect(prompt).toContain("current=13.20 (billed 12.00 EUR)");
+      expect(prompt).toContain(
+        "previous=unknown (no EUR->USD exchange rate; billed 10.00 EUR)",
+      );
+      expect(prompt).toContain("change=20.0%");
+      expect(prompt).not.toContain("current=12.00,");
     });
 
     it("includes monthly spending trends in prompt", async () => {

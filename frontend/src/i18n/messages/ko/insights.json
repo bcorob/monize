@@ -4,19 +4,29 @@
     "subtitle": "AI 기반의 지출 패턴 및 이상 징후 분석"
   },
   "list": {
-    "lastUpdated": "마지막 업데이트: {date} {time}",
     "refreshButton": "인사이트 새로고침",
-    "generating": "생성 중...",
+    "refreshAge": "({time})",
+    "summary": {
+      "active": "활성 인사이트",
+      "alerts": "알림",
+      "warnings": "경고"
+    },
     "allTypes": "모든 유형",
-    "allSeverities": "모든 심각도",
+    "typeFilterLabel": "유형",
+    "severityFilterLabel": "심각도",
+    "severityFilter": {
+      "all": "전체 ({count})",
+      "alert": "알림 ({count})",
+      "warning": "경고 ({count})",
+      "info": "정보 ({count})"
+    },
     "showDismissed": "해제된 항목 표시",
     "emptyNoInsights": "아직 생성된 인사이트가 없습니다. \"인사이트 새로고침\"을 클릭하여 지출 패턴을 분석하세요.",
     "emptyFiltered": "현재 필터와 일치하는 인사이트가 없습니다.",
     "generateButton": "인사이트 생성",
-    "alertCount": "{count, plural, one {# 알림} other {# 알림}}",
-    "warningCount": "{count, plural, one {# 경고} other {# 경고}}",
     "errorLoadFailed": "인사이트를 불러오지 못했습니다. 다시 시도해 주세요.",
     "errorGenerateFailed": "인사이트를 생성하지 못했습니다. AI 제공업체가 구성되어 있는지 확인하세요.",
+    "errorDismissFailed": "인사이트를 해제하지 못했습니다. 다시 시도해 주세요.",
     "errorTimeout": "인사이트 생성에 예상보다 시간이 걸리고 있습니다. 잠시 기다리거나 페이지를 새로고침하세요."
   },
   "card": {

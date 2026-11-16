@@ -13,19 +13,22 @@ import type {
   RateTimelineRow,
   ScenarioComparison,
 } from '@/lib/loan-schedule-types';
-import { round2 } from '@/lib/loan-schedule-types';
+import { roundToCents } from '@/lib/format';
+import { financialTodayYmd } from '@/lib/financial-today';
 
 /**
  * The annual rate (percentage) in effect on a given date: the latest row with
- * `effectiveDate <= date`, else the earliest row's rate (a date before the
- * first recorded change still amortizes at the origination rate), else the
- * fallback. Shared by the schedule table (per-row historical rate) and
+ * `effectiveDate <= date`. Before the first row, the earliest row when it is
+ * dated on or before today (the loan's recorded history start, so an
+ * origination-era payment keeps the origination rate), else the fallback (the
+ * account's rate: a history that starts in the future). Shared by the schedule table (per-row historical rate) and
  * `buildRateTimeline`'s starting rate.
  */
 export function effectiveAnnualRateOn(
   rows: RateTimelineRow[],
   dateIso: string,
   fallbackAnnualRate: number,
+  todayYmd: string = financialTodayYmd(undefined),
 ): number {
   const sorted = [...rows].sort((a, b) =>
     a.effectiveDate.localeCompare(b.effectiveDate),
@@ -34,7 +37,13 @@ export function effectiveAnnualRateOn(
   if (atOrBefore.length > 0) {
     return atOrBefore[atOrBefore.length - 1].annualRate;
   }
-  return sorted[0]?.annualRate ?? fallbackAnnualRate;
+  // Nothing on or before the date. A history that already began (earliest row
+  // not in the future) gives its origination rate to earlier payments; one that
+  // only starts ahead says nothing about today, so the account's own rate.
+  if (sorted.length > 0 && sorted[0].effectiveDate <= todayYmd) {
+    return sorted[0].annualRate;
+  }
+  return fallbackAnnualRate;
 }
 
 /**
@@ -58,11 +67,12 @@ export function buildRateTimeline(
   const atOrBefore = sorted.filter(
     (row) => row.effectiveDate <= scheduleStartIso,
   );
-  const startingAnnualRate = effectiveAnnualRateOn(
-    rows,
-    scheduleStartIso,
-    fallbackAnnualRate,
-  );
+  // A schedule anchored at origination may start before the first row: the
+  // earliest row is then the origination rate (unlike `effectiveAnnualRateOn`).
+  const startingAnnualRate =
+    atOrBefore.length === 0 && sorted.length > 0
+      ? sorted[0].annualRate
+      : effectiveAnnualRateOn(rows, scheduleStartIso, fallbackAnnualRate);
   // Mirror the rate's "before the earliest row, the earliest row applies"
   // fallback for the payment: a schedule starting shortly before the first
   // recorded row (payment_start_date precedes the first installment, which is
@@ -110,6 +120,15 @@ export interface EffectiveLoanTerms {
   /** Stated by an applicable `manual` or `inferred` row; authoritative. */
   paymentAmount: number | null;
   /**
+   * The effective date of the row that stated `paymentAmount`, so a caller can
+   * tell whether an actual installment observed AFTER it has superseded the
+   * statement. Null whenever `paymentAmount` is null. A payment stated in a
+   * rate-change row is a snapshot of the contractual installment on that day;
+   * for a loan whose lender re-amortizes after each overpayment (a lower
+   * installment), every later payment is a newer statement of what is owed.
+   */
+  paymentEffectiveDate: string | null;
+  /**
    * From an applicable `initial` row. Either a real observed installment or a
    * stale copy of `account.paymentAmount` -- see `RateTimelineRow.source` -- so a
    * caller ranks it with the account's own scalar rather than above it.
@@ -138,6 +157,7 @@ export function resolveEffectiveLoanTerms(
     // to the caller as null rather than becoming a measured zero.
     annualRate: latest?.annualRate ?? fallbackAnnualRate ?? null,
     paymentAmount: statedPayment?.newPaymentAmount ?? null,
+    paymentEffectiveDate: statedPayment?.effectiveDate ?? null,
     snapshotPaymentAmount: snapshotPayment?.newPaymentAmount ?? null,
   };
 }
@@ -165,14 +185,15 @@ export function compareSchedules(
       ? monthsBetween(scenario.payoffDate, baseline.payoffDate)
       : null,
     interestSaved: comparable
-      ? round2(baseline.totalInterest - scenario.totalInterest)
+      ? roundToCents(baseline.totalInterest - scenario.totalInterest)
       : null,
     // A truncated schedule's `finalPaymentAmount` is the installment at its last
     // PROJECTED row, not its last payment -- there is no last payment -- so a
     // drop measured from it is as unknown as the rest.
-    installmentReduction: comparable
-      ? round2(baseline.finalPaymentAmount - scenario.finalPaymentAmount)
-      : null,
+    installmentReduction:
+      comparable && scenario.levelInstallment !== false
+        ? roundToCents(baseline.finalPaymentAmount - scenario.finalPaymentAmount)
+        : null,
   };
 }
 

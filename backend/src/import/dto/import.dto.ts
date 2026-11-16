@@ -15,8 +15,10 @@ import {
   Min,
   Max,
   ArrayMaxSize,
+  IsEnum,
 } from "class-validator";
 import { Type } from "class-transformer";
+import { AccountType } from "../../accounts/entities/account.entity";
 import { SanitizeHtml } from "../../common/decorators/sanitize-html.decorator";
 import type { CsvInvestmentSummary } from "../csv-parser";
 
@@ -54,7 +56,8 @@ export class CategoryMappingDto {
 
   @ApiPropertyOptional({
     description:
-      "Name for a new parent category to create (used when parent does not exist yet)",
+      "Name for a new parent category to create (used when parent does not exist yet). " +
+      "A colon-delimited path (e.g. Housing:Mortgage) finds or creates every level.",
   })
   @IsOptional()
   @IsString()
@@ -139,6 +142,7 @@ export class AccountMappingDto {
     "LINE_OF_CREDIT",
     "ASSET",
     "OTHER",
+    "CRYPTO",
   ])
   accountType?: string;
 
@@ -265,6 +269,54 @@ export class ImportQifDto {
   dateFormat?: string;
 }
 
+export class CsvUnreadableDateRowDto {
+  @ApiProperty({
+    description:
+      "The line of the file the row starts on, 1-based with the header",
+  })
+  rowNumber: number;
+
+  @ApiProperty({
+    description: "The date field as the file gave it, empty when it has none",
+  })
+  rawDate: string;
+}
+
+export class CsvUnreadableDatesDto {
+  @ApiProperty({ description: "How many rows have a date that cannot be read" })
+  count: number;
+
+  @ApiProperty({
+    type: [CsvUnreadableDateRowDto],
+    description: "The first of them in file order (at most SKIPPED_ROWS_LIMIT)",
+  })
+  rows: CsvUnreadableDateRowDto[];
+}
+
+export class CsvUnreadableAmountRowDto {
+  @ApiProperty({
+    description:
+      "The line of the file the row starts on, 1-based with the header",
+  })
+  rowNumber: number;
+
+  @ApiProperty({ description: "The amount field as the file gave it" })
+  rawAmount: string;
+}
+
+export class CsvUnreadableAmountsDto {
+  @ApiProperty({
+    description: "How many rows have an amount that cannot be read",
+  })
+  count: number;
+
+  @ApiProperty({
+    type: [CsvUnreadableAmountRowDto],
+    description: "The first of them in file order (at most SKIPPED_ROWS_LIMIT)",
+  })
+  rows: CsvUnreadableAmountRowDto[];
+}
+
 export class ParsedQifResponseDto {
   @ApiProperty()
   accountType: string;
@@ -314,7 +366,93 @@ export class ParsedQifResponseDto {
       "Investment-mode CSV parse summary: per-action counts, cash fallbacks, and rejected rows",
   })
   investmentSummary?: CsvInvestmentSummary;
+
+  @ApiPropertyOptional({
+    type: () => CsvUnreadableDatesDto,
+    description:
+      "CSV parses only: the rows the import will leave out because their date cannot be read under the mapping's date format",
+  })
+  unreadableDates?: CsvUnreadableDatesDto;
+
+  @ApiPropertyOptional({
+    type: () => CsvUnreadableAmountsDto,
+    description:
+      "CSV parses only: the rows the import will leave out because their amount cannot be read",
+  })
+  unreadableAmounts?: CsvUnreadableAmountsDto;
 }
+
+/**
+ * Why an import left a row of the file out: `alreadyImported` when the account
+ * already holds the row's bank id (OFX `FITID`), `duplicateTransfer` when the
+ * transfer is already recorded between the same two accounts,
+ * `unreadableDate` when a CSV row's date cannot be read under the mapping's
+ * date format (or the row has none), `unreadableAmount` when a CSV row's amount
+ * (or debit or credit) field holds text that cannot be read as an amount. The
+ * rest are an investment-mode CSV row
+ * whose action needs data it does not carry (`InvestmentRejectReason`):
+ * `missingSecurity`, `missingQuantity`, `missingAmount`, `missingProceeds`
+ * (a sell with neither price nor amount), `missingSplitRatio`.
+ */
+export const IMPORT_SKIP_REASONS = [
+  "alreadyImported",
+  "duplicateTransfer",
+  "unreadableDate",
+  "unreadableAmount",
+  "missingSecurity",
+  "missingQuantity",
+  "missingAmount",
+  "missingProceeds",
+  "missingSplitRatio",
+] as const;
+
+export type ImportSkipReason = (typeof IMPORT_SKIP_REASONS)[number];
+
+export class ImportSkippedRowDto {
+  @ApiProperty({
+    description:
+      "The row's date, YYYY-MM-DD; empty when the reason is `unreadableDate`, whose `rawDate` carries the file's text",
+  })
+  date: string;
+
+  @ApiProperty({ description: "The row's amount as the file gave it" })
+  amount: number;
+
+  @ApiProperty({
+    description: "The currency of the account the row was imported into",
+  })
+  currencyCode: string;
+
+  @ApiProperty({ description: "The row's payee text, empty when it has none" })
+  payee: string;
+
+  @ApiProperty({ enum: IMPORT_SKIP_REASONS })
+  reason: ImportSkipReason;
+
+  @ApiPropertyOptional({
+    description:
+      "The line of the file the row starts on, 1-based with the header; set for a CSV row the parse left out (`unreadableDate`, `unreadableAmount` and the investment-mode reasons)",
+  })
+  rowNumber?: number;
+
+  @ApiPropertyOptional({
+    description:
+      "The date field as the file gave it, empty when it has none; set for `unreadableDate`",
+  })
+  rawDate?: string;
+
+  @ApiPropertyOptional({
+    description:
+      "The amount field as the file gave it; set for `unreadableAmount`, whose `amount` is 0 because the file's text gives none",
+  })
+  rawAmount?: string;
+}
+
+/**
+ * How many skipped rows the result names. `skipped` keeps the full count; the
+ * import screen shows at most this many and counts the rest.
+ */
+export const SKIPPED_ROWS_LIMIT = 50;
 
 export class ImportResultDto {
   @ApiProperty()
@@ -322,6 +460,12 @@ export class ImportResultDto {
 
   @ApiProperty()
   skipped: number;
+
+  @ApiProperty({
+    type: [ImportSkippedRowDto],
+    description: `The first ${SKIPPED_ROWS_LIMIT} rows counted in \`skipped\`, in the order the import reached them, so a person can see which rows of the file were not written and why. \`skipped\` keeps the full count.`,
+  })
+  skippedRows: ImportSkippedRowDto[];
 
   @ApiProperty()
   errors: number;
@@ -365,9 +509,21 @@ export class ImportResultDto {
 
   @ApiPropertyOptional({
     description:
+      "Number of imported share acquisitions of a bond-program security stored without a series (the file names none and none was on sale on the date, or the action has no purchase date): the bond lots report such a row until its series is chosen. Absent when zero.",
+  })
+  bondRowsWithoutSeries?: number;
+
+  @ApiPropertyOptional({
+    description:
       "Number of Quicken merged split transfers that were automatically removed during import",
   })
   mergedTransfersDeleted?: number;
+
+  @ApiPropertyOptional({
+    description:
+      "Number of imported transactions that one of the user's transaction rules (trigger: import) changed. Absent when no rule changed a row.",
+  })
+  transactionsChangedByRules?: number;
 
   @ApiPropertyOptional({
     type: [String],
@@ -378,6 +534,21 @@ export class ImportResultDto {
 }
 
 // --- Multi-account QIF DTOs ---
+
+export class QifAccountTypeChoiceDto {
+  @ApiProperty({
+    description:
+      "Account name exactly as the file spells it, for an account whose type the file leaves unknown",
+  })
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(255)
+  accountName: string;
+
+  @ApiProperty({ enum: AccountType, description: "Type to create it as" })
+  @IsEnum(AccountType)
+  accountType: AccountType;
+}
 
 export class ImportQifMultiAccountDto {
   @ApiProperty({ description: "QIF file content as string" })
@@ -416,6 +587,18 @@ export class ImportQifMultiAccountDto {
   @ValidateNested({ each: true })
   @Type(() => SecurityMappingDto)
   securityMappings?: SecurityMappingDto[];
+
+  @ApiPropertyOptional({
+    description:
+      "The user's type for each account the file leaves without one; a type the file names is kept",
+    type: [QifAccountTypeChoiceDto],
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(1000)
+  @ValidateNested({ each: true })
+  @Type(() => QifAccountTypeChoiceDto)
+  accountTypes?: QifAccountTypeChoiceDto[];
 }
 
 export class ParsedQifMultiAccountResponseDto {
@@ -439,10 +622,13 @@ export class ParsedQifMultiAccountResponseDto {
     description: string;
   }>;
 
-  @ApiProperty({ description: "Account blocks found in the file" })
+  @ApiProperty({
+    description:
+      "Account blocks found in the file; accountType is null when the file names no type QIF defines",
+  })
   accounts: Array<{
     accountName: string;
-    accountType: string;
+    accountType: string | null;
     transactionCount: number;
     dateRange: { start: string; end: string };
   }>;
@@ -721,11 +907,15 @@ export class CsvColumnMappingConfigDto {
   @Max(100)
   reconciliationStatus?: number;
 
-  @ApiProperty({ description: "Date format for parsing" })
+  @ApiProperty({
+    description:
+      "Date format for parsing: a built-in one (MM/DD/YYYY, DD/MM/YYYY, YYYY-MM-DD, YYYY-DD-MM, DD-MMM-YYYY, MMM DD, YYYY) or a pattern of YYYY, YY, MMM, MM, DD and separators",
+  })
   @IsString()
-  @Matches(/^[YDMW/\-.]+$/, {
+  // Space and comma separate a month name ("MMM DD, YYYY", "DD MMM YYYY").
+  @Matches(/^[YDMW/\-., ]+$/, {
     message:
-      "dateFormat must contain only date pattern characters (Y, M, D) and separators (/, -, .)",
+      "dateFormat must contain only date pattern characters (Y, M, D) and separators (/, -, ., comma, space)",
   })
   @MaxLength(20)
   dateFormat: string;
@@ -991,13 +1181,16 @@ export class ImportCsvDto {
   securityMappings?: SecurityMappingDto[];
 
   @ApiPropertyOptional({
-    description: "Date format override",
+    description:
+      "Date format override; the wizard sends the column mapping's, so it takes the same patterns",
   })
   @IsOptional()
   @IsString()
-  @Matches(/^[YDMW/\-.]+$/, {
+  // Space and comma separate a month name ("MMM DD, YYYY"), as in
+  // CsvColumnMappingConfigDto.dateFormat.
+  @Matches(/^[YDMW/\-., ]+$/, {
     message:
-      "dateFormat must contain only date pattern characters (Y, M, D) and separators (/, -, .)",
+      "dateFormat must contain only date pattern characters (Y, M, D) and separators (/, -, ., comma, space)",
   })
   @MaxLength(20)
   dateFormat?: string;
@@ -1073,6 +1266,14 @@ export class CsvHeadersResponseDto {
 
   @ApiProperty()
   rowCount: number;
+
+  @ApiProperty({
+    type: [String],
+    nullable: true,
+    description:
+      "Per column, the date format that reads the most of its values over the whole file, or null where none reads any",
+  })
+  columnDateFormats: (string | null)[];
 }
 
 export class ColumnMappingResponseDto {

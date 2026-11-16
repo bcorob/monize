@@ -1,4 +1,5 @@
 import { EntityManager } from "typeorm";
+import { currencyKindRows } from "../../../test-helpers/currency-kind-testing";
 import {
   AccountSubType,
   AccountType,
@@ -32,8 +33,15 @@ function repoDouble(existing: unknown[] = []) {
   } as unknown as Record<string, jest.Mock>;
 }
 
+/** The `currencies` kind read (INV-CRYPTO-001) answers BTC as a coin. */
 function managerFor(repo: Record<string, jest.Mock>): EntityManager {
-  return { getRepository: jest.fn(() => repo) } as unknown as EntityManager;
+  return {
+    getRepository: jest.fn(() => repo),
+    query: jest.fn(
+      async (sql: string, params?: unknown[]) =>
+        currencyKindRows(sql, params) ?? [],
+    ),
+  } as unknown as EntityManager;
 }
 
 function account(overrides: Partial<MappedAccount> = {}): MappedAccount {
@@ -69,6 +77,17 @@ function category(overrides: Partial<MappedCategory> = {}): MappedCategory {
 }
 
 describe("writeAccounts", () => {
+  it("refuses a Money account in a CRYPTO currency before inserting it (INV-CRYPTO-001)", async () => {
+    const repo = repoDouble();
+
+    await expect(
+      writeAccounts(managerFor(repo), "user-1", [
+        account({ currencyCode: "BTC" }),
+      ]),
+    ).rejects.toThrow(/BTC is a CRYPTO currency/);
+    expect(repo.insert).not.toHaveBeenCalled();
+  });
+
   it("inserts new accounts and reports how many were created", async () => {
     const repo = repoDouble();
 
@@ -87,7 +106,14 @@ describe("writeAccounts", () => {
   });
 
   it("reuses an account the user already has, matched case-insensitively", async () => {
-    const repo = repoDouble([{ id: "existing-1", name: "CHEQUING" }]);
+    const repo = repoDouble([
+      {
+        id: "existing-1",
+        name: "CHEQUING",
+        currencyCode: "CAD",
+        isClosed: false,
+      },
+    ]);
 
     const written = await writeAccounts(managerFor(repo), "user-1", [
       account(),
@@ -97,6 +123,61 @@ describe("writeAccounts", () => {
     expect(written.created).toBe(0);
     expect(repo.insert).not.toHaveBeenCalled();
     expect(written.idByKey.get("acct-1")).toBe("existing-1");
+  });
+
+  it("reports the reused account ids", async () => {
+    const repo = repoDouble([
+      {
+        id: "existing-1",
+        name: "Chequing",
+        currencyCode: "CAD",
+        isClosed: false,
+      },
+    ]);
+
+    const written = await writeAccounts(managerFor(repo), "user-1", [
+      account(),
+    ]);
+
+    expect([...written.reusedIds]).toEqual(["existing-1"]);
+  });
+
+  it("refuses before any insert when a name-matched account has another currency", async () => {
+    const repo = repoDouble([
+      {
+        id: "existing-1",
+        name: "Savings",
+        currencyCode: "EUR",
+        isClosed: false,
+      },
+    ]);
+
+    await expect(
+      writeAccounts(managerFor(repo), "user-1", [
+        account({ key: "acct-0", name: "Other" }),
+        account({ name: "Savings", currencyCode: "USD" }),
+      ]),
+    ).rejects.toThrow(/"Savings" uses EUR.*uses USD/);
+    expect(repo.insert).not.toHaveBeenCalled();
+  });
+
+  it("refuses before any insert when a name-matched account is closed", async () => {
+    const repo = repoDouble([
+      {
+        id: "existing-1",
+        name: "Savings",
+        currencyCode: "CAD",
+        isClosed: true,
+      },
+    ]);
+
+    await expect(
+      writeAccounts(managerFor(repo), "user-1", [
+        account({ key: "acct-0", name: "Other" }),
+        account({ name: "Savings" }),
+      ]),
+    ).rejects.toThrow(/"Savings" is closed/);
+    expect(repo.insert).not.toHaveBeenCalled();
   });
 
   it("seeds current_balance from the opening balance and leaves the account open", async () => {
@@ -186,7 +267,14 @@ describe("writeAccounts", () => {
   });
 
   it("does not re-link a reused account", async () => {
-    const repo = repoDouble([{ id: "existing-1", name: "Brokerage" }]);
+    const repo = repoDouble([
+      {
+        id: "existing-1",
+        name: "Brokerage",
+        currencyCode: "CAD",
+        isClosed: false,
+      },
+    ]);
 
     await writeAccounts(managerFor(repo), "user-1", [
       account({ key: "acct-5", name: "Brokerage", linkedKey: "acct-5-cash" }),
@@ -274,10 +362,53 @@ describe("applyDeferredClosures", () => {
 });
 
 describe("writeCategories", () => {
-  it("creates parents before children and hangs the child off its parent", async () => {
-    const repo = repoDouble();
+  /**
+   * A manager whose `INSERT ... ON CONFLICT DO NOTHING RETURNING id` returns a
+   * fresh id, or no row for a `name|parentId` already in `taken` -- the shape
+   * PostgreSQL gives a losing insert -- and whose `findOne` then finds the
+   * winner.
+   */
+  function categoryManager(
+    repo: Record<string, jest.Mock>,
+    taken: ReadonlyMap<string, string> = new Map(),
+  ) {
+    let next = 0;
+    const query = jest.fn(async (_sql: string, params: unknown[]) => {
+      if (taken.has(`${String(params[1])}|${String(params[2] ?? "")}`)) {
+        return [];
+      }
+      next += 1;
+      return [{ id: `new-${next}` }];
+    });
+    const findOne = jest.fn(
+      async (
+        _entity: unknown,
+        options: { where: { name: string; parentId: unknown } },
+      ) => {
+        const parent =
+          typeof options.where.parentId === "string"
+            ? options.where.parentId
+            : "";
+        const id = taken.get(`${options.where.name}|${parent}`);
+        return id === undefined ? null : { id };
+      },
+    );
+    const manager = {
+      getRepository: jest.fn(() => repo),
+      query,
+      findOne,
+    } as unknown as EntityManager;
+    return { manager, query, findOne };
+  }
 
-    const written = await writeCategories(managerFor(repo), "user-1", [
+  /** The `[userId, name, parentId, isIncome]` of every category INSERT. */
+  const inserts = (query: jest.Mock) =>
+    query.mock.calls.map((call) => call[1] as unknown[]);
+
+  it("creates parents before children and hangs the child off its parent", async () => {
+    const { manager, query } = categoryManager(repoDouble());
+
+    const written = await writeCategories(manager, "user-1", [
       category({ handle: 1, name: "Utilities", fullName: "Utilities" }),
       category({
         handle: 2,
@@ -289,44 +420,64 @@ describe("writeCategories", () => {
 
     expect(written.created).toBe(2);
     const parentId = written.idByFullName.get("Utilities");
-    expect(repo.insert).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({ name: "Gas", parentId }),
-    );
+    expect(inserts(query)[1]).toEqual(["user-1", "Gas", parentId, false]);
+    expect(String(query.mock.calls[0][0])).toContain("ON CONFLICT DO NOTHING");
   });
 
   it("keeps Money's income flag", async () => {
-    const repo = repoDouble();
+    const { manager, query } = categoryManager(repoDouble());
 
-    await writeCategories(managerFor(repo), "user-1", [
+    await writeCategories(manager, "user-1", [
       category({ name: "Salary", fullName: "Salary", isIncome: true }),
     ]);
 
-    expect(repo.insert).toHaveBeenCalledWith(
-      expect.objectContaining({ name: "Salary", isIncome: true }),
-    );
+    expect(inserts(query)[0]).toEqual(["user-1", "Salary", null, true]);
   });
 
   it("reuses an existing category matched on name and parent", async () => {
-    const repo = repoDouble([
-      { id: "existing-1", name: "groceries", parentId: null },
-    ]);
+    const { manager, query } = categoryManager(
+      repoDouble([{ id: "existing-1", name: "groceries", parentId: null }]),
+    );
 
-    const written = await writeCategories(managerFor(repo), "user-1", [
-      category(),
-    ]);
+    const written = await writeCategories(manager, "user-1", [category()]);
 
     expect(written.created).toBe(0);
     expect(written.idByFullName.get("Groceries")).toBe("existing-1");
-    expect(repo.insert).not.toHaveBeenCalled();
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it("adopts a category another transaction created since the read (INV-IMPORT-003)", async () => {
+    // Not in the read the writer started from, but committed by the time its
+    // INSERT runs: the insert loses and the winner's id is used, instead of a
+    // unique violation that aborted the whole import.
+    const { manager, findOne } = categoryManager(
+      repoDouble([{ id: "auto-id", name: "auto", parentId: null }]),
+      new Map([["Fuel|auto-id", "fuel-by-hand"]]),
+    );
+
+    const written = await writeCategories(manager, "user-1", [
+      category({ handle: 1, name: "Auto", fullName: "Auto" }),
+      category({
+        handle: 2,
+        parentName: "Auto",
+        name: "Fuel",
+        fullName: "Auto:Fuel",
+      }),
+    ]);
+
+    expect(written.idByFullName.get("Auto:Fuel")).toBe("fuel-by-hand");
+    expect(written.created).toBe(0);
+    expect(findOne).toHaveBeenCalledTimes(1);
   });
 
   it("treats the same child name under different parents as different categories", async () => {
-    const repo = repoDouble([
-      { id: "existing-gas", name: "gas", parentId: "utilities-id" },
-    ]);
+    const { manager } = categoryManager(
+      repoDouble([
+        { id: "existing-gas", name: "gas", parentId: "utilities-id" },
+      ]),
+    );
 
-    const written = await writeCategories(managerFor(repo), "user-1", [
+    const written = await writeCategories(manager, "user-1", [
       category({ name: "Gas", fullName: "Gas" }),
     ]);
 
@@ -336,21 +487,21 @@ describe("writeCategories", () => {
   });
 
   it("does not insert the same category twice within one import", async () => {
-    const repo = repoDouble();
+    const { manager, query } = categoryManager(repoDouble());
 
-    const written = await writeCategories(managerFor(repo), "user-1", [
+    const written = await writeCategories(manager, "user-1", [
       category(),
       category({ handle: 11 }),
     ]);
 
     expect(written.created).toBe(1);
-    expect(repo.insert).toHaveBeenCalledTimes(1);
+    expect(query).toHaveBeenCalledTimes(1);
   });
 
   it("treats an unresolvable parent as top level rather than failing", async () => {
-    const repo = repoDouble();
+    const { manager, query } = categoryManager(repoDouble());
 
-    const written = await writeCategories(managerFor(repo), "user-1", [
+    const written = await writeCategories(manager, "user-1", [
       category({
         parentName: "Never Mapped",
         name: "Orphan",
@@ -359,9 +510,7 @@ describe("writeCategories", () => {
     ]);
 
     expect(written.created).toBe(1);
-    expect(repo.insert).toHaveBeenCalledWith(
-      expect.objectContaining({ name: "Orphan", parentId: null }),
-    );
+    expect(inserts(query)[0]).toEqual(["user-1", "Orphan", null, false]);
   });
 });
 

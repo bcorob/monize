@@ -4,10 +4,10 @@ import {
   calculateTotalPayments,
   calculateEndDate,
   calculateAmortization,
-  calculateFinalPayment,
   calculatePaymentForTerm,
   PaymentFrequency,
 } from "./loan-amortization.util";
+import { roundMoney } from "../common/round.util";
 
 describe("Loan Amortization Utility", () => {
   describe("getPeriodsPerYear", () => {
@@ -43,6 +43,12 @@ describe("Loan Amortization Utility", () => {
       // Monthly interest: 100000 * (5/100/12) = 416.67
       expect(result.interest).toBeCloseTo(416.67, 2);
       expect(result.principal).toBeCloseTo(583.33, 2);
+    });
+
+    it("splits sum to the payment exactly, not payment + 0.0001", () => {
+      // interest is 1000.00005 exactly: rounding each line apart drifts
+      const result = calculatePaymentSplit(200000.01, 6, 1500, "MONTHLY");
+      expect(roundMoney(result.principal + result.interest)).toBe(1500);
     });
 
     it("returns zero principal when payment is less than interest", () => {
@@ -258,25 +264,6 @@ describe("Loan Amortization Utility", () => {
       const result = calculateAmortization(100, 0, 500, "MONTHLY", startDate);
 
       expect(result.remainingBalance).toBeGreaterThanOrEqual(0);
-    });
-  });
-
-  describe("calculateFinalPayment", () => {
-    it("includes one period of interest", () => {
-      // $100 balance at 12% annual, monthly
-      const result = calculateFinalPayment(100, 12, "MONTHLY");
-      // Interest for one month: 100 * (12/100/12) = 1.00
-      expect(result).toBe(101.0);
-    });
-
-    it("returns just the balance for zero interest", () => {
-      const result = calculateFinalPayment(100, 0, "MONTHLY");
-      expect(result).toBe(100.0);
-    });
-
-    it("rounds to 4 decimal places (storage precision)", () => {
-      const result = calculateFinalPayment(333.33, 7.77, "MONTHLY");
-      expect(result).toBe(Math.round(result * 10000) / 10000);
     });
   });
 

@@ -25,10 +25,17 @@ export function ReactivatePayeeDialog({
   if (!payee) return null;
 
   return (
-    <Modal isOpen={isOpen} onClose={onCancel} maxWidth="sm" className="p-6">
-      <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-3">
-        {t('reactivate.title')}
-      </h2>
+    // A confirmation, but not ConfirmDialog: its buttons must stay disabled
+    // while the reactivation is in flight (a second click would add the payee
+    // to TransactionForm's list twice), which ConfirmDialog cannot do. The
+    // paragraph is the question being confirmed, not help text.
+    <Modal
+      isOpen={isOpen}
+      onClose={onCancel}
+      maxWidth="sm"
+      className="p-6"
+      title={t('reactivate.title')}
+    >
       <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
         {t('reactivate.message', { name: payee.name })}
       </p>

@@ -43,6 +43,55 @@ export function investmentWritesOwnCashRow(
 }
 
 /**
+ * Moves the classification of Money's sleeve-side cash row onto the trade that
+ * replaces it.
+ *
+ * `classifyTradeCashSides` drops that row (issue #1175) and the trade writes
+ * the leg itself, so a classification the user put on the cash row rather than
+ * on the trade would otherwise vanish with nothing to warn about it: the row
+ * exists in the file and is correctly not imported. The leg carries the union
+ * of both rows' items, each once.
+ */
+export function adoptCashLegTags(
+  investments: MappedInvestments,
+  tradeCashLegTagHandles: ReadonlyMap<number, readonly number[]>,
+): MappedInvestments {
+  if (tradeCashLegTagHandles.size === 0) {
+    return investments;
+  }
+  return {
+    ...investments,
+    transactions: investments.transactions.map((transaction) => {
+      const adopted =
+        transaction.handle === null
+          ? undefined
+          : tradeCashLegTagHandles.get(transaction.handle);
+      return adopted === undefined
+        ? transaction
+        : {
+            ...transaction,
+            tagHandles: [...new Set([...transaction.tagHandles, ...adopted])],
+          };
+    }),
+  };
+}
+
+/**
+ * Classification items the trades this import writes a cash leg for carry --
+ * the leg is the row a tag lands on, so a share-only action, an adopted funding
+ * row or an embedding split leg contributes nothing here (their own rows did).
+ */
+export function referencedTradeTags(
+  investments: MappedInvestments,
+): ReadonlySet<number> {
+  return new Set(
+    investments.transactions
+      .filter(investmentWritesOwnCashRow)
+      .flatMap((transaction) => transaction.tagHandles),
+  );
+}
+
+/**
  * The trades the transaction mapper needs to see, keyed by `TRN.htrn`.
  *
  * Only rows that will really be written are in it: a security-carrying `TRN`
@@ -124,17 +173,21 @@ export function applyInvestmentCashSources(
         fundingAccountKey: source.splitId === null ? source.accountKey : null,
         cashTransactionId: source.transactionId,
         transactionSplitId: source.splitId,
+        // The source settles in the account's currency and the total is in the
+        // security's, so a source in the account's currency keeps the rate the
+        // mapper already put on the trade (1 for a same-currency trade).
         exchangeRate:
-          source.currencyCode === transaction.currencyCode ||
-          transaction.totalAmount <= 0
-            ? 1
-            : roundFxRate(
-                Math.abs(source.amount) /
-                  disposalCashAmount(
-                    transaction.totalAmount,
-                    transaction.accruedInterest,
-                  ),
-              ),
+          source.currencyCode === transaction.currencyCode
+            ? transaction.exchangeRate
+            : transaction.totalAmount <= 0
+              ? 1
+              : roundFxRate(
+                  Math.abs(source.amount) /
+                    disposalCashAmount(
+                      transaction.totalAmount,
+                      transaction.accruedInterest,
+                    ),
+                ),
       };
     }),
   };

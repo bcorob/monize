@@ -94,6 +94,9 @@
     "largestValue": "{date}에 {amount}",
     "overpaymentFor": "추가 상환 수취인으로 지정된 계좌",
     "website": "웹사이트",
+    "address": "주소",
+    "phone": "전화번호",
+    "email": "이메일",
     "notes": "메모"
   },
   "tabs": {
@@ -127,5 +130,23 @@
     "needsMoreHistory": "계절적 패턴을 우연과 구분하려면 최소 {years}년의 기록이 필요합니다.",
     "empty": "월별로 나눌 지출이 아직 없습니다",
     "monthTooltip": "{month}: {years, plural, one {#년} other {#년}} 평균 {amount}"
+  },
+  "contactLookup": {
+    "button": "연락처 정보 조회",
+    "inProgress": "조회 중...",
+    "nothingNew": "새로운 연락처 정보를 찾지 못했습니다.",
+    "noProvider": "연락처를 찾으려면 거래처 조회 설정에서 조회 소스를 설정하세요.",
+    "failed": "조회를 완료할 수 없습니다. 나중에 다시 시도하세요.",
+    "dialogTitle": "연락처 정보 확인",
+    "dialogSubtitle": "확인하기 전까지 {name}에는 아무것도 저장되지 않습니다.",
+    "pickMatch": "이 이름은 {count, plural, other {# 곳의 업체}}와 일치합니다. 결제하는 곳을 선택하세요:",
+    "unlabelledMatch": "이름 없는 후보",
+    "willAdd": "추가",
+    "willReplace": "대체",
+    "cancel": "취소",
+    "confirm": "{count, plural, other {변경 사항 # 건 저장}}",
+    "applied": "{count, plural, other {연락처 정보 # 건을 저장했습니다}}",
+    "applyFailed": "연락처 정보를 저장할 수 없습니다",
+    "quotaExceeded": "이번 달 Google Places 조회를 모두 사용했습니다. 거래처 조회 설정에서 한도를 늘리거나 다음 달까지 기다리세요."
   }
 }

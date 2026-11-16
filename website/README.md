@@ -1,7 +1,9 @@
 # monize-site
 
-The marketing / "what is Monize" site. One page, no framework, no build step, no dependencies.
-Three files do the work: `index.html`, `assets/css/styles.css`, `assets/js/app.js`.
+The marketing / "what is Monize" site and the user documentation at `/docs`. No framework, no
+build step on Cloudflare, no dependencies. The marketing page is three files: `index.html`,
+`assets/css/styles.css`, `assets/js/app.js`. The documentation is described in
+[Documentation](#documentation-docs) below.
 
 * Live app demo: https://demo.monize.net
 * Source: https://github.com/kenlasko/monize
@@ -55,10 +57,17 @@ There is nothing to compile, so builds finish instantly and stay inside the free
 index.html                     the whole page
 404.html                       friendly not-found page
 _headers                       security headers + revalidate-always caching
-_redirects                     /demo /github /docs /wiki /issues short links
+_redirects                     /demo /github /wiki /issues short links
 robots.txt, sitemap.xml        change the domain if it is not monize.net
 assets/css/styles.css          all styling, light + dark themes
 assets/js/app.js               all interactivity and page data
+assets/css/docs.css            documentation layout, on top of styles.css
+assets/js/docs.js              documentation search, page list, on-this-page, copy, zoom
+assets/js/theme-boot.js        documentation theme before first paint (blocking, in <head>)
+docs/*.md                      documentation source, one file per page
+docs/nav.json                  documentation page order and groups
+docs/images/                   documentation screenshots
+docs/*.html, search-index.json, sitemap.xml   GENERATED from docs/*.md -- never edit by hand
 assets/img/monize-logo.svg     favicon + header mark
 assets/img/screenshots/        optional local copies of the wiki screenshots
 scripts/fetch-screenshots.sh   downloads them (macOS/Linux)
@@ -67,7 +76,8 @@ scripts/fetch-screenshots.ps1  downloads them (Windows)
 
 ## Screenshots
 
-Every screenshot is loaded from `assets/img/screenshots/<name>.png` **first**, and falls back to
+`dashboard-overview.png` is checked in here so the hero image follows the app; copy it from
+`docs/images/` after retaking the dashboard. Every screenshot is loaded from `assets/img/screenshots/<name>.png` **first**, and falls back to
 `https://raw.githubusercontent.com/wiki/kenlasko/monize/images/<name>.png` if that file is not there.
 So the site looks complete out of the box, and gets faster the moment you run the fetch script.
 
@@ -174,6 +184,122 @@ focusable, so the strip takes a `tabindex` and that name while it can scroll --
 asked of the element (`scrollWidth > clientWidth`) rather than by repeating the
 breakpoint in JavaScript, so the two files cannot disagree after a breakpoint
 moves.
+
+## Documentation (`/docs`)
+
+The user guide lives in `docs/` as Markdown, one file per page, and is served at
+`https://monize.net/docs/<page>` (`docs/accounts.md` is `/docs/accounts`, `docs/index.md` is
+`/docs/`). It replaced the GitHub wiki so that a change to a feature and the change to its
+documentation land in the same pull request.
+
+Cloudflare Pages has no build step here, so the pages are generated locally and committed:
+
+```bash
+cd frontend
+npm run docs:build     # regenerate docs/*.html, docs/search-index.json, docs/sitemap.xml
+npm run docs:check     # what CI runs (via frontend/src/test/website-docs.test.ts)
+```
+
+The generator is `frontend/scripts/build-website-docs.mjs`. It renders with the frontend's own
+`react-markdown` + `remark-gfm`, so it needs `npm ci` in `frontend/` and nothing else.
+
+### The guide also ships in the backend image
+
+The backend image copies `website/docs/*.md`, `nav.json` and `search-index.json` (no generated
+HTML) into `./help`, and the public `GET /api/v1/help` endpoints serve them to the app's in-app
+help, so help matches the running version and works offline. The screenshots ship too: the image
+build converts every `docs/images/*.png` to WebP (`backend/scripts/convert-help-images.sh`, in
+the Dockerfile's `help-images` stage) and the help panel shows the one matching the app's theme,
+exactly as the website does. A new, retaken or renamed picture therefore reaches the app with no
+extra step; nothing generated from it is committed. A new top-level file the app needs (not a page
+or a picture: those are already covered by `*.md` and `images/*.png`) has to be added to the
+`COPY website/docs/...` lines in `backend/Dockerfile` and to the `website/docs` exceptions in the
+root `.dockerignore`. `backend/src/help/help.real-docs.spec.ts` fails when the bundle and the
+generated pages disagree, pictures included.
+
+### Changing the documentation
+
+- **Edit the `.md` file, then run `npm run docs:build`** and commit both. A generated page that
+  does not match its Markdown fails `website-docs.test.ts`.
+- **A merge conflict in a generated file** (`search-index.json`, `sitemap.xml`, a `docs/*.html`)
+  is resolved by keeping either side and running `npm run docs:build` again; never merge the
+  hunks by hand. The search index is written one entry per line so that pull requests editing
+  different pages merge without one.
+- **A new page** is a new `docs/<slug>.md` (lower-case, hyphenated) starting with one `# Title`,
+  plus an entry in `docs/nav.json` with a one-sentence `summary` (used on the landing page and as
+  the page's description). A page missing from `nav.json`, or listed there without a file, fails
+  the build.
+- **Links between pages** are written `[text](accounts.md#financial-institutions)` so they also
+  work when the Markdown is read on GitHub; the build turns them into `/docs/accounts#...`. A link
+  to a page or heading that does not exist fails the build.
+- **Heading anchors** use GitHub's slug rules, and the app's help links land on them: every one
+  is an entry in `frontend/src/lib/docs-links.ts`, and `docs-links.test.ts` fails when a page or
+  heading it names no longer exists. Renaming a heading means updating that entry. Where a
+  heading's slug is taken, put `<a id="name"></a>` on the line above it; that is the only HTML the
+  pages render.
+- **The table of contents is generated** from the `##` and `###` headings; do not write one by hand.
+- **Callouts** are GitHub's syntax: a blockquote starting `> [!NOTE]`, `[!TIP]`, `[!IMPORTANT]`,
+  `[!WARNING]` or `[!CAUTION]`.
+- **Screenshots** go in `docs/images/` as `.png` and are referenced as `images/<name>.png`. A
+  picture alone in its paragraph becomes a figure with its alt text as the caption. A screenshot
+  that is referenced but not there renders as "Screenshot pending" and the build lists it.
+
+### Screenshots
+
+Every documentation screenshot is taken by Playwright, never by hand, so a changed screen is one
+command away from a current picture, and every picture exists twice: `images/<name>.png` in dark
+mode and `images/<name>.light.png` in light mode. The Markdown names only `images/<name>.png`;
+the build emits both and the stylesheet shows the one matching the reader's theme. A picture
+without a `.light.png` (an old one nobody has retaken) shows in both themes.
+
+Each picture is a test in `e2e/docs-screenshots/<page>.spec.ts` whose title is the file name. It
+opens the screen with `openDocsSession(browser)` (or `openDocsSession(browser, 'phone')`, or
+`openAdminSession(browser)` for the admin screens), waits for it to settle, and calls
+`docShot(page, name)`, or `docShot(page, name, element)` to crop to one card, widget or dialog.
+`playwright.docs.config.ts` runs every test once in a `dark` and once in a `light` project, after
+`e2e/readme/01-seed.spec.ts` has added the showcase data to the built-in demo data. State the
+demo data lacks is seeded through the API inside the test, the way `e2e/readme/` does it.
+
+**When to add or retake one:** a page section that walks through a screen, a dialog or a widget
+shows it, and a feature's page shows its main screen and its main dialog; a change that alters how
+a pictured screen looks retakes its pictures in the same PR. A setting that is one switch, or text
+the page already says, needs no picture. Whole-screen pictures are the 1600x1000 desktop viewport.
+
+**Running them** needs a Monize instance holding the demo data, with rate limits raised, demo
+mode off (it renames the sign-in button and adds a banner) and no plain-HTTP warning. The e2e
+stack does all of that, built from the working tree so the pictures show the branch:
+
+```bash
+# repository root
+printf 'services:\n  backend:\n    environment:\n      DEMO_MODE: "false"\n  frontend:\n    environment:\n      DISABLE_HTTPS_HEADERS: "true"\n' > /tmp/monize-docs.yml
+docker compose -p monize-docs -f docker-compose.e2e.yml -f /tmp/monize-docs.yml up -d --build --wait
+cd e2e && npm ci
+export BASE_URL=http://localhost:3001
+npm run docs:admin            # first: the first account registered becomes the instance admin
+# the e2e stack skips the demo seed the production entrypoint runs; run it once
+docker compose -p monize-docs -f ../docker-compose.e2e.yml exec -e DEMO_MODE=true backend node dist/database/seed.js
+npm run docs:screenshots                                          # showcase seed, then every picture, both themes
+npm run docs:screenshots -- docs-screenshots/warranties.spec.ts   # one page's pictures
+npm run docs:screenshots -- -g warranties-list                    # one picture, both themes
+docker compose -p monize-docs -f ../docker-compose.e2e.yml down -v
+```
+
+After capturing, recompress the pictures without changing a pixel, which saves about a quarter
+of their size: `oxipng -o 3 --strip safe website/docs/images/*.png` (any lossless optimizer will
+do). A picture no page references fails `npm run docs:check`: retire it with the reference that
+used it.
+
+`DOCS_RUN=<name>` gives a run its own output folder and session, so runs for different pages can
+go side by side. Set `PLAYWRIGHT_CHROMIUM_EXECUTABLE` where `npx playwright install chromium` is
+not an option. `e2e/readme/README.md` explains the session, the seed and the settling waits the
+captures share. A picture of a state the stack cannot reach yet renders as "Screenshot pending"
+and `npm run docs:build` lists it.
+
+### Cloudflare Pages free plan
+
+`website-docs.test.ts` also holds the whole folder to the free plan's per-deployment limits:
+20,000 files, 25 MiB per file, 100 `_headers` rules, 2,000 static and 100 dynamic `_redirects`.
+The documentation adds about 160 files.
 
 ## Licence
 

@@ -1,6 +1,9 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { GUARDS_METADATA, PATH_METADATA } from "@nestjs/common/constants";
 import { AdminController } from "./admin.controller";
 import { AdminService } from "./admin.service";
+import { ROLES_KEY, RolesGuard } from "../auth/guards/roles.guard";
+import { DEMO_RESTRICTED_KEY } from "../common/guards/demo-mode.guard";
 
 describe("AdminController", () => {
   let controller: AdminController;
@@ -15,6 +18,9 @@ describe("AdminController", () => {
       updateUserStatus: jest.fn(),
       deleteUser: jest.fn(),
       resetUserPassword: jest.fn(),
+      unlinkUserSso: jest.fn(),
+      resetUserTwoFactor: jest.fn(),
+      getUserStorageUsage: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -38,6 +44,17 @@ describe("AdminController", () => {
 
       expect(result).toBe("users");
       expect(mockAdminService.findAllUsers).toHaveBeenCalledWith();
+    });
+  });
+
+  describe("storageUsage()", () => {
+    it("delegates to adminService.getUserStorageUsage with no arguments", () => {
+      mockAdminService.getUserStorageUsage!.mockReturnValue("usage");
+
+      const result = controller.storageUsage();
+
+      expect(result).toBe("usage");
+      expect(mockAdminService.getUserStorageUsage).toHaveBeenCalledWith();
     });
   });
 
@@ -113,6 +130,56 @@ describe("AdminController", () => {
         "user-1",
         "target-user-1",
       );
+    });
+  });
+
+  describe("unlinkSso()", () => {
+    it("delegates to adminService.unlinkUserSso with adminId and userId", () => {
+      mockAdminService.unlinkUserSso!.mockReturnValue("unlinked");
+
+      const result = controller.unlinkSso(mockReq, "target-user-1");
+
+      expect(result).toBe("unlinked");
+      expect(mockAdminService.unlinkUserSso).toHaveBeenCalledWith(
+        "user-1",
+        "target-user-1",
+      );
+    });
+  });
+
+  describe("resetTwoFactor()", () => {
+    it("delegates to adminService.resetUserTwoFactor with adminId and userId", () => {
+      mockAdminService.resetUserTwoFactor!.mockReturnValue({ reset: true });
+
+      const result = controller.resetTwoFactor(mockReq, "target-user-1");
+
+      expect(result).toEqual({ reset: true });
+      expect(mockAdminService.resetUserTwoFactor).toHaveBeenCalledWith(
+        "user-1",
+        "target-user-1",
+      );
+    });
+
+    it("is an admin-only, JWT-guarded, demo-restricted route under the admin users path", () => {
+      // Class-level, so every route here -- this one included -- inherits it.
+      const guards = Reflect.getMetadata(GUARDS_METADATA, AdminController);
+      expect(guards).toHaveLength(2);
+      expect(guards).toContain(RolesGuard);
+      expect(Reflect.getMetadata(ROLES_KEY, AdminController)).toEqual([
+        "admin",
+      ]);
+      expect(Reflect.getMetadata(DEMO_RESTRICTED_KEY, AdminController)).toBe(
+        true,
+      );
+      expect(Reflect.getMetadata(PATH_METADATA, AdminController)).toBe(
+        "admin/users",
+      );
+      expect(
+        Reflect.getMetadata(
+          PATH_METADATA,
+          AdminController.prototype.resetTwoFactor,
+        ),
+      ).toBe(":id/reset-2fa");
     });
   });
 });

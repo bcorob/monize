@@ -1,0 +1,100 @@
+{
+  "entry": {
+    "history": "{program} koşullarının geçmişi"
+  },
+  "offer": {
+    "loading": "Satıştaki tahviller yükleniyor...",
+    "loadFailed": "Satıştaki tahviller yüklenemedi.",
+    "retry": "Tekrar dene",
+    "empty": "Bugün satışta olan seri yok.",
+    "asOf": "{date} tarihinde satışta. Her rakam, bugün alınıp vadeye kadar tutulan bir tahvil içindir.",
+    "comparisonNote": "Yıllıklandırılmış getiri, farklı vadeli ürünleri karşılaştırmak için kullanılan bir rakamdır, kazancınız için bir vaat değildir.",
+    "couponsNote": "Kuponlar yeniden yatırılmaz: kupon ödeyen bir tahvilde vade değeri, ödenen tüm kuponları toplar.",
+    "projected": "Tahmini",
+    "projectedTitle": "Bu rakam yalnızca yayımlanmış oranlara değil, varsayılan bir gösterge değerine de dayanır.",
+    "assumptions": {
+      "title": "Varsayımlar",
+      "intro": "Henüz başlamamış dönemler bu gösterge değerleriyle değerlenir. Her satıra etkisini görmek için birini değiştirin.",
+      "label": "{benchmark} (%)",
+      "latest": "Son yayımlanan değer: {value} ({observation})",
+      "reset": "Son yayımlanan değerleri kullan",
+      "updating": "Rakamlar güncelleniyor..."
+    },
+    "columns": {
+      "series": "Seri",
+      "saleWindow": "Satışta",
+      "length": "Vade",
+      "firstPeriodRate": "İlk dönem",
+      "rule": "Oran",
+      "capitalization": "Faiz",
+      "redemption": "Erken itfa",
+      "maturityValue": "Vade değeri",
+      "totalReturn": "Toplam getiri",
+      "annualizedReturn": "Yıllıklandırılmış getiri",
+      "terms": "Koşullar"
+    },
+    "saleWindowValue": "{from} ile {to} arası",
+    "lengthValue": "{months, plural, one {# ay} other {# ay}}",
+    "lengthDaysValue": "{days, plural, one {# gün} other {# gün}}",
+    "rule": {
+      "fixed": "Yıllık sabit {rate}",
+      "benchmark": "{benchmark} + {addend}",
+      "floor": "Gösterge tabanı {floor}",
+      "daily": "Günlük: {benchmark} + {addend}",
+      "discount": "Nominal değerden iskonto"
+    },
+    "capitalization": {
+      "NONE": "Her dönem ödenir",
+      "COMPOUND_AT_PERIOD_END": "Her dönem sonunda anaparaya eklenir"
+    },
+    "redemption": {
+      "none": "Yalnızca vadede",
+      "onDemand": "Talep üzerine",
+      "fee": "Tahvil başına {amount} ücret",
+      "forfeit": "Dönem içinde birikmiş faiz kaybedilir"
+    },
+    "couponsNotReinvested": "Kuponlar yeniden yatırılmaz"
+  },
+  "history": {
+    "loading": "Geçmiş yükleniyor...",
+    "loadFailed": "Geçmiş yüklenemedi.",
+    "retry": "Tekrar dene",
+    "empty": "Bu ürünün henüz kayıtlı bir serisi yok.",
+    "coverage": "Katalog {from} ile {to} arasını kapsar.",
+    "rateChartTitle": "Satış ayına göre ilk dönem oranı ve marj",
+    "feeChartTitle": "Satış ayına göre erken itfa ücreti",
+    "rate": "İlk dönem oranı",
+    "rateChartNote": "Sabit faizli tahvillerde çizgi yıllık oranı gösterir.",
+    "addend": "Marj veya spread",
+    "fee": "Erken itfa ücreti",
+    "gapsNote": "Kayıtlı serisi olmayan bir ay çizgide bir boşluk olarak gösterilir, komşu aylardan türetilmiş bir değer olarak değil.",
+    "missingTitle": "Katalogda eksik aylar ({count})",
+    "noMissing": "Kayıtlı ilk ve son seri arasında eksik ay yok.",
+    "tableTitle": "Kayıtlı tüm seriler",
+    "groupCount": "{count} seri",
+    "unknownYear": "Satış tarihi bilinmiyor",
+    "columns": {
+      "series": "Seri",
+      "saleWindow": "Satışta",
+      "rate": "İlk dönem oranı veya yıllık oran",
+      "addend": "Marj veya spread",
+      "fee": "Erken itfa ücreti",
+      "floor": "İtfa tutarı tabanı",
+      "version": "Koşulların sürümü",
+      "source": "Kaynak"
+    },
+    "floor": {
+      "ALL_PERIODS": "Her dönem",
+      "FIRST_PERIOD": "Yalnızca ilk dönem"
+    },
+    "none": "Yok",
+    "held": "Elde"
+  },
+  "refreshProgress": {
+    "label": "Tahvil verileri yenileniyor",
+    "offer": "Güncel teklif kontrol ediliyor…",
+    "series": "Seri {done}/{total} getiriliyor: {seriesCode}",
+    "historyComplete": "Geçmiş eksiksiz",
+    "starting": "Başlatılıyor…"
+  }
+}

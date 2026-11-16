@@ -26,8 +26,18 @@ const PERSISTED_STORE_KEYS: Record<string, string> = {
     'authenticated only: written after login, removed by logout() so conversations do not cross accounts.',
   'monize-density':
     'authenticated only: the store is imported by the list components, none of which the login page renders. One of three row-density levels -- a fact about the screen, not the account, so it survives logout deliberately.',
+  'monize-hidden-columns':
+    'authenticated only: the store is imported by the list components and Settings, none of which the login page renders. Hideable column ids per table kind -- a fact about the screen, not the account, so it survives logout deliberately. It names columns, never their contents.',
   'monize-register-date-display':
     'authenticated only: imported by the transaction register, which the login page never renders. A single boolean (drop the year from register dates on phone widths) -- a fact about the screen, not the account, so it survives logout deliberately.',
+  'monize-settings-sections':
+    'authenticated only: imported by the Settings page, which no unauthenticated route renders. One boolean per named Settings section, saying whether the reader has folded it away -- a fact about the screen, not the account, so it survives logout deliberately. It names sections, never their contents.',
+  'monize-view-mode':
+    'authenticated only: the store is imported by the Transactions, Investments and Bills & Deposits pages, none of which an unauthenticated route renders. Which of the two views a screen is on and which calendar layers are switched on -- a fact about the screen, not the account, so it survives logout deliberately. It names layers, never an account, a figure or a filter.',
+  'monize-scan-settings':
+    'authenticated only: imported by the document scan dialog, which only the transaction attachment flow renders. The last-used scan finish and the two slider offsets (brightness, contrast) -- a capture habit, not account data -- so it survives logout deliberately. It holds no document and no pixels.',
+  'monize-help-width':
+    'authenticated only: written only when the reader resizes the docked help panel, which exists only in the signed-in shell, and importing the store writes nothing (checked below). A panel width in pixels -- a fact about the screen, not the account, so it survives logout deliberately. It holds no personal data.',
 };
 
 // What an unauthenticated visitor's browser holds, verbatim. These are the two
@@ -116,6 +126,22 @@ describe('persisted browser storage', () => {
     // scanner reads off an unauthenticated page, so anything new in either
     // envelope has to be looked at.
     expect(written).toEqual(PRE_LOGIN_FOOTPRINT);
+  });
+
+  it('writes nothing for the help panel width until the reader resizes the panel', async () => {
+    vi.resetModules();
+    window.localStorage.clear();
+
+    // The store is imported by the shell, which also renders the sign-in screens,
+    // so its key may not appear merely because the module loaded.
+    const { useHelpWidthStore } = await import('./helpWidthStore');
+    expect(window.localStorage.getItem('monize-help-width')).toBeNull();
+
+    useHelpWidthStore.getState().setWidth(600);
+    expect(JSON.parse(window.localStorage.getItem('monize-help-width')!)).toEqual({
+      state: { width: 600 },
+      version: 0,
+    });
   });
 
   it('persists the auth flag alone, never the profile, token or delegation context', async () => {

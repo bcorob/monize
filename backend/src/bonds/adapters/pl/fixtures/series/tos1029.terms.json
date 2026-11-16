@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "instrument": {
+    "issuerCountryCode": "PL",
+    "issuerCode": "PL_MF",
+    "programCode": "TOS",
+    "seriesCode": "TOS1029",
+    "currency": "PLN",
+    "marketability": "RETAIL_REDEEMABLE",
+    "faceValue": "100.00"
+  },
+  "saleWindow": {
+    "from": "2026-10-01",
+    "to": "2026-10-31"
+  },
+  "schedule": {
+    "anchor": "LOT_PURCHASE_DATE",
+    "periodMonths": 12,
+    "periodCount": 3,
+    "rollDay": "ANCHOR_DAY_CLAMPED",
+    "calendarId": "PL"
+  },
+  "accrual": {
+    "type": "ACTUAL_DAYS_IN_PERIOD"
+  },
+  "principalRule": {
+    "type": "FIXED_NOMINAL"
+  },
+  "rateRule": {
+    "type": "FIXED",
+    "annualRate": "0.0440"
+  },
+  "capitalization": {
+    "type": "COMPOUND_AT_PERIOD_END",
+    "baseRounding": "PER_PERIOD"
+  },
+  "redemption": {
+    "type": "ON_DEMAND",
+    "earliestDaysAfterPurchase": 7,
+    "latestDaysBeforeMaturity": 20,
+    "blackouts": [],
+    "penalties": [
+      {
+        "type": "FIXED_FEE_PER_UNIT",
+        "amount": "1.00"
+      }
+    ],
+    "proceedsFloor": {
+      "type": "FACE_VALUE",
+      "appliesTo": "ALL_PERIODS"
+    }
+  },
+  "rounding": {
+    "moneyDecimals": 2,
+    "mode": "HALF_UP"
+  },
+  "source": {
+    "provider": "PL_MF",
+    "url": "https://www.obligacjeskarbowe.pl/media_files/c15a26ae-de6e-4b89-a137-cb16687a7b0a.pdf",
+    "document": "List emisyjny nr 97/2026"
+  }
+}

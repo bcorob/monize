@@ -1,0 +1,321 @@
+{
+  "page": {
+    "title": "Warranties",
+    "subtitle": "What you bought, when its coverage ends, and who sold it",
+    "newButton": "Add warranty",
+    "exportButton": "Export CSV",
+    "importButton": "Import CSV",
+    "loading": "Loading warranties...",
+    "loadFailed": "Your warranties could not be loaded.",
+    "retry": "Try again",
+    "summary": {
+      "active": "Active",
+      "expiring": "Expiring soon",
+      "expired": "Expired",
+      "lifetime": "Lifetime",
+      "unavailable": "Not loaded",
+      "expiringHint": "Within {days} days"
+    },
+    "filters": {
+      "label": "Filter by status",
+      "all": "All",
+      "expiring": "Expiring",
+      "active": "Active",
+      "expired": "Expired",
+      "lifetime": "Lifetime",
+      "counted": {
+        "all": "All ({count})",
+        "expiring": "Expiring ({count})",
+        "active": "Active ({count})",
+        "expired": "Expired ({count})",
+        "lifetime": "Lifetime ({count})"
+      }
+    },
+    "search": {
+      "label": "Search warranties",
+      "placeholder": "Search name, vendor, model or serial number"
+    },
+    "archivedToggle": "Show archived",
+    "transactionChip": {
+      "label": "Warranties for one transaction",
+      "clear": "Show all warranties"
+    },
+    "pager": {
+      "itemName": "warranties",
+      "total": "{count, plural, one {{total} warranty} other {{total} warranties}}"
+    },
+    "empty": {
+      "title": "No warranties yet",
+      "description": "Add a warranty to keep track of when its coverage ends.",
+      "filteredTitle": "No warranties match",
+      "filteredDescription": "Try another status, or clear the search.",
+      "archivedTitle": "No archived warranties"
+    },
+    "modal": {
+      "newTitle": "New warranty",
+      "editTitle": "Edit warranty"
+    },
+    "delete": {
+      "title": "Delete warranty",
+      "message": "Delete \"{name}\"? Its claims and documents are deleted with it, and this cannot be undone."
+    },
+    "toasts": {
+      "created": "Warranty added",
+      "updated": "Warranty updated",
+      "deleted": "Warranty deleted",
+      "archived": "Warranty archived",
+      "unarchived": "Warranty restored",
+      "createFailed": "The warranty could not be added",
+      "updateFailed": "The warranty could not be updated",
+      "deleteFailed": "The warranty could not be deleted",
+      "archiveFailed": "The warranty could not be archived",
+      "unarchiveFailed": "The warranty could not be restored",
+      "prefillFailed": "That transaction could not be loaded, so the warranty starts blank",
+      "exported": "{count, plural, one {{shown} warranty exported} other {{shown} warranties exported}}",
+      "exportFailed": "The warranties could not be exported"
+    }
+  },
+  "status": {
+    "lifetime": "Lifetime",
+    "active": "Active",
+    "expiring": "Expiring soon",
+    "expired": "Expired"
+  },
+  "daysLeft": {
+    "left": "{count, plural, one {{days} day left} other {{days} days left}}",
+    "today": "Expires today",
+    "ago": "{count, plural, one {Expired {days} day ago} other {Expired {days} days ago}}",
+    "leftYears": "{yearsCount, plural, one {{years} year} other {{years} years}}, {daysCount, plural, one {{days} day} other {{days} days}} left",
+    "agoYears": "Expired {yearsCount, plural, one {{years} year} other {{years} years}}, {daysCount, plural, one {{days} day} other {{days} days}} ago"
+  },
+  "kind": {
+    "manufacturer": "Manufacturer",
+    "extended": "Extended",
+    "store": "Store",
+    "other": "Other"
+  },
+  "list": {
+    "columns": {
+      "name": "Name",
+      "status": "Status",
+      "expiresOn": "Expires",
+      "purchaseDate": "Purchased",
+      "price": "Price",
+      "documents": "Documents",
+      "claims": "Open claims",
+      "actions": "Actions"
+    },
+    "sortLabel": "Sort by",
+    "lifetime": "Lifetime",
+    "noPrice": "None",
+    "actions": {
+      "archive": "Archive",
+      "unarchive": "Unarchive"
+    }
+  },
+  "form": {
+    "nameLabel": "Name",
+    "namePlaceholder": "What you bought",
+    "vendorLabel": "Vendor",
+    "vendorPlaceholder": "Select or type a vendor",
+    "modelLabel": "Model number",
+    "serialsLabel": "Serial numbers",
+    "serialLabel": "Serial number {index}",
+    "addSerial": "Add serial number",
+    "removeSerial": "Remove serial number {index}",
+    "serialsLimit": "Up to {max} serial numbers",
+    "kindLabel": "Warranty type",
+    "purchaseDateLabel": "Purchase date",
+    "expiry": {
+      "label": "Coverage ends",
+      "date": "On a date",
+      "duration": "After a duration",
+      "lifetime": "Never",
+      "expiresOnLabel": "Expires on",
+      "years": "Years",
+      "months": "Months",
+      "days": "Days",
+      "computed": "Expires on {date}",
+      "needsPurchaseDate": "Enter the purchase date to work out when it ends",
+      "lifetimeHint": "A lifetime warranty has no end date and no reminder"
+    },
+    "priceLabel": "Purchase price",
+    "productUrlLabel": "Product page",
+    "productUrlPlaceholder": "https://",
+    "notesLabel": "Notes",
+    "submitCreate": "Add warranty",
+    "submitUpdate": "Save changes"
+  },
+  "validation": {
+    "nameRequired": "Enter a name",
+    "nameTooLong": "Use 200 characters or fewer",
+    "vendorTooLong": "Use 200 characters or fewer",
+    "modelTooLong": "Use 100 characters or fewer",
+    "serialTooLong": "Use 100 characters or fewer for each serial number",
+    "serialsTooMany": "Up to 10 serial numbers",
+    "purchaseDateRequired": "Enter the purchase date",
+    "expiresOnRequired": "Enter the date the warranty ends",
+    "expiresBeforePurchase": "The warranty cannot end before the purchase date",
+    "durationRequired": "Enter a duration longer than zero",
+    "priceNegative": "The price cannot be negative",
+    "priceNeedsCurrency": "Choose the currency of the price",
+    "urlInvalid": "Enter a web address starting with http:// or https://",
+    "urlTooLong": "Use 500 characters or fewer",
+    "notesTooLong": "Use 2000 characters or fewer"
+  },
+  "detail": {
+    "back": "Back to Warranties",
+    "loading": "Loading warranty...",
+    "loadFailed": "This warranty could not be loaded.",
+    "notFound": "This warranty was not found.",
+    "retry": "Try again",
+    "archivedBadge": "Archived",
+    "switcher": {
+      "trigger": "Switch warranty",
+      "placeholder": "Filter warranties...",
+      "noMatches": "No warranties match"
+    },
+    "summary": {
+      "expires": "Expires",
+      "purchased": "Purchased",
+      "price": "Purchase Price",
+      "openClaims": "Open Claims"
+    },
+    "card": {
+      "title": "Details",
+      "kind": "Warranty type",
+      "vendor": "Vendor",
+      "serialNumbers": "Serial numbers",
+      "model": "Model number",
+      "productUrl": "Product page",
+      "notes": "Notes",
+      "none": "None",
+      "lifetime": "Lifetime"
+    },
+    "transaction": {
+      "title": "Purchase",
+      "edit": "Edit the purchase of {date}: {payee}, {amount}",
+      "viewInRegister": "View in register",
+      "loadFailed": "Failed to load the purchase",
+      "dateInAccount": "{date} · {account}",
+      "none": "No linked transaction",
+      "unreadable": "The purchase is in an account you cannot read.",
+      "noPayee": "No payee"
+    }
+  },
+  "documents": {
+    "title": "Documents",
+    "empty": "No documents yet",
+    "pendingHint": "Documents will be uploaded when you save the warranty.",
+    "tooMany": "Maximum {max} documents per warranty",
+    "uploadFailedAfterCreate": "Warranty added, but {count, plural, one {this document} other {these documents}} could not be uploaded: {names}. Add {count, plural, one {it} other {them}} from the warranty's Documents section.",
+    "kindFor": "Document type for {name}",
+    "kindUpdateFailed": "Failed to change the document type",
+    "addExisting": "Add Existing",
+    "addExistingTitle": "Add an Existing Document",
+    "addExistingHelp": "Choose a file you already uploaded to a transaction or another warranty. A copy is added to this warranty; the original stays where it is.",
+    "addExistingFrom": "Where the document is now",
+    "fromTransaction": "A transaction",
+    "fromWarranty": "Another warranty",
+    "addExistingDocument": "Document",
+    "addExistingKind": "Document type on this warranty",
+    "addExistingNone": "There are no documents here to add.",
+    "addExistingLoadFailed": "Could not load the documents. Please try again.",
+    "addExistingFailed": "Failed to add the document",
+    "addExistingSubmit": "Add Document",
+    "choose": "Choose…",
+    "preview": "Preview",
+    "kinds": {
+      "receipt": "Receipt",
+      "manual": "Manual",
+      "photo": "Photo",
+      "warranty": "Warranty",
+      "other": "Other"
+    }
+  },
+  "claims": {
+    "title": "Claims",
+    "add": "Add claim",
+    "empty": "No claims yet",
+    "loading": "Loading claims...",
+    "loadFailed": "The claims could not be loaded.",
+    "retry": "Try again",
+    "statuses": {
+      "open": "Open",
+      "approved": "Approved",
+      "denied": "Denied",
+      "resolved": "Resolved"
+    },
+    "claimedOn": "Claimed {date}",
+    "resolvedOnLine": "Closed {date}",
+    "resolutionLine": "Resolution: {text}",
+    "modal": {
+      "newTitle": "New claim",
+      "editTitle": "Edit claim"
+    },
+    "form": {
+      "claimDateLabel": "Claim date",
+      "statusLabel": "Status",
+      "descriptionLabel": "Description",
+      "resolutionLabel": "Resolution",
+      "resolvedOnLabel": "Closed on",
+      "resolvedOnHint": "Only for a resolved or denied claim",
+      "submitCreate": "Add claim",
+      "submitUpdate": "Save changes"
+    },
+    "validation": {
+      "claimDateRequired": "Enter the claim date",
+      "resolvedOnBeforeClaim": "A claim cannot close before it was made",
+      "textTooLong": "Use 2000 characters or fewer"
+    },
+    "delete": {
+      "title": "Delete claim",
+      "message": "Delete the claim made on {date}? This cannot be undone."
+    },
+    "toasts": {
+      "created": "Claim added",
+      "updated": "Claim updated",
+      "deleted": "Claim deleted",
+      "createFailed": "The claim could not be added",
+      "updateFailed": "The claim could not be updated",
+      "deleteFailed": "The claim could not be deleted"
+    }
+  },
+  "import": {
+    "title": "Import warranties from CSV",
+    "description": "A CSV file in Warracker's columns, such as one exported from Warracker or from this page. You see every row before anything is saved.",
+    "fileLabel": "CSV file",
+    "chooseFile": "Choose file",
+    "noFileChosen": "No file chosen",
+    "checking": "Checking the file...",
+    "previewFailed": "The file could not be checked",
+    "summary": "{count, plural, one {{valid} of {total} row can be imported.} other {{valid} of {total} rows can be imported.}}",
+    "invalidSummary": "{count, plural, one {{shown} row is invalid and cannot be imported as written.} other {{shown} rows are invalid and cannot be imported as written.}}",
+    "skipInvalid": "Skip the invalid rows and import the rest",
+    "nothingToImport": "Fix the file and choose it again.",
+    "skippedColumns": "Columns not imported:",
+    "columns": {
+      "line": "Line",
+      "name": "Name",
+      "expires": "Expires",
+      "outcome": "Result",
+      "problems": "Problems"
+    },
+    "outcome": {
+      "valid": "Ready",
+      "invalid": "Invalid",
+      "created": "Imported"
+    },
+    "unnamed": "(no name)",
+    "noExpiry": "Not set",
+    "lifetime": "Lifetime",
+    "errorItem": "Error: {message}",
+    "warningItem": "Note: {message}",
+    "submit": "Import",
+    "submitCount": "{count, plural, one {Import {shown} warranty} other {Import {shown} warranties}}",
+    "toasts": {
+      "imported": "{count, plural, one {{shown} warranty imported} other {{shown} warranties imported}}",
+      "failed": "The warranties could not be imported"
+    }
+  }
+}

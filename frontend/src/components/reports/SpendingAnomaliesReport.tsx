@@ -7,14 +7,18 @@ import { useRouter } from 'next/navigation';
 import { builtInReportsApi } from '@/lib/built-in-reports';
 import { SpendingAnomaly } from '@/types/built-in-reports';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
-import { ExportDropdown } from '@/components/ui/ExportDropdown';
+import { ReportToolbarActions } from '@/components/reports/ReportToolbarActions';
 import { useReportData } from '@/hooks/useReportData';
 import { ReportError } from '@/components/reports/ReportError';
+import { PartialDataNotice } from '@/components/reports/PartialDataNotice';
+import { quoteSearchValue } from '@/lib/search-query';
+import { CheckCircleIcon } from '@heroicons/react/24/outline';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 export function SpendingAnomaliesReport() {
   const t = useTranslations('reports');
   const router = useRouter();
-  const { formatCurrencyCompact: formatCurrency } = useNumberFormat();
+  const { formatCurrencyCompact: formatCurrency, defaultCurrency } = useNumberFormat();
   const [threshold, setThreshold] = useState(2); // Standard deviations
 
   const { data: anomaliesData, isLoading, error, reload } = useReportData(
@@ -24,7 +28,9 @@ export function SpendingAnomaliesReport() {
 
   const handleTransactionClick = (anomaly: SpendingAnomaly) => {
     if (anomaly.transactionId && anomaly.payeeName) {
-      router.push(`/transactions?search=${encodeURIComponent(anomaly.payeeName)}`);
+      router.push(
+        `/transactions?search=${encodeURIComponent(quoteSearchValue('payee', anomaly.payeeName))}`,
+      );
     }
   };
 
@@ -159,9 +165,21 @@ export function SpendingAnomaliesReport() {
         </div>
       </div>
 
+      {/* The statistics, the anomalies and the counts leave out a transaction
+          whose currency has no rate, so a quiet result is not the whole answer. */}
+      <PartialDataNotice
+        missingCurrencies={anomaliesData?.missingCurrencies ?? []}
+        excludedCount={anomaliesData?.excludedCount ?? 0}
+        displayCurrency={anomaliesData?.currency ?? defaultCurrency}
+      />
+
       {/* Controls */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4">
-        <div className="flex items-center gap-3">
+        {/* The export is the height of the sensitivity picker beside it, not
+            of its own text: `self-stretch` on the box it sits in and `h-full`
+            on the button, so the two read as one row of controls. On a phone
+            the row wraps and the export takes a line of its own. */}
+        <div className="flex flex-wrap items-center gap-3">
           <label className="text-sm text-gray-700 dark:text-gray-300 whitespace-nowrap">
             {t('spendingAnomalies.sensitivityLabel')}
           </label>
@@ -175,23 +193,14 @@ export function SpendingAnomaliesReport() {
             <option value={2.5}>{t('spendingAnomalies.sensitivityLow')}</option>
             <option value={3}>{t('spendingAnomalies.sensitivityVeryLow')}</option>
           </select>
-          <div className="ml-auto shrink-0">
-            <ExportDropdown onExportPdf={handleExportPdf} />
-          </div>
+          <ReportToolbarActions onExportPdf={handleExportPdf} />
         </div>
       </div>
 
       {/* Anomalies List */}
       {anomalies.length === 0 ? (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6">
-          <div className="text-center py-8">
-            <svg className="h-12 w-12 mx-auto text-green-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <p className="text-gray-500 dark:text-gray-400">
-              {t('spendingAnomalies.noAnomalies')}
-            </p>
-          </div>
+          <EmptyState icon={<CheckCircleIcon />} title={t('spendingAnomalies.noAnomalies')} />
         </div>
       ) : (
         <div className="space-y-4">

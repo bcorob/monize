@@ -11,6 +11,7 @@ import { isColorTheme } from '@/lib/color-themes';
 import { userSettingsApi } from '@/lib/user-settings';
 import { consumePreLoginLocale } from '@/lib/pre-login-locale';
 import { createLogger } from '@/lib/logger';
+import { preferenceCookieAttributes } from '@/lib/preference-cookie';
 
 const logger = createLogger('PreferencesLoader');
 
@@ -83,10 +84,7 @@ export function PreferencesLoader({ children }: { children: React.ReactNode }) {
 
     const current = Cookies.get(LOCALE_COOKIE);
     if (current === effective) return;
-    Cookies.set(LOCALE_COOKIE, effective, {
-      sameSite: 'lax',
-      expires: 365,
-    });
+    Cookies.set(LOCALE_COOKIE, effective, preferenceCookieAttributes());
     router.refresh();
   }, [prefsHydrated, preferences?.language, router, updatePreferencesStore]);
 

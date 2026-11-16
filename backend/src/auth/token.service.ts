@@ -3,8 +3,8 @@ import { JwtService } from "@nestjs/jwt";
 import { ConfigService } from "@nestjs/config";
 import {
   DataSource,
+  EntityManager,
   EntityTarget,
-  In,
   LessThan,
   ObjectLiteral,
   Repository,
@@ -16,7 +16,9 @@ import * as crypto from "crypto";
 
 import { User } from "../users/entities/user.entity";
 import { RefreshToken } from "./entities/refresh-token.entity";
+import { ACCESS_TOKEN_TYPE } from "./access-token";
 import { hashToken } from "./crypto.util";
+import { revokeUserRefreshFamilies } from "./refresh-revocation";
 import { withSystemContext } from "../common/db/with-context";
 import { tr } from "../i18n/translate";
 
@@ -25,8 +27,32 @@ export interface DelegationTokenContext {
   delegationId: string;
 }
 
+/** What the refresh transaction decided; a refusal is raised after it commits. */
+type RefreshOutcome =
+  | {
+      kind: "issued";
+      accessToken: string;
+      refreshToken: string | null;
+      userId: string;
+    }
+  | { kind: "refused"; message: string };
+
+function refused(message: string): RefreshOutcome {
+  return { kind: "refused", message };
+}
+
 @Injectable()
 export class TokenService {
+  /**
+   * How long the immediate predecessor of a fresh successor is answered with an
+   * access token instead of being read as reuse. Two tabs of one browser
+   * refreshing together collide within milliseconds; the window is kept this
+   * short because, inside it, a thief presenting the predecessor is not
+   * detected (it gets one 15-minute access token and no refresh token, so it
+   * cannot keep the session).
+   */
+  static readonly ROTATION_GRACE_SECONDS = 10;
+
   private readonly logger = new Logger(TokenService.name);
   private readonly ACCESS_TOKEN_EXPIRY = "15m";
   private readonly REFRESH_TOKEN_EXPIRY_MS = 1 * 24 * 60 * 60 * 1000; // 1 day
@@ -77,6 +103,7 @@ export class TokenService {
     // the real user.
     const payload: Record<string, unknown> = {
       sub: user.id,
+      type: ACCESS_TOKEN_TYPE,
       email: user.email,
       authProvider: user.authProvider,
       role: user.role,
@@ -114,137 +141,216 @@ export class TokenService {
     return { accessToken, refreshToken: rawRefreshToken };
   }
 
-  async refreshTokens(
-    rawRefreshToken: string,
-  ): Promise<{ accessToken: string; refreshToken: string; userId: string }> {
+  /**
+   * Rotate a refresh token, or refuse it.
+   *
+   * A refusal that revokes (reuse, expiry, an inactive user) is DECIDED inside
+   * the transaction and RAISED after it commits. Throwing inside the
+   * `withScopedDb` callback rolled back the very revocation the refusal
+   * reported, so a thief's successor stayed live after its reuse was detected
+   * (A26-H01). Only the unknown-token branch, which writes nothing, throws
+   * inside.
+   *
+   * `refreshToken` is `null` when the presented token is the immediate
+   * predecessor of a successor minted within `ROTATION_GRACE_SECONDS`: two tabs
+   * of one browser sent the same cookie a moment apart (A26-M03). That answer
+   * is an access token only; the caller keeps the refresh cookie the first
+   * response set, and nothing is revoked or minted.
+   */
+  async refreshTokens(rawRefreshToken: string): Promise<{
+    accessToken: string;
+    refreshToken: string | null;
+    userId: string;
+  }> {
     const tokenHash = hashToken(rawRefreshToken);
 
-    return withScopedDb(this.dataSource, async (manager) => {
-      // SECURITY: the family lock comes FIRST, before any row lock, and this
-      // unlocked read exists only to learn which family to lock.
-      //
-      // The family lock is what makes revocation whole. Revocation is an `UPDATE
-      // ... WHERE family_id = ?`, and under READ COMMITTED that statement uses
-      // one snapshot: blocked on the old row, it waits, updates it -- and never
-      // sees the replacement this rotation inserted *after* the snapshot was
-      // taken. Logout returned success with a usable token still in the family
-      // (audit P4-011).
-      //
-      // The order is not incidental. Taking the row lock first and the family
-      // lock second would deadlock against `revokeAllUserRefreshTokens`, which
-      // holds families and then wants rows. Family-then-rows, everywhere.
-      // `family_id` never changes for a token row, so reading it unlocked is
-      // safe -- everything the decisions below rest on is re-read under the lock.
-      const familyProbe = await manager.findOne(RefreshToken, {
-        where: { tokenHash },
-        select: { familyId: true },
-      });
+    const outcome = await withScopedDb<RefreshOutcome>(
+      this.dataSource,
+      async (manager) => {
+        // SECURITY: the family lock comes FIRST, before any row lock, and this
+        // unlocked read exists only to learn which family to lock.
+        //
+        // The family lock is what makes revocation whole. Revocation is an `UPDATE
+        // ... WHERE family_id = ?`, and under READ COMMITTED that statement uses
+        // one snapshot: blocked on the old row, it waits, updates it -- and never
+        // sees the replacement this rotation inserted *after* the snapshot was
+        // taken. Logout returned success with a usable token still in the family
+        // (audit P4-011).
+        //
+        // The order is not incidental. Taking the row lock first and the family
+        // lock second would deadlock against `revokeAllUserRefreshTokens`, which
+        // holds families and then wants rows. Family-then-rows, everywhere.
+        // `family_id` never changes for a token row, so reading it unlocked is
+        // safe -- everything the decisions below rest on is re-read under the lock.
+        const familyProbe = await manager.findOne(RefreshToken, {
+          where: { tokenHash },
+          select: { familyId: true },
+        });
 
-      if (!familyProbe) {
-        throw new UnauthorizedException(
-          tr("errors.auth.invalidRefreshToken", "Invalid refresh token"),
-        );
-      }
+        if (!familyProbe) {
+          throw new UnauthorizedException(
+            tr("errors.auth.invalidRefreshToken", "Invalid refresh token"),
+          );
+        }
 
-      await lockTokenFamily(manager, familyProbe.familyId);
+        await lockTokenFamily(manager, familyProbe.familyId);
 
-      // Re-read under the row lock, now that the family is held: this is the
-      // version the rotation replaces.
-      const existingToken = await manager.findOne(RefreshToken, {
-        where: { tokenHash },
-        lock: { mode: "pessimistic_write" },
-      });
+        // Re-read under the row lock, now that the family is held: this is the
+        // version the rotation replaces.
+        const existingToken = await manager.findOne(RefreshToken, {
+          where: { tokenHash },
+          lock: { mode: "pessimistic_write" },
+        });
 
-      if (!existingToken) {
-        throw new UnauthorizedException(
-          tr("errors.auth.invalidRefreshToken", "Invalid refresh token"),
-        );
-      }
+        if (!existingToken) {
+          throw new UnauthorizedException(
+            tr("errors.auth.invalidRefreshToken", "Invalid refresh token"),
+          );
+        }
 
-      // Replay detection: if token is revoked, a previously-rotated token was reused
-      if (existingToken.isRevoked) {
-        await manager.update(
-          RefreshToken,
-          { familyId: existingToken.familyId },
-          { isRevoked: true },
-        );
-        throw new UnauthorizedException(
-          tr(
-            "errors.auth.refreshTokenReuseDetected",
-            "Refresh token reuse detected",
-          ),
-        );
-      }
+        // Replay detection: a revoked token presented again is reuse, and the
+        // whole family dies -- unless it is the immediate predecessor of a live
+        // successor minted within the grace (a second tab, not a thief).
+        const inGrace =
+          existingToken.isRevoked &&
+          (await this.hasGraceSuccessor(manager, existingToken));
+        if (existingToken.isRevoked && !inGrace) {
+          await manager.update(
+            RefreshToken,
+            { familyId: existingToken.familyId },
+            { isRevoked: true },
+          );
+          return refused(
+            tr(
+              "errors.auth.refreshTokenReuseDetected",
+              "Refresh token reuse detected",
+            ),
+          );
+        }
 
-      if (existingToken.expiresAt < new Date()) {
+        if (!inGrace && existingToken.expiresAt < new Date()) {
+          existingToken.isRevoked = true;
+          await manager.save(existingToken);
+          return refused(
+            tr("errors.auth.refreshTokenExpired", "Refresh token expired"),
+          );
+        }
+
+        const user = await manager.findOne(User, {
+          where: { id: existingToken.userId },
+        });
+
+        if (!user || !user.isActive) {
+          await manager.update(
+            RefreshToken,
+            { familyId: existingToken.familyId },
+            { isRevoked: true },
+          );
+          return refused(
+            tr(
+              "errors.auth.userNotFoundOrInactive",
+              "User not found or inactive",
+            ),
+          );
+        }
+
+        if (inGrace) {
+          return {
+            kind: "issued",
+            accessToken: this.signAccessToken(user, existingToken),
+            refreshToken: null,
+            userId: user.id,
+          };
+        }
+
+        // Rotate: generate new refresh token in the same family
+        const newRawRefreshToken = crypto.randomBytes(64).toString("hex");
+        const newTokenHash = hashToken(newRawRefreshToken);
+
         existingToken.isRevoked = true;
+        existingToken.replacedByHash = newTokenHash;
         await manager.save(existingToken);
-        throw new UnauthorizedException(
-          tr("errors.auth.refreshTokenExpired", "Refresh token expired"),
+
+        const rotatedExpiryMs = this.getRefreshExpiryMs(
+          existingToken.rememberMe,
         );
-      }
+        const newRefreshTokenEntity = manager.create(RefreshToken, {
+          userId: user.id,
+          tokenHash: newTokenHash,
+          familyId: existingToken.familyId,
+          isRevoked: false,
+          expiresAt: new Date(Date.now() + rotatedExpiryMs),
+          replacedByHash: null,
+          rememberMe: existingToken.rememberMe,
+          // Carry the delegate "acting as owner" context forward through
+          // rotation so the context survives access-token expiry.
+          actingAsUserId: existingToken.actingAsUserId ?? null,
+          delegationId: existingToken.delegationId ?? null,
+        });
+        await manager.save(newRefreshTokenEntity);
 
-      const user = await manager.findOne(User, {
-        where: { id: existingToken.userId },
-      });
+        return {
+          kind: "issued",
+          accessToken: this.signAccessToken(user, existingToken),
+          refreshToken: newRawRefreshToken,
+          userId: user.id,
+        };
+      },
+    );
 
-      if (!user || !user.isActive) {
-        await manager.update(
-          RefreshToken,
-          { familyId: existingToken.familyId },
-          { isRevoked: true },
-        );
-        throw new UnauthorizedException(
-          tr(
-            "errors.auth.userNotFoundOrInactive",
-            "User not found or inactive",
-          ),
-        );
-      }
+    // Committed, then refused: for these branches the revocation IS the point.
+    if (outcome.kind === "refused") {
+      throw new UnauthorizedException(outcome.message);
+    }
+    return {
+      accessToken: outcome.accessToken,
+      refreshToken: outcome.refreshToken,
+      userId: outcome.userId,
+    };
+  }
 
-      // Rotate: generate new refresh token in the same family
-      const newRawRefreshToken = crypto.randomBytes(64).toString("hex");
-      const newTokenHash = hashToken(newRawRefreshToken);
+  /**
+   * True when `predecessor` was rotated into a successor that is still live
+   * and was minted within `ROTATION_GRACE_SECONDS` (so it cannot have expired:
+   * the shortest refresh lifetime is a day). Called under the family lock, so
+   * no rotation of the successor can interleave.
+   *
+   * The recency test runs in SQL against the column's own clock
+   * (`created_at` defaults to `CURRENT_TIMESTAMP`), so a process time zone that
+   * differs from the database's cannot widen or close the window.
+   */
+  private async hasGraceSuccessor(
+    manager: EntityManager,
+    predecessor: RefreshToken,
+  ): Promise<boolean> {
+    if (!predecessor.replacedByHash) return false;
+    const rows: unknown[] = await manager.query(
+      `SELECT 1 FROM refresh_tokens
+        WHERE token_hash = $1 AND family_id = $2 AND is_revoked = false
+          AND created_at > CURRENT_TIMESTAMP - make_interval(secs => $3)`,
+      [
+        predecessor.replacedByHash,
+        predecessor.familyId,
+        TokenService.ROTATION_GRACE_SECONDS,
+      ],
+    );
+    return rows.length > 0;
+  }
 
-      existingToken.isRevoked = true;
-      existingToken.replacedByHash = newTokenHash;
-      await manager.save(existingToken);
-
-      const rotatedExpiryMs = this.getRefreshExpiryMs(existingToken.rememberMe);
-      const newRefreshTokenEntity = manager.create(RefreshToken, {
-        userId: user.id,
-        tokenHash: newTokenHash,
-        familyId: existingToken.familyId,
-        isRevoked: false,
-        expiresAt: new Date(Date.now() + rotatedExpiryMs),
-        replacedByHash: null,
-        rememberMe: existingToken.rememberMe,
-        // Carry the delegate "acting as owner" context forward through
-        // rotation so the context survives access-token expiry.
-        actingAsUserId: existingToken.actingAsUserId ?? null,
-        delegationId: existingToken.delegationId ?? null,
-      });
-      await manager.save(newRefreshTokenEntity);
-
-      const payload: Record<string, unknown> = {
-        sub: user.id,
-        email: user.email,
-        authProvider: user.authProvider,
-        role: user.role,
-      };
-      if (existingToken.actingAsUserId && existingToken.delegationId) {
-        payload.actingAsUserId = existingToken.actingAsUserId;
-        payload.delegationId = existingToken.delegationId;
-      }
-      const accessToken = this.jwtService.sign(payload, {
-        expiresIn: this.ACCESS_TOKEN_EXPIRY,
-      });
-
-      return {
-        accessToken,
-        refreshToken: newRawRefreshToken,
-        userId: user.id,
-      };
+  private signAccessToken(user: User, token: RefreshToken): string {
+    const payload: Record<string, unknown> = {
+      sub: user.id,
+      type: ACCESS_TOKEN_TYPE,
+      email: user.email,
+      authProvider: user.authProvider,
+      role: user.role,
+    };
+    if (token.actingAsUserId && token.delegationId) {
+      payload.actingAsUserId = token.actingAsUserId;
+      payload.delegationId = token.delegationId;
+    }
+    return this.jwtService.sign(payload, {
+      expiresIn: this.ACCESS_TOKEN_EXPIRY,
     });
   }
 
@@ -303,46 +409,25 @@ export class TokenService {
    * captured families and re-revoking until a pass changes nothing converges: a
    * rotation can only add a replacement inside a family it has just revoked, and
    * the next pass, holding that family's lock, covers it.
+   *
+   * `keepSessionOf` is the raw refresh token of the session making the request,
+   * when that session is to survive: its family is left out of the captured set
+   * (resolved by the token's hash, and only among `userId`'s own rows), so "sign
+   * out everywhere else" does not sign the caller out too. An unknown or absent
+   * token keeps nothing, which is the safe direction.
+   *
+   * The mechanism is `revokeUserRefreshFamilies` (`./refresh-revocation`), shared
+   * with the services that cannot inject this one (users, admin, delegation).
    */
-  async revokeAllUserRefreshTokens(userId: string): Promise<void> {
-    // First round: the families this user has a live session in, captured before
-    // any revocation. This is the whole set the operation is allowed to touch.
-    const families = await withScopedDb(this.dataSource, async (manager) => {
-      const rows: { family_id: string }[] = await manager.query(
-        `SELECT DISTINCT family_id FROM refresh_tokens
-          WHERE user_id = $1 AND is_revoked = false`,
-        [userId],
-      );
-      // Ascending, the same fixed order every other multi-lock path uses, so a
-      // pass cannot deadlock against a rotation holding one family.
-      return rows.map((r) => r.family_id).sort((a, b) => a.localeCompare(b));
-    });
-    if (families.length === 0) return;
-
-    // Bounded: a legitimate client rotates once per refresh, so two passes is
-    // the realistic worst case. The cap stops a pathological caller spinning
-    // here forever rather than expressing a real expectation.
-    const MAX_PASSES = 10;
-    for (let pass = 0; pass < MAX_PASSES; pass++) {
-      const affected = await withScopedDb(this.dataSource, async (manager) => {
-        for (const familyId of families) {
-          await lockTokenFamily(manager, familyId);
-        }
-        // Scoped to `familyId IN (captured)`: never a blanket sweep of every
-        // unrevoked token, so a family opened mid-operation is left alone.
-        const result = await manager
-          .getRepository(RefreshToken)
-          .update(
-            { userId, familyId: In(families), isRevoked: false },
-            { isRevoked: true },
-          );
-        return result.affected ?? 0;
-      });
-      if (affected === 0) return;
-    }
-    this.logger.warn(
-      `Gave up revoking sessions for user ${userId} after ${MAX_PASSES} passes; ` +
-        "a client may be rotating refresh tokens in a loop",
+  async revokeAllUserRefreshTokens(
+    userId: string,
+    keepSessionOf?: string,
+  ): Promise<void> {
+    await revokeUserRefreshFamilies(
+      this.dataSource,
+      userId,
+      this.logger,
+      keepSessionOf,
     );
   }
 
@@ -355,22 +440,17 @@ export class TokenService {
   }
 
   private async purgeExpiredRefreshTokensWithinContext(): Promise<void> {
+    // Only expired rows: a rotated (revoked) row is the evidence reuse
+    // detection needs to revoke the family when a stolen token is replayed.
     const expiredResult = await this.scoped(RefreshToken, (repo) =>
       repo.delete({
         expiresAt: LessThan(new Date()),
       }),
     );
 
-    const revokedResult = await this.scoped(RefreshToken, (repo) =>
-      repo.delete({
-        isRevoked: true,
-      }),
-    );
-
-    const totalPurged =
-      (expiredResult.affected || 0) + (revokedResult.affected || 0);
+    const totalPurged = expiredResult.affected || 0;
     if (totalPurged > 0) {
-      this.logger.log(`Purged ${totalPurged} expired/revoked refresh tokens`);
+      this.logger.log(`Purged ${totalPurged} expired refresh tokens`);
     }
   }
 }

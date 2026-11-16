@@ -1,4 +1,13 @@
 {
+  "paymentMatching": {
+    "toggleLabel": "{kind, select, mortgage {Associar os pagamentos bancários importados a este financiamento imobiliário} other {Associar os pagamentos bancários importados a este empréstimo}}",
+    "toggleHelp": "Quando uma transação bancária importada corresponde ao padrão do favorecido, o Monize a usa para quitar o pagamento agendado e a divide em principal e juros, em vez de registrar uma transação de fatura separada.",
+    "payeePattern": "Padrão do beneficiário",
+    "payeePatternPlaceholder": "ex.: *MEU BANCO*",
+    "descriptionPattern": "Padrão da descrição (opcional)",
+    "descriptionPatternPlaceholder": "ex.: *Parcela do empréstimo*",
+    "fromAccount": "Associado aos débitos de {account}."
+  },
   "nameSuffix": {
     "cash": "Dinheiro",
     "brokerage": "Corretagem"
@@ -22,9 +31,7 @@
     "noMatch": "Nenhuma conta corresponde aos seus filtros.",
     "clearFilters": "Limpar Filtros",
     "filter": {
-      "all": "Todas",
-      "active": "Ativas",
-      "closed": "Fechadas",
+      "allCount": "Todas ({count})",
       "netWorthAll": "Patrimônio Líquido: Todas",
       "inNetWorth": "Incluída no Patrimônio Líquido",
       "excludedFromNetWorth": "Excluída do Patrimônio Líquido",
@@ -32,7 +39,10 @@
       "typeAriaLabel": "Filtrar por tipo de conta",
       "searchPlaceholder": "Buscar contas...",
       "searchAriaLabel": "Buscar contas por nome",
-      "searchClear": "Limpar busca"
+      "searchClear": "Limpar busca",
+      "activeCount": "Ativas ({count})",
+      "closedCount": "Fechadas ({count})",
+      "statusLabel": "Status"
     },
     "accountCount": "{filtered} de {total} contas",
     "groupCount": "{count, plural, one {# conta} other {# contas}}",
@@ -40,6 +50,8 @@
       "accountName": "Nome da Conta",
       "type": "Tipo",
       "status": "Status",
+      "lastReconciled": "Última reconciliação",
+      "unreconciled": "Não reconciliadas",
       "balance": "Saldo",
       "actions": "Ações"
     },
@@ -50,8 +62,11 @@
     "statusClosed": "Fechada",
     "marketValue": "Valor de mercado",
     "combinedBreakdown": "Investimentos {investments} · Caixa {cash}",
+    "combinedInvestments": "Investimentos {amount}",
+    "combinedCash": "Caixa {amount}",
     "combinedUnknown": "Total indisponível",
     "combinedUnknownTooltip": "{count, plural, one {# posição não tem preço, então o total desta conta não pode ser calculado} other {# posições não têm preço, então o total desta conta não pode ser calculado}}",
+    "combinedUnknownValuation": "Algumas posições desta conta não puderam ser convertidas para a sua moeda de relatório, então o total não pode ser calculado. Adicione a taxa de câmbio que falta na página Moedas.",
     "combinedUnknownNoPortfolio": "Não foi possível carregar as posições, então o total desta conta não pode ser calculado",
     "limit": "Limite: {amount}",
     "pairedWith": "Associada com {name}",
@@ -81,7 +96,11 @@
     "jointSharedBy": "Compartilhada por {owner}",
     "jointSharedWith": "Compartilhada com {count, plural, one {# pessoa} other {# pessoas}}",
     "includeInNetWorth": "Incluir no meu patrimônio líquido",
-    "excludeFromNetWorth": "Excluir do meu patrimônio líquido"
+    "excludeFromNetWorth": "Excluir do meu patrimônio líquido",
+    "neverReconciled": "Nunca",
+    "lastReconciledOn": "Reconciliada em {date}",
+    "neverReconciledCard": "Nunca reconciliada",
+    "unreconciledCard": "{count, plural, one {{formatted} não reconciliada} other {{formatted} não reconciliadas}}"
   },
   "contextMenu": {
     "subtypeBrokerage": "Corretagem",
@@ -117,17 +136,23 @@
     "accountType": "Tipo de Conta",
     "currency": "Moeda",
     "currencyLocked": "A moeda está bloqueada porque esta conta já tem transações. Alterá-la recalcularia silenciosamente os saldos existentes.",
+    "accountTypeKindLocked": "A moeda está bloqueada pelas transações desta conta, então ela não pode alternar entre Carteira cripto e um tipo de conta em moeda fiduciária.",
+    "currencyPlaceholder": "Selecione uma moeda...",
+    "noCryptoCurrencies": "Uma carteira cripto contém uma criptomoeda, e ainda não há nenhuma configurada. Adicione uma na <currencies>página Moedas</currencies> e escolha-a aqui. <guide>Como adicionar uma criptomoeda</guide>",
     "openingBalance": "Saldo Inicial",
     "loanAmount": "Valor do Empréstimo",
     "mortgageAmount": "Valor da Hipoteca",
     "accountNumber": "Número de Conta (opcional)",
     "institution": "Instituição (opcional)",
-    "institutionRequired": "Mutuante/Instituição (obrigatório)",
+    "institutionRequired": "Mutuante/Instituição",
     "institutionPlaceholder": "Selecionar ou criar uma instituição...",
     "newInstitutionTitle": "Nova Instituição",
     "creditLimit": "Limite de Crédito (opcional)",
+    "balanceAlertsHeading": "Alertas de saldo",
+    "lowBalanceThreshold": "Avisar abaixo de (opcional)",
+    "highBalanceThreshold": "Avisar acima de (opcional)",
     "interestRateOptional": "Taxa de Juros % (opcional)",
-    "interestRateRequired": "Taxa de Juros % (obrigatório)",
+    "interestRateRequired": "Taxa de Juros %",
     "description": "Descrição (opcional)",
     "excludeFromNetWorth": "Excluir do Patrimônio Líquido",
     "favourite": "Favorito",
@@ -157,13 +182,12 @@
       "mortgage": "Hipoteca",
       "asset": "Ativo",
       "cash": "Numerário",
+      "crypto": "Carteira cripto",
       "other": "Outro"
     },
     "statementDueDayPlaceholder": "ex.: 15",
     "statementSettlementDayPlaceholder": "ex.: 25",
     "fxFeeTitle": "Taxa de conversão de moeda estrangeira (opcional)",
-    "fxFeePercent": "Percentual da taxa",
-    "fxFeePercentPlaceholder": "ex.: 2,5",
     "jointSharedWith": "Conta conjunta compartilhada com {count, plural, one {# pessoa} other {# pessoas}}",
     "jointManage": "Gerenciar compartilhamento",
     "cashSection": {
@@ -192,10 +216,10 @@
   },
   "loanFields": {
     "title": "Detalhes do Pagamento do Empréstimo",
-    "paymentAmount": "Valor do Pagamento (obrigatório)",
-    "paymentFrequency": "Frequência do Pagamento (obrigatório)",
-    "firstPaymentDate": "Data do Primeiro Pagamento (obrigatório)",
-    "paymentFromAccount": "Pagar a Partir da Conta (obrigatório)",
+    "paymentAmount": "Valor do Pagamento",
+    "paymentFrequency": "Frequência do Pagamento",
+    "firstPaymentDate": "Data do Primeiro Pagamento",
+    "paymentFromAccount": "Pagar a Partir da Conta",
     "interestCategory": "Categoria de Juros",
     "selectFrequency": "Selecionar frequência...",
     "selectAccount": "Selecionar conta...",
@@ -222,33 +246,32 @@
     "analyzingHistory": "Analisando o histórico de transações...",
     "detectedPayments": "{count} pagamentos detectados de {from} a {to}.",
     "confidence": "Confiança:",
-    "lastSplit": "Última divisão do pagamento: {currency}{principal} capital / {currency}{interest} juros",
-    "extraPayments": "{count, plural, one {# pagamento extra de capital} other {# pagamentos extra de capital}} detectados (média {currency}{avg}/período)",
+    "lastSplit": "Última divisão do pagamento: {principal} capital / {interest} juros",
+    "extraPayments": "{count, plural, one {# pagamento extra de capital} other {# pagamentos extra de capital}} detectados (média {avg}/período)",
     "reviewValues": "Revise e ajuste os valores abaixo antes de salvar.",
-    "regularPaymentAmount": "Valor do Pagamento Regular *",
+    "regularPaymentAmount": "Valor do Pagamento Regular",
     "includeExtraPrincipal": "Incluir pagamento extra ao capital",
     "extraPrincipalPerPayment": "Capital Extra por Pagamento",
-    "totalPayment": "Pagamento total: {currency}{amount}",
+    "totalPayment": "Pagamento total: {amount}",
     "useDetectedSplit": "Usar divisão capital/juros das transações importadas",
-    "useDetectedSplitDesc": "Usará {currency}{interest} para juros, o restante para capital",
+    "useDetectedSplitDesc": "Usará {interest} para juros, o restante para capital",
     "calculateFromRate": "Calculará a divisão a partir da taxa de juros e do saldo atual",
-    "paymentFrequency": "Frequência do Pagamento *",
-    "paymentFromAccount": "Pagar a Partir da Conta *",
+    "paymentFrequency": "Frequência do Pagamento",
+    "paymentFromAccount": "Pagar a Partir da Conta",
     "selectAccount": "Selecionar conta...",
-    "nextPaymentDate": "Data do Próximo Pagamento *",
+    "nextPaymentDate": "Data do Próximo Pagamento",
     "annualInterestRate": "Taxa de Juros Anual (%)",
     "interestRatePlaceholder": "ex.: 5,5",
     "estimatedFromHistory": "Estimada a partir do histórico de transações: {rate}%",
     "interestExpenseCategory": "Categoria de Despesa de Juros",
+    "interestExpenseCategoryRequired": "Categoria de Despesa de Juros",
     "detectedCategory": "Detectada: {name}",
     "selectCategory": "Selecionar categoria...",
     "payeeLender": "Beneficiário / Mutuante",
     "selectOrCreatePayee": "Selecionar ou criar beneficiário...",
     "mortgageDetails": "Detalhes da Hipoteca",
-    "canadianMortgage": "Hipoteca Canadense (capitalização semestral)",
-    "variableRate": "Taxa Variável",
     "amortizationMonths": "Amortização (meses)",
-    "termMonths": "Prazo (meses)",
+    "termMonths": "Prazo de Taxa Fixa (meses)",
     "autoPost": "Registrar transações automaticamente quando vencerem",
     "skip": "Ignorar",
     "setUpPayments": "Configurar Pagamentos",
@@ -264,26 +287,46 @@
     },
     "toasts": {
       "setupComplete": "Pagamentos agendados configurados para {account}"
+    },
+    "firstInstallment": "Primeira parcela",
+    "firstInstallmentHelp": "Este financiamento não tem pagamento fixo: cada parcela é calculada a partir do saldo, da taxa e do prazo de amortização. Esta é a que vence em {date}, incluindo qualquer amortização extra.",
+    "firstInstallmentPending": "Informe a data do próximo pagamento para calcular a primeira parcela.",
+    "firstInstallmentCalculating": "Calculando a primeira parcela...",
+    "firstInstallmentFailed": "Não foi possível calcular a primeira parcela. Verifique os valores abaixo e tente novamente.",
+    "paymentMatching": {
+      "autoPostDisabled": "Desativado automaticamente: a correspondência de pagamentos liquida esta fatura a partir do próprio débito do banco, portanto ela não deve também ser lançada por si mesma.",
+      "payeePatternRequired": "Insira um padrão de beneficiário que inclua um caractere universal *"
     }
   },
   "mortgageFields": {
     "title": "Detalhes da Hipoteca",
-    "canadianMortgage": "Hipoteca Canadense",
-    "canadianMortgageDesc": "Usa capitalização semestral para taxas fixas (obrigatório por lei no Canadá)",
-    "variableRate": "Taxa Variável",
-    "variableRateDesc": "A taxa pode variar durante o prazo (usa capitalização mensal)",
-    "variableRateLoanDetailsLink": "Registre as alterações de taxa nos <link>detalhes do empréstimo</link>.",
-    "termLength": "Duração do Prazo",
-    "termLengthNoTerm": "Deixar em 0 anos e 0 meses para sem prazo.",
-    "amortizationPeriod": "Período de Amortização (obrigatório)",
+    "type": {
+      "label": "Tipo de Hipoteca",
+      "ANNUITY": "Tabela Price (Parcela Constante)",
+      "CANADIAN_FIXED": "Taxa Fixa Canadense",
+      "LINEAR": "SAC (Amortização Constante)",
+      "INTEREST_ONLY": "Somente Juros",
+      "help": {
+        "ANNUITY": "Seu pagamento total é o mesmo todo mês. Escolha esta opção também para uma hipoteca com taxa variável.",
+        "CANADIAN_FIXED": "Um contrato canadense de taxa fixa; os juros são capitalizados duas vezes por ano.",
+        "LINEAR": "A parte de amortização é a mesma todo mês e o total diminui.",
+        "INTEREST_ONLY": "Você paga somente juros e o saldo não muda."
+      }
+    },
+    "rateChangesLoanDetailsLink": "Registre as alterações de taxa nos <link>detalhes do empréstimo</link>.",
+    "termLength": "Prazo de Taxa Fixa",
+    "termLengthHelp": "Quanto tempo dura sua taxa de juros ou o prazo do contrato, por exemplo uma taxa fixa de 5 anos. O Monize pode lembrar você antes do fim. Deixar em 0 anos e 0 meses para sem prazo.",
+    "amortizationPeriod": "Período de Amortização",
     "years": "Anos",
     "months": "Meses",
-    "paymentFrequency": "Frequência do Pagamento (obrigatório)",
-    "firstPaymentDate": "Data do Primeiro Pagamento (obrigatório)",
-    "paymentFromAccount": "Pagar a Partir da Conta (obrigatório)",
-    "interestCategory": "Categoria de Juros",
+    "paymentFrequency": "Frequência do Pagamento",
+    "firstPaymentDate": "Data do Primeiro Pagamento",
+    "paymentFromAccount": "Pagar a Partir da Conta",
+    "paymentFromAccountEditHelp": "Alterá-la move os próximos pagamentos agendados e a regra de correspondência de pagamentos para a nova conta. Os pagamentos já lançados não são alterados.",
+    "interestCategory": "Categoria de Juros (opcional)",
+    "interestCategoryRequired": "Categoria de Juros",
     "interestBookingMode": {
-      "label": "Como os juros são registrados?",
+      "label": "Registro de Juros",
       "help": "Para a detecção de taxa lê-los corretamente. Automático serve na maioria.",
       "AUTO": "Automático (recomendado)",
       "SPLIT": "Parte dividida do pagamento",
@@ -330,6 +373,72 @@
       "memoLabel": "Texto da nota de amortização extra",
       "memoPlaceholder": "ex.: amortização extra",
       "memoHelp": "Correspondência de substring sem diferenciar maiúsculas de minúsculas com a nota do pagamento, a nota da transação de origem ou a nota de um rateio."
+    },
+    "prepaymentMode": {
+      "label": "O que uma amortização extra faz",
+      "SHORTEN_TERM": "Reduz o prazo (mesma amortização todo mês)",
+      "LOWER_INSTALLMENT": "Reduz a parcela (mesma data final)",
+      "help": "Confirme com o seu banco. Se, após uma amortização extra, a parte de amortização no extrato não mudar, o prazo foi reduzido."
+    },
+    "previewFirstInstallment": "Primeira parcela:",
+    "detect": {
+      "toggle": "Não tem certeza? Informe algumas parcelas",
+      "title": "Descubra o tipo de hipoteca",
+      "intro": "Copie duas ou três parcelas consecutivas de um extrato, da mais antiga para a mais recente. O saldo é opcional: com ele e a taxa de juros, o Monize consegue saber se os juros são capitalizados duas vezes por ano.",
+      "installment": "Parcela {number}",
+      "principal": "Principal",
+      "interest": "Juros",
+      "balance": "Saldo anterior (opcional)",
+      "rowIncomplete": "Informe o principal e os juros, ou deixe a linha vazia.",
+      "rate": "Verificado com a taxa de juros informada acima, {rate}.",
+      "noRate": "Nenhuma taxa de juros foi informada acima, então a capitalização não pode ser verificada.",
+      "needsFrequency": "Escolha primeiro a frequência do pagamento abaixo: as parcelas são lidas nessa periodicidade.",
+      "submit": "Sugerir um Tipo",
+      "close": "Fechar",
+      "suggested": "Tipo sugerido: {type}",
+      "noSuggestion": "Nenhum tipo sugerido.",
+      "lowConfidence": "Baixa confiança: confira no seu contrato ou pergunte ao seu banco antes de usar.",
+      "use": "Usar Este Tipo",
+      "failed": "Não foi possível verificar as parcelas porque a solicitação falhou. Tente novamente.",
+      "reason": {
+        "TOO_FEW_SAMPLES": "São necessárias pelo menos duas parcelas consecutivas para comparar.",
+        "INVALID_SAMPLE": "Uma parcela tem um valor negativo ou ilegível.",
+        "NO_PAYMENT": "As parcelas não amortizam o principal nem cobram juros.",
+        "AMBIGUOUS_CONSTANT_PRINCIPAL_AND_INSTALLMENT": "O principal e o total são iguais em todas as parcelas, o que serve tanto para o SAC quanto para a Tabela Price. Tente parcelas mais distantes entre si ou confira seu contrato.",
+        "ACCELERATED_FREQUENCY": "Estas parcelas parecem SAC ou somente juros, o que não é possível com uma frequência de pagamento acelerada. Verifique a frequência do pagamento.",
+        "NO_RULE_FITS": "Nem o principal nem o total se mantêm iguais nestas parcelas. Se a taxa mudou entre elas, use parcelas de um único período de taxa.",
+        "ZERO_PRINCIPAL": "Nenhum principal é amortizado, então o saldo não muda.",
+        "ZERO_PRINCIPAL_RATE_MISMATCH": "Nenhum principal é amortizado, mas os juros não correspondem à taxa informada sobre o saldo. Verifique a taxa.",
+        "CONSTANT_PRINCIPAL": "A parte de amortização é a mesma todas as vezes e o total diminui.",
+        "CONSTANT_PRINCIPAL_RATE_MISMATCH": "A parte de amortização é a mesma todas as vezes, mas os juros não correspondem à taxa informada sobre o saldo. Verifique a taxa.",
+        "CONSTANT_INSTALLMENT_SEMI_ANNUAL": "O total é o mesmo todas as vezes e os juros correspondem à taxa informada capitalizada duas vezes por ano.",
+        "CONSTANT_INSTALLMENT_NOMINAL": "O total é o mesmo todas as vezes e os juros correspondem à taxa informada sem capitalização semestral.",
+        "CONSTANT_INSTALLMENT_RATE_UNCHECKED": "O total é o mesmo todas as vezes. Sem o saldo antes de cada parcela e a taxa de juros, não foi possível verificar a capitalização semestral.",
+        "CONSTANT_INSTALLMENT_COMPOUNDING_AMBIGUOUS": "O total é o mesmo todas as vezes, mas o saldo é pequeno demais para distinguir a capitalização semestral. Um contrato canadense de taxa fixa informa isso em suas condições.",
+        "CONSTANT_INSTALLMENT_RATE_MISMATCH": "O total é o mesmo todas as vezes, mas os juros não correspondem a nenhuma das convenções na taxa informada. Os juros podem ser cobrados por dia; verifique a taxa."
+      },
+      "history": {
+        "action": "Detectar Tipo de Hipoteca",
+        "title": "Tipo de hipoteca a partir dos seus pagamentos",
+        "intro": "Lido das parcelas lançadas mais recentes em uma única taxa. Nada muda até você salvar a conta.",
+        "current": "Tipo atual: {type}",
+        "alreadySet": "Esta hipoteca já tem o tipo sugerido.",
+        "rate": "Taxa de juros em vigor: {rate}",
+        "noRate": "Nenhuma taxa de juros está registrada para estas datas, então a capitalização não foi verificada.",
+        "noSamples": "Nenhuma parcela lançada com uma parte de principal e uma parte de juros foi encontrada. Registre seus pagamentos divididos em principal e juros para usar este recurso.",
+        "colDate": "Data",
+        "colPrincipal": "Principal",
+        "colInterest": "Juros",
+        "colBalance": "Saldo anterior",
+        "balanceUnknown": "Desconhecido",
+        "failed": "Não foi possível ler o histórico de pagamentos porque a solicitação falhou. Tente novamente.",
+        "cancel": "Cancelar",
+        "use": "Editar Conta com Este Tipo"
+      }
+    },
+    "originalPrincipal": {
+      "label": "Principal original",
+      "help": "O valor que você originalmente tomou emprestado. Em uma conta cujo histórico registrado começa depois de o empréstimo ter começado, este é o valor emprestado, não o saldo inicial — que é a dívida no início do seu histórico."
     }
   },
   "assetFields": {
@@ -352,13 +461,19 @@
   "validation": {
     "nameRequired": "O nome da conta é obrigatório",
     "currencyCodeLength": "O código de moeda deve ter 3 caracteres",
+    "currencyRequired": "Selecione uma moeda",
     "institutionRequired": "Selecione ou crie uma instituição",
     "interestRateRequired": "A taxa de juros é obrigatória",
     "paymentAmountRequired": "O valor do pagamento é obrigatório",
     "paymentFrequencyRequired": "A frequência do pagamento é obrigatória",
     "paymentStartDateRequired": "A data do primeiro pagamento é obrigatória",
     "paymentAccountRequired": "A conta de pagamento é obrigatória",
-    "amortizationRequired": "O período de amortização é obrigatório"
+    "amortizationRequired": "O período de amortização é obrigatório",
+    "interestCategoryRequired": "Escolha a categoria em que são registrados os juros deste empréstimo",
+    "acceleratedNeedsAnnuity": "Este financiamento é pago em um cronograma acelerado, que só um financiamento de parcelas fixas tem. Um financiamento SAC ou só de juros precisa de uma frequência de pagamento normal, então mantenha um tipo de parcelas fixas.",
+    "paymentMatchingPayeePatternRequired": "Insira um padrão de beneficiário para associar ao débito do banco",
+    "paymentMatchingPayeePatternWildcard": "O padrão do beneficiário deve incluir um caractere universal *",
+    "paymentMatchingDescriptionPatternWildcard": "O padrão da descrição deve incluir um caractere universal *"
   },
   "loanDetail": {
     "backToAccounts": "Voltar às contas",
@@ -386,7 +501,12 @@
       "estRemainingInterest": "Juros restantes est.",
       "notSet": "Não definido",
       "notAvailable": "N/D",
-      "paidOff": "Quitado"
+      "paidOff": "Quitado",
+      "nextInstallment": "Próxima parcela",
+      "dueOn": "Vence em {date}",
+      "finalPayment": "Pagamento final",
+      "nextInstallmentDue": "Próxima parcela (vence em {date})",
+      "finalPaymentDue": "Pagamento final (vence em {date})"
     },
     "schedule": {
       "title": "Tabela de amortização",
@@ -455,7 +575,19 @@
       "budgetLabel": "Pagamento mensal total",
       "budgetHint": "Gaste um total fixo no empréstimo todo mês; a amortização é o que sobra depois da parcela. Quando a parcela cai, a amortização cresce para manter o total.",
       "budgetBelowInstallment": "É inferior à parcela atual ({amount}); aumente para amortizar.",
-      "windowInverted": "A data de início é posterior à data final, então este plano nunca se aplica."
+      "windowInverted": "A data de início é posterior à data final, então este plano nunca se aplica.",
+      "unavailable": {
+        "title": "A simulação de amortização antecipada ainda não pode ser calculada para este empréstimo.",
+        "reasonPaidOff": "Este empréstimo não tem saldo devedor, então não há nada para amortizar.",
+        "reasonNoFrequency": "Este empréstimo não tem uma frequência de pagamento definida. Adicione-a nas configurações da conta.",
+        "reasonNoRate": "Este empréstimo não tem uma taxa de juros salva. Defina a taxa nas configurações da conta ou registre uma alteração de taxa com data de hoje ou anterior. Uma taxa mostrada por linha no cronograma abaixo é reconstruída a partir dos juros cobrados e não é uma taxa salva.",
+        "reasonNoPayment": "O valor da parcela não pode ser determinado. Registre as parcelas regulares como transferências para a conta do empréstimo (principal, com os juros como linha de divisão ou como uma despesa categorizada separada), ou defina o valor do pagamento nas configurações da conta. Pagamentos registrados como despesas comuns na conta de origem nunca chegam à conta do empréstimo, então o cronograma não consegue vê-los.",
+        "reasonNoAmortization": "Este financiamento imobiliário não tem prazo de amortização, então não é possível calcular as parcelas nem o fim do prazo. Defina o prazo de amortização nas configurações da conta.",
+        "reasonNoPaymentStart": "Este financiamento imobiliário não tem data do primeiro pagamento, então não é possível contar os pagamentos que faltam até o fim do prazo. Configure o pagamento agendado nas configurações da conta; a primeira data de vencimento que você informar passa a ser o pagamento 1.",
+        "reasonNoPrincipal": "Este financiamento imobiliário não tem valor original, então não é possível calcular a amortização constante. Defina o valor do financiamento nas configurações da conta."
+      },
+      "budgetBelowNextInstallment": "Isso está abaixo da próxima parcela ({amount}, vence em {date}); aumente acima dela para amortizar antecipadamente.",
+      "shortenTermNeedsPrincipal": "Este financiamento imobiliário não tem valor original, então não é possível simular um prazo menor. Escolha reduzir a parcela ou defina o valor do financiamento nas configurações da conta."
     },
     "comparison": {
       "newPayoff": "Nova data de quitação",
@@ -471,7 +603,8 @@
       "newInstallment": "Nova parcela",
       "installmentDrop": "{payment} (−{reduction})",
       "monthlyPayment": "Pagamento mensal",
-      "overpaymentAtFrequency": "{frequency}: +{amount}"
+      "overpaymentAtFrequency": "{frequency}: +{amount}",
+      "firstPayment": "Primeiro pagamento"
     },
     "chart": {
       "title": "Linha do tempo de quitação",
@@ -538,6 +671,71 @@
       "seriesActual": "Saldo real",
       "unknown": "Desconhecido"
     },
+    "paymentMatching": {
+      "title": "Correspondência de pagamentos",
+      "description": "Reconhece o próprio débito do banco de cada parcela e o liquida no cronograma do empréstimo como principal e juros, em vez de registrar a fatura separadamente.",
+      "noSchedule": "A correspondência de pagamentos liquida os débitos do banco no pagamento agendado do empréstimo. Configure primeiro os pagamentos deste empréstimo.",
+      "noRule": "Nenhuma regra de correspondência de pagamentos está vinculada a este empréstimo.",
+      "createOne": "Criar uma",
+      "ruleLabel": "Regra:",
+      "ruleLoading": "Carregando a regra",
+      "ruleFailed": "Não foi possível carregar a regra de correspondência de pagamentos.",
+      "scheduleLoading": "Carregando o pagamento agendado",
+      "scheduleFailed": "Não foi possível carregar o pagamento agendado do empréstimo.",
+      "retry": "Tentar novamente",
+      "autoPost": {
+        "title": "O pagamento agendado ainda se registra automaticamente",
+        "body": "O registro automático está ativado na fatura deste empréstimo, então uma parcela que a regra liquida a partir do débito do banco também seria registrada pela fatura. Desative o registro automático da fatura em Faturas e depósitos."
+      },
+      "preconditions": {
+        "openingBalance": "O saldo inicial do empréstimo precisa ser a dívida no início do histórico a ser processado; os juros de cada parcela são calculados sobre ele.",
+        "originalPrincipal": "O principal original precisa ser o valor originalmente emprestado, não o saldo inicial.",
+        "scheduleStart": "Débitos com data anterior a {date}, quando o pagamento agendado começa, não têm parcela para corresponder."
+      },
+      "process": {
+        "button": "Processar histórico",
+        "scope": "Executa a regra sobre os débitos em {account}, dos mais antigos para os mais recentes.",
+        "running": "Processando o histórico: {count, plural, one {# parcela liquidada} other {# parcelas liquidadas}} até agora.",
+        "done": "{count, plural, =0 {Nenhuma parcela foi liquidada.} one {# parcela foi liquidada.} other {# parcelas foram liquidadas.}}",
+        "undo": "Cada página da execução pode ser desfeita pelo histórico de ações.",
+        "failed": "O processamento do histórico parou",
+        "stuckTitle": "Não foi possível continuar o processamento do histórico",
+        "stuck": "Mais de {limit, number} transações têm a data {date}, então a execução não consegue passar desse dia. Liquide o restante em Ferramentas > Regras com um filtro mais restrito.",
+        "stuckUnknown": "O servidor não informou até onde a execução chegou, então ela não pode continuar. Recarregue a página e tente novamente."
+      },
+      "create": {
+        "title": "Criar regra de correspondência de pagamentos",
+        "description": "A regra liquida os débitos correspondentes da conta do pagamento agendado do empréstimo, e o registro automático da fatura é desativado.",
+        "descriptionWithAccount": "A regra liquida os débitos correspondentes de {account}, e o registro automático da fatura é desativado.",
+        "submit": "Criar regra",
+        "payeePatternRequired": "Informe um padrão do beneficiário que inclua um caractere universal *",
+        "descriptionPatternWildcard": "O padrão da descrição deve incluir um caractere universal *",
+        "failed": "Não foi possível criar a regra de correspondência de pagamentos.",
+        "done": "Regra \"{name}\" criada"
+      },
+      "settled": {
+        "title": "Parcelas liquidadas",
+        "titleWithCount": "Parcelas liquidadas ({count})",
+        "colDueDate": "Vencimento",
+        "colTransaction": "Transação",
+        "colPrincipal": "Principal",
+        "colInterest": "Juros",
+        "colExtra": "Principal extra",
+        "colDebtBefore": "Dívida anterior",
+        "openTransaction": "Abrir a transação",
+        "void": "Anulada",
+        "notRecorded": "Não registrado",
+        "empty": {
+          "title": "Nenhuma parcela liquidada ainda",
+          "body": "Processe o histórico, ou importe os débitos do banco, para liquidar parcelas."
+        },
+        "error": {
+          "title": "Não foi possível carregar as parcelas liquidadas",
+          "body": "Esta lista não está vazia. Tente novamente para ver quais parcelas foram liquidadas.",
+          "retry": "Tentar novamente"
+        }
+      }
+    },
     "lineOfCredit": {
       "currentBalance": "Saldo atual",
       "creditLimit": "Limite de crédito",
@@ -549,7 +747,10 @@
     },
     "rateHistory": {
       "scheduledUpdateTitle": "Atualizar o pagamento agendado?",
-      "scheduledUpdateMessage": "O pagamento agendado da conta \"{name}\" pode ser atualizado para corresponder à nova taxa: {payment} no total, dividido em {principal} de principal e {interest} de juros. Atualizar agora?",
+      "scheduledUpdateNextPaymentUnchanged": "O pagamento agendado da conta \"{name}\" corresponde ao histórico de taxas. Próximo pagamento em {date}: sem alteração ({payment}).",
+      "scheduledUpdateNextPaymentChanged": "O pagamento agendado da conta \"{name}\" pode ser atualizado conforme o histórico de taxas. Próximo pagamento em {date}: {before} → {after}, dividido em {principal} de principal e {interest} de juros.",
+      "scheduledUpdateNextPaymentNew": "O pagamento agendado da conta \"{name}\" pode ser atualizado conforme o histórico de taxas. Próximo pagamento em {date}: {payment}, dividido em {principal} de principal e {interest} de juros.",
+      "scheduledUpdateUpcomingChange": "A partir de {date} o pagamento passa a ser {amount}.",
       "scheduledUpdateDefaultName": "esta hipoteca",
       "scheduledUpdateConfirm": "Atualizar pagamento",
       "scheduledUpdateSkip": "Deixar como está",
@@ -616,6 +817,54 @@
       "memoLabel": "Nota de amortização extra",
       "memoPlaceholder": "ex. Principal adicional",
       "memoHelp": "Os pagamentos cuja nota contém este texto são contabilizados como amortizações extras (não diferencia maiúsculas de minúsculas)."
+    },
+    "notAmortizing": {
+      "title": "Este empréstimo não é quitado, então a data estimada de quitação e os juros restantes são desconhecidos.",
+      "paymentBelowInterest": "A parcela ({payment}) é menor que os juros mensais (cerca de {interest}) a {rate}%, então o saldo nunca cai. Registre a parcela real (a entrada no histórico de taxas ou o valor de pagamento da conta) para que ela cubra os juros.",
+      "beyondHorizon": "A parcela cobre os juros, mas o prazo vai além do horizonte de projeção, então a data de quitação e os juros restantes não são mostrados."
+    }
+  },
+  "loanFees": {
+    "title": "Encargos da hipoteca",
+    "help": "Seguros, impostos ou outros encargos cobrados com cada pagamento da hipoteca. Cada encargo vira uma linha própria do pagamento agendado, lançada na categoria que você escolher. Um encargo pode ser um valor fixo, uma porcentagem do saldo atual (recalculada a cada pagamento) ou uma porcentagem do saldo original, cobrado por pagamento ou por ano.",
+    "panelDescription": "Encargos cobrados com cada pagamento agendado da hipoteca. Salvar atualiza as linhas do próximo pagamento.",
+    "none": "Nenhum encargo é cobrado com o pagamento desta hipoteca.",
+    "name": "Nome do encargo",
+    "category": "Categoria",
+    "calculation": "Calculado como",
+    "basis": "O valor se aplica",
+    "amount": "Valor",
+    "rate": "Taxa",
+    "add": "Adicionar um encargo",
+    "remove": "Remover encargo",
+    "edit": "Editar encargos",
+    "editTitle": "Encargos da hipoteca",
+    "save": "Salvar encargos",
+    "cancel": "Cancelar",
+    "saved": "Os encargos da hipoteca foram salvos.",
+    "saveFailed": "Não foi possível salvar os encargos da hipoteca.",
+    "loading": "Carregando encargos...",
+    "loadFailed": "Não foi possível carregar os encargos da hipoteca.",
+    "retry": "Tentar novamente",
+    "unknownCategory": "Categoria desconhecida",
+    "unknownValue": "desconhecido",
+    "summaryPerPayment": "{value} por pagamento, {calculation}",
+    "summaryAnnual": "{value} por ano, {calculation}",
+    "paymentMatchingConflict": "A correspondência de pagamentos ainda não consegue liquidar um pagamento que inclui encargos. Desative a correspondência de pagamentos ou remova os encargos.",
+    "paymentMatchingNote": "Este financiamento tem uma regra de associação de pagamentos. A associação ainda não consegue liquidar um pagamento que inclui encargos, então não é possível adicionar encargos enquanto a regra existir.",
+    "calculations": {
+      "fixed": "Valor fixo",
+      "percentCurrentBalance": "Porcentagem do saldo atual",
+      "percentOriginalBalance": "Porcentagem do saldo original"
+    },
+    "bases": {
+      "perPayment": "Por pagamento",
+      "annual": "Por ano"
+    },
+    "errors": {
+      "required": "Obrigatório",
+      "duplicate": "Cada encargo precisa de sua própria categoria, diferente da categoria de juros",
+      "range": "Informe uma taxa de no máximo 100%"
     }
   }
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
@@ -46,6 +46,7 @@ import {
   buildDisplayCurrencyStrategy,
   summarizeInDisplayCurrency,
   aggregateGroupedTotals,
+  inDisplayCurrency,
 } from '@/components/transactions/widget-shared';
 import type { Category, CategoryDetail, UpdateCategoryData } from '@/types/category';
 import type { ScheduledTransaction } from '@/types/scheduled-transaction';
@@ -136,7 +137,7 @@ function CategoryDetailContent() {
   const searchParams = useSearchParams();
   const categoryId = params.id as string;
 
-  const { convertToDefault, defaultCurrency } = useExchangeRates();
+  const { defaultCurrency } = useExchangeRates();
 
   const [detail, setDetail] = useState<CategoryDetail | null>(null);
   const [analytics, setAnalytics] = useState<CategoryAnalytics | null>(null);
@@ -167,123 +168,144 @@ function CategoryDetailContent() {
   // The category on screen right now, readable from inside an in-flight load.
   // The switcher moves between categories on the same route (`router.push`
   // below), so this component stays mounted and a load started for the previous
-  // one can still be running. Assigned during render so it is never a render
-  // behind the id the page is currently showing.
+  // one can still be running. Assigned in a layout effect, before any effect
+  // or response can read it, so it is never a commit behind the id the page is
+  // currently showing.
   const shownIdRef = useRef(categoryId);
-  shownIdRef.current = categoryId;
+  useLayoutEffect(() => {
+    shownIdRef.current = categoryId;
+  });
 
-  const loadData = useCallback(async () => {
-    const requestedId = categoryId;
-    // Every write below is guarded on the page still showing the category this
-    // load was started for. Without it a slow response for the previous
-    // category lands after the new one's and paints its figures under the new
-    // URL -- the reader sees another category's spending, and nothing looks
-    // wrong until they reload.
-    const isStale = () => shownIdRef.current !== requestedId;
-
+  // Switching categories shows the spinner again; set during render rather
+  // than in the effect that loads the new one.
+  const [loadingId, setLoadingId] = useState(categoryId);
+  if (loadingId !== categoryId) {
+    setLoadingId(categoryId);
     setIsLoading(true);
     setError(null);
-    try {
-      // The detail is the page; the analytics feed the cards and panels, so a
-      // failure in any of them costs its panel, never the page.
-      const detailData = await categoriesApi.getDetail(requestedId);
+  }
 
-      const today = isoDaysAgo(0);
-      const yearAgo = isoDaysAgo(365);
-      const thisYearStart = `${today.slice(0, 4)}-01-01`;
-      const lastYearStart = `${Number(today.slice(0, 4)) - 1}-01-01`;
-      const lastYearSameDate = `${Number(today.slice(0, 4)) - 1}${today.slice(4)}`;
+  // The mount / category-switch load: the state already says loading.
+  const fetchData = useCallback(() => {
+    // Writes live in `run` so they land after the request, not during the effect.
+    const run = async () => {
+      const requestedId = categoryId;
+      // Every write below is guarded on the page still showing the category this
+      // load was started for. Without it a slow response for the previous
+      // category lands after the new one's and paints its figures under the new
+      // URL -- the reader sees another category's spending, and nothing looks
+      // wrong until they reload.
+      const isStale = () => shownIdRef.current !== requestedId;
 
-      const [
-        lifetimeSummary,
-        thisYearSummary,
-        lastYearSummary,
-        monthlyTotals,
-        payeeTotals,
-        payeeTotalsAllTime,
-        categoryTotalsAllTime,
-      ] = await Promise.all([
-        transactionsApi.getSummary({ categoryIds: [requestedId] }).catch((err) => {
-          logger.error(err);
-          return null;
-        }),
-        transactionsApi
-          .getSummary({
-            categoryIds: [requestedId],
-            startDate: thisYearStart,
-            endDate: today,
-          })
-          .catch(() => null),
-        transactionsApi
-          .getSummary({
-            categoryIds: [requestedId],
-            startDate: lastYearStart,
-            endDate: lastYearSameDate,
-          })
-          .catch(() => null),
-        // No date range: the chart covers the category's whole history, and its
-        // own granularity control buckets by quarter or year once that history
-        // outgrows monthly bars. A window here would silently hide the years
-        // before it, which is the opposite of what a detail page is for.
-        transactionsApi
-          .getMonthlyTotals({ categoryIds: [requestedId] })
-          .catch(() => [] as MonthlyTotal[]),
-        transactionsApi
-          .getGroupedTotals({
-            groupBy: 'payee',
-            categoryIds: [requestedId],
-            startDate: yearAgo,
-            endDate: today,
-            limit: 25,
-          })
-          .catch(() => [] as GroupedTotal[]),
-        // Both ranges are fetched up front so the Top Payees toggle is
-        // instant. They are two cheap grouped queries, and switching range is a
-        // comparison -- putting a spinner between the two halves of it would
-        // make the comparison harder than the request is expensive.
-        transactionsApi
-          .getGroupedTotals({
-            groupBy: 'payee',
-            categoryIds: [requestedId],
-            limit: 25,
-          })
-          .catch(() => [] as GroupedTotal[]),
-        // One all-time call feeds both the overview's subcategory breakdown
-        // and the Subcategories tab, which show the same rollup.
-        transactionsApi
-          .getGroupedTotals({
-            groupBy: 'category',
-            categoryIds: [requestedId],
-            limit: 100,
-          })
-          .catch(() => [] as GroupedTotal[]),
-      ]);
+      try {
+        // The detail is the page; the analytics feed the cards and panels, so a
+        // failure in any of them costs its panel, never the page.
+        const detailData = await categoriesApi.getDetail(requestedId);
 
-      if (isStale()) return;
-      setDetail(detailData);
-      setAnalytics({
-        lifetimeSummary,
-        thisYearSummary,
-        lastYearSummary,
-        monthlyTotals,
-        payeeTotals,
-        payeeTotalsAllTime,
-        categoryTotalsAllTime,
-      });
-      setRefreshKey((key) => key + 1);
-    } catch (err) {
-      if (isStale()) return;
-      logger.error(err);
-      setError(getErrorMessage(err, t('loadFailed')));
-    } finally {
-      // A stale load must not clear the spinner the current one put up.
-      if (!isStale()) setIsLoading(false);
-    }
+        const today = isoDaysAgo(0);
+        const yearAgo = isoDaysAgo(365);
+        const thisYearStart = `${today.slice(0, 4)}-01-01`;
+        const lastYearStart = `${Number(today.slice(0, 4)) - 1}-01-01`;
+        const lastYearSameDate = `${Number(today.slice(0, 4)) - 1}${today.slice(4)}`;
+
+        const [
+          lifetimeSummary,
+          thisYearSummary,
+          lastYearSummary,
+          monthlyTotals,
+          payeeTotals,
+          payeeTotalsAllTime,
+          categoryTotalsAllTime,
+        ] = await Promise.all([
+          transactionsApi.getSummary({ categoryIds: [requestedId] }).catch((err) => {
+            logger.error(err);
+            return null;
+          }),
+          transactionsApi
+            .getSummary({
+              categoryIds: [requestedId],
+              startDate: thisYearStart,
+              endDate: today,
+            })
+            .catch(() => null),
+          transactionsApi
+            .getSummary({
+              categoryIds: [requestedId],
+              startDate: lastYearStart,
+              endDate: lastYearSameDate,
+            })
+            .catch(() => null),
+          // No date range: the chart covers the category's whole history, and its
+          // own granularity control buckets by quarter or year once that history
+          // outgrows monthly bars. A window here would silently hide the years
+          // before it, which is the opposite of what a detail page is for.
+          transactionsApi
+            .getMonthlyTotals({ categoryIds: [requestedId] })
+            .catch(() => [] as MonthlyTotal[]),
+          transactionsApi
+            .getGroupedTotals({
+              groupBy: 'payee',
+              categoryIds: [requestedId],
+              startDate: yearAgo,
+              endDate: today,
+              limit: 25,
+            })
+            .catch(() => [] as GroupedTotal[]),
+          // Both ranges are fetched up front so the Top Payees toggle is
+          // instant. They are two cheap grouped queries, and switching range is a
+          // comparison -- putting a spinner between the two halves of it would
+          // make the comparison harder than the request is expensive.
+          transactionsApi
+            .getGroupedTotals({
+              groupBy: 'payee',
+              categoryIds: [requestedId],
+              limit: 25,
+            })
+            .catch(() => [] as GroupedTotal[]),
+          // One all-time call feeds both the overview's subcategory breakdown
+          // and the Subcategories tab, which show the same rollup.
+          transactionsApi
+            .getGroupedTotals({
+              groupBy: 'category',
+              categoryIds: [requestedId],
+              limit: 100,
+            })
+            .catch(() => [] as GroupedTotal[]),
+        ]);
+
+        if (isStale()) return;
+        setDetail(detailData);
+        setAnalytics({
+          lifetimeSummary,
+          thisYearSummary,
+          lastYearSummary,
+          monthlyTotals,
+          payeeTotals,
+          payeeTotalsAllTime,
+          categoryTotalsAllTime,
+        });
+        setRefreshKey((key) => key + 1);
+      } catch (err) {
+        if (isStale()) return;
+        logger.error(err);
+        setError(getErrorMessage(err, t('loadFailed')));
+      } finally {
+        // A stale load must not clear the spinner the current one put up.
+        if (!isStale()) setIsLoading(false);
+      }
+    };
+    return run();
   }, [categoryId, t]);
 
+  const loadData = useCallback(() => {
+    setIsLoading(true);
+    setError(null);
+    return fetchData();
+  }, [fetchData]);
+
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    fetchData();
+  }, [fetchData]);
 
   // Supporting data, loaded once: the switcher, label maps and subcategory
   // rollups need the category list, the scheduled panel the schedules, the
@@ -327,9 +349,8 @@ function CategoryDetailContent() {
       buildDisplayCurrencyStrategy(
         analytics?.lifetimeSummary ?? null,
         defaultCurrency,
-        convertToDefault,
       ),
-    [analytics?.lifetimeSummary, defaultCurrency, convertToDefault],
+    [analytics?.lifetimeSummary, defaultCurrency],
   );
 
   const isMultiCurrency =
@@ -395,7 +416,7 @@ function CategoryDetailContent() {
     const rows = accounts.flatMap((row) => {
       // Unconvertible accounts have an unknown magnitude and are left out of
       // the ranked bars rather than shown as zero.
-      const total = currencyStrategy.toDisplay(row.total, row.currencyCode);
+      const total = inDisplayCurrency(currencyStrategy, row);
       return total === null
         ? []
         : [

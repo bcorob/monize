@@ -1,5 +1,5 @@
 import { NestFactory } from "@nestjs/core";
-import { Logger, RequestMethod, ValidationPipe } from "@nestjs/common";
+import { Logger, RequestMethod } from "@nestjs/common";
 import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
 import helmet from "helmet";
 import * as express from "express";
@@ -23,14 +23,27 @@ import { resolveRestoreQueueConfig } from "./backup/restore-queue-config";
 import { createRestoreTicketAuthorizer } from "./backup/restore-upload-ticket";
 import { OAuthProviderService } from "./oauth/oauth-provider.service";
 import { oauthDebugLogger } from "./oauth/oauth-debug-logger.middleware";
+import { createCorsDelegate } from "./common/http/cors-policy";
 import { isOidcProviderPath } from "./oauth/oidc-provider-paths";
 import { installOidcProviderLogBridge } from "./oauth/oidc-provider-log-bridge";
+import { createOAuthEndpointThrottle } from "./oauth/oauth-endpoint-throttle";
+import { ThrottlerStorage } from "@nestjs/throttler";
 import { DataSource } from "typeorm";
 import { parseRlsMode } from "./common/db/rls-config";
+import { checkClusterBoot } from "./common/cluster/cluster-mode";
+import {
+  PG_LISTENER,
+  PG_WAKEUP_CHANNEL,
+  PG_WAKEUP_PROBE_CHANNEL,
+  PgListener,
+} from "./common/cluster/pg-listener.provider";
 import { assertRuntimeRoleSafe } from "./common/db/runtime-role-check";
 import { assertRequiredDbFunctions } from "./common/db/required-db-functions";
 import { ConfigService } from "@nestjs/config";
+import { resolveListenHost } from "./common/listen-host";
 import { logEncryptionKeyStatus } from "./common/encryption/encryption-key";
+import { logJwtSecretStatus } from "./common/jwt-secret-policy";
+import { createGlobalValidationPipe } from "./common/pipes/global-validation.pipe";
 
 // node-oidc-provider writes its notices straight to console.info/console.warn,
 // which would otherwise be the only unformatted lines in the log. Installed
@@ -68,25 +81,60 @@ pgUtils.prepareValue = function (val: unknown, seen?: unknown[]): unknown {
   return origPrepareValue(val, seen);
 };
 
-// Suppress Node.js 20 ERR_INTERNAL_ASSERTION in HTTP detachSocket.
-// This fires asynchronously when NestJS @Res() handlers throw exceptions,
-// causing a race between the exception filter's response and internal socket
-// cleanup. The response is already sent to the client; only the socket
-// bookkeeping assertion fails. Safe to suppress in dev; does not fire in prod.
-if (process.env.NODE_ENV !== "production") {
-  process.on("uncaughtException", (err: any) => {
-    if (
-      err?.code === "ERR_INTERNAL_ASSERTION" &&
-      err?.stack?.includes("detachSocket")
-    ) {
-      return;
-    }
-    logger.error(
-      "Uncaught exception",
-      err instanceof Error ? err.stack : String(err),
-    );
-    process.exit(1);
+// There is deliberately no `uncaughtException` handler here. A dev-only one used
+// to swallow ERR_INTERNAL_ASSERTION from `detachSocket` as harmless socket
+// bookkeeping; it was a real defect in this code, not a Node bug, and gating the
+// suppression on NODE_ENV hid it from dev and from the E2E stack (both run with
+// NODE_ENV=development) while it killed the process in production. A crash of
+// that class is meant to be loud: `src/common/res-handler-return.guard.spec.ts`
+// and `docs/backend/modules-and-runtime.md` carry the rule it came from.
+
+/**
+ * Check the cluster boot matrix and exit if this configuration cannot serve.
+ *
+ * Runs before `NestFactory.create` on purpose. Much of what it refuses is also
+ * fatal further in -- `JwtStrategy` throws on a missing `JWT_SECRET` -- but
+ * there it is fatal as a dependency-injection failure, which reaches the
+ * operator as a stack trace through Nest's container rather than as a sentence
+ * naming the variable. A missing `ENCRYPTION_KEY` is refused only here. The refusal shape is `assertRequiredDbFunctionsOrExit` below: log
+ * the reason, `process.exit(1)`, before anything listens.
+ */
+function assertClusterBootOrExit(): void {
+  const logger = new Logger("ClusterMode");
+  // Named one by one rather than handing over `process.env`: the list of
+  // variables the boot matrix reads is part of what it promises, and it belongs
+  // where a reader of the bootstrap can see it.
+  const report = checkClusterBoot({
+    CLUSTER_MODE: process.env.CLUSTER_MODE,
+    JWT_SECRET: process.env.JWT_SECRET,
+    ENCRYPTION_KEY: process.env.ENCRYPTION_KEY,
+    AI_ENCRYPTION_KEY: process.env.AI_ENCRYPTION_KEY,
+    ATTACHMENT_STORAGE_PROVIDER: process.env.ATTACHMENT_STORAGE_PROVIDER,
+    ATTACHMENT_CONTAINER_DIR: process.env.ATTACHMENT_CONTAINER_DIR,
+    ATTACHMENT_LOCAL_DIR: process.env.ATTACHMENT_LOCAL_DIR,
+    ATTACHMENT_SHARED_VOLUME: process.env.ATTACHMENT_SHARED_VOLUME,
+    BACKUP_STORAGE_PROVIDER: process.env.BACKUP_STORAGE_PROVIDER,
+    BACKUP_CONTAINER_DIR: process.env.BACKUP_CONTAINER_DIR,
+    BACKUP_SHARED_VOLUME: process.env.BACKUP_SHARED_VOLUME,
+    BACKUP_STORE_S3_BUCKET: process.env.BACKUP_STORE_S3_BUCKET,
+    BACKUP_STORE_S3_PREFIX: process.env.BACKUP_STORE_S3_PREFIX,
+    BACKUP_STORE_S3_ENDPOINT: process.env.BACKUP_STORE_S3_ENDPOINT,
+    BACKUP_S3_BUCKET: process.env.BACKUP_S3_BUCKET,
+    BACKUP_S3_PREFIX: process.env.BACKUP_S3_PREFIX,
+    BACKUP_S3_ENDPOINT: process.env.BACKUP_S3_ENDPOINT,
   });
+  for (const warning of report.warnings) {
+    logger.warn(warning);
+  }
+  if (report.refusals.length > 0) {
+    for (const refusal of report.refusals) {
+      logger.error(refusal);
+    }
+    process.exit(1);
+  }
+  if (report.mode === "multi") {
+    logger.log("CLUSTER_MODE=multi: this replica is one of several.");
+  }
 }
 
 /**
@@ -119,6 +167,61 @@ async function assertRuntimeRoleOrExit(dataSource: DataSource): Promise<void> {
 }
 
 /**
+ * Verify this replica can hear the other replicas, and exit if not.
+ *
+ * `null` in `single`, where there is nothing to hear: the check is skipped and
+ * no second connection is opened. In `multi` it is the first thing that proves
+ * `DATABASE_HOST` is a PostgreSQL session rather than a transaction-mode
+ * pooler, because a pooler accepts the connection and then loses the `LISTEN`
+ * -- a failure that would otherwise show up as wake-ups that silently never
+ * arrive, which reads as a slow application rather than a misconfigured one.
+ *
+ * Same shape as the two database checks above, and the same reason for exiting
+ * rather than throwing.
+ */
+async function assertNotificationChannelOrExit(
+  listener: PgListener | null,
+  dataSource: DataSource,
+): Promise<void> {
+  if (!listener) {
+    return;
+  }
+  const logger = new Logger("ClusterMode");
+  try {
+    await listener.connect();
+    // Not `listen()` alone: accepting the statement is not receiving what it
+    // subscribes to. The probe is published on the *pool*, so what is proven is
+    // that a notification from another connection reaches this one -- which is
+    // exactly what a transaction-mode pooler cannot do, and exactly what the
+    // refusal below claims to catch.
+    //
+    // Probed on its own channel, not `PG_WAKEUP_CHANNEL`: `PostgresEventBus` is
+    // already listening on that one by this point and parses every payload it
+    // sees there as a wake-up envelope, which the probe token is not.
+    // `LISTEN`/`NOTIFY` delivery proves the same thing on either channel.
+    await listener.verifyDelivery(PG_WAKEUP_PROBE_CHANNEL, (channel, payload) =>
+      dataSource.query("SELECT pg_notify($1, $2)", [channel, payload]),
+    );
+    logger.log(
+      `Notification channel ready: listening on "${PG_WAKEUP_CHANNEL}" ` +
+        "and receiving from other connections.",
+    );
+  } catch (error) {
+    logger.error(
+      `CLUSTER_MODE=multi could not open its notification channel on ` +
+        `${process.env.DATABASE_HOST ?? "localhost"}: ` +
+        `${error instanceof Error ? error.message : String(error)}. ` +
+        "Every replica holds one LISTEN, so DATABASE_HOST must reach a " +
+        "PostgreSQL session; a transaction-mode pooler (pgBouncer) accepts " +
+        "the statement and then loses the subscription, which is why this " +
+        "check requires a notification to arrive rather than a statement to " +
+        "succeed. Use a direct endpoint, or CLUSTER_MODE=single.",
+    );
+    process.exit(1);
+  }
+}
+
+/**
  * Verify the database has every SQL function this build calls, and exit if not.
  *
  * Same reasoning as the role check above, and the same shape: the answer comes
@@ -140,33 +243,40 @@ async function assertRequiredDbFunctionsOrExit(
 }
 
 /**
- * Say what this deployment's encryption key situation is, at every boot.
+ * Say at every boot what an operator should fix but that does not stop the
+ * server: `ENCRYPTION_KEY` still supplied under its former name, and a
+ * `JWT_SECRET` that is long enough but weak (a published placeholder, a typed
+ * pattern). Both are refusals only where they are unsafe to serve at all -- a
+ * missing key or a missing/short secret -- and those exit in
+ * `assertClusterBootOrExit` before this runs.
  *
- * Deliberately a warning and not a refusal, unlike the two database checks
- * below. `ENCRYPTION_KEY` is not required yet: refusing to boot would turn an
- * upgrade into an outage for every deployment that never set the variable under
- * its old name, `AI_ENCRYPTION_KEY`, which was optional and documented as being
- * for cloud AI providers. But an unkeyed server is precisely the state issue
- * #1269 was reported from -- backups written in plaintext with nothing saying so
- * -- so the absence is announced loudly, on every start, and named as a coming
- * hard requirement. The individual write paths still refuse; only the boot does
- * not.
+ * The weak secret is a warning rather than a refusal because replacing it
+ * stops every user's authenticator codes working (their TOTP secrets are
+ * encrypted under a key derived from it); the warning says so, and the same
+ * finding reaches administrators in the app as a system alert and a banner.
  */
-function reportEncryptionKeyStatus(configService: ConfigService): void {
+function reportSecretStatus(configService: ConfigService): void {
   logEncryptionKeyStatus(
     (name) => configService.get<string>(name, ""),
     new Logger("EncryptionKeyCheck"),
+  );
+  logJwtSecretStatus(
+    configService.get<string>("JWT_SECRET"),
+    new Logger("JwtSecretCheck"),
   );
 }
 
 async function bootstrap() {
   logger.log("Starting application");
 
+  // Before the container is built: a refusal here is a sentence, the same
+  // refusal from inside a provider constructor is a stack trace.
+  assertClusterBootOrExit();
+
   const app = await NestFactory.create(AppModule);
 
-  // Before anything that could store a secret: a server with no key writes
-  // plaintext where it promises ciphertext, and used to say nothing.
-  reportEncryptionKeyStatus(app.get(ConfigService));
+  // Before anything listens: the warnings belong at the top of the log.
+  reportSecretStatus(app.get(ConfigService));
 
   // RLS_MODE=enforce promises a database-level tenant boundary. Selecting the
   // application role and supplying its password does not deliver one: a
@@ -186,6 +296,12 @@ async function bootstrap() {
   // state -- and the request that discovers it is the one that gets a generic
   // "Database error". Refuse here instead.
   await assertRequiredDbFunctionsOrExit(app.get(DataSource));
+
+  // And, when this replica is one of several, that it can actually hear them.
+  await assertNotificationChannelOrExit(
+    app.get(PG_LISTENER),
+    app.get(DataSource),
+  );
 
   // Trust first proxy (Docker/nginx) so req.ip reflects the real client IP
   app.getHttpAdapter().getInstance().set("trust proxy", 1);
@@ -327,8 +443,7 @@ async function bootstrap() {
   // middleware so a request from an MCP client (Claude Desktop, mcp-remote)
   // is logged even when the strict app-wide CORS layer would have rejected
   // its Origin. CORS itself is path-aware further down (see app.enableCors
-  // delegate) — these paths get permissive CORS because they authenticate
-  // by Bearer token, not cookies.
+  // delegate in common/http/cors-policy.ts).
   app.use("/api/v1/mcp", oauthDebugLogger("mcp"));
   app.use("/.well-known/oauth-protected-resource", oauthDebugLogger("prm"));
   app.use(
@@ -372,78 +487,11 @@ async function bootstrap() {
           "http://127.0.0.1:3000",
         ]
       : []),
-  ].filter(Boolean);
+  ].filter((origin): origin is string => Boolean(origin));
 
-  // Path-aware CORS: the MCP and OAuth surfaces accept any origin
-  // because they authenticate via Bearer tokens (PAT / OAuth access
-  // token) and never receive cookies — a third-party origin can't ride
-  // ambient credentials. The rest of the app keeps the strict allow-list
-  // because it relies on cookies + CSRF for browser sessions.
-  app.enableCors((req, callback) => {
-    const path = req.path ?? req.url ?? "";
-    const isOpenSurface =
-      path === "/api/v1/mcp" ||
-      path.startsWith("/api/v1/mcp/") ||
-      path === "/oauth" ||
-      path.startsWith("/oauth/") ||
-      path.startsWith("/api/v1/oauth-consent/") ||
-      path === "/.well-known/oauth-protected-resource" ||
-      path === "/.well-known/oauth-authorization-server" ||
-      path.startsWith("/.well-known/oauth-authorization-server/") ||
-      path === "/.well-known/openid-configuration";
-
-    if (isOpenSurface) {
-      callback(null, {
-        origin: "*",
-        credentials: false,
-        methods: ["GET", "POST", "DELETE", "OPTIONS"],
-        allowedHeaders: [
-          "Authorization",
-          "Content-Type",
-          "Accept",
-          "Mcp-Session-Id",
-          "Mcp-Protocol-Version",
-        ],
-        exposedHeaders: ["Mcp-Session-Id", "WWW-Authenticate"],
-        maxAge: 600,
-      });
-      return;
-    }
-
-    callback(null, {
-      origin: (origin, cb) => {
-        // Requests with no Origin header (server-to-server, health checks,
-        // curl, same-origin navigations): always allow. Non-browser clients
-        // can trivially set any Origin, so blocking null Origin adds no real
-        // security. Sandboxed-iframe abuse is prevented by Helmet's
-        // frameguard: { action: "deny" } instead.
-        if (!origin) return cb(null, true);
-        if (allowedOrigins.includes(origin)) cb(null, true);
-        else cb(new Error("Not allowed by CORS"));
-      },
-      credentials: true,
-      methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-      allowedHeaders: [
-        "Content-Type",
-        "Authorization",
-        "Accept",
-        "X-CSRF-Token",
-        "X-Restore-Password",
-        "X-Restore-OIDC-Token",
-        // Sent by the client on an encrypted restore whose backup password
-        // differs from the login one. Missing here, that restore died at the
-        // preflight -- the same argument as the ticket header below, and a gap
-        // that predates it.
-        "X-Backup-Password",
-        // Without this a cross-origin restore upload never leaves the browser:
-        // the preflight refuses the header, so the upload is "blocked by CORS"
-        // rather than refused with the 403 that says what to do.
-        "X-Restore-Upload-Ticket",
-        "Mcp-Session-Id",
-      ],
-      exposedHeaders: ["Mcp-Session-Id"],
-    });
-  });
+  // Path-aware CORS: OAuth and discovery answer any origin, the MCP
+  // endpoint and the rest of the app only the allow-list above.
+  app.enableCors(createCorsDelegate(allowedOrigins));
 
   // The restore mount goes AFTER CORS, and that ordering is the point: the
   // admission middleware below answers requests itself (403 with no ticket, 413
@@ -465,13 +513,7 @@ async function bootstrap() {
   );
 
   // Global validation pipe
-  app.useGlobalPipes(
-    new ValidationPipe({
-      whitelist: true,
-      forbidNonWhitelisted: true,
-      transform: true,
-    }),
-  );
+  app.useGlobalPipes(createGlobalValidationPipe());
 
   // API prefix. The protected-resource metadata route (RFC 9728) is the
   // only NestJS-controller path that must live at the application root
@@ -509,6 +551,12 @@ async function bootstrap() {
   // mounted earlier (before the global cookie/helmet/CORS chain) so that
   // requests from MCP clients with an off-allowlist Origin still appear in the
   // log and bypass the strict app-wide CORS layer.
+  //
+  // The global ThrottlerGuard never sees these paths, so the anonymous
+  // row-writing endpoints are capped here, ahead of the provider (#2177).
+  app.use(
+    createOAuthEndpointThrottle(app.get<ThrottlerStorage>(ThrottlerStorage)),
+  );
   app.use(
     (
       req: express.Request,
@@ -543,9 +591,19 @@ async function bootstrap() {
   server.headersTimeout = 605000; // must be > requestTimeout
 
   const port = process.env.PORT || 3001;
-  await app.listen(port);
+  // HOST is optional: unset keeps the all-interfaces default (containers); the
+  // desktop build sets 127.0.0.1 so the API is not reachable from the network.
+  const host = resolveListenHost(process.env.HOST);
+  if (host) {
+    await app.listen(port, host);
+  } else {
+    await app.listen(port);
+  }
 
-  logger.log(`Application is running on: http://localhost:${port}`);
+  logger.log(
+    `Application is running on: http://${host ?? "localhost"}:${port}` +
+      (host ? ` (bound to ${host})` : ""),
+  );
   if (process.env.NODE_ENV !== "production") {
     logger.log(`API Documentation: http://localhost:${port}/api/docs`);
   }

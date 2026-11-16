@@ -19,10 +19,11 @@
     "passwordRequired": "更改電子郵件時需要目前密碼",
     "noChanges": "無變更可儲存",
     "passwordConfirmNote": "更改電子郵件地址時需要密碼確認。",
+    "pendingEmailNotice": "確認連結已傳送至 {email}。點擊該連結後，您的電子郵件地址即會變更。",
     "saveButton": "儲存個人資料",
-    "savingButton": "儲存中...",
     "toasts": {
       "success": "個人資料更新成功",
+      "confirmationSent": "請查看 {email} 中用於確認新電子郵件地址的連結",
       "updateFailed": "更新個人資料失敗"
     },
     "validation": {
@@ -36,7 +37,8 @@
   },
   "security": {
     "heading": "安全性",
-    "ssoNotice": "您的帳戶使用單一登入（SSO）進行驗證。以下密碼不用於登入，但可在停用 SSO 時作為備用。",
+    "ssoPasswordFallbackNotice": "您的帳戶使用單一登入（SSO）。SSO 無法使用時，您也可以使用下方密碼登入。請啟用雙重驗證以保護此備用登入方式。",
+    "ssoNotice": "您的帳戶使用單一登入 (SSO)。此伺服器已對 SSO 帳戶關閉密碼登入。",
     "currentPasswordLabel": "目前密碼",
     "currentPasswordPlaceholder": "輸入目前密碼",
     "newPasswordLabel": "新密碼",
@@ -44,7 +46,6 @@
     "confirmPasswordLabel": "確認新密碼",
     "confirmPasswordPlaceholder": "確認新密碼",
     "changePasswordButton": "更改密碼",
-    "changingPasswordButton": "更改中...",
     "toasts": {
       "passwordChanged": "密碼更改成功",
       "passwordChangeFailed": "更改密碼失敗"
@@ -58,14 +59,28 @@
       "addLayerDescription": "為您的帳戶新增額外的安全層。",
       "enableButton": "啟用 2FA",
       "disableButton": "停用 2FA",
+      "resetButton": "重設 2FA",
       "disableModal": {
         "title": "停用雙重驗證",
-        "description": "輸入您目前的 6 位數驗證碼以確認停用 2FA。",
+        "description": "輸入驗證器 App 中的 6 位數驗證碼，或您的任一備份驗證碼（xxxx-xxxx），以確認停用 2FA。",
         "verificationCodeLabel": "驗證碼",
         "disablingButton": "停用中...",
         "toasts": {
           "disabled": "雙重驗證已停用",
           "disableFailed": "停用 2FA 失敗"
+        }
+      },
+      "resetModal": {
+        "title": "重設雙重驗證",
+        "description": "如果您的驗證器 App 或備份驗證碼可能已外洩，或驗證碼已無法使用（例如伺服器金鑰變更後），請使用此功能。",
+        "effect": "您目前的驗證器、備份驗證碼和受信任裝置將失效，並且您會在所有其他裝置上登出。接著您將立即設定新的驗證器。",
+        "passwordLabel": "帳戶密碼",
+        "codeLabel": "驗證碼或備份驗證碼",
+        "codeHint": "輸入驗證器 App 中的 6 位數驗證碼。如果驗證器已無法使用，請改為輸入您的任一備份驗證碼（xxxx-xxxx）。",
+        "resettingButton": "重設中...",
+        "toasts": {
+          "reset": "雙重驗證已重設。請立即設定新的驗證器。",
+          "resetFailed": "重設 2FA 失敗"
         }
       }
     },
@@ -90,6 +105,8 @@
       "noDevices": "無受信任的裝置。在 2FA 登入時勾選「在此瀏覽器上不再詢問」後，裝置將顯示在此。",
       "currentBadge": "目前",
       "revokeButton": "撤銷",
+      "ipAddress": "IP：{ip}",
+      "dates": "新增於 {added} · 上次使用 {lastUsed} · 到期 {expires}",
       "revokeAllModal": {
         "title": "撤銷所有受信任的裝置",
         "description": "此操作將移除所有受信任的裝置。您在任何裝置的下次登入時都需要輸入 2FA 驗證碼。"
@@ -110,8 +127,20 @@
   },
   "preferences": {
     "heading": "偏好設定",
+    "groups": {
+      "languageRegion": "語言與地區",
+      "appearance": "外觀",
+      "datesNumbers": "日期與數字",
+      "investments": "投資",
+      "transactions": "交易",
+      "application": "應用程式",
+      "defaultViews": "預設檢視",
+      "mobileNavigation": "行動裝置導覽"
+    },
     "themeLabel": "主題",
     "defaultCurrencyLabel": "預設貨幣",
+    "defaultCurrencyHelp": "用於彙總您的帳戶、淨資產與報表，是貨幣頁面中「匯率」欄換算的目標貨幣。",
+    "defaultCurrencyNoCrypto": "此處不提供加密貨幣：合計與報表一律以法定貨幣顯示。",
     "preferredExchangesLabel": "偏好的交易所（用於證券查找）",
     "preferredExchangesHelp": "按優先順序選擇最多 3 個交易所。查找證券時將優先使用這些交易所。",
     "exchangePriorityPlaceholder": "優先順序 {n}",
@@ -131,10 +160,22 @@
     "lockReconciledLabel": "鎖定已對帳交易",
     "lockReconciledTooltip": "關閉時，如果某項修改會變更已對帳交易的日期或金額，Monize 會先提醒您，然後仍允許修改。開啟時，已對帳交易完全無法編輯、刪除或取消對帳。要更正請再次關閉。",
     "timeFormatLabel": "時間格式",
+    "timeFormatOptions": {
+      "h24": "24 小時制 (14:30)",
+      "h12": "12 小時制 (下午 2:30)"
+    },
     "recentTransactionsLabel": "快速填字中的最近交易",
     "recentTransactionsHelp": "在交易表單收款人欄位旁的歷史按鈕彈出視窗中顯示的記錄數量。",
-    "saveButton": "儲存偏好設定",
-    "savingButton": "儲存中...",
+    "mapProviderLabel": "地址使用的地圖服務",
+    "mapProviderHelp": "在桌面瀏覽器中點擊地址時開啟哪個地圖服務。無論您在此處如何選擇，手機和平板電腦一律會開啟自己的地圖應用程式。自動將在桌面端使用 OpenStreetMap。",
+    "mapProviderOptions": {
+      "device": "自動",
+      "apple": "Apple Maps",
+      "bing": "Bing Maps",
+      "google": "Google Maps",
+      "openstreetmap": "OpenStreetMap",
+      "waze": "Waze"
+    },
     "toasts": {
       "saved": "偏好設定已儲存",
       "saveFailed": "儲存偏好設定失敗",
@@ -182,10 +223,47 @@
       "highcontrast": "高對比",
       "colorblind": "色盲安全"
     },
-    "timezoneBrowserOption": "使用瀏覽器時區（自動偵測為 {tz}）"
+    "timezoneBrowserOption": "使用瀏覽器時區（自動偵測為 {tz}）",
+    "defaultViews": {
+      "intro": "適用於任何沒有自身設定的瀏覽器，例如新裝置或私密視窗。您在頁面上所做的變更會由該瀏覽器記住，並優先生效。",
+      "rowsLabel": "列間距",
+      "hideRegisterYearLabel": "在登記簿日期中隱藏年份",
+      "chartCollapsedLabel": "交易頁面的圖表預設收合",
+      "widgetsCollapsedLabel": "科目、收款人和類別資訊預設收合",
+      "accountOpenTargetLabel": "科目預設檢視",
+      "accountOpenTargetOptions": {
+        "register": "顯示其交易",
+        "dashboard": "顯示其儀表板"
+      },
+      "accountOpenTargetHelp": "在「科目」頁面或儀表板的「我的最愛科目」中點按科目時適用。",
+      "columnsLabel": "顯示的欄位",
+      "columnsHelp": "取消勾選即可預設隱藏該欄位。表格的「欄位」選單只會在該瀏覽器中變更此設定。",
+      "columnTables": {
+        "transactions": "交易",
+        "investmentHoldings": "投資持股",
+        "investmentRegister": "投資交易"
+      },
+      "applyHere": "在此瀏覽器中使用這些預設值",
+      "applyHereHelp": "清除此瀏覽器已儲存的檢視設定，使上述預設值在此處也生效。",
+      "appliedHere": "此瀏覽器現在使用您的預設檢視"
+    },
+    "mobileTabs": {
+      "intro": "為手機或平板底部的標籤列選擇最多三個標籤。新增按鈕和「更多」一律顯示。",
+      "slotLabel": "標籤 {number}",
+      "none": "無"
+    }
   },
   "notifications": {
     "heading": "通知",
+    "portfolioAlert": {
+      "title": "投資價值變動",
+      "description": "當我的投資帳戶變動超過閾值時，每天通知我一次；以市場變化與股利衡量（不含存入與提出）。",
+      "enableLabel": "啟用投資變動提醒",
+      "thresholdLabel": "當每日變動至少達到以下值時通知",
+      "saveError": "無法儲存閾值",
+      "loadError": "無法載入投資提醒設定",
+      "retry": "重試"
+    },
     "smtpNotConfigured": "電子郵件通知不可用。管理員尚未設定 SMTP。",
     "emailNotificationsTitle": "電子郵件通知",
     "emailNotificationsDescription": "接收即將到期帳單和預算警示的電子郵件提醒",
@@ -212,6 +290,148 @@
       "digestUpdateFailed": "更新預算摘要偏好設定失敗",
       "digestDayFailed": "更新摘要日失敗",
       "testEmailFailed": "發送測試電子郵件失敗"
+    },
+    "push": {
+      "heading": "瀏覽器推播",
+      "collapsedDevices": "{count, plural, =0 {未註冊任何裝置} other {已註冊 # 台裝置}}",
+      "collapsedDevicesWithRetired": "{count, plural, =0 {未註冊任何裝置} other {已註冊 # 台裝置}}，{retired, plural, other {# 台已停用}}",
+      "collapsedDevicesUnavailable": "裝置清單無法使用",
+      "diagnostics": {
+        "summary": "通知診斷",
+        "intro": "此瀏覽器與裝置向 Monize 回報的通知相關資訊。變更設定後請重新整理，再用「複製報告」傳送完整報告。",
+        "refresh": "重新整理",
+        "copy": "複製報告",
+        "copied": "已將診斷複製到剪貼簿"
+      },
+      "description": "註冊此裝置，Monize 就能在應用程式關閉時也送達通知。目前透過這條通道送達的只有測試通知，其餘仍會出現在鈴鐺裡。",
+      "androidNotify": "在 Android 上，只授予權限還不夠：系統仍可能隱藏通知。長按主畫面上的 Monize 圖示，點按「應用程式資訊」，然後「通知」，並確認已開啟。",
+      "permissionHint": "開啟後，瀏覽器會請求顯示通知的權限。在你允許之前不會傳送任何內容。",
+      "enableButton": "在此裝置啟用",
+      "enablingButton": "啟用中...",
+      "sendTestButton": "傳送測試通知",
+      "sendingTestButton": "傳送中...",
+      "removeButton": "移除",
+      "removeDialog": {
+        "title": "移除裝置",
+        "message": "移除 {device}？在該裝置上重新開啟推播之前，它將不再收到推播通知。"
+      },
+      "thisDevice": "此裝置",
+      "held": "已在此裝置上登出。在此重新登入後，推播通知將恢復。",
+      "unifiedpushBadge": "UnifiedPush",
+      "unnamedDevice": "未命名裝置",
+      "noLiveDevices": "尚未註冊任何裝置。請先在此裝置啟用推播再傳送測試。",
+      "noDeliverableDevices": "所有裝置皆已登出，因此測試無處可送。在某台裝置上重新登入後，該裝置的推播通知將恢復。",
+      "notConfigured": "此 Monize 執行個體未提供瀏覽器推播。管理員可在 Admin 區域啟用。",
+      "disabledByAdmin": "管理員已為此 Monize 執行個體關閉瀏覽器推播。",
+      "keyUnreadable": "Monize 無法讀取此執行個體的推播金鑰組，因此無法傳送任何通知。管理員可於 Admin 區域輪替金鑰組以恢復。",
+      "serverKeyMissing": "此 Monize 實例缺少開啟推播金鑰組所需的加密金鑰，因此無法遞送任何內容。需要管理員在部署中設定該金鑰並重新啟動。",
+      "statusUnavailable": "Monize 無法確認瀏覽器推播是否可用。請重新載入頁面後再試。",
+      "devicesUnavailable": "Monize 無法載入你已註冊的裝置。本頁其他功能仍可使用；請重新載入後再試。",
+      "unsupported": {
+        "unsupported": "此瀏覽器無法接收推播通知。",
+        "denied": "此瀏覽器已封鎖 Monize 的通知。請在瀏覽器的網站設定中允許，然後重新載入本頁。",
+        "ios-browser": "在 iPhone 與 iPad 上，必須先將 Monize 加入主畫面，推播通知才會運作。請使用「分享」，接著選擇「加入主畫面」，並從那裡開啟 Monize。",
+        "shell": {
+          "electron": "Monize 桌面視窗中無法使用通知。請從系統匣選單(\"Open in browser\")在瀏覽器中開啟 Monize,推播通知在瀏覽器中仍可正常使用。",
+          "capacitor": "Monize Android 應用程式目前尚不支援推播通知。請在瀏覽器中開啟 Monize 以接收通知。"
+        }
+      },
+      "native": "Monize 桌面應用程式在執行時會在這台電腦上顯示您的通知，即使視窗已關閉到系統匣也一樣，因此這裡不需要啟用任何項目。通知的顯示方式由 Windows 的通知設定決定。",
+      "disabledReason": {
+        "GONE": "已無法送達。請在該瀏覽器重新啟用推播。",
+        "KEY_ROTATED": "此執行個體輪替推播金鑰組時已停用。請在該瀏覽器重新啟用推播。",
+        "FAILING": "多次傳送失敗後已停用。請在該瀏覽器重新啟用推播。"
+      },
+      "toasts": {
+        "enabled": "已在此裝置啟用推播通知",
+        "enableFailed": "無法啟用推播通知",
+        "permissionDenied": "此瀏覽器正在封鎖 Monize 的通知。請在網站設定中允許後再試。",
+        "permissionDeniedIos": "Monize 的通知已被封鎖。請開啟 iOS「設定」，然後「通知」，再選擇 Monize 以允許。",
+        "permissionDismissed": "未啟用通知。瀏覽器詢問時請選擇「允許」。",
+        "permissionNoPrompt": "通知未開啟，也沒有出現任何請求。請開啟 iOS「設定」，然後「通知」，再選擇 Monize 並允許。如果清單中沒有 Monize，請從主畫面移除後重新加入（「分享」，然後「加入主畫面」），再試一次。",
+        "removed": "已移除裝置",
+        "removeFailed": "無法移除裝置",
+        "testSent": "{count, plural, other {測試通知已傳送至 # 台裝置}}",
+        "testPartial": "測試通知送達 {attempted} 台裝置中的 {delivered} 台",
+        "testFailed": "無法傳送測試通知",
+        "pushServiceRefused": "瀏覽器的推播服務拒絕了註冊。請稍後再試；若持續失敗，請檢查瀏覽器的推播設定。",
+        "pushServiceRefusedBrave": "Brave 預設會封鎖推播服務。在 Brave 中開啟「設定」，然後「隱私權和安全性」，開啟「使用 Google 服務進行推播訊息」，重新啟動瀏覽器後再試一次。"
+      },
+      "testResults": {
+        "heading": "上次測試（依裝置）",
+        "status": {
+          "sent": "已送達推播服務",
+          "expired": "訂閱已過期；請在該裝置上重新啟用推播",
+          "transient": "未送達（暫時性錯誤）；請再試一次",
+          "unconfigured": "此執行個體目前無法簽署推播訊息"
+        }
+      },
+      "transport": {
+        "webpush": "網頁推播",
+        "unifiedpush": "UnifiedPush"
+      },
+      "facts": {
+        "endpoint": "端點",
+        "transport": "投遞方式",
+        "registeredIp": "註冊來源",
+        "registered": "註冊時間",
+        "lastSeen": "最近活動",
+        "lastDelivery": "最近投遞",
+        "noDelivery": "尚未投遞過任何內容",
+        "userAgent": "瀏覽器",
+        "unknownIp": "未知"
+      }
+    },
+    "preferences": {
+      "heading": "如何通知我",
+      "description": "選擇 Monize 透過電子郵件或推播傳送哪些類型，以及傳送頻率。",
+      "categoryHeader": "通知",
+      "channels": {
+        "emailReport": "郵件（報告）",
+        "emailNotification": "電子郵件（提醒）",
+        "push": "推播",
+        "unifiedpush": "UnifiedPush",
+        "unifiedpushHint": "通知會透過你自行執行的分發應用程式（例如 ntfy）投遞，而非瀏覽器廠商的推播服務。請在該應用程式中註冊端點以使用此管道。"
+      },
+      "categories": {
+        "PAYMENTS": "帳單與排程",
+        "BUDGETS": "預算",
+        "SYSTEM": "系統警示",
+        "BALANCES": "帳戶餘額",
+        "INVESTMENTS": "投資價值",
+        "STRATEGIES": "策略訊號",
+        "BANK_SYNC": "銀行連線",
+        "BANK_SYNC_ACTIVITY": "銀行同步結果",
+        "EMAIL_RECEIPTS": "電子郵件收據",
+        "BONDS": "債券",
+        "AI_REVIEW": "AI 審核提案",
+        "WARRANTIES": "保固提醒",
+        "SECURITY": "安全",
+        "SHARED_EXPENSES": "共同支出"
+      },
+      "channelNotApplicable": "不適用於此通知類型",
+      "emailToggleLabel": "{category} 的報告郵件",
+      "emailNotificationToggleLabel": "{category} 的提醒電子郵件",
+      "pushToggleLabel": "{category} 的推播",
+      "unifiedpushToggleLabel": "{category} 的 UnifiedPush",
+      "saveFailed": "無法儲存該設定",
+      "emailUnavailable": "在上方開啟電子郵件通知，即可透過電子郵件傳送。",
+      "pushUnavailable": "沒有裝置註冊推播，因此此管道無法投遞。",
+      "throttle": {
+        "label": "間隔",
+        "ariaLabel": "{category} 的冷卻時間",
+        "hint": "若同組通知已在此時間範圍內發送，則略過提醒或推播。",
+        "options": {
+          "0": "關閉",
+          "5": "5 分鐘",
+          "15": "15 分鐘",
+          "30": "30 分鐘",
+          "60": "1 小時",
+          "360": "6 小時",
+          "1440": "24 小時"
+        }
+      },
+      "pushEnableHint": "此瀏覽器尚未註冊推播通知。"
     }
   },
   "help": {
@@ -229,9 +449,10 @@
       "label": "討論",
       "description": "與社群提問和分享想法。"
     },
-    "wiki": {
-      "label": "Wiki",
-      "description": "瀏覽指南和說明文件。"
+    "docs": {
+      "label": "說明文件",
+      "description": "瀏覽使用者指南。",
+      "openOnline": "在 monize.net 上開啟"
     },
     "supportBackup": {
       "label": "建立支援備份",
@@ -280,7 +501,7 @@
   "supportBackup": {
     "title": "建立支援備份",
     "howItWorks": "產生備份的去識別化副本:名稱會被遮罩(保留首尾各兩個字元),備註/描述/帳號會被移除,每筆金額乘以同一個隱藏係數,而公開數值(匯率、價格、利率)保持不變。檔案一律以下方密碼加密,並像一般備份一樣還原。這只能防範偶然外洩,防不了已經認識您的人——日期、頻率與結構會被保留,讓問題仍可重現。",
-    "sectionsLabel": "包含內容",
+    "sectionsLabel": "要包含的區段",
     "sections": {
       "investments": "投資(證券、持倉、價格)",
       "scheduled": "定期交易",
@@ -325,6 +546,17 @@
       "description": "從您的帳戶中移除財務資料。此操作無法復原。",
       "openButton": "刪除資料...",
       "alwaysDeletedHeading": "以下內容將始終被刪除：",
+      "alwaysDeletedItems": {
+        "transactions": "所有交易與拆分",
+        "scheduled": "所有排程/週期性交易",
+        "securities": "所有證券、價格、持股與投資交易",
+        "budgets": "所有預算與預算提醒",
+        "monthlySummaries": "每月科目結餘摘要",
+        "customReports": "自訂報表、標籤與匯入對應",
+        "actionHistory": "操作紀錄（復原/重做）",
+        "rules": "所有交易規則",
+        "institutions": "金融機構"
+      },
       "optionalHeading": "選擇性也刪除：",
       "accountsOption": "科目",
       "categoriesOption": "類別",
@@ -370,7 +602,8 @@
   },
   "apiAccess": {
     "heading": "API 存取",
-    "description": "建立個人存取權杖，透過 MCP 連接 Claude Desktop 等外部 AI 工具。",
+    "description": "建立個人存取權杖，透過 MCP 連接 Claude Desktop 等外部 AI 工具，或呼叫 /api/v1 的 REST API。",
+    "restrictedNote": "讀取權杖只能讀取。登入、安全、管理、共用和備份端點不適用於權杖。",
     "createTokenButton": "建立權杖",
     "mcpServerUrlLabel": "MCP 伺服器 URL",
     "mcpServerUrlHelp": "設定 MCP 客戶端（例如 Claude Code 或 Claude Desktop）時使用此 URL。",
@@ -384,7 +617,7 @@
     "revokeButton": "撤銷",
     "revokeModal": {
       "title": "撤銷權杖",
-      "message": "此權杖將立即失效。使用此權杖的所有 MCP 連線都將中斷。",
+      "message": "此權杖將立即失效。使用此權杖的所有 MCP 連線或 API 用戶端都將中斷。",
       "confirmLabel": "撤銷"
     },
     "createModal": {
@@ -430,26 +663,27 @@
       "copyUrlFailed": "複製 URL 失敗",
       "loadFailed": "載入 API 權杖失敗",
       "createFailed": "建立權杖失敗",
-      "revokeFailed": "撤銷權杖失敗"
+      "revokeFailed": "撤銷權杖失敗",
+      "reauthFailed": "確認重新驗證失敗"
+    },
+    "stepUp": {
+      "reason": "權杖無需登入即可存取您的帳號，因此在建立權杖前請先確認您的身份。"
     },
     "relative": {
-      "never": "從未",
-      "today": "今天",
-      "yesterday": "昨天",
-      "daysAgo": "{count} 天前",
-      "monthsAgo": "{count} 個月前"
+      "never": "從未"
     }
   },
   "autoBackup": {
     "heading": "自動備份",
-    "description": "依排程自動將您的資料備份至資料夾。由於 Monize 在 Docker 中運行，您必須將主機資料夾映射至容器作為磁碟區（例如：-v /host/backups:/data/backups）。",
-    "adminManagedNote": "只有管理員可以變更這些設定。其他所有使用者都會依照相同的排程與保留原則自動備份到各自的資料夾中。",
+    "description": "整個部署共用一份排程：伺服器會把每個帳戶的資料備份到下方的儲存區。由於 Monize 執行於 Docker，必須把本機資料夾以磁碟區方式掛載進容器（例如 -v /host/backups:/data/backups）。",
+    "adminManagedNote": "只有管理員可以變更此原則，它適用於本部署中的每個帳戶，各自寫入獨立的資料夾。",
+    "demoDisabledNote": "在示範模式下，這些控制項為唯讀。",
     "loadingText": "載入中...",
     "enableLabel": "啟用自動備份",
     "backupFolderLabel": "備份資料夾",
     "backupFolderPlaceholder": "/data/backups",
-    "perUserFolderHelp": "每位使用者的備份都會存放在此資料夾內以其使用者 ID 命名的專屬資料夾中。",
-    "perUserFolderHelpWithPath": "每位使用者的備份都會存放在此資料夾內以其使用者 ID 命名的專屬資料夾中。您的：{path}",
+    "perUserFolderHelp": "每個帳戶的備份都放在此資料夾內以其帳戶 ID 命名的獨立子資料夾中。",
+    "perUserFolderHelpWithPath": "每個帳戶的備份都放在此資料夾內以其帳戶 ID 命名的獨立子資料夾中。範例：{path}",
     "browseButton": "瀏覽...",
     "validateButton": "驗證",
     "validatingButton": "驗證中...",
@@ -471,26 +705,26 @@
       "monthlyHelp": "每月保留一份"
     },
     "status": {
-      "heading": "狀態",
-      "lastBackup": "上次備份",
-      "nextBackup": "下次備份",
+      "heading": "部署狀態",
+      "lastBackup": "最近一次備份",
+      "nextBackup": "下次排程備份",
       "error": "錯誤",
       "success": "成功",
-      "failed": "失敗",
-      "partial": "不完整"
+      "partial": "不完整",
+      "failed": "失敗"
     },
-    "saveButton": "儲存設定",
-    "savingButton": "儲存中...",
-    "runNowButton": "立即執行備份",
-    "runningButton": "執行備份中...",
+    "saveButton": "儲存原則",
+    "runNowButton": "立即備份所有帳戶",
+    "runningButton": "備份中...",
     "toasts": {
-      "saved": "自動備份設定已儲存",
-      "backupCreated": "備份已建立：{filename}",
+      "saved": "備份原則已儲存並套用至所有帳戶",
       "folderValid": "資料夾有效且可寫入",
       "loadFailed": "載入自動備份設定失敗",
       "saveFailed": "儲存設定失敗",
       "runFailed": "執行備份失敗",
-      "browseFailed": "瀏覽資料夾失敗"
+      "browseFailed": "瀏覽資料夾失敗",
+      "backupRunFinished": "已備份 {requested} 個帳戶中的 {backedUp} 個",
+      "backupRunIncomplete": "已備份 {requested} 個中的 {backedUp} 個：{partial} 個不完整，{failed} 個失敗。請查看下方狀態。"
     },
     "folderErrors": {
       "required": "資料夾路徑為必填",
@@ -505,9 +739,22 @@
     },
     "noStorage": {
       "title": "此部署沒有備份儲存空間",
-      "body": "自動備份將寫入 {folderPath}，但此部署無法寫入該位置。管理員需要先在該位置掛載儲存空間，排程才能執行。"
+      "body": "自動備份會寫入 {folderPath}，但本部署無法寫入該位置。必須由管理員先提供該儲存區，排程才能執行。"
     },
-    "never": "從未"
+    "never": "從未",
+    "coverage": {
+      "accounts": "已為本部署 {total} 個啟用帳戶中的 {scheduled} 個排定排程。",
+      "unknown": "無法取得此原則的涵蓋範圍。"
+    },
+    "storage": {
+      "heading": "備份儲存區",
+      "providerLocal": "本機資料夾",
+      "providerS3": "S3 相容物件儲存",
+      "providerUnknown": "儲存區",
+      "localHelp": "由 BACKUP_STORAGE_PROVIDER 決定。每個帳戶的備份都放在此資料夾內以其帳戶 ID 命名的獨立子資料夾中。",
+      "fixedHelp": "由 BACKUP_STORAGE_PROVIDER 決定。儲存貯體與金鑰前置字元屬於本部署，因此這裡沒有可選的資料夾；每個帳戶的備份都放在各自的金鑰前置字元下。",
+      "artifactCount": "此儲存區目前保存你帳戶的 {count} 個備份檔。切換儲存區不會搬移既有的備份。"
+    }
   },
   "backupRestore": {
     "heading": "備份與還原",
@@ -557,8 +804,8 @@
       },
       "toasts": {
         "success": "備份下載成功",
-        "incomplete": "備份已下載，但內容不完整：{total} 個附件中有 {unusable} 個無法完整保存（{missing} 個缺失，{inconsistent} 個未通過完整性檢查）。請勿將此檔案視為完整備份——修復附件儲存後重新匯出。",
-        "failed": "建立備份失敗"
+        "failed": "建立備份失敗",
+        "incomplete": "備份已下載，但內容不完整：{total} 個附件中有 {unusable} 個無法完整保存（{missing} 個缺失，{inconsistent} 個未通過完整性檢查）。請勿將此檔案視為完整備份——修復附件儲存後重新匯出。"
       }
     },
     "restore": {
@@ -580,16 +827,130 @@
         "pleaseEnterPassword": "請輸入您的密碼以確認",
         "encryptedNeedsPassword": "此備份已加密。請在「備份密碼」欄位輸入建立時使用的密碼後再試。",
         "failed": "還原備份失敗",
+        "interrupted": "還原在伺服器回應之前遭到中斷。還原要麼全部生效，要麼完全不生效，因此您的資料要麼已完全還原，要麼維持不變。請先重新載入頁面確認，再重試。",
         "reauthRedirect": "正在前往身分提供者以確認你的身分。返回後請重新選擇備份檔案。"
-      }
+      },
+      "selectedFile": "已選取：{filename}"
     },
     "restoreResult": {
       "title": "還原完成",
-      "description": "您的資料已成功還原。以下是已還原內容的摘要：",
       "totalRecords": "總記錄數",
-      "doneButton": "完成",
       "skippedAttachments": "{count, plural, other {# 個附件未被還原}}：備份中沒有可用的位元組——匯出時它們缺失或未通過總和檢查，或該檔案早於自包含備份。請在附件儲存恢復正常後重新匯出備份。",
-      "unusableAiProviderKeys": "{count, plural, other {# 個 AI 提供者在還原後沒有可用的 API 金鑰}}：此備份建立於提供者金鑰隨備份一同保存之前，因此儲存的金鑰屬於產生該檔案的伺服器，或者本伺服器沒有設定用來保存金鑰的加密金鑰。請開啟「設定 → AI 提供者」並重新輸入 API 金鑰。"
+      "unusableAiProviderKeys": "{count, plural, other {# 個 AI 提供者在還原後沒有可用的 API 金鑰}}：此備份建立於提供者金鑰隨備份一同保存之前，因此儲存的金鑰屬於產生該檔案的伺服器，或者本伺服器沒有設定用來保存金鑰的加密金鑰。請開啟「設定 → AI 提供者」並重新輸入 API 金鑰。",
+      "unlinkedBondSecurities": "{count, plural, other {# 個債券證券在還原後未連結其債券商品}}：此伺服器的債券目錄不包含該系列（或其幣別不同），因此債券引擎不再為它們定價，其計算出的價格也未被還原。請開啟每個證券，重新將其連結到債券商品。",
+      "unlinkedBondSeries": "{count, plural, other {# 筆債券交易遺失了系列}}，因為無法從官方來源取得該系列。這些交易已在沒有系列的情況下還原，在你取得系列之前將維持無系列。",
+      "unrecoveredBondSeries": "備份中提到但無法取得的債券系列：{count} 個。",
+      "unrecoveredBondSeriesItem": "{series}（{country}）：{reason}",
+      "unrecoveredBondSeriesMore": "另有 {count} 個",
+      "unrecoveredBondSeriesAction": "要還原它們，請開啟債券證券，在其頁面取得該系列（重新整理），然後在缺少系列的交易中選擇系列。",
+      "unrecoveredBondSeriesReason": {
+        "not-published": "發行方尚未公布該系列",
+        "source-unavailable": "官方來源未回應；請稍後再試",
+        "no-adapter": "此伺服器沒有該發行方所在國家的來源",
+        "refused": "官方來源的回應未被接受",
+        "rate-limited": "官方來源要求放慢請求；請稍後再試",
+        "not-attempted": "一次還原中的系列過多；未嘗試",
+        "other": "原因不明"
+      },
+      "doneButton": "完成",
+      "unlinkedBondSecuritiesList": "受影響的證券:{symbols}。",
+      "unlinkedBondSecuritiesMore": "以及另外 {count} 個",
+      "currencyKindMismatchAccounts": "{count, plural, other {# 個帳戶還原時使用的貨幣類別與其帳戶類型不符}}：加密貨幣帳戶需要加密貨幣，其他帳戶需要法定貨幣，而在本伺服器上該貨幣屬於另一類別。請修改帳戶的貨幣，或在「貨幣」頁面修改該貨幣的類別。",
+      "currencyKindMismatchAccountsList": "受影響的帳戶:{names}。",
+      "currencyKindMismatchSecurities": "{count, plural, other {# 個證券}}在本伺服器上以加密貨幣計價，而證券需要法定貨幣。請修改證券的貨幣，或在「貨幣」頁面修改該貨幣的類別。",
+      "currencyKindMismatchSecuritiesList": "受影響的證券:{symbols}。",
+      "currencyKindMismatchMore": "以及另外 {count} 個",
+      "currencyKindMismatchDefaultCurrency": "您的預設貨幣 {code} 在本伺服器上是加密貨幣，但合計與報表一律以法定貨幣顯示。請在「設定 → 偏好設定」中選擇一種法定貨幣作為預設貨幣。",
+      "counts": {
+        "sharedGroups": "共同支出群組",
+        "sharedParticipants": "群組參與者",
+        "sharedEntries": "群組記錄",
+        "sharedAllocations": "費用分攤",
+        "sharedActivity": "群組活動",
+        "sharedPeople": "共同支出聯絡人",
+        "sharedPersonLinks": "已連結的聯絡人",
+        "sharedIntegrations": "個人財務連結",
+        "sharedPostings": "共同支出的個人記帳",
+        "sharedLedgerLinks": "已連結的個人交易",
+        "budgetBuckets": "預算資金桶",
+        "budgetPeriodBuckets": "預算期間資金桶"
+      }
+    },
+    "storedBackups": {
+      "heading": "自動備份",
+      "description": "此伺服器依其自身排程為你建立的備份。下載一份自行保存，或使用下方表單從中還原。",
+      "adminScheduleNote": "自動備份設定位於<link>管理 → 備份</link>。",
+      "loading": "正在載入備份...",
+      "loadFailed": "無法載入伺服器上儲存的備份",
+      "retryButton": "重試",
+      "empty": "此伺服器尚未為你保存任何自動備份。",
+      "columns": {
+        "filename": "檔案",
+        "modified": "修改日期",
+        "size": "大小",
+        "actions": "操作"
+      },
+      "downloadButton": "下載",
+      "restoreButton": "還原",
+      "workingButton": "處理中...",
+      "downloadFailed": "無法下載該備份",
+      "offsite": {
+        "disclosure": "異地目的地",
+        "disclosureDescription": "每次完整的自動備份完成後，可以將加密副本傳送到 S3 儲存、以電子郵件寄出，或兩者並行：三份副本、兩種儲存方式，其中一種在本機之外。只會傳送加密備份。",
+        "encryptionUnavailable": "此伺服器未設定加密金鑰，因此無法儲存你自己儲存貯體的認證資訊。伺服器自有的儲存貯體與郵件副本仍可使用。",
+        "loading": "正在載入你的異地目的地...",
+        "loadFailed": "無法載入你的異地備份目的地",
+        "retryButton": "重試",
+        "demoNote": "示範模式中無法變更異地目的地。",
+        "saveButton": "儲存目的地",
+        "saved": "異地目的地已儲存",
+        "saveFailed": "無法儲存你的異地備份目的地",
+        "s3": {
+          "heading": "S3 儲存",
+          "modeLabel": "副本目的地",
+          "modeOff": "關閉",
+          "modeDeployment": "此伺服器的儲存貯體",
+          "modeOwn": "我自己的儲存貯體",
+          "deploymentUnavailable": "此伺服器沒有自己的異地儲存貯體，需要管理員先行設定。你可以改用自己的儲存貯體。",
+          "bucketLabel": "儲存貯體",
+          "regionLabel": "區域",
+          "regionHelp": "許多相容 S3 的服務會忽略此項。",
+          "prefixLabel": "索引鍵前置字串",
+          "prefixHelp": "儲存貯體內的選用資料夾，讓備份可以與其他資料共用同一個儲存貯體。",
+          "endpointLabel": "端點",
+          "endpointHelp": "僅適用於 MinIO、R2 或 B2 等相容 S3 的服務。使用 AWS 時請留空。",
+          "forcePathStyleLabel": "使用路徑樣式定址",
+          "forcePathStyleHelp": "MinIO 及其他部分相容 S3 的服務需要此項。",
+          "accessKeyIdLabel": "存取金鑰 ID",
+          "secretAccessKeyLabel": "私密存取金鑰",
+          "storedPlaceholder": "•••• 已儲存",
+          "credentialsHelp": "認證資訊會以加密方式儲存在此伺服器上，且不會再次顯示。若要保留已儲存的認證資訊，請將這些欄位留空。",
+          "clearCredentialsButton": "移除已儲存的認證資訊",
+          "clearConfirmTitle": "移除已儲存的認證資訊？",
+          "clearConfirmMessage": "此伺服器將忘記你的存取金鑰 ID 與私密存取金鑰。在你重新輸入之前，不會再向你的儲存貯體傳送副本。",
+          "credentialsCleared": "已移除儲存的認證資訊",
+          "clearFailed": "無法移除已儲存的認證資訊"
+        },
+        "email": {
+          "heading": "電子郵件",
+          "toggleLabel": "每次自動備份完成後，以電子郵件寄給我一份副本",
+          "addressLabel": "副本寄送至",
+          "addressPlaceholder": "user@example.com",
+          "sizeNote": "超過此伺服器大小上限的備份不會夾帶附件；你會收到一封載明檔名的通知。"
+        },
+        "rowStatus": {
+          "iconTitle": "{destination}: {status}",
+          "destinationS3": "S3",
+          "destinationEmail": "電子郵件",
+          "statusPending": "等待中",
+          "statusUploading": "傳送中",
+          "statusUploaded": "已複製",
+          "statusFailed": "失敗",
+          "statusConflict": "衝突",
+          "statusSkippedUnencrypted": "已略過：未加密",
+          "statusSkippedTooLarge": "已略過：過大"
+        }
+      }
     }
   },
   "sharedAccess": {
@@ -659,16 +1020,57 @@
       "sections": "區段",
       "shared": "共用資料"
     },
+    "ops": {
+      "read": "讀取",
+      "create": "建立",
+      "edit": "編輯",
+      "delete": "刪除",
+      "joint": "聯名"
+    },
     "sections": {
-      "description": "授予整個應用程式區段的唯讀存取。以科目為範圍的資料仍需要個別科目存取。"
+      "description": "授予整個應用程式區段的唯讀存取。以科目為範圍的資料仍需要個別科目存取。",
+      "bills": {
+        "label": "帳單與存款",
+        "description": "已授權科目的排程交易"
+      },
+      "investments": {
+        "label": "投資",
+        "description": "已授權科目的持股與投資交易"
+      },
+      "budgets": {
+        "label": "預算",
+        "description": "唯讀預算數據"
+      },
+      "reports": {
+        "label": "報表",
+        "description": "唯讀報表"
+      },
+      "ai": {
+        "label": "AI 助理",
+        "description": "使用擁有者設定的 AI 供應商"
+      },
+      "aiRequiresFullAccess": "AI 助理會讀取所有科目與區段，因此只有當此委派人能讀取您的所有科目及其他所有區段時，它才會為其回答。",
+      "warranties": {
+        "label": "保固",
+        "description": "保固及其文件與保固申請。連結的購買紀錄只有在受託人可讀取的帳戶中時才會顯示。"
+      },
+      "toggleLabel": "{section} 區段"
     },
     "accounts": {
       "noAccounts": "無可授予的科目。",
       "grantAll": "授予全部",
-      "jointRequiresFullAccount": "聯名帳戶只能與擁有自己 Monize 帳戶的使用者共享"
+      "jointRequiresFullAccount": "聯名帳戶只能與擁有自己 Monize 帳戶的使用者共享",
+      "grantAllLabel": "{op}所有{type}科目",
+      "grantLabel": "對 {account} 的{op}存取權"
     },
     "shared": {
-      "description": "收款人、類別和標籤的讀取始終允許。這些控制建立/編輯/刪除。"
+      "description": "收款人、類別和標籤的讀取始終允許。這些控制建立/編輯/刪除。",
+      "toggleLabel": "{op}{resource}",
+      "resources": {
+        "payees": "收款人",
+        "categories": "類別",
+        "tags": "標籤"
+      }
     },
     "saveButton": "儲存",
     "toasts": {
@@ -687,11 +1089,13 @@
     "emergencyAccess": "緊急存取",
     "apiAccess": "API 存取",
     "aiSettings": "AI 設定",
+    "emailReceipts": "郵件收據",
     "backupRestore": "備份與還原",
-    "autoBackup": "自動備份",
     "help": "說明與支援",
     "dangerZone": "危險區域",
-    "about": "關於"
+    "about": "關於",
+    "payeeLookup": "收款人查詢",
+    "bankSync": "銀行同步"
   },
   "page": {
     "title": "設定",
@@ -715,6 +1119,14 @@
       "title": "AI 設定",
       "description": "設定 AI 提供者、管理 API 金鑰並查看使用統計。"
     },
+    "emailReceiptsCard": {
+      "title": "郵件收據",
+      "description": "連接用於接收訂單確認郵件的信箱，並管理讀取這些郵件的設定檔。"
+    },
+    "bankSyncCard": {
+      "title": "銀行同步",
+      "description": "透過 Open Banking 連接您的銀行，並將其已入帳的交易匯入您的科目。"
+    },
     "delegateSecurityError": "無法載入您的安全設定。",
     "toasts": {
       "securityLoadFailed": "載入安全設定失敗",
@@ -732,6 +1144,14 @@
       "enabled": "已啟用懸浮聊天氣泡",
       "disabled": "已停用懸浮聊天氣泡",
       "saveFailed": "無法更新聊天氣泡設定"
+    },
+    "trivia": {
+      "title": "AI 趣聞",
+      "subtitle": "用關於你的淨資產和投資的趣聞填充儀表板上的「趣聞」小工具。內容每天早上重新產生，如果你已設定供應商，則由 AI 撰寫。請在儀表板上透過「自訂」新增該小工具。關閉後，小工具不顯示任何趣聞，也不會請求供應商。",
+      "toggleLabel": "用 AI 趣聞填充儀表板上的「趣聞」小工具",
+      "enabled": "已啟用 AI 趣聞",
+      "disabled": "已停用 AI 趣聞",
+      "saveFailed": "無法更新 AI 趣聞設定"
     },
     "demoRestricted": {
       "heading": "示範模式中受限",
@@ -812,7 +1232,6 @@
       "editMessageButton": "編輯",
       "messagePlaceholder": "備註、指示、重要文件的位置...",
       "maxCharsNote": "最多 4000 個字元。靜態加密儲存。",
-      "cancelButton": "取消",
       "saveButton": "儲存留言",
       "toasts": {
         "saved": "留言已儲存",
@@ -857,7 +1276,7 @@
       "grantStatus": "授予狀態：",
       "unknown": "未知",
       "never": "從未",
-      "daysAgo": "{count} 天前",
+      "withRelative": "{timestamp}（{relative}）",
       "grantedOn": "授予於 {timestamp}",
       "notYetGranted": "尚未授予",
       "timerNote": "計時器會在您每次使用應用程式時自動重置 — 登入、查看頁面、記錄交易，任何已驗證的操作。"
@@ -874,6 +1293,17 @@
     },
     "stepUp": {
       "reason": "請重新驗證身份以查看或編輯您的緊急存取留言。"
+    },
+    "validation": {
+      "wholeDays": "只能輸入整天數",
+      "minDays": "{min, plural, other {至少 # 天}}",
+      "maxDays": "{max, plural, other {不超過 # 天}}",
+      "reminderBeforeGrant": "提醒天數必須少於授權天數",
+      "messageMax": "訊息不得超過 {max} 個字元",
+      "firstNameRequired": "名字為必填",
+      "firstNameMax": "名字不得超過 {max} 個字元",
+      "emailInvalid": "請輸入有效的電子郵件地址",
+      "emailMax": "電子郵件不得超過 {max} 個字元"
     },
     "toasts": {
       "loadFailed": "載入緊急存取失敗",
@@ -908,6 +1338,10 @@
       "editButton": "編輯",
       "deleteButton": "刪除"
     },
+    "deleteDialog": {
+      "title": "刪除 AI 供應商",
+      "message": "刪除 {name}？其儲存的 API 金鑰也會一併移除。此操作無法復原。"
+    },
     "configForm": {
       "addTitle": "新增 AI 提供者",
       "editTitle": "編輯提供者",
@@ -919,6 +1353,7 @@
       "ollamaCloudNote": "模型名稱必須包含 -cloud 後綴（例如：gpt-oss:20b-cloud）。",
       "apiKeyLabel": "API 金鑰",
       "baseUrlLabel": "基礎 URL",
+      "baseUrlPrivateNote": "私人或本機位址（localhost、192.168.x.x 或容器名稱）僅適用於管理員，或伺服器營運者已允許該位址的情況。否則，請使用可從網際網路存取的位址。",
       "priorityLabel": "優先順序",
       "priorityHelp": "數字越小，優先順序越高。用於後備排序。",
       "costRatesHeading": "費率（選填）",
@@ -1027,5 +1462,468 @@
       "all": "所有時間"
     },
     "estCostTooltip": "使用您在每個提供者上設定的費率進行估算。不含未設定匹配費率的活動。"
+  },
+  "payeeLookup": {
+    "title": "收款人查詢",
+    "subtitle": "收款人的網站、地址、電子郵件和電話號碼來自何處，以及查詢何時自動執行。",
+    "saved": "已儲存收款人查詢設定",
+    "saveFailed": "無法儲存收款人查詢設定",
+    "loadFailed": "無法載入收款人查詢設定。請重新整理頁面再試一次。",
+    "googlePlaces": {
+      "toggleLabel": "使用 Google Places 查詢收款人",
+      "notConfigured": "新增 Google Places API 金鑰，即可在 Google 的商家目錄中查詢，而非透過你的 AI 供應商。",
+      "operatorManaged": "由本伺服器的管理員設定。你可以為自己的收款人關閉它。",
+      "configure": "設定",
+      "edit": "編輯",
+      "removeKey": "移除金鑰",
+      "usage": "本月已用：{used}/{cap}",
+      "usageNoCap": "本月已用：{used}。無每月上限。",
+      "keyUnreadable": "本伺服器無法讀取已儲存的 API 金鑰。將備份還原到其他執行個體，或加密金鑰變更後會發生這種情況。請重新輸入金鑰以修正。",
+      "encryptionUnavailable": "本伺服器未設定加密金鑰，因此無法安全儲存 API 金鑰。請請管理員設定一組。",
+      "modalTitle": "Google Places",
+      "modalSubtitle": "Monize 會將收款人名稱與你已有的地址傳送給 Google，且不會在 Google 儲存任何內容。",
+      "apiKeyLabel": "API 金鑰",
+      "apiKeyPlaceholder": "貼上你的 Google Places API 金鑰",
+      "apiKeyHelp": "在 Google Cloud 主控台建立金鑰並啟用 Places API (New)。留空則保留已儲存的金鑰。",
+      "capToggleLabel": "限制每月要求數",
+      "capHelp": "針對此查詢所需的欄位，Google 每月提供 {free} 次免費 Text Search 要求。超過上限後，查詢會回退到你的 AI 供應商。",
+      "capLabel": "每月要求數",
+      "capRange": "請輸入 {min} 到 {max} 之間的數字。",
+      "test": "測試",
+      "testing": "測試中...",
+      "testSuccess": "Google 已接受該金鑰。",
+      "save": "儲存",
+      "cancel": "取消",
+      "setupInstructions": "設定說明"
+    },
+    "automatic": {
+      "title": "自動查詢收款人聯絡資訊",
+      "subtitle": "自動查詢新收款人的網站、地址、電子郵件與電話號碼。系統會傳送收款人名稱，以及其已有的備註、網站、地址、電子郵件與電話，讓查詢能分辨正確的商家與分店。",
+      "toggleLabel": "啟用自動查詢收款人聯絡資訊",
+      "enabled": "已啟用自動查詢收款人聯絡資訊",
+      "disabled": "已停用自動查詢收款人聯絡資訊",
+      "saveFailed": "無法更新收款人聯絡資訊查詢設定",
+      "noSource": "請在上方開啟一個來源以自動查詢收款人。兩者都關閉時，沒有任何來源可以回答查詢。"
+    },
+    "order": {
+      "title": "先查詢哪個來源",
+      "placesTitle": "Google Places",
+      "placesHelp": "目錄事實，每次查詢更便宜。Google 不提供電子郵件地址。",
+      "aiTitle": "現有 AI 供應商",
+      "aiHelp": "可以找到電子郵件地址，但每次查詢都會產生一次模型呼叫費用。",
+      "aiToggleLabel": "使用 AI 供應商進行收款人查詢",
+      "aiProviderLabel": "要使用的供應商",
+      "aiProviderAny": "任何供應商，依優先順序",
+      "moveUp": "上移",
+      "moveDown": "下移"
+    }
+  },
+  "bankSync": {
+    "backLink": "返回設定",
+    "title": "銀行同步",
+    "subtitle": "透過 Open Banking 匯入您銀行帳戶中已入帳的交易",
+    "demoRestricted": {
+      "heading": "示範模式中受限",
+      "body": "示範模式中已停用銀行同步。"
+    },
+    "loadFailed": {
+      "title": "無法載入銀行同步",
+      "retry": "重試"
+    },
+    "credentials": {
+      "title": "Enable Banking 應用程式",
+      "subtitle": "Monize 透過您自己的 Enable Banking 應用程式讀取您的銀行帳戶。請在 Enable Banking 控制面板中註冊一個應用程式，然後在此輸入其應用程式 ID 和私密金鑰。",
+      "notConfigured": "尚未設定應用程式。",
+      "applicationId": "應用程式 ID",
+      "keyStored": "已儲存私密金鑰。",
+      "keyMissing": "未儲存私密金鑰。",
+      "configure": "設定憑證",
+      "edit": "編輯憑證",
+      "remove": "移除憑證",
+      "test": "測試連線",
+      "testing": "測試中...",
+      "encryptionUnavailable": "本伺服器未設定加密金鑰，因此無法儲存憑證。",
+      "redirectUrlLabel": "重新導向 URL",
+      "redirectUrlHelp": "請將此 URL 原樣註冊為 Enable Banking 控制面板中的重新導向 URL。您授權存取後，銀行會將您送回此 URL。",
+      "redirectUrlNotPublic": "重新導向 URL 不需要能從網際網路存取。只有您的瀏覽器會開啟它。",
+      "redirectUrlHttpWarning": "「Production」應用程式只接受 https 重新導向 URL。此 URL 使用 http，因此只能用於「Sandbox」應用程式。請將 PUBLIC_APP_URL 設定為 Monize 的 https 位址。",
+      "copy": "複製",
+      "copied": "已複製",
+      "copyFailed": "無法複製",
+      "testSuccess": "應用程式可以正常運作：{name}",
+      "testSuccessNoName": "應用程式可以正常運作。",
+      "testRedirectMissing": "應用程式可以正常運作，但上方的重新導向 URL 尚未為其註冊。請在 Enable Banking 控制面板中新增。",
+      "testFailed": "提供者未接受這些憑證。",
+      "testError": "無法測試憑證",
+      "saved": "憑證已儲存。請使用「測試連線」進行檢查。",
+      "saveFailed": "無法儲存憑證",
+      "removed": "憑證已移除",
+      "removeFailed": "無法移除憑證",
+      "removeConfirm": {
+        "title": "移除憑證",
+        "message": "已儲存的應用程式 ID 和私密金鑰將從 Monize 中刪除。在連接銀行或同步之前，您需要重新輸入它們。",
+        "confirm": "移除"
+      },
+      "help": {
+        "show": "顯示設定說明",
+        "hide": "隱藏設定說明",
+        "whatIsTitle": "什麼是 Enable Banking？",
+        "whatIsBody": "Enable Banking 是一家依 PSD2 在歐盟取得科目資訊服務提供者 (AISP) 許可的公司。它代您連接銀行，並讓 Monize 以唯讀方式存取您的科目、餘額和交易。您在自己的銀行登入。Monize 和 Enable Banking 不會看到您的銀行密碼。Enable Banking 支援歐洲經濟區的銀行。",
+        "dataFlow": "連接銀行後，Enable Banking 可以讀取您的銀行資料：您的帳戶資料在傳送到 Monize 的途中會經過其服務。Enable Banking 聲明不會儲存這些資料。其條款適用：<terms>Enable Banking API 條款</terms>。",
+        "whatIsFree": "個人使用時，處於受限生產模式的免費應用程式就夠了。它只讀取您在控制面板中關聯到它的科目。",
+        "setupTitle": "設定方法",
+        "step1": "在 <link>Enable Banking</link> 建立帳號（選擇「Get Started」並等待確認郵件）。然後登入控制面板並開啟「API applications」。",
+        "step2": "選擇「Production」。Monize 只能透過 Production 應用程式讀取您真實的銀行帳戶。僅在想先試用連線時才選擇「Sandbox」：它只會顯示測試銀行的示範資料。",
+        "step3": "私密金鑰請保持選擇「Generate in the browser」。",
+        "step4": "在表單中輸入下方的值。對於「Production」，每個欄位都是必填。",
+        "registrationValuesTitle": "要貼到表單中的值",
+        "registrationValuesNote": "由於控制面板是英文的，標籤和值維持英文。",
+        "registrationTemplatesNote": "這兩個 URL 指向 Monize 的範本。在受限模式下，Enable Banking 不會檢查它們。如果其他人也使用您的 Monize 執行個體，請改為發布附有您姓名的自有頁面。",
+        "emailPlaceholder": "您的電子郵件地址",
+        "copyField": "複製 {field}",
+        "step5": "選擇「Register」。瀏覽器會儲存私密金鑰檔案 (.pem)。請妥善保密此檔案。",
+        "step6": "對於「Production」，新建的應用程式會顯示「Inactive」。選擇「Activate by linking accounts」，再選擇國家、您的銀行和使用類型（個人帳戶選「personal」，公司帳戶選「business」），然後選擇「Link」。接著登入您的銀行並授權您的帳戶。不要選擇「Request activation」：它申請的是正式全面開放，個人使用並不需要。若沒有關聯帳戶，銀行不會回傳任何帳戶。之後在 Monize 中連接銀行時，請選擇相同的使用類型。",
+        "step7": "輸入應用程式清單中的應用程式 ID，並在此載入私密金鑰檔案。",
+        "sandboxNote": "Sandbox 應用程式中的交易是示範資料。請僅將 Sandbox 銀行帳戶關聯到 Monize 中的測試科目，不要關聯到包含您真實交易的科目。",
+        "networkTitle": "網路存取",
+        "networkBody": "銀行將您送回時，您的瀏覽器會開啟重新導向 URL。Enable Banking 的伺服器不會連線到 Monize。因此 Monize 不需要能從網際網路或 Enable Banking 的 IP 位址存取。重新導向 URL 必須能在您用於授權存取的瀏覽器中開啟。",
+        "networkOutbound": "Monize 伺服器必須能透過 HTTPS (連接埠 443) 連線到 api.enablebanking.com。"
+      },
+      "modalSource": "請從 <link>Enable Banking 控制面板</link>取得應用程式 ID 和私密金鑰。"
+    },
+    "credentialsModal": {
+      "title": "Enable Banking 憑證",
+      "subtitle": "加密儲存在本伺服器上。私密金鑰不會再次顯示。",
+      "applicationIdLabel": "應用程式 ID",
+      "applicationIdPlaceholder": "您的 Enable Banking 應用程式的 ID",
+      "applicationIdRequired": "請輸入應用程式 ID",
+      "applicationIdTooLong": "應用程式 ID 過長",
+      "privateKeyLabel": "私密金鑰 (PEM)",
+      "privateKeyPlaceholder": "貼上您應用程式的 PEM 私密金鑰",
+      "privateKeyStoredPlaceholder": "已儲存一組金鑰。留空即可保留，或貼上新金鑰進行取代。",
+      "privateKeyHelp": "請貼上註冊應用程式時下載的整個 PEM 檔案。",
+      "privateKeyRequired": "請輸入私密金鑰",
+      "privateKeyInvalid": "這看起來不是 PEM 私密金鑰。它應該是以 BEGIN 開頭、以 PRIVATE KEY 結尾的一段內容。",
+      "privateKeyTooLong": "私密金鑰過長",
+      "loadKeyFile": "載入私密金鑰檔案",
+      "keyFileTooLarge": "檔案大於 16 KB。請選擇 Enable Banking 儲存的 .pem 檔案。",
+      "keyFileReadFailed": "無法讀取檔案。",
+      "cancel": "取消",
+      "save": "儲存",
+      "saving": "儲存中..."
+    },
+    "connections": {
+      "title": "已連接的銀行",
+      "subtitle": "每個銀行帳戶會關聯到一個 Monize 科目，其已入帳的交易會匯入該科目。",
+      "connect": "連接銀行",
+      "credentialsFirst": "連接銀行之前，請先在上方設定您的 Enable Banking 憑證。",
+      "loadFailed": "無法載入您的銀行連線。",
+      "empty": {
+        "title": "尚未連接銀行",
+        "description": "連接銀行，將其已入帳的交易匯入您的 Monize 科目。"
+      }
+    },
+    "connect": {
+      "title": "連接銀行",
+      "subtitle": "您將被轉到銀行頁面，授權唯讀存取。",
+      "whySecondAuthorization": "即使您已在 Enable Banking 控制面板中連結相同的帳戶，這裡仍需在銀行再次授權。控制面板只列出應用程式可以讀取哪些帳戶，其授權當天即結束。此步驟讓 Monize 取得自己的授權，可讀取餘額和交易，最長 180 天。授權即將結束時，連線卡片會顯示「續期授權」。",
+      "countryLabel": "國家或地區",
+      "countryPlaceholder": "選擇國家或地區",
+      "institutionLabel": "銀行",
+      "institutionPlaceholder": "搜尋您的銀行",
+      "institutionsLoading": "載入銀行中...",
+      "institutionsFailed": "無法載入銀行清單。",
+      "retry": "重試",
+      "noInstitutions": "提供者未列出該國家或地區的銀行。",
+      "psuTypeLabel": "科目持有人",
+      "psuPersonal": "個人",
+      "psuBusiness": "企業",
+      "consentDays": "{days, plural, other {該銀行允許的存取期限最長為 # 天，之後您必須續期。}}",
+      "continue": "繼續前往銀行",
+      "continuing": "連接中...",
+      "cancel": "取消",
+      "unsafeUrl": "伺服器傳回的銀行網址不是安全的 https 網址，因此 Monize 未開啟它。",
+      "failed": "無法開始連線"
+    },
+    "connection": {
+      "status": {
+        "pending": "待處理",
+        "active": "有效",
+        "expired": "已過期",
+        "revoked": "已撤銷",
+        "failed": "失敗"
+      },
+      "validUntil": "存取有效期限至 {date}",
+      "expiresSoon": "即將過期",
+      "autoSync": "每天自動同步一次",
+      "autoSyncOn": "已開啟自動同步",
+      "autoSyncOff": "已關閉自動同步",
+      "autoSyncFailed": "無法變更自動同步",
+      "renew": "續期授權",
+      "renewFailed": "無法開始續期",
+      "syncAll": "全部同步",
+      "syncingAll": "同步中...",
+      "syncAllFailed": "無法同步此銀行",
+      "disconnect": "中斷連線",
+      "disconnected": "銀行已中斷連線",
+      "disconnectFailed": "無法中斷銀行連線",
+      "disconnectConfirm": {
+        "title": "中斷 {bank} 的連線",
+        "message": "Monize 將停止同步此銀行，並請求銀行終止存取。已匯入的交易會保留，重新連接該銀行也不會再次匯入它們。",
+        "confirm": "中斷連線"
+      },
+      "pendingHint": "銀行端的授權未完成。請續期授權以重試；已關聯的科目會保留。",
+      "noAccounts": "銀行尚未回報此連線下的任何科目。",
+      "accountsHeading": "銀行帳戶",
+      "matchAccounts": "依帳號比對",
+      "matching": "正在比對...",
+      "matchLinked": "{count, plural, other {已將 # 個銀行帳戶關聯到號碼相同的科目}}",
+      "matchSuggested": "{count, plural, other {# 個銀行帳戶與您的多個科目相符：請自行選擇科目}}",
+      "matchBoth": "{linked}。{suggested}",
+      "matchNone": "沒有關聯任何銀行帳戶：沒有帳號與您的科目相符。",
+      "matchFailed": "無法比對銀行帳戶",
+      "syncAllNeedsPreview": "在每個新關聯科目的首次匯入獲得確認之前，無法使用「全部同步」。請在該科目上使用「立即同步」開啟預覽。",
+      "notifySuccess": "每日同步後通知",
+      "notifySuccessOptions": {
+        "always": "每次同步後",
+        "when_imported": "僅在匯入了交易時",
+        "never": "從不"
+      },
+      "notifySuccessSaved": "已儲存通知設定",
+      "notifySuccessFailed": "無法變更通知設定",
+      "tagOperationType": "用銀行的操作類型為交易加上標籤",
+      "tagOperationTypeHelp": "每筆匯入的交易都會取得一個以銀行操作類型命名的標籤，例如「刷卡消費」或「轉入」，方便規則和報表使用。",
+      "tagOperationTypeOn": "已開啟操作類型標籤",
+      "tagOperationTypeOff": "已關閉操作類型標籤",
+      "tagOperationTypeFailed": "無法變更操作類型標籤"
+    },
+    "profileNotes": {
+      "title": "此銀行的 API 如何運作",
+      "show": "顯示此銀行的 API 如何運作",
+      "hide": "隱藏此銀行的 API 如何運作",
+      "severity": {
+        "warning": "警告：",
+        "info": "說明："
+      }
+    },
+    "account": {
+      "unnamed": "未命名的銀行帳戶",
+      "linkLabel": "Monize 科目",
+      "notLinked": "未關聯",
+      "noEligibleAccounts": "沒有可供關聯的、使用此貨幣的未關閉 Monize 科目。",
+      "linkFailed": "無法關聯科目",
+      "unlinked": "已取消關聯科目",
+      "unlinkFailed": "無法取消關聯科目",
+      "syncFrom": "從 {date} 開始匯入",
+      "changeCutoff": "變更開始日期",
+      "syncNow": "立即同步",
+      "syncing": "同步中...",
+      "syncFailed": "無法同步此科目",
+      "neverSynced": "尚未同步",
+      "lastSynced": "上次同步：{time}",
+      "lastSyncOk": "成功",
+      "lastSyncFailed": "失敗",
+      "bankBalance": "銀行餘額",
+      "bankBalanceAsOf": "截至 {date} 為 {amount}",
+      "balanceNotReported": "銀行未回報",
+      "balanceNotSynced": "尚未同步",
+      "monizeBalance": "Monize 餘額",
+      "difference": "差額",
+      "differenceHelp": "銀行餘額是銀行在所示日期回報的餘額。它可能包含銀行尚未入帳的交易，或在該日期之後入帳的交易，因此兩次同步之間出現小額差額是正常的。",
+      "differenceHidden": "銀行餘額的貨幣為 {bankCurrency}，而 Monize 科目的貨幣為 {monizeCurrency}，因此不顯示差額。",
+      "deletedNote": "您在 Monize 中刪除的交易不會在之後的同步中再次匯入，因此已刪除的列會保持刪除狀態。",
+      "createNew": "新增科目",
+      "suggestedName": "{type} {number}",
+      "createdLinked": "科目已建立並關聯",
+      "createdLinkFailed": "科目已建立，但無法關聯",
+      "preview": "預覽",
+      "firstSyncPreview": "首次匯入需透過交易預覽來確認。"
+    },
+    "link": {
+      "title": "關聯到 {account}",
+      "editTitle": "{account} 的開始日期",
+      "syncFromLabel": "匯入交易的起始日期",
+      "syncFromHelp": "已填入 Monize 預設選擇的日期。清空此欄位，Monize 會為您選擇。",
+      "beforeCutoff": "銀行在此日期之前入帳的交易永遠不會被匯入。",
+      "duplicateWarning": "早於科目中最新交易的日期，可能會與您已輸入的交易產生重複。",
+      "save": "關聯科目",
+      "saveEdit": "儲存",
+      "saving": "儲存中...",
+      "cancel": "取消",
+      "saved": "科目已關聯",
+      "editSaved": "開始日期已儲存",
+      "saveFailed": "無法儲存關聯",
+      "loadingDefaults": "正在讀取科目...",
+      "defaultsFailed": "無法讀取此科目中最新的一筆交易，因此 Monize 無法判斷此開始日期是否會產生重複。",
+      "newestTransaction": "此科目中最新的交易：{date}",
+      "emptyAccount": "{days, plural, other {科目為空：匯入涵蓋最近 # 天}}"
+    },
+    "sync": {
+      "summary": "{imported, plural, =0 {未匯入任何交易} other {已匯入 # 筆交易}}，{skipped, plural, =0 {無跳過} other {# 筆因已匯入而跳過}}，{refused, plural, =0 {無拒絕} other {# 筆被拒絕}}",
+      "summaryWithReasons": "{summary}。拒絕原因：{reasons}",
+      "outcomeUnknown": "同步結果尚不明確。請重新載入頁面，查看已匯入的內容。",
+      "failedAccountItem": "{account}（{message}）",
+      "allFailed": "以下科目無法同步：{accounts}",
+      "partialFailure": "{summary}。以下科目無法同步：{accounts}",
+      "reason": {
+        "missing_date": "{count, plural, other {# 筆沒有日期}}",
+        "future_date": "{count, plural, other {# 筆日期在未來}}",
+        "invalid_amount": "{count, plural, other {# 筆金額無效}}",
+        "unknown_direction": "{count, plural, other {# 筆方向未知}}",
+        "currency_mismatch": "{count, plural, other {# 筆使用其他貨幣}}",
+        "other": "{count, plural, other {# 筆因其他原因}}",
+        "missing_identity": "缺少銀行交易識別碼: {count, number}"
+      },
+      "needsPreview": "請開啟 {accounts} 的預覽並確認首次匯入",
+      "withNeedsPreview": "{message}。{needsPreview}"
+    },
+    "callback": {
+      "title": "正在連接您的銀行",
+      "subtitle": "請稍候，Monize 正在完成連線",
+      "success": "銀行已連接",
+      "successNamed": "已連接到 {bank}",
+      "bankError": "您的銀行未授予存取權限：{message}",
+      "missingState": "銀行未傳回有效的回應。請重新開始連線。",
+      "notActive": "無法完成連線",
+      "failed": "無法完成連線",
+      "autoLinked": "{count, plural, other {已將 # 個銀行帳戶關聯到號碼相同的科目。請在首次匯入前檢查。}}",
+      "autoSuggested": "{count, plural, other {# 個銀行帳戶與您的多個科目相符：請在清單中選擇科目。}}"
+    },
+    "accountType": {
+      "CACC": "活期存款",
+      "CARD": "銀行卡",
+      "SVGS": "儲蓄",
+      "LOAN": "貸款",
+      "other": "帳戶類型 {code}"
+    },
+    "mismatch": {
+      "bankCard": "銀行將此帳戶回報為銀行卡，但 {account} 的類型是{type}，不是{creditCard}。銀行卡的交易會被匯入類型不符的科目。",
+      "monizeCard": "{account} 的類型是{creditCard}，但銀行將此帳戶回報為：{bankType}。請確認這是正確的銀行帳戶。",
+      "confirm": "我已了解，仍然關聯這些科目"
+    },
+    "preview": {
+      "title": "匯入到 {account} 的預覽",
+      "description": "在您確認之前不會匯入任何內容。這裡是銀行回報的內容，以及 Monize 將對每筆交易執行的操作。",
+      "loading": "正在讀取銀行...",
+      "loadFailed": "無法預覽此科目",
+      "retry": "重試",
+      "close": "關閉",
+      "import": "{count, plural, =0 {確認：沒有需要匯入的新交易} other {匯入 # 筆交易}}",
+      "importing": "正在匯入...",
+      "importFailed": "無法匯入交易",
+      "planChanged": "自此預覽以來銀行的資料已變更，因此沒有匯入任何內容。預覽已重新讀取：請檢查後再次匯入。",
+      "monizeBalance": "Monize 目前餘額",
+      "balanceAfter": "匯入後的 Monize 餘額",
+      "bankBalance": "銀行餘額",
+      "bankBalanceAsOf": "截至 {date} 為 {amount}",
+      "bankBalanceNotReported": "銀行未回報",
+      "difference": "匯入後的差額",
+      "differenceHelp": "銀行餘額減去匯入後的 Monize 餘額。零表示兩者一致。銀行餘額可能包含銀行尚未入帳的交易，因此小額差異是正常的。",
+      "differenceHidden": "銀行餘額以 {bankCurrency} 計，而 Monize 科目以 {monizeCurrency} 計，因此不顯示差額。",
+      "filterLabel": "顯示交易",
+      "filter": {
+        "all": "全部",
+        "new": "新增",
+        "duplicate": "已匯入",
+        "refused": "已拒絕",
+        "pending": "待處理",
+        "before_cutoff": "早於開始日期",
+        "withCount": "{label} ({count})",
+        "excluded": "例外"
+      },
+      "outcome": {
+        "new": "新增",
+        "duplicate": "已匯入",
+        "refused": "已拒絕",
+        "pending": "待處理",
+        "before_cutoff": "早於開始日期",
+        "excluded": "例外"
+      },
+      "refusal": {
+        "missing_date": "無日期",
+        "future_date": "日期在未來",
+        "invalid_amount": "金額無效",
+        "unknown_direction": "方向未知",
+        "currency_mismatch": "其他貨幣",
+        "other": "已拒絕",
+        "missing_identity": "缺少銀行交易識別碼"
+      },
+      "columns": {
+        "date": "日期",
+        "payee": "收款人",
+        "category": "類別",
+        "status": "狀態",
+        "amount": "金額",
+        "select": "選取與詳細資料"
+      },
+      "noPayee": "無收款人",
+      "dateUnknown": "無日期",
+      "amountUnknown": "未知",
+      "empty": {
+        "all": "銀行未傳回此期間的交易。",
+        "filtered": "此清單中沒有交易。"
+      },
+      "selectAllNew": "選取此清單中的所有新交易",
+      "selectAllExceptions": "選取此清單中的所有例外",
+      "selectRow": "匯入 {payee}",
+      "selectException": "將 {payee} 從例外中移除",
+      "summary": "匯入 {import} 筆，略過 {skip} 筆，加入例外 {except} 筆",
+      "importNothing": "不匯入，直接確認",
+      "exceptions": {
+        "intro": "例外中的交易永遠不會被匯入。將某筆交易從例外中移除，即可讓它重新顯示為新交易。",
+        "remove": "{count, plural, =0 {從例外中移除} other {將 # 筆從例外中移除}}",
+        "removing": "正在移除...",
+        "removed": "{count, plural, other {已將 # 筆交易從例外中移除}}",
+        "removedNone": "沒有從例外中移除任何項目",
+        "removeFailed": "無法移除例外"
+      },
+      "details": {
+        "operation": {
+          "heading": "操作類型",
+          "none": "這筆交易沒有操作類型標籤。",
+          "tag": "來自銀行操作類型的標籤：{tag}"
+        }
+      },
+      "historyBatch": "歷史批次：{from} 至 {to}。",
+      "historyBatchRemaining": "歷史批次：{from} 至 {to}。 仍有更多歷史記錄。匯入此批次後，請預覽下一批次。"
+    },
+    "simplefin": {
+      "provider": "資料提供者",
+      "description": "在 <bridge>SimpleFIN Bridge</bridge> 中連接銀行，然後在此貼上一次性設定權杖。存取權限為唯讀。",
+      "openBridge": "開啟 SimpleFIN Bridge",
+      "setupToken": "設定權杖",
+      "connect": "連接 SimpleFIN",
+      "connected": "SimpleFIN 已連線。",
+      "savedDiscoveryFailed": "已連線，但帳戶探索需要處理。請重試探索，不需要新權杖。",
+      "refresh": "重新整理帳戶",
+      "failed": "無法完成要求。使用新權杖前請檢查連線狀態。",
+      "loadFailed": "無法載入 SimpleFIN 狀態。",
+      "encryptionRequired": "連接 SimpleFIN 前，請管理員設定加密。",
+      "remove": "從 Monize 移除 SimpleFIN",
+      "removeTitle": "移除所有機構的存取權限？",
+      "removeBody": "這會停用 Monize 中的所有 SimpleFIN 同步，並保留歷程記錄。請在 Bridge 中撤銷應用程式權杖以終止遠端存取。",
+      "replaceTitle": "取代 SimpleFIN 存取權限？",
+      "replaceBody": "這會取代所有機構的存取權限。現有帳戶對應會保留，變更的識別資訊需要檢查。",
+      "quota": "剩餘 {remaining} 次要求",
+      "nextEligible": "下次可用時間：{date}",
+      "stopTitle": "停止同步 {bank}？",
+      "stopBody": "保留現有對應和交易。",
+      "stop": "停止同步",
+      "stopped": "已停止同步",
+      "title": "SimpleFIN",
+      "enableBanking": "Enable Banking",
+      "errors": {
+        "unauthorized": "請使用新的設定權杖重新連線。",
+        "payment_required": "請檢查您的 SimpleFIN Bridge 訂閱。",
+        "rate_limited": "已達要求限制。請稍後再重新整理。",
+        "no_accounts": "沒有共用的帳戶。請在 Bridge 中檢查帳戶存取權限。",
+        "partial_data": "部分帳戶資料不完整。請檢查 Bridge 後再重新整理。",
+        "identity_review": "帳戶識別資訊已變更。啟用同步前請檢查對應。",
+        "invalid_response": "Bridge 傳回不支援的資料。請稍後重新整理。",
+        "unavailable": "SimpleFIN 未回應。請稍後重試。"
+      },
+      "resume": "恢復同步",
+      "lastKnownConnected": "上次成功檢查時 SimpleFIN 已連線。"
+    }
   }
 }

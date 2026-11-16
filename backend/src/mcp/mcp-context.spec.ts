@@ -1,20 +1,14 @@
+import { ConfirmRequiredError } from "./mcp-confirm";
 import {
-  confirmWrite,
+  callerKey,
   hasScope,
   requireScope,
+  resolveUserContext,
   safeToolError,
+  toAuthInfo,
   toolError,
   toolResult,
 } from "./mcp-context";
-
-function fakeServer(opts: { capabilities?: unknown; elicit?: jest.Mock }): any {
-  return {
-    server: {
-      getClientCapabilities: jest.fn().mockReturnValue(opts.capabilities),
-      elicitInput: opts.elicit ?? jest.fn(),
-    },
-  };
-}
 
 describe("mcp-context", () => {
   describe("hasScope", () => {
@@ -75,6 +69,13 @@ describe("mcp-context", () => {
   });
 
   describe("safeToolError", () => {
+    it("should pass through the message of a ConfirmRequiredError", () => {
+      const err = new ConfirmRequiredError();
+      const result = safeToolError(err);
+      expect(result.isError).toBe(true);
+      expect(result.content[0].text).toContain(err.message);
+    });
+
     it("should pass through message for a 404 NotFoundException", () => {
       const notFoundErr = {
         getStatus: () => 404,
@@ -136,29 +137,31 @@ describe("mcp-context", () => {
   });
 
   describe("toolResult", () => {
-    it("should return a success response with JSON data", () => {
+    it("returns the payload once, as structured content", () => {
+      // Not twice. Every tool declares an outputSchema, so structuredContent is
+      // what the SDK validates and what a client reads; the pretty-printed text
+      // block beside it made a model pay for the same answer a second time.
       const data = { accounts: [{ id: "a1", name: "Checking" }] };
       const result = toolResult(data);
       expect((result as any).isError).toBeUndefined();
-      expect(result.content).toHaveLength(1);
-      expect(result.content[0].type).toBe("text");
-      expect(JSON.parse(result.content[0].text)).toEqual(data);
+      expect(result.content).toEqual([]);
+      expect(result.structuredContent as any).toEqual(data);
     });
 
-    it("should pretty-print JSON with 2-space indentation", () => {
-      const result = toolResult({ key: "value" });
-      expect(result.content[0].text).toBe('{\n  "key": "value"\n}');
+    it("keeps the text block for errors, which carry no structured content", () => {
+      const result = toolError("Unknown account");
+      expect(result.content[0].text).toBe("Error: Unknown account");
+      expect((result as any).structuredContent).toBeUndefined();
+      expect(result.isError).toBe(true);
     });
 
-    it("should handle arrays", () => {
-      const result = toolResult([1, 2, 3]);
-      expect(JSON.parse(result.content[0].text)).toEqual([1, 2, 3]);
-    });
-
-    it("should handle null and primitive values", () => {
-      expect(JSON.parse(toolResult(null).content[0].text)).toBeNull();
-      expect(JSON.parse(toolResult(42).content[0].text)).toBe(42);
-      expect(JSON.parse(toolResult("hello").content[0].text)).toBe("hello");
+    it("handles arrays and primitives through structured content alone", () => {
+      expect(toolResult([1, 2, 3]).structuredContent).toEqual({
+        items: [1, 2, 3],
+      });
+      expect(toolResult(null).structuredContent).toEqual({ value: null });
+      expect(toolResult(42).structuredContent).toEqual({ value: 42 });
+      expect(toolResult("hello").structuredContent).toEqual({ value: "hello" });
     });
 
     describe("structuredContent", () => {
@@ -182,74 +185,65 @@ describe("mcp-context", () => {
     });
   });
 
-  describe("confirmWrite", () => {
-    const caps = { elicitation: { form: {} } };
+  // Identity is a property of the REQUEST: the credential the transport
+  // validated travels as the SDK's AuthInfo, and a handler reads the caller
+  // from there and from nowhere else (INV-MCP-001).
+  describe("request identity", () => {
+    const user = {
+      userId: "u1",
+      scopes: "read,write",
+      credentialId: "pat:t1",
+    };
 
-    it("returns 'accepted' when the user accepts the elicitation", async () => {
-      const elicit = jest.fn().mockResolvedValue({ action: "accept" });
-      const server = fakeServer({ capabilities: caps, elicit });
-      await expect(confirmWrite(server, "Confirm?", "req-1")).resolves.toBe(
-        "accepted",
-      );
-      expect(elicit).toHaveBeenCalledWith(
-        {
-          message: "Confirm?",
-          requestedSchema: { type: "object", properties: {} },
-        },
-        { timeout: expect.any(Number), relatedRequestId: "req-1" },
-      );
-    });
-
-    it("threads the tool call's request id so the elicitation rides its POST SSE stream", async () => {
-      const elicit = jest.fn().mockResolvedValue({ action: "accept" });
-      const server = fakeServer({ capabilities: caps, elicit });
-      await confirmWrite(server, "Confirm?", 42);
-      expect(elicit).toHaveBeenCalledWith(
-        expect.anything(),
-        expect.objectContaining({ relatedRequestId: 42 }),
-      );
-    });
-
-    it("returns 'declined' when the user declines or cancels", async () => {
-      const declineServer = fakeServer({
-        capabilities: caps,
-        elicit: jest.fn().mockResolvedValue({ action: "decline" }),
+    it("round-trips the caller through AuthInfo", () => {
+      const authInfo = toAuthInfo(user, "tok");
+      expect(authInfo).toMatchObject({
+        token: "tok",
+        clientId: "pat:t1",
+        scopes: ["read", "write"],
       });
-      await expect(
-        confirmWrite(declineServer, "Confirm?", "req-1"),
-      ).resolves.toBe("declined");
+      expect(resolveUserContext({ http: { authInfo } } as any)).toEqual(user);
+    });
 
-      const cancelServer = fakeServer({
-        capabilities: caps,
-        elicit: jest.fn().mockResolvedValue({ action: "cancel" }),
+    // An OAuth grant with no id cannot be bound to a session or to a
+    // confirmation, so the transport has nothing to serve it with.
+    it("refuses a credential that cannot be identified", () => {
+      expect(
+        toAuthInfo({ userId: "u1", scopes: "read" }, "tok"),
+      ).toBeUndefined();
+    });
+
+    it("answers undefined rather than trusting a malformed authInfo", () => {
+      expect(resolveUserContext({} as any)).toBeUndefined();
+      expect(
+        resolveUserContext({ http: { authInfo: { extra: {} } } } as any),
+      ).toBeUndefined();
+      expect(
+        resolveUserContext({
+          http: { authInfo: { extra: { userId: 7, scopes: "read" } } },
+        } as any),
+      ).toBeUndefined();
+    });
+
+    // The relay claim is a question about one connected client. A 2025-era
+    // connection answers it with its session; a 2026-07-28 request has none,
+    // so the credential is the only stable per-client fact on the wire.
+    describe("callerKey", () => {
+      const authInfo = toAuthInfo(user, "tok");
+
+      it("is the session id on a 2025-era connection", () => {
+        expect(callerKey({ sessionId: "s1", http: { authInfo } } as any)).toBe(
+          "s1",
+        );
       });
-      await expect(
-        confirmWrite(cancelServer, "Confirm?", "req-1"),
-      ).resolves.toBe("declined");
-    });
 
-    it("returns 'unsupported' without eliciting when the client lacks the capability", async () => {
-      const elicit = jest.fn();
-      const server = fakeServer({ capabilities: {}, elicit });
-      await expect(confirmWrite(server, "Confirm?", "req-1")).resolves.toBe(
-        "unsupported",
-      );
-      expect(elicit).not.toHaveBeenCalled();
-    });
+      it("is the credential id on a 2026-07-28 request", () => {
+        expect(callerKey({ http: { authInfo } } as any)).toBe("pat:t1");
+      });
 
-    it("returns 'unsupported' when capabilities are undefined", async () => {
-      const server = fakeServer({ capabilities: undefined });
-      await expect(confirmWrite(server, "Confirm?", "req-1")).resolves.toBe(
-        "unsupported",
-      );
-    });
-
-    it("returns 'declined' (never silently proceeds) when a supported dialog errors or times out", async () => {
-      const elicit = jest.fn().mockRejectedValue(new Error("timed out"));
-      const server = fakeServer({ capabilities: caps, elicit });
-      await expect(confirmWrite(server, "Confirm?", "req-1")).resolves.toBe(
-        "declined",
-      );
+      it("is undefined when neither can be proven", () => {
+        expect(callerKey({} as any)).toBeUndefined();
+      });
     });
   });
 });

@@ -53,16 +53,42 @@ export function positionCloseAsOf(
   txFallback: PricePoint[] | undefined,
   date: string,
 ): number | null {
+  return positionClosePointAsOf(stored, txFallback, date)?.close ?? null;
+}
+
+/**
+ * The same observation, with the date it was actually struck on.
+ *
+ * A caller that has to know whether a close is dated `date` itself or carried
+ * forward from earlier needs the date, and asking a second source for it would
+ * be a second merge rule. "Did this security move today" is exactly that
+ * question: a carried close moved nothing, so it is not a gain, a loss, or a
+ * trading day. `positionCloseAsOf` is this function with the date dropped.
+ */
+export function positionClosePointAsOf(
+  stored: PricePoint[] | undefined,
+  txFallback: PricePoint[] | undefined,
+  date: string,
+): PricePoint | null {
   const storedPoint =
     stored && stored.length > 0 ? pointAsOf(stored, date) : null;
   const txPoint =
     txFallback && txFallback.length > 0 ? pointAsOf(txFallback, date) : null;
 
-  if (!storedPoint) return txPoint?.close ?? null;
-  if (!txPoint) return storedPoint.close;
+  if (!storedPoint) return txPoint ?? null;
+  if (!txPoint) return storedPoint;
 
   // Equal date: the accepted store owns same-day precedence. Otherwise the
   // more recent observation stands for the date.
-  if (storedPoint.date >= txPoint.date) return storedPoint.close;
-  return txPoint.close;
+  return storedPoint.date >= txPoint.date ? storedPoint : txPoint;
 }
+
+/**
+ * The scale `security_prices.close_price` is stored at, `NUMERIC(24, 10)`.
+ *
+ * A price is not money: rounding a close, or the difference of two closes, at
+ * money's 4dp would quietly discard the precision the column holds for a
+ * low-priced instrument. Used to clean float noise off a subtraction of two
+ * values that are each exact at this scale, never to re-round a stored close.
+ */
+export const SECURITY_CLOSE_DECIMALS = 10;

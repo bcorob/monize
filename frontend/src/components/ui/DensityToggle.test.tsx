@@ -1,16 +1,11 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@/test/render';
-import { NextIntlClientProvider } from 'next-intl';
 import { DensityToggle, DensityToggleBar } from './DensityToggle';
 import { useDensityStore } from '@/store/densityStore';
 import commonNs from '@/i18n/messages/en/common.json';
 
 function renderToggle(ui: React.ReactElement) {
-  return render(
-    <NextIntlClientProvider locale="en" messages={{ common: commonNs }}>
-      {ui}
-    </NextIntlClientProvider>,
-  );
+  return render(ui);
 }
 
 describe('DensityToggle', () => {

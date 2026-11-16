@@ -27,7 +27,7 @@ import { Logger } from "@nestjs/common";
  *
  * The backend's pooled runtime connections never take session advisory locks --
  * the RLS design forbids cross-transaction session state there
- * (docs/future-plans/row-level-security.md). These scripts are the deliberate
+ * (docs/specs/row-level-security.md). These scripts are the deliberate
  * exception: each holds one dedicated `pg.Client` connection for its whole run
  * and then closes it. That shape requires the startup scripts to reach
  * Postgres directly; routed through a transaction-mode pooler (pgBouncer), the
@@ -95,6 +95,7 @@ export async function acquireDbLifecycleLock(
           "another session holds it and did not finish. Inspect pg_locks " +
           `(locktype = 'advisory', objid = ${DB_LIFECYCLE_LOCK_KEY}) to find ` +
           "the holder; startup will retry on the next restart.",
+        { cause: error },
       );
     }
     throw error;

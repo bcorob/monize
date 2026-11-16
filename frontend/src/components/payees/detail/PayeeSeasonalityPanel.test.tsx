@@ -7,7 +7,7 @@ import type { MonthlyTotal } from '@/types/transaction';
 
 const strategy: DisplayCurrencyStrategy = {
   displayCurrency: 'CAD',
-  toDisplay: (amount) => amount,
+  converted: false,
 };
 
 function month(key: string, total: number): MonthlyTotal {
@@ -71,7 +71,7 @@ describe('PayeeSeasonalityPanel', () => {
       month('2025-12', -900),
       month('2026-12', -900),
     ]);
-    const bars = container.querySelectorAll('li > div > div[style]');
+    const bars = container.querySelectorAll('li > button > div > div[style]');
     expect(bars.length).toBe(12);
     for (const bar of bars) {
       expect(bar.getAttribute('style')).toContain('var(--chart-primary)');
@@ -86,7 +86,7 @@ describe('PayeeSeasonalityPanel', () => {
   it('keeps inflow months green so the sign survives', () => {
     // A payee that refunds more than it charges in July.
     const { container } = renderPanel([...evenTwoYears(), month('2025-07', 900), month('2026-07', 900)]);
-    const bars = Array.from(container.querySelectorAll('li > div > div[style]'));
+    const bars = Array.from(container.querySelectorAll('li > button > div > div[style]'));
     expect(bars[6].getAttribute('style')).toContain('var(--chart-income)');
     expect(bars[0].getAttribute('style')).toContain('var(--chart-primary)');
   });
@@ -97,7 +97,7 @@ describe('PayeeSeasonalityPanel', () => {
       month('2025-12', -900),
       month('2026-12', -900),
     ]);
-    const bars = Array.from(container.querySelectorAll('li > div > div[style]'));
+    const bars = Array.from(container.querySelectorAll('li > button > div > div[style]'));
     // December is the peak: full strength, every other month washed back.
     expect(bars[11].getAttribute('style')).toContain('opacity: 1');
     expect(bars[0].getAttribute('style')).toContain('opacity: 0.6');

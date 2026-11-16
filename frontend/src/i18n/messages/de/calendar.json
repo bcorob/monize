@@ -1,0 +1,120 @@
+{
+  "view": {
+    "label": "Ansicht",
+    "table": "Tabelle",
+    "calendar": "Kalender"
+  },
+  "grid": {
+    "label": "Monat"
+  },
+  "toolbar": {
+    "layers": "Ebenen"
+  },
+  "layers": {
+    "transactions": "Transaktionen",
+    "balances": "Salden",
+    "values": "Werte",
+    "dailyChange": "Tagesveränderung"
+  },
+  "legend": {
+    "label": "Legende",
+    "scheduled": "Geplant"
+  },
+  "chip": {
+    "noPayee": "Kein Zahlungsempfänger",
+    "overdue": "Überfällig",
+    "scheduled": "Geplant",
+    "noSymbol": "Kein Symbol"
+  },
+  "day": {
+    "itemCount": "{count, plural, one {# Eintrag} other {# Einträge}}",
+    "moreChips": "+{count} weitere",
+    "newTransaction": "Neue Transaktion an diesem Tag",
+    "noItems": "Nichts an diesem Tag.",
+    "scheduledHint": "Geplant. Zum Ändern Rechnungen & Einzahlungen öffnen.",
+    "newInvestmentTransaction": "Neue Wertpapiertransaktion an diesem Tag"
+  },
+  "banner": {
+    "title": "Einige Zahlen werden nicht angezeigt",
+    "rowCap": "Dieser Monat enthält {count} Transaktionen, mehr als die {limit}, die ein Kalender anzeigen kann. Grenzen Sie die Filter ein, um sie zu sehen.",
+    "scheduledUnavailable": "Geplante Eintraege konnten fuer diesen Monat nicht geladen werden. Die angezeigten Buchungen sind vollstaendig, die geplanten fehlen.",
+    "scheduledTruncated": "Einige geplante Eintraege werden so weit im Voraus nicht angezeigt. Wechseln Sie naeher zu heute, um alle zu sehen.",
+    "balancesScopeEmpty": "Es sind keine Konten ausgewählt, daher gibt es keinen Saldo anzuzeigen. Wählen Sie ein Konto in den Filtern.",
+    "balancesMissingRates": "Für {pairs} ist an einigen Tagen dieses Monats kein Wechselkurs verfügbar, daher werden diese Summen nicht angezeigt. Öffnen Sie Währungen und aktualisieren Sie die Kurse.",
+    "balancesForecastGaps": "Der prognostizierte Saldo wird zurückgehalten, weil diese geplanten Einträge noch nicht bewertet werden können: {schedules}.",
+    "balancesForecastWithheld": "Der prognostizierte Saldo wird zurückgehalten: Mindestens ein geplanter Eintrag kann noch nicht bewertet werden, und der Grund wurde nicht gemeldet.",
+    "balancesUnforecastable": "{count, plural, one {# ausgewähltes Konto hat keine eigene Prognose, daher werden prognostizierte Summen zurückgehalten.} other {# ausgewählte Konten haben keine eigene Prognose, daher werden prognostizierte Summen zurückgehalten.}}",
+    "valuesUnpriced": "Für {securities} ist an einigen Tagen dieses Monats kein Kurs verfügbar, daher werden diese Werte nicht angezeigt. Fügen Sie im Kursverlauf des Wertpapiers einen Kurs hinzu oder aktualisieren Sie die Kurse.",
+    "valuesMissingRates": "Für {pairs} ist an einigen Tagen dieses Monats kein Wechselkurs verfügbar, daher werden diese Werte nicht angezeigt. Öffnen Sie Währungen und aktualisieren Sie die Kurse.",
+    "notesUnavailable": "Ihre Notizen konnten für diesen Monat nicht geladen werden. Bereits geschriebene Notizen sind weiterhin gespeichert."
+  },
+  "errors": {
+    "monthFailed": "Dieser Monat konnte nicht geladen werden.",
+    "balancesFailed": "Salden konnten für diesen Monat nicht geladen werden.",
+    "valuesFailed": "Portfoliowerte konnten für diesen Monat nicht geladen werden.",
+    "movementsFailed": "Tagesveränderungen konnten für diesen Monat nicht geladen werden.",
+    "movementDetailFailed": "Die Aufschlüsselung dieses Tages konnte nicht geladen werden."
+  },
+  "balance": {
+    "actualTitle": "Saldo am Tagesende",
+    "projectedTitle": "Prognostizierter Saldo",
+    "projected": "Prognostiziert",
+    "projectedHint": "Prognostiziert aus dem Saldo am Ende des heutigen Tages und allen bis zu diesem Tag fälligen geplanten Einträgen.",
+    "projectedFromItems": "Prognostiziert aus dem Saldo am Ende des heutigen Tages und allen bis zu diesem Tag fälligen geplanten Einträgen, einschließlich der unten aufgeführten.",
+    "partial": "Teilweise: {amount} des Bereichs konnte ermittelt werden, der Rest nicht, daher wird keine Summe angezeigt.",
+    "missingRates": "Kein Wechselkurs für {pairs} an dem Tag, auf den sich dieser Betrag bezieht. Öffnen Sie Währungen und aktualisieren Sie die Kurse.",
+    "unforecastable": "{count, plural, one {# ausgewähltes Konto hat keine eigene Prognose, daher wird die prognostizierte Summe zurückgehalten.} other {# ausgewählte Konten haben keine eigene Prognose, daher wird die prognostizierte Summe zurückgehalten.}}"
+  },
+  "value": {
+    "title": "Portfoliowert",
+    "unpriced": "Für {securities} ist an diesem Tag kein Kurs verfügbar, daher wird der Wert nicht angezeigt. Fügen Sie im Kursverlauf des Wertpapiers einen Kurs hinzu oder aktualisieren Sie die Kurse.",
+    "missingRates": "Kein Wechselkurs für {pairs} an diesem Tag, daher wird der Wert nicht angezeigt. Öffnen Sie Währungen und aktualisieren Sie die Kurse."
+  },
+  "change": {
+    "openDetail": "Anzeigen, was sich an diesem Tag bewegt hat",
+    "detailTitle": "Bewegungen am {date}",
+    "headline": "Marktbewegung",
+    "headlineValue": "{amount} ({percent})",
+    "gains": "Gewinne",
+    "losses": "Verluste",
+    "unchanged": "{count, plural, one {# Wertpapier schloss unverändert.} other {# Wertpapiere schlossen unverändert.}}",
+    "remainder": "Bargeld, Ausschüttungen und Transaktionen",
+    "row": "{quantity} Anteile, {from} auf {to} {currency}",
+    "reasons": {
+      "notTradingDay": "An diesem Tag wurde kein gehaltenes Wertpapier bewertet, es gab also keine Handelssitzung zu melden.",
+      "unpricedHolding": "Eine Position hatte an diesem oder am vorherigen Tag keinen Kurs, daher ist die Bewegung unbekannt.",
+      "missingRate": "Ein Wechselkurs fehlte, daher konnte die Bewegung nicht umgerechnet werden.",
+      "flowIncomplete": "Eine Ein- oder Auszahlung an diesem Tag konnte nicht umgerechnet werden, daher lässt sich die Bewegung nicht davon trennen.",
+      "cashIncomplete": "Ein Girokonto hat für diesen Tag keinen Saldo gemeldet, daher ist der Tageswert unvollständig und die Bewegung unbekannt.",
+      "noPriorValue": "Es gibt keinen früheren Wert, an dem dieser Tag gemessen werden kann.",
+      "zeroBaseline": "Das Portfolio war am Vortag leer, daher lässt sich kein Prozentsatz berechnen."
+    }
+  },
+  "notes": {
+    "title": "Notiz",
+    "add": "Notiz hinzufügen",
+    "saveFailed": "Die Notiz konnte nicht gespeichert werden. Versuchen Sie es erneut.",
+    "deleteFailed": "Die Notiz konnte nicht gelöscht werden. Versuchen Sie es erneut.",
+    "deleteTitle": "Diese Notiz löschen?",
+    "deleteMessage": "Die Notiz an diesem Tag wird entfernt. Dies kann nicht rückgängig gemacht werden.",
+    "discardTitle": "Diese Notiz verwerfen?",
+    "discardMessage": "Die Notiz, die Sie schreiben, wurde nicht gespeichert. Wenn Sie diesen Tag verlassen, geht sie verloren.",
+    "discardConfirm": "Verwerfen",
+    "startDate": "Erster Tag",
+    "endDate": "Letzter Tag",
+    "spanRange": "{start} bis {end}",
+    "spanCount": "{count, plural, one {# Tag} other {# Tage}}",
+    "spanBackwards": "Der letzte Tag kann nicht vor dem ersten liegen.",
+    "spanTooLong": "Eine Notiz kann höchstens {days} Tage umfassen.",
+    "spanMissesDay": "Die gewählten Tage enthalten nicht den Tag, an dem Sie diese Notiz schreiben.",
+    "deleteSpanMessage": "{count, plural, one {Die Notiz an diesem Tag wird entfernt. Dies kann nicht rückgängig gemacht werden.} other {Diese Notiz umfasst # Tage, und alle werden gelöscht. Dies kann nicht rückgängig gemacht werden.}}"
+  },
+  "monthPicker": {
+    "title": "Zu einem anderen Monat springen",
+    "typeLabel": "Monat oder Jahr eingeben",
+    "placeholder": "z. B. Mär 1998, 1998-03, 3/1998",
+    "unreadable": "Das ist kein Monat, den wir lesen können. Versuchen Sie ein Jahr, einen Monatsnamen oder 1998-03.",
+    "previousYear": "Vorheriges Jahr",
+    "nextYear": "Nächstes Jahr"
+  }
+}

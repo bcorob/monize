@@ -28,6 +28,13 @@ vi.mock('@/lib/tours-api', () => ({
   },
 }));
 
+let mockPathname = '/dashboard';
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn() }),
+  usePathname: () => mockPathname,
+  useSearchParams: () => new URLSearchParams(),
+}));
+
 const mockApi = vi.mocked(whatsNewApi);
 
 const NOTES: ReleaseNotes = {
@@ -65,6 +72,7 @@ function refreshedSession(announced = '1.12.1') {
 describe('WhatsNewHost', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockPathname = '/dashboard';
     window.sessionStorage.clear();
     window.localStorage.clear();
     useWhatsNewStore.setState({
@@ -346,7 +354,9 @@ describe('WhatsNewHost', () => {
 
     // The tour needs the page to itself, so the dialog gets out of the way.
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Show me' }));
+      fireEvent.click(screen.getByRole('button', {
+          name: 'New here? Take the introduction tour',
+        }));
     });
     expect(useTourStore.getState().active).not.toBeNull();
     expect(useWhatsNewStore.getState().isOpen).toBe(false);
@@ -372,7 +382,9 @@ describe('WhatsNewHost', () => {
       expect(screen.getByText('Intro paragraph.')).toBeInTheDocument(),
     );
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Show me' }));
+      fireEvent.click(screen.getByRole('button', {
+          name: 'New here? Take the introduction tour',
+        }));
     });
 
     // Escape, End tour, and a browser Back out of the tour all land here. The
@@ -404,5 +416,73 @@ describe('WhatsNewHost', () => {
       useTourStore.getState().endTour('dismissed');
     });
     expect(useWhatsNewStore.getState().isOpen).toBe(false);
+  });
+
+  describe('on a public route', () => {
+    it('does not auto-open over the sign-in form, and opens once the user reaches the app', async () => {
+      // A session restored on /login: the version is new to this browser and
+      // the backend says the user is due it.
+      mockPathname = '/login';
+      refreshedSession('1.16.0');
+      mockApi.getWhatsNew.mockResolvedValue({
+        currentVersion: '1.17.0',
+        autoShow: true,
+        notes: NOTES,
+      });
+
+      let rerender: (ui: React.ReactElement) => void = () => {};
+      await act(async () => {
+        ({ rerender } = render(<WhatsNewHost />));
+      });
+      await waitFor(() => expect(mockApi.getWhatsNew).toHaveBeenCalledTimes(1));
+      expect(useWhatsNewStore.getState().isOpen).toBe(false);
+
+      // The trigger was left armed, not spent on the page that could not use it.
+      mockPathname = '/dashboard';
+      await act(async () => {
+        rerender(<WhatsNewHost />);
+      });
+      await waitFor(() => expect(useWhatsNewStore.getState().isOpen).toBe(true));
+    });
+
+    it('keeps the login trigger for the page the sign-in lands on', async () => {
+      mockPathname = '/login';
+      signedInViaLogin();
+      mockApi.getWhatsNew.mockResolvedValue({
+        currentVersion: '1.12.1',
+        autoShow: true,
+        notes: NOTES,
+      });
+
+      let rerender: (ui: React.ReactElement) => void = () => {};
+      await act(async () => {
+        ({ rerender } = render(<WhatsNewHost />));
+      });
+      await waitFor(() => expect(mockApi.getWhatsNew).toHaveBeenCalledTimes(1));
+      expect(useWhatsNewStore.getState().isOpen).toBe(false);
+
+      mockPathname = '/dashboard';
+      await act(async () => {
+        rerender(<WhatsNewHost />);
+      });
+      await waitFor(() => expect(useWhatsNewStore.getState().isOpen).toBe(true));
+    });
+
+    it('opens manually in its signed-out variant, even with a session', async () => {
+      mockPathname = '/login';
+      refreshedSession();
+      await renderHost();
+      await waitFor(() => expect(mockApi.getWhatsNew).toHaveBeenCalled());
+
+      act(() => {
+        useWhatsNewStore.getState().open();
+      });
+      await waitFor(() =>
+        expect(screen.getByText('Intro paragraph.')).toBeInTheDocument(),
+      );
+      expect(
+        screen.queryByRole('button', { name: "Don't show this again" }),
+      ).not.toBeInTheDocument();
+    });
   });
 });

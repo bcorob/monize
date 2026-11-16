@@ -34,19 +34,22 @@
   },
   "page": {
     "title": "İşlem İçe Aktar",
-    "subtitle": "QIF, OFX/QFX veya CSV dosyalarından işlem içe aktarın ya da bütün bir Microsoft Money (.mny) dosyasını aktarın"
+    "subtitle": "QIF/QMTF, OFX/QFX veya CSV dosyalarından işlem içe aktarın ya da bütün bir Microsoft Money (.mny) dosyasını aktarın"
   },
   "upload": {
     "heading": "İşlem Dosyaları Yükle",
-    "instructions": "İçe aktarmak için bir veya daha fazla dosya seçin. Desteklenen biçimler: QIF, OFX/QFX, CSV ve Microsoft Money (.mny).\nToplu içe aktarma için aynı türden birden fazla dosya seçebilirsiniz. Microsoft Money dosyalarını tek tek içe aktarın — bir .mny dosyası bütün bir profili içerir.",
+    "instructions": "İçe aktarmak için bir veya daha fazla dosya seçin. Desteklenen biçimler: QIF/QMTF, OFX/QFX, CSV ve Microsoft Money (.mny).\nToplu içe aktarma için aynı türden birden fazla dosya seçebilirsiniz. Microsoft Money dosyalarını tek tek içe aktarın — bir .mny dosyası bütün bir profili içerir.",
     "importingTo": "İçe aktarılıyor:",
     "clickToSelect": "Dosya(ları) seçmek için tıklayın",
+    "orDragAndDrop": "veya buraya sürükleyip bırakın",
+    "dropToImport": "İçe aktarmak için bırakın",
+    "unsupportedDrop": "Bu dosyalar içe aktarılamaz: {names}. QIF/QMTF, OFX, QFX, CSV veya Microsoft Money (.mny) dosyaları kullanın.",
     "processing": "İşleniyor...",
-    "acceptedFormats": "QIF, OFX, QFX, CSV veya Microsoft Money (.mny)",
+    "acceptedFormats": "QIF/QMTF, OFX, QFX, CSV veya Microsoft Money (.mny)",
     "mnyFailedHeading": "Bu Microsoft Money dosyası açılamadı",
-    "wikiNotice": {
+    "docsNotice": {
       "title": "İçe aktarmadan önce",
-      "body": "Herhangi bir şeyi içe aktarmadan önce wiki'deki <money>Importing from Microsoft Money</money> veya <quicken>Importing from Quicken</quicken> bölümünü okuyun."
+      "body": "Herhangi bir şeyi içe aktarmadan önce belgelerdeki <money>Importing from Microsoft Money</money> veya <quicken>Importing from Quicken</quicken> bölümünü okuyun. OFX/QFX ve QIF dosyalarının her birinin kendine özgü tuhaflıkları vardır — bakınız <ofx>Importing OFX/QFX Files</ofx> ve <qif>Importing Quicken QIF Files</qif>."
     }
   },
   "selectAccount": {
@@ -78,23 +81,25 @@
     "heading": "CSV Sütun Eşleştirmesi",
     "description": "CSV sütunlarınızı işlem alanlarıyla eşleştirin. Aşağıdaki verileri önizleyin ve eşleştirmeyi yapılandırın.",
     "firstRowIsHeader": "İlk satır başlıktır",
-    "delimiterLabel": "Sınırlayıcı:",
-    "dateFormatLabel": "Tarih biçimi:",
+    "delimiterLabel": "Sınırlayıcı",
+    "dateFormatLabel": "Tarih biçimi",
     "customOption": "Özel...",
     "customPlaceholder": "ör. GG.AA.YYYY",
     "dataPreview": "Veri Önizlemesi",
     "columnMappingTitle": "Sütun Eşleştirmesi",
-    "dateField": "Tarih *",
+    "columnMappingHelp": "Her CSV sütununu bir işlem alanına eşleyin. Tarih, Tutar türü ve Tutar ya da Borç/Alacak alanlarından biri zorunludur; diğerleri isteğe bağlıdır.",
+    "dateField": "Tarih",
     "amountTypeField": "Miktar türü",
     "singleAmountOption": "Tek miktar sütunu",
     "splitAmountOption": "Ayrı borç/alacak",
-    "amountField": "Miktar *",
+    "amountField": "Miktar",
     "signField": "İşaret",
+    "signFieldHelp": "Tutarın işareti şu şekilde okunur: \"Olduğu gibi\" pozitif bir sayıyı yatırma olarak değerlendirir, \"Tersine çevir\" onu çekim olarak değerlendirir (ücretlerin pozitif göründüğü kredi kartı ekstrelerinde kullanın) ve bir işlem türü sütunu, işareti değil kendi değerlerini kullanarak yönü belirler.",
     "signNormal": "Olduğu gibi (pozitif = mevduat)",
     "signReverse": "Ters (pozitif = çekim)",
     "signTypeColumn": "İşlem türü sütununu kullan",
-    "debitField": "Borç *",
-    "creditField": "Alacak *",
+    "debitField": "Borç",
+    "creditField": "Alacak",
     "typeColumnTitle": "İşlem türü sütunu",
     "typeColumnDescription": "Her satır için gelir, gider veya transfer belirten sütunu seçin.",
     "valuesFound": "Bulunan değerler: {values}",
@@ -137,8 +142,8 @@
     "kindBanking": "Bankacılık işlemleri",
     "kindInvestment": "Yatırım işlemleri",
     "investmentModeHint": "Satırlar eylem sütununa göre sınıflandırılır. Eşleşmeyen eylem değerleri, bağlı nakit hesabına nakit yatırma veya nakit çekme olarak içe aktarılır.",
-    "actionField": "Eylem *",
-    "securityField": "Menkul kıymet (sembol veya ad) *",
+    "actionField": "Eylem",
+    "securityField": "Menkul kıymet (sembol veya ad)",
     "quantityField": "Adet",
     "priceField": "Fiyat",
     "commissionField": "Komisyon",
@@ -278,6 +283,15 @@
       "missingSplitRatio": "Oranı olmayan bölünme"
     },
     "rejectedGoBack": "Sütunları veya eylem anahtar kelimelerini değiştirmek için sütun eşleştirme adımına geri dönün.",
+    "unreadableDatesNotice": "{count, plural, other {# satırın}} tarihi {format} olarak okunamıyor ve içe aktarılmayacak:",
+    "unreadableDateRow": "Satır {line}: \"{rawDate}\"",
+    "missingDateRow": "Satır {line}: tarih yok",
+    "unreadableDatesMore": "...ve {count} tane daha",
+    "unreadableDatesGoBack": "Dosya tarihleri başka bir sırayla yazıyorsa sütun eşleştirme adımına geri dönün ve dosyanın kullandığı tarih biçimini seçin.",
+    "unreadableAmountsNotice": "{count, plural, other {# satırın}} tutarı okunamıyor ve içe aktarılmayacak:",
+    "unreadableAmountRow": "Satır {line}: \"{rawAmount}\"",
+    "unreadableAmountsMore": "...ve {count} tane daha",
+    "unreadableAmountsGoBack": "Tutar sütunlarının doğru eşlendiğini kontrol edin ya da bu satırları dosyada düzeltip yeniden içe aktarın.",
     "importButton": "İşlemleri İçe Aktar"
   },
   "complete": {
@@ -287,7 +301,7 @@
     "totalImported": "Toplam içe aktarılan:",
     "totalImportedSuffix": "işlem",
     "totalSkipped": "Toplam atlanan:",
-    "totalSkippedSuffix": "tekrar eden transfer",
+    "totalSkippedSuffix": "işlem",
     "totalErrors": "Toplam hata:",
     "categoriesCreated": "Oluşturulan kategoriler:",
     "accountsCreated": "Oluşturulan hesaplar:",
@@ -299,17 +313,36 @@
     "imported": "İçe aktarılan:",
     "importedSuffix": "işlem",
     "skipped": "Atlanan:",
-    "skippedSuffix": "tekrar eden transfer",
+    "skippedSuffix": "işlem",
     "errors": "Hatalar:",
     "errorsLabel": "Hatalar:",
     "andMoreErrors": "...ve {count} hata daha",
+    "skippedRowsHeading": "Atlanan satırlar:",
+    "skippedRow": "{date}: {amount}, {payee} ({reason})",
+    "skippedRowNoPayee": "{date}: {amount} ({reason})",
+    "skipReasonAlreadyImported": "zaten içe aktarıldı",
+    "skipReasonDuplicateTransfer": "transfer zaten kayıtlı",
+    "skipReasonUnreadableDate": "tarih okunamadı",
+    "skipReasonNoDate": "tarih yok",
+    "skipReasonUnreadableAmount": "tutar okunamadı",
+    "skippedRowRawAmount": "\"{rawAmount}\"",
+    "skipReasonMissingSecurity": "menkul kıymet eksik",
+    "skipReasonMissingQuantity": "adet eksik",
+    "skipReasonMissingAmount": "tutar eksik",
+    "skipReasonMissingProceeds": "fiyatı veya satış hasılatı olmayan satış",
+    "skipReasonMissingSplitRatio": "oranı olmayan bölünme",
+    "skippedRowLineDate": "Satır {line}, \"{rawDate}\"",
+    "skippedRowLine": "Satır {line}",
+    "skippedRowLineAt": "Satır {line}, {date}",
+    "andMoreSkipped": "...ve {count} atlanan satır daha",
     "loanSetupHeading": "Yinelenen Ödemeleri Ayarla",
     "loanSetupDescription": "Aşağıdaki kredi/ipotek hesapları zamanlanmış ödemeler olmadan içe aktarıldı. Kredi ilerlemenizi takip etmeye devam etmek için yinelenen ödemeleri ayarlayın.",
     "setUpPayments": "Ödemeleri Ayarla",
     "scheduledPaymentsConfigured": "{count} hesap için zamanlanmış ödemeler yapılandırıldı.",
     "viewInvestments": "Yatırımları Görüntüle",
     "viewTransactions": "İşlemleri Görüntüle",
-    "importMoreFiles": "Daha Fazla Dosya İçe Aktar"
+    "importMoreFiles": "Daha Fazla Dosya İçe Aktar",
+    "bondRowsWithoutSeries": "{count, plural, one {# tahvil alımı seri olmadan içe aktarıldı. Serisini menkul kıymetin tahvil lotlarında seçin.} other {# tahvil alımı seri olmadan içe aktarıldı. Serilerini menkul kıymetin tahvil lotlarında seçin.}}"
   },
   "multiAccountReview": {
     "heading": "Çok Hesaplı QIF İçe Aktarma",
@@ -327,7 +360,10 @@
     "securitiesNotice": "Bu dosya, içe aktarılmadan önce eşleştirilmesi gereken {count} menkul kıymet içeriyor.",
     "nextMapSecurities": "Sonraki: Menkul Kıymetleri Eşleştir",
     "importAll": "Tümünü İçe Aktar",
-    "transactionCount": "{count} işlem"
+    "transactionCount": "{count} işlem",
+    "chooseAccountType": "Bir tür seçin",
+    "accountTypeFor": "{name} için hesap türü",
+    "accountTypesNeeded": "Dosya {count, plural, other {# hesabın}} türünü belirtmiyor. İçe aktarmadan önce her biri için bir tür seçin."
   },
   "navigation": {
     "back": "Geri",
@@ -344,6 +380,7 @@
     "heading": "Microsoft Money dosyanızı gözden geçirin",
     "fileSummary": "{filename} -- {era}, temel para birimi {currency}. Aşağıdaki bakiyeler dosyanın kendisinden hesaplanır; böylece içe aktarmadan önce Money ile karşılaştırabilirsiniz.",
     "era": {
+      "money99": "Money 97-99 biçimi",
       "money2001": "Money 2001 biçimi",
       "money2002": "Money 2002 biçimi",
       "moneyPlus": "Money Plus / Sunset biçimi",
@@ -355,6 +392,7 @@
       "transfersLinked": "{count} transfer bağlandı",
       "payees": "Alıcılar",
       "categories": "Kategoriler",
+      "tags": "Sınıflandırmalardan etiketler",
       "accounts": "Hesaplar",
       "securities": "Menkul kıymetler",
       "investments": "Yatırım işlemleri",
@@ -395,7 +433,7 @@
       "importPrices": "Fiyat geçmişini içe aktar",
       "importPricesHint": "Money'nin her menkul kıymetin gün gün ne ettiğine dair kendi kaydı. Güncel kotasyonlarla başlamayı tercih ediyorsanız bunu kapatın.",
       "importExchangeRates": "Döviz kurlarını içe aktar",
-      "importExchangeRatesHint": "Dosyanızdaki para birimleri arasındaki geçmiş kurlar; böylece eski yabancı para işlemleri Money'nin çevirdiği gibi çevrilir.",
+      "importExchangeRatesHint": "Dosyanızdaki para birimleri arasındaki geçmiş kurlar; yalnızca Monize'de kuru olmayan tarihler için kullanılır. Kayıtlı kurlar asla değiştirilmez.",
       "wipeExistingData": "Sıfırdan başla: önce mevcut Monize verilerimi kaldır",
       "wipeExistingDataHint": "İçe aktarmadan önce Ayarlar'daki Verilerimi Sil işleminin aynısını çalıştırır. Onaylamanız istenir. Money dosyasını mevcut verilerinize eklemek için kapalı bırakın."
     },
@@ -424,7 +462,7 @@
     }
   },
   "mnyWipe": {
-    "heading": "Önce mevcut verileriniz kaldırılsın mı?",
+    "heading": "Mevcut Verileri Kaldır",
     "body": "Bu, içe aktarma başlamadan önce Ayarlar -> Tehlikeli Bölge'deki Verilerimi Sil işleminin aynısını çalıştırır. Şunları kaldırır:",
     "removes": {
       "transactions": "Her işlem ve bölme",
@@ -434,8 +472,8 @@
       "budgets": "Her bütçe, özel rapor, etiket ve içe aktarma eşlemesi"
     },
     "irreversible": "Bu geri alınamaz. İçe aktarma sonrasında başarısız olursa kaldırılan veriler geri gelmez.",
-    "typeToConfirm": "Onaylamak için {word} yazın:",
-    "passwordLabel": "Parolanızı girin:",
+    "typeToConfirm": "Onaylamak için {word} yazın",
+    "passwordLabel": "Parola",
     "oidcNote": "Kimlik sağlayıcınız bu oturumu zaten doğruladı, bu yüzden parola gerekmiyor.",
     "confirm": "Verilerimi sil ve içe aktar"
   },
@@ -455,7 +493,8 @@
     },
     "failedHeading": "İçe aktarma tamamlanmadı",
     "retry": "Yeniden dene",
-    "startOver": "Baştan başla"
+    "startOver": "Baştan başla",
+    "learnMore": "Daha fazla bilgi"
   },
   "mnyComplete": {
     "heading": "İçe aktarma tamamlandı",
@@ -469,6 +508,7 @@
       "splits": "Bölme satırları",
       "payees": "Alıcılar",
       "categories": "Kategoriler",
+      "taggedRows": "Sınıflandırmalardan etiketlenen satırlar",
       "securities": "Menkul kıymetler",
       "investments": "Yatırım işlemleri",
       "prices": "Fiyatlar",
@@ -492,7 +532,8 @@
     },
     "warningsHeading": "Bu içe aktarmayla ilgili notlar",
     "downloadReport": "Raporu indir",
-    "done": "Bitti"
+    "done": "Bitti",
+    "bondRowsWithoutSeries": "{count, plural, one {# tahvil alımı seri olmadan içe aktarıldı. Serisini menkul kıymetin tahvil lotlarında seçin.} other {# tahvil alımı seri olmadan içe aktarıldı. Serilerini menkul kıymetin tahvil lotlarında seçin.}}"
   },
   "mnyWarnings": {
     "missingTable": "Bu Money sürümünde, içe aktarmanın kullandığı {count, plural, other {# tablo}} yok.",
@@ -503,6 +544,7 @@
     "categoryFlattened": "{count, plural, other {# kategori}} iki düzeyden daha derindi ve üst kategorisine düzleştirildi.",
     "categoryTypeInferred": "{count, plural, other {# kategoride}} Money'nin gelir işareti eksikti; gelir mi gider mi olduğu kategori ağacından çıkarıldı.",
     "degeneratePayeeSkipped": "Money'nin içeride tuttuğu {count, plural, other {# yer tutucu alıcı}} atlandı.",
+    "unknownClassificationItem": "{count, plural, one {# işlem, dosyada tanımlı olmayan bir sınıflandırma öğesine} other {# işlem, dosyada tanımlı olmayan sınıflandırma öğelerine}} atıfta bulundu ve bu etiket olmadan içe aktarıldı.",
     "unusableTransaction": "{count, plural, other {# işlemin}} hesabı ya da kullanılabilir tarihi yoktu ve atlandı.",
     "orphanedTransferSide": "{count, plural, other {# transferin}} dosyada karşı tarafı yoktu ve atlandı.",
     "orphanedSplit": "{count, plural, other {# bölme satırının}} üst işlemi yoktu ve atlandı.",
@@ -512,6 +554,7 @@
     "duplicateSecuritySymbol": "{count, plural, other {# menkul kıymet}} sembolünü bir başkasıyla paylaşıyordu; ayrı kalsınlar diye sonrakiler yeniden adlandırıldı.",
     "generatedSecuritySymbol": "{count, plural, other {# menkul kıymetin}} Money'de sembolü yok; bu yüzden bir yer tutucu üretildi ve fiyat güncellemeleri kapalı bırakıldı.",
     "unknownInvestmentAction": "{count, plural, other {# yatırım işlemi}} Monize'nin tanımadığı bir eylem kullandı ve atlandı.",
+    "stockOptionNotImported": "{count, plural, other {# çalışan hisse senedi opsiyonu olayı}} (tahsis, hak kazanma ve sona erme) nakit ya da hisse hareket ettirmediği için içe aktarılmadı.",
     "unconfirmedInvestmentAction": "{count, plural, other {# yatırım işlemi}} anlamı belgelenmiş değil çıkarsanmış bir Money eylemi kullandı; bunları Money ile karşılaştırın.",
     "missingInvestmentDetail": "{count, plural, other {# yatırım işleminin}} dosyada hisse ayrıntısı yoktu ve yalnızca nakit tutarıyla içe aktarıldı.",
     "investmentAccountMismatch": "{count, plural, other {# yatırım işlemi}} yatırım hesabı olmayan bir hesaptaydı ve atlandı.",
@@ -521,6 +564,9 @@
     "unusableBill": "{count, plural, other {# planlanmış faturanın}} hesabı, kullanılabilir tarihi veya tanınan bir yinelenmesi yoktu ve atlandı.",
     "billFrequencyApproximated": "{count, plural, other {# planlanmış fatura}} Monize'ın tam olarak ifade edemediği bir yineleme aralığı kullanıyor; en yakın daha kısa aralık kullanıldı.",
     "loanInterestCategoryUnclear": "{count, plural, other {# kredi ödemesi}} ana para dışında birden fazla kategori içeriyordu, bu yüzden kredinin faiz kategorisi ayarlanmadı. Ödemenin emanet (escrow) içerip içermediğini kontrol edin ve içe aktarmadan sonra faiz kategorisini ayarlayın.",
+    "transferAmountMismatch": "{count, plural, other {# yatırım hesabına transfer}} yatırım tarafında banka tarafından farklı bir tutar kaydetti. Yatırım tarafı kaydedildiği gibi içe aktarıldı.",
+    "crossCurrencyTradeUnconverted": "{count, plural, other {# başka para biriminde fiyatlanan menkul kıymet işlemi}} ne dosyada ne de döviz kuru sağlayıcısında işlem tarihi civarında o para çifti için döviz kuru bulunmadığından hesabın para biriminde kaydedildi. Döviz kurunu ekleyin, sonra her işlemin fiyatını düzeltin.",
+    "crossCurrencyTradeMarketRate": "{count, plural, other {# başka para biriminde fiyatlanan menkul kıymet işlemi}} dosyada o tarih civarında kur bulunmadığından işlem tarihindeki piyasa döviz kuruyla çevrildi. Her işlemin fiyatını kendi kayıtlarınızla karşılaştırın.",
     "showTransactions": "{count, plural, other {# işlemi}} göster",
     "hideTransactions": "İşlemleri gizle",
     "reviewInMoney": "Bunları Microsoft Money içinde açıp kontrol edin veya düzeltin, ardından yeniden dışa aktarıp içe aktarın.",
@@ -539,12 +585,89 @@
     "mnyImportFailed": "İçe aktarma sırasında bir şeyler ters gitti. Hiçbir şey kaydedilmedi -- yeniden denebilirsiniz.",
     "mnyJobStalled": "İçe aktarma yanıt vermeyi bıraktı, büyük olasılıkla sunucu yeniden başladığı için. Yüklediğiniz dosya hâlâ burada, bu yüzden yeniden denemek güvenli.",
     "mnyJobStalledAfterCommit": "İçe aktarma, verilerinizi kaydettikten sonra yanıt vermeyi bıraktı; büyük olasılıkla sunucu yeniden başlatıldı. İçe aktarılan kayıtlar hesabınızda, bu yüzden aynı dosyayı yeniden içe aktarmak onları çoğaltır. Başka bir şey içe aktarmadan önce hesaplarınızı kontrol edin.",
+    "mnyImportFailedAfterCommit": "İçe aktarma verilerinizi kaydetti, ancak sonraki bir adım başarısız oldu. İçe aktarılan kayıtlar hesabınızda olduğundan aynı dosyayı yeniden içe aktarmak onları çoğaltır. Başka bir şey içe aktarmadan önce hesaplarınızı kontrol edin.",
+    "mnyAlreadyImported": "Bu dosya zaten hesabınıza içe aktarıldı; yeniden içe aktarmak kayıtlarını çoğaltır. Bunları değiştirmek için baştan başlayın ve mevcut verilerinizi değiştirmeyi seçin.",
     "mnyStagedFileMissing": "Yüklenen Money dosyası artık kullanılamıyor. Lütfen yeniden yükleyin.",
     "mnyFileTruncated": "Bu Money dosyası eksik görünüyor. Yükleme kesilmiş olabilir.",
     "mnyNotAMoneyFile": "Bu dosya bir Microsoft Money (.mny) dosyası değil.",
-    "mnyUnsupportedVersion": "Bu dosya Money 97 veya 98 ile oluşturulmuş. Ücretsiz Money Plus Sunset sürümünde bir kez açıp kaydedin, ardından sonucu içe aktarın.",
+    "mnyUnsupportedVersion": "Bu dosya Monize'ın okuyamadığı bir Microsoft Money sürümüyle oluşturulmuş. Ücretsiz Money Plus Sunset sürümünde bir kez açıp kaydedin, ardından sonucu içe aktarın.",
     "mnyPasswordRequired": "Bu Money dosyası parola korumalı.",
     "mnyPasswordIncorrect": "Bu parola Money dosyasını açmıyor.",
     "mnyUnreadableDatabase": "Bu Money dosyasının şifresi çözüldü ancak içeriği okunamadı. Dosya bozuk olabilir."
+  },
+  "preview": {
+    "choice": {
+      "legend": "İçe aktarılmazsa {payee} için ne yapılsın",
+      "skip": "Şimdilik atla",
+      "except": "İstisnalara ekle"
+    },
+    "payeeTip": {
+      "name": "Bankadan: {original}. Eşleşen: {name}",
+      "alias": "Bankadan: {original}. Eşleşen: {name} (\"{pattern}\" takma adı)",
+      "aliasNoPattern": "Bankadan: {original}. Eşleşen: {name} (takma ad)",
+      "new": "Bankadan: {original}. Eşleşen: {name} (yeni alacaklı)",
+      "rule": "Bankadan: {original}. Eşleşen: {name} (bir kural belirledi)",
+      "ruleNone": "Bankadan: {original}. Eşleşen: alacaklı yok (bir kural belirledi)"
+    },
+    "expand": {
+      "show": "{payee} ayrıntılarını göster",
+      "hide": "{payee} ayrıntılarını gizle"
+    },
+    "rules": {
+      "heading": "İçe aktarma kuralları",
+      "none": "Hiçbir içe aktarma kuralı bu işlemle eşleşmedi.",
+      "skipped": "{action}: atlandı ({reason})",
+      "stopped": "Sonraki kuralları durdurur.",
+      "applied": "Uygulananlar: {actions}",
+      "openNewTab": "{name} kuralını yeni sekmede aç"
+    },
+    "ruleTest": {
+      "loading": "Kural testi sonucu yükleniyor",
+      "error": "Kural testi sonucu yüklenemedi.",
+      "retry": "Yeniden dene",
+      "noRules": "İçe aktarma kuralınız yok, bu yüzden test edilecek bir şey yoktu.",
+      "showNotMatched": "Eşleşmeyen kuralları göster ({count})",
+      "hideNotMatched": "Eşleşmeyen kuralları gizle ({count})",
+      "noChanges": "Eşleşti, ancak bu işlemde hiçbir şeyi değiştirmiyor.",
+      "badge": {
+        "matched": "Eşleşti",
+        "notMatched": "Eşleşmedi",
+        "notEvaluated": "Değerlendirilmedi"
+      },
+      "notEvaluated": {
+        "afterStop": "Değerlendirilmedi: önceki bir kural kuralları durdurdu.",
+        "disabled": "Değerlendirilmedi: kural kapalı.",
+        "invalid": "Değerlendirilmedi: kural geçerli değil. Onarmak için açın.",
+        "outside_active_window": "Değerlendirilmedi: satırın tarihi kuralın etkin tarihlerinin dışında."
+      },
+      "condition": {
+        "met": "Koşul sağlandı",
+        "notMet": "Koşul sağlanmadı",
+        "actual": "Bu işlemdeki değer: {value}",
+        "noValue": "yok",
+        "noTags": "etiket yok",
+        "capture": "{name} = {value}",
+        "omitted": "Koşulun bu bölümünün ayrıntıları gösterilmiyor."
+      },
+      "skipReasons": {
+        "already_set": "zaten bir değeri var ve kural yalnızca boş olanları doldurur",
+        "no_change": "zaten kuralın ayarlayacağı değere sahip",
+        "payee_unresolved": "kuralın oluşturduğu alıcı aranamadı"
+      }
+    },
+    "payee": {
+      "heading": "Alacaklı",
+      "unknown": "Bu işlem için alacaklı bilgisi yok.",
+      "original": "Bankanın metni: {original}",
+      "name": "Mevcut alacaklınız {name} ile eşleşiyor.",
+      "alias": "\"{pattern}\" takma adıyla {name} ile eşleşiyor.",
+      "aliasNoPattern": "Bir takma adla {name} ile eşleşiyor.",
+      "new": "Henüz hiçbir alacaklı bu ada sahip değil, bu yüzden {name} oluşturulur.",
+      "rule": "Bir içe aktarma kuralı alacaklıyı belirler: {name}.",
+      "ruleNone": "Bir içe aktarma kuralı alacaklıyı kaldırır.",
+      "none": "Banka karşı taraf belirtmedi, bu yüzden işlemin alacaklısı yok.",
+      "openAliases": "Alacaklının takma adlarını aç",
+      "openAliasesNewTab": "Alacaklının takma adlarını yeni sekmede aç"
+    }
   }
 }

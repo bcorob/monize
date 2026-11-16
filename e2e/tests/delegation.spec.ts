@@ -1,5 +1,6 @@
 import { test, expect } from '../fixtures';
 import { loginUser } from '../helpers/auth';
+import { E2E_DEFAULT_PASSWORD } from '../helpers/credentials';
 import { gotoStable } from '../helpers/nav';
 import {
   createApiClient,
@@ -26,7 +27,7 @@ test.describe('Delegation (shared access)', () => {
 
     await page.getByPlaceholder('Delegate email').fill(email);
     // New email + no invite -> the owner sets a password directly.
-    await page.getByPlaceholder('Set a password').fill('E2eTestPass123!');
+    await page.getByPlaceholder('Set a password').fill(E2E_DEFAULT_PASSWORD);
     await page.getByRole('button', { name: 'Add delegate' }).last().click();
 
     await expect(page.getByText(email)).toBeVisible();
@@ -48,7 +49,7 @@ test.describe('Delegation (shared access)', () => {
     const owner = await api.get<{ id: string }>('/auth/profile');
     const account = await createAccount(api, { name: `Shared ${uniqueId()}` });
     const email = `e2e-del-${uniqueId()}@test.example.com`;
-    const password = 'E2eTestPass123!';
+    const password = E2E_DEFAULT_PASSWORD;
     const delegate = await createDelegate(api, { email, password });
     await grantDelegateAccount(api, delegate.id, account.id);
 
@@ -90,7 +91,7 @@ test.describe('Delegation (shared access)', () => {
       openingBalance: 5000,
     });
     const email = `e2e-xo-${uniqueId()}@test.example.com`;
-    const password = 'E2eTestPass123!';
+    const password = E2E_DEFAULT_PASSWORD;
     const delegate = await createDelegate(api, { email, password });
     await grantDelegateAccount(api, delegate.id, ownerAccount.id, {
       canCreate: true,

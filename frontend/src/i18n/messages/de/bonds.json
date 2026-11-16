@@ -1,0 +1,100 @@
+{
+  "entry": {
+    "history": "Verlauf der Bedingungen für {program}"
+  },
+  "offer": {
+    "loading": "Anleihen im Verkauf werden geladen...",
+    "loadFailed": "Die Anleihen im Verkauf konnten nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "empty": "Heute ist keine Serie im Verkauf.",
+    "asOf": "Im Verkauf am {date}. Jeder Wert gilt für eine heute gekaufte und bis zur Fälligkeit gehaltene Anleihe.",
+    "comparisonNote": "Die annualisierte Rendite ist eine Vergleichszahl für Produkte unterschiedlicher Laufzeit, kein Ertragsversprechen.",
+    "couponsNote": "Kupons nicht wiederangelegt: Bei einer Anleihe mit Kupons enthält der Fälligkeitswert alle gezahlten Kupons.",
+    "projected": "Prognose",
+    "projectedTitle": "Dieser Wert beruht auf einem angenommenen Referenzwert und nicht nur auf veröffentlichten Sätzen.",
+    "assumptions": {
+      "title": "Annahmen",
+      "intro": "Perioden, die noch nicht begonnen haben, werden mit diesen Referenzwerten bewertet. Ändern Sie einen Wert, um die Wirkung auf jede Zeile zu sehen.",
+      "label": "{benchmark} (%)",
+      "latest": "Zuletzt veröffentlichter Wert: {value} ({observation})",
+      "reset": "Zuletzt veröffentlichte Werte verwenden",
+      "updating": "Werte werden aktualisiert..."
+    },
+    "columns": {
+      "series": "Serie",
+      "saleWindow": "Im Verkauf",
+      "length": "Laufzeit",
+      "firstPeriodRate": "Erste Periode",
+      "rule": "Zinssatz",
+      "capitalization": "Zinsen",
+      "redemption": "Vorzeitige Rückgabe",
+      "maturityValue": "Fälligkeitswert",
+      "totalReturn": "Gesamtrendite",
+      "annualizedReturn": "Annualisierte Rendite",
+      "terms": "Bedingungen"
+    },
+    "saleWindowValue": "{from} bis {to}",
+    "lengthValue": "{months, plural, one {# Monat} other {# Monate}}",
+    "lengthDaysValue": "{days, plural, one {# Tag} other {# Tage}}",
+    "rule": {
+      "fixed": "Fest {rate} pro Jahr",
+      "benchmark": "{benchmark} + {addend}",
+      "floor": "Untergrenze des Referenzwerts {floor}",
+      "daily": "Täglich: {benchmark} + {addend}",
+      "discount": "Abschlag auf den Nennwert"
+    },
+    "capitalization": {
+      "NONE": "In jeder Periode ausgezahlt",
+      "COMPOUND_AT_PERIOD_END": "Am Ende jeder Periode aufgezinst"
+    },
+    "redemption": {
+      "none": "Nur bei Fälligkeit",
+      "onDemand": "Auf Verlangen",
+      "fee": "Gebühr {amount} pro Anleihe",
+      "forfeit": "In der Periode aufgelaufene Zinsen verfallen"
+    },
+    "couponsNotReinvested": "Kupons nicht wiederangelegt"
+  },
+  "history": {
+    "loading": "Verlauf wird geladen...",
+    "loadFailed": "Der Verlauf konnte nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "empty": "Von diesem Produkt ist noch keine Serie gespeichert.",
+    "coverage": "Der Katalog umfasst {from} bis {to}.",
+    "rateChartTitle": "Zinssatz der ersten Periode und Marge nach Verkaufsmonat",
+    "feeChartTitle": "Gebühr für vorzeitige Rückgabe nach Verkaufsmonat",
+    "rate": "Zinssatz der ersten Periode",
+    "rateChartNote": "Bei Festzinsanleihen zeigt die Linie den Jahreszins.",
+    "addend": "Marge oder Spread",
+    "fee": "Gebühr für vorzeitige Rückgabe",
+    "gapsNote": "Ein Monat ohne gespeicherte Serie ist eine Lücke in der Linie und kein aus den Nachbarmonaten abgeleiteter Wert.",
+    "missingTitle": "Im Katalog fehlende Monate ({count})",
+    "noMissing": "Zwischen der ersten und der letzten gespeicherten Serie fehlt kein Monat.",
+    "tableTitle": "Alle gespeicherten Serien",
+    "groupCount": "{count} Serie(n)",
+    "unknownYear": "Verkaufsdatum unbekannt",
+    "columns": {
+      "series": "Serie",
+      "saleWindow": "Im Verkauf",
+      "rate": "Zinssatz der ersten Periode oder Jahreszins",
+      "addend": "Marge oder Spread",
+      "fee": "Gebühr für vorzeitige Rückgabe",
+      "floor": "Auszahlungsuntergrenze",
+      "version": "Version der Bedingungen",
+      "source": "Quelle"
+    },
+    "floor": {
+      "ALL_PERIODS": "Jede Periode",
+      "FIRST_PERIOD": "Nur erste Periode"
+    },
+    "none": "Keine",
+    "held": "Gehalten"
+  },
+  "refreshProgress": {
+    "label": "Anleihedaten werden aktualisiert",
+    "offer": "Das aktuelle Angebot wird geprüft…",
+    "series": "Serie {done} von {total} wird abgerufen: {seriesCode}",
+    "historyComplete": "Der Verlauf ist vollständig",
+    "starting": "Wird gestartet…"
+  }
+}

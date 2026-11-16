@@ -186,6 +186,9 @@ describe("OpenAiCompatibleProvider", () => {
     expect(provider.name).toBe("openai-compatible");
     expect(provider.supportsStreaming).toBe(true);
     expect(provider.supportsToolUse).toBe(true);
+    // The Responses API's web_search is OpenAI's own; a compatible server
+    // serves a web-search request from model knowledge instead.
+    expect(provider.supportsWebSearch).toBe(false);
   });
 
   describe("completeWithTools()", () => {
@@ -561,6 +564,34 @@ describe("OpenAiCompatibleProvider", () => {
       expect(result.ok).toBe(false);
       if (!result.ok) {
         expect(result.reason).toMatch(/authentication/i);
+      }
+    });
+
+    it("never reads the upstream answer back to the caller", async () => {
+      // The base URL is the user's choice, so whatever that host answered is
+      // not the user's to read: at most the status code comes back.
+      const err = Object.assign(
+        new Error('500 {"internal":"admin-panel-token-abc123"}'),
+        { status: 500 },
+      );
+      mockCreate.mockRejectedValueOnce(err);
+      const result = await provider.verifyModel();
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.reason).toContain("500");
+        expect(result.reason).not.toContain("admin-panel-token-abc123");
+      }
+    });
+
+    it("gives a generic reason, with no error text, when nothing answered", async () => {
+      mockCreate.mockRejectedValueOnce(
+        new Error("connect ECONNREFUSED 10.0.0.7:6379"),
+      );
+      const result = await provider.verifyModel();
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.reason).not.toContain("10.0.0.7");
+        expect(result.reason).toMatch(/could not verify the configured model/i);
       }
     });
   });

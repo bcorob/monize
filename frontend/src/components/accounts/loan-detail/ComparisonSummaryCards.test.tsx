@@ -3,12 +3,15 @@ import { render, screen } from '@/test/render';
 import { ComparisonSummaryCards } from './ComparisonSummaryCards';
 import { compareSchedules, generateLoanSchedule } from '@/lib/loan-schedule';
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
+    }),
+  };
+});
 /**
  * A comparison whose baseline runs past the projection horizon, so no lifetime
  * saving exists: 500k at 6% paying 2510 a month never clears inside 50 years.
@@ -215,5 +218,54 @@ describe('ComparisonSummaryCards', () => {
     expect(screen.queryByText('New Installment')).not.toBeInTheDocument();
     const expected = Math.round((comparison.scenario.finalPaymentAmount + 100) * 100) / 100;
     expect(screen.getByText(`$${expected.toFixed(2)}`)).toBeInTheDocument();
+  });
+
+  describe('a schedule without a level installment (LINEAR, INTEREST_ONLY)', () => {
+    function makeLinearComparison(mode: 'SHORTEN_TERM' | 'LOWER_INSTALLMENT') {
+      const input = {
+        startingBalance: 300000,
+        annualRate: 2,
+        paymentAmount: 1333.33,
+        frequency: 'MONTHLY' as const,
+        mortgageType: 'LINEAR' as const,
+        methodTerms: {
+          prepaymentMode: 'SHORTEN_TERM' as const,
+          constantPrincipal: 833.3333,
+          scheduledPayments: 360,
+          remainingAtFirstRow: 360,
+          termEndDate: '2053-12-01',
+        },
+        firstPaymentDate: new Date(2024, 0, 1),
+      };
+      const baseline = generateLoanSchedule(input);
+      const scenario = generateLoanSchedule({
+        ...input,
+        overpayments: { lumpSums: [{ date: '2024-01-01', amount: 20000, mode }] },
+      });
+      return compareSchedules(baseline, scenario);
+    }
+
+    it('reports time saved, not a new installment, even for a lower-installment plan', () => {
+      const comparison = makeLinearComparison('LOWER_INSTALLMENT');
+      render(
+        <ComparisonSummaryCards
+          comparison={comparison}
+          currencyCode="EUR"
+          recurringOverpayment={{ amount: 0, mode: 'LOWER_INSTALLMENT' }}
+        />,
+      );
+      expect(screen.queryByText('New Installment')).not.toBeInTheDocument();
+      expect(screen.getByText('Time Saved')).toBeInTheDocument();
+    });
+
+    it('shows the first projected payment rather than a resulting monthly payment', () => {
+      const comparison = makeLinearComparison('SHORTEN_TERM');
+      render(<ComparisonSummaryCards comparison={comparison} currencyCode="EUR" />);
+      expect(screen.getByText('First Payment')).toBeInTheDocument();
+      const first = comparison.scenario.rows[0];
+      expect(
+        screen.getByText(`$${(first.payment + first.extraPrincipal).toFixed(2)}`),
+      ).toBeInTheDocument();
+    });
   });
 });

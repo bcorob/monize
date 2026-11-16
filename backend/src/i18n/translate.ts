@@ -1,4 +1,19 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { I18nContext, I18nService } from "nestjs-i18n";
+
+const backgroundLocale = new AsyncLocalStorage<{
+  i18n: I18nService;
+  lang: string;
+}>();
+
+/** Scope persisted job messages to the owner's language using public i18n APIs. */
+export function withTranslationLocale<T>(
+  i18n: I18nService,
+  lang: string,
+  run: () => T,
+): T {
+  return backgroundLocale.run({ i18n, lang }, run);
+}
 
 /**
  * Translate a backend message key against the current request's locale.
@@ -21,7 +36,12 @@ export function tr(
   args?: Record<string, unknown>,
 ): string {
   const ctx = I18nContext.current();
-  if (!ctx) return fallback;
+  if (!ctx) {
+    const background = backgroundLocale.getStore();
+    return background
+      ? translateInLocale(background.i18n, background.lang, key, fallback, args)
+      : fallback;
+  }
   const translated = ctx.t(key, { args, defaultValue: fallback }) as string;
   // nestjs-i18n returns the key itself when it cannot resolve and no
   // defaultValue path matched; guard against leaking a raw key to the client.

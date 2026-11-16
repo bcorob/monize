@@ -1,4 +1,4 @@
-import { EntityManager, IsNull } from "typeorm";
+import { EntityManager, In, IsNull } from "typeorm";
 import { Transaction } from "../transactions/entities/transaction.entity";
 
 /**
@@ -55,9 +55,14 @@ export async function countUncategorizedTransactionsForPayee(
   manager: EntityManager,
   userId: string,
   payeeId: string,
+  accountScope?: readonly string[],
 ): Promise<number> {
+  if (accountScope !== undefined && accountScope.length === 0) return 0;
   return manager.count(Transaction, {
-    where: backfillableWhere(userId, payeeId),
+    where: {
+      ...backfillableWhere(userId, payeeId),
+      ...(accountScope ? { accountId: In([...accountScope]) } : {}),
+    },
   });
 }
 

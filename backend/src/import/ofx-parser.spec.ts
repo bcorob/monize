@@ -498,6 +498,63 @@ describe("OFX Parser", () => {
       const result = parseOfx(ofx);
       expect(result.transactions[0].number).toBe("");
     });
+
+    it("reads each row's FITID, trimmed, and leaves it absent on a row without one", () => {
+      const ofx = `<OFX>
+<BANKMSGSRSV1>
+<STMTTRNRS>
+<STMTRS>
+<BANKTRANLIST>
+<STMTTRN>
+<TRNTYPE>DEBIT
+<DTPOSTED>20260115
+<TRNAMT>-50.00
+<FITID> 20260115-001
+<NAME>Store
+</STMTTRN>
+<STMTTRN>
+<TRNTYPE>DEBIT
+<DTPOSTED>20260116
+<TRNAMT>-20.00
+<NAME>Cafe
+</STMTTRN>
+<STMTTRN>
+<TRNTYPE>DEBIT
+<DTPOSTED>20260117
+<TRNAMT>-5.00
+<FITID>
+<NAME>Kiosk
+</STMTTRN>
+</BANKTRANLIST>
+</STMTRS>
+</STMTTRNRS>
+</BANKMSGSRSV1>
+</OFX>`;
+      const [first, second, third] = parseOfx(ofx).transactions;
+      expect(first.fitId).toBe("20260115-001");
+      expect(second).not.toHaveProperty("fitId");
+      expect(third).not.toHaveProperty("fitId");
+    });
+
+    it("reads the FITID of an XML-style row with closing tags", () => {
+      const ofx = `<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><BANKTRANLIST>
+<STMTTRN><TRNTYPE>CREDIT</TRNTYPE><DTPOSTED>20260115</DTPOSTED><TRNAMT>10.00</TRNAMT><FITID>abc-1</FITID><NAME>Refund</NAME></STMTTRN>
+</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>`;
+      expect(parseOfx(ofx).transactions[0].fitId).toBe("abc-1");
+    });
+
+    it("drops a FITID that two rows of the file share, and keeps the others", () => {
+      const row = (fitId: string, amount: string) =>
+        `<STMTTRN><TRNTYPE>DEBIT</TRNTYPE><DTPOSTED>20260115</DTPOSTED><TRNAMT>${amount}</TRNAMT><FITID>${fitId}</FITID><NAME>Store</NAME></STMTTRN>`;
+      const ofx = `<OFX><BANKMSGSRSV1><STMTTRNRS><STMTRS><BANKTRANLIST>
+${row("0", "-5.00")}${row("U-1", "-6.00")}${row("0", "-7.00")}
+</BANKTRANLIST></STMTRS></STMTTRNRS></BANKMSGSRSV1></OFX>`;
+
+      const [first, unique, repeat] = parseOfx(ofx).transactions;
+      expect(first).not.toHaveProperty("fitId");
+      expect(unique.fitId).toBe("U-1");
+      expect(repeat).not.toHaveProperty("fitId");
+    });
   });
 
   describe("parseOfx - amount parsing", () => {
@@ -535,14 +592,29 @@ describe("OFX Parser", () => {
       expect(result.transactions[0].amount).toBe(0);
     });
 
-    it("rounds amounts to 4 decimal places", () => {
-      const result = parseOfx(buildOfxWithAmount("-50.12346"));
-      expect(result.transactions[0].amount).toBe(-50.1235);
+    it("does not round an over-precise amount to a fiat account's 4 places (the import processor refuses it)", () => {
+      const result = parseOfx(buildOfxWithAmount("-12.34567"));
+      expect(result.transactions[0].amount).toBe(-12.34567);
     });
 
     it("handles amounts with many decimal places", () => {
       const result = parseOfx(buildOfxWithAmount("100.99999"));
-      expect(result.transactions[0].amount).toBe(101.0);
+      expect(result.transactions[0].amount).toBe(100.99999);
+    });
+
+    it("keeps up to 8 places (a preview and an import read alike)", () => {
+      const result = parseOfx(buildOfxWithAmount("-50.12345678"));
+      expect(result.transactions[0].amount).toBe(-50.12345678);
+    });
+
+    it("reads a coin statement's 8-place amount whole", () => {
+      const result = parseOfx(buildOfxWithAmount("-0.00002500"));
+      expect(result.transactions[0].amount).toBe(-0.000025);
+    });
+
+    it("parses a comma as the decimal separator (-18,36 -> -18.36)", () => {
+      const result = parseOfx(buildOfxWithAmount("-18,36"));
+      expect(result.transactions[0].amount).toBe(-18.36);
     });
 
     it("skips transactions with non-numeric amounts", () => {

@@ -1,9 +1,14 @@
 import { Injectable } from "@nestjs/common";
 import { z } from "zod";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { AiRelayService } from "../../ai/relay/ai-relay.service";
+import { McpServer } from "@modelcontextprotocol/server";
 import {
-  UserContextResolver,
+  AiRelayService,
+  RELAY_POLL_REFUSED,
+} from "../../ai/relay/ai-relay.service";
+import { SecurityNoticeService } from "../../notifications/security-notice.service";
+import {
+  callerKey,
+  resolveUserContext,
   requireScope,
   toolResult,
   toolError,
@@ -15,6 +20,8 @@ import {
   reportProgressOutput,
 } from "../tool-output-schemas";
 import { READ_ONLY } from "../mcp-annotations";
+import { RELAY_TURN_GUIDANCE } from "../relay-guidance";
+import { uuidString } from "./schema-fragments";
 
 /**
  * Reverse-relay control tools. These do not touch the financial dataset -- they
@@ -30,46 +37,80 @@ import { READ_ONLY } from "../mcp-annotations";
  */
 @Injectable()
 export class McpRelayTools {
-  constructor(private readonly relayService: AiRelayService) {}
+  constructor(
+    private readonly relayService: AiRelayService,
+    private readonly securityNotices: SecurityNoticeService,
+  ) {}
 
-  register(server: McpServer, resolve: UserContextResolver) {
+  register(server: McpServer) {
     server.registerTool(
       "get_next_prompt",
       {
         title: "Wait for the next chat prompt",
         annotations: READ_ONLY,
         description:
-          "Long-poll for the next prompt a user typed in the Monize web chat. Returns { hasPrompt: false } if none arrives within the poll window -- in that case call this tool again immediately to keep listening. EXCEPTION: if the result is { hasPrompt: false, stop: true }, the user has been inactive for a while -- STOP your polling loop and exit cleanly; do NOT call get_next_prompt again. The web chat tells the user you disconnected for inactivity, and they reconnect you (re-run your loop) when they want to continue. When hasPrompt is true, handle the request using the other Monize tools, calling report_progress with short status updates as you work (before a lookup, or when sending a confirmation card), then call post_response with promptId and your final answer. ALWAYS finish a claimed prompt and call post_response, even for a long task: never abandon it partway. Send your FIRST report_progress immediately after claiming a prompt, and keep sending one at least every minute or two while you read, plan, or compose a large request -- the web chat shows the user a 'went quiet' message if it hears nothing from you for a few minutes, and a steady progress signal prevents that. 'history' is the prior conversation, oldest first. If 'attachments' is present, the user uploaded files with the prompt: read each attachment's 'uri' (a monize-attachment:// resource) to view the file before answering. Text files are also inlined into the prompt text, so you only need to read image and PDF attachments.",
-        inputSchema: {},
+          "Long-poll for the next prompt typed in the Monize web chat. " +
+          "{ hasPrompt: false }: call again. With stop: true the user went " +
+          "inactive: exit, they will reconnect you. With heldElsewhere: true " +
+          "another connection of this account serves the chat: stop and " +
+          "exit. { hasPrompt: true }: carries the prompt, `history` (oldest " +
+          "first), any `attachments` (read each `uri`; text files are inlined) " +
+          "and `guidance` -- follow it, and always finish the prompt with post_response.",
+        inputSchema: z.object({}),
         outputSchema: getNextPromptOutput,
       },
-      async (_args, extra) => {
-        const ctx = resolve(extra.sessionId);
-        if (!ctx) return toolError("No user context");
-        const check = requireScope(ctx.scopes, "read");
+      async (_args, ctx) => {
+        const user = resolveUserContext(ctx);
+        // The credential is what a relay turn is bound to (#2176); a request
+        // that cannot name one is refused rather than served user-wide.
+        if (!user?.credentialId) return toolError("No user context");
+        const check = requireScope(user.scopes, "read");
         if (check.error) return check.result;
 
         try {
-          // The claim is bound to THIS session: it is what makes a later write
+          // The claim is bound to THIS caller: it is what makes a later write
           // from this agent part of the relay turn, and a write from any other
-          // session of the same user a direct client's.
+          // caller of the same user a direct client's. Only the credential
+          // serving the user's chat claims anything; another one comes back
+          // empty, never with someone else's prompt.
           const claimed = await this.relayService.waitForPrompt(
-            ctx.userId,
-            extra.sessionId,
+            user.userId,
+            callerKey(ctx),
+            user.credentialId,
           );
+          if (claimed === RELAY_POLL_REFUSED) {
+            // Stop, but not through the idle clock: it is per user, and a
+            // refused poller must not consume the stop meant for the holder.
+            return toolResult({
+              hasPrompt: false,
+              heldElsewhere: true,
+              stop: true,
+            });
+          }
           if (!claimed) {
             // No prompt this window. If the user has gone quiet long enough,
             // tell the agent to stop looping instead of polling forever.
-            if (this.relayService.shouldStopForIdle(ctx.userId)) {
+            if (await this.relayService.shouldStopForIdle(user.userId)) {
               return toolResult({ hasPrompt: false, stop: true });
             }
             return toolResult({ hasPrompt: false });
+          }
+          // First claim by a credential: the dedupe key makes a repeat a no-op.
+          // Awaits only the row write (the fan-out is detached); never throws.
+          if (user.credentialId) {
+            await this.securityNotices.relayCredentialFirstUse(
+              user.userId,
+              user.credentialId,
+            );
           }
           return toolResult({
             hasPrompt: true,
             promptId: claimed.promptId,
             prompt: claimed.prompt,
             history: claimed.history,
+            // Travels with the claimed prompt rather than in the server
+            // instructions, so only a relay turn pays for it.
+            guidance: RELAY_TURN_GUIDANCE,
             ...(claimed.attachments
               ? { attachments: claimed.attachments }
               : {}),
@@ -86,30 +127,31 @@ export class McpRelayTools {
         title: "Send a chat answer",
         annotations: READ_ONLY,
         description:
-          "Deliver your answer for a prompt obtained from get_next_prompt back to the Monize web chat. Pass the promptId you received and the full answer text. Always post your final answer, even if the task ran long: { delivered: true } is returned even when the user's live request already timed out -- the answer is buffered and shown as soon as the web chat reconnects, so it is never wasted. { delivered: false } is rare and means the promptId is unknown or was already answered; only then move on without retrying.",
-        inputSchema: {
-          promptId: z
-            .string()
-            .uuid()
-            .describe("The promptId from get_next_prompt"),
-          text: z
-            .string()
-            .max(50000)
-            .describe("The answer to show the user in the chat"),
-        },
+          "Deliver the final answer for a prompt from get_next_prompt. Always " +
+          "post it, however long the task ran: a buffered answer is shown when " +
+          "the chat reconnects, so it is never wasted. delivered:false means " +
+          "the promptId is unknown or already answered -- only then move on.",
+        inputSchema: z.object({
+          promptId: uuidString().describe("The promptId from get_next_prompt."),
+          text: z.string().max(50000).describe("The answer to show the user."),
+        }),
         outputSchema: postResponseOutput,
       },
-      async (args, extra) => {
-        const ctx = resolve(extra.sessionId);
-        if (!ctx) return toolError("No user context");
-        const check = requireScope(ctx.scopes, "read");
+      async (args, ctx) => {
+        const user = resolveUserContext(ctx);
+        // The credential is what a relay turn is bound to (#2176); a request
+        // that cannot name one is refused rather than served user-wide.
+        if (!user?.credentialId) return toolError("No user context");
+        const check = requireScope(user.scopes, "read");
         if (check.error) return check.result;
 
         try {
-          const delivered = this.relayService.postResponse(
-            ctx.userId,
+          // Only the credential that claimed the turn may answer it.
+          const delivered = await this.relayService.postResponse(
+            user.userId,
             args.promptId,
             args.text,
+            user.credentialId,
           );
           return toolResult({ delivered });
         } catch (err: unknown) {
@@ -124,33 +166,35 @@ export class McpRelayTools {
         title: "Stream a progress update",
         annotations: READ_ONLY,
         description:
-          "Stream a short, human-readable progress update to the Monize web chat while you work on a prompt from get_next_prompt. Shown live to the user as the assistant's running narration (e.g. 'Looking up the sporting goods category...' or 'Dry run looks good, sending the confirmation card.'). Call it whenever you start a lookup or make a decision, before the relevant tool call, and at least every minute or two during long reading/planning so the chat does not think you went quiet. Pass the promptId you are handling and one concise sentence. This does not answer the prompt -- still call post_response with the final answer when done. { delivered: false } means the web chat is not attached to your live narration right now (it may have stopped waiting after a silent gap). This is NOT a signal to abandon the prompt: keep working and still send your confirmation cards and your final post_response -- those ARE buffered and shown to the user when the chat reconnects, even though live progress lines are not. You may stop sending further progress lines once you see delivered:false, but you must still complete the task and post_response.",
-        inputSchema: {
-          promptId: z
-            .string()
-            .uuid()
-            .describe("The promptId from get_next_prompt"),
-          text: z
-            .string()
-            .max(2000)
-            .describe("A short status update to show the user"),
-        },
+          "Stream one short sentence of live narration to the web chat while " +
+          'you work on a claimed prompt ("Looking up the groceries ' +
+          'category..."): before each lookup or decision, and at least every ' +
+          "minute or two. It does not answer the prompt: finish with " +
+          "post_response. delivered:false means only that narration is not " +
+          "attached now; keep working, cards and your answer are still shown.",
+        inputSchema: z.object({
+          promptId: uuidString().describe("The promptId from get_next_prompt."),
+          text: z.string().max(2000).describe("One short status sentence."),
+        }),
         outputSchema: reportProgressOutput,
       },
-      async (args, extra) => {
-        const ctx = resolve(extra.sessionId);
-        if (!ctx) return toolError("No user context");
-        const check = requireScope(ctx.scopes, "read");
+      async (args, ctx) => {
+        const user = resolveUserContext(ctx);
+        // The credential is what a relay turn is bound to (#2176); a request
+        // that cannot name one is refused rather than served user-wide.
+        if (!user?.credentialId) return toolError("No user context");
+        const check = requireScope(user.scopes, "read");
         if (check.error) return check.result;
 
         try {
-          const delivered = this.relayService.reportProgress(
-            ctx.userId,
+          const delivered = await this.relayService.reportProgress(
+            user.userId,
             args.promptId,
             args.text,
             // Re-binds the turn when an agent reconnects mid-prompt with a
-            // fresh session id; knowing the promptId is what proves ownership.
-            extra.sessionId,
+            // fresh caller key -- only for the credential that claimed it.
+            callerKey(ctx),
+            user.credentialId,
           );
           return toolResult({ delivered });
         } catch (err: unknown) {

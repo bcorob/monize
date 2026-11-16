@@ -18,17 +18,22 @@ import {
   mapPayees,
 } from "./map/map-reference";
 import { mapTransactions } from "./map/map-transactions";
+import { mapClassificationTags } from "./map/map-classifications";
 import { mapSecurities, tradedSecurityHandles } from "./map/map-securities";
 import { mapInvestments } from "./map/map-investments";
+import { resolveExchangeRates } from "./writers/write-prices";
 import {
+  adoptCashLegTags,
   applyInvestmentCashSources,
   investmentWritesOwnCashRow,
   reconcileEmbeddedAccruedInterest,
+  referencedTradeTags,
   tradesByHandle,
 } from "./map/investment-cash";
 import { billReferences, mapBills, selectedBills } from "./map/map-bills";
 import { mapLoans } from "./map/map-loans";
 import { crossCheckHoldings } from "./map/check-holdings";
+import { MONEY99_ABSENT_FIELDS } from "./model/mny-money99";
 import {
   MappedAccounts,
   MappedBills,
@@ -37,8 +42,10 @@ import {
   MappedInvestments,
   MappedPayees,
   MappedSecurities,
+  MappedTags,
   MappedTransactions,
   MnyHoldingCheck,
+  MnyMarketRates,
 } from "./model/mny-import-model";
 import {
   MnyImportOptions,
@@ -46,7 +53,10 @@ import {
 } from "./model/mny-import-options";
 import { MnyWarning } from "./model/mny-warnings";
 import { MnyExchangeRate, MnySecurityPrice } from "./model/mny-rows";
-import { isCurrencyPseudoSecurity } from "./model/mny-model";
+import {
+  isClassificationItem,
+  isCurrencyPseudoSecurity,
+} from "./model/mny-model";
 import { TransactionStatus } from "../../transactions/entities/transaction.entity";
 import { roundMoney } from "../../common/round.util";
 
@@ -63,7 +73,8 @@ import { roundMoney } from "../../common/round.util";
  */
 
 /** Which Money era a file was written by, inferred from its table/column set. */
-export type MnyEra = "money2001" | "money2002" | "moneyPlus" | "unknown";
+export type MnyEra =
+  "money99" | "money2001" | "money2002" | "moneyPlus" | "unknown";
 
 export interface MnyParseInput {
   /** Still-encrypted file bytes, unless `alreadyDecrypted`. Ownership passes to the parser. */
@@ -84,6 +95,12 @@ export interface MnyParseInput {
   /** Used as the base currency only when the file names none. */
   readonly userDefaultCurrency: string;
   /**
+   * Rates for the cross-currency trades the file cannot convert, looked up by
+   * `MnyMarketRateService` from a first parse's `investments.rateGaps`. The
+   * parser itself never fetches one.
+   */
+  readonly marketRates?: MnyMarketRates;
+  /**
    * Balance cut-off, `YYYY-MM-DD`. Future-dated transactions are excluded from
    * expected balances because Monize's own balance recalculation excludes them;
    * comparing against a total that included them would report a discrepancy on
@@ -99,7 +116,7 @@ export interface MnyParsedFile {
   readonly baseCurrency: string;
   /**
    * Every ISO code the import touches -- accounts, securities and exchange-rate
-   * history -- so `ensureSystemCurrency` runs once per code before any row that
+   * history -- so `ensureCurrencyForUser` runs once per code before any row that
    * references it is written.
    */
   readonly currencyCodes: readonly string[];
@@ -107,6 +124,8 @@ export interface MnyParsedFile {
   readonly transactions: MappedTransactions;
   readonly categories: MappedCategories;
   readonly payees: MappedPayees;
+  /** Money's classification items, as the tags imported rows carry. */
+  readonly tags: MappedTags;
   readonly securities: MappedSecurities;
   readonly investments: MappedInvestments;
   /**
@@ -168,8 +187,9 @@ export function todayIsoDate(now: Date = new Date()): string {
 /**
  * Which Money release wrote this file, from what the reader could resolve.
  *
- * Money Plus renamed `TRN.hpay` to `lHpay`, and `BILL` did not exist before
- * Money 2002. Those two facts separate the three vintages the fixtures cover.
+ * Money 97-99 write a Jet 3 file, Money Plus renamed `TRN.hpay` to `lHpay`,
+ * and `BILL` did not exist before Money 2002. Those three facts separate the
+ * four vintages the fixtures cover.
  */
 export function detectEra(tables: MnyTables, db: MnyDatabase): MnyEra {
   const transactionTable = tables.availability.find(
@@ -177,6 +197,9 @@ export function detectEra(tables: MnyTables, db: MnyDatabase): MnyEra {
   );
   if (!transactionTable?.present) {
     return "unknown";
+  }
+  if (db.format === "jet3") {
+    return "money99";
   }
   if (transactionTable.resolvedColumns.payee === "lHpay") {
     return "moneyPlus";
@@ -340,9 +363,10 @@ function fileCounts(tables: MnyTables): MnyFileCounts {
   return {
     accounts: tables.reference.accounts.length,
     payees: tables.reference.payees.length,
-    // Money's two structural roots are not categories.
+    // Money's two structural roots are not categories, and neither are the
+    // items of a classification, which share the table.
     categories: tables.reference.categories.filter(
-      (category) => category.level > 0,
+      (category) => category.level > 0 && !isClassificationItem(category),
     ).length,
     securities: tables.investments.securities.filter(
       (security) => !isCurrencyPseudoSecurity(security.symbol),
@@ -400,6 +424,11 @@ export class MnyParserService {
       accounts,
       securities,
       bills: tables.bills.bills,
+      exchangeRates: resolveExchangeRates(
+        tables.reference.exchangeRates,
+        currencyByHandle,
+      ),
+      marketRates: input.marketRates,
     });
     const transactions = mapTransactions({
       transactions: tables.transactions,
@@ -409,11 +438,14 @@ export class MnyParserService {
       cashKeyByAccountKey: cashKeyByAccountKey(accounts),
       tradesByHandle: tradesByHandle(mappedInvestments),
     });
-    const investments = reconcileEmbeddedAccruedInterest(
-      applyInvestmentCashSources(
-        mappedInvestments,
-        transactions.investmentCashSources,
+    const investments = adoptCashLegTags(
+      reconcileEmbeddedAccruedInterest(
+        applyInvestmentCashSources(
+          mappedInvestments,
+          transactions.investmentCashSources,
+        ),
       ),
+      transactions.tradeCashLegTagHandles,
     );
     const holdings = crossCheckHoldings({
       transactions: investments.transactions,
@@ -474,6 +506,18 @@ export class MnyParserService {
           )
         : null,
     );
+    // A classification is referenced by a banking row or split leg, by a
+    // selected bill's template, or by a trade whose cash leg this import
+    // writes itself (a trade funded from a banking row left the tag on that
+    // row). Nothing else gets a tag, so there is no "all items" option: a
+    // classification is a handful of values, not Money's seeded category tree.
+    const tags = mapClassificationTags(
+      tables.reference,
+      union(
+        union(transactions.referencedTags, referencedTradeTags(investments)),
+        billRefs.tags,
+      ),
+    );
 
     const absentTables = missingTables(tables);
     const defaultedFields = missingFields(tables);
@@ -503,6 +547,7 @@ export class MnyParserService {
       transactions,
       categories,
       payees,
+      tags,
       securities,
       investments,
       bills,
@@ -527,10 +572,17 @@ export class MnyParserService {
           code: "missingTable" as const,
           subject: table,
         })),
-        ...defaultedFields.map((field) => ({
-          code: "missingField" as const,
-          subject: field,
-        })),
+        // A column Money 99 never had is not news to its user; the field list
+        // above still names it for `mny:inspect`.
+        ...defaultedFields
+          .filter(
+            (field) =>
+              db.format !== "jet3" || !MONEY99_ABSENT_FIELDS.has(field),
+          )
+          .map((field) => ({
+            code: "missingField" as const,
+            subject: field,
+          })),
         ...accounts.warnings,
         ...transactions.warnings,
         ...securities.warnings,
@@ -540,6 +592,7 @@ export class MnyParserService {
         ...loans.warnings,
         ...categories.warnings,
         ...payees.warnings,
+        ...tags.warnings,
       ],
     };
   }

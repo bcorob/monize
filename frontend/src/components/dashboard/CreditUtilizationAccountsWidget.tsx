@@ -27,6 +27,7 @@ import { ChartTooltipPanel } from '@/components/reports/ChartTooltip';
 import { ReportAccountMultiSelect } from '@/components/reports/ReportAccountMultiSelect';
 import { WidgetCard, WidgetConfigRow, WidgetMessage } from './WidgetCard';
 import { CREDIT_UTILIZATION_ACCOUNTS_DEFAULT, AccountsConfig } from './widget-config';
+import { CHART_GRID_PROPS_HORIZONTAL_BARS } from '@/lib/chart-style';
 
 const WIDGET_ID = 'credit-utilization-accounts';
 
@@ -40,7 +41,7 @@ export function CreditUtilizationAccountsWidget({
   isLoading,
 }: CreditUtilizationAccountsWidgetProps) {
   const t = useTranslations('dashboard');
-  const { formatCurrency } = useNumberFormat();
+  const { formatCurrency, formatPercent, formatPercentTrimmed } = useNumberFormat();
   const { convert, defaultCurrency } = useExchangeRates();
   const { config, updateConfig } = useWidgetConfig<AccountsConfig>(
     WIDGET_ID,
@@ -92,18 +93,18 @@ export function CreditUtilizationAccountsWidget({
       configTitle={t('creditUtilizationAccounts.title')}
     >
       {isLoading ? (
-        <div className="flex-1 min-h-[260px] animate-pulse rounded-md bg-gray-100 dark:bg-gray-700/50" />
+        <div className="flex-1 min-h-[260px] animate-pulse skeleton-shimmer rounded-md bg-gray-100 dark:bg-gray-700/50" />
       ) : rows.length === 0 ? (
         <WidgetMessage>{t('creditUtilizationAccounts.empty')}</WidgetMessage>
       ) : (
         <div className="flex-1" style={{ minHeight: Math.min(chartMinHeight, 420) }}>
           <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <BarChart data={rows} layout="vertical" margin={{ left: 8, right: 24 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} horizontal={false} />
+              <CartesianGrid {...CHART_GRID_PROPS_HORIZONTAL_BARS} />
               <XAxis
                 type="number"
                 domain={[0, 100]}
-                tickFormatter={(v: number) => `${v}%`}
+                tickFormatter={(v: number) => `${formatPercentTrimmed(v)}`}
                 tick={{ fontSize: 11 }}
               />
               <YAxis type="category" dataKey="name" width={110} tick={{ fontSize: 11 }} />
@@ -115,7 +116,7 @@ export function CreditUtilizationAccountsWidget({
                     <ChartTooltipPanel>
                       <p className="font-medium text-gray-900 dark:text-gray-100">{row.name}</p>
                       <p className="text-sm text-gray-600 dark:text-gray-400">
-                        {t('creditUtilizationAccounts.utilization')}: {row.utilizationPercent.toFixed(1)}%
+                        {t('creditUtilizationAccounts.utilization')}: {formatPercent(row.utilizationPercent, 1)}
                       </p>
                       <p className="text-sm text-gray-600 dark:text-gray-400">
                         {t('creditUtilizationAccounts.used')}:{' '}

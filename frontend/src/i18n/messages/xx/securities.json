@@ -3,6 +3,7 @@
     "noneToUpdate": "[XX-No securities to update-XX]",
     "updated": "[XX-{count, plural, one {# security price updated} other {# security prices updated}}-XX]",
     "partialFailure": "[XX-Prices updated: {updated} succeeded, {failed} failed{symbols}-XX]",
+    "partialFailureWithReasons": "[XX-Prices updated: {updated} succeeded, {failed} failed{symbols}\n{reasons}-XX]",
     "failed": "[XX-Failed to refresh prices-XX]"
   },
   "page": {
@@ -10,6 +11,7 @@
     "subtitle": "[XX-Manage your stocks, ETFs, mutual funds, and other securities-XX]",
     "newSecurity": "[XX-+ New Security-XX]",
     "searchPlaceholder": "[XX-Search by symbol or name...-XX]",
+    "statusFilterLabel": "[XX-Status-XX]",
     "statusAll": "[XX-All ({count})-XX]",
     "statusActive": "[XX-Active ({count})-XX]",
     "statusInactive": "[XX-Inactive ({count})-XX]",
@@ -49,6 +51,7 @@
       "name": "[XX-Name-XX]",
       "type": "[XX-Type-XX]",
       "shares": "[XX-Shares-XX]",
+      "value": "[XX-Value-XX]",
       "exchange": "[XX-Exchange-XX]",
       "currency": "[XX-Currency-XX]",
       "provider": "[XX-Provider-XX]",
@@ -63,12 +66,10 @@
       "inactive": "[XX-Inactive-XX]",
       "inactiveShort": "[XX-Ina-XX]"
     },
-    "providerTitle": {
-      "override": "[XX-Per-security provider override-XX]",
-      "inherited": "[XX-Inherited from your default Quote Provider preference-XX]"
-    },
+    "providerInherited": "[XX-{provider} (default)-XX]",
     "columnTitles": {
       "shares": "[XX-Current shares held across all accounts-XX]",
+      "value": "[XX-Shares held across all accounts at the most recent price, in the security's own currency-XX]",
       "source": "[XX-Source of the most recent price-XX]"
     },
     "actions": {
@@ -115,7 +116,11 @@
     "exchangeLabel": "[XX-Exchange-XX]",
     "currencyLabel": "[XX-Currency-XX]",
     "currencyNotConfigured": "[XX-{code} — not in your currencies-XX]",
+    "currencyPlaceholder": "[XX-Select currency...-XX]",
+    "currencyNotReported": "[XX-The provider did not report this coin's currency. Choose the fiat currency it is quoted in.-XX]",
     "quoteProviderLabel": "[XX-Quote Provider-XX]",
+    "skipPriceUpdatesLabel": "[XX-Disable automatic price updates-XX]",
+    "skipPriceUpdatesHelp": "[XX-Monize will not fetch prices for this security. Use this for a security no provider can price; prices you enter yourself still count. Choosing a different quote provider or MSN Instrument ID turns updates back on.-XX]",
     "msnIdLabel": "[XX-MSN Instrument ID (advanced)-XX]",
     "lookupProviderAriaLabel": "[XX-Lookup provider-XX]",
     "lookupButton": "[XX-Lookup-XX]",
@@ -139,7 +144,11 @@
     "providers": {
       "auto": "[XX-Auto-XX]",
       "yahoo": "[XX-Yahoo-XX]",
-      "msn": "[XX-MSN-XX]"
+      "msn": "[XX-MSN-XX]",
+      "lse": "[XX-LSE-XX]",
+      "deutsche_boerse": "[XX-Deutsche Börse-XX]",
+      "bond_engine": "[XX-Bond engine-XX]",
+      "html_table": "[XX-Web page table-XX]"
     },
     "types": {
       "select": "[XX-Select type...-XX]",
@@ -189,16 +198,50 @@
       "deleteConfirm": "[XX-Delete-XX]",
       "deleteSuccess": "[XX-Deleted asset class \"{name}\"-XX]",
       "deleteFailed": "[XX-Could not delete asset class \"{name}\"-XX]"
+    },
+    "bondFetchAction": "[XX-Fetch {code} from the official source-XX]",
+    "bondFetching": "[XX-Fetching {code} from the issuer and its reference rates. This can take up to a minute.-XX]",
+    "bondFetchFailed": "[XX-The series could not be fetched.-XX]",
+    "bondCurrencyLocked": "[XX-This security is linked to a bond kind in {linkedCurrency}. Set the currency back to {linkedCurrency}, or unlink the bond kind first (unlinking removes its calculated prices).-XX]",
+    "bondProgramLabel": "[XX-Bond kind-XX]",
+    "bondProgramNone": "[XX-Not linked-XX]",
+    "bondProgramCurrent": "[XX-Linked bond kind-XX]",
+    "bondProgramLoading": "[XX-Loading the bond kinds...-XX]",
+    "bondProgramLoadFailed": "[XX-The bond kinds could not be loaded, so a bond kind cannot be linked yet.-XX]",
+    "bondProgramRetry": "[XX-Retry-XX]",
+    "bondNoPrograms": "[XX-The bond catalog holds no bond kind yet.-XX]",
+    "bondAutoFetchLabel": "[XX-Fetch new series of this bond kind automatically-XX]",
+    "bondAutoFetchHelp": "[XX-When on, Monize reads each new series of this bond kind from the official source every day, so you can record a purchase without fetching the series first.-XX]",
+    "bondCountryLabel": "[XX-Country-XX]",
+    "bondCountryOther": "[XX-Other-XX]",
+    "bondCountryOtherInfo": "[XX-Support for bonds of other countries can be requested on the project's <link>GitHub</link>.-XX]",
+    "quoteTable": {
+      "urlLabel": "[XX-Price table webpage-XX]",
+      "urlHelp": "[XX-The page needs a table whose header has a date column and a closing price column.-XX]",
+      "test": "[XX-Test-XX]",
+      "previewFailed": "[XX-The page could not be read.-XX]",
+      "summary": "[XX-{count, plural, one {# day} other {# days}} from {first} to {last}-XX]",
+      "columns": "[XX-Columns used: {columns}-XX]",
+      "currency": "[XX-Currency shown on the page: {currency}-XX]",
+      "noCurrency": "[XX-The page shows no currency; prices are stored in the security's currency.-XX]",
+      "skipped": "[XX-{count, plural, one {# row could not be read and was skipped} other {# rows could not be read and were skipped}}-XX]",
+      "headers": {
+        "date": "[XX-Date-XX]",
+        "open": "[XX-Open-XX]",
+        "high": "[XX-High-XX]",
+        "low": "[XX-Low-XX]",
+        "close": "[XX-Close-XX]",
+        "volume": "[XX-Volume-XX]"
+      }
     }
   },
   "priceForm": {
     "dateLabel": "[XX-Date-XX]",
     "closePriceLabel": "[XX-Close Price-XX]",
-    "openPriceLabel": "[XX-Open Price-XX]",
-    "highPriceLabel": "[XX-High Price-XX]",
-    "lowPriceLabel": "[XX-Low Price-XX]",
-    "volumeLabel": "[XX-Volume-XX]",
-    "optionalPlaceholder": "[XX-Optional-XX]",
+    "openPriceLabel": "[XX-Open Price (optional)-XX]",
+    "highPriceLabel": "[XX-High Price (optional)-XX]",
+    "lowPriceLabel": "[XX-Low Price (optional)-XX]",
+    "volumeLabel": "[XX-Volume (optional)-XX]",
     "submitCreate": "[XX-Add Price-XX]",
     "submitUpdate": "[XX-Update Price-XX]"
   },
@@ -246,7 +289,9 @@
     },
     "groupCount": "[XX-{count} price(s)-XX]",
     "expandAll": "[XX-Expand all-XX]",
-    "collapseAll": "[XX-Collapse all-XX]"
+    "collapseAll": "[XX-Collapse all-XX]",
+    "addYearButton": "[XX-Add Another Year of History-XX]",
+    "addYearTitle": "[XX-Fetch one more year of historical prices from the provider-XX]"
   },
   "transactionHistory": {
     "accountLabel": "[XX-Account-XX]",
@@ -284,7 +329,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "[XX-Reinvest Long-Term Cap Gain-XX]",
       "CAPITAL_GAIN_SHORT": "[XX-Short-Term Capital Gain-XX]",
       "CAPITAL_GAIN_LONG": "[XX-Long-Term Capital Gain-XX]",
-      "REDEEM": "[XX-Redeem CD/Bond-XX]"
+      "REDEEM": "[XX-Redeem CD/Bond-XX]",
+      "RETURN_OF_CAPITAL": "[XX-Return of Capital-XX]"
     },
     "toasts": {
       "loadHistoryFailed": "[XX-Failed to load history-XX]",
@@ -333,11 +379,20 @@
     "nameRequired": "[XX-Name is required-XX]",
     "nameMax": "[XX-Name must be 255 characters or less-XX]",
     "currencyRequired": "[XX-Currency is required-XX]",
-    "descriptionMax": "[XX-Description must be 5000 characters or fewer-XX]"
+    "bondProgramRequired": "[XX-Bond kind is required-XX]",
+    "descriptionMax": "[XX-Description must be 5000 characters or fewer-XX]",
+    "quoteUrlRequired": "[XX-Enter the page that has the price table.-XX]",
+    "quoteUrlInvalid": "[XX-Enter a full address starting with http:// or https://.-XX]"
   },
   "priceValidation": {
     "dateRequired": "[XX-Date is required-XX]",
     "priceRequired": "[XX-Price is required-XX]",
     "priceNonNegative": "[XX-Price must be a non-negative number-XX]"
+  },
+  "priceAlert": {
+    "label": "[XX-Price change alert (%)-XX]",
+    "help": "[XX-Leave blank to disable. Alerts on a rise or fall since the previous available session, at most once per instrument per UTC day.-XX]",
+    "range": "[XX-Enter a percentage from 0.1 to 1000.-XX]",
+    "chartLabel": "[XX-Include a chart in price alerts-XX]"
   }
 }

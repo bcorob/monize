@@ -1,29 +1,50 @@
 import {
   Injectable,
-  Logger,
+  NotFoundException,
   ServiceUnavailableException,
 } from "@nestjs/common";
 import { DataSource, EntityManager } from "typeorm";
 import { ScheduledTransaction } from "./entities/scheduled-transaction.entity";
 import { ScheduledTransactionSplit } from "./entities/scheduled-transaction-split.entity";
-import { Account, AccountType } from "../accounts/entities/account.entity";
-import { PaymentFrequency } from "../accounts/loan-amortization.util";
-import { getPeriodicRate } from "../accounts/mortgage-amortization.util";
-import { roundMoney } from "../common/round.util";
-import {
-  allocateLoanPayment,
-  LoanPaymentAllocation,
-} from "../accounts/loan-payment-waterfall.util";
-import { withScopedDb } from "../common/db/scoped-db";
-import { ensureYMD } from "../common/recurrence";
-import { tr } from "../i18n/translate";
-import { ACCOUNT_BALANCE_AS_OF_SQL } from "../common/ledger-balance.sql";
+import { ScheduledTransactionOverride } from "./entities/scheduled-transaction-override.entity";
 import { LoanRateChange } from "../loan-rate-changes/entities/loan-rate-change.entity";
-import { effectiveAnnualRateOn } from "../accounts/effective-loan-rate.util";
+import { Account } from "../accounts/entities/account.entity";
+import { ensureYMD } from "../common/recurrence";
+import { addDaysYMD } from "../common/date-utils";
 import {
-  DEFAULT_PERIODS_PER_YEAR,
-  periodsPerYearForStoredFrequency,
-} from "../accounts/payment-frequency.util";
+  LoanOccurrence,
+  loanProjectionOccurrences,
+  projectLoanOccurrences,
+} from "../loan-installments/project-loan-occurrences";
+import { bookLoanAllocation } from "../accounts/loan-payment-waterfall.util";
+import {
+  bookSplitsAtMinorUnit,
+  currencyMinorUnitDecimals,
+  LOAN_LIKE_ACCOUNT_TYPES,
+  minorUnitAbsorbIndex,
+} from "../common/currency-minor-unit.util";
+import { withScopedDb } from "../common/db/scoped-db";
+import { FIAT_MONEY_DECIMALS, roundMoney } from "../common/round.util";
+import {
+  loadCurrencyPlaces,
+  moneyDecimalsForCode,
+} from "../common/currency-places.util";
+import { tr } from "../i18n/translate";
+import {
+  datedLoanDebt,
+  datedLoanDebts,
+} from "../accounts/dated-loan-debt.util";
+import {
+  findLoanAccount,
+  InstallmentPurpose,
+  readLoanFees,
+  resolveInstallmentCore,
+  ResolvedInstallment,
+} from "../loan-installments/price-installment";
+import {
+  rewriteLoanTemplate,
+  TemplateRewritePurpose,
+} from "../loan-installments/reprice-template";
 
 // The account types that carry a scheduled loan-payment structure and therefore
 // need their next principal/interest split advanced after each posting. This set
@@ -31,69 +52,19 @@ import {
 // that structure -- it accepts LOAN, MORTGAGE and LINE_OF_CREDIT, so a LOC left
 // out of the recalculation would keep billing the first installment's split
 // forever (issue #1154 re-review).
-const LOAN_LIKE_ACCOUNT_TYPES: ReadonlySet<AccountType> = new Set([
-  AccountType.LOAN,
-  AccountType.MORTGAGE,
-  AccountType.LINE_OF_CREDIT,
-]);
+// The list itself is `LOAN_LIKE_ACCOUNT_TYPES` in
+// `common/currency-minor-unit.util.ts`, shared with the minor-unit booking.
 
-/** The template's managed lines: a principal transfer, one interest line, and
- *  optionally an extra-principal transfer. */
-interface LoanTemplateSplits {
-  principalSplit?: ScheduledTransactionSplit;
-  interestSplit: ScheduledTransactionSplit;
-  extraPrincipalSplit?: ScheduledTransactionSplit;
-}
-
-/**
- * Whether the installment is being priced to advance the stored TEMPLATE or to
- * post an OCCURRENCE. The difference is one rule and it is load-bearing.
- *
- * The template may grow back toward the account's configured payment: a clamp
- * written for one installment must not become the standing instruction (review
- * #1131). An occurrence may NOT: the parent it posts is the bill the user was
- * shown on the bills page and in the Post dialog, so re-pricing may re-divide
- * that total between interest and principal and never resize it. Letting the
- * posting take `max(template, account.payment_amount)` would move more money
- * than any surface displayed, the preview/commit divergence the FX rules call
- * out ("a preview computes what the commit will do, through the same code").
+/*
+ * The pricing itself -- `InstallmentPurpose`, `ResolvedInstallment`, the
+ * dated rate, the method principal and the waterfall -- lives in
+ * `backend/src/loan-installments/price-installment.ts`, and the template
+ * rewrite in `reprice-template.ts` beside it, so the settlement of a bank
+ * debit (`docs/specs/loan-installment-settlement.md`) prices through the same
+ * code without importing this service. This class is the Nest door to that
+ * module for the scheduled-transaction paths: it opens the transaction and
+ * keeps the posting path's defaults.
  */
-type InstallmentPurpose = "template" | "posting";
-
-/** One resolved installment: what the next posting of this template should move. */
-type ResolvedInstallment =
-  | { kind: "declined"; reason: string }
-  /** The ledger could not be read -- not a zero balance, and not "not a loan". */
-  | { kind: "unreadable"; reason: string }
-  | {
-      kind: "paid-off";
-      debt: number;
-      /**
-       * Whether the template is one this service manages (principal transfer +
-       * one identifiable interest line, optionally an extra-principal
-       * transfer). A retired debt is only a reason to withhold an occurrence's
-       * money when every line of the bill is one of those: a mortgage template
-       * carrying an escrow, tax or insurance line still owes those lines when
-       * the mortgage principal reaches zero, and skipping the write would
-       * silently stop paying them.
-       */
-      managed: boolean;
-    }
-  | {
-      kind: "ok";
-      allocation: LoanPaymentAllocation;
-      template: LoanTemplateSplits;
-      debt: number;
-      /** The rate actually priced at -- the timeline's, not the scalar. */
-      annualRate: number;
-      /** Configured installment total, extra included -- what drove the parent. */
-      paymentAmount: number;
-      basePaymentAmount: number;
-      /** The configured extra, before the waterfall clamped it. */
-      extraPrincipalAmount: number;
-      templateAmount: number;
-      templateExtraAmount: number;
-    };
 
 /** The effective split amounts a posting should write, keyed by scheduled-split id. */
 export interface LoanPostingAllocation {
@@ -121,176 +92,64 @@ export type LoanPostingDecision =
   | { kind: "retired" }
   | ({ kind: "allocation" } & LoanPostingAllocation);
 
+/**
+ * The answer of `GET /scheduled-transactions/:id/loan-occurrences`
+ * (`docs/specs/scheduled-loan-installment-pricing.md` section 8.1).
+ * `occurrences` is empty unless `status` is `priced`; for the other two the
+ * client shows what the posting will move, which is the snapshot
+ * `ScheduledOccurrenceService` already answers.
+ */
+export interface LoanOccurrencesProjection {
+  scheduledTransactionId: string;
+  loanAccountId: string | null;
+  /**
+   * `not-a-loan`: no transfer into a loan-like account; `declined`: a shape
+   * the core does not price, or a foreign-currency schedule, which the
+   * posting does not re-price either.
+   */
+  status: "priced" | "not-a-loan" | "declined";
+  currencyCode: string;
+  occurrences: LoanOccurrence[];
+}
+
+/**
+ * How far past the cursor the recurrence may be walked for a projection: a
+ * runaway bound, not a horizon. The count bounds the result, and the walk
+ * stops once that many occurrences are settled (`expandOccurrenceSlots`), so
+ * only a schedule with fewer occurrences left than asked for reaches this.
+ */
+const LOAN_PROJECTION_WALK_DAYS = 36_525;
+
 @Injectable()
 export class ScheduledTransactionLoanService {
-  private readonly logger = new Logger(ScheduledTransactionLoanService.name);
-
   constructor(private dataSource: DataSource) {}
 
   async recalculateLoanPaymentSplits(
     scheduledTransactionId: string,
   ): Promise<void> {
-    return withScopedDb(this.dataSource, async (m) => {
-      // This writer mutates the child split set, so it must serialize through
-      // the same parent lock the posting path takes (issue #1154 re-review): a
-      // recalculation that changed principal/interest without the lock could
-      // land between a poster's split-set guard and its write, and because a
-      // P/I reallocation leaves the parent total unchanged, the poster's own
-      // parent lock would not have blocked it. Lock the parent, then read the
-      // current child set and derive the loan from it -- never from a loan id
-      // captured off a pre-lock snapshot.
-      const scheduledTransaction = await m
-        .getRepository(ScheduledTransaction)
-        .findOne({
-          where: { id: scheduledTransactionId },
-          lock: { mode: "pessimistic_write" },
-        });
+    return this.rewriteTemplate(scheduledTransactionId, "template");
+  }
 
-      if (!scheduledTransaction || !scheduledTransaction.isActive) {
-        return;
-      }
+  /**
+   * Reprice a loan template after its mortgage's amortization method changed
+   * (docs/specs/mortgage-types.md, section 5.6): to the method's installment
+   * for LINEAR and INTEREST_ONLY, and to the account's new constant payment for
+   * an annuity type. Called by the account update in the same transaction as
+   * the type change, after the account row is written and locked (accounts
+   * before scheduled transactions, `docs/concurrency-and-idempotency.md`
+   * section 5).
+   */
+  async repriceLoanTemplate(scheduledTransactionId: string): Promise<void> {
+    return this.rewriteTemplate(scheduledTransactionId, "reconfigure");
+  }
 
-      const splits = await m.getRepository(ScheduledTransactionSplit).find({
-        where: { scheduledTransactionId },
-      });
-
-      const loanAccount = await this.findLoanAccount(m, splits);
-      if (!loanAccount) {
-        return;
-      }
-
-      // Recalculation runs after the schedule advances, so the installment being
-      // prepared is the one due at the (new) nextDueDate.
-      const installment = await this.resolveInstallment(
-        m,
-        scheduledTransaction,
-        splits,
-        loanAccount,
-        ensureYMD(scheduledTransaction.nextDueDate),
-        "template",
-      );
-
-      // A failed ledger read is not a template this method cannot account for,
-      // and the remedy below ("set the interest category") would send the
-      // reader nowhere. Two causes, two messages.
-      if (installment.kind === "unreadable") {
-        this.logger.warn(
-          `Skipping loan recalculation for scheduled transaction ${scheduledTransactionId}: ` +
-            `${installment.reason}. The stored principal/interest split stays at last period's ` +
-            `figures until a later recalculation reads the ledger successfully.`,
-        );
-        return;
-      }
-
-      if (installment.kind === "paid-off") {
-        // A LINE OF CREDIT owing nothing is not a finished loan -- it is a
-        // revolving facility at a zero (or credit) balance, and the user can
-        // draw on it again tomorrow. Deactivating its schedule is not
-        // recoverable from the UI, so it keeps billing whatever the template
-        // holds and simply writes no new split this period.
-        //
-        // This matters more since the debt became `max(0, -balance)`: an
-        // overpaid account in credit now reads as owing nothing, where the
-        // old `Math.abs` read a credit balance as fresh debt and kept
-        // amortizing it. That change is right (it matches `debtMagnitude` on
-        // the client) but it must not take a revolving account's schedule
-        // down with it.
-        if (loanAccount.accountType === AccountType.LINE_OF_CREDIT) {
-          this.logger.log(
-            `Loan recalculation: line of credit ${loanAccount.id} owes nothing through ` +
-              `${ensureYMD(scheduledTransaction.nextDueDate)}; leaving the schedule active ` +
-              `(a revolving facility can be drawn on again).`,
-          );
-          return;
-        }
-        await m
-          .getRepository(ScheduledTransaction)
-          .update(scheduledTransactionId, { isActive: false });
-        return;
-      }
-
-      if (installment.kind === "declined") {
-        this.logger.warn(
-          `Skipping loan recalculation for scheduled transaction ${scheduledTransactionId}: ` +
-            `${installment.reason}. ` +
-            `Rewriting the parent would leave it unequal to the sum of its children and the occurrence would stop posting. ` +
-            `Set the loan's interest category, or keep the template to principal + interest (+ extra principal).`,
-        );
-        return;
-      }
-
-      const {
-        allocation,
-        template,
-        debt,
-        paymentAmount,
-        basePaymentAmount,
-        extraPrincipalAmount,
-        templateAmount,
-        templateExtraAmount,
-      } = installment;
-      const { principalSplit, interestSplit, extraPrincipalSplit } = template;
-
-      const newInterest = allocation.interest;
-      const newPrincipal = allocation.principal;
-      const finalExtraPrincipal = allocation.extraPrincipal;
-      const requiredParentAmount = allocation.total;
-
-      this.logger.log(
-        `Recalculate loan splits: balance=${debt}, rate=${installment.annualRate}%, ` +
-          `freq=${loanAccount.paymentFrequency || scheduledTransaction.frequency}, ` +
-          `basePayment=${basePaymentAmount}, ` +
-          `extra=${extraPrincipalAmount} (final ${finalExtraPrincipal}), ` +
-          `newPrincipal=${newPrincipal}, newInterest=${newInterest}, ` +
-          `isMortgage=${loanAccount.accountType === "MORTGAGE"}, ` +
-          `isCanadian=${loanAccount.isCanadianMortgage}`,
-      );
-
-      if (principalSplit) {
-        principalSplit.amount = -newPrincipal;
-        await m.getRepository(ScheduledTransactionSplit).save(principalSplit);
-      }
-
-      if (interestSplit) {
-        interestSplit.amount = -newInterest;
-        await m.getRepository(ScheduledTransactionSplit).save(interestSplit);
-      }
-
-      // The extra principal child was never written here, so a clamped total had
-      // nowhere to land: the parent would shrink while the children still summed
-      // to the unclamped figure, and the posting path's split validator requires
-      // exact 4dp equality between them (audit P5-008 again, on the child the
-      // first fix did not reach). Written whenever it differs from what the
-      // template holds -- in either direction, so one clamped installment does
-      // not become the standing instruction (review #1131).
-      if (extraPrincipalSplit && finalExtraPrincipal !== templateExtraAmount) {
-        extraPrincipalSplit.amount = -finalExtraPrincipal;
-        await m
-          .getRepository(ScheduledTransactionSplit)
-          .save(extraPrincipalSplit);
-      }
-
-      // Parent and children are written in the same transaction, so a posting
-      // can never see one without the other. The parent is written whenever the
-      // next installment differs from what the template holds: shrunk when the
-      // debt no longer needs the whole configured payment, and grown back
-      // toward the configured payment when a clamp written for one installment
-      // no longer binds -- a voided final payment or an imported balance must
-      // not leave the schedule billing the clamped figure forever (review
-      // #1131). `allocateLoanPayment` bounds the total by the configured
-      // payment, so this can never grow past what the user set.
-      if (
-        requiredParentAmount > 0 &&
-        requiredParentAmount !== roundMoney(templateAmount)
-      ) {
-        await m
-          .getRepository(ScheduledTransaction)
-          .update(scheduledTransactionId, { amount: -requiredParentAmount });
-        this.logger.log(
-          `Loan payment recalculated: scheduled amount changed from ${templateAmount} to ${requiredParentAmount} (configured payment ${paymentAmount}, outstanding balance ${debt})`,
-        );
-      }
-    });
+  private async rewriteTemplate(
+    scheduledTransactionId: string,
+    purpose: TemplateRewritePurpose,
+  ): Promise<void> {
+    return withScopedDb(this.dataSource, (m) =>
+      rewriteLoanTemplate(m, scheduledTransactionId, purpose),
+    );
   }
 
   /**
@@ -311,6 +170,9 @@ export class ScheduledTransactionLoanService {
    *
    * The total is the bill the user was shown: this re-divides it between
    * interest and principal and never resizes it (see `InstallmentPurpose`).
+   * It is booked in the currency's smallest unit (`bookLoanAllocation`): the
+   * bill shows 1,170.65 for a 1,170.6458 installment, and 1,170.65 is what
+   * the bank debits (issue #1581).
    *
    * The decision distinguishes three outcomes, because two of them used to
    * share `null` and a retired loan therefore went on charging its whole stale
@@ -336,7 +198,7 @@ export class ScheduledTransactionLoanService {
     asOfDate: string,
   ): Promise<LoanPostingDecision> {
     return withScopedDb(this.dataSource, async (m) => {
-      const loanAccount = await this.findLoanAccount(m, splits);
+      const loanAccount = await findLoanAccount(m, splits);
       if (!loanAccount) {
         return { kind: "not-applicable" } as const;
       }
@@ -369,8 +231,21 @@ export class ScheduledTransactionLoanService {
         return { kind: "not-applicable" } as const;
       }
 
-      const { allocation, template } = installment;
+      // Priced at storage precision, booked in the currency's smallest unit:
+      // the account this debits moves whole cents (issue #1581). The posting
+      // path excludes a foreign-currency schedule, so the schedule's currency
+      // is the source account's.
+      const allocation = bookLoanAllocation(
+        installment.allocation,
+        currencyMinorUnitDecimals(scheduledTransaction.currencyCode),
+        installment.debt,
+      );
+      const { template } = installment;
       const amountsBySplitId = new Map<string, number>();
+      // A bill below the accrued interest carries a NEGATIVE principal (the
+      // capitalized shortfall), so its line is positive: a transfer FROM the
+      // loan, which raises the debt. The parent stays the bill shown, the
+      // lines still sum to it, and the same transaction books both.
       if (template.principalSplit?.id) {
         amountsBySplitId.set(template.principalSplit.id, -allocation.principal);
       }
@@ -383,11 +258,76 @@ export class ScheduledTransactionLoanService {
           -allocation.extraPrincipal,
         );
       }
+      // A fee line posts as the bill showed it (INV-LOAN-011): the posting
+      // re-divides only the loan portion, and the fee lines are already in
+      // whole minor units.
+      for (const line of installment.fees) {
+        if (line.split.id) amountsBySplitId.set(line.split.id, -line.amount);
+      }
       return {
         kind: "allocation" as const,
         amountsBySplitId,
-        parentAmount: -allocation.total,
+        parentAmount: -roundMoney(allocation.total + installment.feeTotal),
       };
+    });
+  }
+
+  /**
+   * The stored template booked in the currency's smallest unit: every line and
+   * the parent rounded to it, the rounding difference on the loan's principal
+   * line, or on the largest line of a split set that pays no loan
+   * (`bookSplitsAtMinorUnit` and `minorUnitAbsorbIndex`, mirrored by the
+   * client). It is what the Post dialog pre-fills, so the posting path
+   * compares the dialog's lines with it to tell an unchanged echo, which
+   * re-prices from the ledger, from figures the user typed, which post as
+   * given; and it is what an automatic posting books when the template is not
+   * one the loan pricing re-divides (issue #1581).
+   */
+  async bookTemplateAtMinorUnit(
+    scheduledTransaction: ScheduledTransaction,
+    splits: ScheduledTransactionSplit[],
+  ): Promise<LoanPostingAllocation> {
+    return withScopedDb(this.dataSource, async (m) => {
+      // A coin's smallest unit is its own places (a satoshi), which every
+      // stored line already is at (INV-MONEY-001): booking it at a fiat
+      // minor unit would post a 0.005025 BTC template as 0.01. The stored
+      // template is its own booking.
+      const places = await loadCurrencyPlaces(m, [
+        scheduledTransaction.currencyCode,
+      ]);
+      if (
+        moneyDecimalsForCode(places, scheduledTransaction.currencyCode) >
+        FIAT_MONEY_DECIMALS
+      ) {
+        const amountsBySplitId = new Map<string, number>();
+        for (const split of splits) {
+          if (split.id) amountsBySplitId.set(split.id, Number(split.amount));
+        }
+        return {
+          amountsBySplitId,
+          parentAmount: Number(scheduledTransaction.amount),
+        };
+      }
+      const accountTypeById = new Map<string, string>();
+      for (const split of splits) {
+        const accountId = split.transferAccountId;
+        if (!accountId || accountTypeById.has(accountId)) continue;
+        const account = await m
+          .getRepository(Account)
+          .findOne({ where: { id: accountId } });
+        if (account) accountTypeById.set(account.id, account.accountType);
+      }
+      const booked = bookSplitsAtMinorUnit(
+        splits.map((s) => Number(s.amount)),
+        Number(scheduledTransaction.amount),
+        currencyMinorUnitDecimals(scheduledTransaction.currencyCode),
+        minorUnitAbsorbIndex(splits, accountTypeById),
+      );
+      const amountsBySplitId = new Map<string, number>();
+      splits.forEach((s, index) => {
+        if (s.id) amountsBySplitId.set(s.id, booked.amounts[index]);
+      });
+      return { amountsBySplitId, parentAmount: booked.parentAmount };
     });
   }
 
@@ -473,7 +413,7 @@ export class ScheduledTransactionLoanService {
         return { nextDueDate: null, debt: null };
       }
 
-      const debt = await this.datedLoanDebt(m, loanAccount, nextDueDate);
+      const debt = await datedLoanDebt(m, loanAccount, nextDueDate);
       if (debt === null) {
         // "The ledger could not be read" is not "this loan has no scheduled
         // payment" -- the caller reads the second as licence to project from
@@ -489,106 +429,159 @@ export class ScheduledTransactionLoanService {
     });
   }
 
-  /** The loan-like account a split set transfers to, if any. */
-  private async findLoanAccount(
-    m: EntityManager,
-    splits: ScheduledTransactionSplit[],
-  ): Promise<Account | null> {
-    for (const split of splits) {
-      if (!split.transferAccountId) continue;
-      const candidate = await m.getRepository(Account).findOne({
-        where: { id: split.transferAccountId },
-      });
-      if (candidate && LOAN_LIKE_ACCOUNT_TYPES.has(candidate.accountType)) {
-        return candidate;
-      }
-    }
-    return null;
-  }
-
   /**
-   * The outstanding debt through `asOfDate`, from the authoritative ledger:
-   * opening balance plus every non-void, top-level transaction dated on or
-   * before that date -- the same expression `recalculateCurrentBalance` and the
-   * balances-as-of report use, with the installment boundary in place of today.
+   * The next `count` occurrences of a loan bill, each priced at its own due
+   * date (spec section 8): identity from `expandOccurrenceSlots`, the ledger
+   * debt at every date in one statement, the timeline in one read, and the
+   * fold of `projectLoanOccurrences` over them. Nothing is locked: this is a
+   * read, and what the posting books is decided at the posting boundary.
    *
-   * `accounts.current_balance` deliberately excludes future-dated rows, so it
-   * cannot price an installment after a future payment has been posted; and a
-   * previously stored principal/interest split is money already rounded to 4dp,
-   * so advancing it with an amortization recurrence compounds the rounding
-   * (issue #1253). The dated ledger balance is the one source both the next
-   * bill and the amortization projection can agree on.
-   *
-   * Null only when the account row cannot be read back (deleted concurrently);
-   * a failed lookup is not a zero balance.
+   * A schedule that is not the caller's is not found; one that transfers to
+   * no loan-like account answers `not-a-loan`; an inactive one has no
+   * occurrence to price and answers an empty list. **Throws when the ledger
+   * cannot be read** (8.4): a projected figure a default stood in for would
+   * be a guess the reader cannot tell from a fact.
    */
-  private async datedLoanDebt(
-    m: EntityManager,
-    loanAccount: Account,
-    asOfDate: string,
-  ): Promise<number | null> {
-    const rows: Array<{ balance: string }> = await m.query(
-      ACCOUNT_BALANCE_AS_OF_SQL,
-      [loanAccount.id, loanAccount.userId, asOfDate],
+  async projectLoanOccurrences(
+    userId: string,
+    scheduledTransactionId: string,
+    count: number,
+  ): Promise<LoanOccurrencesProjection> {
+    const projection = await withScopedDb(this.dataSource, (m) =>
+      this.projectWithin(m, userId, scheduledTransactionId, count),
     );
-    if (rows.length === 0 || rows[0].balance == null) {
-      return null;
+    if (projection === null) {
+      throw new ServiceUnavailableException(
+        tr(
+          "errors.scheduled.loanLedgerUnreadable",
+          "This loan payment could not be priced because its ledger balance could not be read. Try again.",
+        ),
+      );
     }
-    // Debt accounts store the balance negative; an overpaid balance (in
-    // credit) reads as retired rather than as fresh debt.
-    return Math.max(0, -roundMoney(Number(rows[0].balance)));
+    return projection;
   }
 
   /**
-   * The periodic rate the installment accrues at. One lookup for both
-   * frequency spellings: the column is a bare VARCHAR written by two paths, so
-   * a MORTGAGE row can hold the recurrence spelling SEMIMONTHLY -- cast into
-   * getMortgagePeriodsPerYear it fell through to that function's monthly
-   * default, and every posted split booked twice the interest for the life of
-   * the loan. Account type still decides the COMPOUNDING (Canadian
-   * semi-annual); it never decided the count.
+   * `projectLoanOccurrences` for several schedules in one transaction, for
+   * `ScheduledOccurrenceService` (spec 8.7). A schedule whose ledger cannot
+   * be read answers `null` rather than failing the read: one loan's unknown
+   * figures are that loan's, and the bills, budgets and forecasts beside it
+   * still have theirs. The caller reports that schedule's projected
+   * occurrences as unknown, never as the template.
    */
-  /**
-   * The annual rate this loan carries on `asOfDate`, from its recorded rate
-   * history, falling back to the account's own scalar when no row applies.
-   *
-   * Recording a rate change deliberately does not write `accounts.interest_rate`
-   * (see `effectiveAnnualRateOn`), so pricing an installment at that column
-   * charges a rate nobody pays -- and made the bill disagree with the
-   * amortization report even once the two priced the same balance. The rate is
-   * dated for the same reason the balance is: a change recorded for next month
-   * belongs to next month's installment, not this one.
-   */
-  private async datedAnnualRate(
+  async projectLoanOccurrencesMany(
+    userId: string,
+    requests: ReadonlyArray<{ scheduledTransactionId: string; count: number }>,
+  ): Promise<Map<string, LoanOccurrencesProjection | null>> {
+    const projections = new Map<string, LoanOccurrencesProjection | null>();
+    if (requests.length === 0) return projections;
+    await withScopedDb(this.dataSource, async (m) => {
+      for (const { scheduledTransactionId, count } of requests) {
+        projections.set(
+          scheduledTransactionId,
+          await this.projectWithin(m, userId, scheduledTransactionId, count),
+        );
+      }
+    });
+    return projections;
+  }
+
+  /** The body of both projections; `null` when the ledger cannot be read (8.4). */
+  private async projectWithin(
     m: EntityManager,
-    loanAccount: Account,
-    asOfDate: string,
-  ): Promise<number> {
-    const scalar = Number(loanAccount.interestRate);
-    const fallback = Number.isFinite(scalar) ? scalar : 0;
-    const rows = await m.getRepository(LoanRateChange).find({
+    userId: string,
+    scheduledTransactionId: string,
+    count: number,
+  ): Promise<LoanOccurrencesProjection | null> {
+    const schedule = await m
+      .getRepository(ScheduledTransaction)
+      .findOne({ where: { id: scheduledTransactionId, userId } });
+    if (!schedule) {
+      throw new NotFoundException(
+        tr(
+          "errors.scheduled.notFound",
+          `Scheduled transaction with ID ${scheduledTransactionId} not found`,
+          { id: scheduledTransactionId },
+        ),
+      );
+    }
+    const splits = await m
+      .getRepository(ScheduledTransactionSplit)
+      .find({ where: { scheduledTransactionId } });
+    const loanAccount = await findLoanAccount(m, splits);
+    if (!loanAccount) {
+      return {
+        scheduledTransactionId,
+        loanAccountId: null,
+        status: "not-a-loan" as const,
+        currencyCode: schedule.currencyCode ?? "",
+        occurrences: [],
+      };
+    }
+    const currencyCode = schedule.currencyCode ?? loanAccount.currencyCode;
+    // `post()` posts a foreign-currency schedule's converted amounts and
+    // never re-prices them (its `!fx` gate), so a figure priced here would
+    // be one the posting does not move. The snapshot answers it.
+    if (schedule.originalCurrencyCode && schedule.originalAmount !== null) {
+      return {
+        scheduledTransactionId,
+        loanAccountId: loanAccount.id,
+        status: "declined" as const,
+        currencyCode,
+        occurrences: [],
+      };
+    }
+
+    // Identity is the one expander's (INV-OCCURRENCE-003): the slots from
+    // the cursor, each matched to its override, ordered by the date it
+    // falls on, the first `count` of them.
+    const overrides = schedule.isActive
+      ? await m
+          .getRepository(ScheduledTransactionOverride)
+          .find({ where: { scheduledTransactionId } })
+      : [];
+    const occurrences = schedule.isActive
+      ? loanProjectionOccurrences(
+          schedule,
+          overrides,
+          count,
+          addDaysYMD(
+            ensureYMD(schedule.nextDueDate),
+            LOAN_PROJECTION_WALK_DAYS,
+          ),
+        )
+      : [];
+
+    const rateChanges = await m.getRepository(LoanRateChange).find({
       where: { accountId: loanAccount.id },
       order: { effectiveDate: "ASC" },
     });
-    return effectiveAnnualRateOn(rows, asOfDate, fallback) ?? fallback;
-  }
+    // Both dates of every occurrence: the slot prices the template chain,
+    // the date it falls on prices its lines (8.2).
+    const debtLedger = await datedLoanDebts(
+      m,
+      loanAccount,
+      occurrences.flatMap((o) => [o.originalDate, o.dueDate]),
+    );
+    if (debtLedger === null) return null;
 
-  private periodicRateFor(
-    loanAccount: Account,
-    frequency: PaymentFrequency,
-    interestRate: number,
-  ): number {
-    const periodsPerYear =
-      periodsPerYearForStoredFrequency(frequency) ?? DEFAULT_PERIODS_PER_YEAR;
-
-    return loanAccount.accountType === "MORTGAGE"
-      ? getPeriodicRate(
-          interestRate,
-          periodsPerYear,
-          loanAccount.isCanadianMortgage,
-          loanAccount.isVariableRate,
-        )
-      : interestRate / 100 / periodsPerYear;
+    const projection = projectLoanOccurrences({
+      schedule,
+      splits,
+      loanAccount,
+      rateChanges,
+      occurrences,
+      count,
+      debtLedger,
+      fees: await readLoanFees(m, loanAccount),
+    });
+    return {
+      scheduledTransactionId,
+      loanAccountId: loanAccount.id,
+      status: projection.status,
+      currencyCode,
+      occurrences: projection.occurrences,
+    };
   }
 
   /**
@@ -596,16 +589,14 @@ export class ScheduledTransactionLoanService {
    * template lines, measure the debt through `asOfDate` from the ledger, price
    * the interest at the periodic rate, and run the shared waterfall.
    *
-   * Interest comes from the dated ledger balance, never from the previously
-   * stored split values: those are money already rounded to 4dp, and the
-   * amortization recurrence (`next = prev_interest - prev_principal * rate`)
-   * is equivalent to recalculating from balance only when its inputs retain
-   * full precision -- so the recurrence drifted from the amortization report by
-   * a compounding cent (issue #1253). Both the post-posting recalculation and
-   * the posting-boundary resolution price through here, so the template and
-   * what actually posts cannot use two different rules.
+   * Both the post-posting recalculation and the posting-boundary resolution
+   * price through here, so the template and what actually posts cannot use
+   * two different rules. The body is `resolveInstallmentCore`
+   * (`backend/src/loan-installments/price-installment.ts`), which the
+   * settlement planner shares; a rate nothing records declines the
+   * installment for every purpose, never a 0 % fallback.
    */
-  private async resolveInstallment(
+  private resolveInstallment(
     m: EntityManager,
     scheduledTransaction: ScheduledTransaction,
     splits: ScheduledTransactionSplit[],
@@ -613,165 +604,20 @@ export class ScheduledTransactionLoanService {
     asOfDate: string,
     purpose: InstallmentPurpose,
   ): Promise<ResolvedInstallment> {
-    const loanAccountId = loanAccount.id;
-
-    const debt = await this.datedLoanDebt(m, loanAccount, asOfDate);
-    if (debt === null) {
-      return {
-        kind: "unreadable",
-        reason: `the ledger balance for loan account ${loanAccountId} could not be read`,
-      };
-    }
-
-    const templateAmount = Math.abs(Number(scheduledTransaction.amount));
-    const interestRate = await this.datedAnnualRate(m, loanAccount, asOfDate);
-    const frequency = (loanAccount.paymentFrequency ||
-      scheduledTransaction.frequency) as PaymentFrequency;
-
-    // Identify splits: there may be a regular principal transfer, an interest
-    // category split, and optionally a separate extra principal transfer.
-    // Extra principal splits have memo "Extra Principal" and transfer to the
-    // loan account. Regular principal also transfers to the loan account.
-    const extraPrincipalSplit = splits.find(
-      (s) =>
-        s.transferAccountId === loanAccountId &&
-        s.memo?.toLowerCase().includes("extra"),
-    );
-    const principalSplit = splits.find(
-      (s) => s.transferAccountId === loanAccountId && s !== extraPrincipalSplit,
-    );
-    // Prefer the loan's configured interest category. "The first categorized
-    // line" is an absence predicate -- it says the line is not the principal
-    // transfer, not that it is interest -- so on a template a user has added
-    // an escrow or insurance line to it recalculates whichever line happens to
-    // be listed first. The configured category is the explicit statement, and
-    // it is order-independent.
-    const categoryLines = splits.filter(
-      (s) => s.categoryId && !s.transferAccountId,
-    );
-    const interestSplit = loanAccount.interestCategoryId
-      ? categoryLines.find(
-          (s) => s.categoryId === loanAccount.interestCategoryId,
-        )
-      : categoryLines.length === 1
-        ? categoryLines[0]
-        : undefined;
-
-    // This method understands exactly one template shape: a principal
-    // transfer, one interest line, and optionally an extra-principal transfer.
-    // It reprices the parent as principal + interest + extra, which is the
-    // whole template only for that shape -- so a template carrying an escrow,
-    // insurance or tax line ends up with a parent that no longer equals the
-    // sum of its children, and the posting path's exact-4dp split validator
-    // then refuses every occurrence. The schedule stops posting silently, with
-    // the amount it would have charged nowhere on screen.
-    //
-    // So it declines rather than rewriting what it cannot account for. The
-    // cost is a P/I split that stays at last period's figures; the alternative
-    // cost is a bill that never posts again. Declining also removes the last
-    // place a line was chosen by position: with several categorized lines and
-    // no configured category, there is nothing here that identifies interest,
-    // and guessing is what put an amortization figure onto a property-tax line.
-    const unmanagedLines = splits.filter(
-      (s) =>
-        s !== interestSplit &&
-        s !== principalSplit &&
-        s !== extraPrincipalSplit,
-    );
-    const managed = !!interestSplit && unmanagedLines.length === 0;
-
-    // The debt is checked AFTER the shape, so "paid off" can say whether this
-    // is a bill whose every line the payoff settles. The order is the whole
-    // point: read the other way round, a mortgage template with an escrow line
-    // reports the same "paid off" as a plain principal+interest one, and a
-    // posting that withholds money on it stops paying the escrow.
-    if (debt <= 0.01) {
-      return { kind: "paid-off", debt, managed };
-    }
-
-    if (!managed) {
-      return {
-        kind: "declined",
-        reason: interestSplit
-          ? `${unmanagedLines.length} line(s) beyond principal/interest/extra`
-          : loanAccount.interestCategoryId
-            ? "no line carries the loan's configured interest category"
-            : `${categoryLines.length} categorized lines and no interest category configured on account ${loanAccountId}`,
-      };
-    }
-
-    // What the template holds is what was just posted -- including any clamp
-    // a previous pass wrote for that one installment (a final payment, an
-    // interest spike consuming the extra). Deriving the *configured* payment
-    // from it therefore ratchets: the clamp becomes the configuration and
-    // nothing can grow back, even after the balance is restored by a void or
-    // an import (review #1131). The durable configuration lives on the
-    // account (payment_amount / extra_payment_amount, kept in sync when the
-    // user edits the schedule); the template only wins where it is larger,
-    // which can only mean a user edit the account columns have not seen.
-    const templateExtraAmount = extraPrincipalSplit
-      ? Math.abs(Number(extraPrincipalSplit.amount))
-      : 0;
-    // Only a template advancement may grow back toward the configured payment;
-    // a posting re-divides the bill it was shown (see `InstallmentPurpose`).
-    const paymentAmount =
-      purpose === "posting"
-        ? templateAmount
-        : Math.max(templateAmount, Number(loanAccount.paymentAmount) || 0);
-    // The extra can only ride in an existing split row -- this recalculation
-    // never creates one -- so without the row the configured extra is 0.
-    const extraPrincipalAmount = !extraPrincipalSplit
-      ? 0
-      : purpose === "posting"
-        ? templateExtraAmount
-        : Math.max(
-            templateExtraAmount,
-            Number(loanAccount.extraPaymentAmount) || 0,
-          );
-    const basePaymentAmount = paymentAmount - extraPrincipalAmount;
-
-    const periodicRate = this.periodicRateFor(
+    return resolveInstallmentCore(m, {
+      scheduledTransaction,
+      splits,
       loanAccount,
-      frequency,
-      interestRate,
-    );
-
-    const newInterest = roundMoney(debt * periodicRate);
-    const newPrincipal = roundMoney(basePaymentAmount - newInterest);
-
-    // The clamp sequence -- interest-first across the whole installment
-    // (recheck RR2-006, DR3-01), principal bounded by the debt with the
-    // discretionary extra absorbing the shortfall (audit P5-008, FR-009) --
-    // is `allocateLoanPayment`, shared with the first installment written by
-    // `LoanPaymentSetupService` because the two must agree about what any
-    // installment looks like.
-    const allocation = allocateLoanPayment({
-      paymentAmount,
-      extraPrincipal: extraPrincipalAmount,
-      interest: newInterest,
-      principal: newPrincipal,
-      currentBalance: debt,
+      asOfDate,
+      purpose,
     });
-
-    return {
-      kind: "ok",
-      allocation,
-      template: { principalSplit, interestSplit, extraPrincipalSplit },
-      debt,
-      annualRate: interestRate,
-      paymentAmount,
-      basePaymentAmount,
-      extraPrincipalAmount,
-      templateAmount,
-      templateExtraAmount,
-    };
   }
 
   async findLoanAccountFromSplits(
     splits: ScheduledTransactionSplit[],
   ): Promise<string | null> {
     return withScopedDb(this.dataSource, async (m) => {
-      const account = await this.findLoanAccount(m, splits);
+      const account = await findLoanAccount(m, splits);
       return account ? account.id : null;
     });
   }

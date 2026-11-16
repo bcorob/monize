@@ -1,0 +1,287 @@
+{
+  "title": "सूचनाएं",
+  "unread": "{count} अपठित",
+  "markAllRead": "सभी पढ़ा हुआ चिह्नित करें",
+  "loading": "सूचनाएं लोड हो रही हैं...",
+  "empty": "कोई सूचना नहीं",
+  "undo": "पूर्ववत करें",
+  "buttonTitle": "सूचनाएं",
+  "buttonAriaLabel": "सूचनाएं",
+  "dismissAriaLabel": "सूचना खारिज करें",
+  "closeAriaLabel": "सूचनाएं बंद करें",
+  "emptyFiltered": "वर्तमान फ़िल्टर से कोई सूचना मेल नहीं खाती",
+  "deleteAll": "सभी हटाएँ",
+  "deleteAllConfirmTitle": "सूचनाएं हटाएं",
+  "deleteAllConfirmMessageAll": "सभी सूचनाएं हटाएं? इसे पूर्ववत नहीं किया जा सकता।",
+  "deleteAllConfirmMessageFiltered": "वर्तमान फ़िल्टर से मेल खाने वाली हर सूचना हटाएं, जिनमें न दिखाई गई भी शामिल हैं? इसे पूर्ववत नहीं किया जा सकता।",
+  "deleted": "{count, plural, one {# सूचना हटाई गई} other {# सूचनाएं हटाई गईं}}",
+  "deleteFailed": "सूचनाएं हटाई नहीं जा सकीं",
+  "filter": {
+    "financial": "वित्तीय",
+    "system": "सिस्टम"
+  },
+  "severity": {
+    "critical": "गंभीर",
+    "warning": "चेतावनी",
+    "success": "अच्छी खबर",
+    "info": "जानकारी"
+  },
+  "reminder": {
+    "remindAriaLabel": "मुझे इसकी याद दिलाएं",
+    "stopAriaLabel": "यह अनुस्मारक रोकें",
+    "stopped": "अनुस्मारक रोक दिया गया",
+    "stopFailed": "अनुस्मारक रोका नहीं जा सका",
+    "created": "अनुस्मारक सेट किया गया",
+    "createFailed": "अनुस्मारक सेट नहीं किया जा सका",
+    "dialogTitle": "मुझे याद दिलाएं",
+    "dialogDescription": "जब तक आप कार्रवाई नहीं करते, यह सूचना बाद में फिर से पाएं।",
+    "modeLabel": "आवृत्ति",
+    "modeRepeat": "जब तक मैं रोकूं, दोहराएं",
+    "modeOnce": "बस एक बार और",
+    "intervalLabelRepeat": "हर बार याद दिलाएं",
+    "intervalLabelOnce": "इसके बाद याद दिलाएं",
+    "durationMinutes": "{minutes, plural, one {# मिनट} other {# मिनट}}",
+    "durationHours": "{hours, plural, one {# घंटा} other {# घंटे}}",
+    "cancel": "रद्द करें",
+    "confirm": "अनुस्मारक सेट करें",
+    "pageTitle": "सक्रिय रिमाइंडर",
+    "empty": "कोई सक्रिय रिमाइंडर नहीं",
+    "loadFailed": "रिमाइंडर लोड नहीं हो सके",
+    "retry": "फिर से कोशिश करें",
+    "nextFire": "अगला रिमाइंडर: {date}",
+    "openTarget": "संबंधित पेज खोलें",
+    "delegateUnavailable": "रिमाइंडर प्रबंधित करने के लिए अपने खाते पर वापस जाएँ।"
+  },
+  "billDue": {
+    "titleOverdue": "{payee} अतिदेय",
+    "titleToday": "{payee} आज देय",
+    "titleTomorrow": "{payee} कल देय",
+    "titleInDays": "{payee} {days} दिनों में देय",
+    "amountDue": "{date} को {amount} देय",
+    "amountUnavailable": "राशि अनुपलब्ध (कोई वर्तमान विनिमय दर नहीं), {date} को देय"
+  },
+  "gemSignal": {
+    "riskTitle": "{strategy} {state} पर स्विच हो गई",
+    "riskMessage": "आपकी GEM रणनीति \"{strategy}\" {fromState} से {toState} में बदल गई। अनुशंसा की समीक्षा के लिए खोलें।",
+    "allocationTitle": "{strategy} ने अपना लक्ष्य बदला",
+    "allocationMessage": "आपकी GEM रणनीति \"{strategy}\" अब {target} को लक्षित करती है। अनुशंसा की समीक्षा के लिए खोलें।",
+    "riskOn": "risk-on",
+    "riskOff": "risk-off"
+  },
+  "bond": {
+    "maturitySoonTitle": "{series} की परिपक्वता {date} को है",
+    "maturitySoonMessage": "{quantity} × {series} {date} को परिपक्व होंगे। {payout}",
+    "interestTitle": "{series}: {date} को ब्याज भुगतान",
+    "interestMessage": "{quantity} × {series} पर {date} को {amount} का ब्याज मिलेगा। अगर यह अभी आपके खाते में नहीं है, तो इसे सिक्योरिटी पेज पर दर्ज करें।",
+    "interestMessageUnknown": "{quantity} × {series} पर {date} को ब्याज मिलेगा। राशि अभी ज्ञात नहीं है: जिस दर पर यह निर्भर है, वह प्रकाशित नहीं हुई है।",
+    "rateResetTitle": "{series}: नई ब्याज अवधि",
+    "rateResetMessage": "{series}: {date} से अवधि {period}, वार्षिक दर {rate}।",
+    "unbookedTitle": "{series}: परिपक्व हो चुका, मोचन दर्ज नहीं",
+    "unbookedMessage": "{quantity} × {series} {date} को परिपक्व हो चुके हैं और कोई मोचन दर्ज नहीं है। {payout} सिक्योरिटी पेज पर मोचन दर्ज करें।",
+    "payoutKnown": "भुगतान राशि {payout} है।",
+    "payoutUnknown": "भुगतान राशि अभी ज्ञात नहीं है: {reason}।",
+    "reason": {
+      "RATE_UNKNOWN": "जिस दर पर यह निर्भर है, वह अभी प्रकाशित नहीं हुई है",
+      "TERMS_INCOMPLETE": "सीरीज़ की शर्तें अधूरी हैं",
+      "PURCHASE_OUTSIDE_SALE_WINDOW": "खरीद की तारीख सीरीज़ की बिक्री अवधि से बाहर है",
+      "PURCHASE_AFTER_MATURITY": "खरीद की तिथि सीरीज़ की परिपक्वता तिथि पर या उसके बाद है",
+      "other": "संग्रहीत डेटा से इसकी गणना नहीं हो सकती"
+    },
+    "benchmarkTitle": "{benchmark}: नया अवलोकन {observation}",
+    "benchmarkIntro": "{publisher} ने {observation} के लिए {benchmark} प्रकाशित किया: {value}।",
+    "benchmarkSeries": "{series}: {date} से अवधि, वार्षिक दर {rate}।",
+    "benchmarkSeriesProjected": "{series}: {date} से अवधि, अनुमानित वार्षिक दर {rate}।",
+    "benchmarkSeriesUnknown": "{series}: {date} से अवधि, दर अभी ज्ञात नहीं है।",
+    "benchmarkMore": "और {more} अन्य।",
+    "missingTitle": "बॉन्ड के आँकड़े अभी ज्ञात नहीं हैं",
+    "missingMessage": "बॉन्ड के कुछ आँकड़ों की गणना नहीं हो सकती। {causes}",
+    "cause": {
+      "observation": "{benchmark} ({publisher}) का {observation} का अवलोकन संग्रहीत नहीं है: वह अभी प्रकाशित नहीं हुआ है, या उसके बाद फ़ीड प्राप्त नहीं की गई। बॉन्ड पेज पर रीफ़्रेश करें।",
+      "observationNoPublisher": "{benchmark} का {observation} का अवलोकन संग्रहीत नहीं है: वह अभी प्रकाशित नहीं हुआ है, या उसके बाद फ़ीड प्राप्त नहीं की गई। बॉन्ड पेज पर रीफ़्रेश करें।",
+      "terms": "{series} की शर्तें अधूरी हैं। बॉन्ड पेज पर सीरीज़ रीफ़्रेश करें।",
+      "purchase": "{date} को {series} की खरीद उसकी बिक्री अवधि ({from} से {to}) से बाहर है। खरीद की तारीख सुधारें।",
+      "purchaseAfterMaturity": "{date} को {series} की खरीद उसकी परिपक्वता ({maturity}) पर या उसके बाद है। खरीद की तिथि सुधारें।",
+      "lots": "बही से लॉट निकाले नहीं जा सकते ({code})। बही सुधारें।",
+      "lotsRow": "{action} ({date}): लॉट निकाले नहीं जा सकते ({code})। लेनदेन सुधारें।",
+      "lotsRowSeries": "{action} ({date}): किसी सीरीज़ से जुड़ा नहीं है ({code})। उस लेनदेन में सीरीज़ चुनें।",
+      "lotsRowRemoval": "{action} ({date}): खाते में उस सीरीज़ की जितनी मात्रा है, उससे अधिक हटाया जा रहा है ({code})। लेनदेन सुधारें।"
+    },
+    "action": {
+      "BUY": "खरीद",
+      "SELL": "बिक्री",
+      "REINVEST": "पुनर्निवेश",
+      "ADD_SHARES": "शेयर जोड़ना",
+      "REMOVE_SHARES": "शेयर हटाना",
+      "SPLIT": "स्प्लिट",
+      "TRANSFER_IN": "आने वाला ट्रांसफ़र",
+      "TRANSFER_OUT": "जाने वाला ट्रांसफ़र",
+      "other": "लेनदेन"
+    },
+    "benchmarks": {
+      "PL_CPI_GUS_YOY": "सीपीआई, 12 महीने (GUS)",
+      "PL_NBP_REFERENCE": "एनबीपी संदर्भ दर",
+      "US_CPI_U_NSA": "CPI-U, सभी मदें, मौसमी समायोजन के बिना (BLS)",
+      "US_TBILL_13W_MMY": "13 सप्ताह के ट्रेज़री बिल की प्रतिफल दर"
+    }
+  },
+  "portfolioMovement": {
+    "titleUp": "निवेश {percent}% ऊपर",
+    "titleDown": "निवेश {percent}% नीचे",
+    "messageUp": "{from} से {to} तक आपके निवेश {percent}% ऊपर हैं, जमा और निकासी को छोड़कर। समीक्षा के लिए खोलें।",
+    "messageDown": "{from} से {to} तक आपके निवेश {percent}% नीचे हैं, जमा और निकासी को छोड़कर। समीक्षा के लिए खोलें।"
+  },
+  "balanceThreshold": {
+    "titleLow": "{account} आपकी सीमा से नीचे है",
+    "titleHigh": "{account} आपकी सीमा से ऊपर है",
+    "messageLow": "{account} घटकर {balance} हो गया, आपकी {threshold} सीमा से नीचे।",
+    "messageHigh": "{account} बढ़कर {balance} हो गया, आपकी {threshold} सीमा से ऊपर।"
+  },
+  "system": {
+    "backupFailed": {
+      "title": "स्वचालित बैकअप विफल",
+      "message": "{user} का स्वचालित बैकअप विफल रहा: {error}"
+    },
+    "backupPartial": {
+      "title": "स्वचालित बैकअप अधूरा",
+      "messageAttachments": "{user} का बैकअप लिखा गया, लेकिन {expected} में से {missing} अनुलग्नक शामिल नहीं किए जा सके और {inconsistent} अपने मेटाडेटा से मेल नहीं खाते थे। पूर्ण बैकअप सुरक्षित रखे गए।",
+      "messagePromotion": "{user} का दैनिक बैकअप सफल रहा, लेकिन उसकी साप्ताहिक या मासिक प्रति नहीं लिखी जा सकी: {error}",
+      "messageRetention": "{user} का बैकअप सफल रहा, लेकिन पुरानी बैकअप फ़ाइलें साफ़ नहीं की जा सकीं: {error}"
+    },
+    "encryptionKeyMissing": {
+      "title": "एन्क्रिप्शन कुंजी कॉन्फ़िगर नहीं है",
+      "message": "ENCRYPTION_KEY सेट नहीं है, इसलिए बैकअप बिना एन्क्रिप्शन के लिखे जा रहे हैं और गोपनीय जानकारी संग्रहीत नहीं की जा सकती। भविष्य का संस्करण इसके बिना शुरू नहीं होगा।"
+    },
+    "jwtSecretWeak": {
+      "title": "JWT_SECRET कमज़ोर है",
+      "message": "JWT_SECRET एक प्रकाशित प्लेसहोल्डर है या बहुत अनुमान योग्य है, इसलिए सत्र टोकन जाली बनाए जा सकते हैं। एक मज़बूत मान बनाएं (openssl rand -base64 32)। इसे बदलने से प्रमाणीकरक ऐप के कोड काम करना बंद कर देते हैं और विश्वसनीय डिवाइस भुला दिए जाते हैं: उपयोगकर्ता बैकअप कोड से साइन इन करके 2FA फिर से सेट करते हैं, और जिनके पास बैकअप कोड नहीं है उनके लिए आप उपयोगकर्ता प्रबंधन में 2FA रीसेट करते हैं। पहले docs/backend/modules-and-runtime.md (Changing JWT_SECRET) देखें।"
+    },
+    "smtpFailure": {
+      "title": "ईमेल भेजना विफल हो रहा है",
+      "message": "Monize ईमेल नहीं भेज सका: {error}। सूचनाएँ और अनुस्मारक वितरित नहीं हो रहे हैं।"
+    },
+    "providerOutage": {
+      "title": "{provider} जवाब नहीं दे रहा है",
+      "message": "{provider} से बाज़ार डेटा उपलब्ध नहीं है। जब तक वह फिर से जवाब नहीं देता, कीमतें और सूचकांक डेटा पुराने हो सकते हैं।"
+    },
+    "providerRecovered": {
+      "title": "{provider} फिर से जवाब दे रहा है",
+      "message": "व्यवधान समाप्त हो गया है और {provider} से बाज़ार डेटा फिर से अपडेट हो रहा है।"
+    },
+    "scheduledPostFailed": {
+      "title": "{name} पोस्ट नहीं हो सका",
+      "message": "{date} को देय आपका नियोजित लेनदेन स्वचालित रूप से पोस्ट नहीं हुआ: {error}। आप इसे बिल और जमा अनुभाग से मैन्युअल रूप से पोस्ट कर सकते हैं।"
+    }
+  },
+  "priceMovement": {
+    "title": "कीमत में बदलाव का अलर्ट: {symbol} ({percent}%)",
+    "message": "{symbol}: पिछले उपलब्ध कारोबारी सत्र की तुलना में {percent}%।"
+  },
+  "bankSync": {
+    "expiringTitleToday": "{institution}: बैंक पहुंच आज समाप्त हो रही है",
+    "expiringTitleOneDay": "{institution}: बैंक पहुंच 1 दिन के भीतर समाप्त हो रही है",
+    "expiringTitleDays": "{institution}: बैंक पहुंच {days} दिनों के भीतर समाप्त हो रही है",
+    "expiringMessage": "{institution} को पढ़ने के लिए Monize को दी गई आपकी सहमति {date} को समाप्त हो रही है। सिंक जारी रखने के लिए Monize में कनेक्शन का नवीनीकरण करें।",
+    "expiredTitle": "{institution}: बैंक पहुंच समाप्त हो गई है",
+    "expiredMessage": "{institution} को पढ़ने के लिए Monize को दी गई आपकी सहमति समाप्त हो गई है। सिंक फिर शुरू करने के लिए Monize में कनेक्शन का नवीनीकरण करें।",
+    "failedTitle": "{institution}: सिंक विफल रहा",
+    "failedMessage": "{institution} का दैनिक सिंक इन खातों के लिए विफल रहा: {accounts}। कारण देखने के लिए बैंक सिंक सेटिंग्स खोलें।",
+    "failedCredentialsMessage": "{institution} का दैनिक सिंक शुरू नहीं हो सका, क्योंकि बैंक सिंक के क्रेडेंशियल मौजूद नहीं हैं या अस्वीकार कर दिए गए थे। उन्हें बैंक सिंक सेटिंग्स में जांचें।",
+    "unnamedAccount": "एक खाता",
+    "importedTitle": "{institution}: नए लेन-देन आयात हुए",
+    "importedMessage": "दैनिक सिंक द्वारा {institution} से आयात किए गए लेन-देन: {imported}।",
+    "importedNoneTitle": "{institution}: कोई नया लेन-देन नहीं",
+    "importedNoneMessage": "{institution} के दैनिक सिंक में कोई नया लेन-देन नहीं मिला।"
+  },
+  "emailReceiptsAttention": {
+    "title": "ईमेल रसीदों को ध्यान की आवश्यकता है",
+    "message": "आपके रसीद इनबॉक्स में {noParser} बिना प्रोफ़ाइल के और {parseFailed} जो उनकी प्रोफ़ाइल ने मान्यता नहीं दी है। समीक्षा के लिए खोलें।"
+  },
+  "aiReview": {
+    "readyTitle": "एआई प्रस्ताव आपकी स्वीकृति की प्रतीक्षा में हैं",
+    "readyMessage": "{count, plural, one {# एआई प्रस्ताव} other {# एआई प्रस्ताव}} आपकी स्वीकृति की प्रतीक्षा में हैं, जिनमें {added} नए हैं। उन्हें स्वीकृत या अस्वीकृत करने के लिए एआई समीक्षा इनबॉक्स खोलें।",
+    "expiringTitle": "एआई प्रस्ताव जल्द समाप्त होंगे",
+    "expiringMessage": "{count, plural, one {# एआई प्रस्ताव} other {# एआई प्रस्ताव}} जल्द समाप्त होंगे। पहला {date} को समाप्त होगा। उन्हें स्वीकृत या अस्वीकृत करने के लिए एआई समीक्षा इनबॉक्स खोलें।"
+  },
+  "warranty": {
+    "expiringTitle": "{name}: वारंटी {days, plural, one {# दिन} other {# दिनों}} के भीतर समाप्त हो रही है",
+    "expiringMessage": "{name} की वारंटी {date} को समाप्त हो रही है। इसके दस्तावेज़ देखने या दावा दर्ज करने के लिए इसे खोलें।",
+    "todayTitle": "{name}: वारंटी आज समाप्त हो रही है",
+    "todayMessage": "{name} की वारंटी आज, {date} को समाप्त हो रही है। इसके दस्तावेज़ देखने या दावा दर्ज करने के लिए इसे खोलें।"
+  },
+  "security": {
+    "oauthTitle": "नया ऐप कनेक्ट हुआ: {clientName}",
+    "oauthMessage": "एप्लिकेशन {clientName} को अभी आपके Monize खाते का एक्सेस दिया गया है। अगर यह आपने नहीं किया, तो अभी अपना पासवर्ड बदलें: इससे सभी कनेक्टेड एप्लिकेशन का एक्सेस रद्द हो जाएगा।",
+    "relayTitle": "एक नए कनेक्शन ने आपकी AI चैट का उत्तर दिया",
+    "relayMessage": "ऐसे कनेक्शन ने, जिसने पहले आपकी Monize AI चैट का उत्तर नहीं दिया था, अभी एक प्रॉम्प्ट उठाया है। अगर आपने इस असिस्टेंट को कनेक्ट नहीं किया, तो अपना पासवर्ड बदलें।"
+  },
+  "payrollDeduction": {
+    "resetTitle": "{category}: अगले वर्ष की अधिकतम राशि की पुष्टि करें",
+    "resetMessage": "{bill} पर {category} कटौती {date} को रीसेट होती है। यदि वार्षिक अधिकतम बदलता है तो उसे अपडेट करें; अन्यथा {amount} फिर से लागू होगा।"
+  },
+  "shared": {
+    "title": "साझा खर्च",
+    "message": "एक साझा समूह में बदलाव हुआ है। उसे देखने के लिए Monize खोलें।"
+  },
+  "native": {
+    "payments": {
+      "title": "भुगतान अनुस्मारक",
+      "body": "किसी बिल या नियोजित भुगतान पर आपका ध्यान चाहिए। विवरण के लिए Monize खोलें।"
+    },
+    "budgets": {
+      "title": "बजट चेतावनी",
+      "body": "आपके किसी बजट पर आपका ध्यान चाहिए। विवरण के लिए Monize खोलें।"
+    },
+    "system": {
+      "title": "सिस्टम सूचना",
+      "body": "Monize के पास आपके लिए एक सिस्टम सूचना है। विवरण के लिए ऐप खोलें।"
+    },
+    "balances": {
+      "title": "बैलेंस चेतावनी",
+      "body": "किसी खाते का बैलेंस आपके द्वारा निर्धारित सीमा को पार कर गया है। विवरण के लिए Monize खोलें।"
+    },
+    "investments": {
+      "title": "निवेश में हलचल",
+      "body": "आज आपके निवेश में हलचल हुई। विवरण के लिए Monize खोलें।"
+    },
+    "strategies": {
+      "title": "रणनीति संकेत",
+      "body": "आपकी किसी रणनीति ने अपनी अनुशंसा बदल दी है। विवरण के लिए Monize खोलें।"
+    },
+    "bank_sync": {
+      "title": "बैंक कनेक्शन",
+      "body": "एक बैंक कनेक्शन पर आपका ध्यान चाहिए। विवरण के लिए Monize खोलें।"
+    },
+    "bank_sync_activity": {
+      "title": "बैंक सिंक",
+      "body": "आपके बैंक सिंक में कुछ नया है। विवरण के लिए Monize खोलें।"
+    },
+    "email_receipts": {
+      "title": "ईमेल रसीदों को ध्यान की आवश्यकता है",
+      "body": "आपके रसीद इनबॉक्स में कुछ ईमेल को प्रोफ़ाइल की आवश्यकता है या एक सुधार की आवश्यकता है। विवरण के लिए Monize खोलें।"
+    },
+    "bonds": {
+      "title": "बॉन्ड सूचना",
+      "body": "आपके किसी बॉन्ड के बारे में नई जानकारी है। विवरण के लिए Monize खोलें।"
+    },
+    "ai_review": {
+      "title": "AI समीक्षा प्रस्ताव",
+      "body": "कुछ AI समीक्षा प्रस्ताव आपके निर्णय की प्रतीक्षा में हैं। विवरण के लिए Monize खोलें।"
+    },
+    "warranties": {
+      "title": "वारंटी रिमाइंडर",
+      "body": "आपकी एक वारंटी जल्द समाप्त हो रही है। विवरण के लिए Monize खोलें।"
+    },
+    "shared_expenses": {
+      "title": "साझा खर्च",
+      "body": "एक साझा समूह में बदलाव हुआ है। उसे देखने के लिए Monize खोलें।"
+    },
+    "security": {
+      "title": "सुरक्षा सूचना",
+      "body": "आपके Monize खाते को कौन एक्सेस कर सकता है, इसमें कुछ बदलाव हुआ है। विवरण के लिए Monize खोलें।"
+    },
+    "fallback": {
+      "title": "Monize",
+      "body": "Monize में आपके लिए एक नई सूचना है।"
+    }
+  }
+}

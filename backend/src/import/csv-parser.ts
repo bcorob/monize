@@ -11,11 +11,19 @@
 import type { QifTransaction, QifParseResult } from "./qif-parser";
 import { escapeRegExp } from "../common/escape-regexp.util";
 import { roundToDecimals } from "../common/round.util";
+import { isBlankCsvAmount, parseCsvAmount } from "./csv-amount.util";
+import { isCalendarDate } from "../common/validators/is-calendar-date.validator";
+import { monthFromName } from "./csv-month-names";
 
 export interface CsvHeadersResult {
   headers: string[];
   sampleRows: string[][];
   rowCount: number;
+  /**
+   * Per column, the date format that reads the most of its values over the
+   * whole file (`detectCsvDateFormat`), or null where none reads any.
+   */
+  columnDateFormats: (string | null)[];
 }
 
 /**
@@ -79,6 +87,57 @@ export interface CsvTransferRule {
   pattern: string;
   accountName: string;
 }
+
+/**
+ * A row of the file whose date the mapping's date format cannot read (or that
+ * has none), so the parse left it out. The preview counts them and the import
+ * result lists them among its skipped rows, by the line of the file.
+ */
+export interface CsvUnreadableDateRow {
+  /** The line of the file the row starts on, 1-based, the header included. */
+  rowNumber: number;
+  /** The date field as the file gave it, empty when the row has none. */
+  rawDate: string;
+  amount: number;
+  payee: string;
+}
+
+/**
+ * A row of the file whose amount (or debit or credit) field holds text
+ * `parseCsvAmount` cannot read, so the parse left it out rather than import
+ * it at 0. The preview counts them and the import result lists them among its
+ * skipped rows, by the line of the file.
+ */
+export interface CsvUnreadableAmountRow {
+  /** The line of the file the row starts on, 1-based, the header included. */
+  rowNumber: number;
+  /** The amount field as the file gave it. */
+  rawAmount: string;
+  /** The row's date, YYYY-MM-DD. */
+  date: string;
+  payee: string;
+}
+
+/**
+ * An investment-mode row the parse left out because its action needs data the
+ * row does not carry (`buildInvestmentRow`). The preview counts them per
+ * reason in `investmentSummary.rejectedRows`; the import result lists each
+ * among its skipped rows.
+ */
+export interface CsvRejectedInvestmentRow {
+  /** The line of the file the row starts on, 1-based, the header included. */
+  rowNumber: number;
+  /** The row's date, YYYY-MM-DD. */
+  date: string;
+  amount: number;
+  payee: string;
+  reason: InvestmentRejectReason;
+}
+
+/** Longest raw date text an unreadable-date row carries back. */
+const RAW_DATE_LIMIT = 50;
+/** The same cap for an unreadable amount's text. */
+const RAW_AMOUNT_LIMIT = 50;
 
 /** Per-canonical-action row counts and skip reporting for the preview step. */
 export interface CsvInvestmentSummary {
@@ -320,10 +379,7 @@ export function splitTagValue(
 }
 
 export type NormalizedReconciliationStatus =
-  | "UNRECONCILED"
-  | "CLEARED"
-  | "RECONCILED"
-  | "VOID";
+  "UNRECONCILED" | "CLEARED" | "RECONCILED" | "VOID";
 
 // Lookup for the most common reconciliation status keywords seen across
 // financial exports (banks, QIF-derived CSVs, spreadsheets, etc.). Values are
@@ -528,24 +584,47 @@ function detectDelimiter(content: string): string {
  * - Fields may be wrapped in double quotes
  * - Quoted fields can contain delimiters, newlines, and escaped quotes ("")
  * - Empty rows are skipped
+ *
+ * Exported for an importer whose columns a format fixes rather than a person
+ * maps (the warranty CSV, `warranty-csv.ts`), so the codebase keeps one reader.
  */
-function parseCsvRows(content: string, delimiter: string): string[][] {
+export function parseCsvRows(content: string, delimiter: string): string[][] {
+  return readCsvRecords(content, delimiter).map((record) => record.fields);
+}
+
+/** One record of the file and the line of the file it starts on (1-based). */
+interface CsvRecord {
+  fields: string[];
+  line: number;
+}
+
+/**
+ * `parseCsvRows` with each record's starting line, so a row the import leaves
+ * out can be named by the line a person finds it on in the file, which a
+ * quoted newline or a skipped blank line moves away from its index.
+ */
+function readCsvRecords(content: string, delimiter: string): CsvRecord[] {
   // Defensive: ensure we received a real string. An attacker could submit a
   // JSON body where `content` is an object like {length: 1e100}; iterating on
   // `.length` without this check is a CWE-834 loop-bound injection.
   if (typeof content !== "string") {
     return [];
   }
-  const rows: string[][] = [];
+  const rows: CsvRecord[] = [];
   let currentRow: string[] = [];
   let currentField = "";
   let inQuotes = false;
   let i = 0;
+  let line = 1;
+  let rowStartLine = 1;
 
   while (i < content.length) {
     const char = content[i];
 
     if (inQuotes) {
+      if (char === "\n") {
+        line++;
+      }
       if (char === '"') {
         // Check for escaped quote (doubled "")
         if (i + 1 < content.length && content[i + 1] === '"') {
@@ -587,10 +666,12 @@ function parseCsvRows(content: string, delimiter: string): string[][] {
       currentRow.push(currentField.trim());
       currentField = "";
       if (currentRow.some((f) => f !== "")) {
-        rows.push(currentRow);
+        rows.push({ fields: currentRow, line: rowStartLine });
       }
       currentRow = [];
       i++;
+      line++;
+      rowStartLine = line;
       continue;
     }
 
@@ -599,10 +680,12 @@ function parseCsvRows(content: string, delimiter: string): string[][] {
       currentRow.push(currentField.trim());
       currentField = "";
       if (currentRow.some((f) => f !== "")) {
-        rows.push(currentRow);
+        rows.push({ fields: currentRow, line: rowStartLine });
       }
       currentRow = [];
       i++;
+      line++;
+      rowStartLine = line;
       continue;
     }
 
@@ -614,7 +697,7 @@ function parseCsvRows(content: string, delimiter: string): string[][] {
   if (currentField !== "" || currentRow.length > 0) {
     currentRow.push(currentField.trim());
     if (currentRow.some((f) => f !== "")) {
-      rows.push(currentRow);
+      rows.push({ fields: currentRow, line: rowStartLine });
     }
   }
 
@@ -627,11 +710,26 @@ const KNOWN_FORMATS = new Set([
   "DD/MM/YYYY",
   "YYYY-MM-DD",
   "YYYY-DD-MM",
+  "DD-MMM-YYYY",
+  "MMM DD, YYYY",
 ]);
 
+/** A month written as a word (`monthFromName` reads it), Unicode letters. */
+const MONTH_NAME_PATTERN = "[\\p{L}\\p{M}]+";
+
+// Built-in month-name formats accept any of - / . , and whitespace between
+// the parts, and an abbreviation mark after the month: "15-Jan-2026",
+// "15 janv. 2026", "15.Mär.2026"; "Jan 15, 2026", "January 15 2026".
+const DAY_MONTH_NAME_YEAR =
+  /^(\d{1,2})[-/.,\s]*([\p{L}\p{M}]+)[-/.,\s\u0970]*(\d{2,4})$/u;
+const MONTH_NAME_DAY_YEAR =
+  /^([\p{L}\p{M}]+)[-/.,\s\u0970]*(\d{1,2})[-/.,\s]+(\d{2,4})$/u;
+
 /**
- * Validate that year, month, day values are within reasonable ranges.
- * Returns the YYYY-MM-DD string or null if invalid.
+ * Validate that year, month, day values name a day that exists, in a
+ * reasonable year range. Returns the YYYY-MM-DD string or null if invalid:
+ * 30 February is refused here, where the row can still be reported as an
+ * unreadable date, rather than at the database.
  */
 function validateAndFormat(
   year: string,
@@ -639,12 +737,18 @@ function validateAndFormat(
   day: string,
 ): string | null {
   const y = parseInt(year);
-  const m = parseInt(month);
-  const d = parseInt(day);
-  if (m < 1 || m > 12 || d < 1 || d > 31 || y < 1900 || y > 2100) {
+  if (y < 1900 || y > 2100) {
     return null;
   }
-  return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  const m = parseInt(month);
+  const d = parseInt(day);
+  if (!(m >= 1 && m <= 12 && d >= 1 && d <= 31)) {
+    return null;
+  }
+  const formatted = `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  // Every month has a 28th; only a later day needs the calendar, which keeps
+  // date detection over a whole file cheap.
+  return d <= 28 || isCalendarDate(formatted) ? formatted : null;
 }
 
 /**
@@ -659,8 +763,13 @@ function resolveYear(raw: string): string {
 
 /**
  * Parse a date using a custom format pattern.
- * Supported tokens: YYYY, YY, MM, DD (case-sensitive).
+ * Supported tokens: YYYY, YY, MMM (or MMMM: a month's name or abbreviation in
+ * any app language, `monthFromName`), MM, DD (case-sensitive).
  * Any other characters in the pattern are treated as literal separators.
+ *
+ * A pattern with more than one month-name token reads no date: a date has one
+ * month, and two adjacent unbounded letter groups backtrack polynomially on a
+ * long run of letters, which would stall the event loop for every user.
  */
 function parseDateCustom(dateStr: string, format: string): string | null {
   // Build a regex from the format pattern
@@ -676,6 +785,12 @@ function parseDateCustom(dateStr: string, format: string): string | null {
       regex += "(\\d{2})";
       groups.push("year2");
       i += 2;
+    } else if (format.substring(i, i + 3) === "MMM") {
+      if (groups.includes("monthName")) return null;
+      // An optional abbreviation mark ("janv.", "जन॰") belongs to the name.
+      regex += `(${MONTH_NAME_PATTERN}[.\\u0970]?)`;
+      groups.push("monthName");
+      i += format.substring(i, i + 4) === "MMMM" ? 4 : 3;
     } else if (format.substring(i, i + 2) === "MM") {
       regex += "(\\d{1,2})";
       groups.push("month");
@@ -692,7 +807,7 @@ function parseDateCustom(dateStr: string, format: string): string | null {
   }
   regex += "$";
 
-  const match = dateStr.match(new RegExp(regex));
+  const match = dateStr.match(new RegExp(regex, "u"));
   if (!match) return null;
 
   let year = "";
@@ -710,6 +825,12 @@ function parseDateCustom(dateStr: string, format: string): string | null {
       case "month":
         month = val;
         break;
+      case "monthName": {
+        const named = monthFromName(val);
+        if (named === null) return null;
+        month = String(named);
+        break;
+      }
       case "day":
         day = val;
         break;
@@ -721,36 +842,56 @@ function parseDateCustom(dateStr: string, format: string): string | null {
 }
 
 /**
- * Parse a date string using the specified format and return YYYY-MM-DD.
- * Accepts the 4 well-known formats (with any of - / . as separator)
- * or a custom pattern string using YYYY/YY, MM, DD tokens.
- * Returns null if the date cannot be parsed or is invalid.
- */
-/**
  * Strip trailing time components from a date string.
  * Handles formats like "01/15/2026 14:30:00", "2026-01-15T12:00:00Z",
  * "01/15/2026 2:30 PM", etc.
  */
 function stripTime(dateStr: string): string {
-  // Remove ISO 8601 time portion (T followed by time)
-  const tIndex = dateStr.indexOf("T");
-  if (tIndex > 0) {
-    return dateStr.substring(0, tIndex);
+  // Remove ISO 8601 time portion (T between a digit and a digit), so the T of
+  // "OCT" or "AUGUST" stays part of the month's name
+  const isoMatch = dateStr.match(/^(.*?\d)T\d/);
+  if (isoMatch) {
+    return isoMatch[1];
   }
-  // Remove time after space (e.g., "01/15/2026 14:30:00" or "01/15/2026 2:30 PM")
-  const spaceMatch = dateStr.match(/^(\S+)\s+\d{1,2}:\d{2}/);
-  if (spaceMatch) {
-    return spaceMatch[1];
+  // Remove time after space (e.g., "01/15/2026 14:30:00", "01/15/2026 2:30 PM"
+  // or "Jan 15, 2026 2:30 PM"). The lookbehind starts a match only at the
+  // first character of a whitespace run, so each run is tried once (linear);
+  // `^(.+?)\s+` retried every position inside a run (quadratic).
+  const timeMatch = SPACE_BEFORE_TIME.exec(dateStr);
+  if (timeMatch && timeMatch.index > 0) {
+    return dateStr.slice(0, timeMatch.index);
   }
   return dateStr;
 }
 
+const SPACE_BEFORE_TIME = /(?<!\s)\s+\d{1,2}:\d{2}/;
+
+/**
+ * The longest date field read. The longest real date ("15 September 2026
+ * 23:59:59 PM") is well under it; a longer field is unreadable before any
+ * regex runs, so a crafted cell cannot buy backtracking time.
+ */
+export const MAX_CSV_DATE_LENGTH = 64;
+
+/**
+ * Parse a date string using the specified format and return YYYY-MM-DD.
+ * Accepts the well-known formats (the numeric four with any of - / . as
+ * separator, the month-name two as DAY_MONTH_NAME_YEAR / MONTH_NAME_DAY_YEAR
+ * describe) or a custom pattern string using YYYY/YY, MMM, MM, DD tokens.
+ * Returns null if the date cannot be parsed or is invalid.
+ */
 function parseCsvDate(dateStr: string, format: string): string | null {
-  const trimmed = stripTime(dateStr.trim());
+  const field = dateStr.trim();
+  if (field.length > MAX_CSV_DATE_LENGTH) return null;
+  const trimmed = stripTime(field);
   if (!trimmed) {
     return null;
   }
+  return parseStrippedCsvDate(trimmed, format);
+}
 
+/** `parseCsvDate` of a value already trimmed and stripped of its time. */
+function parseStrippedCsvDate(trimmed: string, format: string): string | null {
   // For custom (non-built-in) format patterns, use the generic parser
   if (!KNOWN_FORMATS.has(format)) {
     return parseDateCustom(trimmed, format);
@@ -760,7 +901,22 @@ function parseCsvDate(dateStr: string, format: string): string | null {
   let month: string;
   let day: string;
 
-  if (format === "YYYY-MM-DD" || format === "YYYY-DD-MM") {
+  if (format === "DD-MMM-YYYY" || format === "MMM DD, YYYY") {
+    const dayFirst = format === "DD-MMM-YYYY";
+    const match = trimmed.match(
+      dayFirst ? DAY_MONTH_NAME_YEAR : MONTH_NAME_DAY_YEAR,
+    );
+    if (!match) {
+      return null;
+    }
+    const named = monthFromName(dayFirst ? match[2] : match[1]);
+    if (named === null) {
+      return null;
+    }
+    year = resolveYear(match[3]);
+    month = String(named);
+    day = dayFirst ? match[1] : match[2];
+  } else if (format === "YYYY-MM-DD" || format === "YYYY-DD-MM") {
     const match = trimmed.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
     if (!match) {
       return null;
@@ -795,31 +951,6 @@ function parseCsvDate(dateStr: string, format: string): string | null {
 }
 
 /**
- * Parse an amount string from a CSV field.
- * Handles currency symbols, commas, spaces, and parentheses-as-negative notation.
- */
-function parseCsvAmount(value: string): number | null {
-  let cleaned = value.trim();
-  if (!cleaned) {
-    return null;
-  }
-
-  // Handle parentheses as negative: (50.00) -> -50.00
-  const parenMatch = cleaned.match(/^\((.+)\)$/);
-  if (parenMatch) {
-    cleaned = "-" + parenMatch[1];
-  }
-
-  // Strip currency symbols and whitespace
-  cleaned = cleaned.replace(/[$£€¥₹\s]/g, "");
-  // Strip commas used as thousands separators
-  cleaned = cleaned.replace(/,/g, "");
-
-  const amount = parseFloat(cleaned);
-  return isNaN(amount) ? null : amount;
-}
-
-/**
  * Get the value at a column index from a row, returning empty string
  * if the index is out of bounds.
  */
@@ -832,7 +963,7 @@ function getField(row: string[], index: number | undefined): string {
 
 // Stable rejection-reason keys surfaced through investmentSummary.rejectedRows;
 // the frontend translates them for the Review step.
-type InvestmentRejectReason =
+export type InvestmentRejectReason =
   | "missingSecurity"
   | "missingQuantity"
   | "missingAmount"
@@ -1095,6 +1226,104 @@ export function validateCsvContent(content: string): {
 }
 
 /**
+ * A row's amount before any type column or transfer rule adjusts its sign:
+ * the amount column (negated under `reverseSign`), or the credit column as an
+ * inflow and the debit column as an outflow. `rawAmount` is the amount
+ * column's value before `reverseSign`. A blank field reads as 0; a field that
+ * holds text `parseCsvAmount` cannot read is returned as `unreadable`, the
+ * file's text, so the row is reported rather than imported at 0.
+ */
+function readRowAmount(
+  row: string[],
+  config: CsvColumnMappingConfig,
+): { amount: number; rawAmount: number; unreadable?: string } {
+  const read = (column: number | undefined) => {
+    const text = column !== undefined ? getField(row, column) : "";
+    if (isBlankCsvAmount(text)) return { value: 0 };
+    const value = parseCsvAmount(text);
+    return value === null ? { value: 0, unreadable: text.trim() } : { value };
+  };
+  if (config.amount !== undefined) {
+    const { value: rawAmount, unreadable } = read(config.amount);
+    return {
+      amount: config.reverseSign ? -rawAmount : rawAmount,
+      rawAmount,
+      ...(unreadable !== undefined ? { unreadable } : {}),
+    };
+  }
+  if (config.debit !== undefined || config.credit !== undefined) {
+    const credit = read(config.credit);
+    const debit = read(config.debit);
+    const unreadable = credit.unreadable ?? debit.unreadable;
+    // Strip sign from debit and negate -- debit is always an outflow
+    return {
+      amount:
+        credit.value !== 0 ? Math.abs(credit.value) : -Math.abs(debit.value),
+      rawAmount: 0,
+      ...(unreadable !== undefined ? { unreadable } : {}),
+    };
+  }
+  return { amount: 0, rawAmount: 0 };
+}
+
+/**
+ * The formats date detection chooses between, in the order a tie goes:
+ * MM/DD/YYYY first, because a file whose every day is the 12th or earlier
+ * reads either way and the import has always read it month first.
+ */
+const DETECTABLE_DATE_FORMATS = [
+  "MM/DD/YYYY",
+  "DD/MM/YYYY",
+  "YYYY-MM-DD",
+  "YYYY-DD-MM",
+  "DD-MMM-YYYY",
+  "MMM DD, YYYY",
+] as const;
+
+/**
+ * A column none of whose first this-many values reads under any format is not
+ * a date column, so the rest of it is not scanned. It decides only whether a
+ * column holds dates; which order they are written in is decided by all of
+ * them.
+ */
+const NOT_A_DATE_COLUMN_AFTER = 50;
+
+/**
+ * The date format that reads the most of `values`, every one of them, through
+ * the same `parseCsvDate` the import uses; ties go to the earlier entry of
+ * DETECTABLE_DATE_FORMATS. Null when no format reads any value. A day-first
+ * statement whose first rows fall on the 1st to the 12th is still detected as
+ * DD/MM/YYYY once any later row is dated after the 12th.
+ */
+export function detectCsvDateFormat(values: readonly string[]): string | null {
+  const counts = DETECTABLE_DATE_FORMATS.map(() => 0);
+  let scanned = 0;
+  for (const value of values) {
+    if (!value || !/\d/.test(value)) continue;
+    const field = value.trim();
+    // An over-long field reads under no format, and is still counted scanned.
+    if (field.length <= MAX_CSV_DATE_LENGTH) {
+      const trimmed = stripTime(field);
+      DETECTABLE_DATE_FORMATS.forEach((format, i) => {
+        if (parseStrippedCsvDate(trimmed, format) !== null) counts[i]++;
+      });
+    }
+    scanned++;
+    if (
+      scanned >= NOT_A_DATE_COLUMN_AFTER &&
+      counts.every((count) => count === 0)
+    ) {
+      return null;
+    }
+  }
+  let best = 0;
+  counts.forEach((count, i) => {
+    if (count > counts[best]) best = i;
+  });
+  return counts[best] > 0 ? DETECTABLE_DATE_FORMATS[best] : null;
+}
+
+/**
  * Parse CSV headers and return sample data for the column mapping UI.
  * Auto-detects delimiter if not provided.
  */
@@ -1106,17 +1335,23 @@ export function parseCsvHeaders(
   const rows = parseCsvRows(content, resolvedDelimiter);
 
   if (rows.length === 0) {
-    return { headers: [], sampleRows: [], rowCount: 0 };
+    return { headers: [], sampleRows: [], rowCount: 0, columnDateFormats: [] };
   }
 
   const headers = rows[0];
   const dataRows = rows.slice(1);
   const sampleRows = dataRows.slice(0, 5);
+  // The first row is scanned too: whether it is a header is the mapping's
+  // choice, and a header's text reads under no format.
+  const columnDateFormats = headers.map((_, column) =>
+    detectCsvDateFormat(rows.map((row) => getField(row, column))),
+  );
 
   return {
     headers,
     sampleRows,
     rowCount: dataRows.length,
+    columnDateFormats,
   };
 }
 
@@ -1129,10 +1364,10 @@ export function parseCsv(
   config: CsvColumnMappingConfig,
   transferRules?: CsvTransferRule[],
 ): QifParseResult {
-  const rows = parseCsvRows(content, config.delimiter);
+  const records = readCsvRecords(content, config.delimiter);
   const investmentMode = config.investmentMode === true;
 
-  if (rows.length === 0) {
+  if (records.length === 0) {
     return {
       accountType: investmentMode ? "INVESTMENT" : "CHEQUING",
       accountName: "",
@@ -1144,8 +1379,11 @@ export function parseCsv(
       sampleDates: [],
       openingBalance: null,
       openingBalanceDate: null,
+      unreadableDateRows: [],
+      unreadableAmountRows: [],
       ...(investmentMode
         ? {
+            rejectedInvestmentRows: [],
             investmentSummary: {
               actionCounts: {},
               cashFallbackValues: [],
@@ -1158,7 +1396,8 @@ export function parseCsv(
   }
 
   // Determine data rows (skip header if configured)
-  const dataRows = config.hasHeader ? rows.slice(1) : rows;
+  const dataRecords = config.hasHeader ? records.slice(1) : records;
+  const dataRows = dataRecords.map((record) => record.fields);
 
   const transactions: QifTransaction[] = [];
   const categoriesSet = new Set<string>();
@@ -1167,8 +1406,11 @@ export function parseCsv(
   const actionCounts: Partial<Record<CanonicalInvestmentAction, number>> = {};
   const cashFallbackValues = new Set<string>();
   const rejectedRowCounts = new Map<InvestmentRejectReason, number>();
+  const rejectedInvestmentRows: CsvRejectedInvestmentRow[] = [];
   let uncostedShareRows = 0;
   const rawDates: string[] = [];
+  const unreadableDateRows: CsvUnreadableDateRow[] = [];
+  const unreadableAmountRows: CsvUnreadableAmountRow[] = [];
   const rules = transferRules || [];
 
   // Tag separator is detected once per import by scanning every tag value in
@@ -1180,50 +1422,47 @@ export function parseCsv(
       ? detectTagSeparator(dataRows.map((row) => getField(row, config.tags!)))
       : null;
 
-  for (const row of dataRows) {
+  for (const { fields: row, line } of dataRecords) {
     // Extract and parse the date
     const rawDate = getField(row, config.date);
-    if (!rawDate) {
-      continue;
-    }
-
-    const parsedDate = parseCsvDate(rawDate, config.dateFormat);
-    if (!parsedDate) {
-      // Skip rows with unparseable dates
-      continue;
-    }
-
-    rawDates.push(rawDate);
+    const parsedDate = rawDate
+      ? parseCsvDate(rawDate, config.dateFormat)
+      : null;
 
     // Extract and parse the amount
-    let amount = 0;
-    let rawAmount = 0; // Original parsed amount before reverseSign
-    if (config.amount !== undefined) {
-      amount = parseCsvAmount(getField(row, config.amount)) ?? 0;
-      rawAmount = amount;
-      if (config.reverseSign) {
-        amount = -amount;
-      }
-    } else if (config.debit !== undefined || config.credit !== undefined) {
-      const creditVal =
-        config.credit !== undefined
-          ? (parseCsvAmount(getField(row, config.credit)) ?? 0)
-          : 0;
-
-      let debitVal =
-        config.debit !== undefined
-          ? (parseCsvAmount(getField(row, config.debit)) ?? 0)
-          : 0;
-
-      // Strip sign from debit and negate -- debit is always an outflow
-      debitVal = -Math.abs(debitVal);
-
-      amount = creditVal !== 0 ? Math.abs(creditVal) : debitVal;
-    }
+    const {
+      amount: rowAmount,
+      rawAmount,
+      unreadable: unreadableAmount,
+    } = readRowAmount(row, config);
+    let amount = rowAmount;
 
     // Extract text fields with sanitization
     const rawPayee = truncate(getField(row, config.payee), FIELD_LIMITS.PAYEE);
     const payee = isAllCaps(rawPayee) ? toProperCase(rawPayee) : rawPayee;
+
+    if (!parsedDate) {
+      // Never a silent drop: the row is named in the preview and the result.
+      unreadableDateRows.push({
+        rowNumber: line,
+        rawDate: truncate(rawDate, RAW_DATE_LIMIT),
+        amount,
+        payee,
+      });
+      continue;
+    }
+
+    rawDates.push(rawDate);
+    if (unreadableAmount !== undefined) {
+      // Never imported at 0: the row is named in the preview and the result.
+      unreadableAmountRows.push({
+        rowNumber: line,
+        rawAmount: truncate(unreadableAmount, RAW_AMOUNT_LIMIT),
+        date: parsedDate,
+        payee,
+      });
+      continue;
+    }
     const categoryPart = truncate(
       getField(row, config.category),
       FIELD_LIMITS.CATEGORY,
@@ -1275,6 +1514,13 @@ export function parseCsv(
           outcome.rejectReason,
           (rejectedRowCounts.get(outcome.rejectReason) || 0) + 1,
         );
+        rejectedInvestmentRows.push({
+          rowNumber: line,
+          date: parsedDate,
+          amount,
+          payee,
+          reason: outcome.rejectReason,
+        });
         continue;
       }
       const emitted = outcome.emittedAction!;
@@ -1415,8 +1661,11 @@ export function parseCsv(
     sampleDates,
     openingBalance: null,
     openingBalanceDate: null,
+    unreadableDateRows,
+    unreadableAmountRows,
     ...(investmentMode
       ? {
+          rejectedInvestmentRows,
           investmentSummary: {
             actionCounts,
             cashFallbackValues: Array.from(cashFallbackValues).sort(),

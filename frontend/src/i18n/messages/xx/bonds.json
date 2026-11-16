@@ -1,0 +1,100 @@
+{
+  "entry": {
+    "history": "[XX-History of {program} terms-XX]"
+  },
+  "offer": {
+    "loading": "[XX-Loading the bonds on sale...-XX]",
+    "loadFailed": "[XX-The bonds on sale could not be loaded.-XX]",
+    "retry": "[XX-Try again-XX]",
+    "empty": "[XX-No series is on sale today.-XX]",
+    "asOf": "[XX-On sale on {date}. Every figure is for one bond bought today and held to maturity.-XX]",
+    "comparisonNote": "[XX-The annualized return is a comparison figure for products of different lengths, not a promise of what you will earn.-XX]",
+    "couponsNote": "[XX-Coupons not reinvested: for a bond that pays coupons, the maturity value adds every coupon paid.-XX]",
+    "projected": "[XX-Projected-XX]",
+    "projectedTitle": "[XX-This figure rests on an assumed benchmark value, not on published rates only.-XX]",
+    "assumptions": {
+      "title": "[XX-Assumptions-XX]",
+      "intro": "[XX-Periods that have not started are valued at these benchmark values. Change one to see what it does to every row.-XX]",
+      "label": "[XX-{benchmark} (%)-XX]",
+      "latest": "[XX-Latest published value: {value} ({observation})-XX]",
+      "reset": "[XX-Use the latest published values-XX]",
+      "updating": "[XX-Updating the figures...-XX]"
+    },
+    "columns": {
+      "series": "[XX-Series-XX]",
+      "saleWindow": "[XX-On sale-XX]",
+      "length": "[XX-Length-XX]",
+      "firstPeriodRate": "[XX-First period-XX]",
+      "rule": "[XX-Rate-XX]",
+      "capitalization": "[XX-Interest-XX]",
+      "redemption": "[XX-Early redemption-XX]",
+      "maturityValue": "[XX-Maturity value-XX]",
+      "totalReturn": "[XX-Total return-XX]",
+      "annualizedReturn": "[XX-Annualized return-XX]",
+      "terms": "[XX-Terms-XX]"
+    },
+    "saleWindowValue": "[XX-{from} to {to}-XX]",
+    "lengthValue": "[XX-{months, plural, one {# month} other {# months}}-XX]",
+    "lengthDaysValue": "[XX-{days, plural, one {# day} other {# days}}-XX]",
+    "rule": {
+      "fixed": "[XX-Fixed {rate} a year-XX]",
+      "benchmark": "[XX-{benchmark} + {addend}-XX]",
+      "floor": "[XX-Benchmark floor {floor}-XX]",
+      "daily": "[XX-Daily: {benchmark} + {addend}-XX]",
+      "discount": "[XX-Discount to face value-XX]"
+    },
+    "capitalization": {
+      "NONE": "[XX-Paid out each period-XX]",
+      "COMPOUND_AT_PERIOD_END": "[XX-Compounded at each period end-XX]"
+    },
+    "redemption": {
+      "none": "[XX-At maturity only-XX]",
+      "onDemand": "[XX-On demand-XX]",
+      "fee": "[XX-Fee {amount} per bond-XX]",
+      "forfeit": "[XX-Interest accrued in the period is forfeited-XX]"
+    },
+    "couponsNotReinvested": "[XX-Coupons not reinvested-XX]"
+  },
+  "history": {
+    "loading": "[XX-Loading the history...-XX]",
+    "loadFailed": "[XX-The history could not be loaded.-XX]",
+    "retry": "[XX-Try again-XX]",
+    "empty": "[XX-No series of this product is stored yet.-XX]",
+    "coverage": "[XX-The catalog covers {from} to {to}.-XX]",
+    "rateChartTitle": "[XX-First-period rate and margin by sale month-XX]",
+    "feeChartTitle": "[XX-Early redemption fee by sale month-XX]",
+    "rate": "[XX-First-period rate-XX]",
+    "rateChartNote": "[XX-For fixed-rate bonds the line shows the annual rate.-XX]",
+    "addend": "[XX-Margin or spread-XX]",
+    "fee": "[XX-Early redemption fee-XX]",
+    "gapsNote": "[XX-A month with no stored series is a gap in the line, never a value drawn from its neighbours.-XX]",
+    "missingTitle": "[XX-Months missing from the catalog ({count})-XX]",
+    "noMissing": "[XX-No month is missing between the first and the last stored series.-XX]",
+    "tableTitle": "[XX-Every stored series-XX]",
+    "groupCount": "[XX-{count} series-XX]",
+    "unknownYear": "[XX-Sale date unknown-XX]",
+    "columns": {
+      "series": "[XX-Series-XX]",
+      "saleWindow": "[XX-On sale-XX]",
+      "rate": "[XX-First-period or annual rate-XX]",
+      "addend": "[XX-Margin or spread-XX]",
+      "fee": "[XX-Early redemption fee-XX]",
+      "floor": "[XX-Proceeds floor-XX]",
+      "version": "[XX-Terms version-XX]",
+      "source": "[XX-Source-XX]"
+    },
+    "floor": {
+      "ALL_PERIODS": "[XX-Every period-XX]",
+      "FIRST_PERIOD": "[XX-First period only-XX]"
+    },
+    "none": "[XX-None-XX]",
+    "held": "[XX-Held-XX]"
+  },
+  "refreshProgress": {
+    "label": "[XX-Refreshing bond data-XX]",
+    "offer": "[XX-Checking the current offer…-XX]",
+    "series": "[XX-Fetching series {done} of {total}: {seriesCode}-XX]",
+    "historyComplete": "[XX-History is complete-XX]",
+    "starting": "[XX-Starting…-XX]"
+  }
+}

@@ -39,6 +39,15 @@ export type GemWarningCode =
   | "NO_POSITION"
   | "FIRST_RUN"
   | "STALE_PRICES"
+  /**
+   * The current period has no signal because one or more required legs have
+   * price history that does not reach the momentum window's start: the roles
+   * are in `roles`, and `requiredFrom` is the date their instruments need
+   * prices back to. More specific than `CALCULATION_FAILED`, which stays for a
+   * missing signal we cannot pin to a named instrument, so the report can tell
+   * the user which security to extend and from when.
+   */
+  | "SHORT_HISTORY"
   | "CALCULATION_FAILED";
 
 export interface GemWarning {
@@ -46,6 +55,11 @@ export interface GemWarning {
   roles?: GemAssetRole[];
   /** How many things the warning is about, when the number is the point. */
   count?: number;
+  /**
+   * For `SHORT_HISTORY`: the date the `roles` instruments need prices back to
+   * (the current period's momentum window start), ISO `YYYY-MM-DD`.
+   */
+  requiredFrom?: string;
 }
 
 export interface GemAssetRef {
@@ -254,9 +268,7 @@ export interface GemPerformancePoint {
  */
 /** Why the current-composition simulation could not be produced. */
 export type GemSimulationUnavailableReason =
-  | "NO_HOLDINGS"
-  | "UNKNOWN_CURRENT_VALUE"
-  | "MISSING_PRICE_HISTORY";
+  "NO_HOLDINGS" | "UNKNOWN_CURRENT_VALUE" | "MISSING_PRICE_HISTORY";
 
 /**
  * What today's holdings would have returned over the window, had they been

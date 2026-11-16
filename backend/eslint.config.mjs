@@ -12,7 +12,7 @@ import eslintPluginPrettier from "eslint-plugin-prettier/recommended";
  * entry points, seeders, bootstrap hooks, admin, backup, the MCP transport,
  * and the interceptor that seeds request scope) -- every entry wraps an
  * out-of-request call path or a genuinely cross-user sweep documented in
- * docs/future-plans/row-level-security-tasks.md (C1-C4, C6, R6/R7).
+ * docs/specs/row-level-security.md (tasks C1-C4, C6, R6/R7 of its retired task list).
  */
 const WITH_CONTEXT_ALLOWLIST = [
   "src/accounts/accounts.service.ts",
@@ -21,29 +21,111 @@ const WITH_CONTEXT_ALLOWLIST = [
   "src/admin/admin.service.ts",
   "src/ai/ai-usage.service.ts",
   "src/ai/insights/ai-insights.service.ts",
+  // The daily dashboard trivia: a system-context fan-out over the active users,
+  // then a per-user body, from a cron with no request behind it.
+  "src/ai/trivia/dashboard-trivia.service.ts",
+  // The relay's expiry sweep: three tables keyed by user_id whose dead rows
+  // belong to every user at once, from a cron with no request to inherit an
+  // identity from -- system context by construction (task R4).
+  "src/ai/relay/relay-sweeper.service.ts",
+  // AI review proposal notices: a system-context fan-out over users with open
+  // proposals (the hourly sweep's ready step, the daily expiring cron), then a
+  // per-user body (withUserContext) that dispatches. No request behind it
+  // (docs/specs/ai-review-notifications.md).
+  "src/ai-review/ai-review-notification.service.ts",
+  // The AI review queue's hourly upkeep: expires open requests past expires_at
+  // and releases stale claims, across every user's rows, from a cron with no
+  // request to inherit an identity from -- system context by construction.
+  "src/ai-review/ai-review-requests-expiry.service.ts",
   // Blob-tombstone sweep: a cron fan-out that reclaims orphaned attachment
   // bytes across every user, and past them -- a tombstone outlives its owner
   // and its user_id is then NULL, so no user context can see it. No request to
   // inherit an identity from either; system context by construction.
   "src/attachments/attachment-orphan-sweeper.service.ts",
+  // The relocation pass that follows a storage-provider switch: a system-context
+  // scan for rows whose bytes are in a backend other than the active one (every
+  // user's, and no request behind it), then each attachment moved under its own
+  // owner's context (task R4's shape).
+  "src/attachments/storage/attachment-storage-migrator.service.ts",
   "src/auth/auth.controller.ts",
   "src/auth/auth.service.ts",
+  // Daily sweep of the two auth state tables (auth_attempt_counters,
+  // single_use_tokens). Both are keyed by an opaque scope/hash with no owner
+  // column, so there is no user whose context could see the rows; a cron with
+  // no request behind it seeds its own system context.
+  "src/auth/auth-state-sweeper.service.ts",
   "src/auth/pat.service.ts",
   "src/auth/strategies/jwt.strategy.ts",
   "src/auth/token.service.ts",
   "src/backup/auto-backup.service.ts",
+  // The off-machine copy of a completed artifact: dispatched on the tail of a
+  // backup run, so it seeds the owner's own withUserContext -- no bypass.
+  "src/backup/offsite/backup-offsite-dispatch.service.ts",
+  // The off-site retry sweep: a cross-user cron fan-out (withSystemContext)
+  // over failed copies, each re-attempted under its owner (withUserContext).
+  "src/backup/offsite/backup-offsite-retry.service.ts",
   // `withPreserveTimestamps` (identity inherited, never granted) around the
   // restore's single transaction, so the GUC-aware `updated_at` trigger keeps
   // the backup's own timestamps. It moved here from `backup.service.ts` when
   // issue #1092 split the restore out; the facade no longer touches the module.
   "src/backup/backup-restore.service.ts",
+  // Daily bank sync: a system-context fan-out over users with an active,
+  // auto-sync connection, then a per-user body (withUserContext) that claims the
+  // day and syncs that user's linked bank accounts. No request behind it
+  // (docs/specs/bank-sync.md section 8).
+  "src/bank-sync/bank-sync-cron.service.ts",
+  // Daily consent reminders: a system-context fan-out over the connections
+  // whose consent ends within the window (and the users' timezones), then a
+  // per-user body (withUserContext) that writes the reminder or expiry notice and
+  // moves an elapsed `active` connection to `expired`. No request behind it
+  // (docs/specs/bank-sync-notifications.md section 4).
+  "src/bank-sync/bank-sync-consent-reminder.service.ts",
+  // Warranty expiry reminders: a daily cron with no request behind it, so a
+  // system-context fan-out over every user's unarchived warranties near their
+  // expiry (and every user's timezone), then a per-user body (withUserContext)
+  // that dispatches the 30, 7 and 0-day reminders
+  // (docs/specs/warranty-tracker.md section 6.7).
+  "src/warranties/warranty-expiry-reminder.service.ts",
+  // Daily payroll-deduction reset reminder: a system-context fan-out over
+  // every rule (and every user's timezone), then a per-user body
+  // (withUserContext) that dispatches the two-months-before reminder
+  // (docs/specs/payroll-deductions.md section 5.5).
+  "src/payroll-deductions/payroll-deduction-reset-reminder.service.ts",
   "src/budgets/budget-alert.service.ts",
   "src/budgets/budget-period-cron.service.ts",
+  // Daily portfolio-movement cron: a system-context fan-out over users with a
+  // threshold, then a per-user body (withUserContext) that prices the portfolio
+  // and dispatches. No request behind it
+  // (docs/specs/portfolio-movement-notifications.md).
+  "src/notification-center/portfolio-movement-alert.service.ts",
+  // Event-driven balance-threshold evaluation: runs on the net-worth recalc's
+  // post-commit timer (no request), so it seeds its own withUserContext
+  // (docs/specs/balance-threshold-notifications.md).
+  "src/notification-center/balance-threshold-alert.service.ts",
+  // Per-security price-movement cron, the same two-part shape as the portfolio
+  // one above: a system-context keyset scan to enumerate every opted-in
+  // security's owner, then a per-user body (withUserContext) that re-reads the
+  // opt-in under that owner's own scope before it writes. No request behind it.
+  "src/notification-center/security-price-alert.service.ts",
   "src/common/interceptors/request-context.interceptor.ts",
+  // The Google Places quota claim for the OPERATOR's key. That counter belongs
+  // to the deployment rather than to whoever's lookup spent it -- there is no
+  // owner column and the table is RLS-exempt -- so the claim runs under
+  // withSystemContext. The per-user counter beside it needs no bypass.
+  "src/payees/lookup/google-places/payee-lookup-quota.service.ts",
   // Cross-replica job coordination: claimOnce/claimLease write to a global
   // claims table that belongs to no single user, from cron entry points with no
   // request to inherit an identity from -- system context by construction.
   "src/common/jobs/job-claim.service.ts",
+  // The replica census: one read of pg_stat_activity, a system view with no
+  // owner column, from the system-alert cron and the health endpoint, neither
+  // of which carries a user identity -- system context by construction.
+  "src/common/cluster/replica-census.service.ts",
+  // The HTTP throttler's counters in CLUSTER_MODE=multi. ThrottlerGuard runs
+  // before RequestContextInterceptor, so there is no request identity to
+  // inherit, and http_throttle_counters has no owner column to establish one
+  // for -- system context by construction (task T1).
+  "src/common/throttler/postgres-throttler-storage.ts",
   // Joint category creation: the owner-scoped write window for a grantee who
   // holds the delegation's categories-can-create capability, opened only after
   // JointCategoriesService has decided authorization in full.
@@ -67,16 +149,36 @@ const WITH_CONTEXT_ALLOWLIST = [
   // grantee's session cannot see the owner's users row under enforcement;
   // only the display label leaves the method).
   "src/delegation/joint-accounts.service.ts",
+  // The nightly purge of notifications the reader is done with: a cross-user
+  // sweep from a cron entry point, with no request to inherit an identity
+  // from. Every other method here runs under the caller's own context.
+  "src/notification-center/notification.service.ts",
+  // The reminder firing cron: the dismissed-source sweep and the atomic claim
+  // are cross-user (withSystemContext), and each due row's re-emit runs under
+  // its own user's context (withUserContext). Moved here from
+  // notification-center with the cron; the reminder CRUD it left behind has no
+  // context wrapper of its own.
+  "src/notifications/notification-reminder-cron.service.ts",
   // Joint register writes: authorization-decision row load plus the
   // owner-scoped mutation window, both fully decided by jointAccessFor
   // before the bypass opens (joint-accounts spec W1).
   "src/transactions/joint-register.service.ts",
+  // The receipts poll: a cron with no request behind it. The fan-out over every
+  // user's enabled mailbox is withSystemContext (it reads across users by
+  // design); each mailbox then runs under its owner's withUserContext, the
+  // per-mailbox lease included, so nothing inside it is cross-user.
+  "src/email-receipts/poll/email-receipt-poll.service.ts",
   "src/emergency-access/emergency-access-claim.controller.ts",
   "src/emergency-access/emergency-access-monitor.service.ts",
   "src/import/mny/mny-import-job.service.ts",
   "src/import/mny/mny-import.service.ts",
   "src/import/mny/mny-staging.service.ts",
   "src/mcp/mcp-http.controller.ts",
+  // Background payee contact enrichment: dispatched after the create's
+  // transaction committed, on the request's tail, so there is no ambient
+  // identity to inherit -- the user's own context is re-seeded for the one
+  // conditional UPDATE it makes.
+  "src/payees/lookup/payee-contact-enrichment.service.ts",
   "src/mcp/tools/transactions.tool.ts",
   // Joint accounts (N1): refreshing a stale joint account's current-month
   // snapshot runs recalculateAccount under withUserContext(ownerUserId) so
@@ -92,20 +194,89 @@ const WITH_CONTEXT_ALLOWLIST = [
   "src/notifications/provider-outage-alert.service.ts",
   "src/oauth/oauth-interaction.controller.ts",
   "src/oauth/oauth-provider.service.ts",
+  // The deployment's OIDC signing identity: one singleton row that belongs to
+  // no user (one issuer signs for every account), minted from the provider's
+  // initialization, which has no request to inherit an identity from.
+  "src/oauth/oauth-signing-keys.service.ts",
   // Provider availability bookkeeping: a global provider_health row written
   // from whatever code path happened to call the provider, so there is no
   // caller identity that could own it -- and it is written outside the caller's
   // transaction on purpose, because an outage is not part of whatever request
   // discovered it.
   "src/provider-health/provider-health.service.ts",
+  // The upstream release check: one singleton row for the whole deployment (one
+  // instance checks one upstream), written from a cron and a bootstrap hook
+  // with no request to inherit an identity from. The READ stays on the
+  // caller's own identity -- the table is RLS-exempt, so a request transaction
+  // sees it without a bypass.
+  "src/updates/updates.service.ts",
+  // Two genuinely cross-user pieces of work, and only those: generating the
+  // deployment's one VAPID key pair on the bootstrap hook (no request behind
+  // it), and counting the devices that key pair serves across every account.
+  // Reading the row itself runs under the caller's own identity -- the table is
+  // RLS-exempt, so a bypass there would widen the fence for nothing.
+  "src/push/push-config.service.ts",
+  // Push chart artifacts: ephemeral pre-rendered images authorized by a one-use
+  // HMAC bearer token and consumed atomically, with no owner column to policy on
+  // (the table is RLS-exempt, and `rls-exempt-tables.ts` carries that reasoning).
+  // Both call sites are cross-user by construction -- the expiry sweep is a cron
+  // with no request behind it, and the per-issue cap counts every artifact on
+  // the instance -- so neither has a caller identity that could own the row.
+  "src/push/push-chart-artifact.service.ts",
+  // Daily sweep of long-retired push devices: a cross-user cron with no request
+  // behind it, and every row it can reach belongs to somebody who can no longer
+  // receive on it.
+  "src/push/push-subscription.service.ts",
   "src/scheduled-transactions/scheduled-transactions.service.ts",
   "src/securities/holdings.service.ts",
+  // Boot-time, READ-ONLY report of holdings that disagree with a replay of
+  // their ledger (INV-HOLDING-001). The enumeration of users holding a position
+  // is cross-user by construction, so it is a system-context fan-out; each
+  // user's comparison then runs under withUserContext. It writes nothing at
+  // all, which is what makes the system context cheap to reason about here:
+  // the widest thing it can do is log.
+  "src/securities/holdings-drift-report.service.ts",
   // The market-index refresh is a deployment-wide cron with no request behind
   // it: the rows it writes are global reference data with no owner, exactly like
   // the exchange-rate refresh above.
   "src/securities/market-index.service.ts",
+  // The bond catalog seed and the benchmark refresh write global reference data
+  // with no owner (bond instruments, terms versions, NBP and GUS series), the
+  // same as the market-index refresh above; neither has a request behind it.
+  "src/bonds/bond-catalog.service.ts",
+  "src/bonds/benchmark-refresh.service.ts",
+  // The daily bond price recompute: a cron with no request behind it, so a
+  // system context for the lease and the cross-user listing of linked
+  // securities, then each user's own withUserContext for the writes (one user's
+  // failure does not stop the others; docs/specs/polish-retail-bonds.md 12.4).
+  "src/bonds/bond-price.service.ts",
+  // The daily check of the issuer's current offer: a cron with no request
+  // behind it, so a system context around the whole lease call. It stores
+  // global reference data with no owner (bond instruments and terms versions),
+  // like the catalog seed above; the user-facing fetch reaches the same store
+  // under the caller's own identity (docs/specs/bond-series-fetch.md 5.1).
+  "src/bonds/bond-series.service.ts",
   "src/securities/securities.controller.ts",
   "src/securities/security-price.service.ts",
+  // GEM recommendation-change cron: a deployment-wide fan-out (system context
+  // to enumerate every strategy's owner) then a per-user body (withUserContext)
+  // that reuses the report materializer and dispatches a notification. No
+  // request behind it (docs/specs/gem-signal-change-notifications.md).
+  "src/strategies/gem-signal-change-alert.service.ts",
+  // Bond notification cron: a deployment-wide fan-out (system context to list
+  // the owners of bond-linked securities) then a per-user body (withUserContext)
+  // that reads the engine valuation and dispatches notifications. No request
+  // behind it (docs/specs/bond-notifications.md).
+  "src/bonds/bond-notification.service.ts",
+  // System alerts: every caller is a cron catch, a post-claim hook or a
+  // bootstrap hook with no request behind it, so the service seeds its own
+  // context -- system for the admin fan-out, user for a per-user alert
+  // (docs/specs/system-alerts.md).
+  "src/system-alerts/system-alert.service.ts",
+  // Daily retention of transaction_rule_applications: the rows of every user
+  // age out together, from a cron with no request to inherit an identity from --
+  // system context by construction, in bounded batches.
+  "src/transaction-rules/transaction-rule-applications-retention.service.ts",
   "src/transactions/transaction-transfer.service.ts",
 ];
 
@@ -147,7 +318,7 @@ const BAN_WITH_CONTEXT = {
  * scoped `EntityManager` is the correct pattern everywhere in this codebase, so
  * a `no-restricted-syntax` selector for it would fire on hundreds of correct
  * call sites -- and `src/common/db/lint-bans.spec.ts` scrapes exactly that
- * selector shape out of this file and then requires `CLAUDE.md` and
+ * selector shape out of this file and then requires `AGENTS.md` and
  * `CONTRIBUTING.md` to name the banned call, which would put false guidance in
  * the instruction files. `src/oauth/oauth-payload-access.spec.ts` covers what
  * an import ban cannot: a re-export laundering the entity, or raw SQL naming
@@ -157,7 +328,8 @@ const OAUTH_PAYLOAD_ALLOWLIST = [
   "src/oauth/entities/oauth-payload.entity.ts",
   "src/oauth/oauth.module.ts",
   // The `oidc-provider` Adapter implementation -- the reason the exception
-  // exists. Every method is keyed by an opaque provider id.
+  // exists. Every method is keyed by an opaque provider id, except the daily
+  // expiry sweep (#2177), keyed by `expires_at` alone.
   "src/oauth/postgres.adapter.ts",
   // `revokeAllForUser`, the second access path, and the one the exemption's
   // original rationale claimed did not exist ("never queried per end-user").

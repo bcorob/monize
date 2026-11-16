@@ -1,9 +1,24 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { DataSource } from "typeorm";
 import { withScopedDb } from "../../common/db/scoped-db";
+import { todayInTimezone } from "../../common/date-utils";
+import { getEffectiveTimezoneOfUser } from "../../common/users-by-timezone.util";
 import { Transaction } from "../../transactions/entities/transaction.entity";
 import { TransactionAnalyticsService } from "../../transactions/transaction-analytics.service";
 import { RecurringCharge } from "../../transactions/recurring-charges.util";
+import { Category } from "../../categories/entities/category.entity";
+import { FxAggregate } from "../../common/fx-aggregate";
+import { roundMoney } from "../../common/round.util";
+import { isNetSpending } from "../../built-in-reports/spending-reports.service";
+import { buildRateIndex } from "../../common/time-series/rate-index.util";
+import {
+  convertRateBasis,
+  toOwnRate,
+} from "../../built-in-reports/report-currency.service";
+import {
+  partRateBasis,
+  splitByRateBasis,
+} from "../../built-in-reports/rate-basis-parts";
 
 export interface CategorySpending {
   categoryName: string;
@@ -36,6 +51,42 @@ export interface SpendingAggregates {
   daysElapsedInMonth: number;
   daysInMonth: number;
   currency: string;
+  /**
+   * False when a currency had no rate into `currency`: that spending is left
+   * out of every figure. Read as `=== false`; the pairs are named beside it.
+   */
+  fxComplete: boolean;
+  missingRatePairs: string[];
+}
+
+/** One (month, category, currency) net-spending row, as the query returns it. */
+interface SpendingRow {
+  month: string;
+  categoryId: string;
+  categoryName: string;
+  currencyCode: string;
+  net: string;
+  txnCount: string;
+  /** A foreign part's day and own rate (`splitByRateBasis`); null otherwise. */
+  fx_day: string | null;
+  fx_original_currency: string | null;
+  fx_exchange_rate: string | null;
+}
+
+/** First day of the month `delta` months from `ymd`'s month; pure string arithmetic. */
+function firstOfMonthShifted(ymd: string, delta: number): string {
+  const total = Number(ymd.slice(0, 4)) * 12 + (Number(ymd.slice(5, 7)) - 1);
+  const shifted = total + delta;
+  const year = Math.floor(shifted / 12);
+  const month = (shifted % 12) + 1;
+  return `${String(year).padStart(4, "0")}-${String(month).padStart(2, "0")}-01`;
+}
+
+/** Days in the month of a `YYYY-MM-DD` string (UTC arithmetic on a zoneless date). */
+function daysInMonthOf(ymd: string): number {
+  return new Date(
+    Date.UTC(Number(ymd.slice(0, 4)), Number(ymd.slice(5, 7)), 0),
+  ).getUTCDate();
 }
 
 @Injectable()
@@ -51,40 +102,39 @@ export class InsightsAggregatorService {
     userId: string,
     currency: string,
   ): Promise<SpendingAggregates> {
-    const now = new Date();
-    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-      .toISOString()
-      .substring(0, 10);
-    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, 1)
-      .toISOString()
-      .substring(0, 10);
-    const today = now.toISOString().substring(0, 10);
+    // The user's financial today (A26-L29), never a local-midnight Date read
+    // back in UTC: the month a person is in follows their own zone.
+    const today = await withScopedDb(this.dataSource, async (manager) => {
+      const timezone = await getEffectiveTimezoneOfUser(manager, userId);
+      return (todayInTimezone(timezone) ?? todayInTimezone("UTC")) as string;
+    });
+    const currentMonthStart = `${today.slice(0, 7)}-01`;
+    const sixMonthsAgo = firstOfMonthShifted(currentMonthStart, -6);
+    const previousMonthStart = firstOfMonthShifted(currentMonthStart, -1);
 
-    const [categorySpending, monthlySpending, recurringCharges] =
-      await Promise.all([
-        this.getCategorySpending(
-          userId,
-          sixMonthsAgo,
-          today,
-          currentMonthStart,
-        ),
-        this.getMonthlySpending(userId, sixMonthsAgo, today),
-        this.transactionAnalytics.getRecurringCharges(
-          userId,
-          sixMonthsAgo,
-          today,
-        ),
-      ]);
+    const [spending, recurringCharges] = await Promise.all([
+      this.getSpending(
+        userId,
+        sixMonthsAgo,
+        today,
+        currency,
+        currentMonthStart.substring(0, 7),
+        previousMonthStart.substring(0, 7),
+      ),
+      // In the insights' currency, beside every other figure (issue #2155).
+      this.transactionAnalytics.getRecurringCharges(
+        userId,
+        sixMonthsAgo,
+        today,
+        { reportingCurrency: currency },
+      ),
+    ]);
+    const { categorySpending, monthlySpending, missingRatePairs } = spending;
 
     const currentMonth = monthlySpending.find(
       (m) => m.month === currentMonthStart.substring(0, 7),
     );
-    const previousMonthDate = new Date(
-      now.getFullYear(),
-      now.getMonth() - 1,
-      1,
-    );
-    const previousMonthKey = `${previousMonthDate.getFullYear()}-${String(previousMonthDate.getMonth() + 1).padStart(2, "0")}`;
+    const previousMonthKey = previousMonthStart.substring(0, 7);
     const previousMonth = monthlySpending.find(
       (m) => m.month === previousMonthKey,
     );
@@ -101,12 +151,8 @@ export class InsightsAggregatorService {
           completedMonths.length
         : 0;
 
-    const daysElapsedInMonth = now.getDate();
-    const daysInMonth = new Date(
-      now.getFullYear(),
-      now.getMonth() + 1,
-      0,
-    ).getDate();
+    const daysElapsedInMonth = Number(today.slice(8, 10));
+    const daysInMonth = daysInMonthOf(today);
 
     return {
       categorySpending,
@@ -118,127 +164,189 @@ export class InsightsAggregatorService {
       daysElapsedInMonth,
       daysInMonth,
       currency,
+      fxComplete: missingRatePairs.length === 0,
+      missingRatePairs,
     };
   }
 
-  private async getCategorySpending(
+  /**
+   * Spending per category and per month, read once. A split line is spent in
+   * its own category, so the category and amount come from the split when the
+   * row has one (the parent's `amount` is the sum of its lines). Spending is
+   * the debits net of the credits filed against the category, converted into
+   * `currency` at each row's own settled rate where it reaches `currency`
+   * (INV-FX-002), else at the market rate on the row's own date (INV-FX-001),
+   * never at its month's last day (issue #2130); a category that nets to a
+   * credit over the window is income, not spending, and is left out.
+   */
+  private async getSpending(
     userId: string,
     startDate: string,
     endDate: string,
-    currentMonthStart: string,
-  ): Promise<CategorySpending[]> {
-    const now = new Date();
-    const previousMonthStart = new Date(
-      now.getFullYear(),
-      now.getMonth() - 1,
-      1,
-    )
-      .toISOString()
-      .substring(0, 10);
-    const previousMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0)
-      .toISOString()
-      .substring(0, 10);
-
-    const rows = await withScopedDb(this.dataSource, (manager) =>
-      manager
-        .getRepository(Transaction)
-        .createQueryBuilder("t")
-        .innerJoin("t.category", "cat")
-        .select("cat.name", "categoryName")
-        .addSelect("cat.id", "categoryId")
-        .addSelect("SUM(ABS(t.amount))", "total")
-        .addSelect("COUNT(*)", "txnCount")
-        .addSelect(
-          `SUM(CASE WHEN t.transactionDate >= :currentMonthStart THEN ABS(t.amount) ELSE 0 END)`,
-          "currentMonthTotal",
-        )
-        .addSelect(
-          `SUM(CASE WHEN t.transactionDate >= :previousMonthStart AND t.transactionDate <= :previousMonthEnd THEN ABS(t.amount) ELSE 0 END)`,
-          "previousMonthTotal",
-        )
-        .addSelect(
-          `COUNT(DISTINCT TO_CHAR(t.transactionDate, 'YYYY-MM'))`,
-          "monthCount",
-        )
-        .where("t.userId = :userId", { userId })
-        .andWhere("t.transactionDate >= :startDate", { startDate })
-        .andWhere("t.transactionDate <= :endDate", { endDate })
-        .andWhere("t.amount < 0")
-        .andWhere("t.status != 'VOID'")
-        .andWhere("t.isTransfer = false")
-        .andWhere("t.parentTransactionId IS NULL")
-        .setParameter("currentMonthStart", currentMonthStart)
-        .setParameter("previousMonthStart", previousMonthStart)
-        .setParameter("previousMonthEnd", previousMonthEnd)
-        .groupBy("cat.id")
-        .addGroupBy("cat.name")
-        .orderBy("total", "DESC")
-        .getRawMany(),
+    currency: string,
+    currentMonth: string,
+    previousMonth: string,
+  ): Promise<{
+    categorySpending: CategorySpending[];
+    monthlySpending: MonthlySpending[];
+    missingRatePairs: string[];
+  }> {
+    const rows: SpendingRow[] = await withScopedDb(
+      this.dataSource,
+      (manager) => {
+        const qb = manager
+          .getRepository(Transaction)
+          .createQueryBuilder("t")
+          .leftJoin("t.splits", "ts")
+          .innerJoin(
+            Category,
+            "cat",
+            "cat.id = COALESCE(ts.categoryId, t.categoryId)",
+          )
+          .select("TO_CHAR(t.transactionDate, 'YYYY-MM')", "month")
+          .addSelect("cat.id", "categoryId")
+          .addSelect("cat.name", "categoryName")
+          .addSelect("t.currencyCode", "currencyCode")
+          .addSelect("SUM(-COALESCE(ts.amount, t.amount))", "net")
+          .addSelect("COUNT(DISTINCT t.id)", "txnCount")
+          .where("t.userId = :userId", { userId })
+          .andWhere("t.transactionDate >= :startDate", { startDate })
+          .andWhere("t.transactionDate <= :endDate", { endDate })
+          .andWhere("COALESCE(ts.amount, t.amount) <> 0")
+          .andWhere("t.status != 'VOID'")
+          .andWhere("t.isTransfer = false")
+          .andWhere("t.parentTransactionId IS NULL")
+          .andWhere("(ts.transferAccountId IS NULL OR ts.id IS NULL)")
+          .groupBy("TO_CHAR(t.transactionDate, 'YYYY-MM')")
+          .addGroupBy("cat.id")
+          .addGroupBy("cat.name")
+          .addGroupBy("t.currencyCode");
+        // A foreign row splits by its day and the rate it settled at, so each
+        // part converts as the reports convert it.
+        splitByRateBasis(
+          qb,
+          {
+            currency: "t.currencyCode",
+            date: "t.transactionDate",
+            originalCurrency: "t.originalCurrencyCode",
+            exchangeRate: "t.exchangeRate",
+          },
+          currency,
+        );
+        return qb.getRawMany();
+      },
     );
 
-    return rows.map((r) => ({
-      categoryName: r.categoryName,
-      categoryId: r.categoryId || null,
-      currentMonthTotal: Number(r.currentMonthTotal) || 0,
-      previousMonthTotal: Number(r.previousMonthTotal) || 0,
-      averageMonthlyTotal:
-        Number(r.monthCount) > 0 ? Number(r.total) / Number(r.monthCount) : 0,
-      monthCount: Number(r.monthCount),
-      transactionCount: Number(r.txnCount),
-    }));
-  }
-
-  private async getMonthlySpending(
-    userId: string,
-    startDate: string,
-    endDate: string,
-  ): Promise<MonthlySpending[]> {
-    const rows = await withScopedDb(this.dataSource, (manager) =>
-      manager
-        .getRepository(Transaction)
-        .createQueryBuilder("t")
-        .innerJoin("t.category", "cat")
-        .select("TO_CHAR(t.transactionDate, 'YYYY-MM')", "month")
-        .addSelect("cat.name", "categoryName")
-        .addSelect("SUM(ABS(t.amount))", "total")
-        .where("t.userId = :userId", { userId })
-        .andWhere("t.transactionDate >= :startDate", { startDate })
-        .andWhere("t.transactionDate <= :endDate", { endDate })
-        .andWhere("t.amount < 0")
-        .andWhere("t.status != 'VOID'")
-        .andWhere("t.isTransfer = false")
-        .andWhere("t.parentTransactionId IS NULL")
-        .groupBy("TO_CHAR(t.transactionDate, 'YYYY-MM')")
-        .addGroupBy("cat.name")
-        .orderBy("month", "ASC")
-        .getRawMany(),
+    const basisOf = (r: SpendingRow) =>
+      partRateBasis(r, r.currencyCode, r.fx_day, currency);
+    // Only a part the market rate converts needs the history.
+    const foreign = new Set(
+      rows
+        .filter(
+          (r) =>
+            r.currencyCode !== currency &&
+            toOwnRate(basisOf(r).own_rate) === null,
+        )
+        .map((r) => r.currencyCode),
     );
+    const rateIndex =
+      foreign.size === 0
+        ? new Map()
+        : await withScopedDb(this.dataSource, (manager) =>
+            buildRateIndex(
+              (sql, params) => manager.query(sql, params),
+              foreign,
+              currency,
+              startDate,
+              endDate,
+            ),
+          );
 
-    const monthMap = new Map<
+    const categories = new Map<
       string,
-      { total: number; breakdown: Map<string, number> }
+      {
+        name: string;
+        txnCount: number;
+        byMonth: Map<string, FxAggregate>;
+      }
     >();
-
-    for (const row of rows) {
-      const existing = monthMap.get(row.month) || {
-        total: 0,
-        breakdown: new Map<string, number>(),
+    for (const r of rows) {
+      const cat = categories.get(r.categoryId) ?? {
+        name: r.categoryName,
+        txnCount: 0,
+        byMonth: new Map<string, FxAggregate>(),
       };
-      const amount = Number(row.total);
-      existing.total += amount;
-      existing.breakdown.set(
-        row.categoryName,
-        (existing.breakdown.get(row.categoryName) || 0) + amount,
-      );
-      monthMap.set(row.month, existing);
+      categories.set(r.categoryId, cat);
+      const agg = cat.byMonth.get(r.month) ?? new FxAggregate();
+      cat.byMonth.set(r.month, agg);
+      cat.txnCount += Number(r.txnCount) || 0;
+      const net = Number(r.net) || 0;
+      if (r.currencyCode === currency || net === 0) {
+        agg.addConverted(net);
+      } else {
+        agg.add(
+          convertRateBasis(net, basisOf(r), currency, rateIndex),
+          r.currencyCode,
+          currency,
+        );
+      }
     }
 
-    return Array.from(monthMap.entries()).map(([month, data]) => ({
-      month,
-      total: data.total,
-      categoryBreakdown: Array.from(data.breakdown.entries())
-        .map(([categoryName, total]) => ({ categoryName, total }))
-        .sort((a, b) => b.total - a.total),
-    }));
+    const missing = new Set<string>();
+    const categorySpending: CategorySpending[] = [];
+    const months = new Map<
+      string,
+      {
+        total: number;
+        breakdown: Array<{ categoryName: string; total: number }>;
+      }
+    >();
+    for (const [categoryId, cat] of categories) {
+      let overall = 0;
+      for (const agg of cat.byMonth.values()) {
+        overall += agg.knownSubtotal;
+        for (const pair of agg.missingPairs) missing.add(pair);
+      }
+      if (!isNetSpending(roundMoney(overall))) continue;
+
+      const monthCount = cat.byMonth.size;
+      categorySpending.push({
+        categoryName: cat.name,
+        categoryId,
+        currentMonthTotal: cat.byMonth.get(currentMonth)?.knownSubtotal ?? 0,
+        previousMonthTotal: cat.byMonth.get(previousMonth)?.knownSubtotal ?? 0,
+        averageMonthlyTotal: monthCount > 0 ? overall / monthCount : 0,
+        monthCount,
+        transactionCount: cat.txnCount,
+      });
+      for (const [month, agg] of cat.byMonth) {
+        const entry = months.get(month) ?? { total: 0, breakdown: [] };
+        months.set(month, entry);
+        entry.total += agg.knownSubtotal;
+        entry.breakdown.push({
+          categoryName: cat.name,
+          total: agg.knownSubtotal,
+        });
+      }
+    }
+    categorySpending.sort(
+      (a, b) =>
+        b.averageMonthlyTotal * b.monthCount -
+        a.averageMonthlyTotal * a.monthCount,
+    );
+
+    const monthlySpending: MonthlySpending[] = [...months.entries()]
+      .sort(([a], [b]) => a.localeCompare(b))
+      .map(([month, data]) => ({
+        month,
+        total: roundMoney(data.total),
+        categoryBreakdown: data.breakdown.sort((a, b) => b.total - a.total),
+      }));
+
+    return {
+      categorySpending,
+      monthlySpending,
+      missingRatePairs: [...missing].sort(),
+    };
   }
 }

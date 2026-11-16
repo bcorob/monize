@@ -1,20 +1,39 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@/test/render';
+import { act } from '@testing-library/react';
+import { render, screen, fireEvent, within } from '@/test/render';
 import { NetWorthChart } from './NetWorthChart';
+import type { NetWorthConfig } from './widget-config';
 
-const mockPush = vi.fn();
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush }),
+const updateConfig = vi.fn();
+const configState: { current: NetWorthConfig } = {
+  current: { range: '1y', barStyle: 'accountType' },
+};
+vi.mock('@/hooks/useWidgetConfig', () => ({
+  useWidgetConfig: () => ({ config: configState.current, updateConfig }),
+}));
+
+const getMonthly = vi.fn();
+vi.mock('@/lib/net-worth', () => ({
+  netWorthApi: { getMonthly: (...a: unknown[]) => getMonthly(...a) },
 }));
 
 vi.mock('recharts', () => ({
   ResponsiveContainer: ({ children }: any) => <div data-testid="responsive-container">{children}</div>,
-  BarChart: ({ children }: any) => <div data-testid="bar-chart">{children}</div>,
-  Bar: ({ children }: any) => <div data-testid="bar">{children}</div>,
+  BarChart: ({ children, data }: any) => <div data-testid="bar-chart" data-points={JSON.stringify(data)}>{children}</div>,
+  ComposedChart: ({ children, stackOffset, data }: any) => (
+    <div data-testid="composed-chart" data-stack-offset={stackOffset} data-points={JSON.stringify(data)}>{children}</div>
+  ),
+  Bar: ({ children, name, dataKey }: any) => (
+    <div data-testid="bar" data-name={name} data-key={typeof dataKey === 'string' ? dataKey : 'fn'}>{children}</div>
+  ),
+  Line: ({ children, name }: any) => <div data-testid="line" data-name={name}>{children}</div>,
   LabelList: ({ formatter }: any) => (
     <div data-testid="label-list">{formatter ? String(formatter(1000)) : ''}</div>
   ),
-  XAxis: () => null,
+  Legend: () => <div data-testid="legend" />,
+  CartesianGrid: () => null,
+  ReferenceLine: () => null,
+  XAxis: ({ ticks }: any) => <div data-testid="x-axis" data-ticks={JSON.stringify(ticks ?? null)} />,
   YAxis: ({ domain }: any) => (
     <div data-testid="y-axis" data-domain={JSON.stringify(domain)} />
   ),
@@ -45,13 +64,17 @@ function setMobile(isMobile: boolean) {
   }));
 }
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
-    formatCurrencyLabel: (n: number) => `$${n}`,
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
+      formatCurrencyLabel: (n: number) => `$${n}`,
+      defaultCurrency: 'USD',
+    }),
+  };
+});
 vi.mock('@/lib/utils', async (importActual) => ({
   ...(await importActual<typeof import('@/lib/utils')>()),
   parseLocalDate: (d: string) => new Date(d + 'T00:00:00'),
@@ -60,200 +83,253 @@ vi.mock('@/lib/utils', async (importActual) => ({
 
 describe('NetWorthChart', () => {
   beforeEach(() => {
-    mockPush.mockClear();
     window.localStorage.clear();
     setMobile(false);
+    updateConfig.mockReset();
+    getMonthly.mockReset();
+    configState.current = { range: '1y', barStyle: 'accountType' };
   });
 
-  it('renders loading state with title and pulse skeleton', () => {
-    render(<NetWorthChart data={[]} isLoading={true} />);
+  async function renderWidget(data: unknown[] | Error, isLoading = false) {
+    if (data instanceof Error) getMonthly.mockRejectedValue(data);
+    else getMonthly.mockResolvedValue(data);
+    await act(async () => {
+      render(<NetWorthChart isLoading={isLoading} />);
+    });
+  }
+
+  const twoMonths = [
+    { month: '2024-01-01', assets: 10000, liabilities: 0, netWorth: 10000 },
+    { month: '2024-06-01', assets: 15000, liabilities: 0, netWorth: 15000 },
+  ];
+
+  it('renders loading state with title and pulse skeleton', async () => {
+    await renderWidget([], true);
     expect(screen.getByText('Net Worth')).toBeInTheDocument();
     expect(document.querySelector('.animate-pulse')).toBeInTheDocument();
-    expect(screen.queryByTestId('bar-chart')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('composed-chart')).not.toBeInTheDocument();
   });
 
-  it('renders empty state when no data', () => {
-    render(<NetWorthChart data={[]} isLoading={false} />);
+  it('renders empty state when no data', async () => {
+    await renderWidget([]);
     expect(screen.getByText('No net worth data available yet.')).toBeInTheDocument();
-    expect(screen.queryByTestId('bar-chart')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('composed-chart')).not.toBeInTheDocument();
   });
 
-  it('renders chart with data and shows current net worth', () => {
-    const data = [
-      { month: '2024-01-01', netWorth: 10000 },
-      { month: '2024-06-01', netWorth: 15000 },
-    ] as any[];
+  it('says the history failed to load rather than showing it as empty', async () => {
+    await renderWidget(new Error('boom'));
+    expect(screen.getByText(/Couldn't load your net worth history/)).toBeInTheDocument();
+    expect(screen.queryByText('No net worth data available yet.')).not.toBeInTheDocument();
+  });
 
-    render(<NetWorthChart data={data} isLoading={false} />);
-    expect(screen.getByTestId('bar-chart')).toBeInTheDocument();
-    expect(screen.getByText('Past 12 months')).toBeInTheDocument();
-    expect(screen.getByText('View full report')).toBeInTheDocument();
+  it('renders chart with data and shows current net worth', async () => {
+    await renderWidget(twoMonths);
+    expect(screen.getByTestId('composed-chart')).toBeInTheDocument();
+    // The header names the window.
+    expect(screen.getByText('1Y')).toBeInTheDocument();
     expect(screen.getByText('$15000')).toBeInTheDocument();
+    // The title is the way to the report; there is no second link under the chart.
+    expect(screen.queryByText('View full report')).not.toBeInTheDocument();
   });
 
-  it('toggles to the 100% stacked composition chart and persists the choice', () => {
-    const data = [
-      { month: '2024-01-01', assets: 50000, liabilities: 10000, netWorth: 40000 },
-      { month: '2024-06-01', assets: 55000, liabilities: 9000, netWorth: 46000 },
-    ] as any[];
+  it('fetches the configured window, month-aligned', async () => {
+    configState.current = { range: '10y', barStyle: 'accountType' };
+    await renderWidget(twoMonths);
+    expect(screen.getByText('10Y')).toBeInTheDocument();
+    const [{ startDate, endDate }] = getMonthly.mock.calls[0] as [{ startDate: string; endDate: string }];
+    expect(startDate).toMatch(/-01$/);
+    const years = Number(endDate.slice(0, 4)) - Number(startDate.slice(0, 4));
+    expect(years).toBeGreaterThanOrEqual(9);
+    expect(years).toBeLessThanOrEqual(10);
+  });
 
-    render(<NetWorthChart data={data} isLoading={false} />);
+  it('names each January by its year over a long window, without value labels', async () => {
+    configState.current = { range: '5y', barStyle: 'accountType' };
+    const months = Array.from({ length: 48 }, (_, i) => {
+      const year = 2021 + Math.floor(i / 12);
+      const month = String((i % 12) + 1).padStart(2, '0');
+      return { month: `${year}-${month}-01`, assets: 1000 + i, liabilities: 0, netWorth: 1000 + i };
+    });
+    await renderWidget(months);
+    expect(JSON.parse(screen.getByTestId('x-axis').getAttribute('data-ticks')!)).toEqual([
+      '2021-01-01',
+      '2022-01-01',
+      '2023-01-01',
+      '2024-01-01',
+    ]);
+    expect(screen.queryByTestId('label-list')).not.toBeInTheDocument();
+  });
+
+  it('toggles to the 100% stacked composition chart and persists the choice', async () => {
+    await renderWidget(twoMonths);
+    // The header switcher is the widget's own control, the gear's height.
+    expect(screen.getByRole('group', { name: 'View' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Bar Chart' })).toHaveAttribute('aria-pressed', 'true');
     fireEvent.click(screen.getByTitle('100% Stacked Bar'));
     // The stacked view renders two series (assets + liabilities).
     expect(screen.getAllByTestId('bar')).toHaveLength(2);
     expect(window.localStorage.getItem('dashboard.net-worth.chartType')).toBe('"stacked"');
   });
 
-  it('restores the stacked composition view from localStorage', () => {
+  it('restores the stacked composition view from localStorage', async () => {
     window.localStorage.setItem('dashboard.net-worth.chartType', '"stacked"');
-    const data = [
-      { month: '2024-01-01', assets: 50000, liabilities: 10000, netWorth: 40000 },
-      { month: '2024-06-01', assets: 55000, liabilities: 9000, netWorth: 46000 },
-    ] as any[];
-
-    render(<NetWorthChart data={data} isLoading={false} />);
+    await renderWidget(twoMonths);
     expect(screen.getAllByTestId('bar')).toHaveLength(2);
   });
 
-  it('renders abbreviated value labels above the bars', () => {
-    const data = [
-      { month: '2024-01-01', netWorth: 10000 },
-      { month: '2024-06-01', netWorth: 15000 },
-    ] as any[];
-
-    render(<NetWorthChart data={data} isLoading={false} />);
-    // The Bar renders a LabelList child that formats each value via
+  it('renders abbreviated value labels above the bars', async () => {
+    await renderWidget(twoMonths);
+    // A LabelList at the top of each bar formats each value via
     // formatCurrencyLabel (mocked here as `$<value>`).
     expect(screen.getByTestId('label-list')).toBeInTheDocument();
     expect(screen.getByText('$1000')).toBeInTheDocument();
   });
 
-  it('shows positive change with plus sign and green styling', () => {
-    const data = [
-      { month: '2024-01-01', netWorth: 10000 },
-      { month: '2024-06-01', netWorth: 15000 },
-    ] as any[];
-
-    render(<NetWorthChart data={data} isLoading={false} />);
+  it('shows positive change with plus sign and green styling', async () => {
+    await renderWidget(twoMonths);
     // Change is +5000, 50%
     const changeEl = screen.getByText(/\+\$5000/);
     expect(changeEl).toBeInTheDocument();
     expect(changeEl.className).toContain('text-green');
   });
 
-  it('shows negative change with red styling', () => {
-    const data = [
-      { month: '2024-01-01', netWorth: 15000 },
-      { month: '2024-06-01', netWorth: 10000 },
-    ] as any[];
-
-    render(<NetWorthChart data={data} isLoading={false} />);
+  it('shows negative change with red styling', async () => {
+    await renderWidget([...twoMonths].reverse().map((m, i) => ({ ...m, month: twoMonths[i].month })));
     // Change is -5000
     const changeEl = screen.getByText(/\$-5000/);
     expect(changeEl).toBeInTheDocument();
     expect(changeEl.className).toContain('text-red');
   });
 
-  it('navigates to net worth report on title click', () => {
-    const data = [
-      { month: '2024-01-01', netWorth: 10000 },
-      { month: '2024-06-01', netWorth: 15000 },
-    ] as any[];
-
-    render(<NetWorthChart data={data} isLoading={false} />);
-    fireEvent.click(screen.getByText('Net Worth'));
-    expect(mockPush).toHaveBeenCalledWith('/reports/net-worth');
+  it('links the title to the net worth report', async () => {
+    await renderWidget(twoMonths);
+    expect(screen.getByRole('link', { name: 'Net Worth' })).toHaveAttribute(
+      'href',
+      '/reports/net-worth',
+    );
   });
 
-  it('navigates to report on View full report click', () => {
-    const data = [
-      { month: '2024-01-01', netWorth: 10000 },
-      { month: '2024-06-01', netWorth: 15000 },
-    ] as any[];
-
-    render(<NetWorthChart data={data} isLoading={false} />);
-    fireEvent.click(screen.getByText('View full report'));
-    expect(mockPush).toHaveBeenCalledWith('/reports/net-worth');
+  it('links the title to the report in the loading and empty states', async () => {
+    await renderWidget([], true);
+    expect(screen.getByRole('link', { name: 'Net Worth' })).toHaveAttribute('href', '/reports/net-worth');
   });
 
-  it('navigates to report on loading state title click', () => {
-    render(<NetWorthChart data={[]} isLoading={true} />);
-    fireEvent.click(screen.getByText('Net Worth'));
-    expect(mockPush).toHaveBeenCalledWith('/reports/net-worth');
-  });
-
-  it('navigates to report on empty state title click', () => {
-    render(<NetWorthChart data={[]} isLoading={false} />);
-    fireEvent.click(screen.getByText('Net Worth'));
-    expect(mockPush).toHaveBeenCalledWith('/reports/net-worth');
-  });
-
-  it('shows negative net worth with red styling', () => {
-    const data = [
-      { month: '2024-01-01', netWorth: -5000 },
-      { month: '2024-06-01', netWorth: -3000 },
-    ] as any[];
-
-    render(<NetWorthChart data={data} isLoading={false} />);
+  it('shows negative net worth with red styling', async () => {
+    await renderWidget([
+      { month: '2024-01-01', assets: 0, liabilities: 5000, netWorth: -5000 },
+      { month: '2024-06-01', assets: 0, liabilities: 3000, netWorth: -3000 },
+    ]);
     const currentEl = screen.getByText('$-3000');
     expect(currentEl.className).toContain('text-red');
   });
 
-  it('uses a tight Y-axis domain above 0 on desktop to surface differences', () => {
-    setMobile(false);
-    const data = [
-      { month: '2024-01-01', netWorth: 500000 },
-      { month: '2024-06-01', netWorth: 520000 },
-    ] as any[];
+  const byType = [
+    {
+      month: '2024-01-01',
+      assets: 210000,
+      liabilities: 150000,
+      netWorth: 60000,
+      byAccountType: { CHEQUING: 5000, INVESTMENT: 205000, MORTGAGE: -150000 },
+    },
+    {
+      month: '2024-02-01',
+      assets: 214000,
+      liabilities: 149000,
+      netWorth: 65000,
+      byAccountType: { CHEQUING: 4000, SAVINGS: 5000, INVESTMENT: 205000, MORTGAGE: -149000 },
+    },
+  ];
 
-    render(<NetWorthChart data={data} isLoading={false} />);
-    const domain = JSON.parse(
-      screen.getByTestId('y-axis').getAttribute('data-domain') as string,
-    );
-    // Lower bound is a concrete number padded below the minimum (not 0).
-    expect(typeof domain[0]).toBe('number');
-    expect(domain[0]).toBeGreaterThan(0);
-    expect(domain[0]).toBeLessThan(500000);
-    expect(domain[1]).toBe('auto');
+  it('stacks the bars by account type, with a legend and the net worth line', async () => {
+    await renderWidget(byType);
+    // Liabilities stack below zero, assets above it.
+    expect(screen.getByTestId('composed-chart')).toHaveAttribute('data-stack-offset', 'sign');
+    expect(screen.getAllByTestId('bar').map((bar) => bar.getAttribute('data-name'))).toEqual([
+      'Chequing',
+      'Savings',
+      'Investment',
+      'Mortgage',
+    ]);
+    expect(screen.getByTestId('legend')).toBeInTheDocument();
+    expect(
+      screen.getAllByTestId('line').some((line) => line.getAttribute('data-name') === 'Net Worth'),
+    ).toBe(true);
   });
 
-  it('uses a tight Y-axis domain above 0 on mobile to surface differences', () => {
-    setMobile(true);
-    const data = [
-      { month: '2024-01-01', netWorth: 500000 },
-      { month: '2024-06-01', netWorth: 520000 },
-    ] as any[];
-
-    render(<NetWorthChart data={data} isLoading={false} />);
-    const domain = JSON.parse(
-      screen.getByTestId('y-axis').getAttribute('data-domain') as string,
-    );
-    // Lower bound is a concrete number padded below the minimum (not 0).
-    expect(typeof domain[0]).toBe('number');
-    expect(domain[0]).toBeGreaterThan(0);
-    expect(domain[0]).toBeLessThan(500000);
-    expect(domain[1]).toBe('auto');
+  it('draws one solid net worth bar a month when that style is chosen', async () => {
+    configState.current = { range: '1y', barStyle: 'netWorth' };
+    await renderWidget(byType);
+    const bars = screen.getAllByTestId('bar');
+    expect(bars).toHaveLength(1);
+    expect(bars[0]).toHaveAttribute('data-key', 'netWorth');
   });
 
-  it('falls back to the anchored domain when all values are equal', () => {
-    const data = [
-      { month: '2024-01-01', netWorth: 500000 },
-      { month: '2024-06-01', netWorth: 500000 },
-    ] as any[];
+  describe('settings', () => {
+    async function openSettings() {
+      await renderWidget(twoMonths);
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Configure Net Worth' }));
+      });
+    }
 
-    render(<NetWorthChart data={data} isLoading={false} />);
-    const domain = screen.getByTestId('y-axis').getAttribute('data-domain');
-    expect(domain).toBe('[null,"auto"]');
+    it('offers 1Y to 10Y and stores the window chosen', async () => {
+      await openSettings();
+      for (const label of ['1Y', '2Y', '5Y', '10Y']) {
+        expect(screen.getAllByRole('button', { name: label }).length).toBeGreaterThan(0);
+      }
+      fireEvent.click(screen.getByRole('button', { name: '10Y' }));
+      expect(updateConfig).toHaveBeenCalledWith({ range: '10y' });
+    });
+
+    it('switches between a solid net worth bar and stacked by account type', async () => {
+      await openSettings();
+      fireEvent.click(screen.getByRole('button', { name: 'Net worth' }));
+      expect(updateConfig).toHaveBeenCalledWith({ barStyle: 'netWorth' });
+    });
   });
 
-  it('handles single data point correctly', () => {
-    const data = [
-      { month: '2024-01-01', netWorth: 10000 },
-    ] as any[];
-
-    render(<NetWorthChart data={data} isLoading={false} />);
+  it('handles single data point correctly', async () => {
+    await renderWidget([{ month: '2024-01-01', assets: 10000, liabilities: 0, netWorth: 10000 }]);
     // Single data point: change = 0, percent = 0
     expect(screen.getByText('$10000')).toBeInTheDocument();
-    expect(screen.getByTestId('bar-chart')).toBeInTheDocument();
+    expect(screen.getByTestId('composed-chart')).toBeInTheDocument();
+  });
+
+  describe('a month the server could not fully convert', () => {
+    const partialMonths = [
+      { month: '2024-01-01', assets: 10000, liabilities: 0, netWorth: 10000, fxComplete: true, missingRatePairs: [] },
+      { month: '2024-06-01', assets: 10000, liabilities: 0, netWorth: 10000, fxComplete: false, missingRatePairs: ['ZZZ->USD'] },
+    ];
+
+    it('marks the headline partial and names the currency', async () => {
+      await renderWidget(partialMonths);
+      const marker = screen.getByTestId('partial-total');
+      expect(within(marker).getByText('$10000')).toBeInTheDocument();
+      expect(within(marker).getByRole('button').getAttribute('aria-label')).toContain('ZZZ');
+    });
+
+    it('withholds the change rather than printing a measured one', async () => {
+      await renderWidget(partialMonths);
+      expect(screen.getByTestId('unknown-amount')).toBeInTheDocument();
+      expect(screen.queryByText(/\+\$0/)).not.toBeInTheDocument();
+    });
+
+    it('draws the partial month as null in the bar and the stacked views', async () => {
+      await renderWidget(partialMonths);
+      const bars = JSON.parse(screen.getByTestId('composed-chart').getAttribute('data-points')!);
+      expect(bars.map((p: { netWorth: number | null }) => p.netWorth)).toEqual([10000, null]);
+      expect(bars[1].byAccountType).toBeUndefined();
+
+      fireEvent.click(screen.getByTitle('100% Stacked Bar'));
+      const stacked = JSON.parse(screen.getByTestId('bar-chart').getAttribute('data-points')!);
+      expect(stacked[1].assets).toBeNull();
+      expect(stacked[1].liabilities).toBeNull();
+    });
+
+    it('marks nothing on a complete series', async () => {
+      await renderWidget(twoMonths);
+      expect(screen.queryByTestId('partial-total')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('unknown-amount')).not.toBeInTheDocument();
+    });
   });
 });

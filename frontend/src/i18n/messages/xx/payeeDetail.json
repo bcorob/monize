@@ -94,6 +94,9 @@
     "largestValue": "[XX-{amount} on {date}-XX]",
     "overpaymentFor": "[XX-Overpayment Payee For-XX]",
     "website": "[XX-Website-XX]",
+    "address": "[XX-Address-XX]",
+    "phone": "[XX-Phone-XX]",
+    "email": "[XX-Email-XX]",
     "notes": "[XX-Notes-XX]"
   },
   "tabs": {
@@ -127,5 +130,23 @@
     "needsMoreHistory": "[XX-At least {years} years of history are needed before a seasonal pattern can be told from noise.-XX]",
     "empty": "[XX-No spending to break down by month yet-XX]",
     "monthTooltip": "[XX-{month}: {amount} on average across {years, plural, one {# year} other {# years}}-XX]"
+  },
+  "contactLookup": {
+    "button": "[XX-Look up contact details-XX]",
+    "inProgress": "[XX-Looking up...-XX]",
+    "nothingNew": "[XX-No new contact details were found.-XX]",
+    "noProvider": "[XX-Set up a lookup source in Payee lookup settings to find contact details.-XX]",
+    "failed": "[XX-The lookup could not be completed. Try again later.-XX]",
+    "dialogTitle": "[XX-Confirm contact details-XX]",
+    "dialogSubtitle": "[XX-Nothing is saved for {name} until you confirm.-XX]",
+    "pickMatch": "[XX-That name matches {count, plural, one {# business} other {# businesses}}. Choose the one you pay:-XX]",
+    "unlabelledMatch": "[XX-Unnamed match-XX]",
+    "willAdd": "[XX-Add-XX]",
+    "willReplace": "[XX-Replace-XX]",
+    "cancel": "[XX-Cancel-XX]",
+    "confirm": "[XX-Save {count, plural, one {# change} other {# changes}}-XX]",
+    "applied": "[XX-{count, plural, one {Saved # contact detail} other {Saved # contact details}}-XX]",
+    "applyFailed": "[XX-Could not save the contact details-XX]",
+    "quotaExceeded": "[XX-This month's Google Places lookups are used up. Raise the limit in Payee lookup settings, or wait until next month.-XX]"
   }
 }

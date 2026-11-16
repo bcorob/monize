@@ -34,7 +34,6 @@
     "units": "Đơn vị",
     "avgCostPerUnit": "Giá vốn TB / đơn vị",
     "heldInAccounts": "Nắm giữ trong các tài khoản",
-    "openAccount": "Xem {name} trên trang Đầu tư",
     "unitsShare": "{units} ({share})",
     "valueUnknown": "Chưa có giá",
     "approx": "~ {amount}"
@@ -74,15 +73,20 @@
     "sector": "Ngành",
     "industry": "Phân ngành",
     "provider": "Nhà cung cấp",
-    "lastPrice": "Giá gần nhất"
+    "lastPrice": "Giá gần nhất",
+    "bondDescription": "Mô tả trái phiếu"
   },
   "tabs": {
     "ariaLabel": "Các phần của chứng khoán",
     "overview": "Tổng quan",
     "transactions": "Giao dịch",
     "prices": "Lịch sử giá",
+    "terms": "Lịch sử điều khoản",
     "documents": "Tài liệu",
     "news": "Tin tức"
+  },
+  "bondPrices": {
+    "title": "Lịch sử giá"
   },
   "about": {
     "title": "Giới thiệu",
@@ -121,6 +125,8 @@
     "fees": "Phí",
     "realizedPl": "Lãi/lỗ đã thực hiện",
     "realizedMixed": "Thực hiện bằng {currencies}, nên không cộng gộp",
+    "realizedUnknownReason": "Không thể tính khoản lãi/lỗ này: vị thế có cổ phiếu được thêm vào mà không có chi phí, nên không biết chi phí của số cổ phiếu đã bán. Hãy mở giao dịch đã thêm chúng và nhập giá.",
+    "realizedKnownPart": "Phần đã biết: {amount}",
     "totalReturn": "Tổng lợi nhuận",
     "totalReturnValue": "{amount} ({percent})",
     "totalReturnTitle": "Lãi chưa thực hiện, cộng phần bạn đã thực hiện khi bán và nhận được từ thu nhập, trừ phí, so với số vốn bạn đã bỏ ra. Đây là lợi nhuận đơn giản trên số vốn đó: không quy về năm và không tính theo thời gian nắm giữ của từng lần mua.",
@@ -147,6 +153,8 @@
     "title": "Vị thế đã đóng",
     "description": "Bạn không còn nắm giữ chứng khoán này. Lịch sử của nó vẫn còn ở bên dưới.",
     "realizedPl": "Lãi/lỗ đã thực hiện",
+    "realizedUnknownReason": "Không thể tính khoản lãi/lỗ này: vị thế từng có cổ phiếu được thêm vào mà không có chi phí, nên không biết chi phí của số cổ phiếu đã bán. Hãy mở giao dịch đã thêm chúng và nhập giá.",
+    "realizedKnownPart": "Phần đã biết: {amount}",
     "heldFrom": "Nắm giữ từ",
     "heldRange": "{start} đến {end}"
   },
@@ -165,7 +173,24 @@
     "sectorEmpty": "Chưa lưu cơ cấu theo ngành. Monize lấy phần này từ nhà cung cấp cho quỹ và ETF.",
     "countryEmpty": "Chưa lưu cơ cấu theo quốc gia. Bạn có thể nhập khi sửa chứng khoán.",
     "assetClassEmpty": "Chưa lưu cơ cấu theo loại tài sản.",
-    "remainder": "{percent} chưa phân loại"
+    "remainder": "{percent} chưa phân loại",
+    "bond": {
+      "seriesTab": "Series",
+      "maturityTab": "Đáo hạn",
+      "empty": "Bạn chưa nắm giữ series nào của loại trái phiếu này.",
+      "someUnknown": "Một số giá trị chưa xác định, nên không hiển thị tỷ trọng.",
+      "issuerCountry": "Quốc gia phát hành",
+      "rate": "Lãi suất",
+      "interest": "Tiền lãi",
+      "term": "Thời hạn đến khi đáo hạn",
+      "interestValue": "{capitalization}, kỳ: {period}",
+      "rateType": {
+        "FIXED": "Cố định",
+        "BENCHMARK_PLUS_SPREAD": "Thả nổi (chuẩn + biên độ)",
+        "INFLATION_PLUS_MARGIN_AS_RATE": "Gắn với lạm phát (chuẩn + biên)",
+        "ZERO_COUPON_DISCOUNT": "Không phiếu lãi (chiết khấu)"
+      }
+    }
   },
   "documents": {
     "title": "Tài liệu",
@@ -225,6 +250,16 @@
       "deleted": "Đã xoá tài liệu",
       "saveFailed": "Không thể lưu tài liệu",
       "deleteFailed": "Không thể xoá tài liệu"
+    },
+    "issueLetters": {
+      "title": "Thư phát hành",
+      "loadFailed": "Không thể tải thư phát hành.",
+      "empty": "Chưa có thư phát hành nào được lưu cho loại trái phiếu này.",
+      "held": "Đang nắm giữ",
+      "onSale": "Đang bán",
+      "noLetter": "Chưa ghi nhận thư cho series này",
+      "open": "PDF chính thức",
+      "openNamed": "Mở thư phát hành của series {series}"
     }
   },
   "news": {
@@ -237,6 +272,243 @@
     "empty": {
       "title": "Hiện chưa có tiêu đề nào",
       "description": "Gần đây chưa có gì được công bố cho mã này. Danh sách sẽ được làm mới khi bạn quay lại."
+    }
+  },
+  "bond": {
+    "loading": "Đang tải định giá trái phiếu...",
+    "loadFailed": "Không thể tải định giá trái phiếu.",
+    "unknown": "Không rõ",
+    "asOf": "Định giá vào ngày",
+    "termsSource": "Điều khoản: {document}",
+    "termsManual": "Điều khoản do quản trị viên nhập thủ công",
+    "noLots": "Không có lô nào đang mở vào ngày này.",
+    "totals": {
+      "quantity": "Trái phiếu đang nắm giữ",
+      "grossValue": "Giá trị gộp",
+      "earlyRedemptionValue": "Giá trị khi tất toán sớm",
+      "accruedInterest": "Lãi tích lũy",
+      "unknownLot": "Ít nhất một lô không có số liệu nên không đưa ra tổng.",
+      "unknownRefusal": "Không thể xác định các lô nên không đưa ra tổng."
+    },
+    "lots": {
+      "purchaseDate": "Ngày mua",
+      "assumed": "Giả định",
+      "assumedTitle": "Ngày mua thực tế không rõ: lô này đến qua một lần chuyển khoản không có phía gửi được liên kết.",
+      "quantity": "Số lượng",
+      "maturity": "Đáo hạn",
+      "period": "Kỳ hiện tại",
+      "periodValue": "{index}: {start} đến {end}",
+      "rate": "Lãi suất",
+      "principal": "Gốc mỗi trái phiếu",
+      "principalIssuePrice": "Chưa nhập chi phí: dùng giá đấu thầu",
+      "accruedInterest": "Lãi tích lũy",
+      "grossValue": "Giá trị gộp",
+      "earlyRedemption": "Tất toán sớm",
+      "nextCashFlow": "Dòng tiền kế tiếp",
+      "cashFlowValue": "{type} {amount} vào {date}",
+      "noCashFlow": "Không có",
+      "projected": "Dự phóng",
+      "maturityValue": "Giá trị khi đáo hạn",
+      "maturityKnown": "Đã biết",
+      "maturityProjected": "Dự phóng",
+      "matured": "Đã đáo hạn",
+      "refused": "Chưa định giá",
+      "amountUnknown": "Số tiền chưa rõ"
+    },
+    "rateSource": {
+      "TERMS": "Điều khoản",
+      "ANNOUNCED": "Đã công bố",
+      "DERIVED": "Suy ra",
+      "PROJECTED": "Dự phóng"
+    },
+    "cashFlowType": {
+      "INTEREST": "Lãi",
+      "PRINCIPAL": "Gốc"
+    },
+    "earlyRefusal": {
+      "NOT_REDEEMABLE": "Không thể tất toán sớm",
+      "TOO_EARLY": "Còn quá sớm để tất toán",
+      "TOO_LATE": "Đã quá muộn để tất toán",
+      "RECORD_DAY": "Không thể tất toán vào ngày chốt danh sách",
+      "MATURED": "Đã đáo hạn",
+      "RATE_UNKNOWN": "Chưa biết lãi suất",
+      "TERMS_INCOMPLETE": "Điều khoản chưa đầy đủ"
+    },
+    "lotsRefusal": {
+      "SPLIT": "Không thể suy ra các lô: trái phiếu không được chia nhỏ.",
+      "FRACTIONAL_QUANTITY": "Không thể suy ra các lô: một số lượng không phải là số nguyên trái phiếu.",
+      "OVER_REMOVAL": "Không thể suy ra các lô: số trái phiếu bị trừ nhiều hơn số đang nắm giữ.",
+      "INVALID_QUANTITY": "Không thể suy ra các lô: một số lượng bị thiếu, âm hoặc quá lớn.",
+      "REMOVAL_EXCEEDS_SERIES": "Không thể xác định các lô: số trái phiếu của một sê-ri bị rút nhiều hơn số đang nắm giữ.",
+      "SERIES_NOT_DETERMINED": "Không thể xác định các lô: không rõ sê-ri của một giao dịch mua."
+    },
+    "lotsRefusalDetail": {
+      "SPLIT": "Chứng khoán này có ghi nhận một lần chia tách ({action} ngày {date}); trái phiếu không chia tách.",
+      "FRACTIONAL_QUANTITY": "{action} ngày {date} chuyển {quantity} trái phiếu, đây không phải số nguyên.",
+      "OVER_REMOVAL": "{action} ngày {date} rút {quantity} trái phiếu, nhiều hơn số đang nắm giữ.",
+      "INVALID_QUANTITY": "Số lượng của {action} ngày {date} bị thiếu, âm hoặc quá lớn.",
+      "REMOVAL_EXCEEDS_SERIES": "{action} ngày {date} rút {quantity} trái phiếu của sê-ri, nhiều hơn số có trong sê-ri đó.",
+      "SERIES_NOT_DETERMINED": "{action} ngày {date} không nêu sê-ri và hôm đó không có sê-ri nào đã lưu của loại trái phiếu được bán. Hãy tải sê-ri và chọn trong giao dịch."
+    },
+    "assumptions": {
+      "title": "Giả định của dự phóng",
+      "latestObservation": "{benchmark} được giả định ở mức {value} cho mọi kỳ tiếp theo, là giá trị được công bố gần nhất ({observation})",
+      "supplied": "{benchmark} được giả định ở mức {value} cho mọi kỳ tiếp theo",
+      "suppliedSimpleAnnual": "{benchmark} được giả định tăng {value} mỗi năm (tăng trưởng năm đơn, không lãi kép) cho mọi tháng sau đó"
+    },
+    "missing": {
+      "title": "Dữ liệu còn thiếu",
+      "item": "{benchmark} {observation} — do {publisher} công bố",
+      "itemNoPublisher": "{benchmark} {observation} — chưa rõ đơn vị công bố"
+    },
+    "recompute": {
+      "button": "Tính lại giá",
+      "done": "Đã tính lại giá: ghi {written}, xóa {deleted}.",
+      "failed": "Không thể tính lại giá."
+    },
+    "rate": {
+      "title": "Lãi suất",
+      "rule": {
+        "fixed": "Cố định {rate} trong toàn bộ kỳ hạn",
+        "firstThen": "Kỳ 1: {firstRate}. Sau đó {benchmark} + {addend}",
+        "every": "Mỗi kỳ: {benchmark} + {addend}",
+        "floorZero": "Giá trị âm của {benchmark} được tính là 0",
+        "dailyFloor": "Lãi suất hằng ngày (chỉ số cộng biên độ) không bao giờ thấp hơn {floor}",
+        "discount": "Chiết khấu so với mệnh giá",
+        "daily": "Mỗi ngày: {benchmark} + {addend}, cộng dồn theo ngày",
+        "lockout": "Một phiên đấu thầu trong vòng {days, plural, one {# ngày làm việc} other {# ngày làm việc}} trước khi kết thúc kỳ không được dùng cho kỳ đó"
+      },
+      "daily": "Hằng ngày, {benchmark}",
+      "dailyNoIndex": "Hằng ngày, {benchmark}: chưa lưu chỉ số",
+      "dailyRun": "Từ {from}: {rate}",
+      "dailyRunUnknown": "Từ {from}: chưa lưu chỉ số",
+      "lotHeading": "Lô mua ngày {date}",
+      "range": "{start} đến {end}",
+      "current": "Hiện tại",
+      "columns": {
+        "period": "Kỳ",
+        "dates": "Ngày",
+        "rate": "Lãi suất",
+        "source": "Nguồn",
+        "how": "Cách xác định"
+      },
+      "how": {
+        "stated": "Lãi suất quy định",
+        "observed": "{benchmark} {observation}: {value} + {addend}",
+        "floored": "(nâng lên {floor})",
+        "missing": "{benchmark} {observation}: chưa được công bố"
+      },
+      "nextRateReset": "Lần điều chỉnh lãi suất tiếp theo: {date}",
+      "nextCapitalization": "Lần nhập lãi vào gốc tiếp theo: {date}"
+    },
+    "indexation": {
+      "inflation": "Gắn với lạm phát: từ {date} (kỳ 2) lãi suất là {benchmark} + {addend}, được tính lại mỗi kỳ",
+      "floating": "Lãi suất thả nổi: từ {date} (kỳ 2) lãi suất là {benchmark} + {addend}, được tính lại mỗi kỳ"
+    },
+    "interestParts": {
+      "fixed": "Lãi cố định (kỳ 1)",
+      "margin": "Lãi từ biên độ",
+      "inflation": "Lãi từ lạm phát",
+      "benchmark": "Lãi từ lãi suất tham chiếu",
+      "announced": "Lãi đã công bố",
+      "fixedTerm": "Lãi theo lãi suất cố định"
+    },
+    "chart": {
+      "title": "Lãi tích lũy cuối mỗi kỳ",
+      "assumption": "Dự phóng với giả định {benchmark} = {value}",
+      "projectedNote": "Các cột nhạt hơn là các kỳ dự phóng",
+      "stoppedAt": "Lãi chưa được biết từ kỳ {period}, nên biểu đồ dừng trước đó."
+    },
+    "scenarios": {
+      "title": "Kịch bản lạm phát",
+      "titleBenchmark": "Kịch bản lãi suất",
+      "projection": "Dự phóng",
+      "caption": "Giá trị đáo hạn dự phóng và lãi theo giá trị giả định",
+      "intro": "Đây là dự phóng, không phải điều chắc chắn: với mỗi kỳ chưa bắt đầu, giá trị {benchmark} ở cột đầu tiên được giả định. Các kỳ đã biết và đã công bố không thay đổi. Chọn một dòng để xem bảng lãi suất và biểu đồ của nó.",
+      "custom": "Giá trị {benchmark} của riêng bạn (%)",
+      "add": "Thêm kịch bản",
+      "useDefault": "Dùng giả định mặc định",
+      "selected": "Đã chọn",
+      "loading": "Đang tải các kịch bản...",
+      "loadFailed": "Không thể tải các kịch bản.",
+      "columns": {
+        "assumed": "Giả định: {benchmark}",
+        "maturityValue": "Giá trị đáo hạn (dự phóng)",
+        "totalInterest": "Tổng lãi (dự phóng)"
+      },
+      "asOfNote": "Định giá tại ngày {date}, ngày được chọn ở trên: các con số là của trái phiếu nắm giữ vào ngày đó."
+    },
+    "benchmarks": {
+      "PL_CPI_GUS_YOY": "CPI, 12 tháng (GUS)",
+      "PL_NBP_REFERENCE": "Lãi suất tham chiếu NBP",
+      "US_CPI_U_NSA": "CPI-U, tất cả các mục, không điều chỉnh theo mùa (BLS)",
+      "US_TBILL_13W_MMY": "Lợi suất tín phiếu Kho bạc 13 tuần"
+    },
+    "valuationRefusal": {
+      "PURCHASE_OUTSIDE_SALE_WINDOW": "Chuỗi này chỉ có thể mua từ {from} đến {to}. Lô này được mua vào {purchaseDate} nên không được định giá.",
+      "PURCHASE_AFTER_MATURITY": "Chuỗi này đã đáo hạn vào {maturityDate}. Lô này được mua vào {purchaseDate}, đúng ngày đó hoặc sau đó, nên không được định giá."
+    },
+    "marketPriceRequired": "Chứng khoán này có một chuỗi được giao dịch trên thị trường nên giá của nó không suy ra từ điều khoản. Monize không ghi giá cho chuỗi này: hãy tự nhập giá. Giá trị các lô bên dưới được tính từ điều khoản và không phải giá trị thị trường.",
+    "partial": {
+      "title": "Định giá này chưa đầy đủ, vì vậy hãy hiểu các con số là một phần.",
+      "terms": "Điều khoản của trái phiếu chưa đầy đủ (ví dụ chưa cài lịch).",
+      "reference": "Thiếu dữ liệu tham chiếu; xem danh sách dữ liệu còn cần bên dưới.",
+      "earlyRedemption": "Điều khoản mua lại sớm chưa đầy đủ nên có thể thiếu giá trị mua lại sớm.",
+      "other": "Ít nhất một lô chưa thể định giá đầy đủ (ví dụ chưa biết lãi suất)."
+    },
+    "projectionMissing": {
+      "title": "Không thể dự phóng các kỳ sau",
+      "item": "{benchmark}: chưa có giá trị nào được công bố và chưa đặt giả định nào, nên không thể dự phóng các kỳ sau (do {publisher} công bố)",
+      "itemNoPublisher": "{benchmark}: chưa có giá trị nào được công bố và chưa đặt giả định nào, nên không thể dự phóng các kỳ sau (chưa rõ đơn vị công bố)"
+    },
+    "coverage": {
+      "asOf": "Dữ liệu {benchmark} tính đến {date}",
+      "none": "Chưa lưu dữ liệu {benchmark} nào"
+    },
+    "issuers": {
+      "PL_MF": "Bộ Tài chính (PL)",
+      "US_TREASURY": "Bộ Tài chính Hoa Kỳ (US)"
+    },
+    "redemption": {
+      "title": "Điều kiện mua lại trước hạn",
+      "fixedFee": "Phí mua lại trước hạn: {amount} mỗi trái phiếu.",
+      "forfeitAccrued": "Khi mua lại trước hạn, tiền lãi đã phát sinh trong kỳ hiện tại sẽ bị mất.",
+      "floorAllPeriods": "Phí không bao giờ làm số tiền nhận được thấp hơn mệnh giá, ở bất kỳ kỳ nào.",
+      "floorFirstPeriod": "Chỉ trong kỳ đầu tiên, phí không thể làm số tiền nhận được thấp hơn mệnh giá; các kỳ sau không có mức sàn này."
+    },
+    "programs": {
+      "OTS": "OTS: trái phiếu tiết kiệm 3 tháng lãi suất cố định",
+      "ROR": "ROR: trái phiếu tiết kiệm 1 năm lãi suất thả nổi",
+      "DOR": "DOR: trái phiếu tiết kiệm 2 năm lãi suất thả nổi",
+      "TOS": "TOS: trái phiếu tiết kiệm 3 năm lãi suất cố định",
+      "COI": "COI: trái phiếu tiết kiệm 4 năm gắn với lạm phát",
+      "EDO": "EDO: trái phiếu tiết kiệm 10 năm gắn với lạm phát",
+      "ROS": "ROS: trái phiếu tiết kiệm gia đình 6 năm gắn với lạm phát",
+      "ROD": "ROD: trái phiếu tiết kiệm gia đình 12 năm gắn với lạm phát",
+      "BILL": "BILL: tín phiếu Kho bạc, 4 đến 52 tuần, bán có chiết khấu",
+      "NOTE": "NOTE: trái phiếu trung hạn Kho bạc, 2 đến 10 năm, coupon cố định theo nửa năm",
+      "BOND": "BOND: trái phiếu Kho bạc, 20 và 30 năm, coupon cố định theo nửa năm",
+      "TIPS": "TIPS: chứng khoán Kho bạc chống lạm phát, gốc được điều chỉnh theo CPI-U",
+      "FRN": "FRN: trái phiếu Kho bạc lãi suất thả nổi, 2 năm, lãi theo quý"
+    },
+    "series": {
+      "title": "Các đợt phát hành của bạn",
+      "column": "Đợt phát hành",
+      "nextRateChange": "Lần đổi lãi suất tiếp theo",
+      "total": "Tổng của loại trái phiếu",
+      "purchasedRange": "{from} đến {to}",
+      "expand": "Hiện chi tiết của {series}",
+      "collapse": "Ẩn chi tiết của {series}",
+      "partial": "Một phần"
+    },
+    "program": {
+      "title": "Loại trái phiếu",
+      "newest": "Điều khoản của đợt phát hành mới nhất, {series}.",
+      "noTerms": "Chưa biết điều khoản: bạn không nắm giữ đợt phát hành nào của loại trái phiếu này và không có đợt nào đang bán.",
+      "autoFetchFailed": "Không thể lưu thiết lập."
+    },
+    "onSale": {
+      "title": "Đang bán ngay bây giờ"
     }
   }
 }

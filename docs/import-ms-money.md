@@ -22,10 +22,18 @@ confirmation word and re-enter your password, and it cannot be undone.
 **Work from a copy.** Monize never writes to the file, but a spare copy of three
 decades of finances costs nothing.
 
-**Money 97 and 98 files are not supported.** Those predate the format Monize
-reads. Open the file once in the free Money Plus Sunset edition and save it; that
-converts it, and the result imports normally. Monize detects these files and
-says so rather than failing obscurely.
+**Money 97, 98 and 99 files import directly**, with no conversion step,
+recurring bills included. A scheduled payment Money recorded with no account to
+pay from (Money 99 can leave a scheduled loan payment that way) cannot become a
+bill and is listed as skipped. An investment account's "Other income" and "Other expenses" arrive as ordinary
+categorized transactions in its cash account, because Monize has no investment
+action for either, and employee stock option grants, vesting and expiry are not
+imported. A CD, which Money 99 buys by amount, arrives as units worth 1 each.
+Money 99 keeps only the latest exchange rate for each currency, so a trade of a
+security quoted in another currency, made before that rate's date, is converted
+at the market exchange rate for its date instead, and listed so you can check
+it. A trade no rate can be found for imports in the account's currency and is
+listed for you to correct.
 
 `.mbf` backup archives are also unsupported. Restore the backup in Money first
 and import the resulting `.mny`.
@@ -49,8 +57,8 @@ and import the resulting `.mny`.
    - Untick any account you do not want. Closed accounts are included by
      default and stay closed; they still hold history worth keeping.
    - Override an account's currency if Money had it wrong.
-   - Counts for payees, categories, securities, prices, rates and bills, each
-     shown against the total in the file, so "40 of 500 payees" is visible
+   - Counts for payees, categories, tags, securities, prices, rates and bills,
+     each shown against the total in the file, so "40 of 500 payees" is visible
      before rather than after.
    - **Scheduled bills** appear as a checkbox list. Money keeps one row per
      occurrence, so a long history holds thousands of them for a handful of real
@@ -79,7 +87,7 @@ and import the resulting `.mny`.
 | Only import categories that are used | on | Money seeds a full category tree whether you use it or not |
 | Import closed accounts | on | Closed accounts keep their history and are created closed |
 | Import price history | on | Money's own record of what each security was worth, day by day |
-| Import exchange rates | on | Historical rates, so past foreign-currency transactions convert the way Money had them |
+| Import exchange rates | on | Historical rates, used only for dates Monize has no rate for |
 | Start fresh | off | Removes your existing Monize data before importing. Typed confirmation and password required |
 
 ## What is imported
@@ -107,23 +115,48 @@ and import the resulting `.mny`.
   that transaction's splits.
 - **Price history and exchange rates**, both additive -- importing twice, or
   importing on top of prices a quote provider already fetched, converges rather
-  than duplicating.
+  than duplicating. Exchange rates are shared by everyone on your Monize server,
+  so a rate from your file only fills a date Monize has no rate for; it never
+  replaces one already stored, and the import reports how many it added.
 - **Scheduled bills** you ticked, created active and set not to post
   automatically, so nothing lands in your accounts without you.
+- **Classifications**, as tags. Money's two user-named classifications
+  ("Classification 1" and "2", which you may have called *Properties* or
+  *Projects*) become Monize tags named `Classification:Item`, for example
+  `Properties:20 Spring Apartment`, so they group under the classification in
+  the tag picker and reports. Every transaction, split leg and scheduled bill
+  that carried the item in Money carries the tag in Monize. Only items a
+  transaction actually uses are created; the review step shows how many of the
+  file's items that is.
 
 ## What is not imported (v1)
 
 - **Budgets.** Money's budget tables have no clean equivalent in Monize's.
 - **Savings goals.** No equivalent entity.
-- **Classifications** beyond ordinary categories.
 - **Attachments** embedded in the file.
 - **Categories deeper than two levels** are flattened into `Parent:Child` names;
   Monize's category tree is two levels deep.
 
 ## Known limitations
 
-**No merge, no de-duplication.** Version 1 targets a fresh profile. Importing
-the same file twice creates the transactions twice.
+**No merge, no de-duplication.** Version 1 targets a fresh profile. Monize
+refuses to import a file whose exact bytes it already imported into your account,
+and names the earlier import; to import it again, start over and choose to replace
+your existing data. A different export of the same Money file (saved again, so its
+bytes differ) is not recognised as the same file, and importing it creates the
+transactions a second time.
+
+**A failure after the data was saved says so.** If an import fails after its
+records were written (a final check, for example), the wizard tells you the records
+are in your account and does not offer to try again: importing the same file again
+would duplicate them.
+
+**Securities quoted in another currency than their account.** Money records a
+trade in the account's currency. Monize stores the trade's price and total in the
+security's own currency, converted with the exchange rate your file holds for that
+date, and keeps the cash movement in the account's currency. If your file has no
+rate for that pair within 45 days before the trade, the trade is imported
+unconverted and the report lists it, so you can add the rate and correct the price.
 
 **Foreign-currency cost basis.** Money stores a foreign holding's cost basis
 converted to your base currency at the historical rate, not in the security's own
@@ -149,7 +182,7 @@ data as it was and the uploaded file is kept for one more attempt.
 
 | What you see | What it means |
 |---|---|
-| "That file was written by Money 97 or 98" | Convert it through Money Plus Sunset first (see above) |
+| "That file was written by a version of Microsoft Money that Monize cannot read" | Open it in the free Money Plus Sunset edition, save it, and import the result |
 | "That file is not a Microsoft Money file" | Wrong file, or the upload was corrupted |
 | "That Money file looks incomplete" | The upload was cut short -- try again |
 | "Its contents could not be read" | The file decrypted but its internals are damaged. Open it in Money and save a fresh copy |
@@ -159,16 +192,17 @@ data as it was and the uploaded file is kept for one more attempt.
 
 Two self-hosting failures look like the app is broken and are configuration:
 
-- **The upload dies immediately and the backend logs `Request aborted`.** The
-  Next.js proxy in front of the API caps a forwarded request body at 10MB by
-  default, and *truncates* rather than rejecting anything larger, so nothing
-  reports a size problem. `MNY_IMPORT_LIMIT_MB` sizes that ceiling and must be
-  set on the **frontend** as well as the backend.
+- **The upload is refused as too large (413).** The frontend streams the
+  upload to the backend through its own route handler
+  (`frontend/src/app/api/v1/import/mny/parse/route.ts`), which refuses a body
+  over `MNY_IMPORT_LIMIT_MB` (plus 8MB of multipart framing). The variable must
+  be set on the **frontend** as well as the backend. The general `/api` proxy
+  refuses any body over 10MB, and the import route is kept out of it for that
+  reason (`LARGE_UPLOAD_ROUTES`, `frontend/src/lib/proxy-body-limit.ts`).
 - **The server is killed partway through every attempt.** It is running out of
   memory. A Money file is held in memory while it is read, so the backend needs
-  roughly twice the file size available, and the frontend needs another copy
-  because the proxy buffers the upload. See `helm/README.md` for the sizing
-  rules.
+  roughly twice the file size available. The frontend streams the upload and
+  holds no copy of it. See `helm/README.md` for the sizing rules.
 
 ## Accuracy, and how to check it
 
@@ -186,7 +220,11 @@ every warning -- without importing anything.
 
 - `docs/ms-money-data-model.md` -- the `.mny` format reference: tables, codes,
   and the traps that produce plausible-looking wrong answers.
-- `docs/future-plans/mny-import.md` -- design, architecture decisions and the
+- `docs/specs/mny-import.md` -- design, architecture decisions and the
   task history.
 - `backend/src/import/mny/README.md` -- how the pipeline is layered and what it
   refuses to guess at.
+
+## A Money activity label is not always its raw `TRN.act` code
+
+Money Plus stores some "Redeem CD/Bond" rows as `act = 2` (SELL) with positive `TRN_INV.amtInt`, while older redemptions use `act = 30`. The importer normalizes SELL plus accrued interest to REDEEM, keeps the SELL row's `TRN.amt` as proceeds, and takes the gross payout from the principal-plus-interest split; do not gate accrued-interest import on raw `act = 30` alone.

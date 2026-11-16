@@ -1,5 +1,4 @@
 import { PasswordBreachService } from "./password-breach.service";
-import * as crypto from "crypto";
 
 describe("PasswordBreachService", () => {
   let service: PasswordBreachService;
@@ -17,21 +16,17 @@ describe("PasswordBreachService", () => {
     fetchSpy.mockRestore();
   });
 
-  // SHA-1 is used here only to replicate HIBP's k-Anonymity API format
-  // inside unit-test fixtures. This is not a password-storage hash.
-  // codeql[js/insufficient-password-hash]
-  function sha1Suffix(password: string): string {
-    return crypto
-      .createHash("sha1")
-      .update(password)
-      .digest("hex")
-      .toUpperCase()
-      .substring(5);
-  }
+  // SHA-1("password123") is CBFDAC6008F9CAB4083784CBD1874F76618D2A97, so the
+  // HIBP range request carries the prefix CBFDA and the service compares the
+  // remaining 35 characters against the body. A fixture that recomputed the
+  // hash with the same library would only prove the service agrees with
+  // itself; a value known independently of the implementation proves the
+  // protocol, and keeps password hashing out of the test entirely.
+  const PASSWORD123_PREFIX = "CBFDA";
+  const PASSWORD123_SUFFIX = "C6008F9CAB4083784CBD1874F76618D2A97";
 
   it("returns true when password is found in breach data", async () => {
-    const suffix = sha1Suffix("password123");
-    const responseBody = `${suffix}:42\nABCDEF1234567890ABCDEFGHIJKLMNOPQR:5`;
+    const responseBody = `${PASSWORD123_SUFFIX}:42\nABCDEF1234567890ABCDEFGHIJKLMNOPQR:5`;
 
     fetchSpy.mockResolvedValue({
       ok: true,
@@ -42,7 +37,7 @@ describe("PasswordBreachService", () => {
 
     expect(result).toBe(true);
     expect(fetchSpy).toHaveBeenCalledWith(
-      expect.stringContaining("https://api.pwnedpasswords.com/range/"),
+      `https://api.pwnedpasswords.com/range/${PASSWORD123_PREFIX}`,
       expect.objectContaining({
         headers: { "User-Agent": "Monize-PasswordCheck" },
       }),

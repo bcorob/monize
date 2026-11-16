@@ -36,6 +36,7 @@ function transaction(
     linkedTransactionId: null,
     splits: [],
     collapsedTradeHandle: null,
+    tagHandles: [],
     ...overrides,
   };
 }
@@ -53,6 +54,7 @@ function split(overrides: Partial<MappedSplit> = {}): MappedSplit {
     investmentHandle: null,
     amount: -10,
     memo: null,
+    tagHandles: [],
     ...overrides,
   };
 }
@@ -61,6 +63,8 @@ interface Doubles {
   manager: EntityManager;
   transactions: Record<string, jest.Mock>;
   splits: Record<string, jest.Mock>;
+  tagLinks: Record<string, jest.Mock>;
+  splitTagLinks: Record<string, jest.Mock>;
   query: jest.Mock;
 }
 
@@ -71,16 +75,25 @@ function doubles(): Doubles {
   const splits = {
     insert: jest.fn().mockResolvedValue(undefined),
   } as unknown as Record<string, jest.Mock>;
+  const tagLinks = {
+    insert: jest.fn().mockResolvedValue(undefined),
+  } as unknown as Record<string, jest.Mock>;
+  const splitTagLinks = {
+    insert: jest.fn().mockResolvedValue(undefined),
+  } as unknown as Record<string, jest.Mock>;
   const query = jest.fn().mockResolvedValue([[], 0]);
 
   const manager = {
-    getRepository: jest.fn((entity: { name?: string }) =>
-      entity?.name === "TransactionSplit" ? splits : transactions,
-    ),
+    getRepository: jest.fn((entity: { name?: string }) => {
+      if (entity?.name === "TransactionSplit") return splits;
+      if (entity?.name === "TransactionTag") return tagLinks;
+      if (entity?.name === "TransactionSplitTag") return splitTagLinks;
+      return transactions;
+    }),
     query,
   } as unknown as EntityManager;
 
-  return { manager, transactions, splits, query };
+  return { manager, transactions, splits, tagLinks, splitTagLinks, query };
 }
 
 const baseInput = {
@@ -88,6 +101,7 @@ const baseInput = {
   categoryIdByHandle: new Map([[10, "category-10"]]),
   payeeIdByHandle: new Map([[5, "payee-5"]]),
   payeeNameByHandle: new Map([[5, "Loblaws"]]),
+  tagIdByHandle: new Map([[552, "tag-552"]]),
 };
 
 describe("writeTransactions", () => {
@@ -192,6 +206,43 @@ describe("writeTransactions", () => {
     expect(transactions.insert.mock.calls[1][0]).toHaveLength(1);
     expect(onProgress).toHaveBeenNthCalledWith(1, INSERT_CHUNK_SIZE, total);
     expect(onProgress).toHaveBeenNthCalledWith(2, total, total);
+  });
+
+  it("links Money's classification to the transaction and to the split leg that carries it", async () => {
+    const { manager, tagLinks, splitTagLinks } = doubles();
+
+    const written = await writeTransactions(manager, "user-1", {
+      ...baseInput,
+      transactions: [
+        transaction({ id: "id-a", tagHandles: [552] }),
+        transaction({
+          id: "id-b",
+          handle: 2,
+          splits: [split({ id: "split-1", tagHandles: [552] }), split()],
+        }),
+      ],
+    });
+
+    expect(written.tagLinksApplied).toBe(2);
+    expect(tagLinks.insert).toHaveBeenCalledWith([
+      { transactionId: "id-a", tagId: "tag-552" },
+    ]);
+    expect(splitTagLinks.insert).toHaveBeenCalledWith([
+      { transactionSplitId: "split-1", tagId: "tag-552" },
+    ]);
+  });
+
+  it("writes no link for a classification item the tag writer did not resolve", async () => {
+    const { manager, tagLinks, splitTagLinks } = doubles();
+
+    const written = await writeTransactions(manager, "user-1", {
+      ...baseInput,
+      transactions: [transaction({ tagHandles: [999] })],
+    });
+
+    expect(written.tagLinksApplied).toBe(0);
+    expect(tagLinks.insert).not.toHaveBeenCalled();
+    expect(splitTagLinks.insert).not.toHaveBeenCalled();
   });
 
   it("back-patches a transfer pair once both rows exist", async () => {

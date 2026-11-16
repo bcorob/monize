@@ -21,6 +21,7 @@ const reportComponents: Record<string, React.LazyExoticComponent<React.Component
   'account-balances': lazy(() => import('@/components/reports/AccountBalancesReport').then(m => ({ default: m.AccountBalancesReport }))),
   'cash-flow': lazy(() => import('@/components/reports/CashFlowReport').then(m => ({ default: m.CashFlowReport }))),
   'tax-summary': lazy(() => import('@/components/reports/TaxSummaryReport').then(m => ({ default: m.TaxSummaryReport }))),
+  'payroll-deductions': lazy(() => import('@/components/reports/PayrollDeductionsReport').then(m => ({ default: m.PayrollDeductionsReport }))),
   'year-over-year': lazy(() => import('@/components/reports/YearOverYearReport').then(m => ({ default: m.YearOverYearReport }))),
   // Debt & Loans
   'debt-payoff-timeline': lazy(() => import('@/components/reports/DebtPayoffTimelineReport').then(m => ({ default: m.DebtPayoffTimelineReport }))),
@@ -45,6 +46,7 @@ const reportComponents: Record<string, React.LazyExoticComponent<React.Component
   'spending-anomalies': lazy(() => import('@/components/reports/SpendingAnomaliesReport').then(m => ({ default: m.SpendingAnomaliesReport }))),
   'weekend-weekday-spending': lazy(() => import('@/components/reports/WeekendVsWeekdayReport').then(m => ({ default: m.WeekendVsWeekdayReport }))),
   'monthly-comparison': lazy(() => import('@/components/reports/MonthlyComparisonReport').then(m => ({ default: m.MonthlyComparisonReport }))),
+  'cash-flow-sankey': lazy(() => import('@/components/reports/CashFlowSankeyReport').then(m => ({ default: m.CashFlowSankeyReport }))),
   'foreign-currency-fees': lazy(() => import('@/components/reports/ForeignCurrencyFeesReport').then(m => ({ default: m.ForeignCurrencyFeesReport }))),
   // Maintenance & Cleanup
   'uncategorized-transactions': lazy(() => import('@/components/reports/UncategorizedTransactionsReport').then(m => ({ default: m.UncategorizedTransactionsReport }))),
@@ -69,14 +71,14 @@ function ReportSkeleton() {
   return (
     <div className="space-y-6">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4">
-        <div className="animate-pulse flex gap-2">
+        <div className="animate-pulse skeleton-shimmer flex gap-2">
           <div className="h-8 w-12 bg-gray-200 dark:bg-gray-700 rounded" />
           <div className="h-8 w-12 bg-gray-200 dark:bg-gray-700 rounded" />
           <div className="h-8 w-12 bg-gray-200 dark:bg-gray-700 rounded" />
         </div>
       </div>
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6">
-        <div className="animate-pulse space-y-4">
+        <div className="animate-pulse skeleton-shimmer space-y-4">
           <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-1/3" />
           <div className="h-64 bg-gray-200 dark:bg-gray-700 rounded" />
         </div>

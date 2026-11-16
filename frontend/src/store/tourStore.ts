@@ -56,7 +56,12 @@ interface TourState {
 
   startTour: (tour: TourDefinition) => void;
   next: () => void;
-  back: () => void;
+  /**
+   * Step back. `pathname` is where the user is now: a step pinned to a dynamic
+   * route can only be replayed while they are still on it, and the store has no
+   * router of its own. Omitted, it falls back to the browser's own location.
+   */
+  back: (pathname?: string) => void;
   /** Graceful skip: the current step's anchor never appeared. */
   skip: () => void;
   /**
@@ -139,12 +144,13 @@ export const useTourStore = create<TourState>((set, get) => ({
     });
   },
 
-  back: () => {
+  back: (pathname) => {
     const { active } = get();
     if (!active || active.showSkippedOutro) return;
     // Not simply stepIndex - 1: steps that live inside UI the user has since
-    // closed cannot be shown again, and landing on one strands the tour.
-    const target = backTargetIndex(active.steps, active.stepIndex);
+    // closed -- or on a route the engine cannot navigate back to -- cannot be
+    // shown again, and landing on one strands the tour.
+    const target = backTargetIndex(active.steps, active.stepIndex, pathname);
     if (target === null) return;
     set({
       active: {
@@ -251,5 +257,17 @@ export function useTourOpensToolsMenu(): boolean {
     const active = s.active;
     if (!active || active.showSkippedOutro) return false;
     return !!active.steps[active.stepIndex]?.openToolsMenu;
+  });
+}
+
+/**
+ * Whether the step showing right now wants the header's notification panel
+ * open, so it can describe the panel's contents instead of a closed bell.
+ */
+export function useTourOpensNotificationBell(): boolean {
+  return useTourStore((s) => {
+    const active = s.active;
+    if (!active || active.showSkippedOutro) return false;
+    return !!active.steps[active.stepIndex]?.openNotificationBell;
   });
 }

@@ -1,14 +1,12 @@
-import { Inject, Injectable, Logger } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { DataSource, IsNull, LessThan } from "typeorm";
 import { withScopedDb } from "../common/db/scoped-db";
 import { affectedRowCount, returnedRows } from "../common/db/query-result";
 import { withSystemContext } from "../common/db/with-context";
 import { AttachmentBlobTombstone } from "./entities/attachment-blob-tombstone.entity";
-import {
-  ATTACHMENT_STORAGE_PROVIDER,
-  AttachmentStorageProvider,
-} from "./storage/attachment-storage.interface";
+import { AttachmentStorageProvider } from "./storage/attachment-storage.interface";
+import { AttachmentStorageRegistry } from "./storage/attachment-storage.registry";
 
 /** How many tombstones one sweep pass handles, so a large backlog is paced. */
 export const ORPHAN_SWEEP_BATCH = 200;
@@ -78,6 +76,33 @@ const quarantineOnClaim = (msParam: number): string =>
                   END)`;
 
 /**
+ * The predicate that refuses to delete bytes a live attachment row points at.
+ *
+ * The claim's other conditions are about writers this sweeper races: an upload
+ * that holds a lease, a replica that got here first. This one is about the thing
+ * the sweeper exists to avoid being wrong about -- "whose metadata is already
+ * gone" -- and it asks the metadata rather than inferring it from the protocol.
+ *
+ * It is what makes a stale intent harmless. An intent is a row saying bytes at a
+ * key may be unreferenced, and the relocation pass writes one for a key that an
+ * attachment row ALREADY has (its own id, in the backend being moved to). Left
+ * behind by a crash, that row would otherwise have the sweeper delete a migrated
+ * attachment's only copy once its lease expired. Nothing else in the claim could
+ * tell the difference, because by shape there is none.
+ *
+ * No index serves `(storage_provider, storage_key)`, so this is a scan of a table
+ * that holds one row per attachment -- a few thousand at this application's scale,
+ * bounded per pass by `ORPHAN_SWEEP_BATCH`. Worth an index if a deployment ever
+ * has enough attachments for it to show; not worth a migration before then. An
+ * upload in flight has no committed row, so it is unaffected; a deletion record
+ * has none either, by definition.
+ */
+const NOT_REFERENCED_SQL = `NOT EXISTS (
+              SELECT 1 FROM transaction_attachments ta
+               WHERE ta.storage_provider = attachment_blob_tombstones.storage_provider
+                 AND ta.storage_key = attachment_blob_tombstones.storage_key)`;
+
+/**
  * Deletes attachment bytes whose metadata is already gone.
  *
  * This is the compensating half of the attachment lifecycle. Metadata deletion
@@ -95,10 +120,14 @@ const quarantineOnClaim = (msParam: number): string =>
  * (audit RV4-002). See "THE CLAIM" at the top of this file, and
  * `AttachmentsService.clearUploadIntent` for the other half of it.
  *
- * A tombstone for another provider is left alone rather than deleted. Its bytes
- * are unreachable through the currently bound provider, so dropping the record
- * would be throwing away the only remaining pointer to the object -- an operator
- * who switches the provider back can still clean up.
+ * A tombstone is swept through the provider it names, for every backend this
+ * deployment can address -- not only the bound one. The two differ while a
+ * provider switch is being relocated (`AttachmentStorageMigrator`), and that is
+ * exactly when objects are being left behind in the backend being moved away
+ * from. A tombstone whose provider this deployment cannot reach at all is still
+ * left alone rather than deleted: the record is the only remaining pointer to
+ * those bytes, so an operator who configures that backend again can still clean
+ * up.
  */
 @Injectable()
 export class AttachmentOrphanSweeper {
@@ -106,20 +135,21 @@ export class AttachmentOrphanSweeper {
 
   constructor(
     private readonly dataSource: DataSource,
-    @Inject(ATTACHMENT_STORAGE_PROVIDER)
-    private readonly storage: AttachmentStorageProvider,
+    private readonly registry: AttachmentStorageRegistry,
   ) {}
 
   /**
    * Delete the objects for up to `ORPHAN_SWEEP_BATCH` tombstones belonging to
-   * the active provider. Returns how many objects were removed.
+   * `storage`. Returns how many objects were removed.
    *
    * Each object is deleted and its tombstone dropped in that order: the provider
    * contract makes `delete` idempotent, so a crash between the two leaves a
    * tombstone whose retry is a no-op at the provider and a row removal here.
    * The reverse order would drop the only record of an object still present.
    */
-  async sweep(): Promise<number> {
+  async sweep(
+    storage: AttachmentStorageProvider = this.registry.active,
+  ): Promise<number> {
     // Candidates: no live upload lease. A row the trigger wrote has none at all;
     // an upload intent has one until its request is done with it. A row already
     // swept has its lease cleared, so it falls into the first arm again -- which is
@@ -128,11 +158,11 @@ export class AttachmentOrphanSweeper {
       m.getRepository(AttachmentBlobTombstone).find({
         where: [
           {
-            storageProvider: this.storage.name,
+            storageProvider: storage.name,
             uploadLeaseExpiresAt: IsNull(),
           },
           {
-            storageProvider: this.storage.name,
+            storageProvider: storage.name,
             uploadLeaseExpiresAt: LessThan(new Date()),
           },
         ],
@@ -146,10 +176,11 @@ export class AttachmentOrphanSweeper {
     for (const tombstone of pending) {
       try {
         if (!(await this.claim(tombstone.id))) {
-          // An upload renewed its lease, or another replica got here first.
+          // An upload renewed its lease, a live row still references these bytes,
+          // or another replica got here first.
           continue;
         }
-        await this.storage.delete(tombstone.storageKey);
+        await storage.delete(tombstone.storageKey);
         if (await this.retire(tombstone.id)) {
           removed += 1;
         } else {
@@ -195,21 +226,35 @@ export class AttachmentOrphanSweeper {
    * so an interactive delete removes the bytes promptly instead of waiting for
    * the cron. Best effort: the cron below is the guarantee.
    */
-  async sweepKey(storageKey: string): Promise<void> {
-    if (this.storage.name === "database") return;
+  async sweepKey(
+    storageKey: string,
+    providerName: string = this.registry.active.name,
+  ): Promise<void> {
+    if (providerName === "database") return;
+    // A provider this deployment cannot address has nothing this call can delete;
+    // the tombstone stays, which is what keeps the bytes findable later.
+    const storage = this.registry.resolve(providerName);
+    if (!storage) {
+      this.logger.warn(
+        `Attachment object ${storageKey} is held in the "${providerName}" backend, ` +
+          `which this deployment cannot address; its tombstone is left for a ` +
+          `deployment that can`,
+      );
+      return;
+    }
     try {
       // Through the same claim as the cron, so there is one place that decides an
       // object may be deleted. This caller has already committed the metadata
       // delete, so there is no upload to lose -- but a *different* upload could
       // have reused the key, and the claim is what refuses that rather than
       // reasoning about whether it can happen.
-      if (!(await this.claimKey(storageKey))) return;
-      await this.storage.delete(storageKey);
+      if (!(await this.claimKey(storageKey, storage.name))) return;
+      await storage.delete(storageKey);
       // Conditional, like the cron's: this path normally holds a deletion record
       // and retires it at once, but the same key can carry a swept upload intent
       // whose late-write window has not passed, and that row has to survive the
       // put that may still land (audit RRV4-002).
-      await this.retireKey(storageKey);
+      await this.retireKey(storageKey, storage.name);
     } catch (error) {
       this.logger.warn(
         `Deferred deletion of attachment object ${storageKey} to the sweeper: ` +
@@ -237,6 +282,7 @@ export class AttachmentOrphanSweeper {
           WHERE id = $1
             AND (upload_lease_expires_at IS NULL
                  OR upload_lease_expires_at < CURRENT_TIMESTAMP)
+            AND ${NOT_REFERENCED_SQL}
           RETURNING id`,
         [id, String(LATE_WRITE_QUARANTINE_MS)],
       ),
@@ -245,7 +291,10 @@ export class AttachmentOrphanSweeper {
   }
 
   /** The same claim, addressed by key, for the interactive path. */
-  private async claimKey(storageKey: string): Promise<boolean> {
+  private async claimKey(
+    storageKey: string,
+    providerName: string,
+  ): Promise<boolean> {
     const claimed = await withScopedDb(this.dataSource, (m) =>
       m.query(
         `UPDATE attachment_blob_tombstones
@@ -256,8 +305,9 @@ export class AttachmentOrphanSweeper {
             AND storage_key = $2
             AND (upload_lease_expires_at IS NULL
                  OR upload_lease_expires_at < CURRENT_TIMESTAMP)
+            AND ${NOT_REFERENCED_SQL}
           RETURNING id`,
-        [this.storage.name, storageKey, String(LATE_WRITE_QUARANTINE_MS)],
+        [providerName, storageKey, String(LATE_WRITE_QUARANTINE_MS)],
       ),
     );
     return returnedRows<{ id: string }>(claimed).length > 0;
@@ -287,7 +337,10 @@ export class AttachmentOrphanSweeper {
   }
 
   /** The same conditional retirement, addressed by key. */
-  private async retireKey(storageKey: string): Promise<boolean> {
+  private async retireKey(
+    storageKey: string,
+    providerName: string,
+  ): Promise<boolean> {
     const gone = await withScopedDb(this.dataSource, (m) =>
       m.query(
         `DELETE FROM attachment_blob_tombstones
@@ -296,7 +349,7 @@ export class AttachmentOrphanSweeper {
             AND (late_write_quarantine_until IS NULL
                  OR late_write_quarantine_until < CURRENT_TIMESTAMP)
           RETURNING id`,
-        [this.storage.name, storageKey],
+        [providerName, storageKey],
       ),
     );
     return affectedRowCount(gone) > 0;
@@ -304,18 +357,28 @@ export class AttachmentOrphanSweeper {
 
   @Cron(CronExpression.EVERY_HOUR)
   async sweepOrphanedObjects(): Promise<void> {
-    if (this.storage.name === "database") return;
-    try {
-      // Cross-user by construction -- a tombstone may have outlived its owner,
-      // and its user_id is then NULL.
-      const removed = await withSystemContext(() => this.sweep());
-      if (removed > 0) {
-        this.logger.log(`Deleted ${removed} orphaned attachment object(s)`);
+    // Every backend whose bytes this deployment can delete, not just the bound
+    // one: after a provider switch the objects to reclaim are in the backend
+    // being moved away from. `database` is not one of them at all -- its bytes
+    // are a cascading child row, so there is nothing a sweep could add.
+    const stores = this.registry
+      .addressable()
+      .filter((store) => store.name !== "database");
+    for (const store of stores) {
+      try {
+        // Cross-user by construction -- a tombstone may have outlived its owner,
+        // and its user_id is then NULL.
+        const removed = await withSystemContext(() => this.sweep(store));
+        if (removed > 0) {
+          this.logger.log(
+            `Deleted ${removed} orphaned attachment object(s) from "${store.name}"`,
+          );
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Attachment orphan sweep of "${store.name}" failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
       }
-    } catch (error) {
-      this.logger.warn(
-        `Attachment orphan sweep failed: ${error instanceof Error ? error.message : String(error)}`,
-      );
     }
   }
 }

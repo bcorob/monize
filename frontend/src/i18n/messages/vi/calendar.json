@@ -1,0 +1,120 @@
+{
+  "view": {
+    "label": "Chế độ xem",
+    "table": "Bảng",
+    "calendar": "Lịch"
+  },
+  "grid": {
+    "label": "Tháng"
+  },
+  "toolbar": {
+    "layers": "Lớp"
+  },
+  "layers": {
+    "transactions": "Giao dịch",
+    "balances": "Số dư",
+    "values": "Giá trị",
+    "dailyChange": "Thay đổi hằng ngày"
+  },
+  "legend": {
+    "label": "Chú giải",
+    "scheduled": "Đã lên lịch"
+  },
+  "chip": {
+    "noPayee": "Không có người nhận",
+    "overdue": "Quá hạn",
+    "scheduled": "Đã lên lịch",
+    "noSymbol": "Không có mã"
+  },
+  "day": {
+    "itemCount": "{count, plural, other {# mục}}",
+    "moreChips": "+{count} nữa",
+    "newTransaction": "Giao dịch mới trong ngày này",
+    "noItems": "Không có gì trong ngày này.",
+    "scheduledHint": "Đã lên lịch. Mở Hóa đơn và tiền gửi để thay đổi.",
+    "newInvestmentTransaction": "Giao dịch đầu tư mới vào ngày này"
+  },
+  "banner": {
+    "title": "Một số con số không được hiển thị",
+    "rowCap": "Tháng này có {count} giao dịch, nhiều hơn {limit} mà lịch có thể hiển thị. Hãy thu hẹp bộ lọc để xem.",
+    "scheduledUnavailable": "Khong the tai cac muc da len lich cho thang nay. Cac dong hien thi la day du; cac muc da len lich bi thieu.",
+    "scheduledTruncated": "Mot so muc da len lich khong duoc hien thi xa den vay. Hay den gan hom nay hon de xem tat ca.",
+    "balancesScopeEmpty": "Không có tài khoản nào trong phạm vi, nên không có số dư để hiển thị. Hãy chọn một tài khoản trong bộ lọc.",
+    "balancesMissingRates": "Không có tỷ giá cho {pairs} vào một số ngày trong tháng này, nên các tổng đó không được hiển thị. Mở Tiền tệ và làm mới tỷ giá.",
+    "balancesForecastGaps": "Số dư dự kiến bị giữ lại vì những mục đã lên lịch sau chưa thể định giá: {schedules}.",
+    "balancesForecastWithheld": "Số dư dự kiến bị giữ lại: ít nhất một mục đã lên lịch chưa thể định giá, và lý do không được báo cáo.",
+    "balancesUnforecastable": "{count, plural, other {# tài khoản trong phạm vi không có dự báo riêng, nên các tổng dự kiến bị giữ lại.}}",
+    "valuesUnpriced": "Không có giá cho {securities} vào một số ngày trong tháng này, nên các giá trị đó không được hiển thị. Thêm giá trong lịch sử giá của chứng khoán, hoặc làm mới giá.",
+    "valuesMissingRates": "Không có tỷ giá cho {pairs} vào một số ngày trong tháng này, nên các giá trị đó không được hiển thị. Mở Tiền tệ và làm mới tỷ giá.",
+    "notesUnavailable": "Không tải được ghi chú của bạn cho tháng này. Mọi ghi chú bạn đã viết vẫn được lưu."
+  },
+  "errors": {
+    "monthFailed": "Không thể tải tháng này.",
+    "balancesFailed": "Không tải được số dư của tháng này.",
+    "valuesFailed": "Không tải được giá trị danh mục của tháng này.",
+    "movementsFailed": "Không tải được thay đổi hằng ngày của tháng này.",
+    "movementDetailFailed": "Không tải được chi tiết của ngày này."
+  },
+  "balance": {
+    "actualTitle": "Số dư cuối ngày",
+    "projectedTitle": "Số dư dự kiến",
+    "projected": "Dự kiến",
+    "projectedHint": "Dự kiến từ số dư cuối ngày hôm nay và mọi mục đã lên lịch đến hạn cho tới ngày này.",
+    "projectedFromItems": "Dự kiến từ số dư cuối ngày hôm nay và mọi mục đã lên lịch đến hạn cho tới ngày này, gồm cả những mục liệt kê bên dưới.",
+    "partial": "Một phần: tính được {amount} của phạm vi, phần còn lại thì không, nên không hiển thị tổng.",
+    "missingRates": "Không có tỷ giá cho {pairs} vào ngày mà con số này được định giá. Mở Tiền tệ và làm mới tỷ giá.",
+    "unforecastable": "{count, plural, other {# tài khoản trong phạm vi không có dự báo riêng, nên tổng dự kiến bị giữ lại.}}"
+  },
+  "value": {
+    "title": "Giá trị danh mục",
+    "unpriced": "Không có giá cho {securities} vào ngày này, nên giá trị không được hiển thị. Thêm giá trong lịch sử giá của chứng khoán, hoặc làm mới giá.",
+    "missingRates": "Không có tỷ giá cho {pairs} vào ngày này, nên giá trị không được hiển thị. Mở Tiền tệ và làm mới tỷ giá."
+  },
+  "change": {
+    "openDetail": "Xem những gì đã biến động trong ngày này",
+    "detailTitle": "Biến động ngày {date}",
+    "headline": "Biến động thị trường",
+    "headlineValue": "{amount} ({percent})",
+    "gains": "Tăng",
+    "losses": "Giảm",
+    "unchanged": "{count, plural, other {# chứng khoán đóng cửa không đổi.}}",
+    "remainder": "Tiền mặt, phân phối và giao dịch",
+    "row": "{quantity} đơn vị, {from} lên {to} {currency}",
+    "reasons": {
+      "notTradingDay": "Không có chứng khoán nào đang nắm giữ được định giá vào ngày này, nên không có phiên nào để báo cáo.",
+      "unpricedHolding": "Một vị thế không có giá vào ngày này hoặc ngày trước đó, nên không biết được biến động.",
+      "missingRate": "Thiếu tỷ giá, nên không quy đổi được biến động.",
+      "flowIncomplete": "Một khoản nạp hoặc rút trong ngày này không quy đổi được, nên không tách được biến động khỏi nó.",
+      "cashIncomplete": "Một tài khoản tiền mặt không báo cáo số dư cho ngày này, nên giá trị của ngày không đầy đủ và không biết được biến động.",
+      "noPriorValue": "Không có giá trị trước đó để so sánh với ngày này.",
+      "zeroBaseline": "Danh mục trống vào ngày hôm trước, nên không có phần trăm để tính."
+    }
+  },
+  "notes": {
+    "title": "Ghi chú",
+    "add": "Thêm ghi chú",
+    "saveFailed": "Không lưu được ghi chú. Hãy thử lại.",
+    "deleteFailed": "Không xóa được ghi chú. Hãy thử lại.",
+    "deleteTitle": "Xóa ghi chú này?",
+    "deleteMessage": "Ghi chú của ngày này sẽ bị xóa. Không thể hoàn tác.",
+    "discardTitle": "Bỏ ghi chú này?",
+    "discardMessage": "Ghi chú bạn đang viết chưa được lưu. Rời khỏi ngày này sẽ bỏ nó.",
+    "discardConfirm": "Bỏ",
+    "startDate": "Ngày đầu",
+    "endDate": "Ngày cuối",
+    "spanRange": "{start} đến {end}",
+    "spanCount": "{count, plural, other {# ngày}}",
+    "spanBackwards": "Ngày cuối không thể trước ngày đầu.",
+    "spanTooLong": "Một ghi chú chỉ có thể kéo dài tối đa {days} ngày.",
+    "spanMissesDay": "Những ngày bạn chọn không bao gồm ngày bạn đang viết ghi chú này.",
+    "deleteSpanMessage": "{count, plural, other {Ghi chú này kéo dài # ngày và tất cả sẽ bị xoá. Không thể hoàn tác.}}"
+  },
+  "monthPicker": {
+    "title": "Đi tới tháng khác",
+    "typeLabel": "Nhập một tháng hoặc một năm",
+    "placeholder": "vd. Thg 3 1998, 1998-03, 3/1998",
+    "unreadable": "Chúng tôi không đọc được đó là tháng nào. Hãy thử một năm, tên tháng hoặc 1998-03.",
+    "previousYear": "Năm trước",
+    "nextYear": "Năm sau"
+  }
+}

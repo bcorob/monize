@@ -33,7 +33,7 @@ import {
   getPeriodicRate,
   getPeriodsPerYear,
   isoDay,
-  PAYOFF_EPSILON,
+  isDebtOutstanding,
   resolveMaxPayments,
 } from "@/lib/loan-frequency";
 import {
@@ -44,9 +44,11 @@ import {
   LoanScheduleInput,
   LoanScheduleResult,
   ScheduleRow,
-  round2,
-  round4,
 } from "@/lib/loan-schedule-types";
+import { roundMoney, roundToCents, roundToDecimals } from "@/lib/format";
+import { generateMethodSchedule } from "@/lib/loan-schedule-methods";
+import { amortizationMethodFor } from "@/lib/mortgage-type";
+import type { MortgageType } from "@/types/account";
 
 /**
  * Contractual payment for a mortgage amortized over a given period.
@@ -59,8 +61,7 @@ export function calculateMortgagePaymentAmount(
   annualRate: number,
   amortizationMonths: number,
   frequency: ScheduleFrequency,
-  isCanadian: boolean,
-  isVariableRate: boolean,
+  type: MortgageType,
 ): number {
   if (principal <= 0 || amortizationMonths <= 0) return 0;
 
@@ -68,30 +69,20 @@ export function calculateMortgagePaymentAmount(
     frequency === "ACCELERATED_BIWEEKLY" ||
     frequency === "ACCELERATED_WEEKLY"
   ) {
-    const monthlyRate = getPeriodicRate(
-      annualRate,
-      12,
-      isCanadian,
-      isVariableRate,
-    );
+    const monthlyRate = getPeriodicRate(annualRate, 12, type);
     // Accelerated payments derive from the monthly payment, rounded to
     // storage precision first as the backend does
-    const monthlyPayment = round4(
+    const monthlyPayment = roundMoney(
       solvePayment(principal, monthlyRate, amortizationMonths),
     );
     const divisor = frequency === "ACCELERATED_BIWEEKLY" ? 2 : 4;
-    return round4(monthlyPayment / divisor);
+    return roundMoney(monthlyPayment / divisor);
   }
 
   const periodsPerYear = getPeriodsPerYear(frequency);
   const totalPayments = Math.round((amortizationMonths * periodsPerYear) / 12);
-  const periodicRate = getPeriodicRate(
-    annualRate,
-    periodsPerYear,
-    isCanadian,
-    isVariableRate,
-  );
-  return round4(solvePayment(principal, periodicRate, totalPayments));
+  const periodicRate = getPeriodicRate(annualRate, periodsPerYear, type);
+  return roundMoney(solvePayment(principal, periodicRate, totalPayments));
 }
 
 /**
@@ -105,18 +96,16 @@ export function calculatePaymentForTerm(
   annualRate: number,
   periods: number,
   frequency: ScheduleFrequency,
-  isCanadian = false,
-  isVariableRate = false,
+  type: MortgageType,
 ): number {
   if (balance <= 0 || periods <= 0) return 0;
   const periodicRate = getPeriodicRate(
     annualRate,
     getPeriodsPerYear(frequency),
-    isCanadian,
-    isVariableRate,
+    type,
   );
-  if (periodicRate === 0) return round4(balance / periods);
-  return round4(
+  if (periodicRate === 0) return roundMoney(balance / periods);
+  return roundMoney(
     (balance * periodicRate) / (1 - Math.pow(1 + periodicRate, -periods)),
   );
 }
@@ -156,8 +145,7 @@ export function generateBudgetSchedule(
     annualRate,
     paymentAmount,
     frequency,
-    isCanadian = false,
-    isVariableRate = false,
+    mortgageType = "ANNUITY",
     firstPaymentDate,
     maxPayments,
     initialCumulativePrincipal = 0,
@@ -200,17 +188,19 @@ export function generateBudgetSchedule(
   let currentPeriodicRate = getPeriodicRate(
     currentAnnualRate,
     periodsPerYear,
-    isCanadian,
-    isVariableRate,
+    mortgageType,
   );
   let rateChangeIndex = 0;
   let lastInstallment = 0;
+  // The recorded installment in force, stepped by a rate change's own payment
+  // exactly as `generateLoanSchedule` does.
+  let currentPayment = paymentAmount;
 
   const rows: ScheduleRow[] = [];
   let currentDate = new Date(firstPaymentDate);
   let paymentNumber = 0;
 
-  while (balance > PAYOFF_EPSILON && paymentNumber < cap) {
+  while (isDebtOutstanding(balance) && paymentNumber < cap) {
     const rowDate = isoDay(currentDate);
     while (
       rateChangeIndex < rateChanges.length &&
@@ -220,9 +210,12 @@ export function generateBudgetSchedule(
       currentPeriodicRate = getPeriodicRate(
         currentAnnualRate,
         periodsPerYear,
-        isCanadian,
-        isVariableRate,
+        mortgageType,
       );
+      const change = rateChanges[rateChangeIndex];
+      if (change.paymentAmount != null && change.paymentAmount > 0) {
+        currentPayment = change.paymentAmount;
+      }
       rateChangeIndex++;
     }
 
@@ -231,22 +224,22 @@ export function generateBudgetSchedule(
     // The installment for the split: re-amortized over the remaining
     // contractual term (LOWER_INSTALLMENT) or the fixed contractual installment
     // (SHORTEN_TERM). The overpayment is whatever is left of the budget.
-    const installment = lowerInstallment
-      ? calculatePaymentForTerm(
-          balance,
-          currentAnnualRate,
-          Math.max(1, contractualPeriods - paymentNumber),
-          frequency,
-          isCanadian,
-          isVariableRate,
-        )
-      : paymentAmount;
-
     // The budget only tops up within its window; outside it (before the start
-    // or after the end) the loan pays just the regular installment.
+    // or after the end) the loan pays just the recorded installment.
     const budgetActive =
       (!window.startDate || window.startDate <= rowDate) &&
       (!window.endDate || rowDate <= window.endDate);
+    if (lowerInstallment && budgetActive) {
+      currentPayment = calculatePaymentForTerm(
+        balance,
+        currentAnnualRate,
+        Math.max(1, contractualPeriods - paymentNumber),
+        frequency,
+        mortgageType,
+      );
+    }
+    const installment = currentPayment;
+
     // Total cash this period: the budget while active, else the installment --
     // capped at the payoff amount on the final period.
     const totalDue = balance + interest;
@@ -280,29 +273,30 @@ export function generateBudgetSchedule(
     rows.push({
       paymentNumber,
       date: rowDate,
-      payment: round2(regularPrincipal + interest),
-      principal: round2(regularPrincipal),
-      interest: round2(interest),
-      extraPrincipal: round2(overpayment),
-      balance: round2(balance),
-      annualRate: round4(currentAnnualRate),
-      cumulativePrincipal: round2(cumulativePrincipal),
-      cumulativeInterest: round2(cumulativeInterest),
+      payment: roundToCents(regularPrincipal + interest),
+      principal: roundToCents(regularPrincipal),
+      interest: roundToCents(interest),
+      extraPrincipal: roundToCents(overpayment),
+      balance: roundToCents(balance),
+      annualRate: roundToDecimals(currentAnnualRate, 4),
+      cumulativePrincipal: roundToCents(cumulativePrincipal),
+      cumulativeInterest: roundToCents(cumulativeInterest),
     });
 
     currentDate = advanceDate(currentDate, frequency);
   }
 
-  const paidOff = coveredInterest && balance <= PAYOFF_EPSILON;
+  const paidOff = coveredInterest && !isDebtOutstanding(balance);
   return {
     rows,
     payoffDate: paidOff && rows.length > 0 ? rows[rows.length - 1].date : null,
-    totalInterest: round2(cumulativeInterest - initialCumulativeInterest),
-    totalPaid: round2(totalPaid),
-    totalExtraPrincipal: round2(totalExtraPrincipal),
+    totalInterest: roundToCents(cumulativeInterest - initialCumulativeInterest),
+    totalPaid: roundToCents(totalPaid),
+    totalExtraPrincipal: roundToCents(totalExtraPrincipal),
     numPayments: rows.length,
     paidOff,
-    finalPaymentAmount: round2(lastInstallment),
+    coveredInterest,
+    finalPaymentAmount: roundToCents(lastInstallment),
   };
 }
 
@@ -315,6 +309,11 @@ export function generateBudgetSchedule(
 export function generateLoanSchedule(
   input: LoanScheduleInput,
 ): LoanScheduleResult {
+  // A LINEAR or INTEREST_ONLY mortgage derives every row's principal from its
+  // method (docs/specs/mortgage-types.md, section 5.4); the annuity loops
+  // below price the remainder of a constant payment.
+  const method = amortizationMethodFor(input.mortgageType ?? "ANNUITY");
+  if (method !== "ANNUITY") return generateMethodSchedule(input, method);
   const budget = input.overpayments?.targetMonthlyPayment;
   if (budget && budget > 0) {
     return generateBudgetSchedule(
@@ -332,8 +331,7 @@ export function generateLoanSchedule(
     annualRate,
     paymentAmount,
     frequency,
-    isCanadian = false,
-    isVariableRate = false,
+    mortgageType = "ANNUITY",
     firstPaymentDate,
     overpayments,
     initialCumulativePrincipal = 0,
@@ -384,8 +382,7 @@ export function generateLoanSchedule(
   let currentPeriodicRate = getPeriodicRate(
     currentAnnualRate,
     periodsPerYear,
-    isCanadian,
-    isVariableRate,
+    mortgageType,
   );
   let rateChangeIndex = 0;
 
@@ -416,7 +413,7 @@ export function generateLoanSchedule(
   let lumpSumIndex = 0;
   let paymentNumber = 0;
 
-  while (balance > PAYOFF_EPSILON && paymentNumber < maxPayments) {
+  while (isDebtOutstanding(balance) && paymentNumber < maxPayments) {
     const rowDate = isoDay(currentDate);
 
     // Rate steps land on the first payment on or after their effective date
@@ -430,8 +427,7 @@ export function generateLoanSchedule(
       currentPeriodicRate = getPeriodicRate(
         currentAnnualRate,
         periodsPerYear,
-        isCanadian,
-        isVariableRate,
+        mortgageType,
       );
       if (change.paymentAmount != null && change.paymentAmount > 0) {
         currentPayment = change.paymentAmount;
@@ -454,8 +450,7 @@ export function generateLoanSchedule(
           currentAnnualRate,
           remaining,
           frequency,
-          isCanadian,
-          isVariableRate,
+          mortgageType,
         );
         principal = currentPayment - interest;
       }
@@ -522,14 +517,13 @@ export function generateLoanSchedule(
           : null;
     if (reLevelEnd !== null) {
       const remaining = reLevelEnd - paymentNumber;
-      if (remaining > 0 && balance > PAYOFF_EPSILON) {
+      if (remaining > 0 && isDebtOutstanding(balance)) {
         currentPayment = calculatePaymentForTerm(
           balance,
           currentAnnualRate,
           remaining,
           frequency,
-          isCanadian,
-          isVariableRate,
+          mortgageType,
         );
       }
     }
@@ -537,30 +531,31 @@ export function generateLoanSchedule(
     rows.push({
       paymentNumber,
       date: rowDate,
-      payment: round2(principal + interest),
-      principal: round2(principal),
-      interest: round2(interest),
-      extraPrincipal: round2(extraPrincipal),
-      balance: round2(balance),
-      annualRate: round4(currentAnnualRate),
-      cumulativePrincipal: round2(cumulativePrincipal),
-      cumulativeInterest: round2(cumulativeInterest),
+      payment: roundToCents(principal + interest),
+      principal: roundToCents(principal),
+      interest: roundToCents(interest),
+      extraPrincipal: roundToCents(extraPrincipal),
+      balance: roundToCents(balance),
+      annualRate: roundToDecimals(currentAnnualRate, 4),
+      cumulativePrincipal: roundToCents(cumulativePrincipal),
+      cumulativeInterest: roundToCents(cumulativeInterest),
     });
 
     currentDate = advanceDate(currentDate, frequency);
   }
 
-  const paidOff = coveredInterest && balance <= PAYOFF_EPSILON;
+  const paidOff = coveredInterest && !isDebtOutstanding(balance);
 
   return {
     rows,
     payoffDate: paidOff && rows.length > 0 ? rows[rows.length - 1].date : null,
-    totalInterest: round2(cumulativeInterest - initialCumulativeInterest),
-    totalPaid: round2(totalPaid),
-    totalExtraPrincipal: round2(totalExtraPrincipal),
+    totalInterest: roundToCents(cumulativeInterest - initialCumulativeInterest),
+    totalPaid: roundToCents(totalPaid),
+    totalExtraPrincipal: roundToCents(totalExtraPrincipal),
     numPayments: rows.length,
     paidOff,
-    finalPaymentAmount: round2(currentPayment),
+    coveredInterest,
+    finalPaymentAmount: roundToCents(currentPayment),
   };
 }
 

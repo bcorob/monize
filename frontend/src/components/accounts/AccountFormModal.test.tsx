@@ -1,15 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act, waitFor } from '@/test/render';
+import toast from 'react-hot-toast';
 import { AccountFormModal } from './AccountFormModal';
 import { Account } from '@/types/account';
+import { showErrorToast } from '@/lib/errors';
 
 let capturedOnSubmit: ((data: any) => Promise<void>) | null = null;
+let capturedInitialValues: unknown;
+let capturedPreselectedMortgageType: string | undefined;
 
 // Stand-in for the dynamically loaded AccountForm: captures the onSubmit so the
 // test can drive the modal's submit logic directly.
 vi.mock('next/dynamic', () => ({
   default: () => (props: any) => {
     capturedOnSubmit = props.onSubmit ?? null;
+    capturedInitialValues = props.initialValues;
+    capturedPreselectedMortgageType = props.preselectedMortgageType;
     return <div data-testid="account-form" />;
   },
 }));
@@ -49,6 +55,7 @@ const buildFormModal = (overrides: Partial<any> = {}) => ({
 describe('AccountFormModal', () => {
   beforeEach(() => {
     capturedOnSubmit = null;
+    capturedPreselectedMortgageType = undefined;
     vi.clearAllMocks();
   });
 
@@ -72,6 +79,17 @@ describe('AccountFormModal', () => {
     expect(screen.getByText('Edit Account')).toBeInTheDocument();
   });
 
+  it('hands a detected mortgage type to the form', () => {
+    render(
+      <AccountFormModal
+        formModal={buildFormModal({ editingItem: { id: 'a-1' } as Account, isEditing: true })}
+        onSaved={vi.fn()}
+        preselectedMortgageType="LINEAR"
+      />,
+    );
+    expect(capturedPreselectedMortgageType).toBe('LINEAR');
+  });
+
   it('creates an account and notifies the caller on submit', async () => {
     mockCreate.mockResolvedValue({ id: 'new' });
     const onSaved = vi.fn();
@@ -86,6 +104,137 @@ describe('AccountFormModal', () => {
     expect(mockCreate).toHaveBeenCalled();
     expect(close).toHaveBeenCalled();
     expect(onSaved).toHaveBeenCalled();
+  });
+
+  it('warns when the created account could not create its Payment matching rule', async () => {
+    mockCreate.mockResolvedValue({
+      id: 'new',
+      paymentMatchingError: { errorCode: 'RULE_LIMIT_REACHED', message: 'Too many rules already exist.' },
+    });
+    render(<AccountFormModal formModal={buildFormModal()} onSaved={vi.fn()} />);
+
+    await waitFor(() => expect(capturedOnSubmit).not.toBeNull());
+    await act(async () => {
+      await capturedOnSubmit!({ name: 'New', accountType: 'MORTGAGE' });
+    });
+
+    // The account is saved either way (docs/specs/loan-installment-settlement.md
+    // decision 5), so the success toast still fires, and the rule failure is a
+    // second, separate warning rather than a replacement for it.
+    expect(toast.success).toHaveBeenCalled();
+    expect(toast.error).toHaveBeenCalledWith('Too many rules already exist.');
+  });
+
+  it('surfaces the server refusing a wallet in a fiat currency like any other save error', async () => {
+    const refusal = Object.assign(new Error('A crypto wallet must hold a cryptocurrency'), {
+      response: { status: 400, data: { message: 'A crypto wallet must hold a cryptocurrency' } },
+    });
+    mockCreate.mockRejectedValue(refusal);
+    const close = vi.fn();
+    const onSaved = vi.fn();
+    render(<AccountFormModal formModal={buildFormModal({ close })} onSaved={onSaved} />);
+
+    await waitFor(() => expect(capturedOnSubmit).not.toBeNull());
+    let thrown: unknown;
+    await act(async () => {
+      await capturedOnSubmit!({ name: 'Wallet', accountType: 'CRYPTO', currencyCode: 'CAD' }).catch(
+        (error: unknown) => {
+          thrown = error;
+        },
+      );
+    });
+
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ accountType: 'CRYPTO', currencyCode: 'CAD' }),
+    );
+    expect(showErrorToast).toHaveBeenCalledWith(refusal, 'Failed to create account');
+    // The form stays open with what was entered, as for any refused save.
+    expect(thrown).toBe(refusal);
+    expect(close).not.toHaveBeenCalled();
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
+  it('does not warn about Payment matching when the create had none to report', async () => {
+    mockCreate.mockResolvedValue({ id: 'new' });
+    render(<AccountFormModal formModal={buildFormModal()} onSaved={vi.fn()} />);
+
+    await waitFor(() => expect(capturedOnSubmit).not.toBeNull());
+    await act(async () => {
+      await capturedOnSubmit!({ name: 'New', accountType: 'CHEQUING' });
+    });
+
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('hands the account it created to onCreated, after onSaved, and only on a create', async () => {
+    const created = { id: 'new', name: 'New' } as Account;
+    mockCreate.mockResolvedValue(created);
+    const order: string[] = [];
+    const onSaved = vi.fn(() => {
+      order.push('saved');
+    });
+    const onCreated = vi.fn(() => {
+      order.push('created');
+    });
+    render(
+      <AccountFormModal formModal={buildFormModal()} onSaved={onSaved} onCreated={onCreated} />,
+    );
+
+    await waitFor(() => expect(capturedOnSubmit).not.toBeNull());
+    await act(async () => {
+      await capturedOnSubmit!({ name: 'New', accountType: 'CHEQUING' });
+    });
+
+    expect(onCreated).toHaveBeenCalledWith(created);
+    // onSaved takes no argument: a refresh function with parameters of its own
+    // is never handed an account.
+    expect(onSaved).toHaveBeenCalledWith();
+    expect(order).toEqual(['saved', 'created']);
+  });
+
+  it('does not call onCreated for an update, or when the create fails', async () => {
+    const onCreated = vi.fn();
+    mockUpdate.mockResolvedValue({});
+    const { unmount } = render(
+      <AccountFormModal
+        formModal={buildFormModal({
+          editingItem: { id: 'a-1', accountType: 'CHEQUING' } as Account,
+          isEditing: true,
+        })}
+        onSaved={vi.fn()}
+        onCreated={onCreated}
+      />,
+    );
+    await waitFor(() => expect(capturedOnSubmit).not.toBeNull());
+    await act(async () => {
+      await capturedOnSubmit!({ name: 'Renamed', accountType: 'CHEQUING' });
+    });
+    expect(onCreated).not.toHaveBeenCalled();
+    unmount();
+
+    capturedOnSubmit = null;
+    mockCreate.mockRejectedValue(new Error('nope'));
+    render(
+      <AccountFormModal formModal={buildFormModal()} onSaved={vi.fn()} onCreated={onCreated} />,
+    );
+    await waitFor(() => expect(capturedOnSubmit).not.toBeNull());
+    await act(async () => {
+      await capturedOnSubmit!({ name: 'New', accountType: 'CHEQUING' }).catch(() => undefined);
+    });
+    expect(onCreated).not.toHaveBeenCalled();
+  });
+
+  it('passes the initial values to the form', async () => {
+    const initialValues = { name: 'From the bank', accountType: 'SAVINGS' as const };
+    render(
+      <AccountFormModal
+        formModal={buildFormModal()}
+        onSaved={vi.fn()}
+        initialValues={initialValues}
+      />,
+    );
+    await waitFor(() => expect(capturedOnSubmit).not.toBeNull());
+    expect(capturedInitialValues).toBe(initialValues);
   });
 
   it('updates an existing account on submit', async () => {

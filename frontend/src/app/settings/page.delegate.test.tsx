@@ -66,9 +66,6 @@ vi.mock('@/components/settings/DangerZoneSection', () => ({
 vi.mock('@/components/settings/BackupRestoreSection', () => ({
   BackupRestoreSection: () => <div data-testid="backup" />,
 }));
-vi.mock('@/components/settings/AutoBackupSection', () => ({
-  AutoBackupSection: () => <div data-testid="auto-backup" />,
-}));
 vi.mock('@/components/settings/ApiAccessSection', () => ({
   ApiAccessSection: () => <div data-testid="api-access" />,
 }));

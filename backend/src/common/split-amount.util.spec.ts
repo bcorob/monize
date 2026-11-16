@@ -11,6 +11,18 @@ describe("validateSplitAmountSum", () => {
     ).not.toThrow();
   });
 
+  it("accepts an interest-only mortgage template's zero principal line", () => {
+    // docs/specs/mortgage-types.md section 9: an INTEREST_ONLY template keeps
+    // its principal transfer at 0 beside the interest line. This is the one
+    // validator the scheduled create, update and post paths call.
+    expect(() =>
+      validateSplitAmountSum([{ amount: -0 }, { amount: -500 }], -500),
+    ).not.toThrow();
+    expect(() =>
+      validateSplitAmountSum([{ amount: 0 }, { amount: -883.3333 }], -883.3333),
+    ).not.toThrow();
+  });
+
   it("rejects when the sum does not match", () => {
     expect(() =>
       validateSplitAmountSum([{ amount: 50 }, { amount: 30 }], 100),
@@ -80,7 +92,7 @@ describe("validateSplitAmountSum", () => {
 
     it("accepts a refund netted under a charge (audit P5-004's example)", () => {
       // P5-004 proposed refusing this; category surfaces instead read the
-      // children signed and net within the category (root CLAUDE.md, "debits
+      // children signed and net within the category (docs/backend/transactions-and-money.md, "debits
       // NET OF credits", issue #1125), so the credit child reduces what it is
       // filed under rather than fabricating income beside it.
       expect(() =>
@@ -112,6 +124,45 @@ describe("validateSplitAmountSum", () => {
           999,
         ),
       ).toThrow(/must equal transaction amount/);
+    });
+  });
+
+  describe("at the parent currency's precision", () => {
+    it("balances a BTC network-fee split at eight places", () => {
+      expect(() =>
+        validateSplitAmountSum(
+          [{ amount: -0.005 }, { amount: -0.000025 }],
+          -0.005025,
+          { decimals: 8 },
+        ),
+      ).not.toThrow();
+    });
+
+    it("refuses a BTC split a satoshi short, which four places would accept", () => {
+      const lines = [{ amount: -0.005 }, { amount: -0.000025 }];
+      expect(() =>
+        validateSplitAmountSum(lines, -0.00502501, { decimals: 8 }),
+      ).toThrow(BadRequestException);
+      expect(() => validateSplitAmountSum(lines, -0.00502501)).not.toThrow();
+    });
+
+    it("accepts coin lines that four places would round apart", () => {
+      expect(() =>
+        validateSplitAmountSum(
+          [{ amount: -0.00004 }, { amount: -0.00004 }],
+          -0.00008,
+          { decimals: 8 },
+        ),
+      ).not.toThrow();
+    });
+
+    it("keeps comparing fiat at four places by default", () => {
+      expect(() =>
+        validateSplitAmountSum(
+          [{ amount: -3.3333 }, { amount: -3.3333 }, { amount: -3.3334 }],
+          -10,
+        ),
+      ).not.toThrow();
     });
   });
 });

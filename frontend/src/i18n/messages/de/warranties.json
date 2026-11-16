@@ -1,0 +1,321 @@
+{
+  "page": {
+    "title": "Garantien",
+    "subtitle": "Was Sie gekauft haben, wann die Garantie endet und wer es verkauft hat",
+    "newButton": "Garantie hinzufügen",
+    "exportButton": "CSV exportieren",
+    "importButton": "CSV importieren",
+    "loading": "Garantien werden geladen...",
+    "loadFailed": "Ihre Garantien konnten nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "summary": {
+      "active": "Aktiv",
+      "expiring": "Läuft bald ab",
+      "expired": "Abgelaufen",
+      "lifetime": "Lebenslang",
+      "unavailable": "Nicht geladen",
+      "expiringHint": "Innerhalb von {days} Tagen"
+    },
+    "filters": {
+      "label": "Nach Status filtern",
+      "all": "Alle",
+      "expiring": "Läuft ab",
+      "active": "Aktiv",
+      "expired": "Abgelaufen",
+      "lifetime": "Lebenslang",
+      "counted": {
+        "all": "Alle ({count})",
+        "expiring": "Läuft ab ({count})",
+        "active": "Aktiv ({count})",
+        "expired": "Abgelaufen ({count})",
+        "lifetime": "Lebenslang ({count})"
+      }
+    },
+    "search": {
+      "label": "Garantien durchsuchen",
+      "placeholder": "Name, Verkäufer, Modell oder Seriennummer suchen"
+    },
+    "archivedToggle": "Archivierte anzeigen",
+    "transactionChip": {
+      "label": "Garantien einer Buchung",
+      "clear": "Alle Garantien anzeigen"
+    },
+    "pager": {
+      "itemName": "Garantien",
+      "total": "{count, plural, one {{total} Garantie} other {{total} Garantien}}"
+    },
+    "empty": {
+      "title": "Noch keine Garantien",
+      "description": "Fügen Sie eine Garantie hinzu, um im Blick zu behalten, wann sie endet.",
+      "filteredTitle": "Keine passenden Garantien",
+      "filteredDescription": "Wählen Sie einen anderen Status oder leeren Sie die Suche.",
+      "archivedTitle": "Keine archivierten Garantien"
+    },
+    "modal": {
+      "newTitle": "Neue Garantie",
+      "editTitle": "Garantie bearbeiten"
+    },
+    "delete": {
+      "title": "Garantie löschen",
+      "message": "\"{name}\" löschen? Ihre Ansprüche und Dokumente werden mitgelöscht. Dies kann nicht rückgängig gemacht werden."
+    },
+    "toasts": {
+      "created": "Garantie hinzugefügt",
+      "updated": "Garantie aktualisiert",
+      "deleted": "Garantie gelöscht",
+      "archived": "Garantie archiviert",
+      "unarchived": "Garantie wiederhergestellt",
+      "createFailed": "Die Garantie konnte nicht hinzugefügt werden",
+      "updateFailed": "Die Garantie konnte nicht aktualisiert werden",
+      "deleteFailed": "Die Garantie konnte nicht gelöscht werden",
+      "archiveFailed": "Die Garantie konnte nicht archiviert werden",
+      "unarchiveFailed": "Die Garantie konnte nicht wiederhergestellt werden",
+      "prefillFailed": "Diese Buchung konnte nicht geladen werden, daher beginnt die Garantie leer",
+      "exported": "{count, plural, one {{shown} Garantie exportiert} other {{shown} Garantien exportiert}}",
+      "exportFailed": "Die Garantien konnten nicht exportiert werden"
+    }
+  },
+  "status": {
+    "lifetime": "Lebenslang",
+    "active": "Aktiv",
+    "expiring": "Läuft bald ab",
+    "expired": "Abgelaufen"
+  },
+  "daysLeft": {
+    "left": "{count, plural, one {Noch {days} Tag} other {Noch {days} Tage}}",
+    "today": "Läuft heute ab",
+    "ago": "{count, plural, one {Vor {days} Tag abgelaufen} other {Vor {days} Tagen abgelaufen}}",
+    "leftYears": "Noch {yearsCount, plural, one {{years} Jahr} other {{years} Jahre}}, {daysCount, plural, one {{days} Tag} other {{days} Tage}}",
+    "agoYears": "Vor {yearsCount, plural, one {{years} Jahr} other {{years} Jahre}}, {daysCount, plural, one {{days} Tag} other {{days} Tage}} abgelaufen"
+  },
+  "kind": {
+    "manufacturer": "Hersteller",
+    "extended": "Verlängert",
+    "store": "Händler",
+    "other": "Sonstige"
+  },
+  "list": {
+    "columns": {
+      "name": "Name",
+      "status": "Status",
+      "expiresOn": "Läuft ab",
+      "purchaseDate": "Gekauft",
+      "price": "Preis",
+      "documents": "Dokumente",
+      "claims": "Offene Ansprüche",
+      "actions": "Aktionen"
+    },
+    "sortLabel": "Sortieren nach",
+    "lifetime": "Lebenslang",
+    "noPrice": "Keiner",
+    "actions": {
+      "archive": "Archivieren",
+      "unarchive": "Dearchivieren"
+    }
+  },
+  "form": {
+    "nameLabel": "Name",
+    "namePlaceholder": "Was Sie gekauft haben",
+    "vendorLabel": "Verkäufer",
+    "vendorPlaceholder": "Verkäufer auswählen oder eingeben",
+    "modelLabel": "Modellnummer",
+    "serialsLabel": "Seriennummern",
+    "serialLabel": "Seriennummer {index}",
+    "addSerial": "Seriennummer hinzufügen",
+    "removeSerial": "Seriennummer {index} entfernen",
+    "serialsLimit": "Bis zu {max} Seriennummern",
+    "kindLabel": "Garantieart",
+    "purchaseDateLabel": "Kaufdatum",
+    "expiry": {
+      "label": "Garantie endet",
+      "date": "An einem Datum",
+      "duration": "Nach einer Laufzeit",
+      "lifetime": "Nie",
+      "expiresOnLabel": "Läuft ab am",
+      "years": "Jahre",
+      "months": "Monate",
+      "days": "Tage",
+      "computed": "Läuft ab am {date}",
+      "needsPurchaseDate": "Geben Sie das Kaufdatum ein, um das Enddatum zu berechnen",
+      "lifetimeHint": "Eine lebenslange Garantie hat kein Enddatum und keine Erinnerung"
+    },
+    "priceLabel": "Kaufpreis",
+    "productUrlLabel": "Produktseite",
+    "productUrlPlaceholder": "https://",
+    "notesLabel": "Notizen",
+    "submitCreate": "Garantie hinzufügen",
+    "submitUpdate": "Änderungen speichern"
+  },
+  "validation": {
+    "nameRequired": "Geben Sie einen Namen ein",
+    "nameTooLong": "Verwenden Sie höchstens 200 Zeichen",
+    "vendorTooLong": "Verwenden Sie höchstens 200 Zeichen",
+    "modelTooLong": "Verwenden Sie höchstens 100 Zeichen",
+    "serialTooLong": "Verwenden Sie höchstens 100 Zeichen pro Seriennummer",
+    "serialsTooMany": "Bis zu 10 Seriennummern",
+    "purchaseDateRequired": "Geben Sie das Kaufdatum ein",
+    "expiresOnRequired": "Geben Sie das Datum ein, an dem die Garantie endet",
+    "expiresBeforePurchase": "Die Garantie kann nicht vor dem Kaufdatum enden",
+    "durationRequired": "Geben Sie eine Laufzeit größer als null ein",
+    "priceNegative": "Der Preis darf nicht negativ sein",
+    "priceNeedsCurrency": "Wählen Sie die Währung des Preises",
+    "urlInvalid": "Geben Sie eine Webadresse ein, die mit http:// oder https:// beginnt",
+    "urlTooLong": "Verwenden Sie höchstens 500 Zeichen",
+    "notesTooLong": "Verwenden Sie höchstens 2000 Zeichen"
+  },
+  "detail": {
+    "back": "Zurück zu den Garantien",
+    "loading": "Garantie wird geladen...",
+    "loadFailed": "Diese Garantie konnte nicht geladen werden.",
+    "notFound": "Diese Garantie wurde nicht gefunden.",
+    "retry": "Erneut versuchen",
+    "archivedBadge": "Archiviert",
+    "switcher": {
+      "trigger": "Garantie wechseln",
+      "placeholder": "Garantien filtern...",
+      "noMatches": "Keine passenden Garantien"
+    },
+    "summary": {
+      "expires": "Läuft ab",
+      "purchased": "Gekauft",
+      "price": "Kaufpreis",
+      "openClaims": "Offene Ansprüche"
+    },
+    "card": {
+      "title": "Details",
+      "kind": "Garantieart",
+      "vendor": "Verkäufer",
+      "serialNumbers": "Seriennummern",
+      "model": "Modellnummer",
+      "productUrl": "Produktseite",
+      "notes": "Notizen",
+      "none": "Keine",
+      "lifetime": "Lebenslang"
+    },
+    "transaction": {
+      "title": "Kauf",
+      "edit": "Kauf vom {date} bearbeiten: {payee}, {amount}",
+      "viewInRegister": "Im Kontobuch ansehen",
+      "loadFailed": "Der Kauf konnte nicht geladen werden",
+      "dateInAccount": "{date} · {account}",
+      "none": "Keine verknüpfte Buchung",
+      "unreadable": "Der Kauf liegt in einem Konto, das Sie nicht lesen dürfen.",
+      "noPayee": "Kein Zahlungsempfänger"
+    }
+  },
+  "documents": {
+    "title": "Dokumente",
+    "empty": "Noch keine Dokumente",
+    "pendingHint": "Dokumente werden hochgeladen, wenn Sie die Garantie speichern.",
+    "tooMany": "Maximal {max} Dokumente pro Garantie",
+    "uploadFailedAfterCreate": "Garantie hinzugefügt, aber {count, plural, one {dieses Dokument konnte} other {diese Dokumente konnten}} nicht hochgeladen werden: {names}. Fügen Sie {count, plural, one {es} other {sie}} im Bereich Dokumente der Garantie hinzu.",
+    "kindFor": "Dokumentart für {name}",
+    "kindUpdateFailed": "Die Dokumentart konnte nicht geändert werden",
+    "addExisting": "Vorhandenes hinzufügen",
+    "addExistingTitle": "Vorhandenes Dokument hinzufügen",
+    "addExistingHelp": "Wählen Sie eine Datei, die Sie bereits zu einer Transaktion oder einer anderen Garantie hochgeladen haben. Eine Kopie wird dieser Garantie hinzugefügt; das Original bleibt, wo es ist.",
+    "addExistingFrom": "Wo sich das Dokument jetzt befindet",
+    "fromTransaction": "Eine Transaktion",
+    "fromWarranty": "Eine andere Garantie",
+    "addExistingDocument": "Dokument",
+    "addExistingKind": "Dokumenttyp bei dieser Garantie",
+    "addExistingNone": "Hier gibt es keine Dokumente zum Hinzufügen.",
+    "addExistingLoadFailed": "Die Dokumente konnten nicht geladen werden. Bitte versuchen Sie es erneut.",
+    "addExistingFailed": "Dokument konnte nicht hinzugefügt werden",
+    "addExistingSubmit": "Dokument hinzufügen",
+    "choose": "Auswählen…",
+    "preview": "Vorschau",
+    "kinds": {
+      "receipt": "Beleg",
+      "manual": "Handbuch",
+      "photo": "Foto",
+      "warranty": "Garantie",
+      "other": "Sonstiges"
+    }
+  },
+  "claims": {
+    "title": "Ansprüche",
+    "add": "Anspruch hinzufügen",
+    "empty": "Noch keine Ansprüche",
+    "loading": "Ansprüche werden geladen...",
+    "loadFailed": "Die Ansprüche konnten nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "statuses": {
+      "open": "Offen",
+      "approved": "Genehmigt",
+      "denied": "Abgelehnt",
+      "resolved": "Erledigt"
+    },
+    "claimedOn": "Geltend gemacht am {date}",
+    "resolvedOnLine": "Abgeschlossen am {date}",
+    "resolutionLine": "Ergebnis: {text}",
+    "modal": {
+      "newTitle": "Neuer Anspruch",
+      "editTitle": "Anspruch bearbeiten"
+    },
+    "form": {
+      "claimDateLabel": "Datum des Anspruchs",
+      "statusLabel": "Status",
+      "descriptionLabel": "Beschreibung",
+      "resolutionLabel": "Ergebnis",
+      "resolvedOnLabel": "Abgeschlossen am",
+      "resolvedOnHint": "Nur für einen erledigten oder abgelehnten Anspruch",
+      "submitCreate": "Anspruch hinzufügen",
+      "submitUpdate": "Änderungen speichern"
+    },
+    "validation": {
+      "claimDateRequired": "Geben Sie das Datum des Anspruchs ein",
+      "resolvedOnBeforeClaim": "Ein Anspruch kann nicht vor seiner Geltendmachung abgeschlossen werden",
+      "textTooLong": "Verwenden Sie höchstens 2000 Zeichen"
+    },
+    "delete": {
+      "title": "Anspruch löschen",
+      "message": "Den Anspruch vom {date} löschen? Dies kann nicht rückgängig gemacht werden."
+    },
+    "toasts": {
+      "created": "Anspruch hinzugefügt",
+      "updated": "Anspruch aktualisiert",
+      "deleted": "Anspruch gelöscht",
+      "createFailed": "Der Anspruch konnte nicht hinzugefügt werden",
+      "updateFailed": "Der Anspruch konnte nicht aktualisiert werden",
+      "deleteFailed": "Der Anspruch konnte nicht gelöscht werden"
+    }
+  },
+  "import": {
+    "title": "Garantien aus CSV importieren",
+    "description": "Eine CSV-Datei mit den Spalten von Warracker, etwa ein Export aus Warracker oder von dieser Seite. Sie sehen jede Zeile, bevor etwas gespeichert wird.",
+    "fileLabel": "CSV-Datei",
+    "chooseFile": "Datei auswählen",
+    "noFileChosen": "Keine Datei ausgewählt",
+    "checking": "Datei wird geprüft...",
+    "previewFailed": "Die Datei konnte nicht geprüft werden",
+    "summary": "{count, plural, one {{valid} von {total} Zeile kann importiert werden.} other {{valid} von {total} Zeilen können importiert werden.}}",
+    "invalidSummary": "{count, plural, one {{shown} Zeile ist ungültig und kann so nicht importiert werden.} other {{shown} Zeilen sind ungültig und können so nicht importiert werden.}}",
+    "skipInvalid": "Ungültige Zeilen überspringen und den Rest importieren",
+    "nothingToImport": "Korrigieren Sie die Datei und wählen Sie sie erneut aus.",
+    "skippedColumns": "Nicht importierte Spalten:",
+    "columns": {
+      "line": "Zeile",
+      "name": "Name",
+      "expires": "Läuft ab",
+      "outcome": "Ergebnis",
+      "problems": "Probleme"
+    },
+    "outcome": {
+      "valid": "Bereit",
+      "invalid": "Ungültig",
+      "created": "Importiert"
+    },
+    "unnamed": "(ohne Namen)",
+    "noExpiry": "Nicht festgelegt",
+    "lifetime": "Lebenslang",
+    "errorItem": "Fehler: {message}",
+    "warningItem": "Hinweis: {message}",
+    "submit": "Importieren",
+    "submitCount": "{count, plural, one {{shown} Garantie importieren} other {{shown} Garantien importieren}}",
+    "toasts": {
+      "imported": "{count, plural, one {{shown} Garantie importiert} other {{shown} Garantien importiert}}",
+      "failed": "Die Garantien konnten nicht importiert werden"
+    }
+  }
+}

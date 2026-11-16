@@ -2,8 +2,12 @@
  * Convert `amount` from one currency to another using a caller-supplied rate
  * lookup. Tries the direct pair first, then falls back to the inverse pair
  * (the reciprocal of the reverse rate). Returns `null` when neither rate is
- * available so the caller decides how to handle a missing rate (log a warning,
- * return the amount unconverted, etc).
+ * available so the caller decides how to handle a missing rate: carry it as
+ * unknown, name the pair, withhold the total. Returning the amount unconverted
+ * is not an option for a caller either (INV-FX-001).
+ *
+ * Only `from === to` answers the amount untouched. An empty code on either side
+ * names no currency, so it is unknown, not "the same currency".
  *
  * This is the single source of truth for the "direct then inverse" conversion
  * decision. Callers differ only in where rates come from -- a flat map of the
@@ -17,7 +21,10 @@ export function convertWithRateLookup(
   to: string,
   getRate: (from: string, to: string) => number | undefined,
 ): number | null {
-  if (!from || from === to) {
+  if (!from || !to) {
+    return null;
+  }
+  if (from === to) {
     return amount;
   }
 

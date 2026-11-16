@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "instrument": {
+    "issuerCountryCode": "PL",
+    "issuerCode": "PL_MF",
+    "programCode": "COI",
+    "seriesCode": "COI1030",
+    "currency": "PLN",
+    "marketability": "RETAIL_REDEEMABLE",
+    "faceValue": "100.00"
+  },
+  "saleWindow": {
+    "from": "2026-10-01",
+    "to": "2026-10-31"
+  },
+  "schedule": {
+    "anchor": "LOT_PURCHASE_DATE",
+    "periodMonths": 12,
+    "periodCount": 4,
+    "rollDay": "ANCHOR_DAY_CLAMPED",
+    "calendarId": "PL"
+  },
+  "accrual": {
+    "type": "ACTUAL_DAYS_IN_PERIOD"
+  },
+  "principalRule": {
+    "type": "FIXED_NOMINAL"
+  },
+  "rateRule": {
+    "type": "INFLATION_PLUS_MARGIN_AS_RATE",
+    "benchmarkId": "PL_CPI_GUS_YOY",
+    "firstPeriodRate": "0.0475",
+    "margin": "0.0150",
+    "benchmarkFloor": "0",
+    "observation": {
+      "type": "MONTHLY_VALUE_MONTHS_BEFORE_START",
+      "months": 2
+    }
+  },
+  "capitalization": {
+    "type": "NONE"
+  },
+  "redemption": {
+    "type": "ON_DEMAND",
+    "earliestDaysAfterPurchase": 7,
+    "latestDaysBeforeMaturity": 20,
+    "blackouts": [
+      {
+        "type": "RECORD_DAY_BEFORE_COUPON",
+        "businessDays": 5,
+        "calendarId": "PL"
+      }
+    ],
+    "penalties": [
+      {
+        "type": "FIXED_FEE_PER_UNIT",
+        "amount": "2.00"
+      }
+    ],
+    "proceedsFloor": {
+      "type": "FACE_VALUE",
+      "appliesTo": "FIRST_PERIOD"
+    }
+  },
+  "rounding": {
+    "moneyDecimals": 2,
+    "mode": "HALF_UP"
+  },
+  "source": {
+    "provider": "PL_MF",
+    "url": "https://www.obligacjeskarbowe.pl/media_files/e156037b-5b0c-40b8-85e1-0b205d4ac395.pdf",
+    "document": "List emisyjny nr 98/2026"
+  }
+}

@@ -1,4 +1,7 @@
 import type { ColorTheme } from '@/lib/color-themes';
+import type { MapProvider } from '@/lib/contact-links';
+import type { HiddenTableColumns } from '@/lib/hidden-columns';
+import type { ViewDefaults } from '@/lib/view-defaults';
 
 /**
  * The acting-context profile (`GET /auth/profile`, `GET /users/me`). While a
@@ -22,6 +25,9 @@ export interface User {
   isDelegateOnly?: boolean;
   backupEncryptionEnabled?: boolean;
   emailVerified?: boolean;
+  // An email change waiting for the link sent to this address; the account's
+  // email stays `email` until it is followed. Returned to the account holder only.
+  pendingEmail?: string | null;
   createdAt: string;
   updatedAt: string;
   lastLogin?: string;
@@ -105,6 +111,21 @@ export interface AuthResponse {
   emailNotVerified?: boolean;
   /** Registration succeeded but the user must verify their email before logging in. */
   verificationRequired?: boolean;
+  /**
+   * 2FA sign-in only, and only when it was completed with a backup code (the
+   * server omits both fields for an authenticator code). The client then sends
+   * the user to Settings > Security to reset their 2FA.
+   */
+  usedBackupCode?: boolean;
+  /** Backup codes left after the one this sign-in consumed. */
+  backupCodesRemaining?: number;
+}
+
+/** How a 2FA sign-in was completed, as far as the next page cares. */
+export interface TwoFactorSignInDetails {
+  usedBackupCode: boolean;
+  /** `null` when the server did not say (never for a backup-code sign-in). */
+  backupCodesRemaining: number | null;
 }
 
 export interface TwoFactorSetupResponse {
@@ -144,7 +165,6 @@ export interface UserPreferences {
   colorTheme: ColorTheme;
   timezone: string; // 'browser' = use browser timezone
   notificationEmail: boolean;
-  notificationBrowser: boolean;
   twoFactorEnabled: boolean;
   gettingStartedDismissed: boolean;
   weekStartsOn: number; // 0=Sunday, 1=Monday, ..., 6=Saturday
@@ -153,12 +173,19 @@ export interface UserPreferences {
   favouriteReportIds: string[];
   dashboardWidgets: string[]; // ordered visible widget ids; empty = default layout
   dashboardWidgetConfig: Record<string, Record<string, unknown>>; // per-widget settings keyed by widget id
+  hiddenTableColumns: HiddenTableColumns; // hidden column ids keyed by table kind
+  // Account-level fallbacks for the browser-local view settings. Optional: a
+  // preferences copy cached before the field existed has none.
+  viewDefaults?: ViewDefaults;
   showCreatedAt: boolean;
   timeFormat: '24h' | '12h';
   preferredExchanges: string[];
-  defaultQuoteProvider: 'yahoo' | 'msn';
+  defaultQuoteProvider: 'yahoo' | 'msn' | 'lse' | 'deutsche_boerse';
+  /** Which map service an address link opens; 'device' decides from the platform. */
+  defaultMapProvider: MapProvider;
   recentTransactionsLimit: number;
   aiBubbleEnabled: boolean;
+  aiTriviaEnabled: boolean;
   showWhatsNew: boolean;
   /**
    * Strict reconciled lock. False (the default) keeps Money's behaviour: the
@@ -168,13 +195,24 @@ export interface UserPreferences {
    * RECONCILED -- so the way to make one is to turn this off in Settings.
    */
   lockReconciledTransactions: boolean;
+  /**
+   * Opt-in: look up a new payee's website, address, email and phone through
+   * the configured AI provider (prefilled for review in the payee form;
+   * written in the background for a name-only create).
+   */
+  payeeContactLookupEnabled: boolean;
   language: string;
   createdAt: string;
   updatedAt: string;
 }
 
+/**
+ * The deployment's automatic-backup policy, as the admin surface reads it.
+ *
+ * Not one account's row: it has no `userId`, because the thing it describes has
+ * no owner. The name is kept because every consumer of it is this one screen.
+ */
 export interface AutoBackupSettings {
-  userId: string;
   enabled: boolean;
   folderPath: string;
   /**
@@ -193,21 +231,65 @@ export interface AutoBackupSettings {
   lastBackupStatus: 'success' | 'partial' | 'failed' | null;
   lastBackupError: string | null;
   nextBackupAt: string | null;
-  createdAt: string;
-  updatedAt: string;
+  /**
+   * How many active accounts this deployment's policy governs, and how many of
+   * them currently hold an armed schedule.
+   *
+   * Server-computed and read-only, present only on the admin policy surface.
+   * Two numbers rather than one because a single one could only have been
+   * `accountCount`, which states coverage the deployment may not have: an
+   * account whose reconcile failed is still an account the policy governs.
+   * They match on a settled deployment.
+   */
+  accountCount?: number;
+  scheduledAccountCount?: number;
 }
 
 /**
- * Whether the deployment has somewhere to write automatic backups.
+ * Whether the deployment has somewhere to write automatic backups, and where.
  *
  * This is a deployment capability, not a field from the acting-context user
  * profile or the user's settings row.
  */
 export interface AutoBackupCapability {
   available: boolean;
+  /** The store in display form: a directory, or a bucket and key prefix. */
   folderPath: string;
+  /**
+   * False when the bound store has no location to choose -- an object store's
+   * bucket and prefix are the deployment's. The folder picker is hidden on it
+   * rather than offering a control whose endpoints refuse.
+   */
+  locationSelectable: boolean;
+  /**
+   * Which store is bound: `local` for a container directory, `s3` for an
+   * S3-compatible bucket. Named rather than inferred from
+   * `locationSelectable`, which answers "may I choose a location" and not
+   * "where do my backups live".
+   */
+  storageProvider: string;
+  /** How many artifacts the current store already holds for the caller. */
+  artifactCount?: number;
   /** Operator-facing detail when the capability is unavailable. */
   reason?: string;
+}
+
+/**
+ * What one "back up every account now" run did.
+ *
+ * Counts rather than a filename: the run covers every account on the
+ * deployment, and `filename` names only the artifact written for the account
+ * that pressed the button -- absent when that account's own backup was skipped
+ * or failed.
+ */
+export interface AutoBackupRunResult {
+  message: string;
+  usersRequested: number;
+  usersBackedUp: number;
+  usersSkipped: number;
+  usersFailed: number;
+  usersPartial: number;
+  filename?: string;
 }
 
 export interface UpdateAutoBackupSettingsData {
@@ -236,22 +318,30 @@ export interface UpdatePreferencesData {
   colorTheme?: ColorTheme;
   timezone?: string;
   notificationEmail?: boolean;
-  notificationBrowser?: boolean;
   gettingStartedDismissed?: boolean;
   weekStartsOn?: number;
   budgetDigestEnabled?: boolean;
   budgetDigestDay?: 'MONDAY' | 'FRIDAY';
   favouriteReportIds?: string[];
   dashboardWidgets?: string[];
-  dashboardWidgetConfig?: Record<string, Record<string, unknown>>;
+  /**
+   * Merged by widget id on the server: a slice sent replaces that widget's
+   * slice, `null` removes it, and a slice not sent is kept.
+   */
+  dashboardWidgetConfig?: Record<string, Record<string, unknown> | null>;
+  hiddenTableColumns?: HiddenTableColumns;
+  viewDefaults?: ViewDefaults;
   showCreatedAt?: boolean;
   timeFormat?: '24h' | '12h';
   preferredExchanges?: string[];
-  defaultQuoteProvider?: 'yahoo' | 'msn';
+  defaultQuoteProvider?: 'yahoo' | 'msn' | 'lse' | 'deutsche_boerse';
+  defaultMapProvider?: MapProvider;
   recentTransactionsLimit?: number;
   aiBubbleEnabled?: boolean;
+  aiTriviaEnabled?: boolean;
   showWhatsNew?: boolean;
   lockReconciledTransactions?: boolean;
+  payeeContactLookupEnabled?: boolean;
   language?: string;
 }
 
@@ -274,7 +364,8 @@ export interface PersonalAccessToken {
 export interface CreatePatData {
   name: string;
   scopes?: string;
-  expiresAt?: string;
+  /** Omitted: the server's 90-day default. `null`: never expires. */
+  expiresAt?: string | null;
 }
 
 export interface CreatePatResponse extends PersonalAccessToken {

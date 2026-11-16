@@ -76,7 +76,10 @@
     "collapseAria": "Kontoinformationen ausblenden",
     "showAccountNumber": "Kontonummer anzeigen",
     "hideAccountNumber": "Kontonummer ausblenden",
-    "show": "Kontoinformationen anzeigen"
+    "show": "Kontoinformationen anzeigen",
+    "nextInstallment": "Nächste Rate",
+    "finalPayment": "Schlusszahlung",
+    "amountDueOn": "{amount}, fällig am {date}"
   },
   "page": {
     "title": "Buchungen",
@@ -121,13 +124,19 @@
       "balance": "Saldo",
       "attachments": "Anhänge",
       "status": "Status",
+      "statusHelp": "Nicht abgeglichen, Bestätigt oder Abgeglichen sind Schritte zum Abgleich mit einem Kontoauszug. Ungültig storniert eine Buchung, behält aber ihren Datensatz; sie bewegt den Kontostand nicht mehr.",
       "actions": "Aktionen"
+    },
+    "sort": {
+      "balanceHiddenHint": "Nach Datum sortieren, um den laufenden Saldo zu sehen",
+      "stripLabel": "Sortieren nach"
     },
     "dateDisplay": {
       "toggleLabel": "Jahr ausblenden",
       "toggleTitle": "Das Jahr aus den Datumsangaben entfernen, damit mehr vom Zahlungsempfänger sichtbar ist"
     },
     "attachmentsCount": "{count, plural, one {# Anhang} other {# Anhänge}}",
+    "warrantiesCount": "{count, plural, one {# Garantie} other {# Garantien}}",
     "today": "Heute",
     "export": {
       "button": "Exportieren",
@@ -165,7 +174,6 @@
     },
     "row": {
       "viewPayeeTitle": "Details zu {name} anzeigen",
-      "ref": "Ref: {number}",
       "investmentLabel": "Investition",
       "linkedInvestmentTitle": "In Investitionen anzeigen",
       "filterByDate": "Nach Datum „{date}” filtern",
@@ -212,13 +220,13 @@
       "title": "Filter",
       "clear": "Zurücksetzen",
       "hide": "Ausblenden",
-      "show": "Anzeigen"
+      "show": "Filter anzeigen"
     },
     "accounts": {
-      "label": "Konten anzeigen:",
-      "all": "Alle",
-      "active": "Aktiv",
-      "closed": "Geschlossen"
+      "label": "Konten anzeigen",
+      "allCount": "Alle ({count})",
+      "activeCount": "Aktiv ({count})",
+      "closedCount": "Geschlossen ({count})"
     },
     "fields": {
       "accounts": "Konten",
@@ -251,7 +259,7 @@
       "statuses": "Alle Status",
       "amountMin": "Min.",
       "amountMax": "Max.",
-      "search": "Zahlungsempfänger, Kategorie, Betrag, Tag, Beschreibung, Referenz-Nr. suchen...",
+      "search": "Suchen, oder #10 bzw. payee:costco versuchen",
       "tagKeyValue": "z. B. usa"
     },
     "tagKeyNone": "Beliebig (kein Schlüsselfilter)",
@@ -312,7 +320,7 @@
     },
     "modal": {
       "title": "Buchungen massenweise aktualisieren",
-      "subtitle": "{count, plural, one {# ausgewählte Buchung} other {# ausgewählte Buchungen}} aktualisieren. Aktivieren Sie die Felder, die Sie ändern möchten.",
+      "help": "Aktivieren Sie die Felder, die Sie ändern möchten.",
       "submitLabel": "{count, plural, one {# Buchung} other {# Buchungen}} aktualisieren",
       "payee": "Zahlungsempfänger",
       "category": "Kategorie",
@@ -360,8 +368,9 @@
       "fromAccount": "Von Konto",
       "toAccount": "An Konto",
       "transferAmount": "Überweisungsbetrag",
-      "transferAmountWithCurrency": "Überweisungsbetrag ({currency})",
-      "amountReceived": "Erhaltener Betrag ({currency})",
+      "amountReceivedLabel": "Erhaltener Betrag",
+      "transferAmountInCurrency": "Überweisungsbetrag ({currency})",
+      "amountReceivedInCurrency": "Erhaltener Betrag ({currency})",
       "payeeOptional": "Zahlungsempfänger (optional)",
       "categoryOptional": "Kategorie (optional)"
     },
@@ -391,10 +400,16 @@
     "submitCreateAndNewDescription": "Speichern und eine weitere beginnen, mit demselben Konto und Datum.",
     "submitOptions": "Wählen, was nach dem Erstellen passiert",
     "submitUpdate": "{mode} aktualisieren",
+    "submitConvert": "In {mode} umwandeln",
     "reconciledConfirm": {
       "title": "Abgeglichene Transaktion bearbeiten?",
       "message": "Diese Transaktion ist abgeglichen. Eine Änderung wirkt sich auf einen abgeschlossenen Abgleich aus. Möchten Sie Ihre Änderungen trotzdem speichern?",
       "confirm": "Änderungen speichern"
+    },
+    "counterpartConfirm": {
+      "title": "Diese Überweisung umwandeln?",
+      "message": "Die Gegenseite dieser Überweisung wurde bereits abgeglichen oder bestätigt. Durch die Umwandlung in eine Transaktion wird dieser Eintrag aus dem anderen Konto entfernt und ein Saldo geändert, der mit einem Kontoauszug abgeglichen wurde. Möchten Sie fortfahren?",
+      "confirm": "Trotzdem umwandeln"
     },
     "modeLabel": {
       "transfer": "Überweisung",
@@ -424,6 +439,8 @@
       "destinationRequired": "Bitte wählen Sie ein Zielkonto aus",
       "sameAccount": "Quell- und Zielkonto müssen verschieden sein",
       "negativeTransfer": "Überweisungsbetrag darf nicht negativ sein",
+      "convertedToTransfer": "In eine Überweisung umgewandelt",
+      "convertedToTransaction": "In eine Transaktion umgewandelt",
       "payeeCreated": "Zahlungsempfänger „{name}” erstellt",
       "payeeCreateFailed": "Zahlungsempfänger konnte nicht erstellt werden",
       "payeeReactivated": "Zahlungsempfänger „{name}” reaktiviert",
@@ -458,10 +475,20 @@
       },
       "feeCaption": "Enthält eine Fremdwährungsgebühr von {percent}% ({fee})."
     },
-    "jointSplitDisabled": "Splitbuchungen in einem geteilten Konto kann nur der Eigentümer verwalten"
+    "jointSplitDisabled": "Splitbuchungen in einem geteilten Konto kann nur der Eigentümer verwalten",
+    "warranties": {
+      "title": "Garantien",
+      "add": "Garantie hinzufügen",
+      "expires": "Läuft ab am {date}",
+      "loading": "Garantien werden geladen",
+      "loadError": "Die Garantien zu dieser Buchung konnten nicht geladen werden.",
+      "empty": "Noch keine Garantien"
+    },
+    "conversionLockedNote": "Diese Überweisung gehört zu einer aufgeteilten Transaktion oder zum Konto eines anderen Eigentümers und kann hier nur eine Überweisung bleiben. Ändern Sie sie über die Aufteilung oder löschen Sie sie und erstellen Sie den gewünschten Eintrag."
   },
   "splitEditor": {
     "header": "Details der Buchungsteile",
+    "headerTooltip": "Jede Zeile kann eine Kategorie, eine Überweisung auf ein anderes Konto oder eine Investition sein. Die Zeilen müssen sich zum Gesamtbetrag der Buchung summieren; Gleichmäßig verteilen und Proportional verteilen verteilen den Rest für Sie.",
     "distributeProportionally": "Proportional verteilen",
     "distributeProportionallyTitle": "Den verbleibenden Betrag proportional auf die Buchungsteile verteilen",
     "distributeEvenly": "Gleichmäßig verteilen",
@@ -521,7 +548,7 @@
     "quantityPlaceholder": "Menge",
     "pricePlaceholder": "Preis",
     "commissionPlaceholder": "Provision",
-    "amountPlaceholder": "Betrag ({currency})",
+    "amountOnlyPlaceholder": "Betrag",
     "ratePlaceholder": "{to} pro 1 {from}",
     "ariaRate": "Wechselkurs ({to} pro 1 {from})",
     "rateHint": "Stückzahl, Preis und Provision sind in {from}; dieser Kurs rechnet die Zahlungswirkung in {to} um.",
@@ -551,6 +578,7 @@
       "total": "Gesamt",
       "transactions": "Buchungen",
       "tooltip": "{count, plural, one {# Buchung} other {# Buchungen}}",
+      "partialNote": "Für einige Beträge fehlt ein Wechselkurs; sie sind in diesen Summen nicht enthalten.",
       "quarterLabel": "Q{quarter} {year}",
       "quarterTick": "Q{quarter} {year}",
       "granularityLabel": "Gruppierung",
@@ -575,6 +603,11 @@
       "log": "Logarithmisch",
       "autoTitle": "Automatisch ({scale})",
       "scaleTitle": "{label}-Skalierung"
+    },
+    "collapse": {
+      "hide": "Diagramm ausblenden",
+      "show": "Diagramm anzeigen",
+      "hidden": "Diagramm ausgeblendet"
     }
   },
   "toasts": {
@@ -597,5 +630,71 @@
     "title": "Ausgaben nach {key}",
     "other": "Sonstige",
     "noData": "Keine getaggten Ausgaben für diesen Schlüssel."
+  },
+  "searchSyntax": {
+    "open": "Suchsyntax",
+    "title": "Suchsyntax",
+    "fields": "Felder: payee, memo, cat, tag, account, ref, amount, date, status, is, has. Wählen Sie ein Beispiel, um es in das Suchfeld zu übernehmen.",
+    "examples": {
+      "allWords": "Jedes Wort kommt irgendwo vor",
+      "phrase": "Genau diese Wortfolge",
+      "exclude": "Alles mit refund ausschließen",
+      "fieldContains": "Empfänger enthält costco",
+      "fieldExact": "Empfänger ist genau Costco",
+      "reference": "Scheck- oder Referenznummer genau 10",
+      "wildcard": "Referenz beginnt mit 10",
+      "amountOver": "Betrag über 100",
+      "amountRange": "Betrag von 50 bis 100",
+      "datePeriod": "Jeder Tag im März 2026",
+      "isSplit": "Aufgeteilte Buchungen",
+      "hasAttachment": "Hat einen Anhang",
+      "hasWarranty": "Hat eine Garantie"
+    }
+  },
+  "searchInterpretation": {
+    "label": "Suche:",
+    "negated": "nicht {phrase}",
+    "malformed": "{raw} (nicht verstanden, als Text gesucht)",
+    "empty": "{raw} (leer, ignoriert)",
+    "status": "Status ist {value}",
+    "any": "„{value}“ überall",
+    "fields": {
+      "payee": "Empfänger",
+      "memo": "Notiz",
+      "cat": "Kategorie",
+      "tag": "Tag",
+      "account": "Konto",
+      "ref": "Referenz",
+      "amount": "Betrag",
+      "date": "Datum",
+      "status": "Status",
+      "is": "Typ",
+      "has": "Hat"
+    },
+    "ops": {
+      "contains": "{field} enthält „{value}“",
+      "exact": "{field} ist „{value}“",
+      "glob": "{field} entspricht „{value}“",
+      "eq": "{field} ist {value}",
+      "gt": "{field} über {value}",
+      "gte": "{field} {value} oder mehr",
+      "lt": "{field} unter {value}",
+      "lte": "{field} {value} oder weniger",
+      "between": "{field} von {value} bis {valueTo}"
+    },
+    "enum": {
+      "is": {
+        "transfer": "Umbuchungen",
+        "split": "Aufgeteilte Buchungen",
+        "uncategorized": "Ohne Kategorie"
+      },
+      "has": {
+        "attachment": "Hat einen Anhang",
+        "warranty": "Hat eine Garantie",
+        "ref": "Hat eine Referenznummer",
+        "memo": "Hat eine Notiz",
+        "tag": "Hat einen Tag"
+      }
+    }
   }
 }

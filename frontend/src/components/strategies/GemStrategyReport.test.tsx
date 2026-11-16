@@ -146,7 +146,7 @@ describe("GemStrategyReport", () => {
 
     mockGetReport.mockResolvedValue(gemReport());
     await act(async () => {
-      fireEvent.click(screen.getByRole("button", { name: "Try again" }));
+      fireEvent.click(screen.getByRole("button", { name: "Try Again" }));
     });
     expect(screen.getByText("RISK-ON")).toBeInTheDocument();
   });

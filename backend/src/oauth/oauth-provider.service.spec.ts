@@ -1,9 +1,17 @@
+import { readFileSync } from "fs";
+import { dirname, join } from "path";
 import { InternalServerErrorException } from "@nestjs/common";
 import {
   OAuthProviderService,
+  MAX_DCR_REDIRECT_URIS,
   MCP_RESOURCE_SCOPES,
 } from "./oauth-provider.service";
+import { OAUTH_CLIENT_IDLE_TTL_SECONDS } from "./postgres.adapter";
 import { getRequestContext } from "../common/request-context";
+import {
+  OauthSigningKeysService,
+  type InstanceJwks,
+} from "./oauth-signing-keys.service";
 
 // A real OAuth subject/accountId is a user UUID. findAccount and
 // validateAccessToken now read the auth-state row under withUserContext(sub),
@@ -55,6 +63,9 @@ jest.mock(
             return lastMockProvider;
           },
         ),
+      errors: {
+        InvalidClientMetadata: class InvalidClientMetadata extends Error {},
+      },
     };
   },
   { virtual: true },
@@ -77,6 +88,25 @@ function makeAuthService(
     getUserStateById: jest.fn().mockResolvedValue(user),
   } as unknown as import("../auth/auth.service").AuthService;
 }
+
+/**
+ * An `OauthSigningKeysService` double.
+ *
+ * Defaults to a stored JWKS, because that is the configured deployment and the
+ * assertion worth making is that it reaches the provider. `null` is the
+ * unkeyed case, where the provider is expected to mint its own exactly as it
+ * did before this existed.
+ */
+function makeSigningKeys(jwks: InstanceJwks | null = SPEC_JWKS) {
+  return {
+    ensureJwks: jest.fn().mockResolvedValue(jwks),
+    readJwks: jest.fn().mockResolvedValue(jwks),
+  } as unknown as OauthSigningKeysService;
+}
+
+const SPEC_JWKS: InstanceJwks = {
+  keys: [{ kty: "RSA", kid: "spec-rsa", use: "sig", n: "n", e: "AQAB" }],
+};
 
 function makeDataSource(deleteAffected = 1) {
   const execute = jest.fn().mockResolvedValue({ affected: deleteAffected });
@@ -102,12 +132,48 @@ describe("OAuthProviderService", () => {
     for (const k of Object.keys(eventListeners)) delete eventListeners[k];
   });
 
+  describe("signing keys", () => {
+    const initWith = async (jwks: InstanceJwks | null) => {
+      const svc = new OAuthProviderService(
+        makeConfigService({
+          PUBLIC_APP_URL: "https://app.test",
+          JWT_SECRET: VALID_JWT,
+        }),
+        makeDataSource().dataSource,
+        makeAuthService(null),
+        makeSigningKeys(jwks),
+      );
+      await svc.ensureInitialized();
+      return providerConstructorCalls[0].config;
+    };
+
+    // Without this the provider mints a development key pair per process, so
+    // two replicas serve two /oauth/jwks documents and a token signed by one
+    // cannot be verified against the other.
+    it("hands the stored JWKS to the provider", async () => {
+      const config = await initWith(SPEC_JWKS);
+
+      expect(config.jwks).toEqual(SPEC_JWKS);
+    });
+
+    // A deployment with no ENCRYPTION_KEY has nowhere to put private signing
+    // keys, and plaintext would be worse than per-process keys -- so the
+    // option is omitted entirely rather than passed as null, which the
+    // provider would reject.
+    it("omits the option entirely when there are no stored keys", async () => {
+      const config = await initWith(null);
+
+      expect(config).not.toHaveProperty("jwks");
+    });
+  });
+
   describe("requirePublicUrl / URL helpers (uninitialized)", () => {
     it("throws if PUBLIC_APP_URL is missing during initialize()", async () => {
       const svc = new OAuthProviderService(
         makeConfigService({}),
         makeDataSource().dataSource,
         makeAuthService(null),
+        makeSigningKeys(),
       );
       await expect(svc.ensureInitialized()).rejects.toThrow(/PUBLIC_APP_URL/);
     });
@@ -120,6 +186,7 @@ describe("OAuthProviderService", () => {
         }),
         makeDataSource().dataSource,
         makeAuthService(null),
+        makeSigningKeys(),
       );
       await expect(svc.ensureInitialized()).rejects.toThrow(/JWT_SECRET/);
     });
@@ -129,6 +196,7 @@ describe("OAuthProviderService", () => {
         makeConfigService({}),
         makeDataSource().dataSource,
         makeAuthService(null),
+        makeSigningKeys(),
       );
       expect(() => svc.getProvider()).toThrow(InternalServerErrorException);
     });
@@ -145,6 +213,7 @@ describe("OAuthProviderService", () => {
           isActive: true,
           mustChangePassword: false,
         }),
+        makeSigningKeys(),
       );
       // The public-URL helpers do not require initialization.
       expect(svc.getMcpResourceUrl()).toBe("https://app.test/api/v1/mcp");
@@ -166,6 +235,7 @@ describe("OAuthProviderService", () => {
           isActive: true,
           mustChangePassword: false,
         }),
+        makeSigningKeys(),
       );
 
       const p1 = await svc.ensureInitialized();
@@ -211,6 +281,7 @@ describe("OAuthProviderService", () => {
           isActive: true,
           mustChangePassword: false,
         }),
+        makeSigningKeys(),
       );
       await svc.ensureInitialized();
 
@@ -236,6 +307,55 @@ describe("OAuthProviderService", () => {
       }
     });
 
+    it("keeps a registered client alive longer than any refresh token minted for it", async () => {
+      // An idle client expires (#2177); it must never expire while a refresh
+      // token minted for it can still be redeemed, or a client that refreshes
+      // within its token's life would be refused as unknown.
+      const svc = new OAuthProviderService(
+        makeConfigService({
+          PUBLIC_APP_URL: "https://app.test",
+          JWT_SECRET: VALID_JWT,
+        }),
+        makeDataSource().dataSource,
+        makeAuthService({
+          id: "u",
+          isActive: true,
+          mustChangePassword: false,
+        }),
+        makeSigningKeys(),
+      );
+      await svc.ensureInitialized();
+
+      const ttl = providerConstructorCalls[0].config.ttl as Record<
+        string,
+        number
+      >;
+      expect(OAUTH_CLIENT_IDLE_TTL_SECONDS).toBeGreaterThan(ttl.RefreshToken);
+      expect(OAUTH_CLIENT_IDLE_TTL_SECONDS).toBeGreaterThan(ttl.Grant);
+    });
+
+    // RFC 9207, which the 2026-07-28 revision asks authorization servers to
+    // support (SEP-2468): the authorization response names the issuer that
+    // produced it, so a client can tell one authorization server's code from
+    // another's before redeeming it. node-oidc-provider does this itself; the
+    // check is here because it is a property MCP clients rely on, and a
+    // provider upgrade that dropped it would otherwise be invisible.
+    it("names the issuer on its authorization responses (RFC 9207)", async () => {
+      const providerLib = join(
+        dirname(require.resolve("oidc-provider/package.json")),
+        "lib",
+      );
+      expect(
+        readFileSync(
+          join(providerLib, "actions/authorization/respond.js"),
+          "utf8",
+        ),
+      ).toContain("out.iss = ctx.oidc.provider.issuer");
+      expect(
+        readFileSync(join(providerLib, "actions/discovery.js"), "utf8"),
+      ).toContain("authorization_response_iss_parameter_supported: true");
+    });
+
     it("returns the same in-flight initPromise when called concurrently", async () => {
       const svc = new OAuthProviderService(
         makeConfigService({
@@ -248,6 +368,7 @@ describe("OAuthProviderService", () => {
           isActive: true,
           mustChangePassword: false,
         }),
+        makeSigningKeys(),
       );
 
       const [a, b] = await Promise.all([
@@ -271,6 +392,7 @@ describe("OAuthProviderService", () => {
           isActive: true,
           mustChangePassword: false,
         }),
+        makeSigningKeys(),
       );
       await svc.onModuleInit();
       expect(providerConstructorCalls).toHaveLength(1);
@@ -293,6 +415,7 @@ describe("OAuthProviderService", () => {
         }),
         makeDataSource().dataSource,
         auth,
+        makeSigningKeys(),
       );
       await svc.ensureInitialized();
       return {
@@ -301,6 +424,80 @@ describe("OAuthProviderService", () => {
         config: providerConstructorCalls[0].config as Record<string, any>,
       };
     }
+
+    describe("dynamic client registration metadata (#2177)", () => {
+      // The provider passes its request context only while registering; a
+      // stored client rebuilt on lookup gets none.
+      const REGISTRATION_CTX = { method: "POST" };
+
+      it("never refuses a stored client after the fact", async () => {
+        const { config } = await init({
+          id: ACCOUNT_ID,
+          isActive: true,
+          mustChangePassword: false,
+        });
+        const many = Array.from(
+          { length: MAX_DCR_REDIRECT_URIS + 5 },
+          (_, i) => `https://client.test/cb${i}`,
+        );
+
+        expect(() =>
+          config.extraClientMetadata.validator(
+            undefined,
+            "redirect_uris",
+            many,
+          ),
+        ).not.toThrow();
+      });
+
+      it("refuses more redirect URIs than the cap", async () => {
+        const { config } = await init({
+          id: ACCOUNT_ID,
+          isActive: true,
+          mustChangePassword: false,
+        });
+        const { properties, validator } = config.extraClientMetadata;
+        const uris = (n: number) =>
+          Array.from({ length: n }, (_, i) => `https://client.test/cb${i}`);
+
+        expect(properties).toEqual(["redirect_uris"]);
+        expect(() =>
+          validator(
+            REGISTRATION_CTX,
+            "redirect_uris",
+            uris(MAX_DCR_REDIRECT_URIS),
+          ),
+        ).not.toThrow();
+        expect(() =>
+          validator(
+            REGISTRATION_CTX,
+            "redirect_uris",
+            uris(MAX_DCR_REDIRECT_URIS + 1),
+          ),
+        ).toThrow(/redirect_uris/);
+        expect(MAX_DCR_REDIRECT_URIS).toBeLessThan(50);
+      });
+
+      it("leaves a malformed value to the provider's own checks", async () => {
+        const { config } = await init({
+          id: ACCOUNT_ID,
+          isActive: true,
+          mustChangePassword: false,
+        });
+        const { validator } = config.extraClientMetadata;
+
+        expect(() =>
+          validator(
+            REGISTRATION_CTX,
+            "redirect_uris",
+            "https://client.test/cb",
+          ),
+        ).not.toThrow();
+        expect(() =>
+          validator(REGISTRATION_CTX, "redirect_uris", undefined),
+        ).not.toThrow();
+      });
+    });
 
     it("pkce.required always returns true", async () => {
       const { config } = await init({
@@ -441,6 +638,7 @@ describe("OAuthProviderService", () => {
           isActive: true,
           mustChangePassword: false,
         }),
+        makeSigningKeys(),
       );
       await svc.ensureInitialized();
 
@@ -476,6 +674,7 @@ describe("OAuthProviderService", () => {
           isActive: true,
           mustChangePassword: false,
         }),
+        makeSigningKeys(),
       );
       await svc.ensureInitialized();
 
@@ -561,6 +760,7 @@ describe("OAuthProviderService", () => {
         }),
         makeDataSource().dataSource,
         makeAuthService(authUser),
+        makeSigningKeys(),
       );
       await svc.ensureInitialized();
       return { svc, find: lastMockProvider.AccessToken.find };
@@ -758,6 +958,7 @@ describe("OAuthProviderService", () => {
           isActive: true,
           mustChangePassword: false,
         }),
+        makeSigningKeys(),
       );
       await expect(svc.revokeAllForUser(ACCOUNT_ID)).resolves.toBe(3);
       expect(ds.where).toHaveBeenCalledWith(
@@ -780,6 +981,7 @@ describe("OAuthProviderService", () => {
           isActive: true,
           mustChangePassword: false,
         }),
+        makeSigningKeys(),
       );
       await expect(svc.revokeAllForUser(ACCOUNT_ID)).resolves.toBe(0);
     });
@@ -804,6 +1006,7 @@ describe("OAuthProviderService", () => {
           isActive: true,
           mustChangePassword: false,
         }),
+        makeSigningKeys(),
       );
 
       await svc.revokeAllForUser(hostile);
@@ -828,8 +1031,67 @@ describe("OAuthProviderService", () => {
           isActive: true,
           mustChangePassword: false,
         }),
+        makeSigningKeys(),
       );
       await expect(svc.revokeAllForUser(ACCOUNT_ID)).resolves.toBe(0);
+    });
+  });
+
+  describe("sweepExpiredPayloads (#2177)", () => {
+    function makeService(dataSource: import("typeorm").DataSource) {
+      return new OAuthProviderService(
+        makeConfigService({
+          PUBLIC_APP_URL: "https://app.test",
+          JWT_SECRET: VALID_JWT,
+        }),
+        dataSource,
+        makeAuthService({
+          id: "u",
+          isActive: true,
+          mustChangePassword: false,
+        }),
+        makeSigningKeys(),
+      );
+    }
+
+    function makeSweepSource(execute: jest.Mock) {
+      const where = jest.fn().mockReturnValue({
+        execute,
+        returning: () => ({ execute }),
+      });
+      const builder = {
+        update: () => ({ set: () => ({ where }) }),
+        delete: () => ({ where }),
+      };
+      return {
+        dataSource: {
+          getRepository: () => ({ createQueryBuilder: () => builder }),
+        } as unknown as import("typeorm").DataSource,
+        where,
+      };
+    }
+
+    it("adopts clients without an expiry, deletes expired rows, and reports both", async () => {
+      const execute = jest
+        .fn()
+        .mockResolvedValueOnce({ raw: [{ id: "c1" }, { id: "c2" }] })
+        .mockResolvedValueOnce({ affected: 42 });
+      const { dataSource, where } = makeSweepSource(execute);
+
+      await expect(
+        makeService(dataSource).sweepExpiredPayloads(),
+      ).resolves.toEqual({ adopted: 2, deleted: 42 });
+      expect(where).toHaveBeenCalledTimes(2);
+    });
+
+    it("swallows a failed run: the next one takes what this one left", async () => {
+      const { dataSource } = makeSweepSource(
+        jest.fn().mockRejectedValue(new Error("connection lost")),
+      );
+
+      await expect(
+        makeService(dataSource).sweepExpiredPayloads(),
+      ).resolves.toEqual({ adopted: 0, deleted: 0 });
     });
   });
 });

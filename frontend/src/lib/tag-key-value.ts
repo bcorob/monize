@@ -47,3 +47,20 @@ export function collectTagKeys(names: Iterable<string>): string[] {
   }
   return [...keys].sort();
 }
+
+/**
+ * Distinct values the user has under one tag key, original case, sorted. The
+ * key matches case-insensitively, like the server's tag-key predicates; a tag
+ * whose value is empty (`key:`) carries no value and is skipped.
+ */
+export function collectTagValues(names: Iterable<string>, key: string): string[] {
+  const wanted = key.trim().toLowerCase();
+  const values = new Set<string>();
+  for (const name of names) {
+    const parsed = parseTag(name);
+    if (parsed.key !== null && parsed.value !== null && parsed.key.toLowerCase() === wanted) {
+      values.add(parsed.value);
+    }
+  }
+  return [...values].sort((a, b) => a.localeCompare(b));
+}

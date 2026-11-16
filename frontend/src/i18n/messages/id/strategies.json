@@ -330,14 +330,13 @@
       "fillMissingDone": "{count, plural, other {# instrumen ditambahkan}}. Simpan konfigurasi untuk memuat harganya dan menghitung sinyal pertama.",
       "fillMissingError": "Instrumen yang disarankan tidak dapat ditambahkan.",
       "lookbackMonths": "Jendela momentum (bulan)",
-      "taxRatePercent": "Tarif pajak (%)",
-      "commissionAmount": "Komisi per transaksi",
+      "taxRatePercent": "Tarif Pajak (Opsional)",
+      "commissionAmount": "Komisi per Transaksi (Opsional)",
       "rulesSourceUrl": "Tautan ke aturan yang Anda ikuti",
       "rulesSourceUrlPlaceholder": "https://example.com/dual-momentum",
       "rulesSourceLabel": "Teks yang ditampilkan untuk tautan itu",
       "rulesSourceLabelPlaceholder": "example.com",
       "rulesSourceHint": "Keduanya opsional dan tidak memengaruhi perhitungan apa pun. Keduanya menaruh tautan di footer laporan ke tempat aturan strategi ini ditulis — sebuah artikel, halaman buku, catatan Anda sendiri — agar nanti Anda bisa memeriksa versi mana yang Anda pakai saat menyiapkannya.",
-      "optional": "Opsional",
       "save": "Simpan konfigurasi",
       "saved": "Konfigurasi strategi disimpan.",
       "saveError": "Konfigurasi strategi tidak dapat disimpan.",
@@ -358,7 +357,9 @@
       "NO_POSITION": "Rekening strategi tidak memiliki instrumen apa pun.",
       "FIRST_RUN": "Strategi ini belum dievaluasi – sinyal pertama muncul setelah evaluasi terjadwal berikutnya.",
       "STALE_PRICES": "Sebagian harga di balik laporan ini tidak terkini, jadi sinyalnya bisa berubah setelah diperbarui. Yang paling lama, atau sama sekali tidak ada, adalah untuk:",
-      "CALCULATION_FAILED": "Sinyal tidak dapat dihitung dari data yang tersedia."
+      "CALCULATION_FAILED": "Sinyal tidak dapat dihitung dari data yang tersedia.",
+      "SHORT_HISTORY": "Riwayat harga tidak cukup untuk mengevaluasi periode saat ini. Peran ini memerlukan harga hingga {from}:",
+      "shortHistoryFix": "Buka setiap instrumen ini dan gunakan “Tambah satu tahun riwayat harga lagi”, lalu buka kembali laporan ini."
     },
     "footer": {
       "pastResults": "Hasil masa lalu tidak menjamin imbal hasil di masa depan.",

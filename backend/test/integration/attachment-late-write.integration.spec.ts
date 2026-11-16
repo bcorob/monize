@@ -1,11 +1,12 @@
 import { DataSource } from "typeorm";
 
+import { AttachmentsService } from "@/attachments/attachments.service";
 import {
   AttachmentObjectSweptError,
-  AttachmentsService,
   UPLOAD_INTENT_LEASE_MS,
-} from "@/attachments/attachments.service";
+} from "@/attachments/storage/object-intent";
 import { AttachmentOrphanSweeper } from "@/attachments/attachment-orphan-sweeper.service";
+import { AttachmentStorageRegistry } from "@/attachments/storage/attachment-storage.registry";
 import type { AttachmentStorageProvider } from "@/attachments/storage/attachment-storage.interface";
 import { withSystemContext, withUserContext } from "@/common/db/with-context";
 import { withScopedDb } from "@/common/db/scoped-db";
@@ -152,6 +153,7 @@ describe("attachment bytes written after their intent was swept", () => {
       // Named as an external provider, because the whole difference is that its
       // writes cannot join a PostgreSQL transaction.
       name: "s3",
+      addressable: true,
       save: async (key: string, data: Buffer) => {
         objects.set(key, data);
       },
@@ -165,8 +167,9 @@ describe("attachment bytes written after their intent was swept", () => {
         objects.delete(key);
       },
     };
-    sweeper = new AttachmentOrphanSweeper(dataSource, storage);
-    service = new AttachmentsService(dataSource, storage, sweeper);
+    const registry = new AttachmentStorageRegistry(storage, [storage]);
+    sweeper = new AttachmentOrphanSweeper(dataSource, registry);
+    service = new AttachmentsService(dataSource, registry, sweeper);
     userId = (
       await createTestUserDirect(dataSource, { email: "uploader@example.com" })
     ).id;

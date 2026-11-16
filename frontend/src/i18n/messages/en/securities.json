@@ -3,6 +3,7 @@
     "noneToUpdate": "No securities to update",
     "updated": "{count, plural, one {# security price updated} other {# security prices updated}}",
     "partialFailure": "Prices updated: {updated} succeeded, {failed} failed{symbols}",
+    "partialFailureWithReasons": "Prices updated: {updated} succeeded, {failed} failed{symbols}\n{reasons}",
     "failed": "Failed to refresh prices"
   },
   "page": {
@@ -10,6 +11,7 @@
     "subtitle": "Manage your stocks, ETFs, mutual funds, and other securities",
     "newSecurity": "+ New Security",
     "searchPlaceholder": "Search by symbol or name...",
+    "statusFilterLabel": "Status",
     "statusAll": "All ({count})",
     "statusActive": "Active ({count})",
     "statusInactive": "Inactive ({count})",
@@ -49,6 +51,7 @@
       "name": "Name",
       "type": "Type",
       "shares": "Shares",
+      "value": "Value",
       "exchange": "Exchange",
       "currency": "Currency",
       "provider": "Provider",
@@ -63,12 +66,10 @@
       "inactive": "Inactive",
       "inactiveShort": "Ina"
     },
-    "providerTitle": {
-      "override": "Per-security provider override",
-      "inherited": "Inherited from your default Quote Provider preference"
-    },
+    "providerInherited": "{provider} (default)",
     "columnTitles": {
       "shares": "Current shares held across all accounts",
+      "value": "Shares held across all accounts at the most recent price, in the security's own currency",
       "source": "Source of the most recent price"
     },
     "actions": {
@@ -115,7 +116,11 @@
     "exchangeLabel": "Exchange",
     "currencyLabel": "Currency",
     "currencyNotConfigured": "{code} — not in your currencies",
+    "currencyPlaceholder": "Select currency...",
+    "currencyNotReported": "The provider did not report this coin's currency. Choose the fiat currency it is quoted in.",
     "quoteProviderLabel": "Quote Provider",
+    "skipPriceUpdatesLabel": "Disable automatic price updates",
+    "skipPriceUpdatesHelp": "Monize will not fetch prices for this security. Use this for a security no provider can price; prices you enter yourself still count. Choosing a different quote provider or MSN Instrument ID turns updates back on.",
     "msnIdLabel": "MSN Instrument ID (advanced)",
     "lookupProviderAriaLabel": "Lookup provider",
     "lookupButton": "Lookup",
@@ -139,7 +144,11 @@
     "providers": {
       "auto": "Auto",
       "yahoo": "Yahoo",
-      "msn": "MSN"
+      "msn": "MSN",
+      "lse": "LSE",
+      "deutsche_boerse": "Deutsche Börse",
+      "bond_engine": "Bond engine",
+      "html_table": "Web page table"
     },
     "types": {
       "select": "Select type...",
@@ -189,16 +198,50 @@
       "deleteConfirm": "Delete",
       "deleteSuccess": "Deleted asset class \"{name}\"",
       "deleteFailed": "Could not delete asset class \"{name}\""
+    },
+    "bondFetchAction": "Fetch {code} from the official source",
+    "bondFetching": "Fetching {code} from the issuer and its reference rates. This can take up to a minute.",
+    "bondFetchFailed": "The series could not be fetched.",
+    "bondCurrencyLocked": "This security is linked to a bond kind in {linkedCurrency}. Set the currency back to {linkedCurrency}, or unlink the bond kind first (unlinking removes its calculated prices).",
+    "bondProgramLabel": "Bond kind",
+    "bondProgramNone": "Not linked",
+    "bondProgramCurrent": "Linked bond kind",
+    "bondProgramLoading": "Loading the bond kinds...",
+    "bondProgramLoadFailed": "The bond kinds could not be loaded, so a bond kind cannot be linked yet.",
+    "bondProgramRetry": "Retry",
+    "bondNoPrograms": "The bond catalog holds no bond kind yet.",
+    "bondAutoFetchLabel": "Fetch new series of this bond kind automatically",
+    "bondAutoFetchHelp": "When on, Monize reads each new series of this bond kind from the official source every day, so you can record a purchase without fetching the series first.",
+    "bondCountryLabel": "Country",
+    "bondCountryOther": "Other",
+    "bondCountryOtherInfo": "Support for bonds of other countries can be requested on the project's <link>GitHub</link>.",
+    "quoteTable": {
+      "urlLabel": "Price table webpage",
+      "urlHelp": "The page needs a table whose header has a date column and a closing price column.",
+      "test": "Test",
+      "previewFailed": "The page could not be read.",
+      "summary": "{count, plural, one {# day} other {# days}} from {first} to {last}",
+      "columns": "Columns used: {columns}",
+      "currency": "Currency shown on the page: {currency}",
+      "noCurrency": "The page shows no currency; prices are stored in the security's currency.",
+      "skipped": "{count, plural, one {# row could not be read and was skipped} other {# rows could not be read and were skipped}}",
+      "headers": {
+        "date": "Date",
+        "open": "Open",
+        "high": "High",
+        "low": "Low",
+        "close": "Close",
+        "volume": "Volume"
+      }
     }
   },
   "priceForm": {
     "dateLabel": "Date",
     "closePriceLabel": "Close Price",
-    "openPriceLabel": "Open Price",
-    "highPriceLabel": "High Price",
-    "lowPriceLabel": "Low Price",
-    "volumeLabel": "Volume",
-    "optionalPlaceholder": "Optional",
+    "openPriceLabel": "Open Price (optional)",
+    "highPriceLabel": "High Price (optional)",
+    "lowPriceLabel": "Low Price (optional)",
+    "volumeLabel": "Volume (optional)",
     "submitCreate": "Add Price",
     "submitUpdate": "Update Price"
   },
@@ -246,7 +289,9 @@
     },
     "groupCount": "{count} price(s)",
     "expandAll": "Expand all",
-    "collapseAll": "Collapse all"
+    "collapseAll": "Collapse all",
+    "addYearButton": "Add Another Year of History",
+    "addYearTitle": "Fetch one more year of historical prices from the provider"
   },
   "transactionHistory": {
     "accountLabel": "Account",
@@ -284,7 +329,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "Reinvest Long-Term Cap Gain",
       "CAPITAL_GAIN_SHORT": "Short-Term Capital Gain",
       "CAPITAL_GAIN_LONG": "Long-Term Capital Gain",
-      "REDEEM": "Redeem CD/Bond"
+      "REDEEM": "Redeem CD/Bond",
+      "RETURN_OF_CAPITAL": "Return of Capital"
     },
     "toasts": {
       "loadHistoryFailed": "Failed to load history",
@@ -333,11 +379,20 @@
     "nameRequired": "Name is required",
     "nameMax": "Name must be 255 characters or less",
     "currencyRequired": "Currency is required",
-    "descriptionMax": "Description must be 5000 characters or fewer"
+    "bondProgramRequired": "Bond kind is required",
+    "descriptionMax": "Description must be 5000 characters or fewer",
+    "quoteUrlRequired": "Enter the page that has the price table.",
+    "quoteUrlInvalid": "Enter a full address starting with http:// or https://."
   },
   "priceValidation": {
     "dateRequired": "Date is required",
     "priceRequired": "Price is required",
     "priceNonNegative": "Price must be a non-negative number"
+  },
+  "priceAlert": {
+    "label": "Price change alert (%)",
+    "help": "Leave blank to disable. Alerts on a rise or fall since the previous available session, at most once per instrument per UTC day.",
+    "range": "Enter a percentage from 0.1 to 1000.",
+    "chartLabel": "Include a chart in price alerts"
   }
 }

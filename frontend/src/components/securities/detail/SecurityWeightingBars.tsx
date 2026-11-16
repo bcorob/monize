@@ -87,12 +87,21 @@ export function SecurityWeightingBars({
           to be definite somewhere, and `max-h` is where. `flex-1` still lets the
           list take the slack when the chart beside it is taller. `pr-1` keeps the
           percentages off the scrollbar thumb. */}
-      <ul className="scrollbar-slim max-h-56 min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
+      {/* On a phone the rows are compact bordered TILES in a two-column grid --
+          a full-width horizontal bar per share eats the vertical space this
+          capped card is trying to save, and the number is the reading anyway.
+          From `sm` up it is the single-column bar list it has always been
+          (`sm:block sm:space-y-2`), the grid inert. One `<li>` per share at
+          every width, so the name and its percentage each appear exactly once. */}
+      <ul className="scrollbar-slim grid max-h-56 min-h-0 flex-1 grid-cols-2 gap-2 overflow-y-auto pr-1 sm:block sm:gap-0 sm:space-y-2">
         {rows.map((row) => {
           const percent = formatPercent(row.weight * 100);
           return (
-            <li key={row.name}>
-              <div className="flex items-baseline justify-between gap-3">
+            <li
+              key={row.name}
+              className="rounded-lg border border-gray-200 p-2 dark:border-gray-700 sm:rounded-none sm:border-0 sm:p-0"
+            >
+              <div className="flex items-baseline justify-between gap-2 sm:gap-3">
                 <span className="truncate text-sm text-gray-700 dark:text-gray-300">
                   {row.name}
                 </span>
@@ -101,9 +110,10 @@ export function SecurityWeightingBars({
                 </span>
               </div>
               {/* The track is recessive; the fill carries the one hue. Rounded
-                  ends, thin mark, anchored to the left baseline. */}
+                  ends, thin mark, anchored to the left baseline. Hidden on the
+                  phone tile, where the percentage stands on its own. */}
               <div
-                className="mt-1 h-1.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-700"
+                className="mt-1 hidden h-1.5 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-gray-700 sm:block"
                 role="img"
                 aria-label={`${row.name}: ${percent}`}
               >

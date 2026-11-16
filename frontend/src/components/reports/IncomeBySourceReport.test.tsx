@@ -7,18 +7,26 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
-vi.mock("@/hooks/useNumberFormat", () => ({
-  useNumberFormat: () => ({
-    formatCurrencyCompact: (n: number) => `$${n.toFixed(2)}`,
-    formatCurrency: (n: number) => `$${n.toFixed(2)}`,
-    formatCurrencyAxis: (n: number) => `$${n}`,
-    defaultCurrency: "CAD",
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrencyCompact: (n: number) => `$${n.toFixed(2)}`,
+      formatCurrency: (n: number) => `$${n.toFixed(2)}`,
+      formatCurrencyAxis: (n: number) => `$${n}`,
+      defaultCurrency: "CAD",
+    }),
+};
+});
 let mockIsValid = true;
+// The selection the mocked range hook reports; a test moves it and re-renders.
+const mockRange = { end: "2025-01-01" };
 vi.mock("@/hooks/useDateRange", () => {
-  const resolvedRange = { start: "2024-01-01", end: "2025-01-01" };
+  const resolvedRange = {
+    start: "2024-01-01",
+    get end() { return mockRange.end; },
+  };
   return {
     useDateRange: () => ({
       dateRange: "1y",
@@ -52,11 +60,11 @@ vi.mock("@/components/ui/ChartViewToggle", () => ({
 }));
 
 vi.mock("@/components/ui/ExportDropdown", () => ({
-  ExportDropdown: ({ onExportPdf, onExportCsv }: any) => (
+  ExportDropdown: ({ onExportPdf, onExportCsv, disabled }: any) => (
     <div data-testid="export-dropdown">
-      <button data-testid="export-pdf" onClick={onExportPdf}>PDF</button>
+      <button data-testid="export-pdf" onClick={onExportPdf} data-disabled={String(disabled === true)}>PDF</button>
       {onExportCsv && (
-        <button data-testid="export-csv" onClick={onExportCsv}>CSV</button>
+        <button data-testid="export-csv" onClick={onExportCsv} data-disabled={String(disabled === true)}>CSV</button>
       )}
     </div>
   ),
@@ -103,11 +111,21 @@ vi.mock("@/lib/logger", () => ({
   }),
 }));
 
+// The account filter and the tag controls read these on mount; the report is
+// the unchanged one while no key is chosen.
+vi.mock("@/lib/accounts", () => ({
+  accountsApi: { getAll: () => Promise.resolve([]) },
+}));
+vi.mock("@/lib/tags", () => ({
+  tagsApi: { getAll: () => Promise.resolve([]) },
+}));
+
 describe("IncomeBySourceReport", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPush.mockClear();
     mockIsValid = true;
+    mockRange.end = "2025-01-01";
   });
 
   it("shows loading state initially", async () => {
@@ -340,7 +358,11 @@ describe("IncomeBySourceReport", () => {
     });
   });
 
-  it("shows 0% percentage in legend when totalIncome is zero", async () => {
+  it("shows a zero percentage in the legend when totalIncome is zero", async () => {
+    // "0.0%", not "0%": the share is rendered at one decimal like every
+    // other row in this legend. The old code took a shortcut in this branch
+    // -- a literal `'0'` beside `.toFixed(1)` for the computed one -- so the
+    // no-data case was the only row that disagreed with its neighbours.
     // Simulate items but totalIncome = 0 (edge case data mismatch)
     mockGetIncomeBySource.mockResolvedValue({
       data: [
@@ -353,7 +375,7 @@ describe("IncomeBySourceReport", () => {
       expect(screen.getByText("Salary")).toBeInTheDocument();
     });
     // When totalIncome is 0, percentage should display as '0'
-    expect(screen.getByText("$0.00 (0%)")).toBeInTheDocument();
+    expect(screen.getByText("$0.00 (0.0%)")).toBeInTheDocument();
   });
 
   it("does not load data when isValid is false", async () => {
@@ -414,5 +436,107 @@ describe("IncomeBySourceReport", () => {
     const rows = container.querySelectorAll('tbody tr');
     rows.forEach((tr) => fireEvent.click(tr));
     fireEvent.click(screen.getByTestId("export-csv"));
+  });
+
+  // A source row is the click target where it names a category, so it has to be
+  // reachable and operable from the keyboard there as well (WCAG 2.1.1).
+  // Before the fix this row was a `cursor-pointer` `<tr>` with an `onClick` and
+  // no `tabIndex` and no `onKeyDown` -- the whole suite was green over a row no
+  // keyboard user could use, so this case is what fails on that shape.
+  it("activates a source row from the keyboard, and only where it is clickable", async () => {
+    mockGetIncomeBySource.mockResolvedValue({
+      data: [
+        { categoryId: "cat-1", categoryName: "Salary", total: 5000, color: "" },
+        { categoryId: "", categoryName: "Other", total: 50, color: "" },
+      ],
+      totalIncome: 5050,
+    });
+    const { container } = render(<IncomeBySourceReport />);
+    await waitFor(() => expect(screen.getByTestId("toggle-table")).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId("toggle-table"));
+    await waitFor(() => expect(container.querySelector('table')).toBeInTheDocument());
+
+    const rows = Array.from(container.querySelectorAll('tbody tr'));
+    const clickable = rows.find((r) => r.textContent?.includes("Salary")) as HTMLElement;
+    const inert = rows.find((r) => r.textContent?.includes("Other")) as HTMLElement;
+    expect(clickable).toHaveAttribute('tabindex', '0');
+    // A row whose click does nothing is not a tab stop either: a focus stop
+    // that does nothing on Enter is one the reader has to escape.
+    expect(inert).not.toHaveAttribute('tabindex');
+
+    const expected =
+      "/transactions?categoryId=cat-1&startDate=2024-01-01&endDate=2025-01-01";
+    fireEvent.keyDown(clickable, { key: 'Enter' });
+    expect(mockPush).toHaveBeenCalledWith(expected);
+
+    mockPush.mockClear();
+    fireEvent.keyDown(clickable, { key: ' ' });
+    expect(mockPush).toHaveBeenCalledWith(expected);
+
+    // A key the row does not claim stays the browser's, and the inert row
+    // answers no key at all.
+    mockPush.mockClear();
+    fireEvent.keyDown(clickable, { key: 'a' });
+    fireEvent.keyDown(inert, { key: 'Enter' });
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it("marks the total a subtotal and shows no 0.00 when an income row was left out", async () => {
+    mockGetIncomeBySource.mockResolvedValue({
+      data: [{ categoryId: "cat-1", categoryName: "Salary", total: 50, color: "" }],
+      totalIncome: null,
+      knownIncome: 50,
+      currency: "CAD",
+      missingCurrencies: ["JPY"],
+      excludedCount: 1,
+    });
+    render(<IncomeBySourceReport />);
+    expect(await screen.findByTestId("partial-total")).toBeInTheDocument();
+    expect(screen.getByTestId("partial-total")).toHaveTextContent("$50.00");
+    expect(screen.queryByText("$0.00")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("toggle-table"));
+    expect(await screen.findByTestId("partial-total")).toHaveTextContent("$50.00");
+    expect(screen.queryByText("$0.00")).not.toBeInTheDocument();
+  });
+});
+
+describe("IncomeBySourceReport: a reload is not the previous answer", () => {
+  const answer = { data: [{ categoryId: "cat-1", categoryName: "Salary", total: 5000, color: "#00ff00" }], totalIncome: 5000 };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRange.end = "2025-01-01";
+  });
+
+  async function loadThenChangeRange(next: () => unknown) {
+    mockGetIncomeBySource.mockResolvedValue(answer);
+    let view!: ReturnType<typeof render>;
+    await act(async () => {
+      view = render(<IncomeBySourceReport />);
+    });
+    expect(screen.getByTestId("export-pdf")).toHaveAttribute("data-disabled", "false");
+
+    mockGetIncomeBySource.mockImplementation(next);
+    mockRange.end = "2025-02-28";
+    await act(async () => {
+      view.rerender(<IncomeBySourceReport />);
+    });
+    await waitFor(() =>
+      expect(mockGetIncomeBySource).toHaveBeenLastCalledWith(
+        expect.objectContaining({ endDate: "2025-02-28" }),
+      ),
+    );
+  }
+
+  it("disables the export while the next request has failed", async () => {
+    await loadThenChangeRange(() => Promise.reject(new Error("500")));
+    expect(screen.getByTestId("export-pdf")).toHaveAttribute("data-disabled", "true");
+    expect(screen.getByTestId("export-csv")).toHaveAttribute("data-disabled", "true");
+  });
+
+  it("disables the export while the next request is pending", async () => {
+    await loadThenChangeRange(() => new Promise(() => {}));
+    expect(screen.getByTestId("export-pdf")).toHaveAttribute("data-disabled", "true");
+    expect(screen.getByTestId("export-csv")).toHaveAttribute("data-disabled", "true");
   });
 });

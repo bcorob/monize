@@ -4,13 +4,19 @@ import {
   ConflictException,
   NotFoundException,
   ForbiddenException,
+  BadRequestException,
   OnApplicationBootstrap,
+  Optional,
 } from "@nestjs/common";
 import { tr } from "../i18n/translate";
 import { DataSource, EntityManager } from "typeorm";
 import { withScopedDb } from "../common/db/scoped-db";
 import { withSystemContext } from "../common/db/with-context";
-import { Currency } from "./entities/currency.entity";
+import {
+  Currency,
+  CurrencyKind,
+  DEFAULT_CURRENCY_KIND,
+} from "./entities/currency.entity";
 import { UserCurrencyPreference } from "./entities/user-currency-preference.entity";
 import { CreateCurrencyDto } from "./dto/create-currency.dto";
 import { UpdateCurrencyDto } from "./dto/update-currency.dto";
@@ -18,15 +24,33 @@ import {
   CURRENCY_METADATA,
   resolveCurrencyMetadata,
   getCurrencyCatalog,
+  isKnownIsoCurrency,
   type CurrencyMetadata,
 } from "./currency-metadata";
 import { FALLBACK_DEFAULT_CURRENCY } from "../common/default-currency.util";
+import { MONEY_SCALE, moneyDecimalsFor } from "../common/round.util";
+import { FxProviderChain } from "./providers/fx-provider-chain";
+import { CryptoFxProvider } from "./providers/crypto-fx.provider";
+import { ExchangeRateHistoryService } from "./exchange-rate-history.service";
+import {
+  QuoteSymbolRefusal,
+  quoteSymbolCoinTicker,
+  quoteSymbolRefusal,
+} from "./currency-kind.util";
 
 export interface CurrencyLookupResult {
   code: string;
   name: string;
   symbol: string;
   decimalPlaces: number;
+}
+
+/**
+ * One entry of the onboarding catalog. Always FIAT: the catalog is ISO 4217
+ * metadata, and nothing infers a coin from a code (decision 1).
+ */
+export interface CurrencyCatalogEntry extends CurrencyLookupResult {
+  kind: CurrencyKind;
 }
 
 export interface CurrencyUsageMap {
@@ -41,7 +65,16 @@ export interface UserCurrencyView {
   isActive: boolean;
   isSystem: boolean;
   createdAt: Date;
+  kind: CurrencyKind;
+  quoteSymbol: string | null;
 }
+
+/**
+ * The places a coin defaults to: the most money holds, eight
+ * (`docs/specs/money-precision.md` decision 2, superseding decision 4 of
+ * `docs/specs/crypto-accounts.md`).
+ */
+const CRYPTO_DEFAULT_DECIMAL_PLACES = 8;
 
 // The currency every new user's preferences default to (see
 // buildDefaultPreferences), and the one every reporting surface falls back to
@@ -51,11 +84,46 @@ export interface UserCurrencyView {
 // row resolves no rate at all: every converted total would be withheld.
 const DEFAULT_CURRENCY_CODE = FALLBACK_DEFAULT_CURRENCY;
 
+/** The translated message for each price-symbol refusal. */
+const QUOTE_SYMBOL_REFUSAL_MESSAGES: Record<
+  QuoteSymbolRefusal,
+  (code: string, quoteSymbol: string) => string
+> = {
+  quoteSymbolRequiresCrypto: (code, quoteSymbol) =>
+    tr(
+      "errors.currencies.quoteSymbolRequiresCrypto",
+      `A price symbol (${quoteSymbol}) can only be set on a cryptocurrency; "${code}" is a fiat currency`,
+      { code, quoteSymbol },
+    ),
+  quoteSymbolNotAPair: (code, quoteSymbol) =>
+    tr(
+      "errors.currencies.quoteSymbolNotAPair",
+      `The price symbol "${quoteSymbol}" for "${code}" is not a coin and fiat pair such as BTC-EUR`,
+      { code, quoteSymbol },
+    ),
+};
+
 @Injectable()
 export class CurrenciesService implements OnApplicationBootstrap {
   private readonly logger = new Logger(CurrenciesService.name);
 
-  constructor(private dataSource: DataSource) {}
+  constructor(
+    private dataSource: DataSource,
+    private readonly fxProviders: FxProviderChain,
+    /**
+     * Told when a currency row changes, so the codes it prices are re-read
+     * on its next question instead of after its cache expires. Optional: a
+     * caller that builds this service without the chain's crypto adapter
+     * loses nothing but the early refresh.
+     */
+    @Optional() private readonly cryptoFx?: CryptoFxProvider,
+    /**
+     * Told when a coin's price symbol is first set or re-pointed, so the
+     * windows this process remembers as empty for the code are asked again.
+     * Optional for the same reason as `cryptoFx`.
+     */
+    @Optional() private readonly rateHistory?: ExchangeRateHistoryService,
+  ) {}
 
   /**
    * Currencies are created on demand rather than pre-seeded, but a brand-new
@@ -64,6 +132,11 @@ export class CurrenciesService implements OnApplicationBootstrap {
    * currencies(code). Guarantee that single currency on startup so the first
    * user can register before anyone picks a currency at onboarding. Idempotent.
    *
+   * The row is inactive reference data, like the bond catalog's: a user who
+   * picks CAD at onboarding is offered CAD and nothing else (issue #2186). A
+   * user who keeps USD is given it by `ensureCurrencyForUser`, from the
+   * preference write or from `findAll`'s default-currency fallback.
+   *
    * RLS: this is a bootstrap hook, so there is no request/user context for
    * `withScopedDb` to spend -- and the row it writes is a system currency owned
    * by nobody. It runs under `withSystemContext`, like the seeders (C3).
@@ -71,7 +144,7 @@ export class CurrenciesService implements OnApplicationBootstrap {
   async onApplicationBootstrap(): Promise<void> {
     try {
       await withSystemContext(() =>
-        this.ensureSystemCurrency(DEFAULT_CURRENCY_CODE),
+        this.insertSystemCurrencyIfMissing(DEFAULT_CURRENCY_CODE),
       );
     } catch (err) {
       this.logger.warn(
@@ -88,9 +161,11 @@ export class CurrenciesService implements OnApplicationBootstrap {
 
     // One transaction: every branch below is "look, then insert", so splitting
     // the read from the write would let a concurrent request slip between them.
-    return withScopedDb(this.dataSource, async (manager) =>
+    const view = await withScopedDb(this.dataSource, async (manager) =>
       this.createWithin(manager, userId, dto, code),
     );
+    this.cryptoFx?.forgetCurrencies();
+    return view;
   }
 
   private async createWithin(
@@ -106,6 +181,21 @@ export class CurrenciesService implements OnApplicationBootstrap {
     });
 
     if (existing) {
+      // A request that states a kind is a statement about the currency, not a
+      // preference: a code that already exists in the other kind is refused
+      // rather than handed back silently (a CRYPTO request answered with a
+      // FIAT row, INV-CRYPTO-001). A request without a kind adopts the row.
+      const existingKind = existing.kind ?? DEFAULT_CURRENCY_KIND;
+      if (dto.kind !== undefined && dto.kind !== existingKind) {
+        throw new ConflictException(
+          tr(
+            "errors.currencies.kindConflict",
+            `Currency "${code}" already exists as a ${existingKind} currency and cannot be added as ${dto.kind}`,
+            { code, kind: existingKind, requestedKind: dto.kind },
+          ),
+        );
+      }
+
       // Check if this user already has this currency in their list
       const existingPref = await manager
         .getRepository(UserCurrencyPreference)
@@ -148,11 +238,20 @@ export class CurrenciesService implements OnApplicationBootstrap {
       return this.buildUserCurrencyView(existing, true);
     }
 
-    // Currency doesn't exist — create it as a user-created currency
+    // Currency doesn't exist — create it as a user-created currency. Its kind
+    // is the reader's statement, FIAT unless they said CRYPTO; a price symbol
+    // is held to the kind before anything is written.
+    const kind = dto.kind ?? DEFAULT_CURRENCY_KIND;
+    const quoteSymbol = dto.quoteSymbol ?? null;
+    this.assertQuoteSymbol(kind, quoteSymbol, code);
     const currency = currencyRepo.create({
       ...dto,
       code,
-      decimalPlaces: dto.decimalPlaces ?? 2,
+      kind,
+      quoteSymbol,
+      decimalPlaces:
+        dto.decimalPlaces ??
+        (kind === "CRYPTO" ? CRYPTO_DEFAULT_DECIMAL_PLACES : 2),
       isActive: true,
       createdByUserId: userId,
     });
@@ -169,6 +268,16 @@ export class CurrenciesService implements OnApplicationBootstrap {
     return this.buildUserCurrencyView(currency, true);
   }
 
+  /**
+   * The currencies `userId` has: the ones they added (a preference row, active
+   * or not), their own custom ones, and any system row active for everybody.
+   *
+   * `includeInactive` adds an inactive system row only when this user's own
+   * accounts or securities are denominated in it. Reference rows nobody chose
+   * -- the bootstrap USD, a bond program's PLN -- are not "optional currencies"
+   * of every user (issue #2186); a user adds one from the Currencies page,
+   * which adopts the existing row.
+   */
   async findAll(
     userId: string,
     includeInactive = false,
@@ -178,39 +287,58 @@ export class CurrenciesService implements OnApplicationBootstrap {
              c.decimal_places AS "decimalPlaces",
              COALESCE(ucp.is_active, c.is_active) AS "isActive",
              (c.created_by_user_id IS NULL) AS "isSystem",
-             c.created_at AS "createdAt"
+             c.created_at AS "createdAt",
+             c.kind,
+             c.quote_symbol AS "quoteSymbol"
       FROM currencies c
       LEFT JOIN user_currency_preferences ucp
-        ON ucp.currency_code = c.code AND ucp.user_id = $1
-      WHERE (c.created_by_user_id IS NULL OR ucp.user_id IS NOT NULL)`;
+        ON ucp.currency_code = c.code AND ucp.user_id = $1`;
 
-    if (!includeInactive) {
-      query += ` AND COALESCE(ucp.is_active, c.is_active) = true`;
+    if (includeInactive) {
+      query += `
+      WHERE (ucp.user_id IS NOT NULL
+             OR (c.created_by_user_id IS NULL
+                 AND (c.is_active
+                      OR EXISTS (SELECT 1 FROM accounts a
+                                  WHERE a.user_id = $1 AND a.currency_code = c.code)
+                      OR EXISTS (SELECT 1 FROM securities s
+                                  WHERE s.user_id = $1 AND s.currency_code = c.code))))`;
+    } else {
+      query += `
+      WHERE (c.created_by_user_id IS NULL OR ucp.user_id IS NOT NULL)
+        AND COALESCE(ucp.is_active, c.is_active) = true`;
     }
 
     query += ` ORDER BY c.code ASC`;
 
     // One transaction around the whole block: the lazy-create fallback re-runs
     // the same query and must see the row it just wrote. The nested
-    // `ensureSystemCurrency` joins this transaction (scoped-db re-entrancy).
+    // `ensureCurrencyForUser` joins this transaction (scoped-db re-entrancy).
     return withScopedDb(this.dataSource, async (manager) => {
       const rows: UserCurrencyView[] = await manager.query(query, [userId]);
 
-      // A fresh instance no longer pre-seeds a list of currencies; the user's
-      // chosen currency is created when they pick it at onboarding. If they
-      // skipped onboarding this list is empty on first use, so lazily create
-      // their default-preference currency (with a proper symbol) here.
-      if (rows.length === 0) {
-        const prefRows: Array<{ default_currency: string | null }> =
-          await manager.query(
-            `SELECT default_currency FROM user_preferences WHERE user_id = $1`,
-            [userId],
-          );
-        const defaultCurrency = prefRows[0]?.default_currency;
-        if (defaultCurrency) {
-          await this.ensureSystemCurrency(defaultCurrency);
-          return manager.query(query, [userId]);
-        }
+      // A fresh instance pre-seeds no list of currencies, and the bootstrap
+      // USD is offered to nobody. The user's chosen currency is ensured when
+      // they pick it at onboarding, but a user who kept the registration
+      // default (or skipped onboarding) never wrote a preference for it, so it
+      // is lazily ensured here, with a proper symbol. Only while no preference
+      // row exists: a default the user deactivated stays deactivated.
+      const prefRows: Array<{
+        default_currency: string | null;
+        hasPreference: boolean;
+      }> = await manager.query(
+        `SELECT up.default_currency,
+                EXISTS (SELECT 1 FROM user_currency_preferences ucp
+                         WHERE ucp.user_id = up.user_id
+                           AND ucp.currency_code = up.default_currency) AS "hasPreference"
+           FROM user_preferences up
+          WHERE up.user_id = $1`,
+        [userId],
+      );
+      const defaultCurrency = prefRows[0]?.default_currency;
+      if (defaultCurrency && prefRows[0]?.hasPreference !== true) {
+        await this.ensureCurrencyForUser(userId, defaultCurrency);
+        return manager.query(query, [userId]);
       }
 
       return rows;
@@ -221,18 +349,95 @@ export class CurrenciesService implements OnApplicationBootstrap {
    * The catalog of known currencies (curated metadata) used to populate the
    * onboarding picker without pre-seeding every currency into the database.
    */
-  getCatalog(): CurrencyLookupResult[] {
-    return getCurrencyCatalog();
+  getCatalog(): CurrencyCatalogEntry[] {
+    return getCurrencyCatalog().map((entry) => ({
+      ...entry,
+      kind: DEFAULT_CURRENCY_KIND,
+    }));
   }
 
   /**
-   * Ensure a system currency row exists for `code`, creating it from the
-   * curated/derived metadata (name, symbol, decimal places) when missing.
-   * Idempotent and safe to call on every default-currency change. Used so we
-   * create a currency on demand -- with a real symbol -- instead of seeding a
-   * whole list up front.
+   * Make `code` usable by `userId` -- as the default-currency preference, or as
+   * the currency an imported account, security or rate is priced in -- without
+   * offering it to anybody else. A user's action never creates a currency every
+   * other user is shown: a known ISO 4217 code becomes an inactive reference row
+   * (as the bond catalog's does, and owned by nobody), and anything else is the
+   * user's own custom currency. Either way only this user's preference row is
+   * activated.
+   *
+   * One `withScopedDb`: it joins the caller's transaction, so a preference
+   * written after this call in the same transaction finds its foreign key. The
+   * insert is `ON CONFLICT DO NOTHING`, so an existing row (active, inactive,
+   * system or somebody's own) is left as it is.
    */
-  async ensureSystemCurrency(code: string): Promise<void> {
+  async ensureCurrencyForUser(userId: string, code: string): Promise<void> {
+    const upper = code.toUpperCase();
+    if (!/^[A-Z]{3}$/.test(upper)) {
+      throw new BadRequestException(
+        tr(
+          "errors.common.currencyCodeInvalid",
+          "Currency code must be exactly 3 letters (e.g., USD, CAD)",
+        ),
+      );
+    }
+
+    await withScopedDb(this.dataSource, async (manager) => {
+      const existing = await manager.getRepository(Currency).findOne({
+        where: { code: upper },
+      });
+      if (!existing) {
+        const meta = resolveCurrencyMetadata(upper);
+        const isReference = isKnownIsoCurrency(upper);
+        // FIAT, always, a non-ISO code included: a code is never evidence of a
+        // coin (decision 1), and a reader who means one says so on the
+        // Currencies page.
+        await manager.query(
+          `INSERT INTO currencies (code, name, symbol, decimal_places, is_active, created_by_user_id, kind)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (code) DO NOTHING`,
+          [
+            upper,
+            meta.name,
+            meta.symbol,
+            meta.decimalPlaces,
+            !isReference,
+            isReference ? null : userId,
+            DEFAULT_CURRENCY_KIND,
+          ],
+        );
+        this.cryptoFx?.forgetCurrencies();
+      }
+
+      await manager.query(
+        `INSERT INTO user_currency_preferences (user_id, currency_code, is_active)
+         VALUES ($1, $2, true)
+         ON CONFLICT (user_id, currency_code) DO UPDATE SET is_active = true`,
+        [userId, upper],
+      );
+    });
+  }
+
+  /**
+   * Ensure the currency a reference catalog row is priced in exists, without
+   * offering it to anyone: a deployment's users did not choose it, so it is
+   * created inactive (`findAll` lists only what a user has activated or what is
+   * active globally) and stays selectable by code through `create`. Used only
+   * by the bond catalog (its seed and a series fetch); an existing row, active or not, is left as is.
+   */
+  async ensureCatalogCurrency(code: string): Promise<void> {
+    // The default-preference currency is created exactly as bootstrap creates
+    // it, so the order of the two startup hooks does not matter.
+    await this.insertSystemCurrencyIfMissing(code);
+  }
+
+  /**
+   * Create `code` as an inactive system row from the curated/derived metadata
+   * (name, symbol, decimal places) when it is missing. Owned by nobody and
+   * offered to nobody: a user is given it by `ensureCurrencyForUser` or by
+   * adding it on the Currencies page, which both write their preference row.
+   * An existing row, active or not, is left as it is.
+   */
+  private async insertSystemCurrencyIfMissing(code: string): Promise<void> {
     const upper = code.toUpperCase();
     await withScopedDb(this.dataSource, async (manager) => {
       const existing = await manager.getRepository(Currency).findOne({
@@ -242,12 +447,59 @@ export class CurrenciesService implements OnApplicationBootstrap {
 
       const meta = resolveCurrencyMetadata(upper);
       await manager.query(
-        `INSERT INTO currencies (code, name, symbol, decimal_places, is_active, created_by_user_id)
-       VALUES ($1, $2, $3, $4, true, NULL)
+        `INSERT INTO currencies (code, name, symbol, decimal_places, is_active, created_by_user_id, kind)
+       VALUES ($1, $2, $3, $4, false, NULL, $5)
        ON CONFLICT (code) DO NOTHING`,
-        [upper, meta.name, meta.symbol, meta.decimalPlaces],
+        [
+          upper,
+          meta.name,
+          meta.symbol,
+          meta.decimalPlaces,
+          DEFAULT_CURRENCY_KIND,
+        ],
       );
     });
+    this.cryptoFx?.forgetCurrencies();
+  }
+
+  /**
+   * Lock the custom currencies `userId` created and return their codes, in code
+   * order. Called in the transaction that deletes the user, before the user row
+   * goes: the lock keeps a concurrent activation from committing a reference
+   * between this decision and `removeUnreferencedCurrencies`.
+   */
+  async lockCurrenciesCreatedBy(
+    manager: EntityManager,
+    userId: string,
+  ): Promise<string[]> {
+    const rows: Array<{ code: string }> = await manager.query(
+      `SELECT code FROM currencies WHERE created_by_user_id = $1 ORDER BY code FOR UPDATE`,
+      [userId],
+    );
+    return rows.map((row) => row.code);
+  }
+
+  /**
+   * After a user is deleted, remove the currencies they created that nothing
+   * references any more. The foreign key's ON DELETE SET NULL has by then turned
+   * each into a system row (a trigger deactivated it), so only a row with no
+   * creator is deleted, and only when `currency_code_in_use_globally` says
+   * nobody -- including rows this scope cannot see -- still points at it.
+   *
+   * Lock the candidates (`lockCurrenciesCreatedBy`), then decide here, one code
+   * at a time on the transaction's single connection: the CONC-008 rule.
+   */
+  async removeUnreferencedCurrencies(
+    manager: EntityManager,
+    codes: string[],
+  ): Promise<void> {
+    for (const code of codes) {
+      if (await this.isInUseGlobally(manager, code)) continue;
+      await manager.query(
+        `DELETE FROM currencies WHERE code = $1 AND created_by_user_id IS NULL`,
+        [code],
+      );
+    }
   }
 
   async findOne(code: string): Promise<Currency> {
@@ -273,9 +525,15 @@ export class CurrenciesService implements OnApplicationBootstrap {
   ): Promise<UserCurrencyView> {
     // Read-modify-write: the ownership check, the metadata save and the
     // preference upsert are one unit. Nested calls join this transaction.
-    return withScopedDb(this.dataSource, (manager) =>
+    const { view, repriced } = await withScopedDb(this.dataSource, (manager) =>
       this.updateWithin(manager, userId, code, dto),
     );
+    this.cryptoFx?.forgetCurrencies();
+    // After the commit, beside the coverage rows the transaction deleted: a
+    // fill between the two finds no coverage and asks the provider, which is
+    // the point. Only this process's memory; see `forgetEmptyWindowsFor`.
+    if (repriced) this.rateHistory?.forgetEmptyWindowsFor(view.code);
+    return view;
   }
 
   private async updateWithin(
@@ -283,7 +541,7 @@ export class CurrenciesService implements OnApplicationBootstrap {
     userId: string,
     code: string,
     dto: UpdateCurrencyDto,
-  ): Promise<UserCurrencyView> {
+  ): Promise<{ view: UserCurrencyView; repriced: boolean }> {
     const currency = await this.findOne(code);
 
     // System currencies: cannot modify metadata
@@ -307,7 +565,23 @@ export class CurrenciesService implements OnApplicationBootstrap {
     }
 
     // Handle isActive separately via preference row
-    const { isActive, ...metadataUpdates } = dto;
+    const { isActive, kind, quoteSymbol, ...rest } = dto;
+    if (rest.decimalPlaces !== undefined) {
+      await this.assertDecimalPlacesFit(
+        manager,
+        currency.code,
+        currency.decimalPlaces,
+        rest.decimalPlaces,
+      );
+    }
+    const { updates: kindUpdates, repriced } = await this.kindUpdates(
+      manager,
+      userId,
+      currency,
+      kind,
+      quoteSymbol,
+    );
+    const metadataUpdates: Partial<Currency> = { ...rest, ...kindUpdates };
 
     if (Object.keys(metadataUpdates).length > 0) {
       Object.assign(currency, metadataUpdates);
@@ -322,9 +596,200 @@ export class CurrenciesService implements OnApplicationBootstrap {
       where: { userId, currencyCode: currency.code },
     });
 
-    return this.buildUserCurrencyView(
-      currency,
-      pref ? pref.isActive : currency.isActive,
+    return {
+      view: this.buildUserCurrencyView(
+        currency,
+        pref ? pref.isActive : currency.isActive,
+      ),
+      repriced,
+    };
+  }
+
+  /**
+   * Refuse lowering `decimal_places` below what stored amounts already carry
+   * (`docs/specs/money-precision.md`, INV-MONEY-001). Every amount in the
+   * currency is held at `moneyDecimalsFor(decimal_places)` places; a smaller
+   * precision would leave rows the write paths then refuse (`amountPrecisionExceeded`)
+   * on an unchanged edit. Raising is free. The row is locked first, as
+   * `kindUpdates` does, and the current value is read under that lock, so a
+   * concurrent update cannot slip a lower value past the check; the lock is
+   * taken only for a request that lowers the value as last read.
+   *
+   * The scan is `currency_min_decimal_places_in_use`, SECURITY DEFINER, so it
+   * covers every user's amounts in the currency rather than the editing user's
+   * RLS view: transactions, their splits, account balances and thresholds,
+   * scheduled transactions, their splits and overrides. It answers the smallest
+   * `decimalPlaces` every stored amount fits; the refusal names it.
+   */
+  private async assertDecimalPlacesFit(
+    manager: EntityManager,
+    code: string,
+    readPlaces: number,
+    requestedPlaces: number,
+  ): Promise<void> {
+    if (requestedPlaces >= readPlaces) return;
+    const locked: Array<{ decimal_places: number | string | null }> =
+      await manager.query(
+        "SELECT decimal_places FROM currencies WHERE code = $1 FOR UPDATE",
+        [code],
+      );
+    const lockedValue = locked[0]?.decimal_places;
+    const currentPlaces =
+      lockedValue == null ? readPlaces : Number(lockedValue);
+    if (requestedPlaces >= currentPlaces) return;
+
+    const allowed = moneyDecimalsFor(requestedPlaces);
+    if (allowed >= MONEY_SCALE) return;
+    const rows: Array<{ fitting: number | string | null }> =
+      await manager.query(
+        `SELECT currency_min_decimal_places_in_use($1) AS "fitting"`,
+        [code],
+      );
+    const fitting = Number(rows[0]?.fitting ?? 0);
+    if (fitting <= allowed) return;
+    throw new ConflictException(
+      tr(
+        "errors.currencies.decimalPlacesInUse",
+        `The decimal places of "${code}" cannot be lowered below ${fitting} while accounts, transactions or other records hold amounts with that many places`,
+        { code, places: fitting },
+      ),
+    );
+  }
+
+  /**
+   * The `kind` and `quote_symbol` an update writes, refused before anything is
+   * written (`docs/specs/crypto-accounts.md`, section 5). A field the request
+   * resent unchanged is not a change. A new kind is refused on a code any row
+   * anywhere uses (`currency_code_referenced_by_data`: every column
+   * `currency-reference-columns.ts` names except activations): a CRYPTO
+   * account's currency turning FIAT under it would break INV-CRYPTO-001. An
+   * activation is not a use -- every creator holds one -- so a kind stays
+   * changeable until something financial references the code. The row is locked first,
+   * as `removeWithin` does, so a reference committed while this decides waits
+   * for it. A currency turning FIAT drops a symbol the request did not restate;
+   * one the request names on a FIAT row is refused.
+   *
+   * A new coin ticker on a CRYPTO row (`quoteSymbolCoinTicker` of the new
+   * symbol differs from the old one's, including removing the symbol) is held
+   * like a kind change: `currencies` is shared, so re-pointing `BTC` from
+   * `BTC-EUR` to `ETH-EUR` would revalue every other user's wallet in it at
+   * another coin's price. Refused `quoteSymbolInUse` once data references the
+   * code. A new fiat leg alone (`BTC-EUR` to `BTC-CAD`) is allowed on a
+   * referenced coin, because the provider prices against whichever fiat the
+   * pair names, not the one in the symbol.
+   *
+   * A first symbol on a CRYPTO coin that had none is refused
+   * `firstQuoteSymbolInUse` once another user activates the code or holds data
+   * in it (`currency_code_used_by_other_users`): it decides the price every
+   * holder's wallet is valued at, and only the creator may edit the row, so
+   * the creator could otherwise point another user's coin at any ticker. The
+   * creator may still price a coin only they use.
+   *
+   * `repriced` is whether the coin the code is priced through changed: a
+   * CRYPTO row's coin ticker first set or changed, including a first symbol
+   * and a kind change to CRYPTO with one. Its `exchange_rate_coverage` rows
+   * (either code order) are deleted here, in the update's transaction: a fill
+   * under the old ticker, or under none, recorded where the provider's
+   * history starts for a symbol that no longer prices the code, and the
+   * provider fingerprint those rows are scoped to does not change with a
+   * symbol (INV-FX-005). The caller forgets the process's empty windows after
+   * the commit.
+   */
+  private async kindUpdates(
+    manager: EntityManager,
+    userId: string,
+    currency: Currency,
+    requestedKind: CurrencyKind | undefined,
+    requestedQuoteSymbol: string | null | undefined,
+  ): Promise<{
+    updates: Partial<Pick<Currency, "kind" | "quoteSymbol">>;
+    repriced: boolean;
+  }> {
+    const currentKind = currency.kind ?? DEFAULT_CURRENCY_KIND;
+    const kind = requestedKind ?? currentKind;
+    const kindChanged = kind !== currentKind;
+    const quoteSymbol =
+      requestedQuoteSymbol !== undefined
+        ? requestedQuoteSymbol
+        : kind === "CRYPTO"
+          ? (currency.quoteSymbol ?? null)
+          : null;
+    this.assertQuoteSymbol(kind, quoteSymbol, currency.code);
+
+    const currentSymbol = currency.quoteSymbol ?? null;
+    const tickerOf = (symbol: string | null) =>
+      symbol === null ? null : quoteSymbolCoinTicker(symbol);
+    const coinTickerChanged =
+      kind === "CRYPTO" && tickerOf(quoteSymbol) !== tickerOf(currentSymbol);
+    // Held like a kind change when a ticker was there to change; a first
+    // symbol on a coin that had none is held only against other users' use.
+    const tickerChanged =
+      !kindChanged && currentSymbol !== null && coinTickerChanged;
+    const firstTicker =
+      !kindChanged && currentSymbol === null && coinTickerChanged;
+
+    if (kindChanged || tickerChanged || firstTicker) {
+      await manager.query(
+        "SELECT 1 FROM currencies WHERE code = $1 FOR UPDATE",
+        [currency.code],
+      );
+    }
+    if (
+      firstTicker &&
+      (await this.isUsedByOtherUsers(manager, currency.code, userId))
+    ) {
+      throw new ConflictException(
+        tr(
+          "errors.currencies.firstQuoteSymbolInUse",
+          `A price symbol cannot be added to "${currency.code}" while other users hold it; it would set the price of their holdings`,
+          { code: currency.code },
+        ),
+      );
+    }
+    if (kindChanged || tickerChanged) {
+      if (await this.isReferencedByData(manager, currency.code)) {
+        throw new ConflictException(
+          kindChanged
+            ? tr(
+                "errors.currencies.kindInUse",
+                `The kind of "${currency.code}" cannot change while accounts, transactions, securities or other records use it`,
+                { code: currency.code },
+              )
+            : tr(
+                "errors.currencies.quoteSymbolInUse",
+                `The coin in the price symbol of "${currency.code}" cannot change while accounts, transactions, securities or other records use it; only its fiat side can`,
+                { code: currency.code },
+              ),
+        );
+      }
+    }
+
+    if (coinTickerChanged) {
+      await manager.query(
+        `DELETE FROM exchange_rate_coverage
+          WHERE from_currency = $1 OR to_currency = $1`,
+        [currency.code],
+      );
+    }
+
+    const updates: Partial<Pick<Currency, "kind" | "quoteSymbol">> = {};
+    if (kindChanged) updates.kind = kind;
+    if (quoteSymbol !== (currency.quoteSymbol ?? null)) {
+      updates.quoteSymbol = quoteSymbol;
+    }
+    return { updates, repriced: coinTickerChanged };
+  }
+
+  /** Refuse a price symbol the kind does not admit, by the section 5 table. */
+  private assertQuoteSymbol(
+    kind: CurrencyKind,
+    quoteSymbol: string | null,
+    code: string,
+  ): void {
+    const refusal = quoteSymbolRefusal(kind, quoteSymbol);
+    if (refusal === null) return;
+    throw new BadRequestException(
+      QUOTE_SYMBOL_REFUSAL_MESSAGES[refusal](code, quoteSymbol ?? ""),
     );
   }
 
@@ -516,41 +981,11 @@ export class CurrenciesService implements OnApplicationBootstrap {
         );
       }
 
-      // 3. Fall back to Yahoo Finance search API for unknown currencies
-      const searchUrl = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(trimmed)}&quotesCount=20&newsCount=0`;
-      const searchResponse = await fetch(searchUrl, {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        },
-      });
-
-      if (!searchResponse.ok) {
-        this.logger.warn(
-          `Yahoo Finance search returned ${searchResponse.status} for currency query: ${query}`,
-        );
+      // 3. Fall back to the providers' free-text search for unknown currencies
+      const resultCode = await this.fxProviders.searchCurrency(trimmed);
+      if (resultCode === null) {
         return null;
       }
-
-      const searchData = await searchResponse.json();
-      const quotes = searchData.quotes || [];
-
-      // Find currency-type results (forex pairs like EURUSD=X)
-      const currencyQuotes = quotes.filter(
-        (q: any) =>
-          q.quoteType === "CURRENCY" || (q.symbol && q.symbol.includes("=X")),
-      );
-
-      if (currencyQuotes.length === 0) {
-        return null;
-      }
-
-      // Extract the currency code from the first forex pair result
-      const firstResult = currencyQuotes[0];
-      const resultCode = this.extractCurrencyCode(
-        firstResult.symbol,
-        upperQuery,
-      );
 
       const resultMetadata = CURRENCY_METADATA[resultCode];
 
@@ -613,6 +1048,41 @@ export class CurrenciesService implements OnApplicationBootstrap {
     return result[0]?.inUse === true;
   }
 
+  /**
+   * Whether any row anywhere other than a `user_currency_preferences`
+   * activation references the code, including rows this tenant cannot see:
+   * `currency_code_referenced_by_data`, the sibling of
+   * `currency_code_in_use_globally` with activations left out, SECURITY
+   * DEFINER and run in this transaction after the caller's row lock.
+   */
+  private async isReferencedByData(
+    manager: EntityManager,
+    code: string,
+  ): Promise<boolean> {
+    const result = await manager.query(
+      `SELECT currency_code_referenced_by_data($1) AS "inUse"`,
+      [code.toUpperCase()],
+    );
+    return result[0]?.inUse === true;
+  }
+
+  /**
+   * Whether any user other than `userId` activates the code or holds data in
+   * it, including rows this tenant cannot see: `currency_code_used_by_other_users`,
+   * SECURITY DEFINER and run in this transaction after the caller's row lock.
+   */
+  private async isUsedByOtherUsers(
+    manager: EntityManager,
+    code: string,
+    userId: string,
+  ): Promise<boolean> {
+    const result = await manager.query(
+      `SELECT currency_code_used_by_other_users($1, $2) AS "inUse"`,
+      [code.toUpperCase(), userId],
+    );
+    return result[0]?.inUse === true;
+  }
+
   private buildUserCurrencyView(
     currency: Currency,
     isActive: boolean,
@@ -625,6 +1095,8 @@ export class CurrenciesService implements OnApplicationBootstrap {
       isActive,
       isSystem: currency.createdByUserId === null,
       createdAt: currency.createdAt,
+      kind: currency.kind ?? DEFAULT_CURRENCY_KIND,
+      quoteSymbol: currency.quoteSymbol ?? null,
     };
   }
 
@@ -659,34 +1131,30 @@ export class CurrenciesService implements OnApplicationBootstrap {
   }
 
   /**
-   * Verify a currency exists on Yahoo Finance and return our metadata name.
+   * Verify a currency through the configured exchange rate providers and
+   * return our metadata. A code some provider carries is verified without a
+   * call; otherwise each provider that can verify one is asked. The local
+   * metadata is the name and symbol source either way, and an unverified code
+   * is still returned: verification is a lookup aid, not a gate.
    */
   private async verifyAndReturnCurrency(
     code: string,
     metadata: CurrencyMetadata,
   ): Promise<CurrencyLookupResult> {
     try {
-      const yahooSymbol = `${code}USD=X`;
-      const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=1d`;
-      const response = await fetch(url, {
-        headers: {
-          "User-Agent":
-            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        },
-      });
-
-      if (response.ok) {
-        // Verified on Yahoo - use our metadata name (not Yahoo's forex pair name)
-        return {
-          code,
-          name: metadata.name,
-          symbol: metadata.symbol,
-          decimalPlaces: metadata.decimalPlaces,
-        };
+      if (!(await this.fxProviders.carriesAny(code))) {
+        const known = await this.fxProviders.verifyCurrency(code);
+        if (known !== true) {
+          this.logger.debug(
+            known === false
+              ? `No configured exchange rate provider knows ${code}; returning local metadata`
+              : `No configured exchange rate provider could verify ${code}; returning local metadata`,
+          );
+        }
       }
     } catch (err) {
       this.logger.debug(
-        `Yahoo verification failed for ${code}, falling back to local metadata: ${err instanceof Error ? err.message : err}`,
+        `Provider verification failed for ${code}, falling back to local metadata: ${err instanceof Error ? err.message : err}`,
       );
     }
 
@@ -696,24 +1164,5 @@ export class CurrenciesService implements OnApplicationBootstrap {
       symbol: metadata.symbol,
       decimalPlaces: metadata.decimalPlaces,
     };
-  }
-
-  /**
-   * Extract a currency code from a Yahoo Finance forex symbol like "EURUSD=X"
-   */
-  private extractCurrencyCode(symbol: string, originalQuery: string): string {
-    // Remove =X suffix
-    const pair = symbol.replace("=X", "");
-    // Forex pairs are 6 chars: EURUSD -> EUR + USD
-    if (pair.length === 6) {
-      const base = pair.substring(0, 3);
-      const quote = pair.substring(3, 6);
-      // Return whichever part matches the query
-      const upperQuery = originalQuery.toUpperCase();
-      if (base === upperQuery) return base;
-      if (quote === upperQuery) return quote;
-      return base; // Default to base currency
-    }
-    return originalQuery.toUpperCase();
   }
 }

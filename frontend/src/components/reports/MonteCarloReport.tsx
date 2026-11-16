@@ -20,8 +20,10 @@ import {
   monteCarloApi,
   AccountHoldingStats,
   CashFlowType,
+  MAX_CASH_FLOWS,
 } from '@/lib/monte-carlo';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
+import { useDateFormat } from '@/hooks/useDateFormat';
 import { getCurrencySymbol } from '@/lib/format';
 import { showErrorToast } from '@/lib/errors';
 import { Button } from '@/components/ui/Button';
@@ -42,23 +44,33 @@ import {
 } from './MonteCarloPerformanceSummary';
 import { HoldingStatsTable } from './MonteCarloHoldingStatsTable';
 import { CsvSection, exportCsvSections } from '@/lib/csv-export';
-import { ExportDropdown } from '@/components/ui/ExportDropdown';
+import { ReportToolbarActions } from '@/components/reports/ReportToolbarActions';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { NumericInput } from '@/components/ui/NumericInput';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { ChevronDownIcon } from '@heroicons/react/20/solid';
+import { ChevronDownIcon } from '@heroicons/react/24/outline';
 import { createLogger } from '@/lib/logger';
 import { chartColors } from '@/lib/chart-colors';
 import { useMonteCarloScenarios, MAX_COMPARE_SCENARIOS } from './useMonteCarloScenarios';
 import { useTranslations } from 'next-intl';
+import { CHART_GRID_PROPS } from '@/lib/chart-style';
+import { ChartActiveDot } from '@/components/ui/ChartActiveDot';
 
 const logger = createLogger('MonteCarloReport');
 
 export function MonteCarloReport() {
   const t = useTranslations('reports');
-  const { formatCurrency, formatCurrencyLabel, defaultCurrency } = useNumberFormat();
+  const { formatCurrency, formatCurrencyLabel, formatNumber, formatPercent, defaultCurrency } = useNumberFormat();
+  const { formatDate } = useDateFormat();
+  // One bundle for the pure helpers below (the summary table, the holdings
+  // stats and the CSV rows), which format money, counts and percentages and
+  // must do all three in the reader's number locale.
+  const numberFormatters = useMemo(
+    () => ({ formatCurrency, formatNumber, formatPercent }),
+    [formatCurrency, formatNumber, formatPercent],
+  );
   const currencySymbol = useMemo(() => getCurrencySymbol(defaultCurrency), [defaultCurrency]);
   const {
     accounts,
@@ -150,13 +162,32 @@ export function MonteCarloReport() {
   // Fetch per-holding historical stats for the selected accounts whenever the
   // user is in historical-returns mode. Cleared otherwise so the table doesn't
   // show stale data after a mode toggle.
-  useEffect(() => {
-    if (!form.useHistoricalReturns || form.accountIds.length === 0) {
+  const wantsHoldingStats = form.useHistoricalReturns && form.accountIds.length > 0;
+  // The inputs the stats were last requested for (null before the first
+  // render). When they change, the clear / "becomes loading" transition
+  // happens here, during render, rather than from inside the fetch effect.
+  const [holdingStatsInputs, setHoldingStatsInputs] = useState<{
+    useHistoricalReturns: boolean;
+    accountIds: string[];
+  } | null>(null);
+  if (
+    holdingStatsInputs === null ||
+    holdingStatsInputs.useHistoricalReturns !== form.useHistoricalReturns ||
+    holdingStatsInputs.accountIds !== form.accountIds
+  ) {
+    setHoldingStatsInputs({
+      useHistoricalReturns: form.useHistoricalReturns,
+      accountIds: form.accountIds,
+    });
+    if (wantsHoldingStats) {
+      setHoldingStatsLoading(true);
+    } else {
       setHoldingStats(null);
-      return;
     }
+  }
+  useEffect(() => {
+    if (!form.useHistoricalReturns || form.accountIds.length === 0) return;
     let cancelled = false;
-    setHoldingStatsLoading(true);
     monteCarloApi
       .holdingStats(form.accountIds)
       .then((stats) => {
@@ -309,11 +340,11 @@ export function MonteCarloReport() {
         headers: PERFORMANCE_SUMMARY_HEADERS,
         rows: summaryRows.map((row) => [
           row.label,
-          formatSummaryValue(row.band.p10, row.format, formatCurrency),
-          formatSummaryValue(row.band.p25, row.format, formatCurrency),
-          formatSummaryValue(row.band.p50, row.format, formatCurrency),
-          formatSummaryValue(row.band.p75, row.format, formatCurrency),
-          formatSummaryValue(row.band.p90, row.format, formatCurrency),
+          formatSummaryValue(row.band.p10, row.format, numberFormatters),
+          formatSummaryValue(row.band.p25, row.format, numberFormatters),
+          formatSummaryValue(row.band.p50, row.format, numberFormatters),
+          formatSummaryValue(row.band.p75, row.format, numberFormatters),
+          formatSummaryValue(row.band.p90, row.format, numberFormatters),
         ]),
       });
     }
@@ -321,7 +352,7 @@ export function MonteCarloReport() {
       `monte-carlo-${(form.name || 'scenario').toLowerCase().replace(/\s+/g, '-')}`,
       sections,
     );
-  }, [result, tableRows, form.name, formatCurrency, t]);
+  }, [result, tableRows, form.name, numberFormatters, t]);
 
   const handleExportPdf = useCallback(async () => {
     if (!result) return;
@@ -352,7 +383,7 @@ export function MonteCarloReport() {
         },
         {
           label: t('monteCarlo.probabilityOfDepletion'),
-          value: `${(result.finalDistribution.depletionRate * 100).toFixed(1)}%`,
+          value: formatPercent((result.finalDistribution.depletionRate * 100), 1),
           color: '#dc2626',
         },
         {
@@ -363,7 +394,7 @@ export function MonteCarloReport() {
           value:
             result.successRate == null
               ? '—'
-              : `${(result.successRate * 100).toFixed(1)}%`,
+              : formatPercent((result.successRate * 100), 1),
           color: '#16a34a',
         },
       ],
@@ -380,11 +411,11 @@ export function MonteCarloReport() {
                 rows: buildPerformanceSummaryRows(result.performanceSummary).map(
                   (row) => [
                     row.label,
-                    formatSummaryValue(row.band.p10, row.format, formatCurrency),
-                    formatSummaryValue(row.band.p25, row.format, formatCurrency),
-                    formatSummaryValue(row.band.p50, row.format, formatCurrency),
-                    formatSummaryValue(row.band.p75, row.format, formatCurrency),
-                    formatSummaryValue(row.band.p90, row.format, formatCurrency),
+                    formatSummaryValue(row.band.p10, row.format, numberFormatters),
+                    formatSummaryValue(row.band.p25, row.format, numberFormatters),
+                    formatSummaryValue(row.band.p50, row.format, numberFormatters),
+                    formatSummaryValue(row.band.p75, row.format, numberFormatters),
+                    formatSummaryValue(row.band.p90, row.format, numberFormatters),
                   ],
                 ),
               },
@@ -423,6 +454,8 @@ export function MonteCarloReport() {
     form.name,
     form.targetValue,
     formatCurrency,
+    formatPercent,
+    numberFormatters,
     defaultCurrency,
     tableRows, t,
   ]);
@@ -516,7 +549,7 @@ export function MonteCarloReport() {
                       <div className="font-medium truncate">{s.name}</div>
                       {s.lastRunAt && (
                         <div className="text-xs text-gray-500 dark:text-gray-400">
-                          {t('monteCarlo.lastRun', { date: new Date(s.lastRunAt).toLocaleDateString() })}
+                          {t('monteCarlo.lastRun', { date: formatDate(new Date(s.lastRunAt)) })}
                         </div>
                       )}
                     </div>
@@ -541,7 +574,7 @@ export function MonteCarloReport() {
                     <div className="font-medium truncate">{s.name}</div>
                     {s.lastRunAt && (
                       <div className="text-xs text-gray-500 dark:text-gray-400">
-                        {t('monteCarlo.lastRun', { date: new Date(s.lastRunAt).toLocaleDateString() })}
+                        {t('monteCarlo.lastRun', { date: formatDate(new Date(s.lastRunAt)) })}
                       </div>
                     )}
                   </button>
@@ -616,7 +649,7 @@ export function MonteCarloReport() {
                         ? t('monteCarlo.collapsedHistoricalReturns')
                         : t('monteCarlo.collapsedCustomReturns', { return: (form.expectedReturn * 100).toFixed(1), vol: (form.volatility * 100).toFixed(1) })}
                     </span>
-                    <span>{t('monteCarlo.collapsedRuns', { count: form.simulationCount.toLocaleString() })}</span>
+                    <span>{t('monteCarlo.collapsedRuns', { count: formatNumber(form.simulationCount, 0) })}</span>
                   </div>
                 </div>
               ) : (
@@ -896,9 +929,19 @@ export function MonteCarloReport() {
                 ))}
               </div>
             )}
-            <Button variant="outline" size="sm" onClick={addCashFlow}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={addCashFlow}
+              disabled={form.cashFlows.length >= MAX_CASH_FLOWS}
+            >
               {t('monteCarlo.addCashFlow')}
             </Button>
+            {form.cashFlows.length >= MAX_CASH_FLOWS && (
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
+                {t('monteCarlo.cashFlowLimitReached', { max: MAX_CASH_FLOWS })}
+              </p>
+            )}
           </fieldset>
 
           <fieldset className="border border-gray-200 dark:border-gray-700 rounded-md p-4">
@@ -933,7 +976,7 @@ export function MonteCarloReport() {
                 <HoldingStatsTable
                   data={holdingStats}
                   loading={holdingStatsLoading}
-                  formatCurrency={formatCurrency}
+                  formatters={numberFormatters}
                 />
               </>
             )}
@@ -1101,7 +1144,7 @@ export function MonteCarloReport() {
               />
               <SummaryStat
                 label={t('monteCarlo.probabilityOfDepletion')}
-                value={`${(result.finalDistribution.depletionRate * 100).toFixed(1)}%`}
+                value={formatPercent((result.finalDistribution.depletionRate * 100), 1)}
               />
               <SummaryStat
                 label={
@@ -1112,7 +1155,7 @@ export function MonteCarloReport() {
                 value={
                   result.successRate == null
                     ? '—'
-                    : `${(result.successRate * 100).toFixed(1)}%`
+                    : formatPercent((result.successRate * 100), 1)
                 }
               />
             </div>
@@ -1142,11 +1185,11 @@ export function MonteCarloReport() {
                       </button>
                     ))}
                   </div>
-                  <ExportDropdown
-                    onExportCsv={handleExportCsv}
-                    onExportPdf={handleExportPdf}
-                  />
                 </div>
+                <ReportToolbarActions
+                  onExportCsv={handleExportCsv}
+                  onExportPdf={handleExportPdf}
+                />
               </div>
 
               {/* Chart stays mounted whether or not it's the visible view, so
@@ -1165,7 +1208,7 @@ export function MonteCarloReport() {
               >
                 <ResponsiveContainer>
                   <ComposedChart data={chartData}>
-                    <CartesianGrid strokeDasharray="3 3" />
+                    <CartesianGrid {...CHART_GRID_PROPS} />
                     <XAxis dataKey="year" />
                     <YAxis
                       tickFormatter={(v) => formatCurrencyLabel(Number(v))}
@@ -1176,7 +1219,7 @@ export function MonteCarloReport() {
                         <FanChartTooltip
                           active={props.active}
                           payload={
-                            props.payload as Array<{
+                            props.payload as ReadonlyArray<{
                               payload?: Record<string, number>;
                             }>
                           }
@@ -1225,6 +1268,7 @@ export function MonteCarloReport() {
                       name={t('monteCarlo.chartBand75to90')}
                     />
                     <Line
+                      activeDot={ChartActiveDot}
                       type="monotone"
                       dataKey="p50"
                       stroke={chartColors.primary}
@@ -1334,7 +1378,7 @@ export function MonteCarloReport() {
                 </h3>
                 <PerformanceSummaryTable
                   summary={result.performanceSummary}
-                  formatCurrency={formatCurrency}
+                  formatters={numberFormatters}
                 />
               </div>
             )}

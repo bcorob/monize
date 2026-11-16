@@ -18,6 +18,7 @@ import {
   LoanScheduleInput,
   RecurringOverpaymentFrequency,
 } from './loan-schedule';
+import { MORTGAGE_TYPES } from '@/types/account';
 
 function baseInput(overrides: Partial<LoanScheduleInput> = {}): LoanScheduleInput {
   return {
@@ -51,17 +52,17 @@ describe('getPeriodicRate', () => {
   // Parity fixtures with backend mortgage-amortization.util.spec.ts
   it('uses semi-annual compounding for Canadian fixed-rate mortgages', () => {
     const expected = Math.pow(1 + 0.05 / 2, 2 / 12) - 1;
-    expect(getPeriodicRate(5, 12, true, false)).toBeCloseTo(expected, 10);
+    expect(getPeriodicRate(5, 12, 'CANADIAN_FIXED')).toBeCloseTo(expected, 10);
   });
 
   it('uses semi-annual compounding for Canadian fixed biweekly payments', () => {
     const expected = Math.pow(1 + 0.05 / 2, 2 / 26) - 1;
-    expect(getPeriodicRate(5, 26, true, false)).toBeCloseTo(expected, 10);
+    expect(getPeriodicRate(5, 26, 'CANADIAN_FIXED')).toBeCloseTo(expected, 10);
   });
 
   it('uses simple division for non-Canadian loans', () => {
-    expect(getPeriodicRate(6, 12, false, false)).toBeCloseTo(0.005, 10);
-    expect(getPeriodicRate(6, 26, false, false)).toBeCloseTo(6 / 100 / 26, 10);
+    expect(getPeriodicRate(6, 12, 'ANNUITY')).toBeCloseTo(0.005, 10);
+    expect(getPeriodicRate(6, 26, 'ANNUITY')).toBeCloseTo(6 / 100 / 26, 10);
   });
 
   it('is the nominal convention, not monthly compounding converted', () => {
@@ -72,32 +73,50 @@ describe('getPeriodicRate', () => {
     // number -- otherwise a future change to either convention would look like
     // agreement.
     const monthlyEquivalentBiweekly = Math.pow(1 + 0.06 / 12, 12 / 26) - 1;
-    expect(getPeriodicRate(6, 26, false, false)).not.toBeCloseTo(
+    expect(getPeriodicRate(6, 26, 'ANNUITY')).not.toBeCloseTo(
       monthlyEquivalentBiweekly,
       9,
     );
-    expect(getPeriodicRate(6, 52, false, false)).not.toBeCloseTo(
+    expect(getPeriodicRate(6, 52, 'ANNUITY')).not.toBeCloseTo(
       Math.pow(1 + 0.06 / 12, 12 / 52) - 1,
       9,
     );
     // Monthly is the one frequency where the two conventions coincide.
-    expect(getPeriodicRate(6, 12, false, false)).toBeCloseTo(
+    expect(getPeriodicRate(6, 12, 'ANNUITY')).toBeCloseTo(
       Math.pow(1 + 0.06 / 12, 12 / 12) - 1,
       12,
     );
   });
 
-  it('uses simple division for Canadian variable-rate mortgages', () => {
-    expect(getPeriodicRate(6, 12, true, true)).toBeCloseTo(0.005, 10);
+  // One row per type: each prices a biweekly period by its own compounding
+  // trait, derived here from the quoted rate rather than read back from
+  // `MORTGAGE_TYPE_TRAITS`. Only the semi-annual type departs from the nominal
+  // convention; none of them is monthly compounding converted.
+  const BIWEEKLY_6_PERCENT: Record<(typeof MORTGAGE_TYPES)[number], number> = {
+    ANNUITY: 0.06 / 26,
+    CANADIAN_FIXED: Math.pow(1 + 0.06 / 2, 2 / 26) - 1,
+    LINEAR: 0.06 / 26,
+    INTEREST_ONLY: 0.06 / 26,
+  };
+  it.each(MORTGAGE_TYPES)('prices a %s period by its own compounding', (type) => {
+    expect(getPeriodicRate(6, 26, type)).toBeCloseTo(BIWEEKLY_6_PERCENT[type], 12);
+    expect(getPeriodicRate(6, 26, type)).not.toBeCloseTo(
+      Math.pow(1 + 0.06 / 12, 12 / 26) - 1,
+      9,
+    );
+  });
+
+  it('uses simple division for an ANNUITY mortgage', () => {
+    expect(getPeriodicRate(6, 12, 'ANNUITY')).toBeCloseTo(0.005, 10);
   });
 
   it('yields a lower rate than simple division for Canadian fixed', () => {
-    expect(getPeriodicRate(5, 12, true, false)).toBeLessThan(getPeriodicRate(5, 12, false, false));
+    expect(getPeriodicRate(5, 12, 'CANADIAN_FIXED')).toBeLessThan(getPeriodicRate(5, 12, 'ANNUITY'));
   });
 
   it('returns 0 for a 0% annual rate', () => {
-    expect(getPeriodicRate(0, 12, true, false)).toBe(0);
-    expect(getPeriodicRate(0, 12, false, false)).toBe(0);
+    expect(getPeriodicRate(0, 12, 'CANADIAN_FIXED')).toBe(0);
+    expect(getPeriodicRate(0, 12, 'ANNUITY')).toBe(0);
   });
 });
 
@@ -107,31 +126,31 @@ describe('effectiveAnnualRate', () => {
   // not read back from either implementation.
   it('compounds at the payment frequency outside the Canadian fixed branch', () => {
     for (const periodsPerYear of [12, 24, 26, 52]) {
-      expect(effectiveAnnualRate(6, periodsPerYear, false, false)).toBeCloseTo(
+      expect(effectiveAnnualRate(6, periodsPerYear, 'ANNUITY')).toBeCloseTo(
         (Math.pow(1 + 0.06 / periodsPerYear, periodsPerYear) - 1) * 100,
         10,
       );
     }
     // More compounding periods cost more.
-    expect(effectiveAnnualRate(6, 12, false, false)).toBeLessThan(
-      effectiveAnnualRate(6, 52, false, false),
+    expect(effectiveAnnualRate(6, 12, 'ANNUITY')).toBeLessThan(
+      effectiveAnnualRate(6, 52, 'ANNUITY'),
     );
   });
 
   it('compounds semi-annually for Canadian fixed, whatever the frequency', () => {
     const expected = (Math.pow(1 + 0.05 / 2, 2) - 1) * 100;
-    expect(effectiveAnnualRate(5, 12, true, false)).toBeCloseTo(expected, 10);
-    expect(effectiveAnnualRate(5, 26, true, false)).toBeCloseTo(expected, 10);
-    // A Canadian VARIABLE mortgage is on the nominal convention, like any other.
-    expect(effectiveAnnualRate(5, 26, true, true)).toBeCloseTo(
+    expect(effectiveAnnualRate(5, 12, 'CANADIAN_FIXED')).toBeCloseTo(expected, 10);
+    expect(effectiveAnnualRate(5, 26, 'CANADIAN_FIXED')).toBeCloseTo(expected, 10);
+    // ANNUITY is on the nominal convention, compounded at the payment frequency.
+    expect(effectiveAnnualRate(5, 26, 'ANNUITY')).toBeCloseTo(
       (Math.pow(1 + 0.05 / 26, 26) - 1) * 100,
       10,
     );
   });
 
   it('is 0 for a 0% rate on either branch', () => {
-    expect(effectiveAnnualRate(0, 12, true, false)).toBe(0);
-    expect(effectiveAnnualRate(0, 26, false, false)).toBe(0);
+    expect(effectiveAnnualRate(0, 12, 'CANADIAN_FIXED')).toBe(0);
+    expect(effectiveAnnualRate(0, 26, 'ANNUITY')).toBe(0);
   });
 });
 
@@ -170,36 +189,36 @@ describe('advanceDate', () => {
 describe('calculateMortgagePaymentAmount', () => {
   it('matches the backend fixture for a standard mortgage', () => {
     // $300,000 at 5% over 25 years, monthly, non-Canadian: ~1753.77
-    const payment = calculateMortgagePaymentAmount(300000, 5, 300, 'MONTHLY', false, false);
+    const payment = calculateMortgagePaymentAmount(300000, 5, 300, 'MONTHLY', 'ANNUITY');
     expect(payment).toBeCloseTo(1753.77, 0);
   });
 
   it('handles 0% interest as principal / payments', () => {
-    expect(calculateMortgagePaymentAmount(120000, 0, 300, 'MONTHLY', false, false)).toBe(400);
+    expect(calculateMortgagePaymentAmount(120000, 0, 300, 'MONTHLY', 'ANNUITY')).toBe(400);
   });
 
   it('computes Canadian fixed-rate payments with semi-annual compounding', () => {
-    const canadian = calculateMortgagePaymentAmount(300000, 5, 300, 'MONTHLY', true, false);
-    const standard = calculateMortgagePaymentAmount(300000, 5, 300, 'MONTHLY', false, false);
+    const canadian = calculateMortgagePaymentAmount(300000, 5, 300, 'MONTHLY', 'CANADIAN_FIXED');
+    const standard = calculateMortgagePaymentAmount(300000, 5, 300, 'MONTHLY', 'ANNUITY');
     expect(canadian).toBeLessThan(standard);
     expect(canadian).toBeCloseTo(1744.81, 0);
   });
 
   it('derives accelerated payments from the monthly payment', () => {
-    const monthly = calculateMortgagePaymentAmount(300000, 5, 300, 'MONTHLY', false, false);
+    const monthly = calculateMortgagePaymentAmount(300000, 5, 300, 'MONTHLY', 'ANNUITY');
     const acceleratedBiweekly = calculateMortgagePaymentAmount(
-      300000, 5, 300, 'ACCELERATED_BIWEEKLY', false, false,
+      300000, 5, 300, 'ACCELERATED_BIWEEKLY', 'ANNUITY',
     );
     const acceleratedWeekly = calculateMortgagePaymentAmount(
-      300000, 5, 300, 'ACCELERATED_WEEKLY', false, false,
+      300000, 5, 300, 'ACCELERATED_WEEKLY', 'ANNUITY',
     );
     expect(acceleratedBiweekly).toBeCloseTo(monthly / 2, 2);
     expect(acceleratedWeekly).toBeCloseTo(monthly / 4, 2);
   });
 
   it('returns 0 for non-positive principal or term', () => {
-    expect(calculateMortgagePaymentAmount(0, 5, 300, 'MONTHLY', false, false)).toBe(0);
-    expect(calculateMortgagePaymentAmount(100000, 5, 0, 'MONTHLY', false, false)).toBe(0);
+    expect(calculateMortgagePaymentAmount(0, 5, 300, 'MONTHLY', 'ANNUITY')).toBe(0);
+    expect(calculateMortgagePaymentAmount(100000, 5, 0, 'MONTHLY', 'ANNUITY')).toBe(0);
   });
 });
 
@@ -224,6 +243,28 @@ describe('generateLoanSchedule', () => {
     expect(first.balance).toBeCloseTo(10000 - 450, 2);
     expect(first.date).toBe('2026-01-15');
     expect(result.rows[1].date).toBe('2026-02-15');
+  });
+
+  // A26-S15-06: one whole minor unit is owed; less than one is a residue.
+  it('amortizes the last cent: 1,000 at 0 % with a payment of 999.99 takes two rows', () => {
+    const result = generateLoanSchedule(
+      baseInput({ startingBalance: 1000, annualRate: 0, paymentAmount: 999.99 }),
+    );
+    expect(result.rows).toHaveLength(2);
+    expect(result.rows[0].balance).toBe(0.01);
+    expect(result.rows[1].principal).toBe(0.01);
+    expect(result.rows[1].balance).toBe(0);
+    expect(result.paidOff).toBe(true);
+  });
+
+  it('owes a cent that float subtraction leaves a hair under: 5.10 less 5.09', () => {
+    // 5.1 - 5.09 is 0.009999999999999787 in floating point.
+    const result = generateLoanSchedule(
+      baseInput({ startingBalance: 5.1, annualRate: 0, paymentAmount: 5.09 }),
+    );
+    expect(result.rows).toHaveLength(2);
+    expect(result.rows[1].principal).toBe(0.01);
+    expect(result.paidOff).toBe(true);
   });
 
   it('handles a 0% rate loan', () => {
@@ -268,21 +309,13 @@ describe('generateLoanSchedule', () => {
 
   it('produces less interest for Canadian fixed than standard compounding', () => {
     const canadian = generateLoanSchedule(
-      baseInput({ startingBalance: 300000, paymentAmount: 2000, isCanadian: true }),
+      baseInput({ startingBalance: 300000, paymentAmount: 2000, mortgageType: 'CANADIAN_FIXED' }),
     );
     const standard = generateLoanSchedule(
       baseInput({ startingBalance: 300000, paymentAmount: 2000 }),
     );
     expect(canadian.totalInterest).toBeLessThan(standard.totalInterest);
     expect(canadian.numPayments).toBeLessThanOrEqual(standard.numPayments);
-  });
-
-  it('treats Canadian variable-rate as standard compounding', () => {
-    const variable = generateLoanSchedule(
-      baseInput({ isCanadian: true, isVariableRate: true }),
-    );
-    const standard = generateLoanSchedule(baseInput());
-    expect(variable.totalInterest).toBe(standard.totalInterest);
   });
 
   it('seeds cumulative totals from prior history', () => {
@@ -467,12 +500,12 @@ describe('generateLoanSchedule with rate changes', () => {
   it('recomputes the periodic rate per segment with Canadian semi-annual compounding', () => {
     const result = generateLoanSchedule(
       baseInput({
-        isCanadian: true,
+        mortgageType: 'CANADIAN_FIXED',
         rateChanges: [{ effectiveDate: '2026-03-01', annualRate: 12 }],
       }),
     );
-    const firstSegmentRate = getPeriodicRate(6, 12, true, false);
-    const secondSegmentRate = getPeriodicRate(12, 12, true, false);
+    const firstSegmentRate = getPeriodicRate(6, 12, 'CANADIAN_FIXED');
+    const secondSegmentRate = getPeriodicRate(12, 12, 'CANADIAN_FIXED');
     expect(result.rows[0].interest).toBeCloseTo(10000 * firstSegmentRate, 2);
     expect(result.rows[2].interest).toBeCloseTo(result.rows[1].balance * secondSegmentRate, 2);
   });
@@ -559,6 +592,7 @@ describe('resolveEffectiveLoanTerms', () => {
     expect(resolveEffectiveLoanTerms(rows, '2024-01-01', 4)).toEqual({
       annualRate: 6.2,
       paymentAmount: 2500,
+      paymentEffectiveDate: '2022-01-01',
       snapshotPaymentAmount: null,
     });
   });
@@ -572,6 +606,7 @@ describe('resolveEffectiveLoanTerms', () => {
     expect(resolveEffectiveLoanTerms(rows, '2021-01-01', 4)).toEqual({
       annualRate: 4,
       paymentAmount: null,
+      paymentEffectiveDate: null,
       snapshotPaymentAmount: null,
     });
     expect(buildRateTimeline(rows, '2021-01-01', 4).startingAnnualRate).toBe(5.5);
@@ -589,6 +624,7 @@ describe('resolveEffectiveLoanTerms', () => {
     expect(resolveEffectiveLoanTerms(initialOnly, '2024-01-01', 4)).toEqual({
       annualRate: 3.9,
       paymentAmount: null,
+      paymentEffectiveDate: null,
       snapshotPaymentAmount: 450,
     });
   });
@@ -602,6 +638,7 @@ describe('resolveEffectiveLoanTerms', () => {
     expect(resolveEffectiveLoanTerms(withInitial, '2024-01-01', 4)).toEqual({
       annualRate: 6,
       paymentAmount: 2500,
+      paymentEffectiveDate: '2022-01-01',
       snapshotPaymentAmount: 100,
     });
   });
@@ -622,6 +659,7 @@ describe('resolveEffectiveLoanTerms', () => {
     expect(resolveEffectiveLoanTerms([], '2024-01-01', 4.25)).toEqual({
       annualRate: 4.25,
       paymentAmount: null,
+      paymentEffectiveDate: null,
       snapshotPaymentAmount: null,
     });
   });
@@ -722,25 +760,25 @@ describe('compareSchedules', () => {
 describe('calculatePaymentForTerm', () => {
   it('solves the annuity payment for a balance over a fixed term', () => {
     // 225400 over 300 monthly periods at 5% -> ~1317 (WMP worked example)
-    const payment = calculatePaymentForTerm(225400, 5, 300, 'MONTHLY');
+    const payment = calculatePaymentForTerm(225400, 5, 300, 'MONTHLY', 'ANNUITY');
     expect(payment).toBeGreaterThan(1300);
     expect(payment).toBeLessThan(1335);
   });
 
   it('splits the balance evenly at 0% interest', () => {
-    expect(calculatePaymentForTerm(12000, 0, 24, 'MONTHLY')).toBe(500);
+    expect(calculatePaymentForTerm(12000, 0, 24, 'MONTHLY', 'ANNUITY')).toBe(500);
   });
 
   it('returns 0 for a non-positive balance or term', () => {
-    expect(calculatePaymentForTerm(0, 5, 300, 'MONTHLY')).toBe(0);
-    expect(calculatePaymentForTerm(1000, 5, 0, 'MONTHLY')).toBe(0);
+    expect(calculatePaymentForTerm(0, 5, 300, 'MONTHLY', 'ANNUITY')).toBe(0);
+    expect(calculatePaymentForTerm(1000, 5, 0, 'MONTHLY', 'ANNUITY')).toBe(0);
   });
 
   it('recovers the contractual payment that generateLoanSchedule amortizes', () => {
     // The payment that clears 10000 over the baseline term should reproduce
     // roughly the same number of periods.
     const baseline = generateLoanSchedule(baseInput());
-    const payment = calculatePaymentForTerm(10000, 6, baseline.numPayments, 'MONTHLY');
+    const payment = calculatePaymentForTerm(10000, 6, baseline.numPayments, 'MONTHLY', 'ANNUITY');
     const rebuilt = generateLoanSchedule(baseInput({ paymentAmount: payment }));
     expect(Math.abs(rebuilt.numPayments - baseline.numPayments)).toBeLessThanOrEqual(1);
   });
@@ -843,8 +881,12 @@ describe('effectiveAnnualRateOn', () => {
     expect(effectiveAnnualRateOn(rows, '2025-06-05', 9)).toBe(5.5);
   });
 
-  it('uses the earliest row for a date before the first change', () => {
-    expect(effectiveAnnualRateOn(rows, '2020-01-01', 9)).toBe(1.95);
+  it('uses the earliest row, not the account rate, for a date before the first row of a history that has begun', () => {
+    expect(effectiveAnnualRateOn(rows, '2020-01-01', 9, '2026-01-01')).toBe(1.95);
+  });
+
+  it('falls back to the account rate when the whole history starts in the future', () => {
+    expect(effectiveAnnualRateOn(rows, '2020-01-01', 9, '2019-01-01')).toBe(9);
   });
 
   it('falls back to the account rate when there are no rows', () => {
@@ -854,7 +896,7 @@ describe('effectiveAnnualRateOn', () => {
 
 describe('generateBudgetSchedule (fixed monthly budget)', () => {
   const budgetInput = () => {
-    const installment = calculateMortgagePaymentAmount(200000, 4, 300, 'MONTHLY', false, false);
+    const installment = calculateMortgagePaymentAmount(200000, 4, 300, 'MONTHLY', 'ANNUITY');
     return baseInput({
       startingBalance: 200000,
       annualRate: 4,
@@ -989,6 +1031,34 @@ describe('generateBudgetSchedule (fixed monthly budget)', () => {
     const after = result.rows.filter((r) => r.date > '2025-12-31');
     expect(after.length).toBeGreaterThan(0);
     for (const r of after) expect(r.extraPrincipal).toBe(0);
+  });
+
+  it('outside the window pays the recorded payment a rate change set, as the ordinary generator does', () => {
+    const rateChanges = [{ effectiveDate: '2025-02-01', annualRate: 4, paymentAmount: 1500 }];
+    const result = generateLoanSchedule({
+      ...budgetInput(),
+      rateChanges,
+      overpayments: {
+        targetMonthlyPayment: 4000,
+        targetMonthlyPaymentMode: 'SHORTEN_TERM',
+        targetMonthlyPaymentStart: '2025-04-01',
+      },
+    });
+    const beforeWindow = result.rows.filter((r) => r.date >= '2025-02-01' && r.date < '2025-04-01');
+    expect(beforeWindow.length).toBeGreaterThan(0);
+    for (const r of beforeWindow) expect(r.payment).toBeCloseTo(1500, 1);
+
+    const lower = generateLoanSchedule({
+      ...budgetInput(),
+      rateChanges,
+      overpayments: {
+        targetMonthlyPayment: 4000,
+        targetMonthlyPaymentMode: 'LOWER_INSTALLMENT',
+        targetMonthlyPaymentStart: '2025-04-01',
+      },
+    });
+    const lowerBefore = lower.rows.filter((r) => r.date >= '2025-02-01' && r.date < '2025-04-01');
+    for (const r of lowerBefore) expect(r.payment).toBeCloseTo(1500, 1);
   });
 
   it('never counts unpaid interest as principal when the installment is below the interest', () => {
@@ -1228,8 +1298,7 @@ describe('recurringOccurrencesDue', () => {
           6,
           360,
           'BIWEEKLY',
-          false,
-          false,
+          'ANNUITY',
         ),
         frequency: 'BIWEEKLY',
         firstPaymentDate: new Date(2026, 0, 31),
@@ -1375,8 +1444,7 @@ describe('recurring overpayment cadence in a schedule', () => {
         6,
         360,
         frequency,
-        false,
-        false,
+        'ANNUITY',
       ),
       frequency,
       firstPaymentDate: new Date(2026, 0, 1),
@@ -1554,8 +1622,7 @@ describe('projection horizon', () => {
         5,
         amortizationMonths,
         frequency,
-        false,
-        false,
+        'ANNUITY',
       );
       const result = generateLoanSchedule(
         baseInput({

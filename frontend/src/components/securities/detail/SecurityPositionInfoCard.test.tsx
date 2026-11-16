@@ -219,6 +219,45 @@ describe('SecurityPositionInfoCard', () => {
       ).toBeInTheDocument();
     });
 
+    it('shows the known part of the gain beside the unknown marker, never in its place', () => {
+      render(
+        <SecurityPositionInfoCard
+          detail={detail({
+            activity: activity({
+              realizedGain: null,
+              realizedGainComplete: false,
+              realizedGainKnownSubtotal: 120.5,
+              realizedGainCurrency: 'PLN',
+              realizedGainCurrencies: ['PLN'],
+              realizedSaleCount: 2,
+            }),
+          })}
+        />,
+      );
+      expect(screen.getByText(/Known part:.*120\.50/)).toBeInTheDocument();
+      // The subtotal appears once, as the known part; the figure's own place
+      // holds the unknown marker.
+      expect(screen.getAllByText(/120\.50/)).toHaveLength(1);
+    });
+
+    it('shows no known part when the gains are unknown and none is known in one currency', () => {
+      render(
+        <SecurityPositionInfoCard
+          detail={detail({
+            activity: activity({
+              realizedGain: null,
+              realizedGainComplete: false,
+              realizedGainKnownSubtotal: null,
+              realizedGainCurrency: null,
+              realizedGainCurrencies: ['EUR', 'PLN'],
+              realizedSaleCount: 2,
+            }),
+          })}
+        />,
+      );
+      expect(screen.queryByText(/Known part/)).not.toBeInTheDocument();
+    });
+
     it('leaves the row out entirely when nothing was ever sold', () => {
       render(<SecurityPositionInfoCard detail={detail()} />);
       expect(screen.queryByText(/Realized P\/L/)).not.toBeInTheDocument();
@@ -239,15 +278,15 @@ describe('SecurityPositionInfoCard', () => {
           })}
         />,
       );
-      // 3000 unrealized + 500 realized + 200 income - 50 fees = 3650 on 10000.
-      expect(screen.getByText(/\+€3,650\.00/)).toBeInTheDocument();
-      expect(screen.getByText(/\+36\.50%/)).toBeInTheDocument();
+      // 3000 unrealized + 500 realized + 200 income = 3700 on 10000; fees are already in the basis.
+      expect(screen.getByText(/\+€3,700\.00/)).toBeInTheDocument();
+      expect(screen.getByText(/\+37\.00%/)).toBeInTheDocument();
     });
 
-    it('counts only income and fees for a security still held but never sold', () => {
+    it('counts only income for a security still held but never sold', () => {
       render(<SecurityPositionInfoCard detail={detail()} />);
       // 3000 + 200 - 50 = 3150 on 10000.
-      expect(screen.getByText(/\+€3,150\.00/)).toBeInTheDocument();
+      expect(screen.getByText(/\+€3,200\.00/)).toBeInTheDocument();
     });
 
     it('is withheld when the realized gain sits in another currency', () => {
@@ -306,8 +345,8 @@ describe('SecurityPositionInfoCard', () => {
         />,
       );
       // Nothing is held, so there is no unrealized part to be unable to price:
-      // 900 realized + 200 income - 50 fees = 1050.
-      expect(screen.getByText(/\+€1,050\.00/)).toBeInTheDocument();
+      // 900 realized + 200 income = 1100.
+      expect(screen.getByText(/\+€1,100\.00/)).toBeInTheDocument();
     });
   });
 });

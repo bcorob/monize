@@ -1,62 +1,125 @@
 import { format, subDays, subMonths, subYears } from 'date-fns';
 import { resolveRangePreset, type ResolveRangeOptions } from '@/lib/date-range';
+import {
+  previousCalendarDay,
+  usesPriorCloseBaseline,
+} from './portfolio-change-baseline';
 
 /**
- * Where a Portfolio Value chart's window opens, per range.
+ * The window a Portfolio Value chart requests, per range.
+ *
+ * **A portfolio chart opens its series on the close its figures are measured
+ * from.** The figures are the server's (`usePortfolioPeriodResult`), measured
+ * over the window `backend/src/net-worth/portfolio-period-presets.util.ts`
+ * resolves for the range, so this table mirrors that file day for day:
+ * `periodStart` is where the period opens (`presetWindowStart`) and `start` is
+ * the day it is measured from (`presetEarliestDate`) -- the day before the
+ * period for a range measured from the prior close (`usesPriorCloseBaseline`),
+ * the period's own first day otherwise. `portfolio-range-window.test.ts` and
+ * `portfolio-period-presets.util.spec.ts` pin the two files to the same dates.
  *
  * Separate from `resolveRangePreset` on purpose. That function answers "what
  * period is the user asking about", and ten other reports depend on its
- * answer -- a spending report's 3M window must not quietly start a day early.
- * This one answers a narrower question that only a *price* chart has: **which
- * close is the series measured from**, so the figure beside it matches what
- * every other quote source reports for the same period.
+ * answer -- a spending report's 3M window must not move when a price chart's
+ * does. A rule naming an exact day overrides month alignment, which is why
+ * these do not consult `options.alignment`: "the same day a year earlier" has
+ * no month-aligned reading.
  *
- * The rules are not uniform, and that is deliberate rather than an oversight:
- * they were each set to match what the platforms being compared against
- * actually show.
- *
- * | Range | Opens on | Why |
+ * | Range | Period opens | Measured from |
  * |---|---|---|
- * | 1D, 1W, MTD | unchanged | already measured from the prior close, via `PRIOR_CLOSE_BASELINE_RANGES` |
- * | 1M | unchanged | intraday; the first *day* is collapsed to its close by `trimIntradayToFirstDayClose` |
- * | 3M, 6M | the day before the period starts | so the first plotted close precedes the period |
- * | YTD | the year's first **trading** day | not 1 January, which carries December's close |
- * | 1Y, 2Y, 5Y | the day before the anniversary | today - 1 year - 1 day, and so on |
+ * | 1D | unchanged (`resolveRangePreset` widens the daily fallback to a week) | the day before |
+ * | 1W | 7 days back | the day before |
+ * | MTD | the 1st | the last day of the previous month |
+ * | 1M, 3M, 2Y | 30 / 90 / 730 days back | the same day |
+ * | 6M | the same day six months earlier | the same day |
+ * | YTD | 31 December of the previous year | the same day |
+ * | 1Y, 5Y | the same day one / five years earlier | the same day |
+ * | All, custom | unchanged | the same day |
  *
- * A rule naming an exact day overrides month alignment, which is why these do
- * not consult `options.alignment`: "the day before the anniversary" has no
- * month-aligned reading.
+ * A day is valued from the latest close on or before it, so a `start` on a
+ * weekend carries the previous session's close; the point is dated by that
+ * session once the server names it (`openingSessionDate`).
  */
 export type PortfolioWindowStart =
   /** Take `resolveRangePreset`'s answer unchanged. */
   | { kind: 'inherit' }
-  /** The calendar day before `years`/`months` ago. */
-  | { kind: 'dayBefore'; years?: number; months?: number }
-  /** The first day of the year on which anything held was actually priced. */
-  | { kind: 'firstPricedDayOfYear' };
+  /** `days` calendar days before today. */
+  | { kind: 'daysBefore'; days: number }
+  /** The same day `months` earlier, clamped to the month's last day. */
+  | { kind: 'monthsBefore'; months: number }
+  /** The same day `years` earlier, so 29 February steps back to 28 February. */
+  | { kind: 'yearsBefore'; years: number }
+  /**
+   * 31 December of the previous year. A year-end on a weekend or holiday
+   * still carries the last session's close, and the period result's
+   * `startPriceDate` names it.
+   */
+  | { kind: 'previousYearEnd' };
 
 export const PORTFOLIO_WINDOW_STARTS: Readonly<
   Record<string, PortfolioWindowStart>
 > = {
   '1d': { kind: 'inherit' },
-  '1w': { kind: 'inherit' },
+  '1w': { kind: 'daysBefore', days: 7 },
   mtd: { kind: 'inherit' },
-  '1m': { kind: 'inherit' },
-  '3m': { kind: 'dayBefore', months: 3 },
-  '6m': { kind: 'dayBefore', months: 6 },
-  ytd: { kind: 'firstPricedDayOfYear' },
-  '1y': { kind: 'dayBefore', years: 1 },
-  '2y': { kind: 'dayBefore', years: 2 },
-  '5y': { kind: 'dayBefore', years: 5 },
+  '1m': { kind: 'daysBefore', days: 30 },
+  '3m': { kind: 'daysBefore', days: 90 },
+  '6m': { kind: 'monthsBefore', months: 6 },
+  ytd: { kind: 'previousYearEnd' },
+  '1y': { kind: 'yearsBefore', years: 1 },
+  '2y': { kind: 'daysBefore', days: 730 },
+  '5y': { kind: 'yearsBefore', years: 5 },
 };
 
-export interface PortfolioWindowOptions extends ResolveRangeOptions {
+/**
+ * The ranges a portfolio's value and performance are offered over: the
+ * Investments page's value chart and the Investment Performance report show
+ * the same buttons, so the same caption names the same window on both.
+ */
+export const PORTFOLIO_CHART_RANGES = [
+  '1d',
+  '1w',
+  'mtd',
+  '1m',
+  '3m',
+  'ytd',
+  '1y',
+  '2y',
+  '5y',
+  'all',
+] as const;
+
+export interface PortfolioRangeWindow {
   /**
-   * The year's first priced day, from `netWorthApi.getFirstPricedDay`. Null or
-   * absent -- not loaded yet, or the scope holds nothing priced -- keeps the
-   * calendar boundary rather than inventing a trading day.
+   * The day the series is requested from: the close the figures are measured
+   * from. Empty for a window with no start (All).
    */
-  ytdFirstPricedDay?: string | null;
+  start: string;
+  /**
+   * The day the period the range names opens. Equal to `start` except on a
+   * range measured from the prior close, where it is the day after.
+   */
+  periodStart: string;
+  end: string;
+}
+
+function periodStartFor(
+  rule: PortfolioWindowStart,
+  base: string,
+  now: Date,
+): string {
+  switch (rule.kind) {
+    case 'inherit':
+      return base;
+    case 'daysBefore':
+      return format(subDays(now, rule.days), 'yyyy-MM-dd');
+    case 'monthsBefore':
+      return format(subMonths(now, rule.months), 'yyyy-MM-dd');
+    case 'yearsBefore':
+      return format(subYears(now, rule.years), 'yyyy-MM-dd');
+    case 'previousYearEnd':
+      return `${now.getFullYear() - 1}-12-31`;
+  }
 }
 
 /**
@@ -67,8 +130,8 @@ export interface PortfolioWindowOptions extends ResolveRangeOptions {
  */
 export function resolvePortfolioRangeWindow(
   range: string,
-  options: PortfolioWindowOptions = {},
-): { start: string; end: string } {
+  options: ResolveRangeOptions = {},
+): PortfolioRangeWindow {
   return applyPortfolioWindowStart(
     range,
     resolveRangePreset(range, options),
@@ -86,32 +149,13 @@ export function resolvePortfolioRangeWindow(
 export function applyPortfolioWindowStart(
   range: string,
   base: { start: string; end: string },
-  options: PortfolioWindowOptions = {},
-): { start: string; end: string } {
-  const rule = PORTFOLIO_WINDOW_STARTS[range];
-  if (!rule || rule.kind === 'inherit') return base;
-
-  if (rule.kind === 'firstPricedDayOfYear') {
-    return { ...base, start: options.ytdFirstPricedDay || base.start };
-  }
-
-  const now = options.now ?? new Date();
-  const anniversary =
-    rule.years !== undefined
-      ? subYears(now, rule.years)
-      : subMonths(now, rule.months ?? 0);
-  return { ...base, start: format(subDays(anniversary, 1), 'yyyy-MM-dd') };
-}
-
-/**
- * Does this range need the year's first priced day looked up before its window
- * can be resolved? Only YTD does, so only YTD pays for the extra request.
- */
-export function needsFirstPricedDay(range: string): boolean {
-  return PORTFOLIO_WINDOW_STARTS[range]?.kind === 'firstPricedDayOfYear';
-}
-
-/** 1 January of the year `now` falls in, as YYYY-MM-DD. */
-export function startOfYearIso(now: Date = new Date()): string {
-  return `${now.getFullYear()}-01-01`;
+  options: ResolveRangeOptions = {},
+): PortfolioRangeWindow {
+  const rule = PORTFOLIO_WINDOW_STARTS[range] ?? { kind: 'inherit' };
+  const periodStart = periodStartFor(rule, base.start, options.now ?? new Date());
+  const start =
+    periodStart && usesPriorCloseBaseline(range)
+      ? previousCalendarDay(periodStart)
+      : periodStart;
+  return { start, periodStart, end: base.end };
 }

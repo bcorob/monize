@@ -34,6 +34,12 @@
     "dismiss": "닫기",
     "dismissAriaLabel": "업데이트 알림 닫기"
   },
+  "jwtSecretBanner": {
+    "label": "JWT_SECRET이 취약합니다.",
+    "detail": "공개된 예시 값이거나 너무 쉽게 추측할 수 있어 세션 토큰이 위조될 수 있습니다. <code>openssl rand -base64 32</code>로 강력한 값을 생성하세요. 값을 변경하면 인증 앱 코드가 더 이상 작동하지 않고 신뢰할 수 있는 기기도 해제됩니다. 사용자는 백업 코드로 로그인한 뒤 2FA를 다시 설정하고, 백업 코드가 없는 사용자는 <users>사용자 관리</users>에서 2FA를 재설정하세요. 먼저 <code>docs/backend/modules-and-runtime.md</code>(Changing JWT_SECRET)를 읽어 보세요.",
+    "dismiss": "닫기",
+    "dismissAriaLabel": "JWT_SECRET 경고 닫기"
+  },
   "actionHistory": {
     "title": "작업 내역",
     "buttonAriaLabel": "작업 내역",
@@ -58,6 +64,7 @@
       "tag": "태그",
       "account": "계정",
       "scheduled_transaction": "예약됨",
+      "scheduled_posting": "예약됨",
       "security": "유가증권",
       "budget": "예산",
       "custom_report": "보고서"
@@ -79,7 +86,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "장기 자본이득 재투자",
       "CAPITAL_GAIN_SHORT": "단기 자본이득",
       "CAPITAL_GAIN_LONG": "장기 자본이득",
-      "REDEEM": "CD/채권 상환"
+      "REDEEM": "CD/채권 상환",
+      "RETURN_OF_CAPITAL": "자본 환급"
     },
     "descriptions": {
       "createdAccount": "계정 \"{name}\" 생성됨",
@@ -99,6 +107,7 @@
       "deletedInvestmentReport": "투자 보고서 \"{name}\" 삭제됨",
       "createdPayee": "수취인 \"{name}\" 생성됨",
       "updatedPayee": "수취인 \"{name}\" 업데이트됨",
+      "lookedUpPayeeContact": "거래처 \"{name}\"의 연락처 정보를 조회했습니다",
       "deletedPayee": "수취인 \"{name}\" 삭제됨",
       "createdReport": "보고서 \"{name}\" 생성됨",
       "updatedReport": "보고서 \"{name}\" 업데이트됨",
@@ -106,6 +115,7 @@
       "createdScheduledTransaction": "예약 거래 \"{name}\" 생성됨",
       "updatedScheduledTransaction": "예약 거래 \"{name}\" 업데이트됨",
       "deletedScheduledTransaction": "예약 거래 \"{name}\" 삭제됨",
+      "postedScheduledTransaction": "예약 거래 \"{name}\" 게시됨",
       "createdSecurity": "유가증권 \"{symbol}\" 생성됨",
       "updatedSecurity": "유가증권 \"{symbol}\" 업데이트됨",
       "deletedSecurity": "유가증권 \"{symbol}\" 삭제됨",
@@ -115,26 +125,23 @@
       "createdTransaction": "거래 생성됨 {payee} {amount}",
       "updatedTransaction": "거래 업데이트됨 {payee} {amount}",
       "deletedTransaction": "거래 삭제됨 {payee} {amount}",
+      "convertedToTransfer": "거래 {payee} {amount}을(를) 이체로 변환함",
+      "convertedToTransaction": "이체 {payee} {amount}을(를) 거래로 변환함",
       "bulkUpdatedTransactions": "{count, plural, one {# 건의 거래} other {# 건의 거래}} 일괄 업데이트됨",
       "createdTransfer": "이체 생성됨 {from}에서 {to}으로 {amount}",
       "createdInvestmentTransaction": "{action} 거래 생성됨",
       "updatedInvestmentTransaction": "{action} 거래 업데이트됨",
       "deletedInvestmentTransaction": "{action} 거래 삭제됨",
       "transferredSecurity": "계정 간 유가증권이 이체되었습니다",
-      "updatedSecurityTransfer": "유가증권 이체가 업데이트되었습니다"
-    },
-    "timeAgo": {
-      "justNow": "방금 전",
-      "minutes": "{count}분 전",
-      "hours": "{count}시간 전",
-      "days": "{count}일 전"
+      "updatedSecurityTransfer": "유가증권 이체가 업데이트되었습니다",
+      "ranTransactionRule": "“{name}” 규칙을 {count, plural, other {# 건}}의 거래에 실행했습니다"
     },
     "undonePrefix": "취소됨: {description}",
     "redonePrefix": "다시 실행됨: {description}"
   },
   "pageHeader": {
-    "helpAriaLabel": "이 섹션의 도움말을 위해 Monize 위키 열기",
-    "helpTooltip": "이 섹션의 도움말을 위해 Monize 위키 열기"
+    "helpAriaLabel": "이 페이지 도움말",
+    "helpTooltip": "이 페이지 도움말"
   },
   "bootSplash": {
     "loading": "Monize 로드 중",
@@ -145,5 +152,17 @@
     "title": "연결할 수 없음",
     "message": "Monize가 서버에 연결할 수 없습니다. 연결 상태를 확인하고 다시 시도하세요.",
     "retry": "다시 시도"
+  },
+  "pushBanner": {
+    "enableTitle": "알림을 켤까요?",
+    "enableBody": "Monize는 앱이 닫혀 있어도 이 기기에서 청구서와 예산 한도를 알려줄 수 있습니다. 브라우저가 권한을 요청합니다.",
+    "enableButton": "켜기",
+    "enabling": "켜는 중…",
+    "installIosTitle": "먼저 Monize를 홈 화면에 추가하세요.",
+    "installIosBody": "iPhone과 iPad에서는 설치된 앱에서만 알림이 작동합니다. 공유를 누르고 홈 화면에 추가를 선택한 뒤, 거기서 Monize를 여세요.",
+    "blockedTitle": "Monize의 알림이 차단되어 있습니다.",
+    "blockedBody": "이 페이지에 대해 브라우저의 사이트 설정에서 허용해 주세요. Monize가 스스로 다시 요청할 수는 없습니다.",
+    "blockedIosBody": "iOS 설정에서 알림, 그다음 Monize를 열어 허용하세요. 목록에 Monize가 없으면 홈 화면에서 삭제한 뒤 다시 추가하세요.",
+    "dismiss": "나중에"
   }
 }

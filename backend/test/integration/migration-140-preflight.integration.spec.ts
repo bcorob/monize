@@ -137,6 +137,15 @@ describe("migration 140 preflight over legacy data", () => {
     // Brings the synchronize-built schema up to the real one's shape, which
     // includes applying 133 itself.
     await applyRlsPolicies(dataSource);
+    // ...and 179, which renames budget_alerts to notifications. Migration 140
+    // predates that rename and is guarded on the old name, so a database still
+    // legacy enough to need 140's repair is one where the table is still called
+    // budget_alerts. Renaming it back is part of reconstructing that database,
+    // exactly like dropping the guards below -- and it is what makes the alert
+    // half of this spec exercise the migration instead of skipping it.
+    await dataSource.query(
+      `ALTER TABLE IF EXISTS notifications RENAME TO budget_alerts`,
+    );
   });
 
   afterAll(async () => {

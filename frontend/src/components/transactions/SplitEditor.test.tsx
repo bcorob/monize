@@ -2,10 +2,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@/test/render';
 import { SplitEditor, SplitRow, createEmptySplits, toSplitRows, toCreateSplitData } from './SplitEditor';
 
-vi.mock('@/lib/format', () => ({
+vi.mock('@/lib/format', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/format')>()),
   getCurrencySymbol: () => '$',
   getDecimalPlacesForCurrency: () => 2,
   roundToCents: (v: number) => Math.round(v * 100) / 100,
+  // No currency is registered in this suite, so every code rounds at cents.
+  roundToEntryPlaces: (v: number) => Math.round(v * 100) / 100,
+  roundMoney: (v: number, d = 4) => { const f = Math.pow(10, d); return Math.round(v * f) / f; },
   roundToDecimals: (v: number, d: number) => { const f = Math.pow(10, d); return Math.round(v * f) / f; },
   formatAmount: (v: number | undefined | null) => (v === undefined || v === null || isNaN(v)) ? '' : (Math.round(v * 100) / 100).toFixed(2),
   formatAmountWithCommas: (v: number | undefined | null) => (v === undefined || v === null || isNaN(v)) ? '' : (Math.round(v * 100) / 100).toFixed(2),
@@ -228,11 +232,11 @@ describe('SplitEditor', () => {
     expect(mockOnChange).toHaveBeenCalledTimes(1);
     const newSplits = mockOnChange.mock.calls[0][0];
     expect(newSplits).toHaveLength(3);
-    // -100 / 3 = -33.33 each, last gets remainder
-    expect(newSplits[0].amount).toBe(-33.33);
-    expect(newSplits[1].amount).toBe(-33.33);
-    // Last split absorbs remainder: -100 - (-33.33 * 2) = -33.34
-    expect(newSplits[2].amount).toBe(-33.34);
+    // -100 / 3 = -33.3333 each (the stored four decimals), last gets remainder
+    expect(newSplits[0].amount).toBe(-33.3333);
+    expect(newSplits[1].amount).toBe(-33.3333);
+    // Last split absorbs remainder: -100 - (-33.3333 * 2) = -33.3334
+    expect(newSplits[2].amount).toBe(-33.3334);
   });
 
   it('removes a split when more than 2 exist', () => {
@@ -286,6 +290,30 @@ describe('SplitEditor', () => {
     expect(newSplits).toHaveLength(3);
     // Remaining is -50 - (-40) = -10
     expect(newSplits[2].amount).toBe(-10);
+  });
+
+  it('keeps four decimals when pre-filling, distributing and setting the total', () => {
+    const mockOnAmountChange = vi.fn();
+    const splits: SplitRow[] = [
+      createSplitRow({ id: 'split-1', amount: -100 }),
+      createSplitRow({ id: 'split-2', amount: -100.1234 }),
+    ];
+    render(
+      <SplitEditor
+        splits={splits}
+        onChange={mockOnChange}
+        categories={mockCategories}
+        transactionAmount={-432.1765}
+        onTransactionAmountChange={mockOnAmountChange}
+      />
+    );
+
+    fireEvent.click(screen.getAllByText(/Set total to/)[0]);
+    expect(mockOnAmountChange).toHaveBeenCalledWith(-200.1234);
+
+    fireEvent.click(screen.getAllByText('Add Split')[0]);
+    // -432.1765 - (-200.1234) = -232.0531, not -232.05
+    expect(mockOnChange.mock.calls[0][0][2].amount).toBe(-232.0531);
   });
 
   it('distributes proportionally based on current amounts', () => {
@@ -1390,6 +1418,42 @@ describe('SplitEditor — desktop layout interactions', () => {
     expect(mockOnChange).toHaveBeenCalledTimes(1);
     const newSplits = mockOnChange.mock.calls[0][0];
     expect(newSplits[0].tagIds).toContain('tag-1');
+  });
+
+  it('orders a line\'s tag picker recent-first from tagUsage, and A-Z without it', () => {
+    const splits: SplitRow[] = [createSplitRow({ id: 'split-1', amount: -50 })];
+    const optionOrder = () => {
+      fireEvent.click(screen.getAllByText('Tags...')[0]);
+      const essential = screen.getByText('Essential');
+      const discretionary = screen.getByText('Discretionary');
+      return essential.compareDocumentPosition(discretionary) & Node.DOCUMENT_POSITION_FOLLOWING
+        ? ['Essential', 'Discretionary']
+        : ['Discretionary', 'Essential'];
+    };
+
+    const { unmount } = render(
+      <SplitEditor
+        splits={splits}
+        onChange={mockOnChange}
+        categories={mockCategories}
+        tags={mockTags}
+        tagUsage={{ 'tag-1': { lastUsed: '2026-10-01', count: 1 } }}
+        transactionAmount={-50}
+      />
+    );
+    expect(optionOrder()).toEqual(['Essential', 'Discretionary']);
+    unmount();
+
+    render(
+      <SplitEditor
+        splits={splits}
+        onChange={mockOnChange}
+        categories={mockCategories}
+        tags={mockTags}
+        transactionAmount={-50}
+      />
+    );
+    expect(optionOrder()).toEqual(['Discretionary', 'Essential']);
   });
 
   it('add remaining button in desktop layout adds remaining amount to split', () => {

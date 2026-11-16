@@ -36,24 +36,32 @@ export function MnyPasswordDialog({
   const [password, setPassword] = useState('');
 
   return (
-    <Modal isOpen={isOpen} onClose={onCancel} maxWidth="sm" pushHistory>
+    <Modal
+      isOpen={isOpen}
+      onClose={onCancel}
+      maxWidth="sm"
+      pushHistory
+      title={t('mnyPassword.heading')}
+      description={t('mnyPassword.body')}
+      className="p-6"
+    >
       <form
         onSubmit={(e) => {
           e.preventDefault();
           onSubmit(password);
         }}
-        className="p-6"
       >
-        <h2 className="text-lg font-semibold text-foreground">
-          {t('mnyPassword.heading')}
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {isRetry ? t('mnyPassword.retryBody') : t('mnyPassword.body')}
-        </p>
+        {/* The rejection is feedback on what was just typed, not help, so it
+            stays on the page rather than joining the description tooltip. */}
+        {isRetry && (
+          <p role="alert" className="mb-4 text-sm text-red-600 dark:text-red-400">
+            {t('mnyPassword.retryBody')}
+          </p>
+        )}
 
         <label
           htmlFor="mny-password"
-          className="mt-4 block text-sm font-medium text-foreground"
+          className="block text-sm font-medium text-foreground"
         >
           {t('mnyPassword.label')}
         </label>

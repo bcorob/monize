@@ -1,0 +1,58 @@
+{
+  "product": "TOS",
+  "validFrom": "2024-01",
+  "addend": null,
+  "hasFee": true,
+  "structure": {
+    "instrument": {
+      "issuerCountryCode": "PL",
+      "issuerCode": "PL_MF",
+      "programCode": "TOS",
+      "currency": "PLN",
+      "marketability": "RETAIL_REDEEMABLE",
+      "faceValue": "100.00"
+    },
+    "rateRule": {
+      "type": "FIXED"
+    },
+    "redemption": {
+      "type": "ON_DEMAND",
+      "earliestDaysAfterPurchase": 7,
+      "latestDaysBeforeMaturity": 20,
+      "blackouts": [],
+      "penalties": [
+        {
+          "type": "FIXED_FEE_PER_UNIT"
+        }
+      ],
+      "proceedsFloor": {
+        "type": "FACE_VALUE",
+        "appliesTo": "ALL_PERIODS"
+      }
+    },
+    "rest": {
+      "schemaVersion": 1,
+      "schedule": {
+        "anchor": "LOT_PURCHASE_DATE",
+        "periodMonths": 12,
+        "periodCount": 3,
+        "rollDay": "ANCHOR_DAY_CLAMPED",
+        "calendarId": "PL"
+      },
+      "accrual": {
+        "type": "ACTUAL_DAYS_IN_PERIOD"
+      },
+      "principalRule": {
+        "type": "FIXED_NOMINAL"
+      },
+      "capitalization": {
+        "type": "COMPOUND_AT_PERIOD_END",
+        "baseRounding": "PER_PERIOD"
+      },
+      "rounding": {
+        "moneyDecimals": 2,
+        "mode": "HALF_UP"
+      }
+    }
+  }
+}

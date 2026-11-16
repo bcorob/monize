@@ -1,4 +1,5 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { ConflictException } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { DataSource, EntityManager } from "typeorm";
@@ -13,6 +14,7 @@ import { UserPreference } from "@/users/entities/user-preference.entity";
 import { UsersService } from "@/users/users.service";
 import { CurrenciesService } from "@/currencies/currencies.service";
 import { NetWorthService } from "@/net-worth/net-worth.service";
+import { SecuritiesService } from "@/securities/securities.service";
 import { SecurityPriceService } from "@/securities/security-price.service";
 import { ExchangeRateService } from "@/currencies/exchange-rate.service";
 import { Security } from "@/securities/entities/security.entity";
@@ -20,13 +22,21 @@ import { SecurityPrice } from "@/securities/entities/security-price.entity";
 import { Holding } from "@/securities/entities/holding.entity";
 import { InvestmentTransaction } from "@/securities/entities/investment-transaction.entity";
 import { HoldingsService } from "@/securities/holdings.service";
+import { TransactionRulesApplierService } from "@/transaction-rules/transaction-rules-applier.service";
 import { ExchangeRate } from "@/currencies/entities/exchange-rate.entity";
+import { Tag } from "@/tags/entities/tag.entity";
+import { TransactionTag } from "@/tags/entities/transaction-tag.entity";
+import { TransactionSplitTag } from "@/tags/entities/transaction-split-tag.entity";
+import { TagsService } from "@/tags/tags.service";
+import { ActionHistoryService } from "@/action-history/action-history.service";
 import { ImportPostProcessingService } from "@/import/import-post-processing.service";
+import { RateHistoryCatchUpService } from "@/currencies/rate-history-catch-up.service";
 import { ImportJob } from "@/import/mny/entities/import-job.entity";
 import { ImportStagedFile } from "@/import/mny/entities/import-staged-file.entity";
 import { MnyImportJobService } from "@/import/mny/mny-import-job.service";
 import { MnyImportService } from "@/import/mny/mny-import.service";
 import { MnyParserService } from "@/import/mny/mny-parser.service";
+import { MnyMarketRateService } from "@/import/mny/mny-market-rates.service";
 import { MnyStagingService } from "@/import/mny/mny-staging.service";
 import {
   MNY_FIXTURES,
@@ -40,6 +50,7 @@ import {
   mnyAccount,
   mnyBill,
   mnyCategory,
+  mnyClassification,
   mnyCurrency,
   mnyDefaults,
   mnyPayee,
@@ -53,11 +64,14 @@ import {
 } from "@/import/mny/__fixtures__/mny-row-builders";
 import {
   cashKeyByAccountKey,
+  currencyCodesByHandle,
   mapAccounts,
   mapCategories,
   mapPayees,
 } from "@/import/mny/map/map-reference";
 import { mapTransactions } from "@/import/mny/map/map-transactions";
+import { mapClassificationTags } from "@/import/mny/map/map-classifications";
+import { writeTags } from "@/import/mny/writers/write-tags";
 import { mapBills } from "@/import/mny/map/map-bills";
 import { mapLoans } from "@/import/mny/map/map-loans";
 import { mapSecurities } from "@/import/mny/map/map-securities";
@@ -67,7 +81,7 @@ import {
   tradesByHandle,
 } from "@/import/mny/map/investment-cash";
 import { DEFAULT_MNY_IMPORT_OPTIONS } from "@/import/mny/model/mny-import-options";
-import { MNY_ACTION } from "@/import/mny/model/mny-model";
+import { MNY_ACTION } from "@/import/mny/model/mny-actions";
 import {
   applyDeferredClosures,
   writeAccounts,
@@ -82,6 +96,7 @@ import {
   writeInvestments,
   writeSecurities,
 } from "@/import/mny/writers/write-investments";
+import { ExchangeRateRow } from "@/import/mny/writers/write-prices";
 import { writeBills } from "@/import/mny/writers/write-bills";
 import { writeLoans } from "@/import/mny/writers/write-loans";
 import { ScheduledTransaction } from "@/scheduled-transactions/entities/scheduled-transaction.entity";
@@ -129,7 +144,7 @@ describe("mny writers (integration)", () => {
     "exchange_rates",
   ];
 
-  /** Mirrors CurrenciesService.ensureSystemCurrency, which the FKs require. */
+  /** Stands in for CurrenciesService.ensureCurrencyForUser, whose row the FKs require. */
   async function ensureCurrency(code: string): Promise<void> {
     await dataSource.query(
       `INSERT INTO currencies (code, name, symbol, decimal_places, is_active)
@@ -157,16 +172,25 @@ describe("mny writers (integration)", () => {
           Holding,
           InvestmentTransaction,
           ExchangeRate,
+          Tag,
+          TransactionTag,
+          TransactionSplitTag,
         ]),
       ],
       providers: [
         MnyStagingService,
         MnyParserService,
+        MnyMarketRateService,
         MnyImportJobService,
         MnyImportService,
         // Real: its balance recalculation is the cross-check the verification
         // report compares against.
         ImportPostProcessingService,
+        // Real: the import creates tags through its find-or-create, and the
+        // `transaction_tags` writes below are what this suite is for. Its
+        // history recorder only needs the DataSource and ModuleRef.
+        TagsService,
+        ActionHistoryService,
         // Stubbed: these reach external price and FX providers.
         {
           provide: NetWorthService,
@@ -180,14 +204,40 @@ describe("mny writers (integration)", () => {
           },
         },
         {
+          // Stubbed: the bond-price recompute is not what these cases read.
+          provide: SecuritiesService,
+          useValue: { recomputeBondPricesOfAccounts: async () => undefined },
+        },
+        {
           provide: ExchangeRateService,
-          useValue: { backfillHistoricalRates: async () => undefined },
+          // No stored history and nothing from the provider: a trade the file
+          // cannot convert stays unconverted, as it did before the lookup.
+          useValue: {
+            backfillHistoricalRates: async () => undefined,
+            resolveStoredRate: async () => ({ rate: null }),
+            fillRateWindow: async () => ({ stored: 0, answered: true }),
+          },
+        },
+        {
+          // Stubbed: the post-import gap fill reaches the FX provider.
+          provide: RateHistoryCatchUpService,
+          useValue: { start: () => undefined },
         },
         { provide: UsersService, useValue: { deleteData: jest.fn() } },
+        // No rules: the rules pass is covered against the real applier in
+        // transaction-rules-import.integration.spec.ts.
+        {
+          provide: TransactionRulesApplierService,
+          useValue: {
+            loadRulesFor: async () => [],
+            applyToNew: async () => [],
+          },
+        },
         {
           provide: CurrenciesService,
           useValue: {
-            ensureSystemCurrency: (code: string) => ensureCurrency(code),
+            ensureCurrencyForUser: (_userId: string, code: string) =>
+              ensureCurrency(code),
           },
         },
         // The real holdings rebuild -- the whole point of the investment half of
@@ -467,7 +517,18 @@ describe("mny writers (integration)", () => {
           }),
           mnyCategory({ handle: 60, name: "Interest", level: 1, parent: 131 }),
           mnyCategory({ handle: 61, name: "Groceries", level: 1, parent: 131 }),
+          // A classification item shares the table: Money's real shape, from
+          // the maintainer's file.
+          mnyCategory({
+            handle: 552,
+            name: "20 Spring Apartment",
+            level: 0,
+            parent: null,
+            classification: 1,
+            categoryType: -1,
+          }),
         ],
+        classifications: [mnyClassification({ handle: 1, name: "Properties" })],
       });
       const accounts = mapAccounts(
         reference,
@@ -484,6 +545,10 @@ describe("mny writers (integration)", () => {
       });
       const categories = mapCategories(reference, null);
       const payees = mapPayees(reference.payees, null);
+      const tags = mapClassificationTags(
+        reference,
+        transactions.referencedTags,
+      );
 
       const written = await inTransaction(async (manager) => {
         const writtenAccounts = await writeAccounts(
@@ -497,7 +562,18 @@ describe("mny writers (integration)", () => {
           categories.categories,
         );
         const writtenPayees = await writePayees(manager, userId, payees.payees);
-        return { writtenAccounts, writtenCategories, writtenPayees };
+        const writtenTags = await writeTags(
+          manager,
+          module.get(TagsService),
+          userId,
+          tags.tags,
+        );
+        return {
+          writtenAccounts,
+          writtenCategories,
+          writtenPayees,
+          writtenTags,
+        };
       });
 
       return {
@@ -505,6 +581,8 @@ describe("mny writers (integration)", () => {
         transactions,
         categories,
         payees,
+        tags,
+        writtenTags: written.writtenTags,
         input: {
           transactions: transactions.transactions,
           accountIdByKey: written.writtenAccounts.idByKey,
@@ -521,6 +599,7 @@ describe("mny writers (integration)", () => {
             ]),
           ),
           payeeNameByHandle: payees.nameByHandle,
+          tagIdByHandle: written.writtenTags.idByHandle,
         },
       };
     }
@@ -554,7 +633,7 @@ describe("mny writers (integration)", () => {
         relations: { payee: true, category: true },
       });
       expect(row).toMatchObject({
-        amount: "-42.5000",
+        amount: "-42.50000000",
         transactionDate: "2024-03-04",
         description: "Weekly shop",
         referenceNumber: "1042",
@@ -563,6 +642,81 @@ describe("mny writers (integration)", () => {
       });
       expect(row!.payee!.name).toBe("Bank");
       expect(row!.category!.name).toBe("Groceries");
+    });
+
+    it("tags a classified row and a classified split leg with the classification's key:value tag", async () => {
+      const { tags, writtenTags, input } = await setup(
+        transactionData({
+          transactions: [
+            mnyTransaction({
+              handle: 1,
+              account: 1,
+              amount: -100,
+              classification1: 552,
+            }),
+            mnyTransaction({
+              handle: 2,
+              account: 1,
+              amount: -70,
+              category: 61,
+              classification1: 552,
+            }),
+            mnyTransaction({
+              handle: 3,
+              account: 1,
+              amount: -30,
+              category: 60,
+            }),
+            mnyTransaction({ handle: 4, account: 2, amount: 5 }),
+          ],
+          splits: [
+            mnySplit({ parent: 1, child: 2, position: 0 }),
+            mnySplit({ parent: 1, child: 3, position: 1 }),
+          ],
+        }),
+      );
+
+      expect(tags.tags).toEqual([
+        { handle: 552, name: "Properties:20 Spring Apartment" },
+      ]);
+      expect(writtenTags.created).toBe(1);
+
+      const written = await inTransaction((manager) =>
+        writeTransactions(manager, userId, input),
+      );
+      expect(written.tagLinksApplied).toBe(2);
+
+      const tag = await dataSource
+        .getRepository(Tag)
+        .findOneByOrFail({ userId, name: "Properties:20 Spring Apartment" });
+      const rowLinks = await dataSource
+        .getRepository(TransactionTag)
+        .find({ where: { tagId: tag.id }, relations: { transaction: true } });
+      expect(rowLinks.map((link) => link.transaction.amount)).toEqual([
+        "-100.00000000",
+      ]);
+      const legLinks = await dataSource
+        .getRepository(TransactionSplitTag)
+        .find({
+          where: { tagId: tag.id },
+          relations: { transactionSplit: true },
+        });
+      expect(legLinks.map((link) => link.transactionSplit.amount)).toEqual([
+        "-70.00000000",
+      ]);
+      // The item itself is never a category.
+      expect(
+        await dataSource
+          .getRepository(Category)
+          .findOneBy({ userId, name: "20 Spring Apartment" }),
+      ).toBeNull();
+
+      // A second import finds the tag instead of creating a twin.
+      const again = await inTransaction((manager) =>
+        writeTags(manager, module.get(TagsService), userId, tags.tags),
+      );
+      expect(again.created).toBe(0);
+      expect(again.idByHandle.get(552)).toBe(tag.id);
     });
 
     it("cross-links a transfer pair, which a per-row insert could not do", async () => {
@@ -840,8 +994,12 @@ describe("mny writers (integration)", () => {
     async function importRows(
       rows: ReturnType<typeof transactionData>,
       investmentTables: ReturnType<typeof investmentData>,
+      overrides: {
+        referenceRows?: ReturnType<typeof reference>;
+        exchangeRates?: readonly ExchangeRateRow[];
+      } = {},
     ) {
-      const referenceRows = reference();
+      const referenceRows = overrides.referenceRows ?? reference();
       const accounts = mapAccounts(
         referenceRows,
         DEFAULT_MNY_IMPORT_OPTIONS,
@@ -849,7 +1007,7 @@ describe("mny writers (integration)", () => {
       );
       const securities = mapSecurities({
         securities: investmentTables.securities,
-        currencyByHandle: new Map(),
+        currencyByHandle: currencyCodesByHandle(referenceRows),
         baseCurrency: "USD",
         activeHandles: new Set([SECURITY_HANDLE]),
       });
@@ -859,6 +1017,7 @@ describe("mny writers (integration)", () => {
         accounts,
         securities,
         bills: [],
+        exchangeRates: overrides.exchangeRates ?? [],
       });
       const transactions = mapTransactions({
         transactions: rows,
@@ -890,6 +1049,7 @@ describe("mny writers (integration)", () => {
           categoryIdByHandle: new Map(),
           payeeIdByHandle: new Map(),
           payeeNameByHandle: new Map(),
+          tagIdByHandle: new Map(),
         });
         await writeInvestments(manager, userId, {
           transactions: investments.transactions,
@@ -901,6 +1061,7 @@ describe("mny writers (integration)", () => {
           symbolByHandle: new Map([[SECURITY_HANDLE, "VOO"]]),
           writtenTransactionIds: writtenTransactions.writtenTransactionIds,
           writtenSplitIds: writtenTransactions.writtenSplitIds,
+          tagIdByHandle: new Map(),
         });
         return { accountIdByKey: writtenAccounts.idByKey };
       });
@@ -936,7 +1097,7 @@ describe("mny writers (integration)", () => {
       const chequing = await rowsIn(accountIdByKey.get("acct-1")!);
       expect(chequing).toHaveLength(1);
       expect(chequing[0]).toMatchObject({
-        amount: "-2400.0000",
+        amount: "-2400.00000000",
         isTransfer: false,
         linkedTransactionId: null,
       });
@@ -993,7 +1154,7 @@ describe("mny writers (integration)", () => {
         categoryId: null,
         transferAccountId: null,
         linkedTransactionId: null,
-        amount: "-2400.0000",
+        amount: "-2400.00000000",
       });
 
       const trade = await dataSource
@@ -1002,6 +1163,142 @@ describe("mny writers (integration)", () => {
       expect(trade.transactionSplitId).toBe(investmentLeg!.id);
       expect(trade.transactionId).toBeNull();
       expect(trade.fundingAccountId).toBeNull();
+    });
+
+    describe("across currencies", () => {
+      const crossCurrencyReference = (accountCurrency: number) =>
+        referenceData({
+          currencies: [
+            mnyCurrency({ handle: 1, isoCode: "EUR" }),
+            mnyCurrency({ handle: 2, isoCode: "USD" }),
+            mnyCurrency({ handle: 3, isoCode: "CAD" }),
+          ],
+          defaults: mnyDefaults({ defaultCurrency: 2 }),
+          accounts: [
+            mnyAccount({
+              handle: CHEQUING,
+              type: 0,
+              name: "Chequing",
+              currency: 1,
+            }),
+            mnyAccount({
+              handle: BROKERAGE,
+              type: 5,
+              name: "Brokerage",
+              relatedAccount: SLEEVE,
+              currency: accountCurrency,
+            }),
+            mnyAccount({
+              handle: SLEEVE,
+              type: 0,
+              name: "Brokerage (Cash)",
+              relatedAccount: BROKERAGE,
+              currency: accountCurrency,
+            }),
+          ],
+        });
+
+      it("credits the USD sleeve with the investment side's own amount", async () => {
+        await ensureCurrency("EUR");
+        // A transfer into the brokerage that adds shares and moves no trade
+        // cash: the sleeve row is the only record of the money arriving. Money
+        // stores EUR 2400 out of chequing and USD 2640 on the investment side.
+        const { accountIdByKey } = await importRows(
+          transactionData({
+            transactions: [
+              mnyTransaction({
+                handle: 20,
+                account: CHEQUING,
+                amount: -2_400,
+              }),
+              mnyTransaction({
+                handle: 21,
+                account: BROKERAGE,
+                amount: 2_640,
+                security: SECURITY_HANDLE,
+                action: MNY_ACTION.ADD_SHARES,
+              }),
+            ],
+            transfers: [mnyTransfer({ from: 20, to: 21 })],
+          }),
+          detail(21),
+          { referenceRows: crossCurrencyReference(2) },
+        );
+
+        const bank = await rowsIn(accountIdByKey.get("acct-1")!);
+        const sleeve = await rowsIn(accountIdByKey.get("acct-6")!);
+        expect(bank).toHaveLength(1);
+        expect(bank[0]).toMatchObject({
+          amount: "-2400.00000000",
+          currencyCode: "EUR",
+        });
+        expect(sleeve).toHaveLength(1);
+        expect(sleeve[0]).toMatchObject({
+          amount: "2640.00000000",
+          currencyCode: "USD",
+          linkedTransactionId: bank[0].id,
+        });
+      });
+
+      it("stores a USD-quoted trade in a CAD account in USD with its rate", async () => {
+        await ensureCurrency("CAD");
+        const { accountIdByKey } = await importRows(
+          transactionData({
+            transactions: [
+              mnyTransaction({
+                handle: 21,
+                account: BROKERAGE,
+                amount: -1_250,
+                date: "2026-03-02",
+                security: SECURITY_HANDLE,
+                action: MNY_ACTION.BUY,
+              }),
+            ],
+          }),
+          investmentData({
+            securities: [
+              mnySecurity({
+                handle: SECURITY_HANDLE,
+                symbol: "VOO",
+                currency: 2,
+              }),
+            ],
+            investmentDetails: [
+              mnyInvestmentDetail({
+                transaction: 21,
+                price: 125,
+                quantity: 10,
+              }),
+            ],
+          }),
+          {
+            referenceRows: crossCurrencyReference(3),
+            exchangeRates: [
+              {
+                fromCurrency: "CAD",
+                toCurrency: "USD",
+                rate: 0.8,
+                rateDate: "2026-03-02",
+              },
+            ],
+          },
+        );
+
+        const trade = await dataSource
+          .getRepository(InvestmentTransaction)
+          .findOneOrFail({ where: { userId } });
+        expect(Number(trade.price)).toBe(100);
+        expect(Number(trade.totalAmount)).toBe(1000);
+        expect(Number(trade.exchangeRate)).toBe(1.25);
+
+        const cash = await rowsIn(accountIdByKey.get("acct-6")!);
+        expect(cash).toHaveLength(1);
+        expect(cash[0]).toMatchObject({
+          amount: "-1250.00000000",
+          currencyCode: "CAD",
+        });
+        expect(trade.transactionId).toBe(cash[0].id);
+      });
     });
   });
 
@@ -1221,6 +1518,7 @@ describe("mny writers (integration)", () => {
           categoryIdByHandle,
           securityIdByHandle: new Map<number, string>(),
           linkedKeyByKey: new Map<string, string>(),
+          tagIdByHandle: new Map<number, string>(),
         },
       };
     }
@@ -1653,6 +1951,151 @@ describe("mny writers (integration)", () => {
       ).rejects.toThrow(/no longer available/i);
     });
 
+    /**
+     * A failure after `writeAll` committed (A26-H08). The fixture's figures are
+     * the finding's: Sample Deposit Account 5000.00, investment cash 4061.00,
+     * 1000 shares. Before the fix the job said "Nothing was saved", the staged
+     * id survived, and a second start (or a re-upload of the same bytes) took
+     * them to 10000.00, 8122.00 and 2000 shares.
+     */
+    describe("a committed import", () => {
+      async function ledgerSnapshot() {
+        const accounts = await dataSource
+          .getRepository(Account)
+          .find({ where: { userId }, order: { name: "ASC" } });
+        const holdings: { quantity: string }[] = await dataSource.query(
+          `SELECT h.quantity FROM holdings h
+             JOIN accounts a ON a.id = h.account_id
+            WHERE a.user_id = $1 AND h.quantity <> 0`,
+          [userId],
+        );
+        return {
+          transactions: await dataSource
+            .getRepository(Transaction)
+            .count({ where: { userId } }),
+          investmentRows: await dataSource
+            .getRepository(InvestmentTransaction)
+            .count({ where: { userId } }),
+          balances: accounts.map(
+            (account) => `${account.name}=${Number(account.currentBalance)}`,
+          ),
+          shares: holdings
+            .map((holding) => Number(holding.quantity))
+            .sort((a, b) => a - b),
+        };
+      }
+
+      async function stageFixture(): Promise<string> {
+        const staged = await withUserContext(userId, () =>
+          staging.stage(userId, {
+            filename: "sample-cd-redemption.mny",
+            data: stagedBytes("sampleCdRedemption"),
+          }),
+        );
+        return staged.id;
+      }
+
+      afterEach(() => {
+        jest.restoreAllMocks();
+      });
+
+      it("reports a failure after the commit as committed and refuses a second start", async () => {
+        const post = module.get(ImportPostProcessingService);
+        jest
+          .spyOn(post, "run")
+          .mockRejectedValueOnce(new Error("failpoint after commit"));
+        const stagedFileId = await stageFixture();
+
+        const job = await awaitJob(
+          (
+            await withUserContext(userId, () =>
+              importService.start(userId, { stagedFileId }),
+            )
+          ).id,
+        );
+
+        const before = await ledgerSnapshot();
+        expect(job).toMatchObject({
+          status: "failed",
+          dataCommitted: true,
+          retryable: false,
+          errorKey: "mnyImportFailedAfterCommit",
+        });
+        expect(before.balances).toContain("Sample Deposit Account=5000");
+        expect(before.balances).toContain(
+          "Sample Investment Account - Cash=4061",
+        );
+        expect(before.shares).toEqual([1000]);
+
+        // The API path: the staged id survived the failure.
+        await expect(
+          withUserContext(userId, () =>
+            importService.start(userId, { stagedFileId }),
+          ),
+        ).rejects.toThrow(ConflictException);
+        expect(await ledgerSnapshot()).toEqual(before);
+      });
+
+      it("refuses a re-upload of the same bytes while the first import's rows exist", async () => {
+        const first = await awaitJob(
+          (
+            await withUserContext(userId, async () =>
+              importService.start(userId, {
+                stagedFileId: await stageFixture(),
+              }),
+            )
+          ).id,
+        );
+        expect(first.status).toBe("completed");
+        const before = await ledgerSnapshot();
+
+        // The UI path: start over and upload the same file again.
+        const again = await stageFixture();
+        const refusal = withUserContext(userId, () =>
+          importService.start(userId, { stagedFileId: again }),
+        );
+        await expect(refusal).rejects.toThrow(ConflictException);
+        await expect(refusal).rejects.toThrow(/already imported/i);
+        expect(await ledgerSnapshot()).toEqual(before);
+        expect(
+          await dataSource
+            .getRepository(ImportJob)
+            .count({ where: { userId } }),
+        ).toBe(1);
+      });
+
+      it("lets the same bytes in again when the start replaces existing data", async () => {
+        const first = await awaitJob(
+          (
+            await withUserContext(userId, async () =>
+              importService.start(userId, {
+                stagedFileId: await stageFixture(),
+              }),
+            )
+          ).id,
+        );
+        expect(first.status).toBe("completed");
+
+        // `deleteData` is stubbed in this suite, so the rows do not actually
+        // go; what is asserted is that the wipe-and-import is not refused and
+        // that its own commit is not refused by the first job's content key.
+        const second = await awaitJob(
+          (
+            await withUserContext(userId, async () =>
+              importService.start(userId, {
+                stagedFileId: await stageFixture(),
+                options: { wipeExistingData: true },
+              }),
+            )
+          ).id,
+        );
+        expect(second).toMatchObject({
+          status: "completed",
+          dataCommitted: true,
+        });
+      });
+    });
+
     /*
      * money2002.mny is the investment fixture: 86 `SEC` rows, 60 `act` 15
      * transactions and 60 open `LOT` rows across 30 securities. That makes it
@@ -1801,8 +2244,11 @@ describe("mny writers (integration)", () => {
         const rates = await dataSource.getRepository(ExchangeRate).find();
         expect(rates.length).toBe(job.result!.exchangeRatesImported);
 
-        // A second import of the same file must converge, not duplicate.
-        await runImport("money2002");
+        // A second import of the same file must converge, not duplicate. Only a
+        // start that replaces existing data may import the same bytes again
+        // (A26-H08); `deleteData` is stubbed here, so the global rate rows the
+        // first run wrote are still present for the second to collide with.
+        await runImport("money2002", { wipeExistingData: true });
         const after = await dataSource.getRepository(ExchangeRate).find();
         expect(after.length).toBe(rates.length);
       });

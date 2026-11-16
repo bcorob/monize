@@ -1,0 +1,100 @@
+{
+  "entry": {
+    "history": "Lịch sử điều kiện của {program}"
+  },
+  "offer": {
+    "loading": "Đang tải các trái phiếu đang bán...",
+    "loadFailed": "Không thể tải các trái phiếu đang bán.",
+    "retry": "Thử lại",
+    "empty": "Hôm nay không có đợt phát hành nào đang bán.",
+    "asOf": "Đang bán vào ngày {date}. Mọi số liệu áp dụng cho một trái phiếu mua hôm nay và giữ đến đáo hạn.",
+    "comparisonNote": "Lợi suất quy năm là số liệu để so sánh các sản phẩm có kỳ hạn khác nhau, không phải cam kết về khoản bạn sẽ kiếm được.",
+    "couponsNote": "Coupon không tái đầu tư: với trái phiếu trả coupon, giá trị đáo hạn cộng tất cả coupon đã trả.",
+    "projected": "Dự phóng",
+    "projectedTitle": "Số liệu này dựa trên một giá trị tham chiếu giả định, không chỉ dựa trên lãi suất đã công bố.",
+    "assumptions": {
+      "title": "Giả định",
+      "intro": "Các kỳ chưa bắt đầu được định giá theo các giá trị tham chiếu này. Hãy đổi một giá trị để xem tác động lên từng dòng.",
+      "label": "{benchmark} (%)",
+      "latest": "Giá trị công bố gần nhất: {value} ({observation})",
+      "reset": "Dùng các giá trị công bố gần nhất",
+      "updating": "Đang cập nhật số liệu..."
+    },
+    "columns": {
+      "series": "Đợt phát hành",
+      "saleWindow": "Đang bán",
+      "length": "Kỳ hạn",
+      "firstPeriodRate": "Kỳ đầu",
+      "rule": "Lãi suất",
+      "capitalization": "Tiền lãi",
+      "redemption": "Mua lại trước hạn",
+      "maturityValue": "Giá trị đáo hạn",
+      "totalReturn": "Tổng lợi suất",
+      "annualizedReturn": "Lợi suất quy năm",
+      "terms": "Điều kiện"
+    },
+    "saleWindowValue": "Từ {from} đến {to}",
+    "lengthValue": "{months, plural, other {# tháng}}",
+    "lengthDaysValue": "{days, plural, other {# ngày}}",
+    "rule": {
+      "fixed": "Cố định {rate} mỗi năm",
+      "benchmark": "{benchmark} + {addend}",
+      "floor": "Mức sàn của chỉ số {floor}",
+      "daily": "Hằng ngày: {benchmark} + {addend}",
+      "discount": "Chiết khấu so với mệnh giá"
+    },
+    "capitalization": {
+      "NONE": "Trả mỗi kỳ",
+      "COMPOUND_AT_PERIOD_END": "Nhập gốc vào cuối mỗi kỳ"
+    },
+    "redemption": {
+      "none": "Chỉ khi đáo hạn",
+      "onDemand": "Theo yêu cầu",
+      "fee": "Phí {amount} mỗi trái phiếu",
+      "forfeit": "Tiền lãi tích lũy trong kỳ bị mất"
+    },
+    "couponsNotReinvested": "Coupon không tái đầu tư"
+  },
+  "history": {
+    "loading": "Đang tải lịch sử...",
+    "loadFailed": "Không thể tải lịch sử.",
+    "retry": "Thử lại",
+    "empty": "Chưa lưu đợt phát hành nào của sản phẩm này.",
+    "coverage": "Danh mục bao gồm từ {from} đến {to}.",
+    "rateChartTitle": "Lãi suất kỳ đầu và biên lãi theo tháng phát hành",
+    "feeChartTitle": "Phí mua lại trước hạn theo tháng phát hành",
+    "rate": "Lãi suất kỳ đầu",
+    "rateChartNote": "Với trái phiếu lãi suất cố định, đường này hiển thị lãi suất hằng năm.",
+    "addend": "Biên lãi hoặc chênh lệch",
+    "fee": "Phí mua lại trước hạn",
+    "gapsNote": "Tháng không có đợt phát hành đã lưu là một quãng đứt trên đường, không bao giờ là giá trị suy ra từ các tháng lân cận.",
+    "missingTitle": "Các tháng còn thiếu trong danh mục ({count})",
+    "noMissing": "Không thiếu tháng nào giữa đợt phát hành đã lưu đầu tiên và cuối cùng.",
+    "tableTitle": "Tất cả các đợt phát hành đã lưu",
+    "groupCount": "{count} đợt phát hành",
+    "unknownYear": "Chưa rõ ngày bán",
+    "columns": {
+      "series": "Đợt phát hành",
+      "saleWindow": "Đang bán",
+      "rate": "Lãi suất kỳ đầu hoặc lãi suất năm",
+      "addend": "Biên lãi hoặc chênh lệch",
+      "fee": "Phí mua lại trước hạn",
+      "floor": "Mức sàn của số tiền nhận lại",
+      "version": "Phiên bản điều kiện",
+      "source": "Nguồn"
+    },
+    "floor": {
+      "ALL_PERIODS": "Mọi kỳ",
+      "FIRST_PERIOD": "Chỉ kỳ đầu"
+    },
+    "none": "Không có",
+    "held": "Đang nắm giữ"
+  },
+  "refreshProgress": {
+    "label": "Đang làm mới dữ liệu trái phiếu",
+    "offer": "Đang kiểm tra đợt phát hành hiện tại…",
+    "series": "Đang tải loạt {done}/{total}: {seriesCode}",
+    "historyComplete": "Lịch sử đã đầy đủ",
+    "starting": "Đang bắt đầu…"
+  }
+}

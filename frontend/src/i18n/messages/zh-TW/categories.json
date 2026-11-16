@@ -7,6 +7,7 @@
     "filterAll": "全部 ({count})",
     "filterExpenses": "支出 ({count})",
     "filterIncome": "收入 ({count})",
+    "typeFilterLabel": "類型",
     "modalTitleNew": "新增類別",
     "modalTitleEdit": "編輯類別",
     "countSingle": "1 個類別",
@@ -54,6 +55,12 @@
     "typeExpense": "支出",
     "typeIncome": "收入",
     "typeInherited": "類型繼承自上層",
+    "autoSignLabel": "自動正負號",
+    "autoSignOn": "開啟",
+    "autoSignOff": "關閉",
+    "autoSignInherit": "繼承上層類別",
+    "autoSignInheritedFrom": "繼承自上層類別（{name}）：目前為{state}",
+    "autoSignHelp": "開啟後，輸入的金額在支出類別中會變為負數，在收入類別中會變為正數。關閉後將完全保留您輸入的正負號。",
     "colourLabel": "顏色",
     "colourInherit": "繼承自上層",
     "colourNone": "無顏色",
@@ -65,8 +72,8 @@
     "submitUpdate": "更新類別"
   },
   "list": {
-    "emptyHeading": "無類別",
-    "emptyDescription": "立即建立新類別開始使用。",
+    "emptyHeading": "找不到類別",
+    "emptyDescription": "沒有符合目前搜尋或篩選條件的類別。",
     "colName": "名稱",
     "colType": "類型",
     "colCount": "數量",
@@ -79,7 +86,7 @@
     "viewTransactionsTitle": "檢視此類別的交易"
   },
   "deleteDialog": {
-    "title": "刪除「{name}」？",
+    "title": "刪除「{name}」",
     "checkingUsage": "正在檢查使用狀況...",
     "usedBy": "此類別已被 {count, plural, one {# 個項目} other {# 個項目}} 使用（交易和/或排程帳單與存款）。",
     "reassignLabel": "重新指定至：",

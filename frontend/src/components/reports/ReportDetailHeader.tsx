@@ -35,7 +35,11 @@ export function ReportDetailHeader({
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="min-w-0">
           <div className="flex min-w-0 items-center gap-1">
-            <h1 className="truncate text-2xl font-bold text-gray-900 dark:text-gray-100">
+            {/* A long report title wraps on a phone (`break-words`, no clamp)
+                rather than being cut with an ellipsis; the desktop keeps the
+                single-line truncation (`sm:truncate`). The caret stays beside
+                it -- the mobile-table identity treatment. */}
+            <h1 className="break-words text-2xl font-bold text-gray-900 sm:truncate dark:text-gray-100">
               {title}
             </h1>
             <ReportSwitcher currentId={reportId} />

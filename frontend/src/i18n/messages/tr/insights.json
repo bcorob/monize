@@ -4,19 +4,29 @@
     "subtitle": "Harcama örüntüleriniz ve anormalliklerinizin yapay zeka destekli analizi"
   },
   "list": {
-    "lastUpdated": "Son güncelleme: {date} {time}",
     "refreshButton": "İçgörüleri Yenile",
-    "generating": "Oluşturuluyor...",
+    "refreshAge": "({time})",
+    "summary": {
+      "active": "Etkin İçgörüler",
+      "alerts": "Uyarılar",
+      "warnings": "İkazlar"
+    },
     "allTypes": "Tüm Türler",
-    "allSeverities": "Tüm Önem Dereceleri",
+    "typeFilterLabel": "Tür",
+    "severityFilterLabel": "Önem Derecesi",
+    "severityFilter": {
+      "all": "Tümü ({count})",
+      "alert": "Uyarılar ({count})",
+      "warning": "İkazlar ({count})",
+      "info": "Bilgi ({count})"
+    },
     "showDismissed": "Kapatılanları göster",
     "emptyNoInsights": "Henüz içgörü oluşturulmadı. Harcama örüntülerinizi analiz etmek için \"İçgörüleri Yenile\"ye tıklayın.",
     "emptyFiltered": "Mevcut filtrelerinizle eşleşen içgörü yok.",
     "generateButton": "İçgörü Oluştur",
-    "alertCount": "{count, plural, one {# uyarı} other {# uyarı}}",
-    "warningCount": "{count, plural, one {# ikaz} other {# ikaz}}",
     "errorLoadFailed": "İçgörüler yüklenemedi. Lütfen tekrar deneyin.",
     "errorGenerateFailed": "İçgörüler oluşturulamadı. Yapılandırılmış bir yapay zeka sağlayıcınız olduğundan emin olun.",
+    "errorDismissFailed": "İçgörü kapatılamadı. Lütfen tekrar deneyin.",
     "errorTimeout": "İçgörü oluşturma beklenenden uzun sürüyor. Lütfen bekleyin veya sayfayı yenileyin."
   },
   "card": {

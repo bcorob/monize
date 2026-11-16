@@ -27,6 +27,7 @@ import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useChartDateFormat } from '@/hooks/useChartDateFormat';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { ChartDownloadButton } from '@/components/ui/ChartDownloadButton';
+import { CHART_GRID_PROPS, CHART_TOOLTIP_CLASS } from '@/lib/chart-style';
 
 // Same crowding thresholds as the transactions Monthly Totals chart: switch the
 // bar-top value labels to vertical once horizontal ones would overlap, and drop
@@ -103,7 +104,7 @@ function FeeTooltip({
   if (active && payload?.[0]) {
     const data = payload[0].payload;
     return (
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3">
+      <div className={CHART_TOOLTIP_CLASS}>
         <p className="font-medium text-gray-900 dark:text-gray-100 mb-1">
           {data.label}
         </p>
@@ -135,7 +136,7 @@ export function ForeignCurrencyFeeChart({
 }: ForeignCurrencyFeeChartProps) {
   const t = useTranslations('accountDetail-fxFees');
   const chartTitle = t('chart.title');
-  const { formatCurrency, formatCurrencyAxis } = useNumberFormat();
+  const { formatCurrency, formatCurrencyAxis, formatNumber } = useNumberFormat();
   const formatChartDate = useChartDateFormat();
   const chartRef = useRef<HTMLDivElement>(null);
   const downloadFilename = accountName ? `${chartTitle} - ${accountName}` : chartTitle;
@@ -226,7 +227,7 @@ export function ForeignCurrencyFeeChart({
         { label: t('chart.total'), value: formatFee(summary.total) },
         {
           label: t('chart.transactions'),
-          value: summary.totalCount.toLocaleString(),
+          value: formatNumber(summary.totalCount, 0),
         },
       ]
     : [];
@@ -330,7 +331,7 @@ export function ForeignCurrencyFeeChart({
           >
             {/* The token carries its own dark override, so the dark-variant
                 stroke class this used to need alongside it is gone. */}
-            <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+            <CartesianGrid {...CHART_GRID_PROPS} />
             <XAxis
               dataKey="periodStart"
               tick={{ fill: chartColors.axis, fontSize: isMobile ? 10 : 12 }}
@@ -411,7 +412,7 @@ export function ForeignCurrencyFeeChart({
           <div>
             <div className="text-sm text-gray-500 dark:text-gray-400">{t('chart.transactions')}</div>
             <div className="font-semibold text-gray-900 dark:text-gray-100">
-              {summary.totalCount.toLocaleString()}
+              {formatNumber(summary.totalCount, 0)}
             </div>
           </div>
         </div>

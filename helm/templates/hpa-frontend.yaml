@@ -1,0 +1,31 @@
+{{- if .Values.frontend.autoscaling.enabled }}
+{{- /*
+  Optional, and off by default. When it is on, the Deployment omits its own
+  `replicas` so the two do not fight on every upgrade.
+
+  CPU is the only metric offered here because it is the only one every cluster
+  has without metrics beyond metrics-server. A deployment that needs to scale on
+  queue depth or request rate is past what a chart default should decide.
+*/}}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: monize-frontend
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "monize.frontend.labels" . | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: monize-frontend
+  minReplicas: {{ .Values.frontend.autoscaling.minReplicas }}
+  maxReplicas: {{ .Values.frontend.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ .Values.frontend.autoscaling.targetCPUUtilizationPercentage }}
+{{- end }}

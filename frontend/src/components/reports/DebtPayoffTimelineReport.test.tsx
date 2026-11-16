@@ -3,15 +3,18 @@ import { render, screen, waitFor, fireEvent, act } from '@/test/render';
 import { DebtPayoffTimelineReport } from './DebtPayoffTimelineReport';
 import { axisTickLabel } from '@/lib/chart-sampling';
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
-    formatCurrency: (n: number) => `$${n.toFixed(2)}`,
-    formatCurrencyAxis: (n: number) => `$${n}`,
-    defaultCurrency: 'CAD',
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
+      formatCurrency: (n: number) => `$${n.toFixed(2)}`,
+      formatCurrencyAxis: (n: number) => `$${n}`,
+      defaultCurrency: 'CAD',
+    }),
+  };
+});
 vi.mock('recharts', () => ({
   ResponsiveContainer: ({ children }: any) => <div data-testid="responsive-container">{children}</div>,
   // `data` is serialized onto the node so a test can assert on what the chart
@@ -41,8 +44,8 @@ vi.mock('recharts', () => ({
       const C = content.type;
       return (
         <div data-testid="tooltip">
-          <C active={true} payload={[{ name: 'Remaining Balance', value: 100, color: '#000', dataKey: 'historicalBalance' }, { name: 'Remaining Balance', value: 100, color: '#000', dataKey: 'historicalBalance' }, { name: 'Other', value: undefined, color: '#000', dataKey: 'projectedBalance' }]} label="Jan 2024" />
-          <C active={false} payload={[]} label="" />
+          <C {...content.props} active={true} payload={[{ name: 'Remaining Balance', value: 100, color: '#000', dataKey: 'historicalBalance' }, { name: 'Remaining Balance', value: 100, color: '#000', dataKey: 'historicalBalance' }, { name: 'Other', value: undefined, color: '#000', dataKey: 'projectedBalance' }]} label="Jan 2024" />
+          <C {...content.props} active={false} payload={[]} label="" />
         </div>
       );
     }
@@ -135,8 +138,7 @@ describe('DebtPayoffTimelineReport', () => {
         paymentFrequency: 'MONTHLY',
         interestCategoryId: 'cat-int',
         sourceAccountId: 'src-1',
-        isCanadianMortgage: false,
-        isVariableRate: false,
+        mortgageType: 'ANNUITY',
         isClosed: false,
       },
     ]);
@@ -167,7 +169,7 @@ describe('DebtPayoffTimelineReport', () => {
         id: 'loc-1', name: 'LOC', accountType: 'LINE_OF_CREDIT',
         currentBalance: -3000, openingBalance: -5000, interestRate: 8,
         paymentAmount: 200, paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        mortgageType: 'ANNUITY', isClosed: false,
       },
     ]);
     mockGetAllTransactions.mockResolvedValue({
@@ -181,7 +183,7 @@ describe('DebtPayoffTimelineReport', () => {
       expect(screen.getByText('Select Account')).toBeInTheDocument();
     });
     expect(mockGetRateChanges).not.toHaveBeenCalled();
-    expect(screen.queryByText('Try again')).not.toBeInTheDocument();
+    expect(screen.queryByText('Try Again')).not.toBeInTheDocument();
   });
 
   it('loads the loan rate history for the selected account', async () => {
@@ -193,7 +195,7 @@ describe('DebtPayoffTimelineReport', () => {
         id: 'loan-1', name: 'Mortgage', accountType: 'MORTGAGE',
         currentBalance: -100000, openingBalance: -100000, interestRate: 5,
         paymentAmount: 500, paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        mortgageType: 'ANNUITY', isClosed: false,
       },
     ]);
     mockGetAllTransactions.mockResolvedValue({
@@ -217,8 +219,7 @@ describe('DebtPayoffTimelineReport', () => {
         paymentFrequency: 'MONTHLY',
         interestCategoryId: 'cat-int',
         sourceAccountId: 'src-1',
-        isCanadianMortgage: false,
-        isVariableRate: false,
+        mortgageType: 'ANNUITY',
         isClosed: false,
       },
     ]);
@@ -264,8 +265,7 @@ describe('DebtPayoffTimelineReport', () => {
         interestRate: 5.5,
         paymentAmount: 500,
         paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false,
-        isVariableRate: false,
+        mortgageType: 'ANNUITY',
         isClosed: false,
       },
     ]);
@@ -290,8 +290,7 @@ describe('DebtPayoffTimelineReport', () => {
         interestRate: 4.0,
         paymentAmount: 1500,
         paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: true,
-        isVariableRate: false,
+        mortgageType: 'CANADIAN_FIXED',
         isClosed: false,
       },
     ]);
@@ -319,8 +318,7 @@ describe('DebtPayoffTimelineReport', () => {
         interestRate: 5.0,
         paymentAmount: 300,
         paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false,
-        isVariableRate: false,
+        mortgageType: 'ANNUITY',
         isClosed: false,
       },
     ]);
@@ -351,8 +349,7 @@ describe('DebtPayoffTimelineReport', () => {
         interestRate: null,
         paymentAmount: null,
         paymentFrequency: null,
-        isCanadianMortgage: false,
-        isVariableRate: false,
+        mortgageType: 'ANNUITY',
         isClosed: false,
       },
     ]);
@@ -380,8 +377,7 @@ describe('DebtPayoffTimelineReport', () => {
         interestRate: 5.0,
         paymentAmount: null,
         paymentFrequency: null,
-        isCanadianMortgage: false,
-        isVariableRate: false,
+        mortgageType: 'ANNUITY',
         isClosed: false,
       },
     ]);
@@ -403,8 +399,7 @@ describe('DebtPayoffTimelineReport', () => {
         interestRate: 3.0,
         paymentAmount: 200,
         paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false,
-        isVariableRate: false,
+        mortgageType: 'ANNUITY',
         isClosed: false,
       },
     ]);
@@ -441,8 +436,7 @@ describe('DebtPayoffTimelineReport', () => {
         interestRate: 4.0,
         paymentAmount: 1500,
         paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false,
-        isVariableRate: true,
+        mortgageType: 'ANNUITY',
         isClosed: false,
       },
     ]);
@@ -475,13 +469,13 @@ describe('DebtPayoffTimelineReport', () => {
         id: 'savings-1', name: 'Savings', accountType: 'SAVINGS',
         currentBalance: 5000, openingBalance: 5000, interestRate: null,
         paymentAmount: null, paymentFrequency: null,
-        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        mortgageType: 'ANNUITY', isClosed: false,
       },
       {
         id: 'loan-1', name: 'Car Loan', accountType: 'LOAN',
         currentBalance: -5000, openingBalance: -15000, interestRate: 5.0,
         paymentAmount: 300, paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        mortgageType: 'ANNUITY', isClosed: false,
       },
     ]);
     mockGetAllTransactions.mockResolvedValue({ data: [], pagination: { hasMore: false } });
@@ -499,7 +493,7 @@ describe('DebtPayoffTimelineReport', () => {
         id: 'loan-1', name: 'Car Loan', accountType: 'LOAN',
         currentBalance: -7500, openingBalance: -10000, interestRate: 5.0,
         paymentAmount: 300, paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        mortgageType: 'ANNUITY', isClosed: false,
       },
     ]);
     mockGetAllTransactions.mockResolvedValue({
@@ -521,7 +515,7 @@ describe('DebtPayoffTimelineReport', () => {
         id: 'loan-1', name: 'Car Loan', accountType: 'LOAN',
         currentBalance: -5000, openingBalance: -10000, interestRate: 5.0,
         paymentAmount: 500, paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        mortgageType: 'ANNUITY', isClosed: false,
       },
     ]);
     mockGetAllTransactions.mockResolvedValue({
@@ -542,7 +536,7 @@ describe('DebtPayoffTimelineReport', () => {
         id: 'loan-1', name: 'Car Loan', accountType: 'LOAN',
         currentBalance: -5000, openingBalance: -10000, interestRate: 5.0,
         paymentAmount: 500, paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        mortgageType: 'ANNUITY', isClosed: false,
       },
     ]);
     mockGetAllTransactions.mockResolvedValue({
@@ -563,7 +557,7 @@ describe('DebtPayoffTimelineReport', () => {
         id: 'loan-1', name: 'Car Loan', accountType: 'LOAN',
         currentBalance: -5000, openingBalance: -10000, interestRate: null,
         paymentAmount: null, paymentFrequency: null,
-        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        mortgageType: 'ANNUITY', isClosed: false,
       },
     ]);
     mockGetAllTransactions.mockResolvedValue({
@@ -584,7 +578,7 @@ describe('DebtPayoffTimelineReport', () => {
         id: 'loan-1', name: 'Car Loan', accountType: 'LOAN',
         currentBalance: -5000, openingBalance: -10000, interestRate: 5.0,
         paymentAmount: 500, paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        mortgageType: 'ANNUITY', isClosed: false,
       },
     ]);
     mockGetAllTransactions.mockResolvedValue({
@@ -605,7 +599,7 @@ describe('DebtPayoffTimelineReport', () => {
         id: 'loan-1', name: 'Car Loan', accountType: 'LOAN',
         currentBalance: -5000, openingBalance: -10000, interestRate: 5.0,
         paymentAmount: 500, paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        mortgageType: 'ANNUITY', isClosed: false,
       },
     ]);
     mockGetAllTransactions.mockResolvedValue({
@@ -626,7 +620,7 @@ describe('DebtPayoffTimelineReport', () => {
         id: 'loan-1', name: 'Car Loan', accountType: 'LOAN',
         currentBalance: -5000, openingBalance: -10000, interestRate: 5.0,
         paymentAmount: 500, paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        mortgageType: 'ANNUITY', isClosed: false,
       },
     ]);
     mockGetAllTransactions.mockResolvedValue({
@@ -650,7 +644,7 @@ describe('DebtPayoffTimelineReport', () => {
         id: 'loan-1', name: 'Car Loan', accountType: 'LOAN',
         currentBalance: -5000, openingBalance: -10000, interestRate: 5.0,
         paymentAmount: 500, paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        mortgageType: 'ANNUITY', isClosed: false,
       },
     ]);
     mockGetAllTransactions.mockResolvedValue({
@@ -674,7 +668,7 @@ describe('DebtPayoffTimelineReport', () => {
         id: 'loan-1', name: 'Car Loan', accountType: 'LOAN',
         currentBalance: -5000, openingBalance: -10000, interestRate: 5.0,
         paymentAmount: 500, paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        mortgageType: 'ANNUITY', isClosed: false,
       },
     ]);
     mockGetAllTransactions.mockResolvedValue({
@@ -701,7 +695,7 @@ describe('DebtPayoffTimelineReport', () => {
         id: 'loan-1', name: 'Car Loan', accountType: 'LOAN',
         currentBalance: -5000, openingBalance: -10000, interestRate: 3.5,
         paymentAmount: 300, paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        mortgageType: 'ANNUITY', isClosed: false,
       },
     ]);
     mockGetAllTransactions.mockResolvedValue({
@@ -726,7 +720,7 @@ describe('DebtPayoffTimelineReport', () => {
         id: 'loan-1', name: 'Loan', accountType: 'LOAN',
         currentBalance: -5000, openingBalance: -10000, interestRate: 5.0,
         paymentAmount: 300, paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        mortgageType: 'ANNUITY', isClosed: false,
       },
     ]);
     mockGetAllTransactions
@@ -750,7 +744,7 @@ describe('DebtPayoffTimelineReport', () => {
         id: 'loc-1', name: 'LOC', accountType: 'LINE_OF_CREDIT',
         currentBalance: -3000, openingBalance: -5000, interestRate: null,
         paymentAmount: null, paymentFrequency: null,
-        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        mortgageType: 'ANNUITY', isClosed: false,
       },
     ]);
     mockGetAllTransactions.mockResolvedValue({
@@ -771,7 +765,7 @@ describe('DebtPayoffTimelineReport', () => {
         id: 'loan-1', name: 'Car Loan', accountType: 'LOAN',
         currentBalance: -5000, openingBalance: -10000, interestRate: 5.0,
         paymentAmount: 500, paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        mortgageType: 'ANNUITY', isClosed: false,
       },
     ]);
     mockGetAllTransactions.mockResolvedValue({
@@ -797,13 +791,49 @@ describe('DebtPayoffTimelineReport', () => {
     }
   });
 
+  it('exports an interest-only mortgage\'s next installment and its bullet, dated', async () => {
+    // docs/specs/mortgage-types.md section 5.6: no constant payment is stored
+    // for the method, so the payment column is the next installment with its
+    // date, and the bullet travels with it.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-08-01T12:00:00Z'));
+    try {
+      mockGetAllAccounts.mockResolvedValue([
+        {
+          id: 'mortgage-1', name: 'Hypotheek', accountType: 'MORTGAGE',
+          currentBalance: -300000, openingBalance: -300000, interestRate: 2,
+          paymentAmount: null, paymentFrequency: 'MONTHLY', paymentStartDate: '2026-01-01',
+          amortizationMonths: 360, originalPrincipal: 300000,
+          mortgageType: 'INTEREST_ONLY', prepaymentMode: null,
+          isClosed: false,
+        },
+      ]);
+      render(<DebtPayoffTimelineReport />);
+      await waitFor(() => {
+        expect(screen.getByText('Account Details')).toBeInTheDocument();
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /export/i }));
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByText(/PDF/i));
+      });
+      const { exportToPdf } = await import('@/lib/pdf-export');
+      const call = vi.mocked(exportToPdf).mock.calls.at(-1)![0];
+      const paymentCell = call.tableData!.rows[0][4];
+      expect(paymentCell).toMatch(/^\$500\S*, due \S*2026; final payment \$300,?500\S*, due \S*2055$/);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('shows a retryable error when loading accounts fails', async () => {
     mockGetAllAccounts.mockRejectedValue(new Error('network'));
     render(<DebtPayoffTimelineReport />);
     await waitFor(() => {
       expect(screen.getByText(/Failed to load report data/i)).toBeInTheDocument();
     });
-    expect(screen.getByRole('button', { name: /Try again/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Try Again/i })).toBeInTheDocument();
   });
 
   it('handles error in loadTransactions gracefully', async () => {
@@ -812,7 +842,7 @@ describe('DebtPayoffTimelineReport', () => {
         id: 'loan-1', name: 'Loan', accountType: 'LOAN',
         currentBalance: -5000, openingBalance: -10000, interestRate: 5.0,
         paymentAmount: 300, paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        mortgageType: 'ANNUITY', isClosed: false,
       },
     ]);
     mockGetAllTransactions.mockRejectedValue(new Error('boom'));
@@ -820,7 +850,7 @@ describe('DebtPayoffTimelineReport', () => {
     await waitFor(() => {
       expect(screen.getByText(/Failed to load report data/i)).toBeInTheDocument();
     });
-    expect(screen.getByRole('button', { name: /Try again/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Try Again/i })).toBeInTheDocument();
   });
 
   it('handles WEEKLY payment frequency in projections', async () => {
@@ -829,7 +859,7 @@ describe('DebtPayoffTimelineReport', () => {
         id: 'loan-1', name: 'Loan', accountType: 'LOAN',
         currentBalance: -2000, openingBalance: -5000, interestRate: 6.0,
         paymentAmount: 100, paymentFrequency: 'WEEKLY',
-        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        mortgageType: 'ANNUITY', isClosed: false,
       },
     ]);
     mockGetAllTransactions.mockResolvedValue({ data: [], pagination: { hasMore: false } });
@@ -845,7 +875,7 @@ describe('DebtPayoffTimelineReport', () => {
         id: 'loan-1', name: 'Loan', accountType: 'LOAN',
         currentBalance: -3000, openingBalance: -5000, interestRate: 4.5,
         paymentAmount: 200, paymentFrequency: 'BIWEEKLY',
-        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        mortgageType: 'ANNUITY', isClosed: false,
       },
     ]);
     mockGetAllTransactions.mockResolvedValue({ data: [], pagination: { hasMore: false } });
@@ -861,7 +891,7 @@ describe('DebtPayoffTimelineReport', () => {
         id: 'loan-1', name: 'Loan', accountType: 'LOAN',
         currentBalance: -3000, openingBalance: -5000, interestRate: 4.5,
         paymentAmount: 200, paymentFrequency: 'SEMI_MONTHLY',
-        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        mortgageType: 'ANNUITY', isClosed: false,
       },
     ]);
     mockGetAllTransactions.mockResolvedValue({ data: [], pagination: { hasMore: false } });
@@ -877,7 +907,7 @@ describe('DebtPayoffTimelineReport', () => {
         id: 'loan-1', name: 'Loan', accountType: 'LOAN',
         currentBalance: -3000, openingBalance: -5000, interestRate: 4.5,
         paymentAmount: 700, paymentFrequency: 'QUARTERLY',
-        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        mortgageType: 'ANNUITY', isClosed: false,
       },
     ]);
     mockGetAllTransactions.mockResolvedValue({ data: [], pagination: { hasMore: false } });
@@ -893,7 +923,7 @@ describe('DebtPayoffTimelineReport', () => {
         id: 'loan-1', name: 'Loan', accountType: 'LOAN',
         currentBalance: -3000, openingBalance: -5000, interestRate: 4.5,
         paymentAmount: 2500, paymentFrequency: 'YEARLY',
-        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        mortgageType: 'ANNUITY', isClosed: false,
       },
     ]);
     mockGetAllTransactions.mockResolvedValue({ data: [], pagination: { hasMore: false } });
@@ -909,7 +939,7 @@ describe('DebtPayoffTimelineReport', () => {
         id: 'loan-1', name: 'Loan', accountType: 'LOAN',
         currentBalance: -3000, openingBalance: -5000, interestRate: 4.5,
         paymentAmount: 200, paymentFrequency: 'ACCELERATED_BIWEEKLY',
-        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        mortgageType: 'ANNUITY', isClosed: false,
       },
     ]);
     mockGetAllTransactions.mockResolvedValue({ data: [], pagination: { hasMore: false } });
@@ -925,7 +955,7 @@ describe('DebtPayoffTimelineReport', () => {
         id: 'loan-1', name: 'Loan', accountType: 'LOAN',
         currentBalance: -3000, openingBalance: -5000, interestRate: 0,
         paymentAmount: 100, paymentFrequency: 'ACCELERATED_WEEKLY',
-        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        mortgageType: 'ANNUITY', isClosed: false,
       },
     ]);
     mockGetAllTransactions.mockResolvedValue({ data: [], pagination: { hasMore: false } });
@@ -941,7 +971,7 @@ describe('DebtPayoffTimelineReport', () => {
         id: 'loan-1', name: 'Loan', accountType: 'LOAN',
         currentBalance: -100000, openingBalance: -100000, interestRate: 50,
         paymentAmount: 10, paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        mortgageType: 'ANNUITY', isClosed: false,
       },
     ]);
     mockGetAllTransactions.mockResolvedValue({ data: [], pagination: { hasMore: false } });
@@ -963,7 +993,7 @@ describe('DebtPayoffTimelineReport', () => {
         id: 'loan-1', name: 'Loan', accountType: 'LOAN',
         currentBalance: -2000, openingBalance: -10000, interestRate: 5.0,
         paymentAmount: 100, paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        mortgageType: 'ANNUITY', isClosed: false,
       },
     ]);
     mockGetAllTransactions.mockResolvedValue({ data: txs, pagination: { hasMore: false } });
@@ -979,7 +1009,7 @@ describe('DebtPayoffTimelineReport', () => {
         id: 'loan-1', name: 'Loan', accountType: 'LOAN',
         currentBalance: -5000, openingBalance: 0, interestRate: 5.0,
         paymentAmount: 200, paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        mortgageType: 'ANNUITY', isClosed: false,
       },
     ]);
     mockGetAllTransactions.mockResolvedValue({
@@ -1000,13 +1030,13 @@ describe('DebtPayoffTimelineReport', () => {
         id: 'loc-1', name: 'My LOC', accountType: 'LINE_OF_CREDIT',
         currentBalance: -3000, openingBalance: -10000, interestRate: 7.0,
         paymentAmount: 200, paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false, isVariableRate: false, isClosed: false,
+        mortgageType: 'ANNUITY', isClosed: false,
       },
       {
         id: 'mortgage-1', name: 'Home Mortgage', accountType: 'MORTGAGE',
         currentBalance: -200000, openingBalance: -300000, interestRate: 4.0,
         paymentAmount: 1500, paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: true, isVariableRate: false, isClosed: false,
+        mortgageType: 'CANADIAN_FIXED', isClosed: false,
       },
     ]);
     mockGetAllTransactions.mockResolvedValue({ data: [], pagination: { hasMore: false } });
@@ -1033,8 +1063,7 @@ describe('DebtPayoffTimelineReport', () => {
         interestRate: 5.0,
         paymentAmount: 400,
         paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false,
-        isVariableRate: false,
+        mortgageType: 'ANNUITY',
         isClosed: false,
       },
       {
@@ -1046,8 +1075,7 @@ describe('DebtPayoffTimelineReport', () => {
         interestRate: 5.0,
         paymentAmount: 400,
         paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false,
-        isVariableRate: false,
+        mortgageType: 'ANNUITY',
         isClosed: false,
       },
     ]);
@@ -1071,8 +1099,7 @@ describe('DebtPayoffTimelineReport', () => {
         interestRate: 5.0,
         paymentAmount: 400,
         paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false,
-        isVariableRate: false,
+        mortgageType: 'ANNUITY',
         isClosed: false,
       }]);
     render(<DebtPayoffTimelineReport />);
@@ -1132,8 +1159,7 @@ describe('DebtPayoffTimelineReport', () => {
       interestRate: null,
       paymentAmount: null,
       paymentFrequency: null,
-      isCanadianMortgage: false,
-      isVariableRate: false,
+      mortgageType: 'ANNUITY',
       isClosed: false,
     }];
 
@@ -1250,8 +1276,7 @@ describe('DebtPayoffTimelineReport', () => {
         interestRate: 5.0,
         paymentAmount: 200,
         paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false,
-        isVariableRate: false,
+        mortgageType: 'ANNUITY',
         isClosed: false,
       }]);
       mockGetAllTransactions.mockResolvedValue({
@@ -1293,8 +1318,7 @@ describe('DebtPayoffTimelineReport', () => {
         interestRate: 5.0,
         paymentAmount: 500,
         paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false,
-        isVariableRate: false,
+        mortgageType: 'ANNUITY',
         isClosed: false,
       }]);
       mockGetAllTransactions.mockResolvedValue({
@@ -1359,8 +1383,7 @@ describe('DebtPayoffTimelineReport', () => {
         interestRate: 0,
         paymentAmount: 100,
         paymentFrequency: 'WEEKLY',
-        isCanadianMortgage: false,
-        isVariableRate: false,
+        mortgageType: 'ANNUITY',
         isClosed: false,
       }]);
       mockGetAllTransactions.mockResolvedValue({
@@ -1408,11 +1431,11 @@ describe('DebtPayoffTimelineReport', () => {
       expect(rows[rows.length - 1].balance).toBe(0);
     });
 
-    it('keeps a future-dated posted payment in its own run among the projected rows', async () => {
-      // A repayment posted ahead of its date is a HISTORICAL event dated after
-      // the projection starts, so the two interleave. Grouping by a month key
-      // would fold it back into a month it no longer sits beside; grouping
-      // contiguous runs over a date-ordered series gives it its own row.
+    it('does not count a future-dated posted payment as history (A26-M28)', async () => {
+      // A repayment posted ahead of its date has not happened yet. It used to be
+      // a HISTORICAL event dated after the projection starts, interleaving with
+      // the projected rows; the history now keeps only what the ledger moved by
+      // today, so the payment is not a historical row and not a payment made.
       mockGetAllAccounts.mockResolvedValue([{
         id: 'loan-1',
         name: 'Prepaid Loan',
@@ -1422,8 +1445,7 @@ describe('DebtPayoffTimelineReport', () => {
         interestRate: 0,
         paymentAmount: 100,
         paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false,
-        isVariableRate: false,
+        mortgageType: 'ANNUITY',
         isClosed: false,
       }]);
       mockGetAllTransactions.mockResolvedValue({
@@ -1434,7 +1456,7 @@ describe('DebtPayoffTimelineReport', () => {
         pagination: { hasMore: false },
       });
 
-      await renderAwaitingHistory('2');
+      await renderAwaitingHistory('1');
 
       const rows: Array<{ date: string; label: string; axisKey: string; isProjected: boolean }> =
         chartRows('area-chart');
@@ -1443,12 +1465,9 @@ describe('DebtPayoffTimelineReport', () => {
         [...rows].map((row) => row.date.slice(0, 10)).sort(),
       );
       expect(new Set(rows.map((row) => row.axisKey)).size).toBe(rows.length);
-      // October holds a posted payment and projected ones, and they are not one
-      // row: the historical run sits between two projected runs.
+      // October holds projected rows only: the posted-ahead payment is not one.
       const october = rows.filter((row) => row.label === 'Oct 2026');
-      expect(october.length).toBeGreaterThan(1);
-      expect(october.some((row) => !row.isProjected)).toBe(true);
-      expect(october.some((row) => row.isProjected)).toBe(true);
+      expect(october.every((row) => row.isProjected)).toBe(true);
     });
 
     it('still knows it has a projection when the loan pays off in the transition month', async () => {

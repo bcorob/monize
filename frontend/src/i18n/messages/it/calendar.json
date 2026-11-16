@@ -1,0 +1,120 @@
+{
+  "view": {
+    "label": "Visualizzazione",
+    "table": "Tabella",
+    "calendar": "Calendario"
+  },
+  "grid": {
+    "label": "Mese"
+  },
+  "toolbar": {
+    "layers": "Livelli"
+  },
+  "layers": {
+    "transactions": "Transazioni",
+    "balances": "Saldi",
+    "values": "Valori",
+    "dailyChange": "Variazione giornaliera"
+  },
+  "legend": {
+    "label": "Legenda",
+    "scheduled": "Pianificato"
+  },
+  "chip": {
+    "noPayee": "Nessun beneficiario",
+    "overdue": "Scaduto",
+    "scheduled": "Pianificato",
+    "noSymbol": "Nessun simbolo"
+  },
+  "day": {
+    "itemCount": "{count, plural, one {# voce} other {# voci}}",
+    "moreChips": "+{count} altri",
+    "newTransaction": "Nuova transazione in questo giorno",
+    "noItems": "Niente in questo giorno.",
+    "scheduledHint": "Pianificato. Apri Bollette e depositi per modificarlo.",
+    "newInvestmentTransaction": "Nuova transazione di investimento in questo giorno"
+  },
+  "banner": {
+    "title": "Alcune cifre non sono mostrate",
+    "rowCap": "Questo mese contiene {count} transazioni, più delle {limit} che un calendario può mostrare. Restringi i filtri per vederle.",
+    "scheduledUnavailable": "Non e stato possibile caricare le voci pianificate di questo mese. Le righe mostrate sono complete; mancano quelle pianificate.",
+    "scheduledTruncated": "Alcune voci pianificate non sono mostrate cosi avanti nel tempo. Avvicinati a oggi per vederle tutte.",
+    "balancesScopeEmpty": "Nessun conto è incluso, quindi non c'è alcun saldo da mostrare. Scegli un conto nei filtri.",
+    "balancesMissingRates": "Per {pairs} non è disponibile un tasso di cambio in alcuni giorni di questo mese, quindi quei totali non vengono mostrati. Apri Valute e aggiorna i tassi.",
+    "balancesForecastGaps": "Il saldo previsto è trattenuto perché questi elementi pianificati non possono ancora essere valorizzati: {schedules}.",
+    "balancesForecastWithheld": "Il saldo previsto è trattenuto: almeno un elemento pianificato non può ancora essere valorizzato e il motivo non è stato riportato.",
+    "balancesUnforecastable": "{count, plural, one {# conto incluso non ha una previsione propria, quindi i totali previsti sono trattenuti.} other {# conti inclusi non hanno una previsione propria, quindi i totali previsti sono trattenuti.}}",
+    "valuesUnpriced": "Per {securities} non è disponibile un prezzo in alcuni giorni di questo mese, quindi quei valori non vengono mostrati. Aggiungi un prezzo nello storico prezzi del titolo oppure aggiorna i prezzi.",
+    "valuesMissingRates": "Per {pairs} non è disponibile un tasso di cambio in alcuni giorni di questo mese, quindi quei valori non vengono mostrati. Apri Valute e aggiorna i tassi.",
+    "notesUnavailable": "Le tue note non sono state caricate per questo mese. Le note già scritte restano salvate."
+  },
+  "errors": {
+    "monthFailed": "Impossibile caricare questo mese.",
+    "balancesFailed": "Non è stato possibile caricare i saldi di questo mese.",
+    "valuesFailed": "Non è stato possibile caricare i valori del portafoglio di questo mese.",
+    "movementsFailed": "Non è stato possibile caricare le variazioni giornaliere di questo mese.",
+    "movementDetailFailed": "Non è stato possibile caricare il dettaglio di questo giorno."
+  },
+  "balance": {
+    "actualTitle": "Saldo a fine giornata",
+    "projectedTitle": "Saldo previsto",
+    "projected": "Previsto",
+    "projectedHint": "Previsto a partire dal saldo di fine giornata di oggi e da ogni elemento pianificato in scadenza fino a questo giorno.",
+    "projectedFromItems": "Previsto a partire dal saldo di fine giornata di oggi e da ogni elemento pianificato in scadenza fino a questo giorno, compresi quelli elencati sotto.",
+    "partial": "Parziale: è stato possibile calcolare {amount} dell'insieme; il resto no, quindi non viene mostrato alcun totale.",
+    "missingRates": "Nessun tasso di cambio per {pairs} nel giorno a cui si riferisce questa cifra. Apri Valute e aggiorna i tassi.",
+    "unforecastable": "{count, plural, one {# conto incluso non ha una previsione propria, quindi il totale previsto è trattenuto.} other {# conti inclusi non hanno una previsione propria, quindi il totale previsto è trattenuto.}}"
+  },
+  "value": {
+    "title": "Valore del portafoglio",
+    "unpriced": "Per {securities} non è disponibile un prezzo in questo giorno, quindi il valore non viene mostrato. Aggiungi un prezzo nello storico prezzi del titolo oppure aggiorna i prezzi.",
+    "missingRates": "Nessun tasso di cambio per {pairs} in questo giorno, quindi il valore non viene mostrato. Apri Valute e aggiorna i tassi."
+  },
+  "change": {
+    "openDetail": "Mostra cosa si è mosso in questo giorno",
+    "detailTitle": "Cosa si è mosso il {date}",
+    "headline": "Movimento di mercato",
+    "headlineValue": "{amount} ({percent})",
+    "gains": "Guadagni",
+    "losses": "Perdite",
+    "unchanged": "{count, plural, one {# titolo ha chiuso invariato.} other {# titoli hanno chiuso invariati.}}",
+    "remainder": "Liquidità, distribuzioni e operazioni",
+    "row": "{quantity} quote, da {from} a {to} {currency}",
+    "reasons": {
+      "notTradingDay": "Nessun titolo in portafoglio ha avuto un prezzo in questo giorno, quindi non c'è stata alcuna seduta da riportare.",
+      "unpricedHolding": "Una posizione non aveva un prezzo in questo giorno né in quello precedente, quindi il movimento è sconosciuto.",
+      "missingRate": "Mancava un tasso di cambio, quindi il movimento non è stato convertito.",
+      "flowIncomplete": "Un versamento o un prelievo di questo giorno non è stato convertito, quindi il movimento non può esserne separato.",
+      "cashIncomplete": "Un conto di liquidità non ha riportato un saldo per questo giorno, quindi il valore del giorno è incompleto e il movimento è sconosciuto.",
+      "noPriorValue": "Non c'è un valore precedente con cui misurare questo giorno.",
+      "zeroBaseline": "Il portafoglio era vuoto il giorno prima, quindi non c'è alcuna percentuale da calcolare."
+    }
+  },
+  "notes": {
+    "title": "Nota",
+    "add": "Aggiungi una nota",
+    "saveFailed": "Non è stato possibile salvare la nota. Riprova.",
+    "deleteFailed": "Non è stato possibile eliminare la nota. Riprova.",
+    "deleteTitle": "Eliminare questa nota?",
+    "deleteMessage": "La nota di questo giorno viene rimossa. L'operazione non può essere annullata.",
+    "discardTitle": "Scartare questa nota?",
+    "discardMessage": "La nota che stai scrivendo non è stata salvata. Uscendo da questo giorno viene scartata.",
+    "discardConfirm": "Scarta",
+    "startDate": "Primo giorno",
+    "endDate": "Ultimo giorno",
+    "spanRange": "da {start} a {end}",
+    "spanCount": "{count, plural, one {# giorno} other {# giorni}}",
+    "spanBackwards": "L'ultimo giorno non può precedere il primo.",
+    "spanTooLong": "Una nota può coprire al massimo {days} giorni.",
+    "spanMissesDay": "I giorni scelti non includono il giorno in cui stai scrivendo questa nota.",
+    "deleteSpanMessage": "{count, plural, one {La nota di questo giorno verrà rimossa. L'operazione non può essere annullata.} other {Questa nota copre # giorni e verranno cancellati tutti. L'operazione non può essere annullata.}}"
+  },
+  "monthPicker": {
+    "title": "Vai a un altro mese",
+    "typeLabel": "Digita un mese o un anno",
+    "placeholder": "es. mar 1998, 1998-03, 3/1998",
+    "unreadable": "Non riusciamo a leggerlo come un mese. Prova con un anno, il nome di un mese o 1998-03.",
+    "previousYear": "Anno precedente",
+    "nextYear": "Anno successivo"
+  }
+}

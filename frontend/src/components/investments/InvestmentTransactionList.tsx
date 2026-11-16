@@ -6,9 +6,13 @@ import { useDateFormat } from '@/hooks/useDateFormat';
 import { DateInput } from '@/components/ui/DateInput';
 import { InvestmentTransaction } from '@/types/investment';
 import {
-  redemptionTotalWithInterest,
-  supportsAccruedInterest,
-} from '@/lib/investment-actions';
+  buildInvestmentTxActions,
+  InvestmentPriceValue,
+  InvestmentSharesValue,
+  InvestmentTotalValue,
+  InvestmentTransactionCardBody,
+  useInvestmentActionInfo,
+} from '@/components/investments/InvestmentTransactionListParts';
 import { TransactionStatus } from '@/types/transaction';
 import { investmentsApi } from '@/lib/investments';
 import { getErrorMessage } from '@/lib/errors';
@@ -21,42 +25,21 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { DensityLevel, useTableDensity } from '@/hooks/useTableDensity';
 import { useDensityPreference, type DensityView } from '@/store/densityStore';
 import { Account } from '@/types/account';
-import { getLocalDateString } from '@/lib/utils';
+import { useFinancialToday } from '@/hooks/useFinancialToday';
 import { useLongPress, type LongPressRowHandlers } from '@/hooks/useLongPress';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { RowActions } from '@/components/ui/row-actions/RowActions';
 import { RowActionSheet } from '@/components/ui/row-actions/RowActionSheet';
-import type { RowAction } from '@/components/ui/row-actions/rowAction';
 import { DensityToggle } from '@/components/ui/DensityToggle';
 import { ListTopToolbar } from '@/components/ui/ListTopToolbar';
+import { ColumnChooserMenu, type ColumnChooserItem } from '@/components/ui/ColumnChooserMenu';
+import { useHiddenColumns } from '@/hooks/useHiddenColumns';
+import { useColumnHeaderActions } from '@/hooks/useColumnHeaderActions';
+import type { HideableColumn } from '@/lib/hidden-columns';
+import { Button } from '@/components/ui/Button';
+import { FunnelIcon } from '@heroicons/react/24/outline';
 
-/**
- * Builds the standard row actions for an investment transaction. Shared by the
- * desktop `RowActions` cell and the mobile `RowActionSheet`.
- */
-function buildInvestmentTxActions(
-  tx: InvestmentTransaction,
-  labels: { edit: string; delete: string },
-  handlers: { onEdit?: (tx: InvestmentTransaction) => void; onDeleteClick: (tx: InvestmentTransaction) => void },
-): RowAction[] {
-  return [
-    {
-      key: 'edit',
-      label: labels.edit,
-      icon: 'edit',
-      tone: 'primary',
-      onClick: () => handlers.onEdit?.(tx),
-      hidden: !handlers.onEdit,
-    },
-    {
-      key: 'delete',
-      label: labels.delete,
-      icon: 'delete',
-      tone: 'delete',
-      destructive: true,
-      onClick: () => handlers.onDeleteClick(tx),
-    },
-  ];
-}
+type BrokerageColumn = HideableColumn<'investmentRegister'>;
 
 export interface TransactionFilters {
   symbol?: string;
@@ -91,7 +74,16 @@ interface InvestmentTransactionListProps {
   availableActions?: string[];
   /** Which surface's remembered row density this register reads. */
   densityView?: DensityView;
+  /** The brokerage / cash switch, drawn beside this register's heading. */
   viewToggle?: React.ReactNode;
+  /**
+   * The Table / Calendar switch, drawn in the top toolbar between the density
+   * button and the pager -- the same corner it occupies in calendar mode, and
+   * beside the other control that changes what the whole list looks like.
+   * Only reaches the strip when this list owns its paging; without the strip
+   * there is nowhere for it to go and the page draws it itself.
+   */
+  viewModeToggle?: React.ReactNode;
   /**
    * Paging, when this list owns it. Supplied together, they put the pager in
    * the strip above the table -- the same strip, in the same place, as the cash
@@ -108,67 +100,6 @@ interface InvestmentTransactionListProps {
   onPageChange?: (page: number) => void;
 }
 
-/**
- * Decide whether a SPLIT transaction's stored quantity looks like a ratio a
- * user (or the current QIF parser) would actually have set. Older buggy
- * imports left stray integers like 5, 10, 20, 30 in the quantity column;
- * those would render as misleading "5:1" / "20:1" splits if shown verbatim.
- * Mirror the SPLIT form's logic so the list and the editor agree on which
- * quantities count as "set" and which are blank.
- */
-function isPlausibleSplitRatio(quantity: number | null | undefined): boolean {
-  if (quantity === null || quantity === undefined) return false;
-  const q = Number(quantity);
-  if (!Number.isFinite(q) || q <= 0) return false;
-  if (!Number.isInteger(q)) return true; // 1.5, 0.5, 0.333...
-  return q === 2 || q === 3 || q === 4;
-}
-
-/**
- * Render a SPLIT transaction's stored ratio (new shares per old share)
- * as human-readable "N:M" notation. Examples: 2 -> "2:1", 0.5 -> "1:2",
- * 1.5 -> "3:2". Returns "-" when the stored quantity is missing or doesn't
- * look like an actual user-set ratio so the list never advertises a split
- * the user didn't author.
- */
-function formatSplitRatio(quantity: number | null | undefined): string {
-  if (!isPlausibleSplitRatio(quantity)) return '-';
-  const ratio = Number(quantity);
-  const trim = (n: number) =>
-    Number.isInteger(n) ? String(n) : String(Number(n.toFixed(4)));
-  // Probe small denominators for the most natural ratio rendering.
-  for (const denom of [1, 2, 3, 4, 5, 6, 8, 10]) {
-    const numer = ratio * denom;
-    if (Math.abs(numer - Math.round(numer)) < 1e-6) {
-      const n = Math.round(numer);
-      if (n > 0) return `${trim(n)}:${denom}`;
-    }
-  }
-  if (ratio >= 1) return `${trim(ratio)}:1`;
-  return `1:${trim(1 / ratio)}`;
-}
-
-const ACTION_COLORS: Record<string, string> = {
-  BUY: 'text-green-600 dark:text-green-400',
-  SELL: 'text-red-600 dark:text-red-400',
-  DIVIDEND: 'text-blue-600 dark:text-blue-400',
-  INTEREST: 'text-blue-600 dark:text-blue-400',
-  CAPITAL_GAIN: 'text-purple-600 dark:text-purple-400',
-  SPLIT: 'text-yellow-600 dark:text-yellow-400',
-  TRANSFER_IN: 'text-green-600 dark:text-green-400',
-  TRANSFER_OUT: 'text-red-600 dark:text-red-400',
-  REINVEST: 'text-indigo-600 dark:text-indigo-400',
-  ADD_SHARES: 'text-teal-600 dark:text-teal-400',
-  REMOVE_SHARES: 'text-orange-600 dark:text-orange-400',
-  // Money-vocabulary refinements share their base action's colour.
-  REINVEST_INTEREST: 'text-indigo-600 dark:text-indigo-400',
-  REINVEST_CAPITAL_GAIN_SHORT: 'text-indigo-600 dark:text-indigo-400',
-  REINVEST_CAPITAL_GAIN_LONG: 'text-indigo-600 dark:text-indigo-400',
-  CAPITAL_GAIN_SHORT: 'text-purple-600 dark:text-purple-400',
-  CAPITAL_GAIN_LONG: 'text-purple-600 dark:text-purple-400',
-  REDEEM: 'text-red-600 dark:text-red-400',
-};
-
 interface InvestmentTransactionRowProps {
   tx: InvestmentTransaction;
   accountName?: string;
@@ -184,6 +115,66 @@ interface InvestmentTransactionRowProps {
   onDeleteClick: (tx: InvestmentTransaction) => void;
   onCycleStatus: (tx: InvestmentTransaction) => void;
   hasActions: boolean;
+  /**
+   * The stored `investmentRegister` set, read once by the list. A hidden
+   * column is absent from both layouts: its tier cell and its place on the
+   * card.
+   */
+  hidden: ReadonlySet<BrokerageColumn>;
+  /**
+   * Render the row as a wrapped card instead of the tier table's cells. The
+   * list sets it for phones at Normal density only (Model B: on a phone the
+   * density toggle picks the layout); every other width and every other
+   * density renders the tier row below, unchanged.
+   *
+   * The card carries EIGHT of this register's nine columns -- Date, Action,
+   * Symbol (with the security name that hangs under it at Normal density),
+   * Shares, Price, Total, Account and Status. FOUR of those are ones a
+   * phone-width tier row does not show at all: Shares is `hidden
+   * sm:table-cell`, Price `hidden md:table-cell`, Account and Status `hidden
+   * lg:table-cell` -- so the card is how they get back on screen. Nothing is
+   * omitted for width; the one column left out is **Actions**, because the
+   * long-press (and right-click) sheet these same row handlers open already
+   * carries Edit and Delete.
+   *
+   * The three lines are: Date, Action + Symbol (+ the security name), and the
+   * Total; then Shares and Price; then the Account and the status button.
+   *
+   * Two of those are decisions worth stating rather than defects to fix here:
+   *
+   * - **Account is carried on both surfaces**, because it is a RESPONSIVE
+   *   column on this register rather than a structural one -- unlike the cash
+   *   register, which omits it from the DOM entirely on a single account's
+   *   page. There is no `isSingleAccountView` here and neither mount site
+   *   supplies one, so on the account detail page's panel the card repeats
+   *   that page's own account on every row. Deriving "one account" from the
+   *   rows instead would make the card and the tier table disagree about
+   *   whether the column exists; making it structural is a change to both
+   *   branches and to both callers, and is filed as a follow-up.
+   * - **Price shows whatever the tier's Price cell shows**, which for the
+   *   amount-only actions (DIVIDEND, INTEREST, CAPITAL_GAIN and their
+   *   refinements) is the cash amount rather than a per-share price, and for
+   *   the quantity-only ones (ADD_SHARES, REMOVE_SHARES) is an unrecorded
+   *   price rendered as zero. The card calls the tier's own renderer, so the
+   *   two cannot disagree; that the label overstates what the figure is, is a
+   *   pre-existing property of the column and a separate follow-up. A layout
+   *   mode does not re-decide what a value means.
+   *
+   * The two breakpoints are not the same one. The tier row's Actions cell is
+   * `min-[480px]`, and `wrapped` covers everything below 640px, so between
+   * 480px and 639px at Normal density the actions move from inline buttons to
+   * that sheet -- which also means they stop being tab-reachable there. It is
+   * the price of the card, paid for the four columns above, and the cash
+   * register and the payees list make the same trade at the same two widths,
+   * so they all behave alike. Compact density, one tap
+   * away, is the way back to inline actions.
+   *
+   * Both surfaces that mount this list wrap: the Investments page and the
+   * account detail page's register panel pass the same row-shaping props
+   * (`accounts` differ in scope, nothing else), so neither has a column the
+   * card cannot carry.
+   */
+  wrapped?: boolean;
 }
 
 const InvestmentTransactionRow = memo(function InvestmentTransactionRow({
@@ -201,33 +192,12 @@ const InvestmentTransactionRow = memo(function InvestmentTransactionRow({
   onDeleteClick,
   onCycleStatus,
   hasActions,
+  hidden,
+  wrapped = false,
 }: InvestmentTransactionRowProps) {
-  const t = useTranslations('investments');
   const tc = useTranslations('common');
-  const ACTION_LABELS: Record<string, { label: string; shortLabel: string; color: string }> = {
-    BUY: { label: t('transactionList.actionBuy'), shortLabel: t('transactionList.actionBuy'), color: ACTION_COLORS.BUY },
-    SELL: { label: t('transactionList.actionSell'), shortLabel: t('transactionList.actionSell'), color: ACTION_COLORS.SELL },
-    DIVIDEND: { label: t('transactionList.actionDividend'), shortLabel: 'Div', color: ACTION_COLORS.DIVIDEND },
-    INTEREST: { label: t('transactionList.actionInterest'), shortLabel: 'Int', color: ACTION_COLORS.INTEREST },
-    CAPITAL_GAIN: { label: t('transactionList.actionCapitalGain'), shortLabel: 'Cap', color: ACTION_COLORS.CAPITAL_GAIN },
-    SPLIT: { label: t('transactionList.actionSplit'), shortLabel: t('transactionList.actionSplit'), color: ACTION_COLORS.SPLIT },
-    TRANSFER_IN: { label: t('transactionList.actionTransferIn'), shortLabel: 'In', color: ACTION_COLORS.TRANSFER_IN },
-    TRANSFER_OUT: { label: t('transactionList.actionTransferOut'), shortLabel: 'Out', color: ACTION_COLORS.TRANSFER_OUT },
-    REINVEST: { label: t('transactionList.actionReinvest'), shortLabel: 'Reinv', color: ACTION_COLORS.REINVEST },
-    ADD_SHARES: { label: t('transactionList.actionAddShares'), shortLabel: 'Add', color: ACTION_COLORS.ADD_SHARES },
-    REMOVE_SHARES: { label: t('transactionList.actionRemoveShares'), shortLabel: 'Rem', color: ACTION_COLORS.REMOVE_SHARES },
-    REINVEST_INTEREST: { label: t('transactionList.actionReinvestInterest'), shortLabel: 'RInt', color: ACTION_COLORS.REINVEST_INTEREST },
-    REINVEST_CAPITAL_GAIN_SHORT: { label: t('transactionList.actionReinvestCapitalGainShort'), shortLabel: 'RScg', color: ACTION_COLORS.REINVEST_CAPITAL_GAIN_SHORT },
-    REINVEST_CAPITAL_GAIN_LONG: { label: t('transactionList.actionReinvestCapitalGainLong'), shortLabel: 'RLcg', color: ACTION_COLORS.REINVEST_CAPITAL_GAIN_LONG },
-    CAPITAL_GAIN_SHORT: { label: t('transactionList.actionCapitalGainShort'), shortLabel: 'SCap', color: ACTION_COLORS.CAPITAL_GAIN_SHORT },
-    CAPITAL_GAIN_LONG: { label: t('transactionList.actionCapitalGainLong'), shortLabel: 'LCap', color: ACTION_COLORS.CAPITAL_GAIN_LONG },
-    REDEEM: { label: t('transactionList.actionRedeem'), shortLabel: 'Rdm', color: ACTION_COLORS.REDEEM },
-  };
-  const actionInfo = ACTION_LABELS[tx.action] || {
-    label: tx.action,
-    shortLabel: tx.action,
-    color: 'text-gray-600 dark:text-gray-400',
-  };
+  const actionInfoFor = useInvestmentActionInfo();
+  const actionInfo = actionInfoFor(tx.action);
 
   const actions = buildInvestmentTxActions(
     tx,
@@ -237,8 +207,56 @@ const InvestmentTransactionRow = memo(function InvestmentTransactionRow({
 
   // Same treatment as the cash register: a VOID row is struck through and
   // dimmed, because it records something that did not happen.
+  // True for every column not hidden, structural ones included.
+  const isVisible = (id: string) => !(hidden as ReadonlySet<string>).has(id);
+
   const isVoid = tx.status === TransactionStatus.VOID;
   const voidText = isVoid ? 'line-through' : '';
+
+  // Phone + Normal density: one wrapped card per row instead of the tier
+  // table's cells (see the `wrapped` prop). It is a LAYOUT mode, not a
+  // different set of facts -- the shares, the price and the total come from
+  // the same three renderers the tier cells below call, so the two branches
+  // cannot come to disagree about what a SPLIT's quantity means, when a price
+  // is a dash, or what a redemption's total is. The row keeps its own
+  // handlers, its VOID treatment and its hover, so the long-press sheet and
+  // the row click work identically. Striping is not carried over: it only
+  // exists at Compact and Dense, which never wrap.
+  if (wrapped) {
+    return (
+      <tr
+        {...getRowHandlers(tx)}
+        className={`group hover:bg-gray-100 dark:hover:bg-gray-800 select-none bg-white dark:bg-gray-900 ${onEdit ? 'cursor-pointer' : ''} ${isVoid ? 'opacity-50' : ''}`}
+      >
+        <td className="p-0">
+          {/* The inset is this table's own `cellPadding` -- the `wide` scale
+              it already reads -- never a hand-picked literal. That keeps the
+              card and the tier rows above and below it inset identically at
+              every density, and it keeps the value in one place: a change to
+              the scale reaches both layouts rather than one. The `wide`
+              scale's phone inset is narrower than every other table's, which
+              is why this card can hold two figures on a line at 320px. (The
+              "Today" divider between the rows spells its own padding and is
+              a shade wider; it renders in both layouts, so it is left exactly
+              as it was and noted as a follow-up.) */}
+          <div className={cellPadding}>
+            <InvestmentTransactionCardBody
+              tx={tx}
+              accountName={accountName}
+              defaultCurrency={defaultCurrency}
+              formatDate={formatDate}
+              formatCurrency={formatCurrency}
+              formatQuantity={formatQuantity}
+              actionInfo={actionInfo}
+              onCycleStatus={onCycleStatus}
+              voidText={voidText}
+              hidden={hidden}
+            />
+          </div>
+        </td>
+      </tr>
+    );
+  }
 
   return (
     <tr
@@ -266,44 +284,36 @@ const InvestmentTransactionRow = memo(function InvestmentTransactionRow({
           </div>
         )}
       </td>
-      <td className={`${cellPadding} whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100 hidden sm:table-cell ${voidText}`}>
-        {tx.action === 'SPLIT'
-          ? formatSplitRatio(tx.quantity)
-          : formatQuantity(tx.quantity ?? 0)}
-      </td>
-      <td className={`${cellPadding} whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100 hidden md:table-cell ${voidText}`}>
-        {tx.action === 'SPLIT' && !tx.price ? (
-          '-'
-        ) : (
-          <>
-            {formatCurrency(tx.price ?? 0, tx.security?.currencyCode, 4)}
-            {tx.security?.currencyCode && tx.security.currencyCode !== defaultCurrency && (
-              <span className="ml-1">{tx.security.currencyCode}</span>
-            )}
-          </>
-        )}
-      </td>
+      {isVisible('shares') && (
+        <td className={`${cellPadding} whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100 hidden sm:table-cell ${voidText}`}>
+          <InvestmentSharesValue tx={tx} formatQuantity={formatQuantity} />
+        </td>
+      )}
+      {isVisible('price') && (
+        <td className={`${cellPadding} whitespace-nowrap text-right text-sm text-gray-900 dark:text-gray-100 hidden md:table-cell ${voidText}`}>
+          <InvestmentPriceValue
+            tx={tx}
+            formatCurrency={formatCurrency}
+            defaultCurrency={defaultCurrency}
+          />
+        </td>
+      )}
       <td className={`${cellPadding} whitespace-nowrap text-right text-sm font-medium text-gray-900 dark:text-gray-100 ${voidText}`}>
-        {formatCurrency(
-          // A redemption's accrued interest moved with its proceeds, so the
-          // register shows what the cash account received rather than the
-          // stored proceeds, which are only part of it.
-          supportsAccruedInterest(tx.action)
-            ? redemptionTotalWithInterest(tx.totalAmount, tx.accruedInterest)
-            : tx.totalAmount,
-          tx.security?.currencyCode,
-        )}
-        {tx.security?.currencyCode && tx.security.currencyCode !== defaultCurrency && (
-          <span className="ml-1 font-normal">{tx.security.currencyCode}</span>
-        )}
-      </td>
-      <td className={`${cellPadding} whitespace-nowrap text-center hidden lg:table-cell`}>
-        <StatusCellButton
-          status={tx.status}
-          dense={density === 'dense'}
-          onCycle={() => onCycleStatus(tx)}
+        <InvestmentTotalValue
+          tx={tx}
+          formatCurrency={formatCurrency}
+          defaultCurrency={defaultCurrency}
         />
       </td>
+      {isVisible('status') && (
+        <td className={`${cellPadding} whitespace-nowrap text-center hidden lg:table-cell`}>
+          <StatusCellButton
+            status={tx.status}
+            dense={density === 'dense'}
+            onCycle={() => onCycleStatus(tx)}
+          />
+        </td>
+      )}
       {hasActions && (
         <td className={`${cellPadding} whitespace-nowrap text-right text-sm hidden min-[480px]:table-cell sticky right-0 ${density !== 'normal' && index % 2 === 1 ? 'bg-gray-50 dark:bg-table-stripe-dark' : 'bg-white dark:bg-gray-900'} group-hover:bg-gray-100 dark:group-hover:bg-gray-800`} onClick={(e) => e.stopPropagation()}>
           <RowActions actions={actions} density={density} />
@@ -327,6 +337,7 @@ export function InvestmentTransactionList({
   availableActions,
   densityView = 'investments',
   viewToggle,
+  viewModeToggle,
   currentPage,
   totalPages,
   totalItems,
@@ -358,6 +369,7 @@ export function InvestmentTransactionList({
     { value: 'CAPITAL_GAIN_SHORT', label: t('transactionList.actionCapitalGainShort') },
     { value: 'CAPITAL_GAIN_LONG', label: t('transactionList.actionCapitalGainLong') },
     { value: 'REDEEM', label: t('transactionList.actionRedeem') },
+    { value: 'RETURN_OF_CAPITAL', label: t('transactionList.actionReturnOfCapital') },
   ];
   // "All actions" always stands, and so does whatever is currently selected --
   // a filter set before the rows changed must stay visible in the control that
@@ -373,6 +385,10 @@ export function InvestmentTransactionList({
     // what this depends on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [availableActions, filters?.action, t]);
+  // The same action vocabulary the rows read, so the delete confirmation and
+  // the action sheet's title cannot name an action differently from the row
+  // they were opened on.
+  const actionInfoFor = useInvestmentActionInfo();
   const { formatCurrency, formatQuantity } = useNumberFormat();
   const { formatDate } = useDateFormat();
   const { defaultCurrency } = useExchangeRates();
@@ -380,17 +396,19 @@ export function InvestmentTransactionList({
 
   // Find the index where future investments end and today/past begin.
   // Mirrors TransactionList: rows are sorted DESC by transactionDate so the
-  // future block leads. "Today" is the user's local date so users west of
-  // UTC don't see a tomorrow-local row classified as past.
+  // future block leads. "Today" is the user's own calendar, not the browser's
+  // -- this list and the cash register are drawn on one screen, so a
+  // traveller whose laptop is a day ahead of their configured timezone would
+  // otherwise read two TODAY dividers falling on different rows.
+  const today = useFinancialToday();
   const futureBoundaryIndex = useMemo(() => {
-    const today = getLocalDateString();
     for (let i = 0; i < transactions.length; i++) {
       if (transactions[i].transactionDate <= today) {
         return i;
       }
     }
     return transactions.length;
-  }, [transactions]);
+  }, [transactions, today]);
   const { density } = useDensityPreference(densityView);
   const [showFilters, setShowFilters] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ isOpen: boolean; transaction: InvestmentTransaction | null }>({ isOpen: false, transaction: null });
@@ -452,6 +470,59 @@ export function InvestmentTransactionList({
   // Wide scale: this register carries more columns than any other table.
   const { cellPadding, headerPadding } = useTableDensity(density, 'wide');
 
+  // Model B: on a phone, density picks the LAYOUT rather than only the row
+  // height. At Normal each trade is a wrapped card carrying the Shares this
+  // table hides below `sm`, the Price it hides below `md` and the Account and
+  // Status it hides below `lg`; Compact and Dense keep the tier table,
+  // unchanged, and so does every non-phone width. Exactly one branch renders
+  // per row, chosen here. Both mounting surfaces wrap: the Investments page
+  // and the account detail page's register panel differ only in the scope of
+  // the `accounts` they pass, so neither has a column the card cannot carry.
+  const isMobile = useIsMobile();
+  const wrapped = isMobile && density === 'normal';
+
+  // The stored `investmentRegister` set (one per table kind), so the
+  // Investments page and the account detail page's register panel follow the
+  // same choice. A hidden column is absent from the DOM at every width, the
+  // phone card included; the viewport classes on the cells that remain still
+  // decide whether they fit.
+  const {
+    hidden: hiddenColumns,
+    isVisible,
+    hide: hideColumn,
+    show: showColumn,
+    showAll: showAllColumns,
+    hideable,
+  } = useHiddenColumns('investmentRegister');
+  const hideableColumns = useMemo<ColumnChooserItem<BrokerageColumn>[]>(() => {
+    const labels: Record<BrokerageColumn, string> = {
+      shares: t('transactionList.sharesColumn'),
+      price: t('transactionList.priceColumn'),
+      status: tStatus('list.header.status'),
+    };
+    return hideable.map((id) => ({ id, label: labels[id] }));
+  }, [hideable, t, tStatus]);
+  // The headers do not sort (the server orders this register), so a plain
+  // click on one does nothing; a long-press or right-click opens the "Hide
+  // column" sheet.
+  const { headerHandlers, sheet: columnHeaderSheet } = useColumnHeaderActions({
+    columns: hideableColumns,
+    onHide: hideColumn,
+  });
+  const columnChooser = (
+    <ColumnChooserMenu
+      columns={hideableColumns}
+      hidden={hiddenColumns}
+      onHide={hideColumn}
+      onShow={showColumn}
+      onShowAll={showAllColumns}
+    />
+  );
+
+  // Eight data columns less the hidden ones, plus Actions when this surface
+  // offers any. Loop invariant, so it is resolved once rather than per row.
+  const colCount = 8 - hiddenColumns.size + (onDelete || onEdit ? 1 : 0);
+
   if (isLoading) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-4">
@@ -460,10 +531,15 @@ export function InvestmentTransactionList({
             {t('transactionList.title')}
           </h3>
           {viewToggle}
+          {/* The Table / Calendar switch lives in the strip above the table,
+              which this branch does not draw. It rides the heading here rather
+              than disappearing: a register that is still loading, or holds
+              nothing, is exactly when a reader reaches for another view of it. */}
+          <span className="ml-auto">{viewModeToggle}</span>
         </div>
         <div className="space-y-3">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="animate-pulse flex justify-between">
+            <div key={i} className="animate-pulse skeleton-shimmer flex justify-between">
               <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/3" />
               <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/4" />
             </div>
@@ -482,14 +558,12 @@ export function InvestmentTransactionList({
               {t('transactionList.title')}
             </h3>
             {viewToggle}
+            {viewModeToggle}
           </div>
           {onNewTransaction && (
-            <button
-              onClick={onNewTransaction}
-              className="inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 sm:min-w-[14rem]"
-            >
+            <Button size="sm" onClick={onNewTransaction} className="sm:min-w-[14rem]">
               {t('transactionList.newBrokerageTransaction')}
-            </button>
+            </Button>
           )}
         </div>
         <p className="text-gray-500 dark:text-gray-400">
@@ -514,26 +588,6 @@ export function InvestmentTransactionList({
     }
   };
 
-  const ACTION_LABEL_MAP: Record<string, string> = {
-    BUY: t('transactionList.actionBuy'),
-    SELL: t('transactionList.actionSell'),
-    DIVIDEND: t('transactionList.actionDividend'),
-    INTEREST: t('transactionList.actionInterest'),
-    CAPITAL_GAIN: t('transactionList.actionCapitalGain'),
-    SPLIT: t('transactionList.actionSplit'),
-    TRANSFER_IN: t('transactionList.actionTransferIn'),
-    TRANSFER_OUT: t('transactionList.actionTransferOut'),
-    REINVEST: t('transactionList.actionReinvest'),
-    ADD_SHARES: t('transactionList.actionAddShares'),
-    REMOVE_SHARES: t('transactionList.actionRemoveShares'),
-    REINVEST_INTEREST: t('transactionList.actionReinvestInterest'),
-    REINVEST_CAPITAL_GAIN_SHORT: t('transactionList.actionReinvestCapitalGainShort'),
-    REINVEST_CAPITAL_GAIN_LONG: t('transactionList.actionReinvestCapitalGainLong'),
-    CAPITAL_GAIN_SHORT: t('transactionList.actionCapitalGainShort'),
-    CAPITAL_GAIN_LONG: t('transactionList.actionCapitalGainLong'),
-    REDEEM: t('transactionList.actionRedeem'),
-  };
-
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 overflow-hidden">
       <div className="px-3 pt-3 sm:px-4 sm:pt-4 flex flex-wrap justify-between items-center gap-2">
@@ -550,36 +604,46 @@ export function InvestmentTransactionList({
         </div>
         <div className="flex items-center gap-2 w-full sm:w-auto">
         {onNewTransaction && (
-          <button
-            onClick={onNewTransaction}
-            className="inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 sm:min-w-[14rem]"
-          >
+          <Button size="sm" onClick={onNewTransaction} className="sm:min-w-[14rem]">
             <span className="sm:hidden">{t('transactionList.newBrokerageTransactionShort')}</span>
             <span className="hidden sm:inline">{t('transactionList.newBrokerageTransaction')}</span>
-          </button>
+          </Button>
         )}
         {onFiltersChange && (
           <button
+            type="button"
             onClick={() => setShowFilters(!showFilters)}
-            className={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md ${
+            aria-expanded={showFilters}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md ${
               hasActiveFilters
                 ? 'text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30'
                 : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
             }`}
           >
-            <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-            </svg>
+            <FunnelIcon className="w-4 h-4" aria-hidden="true" />
             {t('transactionList.filter')}
             {hasActiveFilters && (
-              <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-blue-600 rounded-full">
+              <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-blue-600 rounded-full">
                 {[filters?.symbol, filters?.action, filters?.startDate, filters?.endDate].filter(Boolean).length}
               </span>
             )}
           </button>
         )}
+        {/* A folded filter bar still offers Clear beside its count. */}
+        {onFiltersChange && hasActiveFilters && !showFilters && (
+          <button
+            type="button"
+            onClick={clearFilters}
+            className="text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+          >
+            {t('transactionList.clearFilters')}
+          </button>
+        )}
         {!ownsPaging && (
-          <DensityToggle view={densityView} size="md" className="ml-auto" />
+          <div className="ml-auto flex items-center gap-2">
+            {columnChooser}
+            <DensityToggle view={densityView} size="md" />
+          </div>
         )}
         </div>
       </div>
@@ -666,18 +730,30 @@ export function InvestmentTransactionList({
       {ownsPaging && (
         <ListTopToolbar
           densityView={densityView}
+          viewToggle={viewModeToggle}
           currentPage={currentPage}
           totalPages={totalPages}
           totalItems={totalItems}
           pageSize={pageSize}
           onPageChange={onPageChange}
           itemName={t('transactionList.itemNamePlural')}
+          actions={columnChooser}
         />
       )}
 
       {/* Brokerage Transactions Table */}
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+          {/* On a phone the wrapped card labels its own values, so the column
+              header goes with the columns. Unlike the cash register and the
+              list tables, there is nothing in this header row to keep: it
+              holds no sort control (this register is ordered by the server and
+              offers no sortable column at any width), no select-all box and no
+              date-view toggle -- only the eight labels the card's own captions
+              now carry. A slim header would therefore have nothing to put in
+              it, and a `<th>` bearing one of those labels would misdescribe
+              the single card cell below to a screen reader. */}
+          {!wrapped && (
           <thead className="bg-gray-50 dark:bg-gray-800">
             <tr>
               <th className={`${headerPadding} text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider`}>
@@ -692,18 +768,24 @@ export function InvestmentTransactionList({
               <th className={`${headerPadding} text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider`}>
                 {t('transactionList.symbolColumn')}
               </th>
-              <th className={`${headerPadding} text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell`}>
-                {t('transactionList.sharesColumn')}
-              </th>
-              <th className={`${headerPadding} text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden md:table-cell`}>
-                {t('transactionList.priceColumn')}
-              </th>
+              {isVisible('shares') && (
+                <th className={`${headerPadding} text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell`} {...headerHandlers('shares')}>
+                  {t('transactionList.sharesColumn')}
+                </th>
+              )}
+              {isVisible('price') && (
+                <th className={`${headerPadding} text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden md:table-cell`} {...headerHandlers('price')}>
+                  {t('transactionList.priceColumn')}
+                </th>
+              )}
               <th className={`${headerPadding} text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider`}>
                 {t('transactionList.totalColumn')}
               </th>
-              <th className={`${headerPadding} text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden lg:table-cell`}>
-                {tStatus('list.header.status')}
-              </th>
+              {isVisible('status') && (
+                <th className={`${headerPadding} text-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden lg:table-cell`} {...headerHandlers('status')}>
+                  {tStatus('list.header.status')}
+                </th>
+              )}
               {(onDelete || onEdit) && (
                 <th className={`${headerPadding} text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden min-[480px]:table-cell sticky right-0 bg-gray-50 dark:bg-gray-800`}>
                   {t('transactionList.actionsColumn')}
@@ -711,20 +793,26 @@ export function InvestmentTransactionList({
               )}
             </tr>
           </thead>
+          )}
           <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
             {transactions.length === 0 ? (
               <tr>
-                <td colSpan={9} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
+                {/* Both of this table's spanning rows span ONE column in the
+                    wrapped layout, because every body row there is a single
+                    card cell. The tier count is `colCount`, so it follows the
+                    hidden columns; both mounting surfaces pass `onEdit` and
+                    `onDelete`, so with nothing hidden it is the nine it has
+                    always been. */}
+                <td colSpan={wrapped ? 1 : colCount} className="px-6 py-8 text-center text-gray-500 dark:text-gray-400">
                   {t('transactionList.noTransactionsFiltered')}
                 </td>
               </tr>
             ) : transactions.map((tx, index) => {
-              const colCount = 8 + (onDelete || onEdit ? 1 : 0);
               return (
                 <Fragment key={tx.id}>
                   {index === futureBoundaryIndex && futureBoundaryIndex > 0 && (
                     <tr>
-                      <td colSpan={colCount} className="px-0 py-0">
+                      <td colSpan={wrapped ? 1 : colCount} className="px-0 py-0">
                         <div className="flex items-center gap-3 px-4 py-1.5">
                           <div className="flex-1 border-t border-blue-300 dark:border-blue-700" />
                           <span className="text-xs font-medium text-blue-500 dark:text-blue-400 uppercase tracking-wider whitespace-nowrap">{t('transactionList.today')}</span>
@@ -748,6 +836,8 @@ export function InvestmentTransactionList({
                     onDeleteClick={handleDeleteClick}
                     onCycleStatus={handleCycleStatus}
                     hasActions={!!(onDelete || onEdit)}
+                    hidden={hiddenColumns}
+                    wrapped={wrapped}
                   />
                 </Fragment>
               );
@@ -762,7 +852,7 @@ export function InvestmentTransactionList({
         title={t('transactionList.deleteTitle')}
         message={deleteConfirm.transaction
           ? t('transactionList.deleteConfirmMessage', {
-              action: ACTION_LABEL_MAP[deleteConfirm.transaction.action] || deleteConfirm.transaction.action,
+              action: actionInfoFor(deleteConfirm.transaction.action).label,
               security: deleteConfirm.transaction.security ? ` for ${deleteConfirm.transaction.security.symbol}` : '',
             })
           : t('transactionList.deleteConfirmGeneric')}
@@ -775,7 +865,7 @@ export function InvestmentTransactionList({
 
       <RowActionSheet
         isOpen={!!contextTx}
-        title={contextTx?.security?.symbol ?? (contextTx ? ACTION_LABEL_MAP[contextTx.action] || contextTx.action : '')}
+        title={contextTx?.security?.symbol ?? (contextTx ? actionInfoFor(contextTx.action).label : '')}
         subtitle={contextTx ? formatDate(contextTx.transactionDate) : undefined}
         actions={contextTx
           ? buildInvestmentTxActions(
@@ -786,6 +876,8 @@ export function InvestmentTransactionList({
           : []}
         onClose={() => setContextTx(null)}
       />
+
+      {columnHeaderSheet}
     </div>
   );
 }

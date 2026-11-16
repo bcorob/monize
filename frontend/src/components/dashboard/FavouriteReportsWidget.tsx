@@ -97,7 +97,7 @@ export function FavouriteReportsWidget({ isLoading: parentLoading }: FavouriteRe
   }, [favouriteReportIds, managedFavourites]);
 
   const sectionTitle = (
-    <WidgetHeading id="favourite-reports" onClick={() => router.push('/reports')} className="mb-4">
+    <WidgetHeading id="favourite-reports" href="/reports" className="mb-4">
       {t('favouriteReports.title')}
     </WidgetHeading>
   );
@@ -106,7 +106,7 @@ export function FavouriteReportsWidget({ isLoading: parentLoading }: FavouriteRe
     return (
       <div className={`${CARD_CLASS} p-3 sm:p-6`}>
         {sectionTitle}
-        <div className="animate-pulse space-y-3">
+        <div className="animate-pulse skeleton-shimmer space-y-3">
           <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded" />
           <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded" />
           <div className="h-10 bg-gray-200 dark:bg-gray-700 rounded" />

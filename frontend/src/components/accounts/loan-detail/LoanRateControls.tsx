@@ -33,13 +33,18 @@ export function LoanRateControls({ editing }: LoanRateControlsProps) {
         {t('loanDetail.rateHistory.add')}
       </Button>
 
-      <Modal isOpen={formModal !== null} onClose={editing.closeForm} maxWidth="md">
-        <div className="p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-            {formModal?.mode === 'edit'
-              ? t('loanDetail.rateHistory.editTitle')
-              : t('loanDetail.rateHistory.addTitle')}
-          </h3>
+      <Modal
+        isOpen={formModal !== null}
+        onClose={editing.closeForm}
+        maxWidth="md"
+        className="p-6"
+        title={
+          formModal?.mode === 'edit'
+            ? t('loanDetail.rateHistory.editTitle')
+            : t('loanDetail.rateHistory.addTitle')
+        }
+      >
+        <div>
           <div className="space-y-4">
             <DateInput
               label={t('loanDetail.rateHistory.effectiveDateLabel')}

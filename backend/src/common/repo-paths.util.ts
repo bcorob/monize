@@ -1,6 +1,7 @@
 import { basename } from "path";
 
 import { escapeRegExp } from "./escape-regexp.util";
+import { LEGACY_PREFIX_WIDTH } from "./db/migration-filename";
 
 /**
  * The grammar and inventory that decide whether a written reference to a file --
@@ -48,6 +49,8 @@ export const ROOTED = [
   "helm/",
   "scripts/",
   "e2e/",
+  "desktop/",
+  "mobile/",
   ".github/",
   ".claude/",
 ];
@@ -61,6 +64,7 @@ const NOT_REPO_PATHS: RegExp[] = [
   /^\/(?:data|app|tmp|etc|root)\//, // container and host paths
   /\.{3}/, // `.../interceptors/foo.ts` ellipsis shorthand
   /(?:^|\/)\d*N{2,}_/, // `NNN_description.sql`, `0NN_rls_...` numbering placeholders
+  /(?:^|\/)YYYYMMDDHHMMSS_/, // `YYYYMMDDHHMMSS_description.sql`, the timestamp placeholder
 ];
 
 export type PathClaim = { kind: "rooted" | "relative" | "bare"; path: string };
@@ -520,9 +524,19 @@ export function commentPathSpans(comment: string): string[] {
 
 // ---------------------------------------------------------------------------
 // Migration-number references (issue #1093): "migration 136", "migrations 133
-// and 134", "sibling in 136". Resolved by filename, not path logic -- a
-// migration is named `NNN_description.sql`, so the number is the identity.
+// and 134", "sibling in 136", and the same forms with a fourteen-digit
+// timestamp. Resolved by filename, not path logic -- a migration is named
+// `NNN_description.sql` (historical) or `YYYYMMDDHHMMSS_description.sql`, so
+// the number is the identity.
 // ---------------------------------------------------------------------------
+
+/**
+ * A migration number as it appears in prose: the historical two-to-four digit
+ * form, or the fourteen-digit timestamp. The timestamp alternative is tried
+ * first and both end on a word boundary, so a timestamp is never read as its
+ * first four digits (which would name a migration that does not exist).
+ */
+const MIGRATION_NUMBER = String.raw`(?:\d{14}|\d{2,4})\b`;
 
 /**
  * The migration numbers referenced by a comment. Two anchors, each a form that
@@ -537,17 +551,28 @@ export function commentPathSpans(comment: string): string[] {
 export function migrationRefs(comment: string): number[] {
   const numbers: number[] = [];
   for (const m of comment.matchAll(
-    /\bmigrations?\s+(\d{2,4}(?:\s*(?:,|and|&)\s*\d{2,4})*)/gi,
+    new RegExp(
+      String.raw`\bmigrations?\s+(${MIGRATION_NUMBER}(?:\s*(?:,|and|&)\s*${MIGRATION_NUMBER})*)`,
+      "gi",
+    ),
   )) {
-    for (const n of m[1].match(/\d{2,4}/g) ?? []) numbers.push(parseInt(n, 10));
+    for (const n of m[1].match(new RegExp(MIGRATION_NUMBER, "g")) ?? []) {
+      numbers.push(parseInt(n, 10));
+    }
   }
-  for (const m of comment.matchAll(/\bsibling in\s+(\d{2,4})\b/gi)) {
+  for (const m of comment.matchAll(
+    new RegExp(String.raw`\bsibling in\s+(${MIGRATION_NUMBER})`, "gi"),
+  )) {
     numbers.push(parseInt(m[1], 10));
   }
   return numbers;
 }
 
-/** The set of migration numbers present in `database/migrations`. */
+/**
+ * The set of migration numbers present in `database/migrations`, historical and
+ * timestamp forms alike -- both are the numeric value of the prefix, which is
+ * how `migrationRefs` reads them out of prose.
+ */
 export function buildMigrationIndex(migrationFiles: string[]): Set<number> {
   const numbers = new Set<number>();
   for (const f of migrationFiles) {
@@ -564,5 +589,5 @@ export function migrationProblem(
 ): string | null {
   return migrations.has(ref)
     ? null
-    : `migration ${ref} does not exist (no database/migrations/${String(ref).padStart(3, "0")}_*.sql)`;
+    : `migration ${ref} does not exist (no database/migrations/${String(ref).padStart(LEGACY_PREFIX_WIDTH, "0")}_*.sql)`;
 }

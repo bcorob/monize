@@ -172,6 +172,66 @@ describe("db-migrate runMigrations()", () => {
     expect(logSpy).toHaveBeenCalledWith("Applied 2 migration(s) successfully");
   });
 
+  it("applies migrations in numeric prefix order, not string order, whatever order the directory lists them in", async () => {
+    // Issue #1277: `readdirSync(...).sort()` is a string sort, which agrees
+    // with numeric order only while every historical prefix begins with 0 or 1
+    // and every timestamp with 2. The 205 below is above today's ceiling (the
+    // prefix check refuses one), and it is exactly the shape a string sort
+    // places after every timestamp: the runner's order must not depend on the
+    // coincidence.
+    existsSyncSpy.mockReturnValue(true);
+    const listing = [
+      "20260905143000_new.sql",
+      "205_beyond_ceiling.sql",
+      "168_existing.sql",
+      "022_old.sql",
+    ];
+    readdirSyncSpy.mockReturnValue(listing as any);
+    readFileSyncSpy.mockReturnValue("SELECT 1;");
+    // The fixture must be one a string sort gets wrong, or this proves nothing.
+    const stringSorted = [...listing].sort();
+    expect(stringSorted[stringSorted.length - 1]).toBe(
+      "205_beyond_ceiling.sql",
+    );
+
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{}] })
+      .mockResolvedValueOnce({ rows: [{}] })
+      .mockResolvedValueOnce({ rows: [{}] })
+      .mockResolvedValueOnce(undefined) // CREATE TABLE
+      .mockResolvedValueOnce({ rows: [] }) // SELECT applied
+      .mockResolvedValue(undefined);
+
+    await runMigrations();
+
+    const recorded = mockQuery.mock.calls
+      .filter(
+        (c) => c[0] === "INSERT INTO schema_migrations (filename) VALUES ($1)",
+      )
+      .map((c) => c[1][0]);
+    expect(recorded).toEqual([
+      "022_old.sql",
+      "168_existing.sql",
+      "205_beyond_ceiling.sql",
+      "20260905143000_new.sql",
+    ]);
+  });
+
+  it("refuses to run when a filename carries neither prefix form", async () => {
+    // A name the comparator cannot place is not applied at whatever position
+    // a string sort would give it; the run fails before any BEGIN.
+    existsSyncSpy.mockReturnValue(true);
+    readdirSyncSpy.mockReturnValue(["001_init.sql", "1000_wide.sql"] as any);
+    mockQuery.mockResolvedValue({ rows: [] });
+
+    await runMigrations();
+
+    expect(mockQuery).not.toHaveBeenCalledWith("BEGIN");
+    const report = errorSpy.mock.calls.map((c) => c[0]).join("\n");
+    expect(report).toContain('cannot order migration filename "1000_wide.sql"');
+    expect(mockExit).toHaveBeenCalledWith(1);
+  });
+
   it("applies only pending migrations (skips already-applied)", async () => {
     existsSyncSpy.mockReturnValue(true);
     readdirSyncSpy.mockReturnValue([

@@ -4,19 +4,29 @@
     "subtitle": "Analiza wzorców wydatków i anomalii oparta na AI"
   },
   "list": {
-    "lastUpdated": "Ostatnia aktualizacja: {date} {time}",
     "refreshButton": "Odśwież analizę",
-    "generating": "Generowanie...",
+    "refreshAge": "({time})",
+    "summary": {
+      "active": "Aktywne analizy",
+      "alerts": "Alerty",
+      "warnings": "Ostrzeżenia"
+    },
     "allTypes": "Wszystkie typy",
-    "allSeverities": "Wszystkie poziomy",
+    "typeFilterLabel": "Typ",
+    "severityFilterLabel": "Ważność",
+    "severityFilter": {
+      "all": "Wszystkie ({count})",
+      "alert": "Alerty ({count})",
+      "warning": "Ostrzeżenia ({count})",
+      "info": "Informacje ({count})"
+    },
     "showDismissed": "Pokaż odrzucone",
     "emptyNoInsights": "Nie wygenerowano jeszcze żadnej analizy. Kliknij \"Odśwież analizę\", aby przeanalizować wzorce wydatków.",
     "emptyFiltered": "Żadna analiza nie pasuje do bieżących filtrów.",
     "generateButton": "Wygeneruj analizę",
-    "alertCount": "{count, plural, one {# alert} few {# alerty} many {# alertów} other {# alertu}}",
-    "warningCount": "{count, plural, one {# ostrzeżenie} few {# ostrzeżenia} many {# ostrzeżeń} other {# ostrzeżenia}}",
     "errorLoadFailed": "Nie udało się wczytać analizy. Spróbuj ponownie.",
     "errorGenerateFailed": "Nie udało się wygenerować analizy. Upewnij się, że dostawca AI jest skonfigurowany.",
+    "errorDismissFailed": "Nie udało się zamknąć analizy. Spróbuj ponownie.",
     "errorTimeout": "Generowanie analizy trwa dłużej niż zwykle. Poczekaj lub odśwież stronę."
   },
   "card": {

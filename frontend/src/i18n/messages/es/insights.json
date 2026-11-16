@@ -4,19 +4,29 @@
     "subtitle": "Análisis impulsado por AI de tus patrones de gasto y anomalías"
   },
   "list": {
-    "lastUpdated": "Última actualización: {date} {time}",
     "refreshButton": "Actualizar análisis",
-    "generating": "Generando...",
+    "refreshAge": "({time})",
+    "summary": {
+      "active": "Análisis activos",
+      "alerts": "Alertas",
+      "warnings": "Avisos"
+    },
     "allTypes": "Todos los tipos",
-    "allSeverities": "Todas las gravedades",
+    "typeFilterLabel": "Tipo",
+    "severityFilterLabel": "Gravedad",
+    "severityFilter": {
+      "all": "Todos ({count})",
+      "alert": "Alertas ({count})",
+      "warning": "Avisos ({count})",
+      "info": "Info ({count})"
+    },
     "showDismissed": "Mostrar descartados",
     "emptyNoInsights": "Aún no se han generado análisis. Haz clic en \"Actualizar análisis\" para analizar tus patrones de gasto.",
     "emptyFiltered": "Ningún análisis coincide con los filtros actuales.",
     "generateButton": "Generar análisis",
-    "alertCount": "{count, plural, one {# alerta} other {# alertas}}",
-    "warningCount": "{count, plural, one {# aviso} other {# avisos}}",
     "errorLoadFailed": "Error al cargar los análisis. Inténtalo de nuevo.",
     "errorGenerateFailed": "Error al generar los análisis. Asegúrate de tener un proveedor de AI configurado.",
+    "errorDismissFailed": "Error al descartar el análisis. Inténtalo de nuevo.",
     "errorTimeout": "La generación de análisis está tardando más de lo esperado. Espera o actualiza la página."
   },
   "card": {

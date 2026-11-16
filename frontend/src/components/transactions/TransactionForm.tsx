@@ -1,17 +1,23 @@
 'use client';
 
-import { useState, useEffect, useMemo, useRef, useCallback, MutableRefObject } from 'react';
+import { SharedLinkedTransactionNotice } from "@/components/shared-expenses/SharedLinkedTransactionNotice";
+import { isSharedPaymentAccount } from "@/lib/shared-bank-eligibility";
+
+import { FALLBACK_DEFAULT_CURRENCY } from '@/lib/default-currency';
+import { useState, useEffect, useId, useMemo, useRef, useCallback, MutableRefObject, type BaseSyntheticEvent } from 'react';
 import { useTranslations } from 'next-intl';
-import { useForm, Resolver } from 'react-hook-form';
+import { useForm, useWatch, Resolver } from 'react-hook-form';
 import '@/lib/zodConfig';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { Select } from '@/components/ui/Select';
 import { SplitEditor, SplitRow, createEmptySplits, toSplitRows, toCreateSplitData } from './SplitEditor';
+import { receivedAmountToSend } from './split-transfer-currency';
 import { NormalTransactionFields } from './NormalTransactionFields';
 import { SplitTransactionFields } from './SplitTransactionFields';
 import { CurrencyPickerButton } from './CurrencyPickerButton';
+import { HelpLink } from '@/components/help/HelpLink';
 import { TOUR_ANCHORS, tourAnchor } from '@/lib/tours/anchors';
 import { useDisableTransactionSplit } from '@/store/tourStore';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
@@ -19,14 +25,19 @@ import { exchangeRatesApi } from '@/lib/exchange-rates';
 import {
   FX_RATE_DISPLAY_DECIMALS,
   getCurrencySymbol,
-  roundToCents,
+  roundMoney,
+  sumMoney,
   roundToDecimals,
+  roundToEntryPlaces,
+  entryDecimalPlaces,
+  moneyDecimalsForCurrency,
 } from '@/lib/format';
 import {
   getRememberedTransactionCurrency,
   rememberTransactionCurrency,
 } from '@/lib/lastTransactionCurrency';
 import { TransferTransactionFields } from './TransferTransactionFields';
+import { useTransferFxAutofill } from './useTransferFxAutofill';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { Modal } from '@/components/ui/Modal';
 import { TagForm } from '@/components/tags/TagForm';
@@ -48,16 +59,25 @@ import { Payee } from '@/types/payee';
 import { Category } from '@/types/category';
 import { Account, TransferCandidate } from '@/types/account';
 import { Tag } from '@/types/tag';
+import { useTagPickerOptions } from '@/hooks/useTagPickerOptions';
 import { ReactivatePayeeDialog } from '@/components/payees/ReactivatePayeeDialog';
+import { ContactLookupDialog } from '@/components/payees/ContactLookupDialog';
+import { useContactLookupAvailable } from '@/hooks/useContactLookupAvailable';
+import { usePayeeContactLookup } from '@/hooks/usePayeeContactLookup';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { buildCategoryTree } from '@/lib/categoryUtils';
+import { buildCategoryTree, signAmountByCategory } from '@/lib/categoryUtils';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useDateFormat } from '@/hooks/useDateFormat';
 import { usePreferencesStore } from '@/store/preferencesStore';
+import { useAuthStore } from '@/store/authStore';
 import { createLogger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errors';
 import { AttachmentsSection } from './AttachmentsSection';
+import { useAutoGrowTextarea } from '@/hooks/useAutoGrowTextarea';
+import { TransactionWarrantiesLine } from './TransactionWarrantiesLine';
+import { rowHasWarranties } from './WarrantyBadge';
 import { attachmentsApi } from '@/lib/attachments';
+import type { StagedAttachment } from '@/types/attachment';
 import { optionalUuid, optionalString } from '@/lib/zod-helpers';
 import { useFormSubmitRef } from '@/hooks/useFormSubmitRef';
 import { useFormDirtyNotify } from '@/hooks/useFormDirtyNotify';
@@ -66,6 +86,8 @@ import {
   TRANSACTION_SUBMIT_MODE_KEY,
   useTransactionSubmitMode,
 } from '@/hooks/useTransactionSubmitMode';
+import { TRANSACTION_NOTE_MAX_LENGTH } from '@/lib/transaction-note';
+import { NoteLinks } from '@/components/ui/LinkifiedText';
 
 const logger = createLogger('TransactionForm');
 
@@ -76,7 +98,7 @@ const buildTransactionSchema = (t: (key: string) => string) => z.object({
   payeeName: optionalString,
   categoryId: optionalUuid,
   amount: z.number({ error: 'Amount is required' }),
-  currencyCode: z.string().default('CAD'),
+  currencyCode: z.string().default(FALLBACK_DEFAULT_CURRENCY),
   description: optionalString,
   referenceNumber: optionalString,
   status: z.nativeEnum(TransactionStatus).default(TransactionStatus.UNRECONCILED),
@@ -85,22 +107,31 @@ const buildTransactionSchema = (t: (key: string) => string) => z.object({
 type TransactionFormData = z.infer<ReturnType<typeof buildTransactionSchema>>;
 
 /**
- * Sign a freshly entered amount magnitude according to a category: an income
- * category makes it positive, an expense category negative. An explicit sign
- * toggle -- the magnitude is unchanged from `reference`, so the user just
- * flipped the sign -- is preserved so a manual override is respected. Shared by
- * the account-currency and foreign-currency amount inputs so both behave
- * identically. With no category (or no reference), the value is returned as-is.
+ * The figure a transfer form shows as "Transfer Amount": the FROM (negative)
+ * leg's, whichever leg the form was opened on. The receiving leg holds the
+ * amount in the destination currency, which is the "Amount Received" field,
+ * so loading it here would re-price the transfer on an unedited save.
  */
-function signAmountByCategory(
-  value: number,
-  reference: number | undefined,
-  category: Category | undefined,
-): number {
-  const referenceAbs = reference !== undefined ? Math.abs(reference) : 0;
-  const isJustSignChange = referenceAbs === Math.abs(value) && referenceAbs !== 0;
-  if (isJustSignChange || !category) return value;
-  return category.isIncome ? Math.abs(value) : -Math.abs(value);
+function transferSourceAmount(source: Transaction): number {
+  return Math.abs(Number(transferSourceLeg(source).amount));
+}
+
+/** The FROM (negative) leg of a transfer, whichever leg the form was opened on. */
+function transferSourceLeg(source: Transaction): Transaction {
+  const linked = source.linkedTransaction;
+  return Number(source.amount) >= 0 && linked ? linked : source;
+}
+
+/**
+ * The money precision of the amount a form loads from `source`: its own
+ * currency's, or for a transfer the FROM leg's, whose amount the form shows.
+ */
+function loadedAmountDecimals(source: Transaction): number {
+  return moneyDecimalsForCurrency(
+    source.isTransfer
+      ? (transferSourceLeg(source).currencyCode ?? source.currencyCode)
+      : source.currencyCode,
+  );
 }
 
 /**
@@ -109,22 +140,59 @@ function signAmountByCategory(
  * fields (payee, category, notes, reference) leaves the reconciliation intact
  * and should save without a warning. Returns true only when the submitted date
  * or amount differs from the original, in which case the edit is gated behind a
- * confirmation. Amounts are compared in integer cents at the same 2-decimal
- * precision the form loads them with, so float drift never triggers a warning.
+ * confirmation. Amounts are compared at the server's precision for the
+ * row's currency (four for fiat, a coin's eight), the precision the form
+ * loads them with, so float drift never triggers a warning and a sub-cent (or
+ * one-satoshi) change is not missed.
  */
 function reconciledEditAffectsReconciliation(
   original: Transaction,
   data: TransactionFormData,
 ): boolean {
   const dateChanged = data.transactionDate !== original.transactionDate;
-  // Mirror the form's defaultValues normalization: transfers always load an
-  // absolute amount, everything else keeps its sign.
+  // Mirror the form's defaultValues normalization: transfers always load the
+  // source leg's absolute amount, everything else keeps its sign.
   const originalAmount = original.isTransfer
-    ? Math.abs(Math.round(Number(original.amount) * 100) / 100)
-    : Math.round(Number(original.amount) * 100) / 100;
+    ? transferSourceAmount(original)
+    : Number(original.amount);
+  const decimals = loadedAmountDecimals(original);
   const amountChanged =
-    Math.round(Number(data.amount) * 100) !== Math.round(originalAmount * 100);
+    roundMoney(Number(data.amount), decimals) !== roundMoney(originalAmount, decimals);
   return dateChanged || amountChanged;
+}
+
+/**
+ * A transfer leg whose pairing the form cannot change: a split-transfer leg
+ * (its link names the split parent, which owns the pairing) or a leg whose
+ * counterpart is another owner's row. The server refuses converting either,
+ * so the form offers them no other mode.
+ *
+ * Judged only on what was loaded: a row whose `linkedTransaction` relation was
+ * never fetched (`undefined`) says nothing and is not locked; one fetched and
+ * missing (`null`) is the owner-scoped read missing a foreign row; one fetched
+ * in an account the user cannot see (not in `accounts`, once they are loaded)
+ * is another owner's as well, as `TransferTransactionFields` judges it.
+ */
+function conversionLocked(
+  transaction: Transaction | undefined,
+  accounts: readonly Account[],
+): boolean {
+  if (!transaction?.isTransfer || !transaction.linkedTransactionId) return false;
+  const linked = transaction.linkedTransaction;
+  if (linked === undefined) return false;
+  if (linked === null) return true;
+  if (linked.isSplit) return true;
+  return accounts.length > 0 && !accounts.some((account) => account.id === linked.accountId);
+}
+
+/**
+ * Whether converting this transfer away deletes a counterpart somebody has
+ * already checked against a statement: the form warns first (issue #1937);
+ * the server refuses a RECONCILED one outright under the strict lock.
+ */
+function counterpartChecked(transaction: Transaction): boolean {
+  const status = transaction.linkedTransaction?.status;
+  return status === TransactionStatus.CLEARED || status === TransactionStatus.RECONCILED;
 }
 
 interface TransactionFormProps {
@@ -132,6 +200,20 @@ interface TransactionFormProps {
   duplicateFrom?: Transaction;
   defaultAccountId?: string;
   defaultCategoryId?: string;
+  /**
+   * The date a new entry opens on, `YYYY-MM-DD`.
+   *
+   * Read only in create mode, and only when set: the calendar's "New
+   * transaction on this day" means the day the reader clicked, which is not
+   * the date the last entry was filed under. An edit keeps the row's own date,
+   * and a form opened anywhere else keeps the remembered one.
+   */
+  defaultDate?: string;
+  /**
+   * A new transaction starts with this payee selected and its default category
+   * filled in (the command palette's action). Ignored when editing or duplicating.
+   */
+  defaultPayee?: { id: string; name: string; defaultCategoryId?: string | null };
   onSuccess?: () => void;
   onCancel?: () => void;
   onDirtyChange?: (isDirty: boolean) => void;
@@ -143,6 +225,41 @@ interface TransactionFormProps {
    * off and the submit button offers no such option.
    */
   onCreateAndNew?: () => void;
+  /**
+   * Files to open the form with already staged, used by the Web Share Target's
+   * review screen. They travel the same path as files picked in this window:
+   * held client-side while the transaction does not exist, then uploaded by
+   * `uploadStagedAttachments` once it does. Plain files with no scan original,
+   * so each becomes a `StagedAttachment` carrying only `file`.
+   */
+  initialStagedFiles?: File[];
+  /**
+   * The Warranties line's "Add warranty": the host closes this form through
+   * its own close path (which asks about unsaved edits) and then opens the
+   * Warranties page's form prefilled from the transaction. Edits only; a new
+   * transaction's Add is `onAddWarrantyAfterCreate`. Leave it off and the line
+   * offers no Add, and shows only when the row has warranties to list.
+   */
+  onAddWarranty?: (transaction: Transaction) => void;
+  /**
+   * A new transaction's "Add warranty": the form saves the transaction first,
+   * through the same validation and submit as Save, and calls this in place of
+   * `onSuccess` once the save succeeded, with the row it created. Nothing is
+   * unsaved by then, so the host closes without asking and opens the
+   * Warranties page's form prefilled from that row. Leave it off and a new
+   * transaction shows no Warranties line.
+   */
+  onAddWarrantyAfterCreate?: (created: Transaction) => void;
+  /** Continue with the saved bank row; the host closes its modal before navigating. */
+  onShareAfterCreate?: (created: Transaction) => void;
+  /**
+   * Opens one linked warranty's page from the Warranties line, through the
+   * same close-then-navigate as `onAddWarranty`. A plain link cannot do it:
+   * this form sits in a `pushHistory` Modal, and the Modal's unmount pops its
+   * history entry, which undoes the link's navigation. Leave it off and the
+   * line lists the warranties without links.
+   */
+  onOpenWarranty?: (warrantyId: string) => void;
 }
 
 interface TransactionFormFieldsProps extends TransactionFormProps {
@@ -150,16 +267,30 @@ interface TransactionFormFieldsProps extends TransactionFormProps {
   onCreateAnother?: (accountId: string) => void;
 }
 
+/** What a successful create goes on to do in place of closing the form. */
+type AfterCreate = 'addWarranty';
+
 // Transaction mode type
 type TransactionMode = 'normal' | 'split' | 'transfer';
 
-function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, defaultCategoryId, onSuccess, onCancel, onDirtyChange, submitRef, onCreateAnother }: TransactionFormFieldsProps) {
+function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, defaultCategoryId, defaultDate, defaultPayee, onSuccess, onCancel, onDirtyChange, submitRef, onCreateAnother, initialStagedFiles, onAddWarranty, onAddWarrantyAfterCreate, onShareAfterCreate, onOpenWarranty }: TransactionFormFieldsProps) {
   const t = useTranslations('transactions');
+  const th = useTranslations('help');
+  const sharedT = useTranslations('sharedExpenses');
+  const userId = useAuthStore((s) => s.user?.id);
+  const [shareAfterCreate, setShareAfterCreate] = useState(false);
+  // An acting delegate never sees the Warranties line: a warranty is the
+  // owner's to add, and the same rule makes the Warranties page read-only.
+  const actingAsDelegate = useAuthStore((s) => s.actingAsUserId) !== null;
   const { defaultCurrency, formatCurrency, formatNumber } = useNumberFormat();
   const showCreatedAt = usePreferencesStore((s) => s.preferences?.showCreatedAt ?? false);
   const timeFormat = usePreferencesStore((s) => s.preferences?.timeFormat ?? '24h');
   const timezonePref = usePreferencesStore((s) => s.preferences?.timezone);
   const [isLoading, setIsLoading] = useState(false);
+  // Set on the click, before validation resolves: `isLoading` is set only
+  // once it has, so it cannot stop a second click from creating the row twice.
+  const submitInFlight = useRef(false);
+  const [isSavingForWarranty, setIsSavingForWarranty] = useState(false);
   // What the submit button does once a *new* transaction has been created.
   // Only offered when creating and only when the host can keep the window open;
   // an edit always hands back to the page.
@@ -167,7 +298,9 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
   const canCreateAnother = !transaction && !!onCreateAnother;
   // Files chosen in the New Transaction window before the transaction exists;
   // uploaded once it has been created. Empty (and unused) when editing.
-  const [stagedAttachments, setStagedAttachments] = useState<File[]>([]);
+  const [stagedAttachments, setStagedAttachments] = useState<
+    StagedAttachment[]
+  >(() => (initialStagedFiles ?? []).map((file) => ({ file })));
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transferCandidates, setTransferCandidates] = useState<
     TransferCandidate[]
@@ -178,17 +311,40 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
   const [tags, setTags] = useState<Tag[]>([]);
   // initSource: the transaction to pre-fill from (either editing or duplicating)
   const initSource = transaction || duplicateFrom;
+  const newEntryPayee = initSource ? undefined : defaultPayee;
+  const payeeCategoryId = newEntryPayee?.defaultCategoryId || undefined;
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>(
     initSource?.tags?.map(t => t.id) || []
   );
-  const [selectedPayeeId, setSelectedPayeeId] = useState<string>(initSource?.payeeId || '');
+  const [selectedPayeeId, setSelectedPayeeId] = useState<string>(initSource?.payeeId || newEntryPayee?.id || '');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>(
-    initSource?.categoryId || (initSource ? '' : defaultCategoryId || '')
+    initSource?.categoryId || (initSource ? '' : payeeCategoryId || defaultCategoryId || '')
   );
   const [, setCategoryName] = useState<string>('');
   // Tracks whether the current categoryId was set by the asset-account auto-fill
-  // (so we can clear it when switching away to a non-asset account).
-  const categoryWasAutoSetRef = useRef<boolean>(!initSource && !!defaultCategoryId);
+  // (so we can clear it when switching away to a non-asset account). A payee's
+  // category is the reader's choice of payee, as when one is picked in the form.
+  const categoryWasAutoSetRef = useRef<boolean>(!initSource && !!defaultCategoryId && !payeeCategoryId);
+
+  // ─── new payee's contact details ──────────────────────────────────────
+  //
+  // Creating a payee here gives it a name and nothing else, so the lookup runs
+  // on the payee that was just created and offers what it found. Nothing is
+  // stored until the user confirms: the create tells the server not to run its
+  // own background lookup (`deferContactLookup`), because two lookups would be
+  // two paid calls and the second one would write values behind the dialogue
+  // the user is still reading.
+  const payeeLookupEnabled = usePreferencesStore(
+    (s) => s.preferences?.payeeContactLookupEnabled ?? false,
+  );
+  const { available: lookupAvailable } = useContactLookupAvailable();
+  // Both conditions, because either one missing makes the lookup impossible:
+  // the preference is the user asking for it, the provider is what answers.
+  const offerContactLookup = payeeLookupEnabled && lookupAvailable;
+  const contactLookup = usePayeeContactLookup({
+    onApplied: (saved) =>
+      setPayees((prev) => prev.map((p) => (p.id === saved.id ? saved : p))),
+  });
 
   // Reactivation modal state
   const [inactivePayeeMatch, setInactivePayeeMatch] = useState<Payee | null>(null);
@@ -205,6 +361,11 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
 
   // Transaction mode state (normal, split, or transfer)
   const [mode, setMode] = useState<TransactionMode>(getInitialMode());
+  // Transfer forces the amount positive for display; this remembers that the
+  // flip happened (for a row that is not itself a stored transfer) so leaving
+  // Transfer can restore the negative sign rather than keeping the forced one.
+  const wasNegativeBeforeTransferRef = useRef(false);
+  const isConversionLocked = conversionLocked(transaction, accounts);
   // A tour can grey out Split; false whenever no such tour is running.
   const splitDisabled = useDisableTransactionSplit();
 
@@ -212,7 +373,12 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
   const [isSplitMode, setIsSplitMode] = useState<boolean>(initSource?.isSplit || false);
   const [splits, setSplits] = useState<SplitRow[]>(
     initSource?.splits && initSource.splits.length > 0
-      ? toSplitRows(initSource.splits)
+      ? toSplitRows(
+          initSource.splits,
+          // Only the row being edited keeps what its transfer lines received; a
+          // duplicate takes the rate for its own date.
+          transaction ? { receivedAmountsIn: transaction.currencyCode } : {},
+        )
       : []
   );
 
@@ -294,7 +460,7 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
     register,
     handleSubmit,
     setValue,
-    watch,
+    control,
     getValues,
     formState: { errors, isDirty },
   } = useForm<TransactionFormData>({
@@ -310,10 +476,12 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
           payeeId: initSource.payeeId || '',
           payeeName: initSource.payeeName || '',
           categoryId: initSource.categoryId || '',
-          // For transfers, always show absolute amount
+          // As stored (its currency's money precision: four for fiat, a
+          // coin's eight), so an unedited save re-sends it. For transfers, the
+          // source (FROM) leg's absolute amount.
           amount: initSource.isTransfer
-            ? Math.abs(Math.round(Number(initSource.amount) * 100) / 100)
-            : Math.round(Number(initSource.amount) * 100) / 100,
+            ? roundMoney(transferSourceAmount(initSource), loadedAmountDecimals(initSource))
+            : roundMoney(Number(initSource.amount), loadedAmountDecimals(initSource)),
           currencyCode: initSource.currencyCode,
           description: initSource.description || '',
           referenceNumber: initSource.referenceNumber || '',
@@ -321,8 +489,10 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
         }
       : {
           accountId: defaultAccountId || '',
-          categoryId: defaultCategoryId || '',
-          transactionDate: getRememberedTransactionDate(LAST_TRANSACTION_DATE_KEY),
+          payeeId: defaultPayee?.id || '',
+          payeeName: defaultPayee?.name || '',
+          categoryId: payeeCategoryId || defaultCategoryId || '',
+          transactionDate: defaultDate || getRememberedTransactionDate(LAST_TRANSACTION_DATE_KEY),
           currencyCode: defaultCurrency,
           status: TransactionStatus.UNRECONCILED,
         },
@@ -330,11 +500,19 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
 
   useFormDirtyNotify(isDirty, onDirtyChange);
 
-  const watchedAccountId = watch('accountId');
-  const watchedAmount = watch('amount');
-  const watchedCurrencyCode = watch('currencyCode');
-  const watchedPayeeName = watch('payeeName');
-  const watchedDate = watch('transactionDate');
+  const watchedAccountId = useWatch({ control, name: 'accountId' });
+  const watchedAmount = useWatch({ control, name: 'amount' });
+  const watchedStatus = useWatch({ control, name: 'status' });
+  const watchedCurrencyCode = useWatch({ control, name: 'currencyCode' });
+  const watchedPayeeName = useWatch({ control, name: 'payeeName' });
+  // Read live so the links under the field track what is being typed. The
+  // textarea itself cannot hold an anchor, so this is the only way the address
+  // in a draft is reachable without saving first.
+  const watchedDescription = useWatch({ control, name: 'description' });
+  const autoGrowDescription = useAutoGrowTextarea(watchedDescription);
+  const descriptionId = useId();
+  const { ref: descriptionRegisterRef, ...descriptionField } = register('description');
+  const watchedDate = useWatch({ control, name: 'transactionDate' });
 
   // Foreign-currency entry is active only for non-transfer transactions whose
   // entry currency differs from the account currency. Transfers already have
@@ -421,6 +599,29 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
     };
   }, [mode, watchedAccountId, transferToAccountId, accounts]);
 
+  // Cross-currency transfer: typing either amount fills the other from the
+  // day's rate less the FX fee, while the other side is empty or still
+  // auto-filled. The fee is the sending account's, which is the one that
+  // converts; a receiving account's fee applies only when the sender has none.
+  const transferFxFeePercent = useMemo(() => {
+    if (!crossCurrencyInfo) return null;
+    const feeOf = (id: string) => {
+      const fee = accounts.find((a) => a.id === id)?.fxFeePercent;
+      return fee != null && Number(fee) > 0 ? Number(fee) : null;
+    };
+    return feeOf(watchedAccountId) ?? feeOf(transferToAccountId);
+  }, [crossCurrencyInfo, accounts, watchedAccountId, transferToAccountId]);
+  const transferFx = useTransferFxAutofill({
+    fromCurrency: crossCurrencyInfo?.fromCurrency ?? null,
+    toCurrency: crossCurrencyInfo?.toCurrency ?? null,
+    date: watchedDate,
+    fxFeePercent: transferFxFeePercent,
+    amount: watchedAmount,
+    targetAmount: transferTargetAmount,
+    setAmount: (value) => setValue('amount', value, { shouldValidate: true }),
+    setTargetAmount: setTransferTargetAmount,
+  });
+
   // Joint context swaps the picker sources for the owner's lists. While the
   // owner lists are still loading the pickers are empty rather than showing
   // the caller's own (unusable) reference data.
@@ -457,30 +658,69 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
   }), [categoryTree, effectiveCategories]);
 
   // Memoize tag options for multiselect
-  const tagOptions = useMemo(() =>
-    [...tags]
-      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
-      .map(tag => ({ value: tag.id, label: tag.name })),
-    [tags]
-  );
+  // Tags are per-user, so the picker (and its usage lookup) is off on a joint account.
+  const { tagOptions, tagUsage } = useTagPickerOptions(tags, !selectedIsJoint);
 
   // Handle mode changes
   const handleModeChange = (newMode: TransactionMode) => {
     setMode(newMode);
 
+    // An existing transfer leg loads the PAIR into the form: the account field
+    // is the source account and the amount the source leg's, whichever leg was
+    // opened. Leaving the pair, the row's own account and signed amount come
+    // back, so the conversion keeps the row where it is; returning to Transfer
+    // restores the pair as it was loaded.
+    const leavingTransfer = !!transaction?.isTransfer && newMode !== 'transfer';
+    let amountForSplits = watchedAmount || 0;
+    // The currency the split rows are in: the row's own when leaving a stored
+    // transfer (its account comes back), else the account's.
+    const splitsCurrency =
+      leavingTransfer && transaction ? transaction.currencyCode : accountCurrency;
+    if (leavingTransfer && transaction) {
+      amountForSplits = roundMoney(
+        Number(transaction.amount),
+        moneyDecimalsForCurrency(transaction.currencyCode),
+      );
+      setValue('accountId', transaction.accountId, { shouldDirty: true });
+      setValue('amount', amountForSplits, { shouldDirty: true, shouldValidate: true });
+    } else if (
+      mode === 'transfer' &&
+      newMode !== 'transfer' &&
+      !transaction?.isTransfer &&
+      wasNegativeBeforeTransferRef.current &&
+      watchedAmount &&
+      watchedAmount > 0
+    ) {
+      // Leaving a Transfer tab that only previewed this row (it is not a
+      // stored transfer): restore the negative sign Transfer forced away.
+      amountForSplits = roundMoney(-Math.abs(watchedAmount), moneyDecimalsForCurrency(accountCurrency));
+      setValue('amount', amountForSplits, { shouldDirty: true, shouldValidate: true });
+    }
+
     if (newMode === 'split') {
       setIsSplitMode(true);
       if (splits.length === 0) {
-        const amount = watchedAmount || 0;
-        setSplits(createEmptySplits(amount));
+        setSplits(createEmptySplits(amountForSplits, splitsCurrency));
       }
       setTransferToAccountId('');
     } else if (newMode === 'transfer') {
       setIsSplitMode(false);
       setSplits([]);
-      // Make amount positive for transfers
-      if (watchedAmount && watchedAmount < 0) {
+      if (transaction?.isTransfer) {
+        setValue('accountId', initialTransferAccounts.fromAccountId || transaction.accountId, {
+          shouldDirty: true,
+        });
+        setValue('amount', roundMoney(transferSourceAmount(transaction), loadedAmountDecimals(transaction)), {
+          shouldDirty: true,
+          shouldValidate: true,
+        });
+        setTransferToAccountId(initialTransferAccounts.toAccountId);
+      } else if (watchedAmount && watchedAmount < 0) {
+        // Make amount positive for transfers
+        wasNegativeBeforeTransferRef.current = true;
         setValue('amount', Math.abs(watchedAmount), { shouldDirty: true, shouldValidate: true });
+      } else {
+        wasNegativeBeforeTransferRef.current = false;
       }
     } else {
       setIsSplitMode(false);
@@ -512,14 +752,25 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
     }
   }, [defaultAccountId, transaction, setValue]);
 
-  // Set defaultCategoryId when it changes (and we're not editing/duplicating)
-  useEffect(() => {
-    if (!initSource && defaultCategoryId) {
-      setValue('categoryId', defaultCategoryId);
+  // Set defaultCategoryId when it changes (and we're not editing/duplicating).
+  // The picker's own state follows during render (the "info from previous
+  // render" pattern); the form value and the auto-set flag stay in the effect.
+  const [categoryDefaultFor, setCategoryDefaultFor] = useState({ defaultCategoryId, initSource });
+  if (
+    categoryDefaultFor.defaultCategoryId !== defaultCategoryId ||
+    categoryDefaultFor.initSource !== initSource
+  ) {
+    setCategoryDefaultFor({ defaultCategoryId, initSource });
+    if (!initSource && defaultCategoryId && !payeeCategoryId) {
       setSelectedCategoryId(defaultCategoryId);
+    }
+  }
+  useEffect(() => {
+    if (!initSource && defaultCategoryId && !payeeCategoryId) {
+      setValue('categoryId', defaultCategoryId);
       categoryWasAutoSetRef.current = true;
     }
-  }, [defaultCategoryId, initSource, setValue]);
+  }, [defaultCategoryId, payeeCategoryId, initSource, setValue]);
 
   // Load accounts, categories, active payees on mount
   // When editing, also fetch the transaction's payee if it's inactive so it appears in the dropdown
@@ -534,7 +785,11 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
       accountsApi.getTransferCandidates().catch(() => []),
     ])
       .then(async ([accountsData, categoriesData, payeesData, tagsData, aliasesData, candidatesData]) => {
-        setAccounts(accountsData);
+        setAccounts(accountsData.filter(
+              (account) =>
+                !account.managedPurpose ||
+                account.id === transaction?.accountId,
+            ),);
         setTransferCandidates(candidatesData);
         setCategories(categoriesData);
         setTags(tagsData);
@@ -561,12 +816,12 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
         } else {
           setPayees(payeesData);
         }
-      })
+      },)
       .catch((error) => {
         toast.error(getErrorMessage(error, t('form.toasts.loadFailed')));
         logger.error(error);
       });
-  }, [transaction?.payeeId, t]);
+  }, [transaction?.accountId, transaction?.payeeId, t]);
 
   // Quick-fill the form from a previously entered transaction (chosen from
   // the history popover next to the Payee field). Resets status to
@@ -592,7 +847,9 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
   //    showed. The source row's own date is not copied either: it is when that
   //    transaction happened, not when this one did.
   const handleQuickFill = (source: Transaction) => {
-    const amount = Math.round(Number(source.amount) * 100) / 100;
+    // At the form currency's places: a coin's own (a -0.0051 BTC source read
+    // -0.01 at cents), otherwise two as before.
+    const amount = roundToEntryPlaces(Number(source.amount), accountCurrency);
     setValue('payeeId', source.payeeId || undefined, { shouldDirty: true });
     setValue('payeeName', source.payeeName || '', { shouldDirty: true });
     setValue('categoryId', source.categoryId || '', { shouldDirty: true });
@@ -660,7 +917,10 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
         return;
       }
 
-      const newPayee = await payeesApi.create({ name: name.trim() });
+      const newPayee = await payeesApi.create({
+        name: name.trim(),
+        ...(offerContactLookup ? { deferContactLookup: true } : {}),
+      });
       // Add to payees list
       setPayees(prev => [...prev, newPayee]);
       // Select the new payee
@@ -668,6 +928,11 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
       setValue('payeeId', newPayee.id, { shouldDirty: true, shouldValidate: true });
       setValue('payeeName', newPayee.name, { shouldDirty: true, shouldValidate: true });
       toast.success(t('form.toasts.payeeCreated', { name }));
+      if (offerContactLookup) {
+        // The user did not ask for this lookup by name, so a "nothing found"
+        // or a failure stays quiet -- they came here to enter a transaction.
+        void contactLookup.lookUp(newPayee, { announce: false });
+      }
     } catch (error) {
       logger.error('Failed to create payee:', error);
       toast.error(getErrorMessage(error, t('form.toasts.payeeCreateFailed')));
@@ -802,20 +1067,25 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
   //   amount = base + fee
 
   // The converted account-currency base shown in the FX panel (before fee), the
-  // fee itself, and the resulting total charged to the account.
+  // fee itself, and the resulting total charged to the account, all at the
+  // account currency's money precision (four for fiat, a coin's eight).
+  const accountMoneyDecimals = moneyDecimalsForCurrency(accountCurrency);
   const convertedBase =
     isForeign && foreignAmount !== undefined && fxRate != null
-      ? roundToCents(foreignAmount * fxRate)
+      ? roundMoney(foreignAmount * fxRate, accountMoneyDecimals)
       : undefined;
   const fxFeePercent = selectedAccount?.fxFeePercent ?? undefined;
   const fxFeeApplies =
     isForeign && convertedBase !== undefined && !!fxFeePercent && fxFeePercent > 0;
   const fxFeeAmount = fxFeeApplies
-    ? -roundToCents((Math.abs(convertedBase as number) * (fxFeePercent as number)) / 100)
+    ? -roundMoney(
+        (Math.abs(convertedBase as number) * (fxFeePercent as number)) / 100,
+        accountMoneyDecimals,
+      )
     : 0;
   const fxTotal =
     convertedBase !== undefined
-      ? roundToCents(convertedBase + fxFeeAmount)
+      ? roundMoney(convertedBase + fxFeeAmount, accountMoneyDecimals)
       : undefined;
 
   // Recompute the account-currency `amount` from the foreign amount and rate.
@@ -829,13 +1099,13 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
   ) => {
     if (fAmount === undefined || rate == null) return;
     const base =
-      overrideBase !== undefined ? overrideBase : roundToCents(fAmount * rate);
+      overrideBase !== undefined ? overrideBase : roundMoney(fAmount * rate, accountMoneyDecimals);
     const feePercent = selectedAccount?.fxFeePercent;
     const fee =
       feePercent && feePercent > 0
-        ? -roundToCents((Math.abs(base) * feePercent) / 100)
+        ? -roundMoney((Math.abs(base) * feePercent) / 100, accountMoneyDecimals)
         : 0;
-    setValue('amount', roundToCents(base + fee), {
+    setValue('amount', roundMoney(base + fee, accountMoneyDecimals), {
       shouldDirty: true,
       shouldValidate: true,
     });
@@ -863,6 +1133,7 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
   // converted amount), otherwise on the account-currency amount. Mirrors the
   // sign adjustment the account-currency flow applies on category change.
   const resignActiveAmount = (category: Category) => {
+    if (category.effectiveAutoSign === false) return;
     if (isForeign) {
       if (foreignAmount === undefined || foreignAmount === 0) return;
       const signed = category.isIncome
@@ -899,7 +1170,8 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
     if (feePercent && feePercent > 0) {
       // total = base - |base| * p; solve for base by its (matching) sign.
       const p = feePercent / 100;
-      base = roundToCents(total >= 0 ? total / (1 - p) : total / (1 + p));
+      // At the account currency's places: a coin's own, cents for fiat.
+      base = roundToEntryPlaces(total >= 0 ? total / (1 - p) : total / (1 + p), accountCurrency);
     }
     const newRate = roundToDecimals(base / foreignAmount, 10);
     rateOverriddenRef.current = true;
@@ -1081,14 +1353,19 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
     return formatDatetimeLocal(isoToDatetimeLocal(transaction.createdAt, userTimezone), dateFormat, timeFormat);
   });
 
-  // Recalculate if the timezone preference or date format loads/changes after initial mount
-  useEffect(() => {
-    if (!transaction?.createdAt) return;
-    const dtLocal = isoToDatetimeLocal(transaction.createdAt, userTimezone);
-    setCreatedAtValue(dtLocal);
-    setCreatedAtOriginal(dtLocal);
-    setCreatedAtDisplay(formatDatetimeLocal(dtLocal, dateFormat, timeFormat));
-  }, [transaction?.createdAt, userTimezone, dateFormat, timeFormat]);
+  // Recalculate if the timezone preference or date format loads/changes after
+  // initial mount (the "info from previous render" pattern, not an effect)
+  const createdAtKey = `${transaction?.createdAt ?? ''}|${userTimezone}|${dateFormat}|${timeFormat}`;
+  const [createdAtFor, setCreatedAtFor] = useState(createdAtKey);
+  if (createdAtFor !== createdAtKey) {
+    setCreatedAtFor(createdAtKey);
+    if (transaction?.createdAt) {
+      const dtLocal = isoToDatetimeLocal(transaction.createdAt, userTimezone);
+      setCreatedAtValue(dtLocal);
+      setCreatedAtOriginal(dtLocal);
+      setCreatedAtDisplay(formatDatetimeLocal(dtLocal, dateFormat, timeFormat));
+    }
+  }
 
   // Tag creation modal state
   const [showTagForm, setShowTagForm] = useState(false);
@@ -1110,6 +1387,10 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
   // transaction; null when no such confirmation is pending.
   const [reconciledConfirmData, setReconciledConfirmData] =
     useState<TransactionFormData | null>(null);
+  // Likewise while the user confirms converting a transfer whose other leg was
+  // already cleared or reconciled.
+  const [counterpartConfirmData, setCounterpartConfirmData] =
+    useState<TransactionFormData | null>(null);
 
   // Upload any files staged in the New Transaction window to the freshly
   // created transaction. The transaction already exists at this point, so a
@@ -1117,9 +1398,12 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
   const uploadStagedAttachments = async (newTransactionId: string) => {
     if (stagedAttachments.length === 0) return;
     let failed = 0;
-    for (const file of stagedAttachments) {
+    for (const { file, original } of stagedAttachments) {
       try {
-        await attachmentsApi.upload(newTransactionId, file);
+        // Both halves of a scan pair go in ONE request: the server writes them
+        // in one transaction, so uploading the original separately would leave
+        // a window where the pair is half stored.
+        await attachmentsApi.upload({ transactionId: newTransactionId }, file, original);
       } catch (error) {
         failed += 1;
         logger.error('Failed to upload staged attachment:', error);
@@ -1131,6 +1415,15 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
   };
 
   const modeLabel = t(mode === 'transfer' ? 'form.modeLabel.transfer' : 'form.modeLabel.transaction');
+  const canCreateShared = !transaction && !!onShareAfterCreate && !actingAsDelegate &&
+    !!userId && selectedAccount?.userId === userId && !selectedIsJoint &&
+    isSharedPaymentAccount(selectedAccount) && mode !== 'transfer' &&
+    watchedStatus !== TransactionStatus.VOID && watchedStatus !== TransactionStatus.RECONCILED &&
+    watchedAmount !== undefined && watchedAmount !== 0 &&
+    (mode !== 'split' || splits.every((split) => split.splitType === 'category'));
+  // Saving an existing row in the other family of modes converts it in place
+  // (issue #1937): the button says so, and the submit takes the conversion route.
+  const isConversion = !!transaction && (mode === 'transfer') !== !!transaction.isTransfer;
   // The two behaviours the create button can carry. Order is fixed: 'close'
   // first, because it is what the button did before this choice existed.
   const submitOptions = [
@@ -1139,11 +1432,12 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
       label: t('form.submitCreate', { mode: modeLabel }),
       description: t('form.submitCreateDescription'),
     },
-    {
+    ...(canCreateAnother ? [{
       id: 'new',
       label: t('form.submitCreateAndNew', { mode: modeLabel }),
       description: t('form.submitCreateAndNewDescription'),
-    },
+    }] : []),
+    ...(canCreateShared ? [{ id: 'shared', label: sharedT('saveAndShare'), description: sharedT('saveAndShareHelp') }] : []),
   ];
 
   /**
@@ -1152,7 +1446,15 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
    * with this account and the date just used) and the modal stays open;
    * otherwise this is the ordinary `onSuccess` that closes it.
    */
-  const finishAfterCreate = (accountId: string) => {
+  const finishAfterCreate = (accountId: string, created: Transaction, then?: AfterCreate) => {
+    if (then === 'addWarranty' && onAddWarrantyAfterCreate) {
+      onAddWarrantyAfterCreate(created);
+      return;
+    }
+    if (canCreateShared && shareAfterCreate) {
+      onShareAfterCreate?.(created);
+      return;
+    }
     if (canCreateAnother && submitMode === 'new') {
       onCreateAnother?.(accountId);
       return;
@@ -1160,7 +1462,7 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
     onSuccess?.();
   };
 
-  const performSubmit = async (data: TransactionFormData) => {
+  const performSubmit = async (data: TransactionFormData, then?: AfterCreate) => {
     // Joint accounts: a free-text payee would auto-create on the OWNER's
     // ledger, which needs the delegation's payees-can-create capability. The
     // server enforces this too; refusing here keeps the form's state intact.
@@ -1228,13 +1530,21 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
           await transactionsApi.updateTransfer(transaction.id, transferData);
           toast.success(t('form.toasts.transferUpdated'));
           onSuccess?.();
+        } else if (transaction) {
+          // An existing income, expense or split becomes one leg of this
+          // transfer in place. Creating a transfer beside it would leave the
+          // edited row standing and book the money twice (A26-H14), which is
+          // why this is its own route rather than createTransfer.
+          await transactionsApi.convertToTransfer(transaction.id, transferData);
+          toast.success(t('form.toasts.convertedToTransfer'));
+          onSuccess?.();
         } else {
           const transfer = await transactionsApi.createTransfer(transferData);
           toast.success(t('form.toasts.transferCreated'));
           rememberTransactionDate(LAST_TRANSACTION_DATE_KEY, data.transactionDate);
           // Attach staged files to the "from" leg (the account being edited).
           await uploadStagedAttachments(transfer.fromTransaction.id);
-          finishAfterCreate(data.accountId);
+          finishAfterCreate(data.accountId, transfer.fromTransaction, then);
         }
         return;
       }
@@ -1244,17 +1554,27 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
       // so the backend clears the splits and converts it to a regular one.
       // (`undefined` means "leave splits untouched", which is wrong here.)
       const wasSplit = Boolean(transaction?.isSplit);
+      const splitCurrencyCode = watchedCurrencyCode || defaultCurrency;
       const splitsData = isSplitMode
-        ? toCreateSplitData(splits)
+        ? toCreateSplitData(splits, {
+            // A cross-currency transfer line carries what arrived, when it
+            // was stated against the account's current currency.
+            transferTargetAmountOf: (split) =>
+              receivedAmountToSend(split, accounts, splitCurrencyCode),
+          })
         : wasSplit
           ? []
           : undefined;
 
       // Validate splits sum to amount if in split mode
       if (isSplitMode && splitsData) {
-        const splitsTotal = splitsData.reduce((sum, s) => sum + s.amount, 0);
-        const roundedSplitsTotal = Math.round(splitsTotal * 100) / 100;
-        const roundedAmount = Math.round(data.amount * 100) / 100;
+        // At the server's precision: it requires the lines to equal the parent
+        // exactly at the currency's money precision (four for fiat, a coin's
+        // eight), so a one-cent tolerance here let through a set the server
+        // refuses and refused a stored four-decimal set.
+        const splitsMoneyDecimals = moneyDecimalsForCurrency(splitCurrencyCode);
+        const roundedSplitsTotal = sumMoney(splitsData.map((s) => s.amount), splitsMoneyDecimals);
+        const roundedAmount = roundMoney(data.amount, splitsMoneyDecimals);
         if (roundedSplitsTotal !== roundedAmount) {
           toast.error(t('form.toasts.splitsNotEqual', { splitTotal: roundedSplitsTotal, txAmount: roundedAmount }));
           setIsLoading(false);
@@ -1311,8 +1631,15 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
         if (showCreatedAt && createdAtValue && createdAtValue !== createdAtOriginal) {
           updatePayload.createdAt = datetimeLocalToIso(createdAtValue, userTimezone);
         }
-        await transactionsApi.update(transaction.id, updatePayload);
-        toast.success(t('form.toasts.transactionUpdated'));
+        if (transaction.isTransfer) {
+          // A transfer leg becomes a transaction or a split in place: the
+          // server removes the counterpart and applies this body to the row.
+          await transactionsApi.convertToTransaction(transaction.id, updatePayload);
+          toast.success(t('form.toasts.convertedToTransaction'));
+        } else {
+          await transactionsApi.update(transaction.id, updatePayload);
+          toast.success(t('form.toasts.transactionUpdated'));
+        }
         onSuccess?.();
       } else {
         const created = await transactionsApi.create(payload);
@@ -1322,7 +1649,7 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
         // ('' when the account currency was used, which clears the stickiness).
         rememberTransactionCurrency(isForeign ? entryCurrency : '');
         await uploadStagedAttachments(created.id);
-        finishAfterCreate(data.accountId);
+        finishAfterCreate(data.accountId, created, then);
       }
     } catch (error) {
       logger.error('Submit error:', error);
@@ -1337,7 +1664,17 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
   // leave the date and amount untouched (e.g. fixing a payee or category) don't
   // affect the reconciliation and save without a prompt. New/duplicated
   // transactions start UNRECONCILED, so this only gates genuine edits.
-  const onSubmit = async (data: TransactionFormData) => {
+  const submitThen = async (data: TransactionFormData, then?: AfterCreate) => {
+    // Converting a transfer away deletes its other leg; one that was cleared or
+    // reconciled is pointed out first. The strict lock's refusal is the server's.
+    if (transaction?.isTransfer && mode !== 'transfer' && counterpartChecked(transaction)) {
+      setCounterpartConfirmData(data);
+      return;
+    }
+    await submitAfterCounterpartCheck(data, then);
+  };
+
+  const submitAfterCounterpartCheck = async (data: TransactionFormData, then?: AfterCreate) => {
     if (
       transaction?.status === TransactionStatus.RECONCILED &&
       reconciledEditAffectsReconciliation(transaction, data)
@@ -1345,13 +1682,46 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
       setReconciledConfirmData(data);
       return;
     }
-    await performSubmit(data);
+    await performSubmit(data, then);
   };
+
+  // One argument only: react-hook-form passes the submit event second.
+  const onSubmit = (data: TransactionFormData) => submitThen(data);
+
+  /** Save, or a new transaction's save-then-Add-warranty: one at a time. */
+  const guardedSubmit = (then: AfterCreate | undefined, event?: BaseSyntheticEvent) => {
+    event?.preventDefault();
+    if (submitInFlight.current) return;
+    submitInFlight.current = true;
+    if (then === 'addWarranty') setIsSavingForWarranty(true);
+    void handleSubmit((data) => submitThen(data, then))(event).finally(() => {
+      submitInFlight.current = false;
+      setIsSavingForWarranty(false);
+    });
+  };
+
+  // An edit's Add leaves for the warranty through the host's own close; a new
+  // transaction's saves it first, as the warranty links to the row it creates.
+  const addWarranty = transaction
+    ? onAddWarranty && (() => onAddWarranty(transaction))
+    : onAddWarrantyAfterCreate && (() => guardedSubmit('addWarranty'));
+  const showWarrantiesLine =
+    !selectedIsJoint &&
+    !actingAsDelegate &&
+    // From the props, not `addWarranty`: that closes over the submit guard's ref.
+    ((transaction ? onAddWarranty : onAddWarrantyAfterCreate) !== undefined ||
+      (transaction !== undefined && rowHasWarranties(transaction)));
 
   const handleReconciledConfirm = async () => {
     const data = reconciledConfirmData;
     setReconciledConfirmData(null);
     if (data) await performSubmit(data);
+  };
+
+  const handleCounterpartConfirm = async () => {
+    const data = counterpartConfirmData;
+    setCounterpartConfirmData(null);
+    if (data) await submitAfterCounterpartCheck(data);
   };
 
   useFormSubmitRef(submitRef, handleSubmit, onSubmit);
@@ -1409,6 +1779,7 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
       <CurrencyInput
         label={t('form.fx.totalInCurrency', { currency: accountCurrency })}
         prefix={getCurrencySymbol(accountCurrency)}
+        decimalPlaces={entryDecimalPlaces(accountCurrency)}
         value={fxTotal}
         onChange={handleConvertedTotalOverride}
         allowSignToggle
@@ -1425,7 +1796,13 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
             rate: formatNumber(fxRate, FX_RATE_DISPLAY_DECIMALS),
             to: accountCurrency,
             date: watchedDate ? formatDate(watchedDate) : watchedDate,
-          })}
+          })}{' '}
+          <HelpLink
+            link="currencyRatesOnTransactions"
+            className="underline hover:text-gray-700 dark:hover:text-gray-200"
+          >
+            {th('learnMore')}
+          </HelpLink>
         </span>
       ) : !fxRateLoading && !fxRateLookupFailed ? (
         // Only when the server answered "none". A failed request says nothing
@@ -1436,7 +1813,10 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
             from: entryCurrency,
             to: accountCurrency,
             date: watchedDate ? formatDate(watchedDate) : watchedDate,
-          })}
+          })}{' '}
+          <HelpLink link="currencyRateHistory" className="underline hover:text-amber-800 dark:hover:text-amber-200">
+            {th('learnMore')}
+          </HelpLink>
         </span>
       ) : null}
       {fxFeeApplies && fxTotal !== undefined && (
@@ -1456,14 +1836,19 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
     </p>
   ) : undefined;
 
+  if (transaction?.sharedExpensePostingId) return <SharedLinkedTransactionNotice postingId={transaction.sharedExpensePostingId} transactionId={transaction.id} onClose={onCancel} />;
+
   return (
     <form
       {...tourAnchor(TOUR_ANCHORS.transactionForm)}
-      onSubmit={handleSubmit(onSubmit)}
+      onSubmit={(event) => guardedSubmit(undefined, event)}
       className="space-y-4"
     >
-      {/* Mode selector - show for new/duplicate transactions, or non-transfer edits */}
-      {(!transaction || !transaction.isTransfer) && (
+      {/* Mode selector: every mode, for a new entry and for an edit alike. An
+          edit saved in the other family converts the row in place through its
+          own route (issue #1937). Only a leg whose pairing is not this form's
+          to change (a split-transfer leg, a cross-owner pair) has no tabs. */}
+      {!isConversionLocked && (
         <div className="flex space-x-2 pb-2 border-b dark:border-gray-700">
           <button
             type="button"
@@ -1511,15 +1896,19 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
         </div>
       )}
 
-      {/* Transfer mode indicator for editing existing transfers */}
-      {transaction?.isTransfer && (
-        <div className="flex items-center space-x-2 pb-2 border-b dark:border-gray-700">
-          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200">
-            {t('form.transferBadge')}
-          </span>
-          <span className="text-sm text-gray-500 dark:text-gray-400">
-            {t('form.isLinkedTransfer')}
-          </span>
+      {/* A transfer leg the form can only keep a transfer: say so instead of
+          offering tabs whose save the server would refuse. */}
+      {isConversionLocked && (
+        <div className="pb-2 border-b dark:border-gray-700 space-y-1">
+          <div className="flex items-center space-x-2">
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200">
+              {t('form.transferBadge')}
+            </span>
+            <span className="text-sm text-gray-500 dark:text-gray-400">
+              {t('form.isLinkedTransfer')}
+            </span>
+          </div>
+          <p className="text-xs text-gray-500 dark:text-gray-400">{t('form.conversionLockedNote')}</p>
         </div>
       )}
 
@@ -1565,6 +1954,7 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
           watchedAmount={watchedAmount}
           watchedCurrencyCode={watchedCurrencyCode}
           watchedPayeeName={watchedPayeeName}
+          watchedDescription={watchedDescription}
           accounts={accounts}
           selectedPayeeId={selectedPayeeId}
           payees={effectivePayees}
@@ -1599,6 +1989,8 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
           setTransferToAccountId={setTransferToAccountId}
           transferTargetAmount={transferTargetAmount}
           setTransferTargetAmount={setTransferTargetAmount}
+          onTransferAmountChange={transferFx.handleAmountChange}
+          onTransferTargetAmountChange={transferFx.handleTargetAmountChange}
           transferPayeeId={transferPayeeId}
           transferPayeeName={transferPayeeName}
           setTransferPayeeId={setTransferPayeeId}
@@ -1619,7 +2011,9 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
       {isSplitMode && (
         <div className="border-t dark:border-gray-700 pt-4">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">{t('form.splitSection.title')}</h3>
+            <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+              {t('form.splitSection.title')}
+            </h3>
             <button
               type="button"
               onClick={() => handleSplitModeToggle(false)}
@@ -1633,6 +2027,7 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
             onChange={setSplits}
             categories={effectiveCategories}
             tags={tags}
+            tagUsage={tagUsage}
             accounts={accounts}
             sourceAccountId={watchedAccountId || ''}
             parentAccountSubType={
@@ -1646,22 +2041,70 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
             displayCurrencyCode={isForeign ? entryCurrency : undefined}
             displayRate={isForeign ? (fxRate ?? undefined) : undefined}
             onCreateCategory={jointSafeCategoryCreator}
+            transactionDate={watchedDate}
+            crossCurrencyTransfers
           />
         </div>
       )}
 
-      {/* Tags (per-user, so hidden on a joint account's owner-owned rows) */}
-      {!selectedIsJoint && (
-        <MultiSelect
-          label={t('form.fields.tags')}
-          options={tagOptions}
-          value={selectedTagIds}
-          onChange={setSelectedTagIds}
-          placeholder={t('form.placeholders.selectTags')}
-          onCreateNew={() => setShowTagForm(true)}
-          createNewLabel={t('form.placeholders.createNewTag')}
-        />
+      {/* Description - only shown when not in split mode (split mode has it
+          inline with Reference Number). One line until the text has more: a
+          multi-line note, typed or saved, opens it to show every line. */}
+      {!isSplitMode && (
+        <div>
+          <label
+            htmlFor={descriptionId}
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+          >
+            {t('form.fields.description')}
+          </label>
+          <textarea
+            id={descriptionId}
+            rows={1}
+            maxLength={TRANSACTION_NOTE_MAX_LENGTH}
+            className="block w-full resize-y rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400"
+            {...descriptionField}
+            ref={(el) => {
+              descriptionRegisterRef(el);
+              autoGrowDescription(el);
+            }}
+          />
+          <NoteLinks text={watchedDescription ?? ''} />
+          {errors.description && (
+            <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+              {errors.description.message}
+            </p>
+          )}
+        </div>
       )}
+
+      {/* Tags on the left, Status on the right. Tags are per-user, so a joint
+          account's row shows Status alone. */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {!selectedIsJoint && (
+          <MultiSelect
+            label={t('form.fields.tags')}
+            options={tagOptions}
+            value={selectedTagIds}
+            onChange={setSelectedTagIds}
+            placeholder={t('form.placeholders.selectTags')}
+            onCreateNew={() => setShowTagForm(true)}
+            createNewLabel={t('form.placeholders.createNewTag')}
+          />
+        )}
+        <div className={selectedIsJoint ? 'md:col-start-2' : undefined}>
+          <Select
+            label={t('form.fields.status')}
+            options={[
+              { value: TransactionStatus.UNRECONCILED, label: t('form.statusOptions.unreconciled') },
+              { value: TransactionStatus.CLEARED, label: t('form.statusOptions.cleared') },
+              { value: TransactionStatus.RECONCILED, label: t('form.statusOptions.reconciled') },
+              { value: TransactionStatus.VOID, label: t('form.statusOptions.void') },
+            ]}
+            {...register('status')}
+          />
+        </div>
+      </div>
 
       {/* Tag Creation Modal */}
       <Modal isOpen={showTagForm} onClose={() => setShowTagForm(false)} maxWidth="lg" allowOverflow pushHistory className="p-6">
@@ -1674,68 +2117,93 @@ function TransactionFormFields({ transaction, duplicateFrom, defaultAccountId, d
         />
       </Modal>
 
-      {/* Description - only shown when not in split mode (split mode has it inline with Reference Number) */}
-      {!isSplitMode && (
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            {t('form.fields.description')}
-          </label>
-          <textarea
-            rows={3}
-            className="block w-full rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-800 dark:text-gray-100 dark:focus:border-blue-400 dark:focus:ring-blue-400"
-            {...register('description')}
-          />
-          {errors.description && (
-            <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.description.message}</p>
+      {/* Attachments and Warranties side by side. Attachments: when editing,
+          they are managed directly against the saved transaction; when
+          creating, files are staged client-side and uploaded once the
+          transaction has been created. Warranties linked to this purchase,
+          and Add warranty: shown where there is one to list or the host can
+          Add, never as a dead end. Neither is offered on a joint account's
+          row (both are the reader's own), and an acting delegate sees no
+          Warranties line. */}
+      {!selectedIsJoint && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {transaction ? (
+            <AttachmentsSection transactionId={transaction.id} />
+          ) : (
+            <AttachmentsSection
+              stagedFiles={stagedAttachments}
+              onStagedFilesChange={setStagedAttachments}
+            />
+          )}
+          {/* A dividing line sets Warranties apart from Attachments: a rule
+              above it when the two stack, and beside it when they share the
+              line. */}
+          {showWarrantiesLine && (
+            <div
+              data-testid="warranties-divider"
+              className="border-t border-gray-200 pt-4 dark:border-gray-700 md:border-t-0 md:border-l md:pt-0 md:pl-4"
+            >
+              <TransactionWarrantiesLine
+                transaction={transaction}
+                onAddWarranty={addWarranty}
+                isAdding={isSavingForWarranty}
+                onOpenWarranty={onOpenWarranty}
+              />
+            </div>
           )}
         </div>
       )}
 
-      {/* Status selector */}
-      <Select
-        label={t('form.fields.status')}
-        options={[
-          { value: TransactionStatus.UNRECONCILED, label: t('form.statusOptions.unreconciled') },
-          { value: TransactionStatus.CLEARED, label: t('form.statusOptions.cleared') },
-          { value: TransactionStatus.RECONCILED, label: t('form.statusOptions.reconciled') },
-          { value: TransactionStatus.VOID, label: t('form.statusOptions.void') },
-        ]}
-        {...register('status')}
-      />
-
-      {/* Attachments. When editing, they are managed directly against the
-          saved transaction; when creating, files are staged client-side and
-          uploaded once the transaction has been created. Attachments are
-          per-user, so they are not offered on a joint account's rows. */}
-      {selectedIsJoint ? null : transaction ? (
-        <AttachmentsSection transactionId={transaction.id} />
-      ) : (
-        <AttachmentsSection
-          stagedFiles={stagedAttachments}
-          onStagedFilesChange={setStagedAttachments}
-        />
-      )}
-
-      {/* Actions. anchorProps, not a wrapper, so a guided tour rings the
-          Cancel/Save pair rather than the full-width row around it. */}
+      {/* What the lookup found for the payee just created -- an offer, saved
+          only for the fields the user ticks. */}
       <FormActions
         anchorProps={tourAnchor(TOUR_ANCHORS.transactionFormActions)}
         onCancel={onCancel}
-        submitLabel={t(transaction ? 'form.submitUpdate' : 'form.submitCreate', { mode: modeLabel })}
+        submitLabel={t(
+          isConversion ? 'form.submitConvert' : transaction ? 'form.submitUpdate' : 'form.submitCreate',
+          { mode: modeLabel },
+        )}
         isSubmitting={isLoading}
-        submitOptions={canCreateAnother ? submitOptions : undefined}
-        selectedSubmitOptionId={submitMode}
-        onSubmitOptionChange={(id) => setSubmitMode(id === 'new' ? 'new' : 'close')}
+        submitOptions={canCreateAnother || canCreateShared ? submitOptions : undefined}
+        selectedSubmitOptionId={canCreateShared && shareAfterCreate ? 'shared' : submitMode}
+        onSubmitOptionChange={(id) => {
+          setShareAfterCreate(id === 'shared');
+          if (id !== 'shared') setSubmitMode(id === 'new' ? 'new' : 'close');
+        }}
         submitOptionsLabel={t('form.submitOptions')}
       />
 
-      {/* Reactivate Payee Dialog */}
+      {/* Warn before saving edits to a reconciled transaction */}
+      {contactLookup.target && (
+        <ContactLookupDialog
+          isOpen
+          payee={contactLookup.target}
+          suggestions={contactLookup.candidates}
+          saving={contactLookup.saving}
+          onCancel={contactLookup.dismiss}
+          onConfirm={contactLookup.apply}
+        />
+      )}
+
+      {/* Warn before saving edits to a reconciled transaction */}
       <ReactivatePayeeDialog
         isOpen={showReactivateDialog}
         payee={inactivePayeeMatch}
         onReactivate={handleReactivatePayee}
         onCancel={handleCancelReactivation}
         isReactivating={isReactivating}
+      />
+
+      {/* Warn before converting a transfer whose other leg was cleared or reconciled */}
+      <ConfirmDialog
+        isOpen={counterpartConfirmData !== null}
+        title={t('form.counterpartConfirm.title')}
+        message={t('form.counterpartConfirm.message')}
+        confirmLabel={t('form.counterpartConfirm.confirm')}
+        variant="warning"
+        pushHistory
+        onConfirm={handleCounterpartConfirm}
+        onCancel={() => setCounterpartConfirmData(null)}
       />
 
       {/* Warn before saving edits to a reconciled transaction */}
@@ -1785,6 +2253,10 @@ export function TransactionForm(props: TransactionFormProps) {
       // A restarted form is a blank new entry, not another copy of whatever the
       // first one was duplicated from.
       duplicateFrom={restart ? undefined : props.duplicateFrom}
+      defaultPayee={restart ? undefined : props.defaultPayee}
+      // Same for shared files: they were uploaded to the entry just created, so
+      // re-staging them here would attach a second copy to the next one.
+      initialStagedFiles={restart ? undefined : props.initialStagedFiles}
       defaultAccountId={restart?.accountId ?? defaultAccountId}
       // The host's default category belongs to the account the host named (an
       // asset account's own category). Once the user has filed an entry against

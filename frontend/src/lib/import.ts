@@ -1,5 +1,5 @@
 import apiClient from './api';
-import { invalidateBalanceCaches } from './apiCache';
+import { clearAllCache } from './apiCache';
 
 export type DateFormat = 'MM/DD/YYYY' | 'DD/MM/YYYY' | 'YYYY-MM-DD' | 'YYYY-DD-MM';
 
@@ -12,63 +12,16 @@ export const DATE_FORMAT_OPTIONS: { value: string; label: string }[] = [
 ];
 
 /**
- * Auto-detect the date format from an array of sample date strings.
- * Examines the values to determine which of the built-in formats best matches.
- * Returns null if no format can be confidently detected.
+ * The CSV importer's built-in date formats: the four above plus the two that
+ * write the month as a word ("15-Jan-2026", "Jan 15, 2026"), which the server
+ * reads in every app language. The server detects which one a file uses over
+ * every row (`CsvHeadersResponse.columnDateFormats`).
  */
-/**
- * Strip trailing time components from a date string for format detection.
- * Handles "01/15/2026 14:30:00", "2026-01-15T12:00:00Z", "01/15/2026 2:30 PM", etc.
- */
-function stripTimeForDetection(dateStr: string): string {
-  const tIndex = dateStr.indexOf('T');
-  if (tIndex > 0) return dateStr.substring(0, tIndex);
-  const spaceMatch = dateStr.match(/^(\S+)\s+\d{1,2}:\d{2}/);
-  if (spaceMatch) return spaceMatch[1];
-  return dateStr;
-}
-
-export function detectCsvDateFormat(samples: string[]): string | null {
-  const dates = samples.filter((s) => s && s.trim());
-  if (dates.length === 0) return null;
-
-  const first = stripTimeForDetection(dates[0].trim());
-
-  // Check for ISO-like (YYYY prefix)
-  if (first.match(/^\d{4}[-/.]/)) {
-    // Disambiguate YYYY-MM-DD vs YYYY-DD-MM
-    for (const date of dates) {
-      const m = stripTimeForDetection(date.trim()).match(/^\d{4}[-/.](\d{1,2})[-/.](\d{1,2})$/);
-      if (m) {
-        const p2 = parseInt(m[1]);
-        const p3 = parseInt(m[2]);
-        if (p2 > 12) return 'YYYY-DD-MM';
-        if (p3 > 12) return 'YYYY-MM-DD';
-      }
-    }
-    return 'YYYY-MM-DD';
-  }
-
-  // Check for numeric date with separators (- / .)
-  const numericMatch = first.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$/);
-  if (numericMatch) {
-    // Disambiguate MM/DD/YYYY vs DD/MM/YYYY
-    for (const date of dates) {
-      const m = stripTimeForDetection(date.trim()).match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$/);
-      if (m) {
-        const p1 = parseInt(m[1]);
-        const p2 = parseInt(m[2]);
-        if (p1 > 12) return 'DD/MM/YYYY';
-        if (p2 > 12) return 'MM/DD/YYYY';
-      }
-    }
-    // Ambiguous (both parts <= 12) -- default to MM/DD/YYYY
-    return 'MM/DD/YYYY';
-  }
-
-  // No recognizable date pattern
-  return null;
-}
+export const CSV_DATE_FORMAT_OPTIONS: { value: string; label: string }[] = [
+  ...DATE_FORMAT_OPTIONS,
+  { value: 'DD-MMM-YYYY', label: 'DD-MMM-YYYY' },
+  { value: 'MMM DD, YYYY', label: 'MMM DD, YYYY' },
+];
 
 export type CanonicalInvestmentAction =
   | 'buy'
@@ -190,6 +143,36 @@ export interface ParsedQifResponse {
   detectedDateFormat: DateFormat;
   sampleDates: string[];
   investmentSummary?: CsvInvestmentSummary;
+  /** CSV parses only: the rows the import will leave out because their date cannot be read. */
+  unreadableDates?: CsvUnreadableDates;
+  /** CSV parses only: the rows the import will leave out because their amount cannot be read. */
+  unreadableAmounts?: CsvUnreadableAmounts;
+}
+
+/** A CSV row whose date the mapping's date format cannot read, by its line in the file. */
+export interface CsvUnreadableDateRow {
+  rowNumber: number;
+  /** The date field as the file gave it, empty when it has none. */
+  rawDate: string;
+}
+
+export interface CsvUnreadableDates {
+  count: number;
+  /** The first of them in file order. */
+  rows: CsvUnreadableDateRow[];
+}
+
+/** A CSV row whose amount (or debit or credit) field cannot be read, by its line in the file. */
+export interface CsvUnreadableAmountRow {
+  rowNumber: number;
+  /** The amount field as the file gave it. */
+  rawAmount: string;
+}
+
+export interface CsvUnreadableAmounts {
+  count: number;
+  /** The first of them in file order. */
+  rows: CsvUnreadableAmountRow[];
 }
 
 export interface CategoryMapping {
@@ -306,8 +289,10 @@ export function autoMatchCsvColumns(headers: string[]): Partial<CsvColumnMapping
     delete result.debit;
     delete result.credit;
   } else if (result.debit !== undefined && result.credit !== undefined) {
-    // Both debit and credit matched without amount -- keep split mode
-    delete result.amount;
+    // Both debit and credit matched without amount -- keep split mode. The
+    // key is set, not deleted, so it overrides the wizard's default amount
+    // column when spread over it; the backend reads amount before debit/credit.
+    result.amount = undefined;
   }
 
   return result;
@@ -369,6 +354,11 @@ export interface CsvHeadersResponse {
   headers: string[];
   sampleRows: string[][];
   rowCount: number;
+  /**
+   * Per column, the date format that reads the most of its values over the
+   * whole file, or null where none reads any.
+   */
+  columnDateFormats: (string | null)[];
 }
 
 export interface SavedColumnMapping {
@@ -399,15 +389,53 @@ export interface ImportCsvRequest {
   dateFormat?: DateFormat;
 }
 
+/** Why the import left a row of the file out (`ImportSkipReason` on the server). */
+export type ImportSkipReason =
+  | 'alreadyImported'
+  | 'duplicateTransfer'
+  | 'unreadableDate'
+  | 'unreadableAmount'
+  // An investment-mode CSV row whose action needs data it does not carry.
+  | 'missingSecurity'
+  | 'missingQuantity'
+  | 'missingAmount'
+  | 'missingProceeds'
+  | 'missingSplitRatio';
+
+/** One row counted in `skipped`, as the file gave it. */
+export interface ImportSkippedRow {
+  /** YYYY-MM-DD; empty for `unreadableDate`, whose `rawDate` is the file's text. */
+  date: string;
+  amount: number;
+  /** The currency of the account the row was imported into. */
+  currencyCode: string;
+  payee: string;
+  reason: ImportSkipReason;
+  /** The line of the file the row starts on (with the header); set for a CSV row the parse left out. */
+  rowNumber?: number;
+  /** The date field as the file gave it, empty when it has none; set for `unreadableDate`. */
+  rawDate?: string;
+  /** The amount field as the file gave it; set for `unreadableAmount`, whose `amount` is 0. */
+  rawAmount?: string;
+}
+
 export interface ImportResult {
   imported: number;
   skipped: number;
+  /** Every row counted in `skipped`, in the order the import reached it. */
+  skippedRows?: ImportSkippedRow[];
   errors: number;
   errorMessages: string[];
   categoriesCreated: number;
   accountsCreated: number;
   payeesCreated: number;
   securitiesCreated: number;
+  /**
+   * Imported share acquisitions of a bond-program security stored without a
+   * series (the file names none and none was on sale on the date): the bond
+   * lots report such a row until its series is chosen. Absent when zero.
+   */
+  bondRowsWithoutSeries?: number;
   createdMappings?: {
     categories: Record<string, string>;
     accounts: Record<string, string>;
@@ -435,7 +463,8 @@ export interface ParsedQifMultiAccountResponse {
   }>;
   accounts: Array<{
     accountName: string;
-    accountType: string;
+    /** `null` when the file names no type; the user chooses one before import. */
+    accountType: string | null;
     transactionCount: number;
     dateRange: { start: string; end: string };
   }>;
@@ -450,6 +479,8 @@ export interface ImportQifMultiAccountRequest {
   currencyCode: string;
   dateFormat?: DateFormat;
   securityMappings?: SecurityMapping[];
+  /** The user's type for each account the file leaves untyped. */
+  accountTypes?: Array<{ accountName: string; accountType: string }>;
 }
 
 export const importApi = {
@@ -462,7 +493,9 @@ export const importApi = {
   importQif: async (data: ImportQifRequest): Promise<ImportResult> => {
     // Longer timeout for large imports (5 minutes)
     const response = await apiClient.post('/import/qif', data, { timeout: 300000 });
-    invalidateBalanceCaches();
+    // The import creates categories, payees, accounts and securities as well as
+    // transactions, so no prefix is narrow enough.
+    clearAllCache();
     return response.data;
   },
 
@@ -474,7 +507,9 @@ export const importApi = {
 
   importQifMultiAccount: async (data: ImportQifMultiAccountRequest): Promise<ImportResult> => {
     const response = await apiClient.post('/import/qif/multi-account', data, { timeout: 300000 });
-    invalidateBalanceCaches();
+    // The import creates categories, payees, accounts and securities as well as
+    // transactions, so no prefix is narrow enough.
+    clearAllCache();
     return response.data;
   },
 
@@ -486,7 +521,9 @@ export const importApi = {
 
   importOfx: async (data: ImportOfxRequest): Promise<ImportResult> => {
     const response = await apiClient.post('/import/ofx', data, { timeout: 300000 });
-    invalidateBalanceCaches();
+    // The import creates categories, payees, accounts and securities as well as
+    // transactions, so no prefix is narrow enough.
+    clearAllCache();
     return response.data;
   },
 
@@ -503,7 +540,9 @@ export const importApi = {
 
   importCsv: async (data: ImportCsvRequest): Promise<ImportResult> => {
     const response = await apiClient.post('/import/csv', data, { timeout: 300000 });
-    invalidateBalanceCaches();
+    // The import creates categories, payees, accounts and securities as well as
+    // transactions, so no prefix is narrow enough.
+    clearAllCache();
     return response.data;
   },
 

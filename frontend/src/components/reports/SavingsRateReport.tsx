@@ -19,20 +19,122 @@ import { budgetsApi } from '@/lib/budgets';
 import { chartColors } from '@/lib/chart-colors';
 import type { Budget, SavingsRatePoint } from '@/types/budget';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
-import { ExportDropdown } from '@/components/ui/ExportDropdown';
+import { useDateFormat } from '@/hooks/useDateFormat';
+import { useChartMonthFormat } from '@/hooks/useChartMonthFormat';
+import { ReportToolbarActions } from '@/components/reports/ReportToolbarActions';
 import { SortableHeader } from '@/components/ui/SortableHeader';
+import { CAPTION_CLASS, CellLabel, PHONE_HEADER_CLASS } from '@/components/ui/Table';
+import type {
+  SortColumn as TableSortColumn,
+  SortColumnsByField as TableSortColumnsByField,
+} from '@/components/ui/Table';
 import { useSortableTable, compareValues } from '@/hooks/useSortableTable';
 import { useReportData } from '@/hooks/useReportData';
 import { ReportError } from '@/components/reports/ReportError';
 import { createLogger } from '@/lib/logger';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { CHART_GRID_PROPS, CHART_TOOLTIP_CLASS } from '@/lib/chart-style';
+import { ChartActiveDot } from '@/components/ui/ChartActiveDot';
 
 const logger = createLogger('SavingsRateReport');
 
 type SavingsRateSortField = 'month' | 'income' | 'expenses' | 'savings' | 'rate';
 
+/**
+ * One sortable column of the monthly-breakdown table. The five are declared
+ * once and rendered by BOTH header rows -- the column header row (from `sm`
+ * up) and the phone sort strip -- so the two can never list different fields.
+ *
+ * The field is still named `month` because it is the COLUMN's identity (and the
+ * key a stored sort preference was written under); what it sorts on is the
+ * point's `monthKey`.
+ */
+interface SortColumn extends TableSortColumn<SavingsRateSortField, 'right'> {
+  /**
+   * The last column carries no right padding, exactly as it does today. This
+   * flag is the ONE place that is decided: the header cell and the body cell
+   * both read it (`headerClass` / `cellPadding`), so reordering the list
+   * cannot leave the two disagreeing about which column drops its `pr-4`.
+   */
+  last?: boolean;
+}
+
+/**
+ * The record both header rows are built from, keyed by sort field.
+ *
+ * The key is tied to the entry's own `field`, which a plain
+ * `Record<SavingsRateSortField, SortColumn>` does not do: that forces an entry
+ * to EXIST for every member of the union but lets it name a different one, so
+ * `expenses: { field: 'income', label: colExpenses }` type-checks. Both header
+ * rows would then render two controls keyed `income` (a duplicate React key),
+ * tapping "Expenses" would sort by Income, and "Expenses" would be unsortable
+ * -- none of which a test comparing header LABELS can see, because the labels
+ * stay right. Here it is a compile error instead.
+ */
+type SortColumnsByField = TableSortColumnsByField<SavingsRateSortField, SortColumn>;
+
+// Today's header cell, unchanged.
+const headerClass = (col: SortColumn) =>
+  col.last
+    ? 'py-2 font-medium text-gray-500 dark:text-gray-400'
+    : 'py-2 pr-4 font-medium text-gray-500 dark:text-gray-400';
+
+// Today's body cell padding, restored from `sm` up and absent below it (the
+// wrapped row supplies the vertical inset and the grid does the spacing).
+const cellPadding = (col: SortColumn) => (col.last ? 'sm:py-2' : 'sm:py-2 sm:pr-4');
+
+// The same sort controls in the phone strip: a wrapped row of compact chips.
+// Column alignment means nothing there -- the column header row is hidden and
+// each data row is a grid -- so every control is left-aligned and self-naming.
+// The border is what says "tappable" here: there is no hover on a touch screen,
+// and the strip sits directly on the card, whose background this already is --
+// so the border is the whole of the affordance. The shared
+// `PHONE_HEADER_CLASS` keeps this strip identical to its sibling reports.
+// A money (or rate) cell inside a wrapped row: no padding of its own below
+// `sm` and this table's own from `sm` up, which each cell adds through
+// `cellPadding` so "which column is last" stays decided in one place. Smaller
+// type on phones so a seven-figure amount still fits a third of the width.
+//
+// `whitespace-nowrap` is the one property here that is NOT phone-only, and it
+// is deliberate: `formatCurrencyCompact` groups thousands, and a locale that
+// groups them with a space (`1 234 567 zł`) could otherwise break a figure in
+// the middle at any width -- so the ban holds above `sm` too. That is the
+// single respect in which the desktop cell differs from today's.
+//
+// The budget was measured on a hand-written CSS replica in Chromium, at the
+// insets this table really gets on a phone (the report page's `px-4` plus the
+// card's `p-4`): the three equal tracks are 77px at 320px and 101px at 390px,
+// which holds a seven-figure `pl-PL` amount (`1 234 567 zł`, 77px at
+// `text-xs`) at both widths, and a six-figure one with room to spare.
+//
+// The unit is part of that budget, and it is not always a symbol:
+// `formatCurrencyCompact` asks for `narrowSymbol`, which falls back to the ISO
+// code where a currency has none (`1 439 000 CHF`, 89px). A seven-figure
+// amount in such a currency overflows the third track by 12px at 320px and
+// reopens the wrapper's sideways scroll; at 390px it fits. That is the
+// deliberate failure, not a missed case: right alignment is not a containment
+// device -- a nowrap amount longer than its track overflows past the end edge
+// whatever `text-align` says -- and `overflow-hidden` here would silently cut
+// a figure, which is worse than a crowded one or an honest scroll. (Today,
+// before this layout, the same reader scrolled at every width: the five-column
+// table is 470px wide in that 256px box.)
+//
+// The caption inside the cell wraps even though the cell does not: `white-space`
+// is inherited, so `CellLabel` takes `whitespace-normal` back for itself (a
+// caption with no space in it, `[XX-Expenses-XX]` in the pseudo-locale, once
+// overflowed the third track by 20px at 320px -- the very scroll this layout
+// removes). A number must not break; a caption may.
+const MONEY_CELL = 'p-0 text-right text-xs whitespace-nowrap sm:table-cell sm:text-sm';
+
 export function SavingsRateReport() {
   const t = useTranslations('reports');
-  const { formatCurrencyCompact: formatCurrency } = useNumberFormat();
+  const { formatCurrencyCompact: formatCurrency, formatPercent, formatPercentTrimmed } = useNumberFormat();
+  // Two month formatters, because a month column and a month axis are not the
+  // same surface: the column follows the user's date-format preference like
+  // every other date in the table, the axis localizes the month name like every
+  // other chart. `useChartMonthFormat` explains the split.
+  const { formatMonth } = useDateFormat();
+  const formatChartMonth = useChartMonthFormat();
   const chartRef = useRef<HTMLDivElement>(null);
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [selectedBudgetId, setSelectedBudgetId] = useState<string>('');
@@ -59,7 +161,10 @@ export function SavingsRateReport() {
       let comparison = 0;
       switch (sortField) {
         case 'month':
-          comparison = compareValues(a.month, b.month);
+          // The KEY, not a rendered label: `YYYY-MM` sorts chronologically as
+          // a string, while the server's old `Mmm YYYY` sorted alphabetically
+          // (Apr, Aug, Dec, Feb, Jan...) and differently per language.
+          comparison = compareValues(a.monthKey, b.monthKey);
           break;
         case 'income':
           comparison = compareValues(a.income, b.income);
@@ -78,6 +183,26 @@ export function SavingsRateReport() {
     });
     return sorted;
   }, [data, sortField, sortDirection]);
+
+  // The five sortable columns, keyed by field so the record is exhaustive:
+  // adding a member to `SavingsRateSortField` is a compile error here rather
+  // than a body cell that renders `undefined` in place of its padding.
+  const columns: SortColumnsByField = {
+    month: { field: 'month', label: t('savingsRate.colMonth') },
+    income: { field: 'income', label: t('savingsRate.colIncome'), align: 'right' },
+    expenses: { field: 'expenses', label: t('savingsRate.colExpenses'), align: 'right' },
+    savings: { field: 'savings', label: t('savingsRate.colSavings'), align: 'right' },
+    rate: { field: 'rate', label: t('savingsRate.colRate'), align: 'right', last: true },
+  };
+
+  // Their order, rendered by BOTH header rows and matched by the cells' DOM
+  // order. DERIVED from the record rather than re-listed: a hand-written list
+  // beside an exhaustive record is not exhaustive, so a field added to the
+  // union would compile and still ship with no sort control in either header.
+  // The record's declaration order is the column order. Every body cell takes
+  // its `sm`-and-up padding from the same record, so the header and the cells
+  // cannot disagree about which column is last and drops its right padding.
+  const sortColumns: readonly SortColumn[] = Object.values(columns);
 
   useEffect(() => {
     const loadBudgets = async () => {
@@ -102,9 +227,9 @@ export function SavingsRateReport() {
     await exportToPdf({
       title: t('savingsRate.pdfTitle'),
       summaryCards: [
-        { label: t('savingsRate.pdfCurrentRate'), value: `${currentRate.toFixed(1)}%`, color: meetsTarget ? '#16a34a' : '#dc2626' },
-        { label: t('savingsRate.pdfAverageRate'), value: `${avgRate.toFixed(1)}%`, color: '#111827' },
-        { label: t('savingsRate.pdfTargetRate'), value: `${targetRate}%`, color: '#2563eb' },
+        { label: t('savingsRate.pdfCurrentRate'), value: formatPercent(currentRate, 1), color: meetsTarget ? '#16a34a' : '#dc2626' },
+        { label: t('savingsRate.pdfAverageRate'), value: formatPercent(avgRate, 1), color: '#111827' },
+        { label: t('savingsRate.pdfTargetRate'), value: `${formatPercentTrimmed(targetRate)}`, color: '#2563eb' },
         { label: t('savingsRate.pdfTotalSaved'), value: formatCurrency(totalSaved), color: totalSaved >= 0 ? '#16a34a' : '#dc2626' },
       ],
       chartContainer: chartRef.current,
@@ -118,11 +243,11 @@ export function SavingsRateReport() {
           t('savingsRate.pdfColRate'),
         ],
         rows: data.map((point) => [
-          point.month,
+          formatMonth(point.monthKey),
           formatCurrency(point.income),
           formatCurrency(point.expenses),
           formatCurrency(point.savings),
-          `${point.savingsRate.toFixed(1)}%`,
+          formatPercent(point.savingsRate, 1),
         ]),
       }] : undefined,
       filename: 'savings-rate',
@@ -199,9 +324,7 @@ export function SavingsRateReport() {
               <option value={50}>50%</option>
             </select>
           </div>
-          <div className="ml-auto">
-            <ExportDropdown onExportPdf={handleExportPdf} />
-          </div>
+          <ReportToolbarActions onExportPdf={handleExportPdf} />
         </div>
       </div>
 
@@ -210,19 +333,19 @@ export function SavingsRateReport() {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4 text-center">
           <p className="text-xs text-gray-500 dark:text-gray-400">{t('savingsRate.currentRate')}</p>
           <p className={`text-2xl font-bold ${meetsTarget ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-            {currentRate.toFixed(1)}%
+            {formatPercent(currentRate, 1)}
           </p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4 text-center">
           <p className="text-xs text-gray-500 dark:text-gray-400">{t('savingsRate.averageRate')}</p>
           <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-            {avgRate.toFixed(1)}%
+            {formatPercent(avgRate, 1)}
           </p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4 text-center">
           <p className="text-xs text-gray-500 dark:text-gray-400">{t('savingsRate.targetRate')}</p>
           <p className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-            {targetRate}%
+            {formatPercentTrimmed(targetRate)}
           </p>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4 text-center">
@@ -236,17 +359,19 @@ export function SavingsRateReport() {
       {/* Chart */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 px-2 py-4 sm:p-6">
         {data.length === 0 ? (
-          <p className="text-gray-500 dark:text-gray-400 text-center py-8">
-            {t('savingsRate.noData')}
-          </p>
+          <EmptyState title={t('savingsRate.noData')} />
         ) : (
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <LineChart data={data}>
-                <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                <CartesianGrid {...CHART_GRID_PROPS} />
+                <XAxis
+                  dataKey="monthKey"
+                  tick={{ fontSize: 12 }}
+                  tickFormatter={(value: string) => formatChartMonth(value)}
+                />
                 <YAxis
-                  tickFormatter={(v) => `${v}%`}
+                  tickFormatter={(v) => `${formatPercentTrimmed(v)}`}
                   tick={{ fontSize: 12 }}
                   domain={['auto', 'auto']}
                 />
@@ -256,8 +381,8 @@ export function SavingsRateReport() {
                     const point = payload[0]?.payload as SavingsRatePoint | undefined;
                     if (!point) return null;
                     return (
-                      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3">
-                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">{label}</p>
+                      <div className={CHART_TOOLTIP_CLASS}>
+                        <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">{formatChartMonth(String(label))}</p>
                         <p className="text-sm text-gray-600 dark:text-gray-400">{t('savingsRate.tooltipIncome', { amount: formatCurrency(point.income) })}</p>
                         <p className="text-sm text-gray-600 dark:text-gray-400">{t('savingsRate.tooltipExpenses', { amount: formatCurrency(point.expenses) })}</p>
                         <p className="text-sm text-gray-600 dark:text-gray-400">{t('savingsRate.tooltipSavings', { amount: formatCurrency(point.savings) })}</p>
@@ -277,6 +402,7 @@ export function SavingsRateReport() {
                 />
                 <ReferenceLine y={0} stroke={chartColors.axis} />
                 <Line
+                  activeDot={ChartActiveDot}
                   type="monotone"
                   dataKey="savingsRate"
                   stroke={chartColors.income}
@@ -294,72 +420,95 @@ export function SavingsRateReport() {
       {data.length > 0 && (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4 sm:p-6">
           <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">{t('savingsRate.monthlyBreakdown')}</h3>
+          {/* Below `sm` the table becomes a block and each row wraps into a
+              three-column grid so all five columns fit a phone without a
+              horizontal scroll, on two lines: the month, its savings and its
+              income share line 1; the savings rate (spanning the first two
+              tracks) and the expenses share line 2. Each derived figure sits
+              under the figure it derives from -- rate under savings, expenses
+              under income -- and the month is the one cell allowed to wrap,
+              since a compact amount never may. No column is dropped, and no
+              figure is truncated -- an amount wider than its track overflows
+              the end edge and reopens the wrapper's scroll, which `MONEY_CELL`
+              measures and argues for. From `sm` up it is the
+              ordinary table: each cell restores this table's own `py-2 pr-4`
+              (and the Rate column's bare `py-2`) through `cellPadding`, and a
+              Chromium replica renders it pixel-identically to today at 800px.
+              The one deliberate difference above `sm` is `whitespace-nowrap`
+              on the figures, for the reason `MONEY_CELL` gives. The sort
+              controls survive as their own phone-only header row, because the
+              column header row that carries them on desktop is hidden there.
+
+              Two costs of restyling one tree, both deliberate. Changing the
+              display roles drops the table semantics below `sm`, which is why
+              the roles are restated explicitly and every figure carries a
+              `CellLabel` naming its column -- the month needs none, being the
+              row's identity rather than one of its figures. And the phone
+              reading order differs from the DOM order, which is the desktop
+              column order the grid placement overrides visually. Both are
+              properties of the mechanism, not of this table. */}
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="border-b border-gray-200 dark:border-gray-700">
-                  <SortableHeader<SavingsRateSortField>
-                    field="month"
-                    sortField={sortField}
-                    sortDirection={sortDirection}
-                    onSort={handleSort}
-                    className="py-2 pr-4 font-medium text-gray-500 dark:text-gray-400"
-                  >
-                    {t('savingsRate.colMonth')}
-                  </SortableHeader>
-                  <SortableHeader<SavingsRateSortField>
-                    field="income"
-                    sortField={sortField}
-                    sortDirection={sortDirection}
-                    onSort={handleSort}
-                    align="right"
-                    className="py-2 pr-4 font-medium text-gray-500 dark:text-gray-400"
-                  >
-                    {t('savingsRate.colIncome')}
-                  </SortableHeader>
-                  <SortableHeader<SavingsRateSortField>
-                    field="expenses"
-                    sortField={sortField}
-                    sortDirection={sortDirection}
-                    onSort={handleSort}
-                    align="right"
-                    className="py-2 pr-4 font-medium text-gray-500 dark:text-gray-400"
-                  >
-                    {t('savingsRate.colExpenses')}
-                  </SortableHeader>
-                  <SortableHeader<SavingsRateSortField>
-                    field="savings"
-                    sortField={sortField}
-                    sortDirection={sortDirection}
-                    onSort={handleSort}
-                    align="right"
-                    className="py-2 pr-4 font-medium text-gray-500 dark:text-gray-400"
-                  >
-                    {t('savingsRate.colSavings')}
-                  </SortableHeader>
-                  <SortableHeader<SavingsRateSortField>
-                    field="rate"
-                    sortField={sortField}
-                    sortDirection={sortDirection}
-                    onSort={handleSort}
-                    align="right"
-                    className="py-2 font-medium text-gray-500 dark:text-gray-400"
-                  >
-                    {t('savingsRate.colRate')}
-                  </SortableHeader>
+            <table role="table" className="block min-w-full text-sm sm:table">
+              <thead role="rowgroup" className="block sm:table-header-group">
+                {/* Phone sort strip: the same five controls, wrapped. */}
+                <tr role="row" className="flex flex-wrap gap-x-2 gap-y-1 pb-2 border-b border-gray-200 dark:border-gray-700 sm:hidden">
+                  {sortColumns.map((col) => (
+                    <SortableHeader<SavingsRateSortField>
+                      key={col.field}
+                      field={col.field}
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                      className={PHONE_HEADER_CLASS}
+                    >
+                      {col.label}
+                    </SortableHeader>
+                  ))}
+                </tr>
+                <tr role="row" className="hidden border-b border-gray-200 dark:border-gray-700 sm:table-row">
+                  {sortColumns.map((col) => (
+                    <SortableHeader<SavingsRateSortField>
+                      key={col.field}
+                      field={col.field}
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                      align={col.align}
+                      className={headerClass(col)}
+                    >
+                      {col.label}
+                    </SortableHeader>
+                  ))}
                 </tr>
               </thead>
-              <tbody>
+              <tbody role="rowgroup" className="block sm:table-row-group">
                 {sortedData.map((point) => (
-                  <tr key={point.month} className="border-b border-gray-100 dark:border-gray-700/50">
-                    <td className="py-2 pr-4 text-gray-900 dark:text-gray-100">{point.month}</td>
-                    <td className="py-2 pr-4 text-right text-gray-600 dark:text-gray-400">{formatCurrency(point.income)}</td>
-                    <td className="py-2 pr-4 text-right text-gray-600 dark:text-gray-400">{formatCurrency(point.expenses)}</td>
-                    <td className={`py-2 pr-4 text-right font-medium ${gainLossColor(point.savings)}`}>
+                  <tr
+                    key={point.monthKey}
+                    role="row"
+                    className="grid grid-cols-3 items-start gap-x-3 gap-y-1.5 py-2 border-b border-gray-100 dark:border-gray-700/50 sm:table-row sm:py-0"
+                  >
+                    <td role="cell" className={`col-start-1 row-start-1 p-0 text-gray-900 dark:text-gray-100 sm:table-cell ${cellPadding(columns.month)}`}>{formatMonth(point.monthKey)}</td>
+                    <td role="cell" className={`col-start-3 row-start-1 text-gray-600 dark:text-gray-400 ${cellPadding(columns.income)} ${MONEY_CELL}`}>
+                      <CellLabel className={CAPTION_CLASS}>{t('savingsRate.colIncome')}</CellLabel>
+                      {formatCurrency(point.income)}
+                    </td>
+                    <td role="cell" className={`col-start-3 row-start-2 text-gray-600 dark:text-gray-400 ${cellPadding(columns.expenses)} ${MONEY_CELL}`}>
+                      <CellLabel className={CAPTION_CLASS}>{t('savingsRate.colExpenses')}</CellLabel>
+                      {formatCurrency(point.expenses)}
+                    </td>
+                    {/* Savings takes the middle of line 1 beside the month:
+                        it is the figure the row is read for. */}
+                    <td role="cell" className={`col-start-2 row-start-1 font-medium ${gainLossColor(point.savings)} ${cellPadding(columns.savings)} ${MONEY_CELL}`}>
+                      <CellLabel className={CAPTION_CLASS}>{t('savingsRate.colSavings')}</CellLabel>
                       {formatCurrency(point.savings)}
                     </td>
-                    <td className={`py-2 text-right font-medium ${point.savingsRate >= targetRate ? 'text-green-600 dark:text-green-400' : point.savingsRate >= 0 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'}`}>
-                      {point.savingsRate.toFixed(1)}%
+                    {/* The rate spans the first two tracks so it has room
+                        beneath the savings it is derived from; right-aligned,
+                        it ends under that figure. */}
+                    <td role="cell" className={`col-start-1 col-span-2 row-start-2 font-medium ${point.savingsRate >= targetRate ? 'text-green-600 dark:text-green-400' : point.savingsRate >= 0 ? 'text-yellow-600 dark:text-yellow-400' : 'text-red-600 dark:text-red-400'} ${cellPadding(columns.rate)} ${MONEY_CELL}`}>
+                      <CellLabel className={CAPTION_CLASS}>{t('savingsRate.colRate')}</CellLabel>
+                      {formatPercent(point.savingsRate, 1)}
                     </td>
                   </tr>
                 ))}

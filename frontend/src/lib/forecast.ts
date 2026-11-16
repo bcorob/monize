@@ -1,7 +1,70 @@
+import { anniversaryInYear } from '@/lib/payroll-period';
 import { ScheduledTransaction } from '@/types/scheduled-transaction';
 import { Account } from '@/types/account';
 import { parseLocalDate } from '@/lib/utils';
-import { advanceByFrequency } from '@/lib/frequency';
+import { advanceSchedule, isOneTime } from '@/lib/frequency';
+import {
+  estimatedOccurrenceAmount,
+  occurrenceFollowsEstimate,
+  occurrenceSettlementAccountId,
+} from '@/lib/scheduled-effective-amount';
+import {
+  FIAT_MONEY_DECIMALS,
+  fromMoneyUnits,
+  moneyDecimalsForCurrency,
+  roundMoney,
+  roundToEntryPlaces,
+  sumMoney,
+  toMoneyUnits,
+} from '@/lib/format';
+
+/**
+ * A running balance is accumulated in integer units of `10^-decimals`, the
+ * money precision of the currency it is in (four for fiat and for a balance
+ * converted into the reporting currency, a coin's own eight), held in `BigInt`
+ * so a long series of 0.1-sized amounts cannot drift and eight places stay
+ * exact above 2^53 units. It is rounded once, half away from zero, for
+ * display: at the places of the currency the balance is in (a coin wallet's
+ * 0.00002500 BTC read 0.00 at cents), two for fiat and for a currency the
+ * caller does not name. An unreadable amount contributes nothing.
+ */
+const toUnits = (amount: number, decimals: number): bigint => {
+  const value = Number(amount);
+  return Number.isFinite(value) ? toMoneyUnits(value, decimals) : BigInt(0);
+};
+const unitsToPlaces = (units: bigint, decimals: number, currencyCode?: string): number =>
+  roundToEntryPlaces(fromMoneyUnits(units, decimals), currencyCode);
+
+/**
+ * The precision of a figure converted into the reporting currency: a coin is
+ * never the reporting currency (`docs/specs/money-precision.md` decision 3).
+ */
+const REPORTING_MONEY_DECIMALS = FIAT_MONEY_DECIMALS;
+
+/**
+ * The money precision a set of unconverted balances accumulates at: the widest
+ * of their currencies', so no account's amounts are rounded below their own.
+ */
+function widestMoneyDecimals(accounts: readonly Account[]): number {
+  return accounts.reduce(
+    (widest, account) => Math.max(widest, moneyDecimalsForCurrency(account.currencyCode)),
+    FIAT_MONEY_DECIMALS,
+  );
+}
+
+/**
+ * The one currency a set of balances is drawn in without conversion, or
+ * `undefined` when they are converted (into the reader's fiat default) or do
+ * not share one.
+ */
+function unconvertedCurrency(
+  accounts: readonly Account[],
+  converted: boolean,
+): string | undefined {
+  if (converted) return undefined;
+  const codes = new Set(accounts.map(a => a.currencyCode));
+  return codes.size === 1 ? [...codes][0] : undefined;
+}
 
 export interface FutureTransaction {
   id: string;
@@ -23,6 +86,18 @@ export interface ForecastTransaction {
    * account and the tooltip has to say which.
    */
   accountId?: string;
+  /**
+   * Set on a scheduled occurrence that fell due before the forecast's first day
+   * and was neither posted nor skipped, so it is applied on that day instead
+   * (discussion #1784): the recurrence slot it came from, which is the
+   * occurrence's identity. Absent on everything dated inside the window.
+   */
+  overdueOriginalDate?: string;
+  /**
+   * The amount is the schedule's history estimate for this month (issue
+   * #2096), not an entered figure; the tooltip says so.
+   */
+  estimated?: true;
 }
 
 export interface ForecastDataPoint {
@@ -53,6 +128,8 @@ export interface MultiAccountForecastResult {
   points: MultiAccountForecastPoint[];
   series: ForecastAccountSeries[];
   missingCurrencies: string[];
+  /** See `ForecastResult.unknownEstimates`. */
+  unknownEstimates?: string[];
 }
 
 /**
@@ -65,6 +142,14 @@ export interface MultiAccountForecastResult {
 export interface ForecastResult {
   points: ForecastDataPoint[];
   missingCurrencies: string[];
+  /**
+   * The ids of estimated schedules with an occurrence in the window whose
+   * estimate is unknown (no payment history, or no rate to convert it): a
+   * different gap from a missing display rate, with a different repair, so it
+   * is reported apart. `points` is empty when it is not, for the same reason.
+   * Absent means none.
+   */
+  unknownEstimates?: string[];
 }
 
 export const FORECAST_PERIOD_DAYS: Record<ForecastPeriod, number> = {
@@ -116,7 +201,41 @@ interface Occurrence {
    * override can be unknown while the base schedule is not, and vice versa.
    */
   unknown: boolean;
+  /** See `ForecastTransaction.overdueOriginalDate`. */
+  overdueOriginalDate?: string;
+  /**
+   * The day the occurrence falls on before any overdue carry: the day its
+   * deductions are spent against the room (`spendPayrollDeductions`).
+   */
+  spendDate?: string;
+  /** An override states the amount: it spends room but takes no add-back. */
+  stated?: boolean;
+  /** What each ruled category deducts on this occurrence, once the room is spent. */
+  deductions?: { categoryId: string; deducted: number }[];
+  /**
+   * Priced from the schedule's history estimate (issue #2096). With `unknown`,
+   * the estimate itself is unknown, which the builders report as an unknown
+   * estimate rather than a missing rate.
+   */
+  estimated?: boolean;
 }
+
+/**
+ * How many steps one schedule's recurrence is walked. The backend's expander
+ * stops at the same count (`OCCURRENCE_WALK_GUARD` in
+ * `backend/src/common/scheduled-occurrences.ts`), so a schedule overdue for
+ * years is cut at the same occurrence on the Bills chart and the account card.
+ */
+const MAX_OCCURRENCE_STEPS = 2000;
+
+/**
+ * How many days before the forecast's first day an occurrence that was neither
+ * posted nor skipped is still carried as owed (discussion #1784). Older ones are
+ * read as forgotten and left out, so a stale schedule moves the forecast by at
+ * most this window's occurrences. The backend uses the same window
+ * (`OVERDUE_CARRY_DAYS` in `backend/src/common/scheduled-occurrences.ts`).
+ */
+export const OVERDUE_CARRY_DAYS = 31;
 
 /**
  * Does this override carry an embedded investment split? Such an override is
@@ -136,18 +255,241 @@ function overrideHasInvestmentSplits(
 interface OverrideLookup {
   overrideDate: string;
   amount: number | null;
+  isSplit?: boolean | null;
   hasInvestmentSplits: boolean;
   investmentForecastAmount?: number | null;
+}
+
+interface DeductionPool {
+  /** The maximum the pool refills to at the next reset, and every one after it. */
+  nextMaximum: number;
+  remaining: number;
+  nextResetOn: string;
+  /** The current period's first day: an occurrence before it belongs to a closed period. */
+  periodStart: string;
+  /** The anchor the resets are anniversaries of; absent on an older read model. */
+  resetDate?: string;
+}
+
+/**
+ * The anniversary of `resetDate`'s month and day in the year after `after`,
+ * the day clamped to the month (`anniversaryInYear`), so a leap-day anchor
+ * returns to the 29th in a leap year as the server's does. Without the
+ * anchor the previous reset is stepped one year, which keeps a clamped day
+ * clamped.
+ */
+function nextAnniversary(resetDate: string | undefined, after: string): string {
+  return anniversaryInYear(resetDate ?? after, Number(after.slice(0, 4)) + 1);
+}
+
+/** A positive expected figure, else `null`. */
+const positiveFigure = (value: number | null | undefined) =>
+  value != null && Number(value) > 0 ? Number(value) : null;
+
+/**
+ * A bill's rules the projection can spend: those with a positive expected
+ * figure this period or next (spec section 11), so a deduction that starts
+ * only at the reset is still projected from it.
+ */
+function spendableRules(transaction: ScheduledTransaction) {
+  return (transaction.payrollDeductions ?? [])
+    .filter(
+      r =>
+        positiveFigure(r.expectedPerPaycheque) !== null ||
+        positiveFigure(r.nextPeriod?.expectedPerPaycheque) !== null,
+    )
+    .map(r => ({
+      key: `${r.categoryId}|${r.currencyCode}`,
+      // The rule's money precision: its currency's (a payroll bill is fiat,
+      // so four, as it has always been).
+      decimals: moneyDecimalsForCurrency(r.currencyCode),
+      categoryId: r.categoryId,
+      expected: positiveFigure(r.expectedPerPaycheque) ?? 0,
+      // From the reset on, the next period's figure (spec section 11); an
+      // older read model kept one figure for every period.
+      nextExpected:
+        r.nextPeriod?.expectedPerPaycheque != null
+          ? Number(r.nextPeriod.expectedPerPaycheque)
+          : (positiveFigure(r.expectedPerPaycheque) ?? 0),
+      // What the template already deducts for the category: its own line, or
+      // nothing when the figure was entered because the line is absent or zero.
+      lineAmount: r.expectedSource === 'line' ? (positiveFigure(r.expectedPerPaycheque) ?? 0) : 0,
+      nextMaximum: Number(r.nextPeriod?.yearlyMaximum ?? r.yearlyMaximum),
+      remaining: Number(r.remaining),
+      nextResetOn: r.nextResetOn,
+      periodStart: r.periodStart,
+      resetDate: r.resetDate,
+    }));
+}
+
+/**
+ * The room under each yearly maximum, pooled per category and currency across
+ * every bill that names it (docs/specs/payroll-deductions.md decision 7). Two
+ * paycheques (a mid-month and a month-end) deducting to the same category draw
+ * down one maximum, as the ledger's category-wide paid figure does on the
+ * server. Where their rules differ, the lower ceiling and the earlier reset
+ * bind: the projection errs towards collecting, as the posting cap does.
+ */
+function buildDeductionPools(transactions: ScheduledTransaction[]): Map<string, DeductionPool> {
+  const pools = new Map<string, DeductionPool>();
+  for (const tx of transactions) {
+    if (!tx.isActive) continue;
+    for (const rule of spendableRules(tx)) {
+      const pool = pools.get(rule.key);
+      if (!pool) {
+        pools.set(rule.key, {
+          nextMaximum: rule.nextMaximum,
+          remaining: rule.remaining,
+          nextResetOn: rule.nextResetOn,
+          periodStart: rule.periodStart,
+          resetDate: rule.resetDate,
+        });
+      } else {
+        pool.nextMaximum = Math.min(pool.nextMaximum, rule.nextMaximum);
+        pool.remaining = Math.min(pool.remaining, rule.remaining);
+        if (rule.periodStart < pool.periodStart) pool.periodStart = rule.periodStart;
+        if (rule.nextResetOn < pool.nextResetOn) {
+          pool.nextResetOn = rule.nextResetOn;
+          pool.resetDate = rule.resetDate;
+        }
+      }
+    }
+  }
+  return pools;
+}
+
+/**
+ * Spend the payroll deductions of every bill against the pooled room, in date
+ * order across bills (INV-PAYROLL-003).
+ *
+ * Each pool starts from the server's `remaining` -- the room left under the
+ * yearly maximum as of today, read from the ledger -- and every occurrence
+ * walked spends the bill's own expected deduction against it. The occurrence
+ * is then projected at the template's amount, less what the template already
+ * deducts for the category (its line, or nothing when the figure was entered
+ * because the line is absent or zero), plus what will be deducted: so a bill
+ * whose line was zeroed at this year's maximum stays where it is until the
+ * reset and drops by the deduction from the first paycheque after it, and a
+ * bill whose line still deducts rises by what the room cannot cover. An
+ * override that states its amount is projected as stated and still spends.
+ * An occurrence on or after the reset date refills the pool to the next
+ * period's maximum first, and spends the next period's expected figure
+ * (spec section 11); one dated inside a closed period (an overdue paycheque from before
+ * the current period) neither spends the pool nor changes. A rule with no
+ * expected figure projects nothing, and a bill without rules walks
+ * unchanged. Mutates the occurrences in place.
+ */
+function spendPayrollDeductions(
+  transactions: ScheduledTransaction[],
+  occurrencesById: Map<string, Occurrence[]>,
+): void {
+  const pools = buildDeductionPools(transactions);
+  if (pools.size === 0) return;
+  const walk: {
+    occurrence: Occurrence;
+    rules: ReturnType<typeof spendableRules>;
+    decimals: number;
+  }[] = [];
+  const seen = new Set<string>();
+  for (const tx of transactions) {
+    if (seen.has(tx.id)) continue;
+    seen.add(tx.id);
+    const rules = spendableRules(tx);
+    if (rules.length === 0) continue;
+    for (const occurrence of occurrencesById.get(tx.id) ?? []) {
+      if (occurrence.spendDate !== undefined) {
+        walk.push({ occurrence, rules, decimals: moneyDecimalsForCurrency(tx.currencyCode) });
+      }
+    }
+  }
+  // Stable: two bills on one day spend in the order they were given.
+  walk.sort((a, b) => (a.occurrence.spendDate as string).localeCompare(b.occurrence.spendDate as string));
+  for (const { occurrence, rules, decimals } of walk) {
+    const dateKey = occurrence.spendDate as string;
+    let delta = 0;
+    const deductions: { categoryId: string; deducted: number }[] = [];
+    for (const rule of rules) {
+      const pool = pools.get(rule.key) as DeductionPool;
+      if (dateKey < pool.periodStart) {
+        deductions.push({ categoryId: rule.categoryId, deducted: rule.lineAmount });
+        continue;
+      }
+      while (dateKey >= pool.nextResetOn) {
+        pool.remaining = pool.nextMaximum;
+        pool.nextResetOn = nextAnniversary(pool.resetDate, pool.nextResetOn);
+      }
+      const expected = dateKey >= rule.nextResetOn ? rule.nextExpected : rule.expected;
+      const applied = Math.min(expected, Math.max(0, pool.remaining));
+      pool.remaining = roundMoney(pool.remaining - applied, rule.decimals);
+      deductions.push({ categoryId: rule.categoryId, deducted: roundMoney(applied, rule.decimals) });
+      if (!occurrence.stated) delta += rule.lineAmount - applied;
+    }
+    occurrence.deductions = deductions;
+    occurrence.amount = roundMoney(occurrence.amount + roundMoney(delta, decimals), decimals);
+  }
+}
+
+/**
+ * What each ruled category deducts on one occurrence of `billId` falling on
+ * `dateKey`, as a map of category id to magnitude, with every bill's earlier
+ * occurrences spent first; `null` when the bill has no spendable rule or no
+ * occurrence on that day. The occurrence editor opens on these lines, so what
+ * it shows is what the forecast projects and the posting will cap to.
+ */
+export function projectPayrollOccurrence(
+  transactions: ScheduledTransaction[],
+  billId: string,
+  dateKey: string,
+): Record<string, number> | null {
+  const bill = transactions.find(t => t.id === billId);
+  if (!bill || spendableRules(bill).length === 0) return null;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const endDate = parseLocalDate(dateKey);
+  endDate.setHours(0, 0, 0, 0);
+  const occurrences = generateAllOccurrences(transactions, today, endDate, { carryOverdue: true });
+  const occurrence = (occurrences.get(billId) ?? []).find(o => o.spendDate === dateKey);
+  if (!occurrence?.deductions) return null;
+  return Object.fromEntries(occurrence.deductions.map(d => [d.categoryId, d.deducted]));
+}
+
+/**
+ * The occurrences of every schedule in the window, keyed by schedule id, with
+ * the payroll deductions spent across all of them. Every surface generates
+ * through this so two bills sharing a deduction category see one room, even
+ * when the surface then reads only one account's bills.
+ */
+function generateAllOccurrences(
+  transactions: ScheduledTransaction[],
+  startDate: Date,
+  endDate: Date,
+  options: { carryOverdue?: boolean } = {},
+): Map<string, Occurrence[]> {
+  const byId = new Map<string, Occurrence[]>();
+  for (const tx of transactions) {
+    if (!byId.has(tx.id)) byId.set(tx.id, generateOccurrences(tx, startDate, endDate, options));
+  }
+  spendPayrollDeductions(transactions, byId);
+  return byId;
 }
 
 /**
  * Generate all occurrence dates for a scheduled transaction within a date range.
  * Uses override data (amount, date) from futureOverrides for each occurrence.
+ *
+ * With `carryOverdue`, an occurrence whose date (after any override) is before
+ * `startDate`, by at most `OVERDUE_CARRY_DAYS`, is not dropped but placed ON
+ * `startDate` and marked with its slot (discussion #1784). Posting or skipping
+ * an occurrence advances `nextDueDate`, so every slot walked from there is one
+ * nobody has posted or skipped: the bill is still owed, and a forecast that left
+ * it out showed money that will not be there. The cash-flow forecasts carry;
+ * `getProjectedBalanceAtDate` does not.
  */
 function generateOccurrences(
   transaction: ScheduledTransaction,
   startDate: Date,
-  endDate: Date
+  endDate: Date,
+  { carryOverdue = false }: { carryOverdue?: boolean } = {},
 ): Occurrence[] {
   const occurrences: Occurrence[] = [];
 
@@ -155,6 +497,26 @@ function generateOccurrences(
 
   const startTime = startDate.getTime();
   const endTime = endDate.getTime();
+  const startKey = formatDateKey(startDate);
+  const carryFrom = new Date(startDate);
+  carryFrom.setDate(carryFrom.getDate() - OVERDUE_CARRY_DAYS);
+  const carryFromTime = carryFrom.getTime();
+
+  // Where an occurrence falling on `effectiveTime` lands in this window, or
+  // `null` when it is outside it. Before the window it is overdue: carried onto
+  // the first day when asked to, only while the window has a first day, and
+  // only from the last `OVERDUE_CARRY_DAYS`.
+  const place = (
+    effectiveTime: number,
+    effectiveKey: string,
+    slotKey: string,
+  ): { date: string; overdueOriginalDate?: string } | null => {
+    if (effectiveTime > endTime) return null;
+    if (effectiveTime >= startTime) return { date: effectiveKey };
+    if (!carryOverdue || startTime > endTime) return null;
+    if (effectiveTime < carryFromTime) return null;
+    return { date: startKey, overdueOriginalDate: slotKey };
+  };
   const txEndDate = transaction.endDate ? parseLocalDate(transaction.endDate) : null;
   const txEndTime = txEndDate ? txEndDate.getTime() : null;
 
@@ -171,6 +533,7 @@ function generateOccurrences(
   const toLookup = (o: {
     overrideDate?: string;
     amount: number | null;
+    isSplit?: boolean | null;
     splits?: { splitKind?: string; investment?: unknown }[] | null;
     investmentForecastAmount?: number | null;
   }): OverrideLookup => ({
@@ -178,6 +541,7 @@ function generateOccurrences(
     // treats an absent date as "same date" (uses the occurrence's own date).
     overrideDate: o.overrideDate ? o.overrideDate.split('T')[0] : '',
     amount: o.amount,
+    isSplit: o.isSplit,
     hasInvestmentSplits: overrideHasInvestmentSplits(o),
     investmentForecastAmount: o.investmentForecastAmount,
   });
@@ -201,43 +565,68 @@ function generateOccurrences(
   const baseIsInvestment = transaction.isInvestment === true;
   const resolveOccurrence = (
     override: OverrideLookup | undefined,
-  ): { amount: number; unknown: boolean } => {
+    dateKey: string,
+  ): { amount: number; unknown: boolean; stated: boolean; estimated?: boolean } => {
+    // An estimated schedule (issue #2096) prices each occurrence the override
+    // does not state at the estimate for the month it falls in; an unknown
+    // estimate is unknown, never the stored snapshot.
+    if (
+      occurrenceFollowsEstimate(
+        transaction,
+        override ? { amount: override.amount, isSplit: override.isSplit ?? null } : null,
+      )
+    ) {
+      const estimate = estimatedOccurrenceAmount(transaction, dateKey);
+      return estimate == null
+        ? { amount: 0, unknown: true, stated: false, estimated: true }
+        : { amount: estimate, unknown: false, stated: false, estimated: true };
+    }
     if (override && (baseIsInvestment || override.hasInvestmentSplits)) {
       if (override.investmentForecastAmount == null) {
-        return { amount: 0, unknown: true };
+        return { amount: 0, unknown: true, stated: true };
       }
-      return { amount: override.investmentForecastAmount, unknown: false };
+      return { amount: override.investmentForecastAmount, unknown: false, stated: true };
     }
     if (override && override.amount != null) {
-      return { amount: Number(override.amount), unknown: false };
+      return { amount: Number(override.amount), unknown: false, stated: true };
     }
     // No override, or an override that reuses the base amount.
-    return { amount: baseAmount, unknown: baseUnknown };
+    return { amount: baseAmount, unknown: baseUnknown, stated: false };
   };
 
-  // For ONCE frequency, just check if it's in range
-  if (transaction.frequency === 'ONCE') {
-    const override = overrideMap.get(formatDateKey(currentDate));
+  // Deductions are spent later, across every bill (`spendPayrollDeductions`):
+  // the occurrence records the day it falls on and whether an override stated
+  // its amount, which is projected as stated and still spends.
+  const withDeductions = (
+    resolved: { amount: number; unknown: boolean; stated: boolean; estimated?: boolean },
+    dateKey: string,
+  ): Pick<Occurrence, 'amount' | 'unknown' | 'spendDate' | 'stated' | 'estimated'> => ({
+    amount: resolved.amount,
+    unknown: resolved.unknown,
+    spendDate: dateKey,
+    stated: resolved.stated,
+    ...(resolved.estimated && { estimated: true }),
+  });
+
+  // A one-time schedule (ONCE, or a Custom row without a rule that can step):
+  // just check whether its one date is in range.
+  if (isOneTime(transaction)) {
+    const slotKey = formatDateKey(currentDate);
+    const override = overrideMap.get(slotKey);
     const effectiveDate = override?.overrideDate ? parseLocalDate(override.overrideDate) : currentDate;
-    const { amount, unknown } = resolveOccurrence(override);
     const effectiveTime = effectiveDate.getTime();
-    if (effectiveTime >= startTime && effectiveTime <= endTime) {
-      if (!txEndTime || effectiveTime <= txEndTime) {
-        occurrences.push({
-          date: formatDateKey(effectiveDate),
-          amount,
-          unknown,
-        });
-      }
+    const effectiveKey = formatDateKey(effectiveDate);
+    const placed = place(effectiveTime, effectiveKey, slotKey);
+    if (placed && (!txEndTime || effectiveTime <= txEndTime)) {
+      occurrences.push({ ...placed, ...withDeductions(resolveOccurrence(override, effectiveKey), effectiveKey) });
     }
     return occurrences;
   }
 
   // Generate occurrences until we pass the end date or run out of occurrences
   let iterations = 0;
-  const maxIterations = 1000;
 
-  while (iterations < maxIterations) {
+  while (iterations < MAX_OCCURRENCE_STEPS) {
     iterations++;
     const currentDateKey = formatDateKey(currentDate);
 
@@ -259,23 +648,26 @@ function generateOccurrences(
     const effectiveDateKey = override?.overrideDate && override.overrideDate !== currentDateKey
       ? formatDateKey(effectiveDate)
       : currentDateKey;
-    const { amount, unknown } = resolveOccurrence(override);
-
-    // Only include if effective date is within our forecast range
-    if (effectiveTime >= startTime && effectiveTime <= endTime) {
+    // Only include if effective date is within our forecast range (or, when
+    // carrying, before it)
+    const placed = place(effectiveTime, effectiveDateKey, currentDateKey);
+    if (placed) {
       occurrences.push({
-        date: effectiveDateKey,
-        amount,
-        unknown,
+        ...placed,
+        ...withDeductions(resolveOccurrence(override, effectiveDateKey), effectiveDateKey),
       });
+    }
 
-      if (remainingOccurrences !== null) {
-        remainingOccurrences--;
-      }
+    // Every slot walked is one occurrence of the count, wherever it falls --
+    // the backend's expander counts the same way. Counting only the ones inside
+    // the window let an overdue slot leave the count untouched, so a schedule
+    // with one occurrence left projected one more after it.
+    if (remainingOccurrences !== null) {
+      remainingOccurrences--;
     }
 
     // Calculate next date based on frequency
-    currentDate = advanceByFrequency(currentDate, transaction.frequency);
+    currentDate = advanceSchedule(currentDate, transaction);
   }
 
   return occurrences;
@@ -414,13 +806,10 @@ function normalizeInvestmentForForecast(
     }
     return transaction;
   }
-  let cashAccountId = transaction.investmentFundingAccountId;
-  if (!cashAccountId) {
-    const brokerage = accountsById.get(transaction.accountId);
-    if (brokerage?.linkedAccountId) {
-      cashAccountId = brokerage.linkedAccountId;
-    }
-  }
+  // Which account settles is one decision, made by the server for the posting
+  // and read here through the shared helper -- the projection and the dashboard
+  // widget cannot charge different accounts for the same occurrence (#1247).
+  const cashAccountId = occurrenceSettlementAccountId(transaction, accountsById);
   if (!cashAccountId) {
     return transaction;
   }
@@ -450,14 +839,21 @@ function normalizeInvestmentForForecast(
     // KNOWN, so stamp it so the projection is not withheld.
     return { ...remapped, investmentForecastExchangeRate: rate };
   }
+  // Converted into the cash account's currency, at that currency's precision.
+  const cashDecimals = moneyDecimalsForCurrency(
+    accountsById.get(cashAccountId)?.currencyCode ??
+      (transaction.investmentFundingAccountId === cashAccountId
+        ? transaction.investmentFundingAccount?.currencyCode
+        : undefined),
+  );
   const convertOverride = <T extends { amount: number | null }>(o: T): T => ({
     ...o,
-    amount: o.amount != null ? Number(o.amount) * rate : o.amount,
+    amount: o.amount != null ? roundMoney(Number(o.amount) * rate, cashDecimals) : o.amount,
   });
   return {
     ...transaction,
     accountId: cashAccountId,
-    amount: Number(transaction.amount) * rate,
+    amount: roundMoney(Number(transaction.amount) * rate, cashDecimals),
     investmentForecastExchangeRate: rate,
     futureOverrides: transaction.futureOverrides?.map(convertOverride),
     nextOverride: transaction.nextOverride
@@ -532,6 +928,11 @@ function scheduledFlowsForAccount(
  * These are NOT included in account.currentBalance (the backend excludes
  * future-dated transactions from currentBalance).  We start from
  * currentBalance and add future transactions at their correct dates.
+ *
+ * A scheduled occurrence due before today that was neither posted nor skipped
+ * is applied on today, the forecast's first day, and carries
+ * `overdueOriginalDate` (discussion #1784). The account balance forecast
+ * (`BalanceForecastService`) applies the same rule on its own first day.
  */
 export function buildForecast(
   accounts: Account[],
@@ -580,11 +981,16 @@ export function buildForecast(
 
   // Build account currency lookup for converting transaction amounts
   const accountCurrencyMap = new Map(targetAccounts.map(a => [a.id, a.currencyCode]));
+  const lineCurrency = unconvertedCurrency(targetAccounts, !!convertAmount);
+  // Converted into the reporting currency at four; unconverted, at the
+  // account currency's own precision (a coin wallet's eight).
+  const unitDecimals = convertAmount ? REPORTING_MONEY_DECIMALS : widestMoneyDecimals(targetAccounts);
   // A forecast is a running balance: one unconvertible amount makes every
   // subsequent day wrong, so an unknown conversion is recorded once and the whole
   // series is reported as unavailable rather than silently drifting. `conv`
   // therefore contributes nothing and sets the flag.
   const missingRateCurrencies = new Set<string>();
+  const unknownEstimates = new Set<string>();
   const conv = (amount: number, acctId: string): number => {
     if (!convertAmount) return amount;
     const currency = accountCurrencyMap.get(acctId);
@@ -597,18 +1003,18 @@ export function buildForecast(
       missingRateCurrencies.add(currency);
       return 0;
     }
-    return converted;
+    return roundMoney(converted, REPORTING_MONEY_DECIMALS);
   };
 
-  const startingBalance = targetAccounts.reduce((sum, acc) => {
-    if (!convertAmount) return sum + Number(acc.currentBalance);
+  const startingUnits = targetAccounts.reduce((sum, acc) => {
+    if (!convertAmount) return sum + toUnits(Number(acc.currentBalance), unitDecimals);
     const converted = convertAmount(Number(acc.currentBalance), acc.currencyCode);
     if (converted === null) {
       missingRateCurrencies.add(acc.currencyCode);
       return sum;
     }
-    return sum + converted;
-  }, 0);
+    return sum + toUnits(converted, unitDecimals);
+  }, BigInt(0));
 
   // Filter scheduled transactions by account
   // For a specific account, include transfers where this account is the destination
@@ -623,6 +1029,10 @@ export function buildForecast(
         .filter(t => t.isActive && !isTransfer(t) && targetAccountIds.has(t.accountId))
         .map(transaction => ({ transaction, isInbound: false }))
     : scheduledFlowsForAccount(transactions, accountId);
+
+  // Every active schedule, not only the relevant ones: a paycheque on another
+  // account draws down the same deduction room.
+  const occurrencesById = generateAllOccurrences(transactions, today, endDate, { carryOverdue: true });
 
   // Generate all occurrences and group by date
   const transactionsByDate = new Map<string, ForecastTransaction[]>();
@@ -639,7 +1049,9 @@ export function buildForecast(
   }
 
   for (const { transaction: tx, isInbound } of relevantFlows) {
-    const occurrences = generateOccurrences(tx, today, endDate);
+    // An unposted occurrence due before today lands on today: the bill is
+    // still owed (discussion #1784).
+    const occurrences = occurrencesById.get(tx.id) ?? [];
     const txAccountId = isInbound ? (tx.transferAccountId ?? tx.accountId) : tx.accountId;
     for (const occ of occurrences) {
       const existing = transactionsByDate.get(occ.date) || [];
@@ -648,7 +1060,11 @@ export function buildForecast(
       // currency and contribute nothing, which withholds the whole series below.
       // The flag is per-occurrence (F5-2): a base occurrence and an override on
       // the same schedule can differ.
-      if (occ.unknown) {
+      // An unknown history estimate (issue #2096) withholds the series too,
+      // but is reported apart: it is not a rate the reader can add.
+      if (occ.unknown && occ.estimated) {
+        unknownEstimates.add(tx.id);
+      } else if (occ.unknown) {
         missingRateCurrencies.add(
           tx.investmentSecurity?.currencyCode ??
             accountCurrencyMap.get(txAccountId) ??
@@ -661,6 +1077,10 @@ export function buildForecast(
           ? 0
           : conv(isInbound ? -occ.amount : occ.amount, txAccountId),
         scheduledTransactionId: tx.id,
+        ...(occ.overdueOriginalDate !== undefined && {
+          overdueOriginalDate: occ.overdueOriginalDate,
+        }),
+        ...(occ.estimated && { estimated: true as const }),
       });
       transactionsByDate.set(occ.date, existing);
     }
@@ -668,7 +1088,7 @@ export function buildForecast(
 
   // Build data points
   const dataPoints: ForecastDataPoint[] = [];
-  let currentBalance = startingBalance;
+  let currentUnits = startingUnits;
   let lastAddedTime: number | null = null;
 
   // Iterate through each day in the forecast period
@@ -682,7 +1102,7 @@ export function buildForecast(
 
     // Apply transactions for this day
     for (const tx of dayTransactions) {
-      currentBalance += tx.amount;
+      currentUnits += toUnits(tx.amount, unitDecimals);
     }
 
     // Check if we should add a data point (based on granularity)
@@ -697,7 +1117,7 @@ export function buildForecast(
     if (shouldAddPoint || dayTransactions.length > 0 || isLastDay) {
       dataPoints.push({
         date: dateKey,
-        balance: Math.round(currentBalance * 100) / 100,
+        balance: unitsToPlaces(currentUnits, unitDecimals, lineCurrency),
         transactions: dayTransactions,
       });
       lastAddedTime = currentTime;
@@ -705,11 +1125,16 @@ export function buildForecast(
   }
 
   // A running balance cannot be partially right: report the whole series as
-  // unavailable when any leg of it needed a rate we do not have.
-  if (missingRateCurrencies.size > 0) {
-    return { points: [], missingCurrencies: [...missingRateCurrencies] };
+  // unavailable when any leg of it needed a rate we do not have, or an
+  // estimate nobody can work out yet.
+  if (missingRateCurrencies.size > 0 || unknownEstimates.size > 0) {
+    return {
+      points: [],
+      missingCurrencies: [...missingRateCurrencies],
+      unknownEstimates: [...unknownEstimates],
+    };
   }
-  return { points: dataPoints, missingCurrencies: [] };
+  return { points: dataPoints, missingCurrencies: [], unknownEstimates: [] };
 }
 
 /**
@@ -764,6 +1189,7 @@ export function buildMultiAccountForecast(
   // An unknown rate contributes nothing and sets the flag; the whole result is
   // withheld below rather than reported as a shorter, wrong series.
   const missingRateCurrencies = new Set<string>();
+  const unknownEstimates = new Set<string>();
   const conv = (amount: number, currencyCode: string): number => {
     if (!convertAmount) return amount;
     const converted = convertAmount(amount, currencyCode);
@@ -771,16 +1197,25 @@ export function buildMultiAccountForecast(
       missingRateCurrencies.add(currencyCode);
       return 0;
     }
-    return converted;
+    return roundMoney(converted, REPORTING_MONEY_DECIMALS);
   };
+  // Each line's precision: the reporting currency's four when converted, else
+  // its account currency's own (a coin wallet's eight).
+  const lineDecimals = (account: Account): number =>
+    convertAmount ? REPORTING_MONEY_DECIMALS : moneyDecimalsForCurrency(account.currencyCode);
+  const totalDecimals = convertAmount ? REPORTING_MONEY_DECIMALS : widestMoneyDecimals(targetAccounts);
 
-  const startingBalances = new Map<string, number>();
+  // Integer units of each line's precision, like the running balance below.
+  const startingBalances = new Map<string, bigint>();
   const flowsByAccount = new Map<string, Map<string, ForecastTransaction[]>>();
+
+  // Across every schedule, so bills on different accounts share one room.
+  const occurrencesById = generateAllOccurrences(normalized, today, endDate, { carryOverdue: true });
 
   for (const account of targetAccounts) {
     startingBalances.set(
       account.id,
-      conv(Number(account.currentBalance), account.currencyCode),
+      toUnits(conv(Number(account.currentBalance), account.currencyCode), lineDecimals(account)),
     );
 
     const byDate = new Map<string, ForecastTransaction[]>();
@@ -801,11 +1236,13 @@ export function buildMultiAccountForecast(
     }
 
     for (const { transaction, isInbound } of scheduledFlowsForAccount(normalized, account.id)) {
-      for (const occ of generateOccurrences(transaction, today, endDate)) {
+      for (const occ of occurrencesById.get(transaction.id) ?? []) {
         // Unresolved current FX for an investment occurrence withholds the whole
         // result (issue #1167), the same as a missing display-currency rate. The
         // flag is per-occurrence (F5-2).
-        if (occ.unknown) {
+        if (occ.unknown && occ.estimated) {
+          unknownEstimates.add(transaction.id);
+        } else if (occ.unknown) {
           missingRateCurrencies.add(
             transaction.investmentSecurity?.currencyCode ?? account.currencyCode,
           );
@@ -817,6 +1254,10 @@ export function buildMultiAccountForecast(
             : conv(isInbound ? -occ.amount : occ.amount, account.currencyCode),
           scheduledTransactionId: transaction.id,
           accountId: account.id,
+          ...(occ.overdueOriginalDate !== undefined && {
+            overdueOriginalDate: occ.overdueOriginalDate,
+          }),
+          ...(occ.estimated && { estimated: true as const }),
         });
       }
     }
@@ -824,7 +1265,7 @@ export function buildMultiAccountForecast(
     flowsByAccount.set(account.id, byDate);
   }
 
-  const running = new Map<string, number>(startingBalances);
+  const running = new Map<string, bigint>(startingBalances);
   const points: MultiAccountForecastPoint[] = [];
   let lastAddedTime: number | null = null;
 
@@ -838,9 +1279,13 @@ export function buildMultiAccountForecast(
     for (const account of targetAccounts) {
       const dayFlows = flowsByAccount.get(account.id)?.get(dateKey);
       if (!dayFlows) continue;
+      const decimals = lineDecimals(account);
       running.set(
         account.id,
-        dayFlows.reduce((sum, tx) => sum + tx.amount, running.get(account.id) ?? 0),
+        dayFlows.reduce(
+          (sum, tx) => sum + toUnits(tx.amount, decimals),
+          running.get(account.id) ?? BigInt(0),
+        ),
       );
       dayTransactions.push(...dayFlows);
     }
@@ -852,19 +1297,20 @@ export function buildMultiAccountForecast(
     const isLastDay = dayOffset === days;
 
     if (shouldAddPoint || dayTransactions.length > 0 || isLastDay) {
-      // Integer cents: the total is summed from the same rounded per-account
+      // Integer units: the total is summed from the same rounded per-account
       // figures the lines are drawn from, so the total on screen is exactly the
       // total of the lines on screen.
       const balances: Record<string, number> = {};
-      let totalCents = 0;
       for (const account of targetAccounts) {
-        const cents = Math.round((running.get(account.id) ?? 0) * 100);
-        balances[account.id] = cents / 100;
-        totalCents += cents;
+        balances[account.id] = unitsToPlaces(
+          running.get(account.id) ?? BigInt(0),
+          lineDecimals(account),
+          convertAmount ? undefined : account.currencyCode,
+        );
       }
       points.push({
         date: dateKey,
-        balance: totalCents / 100,
+        balance: sumMoney(Object.values(balances), totalDecimals),
         balances,
         transactions: dayTransactions,
       });
@@ -872,14 +1318,20 @@ export function buildMultiAccountForecast(
     }
   }
 
-  if (missingRateCurrencies.size > 0) {
-    return { points: [], series: [], missingCurrencies: [...missingRateCurrencies] };
+  if (missingRateCurrencies.size > 0 || unknownEstimates.size > 0) {
+    return {
+      points: [],
+      series: [],
+      missingCurrencies: [...missingRateCurrencies],
+      unknownEstimates: [...unknownEstimates],
+    };
   }
 
   return {
     points,
     series: targetAccounts.map(a => ({ accountId: a.id, name: a.name })),
     missingCurrencies: [],
+    unknownEstimates: [],
   };
 }
 
@@ -892,6 +1344,10 @@ export function buildMultiAccountForecast(
  *
  * @param excludeScheduledId - Omit this scheduled transaction (e.g. the one
  *   being posted) so the caller can add the user-edited amount separately.
+ *
+ * Occurrences already overdue are not carried onto today here, unlike the
+ * cash-flow forecasts: discussion #1784 agreed the rule for those two surfaces,
+ * and this figure is the posting dialog's "balance before".
  */
 export function getProjectedBalanceAtDate(
   account: Account,
@@ -917,12 +1373,13 @@ export function getProjectedBalanceAtDate(
   const endDate = parseLocalDate(targetDate);
   endDate.setHours(0, 0, 0, 0);
 
-  let balance = Number(account.currentBalance);
+  const decimals = moneyDecimalsForCurrency(account.currencyCode);
+  let units = toUnits(Number(account.currentBalance), decimals);
 
   // Add future-dated posted transactions for this account up to targetDate
   for (const ft of futureTransactions) {
     if (ft.accountId === account.id && ft.date > todayKey && ft.date <= targetDate) {
-      balance += ft.amount;
+      units += toUnits(ft.amount, decimals);
     }
   }
 
@@ -940,8 +1397,15 @@ export function getProjectedBalanceAtDate(
     relevant.filter(t => isTransfer(t) && t.transferAccountId === account.id && t.accountId !== account.id).map(t => t.id)
   );
 
+  // The excluded schedule is the one being posted: it neither counts here nor
+  // spends room the others would have had.
+  const occurrencesById = generateAllOccurrences(
+    scheduledTransactions.filter(t => !excludeScheduledId || t.id !== excludeScheduledId),
+    today,
+    endDate,
+  );
   for (const tx of relevant) {
-    const occurrences = generateOccurrences(tx, today, endDate);
+    const occurrences = occurrencesById.get(tx.id) ?? [];
     const isInbound = inboundTransferIds.has(tx.id);
     for (const occ of occurrences) {
       // An investment occurrence whose current FX rate is unknown (issue #1167)
@@ -950,17 +1414,42 @@ export function getProjectedBalanceAtDate(
       // stale/raw security-currency amount (or 0) into a projected balance the
       // user approves a posting against.
       if (occ.unknown) return null;
-      balance += isInbound ? -occ.amount : occ.amount;
+      units += toUnits(isInbound ? -occ.amount : occ.amount, decimals);
     }
   }
 
-  return Math.round(balance * 100) / 100;
+  return unitsToPlaces(units, decimals, account.currencyCode);
+}
+
+/**
+ * How many overdue occurrences a forecast point carries (discussion #1784), so
+ * the tooltip can say why the first day drops. Counted per occurrence -- a
+ * schedule three months behind is three payments -- and once per occurrence: a
+ * transfer between two charted accounts puts one entry on each line, and it is
+ * still one bill.
+ */
+export function countOverdueOccurrences(transactions: ForecastTransaction[]): number {
+  const keys = new Set<string>();
+  for (const tx of transactions) {
+    if (tx.overdueOriginalDate !== undefined) {
+      keys.add(`${tx.scheduledTransactionId}|${tx.overdueOriginalDate}`);
+    }
+  }
+  return keys.size;
+}
+
+/** The net of the overdue occurrences a forecast point carries, in `10^-decimals` units. */
+function overdueNetUnits(transactions: ForecastTransaction[], decimals: number): bigint {
+  return transactions.reduce(
+    (sum, tx) => (tx.overdueOriginalDate !== undefined ? sum + toUnits(tx.amount, decimals) : sum),
+    BigInt(0),
+  );
 }
 
 /**
  * Get summary statistics from forecast data
  */
-export function getForecastSummary(dataPoints: ForecastDataPoint[]) {
+export function getForecastSummary(dataPoints: ForecastDataPoint[], currencyCode?: string) {
   if (dataPoints.length === 0) {
     return {
       startingBalance: 0,
@@ -972,7 +1461,15 @@ export function getForecastSummary(dataPoints: ForecastDataPoint[]) {
   }
 
   const balances = dataPoints.map(d => d.balance);
-  const startingBalance = balances[0];
+  // "Starting" is where the forecast starts from, before the overdue occurrences
+  // it applies on its first day (discussion #1784): those are a projection, and
+  // the figure has to match the balance the account shows.
+  const decimals = moneyDecimalsForCurrency(currencyCode);
+  const startingBalance = unitsToPlaces(
+    toUnits(balances[0], decimals) - overdueNetUnits(dataPoints[0].transactions, decimals),
+    decimals,
+    currencyCode,
+  );
   const endingBalance = balances[balances.length - 1];
   const minBalance = Math.min(...balances);
   const maxBalance = Math.max(...balances);

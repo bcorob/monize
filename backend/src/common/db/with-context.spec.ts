@@ -1,7 +1,8 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { Logger } from "@nestjs/common";
-import { getRequestContext } from "../request-context";
+import { getRequestContext, getRequestTimezone } from "../request-context";
 import {
-  callSiteFromStack,
   withPreserveTimestamps,
   withSystemContext,
   withUserContext,
@@ -13,6 +14,20 @@ describe("withUserContext", () => {
   it("seeds a user context and returns the callback value", () => {
     const seen = withUserContext(VALID_UUID, () => getRequestContext());
     expect(seen).toEqual({ userId: VALID_UUID });
+  });
+
+  it("seeds an optional timezone, visible via getRequestTimezone", () => {
+    const seen = withUserContext(VALID_UUID, () => getRequestTimezone());
+    expect(seen).toBeUndefined();
+    const tz = withUserContext(
+      VALID_UUID,
+      () => getRequestTimezone(),
+      "Australia/Brisbane",
+    );
+    expect(tz).toBe("Australia/Brisbane");
+    // The key is omitted, not set to undefined.
+    const ctx = withUserContext(VALID_UUID, () => getRequestContext());
+    expect(ctx).not.toHaveProperty("timezone");
   });
 
   it("does not seed realUserId (withScopedDb defaults it to userId)", () => {
@@ -85,14 +100,21 @@ describe("withPreserveTimestamps", () => {
 });
 
 describe("withSystemContext", () => {
-  let logSpy: jest.SpyInstance;
+  let logSpies: jest.SpyInstance[];
 
   beforeEach(() => {
-    logSpy = jest.spyOn(Logger.prototype, "log").mockImplementation(() => {});
+    const proto = Logger.prototype;
+    logSpies = [
+      jest.spyOn(proto, "log").mockImplementation(() => {}),
+      jest.spyOn(proto, "debug").mockImplementation(() => {}),
+      jest.spyOn(proto, "verbose").mockImplementation(() => {}),
+      jest.spyOn(proto, "warn").mockImplementation(() => {}),
+      jest.spyOn(proto, "error").mockImplementation(() => {}),
+    ];
   });
 
   afterEach(() => {
-    logSpy.mockRestore();
+    logSpies.forEach((spy) => spy.mockRestore());
   });
 
   it("seeds a system context and returns the callback value", () => {
@@ -100,14 +122,18 @@ describe("withSystemContext", () => {
     expect(seen).toEqual({ system: true });
   });
 
-  it("logs each distinct call site once (rate-limited)", () => {
-    // Both calls share the same source line inside `invoke`, so the second is
-    // throttled by call site.
+  it("emits no log line, at any level", () => {
+    // The bypass audit log used to print once per call site per minute. With
+    // ~100 call sites, most of them on request and cron paths, that was the
+    // bulk of a quiet backend log. Every level is spied, because moving the
+    // line to `debug` would be the same flood: nothing in this app restricts
+    // Nest's log levels, so `debug` prints too.
     const invoke = () => withSystemContext(() => undefined);
     invoke();
     invoke();
-    expect(logSpy).toHaveBeenCalledTimes(1);
-    expect(logSpy.mock.calls[0][0]).toMatch(/RLS bypass \(withSystemContext\)/);
+    for (const spy of logSpies) {
+      expect(spy).not.toHaveBeenCalled();
+    }
   });
 
   it("propagates async return values within the scope", async () => {
@@ -117,40 +143,42 @@ describe("withSystemContext", () => {
   });
 });
 
-describe("callSiteFromStack", () => {
-  it("returns 'unknown' when the stack is absent", () => {
-    expect(callSiteFromStack(undefined)).toBe("unknown");
+describe("with-context.ts source", () => {
+  // A guard rather than only the behavioural test above: a logger reintroduced
+  // behind a condition the unit test does not enter (an env flag, a mode check)
+  // would leave that test green and the log back. The module has no reason to
+  // log at all -- it seeds AsyncLocalStorage and returns.
+  const SOURCE_PATH = join(__dirname, "with-context.ts");
+
+  // Comments are blanked before matching so this file's own prose about the
+  // removed logger cannot fail the scan it documents.
+  function blankComments(source: string): string {
+    return source
+      .replace(/\/\*[\s\S]*?\*\//g, (match) => match.replace(/[^\n]/g, " "))
+      .replace(
+        /(^|[^:])\/\/[^\n]*/g,
+        (match, prefix: string) =>
+          prefix + " ".repeat(match.length - prefix.length),
+      );
+  }
+
+  it("blanks comments while preserving line numbers", () => {
+    const blanked = blankComments("const a = 1; // Logger\n/* Logger */\nb;");
+    expect(blanked).not.toMatch(/Logger/);
+    expect(blanked.split("\n")).toHaveLength(3);
+    expect(blanked).toContain("const a = 1;");
   });
 
-  it("returns the first frame outside this module", () => {
-    const stack = [
-      "Error",
-      "    at resolveCallSite (/app/src/common/db/with-context.ts:60:12)",
-      "    at withSystemContext (/app/src/common/db/with-context.ts:45:3)",
-      "    at MyCron.run (/app/src/scheduled/my.service.ts:88:20)",
-    ].join("\n");
-    expect(callSiteFromStack(stack)).toBe(
-      "MyCron.run (/app/src/scheduled/my.service.ts:88:20)",
-    );
+  it("leaves a Logger outside a comment visible to the scan", () => {
+    expect(blankComments('const l = new Logger("X");')).toMatch(/Logger/);
   });
 
-  it("does not treat a with-context.spec.ts caller as an own frame", () => {
-    const stack = [
-      "Error",
-      "    at resolveCallSite (/app/src/common/db/with-context.ts:60:12)",
-      "    at invoke (/app/src/common/db/with-context.spec.ts:64:5)",
-    ].join("\n");
-    expect(callSiteFromStack(stack)).toBe(
-      "invoke (/app/src/common/db/with-context.spec.ts:64:5)",
-    );
-  });
-
-  it("returns 'unknown' when every frame is an own frame", () => {
-    const stack = [
-      "Error",
-      "    at resolveCallSite (/app/src/common/db/with-context.ts:60:12)",
-      "    at withSystemContext (/app/src/common/db/with-context.js:45:3)",
-    ].join("\n");
-    expect(callSiteFromStack(stack)).toBe("unknown");
+  it("instantiates no logger and captures no stack", () => {
+    const code = blankComments(readFileSync(SOURCE_PATH, "utf8"));
+    const offenders = code
+      .split("\n")
+      .map((text, index) => ({ line: index + 1, text: text.trim() }))
+      .filter(({ text }) => /\bLogger\b|new Error\(\)\.stack/.test(text));
+    expect(offenders).toEqual([]);
   });
 });

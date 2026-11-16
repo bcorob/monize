@@ -19,10 +19,10 @@ describe('SecurityPriceForm', () => {
 
     expect(screen.getByLabelText('Date')).toBeInTheDocument();
     expect(screen.getByLabelText('Close Price')).toBeInTheDocument();
-    expect(screen.getByLabelText('Open Price')).toBeInTheDocument();
-    expect(screen.getByLabelText('High Price')).toBeInTheDocument();
-    expect(screen.getByLabelText('Low Price')).toBeInTheDocument();
-    expect(screen.getByLabelText('Volume')).toBeInTheDocument();
+    expect(screen.getByLabelText('Open Price (optional)')).toBeInTheDocument();
+    expect(screen.getByLabelText('High Price (optional)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Low Price (optional)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Volume (optional)')).toBeInTheDocument();
   });
 
   it('shows Add Price button for new entry', () => {

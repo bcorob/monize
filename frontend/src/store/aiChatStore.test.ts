@@ -23,6 +23,23 @@ vi.mock('@/lib/ai', () => ({
   },
 }));
 
+const mockInvalidateTransactionRules = vi.fn();
+const mockNotifyUndoRedo = vi.fn();
+const mockClearAllCache = vi.fn();
+
+vi.mock('@/lib/transaction-rules-api', () => ({
+  invalidateTransactionRulesCache: () => mockInvalidateTransactionRules(),
+}));
+
+vi.mock('@/lib/undoRedoSignal', () => ({
+  notifyUndoRedo: () => mockNotifyUndoRedo(),
+}));
+
+vi.mock('@/lib/apiCache', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/apiCache')>()),
+  clearAllCache: () => mockClearAllCache(),
+}));
+
 vi.mock('@/lib/aiActionSignal', () => ({
   notifyAiAction: () => mockNotifyAiAction(),
 }));
@@ -1026,6 +1043,72 @@ describe('aiChatStore', () => {
       const assistant = streamWithPendingAction();
       await useAiChatStore.getState().confirmAction(assistant.id, 'a1');
       expect(mockNotifyAiAction).toHaveBeenCalledTimes(1);
+    });
+
+    describe('confirming a rule action', () => {
+      const ruleAction = (type: string) => ({
+        actionId: 'r1',
+        type: type as 'run_transaction_rule',
+        expiresAt: Date.now() + 60_000,
+        signature: 'sig',
+        descriptor: { type },
+        preview: {},
+      });
+
+      function streamRule(type: string) {
+        useAiChatStore.getState().submit('rules');
+        capturedCallbacks?.onEvent({ type: 'pending_action', action: ruleAction(type) });
+        capturedCallbacks?.onEvent({ type: 'content', text: 'Review the card.' });
+        capturedCallbacks?.onEvent({
+          type: 'done',
+          usage: { inputTokens: 1, outputTokens: 1, toolCalls: 1 },
+        });
+        return useAiChatStore.getState().messages.find((m) => m.role === 'assistant')!;
+      }
+
+      it.each(['create_transaction_rule', 'update_transaction_rule', 'delete_transaction_rule'])(
+        'drops the cached rule list after %s and does not touch the action history',
+        async (type) => {
+          mockConfirmAction.mockResolvedValueOnce({ type, id: 'rule-1' });
+          const assistant = streamRule(type);
+          await useAiChatStore.getState().confirmAction(assistant.id, 'r1');
+          expect(mockInvalidateTransactionRules).toHaveBeenCalledTimes(1);
+          expect(mockClearAllCache).toHaveBeenCalledTimes(1);
+          expect(mockNotifyUndoRedo).not.toHaveBeenCalled();
+          expect(mockNotifyAiAction).toHaveBeenCalledTimes(1);
+        },
+      );
+
+      it('drops every cache, the rule list and tells the action history after a run, and keeps the result', async () => {
+        const ruleRun = { changed: 3, skipped: [{ transactionId: 'tx-1', reason: 'split_category' }], historyId: 'h1' };
+        mockConfirmAction.mockResolvedValueOnce({ type: 'run_transaction_rule', id: 'rule-1', ruleRun });
+        const assistant = streamRule('run_transaction_rule');
+        await useAiChatStore.getState().confirmAction(assistant.id, 'r1');
+        expect(mockClearAllCache).toHaveBeenCalledTimes(1);
+        expect(mockInvalidateTransactionRules).toHaveBeenCalledTimes(1);
+        expect(mockNotifyUndoRedo).toHaveBeenCalledTimes(1);
+        const updated = useAiChatStore.getState().messages.find((m) => m.id === assistant.id)!;
+        expect(updated.pendingActions![0]).toMatchObject({ status: 'confirmed', resultRuleRun: ruleRun });
+      });
+
+      it('leaves the caches alone when a rule action is refused', async () => {
+        mockConfirmAction.mockRejectedValueOnce({ response: { data: { message: 'Rule changed' } } });
+        const assistant = streamRule('update_transaction_rule');
+        await useAiChatStore.getState().confirmAction(assistant.id, 'r1');
+        expect(mockInvalidateTransactionRules).not.toHaveBeenCalled();
+        expect(mockClearAllCache).not.toHaveBeenCalled();
+        expect(mockNotifyUndoRedo).not.toHaveBeenCalled();
+        const updated = useAiChatStore.getState().messages.find((m) => m.id === assistant.id)!;
+        expect(updated.pendingActions![0]).toMatchObject({ status: 'error', errorMessage: 'Rule changed' });
+      });
+
+      it('does not touch the rule list for any other action', async () => {
+        mockConfirmAction.mockResolvedValueOnce({ type: 'create_transaction', id: 'tx-1' });
+        const assistant = streamWithPendingAction();
+        await useAiChatStore.getState().confirmAction(assistant.id, 'a1');
+        expect(mockClearAllCache).toHaveBeenCalledTimes(1);
+        expect(mockInvalidateTransactionRules).not.toHaveBeenCalled();
+      });
     });
 
     it('confirmAction does not notify list pages when the write fails', async () => {

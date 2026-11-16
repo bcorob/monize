@@ -76,7 +76,10 @@
     "collapseAria": "Скрыть информацию о счёте",
     "showAccountNumber": "Показать номер счёта",
     "hideAccountNumber": "Скрыть номер счёта",
-    "show": "Показать информацию о счёте"
+    "show": "Показать информацию о счёте",
+    "nextInstallment": "Следующий платёж",
+    "finalPayment": "Последний платёж",
+    "amountDueOn": "{amount}, срок {date}"
   },
   "page": {
     "title": "Проводки",
@@ -121,13 +124,19 @@
       "balance": "Остаток",
       "attachments": "Вложения",
       "status": "Статус",
+      "statusHelp": "Не согласована, Очищена или Согласована — это этапы сверки с банковской выпиской. Аннулирована отменяет транзакцию, но сохраняет запись о ней; она больше не изменяет баланс счёта.",
       "actions": "Действия"
+    },
+    "sort": {
+      "balanceHiddenHint": "Отсортируйте по дате, чтобы увидеть текущий баланс",
+      "stripLabel": "Сортировать по"
     },
     "dateDisplay": {
       "toggleLabel": "Скрыть год",
       "toggleTitle": "Убрать год из дат, чтобы поместилось больше имени получателя"
     },
     "attachmentsCount": "{count, plural, one {# вложение} few {# вложения} many {# вложений} other {# вложения}}",
+    "warrantiesCount": "{count, plural, one {# гарантия} few {# гарантии} many {# гарантий} other {# гарантии}}",
     "today": "Сегодня",
     "export": {
       "button": "Экспорт",
@@ -165,7 +174,6 @@
     },
     "row": {
       "viewPayeeTitle": "Показать сведения о {name}",
-      "ref": "Реф.: {number}",
       "investmentLabel": "Инвестиция",
       "linkedInvestmentTitle": "Просмотр в разделе Инвестиции",
       "filterByDate": "Фильтр по дате \"{date}\"",
@@ -212,13 +220,13 @@
       "title": "Фильтры",
       "clear": "Сбросить",
       "hide": "Скрыть",
-      "show": "Показать"
+      "show": "Показать фильтры"
     },
     "accounts": {
-      "label": "Показать счета:",
-      "all": "Все",
-      "active": "Активные",
-      "closed": "Закрытые"
+      "label": "Показать счета",
+      "allCount": "Все ({count})",
+      "activeCount": "Активные ({count})",
+      "closedCount": "Закрытые ({count})"
     },
     "fields": {
       "accounts": "Счета",
@@ -251,7 +259,7 @@
       "statuses": "Все статусы",
       "amountMin": "Мин.",
       "amountMax": "Макс.",
-      "search": "Поиск получателя, категории, суммы, тега, описания, реф. номера...",
+      "search": "Поиск, или попробуйте #10 или payee:costco",
       "tagKeyValue": "например, usa"
     },
     "tagKeyNone": "Любой (без фильтра по ключу)",
@@ -312,7 +320,7 @@
     },
     "modal": {
       "title": "Массовое обновление проводок",
-      "subtitle": "Обновить {count, plural, one {# выбранную проводку} other {# выбранных проводок}}. Отметьте поля, которые хотите изменить.",
+      "help": "Отметьте поля, которые хотите изменить.",
       "submitLabel": "Обновить {count, plural, one {# проводку} other {# проводок}}",
       "payee": "Получатель",
       "category": "Категория",
@@ -360,8 +368,9 @@
       "fromAccount": "Со счёта",
       "toAccount": "На счёт",
       "transferAmount": "Сумма перевода",
-      "transferAmountWithCurrency": "Сумма перевода ({currency})",
-      "amountReceived": "Полученная сумма ({currency})",
+      "amountReceivedLabel": "Полученная сумма",
+      "transferAmountInCurrency": "Сумма перевода ({currency})",
+      "amountReceivedInCurrency": "Полученная сумма ({currency})",
       "payeeOptional": "Получатель (необязательно)",
       "categoryOptional": "Категория (необязательно)"
     },
@@ -391,10 +400,16 @@
     "submitCreateAndNewDescription": "Сохранить и начать следующую с тем же счётом и датой.",
     "submitOptions": "Выберите, что произойдёт после создания",
     "submitUpdate": "Обновить {mode}",
+    "submitConvert": "Преобразовать в {mode}",
     "reconciledConfirm": {
       "title": "Изменить согласованную транзакцию?",
       "message": "Эта транзакция согласована. Её изменение повлияет на завершённое согласование. Всё равно сохранить изменения?",
       "confirm": "Сохранить изменения"
+    },
+    "counterpartConfirm": {
+      "title": "Преобразовать этот перевод?",
+      "message": "Другая сторона этого перевода уже проведена или сверена. Преобразование в транзакцию удалит эту запись с другого счёта и изменит баланс, сверенный с выпиской. Продолжить?",
+      "confirm": "Всё равно преобразовать"
     },
     "modeLabel": {
       "transfer": "Перевод",
@@ -424,6 +439,8 @@
       "destinationRequired": "Выберите счёт назначения",
       "sameAccount": "Счёт источника и счёт назначения должны отличаться",
       "negativeTransfer": "Сумма перевода не должна быть отрицательной",
+      "convertedToTransfer": "Преобразовано в перевод",
+      "convertedToTransaction": "Преобразовано в транзакцию",
       "payeeCreated": "Получатель \"{name}\" создан",
       "payeeCreateFailed": "Не удалось создать получателя",
       "payeeReactivated": "Получатель \"{name}\" реактивирован",
@@ -458,10 +475,20 @@
       },
       "feeCaption": "Включает комиссию за зарубежную операцию {percent}% ({fee})."
     },
-    "jointSplitDisabled": "Разделёнными операциями на совместном счёте может управлять только владелец"
+    "jointSplitDisabled": "Разделёнными операциями на совместном счёте может управлять только владелец",
+    "warranties": {
+      "title": "Гарантии",
+      "add": "Добавить гарантию",
+      "expires": "Истекает {date}",
+      "loading": "Загрузка гарантий",
+      "loadError": "Не удалось загрузить гарантии для этой проводки.",
+      "empty": "Гарантий пока нет"
+    },
+    "conversionLockedNote": "Этот перевод относится к разделённой транзакции или к счёту другого владельца, поэтому здесь он может остаться только переводом. Измените его через разделение или удалите и создайте нужную запись."
   },
   "splitEditor": {
     "header": "Детали разбивки",
+    "headerTooltip": "Каждая строка может быть категорией, переводом на другой счёт или инвестицией. Сумма строк должна совпадать с общей суммой транзакции; функции «Распределить равномерно» и «Распределить пропорционально» распределяют остаток за вас.",
     "distributeProportionally": "Распределить пропорционально",
     "distributeProportionallyTitle": "Распределить оставшуюся сумму пропорционально на основе суммы каждой части",
     "distributeEvenly": "Распределить равномерно",
@@ -521,7 +548,7 @@
     "quantityPlaceholder": "Количество",
     "pricePlaceholder": "Цена",
     "commissionPlaceholder": "Комиссия",
-    "amountPlaceholder": "Сумма ({currency})",
+    "amountOnlyPlaceholder": "Сумма",
     "ratePlaceholder": "{to} за 1 {from}",
     "ariaRate": "Курс обмена ({to} за 1 {from})",
     "rateHint": "Количество, цена и комиссия указаны в {from}; этот курс переводит денежный результат в {to}.",
@@ -551,6 +578,7 @@
       "total": "Итого",
       "transactions": "Проводки",
       "tooltip": "{count, plural, one {# проводка} other {# проводок}}",
+      "partialNote": "Для некоторых сумм нет обменного курса, и они не включены в эти итоги.",
       "quarterLabel": "{quarter} кв. {year}",
       "quarterTick": "{quarter} кв. {year}",
       "granularityLabel": "Группировка",
@@ -575,6 +603,11 @@
       "log": "Лог",
       "autoTitle": "Авто ({scale})",
       "scaleTitle": "Масштаб {label}"
+    },
+    "collapse": {
+      "hide": "Скрыть график",
+      "show": "Показать график",
+      "hidden": "График скрыт"
     }
   },
   "toasts": {
@@ -597,5 +630,71 @@
     "title": "Расходы по {key}",
     "other": "Прочее",
     "noData": "Нет помеченных тегами расходов для разбивки по этому ключу."
+  },
+  "searchSyntax": {
+    "open": "Синтаксис поиска",
+    "title": "Синтаксис поиска",
+    "fields": "Поля: payee, memo, cat, tag, account, ref, amount, date, status, is, has. Выберите пример, чтобы вставить его в поле поиска.",
+    "examples": {
+      "allWords": "Каждое слово где-то встречается",
+      "phrase": "Именно эта фраза",
+      "exclude": "Исключить всё, что совпадает с refund",
+      "fieldContains": "Получатель содержит costco",
+      "fieldExact": "Получатель точно Costco",
+      "reference": "Номер чека или ссылки ровно 10",
+      "wildcard": "Ссылка начинается с 10",
+      "amountOver": "Сумма больше 100",
+      "amountRange": "Сумма от 50 до 100",
+      "datePeriod": "Любой день марта 2026",
+      "isSplit": "Разделённые операции",
+      "hasAttachment": "Есть вложение",
+      "hasWarranty": "Есть гарантия"
+    }
+  },
+  "searchInterpretation": {
+    "label": "Поиск:",
+    "negated": "не {phrase}",
+    "malformed": "{raw} (не распознано, искали как текст)",
+    "empty": "{raw} (пусто, пропущено)",
+    "status": "Статус: {value}",
+    "any": "«{value}» в любом поле",
+    "fields": {
+      "payee": "Получатель",
+      "memo": "Заметка",
+      "cat": "Категория",
+      "tag": "Метка",
+      "account": "Счёт",
+      "ref": "Ссылка",
+      "amount": "Сумма",
+      "date": "Дата",
+      "status": "Статус",
+      "is": "Тип",
+      "has": "Есть"
+    },
+    "ops": {
+      "contains": "{field} содержит «{value}»",
+      "exact": "{field}: «{value}»",
+      "glob": "{field} соответствует «{value}»",
+      "eq": "{field}: {value}",
+      "gt": "{field} больше {value}",
+      "gte": "{field} от {value}",
+      "lt": "{field} меньше {value}",
+      "lte": "{field} до {value}",
+      "between": "{field} от {value} до {valueTo}"
+    },
+    "enum": {
+      "is": {
+        "transfer": "Переводы",
+        "split": "Разделённые операции",
+        "uncategorized": "Без категории"
+      },
+      "has": {
+        "attachment": "Есть вложение",
+        "warranty": "Есть гарантия",
+        "ref": "Есть номер ссылки",
+        "memo": "Есть заметка",
+        "tag": "Есть метка"
+      }
+    }
   }
 }

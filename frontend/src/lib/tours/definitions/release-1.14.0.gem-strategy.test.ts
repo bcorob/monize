@@ -50,7 +50,12 @@ describe('GEM strategy release tour', () => {
     // through it, rather than only on `requiresData`, is what fails if the tour
     // is gated later: a user with no accounts and no securities still sees it,
     // and it is listed before the lookups have even resolved.
-    const nothing = { transactionEntry: false, securitiesExist: false };
+    const nothing = {
+      transactionEntry: false,
+      accountsExist: false,
+      securitiesExist: false,
+      ownerView: true,
+    };
     expect(isTourOfferable(tour, nothing)).toBe(true);
     expect(isTourOfferable(tour, null)).toBe(true);
   });

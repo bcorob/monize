@@ -26,7 +26,7 @@ import {
  *
  * A mocked query cannot demonstrate a property of the schema, the same way a
  * mocked filesystem cannot demonstrate a property of a directory
- * (`backend/CLAUDE.md`). This scan can: it reads the schema and the source, and
+ * (`AGENTS.md`). This scan can: it reads the schema and the source, and
  * needs no database.
  *
  * It is deliberately a scan rather than a case for that one query -- the class

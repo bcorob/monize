@@ -255,7 +255,7 @@ interface AccountBalancesAsOfResponse {
 
 The response echoes `asOfDate` because the client offers actions beside it: a
 payload without the date that produced it cannot be told from the previous one
-(`frontend/CLAUDE.md`, "Asynchronous data carries the request that produced it").
+(`docs/frontend/api-and-cache.md`, "Asynchronous data carries the request that produced it").
 
 ## 6. Numerical examples
 

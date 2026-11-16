@@ -4,19 +4,29 @@
     "subtitle": "AI-powered analysis of your spending patterns and anomalies"
   },
   "list": {
-    "lastUpdated": "Last updated: {date} {time}",
     "refreshButton": "Refresh Insights",
-    "generating": "Generating...",
+    "refreshAge": "({time})",
+    "summary": {
+      "active": "Active Insights",
+      "alerts": "Alerts",
+      "warnings": "Warnings"
+    },
     "allTypes": "All Types",
-    "allSeverities": "All Severities",
+    "typeFilterLabel": "Type",
+    "severityFilterLabel": "Severity",
+    "severityFilter": {
+      "all": "All ({count})",
+      "alert": "Alerts ({count})",
+      "warning": "Warnings ({count})",
+      "info": "Info ({count})"
+    },
     "showDismissed": "Show dismissed",
     "emptyNoInsights": "No insights generated yet. Click \"Refresh Insights\" to analyze your spending patterns.",
     "emptyFiltered": "No insights match your current filters.",
     "generateButton": "Generate Insights",
-    "alertCount": "{count, plural, one {# alert} other {# alerts}}",
-    "warningCount": "{count, plural, one {# warning} other {# warnings}}",
     "errorLoadFailed": "Failed to load insights. Please try again.",
     "errorGenerateFailed": "Failed to generate insights. Make sure you have an AI provider configured.",
+    "errorDismissFailed": "Failed to dismiss the insight. Please try again.",
     "errorTimeout": "Insight generation is taking longer than expected. Please wait or refresh the page."
   },
   "card": {

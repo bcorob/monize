@@ -17,10 +17,12 @@ import {
  * providers was left unset by every deployment that configured none, and the
  * backup password capture silently had nowhere to store its copy.
  *
- * The key is `ENCRYPTION_KEY`. It is not required to boot in this release --
- * `logEncryptionKeyStatus` warns on every start that it will be -- but a
- * deployment without one stores no secret at all, so every method here refuses
- * rather than inventing a fallback. `AI_ENCRYPTION_KEY` is still read, and
+ * The key is `ENCRYPTION_KEY`, and the server refuses to boot without one
+ * (`checkClusterBoot`). The `isConfigured()` answer and the refusals below are
+ * therefore unreachable in a booted server; they stay because specs, scripts
+ * and other entry points construct this service outside that path, and a
+ * method that returned ciphertext-shaped garbage there would be worse than one
+ * that refuses. `AI_ENCRYPTION_KEY` is still read, and
  * still wins where both are set, so an existing deployment takes the upgrade
  * without re-keying a single column.
  */

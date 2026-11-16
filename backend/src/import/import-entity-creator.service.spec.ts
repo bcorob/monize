@@ -6,6 +6,7 @@ import {
 } from "../accounts/entities/account.entity";
 import { Category } from "../categories/entities/category.entity";
 import { Security } from "../securities/entities/security.entity";
+import { currencyKindRows } from "../test-helpers/currency-kind-testing";
 import { ImportResultDto, CategoryMappingDto } from "./dto/import.dto";
 
 describe("ImportEntityCreatorService", () => {
@@ -23,6 +24,7 @@ describe("ImportEntityCreatorService", () => {
     return {
       imported: 0,
       skipped: 0,
+      skippedRows: [],
       errors: 0,
       errorMessages: [],
       categoriesCreated: 0,
@@ -52,6 +54,9 @@ describe("ImportEntityCreatorService", () => {
 
   beforeEach(() => {
     manager = {
+      getRepository: jest.fn(() => {
+        throw new Error("unexpected repository");
+      }),
       findOne: jest.fn(),
       create: jest.fn().mockImplementation((_entity, data) => ({
         ...data,
@@ -64,7 +69,10 @@ describe("ImportEntityCreatorService", () => {
       // Categories are created with `INSERT ... ON CONFLICT DO NOTHING RETURNING
       // id` so a lost race adopts the existing row instead of aborting the whole
       // import transaction. Default to winning; the loser path is asserted below.
-      query: jest.fn(async (sql: string) => {
+      // The `currencies` kind read (INV-CRYPTO-001) answers BTC as a coin.
+      query: jest.fn(async (sql: string, params?: unknown[]) => {
+        const kindRows = currencyKindRows(sql, params);
+        if (kindRows) return kindRows;
         if (
           typeof sql !== "string" ||
           !sql.includes("INSERT INTO categories")
@@ -334,6 +342,88 @@ describe("ImportEntityCreatorService", () => {
       expect(categoryMap.get("Taxes:CPP")).toBe("cat-3");
     });
 
+    it("creates every level of a colon-delimited parent path", async () => {
+      // A three-level QIF category ("Housing:Mortgage:Interest") used to land
+      // as a top-level category literally named "Housing:Mortgage".
+      manager.findOne.mockResolvedValue(null);
+      categoryIdQueue.push("housing", "mortgage", "interest", "principal");
+
+      const categoryMap = new Map<string, string | null>();
+      const categoriesToCreate: CategoryMappingDto[] = [
+        {
+          originalName: "Housing:Mortgage:Interest",
+          createNew: "Interest",
+          createNewParentCategoryName: "Housing:Mortgage",
+        },
+        {
+          originalName: "Housing:Mortgage:Principal",
+          createNew: "Principal",
+          createNewParentCategoryName: "Housing: Mortgage",
+        },
+      ];
+
+      await service.createCategories(
+        manager as any,
+        userId,
+        categoriesToCreate,
+        categoryMap,
+        importResult,
+      );
+
+      const inserts = manager.query.mock.calls
+        .filter((call: unknown[]) =>
+          String(call[0]).includes("INSERT INTO categories"),
+        )
+        .map((call: unknown[]) => call[1]);
+      expect(inserts).toEqual([
+        [userId, "Housing", null],
+        [userId, "Mortgage", "housing"],
+        [userId, "Interest", "mortgage"],
+        [userId, "Principal", "mortgage"],
+      ]);
+      expect(categoryMap.get("Housing:Mortgage:Interest")).toBe("interest");
+      expect(categoryMap.get("Housing:Mortgage:Principal")).toBe("principal");
+      expect(importResult.categoriesCreated).toBe(4);
+    });
+
+    it("reuses the existing levels of a parent path and creates the rest", async () => {
+      manager.findOne.mockImplementation((_entity: any, opts: any) => {
+        const where = opts?.where ?? {};
+        if (where.name === "Housing" && typeof where.parentId !== "string") {
+          return Promise.resolve({ id: "housing-existing", name: "Housing" });
+        }
+        return Promise.resolve(null);
+      });
+      categoryIdQueue.push("mortgage-new", "interest-new");
+
+      const categoryMap = new Map<string, string | null>();
+      await service.createCategories(
+        manager as any,
+        userId,
+        [
+          {
+            originalName: "Housing:Mortgage:Interest",
+            createNew: "Interest",
+            createNewParentCategoryName: "Housing:Mortgage",
+          },
+        ],
+        categoryMap,
+        importResult,
+      );
+
+      const inserts = manager.query.mock.calls
+        .filter((call: unknown[]) =>
+          String(call[0]).includes("INSERT INTO categories"),
+        )
+        .map((call: unknown[]) => call[1]);
+      expect(inserts).toEqual([
+        [userId, "Mortgage", "housing-existing"],
+        [userId, "Interest", "mortgage-new"],
+      ]);
+      expect(categoryMap.get("Housing:Mortgage:Interest")).toBe("interest-new");
+      expect(importResult.categoriesCreated).toBe(2);
+    });
+
     it("should prefer parentCategoryId over createNewParentCategoryName", async () => {
       manager.findOne.mockResolvedValue(null);
       categoryIdQueue.push("child-id");
@@ -399,6 +489,57 @@ describe("ImportEntityCreatorService", () => {
 
   describe("createAccounts", () => {
     const account = makeAccount();
+
+    it.each([
+      ["a CRYPTO account in CAD", "CRYPTO", "CAD"],
+      ["a CHEQUING account in BTC", "CHEQUING", "BTC"],
+      ["an INVESTMENT pair in BTC", "INVESTMENT", "BTC"],
+    ])(
+      "refuses %s before writing it (INV-CRYPTO-001)",
+      async (_label, accountType, currencyCode) => {
+        manager.findOne.mockResolvedValue(null);
+        await expect(
+          service.createAccounts(
+            manager as any,
+            userId,
+            [
+              {
+                originalName: "Wallet",
+                createNew: "Wallet",
+                accountType,
+                currencyCode,
+              },
+            ],
+            new Map(),
+            account,
+            importResult,
+          ),
+        ).rejects.toThrow(/currency, which a .* account cannot hold/);
+        expect(manager.save).not.toHaveBeenCalled();
+      },
+    );
+
+    it("creates a CRYPTO account in BTC", async () => {
+      manager.findOne.mockResolvedValue(null);
+      manager.save.mockResolvedValue({ id: "wallet-1" });
+      const accountMap = new Map<string, string | null>();
+      await service.createAccounts(
+        manager as any,
+        userId,
+        [
+          {
+            originalName: "Wallet",
+            createNew: "Wallet",
+            accountType: "CRYPTO",
+            currencyCode: "BTC",
+          },
+        ],
+        accountMap,
+        account,
+        importResult,
+      );
+      expect(accountMap.get("Wallet")).toBe("wallet-1");
+    });
 
     it("should create a regular (non-investment) account", async () => {
       manager.findOne.mockResolvedValue(null);
@@ -691,6 +832,20 @@ describe("ImportEntityCreatorService", () => {
   describe("createLoanAccounts", () => {
     const account = makeAccount();
 
+    it("refuses a loan created from a BTC account's import before writing it (INV-CRYPTO-001)", async () => {
+      await expect(
+        service.createLoanAccounts(
+          manager as any,
+          userId,
+          [{ originalName: "Car loan", createNewLoan: "Car loan" } as any],
+          new Map(),
+          makeAccount({ accountType: AccountType.CRYPTO, currencyCode: "BTC" }),
+          importResult,
+        ),
+      ).rejects.toThrow(/BTC is a CRYPTO currency, which a LOAN account/);
+      expect(manager.save).not.toHaveBeenCalled();
+    });
+
     it("should create a new loan account", async () => {
       const savedLoan = { id: "loan-1" };
       manager.save.mockResolvedValue(savedLoan);
@@ -837,6 +992,29 @@ describe("ImportEntityCreatorService", () => {
 
   describe("createSecurities", () => {
     const account = makeAccount();
+
+    it("refuses a security in a CRYPTO currency before writing it (INV-CRYPTO-001)", async () => {
+      manager.findOne.mockResolvedValue(null);
+      await expect(
+        service.createSecurities(
+          manager as any,
+          userId,
+          [
+            {
+              originalName: "Bitcoin",
+              createNew: "BTC-CAD",
+              securityName: "Bitcoin",
+              securityType: "CRYPTO",
+              currencyCode: "BTC",
+            },
+          ],
+          new Map(),
+          account,
+          importResult,
+        ),
+      ).rejects.toThrow(/BTC is a cryptocurrency/);
+      expect(manager.save).not.toHaveBeenCalled();
+    });
 
     it("should create a new security", async () => {
       manager.findOne.mockResolvedValue(null);
@@ -1055,65 +1233,79 @@ describe("ImportEntityCreatorService", () => {
   });
 
   describe("applyOpeningBalance", () => {
-    it("should update account balances correctly", async () => {
+    // The opening balance moves current_balance by new - old, both read under
+    // the balance-write lock, as one atomic delta at 4dp; the caller's
+    // `account` snapshot supplies only the owner (A26-M13).
+    function lockedOpening(opening: string | null, decimalPlaces = 2) {
+      manager.query.mockImplementation(async (sql: string) =>
+        sql.includes("SELECT a.opening_balance")
+          ? [{ opening_balance: opening, decimal_places: decimalPlaces }]
+          : [],
+      );
+    }
+    const deltaUpdate = () =>
+      manager.query.mock.calls.find(([sql]: [string]) =>
+        sql.includes("SET opening_balance"),
+      );
+
+    it("moves the balance by the change from the locked opening balance, not the snapshot", async () => {
+      lockedOpening("100");
       const account = makeAccount({
-        openingBalance: 100,
-        currentBalance: 500,
+        userId: "user-1",
+        openingBalance: 999,
+        currentBalance: 999,
       } as any);
 
       await service.applyOpeningBalance(manager as any, "acc-1", account, 250);
 
-      expect(manager.update).toHaveBeenCalledWith(Account, "acc-1", {
-        openingBalance: 250,
-        currentBalance: 650,
-      });
+      const [sql, params] = deltaUpdate();
+      expect(sql).toContain(
+        "current_balance = CAST(current_balance AS numeric) + $4",
+      );
+      expect(params).toEqual(["acc-1", "user-1", 250, 150]);
+      expect(manager.update).not.toHaveBeenCalled();
     });
 
-    it("should handle zero opening balance", async () => {
-      const account = makeAccount({
-        openingBalance: 0,
-        currentBalance: 300,
-      } as any);
-
-      await service.applyOpeningBalance(manager as any, "acc-1", account, 100);
-
-      expect(manager.update).toHaveBeenCalledWith(Account, "acc-1", {
-        openingBalance: 100,
-        currentBalance: 400,
-      });
-    });
-
-    it("should handle negative opening balance", async () => {
-      const account = makeAccount({
-        openingBalance: 0,
-        currentBalance: 1000,
-      } as any);
+    it("handles a negative opening balance", async () => {
+      lockedOpening("0");
+      const account = makeAccount({ userId: "user-1" } as any);
 
       await service.applyOpeningBalance(manager as any, "acc-1", account, -500);
 
-      expect(manager.update).toHaveBeenCalledWith(Account, "acc-1", {
-        openingBalance: -500,
-        currentBalance: 500,
-      });
+      expect(deltaUpdate()[1]).toEqual(["acc-1", "user-1", -500, -500]);
     });
 
-    it("should round to two decimal places", async () => {
-      const account = makeAccount({
-        openingBalance: 0,
-        currentBalance: 0,
-      } as any);
+    it("keeps four decimals", async () => {
+      lockedOpening(null);
+      const account = makeAccount({ userId: "user-1" } as any);
 
       await service.applyOpeningBalance(
         manager as any,
         "acc-1",
         account,
-        100.555,
+        100.1234,
       );
 
-      expect(manager.update).toHaveBeenCalledWith(Account, "acc-1", {
-        openingBalance: 100.56,
-        currentBalance: 100.56,
-      });
+      expect(deltaUpdate()[1]).toEqual(["acc-1", "user-1", 100.1234, 100.1234]);
+    });
+
+    it("keeps a coin's eight places when the account's currency carries them", async () => {
+      lockedOpening("0.00000001", 8);
+      const account = makeAccount({ userId: "user-1" } as any);
+
+      await service.applyOpeningBalance(
+        manager as any,
+        "acc-1",
+        account,
+        0.00002501,
+      );
+
+      expect(deltaUpdate()[1]).toEqual([
+        "acc-1",
+        "user-1",
+        0.00002501,
+        0.000025,
+      ]);
     });
   });
 });

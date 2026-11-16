@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import apiClient from './api';
 import { mnyImportApi } from './import-mny';
+import { setCache, getCached, clearAllCache } from './apiCache';
 
 vi.mock('./api', () => ({
   default: {
@@ -96,5 +97,27 @@ describe('mnyImportApi', () => {
       expect(url).toBe('/import/mny/jobs/job-1');
       expect(config?.timeout).toBeLessThanOrEqual(10_000);
     });
+  });
+});
+
+describe('mnyImportApi.getJob cache scope (INV-CACHE-001)', () => {
+  const KEYS = ['categories:all', 'payees:all', 'tags:all', 'scheduled:all'];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearAllCache();
+    for (const key of KEYS) setCache(key, [{ id: key }]);
+  });
+
+  it.each(['completed', 'failed'])('a %s job drops the reference-data caches', async (status) => {
+    mockedClient.get.mockResolvedValue({ data: { status } } as never);
+    await mnyImportApi.getJob('job-1');
+    for (const key of KEYS) expect(getCached(key)).toBeUndefined();
+  });
+
+  it('a running job leaves the caches', async () => {
+    mockedClient.get.mockResolvedValue({ data: { status: 'running' } } as never);
+    await mnyImportApi.getJob('job-1');
+    for (const key of KEYS) expect(getCached(key)).toEqual([{ id: key }]);
   });
 });

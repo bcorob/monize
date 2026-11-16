@@ -42,6 +42,7 @@ vi.mock('@/lib/errors', () => ({
 
 import { userSettingsApi } from '@/lib/user-settings';
 import { investmentsApi } from '@/lib/investments';
+import { exchangeRatesApi } from '@/lib/exchange-rates';
 import toast from 'react-hot-toast';
 
 const mockPreferences: UserPreferences = {
@@ -53,7 +54,6 @@ const mockPreferences: UserPreferences = {
   colorTheme: 'default',
   defaultCurrency: 'CAD',
   notificationEmail: false,
-  notificationBrowser: false,
   twoFactorEnabled: false,
   gettingStartedDismissed: false,
   weekStartsOn: 1,
@@ -64,13 +64,17 @@ const mockPreferences: UserPreferences = {
   favouriteReportIds: [],
   dashboardWidgets: [],
   dashboardWidgetConfig: {},
+  hiddenTableColumns: {},
   preferredExchanges: [],
     defaultQuoteProvider: 'yahoo' as const,
     recentTransactionsLimit: 5,
   aiBubbleEnabled: false,
+  aiTriviaEnabled: true,
   showWhatsNew: true,
   lockReconciledTransactions: false,
+  payeeContactLookupEnabled: false,
   language: 'en',
+  defaultMapProvider: 'device',
   createdAt: '2024-01-01T00:00:00Z',
   updatedAt: '2024-01-01T00:00:00Z',
 };
@@ -93,7 +97,9 @@ describe('PreferencesSection', () => {
     expect(screen.getByText('Date Format')).toBeInTheDocument();
     expect(screen.getByText('Number Format')).toBeInTheDocument();
     expect(screen.getByText('Timezone')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Save Preferences' })).toBeInTheDocument();
+    // Every control here persists on change, so there is no Save button and
+    // no half-saved state between a change and a click.
+    expect(screen.queryByRole('button', { name: 'Save Preferences' })).toBeNull();
   });
 
   it('shows a help tooltip explaining the Show Create Date toggle', async () => {
@@ -115,12 +121,14 @@ describe('PreferencesSection', () => {
     });
   });
 
-  it('calls updatePreferences and shows success toast on save', async () => {
+  it('saves a change as it is made, and says so', async () => {
     (userSettingsApi.updatePreferences as ReturnType<typeof vi.fn>).mockResolvedValue(mockPreferences);
 
     render(<PreferencesSection preferences={mockPreferences} onPreferencesUpdated={mockOnPreferencesUpdated} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save Preferences' }));
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Week starts on'), { target: { value: '0' } });
+    });
 
     await waitFor(() => {
       expect(userSettingsApi.updatePreferences).toHaveBeenCalled();
@@ -128,16 +136,26 @@ describe('PreferencesSection', () => {
     });
   });
 
-  it('shows error toast when save fails', async () => {
+  /**
+   * An optimistic write has to be able to undo itself: the control moved before
+   * the server agreed, so a refusal that left it showing the new value would
+   * report a preference the account does not hold.
+   */
+  it('puts the control back and says so when the save fails', async () => {
     (userSettingsApi.updatePreferences as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('fail'));
 
     render(<PreferencesSection preferences={mockPreferences} onPreferencesUpdated={mockOnPreferencesUpdated} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save Preferences' }));
+    const weekStart = screen.getByLabelText('Week starts on') as HTMLSelectElement;
+    await act(async () => {
+      fireEvent.change(weekStart, { target: { value: '0' } });
+    });
+    await act(async () => {}); // drain the rejection handler
 
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith('Failed to save preferences');
     });
+    await waitFor(() => expect(weekStart.value).toBe('1'));
   });
 
   it('sends updated recent-transactions limit when changed and saved', async () => {
@@ -148,7 +166,6 @@ describe('PreferencesSection', () => {
     fireEvent.change(screen.getByLabelText('Recent transactions in quick-fill'), {
       target: { value: '10' },
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Save Preferences' }));
 
     await waitFor(() => {
       expect(userSettingsApi.updatePreferences).toHaveBeenCalledWith(
@@ -175,7 +192,6 @@ describe('PreferencesSection', () => {
       render(<PreferencesSection preferences={mockPreferences} onPreferencesUpdated={mockOnPreferencesUpdated} />);
 
       fireEvent.click(screen.getByRole('switch', { name: 'Lock reconciled transactions' }));
-      fireEvent.click(screen.getByRole('button', { name: 'Save Preferences' }));
 
       await waitFor(() => {
         expect(userSettingsApi.updatePreferences).toHaveBeenCalledWith(
@@ -184,22 +200,77 @@ describe('PreferencesSection', () => {
       });
     });
 
-    it('sends the stored value untouched when nothing is changed', async () => {
-      // The bulk save resends every field it owns, so a preference it forgot
-      // to include would be silently reset on the next unrelated save.
+    it('sends the chosen map provider when changed and saved', async () => {
+    (userSettingsApi.updatePreferences as ReturnType<typeof vi.fn>).mockResolvedValue(mockPreferences);
+
+    render(
+      <PreferencesSection
+        preferences={mockPreferences}
+        onPreferencesUpdated={mockOnPreferencesUpdated}
+      />,
+    );
+
+    fireEvent.change(screen.getByLabelText('Map provider for addresses'), {
+      target: { value: 'google' },
+    });
+
+    await waitFor(() => {
+      expect(userSettingsApi.updatePreferences).toHaveBeenCalledWith(
+        expect.objectContaining({ defaultMapProvider: 'google' }),
+      );
+    });
+  });
+
+  /**
+   * These two replace a pair that pinned properties of the bulk payload: that
+   * it resent every field it owned, and that a field left out of it would be
+   * reset on the next unrelated save. A per-field PATCH cannot have that
+   * defect -- it carries the one field that changed -- so what is worth pinning
+   * is the property that replaced it.
+   */
+  it('sends the changed field and nothing else', async () => {
+    (userSettingsApi.updatePreferences as ReturnType<typeof vi.fn>).mockResolvedValue(mockPreferences);
+
+    render(
+      <PreferencesSection
+        preferences={{ ...mockPreferences, defaultMapProvider: 'waze' }}
+        onPreferencesUpdated={mockOnPreferencesUpdated}
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Week starts on'), { target: { value: '0' } });
+    });
+
+    await waitFor(() => expect(userSettingsApi.updatePreferences).toHaveBeenCalled());
+    expect(userSettingsApi.updatePreferences).toHaveBeenCalledWith({ weekStartsOn: 0 });
+  });
+
+  it('writes nothing while the reader only looks', async () => {
       (userSettingsApi.updatePreferences as ReturnType<typeof vi.fn>).mockResolvedValue(mockPreferences);
       const locked = { ...mockPreferences, lockReconciledTransactions: true };
 
       render(<PreferencesSection preferences={locked} onPreferencesUpdated={mockOnPreferencesUpdated} />);
 
-      fireEvent.click(screen.getByRole('button', { name: 'Save Preferences' }));
-
-      await waitFor(() => {
-        expect(userSettingsApi.updatePreferences).toHaveBeenCalledWith(
-          expect.objectContaining({ lockReconciledTransactions: true }),
-        );
-      });
+      await waitFor(() =>
+        expect(screen.getByText('Lock reconciled transactions')).toBeInTheDocument(),
+      );
+      expect(userSettingsApi.updatePreferences).not.toHaveBeenCalled();
     });
+
+  // A control re-emitting the value it already holds is not an edit, and a
+  // request per non-edit is a toast per non-edit too.
+  it('writes nothing when a control re-emits the value it already holds', async () => {
+    (userSettingsApi.updatePreferences as ReturnType<typeof vi.fn>).mockResolvedValue(mockPreferences);
+
+    render(<PreferencesSection preferences={mockPreferences} onPreferencesUpdated={mockOnPreferencesUpdated} />);
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Week starts on'), { target: { value: '1' } });
+    });
+
+    expect(userSettingsApi.updatePreferences).not.toHaveBeenCalled();
+  });
   });
 
   /**
@@ -222,7 +293,11 @@ describe('PreferencesSection', () => {
 
     expect(screen.queryByLabelText('Portfolio change measured from')).toBeNull();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save Preferences' }));
+    // Nothing sends it either -- driven from a change now that there is no
+    // bulk save to inspect.
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Week starts on'), { target: { value: '0' } });
+    });
     await waitFor(() => {
       expect(userSettingsApi.updatePreferences).toHaveBeenCalled();
     });
@@ -237,7 +312,6 @@ describe('PreferencesSection', () => {
     render(<PreferencesSection preferences={mockPreferences} onPreferencesUpdated={mockOnPreferencesUpdated} />);
 
     fireEvent.change(screen.getByLabelText('Date Format'), { target: { value: 'MM/DD/YYYY' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save Preferences' }));
 
     await waitFor(() => {
       expect(userSettingsApi.updatePreferences).toHaveBeenCalledWith(
@@ -252,7 +326,6 @@ describe('PreferencesSection', () => {
     render(<PreferencesSection preferences={mockPreferences} onPreferencesUpdated={mockOnPreferencesUpdated} />);
 
     fireEvent.change(screen.getByLabelText('Number Format'), { target: { value: 'de-DE' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save Preferences' }));
 
     await waitFor(() => {
       expect(userSettingsApi.updatePreferences).toHaveBeenCalledWith(
@@ -277,7 +350,6 @@ describe('PreferencesSection', () => {
     });
     fireEvent.click(screen.getByText('America/New York'));
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save Preferences' }));
 
     await waitFor(() => {
       expect(userSettingsApi.updatePreferences).toHaveBeenCalledWith(
@@ -350,12 +422,54 @@ describe('PreferencesSection', () => {
     });
 
     fireEvent.change(screen.getByLabelText('Default Currency'), { target: { value: 'USD' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save Preferences' }));
 
     await waitFor(() => {
       expect(userSettingsApi.updatePreferences).toHaveBeenCalledWith(
         expect.objectContaining({ defaultCurrency: 'USD' })
       );
+    });
+  });
+
+  describe('a cryptocurrency as the default currency', () => {
+    const currencies = [
+      { code: 'CAD', name: 'Canadian Dollar', kind: 'FIAT' },
+      { code: 'USD', name: 'US Dollar' },
+      { code: 'BTC', name: 'Bitcoin', kind: 'CRYPTO' },
+    ];
+    const optionValues = () =>
+      Array.from((screen.getByLabelText('Default Currency') as HTMLSelectElement).options).map(
+        (o) => o.value,
+      );
+    const hint = /Cryptocurrencies are not offered here/;
+
+    it('offers only fiat currencies and says why a coin is missing', async () => {
+      (exchangeRatesApi.getCurrencies as ReturnType<typeof vi.fn>).mockResolvedValueOnce(currencies);
+      render(<PreferencesSection preferences={mockPreferences} onPreferencesUpdated={mockOnPreferencesUpdated} />);
+
+      await waitFor(() => expect(screen.getByText('USD - US Dollar')).toBeInTheDocument());
+      expect(optionValues()).toEqual(['CAD', 'USD']);
+      expect(screen.getByText(hint)).toBeInTheDocument();
+    });
+
+    it('shows no hint when the reader holds no coin', async () => {
+      render(<PreferencesSection preferences={mockPreferences} onPreferencesUpdated={mockOnPreferencesUpdated} />);
+
+      await waitFor(() => expect(screen.getByText('USD - US Dollar')).toBeInTheDocument());
+      expect(screen.queryByText(hint)).not.toBeInTheDocument();
+    });
+
+    it('keeps a coin already saved as the default listed, so the picker shows what is held', async () => {
+      (exchangeRatesApi.getCurrencies as ReturnType<typeof vi.fn>).mockResolvedValueOnce(currencies);
+      render(
+        <PreferencesSection
+          preferences={{ ...mockPreferences, defaultCurrency: 'BTC' }}
+          onPreferencesUpdated={mockOnPreferencesUpdated}
+        />,
+      );
+
+      await waitFor(() => expect(screen.getByText('BTC - Bitcoin')).toBeInTheDocument());
+      expect(optionValues()).toEqual(['CAD', 'USD', 'BTC']);
+      expect((screen.getByLabelText('Default Currency') as HTMLSelectElement).value).toBe('BTC');
     });
   });
 
@@ -373,16 +487,18 @@ describe('PreferencesSection', () => {
     });
   });
 
-  it('does not include theme in the bulk Save Preferences payload', async () => {
+  // The selector owns the write, so the section must not send it a second time
+  // alongside a field of its own.
+  it('never sends theme alongside another field', async () => {
     (userSettingsApi.updatePreferences as ReturnType<typeof vi.fn>).mockResolvedValue(mockPreferences);
 
     render(<PreferencesSection preferences={mockPreferences} onPreferencesUpdated={mockOnPreferencesUpdated} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save Preferences' }));
-
-    await waitFor(() => {
-      expect(userSettingsApi.updatePreferences).toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Week starts on'), { target: { value: '0' } });
     });
+
+    await waitFor(() => expect(userSettingsApi.updatePreferences).toHaveBeenCalled());
     expect(userSettingsApi.updatePreferences).toHaveBeenCalledWith(
       expect.not.objectContaining({ theme: expect.anything() }),
     );
@@ -402,16 +518,16 @@ describe('PreferencesSection', () => {
     });
   });
 
-  it('does not include colorTheme in the bulk Save Preferences payload', async () => {
+  it('never sends colorTheme alongside another field', async () => {
     (userSettingsApi.updatePreferences as ReturnType<typeof vi.fn>).mockResolvedValue(mockPreferences);
 
     render(<PreferencesSection preferences={mockPreferences} onPreferencesUpdated={mockOnPreferencesUpdated} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save Preferences' }));
-
-    await waitFor(() => {
-      expect(userSettingsApi.updatePreferences).toHaveBeenCalled();
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Week starts on'), { target: { value: '0' } });
     });
+
+    await waitFor(() => expect(userSettingsApi.updatePreferences).toHaveBeenCalled());
     expect(userSettingsApi.updatePreferences).toHaveBeenCalledWith(
       expect.not.objectContaining({ colorTheme: expect.anything() }),
     );
@@ -432,34 +548,11 @@ describe('PreferencesSection', () => {
     render(<PreferencesSection preferences={mockPreferences} onPreferencesUpdated={mockOnPreferencesUpdated} />);
 
     fireEvent.change(screen.getByLabelText('Week starts on'), { target: { value: '0' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save Preferences' }));
 
     await waitFor(() => {
       expect(userSettingsApi.updatePreferences).toHaveBeenCalledWith(
         expect.objectContaining({ weekStartsOn: 0 })
       );
-    });
-  });
-
-  it('shows Saving... text while preferences are being saved', async () => {
-    let resolvePromise: (value: unknown) => void;
-    const pendingPromise = new Promise((resolve) => {
-      resolvePromise = resolve;
-    });
-    (userSettingsApi.updatePreferences as ReturnType<typeof vi.fn>).mockReturnValue(pendingPromise);
-
-    render(<PreferencesSection preferences={mockPreferences} onPreferencesUpdated={mockOnPreferencesUpdated} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Save Preferences' }));
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Saving...' })).toBeInTheDocument();
-    });
-
-    resolvePromise!(mockPreferences);
-
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Save Preferences' })).toBeInTheDocument();
     });
   });
 
@@ -469,7 +562,9 @@ describe('PreferencesSection', () => {
 
     render(<PreferencesSection preferences={mockPreferences} onPreferencesUpdated={mockOnPreferencesUpdated} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save Preferences' }));
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Week starts on'), { target: { value: '0' } });
+    });
 
     await waitFor(() => {
       expect(mockOnPreferencesUpdated).toHaveBeenCalledWith(updatedPrefs);
@@ -500,18 +595,43 @@ describe('PreferencesSection', () => {
     });
   });
 
-  it('sends preferredExchanges when saving', async () => {
+  it('saves a preferred exchange as it is picked', async () => {
     (userSettingsApi.updatePreferences as ReturnType<typeof vi.fn>).mockResolvedValue(mockPreferences);
 
     render(<PreferencesSection preferences={mockPreferences} onPreferencesUpdated={mockOnPreferencesUpdated} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save Preferences' }));
+    const first = screen.getAllByPlaceholderText(/Priority/)[0];
+    await act(async () => {
+      fireEvent.focus(first);
+      fireEvent.change(first, { target: { value: 'London' } });
+    });
+    const option = await screen.findByText(/London Stock Exchange/i);
+    await act(async () => {
+      fireEvent.click(option);
+    });
 
     await waitFor(() => {
       expect(userSettingsApi.updatePreferences).toHaveBeenCalledWith(
-        expect.objectContaining({ preferredExchanges: [] })
+        expect.objectContaining({ preferredExchanges: expect.arrayContaining(['LSE']) }),
       );
     });
+  });
+
+  it('does not offer Crypto as a preferred exchange', async () => {
+    render(<PreferencesSection preferences={mockPreferences} onPreferencesUpdated={mockOnPreferencesUpdated} />);
+
+    const first = screen.getAllByPlaceholderText(/Priority/)[0];
+    await act(async () => {
+      fireEvent.focus(first);
+      fireEvent.change(first, { target: { value: 'Crypto' } });
+    });
+    expect(screen.queryByText(/Cryptocurrency \(Yahoo\)/)).not.toBeInTheDocument();
+
+    // Control: the same input does offer a real exchange when it matches.
+    await act(async () => {
+      fireEvent.change(first, { target: { value: 'London' } });
+    });
+    expect(await screen.findByText(/London Stock Exchange/i)).toBeInTheDocument();
   });
 
   describe('MSN provider configuration warning', () => {
@@ -622,6 +742,179 @@ describe('PreferencesSection', () => {
       });
 
       expect(screen.queryByTestId('msn-not-configured-error')).not.toBeInTheDocument();
+    });
+  });
+
+  /**
+   * The section is one card of sixteen controls, and the ONLY thing holding
+   * their order and their grouping is the JSX. Every other test in this file
+   * asserts by accessible label, so all thirty-six stayed green through the
+   * reorder that introduced these -- which is the finding, not the pass.
+   * These read the rendered order back out of the DOM.
+   */
+  describe('control order and grouping', () => {
+    // Group headings interleaved with the labels of the controls under them,
+    // in the order the card must render. Time Format is deliberately absent:
+    // it is gated on Show Create Date and has its own case below.
+    const EXPECTED_ORDER = [
+      'Language & Region',
+      'Language',
+      'Default Currency',
+      'Appearance',
+      'Theme',
+      'Colour theme',
+      'Dates & Numbers',
+      'Date Format',
+      'Number Format',
+      'Timezone',
+      'Week starts on',
+      'Show Create Date in transaction forms',
+      'Investments',
+      'Default Stock Quote Provider',
+      'Preferred Exchanges (for security lookups)',
+      'Transactions',
+      'Recent transactions in quick-fill',
+      'Lock reconciled transactions',
+      'Application',
+      'Map provider for addresses',
+      "Show What's New after an upgrade",
+    ];
+
+    const KNOWN_TEXTS = new Set([...EXPECTED_ORDER, 'Time Format']);
+
+    /**
+     * The labels and group headings the card renders, in document order.
+     * Walks every element and takes the first one whose own text is exactly a
+     * known label -- the controls use three different label elements (`label`
+     * for Select/Combobox, a `span` for the colour-theme radiogroup, `h3` for
+     * the group headings), so matching on text is what keeps this independent
+     * of which element each one happens to use.
+     */
+    function readRenderedOrder(container: HTMLElement): string[] {
+      const seen = new Set<string>();
+      const order: string[] = [];
+      for (const el of Array.from(container.querySelectorAll<HTMLElement>('*'))) {
+        const text = el.textContent?.trim() ?? '';
+        if (KNOWN_TEXTS.has(text) && !seen.has(text)) {
+          seen.add(text);
+          order.push(text);
+        }
+      }
+      return order;
+    }
+
+    it('renders every control under its own group heading, in order', async () => {
+      const { container } = render(
+        <PreferencesSection
+          preferences={mockPreferences}
+          onPreferencesUpdated={mockOnPreferencesUpdated}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Map provider for addresses')).toBeInTheDocument();
+      });
+
+      expect(readRenderedOrder(container)).toEqual(EXPECTED_ORDER);
+    });
+
+    it('renders the seven group headings as headings, in order', async () => {
+      const { container } = render(
+        <PreferencesSection
+          preferences={mockPreferences}
+          onPreferencesUpdated={mockOnPreferencesUpdated}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Application')).toBeInTheDocument();
+      });
+
+      const headings = Array.from(container.querySelectorAll('h3')).map((h) =>
+        h.textContent?.trim(),
+      );
+      expect(headings).toEqual([
+        'Language & Region',
+        'Appearance',
+        'Dates & Numbers',
+        'Investments',
+        'Transactions',
+        'Default Views',
+        'Mobile Navigation',
+        'Application',
+      ]);
+    });
+
+    it('separates the groups with a rule, except the first', async () => {
+      const { container } = render(
+        <PreferencesSection
+          preferences={mockPreferences}
+          onPreferencesUpdated={mockOnPreferencesUpdated}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Application')).toBeInTheDocument();
+      });
+
+      // The wrapper of each group is its heading's parent. The first group
+      // opens the card, where a rule would read as a second heading under
+      // "Preferences"; every group after it is separated by one.
+      const wrappers = Array.from(container.querySelectorAll('h3')).map((h) => h.parentElement!);
+      expect(wrappers).toHaveLength(8);
+      expect(wrappers[0].className).not.toMatch(/border-t/);
+      for (const wrapper of wrappers.slice(1)) {
+        expect(wrapper.className).toMatch(/border-t/);
+        // A rule invisible in dark mode is not a rule.
+        expect(wrapper.className).toMatch(/dark:border-/);
+      }
+    });
+
+    it('hides Time Format until Show Create Date is on, then shows it directly beneath', async () => {
+      const { container } = render(
+        <PreferencesSection
+          preferences={mockPreferences}
+          onPreferencesUpdated={mockOnPreferencesUpdated}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(
+          screen.getByText('Show Create Date in transaction forms'),
+        ).toBeInTheDocument();
+      });
+      expect(screen.queryByText('Time Format')).not.toBeInTheDocument();
+
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole('switch', { name: 'Show Create Date in transaction forms' }),
+        );
+      });
+
+      const order = readRenderedOrder(container);
+      const toggleIndex = order.indexOf('Show Create Date in transaction forms');
+      expect(order[toggleIndex + 1]).toBe('Time Format');
+      // Still inside Dates & Numbers -- the next heading after it is Investments.
+      expect(order[toggleIndex + 2]).toBe('Investments');
+    });
+
+    it('localizes the Time Format options rather than hardcoding English', async () => {
+      render(
+        <PreferencesSection
+          preferences={{ ...mockPreferences, showCreatedAt: true }}
+          onPreferencesUpdated={mockOnPreferencesUpdated}
+        />,
+      );
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Time Format')).toBeInTheDocument();
+      });
+
+      const select = screen.getByLabelText('Time Format') as HTMLSelectElement;
+      expect(Array.from(select.options).map((o) => o.text)).toEqual([
+        '24-hour (14:30)',
+        '12-hour (2:30 PM)',
+      ]);
     });
   });
 });

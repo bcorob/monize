@@ -16,12 +16,13 @@
     "chartUnavailable": "Grafico temporaneamente non disponibile"
   },
   "viewTabs": {
-    "list": "Elenco",
-    "calendar": "Calendario",
+    "filterLabel": "Tipo di pianificazione",
     "filterAll": "Tutte ({count})",
     "filterBills": "Fatture ({count})",
     "filterDeposits": "Versamenti ({count})",
-    "todayButton": "Oggi"
+    "chipBills": "Fatture",
+    "chipDeposits": "Versamenti",
+    "clearType": "Mostra tutti i tipi di pianificazione"
   },
   "form": {
     "titleNew": "Nuova transazione pianificata",
@@ -53,7 +54,11 @@
     "totalOfAccounts": "Totale dei conti",
     "legendAriaLabel": "Linee della previsione",
     "tooltipTransactionForAccount": "{name} ({account})",
-    "unavailableMissingRates": "Questa previsione non può essere mostrata in {displayCurrency}: nessun tasso di cambio disponibile per {currencies}, e un saldo proiettato si basa su ogni giorno precedente. Aggiungi un tasso, oppure scegli un conto a valuta singola."
+    "unavailableMissingRates": "Questa previsione non può essere mostrata in {displayCurrency}: nessun tasso di cambio disponibile per {currencies}, e un saldo proiettato si basa su ogni giorno precedente. Aggiungi un tasso, oppure scegli un conto a valuta singola.",
+    "untitledTransaction": "Transazione",
+    "tooltipEstimated": "(stimato)",
+    "unavailableUnknownEstimates": "Questa previsione non può ancora essere mostrata: l'importo stimato di una bolletta inclusa è sconosciuto, e un saldo previsto si basa su ogni giorno precedente. Inserisci l'importo di quell'occorrenza oppure disattiva Stima sulla bolletta.",
+    "unknownEstimateItem": "{name}: {reason}"
   },
   "calendar": {
     "days": {
@@ -72,5 +77,11 @@
     "notFound": "Pagamento pianificato non trovato",
     "loadFailed": "Caricamento delle transazioni pianificate non riuscito",
     "overridesDeleteFailed": "Eliminazione delle sostituzioni non riuscita"
+  },
+  "toolbar": {
+    "showing": "Visualizzazione di <b>{shown}</b> su <b>{total}</b> fatture e versamenti",
+    "exportButton": "Esporta",
+    "exportTitle": "Esporta fatture e versamenti in CSV",
+    "exported": "{count, plural, one {Esportata # pianificazione} other {Esportate # pianificazioni}}"
   }
 }

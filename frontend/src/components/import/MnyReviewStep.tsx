@@ -3,11 +3,14 @@
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
-import { formatCurrency } from '@/lib/format';
+import { HelpLink } from '@/components/help/HelpLink';
+import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { formatAccountType } from '@/lib/account-utils';
 import { MnyImportOptionsInput, MnyPreview } from '@/lib/import-mny';
+import { mnyErrorDocsLink } from '@/lib/import-mny-error-docs';
 import { MnyBillsPanel } from './MnyBillsPanel';
 import { MnyWarningsPanel } from './MnyWarningsPanel';
+import { Th } from '@/components/ui/Table';
 
 interface MnyReviewStepProps {
   preview: MnyPreview;
@@ -62,6 +65,7 @@ export function MnyReviewStep({
 }: MnyReviewStepProps) {
   const t = useTranslations('import');
   const tc = useTranslations('common');
+  const { formatCurrency } = useNumberFormat();
 
   const { counts, fileCounts } = preview;
   const includedCount = preview.accounts.filter(
@@ -123,6 +127,13 @@ export function MnyReviewStep({
             total: preview.accounts.length,
           })}
         />
+        {counts.tagsInFile > 0 && (
+          <SummaryTile
+            label={t('mnyReview.counts.tags')}
+            value={String(counts.tagsToCreate)}
+            detail={t('mnyReview.counts.ofTotal', { total: counts.tagsInFile })}
+          />
+        )}
       </div>
 
       {/* Investments */}
@@ -199,28 +210,28 @@ export function MnyReviewStep({
         <div className="bg-card border border-border rounded-lg overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead>
-              <tr className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="px-3 py-2 text-left font-medium">
+              <tr className="border-b border-border">
+                <Th className="px-3 py-2">
                   {t('mnyReview.table.include')}
-                </th>
-                <th className="px-3 py-2 text-left font-medium">
+                </Th>
+                <Th className="px-3 py-2">
                   {t('mnyReview.table.account')}
-                </th>
-                <th className="px-3 py-2 text-left font-medium">
+                </Th>
+                <Th className="px-3 py-2">
                   {t('mnyReview.table.type')}
-                </th>
-                <th className="px-3 py-2 text-left font-medium">
+                </Th>
+                <Th className="px-3 py-2">
                   {t('mnyReview.table.currency')}
-                </th>
-                <th className="px-3 py-2 text-right font-medium">
+                </Th>
+                <Th align="right" className="px-3 py-2">
                   {t('mnyReview.table.transactions')}
-                </th>
-                <th className="px-3 py-2 text-right font-medium">
+                </Th>
+                <Th align="right" className="px-3 py-2">
                   {t('mnyReview.table.openingBalance')}
-                </th>
-                <th className="px-3 py-2 text-right font-medium">
+                </Th>
+                <Th align="right" className="px-3 py-2">
                   {t('mnyReview.table.finalBalance')}
-                </th>
+                </Th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -422,6 +433,14 @@ export function MnyReviewStep({
           </h3>
           <p className="mt-1 text-sm text-red-700 dark:text-red-300">
             {startError.message || t('mnyErrors.mnyImportFailed')}
+          </p>
+          <p className="mt-2 text-sm">
+            <HelpLink
+              link={mnyErrorDocsLink(startError.code)}
+              className="font-medium text-red-800 underline hover:text-red-900 dark:text-red-300 dark:hover:text-red-100"
+            >
+              {t('mnyImporting.learnMore')}
+            </HelpLink>
           </p>
           {startError.code === 'mnyStagedFileMissing' && (
             <Button

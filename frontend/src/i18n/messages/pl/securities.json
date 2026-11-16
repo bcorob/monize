@@ -3,6 +3,7 @@
     "noneToUpdate": "Brak papierów wartościowych do zaktualizowania",
     "updated": "{count, plural, one {Zaktualizowano # cenę papieru wartościowego} few {Zaktualizowano # ceny papierów wartościowych} many {Zaktualizowano # cen papierów wartościowych} other {Zaktualizowano # cen papierów wartościowych}}",
     "partialFailure": "Aktualizacja cen — udane: {updated}, nieudane: {failed}{symbols}",
+    "partialFailureWithReasons": "Aktualizacja cen — udane: {updated}, nieudane: {failed}{symbols}\n{reasons}",
     "failed": "Nie udało się odświeżyć cen"
   },
   "page": {
@@ -10,6 +11,7 @@
     "subtitle": "Zarządzaj swoimi akcjami, ETF-ami, funduszami inwestycyjnymi i innymi papierami wartościowymi",
     "newSecurity": "+ Nowy papier wartościowy",
     "searchPlaceholder": "Szukaj po symbolu lub nazwie...",
+    "statusFilterLabel": "Status",
     "statusAll": "Wszystkie ({count})",
     "statusActive": "Aktywne ({count})",
     "statusInactive": "Nieaktywne ({count})",
@@ -49,6 +51,7 @@
       "name": "Nazwa",
       "type": "Typ",
       "shares": "Udziały",
+      "value": "Wartość",
       "exchange": "Giełda",
       "currency": "Waluta",
       "provider": "Dostawca",
@@ -63,12 +66,10 @@
       "inactive": "Nieaktywny",
       "inactiveShort": "Nie"
     },
-    "providerTitle": {
-      "override": "Nadpisanie dostawcy dla papieru wartościowego",
-      "inherited": "Odziedziczone z domyślnego dostawcy notowań"
-    },
+    "providerInherited": "{provider} (domyślny)",
     "columnTitles": {
       "shares": "Aktualnie posiadane udziały na wszystkich kontach",
+      "value": "Udziały na wszystkich kontach według najnowszej ceny, w walucie samego papieru wartościowego",
       "source": "Źródło ostatniej ceny"
     },
     "actions": {
@@ -115,7 +116,11 @@
     "exchangeLabel": "Giełda",
     "currencyLabel": "Waluta",
     "currencyNotConfigured": "{code} — brak w Twoich walutach",
+    "currencyPlaceholder": "Wybierz walutę...",
+    "currencyNotReported": "Dostawca nie podał waluty tej kryptowaluty. Wybierz walutę fiducjarną, w której jest notowana.",
     "quoteProviderLabel": "Dostawca notowań",
+    "skipPriceUpdatesLabel": "Wyłącz automatyczne aktualizacje cen",
+    "skipPriceUpdatesHelp": "Monize nie będzie pobierać cen dla tego papieru wartościowego. Użyj tej opcji dla papieru, którego żaden dostawca nie wycenia; ceny wprowadzone samodzielnie nadal się liczą. Wybranie innego dostawcy notowań lub identyfikatora instrumentu MSN ponownie włącza aktualizacje.",
     "msnIdLabel": "Identyfikator instrumentu MSN (zaawansowane)",
     "lookupProviderAriaLabel": "Dostawca wyszukiwania",
     "lookupButton": "Wyszukaj",
@@ -139,7 +144,11 @@
     "providers": {
       "auto": "Auto",
       "yahoo": "Yahoo",
-      "msn": "MSN"
+      "msn": "MSN",
+      "lse": "LSE",
+      "deutsche_boerse": "Deutsche Börse",
+      "bond_engine": "Silnik obligacji",
+      "html_table": "Tabela na stronie WWW"
     },
     "types": {
       "select": "Wybierz typ...",
@@ -189,16 +198,50 @@
       "deleteConfirm": "Usuń",
       "deleteSuccess": "Usunięto klasę aktywów „{name}”",
       "deleteFailed": "Nie udało się usunąć klasy aktywów „{name}”"
+    },
+    "bondFetchAction": "Pobierz {code} z oficjalnego źródła",
+    "bondFetching": "Pobieranie {code} od emitenta wraz z kursami referencyjnymi. To może potrwać do minuty.",
+    "bondFetchFailed": "Nie udało się pobrać serii.",
+    "bondCurrencyLocked": "Ten papier wartościowy jest powiązany z rodzajem obligacji w walucie {linkedCurrency}. Przywróć walutę {linkedCurrency} albo najpierw odepnij rodzaj obligacji (odpięcie usuwa wyliczone ceny).",
+    "bondProgramLabel": "Rodzaj obligacji",
+    "bondProgramNone": "Brak powiązania",
+    "bondProgramCurrent": "Powiązany rodzaj obligacji",
+    "bondProgramLoading": "Wczytywanie rodzajów obligacji...",
+    "bondProgramLoadFailed": "Nie udało się wczytać rodzajów obligacji, więc nie można jeszcze powiązać rodzaju obligacji.",
+    "bondProgramRetry": "Ponów",
+    "bondNoPrograms": "Katalog obligacji nie zawiera jeszcze żadnego rodzaju obligacji.",
+    "bondAutoFetchLabel": "Pobieraj nowe serie tego rodzaju obligacji automatycznie",
+    "bondAutoFetchHelp": "Gdy opcja jest włączona, Monize codziennie odczytuje nowe serie tego rodzaju obligacji z oficjalnego źródła, dzięki czemu możesz zapisać zakup bez wcześniejszego pobierania serii.",
+    "bondCountryLabel": "Kraj",
+    "bondCountryOther": "Inny",
+    "bondCountryOtherInfo": "Wsparcie dla obligacji innych krajów można zgłosić na <link>GitHubie projektu</link>.",
+    "quoteTable": {
+      "urlLabel": "Strona internetowa z tabelą kursów",
+      "urlHelp": "Strona musi zawierać tabelę, której nagłówek ma kolumnę daty i kolumnę kursu zamknięcia.",
+      "test": "Testuj",
+      "previewFailed": "Nie udało się odczytać strony.",
+      "summary": "{count, plural, one {# dzień} few {# dni} many {# dni} other {# dnia}} od {first} do {last}",
+      "columns": "Użyte kolumny: {columns}",
+      "currency": "Waluta podana na stronie: {currency}",
+      "noCurrency": "Strona nie podaje waluty; kursy są zapisywane w walucie papieru.",
+      "skipped": "{count, plural, one {Pominięto # nieczytelny wiersz} few {Pominięto # nieczytelne wiersze} many {Pominięto # nieczytelnych wierszy} other {Pominięto # nieczytelnego wiersza}}",
+      "headers": {
+        "date": "Data",
+        "open": "Otwarcie",
+        "high": "Maks.",
+        "low": "Min.",
+        "close": "Zamknięcie",
+        "volume": "Wolumen"
+      }
     }
   },
   "priceForm": {
     "dateLabel": "Data",
     "closePriceLabel": "Cena zamknięcia",
-    "openPriceLabel": "Cena otwarcia",
-    "highPriceLabel": "Cena maksymalna",
-    "lowPriceLabel": "Cena minimalna",
-    "volumeLabel": "Wolumen",
-    "optionalPlaceholder": "Opcjonalne",
+    "openPriceLabel": "Cena otwarcia (opcjonalnie)",
+    "highPriceLabel": "Cena maksymalna (opcjonalnie)",
+    "lowPriceLabel": "Cena minimalna (opcjonalnie)",
+    "volumeLabel": "Wolumen (opcjonalnie)",
     "submitCreate": "Dodaj cenę",
     "submitUpdate": "Zaktualizuj cenę"
   },
@@ -246,7 +289,9 @@
     },
     "collapseAll": "Zwiń wszystko",
     "expandAll": "Rozwiń wszystko",
-    "groupCount": "ceny: {count}"
+    "groupCount": "ceny: {count}",
+    "addYearButton": "Dodaj kolejny rok historii",
+    "addYearTitle": "Pobierz od dostawcy jeszcze jeden rok historycznych cen"
   },
   "transactionHistory": {
     "accountLabel": "Konto",
@@ -284,7 +329,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "Reinwestycja długoterminowych zysków kapitałowych",
       "CAPITAL_GAIN_SHORT": "Krótkoterminowy zysk kapitałowy",
       "CAPITAL_GAIN_LONG": "Długoterminowy zysk kapitałowy",
-      "REDEEM": "Wykup CD/obligacji"
+      "REDEEM": "Wykup CD/obligacji",
+      "RETURN_OF_CAPITAL": "Zwrot kapitału"
     },
     "toasts": {
       "loadHistoryFailed": "Nie udało się wczytać historii",
@@ -333,11 +379,20 @@
     "nameRequired": "Nazwa jest wymagana",
     "nameMax": "Nazwa może mieć maksymalnie 255 znaków",
     "currencyRequired": "Waluta jest wymagana",
-    "descriptionMax": "Opis może mieć maksymalnie 5000 znaków"
+    "bondProgramRequired": "Rodzaj obligacji jest wymagany",
+    "descriptionMax": "Opis może mieć maksymalnie 5000 znaków",
+    "quoteUrlRequired": "Podaj stronę z tabelą kursów.",
+    "quoteUrlInvalid": "Podaj pełny adres zaczynający się od http:// lub https://."
   },
   "priceValidation": {
     "dateRequired": "Data jest wymagana",
     "priceRequired": "Cena jest wymagana",
     "priceNonNegative": "Cena musi być liczbą nieujemną"
+  },
+  "priceAlert": {
+    "label": "Alert zmiany ceny (%)",
+    "help": "Puste pole wyłącza alert. Powiadomienie o wzroście lub spadku względem poprzedniej dostępnej sesji, najwyżej raz dziennie (UTC) na instrument.",
+    "range": "Wpisz wartość procentową od 0,1 do 1000.",
+    "chartLabel": "Dołącz wykres do alertów cenowych"
   }
 }

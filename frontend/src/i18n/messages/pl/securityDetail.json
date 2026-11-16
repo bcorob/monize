@@ -34,7 +34,6 @@
     "units": "Jednostki",
     "avgCostPerUnit": "Śr. koszt / jednostkę",
     "heldInAccounts": "Trzymane na kontach",
-    "openAccount": "Pokaż {name} na stronie Inwestycje",
     "unitsShare": "{units} ({share})",
     "valueUnknown": "Brak wyceny",
     "approx": "~ {amount}"
@@ -74,15 +73,20 @@
     "sector": "Sektor",
     "industry": "Branża",
     "provider": "Dostawca",
-    "lastPrice": "Ostatnia cena"
+    "lastPrice": "Ostatnia cena",
+    "bondDescription": "Opis obligacji"
   },
   "tabs": {
     "ariaLabel": "Sekcje papieru wartościowego",
     "overview": "Przegląd",
     "transactions": "Transakcje",
     "prices": "Historia cen",
+    "terms": "Historia warunków",
     "documents": "Dokumenty",
     "news": "Wiadomości"
+  },
+  "bondPrices": {
+    "title": "Historia cen"
   },
   "about": {
     "title": "O papierze",
@@ -121,6 +125,8 @@
     "fees": "Opłaty",
     "realizedPl": "Zrealizowany zysk/strata",
     "realizedMixed": "Zrealizowane w {currencies}, więc nie zsumowano",
+    "realizedUnknownReason": "Nie można obliczyć tego zysku: pozycja zawiera akcje dodane bez kosztu, więc koszt sprzedanych akcji jest nieznany. Otwórz transakcję, która je dodała, i wpisz ich cenę.",
+    "realizedKnownPart": "Znana część: {amount}",
     "totalReturn": "Zwrot całkowity",
     "totalReturnValue": "{amount} ({percent})",
     "totalReturnTitle": "Niezrealizowany zysk plus to, co zrealizowałeś na sprzedażach i otrzymałeś w przychodach, minus opłaty, w stosunku do wpłaconego kapitału. Prosty zwrot z tego kapitału: nie jest annualizowany i nie waży transz czasem ich trzymania.",
@@ -147,6 +153,8 @@
     "title": "Pozycja zamknięta",
     "description": "Nie trzymasz już tego papieru wartościowego. Jego historia pozostaje dostępna poniżej.",
     "realizedPl": "Zrealizowany zysk/strata",
+    "realizedUnknownReason": "Nie można obliczyć tego zysku: pozycja zawierała akcje dodane bez kosztu, więc koszt sprzedanych akcji jest nieznany. Otwórz transakcję, która je dodała, i wpisz ich cenę.",
+    "realizedKnownPart": "Znana część: {amount}",
     "heldFrom": "Trzymane od",
     "heldRange": "{start} do {end}"
   },
@@ -165,7 +173,24 @@
     "sectorEmpty": "Nie zapisano podziału na sektory. Monize uzupełnia go od dostawcy dla funduszy i ETF-ów.",
     "countryEmpty": "Nie zapisano podziału na kraje. Możesz go wpisać przy edycji papieru wartościowego.",
     "assetClassEmpty": "Nie zapisano jeszcze podziału na klasy aktywów.",
-    "remainder": "{percent} niesklasyfikowane"
+    "remainder": "{percent} niesklasyfikowane",
+    "bond": {
+      "seriesTab": "Serie",
+      "maturityTab": "Wykup",
+      "empty": "Nie masz jeszcze żadnej serii tego rodzaju obligacji.",
+      "someUnknown": "Część wartości jest nieznana, więc udziały nie są pokazane.",
+      "issuerCountry": "Kraj emitenta",
+      "rate": "Oprocentowanie",
+      "interest": "Odsetki",
+      "term": "Okres do wykupu",
+      "interestValue": "{capitalization}, okres: {period}",
+      "rateType": {
+        "FIXED": "Stałe",
+        "BENCHMARK_PLUS_SPREAD": "Zmienne (wskaźnik + marża)",
+        "INFLATION_PLUS_MARGIN_AS_RATE": "Indeksowane inflacją (wskaźnik + marża)",
+        "ZERO_COUPON_DISCOUNT": "Zerokuponowe (dyskontowe)"
+      }
+    }
   },
   "documents": {
     "title": "Dokumenty",
@@ -225,6 +250,16 @@
       "deleted": "Dokument usunięty",
       "saveFailed": "Nie udało się zapisać dokumentu",
       "deleteFailed": "Nie udało się usunąć dokumentu"
+    },
+    "issueLetters": {
+      "title": "Listy emisyjne",
+      "loadFailed": "Nie udało się wczytać listów emisyjnych.",
+      "empty": "Dla tego rodzaju obligacji nie zapisano jeszcze żadnego listu emisyjnego.",
+      "held": "Posiadana",
+      "onSale": "W sprzedaży",
+      "noLetter": "Brak zapisanego listu dla tej serii",
+      "open": "Oficjalny PDF",
+      "openNamed": "Otwórz list emisyjny serii {series}"
     }
   },
   "news": {
@@ -237,6 +272,243 @@
     "empty": {
       "title": "Brak nagłówków w tej chwili",
       "description": "Nic nie opublikowano ostatnio pod tym symbolem. Lista odświeży się, gdy tu wrócisz."
+    }
+  },
+  "bond": {
+    "loading": "Wczytywanie wyceny obligacji...",
+    "loadFailed": "Nie udało się wczytać wyceny obligacji.",
+    "unknown": "Nieznane",
+    "asOf": "Wycena na dzień",
+    "termsSource": "Warunki: {document}",
+    "termsManual": "Warunki wprowadzone ręcznie przez administratora",
+    "noLots": "Na ten dzień nie ma otwartych partii.",
+    "totals": {
+      "quantity": "Posiadane obligacje",
+      "grossValue": "Wartość brutto",
+      "earlyRedemptionValue": "Wartość przedterminowego wykupu",
+      "accruedInterest": "Narosłe odsetki",
+      "unknownLot": "Co najmniej jedna partia nie ma wyniku, dlatego nie podajemy sumy.",
+      "unknownRefusal": "Nie można ustalić partii, dlatego nie podajemy sumy."
+    },
+    "lots": {
+      "purchaseDate": "Data zakupu",
+      "assumed": "Założona",
+      "assumedTitle": "Rzeczywista data zakupu jest nieznana: ta partia pojawiła się w wyniku przelewu bez powiązanej strony wysyłającej.",
+      "quantity": "Liczba",
+      "maturity": "Termin wykupu",
+      "period": "Bieżący okres odsetkowy",
+      "periodValue": "{index}: {start} do {end}",
+      "rate": "Oprocentowanie",
+      "principal": "Kapitał na obligację",
+      "principalIssuePrice": "Nie wpisano kosztu: użyto ceny z przetargu",
+      "accruedInterest": "Narosłe odsetki",
+      "grossValue": "Wartość brutto",
+      "earlyRedemption": "Przedterminowy wykup",
+      "nextCashFlow": "Następny przepływ",
+      "cashFlowValue": "{type} {amount} dnia {date}",
+      "noCashFlow": "Brak",
+      "projected": "Prognoza",
+      "maturityValue": "Wartość w terminie wykupu",
+      "maturityKnown": "Znana",
+      "maturityProjected": "Prognozowana",
+      "matured": "Wykupiona",
+      "refused": "Bez wyceny",
+      "amountUnknown": "Kwota nieznana"
+    },
+    "rateSource": {
+      "TERMS": "Warunki emisji",
+      "ANNOUNCED": "Ogłoszone",
+      "DERIVED": "Wyliczone",
+      "PROJECTED": "Prognozowane"
+    },
+    "cashFlowType": {
+      "INTEREST": "Odsetki",
+      "PRINCIPAL": "Kapitał"
+    },
+    "earlyRefusal": {
+      "NOT_REDEEMABLE": "Brak możliwości przedterminowego wykupu",
+      "TOO_EARLY": "Zbyt wcześnie na wykup",
+      "TOO_LATE": "Zbyt późno na wykup",
+      "RECORD_DAY": "Wykup niemożliwy w dniu ustalenia praw",
+      "MATURED": "Obligacja wykupiona",
+      "RATE_UNKNOWN": "Oprocentowanie jeszcze nieznane",
+      "TERMS_INCOMPLETE": "Niepełne warunki emisji"
+    },
+    "lotsRefusal": {
+      "SPLIT": "Nie można ustalić partii: obligacja nie podlega podziałowi.",
+      "FRACTIONAL_QUANTITY": "Nie można ustalić partii: ilość nie jest całkowitą liczbą obligacji.",
+      "OVER_REMOVAL": "Nie można ustalić partii: usunięto więcej obligacji, niż było w posiadaniu.",
+      "INVALID_QUANTITY": "Nie można ustalić partii: ilość jest nieokreślona, ujemna lub zbyt duża.",
+      "REMOVAL_EXCEEDS_SERIES": "Nie można wyznaczyć partii: wycofano więcej obligacji jednej serii, niż było jej w posiadaniu.",
+      "SERIES_NOT_DETERMINED": "Nie można wyznaczyć partii: seria zakupu jest nieznana."
+    },
+    "lotsRefusalDetail": {
+      "SPLIT": "Dla tego papieru zapisano split ({action} w dniu {date}); obligacja się nie dzieli.",
+      "FRACTIONAL_QUANTITY": "{action} w dniu {date} przesuwa {quantity} obligacji, co nie jest liczbą całkowitą.",
+      "OVER_REMOVAL": "{action} w dniu {date} usuwa {quantity} obligacji, więcej niż było w posiadaniu.",
+      "INVALID_QUANTITY": "Ilość w operacji {action} z dnia {date} jest pusta, ujemna lub zbyt duża.",
+      "REMOVAL_EXCEEDS_SERIES": "{action} z {date} wycofuje {quantity} obligacji swojej serii, więcej niż było w tej serii.",
+      "SERIES_NOT_DETERMINED": "{action} z {date} nie wskazuje serii, a tego dnia nie była w sprzedaży żadna zapisana seria tego rodzaju obligacji. Pobierz serię i wybierz ją w transakcji."
+    },
+    "assumptions": {
+      "title": "Założenia prognozy",
+      "latestObservation": "Dla wszystkich kolejnych okresów założono wartość „{benchmark}” na poziomie {value} (ostatnia opublikowana wartość: {observation})",
+      "supplied": "Dla wszystkich kolejnych okresów założono wartość „{benchmark}” na poziomie {value}",
+      "suppliedSimpleAnnual": "Założono, że {benchmark} rośnie o {value} rocznie (wzrost roczny prosty, bez kapitalizacji) w każdym kolejnym miesiącu"
+    },
+    "missing": {
+      "title": "Dane, których jeszcze brakuje",
+      "item": "{benchmark} {observation} — publikuje: {publisher}",
+      "itemNoPublisher": "{benchmark} {observation} — nie wiadomo, kto publikuje"
+    },
+    "recompute": {
+      "button": "Przelicz ceny",
+      "done": "Ceny przeliczone: zapisano {written}, usunięto {deleted}.",
+      "failed": "Nie udało się przeliczyć cen."
+    },
+    "rate": {
+      "title": "Oprocentowanie",
+      "rule": {
+        "fixed": "Stałe {rate} przez cały okres",
+        "firstThen": "Okres 1: {firstRate}. Następnie {benchmark} + marża {addend}",
+        "every": "Każdy okres: {benchmark} + marża {addend}",
+        "floorZero": "Ujemna wartość wskaźnika „{benchmark}” jest liczona jako 0",
+        "dailyFloor": "Stawka dzienna (wskaźnik plus marża) nigdy nie jest niższa niż {floor}",
+        "discount": "Dyskonto względem wartości nominalnej",
+        "daily": "Każdego dnia: {benchmark} + {addend}, sumowane za każdy dzień",
+        "lockout": "Przetarg w ciągu {days, plural, one {# dnia roboczego} few {# dni roboczych} many {# dni roboczych} other {# dnia roboczego}} przed końcem okresu nie jest używany dla tego okresu"
+      },
+      "daily": "Codziennie, {benchmark}",
+      "dailyNoIndex": "Codziennie, {benchmark}: brak zapisanego indeksu",
+      "dailyRun": "Od {from}: {rate}",
+      "dailyRunUnknown": "Od {from}: brak zapisanego indeksu",
+      "lotHeading": "Partia kupiona {date}",
+      "range": "{start} do {end}",
+      "current": "Bieżący",
+      "columns": {
+        "period": "Okres",
+        "dates": "Daty",
+        "rate": "Oprocentowanie",
+        "source": "Źródło",
+        "how": "Sposób ustalenia"
+      },
+      "how": {
+        "stated": "Stawka podana w warunkach",
+        "observed": "{benchmark} {observation}: {value} + {addend}",
+        "floored": "(przyjęto minimum {floor})",
+        "missing": "{benchmark} {observation}: jeszcze nieopublikowane"
+      },
+      "nextRateReset": "Następna zmiana oprocentowania: {date}",
+      "nextCapitalization": "Następna kapitalizacja odsetek: {date}"
+    },
+    "indexation": {
+      "inflation": "Obligacja indeksowana inflacją: od {date} (2. okres) oprocentowanie to {benchmark} + {addend}, ustalane na nowo w każdym okresie",
+      "floating": "Oprocentowanie zmienne: od {date} (2. okres) oprocentowanie to {benchmark} + {addend}, ustalane na nowo w każdym okresie"
+    },
+    "interestParts": {
+      "fixed": "Odsetki stałe (1. okres)",
+      "margin": "Odsetki z marży",
+      "inflation": "Odsetki z inflacji",
+      "benchmark": "Odsetki ze stopy referencyjnej",
+      "announced": "Odsetki ogłoszone",
+      "fixedTerm": "Odsetki według stałego oprocentowania"
+    },
+    "chart": {
+      "title": "Odsetki narastająco na koniec każdego okresu",
+      "assumption": "Prognoza przy założeniu {benchmark} = {value}",
+      "projectedNote": "Jaśniejsze słupki to okresy prognozowane",
+      "stoppedAt": "Odsetki nie są znane od okresu {period}, dlatego wykres kończy się przed nim."
+    },
+    "scenarios": {
+      "title": "Scenariusze inflacji",
+      "titleBenchmark": "Scenariusze stopy procentowej",
+      "projection": "Prognoza",
+      "caption": "Prognozowana wartość wykupu i odsetki według przyjętej wartości",
+      "intro": "To prognozy, a nie pewniki: dla każdego okresu, który się nie rozpoczął, przyjmuje się wartość {benchmark} z pierwszej kolumny. Okresy znane i ogłoszone się nie zmieniają. Wybierz wiersz, aby zobaczyć tabelę stóp i wykres.",
+      "custom": "Własna wartość: {benchmark} (%)",
+      "add": "Dodaj scenariusz",
+      "useDefault": "Wróć do założenia domyślnego",
+      "selected": "Wybrany",
+      "loading": "Wczytywanie scenariuszy...",
+      "loadFailed": "Nie udało się wczytać scenariuszy.",
+      "columns": {
+        "assumed": "Przyjęte: {benchmark}",
+        "maturityValue": "Wartość wykupu (prognoza)",
+        "totalInterest": "Odsetki łącznie (prognoza)"
+      },
+      "asOfNote": "Wycena na dzień {date}, wybrany powyżej: kwoty dotyczą obligacji posiadanych tego dnia."
+    },
+    "benchmarks": {
+      "PL_CPI_GUS_YOY": "Inflacja CPI r/r (GUS)",
+      "PL_NBP_REFERENCE": "Stopa referencyjna NBP",
+      "US_CPI_U_NSA": "CPI-U, wszystkie pozycje, bez korekty sezonowej (BLS)",
+      "US_TBILL_13W_MMY": "Rentowność 13-tygodniowych bonów skarbowych"
+    },
+    "valuationRefusal": {
+      "PURCHASE_OUTSIDE_SALE_WINDOW": "Tę serię można kupić tylko od {from} do {to}. Ta partia została kupiona {purchaseDate}, więc nie jest wyceniana.",
+      "PURCHASE_AFTER_MATURITY": "Ta seria została wykupiona w dniu {maturityDate}. Tę partię kupiono w dniu {purchaseDate}, czyli w tym dniu lub po nim, więc nie jest wyceniana."
+    },
+    "marketPriceRequired": "Ten papier wartościowy zawiera serię notowaną na rynku, więc jej cena nie wynika z warunków emisji. Monize nie zapisuje dla niej ceny: wpisz cenę samodzielnie. Wartości partii poniżej wyliczono z warunków emisji i nie są wartościami rynkowymi.",
+    "partial": {
+      "title": "Wycena jest niepełna, dlatego traktuj te kwoty jako cząstkowe.",
+      "terms": "Warunki obligacji są niekompletne (na przykład nie zainstalowano kalendarza).",
+      "reference": "Brakuje danych referencyjnych; zobacz poniżej listę brakujących danych.",
+      "earlyRedemption": "Warunki wcześniejszego wykupu są niekompletne, więc wartości wcześniejszego wykupu mogą być niedostępne.",
+      "other": "Co najmniej jednej partii nie można jeszcze w pełni wycenić (na przykład nie jest znana stopa)."
+    },
+    "projectionMissing": {
+      "title": "Nie można prognozować kolejnych okresów",
+      "item": "{benchmark}: nie opublikowano żadnej wartości i nie przyjęto założenia, więc kolejnych okresów nie można prognozować (publikuje: {publisher})",
+      "itemNoPublisher": "{benchmark}: nie opublikowano żadnej wartości i nie przyjęto założenia, więc kolejnych okresów nie można prognozować (wydawca nieznany)"
+    },
+    "coverage": {
+      "asOf": "Dane {benchmark} według stanu na {date}",
+      "none": "Brak zapisanych danych {benchmark}"
+    },
+    "issuers": {
+      "PL_MF": "Ministerstwo Finansów (PL)",
+      "US_TREASURY": "Departament Skarbu Stanów Zjednoczonych (US)"
+    },
+    "redemption": {
+      "title": "Warunki przedterminowego wykupu",
+      "fixedFee": "Opłata za przedterminowy wykup: {amount} za obligację.",
+      "forfeitAccrued": "Przy przedterminowym wykupie odsetki naliczone w bieżącym okresie odsetkowym przepadają.",
+      "floorAllPeriods": "W każdym okresie opłata nie obniży kwoty wykupu poniżej wartości nominalnej.",
+      "floorFirstPeriod": "Tylko w pierwszym okresie opłata nie obniży kwoty wykupu poniżej wartości nominalnej; od drugiego okresu potrącana jest pełna opłata."
+    },
+    "programs": {
+      "OTS": "OTS: 3-miesięczne oszczędnościowe obligacje stałoprocentowe",
+      "ROR": "ROR: roczne oszczędnościowe obligacje zmiennoprocentowe",
+      "DOR": "DOR: 2-letnie oszczędnościowe obligacje zmiennoprocentowe",
+      "TOS": "TOS: 3-letnie oszczędnościowe obligacje stałoprocentowe",
+      "COI": "COI: 4-letnie oszczędnościowe obligacje indeksowane inflacją",
+      "EDO": "EDO: 10-letnie oszczędnościowe obligacje indeksowane inflacją",
+      "ROS": "ROS: 6-letnie rodzinne oszczędnościowe obligacje indeksowane inflacją",
+      "ROD": "ROD: 12-letnie rodzinne oszczędnościowe obligacje indeksowane inflacją",
+      "BILL": "BILL: bony skarbowe, od 4 do 52 tygodni, sprzedawane z dyskontem",
+      "NOTE": "NOTE: noty skarbowe, od 2 do 10 lat, stały kupon półroczny",
+      "BOND": "BOND: obligacje skarbowe, 20 i 30 lat, stały kupon półroczny",
+      "TIPS": "TIPS: obligacje skarbowe chronione przed inflacją, kapitał indeksowany do CPI-U",
+      "FRN": "FRN: noty skarbowe o zmiennym oprocentowaniu, 2 lata, odsetki kwartalne"
+    },
+    "series": {
+      "title": "Twoje serie",
+      "column": "Seria",
+      "nextRateChange": "Następna zmiana oprocentowania",
+      "total": "Razem dla rodzaju obligacji",
+      "purchasedRange": "od {from} do {to}",
+      "expand": "Pokaż szczegóły serii {series}",
+      "collapse": "Ukryj szczegóły serii {series}",
+      "partial": "Częściowo"
+    },
+    "program": {
+      "title": "Rodzaj obligacji",
+      "newest": "Warunki najnowszej serii, {series}.",
+      "noTerms": "Warunki nie są jeszcze znane: nie masz żadnej serii tego rodzaju obligacji i żadna nie jest w sprzedaży.",
+      "autoFetchFailed": "Nie udało się zapisać ustawienia."
+    },
+    "onSale": {
+      "title": "Teraz w sprzedaży"
     }
   }
 }

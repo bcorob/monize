@@ -1,11 +1,15 @@
+import { AccountType } from "../../accounts/entities/account.entity";
+import { SharedReviewService } from "../../shared-expenses/shared-review.service";
+import { sharedReviewMock } from "../../shared-expenses/__fixtures__/shared-review";
 import { McpAccountsTools } from "./accounts.tool";
-import { UserContextResolver } from "../mcp-context";
+import { mcpTestCtx, McpTestContext } from "../testing/mcp-test-context";
 
 describe("McpAccountsTools", () => {
   let tool: McpAccountsTools;
+  let sharedReview: ReturnType<typeof sharedReviewMock>;
   let accountsService: Record<string, jest.Mock>;
   let server: { registerTool: jest.Mock };
-  let resolve: jest.MockedFunction<UserContextResolver>;
+  let ctx: McpTestContext;
   const handlers: Record<string, (...args: any[]) => any> = {};
 
   beforeEach(() => {
@@ -13,7 +17,11 @@ describe("McpAccountsTools", () => {
       getLlmAccounts: jest.fn(),
     };
 
-    tool = new McpAccountsTools(accountsService as any);
+    sharedReview = sharedReviewMock();
+    tool = new McpAccountsTools(
+      accountsService as any,
+      sharedReview as unknown as SharedReviewService,
+    );
 
     server = {
       registerTool: jest.fn((name, _opts, handler) => {
@@ -21,8 +29,29 @@ describe("McpAccountsTools", () => {
       }),
     };
 
-    resolve = jest.fn();
-    tool.register(server as any, resolve);
+    ctx = mcpTestCtx();
+    tool.register(server as any);
+  });
+
+  it("returns the shared-review disclosure beside accepted account totals", async () => {
+    ctx.setUser({ userId: "u1", scopes: "read" });
+    accountsService.getLlmAccounts.mockResolvedValue({
+      accounts: [],
+      netWorth: 100,
+    });
+    sharedReview.annotate.mockImplementation(async (_user, data) => ({
+      ...(data as object),
+      sharedExpenses: { pendingCount: 2, status: "REVIEW_REQUIRED" },
+    }));
+    const result = await handlers.list_accounts({}, ctx);
+    expect(sharedReview.annotate).toHaveBeenCalledWith("u1", {
+      accounts: [],
+      netWorth: 100,
+    });
+    expect(result.structuredContent).toMatchObject({
+      netWorth: 100,
+      sharedExpenses: { pendingCount: 2 },
+    });
   });
 
   it("should register 1 tool", () => {
@@ -34,9 +63,20 @@ describe("McpAccountsTools", () => {
     );
   });
 
+  it("accepts every AccountType, CRYPTO included, in the accountTypes filter", () => {
+    const opts = server.registerTool.mock.calls[0][1] as {
+      inputSchema: { safeParse: (v: unknown) => { success: boolean } };
+    };
+    expect(Object.values(AccountType)).toContain(AccountType.CRYPTO);
+    expect(
+      opts.inputSchema.safeParse({ accountTypes: Object.values(AccountType) })
+        .success,
+    ).toBe(true);
+  });
+
   describe("list_accounts", () => {
     it("passes all filter args through to the service", async () => {
-      resolve.mockReturnValue({ userId: "u1", scopes: "read" });
+      ctx.setUser({ userId: "u1", scopes: "read" });
       accountsService.getLlmAccounts.mockResolvedValue({
         accounts: [
           {
@@ -94,7 +134,7 @@ describe("McpAccountsTools", () => {
           status: "all",
           accountTypes: ["CHEQUING", "SAVINGS"],
         },
-        { sessionId: "s1" },
+        ctx,
       );
 
       expect(accountsService.getLlmAccounts).toHaveBeenCalledWith("u1", {
@@ -105,7 +145,7 @@ describe("McpAccountsTools", () => {
         accountTypes: ["CHEQUING", "SAVINGS"],
       });
       expect(result.isError).toBeUndefined();
-      const parsed = JSON.parse(result.content[0].text);
+      const parsed = result.structuredContent as any;
       expect(parsed.netWorth).toBe(1000);
       expect(parsed.accounts[0].id).toBe("a1");
       // Loan schedule fields flow through for debt accounts
@@ -120,7 +160,7 @@ describe("McpAccountsTools", () => {
     });
 
     it("delegates with undefined filters when none provided (service applies 'open' default)", async () => {
-      resolve.mockReturnValue({ userId: "u1", scopes: "read" });
+      ctx.setUser({ userId: "u1", scopes: "read" });
       accountsService.getLlmAccounts.mockResolvedValue({
         accounts: [],
         totalAssets: 0,
@@ -129,7 +169,7 @@ describe("McpAccountsTools", () => {
         totalAccounts: 0,
       });
 
-      await handlers["list_accounts"]({}, { sessionId: "s1" });
+      await handlers["list_accounts"]({}, ctx);
 
       expect(accountsService.getLlmAccounts).toHaveBeenCalledWith("u1", {
         accountNames: undefined,
@@ -140,24 +180,52 @@ describe("McpAccountsTools", () => {
       });
     });
 
+    it("carries the completeness flags and a withheld net worth through unformatted", async () => {
+      ctx.setUser({ userId: "u1", scopes: "read" });
+      accountsService.getLlmAccounts.mockResolvedValue({
+        accounts: [],
+        totalAssets: null,
+        totalLiabilities: 0,
+        netWorth: null,
+        knownNetWorthSubtotal: 1000,
+        fxComplete: false,
+        pricesComplete: true,
+        valuationComplete: false,
+        missingRatePairs: ["ZZZ->USD"],
+        totalAccounts: 0,
+      });
+
+      const result = await handlers["list_accounts"]({}, ctx);
+
+      expect(result.isError).toBeUndefined();
+      const parsed = result.structuredContent as any;
+      expect(parsed.netWorth).toBeNull();
+      expect(parsed.totalAssets).toBeNull();
+      expect(parsed.knownNetWorthSubtotal).toBe(1000);
+      expect(parsed.fxComplete).toBe(false);
+      expect(parsed.pricesComplete).toBe(true);
+      expect(parsed.valuationComplete).toBe(false);
+      expect(parsed.missingRatePairs).toEqual(["ZZZ->USD"]);
+    });
+
     it("returns error when no user context", async () => {
-      resolve.mockReturnValue(undefined);
-      const result = await handlers["list_accounts"]({}, { sessionId: "s1" });
+      ctx.setUser(undefined);
+      const result = await handlers["list_accounts"]({}, ctx);
       expect(result.isError).toBe(true);
     });
 
     it("requires read scope", async () => {
-      resolve.mockReturnValue({ userId: "u1", scopes: "write" });
-      const result = await handlers["list_accounts"]({}, { sessionId: "s1" });
+      ctx.setUser({ userId: "u1", scopes: "write" });
+      const result = await handlers["list_accounts"]({}, ctx);
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain("read");
     });
 
     it("returns a safe error when the service throws", async () => {
-      resolve.mockReturnValue({ userId: "u1", scopes: "read" });
+      ctx.setUser({ userId: "u1", scopes: "read" });
       accountsService.getLlmAccounts.mockRejectedValue(new Error("DB fail"));
 
-      const result = await handlers["list_accounts"]({}, { sessionId: "s1" });
+      const result = await handlers["list_accounts"]({}, ctx);
       expect(result.isError).toBe(true);
       expect(result.content[0].text).toContain("An error occurred");
     });

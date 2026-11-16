@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   buildLoanProjectionInput,
   deriveLoanPaymentHistory,
+  diagnoseLoanProjection,
   observedInstallment,
   resolveCurrentLoanTerms,
   fetchAllAccountTransactions,
@@ -11,7 +12,7 @@ import { transactionsApi } from '@/lib/transactions';
 import { generateLoanSchedule, getPeriodicRate, isoDay } from '@/lib/loan-schedule';
 import { financialTodayYmd } from '@/lib/financial-today';
 import { Account } from '@/types/account';
-import { Transaction, TransactionSplit } from '@/types/transaction';
+import { Transaction, TransactionSplit, TransactionStatus } from '@/types/transaction';
 
 vi.mock('@/lib/transactions', () => ({
   transactionsApi: {
@@ -32,8 +33,7 @@ function makeAccount(overrides: Partial<Account> = {}): Account {
     interestRate: 6,
     paymentAmount: 500,
     paymentFrequency: 'MONTHLY',
-    isCanadianMortgage: false,
-    isVariableRate: false,
+    mortgageType: 'ANNUITY',
     ...overrides,
   } as Account;
 }
@@ -70,6 +70,25 @@ afterEach(() => {
   vi.clearAllMocks();
 });
 
+// The fixtures predate the `todayYmd` argument and are all dated in the past, so
+// they run on a day after every one of them; the cases that are ABOUT today pass
+// their own, below.
+const AFTER_ALL_FIXTURES = '2999-12-31';
+function derive(
+  account: Account,
+  transactions: Transaction[],
+  rateChanges: Parameters<typeof deriveLoanPaymentHistory>[2] = [],
+  interestTransactions: Transaction[] = [],
+) {
+  return deriveLoanPaymentHistory(
+    account,
+    transactions,
+    rateChanges,
+    interestTransactions,
+    AFTER_ALL_FIXTURES,
+  );
+}
+
 describe('deriveLoanPaymentHistory', () => {
   it('builds a row per repayment in date order, anchored to the opening balance', () => {
     const account = makeAccount();
@@ -78,7 +97,7 @@ describe('deriveLoanPaymentHistory', () => {
       makeTransaction({ transactionDate: '2026-01-15', amount: 450 }),
     ];
 
-    const result = deriveLoanPaymentHistory(account, transactions);
+    const result = derive(account, transactions);
 
     expect(result.events).toHaveLength(2);
     expect(result.events[0].date).toBe('2026-01-15');
@@ -88,6 +107,17 @@ describe('deriveLoanPaymentHistory', () => {
     expect(result.events[1].balance).toBe(10000 - 450 - 460);
     expect(result.cumulativePrincipal).toBe(910);
     expect(result.currentBalance).toBe(8000);
+  });
+
+  it('rounds the running balance at each step, so no float noise reaches a row', () => {
+    // -0.3 + 0.1 is -0.19999999999999998 in floating point.
+    const account = makeAccount({ openingBalance: -0.3, currentBalance: 0 } as Partial<Account>);
+    const result = derive(account, [
+      makeTransaction({ transactionDate: '2026-01-15', amount: 0.1 }),
+      makeTransaction({ transactionDate: '2026-02-15', amount: 0.2 }),
+    ]);
+    expect(result.events[0].balance).toBe(0.2);
+    expect(result.events[1].balance).toBe(0);
   });
 
   it('counts draws in the running balance but emits no row for them', () => {
@@ -100,7 +130,7 @@ describe('deriveLoanPaymentHistory', () => {
       makeTransaction({ transactionDate: '2026-01-20', amount: -100 }), // draw
     ];
 
-    const result = deriveLoanPaymentHistory(account, transactions);
+    const result = derive(account, transactions);
 
     expect(result.events).toHaveLength(2);
     expect(result.events[0].balance).toBe(10000 - 450);
@@ -124,7 +154,7 @@ describe('deriveLoanPaymentHistory', () => {
       makeTransaction({ id: 'p2', transactionDate: '2026-04-01', amount: 1000 }), // repay
     ];
 
-    const result = deriveLoanPaymentHistory(loc, transactions);
+    const result = derive(loc, transactions);
 
     expect(result.startingBalance).toBe(0);
     // Repayment rows only; balances track real utilization
@@ -142,7 +172,7 @@ describe('deriveLoanPaymentHistory', () => {
       50,
     );
 
-    const result = deriveLoanPaymentHistory(account, [tx]);
+    const result = derive(account, [tx]);
 
     expect(result.events[0].interest).toBe(50);
     expect(result.events[0].principal).toBe(450);
@@ -163,7 +193,7 @@ describe('deriveLoanPaymentHistory', () => {
       50,
     );
 
-    const result = deriveLoanPaymentHistory(account, [regular, extra]);
+    const result = derive(account, [regular, extra]);
 
     expect(result.events).toHaveLength(2);
     expect(result.cumulativeInterest).toBe(50);
@@ -177,21 +207,21 @@ describe('deriveLoanPaymentHistory', () => {
       makeTransaction({ transactionDate: '2026-02-15', amount: 550 }),
     ];
 
-    const result = deriveLoanPaymentHistory(account, transactions);
+    const result = derive(account, transactions);
 
     expect(result.startingBalance).toBe(8000 + 1000);
   });
 
   it('floors the running balance at zero', () => {
     const account = makeAccount({ openingBalance: -100, currentBalance: 0 });
-    const result = deriveLoanPaymentHistory(account, [
+    const result = derive(account, [
       makeTransaction({ transactionDate: '2026-01-15', amount: 450 }),
     ]);
     expect(result.events[0].balance).toBe(0);
   });
 
   it('returns an empty history for no transactions', () => {
-    const result = deriveLoanPaymentHistory(makeAccount(), []);
+    const result = derive(makeAccount(), []);
     expect(result.events).toHaveLength(0);
     expect(result.cumulativePrincipal).toBe(0);
     expect(result.cumulativeInterest).toBe(0);
@@ -205,7 +235,7 @@ describe('deriveLoanPaymentHistory', () => {
     // every cumulative interest figure derived from it. A historical row states
     // the ledger, so the interest is a measured zero.
     const account = makeAccount();
-    const result = deriveLoanPaymentHistory(account, [
+    const result = derive(account, [
       makeTransaction({ transactionDate: '2026-01-15', amount: 450 }),
     ]);
     expect(result.events[0].type).toBe('REGULAR');
@@ -225,7 +255,7 @@ describe('deriveLoanPaymentHistory', () => {
       currentBalance: -199715,
       interestRate: 5.5,
     });
-    const { events, cumulativeInterest } = deriveLoanPaymentHistory(
+    const { events, cumulativeInterest } = derive(
       account,
       [makeTransaction({ transactionDate: '2022-05-05', amount: 285 })],
       [{ effectiveDate: '2022-04-05', annualRate: 5.5 }],
@@ -242,14 +272,14 @@ describe('deriveLoanPaymentHistory', () => {
       'parent-1',
       42,
     );
-    const result = deriveLoanPaymentHistory(account, [tx]);
+    const result = derive(account, [tx]);
     expect(result.events[0].type).toBe('REGULAR');
     expect(result.events[0].interest).toBe(42);
   });
 
   it('classifies overpayment-category payments as 100% principal and flags them', () => {
     const account = makeAccount({ overpaymentCategoryId: 'cat-over' });
-    const result = deriveLoanPaymentHistory(account, [
+    const result = derive(account, [
       makeTransaction({
         transactionDate: '2026-01-15',
         amount: 450,
@@ -272,14 +302,14 @@ describe('deriveLoanPaymentHistory', () => {
         splits: [],
       } as unknown as Transaction,
     };
-    const result = deriveLoanPaymentHistory(account, [tx]);
+    const result = derive(account, [tx]);
     expect(result.events[0].type).toBe('OVERPAYMENT');
     expect(result.events[0].interest).toBe(0);
   });
 
   it('classifies payments whose memo matches the overpayment memo, case-insensitively', () => {
     const account = makeAccount({ overpaymentMemo: 'Extra principal' });
-    const result = deriveLoanPaymentHistory(account, [
+    const result = derive(account, [
       makeTransaction({
         transactionDate: '2026-01-15',
         amount: 450,
@@ -301,14 +331,14 @@ describe('deriveLoanPaymentHistory', () => {
         splits: [{ memo: 'monthly OVERPAY', amount: -300 } as TransactionSplit],
       } as unknown as Transaction,
     };
-    const result = deriveLoanPaymentHistory(account, [tx]);
+    const result = derive(account, [tx]);
     expect(result.events[0].type).toBe('OVERPAYMENT');
     expect(result.events[0].interest).toBe(0);
   });
 
   it('treats a payment as regular when its memo does not contain the overpayment memo', () => {
     const account = makeAccount({ overpaymentMemo: 'extra principal' });
-    const result = deriveLoanPaymentHistory(account, [
+    const result = derive(account, [
       makeTransaction({
         transactionDate: '2026-01-15',
         amount: 450,
@@ -324,7 +354,7 @@ describe('deriveLoanPaymentHistory', () => {
       overpaymentMemo: 'lump sum',
       overpaymentPayeeId: null,
     });
-    const result = deriveLoanPaymentHistory(account, [
+    const result = derive(account, [
       makeTransaction({
         transactionDate: '2026-01-15',
         amount: 1000,
@@ -370,7 +400,7 @@ describe('deriveLoanPaymentHistory', () => {
       linkedTransaction: parent,
     };
 
-    const result = deriveLoanPaymentHistory(account, [regular, extra]);
+    const result = derive(account, [regular, extra]);
 
     const regularEvent = result.events.find((e) => e.principal === 800);
     const extraEvent = result.events.find((e) => e.principal === 150);
@@ -403,31 +433,27 @@ describe('deriveLoanPaymentHistory', () => {
       linkedTransaction: parent,
     };
 
-    const result = deriveLoanPaymentHistory(account, [regular, extra]);
+    const result = derive(account, [regular, extra]);
 
     expect(result.events.find((e) => e.principal === 800)?.type).toBe('REGULAR');
     expect(result.events.find((e) => e.principal === 150)?.type).toBe('OVERPAYMENT');
   });
 
   // Every shape the estimate used to reach a row through. It read the account
-  // type, the Canadian and variable flags, the payment frequency and the rate
-  // timeline, so a single-fixture test only closes one door; the interest of a
-  // principal-only payment is zero for all of them.
+  // type, the mortgage type, the payment frequency and the rate timeline, so a
+  // single-fixture test only closes one door; the interest of a principal-only
+  // payment is zero for all of them.
   const PRINCIPAL_ONLY_SHAPES: Array<{ label: string; account: Partial<Account> }> = [
     { label: 'loan', account: { accountType: 'LOAN' } },
     { label: 'mortgage', account: { accountType: 'MORTGAGE' } },
     { label: 'line of credit', account: { accountType: 'LINE_OF_CREDIT' } },
     {
       label: 'Canadian fixed mortgage',
-      account: { accountType: 'MORTGAGE', isCanadianMortgage: true, isVariableRate: false },
+      account: { accountType: 'MORTGAGE', mortgageType: 'CANADIAN_FIXED' },
     },
     {
-      label: 'Canadian variable mortgage',
-      account: { accountType: 'MORTGAGE', isCanadianMortgage: true, isVariableRate: true },
-    },
-    {
-      label: 'variable-rate loan',
-      account: { accountType: 'LOAN', isVariableRate: true },
+      label: 'annuity mortgage',
+      account: { accountType: 'MORTGAGE', mortgageType: 'ANNUITY' },
     },
     {
       label: 'biweekly loan',
@@ -445,7 +471,7 @@ describe('deriveLoanPaymentHistory', () => {
         withTimeline ? ' with a rate timeline' : ''
       }`, () => {
         const account = makeAccount(overrides);
-        const result = deriveLoanPaymentHistory(
+        const result = derive(
           account,
           [makeTransaction({ transactionDate: '2026-01-15', amount: 450 })],
           withTimeline ? [{ effectiveDate: '2025-12-15', annualRate: 6 }] : [],
@@ -462,7 +488,7 @@ describe('deriveLoanPaymentHistory', () => {
       openingBalance: -1000,
       currentBalance: -500,
     });
-    const result = deriveLoanPaymentHistory(loc, [
+    const result = derive(loc, [
       makeTransaction({ transactionDate: '2026-01-15', amount: 200 }),
     ]);
     expect(result.events[0].interest).toBe(0);
@@ -501,7 +527,7 @@ describe('observedInstallment', () => {
         { principal: 765, interest: 153, type: 'REGULAR' },
       ]),
     );
-    expect(result).toEqual({ amount: 918, complete: true });
+    expect(result).toMatchObject({ amount: 918, complete: true });
   });
 
   it('reports what was observed, whatever the stored payment says', () => {
@@ -510,7 +536,7 @@ describe('observedInstallment', () => {
     const result = observedInstallment(
       history([{ principal: 765, interest: 700, type: 'REGULAR' }]),
     );
-    expect(result).toEqual({ amount: 1465, complete: true });
+    expect(result).toMatchObject({ amount: 1465, complete: true });
   });
 
   it('skips overpayment rows when finding the last regular installment', () => {
@@ -520,7 +546,7 @@ describe('observedInstallment', () => {
         { principal: 5000, interest: 0, type: 'OVERPAYMENT' },
       ]),
     );
-    expect(result).toEqual({ amount: 918, complete: true });
+    expect(result).toMatchObject({ amount: 918, complete: true });
   });
 
   it('reports nothing observed with no regular history', () => {
@@ -528,12 +554,35 @@ describe('observedInstallment', () => {
     expect(observedInstallment(history([]))).toBeNull();
   });
 
+  it('dates the figure at the last REGULAR row, not the last row', () => {
+    // The date is what resolveSeedPayment compares against a stated payment's
+    // row to decide which statement is newer, so it has to belong to the
+    // installment the amount came from -- a trailing overpayment must not move
+    // it forward.
+    expect(
+      observedInstallment(
+        history([
+          { principal: 765, interest: 153, type: 'REGULAR' },
+          { principal: 5000, interest: 0, type: 'OVERPAYMENT' },
+        ]),
+      ),
+    ).toMatchObject({ amount: 918, date: '2026-01-15' });
+    expect(
+      observedInstallment(
+        history([
+          { principal: 800, interest: 200, type: 'REGULAR' },
+          { principal: 765, interest: 153, type: 'REGULAR' },
+        ]),
+      ),
+    ).toMatchObject({ date: '2026-02-15' });
+  });
+
   it('marks a principal-only row incomplete rather than smaller', () => {
     // The distinction the contractual fallback keys off: principal + 0 is a
     // partial installment, not a lower one.
     expect(
       observedInstallment(history([{ principal: 450, interest: 0, type: 'REGULAR' }])),
-    ).toEqual({ amount: 450, complete: false });
+    ).toMatchObject({ amount: 450, complete: false });
   });
 
   it('marks a principal-only row COMPLETE at a known 0% rate', () => {
@@ -546,7 +595,7 @@ describe('observedInstallment', () => {
       observedInstallment(
         history([{ principal: 450, interest: 0, type: 'REGULAR', annualRate: 0 }]),
       ),
-    ).toEqual({ amount: 450, complete: true });
+    ).toMatchObject({ amount: 450, complete: true });
   });
 
   it('keeps a principal-only row incomplete at a known NON-zero rate', () => {
@@ -554,17 +603,17 @@ describe('observedInstallment', () => {
       observedInstallment(
         history([{ principal: 450, interest: 0, type: 'REGULAR', annualRate: 5 }]),
       ),
-    ).toEqual({ amount: 450, complete: false });
+    ).toMatchObject({ amount: 450, complete: false });
   });
 
   it('keeps a principal-only row incomplete when the rate is unknown', () => {
-    // A variable-rate loan with no recorded history: this row's rate is genuinely
-    // unknown, so the interest could be anything. Strictly `=== 0`, never falsy.
+    // No rate on record for this row, so the interest could be anything.
+    // Strictly `=== 0`, never falsy.
     expect(
       observedInstallment(
         history([{ principal: 450, interest: 0, type: 'REGULAR', annualRate: null }]),
       ),
-    ).toEqual({ amount: 450, complete: false });
+    ).toMatchObject({ amount: 450, complete: false });
   });
 
   it('uses principal + interest for separately-booked interest', () => {
@@ -581,7 +630,7 @@ describe('observedInstallment', () => {
         { principal: 300, interest: 300, type: 'REGULAR' },
       ]),
     );
-    expect(result).toEqual({ amount: 600, complete: true });
+    expect(result).toMatchObject({ amount: 600, complete: true });
   });
 });
 
@@ -600,7 +649,7 @@ describe('buildLoanProjectionInput seed payment', () => {
       ...overrides,
     });
   const principalOnlyHistory = (acct: Account) =>
-    deriveLoanPaymentHistory(acct, [
+    derive(acct, [
       makeTransaction({ transactionDate: '2022-05-05', amount: 285 }),
     ]);
 
@@ -630,7 +679,7 @@ describe('buildLoanProjectionInput seed payment', () => {
       paymentAmount: 1200,
       paymentFrequency: 'MONTHLY',
     });
-    const history = deriveLoanPaymentHistory(acct, [
+    const history = derive(acct, [
       makeTransaction({ transactionDate: '2024-01-05', amount: 285 }),
     ]);
     const input = buildLoanProjectionInput(acct, history);
@@ -649,7 +698,7 @@ describe('buildLoanProjectionInput seed payment', () => {
       paymentAmount: null as unknown as number,
       paymentFrequency: 'MONTHLY',
     });
-    const history = deriveLoanPaymentHistory(acct, [
+    const history = derive(acct, [
       makeTransaction({ transactionDate: '2024-01-05', amount: 285 }),
     ]);
     expect(resolveCurrentLoanTerms(acct, history).payment).toBeNull();
@@ -660,7 +709,7 @@ describe('buildLoanProjectionInput seed payment', () => {
     // Interest recorded on the payment: the derived figure is the borrower's
     // real installment and wins even though the contractual one also amortizes.
     const acct = account();
-    const history = deriveLoanPaymentHistory(acct, [
+    const history = derive(acct, [
       withInterestSplit(
         makeTransaction({ transactionDate: '2022-05-05', amount: 285 }),
         'parent-1',
@@ -696,7 +745,7 @@ describe('buildLoanProjectionInput seed payment', () => {
       paymentAmount: 1500,
       paymentFrequency: 'MONTHLY',
     });
-    const history = deriveLoanPaymentHistory(acct, [
+    const history = derive(acct, [
       makeTransaction({ transactionDate: '2024-01-05', amount: 600 }),
     ]);
     const input = buildLoanProjectionInput(acct, history, [
@@ -757,7 +806,7 @@ describe('buildLoanProjectionInput scheduled-installment anchor (issue #1253)', 
       ...overrides,
     });
   const history = (acct: Account) =>
-    deriveLoanPaymentHistory(acct, [
+    derive(acct, [
       withInterestSplit(
         makeTransaction({ transactionDate: '2026-07-15', amount: 500 }),
         'parent-1',
@@ -829,7 +878,7 @@ describe('buildLoanProjectionInput scheduled-installment anchor (issue #1253)', 
     // against a balance that never saw the repayment -- and the generated rows
     // would be dated before the real 2026-06-15 row they are appended after.
     const acct = account({ currentBalance: -80000, openingBalance: -100000 });
-    const hist = deriveLoanPaymentHistory(acct, [
+    const hist = derive(acct, [
       makeTransaction({ transactionDate: '2026-06-15', amount: 20000 }),
     ]);
 
@@ -883,7 +932,7 @@ describe('buildLoanProjectionInput scheduled-installment anchor (issue #1253)', 
     expect(todayYmd).toBe('2026-08-30');
 
     const acct = account({ currentBalance: -80000, openingBalance: -100000 });
-    const hist = deriveLoanPaymentHistory(acct, [
+    const hist = derive(acct, [
       makeTransaction({ transactionDate: '2026-08-30', amount: 20000 }),
     ]);
 
@@ -963,6 +1012,33 @@ describe('buildLoanProjectionInput scheduled-installment anchor (issue #1253)', 
   });
 });
 
+describe('buildLoanProjectionInput mortgage type', () => {
+  // The projection is priced by the account's type, read through
+  // `mortgageTypeOf`.
+  const project = (overrides: Partial<Account>) => {
+    const acct = makeAccount({
+      accountType: 'MORTGAGE',
+      openingBalance: -100000,
+      currentBalance: -100000,
+      interestRate: 5,
+      paymentAmount: 1500,
+      ...overrides,
+    });
+    const history = derive(acct, [
+      makeTransaction({ transactionDate: '2024-01-05', amount: 600 }),
+    ]);
+    return buildLoanProjectionInput(acct, history, [])!;
+  };
+
+  it('carries the stored type', () => {
+    expect(project({ mortgageType: 'CANADIAN_FIXED' }).mortgageType).toBe('CANADIAN_FIXED');
+    expect(project({ mortgageType: 'ANNUITY' }).mortgageType).toBe('ANNUITY');
+    expect(project({ accountType: 'LOAN', mortgageType: 'ANNUITY' }).mortgageType).toBe(
+      'ANNUITY',
+    );
+  });
+});
+
 describe('buildLoanProjectionInput rate authority', () => {
   // Recording a rate change never writes account.interestRate -- the backend
   // keeps it user-owned and says so -- so a loan whose rate rose through the
@@ -981,7 +1057,7 @@ describe('buildLoanProjectionInput rate authority', () => {
 
   it('projects at the timeline rate, not the stale account scalar', () => {
     const acct = divergent();
-    const history = deriveLoanPaymentHistory(acct, [
+    const history = derive(acct, [
       makeTransaction({ transactionDate: '2024-01-05', amount: 600 }),
     ]);
     const input = buildLoanProjectionInput(acct, history, [
@@ -1003,7 +1079,7 @@ describe('buildLoanProjectionInput rate authority', () => {
     // A rate change entered without a new payment: the rate is still the
     // timeline's, and the payment falls back down the documented order.
     const acct = divergent();
-    const history = deriveLoanPaymentHistory(acct, [
+    const history = derive(acct, [
       makeTransaction({ transactionDate: '2024-01-05', amount: 600 }),
     ]);
     const input = buildLoanProjectionInput(acct, history, [
@@ -1021,7 +1097,7 @@ describe('buildLoanProjectionInput rate authority', () => {
     // the very field the user would edit to fix it: a principal-only 300 copied
     // into the row, and correcting the account to 1500 changed nothing.
     const acct = divergent({ paymentAmount: 1500 });
-    const history = deriveLoanPaymentHistory(acct, [
+    const history = derive(acct, [
       makeTransaction({ transactionDate: '2024-01-05', amount: 300 }),
     ]);
     const input = buildLoanProjectionInput(acct, history, [
@@ -1043,7 +1119,7 @@ describe('buildLoanProjectionInput rate authority', () => {
     // observation, so it is ranked and tested -- and here it amortizes, so it
     // wins over the contractual figure.
     const acct = divergent({ paymentAmount: 1500 });
-    const history = deriveLoanPaymentHistory(acct, [
+    const history = derive(acct, [
       makeTransaction({ transactionDate: '2024-01-05', amount: 300 }),
     ]);
     const input = buildLoanProjectionInput(acct, history, [
@@ -1059,7 +1135,7 @@ describe('buildLoanProjectionInput rate authority', () => {
 
   it('keeps a manual row\'s payment authoritative even when it cannot amortize', () => {
     const acct = divergent({ paymentAmount: 1500 });
-    const history = deriveLoanPaymentHistory(acct, [
+    const history = derive(acct, [
       makeTransaction({ transactionDate: '2024-01-05', amount: 450 }),
     ]);
     const input = buildLoanProjectionInput(acct, history, [
@@ -1081,7 +1157,7 @@ describe('buildLoanProjectionInput rate authority', () => {
     // the very next line then refuses, and the projection would silently vanish
     // instead of using a payment that does amortize.
     const acct = divergent({ paymentAmount: 1500, interestRate: 5 });
-    const history = deriveLoanPaymentHistory(acct, [
+    const history = derive(acct, [
       makeTransaction({ transactionDate: '2024-01-05', amount: 600 }),
     ]);
     const nextWeek = new Date();
@@ -1103,7 +1179,7 @@ describe('buildLoanProjectionInput rate authority', () => {
     // back to the contractual 1800 would report a payoff from a payment nobody
     // makes; the fallback is only for an INCOMPLETE `principal + 0`.
     const acct = divergent({ currentBalance: -250000, paymentAmount: 1800 });
-    const history = deriveLoanPaymentHistory(acct, [
+    const history = derive(acct, [
       withInterestSplit(
         makeTransaction({ transactionDate: '2024-01-05', amount: 600 }),
         'parent-1',
@@ -1120,7 +1196,7 @@ describe('buildLoanProjectionInput rate authority', () => {
     // The card and the schedule used to resolve separately: "Current Payment
     // $450" beside a payoff computed from the contractual $950.
     const acct = divergent({ currentBalance: -100000, paymentAmount: 1500 });
-    const history = deriveLoanPaymentHistory(acct, [
+    const history = derive(acct, [
       makeTransaction({ transactionDate: '2024-01-05', amount: 450 }),
     ]);
     expect(resolveCurrentLoanTerms(acct, history).payment).toBe(
@@ -1141,7 +1217,7 @@ describe('buildLoanProjectionInput rate authority', () => {
       paymentAmount: null as unknown as number,
       paymentFrequency: 'MONTHLY',
     });
-    const history = deriveLoanPaymentHistory(acct, [
+    const history = derive(acct, [
       makeTransaction({ transactionDate: '2024-01-05', amount: 600 }),
     ]);
     const rows = [
@@ -1170,7 +1246,7 @@ describe('buildLoanProjectionInput rate authority', () => {
       interestRate: null as unknown as number,
       paymentAmount: null as unknown as number,
     });
-    const history = deriveLoanPaymentHistory(acct, []);
+    const history = derive(acct, []);
     expect(buildLoanProjectionInput(acct, history)).toBeNull();
   });
 
@@ -1183,12 +1259,11 @@ describe('buildLoanProjectionInput rate authority', () => {
     // the missing-data rule.
     const acct = makeAccount({
       interestRate: 0,
-      isVariableRate: false,
       paymentAmount: null as unknown as number,
       openingBalance: -1200,
       currentBalance: -900,
     });
-    const history = deriveLoanPaymentHistory(acct, [
+    const history = derive(acct, [
       makeTransaction({ transactionDate: '2026-01-15', amount: 150 }),
       makeTransaction({ transactionDate: '2026-02-15', amount: 150 }),
     ]);
@@ -1215,12 +1290,11 @@ describe('buildLoanProjectionInput rate authority', () => {
     // the installment.
     const acct = makeAccount({
       interestRate: 6,
-      isVariableRate: false,
       paymentAmount: null as unknown as number,
       openingBalance: -1200,
       currentBalance: -900,
     });
-    const history = deriveLoanPaymentHistory(acct, [
+    const history = derive(acct, [
       makeTransaction({ transactionDate: '2026-01-15', amount: 150 }),
       makeTransaction({ transactionDate: '2026-02-15', amount: 150 }),
     ]);
@@ -1233,7 +1307,7 @@ describe('buildLoanProjectionInput rate authority', () => {
     // the PDF all print `${rate}%`, so a loan with no rate anywhere rendered a
     // measured "0%" where it had always said "Not set".
     const acct = makeAccount({ interestRate: null as unknown as number });
-    const history = deriveLoanPaymentHistory(acct, [
+    const history = derive(acct, [
       makeTransaction({ transactionDate: '2024-01-05', amount: 300 }),
     ]);
     expect(resolveCurrentLoanTerms(acct, history).annualRate).toBeNull();
@@ -1249,7 +1323,7 @@ describe('buildLoanProjectionInput rate authority', () => {
     // Negative control: with no timeline, startingAnnualRate IS the scalar, so
     // this change is inert for every loan without a rate history.
     const acct = divergent();
-    const history = deriveLoanPaymentHistory(acct, [
+    const history = derive(acct, [
       makeTransaction({ transactionDate: '2024-01-05', amount: 600 }),
     ]);
     expect(buildLoanProjectionInput(acct, history)!.annualRate).toBe(5);
@@ -1295,10 +1369,10 @@ describe('readRecordedInterest provenance', () => {
     // The defect: `the first split that is not the principal transfer` made the
     // ESCROW line interest whenever it happened to come first, reporting $500 of
     // property tax as $500 of interest paid on a payment whose interest was $300.
-    const escrowFirst = deriveLoanPaymentHistory(withInterestCategory, [
+    const escrowFirst = derive(withInterestCategory, [
       splitPayment([LOAN_LINE, ESCROW_LINE, INTEREST_LINE]),
     ]);
-    const interestFirst = deriveLoanPaymentHistory(withInterestCategory, [
+    const interestFirst = derive(withInterestCategory, [
       splitPayment([LOAN_LINE, INTEREST_LINE, ESCROW_LINE]),
     ]);
 
@@ -1309,7 +1383,7 @@ describe('readRecordedInterest provenance', () => {
   });
 
   it('sums interest split across two lines of the configured category', () => {
-    const history = deriveLoanPaymentHistory(withInterestCategory, [
+    const history = derive(withInterestCategory, [
       splitPayment([
         LOAN_LINE,
         INTEREST_LINE,
@@ -1326,7 +1400,7 @@ describe('readRecordedInterest provenance', () => {
     // interest" for them wiped Interest Paid, every cumulative total and the
     // exports the moment the field was filled in.
     const withOtherCategory = makeAccount({ interestCategoryId: 'cat-different' });
-    const history = deriveLoanPaymentHistory(withOtherCategory, [
+    const history = derive(withOtherCategory, [
       splitPayment([LOAN_LINE, INTEREST_LINE]),
     ]);
     expect(history.events[0].interest).toBe(300);
@@ -1338,7 +1412,7 @@ describe('readRecordedInterest provenance', () => {
     // the date is the stronger signal for a loan that books interest outside the
     // split, so it wins over the fallback.
     const withOtherCategory = makeAccount({ interestCategoryId: 'cat-different' });
-    const history = deriveLoanPaymentHistory(
+    const history = derive(
       withOtherCategory,
       [splitPayment([LOAN_LINE, ESCROW_LINE])],
       [],
@@ -1355,7 +1429,7 @@ describe('readRecordedInterest provenance', () => {
 
   it('prefers the configured category over a paired expense', () => {
     // The other direction: an exact provenance match is not overridden.
-    const history = deriveLoanPaymentHistory(
+    const history = derive(
       withInterestCategory,
       [splitPayment([LOAN_LINE, INTEREST_LINE])],
       [],
@@ -1373,7 +1447,7 @@ describe('readRecordedInterest provenance', () => {
   it('refuses to guess between two category lines with no configured category', () => {
     // No interestCategoryId, escrow and interest indistinguishable: reporting
     // either would be picking a number because it was listed first.
-    const history = deriveLoanPaymentHistory(makeAccount(), [
+    const history = derive(makeAccount(), [
       splitPayment([LOAN_LINE, ESCROW_LINE, INTEREST_LINE]),
     ]);
     expect(history.events[0].interest).toBe(0);
@@ -1382,7 +1456,7 @@ describe('readRecordedInterest provenance', () => {
   it('still reads a single category line with no configured category', () => {
     // The canonical shape ScheduledTransactionLoanService builds, and what every
     // loan without a configured interest category has always relied on.
-    const history = deriveLoanPaymentHistory(makeAccount(), [
+    const history = derive(makeAccount(), [
       splitPayment([LOAN_LINE, INTEREST_LINE]),
     ]);
     expect(history.events[0].interest).toBe(300);
@@ -1391,7 +1465,7 @@ describe('readRecordedInterest provenance', () => {
   it('lets a paired separate expense answer when the split carries no interest line', () => {
     // Configured category, but this parent is principal + escrow only and the
     // interest is booked as its own expense. Reporting 0 here would drop it.
-    const history = deriveLoanPaymentHistory(
+    const history = derive(
       withInterestCategory,
       [splitPayment([LOAN_LINE, ESCROW_LINE])],
       [],
@@ -1413,7 +1487,7 @@ describe('readRecordedInterest provenance', () => {
     // [principal, categorized interest, uncategorized fee] was one candidate to
     // the writer and two to this reader -- ambiguous, and reported as no
     // interest at all while the recorded 300 sat in the split.
-    const history = deriveLoanPaymentHistory(makeAccount(), [
+    const history = derive(makeAccount(), [
       splitPayment([
         LOAN_LINE,
         INTEREST_LINE,
@@ -1426,7 +1500,7 @@ describe('readRecordedInterest provenance', () => {
   it('rounds a multi-line interest sum to cents like every sibling path', () => {
     // takeSeparateInterest and the orphan rows both round; an unrounded sum let
     // float drift into event.interest and the cumulative accumulator.
-    const history = deriveLoanPaymentHistory(withInterestCategory, [
+    const history = derive(withInterestCategory, [
       splitPayment([
         LOAN_LINE,
         { transferAccountId: null, categoryId: 'cat-interest', amount: -0.1 } as unknown as TransactionSplit,
@@ -1440,7 +1514,7 @@ describe('readRecordedInterest provenance', () => {
     // Regular principal + extra principal, both transfers to the loan, with the
     // interest booked as its own expense that day. Answering a hard 0 here made
     // the caller treat the parent as final and drop the real expense.
-    const history = deriveLoanPaymentHistory(
+    const history = derive(
       makeAccount(),
       [
         splitPayment([
@@ -1461,7 +1535,7 @@ describe('readRecordedInterest provenance', () => {
   });
 
   it('records no interest for a transfer-only split parent with nothing paired', () => {
-    const history = deriveLoanPaymentHistory(withInterestCategory, [
+    const history = derive(withInterestCategory, [
       splitPayment([
         LOAN_LINE,
         { transferAccountId: LOAN_ID, amount: -200 } as TransactionSplit,
@@ -1473,7 +1547,7 @@ describe('readRecordedInterest provenance', () => {
   it('never treats a transfer to a third account as interest', () => {
     // The old predicate was `transferAccountId !== loanAccountId`, so a leg
     // moving money to some other account of the user's read as interest.
-    const history = deriveLoanPaymentHistory(makeAccount(), [
+    const history = derive(makeAccount(), [
       splitPayment([
         LOAN_LINE,
         { transferAccountId: 'savings-1', amount: -250 } as TransactionSplit,
@@ -1584,7 +1658,6 @@ describe('deriveLoanPaymentHistory with a rate timeline but no recorded interest
       openingBalance: -200000,
       currentBalance: -199430,
       interestRate: 5.5,
-      isVariableRate: true,
     });
     const transactions = [
       makeTransaction({ transactionDate: '2021-08-05', amount: 285 }),
@@ -1595,7 +1668,7 @@ describe('deriveLoanPaymentHistory with a rate timeline but no recorded interest
       { effectiveDate: '2022-04-05', annualRate: 5.5 },
     ];
 
-    const { events, cumulativeInterest } = deriveLoanPaymentHistory(
+    const { events, cumulativeInterest } = derive(
       account,
       transactions,
       rateChanges,
@@ -1617,13 +1690,12 @@ describe('deriveLoanPaymentHistory reconstructed rate (no rate history)', () => 
     // regression the #1255 fix must not cause.
     const account = makeAccount({
       accountType: 'MORTGAGE',
-      isCanadianMortgage: true,
-      isVariableRate: false,
+      mortgageType: 'CANADIAN_FIXED',
       openingBalance: -200000,
       currentBalance: -199715,
       interestRate: 5.5,
     });
-    const { events } = deriveLoanPaymentHistory(account, [
+    const { events } = derive(account, [
       makeTransaction({ transactionDate: '2022-05-05', amount: 285 }),
     ]);
     expect(events[0].interest).toBe(0);
@@ -1633,13 +1705,12 @@ describe('deriveLoanPaymentHistory reconstructed rate (no rate history)', () => 
   it('keeps a non-Canadian fixed loan on its configured rate for a principal-only row', () => {
     const account = makeAccount({
       accountType: 'MORTGAGE',
-      isCanadianMortgage: false,
-      isVariableRate: false,
+      mortgageType: 'ANNUITY',
       openingBalance: -200000,
       currentBalance: -199000,
       interestRate: 6,
     });
-    const { events } = deriveLoanPaymentHistory(account, [
+    const { events } = derive(account, [
       makeTransaction({ transactionDate: '2024-01-05', amount: 1000 }),
     ]);
     expect(events[0].interest).toBe(0);
@@ -1653,11 +1724,10 @@ describe('deriveLoanPaymentHistory reconstructed rate (no rate history)', () => 
     // books no interest, and every row's rate is known.
     const account = makeAccount({
       interestRate: 0,
-      isVariableRate: false,
       openingBalance: -10000,
       currentBalance: -9550,
     });
-    const { events } = deriveLoanPaymentHistory(account, [
+    const { events } = derive(account, [
       makeTransaction({ transactionDate: '2026-01-15', amount: 450 }),
     ]);
     expect(events[0].interest).toBe(0);
@@ -1668,26 +1738,9 @@ describe('deriveLoanPaymentHistory reconstructed rate (no rate history)', () => 
     // The other side of the same distinction: absent is not 0%.
     const account = makeAccount({
       interestRate: null as unknown as number,
-      isVariableRate: false,
     });
-    const { events } = deriveLoanPaymentHistory(account, [
+    const { events } = derive(account, [
       makeTransaction({ transactionDate: '2026-01-15', amount: 450 }),
-    ]);
-    expect(events[0].annualRate).toBeNull();
-  });
-
-  it('shows no rate for a variable-rate loan with nothing to reconstruct from', () => {
-    // A variable loan's scalar rate is only today's, so this row's rate is
-    // genuinely unknown -- the fixed-rate fallback must not be extended to it.
-    const account = makeAccount({
-      accountType: 'MORTGAGE',
-      isVariableRate: true,
-      openingBalance: -200000,
-      currentBalance: -199000,
-      interestRate: 6,
-    });
-    const { events } = deriveLoanPaymentHistory(account, [
-      makeTransaction({ transactionDate: '2024-01-05', amount: 1000 }),
     ]);
     expect(events[0].annualRate).toBeNull();
   });
@@ -1697,10 +1750,9 @@ describe('deriveLoanPaymentHistory reconstructed rate (no rate history)', () => 
     // the configured-rate fallback is for regular rows only.
     const account = makeAccount({
       overpaymentCategoryId: 'cat-over',
-      isVariableRate: false,
       interestRate: 6,
     });
-    const { events } = deriveLoanPaymentHistory(account, [
+    const { events } = derive(account, [
       makeTransaction({
         transactionDate: '2026-01-15',
         amount: 500,
@@ -1718,14 +1770,13 @@ describe('deriveLoanPaymentHistory reconstructed rate (no rate history)', () => 
     // day-count annualization (x365/days) would read ~5.44%.
     const account = makeAccount({
       accountType: 'MORTGAGE',
-      isCanadianMortgage: true,
-      isVariableRate: false,
+      mortgageType: 'CANADIAN_FIXED',
       openingBalance: -200000,
       currentBalance: -199715,
       interestRate: 5.5,
     });
-    const recordedInterest = 200000 * getPeriodicRate(5.5, 12, true, false);
-    const { events } = deriveLoanPaymentHistory(account, [
+    const recordedInterest = 200000 * getPeriodicRate(5.5, 12, 'CANADIAN_FIXED');
+    const { events } = derive(account, [
       withInterestSplit(
         makeTransaction({ transactionDate: '2022-05-05', amount: 285 }),
         'parent-1',
@@ -1741,13 +1792,13 @@ describe('deriveLoanPaymentHistory reconstructed rate (no rate history)', () => 
     // first period recovers 6% from balance x rate/12 of recorded interest.
     const account = makeAccount({
       accountType: 'MORTGAGE',
-      isCanadianMortgage: false,
+      mortgageType: 'ANNUITY',
       openingBalance: -200000,
       currentBalance: -199000,
       interestRate: 6,
     });
     const recordedInterest = 200000 * (6 / 100 / 12);
-    const { events } = deriveLoanPaymentHistory(account, [
+    const { events } = derive(account, [
       withInterestSplit(
         makeTransaction({ transactionDate: '2024-01-05', amount: 1000 }),
         'parent-1',
@@ -1756,6 +1807,65 @@ describe('deriveLoanPaymentHistory reconstructed rate (no rate history)', () => 
     ]);
     expect(events[0].interest).toBeCloseTo(recordedInterest, 2);
     expect(events[0].annualRate).toBeCloseTo(6, 1);
+  });
+
+  it('annualizes an ANNUITY mortgage by day count, not by the periods per year', () => {
+    // docs/specs/mortgage-types.md table 4.1: ANNUITY's annualization trait is
+    // DAY_COUNT. The two differ on any period that is not exactly 365/12 days,
+    // so the second, 31-day period tells them apart.
+    const account = makeAccount({
+      accountType: 'MORTGAGE',
+      mortgageType: 'ANNUITY',
+      openingBalance: -200000,
+      currentBalance: -198000,
+      interestRate: 6,
+    });
+    const { events } = derive(account, [
+      withInterestSplit(
+        makeTransaction({ id: 'tx-1', transactionDate: '2024-01-05', amount: 1500 }),
+        'parent-1',
+        1000,
+      ),
+      withInterestSplit(
+        makeTransaction({ id: 'tx-2', transactionDate: '2024-02-05', amount: 1500 }),
+        'parent-2',
+        997.5,
+      ),
+    ]);
+    const second = events[1];
+    const periodicRate = second.interest / (second.balance + second.principal);
+    expect(second.annualRate).toBeCloseTo(periodicRate * (365 / 31) * 100, 6);
+    expect(second.annualRate).not.toBeCloseTo(periodicRate * 12 * 100, 2);
+  });
+
+  it('annualizes the same interest by the stored type', () => {
+    // CANADIAN_FIXED inverts the semi-annual compounding and recovers 5.5%
+    // exactly.
+    const recordedInterest = 200000 * getPeriodicRate(5.5, 12, 'CANADIAN_FIXED');
+    const history = (overrides: Partial<Account>) =>
+      derive(
+        makeAccount({
+          accountType: 'MORTGAGE',
+          openingBalance: -200000,
+          currentBalance: -199715,
+          interestRate: 5.5,
+          ...overrides,
+        }),
+        [
+          withInterestSplit(
+            makeTransaction({ transactionDate: '2022-05-05', amount: 285 }),
+            'parent-1',
+            recordedInterest,
+          ),
+        ],
+      ).events[0].annualRate;
+
+    expect(
+      history({ mortgageType: 'CANADIAN_FIXED' }),
+    ).toBeCloseTo(5.5, 3);
+    // ANNUITY annualizes by day count, reading the same interest as about
+    // 5.44%.
+    expect(history({ mortgageType: 'ANNUITY' })).toBeCloseTo(5.44, 2);
   });
 });
 
@@ -1784,7 +1894,7 @@ describe('deriveLoanPaymentHistory rate column with a recorded rate history', ()
       { effectiveDate: '2022-08-05', annualRate: 3.25 },
     ];
 
-    const { events } = deriveLoanPaymentHistory(account, transactions, rateChanges);
+    const { events } = derive(account, transactions, rateChanges);
 
     expect(events[0].annualRate).toBe(1.75);
     expect(events[1].annualRate).toBe(2.25);
@@ -1805,7 +1915,7 @@ describe('deriveLoanPaymentHistory rate column with a recorded rate history', ()
     ];
     const rateChanges = [{ effectiveDate: '2024-01-01', annualRate: 5.5 }];
 
-    const { events } = deriveLoanPaymentHistory(account, transactions, rateChanges);
+    const { events } = derive(account, transactions, rateChanges);
 
     const overpayment = events.find((e) => e.type === 'OVERPAYMENT');
     const regular = events.find((e) => e.type === 'REGULAR');
@@ -1841,7 +1951,7 @@ describe('deriveLoanPaymentHistory with paired separate interest expenses', () =
       { transactionDate: '2024-06-05', amount: -259.13, isTransfer: true } as Transaction,
     ];
 
-    const { events } = deriveLoanPaymentHistory(
+    const { events } = derive(
       account,
       transactions,
       [],
@@ -1877,7 +1987,7 @@ describe('deriveLoanPaymentHistory with paired separate interest expenses', () =
       { transactionDate: '2021-07-05', amount: -335.92, isTransfer: false } as Transaction,
     ];
 
-    const { events, cumulativeInterest } = deriveLoanPaymentHistory(
+    const { events, cumulativeInterest } = derive(
       account,
       transactions,
       [],
@@ -1895,6 +2005,38 @@ describe('deriveLoanPaymentHistory with paired separate interest expenses', () =
     expect(events[2].interest).toBeCloseTo(335.92, 2);
     // Grace interest is counted in the running total.
     expect(cumulativeInterest).toBeCloseTo(388.14 + 286.49 + 335.92, 2);
+  });
+
+  it('keeps a zero-amount interest row (a payment holiday), like a -0.01 one', () => {
+    // A suspended installment ("wakacje kredytowe") posts a 0 against the
+    // interest category. It is a real recorded event, so it must show in the
+    // schedule -- dropping exactly 0 while keeping a -0.01 rounding of the same
+    // row is the bug this asserts against (an interest expense far from any
+    // payment becomes its own interest-only row).
+    const account = makeAccount({
+      accountType: 'MORTGAGE',
+      openingBalance: -200000,
+      currentBalance: -199000,
+      interestRate: 5.5,
+    });
+    const transactions = [
+      makeTransaction({ transactionDate: '2022-01-05', amount: 500 }),
+    ];
+
+    const withZero = derive(account, transactions, [], [
+      { transactionDate: '2020-01-05', amount: 0, isTransfer: false } as Transaction,
+    ]);
+    const withTinyNegative = derive(account, transactions, [], [
+      { transactionDate: '2020-01-05', amount: -0.01, isTransfer: false } as Transaction,
+    ]);
+
+    // The zero row is kept (an interest-only row), so the schedule has the same
+    // number of rows either way.
+    expect(withZero.events).toHaveLength(withTinyNegative.events.length);
+    const zeroRow = withZero.events.find((e) => e.date.includes('2020-01'));
+    expect(zeroRow).toBeDefined();
+    expect(zeroRow!.principal).toBe(0);
+    expect(zeroRow!.interest).toBe(0);
   });
 
   it('consumes a date\'s booked interest once across two payments sharing it', () => {
@@ -1930,7 +2072,7 @@ describe('deriveLoanPaymentHistory with paired separate interest expenses', () =
       { transactionDate: '2023-09-05', amount: -28.28, isTransfer: false } as Transaction,
     ];
 
-    const { events } = deriveLoanPaymentHistory(account, transactions, [], interestTransactions);
+    const { events } = derive(account, transactions, [], interestTransactions);
     const sept = events.filter((e) => e.date.startsWith('2023-09'));
     const septInterest = sept.reduce((s, e) => s + e.interest, 0);
 
@@ -1961,7 +2103,7 @@ describe('deriveLoanPaymentHistory with paired separate interest expenses', () =
       { transactionDate: '2021-07-05', amount: -335.92, isTransfer: false } as Transaction,
     ];
 
-    const { events } = deriveLoanPaymentHistory(account, transactions, [], interestTransactions);
+    const { events } = derive(account, transactions, [], interestTransactions);
 
     // Grace interest from 2019-08 appears, ahead of the 2020-04 start date.
     expect(events[0].date).toContain('2019-08');
@@ -1993,7 +2135,7 @@ describe('deriveLoanPaymentHistory with paired separate interest expenses', () =
       { transactionDate: '2022-09-05', amount: -1245, isTransfer: false } as Transaction,
     ];
 
-    const { events } = deriveLoanPaymentHistory(account, transactions, [], interestTransactions);
+    const { events } = derive(account, transactions, [], interestTransactions);
 
     // All category interest is now included, including the earlier dates.
     expect(events.some((e) => e.date.startsWith('2012'))).toBe(true);
@@ -2020,7 +2162,7 @@ describe('deriveLoanPaymentHistory with paired separate interest expenses', () =
       { transactionDate: '2024-06-05', amount: -300, isTransfer: false } as Transaction,
     ];
 
-    const { events } = deriveLoanPaymentHistory(account, transactions, [], interestTransactions);
+    const { events } = derive(account, transactions, [], interestTransactions);
 
     expect(events.some((e) => e.date.startsWith('2024'))).toBe(false);
   });
@@ -2046,7 +2188,7 @@ describe('deriveLoanPaymentHistory with paired separate interest expenses', () =
       { transactionDate: '2024-02-05', amount: -secondInterest, isTransfer: false } as Transaction,
     ];
 
-    const { events } = deriveLoanPaymentHistory(account, transactions, [], interestTransactions);
+    const { events } = derive(account, transactions, [], interestTransactions);
 
     expect(events[1].interest).toBeCloseTo(secondInterest, 2);
     expect(events[1].annualRate).toBeCloseTo(5.5, 1);
@@ -2073,7 +2215,7 @@ describe('deriveLoanPaymentHistory with paired separate interest expenses', () =
       { transactionDate: '2023-02-05', amount: -oneMonthInterest, isTransfer: false } as Transaction,
     ];
 
-    const { events } = deriveLoanPaymentHistory(account, transactions, [], interestTransactions);
+    const { events } = derive(account, transactions, [], interestTransactions);
 
     expect(events[1].annualRate).toBeCloseTo(6, 1);
   });
@@ -2100,7 +2242,7 @@ describe('deriveLoanPaymentHistory with paired separate interest expenses', () =
       { transactionDate: '2025-11-05', amount: -796.93, isTransfer: false } as Transaction,
     ];
 
-    const { events } = deriveLoanPaymentHistory(account, transactions, [], interestTransactions);
+    const { events } = derive(account, transactions, [], interestTransactions);
 
     // The overpayment carries no interest, so it has no rate.
     expect(events[1].type).toBe('OVERPAYMENT');
@@ -2132,7 +2274,7 @@ describe('deriveLoanPaymentHistory with paired separate interest expenses', () =
       { transactionDate: '2024-02-05', amount: -secondInterest, isTransfer: false } as Transaction,
     ];
 
-    const { events } = deriveLoanPaymentHistory(account, transactions, [], interestTransactions);
+    const { events } = derive(account, transactions, [], interestTransactions);
 
     // The overpayment has interest but shows no rate...
     expect(events[1].type).toBe('OVERPAYMENT');
@@ -2165,7 +2307,7 @@ describe('deriveLoanPaymentHistory with paired separate interest expenses', () =
       { transactionDate: '2022-10-05', amount: -146, isTransfer: false } as Transaction,
     ];
 
-    const withTimeline = deriveLoanPaymentHistory(
+    const withTimeline = derive(
       account,
       transactions,
       rateChanges,
@@ -2186,7 +2328,7 @@ describe('deriveLoanPaymentHistory with paired separate interest expenses', () =
       interestRate: 0,
       overpaymentCategoryId: 'cat-over',
     });
-    const noTimeline = deriveLoanPaymentHistory(rateless, transactions, [], interestTransactions);
+    const noTimeline = derive(rateless, transactions, [], interestTransactions);
     expect(noTimeline.events[1].annualRate).toBeLessThan(2);
   });
 
@@ -2213,7 +2355,7 @@ describe('deriveLoanPaymentHistory with paired separate interest expenses', () =
       { transactionDate: '2024-02-05', amount: -625, isTransfer: false } as Transaction,
     ];
 
-    const { events } = deriveLoanPaymentHistory(account, transactions, [], interestTransactions);
+    const { events } = derive(account, transactions, [], interestTransactions);
 
     const overpayment = events.find((event) => event.type === 'OVERPAYMENT');
     const sameDayRegular = events.find(
@@ -2223,5 +2365,310 @@ describe('deriveLoanPaymentHistory with paired separate interest expenses', () =
     expect(sameDayRegular?.annualRate).not.toBeNull();
     expect(sameDayRegular!.annualRate!).toBeGreaterThan(3);
     expect(sameDayRegular!.annualRate!).toBeLessThan(8);
+  });
+});
+
+describe('diagnoseLoanProjection', () => {
+  const TODAY = '2026-06-01';
+
+  // The reason and buildLoanProjectionInput share one evaluation, so a reason
+  // of null must mean the input builds, and any reason must mean it does not.
+  function reasonAndInputAgree(account: Account, rateChanges = []) {
+    const history = derive(account, []);
+    const reason = diagnoseLoanProjection(account, history, rateChanges, null, TODAY);
+    const input = buildLoanProjectionInput(account, history, rateChanges, null, TODAY);
+    return { reason, input };
+  }
+
+  it('is null and the input builds for a rate + payment + frequency loan', () => {
+    const { reason, input } = reasonAndInputAgree(makeAccount());
+    expect(reason).toBeNull();
+    expect(input).not.toBeNull();
+  });
+
+  it("reports 'paid-off' when nothing is outstanding", () => {
+    const { reason, input } = reasonAndInputAgree(
+      makeAccount({ currentBalance: 0 }),
+    );
+    expect(reason).toBe('paid-off');
+    expect(input).toBeNull();
+  });
+
+  it('treats a debt of exactly 0.01 as owed and one below a cent as paid off (A26-S15-06)', () => {
+    const owed = reasonAndInputAgree(makeAccount({ currentBalance: -0.01 }));
+    expect(owed.reason).not.toBe('paid-off');
+    const residue = reasonAndInputAgree(makeAccount({ currentBalance: -0.0099 }));
+    expect(residue.reason).toBe('paid-off');
+    expect(residue.input).toBeNull();
+  });
+
+  it("reports 'no-frequency' when the payment frequency is unset", () => {
+    const { reason, input } = reasonAndInputAgree(
+      makeAccount({ paymentFrequency: null as unknown as Account['paymentFrequency'] }),
+    );
+    expect(reason).toBe('no-frequency');
+    expect(input).toBeNull();
+  });
+
+  it("reports 'no-rate' when no rate is recorded anywhere", () => {
+    const { reason, input } = reasonAndInputAgree(
+      makeAccount({ interestRate: null as unknown as number }),
+    );
+    expect(reason).toBe('no-rate');
+    expect(input).toBeNull();
+  });
+
+  it("reports 'no-payment' when the installment cannot be resolved", () => {
+    // Rate is set, but there is no observed regular installment (no rows on the
+    // loan account) and no stored contractual payment -- the shape of a loan
+    // whose installments were booked as expenses on the source account.
+    const { reason, input } = reasonAndInputAgree(
+      makeAccount({ paymentAmount: undefined as unknown as number }),
+    );
+    expect(reason).toBe('no-payment');
+    expect(input).toBeNull();
+  });
+});
+
+describe('resolveSeedPayment recency: a later real payment supersedes a stated one', () => {
+  const TODAY = '2026-09-01';
+  // A regular installment actually paid on 2026-08-05:
+  // 104.74 principal + 775.07 interest = 879.81, interest recorded (complete).
+  const paid = withInterestSplit(
+    makeTransaction({ id: 'reg', transactionDate: '2026-08-05', amount: 104.74 }),
+    'parent-reg',
+    775.07,
+  );
+  const account = makeAccount({
+    accountType: 'MORTGAGE',
+    currentBalance: -135662.61,
+    interestRate: 5.5,
+  });
+
+  it('uses the observed installment when it is dated after the stated payment row', () => {
+    // The user's case: 1,200.99 stated in a 2022 rate-change row, while the
+    // lender re-amortized after each overpayment and the 2026 payment is 879.81.
+    // The stated figure showed as "the installment" on every surface and seeded
+    // a projection of payments nobody was making.
+    const rows = [
+      { effectiveDate: '2022-04-05', annualRate: 5.5, newPaymentAmount: 1200.99, source: 'manual' as const },
+    ];
+    const history = derive(account, [paid], rows);
+    const terms = resolveCurrentLoanTerms(account, history, rows, null, TODAY);
+    expect(terms.payment).toBeCloseTo(879.81, 2);
+  });
+
+  it('keeps the stated payment when its row is dated after the last real payment', () => {
+    // A rate rise recorded with a new contractual installment that has not been
+    // paid yet must not be overridden by the older observation.
+    const rows = [
+      { effectiveDate: '2026-08-20', annualRate: 5.5, newPaymentAmount: 1300, source: 'manual' as const },
+    ];
+    const history = derive(account, [paid], rows);
+    const terms = resolveCurrentLoanTerms(account, history, rows, null, TODAY);
+    expect(terms.payment).toBe(1300);
+  });
+});
+
+describe('deriveLoanPaymentHistory keeps only rows the ledger moved by today (A26-M28, A26-S15-03)', () => {
+  const TODAY = '2026-10-21';
+
+  it('drops a VOID payment: no principal, no balance move', () => {
+    const history = deriveLoanPaymentHistory(
+      makeAccount(),
+      [
+        makeTransaction({ id: 'p1', transactionDate: '2026-01-15', amount: 1000 }),
+        makeTransaction({
+          id: 'p2',
+          transactionDate: '2026-02-15',
+          amount: 1000,
+          status: TransactionStatus.VOID,
+        }),
+      ],
+      [],
+      [],
+      TODAY,
+    );
+
+    expect(history.events).toHaveLength(1);
+    expect(history.cumulativePrincipal).toBe(1000);
+    expect(history.events[history.events.length - 1].balance).toBe(9000);
+  });
+
+  it('drops a VOID standalone interest expense', () => {
+    const history = deriveLoanPaymentHistory(
+      makeAccount(),
+      [makeTransaction({ id: 'p1', transactionDate: '2026-01-15', amount: 1000 })],
+      [],
+      [
+        {
+          id: 'i1',
+          transactionDate: '2026-01-15',
+          amount: -50,
+          isTransfer: false,
+          status: TransactionStatus.VOID,
+        } as Transaction,
+      ],
+      TODAY,
+    );
+
+    expect(history.cumulativeInterest).toBe(0);
+    expect(history.events[0].interest).toBe(0);
+  });
+
+  it('drops a payment dated after today', () => {
+    const history = deriveLoanPaymentHistory(
+      makeAccount(),
+      [
+        makeTransaction({ id: 'p1', transactionDate: '2026-01-15', amount: 1000 }),
+        makeTransaction({ id: 'p2', transactionDate: '2026-12-15', amount: 500 }),
+      ],
+      [],
+      [],
+      TODAY,
+    );
+
+    expect(history.events.map((e) => e.date)).toEqual(['2026-01-15']);
+    expect(history.cumulativePrincipal).toBe(1000);
+    expect(history.events[0].balance).toBe(9000);
+  });
+
+  it('keeps a payment dated today, and compares the yyyy-MM-dd part of a timestamp', () => {
+    const history = deriveLoanPaymentHistory(
+      makeAccount(),
+      [makeTransaction({ id: 'p1', transactionDate: '2026-10-21T00:00:00.000Z', amount: 400 })],
+      [],
+      [],
+      TODAY,
+    );
+
+    expect(history.events).toHaveLength(1);
+    expect(history.cumulativePrincipal).toBe(400);
+  });
+
+  it('reconstructs the starting balance from the rows the ledger moved, not the VOID or future ones', () => {
+    // No opening balance and no draws: the reconstruction path.
+    const history = deriveLoanPaymentHistory(
+      makeAccount({ openingBalance: 0, currentBalance: -9000 }),
+      [
+        makeTransaction({ id: 'p1', transactionDate: '2026-01-15', amount: 1000 }),
+        makeTransaction({
+          id: 'p2',
+          transactionDate: '2026-02-15',
+          amount: 1000,
+          status: TransactionStatus.VOID,
+        }),
+        makeTransaction({ id: 'p3', transactionDate: '2026-12-15', amount: 500 }),
+      ],
+      [],
+      [],
+      TODAY,
+    );
+
+    expect(history.startingBalance).toBe(10000);
+    expect(history.events).toHaveLength(1);
+    expect(history.events[0].balance).toBe(9000);
+  });
+
+  it('does not let a future payment lift the paid-off cut-off for later interest', () => {
+    // lastTransactionDate must be the last row that counts: a future-dated
+    // payment would otherwise keep interest booked after the real last payment.
+    const history = deriveLoanPaymentHistory(
+      makeAccount({ currentBalance: 0 }),
+      [
+        makeTransaction({ id: 'p1', transactionDate: '2026-01-15', amount: 10000 }),
+        makeTransaction({ id: 'p2', transactionDate: '2026-12-15', amount: 500 }),
+      ],
+      [],
+      [
+        { id: 'i1', transactionDate: '2026-09-01', amount: -80, isTransfer: false } as Transaction,
+      ],
+      TODAY,
+    );
+
+    expect(history.events).toHaveLength(1);
+    expect(history.cumulativeInterest).toBe(0);
+  });
+});
+
+describe('deriveLoanPaymentHistory nets an interest refund (A26-S15-05)', () => {
+  const TODAY = '2026-10-21';
+  const interestExpense = (id: string, transactionDate: string, amount: number) =>
+    ({ id, transactionDate, amount, isTransfer: false }) as Transaction;
+
+  it('nets an interest refund', () => {
+    const history = deriveLoanPaymentHistory(
+      makeAccount(),
+      [makeTransaction({ id: 'p1', transactionDate: '2026-01-15', amount: 1000 })],
+      [],
+      [
+        interestExpense('i1', '2026-01-15', -200),
+        interestExpense('i2', '2026-01-16', 50),
+      ],
+      TODAY,
+    );
+
+    expect(history.cumulativeInterest).toBe(150);
+    expect(history.events).toHaveLength(1);
+    expect(history.events[0].interest).toBe(150);
+  });
+
+  it('lets a refund with no payment nearby lower the cumulative interest by its amount', () => {
+    const payment = makeTransaction({ id: 'p1', transactionDate: '2026-06-15', amount: 1000 });
+    const charge = interestExpense('i1', '2026-06-15', -200);
+    const without = deriveLoanPaymentHistory(makeAccount(), [payment], [], [charge], TODAY);
+    const withRefund = deriveLoanPaymentHistory(
+      makeAccount(),
+      [payment],
+      [],
+      [charge, interestExpense('i2', '2025-01-10', 50)],
+      TODAY,
+    );
+
+    expect(without.cumulativeInterest).toBe(200);
+    expect(withRefund.cumulativeInterest).toBe(150);
+    const refundRow = withRefund.events.find((e) => e.date.startsWith('2025-01'));
+    expect(refundRow?.principal).toBe(0);
+    expect(refundRow?.interest).toBe(-50);
+  });
+
+  it('gives a refund-only row no reconstructed rate', () => {
+    // No rate on record, so nothing but a reconstruction could give the row one.
+    const history = deriveLoanPaymentHistory(
+      makeAccount({ interestRate: null as unknown as number }),
+      [makeTransaction({ id: 'p1', transactionDate: '2026-06-15', amount: 1000 })],
+      [],
+      [interestExpense('i2', '2025-01-10', 50)],
+      TODAY,
+    );
+
+    const refundRow = history.events.find((e) => e.date.startsWith('2025-01'));
+    expect(refundRow?.interest).toBe(-50);
+    expect(refundRow?.annualRate).toBeNull();
+  });
+
+  it('nets the lines of a recorded interest split', () => {
+    const payment = makeTransaction({ id: 'p1', transactionDate: '2026-01-15', amount: 1000 });
+    const history = deriveLoanPaymentHistory(
+      makeAccount({ interestCategoryId: 'cat-interest' }),
+      [
+        {
+          ...payment,
+          linkedTransaction: {
+            id: 'parent-1',
+            splits: [
+              { transferAccountId: LOAN_ID, amount: -1000 } as TransactionSplit,
+              { transferAccountId: null, categoryId: 'cat-interest', amount: -200 } as TransactionSplit,
+              { transferAccountId: null, categoryId: 'cat-interest', amount: 50 } as TransactionSplit,
+            ],
+          } as Transaction,
+        },
+      ],
+      [],
+      [],
+      TODAY,
+    );
+
+    expect(history.cumulativeInterest).toBe(150);
   });
 });

@@ -5,6 +5,8 @@ import { useTranslations } from 'next-intl';
 import { Select } from '@/components/ui/Select';
 import { Input } from '@/components/ui/Input';
 import { CategoryMapping } from '@/lib/import';
+import { parseLocaleNumber } from '@/lib/number-parse';
+import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { Account } from '@/types/account';
 
 interface CategoryMappingRowProps {
@@ -27,6 +29,7 @@ export function CategoryMappingRow({
   isHighlighted = false,
 }: CategoryMappingRowProps) {
   const t = useTranslations('import');
+  const { numberSeparators } = useNumberFormat();
   // Local state for inputs - only syncs on blur
   const [localCreateNew, setLocalCreateNew] = useState(mapping.createNew || '');
   const [localNewLoanName, setLocalNewLoanName] = useState(mapping.createNewLoan || '');
@@ -177,10 +180,11 @@ export function CategoryMappingRow({
 
   const handleNewLoanAmountBlur = (e: React.FocusEvent<HTMLInputElement>) => {
     const raw = (e.target.value ?? localNewLoanAmount).trim();
-    // Strip currency symbols, commas, and whitespace so pasted values like "$25,000" work
-    const cleaned = raw.replace(/[$€£¥,\s]/g, '');
-    setLocalNewLoanAmount(cleaned);
-    const numValue = cleaned ? parseFloat(cleaned) : undefined;
+    // parseLocaleNumber drops currency symbols and grouping, so "$25,000" and "25.000,00" (de) both work
+    const numValue = parseLocaleNumber(raw, numberSeparators);
+    setLocalNewLoanAmount(
+      numValue === undefined ? '' : String(numValue).replace('.', numberSeparators.decimal),
+    );
     if (numValue !== mapping.newLoanAmount) {
       onMappingChange({
         newLoanAmount: numValue,

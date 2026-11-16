@@ -41,7 +41,7 @@ are unaffected by the window.
   currency so the UI can say which one each line is measured in. This mirrors the
   choice `GemPerformanceView` documents in `backend/src/strategies/gem-report.types.ts`.
 - **No money.** Nothing here computes, aggregates or reports an amount, so the
-  rounding rules in the root `CLAUDE.md` apply only to the percentage
+  rounding rules in `AGENTS.md` apply only to the percentage
   (`GEM_PP_DECIMALS`, 4).
 - **Nothing is materialized.** The endpoint is a pure read, so the
   materialized-result versioning rule (financial contract section 5) and the

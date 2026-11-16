@@ -89,15 +89,15 @@ const CLIENT_EXPANDERS = new Map([
   ],
   [
     '/src/components/scheduled-transactions/OccurrenceDatePicker.tsx',
-    'offers the next N dates to attach an override to -- dates only, no amounts',
+    'offers the next N dates to attach an override to; the amount of each date of a loan bill comes from the server (getLoanOccurrences), never the template',
   ],
   [
     '/src/lib/forecast.ts',
     'the cash-flow forecast, which already resolves each occurrence against futureOverrides and the effective-amount contract; it is the surface the others were wrong against',
   ],
   [
-    '/src/app/bills/page.tsx',
-    'the bills calendar, which draws names on dates and prints no amount per occurrence',
+    '/src/lib/scheduled-calendar.ts',
+    'the shared month grid behind the bills calendar and the Upcoming Bills widget, which draws names on dates and prints no amount per occurrence',
   ],
   [
     '/src/lib/loan-overpayments.ts',
@@ -307,6 +307,79 @@ describe('scheduled effective amount guard', () => {
   it('the allowed exception still exists, so the exemption is not stale', () => {
     const paths = new Map(productionSources());
     for (const path of ALLOWED) {
+      expect(paths.has(path)).toBe(true);
+    }
+  });
+
+  /**
+   * The amount is half the answer; the account is the other half.
+   *
+   * A scheduled investment's `accountId` is the BROKERAGE, and its cash settles
+   * in the funding account or the brokerage's linked cash account. The dashboard
+   * widget ran its below-zero projection on `accountMap.get(item.accountId)`, so
+   * a purchase the funding account covers to the cent was reported as an
+   * overdraft of the brokerage -- a balance the trade never moves -- while the
+   * account that actually pays was left out of the projection entirely.
+   *
+   * The shape is `<map>.get(<x>.accountId)` in a file that resolves an
+   * occurrence's amount, and it is the fingerprint rather than a variable name
+   * because the alias is how it reappears. `occurrenceSettlementAccountId` is
+   * the fix, and its two exemptions below each say why they address the
+   * brokerage on purpose.
+   */
+  const ACCOUNT_ID_LOOKUP =
+    /(?:\.(?:get|has)\(\s*|\[\s*)[A-Za-z_$][\w$]*\.accountId\b/;
+
+  /** Files that address an account by `accountId` for a reason that is not a balance. */
+  const ACCOUNT_ID_LOOKUP_ALLOWED = new Map([
+    [
+      '/src/lib/scheduled-effective-amount.ts',
+      'defines occurrenceSettlementAccountId; the brokerage is where the linked cash account is read from',
+    ],
+    [
+      '/src/lib/forecast.ts',
+      "reads the brokerage's own currency for the settlement pair's `from` side; the account it charges comes from occurrenceSettlementAccountId",
+    ],
+  ]);
+
+  it('no surface projects an occurrence onto the account it is filed under', () => {
+    const offenders: string[] = [];
+
+    for (const [path, contents] of productionSources()) {
+      if (ACCOUNT_ID_LOOKUP_ALLOWED.has(path)) continue;
+      if (!contents.includes('scheduled-effective-amount')) continue;
+      contents.split('\n').forEach((line, index) => {
+        if (isComment(line)) return;
+        if (ACCOUNT_ID_LOOKUP.test(line)) {
+          offenders.push(`${path}:${index + 1}: ${line.trim()}`);
+        }
+      });
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
+  it('matches the shape the dashboard widget had, and not a settlement lookup', () => {
+    expect(
+      ACCOUNT_ID_LOOKUP.test('const account = accountMap.get(item.accountId);'),
+    ).toBe(true);
+    expect(
+      ACCOUNT_ID_LOOKUP.test('if (!runningBalances.has(item.accountId)) {'),
+    ).toBe(true);
+    expect(ACCOUNT_ID_LOOKUP.test('const a = byId[tx.accountId];')).toBe(true);
+    expect(
+      ACCOUNT_ID_LOOKUP.test(
+        'const account = accountMap.get(settlementAccountId);',
+      ),
+    ).toBe(false);
+    expect(ACCOUNT_ID_LOOKUP.test('if (s.accountId === accountId) return;')).toBe(
+      false,
+    );
+  });
+
+  it('every allowed account lookup still exists, so no exemption is stale', () => {
+    const paths = new Map(productionSources());
+    for (const path of ACCOUNT_ID_LOOKUP_ALLOWED.keys()) {
       expect(paths.has(path)).toBe(true);
     }
   });

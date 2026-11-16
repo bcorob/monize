@@ -14,6 +14,8 @@ import { Payee } from "../../payees/entities/payee.entity";
 import { ScheduledTransaction } from "../../scheduled-transactions/entities/scheduled-transaction.entity";
 import { User } from "../../users/entities/user.entity";
 import { Institution } from "../../institutions/entities/institution.entity";
+import { TransactionRule } from "../../transaction-rules/transaction-rule.entity";
+import { MortgageType, PrepaymentMode } from "../mortgage-type.util";
 
 export enum AccountType {
   CHEQUING = "CHEQUING",
@@ -26,6 +28,7 @@ export enum AccountType {
   LINE_OF_CREDIT = "LINE_OF_CREDIT",
   ASSET = "ASSET",
   OTHER = "OTHER",
+  CRYPTO = "CRYPTO",
 }
 
 export enum AccountSubType {
@@ -86,8 +89,8 @@ export class Account {
 
   @Column({
     type: "decimal",
-    precision: 20,
-    scale: 4,
+    precision: 24,
+    scale: 8,
     name: "opening_balance",
     default: 0,
     transformer: numericTransformer,
@@ -96,8 +99,8 @@ export class Account {
 
   @Column({
     type: "decimal",
-    precision: 20,
-    scale: 4,
+    precision: 24,
+    scale: 8,
     name: "current_balance",
     default: 0,
     transformer: numericTransformer,
@@ -106,8 +109,8 @@ export class Account {
 
   @Column({
     type: "decimal",
-    precision: 20,
-    scale: 4,
+    precision: 24,
+    scale: 8,
     name: "credit_limit",
     nullable: true,
     transformer: numericTransformer,
@@ -137,6 +140,33 @@ export class Account {
   @Column({ type: "date", name: "closed_date", nullable: true })
   closedDate: Date | null;
 
+  // Balance-threshold alerts (docs/specs/balance-threshold-notifications.md).
+  @Column({
+    type: "numeric",
+    name: "low_balance_threshold",
+    precision: 24,
+    scale: 8,
+    nullable: true,
+    transformer: numericTransformer,
+  })
+  lowBalanceThreshold: number | null;
+
+  @Column({
+    type: "numeric",
+    name: "high_balance_threshold",
+    precision: 24,
+    scale: 8,
+    nullable: true,
+    transformer: numericTransformer,
+  })
+  highBalanceThreshold: number | null;
+
+  @Column({ name: "low_alert_armed", default: false })
+  lowAlertArmed: boolean;
+
+  @Column({ name: "high_alert_armed", default: false })
+  highAlertArmed: boolean;
+
   @Column({ name: "is_favourite", default: false })
   isFavourite: boolean;
 
@@ -145,6 +175,17 @@ export class Account {
 
   @Column({ name: "exclude_from_net_worth", default: false })
   excludeFromNetWorth: boolean;
+
+  @Column({
+    type: "varchar",
+    length: 30,
+    name: "managed_purpose",
+    nullable: true,
+  })
+  managedPurpose: "SHARED_SETTLEMENT" | null;
+
+  @Column({ type: "uuid", name: "shared_expense_group_id", nullable: true })
+  sharedExpenseGroupId: string | null;
 
   @Column({
     type: "varchar",
@@ -164,8 +205,8 @@ export class Account {
   // Loan-specific fields
   @Column({
     type: "decimal",
-    precision: 20,
-    scale: 4,
+    precision: 24,
+    scale: 8,
     name: "payment_amount",
     nullable: true,
     transformer: numericTransformer,
@@ -178,8 +219,8 @@ export class Account {
   // the configured value on the next pass (review #1131).
   @Column({
     type: "decimal",
-    precision: 20,
-    scale: 4,
+    precision: 24,
+    scale: 8,
     name: "extra_payment_amount",
     nullable: true,
     transformer: numericTransformer,
@@ -300,11 +341,25 @@ export class Account {
   linkedLoanAccount: Account | null;
 
   // Mortgage-specific fields
-  @Column({ name: "is_canadian_mortgage", default: false })
-  isCanadianMortgage: boolean;
+  // Read only on a MORTGAGE; every other account carries the default, the
+  // annuity engine a plain LOAN uses. Read it through `mortgageTypeOf`.
+  @Column({
+    type: "varchar",
+    length: 20,
+    name: "mortgage_type",
+    default: "ANNUITY",
+  })
+  mortgageType: MortgageType;
 
-  @Column({ name: "is_variable_rate", default: false })
-  isVariableRate: boolean;
+  // What an extra repayment does to a LINEAR mortgage's constant principal;
+  // null reads as SHORTEN_TERM, and the column is null on every other type.
+  @Column({
+    type: "varchar",
+    length: 20,
+    name: "prepayment_mode",
+    nullable: true,
+  })
+  prepaymentMode: PrepaymentMode | null;
 
   @Column({ type: "integer", name: "term_months", nullable: true })
   termMonths: number | null;
@@ -317,8 +372,8 @@ export class Account {
 
   @Column({
     type: "decimal",
-    precision: 20,
-    scale: 4,
+    precision: 24,
+    scale: 8,
     name: "original_principal",
     nullable: true,
     transformer: numericTransformer,
@@ -331,6 +386,16 @@ export class Account {
   @ManyToOne(() => ScheduledTransaction, { nullable: true })
   @JoinColumn({ name: "scheduled_transaction_id" })
   scheduledTransaction: ScheduledTransaction | null;
+
+  // The rule a loan's "Payment matching" created (docs/specs/
+  // loan-installment-settlement.md 5.4). A pointer for the UI only: the
+  // planner reads the rule's action, never this column.
+  @Column({ type: "uuid", name: "payment_matching_rule_id", nullable: true })
+  paymentMatchingRuleId: string | null;
+
+  @ManyToOne(() => TransactionRule, { nullable: true, onDelete: "SET NULL" })
+  @JoinColumn({ name: "payment_matching_rule_id" })
+  paymentMatchingRule?: TransactionRule | null;
 
   @CreateDateColumn({ name: "created_at" })
   createdAt: Date;

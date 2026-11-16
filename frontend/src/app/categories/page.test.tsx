@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useState } from 'react';
-import { render, screen, waitFor, fireEvent, act } from '@/test/render';
+import { render, screen, waitFor, fireEvent, act, within } from '@/test/render';
 import CategoriesPage from './page';
+import { SEGMENTED_TOOLBAR_GROUP_CLASS, toolbarSegmentClass } from '@/components/ui/segmented-control';
 import toast from 'react-hot-toast';
 
 // Mock next/image
@@ -122,8 +123,17 @@ vi.mock('@/components/categories/CategoryForm', () => ({
 }));
 
 vi.mock('@/components/categories/CategoryList', () => ({
-  CategoryList: ({ categories, onEdit, onRefresh, onDelete, sortField, sortDirection, onSort }: any) => (
+  // The list renders its own EmptyState; the stand-in exposes which one it was
+  // asked for and the page's first-run actions, so the page's wiring is tested
+  // here and the empty state's copy in CategoryList.test.tsx.
+  CategoryList: ({ categories, onEdit, onRefresh, onDelete, sortField, sortDirection, onSort, isFiltered, onCreate, onImportDefaults }: any) => (
     <div data-testid="category-list">
+      {categories.length === 0 && (
+        <div data-testid="category-list-empty" data-filtered={String(!!isFiltered)}>
+          {onImportDefaults && <button onClick={onImportDefaults}>Import Default Categories</button>}
+          {onCreate && <button onClick={onCreate}>Create Your Own</button>}
+        </div>
+      )}
       <span data-testid="sort-info">{sortField} {sortDirection}</span>
       <button data-testid="sort-name" onClick={() => onSort('name')}>SortByName</button>
       <button data-testid="sort-count" onClick={() => onSort('count')}>SortByCount</button>
@@ -141,7 +151,13 @@ vi.mock('@/components/categories/CategoryList', () => ({
 }));
 
 vi.mock('@/components/ui/Modal', () => ({
-  Modal: ({ children, isOpen }: any) => isOpen ? <div data-testid="modal">{children}</div> : null,
+  Modal: ({ children, isOpen, title }: any) =>
+    isOpen ? (
+      <div data-testid="modal">
+        {title && <h2>{title}</h2>}
+        {children}
+      </div>
+    ) : null,
 }));
 
 vi.mock('@/components/ui/UnsavedChangesDialog', () => ({
@@ -218,11 +234,19 @@ describe('CategoriesPage', () => {
     });
   });
 
-  it('shows empty state with import button when no categories exist', async () => {
+  it('asks the list for its first-run empty state when no categories exist', async () => {
     render(<CategoriesPage />);
-    await waitFor(() => {
-      expect(screen.getByText(/No categories yet/i)).toBeInTheDocument();
-    });
+    const empty = await screen.findByTestId('category-list-empty');
+    expect(empty).toHaveAttribute('data-filtered', 'false');
+  });
+
+  it('asks the list for its no-match empty state when the search hides every category', async () => {
+    mockGetAll.mockResolvedValue(mockCategories);
+    render(<CategoriesPage />);
+    await waitFor(() => expect(screen.getByTestId('category-cat-1')).toBeInTheDocument());
+    fireEvent.change(screen.getByPlaceholderText('Search categories...'), { target: { value: 'zzz' } });
+    const empty = await screen.findByTestId('category-list-empty');
+    expect(empty).toHaveAttribute('data-filtered', 'true');
   });
 
   it('shows loading spinner while data is loading', async () => {
@@ -257,6 +281,21 @@ describe('CategoriesPage', () => {
     await waitFor(() => {
       expect(screen.getByText('+ New Category')).toBeInTheDocument();
     });
+  });
+
+  it('draws the type filter as the shared segmented control with counts', async () => {
+    mockGetAll.mockResolvedValue(mockCategories);
+    render(<CategoriesPage />);
+    const group = await screen.findByRole('group', { name: 'Type' });
+    expect(group.className).toBe(SEGMENTED_TOOLBAR_GROUP_CLASS);
+    const all = within(group).getByRole('button', { name: 'All (4)' });
+    expect(all).toHaveAttribute('aria-pressed', 'true');
+    expect(all.className).toBe(toolbarSegmentClass(true));
+    const income = within(group).getByRole('button', { name: 'Income (1)' });
+    expect(income).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(income);
+    expect(income).toHaveAttribute('aria-pressed', 'true');
+    expect(group.parentElement!.className).toContain('flex-wrap');
   });
 
   it('renders filter buttons for All, Expenses, Income with counts', async () => {
@@ -483,13 +522,6 @@ describe('CategoriesPage', () => {
     await act(async () => {});
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith('Failed to import default categories');
-    });
-  });
-
-  it('displays empty state hint about default categories', async () => {
-    render(<CategoriesPage />);
-    await waitFor(() => {
-      expect(screen.getByText(/The default set includes common income and expense categories/i)).toBeInTheDocument();
     });
   });
 

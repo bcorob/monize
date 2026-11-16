@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@/test/render';
+import { render, screen, fireEvent } from '@/test/render';
 import { DeleteCategoryDialog } from './DeleteCategoryDialog';
+import { categoriesApi } from '@/lib/categories';
 
 vi.mock('@/lib/categories', () => ({
   categoriesApi: {
@@ -28,14 +29,24 @@ describe('DeleteCategoryDialog', () => {
     expect(container.innerHTML).toBe('');
   });
 
-  it('renders dialog with category name', async () => {
+  it('is named by its Modal title, which names the action rather than asking', async () => {
     render(
       <DeleteCategoryDialog isOpen={true} category={categories[0]} categories={categories} onConfirm={onConfirm} onCancel={onCancel} />
     );
-    await waitFor(() => {
-      expect(screen.getByText('Delete "Food"?')).toBeInTheDocument();
-    });
+    expect(await screen.findByRole('dialog', { name: 'Delete "Food"' })).toBeInTheDocument();
+    await screen.findByText('This category is not used. It can be safely deleted.');
     expect(screen.getByText('This action cannot be undone.')).toBeInTheDocument();
+  });
+
+  it('offers Cancel while the usage check is still running', () => {
+    vi.mocked(categoriesApi.getTransactionCount).mockReturnValueOnce(new Promise(() => {}));
+    render(
+      <DeleteCategoryDialog isOpen={true} category={categories[0]} categories={categories} onConfirm={onConfirm} onCancel={onCancel} />
+    );
+    expect(screen.getByText('Checking usage...')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onCancel).toHaveBeenCalled();
   });
 
   it('shows safe delete message when no transactions', async () => {

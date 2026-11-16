@@ -5,6 +5,13 @@
     "cash": "현금",
     "brokerage": "증권"
   },
+  "oauthConsent": {
+    "destinationLabel": "액세스를 허용하면 Monize가 권한 부여 정보를 다음 주소로 보냅니다:",
+    "destinationUnknown": "Monize가 이 권한 부여 정보를 어디로 보낼지 확인할 수 없습니다. 액세스를 허용하지 마세요.",
+    "unverifiedNotice": "이 애플리케이션은 이 Monize 서버에 스스로 등록했으며, Monize는 누가 운영하는지 확인하지 않았습니다. 이름도 애플리케이션이 스스로 정한 것입니다. 해당 애플리케이션에서 직접 이 연결을 시작했고 위 주소가 그 애플리케이션의 것인 경우에만 액세스를 허용하세요.",
+    "claimedWebsite": "애플리케이션이 밝힌 웹사이트: {{ website }}",
+    "websiteMismatch": "애플리케이션은 웹사이트를 {{ website }}(으)로 밝혔지만, 권한 부여 정보는 다른 주소로 전송됩니다."
+  },
   "import": {
     "voidedTransactionNote": "원본에서 무효 처리되었습니다. 원래 금액이 내보내기에서 누락되어 0으로 가져왔습니다."
   },
@@ -17,5 +24,20 @@
       "stalled": "마무리하지 않고 계속 작업하겠다는 말만 반복하여, 이 답변은 중단하기 전까지 수집한 데이터를 기반으로 합니다."
     },
     "synthesisFailed": "이 질문에 대한 데이터를 수집했지만 분석을 완료하지 못해 신뢰할 수 있는 답변이 없습니다. 범위를 좁혀서 다시 질문해 보세요."
+  },
+  "bankSync": {
+    "operationTypes": {
+      "cardPayment": "카드 결제",
+      "transferIn": "입금 이체",
+      "transferOut": "출금 이체",
+      "mobilePayment": "모바일 결제",
+      "cashWithdrawal": "현금 인출",
+      "cashWithdrawalBlik": "현금 인출 (BLIK)",
+      "mobilePaymentRefund": "모바일 결제 환불",
+      "standingOrder": "정기 이체",
+      "cashback": "캐시백",
+      "loanRepayment": "대출 상환",
+      "creditCardRepayment": "신용카드 상환"
+    }
   }
 }

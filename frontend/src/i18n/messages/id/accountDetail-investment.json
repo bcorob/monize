@@ -5,6 +5,8 @@
     "dividendsInterest": "Dividen & Bunga",
     "realizedGains": "Keuntungan Terealisasi",
     "ytd": "Sejak awal tahun",
+    "realizedKnownPart": "Bagian yang diketahui: {amount}",
+    "realizedUnknownReason": "Keuntungan ini tidak dapat dihitung: posisi memiliki saham yang ditambahkan tanpa biaya, sehingga biaya saham yang dijual tidak diketahui. Buka transaksi yang menambahkannya dan masukkan harganya.",
     "empty": "Tidak ada pendapatan investasi tahun ini"
   },
   "register": {

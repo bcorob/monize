@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { render } from '@/test/render';
@@ -12,13 +13,15 @@ vi.mock('@/lib/investments', () => ({
   },
 }));
 
-// The rate prefill for a cross-currency split. Empty by default, so a test has
-// to say a rate exists before the component can convert -- which is the state
-// that used to be papered over with 1.
-const mockGetLatestRates = vi.fn().mockResolvedValue([]);
+// The rate prefill for a cross-currency split: the rate for the parent's DATE
+// (INV-FX-001). It answers null by default, so a test has to say a rate exists
+// before the component can convert -- which is the state that used to be
+// papered over with 1. `getLatestRates` is deliberately absent: the component
+// must not read the latest rate.
+const mockGetRateForDate = vi.fn().mockResolvedValue(null);
 vi.mock('@/lib/exchange-rates', () => ({
   exchangeRatesApi: {
-    getLatestRates: (...args: unknown[]) => mockGetLatestRates(...args),
+    getRateForDate: (...args: unknown[]) => mockGetRateForDate(...args),
   },
 }));
 
@@ -63,8 +66,53 @@ async function renderFieldsAsync(
   return result!;
 }
 
+/**
+ * Holds the row the way `SplitEditor` does: the emitted row comes back as
+ * `value`, and the `exchangeRateEdited` latch follows `meta` (set by a rate
+ * edit, reset by a security change).
+ */
+function Harness({
+  initial,
+  onChange,
+  ...rest
+}: {
+  initial: InvestmentSplitDetails | undefined;
+  onChange: (...args: any[]) => void;
+} & Partial<Parameters<typeof InvestmentSplitFields>[0]>) {
+  const [value, setValue] = useState(initial);
+  const [edited, setEdited] = useState(false);
+  return (
+    <InvestmentSplitFields
+      {...rest}
+      value={value}
+      rateEdited={edited}
+      onChange={(next, amount, meta) => {
+        setValue(next);
+        setEdited((prev) => (meta.securityChanged ? false : prev || meta.rateEdited));
+        onChange(next, amount, meta);
+      }}
+    />
+  );
+}
+
+async function renderHarness(
+  initial: InvestmentSplitDetails | undefined,
+  onChange: (...args: any[]) => void,
+  props: Partial<Parameters<typeof InvestmentSplitFields>[0]> = {},
+) {
+  let result: ReturnType<typeof render>;
+  await act(async () => {
+    result = render(<Harness initial={initial} onChange={onChange} {...props} />);
+  });
+  return result!;
+}
+
+const TRADE_DATE = '2025-01-02';
+
 beforeEach(() => {
   vi.clearAllMocks();
+  mockGetRateForDate.mockReset();
+  mockGetRateForDate.mockResolvedValue(null);
   (investmentsApi.getSecurities as ReturnType<typeof vi.fn>).mockResolvedValue(mockSecurities);
 });
 
@@ -185,18 +233,16 @@ describe('InvestmentSplitFields', () => {
   describe('a security priced in another currency', () => {
     // sec-1 is USD; the cash account is CAD.
     const noStatedRate = () => buyValue({ exchangeRate: undefined });
+    const rateLabel = 'Exchange rate (CAD per 1 USD)';
 
-    it('prefills the rate from the stored market rate and converts with it', async () => {
-      mockGetLatestRates.mockResolvedValue([
-        { fromCurrency: 'USD', toCurrency: 'CAD', rate: 1.35 },
-      ]);
+    it('prefills the rate for the parent date, not the latest, and converts with it', async () => {
+      mockGetRateForDate.mockResolvedValue(1.35);
       const onChange = vi.fn();
-      await renderFieldsAsync({ value: noStatedRate(), onChange });
+      await renderHarness(noStatedRate(), onChange, { transactionDate: TRADE_DATE });
       await waitFor(() =>
-        expect(
-          screen.getByLabelText('Exchange rate (CAD per 1 USD)'),
-        ).toHaveValue('1.350000'),
+        expect(screen.getByLabelText(rateLabel)).toHaveValue('1.350000'),
       );
+      expect(mockGetRateForDate).toHaveBeenCalledWith('USD', 'CAD', TRADE_DATE);
 
       await act(async () => {
         fireEvent.change(screen.getByPlaceholderText('Quantity'), {
@@ -209,6 +255,139 @@ describe('InvestmentSplitFields', () => {
       expect(amount).toBe(-136.35);
     });
 
+    it('emits the prefilled rate with its converted amount and does not latch it as an edit', async () => {
+      mockGetRateForDate.mockResolvedValue(1.35);
+      const onChange = vi.fn();
+      await renderHarness(noStatedRate(), onChange, { transactionDate: TRADE_DATE });
+      await waitFor(() => expect(onChange).toHaveBeenCalled());
+      const [next, amount, meta] = onChange.mock.calls.at(-1)!;
+      expect(next.exchangeRate).toBe(1.35);
+      // BUY 10 @ 5 USD + 1 commission = -51 USD, x 1.35 = -68.85 CAD.
+      expect(amount).toBe(-68.85);
+      expect(meta).toEqual({ rateEdited: false, securityChanged: false });
+    });
+
+    it('asks again when the date changes and refills the rate', async () => {
+      mockGetRateForDate.mockImplementation(async (_f, _t, date) =>
+        date === TRADE_DATE ? 1.35 : 1.3,
+      );
+      const onChange = vi.fn();
+      const { rerender } = await renderHarness(noStatedRate(), onChange, {
+        transactionDate: TRADE_DATE,
+      });
+      await waitFor(() =>
+        expect(screen.getByLabelText(rateLabel)).toHaveValue('1.350000'),
+      );
+
+      await act(async () => {
+        rerender(
+          <Harness initial={noStatedRate()} onChange={onChange} transactionDate="2025-03-03" />,
+        );
+      });
+      await waitFor(() =>
+        expect(mockGetRateForDate).toHaveBeenCalledWith('USD', 'CAD', '2025-03-03'),
+      );
+      await waitFor(() =>
+        expect(screen.getByLabelText(rateLabel)).toHaveValue('1.300000'),
+      );
+    });
+
+    it('keeps a rate the person typed when the date changes', async () => {
+      mockGetRateForDate.mockResolvedValue(1.35);
+      const onChange = vi.fn();
+      const { rerender } = await renderHarness(noStatedRate(), onChange, {
+        transactionDate: TRADE_DATE,
+      });
+      await waitFor(() =>
+        expect(screen.getByLabelText(rateLabel)).toHaveValue('1.350000'),
+      );
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText(rateLabel), { target: { value: '1.4' } });
+      });
+      mockGetRateForDate.mockClear();
+
+      await act(async () => {
+        rerender(
+          <Harness initial={noStatedRate()} onChange={onChange} transactionDate="2025-03-03" />,
+        );
+      });
+      expect(mockGetRateForDate).not.toHaveBeenCalled();
+      expect(onChange.mock.calls.at(-1)![0].exchangeRate).toBe(1.4);
+    });
+
+    it('does not ask when the row is flagged as edited', async () => {
+      await renderFieldsAsync({
+        value: noStatedRate(),
+        transactionDate: TRADE_DATE,
+        rateEdited: true,
+      });
+      await act(async () => {});
+      expect(mockGetRateForDate).not.toHaveBeenCalled();
+    });
+
+    it('keeps the stored rate on load and asks again only for another day', async () => {
+      mockGetRateForDate.mockResolvedValue(1.3);
+      const onChange = vi.fn();
+      const stored = buyValue({ exchangeRate: 1.2345678 });
+      const { rerender } = await renderHarness(stored, onChange, {
+        transactionDate: TRADE_DATE,
+      });
+      await act(async () => {});
+      expect(mockGetRateForDate).not.toHaveBeenCalled();
+      expect(screen.getByLabelText(rateLabel)).toHaveValue('1.234568');
+
+      await act(async () => {
+        rerender(<Harness initial={stored} onChange={onChange} transactionDate="2025-03-03" />);
+      });
+      await waitFor(() =>
+        expect(mockGetRateForDate).toHaveBeenCalledWith('USD', 'CAD', '2025-03-03'),
+      );
+      await waitFor(() =>
+        expect(screen.getByLabelText(rateLabel)).toHaveValue('1.300000'),
+      );
+    });
+
+    it('ignores a late answer for a day the row has moved off', async () => {
+      const resolvers = new Map<string, (rate: number | null) => void>();
+      mockGetRateForDate.mockImplementation(
+        (_f, _t, date) => new Promise((resolve) => resolvers.set(date, resolve)),
+      );
+      const onChange = vi.fn();
+      const { rerender } = await renderHarness(noStatedRate(), onChange, {
+        transactionDate: TRADE_DATE,
+      });
+      await act(async () => {
+        rerender(
+          <Harness initial={noStatedRate()} onChange={onChange} transactionDate="2025-03-03" />,
+        );
+      });
+      await act(async () => {
+        resolvers.get('2025-03-03')!(1.3);
+      });
+      await waitFor(() =>
+        expect(screen.getByLabelText(rateLabel)).toHaveValue('1.300000'),
+      );
+      await act(async () => {
+        resolvers.get(TRADE_DATE)!(1.35);
+      });
+      expect(screen.getByLabelText(rateLabel)).toHaveValue('1.300000');
+    });
+
+    it('looks nothing up without a parent date and leaves the rate unresolved', async () => {
+      mockGetRateForDate.mockResolvedValue(1.35);
+      await renderHarness(noStatedRate(), vi.fn());
+      await act(async () => {});
+      expect(mockGetRateForDate).not.toHaveBeenCalled();
+      expect(screen.getByRole('alert')).toHaveTextContent(/No USD to CAD rate is available/i);
+    });
+
+    it('leaves the rate unresolved when the lookup fails', async () => {
+      mockGetRateForDate.mockRejectedValue(new Error('offline'));
+      await renderHarness(noStatedRate(), vi.fn(), { transactionDate: TRADE_DATE });
+      await act(async () => {});
+      expect(screen.getByRole('alert')).toHaveTextContent(/No USD to CAD rate is available/i);
+    });
+
     it('emits the converted amount at money precision, not cents', async () => {
       // A real FX rate rarely yields a 2dp-clean product. The amount is stored
       // as decimal(20,4) and the backend validates it at 4dp (roundMoney) both
@@ -216,15 +395,11 @@ describe('InvestmentSplitFields', () => {
       // rounding it to cents here made the two disagree and the commit was
       // rejected. -101 USD x 1.3652 = -137.8852 CAD: cents would emit -137.89,
       // which fails the backend's 4dp check.
-      mockGetLatestRates.mockResolvedValue([
-        { fromCurrency: 'USD', toCurrency: 'CAD', rate: 1.3652 },
-      ]);
+      mockGetRateForDate.mockResolvedValue(1.3652);
       const onChange = vi.fn();
-      await renderFieldsAsync({ value: noStatedRate(), onChange });
+      await renderHarness(noStatedRate(), onChange, { transactionDate: TRADE_DATE });
       await waitFor(() =>
-        expect(
-          screen.getByLabelText('Exchange rate (CAD per 1 USD)'),
-        ).toHaveValue('1.365200'),
+        expect(screen.getByLabelText(rateLabel)).toHaveValue('1.365200'),
       );
 
       await act(async () => {
@@ -236,21 +411,17 @@ describe('InvestmentSplitFields', () => {
       expect(amount).toBe(-137.8852);
     });
 
-    it('does not truncate the market rate when the field is only blurred', async () => {
-      // The field shows 6dp but the market rate is stored at 10dp, so blurring
-      // the untouched field re-reports the 6dp rounding. That is not a user
+    it('does not truncate the prefilled rate when the field is only blurred', async () => {
+      // The field shows 6dp but the rate is stored at 10dp, so blurring the
+      // untouched field re-reports the 6dp rounding. That is not a user
       // override: adopting it would replace the fetched rate with a truncated
-      // one (the FX-panel bug frontend/CLAUDE.md warns about). The guard drops a
-      // re-report matching the market rate at display precision, so no onChange
+      // one (the FX-panel bug docs/frontend/forms-and-formatting.md warns about). The guard drops a
+      // re-report matching the rate at display precision, so no onChange
       // fires from the blur alone.
-      mockGetLatestRates.mockResolvedValue([
-        { fromCurrency: 'USD', toCurrency: 'CAD', rate: 1.2345678 },
-      ]);
+      mockGetRateForDate.mockResolvedValue(1.2345678);
       const onChange = vi.fn();
-      await renderFieldsAsync({ value: noStatedRate(), onChange });
-      const rateField = await screen.findByLabelText(
-        'Exchange rate (CAD per 1 USD)',
-      );
+      await renderHarness(noStatedRate(), onChange, { transactionDate: TRADE_DATE });
+      const rateField = await screen.findByLabelText(rateLabel);
       await waitFor(() => expect(rateField).toHaveValue('1.234568'));
       onChange.mockClear();
       await act(async () => {
@@ -266,21 +437,18 @@ describe('InvestmentSplitFields', () => {
       // focus+blur re-reports that truncation. Adopting it would latch
       // `rateEdited`, so the server stamps the current settlement pair onto a
       // truncated -- possibly stale-pair -- scalar, reopening the #1167 bug class
-      // through a cosmetic edit. No market rate is offered here, so only the
-      // stored value can fill the field; the guard must still drop the re-report.
-      mockGetLatestRates.mockResolvedValue([]);
+      // through a cosmetic edit. The guard must drop the re-report.
       const onChange = vi.fn();
-      await renderFieldsAsync({
-        value: buyValue({
+      await renderHarness(
+        buyValue({
           exchangeRate: 1.2345678,
           exchangeRateFromCurrency: 'USD',
           exchangeRateToCurrency: 'CAD',
         }),
         onChange,
-      });
-      const rateField = await screen.findByLabelText(
-        'Exchange rate (CAD per 1 USD)',
+        { transactionDate: TRADE_DATE },
       );
+      const rateField = await screen.findByLabelText(rateLabel);
       await waitFor(() => expect(rateField).toHaveValue('1.234568'));
       onChange.mockClear();
       await act(async () => {
@@ -291,8 +459,8 @@ describe('InvestmentSplitFields', () => {
     });
 
     it('says the rate is unknown rather than settling at par', async () => {
-      mockGetLatestRates.mockResolvedValue([]);
-      await renderFieldsAsync({ value: noStatedRate() });
+      mockGetRateForDate.mockResolvedValue(null);
+      await renderHarness(noStatedRate(), vi.fn(), { transactionDate: TRADE_DATE });
       await waitFor(() =>
         expect(screen.getByRole('alert')).toHaveTextContent(
           /No USD to CAD rate is available/i,
@@ -301,9 +469,9 @@ describe('InvestmentSplitFields', () => {
     });
 
     it('emits no cash impact while the rate is unknown', async () => {
-      mockGetLatestRates.mockResolvedValue([]);
+      mockGetRateForDate.mockResolvedValue(null);
       const onChange = vi.fn();
-      await renderFieldsAsync({ value: noStatedRate(), onChange });
+      await renderHarness(noStatedRate(), onChange, { transactionDate: TRADE_DATE });
       await act(async () => {
         fireEvent.change(screen.getByPlaceholderText('Quantity'), {
           target: { value: '20' },
@@ -316,14 +484,15 @@ describe('InvestmentSplitFields', () => {
       expect(amount).toBe(0);
     });
 
-    it('lets the user state a rate that overrides the market one', async () => {
-      mockGetLatestRates.mockResolvedValue([
-        { fromCurrency: 'USD', toCurrency: 'CAD', rate: 1.35 },
-      ]);
+    it('lets the user state a rate that overrides the prefilled one', async () => {
+      mockGetRateForDate.mockResolvedValue(1.35);
       const onChange = vi.fn();
-      await renderFieldsAsync({ value: noStatedRate(), onChange });
+      await renderHarness(noStatedRate(), onChange, { transactionDate: TRADE_DATE });
+      await waitFor(() =>
+        expect(screen.getByLabelText(rateLabel)).toHaveValue('1.350000'),
+      );
       await act(async () => {
-        fireEvent.change(screen.getByLabelText('Exchange rate (CAD per 1 USD)'), {
+        fireEvent.change(screen.getByLabelText(rateLabel), {
           target: { value: '1.4' },
         });
       });
@@ -336,14 +505,12 @@ describe('InvestmentSplitFields', () => {
     // code copied the effective rate (1) into the payload before applying the new
     // security, so a USD BUY on a CAD account booked at 1:1 (a 26% error), and R8
     // then blessed that 1 as an explicit USD/CAD rate.
-    it('resolves the new security pair rate on select, never carrying the stale 1 (R9-F3)', async () => {
-      mockGetLatestRates.mockResolvedValue([
-        { fromCurrency: 'USD', toCurrency: 'CAD', rate: 1.35 },
-      ]);
+    it('resolves the new security pair rate for the date on select, never carrying the stale 1 (R9-F3)', async () => {
+      mockGetRateForDate.mockResolvedValue(1.35);
       const onChange = vi.fn();
       // Start with no security (CAD account -> same-currency, effective rate 1).
-      await renderFieldsAsync({
-        value: {
+      await renderHarness(
+        {
           action: 'BUY',
           securityId: undefined,
           quantity: 10,
@@ -352,8 +519,8 @@ describe('InvestmentSplitFields', () => {
           exchangeRate: undefined,
         } as InvestmentSplitDetails,
         onChange,
-        currencyCode: 'CAD',
-      });
+        { currencyCode: 'CAD', transactionDate: TRADE_DATE },
+      );
 
       await act(async () => {
         fireEvent.change(screen.getByLabelText('Security'), {
@@ -361,21 +528,32 @@ describe('InvestmentSplitFields', () => {
         });
       });
 
-      const [next, amount, meta] = onChange.mock.calls.at(-1)!;
-      expect(next.securityId).toBe('sec-1');
-      expect(next.exchangeRate).toBe(1.35); // resolved for USD->CAD, not 1
-      expect(amount).toBe(-1350); // 10 x 100 x 1.35, never -1000
+      // The select itself leaves the new pair unresolved (never 1) ...
+      const [selected, selectedAmount, meta] = onChange.mock.calls[0];
+      expect(selected.securityId).toBe('sec-1');
+      expect(selected.exchangeRate).toBeUndefined();
+      expect(selectedAmount).toBe(0);
       expect(meta.securityChanged).toBe(true);
       // The recorded pair is cleared so a stale scalar cannot be blessed for it.
-      expect(next.exchangeRateFromCurrency).toBeUndefined();
-      expect(next.exchangeRateToCurrency).toBeUndefined();
+      expect(selected.exchangeRateFromCurrency).toBeUndefined();
+      expect(selected.exchangeRateToCurrency).toBeUndefined();
+
+      // ... and the dated lookup fills it in.
+      await waitFor(() =>
+        expect(mockGetRateForDate).toHaveBeenCalledWith('USD', 'CAD', TRADE_DATE),
+      );
+      await waitFor(() => {
+        const [next, amount] = onChange.mock.calls.at(-1)!;
+        expect(next.exchangeRate).toBe(1.35); // resolved for USD->CAD, not 1
+        expect(amount).toBe(-1350); // 10 x 100 x 1.35, never -1000
+      });
     });
 
     it('leaves the rate unresolved (never 1) when the new pair has no rate (R9-F3)', async () => {
-      mockGetLatestRates.mockResolvedValue([]); // no USD/CAD rate available
+      mockGetRateForDate.mockResolvedValue(null); // no USD/CAD rate available
       const onChange = vi.fn();
-      await renderFieldsAsync({
-        value: {
+      await renderHarness(
+        {
           action: 'BUY',
           securityId: undefined,
           quantity: 10,
@@ -384,8 +562,8 @@ describe('InvestmentSplitFields', () => {
           exchangeRate: undefined,
         } as InvestmentSplitDetails,
         onChange,
-        currencyCode: 'CAD',
-      });
+        { currencyCode: 'CAD', transactionDate: TRADE_DATE },
+      );
 
       await act(async () => {
         fireEvent.change(screen.getByLabelText('Security'), {
@@ -402,15 +580,11 @@ describe('InvestmentSplitFields', () => {
     // user changes the rate input, so a re-entered rate on a continuing line is
     // honoured even when its value equals the stale stored one.
     it('reports meta.rateEdited only for a rate edit, not for other field edits (R9-F2)', async () => {
-      mockGetLatestRates.mockResolvedValue([
-        { fromCurrency: 'USD', toCurrency: 'CAD', rate: 1.35 },
-      ]);
+      mockGetRateForDate.mockResolvedValue(1.35);
       const onChange = vi.fn();
-      await renderFieldsAsync({ value: noStatedRate(), onChange });
+      await renderHarness(noStatedRate(), onChange, { transactionDate: TRADE_DATE });
       await waitFor(() =>
-        expect(
-          screen.getByLabelText('Exchange rate (CAD per 1 USD)'),
-        ).toHaveValue('1.350000'),
+        expect(screen.getByLabelText(rateLabel)).toHaveValue('1.350000'),
       );
 
       await act(async () => {
@@ -424,10 +598,7 @@ describe('InvestmentSplitFields', () => {
       });
 
       await act(async () => {
-        fireEvent.change(
-          screen.getByLabelText('Exchange rate (CAD per 1 USD)'),
-          { target: { value: '1.4' } },
-        );
+        fireEvent.change(screen.getByLabelText(rateLabel), { target: { value: '1.4' } });
       });
       expect(onChange.mock.calls.at(-1)![2]).toEqual({
         rateEdited: true,
@@ -454,7 +625,7 @@ describe('InvestmentSplitFields', () => {
     // The amount is in the SECURITY's currency (sec-1 is USD), not the cash
     // account's -- that is how the backend reads price and commission, and
     // labelling them with the account's currency asked for the wrong number.
-    expect(screen.getByPlaceholderText('Amount (USD)')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Amount')).toBeInTheDocument();
     // DIVIDEND still needs a security
     expect(screen.getByLabelText('Security')).toBeInTheDocument();
   });
@@ -466,7 +637,7 @@ describe('InvestmentSplitFields', () => {
       onChange,
     });
     await act(async () => {
-      fireEvent.change(screen.getByPlaceholderText('Amount (USD)'), {
+      fireEvent.change(screen.getByPlaceholderText('Amount'), {
         target: { value: '25' },
       });
     });
@@ -479,7 +650,7 @@ describe('InvestmentSplitFields', () => {
   it('hides the security dropdown for actions that do not need one (INTEREST)', async () => {
     await renderFieldsAsync({ value: buyValue({ action: 'INTEREST' }) });
     expect(screen.queryByLabelText('Security')).not.toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Amount (USD)')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Amount')).toBeInTheDocument();
   });
 
   it('honours a custom currency code in the amount placeholder and symbol', async () => {
@@ -487,7 +658,7 @@ describe('InvestmentSplitFields', () => {
       value: buyValue({ action: 'INTEREST' }),
       currencyCode: 'USD',
     });
-    expect(screen.getByPlaceholderText('Amount (USD)')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('Amount')).toBeInTheDocument();
   });
 
   it('disables all controls when disabled', async () => {

@@ -1,0 +1,287 @@
+{
+  "title": "Bildirimler",
+  "unread": "{count} okunmamış",
+  "markAllRead": "Tümünü okundu işaretle",
+  "loading": "Bildirimler yükleniyor...",
+  "empty": "Bildirim yok",
+  "undo": "Geri Al",
+  "buttonTitle": "Bildirimler",
+  "buttonAriaLabel": "Bildirimler",
+  "dismissAriaLabel": "Bildirimi kapat",
+  "closeAriaLabel": "Bildirimleri kapat",
+  "emptyFiltered": "Geçerli filtreyle eşleşen bildirim yok",
+  "deleteAll": "Tümünü sil",
+  "deleteAllConfirmTitle": "Bildirimleri sil",
+  "deleteAllConfirmMessageAll": "Tüm bildirimler silinsin mi? Bu işlem geri alınamaz.",
+  "deleteAllConfirmMessageFiltered": "Gösterilmeyenler dahil, geçerli filtreyle eşleşen tüm bildirimler silinsin mi? Bu işlem geri alınamaz.",
+  "deleted": "{count, plural, other {# bildirim silindi}}",
+  "deleteFailed": "Bildirimler silinemedi",
+  "filter": {
+    "financial": "Finansal",
+    "system": "Sistem"
+  },
+  "severity": {
+    "critical": "Kritik",
+    "warning": "Uyarı",
+    "success": "İyi Haber",
+    "info": "Bilgi"
+  },
+  "reminder": {
+    "remindAriaLabel": "Bunu bana hatırlat",
+    "stopAriaLabel": "Bu hatırlatıcıyı durdur",
+    "stopped": "Hatırlatıcı durduruldu",
+    "stopFailed": "Hatırlatıcı durdurulamadı",
+    "created": "Hatırlatıcı ayarlandı",
+    "createFailed": "Hatırlatıcı ayarlanamadı",
+    "dialogTitle": "Bana hatırlat",
+    "dialogDescription": "Harekete geçene kadar bu bildirimi daha sonra tekrar al.",
+    "modeLabel": "Sıklık",
+    "modeRepeat": "Ben durdurana kadar tekrarla",
+    "modeOnce": "Sadece bir kez daha",
+    "intervalLabelRepeat": "Bana hatırlat, her",
+    "intervalLabelOnce": "Şu süre sonra hatırlat",
+    "durationMinutes": "{minutes, plural, one {# dakika} other {# dakika}}",
+    "durationHours": "{hours, plural, one {# saat} other {# saat}}",
+    "cancel": "İptal",
+    "confirm": "Hatırlatıcı ayarla",
+    "pageTitle": "Etkin hatırlatıcılar",
+    "empty": "Etkin hatırlatıcı yok",
+    "loadFailed": "Hatırlatıcılar yüklenemedi",
+    "retry": "Tekrar dene",
+    "nextFire": "Sonraki hatırlatıcı: {date}",
+    "openTarget": "İlgili sayfayı aç",
+    "delegateUnavailable": "Hatırlatıcıları yönetmek için kendi hesabınıza dönün."
+  },
+  "billDue": {
+    "titleOverdue": "{payee} gecikmiş",
+    "titleToday": "{payee} bugün ödenecek",
+    "titleTomorrow": "{payee} yarın ödenecek",
+    "titleInDays": "{payee} {days} gün içinde ödenecek",
+    "amountDue": "{date} tarihinde {amount} ödenecek",
+    "amountUnavailable": "Tutar kullanılamıyor (güncel döviz kuru yok), {date} tarihinde ödenecek"
+  },
+  "gemSignal": {
+    "riskTitle": "{strategy} {state} durumuna geçti",
+    "riskMessage": "GEM stratejiniz \"{strategy}\" {fromState} durumundan {toState} durumuna geçti. Öneriyi incelemek için açın.",
+    "allocationTitle": "{strategy} hedefini değiştirdi",
+    "allocationMessage": "GEM stratejiniz \"{strategy}\" artık {target} hedefliyor. Öneriyi incelemek için açın.",
+    "riskOn": "risk-on",
+    "riskOff": "risk-off"
+  },
+  "bond": {
+    "maturitySoonTitle": "{series} için vade {date} tarihinde doluyor",
+    "maturitySoonMessage": "{quantity} × {series} için vade {date} tarihinde doluyor. {payout}",
+    "interestTitle": "{series}: {date} tarihinde faiz ödemesi",
+    "interestMessage": "{quantity} × {series} için {date} tarihinde {amount} faiz ödenecek. Henüz hesabınızda değilse menkul kıymet sayfasında kaydedin.",
+    "interestMessageUnknown": "{quantity} × {series} için {date} tarihinde faiz ödenecek. Tutar henüz bilinmiyor: bağlı olduğu oran henüz yayımlanmadı.",
+    "rateResetTitle": "{series}: yeni faiz dönemi",
+    "rateResetMessage": "{series}: {date} tarihinde başlayan dönem {period}, yıllık oran {rate}.",
+    "unbookedTitle": "{series}: vadesi doldu, itfa kaydedilmedi",
+    "unbookedMessage": "{quantity} × {series} için vade {date} tarihinde doldu ve kayıtlı bir itfa yok. {payout} İtfayı menkul kıymet sayfasında kaydedin.",
+    "payoutKnown": "Ödeme tutarı {payout}.",
+    "payoutUnknown": "Ödeme tutarı henüz bilinmiyor: {reason}.",
+    "reason": {
+      "RATE_UNKNOWN": "bağlı olduğu oran henüz yayımlanmadı",
+      "TERMS_INCOMPLETE": "serinin koşulları eksik",
+      "PURCHASE_OUTSIDE_SALE_WINDOW": "bir alış tarihi serinin satış döneminin dışında",
+      "PURCHASE_AFTER_MATURITY": "bir alım tarihi serinin vade tarihine denk geliyor veya sonrasında",
+      "other": "kayıtlı verilerden hesaplanamıyor"
+    },
+    "benchmarkTitle": "{benchmark}: yeni gözlem {observation}",
+    "benchmarkIntro": "{publisher}, {observation} için {benchmark} değerini yayımladı: {value}.",
+    "benchmarkSeries": "{series}: {date} tarihinden başlayan dönem, yıllık oran {rate}.",
+    "benchmarkSeriesProjected": "{series}: {date} tarihinden başlayan dönem, öngörülen yıllık oran {rate}.",
+    "benchmarkSeriesUnknown": "{series}: {date} tarihinden başlayan dönem, oran henüz bilinmiyor.",
+    "benchmarkMore": "Ve {more} diğeri.",
+    "missingTitle": "Tahvil rakamları henüz bilinmiyor",
+    "missingMessage": "Bazı tahvil rakamları hesaplanamıyor. {causes}",
+    "cause": {
+      "observation": "{benchmark} ({publisher}) için {observation} gözlemi kayıtlı değil: henüz yayımlanmadı veya veri akışı o zamandan beri alınmadı. Tahvil sayfasında yenileyin.",
+      "observationNoPublisher": "{benchmark} için {observation} gözlemi kayıtlı değil: henüz yayımlanmadı veya veri akışı o zamandan beri alınmadı. Tahvil sayfasında yenileyin.",
+      "terms": "{series} koşulları eksik. Seriyi tahvil sayfasında yenileyin.",
+      "purchase": "{series} için {date} tarihli alış, satış döneminin ({from} – {to}) dışında. Alış tarihini düzeltin.",
+      "purchaseAfterMaturity": "{series} alımı ({date}) vadesine ({maturity}) denk geliyor veya sonrasında. Alım tarihini düzeltin.",
+      "lots": "Lotlar defterden türetilemiyor ({code}). Defteri düzeltin.",
+      "lotsRow": "{action} ({date}): lotlar türetilemiyor ({code}). İşlemi düzeltin.",
+      "lotsRowSeries": "{action} ({date}): bir seriye atanmamış ({code}). Bu işlemde seriyi seçin.",
+      "lotsRowRemoval": "{action} ({date}): hesapta bulunandan fazlasını o seriden çıkarıyor ({code}). İşlemi düzeltin."
+    },
+    "action": {
+      "BUY": "Alım",
+      "SELL": "Satım",
+      "REINVEST": "Yeniden yatırım",
+      "ADD_SHARES": "Pay ekleme",
+      "REMOVE_SHARES": "Pay çıkarma",
+      "SPLIT": "Bölünme (split)",
+      "TRANSFER_IN": "Gelen transfer",
+      "TRANSFER_OUT": "Giden transfer",
+      "other": "İşlem"
+    },
+    "benchmarks": {
+      "PL_CPI_GUS_YOY": "TÜFE, 12 ay (GUS)",
+      "PL_NBP_REFERENCE": "NBP referans faizi",
+      "US_CPI_U_NSA": "TÜFE (CPI-U), tüm kalemler, mevsimsellikten arındırılmamış (BLS)",
+      "US_TBILL_13W_MMY": "13 haftalık Hazine bonosu getirisi"
+    }
+  },
+  "portfolioMovement": {
+    "titleUp": "Yatırımlar %{percent} arttı",
+    "titleDown": "Yatırımlar %{percent} azaldı",
+    "messageUp": "Yatırımlarınız {from} - {to} arasında, para yatırma ve çekme hariç %{percent} arttı. İncelemek için açın.",
+    "messageDown": "Yatırımlarınız {from} - {to} arasında, para yatırma ve çekme hariç %{percent} azaldı. İncelemek için açın."
+  },
+  "balanceThreshold": {
+    "titleLow": "{account} eşiğinizin altında",
+    "titleHigh": "{account} eşiğinizin üstünde",
+    "messageLow": "{account} {balance} değerine düştü, {threshold} eşiğinizin altında.",
+    "messageHigh": "{account} {balance} değerine yükseldi, {threshold} eşiğinizin üstünde."
+  },
+  "system": {
+    "backupFailed": {
+      "title": "Otomatik yedekleme başarısız oldu",
+      "message": "{user} için otomatik yedekleme başarısız oldu: {error}"
+    },
+    "backupPartial": {
+      "title": "Otomatik yedekleme eksik",
+      "messageAttachments": "{user} için yedek yazıldı, ancak {expected} ekten {missing} tanesi dahil edilemedi ve {inconsistent} tanesi meta verileriyle eşleşmedi. Tam yedekler korundu.",
+      "messagePromotion": "{user} için günlük yedekleme başarılı oldu, ancak haftalık veya aylık kopyası yazılamadı: {error}",
+      "messageRetention": "{user} için yedekleme başarılı oldu, ancak eski yedek dosyaları temizlenemedi: {error}"
+    },
+    "encryptionKeyMissing": {
+      "title": "Şifreleme anahtarı yapılandırılmamış",
+      "message": "ENCRYPTION_KEY ayarlanmadığından yedekler şifrelenmeden yazılıyor ve gizli bilgiler saklanamıyor. Gelecek bir sürüm bu anahtar olmadan başlamayacak."
+    },
+    "jwtSecretWeak": {
+      "title": "JWT_SECRET zayıf",
+      "message": "JWT_SECRET yayımlanmış bir örnek değer ya da fazla tahmin edilebilir; bu nedenle oturum belirteçleri taklit edilebilir. Güçlü bir değer oluşturun (openssl rand -base64 32). Değiştirmek, kimlik doğrulama uygulamalarının kodlarını geçersiz kılar ve güvenilen cihazları unutur: kullanıcılar bir yedek kodla giriş yapıp 2FA'yı yeniden kurar, yedek kodu olmayanlar için 2FA'yı Kullanıcı Yönetimi'nden siz sıfırlarsınız. Önce docs/backend/modules-and-runtime.md (Changing JWT_SECRET) belgesini okuyun."
+    },
+    "smtpFailure": {
+      "title": "E-posta gönderimi başarısız oluyor",
+      "message": "Monize e-posta gönderemedi: {error}. Bildirimler ve hatırlatıcılar iletilemiyor."
+    },
+    "providerOutage": {
+      "title": "{provider} yanıt vermiyor",
+      "message": "{provider} kaynaklı piyasa verilerine ulaşılamıyor. Sağlayıcı yeniden yanıt verene kadar fiyatlar ve endeks verileri güncel olmayabilir."
+    },
+    "providerRecovered": {
+      "title": "{provider} yeniden yanıt veriyor",
+      "message": "Kesinti sona erdi ve {provider} kaynaklı piyasa verileri yeniden güncelleniyor."
+    },
+    "scheduledPostFailed": {
+      "title": "{name} kaydedilemedi",
+      "message": "Vadesi {date} olan planlı işleminiz otomatik olarak kaydedilmedi: {error}. Faturalar ve Mevduatlar bölümünden elle kaydedebilirsiniz."
+    }
+  },
+  "priceMovement": {
+    "title": "Fiyat değişimi uyarısı: {symbol} ({percent}%)",
+    "message": "{symbol}: önceki mevcut seansa göre %{percent}."
+  },
+  "bankSync": {
+    "expiringTitleToday": "{institution}: banka erişimi bugün sona eriyor",
+    "expiringTitleOneDay": "{institution}: banka erişimi 1 gün içinde sona eriyor",
+    "expiringTitleDays": "{institution}: banka erişimi {days} gün içinde sona eriyor",
+    "expiringMessage": "Monize'in {institution} kaydını okumasına verdiğiniz onay {date} tarihinde sona eriyor. Senkronizasyonu sürdürmek için Monize'de bağlantıyı yenileyin.",
+    "expiredTitle": "{institution}: banka erişimi sona erdi",
+    "expiredMessage": "Monize'in {institution} kaydını okumasına verdiğiniz onay sona erdi. Senkronizasyonu yeniden başlatmak için Monize'de bağlantıyı yenileyin.",
+    "failedTitle": "{institution}: senkronizasyon başarısız",
+    "failedMessage": "{institution} günlük senkronizasyonu şu hesaplar için başarısız oldu: {accounts}. Nedenini görmek için banka senkronizasyonu ayarlarını açın.",
+    "failedCredentialsMessage": "Banka senkronizasyonu kimlik bilgileri eksik olduğu veya reddedildiği için {institution} günlük senkronizasyonu başlatılamadı. Bunları banka senkronizasyonu ayarlarında kontrol edin.",
+    "unnamedAccount": "bir hesap",
+    "importedTitle": "{institution}: yeni işlemler içe aktarıldı",
+    "importedMessage": "Günlük senkronizasyonla {institution} kaynağından içe aktarılan işlemler: {imported}.",
+    "importedNoneTitle": "{institution}: yeni işlem yok",
+    "importedNoneMessage": "{institution} günlük senkronizasyonu yeni işlem bulamadı."
+  },
+  "emailReceiptsAttention": {
+    "title": "E-posta makbuzları ilgilenilmesi gerekiyor",
+    "message": "Makbuz gelen kutunuz {noParser} profil olmadan ve {parseFailed} ki profili tanımadığı içeriyor. Gözden geçirmek için açın."
+  },
+  "aiReview": {
+    "readyTitle": "Yapay zeka önerileri onayınızı bekliyor",
+    "readyMessage": "{count, plural, one {# yapay zeka önerisi} other {# yapay zeka önerisi}} onayınızı bekliyor, bunların {added} tanesi yeni. Onaylamak veya reddetmek için yapay zeka inceleme gelen kutusunu açın.",
+    "expiringTitle": "Yapay zeka önerilerinin süresi yakında doluyor",
+    "expiringMessage": "{count, plural, one {# yapay zeka önerisinin} other {# yapay zeka önerisinin}} süresi yakında doluyor. İlkinin süresi {date} tarihinde doluyor. Onaylamak veya reddetmek için yapay zeka inceleme gelen kutusunu açın."
+  },
+  "warranty": {
+    "expiringTitle": "{name}: garantinin süresi {days, plural, other {# gün}} içinde doluyor",
+    "expiringMessage": "{name} garantisinin süresi {date} tarihinde doluyor. Belgelerini incelemek veya bir talep kaydetmek için açın.",
+    "todayTitle": "{name}: garantinin süresi bugün doluyor",
+    "todayMessage": "{name} garantisinin süresi bugün, {date} tarihinde doluyor. Belgelerini incelemek veya bir talep kaydetmek için açın."
+  },
+  "security": {
+    "oauthTitle": "Yeni uygulama bağlandı: {clientName}",
+    "oauthMessage": "{clientName} uygulamasına Monize hesabınıza erişim izni verildi. Bu siz değilseniz şifrenizi hemen değiştirin: bu işlem bağlı tüm uygulamaların erişimini iptal eder.",
+    "relayTitle": "Yeni bir bağlantı yapay zekâ sohbetinize yanıt verdi",
+    "relayMessage": "Monize yapay zekâ sohbetinize daha önce yanıt vermemiş bir bağlantı az önce bir istem aldı. Bu asistanı siz bağlamadıysanız şifrenizi değiştirin."
+  },
+  "payrollDeduction": {
+    "resetTitle": "{category}: gelecek yılın üst sınırını onaylayın",
+    "resetMessage": "{bill} üzerindeki {category} kesintisi {date} tarihinde sıfırlanır. Yıllık üst sınır değişiyorsa güncelleyin; aksi halde {amount} yeniden uygulanır."
+  },
+  "shared": {
+    "title": "Paylaşılan giderler",
+    "message": "Ortak bir grupta güncelleme var. İncelemek için Monize'ı açın."
+  },
+  "native": {
+    "payments": {
+      "title": "Ödeme hatırlatması",
+      "body": "Bir fatura veya planlanmış ödeme ilginizi bekliyor. Ayrıntılar için Monize'i açın."
+    },
+    "budgets": {
+      "title": "Bütçe uyarısı",
+      "body": "Bütçelerinizden biri ilginizi bekliyor. Ayrıntılar için Monize'i açın."
+    },
+    "system": {
+      "title": "Sistem bildirimi",
+      "body": "Monize'in sizin için bir sistem bildirimi var. Ayrıntılar için uygulamayı açın."
+    },
+    "balances": {
+      "title": "Bakiye uyarısı",
+      "body": "Bir hesap bakiyesi belirlediğiniz eşiği aştı. Ayrıntılar için Monize'i açın."
+    },
+    "investments": {
+      "title": "Yatırım hareketi",
+      "body": "Yatırımlarınız bugün hareket etti. Ayrıntılar için Monize'i açın."
+    },
+    "strategies": {
+      "title": "Strateji sinyali",
+      "body": "Stratejilerinizden biri önerisini değiştirdi. Ayrıntılar için Monize'i açın."
+    },
+    "bank_sync": {
+      "title": "Banka bağlantısı",
+      "body": "Bir banka bağlantısı ilginizi bekliyor. Ayrıntılar için Monize'i açın."
+    },
+    "bank_sync_activity": {
+      "title": "Banka senkronizasyonu",
+      "body": "Banka senkronizasyonunuzda yenilikler var. Ayrıntılar için Monize'i açın."
+    },
+    "email_receipts": {
+      "title": "E-posta makbuzları ilgilenilmesi gerekiyor",
+      "body": "Makbuz gelen kutunuzdaki bazı e-postalar bir profil veya düzeltme gerektirir. Detaylar için Monize'i açın."
+    },
+    "bonds": {
+      "title": "Tahvil bildirimi",
+      "body": "Tahvillerinizden biriyle ilgili yeni bir gelişme var. Ayrıntılar için Monize uygulamasını açın."
+    },
+    "ai_review": {
+      "title": "Yapay zeka inceleme önerileri",
+      "body": "Bazı yapay zeka inceleme önerileri kararınızı bekliyor. Ayrıntılar için Monize'i açın."
+    },
+    "warranties": {
+      "title": "Garanti hatırlatıcısı",
+      "body": "Garantilerinizden birinin süresi yakında doluyor. Ayrıntılar için Monize'i açın."
+    },
+    "shared_expenses": {
+      "title": "Paylaşılan giderler",
+      "body": "Ortak bir grupta güncelleme var. İncelemek için Monize'ı açın."
+    },
+    "security": {
+      "title": "Güvenlik bildirimi",
+      "body": "Monize hesabınıza kimlerin erişebildiği değişti. Ayrıntılar için Monize'i açın."
+    },
+    "fallback": {
+      "title": "Monize",
+      "body": "Monize'da yeni bir bildiriminiz var."
+    }
+  }
+}

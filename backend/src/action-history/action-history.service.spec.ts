@@ -1,9 +1,29 @@
 import { Test, TestingModule } from "@nestjs/testing";
-import { NotFoundException, ConflictException, Logger } from "@nestjs/common";
+import { Currency } from "../currencies/entities/currency.entity";
+import { currencyPlacesRepoMock } from "../test-helpers/currency-places-testing";
+import {
+  BadRequestException,
+  NotFoundException,
+  ConflictException,
+  Logger,
+} from "@nestjs/common";
 import { DataSource } from "typeorm";
 import { createScopedDbMocks } from "../test-helpers/scoped-db-testing";
-import { ActionHistoryService } from "./action-history.service";
+import {
+  currencyKindRows,
+  isCurrencyKindRead,
+} from "../test-helpers/currency-kind-testing";
+import {
+  ActionHistoryService,
+  settlePendingHistoryWrites,
+} from "./action-history.service";
 import { ActionHistory } from "./entities/action-history.entity";
+import { Transaction } from "../transactions/entities/transaction.entity";
+import { UserPreference } from "../users/entities/user-preference.entity";
+import { Tag } from "../tags/entities/tag.entity";
+import { BondPriceService } from "../bonds/bond-price.service";
+import { HoldingsService } from "../securities/holdings.service";
+import { requestContextStorage } from "../common/request-context";
 
 jest.mock("../common/db/scoped-db", () =>
   jest.requireActual("../test-helpers/scoped-db-testing").scopedDbMockModule(),
@@ -14,6 +34,12 @@ describe("ActionHistoryService", () => {
   let mockRepository: Record<string, jest.Mock>;
   let mockQueryRunner: Record<string, any>;
   let mockDataSource: Record<string, any>;
+  let holdings: { rebuildAccountsFromTransactions: jest.Mock };
+  let bondPrices: {
+    clearEnginePrices: jest.Mock;
+    publishClearedPrices: jest.Mock;
+    recomputeLinkedSecurities: jest.Mock;
+  };
 
   const userId = "user-1";
   const mockAction: Partial<ActionHistory> = {
@@ -28,6 +54,44 @@ describe("ActionHistoryService", () => {
     isUndone: false,
     description: 'Created tag "Test Tag"',
     createdAt: new Date(),
+  };
+
+  /**
+   * The row-lock `SELECT ... FOR UPDATE` over `transactions` answers with the
+   * rows given (by id); every other query answers like the balance recompute.
+   */
+  const mockLockedRows = (
+    rows: Record<
+      string,
+      {
+        account_id: string;
+        amount: string;
+        linked_transaction_id?: string | null;
+        status?: string;
+        transaction_date?: string;
+      }
+    >,
+  ) => {
+    mockQueryRunner.query.mockImplementation(
+      async (sql: string, params: unknown[]) => {
+        if (/FROM transactions/.test(sql) && /FOR UPDATE/.test(sql)) {
+          return (params[0] as string[])
+            .filter((id) => rows[id] !== undefined)
+            .map((id) => ({
+              id,
+              status: "UNRECONCILED",
+              transaction_date: "2020-01-15",
+              is_split: false,
+              linked_transaction_id: null,
+              parent_transaction_id: null,
+              payee_id: null,
+              payee_name: null,
+              ...rows[id],
+            }));
+        }
+        return [{ opening_balance: "0", tx_sum: "0" }];
+      },
+    );
   };
 
   beforeEach(async () => {
@@ -45,12 +109,27 @@ describe("ActionHistoryService", () => {
     // QueryRunner is the transaction's EntityManager: `queryRunner.query` and
     // `queryRunner.manager.*` are the same jest.fn()s the manager exposes, which
     // keeps the assertions below pointed at the same calls they always were.
-    const scoped = createScopedDbMocks([[ActionHistory, mockRepository]]);
+    const scoped = createScopedDbMocks([
+      [ActionHistory, mockRepository],
+      // `decimal_places` per currency, for the replay's precision refusal.
+      [Currency, currencyPlacesRepoMock({ BTC: 8 })],
+    ]);
     mockQueryRunner = {
       query: scoped.manager.query,
       manager: scoped.manager,
     };
     mockDataSource = scoped.dataSource;
+
+    holdings = {
+      rebuildAccountsFromTransactions: jest.fn().mockResolvedValue(undefined),
+    };
+    bondPrices = {
+      clearEnginePrices: jest
+        .fn()
+        .mockResolvedValue({ deleted: 2, accountIds: ["acct-1"] }),
+      publishClearedPrices: jest.fn(),
+      recomputeLinkedSecurities: jest.fn().mockResolvedValue(undefined),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -59,6 +138,8 @@ describe("ActionHistoryService", () => {
           provide: DataSource,
           useValue: mockDataSource,
         },
+        { provide: BondPriceService, useValue: bondPrices },
+        { provide: HoldingsService, useValue: holdings },
       ],
     }).compile();
 
@@ -70,6 +151,46 @@ describe("ActionHistoryService", () => {
   });
 
   describe("record", () => {
+    it("stays visible to settlePendingHistoryWrites until it has finished", async () => {
+      // Every call site invokes `record` without `await`, so the write outlives
+      // the request that caused it. A teardown that truncates `users` while one
+      // is in flight gets a foreign key violation against a user that no longer
+      // exists, and a fixture that writes several rows per test starts the next
+      // test body with those chains still holding pooled connections -- which,
+      // on a pool that waits forever for a free one, is a 30-second stall with
+      // nothing naming the cause. Registering the promise is what lets a
+      // teardown wait for it.
+      let releaseSave: (value: unknown) => void = () => {};
+      mockRepository.delete.mockResolvedValue({});
+      mockRepository.create.mockReturnValue(mockAction);
+      mockRepository.count.mockResolvedValue(0);
+      mockRepository.save.mockReturnValue(
+        new Promise((resolve) => {
+          releaseSave = resolve;
+        }),
+      );
+
+      void service.record(userId, {
+        entityType: "tag",
+        entityId: "entity-1",
+        action: "create",
+        description: 'Created tag "Test Tag"',
+      });
+
+      let settled = false;
+      const settling = settlePendingHistoryWrites().then(() => {
+        settled = true;
+      });
+      // Several microtask turns: enough for a settle that was going to resolve
+      // immediately to have done so.
+      await new Promise((resolve) => setImmediate(resolve));
+      expect(settled).toBe(false);
+
+      releaseSave(mockAction);
+      await settling;
+      expect(settled).toBe(true);
+    });
+
     it("reports a failed recording as an error naming what cannot be undone", async () => {
       // Recording is best-effort so it cannot fail the user's operation, but the
       // operation succeeded and its undo entry did not -- the user will look for
@@ -538,6 +659,93 @@ describe("ActionHistoryService", () => {
     });
   });
 
+  describe("undo of a foreign-currency delete restores original_amount and original_currency_code", () => {
+    const fx = { originalAmount: 100, originalCurrencyCode: "EUR" };
+    const txBase = {
+      accountId: "acc-1",
+      transactionDate: "2024-01-15",
+      amount: -108,
+      currencyCode: "USD",
+      exchangeRate: 1.08,
+    };
+
+    const insertFor = (table: string) =>
+      mockQueryRunner.query.mock.calls.find(
+        (call: any[]) =>
+          typeof call[0] === "string" &&
+          call[0].includes(`INSERT INTO ${table} `),
+      ) as [string, unknown[]] | undefined;
+
+    const run = async (
+      entityType: string,
+      action: string,
+      beforeData: Record<string, any>,
+    ) => {
+      mockRepository.findOne.mockResolvedValue({
+        ...mockAction,
+        entityType,
+        action,
+        entityId: "tx-1",
+        beforeData,
+        afterData: null,
+      });
+      mockQueryRunner.manager.findOne.mockResolvedValue({
+        id: "acc-1",
+        userId,
+      });
+      mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
+      mockQueryRunner.query.mockResolvedValue([
+        { opening_balance: "0", tx_sum: "0" },
+      ]);
+      await service.undo(userId);
+    };
+
+    it("single transaction", async () => {
+      await run("transaction", "delete", { id: "tx-1", ...txBase, ...fx });
+      const insert = insertFor("transactions")!;
+      expect(insert[0]).toContain("original_amount, original_currency_code");
+      expect(insert[1].slice(-2)).toEqual([100, "EUR"]);
+    });
+
+    it("single transaction from a snapshot recorded before the fields existed", async () => {
+      await run("transaction", "delete", { id: "tx-1", ...txBase });
+      expect(insertFor("transactions")![1].slice(-2)).toEqual([null, null]);
+    });
+
+    it("transfer legs", async () => {
+      await run("transfer", "delete", {
+        fromTransaction: { id: "tx-1", ...txBase, ...fx },
+        toTransaction: { id: "tx-2", ...txBase, amount: 108 },
+      });
+      const inserts = mockQueryRunner.query.mock.calls.filter(
+        (c: any[]) =>
+          typeof c[0] === "string" &&
+          c[0].includes("INSERT INTO transactions "),
+      );
+      expect(inserts[0][1].slice(-2)).toEqual([100, "EUR"]);
+      expect(inserts[1][1].slice(-2)).toEqual([null, null]);
+    });
+
+    it("investment linked cash transaction", async () => {
+      await run("investment_transaction", "delete", {
+        id: "inv-1",
+        accountId: "acc-1",
+        securityId: "sec-1",
+        action: "BUY",
+        transactionDate: "2024-01-15",
+        linkedCashTransaction: { id: "cash-1", ...txBase, ...fx },
+      });
+      expect(insertFor("transactions")![1].slice(-2)).toEqual([100, "EUR"]);
+    });
+
+    it("bulk delete", async () => {
+      await run("bulk_transaction", "bulk_delete", {
+        transactions: [{ id: "tx-1", ...txBase, ...fx }],
+      });
+      expect(insertFor("transactions")![1].slice(-2)).toEqual([100, "EUR"]);
+    });
+  });
+
   describe("undo transaction update", () => {
     it("should restore transaction fields from beforeData", async () => {
       const updateAction = {
@@ -616,6 +824,438 @@ describe("ActionHistoryService", () => {
       expect(mockQueryRunner.manager.delete).toHaveBeenCalled();
       // Should re-create two splits
       expect(mockQueryRunner.manager.save).toHaveBeenCalledTimes(2);
+    });
+
+    describe("a split transaction with a transfer line", () => {
+      const transferSplits = (linked: string) => [
+        {
+          id: "s1",
+          kind: "category",
+          categoryId: "cat-1",
+          transferAccountId: null,
+          linkedTransactionId: null,
+          amount: -60,
+          memo: null,
+        },
+        {
+          id: "s2",
+          kind: "transfer",
+          categoryId: null,
+          transferAccountId: "acc-2",
+          linkedTransactionId: linked,
+          amount: -40,
+          memo: null,
+        },
+      ];
+      const splitAction = (
+        beforeSplits: unknown,
+        afterSplits: unknown,
+      ): Record<string, any> => ({
+        ...mockAction,
+        entityType: "transaction",
+        action: "update",
+        entityId: "tx-1",
+        beforeData: {
+          accountId: "acc-1",
+          description: "old",
+          splits: beforeSplits,
+        },
+        afterData: {
+          accountId: "acc-1",
+          description: "new",
+          splits: afterSplits,
+        },
+      });
+      const arrange = (action: unknown) => {
+        mockRepository.findOne.mockResolvedValue(action);
+        mockQueryRunner.manager.findOne.mockResolvedValue({
+          id: "tx-1",
+          userId,
+          accountId: "acc-1",
+        });
+        mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
+        mockQueryRunner.manager.delete.mockResolvedValue({ affected: 1 });
+        mockQueryRunner.manager.create.mockImplementation((_, data) => data);
+        mockQueryRunner.query.mockResolvedValue([
+          { opening_balance: "0", tx_sum: "0" },
+        ]);
+      };
+
+      describe("a split-line tag change (its exact record, splitTagPlaces)", () => {
+        // The reviewer's cases: the leg's own tags differ from the line's.
+        const tagAction = (before: unknown[], after: unknown[]) => ({
+          ...mockAction,
+          entityType: "transaction",
+          action: "update",
+          entityId: "tx-1",
+          beforeData: { accountId: "acc-1", splitTagPlaces: before },
+          afterData: { accountId: "acc-1", splitTagPlaces: after },
+        });
+        const arrangeTags = (
+          action: unknown,
+          {
+            lines = ["s2"],
+            tags = ["t-trip", "t-old"],
+            leg = {} as object,
+          } = {},
+        ) => {
+          arrange(action);
+          mockLockedRows({
+            "tx-1": { account_id: "acc-1", amount: "-100" },
+            "leg-1": { account_id: "acc-2", amount: "40", ...leg },
+          });
+          mockQueryRunner.manager.find.mockImplementation(
+            (entity: unknown, opts: any) => {
+              const ids: string[] = opts?.where?.id?._value ?? [];
+              if (entity === Tag)
+                return Promise.resolve(
+                  ids.filter((id) => tags.includes(id)).map((id) => ({ id })),
+                );
+              return Promise.resolve(
+                ids.filter((id) => lines.includes(id)).map((id) => ({ id })),
+              );
+            },
+          );
+        };
+        const sqlCalls = () =>
+          mockQueryRunner.query.mock.calls
+            .filter(([sql]: [string]) => /_tags/.test(sql))
+            .map(([sql, params]: [string, unknown[]]) => [
+              sql.startsWith("INSERT") ? "insert" : "delete",
+              sql.includes("transaction_split_tags") ? "line" : "leg",
+              ...(params as string[]),
+            ]);
+
+        it("leaves a tag the leg carried before the edit on it", async () => {
+          // Line had no Trip, the leg already did; the edit added Trip.
+          const place = { splitId: "s2", legId: "leg-1", touched: ["t-trip"] };
+          arrangeTags(
+            tagAction(
+              [{ ...place, line: [], leg: ["t-trip"] }],
+              [{ ...place, line: ["t-trip"], leg: ["t-trip"] }],
+            ),
+          );
+
+          await service.undo(userId);
+
+          expect(sqlCalls()).toEqual([
+            ["delete", "line", "s2", "t-trip"],
+            ["insert", "leg", "leg-1", "t-trip"],
+          ]);
+        });
+
+        it("puts back a tag the edit removed from the leg alone, and redoes it", async () => {
+          const place = { splitId: "s2", legId: "leg-1", touched: ["t-old"] };
+          const action = tagAction(
+            [{ ...place, line: [], leg: ["t-old"] }],
+            [{ ...place, line: [], leg: [] }],
+          );
+          arrangeTags(action);
+          await service.undo(userId);
+          expect(sqlCalls()).toContainEqual([
+            "insert",
+            "leg",
+            "leg-1",
+            "t-old",
+          ]);
+
+          mockQueryRunner.query.mockClear();
+          arrangeTags({ ...action, isUndone: true });
+          await service.redo(userId);
+          expect(sqlCalls()).toContainEqual([
+            "delete",
+            "leg",
+            "leg-1",
+            "t-old",
+          ]);
+        });
+
+        it("refuses, writing nothing, when the leg is held by the reconciled lock", async () => {
+          const place = { splitId: "s2", legId: "leg-1", touched: ["t-trip"] };
+          arrangeTags(
+            tagAction(
+              [{ ...place, line: [], leg: [] }],
+              [{ ...place, line: ["t-trip"], leg: ["t-trip"] }],
+            ),
+            { leg: { status: "RECONCILED" } },
+          );
+          const routeRepository =
+            mockQueryRunner.manager.getRepository.getMockImplementation();
+          mockQueryRunner.manager.getRepository.mockImplementation(
+            (entity: unknown) =>
+              entity === UserPreference
+                ? {
+                    findOne: jest
+                      .fn()
+                      .mockResolvedValue({ lockReconciledTransactions: true }),
+                  }
+                : routeRepository(entity),
+          );
+
+          await expect(service.undo(userId)).rejects.toBeInstanceOf(
+            ConflictException,
+          );
+          expect(sqlCalls()).toEqual([]);
+        });
+
+        it("refuses with a reason when the line or a tag is gone", async () => {
+          const place = { splitId: "s2", legId: null, touched: ["t-trip"] };
+          const action = tagAction(
+            [{ ...place, line: ["t-trip"], leg: [] }],
+            [{ ...place, line: [], leg: [] }],
+          );
+          arrangeTags(action, { lines: [] });
+          await expect(service.undo(userId)).rejects.toThrow(
+            /split line this change tagged/,
+          );
+
+          arrangeTags(action, { tags: [] });
+          await expect(service.undo(userId)).rejects.toThrow(
+            /has been deleted since/,
+          );
+          expect(sqlCalls()).toEqual([]);
+        });
+      });
+
+      it("leaves line tags alone for an entry whose snapshots did not record them", async () => {
+        arrange(splitAction(transferSplits("leg-1"), transferSplits("leg-1")));
+        mockQueryRunner.manager.find.mockClear();
+
+        await service.undo(userId);
+
+        expect(
+          mockQueryRunner.query.mock.calls.some(([sql]: [string]) =>
+            sql.includes("transaction_split_tags"),
+          ),
+        ).toBe(false);
+      });
+
+      it("leaves the split rows alone when the edit resent the same lines", async () => {
+        // The re-created lines carry new ids and new counterpart ids.
+        arrange(
+          splitAction(transferSplits("leg-old"), [
+            ...transferSplits("leg-new").reverse(),
+          ]),
+        );
+
+        await service.undo(userId);
+
+        expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+          expect.any(Function),
+          "tx-1",
+          expect.objectContaining({ description: "old" }),
+        );
+        expect(mockQueryRunner.manager.delete).not.toHaveBeenCalled();
+        expect(mockQueryRunner.manager.save).not.toHaveBeenCalled();
+      });
+
+      it("refuses, before any write, when the edit changed a transfer line", async () => {
+        arrange(
+          splitAction(transferSplits("leg-old"), [
+            { ...transferSplits("leg-new")[0], amount: -50 },
+            { ...transferSplits("leg-new")[1], amount: -50 },
+          ]),
+        );
+
+        await expect(service.undo(userId)).rejects.toMatchObject({
+          response: { errorCode: "UNDO_SPLIT_LEGS_CHANGED" },
+        });
+        expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+        expect(mockQueryRunner.manager.delete).not.toHaveBeenCalled();
+        expect(mockQueryRunner.manager.save).not.toHaveBeenCalled();
+      });
+
+      const withReceived = (linked: string, receivedAmount: number) =>
+        transferSplits(linked).map((split) =>
+          split.transferAccountId ? { ...split, receivedAmount } : split,
+        );
+
+      it("tells BTC lines a satoshi apart and restores them (INV-MONEY-001)", async () => {
+        const lines = (fee: number) => [
+          { id: "s1", categoryId: "cat-1", amount: -0.005 },
+          { id: "s2", categoryId: "fees", amount: fee },
+        ];
+        const action = splitAction(lines(-0.000025), lines(-0.00002501));
+        action.beforeData.currencyCode = "BTC";
+        action.afterData.currencyCode = "BTC";
+        arrange(action);
+
+        await service.undo(userId);
+
+        // At four places the two sets would compare equal and stay as edited.
+        expect(mockQueryRunner.manager.delete).toHaveBeenCalled();
+        expect(mockQueryRunner.manager.save).toHaveBeenCalledWith(
+          expect.objectContaining({ amount: -0.000025 }),
+        );
+      });
+
+      it("refuses, before any write, to restore an amount its currency no longer carries", async () => {
+        const action = splitAction(undefined, undefined);
+        action.beforeData = {
+          accountId: "acc-1",
+          currencyCode: "USD",
+          amount: -50.00001,
+        };
+        arrange(action);
+
+        await expect(service.undo(userId)).rejects.toThrow(/USD carries \(4\)/);
+        expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+      });
+
+      it("refuses, before any write, when the edit changed only what a line received", async () => {
+        // A cross-currency line: same CAD amount, the USD received corrected.
+        arrange(
+          splitAction(
+            withReceived("leg-old", 29.2),
+            withReceived("leg-new", 28.75),
+          ),
+        );
+
+        await expect(service.undo(userId)).rejects.toMatchObject({
+          response: { errorCode: "UNDO_SPLIT_LEGS_CHANGED" },
+        });
+        expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+        expect(mockQueryRunner.manager.delete).not.toHaveBeenCalled();
+      });
+
+      it("leaves the lines alone when the received amounts are unchanged", async () => {
+        arrange(
+          splitAction(
+            withReceived("leg-old", 29.2),
+            withReceived("leg-new", 29.2),
+          ),
+        );
+
+        await service.undo(userId);
+
+        expect(mockQueryRunner.manager.delete).not.toHaveBeenCalled();
+      });
+
+      it("does not read a received amount only one snapshot recorded as a change", async () => {
+        // An entry written before snapshots carried the figure.
+        arrange(
+          splitAction(transferSplits("leg-old"), withReceived("leg-new", 29.2)),
+        );
+
+        await service.undo(userId);
+
+        expect(mockQueryRunner.manager.delete).not.toHaveBeenCalled();
+      });
+
+      it("refuses the redo of an edit that added a transfer line", async () => {
+        arrange(
+          splitAction([transferSplits("x")[0]], transferSplits("leg-new")),
+        );
+
+        await expect(service.redo(userId)).rejects.toMatchObject({
+          response: { errorCode: "UNDO_SPLIT_LEGS_CHANGED" },
+        });
+        expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+      });
+
+      it.each([
+        ["undo", "UNRECONCILED", "VOID"],
+        ["redo", "VOID", "UNRECONCILED"],
+      ])(
+        "refuses the %s of a status change that voided or restored legs, before any write",
+        async (which, beforeStatus, afterStatus) => {
+          const action = splitAction(
+            transferSplits("leg-1"),
+            transferSplits("leg-1"),
+          );
+          action.beforeData = { ...action.beforeData, status: beforeStatus };
+          action.afterData = { ...action.afterData, status: afterStatus };
+          arrange(action);
+
+          await expect(
+            which === "undo" ? service.undo(userId) : service.redo(userId),
+          ).rejects.toMatchObject({
+            response: { errorCode: "UNDO_VOID_WITH_LEGS" },
+          });
+          expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+          expect(mockQueryRunner.manager.delete).not.toHaveBeenCalled();
+        },
+      );
+
+      it("refuses an undo of a VOID of a transfer leg", async () => {
+        const action = {
+          ...splitAction(undefined, undefined),
+          beforeData: {
+            accountId: "acc-1",
+            status: "UNRECONCILED",
+            isTransfer: true,
+            linkedTransactionId: "tx-2",
+          },
+          afterData: {
+            accountId: "acc-1",
+            status: "VOID",
+            isTransfer: true,
+            linkedTransactionId: "tx-2",
+          },
+        };
+        arrange(action);
+
+        await expect(service.undo(userId)).rejects.toMatchObject({
+          response: { errorCode: "UNDO_VOID_WITH_LEGS" },
+        });
+        expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+      });
+
+      it("refuses the undo of a conversion between a transaction and a transfer", async () => {
+        const action = {
+          ...splitAction(undefined, undefined),
+          beforeData: {
+            accountId: "acc-1",
+            amount: -50,
+            isTransfer: false,
+            linkedTransactionId: null,
+          },
+          afterData: {
+            accountId: "acc-1",
+            amount: -50,
+            isTransfer: true,
+            linkedTransactionId: "tx-2",
+          },
+        };
+        arrange(action);
+
+        await expect(service.undo(userId)).rejects.toMatchObject({
+          response: { errorCode: "UNDO_CONVERSION" },
+        });
+        expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+      });
+
+      it("still undoes a VOID of a row without legs", async () => {
+        const action = {
+          ...splitAction(undefined, undefined),
+          beforeData: { accountId: "acc-1", status: "UNRECONCILED" },
+          afterData: { accountId: "acc-1", status: "VOID" },
+        };
+        arrange(action);
+
+        await service.undo(userId);
+
+        expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+          expect.any(Function),
+          "tx-1",
+          expect.objectContaining({ status: "UNRECONCILED" }),
+        );
+      });
+
+      it("sets the kind of a re-created category line from the snapshot", async () => {
+        arrange(
+          splitAction(
+            [{ id: "s1", categoryId: "cat-1", amount: 10 }],
+            [{ id: "s1", categoryId: "cat-2", amount: 10 }],
+          ),
+        );
+
+        await service.undo(userId);
+
+        expect(mockQueryRunner.manager.save).toHaveBeenCalledWith(
+          expect.objectContaining({ kind: "category", categoryId: "cat-1" }),
+        );
+      });
     });
 
     it("should restore tags when beforeData contains tagIds", async () => {
@@ -1310,6 +1950,236 @@ describe("ActionHistoryService", () => {
       );
     });
 
+    describe("the bond series of a restored row (INV-BOND-007)", () => {
+      const PROGRAM = "33333333-3333-5333-8333-333333333333";
+      const SERIES = "11111111-1111-5111-8111-111111111111";
+      /**
+       * The statements of the restore and of the write guard's ledger reads;
+       * everything else answers nothing. `ledgers` are the successive answers of
+       * the ledger read (before the write, after it); the last repeats.
+       */
+      const bondWorld = (opts: {
+        linked?: boolean;
+        inProgram?: string[];
+        onSale?: string[];
+        ledgers?: Array<Array<Record<string, unknown>>>;
+      }) => {
+        let ledgerReads = 0;
+        return mockQueryRunner.query.mockImplementation(
+          async (sql: string, params: unknown[] = []) => {
+            const text = String(sql);
+            if (text.includes("bond_auto_fetch")) {
+              return [
+                {
+                  id: "sec-1",
+                  user_id: userId,
+                  symbol: "EDO",
+                  currency_code: "PLN",
+                  bond_program_id: opts.linked === false ? null : PROGRAM,
+                  bond_auto_fetch: false,
+                },
+              ];
+            }
+            if (text.includes("counterpart_account_id")) {
+              const all = opts.ledgers ?? [[]];
+              const rows = all[Math.min(ledgerReads, all.length - 1)];
+              ledgerReads += 1;
+              return rows;
+            }
+            if (text.includes("s.bond_program_id AS id")) {
+              return [
+                opts.linked === false
+                  ? { id: null, program_code: null }
+                  : { id: PROGRAM, program_code: "EDO" },
+              ];
+            }
+            // restoredSeries: the snapshot's series, when it is in the program.
+            if (text.includes("JOIN bond_instruments i ON")) {
+              return opts.linked !== false &&
+                (opts.inProgram ?? []).includes(String(params[2]))
+                ? [{ "?column?": 1 }]
+                : [];
+            }
+            if (text.includes("saleWindow")) {
+              return (opts.onSale ?? []).map((id) => ({ id }));
+            }
+            return [];
+          },
+        );
+      };
+      const deleted = (before: Record<string, unknown>) => ({
+        ...mockAction,
+        entityType: "investment_transaction",
+        action: "delete",
+        entityId: "inv-1",
+        beforeData: {
+          id: "inv-1",
+          accountId: "acc-1",
+          securityId: "sec-1",
+          action: "BUY",
+          transactionDate: "2026-10-15",
+          quantity: 10,
+          price: 100,
+          commission: 0,
+          totalAmount: 1000,
+          ...before,
+        },
+        afterData: null,
+      });
+      const insert = () =>
+        mockQueryRunner.query.mock.calls.find(
+          (call: any[]) =>
+            typeof call[0] === "string" &&
+            call[0].includes("INSERT INTO investment_transactions"),
+        );
+
+      it("reinserts a deleted row with the series its snapshot carried", async () => {
+        bondWorld({ inProgram: [SERIES] });
+        mockRepository.findOne.mockResolvedValue(
+          deleted({ bondInstrumentId: SERIES }),
+        );
+        mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
+        await service.undo(userId);
+        expect(insert()![0]).toContain("bond_instrument_id");
+        // The sixteenth parameter, after created_at.
+        expect((insert()![1] as unknown[])[15]).toBe(SERIES);
+      });
+
+      it("restores a snapshot that carries no series with NULL, never inferring one from the date", async () => {
+        bondWorld({ onSale: [SERIES] });
+        mockRepository.findOne.mockResolvedValue(deleted({}));
+        mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
+        await service.undo(userId);
+        expect((insert()![1] as unknown[])[15]).toBeNull();
+      });
+
+      it("never refuses an undo with SERIES_NOT_DETERMINED, even when no series covers the restored purchase's date", async () => {
+        bondWorld({ onSale: [] });
+        mockRepository.findOne.mockResolvedValue(deleted({}));
+        mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
+        await expect(service.undo(userId)).resolves.toBeDefined();
+        expect((insert()![1] as unknown[])[15]).toBeNull();
+      });
+
+      it("restores a series the security's current program does not hold as NULL, for the ledger to report", async () => {
+        bondWorld({ inProgram: [] });
+        mockRepository.findOne.mockResolvedValue(
+          deleted({ bondInstrumentId: SERIES }),
+        );
+        mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
+        await service.undo(userId);
+        expect((insert()![1] as unknown[])[15]).toBeNull();
+      });
+
+      it("refuses the undo of a delete after which a removal is not covered (OVER_REMOVAL), and does not reinsert past it", async () => {
+        const sell = {
+          id: "inv-1",
+          action: "SELL",
+          status: "UNRECONCILED",
+          tx_date: "2026-10-15",
+          quantity: "10",
+          account_id: "acc-1",
+          bond_instrument_id: null,
+          counterpart_account_id: null,
+        };
+        bondWorld({ ledgers: [[], [sell]] });
+        mockRepository.findOne.mockResolvedValue(deleted({ action: "SELL" }));
+        mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
+        await expect(service.undo(userId)).rejects.toMatchObject({
+          response: { errorCode: "OVER_REMOVAL" },
+        });
+      });
+
+      it("refuses the undo of a create (a delete) that leaves a later removal uncovered (REMOVAL_EXCEEDS_SERIES)", async () => {
+        const row = (over: Record<string, unknown>) => ({
+          id: "inv-1",
+          action: "BUY",
+          status: "UNRECONCILED",
+          tx_date: "2026-01-10",
+          quantity: "10",
+          account_id: "acc-1",
+          bond_instrument_id: SERIES,
+          counterpart_account_id: null,
+          ...over,
+        });
+        const sell = row({
+          id: "s1",
+          action: "SELL",
+          tx_date: "2026-02-01",
+          quantity: "8",
+        });
+        bondWorld({ ledgers: [[row({}), sell], [sell]] });
+        mockRepository.findOne.mockResolvedValue({
+          ...mockAction,
+          entityType: "investment_transaction",
+          action: "create",
+          entityId: "inv-1",
+        });
+        mockQueryRunner.manager.findOne.mockResolvedValue({
+          id: "inv-1",
+          accountId: "acc-1",
+          securityId: "sec-1",
+          linkedTransactionId: null,
+          transactionId: null,
+        });
+        await expect(service.undo(userId)).rejects.toMatchObject({
+          response: { errorCode: "REMOVAL_EXCEEDS_SERIES" },
+        });
+      });
+
+      it("restores a security that is no longer linked without the series", async () => {
+        bondWorld({ linked: false, inProgram: [SERIES] });
+        mockRepository.findOne.mockResolvedValue(
+          deleted({ bondInstrumentId: SERIES }),
+        );
+        mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
+        await service.undo(userId);
+        expect((insert()![1] as unknown[])[15]).toBeNull();
+      });
+
+      it("restores both legs of a transfer update with their series", async () => {
+        bondWorld({ inProgram: [SERIES] });
+        mockRepository.findOne.mockResolvedValue({
+          ...mockAction,
+          entityType: "investment_transaction",
+          action: "update",
+          entityId: "inv-out",
+          beforeData: {
+            id: "inv-out",
+            accountId: "acc-1",
+            securityId: "sec-1",
+            action: "TRANSFER_OUT",
+            transactionDate: "2026-11-01",
+            quantity: 100,
+            bondInstrumentId: SERIES,
+            linkedTransferLeg: {
+              id: "inv-in",
+              accountId: "acc-2",
+              securityId: "sec-1",
+              action: "TRANSFER_IN",
+              transactionDate: "2026-11-01",
+              quantity: 100,
+              bondInstrumentId: SERIES,
+            },
+          },
+          afterData: { id: "inv-out", accountId: "acc-1" },
+        });
+        mockQueryRunner.manager.findOne.mockResolvedValue({
+          id: "inv-out",
+          accountId: "acc-1",
+        });
+        mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
+        await service.undo(userId);
+        const restored = mockQueryRunner.manager.update.mock.calls.filter(
+          (c: any[]) => c[2] && "bondInstrumentId" in c[2],
+        );
+        expect(restored.map((c: any[]) => c[2].bondInstrumentId)).toEqual([
+          SERIES,
+          SERIES,
+        ]);
+      });
+    });
+
     it("should not undo a regular (non-transfer) investment update", async () => {
       const invAction = {
         ...mockAction,
@@ -1460,70 +2330,15 @@ describe("ActionHistoryService", () => {
       expect(invInsertCall[1][3]).toBe("cash-1");
     });
 
-    it("should use correct table name 'holdings' in rebuildHoldings", async () => {
-      const invAction = {
-        ...mockAction,
-        entityType: "investment_transaction",
-        action: "create",
-        entityId: "inv-1",
-        afterData: { id: "inv-1" },
-      };
-      mockRepository.findOne.mockResolvedValue(invAction);
-
-      const mockInvTx = {
-        id: "inv-1",
-        userId,
-        accountId: "acc-1",
-        transactionId: null,
-      };
-      mockQueryRunner.manager.findOne.mockResolvedValueOnce(mockInvTx);
-      mockQueryRunner.manager.remove.mockResolvedValue(undefined);
-      mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
-      // rebuildHoldings takes the shared holdings lock first -- a rebuild replays
-      // investment_transactions and replaces what it derives from them, so the
-      // trade it must not lose is an insert no holdings row locks (P4-006).
-      mockQueryRunner.query
-        .mockResolvedValueOnce([]) // pg_advisory_xact_lock
-        .mockResolvedValueOnce(undefined) // DELETE FROM holdings
-        .mockResolvedValueOnce([
-          {
-            security_id: "sec-1",
-            action: "BUY",
-            quantity: "10",
-            price: "100",
-          },
-        ]) // SELECT investment_transactions
-        .mockResolvedValueOnce(undefined); // INSERT INTO holdings
-
-      await service.undo(userId);
-
-      const deleteCalls = mockQueryRunner.query.mock.calls.filter(
-        (call: any[]) =>
-          typeof call[0] === "string" &&
-          call[0].includes("DELETE FROM holdings"),
-      );
-      expect(deleteCalls.length).toBe(1);
-      const insertCalls = mockQueryRunner.query.mock.calls.filter(
-        (call: any[]) =>
-          typeof call[0] === "string" &&
-          call[0].includes("INSERT INTO holdings"),
-      );
-      expect(insertCalls.length).toBe(1);
-      // Verify no references to the wrong table name
-      const wrongTableCalls = mockQueryRunner.query.mock.calls.filter(
-        (call: any[]) =>
-          typeof call[0] === "string" &&
-          call[0].includes("investment_holdings"),
-      );
-      expect(wrongTableCalls.length).toBe(0);
-    });
-
-    it("carries an over-sold position as negative, agreeing with the canonical rebuild", async () => {
-      // BUY 10, SELL 15, BUY 10: computeHoldingsMap carries the over-sell as
-      // -5 (its own comment calls an over-sell "history") and stores 5 shares.
-      // The undo rebuild used to clamp the -5 to 0 and store 10 -- so undoing
-      // any unrelated action rewrote holdings to a position the next canonical
-      // rebuild flipped back.
+    /**
+     * A26-L21: the undo re-derives the account through the canonical fold on
+     * the undo's own manager, not a second copy of it (which added a
+     * DIVIDEND's total to the basis and stored the average at 6 decimals).
+     * The fold's own arithmetic -- over-sells carried as negative included --
+     * is holdings.service.spec.ts's; holding-undo-fold.integration.spec.ts
+     * proves the stored row against the drift report.
+     */
+    it("re-derives the account's holdings through HoldingsService on the undo's manager", async () => {
       const invAction = {
         ...mockAction,
         entityType: "investment_transaction",
@@ -1541,41 +2356,20 @@ describe("ActionHistoryService", () => {
       });
       mockQueryRunner.manager.remove.mockResolvedValue(undefined);
       mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
-      mockQueryRunner.query
-        .mockResolvedValueOnce([]) // pg_advisory_xact_lock
-        .mockResolvedValueOnce(undefined) // DELETE FROM holdings
-        .mockResolvedValueOnce([
-          {
-            security_id: "sec-1",
-            action: "BUY",
-            quantity: "10",
-            price: "100",
-          },
-          {
-            security_id: "sec-1",
-            action: "SELL",
-            quantity: "15",
-            price: "100",
-          },
-          {
-            security_id: "sec-1",
-            action: "BUY",
-            quantity: "10",
-            price: "100",
-          },
-        ]) // SELECT investment_transactions
-        .mockResolvedValueOnce(undefined); // INSERT INTO holdings
 
       await service.undo(userId);
 
-      const insertCall = mockQueryRunner.query.mock.calls.find(
+      expect(holdings.rebuildAccountsFromTransactions).toHaveBeenCalledWith(
+        userId,
+        ["acc-1"],
+        mockQueryRunner.manager,
+      );
+      const handRolled = mockQueryRunner.query.mock.calls.filter(
         (call: any[]) =>
           typeof call[0] === "string" &&
-          call[0].includes("INSERT INTO holdings"),
+          /(DELETE FROM|INSERT INTO) holdings/.test(call[0]),
       );
-      expect(insertCall).toBeDefined();
-      // Params: [accountId, securityId, quantity, avgCost] -- 5 shares, not 10.
-      expect(insertCall[1][2]).toBe(5);
+      expect(handRolled).toEqual([]);
     });
   });
 
@@ -1673,6 +2467,49 @@ describe("ActionHistoryService", () => {
       );
       expect(splitCalls).toHaveLength(0);
     });
+
+    it.each(["undo", "redo"] as const)(
+      "refuses the %s of a bulk update that touches a reconciled row under the lock, before any write",
+      async (which) => {
+        const rows = [
+          { id: "tx-1", accountId: "acc-1", status: "UNRECONCILED" },
+          { id: "tx-2", accountId: "acc-1", status: "RECONCILED" },
+        ];
+        mockRepository.findOne.mockResolvedValue({
+          ...mockAction,
+          entityType: "bulk_transaction",
+          action: "bulk_update",
+          entityId: null,
+          beforeData: { transactions: rows },
+          afterData: {
+            transactions: rows.map((r) => ({ ...r, status: "UNRECONCILED" })),
+          },
+        });
+        mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
+        mockLockedRows({
+          "tx-1": { account_id: "acc-1", amount: "-5" },
+          "tx-2": { account_id: "acc-1", amount: "-5", status: "RECONCILED" },
+        });
+        const routeRepository =
+          mockQueryRunner.manager.getRepository.getMockImplementation();
+        mockQueryRunner.manager.getRepository.mockImplementation(
+          (entity: unknown) =>
+            entity === UserPreference
+              ? {
+                  findOne: jest
+                    .fn()
+                    .mockResolvedValue({ lockReconciledTransactions: true }),
+                }
+              : routeRepository(entity),
+        );
+
+        await expect(
+          which === "undo" ? service.undo(userId) : service.redo(userId),
+        ).rejects.toBeInstanceOf(ConflictException);
+
+        expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+      },
+    );
 
     it("should restore split-line categories through the user-scoped parent join", async () => {
       const bulkAction = {
@@ -1791,6 +2628,161 @@ describe("ActionHistoryService", () => {
     });
   });
 
+  /**
+   * INV-CRYPTO-001 on the undo path: a replayed account or security is a write
+   * like any other, so its currency kind is read now, inside the undo's
+   * transaction, before anything is written (BTC is a coin here).
+   */
+  describe("undo and redo hold the currency kind rules", () => {
+    const answerKinds = () =>
+      mockQueryRunner.query.mockImplementation(
+        async (sql: string, params?: unknown[]) =>
+          currencyKindRows(sql, params) ?? [],
+      );
+
+    it("refuses to re-insert a deleted CHEQUING account in a coin, writing nothing", async () => {
+      answerKinds();
+      mockRepository.findOne.mockResolvedValue({
+        ...mockAction,
+        entityType: "account",
+        action: "delete",
+        entityId: "acc-1",
+        beforeData: {
+          id: "acc-1",
+          name: "Chequing",
+          accountType: "CHEQUING",
+          currencyCode: "BTC",
+        },
+        afterData: null,
+      });
+
+      await expect(service.undo(userId)).rejects.toThrow(BadRequestException);
+
+      const sqls = mockQueryRunner.query.mock.calls.map(([sql]) => String(sql));
+      expect(sqls.some((sql) => isCurrencyKindRead(sql))).toBe(true);
+      expect(sqls.some((sql) => sql.includes('INSERT INTO "accounts"'))).toBe(
+        false,
+      );
+    });
+
+    it("refuses to restore an account edit whose snapshot pairs CRYPTO with a fiat", async () => {
+      answerKinds();
+      mockRepository.findOne.mockResolvedValue({
+        ...mockAction,
+        entityType: "account",
+        action: "update",
+        entityId: "acc-1",
+        beforeData: {
+          id: "acc-1",
+          name: "Wallet",
+          accountType: "CRYPTO",
+          currencyCode: "CAD",
+        },
+        afterData: { id: "acc-1", name: "Renamed" },
+      });
+
+      await expect(service.undo(userId)).rejects.toThrow(BadRequestException);
+      expect(mockQueryRunner.manager.update).not.toHaveBeenCalledWith(
+        expect.anything(),
+        "acc-1",
+        expect.anything(),
+      );
+    });
+
+    it("re-inserts a deleted CRYPTO wallet in its coin", async () => {
+      answerKinds();
+      mockRepository.findOne.mockResolvedValue({
+        ...mockAction,
+        entityType: "account",
+        action: "delete",
+        entityId: "acc-1",
+        beforeData: {
+          id: "acc-1",
+          name: "Wallet",
+          accountType: "CRYPTO",
+          currencyCode: "BTC",
+        },
+        afterData: null,
+      });
+      mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
+
+      await service.undo(userId);
+
+      const sqls = mockQueryRunner.query.mock.calls.map(([sql]) => String(sql));
+      expect(sqls.some((sql) => sql.includes('INSERT INTO "accounts"'))).toBe(
+        true,
+      );
+    });
+
+    it("refuses a redo that re-creates a CHEQUING account in a coin", async () => {
+      answerKinds();
+      mockRepository.findOne.mockResolvedValue({
+        ...mockAction,
+        entityType: "account",
+        action: "create",
+        entityId: "acc-1",
+        isUndone: true,
+        beforeData: null,
+        afterData: {
+          id: "acc-1",
+          name: "Chequing",
+          accountType: "CHEQUING",
+          currencyCode: "BTC",
+        },
+      });
+
+      await expect(service.redo(userId)).rejects.toThrow(BadRequestException);
+    });
+
+    it("reads no kind for the undo of a create, which deletes", async () => {
+      answerKinds();
+      mockRepository.findOne.mockResolvedValue({
+        ...mockAction,
+        entityType: "account",
+        action: "create",
+        entityId: "acc-1",
+        afterData: {
+          id: "acc-1",
+          accountType: "CHEQUING",
+          currencyCode: "BTC",
+        },
+      });
+      mockQueryRunner.manager.delete.mockResolvedValue({ affected: 1 });
+      mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
+
+      await service.undo(userId);
+
+      expect(
+        mockQueryRunner.query.mock.calls.some(([sql]) =>
+          isCurrencyKindRead(sql),
+        ),
+      ).toBe(false);
+    });
+
+    it("refuses to re-insert a deleted security priced in a coin", async () => {
+      answerKinds();
+      mockRepository.findOne.mockResolvedValue({
+        ...mockAction,
+        entityType: "security",
+        action: "delete",
+        entityId: "sec-1",
+        beforeData: {
+          id: "sec-1",
+          symbol: "XYZ",
+          name: "XYZ Corp",
+          currencyCode: "BTC",
+        },
+        afterData: null,
+      });
+
+      await expect(service.undo(userId)).rejects.toThrow(BadRequestException);
+      const sqls = mockQueryRunner.query.mock.calls.map(([sql]) => String(sql));
+      expect(sqls.some((sql) => sql.includes('INSERT INTO "securities"'))).toBe(
+        false,
+      );
+    });
+  });
+
   describe("undo simple entity (additional entity types)", () => {
     it("should undo account create", async () => {
       const action = {
@@ -1809,6 +2801,153 @@ describe("ActionHistoryService", () => {
       expect(result.description).toContain("Undone");
       expect(mockQueryRunner.manager.delete).toHaveBeenCalled();
     });
+
+    it("re-inserts a deleted account recorded before the mortgage-type contract with its type", async () => {
+      // docs/specs/mortgage-types.md, task P3-B1: the snapshot carries the
+      // legacy flags and a null type, which would read as ANNUITY.
+      const action = {
+        ...mockAction,
+        entityType: "account",
+        action: "delete",
+        entityId: "acc-1",
+        beforeData: {
+          id: "acc-1",
+          name: "Home",
+          accountType: "MORTGAGE",
+          mortgageType: null,
+          isCanadianMortgage: true,
+          isVariableRate: false,
+        },
+        afterData: null,
+      };
+      mockRepository.findOne.mockResolvedValue(action);
+      mockQueryRunner.query.mockResolvedValue([]);
+      mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
+
+      await service.undo(userId);
+
+      const insert = mockQueryRunner.query.mock.calls.find(([sql]: [string]) =>
+        sql.includes('INSERT INTO "accounts"'),
+      );
+      expect(insert[0]).toContain('"mortgage_type"');
+      expect(insert[0]).not.toContain("is_canadian_mortgage");
+      expect(insert[0]).not.toContain("is_variable_rate");
+      expect(insert[1]).toContain("CANADIAN_FIXED");
+    });
+
+    it("restores an account update recorded before the contract without a null type", async () => {
+      const action = {
+        ...mockAction,
+        entityType: "account",
+        action: "update",
+        entityId: "acc-1",
+        beforeData: {
+          id: "acc-1",
+          name: "Chequing",
+          accountType: "CHEQUING",
+          mortgageType: null,
+          isCanadianMortgage: false,
+          isVariableRate: false,
+        },
+        afterData: { id: "acc-1", name: "Renamed" },
+      };
+      mockRepository.findOne.mockResolvedValue(action);
+      mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
+
+      await service.undo(userId);
+
+      const [, , fields] = mockQueryRunner.manager.update.mock.calls.find(
+        ([, id]: [unknown, string]) => id === "acc-1",
+      );
+      expect(fields).toMatchObject({
+        name: "Chequing",
+        mortgageType: "ANNUITY",
+      });
+      expect(fields).not.toHaveProperty("isCanadianMortgage");
+    });
+
+    it("undoes an account edit without writing derived or lifecycle columns back (A26-H06)", async () => {
+      const action = {
+        ...mockAction,
+        entityType: "account",
+        action: "update",
+        entityId: "acc-1",
+        beforeData: {
+          id: "acc-1",
+          name: "Chequing",
+          openingBalance: 5000,
+          currentBalance: 5000,
+          isClosed: false,
+          closedDate: null,
+          linkedAccountId: null,
+        },
+        afterData: {
+          id: "acc-1",
+          name: "Renamed",
+          openingBalance: 5000,
+          currentBalance: 5000,
+          isClosed: false,
+          closedDate: null,
+          linkedAccountId: null,
+        },
+      };
+      mockRepository.findOne.mockResolvedValue(action);
+      mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
+
+      await service.undo(userId);
+
+      const accountUpdate = mockQueryRunner.manager.update.mock.calls.find(
+        (call: unknown[]) => call[1] === "acc-1",
+      );
+      expect(accountUpdate[2]).toEqual({
+        name: "Chequing",
+        openingBalance: 5000,
+      });
+      // The opening balance did not change, so nothing is recomputed.
+      expect(mockQueryRunner.query).not.toHaveBeenCalledWith(
+        expect.stringContaining("SET current_balance"),
+        expect.anything(),
+      );
+    });
+
+    it.each([
+      [
+        "a method change",
+        { mortgageType: "ANNUITY" },
+        { mortgageType: "LINEAR" },
+      ],
+      [
+        "an interest-category change",
+        { interestCategoryId: "cat-a" },
+        { interestCategoryId: "cat-b" },
+      ],
+    ])(
+      "refuses undo of %s on a loan with a schedule, writing nothing (A26-H06)",
+      async (_label, beforeLoan, afterLoan) => {
+        const action = {
+          ...mockAction,
+          entityType: "account",
+          action: "update",
+          entityId: "loan-1",
+          beforeData: {
+            id: "loan-1",
+            scheduledTransactionId: "st-1",
+            ...beforeLoan,
+          },
+          afterData: {
+            id: "loan-1",
+            scheduledTransactionId: "st-1",
+            ...afterLoan,
+          },
+        };
+        mockRepository.findOne.mockResolvedValue(action);
+
+        await expect(service.undo(userId)).rejects.toBeInstanceOf(
+          ConflictException,
+        );
+        expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+      },
+    );
 
     it("should undo scheduled_transaction delete", async () => {
       const action = {
@@ -1837,6 +2976,147 @@ describe("ActionHistoryService", () => {
         expect.stringContaining('INSERT INTO "scheduled_transactions"'),
         expect.any(Array),
       );
+    });
+
+    describe("a Custom schedule (docs/specs/custom-recurrence.md section 5)", () => {
+      const rule = {
+        unit: "WEEK",
+        interval: 1,
+        weekdays: [5, 1],
+        weekStartsOn: 1,
+      };
+      const canonical = {
+        unit: "WEEK",
+        interval: 1,
+        weekdays: [1, 5],
+        weekStartsOn: 1,
+      };
+      const schedule = (frequency: string, extra: object = {}) => ({
+        id: "st-1",
+        name: "Gym",
+        userId,
+        accountId: "acc-1",
+        amount: -20,
+        frequency,
+        nextDueDate: "2026-11-13",
+        ...extra,
+      });
+
+      function insertedRow(): Record<string, unknown> {
+        const call = mockQueryRunner.query.mock.calls.find((c: unknown[]) =>
+          String(c[0]).includes('INSERT INTO "scheduled_transactions"'),
+        );
+        expect(call).toBeDefined();
+        const columns = [...String(call![0]).matchAll(/"([a-z_]+)"/g)]
+          .map((m) => m[1])
+          .filter((c) => c !== "scheduled_transactions");
+        return Object.fromEntries(
+          columns.map((c, i) => [c, (call![1] as unknown[])[i]]),
+        );
+      }
+
+      it("reinserts a deleted Custom schedule with its rule", async () => {
+        mockRepository.findOne.mockResolvedValue({
+          ...mockAction,
+          entityType: "scheduled_transaction",
+          action: "delete",
+          entityId: "st-1",
+          beforeData: schedule("CUSTOM", { customRecurrence: rule }),
+          afterData: null,
+        });
+        mockQueryRunner.query.mockResolvedValue([]);
+
+        await service.undo(userId);
+
+        const row = insertedRow();
+        expect(row.frequency).toBe("CUSTOM");
+        expect(row.custom_recurrence).toEqual(canonical);
+      });
+
+      it("redoes the create of a Custom schedule with its rule", async () => {
+        mockRepository.findOne.mockResolvedValue({
+          ...mockAction,
+          entityType: "scheduled_transaction",
+          action: "create",
+          entityId: "st-1",
+          isUndone: true,
+          beforeData: null,
+          afterData: schedule("CUSTOM", { customRecurrence: rule }),
+        });
+        mockQueryRunner.query.mockResolvedValue([]);
+
+        await service.redo(userId);
+
+        expect(insertedRow().custom_recurrence).toEqual(canonical);
+      });
+
+      it("puts the rule back with CUSTOM when an edit away from it is undone", async () => {
+        mockRepository.findOne.mockResolvedValue({
+          ...mockAction,
+          entityType: "scheduled_transaction",
+          action: "update",
+          entityId: "st-1",
+          beforeData: schedule("CUSTOM", { customRecurrence: rule }),
+          afterData: schedule("MONTHLY", { customRecurrence: null }),
+        });
+        mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
+
+        await service.undo(userId);
+
+        expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+          expect.anything(),
+          "st-1",
+          expect.objectContaining({
+            frequency: "CUSTOM",
+            customRecurrence: canonical,
+          }),
+        );
+      });
+
+      it("clears the rule when an edit to CUSTOM is undone, even from a snapshot without the key", async () => {
+        // A snapshot recorded before the column existed has no key at all.
+        mockRepository.findOne.mockResolvedValue({
+          ...mockAction,
+          entityType: "scheduled_transaction",
+          action: "update",
+          entityId: "st-1",
+          beforeData: schedule("MONTHLY"),
+          afterData: schedule("CUSTOM", { customRecurrence: rule }),
+        });
+        mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
+
+        await service.undo(userId);
+
+        expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+          expect.anything(),
+          "st-1",
+          expect.objectContaining({
+            frequency: "MONTHLY",
+            customRecurrence: null,
+          }),
+        );
+      });
+
+      it("refuses, writing nothing, a Custom snapshot without a walkable rule", async () => {
+        mockRepository.findOne.mockResolvedValue({
+          ...mockAction,
+          entityType: "scheduled_transaction",
+          action: "delete",
+          entityId: "st-1",
+          beforeData: schedule("CUSTOM"),
+          afterData: null,
+        });
+        mockQueryRunner.query.mockResolvedValue([]);
+
+        await expect(service.undo(userId)).rejects.toBeInstanceOf(
+          ConflictException,
+        );
+        expect(mockQueryRunner.query).not.toHaveBeenCalledWith(
+          expect.stringContaining('INSERT INTO "scheduled_transactions"'),
+          expect.anything(),
+        );
+        expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+      });
     });
 
     it("should undo security update", async () => {
@@ -1869,6 +3149,255 @@ describe("ActionHistoryService", () => {
         expect.objectContaining({ symbol: "AAPL", name: "Apple Inc." }),
       );
     });
+
+    describe("a security edit that touches the bond link (R4)", () => {
+      const INSTRUMENT = "11111111-1111-5111-8111-111111111111";
+      const edit = (before: Record<string, unknown>, after = {}) => ({
+        ...mockAction,
+        entityType: "security",
+        action: "update",
+        entityId: "sec-1",
+        beforeData: { id: "sec-1", userId, symbol: "EDO1036", ...before },
+        afterData: { id: "sec-1", symbol: "EDO1036", ...after },
+      });
+      /** The security row as it is now (locked) and the instrument's currency. */
+      const answer = (
+        current: Record<string, unknown>,
+        instrumentCurrency: string | null = "PLN",
+      ) =>
+        mockQueryRunner.query.mockImplementation(async (sql: string) => {
+          if (/FROM securities/.test(sql)) return [current];
+          if (/FROM bond_programs/.test(sql))
+            return instrumentCurrency === null
+              ? []
+              : [{ currency_code: instrumentCurrency }];
+          return [];
+        });
+
+      it("clears the series the rows name when the restored link differs (INV-BOND-007)", async () => {
+        answer({
+          bond_program_id: INSTRUMENT,
+          security_type: "BOND",
+          currency_code: "PLN",
+        });
+        mockRepository.findOne.mockResolvedValue(
+          edit({ bondProgramId: null, securityType: "BOND" }),
+        );
+        mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
+        await service.undo(userId);
+        const clear = mockQueryRunner.query.mock.calls.find(
+          (c: any[]) =>
+            typeof c[0] === "string" &&
+            c[0].includes("UPDATE investment_transactions"),
+        );
+        expect(clear).toBeDefined();
+        expect(clear![1]).toEqual(["sec-1", userId, null]);
+      });
+
+      it("clears nothing when the restored link is the one the security has", async () => {
+        answer({
+          bond_program_id: INSTRUMENT,
+          security_type: "BOND",
+          currency_code: "PLN",
+        });
+        mockRepository.findOne.mockResolvedValue(
+          edit({ bondProgramId: INSTRUMENT, securityType: "BOND" }),
+        );
+        mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
+        await service.undo(userId);
+        expect(
+          mockQueryRunner.query.mock.calls.some(
+            (c: any[]) =>
+              typeof c[0] === "string" &&
+              c[0].includes("UPDATE investment_transactions"),
+          ),
+        ).toBe(false);
+      });
+
+      it("restores the link with the currency, deletes the engine's prices of the old link, and prices nothing for an unlink", async () => {
+        answer({
+          bond_program_id: INSTRUMENT,
+          security_type: "BOND",
+          currency_code: "PLN",
+        });
+        mockRepository.findOne.mockResolvedValue(
+          edit({
+            bondProgramId: null,
+            currencyCode: "USD",
+            securityType: "BOND",
+          }),
+        );
+        mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
+
+        await service.undo(userId);
+
+        expect(bondPrices.clearEnginePrices).toHaveBeenCalledWith(
+          mockQueryRunner.manager,
+          userId,
+          "sec-1",
+        );
+        expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+          expect.any(Function),
+          "sec-1",
+          expect.objectContaining({
+            bondProgramId: null,
+            currencyCode: "USD",
+          }),
+        );
+        expect(bondPrices.publishClearedPrices).toHaveBeenCalledWith(userId, [
+          "acct-1",
+        ]);
+        expect(bondPrices.recomputeLinkedSecurities).not.toHaveBeenCalled();
+      });
+
+      it("re-links through the same validation and recomputes after the commit", async () => {
+        answer({
+          bond_program_id: null,
+          security_type: "BOND",
+          currency_code: "PLN",
+        });
+        mockRepository.findOne.mockResolvedValue(
+          edit({
+            bondProgramId: INSTRUMENT,
+            currencyCode: "PLN",
+            securityType: "BOND",
+          }),
+        );
+        mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
+
+        await service.undo(userId);
+
+        expect(bondPrices.recomputeLinkedSecurities).toHaveBeenCalledWith(
+          userId,
+          ["sec-1"],
+        );
+      });
+
+      it.each([
+        ["the instrument is in another currency", "EUR", "BOND", INSTRUMENT],
+        ["the instrument no longer exists", null, "BOND", INSTRUMENT],
+        ["the security is no longer a BOND", "PLN", "ETF", INSTRUMENT],
+      ])(
+        "refuses with UNDO_LINK_INVALID and writes nothing when %s",
+        async (_why, instrumentCurrency, securityType, link) => {
+          answer(
+            {
+              bond_program_id: null,
+              security_type: "BOND",
+              currency_code: "PLN",
+            },
+            instrumentCurrency,
+          );
+          mockRepository.findOne.mockResolvedValue(
+            edit({
+              bondProgramId: link,
+              currencyCode: "PLN",
+              securityType,
+            }),
+          );
+
+          await expect(service.undo(userId)).rejects.toThrow(ConflictException);
+
+          expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+          expect(bondPrices.clearEnginePrices).not.toHaveBeenCalled();
+          expect(bondPrices.recomputeLinkedSecurities).not.toHaveBeenCalled();
+        },
+      );
+
+      it("refuses restoring only the currency while the link stays to an instrument in another currency", async () => {
+        answer({
+          bond_program_id: INSTRUMENT,
+          security_type: "BOND",
+          currency_code: "PLN",
+        });
+        mockRepository.findOne.mockResolvedValue(
+          edit({ currencyCode: "USD", bondProgramId: INSTRUMENT }),
+        );
+
+        await expect(service.undo(userId)).rejects.toThrow(ConflictException);
+        expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+      });
+
+      it("does not clear or recompute when the link is the same in another spelling", async () => {
+        answer({
+          bond_program_id: INSTRUMENT,
+          security_type: "BOND",
+          currency_code: "PLN",
+        });
+        mockRepository.findOne.mockResolvedValue(
+          edit({
+            bondProgramId: INSTRUMENT.toUpperCase(),
+            currencyCode: "PLN",
+            securityType: "BOND",
+          }),
+        );
+        mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
+
+        await service.undo(userId);
+
+        expect(bondPrices.clearEnginePrices).not.toHaveBeenCalled();
+        expect(bondPrices.recomputeLinkedSecurities).not.toHaveBeenCalled();
+      });
+
+      it("redo applies the edit's own snapshot through the same guard", async () => {
+        answer({
+          bond_program_id: null,
+          security_type: "BOND",
+          currency_code: "USD",
+        });
+        mockRepository.findOne.mockResolvedValue({
+          ...edit(
+            { bondProgramId: null, currencyCode: "USD" },
+            {
+              bondProgramId: INSTRUMENT,
+              currencyCode: "PLN",
+              securityType: "BOND",
+            },
+          ),
+          isUndone: true,
+        });
+        mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
+
+        await service.redo(userId);
+
+        expect(bondPrices.recomputeLinkedSecurities).toHaveBeenCalledWith(
+          userId,
+          ["sec-1"],
+        );
+      });
+    });
+
+    it.each([
+      ["undo", false],
+      ["redo", true],
+    ])(
+      "%s of an investment transaction recomputes the engine prices of its securities after the commit",
+      async (which, isUndone) => {
+        mockRepository.findOne.mockResolvedValue({
+          ...mockAction,
+          entityType: "investment_transaction",
+          action: "update",
+          entityId: "itx-1",
+          isUndone,
+          beforeData: {
+            id: "itx-1",
+            securityId: "sec-1",
+            linkedTransferLeg: { securityId: "sec-2" },
+          },
+          afterData: { id: "itx-1", securityId: "sec-1" },
+        });
+        jest
+          .spyOn(service as any, "undoInvestmentTransaction")
+          .mockResolvedValue(undefined);
+
+        await (which === "undo" ? service.undo(userId) : service.redo(userId));
+
+        expect(bondPrices.recomputeLinkedSecurities).toHaveBeenCalledWith(
+          userId,
+          ["sec-1", "sec-2"],
+        );
+      },
+    );
 
     it("should undo budget delete", async () => {
       const action = {
@@ -2029,14 +3558,254 @@ describe("ActionHistoryService", () => {
       mockQueryRunner.manager.delete.mockResolvedValue({ affected: 2 });
       mockQueryRunner.manager.remove.mockResolvedValue(undefined);
       mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
-      mockQueryRunner.query.mockResolvedValue([
-        { opening_balance: "0", tx_sum: "0" },
-      ]);
+      mockLockedRows({ "tx-1": { account_id: "acc-1", amount: "100" } });
 
       const result = await service.undo(userId);
 
       expect(result.description).toContain("Undone");
       expect(mockQueryRunner.manager.delete).toHaveBeenCalled();
+      expect(mockQueryRunner.manager.remove).toHaveBeenCalled();
+    });
+
+    describe("a create that wrote legs in other accounts", () => {
+      // A rule's convert_to_transfer (or split with a transfer part) writes a
+      // counterpart leg in another account in the create's own transaction.
+      // Undoing the create must remove it and reverse its balance.
+      const createAction = (after: Record<string, unknown>) => ({
+        ...mockAction,
+        entityType: "transaction",
+        action: "create",
+        entityId: "tx-1",
+        afterData: after,
+      });
+
+      it("removes the transfer counterpart and reverses its balance", async () => {
+        mockRepository.findOne.mockResolvedValue(
+          createAction({ id: "tx-1", accountId: "acc-1" }),
+        );
+        mockQueryRunner.manager.findOne.mockResolvedValue({
+          id: "tx-1",
+          userId,
+          accountId: "acc-1",
+          amount: -640.15,
+          isTransfer: true,
+          linkedTransactionId: "leg-1",
+          splits: [],
+        });
+        mockQueryRunner.manager.delete.mockResolvedValue({ affected: 1 });
+        mockQueryRunner.manager.remove.mockResolvedValue(undefined);
+        mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
+        mockLockedRows({
+          "tx-1": {
+            account_id: "acc-1",
+            amount: "-640.15",
+            linked_transaction_id: "leg-1",
+          },
+          "leg-1": {
+            account_id: "loan",
+            amount: "640.15",
+            linked_transaction_id: "tx-1",
+          },
+        });
+
+        await service.undo(userId);
+
+        expect(mockQueryRunner.manager.delete).toHaveBeenCalledWith(
+          Transaction,
+          { id: "leg-1", userId },
+        );
+        const balanceWrites = mockQueryRunner.query.mock.calls.filter(
+          ([sql]: [string]) =>
+            /SET current_balance = current_balance \+ \$1/.test(sql),
+        );
+        expect(balanceWrites).toEqual([
+          [expect.any(String), [-640.15, "loan", userId]],
+        ]);
+      });
+
+      it("removes the legs of transfer split lines, each reversed by its own amount", async () => {
+        mockRepository.findOne.mockResolvedValue(
+          createAction({ id: "tx-1", accountId: "acc-1" }),
+        );
+        mockQueryRunner.manager.findOne.mockResolvedValue({
+          id: "tx-1",
+          userId,
+          accountId: "acc-1",
+          amount: -1500.75,
+          isSplit: true,
+          splits: [
+            { id: "s1", amount: -1200.5, linkedTransactionId: "leg-1" },
+            { id: "s2", amount: -300.25, linkedTransactionId: null },
+          ],
+        });
+        mockQueryRunner.manager.delete.mockResolvedValue({ affected: 1 });
+        mockQueryRunner.manager.remove.mockResolvedValue(undefined);
+        mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
+        mockLockedRows({
+          "tx-1": { account_id: "acc-1", amount: "-1500.75" },
+          "leg-1": {
+            account_id: "loan",
+            amount: "1200.50",
+            linked_transaction_id: "tx-1",
+          },
+        });
+
+        await service.undo(userId);
+
+        expect(mockQueryRunner.manager.delete).toHaveBeenCalledWith(
+          Transaction,
+          { id: "leg-1", userId },
+        );
+        expect(
+          mockQueryRunner.query.mock.calls.filter(([sql]: [string]) =>
+            /SET current_balance = current_balance \+ \$1/.test(sql),
+          ),
+        ).toEqual([[expect.any(String), [-1200.5, "loan", userId]]]);
+      });
+
+      it("refuses, before any write, when the counterpart is reconciled and the strict lock is on", async () => {
+        mockRepository.findOne.mockResolvedValue(
+          createAction({ id: "tx-1", accountId: "acc-1" }),
+        );
+        mockQueryRunner.manager.findOne.mockResolvedValue({
+          id: "tx-1",
+          userId,
+          accountId: "acc-1",
+          amount: -640.15,
+          isTransfer: true,
+          linkedTransactionId: "leg-1",
+          splits: [],
+        });
+        mockQueryRunner.manager.delete.mockResolvedValue({ affected: 1 });
+        mockQueryRunner.manager.remove.mockResolvedValue(undefined);
+        mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
+        mockLockedRows({
+          "tx-1": {
+            account_id: "acc-1",
+            amount: "-640.15",
+            linked_transaction_id: "leg-1",
+          },
+          "leg-1": {
+            account_id: "loan",
+            amount: "640.15",
+            status: "RECONCILED",
+            linked_transaction_id: "tx-1",
+          },
+        });
+        const routeRepository =
+          mockQueryRunner.manager.getRepository.getMockImplementation();
+        mockQueryRunner.manager.getRepository.mockImplementation(
+          (entity: unknown) =>
+            entity === UserPreference
+              ? {
+                  findOne: jest
+                    .fn()
+                    .mockResolvedValue({ lockReconciledTransactions: true }),
+                }
+              : routeRepository(entity),
+        );
+
+        await expect(service.undo(userId)).rejects.toBeInstanceOf(
+          ConflictException,
+        );
+
+        expect(mockQueryRunner.manager.delete).not.toHaveBeenCalled();
+        expect(mockQueryRunner.manager.remove).not.toHaveBeenCalled();
+        expect(
+          mockQueryRunner.query.mock.calls.filter(([sql]: [string]) =>
+            /SET current_balance = current_balance \+ \$1/.test(sql),
+          ),
+        ).toEqual([]);
+      });
+
+      it("leaves a leg alone that is linked to another row, and a VOID leg moves nothing", async () => {
+        mockRepository.findOne.mockResolvedValue(
+          createAction({ id: "tx-1", accountId: "acc-1" }),
+        );
+        mockQueryRunner.manager.findOne.mockResolvedValue({
+          id: "tx-1",
+          userId,
+          accountId: "acc-1",
+          amount: -10,
+          isSplit: true,
+          splits: [
+            { id: "s1", amount: -5, linkedTransactionId: "leg-1" },
+            { id: "s2", amount: -5, linkedTransactionId: "leg-2" },
+          ],
+        });
+        mockQueryRunner.manager.delete.mockResolvedValue({ affected: 1 });
+        mockQueryRunner.manager.remove.mockResolvedValue(undefined);
+        mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
+        mockLockedRows({
+          "tx-1": { account_id: "acc-1", amount: "-10" },
+          "leg-1": {
+            account_id: "loan",
+            amount: "5",
+            linked_transaction_id: "someone-else",
+          },
+          "leg-2": {
+            account_id: "loan",
+            amount: "5",
+            status: "VOID",
+            linked_transaction_id: "tx-1",
+          },
+        });
+
+        await service.undo(userId);
+
+        const deletedLegs = mockQueryRunner.manager.delete.mock.calls
+          .filter(([entity]: [unknown]) => entity === Transaction)
+          .map(([, where]: [unknown, { id: string }]) => where.id);
+        expect(deletedLegs).toEqual(["leg-2"]);
+        expect(
+          mockQueryRunner.query.mock.calls.filter(([sql]: [string]) =>
+            /SET current_balance = current_balance \+ \$1/.test(sql),
+          ),
+        ).toEqual([]);
+      });
+    });
+
+    describe("redo of a create that wrote legs in other accounts", () => {
+      const undoneCreate = (after: Record<string, unknown>) => ({
+        ...mockAction,
+        entityType: "transaction",
+        action: "create",
+        entityId: "tx-1",
+        isUndone: true,
+        beforeData: null,
+        afterData: after,
+      });
+
+      it("is refused for a transfer leg, before anything is written", async () => {
+        mockRepository.findOne.mockResolvedValue(
+          undoneCreate({
+            id: "tx-1",
+            accountId: "acc-1",
+            isTransfer: true,
+            linkedTransactionId: "leg-1",
+          }),
+        );
+        await expect(service.redo(userId)).rejects.toMatchObject({
+          response: expect.objectContaining({
+            errorCode: "REDO_CREATE_WITH_LEGS",
+          }),
+        });
+        expect(mockQueryRunner.query).not.toHaveBeenCalled();
+        expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+      });
+
+      it("is refused for a split with a linked leg", async () => {
+        mockRepository.findOne.mockResolvedValue(
+          undoneCreate({
+            id: "tx-1",
+            accountId: "acc-1",
+            splits: [{ id: "s1", linkedTransactionId: "leg-1" }],
+          }),
+        );
+        await expect(service.redo(userId)).rejects.toBeInstanceOf(
+          ConflictException,
+        );
+      });
     });
 
     it("should return early if entityId is null", async () => {
@@ -2104,6 +3873,47 @@ describe("ActionHistoryService", () => {
           call[0].includes("UPDATE accounts SET current_balance"),
       );
       expect(balanceUpdateCalls.length).toBe(0);
+    });
+
+    it("bounds the recompute by the user's day, not the database server's (issue #2070)", async () => {
+      const txAction = {
+        ...mockAction,
+        entityType: "transaction",
+        action: "create",
+        entityId: "tx-1",
+        afterData: { id: "tx-1", accountId: "acc-1" },
+      };
+      mockRepository.findOne.mockResolvedValue(txAction);
+
+      const mockTransaction = {
+        id: "tx-1",
+        userId,
+        accountId: "acc-1",
+        amount: 100,
+        splits: [],
+      };
+      mockQueryRunner.manager.findOne.mockResolvedValue(mockTransaction);
+      mockQueryRunner.manager.remove.mockResolvedValue(undefined);
+      mockQueryRunner.manager.update.mockResolvedValue({ affected: 1 });
+      mockLockedRows({ "tx-1": { account_id: "acc-1", amount: "100" } });
+
+      // 21:00 in Toronto on Jan 1 is already 02:00 UTC on Jan 2: the database
+      // server's CURRENT_DATE would be a day ahead of the user's.
+      jest.useFakeTimers({ now: new Date("2026-01-02T02:00:00Z") });
+      try {
+        await requestContextStorage.run({ timezone: "America/Toronto" }, () =>
+          service.undo(userId),
+        );
+      } finally {
+        jest.useRealTimers();
+      }
+
+      const balanceQuery = mockQueryRunner.query.mock.calls.find(
+        (call: any[]) =>
+          typeof call[0] === "string" &&
+          call[0].includes("COALESCE(SUM(t.amount)"),
+      );
+      expect(balanceQuery![1]).toEqual(["acc-1", "2026-01-01"]);
     });
   });
 

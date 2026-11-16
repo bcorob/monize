@@ -1,4 +1,13 @@
 {
+  "paymentMatching": {
+    "toggleLabel": "{kind, select, mortgage {Geïmporteerde bankbetalingen aan deze hypotheek koppelen} other {Geïmporteerde bankbetalingen aan deze lening koppelen}}",
+    "toggleHelp": "Wanneer een geïmporteerde banktransactie overeenkomt met het begunstigdepatroon, verrekent Monize deze met de geplande betaling en splitst deze in aflossing en rente, in plaats van een afzonderlijke rekeningtransactie te boeken.",
+    "payeePattern": "Begunstigdepatroon",
+    "payeePatternPlaceholder": "bijv. *MIJN BANK*",
+    "descriptionPattern": "Omschrijvingspatroon (optioneel)",
+    "descriptionPatternPlaceholder": "bijv. *Aflossing lening*",
+    "fromAccount": "Gematcht met afschrijvingen van {account}."
+  },
   "nameSuffix": {
     "cash": "Contant",
     "brokerage": "Effecten"
@@ -22,9 +31,7 @@
     "noMatch": "Geen rekeningen komen overeen met jouw filters.",
     "clearFilters": "Filters wissen",
     "filter": {
-      "all": "Alle",
-      "active": "Actief",
-      "closed": "Gesloten",
+      "allCount": "Alle ({count})",
       "netWorthAll": "Nettowaarde: alle",
       "inNetWorth": "In nettowaarde",
       "excludedFromNetWorth": "Uitgesloten van nettowaarde",
@@ -32,7 +39,10 @@
       "typeAriaLabel": "Filteren op rekeningtype",
       "searchPlaceholder": "Rekeningen zoeken...",
       "searchAriaLabel": "Rekeningen op naam zoeken",
-      "searchClear": "Zoekopdracht wissen"
+      "searchClear": "Zoekopdracht wissen",
+      "activeCount": "Actief ({count})",
+      "closedCount": "Gesloten ({count})",
+      "statusLabel": "Status"
     },
     "accountCount": "{filtered} van {total} rekeningen",
     "groupCount": "{count, plural, one {# rekening} other {# rekeningen}}",
@@ -40,6 +50,8 @@
       "accountName": "Rekeningnaam",
       "type": "Type",
       "status": "Status",
+      "lastReconciled": "Laatst afgestemd",
+      "unreconciled": "Niet afgestemd",
       "balance": "Saldo",
       "actions": "Acties"
     },
@@ -50,8 +62,11 @@
     "statusClosed": "Gesloten",
     "marketValue": "Marktwaarde",
     "combinedBreakdown": "Beleggingen {investments} · Contanten {cash}",
+    "combinedInvestments": "Beleggingen {amount}",
+    "combinedCash": "Contanten {amount}",
     "combinedUnknown": "Totaal niet beschikbaar",
     "combinedUnknownTooltip": "{count, plural, one {# positie heeft geen koers, dus het totaal van deze rekening kan niet worden bepaald} other {# posities hebben geen koers, dus het totaal van deze rekening kan niet worden bepaald}}",
+    "combinedUnknownValuation": "Sommige posities in deze rekening konden niet naar je rapportagevaluta worden omgerekend, dus het totaal kan niet worden berekend. Voeg de ontbrekende wisselkoers toe op de pagina Valuta's.",
     "combinedUnknownNoPortfolio": "De posities konden niet worden geladen, dus het totaal van deze rekening kan niet worden bepaald",
     "limit": "Limiet: {amount}",
     "pairedWith": "Gekoppeld aan {name}",
@@ -81,7 +96,11 @@
     "jointSharedBy": "Gedeeld door {owner}",
     "jointSharedWith": "Gedeeld met {count, plural, one {# persoon} other {# personen}}",
     "includeInNetWorth": "Opnemen in mijn nettovermogen",
-    "excludeFromNetWorth": "Uitsluiten van mijn nettovermogen"
+    "excludeFromNetWorth": "Uitsluiten van mijn nettovermogen",
+    "neverReconciled": "Nooit",
+    "lastReconciledOn": "Afgestemd op {date}",
+    "neverReconciledCard": "Nooit afgestemd",
+    "unreconciledCard": "{count, plural, one {{formatted} niet afgestemd} other {{formatted} niet afgestemd}}"
   },
   "contextMenu": {
     "subtypeBrokerage": "Effectenrekening",
@@ -117,17 +136,23 @@
     "accountType": "Rekeningtype",
     "currency": "Valuta",
     "currencyLocked": "Valuta is vergrendeld omdat deze rekening al transacties heeft. Wijzigen zou bestaande saldi stilzwijgend herdenomineren.",
+    "accountTypeKindLocked": "De valuta is vergrendeld door de transacties van deze rekening, dus kan deze niet wisselen tussen Cryptowallet en een fiat-rekeningtype.",
+    "currencyPlaceholder": "Selecteer een valuta...",
+    "noCryptoCurrencies": "Een cryptowallet bevat één cryptovaluta en er is er nog geen ingesteld. Voeg er een toe op de <currencies>pagina Valuta's</currencies> en kies die hier. <guide>Zo voeg je een cryptovaluta toe</guide>",
     "openingBalance": "Beginsaldo",
     "loanAmount": "Leningbedrag",
     "mortgageAmount": "Hypotheekbedrag",
     "accountNumber": "Rekeningnummer (optioneel)",
     "institution": "Instelling (optioneel)",
-    "institutionRequired": "Geldverstrekker/instelling (vereist)",
+    "institutionRequired": "Geldverstrekker/instelling",
     "institutionPlaceholder": "Selecteer of maak een instelling aan...",
     "newInstitutionTitle": "Nieuwe instelling",
     "creditLimit": "Kredietlimiet (optioneel)",
+    "balanceAlertsHeading": "Saldowaarschuwingen",
+    "lowBalanceThreshold": "Waarschuwen onder (optioneel)",
+    "highBalanceThreshold": "Waarschuwen boven (optioneel)",
     "interestRateOptional": "Rentepercentage % (optioneel)",
-    "interestRateRequired": "Rentepercentage % (vereist)",
+    "interestRateRequired": "Rentepercentage %",
     "description": "Omschrijving (optioneel)",
     "excludeFromNetWorth": "Uitsluiten van nettowaarde",
     "favourite": "Favoriet",
@@ -157,13 +182,12 @@
       "mortgage": "Hypotheek",
       "asset": "Actief",
       "cash": "Contanten",
+      "crypto": "Cryptowallet",
       "other": "Overig"
     },
     "statementDueDayPlaceholder": "bijv. 15",
     "statementSettlementDayPlaceholder": "bijv. 25",
     "fxFeeTitle": "Kosten voor omrekening van vreemde valuta (optioneel)",
-    "fxFeePercent": "Kostenpercentage",
-    "fxFeePercentPlaceholder": "bijv. 2,5",
     "jointSharedWith": "Gezamenlijke rekening gedeeld met {count, plural, one {# persoon} other {# personen}}",
     "jointManage": "Delen beheren",
     "cashSection": {
@@ -192,10 +216,10 @@
   },
   "loanFields": {
     "title": "Details leningbetaling",
-    "paymentAmount": "Betalingsbedrag (vereist)",
-    "paymentFrequency": "Betalingsfrequentie (vereist)",
-    "firstPaymentDate": "Datum eerste betaling (vereist)",
-    "paymentFromAccount": "Betaling van rekening (vereist)",
+    "paymentAmount": "Betalingsbedrag",
+    "paymentFrequency": "Betalingsfrequentie",
+    "firstPaymentDate": "Datum eerste betaling",
+    "paymentFromAccount": "Betaling van rekening",
     "interestCategory": "Rentecategorie",
     "selectFrequency": "Selecteer frequentie...",
     "selectAccount": "Selecteer rekening...",
@@ -222,33 +246,32 @@
     "analyzingHistory": "Transactiegeschiedenis analyseren...",
     "detectedPayments": "{count} betalingen gedetecteerd van {from} tot {to}.",
     "confidence": "Betrouwbaarheid:",
-    "lastSplit": "Laatste betalingssplitsing: {currency}{principal} aflossing / {currency}{interest} rente",
-    "extraPayments": "{count, plural, one {# extra aflossing} other {# extra aflossingen}} gedetecteerd (gem. {currency}{avg}/periode)",
+    "lastSplit": "Laatste betalingssplitsing: {principal} aflossing / {interest} rente",
+    "extraPayments": "{count, plural, one {# extra aflossing} other {# extra aflossingen}} gedetecteerd (gem. {avg}/periode)",
     "reviewValues": "Controleer en pas de onderstaande waarden aan voor het opslaan.",
-    "regularPaymentAmount": "Regulier betalingsbedrag *",
+    "regularPaymentAmount": "Regulier betalingsbedrag",
     "includeExtraPrincipal": "Extra aflossing meenemen",
     "extraPrincipalPerPayment": "Extra aflossing per betaling",
-    "totalPayment": "Totale betaling: {currency}{amount}",
+    "totalPayment": "Totale betaling: {amount}",
     "useDetectedSplit": "Aflossings-/rentesplitsing gebruiken uit geïmporteerde transacties",
-    "useDetectedSplitDesc": "Gebruikt {currency}{interest} voor rente, de rest naar aflossing",
+    "useDetectedSplitDesc": "Gebruikt {interest} voor rente, de rest naar aflossing",
     "calculateFromRate": "Splitsing wordt berekend op basis van rentepercentage en huidig saldo",
-    "paymentFrequency": "Betalingsfrequentie *",
-    "paymentFromAccount": "Betaling van rekening *",
+    "paymentFrequency": "Betalingsfrequentie",
+    "paymentFromAccount": "Betaling van rekening",
     "selectAccount": "Selecteer rekening...",
-    "nextPaymentDate": "Datum volgende betaling *",
+    "nextPaymentDate": "Datum volgende betaling",
     "annualInterestRate": "Jaarlijks rentepercentage (%)",
     "interestRatePlaceholder": "bijv. 5,5",
     "estimatedFromHistory": "Geschat uit transactiegeschiedenis: {rate}%",
     "interestExpenseCategory": "Categorie renteonkosten",
+    "interestExpenseCategoryRequired": "Categorie renteonkosten",
     "detectedCategory": "Gedetecteerd: {name}",
     "selectCategory": "Selecteer categorie...",
     "payeeLender": "Begunstigde / geldverstrekker",
     "selectOrCreatePayee": "Selecteer of maak begunstigde aan...",
     "mortgageDetails": "Hypotheekdetails",
-    "canadianMortgage": "Canadese hypotheek (halfjaarlijkse samengestelde rente)",
-    "variableRate": "Variabele rente",
     "amortizationMonths": "Afschrijvingstermijn (maanden)",
-    "termMonths": "Looptijd (maanden)",
+    "termMonths": "Rentevaste periode (maanden)",
     "autoPost": "Transacties automatisch boeken bij vervaldatum",
     "skip": "Overslaan",
     "setUpPayments": "Betalingen instellen",
@@ -264,26 +287,46 @@
     },
     "toasts": {
       "setupComplete": "Geplande betalingen ingesteld voor {account}"
+    },
+    "firstInstallment": "Eerste termijn",
+    "firstInstallmentHelp": "Deze hypotheek heeft geen vaste betaling: elke termijn wordt berekend uit het saldo, de rente en de looptijd. Dit is de termijn die vervalt op {date}, inclusief eventuele extra aflossing.",
+    "firstInstallmentPending": "Voer de volgende betaaldatum in om de eerste termijn te berekenen.",
+    "firstInstallmentCalculating": "De eerste termijn wordt berekend...",
+    "firstInstallmentFailed": "De eerste termijn kon niet worden berekend. Controleer de waarden hieronder en probeer het opnieuw.",
+    "paymentMatching": {
+      "autoPostDisabled": "Automatisch uitgeschakeld: betalingsmatching verrekent deze rekening met de eigen afschrijving van de bank, dus deze mag niet ook zelf worden geboekt.",
+      "payeePatternRequired": "Voer een begunstigdepatroon in met een *-jokerteken"
     }
   },
   "mortgageFields": {
     "title": "Hypotheekdetails",
-    "canadianMortgage": "Canadese hypotheek",
-    "canadianMortgageDesc": "Gebruikt halfjaarlijkse samengestelde rente voor vaste tarieven (wettelijk vereist in Canada)",
-    "variableRate": "Variabele rente",
-    "variableRateDesc": "Tarief kan wijzigen tijdens de looptijd (gebruikt maandelijkse samengestelde rente)",
-    "variableRateLoanDetailsLink": "Registreer tariefwijzigingen in <link>Leninggegevens</link>.",
-    "termLength": "Looptijd",
-    "termLengthNoTerm": "Laat op 0 jaar en 0 maanden voor geen looptijd.",
-    "amortizationPeriod": "Afschrijvingstermijn (vereist)",
+    "type": {
+      "label": "Hypotheekvorm",
+      "ANNUITY": "Annuïtair (gelijk maandbedrag)",
+      "CANADIAN_FIXED": "Canadese vaste rente",
+      "LINEAR": "Lineair (gelijke aflossing)",
+      "INTEREST_ONLY": "Aflossingsvrij",
+      "help": {
+        "ANNUITY": "Je totale betaling is elke maand gelijk. Kies dit ook voor een hypotheek met variabele rente.",
+        "CANADIAN_FIXED": "Een Canadees contract met vaste rente; de rente wordt twee keer per jaar samengesteld.",
+        "LINEAR": "Het aflossingsdeel is elke maand gelijk en het totaal daalt.",
+        "INTEREST_ONLY": "Je betaalt alleen rente en de schuld blijft gelijk."
+      }
+    },
+    "rateChangesLoanDetailsLink": "Registreer tariefwijzigingen in <link>Leninggegevens</link>.",
+    "termLength": "Rentevaste periode",
+    "termLengthHelp": "Hoe lang je rente of contracttermijn loopt, bijvoorbeeld 5 jaar vaste rente. Monize kan je herinneren voordat die afloopt. Laat op 0 jaar en 0 maanden voor geen rentevaste periode.",
+    "amortizationPeriod": "Afschrijvingstermijn",
     "years": "Jaar",
     "months": "Maanden",
-    "paymentFrequency": "Betalingsfrequentie (vereist)",
-    "firstPaymentDate": "Datum eerste betaling (vereist)",
-    "paymentFromAccount": "Betaling van rekening (vereist)",
-    "interestCategory": "Rentecategorie",
+    "paymentFrequency": "Betalingsfrequentie",
+    "firstPaymentDate": "Datum eerste betaling",
+    "paymentFromAccount": "Betaling van rekening",
+    "paymentFromAccountEditHelp": "Als u dit wijzigt, worden de komende geplande betalingen en de betalingskoppelingsregel naar de nieuwe rekening verplaatst. Reeds geboekte betalingen veranderen niet.",
+    "interestCategory": "Rentecategorie (optioneel)",
+    "interestCategoryRequired": "Rentecategorie",
     "interestBookingMode": {
-      "label": "Hoe wordt rente geboekt?",
+      "label": "Rentevastlegging",
       "help": "Zodat rentedetectie het goed leest. Automatisch werkt meestal.",
       "AUTO": "Automatisch (aanbevolen)",
       "SPLIT": "Gesplitst deel van de betaling",
@@ -330,6 +373,72 @@
       "memoLabel": "Notitietekst extra aflossing",
       "memoPlaceholder": "bijv. extra aflossing",
       "memoHelp": "Hoofdletterongevoelige subtekenreeks-overeenkomst met de notitie van de betaling, de notitie van de brontransactie of een split-notitie."
+    },
+    "prepaymentMode": {
+      "label": "Wat een extra aflossing doet",
+      "SHORTEN_TERM": "Verkort de looptijd (elke maand dezelfde aflossing)",
+      "LOWER_INSTALLMENT": "Verlaagt de termijn (zelfde einddatum)",
+      "help": "Vraag het na bij je geldverstrekker. Blijft het aflossingsdeel op het overzicht na een extra aflossing gelijk, dan is de looptijd verkort."
+    },
+    "previewFirstInstallment": "Eerste termijn:",
+    "detect": {
+      "toggle": "Weet je het niet zeker? Vul een paar termijnen in",
+      "title": "Vind je hypotheekvorm",
+      "intro": "Neem twee of drie opeenvolgende termijnen over van een overzicht, de oudste eerst. De schuld is optioneel: daarmee en met de rente kan Monize zien of de rente twee keer per jaar wordt samengesteld.",
+      "installment": "Termijn {number}",
+      "principal": "Aflossing",
+      "interest": "Rente",
+      "balance": "Schuld vooraf (optioneel)",
+      "rowIncomplete": "Vul zowel de aflossing als de rente in, of laat de rij leeg.",
+      "rate": "Gecontroleerd met de hierboven ingevulde rente, {rate}.",
+      "noRate": "Er is hierboven geen rente ingevuld, dus de samenstelling kan niet worden gecontroleerd.",
+      "needsFrequency": "Kies eerst hieronder de betalingsfrequentie: de termijnen worden in dat ritme gelezen.",
+      "submit": "Vorm voorstellen",
+      "close": "Sluiten",
+      "suggested": "Voorgestelde vorm: {type}",
+      "noSuggestion": "Geen vorm voorgesteld.",
+      "lowConfidence": "Weinig zekerheid: controleer dit met je contract of vraag het je geldverstrekker voordat je het gebruikt.",
+      "use": "Deze vorm gebruiken",
+      "failed": "De termijnen konden niet worden gecontroleerd omdat het verzoek is mislukt. Probeer het opnieuw.",
+      "reason": {
+        "TOO_FEW_SAMPLES": "Er zijn minstens twee opeenvolgende termijnen nodig om te vergelijken.",
+        "INVALID_SAMPLE": "Een termijn heeft een negatief of onleesbaar bedrag.",
+        "NO_PAYMENT": "De termijnen lossen niets af en rekenen geen rente.",
+        "AMBIGUOUS_CONSTANT_PRINCIPAL_AND_INSTALLMENT": "De aflossing en het totaal zijn bij elke termijn gelijk, wat even goed past bij een lineaire als bij een annuïtaire hypotheek. Probeer termijnen die verder uit elkaar liggen, of controleer je contract.",
+        "ACCELERATED_FREQUENCY": "Deze termijnen lijken lineair of aflossingsvrij, en dat kan niet bij een versnelde betalingsfrequentie. Controleer de betalingsfrequentie.",
+        "NO_RULE_FITS": "Noch de aflossing noch het totaal blijft gelijk over deze termijnen. Is de rente ertussen veranderd, gebruik dan termijnen uit één renteperiode.",
+        "ZERO_PRINCIPAL": "Er wordt niets afgelost, dus de schuld verandert niet.",
+        "ZERO_PRINCIPAL_RATE_MISMATCH": "Er wordt niets afgelost, maar de rente komt niet overeen met de opgegeven rente over de schuld. Controleer de rente.",
+        "CONSTANT_PRINCIPAL": "Het aflossingsdeel is elke keer gelijk en het totaal daalt.",
+        "CONSTANT_PRINCIPAL_RATE_MISMATCH": "Het aflossingsdeel is elke keer gelijk, maar de rente komt niet overeen met de opgegeven rente over de schuld. Controleer de rente.",
+        "CONSTANT_INSTALLMENT_SEMI_ANNUAL": "Het totaal is elke keer gelijk en de rente komt overeen met de opgegeven rente, twee keer per jaar samengesteld.",
+        "CONSTANT_INSTALLMENT_NOMINAL": "Het totaal is elke keer gelijk en de rente komt overeen met de opgegeven rente zonder samenstelling twee keer per jaar.",
+        "CONSTANT_INSTALLMENT_RATE_UNCHECKED": "Het totaal is elke keer gelijk. Zonder de schuld vóór elke termijn en de rente kon samenstelling twee keer per jaar niet worden gecontroleerd.",
+        "CONSTANT_INSTALLMENT_COMPOUNDING_AMBIGUOUS": "Het totaal is elke keer gelijk, maar de schuld is te klein om samenstelling twee keer per jaar te onderscheiden. Een Canadees contract met vaste rente vermeldt dit in de voorwaarden.",
+        "CONSTANT_INSTALLMENT_RATE_MISMATCH": "Het totaal is elke keer gelijk, maar de rente past bij de opgegeven rente in geen van beide berekeningswijzen. Mogelijk wordt de rente per dag berekend; controleer de rente."
+      },
+      "history": {
+        "action": "Hypotheekvorm detecteren",
+        "title": "Hypotheekvorm op basis van je betalingen",
+        "intro": "Gelezen uit de laatste geboekte termijnen tegen één rente. Er verandert niets totdat je de rekening opslaat.",
+        "current": "Huidige vorm: {type}",
+        "alreadySet": "Deze hypotheek heeft de voorgestelde vorm al.",
+        "rate": "Geldende rente: {rate}",
+        "noRate": "Er is geen rente vastgelegd voor deze datums, dus de samenstelling is niet gecontroleerd.",
+        "noSamples": "Er is geen geboekte termijn gevonden met zowel een aflossings- als een rentedeel. Boek je betalingen gesplitst in aflossing en rente om dit te gebruiken.",
+        "colDate": "Datum",
+        "colPrincipal": "Aflossing",
+        "colInterest": "Rente",
+        "colBalance": "Schuld vooraf",
+        "balanceUnknown": "Onbekend",
+        "failed": "De betalingsgeschiedenis kon niet worden gelezen omdat het verzoek is mislukt. Probeer het opnieuw.",
+        "cancel": "Annuleren",
+        "use": "Rekening bewerken met deze vorm"
+      }
+    },
+    "originalPrincipal": {
+      "label": "Oorspronkelijke hoofdsom",
+      "help": "Het bedrag dat je oorspronkelijk hebt geleend. Voor een rekening waarvan de vastgelegde geschiedenis later begint dan de lening, is dit het geleende bedrag, niet het openingssaldo — dat is de schuld aan het begin van je geschiedenis."
     }
   },
   "assetFields": {
@@ -352,13 +461,19 @@
   "validation": {
     "nameRequired": "Rekeningnaam is vereist",
     "currencyCodeLength": "Valutacode moet 3 tekens zijn",
+    "currencyRequired": "Selecteer een valuta",
     "institutionRequired": "Selecteer of maak een instelling aan",
     "interestRateRequired": "Rentepercentage is vereist",
     "paymentAmountRequired": "Betalingsbedrag is vereist",
     "paymentFrequencyRequired": "Betalingsfrequentie is vereist",
     "paymentStartDateRequired": "Datum eerste betaling is vereist",
     "paymentAccountRequired": "Betaalrekening is vereist",
-    "amortizationRequired": "Afschrijvingstermijn is vereist"
+    "amortizationRequired": "Afschrijvingstermijn is vereist",
+    "interestCategoryRequired": "Kies de categorie waarop de rente van deze lening wordt geboekt",
+    "acceleratedNeedsAnnuity": "Deze hypotheek wordt volgens een versneld schema betaald, dat alleen een annuïteitenhypotheek heeft. Een lineaire of aflossingsvrije hypotheek heeft een gewone betaalfrequentie nodig, dus houd een annuïteitensoort aan.",
+    "paymentMatchingPayeePatternRequired": "Voer een begunstigdepatroon in om de afschrijving van de bank te herkennen",
+    "paymentMatchingPayeePatternWildcard": "Het begunstigdepatroon moet een *-jokerteken bevatten",
+    "paymentMatchingDescriptionPatternWildcard": "Het omschrijvingspatroon moet een *-jokerteken bevatten"
   },
   "loanDetail": {
     "backToAccounts": "Terug naar rekeningen",
@@ -386,7 +501,12 @@
       "estRemainingInterest": "Gesch. resterende rente",
       "notSet": "Niet ingesteld",
       "notAvailable": "N.v.t.",
-      "paidOff": "Afgelost"
+      "paidOff": "Afgelost",
+      "nextInstallment": "Volgende termijn",
+      "dueOn": "Vervalt op {date}",
+      "finalPayment": "Slotbetaling",
+      "nextInstallmentDue": "Volgende termijn (vervalt op {date})",
+      "finalPaymentDue": "Slotbetaling (vervalt op {date})"
     },
     "schedule": {
       "title": "Aflossingsschema",
@@ -455,7 +575,19 @@
       "budgetLabel": "Totale maandelijkse betaling",
       "budgetHint": "Besteed elke maand een vast totaal aan de lening; de extra aflossing is wat er na de termijn overblijft. Daalt de termijn, dan groeit de extra aflossing zodat het totaal gelijk blijft.",
       "budgetBelowInstallment": "Dat is lager dan de huidige termijn ({amount}); verhoog het om extra af te lossen.",
-      "windowInverted": "De startdatum ligt na de einddatum, dus dit plan wordt nooit toegepast."
+      "windowInverted": "De startdatum ligt na de einddatum, dus dit plan wordt nooit toegepast.",
+      "unavailable": {
+        "title": "De simulatie van extra aflossing kan voor deze lening nog niet worden berekend.",
+        "reasonPaidOff": "Deze lening heeft geen openstaand saldo, dus er is niets meer om af te lossen.",
+        "reasonNoFrequency": "Voor deze lening is geen betaalfrequentie ingesteld. Voeg deze toe in de accountinstellingen.",
+        "reasonNoRate": "Voor deze lening is geen rentepercentage opgeslagen. Stel de rente in bij de accountinstellingen of leg een rentewijziging vast met de datum van vandaag of eerder. Een per rij in het schema getoonde rente is gereconstrueerd uit de in rekening gebrachte rente en is geen opgeslagen rente.",
+        "reasonNoPayment": "Het termijnbedrag kan niet worden bepaald. Leg de reguliere termijnen vast als overboekingen naar de leningrekening (hoofdsom, met rente als splitsingsregel of als aparte gecategoriseerde uitgave), of stel het betaalbedrag in bij de accountinstellingen. Betalingen die als gewone uitgaven op de bronrekening worden geboekt, bereiken de leningrekening nooit, dus het schema kan ze niet zien.",
+        "reasonNoAmortization": "Deze hypotheek heeft geen looptijd, dus de termijnen en het einde van de looptijd kunnen niet worden berekend. Stel de looptijd in bij de rekeninginstellingen.",
+        "reasonNoPaymentStart": "Deze hypotheek heeft geen eerste betaaldatum, dus de betalingen tot het einde van de looptijd kunnen niet worden geteld. Stel de geplande betaling in via de rekeninginstellingen; de eerste vervaldatum die je invoert wordt betaling 1.",
+        "reasonNoPrincipal": "Deze hypotheek heeft geen oorspronkelijk bedrag, dus de vaste aflossing kan niet worden berekend. Stel het hypotheekbedrag in bij de rekeninginstellingen."
+      },
+      "budgetBelowNextInstallment": "Dat is lager dan de volgende termijn ({amount}, vervalt op {date}); verhoog het daarboven om extra af te lossen.",
+      "shortenTermNeedsPrincipal": "Deze hypotheek heeft geen oorspronkelijk bedrag, dus een kortere looptijd kan niet worden gesimuleerd. Kies voor een lagere termijn, of stel het hypotheekbedrag in bij de rekeninginstellingen."
     },
     "comparison": {
       "newPayoff": "Nieuwe aflossingsdatum",
@@ -471,7 +603,8 @@
       "newInstallment": "Nieuwe termijn",
       "installmentDrop": "{payment} (−{reduction})",
       "monthlyPayment": "Maandelijkse betaling",
-      "overpaymentAtFrequency": "{frequency}: +{amount}"
+      "overpaymentAtFrequency": "{frequency}: +{amount}",
+      "firstPayment": "Eerste betaling"
     },
     "chart": {
       "title": "Aflossingstijdlijn",
@@ -538,6 +671,71 @@
       "seriesActual": "Werkelijk saldo",
       "unknown": "Onbekend"
     },
+    "paymentMatching": {
+      "title": "Betalingen matchen",
+      "description": "Herkent de afschrijving van elke termijn door de bank en verrekent die met het schema van de lening als aflossing en rente, in plaats van de rekening apart te boeken.",
+      "noSchedule": "Betalingen matchen verrekent de afschrijvingen van de bank met de geplande betaling van de lening. Stel eerst de betalingen van deze lening in.",
+      "noRule": "Er is geen regel voor betalingen matchen aan deze lening gekoppeld.",
+      "createOne": "Er een maken",
+      "ruleLabel": "Regel:",
+      "ruleLoading": "Regel laden",
+      "ruleFailed": "De regel voor betalingen matchen kon niet worden geladen.",
+      "scheduleLoading": "Geplande betaling laden",
+      "scheduleFailed": "De geplande betaling van de lening kon niet worden geladen.",
+      "retry": "Opnieuw proberen",
+      "autoPost": {
+        "title": "De geplande betaling boekt zichzelf nog steeds",
+        "body": "Automatisch boeken staat aan voor de rekening van deze lening, dus een termijn die de regel verrekent uit de afschrijving van de bank zou ook door de rekening worden geboekt. Zet automatisch boeken voor de rekening uit in Facturen & stortingen."
+      },
+      "preconditions": {
+        "openingBalance": "Het beginsaldo van de lening moet de schuld zijn aan het begin van de verwerkte geschiedenis; de rente van elke termijn wordt daarover berekend.",
+        "originalPrincipal": "De oorspronkelijke hoofdsom moet het oorspronkelijk geleende bedrag zijn, niet het beginsaldo.",
+        "scheduleStart": "Afschrijvingen gedateerd vóór {date}, wanneer de geplande betaling begint, hebben geen termijn om mee te matchen."
+      },
+      "process": {
+        "button": "Geschiedenis verwerken",
+        "scope": "Past de regel toe op de afschrijvingen in {account}, oudste eerst.",
+        "running": "Geschiedenis verwerken: tot nu toe {count, plural, one {# termijn} other {# termijnen}} verrekend.",
+        "done": "{count, plural, =0 {Er zijn geen termijnen verrekend.} one {# termijn is verrekend.} other {# termijnen zijn verrekend.}}",
+        "undo": "Elke pagina van de verwerking kan ongedaan worden gemaakt via de actiegeschiedenis.",
+        "failed": "Verwerken van geschiedenis gestopt",
+        "stuckTitle": "Verwerken van geschiedenis kon niet doorgaan",
+        "stuck": "Meer dan {limit, number} transacties zijn gedateerd op {date}, dus de verwerking kan niet voorbij die dag komen. Verreken de rest via Hulpmiddelen > Regels met een nauwer filter.",
+        "stuckUnknown": "De server heeft niet gemeld hoe ver de verwerking is gekomen, dus deze kan niet doorgaan. Laad de pagina opnieuw en probeer het nog eens."
+      },
+      "create": {
+        "title": "Regel voor betalingen matchen maken",
+        "description": "De regel verrekent overeenkomende afschrijvingen van de rekening van de geplande betaling van de lening, en automatisch boeken voor de rekening wordt uitgezet.",
+        "descriptionWithAccount": "De regel verrekent overeenkomende afschrijvingen van {account}, en automatisch boeken voor de rekening wordt uitgezet.",
+        "submit": "Regel maken",
+        "payeePatternRequired": "Voer een begunstigdepatroon in met een *-jokerteken",
+        "descriptionPatternWildcard": "Een omschrijvingspatroon moet een *-jokerteken bevatten",
+        "failed": "De regel voor betalingen matchen kon niet worden gemaakt.",
+        "done": "Regel \"{name}\" gemaakt"
+      },
+      "settled": {
+        "title": "Verrekende termijnen",
+        "titleWithCount": "Verrekende termijnen ({count})",
+        "colDueDate": "Vervaldatum",
+        "colTransaction": "Transactie",
+        "colPrincipal": "Hoofdsom",
+        "colInterest": "Rente",
+        "colExtra": "Extra hoofdsom",
+        "colDebtBefore": "Schuld vooraf",
+        "openTransaction": "Transactie openen",
+        "void": "Vervallen",
+        "notRecorded": "Niet vastgelegd",
+        "empty": {
+          "title": "Nog geen termijnen verrekend",
+          "body": "Verwerk de geschiedenis of importeer de afschrijvingen van de bank om termijnen te verrekenen."
+        },
+        "error": {
+          "title": "De verrekende termijnen konden niet worden geladen",
+          "body": "Dit is geen lege lijst. Probeer het opnieuw om te zien welke termijnen zijn verrekend.",
+          "retry": "Opnieuw proberen"
+        }
+      }
+    },
     "lineOfCredit": {
       "currentBalance": "Huidig saldo",
       "creditLimit": "Kredietlimiet",
@@ -549,7 +747,10 @@
     },
     "rateHistory": {
       "scheduledUpdateTitle": "Geplande betaling bijwerken?",
-      "scheduledUpdateMessage": "De geplande factuurbetaling \"{name}\" kan worden aangepast aan het nieuwe tarief: {payment} totaal, verdeeld in {principal} aflossing en {interest} rente. Nu bijwerken?",
+      "scheduledUpdateNextPaymentUnchanged": "De geplande factuurbetaling \"{name}\" komt overeen met de rentetijdlijn. Volgende betaling op {date}: ongewijzigd ({payment}).",
+      "scheduledUpdateNextPaymentChanged": "De geplande factuurbetaling \"{name}\" kan worden aangepast aan de rentetijdlijn. Volgende betaling op {date}: {before} → {after}, verdeeld in {principal} aflossing en {interest} rente.",
+      "scheduledUpdateNextPaymentNew": "De geplande factuurbetaling \"{name}\" kan worden aangepast aan de rentetijdlijn. Volgende betaling op {date}: {payment}, verdeeld in {principal} aflossing en {interest} rente.",
+      "scheduledUpdateUpcomingChange": "Vanaf {date} wordt de betaling {amount}.",
       "scheduledUpdateDefaultName": "deze hypotheek",
       "scheduledUpdateConfirm": "Betaling bijwerken",
       "scheduledUpdateSkip": "Ongewijzigd laten",
@@ -616,6 +817,54 @@
       "memoLabel": "Memo voor extra aflossing",
       "memoPlaceholder": "bijv. Extra aflossing",
       "memoHelp": "Betalingen waarvan het memo deze tekst bevat, tellen als extra aflossingen (niet hoofdlettergevoelig)."
+    },
+    "notAmortizing": {
+      "title": "Deze lening wordt niet afgelost, dus de geschatte afloscdatum en de resterende rente zijn onbekend.",
+      "paymentBelowInterest": "De termijn ({payment}) is lager dan de maandelijkse rente (ongeveer {interest}) bij {rate}%, dus het saldo daalt nooit. Leg de werkelijke termijn vast (de invoer in de rentegeschiedenis of het betaalbedrag van de rekening) zodat deze de rente dekt.",
+      "beyondHorizon": "De termijn dekt de rente, maar de looptijd reikt voorbij de prognosehorizon, dus de aflosdatum en de resterende rente worden niet getoond."
+    }
+  },
+  "loanFees": {
+    "title": "Hypotheekkosten",
+    "help": "Verzekeringen, belastingen of andere kosten die met elke hypotheekbetaling worden geïnd. Elke kostenpost wordt een eigen regel van de geplande betaling, geboekt op de categorie die je kiest. Een kostenpost kan een vast bedrag zijn, een percentage van het huidige saldo (bij elke betaling opnieuw berekend) of een percentage van het oorspronkelijke saldo, in rekening gebracht per betaling of per jaar.",
+    "panelDescription": "Kosten die met elke geplande hypotheekbetaling worden geïnd. Opslaan werkt de regels van de volgende betaling bij.",
+    "none": "Met de betaling van deze hypotheek worden geen kosten geïnd.",
+    "name": "Naam van de kostenpost",
+    "category": "Categorie",
+    "calculation": "Berekend als",
+    "basis": "Waarde geldt",
+    "amount": "Bedrag",
+    "rate": "Tarief",
+    "add": "Kostenpost toevoegen",
+    "remove": "Kostenpost verwijderen",
+    "edit": "Kosten bewerken",
+    "editTitle": "Hypotheekkosten",
+    "save": "Kosten opslaan",
+    "cancel": "Annuleren",
+    "saved": "De hypotheekkosten zijn opgeslagen.",
+    "saveFailed": "De hypotheekkosten konden niet worden opgeslagen.",
+    "loading": "Kosten laden...",
+    "loadFailed": "De hypotheekkosten konden niet worden geladen.",
+    "retry": "Opnieuw proberen",
+    "unknownCategory": "Onbekende categorie",
+    "unknownValue": "onbekend",
+    "summaryPerPayment": "{value} per betaling, {calculation}",
+    "summaryAnnual": "{value} per jaar, {calculation}",
+    "paymentMatchingConflict": "Betalingen matchen kan een betaling met kosten nog niet verrekenen. Zet betalingen matchen uit of verwijder de kosten.",
+    "paymentMatchingNote": "Deze hypotheek heeft een regel voor betalingskoppeling. Betalingskoppeling kan een betaling met kosten nog niet verrekenen, dus er kunnen geen kosten worden toegevoegd zolang de regel bestaat.",
+    "calculations": {
+      "fixed": "Vast bedrag",
+      "percentCurrentBalance": "Percentage van het huidige saldo",
+      "percentOriginalBalance": "Percentage van het oorspronkelijke saldo"
+    },
+    "bases": {
+      "perPayment": "Per betaling",
+      "annual": "Per jaar"
+    },
+    "errors": {
+      "required": "Verplicht",
+      "duplicate": "Elke kostenpost heeft een eigen categorie nodig, anders dan de rentecategorie",
+      "range": "Voer een tarief van maximaal 100% in"
     }
   }
 }

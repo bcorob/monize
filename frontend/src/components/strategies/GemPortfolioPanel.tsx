@@ -4,6 +4,8 @@ import { useTranslations } from "next-intl";
 import { useNumberFormat } from "@/hooks/useNumberFormat";
 import { GemPosition } from "@/types/gem-strategy";
 import { compliancePercent, isKnown } from "@/lib/gem-strategy-view";
+import { Th } from "@/components/ui/Table";
+import { sumMoney } from "@/lib/format";
 import {
   GemAccountLinks,
   GemBadge,
@@ -54,7 +56,7 @@ export function GemPortfolioPanel({
     (holding) => !isKnown(holding.marketValue),
   )
     ? null
-    : securities.reduce((sum, holding) => sum + (holding.marketValue ?? 0), 0);
+    : sumMoney(securities.map((holding) => holding.marketValue ?? 0));
   /**
    * What is actually in the target, summed from the same rows the table marks
    * "Yes — kept".
@@ -66,9 +68,11 @@ export function GemPortfolioPanel({
   const inTargetValue =
     securitiesValue === null
       ? null
-      : securities
-          .filter((holding) => holding.isTargetInstrument)
-          .reduce((sum, holding) => sum + (holding.marketValue ?? 0), 0);
+      : sumMoney(
+          securities
+            .filter((holding) => holding.isTargetInstrument)
+            .map((holding) => holding.marketValue ?? 0),
+        );
 
   /**
    * An exposure figure, marked as a lower bound when it is one.
@@ -268,22 +272,19 @@ export function GemPortfolioPanel({
               <div className="overflow-x-auto">
                 <table className="min-w-full text-xs">
                   <thead>
-                    <tr className="text-left text-gray-500 dark:text-gray-400">
-                      <th scope="col" className="py-1 pr-3 font-medium">
+                    <tr>
+                      <Th scope="col" className="py-1 pl-0 pr-3">
                         {t("gem.portfolioPanel.workingInstrument")}
-                      </th>
-                      <th
-                        scope="col"
-                        className="py-1 pr-3 text-right font-medium"
-                      >
+                      </Th>
+                      <Th scope="col" align="right" className="py-1 pl-0 pr-3">
                         {t("gem.portfolioPanel.workingValue")}
-                      </th>
-                      <th scope="col" className="py-1 pr-3 font-medium">
+                      </Th>
+                      <Th scope="col" className="py-1 pl-0 pr-3">
                         {t("gem.portfolioPanel.workingIsTarget")}
-                      </th>
-                      <th scope="col" className="py-1 text-right font-medium">
+                      </Th>
+                      <Th scope="col" align="right" className="py-1 px-0">
                         {t("gem.portfolioPanel.workingExposure")}
-                      </th>
+                      </Th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-gray-100 dark:divide-gray-700/60">

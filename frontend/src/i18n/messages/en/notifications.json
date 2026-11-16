@@ -1,0 +1,287 @@
+{
+  "title": "Notifications",
+  "unread": "{count} unread",
+  "markAllRead": "Mark all read",
+  "loading": "Loading notifications...",
+  "empty": "No notifications",
+  "undo": "Undo",
+  "buttonTitle": "Notifications",
+  "buttonAriaLabel": "Notifications",
+  "dismissAriaLabel": "Dismiss notification",
+  "closeAriaLabel": "Close notifications",
+  "emptyFiltered": "No notifications match the current filter",
+  "deleteAll": "Delete all",
+  "deleteAllConfirmTitle": "Delete notifications",
+  "deleteAllConfirmMessageAll": "Delete all notifications? This cannot be undone.",
+  "deleteAllConfirmMessageFiltered": "Delete every notification matching the current filter, including any not shown? This cannot be undone.",
+  "deleted": "{count, plural, one {# notification deleted} other {# notifications deleted}}",
+  "deleteFailed": "The notifications could not be deleted",
+  "filter": {
+    "financial": "Financial",
+    "system": "System"
+  },
+  "severity": {
+    "critical": "Critical",
+    "warning": "Warning",
+    "success": "Good News",
+    "info": "Info"
+  },
+  "reminder": {
+    "remindAriaLabel": "Remind me about this",
+    "stopAriaLabel": "Stop this reminder",
+    "stopped": "Reminder stopped",
+    "stopFailed": "The reminder could not be stopped",
+    "created": "Reminder set",
+    "createFailed": "The reminder could not be set",
+    "dialogTitle": "Remind me",
+    "dialogDescription": "Get this notification again later until you act on it.",
+    "modeLabel": "Frequency",
+    "modeRepeat": "Repeat until I stop it",
+    "modeOnce": "Just once more",
+    "intervalLabelRepeat": "Remind me every",
+    "intervalLabelOnce": "Remind me after",
+    "durationMinutes": "{minutes, plural, one {# minute} other {# minutes}}",
+    "durationHours": "{hours, plural, one {# hour} other {# hours}}",
+    "cancel": "Cancel",
+    "confirm": "Set reminder",
+    "pageTitle": "Active reminders",
+    "empty": "No active reminders",
+    "loadFailed": "Reminders could not be loaded",
+    "retry": "Try again",
+    "nextFire": "Next reminder: {date}",
+    "openTarget": "Open related page",
+    "delegateUnavailable": "Switch back to your own account to manage reminders."
+  },
+  "billDue": {
+    "titleOverdue": "{payee} overdue",
+    "titleToday": "{payee} due today",
+    "titleTomorrow": "{payee} due tomorrow",
+    "titleInDays": "{payee} due in {days} days",
+    "amountDue": "{amount} due on {date}",
+    "amountUnavailable": "Amount unavailable (no current exchange rate), due on {date}"
+  },
+  "gemSignal": {
+    "riskTitle": "{strategy} switched to {state}",
+    "riskMessage": "Your GEM strategy \"{strategy}\" changed from {fromState} to {toState}. Open to review the recommendation.",
+    "allocationTitle": "{strategy} changed its target",
+    "allocationMessage": "Your GEM strategy \"{strategy}\" now targets {target}. Open to review the recommendation.",
+    "riskOn": "risk-on",
+    "riskOff": "risk-off"
+  },
+  "bond": {
+    "maturitySoonTitle": "{series} matures on {date}",
+    "maturitySoonMessage": "{quantity} x {series} mature on {date}. {payout}",
+    "interestTitle": "{series}: interest payment on {date}",
+    "interestMessage": "{quantity} x {series} pay {amount} of interest on {date}. Book it on the security page if it is not in your account yet.",
+    "interestMessageUnknown": "{quantity} x {series} pay interest on {date}. The amount is not known yet: a rate it depends on is not published.",
+    "rateResetTitle": "{series}: new interest period",
+    "rateResetMessage": "{series} entered period {period} on {date} at {rate} a year.",
+    "unbookedTitle": "{series}: matured, redemption not booked",
+    "unbookedMessage": "{quantity} x {series} matured on {date} and no redemption is booked. {payout} Book the redemption on the security page.",
+    "payoutKnown": "The payout is {payout}.",
+    "payoutUnknown": "The payout is not known yet: {reason}.",
+    "reason": {
+      "RATE_UNKNOWN": "a rate it depends on is not published yet",
+      "TERMS_INCOMPLETE": "the terms of the series are incomplete",
+      "PURCHASE_OUTSIDE_SALE_WINDOW": "a purchase date is outside the sale window of the series",
+      "PURCHASE_AFTER_MATURITY": "a purchase date is on or after the maturity of the series",
+      "other": "it cannot be worked out from the data stored"
+    },
+    "benchmarkTitle": "{benchmark}: new observation {observation}",
+    "benchmarkIntro": "{publisher} published {benchmark} for {observation}: {value}.",
+    "benchmarkSeries": "{series}: period from {date} at {rate} a year.",
+    "benchmarkSeriesProjected": "{series}: period from {date}, projected at {rate} a year.",
+    "benchmarkSeriesUnknown": "{series}: period from {date}, the rate is not known yet.",
+    "benchmarkMore": "And {more} more.",
+    "missingTitle": "Bond figures are not known yet",
+    "missingMessage": "Some bond figures cannot be worked out. {causes}",
+    "cause": {
+      "observation": "The {observation} observation of {benchmark} ({publisher}) is not stored: it is not published yet, or the feed has not been fetched since. Refresh on the bond page.",
+      "observationNoPublisher": "The {observation} observation of {benchmark} is not stored: it is not published yet, or the feed has not been fetched since. Refresh on the bond page.",
+      "terms": "The terms of {series} are incomplete. Refresh the series on the bond page.",
+      "purchase": "A purchase of {series} on {date} is outside its sale window ({from} to {to}). Correct the purchase date.",
+      "purchaseAfterMaturity": "A purchase of {series} on {date} is on or after its maturity ({maturity}). Correct the purchase date.",
+      "lots": "The lots cannot be derived from the ledger ({code}). Correct the ledger.",
+      "lotsRow": "{action} on {date} makes the lots impossible to derive ({code}). Correct the transaction.",
+      "lotsRowSeries": "{action} on {date} is not placed in a series ({code}). Choose the series on that transaction.",
+      "lotsRowRemoval": "{action} on {date} removes more than the account holds of that series ({code}). Correct the transaction."
+    },
+    "action": {
+      "BUY": "Purchase",
+      "SELL": "Sale",
+      "REINVEST": "Reinvestment",
+      "ADD_SHARES": "Share addition",
+      "REMOVE_SHARES": "Share removal",
+      "SPLIT": "Split",
+      "TRANSFER_IN": "Incoming transfer",
+      "TRANSFER_OUT": "Outgoing transfer",
+      "other": "Transaction"
+    },
+    "benchmarks": {
+      "PL_CPI_GUS_YOY": "CPI, 12 months (GUS)",
+      "PL_NBP_REFERENCE": "NBP reference rate",
+      "US_CPI_U_NSA": "CPI-U, all items, not seasonally adjusted (BLS)",
+      "US_TBILL_13W_MMY": "13-week Treasury bill yield"
+    }
+  },
+  "emailReceiptsAttention": {
+    "title": "Email receipts need attention",
+    "message": "Your receipts inbox holds {noParser} without a profile and {parseFailed} that their profile did not recognize. Open to review."
+  },
+  "portfolioMovement": {
+    "titleUp": "Investments up {percent}%",
+    "titleDown": "Investments down {percent}%",
+    "messageUp": "Your investments are up {percent}% from {from} to {to}, excluding deposits and withdrawals. Open to review.",
+    "messageDown": "Your investments are down {percent}% from {from} to {to}, excluding deposits and withdrawals. Open to review."
+  },
+  "balanceThreshold": {
+    "titleLow": "{account} is below your threshold",
+    "titleHigh": "{account} is above your threshold",
+    "messageLow": "{account} dropped to {balance}, below your {threshold} threshold.",
+    "messageHigh": "{account} rose to {balance}, above your {threshold} threshold."
+  },
+  "system": {
+    "backupFailed": {
+      "title": "Automatic backup failed",
+      "message": "The automatic backup for {user} failed: {error}"
+    },
+    "backupPartial": {
+      "title": "Automatic backup incomplete",
+      "messageAttachments": "The backup for {user} was written, but {missing} of {expected} attachments could not be included and {inconsistent} did not match their metadata. Complete backups were preserved.",
+      "messagePromotion": "The daily backup for {user} succeeded, but its weekly or monthly copy could not be written: {error}",
+      "messageRetention": "The backup for {user} succeeded, but old backup files could not be cleaned up: {error}"
+    },
+    "encryptionKeyMissing": {
+      "title": "Encryption key not configured",
+      "message": "ENCRYPTION_KEY is not set, so backups are written unencrypted and secrets cannot be stored. A future release will refuse to start without it."
+    },
+    "jwtSecretWeak": {
+      "title": "JWT_SECRET is weak",
+      "message": "JWT_SECRET is a published placeholder or too predictable, so session tokens can be forged. Generate a strong one (openssl rand -base64 32). Changing it stops authenticator codes from working and forgets trusted devices: users sign in with a backup code and set up 2FA again, and you reset 2FA in User Management for anyone without one. See docs/backend/modules-and-runtime.md (Changing JWT_SECRET) first."
+    },
+    "smtpFailure": {
+      "title": "Email delivery is failing",
+      "message": "Monize could not send email: {error}. Notifications and reminders are not being delivered."
+    },
+    "providerOutage": {
+      "title": "{provider} is not responding",
+      "message": "Market data from {provider} is unavailable. Prices and index data may be out of date until it answers again."
+    },
+    "providerRecovered": {
+      "title": "{provider} is answering again",
+      "message": "The outage is over and market data from {provider} is updating again."
+    },
+    "scheduledPostFailed": {
+      "title": "{name} could not be posted",
+      "message": "Your scheduled transaction due {date} did not post automatically: {error}. You can post it manually from Bills."
+    }
+  },
+  "priceMovement": {
+    "title": "Price change alert: {symbol} ({percent}%)",
+    "message": "{symbol}: {percent}% compared with the previous available session."
+  },
+  "bankSync": {
+    "expiringTitleToday": "{institution}: bank access ends today",
+    "expiringTitleOneDay": "{institution}: bank access ends within 1 day",
+    "expiringTitleDays": "{institution}: bank access ends within {days} days",
+    "expiringMessage": "Your consent for Monize to read {institution} ends on {date}. Renew the connection in Monize to keep syncing.",
+    "expiredTitle": "{institution}: bank access has ended",
+    "expiredMessage": "Your consent for Monize to read {institution} has ended. Renew the connection in Monize to resume syncing.",
+    "failedTitle": "{institution}: sync failed",
+    "failedMessage": "The daily sync of {institution} failed for: {accounts}. Open bank sync settings to see why.",
+    "failedCredentialsMessage": "The daily sync of {institution} could not start because the bank sync credentials are missing or were rejected. Check them in bank sync settings.",
+    "unnamedAccount": "an account",
+    "importedTitle": "{institution}: new transactions imported",
+    "importedMessage": "Transactions imported from {institution} by the daily sync: {imported}.",
+    "importedNoneTitle": "{institution}: no new transactions",
+    "importedNoneMessage": "The daily sync of {institution} found no new transactions."
+  },
+  "aiReview": {
+    "readyTitle": "AI proposals wait for your approval",
+    "readyMessage": "{count, plural, one {# AI proposal waits} other {# AI proposals wait}} for your approval ({added} new). Open the AI review inbox to approve or dismiss.",
+    "expiringTitle": "AI proposals expire soon",
+    "expiringMessage": "{count, plural, one {# AI proposal expires} other {# AI proposals expire}} soon. The first one expires on {date}. Open the AI review inbox to approve or dismiss."
+  },
+  "warranty": {
+    "expiringTitle": "{name}: warranty expires within {days, plural, one {# day} other {# days}}",
+    "expiringMessage": "The warranty for {name} expires on {date}. Open to review its documents or record a claim.",
+    "todayTitle": "{name}: warranty expires today",
+    "todayMessage": "The warranty for {name} expires today, {date}. Open to review its documents or record a claim."
+  },
+  "security": {
+    "oauthTitle": "New app connected: {clientName}",
+    "oauthMessage": "The application {clientName} was just granted access to your Monize account. If this wasn't you, change your password now: that revokes every connected application's access.",
+    "relayTitle": "A new connection answered your AI chat",
+    "relayMessage": "A connection that has not answered your Monize AI chat before just picked up a prompt. If you did not connect this assistant, change your password."
+  },
+  "payrollDeduction": {
+    "resetTitle": "{category}: confirm next year's maximum",
+    "resetMessage": "The {category} deduction on {bill} resets on {date}. Update the yearly maximum if it changes; otherwise {amount} applies again."
+  },
+  "shared": {
+    "title": "Shared expenses",
+    "message": "A shared group has an update. Open Monize to review it."
+  },
+  "native": {
+    "payments": {
+      "title": "Payment reminder",
+      "body": "A bill or scheduled payment needs your attention. Open Monize for the details."
+    },
+    "budgets": {
+      "title": "Budget alert",
+      "body": "One of your budgets needs your attention. Open Monize for the details."
+    },
+    "system": {
+      "title": "System notice",
+      "body": "Monize has a system notice for you. Open the app for the details."
+    },
+    "balances": {
+      "title": "Balance alert",
+      "body": "An account balance crossed a threshold you set. Open Monize for the details."
+    },
+    "investments": {
+      "title": "Investment movement",
+      "body": "Your investments moved today. Open Monize for the details."
+    },
+    "strategies": {
+      "title": "Strategy signal",
+      "body": "One of your strategies changed its recommendation. Open Monize for the details."
+    },
+    "bank_sync": {
+      "title": "Bank connection",
+      "body": "A bank connection needs your attention. Open Monize for the details."
+    },
+    "bank_sync_activity": {
+      "title": "Bank sync",
+      "body": "Your bank sync has news. Open Monize for the details."
+    },
+    "email_receipts": {
+      "title": "Email receipts need attention",
+      "body": "Some emails in your receipts inbox need a profile or a fix. Open Monize for the details."
+    },
+    "bonds": {
+      "title": "Bond notice",
+      "body": "One of your bonds has news. Open Monize for the details."
+    },
+    "ai_review": {
+      "title": "AI review proposals",
+      "body": "Some AI review proposals wait for your decision. Open Monize for the details."
+    },
+    "warranties": {
+      "title": "Warranty reminder",
+      "body": "One of your warranties expires soon. Open Monize for the details."
+    },
+    "shared_expenses": {
+      "title": "Shared expenses",
+      "body": "A shared group has an update. Open Monize to review it."
+    },
+    "security": {
+      "title": "Security notice",
+      "body": "Something changed in who can access your Monize account. Open Monize for the details."
+    },
+    "fallback": {
+      "title": "Monize",
+      "body": "You have a new notification in Monize."
+    }
+  }
+}

@@ -22,21 +22,33 @@ import { investmentsApi } from '@/lib/investments';
 import { InvestmentTransaction, CapitalGainEntry } from '@/types/investment';
 import { Account } from '@/types/account';
 import { parseLocalDate } from '@/lib/utils';
-import { baseInvestmentAction } from '@/lib/investment-actions';
+import { incomeBaseKind, investmentIncomeAmount, investmentRowHasEffect } from '@/lib/investment-actions';
+import { convertRowAmount } from '@/lib/investment-row-currency';
 import { useChartDateFormat } from '@/hooks/useChartDateFormat';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { useDateRange } from '@/hooks/useDateRange';
 import { DateRangeSelector } from '@/components/ui/DateRangeSelector';
-import { ExportDropdown } from '@/components/ui/ExportDropdown';
+import { ReportToolbarActions } from '@/components/reports/ReportToolbarActions';
 import { MultiSelect } from '@/components/ui/MultiSelect';
-import { RefreshPricesButton } from '@/components/reports/RefreshPricesButton';
 import { SortableHeader } from '@/components/ui/SortableHeader';
+import {
+  CAPTION_CLASS,
+  CellLabel,
+  PHONE_HEADER_CLASS,
+  type SortColumn,
+  type SortColumnsByField,
+} from '@/components/ui/Table';
 import { useSortableTable, compareValues } from '@/hooks/useSortableTable';
 import { exportToCsv } from '@/lib/csv-export';
+import { roundMoney, balanceColor } from '@/lib/format';
 import { chartColors, CHART_SERIES } from '@/lib/chart-colors';
 import { useTranslations } from 'next-intl';
 import { useMainAccountName } from '@/hooks/useMainAccountName';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { SEGMENTED_GROUP_CLASS, segmentClass } from '@/components/ui/segmented-control';
+import { ChartViewToggle } from '@/components/ui/ChartViewToggle';
+import { CHART_GRID_PROPS, CHART_TOOLTIP_CLASS } from '@/lib/chart-style';
 
 type SeriesKey = 'dividends' | 'interest' | 'capitalGains';
 type MonthlyIncomeSortField = 'month' | 'startValue' | 'endValue' | 'dividends' | 'interest' | 'capitalGains' | 'total';
@@ -86,14 +98,59 @@ const SERIES_COLORS: Record<SeriesKey, { positive: string; negative: string }> =
   capitalGains: { positive: CHART_SERIES[4], negative: chartColors.expense },
 };
 
+interface DividendIncomeTooltipProps {
+  active?: boolean;
+  payload?: Array<{ name: string; value: number; color: string; dataKey?: string }>;
+  label?: string;
+  fmtValue: (value: number | null) => string;
+}
+
+function DividendIncomeTooltip({ active, payload, label, fmtValue }: DividendIncomeTooltipProps) {
+  if (active && payload && payload.length) {
+    // Recharts can pass a Cell-coloured payload entry; surface signed values
+    // and use the original series colour rather than the per-bar Cell colour.
+    return (
+      <div className={CHART_TOOLTIP_CLASS}>
+        <p className="font-medium text-gray-900 dark:text-gray-100 mb-1">{label}</p>
+        {payload.map((entry, index) => {
+          const seriesKey = entry.dataKey as SeriesKey | undefined;
+          const colour = seriesKey
+            ? entry.value < 0
+              ? SERIES_COLORS[seriesKey].negative
+              : SERIES_COLORS[seriesKey].positive
+            : entry.color;
+          return (
+            <p key={index} className="text-sm" style={{ color: colour }}>
+              {entry.name}: {fmtValue(entry.value)}
+            </p>
+          );
+        })}
+      </div>
+    );
+  }
+  return null;
+}
+
 const ACCOUNTS_STORAGE_KEY = 'monize-reports-dividend-income-accounts';
+
+// Today's header cell, unchanged. Kept local -- PHONE_HEADER_CLASS/CAPTION_CLASS/
+// CellLabel are shared, but a table's own header stays per-report because track
+// budgets differ.
+const HEADER_CLASS =
+  'px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase';
+// A money cell inside a wrapped row: no padding of its own below `sm` (the grid
+// spaces it), this table's own `px-4 py-3 text-sm` from `sm` up, smaller type on
+// phones. `whitespace-nowrap` is the one property that is not phone-only -- a
+// number must never break; the caption inside takes it back (`CellLabel`).
+const FIGURE_CELL =
+  'p-0 text-right text-xs whitespace-nowrap sm:table-cell sm:px-4 sm:py-3 sm:text-sm';
 
 export function DividendIncomeReport() {
   const t = useTranslations('reports');
   const formatChartDate = useChartDateFormat();
   const mainAccountName = useMainAccountName();
   const { formatCurrency: formatCurrencyFull, formatCurrencyAxis } = useNumberFormat();
-  const { defaultCurrency, convertToDefault } = useExchangeRates();
+  const { defaultCurrency } = useExchangeRates();
   const chartRef = useRef<HTMLDivElement>(null);
   // Persisted so the report opens on the accounts the user last chose.
   // Accounts arrive with the data below, so stale IDs are pruned there.
@@ -134,6 +191,23 @@ export function DividendIncomeReport() {
     'reports.dividend-income.security.sort',
     { field: 'total', direction: 'desc' },
   );
+
+  // The by-security table's five sortable columns, keyed by field so the record
+  // is exhaustive: adding a member to `SecurityIncomeSortField` is a compile
+  // error here rather than a header with no control. Declaration order is the
+  // column (and cell DOM) order, rendered by BOTH the column header row and the
+  // phone sort strip from the derived `Object.values`.
+  const securityColumns: SortColumnsByField<
+    SecurityIncomeSortField,
+    SortColumn<SecurityIncomeSortField>
+  > = {
+    symbol: { field: 'symbol', label: t('dividendIncome.colSecurity') },
+    dividends: { field: 'dividends', label: t('dividendIncome.colDividends'), align: 'right' },
+    interest: { field: 'interest', label: t('dividendIncome.colInterest'), align: 'right' },
+    capitalGains: { field: 'capitalGains', label: t('dividendIncome.colCapitalGains'), align: 'right' },
+    total: { field: 'total', label: t('dividendIncome.colTotal'), align: 'right' },
+  };
+  const securitySortColumns = Object.values(securityColumns);
 
   const { start: rangeStart, end: rangeEnd } = resolvedRange;
   // Capital gains require a window; fall back to a wide window when the user
@@ -193,15 +267,14 @@ export function DividendIncomeReport() {
       ]);
 
       // Dividend / Interest / CAPITAL_GAIN income comes from the plain
-      // transaction list; SELL realized + unrealized capital gains come from
-      // the monthly capital gains endpoint.
-      const incomeTransactions = allTransactions.filter((tx) => {
-        // Base-normalized: CAPITAL_GAIN_SHORT/LONG are capital-gain income.
-        const base = baseInvestmentAction(tx.action);
-        return (
-          base === 'DIVIDEND' || base === 'INTEREST' || base === 'CAPITAL_GAIN'
-        );
-      });
+      // transaction list, paid in cash or reinvested in shares; SELL realized +
+      // unrealized capital gains come from the monthly capital gains endpoint,
+      // which counts a reinvestment's shares as a purchase, so their value is
+      // not also a capital gain here.
+      // A VOID row is listed by the endpoint as a record; it paid nothing.
+      const incomeTransactions = allTransactions.filter(
+        (tx) => incomeBaseKind(tx.action) !== null && investmentRowHasEffect(tx),
+      );
 
       return {
         transactions: incomeTransactions,
@@ -230,7 +303,12 @@ export function DividendIncomeReport() {
   pruneAccountFilter(accounts);
 
   // Lazy-load daily capital gains only when the user switches to the daily view.
-  const { data: dailyResponse, reload: reloadDaily } = useReportData(
+  const {
+    data: dailyResponse,
+    isLoading: isDailyLoading,
+    error: dailyError,
+    reload: reloadDaily,
+  } = useReportData(
     () =>
       viewType === 'daily' && isValid
         ? investmentsApi.getCapitalGains({
@@ -290,15 +368,14 @@ export function DividendIncomeReport() {
 
   // Clear the security filter when the account changes or when the selected
   // security drops out of the available set (e.g. switching to an account
-  // that doesn't hold it).
-  useEffect(() => {
-    if (
-      selectedSecurityId &&
-      !availableSecurities.some((s) => s.id === selectedSecurityId)
-    ) {
-      setSelectedSecurityId('');
-    }
-  }, [selectedSecurityId, availableSecurities]);
+  // that doesn't hold it). Adjusted during render, not in an effect, so the
+  // stale filter never paints.
+  if (
+    selectedSecurityId &&
+    !availableSecurities.some((s) => s.id === selectedSecurityId)
+  ) {
+    setSelectedSecurityId('');
+  }
 
   const filteredTransactions = useMemo(() => {
     if (!selectedSecurityId) return transactions;
@@ -322,37 +399,43 @@ export function DividendIncomeReport() {
   const displayCurrency = selectedAccount?.currencyCode || defaultCurrency;
   const isForeign = displayCurrency !== defaultCurrency;
 
-  const getTxAmount = useCallback((tx: InvestmentTransaction): number | null => {
-    const amount = Math.abs(tx.totalAmount);
-    if (isSingleAccount) {
-      // Single account selected: native currency, no conversion needed
-      return amount;
-    }
-    // All accounts or multiple selected: convert to default currency
-    const txCurrency = accountCurrencyMap.get(tx.accountId) || defaultCurrency;
-    return convertToDefault(amount, txCurrency);
-  }, [isSingleAccount, accountCurrencyMap, defaultCurrency, convertToDefault]);
+  // A row's income is in the row's own (security) currency, not the account's.
+  // It reaches the display currency through the row's settlement rate where it
+  // has one, the rate its cash leg was booked at, and the market rate beyond.
+  // A reinvest created in the app stores no total; its income is the cost its
+  // shares were bought at.
+  const getTxAmount = useCallback(
+    (tx: InvestmentTransaction): number | null =>
+      convertRowAmount(
+        tx,
+        investmentIncomeAmount(tx),
+        accountCurrencyMap.get(tx.accountId),
+        displayCurrency,
+      ),
+    [accountCurrencyMap, displayCurrency],
+  );
 
-  // Backend already returns each capital gain entry in the holding account's
-  // currency. Convert to the default currency for multi-account views; pass
-  // through when a single account is selected.
+  // Backend returns each capital gain entry in the holding account's currency,
+  // and the same figures folded in the reporting currency, each flow at its own
+  // rate (`inReportingCurrency`). A single account reads its native figures;
+  // several read the reporting-currency ones, never a past month at today's
+  // rate (issues #2106, #2130).
   const convertCapitalGain = useCallback((entry: CapitalGainEntry): number | null => {
     // A null gain is unknown (no rate between the security's currency and the
     // account's); it must not survive conversion as a 0.
     if (entry.totalCapitalGain === null) return null;
     if (isSingleAccount) return entry.totalCapitalGain;
-    return convertToDefault(entry.totalCapitalGain, entry.accountCurrencyCode || defaultCurrency);
-  }, [isSingleAccount, defaultCurrency, convertToDefault]);
+    return entry.inReportingCurrency?.totalCapitalGain ?? null;
+  }, [isSingleAccount]);
 
-  // Same conversion as convertCapitalGain but applied to an arbitrary amount
-  // denominated in the entry's account currency (e.g. start/end market values).
+  // The same reading for an entry's start or end market value.
   const convertFromAccountCurrency = useCallback(
-    (amount: number | null, accountCurrencyCode: string | null): number | null => {
-      if (amount === null) return null;
-      if (isSingleAccount) return amount;
-      return convertToDefault(amount, accountCurrencyCode || defaultCurrency);
+    (entry: CapitalGainEntry, field: 'startValue' | 'endValue'): number | null => {
+      if (entry[field] === null) return null;
+      if (isSingleAccount) return entry[field];
+      return entry.inReportingCurrency?.[field] ?? null;
     },
-    [isSingleAccount, defaultCurrency, convertToDefault],
+    [isSingleAccount],
   );
 
   // A sum with an unknown component is unknown. Used everywhere a nullable
@@ -360,6 +443,20 @@ export function DividendIncomeReport() {
   const addOrUnknown = (a: number | null, b: number | null): number | null =>
     a === null || b === null ? null : a + b;
 
+  /**
+   * The one place this report decides unknown-versus-zero, so a cell renders
+   * `{fmtValue(x)}` and never a branch of its own.
+   *
+   * `null` is "the server could not work this out" and draws the em dash; every
+   * other number, `0` included, is a measured figure and is formatted. The
+   * tables used to ask `x !== 0 ? fmtValue(x) : '-'`, which had it exactly
+   * backwards for a real zero: an account that opened the month at nothing, or
+   * a day that paid no dividend, is a KNOWN 0.00 and was drawn as the unknown
+   * marker -- so a start value nobody could compute and a start value of zero
+   * read the same, in the report whose whole subject is which of those it is.
+   * The test is `null`, never `!== 0`, `> 0` or truthiness (`Number(null)` is
+   * `0`, which is how the two get folded together).
+   */
   const fmtValue = useCallback((value: number | null): string => {
     if (value === null) return '\u2014';
     if (isForeign) {
@@ -418,7 +515,7 @@ export function DividendIncomeReport() {
     filteredTransactions.forEach((tx) => {
       const bucket = getOrCreateBucket(parseLocalDate(tx.transactionDate));
       const contribution = getTxAmount(tx);
-      switch (baseInvestmentAction(tx.action)) {
+      switch (incomeBaseKind(tx.action)) {
         case 'DIVIDEND':
           bucket.dividends = addOrUnknown(bucket.dividends, contribution);
           break;
@@ -444,11 +541,11 @@ export function DividendIncomeReport() {
       // mark-to-market snapshot at each month boundary.
       bucket.startValue = addOrUnknown(
         bucket.startValue,
-        convertFromAccountCurrency(entry.startValue, entry.accountCurrencyCode),
+        convertFromAccountCurrency(entry, 'startValue'),
       );
       bucket.endValue = addOrUnknown(
         bucket.endValue,
-        convertFromAccountCurrency(entry.endValue, entry.accountCurrencyCode),
+        convertFromAccountCurrency(entry, 'endValue'),
       );
     });
 
@@ -483,7 +580,7 @@ export function DividendIncomeReport() {
       const txDate = parseLocalDate(tx.transactionDate);
       const bucket = getOrCreateBucket(tx.transactionDate, txDate);
       const contribution = getTxAmount(tx);
-      switch (baseInvestmentAction(tx.action)) {
+      switch (incomeBaseKind(tx.action)) {
         case 'DIVIDEND':
           bucket.dividends = addOrUnknown(bucket.dividends, contribution);
           break;
@@ -509,11 +606,11 @@ export function DividendIncomeReport() {
       bucket.total = addOrUnknown(bucket.total, gain);
       bucket.startValue = addOrUnknown(
         bucket.startValue,
-        convertFromAccountCurrency(entry.startValue, entry.accountCurrencyCode),
+        convertFromAccountCurrency(entry, 'startValue'),
       );
       bucket.endValue = addOrUnknown(
         bucket.endValue,
-        convertFromAccountCurrency(entry.endValue, entry.accountCurrencyCode),
+        convertFromAccountCurrency(entry, 'endValue'),
       );
     });
 
@@ -582,7 +679,7 @@ export function DividendIncomeReport() {
       const name = tx.security?.name || 'Unknown Security';
       const bucket = getOrCreateBucket(symbol, name);
       const contribution = getTxAmount(tx);
-      switch (baseInvestmentAction(tx.action)) {
+      switch (incomeBaseKind(tx.action)) {
         case 'DIVIDEND':
           bucket.dividends = addOrUnknown(bucket.dividends, contribution);
           break;
@@ -729,13 +826,13 @@ export function DividendIncomeReport() {
     // components could not be converted -- one missing rate makes the whole
     // figure unknown, the same rule the monthly and daily buckets follow.
     const dividends = filteredTransactions
-      .filter((t) => baseInvestmentAction(t.action) === 'DIVIDEND')
+      .filter((t) => incomeBaseKind(t.action) === 'DIVIDEND')
       .reduce<number | null>((sum, t) => addOrUnknown(sum, getTxAmount(t)), 0);
     const interest = filteredTransactions
-      .filter((t) => baseInvestmentAction(t.action) === 'INTEREST')
+      .filter((t) => incomeBaseKind(t.action) === 'INTEREST')
       .reduce<number | null>((sum, t) => addOrUnknown(sum, getTxAmount(t)), 0);
     const manualCapitalGains = filteredTransactions
-      .filter((t) => baseInvestmentAction(t.action) === 'CAPITAL_GAIN')
+      .filter((t) => incomeBaseKind(t.action) === 'CAPITAL_GAIN')
       .reduce<number | null>((sum, t) => addOrUnknown(sum, getTxAmount(t)), 0);
     const periodCapitalGains = filteredCapitalGains.reduce<number | null>(
       (sum, entry) => addOrUnknown(sum, convertCapitalGain(entry)),
@@ -760,8 +857,8 @@ export function DividendIncomeReport() {
 
   // '' (an empty cell), not 0, for an unknown value: a spreadsheet summing the
   // column must not absorb an unknown as a zero.
-  const round4 = (n: number | null): number | '' =>
-    n === null ? '' : Math.round(n * 10000) / 10000;
+  const csvMoney = (n: number | null): number | '' =>
+    n === null ? '' : roundMoney(n);
 
   const handleExportCsv = () => {
     const accountLabel = selectedAccount
@@ -784,10 +881,10 @@ export function DividendIncomeReport() {
       const rows = securityData.map((s) => [
         s.symbol,
         s.name,
-        round4(s.dividends),
-        round4(s.interest),
-        round4(s.capitalGains),
-        round4(s.total),
+        csvMoney(s.dividends),
+        csvMoney(s.interest),
+        csvMoney(s.capitalGains),
+        csvMoney(s.total),
         currencyCode,
       ]);
       exportToCsv(`${filenameBase}-by-security-${scope}`, headers, rows);
@@ -801,12 +898,12 @@ export function DividendIncomeReport() {
       if (visibleSeries.capitalGains) headers.push(t('dividendIncome.colCapitalGains'));
       headers.push(t('dividendIncome.colTotal'), t('dividendIncome.colCurrency'));
       const rows = displayedDailyData.map((row) => {
-        const out: (string | number)[] = [row.date, round4(row.startValue), round4(row.endValue)];
-        if (visibleSeries.dividends) out.push(round4(row.dividends));
-        if (visibleSeries.interest) out.push(round4(row.interest));
-        if (visibleSeries.capitalGains) out.push(round4(row.capitalGains));
+        const out: (string | number)[] = [row.date, csvMoney(row.startValue), csvMoney(row.endValue)];
+        if (visibleSeries.dividends) out.push(csvMoney(row.dividends));
+        if (visibleSeries.interest) out.push(csvMoney(row.interest));
+        if (visibleSeries.capitalGains) out.push(csvMoney(row.capitalGains));
         out.push(
-          round4(visibleTotal(row.dividends, row.interest, row.capitalGains)),
+          csvMoney(visibleTotal(row.dividends, row.interest, row.capitalGains)),
           currencyCode,
         );
         return out;
@@ -826,14 +923,14 @@ export function DividendIncomeReport() {
     const rows = monthlyData.map((row) => {
       const out: (string | number)[] = [
         row.month,
-        round4(row.startValue),
-        round4(row.endValue),
+        csvMoney(row.startValue),
+        csvMoney(row.endValue),
       ];
-      if (visibleSeries.dividends) out.push(round4(row.dividends));
-      if (visibleSeries.interest) out.push(round4(row.interest));
-      if (visibleSeries.capitalGains) out.push(round4(row.capitalGains));
+      if (visibleSeries.dividends) out.push(csvMoney(row.dividends));
+      if (visibleSeries.interest) out.push(csvMoney(row.interest));
+      if (visibleSeries.capitalGains) out.push(csvMoney(row.capitalGains));
       out.push(
-        round4(visibleTotal(row.dividends, row.interest, row.capitalGains)),
+        csvMoney(visibleTotal(row.dividends, row.interest, row.capitalGains)),
         currencyCode,
       );
       return out;
@@ -977,32 +1074,6 @@ export function DividendIncomeReport() {
     capitalGains: t('dividendIncome.seriesCapitalGains'),
   };
 
-  const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string; dataKey?: string }>; label?: string }) => {
-    if (active && payload && payload.length) {
-      // Recharts can pass a Cell-coloured payload entry; surface signed values
-      // and use the original series colour rather than the per-bar Cell colour.
-      return (
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3">
-          <p className="font-medium text-gray-900 dark:text-gray-100 mb-1">{label}</p>
-          {payload.map((entry, index) => {
-            const seriesKey = entry.dataKey as SeriesKey | undefined;
-            const colour = seriesKey
-              ? entry.value < 0
-                ? SERIES_COLORS[seriesKey].negative
-                : SERIES_COLORS[seriesKey].positive
-              : entry.color;
-            return (
-              <p key={index} className="text-sm" style={{ color: colour }}>
-                {entry.name}: {fmtValue(entry.value)}
-              </p>
-            );
-          })}
-        </div>
-      );
-    }
-    return null;
-  };
-
   if (error) {
     return <ReportError onRetry={reloadAll} />;
   }
@@ -1098,132 +1169,122 @@ export function DividendIncomeReport() {
             value={dateRange}
             onChange={setDateRange}
           />
-          <div className="ml-auto shrink-0 flex gap-2 items-center">
+          {/* The three view buttons wrap onto their own line on a phone: this
+              group used to hold the refresh and the export too, unwrapped, and
+              the export was pushed past the right edge of the card. */}
+          <div
+            className={`${SEGMENTED_GROUP_CLASS} flex-wrap sm:ml-auto sm:shrink-0`}
+            role="group"
+            aria-label={t('reportPage.viewLabel')}
+          >
             <button
+              type="button"
               onClick={() => setViewType('monthly')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                viewType === 'monthly'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-              }`}
+              aria-pressed={viewType === 'monthly'}
+              className={segmentClass(viewType === 'monthly')}
             >
               {t('dividendIncome.viewMonthly')}
             </button>
             <button
+              type="button"
               onClick={() => setViewType('daily')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                viewType === 'daily'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-              }`}
+              aria-pressed={viewType === 'daily'}
+              className={segmentClass(viewType === 'daily')}
             >
               {t('dividendIncome.viewDaily')}
             </button>
             <button
+              type="button"
               onClick={() => setViewType('bySecurity')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                viewType === 'bySecurity'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-              }`}
+              aria-pressed={viewType === 'bySecurity'}
+              className={segmentClass(viewType === 'bySecurity')}
             >
               {t('dividendIncome.viewBySecurity')}
             </button>
-            <RefreshPricesButton onRefreshComplete={reloadAll} />
-            <ExportDropdown
-              onExportPdf={handleExportPdf}
-              onExportCsv={isTableView ? handleExportCsv : undefined}
-            />
           </div>
         </div>
-        {/* Monthly/Daily view sub-controls: chart/table switch + series toggles */}
-        {(viewType === 'monthly' || viewType === 'daily') && (
-          <div className="flex flex-wrap gap-4 mt-3 items-center">
-            <div
-              className="inline-flex rounded-md border border-gray-200 dark:border-gray-600 overflow-hidden text-sm"
-              role="group"
-              aria-label="Monthly display mode"
-            >
-              <button
-                onClick={() => setMonthlyDisplay('chart')}
-                className={`px-3 py-1 font-medium transition-colors ${
-                  monthlyDisplay === 'chart'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                }`}
-              >
-                {t('dividendIncome.displayChart')}
-              </button>
-              <button
-                onClick={() => setMonthlyDisplay('table')}
-                className={`px-3 py-1 font-medium transition-colors ${
-                  monthlyDisplay === 'table'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                }`}
-              >
-                {t('dividendIncome.displayTable')}
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2 items-center">
-              <span className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                {t('dividendIncome.showLabel')}
-              </span>
-              {(Object.keys(SERIES_COLORS) as SeriesKey[]).map((key) => {
-                const active = visibleSeries[key];
-                return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => toggleSeries(key)}
-                    aria-pressed={active}
-                    className={`px-3 py-1 text-sm font-medium rounded-md border transition-colors ${
-                      active
-                        ? 'text-white border-transparent'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-600'
-                    }`}
-                    style={
-                      active
-                        ? { backgroundColor: SERIES_COLORS[key].positive }
-                        : undefined
-                    }
-                  >
-                    {seriesLabels[key]}
-                  </button>
-                );
-              })}
-            </div>
-            {viewType === 'daily' && (
-              <button
-                type="button"
-                role="switch"
-                aria-checked={hideInactiveDays}
-                onClick={() => setHideInactiveDays((v) => !v)}
-                className="ml-auto flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400"
-              >
-                <span
-                  className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ${
-                    hideInactiveDays ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'
-                  }`}
+        {/* The chart/table switch and the series toggles are selectors too, so
+            the actions row sits BELOW them rather than in the row above: on a
+            phone the refresh and the export are the last thing in the card.
+            The row is always rendered, because the actions are -- the
+            sub-controls inside it belong to the monthly and daily views. */}
+        <div className="mt-3 flex flex-wrap gap-4 items-center">
+          {(viewType === 'monthly' || viewType === 'daily') && (
+            <>
+              <div role="group" aria-label={t('dividendIncome.monthlyDisplayModeLabel')}>
+                <ChartViewToggle
+                  value={monthlyDisplay === 'chart' ? 'bar' : 'table'}
+                  onChange={(v) => setMonthlyDisplay(v === 'table' ? 'table' : 'chart')}
+                  options={['bar', 'table']}
+                />
+              </div>
+              <div className="flex flex-wrap gap-2 items-center">
+                <span className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                  {t('dividendIncome.showLabel')}
+                </span>
+                {(Object.keys(SERIES_COLORS) as SeriesKey[]).map((key) => {
+                  const active = visibleSeries[key];
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => toggleSeries(key)}
+                      aria-pressed={active}
+                      className={`px-3 py-1 text-sm font-medium rounded-md border transition-colors ${
+                        active
+                          ? 'text-white border-transparent'
+                          : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400 border-gray-200 dark:border-gray-600'
+                      }`}
+                      style={
+                        active
+                          ? { backgroundColor: SERIES_COLORS[key].positive }
+                          : undefined
+                      }
+                    >
+                      {seriesLabels[key]}
+                    </button>
+                  );
+                })}
+              </div>
+              {viewType === 'daily' && (
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={hideInactiveDays}
+                  onClick={() => setHideInactiveDays((v) => !v)}
+                  className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400 sm:ml-auto"
                 >
                   <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${
-                      hideInactiveDays ? 'translate-x-4' : 'translate-x-0'
+                    className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border-2 border-transparent transition-colors duration-200 ${
+                      hideInactiveDays ? 'bg-blue-600' : 'bg-gray-200 dark:bg-gray-600'
                     }`}
-                  />
-                </span>
-                {t('dividendIncome.hideInactiveDays')}
-              </button>
-            )}
-          </div>
-        )}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform duration-200 ${
+                        hideInactiveDays ? 'translate-x-4' : 'translate-x-0'
+                      }`}
+                    />
+                  </span>
+                  {t('dividendIncome.hideInactiveDays')}
+                </button>
+              )}
+            </>
+          )}
+          <ReportToolbarActions
+            onRefreshComplete={reloadAll}
+            onExportPdf={handleExportPdf}
+            onExportCsv={isTableView ? handleExportCsv : undefined}
+            // Both requests feed the export; the daily one only its own view.
+            disabled={
+              isLoading || !!error || (viewType === 'daily' && (isDailyLoading || !!dailyError))
+            }
+          />
+        </div>
       </div>
 
       {filteredTransactions.length === 0 && filteredCapitalGains.length === 0 && filteredDailyCapitalGains.length === 0 ? (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6">
-          <p className="text-gray-500 dark:text-gray-400 text-center py-8">
-            {t('dividendIncome.empty')}
-          </p>
+          <EmptyState title={t('dividendIncome.empty')} />
         </div>
       ) : viewType === 'monthly' && monthlyDisplay === 'chart' ? (
         /* Monthly Chart */
@@ -1234,10 +1295,10 @@ export function DividendIncomeReport() {
           <div className="h-80">
             <ResponsiveContainer width="100%" height="100%" minWidth={0}>
               <BarChart data={monthlyData}>
-                <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+                <CartesianGrid {...CHART_GRID_PROPS} />
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                 <YAxis tickFormatter={formatCurrencyAxis} />
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip content={<DividendIncomeTooltip fmtValue={fmtValue} />} />
                 <Legend />
                 <ReferenceLine y={0} stroke={chartColors.axis} />
                 {visibleSeries.dividends && (
@@ -1281,6 +1342,17 @@ export function DividendIncomeReport() {
         </div>
       ) : viewType === 'monthly' ? (
         /* Monthly Table */
+        /* Deliberately NOT phone-wrapped, and this is the reason: the column
+           count is decided at runtime. `visibleSeries` toggles the dividends,
+           interest and capital-gains columns independently, so the row is
+           anywhere from four to seven cells wide -- and the phone card is a
+           `grid grid-cols-N` with per-cell `col-start`/`row-start`, which is a
+           fixed N by construction. Converting it means either a class computed
+           from the toggles (four grids to measure, and Tailwind emits only the
+           classes it can see in the source) or a wrapper that re-derives the
+           placements per combination. Neither is a conversion; both are a
+           different component. Until then the phone gets the horizontal scroll,
+           which is honest. Same for the daily table below. */
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -1381,19 +1453,19 @@ export function DividendIncomeReport() {
                         {row.label}
                       </td>
                       <td className="px-4 py-3 text-right text-sm text-gray-700 dark:text-gray-300">
-                        {row.startValue !== 0 ? fmtValue(row.startValue) : '-'}
+                        {fmtValue(row.startValue)}
                       </td>
                       <td className="px-4 py-3 text-right text-sm text-gray-700 dark:text-gray-300">
-                        {row.endValue !== 0 ? fmtValue(row.endValue) : '-'}
+                        {fmtValue(row.endValue)}
                       </td>
                       {visibleSeries.dividends && (
                         <td className="px-4 py-3 text-right text-sm text-green-600 dark:text-green-400">
-                          {row.dividends !== 0 ? fmtValue(row.dividends) : '-'}
+                          {fmtValue(row.dividends)}
                         </td>
                       )}
                       {visibleSeries.interest && (
                         <td className="px-4 py-3 text-right text-sm text-blue-600 dark:text-blue-400">
-                          {row.interest !== 0 ? fmtValue(row.interest) : '-'}
+                          {fmtValue(row.interest)}
                         </td>
                       )}
                       {visibleSeries.capitalGains && (
@@ -1404,17 +1476,13 @@ export function DividendIncomeReport() {
                               : 'text-purple-600 dark:text-purple-400'
                           }`}
                         >
-                          {row.capitalGains !== 0 ? fmtValue(row.capitalGains) : '-'}
+                          {fmtValue(row.capitalGains)}
                         </td>
                       )}
                       <td
-                        className={`px-4 py-3 text-right text-sm font-medium ${
-                          rowTotal !== null && rowTotal < 0
-                            ? 'text-red-600 dark:text-red-400'
-                            : 'text-gray-900 dark:text-gray-100'
-                        }`}
+                        className={`px-4 py-3 text-right text-sm font-medium ${rowTotal === null ? 'text-gray-900 dark:text-gray-100' : balanceColor(rowTotal)}`}
                       >
-                        {rowTotal !== 0 ? fmtValue(rowTotal) : '-'}
+                        {fmtValue(rowTotal)}
                       </td>
                     </tr>
                   );
@@ -1430,17 +1498,15 @@ export function DividendIncomeReport() {
             {t('dividendIncome.dailyChartTitle')}
           </h3>
           {displayedDailyData.length === 0 ? (
-            <p className="text-gray-500 dark:text-gray-400 text-center py-8">
-              {t('dividendIncome.noDailyData')}
-            </p>
+            <EmptyState title={t('dividendIncome.noDailyData')} />
           ) : (
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <BarChart data={displayedDailyData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+                  <CartesianGrid {...CHART_GRID_PROPS} />
                   <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                   <YAxis tickFormatter={formatCurrencyAxis} />
-                  <Tooltip content={<CustomTooltip />} />
+                  <Tooltip content={<DividendIncomeTooltip fmtValue={fmtValue} />} />
                   <Legend />
                   <ReferenceLine y={0} stroke={chartColors.axis} />
                   {visibleSeries.dividends && (
@@ -1485,6 +1551,8 @@ export function DividendIncomeReport() {
         </div>
       ) : viewType === 'daily' ? (
         /* Daily Table */
+        /* Not phone-wrapped either, for the same runtime-variable column count
+           as the monthly table above. */
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -1492,9 +1560,7 @@ export function DividendIncomeReport() {
             </h3>
           </div>
           {displayedDailyData.length === 0 ? (
-            <p className="text-gray-500 dark:text-gray-400 text-center py-8">
-              {t('dividendIncome.noDailyData')}
-            </p>
+            <EmptyState title={t('dividendIncome.noDailyData')} />
           ) : (
             <div className="overflow-x-auto">
               <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -1590,19 +1656,19 @@ export function DividendIncomeReport() {
                           {row.label}
                         </td>
                         <td className="px-4 py-3 text-right text-sm text-gray-700 dark:text-gray-300">
-                          {row.startValue !== 0 ? fmtValue(row.startValue) : '-'}
+                          {fmtValue(row.startValue)}
                         </td>
                         <td className="px-4 py-3 text-right text-sm text-gray-700 dark:text-gray-300">
-                          {row.endValue !== 0 ? fmtValue(row.endValue) : '-'}
+                          {fmtValue(row.endValue)}
                         </td>
                         {visibleSeries.dividends && (
                           <td className="px-4 py-3 text-right text-sm text-green-600 dark:text-green-400">
-                            {row.dividends !== 0 ? fmtValue(row.dividends) : '-'}
+                            {fmtValue(row.dividends)}
                           </td>
                         )}
                         {visibleSeries.interest && (
                           <td className="px-4 py-3 text-right text-sm text-blue-600 dark:text-blue-400">
-                            {row.interest !== 0 ? fmtValue(row.interest) : '-'}
+                            {fmtValue(row.interest)}
                           </td>
                         )}
                         {visibleSeries.capitalGains && (
@@ -1613,17 +1679,13 @@ export function DividendIncomeReport() {
                                 : 'text-purple-600 dark:text-purple-400'
                             }`}
                           >
-                            {row.capitalGains !== 0 ? fmtValue(row.capitalGains) : '-'}
+                            {fmtValue(row.capitalGains)}
                           </td>
                         )}
                         <td
-                          className={`px-4 py-3 text-right text-sm font-medium ${
-                            rowTotal !== null && rowTotal < 0
-                              ? 'text-red-600 dark:text-red-400'
-                              : 'text-gray-900 dark:text-gray-100'
-                          }`}
+                          className={`px-4 py-3 text-right text-sm font-medium ${rowTotal === null ? 'text-gray-900 dark:text-gray-100' : balanceColor(rowTotal)}`}
                         >
-                          {rowTotal !== 0 ? fmtValue(rowTotal) : '-'}
+                          {fmtValue(rowTotal)}
                         </td>
                       </tr>
                     );
@@ -1641,80 +1703,84 @@ export function DividendIncomeReport() {
               {t('dividendIncome.incomeBySecurityTitle')}
             </h3>
           </div>
+          {/* Below `sm` the table becomes a block and each row wraps into a
+              two-column, three-line grid card so all five columns fit a phone
+              without a horizontal scroll: line 1 is the security identity and
+              its Dividends; line 2 is Interest and Capital Gains; line 3 is the
+              Total, spanning both tracks as the row's headline. Nothing is
+              dropped, and no figure is truncated -- a money value never wraps
+              (`FIGURE_CELL`). From `sm` up it is the ordinary table, resolving
+              to today's output in every respect but one (each cell restores its
+              own `sm:px-4 sm:py-3 sm:text-sm`; the identity cell keeps its 16px
+              symbol by carrying no `sm:text-*`; `FIGURE_CELL`'s
+              `whitespace-nowrap` is unprefixed, so it applies at 640px+ too,
+              where the base cell carried no `white-space` class -- deliberate,
+              and the constant says why), and the sort controls survive
+              as their own phone-only header row because the column header row
+              that carries them on desktop is hidden there. Restyling `display`
+              strips the implicit table semantics below `sm`, so the roles are
+              restated and every bare figure carries a `CellLabel` naming its
+              column; the symbol names itself. */}
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-900/50">
-                <tr>
-                  <SortableHeader<SecurityIncomeSortField>
-                    field="symbol"
-                    sortField={securitySort.sortField}
-                    sortDirection={securitySort.sortDirection}
-                    onSort={securitySort.handleSort}
-                    className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
-                  >
-                    {t('dividendIncome.colSecurity')}
-                  </SortableHeader>
-                  <SortableHeader<SecurityIncomeSortField>
-                    field="dividends"
-                    sortField={securitySort.sortField}
-                    sortDirection={securitySort.sortDirection}
-                    onSort={securitySort.handleSort}
-                    align="right"
-                    className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
-                  >
-                    {t('dividendIncome.colDividends')}
-                  </SortableHeader>
-                  <SortableHeader<SecurityIncomeSortField>
-                    field="interest"
-                    sortField={securitySort.sortField}
-                    sortDirection={securitySort.sortDirection}
-                    onSort={securitySort.handleSort}
-                    align="right"
-                    className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
-                  >
-                    {t('dividendIncome.colInterest')}
-                  </SortableHeader>
-                  <SortableHeader<SecurityIncomeSortField>
-                    field="capitalGains"
-                    sortField={securitySort.sortField}
-                    sortDirection={securitySort.sortDirection}
-                    onSort={securitySort.handleSort}
-                    align="right"
-                    className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
-                  >
-                    {t('dividendIncome.colCapitalGains')}
-                  </SortableHeader>
-                  <SortableHeader<SecurityIncomeSortField>
-                    field="total"
-                    sortField={securitySort.sortField}
-                    sortDirection={securitySort.sortDirection}
-                    onSort={securitySort.handleSort}
-                    align="right"
-                    className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
-                  >
-                    {t('dividendIncome.colTotal')}
-                  </SortableHeader>
+            <table role="table" className="block min-w-full divide-y divide-gray-200 dark:divide-gray-700 sm:table">
+              <thead role="rowgroup" className="block bg-gray-50 dark:bg-gray-900/50 sm:table-header-group">
+                {/* Phone sort strip: the same five controls, wrapped. */}
+                <tr role="row" className="flex flex-wrap gap-x-2 gap-y-1 px-2 py-2 sm:hidden">
+                  {securitySortColumns.map((column) => (
+                    <SortableHeader<SecurityIncomeSortField>
+                      key={column.field}
+                      field={column.field}
+                      sortField={securitySort.sortField}
+                      sortDirection={securitySort.sortDirection}
+                      onSort={securitySort.handleSort}
+                      className={PHONE_HEADER_CLASS}
+                    >
+                      {column.label}
+                    </SortableHeader>
+                  ))}
+                </tr>
+                <tr role="row" className="hidden sm:table-row">
+                  {securitySortColumns.map((column) => (
+                    <SortableHeader<SecurityIncomeSortField>
+                      key={column.field}
+                      field={column.field}
+                      sortField={securitySort.sortField}
+                      sortDirection={securitySort.sortDirection}
+                      onSort={securitySort.handleSort}
+                      align={column.align}
+                      className={HEADER_CLASS}
+                    >
+                      {column.label}
+                    </SortableHeader>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody role="rowgroup" className="block divide-y divide-gray-200 dark:divide-gray-700 sm:table-row-group">
                 {sortedSecurityData.map((security) => (
-                  <tr key={security.symbol} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                    <td className="px-4 py-3">
+                  <tr
+                    key={security.symbol}
+                    role="row"
+                    className="grid grid-cols-2 items-start gap-x-3 gap-y-1.5 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 sm:table-row sm:p-0"
+                  >
+                    {/* Security: the row identity, wrapping unclamped. No caption. */}
+                    <td role="cell" className="col-start-1 row-start-1 min-w-0 p-0 sm:table-cell sm:px-4 sm:py-3">
                       <div className="font-medium text-gray-900 dark:text-gray-100">
                         {security.symbol}
                       </div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">
+                      <div className="break-words text-sm text-gray-500 dark:text-gray-400 sm:break-normal">
                         {security.name}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-right text-sm text-green-600 dark:text-green-400">
+                    <td role="cell" className={`col-start-2 row-start-1 text-green-600 dark:text-green-400 ${FIGURE_CELL}`}>
+                      <CellLabel className={CAPTION_CLASS}>{securityColumns.dividends.label}</CellLabel>
                       {security.dividends === null
                         ? fmtValue(null)
                         : security.dividends > 0
                           ? fmtValue(security.dividends)
                           : '-'}
                     </td>
-                    <td className="px-4 py-3 text-right text-sm text-blue-600 dark:text-blue-400">
+                    <td role="cell" className={`col-start-1 row-start-2 text-blue-600 dark:text-blue-400 ${FIGURE_CELL}`}>
+                      <CellLabel className={CAPTION_CLASS}>{securityColumns.interest.label}</CellLabel>
                       {security.interest === null
                         ? fmtValue(null)
                         : security.interest > 0
@@ -1722,21 +1788,21 @@ export function DividendIncomeReport() {
                           : '-'}
                     </td>
                     <td
-                      className={`px-4 py-3 text-right text-sm ${
+                      role="cell"
+                      className={`col-start-2 row-start-2 ${
                         security.capitalGains !== null && security.capitalGains < 0
                           ? 'text-red-600 dark:text-red-400'
                           : 'text-purple-600 dark:text-purple-400'
-                      }`}
+                      } ${FIGURE_CELL}`}
                     >
-                      {security.capitalGains !== 0 ? fmtValue(security.capitalGains) : '-'}
+                      <CellLabel className={CAPTION_CLASS}>{securityColumns.capitalGains.label}</CellLabel>
+                      {fmtValue(security.capitalGains)}
                     </td>
                     <td
-                      className={`px-4 py-3 text-right text-sm font-medium ${
-                        security.total !== null && security.total < 0
-                          ? 'text-red-600 dark:text-red-400'
-                          : 'text-gray-900 dark:text-gray-100'
-                      }`}
+                      role="cell"
+                      className={`col-start-1 col-span-2 row-start-3 font-medium ${security.total === null ? 'text-gray-900 dark:text-gray-100' : balanceColor(security.total)} ${FIGURE_CELL}`}
                     >
+                      <CellLabel className={CAPTION_CLASS}>{securityColumns.total.label}</CellLabel>
                       {fmtValue(security.total)}
                     </td>
                   </tr>

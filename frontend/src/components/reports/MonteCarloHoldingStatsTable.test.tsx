@@ -5,19 +5,31 @@ import { HoldingStatsTable } from './MonteCarloHoldingStatsTable';
 const fmt = (v: number, currencyCode?: string) =>
   `${v.toFixed(0)} ${currencyCode ?? 'DEFAULT'}`;
 
+/**
+ * A deterministic stand-in for `useNumberFormat()`'s bundle. These are unit
+ * tests of the pure helpers' branching, not of locale rendering -- the locale
+ * cases live in `src/hooks/useNumberFormat.test.ts` and the component locale
+ * regressions in `SecurityList.test.tsx`'s "number locale" block.
+ */
+const fmts = {
+  formatCurrency: fmt,
+  formatNumber: (v: number, d = 2) => v.toFixed(d),
+  formatPercent: (v: number, d = 2) => `${v.toFixed(d)}%`,
+};
+
 describe('HoldingStatsTable', () => {
   it('renders loading state', () => {
-    render(<HoldingStatsTable data={null} loading={true} formatCurrency={fmt} />);
+    render(<HoldingStatsTable data={null} loading={true} formatters={fmts} />);
     expect(screen.getByText(/Loading holding stats/i)).toBeInTheDocument();
   });
 
   it('renders empty state when data is null', () => {
-    render(<HoldingStatsTable data={null} loading={false} formatCurrency={fmt} />);
+    render(<HoldingStatsTable data={null} loading={false} formatters={fmts} />);
     expect(screen.getByText(/Select one or more accounts/i)).toBeInTheDocument();
   });
 
   it('renders empty state when data is empty array', () => {
-    render(<HoldingStatsTable data={[]} loading={false} formatCurrency={fmt} />);
+    render(<HoldingStatsTable data={[]} loading={false} formatters={fmts} />);
     expect(screen.getByText(/Select one or more accounts/i)).toBeInTheDocument();
   });
 
@@ -33,12 +45,41 @@ describe('HoldingStatsTable', () => {
           },
         ] as any}
         loading={false}
-        formatCurrency={fmt}
+        formatters={fmts}
       />,
     );
     expect(screen.getByText('My Brokerage')).toBeInTheDocument();
     expect(screen.getByText(/USD/)).toBeInTheDocument();
     expect(screen.getByText(/No active holdings/)).toBeInTheDocument();
+  });
+
+  it('shows a dash, not a guessed currency, when the security has none', () => {
+    render(
+      <HoldingStatsTable
+        data={[
+          {
+            accountId: 'a',
+            accountName: 'Brokerage',
+            currencyCode: 'USD',
+            holdings: [
+              {
+                symbol: 'XYZ',
+                name: 'No currency',
+                currencyCode: null,
+                quantity: 5,
+                marketValue: 777,
+                yearsObserved: 0,
+                meanReturn: null,
+                volatility: null,
+              },
+            ],
+          },
+        ]}
+        loading={false}
+        formatters={fmts}
+      />,
+    );
+    expect(screen.queryByText(/777/)).not.toBeInTheDocument();
   });
 
   it('renders holdings rows including null mean/volatility', () => {
@@ -56,7 +97,7 @@ describe('HoldingStatsTable', () => {
           },
         ] as any}
         loading={false}
-        formatCurrency={fmt}
+        formatters={fmts}
       />,
     );
     expect(screen.getByText('AAPL')).toBeInTheDocument();
@@ -97,7 +138,7 @@ describe('HoldingStatsTable', () => {
       <HoldingStatsTable
         data={data as never}
         loading={false}
-        formatCurrency={fmt}
+        formatters={fmts}
       />,
     );
 
@@ -123,7 +164,7 @@ describe('HoldingStatsTable', () => {
           },
         ] as any}
         loading={false}
-        formatCurrency={fmt}
+        formatters={fmts}
       />,
     );
 

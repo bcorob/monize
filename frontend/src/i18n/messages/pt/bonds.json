@@ -1,0 +1,100 @@
+{
+  "entry": {
+    "history": "Histórico das condições de {program}"
+  },
+  "offer": {
+    "loading": "A carregar as obrigações à venda...",
+    "loadFailed": "Não foi possível carregar as obrigações à venda.",
+    "retry": "Tentar novamente",
+    "empty": "Hoje nenhuma série está à venda.",
+    "asOf": "À venda em {date}. Cada valor refere-se a uma obrigação comprada hoje e mantida até ao vencimento.",
+    "comparisonNote": "A rendibilidade anualizada é um valor de comparação entre produtos de prazos diferentes, não uma promessa do que irá ganhar.",
+    "couponsNote": "Cupões não reinvestidos: numa obrigação que paga cupões, o valor no vencimento soma todos os cupões pagos.",
+    "projected": "Projetado",
+    "projectedTitle": "Este valor assenta num valor de referência assumido, e não apenas em taxas publicadas.",
+    "assumptions": {
+      "title": "Pressupostos",
+      "intro": "Os períodos que ainda não começaram são avaliados com estes valores de referência. Altere um para ver o efeito em cada linha.",
+      "label": "{benchmark} (%)",
+      "latest": "Último valor publicado: {value} ({observation})",
+      "reset": "Usar os últimos valores publicados",
+      "updating": "A atualizar os valores..."
+    },
+    "columns": {
+      "series": "Série",
+      "saleWindow": "À venda",
+      "length": "Prazo",
+      "firstPeriodRate": "Primeiro período",
+      "rule": "Taxa",
+      "capitalization": "Juros",
+      "redemption": "Reembolso antecipado",
+      "maturityValue": "Valor no vencimento",
+      "totalReturn": "Rendibilidade total",
+      "annualizedReturn": "Rendibilidade anualizada",
+      "terms": "Condições"
+    },
+    "saleWindowValue": "De {from} a {to}",
+    "lengthValue": "{months, plural, one {# mês} other {# meses}}",
+    "lengthDaysValue": "{days, plural, one {# dia} other {# dias}}",
+    "rule": {
+      "fixed": "Fixa de {rate} ao ano",
+      "benchmark": "{benchmark} + {addend}",
+      "floor": "Piso da referência {floor}",
+      "daily": "Diário: {benchmark} + {addend}",
+      "discount": "Desconto sobre o valor nominal"
+    },
+    "capitalization": {
+      "NONE": "Pagos em cada período",
+      "COMPOUND_AT_PERIOD_END": "Capitalizados no fim de cada período"
+    },
+    "redemption": {
+      "none": "Apenas no vencimento",
+      "onDemand": "A pedido",
+      "fee": "Comissão de {amount} por obrigação",
+      "forfeit": "Os juros acumulados no período perdem-se"
+    },
+    "couponsNotReinvested": "Cupões não reinvestidos"
+  },
+  "history": {
+    "loading": "A carregar o histórico...",
+    "loadFailed": "Não foi possível carregar o histórico.",
+    "retry": "Tentar novamente",
+    "empty": "Ainda não há nenhuma série deste produto guardada.",
+    "coverage": "O catálogo abrange de {from} a {to}.",
+    "rateChartTitle": "Taxa do primeiro período e margem por mês de venda",
+    "feeChartTitle": "Comissão de reembolso antecipado por mês de venda",
+    "rate": "Taxa do primeiro período",
+    "rateChartNote": "Nas obrigações de taxa fixa, a linha mostra a taxa anual.",
+    "addend": "Margem ou spread",
+    "fee": "Comissão de reembolso antecipado",
+    "gapsNote": "Um mês sem série guardada é uma interrupção na linha, nunca um valor deduzido dos meses vizinhos.",
+    "missingTitle": "Meses em falta no catálogo ({count})",
+    "noMissing": "Não falta nenhum mês entre a primeira e a última série guardada.",
+    "tableTitle": "Todas as séries guardadas",
+    "groupCount": "{count} série(s)",
+    "unknownYear": "Data de venda desconhecida",
+    "columns": {
+      "series": "Série",
+      "saleWindow": "À venda",
+      "rate": "Taxa do primeiro período ou taxa anual",
+      "addend": "Margem ou spread",
+      "fee": "Comissão de reembolso antecipado",
+      "floor": "Piso do montante reembolsado",
+      "version": "Versão das condições",
+      "source": "Fonte"
+    },
+    "floor": {
+      "ALL_PERIODS": "Todos os períodos",
+      "FIRST_PERIOD": "Apenas o primeiro período"
+    },
+    "none": "Nenhuma",
+    "held": "Em carteira"
+  },
+  "refreshProgress": {
+    "label": "A atualizar os dados da obrigação",
+    "offer": "A verificar a oferta atual…",
+    "series": "A obter a série {done} de {total}: {seriesCode}",
+    "historyComplete": "O histórico está completo",
+    "starting": "A iniciar…"
+  }
+}

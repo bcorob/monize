@@ -1,138 +1,169 @@
 'use client';
 
 import { useMemo } from 'react';
-import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { chartColors } from '@/lib/chart-colors';
 import { MonthlyNetWorth } from '@/types/net-worth';
-import { useNumberFormat } from '@/hooks/useNumberFormat';
-import { WidgetHeading } from './widget-meta';
-import { CARD_CLASS } from '@/components/ui/Card';
+import { useNumberFormat, type NumberFormatters } from '@/hooks/useNumberFormat';
+import { useWidgetConfig } from '@/hooks/useWidgetConfig';
+import { ChartTooltipPanel } from '@/components/reports/ChartTooltip';
+import { PartialTotal } from '@/components/ui/PartialTotal';
+import {
+  assetsFxComplete,
+  liabilitiesFxComplete,
+  netWorthIsPartial,
+  partialTotalFor,
+} from '@/lib/net-worth-completeness';
+import { WidgetCard, WidgetConfigRow, WidgetMessage } from './WidgetCard';
+import { WidgetSegmentedControl } from './WidgetSegmentedControl';
+import { DonutCalloutChart, DonutCalloutSlice, DonutCalloutViewHint } from './DonutCalloutChart';
+import { ASSETS_LIABILITIES_DEFAULT, AssetsLiabilitiesConfig } from './widget-config';
+
+const WIDGET_ID = 'assets-liabilities';
 
 interface AssetsVsLiabilitiesProps {
   data: MonthlyNetWorth[];
   isLoading: boolean;
+  /** The request failed: `data` is empty because nothing came back, not because there is no history. */
+  error?: boolean;
 }
 
 const ASSET_COLOUR = chartColors.income;
 const LIABILITY_COLOUR = chartColors.expense;
 
-function AssetsTooltip({
-  active,
-  payload,
-  total,
-  formatCurrency,
-}: {
-  active?: boolean;
-  payload?: Array<{ payload: { name: string; value: number } }>;
+interface AssetsTooltipProps {
+  slice: { name: string; value: number };
   total: number;
-  formatCurrency: (v: number) => string;
-}) {
-  if (active && payload && payload.length) {
-    const d = payload[0].payload;
-    const percentage = total > 0 ? ((d.value / total) * 100).toFixed(1) : '0';
-    return (
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3">
-        <p className="font-medium text-gray-900 dark:text-gray-100">{d.name}</p>
-        <p className="text-gray-600 dark:text-gray-400">
-          {formatCurrency(d.value)} ({percentage}%)
-        </p>
-      </div>
-    );
-  }
-  return null;
+  formatCurrency: NumberFormatters['formatCurrency'];
+  formatPercent: NumberFormatters['formatPercent'];
 }
 
-export function AssetsVsLiabilities({ data, isLoading }: AssetsVsLiabilitiesProps) {
+function AssetsTooltip({ slice, total, formatCurrency, formatPercent }: AssetsTooltipProps) {
+  const percentage = total > 0 ? (slice.value / total) * 100 : 0;
+  return (
+    <ChartTooltipPanel>
+      <p className="font-medium text-gray-900 dark:text-gray-100">{slice.name}</p>
+      <p className="text-gray-600 dark:text-gray-400">
+        {formatCurrency(slice.value)} ({formatPercent(percentage, 1)})
+      </p>
+    </ChartTooltipPanel>
+  );
+}
+
+export function AssetsVsLiabilities({ data, isLoading, error = false }: AssetsVsLiabilitiesProps) {
   const t = useTranslations('dashboard');
-  const router = useRouter();
-  const { formatCurrencyCompact: formatCurrency } = useNumberFormat();
+  const { formatCurrencyCompact: formatCurrency, formatCurrencyTight, formatPercent, defaultCurrency } = useNumberFormat();
+  const { config, updateConfig } = useWidgetConfig<AssetsLiabilitiesConfig>(
+    WIDGET_ID,
+    ASSETS_LIABILITIES_DEFAULT,
+  );
 
   // The net-worth series carries assets and liabilities per month; the pie
   // reflects the most recent month's split.
   const latest = useMemo(() => (data.length > 0 ? data[data.length - 1] : null), [data]);
 
-  const chartData = useMemo(() => {
+  // Each side reads its own flag, falling back to the month's. A side that is a
+  // subtotal says so in its name (text, not colour alone); net worth, which is
+  // partial when either side is, goes through `PartialTotal`.
+  const chartData = useMemo<DonutCalloutSlice[]>(() => {
     if (!latest) return [];
+    const partialName = (name: string, complete: boolean | undefined) =>
+      complete === false ? t('assetsVsLiabilities.partialName', { name }) : name;
     return [
-      { name: t('assetsVsLiabilities.assets'), value: Math.round(latest.assets), colour: ASSET_COLOUR },
-      { name: t('assetsVsLiabilities.liabilities'), value: Math.round(latest.liabilities), colour: LIABILITY_COLOUR },
+      {
+        key: 'assets',
+        name: partialName(t('assetsVsLiabilities.assets'), assetsFxComplete(latest)),
+        value: Math.round(latest.assets),
+        color: ASSET_COLOUR,
+      },
+      {
+        key: 'liabilities',
+        name: partialName(t('assetsVsLiabilities.liabilities'), liabilitiesFxComplete(latest)),
+        value: Math.round(latest.liabilities),
+        color: LIABILITY_COLOUR,
+      },
     ].filter((d) => d.value > 0);
   }, [latest, t]);
 
   const netWorth = latest ? Math.round(latest.netWorth) : 0;
+  const netWorthTotal = partialTotalFor(
+    netWorth,
+    latest && netWorthIsPartial(latest) ? false : undefined,
+    latest?.missingRatePairs,
+  );
   const total = chartData.reduce((sum, item) => sum + item.value, 0);
+  const netWorthClass = netWorth >= 0 ? undefined : 'text-red-600 dark:text-red-400';
 
-  if (isLoading) {
-    return (
-      <div className={`${CARD_CLASS} p-3 sm:p-6 lg:min-h-[500px]`}>
-        <WidgetHeading id="assets-liabilities" className="mb-4">
-          {t('assetsVsLiabilities.title')}
-        </WidgetHeading>
-        <div className="h-64 flex items-center justify-center">
-          <div className="animate-pulse w-48 h-48 rounded-full bg-gray-200 dark:bg-gray-700" />
-        </div>
-      </div>
-    );
-  }
-
-  if (chartData.length === 0) {
-    return (
-      <div className={`${CARD_CLASS} p-3 sm:p-6 lg:min-h-[500px]`}>
-        <WidgetHeading id="assets-liabilities" className="mb-4">
-          {t('assetsVsLiabilities.title')}
-        </WidgetHeading>
-        <p className="text-gray-500 dark:text-gray-400 text-sm">
-          {t('assetsVsLiabilities.empty')}
-        </p>
-      </div>
-    );
-  }
+  const configControls = (
+    <WidgetConfigRow label={t('widgets.view')}>
+      <WidgetSegmentedControl
+        value={config.view}
+        onChange={(view) => updateConfig({ view })}
+        options={[
+          { value: 'callouts', label: t('assetsVsLiabilities.viewCallouts') },
+          { value: 'legend', label: t('assetsVsLiabilities.viewLegend') },
+        ]}
+      />
+      <DonutCalloutViewHint />
+    </WidgetConfigRow>
+  );
 
   return (
-    <div className={`${CARD_CLASS} p-3 sm:p-6 lg:min-h-[500px] flex flex-col h-full`}>
-      <div className="flex items-center justify-between mb-1">
-        <WidgetHeading id="assets-liabilities" onClick={() => router.push('/reports/net-worth')}>
-          {t('assetsVsLiabilities.title')}
-        </WidgetHeading>
+    <WidgetCard
+      title={t('assetsVsLiabilities.title')}
+      titleHref="/reports/net-worth"
+      widgetId={WIDGET_ID}
+      headerRight={
         <span className="text-sm text-gray-500 dark:text-gray-400">{t('assetsVsLiabilities.current')}</span>
-      </div>
-      <div className="flex-1 min-h-[16rem]">
-        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-          <PieChart>
-            <Pie
-              data={chartData}
-              cx="50%"
-              cy="50%"
-              innerRadius={55}
-              outerRadius={85}
-              paddingAngle={2}
-              dataKey="value"
-            >
-              {chartData.map((entry) => (
-                <Cell key={entry.name} fill={entry.colour} />
-              ))}
-            </Pie>
-            <Tooltip content={<AssetsTooltip total={total} formatCurrency={formatCurrency} />} />
-          </PieChart>
-        </ResponsiveContainer>
-      </div>
-      <div className="mt-2 flex justify-center gap-4">
-        {chartData.map((item) => (
-          <div key={item.name} className="flex items-center gap-2 text-sm">
-            <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: item.colour }} />
-            <span className="text-gray-600 dark:text-gray-400">{item.name}</span>
-            <span className="font-medium text-gray-900 dark:text-gray-100">{formatCurrency(item.value)}</span>
-          </div>
-        ))}
-      </div>
-      <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700 text-center flex-shrink-0">
-        <div className="text-sm text-gray-500 dark:text-gray-400">{t('assetsVsLiabilities.netWorthLabel')}</div>
-        <div className={`font-semibold ${netWorth >= 0 ? 'text-gray-900 dark:text-gray-100' : 'text-red-600 dark:text-red-400'}`}>
-          {formatCurrency(netWorth)}
+      }
+      configControls={configControls}
+      configTitle={t('assetsVsLiabilities.title')}
+    >
+      {isLoading ? (
+        <div className="h-64 flex items-center justify-center">
+          <div className="animate-pulse skeleton-shimmer w-48 h-48 rounded-full bg-gray-200 dark:bg-gray-700" />
         </div>
-      </div>
-    </div>
+      ) : error ? (
+        <WidgetMessage>{t('netWorth.loadFailed')}</WidgetMessage>
+      ) : chartData.length === 0 ? (
+        <WidgetMessage>{t('assetsVsLiabilities.empty')}</WidgetMessage>
+      ) : (
+        <DonutCalloutChart
+          slices={chartData}
+          view={config.view}
+          label={t('assetsVsLiabilities.title')}
+          formatValue={(value) => formatCurrency(value)}
+          legendAreaClassName="flex-1 min-h-[16rem]"
+          // Only ever Assets and Liabilities: the names and their values sit
+          // together as a group, the way the pair of pills looked before this
+          // widget moved onto the shared donut, rather than the category
+          // legend's columns of aligned trailing figures.
+          legendCompact
+          // Net worth is what the two slices come to, so it belongs in the
+          // donut's hole rather than in a row under the chart.
+          center={{
+            label: t('assetsVsLiabilities.netWorthLabel'),
+            value: (
+              <PartialTotal total={netWorthTotal} displayCurrency={defaultCurrency}>
+                <span className={netWorthClass}>{formatCurrency(netWorth)}</span>
+              </PartialTotal>
+            ),
+            compactValue: (
+              <PartialTotal total={netWorthTotal} displayCurrency={defaultCurrency}>
+                <span className={netWorthClass}>{formatCurrencyTight(netWorth)}</span>
+              </PartialTotal>
+            ),
+          }}
+          renderTooltip={(slice) => (
+            <AssetsTooltip
+              slice={slice}
+              total={total}
+              formatCurrency={formatCurrency}
+              formatPercent={formatPercent}
+            />
+          )}
+        />
+      )}
+    </WidgetCard>
   );
 }

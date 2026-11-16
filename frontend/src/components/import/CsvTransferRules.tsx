@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import { CsvTransferRule } from '@/lib/import';
 import { Account } from '@/types/account';
+import { orderAccountsForPicker } from '@/lib/account-utils';
 
 interface CsvTransferRulesProps {
   rules: CsvTransferRule[];
@@ -16,12 +17,11 @@ export function CsvTransferRules({ rules, onChange, accounts }: CsvTransferRules
   const filtered = accounts.filter(
     (a) => !a.isClosed && a.accountSubType !== 'INVESTMENT_BROKERAGE',
   );
-  const favouriteAccounts = filtered
-    .filter((a) => a.isFavourite)
-    .sort((a, b) => a.favouriteSortOrder - b.favouriteSortOrder);
-  const nonFavouriteAccounts = filtered
-    .filter((a) => !a.isFavourite)
-    .sort((a, b) => a.name.localeCompare(b.name));
+  // The account-picker order, written once: favourites in the user's own
+  // arrangement (alphabetically where it does not separate them), then the rest
+  // by name. This block was a hand-copied version of exactly that.
+  const { favourites: favouriteAccounts, rest: nonFavouriteAccounts } =
+    orderAccountsForPicker(filtered);
   const addRule = () => {
     onChange([...rules, { type: 'payee', pattern: '', accountName: '' }]);
   };

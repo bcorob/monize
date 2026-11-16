@@ -1,70 +1,97 @@
 import { describe, expect, it } from 'vitest';
 import {
-  PORTFOLIO_WINDOW_STARTS,
   applyPortfolioWindowStart,
-  needsFirstPricedDay,
   resolvePortfolioRangeWindow,
-  startOfYearIso,
 } from './portfolio-range-window';
 import { resolveRangePreset } from '@/lib/date-range';
 
-// Wednesday 12 August 2026, the day the rules were specified against.
-const NOW = new Date(2026, 7, 12);
+// Monday 28 September 2026, the day issue #1461 was reported on.
+const NOW = new Date(2026, 8, 28);
 
-const startFor = (range: string, extra = {}) =>
-  resolvePortfolioRangeWindow(range, { now: NOW, ...extra }).start;
+const windowFor = (range: string, extra = {}) =>
+  resolvePortfolioRangeWindow(range, { now: NOW, ...extra });
 
 describe('resolvePortfolioRangeWindow', () => {
   /**
-   * The anniversary rule, stated the way it was asked for: today is
-   * 12 Aug 2026, so a 1Y chart opens on the close of 11 Aug 2025.
+   * A chart opens its series on the close its figures are measured from, and
+   * the figures are measured over the server's own preset window. This table
+   * is the mirror of `presetEarliestDate` / `presetWindowStart` in
+   * `backend/src/net-worth/portfolio-period-presets.util.ts`, pinned to the
+   * same day in `portfolio-period-presets.util.spec.ts`: change one and the
+   * other fails.
    */
-  it('opens 1Y on the day before the anniversary', () => {
-    expect(startFor('1y')).toBe('2025-08-11');
+  it('opens each preset where the server measures it from', () => {
+    expect(windowFor('1w')).toEqual({
+      start: '2026-09-20',
+      periodStart: '2026-09-21',
+      end: '2026-09-28',
+    });
+    expect(windowFor('1m').start).toBe('2026-08-29');
+    expect(windowFor('3m').start).toBe('2026-06-30');
+    expect(windowFor('ytd').start).toBe('2025-12-31');
+    expect(windowFor('1y').start).toBe('2025-09-28');
+    expect(windowFor('2y').start).toBe('2024-09-28');
+    expect(windowFor('5y').start).toBe('2021-09-28');
   });
 
-  it('opens 2Y and 5Y on the same rule', () => {
-    expect(startFor('2y')).toBe('2024-08-11');
-    expect(startFor('5y')).toBe('2021-08-11');
+  it('measures a range from its own first day unless it reports against the prior close', () => {
+    for (const range of ['1m', '3m', '6m', 'ytd', '1y', '2y', '5y']) {
+      const window = windowFor(range);
+      expect(window.start).toBe(window.periodStart);
+    }
   });
 
   /**
-   * 2Y used to be a flat 730-day count. That lands on the anniversary itself
-   * only when no leap day falls in the window, and a day off it when one does
-   * -- either way it is not the day *before* the anniversary, which is what a
-   * price series has to open on.
+   * MTD opens on the 1st and is measured from the close before the month:
+   * the last day of the previous month, which is where its series is drawn
+   * from, and the day the period result is sent as its baseline.
    */
-  it('2Y follows the calendar, not a 730-day count', () => {
-    expect(startFor('2y')).not.toBe(
-      resolveRangePreset('2y', { now: NOW }).start,
+  it('draws MTD from the last day of the previous month', () => {
+    expect(windowFor('mtd')).toEqual({
+      start: '2026-08-31',
+      periodStart: '2026-09-01',
+      end: '2026-09-28',
+    });
+  });
+
+  it('steps a leap-day anniversary back to 28 February, as the server does', () => {
+    const leap = new Date(2028, 1, 29);
+    expect(resolvePortfolioRangeWindow('1y', { now: leap }).start).toBe(
+      '2027-02-28',
+    );
+    expect(resolvePortfolioRangeWindow('5y', { now: leap }).start).toBe(
+      '2023-02-28',
     );
   });
 
-  it('opens 3M and 6M on the day before the period', () => {
-    expect(startFor('3m')).toBe('2026-05-11');
-    expect(startFor('6m')).toBe('2026-02-11');
+  it('opens 6M on the same day six months earlier', () => {
+    expect(windowFor('6m').start).toBe('2026-03-28');
   });
 
   /**
    * A rule naming an exact day has no month-aligned reading, so alignment is
-   * ignored where one applies. Under the old resolver the report's 5Y opened
-   * on the first of a month.
+   * ignored where one applies. Under the shared resolver the report's 5Y
+   * opened on the first of a month.
    */
   it('ignores month alignment where an exact day is named', () => {
-    expect(startFor('5y', { alignment: 'month' })).toBe('2021-08-11');
-    expect(startFor('1y', { alignment: 'month' })).toBe('2025-08-11');
+    expect(windowFor('5y', { alignment: 'month' }).start).toBe('2021-09-28');
+    expect(windowFor('1y', { alignment: 'month' }).start).toBe('2025-09-28');
+    expect(windowFor('ytd', { alignment: 'month' }).start).toBe('2025-12-31');
   });
 
-  it('leaves the intraday ranges alone', () => {
-    for (const range of ['1d', '1w', 'mtd', '1m']) {
-      expect(startFor(range)).toBe(
-        resolveRangePreset(range, { now: NOW }).start,
-      );
-    }
+  it('leaves 1D to the shared resolver, a day early', () => {
+    // The intraday session is the server's; the daily fallback is a week.
+    const base = resolveRangePreset('1d', { now: NOW });
+    expect(windowFor('1d')).toEqual({
+      start: '2026-09-20',
+      periodStart: base.start,
+      end: base.end,
+    });
   });
 
   it('passes an unknown range straight through', () => {
-    expect(startFor('7y')).toBe(resolveRangePreset('7y', { now: NOW }).start);
+    const base = resolveRangePreset('7y', { now: NOW });
+    expect(windowFor('7y')).toEqual({ ...base, periodStart: base.start });
   });
 
   it('keeps a custom range custom', () => {
@@ -74,33 +101,39 @@ describe('resolvePortfolioRangeWindow', () => {
         startDate: '2024-03-04',
         endDate: '2024-05-06',
       }),
-    ).toEqual({ start: '2024-03-04', end: '2024-05-06' });
+    ).toEqual({
+      start: '2024-03-04',
+      periodStart: '2024-03-04',
+      end: '2024-05-06',
+    });
+  });
+
+  it('leaves All with no start to send', () => {
+    expect(windowFor('all')).toEqual({
+      start: '',
+      periodStart: '',
+      end: '2026-09-28',
+    });
   });
 
   it('always ends today', () => {
-    for (const range of ['1y', '3m', 'ytd', '5y']) {
-      expect(resolvePortfolioRangeWindow(range, { now: NOW }).end).toBe(
-        '2026-08-12',
-      );
+    for (const range of ['1w', 'mtd', '1y', '3m', 'ytd', '5y']) {
+      expect(windowFor(range).end).toBe('2026-09-28');
     }
   });
 
   describe('YTD', () => {
-    it('opens on the year’s first priced day when one is known', () => {
-      expect(startFor('ytd', { ytdFirstPricedDay: '2026-01-02' })).toBe(
-        '2026-01-02',
-      );
-    });
-
     /**
-     * Unknown is not "1 January is a trading day": the lookup has not answered,
-     * or the scope holds nothing priced. Keeping the calendar boundary draws
-     * every real close it has, one day wider than asked for -- the failure that
-     * matters would be claiming a trading day nobody observed.
+     * The year is measured from the close of the previous year's last trading
+     * session. 31 December carries that close even when it fell on a weekend
+     * or holiday, because a day is valued from the latest close on or before
+     * it. Opening on the year's first trading day dropped that day's move.
      */
-    it('falls back to the calendar boundary when it is unknown', () => {
-      expect(startFor('ytd')).toBe('2026-01-01');
-      expect(startFor('ytd', { ytdFirstPricedDay: null })).toBe('2026-01-01');
+    it('opens on the previous 31 December on the first and last days of the year', () => {
+      const on = (now: Date) =>
+        resolvePortfolioRangeWindow('ytd', { now }).start;
+      expect(on(new Date(2026, 0, 1))).toBe('2025-12-31');
+      expect(on(new Date(2026, 11, 31))).toBe('2025-12-31');
     });
   });
 });
@@ -115,31 +148,27 @@ describe('applyPortfolioWindowStart', () => {
     expect(
       applyPortfolioWindowStart(
         '1y',
-        { start: '2025-08-12', end: '2026-08-12' },
+        { start: '2025-09-01', end: '2026-09-28' },
         { now: NOW },
       ),
-    ).toEqual({ start: '2025-08-11', end: '2026-08-12' });
+    ).toEqual({
+      start: '2025-09-28',
+      periodStart: '2025-09-28',
+      end: '2026-09-28',
+    });
   });
 
-  it('returns an inherited range untouched', () => {
-    const base = { start: '2026-07-13', end: '2026-08-12' };
-    expect(applyPortfolioWindowStart('1m', base, { now: NOW })).toEqual(base);
-  });
-});
-
-describe('needsFirstPricedDay', () => {
-  it('is true for YTD alone, so only YTD pays for the extra request', () => {
-    const asking = Object.keys(PORTFOLIO_WINDOW_STARTS).filter(
-      needsFirstPricedDay,
-    );
-    expect(asking).toEqual(['ytd']);
-  });
-});
-
-describe('startOfYearIso', () => {
-  it('is 1 January of the year “now” falls in', () => {
-    expect(startOfYearIso(NOW)).toBe('2026-01-01');
-    expect(startOfYearIso(new Date(2026, 0, 1))).toBe('2026-01-01');
-    expect(startOfYearIso(new Date(2026, 11, 31))).toBe('2026-01-01');
+  it('opens an inherited prior-close range a day before the window it is handed', () => {
+    expect(
+      applyPortfolioWindowStart(
+        'mtd',
+        { start: '2026-09-01', end: '2026-09-28' },
+        { now: NOW },
+      ),
+    ).toEqual({
+      start: '2026-08-31',
+      periodStart: '2026-09-01',
+      end: '2026-09-28',
+    });
   });
 });

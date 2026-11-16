@@ -1,4 +1,5 @@
 import type { TourAnchorId } from './anchors';
+import type { DocsLink } from '@/lib/docs-links';
 
 /** App areas a tour belongs to, used for grouping and the offer-row label. */
 export type TourArea =
@@ -40,8 +41,23 @@ export type TourPlacement = 'top' | 'bottom' | 'left' | 'right' | 'auto';
  * - `securitiesExist` the user has at least one active security. A tour of the
  *   security detail page has nothing to open without one, and every step after
  *   the first would be a dead end.
+ * - `accountsExist` the user has at least one open account that can open a
+ *   dedicated detail page (`hasAccountDetailView`). Deliberately its own
+ *   requirement rather than a second reading of `transactionEntry`: the two ask
+ *   different questions of the same list -- "is there something to record
+ *   against" and "is there a Details page to open" -- so tightening either one
+ *   later must not silently move the other.
+ * - `ownerView` the reader is looking at their own data, not acting as a
+ *   delegate. The Rules entry in Tools and the AI review inbox are owner-only
+ *   (the header hides the one and the inbox's layout redirects away from the
+ *   other), so a step pointing at either has nothing to show a delegate.
+ *   Answered from the session, never from the network, so it cannot fail.
  */
-export type TourRequirement = 'transactionEntry' | 'securitiesExist';
+export type TourRequirement =
+  | 'transactionEntry'
+  | 'securitiesExist'
+  | 'accountsExist'
+  | 'ownerView';
 
 export interface TourStep {
   /** i18n leaf: tours.<i18nPrefix>.steps.<id>.{title,body}. */
@@ -82,12 +98,29 @@ export interface TourStep {
    */
   openToolsMenu?: boolean;
   /**
+   * Open the header's notification panel while this step is showing, for the
+   * same reason `openToolsMenu` exists: the panel is a dropdown the engine
+   * cannot leave open by pointing at it. A `click` advance on the bell would
+   * open it, but the very next thing the user does -- reading a card that sits
+   * outside the panel -- is a click-outside, and the panel would close under
+   * the step describing its contents.
+   */
+  openNotificationBell?: boolean;
+  /**
    * Data this step needs to be worth showing. The engine omits the step (with
    * no "steps were skipped" outro -- the omission is deliberate) when the
    * requirement is not met, e.g. skipping the record-a-transaction walkthrough
    * for a user who has no accounts yet.
    */
   requires?: TourRequirement;
+  /**
+   * Where the card sits: against its anchor for an anchored step. For an
+   * `unobtrusive` step with NO anchor -- a corner-parked coach mark -- only
+   * 'left' is meaningful, and it moves the card to the bottom-LEFT corner.
+   * Use it whenever the step asks the user to click something the right of the
+   * page holds: row actions are right-aligned and sticky, so the default
+   * right-hand corner puts the card on top of the very control the copy names.
+   */
   placement?: TourPlacement;
   /** Filtered out at startTour on narrow viewports. */
   skipOnMobile?: boolean;
@@ -151,6 +184,13 @@ export interface TourDefinition {
    * the introduction tour teaches Split and must keep it usable.
    */
   disableTransactionSplit?: boolean;
+  /**
+   * The guide page this tour walks through, if any. The last step offers
+   * "Read the full guide", opening the help panel there (`TourHost`), and
+   * `lib/help-tours.ts` maps the guide page back to this tour so the panel
+   * can offer "Show me". Checked against `DOCS_LINKS` by `help-tours.test.ts`.
+   */
+  docs?: DocsLink;
   steps: readonly TourStep[];
 }
 

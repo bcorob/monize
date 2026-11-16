@@ -6,6 +6,7 @@ import { INTEGRATION_TYPEORM_OPTIONS } from "../helpers/integration-setup";
 import {
   applyRlsPolicies,
   declaredPolicyTables,
+  renamedTables,
   findRlsMigrations,
   TEST_APP_ROLE,
 } from "../helpers/rls-setup";
@@ -155,6 +156,44 @@ describe("RLS integration harness (T1)", () => {
           ORDER BY c.relname`,
       );
       expect(rows.map((r: { relname: string }) => r.relname)).toEqual(expected);
+    });
+
+    it("reads a table rename out of the migration that performs it", () => {
+      // The post-condition in applyRlsPolicies resolves a declared policy table
+      // through this map: 112 lists `budget_alerts`, 179 renames it, and the
+      // policy exists under the new name. Held against the shipped file rather
+      // than a fixture, so the day the rename moves the extractor notices.
+      const renames = findRlsMigrations()
+        .map((f) => renamedTables(fs.readFileSync(f, "utf8")))
+        .flat();
+      expect(renames).toContainEqual(["budget_alerts", "notifications"]);
+      // Indexes are renamed in that same file and carry no policy, so the
+      // extractor must not report them.
+      expect(renames.map(([from]) => from)).not.toContain(
+        "idx_budget_alerts_user",
+      );
+    });
+
+    it("demands the policy of a renamed table under its CURRENT name", async () => {
+      // `budget_alerts` no longer exists here (synchronize built `notifications`
+      // from the entity, and 112 skips a name that is gone), so the declared
+      // list naming it must not read as a missing policy -- while the policy it
+      // resolves to has to be real.
+      const declared = new Set(
+        findRlsMigrations().flatMap((f) =>
+          declaredPolicyTables(fs.readFileSync(f, "utf8")),
+        ),
+      );
+      expect([...declared]).toContain("budget_alerts");
+
+      const [legacy] = await dataSource.query(
+        "SELECT to_regclass('public.budget_alerts') IS NULL AS gone",
+      );
+      const [current] = await dataSource.query(
+        "SELECT count(*)::int AS n FROM pg_policies WHERE schemaname = 'public' AND tablename = 'notifications'",
+      );
+      expect(legacy.gone).toBe(true);
+      expect(current.n).toBeGreaterThan(0);
     });
 
     it("is idempotent -- re-applying leaves one policy per table", async () => {

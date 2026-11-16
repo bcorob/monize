@@ -13,28 +13,67 @@ import {
   isInvestmentBrokerageAccount,
 } from './import-utils';
 
-/** Get the full path for a category (e.g., "Parent: Child") */
-export function getCategoryPath(category: Category, categories: Category[]): string {
-  if (category.parentId) {
-    const parent = categories.find((c) => c.id === category.parentId);
-    if (parent) {
-      return `${parent.name}: ${category.name}`;
-    }
+/** The names from the root down to a category, at any depth */
+function getCategoryChain(category: Category, categories: Category[]): string[] {
+  const names = [category.name];
+  const seen = new Set([category.id]);
+  let parentId = category.parentId;
+  while (parentId && !seen.has(parentId)) {
+    seen.add(parentId);
+    const parent = categories.find((c) => c.id === parentId);
+    if (!parent) break;
+    names.unshift(parent.name);
+    parentId = parent.parentId;
   }
-  return category.name;
+  return names;
+}
+
+/** Get the full path for a category at any depth (e.g., "Housing: Mortgage: Interest") */
+export function getCategoryPath(category: Category, categories: Category[]): string {
+  return getCategoryChain(category, categories).join(': ');
+}
+
+/** The levels of a colon-delimited QIF/CSV category path, root first. */
+function splitCategoryPath(path: string): string[] {
+  return path.split(':').map((part) => part.trim()).filter((part) => part.length > 0);
+}
+
+/**
+ * QIF files replace / with - in category names, so a segment also matches a
+ * name with every - read as /.
+ */
+function segmentMatches(name: string, segment: string): boolean {
+  const lowerName = name.toLowerCase();
+  const lowerSegment = segment.toLowerCase();
+  return lowerName === lowerSegment || lowerName === lowerSegment.replace(/-/g, '/');
+}
+
+/**
+ * Walk a category path from the root through the existing categories, and
+ * return the chain matched before the first level that does not exist yet.
+ */
+function matchExistingPrefix(segments: string[], categories: Category[]): Category[] {
+  const chain: Category[] = [];
+  let parentId: string | null = null;
+  for (const segment of segments) {
+    const match = categories.find(
+      (c) => (c.parentId ?? null) === parentId && segmentMatches(c.name, segment),
+    );
+    if (!match) break;
+    chain.push(match);
+    parentId = match.id;
+  }
+  return chain;
 }
 
 /** Find an existing category that matches a QIF category string */
 export function findMatchingCategory(cat: string, categories: Category[]): string | undefined {
   const normalizedQifCat = formatCategoryPath(cat).toLowerCase();
-  const qifSubcategory = cat.split(':').pop()?.trim().toLowerCase() || '';
-  const qifParts = cat.split(':');
-  const qifParentName = qifParts.length > 1 ? qifParts[0].trim().toLowerCase() : null;
+  const qifParts = splitCategoryPath(cat);
+  const qifLeaf = qifParts[qifParts.length - 1] ?? '';
 
   // QIF files replace / with - in category names, so also try matching with - replaced by /
   const normalizedQifCatWithSlash = normalizedQifCat.replace(/-/g, '/');
-  const qifSubcategoryWithSlash = qifSubcategory.replace(/-/g, '/');
-  const qifParentNameWithSlash = qifParentName?.replace(/-/g, '/') || null;
 
   // Try exact full path match
   let existingCat = categories.find((c) => {
@@ -50,26 +89,25 @@ export function findMatchingCategory(cat: string, categories: Category[]): strin
     });
   }
 
-  // Try matching subcategory with correct parent
-  if (!existingCat && qifParentName) {
+  // Try a path that agrees with the QIF one on every level both have, counted
+  // up from the leaf, and on at least the leaf and its parent: "Mortgage:
+  // Interest" for "Housing:Mortgage:Interest", or the reverse. A different
+  // branch ("Business: Mortgage: Interest") disagrees on a shared level.
+  if (!existingCat && qifParts.length > 1) {
     existingCat = categories.find((c) => {
-      const catName = c.name.toLowerCase();
-      if (catName !== qifSubcategory && catName !== qifSubcategoryWithSlash) return false;
-      if (c.parentId) {
-        const parent = categories.find((p) => p.id === c.parentId);
-        const parentName = parent?.name.toLowerCase();
-        return parentName === qifParentName || parentName === qifParentNameWithSlash;
+      const chain = getCategoryChain(c, categories);
+      const shared = Math.min(chain.length, qifParts.length);
+      if (shared < 2) return false;
+      for (let i = 1; i <= shared; i++) {
+        if (!segmentMatches(chain[chain.length - i], qifParts[qifParts.length - i])) return false;
       }
-      return false;
+      return true;
     });
   }
 
   // Match just the subcategory name (only if no parent specified in QIF)
-  if (!existingCat && !qifParentName) {
-    existingCat = categories.find((c) => {
-      const catName = c.name.toLowerCase();
-      return catName === qifSubcategory || catName === qifSubcategoryWithSlash;
-    });
+  if (!existingCat && qifParts.length === 1) {
+    existingCat = categories.find((c) => segmentMatches(c.name, qifLeaf));
   }
 
   return existingCat?.id;
@@ -158,30 +196,32 @@ export function buildCategoryMappings(
       return { originalName: cat, isLoanCategory: true, loanAccountId };
     }
 
-    // For colon-separated categories (e.g., "Fees & Charges:Bank Fee"),
-    // auto-suggest creating the child under a new or existing parent
-    const parts = cat.split(':');
+    // For colon-separated categories (e.g., "Fees & Charges:Bank Fee" or
+    // "Housing:Mortgage:Interest"), auto-suggest creating the leaf under the
+    // parent path, reusing whichever levels of it already exist
+    const parts = splitCategoryPath(cat);
     if (parts.length >= 2) {
-      const parentName = parts.slice(0, -1).join(':').trim();
-      const childName = parts[parts.length - 1].trim();
+      const parentParts = parts.slice(0, -1);
+      const childName = parts[parts.length - 1];
+      const existingChain = matchExistingPrefix(parentParts, categories);
 
-      // Check if parent already exists as a top-level category
-      const existingParent = categories.find(
-        (c) => !c.parentId && c.name.toLowerCase() === parentName.toLowerCase()
-      );
-
-      if (existingParent) {
+      if (existingChain.length === parentParts.length) {
         return {
           originalName: cat,
           createNew: childName,
-          parentCategoryId: existingParent.id,
+          parentCategoryId: existingChain[existingChain.length - 1].id,
         };
       }
 
+      // The server finds or creates each level of this path in turn, so the
+      // levels that already exist are spelled as they are stored.
       return {
         originalName: cat,
         createNew: childName,
-        createNewParentCategoryName: parentName,
+        createNewParentCategoryName: [
+          ...existingChain.map((c) => c.name),
+          ...parentParts.slice(existingChain.length),
+        ].join(':'),
       };
     }
 

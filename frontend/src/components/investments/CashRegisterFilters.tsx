@@ -7,6 +7,7 @@ import { DateInput } from '@/components/ui/DateInput';
 import { transactionsApi } from '@/lib/transactions';
 import { createLogger } from '@/lib/logger';
 import type { RegisterFilterOptions } from '@/types/transaction';
+import { FunnelIcon } from '@heroicons/react/24/outline';
 
 const logger = createLogger('CashRegisterFilters');
 
@@ -94,6 +95,8 @@ export function countActiveCashFilters(value: CashFilterValues): number {
 }
 
 interface CashFilterToggleButtonProps {
+  /** Whether the filter bar it opens is showing, for `aria-expanded`. */
+  expanded?: boolean;
   activeCount: number;
   onClick: () => void;
 }
@@ -107,23 +110,24 @@ interface CashFilterToggleButtonProps {
 export function CashFilterToggleButton({
   activeCount,
   onClick,
+  expanded,
 }: CashFilterToggleButtonProps) {
   const t = useTranslations('investments');
   return (
     <button
+      type="button"
       onClick={onClick}
-      className={`inline-flex items-center px-3 py-1.5 text-sm font-medium rounded-md ${
+      aria-expanded={expanded}
+      className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md ${
         activeCount > 0
           ? 'text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-900/30'
           : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
       }`}
     >
-      <svg className="w-4 h-4 mr-1.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-      </svg>
+      <FunnelIcon className="w-4 h-4" aria-hidden="true" />
       {t('page.filter')}
       {activeCount > 0 && (
-        <span className="ml-1.5 inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-blue-600 rounded-full">
+        <span className="inline-flex items-center justify-center w-5 h-5 text-xs font-bold text-white bg-blue-600 rounded-full">
           {activeCount}
         </span>
       )}

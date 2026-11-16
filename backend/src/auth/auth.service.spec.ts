@@ -19,9 +19,12 @@ import { AuthEmailService } from "./auth-email.service";
 import { DelegationService } from "../delegation/delegation.service";
 import { I18nService, I18nContext } from "nestjs-i18n";
 import { BackupEncryptionService } from "../backup/backup-encryption.service";
+import { loginPasswordRef } from "../backup/backup-key-wrap";
 import { User } from "../users/entities/user.entity";
 import { UserPreference } from "../users/entities/user-preference.entity";
 import { TrustedDevice } from "../users/entities/trusted-device.entity";
+import { PersonalAccessToken } from "./entities/personal-access-token.entity";
+import { OAUTH_GRANT_REVOKER } from "./credential-revocation";
 import { RefreshToken } from "./entities/refresh-token.entity";
 import { encrypt, derivePurposeKey } from "./crypto.util";
 import { PasswordBreachService } from "./password-breach.service";
@@ -32,6 +35,13 @@ import {
   createUserPreferenceRepoMock,
   type UserPreferenceRepoMock,
 } from "../test-helpers/user-preference-testing";
+import { authAttemptCounterProvider } from "../test-helpers/auth-attempt-counter-testing";
+import {
+  issueLoginDeviceCookie,
+  loginDeviceCookieName,
+  verifyLoginDeviceCookie,
+} from "./login-device";
+import { singleUseTokenProvider } from "../test-helpers/single-use-token-testing";
 
 jest.mock("../common/db/scoped-db", () =>
   jest.requireActual("../test-helpers/scoped-db-testing").scopedDbMockModule(),
@@ -63,6 +73,8 @@ describe("AuthService", () => {
   let preferencesRow: UserPreferenceRepoMock;
   let trustedDevicesRepository: Record<string, jest.Mock>;
   let refreshTokensRepository: Record<string, jest.Mock>;
+  let patRepository: Record<string, jest.Mock>;
+  let oauthProviderService: { revokeAllForUser: jest.Mock };
   let jwtService: Partial<JwtService>;
   let configService: { get: jest.Mock };
   let delegationService: {
@@ -72,7 +84,7 @@ describe("AuthService", () => {
   let dataSource: Record<string, jest.Mock>;
   let passwordBreachService: { isBreached: jest.Mock };
   let emailService: { sendMail: jest.Mock; getStatus: jest.Mock };
-  let backupEncryptionService: { rememberLoginPassword: jest.Mock };
+  let backupEncryptionService: { rewrapBackupKey: jest.Mock };
 
   const mockUser = {
     id: "user-1",
@@ -100,6 +112,7 @@ describe("AuthService", () => {
       findOne: jest.fn(),
       create: jest.fn(),
       save: jest.fn(),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
       count: jest.fn(),
       // The login path no longer uses a query builder: the failed-attempt
       // increment/lockout and the success reset are both raw guarded SQL on the
@@ -137,6 +150,9 @@ describe("AuthService", () => {
       delete: jest.fn(),
     };
 
+    patRepository = { update: jest.fn() };
+    oauthProviderService = { revokeAllForUser: jest.fn().mockResolvedValue(0) };
+
     jwtService = {
       sign: jest.fn().mockReturnValue("mock-jwt-token"),
       verify: jest.fn(),
@@ -152,6 +168,7 @@ describe("AuthService", () => {
       // The spec provides a real TokenService, whose refresh-token writes now
       // go through the same scoped manager.
       [RefreshToken, refreshTokensRepository as never],
+      [PersonalAccessToken, patRepository as never],
     ]);
     scopedManager = scoped.manager;
     // Two statements now reach the manager directly on ordinary paths: the SQL
@@ -190,7 +207,7 @@ describe("AuthService", () => {
     };
 
     backupEncryptionService = {
-      rememberLoginPassword: jest.fn().mockResolvedValue(undefined),
+      rewrapBackupKey: jest.fn().mockResolvedValue(undefined),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -198,6 +215,8 @@ describe("AuthService", () => {
         AuthService,
         TokenService,
         TwoFactorService,
+        authAttemptCounterProvider(),
+        singleUseTokenProvider(),
         AuthEmailService,
         { provide: JwtService, useValue: jwtService },
         {
@@ -214,6 +233,7 @@ describe("AuthService", () => {
           },
         },
         { provide: DataSource, useValue: dataSource },
+        { provide: OAUTH_GRANT_REVOKER, useValue: oauthProviderService },
         { provide: PasswordBreachService, useValue: passwordBreachService },
         { provide: EmailService, useValue: emailService },
         {
@@ -344,6 +364,23 @@ describe("AuthService", () => {
       expect(result.user).not.toHaveProperty("passwordHash");
     });
 
+    it("wraps the backup key under the new password, bound to the hash it created", async () => {
+      usersRepository.findOne.mockResolvedValue(null);
+      const txManager = setupRegisterTransactionMock(1);
+
+      await service.register({
+        email: "new@example.com",
+        password: "StrongPass123!",
+      });
+
+      const createdHash = txManager.save.mock.calls[0][0].passwordHash;
+      expect(backupEncryptionService.rewrapBackupKey).toHaveBeenCalledWith(
+        "new-user",
+        "StrongPass123!",
+        createdHash,
+      );
+    });
+
     it("makes first user an admin", async () => {
       usersRepository.findOne.mockResolvedValue(null);
       const txManager = setupRegisterTransactionMock(0); // first user
@@ -400,38 +437,49 @@ describe("AuthService", () => {
       ).rejects.toThrow(ConflictException);
     });
 
-    it("claims an invited (passwordless) delegate instead of duplicating", async () => {
+    it("refuses to claim an invited (passwordless) delegate through /register", async () => {
+      // An invited row carries only an emailed invite token. Letting
+      // /register set its password would hand the row -- verified email and
+      // a session included -- to anyone who knows the address, without ever
+      // proving control of the mailbox. The invite link is the only way in.
+      const expiry = new Date(Date.now() + 60_000);
       const invitedDelegate = {
         id: "deleg-1",
         email: "shared@example.com",
         authProvider: "local",
         passwordHash: null,
+        emailVerified: true,
+        isDelegateOnly: true,
         resetToken: "tok",
-        resetTokenExpiry: new Date(),
+        resetTokenExpiry: expiry,
       };
       usersRepository.findOne.mockResolvedValue(invitedDelegate);
       delegationService.isDelegateUser.mockResolvedValue(true);
+      delegationService.isFullAccount.mockResolvedValue(false);
       passwordBreachService.isBreached.mockResolvedValue(false);
       usersRepository.save.mockImplementation(async (u: any) => u);
 
-      const result = await service.register({
+      const attempt = service.register({
         email: "shared@example.com",
         password: "StrongPass123!",
-        firstName: "Real",
+        firstName: "Attacker",
       });
 
-      expect(delegationService.isDelegateUser).toHaveBeenCalledWith("deleg-1");
-      expect(invitedDelegate.passwordHash).toBeTruthy();
-      expect(usersRepository.save).toHaveBeenCalledWith(invitedDelegate);
-      // The claim path reuses the existing row: no SERIALIZABLE create
-      // transaction is opened (every other scoped read is transaction(cb)).
+      // The same generic refusal a non-claimable row gets, so the response
+      // discloses nothing more than it did before.
+      await expect(attempt).rejects.toBeInstanceOf(ConflictException);
+      await expect(attempt).rejects.toThrow("Unable to complete registration");
+      expect(usersRepository.save).not.toHaveBeenCalled();
+      expect(invitedDelegate.passwordHash).toBeNull();
+      expect(invitedDelegate.resetToken).toBe("tok");
+      expect(invitedDelegate.resetTokenExpiry).toBe(expiry);
+      expect(invitedDelegate.isDelegateOnly).toBe(true);
+      // Nor does it fall through to creating a duplicate account.
       expect(
         dataSource.transaction.mock.calls.some(
           (call) => call[0] === "SERIALIZABLE",
         ),
       ).toBe(false);
-      expect(result.accessToken).toBeDefined();
-      expect(result.user).not.toHaveProperty("passwordHash");
     });
 
     it("claims a delegate with a temp password when the correct currentPassword is supplied", async () => {
@@ -536,6 +584,69 @@ describe("AuthService", () => {
       ).rejects.toThrow(/temporary password/i);
     });
 
+    describe("delegate claim hardening", () => {
+      const claimRow = async (extra: Record<string, unknown> = {}) => {
+        const row = {
+          id: "deleg-guard",
+          email: "shared-guard@example.com",
+          authProvider: "local",
+          passwordHash: await bcrypt.hash("Temp-Pw-9!aB", 4),
+          failedLoginAttempts: 0,
+          lockedUntil: null,
+          ...extra,
+        };
+        usersRepository.findOne.mockResolvedValue(row);
+        delegationService.isDelegateUser.mockResolvedValue(true);
+        delegationService.isFullAccount.mockResolvedValue(false);
+        passwordBreachService.isBreached.mockResolvedValue(false);
+        usersRepository.save.mockImplementation(async (u: any) => u);
+        return row;
+      };
+      const claim = (currentPassword = "Temp-Pw-9!aB") =>
+        service.register({
+          email: "shared-guard@example.com",
+          password: "StrongPass123!",
+          currentPassword,
+        });
+      const failedAttemptWrites = () =>
+        scopedManager.query.mock.calls.filter(
+          (c) =>
+            String(c[0]).includes("failed_login_attempts") &&
+            String(c[0]).includes("RETURNING"),
+        );
+
+      it("refuses a locked delegate row without issuing tokens", async () => {
+        await claimRow({ lockedUntil: new Date(Date.now() + 60_000) });
+
+        await expect(claim()).rejects.toThrow(ForbiddenException);
+        expect(usersRepository.save).not.toHaveBeenCalled();
+        expect(refreshTokensRepository.save).not.toHaveBeenCalled();
+      });
+
+      it("counts a wrong claim password as a failed attempt", async () => {
+        await claimRow();
+
+        await expect(claim("WrongPassword!")).rejects.toThrow(
+          UnauthorizedException,
+        );
+        expect(failedAttemptWrites()).toHaveLength(1);
+        expect(failedAttemptWrites()[0][1][0]).toBe("deleg-guard");
+      });
+
+      it("refuses a claim on a delegate with active 2FA, with no tokens and no save", async () => {
+        await claimRow({ twoFactorSecret: "encrypted-secret" });
+        preferencesRepository.findOne.mockResolvedValue({
+          twoFactorEnabled: true,
+        });
+
+        await expect(claim()).rejects.toThrow(
+          /two-factor authentication.*Sign in/i,
+        );
+        expect(usersRepository.save).not.toHaveBeenCalled();
+        expect(refreshTokensRepository.save).not.toHaveBeenCalled();
+      });
+    });
+
     it("never claims a row that already owns data (full account)", async () => {
       usersRepository.findOne.mockResolvedValue({
         id: "full-1",
@@ -627,25 +738,28 @@ describe("AuthService", () => {
     });
 
     it("marks a claimed delegate as email-verified", async () => {
-      const invitedDelegate = {
+      const tempPwHash = await bcrypt.hash("Temp-Pw-9!aB", 4);
+      const tempDelegate = {
         id: "deleg-verify",
         email: "shared-verify@example.com",
         authProvider: "local",
-        passwordHash: null,
+        passwordHash: tempPwHash,
         emailVerified: false,
-        resetToken: "tok",
-        resetTokenExpiry: new Date(),
+        resetToken: null,
+        resetTokenExpiry: null,
       };
-      usersRepository.findOne.mockResolvedValue(invitedDelegate);
+      usersRepository.findOne.mockResolvedValue(tempDelegate);
       delegationService.isDelegateUser.mockResolvedValue(true);
+      delegationService.isFullAccount.mockResolvedValue(false);
       usersRepository.save.mockImplementation(async (u: any) => u);
 
       await service.register({
         email: "shared-verify@example.com",
         password: "StrongPass123!",
+        currentPassword: "Temp-Pw-9!aB",
       });
 
-      expect(invitedDelegate.emailVerified).toBe(true);
+      expect(tempDelegate.emailVerified).toBe(true);
     });
   });
 
@@ -723,7 +837,35 @@ describe("AuthService", () => {
       );
     });
 
-    it("captures the password so automatic backups can be encrypted", async () => {
+    it("stamps last_login alone, never saving the pre-bcrypt snapshot over the counter reset", async () => {
+      // A whole-entity save wrote failed_login_attempts = 4 back over the SQL
+      // reset to 0 (A26-M01); test/integration/credential-writes-atomic holds
+      // the stored state.
+      const hashedPassword = await bcrypt.hash("ValidPass123!", 10);
+      const user = {
+        ...mockUser,
+        passwordHash: hashedPassword,
+        failedLoginAttempts: 4,
+        lockedUntil: new Date(Date.now() - 60_000),
+      };
+      usersRepository.findOne.mockResolvedValue(user);
+      preferencesRepository.findOne.mockResolvedValue(null);
+
+      await service.login({
+        email: "test@example.com",
+        password: "ValidPass123!",
+      });
+
+      expect(usersRepository.save).not.toHaveBeenCalled();
+      expect(usersRepository.update).toHaveBeenCalledWith(
+        { id: user.id },
+        { lastLogin: expect.any(Date) },
+      );
+      expect(user.failedLoginAttempts).toBe(0);
+      expect(user.lockedUntil).toBeNull();
+    });
+
+    it("re-wraps the backup key so automatic backups can be encrypted", async () => {
       const hashedPassword = await bcrypt.hash("ValidPass123!", 10);
       const user = { ...mockUser, passwordHash: hashedPassword };
       usersRepository.findOne.mockResolvedValue(user);
@@ -736,13 +878,16 @@ describe("AuthService", () => {
       });
 
       // Signing in is the only moment the server holds the plaintext, and the
-      // user is never asked to configure backup encryption.
-      expect(
-        backupEncryptionService.rememberLoginPassword,
-      ).toHaveBeenCalledWith(user.id, "ValidPass123!");
+      // user is never asked to configure backup encryption. The hash it was
+      // verified against goes with it, so the wrap is bound to that hash.
+      expect(backupEncryptionService.rewrapBackupKey).toHaveBeenCalledWith(
+        user.id,
+        "ValidPass123!",
+        hashedPassword,
+      );
     });
 
-    it("captures the password before the 2FA challenge", async () => {
+    it("re-wraps the backup key before the 2FA challenge", async () => {
       const hashedPassword = await bcrypt.hash("ValidPass123!", 10);
       const user = {
         ...mockUser,
@@ -762,9 +907,11 @@ describe("AuthService", () => {
       // The password is already proven correct here, and this exit returns
       // without reaching the code below it.
       expect(result.requires2FA).toBe(true);
-      expect(
-        backupEncryptionService.rememberLoginPassword,
-      ).toHaveBeenCalledWith(user.id, "ValidPass123!");
+      expect(backupEncryptionService.rewrapBackupKey).toHaveBeenCalledWith(
+        user.id,
+        "ValidPass123!",
+        hashedPassword,
+      );
     });
 
     it("captures nothing when the password is wrong", async () => {
@@ -777,18 +924,16 @@ describe("AuthService", () => {
       await expect(
         service.login({ email: "test@example.com", password: "WrongPass" }),
       ).rejects.toThrow(UnauthorizedException);
-      expect(
-        backupEncryptionService.rememberLoginPassword,
-      ).not.toHaveBeenCalled();
+      expect(backupEncryptionService.rewrapBackupKey).not.toHaveBeenCalled();
     });
 
-    it("signs in even when the backup password cannot be stored", async () => {
+    it("signs in even when the backup key cannot be wrapped", async () => {
       const hashedPassword = await bcrypt.hash("ValidPass123!", 10);
       const user = { ...mockUser, passwordHash: hashedPassword };
       usersRepository.findOne.mockResolvedValue(user);
       preferencesRepository.findOne.mockResolvedValue(null);
       usersRepository.save.mockResolvedValue(user);
-      backupEncryptionService.rememberLoginPassword.mockRejectedValue(
+      backupEncryptionService.rewrapBackupKey.mockRejectedValue(
         new Error("db down"),
       );
 
@@ -798,6 +943,79 @@ describe("AuthService", () => {
       });
 
       expect(result.accessToken).toBeDefined();
+    });
+
+    it("refuses password login for an SSO account that kept a local password hash", async () => {
+      // A link clears passwordHash, but one made before that (or a hash set
+      // since) must never sign in with no second factor: the OIDC login strips
+      // the TOTP secret.
+      const hashedPassword = await bcrypt.hash("ValidPass123!", 10);
+      usersRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        authProvider: "oidc",
+        passwordHash: hashedPassword,
+      });
+      const compare = jest.spyOn(bcrypt, "compare");
+      compare.mockClear();
+
+      await expect(
+        service.login({ email: "test@example.com", password: "ValidPass123!" }),
+      ).rejects.toThrow(/Invalid credentials/);
+      expect(compare).not.toHaveBeenCalled();
+      expect(usersRepository.save).not.toHaveBeenCalled();
+      expect(refreshTokensRepository.save).not.toHaveBeenCalled();
+    });
+
+    it("with OIDC_ALLOW_PASSWORD_LOGIN signs an SSO account in with its password", async () => {
+      (service as any).oidcPasswordLogin = true;
+      const hashedPassword = await bcrypt.hash("ValidPass123!", 10);
+      usersRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        authProvider: "oidc",
+        passwordHash: hashedPassword,
+      });
+
+      const result = await service.login({
+        email: "test@example.com",
+        password: "ValidPass123!",
+      });
+
+      expect(result.accessToken).toBeDefined();
+    });
+
+    it("with OIDC_ALLOW_PASSWORD_LOGIN still challenges an SSO account that has TOTP", async () => {
+      (service as any).oidcPasswordLogin = true;
+      const hashedPassword = await bcrypt.hash("ValidPass123!", 10);
+      usersRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        authProvider: "oidc",
+        passwordHash: hashedPassword,
+        twoFactorSecret: "encrypted-secret",
+      });
+      preferencesRepository.findOne.mockResolvedValue({
+        twoFactorEnabled: true,
+      });
+
+      const result = await service.login({
+        email: "test@example.com",
+        password: "ValidPass123!",
+      });
+
+      expect(result.requires2FA).toBe(true);
+      expect(result).not.toHaveProperty("accessToken");
+    });
+
+    it("with OIDC_ALLOW_PASSWORD_LOGIN still refuses a wrong password for an SSO account", async () => {
+      (service as any).oidcPasswordLogin = true;
+      usersRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        authProvider: "oidc",
+        passwordHash: await bcrypt.hash("ValidPass123!", 10),
+      });
+
+      await expect(
+        service.login({ email: "test@example.com", password: "wrong" }),
+      ).rejects.toThrow(UnauthorizedException);
     });
 
     it("throws for non-existent user", async () => {
@@ -866,6 +1084,31 @@ describe("AuthService", () => {
       );
     });
 
+    it("does not ask for a code when the flag is on but no secret is stored", async () => {
+      // Sign-in, status and preferences all read 2FA through
+      // `isTwoFactorActive`; a flag left over a cleared secret admits the
+      // password alone, and the other two surfaces now report it that way.
+      const hashedPassword = await bcrypt.hash("ValidPass123!", 10);
+      const user = {
+        ...mockUser,
+        passwordHash: hashedPassword,
+        twoFactorSecret: null,
+      };
+      usersRepository.findOne.mockResolvedValue(user);
+      usersRepository.save.mockResolvedValue(user);
+      preferencesRepository.findOne.mockResolvedValue({
+        twoFactorEnabled: true,
+      });
+
+      const result = await service.login({
+        email: "test@example.com",
+        password: "ValidPass123!",
+      });
+
+      expect(result).not.toHaveProperty("requires2FA");
+      expect(result.accessToken).toBeDefined();
+    });
+
     it("rejects login when account is locked", async () => {
       usersRepository.findOne.mockResolvedValue({
         ...mockUser,
@@ -878,6 +1121,191 @@ describe("AuthService", () => {
       expect((service as any).logger.warn).toHaveBeenCalledWith(
         expect.stringContaining("account locked"),
       );
+    });
+
+    describe("known login device (#2181)", () => {
+      const PASSWORD = "CorrectPass";
+      let hash: string;
+      beforeAll(async () => {
+        hash = await bcrypt.hash(PASSWORD, 4);
+      });
+      const lockedUser = () => ({
+        ...mockUser,
+        passwordHash: hash,
+        failedLoginAttempts: 7,
+        lockedUntil: new Date(Date.now() + 60 * 60 * 1000),
+      });
+      const deviceKey = () => (service as any).loginDeviceKey as string;
+      /** The cookie jar of a browser that signed in as `userId` under `pwHash`. */
+      const jar = (
+        userId: string,
+        pwHash: string,
+        now: number = Date.now(),
+      ) => ({
+        [loginDeviceCookieName(deviceKey(), userId)]: issueLoginDeviceCookie(
+          deviceKey(),
+          userId,
+          pwHash,
+          now,
+        ),
+      });
+      const attempt = (password: string, cookies?: Record<string, unknown>) =>
+        service.login(
+          { email: "test@example.com", password },
+          undefined,
+          undefined,
+          cookies,
+        );
+      const counters = () => (service as any).attemptCounters;
+      const accountResetCall = () =>
+        scopedManager.query.mock.calls.find((c) =>
+          String(c[0]).includes("SET failed_login_attempts = 0"),
+        );
+
+      it("issues a cookie bound to the current password, and none to an account that cannot use one", async () => {
+        usersRepository.findOne.mockResolvedValueOnce({
+          ...mockUser,
+          passwordHash: hash,
+        });
+        const cookie = await service.issueLoginDeviceCookie(mockUser.id);
+        expect(cookie?.name).toBe(
+          loginDeviceCookieName(deviceKey(), mockUser.id),
+        );
+        expect(
+          verifyLoginDeviceCookie(
+            deviceKey(),
+            mockUser.id,
+            hash,
+            cookie?.value,
+          ),
+        ).toBe(true);
+
+        usersRepository.findOne.mockResolvedValueOnce({
+          ...mockUser,
+          passwordHash: null,
+        });
+        await expect(
+          service.issueLoginDeviceCookie(mockUser.id),
+        ).resolves.toBeNull();
+
+        // SSO account without OIDC_ALLOW_PASSWORD_LOGIN: password sign-in is
+        // refused, so there is no password lock to be spared.
+        usersRepository.findOne.mockResolvedValueOnce({
+          ...mockUser,
+          authProvider: "oidc",
+          passwordHash: hash,
+        });
+        await expect(
+          service.issueLoginDeviceCookie(mockUser.id),
+        ).resolves.toBeNull();
+      });
+
+      it("feeds the per-account lockout from every source while the account is unlocked", async () => {
+        // Guesses spread over many IPs all land on the one account counter; a
+        // cookie changes nothing and writes nothing before the lock.
+        usersRepository.findOne.mockResolvedValue({
+          ...mockUser,
+          passwordHash: hash,
+        });
+        stageFailedAttempt({ attempts: 1 });
+
+        await expect(attempt("Wrong", jar(mockUser.id, hash))).rejects.toThrow(
+          UnauthorizedException,
+        );
+
+        expect(failedAttemptCall()).toBeDefined();
+        expect(counters().increment).not.toHaveBeenCalled();
+      });
+
+      it("refuses every login under the lock that lacks this account's live cookie", async () => {
+        usersRepository.findOne.mockResolvedValue(lockedUser());
+        const otherAccount = jar("another-user", hash);
+        const supersededHash = jar(mockUser.id, await bcrypt.hash("Old", 4));
+        const expired = jar(
+          mockUser.id,
+          hash,
+          Date.now() - 181 * 24 * 60 * 60 * 1000,
+        );
+        const misfiled = {
+          [loginDeviceCookieName(deviceKey(), mockUser.id)]:
+            Object.values(otherAccount)[0],
+        };
+        const forged = {
+          [loginDeviceCookieName(deviceKey(), mockUser.id)]: "abc.def.ghi",
+        };
+
+        for (const cookies of [
+          undefined,
+          otherAccount,
+          supersededHash,
+          expired,
+          misfiled,
+          forged,
+        ]) {
+          await expect(attempt(PASSWORD, cookies)).rejects.toThrow(
+            ForbiddenException,
+          );
+        }
+      });
+
+      it("lets the owner in from a known device while strangers keep the account locked", async () => {
+        usersRepository.findOne.mockResolvedValue(lockedUser());
+        preferencesRepository.findOne.mockResolvedValue(null);
+
+        const result = await attempt(PASSWORD, jar(mockUser.id, hash));
+
+        expect(result.accessToken).toBeDefined();
+        // The strangers' lock and count stand; clearing them would hand them a
+        // fresh allowance every time the owner signs in.
+        expect(accountResetCall()).toBeUndefined();
+        expect(counters().reset).toHaveBeenCalledWith(
+          "login-device",
+          expect.any(String),
+        );
+      });
+
+      it("hands a 2FA account on a known device to the second factor, not to the lock", async () => {
+        usersRepository.findOne.mockResolvedValue({
+          ...lockedUser(),
+          twoFactorSecret: "secret",
+        });
+        preferencesRepository.findOne.mockResolvedValue({
+          twoFactorEnabled: true,
+        });
+
+        const result = await attempt(PASSWORD, jar(mockUser.id, hash));
+
+        expect(result.requires2FA).toBe(true);
+        expect(accountResetCall()).toBeUndefined();
+      });
+
+      it("does not spare a known device a lock the 2FA budget set", async () => {
+        usersRepository.findOne.mockResolvedValue(lockedUser());
+        counters().rows.set(`2fa-lock\u0000${mockUser.id}`, {
+          count: 1,
+          windowExpiresAt: new Date(Date.now() + 30 * 60 * 1000),
+        });
+
+        await expect(attempt(PASSWORD, jar(mockUser.id, hash))).rejects.toThrow(
+          ForbiddenException,
+        );
+      });
+
+      it("counts a known device's failures on its own budget, then locks it out too", async () => {
+        usersRepository.findOne.mockResolvedValue(lockedUser());
+        const cookies = jar(mockUser.id, hash);
+
+        for (let i = 0; i < 10; i++) {
+          await expect(attempt("Wrong", cookies)).rejects.toThrow(
+            UnauthorizedException,
+          );
+        }
+        expect(failedAttemptCall()).toBeUndefined();
+
+        await expect(attempt(PASSWORD, cookies)).rejects.toThrow(
+          ForbiddenException,
+        );
+      });
     });
 
     it("allows login when lock has expired", async () => {
@@ -922,7 +1350,15 @@ describe("AuthService", () => {
       // carry the id, the threshold, and the base lockout window.
       const increment = failedAttemptCall();
       expect(increment).toBeDefined();
-      expect(increment![1]).toEqual([mockUser.id, 5, 30 * 60 * 1000]);
+      // Threshold, base window, the cap on doublings (4 hours at most) and the
+      // decay window after which an expired lock's escalation is forgotten.
+      expect(increment![1]).toEqual([
+        mockUser.id,
+        5,
+        30 * 60 * 1000,
+        3,
+        24 * 60 * 60 * 1000,
+      ]);
       // The lockout is folded into that same UPDATE (a CASE on the threshold),
       // so no separate query-builder lockout write remains in the login path.
       expect(usersRepository.createQueryBuilder).not.toHaveBeenCalled();
@@ -1227,6 +1663,32 @@ describe("AuthService", () => {
       ).rejects.toThrow("New account registration is disabled.");
     });
 
+    it("merges directly into an account that is already SSO and kept its password (no confirmation email)", async () => {
+      const existing: any = {
+        id: "u1",
+        email: "user@example.com",
+        passwordHash: "hash",
+        authProvider: "oidc",
+        oidcSubject: "old-sub",
+      };
+      usersRepository.findOne
+        .mockResolvedValueOnce(null) // by oidcSubject
+        .mockResolvedValueOnce(existing); // by email
+      usersRepository.save.mockImplementation(async (u: any) => u);
+      const sendSpy = jest
+        .spyOn(service as any, "sendOidcLinkEmail")
+        .mockResolvedValue(undefined);
+
+      const result = await service.findOrCreateOidcUser(
+        { ...oidcProfile, email_verified: true },
+        false,
+      );
+
+      expect(result.linkPending).toBeFalsy();
+      expect(existing.oidcSubject).toBe("oidc-sub-123");
+      expect(sendSpy).not.toHaveBeenCalled();
+    });
+
     it("with OIDC_REQUIRE_VERIFIED_EMAIL=false merges directly into a matching password account (no confirmation email)", async () => {
       configService.get.mockImplementation((key: string) => {
         if (key === "JWT_SECRET")
@@ -1254,6 +1716,14 @@ describe("AuthService", () => {
       expect(result.user).toBe(existing);
       expect(existing.oidcSubject).toBe("oidc-sub-123");
       expect(existing.authProvider).toBe("oidc");
+      // The password stays; the credentials issued under the old method end
+      // with the change, as on the confirmed link (INV-AUTH-005).
+      expect(existing.passwordHash).toBe("hash");
+      expect(patRepository.update).toHaveBeenCalledWith(
+        { userId: "u1", isRevoked: false },
+        { isRevoked: true },
+      );
+      expect(oauthProviderService.revokeAllForUser).toHaveBeenCalledWith("u1");
       expect(sendSpy).not.toHaveBeenCalled();
     });
 
@@ -1288,6 +1758,7 @@ describe("AuthService", () => {
       expect(result.user).toBe(existing);
       expect(existing.oidcSubject).toBe("oidc-sub-123");
       expect(existing.authProvider).toBe("oidc");
+      expect(existing.passwordHash).toBe("hash");
       expect(sendSpy).not.toHaveBeenCalled();
     });
   });
@@ -1585,6 +2056,25 @@ describe("AuthService", () => {
   // disable2FA
   // ---------------------------------------------------------------
 
+  describe("reset2FA", () => {
+    it("hands the whole request to TwoFactorService, the session to keep included", async () => {
+      const twoFactor = (service as any).twoFactorService as TwoFactorService;
+      const reset = jest
+        .spyOn(twoFactor, "reset2FA")
+        .mockResolvedValue({ message: "ok" });
+
+      await expect(
+        service.reset2FA("user-1", "pw", "abcd-ef01", "current-refresh"),
+      ).resolves.toEqual({ message: "ok" });
+      expect(reset).toHaveBeenCalledWith(
+        "user-1",
+        "pw",
+        "abcd-ef01",
+        "current-refresh",
+      );
+    });
+  });
+
   describe("disable2FA", () => {
     it("validates code, clears secret, disables preferences, revokes trusted devices", async () => {
       const encryptedSecret = encrypt("TESTSECRET", TEST_TOTP_KEY);
@@ -1602,8 +2092,10 @@ describe("AuthService", () => {
       expect(result.message).toContain("disabled successfully");
 
       // Secret should be cleared
-      const savedUser = usersRepository.save.mock.calls[0][0];
-      expect(savedUser.twoFactorSecret).toBeNull();
+      expect(usersRepository.update).toHaveBeenCalledWith(
+        { id: "user-1" },
+        { twoFactorSecret: null, backupCodes: null },
+      );
 
       // Preferences should be disabled
       expect(preferencesRow.row()!.twoFactorEnabled).toBe(false);
@@ -1804,12 +2296,13 @@ describe("AuthService", () => {
         twoFactorSecret: encryptedSecret,
       });
       (otplib.verifySync as jest.Mock).mockReturnValue({ valid: true });
-      usersRepository.save.mockImplementation((u) => u);
 
       await service.verify2FA("valid-temp-token", "123456");
 
-      const savedUser = usersRepository.save.mock.calls[0][0];
-      expect(savedUser.lastLogin).toBeInstanceOf(Date);
+      expect(usersRepository.update).toHaveBeenCalledWith(
+        { id: mockUser.id },
+        { lastLogin: expect.any(Date) },
+      );
       expect((service as any).logger.log).toHaveBeenCalledWith(
         expect.stringContaining("2FA verification successful"),
       );
@@ -1868,6 +2361,77 @@ describe("AuthService", () => {
       expect(result.user.lastName).toBe("User");
       // Drives the callback's first-run language/currency step.
       expect(result.isNewUser).toBe(true);
+    });
+
+    it("keeps the local password an SSO account holds on its next OIDC login", async () => {
+      const existing: any = {
+        id: "oidc-existing",
+        email: "oidc@example.com",
+        oidcSubject: "oidc-sub-123",
+        authProvider: "oidc",
+        passwordHash: "linked-before-1858",
+        resetToken: "pending-reset",
+      };
+      usersRepository.findOne.mockResolvedValueOnce(existing);
+      usersRepository.save.mockImplementation((u) => u);
+
+      await service.findOrCreateOidcUser({
+        sub: "oidc-sub-123",
+        email: "oidc@example.com",
+        email_verified: true,
+      });
+
+      expect(existing.passwordHash).toBe("linked-before-1858");
+      expect(existing.resetToken).toBe("pending-reset");
+      expect(existing.oidcSubject).toBe("oidc-sub-123");
+      expect(usersRepository.save).toHaveBeenCalledWith(existing);
+    });
+
+    it("with OIDC_ALLOW_PASSWORD_LOGIN keeps the password and the TOTP secret on an OIDC login", async () => {
+      (service as any).oidcPasswordLogin = true;
+      const existing: any = {
+        id: "oidc-existing",
+        email: "oidc@example.com",
+        oidcSubject: "oidc-sub-123",
+        authProvider: "oidc",
+        passwordHash: "kept-hash",
+        resetToken: "pending-reset",
+        twoFactorSecret: "totp-secret",
+        backupCodes: "[]",
+      };
+      usersRepository.findOne.mockResolvedValueOnce(existing);
+      usersRepository.save.mockImplementation((u) => u);
+
+      await service.findOrCreateOidcUser({
+        sub: "oidc-sub-123",
+        email: "oidc@example.com",
+        email_verified: true,
+      });
+
+      expect(existing.passwordHash).toBe("kept-hash");
+      expect(existing.resetToken).toBe("pending-reset");
+      expect(existing.twoFactorSecret).toBe("totp-secret");
+      expect(existing.backupCodes).toBe("[]");
+    });
+
+    it("clears the TOTP secret of an SSO account on an OIDC login by default", async () => {
+      const existing: any = {
+        id: "oidc-existing",
+        email: "oidc@example.com",
+        oidcSubject: "oidc-sub-123",
+        authProvider: "oidc",
+        twoFactorSecret: "totp-secret",
+      };
+      usersRepository.findOne.mockResolvedValueOnce(existing);
+      usersRepository.save.mockImplementation((u) => u);
+
+      await service.findOrCreateOidcUser({
+        sub: "oidc-sub-123",
+        email: "oidc@example.com",
+        email_verified: true,
+      });
+
+      expect(existing.twoFactorSecret).toBeNull();
     });
 
     it("does not flag a returning OIDC user as new", async () => {
@@ -2020,6 +2584,60 @@ describe("AuthService", () => {
       expect(result.user.authProvider).toBe("oidc");
     });
 
+    describe("an existing SSO account found by email", () => {
+      const ssoByEmail = (): any => ({
+        ...mockUser,
+        id: "sso-user",
+        authProvider: "oidc",
+        oidcSubject: null,
+        passwordHash: "kept-hash",
+        mustChangePassword: true,
+        resetToken: "reset-before-link",
+        resetTokenExpiry: new Date(),
+      });
+      const login = () =>
+        service.findOrCreateOidcUser({
+          sub: "oidc-sub-merge",
+          email: "test@example.com",
+          email_verified: true,
+        });
+
+      beforeEach(() => {
+        usersRepository.save.mockImplementation((u) => u);
+      });
+
+      it("merges directly, revokes nothing and clears reset state and the forced change with the flag off", async () => {
+        stageOneTokenFamily();
+        const existing = ssoByEmail();
+        usersRepository.findOne
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce(existing);
+
+        const result = await login();
+
+        expect(result.linkPending).toBeFalsy();
+        expect(existing.oidcSubject).toBe("oidc-sub-merge");
+        expect(existing.passwordHash).toBe("kept-hash");
+        expect(existing.resetToken).toBeNull();
+        expect(existing.resetTokenExpiry).toBeNull();
+        expect(existing.mustChangePassword).toBe(false);
+        expect(refreshTokensRepository.update).not.toHaveBeenCalled();
+      });
+
+      it("asks for link confirmation with the flag on and a password kept", async () => {
+        (service as any).oidcPasswordLogin = true;
+        const existing = ssoByEmail();
+        usersRepository.findOne
+          .mockResolvedValueOnce(null)
+          .mockResolvedValueOnce(existing);
+
+        const result = await login();
+
+        expect(result.linkPending).toBe(true);
+        expect(existing.oidcSubject).toBeNull();
+      });
+    });
+
     it("does NOT link to existing user when email is unverified", async () => {
       usersRepository.findOne.mockResolvedValue(null); // no existing by oidcSubject
       const txManager = setupOidcTransactionMock(1);
@@ -2069,6 +2687,8 @@ describe("AuthService", () => {
         id: "oidc-existing",
         oidcSubject: "oidc-sub-same",
         authProvider: "oidc",
+        // An SSO account holds no local password; one would be cleared (#1858).
+        passwordHash: null,
         firstName: "Test",
         lastName: "User",
         email: "test@example.com",
@@ -2566,33 +3186,25 @@ describe("AuthService", () => {
   // ---------------------------------------------------------------
 
   describe("purgeExpiredRefreshTokens", () => {
-    it("deletes expired and revoked tokens", async () => {
-      refreshTokensRepository.delete
-        .mockResolvedValueOnce({ affected: 5 })
-        .mockResolvedValueOnce({ affected: 3 });
+    it("deletes only expired tokens, keeping revoked rows for reuse detection", async () => {
+      refreshTokensRepository.delete.mockResolvedValue({ affected: 5 });
 
       await service.purgeExpiredRefreshTokens();
 
+      expect(refreshTokensRepository.delete).toHaveBeenCalledTimes(1);
       expect(refreshTokensRepository.delete).toHaveBeenCalledWith(
         expect.objectContaining({
           expiresAt: expect.anything(),
         }),
       );
-      expect(refreshTokensRepository.delete).toHaveBeenCalledWith(
-        expect.objectContaining({
-          isRevoked: true,
-        }),
-      );
     });
 
     it("does not log when no tokens purged", async () => {
-      refreshTokensRepository.delete
-        .mockResolvedValueOnce({ affected: 0 })
-        .mockResolvedValueOnce({ affected: 0 });
+      refreshTokensRepository.delete.mockResolvedValue({ affected: 0 });
 
       await service.purgeExpiredRefreshTokens();
 
-      expect(refreshTokensRepository.delete).toHaveBeenCalledTimes(2);
+      expect(refreshTokensRepository.delete).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -3173,53 +3785,34 @@ describe("AuthService", () => {
   // ---------------------------------------------------------------
 
   describe("checkForgotPasswordEmailLimit (M7)", () => {
-    it("allows first 3 requests for an email", () => {
-      expect(service.checkForgotPasswordEmailLimit("test@example.com")).toBe(
-        true,
-      );
-      expect(service.checkForgotPasswordEmailLimit("test@example.com")).toBe(
-        true,
-      );
-      expect(service.checkForgotPasswordEmailLimit("test@example.com")).toBe(
-        true,
-      );
+    const check = (email: string) =>
+      service.checkForgotPasswordEmailLimit(email);
+
+    it("allows first 3 requests for an email", async () => {
+      await expect(check("test@example.com")).resolves.toBe(true);
+      await expect(check("test@example.com")).resolves.toBe(true);
+      await expect(check("test@example.com")).resolves.toBe(true);
     });
 
-    it("blocks the 4th request for the same email within the window", () => {
-      expect(service.checkForgotPasswordEmailLimit("block@example.com")).toBe(
-        true,
-      );
-      expect(service.checkForgotPasswordEmailLimit("block@example.com")).toBe(
-        true,
-      );
-      expect(service.checkForgotPasswordEmailLimit("block@example.com")).toBe(
-        true,
-      );
-      expect(service.checkForgotPasswordEmailLimit("block@example.com")).toBe(
-        false,
-      );
+    it("blocks the 4th request for the same email within the window", async () => {
+      await expect(check("block@example.com")).resolves.toBe(true);
+      await expect(check("block@example.com")).resolves.toBe(true);
+      await expect(check("block@example.com")).resolves.toBe(true);
+      await expect(check("block@example.com")).resolves.toBe(false);
     });
 
-    it("normalizes email case", () => {
-      expect(service.checkForgotPasswordEmailLimit("UPPER@Example.COM")).toBe(
-        true,
-      );
-      expect(service.checkForgotPasswordEmailLimit("upper@example.com")).toBe(
-        true,
-      );
-      expect(service.checkForgotPasswordEmailLimit("Upper@EXAMPLE.com")).toBe(
-        true,
-      );
-      expect(service.checkForgotPasswordEmailLimit("upper@example.com")).toBe(
-        false,
-      );
+    it("normalizes email case", async () => {
+      await expect(check("UPPER@Example.COM")).resolves.toBe(true);
+      await expect(check("upper@example.com")).resolves.toBe(true);
+      await expect(check("Upper@EXAMPLE.com")).resolves.toBe(true);
+      await expect(check("upper@example.com")).resolves.toBe(false);
     });
 
-    it("tracks different emails independently", () => {
-      expect(service.checkForgotPasswordEmailLimit("a@test.com")).toBe(true);
-      expect(service.checkForgotPasswordEmailLimit("a@test.com")).toBe(true);
-      expect(service.checkForgotPasswordEmailLimit("a@test.com")).toBe(true);
-      expect(service.checkForgotPasswordEmailLimit("b@test.com")).toBe(true); // different email
+    it("tracks different emails independently", async () => {
+      await expect(check("a@test.com")).resolves.toBe(true);
+      await expect(check("a@test.com")).resolves.toBe(true);
+      await expect(check("a@test.com")).resolves.toBe(true);
+      await expect(check("b@test.com")).resolves.toBe(true); // different email
     });
   });
 
@@ -3268,6 +3861,79 @@ describe("AuthService", () => {
       expect(result.oidcLinkPending).toBe(false);
       expect(result.oidcLinkToken).toBeNull();
       expect(result.pendingOidcSubject).toBeNull();
+      // The link keeps the local password; OIDC_ALLOW_PASSWORD_LOGIN decides
+      // whether it may sign in.
+      expect(result.passwordHash).toBe(mockUser.passwordHash);
+    });
+
+    it("confirmOidcLink leaves the backup key and its password ref alone", async () => {
+      const ref = loginPasswordRef(mockUser.passwordHash);
+      const pendingUser = {
+        ...mockUser,
+        oidcLinkPending: true,
+        oidcLinkExpiresAt: new Date(Date.now() + 3600000),
+        pendingOidcSubject: "oidc-sub-confirmed",
+        backupEncryptionEnabled: true,
+        backupKeyEnc: "enc",
+        backupKeyWrap: "wrap",
+        backupKeyPasswordRef: ref,
+      };
+      usersRepository.findOne.mockResolvedValue(pendingUser);
+      usersRepository.save.mockImplementation((u) => u);
+
+      const result = await service.confirmOidcLink("some-token");
+
+      expect(result.backupKeyPasswordRef).toBe(ref);
+      expect(result.backupKeyEnc).toBe("enc");
+      expect(result.backupKeyWrap).toBe("wrap");
+      expect(result.backupEncryptionEnabled).toBe(true);
+    });
+
+    it("confirmOidcLink ends every credential the local password stood behind", async () => {
+      // The account now signs in through the identity provider; a PAT, a
+      // trusted device, a session or an MCP client's OAuth grant issued on the
+      // strength of the local password must not survive the switch.
+      stageOneTokenFamily();
+      const pendingUser = {
+        ...mockUser,
+        oidcLinkPending: true,
+        oidcLinkExpiresAt: new Date(Date.now() + 3600000),
+        pendingOidcSubject: "oidc-sub-confirmed",
+      };
+      usersRepository.findOne.mockResolvedValue(pendingUser);
+      usersRepository.save.mockImplementation((u) => u);
+
+      await service.confirmOidcLink("some-token");
+
+      expect(patRepository.update).toHaveBeenCalledWith(
+        { userId: mockUser.id, isRevoked: false },
+        { isRevoked: true },
+      );
+      expect(trustedDevicesRepository.delete).toHaveBeenCalledWith({
+        userId: mockUser.id,
+      });
+      expect(refreshTokensRepository.update).toHaveBeenCalledWith(
+        expect.objectContaining({ userId: mockUser.id, isRevoked: false }),
+        { isRevoked: true },
+      );
+      expect(oauthProviderService.revokeAllForUser).toHaveBeenCalledWith(
+        mockUser.id,
+      );
+    });
+
+    it("confirmOidcLink revokes nothing for an expired link", async () => {
+      usersRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        oidcLinkPending: true,
+        oidcLinkExpiresAt: new Date(Date.now() - 3600000),
+        pendingOidcSubject: "oidc-sub-expired",
+      });
+      usersRepository.save.mockImplementation((u) => u);
+
+      await expect(service.confirmOidcLink("expired-token")).rejects.toThrow();
+
+      expect(patRepository.update).not.toHaveBeenCalled();
+      expect(oauthProviderService.revokeAllForUser).not.toHaveBeenCalled();
     });
 
     it("confirmOidcLink throws for expired token", async () => {
@@ -3740,7 +4406,8 @@ describe("AuthService", () => {
       expect(mockQB.update).toHaveBeenCalled();
       expect(mockQB.set).toHaveBeenCalledWith(
         expect.objectContaining({
-          lockedUntil: expect.any(Date),
+          // GREATEST(...) on the database clock: never shortens a longer lock.
+          lockedUntil: expect.any(Function),
         }),
       );
     });
@@ -3792,15 +4459,39 @@ describe("AuthService", () => {
   // ---------------------------------------------------------------
 
   describe("is2FAEnabled", () => {
-    it("returns true when the user's preferences have 2FA enabled", async () => {
+    it("returns true when the flag is on and a secret is stored", async () => {
       preferencesRepository.findOne.mockResolvedValue({
         userId: "u1",
         twoFactorEnabled: true,
+      });
+      usersRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        id: "u1",
+        twoFactorSecret: "encrypted-secret",
       });
       await expect(service.is2FAEnabled("u1")).resolves.toBe(true);
       expect(preferencesRepository.findOne).toHaveBeenCalledWith({
         where: { userId: "u1" },
       });
+      expect(usersRepository.findOne).toHaveBeenCalledWith({
+        where: { id: "u1" },
+      });
+    });
+
+    it("returns false when the flag is on but no secret is stored", async () => {
+      // The state issue #1429's reporter was left in: sign-in no longer asked
+      // for a code, while Settings, reading the flag alone, still said enabled
+      // and offered no way to enroll again. Status answers what sign-in does.
+      preferencesRepository.findOne.mockResolvedValue({
+        userId: "u1",
+        twoFactorEnabled: true,
+      });
+      usersRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        id: "u1",
+        twoFactorSecret: null,
+      });
+      await expect(service.is2FAEnabled("u1")).resolves.toBe(false);
     });
 
     it("returns false when preferences are missing or 2FA is disabled", async () => {
@@ -3903,6 +4594,23 @@ describe("AuthService", () => {
       // The consumption block returns early without writing, so its
       // transaction commits empty -- same net effect as the old rollback.
       expect(dataSource.transaction).toHaveBeenCalled();
+    });
+  });
+
+  describe("confirmEmailChange", () => {
+    // The link is followed signed out, so the service seeds its own identity
+    // around the token lookup, the same way verifyEmail does.
+    it("hands the token to AuthEmailService", async () => {
+      const authEmail = (
+        service as unknown as { authEmailService: AuthEmailService }
+      ).authEmailService;
+      const confirm = jest
+        .spyOn(authEmail, "confirmEmailChange")
+        .mockResolvedValue(undefined);
+
+      await service.confirmEmailChange("change-token");
+
+      expect(confirm).toHaveBeenCalledWith("change-token");
     });
   });
 });

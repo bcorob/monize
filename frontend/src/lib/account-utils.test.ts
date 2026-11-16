@@ -1,6 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
   buildAccountDropdownOptions,
+  orderAccountsForPicker,
+  orderForPicker,
   buildAccountFilterLabel,
   formatAccountType,
   isInvestmentBrokerageAccount,
@@ -21,12 +23,108 @@ function makeAccount(overrides: Partial<Account> & { id: string; name: string })
     paymentAmount: null, paymentFrequency: null, paymentStartDate: null,
     sourceAccountId: null, principalCategoryId: null, interestCategoryId: null, overpaymentCategoryId: null, overpaymentMemo: null, overpaymentPayeeId: null, fxFeePercent: null,
     scheduledTransactionId: null, assetCategoryId: null, dateAcquired: null, linkedLoanAccountId: null,
-    isCanadianMortgage: false, isVariableRate: false, termMonths: null,
+    mortgageType: 'ANNUITY',
+    termMonths: null,
     termEndDate: null, amortizationMonths: null, originalPrincipal: null,
     createdAt: '', updatedAt: '',
     ...overrides,
   };
 }
+
+describe('orderAccountsForPicker', () => {
+  const accounts = [
+    makeAccount({ id: 'z', name: 'Zebra' }),
+    makeAccount({ id: 'f2', name: 'Beta', isFavourite: true, favouriteSortOrder: 2 }),
+    makeAccount({ id: 'a', name: 'Alpha' }),
+    makeAccount({ id: 'f1', name: 'Yankee', isFavourite: true, favouriteSortOrder: 1 }),
+  ];
+
+  it('puts the starred accounts in the order the user arranged them', () => {
+    // `favouriteSortOrder`, never the name: the user dragged them into that
+    // order and every picker honours it.
+    expect(orderAccountsForPicker(accounts).favourites.map((a) => a.name)).toEqual([
+      'Yankee',
+      'Beta',
+    ]);
+  });
+
+  it('sorts everything else by name', () => {
+    expect(orderAccountsForPicker(accounts).rest.map((a) => a.name)).toEqual([
+      'Alpha',
+      'Zebra',
+    ]);
+  });
+
+  it('leaves the array it was handed alone', () => {
+    // `Array.prototype.sort` reorders in place, and callers pass a list they
+    // memoized for other consumers too.
+    const input = [...accounts];
+    orderAccountsForPicker(input);
+    expect(input.map((a) => a.id)).toEqual(['z', 'f2', 'a', 'f1']);
+  });
+
+  it('falls back to alphabetical where the arrangement does not separate them', () => {
+    // `favourite_sort_order` defaults to 0, so a user who starred three
+    // accounts without ever dragging them into an order has three ties -- and a
+    // stable sort leaves those in whatever order the API answered in, which
+    // differs between surfaces reading the same list.
+    const tied = [
+      makeAccount({ id: 't1', name: 'Zephyr', isFavourite: true, favouriteSortOrder: 0 }),
+      makeAccount({ id: 't2', name: 'Anchor', isFavourite: true, favouriteSortOrder: 0 }),
+      makeAccount({ id: 't3', name: 'Mid', isFavourite: true, favouriteSortOrder: 0 }),
+    ];
+    expect(orderAccountsForPicker(tied).favourites.map((a) => a.name)).toEqual([
+      'Anchor',
+      'Mid',
+      'Zephyr',
+    ]);
+  });
+
+  it('keeps the arrangement ahead of the alphabet where it says something', () => {
+    const arranged = [
+      makeAccount({ id: 'a1', name: 'Anchor', isFavourite: true, favouriteSortOrder: 2 }),
+      makeAccount({ id: 'a2', name: 'Zephyr', isFavourite: true, favouriteSortOrder: 1 }),
+    ];
+    expect(orderAccountsForPicker(arranged).favourites.map((a) => a.name)).toEqual([
+      'Zephyr',
+      'Anchor',
+    ]);
+  });
+
+  it('returns two empty halves for no accounts', () => {
+    expect(orderAccountsForPicker([])).toEqual({ favourites: [], rest: [] });
+  });
+});
+
+describe('orderForPicker', () => {
+  it('orders by the name the caller says the picker displays', () => {
+    // The account switcher shows a linked pair under a stripped name, so the
+    // stored name is not what a reader is scanning down.
+    const entries = [
+      { stored: 'Zephyr TFSA - Brokerage', shown: 'Anchor', fav: false },
+      { stored: 'Anchor Loan', shown: 'Zephyr', fav: false },
+    ];
+    const ordered = orderForPicker(entries, (entry) => ({
+      isFavourite: entry.fav,
+      favouriteSortOrder: 0,
+      name: entry.shown,
+    }));
+    expect(ordered.rest.map((entry) => entry.shown)).toEqual(['Anchor', 'Zephyr']);
+  });
+
+  it('reads each item once, however long the list', () => {
+    // A comparator that called `read` would call it O(n log n) times, and it is
+    // a caller's own function.
+    const items = Array.from({ length: 20 }, (_, index) => ({ name: `Item ${index}` }));
+    const read = vi.fn((item: { name: string }) => ({
+      isFavourite: false,
+      favouriteSortOrder: 0,
+      name: item.name,
+    }));
+    orderForPicker(items, read);
+    expect(read).toHaveBeenCalledTimes(items.length);
+  });
+});
 
 describe('buildAccountDropdownOptions', () => {
   const accounts: Account[] = [
@@ -189,6 +287,7 @@ describe('formatAccountType', () => {
     expect(formatAccountType('CREDIT_CARD')).toBe('Credit Card');
     expect(formatAccountType('LINE_OF_CREDIT')).toBe('Line of Credit');
     expect(formatAccountType('CHEQUING')).toBe('Chequing');
+    expect(formatAccountType('CRYPTO')).toBe('Crypto Wallet');
   });
 
   it('returns the raw type string for unknown types', () => {

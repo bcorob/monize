@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act, waitFor, cleanup } from '@/test/render';
-import { NextIntlClientProvider } from 'next-intl';
 import toast from 'react-hot-toast';
 import { InvestmentRegisterPanel } from './InvestmentRegisterPanel';
 import { accountsApi } from '@/lib/accounts';
@@ -9,10 +8,6 @@ import { transactionsApi } from '@/lib/transactions';
 import { invalidateBalanceCaches } from '@/lib/apiCache';
 import type { Account } from '@/types/account';
 import { TransactionStatus, type Transaction } from '@/types/transaction';
-import investmentMessages from '@/i18n/messages/en/accountDetail-investment.json';
-import investmentsNs from '@/i18n/messages/en/investments.json';
-import transactionsNs from '@/i18n/messages/en/transactions.json';
-import commonNs from '@/i18n/messages/en/common.json';
 
 vi.mock('@/lib/investments', () => ({
   investmentsApi: {
@@ -161,21 +156,11 @@ async function renderPanel(
 ) {
   await act(async () => {
     render(
-      <NextIntlClientProvider
-        locale="en"
-        messages={{
-          'accountDetail-investment': investmentMessages,
-          investments: investmentsNs,
-          transactions: transactionsNs,
-          common: commonNs,
-        }}
-      >
-        <InvestmentRegisterPanel
-          holdingsAccount={holdingsAccount}
-          cashAccount={cashAccount}
-          onDataChanged={onDataChanged}
-        />
-      </NextIntlClientProvider>,
+      <InvestmentRegisterPanel
+        holdingsAccount={holdingsAccount}
+        cashAccount={cashAccount}
+        onDataChanged={onDataChanged}
+      />,
     );
   });
 }

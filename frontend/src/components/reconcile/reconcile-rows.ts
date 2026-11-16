@@ -1,5 +1,6 @@
 import { Transaction, TransactionStatus } from '@/types/transaction';
 import { compareValues, type SortDirection } from '@/hooks/useSortableTable';
+import { FIAT_MONEY_DECIMALS, sumMoney } from '@/lib/format';
 
 /** Every column the reconcile table can be ordered by. */
 export type ReconcileSortField =
@@ -24,18 +25,18 @@ export function transactionFlow(amount: number | string): ReconcileFlow {
 }
 
 /**
- * Sum amounts in integer units of the storage precision.
+ * Sum amounts exactly at `decimals`, the account currency's money precision
+ * (`moneyDecimalsForCurrency`: four for fiat, a coin's eight).
  *
- * `decimal(20,4)` crosses the wire as a string, so every value is coerced
- * before it is scaled, and the accumulation happens in integers so summing
- * fifty rows cannot drift a cent (the root `CLAUDE.md` financial-math rule).
+ * A money column crosses the wire as a string, so every value is coerced
+ * before it is summed, and the accumulation happens in integers (`sumMoney`)
+ * so summing fifty rows cannot drift a cent (`AGENTS.md` financial-math rule).
  */
-export function sumAmounts(rows: readonly Transaction[]): number {
-  const scaled = rows.reduce(
-    (sum, row) => sum + Math.round(Number(row.amount) * 10000),
-    0,
-  );
-  return scaled / 10000;
+export function sumAmounts(
+  rows: readonly Transaction[],
+  decimals: number = FIAT_MONEY_DECIMALS,
+): number {
+  return sumMoney(rows.map((row) => Number(row.amount)), decimals);
 }
 
 /** Rank for the status column, so the sort is by meaning rather than by spelling. */
@@ -134,15 +135,60 @@ export interface ReconcileGroup {
 export function groupReconcileRows(
   rows: readonly Transaction[],
   groupByFlow: boolean,
+  decimals: number = FIAT_MONEY_DECIMALS,
 ): ReconcileGroup[] {
   if (!groupByFlow) {
-    return [{ flow: null, rows: [...rows], subtotal: sumAmounts(rows) }];
+    return [{ flow: null, rows: [...rows], subtotal: sumAmounts(rows, decimals) }];
   }
   const groups: ReconcileGroup[] = [];
   for (const flow of ['credit', 'debit'] as const) {
     const inFlow = rows.filter((row) => transactionFlow(row.amount) === flow);
     if (inFlow.length === 0) continue;
-    groups.push({ flow, rows: inFlow, subtotal: sumAmounts(inFlow) });
+    groups.push({ flow, rows: inFlow, subtotal: sumAmounts(inFlow, decimals) });
   }
   return groups;
+}
+
+/**
+ * The rows a reconciliation starts with ticked: every listed row dated on or
+ * before the statement date, whatever its status. With the statement balance
+ * pre-filled from the ledger, that opening selection already balances, and the
+ * user unticks what the statement does not show rather than ticking all of what
+ * it does.
+ *
+ * The server lists every outstanding row, including those dated after the
+ * statement; they are shown so they can be ticked, but start unticked.
+ */
+export function initialReconcileSelection(
+  rows: readonly Transaction[],
+  statementDate: string,
+): Set<string> {
+  return new Set(
+    rows.filter((row) => row.transactionDate <= statementDate).map((row) => row.id),
+  );
+}
+
+/**
+ * The selection after the list is reloaded inside the reconcile step.
+ *
+ * A row keeps whatever the user made of it while it stays listed; a row that
+ * has gone (deleted, or edited past the statement date) drops out rather than
+ * leaving a phantom in the selected total; and a row that has newly appeared
+ * is ticked by the {@link initialReconcileSelection} rule, so an added
+ * transaction behaves the way one already on the statement would.
+ */
+export function carryReconcileSelection(
+  previouslySelected: ReadonlySet<string>,
+  previouslyListed: ReadonlySet<string>,
+  rows: readonly Transaction[],
+  statementDate: string,
+): Set<string> {
+  const next = new Set<string>();
+  for (const row of rows) {
+    const keep = previouslyListed.has(row.id)
+      ? previouslySelected.has(row.id)
+      : row.transactionDate <= statementDate;
+    if (keep) next.add(row.id);
+  }
+  return next;
 }

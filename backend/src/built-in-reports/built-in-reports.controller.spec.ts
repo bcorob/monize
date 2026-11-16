@@ -24,6 +24,7 @@ describe("BuiltInReportsController", () => {
       getDuplicateTransactions: jest.fn(),
       getMonthlyComparison: jest.fn(),
       getMonthlyCategoryBreakdown: jest.fn(),
+      getCashFlowSankey: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -55,6 +56,56 @@ describe("BuiltInReportsController", () => {
         "user-1",
         "2024-01-01",
         "2024-12-31",
+        { rollupToParent: undefined, accountIds: undefined },
+      );
+    });
+
+    it("passes the account filter and rollup choice through", async () => {
+      // Both are the dashboard widget's settings, answered by the report rather
+      // than re-applied to its result.
+      const query = {
+        startDate: "2024-01-01",
+        endDate: "2024-12-31",
+        accountIds: ["acct-1"],
+        rollupToParent: true,
+      };
+      mockService.getSpendingByCategory.mockResolvedValue({
+        data: [],
+        totalSpending: 0,
+      });
+
+      await controller.getSpendingByCategory(mockReq, query as any);
+
+      expect(mockService.getSpendingByCategory).toHaveBeenCalledWith(
+        "user-1",
+        "2024-01-01",
+        "2024-12-31",
+        { rollupToParent: true, accountIds: ["acct-1"] },
+      );
+    });
+  });
+
+  describe("getSpendingByCategory() tag filter", () => {
+    it("passes the tag key and value through", async () => {
+      mockService.getSpendingByCategory.mockResolvedValue({ data: [] });
+
+      await controller.getSpendingByCategory(mockReq, {
+        startDate: "2024-01-01",
+        endDate: "2024-12-31",
+        tagKey: "scope",
+        tagValue: "household",
+      } as any);
+
+      expect(mockService.getSpendingByCategory).toHaveBeenCalledWith(
+        "user-1",
+        "2024-01-01",
+        "2024-12-31",
+        {
+          rollupToParent: undefined,
+          accountIds: undefined,
+          tagKey: "scope",
+          tagValue: "household",
+        },
       );
     });
   });
@@ -89,6 +140,25 @@ describe("BuiltInReportsController", () => {
         "user-1",
         "2024-01-01",
         "2024-06-30",
+        { accountIds: undefined },
+      );
+    });
+
+    it("threads accountIds through to the service", async () => {
+      const query = {
+        startDate: "2024-01-01",
+        endDate: "2024-06-30",
+        accountIds: ["a1b2c3d4-0000-4000-8000-000000000001"],
+      };
+      mockService.getIncomeBySource.mockResolvedValue({ data: [] });
+
+      await controller.getIncomeBySource(mockReq, query as any);
+
+      expect(mockService.getIncomeBySource).toHaveBeenCalledWith(
+        "user-1",
+        "2024-01-01",
+        "2024-06-30",
+        { accountIds: ["a1b2c3d4-0000-4000-8000-000000000001"] },
       );
     });
   });
@@ -114,6 +184,27 @@ describe("BuiltInReportsController", () => {
   });
 
   describe("getIncomeVsExpenses()", () => {
+    it("passes the account filter and the bucket width through", async () => {
+      // Both are the dashboard widget's settings, answered by the report rather
+      // than applied to its result.
+      mockService.getIncomeVsExpenses.mockResolvedValue({ data: [] });
+
+      await controller.getIncomeVsExpenses(mockReq, {
+        startDate: "2024-01-01",
+        endDate: "2024-12-31",
+        accountIds: ["acct-1"],
+        bucket: "week",
+        weekStartsOn: 0,
+      } as any);
+
+      expect(mockService.getIncomeVsExpenses).toHaveBeenCalledWith(
+        "user-1",
+        "2024-01-01",
+        "2024-12-31",
+        { accountIds: ["acct-1"], bucket: "week", weekStartsOn: 0 },
+      );
+    });
+
     it("delegates to service with userId, startDate, and endDate", async () => {
       const query = { startDate: "2024-01-01", endDate: "2024-12-31" };
       const expected = { months: [] };
@@ -129,6 +220,73 @@ describe("BuiltInReportsController", () => {
         "user-1",
         "2024-01-01",
         "2024-12-31",
+        { accountIds: undefined, bucket: undefined, weekStartsOn: undefined },
+      );
+    });
+
+    it("threads tagKey through to service.getIncomeVsExpenses", async () => {
+      mockService.getIncomeVsExpenses.mockResolvedValue({ data: [] });
+
+      await controller.getIncomeVsExpenses(mockReq, {
+        startDate: "2024-01-01",
+        endDate: "2024-12-31",
+        tagKey: "scope",
+      } as any);
+
+      expect(mockService.getIncomeVsExpenses).toHaveBeenCalledWith(
+        "user-1",
+        "2024-01-01",
+        "2024-12-31",
+        {
+          accountIds: undefined,
+          bucket: undefined,
+          weekStartsOn: undefined,
+          tagKey: "scope",
+        },
+      );
+    });
+  });
+
+  describe("transferScopeAccountIds (spec 10.8.1)", () => {
+    it("passes the tagged-transfer boundary through on Income vs Expenses", async () => {
+      mockService.getIncomeVsExpenses.mockResolvedValue({ data: [] });
+
+      await controller.getIncomeVsExpenses(mockReq, {
+        startDate: "2024-01-01",
+        endDate: "2024-12-31",
+        tagKey: "scope",
+        transferScopeAccountIds: ["acct-1", "acct-2"],
+      } as any);
+
+      expect(mockService.getIncomeVsExpenses).toHaveBeenCalledWith(
+        "user-1",
+        "2024-01-01",
+        "2024-12-31",
+        expect.objectContaining({
+          tagKey: "scope",
+          transferScopeAccountIds: ["acct-1", "acct-2"],
+        }),
+      );
+    });
+
+    it("passes the tagged-transfer boundary through on Cash Flow", async () => {
+      mockService.getIncomeVsExpenses.mockResolvedValue({ data: [] });
+
+      await controller.getCashFlow(mockReq, {
+        startDate: "2024-01-01",
+        endDate: "2024-12-31",
+        tagKey: "scope",
+        transferScopeAccountIds: ["acct-1"],
+      } as any);
+
+      expect(mockService.getIncomeVsExpenses).toHaveBeenCalledWith(
+        "user-1",
+        "2024-01-01",
+        "2024-12-31",
+        expect.objectContaining({
+          tagKey: "scope",
+          transferScopeAccountIds: ["acct-1"],
+        }),
       );
     });
   });
@@ -146,6 +304,47 @@ describe("BuiltInReportsController", () => {
         "user-1",
         "2024-01-01",
         "2024-12-31",
+        { tagKey: undefined },
+      );
+    });
+
+    it("threads tagKey through to service.getIncomeVsExpenses", async () => {
+      const query = {
+        startDate: "2024-01-01",
+        endDate: "2024-12-31",
+        tagKey: "scope",
+      };
+      const expected = { months: [] };
+      mockService.getIncomeVsExpenses.mockResolvedValue(expected);
+
+      await controller.getCashFlow(mockReq, query as any);
+
+      expect(mockService.getIncomeVsExpenses).toHaveBeenCalledWith(
+        "user-1",
+        "2024-01-01",
+        "2024-12-31",
+        { tagKey: "scope" },
+      );
+    });
+
+    it("threads accountIds through to service.getIncomeVsExpenses", async () => {
+      const query = {
+        startDate: "2024-01-01",
+        endDate: "2024-12-31",
+        accountIds: ["a1b2c3d4-0000-4000-8000-000000000001"],
+      };
+      mockService.getIncomeVsExpenses.mockResolvedValue({ months: [] });
+
+      await controller.getCashFlow(mockReq, query as any);
+
+      expect(mockService.getIncomeVsExpenses).toHaveBeenCalledWith(
+        "user-1",
+        "2024-01-01",
+        "2024-12-31",
+        {
+          tagKey: undefined,
+          accountIds: ["a1b2c3d4-0000-4000-8000-000000000001"],
+        },
       );
     });
   });
@@ -269,10 +468,11 @@ describe("BuiltInReportsController", () => {
       expect(mockService.getRecurringExpenses).toHaveBeenCalledWith(
         "user-1",
         5,
+        "6m",
       );
     });
 
-    it("defaults minOccurrences to 3 when not provided", async () => {
+    it("defaults minOccurrences to 3 and the range to 6m when not provided", async () => {
       mockService.getRecurringExpenses.mockResolvedValue({ expenses: [] });
 
       await controller.getRecurringExpenses(mockReq);
@@ -280,6 +480,46 @@ describe("BuiltInReportsController", () => {
       expect(mockService.getRecurringExpenses).toHaveBeenCalledWith(
         "user-1",
         3,
+        "6m",
+      );
+    });
+
+    it.each(["1y", "2y", "5y", "all"])(
+      "passes the %s range through",
+      async (range) => {
+        mockService.getRecurringExpenses.mockResolvedValue({ expenses: [] });
+
+        await controller.getRecurringExpenses(mockReq, "3", range);
+
+        expect(mockService.getRecurringExpenses).toHaveBeenCalledWith(
+          "user-1",
+          3,
+          range,
+        );
+      },
+    );
+
+    it("falls back to 6m for an unknown or repeated range", async () => {
+      mockService.getRecurringExpenses.mockResolvedValue({ expenses: [] });
+
+      await controller.getRecurringExpenses(mockReq, "3", "10y");
+      // A repeated query key arrives as an array.
+      await controller.getRecurringExpenses(mockReq, "3", [
+        "1y",
+        "2y",
+      ] as unknown as string);
+
+      expect(mockService.getRecurringExpenses).toHaveBeenNthCalledWith(
+        1,
+        "user-1",
+        3,
+        "6m",
+      );
+      expect(mockService.getRecurringExpenses).toHaveBeenNthCalledWith(
+        2,
+        "user-1",
+        3,
+        "6m",
       );
     });
   });
@@ -417,6 +657,47 @@ describe("BuiltInReportsController", () => {
         "user-1",
         "2024-01-01",
         "2024-12-31",
+        { accountIds: undefined },
+      );
+    });
+
+    it("passes the account filter through", async () => {
+      mockService.getMonthlyCategoryBreakdown.mockResolvedValue({});
+
+      await controller.getMonthlyCategoryBreakdown(mockReq, {
+        startDate: "2024-01-01",
+        endDate: "2024-12-31",
+        accountIds: ["acct-1"],
+      } as any);
+
+      expect(mockService.getMonthlyCategoryBreakdown).toHaveBeenCalledWith(
+        "user-1",
+        "2024-01-01",
+        "2024-12-31",
+        { accountIds: ["acct-1"] },
+      );
+    });
+  });
+
+  describe("getCashFlowSankey()", () => {
+    it("delegates the window, the scope and the depth to the service", async () => {
+      const query = {
+        startDate: "2026-09-01",
+        endDate: "2026-09-30",
+        accountIds: ["acc-1"],
+        depth: 2,
+      };
+      const expected = { nodes: [], links: [] };
+      mockService.getCashFlowSankey.mockResolvedValue(expected);
+
+      const result = await controller.getCashFlowSankey(mockReq, query as any);
+
+      expect(result).toEqual(expected);
+      expect(mockService.getCashFlowSankey).toHaveBeenCalledWith(
+        "user-1",
+        "2026-09-01",
+        "2026-09-30",
+        { accountIds: ["acc-1"], depth: 2 },
       );
     });
   });

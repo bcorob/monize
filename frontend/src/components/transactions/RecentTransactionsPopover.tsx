@@ -11,6 +11,7 @@ import { useDateFormat } from '@/hooks/useDateFormat';
 import { usePayeeDisplay } from '@/hooks/usePayeeDisplay';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import { createLogger } from '@/lib/logger';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 
 const logger = createLogger('RecentTransactionsPopover');
 
@@ -120,7 +121,9 @@ export function RecentTransactionsPopover({
       </div>
       <div className="max-h-80 overflow-y-auto">
         {isLoading && (
-          <div className="px-3 py-4 text-sm text-gray-500 dark:text-gray-400">{t('recentPopover.loading')}</div>
+          <div className="px-3 py-4 text-sm">
+            <LoadingSpinner size="sm" fullContainer={false} text={t('recentPopover.loading')} />
+          </div>
         )}
         {!isLoading && error && (
           <div className="px-3 py-4 text-sm text-red-600 dark:text-red-400">{error}</div>
@@ -157,7 +160,10 @@ export function RecentTransactionsPopover({
                       <span className="whitespace-nowrap">{formatDate(tx.transactionDate)}</span>
                     </div>
                     {tx.description && (
-                      <div className="mt-0.5 text-xs text-gray-500 dark:text-gray-400 truncate">
+                      <div
+                        className="mt-0.5 text-xs text-gray-500 dark:text-gray-400 line-clamp-2 break-words"
+                        title={tx.description}
+                      >
                         {tx.description}
                       </div>
                     )}

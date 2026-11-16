@@ -15,7 +15,7 @@ import { getMetadataStorage } from "class-validator";
  *
  * The fix is `@ArrayMaxSize(n)` beside the `@IsArray()`. This test finds the
  * next unbounded array automatically rather than trusting the next author to
- * remember, in the shape of `optional-url-dto.spec.ts`.
+ * remember, in the shape of `optional-format-dto.spec.ts`.
  *
  * Metadata-shaped rather than behavioural on purpose: proving the absence of
  * a bound behaviourally means validating an arbitrarily large array, and the
@@ -113,7 +113,6 @@ const PREEXISTING_UNBOUNDED: readonly string[] = [
   "BulkUpdateFilterDto.categoryIds",
   "BulkUpdateFilterDto.payeeIds",
   "CreateScenarioDto.accountIds",
-  "CreateScenarioDto.cashFlows",
   "CreateScheduledTransactionDto.tagIds",
   "CreateScheduledTransactionOverrideDto.splits",
   "CreateScheduledTransactionSplitDto.tagIds",
@@ -131,10 +130,8 @@ const PREEXISTING_UNBOUNDED: readonly string[] = [
   "ReportFiltersDto.filterGroups",
   "ReportFiltersDto.payeeIds",
   "RunScenarioDto.accountIds",
-  "RunScenarioDto.cashFlows",
   "SetGrantsDto.grants",
   "UpdateScenarioDto.accountIds",
-  "UpdateScenarioDto.cashFlows",
   "UpdateScheduledTransactionDto.tagIds",
   "UpdateScheduledTransactionOverrideDto.splits",
   "UpdateSecurityDto.tagIds",

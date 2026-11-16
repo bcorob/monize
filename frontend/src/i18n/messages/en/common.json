@@ -10,6 +10,8 @@
     "versionLabel": "Version {version}",
     "expandAll": "Expand all",
     "collapseAll": "Collapse all",
+    "changeCount": "{count, plural, one {# change} other {# changes}}",
+    "otherSections": "Fixes and details",
     "viewFullNotes": "View full release notes",
     "dontShowAgain": "Don't show this again",
     "showNextLogin": "Show at next login",
@@ -38,6 +40,14 @@
     "scheduleRecurring": "Make recurring",
     "more": "More actions"
   },
+  "columns": {
+    "button": "Columns",
+    "buttonWithHidden": "Columns, {count} hidden",
+    "menuLabel": "Show or hide columns",
+    "showAll": "Show all",
+    "hideColumn": "Hide column",
+    "sheetSubtitle": "Bring it back from the Columns menu."
+  },
   "loading": "Loading...",
   "pagination": {
     "showing": "Showing",
@@ -60,6 +70,7 @@
   },
   "exportDropdown": {
     "export": "Export",
+    "exportCsv": "Export CSV",
     "exporting": "Exporting...",
     "exportPdf": "Export PDF",
     "exportReport": "Export report",
@@ -88,6 +99,7 @@
     "stackedChart": "100% Stacked Bar",
     "lineChart": "Line Chart",
     "areaChart": "Area Chart",
+    "sankeyChart": "Flow Diagram",
     "table": "Table"
   },
   "formActions": {
@@ -118,8 +130,15 @@
     "search": "Search...",
     "selectAll": "Select All",
     "clear": "Clear",
+    "clearSearch": "Clear Search",
     "noOptions": "No options found",
     "selectedCount": "{count} selected"
+  },
+  "categoryFilter": {
+    "uncategorized": "Uncategorized",
+    "transfers": "Transfers",
+    "allIncome": "All income categories",
+    "allExpenses": "All expense categories"
   },
   "combobox": {
     "createOption": "Create \"{value}\"",
@@ -137,6 +156,7 @@
   },
   "dateInput": {
     "shortcutsTitle": "Keyboard shortcuts",
+    "openPicker": "Open date picker",
     "today": "Today",
     "firstDayOfYear": "First day of year",
     "lastDayOfYear": "Last day of year",
@@ -158,6 +178,7 @@
     "CASH": "Cash",
     "LINE_OF_CREDIT": "Line of Credit",
     "ASSET": "Asset",
+    "CRYPTO": "Crypto Wallet",
     "OTHER": "Other"
   },
   "accountFilter": {
@@ -238,15 +259,23 @@
     "explanationExcluded": "Partial total: {count, plural, one {# amount} other {# amounts}} could not be worked out, so the figure shown excludes them."
   },
   "unknownAmount": {
-    "marker": "\u2014",
+    "marker": "—",
     "srLabel": "Amount not available",
     "scheduledFx": "The current amount cannot be worked out: no exchange rate is available for this scheduled item's settlement currency pair. The stored amount was calculated at an older rate, so it is not shown.",
-    "displayFx": "This figure cannot be shown here: the amount is known, but no exchange rate is available to convert it into the currency this total is reported in. Refresh your rates on the Currencies page."
+    "displayFx": "This figure cannot be shown here: the amount is known, but no exchange rate is available to convert it into the currency this total is reported in. Refresh your rates on the Currencies page.",
+    "noCashBalance": "This value cannot be worked out: a cash account in this view reported no balance for this day, so what it held is unknown rather than zero. Reload the report; if it persists, the day's balances could not be worked out and this is worth reporting.",
+    "noPrice": "This value cannot be worked out: the shares held are known, but the security has no price to value them at. Refresh prices, or add one by hand on the security's Price history.",
+    "noBaseline": "This figure cannot be worked out: it is a comparison, and there is no earlier value to measure it against. Nothing is missing, so there is nothing to add.",
+    "staleQuote": "The day's move cannot be worked out: the security's most recent price is older than the last trading session, so any change from it would be an earlier day's. Refresh prices, or check the security's quote provider.",
+    "unknownCurrency": "This amount cannot be shown: the record names no security, so the currency the figure is in is unknown. Open the transaction and give it a security so its amounts can be labelled."
   },
   "density": {
     "title": "Toggle row density",
     "normal": "Normal",
     "compact": "Compact",
     "dense": "Dense"
+  },
+  "scheduledOverdue": {
+    "included": "Includes {count, plural, one {# overdue scheduled transaction} other {# overdue scheduled transactions}}"
   }
 }

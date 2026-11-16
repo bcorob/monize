@@ -5,6 +5,8 @@
     "dividendsInterest": "Dividends & Interest",
     "realizedGains": "Realized Gains",
     "ytd": "Year to date",
+    "realizedKnownPart": "Known part: {amount}",
+    "realizedUnknownReason": "This gain cannot be worked out: the position holds shares that were added with no cost, so what the sold shares cost is unknown. Open the transaction that added them and enter their price.",
     "empty": "No investment income this year"
   },
   "register": {

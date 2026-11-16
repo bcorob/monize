@@ -1,6 +1,6 @@
 'use client';
 
-import Link from 'next/link';
+import { BackToSettingsLink } from '@/components/settings/BackToSettingsLink';
 import { useTranslations } from 'next-intl';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { PageHeader } from '@/components/layout/PageHeader';
@@ -21,18 +21,12 @@ function ToursSettingsContent() {
   return (
     <PageLayout>
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-12 pt-6 pb-8">
-        <div className="mb-4">
-          <Link
-            href="/settings"
-            className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-          >
-            &larr; {t('settings.backLink')}
-          </Link>
-        </div>
+        <BackToSettingsLink label={t('settings.backLink')} />
 
         <PageHeader
           title={t('settings.pageTitle')}
           subtitle={t('settings.pageSubtitle')}
+          help="tourSettings"
         />
 
         <TourCatalog />

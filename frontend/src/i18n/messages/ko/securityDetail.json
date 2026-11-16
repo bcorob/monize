@@ -34,7 +34,6 @@
     "units": "수량",
     "avgCostPerUnit": "평균 단가",
     "heldInAccounts": "보유 계좌",
-    "openAccount": "투자 페이지에서 {name} 보기",
     "unitsShare": "{units} ({share})",
     "valueUnknown": "평가 불가",
     "approx": "약 {amount}"
@@ -74,15 +73,20 @@
     "sector": "섹터",
     "industry": "산업",
     "provider": "제공처",
-    "lastPrice": "최종 가격"
+    "lastPrice": "최종 가격",
+    "bondDescription": "채권 설명"
   },
   "tabs": {
     "ariaLabel": "종목 섹션",
     "overview": "개요",
     "transactions": "거래",
     "prices": "가격 이력",
+    "terms": "조건 이력",
     "documents": "문서",
     "news": "뉴스"
+  },
+  "bondPrices": {
+    "title": "가격 내역"
   },
   "about": {
     "title": "소개",
@@ -121,6 +125,8 @@
     "fees": "수수료",
     "realizedPl": "실현 손익",
     "realizedMixed": "{currencies}로 실현되어 합산하지 않았습니다",
+    "realizedUnknownReason": "이 손익은 계산할 수 없습니다. 포지션에 비용 없이 추가된 주식이 있어 매도한 주식의 원가를 알 수 없습니다. 해당 주식을 추가한 거래를 열어 가격을 입력하세요.",
+    "realizedKnownPart": "확인된 부분: {amount}",
     "totalReturn": "총수익률",
     "totalReturnValue": "{amount} ({percent})",
     "totalReturnTitle": "미실현 이익에 매도로 실현한 금액과 받은 수익을 더하고 수수료를 뺀 값을, 투입한 자본에 대비해 나타낸 것입니다. 그 자본에 대한 단순 수익률이며, 연율로 환산하지 않고 각 매수분을 보유 기간으로 가중하지도 않습니다.",
@@ -147,6 +153,8 @@
     "title": "포지션 청산됨",
     "description": "이 종목을 더 이상 보유하지 않습니다. 이력은 아래에 그대로 남아 있습니다.",
     "realizedPl": "실현 손익",
+    "realizedUnknownReason": "이 손익은 계산할 수 없습니다. 포지션에 비용 없이 추가된 주식이 있었기 때문에 매도한 주식의 원가를 알 수 없습니다. 해당 주식을 추가한 거래를 열어 가격을 입력하세요.",
+    "realizedKnownPart": "확인된 부분: {amount}",
     "heldFrom": "보유 시작",
     "heldRange": "{start} ~ {end}"
   },
@@ -165,7 +173,24 @@
     "sectorEmpty": "섹터 구성이 저장되어 있지 않습니다. Monize는 펀드와 ETF에 대해 제공처에서 채워 넣습니다.",
     "countryEmpty": "국가 구성이 저장되어 있지 않습니다. 종목을 편집할 때 입력할 수 있습니다.",
     "assetClassEmpty": "자산군 구성이 아직 저장되어 있지 않습니다.",
-    "remainder": "{percent} 미분류"
+    "remainder": "{percent} 미분류",
+    "bond": {
+      "seriesTab": "시리즈",
+      "maturityTab": "만기",
+      "empty": "이 채권 종류의 시리즈를 아직 보유하고 있지 않습니다.",
+      "someUnknown": "일부 값을 알 수 없어 비중을 표시하지 않습니다.",
+      "issuerCountry": "발행 국가",
+      "rate": "금리",
+      "interest": "이자",
+      "term": "만기까지 기간",
+      "interestValue": "{capitalization}, 기간: {period}",
+      "rateType": {
+        "FIXED": "고정",
+        "BENCHMARK_PLUS_SPREAD": "변동(기준 + 스프레드)",
+        "INFLATION_PLUS_MARGIN_AS_RATE": "물가연동(기준 + 마진)",
+        "ZERO_COUPON_DISCOUNT": "제로쿠폰(할인)"
+      }
+    }
   },
   "documents": {
     "title": "문서",
@@ -225,6 +250,16 @@
       "deleted": "문서를 삭제했습니다",
       "saveFailed": "문서를 저장할 수 없습니다",
       "deleteFailed": "문서를 삭제할 수 없습니다"
+    },
+    "issueLetters": {
+      "title": "발행 서한",
+      "loadFailed": "발행 서한을 불러오지 못했습니다.",
+      "empty": "이 채권 종류에 저장된 발행 서한이 아직 없습니다.",
+      "held": "보유 중",
+      "onSale": "판매 중",
+      "noLetter": "이 시리즈에 기록된 서한이 없습니다",
+      "open": "공식 PDF",
+      "openNamed": "{series} 시리즈의 발행 서한 열기"
     }
   },
   "news": {
@@ -237,6 +272,243 @@
     "empty": {
       "title": "현재 헤드라인이 없습니다",
       "description": "최근 이 심볼로 게시된 내용이 없습니다. 다시 돌아오면 목록이 갱신됩니다."
+    }
+  },
+  "bond": {
+    "loading": "채권 평가를 불러오는 중...",
+    "loadFailed": "채권 평가를 불러오지 못했습니다.",
+    "unknown": "알 수 없음",
+    "asOf": "평가 기준일",
+    "termsSource": "조건: {document}",
+    "termsManual": "관리자가 직접 입력한 조건",
+    "noLots": "이 날짜에 열려 있는 로트가 없습니다.",
+    "totals": {
+      "quantity": "보유 채권 수",
+      "grossValue": "총액",
+      "earlyRedemptionValue": "조기 상환액",
+      "accruedInterest": "경과 이자",
+      "unknownLot": "하나 이상의 로트에 수치가 없어 합계를 제공하지 않습니다.",
+      "unknownRefusal": "로트를 산출할 수 없어 합계를 제공하지 않습니다."
+    },
+    "lots": {
+      "purchaseDate": "매수일",
+      "assumed": "가정",
+      "assumedTitle": "실제 매수일을 알 수 없습니다. 이 로트는 연결된 송신 측이 없는 이체로 들어왔습니다.",
+      "quantity": "수량",
+      "maturity": "만기",
+      "period": "현재 기간",
+      "periodValue": "{index}: {start}부터 {end}까지",
+      "rate": "금리",
+      "principal": "채권당 원금",
+      "principalIssuePrice": "비용이 입력되지 않았습니다: 입찰 가격을 사용합니다",
+      "accruedInterest": "경과 이자",
+      "grossValue": "총액",
+      "earlyRedemption": "조기 상환",
+      "nextCashFlow": "다음 현금흐름",
+      "cashFlowValue": "{date} {type} {amount}",
+      "noCashFlow": "없음",
+      "projected": "예상",
+      "maturityValue": "만기 시 가치",
+      "maturityKnown": "확정",
+      "maturityProjected": "예상",
+      "matured": "만기 도래",
+      "refused": "평가 안 됨",
+      "amountUnknown": "금액 알 수 없음"
+    },
+    "rateSource": {
+      "TERMS": "조건",
+      "ANNOUNCED": "발표됨",
+      "DERIVED": "산출됨",
+      "PROJECTED": "예상"
+    },
+    "cashFlowType": {
+      "INTEREST": "이자",
+      "PRINCIPAL": "원금"
+    },
+    "earlyRefusal": {
+      "NOT_REDEEMABLE": "조기 상환 불가",
+      "TOO_EARLY": "상환하기에는 너무 이름",
+      "TOO_LATE": "상환하기에는 너무 늦음",
+      "RECORD_DAY": "기준일에는 상환할 수 없음",
+      "MATURED": "만기 도래",
+      "RATE_UNKNOWN": "금리 미확정",
+      "TERMS_INCOMPLETE": "조건 불완전"
+    },
+    "lotsRefusal": {
+      "SPLIT": "로트를 산출할 수 없습니다. 채권은 분할되지 않습니다.",
+      "FRACTIONAL_QUANTITY": "로트를 산출할 수 없습니다. 수량이 채권의 정수 개수가 아닙니다.",
+      "OVER_REMOVAL": "로트를 산출할 수 없습니다. 보유한 수보다 많은 채권이 제거되었습니다.",
+      "INVALID_QUANTITY": "로트를 산출할 수 없습니다. 수량이 없거나, 음수이거나, 너무 큽니다.",
+      "REMOVAL_EXCEEDS_SERIES": "로트를 산출할 수 없습니다: 한 시리즈의 채권이 보유량보다 많이 인출되었습니다.",
+      "SERIES_NOT_DETERMINED": "로트를 산출할 수 없습니다: 매수의 시리즈를 알 수 없습니다."
+    },
+    "lotsRefusalDetail": {
+      "SPLIT": "이 종목에 분할({date} {action})이 기록되어 있습니다. 채권은 분할되지 않습니다.",
+      "FRACTIONAL_QUANTITY": "{date} {action}이(가) 채권 {quantity}장을 이동하며, 정수가 아닙니다.",
+      "OVER_REMOVAL": "{date} {action}이(가) 채권 {quantity}장을 제거하며, 보유 수량보다 많습니다.",
+      "INVALID_QUANTITY": "{date} {action}의 수량이 없거나 음수이거나 너무 큽니다.",
+      "REMOVAL_EXCEEDS_SERIES": "{date}의 {action}은(는) 해당 시리즈의 채권 {quantity}개를 인출하며, 이는 그 시리즈의 보유량보다 많습니다.",
+      "SERIES_NOT_DETERMINED": "{date}의 {action}에 시리즈가 없고, 그날 판매 중이던 채권 종류의 저장된 시리즈도 없습니다. 시리즈를 가져와 거래에서 선택하세요."
+    },
+    "assumptions": {
+      "title": "예상 가정",
+      "latestObservation": "{benchmark}은(는) 이후 모든 기간에 대해 {value}(으)로 가정합니다(최근 발표된 값: {observation})",
+      "supplied": "{benchmark}은(는) 이후 모든 기간에 대해 {value}(으)로 가정합니다",
+      "suppliedSimpleAnnual": "{benchmark}이(가) 이후 모든 달에 연 {value} 상승한다고 가정합니다(단순 연간 성장, 복리 아님)"
+    },
+    "missing": {
+      "title": "아직 필요한 데이터",
+      "item": "{benchmark} {observation} — 발표 기관: {publisher}",
+      "itemNoPublisher": "{benchmark} {observation} — 발표 기관을 알 수 없음"
+    },
+    "recompute": {
+      "button": "가격 다시 계산",
+      "done": "가격을 다시 계산했습니다: {written}건 기록, {deleted}건 삭제.",
+      "failed": "가격을 다시 계산하지 못했습니다."
+    },
+    "rate": {
+      "title": "이자율",
+      "rule": {
+        "fixed": "전체 기간 동안 고정 {rate}",
+        "firstThen": "1회차: {firstRate}. 이후 {benchmark} + {addend}",
+        "every": "매 회차: {benchmark} + {addend}",
+        "floorZero": "{benchmark}가 음수이면 0으로 계산합니다",
+        "dailyFloor": "일일 금리(지수 더하기 스프레드)는 {floor} 아래로 내려가지 않습니다",
+        "discount": "액면가 대비 할인",
+        "daily": "매일: {benchmark} + {addend}, 일별로 합산",
+        "lockout": "기간 종료 전 {days, plural, one {영업일 #일} other {영업일 #일}} 이내의 입찰은 해당 기간에 사용하지 않습니다"
+      },
+      "daily": "매일, {benchmark}",
+      "dailyNoIndex": "매일, {benchmark}: 저장된 지수가 아직 없습니다",
+      "dailyRun": "{from}부터: {rate}",
+      "dailyRunUnknown": "{from}부터: 저장된 지수 없음",
+      "lotHeading": "{date}에 매수한 로트",
+      "range": "{start}부터 {end}까지",
+      "current": "현재",
+      "columns": {
+        "period": "회차",
+        "dates": "기간",
+        "rate": "이자율",
+        "source": "출처",
+        "how": "산정 방식"
+      },
+      "how": {
+        "stated": "약정 이자율",
+        "observed": "{benchmark} {observation}: {value} + {addend}",
+        "floored": "({floor}(으)로 상향)",
+        "missing": "{benchmark} {observation}: 아직 발표되지 않음"
+      },
+      "nextRateReset": "다음 금리 재설정일: {date}",
+      "nextCapitalization": "다음 원금 가산일: {date}"
+    },
+    "indexation": {
+      "inflation": "물가연동: {date}부터(2기) 금리는 {benchmark} + {addend}이며 매 기간마다 다시 계산됩니다",
+      "floating": "변동금리: {date}부터(2기) 금리는 {benchmark} + {addend}이며 매 기간마다 다시 계산됩니다"
+    },
+    "interestParts": {
+      "fixed": "고정 이자(1기)",
+      "margin": "마진에서 나온 이자",
+      "inflation": "물가에서 나온 이자",
+      "benchmark": "기준금리에서 나온 이자",
+      "announced": "공표된 이자",
+      "fixedTerm": "고정금리 이자"
+    },
+    "chart": {
+      "title": "각 기간 말까지의 누적 이자",
+      "assumption": "{benchmark} = {value} 가정 시 전망",
+      "projectedNote": "연한 막대는 예상 기간입니다",
+      "stoppedAt": "{period}기부터 이자를 알 수 없으므로 차트는 그 앞에서 끝납니다."
+    },
+    "scenarios": {
+      "title": "물가 시나리오",
+      "titleBenchmark": "금리 시나리오",
+      "projection": "전망",
+      "caption": "가정값별 예상 만기 가치와 이자",
+      "intro": "확정이 아닌 전망입니다. 아직 시작되지 않은 각 기간에는 첫 번째 열의 {benchmark} 값을 가정합니다. 확정 및 공표된 기간은 바뀌지 않습니다. 행을 선택하면 해당 금리 표와 차트를 볼 수 있습니다.",
+      "custom": "직접 입력한 {benchmark}(%)",
+      "add": "시나리오 추가",
+      "useDefault": "기본 가정 사용",
+      "selected": "선택됨",
+      "loading": "시나리오를 불러오는 중...",
+      "loadFailed": "시나리오를 불러오지 못했습니다.",
+      "columns": {
+        "assumed": "가정: {benchmark}",
+        "maturityValue": "만기 가치(전망)",
+        "totalInterest": "총 이자(전망)"
+      },
+      "asOfNote": "위에서 선택한 {date} 기준으로 평가했습니다. 수치는 그날 보유한 채권을 대상으로 합니다."
+    },
+    "benchmarks": {
+      "PL_CPI_GUS_YOY": "소비자물가지수, 12개월 (GUS)",
+      "PL_NBP_REFERENCE": "NBP 기준금리",
+      "US_CPI_U_NSA": "CPI-U, 전 품목, 계절 조정 없음 (BLS)",
+      "US_TBILL_13W_MMY": "13주 미국 재무부 단기 증권 수익률"
+    },
+    "valuationRefusal": {
+      "PURCHASE_OUTSIDE_SALE_WINDOW": "이 시리즈는 {from}부터 {to}까지만 매수할 수 있습니다. 이 로트는 {purchaseDate}에 매수되어 평가되지 않습니다.",
+      "PURCHASE_AFTER_MATURITY": "이 시리즈는 {maturityDate}에 만기가 되었습니다. 이 로트는 {purchaseDate}, 즉 그날 또는 그 이후에 매수되었으므로 평가되지 않습니다."
+    },
+    "marketPriceRequired": "이 증권에는 시장에서 거래되는 시리즈가 있어 가격이 조건으로 정해지지 않습니다. Monize는 이 시리즈의 가격을 기록하지 않으므로 가격을 직접 입력하세요. 아래 로트의 가치는 조건으로 계산한 값이며 시장 가치가 아닙니다.",
+    "partial": {
+      "title": "이 평가는 불완전하므로 수치를 일부 값으로 보세요.",
+      "terms": "채권 조건이 불완전합니다(예: 달력이 설치되지 않음).",
+      "reference": "참조 데이터가 없습니다. 아직 필요한 데이터 목록은 아래를 참고하세요.",
+      "earlyRedemption": "조기 상환 조건이 불완전하여 조기 상환 가치가 없을 수 있습니다.",
+      "other": "하나 이상의 로트를 아직 완전히 평가할 수 없습니다(예: 금리를 알 수 없음)."
+    },
+    "projectionMissing": {
+      "title": "이후 기간은 예측할 수 없습니다",
+      "item": "{benchmark}: 공표된 값이 없고 가정도 설정되지 않아 이후 기간을 예측할 수 없습니다(공표 기관: {publisher})",
+      "itemNoPublisher": "{benchmark}: 공표된 값이 없고 가정도 설정되지 않아 이후 기간을 예측할 수 없습니다(공표 기관 알 수 없음)"
+    },
+    "coverage": {
+      "asOf": "{benchmark} 데이터({date} 기준)",
+      "none": "저장된 {benchmark} 데이터가 아직 없습니다"
+    },
+    "issuers": {
+      "PL_MF": "재무부(PL)",
+      "US_TREASURY": "미국 재무부 (US)"
+    },
+    "redemption": {
+      "title": "중도 환매 조건",
+      "fixedFee": "중도 환매 수수료: 채권당 {amount}.",
+      "forfeitAccrued": "중도 환매 시 현재 기간에 발생한 이자는 지급되지 않습니다.",
+      "floorAllPeriods": "수수료로 인해 환매금이 어느 기간에도 액면가 아래로 내려가지 않습니다.",
+      "floorFirstPeriod": "수수료로 인해 환매금이 액면가 아래로 내려가지 않는 것은 첫 번째 기간뿐이며, 이후 기간에는 이러한 하한이 없습니다."
+    },
+    "programs": {
+      "OTS": "OTS: 3개월 고정금리 저축채권",
+      "ROR": "ROR: 1년 변동금리 저축채권",
+      "DOR": "DOR: 2년 변동금리 저축채권",
+      "TOS": "TOS: 3년 고정금리 저축채권",
+      "COI": "COI: 4년 물가연동 저축채권",
+      "EDO": "EDO: 10년 물가연동 저축채권",
+      "ROS": "ROS: 6년 물가연동 가족 저축채권",
+      "ROD": "ROD: 12년 물가연동 가족 저축채권",
+      "BILL": "BILL: 재무부 단기 증권, 4~52주, 할인 판매",
+      "NOTE": "NOTE: 재무부 중기 채권, 2~10년, 고정 반기 쿠폰",
+      "BOND": "BOND: 재무부 장기 채권, 20년 및 30년, 고정 반기 쿠폰",
+      "TIPS": "TIPS: 물가연동 재무부 증권, 원금이 CPI-U에 연동",
+      "FRN": "FRN: 변동금리 재무부 채권, 2년, 분기별 이자"
+    },
+    "series": {
+      "title": "내 시리즈",
+      "column": "시리즈",
+      "nextRateChange": "다음 금리 변경",
+      "total": "채권 종류 합계",
+      "purchasedRange": "{from} ~ {to}",
+      "expand": "{series} 세부 정보 보기",
+      "collapse": "{series} 세부 정보 숨기기",
+      "partial": "일부"
+    },
+    "program": {
+      "title": "채권 종류",
+      "newest": "가장 최근 시리즈 {series}의 조건입니다.",
+      "noTerms": "조건을 아직 알 수 없습니다. 이 채권 종류의 시리즈를 보유하고 있지 않고 판매 중인 시리즈도 없습니다.",
+      "autoFetchFailed": "설정을 저장하지 못했습니다."
+    },
+    "onSale": {
+      "title": "현재 판매 중"
     }
   }
 }

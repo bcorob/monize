@@ -4,6 +4,8 @@ import {
   ArrowTrendingUpIcon,
   ArrowsRightLeftIcon,
   BanknotesIcon,
+  BellAlertIcon,
+  BoltIcon,
   BuildingLibraryIcon,
   BuildingOffice2Icon,
   CalendarDaysIcon,
@@ -12,8 +14,12 @@ import {
   ChatBubbleLeftRightIcon,
   Cog6ToothIcon,
   CurrencyDollarIcon,
+  EnvelopeIcon,
   HashtagIcon,
+  InboxStackIcon,
   LightBulbIcon,
+  ReceiptPercentIcon,
+  ServerStackIcon,
   ShieldCheckIcon,
   Squares2X2Icon,
   TagIcon,
@@ -27,6 +33,8 @@ export interface NavLinkDef {
   /** Translation key in the `navigation` namespace. */
   labelKey: string;
   badge?: string;
+  /** Hidden while acting as a delegate: the API refuses a delegate session on the route. */
+  ownerOnly?: boolean;
 }
 
 /**
@@ -47,18 +55,36 @@ export const NAV_LINKS: NavLinkDef[] = [
 ];
 
 export const TOOLS_LINKS: NavLinkDef[] = [
-  { href: '/categories', labelKey: 'categories' },
   { href: '/payees', labelKey: 'payees' },
-  { href: '/institutions', labelKey: 'institutions' },
-  { href: '/tags', labelKey: 'tags' },
+  { href: '/categories', labelKey: 'categories' },
   { href: '/securities', labelKey: 'securities' },
   { href: '/currencies', labelKey: 'currencies' },
+  { href: '/institutions', labelKey: 'institutions' },
+  { href: '/tags', labelKey: 'tags' },
+  { href: '/warranties', labelKey: 'warranties' },
+  { href: '/shared-expenses', labelKey: 'sharedExpenses', ownerOnly: true },
+  // Owner-only: every /payroll-deductions route refuses a delegate session.
+  { href: '/taxes', labelKey: 'taxes', ownerOnly: true },
+  { href: '/rules', labelKey: 'rules' },
+  { href: '/email-receipts', labelKey: 'emailReceipts', ownerOnly: true },
   { href: '/import', labelKey: 'import' },
+];
+
+/**
+ * Administrator-only routes. A second entry is what turned the header's Admin
+ * button into a menu: with one page a button that navigates is right, with two
+ * it silently hides the other.
+ */
+export const ADMIN_LINKS: NavLinkDef[] = [
+  { href: '/admin/users', labelKey: 'userManagement' },
+  { href: '/admin/notifications', labelKey: 'notificationSettings' },
+  { href: '/admin/backups', labelKey: 'backups' },
 ];
 
 export const AI_LINKS: NavLinkDef[] = [
   { href: '/insights', labelKey: 'insights' },
   { href: '/ai', labelKey: 'aiAssistant' },
+  { href: '/ai-reviews', labelKey: 'aiReviews', ownerOnly: true },
 ];
 
 /** Icon per route, including the fixed drawer entries outside the arrays. */
@@ -72,13 +98,21 @@ export const NAV_ICONS: Record<string, NavIcon> = {
   '/reports': ChartBarIcon,
   '/insights': LightBulbIcon,
   '/ai': ChatBubbleLeftRightIcon,
+  '/ai-reviews': InboxStackIcon,
   '/categories': TagIcon,
   '/payees': UsersIcon,
   '/institutions': BuildingOffice2Icon,
   '/tags': HashtagIcon,
+  '/rules': BoltIcon,
+  '/warranties': ShieldCheckIcon,
+  "/shared-expenses": UsersIcon,
+  '/email-receipts': EnvelopeIcon,
+  '/taxes': ReceiptPercentIcon,
   '/securities': BanknotesIcon,
   '/currencies': CurrencyDollarIcon,
   '/import': ArrowDownTrayIcon,
   '/admin/users': ShieldCheckIcon,
+  '/admin/notifications': BellAlertIcon,
+  '/admin/backups': ServerStackIcon,
   '/settings': Cog6ToothIcon,
 };

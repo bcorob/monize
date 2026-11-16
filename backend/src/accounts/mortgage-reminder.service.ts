@@ -13,6 +13,8 @@ import { emailTranslator } from "../i18n/email-translator";
 import { DEFAULT_LOCALE } from "../i18n/config";
 import { withSystemContext, withUserContext } from "../common/db/with-context";
 import { withScopedDb } from "../common/db/scoped-db";
+import { NotificationCategory } from "../notification-center/entities/notification.entity";
+import { NotificationPreferenceService } from "../notification-center/notification-preference.service";
 import {
   JobClaimService,
   JobClaimType,
@@ -23,9 +25,10 @@ import { createHash } from "node:crypto";
  * Service for handling mortgage term renewal reminders
  *
  * Runs daily to check for mortgages with term end dates approaching and
- * sends an email reminder to each affected user (respecting their
- * notificationEmail preference). Also logs each detected renewal so ops
- * can see what was processed even when SMTP is unavailable.
+ * sends an email reminder to each affected user (respecting their PAYMENTS
+ * channel preference and the global email master switch, via
+ * NotificationPreferenceService.resolveEmail). Also logs each detected renewal
+ * so ops can see what was processed even when SMTP is unavailable.
  */
 /**
  * How long one replica holds the right to send this user's mortgage renewal notice.
@@ -52,6 +55,8 @@ export class MortgageReminderService {
     private configService: ConfigService,
     private readonly i18n: I18nService,
     private readonly jobClaims: JobClaimService,
+    // A mortgage renewal reminder is a scheduled payment reminder (PAYMENTS).
+    private readonly notificationPreferences: NotificationPreferenceService,
   ) {}
 
   /**
@@ -192,16 +197,25 @@ export class MortgageReminderService {
     }
 
     try {
-      // RLS (task C2): per-user reads run under the user's own context.
+      // A mortgage renewal reminder is the PAYMENTS category; email is gated by
+      // that channel matrix and the global email master switch together (the
+      // resolver reads both). RLS (task C2): this per-user body runs under the
+      // user's own context, which the resolver's nested withScopedDb joins.
+      const emailEnabled = await this.notificationPreferences.resolveEmail(
+        userId,
+        NotificationCategory.PAYMENTS,
+      );
+      if (!emailEnabled) {
+        await this.releaseClaim(userId, claimKey, leaseToken);
+        return false;
+      }
+
+      // The user's stored locale for the reminder copy, composed off-request.
       const prefs = await withScopedDb(this.dataSource, (m) =>
         m.getRepository(UserPreference).findOne({
           where: { userId },
         }),
       );
-      if (prefs && !prefs.notificationEmail) {
-        await this.releaseClaim(userId, claimKey, leaseToken);
-        return false;
-      }
 
       const user = await withScopedDb(this.dataSource, (m) =>
         m.getRepository(User).findOne({
@@ -231,11 +245,11 @@ export class MortgageReminderService {
         mortgages.length === 1
           ? t(
               "emails.mortgageReminder.subject",
-              "Monize: 1 upcoming mortgage renewal",
+              "Monize: 1 mortgage rate term ending soon",
             )
           : t(
               "emails.mortgageReminder.subjectPlural",
-              `Monize: ${mortgages.length} upcoming mortgage renewals`,
+              `Monize: ${mortgages.length} mortgage rate terms ending soon`,
               { count: mortgages.length },
             );
 

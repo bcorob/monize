@@ -5,6 +5,8 @@
     "dividendsInterest": "Dividendos e Juros",
     "realizedGains": "Mais-valias Realizadas",
     "ytd": "Desde o início do ano",
+    "realizedKnownPart": "Parte conhecida: {amount}",
+    "realizedUnknownReason": "Este ganho não pode ser calculado: a posição contém ações adicionadas sem custo, pelo que o custo das ações vendidas é desconhecido. Abra a transação que as adicionou e introduza o respetivo preço.",
     "empty": "Sem rendimento de investimentos este ano"
   },
   "register": {

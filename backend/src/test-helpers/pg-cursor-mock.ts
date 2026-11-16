@@ -29,8 +29,7 @@ export function emulatePgCursors(
     const declared = DECLARE.exec(text);
     if (declared) {
       const rows = (await handler(declared[2], params)) as
-        | unknown[]
-        | undefined;
+        unknown[] | undefined;
       open.set(declared[1], { rows: rows ?? [], next: 0 });
       return [];
     }

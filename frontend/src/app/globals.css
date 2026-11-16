@@ -26,6 +26,22 @@
      from the inline-card baseline keep the old one until they are converted. */
   --shadow-card: 0 1px 2px 0 rgb(0 0 0 / 0.04), 0 2px 6px -1px rgb(0 0 0 / 0.07);
 
+  /* The dark-mode card shadow. A drop shadow alone is invisible on a dark
+     page, which is why cards used to wear a light gray-700 glow instead; that
+     glow read as a halo round every panel. This lights the card from above
+     instead: a 1px inset highlight along the top edge (the bevel) over a
+     plain dark drop. The highlight is white at a few percent, so it lifts the
+     themed card colour by the same step on every palette. `CARD_CLASS` wears
+     it as `dark:shadow-card-dark`. */
+  --shadow-card-dark: inset 0 1px 0 0 rgb(255 255 255 / 0.05), 0 1px 2px 0 rgb(0 0 0 / 0.3),
+    0 2px 6px -1px rgb(0 0 0 / 0.3);
+
+  /* A floating surface over content (chart tooltips): the same top-edge
+     highlight as the dark card over a deeper drop, since it sits above the
+     card rather than on the page. */
+  --shadow-popover-dark: inset 0 1px 0 0 rgb(255 255 255 / 0.06),
+    0 12px 24px -8px rgb(0 0 0 / 0.6);
+
   /* Table stripe color -- subtle alternating row in dark mode (between gray-900 and gray-800) */
   --color-table-stripe-dark: #161d2b;
 
@@ -85,13 +101,72 @@
   --highlight-flash-ring: #f59e0b;
 }
 
-/* Base styles -- extend background behind display cutouts */
+/* Base styles -- extend background behind display cutouts.
+   `color-scheme` tells the browser which native chrome to draw: the page
+   scrollbar, form-control popups and the date-picker icon. Dark mode is a
+   class here, not the OS media query, so without it Chromium on Windows keeps
+   painting a light scrollbar beside a dark page. */
 html {
+  color-scheme: light;
   @apply bg-gray-50;
 }
 
 html.dark {
+  color-scheme: dark;
   @apply bg-gray-900;
+}
+
+/* Ambient accent glow behind the page header. One soft radial wash from the
+   accent ramp through color-mix, so every palette gets its own tint without a
+   per-theme entry. It is painted on the page wrapper, not `body`, because
+   `PageLayout` and `SwipeShell` are opaque and would cover it. It has faded out
+   9rem down, so it stops with the header and never sits behind a table. Light
+   mode spends less of it: on pale paper the same share reads as a stain. */
+:root {
+  --ambient-glow: color-mix(in oklab, var(--color-blue-500) 10%, transparent);
+}
+.dark {
+  --ambient-glow: color-mix(in oklab, var(--color-blue-500) 16%, transparent);
+}
+/* Midnight is unlit black for OLED and highcontrast spends nothing on
+   decoration, so neither paints a glow. */
+html[data-theme='midnight'],
+html[data-theme='highcontrast'] {
+  --ambient-glow: transparent;
+}
+
+/* The picture on the sign-in screen's brand panel settles into place. */
+@media (prefers-reduced-motion: no-preference) {
+  .auth-brand-rise {
+    animation: auth-brand-rise 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+}
+@keyframes auth-brand-rise {
+  from {
+    opacity: 0;
+    transform: translateY(1.5rem);
+  }
+}
+
+.page-ambient-glow {
+  background-image: radial-gradient(56rem 13rem at 15% -4rem, var(--ambient-glow), transparent);
+  background-repeat: no-repeat;
+}
+
+:root {
+  /* The room a page leaves for the fixed tab bar, only while one is drawn. */
+  --tab-bar-space: 0px;
+}
+
+@media screen and (width < 80rem) {
+  :root:has([data-mobile-tab-bar]) {
+    --tab-bar-space: 4rem;
+  }
+}
+
+/* A section jumped to clears the status bar of an installed app. */
+html {
+  scroll-padding-top: env(safe-area-inset-top);
 }
 
 body {
@@ -146,6 +221,11 @@ body {
   /* Unclassified data -- an "Other" pie slice, a series with no colour of
      its own. Recessive by design, so it never competes with real series. */
   --chart-neutral: var(--color-gray-400);
+  /* Tagged transfer flows (Income vs Expenses funding series): an indigo pair
+     from the ramp, never the income green or expense red -- a transfer is not
+     income. Not themed; the ramp follows the palette. */
+  --chart-inflow: var(--color-indigo-500);
+  --chart-outflow: var(--color-indigo-300);
   --chart-1: #3b82f6;
   --chart-2: #10b981;
   --chart-3: #f59e0b;
@@ -172,6 +252,8 @@ body {
   --chart-axis: var(--color-gray-400);
   --chart-surface: var(--color-gray-800);
   --chart-neutral: var(--color-gray-500);
+  --chart-inflow: var(--color-indigo-400);
+  --chart-outflow: var(--color-indigo-300);
   --chart-income: #34d399;
   --chart-expense: #f87171;
   --chart-warning: #fbbf24;
@@ -301,6 +383,24 @@ select {
   background-color: var(--color-gray-800);
 }
 
+/* Recharts gives every chart <svg> tabIndex=0 and role="application" for its
+   keyboard accessibility layer. On a touch tap or a mouse click that focuses
+   the surface, and the browser then paints its focus outline around the whole
+   chart -- an oversized rectangle framing the point the reader just touched,
+   with the tooltip, active dot and cursor inside it. That ring belongs only to
+   keyboard focus: drop it for pointer focus and keep the visible one for
+   :focus-visible, so a keyboard user still sees where they are. The recharts
+   Tooltip cursor and activeDot are unaffected -- they are drawn inside the SVG,
+   not this outline. */
+.recharts-surface:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.recharts-surface:focus-visible {
+  outline: 2px solid var(--color-blue-500);
+  outline-offset: 2px;
+}
+
 /* Date input styling - empty date inputs should match placeholder color */
 .date-empty {
   color: var(--color-gray-400) !important; /* matches placeholder */
@@ -330,6 +430,85 @@ button {
 }
 
 /* Hide scrollbar while maintaining scroll functionality */
+/* A horizontal scroller that says where its hidden content is.
+ *
+ * A phone draws no scrollbar, so a row of tabs that scrolls sideways looks like
+ * a row that ends at the screen edge: the security detail page's fifth tab was
+ * simply not there. The component keeps `data-overflow` current from its scroll
+ * and resize handlers (`overflowEdge` in `components/ui/Tabs.tsx`), and this
+ * fades the content out at whichever edge still has more behind it. A mask
+ * rather than a painted gradient, so it needs no knowledge of the background
+ * colour and holds on every theme. */
+@utility scroll-fade-x {
+  --scroll-fade: 1.75rem;
+  &[data-overflow='end'] {
+    mask-image: linear-gradient(to right, #000 calc(100% - var(--scroll-fade)), transparent);
+    -webkit-mask-image: linear-gradient(to right, #000 calc(100% - var(--scroll-fade)), transparent);
+  }
+  &[data-overflow='start'] {
+    mask-image: linear-gradient(to left, #000 calc(100% - var(--scroll-fade)), transparent);
+    -webkit-mask-image: linear-gradient(to left, #000 calc(100% - var(--scroll-fade)), transparent);
+  }
+  &[data-overflow='both'] {
+    mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 var(--scroll-fade),
+      #000 calc(100% - var(--scroll-fade)),
+      transparent
+    );
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent,
+      #000 var(--scroll-fade),
+      #000 calc(100% - var(--scroll-fade)),
+      transparent
+    );
+  }
+}
+
+/* Loading placeholder sweep. A highlight band travels across the element
+ * over its own `bg-*` blocks, which reads as content on its way rather than a
+ * blinking box. It is an overlay (`::after`), so it works on a single block
+ * and on a wrapper of several blocks alike, and needs no knowledge of the
+ * block colours. Placeholders keep `animate-pulse` beside it: with reduced
+ * motion the sweep is never drawn and the element keeps the pulse it always
+ * had, and the tests that find a loading state by `.animate-pulse` still
+ * find it. When the sweep runs it replaces the pulse rather than adding to it.
+ * `Skeleton` wears it; a hand-rolled placeholder adds it next to its
+ * `animate-pulse` (`src/test/skeleton-shimmer.guard.test.ts`). */
+:root {
+  --skeleton-sheen: rgb(255 255 255 / 0.55);
+}
+.dark {
+  --skeleton-sheen: rgb(255 255 255 / 0.06);
+}
+@keyframes skeleton-shimmer {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(100%);
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .skeleton-shimmer {
+    position: relative;
+    overflow: hidden;
+    isolation: isolate;
+    animation: none;
+  }
+  .skeleton-shimmer::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: linear-gradient(100deg, transparent 20%, var(--skeleton-sheen) 50%, transparent 80%);
+    transform: translateX(-100%);
+    animation: skeleton-shimmer 1.6s ease-in-out infinite;
+  }
+}
+
 @utility scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;

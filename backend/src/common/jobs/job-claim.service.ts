@@ -63,6 +63,23 @@ export const JobClaimType = {
   UserMaintenance: "user_maintenance",
   DemoReset: "demo_reset",
   DemoIntraday: "demo_intraday",
+  SystemAlertEmail: "system_alert_email",
+  BudgetPeriodRollover: "budget_period_rollover",
+  BudgetWeeklyDigest: "budget_weekly_digest",
+  /** One bank account's sync, held as a lease (spec docs/specs/bank-sync.md section 7). */
+  BankSyncAccount: "bank_sync_account",
+  /** One user's daily bank sync, claimed once per UTC day (spec section 8). */
+  BankSyncDaily: "bank_sync_daily",
+  /** Serializes setup and records hashed one-time SimpleFIN token attempts. */
+  SimplefinSetup: "simplefin_setup",
+  EmailReceiptPoll: "email_receipt_poll",
+  /** One user's dashboard trivia, claimed once per UTC day. */
+  DashboardTrivia: "dashboard_trivia",
+  /**
+   * One sender's parser draft, held across the provider call so a second poll
+   * does not draft the same sender beside it (A26-S11-01).
+   */
+  EmailReceiptParserDraft: "email_receipt_parser_draft",
 } as const;
 
 export type JobClaimType = (typeof JobClaimType)[keyof typeof JobClaimType];
@@ -281,6 +298,109 @@ export class JobClaimService {
           `and will be re-sent.`,
       );
     }
+  }
+
+  /**
+   * Push a lease's expiry out to `ttlMs` from now, as the attempt that holds it.
+   * True while this attempt is still the holder; false once another attempt
+   * retook the row, after which the caller's writes are refused by `holdsLease`.
+   *
+   * A holder whose work can outlast its TTL (a provider call) renews while the
+   * work runs, so the lease is never retaken from under a live call
+   * (A26-L13). `whileLeaseHeld` is the one place that schedules it.
+   */
+  async renewLease(
+    claimType: JobClaimType,
+    userId: string,
+    claimKey: string,
+    leaseToken: string,
+    ttlMs: number,
+  ): Promise<boolean> {
+    const updated = await withScopedDb(this.dataSource, async (manager) => {
+      await this.declareLeaseToken(manager, leaseToken);
+      return manager.query(
+        `UPDATE job_claims
+            SET expires_at = CURRENT_TIMESTAMP + ($5::text || ' milliseconds')::interval
+          WHERE claim_type = $1 AND user_id = $2 AND claim_key = $3
+            AND lease_token = $4::uuid
+            AND delivered_at IS NULL`,
+        [
+          claimType,
+          userId,
+          claimKey,
+          leaseToken,
+          String(Math.max(1, Math.round(ttlMs))),
+        ],
+      );
+    });
+    return affectedRowCount(updated) > 0;
+  }
+
+  /**
+   * Run `work` while renewing its lease every third of `ttlMs`, so a provider
+   * call longer than the TTL never lets a second holder start the same work.
+   * The renewal timer stops when `work` settles; a failed renewal is logged and
+   * left to the fence (`holdsLease`) to decide the save.
+   */
+  async whileLeaseHeld<T>(
+    claimType: JobClaimType,
+    userId: string,
+    claimKey: string,
+    leaseToken: string,
+    ttlMs: number,
+    work: () => Promise<T>,
+  ): Promise<T> {
+    const timer = setInterval(
+      () => {
+        this.renewLease(claimType, userId, claimKey, leaseToken, ttlMs)
+          .then((held) => {
+            if (!held) {
+              this.logger.warn(
+                `Lease ${claimType}/${claimKey} for user ${userId} was retaken while its work ran`,
+              );
+            }
+          })
+          .catch((error: unknown) =>
+            this.logger.warn(
+              `Could not renew lease ${claimType}/${claimKey} for user ${userId}: ` +
+                `${error instanceof Error ? error.message : String(error)}`,
+            ),
+          );
+      },
+      Math.max(1000, Math.floor(ttlMs / 3)),
+    );
+    timer.unref?.();
+    try {
+      return await work();
+    } finally {
+      clearInterval(timer);
+    }
+  }
+
+  /**
+   * The fence on a lease holder's own write: true only while this attempt's
+   * token is still the row's, read `FOR UPDATE` inside the caller's
+   * transaction so a retake waits for the write to commit (or the write sees
+   * the retake and stands down). Call it inside the transaction of the write it
+   * guards, before writing (A26-L13).
+   */
+  async holdsLease(
+    manager: EntityManager,
+    claimType: JobClaimType,
+    userId: string,
+    claimKey: string,
+    leaseToken: string,
+  ): Promise<boolean> {
+    const rows = returnedRows<{ held: number }>(
+      await manager.query(
+        `SELECT 1 AS held FROM job_claims
+          WHERE claim_type = $1 AND user_id = $2 AND claim_key = $3
+            AND lease_token = $4::uuid
+          FOR UPDATE`,
+        [claimType, userId, claimKey, leaseToken],
+      ),
+    );
+    return rows.length > 0;
   }
 
   /**

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildCategoryTree, getCategorySelectOptions, buildCategoryColorMap, buildCategoryLabelMap, buildDescendantIdSet, rollupToDirectChildren } from './categoryUtils';
+import { buildCategoryTree, getCategorySelectOptions, buildCategoryColorMap, buildCategoryLabelMap, buildDescendantIdSet, rollupToDirectChildren, buildCategoryFilterOptions, canonicalizeCategoryFilter, resolveSelectedCategories, SpecialCategoryFilterLabels, signAmountByCategory } from './categoryUtils';
 import { Category } from '@/types/category';
 
 function makeCategory(overrides: Partial<Category> & { id: string; name: string }): Category {
@@ -252,5 +252,119 @@ describe('rollupToDirectChildren', () => {
       'cat-3',
     );
     expect(result).toEqual([]);
+  });
+});
+
+const labels: SpecialCategoryFilterLabels = {
+  uncategorized: 'Uncategorized',
+  transfer: 'Transfers',
+  income: 'All income categories',
+  expense: 'All expense categories',
+};
+const salary = makeCategory({ id: 'inc-1', name: 'Salary', isIncome: true });
+const bonus = makeCategory({ id: 'inc-2', name: 'Bonus', isIncome: true, parentId: 'inc-1' });
+
+describe('buildCategoryFilterOptions', () => {
+  it('lists the four labelled pseudo-ids first, then the tree', () => {
+    const result = buildCategoryFilterOptions([food, fastFood, salary], labels);
+    expect(result.slice(0, 4)).toEqual([
+      { value: 'uncategorized', label: 'Uncategorized', separatorAfter: false },
+      { value: 'transfer', label: 'Transfers', separatorAfter: false },
+      { value: 'income', label: 'All income categories', separatorAfter: false },
+      { value: 'expense', label: 'All expense categories', separatorAfter: true },
+    ]);
+    expect(result.slice(4).map((o) => o.value)).toEqual(['cat-3', 'inc-1']);
+    expect(result[4].children?.map((o) => o.value)).toEqual(['cat-4']);
+  });
+
+  it('closes the pseudo-id group after the last one, and nowhere else', () => {
+    const result = buildCategoryFilterOptions([food, fastFood, salary], labels);
+    // Exactly one boundary, on the last pseudo-id: everything above it filters
+    // by what a record is, everything below is a category you can pick.
+    expect(result.filter((o) => o.separatorAfter).map((o) => o.value)).toEqual(['expense']);
+  });
+
+  it('still marks the boundary when there are no categories to separate', () => {
+    // The list is the four pseudo-ids and nothing else. The flag stays put;
+    // MultiSelect is what declines to draw a rule under the last row.
+    const result = buildCategoryFilterOptions([], labels);
+    expect(result).toHaveLength(4);
+    expect(result[3]).toMatchObject({ value: 'expense', separatorAfter: true });
+  });
+});
+
+describe('resolveSelectedCategories', () => {
+  it('renders every pseudo-id as a labelled chip and drops unknown ids', () => {
+    const result = resolveSelectedCategories(
+      ['income', 'cat-1', 'missing', 'transfer', 'expense', 'uncategorized'],
+      [groceries],
+      labels,
+    );
+    expect(result.map((c) => c.name)).toEqual([
+      'All income categories', 'Groceries', 'Transfers', 'All expense categories', 'Uncategorized',
+    ]);
+  });
+});
+
+describe('canonicalizeCategoryFilter', () => {
+  const all = [groceries, food, fastFood, salary, bonus];
+
+  it('collapses a selection of every category of a type into its pseudo-id, in place', () => {
+    expect(canonicalizeCategoryFilter(['cat-1', 'inc-1', 'uncategorized', 'inc-2'], all))
+      .toEqual(['cat-1', 'income', 'uncategorized']);
+  });
+
+  it('leaves a partial type as ids', () => {
+    expect(canonicalizeCategoryFilter(['cat-1', 'inc-1'], all)).toEqual(['cat-1', 'inc-1']);
+  });
+
+  it('drops ids a present pseudo-id already covers', () => {
+    expect(canonicalizeCategoryFilter(['inc-1', 'expense', 'cat-3', 'income'], all))
+      .toEqual(['expense', 'income']);
+  });
+
+  it('turns Select All into the four pseudo-ids', () => {
+    const everything = ['uncategorized', 'transfer', 'income', 'expense', ...all.map((c) => c.id)];
+    expect(canonicalizeCategoryFilter(everything, all)).toEqual(['uncategorized', 'transfer', 'income', 'expense']);
+  });
+
+  it('never collapses a type that has no categories', () => {
+    expect(canonicalizeCategoryFilter(['cat-1', 'cat-3', 'cat-4'], [groceries, food, fastFood]))
+      .toEqual(['expense']);
+    expect(canonicalizeCategoryFilter([], [groceries])).toEqual([]);
+    expect(canonicalizeCategoryFilter(['cat-1'], [])).toEqual(['cat-1']);
+  });
+});
+
+describe('signAmountByCategory', () => {
+  const expense = { isIncome: false, effectiveAutoSign: true };
+  const income = { isIncome: true, effectiveAutoSign: true };
+
+  it('makes a typed amount negative for an expense category', () => {
+    expect(signAmountByCategory(25, undefined, expense)).toBe(-25);
+  });
+
+  it('makes a typed amount positive for an income category', () => {
+    expect(signAmountByCategory(-25, undefined, income)).toBe(25);
+  });
+
+  it('treats an absent effectiveAutoSign as on', () => {
+    expect(signAmountByCategory(25, undefined, { isIncome: false } as never)).toBe(-25);
+  });
+
+  it('leaves the typed value unchanged when automatic sign is off', () => {
+    expect(signAmountByCategory(25, undefined, { isIncome: false, effectiveAutoSign: false })).toBe(25);
+    expect(signAmountByCategory(-25, undefined, { isIncome: true, effectiveAutoSign: false })).toBe(-25);
+  });
+
+  it('preserves a pure sign flip of the reference whatever the setting', () => {
+    expect(signAmountByCategory(25, -25, expense)).toBe(25);
+    expect(signAmountByCategory(-25, 25, income)).toBe(-25);
+    expect(signAmountByCategory(25, -25, { isIncome: false, effectiveAutoSign: false })).toBe(25);
+  });
+
+  it('returns the value unchanged with no category', () => {
+    expect(signAmountByCategory(25, undefined, undefined)).toBe(25);
+    expect(signAmountByCategory(-25, 10, undefined)).toBe(-25);
   });
 });

@@ -34,7 +34,6 @@
     "units": "份数",
     "avgCostPerUnit": "平均成本 / 份",
     "heldInAccounts": "持有账户",
-    "openAccount": "在“投资”页面中查看 {name}",
     "unitsShare": "{units}（{share}）",
     "valueUnknown": "无法估值",
     "approx": "约 {amount}"
@@ -74,15 +73,20 @@
     "sector": "板块",
     "industry": "行业",
     "provider": "数据源",
-    "lastPrice": "最新价格"
+    "lastPrice": "最新价格",
+    "bondDescription": "债券说明"
   },
   "tabs": {
     "ariaLabel": "证券各部分",
     "overview": "概览",
     "transactions": "交易",
     "prices": "价格历史",
+    "terms": "条款历史",
     "documents": "文档",
     "news": "新闻"
+  },
+  "bondPrices": {
+    "title": "价格历史"
   },
   "about": {
     "title": "简介",
@@ -121,6 +125,8 @@
     "fees": "费用",
     "realizedPl": "已实现盈亏",
     "realizedMixed": "以 {currencies} 实现，因此不做合计",
+    "realizedUnknownReason": "无法计算此收益：该持仓包含未记录成本而添加的股份，因此已卖出股份的成本未知。请打开添加这些股份的交易并输入其价格。",
+    "realizedKnownPart": "已知部分：{amount}",
     "totalReturn": "总回报",
     "totalReturnValue": "{amount}（{percent}）",
     "totalReturnTitle": "未实现收益，加上卖出时已实现的金额和收到的收益，减去费用，相对于你投入的资本。这是该资本上的简单回报：没有折算成年化，也没有按各笔买入的持有时长加权。",
@@ -147,6 +153,8 @@
     "title": "持仓已清",
     "description": "你已不再持有该证券。它的历史仍保留在下方。",
     "realizedPl": "已实现盈亏",
+    "realizedUnknownReason": "无法计算此收益：该持仓曾包含未记录成本而添加的股份，因此已卖出股份的成本未知。请打开添加这些股份的交易并输入其价格。",
+    "realizedKnownPart": "已知部分：{amount}",
     "heldFrom": "持有起始",
     "heldRange": "{start} 至 {end}"
   },
@@ -165,7 +173,24 @@
     "sectorEmpty": "未存储板块构成。对于基金和 ETF，Monize 会从数据源补齐。",
     "countryEmpty": "未存储国家构成。你可以在编辑该证券时录入。",
     "assetClassEmpty": "尚未存储资产类别构成。",
-    "remainder": "{percent} 未分类"
+    "remainder": "{percent} 未分类",
+    "bond": {
+      "seriesTab": "系列",
+      "maturityTab": "到期",
+      "empty": "您尚未持有此类债券的任何系列。",
+      "someUnknown": "部分数值未知,因此不显示占比。",
+      "issuerCountry": "发行国家",
+      "rate": "利率",
+      "interest": "利息",
+      "term": "距到期期限",
+      "interestValue": "{capitalization},期间:{period}",
+      "rateType": {
+        "FIXED": "固定",
+        "BENCHMARK_PLUS_SPREAD": "浮动(基准 + 利差)",
+        "INFLATION_PLUS_MARGIN_AS_RATE": "通胀挂钩(基准 + 加点)",
+        "ZERO_COUPON_DISCOUNT": "零息（折价）"
+      }
+    }
   },
   "documents": {
     "title": "文档",
@@ -225,6 +250,16 @@
       "deleted": "已删除文档",
       "saveFailed": "无法保存该文档",
       "deleteFailed": "无法删除该文档"
+    },
+    "issueLetters": {
+      "title": "发行函",
+      "loadFailed": "无法加载发行函。",
+      "empty": "此债券种类尚未保存任何发行函。",
+      "held": "已持有",
+      "onSale": "在售",
+      "noLetter": "此系列未记录发行函",
+      "open": "官方PDF",
+      "openNamed": "打开系列 {series} 的发行函"
     }
   },
   "news": {
@@ -237,6 +272,243 @@
     "empty": {
       "title": "目前没有标题",
       "description": "最近没有关于该代码的内容发布。你再回到这里时列表会刷新。"
+    }
+  },
+  "bond": {
+    "loading": "正在加载债券估值...",
+    "loadFailed": "无法加载债券估值。",
+    "unknown": "未知",
+    "asOf": "估值日期",
+    "termsSource": "条款：{document}",
+    "termsManual": "由管理员手动录入的条款",
+    "noLots": "该日期没有未平仓批次。",
+    "totals": {
+      "quantity": "持有债券数量",
+      "grossValue": "总价值",
+      "earlyRedemptionValue": "提前赎回价值",
+      "accruedInterest": "应计利息",
+      "unknownLot": "至少有一个批次没有数据，因此不给出合计。",
+      "unknownRefusal": "无法确定各批次，因此不给出合计。"
+    },
+    "lots": {
+      "purchaseDate": "购买日期",
+      "assumed": "假定",
+      "assumedTitle": "实际购买日期未知：该批次通过转账而来，且没有关联的转出方。",
+      "quantity": "数量",
+      "maturity": "到期日",
+      "period": "当前计息期",
+      "periodValue": "{index}：{start} 至 {end}",
+      "rate": "利率",
+      "principal": "每张债券本金",
+      "principalIssuePrice": "未输入成本：使用拍卖价格",
+      "accruedInterest": "应计利息",
+      "grossValue": "总价值",
+      "earlyRedemption": "提前赎回",
+      "nextCashFlow": "下一笔现金流",
+      "cashFlowValue": "{date} {type} {amount}",
+      "noCashFlow": "无",
+      "projected": "预测",
+      "maturityValue": "到期价值",
+      "maturityKnown": "已知",
+      "maturityProjected": "预测",
+      "matured": "已到期",
+      "refused": "未估值",
+      "amountUnknown": "金额未知"
+    },
+    "rateSource": {
+      "TERMS": "条款",
+      "ANNOUNCED": "已公布",
+      "DERIVED": "推算",
+      "PROJECTED": "预测"
+    },
+    "cashFlowType": {
+      "INTEREST": "利息",
+      "PRINCIPAL": "本金"
+    },
+    "earlyRefusal": {
+      "NOT_REDEEMABLE": "不可提前赎回",
+      "TOO_EARLY": "赎回为时过早",
+      "TOO_LATE": "赎回为时已晚",
+      "RECORD_DAY": "登记日不可赎回",
+      "MATURED": "已到期",
+      "RATE_UNKNOWN": "利率尚未确定",
+      "TERMS_INCOMPLETE": "条款不完整"
+    },
+    "lotsRefusal": {
+      "SPLIT": "无法推导批次：债券不可拆分。",
+      "FRACTIONAL_QUANTITY": "无法推导批次：某个数量不是整数张债券。",
+      "OVER_REMOVAL": "无法推导批次：移除的债券多于持有的债券。",
+      "INVALID_QUANTITY": "无法推导批次：某个数量缺失、为负数或过大。",
+      "REMOVAL_EXCEEDS_SERIES": "无法确定批次:某一系列取出的债券多于持有数量。",
+      "SERIES_NOT_DETERMINED": "无法确定批次:某笔购买的系列未知。"
+    },
+    "lotsRefusalDetail": {
+      "SPLIT": "此证券记录了一次拆分（{date} 的 {action}）；债券不可拆分。",
+      "FRACTIONAL_QUANTITY": "{date} 的 {action} 涉及 {quantity} 张债券，不是整数。",
+      "OVER_REMOVAL": "{date} 的 {action} 减少 {quantity} 张债券，超过持有数量。",
+      "INVALID_QUANTITY": "{date} 的 {action} 数量缺失、为负数或过大。",
+      "REMOVAL_EXCEEDS_SERIES": "{date} 的 {action} 取出其系列的 {quantity} 份债券,超过该系列的持有数量。",
+      "SERIES_NOT_DETERMINED": "{date} 的 {action} 未指定系列,且当天没有该债券种类的已存系列在售。请获取该系列并在交易中选择。"
+    },
+    "assumptions": {
+      "title": "预测假设",
+      "latestObservation": "所有后续期间均假定 {benchmark} 为 {value}(最新公布值:{observation})",
+      "supplied": "所有后续期间均假定 {benchmark} 为 {value}",
+      "suppliedSimpleAnnual": "假定 {benchmark} 此后每个月按每年 {value} 增长（简单年增长，不复利）"
+    },
+    "missing": {
+      "title": "仍需的数据",
+      "item": "{benchmark} {observation} — 发布方：{publisher}",
+      "itemNoPublisher": "{benchmark} {observation} — 发布方未知"
+    },
+    "recompute": {
+      "button": "重新计算价格",
+      "done": "价格已重新计算：写入 {written} 条，删除 {deleted} 条。",
+      "failed": "无法重新计算价格。"
+    },
+    "rate": {
+      "title": "利率",
+      "rule": {
+        "fixed": "整个期限内固定 {rate}",
+        "firstThen": "第 1 期：{firstRate}。之后为 {benchmark} + {addend}",
+        "every": "每期：{benchmark} + {addend}",
+        "floorZero": "{benchmark} 为负数时按 0 计算",
+        "dailyFloor": "每日利率（指数加利差）不会低于 {floor}",
+        "discount": "相对面值的折价",
+        "daily": "每天：{benchmark} + {addend}，按日累加",
+        "lockout": "计息期结束前 {days, plural, one {# 个工作日} other {# 个工作日}} 内的拍卖不用于该计息期"
+      },
+      "daily": "每日，{benchmark}",
+      "dailyNoIndex": "每日，{benchmark}：尚未保存指数",
+      "dailyRun": "自 {from} 起：{rate}",
+      "dailyRunUnknown": "自 {from} 起：未保存指数",
+      "lotHeading": "{date} 购入的份额",
+      "range": "{start} 至 {end}",
+      "current": "当前",
+      "columns": {
+        "period": "期次",
+        "dates": "日期",
+        "rate": "利率",
+        "source": "来源",
+        "how": "确定方式"
+      },
+      "how": {
+        "stated": "约定利率",
+        "observed": "{benchmark} {observation}：{value} + {addend}",
+        "floored": "（上调至 {floor}）",
+        "missing": "{benchmark} {observation}：尚未公布"
+      },
+      "nextRateReset": "下次利率重置日:{date}",
+      "nextCapitalization": "下次计息资本化日:{date}"
+    },
+    "indexation": {
+      "inflation": "与通胀挂钩：自 {date}（第 2 期）起，利率为 {benchmark} + {addend}，每期重新计算",
+      "floating": "浮动利率：自 {date}（第 2 期）起，利率为 {benchmark} + {addend}，每期重新计算"
+    },
+    "interestParts": {
+      "fixed": "固定利息（第 1 期）",
+      "margin": "来自利差的利息",
+      "inflation": "来自通胀的利息",
+      "benchmark": "来自参考利率的利息",
+      "announced": "已公布的利息",
+      "fixedTerm": "固定利率利息"
+    },
+    "chart": {
+      "title": "各期末累计利息",
+      "assumption": "假设 {benchmark} = {value} 的预测",
+      "projectedNote": "较浅的柱表示预测期间",
+      "stoppedAt": "自第 {period} 期起利息未知，因此图表在此之前结束。"
+    },
+    "scenarios": {
+      "title": "通胀情景",
+      "titleBenchmark": "利率情景",
+      "projection": "预测",
+      "caption": "按假设值计算的预测到期价值和利息",
+      "intro": "这些是预测而非确定结果：对每个尚未开始的期间，均假设为第一列的 {benchmark} 值。已知和已公布的期间不会改变。选择一行即可查看其利率表和图表。",
+      "custom": "自定义 {benchmark}（%）",
+      "add": "添加情景",
+      "useDefault": "使用默认假设",
+      "selected": "已选择",
+      "loading": "正在加载情景...",
+      "loadFailed": "无法加载情景。",
+      "columns": {
+        "assumed": "假设：{benchmark}",
+        "maturityValue": "到期价值（预测）",
+        "totalInterest": "利息合计（预测）"
+      },
+      "asOfNote": "按上方所选日期 {date} 估值:数字涵盖当天持有的债券。"
+    },
+    "benchmarks": {
+      "PL_CPI_GUS_YOY": "居民消费价格指数，12 个月 (GUS)",
+      "PL_NBP_REFERENCE": "NBP 基准利率",
+      "US_CPI_U_NSA": "CPI-U，所有项目，未经季节性调整 (BLS)",
+      "US_TBILL_13W_MMY": "13 周美国国库券收益率"
+    },
+    "valuationRefusal": {
+      "PURCHASE_OUTSIDE_SALE_WINDOW": "该系列只能在 {from} 至 {to} 之间购买。此份额购于 {purchaseDate},因此不予估值。",
+      "PURCHASE_AFTER_MATURITY": "此系列已于 {maturityDate} 到期。此批次于 {purchaseDate} 买入，即在到期日当天或之后，因此不予估值。"
+    },
+    "marketPriceRequired": "此证券包含一个在市场上交易的系列，因此其价格不由条款决定。Monize 不会为其写入价格：请自行输入价格。下方各批次的价值根据条款计算，不是市场价值。",
+    "partial": {
+      "title": "此估值不完整,请将这些数字视为部分数据。",
+      "terms": "债券条款不完整(例如未安装日历)。",
+      "reference": "缺少参考数据;请参阅下方仍需的数据清单。",
+      "earlyRedemption": "提前赎回条款不完整,因此可能缺少提前赎回价值。",
+      "other": "至少有一个份额尚无法完整估值(例如利率未知)。"
+    },
+    "projectionMissing": {
+      "title": "无法预测之后的期间",
+      "item": "{benchmark}:没有已发布的数值,也未设置假设,因此无法预测之后的期间(发布方:{publisher})",
+      "itemNoPublisher": "{benchmark}:没有已发布的数值,也未设置假设,因此无法预测之后的期间(发布方未知)"
+    },
+    "coverage": {
+      "asOf": "{benchmark} 数据截至 {date}",
+      "none": "尚未保存 {benchmark} 数据"
+    },
+    "issuers": {
+      "PL_MF": "财政部(PL)",
+      "US_TREASURY": "美国财政部(US)"
+    },
+    "redemption": {
+      "title": "提前赎回条款",
+      "fixedFee": "提前赎回费用:每份债券 {amount}。",
+      "forfeitAccrued": "提前赎回时,当期已累计的利息将被没收。",
+      "floorAllPeriods": "在任何期间,该费用都不会使赎回所得低于面值。",
+      "floorFirstPeriod": "仅在第一个期间,该费用不会使赎回所得低于面值;之后的期间没有这一下限。"
+    },
+    "programs": {
+      "OTS": "OTS: 3 个月固定利率储蓄债券",
+      "ROR": "ROR: 1 年期浮动利率储蓄债券",
+      "DOR": "DOR: 2 年期浮动利率储蓄债券",
+      "TOS": "TOS: 3 年期固定利率储蓄债券",
+      "COI": "COI: 4 年期通胀指数储蓄债券",
+      "EDO": "EDO: 10 年期通胀指数储蓄债券",
+      "ROS": "ROS: 6 年期通胀指数家庭储蓄债券",
+      "ROD": "ROD: 12 年期通胀指数家庭储蓄债券",
+      "BILL": "BILL：国库券，4 至 52 周，折价发行",
+      "NOTE": "NOTE：中期国债，2 至 10 年，固定半年付息",
+      "BOND": "BOND：长期国债，20 年和 30 年，固定半年付息",
+      "TIPS": "TIPS：通胀保值国债，本金与 CPI-U 挂钩",
+      "FRN": "FRN：浮动利率国债，2 年，按季付息"
+    },
+    "series": {
+      "title": "您的系列",
+      "column": "系列",
+      "nextRateChange": "下次利率变更",
+      "total": "债券种类合计",
+      "purchasedRange": "{from} 至 {to}",
+      "expand": "显示 {series} 的详情",
+      "collapse": "隐藏 {series} 的详情",
+      "partial": "部分"
+    },
+    "program": {
+      "title": "债券种类",
+      "newest": "最新系列 {series} 的条款。",
+      "noTerms": "条款尚不明确:您没有此债券种类的任何系列,也没有在售的系列。",
+      "autoFetchFailed": "无法保存该设置。"
+    },
+    "onSale": {
+      "title": "当前在售"
     }
   }
 }

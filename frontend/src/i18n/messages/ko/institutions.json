@@ -30,11 +30,6 @@
       "actions": "작업"
     },
     "accountCount": "{count, plural, =0 {계정 없음} one {# 계정} other {# 계정}}",
-    "statusFilter": {
-      "all": "전체",
-      "active": "활성",
-      "closed": "닫힘"
-    },
     "actions": {
       "manageAccounts": "계정"
     },

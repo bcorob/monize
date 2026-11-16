@@ -11,9 +11,76 @@
   "uploaded": "[XX-Attachment added-XX]",
   "deleted": "[XX-Attachment deleted-XX]",
   "loadFailed": "[XX-Failed to load attachments-XX]",
+  "retry": "[XX-Try again-XX]",
   "uploadFailed": "[XX-Failed to upload attachment-XX]",
   "deleteFailed": "[XX-Failed to delete attachment-XX]",
   "tooLarge": "[XX-File is too large (maximum {max})-XX]",
   "unsupported": "[XX-Unsupported file type. Allowed: images or PDF-XX]",
-  "tooMany": "[XX-Maximum {max} attachments per transaction-XX]"
+  "tooMany": "[XX-Maximum {max} attachments per transaction-XX]",
+  "fromWarranty": "[XX-From warranty: {name}-XX]",
+  "fromLinkedWarranty": "[XX-From a linked warranty-XX]",
+  "scan": {
+    "button": "[XX-Scan document-XX]",
+    "title": "[XX-Scan document-XX]",
+    "description": "[XX-Straighten and clean up a photo of a document before attaching it.-XX]",
+    "analysing": "[XX-Looking for a document in the photo…-XX]",
+    "failed": "[XX-The document could not be scanned. You can still attach the photo as it is.-XX]",
+    "viewEnhanced": "[XX-Enhanced-XX]",
+    "viewOriginal": "[XX-Original-XX]",
+    "rotate": "[XX-Rotate-XX]",
+    "styleLabel": "[XX-Finish-XX]",
+    "styles": {
+      "colour": "[XX-Colour-XX]",
+      "grayscale": "[XX-Greyscale-XX]",
+      "blackAndWhite": "[XX-Black and white-XX]",
+      "none": "[XX-No enhancement-XX]"
+    },
+    "styleHints": {
+      "colour": "[XX-Evens out the lighting, lifts the contrast and sharpens the text.-XX]",
+      "grayscale": "[XX-The same clean-up without the colour. Smaller, and free of the tint paper picks up under artificial light.-XX]",
+      "blackAndWhite": "[XX-Ink and paper only. Best for printed text; it will flatten photos and logos.-XX]",
+      "none": "[XX-Straightened and cropped, otherwise exactly as photographed. Use this when the clean-up spoils the subject.-XX]"
+    },
+    "adjustments": {
+      "brightness": "[XX-Brightness ({value})-XX]",
+      "contrast": "[XX-Contrast ({value})-XX]"
+    },
+    "resetAdjustments": "[XX-Reset brightness and contrast-XX]",
+    "adjustHint": "[XX-Switch to Original to drag the corners if the edges are wrong.-XX]",
+    "updating": "[XX-Updating the preview…-XX]",
+    "noDocumentFound": "[XX-No document edges were found, so the whole photo was used. Switch to Original and drag the corners to set them yourself.-XX]",
+    "previewEnhancedAlt": "[XX-Enhanced scan preview-XX]",
+    "previewOriginalAlt": "[XX-Original photo preview-XX]",
+    "useEnhanced": "[XX-Use enhanced-XX]",
+    "keepOriginal": "[XX-Keep original only-XX]",
+    "retake": "[XX-Retake-XX]",
+    "cancel": "[XX-Cancel-XX]",
+    "originalTooLarge": "[XX-The original photo is larger than {max}, so only the enhanced scan will be attached.-XX]",
+    "warnings": {
+      "blurry": "[XX-The photo looks blurred. Retaking it will give a sharper scan.-XX]",
+      "edgesOutsideFrame": "[XX-The document reaches the edge of the photo, so a side may be cut off. Retake it with a margin around the whole page, with no side touching the border.-XX]",
+      "lowResolution": "[XX-The scan is quite small, so fine print may be hard to read.-XX]"
+    },
+    "corners": {
+      "label": "[XX-Document corners-XX]",
+      "topLeft": "[XX-Top-left corner-XX]",
+      "topRight": "[XX-Top-right corner-XX]",
+      "bottomRight": "[XX-Bottom-right corner-XX]",
+      "bottomLeft": "[XX-Bottom-left corner-XX]"
+    },
+    "originalKept": "[XX-original kept-XX]"
+  },
+  "preview": {
+    "loading": "[XX-Loading preview…-XX]",
+    "failed": "[XX-The preview could not be loaded. You can still download the file.-XX]",
+    "storeUnavailable": "[XX-This file is stored in a storage backend this server cannot currently reach, so it cannot be previewed or downloaded. Nothing is lost: ask your administrator to restore the attachment storage settings.-XX]",
+    "unsupported": "[XX-This file type cannot be previewed. You can still download it.-XX]",
+    "fit": "[XX-Fit to screen-XX]",
+    "actualSize": "[XX-Actual size-XX]",
+    "versionLabel": "[XX-Version-XX]",
+    "zoomLabel": "[XX-Zoom-XX]",
+    "pageCount": "[XX-{count, plural, one {# page} other {# pages}}-XX]",
+    "page": "[XX-Page {page} of {total}-XX]",
+    "open": "[XX-Preview {name}-XX]"
+  }
 }

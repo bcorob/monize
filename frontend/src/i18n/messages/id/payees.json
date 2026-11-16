@@ -8,9 +8,11 @@
     "autoMergePayees": "Gabungkan Penerima Otomatis",
     "newPayee": "+ Penerima Baru",
     "searchPlaceholder": "Cari penerima...",
+    "statusFilterLabel": "Status",
     "statusAll": "Semua ({count})",
     "statusActive": "Aktif ({count})",
     "statusInactive": "Tidak Aktif ({count})",
+    "categoryFilterLabel": "Kategori Default",
     "categoryFilterAll": "Semua Penerima ({count})",
     "categoryFilterNoCategory": "Tidak Ada Kategori Default ({count})",
     "categoryFilterUncategorized": "Txns Tanpa Kategori ({count})",
@@ -34,7 +36,8 @@
       "inactive": "Tidak Aktif",
       "withoutCategory": "Tanpa Kategori"
     },
-    "applyDefaultCategories": "Terapkan Kategori Default"
+    "applyDefaultCategories": "Terapkan Kategori Default",
+    "lookupSettings": "Pengaturan pencarian penerima"
   },
   "list": {
     "columns": {
@@ -82,13 +85,27 @@
     "categoryLabel": "Kategori Default",
     "notesLabel": "Catatan (opsional)",
     "websiteLabel": "Situs web",
+    "addressLabel": "Alamat",
+    "emailLabel": "Email",
+    "phoneLabel": "Telepon",
     "submitCreate": "Buat Penerima",
     "submitUpdate": "Perbarui Penerima",
     "applyCategoryLabel": "Terapkan kategori ini ke transaksi yang sudah ada",
     "applyCategoryNone": "Jangan ubah transaksi yang sudah ada",
     "applyCategoryUncategorized": "Hanya transaksi tanpa kategori ({count})",
     "applyCategoryAll": "Semua transaksi ({count})",
-    "applyCategoryHelp": "Transfer dan transaksi terbagi tidak pernah diubah."
+    "applyCategoryHelp": "Transfer dan transaksi terbagi tidak pernah diubah.",
+    "lookup": {
+      "button": "Cari detail",
+      "searching": "Mencari detail kontak...",
+      "suggested": "Disarankan dari pencarian:",
+      "replaced": "Diganti oleh pencarian:",
+      "clear": "Urungkan perubahan pencarian",
+      "nothingFound": "Tidak ditemukan detail kontak publik untuk nama ini.",
+      "noProvider": "Siapkan sumber di <link>pengaturan pencarian penerima</link> untuk menemukan detail kontak.",
+      "failed": "Pencarian tidak dapat diselesaikan. Coba lagi nanti.",
+      "quotaExceeded": "Pencarian Google Places bulan ini sudah habis. Naikkan batasnya di <link>pengaturan pencarian penerima</link>, atau tunggu bulan depan."
+    }
   },
   "merge": {
     "title": "Gabungkan Penerima",
@@ -112,7 +129,6 @@
   },
   "categoryAutoAssign": {
     "title": "Tetapkan Kategori Default Otomatis",
-    "howItWorksTitle": "Cara kerjanya",
     "howItWorksBody": "Fitur ini menganalisis riwayat transaksi Anda untuk menyarankan kategori default bagi penerima. Fitur ini melihat kategori mana yang paling sering digunakan untuk setiap penerima dan menyarankan penetapannya sebagai kategori default untuk transaksi di masa depan. Anda selalu dapat mengganti kategori default jika diperlukan.",
     "minTransactionsLabel": "Minimum Transaksi: {count}",
     "minTransactionsHelp": "Hanya pertimbangkan penerima dengan setidaknya sejumlah transaksi ini",
@@ -133,6 +149,7 @@
       "line2": "Coba sesuaikan pengaturan di atas."
     },
     "columns": {
+      "assign": "Tetapkan",
       "payee": "Penerima",
       "suggestedCategory": "Kategori yang Disarankan",
       "match": "Kecocokan"
@@ -150,7 +167,6 @@
   },
   "autoMerge": {
     "title": "Gabungkan Penerima Otomatis",
-    "howItWorksTitle": "Cara kerjanya",
     "howItWorksBody": "Fitur ini memindai penerima Anda dan mengelompokkan varian di mana satu nama memperluas yang lain - misalnya \"Lidl\", \"LIDL sp. z o.o.\" dan \"LIDL WARSZAWA 0421\" semuanya dibangun dari \"Lidl\". Setiap kelompok digabungkan menjadi satu penerima kanonik, dan alias wildcard (seperti \"*LIDL*\") dibuat sehingga impor di masa depan dicocokkan secara otomatis. Penerima yang hanya berbagi kata umum (seperti \"Royal Electric\" dan \"Royal City Nursery\") tetap dipisahkan. Tinjau dan sesuaikan setiap kelompok sebelum menerapkan.",
     "backupRecommendation": "Disarankan: buat <link>cadangan</link> sebelum melakukan perubahan.",
     "minGroupSizeLabel": "Ukuran Kelompok Minimum: {count}",
@@ -210,7 +226,6 @@
   },
   "deactivateUnused": {
     "title": "Nonaktifkan Penerima yang Tidak Digunakan",
-    "howItWorksTitle": "Cara kerjanya",
     "howItWorksBody": "Fitur ini menemukan penerima yang jarang digunakan dan menonaktifkannya. Penerima yang dinonaktifkan tidak akan muncul di dropdown penerima saat membuat transaksi, tetapi transaksi historis mereka tetap tersimpan. Anda dapat mengaktifkan kembali penerima kapan saja dari daftar penerima.",
     "maxTransactionsLabel": "{count, plural, one {# atau kurang transaksi} other {# atau kurang transaksi}}",
     "maxTransactionsHelp": "Hanya sertakan penerima dengan jumlah transaksi ini atau lebih sedikit",
@@ -228,6 +243,7 @@
       "line2": "Coba sesuaikan pengaturan di atas."
     },
     "columns": {
+      "deactivate": "Nonaktifkan",
       "payee": "Penerima",
       "transactions": "Transaksi",
       "lastUsed": "Terakhir Digunakan"
@@ -243,7 +259,7 @@
     }
   },
   "reactivate": {
-    "title": "Aktifkan Kembali Penerima?",
+    "title": "Aktifkan Kembali Penerima",
     "message": "Penerima \"{name}\" sebelumnya dinonaktifkan. Apakah Anda ingin mengaktifkannya kembali agar muncul di dropdown penerima lagi?",
     "keepInactiveButton": "Tidak, Tetap Tidak Aktif",
     "reactivateButton": "Aktifkan Kembali",
@@ -252,7 +268,7 @@
   "aliases": {
     "heading": "Alias",
     "description": "Alias memetakan nama penerima yang diimpor ke penerima ini. Gunakan * sebagai wildcard (mis., \"STARBUCKS*\"). Tidak peka huruf besar/kecil.",
-    "loading": "Memuat...",
+    "loading": "Memuat alias...",
     "noAliases": "Tidak ada alias yang dikonfigurasi",
     "removeTitle": "Hapus alias",
     "removeButton": "Hapus",
@@ -270,7 +286,10 @@
   },
   "selectCategoryPlaceholder": "Pilih kategori...",
   "validation": {
-    "nameRequired": "Nama penerima wajib diisi"
+    "nameRequired": "Nama penerima wajib diisi",
+    "emailInvalid": "Masukkan alamat email yang valid",
+    "phoneInvalid": "Masukkan nomor telepon yang valid",
+    "phoneNeedsCountryCode": "Tambahkan kode negara, misalnya +1 206 448 8762"
   },
   "defaultCategoryBackfill": {
     "allConfirmTitle": "Terapkan kategori default?",

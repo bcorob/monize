@@ -1,11 +1,18 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import React from 'react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@/test/render';
 import TransactionsPage from './page';
+import { useCommandPaletteStore } from '@/store/commandPaletteStore';
+import { TRANSACTION_SORT_STORAGE_KEY } from '@/lib/transaction-sort';
+import { useDensityStore } from '@/store/densityStore';
+import { clearCurrencyDecimals, registerCurrencyDecimals } from '@/lib/currency-decimals';
 
 // The global setup mock builds a fresh router per call, so pushes cannot be
-// observed. This one keeps a stable `push` for the navigation assertions; the
-// rest matches the global mock (this file never reads search params).
+// observed. This one keeps a stable `push` for the navigation assertions.
 const mockPush = vi.fn();
+// The query string the page starts from. Empty for every test but the ones
+// that need a single account's register; reset in the top-level `beforeEach`.
+const mockSearchParams = { value: '' };
 vi.mock('next/navigation', () => {
   // One stable object, as the real hook returns. A fresh router per call makes
   // every `useCallback([router])` change identity each render, and this page's
@@ -25,7 +32,10 @@ vi.mock('next/navigation', () => {
   return {
     useRouter: () => (router ??= buildRouter()),
     usePathname: () => '/transactions',
-    useSearchParams: () => new URLSearchParams(),
+    // Empty unless a test sets it. The page reads the account filter from the
+    // URL, so this is the only way to render it as a single account's
+    // register, which is the state that draws the Balance column.
+    useSearchParams: () => new URLSearchParams(mockSearchParams.value),
   };
 });
 
@@ -41,7 +51,34 @@ vi.mock('next/dynamic', () => ({
     const DynamicComponent = (props: any) => {
       // Check loader path to determine which component
       if (props.transaction !== undefined || props.onSuccess !== undefined) {
-        return <div data-testid="dynamic-transaction-form">TransactionForm</div>;
+        return (
+          <div data-testid="dynamic-transaction-form">
+            TransactionForm
+            {props.onAddWarranty && (
+              <button data-testid="form-add-warranty" onClick={() => props.onAddWarranty(props.transaction)}>
+                Form add warranty
+              </button>
+            )}
+            {props.onAddWarrantyAfterCreate && (
+              <button data-testid="form-add-warranty-after-create" onClick={() => props.onAddWarrantyAfterCreate({ id: 'tx-new' })}>
+                Form add warranty after create
+              </button>
+            )}
+            {props.onShareAfterCreate && (
+              <button data-testid="form-share-after-create" onClick={() => props.onShareAfterCreate({ id: 'tx-new' })}>Share saved transaction</button>
+            )}
+            {props.onOpenWarranty && (
+              <button data-testid="form-open-warranty" onClick={() => props.onOpenWarranty('w-9')}>
+                Form open warranty
+              </button>
+            )}
+            {props.onDirtyChange && (
+              <button data-testid="form-make-dirty" onClick={() => props.onDirtyChange(true)}>
+                Make dirty
+              </button>
+            )}
+          </div>
+        );
       }
       if (props.payee !== undefined) {
         return <div data-testid="dynamic-payee-form">PayeeForm</div>;
@@ -63,12 +100,18 @@ vi.mock('next/dynamic', () => ({
       }
       // Chart components all receive `data` + `isLoading`; distinguish by their
       // unique click handlers / currency code prop.
+      // Every chart the page draws is handed `onCollapse`; the mocks expose it
+      // as the header button the real cards draw.
+      const hideButton = props.onCollapse ? (
+        <button type="button" onClick={props.onCollapse}>Hide chart</button>
+      ) : null;
       if (props.onMonthClick !== undefined) {
         return (
           <div data-testid="chart-monthly-totals">
             <span data-testid="chart-monthly-totals-filter-label">
               {props.filterLabel ?? ''}
             </span>
+            {hideButton}
           </div>
         );
       }
@@ -80,6 +123,7 @@ vi.mock('next/dynamic', () => ({
                 {a.accountName}:{a.balance}
               </span>
             ))}
+            {hideButton}
           </div>
         );
       }
@@ -89,10 +133,18 @@ vi.mock('next/dynamic', () => ({
             <span data-testid="chart-balance-history-account-name">
               {props.accountName ?? ''}
             </span>
+            {hideButton}
           </div>
         );
       }
-      return <div data-testid="dynamic-component">DynamicComponent</div>;
+      // The calendar is loaded through `dynamic()`, and it too draws the
+      // switch -- at the right-hand end of its own toolbar row.
+      return (
+        <div data-testid="dynamic-component">
+          DynamicComponent
+          {props.viewToggle}
+        </div>
+      );
     };
     return DynamicComponent;
   },
@@ -108,7 +160,14 @@ vi.mock('@/lib/logger', () => ({
   }),
 }));
 
-// Mock auth store
+// Mock auth store. `mockActing` is who the reader is acting as; a delegate
+// test sets it and the top-level `beforeEach` puts it back.
+const { mockActing } = vi.hoisted(() => ({
+  mockActing: {
+    actingAsUserId: null as string | null,
+    delegateSections: null as Record<string, boolean> | null,
+  },
+}));
 vi.mock('@/store/authStore', () => ({
   useAuthStore: Object.assign(
     (selector?: any) => {
@@ -118,6 +177,8 @@ vi.mock('@/store/authStore', () => ({
         isLoading: false,
         _hasHydrated: true,
         logout: vi.fn(),
+        actingAsUserId: mockActing.actingAsUserId,
+        delegateSections: mockActing.delegateSections,
       };
       return selector ? selector(state) : state;
     },
@@ -132,11 +193,25 @@ vi.mock('@/store/authStore', () => ({
   ),
 }));
 
-// Mock preferences store
+// Mock preferences store. `mockPreferences.value` is what the store answers
+// with; a test that needs another row (a hidden column) swaps it and puts it
+// back.
+const DEFAULT_MOCK_PREFERENCES = {
+  twoFactorEnabled: true,
+  theme: 'system',
+  defaultCurrency: 'USD',
+} as Record<string, unknown>;
+const { mockPreferences } = vi.hoisted(() => ({
+  mockPreferences: { value: undefined as Record<string, unknown> | undefined },
+}));
 vi.mock('@/store/preferencesStore', () => ({
   usePreferencesStore: (selector?: any) => {
     const state = {
-      preferences: { twoFactorEnabled: true, theme: 'system', defaultCurrency: 'USD' },
+      preferences: mockPreferences.value ?? {
+        twoFactorEnabled: true,
+        theme: 'system',
+        defaultCurrency: 'USD',
+      },
       isLoaded: true,
       _hasHydrated: true,
     };
@@ -155,6 +230,7 @@ vi.mock('@/lib/auth', () => ({
 
 // Mock API libs
 const mockGetAll = vi.fn();
+const mockGetAllForExport = vi.fn();
 const mockGetSummary = vi.fn();
 const mockGetById = vi.fn();
 const mockBulkUpdate = vi.fn();
@@ -163,6 +239,7 @@ const mockGetMonthlyTotals = vi.fn();
 vi.mock('@/lib/transactions', () => ({
   transactionsApi: {
     getAll: (...args: any[]) => mockGetAll(...args),
+    getAllForExport: (...args: any[]) => mockGetAllForExport(...args),
     getSummary: (...args: any[]) => mockGetSummary(...args),
     getById: (...args: any[]) => mockGetById(...args),
     bulkUpdate: (...args: any[]) => mockBulkUpdate(...args),
@@ -251,6 +328,10 @@ vi.mock('@/lib/budgets', () => ({
 vi.mock('@/components/transactions/TransactionList', () => ({
   TransactionList: (props: any) => (
     <div data-testid="transaction-list">
+      {/* The Table / Calendar switch is the register's now, handed down by the
+          page: a mock that dropped it would hide the only control this suite
+          uses to change the view. */}
+      {props.viewToggle}
       <span data-testid="tx-count">{props.transactions?.length ?? 0} transactions</span>
       {props.transactions?.map((t: any) => (
         <div key={t.id} data-testid={`tx-${t.id}`} onClick={() => props.onEdit(t)}>
@@ -258,6 +339,7 @@ vi.mock('@/components/transactions/TransactionList', () => ({
           <span data-testid={`tx-${t.id}-attachments`}>{t.attachmentCount ?? 'none'}</span>
         </div>
       ))}
+      {(props.onAddWarranty || props.onViewWarranties) && <span data-testid="row-warranty-actions" />}
       {props.onPayeeClick && <button data-testid="payee-click-btn" onClick={() => props.onPayeeClick('payee-1')}>Payee</button>}
       {props.onTransferClick && <button data-testid="transfer-click-btn" onClick={() => props.onTransferClick('acc-2', 'tx-linked')}>Transfer</button>}
       {props.onCategoryClick && <button data-testid="category-click-btn" onClick={() => props.onCategoryClick('cat-1')}>Category</button>}
@@ -272,6 +354,30 @@ vi.mock('@/components/transactions/TransactionList', () => ({
       <span data-testid="density">{props.density}</span>
       <span data-testid="single-account">{props.isSingleAccountView ? 'single' : 'multi'}</span>
       <span data-testid="starting-balance">{props.startingBalance ?? 'none'}</span>
+      <span data-testid="sort">
+        {props.sort ? `${props.sort.field}:${props.sort.direction}` : 'none'}
+      </span>
+      {/* The order the rows on screen were fetched in, which the register uses
+          for every figure derived from them. It trails `sort` by a request. */}
+      <span data-testid="rows-sort">
+        {props.rowsSort ? `${props.rowsSort.field}:${props.rowsSort.direction}` : 'none'}
+      </span>
+      <span data-testid="balance-withheld">{props.startingBalanceWithheld ?? 'none'}</span>
+      {props.onSortChange && (
+        <button data-testid="sort-amount" onClick={() => props.onSortChange('amount')}>
+          Sort by amount
+        </button>
+      )}
+      {props.onSortChange && (
+        <button data-testid="sort-date" onClick={() => props.onSortChange('date')}>
+          Sort by date
+        </button>
+      )}
+      {props.onSortChange && (
+        <button data-testid="sort-payee" onClick={() => props.onSortChange('payee')}>
+          Sort by payee
+        </button>
+      )}
       <span data-testid="selection-mode">{props.selectionMode ? 'on' : 'off'}</span>
       {props.onToggleSelection && (
         <button data-testid="select-tx-1" onClick={() => props.onToggleSelection('tx-1')}>
@@ -374,7 +480,14 @@ vi.mock('@/components/ui/ConfirmDialog', () => ({
 }));
 
 vi.mock('@/components/ui/UnsavedChangesDialog', () => ({
-  UnsavedChangesDialog: () => null,
+  UnsavedChangesDialog: ({ isOpen, onSave, onDiscard, onCancel }: any) =>
+    isOpen ? (
+      <div data-testid="unsaved-dialog">
+        <button data-testid="unsaved-save" onClick={onSave}>Save</button>
+        <button data-testid="unsaved-discard" onClick={onDiscard}>Discard</button>
+        <button data-testid="unsaved-cancel" onClick={onCancel}>Keep editing</button>
+      </div>
+    ) : null,
 }));
 
 vi.mock('@/components/ui/LoadingSpinner', () => ({
@@ -424,23 +537,36 @@ const mockTxOpenEdit = vi.fn();
 const mockTxClose = vi.fn();
 const mockSetFormDirty = vi.fn();
 
-vi.mock('@/hooks/useFormModal', () => ({
-  useFormModal: () => ({
-    showForm: false,
-    editingItem: null,
-    openCreate: mockTxOpenCreate,
-    openEdit: mockTxOpenEdit,
-    close: mockTxClose,
-    isEditing: false,
-    modalProps: {},
-    setFormDirty: mockSetFormDirty,
-    unsavedChangesDialog: { isOpen: false, onSave: vi.fn(), onDiscard: vi.fn(), onCancel: vi.fn() },
-    formSubmitRef: { current: null },
-  }),
-}));
+// A stub by default; a test that drives the edit window's close path (the
+// unsaved-changes check) sets `mockRealFormModal.value` for the real hook.
+const { mockRealFormModal } = vi.hoisted(() => ({ mockRealFormModal: { value: false } }));
+vi.mock('@/hooks/useFormModal', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/hooks/useFormModal')>();
+  return {
+    useFormModal: () =>
+      mockRealFormModal.value
+        ? actual.useFormModal()
+        : {
+            showForm: false,
+            editingItem: null,
+            openCreate: mockTxOpenCreate,
+            openEdit: mockTxOpenEdit,
+            close: mockTxClose,
+            isEditing: false,
+            modalProps: {},
+            setFormDirty: mockSetFormDirty,
+            unsavedChangesDialog: { isOpen: false, onSave: vi.fn(), onDiscard: vi.fn(), onCancel: vi.fn() },
+            formSubmitRef: { current: null },
+          },
+  };
+});
 
+// Stateless by default, which is what almost every test here wants. The sort
+// tests swap in a stateful implementation, because a click that cannot change
+// the remembered value proves nothing about what the click does.
+const mockUseLocalStorage = vi.fn((_key: string, defaultValue: any) => [defaultValue, vi.fn()]);
 vi.mock('@/hooks/useLocalStorage', () => ({
-  useLocalStorage: (_key: string, defaultValue: any) => [defaultValue, vi.fn()],
+  useLocalStorage: (...args: any[]) => (mockUseLocalStorage as any)(...args),
 }));
 
 vi.mock('@/hooks/useDateFormat', () => ({
@@ -449,19 +575,26 @@ vi.mock('@/hooks/useDateFormat', () => ({
   }),
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (val: number) => `$${val.toFixed(2)}`,
-    formatNumber: (val: number) => val.toString(),
-  }),
-}));
-
-vi.mock('@/hooks/useExchangeRates', () => ({
-  useExchangeRates: () => ({
-    convertToDefault: (val: number) => val,
-    defaultCurrency: 'USD',
-  }),
-}));
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      // A coin's figure is written as held, so a test can see the places it
+      // was rounded at; every other figure keeps the two-place `$` shape.
+      formatCurrency: (val: number, code?: string) =>
+        code === 'BTC' ? `BTC ${val}` : `$${val.toFixed(2)}`,
+      formatNumber: (val: number) => val.toString(),
+    }),
+  };
+});
+// A stable `convertToDefault`, as the real hook's is between rate loads: a new
+// function per render would recompute every memo that lists it, hiding a
+// missing dependency.
+vi.mock('@/hooks/useExchangeRates', () => {
+  const rates = { convertToDefault: (val: number) => val, defaultCurrency: 'USD' };
+  return { useExchangeRates: () => rates };
+});
 
 const mockTransactions = [
   { id: 'tx-1', date: '2026-02-01', amount: -50, status: 'UNCLEARED', payee: { id: 'payee-1', name: 'Store' }, category: null, account: { id: 'acc-1', name: 'Checking' }, isTransfer: false },
@@ -502,10 +635,18 @@ const mockLongPayees = [
   { id: 'long-pay-3', name: 'Grocery Chain Supermarket Location Three', defaultCategoryId: null },
 ];
 
+// Every suite in this file starts as the owner with the stubbed form modal.
+beforeEach(() => {
+  mockActing.actingAsUserId = null;
+  mockActing.delegateSections = null;
+  mockRealFormModal.value = false;
+});
+
 describe('TransactionsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetAll.mockResolvedValue({ data: [], pagination: { page: 1, totalPages: 1, total: 0 } });
+    mockGetAllForExport.mockResolvedValue([]);
     mockGetSummary.mockResolvedValue({ totalIncome: 0, totalExpenses: 0, netCashFlow: 0, transactionCount: 0 });
     mockGetAllAccounts.mockResolvedValue([]);
     mockGetAllCategories.mockResolvedValue([]);
@@ -536,11 +677,61 @@ describe('TransactionsPage', () => {
       });
     });
 
+    it('opens the new form for a command palette request, and consumes it', async () => {
+      useCommandPaletteStore.getState().requestNewTransaction({
+        id: 'p1',
+        name: 'Hydro One',
+        defaultCategoryId: null,
+      });
+      render(<TransactionsPage />);
+      await waitFor(() => expect(mockTxOpenCreate).toHaveBeenCalledTimes(1));
+      expect(useCommandPaletteStore.getState().newTransactionRequest).toBeNull();
+    });
+
     it('renders the New Transaction button', async () => {
       render(<TransactionsPage />);
       await waitFor(() => {
         expect(screen.getByText('+ New Transaction')).toBeInTheDocument();
       });
+    });
+  });
+
+  describe('Table / Calendar', () => {
+    /**
+     * One test rather than three: the view is a persisted store, so a test that
+     * leaves it on Calendar leaves it there for the next one. This ends where it
+     * started, and the store is deliberately not imported here -- doing so
+     * rehydrates it mid-render and the page updates outside act().
+     */
+    it('starts on the table, swaps the register for the calendar, and swaps back', async () => {
+      await act(async () => {
+        render(<TransactionsPage />);
+      });
+      await waitFor(() => expect(screen.getByTestId('transaction-list')).toBeInTheDocument());
+
+      expect(screen.getByRole('button', { name: 'Table' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      );
+      expect(screen.getByRole('button', { name: 'Calendar' })).toHaveAttribute(
+        'aria-pressed',
+        'false',
+      );
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Calendar' }));
+      });
+
+      await waitFor(() =>
+        expect(screen.queryByTestId('transaction-list')).not.toBeInTheDocument(),
+      );
+      expect(screen.getByTestId('dynamic-component')).toBeInTheDocument();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Table' }));
+      });
+
+      await waitFor(() => expect(screen.getByTestId('transaction-list')).toBeInTheDocument());
     });
   });
 
@@ -859,6 +1050,23 @@ describe('TransactionsPage', () => {
       });
       expect(screen.queryByTestId('chart-balance-history')).not.toBeInTheDocument();
       expect(screen.queryByTestId('chart-monthly-totals')).not.toBeInTheDocument();
+    });
+
+    it("draws several currencies at the server's per-day conversion, not today's rate (issue #2106)", async () => {
+      mockGetAllAccounts.mockResolvedValue(mockAccounts);
+      mockGetDailyBalances.mockResolvedValue([
+        { date: '2026-02-01', balance: 1000, accountId: 'acc-1', currencyCode: 'USD', convertedCurrency: 'USD', convertedBalance: 1000 },
+        { date: '2026-02-15', balance: 1500, accountId: 'acc-1', currencyCode: 'USD', convertedCurrency: 'USD', convertedBalance: 1500 },
+        { date: '2026-02-01', balance: 5000, accountId: 'acc-2', currencyCode: 'CAD', convertedCurrency: 'USD', convertedBalance: 3600 },
+        { date: '2026-02-15', balance: 5000, accountId: 'acc-2', currencyCode: 'CAD', convertedCurrency: 'USD', convertedBalance: 3700 },
+      ]);
+
+      render(<TransactionsPage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('chart-account-acc-2')).toHaveTextContent('Savings:3700');
+      });
+      expect(screen.getByTestId('chart-account-acc-1')).toHaveTextContent('Checking:1500');
     });
 
     it('excludes zero-balance accounts from the Account Balances chart', async () => {
@@ -1313,6 +1521,41 @@ describe('TransactionsPage', () => {
       expect(screen.queryByText('$5000.00')).not.toBeInTheDocument();
     });
 
+    it('recomputes a coin balance when the currency registry loads after the series', async () => {
+      clearCurrencyDecimals();
+      mockGetAllAccounts.mockResolvedValue([
+        { ...mockAccounts[0], name: 'Wallet', accountType: 'CRYPTO', currencyCode: 'BTC' },
+      ]);
+      mockGetDailyBalances.mockResolvedValue([
+        { date: '2026-02-01', balance: 0.01, accountId: 'acc-1', currencyCode: 'BTC' },
+        { date: '2026-02-15', balance: 0.0125, accountId: 'acc-1', currencyCode: 'BTC' },
+      ]);
+
+      try {
+        render(<TransactionsPage />);
+        await waitFor(() => {
+          expect(screen.getByTestId('filter-panel')).toBeInTheDocument();
+        });
+        fireEvent.click(screen.getByTestId('set-account-filter'));
+
+        // Before `GET /currencies` answers, BTC rounds at Intl's two places.
+        await waitFor(() => {
+          expect(screen.getByText('BTC 0.01')).toBeInTheDocument();
+        });
+
+        act(() => {
+          registerCurrencyDecimals([{ code: 'BTC', decimalPlaces: 8, symbol: '₿' }]);
+        });
+
+        await waitFor(() => {
+          expect(screen.getByText('BTC 0.0125')).toBeInTheDocument();
+        });
+        expect(screen.queryByText('BTC 0.01')).not.toBeInTheDocument();
+      } finally {
+        act(() => clearCurrencyDecimals());
+      }
+    });
+
     it('keeps the widget mounted and slides it out when the filter widens to two accounts', async () => {
       mockGetAllAccounts.mockResolvedValue(mockAccounts);
       const rows = [
@@ -1361,6 +1604,45 @@ describe('TransactionsPage', () => {
       expect(widgetColumn?.className).toContain('opacity-100');
     });
 
+    it('switches to another account from the caret, keeping the Show Accounts toggle', async () => {
+      mockGetAllAccounts.mockResolvedValue(mockAccounts);
+      mockGetDailyBalances.mockResolvedValue([]);
+
+      render(<TransactionsPage />);
+      await waitFor(() => {
+        expect(screen.getByTestId('filter-panel')).toBeInTheDocument();
+      });
+
+      // Show Closed accounts only, then narrow to the closed one. The status
+      // toggle is the filter the caret must respect: switching goes through the
+      // same command as the Accounts filter, so it survives the switch.
+      fireEvent.click(screen.getByTestId('set-account-status-active'));
+      fireEvent.click(screen.getByTestId('set-account-filter'));
+      await waitFor(() => {
+        expect(screen.getByText('Current Balance')).toBeInTheDocument();
+      });
+      expect(screen.getByRole('heading', { name: 'Checking' })).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Switch to another account' }));
+      // Only the accounts the Active filter offers: the closed acc-3 and the
+      // brokerage acc-4 are absent.
+      expect(screen.getByRole('menuitem', { name: /Savings/ })).toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: /Old Account/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('menuitem', { name: /Brokerage/ })).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('menuitem', { name: /Savings/ }));
+      await waitFor(() => {
+        expect(screen.getByRole('heading', { name: 'Savings' })).toBeInTheDocument();
+      });
+      // The list narrowed to the chosen account and the status toggle is
+      // still Active: the persisted toggle would read '""' had it been reset.
+      await waitFor(() => {
+        const latest = mockGetAll.mock.calls.at(-1)?.[0];
+        expect(latest?.accountIds).toEqual(['acc-2']);
+      });
+      expect(window.localStorage.getItem('transactions.filter.accountStatus')).toBe(JSON.stringify('active'));
+    });
+
     it('falls back to the stored account balance when no daily-balance rows exist', async () => {
       mockGetAllAccounts.mockResolvedValue(mockAccounts);
       mockGetDailyBalances.mockResolvedValue([]);
@@ -1376,6 +1658,146 @@ describe('TransactionsPage', () => {
         expect(screen.getByText('Current Balance')).toBeInTheDocument();
       });
       expect(screen.getByText('$5000.00')).toBeInTheDocument();
+    });
+  });
+
+  describe('Folding the chart band', () => {
+    beforeEach(async () => {
+      window.localStorage.clear();
+      // The real hook, so a fold is remembered and an absent key reads as no
+      // choice: the stateless default could prove neither.
+      const actual = await vi.importActual<typeof import('@/hooks/useLocalStorage')>(
+        '@/hooks/useLocalStorage',
+      );
+      mockUseLocalStorage.mockImplementation(actual.useLocalStorage as any);
+    });
+    afterEach(() => {
+      mockPreferences.value = undefined;
+      mockUseLocalStorage.mockImplementation((_key: string, defaultValue: any) => [
+        defaultValue,
+        vi.fn(),
+      ]);
+    });
+
+    it('folds the chart into a strip, remembers it, and brings it back from the strip', async () => {
+      mockGetAllAccounts.mockResolvedValue(mockAccounts);
+      mockGetDailyBalances.mockResolvedValue([
+        { date: '2026-02-01', balance: 1000, accountId: 'acc-1', currencyCode: 'USD' },
+      ]);
+
+      await act(async () => {
+        render(<TransactionsPage />);
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId('chart-balance-history')).toBeInTheDocument();
+      });
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Hide chart' }));
+      });
+
+      expect(screen.queryByTestId('chart-balance-history')).not.toBeInTheDocument();
+      expect(screen.getByTestId('chart-collapsed-strip')).toHaveTextContent('Chart hidden');
+      expect(window.localStorage.getItem('monize-transactions-chart-collapsed')).toBe('true');
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Show chart' }));
+      });
+
+      expect(screen.getByTestId('chart-balance-history')).toBeInTheDocument();
+      expect(screen.queryByTestId('chart-collapsed-strip')).not.toBeInTheDocument();
+      expect(window.localStorage.getItem('monize-transactions-chart-collapsed')).toBe('false');
+    });
+
+    it('offers the fold on the zero-balances banner too', async () => {
+      mockGetAllAccounts.mockResolvedValue(mockAccounts);
+      mockGetDailyBalances.mockResolvedValue([
+        { date: '2026-02-01', balance: 0, accountId: 'acc-1', currencyCode: 'USD' },
+        { date: '2026-02-01', balance: 0, accountId: 'acc-2', currencyCode: 'USD' },
+      ]);
+
+      // Inside act, as the first fold test: the page's other loads can
+      // resolve after the banner shows, and an update outside act fails the
+      // act guard (it did on CI).
+      await act(async () => {
+        render(<TransactionsPage />);
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId('chart-zero-balances')).toBeInTheDocument();
+      });
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Hide chart' }));
+      });
+
+      expect(screen.queryByTestId('chart-zero-balances')).not.toBeInTheDocument();
+      expect(screen.getByTestId('chart-collapsed-strip')).toBeInTheDocument();
+    });
+
+    it("starts folded on the account's default when this browser has no choice", async () => {
+      mockPreferences.value = { defaultCurrency: 'USD', viewDefaults: { chartCollapsed: true } };
+
+      render(<TransactionsPage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('chart-collapsed-strip')).toBeInTheDocument();
+      });
+    });
+
+    it("keeps this browser's choice over the account's default", async () => {
+      mockPreferences.value = { defaultCurrency: 'USD', viewDefaults: { chartCollapsed: true } };
+      window.localStorage.setItem('monize-transactions-chart-collapsed', 'false');
+
+      render(<TransactionsPage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('chart-balance-history')).toBeInTheDocument();
+      });
+      expect(screen.queryByTestId('chart-collapsed-strip')).not.toBeInTheDocument();
+    });
+
+    it('folds the info widget with the chart, and brings back both', async () => {
+      mockGetAllAccounts.mockResolvedValue(mockAccounts);
+      mockGetDailyBalances.mockResolvedValue([]);
+
+      render(<TransactionsPage />);
+      await waitFor(() => {
+        expect(screen.getByTestId('filter-panel')).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByTestId('set-account-filter'));
+      await waitFor(() => {
+        expect(screen.getByText('Current Balance')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: 'Hide chart' }));
+
+      expect(screen.queryByText('Current Balance')).not.toBeInTheDocument();
+      // The widget's own state is untouched: it comes back open with the band.
+      expect(window.localStorage.getItem('monize-transactions-account-widget-collapsed')).toBeNull();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Show chart' }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Current Balance')).toBeInTheDocument();
+      });
+    });
+
+    it("starts the info widget folded on the account's widget default", async () => {
+      mockPreferences.value = { defaultCurrency: 'USD', viewDefaults: { widgetsCollapsed: true } };
+      mockGetAllAccounts.mockResolvedValue(mockAccounts);
+      mockGetDailyBalances.mockResolvedValue([]);
+
+      render(<TransactionsPage />);
+      await waitFor(() => {
+        expect(screen.getByTestId('filter-panel')).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByTestId('set-account-filter'));
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Show account info' })).toBeInTheDocument();
+      });
+      const widgetColumn = screen.getByText('Current Balance').closest('[aria-hidden]');
+      expect(widgetColumn).toHaveAttribute('aria-hidden', 'true');
     });
   });
 
@@ -1445,6 +1867,172 @@ describe('TransactionsPage', () => {
         expect(mockGetById).toHaveBeenCalledWith('tx-split');
         expect(mockTxOpenEdit).toHaveBeenCalledWith(splitTx);
       });
+    });
+  });
+
+  describe('Warranties', () => {
+    // A warranty is added from the transaction's form or the Warranties page.
+    beforeEach(() => {
+      mockGetAll.mockResolvedValue({
+        data: mockTransactions,
+        pagination: { page: 1, totalPages: 1, total: 3 },
+      });
+      mockGetSummary.mockResolvedValue({ totalIncome: 0, totalExpenses: 0, netCashFlow: 0, transactionCount: 0 });
+    });
+
+    it('gives the register rows no warranty action', async () => {
+      await act(async () => {
+        render(<TransactionsPage />);
+      });
+      await waitFor(() => expect(screen.getByTestId('tx-count')).toHaveTextContent('3 transactions'));
+      expect(screen.queryByTestId('row-warranty-actions')).not.toBeInTheDocument();
+    });
+
+    describe('for an acting delegate', () => {
+      it("gives the edit window no Add warranty", async () => {
+        mockRealFormModal.value = true;
+        mockActing.actingAsUserId = 'owner-1';
+        mockActing.delegateSections = { warranties: true };
+        await act(async () => {
+          render(<TransactionsPage />);
+        });
+        await waitFor(() => expect(screen.getByTestId('tx-tx-1')).toBeInTheDocument());
+        await act(async () => {
+          fireEvent.click(screen.getByTestId('tx-tx-1'));
+        });
+        expect(screen.getByTestId('dynamic-transaction-form')).toBeInTheDocument();
+        expect(screen.queryByTestId('form-add-warranty')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('form-add-warranty-after-create')).not.toBeInTheDocument();
+      });
+    });
+
+    describe('Add warranty from inside the edit window', () => {
+      // A link out of the window would drop unsaved edits without asking; the
+      // page closes the window through its own close path first.
+      async function openEditWindow() {
+        mockRealFormModal.value = true;
+        await act(async () => {
+          render(<TransactionsPage />);
+        });
+        await waitFor(() => expect(screen.getByTestId('tx-tx-1')).toBeInTheDocument());
+        await act(async () => {
+          fireEvent.click(screen.getByTestId('tx-tx-1'));
+        });
+        expect(screen.getByTestId('dynamic-transaction-form')).toBeInTheDocument();
+      }
+
+      it('asks about unsaved edits first and stays put', async () => {
+        await openEditWindow();
+        fireEvent.click(screen.getByTestId('form-make-dirty'));
+        fireEvent.click(screen.getByTestId('form-add-warranty'));
+        expect(screen.getByTestId('unsaved-dialog')).toBeInTheDocument();
+        expect(screen.getByTestId('dynamic-transaction-form')).toBeInTheDocument();
+        await new Promise((r) => setTimeout(r, 150));
+        expect(mockPush).not.toHaveBeenCalled();
+      });
+
+      it('keeps editing and does not navigate when the dialog is dismissed', async () => {
+        await openEditWindow();
+        fireEvent.click(screen.getByTestId('form-make-dirty'));
+        fireEvent.click(screen.getByTestId('form-add-warranty'));
+        fireEvent.click(screen.getByTestId('unsaved-cancel'));
+        expect(screen.queryByTestId('unsaved-dialog')).not.toBeInTheDocument();
+        expect(screen.getByTestId('dynamic-transaction-form')).toBeInTheDocument();
+        await new Promise((r) => setTimeout(r, 150));
+        expect(mockPush).not.toHaveBeenCalled();
+      });
+
+      it('navigates once the edits are discarded', async () => {
+        await openEditWindow();
+        fireEvent.click(screen.getByTestId('form-make-dirty'));
+        fireEvent.click(screen.getByTestId('form-add-warranty'));
+        fireEvent.click(screen.getByTestId('unsaved-discard'));
+        expect(screen.queryByTestId('dynamic-transaction-form')).not.toBeInTheDocument();
+        await waitFor(() =>
+          expect(mockPush).toHaveBeenCalledWith('/warranties?new=1&transactionId=tx-1'),
+        );
+      });
+
+      // On a new transaction the form calls Add only after it has saved the
+      // row, so the window's dirty flag is stale: no dialog, and no register
+      // reload behind a page that is being left.
+      it('on a new transaction, closes without asking and opens the warranty for the created row', async () => {
+        mockRealFormModal.value = true;
+        await act(async () => {
+          render(<TransactionsPage />);
+        });
+        await waitFor(() => expect(screen.getByText('+ New Transaction')).toBeInTheDocument());
+        await act(async () => {
+          fireEvent.click(screen.getByText('+ New Transaction'));
+        });
+        expect(screen.getByTestId('dynamic-transaction-form')).toBeInTheDocument();
+        const loadsBefore = mockGetAll.mock.calls.length;
+        fireEvent.click(screen.getByTestId('form-make-dirty'));
+        fireEvent.click(screen.getByTestId('form-add-warranty-after-create'));
+        expect(screen.queryByTestId('unsaved-dialog')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('dynamic-transaction-form')).not.toBeInTheDocument();
+        await waitFor(() =>
+          expect(mockPush).toHaveBeenCalledWith('/warranties?new=1&transactionId=tx-new'),
+        );
+        expect(mockGetAll.mock.calls.length).toBe(loadsBefore);
+      });
+
+      it('keeps the ordinary form open without offering the deferred shared-expense handoff', async () => {
+        mockRealFormModal.value = true;
+        await act(async () => render(<TransactionsPage />));
+        await act(async () => fireEvent.click(screen.getByText('+ New Transaction')));
+        fireEvent.click(screen.getByTestId('form-make-dirty'));
+        expect(screen.queryByTestId('form-share-after-create')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('unsaved-dialog')).not.toBeInTheDocument();
+        expect(screen.getByTestId('dynamic-transaction-form')).toBeInTheDocument();
+        expect(mockPush).not.toHaveBeenCalledWith('/shared-expenses/from-transaction/tx-new');
+      });
+      it('closes a clean form and navigates', async () => {
+        await openEditWindow();
+        fireEvent.click(screen.getByTestId('form-add-warranty'));
+        expect(screen.queryByTestId('unsaved-dialog')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('dynamic-transaction-form')).not.toBeInTheDocument();
+        await waitFor(() =>
+          expect(mockPush).toHaveBeenCalledWith('/warranties?new=1&transactionId=tx-1'),
+        );
+      });
+
+      // A linked warranty in the window's Warranties line: a bare link was
+      // undone by the closing Modal's history.back(), landing on Transactions.
+      it('opens a linked warranty by closing the window first', async () => {
+        await openEditWindow();
+        fireEvent.click(screen.getByTestId('form-open-warranty'));
+        expect(screen.queryByTestId('unsaved-dialog')).not.toBeInTheDocument();
+        expect(screen.queryByTestId('dynamic-transaction-form')).not.toBeInTheDocument();
+        expect(mockPush).not.toHaveBeenCalled();
+        await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/warranties/w-9'));
+      });
+
+      it('asks about unsaved edits before opening a linked warranty', async () => {
+        await openEditWindow();
+        fireEvent.click(screen.getByTestId('form-make-dirty'));
+        fireEvent.click(screen.getByTestId('form-open-warranty'));
+        expect(screen.getByTestId('unsaved-dialog')).toBeInTheDocument();
+        expect(screen.getByTestId('dynamic-transaction-form')).toBeInTheDocument();
+        await new Promise((r) => setTimeout(r, 150));
+        expect(mockPush).not.toHaveBeenCalled();
+        fireEvent.click(screen.getByTestId('unsaved-discard'));
+        expect(screen.queryByTestId('dynamic-transaction-form')).not.toBeInTheDocument();
+        await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/warranties/w-9'));
+      });
+    });
+
+    it("keeps the row's warranty count when a split is re-read for editing", async () => {
+      const splitTx = { id: 'tx-split', date: '2026-02-01', amount: -100, payee: { name: 'Store' }, isTransfer: false, isSplit: true, splits: [], warrantyCount: 2 };
+      const fullSplitTx = { ...splitTx, warrantyCount: undefined, splits: [{ id: 's1', amount: -100 }] };
+      mockGetAll.mockResolvedValue({ data: [splitTx], pagination: { page: 1, totalPages: 1, total: 1 } });
+      mockGetById.mockResolvedValue(fullSplitTx);
+      render(<TransactionsPage />);
+      await waitFor(() => expect(screen.getByTestId('tx-tx-split')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('tx-tx-split'));
+      await waitFor(() =>
+        expect(mockTxOpenEdit).toHaveBeenCalledWith(expect.objectContaining({ id: 'tx-split', warrantyCount: 2 })),
+      );
     });
   });
 
@@ -2049,6 +2637,7 @@ describe('TransactionsPage', () => {
         pagination: { page: 1, totalPages: 1, total: 2 },
         startingBalance: 5000,
       });
+      mockGetAllForExport.mockResolvedValue(exportTransactions);
 
       render(<TransactionsPage />);
 
@@ -2071,26 +2660,26 @@ describe('TransactionsPage', () => {
       expect(rows[1]).toEqual(['2026-02-02', 'Checking', 'Employer', 'Salary', 'Monthly pay', '', 3000, 'USD', 'CLEARED']);
     });
 
-    it('fetches all pages when exporting multi-page results', async () => {
-      const page1Transactions = [
-        { id: 'tx-1', transactionDate: '2026-02-01', amount: -50, status: 'UNRECONCILED', payee: null, payeeName: null, category: null, account: { id: 'acc-1', name: 'Checking' }, description: null, tags: [], currencyCode: 'USD', isTransfer: false },
+    it('exports every filtered row in one request instead of walking the pages (issue #2198)', async () => {
+      // Walking the paged list from the page took a request per 50 rows, and
+      // a 26,000-row ledger ran into the API's 100-a-minute throttle.
+      const exportRows = [
+        { id: 'tx-1', transactionDate: '2026-02-01', amount: -50, status: 'UNRECONCILED', payee: null, payeeName: null, category: null, account: { name: 'Checking' }, description: null, tags: [], currencyCode: 'USD', isTransfer: false, isSplit: false, linkedTransaction: null, splits: [] },
+        { id: 'tx-2', transactionDate: '2026-02-02', amount: 100, status: 'CLEARED', payee: null, payeeName: null, category: null, account: { name: 'Checking' }, description: null, tags: [], currencyCode: 'USD', isTransfer: false, isSplit: false, linkedTransaction: null, splits: [] },
       ];
-      const page2Transactions = [
-        { id: 'tx-2', transactionDate: '2026-02-02', amount: 100, status: 'CLEARED', payee: null, payeeName: null, category: null, account: { id: 'acc-1', name: 'Checking' }, description: null, tags: [], currencyCode: 'USD', isTransfer: false },
-      ];
-
-      mockGetAll.mockImplementation((params: any) => {
-        if (params?.page === 2) {
-          return Promise.resolve({ data: page2Transactions, pagination: { page: 2, totalPages: 2, total: 2 }, startingBalance: 5000 });
-        }
-        return Promise.resolve({ data: page1Transactions, pagination: { page: 1, totalPages: 2, total: 2 }, startingBalance: 5000 });
+      mockGetAll.mockResolvedValue({
+        data: [exportRows[0]],
+        pagination: { page: 1, totalPages: 2, total: 2 },
+        startingBalance: 5000,
       });
+      mockGetAllForExport.mockResolvedValue(exportRows);
 
       render(<TransactionsPage />);
 
       await waitFor(() => {
         expect(screen.getByTestId('tx-count')).toHaveTextContent('1 transactions');
       });
+      const listCalls = mockGetAll.mock.calls.length;
 
       fireEvent.click(screen.getByTestId('export-btn'));
 
@@ -2100,6 +2689,12 @@ describe('TransactionsPage', () => {
 
       const [, , rows] = mockExportToCsv.mock.calls[0];
       expect(rows).toHaveLength(2);
+      expect(mockGetAllForExport).toHaveBeenCalledTimes(1);
+      expect(mockGetAll).toHaveBeenCalledTimes(listCalls);
+      // The export asks for the register's filters, never a page of them.
+      const [params] = mockGetAllForExport.mock.calls[0];
+      expect(params).not.toHaveProperty('page');
+      expect(params).not.toHaveProperty('limit');
     });
 
     it('shows error toast when no transactions to export', async () => {
@@ -2110,6 +2705,7 @@ describe('TransactionsPage', () => {
         pagination: { page: 1, totalPages: 1, total: 0 },
         startingBalance: 0,
       });
+      mockGetAllForExport.mockResolvedValue([]);
 
       render(<TransactionsPage />);
 
@@ -2142,8 +2738,7 @@ describe('TransactionsPage', () => {
         expect(screen.getByTestId('tx-count')).toHaveTextContent('3 transactions');
       });
 
-      // Now make next call fail (the export call)
-      mockGetAll.mockRejectedValueOnce(new Error('Network error'));
+      mockGetAllForExport.mockRejectedValueOnce(new Error('Network error'));
 
       fireEvent.click(screen.getByTestId('export-btn'));
 
@@ -2164,6 +2759,7 @@ describe('TransactionsPage', () => {
         pagination: { page: 1, totalPages: 1, total: 1 },
         startingBalance: 5000,
       });
+      mockGetAllForExport.mockResolvedValue(exportTransactions);
 
       render(<TransactionsPage />);
 
@@ -2192,6 +2788,7 @@ describe('TransactionsPage', () => {
         pagination: { page: 1, totalPages: 1, total: 1 },
         startingBalance: 0,
       });
+      mockGetAllForExport.mockResolvedValue(sparseTransaction);
 
       render(<TransactionsPage />);
 
@@ -2228,6 +2825,7 @@ describe('TransactionsPage', () => {
         pagination: { page: 1, totalPages: 1, total: 2 },
         startingBalance: 5000,
       });
+      mockGetAllForExport.mockResolvedValue(apiShapedTransactions);
 
       render(<TransactionsPage />);
 
@@ -2262,6 +2860,7 @@ describe('TransactionsPage', () => {
         pagination: { page: 1, totalPages: 1, total: 2 },
         startingBalance: 5000,
       });
+      mockGetAllForExport.mockResolvedValue(transfers);
 
       render(<TransactionsPage />);
 
@@ -2292,6 +2891,7 @@ describe('TransactionsPage', () => {
         pagination: { page: 1, totalPages: 1, total: 1 },
         startingBalance: 5000,
       });
+      mockGetAllForExport.mockResolvedValue(transfers);
 
       render(<TransactionsPage />);
 
@@ -2338,6 +2938,7 @@ describe('TransactionsPage', () => {
         pagination: { page: 1, totalPages: 1, total: 1 },
         startingBalance: 5000,
       });
+      mockGetAllForExport.mockResolvedValue(splitTransaction);
 
       render(<TransactionsPage />);
 
@@ -2381,6 +2982,7 @@ describe('TransactionsPage', () => {
         pagination: { page: 1, totalPages: 1, total: 1 },
         startingBalance: 5000,
       });
+      mockGetAllForExport.mockResolvedValue(splitTransaction);
 
       render(<TransactionsPage />);
 
@@ -2429,6 +3031,7 @@ describe('TransactionsPage', () => {
         pagination: { page: 1, totalPages: 1, total: 1 },
         startingBalance: 5000,
       });
+      mockGetAllForExport.mockResolvedValue(splitTransaction);
 
       render(<TransactionsPage />);
 
@@ -2448,5 +3051,487 @@ describe('TransactionsPage', () => {
       // Category should show all split categories
       expect(rows[0][3]).toBe('Groceries; Dining');
     });
+  });
+});
+
+describe('TransactionsPage register sorting', () => {
+  /** The params of the most recent register request. */
+  const lastGetAllParams = () => {
+    const calls = mockGetAll.mock.calls;
+    return calls[calls.length - 1][0];
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSearchParams.value = '';
+    // Rows, because an empty register draws an empty state and no headers.
+    mockGetAll.mockResolvedValue({
+      data: mockTransactions,
+      pagination: { page: 3, totalPages: 3, total: 120 },
+    });
+    mockGetSummary.mockResolvedValue({ totalIncome: 0, totalExpenses: 0, netCashFlow: 0, transactionCount: 0 });
+    mockGetAllAccounts.mockResolvedValue([]);
+    mockGetAllCategories.mockResolvedValue([]);
+    mockGetAllPayees.mockResolvedValue([]);
+    mockGetDailyBalances.mockResolvedValue([]);
+    mockGetMonthlyTotals.mockResolvedValue([]);
+    // A real remembered value, so a header click can actually change it.
+    mockUseLocalStorage.mockImplementation((_key: string, defaultValue: any) => {
+      const [value, setValue] = React.useState(defaultValue);
+      return [value, setValue];
+    });
+  });
+
+  afterEach(() => {
+    mockUseLocalStorage.mockImplementation((_key: string, defaultValue: any) => [
+      defaultValue,
+      vi.fn(),
+    ]);
+  });
+
+  it('asks for the register in date order, newest first, by default', async () => {
+    render(<TransactionsPage />);
+    await waitFor(() => expect(mockGetAll).toHaveBeenCalled());
+    expect(lastGetAllParams()).toMatchObject({ sortBy: 'date', sortDirection: 'desc' });
+  });
+
+  it('re-asks the server when a column header is used, from page 1', async () => {
+    render(<TransactionsPage />);
+    await waitFor(() => expect(mockGetAll).toHaveBeenCalled());
+
+    const sortAmount = await screen.findByTestId('sort-amount');
+    await act(async () => {
+      fireEvent.click(sortAmount);
+    });
+
+    await waitFor(() => {
+      expect(lastGetAllParams()).toMatchObject({ sortBy: 'amount', sortDirection: 'asc' });
+    });
+    // Page 3 of one order is a different set of rows from page 3 of another,
+    // so the register goes back to the first page.
+    expect(lastGetAllParams().page).toBe(1);
+  });
+
+  it('reverses the column that is already sorted', async () => {
+    render(<TransactionsPage />);
+    await waitFor(() => expect(mockGetAll).toHaveBeenCalled());
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('sort-date'));
+    });
+
+    await waitFor(() => {
+      expect(lastGetAllParams()).toMatchObject({ sortBy: 'date', sortDirection: 'asc' });
+    });
+  });
+
+  it('carries the withheld reason from the response to the register', async () => {
+    mockGetAll.mockResolvedValue({
+      data: mockTransactions,
+      pagination: { page: 1, totalPages: 1, total: 3 },
+      startingBalanceWithheld: 'sort',
+    });
+    render(<TransactionsPage />);
+    await waitFor(() => expect(mockGetAll).toHaveBeenCalled());
+    // The reason travels with the rows: the register turns it into the line
+    // that tells a reader how to get the Balance column back.
+    await waitFor(() => {
+      expect(screen.getByTestId('balance-withheld')).toHaveTextContent('sort');
+    });
+  });
+
+  it('keeps the sort out of the requests that are not the register', async () => {
+    // The charts, the calendar and the export read the same filters. A sort is
+    // not a filter: it reorders one list, and sending it anywhere else is a
+    // parameter those endpoints have to ignore.
+    render(<TransactionsPage />);
+    await waitFor(() => expect(mockGetDailyBalances).toHaveBeenCalled());
+    expect(lastGetAllParams()).toHaveProperty('sortBy');
+    for (const call of mockGetDailyBalances.mock.calls) {
+      expect(JSON.stringify(call)).not.toContain('sortBy');
+    }
+  });
+
+  it('drops back to the date order to reach a deep-linked row', async () => {
+    render(<TransactionsPage />);
+    await waitFor(() => expect(mockGetAll).toHaveBeenCalled());
+    const sortAmount = await screen.findByTestId('sort-amount');
+    await act(async () => {
+      fireEvent.click(sortAmount);
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('sort')).toHaveTextContent('amount:asc');
+    });
+
+    // Following a transfer to its other leg asks the server for the page that
+    // row is on. A page number can only be counted in date order -- the server
+    // refuses the pair outright -- so arriving at a row returns to the date
+    // order, keeping the direction, exactly as it already drops the filters
+    // that would have hidden the row.
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('transfer-click-btn'));
+    });
+
+    await waitFor(() => {
+      expect(lastGetAllParams()).toMatchObject({
+        targetTransactionId: 'tx-linked',
+        sortBy: 'date',
+        sortDirection: 'asc',
+      });
+    });
+    expect(screen.getByTestId('sort')).toHaveTextContent('date:asc');
+  });
+
+  it('describes the rows on screen by the order they were fetched in', async () => {
+    // The header answers the press at once; the rows cannot. Between the two
+    // the register holds a page fetched newest-first and a header saying
+    // oldest-first, and the running balance is walked from a seed that is the
+    // balance after the page's newest row. Reading the direction from the
+    // header there reverses the page before walking it, so every figure in the
+    // Balance column comes out inverted -- a column of numbers that was never
+    // true of any state of the ledger, drawn at full opacity with no spinner
+    // over it (`docs/frontend/api-and-cache.md`: the payload plus the complete
+    // request key that produced it).
+    render(<TransactionsPage />);
+    await waitFor(() => expect(mockGetAll).toHaveBeenCalled());
+    expect(screen.getByTestId('rows-sort')).toHaveTextContent('date:desc');
+
+    // The reload never answers, so the rows stay exactly as they are.
+    const before = mockGetAll.mock.calls.length;
+    mockGetAll.mockImplementation(() => new Promise(() => {}));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('sort-date'));
+    });
+
+    // Waited for, not assumed: the request has to be in flight for this to be
+    // the in-flight state rather than a click nothing has acted on yet.
+    await waitFor(() => {
+      expect(mockGetAll.mock.calls.length).toBeGreaterThan(before);
+    });
+    expect(screen.getByTestId('sort')).toHaveTextContent('date:asc');
+    expect(screen.getByTestId('rows-sort')).toHaveTextContent('date:desc');
+  });
+
+  it('keeps describing the rows it has when the reload fails', async () => {
+    // A failed reload changes no rows and no seed, so it must change no order
+    // either: the three are one payload. Leaving the header's order behind
+    // would make the inverted column above permanent rather than momentary.
+    render(<TransactionsPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('rows-sort')).toHaveTextContent('date:desc');
+    });
+
+    mockGetAll.mockRejectedValueOnce(new Error('register unavailable'));
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('sort-date'));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('sort')).toHaveTextContent('date:asc');
+    });
+    expect(screen.getByTestId('rows-sort')).toHaveTextContent('date:desc');
+  });
+
+  it('adopts the new order once the rows that belong to it arrive', async () => {
+    render(<TransactionsPage />);
+    await waitFor(() => expect(mockGetAll).toHaveBeenCalled());
+
+    const sortAmount = await screen.findByTestId('sort-amount');
+    await act(async () => {
+      fireEvent.click(sortAmount);
+    });
+
+    await waitFor(() => {
+      expect(screen.getByTestId('rows-sort')).toHaveTextContent('amount:asc');
+    });
+  });
+
+  it('reverses the date column from the order the header is showing', async () => {
+    // A remembered account sort is resolved away on a single account's page,
+    // because that page draws no Account column to click back. The Date header
+    // therefore shows the default, newest-first -- and toggling from the
+    // REMEMBERED sort returns the default too, so the first press moves no
+    // arrow, reverses nothing, and still drops the reader back to page 1.
+    mockSearchParams.value = 'accountIds=acc-1';
+    mockUseLocalStorage.mockImplementation((key: string, defaultValue: any) => {
+      const [value, setValue] = React.useState(
+        key === TRANSACTION_SORT_STORAGE_KEY
+          ? { field: 'account', direction: 'asc' }
+          : defaultValue,
+      );
+      return [value, setValue];
+    });
+
+    render(<TransactionsPage />);
+    await waitFor(() => expect(mockGetAll).toHaveBeenCalled());
+    await waitFor(() => {
+      expect(screen.getByTestId('single-account')).toHaveTextContent('single');
+    });
+    expect(screen.getByTestId('sort')).toHaveTextContent('date:desc');
+
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('sort-date'));
+    });
+
+    await waitFor(() => {
+      expect(lastGetAllParams()).toMatchObject({ sortBy: 'date', sortDirection: 'asc' });
+    });
+    expect(screen.getByTestId('sort')).toHaveTextContent('date:asc');
+  });
+
+  it('falls back to the date sort while the remembered column is hidden', async () => {
+    // A column the reader has hidden has no header at any width, so a
+    // remembered sort on it is resolved away like the account sort on a
+    // single account's page: this render only, storage untouched. The request
+    // goes out by date, and the header shows the default.
+    mockPreferences.value = {
+      ...DEFAULT_MOCK_PREFERENCES,
+      hiddenTableColumns: { transactions: ['status'] },
+    };
+    mockUseLocalStorage.mockImplementation((key: string, defaultValue: any) => {
+      const [value, setValue] = React.useState(
+        key === TRANSACTION_SORT_STORAGE_KEY
+          ? { field: 'status', direction: 'asc' }
+          : defaultValue,
+      );
+      return [value, setValue];
+    });
+
+    try {
+      render(<TransactionsPage />);
+      await waitFor(() => expect(mockGetAll).toHaveBeenCalled());
+      expect(screen.getByTestId('sort')).toHaveTextContent('date:desc');
+      expect(lastGetAllParams()).toMatchObject({ sortBy: 'date', sortDirection: 'desc' });
+    } finally {
+      mockPreferences.value = undefined;
+    }
+  });
+
+  it('falls back to the date sort on the phone card for a column the card does not show', async () => {
+    // The phone card (a phone at Normal density) shows no description or
+    // ref #, and its sort strip offers no chip for either, so a sort
+    // remembered from the tier table is resolved away while the card is
+    // drawn: this render only, storage untouched.
+    const originalMatchMedia = window.matchMedia;
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query === '(max-width: 639px)',
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })) as unknown as typeof window.matchMedia;
+    const originalDensities = useDensityStore.getState().densities;
+    useDensityStore.setState({ densities: { transactions: 'normal' } });
+    mockUseLocalStorage.mockImplementation((key: string, defaultValue: any) => {
+      const [value, setValue] = React.useState(
+        key === TRANSACTION_SORT_STORAGE_KEY
+          ? { field: 'refNumber', direction: 'asc' }
+          : defaultValue,
+      );
+      return [value, setValue];
+    });
+
+    let unmount: (() => void) | undefined;
+    try {
+      ({ unmount } = render(<TransactionsPage />));
+      await waitFor(() => expect(mockGetAll).toHaveBeenCalled());
+      expect(screen.getByTestId('sort')).toHaveTextContent('date:desc');
+      expect(lastGetAllParams()).toMatchObject({ sortBy: 'date', sortDirection: 'desc' });
+      await waitFor(() => {
+        expect(screen.getByTestId('rows-sort')).toHaveTextContent('date:desc');
+      });
+
+      // Compact keeps the tier table on a phone, Ref # column and all, so the
+      // remembered sort comes back, and the rows are read again in it: the
+      // switch is no click, so only the page's own watch on it can reload.
+      await act(async () => {
+        useDensityStore.setState({ densities: { transactions: 'compact' } });
+      });
+      expect(screen.getByTestId('sort')).toHaveTextContent('refNumber:asc');
+      await waitFor(() => {
+        expect(screen.getByTestId('rows-sort')).toHaveTextContent('refNumber:asc');
+      });
+      expect(lastGetAllParams()).toMatchObject({ sortBy: 'refNumber', sortDirection: 'asc', page: 1 });
+    } finally {
+      // Unmounted first: putting the store back re-renders a mounted page.
+      unmount?.();
+      window.matchMedia = originalMatchMedia;
+      useDensityStore.setState({ densities: originalDensities });
+    }
+  });
+
+  it('reads the register once for a deep link that arrives in the URL', async () => {
+    // A `targetTransactionId` in the mount URL is not a filter change, so it
+    // takes the loader's undebounced branch: nothing coalesces a second read
+    // there. Remembering the date fallback from inside the loader used to
+    // change the loader's own identity and fire one -- with the target already
+    // consumed, for whatever page the register was on, racing the page the
+    // first read resolved. Whichever answered last won, so the reader could
+    // land on page 1 with the row they followed nowhere on it.
+    mockSearchParams.value =
+      'targetTransactionId=11111111-1111-4111-8111-111111111111';
+    mockUseLocalStorage.mockImplementation((key: string, defaultValue: any) => {
+      const [value, setValue] = React.useState(
+        key === TRANSACTION_SORT_STORAGE_KEY
+          ? { field: 'amount', direction: 'asc' }
+          : defaultValue,
+      );
+      return [value, setValue];
+    });
+
+    render(<TransactionsPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('rows-sort')).toHaveTextContent('date:asc');
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    });
+
+    const reads = mockGetAll.mock.calls.map(([params]: any[]) => ({
+      page: params.page,
+      target: params.targetTransactionId,
+      sortBy: params.sortBy,
+    }));
+    expect(reads).toEqual([
+      {
+        page: 1,
+        target: '11111111-1111-4111-8111-111111111111',
+        sortBy: 'date',
+      },
+      { page: 3, target: undefined, sortBy: 'date' },
+    ]);
+  });
+
+  it('keeps the deep-link target on the read that supersedes the first one', async () => {
+    // A cold load: the accounts answer while the first register read is still
+    // in flight, the account scope changes and a second read replaces the
+    // first. That second read must still ask for the target's page; sent
+    // without it, the register stayed on page 1 and the linked row was only
+    // found when it happened to be there.
+    const target = '11111111-1111-4111-8111-111111111111';
+    mockSearchParams.value = `targetTransactionId=${target}`;
+    mockGetAllAccounts.mockResolvedValue(mockAccounts);
+    let releaseFirst: (value: unknown) => void = () => {};
+    mockGetAll.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseFirst = resolve;
+        }),
+    );
+
+    render(<TransactionsPage />);
+    await waitFor(() => expect(mockGetAll.mock.calls.length).toBeGreaterThanOrEqual(2));
+    await act(async () => {
+      releaseFirst({ data: [], pagination: { page: 1, totalPages: 3, total: 120 } });
+    });
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    });
+
+    const reads = mockGetAll.mock.calls.map(([params]: any[]) => ({
+      page: params.page,
+      target: params.targetTransactionId,
+      accounts: params.accountIds,
+    }));
+    expect(reads[0]).toEqual({ page: 1, target, accounts: undefined });
+    expect(reads[1]).toMatchObject({ page: 1, target });
+    expect(reads[1].accounts).toEqual(expect.arrayContaining(['acc-1', 'acc-2']));
+    // The page the superseding read resolved is the one the register shows.
+    expect(reads[reads.length - 1]).toMatchObject({ page: 3, target: undefined });
+  });
+
+  it('reads the register once to follow a transfer to its other leg', async () => {
+    // The same shape on the path that goes through a filter change, where the
+    // debounce would coalesce a duplicate rather than let it race.
+    render(<TransactionsPage />);
+    await waitFor(() => expect(mockGetAll).toHaveBeenCalled());
+    const sortAmount = await screen.findByTestId('sort-amount');
+    await act(async () => {
+      fireEvent.click(sortAmount);
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('rows-sort')).toHaveTextContent('amount:asc');
+    });
+
+    const before = mockGetAll.mock.calls.length;
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('transfer-click-btn'));
+    });
+    await waitFor(() => {
+      expect(lastGetAllParams()).toMatchObject({ targetTransactionId: 'tx-linked' });
+    });
+    // Settle anything the response itself scheduled before counting.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    });
+
+    // The read that follows carries the page the first one resolved, which is
+    // the pager catching up. A read for the page the register was already on,
+    // with the target gone, is the duplicate: it answers a question nobody
+    // asked and can overwrite the row's page with the one it replaced.
+    const reads = mockGetAll.mock.calls
+      .slice(before)
+      .map(([params]: any[]) => ({
+        page: params.page,
+        target: params.targetTransactionId,
+      }));
+    expect(reads).toEqual([
+      { page: 1, target: 'tx-linked' },
+      { page: 3, target: undefined },
+    ]);
+  });
+
+  it('discards a reply a newer request has already superseded', async () => {
+    // Two header clicks further apart than the debounce put two reads in
+    // flight. Without a sequence the display is whichever answered last, so a
+    // slow amount-ordered page can land under a Payee-active header.
+    render(<TransactionsPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('rows-sort')).toHaveTextContent('date:desc');
+    });
+
+    const before = mockGetAll.mock.calls.length;
+    let releaseSlow: (value: unknown) => void = () => {};
+    mockGetAll.mockImplementationOnce(
+      () => new Promise((resolve) => { releaseSlow = resolve; }),
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('sort-amount'));
+    });
+    // The slow read has to be in flight before the second click, or the
+    // debounce cancels it and there is nothing to arrive late.
+    await waitFor(() => {
+      expect(mockGetAll.mock.calls.length).toBeGreaterThan(before);
+    });
+
+    mockGetAll.mockResolvedValue({
+      data: mockTransactions,
+      pagination: { page: 1, totalPages: 1, total: 3 },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('sort-payee'));
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId('rows-sort')).toHaveTextContent('payee:asc');
+    });
+
+    // The abandoned amount request answers now, and must change nothing.
+    await act(async () => {
+      releaseSlow({
+        data: [],
+        pagination: { page: 9, totalPages: 9, total: 400 },
+        startingBalanceWithheld: 'sort',
+      });
+      await Promise.resolve();
+    });
+
+    expect(screen.getByTestId('rows-sort')).toHaveTextContent('payee:asc');
+    expect(screen.getByTestId('tx-count')).toHaveTextContent(
+      `${mockTransactions.length} transactions`,
+    );
+    expect(screen.getByTestId('balance-withheld')).toHaveTextContent('none');
   });
 });

@@ -66,10 +66,17 @@ export function ComparisonSummaryCards({
   // saved-scenarios table, which compares without a live plan. Reading the mode
   // off `installmentReduction` alone was wrong precisely when that value is null
   // -- a truncated schedule -- flipping the payment card to the wrong formula.
+  //
+  // A LINEAR or INTEREST_ONLY schedule has no level installment to report a
+  // drop in (`levelInstallment === false`): its outcome is the time saved --
+  // none, when the overpayment holds the term end -- and its payment card is
+  // the first projected row's outlay rather than a "resulting" installment.
+  const levelInstallment = scenario.levelInstallment !== false;
   const isLowerInstallment =
-    recurringOverpayment?.mode != null
+    levelInstallment &&
+    (recurringOverpayment?.mode != null
       ? recurringOverpayment.mode === 'LOWER_INSTALLMENT'
-      : (comparison.installmentReduction ?? 0) > 0.005;
+      : (comparison.installmentReduction ?? 0) > 0.005);
 
   const opAmount = recurringOverpayment?.amount ?? 0;
   const opFrequency = recurringOverpayment?.frequency;
@@ -106,10 +113,15 @@ export function ComparisonSummaryCards({
   // the borrower had typed in themselves. `null` means not known; a state that
   // IS known must not use it. A fixed budget is the borrower's own input and
   // stays known either way.
+  const firstRow = scenario.rows[0];
   const monthlyPayment =
     fixedMonthlyPayment != null
       ? fixedMonthlyPayment
-      : isLowerInstallment
+      : !levelInstallment
+        ? firstRow
+          ? Math.round((firstRow.payment + firstRow.extraPrincipal) * 100) / 100
+          : null
+        : isLowerInstallment
         ? scenario.paidOff
           ? // The overpayment IS the reduction here; adding it on top would
             // count the same money twice.
@@ -118,7 +130,7 @@ export function ComparisonSummaryCards({
         : Math.round((scenario.finalPaymentAmount + perPaymentExtra) * 100) / 100;
 
   const overpaymentNote =
-    fixedMonthlyPayment == null && !isLowerInstallment && opAmount > 0
+    fixedMonthlyPayment == null && levelInstallment && !isLowerInstallment && opAmount > 0
       ? t('loanDetail.comparison.overpaymentAtFrequency', {
           // A saved cadence can be any string the column holds, and
           // `t(undefined)` throws -- so an unrecognised one reads as monthly
@@ -184,7 +196,11 @@ export function ComparisonSummaryCards({
         valueClass="text-green-600 dark:text-green-400"
       />
       <Card
-        label={t('loanDetail.comparison.monthlyPayment')}
+        label={
+          levelInstallment || fixedMonthlyPayment != null
+            ? t('loanDetail.comparison.monthlyPayment')
+            : t('loanDetail.comparison.firstPayment')
+        }
         value={
           monthlyPayment == null
             ? t('loanDetail.comparison.unknown')

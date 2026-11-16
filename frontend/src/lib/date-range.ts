@@ -79,6 +79,11 @@ export function resolveRangePreset(
         ? format(startOfMonth(subMonths(now, 59)), 'yyyy-MM-dd')
         : format(subYears(now, 5), 'yyyy-MM-dd');
       break;
+    case '10y':
+      start = isMonth
+        ? format(startOfMonth(subMonths(now, 119)), 'yyyy-MM-dd')
+        : format(subYears(now, 10), 'yyyy-MM-dd');
+      break;
     case 'ytd':
       start = `${now.getFullYear()}-01-01`;
       break;

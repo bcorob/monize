@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { TransactionReconciliationService } from "./transaction-reconciliation.service";
+import { RECONCILED_THROUGH_SQL } from "./stale-reconciliation";
 import { Transaction, TransactionStatus } from "./entities/transaction.entity";
 import { TransactionSplit } from "./entities/transaction-split.entity";
 import { UserPreference } from "../users/entities/user-preference.entity";
@@ -21,6 +22,8 @@ import {
   lockedTransactionRow,
   stubLockedTransactions,
 } from "../test-helpers/locks-testing";
+import { Currency } from "../currencies/entities/currency.entity";
+import { currencyPlacesRepoMock } from "../test-helpers/currency-places-testing";
 
 jest.mock("../common/db/scoped-db", () =>
   jest.requireActual("../test-helpers/scoped-db-testing").scopedDbMockModule(),
@@ -140,6 +143,7 @@ describe("TransactionReconciliationService", () => {
         .mockResolvedValue({ userId, lockReconciledTransactions: false }),
     };
     const tenantMocks = createScopedDbMocks([
+      [Currency, currencyPlacesRepoMock({ BTC: 8 })],
       [Transaction, transactionsRepository],
       [TransactionSplit, splitsRepository],
       // The strict reconciled lock reads the caller's preference whenever a
@@ -176,6 +180,11 @@ describe("TransactionReconciliationService", () => {
       applyParentStatusToTransferCounterparts: jest
         .fn()
         .mockResolvedValue(new Set<string>()),
+      // Takes the holdings advisory lock for the parent's embedded investment
+      // rows; the real method resolves to nothing.
+      lockEmbeddedInvestmentScopes: jest.fn().mockResolvedValue(undefined),
+      // The post-commit bond price recompute (INV-BOND-005).
+      recomputeBondPricesAfterWrite: jest.fn().mockResolvedValue(undefined),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -333,6 +342,59 @@ describe("TransactionReconciliationService", () => {
       );
     });
 
+    it("restores a voided transfer's mirror leg to UNRECONCILED, not the chosen status (#2071)", async () => {
+      // Restoring leg-1 as RECONCILED must not stamp RECONCILED onto leg-2:
+      // reconciliation state is per-ledger (INV-TRANSFER-001), and leg-2's own
+      // account was never checked against a statement. Only VOID-ness is
+      // shared, so leg-2 returns to UNRECONCILED with no reconciled date.
+      stubLockedTransactions(
+        {
+          lockTransactionRow: lockTransactionRow as jest.Mock,
+          lockTransactionRows: jest.fn(),
+        },
+        [
+          lockedTransactionRow({
+            id: "leg-1",
+            accountId,
+            amount: -100,
+            transactionDate: "2026-01-15",
+            status: TransactionStatus.VOID,
+            isSplit: false,
+            linkedTransactionId: "leg-2",
+          }),
+          lockedTransactionRow({
+            id: "leg-2",
+            accountId: "account-2",
+            amount: 100,
+            transactionDate: "2026-01-15",
+            status: TransactionStatus.VOID,
+            isSplit: false,
+            linkedTransactionId: "leg-1",
+          }),
+        ],
+      );
+      mockFindOne.mockResolvedValue(
+        makeTransaction({ status: TransactionStatus.RECONCILED }),
+      );
+
+      await service.updateStatus(
+        userId,
+        "leg-1",
+        TransactionStatus.RECONCILED,
+        mockTriggerNetWorthRecalc,
+        mockFindOne,
+      );
+
+      expect(transactionsRepository.update).toHaveBeenCalledWith("leg-2", {
+        status: TransactionStatus.UNRECONCILED,
+        reconciledDate: null,
+      });
+      expect(transactionsRepository.update).toHaveBeenCalledWith(
+        "leg-1",
+        expect.objectContaining({ status: TransactionStatus.RECONCILED }),
+      );
+    });
+
     it("refuses to void a split-transfer counterpart leg on its own", async () => {
       // The pairing belongs to the split parent, which has a propagation path;
       // voiding the leg alone leaves the parent's split row recording money
@@ -429,6 +491,19 @@ describe("TransactionReconciliationService", () => {
         makeTransaction({ status: TransactionStatus.VOID, isSplit: true }),
       );
 
+      splitService.applyParentStatusToTransferCounterparts.mockImplementationOnce(
+        async (
+          _m: unknown,
+          _id: string,
+          _u: string,
+          _s: unknown,
+          touched: Set<string>,
+        ) => {
+          touched.add("sec-1");
+          return new Set<string>();
+        },
+      );
+
       await service.updateStatus(
         userId,
         transaction.id,
@@ -444,6 +519,67 @@ describe("TransactionReconciliationService", () => {
         transaction.id,
         userId,
         TransactionStatus.VOID,
+        expect.any(Set),
+      );
+      // Dispatched after the commit, with the securities the pass reported
+      // (INV-BOND-005, INV-CACHE-001).
+      expect(splitService.recomputeBondPricesAfterWrite).toHaveBeenCalledWith(
+        userId,
+        new Set(["sec-1"]),
+      );
+    });
+
+    /**
+     * Advisory locks are taken before row locks (`common/db/locks.ts`). The
+     * parent's embedded investment rows are rebuilt under the holdings
+     * advisory lock, and this path took it only there -- after the parent's
+     * balance write had row-locked `accounts`, the opposite order from an
+     * investment write (40P01).
+     *
+     * The `lockTransactionRow` half is the second round of the same defect:
+     * moving the advisory lock above the balance write but below the parent's
+     * own `FOR UPDATE` still leaves it after a row lock, and
+     * `InvestmentTransactionsService.update()` takes the advisory lock first
+     * and then row-locks the very same parent -- advisory A vs. row P against
+     * row P vs. advisory A, which is 40P01 for both.
+     */
+    it("locks the embedded investment scopes before the parent's row lock and balance write", async () => {
+      const transaction = stageTransaction({
+        status: TransactionStatus.CLEARED,
+        amount: 100,
+        isSplit: true,
+      });
+      mockFindOne.mockResolvedValue(
+        makeTransaction({ status: TransactionStatus.VOID, isSplit: true }),
+      );
+
+      // The module mock is shared across this file's tests, so its recorded
+      // invocation order carries earlier cases' calls; the ordering assertion
+      // below is about this run only.
+      (lockTransactionRow as jest.Mock).mockClear();
+
+      await service.updateStatus(
+        userId,
+        transaction.id,
+        TransactionStatus.VOID,
+        mockTriggerNetWorthRecalc,
+        mockFindOne,
+      );
+
+      expect(splitService.lockEmbeddedInvestmentScopes).toHaveBeenCalledWith(
+        expect.anything(),
+        userId,
+        [transaction.id],
+      );
+      expect(accountsService.updateBalance).toHaveBeenCalled();
+      expect(
+        splitService.lockEmbeddedInvestmentScopes.mock.invocationCallOrder[0],
+      ).toBeLessThan(accountsService.updateBalance.mock.invocationCallOrder[0]);
+      expect(lockTransactionRow).toHaveBeenCalled();
+      expect(
+        splitService.lockEmbeddedInvestmentScopes.mock.invocationCallOrder[0],
+      ).toBeLessThan(
+        (lockTransactionRow as jest.Mock).mock.invocationCallOrder[0],
       );
     });
 
@@ -933,6 +1069,51 @@ describe("TransactionReconciliationService", () => {
       expect(accountsService.updateBalance).not.toHaveBeenCalled();
     });
 
+    it("refuses a VOID whose mirror transfer leg is reconciled, writing nothing (#2072)", async () => {
+      // The request names the Chequing leg, but the VOID also writes the
+      // Savings leg and its balance, so that leg answers the lock too.
+      lockOn();
+      stubLockedTransactions(
+        {
+          lockTransactionRow: lockTransactionRow as jest.Mock,
+          lockTransactionRows: jest.fn(),
+        },
+        [
+          lockedTransactionRow({
+            id: "leg-1",
+            accountId,
+            amount: -100,
+            transactionDate: "2026-01-15",
+            status: TransactionStatus.CLEARED,
+            isSplit: false,
+            linkedTransactionId: "leg-2",
+          }),
+          lockedTransactionRow({
+            id: "leg-2",
+            accountId: "account-2",
+            amount: 100,
+            transactionDate: "2026-01-15",
+            status: TransactionStatus.RECONCILED,
+            isSplit: false,
+            linkedTransactionId: "leg-1",
+          }),
+        ],
+      );
+
+      await expect(
+        service.updateStatus(
+          userId,
+          "leg-1",
+          TransactionStatus.VOID,
+          mockTriggerNetWorthRecalc,
+          mockFindOne,
+        ),
+      ).rejects.toThrow(ConflictException);
+      expect(transactionsRepository.update).not.toHaveBeenCalled();
+      expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      expect(accountsService.recalculateCurrentBalance).not.toHaveBeenCalled();
+    });
+
     it("leaves a row that is not reconciled alone", async () => {
       // The lock is about reconciled rows. Clearing an unreconciled one is
       // ordinary work and must not be caught by it.
@@ -1265,6 +1446,53 @@ describe("TransactionReconciliationService", () => {
       expect(result.difference).toBe(150);
     });
 
+    it("reconciles a BTC wallet to the satoshi (INV-MONEY-001)", async () => {
+      accountsService.findOne.mockResolvedValue({
+        id: accountId,
+        currencyCode: "BTC",
+        openingBalance: 0,
+      });
+      mockQueryBuilder.getMany.mockResolvedValue([]);
+      mockQueryBuilder.getRawOne
+        .mockResolvedValueOnce({ sum: "0.01249993" })
+        .mockResolvedValueOnce({ sum: "-0.00002500" });
+
+      const result = await service.getReconciliationData(
+        userId,
+        accountId,
+        "2026-01-31",
+        0.01247493,
+      );
+
+      // At four places the fee vanished and the wallet could never reconcile.
+      expect(result.reconciledBalance).toBe(0.01249993);
+      expect(result.clearedBalance).toBe(0.01247493);
+      expect(result.difference).toBe(0);
+    });
+
+    it("leaves no float residue in a fiat difference", async () => {
+      accountsService.findOne.mockResolvedValue({
+        id: accountId,
+        currencyCode: "CAD",
+        openingBalance: 0.1,
+      });
+      mockQueryBuilder.getMany.mockResolvedValue([]);
+      mockQueryBuilder.getRawOne
+        .mockResolvedValueOnce({ sum: "0.2" })
+        .mockResolvedValueOnce({ sum: null });
+
+      const result = await service.getReconciliationData(
+        userId,
+        accountId,
+        "2026-01-31",
+        0.3,
+      );
+
+      // 0.1 + 0.2 is 0.30000000000000004 in floats; the reader must reach 0.
+      expect(result.clearedBalance).toBe(0.3);
+      expect(result.difference).toBe(0);
+    });
+
     it("handles null sums (no reconciled or cleared transactions)", async () => {
       mockQueryBuilder.getRawOne.mockResolvedValue({ sum: null });
 
@@ -1324,6 +1552,21 @@ describe("TransactionReconciliationService", () => {
       );
     });
 
+    it("reads the last reconciled date through RECONCILED_THROUGH_SQL, capped at each row's statement", async () => {
+      managerQuery.mockResolvedValue([{ last_reconciled_date: "2026-02-15" }]);
+
+      const result = await service.getReconciliationData(
+        userId,
+        accountId,
+        "2026-02-28",
+        500,
+      );
+
+      expect(result.lastReconciledDate).toBe("2026-02-15");
+      const sql: string = managerQuery.mock.calls[0][0];
+      expect(sql).toContain(`MAX(${RECONCILED_THROUGH_SQL})`);
+    });
+
     it("delegates account lookup to accountsService.findOne", async () => {
       mockQueryBuilder.getRawOne.mockResolvedValue({ sum: "0" });
 
@@ -1355,6 +1598,39 @@ describe("TransactionReconciliationService", () => {
       expect(result.reconciledBalance).toBe(500);
       expect(result.clearedBalance).toBe(0);
       expect(result.difference).toBe(0);
+    });
+  });
+
+  describe("getStaleUnreconciled", () => {
+    it("measures missed rows from RECONCILED_THROUGH_SQL, not the newest reconciled row's own date", async () => {
+      managerQuery.mockResolvedValue([
+        {
+          account_id: accountId,
+          account_name: "Checking",
+          currency_code: "USD",
+          count: "3",
+          oldest_date: "2026-01-02",
+          last_reconciled_date: "2026-02-15",
+          missed_count: "1",
+        },
+      ]);
+
+      const result = await service.getStaleUnreconciled(userId);
+
+      const sql: string = managerQuery.mock.calls[0][0];
+      expect(sql).toContain(
+        `MAX(${RECONCILED_THROUGH_SQL}) AS last_reconciled_date`,
+      );
+      expect(sql).not.toContain("MAX(transaction_date)");
+      expect(result.accounts).toEqual([
+        expect.objectContaining({
+          lastReconciledDate: "2026-02-15",
+          count: 3,
+          missedCount: 1,
+          overdueCount: 2,
+        }),
+      ]);
+      expect(result.totalCount).toBe(3);
     });
   });
 

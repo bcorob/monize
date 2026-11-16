@@ -16,9 +16,14 @@ import {
   unsupportedAttachmentNote,
 } from "./content-blocks.util";
 import { randomUUID } from "crypto";
-import { longRunningFetch } from "./long-running-fetch";
+import { providerFetch } from "./long-running-fetch";
+import { unverifiedModelReason } from "./model-verification.util";
+
+/** Where a self-hosted Ollama provider with no base URL sends its requests. */
+export const OLLAMA_DEFAULT_BASE_URL = "http://localhost:11434";
 import { validateUrlBasicSafety } from "../validators/safe-url.validator";
 import { toolsField } from "./tools-field.util";
+import { OLLAMA_CALL_TIMEOUT_MS } from "./provider-call-budget";
 
 /**
  * How often to emit a progress log line during a long-running stream so
@@ -91,20 +96,28 @@ export class OllamaProvider implements AiProvider {
   readonly name: string = "ollama";
   readonly supportsStreaming = true;
   readonly supportsToolUse = true;
+  // A local model has no search of its own; a web-search request is served
+  // from model knowledge by AiService.completeWithWebSearch.
+  readonly supportsWebSearch = false;
 
   private readonly logger = new Logger(OllamaProvider.name);
   protected readonly baseUrl: string;
   protected readonly modelId: string;
+  protected readonly fetchImpl: typeof fetch;
 
-  constructor(baseUrl?: string, model?: string) {
-    const rawBaseUrl = (baseUrl || "http://localhost:11434").trim();
+  constructor(
+    baseUrl?: string,
+    model?: string,
+    /** The egress-policy fetch; see `OpenAiProvider`'s constructor. */
+    fetchImpl: typeof fetch = providerFetch("public-only"),
+  ) {
+    const rawBaseUrl = (baseUrl || OLLAMA_DEFAULT_BASE_URL).trim();
     // Reject malformed URLs, non-http(s) protocols, and URLs carrying
     // embedded credentials so downstream fetch() calls can only ever hit
-    // a user-provided origin whose shape we've already validated. This is
-    // the SSRF mitigation boundary for self-hosted Ollama; the full
-    // hostname/IP check happens in the service layer when the config is
-    // saved (we must still allow private/loopback hosts here for LAN
-    // Ollama deployments).
+    // a user-provided origin whose shape we've already validated. Whether
+    // that origin may be a private or loopback address is not decided here:
+    // the service checks it against the owner's entitlement when the config
+    // is saved and used, and `fetchImpl` enforces it on the connection.
     if (!validateUrlBasicSafety(rawBaseUrl)) {
       throw new Error(
         `Invalid Ollama baseUrl "${rawBaseUrl}": must be an http(s) URL without credentials.`,
@@ -112,6 +125,7 @@ export class OllamaProvider implements AiProvider {
     }
     this.baseUrl = new URL(rawBaseUrl).origin;
     this.modelId = model || "llama3";
+    this.fetchImpl = fetchImpl;
   }
 
   /**
@@ -144,7 +158,10 @@ export class OllamaProvider implements AiProvider {
 
     // H14: Timeout covers both fetch and stream consumption
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20 * 60 * 1000); // 20 minutes for CPU inference
+    const timeout = setTimeout(
+      () => controller.abort(),
+      OLLAMA_CALL_TIMEOUT_MS,
+    );
 
     const requestStart = Date.now();
     const url = this.buildUrl("/api/chat");
@@ -164,7 +181,7 @@ export class OllamaProvider implements AiProvider {
     try {
       let response: Response;
       try {
-        response = await longRunningFetch(url, {
+        response = await this.fetchImpl(url, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -289,10 +306,13 @@ export class OllamaProvider implements AiProvider {
 
     // H14: Timeout covers both fetch and stream consumption
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20 * 60 * 1000);
+    const timeout = setTimeout(
+      () => controller.abort(),
+      OLLAMA_CALL_TIMEOUT_MS,
+    );
 
     try {
-      const response = await longRunningFetch(this.buildUrl("/api/chat"), {
+      const response = await this.fetchImpl(this.buildUrl("/api/chat"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -412,7 +432,10 @@ export class OllamaProvider implements AiProvider {
 
     // H14: Timeout covers both fetch and stream consumption
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20 * 60 * 1000); // 20 minutes for CPU inference
+    const timeout = setTimeout(
+      () => controller.abort(),
+      OLLAMA_CALL_TIMEOUT_MS,
+    );
 
     const requestStart = Date.now();
     const url = this.buildUrl("/api/chat");
@@ -432,7 +455,7 @@ export class OllamaProvider implements AiProvider {
     try {
       let response: Response;
       try {
-        response = await longRunningFetch(url, {
+        response = await this.fetchImpl(url, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -708,7 +731,7 @@ export class OllamaProvider implements AiProvider {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 3000);
       try {
-        const response = await fetch(this.buildUrl("/api/tags"), {
+        const response = await this.fetchImpl(this.buildUrl("/api/tags"), {
           signal: controller.signal,
           headers: this.getAuthHeaders(),
         });
@@ -725,7 +748,7 @@ export class OllamaProvider implements AiProvider {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 5000);
     try {
-      const response = await fetch(this.buildUrl("/api/tags"), {
+      const response = await this.fetchImpl(this.buildUrl("/api/tags"), {
         signal: controller.signal,
         headers: this.getAuthHeaders(),
       });
@@ -733,7 +756,12 @@ export class OllamaProvider implements AiProvider {
         return {
           ok: false,
           model: this.modelId,
-          reason: `Provider /api/tags returned ${response.status}`,
+          reason: unverifiedModelReason(
+            this.name,
+            this.modelId,
+            `/api/tags returned ${response.status}`,
+            response.status,
+          ),
         };
       }
       const body = (await response.json()) as {
@@ -761,7 +789,9 @@ export class OllamaProvider implements AiProvider {
           reason: "No models are installed on this Ollama host.",
         };
       }
-      const shown = [...names].sort();
+      // Tag names are the one thing read back from the host, so each is
+      // bounded: a listing that is not Ollama's cannot return a document here.
+      const shown = [...names].sort().map((name) => name.slice(0, 100));
       const cap = 20;
       const preview = shown.slice(0, cap).join(", ");
       const suffix = shown.length > cap ? ` (+${shown.length - cap} more)` : "";
@@ -771,11 +801,10 @@ export class OllamaProvider implements AiProvider {
         reason: `Model "${this.modelId}" is not installed. Available: ${preview}${suffix}.`,
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
       return {
         ok: false,
         model: this.modelId,
-        reason: `Could not reach provider to verify model: ${message}`,
+        reason: unverifiedModelReason(this.name, this.modelId, error),
       };
     } finally {
       clearTimeout(timeout);

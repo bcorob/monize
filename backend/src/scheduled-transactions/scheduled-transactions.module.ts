@@ -8,6 +8,7 @@ import { Tag } from "../tags/entities/tag.entity";
 import { ScheduledTransactionsService } from "./scheduled-transactions.service";
 import { ScheduledEffectiveAmountService } from "./scheduled-effective-amount.service";
 import { ScheduledOccurrenceService } from "./scheduled-occurrence.service";
+import { ScheduledAmountEstimateService } from "./scheduled-amount-estimate.service";
 import { ScheduledTransactionOverrideService } from "./scheduled-transaction-override.service";
 import { ScheduledTransactionLoanService } from "./scheduled-transaction-loan.service";
 import { ScheduledTransactionsController } from "./scheduled-transactions.controller";
@@ -17,6 +18,7 @@ import { SecuritiesModule } from "../securities/securities.module";
 import { CurrenciesModule } from "../currencies/currencies.module";
 import { ActionHistoryModule } from "../action-history/action-history.module";
 import { DelegationModule } from "../delegation/delegation.module";
+import { SystemAlertsModule } from "../system-alerts/system-alerts.module";
 
 @Module({
   imports: [
@@ -35,11 +37,15 @@ import { DelegationModule } from "../delegation/delegation.module";
     forwardRef(() => CurrenciesModule),
     ActionHistoryModule,
     forwardRef(() => DelegationModule),
+    // SCHEDULED_POST_FAILED user alerts. forwardRef: SystemAlertsModule
+    // reaches NotificationsModule, which imports this module back.
+    forwardRef(() => SystemAlertsModule),
   ],
   providers: [
     ScheduledTransactionsService,
     ScheduledEffectiveAmountService,
     ScheduledOccurrenceService,
+    ScheduledAmountEstimateService,
     ScheduledTransactionOverrideService,
     ScheduledTransactionLoanService,
   ],
@@ -52,6 +58,7 @@ import { DelegationModule } from "../delegation/delegation.module";
     ScheduledTransactionsService,
     ScheduledEffectiveAmountService,
     ScheduledOccurrenceService,
+    ScheduledAmountEstimateService,
   ],
 })
 export class ScheduledTransactionsModule {}

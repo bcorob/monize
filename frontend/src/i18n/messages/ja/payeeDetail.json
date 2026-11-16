@@ -94,6 +94,9 @@
     "largestValue": "{date} に {amount}",
     "overpaymentFor": "繰上返済の支払先となる口座",
     "website": "ウェブサイト",
+    "address": "住所",
+    "phone": "電話番号",
+    "email": "メールアドレス",
     "notes": "メモ"
   },
   "tabs": {
@@ -127,5 +130,23 @@
     "needsMoreHistory": "季節的な傾向を偶然と区別するには、少なくとも{years}年分の履歴が必要です。",
     "empty": "月別に分ける支出がまだありません",
     "monthTooltip": "{month}: {years, plural, one {# 年} other {# 年}}平均で {amount}"
+  },
+  "contactLookup": {
+    "button": "連絡先情報を検索",
+    "inProgress": "検索中...",
+    "nothingNew": "新しい連絡先情報は見つかりませんでした。",
+    "noProvider": "連絡先を検索するには、支払先検索の設定で検索元を設定してください。",
+    "failed": "検索を完了できませんでした。後でもう一度お試しください。",
+    "dialogTitle": "連絡先情報の確認",
+    "dialogSubtitle": "確認するまで、{name} には何も保存されません。",
+    "pickMatch": "この名前は{count, plural, other {#件の事業者}}に一致します。支払っている先を選んでください:",
+    "unlabelledMatch": "名称のない候補",
+    "willAdd": "追加",
+    "willReplace": "置き換え",
+    "cancel": "キャンセル",
+    "confirm": "{count, plural, other {#件の変更を保存}}",
+    "applied": "{count, plural, other {連絡先情報を#件保存しました}}",
+    "applyFailed": "連絡先情報を保存できませんでした",
+    "quotaExceeded": "今月の Google Places 検索を使い切りました。支払先検索の設定で上限を引き上げるか、来月までお待ちください。"
   }
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, fireEvent } from '@/test/render';
+import { render, screen, fireEvent } from '@/test/render';
 import { ReactivatePayeeDialog } from './ReactivatePayeeDialog';
 import { Payee } from '@/types/payee';
 
@@ -17,6 +17,11 @@ describe('ReactivatePayeeDialog', () => {
     website: null,
     hasLogo: false,
     logoFetchedAt: null,
+    contactLookupAt: null,
+    contactLookupSource: null,
+    address: null,
+    email: null,
+    phone: null,
     isActive: false,
     createdAt: '2024-01-01',
   };
@@ -36,7 +41,8 @@ describe('ReactivatePayeeDialog', () => {
     );
 
     expect(getByText(/"Old Store"/)).toBeInTheDocument();
-    expect(getByText('Reactivate Payee?')).toBeInTheDocument();
+    // Titled through Modal, so the dialog is named by its title.
+    expect(screen.getByRole('dialog', { name: 'Reactivate Payee' })).toBeInTheDocument();
   });
 
   it('does not render when payee is null', () => {
@@ -62,7 +68,7 @@ describe('ReactivatePayeeDialog', () => {
       />,
     );
 
-    expect(queryByText('Reactivate Payee?')).not.toBeInTheDocument();
+    expect(queryByText('Reactivate Payee')).not.toBeInTheDocument();
   });
 
   it('calls onReactivate when Reactivate button is clicked', () => {

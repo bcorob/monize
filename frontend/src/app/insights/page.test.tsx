@@ -62,23 +62,14 @@ vi.mock('@/components/layout/PageHeader', () => ({
 }));
 
 describe('InsightsPage', () => {
-  it('renders the page heading', () => {
-    render(<InsightsPage />);
-    expect(screen.getByText('Spending Insights')).toBeInTheDocument();
-  });
-
-  it('renders the page subtitle', () => {
-    render(<InsightsPage />);
-    expect(screen.getByText(/AI-powered analysis/i)).toBeInTheDocument();
-  });
-
-  it('renders the InsightsList component', () => {
+  it('renders the InsightsList component, which draws the page header', () => {
     render(<InsightsPage />);
     expect(screen.getByTestId('insights-list')).toBeInTheDocument();
   });
 
-  it('renders within page layout', () => {
+  it('renders within page layout, in the list-page container', () => {
     render(<InsightsPage />);
     expect(screen.getByTestId('page-layout')).toBeInTheDocument();
+    expect(screen.getByRole('main')).toHaveClass('px-4', 'sm:px-6', 'lg:px-12', 'pt-6', 'pb-8');
   });
 });

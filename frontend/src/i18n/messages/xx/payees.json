@@ -8,9 +8,11 @@
     "autoMergePayees": "[XX-Auto-Merge Payees-XX]",
     "newPayee": "[XX-+ New Payee-XX]",
     "searchPlaceholder": "[XX-Search payees...-XX]",
+    "statusFilterLabel": "[XX-Status-XX]",
     "statusAll": "[XX-All ({count})-XX]",
     "statusActive": "[XX-Active ({count})-XX]",
     "statusInactive": "[XX-Inactive ({count})-XX]",
+    "categoryFilterLabel": "[XX-Default Category-XX]",
     "categoryFilterAll": "[XX-All Payees ({count})-XX]",
     "categoryFilterNoCategory": "[XX-No Default Category ({count})-XX]",
     "categoryFilterUncategorized": "[XX-Uncategorized Txns ({count})-XX]",
@@ -34,7 +36,8 @@
       "inactive": "[XX-Inactive-XX]",
       "withoutCategory": "[XX-Without Category-XX]"
     },
-    "applyDefaultCategories": "[XX-Apply Default Categories-XX]"
+    "applyDefaultCategories": "[XX-Apply Default Categories-XX]",
+    "lookupSettings": "[XX-Payee Lookup settings-XX]"
   },
   "list": {
     "columns": {
@@ -82,13 +85,27 @@
     "categoryLabel": "[XX-Default Category-XX]",
     "notesLabel": "[XX-Notes (optional)-XX]",
     "websiteLabel": "[XX-Website-XX]",
+    "addressLabel": "[XX-Address-XX]",
+    "emailLabel": "[XX-Email-XX]",
+    "phoneLabel": "[XX-Phone-XX]",
     "submitCreate": "[XX-Create Payee-XX]",
     "submitUpdate": "[XX-Update Payee-XX]",
     "applyCategoryLabel": "[XX-Apply this category to existing transactions-XX]",
     "applyCategoryNone": "[XX-Don't change existing transactions-XX]",
     "applyCategoryUncategorized": "[XX-Only transactions without a category ({count})-XX]",
     "applyCategoryAll": "[XX-All transactions ({count})-XX]",
-    "applyCategoryHelp": "[XX-Transfers and split transactions are never changed.-XX]"
+    "applyCategoryHelp": "[XX-Transfers and split transactions are never changed.-XX]",
+    "lookup": {
+      "button": "[XX-Look up details-XX]",
+      "searching": "[XX-Looking up contact details...-XX]",
+      "suggested": "[XX-Suggested by lookup:-XX]",
+      "replaced": "[XX-Replaced by lookup:-XX]",
+      "clear": "[XX-Undo lookup changes-XX]",
+      "nothingFound": "[XX-No public contact details were found for this name.-XX]",
+      "noProvider": "[XX-Set up a lookup source in <link>Payee lookup settings</link> to find contact details.-XX]",
+      "failed": "[XX-The lookup could not be completed. Try again later.-XX]",
+      "quotaExceeded": "[XX-This month's Google Places lookups are used up. Raise the limit in <link>Payee lookup settings</link>, or wait until next month.-XX]"
+    }
   },
   "merge": {
     "title": "[XX-Merge Payee-XX]",
@@ -112,7 +129,6 @@
   },
   "categoryAutoAssign": {
     "title": "[XX-Auto-Assign Default Categories-XX]",
-    "howItWorksTitle": "[XX-How it works-XX]",
     "howItWorksBody": "[XX-This feature analyzes your transaction history to suggest default categories for payees. It looks at which category is most commonly used for each payee and suggests assigning it as their default category for future transactions. You can always override the default category if needed.-XX]",
     "minTransactionsLabel": "[XX-Minimum Transactions: {count}-XX]",
     "minTransactionsHelp": "[XX-Only consider payees with at least this many transactions-XX]",
@@ -133,6 +149,7 @@
       "line2": "[XX-Try adjusting the settings above.-XX]"
     },
     "columns": {
+      "assign": "[XX-Assign-XX]",
       "payee": "[XX-Payee-XX]",
       "suggestedCategory": "[XX-Suggested Category-XX]",
       "match": "[XX-Match-XX]"
@@ -150,7 +167,6 @@
   },
   "autoMerge": {
     "title": "[XX-Auto-Merge Payees-XX]",
-    "howItWorksTitle": "[XX-How it works-XX]",
     "howItWorksBody": "[XX-This feature scans your payees and groups variants where one name extends another - for example \"Lidl\", \"LIDL sp. z o.o.\" and \"LIDL WARSZAWA 0421\" all build on \"Lidl\". Each group is merged into a single canonical payee, and a wildcard alias (such as \"*LIDL*\") is created so future imports are matched automatically. Payees that merely share a common word (like \"Royal Electric\" and \"Royal City Nursery\") are kept separate. Review and adjust each group before applying.-XX]",
     "backupRecommendation": "[XX-Recommended: create a <link>backup</link> before making changes.-XX]",
     "minGroupSizeLabel": "[XX-Minimum Group Size: {count}-XX]",
@@ -210,7 +226,6 @@
   },
   "deactivateUnused": {
     "title": "[XX-Deactivate Unused Payees-XX]",
-    "howItWorksTitle": "[XX-How it works-XX]",
     "howItWorksBody": "[XX-This feature finds payees that are rarely used and deactivates them. Deactivated payees will not appear in payee dropdowns when creating transactions, but their historical transactions are preserved. You can reactivate a payee at any time from the payees list.-XX]",
     "maxTransactionsLabel": "[XX-{count, plural, one {# or fewer transaction} other {# or fewer transactions}}-XX]",
     "maxTransactionsHelp": "[XX-Only include payees with this many transactions or fewer-XX]",
@@ -228,6 +243,7 @@
       "line2": "[XX-Try adjusting the settings above.-XX]"
     },
     "columns": {
+      "deactivate": "[XX-Deactivate-XX]",
       "payee": "[XX-Payee-XX]",
       "transactions": "[XX-Transactions-XX]",
       "lastUsed": "[XX-Last Used-XX]"
@@ -243,7 +259,7 @@
     }
   },
   "reactivate": {
-    "title": "[XX-Reactivate Payee?-XX]",
+    "title": "[XX-Reactivate Payee-XX]",
     "message": "[XX-The payee \"{name}\" was previously deactivated. Would you like to reactivate it so it appears in payee dropdowns again?-XX]",
     "keepInactiveButton": "[XX-No, Keep Inactive-XX]",
     "reactivateButton": "[XX-Reactivate-XX]",
@@ -252,7 +268,7 @@
   "aliases": {
     "heading": "[XX-Aliases-XX]",
     "description": "[XX-Aliases map imported payee names to this payee. Use * as wildcard (e.g., \"STARBUCKS*\"). Case-insensitive.-XX]",
-    "loading": "[XX-Loading...-XX]",
+    "loading": "[XX-Loading aliases...-XX]",
     "noAliases": "[XX-No aliases configured-XX]",
     "removeTitle": "[XX-Remove alias-XX]",
     "removeButton": "[XX-Remove-XX]",
@@ -270,7 +286,10 @@
   },
   "selectCategoryPlaceholder": "[XX-Select category...-XX]",
   "validation": {
-    "nameRequired": "[XX-Payee name is required-XX]"
+    "nameRequired": "[XX-Payee name is required-XX]",
+    "emailInvalid": "[XX-Enter a valid email address-XX]",
+    "phoneInvalid": "[XX-Enter a valid phone number-XX]",
+    "phoneNeedsCountryCode": "[XX-Add the country code, for example +1 206 448 8762-XX]"
   },
   "defaultCategoryBackfill": {
     "allConfirmTitle": "[XX-Apply default categories?-XX]",

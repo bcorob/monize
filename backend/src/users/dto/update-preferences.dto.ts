@@ -12,8 +12,37 @@ import {
   ArrayMaxSize,
   Matches,
   IsIn,
+  ValidateIf,
 } from "class-validator";
+import { Transform } from "class-transformer";
+import { IsCurrencyCode } from "../../common/validators/is-currency-code.validator";
 import { IsDashboardWidgetConfig } from "../validators/is-dashboard-widget-config.validator";
+import { IsHiddenTableColumns } from "../validators/is-hidden-table-columns.validator";
+import { IsViewDefaults } from "../validators/is-view-defaults.validator";
+import { IsNumberLocale } from "../../common/validators/is-number-locale.validator";
+import {
+  DEFAULT_QUOTE_PROVIDER_NAMES,
+  DefaultQuoteProviderName,
+} from "../../securities/providers/quote-provider.interface";
+
+/**
+ * Map services an address link can be sent to.
+ *
+ * "device" is the platform hand-off that predates this setting: Apple Maps on
+ * iOS, a `geo:` URI on Android (which opens whichever map app the phone is set
+ * to), OpenStreetMap everywhere else. It is a value rather than an absence so a
+ * user can deliberately return to it.
+ */
+export const MAP_PROVIDERS = [
+  "device",
+  "openstreetmap",
+  "google",
+  "apple",
+  "bing",
+  "waze",
+] as const;
+
+export type MapProvider = (typeof MAP_PROVIDERS)[number];
 
 export class UpdatePreferencesDto {
   @ApiPropertyOptional({
@@ -21,8 +50,10 @@ export class UpdatePreferencesDto {
     example: "USD",
   })
   @IsOptional()
-  @IsString()
-  @MaxLength(3)
+  @Transform(({ value }) =>
+    typeof value === "string" ? value.toUpperCase() : value,
+  )
+  @IsCurrencyCode()
   defaultCurrency?: string;
 
   @ApiPropertyOptional({
@@ -41,6 +72,7 @@ export class UpdatePreferencesDto {
   @IsOptional()
   @IsString()
   @MaxLength(50)
+  @IsNumberLocale()
   numberFormat?: string;
 
   @ApiPropertyOptional({ description: "Theme preference", example: "light" })
@@ -106,11 +138,6 @@ export class UpdatePreferencesDto {
   @IsBoolean()
   notificationEmail?: boolean;
 
-  @ApiPropertyOptional({ description: "Receive browser notifications" })
-  @IsOptional()
-  @IsBoolean()
-  notificationBrowser?: boolean;
-
   @ApiPropertyOptional({ description: "Dismiss the Getting Started guide" })
   @IsOptional()
   @IsBoolean()
@@ -124,12 +151,27 @@ export class UpdatePreferencesDto {
   aiBubbleEnabled?: boolean;
 
   @ApiPropertyOptional({
+    description: "Show and build the trivia beside the dashboard greeting",
+  })
+  @IsOptional()
+  @IsBoolean()
+  aiTriviaEnabled?: boolean;
+
+  @ApiPropertyOptional({
     description:
       "Strict mode: refuse any alteration of a RECONCILED transaction while on",
   })
   @IsOptional()
   @IsBoolean()
   lockReconciledTransactions?: boolean;
+
+  @ApiPropertyOptional({
+    description:
+      "Look up a new payee's website, address, email and phone through the configured AI provider",
+  })
+  @IsOptional()
+  @IsBoolean()
+  payeeContactLookupEnabled?: boolean;
 
   @ApiPropertyOptional({
     description:
@@ -200,7 +242,7 @@ export class UpdatePreferencesDto {
 
   @ApiPropertyOptional({
     description:
-      "Per-widget dashboard settings (timeframe, account selection, chart type) keyed by widget id",
+      "Per-widget dashboard settings (timeframe, account selection, chart type) keyed by widget id, merged into the stored map by widget id: a slice sent replaces that widget's slice, null removes it, and a slice not sent is kept",
     example: {
       "spending-by-payee": { range: "3m" },
       "income-by-source": { range: "1y", chartType: "pie" },
@@ -210,6 +252,44 @@ export class UpdatePreferencesDto {
   @IsObject()
   @IsDashboardWidgetConfig()
   dashboardWidgetConfig?: Record<string, unknown>;
+
+  @ApiPropertyOptional({
+    description:
+      "Hidden column ids keyed by table kind (transactions, investmentHoldings, investmentRegister); an unknown kind, an unknown id or a duplicate is refused",
+    example: {
+      transactions: ["refNumber", "attachments"],
+      investmentHoldings: [],
+      investmentRegister: ["status"],
+    },
+  })
+  // The raw body value: class-transformer silently skips a `__proto__` key
+  // when it copies a plain object, which would store `{}` in place of
+  // refusing the payload.
+  @Transform(({ obj, key }) => obj[key])
+  @IsOptional()
+  @IsObject()
+  @IsHiddenTableColumns()
+  hiddenTableColumns?: Record<string, string[]>;
+
+  @ApiPropertyOptional({
+    description:
+      "Account-level defaults for the browser-local view settings, applied only where the browser has saved nothing: density (normal, compact, dense), hideRegisterYear, widgetsCollapsed, chartCollapsed (booleans), and accountOpenTarget (register, dashboard). Merged into the stored map, so a key not sent keeps its value. An unknown key or value, or null, is refused",
+    example: {
+      density: "compact",
+      hideRegisterYear: true,
+      widgetsCollapsed: false,
+      chartCollapsed: true,
+      accountOpenTarget: "register",
+    },
+  })
+  // The raw body value, for the `__proto__` reason given on hiddenTableColumns.
+  @Transform(({ obj, key }) => obj[key])
+  // Validated unless absent: `@IsOptional()` would let `null` through to the
+  // NOT NULL column, a 500 in place of a 400.
+  @ValidateIf((_o, value) => value !== undefined)
+  @IsObject()
+  @IsViewDefaults()
+  viewDefaults?: Record<string, string | boolean | string[]>;
 
   @ApiPropertyOptional({
     description: "Show the Created At field in transaction forms",
@@ -243,11 +323,21 @@ export class UpdatePreferencesDto {
     description:
       "Default provider for stock quotes. Per-security overrides fall back to this value.",
     example: "yahoo",
-    enum: ["yahoo", "msn"],
+    enum: DEFAULT_QUOTE_PROVIDER_NAMES,
   })
   @IsOptional()
-  @IsIn(["yahoo", "msn"])
-  defaultQuoteProvider?: "yahoo" | "msn";
+  @IsIn([...DEFAULT_QUOTE_PROVIDER_NAMES])
+  defaultQuoteProvider?: DefaultQuoteProviderName;
+
+  @ApiPropertyOptional({
+    description:
+      "Which map service an address link opens. 'device' decides from the platform: Apple Maps on iOS, the phone's default map app on Android, OpenStreetMap elsewhere.",
+    example: "device",
+    enum: MAP_PROVIDERS,
+  })
+  @IsOptional()
+  @IsIn([...MAP_PROVIDERS])
+  defaultMapProvider?: MapProvider;
 
   @ApiPropertyOptional({
     description:

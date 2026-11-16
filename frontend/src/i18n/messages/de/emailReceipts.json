@@ -1,0 +1,1457 @@
+{
+  "settingsPage": {
+    "redirecting": "Die Seite „E-Mail-Belege“ wird geöffnet...",
+    "redirectLink": "Zu den Postfach-Einstellungen"
+  },
+  "page": {
+    "title": "E-Mail-Belege",
+    "subtitle": "Lies Bestellbestätigungen aus einem Postfach und wandle sie in aufgeschlüsselte Buchungen um: was verbunden ist, was aus jeder E-Mail geworden ist und was auf dich wartet"
+  },
+  "mailbox": {
+    "heading": "Postfach",
+    "description": "Bestellbestätigungen werden über IMAP aus einem eigens dafür vorgesehenen Postfach gelesen. Monize liest es nur: Es ändert, verschiebt oder löscht niemals eine Nachricht.",
+    "loading": "Postfach wird geladen",
+    "dedicatedWarning": "Verwende ein eigenes Postfach. Jede Nachricht im Ordner wird gelesen, daher sollte er nur Bestellbestätigungen enthalten.",
+    "encryptionUnavailable": "Dieser Server kann keine Geheimnisse verschlüsseln, daher können ein Postfachpasswort oder eine Verbindung nicht gespeichert werden. Bitte den Administrator, die Verschlüsselung einzurichten.",
+    "error": {
+      "title": "Das Postfach konnte nicht geladen werden",
+      "body": "Die Anfrage ist fehlgeschlagen, daher ist noch nichts über dein Postfach bekannt. Versuche es erneut.",
+      "retry": "Erneut versuchen"
+    },
+    "oauth": {
+      "heading": "Konto verbinden",
+      "explanation": "Google und Microsoft 365 lehnen ein einfaches Passwort meist ab. Melde dich stattdessen beim Anbieter an: Du gewährst Monize Zugriff auf das Postfach und gibst dessen Passwort hier nie ein.",
+      "connect": {
+        "google": "Mit Google verbinden",
+        "microsoft": "Mit Microsoft verbinden"
+      },
+      "providerNames": {
+        "google": "Google",
+        "microsoft": "Microsoft 365"
+      },
+      "providersUnavailable": "Ob die Anmeldung über Google oder Microsoft verfügbar ist, konnte nicht geprüft werden. Das manuelle Formular unten funktioniert weiterhin.",
+      "startFailed": "Die Anmeldung konnte nicht gestartet werden",
+      "badAuthorizationUrl": "Der Server hat eine Anmeldeadresse zurückgegeben, die keine sichere Webseite ist, daher wurde sie nicht geöffnet.",
+      "connectedAs": "Mit {provider} verbunden als {username}.",
+      "notConnected": "Die Verbindung zu {provider} ist nicht aktiv, daher wird das Postfach nicht gelesen. Verbinde erneut, um fortzufahren.",
+      "reconnect": "Erneut verbinden",
+      "disconnect": "Trennen",
+      "disconnectDialog": {
+        "title": "Postfach trennen?",
+        "message": "Monize löscht den gespeicherten Zugriff auf {provider} und liest das Postfach nicht mehr. Bereits gespeicherte E-Mails bleiben erhalten."
+      },
+      "disconnected": "Postfach getrennt",
+      "disconnectFailed": "Das Postfach konnte nicht getrennt werden",
+      "revokeNote": "Das Trennen entzieht die erteilte Berechtigung nicht. Um sie zurückzuziehen, entferne Monize auf der Berechtigungsseite von {provider}.",
+      "revokeLink": {
+        "google": "Berechtigungen des Google-Kontos öffnen",
+        "microsoft": "Microsoft-App-Berechtigungen öffnen"
+      },
+      "saveButton": "Einstellungen speichern",
+      "saved": "Postfacheinstellungen gespeichert",
+      "saveFailed": "Die Postfacheinstellungen konnten nicht gespeichert werden"
+    },
+    "form": {
+      "intro": "Oder gib die Daten eines beliebigen IMAP-Postfachs ein. Die meisten Anbieter verlangen ein App-Passwort statt deines Kontopassworts.",
+      "hostLabel": "IMAP-Server",
+      "portLabel": "Port",
+      "securityLabel": "Verbindungssicherheit",
+      "securityOptions": {
+        "tls": "TLS (meist Port 993)",
+        "starttls": "STARTTLS (meist Port 143)"
+      },
+      "usernameLabel": "Benutzername",
+      "passwordLabel": "Passwort",
+      "passwordStoredPlaceholder": "Ein Passwort ist gespeichert. Tippe, um es zu ersetzen.",
+      "passwordRequiredHelp": "Erforderlich für ein neues Postfach oder wenn sich Server oder Benutzername ändern.",
+      "passwordKeepHelp": "Leer lassen, um das gespeicherte Passwort zu behalten. Es wird nie wieder angezeigt.",
+      "saveButton": "Postfach speichern",
+      "saved": "Postfach gespeichert",
+      "saveFailed": "Das Postfach konnte nicht gespeichert werden",
+      "test": {
+        "button": "Verbindung testen",
+        "ok": "{count, plural, one {Die Verbindung funktioniert. Der Ordner enthält # Nachricht.} other {Die Verbindung funktioniert. Der Ordner enthält # Nachrichten.}}",
+        "error": "Die Verbindung ist fehlgeschlagen: {error}",
+        "failed": "Die Verbindung konnte nicht getestet werden"
+      }
+    },
+    "settings": {
+      "folderLabel": "Ordner",
+      "folderHelp": "Der Ordner, der gelesen wird. Er wird schreibgeschützt geöffnet.",
+      "enabledLabel": "Postfach automatisch lesen",
+      "enabledHelp": "Steuert nur das automatische Lesen: Wenn aktiviert, liest Monize das Postfach alle 15 Minuten. Das Ausschalten trennt das Postfach nicht, und Jetzt abrufen liest es, egal ob dies an oder aus ist.",
+      "aiModeLabel": "KI-Modus",
+      "aiModeHelp": "Ob der Abruf den von dir eingerichteten KI-Anbieter für Belege verwenden darf. Mit KI erkennen und Profil mit KI entwerfen fragen unabhängig vom Modus den Assistenten im Chat, und eine KI-Antwort ist immer ein Vorschlag oder ein Entwurf, den du freigibst.",
+      "aiModes": {
+        "off": "Aus",
+        "on_demand": "Auf Abruf",
+        "automatic": "Automatisch"
+      },
+      "aiModeDescriptions": {
+        "off": "Der Abruf ruft die KI für Belege nie auf.",
+        "on_demand": "Der Abruf ruft die KI nie auf. Du fragst den Assistenten selbst mit Mit KI erkennen oder Profil mit KI entwerfen.",
+        "automatic": "Beim Abruf fragt die KI zu einem zugeordneten Beleg nach, den kein freigegebenes Profil vollständig lesen konnte, und entwirft ein Profil für einen Absender, der noch keines hat."
+      },
+      "autoApplyLabel": "Vorschläge automatisch anwenden",
+      "autoApplyHelp": "Standardmäßig aus. Ein Vorschlag wird nur dann ohne Nachfrage angewendet, wenn alles Folgende zutrifft: Ein freigegebenes Profil hat die ganze E-Mail gelesen, die Buchung wurde über eine Bestellnummer oder eine Referenz gefunden oder über genauen Betrag und Empfänger, mit genau einem Kandidaten, und der Vorschlag geht auf den Cent auf. Eine Handelsbestätigung wird nur dann ohne Nachfrage gebucht, wenn ihr Handelsprofil freigegeben ist, es den ganzen Handel gelesen hat, der Kurs zu den Anteilen und der Summe passt (eine Bardividende, die nur ihren Betrag nennt, hat nichts zu prüfen) und deine Konten noch keinen passenden Handel enthalten. Alles andere wartet auf deine Freigabe.",
+      "profileLimitLabel": "Vorschläge von Profilen auf das tägliche KI-Limit anrechnen",
+      "profileLimitHelp": "Standardmäßig an: Eine Änderung, die ein Profil aus einer E-Mail vorschlägt, zählt wie jeder andere KI-Vorschlag zum Tageslimit KI-vorgeschlagener Änderungen. Schalte es aus, wenn ein großer Stapel gespeicherter E-Mails das Limit sonst aufbrauchen würde. Nur Vorschläge von Profilen sind ausgenommen; jeder Vorschlag wartet weiterhin auf deine Freigabe."
+    },
+    "status": {
+      "lastPolled": "Letzter Abruf",
+      "lastSuccess": "Letzter erfolgreicher Abruf",
+      "never": "Nie",
+      "lastError": "Letzter Fehler: {error}",
+      "lastErrorAt": "Letzter Fehler ({at}): {error}",
+      "pollNow": "Jetzt abrufen",
+      "pollResult": "Abruf abgeschlossen: {fetched, plural, one {# E-Mail gespeichert} other {# E-Mails gespeichert}}, {skipped} übersprungen, {processed} verarbeitet.",
+      "pollResultLink": "Gespeicherte E-Mails anzeigen",
+      "pollFailed": "Der Abruf ist fehlgeschlagen",
+      "deleteButton": "Postfach löschen",
+      "deleteDialog": {
+        "title": "Postfach löschen?",
+        "message": "Die Postfacheinstellungen und alle gespeicherten E-Mails werden gelöscht, und offene Prüfanfragen dazu werden verworfen. Die E-Mails im Postfach selbst bleiben unberührt."
+      },
+      "deleted": "Postfach gelöscht",
+      "deleteFailed": "Das Postfach konnte nicht gelöscht werden"
+    },
+    "import": {
+      "title": "Archivierte E-Mails importieren",
+      "description": "Eine Datei behält den Absender und das Kaufdatum des Shops, anders als eine weitergeleitete E-Mail. Laden Sie exportierte E-Mails hoch, um alte Bestellbestätigungen zu lesen.",
+      "fileLabel": "E-Mail-Dateien (.eml, .mbox, .msg oder .zip)",
+      "chooseFiles": "Dateien auswählen",
+      "noFileChosen": "Keine Dateien ausgewählt",
+      "selected": "Ausgewählt: {count}",
+      "button": "Importieren",
+      "preparing": "Dateien werden vorbereitet...",
+      "sending": "Teil {current} von {total} wird gesendet",
+      "processing": "E-Mails werden verarbeitet: {done} von {total}",
+      "cancel": "Abbrechen",
+      "tooLargeTotal": "Die ausgewählten Dateien zusammen sind größer als {max}. Importieren Sie sie in kleineren Gruppen.",
+      "failed": "Der Import ist fehlgeschlagen",
+      "result": {
+        "heading": "Importergebnis",
+        "file": "{name}: {stored} gespeichert, {duplicates} Duplikate, {skipped} übersprungen",
+        "summary": "{processed, plural, one {# wartende E-Mail verarbeitet.} other {# wartende E-Mails verarbeitet.}}",
+        "pendingLeft": "{count, plural, one {# E-Mail wartet noch auf die Verarbeitung. Monize verarbeitet sie beim nächsten Lesen des Postfachs.} other {# E-Mails warten noch auf die Verarbeitung. Monize verarbeitet sie beim nächsten Lesen des Postfachs.}}",
+        "processFailed": "{count, plural, one {# E-Mail konnte nicht verarbeitet werden.} other {# E-Mails konnten nicht verarbeitet werden.}}",
+        "processingStopped": "Die Verarbeitung der importierten E-Mails wurde beendet. Die E-Mails bleiben gespeichert. Monize verarbeitet sie beim nächsten Lesen des Postfachs.",
+        "truncated": "{count} Nachrichten wurden nicht gelesen, weil ein Import ein Limit hat. Importieren Sie sie in einem zweiten Durchgang erneut.",
+        "oversized": "{name}: {count} Nachrichten, die größer als {max} sind, wurden nicht gesendet.",
+        "stopped": "Der Import wurde nach {done} von {total} Teilen beendet. Bereits importierte E-Mails bleiben erhalten. Importieren Sie dieselben Dateien erneut, um fortzufahren. Bereits importierte E-Mails werden nicht doppelt gespeichert.",
+        "cancelled": "Der Import wurde nach {done} von {total} Teilen abgebrochen. Bereits importierte E-Mails bleiben erhalten.",
+        "errors": {
+          "unsupported_format": "{name}: Dieses Format wird nicht unterstützt. Unterstützte Formate sind .eml, .mbox, .msg und .zip.",
+          "invalid_archive": "{name}: Die ZIP-Datei ist beschädigt oder kann nicht gelesen werden.",
+          "archive_too_large": "{name}: Die ZIP-Datei ist entpackt größer als das Importlimit. Entpacken Sie sie und laden Sie die enthaltene .mbox-Datei hoch.",
+          "empty": "{name}: Die Datei enthält keine E-Mails."
+        },
+        "ignored": "{name}: {count} andere Dateien im Archiv wurden übersprungen."
+      },
+      "guide": {
+        "toggle": "So exportieren Sie E-Mails bei Ihrem Anbieter",
+        "gmailLabel": {
+          "title": "Gmail: alle E-Mails mit einem Label",
+          "step1": "Öffnen Sie takeout.google.com und wählen Sie „Alle Auswahlen aufheben“.",
+          "step2": "Wählen Sie „E-Mail“ und dann „Alle E-Mail-Daten enthalten“.",
+          "step3": "Wählen Sie nur Ihr Label und erstellen Sie den Export.",
+          "step4": "Laden Sie die heruntergeladene .zip-Datei unverändert hoch, egal wie groß sie ist. Sie müssen sie nicht entpacken."
+        },
+        "gmailOne": {
+          "title": "Gmail: eine E-Mail",
+          "step1": "Öffnen Sie die E-Mail.",
+          "step2": "Wählen Sie „Mehr“ und dann „Nachricht herunterladen“.",
+          "step3": "Laden Sie die .eml-Datei hoch."
+        },
+        "imap": {
+          "title": "Andere Anbieter: Outlook.com, Yahoo, Onet, WP, Interia, o2, iCloud, Zoho",
+          "step1": "Fügen Sie das Postfach in Thunderbird über IMAP hinzu und installieren Sie das Add-on ImportExportTools NG.",
+          "step2": "Wählen Sie die E-Mails oder einen Ordner aus und klicken Sie mit der rechten Maustaste.",
+          "step3": "Wählen Sie ImportExportTools NG und exportieren Sie dann als EML oder als mbox.",
+          "step4": "Laden Sie die Dateien hoch."
+        },
+        "outlook": {
+          "title": "Outlook für den Desktop",
+          "body": "Wählen Sie die E-Mails aus und ziehen Sie sie in einen Ordner auf Ihrer Festplatte. Outlook schreibt .msg-Dateien. Laden Sie sie hoch, mehrere auf einmal oder in einer .zip-Datei gepackt."
+        },
+        "apple": {
+          "title": "Apple Mail",
+          "step1": "Wählen Sie „Postfach“ und dann „Postfach exportieren“. Apple Mail schreibt einen Ordner.",
+          "step2": "Laden Sie die Datei mit dem Namen mbox aus dem Ordner hoch oder ziehen Sie E-Mails in den Finder, um .eml-Dateien zu erhalten."
+        },
+        "tip": "Tipp: Das Weiterleiten von E-Mails mit einem Skript verliert den Absender und das Datum des Shops. Der Import von Dateien behält sie."
+      }
+    }
+  },
+  "parsers": {
+    "heading": "Profile",
+    "description": "Ein Profil liest die Bestellbestätigungen eines Absenders mit Mustern, die du schreibst oder prüfst, und legt fest, wie die Bankbuchung gefunden wird. Einmal freigegeben, läuft es ohne die KI.",
+    "newButton": "Neues Profil manuell erstellen",
+    "loading": "Profile werden geladen",
+    "error": {
+      "title": "Die Profile konnten nicht geladen werden",
+      "body": "Die Anfrage ist fehlgeschlagen. Versuche es erneut.",
+      "retry": "Erneut versuchen"
+    },
+    "empty": {
+      "title": "Noch keine Profile",
+      "body": "Erstelle einen für einen Absender von Bestellbestätigungen oder entwirf einen aus einer gespeicherten E-Mail auf der Seite E-Mail-Belege."
+    },
+    "columns": {
+      "name": "Profil",
+      "status": "Status",
+      "payee": "Zahlungsempfänger",
+      "actions": "Aktionen"
+    },
+    "status": {
+      "draft": "Entwurf",
+      "approved": "Freigegeben"
+    },
+    "source": {
+      "manual": "Von dir geschrieben",
+      "ai": "Von der KI entworfen"
+    },
+    "invalid": "Ungültig",
+    "noPayee": "Kein Zahlungsempfänger",
+    "payeeUnknown": "Zahlungsempfänger nicht gefunden",
+    "payeeUnavailable": "Zahlungsempfängerliste nicht verfügbar",
+    "actions": {
+      "approve": "Freigeben",
+      "viewJson": "JSON anzeigen"
+    },
+    "toasts": {
+      "approved": "Profil freigegeben",
+      "approveFailed": "Das Profil konnte nicht freigegeben werden",
+      "changedElsewhere": "Dieses Profil wurde an anderer Stelle geändert. Die Liste wurde neu geladen.",
+      "deleted": "Profil gelöscht",
+      "deleteFailed": "Das Profil konnte nicht gelöscht werden",
+      "emailsIgnored": "{count, plural, one {# E-Mail ignoriert} other {# E-Mails ignoriert}}",
+      "emailsDeleted": "{count, plural, one {# E-Mail gelöscht} other {# E-Mails gelöscht}}",
+      "bulkFailed": "Die E-Mails dieses Profils konnten nicht vollständig bearbeitet werden. Bereits bearbeitete bleiben so."
+    },
+    "bulk": {
+      "ignoreTitle": "E-Mails dieses Profils ignorieren?",
+      "ignoreMessage": "{count, plural, one {# E-Mail, die {name} ausliest, wird} other {# E-Mails, die {name} ausliest, werden}} ignoriert: Sie schlagen nichts vor, und ihre offenen Vorschläge werden geschlossen.{kept, plural, =0 {} one { # E-Mail, die bereits angewendet wurde oder nicht gelesen werden konnte, bleibt unverändert.} other { # E-Mails, die bereits angewendet wurden oder nicht gelesen werden konnten, bleiben unverändert.}}",
+      "ignoreConfirm": "E-Mails ignorieren",
+      "deleteTitle": "E-Mails dieses Profils löschen?",
+      "deleteMessage": "{count, plural, one {# E-Mail, die {name} ausliest, wird} other {# E-Mails, die {name} ausliest, werden}} samt ihren offenen Vorschlägen gelöscht. Das lässt sich nicht rückgängig machen.{kept, plural, =0 {} one { # E-Mail, deren Vorschlag bereits angewendet wurde, bleibt.} other { # E-Mails, deren Vorschläge bereits angewendet wurden, bleiben.}}",
+      "deleteConfirm": "E-Mails löschen"
+    },
+    "deleteDialog": {
+      "title": "Profil löschen?",
+      "message": "Das Profil {name} wird gelöscht. E-Mails, die es bereits gelesen hat, behalten ihre Ergebnisse."
+    },
+    "jsonDialog": {
+      "title": "Definition von {name}",
+      "help": "Die Profildefinition so, wie sie gespeichert ist. Der Abschnitt zur Zuordnung zeigt die geltenden Einstellungen, auch die Standardwerte. Hier ist sie schreibgeschützt; ändere sie mit Bearbeiten.",
+      "contentLabel": "Definition als JSON",
+      "copy": "Kopieren",
+      "copied": "JSON kopiert",
+      "copyFailed": "Das JSON konnte nicht kopiert werden"
+    },
+    "processOffer": {
+      "title": "Die gespeicherten E-Mails jetzt verarbeiten?",
+      "message": "{count, plural, one {Die # gespeicherte E-Mail} other {Die # gespeicherten E-Mails}} von {domains} jetzt verarbeiten? Jede wird erneut mit diesem Profil gelesen; was es vorschlägt, wartet im KI-Prüfungseingang, sofern die automatische Anwendung nicht aktiv ist.",
+      "confirm": "Jetzt verarbeiten",
+      "later": "Nicht jetzt"
+    },
+    "reparse": "E-Mails erneut auslesen ({count})",
+    "kindTrade": "Wertpapierhandel",
+    "discardIgnore": "Ignoriert seine E-Mails",
+    "discardDelete": "Löscht seine E-Mails"
+  },
+  "editor": {
+    "createTitle": "Neues Profil",
+    "editTitle": "Profil bearbeiten",
+    "loading": "Zahlungsempfänger, Kategorien, Konten und Währungen werden geladen",
+    "lookupsError": {
+      "title": "Zahlungsempfänger, Kategorien, Konten oder Währungen konnten nicht geladen werden",
+      "body": "Die Auswahlfelder brauchen sie, daher kann der Editor noch nicht geöffnet werden. Versuche es erneut.",
+      "retry": "Erneut versuchen"
+    },
+    "draftNote": "Dieses Profil ist ein Entwurf. Es liest nichts, bis du es freigibst.",
+    "draftAiNote": "Die KI hat dieses Profil aus deinen Beispiel-E-Mails entworfen. Teste es an jeder davon und prüfe jedes Muster, gib es dann in der Liste frei. Es liest nichts, bis du das getan hast.",
+    "identityHeading": "Welche E-Mails er liest",
+    "nameLabel": "Name",
+    "payeeLabel": "Zahlungsempfänger",
+    "payeePlaceholder": "Kein Zahlungsempfänger",
+    "domainsLabel": "Absenderdomains",
+    "domainsHelp": "Eine pro Zeile, höchstens {max}. Eine Subdomain einer aufgeführten Domain passt ebenfalls.",
+    "subjectLabel": "Betreff enthält",
+    "subjectHelp": "Optional, eines pro Zeile, höchstens {max}. Der Betreff muss mindestens eines davon enthalten, Groß- und Kleinschreibung wird ignoriert.",
+    "saveButton": "Profil speichern",
+    "created": "Profil erstellt",
+    "updated": "Profil gespeichert",
+    "saveFailed": "Das Profil konnte nicht gespeichert werden",
+    "conflict": "Dieses Profil wurde an anderer Stelle geändert, seit du es geöffnet hast. Lade es neu, um die aktuelle Version zu sehen. Deine Änderungen hier sind nicht gespeichert.",
+    "conflictReload": "Profil neu laden",
+    "required": {
+      "heading": "Das Profil kann noch nicht gespeichert werden. Beheben Sie zuerst Folgendes:",
+      "item": "{field}: {problem}",
+      "nameMissing": "Geben Sie einen Namen für das Profil ein.",
+      "domainsMissing": "Geben Sie mindestens eine Absenderdomain ein, z. B. shop.example.com.",
+      "domainsInvalid": "Kein Domainname: {values}. Geben Sie Domains wie shop.example.com ein, eine pro Zeile.",
+      "domainsTooMany": "Geben Sie höchstens {max} Absenderdomains ein.",
+      "subjectTooMany": "Geben Sie höchstens {max} Betreffwörter ein.",
+      "subjectTooLong": "Jedes Betreffwort darf höchstens {max} Zeichen lang sein.",
+      "server": "Der Server hat dieses Feld abgelehnt. Der Grund steht unter dem Formular."
+    },
+    "patterns": {
+      "sourceLabel": "Zeilenquelle",
+      "sourceHint": "Mit welcher Darstellung der E-Mail die folgenden Muster verglichen werden. Text ist der Textteil der E-Mail, eine Zeile pro Zeilenumbruch. HTML liest den HTML-Teil: Jeder Block und jede Tabellenzelle wird zu einer eigenen Zeile, sodass ein Produktname, den der Text auf mehrere Zeilen verteilt, zusammenbleibt. Die Ansicht „Zeilen“ der E-Mail zeigt genau, was jede Quelle liefert.",
+      "sourceOptions": {
+        "text": "Text",
+        "html": "HTML"
+      },
+      "globHelp": "Jedes Muster wird mit einer ganzen Zeile der E-Mail verglichen, Groß- und Kleinschreibung wird ignoriert. Verwende {star} für beliebigen Text und einen Namen in geschweiften Klammern, etwa {capture}, um einen Wert zu erfassen. Jedes Feld nimmt bis zu {max} Muster auf, eines pro Zeile. Um aufeinanderfolgende Zeilen zu erfassen, verbinde ein Muster pro Zeile mit {lineBreak}, etwa {example}.",
+      "orderIdLabel": "Muster für die Bestellnummer",
+      "orderIdHint": "Muss {capture} erfassen. Beispiel: Bestellnummer: {capture}",
+      "totalLabel": "Muster für die Summe",
+      "amountHint": "Muss {capture} erfassen. Beispiel: Bestellsumme {capture}",
+      "shippingLabel": "Muster für die Versandkosten",
+      "discountLabel": "Muster für den Rabatt",
+      "feesLabel": "Gebührenmuster",
+      "itemsHeading": "Positionen",
+      "startAfterLabel": "Positionen beginnen nach",
+      "startAfterHint": "Optional. Die Positionen werden ab der Zeile nach der ersten Zeile gelesen, die diesen Text enthält.",
+      "stopAtLabel": "Positionen enden bei",
+      "stopAtHint": "Optional. Die Positionen enden vor der ersten Zeile, die diesen Text enthält.",
+      "itemPatternsLabel": "Positionsmuster",
+      "itemPatternsHint": "Muss {name} erfassen und entweder {amount} (die Zeilensumme) oder {price} (den Einzelpreis, optional mit {qty}), nie beides. Beispiel: {name} x {qty} {price}"
+    },
+    "categories": {
+      "heading": "Kategorien",
+      "help": "Gib einen Kategorienamen ein und wähle ihn aus der Liste. Der Name wird im Profil gespeichert, und die Kategorie muss beim Speichern des Profils existieren.",
+      "categoryPlaceholder": "Keine Kategorie",
+      "defaultLabel": "Standardkategorie",
+      "defaultHelp": "Wird für Positionen verwendet, auf die keine Regel passt.",
+      "shippingLabel": "Versandkategorie",
+      "shippingHelp": "Die Kategorie der Versandzeile.",
+      "feesLabel": "Gebührenkategorie",
+      "feesHelp": "Die Kategorie der Gebührenzeile.",
+      "unknownCategory": "Es gibt keine Kategorie namens {name}. Wähle eine aus der Liste oder lege sie zuerst an.",
+      "rulesInJson": "Kategorieregeln nach Positionsname sind eine erweiterte Option: Füge sie der Profildefinition im JSON-Modus hinzu."
+    },
+    "mode": {
+      "label": "Bearbeitungsmodus",
+      "form": "Formular",
+      "json": "JSON",
+      "formUnavailable": "Diese Definition verwendet etwas, das das Formular nicht anzeigen kann: Einträge mit Beschriftung, mehrzeilige Positionen oder Schlüssel, für die es kein Feld gibt. Bearbeite sie als JSON.",
+      "jsonInvalid": "Das JSON ist noch nicht gültig, daher kann das Formular nicht angezeigt werden. Korrigiere es zuerst."
+    },
+    "json": {
+      "label": "Profildefinition (JSON)",
+      "help": "Dieselbe Definition, die das Formular erstellt. Der Server prüft sie beim Speichern, und der Test unten liest sie so, wie sie jetzt ist.",
+      "parseError": "Das ist kein gültiges JSON oder kein JSON-Objekt. Korrigiere es, um das Profil zu speichern oder zu testen."
+    },
+    "matching": {
+      "heading": "Zuordnung",
+      "help": "Wie die Bankbuchung gefunden wird, die eine E-Mail bezahlt hat. Die Strategien werden der Reihe nach versucht: Die erste, die genau eine Buchung übrig lässt, entscheidet, mehrere Buchungen sind mehrdeutig, und keine Buchung führt zur nächsten Strategie.",
+      "instruction": "Am besten ist eine Referenznummer aus der Beschreibung der Bankbuchung. Gibt es keine, werden Datum und Betrag verwendet. Standardmäßig werden die Strategien in dieser Reihenfolge versucht: Referenz (wenn das Profil Referenzmuster hat), Bestellnummer, Betrag und Empfänger, Betrag und Datum.",
+      "referenceLabel": "Referenzmuster",
+      "referenceHint": "Die Kennung, die der Shop oder das Zahlungsportal in die Bankbuchung einträgt, etwa ein Verwendungszweck oder ein Überweisungstitel. Muss {capture} erfassen.",
+      "strategiesLabel": "Strategien in der Reihenfolge, in der sie versucht werden",
+      "strategiesHelp": "Bestellnummer und Referenz suchen den Wert in der Beschreibung, im Zahlungsempfänger oder in der Referenznummer der Buchung. Betrag und Zahlungsempfänger braucht den Betrag plus einen Hinweis auf den Zahlungsempfänger. Betrag und Datum braucht nur den Betrag innerhalb des Zeitfensters. Mindestens eine Strategie muss aktiv bleiben.",
+      "strategyPosition": "{position}. {name}",
+      "moveUp": "{name} nach vorn verschieben",
+      "moveDown": "{name} nach hinten verschieben",
+      "strategies": {
+        "reference": "Referenz",
+        "orderId": "Bestellnummer",
+        "amount_payee": "Betrag und Zahlungsempfänger",
+        "amount_date": "Betrag und Datum"
+      },
+      "referenceNeeded": "Die Referenzstrategie ist aktiv, aber es gibt keine Referenzmuster, daher findet sie nichts.",
+      "referenceInLabel": "Referenz und Bestellnummer suchen in",
+      "referenceInHint": "Werte mit weniger als 4 Zeichen werden nie gesucht.",
+      "referenceIn": {
+        "description": "Beschreibung",
+        "payee": "Name des Zahlungsempfängers",
+        "referenceNumber": "Referenznummer"
+      },
+      "daysBeforeLabel": "Tage vor dem Kauf",
+      "daysAfterLabel": "Tage nach dem Kauf",
+      "daysHint": "Das Zeitfenster um das Kaufdatum. Standard {default}, höchstens {max}.",
+      "toleranceLabel": "Betragstoleranz",
+      "toleranceHint": "Wie weit der Bankbetrag von der Summe der E-Mail abweichen darf. Standard 0, höchstens {max}."
+    },
+    "proposal": {
+      "heading": "Vorschlag",
+      "tagLabel": "Den Buchungen, die dieses Profil kategorisiert, einen Tag hinzufügen",
+      "tagHelp": "Der Tag wird angelegt, wenn du keinen mit diesem Namen hast. Er wird im Vorschlag angezeigt, und es wird nichts geschrieben, bevor du den Vorschlag freigibst.",
+      "tagNameLabel": "Tag-Name",
+      "aiCategoriesLabel": "Die KI die Kategorie von Positionen wählen lassen, auf die keine Regel passt",
+      "aiCategoriesHelp": "Wenn eine Position auf keine Kategorieregel passt und es keine Standardkategorie gibt, wird die KI nach ihrer Kategorie aus deiner Kategorienliste gefragt. Die Wahl wird im Vorschlag als die der KI gekennzeichnet. Ist die Option aus, wird die KI nie gefragt."
+    },
+    "kind": {
+      "label": "Art des Profils",
+      "receipt": "Bestellbeleg",
+      "trade": "Wertpapierhandel",
+      "receiptHelp": "Liest eine Bestellbestätigung und findet die Banktransaktion, mit der sie bezahlt wurde.",
+      "tradeHelp": "Liest eine Handelsbestätigung des Brokers und schlägt die Anlagetransaktion vor, die sie meldet: einen Kauf, einen Verkauf, eine Bardividende oder eine reinvestierte Dividende."
+    },
+    "trade": {
+      "guardsHeading": "Welche E-Mails des Absenders es liest",
+      "guardsHelp": "Optional. Jedes Muster wird mit einer ganzen Zeile der E-Mail verglichen, ein Muster pro Zeile.",
+      "guards": {
+        "requireLine": "Erforderliche Zeilen",
+        "requireLineHint": "Das Profil liest eine E-Mail nur, wenn eine dieser Zeilen darin steht; sonst wird das nächste Profil des Absenders versucht.",
+        "skipIfLine": "Zeilen, die die E-Mail überspringen",
+        "skipIfLineHint": "Eine E-Mail mit einer dieser Zeilen wird beiseitegelegt, etwa eine stornierte Order.",
+        "waitIfLine": "Zeilen, die die E-Mail zurückhalten",
+        "waitIfLineHint": "Eine E-Mail mit einer dieser Zeilen wird zurückgehalten und später erneut gelesen, etwa eine Teilausführung."
+      },
+      "fieldsHeading": "Der Handel",
+      "fieldsHelp": "Die Handelsart, das Kürzel und eine Summe oder ein Preis sind Pflicht, ebenso die Stückzahl außer bei einer Bardividende. Die Handelsart wird aus ihrem Text gelesen: Dividend oder Distribution ist eine Bardividende, Reinvest oder DRIP eine reinvestierte Dividende, sonst Buy oder Sell. Jedes Feld nimmt Muster auf, eines pro Zeile, in Reihenfolge versucht.",
+      "fields": {
+        "tradeAction": "Muster für die Handelsart",
+        "tradeSymbol": "Muster für das Kürzel",
+        "tradeQuantity": "Muster für die Stückzahl",
+        "tradeTotal": "Muster für die Handelssumme",
+        "tradePrice": "Muster für den Preis pro Anteil",
+        "tradeCommission": "Muster für die Provision",
+        "tradeDate": "Muster für das Handelsdatum",
+        "tradeAccount": "Muster für das Konto"
+      },
+      "fieldHint": "Muss {capture} erfassen. Beispiel: {example}",
+      "amountsHelp": "Die Summe ist der ausgeführte Betrag, bei einem Kauf oder einer reinvestierten Dividende mit Provision; bei einer Bardividende ist sie der ausgezahlte Betrag. Der Preis (bei einer Dividende der Betrag je Anteil) dient zur Gegenprüfung und ergibt mit der Stückzahl die Summe, wenn die E-Mail keine nennt. Ein Betrag, der seine Währung nennt (US$, C$, USD, €), legt auch die Währung des Handels fest.",
+      "rulesHeading": "Kontoregeln",
+      "rulesHelp": "Auf welches Konto der Handel gebucht wird. Die Regeln werden der Reihe nach mit dem Kontotext verglichen, den die Kontomuster lesen, und die erste passende gewinnt; {star} steht für beliebigen Text. Eine Regel mit Währung gilt nur für einen Handel in dieser Währung, daher sind zwei Konten, die der Broker gleich schreibt, etwa ein RRSP in CAD und eines in USD, beide als RRSP angezeigt, zwei Regeln mit demselben Text und verschiedenen Währungen. Nennt die E-Mail keinen Kontotext, kann nur eine Regel mit dem Text {star} gelten. Das Standardkonto nimmt den Rest.",
+      "currencyOrder": "Die Währung des Handels wird in dieser Reihenfolge bestimmt: aus dem Betrag selbst, wenn er eine nennt (US$, C$, USD, €), dann aus der ersten Währungsmarkierung unten, die zu einer Zeile der E-Mail passt, dann aus der Währung deines Wertpapiers für das Kürzel. Eine Regel mit Währung rät nie: Wenn keine der drei die Währung verrät, wartet die E-Mail auf dich, statt auf eines der Konten gebucht zu werden.",
+      "ruleMatchLabel": "Kontotext der Regel {rule}",
+      "ruleMatchPlaceholder": "Kontotext, etwa RRSP",
+      "ruleCurrencyLabel": "Währung der Regel {rule}",
+      "ruleAccountLabel": "Konto der Regel {rule}",
+      "ruleMoveUp": "Regel {rule} nach oben",
+      "ruleMoveDown": "Regel {rule} nach unten",
+      "ruleRemove": "Regel {rule} entfernen",
+      "ruleAdd": "Kontoregel hinzufügen",
+      "rulesMax": "Höchstens {max} Regeln.",
+      "rulesWithoutAccountText": "Es gibt keine Kontomuster, daher werden die Regeln mit leerem Text verglichen: Nur eine Regel mit dem Text {star} kann gelten.",
+      "anyCurrency": "Jede Währung",
+      "baseCurrency": "{code} (deine Basiswährung)",
+      "currencyPlaceholder": "Währung wählen",
+      "accountPlaceholder": "Konto wählen",
+      "accountOption": "{name} ({currency})",
+      "accountNotTradableOption": "{name} (kein offenes Depotkonto)",
+      "accountUnknownOption": "Ein Konto, das nicht in deiner Liste ist",
+      "accountNotTradable": "Auf dieses Konto kann kein Handel gebucht werden: Es ist geschlossen, ein Verrechnungskonto oder kein Anlagekonto.",
+      "accountUnknown": "Dieses Konto ist nicht in deiner Liste: Es wurde vielleicht gelöscht. Wähle ein anderes.",
+      "defaultAccountLabel": "Standardkonto",
+      "defaultAccountNone": "Kein Standardkonto",
+      "defaultAccountHint": "Das Konto, wenn keine Regel gilt. Ohne eines wartet eine E-Mail, für die keine Regel gilt, auf dich.",
+      "markersHeading": "Währungsmarkierungen",
+      "markersHelp": "Text, der die Währung des Handels nennt, wenn die Beträge es nicht tun, etwa eine Zeile, dass die Beträge in US-Dollar sind, neben einem bloßen $. Jede Markierung wird mit jeder Zeile der E-Mail verglichen ({star} steht für beliebigen Text), und die erste passende Markierung in der Reihenfolge nennt die Währung. Markierungen werden nur genutzt, wenn der Betrag keine Währung nennt.",
+      "markerMatchLabel": "Text der Markierung {marker}",
+      "markerMatchPlaceholder": "Etwa *U.S. dollars*",
+      "markerCurrencyLabel": "Währung der Markierung {marker}",
+      "markerMoveUp": "Markierung {marker} nach oben",
+      "markerMoveDown": "Markierung {marker} nach unten",
+      "markerRemove": "Markierung {marker} entfernen",
+      "markerAdd": "Währungsmarkierung hinzufügen",
+      "markersMax": "Höchstens {max} Markierungen."
+    },
+    "discard": {
+      "label": "Passende E-Mails",
+      "read": "Auslesen",
+      "ignore": "Ignorieren",
+      "delete": "Löschen",
+      "readHelp": "Das Profil liest jede passende E-Mail mit den Mustern unten aus.",
+      "ignoreHelp": "Jede E-Mail, die zu diesem Profil passt, wird beim Eintreffen ignoriert: Sie schlägt nichts vor. Für Absender, mit deren E-Mails du nie etwas zu tun haben willst.",
+      "deleteHelp": "Jede E-Mail, die zu diesem Profil passt, wird beim Eintreffen aus Monize gelöscht (in deinem Postfach bleibt sie). Eine gelöschte E-Mail lässt sich nicht zurückholen.",
+      "noReading": "Dieses Profil liest nichts aus und braucht daher keine Muster, Kategorien oder Zuordnung. Die Absenderdomains und Betreffwörter oben bestimmen, welche E-Mails es übernimmt."
+    }
+  },
+  "problems": {
+    "heading": "Die Profildefinition ist nicht gültig:",
+    "item": "{where}: {problem}",
+    "paths": {
+      "definition": "Die Definition",
+      "line": "{field}, Zeile {line}",
+      "rule": "Kategorieregel {rule}, {part}",
+      "entryPart": "{field}, Eintrag {line}, {part}",
+      "skipLine": "Zu überspringende Zeile {line}",
+      "recordStep": "Datensatzschritt {step}",
+      "recordStepPart": "Datensatzschritt {step}, {part}",
+      "recordAlternative": "Datensatzschritt {step}, Alternative {alternative}",
+      "accountRule": "Kontoregel {rule}",
+      "accountRulePart": "Kontoregel {rule}, {part}",
+      "currencyMarker": "Währungsmarkierung {marker}",
+      "currencyMarkerPart": "Währungsmarkierung {marker}, {part}"
+    },
+    "fields": {
+      "orderId": "Muster für die Bestellnummer",
+      "total": "Muster für die Summe",
+      "shipping": "Muster für die Versandkosten",
+      "discount": "Muster für den Rabatt",
+      "itemPatterns": "Positionsmuster",
+      "startAfter": "Positionen beginnen nach",
+      "stopAt": "Positionen enden bei",
+      "items": "Positionen",
+      "categoryRules": "Kategorieregeln",
+      "rulePattern": "Muster",
+      "ruleCategory": "Kategorie",
+      "defaultCategory": "Standardkategorie",
+      "shippingCategory": "Versandkategorie",
+      "feesCategory": "Gebührenkategorie",
+      "balanceTolerance": "Saldotoleranz",
+      "fees": "Gebührenmuster",
+      "skipLines": "Zu überspringende Zeilen",
+      "record": "Datensatz",
+      "label": "Bezeichnung",
+      "value": "Wert",
+      "within": "innerhalb",
+      "line": "Zeile",
+      "optional": "optional",
+      "paid": "Muster für den bezahlten Betrag",
+      "payee": "Muster für den Händler",
+      "requireLine": "Erforderliche Zeilen",
+      "skipIfLine": "Zeilen, die die E-Mail überspringen",
+      "waitIfLine": "Zeilen, die die E-Mail zurückhalten",
+      "source": "Zeilenquelle",
+      "single": "Einzelne Position",
+      "singleName": "Name der einzelnen Position",
+      "joinWrapped": "Umgebrochene Zeilen verbinden",
+      "ruleField": "Feld",
+      "reference": "Referenzmuster",
+      "match": "Der Abschnitt „Zuordnung“",
+      "matchBy": "Zuordnungsstrategien",
+      "matchReferenceIn": "Felder, in denen nach der Referenz gesucht wird",
+      "matchDaysBefore": "Tage vor dem Kauf",
+      "matchDaysAfter": "Tage nach dem Kauf",
+      "matchTolerance": "Betragstoleranz",
+      "tag": "Tag",
+      "aiCategories": "KI-Kategorien",
+      "trade": "Der Handelsabschnitt",
+      "tradeAction": "Muster für die Handelsart",
+      "tradeSymbol": "Muster für das Kürzel",
+      "tradeQuantity": "Muster für die Stückzahl",
+      "tradeTotal": "Muster für die Handelssumme",
+      "tradePrice": "Muster für den Preis pro Anteil",
+      "tradeCommission": "Muster für die Provision",
+      "tradeDate": "Muster für das Handelsdatum",
+      "tradeAccount": "Muster für das Konto",
+      "accountRules": "Kontoregeln",
+      "currencyMarkers": "Währungsmarkierungen",
+      "defaultAccount": "Standardkonto",
+      "ruleAccount": "Konto",
+      "ruleCurrency": "Währung",
+      "role": "Profilrolle",
+      "link": "Der Abschnitt „link“",
+      "linkDaysBefore": "Tage vor der Rückzahlung",
+      "linkFromDomains": "Absenderdomains der Kauf-E-Mails",
+      "linkKey": "Muster für den Link-Schlüssel"
+    },
+    "codes": {
+      "not_object": "ist keine gültige Definition",
+      "unknown_key": "ist nichts, was ein Profil enthalten kann",
+      "unsupported_version": "ist eine Version, die dieser Server nicht liest (verwende Version 2)",
+      "invalid_type": "hat die falsche Art von Wert",
+      "empty": "darf nicht leer sein",
+      "too_many": "hat zu viele Einträge (höchstens {max})",
+      "too_long": "ist zu lang (höchstens {max} Zeichen)",
+      "control_character": "enthält ein Steuerzeichen",
+      "malformed_capture": "enthält eine ungültige Erfassung in geschweiften Klammern",
+      "too_many_captures": "enthält zu viele Erfassungen",
+      "duplicate_capture": "verwendet denselben Erfassungsnamen zweimal",
+      "capture_not_allowed": "verwendet einen Erfassungsnamen, den dieses Feld nicht akzeptiert",
+      "capture_missing": "fehlt eine Erfassung, die dieses Feld braucht",
+      "capture_conflict": "erfasst sowohl die Zeilensumme als auch den Einzelpreis. Verwende nur eines davon.",
+      "invalid_uuid": "ist keine gültige Kategorie",
+      "out_of_range": "muss eine ganze Zahl von 1 bis {max} sein",
+      "items_patterns_and_record": "enthält sowohl Muster als auch einen Datensatz. Verwende nur eines davon.",
+      "items_shape_missing": "braucht entweder Muster oder einen Datensatz",
+      "skip_lines_need_record": "kann nur zusammen mit einem Datensatz verwendet werden",
+      "record_name_missing": "muss {capture} in einem seiner Schritte erfassen",
+      "items_single_conflict": "enthält eine einzelne Position neben Mustern oder einem Datensatz. Verwende nur eines davon.",
+      "join_wrapped_needs_patterns": "funktioniert nur mit Positionsmustern",
+      "invalid_value": "hat einen Wert, den dieses Feld nicht akzeptiert",
+      "duplicate_entry": "führt denselben Eintrag zweimal auf",
+      "reference_field_missing": "braucht Referenzmuster (die Referenzstrategie ist aktiv)",
+      "out_of_range_days": "muss eine ganze Zahl von 0 bis {max} sein",
+      "out_of_range_tolerance": "muss ein Betrag von 0,00 bis {max} sein",
+      "trade_conflict": "darf nicht in einem Profil für Wertpapierhandel stehen, das nur den Handel liest",
+      "trade_amount_missing": "braucht Muster für die Summe oder den Preis (mindestens eines von beiden)",
+      "trade_account_missing": "braucht ein Standardkonto oder Kontoregeln",
+      "invalid_currency": "ist kein dreistelliger Währungscode wie USD",
+      "too_many_lines": "erstreckt sich über zu viele Zeilen (höchstens {max})",
+      "line_break_not_allowed": "wird mit einem einzelnen Text verglichen (einem Artikelnamen, dem Händler oder einem Konto) und kann sich daher nicht über mehrere Zeilen erstrecken",
+      "invalid_uuid_account": "ist kein gültiges Konto",
+      "role_invalid": "muss standalone, component oder settlement sein",
+      "link_key_requires_component": "kann nur verwendet werden, wenn die Rolle component ist",
+      "link_key_missing": "wird benötigt, wenn die Rolle component ist",
+      "link_capture_requires_settlement": "verwendet eine Erfassung von link oder instalment, die nur ein settlement-Profil akzeptiert",
+      "link_requires_settlement": "kann nur verwendet werden, wenn die Rolle settlement ist",
+      "link_domain_invalid": "ist keine gültige Absenderdomain (höchstens {max} Domains)",
+      "link_days_invalid": "muss eine ganze Zahl von 0 bis {max} sein",
+      "role_trade_conflict": "darf in einem Profil für Wertpapierhandel, das nur den Handel liest, nicht component oder settlement sein"
+    }
+  },
+  "test": {
+    "heading": "Mit einer gespeicherten E-Mail testen",
+    "help": "Liest eine gespeicherte E-Mail mit den obigen Mustern, gespeichert oder nicht, und zeigt, was gefunden würde und welche Buchung dazu passen würde. Es wird nichts geschrieben.",
+    "loadFailed": "Die gespeicherten E-Mails konnten nicht geladen werden, daher gibt es noch nichts zum Testen.",
+    "noReceipts": "Noch keine E-Mails gespeichert. Rufe zuerst das Postfach ab.",
+    "receiptLabel": "E-Mail",
+    "choosePlaceholder": "E-Mail auswählen",
+    "receiptOption": "{subject} von {sender} ({date})",
+    "button": "Testen",
+    "failed": "Der Test ist fehlgeschlagen",
+    "matchHeading": "Buchungszuordnung",
+    "matched": "Würde die Buchung vom {date} über {amount} ({payee}) verknüpfen, gefunden über {how}.",
+    "matchKinds": {
+      "order_id": "Bestellnummer",
+      "amount_payee": "Betrag und Zahlungsempfänger",
+      "amount_only": "Betrag",
+      "manual": "deine Auswahl",
+      "reference": "Referenz",
+      "amount_date": "Betrag und Datum"
+    },
+    "noPayee": "kein Zahlungsempfänger",
+    "ambiguous": "{count, plural, one {# Buchung passt} other {# Buchungen passen}} gleich gut, daher würde keine verknüpft, bis du eine auswählst.",
+    "unmatched": "Keine Buchung passt, geprüft wurden {count, plural, one {# Kandidat} other {# Kandidaten}}.",
+    "jsonInvalid": "Das JSON ist nicht gültig, daher gibt es noch nichts zu testen.",
+    "component": {
+      "heading": "Kauf-E-Mail (component): Link-Schlüssel {linkKey}",
+      "noLinkKey": "Kauf-E-Mail (component): Es wurde kein Link-Schlüssel gelesen, daher kann keine Rückzahlungs-E-Mail sie finden.",
+      "noneWaiting": "Keine Rückzahlungs-E-Mail wartet auf diesen Link-Schlüssel.",
+      "waiting": "{count, plural, one {# Rückzahlungs-E-Mail wartet} other {# Rückzahlungs-E-Mails warten}} auf diesen Link-Schlüssel:",
+      "settlement": "{subject} ({date})"
+    },
+    "outcome": {
+      "not_applicable": "Dieses Profil würde diese E-Mail nicht lesen: Keine seiner erforderlichen Zeilen kommt darin vor, daher würde das nächste Profil für den Absender versucht.",
+      "skip_line": "Dieses Profil würde diese E-Mail beiseitelegen: Sie enthält eine Zeile, bei der es überspringt.",
+      "wait_line": "Dieses Profil würde diese E-Mail zurückhalten: Eine Zeile besagt, dass die Bestellung nicht endgültig ist, daher wird sie später erneut gelesen.",
+      "discard_ignore": "Dieses Profil würde diese E-Mail ignorieren: Es ignoriert jede passende E-Mail.",
+      "discard_delete": "Dieses Profil würde diese E-Mail löschen: Es löscht jede passende E-Mail.",
+      "no_html": "Dieses Profil liest den HTML-Teil der E-Mail, und diese E-Mail hat keinen, daher würde sie als nicht lesbar (kein HTML) markiert."
+    },
+    "matchedBy": {
+      "heading": "Gefunden über",
+      "none": "Aus dieser E-Mail wurde kein Wert gelesen.",
+      "fields": {
+        "orderId": "Bestellnummer",
+        "total": "Summe",
+        "paid": "Bezahlt",
+        "shipping": "Versand",
+        "discount": "Rabatt",
+        "payee": "Händler",
+        "requireLine": "Erforderliche Zeile",
+        "skipIfLine": "Überspringzeile",
+        "waitIfLine": "Zurückhaltezeile",
+        "reference": "Referenz",
+        "linkKey": "Link-Schlüssel",
+        "action": "Handelsart",
+        "symbol": "Kürzel",
+        "quantity": "Anteile",
+        "price": "Preis",
+        "commission": "Provision",
+        "date": "Datum",
+        "account": "Konto",
+        "currency": "Währungsmarkierung"
+      },
+      "entryLine": "Eintrag {entry} ({pattern}), Zeile {line}: {text}",
+      "entrySubject": "Eintrag {entry} ({pattern}), der Betreff: {text}",
+      "entryLines": "Eintrag {entry} ({pattern}), Zeilen {first} bis {last}:",
+      "blockLine": "Zeile {line}: {text}",
+      "labelled": "Eintrag {entry}, Beschriftung {label} in Zeile {labelLine} ({labelText}), Wert {pattern} in Zeile {line}: {text}",
+      "item": "Position {number}",
+      "itemLine": "{pattern}, Zeile {line}: {text}"
+    },
+    "trace": {
+      "heading": "Was die Zuordnung angesehen hat",
+      "window": "Buchungen vom {from} bis {to} ({before} Tage vor, {after} Tage nach dem Kauf): {considered, plural, one {# berücksichtigt} other {# berücksichtigt}}.",
+      "tolerance": "Der Betrag darf um {amount} abweichen.",
+      "attempt": "{position}. {name}",
+      "kept": "{count, plural, =0 {keine übrig gelassen} one {# Buchung übrig gelassen} other {# Buchungen übrig gelassen}}",
+      "decided": "Entschieden",
+      "transaction": "{date}, {amount}, {payee}",
+      "noPayee": "kein Zahlungsempfänger",
+      "strategies": {
+        "reference": "Referenz",
+        "orderId": "Bestellnummer",
+        "amount_payee": "Betrag und Zahlungsempfänger",
+        "amount_date": "Betrag und Datum"
+      }
+    }
+  },
+  "parsed": {
+    "notFound": "Nicht gefunden",
+    "noCategory": "Keine Kategorie",
+    "unknownCategory": "Unbekannte Kategorie",
+    "categoryUnavailable": "Kategorien nicht geladen",
+    "noItems": "Es wurden keine Positionen gelesen.",
+    "orderId": "Bestellnummer",
+    "total": "Summe",
+    "shipping": "Versand",
+    "discount": "Rabatt",
+    "columns": {
+      "item": "Position",
+      "qty": "Menge",
+      "amount": "Betrag",
+      "category": "Kategorie"
+    },
+    "complete": "Vollständig gelesen",
+    "incomplete": "Nicht vollständig gelesen",
+    "reasons": {
+      "no_total": "Die E-Mail nennt keine Summe.",
+      "no_items": "Es wurden keine Positionen gefunden.",
+      "items_unbalanced": "Die Positionen ergeben nicht die Summe.",
+      "items_uncategorized": "Einige Positionen haben keine Kategorie.",
+      "shipping_uncategorized": "Die Versandzeile hat keine Kategorie.",
+      "item_amount_missing": "Eine Position hat keinen Betrag, und die E-Mail enthält keine einzelne Summe, die ihr zugewiesen werden könnte."
+    },
+    "readByAi": "Von der KI gelesen",
+    "readFromStructuredData": "Aus strukturierten Daten gelesen",
+    "paid": "Bezahlt",
+    "payee": "Händler",
+    "reference": "Referenz",
+    "categoryByAi": "KI",
+    "linkKey": "Link-Schlüssel",
+    "kinds": {
+      "shipping": "Versand",
+      "fee": "Gebühr",
+      "discount": "Rabatt"
+    },
+    "parts": {
+      "heading": "Teile",
+      "part": "Teil",
+      "link": "Verknüpfung",
+      "outcome": "Ergebnis",
+      "noLink": "Keine Verknüpfung",
+      "component": "Kauf-E-Mail: {subject} ({date}).",
+      "componentProfile": "Profil: {name}.",
+      "componentNet": "Kaufsumme: {amount}.",
+      "taken": "Bereits verwendet: {amount}."
+    },
+    "linkOutcomes": {
+      "no_link": "Der Teil hat keine Verknüpfung und bleibt daher eine Zeile.",
+      "not_found": "Für diese Verknüpfung wurde keine Kauf-E-Mail gefunden, daher bleibt der Teil eine Zeile.",
+      "component_incomplete": "Die Kauf-E-Mail wurde nicht vollständig gelesen, daher bleibt der Teil eine Zeile.",
+      "component_used": "Andere Rückzahlungen haben den ganzen Kauf bereits verbraucht, daher bleibt der Teil eine Zeile.",
+      "joined": "Durch die Zeilen der Kauf-E-Mail ersetzt.",
+      "scaled": "Durch die Zeilen der Kauf-E-Mail ersetzt, auf diesen Teil skaliert.",
+      "amount_exceeds": "Der Teil ist größer als der Rest des Kaufs, daher bleibt er eine Zeile."
+    }
+  },
+  "state": {
+    "pending": "Wartet auf das Einlesen",
+    "skipped": "Übersprungen",
+    "no_parser": "Kein Profile",
+    "parse_failed": "Konnte nicht gelesen werden",
+    "unmatched": "Keine Buchung gefunden",
+    "ambiguous": "Mehrere Buchungen passen",
+    "review_conflict": "Andere Anfrage offen",
+    "ignored": "Ignoriert",
+    "proposed": "Wartet auf Freigabe",
+    "applied": "Angewendet",
+    "dismissed": "Verworfen",
+    "expired": "Abgelaufen",
+    "pending_ai": "Wartet auf die KI",
+    "request_missing": "Anfrage fehlt",
+    "component": "Wartet auf die Rückzahlung"
+  },
+  "receipts": {
+    "loading": "E-Mails werden geladen",
+    "links": {
+      "reviewInbox": "KI-Prüfungseingang öffnen",
+      "settings": "Postfach-Einstellungen"
+    },
+    "filter": {
+      "label": "Nach Status filtern",
+      "option": "{label} ({count})",
+      "all": "Alle",
+      "pending": "Wartet auf das Einlesen",
+      "skipped": "Übersprungen",
+      "no_parser": "Kein Profile",
+      "parse_failed": "Konnte nicht gelesen werden",
+      "unmatched": "Keine Buchung gefunden",
+      "ambiguous": "Mehrere Buchungen passen",
+      "review_conflict": "Andere Anfrage offen",
+      "review": "In Prüfung",
+      "ignored": "Ignoriert",
+      "component": "Wartet auf Rückzahlung"
+    },
+    "search": {
+      "label": "E-Mails durchsuchen",
+      "placeholder": "Nach Betreff, Absender oder Inhalt suchen...",
+      "in": "Suchen in",
+      "fields": {
+        "all": "Alle Felder",
+        "subject": "Betreff",
+        "sender": "Absender",
+        "body": "Inhalt"
+      },
+      "from": "Von Datum",
+      "to": "Bis Datum",
+      "rangeBackwards": "Das Enddatum liegt vor dem Startdatum. Der Zeitraum wird nicht angewendet.",
+      "clear": "Suche löschen"
+    },
+    "domainFilter": {
+      "label": "Absenderdomain",
+      "all": "Alle Absender",
+      "option": "{domain} ({count})",
+      "unknown": "Die Absenderzahlen konnten nicht geladen werden.",
+      "help": "E-Mails von {domain} und ihren Subdomains werden angezeigt. Wähle mehrere davon aus, um ein Profil für den Absender zu entwerfen.",
+      "waitingForAi": "Wartet auf KI"
+    },
+    "columns": {
+      "select": "Auswählen",
+      "date": "Datum",
+      "email": "E-Mail",
+      "transaction": "Buchung",
+      "state": "Status",
+      "actions": "Aktionen"
+    },
+    "transactionSummary": "{date}, {amount}, {payee}",
+    "noPayee": "kein Zahlungsempfänger",
+    "noTransaction": "Noch keine",
+    "error": {
+      "title": "Die E-Mails konnten nicht geladen werden",
+      "body": "Die Anfrage ist fehlgeschlagen, daher ist noch nichts über deine E-Mails bekannt. Versuche es erneut.",
+      "retry": "Erneut versuchen"
+    },
+    "empty": {
+      "title": "Keine E-Mails",
+      "body": "Bestellbestätigungen erscheinen hier, sobald das Postfach gelesen wurde.",
+      "filteredTitle": "Keine E-Mails mit diesem Status",
+      "filteredBody": "Wähle einen anderen Status, um die übrigen zu sehen.",
+      "searchTitle": "Keine E-Mail entspricht der Suche",
+      "searchBody": "Ändern Sie die Wörter oder die Daten, oder löschen Sie die Suche, um alle E-Mails zu sehen.",
+      "noMailboxBody": "Es ist noch kein Postfach verbunden. Verbinde eines, um Bestellbestätigungen zu lesen.",
+      "connectButton": "Postfach verbinden"
+    },
+    "actions": {
+      "view": "Anzeigen",
+      "reprocess": "Erneut verarbeiten",
+      "link": "Buchung auswählen",
+      "recognizeAi": "Mit KI erkennen",
+      "recognizeTradeAi": "Mit KI als Handel erkennen",
+      "approve": "Freigeben",
+      "draftParser": "Profil mit KI entwerfen",
+      "createParser": "Profil erstellen",
+      "ignore": "Ignorieren",
+      "reviewTrade": "Im Eingang prüfen"
+    },
+    "toasts": {
+      "approved": "Vorschlag freigegeben",
+      "approveFailed": "Der Vorschlag konnte nicht freigegeben werden",
+      "reprocessed": "E-Mail erneut verarbeitet",
+      "reprocessFailed": "Die E-Mail konnte nicht erneut verarbeitet werden",
+      "ignored": "E-Mail ignoriert",
+      "ignoreFailed": "Die E-Mail konnte nicht ignoriert werden",
+      "deleted": "E-Mail gelöscht",
+      "deleteFailed": "Die E-Mail konnte nicht gelöscht werden"
+    },
+    "ignoreDialog": {
+      "title": "Diese E-Mail ignorieren?",
+      "message": "Die E-Mail {subject} schlägt nichts vor, und ihre offene Prüfanfrage wird verworfen.",
+      "confirm": "Ignorieren"
+    },
+    "deleteDialog": {
+      "title": "Diese E-Mail löschen?",
+      "message": "Die gespeicherte E-Mail {subject} wird gelöscht und ihre offene Prüfanfrage verworfen. Die Nachricht im Postfach bleibt unberührt, und ein späterer Abruf holt sie nicht erneut."
+    },
+    "selection": {
+      "label": "Ausgewählte E-Mails",
+      "select": "{subject} auswählen",
+      "selectAll": "Alle E-Mails dieser Liste auswählen",
+      "count": "{count, plural, one {# E-Mail ausgewählt} other {# E-Mails ausgewählt}}",
+      "draftButton": "Profil mit KI entwerfen ({count})",
+      "clear": "Auswahl aufheben",
+      "deleteButton": "Löschen ({count})",
+      "ignoreButton": "Ignorieren ({count})",
+      "pageSelected": "Alle {count} E-Mails auf dieser Seite sind ausgewählt.",
+      "selectAllMatching": "Alle {total} E-Mails auswählen, die zu diesem Filter passen.",
+      "allMatchingSelected": "Alle {total} E-Mails, die zu diesem Filter passen, sind ausgewählt.",
+      "hiddenSelected": "{hidden, plural, one {# der ausgewählten E-Mails wird in dieser Liste nicht angezeigt.} other {# der ausgewählten E-Mails werden in dieser Liste nicht angezeigt.}}",
+      "reprocessButton": "Erneut verarbeiten ({count})",
+      "restoreButton": "Ignorierte wiederherstellen ({count})",
+      "restoreButtonAll": "Ignorierte wiederherstellen",
+      "approveButton": "Vorschläge genehmigen ({count})",
+      "approveButtonAll": "Vorschläge genehmigen",
+      "progress": "Verarbeitet: {processed}, übrig: {remaining}",
+      "progressStarting": "Start",
+      "stop": "Stopp",
+      "narrowedSelected": "{total} E-Mails sind ausgewählt: alle E-Mails dieses Filters, außer den unten herausgenommenen.",
+      "deselect": {
+        "label": "Abwählen nach",
+        "state": "Status: {state}",
+        "sender": "Absender: {domain}",
+        "before": "Empfangen vor einem Tag",
+        "after": "Empfangen nach einem Tag",
+        "beforeLabel": "E-Mails abwählen, die vor diesem Tag empfangen wurden",
+        "afterLabel": "E-Mails abwählen, die nach diesem Tag empfangen wurden",
+        "apply": "Abwählen",
+        "cancel": "Abbrechen"
+      },
+      "exclusion": {
+        "label": "Aus der Auswahl herausgenommen",
+        "state": "Nicht im Status {state}",
+        "sender": "Nicht von {domain}",
+        "from": "Empfangen am {date} oder später",
+        "to": "Empfangen am {date} oder früher",
+        "remove": "Zurücknehmen: {label}"
+      },
+      "draftBlocked": {
+        "skipped": "Eine E-Mail, die nicht gelesen werden konnte, hat keinen Text für ein Profil. Entferne sie aus der Auswahl.",
+        "allMatching": "Ein Profil wird aus E-Mails erstellt, die du selbst auswählst, höchstens {max}. Hebe diese Auswahl auf und wähle bis zu {max} E-Mails aus.",
+        "mixedKinds": "Die ausgewählten E-Mails mischen Handelsbestätigungen und Bestell-E-Mails. Ein Profil liest nur eine Art, wähle also nur Handelsbestätigungen oder nur Bestell-E-Mails.",
+        "tooManyPerDomain": "Von einem Absender können höchstens {perDomain} E-Mails verwendet werden. Wähle von jedem Absender ({domains}) {perDomain} oder weniger E-Mails.",
+        "tooManyDomains": "Höchstens {maxDomains} Absender können zusammen verwendet werden ({domains}). Wähle E-Mails von {maxDomains} Absendern oder weniger.",
+        "tradeOneDomain": "Ein Trade-Profil liest die E-Mails eines Absenders ({domains}). Wähle Trade-Bestätigungen von einem Absender."
+      }
+    },
+    "pager": {
+      "itemName": "E-Mails",
+      "total": "{count, plural, one {# E-Mail} other {# E-Mails}}",
+      "page": "Seite {page}"
+    },
+    "draft": {
+      "failed": "Das Entwerfen eines Profils konnte nicht gestartet werden",
+      "queued": "In die Warteschlange gestellt: Die Anfrage wartet im KI-Prüfungseingang auf einen Agenten. Derzeit steht kein Assistent zur Verfügung, der antworten kann.",
+      "handoffFailed": "Die Anfrage ist in der Warteschlange, aber die E-Mails konnten nicht im Chat geöffnet werden. Sie wartet im KI-Prüfungseingang auf einen Agenten.",
+      "inboxLink": "KI-Prüfungseingang öffnen",
+      "opened": "Der Chat wurde mit den angehängten E-Mails geöffnet. Lies die Nachricht und drücke auf Senden.",
+      "chatPrompt": "Erstelle einen Profile für E-Mail-Belege für {count, plural, one {diese Bestell-E-Mail} other {diese # Bestell-E-Mails}} von {domain}. Übernimm die KI-Prüfanfrage {requestId}, teste deinen Profile mit dem Tool email_receipt_profiles an jeder angehängten E-Mail, korrigiere ihn, bis jede vollständig gelesen wird, und speichere ihn dann als Entwurf für die Anfrage {requestId}.",
+      "mixedKinds": "Die ausgewählten E-Mails mischen Handelsbestätigungen und Bestell-E-Mails. Ein Profil liest nur eine Art, wähle also nur Handelsbestätigungen oder nur Bestell-E-Mails.",
+      "chatPromptTrade": "Erstelle ein Handelsprofil für {count, plural, one {diese Handelsbestätigung} other {diese # Handelsbestätigungen}} von {domain}. Übernimm die KI-Prüfanfrage {requestId}, teste dein Profil mit dem Tool email_receipt_parsers an jeder angehängten E-Mail, korrigiere es, bis jede einen vollständigen Handel ergibt, und speichere es dann als Entwurf für die Anfrage {requestId}."
+    },
+    "tradeBadge": "Handel",
+    "bulkDialog": {
+      "delete": {
+        "title": "E-Mails löschen?",
+        "message": "{count, plural, one {# E-Mail löschen} other {# E-Mails löschen}}{scope, select, both { von {domain} im Status {status}} domain { von {domain}} status { im Status {status}} other {}}? Das kann nicht rückgängig gemacht werden. Wähle stattdessen „Ignorieren“, um die E-Mails zu behalten und zu verhindern, dass sie etwas vorschlagen. E-Mails, die mit einer Transaktion verknüpft sind, bleiben erhalten."
+      },
+      "ignore": {
+        "title": "E-Mails ignorieren?",
+        "message": "{count, plural, one {# E-Mail ignorieren} other {# E-Mails ignorieren}}{scope, select, both { von {domain} im Status {status}} domain { von {domain}} status { im Status {status}} other {}}? Sie schlagen dann nichts mehr vor, und ihre offenen Prüfanfragen werden verworfen. E-Mails, die mit einer Transaktion verknüpft sind, bleiben unverändert.",
+        "confirm": "Ignorieren"
+      },
+      "countChanged": "Die Anzahl der passenden E-Mails ist jetzt {count}. Es wurde nichts geändert. Prüfe die Zahl und bestätige erneut.",
+      "approve": {
+        "title": "Vorschläge genehmigen?",
+        "message": "{count, plural, one {# Vorschlag genehmigen} other {# Vorschläge genehmigen}}? Jeder wird so angewendet wie mit der Schaltfläche Bestätigen im KI-Prüfeingang.",
+        "trades": "{count, plural, one {# Trade-E-Mail wird ausgelassen. Genehmigen Sie sie auf ihrer Karte im KI-Prüfeingang.} other {# Trade-E-Mails werden ausgelassen. Genehmigen Sie sie auf ihren Karten im KI-Prüfeingang.}}",
+        "confirm": "Genehmigen"
+      },
+      "searchNote": "Nur die E-Mails, die der Suche entsprechen, sind enthalten.",
+      "narrowedNote": "E-Mails, die aus der Auswahl herausgenommen wurden, bleiben unverändert."
+    },
+    "bulk": {
+      "result": {
+        "deleted": "{count, plural, one {# E-Mail gelöscht.} other {# E-Mails gelöscht.}}",
+        "ignored": "{count, plural, one {# E-Mail ignoriert.} other {# E-Mails ignoriert.}}",
+        "unchanged": "{count, plural, one {# E-Mail war bereits ignoriert.} other {# E-Mails waren bereits ignoriert.}}",
+        "notIgnorable": "{count, plural, one {# E-Mail konnte nicht ignoriert werden: Sie konnte nicht gelesen werden, oder ihr Vorschlag wurde bereits angewendet.} other {# E-Mails konnten nicht ignoriert werden: Sie konnten nicht gelesen werden, oder ihre Vorschläge wurden bereits angewendet.}}",
+        "skippedLinked": "{count, plural, one {# E-Mail, die mit einer Transaktion verknüpft ist, wurde behalten.} other {# E-Mails, die mit einer Transaktion verknüpft sind, wurden behalten.}}",
+        "reprocessed": "{count, plural, one {# E-Mail erneut verarbeitet.} other {# E-Mails erneut verarbeitet.}}",
+        "restored": "{count, plural, one {# ignorierte E-Mail erneut gelesen.} other {# ignorierte E-Mails erneut gelesen.}}",
+        "reprocessFailed": "{count, plural, one {# E-Mail fehlgeschlagen.} other {# E-Mails fehlgeschlagen.}}",
+        "stopped": "{count, plural, one {Gestoppt. # E-Mail blieb unverarbeitet.} other {Gestoppt. # E-Mails blieben unverarbeitet.}}",
+        "approved": "{count, plural, one {# Vorschlag genehmigt.} other {# Vorschläge genehmigt.}}",
+        "approveFailed": "{count, plural, one {# Vorschlag konnte nicht genehmigt werden.} other {# Vorschläge konnten nicht genehmigt werden.}}"
+      },
+      "deleteFailed": "E-Mails konnten nicht gelöscht werden",
+      "ignoreFailed": "E-Mails konnten nicht ignoriert werden",
+      "noneLeft": "Keine E-Mails passen mehr. Es wurde nichts geändert.",
+      "reprocessFailed": "Die E-Mails konnten nicht erneut verarbeitet werden",
+      "approveFailed": "Die Vorschläge konnten nicht genehmigt werden",
+      "noApprovable": "In dieser Auswahl kann kein Vorschlag genehmigt werden.",
+      "narrowFailed": "Die E-Mails konnten nicht gezählt werden. Die Änderung wurde nicht übernommen."
+    },
+    "linkedDraftDialog": {
+      "title": "Verknüpfte Profile entwerfen?",
+      "message": "Du hast E-Mails mehrerer Absender gewählt: {domains}. Nutze das nur, wenn die Angaben zu einer Banktransaktion auf E-Mails mehrerer Absender verteilt sind, zum Beispiel ein Shop und sein Anbieter für Ratenzahlung oder ein Shop und ein Zahlungsdienst. Für voneinander unabhängige Shops brich ab und entwirf eine Domain nach der anderen. Eine Anfrage nimmt höchstens {perDomain} E-Mails je Absender und höchstens {maxDomains} Absender.",
+      "domainEntry": "{domain} ({count, plural, one {# E-Mail} other {# E-Mails}})",
+      "confirm": "Verknüpfte Profile entwerfen"
+    }
+  },
+  "detail": {
+    "title": "E-Mail-Beleg",
+    "loading": "E-Mail wird geladen",
+    "error": {
+      "title": "Die E-Mail konnte nicht geladen werden",
+      "body": "Die Anfrage ist fehlgeschlagen. Versuche es erneut.",
+      "retry": "Erneut versuchen"
+    },
+    "from": "Von",
+    "received": "Empfangen",
+    "forwardedBy": "Weitergeleitet von",
+    "originalSent": "Vom Shop gesendet",
+    "subject": "Betreff",
+    "state": "Status",
+    "parser": "Profil",
+    "noParser": "Keiner",
+    "structuredSource": "Strukturierte Daten",
+    "matchedBy": "Zugeordnet über",
+    "matchKinds": {
+      "order_id": "Bestellnummer",
+      "amount_payee": "Betrag und Zahlungsempfänger",
+      "amount_only": "Betrag",
+      "manual": "Deine Auswahl",
+      "reference": "Referenz",
+      "amount_date": "Betrag und Datum"
+    },
+    "transaction": "Buchung",
+    "transactionSummary": "{date}, {amount}, {payee}",
+    "noPayee": "kein Zahlungsempfänger",
+    "viewTransaction": "Buchung anzeigen",
+    "noTransaction": "Noch keine",
+    "reasons": {
+      "too_large": "Die E-Mail ist größer als das Größenlimit, daher wurde sie gespeichert, ohne gelesen zu werden.",
+      "undecodable": "Die E-Mail konnte nicht dekodiert werden, daher wurde sie gespeichert, ohne gelesen zu werden.",
+      "draft_failed": "Die KI konnte kein Profil für diesen Absender entwerfen.",
+      "parser_invalid": "Das Profil für diesen Absender ist nicht gültig. Bearbeite es in den Profil-Einstellungen.",
+      "no_total": "Das Profil hat in dieser E-Mail keine Summe gefunden.",
+      "no_items": "Das Profil hat keine Positionen gefunden.",
+      "items_unbalanced": "Die Positionen ergeben nicht die Summe.",
+      "items_uncategorized": "Einige Positionen haben keine Kategorie.",
+      "shipping_uncategorized": "Die Versandzeile hat keine Kategorie.",
+      "amount_differs": "Die gelesene Summe weicht vom Betrag der Buchung ab, daher wird nur eine Beschreibung vorgeschlagen.",
+      "proposal_fallback": "Der aufgeschlüsselte Vorschlag wurde abgelehnt, daher wird nur eine Beschreibung vorgeschlagen.",
+      "nothing_to_propose": "Die E-Mail ergänzt diese Buchung um nichts.",
+      "proposal_refused": "Der Vorschlag wurde abgelehnt, daher wurde nichts vorgeschlagen.",
+      "skip_line": "Es wurde eine Zeile gefunden, bei der dieses Profil überspringt, daher wurde die E-Mail ignoriert.",
+      "wait_line": "Eine Zeile besagt, dass die Bestellung noch nicht endgültig ist, daher wird die E-Mail später erneut gelesen.",
+      "profile_ignore": "Das Profil dieser E-Mail ignoriert jede passende E-Mail.",
+      "no_html": "Dieses Profil liest den HTML-Teil der E-Mail, und diese E-Mail hat keinen.",
+      "schema_org": "Es wurde kein Profil benötigt: Die Bestellung wurde aus den strukturierten Daten (schema.org) der E-Mail gelesen.",
+      "item_amount_missing": "Eine Position hat keinen Betrag, und die E-Mail enthält keine einzelne Summe, die ihr zugewiesen werden könnte.",
+      "trade_no_action": "Das Profil hat in dieser E-Mail keinen Kauf, keinen Verkauf, keine Dividende und keine Reinvestition gefunden.",
+      "trade_no_symbol": "Das Profil hat in dieser E-Mail kein Börsenkürzel gefunden.",
+      "trade_no_quantity": "Das Profil hat in dieser E-Mail keine Anzahl von Anteilen gefunden, die ein Kauf, ein Verkauf oder eine reinvestierte Dividende braucht.",
+      "trade_no_amount": "Das Profil hat in dieser E-Mail weder eine Summe noch einen Preis gefunden.",
+      "trade_no_account": "Das Profil konnte nicht erkennen, für welches Konto dieser Handel gilt.",
+      "trade_exists": "Deine Konten enthalten diesen Handel bereits, daher wurde nichts vorgeschlagen.",
+      "trade_linked": "Mit der Buchung verknüpft, die sie meldet, daher wurde nichts vorgeschlagen.",
+      "trade_no_currency": "Das Profil konnte nicht erkennen, in welcher Währung dieser Handel ist, und daher sein Konto nicht wählen.",
+      "awaiting_settlement": "Kauf-E-Mail gespeichert. Sie wartet auf die Rückzahlungs-E-Mail, die sie bezahlt.",
+      "settled": "Kauf-E-Mail gespeichert. Die damit verbundenen Rückzahlungs-E-Mails bezahlen den ganzen Betrag.",
+      "instalment": "Kauf-E-Mail gespeichert. Rückzahlungen haben einen Teil bezahlt; der Rest ist noch offen.",
+      "partially_linked": "Für einige Teile dieser Rückzahlung gibt es noch keine Kauf-E-Mail. Sie werden jeweils als eine Zeile gezeigt.",
+      "enriched_by_other": "Die passende Buchung wurde bereits durch eine andere E-Mail ergänzt. Öffne sie und nutze Verknüpfen, um diese Ergänzung zu ersetzen, oder ignoriere diese E-Mail.",
+      "no_link_key": "Diese Kauf-E-Mail enthält keinen Link-Schlüssel, daher kann keine Rückzahlung sie finden."
+    },
+    "reasonUnknown": "Grund: {reason}",
+    "requestNote": "Prüfanfrage ({state}): {note}",
+    "parsedHeading": "Was das Profil gelesen hat",
+    "tradeHeading": "Aus der E-Mail gelesener Handel",
+    "tradeCandidatesHeading": "Vorhandene Buchungen, die dieser Handel sein könnten",
+    "tradeCandidatesHelp": "Diese Wertpapiertransaktionen könnten der Handel sein, den diese E-Mail meldet. Verknüpfe die richtige: Es wird keine neue Buchung erstellt, und eine geplante Rechnung oder Einzahlung, die sie begleicht, wird als bezahlt markiert.",
+    "notParsed": "Aus dieser E-Mail wurde noch nichts gelesen.",
+    "candidatesHeading": "Passende Buchungen",
+    "candidatesHelp": "Mehrere Buchungen passen gleich gut zu dieser E-Mail. Wähle die, die damit bezahlt wurde.",
+    "linkButton": "Mit dieser Buchung verknüpfen",
+    "linked": "E-Mail mit der Buchung verknüpft",
+    "linkFailed": "Die E-Mail konnte nicht verknüpft werden",
+    "bodyHeading": "E-Mail",
+    "textLabel": "Text der E-Mail",
+    "noText": "Die E-Mail enthält keinen Text.",
+    "bodyView": {
+      "label": "E-Mail anzeigen als",
+      "html": "HTML",
+      "text": "Text",
+      "lines": "Zeilen"
+    },
+    "remoteImagesNote": "Externe Bilder werden nicht geladen.",
+    "htmlFrameTitle": "Die E-Mail so, wie der Absender sie formatiert hat",
+    "structured": {
+      "heading": "Strukturierte Daten (schema.org)",
+      "help": "Eine Bestellung oder Rechnung, die die E-Mail als Markup für Mailprogramme enthält. Sie wird nur gelesen, wenn kein Profil zutrifft oder das Profil keine Summe findet.",
+      "found": "Gefunden",
+      "notFound": "Nicht gefunden",
+      "notFoundHelp": "Die E-Mail enthält kein Bestellmarkup, oder es nennt weder eine Summe noch Positionen.",
+      "seller": "Verkäufer",
+      "currency": "Währung",
+      "orderDate": "Bestelldatum",
+      "unitPrice": "Stückpreis"
+    },
+    "lines": {
+      "help": "Die Zeilen, mit denen die Muster eines Profils abgeglichen werden, nummeriert so, wie die Liste „Gefunden über“ eines Tests sie nummeriert.",
+      "sourceLabel": "Zeilenquelle",
+      "sources": {
+        "text": "Text",
+        "html": "HTML"
+      },
+      "noHtml": "Diese E-Mail hat keinen HTML-Teil, daher kann ein Profil, das HTML liest, sie nicht lesen.",
+      "capped": "Es werden nur die ersten {max} Zeilen gelesen.",
+      "empty": "Keine Zeilen.",
+      "listLabel": "Nummerierte Zeilen der E-Mail"
+    },
+    "linkedReceipts": {
+      "componentsHeading": "Verknüpfte Kauf-E-Mails",
+      "component": "Teil {part}: {subject} ({date})",
+      "settlementsHeading": "Bezahlt durch",
+      "settlement": "{subject} ({date}), Teil {amount}",
+      "enrichedBy": "Bereits ergänzt durch: {subject}",
+      "openButton": "Öffnen",
+      "open": "Die E-Mail {subject} öffnen"
+    },
+    "tradeTransactionSummary": "{action, select, BUY {Gekauft: {quantity} {symbol} für {total} am {date}.} SELL {Verkauft: {quantity} {symbol} für {total} am {date}.} DIVIDEND {Dividende von {symbol}: {total} am {date}.} REINVEST {Dividende reinvestiert in {quantity} {symbol} für {total} am {date}.} other {{quantity} {symbol} für {total} am {date}.}}",
+    "noTradeTransaction": "Noch keine: Der Trade wird gebucht, wenn du den Vorschlag freigibst, oder mit einer bereits erfassten Transaktion verknüpft.",
+    "candidateShares": "{quantity} Anteile",
+    "tradeNoCandidates": "Keine Investmenttransaktion dieses Kontos, dieser Handelsart und dieses Kürzels innerhalb einer Woche um den Handelstag ist frei zum Verknüpfen. Wenn du den Trade selbst erfasst hast, prüfe Konto und Datum; andernfalls gib den Vorschlag im Prüfeingang frei.",
+    "aiTradeHeading": "Vom KI-Agenten vorgeschlagener Handel",
+    "aiTradeReader": "Keins: Der KI-Agent liest sie als Handel",
+    "noAiTradeTransaction": "Noch keine: Der Trade wird gebucht, wenn du den Vorschlag des KI-Agenten freigibst.",
+    "tradeProposalHeading": "Was der Vorschlag buchen würde"
+  },
+  "picker": {
+    "heading": "Buchung auswählen",
+    "help": "Es wurde keine Buchung automatisch zugeordnet. Hier siehst du deine Buchungen im Zeitraum unten, der zunächst die Tage rund um den Kauf umfasst. Wähle die, die damit bezahlt wurde, oder ändere die Daten, um weiter zu suchen.",
+    "fromLabel": "Von",
+    "toLabel": "Bis",
+    "searchPlaceholder": "Nach Zahlungsempfänger, Beschreibung oder Betrag suchen...",
+    "loading": "Buchungen werden geladen",
+    "error": "Die Buchungen konnten nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "empty": "In diesem Zeitraum hast du keine Buchungen, die verknüpft werden können. Du kannst die Daten oben erweitern, um weiter zu suchen.",
+    "emptySearch": "In diesem Zeitraum passt keine Buchung zur Suche. Du kannst die Daten oben erweitern.",
+    "rangeReversed": "Das Von-Datum liegt nach dem Bis-Datum.",
+    "rangeIncomplete": "Gib beide Daten ein, um Buchungen aufzulisten.",
+    "row": "{date}, {amount}, {payee}",
+    "noPayee": "kein Zahlungsempfänger",
+    "linkButton": "Verknüpfen",
+    "hasMore": "Es werden nur die ersten {count} angezeigt. Grenze die Liste mit der Suche ein.",
+    "ai": {
+      "heading": "Buchung für die KI auswählen",
+      "help": "Hier siehst du deine Buchungen im Zeitraum unten, der zunächst die Tage rund um den Kauf umfasst. Wähle die, die die KI nach den Produkten in der E-Mail aufteilen soll, oder ändere die Daten, um weiter zu suchen.",
+      "linkButton": "Diese Buchung verwenden"
+    },
+    "sample": {
+      "heading": "Wähle die Buchung, die diese E-Mail bezahlt hat",
+      "help": "Hier siehst du deine Buchungen im Zeitraum unten, der zunächst die Tage rund um den Kauf umfasst. Die Auswahl wird in der Anleitung gemerkt und dient dazu, das Profil zu prüfen; mit der E-Mail wird nichts verknüpft. Ändere die Daten, um weiter zu suchen.",
+      "linkButton": "Diese Buchung verwenden"
+    }
+  },
+  "callback": {
+    "title": "Postfach wird verbunden",
+    "connecting": "Verbindung wird abgeschlossen",
+    "toasts": {
+      "connected": "Postfach verbunden"
+    },
+    "success": {
+      "title": "Postfach verbunden",
+      "body": "Verbunden als {username}. Weiterleitung zu den Einstellungen."
+    },
+    "providerError": {
+      "title": "Die Anmeldung wurde nicht abgeschlossen",
+      "withDescription": "Der Anbieter meldete: {error}. {description}",
+      "withoutDescription": "Der Anbieter meldete: {error}."
+    },
+    "missingParameters": {
+      "title": "Diese Seite wurde ohne Anmeldeergebnis geöffnet",
+      "body": "Beginne erneut in den Einstellungen für E-Mail-Belege und verwende eine der Schaltflächen zum Verbinden."
+    },
+    "failed": {
+      "title": "Das Postfach konnte nicht verbunden werden",
+      "fallback": "Der Server hat die Verbindung abgelehnt. Beginne erneut in den Einstellungen für E-Mail-Belege."
+    },
+    "backLink": "Zurück zu den Einstellungen für E-Mail-Belege"
+  },
+  "recognize": {
+    "title": "Mit KI erkennen",
+    "tradeTitle": "Mit KI als Handel erkennen",
+    "tradeMessage": "Die KI liest diese E-Mail als Handelsbestätigung eines Brokers und schlägt die Wertpapiertransaktion vor, die sie meldet (Konto, Kauf, Verkauf, Bardividende oder reinvestierte Dividende, Börsenkürzel, Anteile und Summe). Nichts wird gespeichert, bis du es freigibst.",
+    "tradeConfirm": "Als Handel erkennen",
+    "transactionSummary": "{date}, {amount}, {payee}",
+    "noPayee": "kein Zahlungsempfänger",
+    "confirmMessage": "Diese E-Mail ist mit der Buchung {summary} verknüpft. Die KI liest die E-Mail und schlägt vor, wie diese Buchung nach Produkten aufgeteilt wird. Mit dieser Buchung fortfahren?",
+    "confirm": "Mit KI erkennen",
+    "chooseOther": "Andere Buchung auswählen",
+    "candidatesHeading": "Welche Buchung wurde mit der E-Mail bezahlt?",
+    "candidatesHelp": "Mehrere Buchungen passen zu dieser E-Mail. Wähle die, die die KI verwenden soll, oder suche nach einer anderen.",
+    "candidatesLoading": "Passende Buchungen werden geladen",
+    "candidatesError": "Die passenden Buchungen konnten nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "useButton": "Diese Buchung verwenden",
+    "searchOther": "Andere Buchungen suchen",
+    "back": "Zurück",
+    "failed": "Die Erkennung konnte nicht gestartet werden",
+    "queued": "In der Warteschlange: Derzeit steht kein KI-Assistent für eine Antwort bereit, daher wartet die Anfrage im KI-Prüfungseingang auf einen Agenten (zum Beispiel über MCP).",
+    "handoffFailed": "Die Anfrage steht in der Warteschlange, aber die E-Mail konnte nicht im Chat geöffnet werden. Sie wartet im KI-Prüfungseingang auf einen Agenten (zum Beispiel über MCP).",
+    "inboxLink": "KI-Prüfungseingang öffnen",
+    "opened": "Der Chat wurde mit der angehängten E-Mail geöffnet. Lies die Nachricht und drücke auf Senden.",
+    "chatPrompt": "Erkenne die Produkte, Mengen und Preise in der angehängten Bestell-E-Mail und teile meine Buchung vom {date} ({payee}, {amount}) nach Produkten auf, mit je einer Kategorie. Übernimm die KI-Prüfungsanfrage {requestId} und reiche deinen Vorschlag dafür ein.",
+    "tradeChatPrompt": "Erkenne den Handel in der angehängten Broker-Bestätigung: das Konto, ob es ein Kauf, ein Verkauf, eine Bardividende oder eine reinvestierte Dividende ist, das Börsenkürzel, die Anteile (eine Bardividende nennt vielleicht keine), die ausgeführte Summe und das Datum. Übernimm die KI-Prüfanfrage {requestId} und reiche den Handel dafür ein.",
+    "tradeDetachesTransaction": "Als Trade gelesen, gehört diese E-Mail nicht mehr zu {summary}: Der Trade erzeugt eine eigene Investmenttransaktion."
+  },
+  "hub": {
+    "tabs": {
+      "ariaLabel": "Bereiche der E-Mail-Belege",
+      "overview": "Übersicht",
+      "emails": "E-Mails",
+      "profiles": "Profile",
+      "mailbox": "Postfach"
+    },
+    "demoRestricted": {
+      "heading": "Im Demomodus eingeschränkt",
+      "body": "Das Verbinden eines Postfachs und das Schreiben von Profilen sind im Demomodus deaktiviert."
+    }
+  },
+  "process": {
+    "retryFailed": "Fehlgeschlagene E-Mails wiederholen ({count})",
+    "starting": "Wird gestartet...",
+    "progress": "{processed, plural, one {# E-Mail verarbeitet} other {# E-Mails verarbeitet}}, {remaining} übrig.",
+    "cancel": "Abbrechen",
+    "cancelling": "Wird abgebrochen...",
+    "summary": "{count, plural, one {# E-Mail verarbeitet.} other {# E-Mails verarbeitet.}}",
+    "cancelledSummary": "Nach {count, plural, one {# E-Mail abgebrochen.} other {# E-Mails abgebrochen.}}",
+    "outcomes": "Sie endeten so: {outcomes}.",
+    "passedOver": "{count, plural, one {# E-Mail hat einen Fehler ausgelöst und wurde übergangen.} other {# E-Mails haben einen Fehler ausgelöst und wurden übergangen.}}",
+    "failed": "Die Verarbeitung wurde gestoppt, weil eine Anfrage fehlgeschlagen ist.",
+    "failedWithReason": "Die Verarbeitung wurde gestoppt: {reason}",
+    "outcome": "{count} {state}",
+    "deletedOutcome": "{count} gelöscht",
+    "close": "Schließen"
+  },
+  "overview": {
+    "loading": "Die Übersicht wird geladen...",
+    "error": {
+      "title": "Die Übersicht konnte nicht geladen werden",
+      "body": "Die Anfrage ist fehlgeschlagen, daher darf nichts hier als leer gelten. Versuche es erneut.",
+      "retry": "Erneut versuchen"
+    },
+    "mailbox": {
+      "title": "Postfach",
+      "none": "Es ist noch kein Postfach verbunden.",
+      "connect": "Postfach verbinden",
+      "manage": "Postfach-Einstellungen öffnen",
+      "state": {
+        "notConnected": "Nicht verbunden",
+        "failing": "Letzter Abruf fehlgeschlagen",
+        "off": "Der Abruf ist aus",
+        "polling": "Wird abgerufen"
+      },
+      "auth": {
+        "password": "Anmeldung mit Passwort",
+        "oauth2": "Anmeldung über einen Anbieter"
+      },
+      "lastSuccess": "Letzter erfolgreicher Abruf {when}",
+      "neverPolled": "Noch nicht erfolgreich abgerufen.",
+      "lastError": "Letzter Fehler: {error}"
+    },
+    "emails": {
+      "title": "E-Mails",
+      "stored": "gespeichert",
+      "processable": "{count, plural, one {# E-Mail kann erneut verarbeitet werden} other {# E-Mails können erneut verarbeitet werden}}.",
+      "open": "E-Mails öffnen"
+    },
+    "proposals": {
+      "title": "Vorschläge",
+      "waiting": "warten auf deine Freigabe",
+      "review": "Vorschläge prüfen",
+      "open": "KI-Prüfungseingang öffnen"
+    },
+    "profiles": {
+      "title": "Profile",
+      "approved": "freigegeben",
+      "drafts": "{count, plural, one {# Entwurf wartet auf deine Freigabe} other {# Entwürfe warten auf deine Freigabe}}.",
+      "manage": "Profile öffnen"
+    },
+    "uncovered": {
+      "title": "Absender ohne Profil",
+      "help": "Von diesen Absendern gibt es E-Mails, die kein Profil liest. Erstelle ein Profil für einen davon: Die Anleitung im Tab „Profile“ führt dich durch.",
+      "none": "Jeder Absender der gespeicherten E-Mails wird von einem Profil abgedeckt.",
+      "row": "{domain} ({count, plural, one {# E-Mail} other {# E-Mails}})",
+      "create": "Profil erstellen"
+    }
+  },
+  "wizard": {
+    "heading": "Erste Schritte mit E-Mail-Belegen",
+    "intro": "Vier Schritte vom Nichts bis zum ersten Vorschlag.",
+    "done": "(erledigt)",
+    "steps": {
+      "mailbox": {
+        "title": "Postfach verbinden",
+        "body": "Verwende ein eigenes Postfach, das deine Bestellbestätigungen empfängt. Monize liest es nur.",
+        "action": "Postfach verbinden"
+      },
+      "emails": {
+        "title": "E-Mails abrufen",
+        "body": "E-Mails werden gelesen, wenn das Postfach abgerufen wird. Rufe es in den Postfach-Einstellungen ab, um die ersten zu sehen.",
+        "action": "E-Mails öffnen"
+      },
+      "profile": {
+        "title": "Ein Profil für einen Absender erstellen",
+        "body": "Ein Profil sagt Monize, wie es die Bestellbestätigungen eines Absenders lesen soll. Schreibe eines oder erstelle einen Entwurf aus einer gespeicherten E-Mail.",
+        "action": "Profile öffnen"
+      },
+      "review": {
+        "title": "Vorschläge prüfen",
+        "body": "Jede E-Mail wird zu einem Vorschlag für eine Buchung. Nichts wird geändert, bevor du ihn freigibst.",
+        "action": "KI-Prüfungseingang öffnen"
+      }
+    }
+  },
+  "profileWizard": {
+    "heading": "Profil für {domain} erstellen",
+    "stepsLabel": "Schritte der Anleitung",
+    "stepName": "{number}. {name}",
+    "steps": {
+      "samples": "Beispiele",
+      "generate": "Erzeugen",
+      "preview": "Vorschau und Übernahme"
+    },
+    "cancel": "Abbrechen",
+    "existingDraft": "Für diese Domain gibt es bereits einen Profil-Entwurf.",
+    "useExistingDraft": "Mit dem Entwurf bei der Vorschau beginnen",
+    "uncovered": {
+      "heading": "Profil für eine Domain erstellen",
+      "help": "Absender-Domains mit gespeicherten E-Mails und ohne freigegebenes Profil. Wähle eine aus, um die Anleitung zu starten.",
+      "loading": "Absender-Domains werden geladen",
+      "error": "Die Absender-Domains konnten nicht geladen werden.",
+      "retry": "Erneut versuchen",
+      "none": "Jeder Absender der gespeicherten E-Mails wird von einem Profil abgedeckt."
+    },
+    "samples": {
+      "loading": "E-Mails werden geladen",
+      "error": "Die E-Mails konnten nicht geladen werden.",
+      "retry": "Erneut versuchen",
+      "empty": {
+        "title": "Keine E-Mails von dieser Domain",
+        "body": "Keine gespeicherte E-Mail hat einen Absender bei {domain}."
+      },
+      "help": "Klicke auf eine E-Mail, um sie zu lesen und die Buchung zu wählen, die sie bezahlt hat. Hake dann bis zu {max} E-Mails an, aus denen das Profil entstehen soll; eine E-Mail lässt sich erst anhaken, wenn sie eine Buchung hat.",
+      "tradeToggle": "Diese E-Mails sind Handelsbestätigungen eines Brokers (sie erzeugen eine Wertpapiertransaktion, daher wird keine Banktransaktion zugeordnet)",
+      "tradeHelp": "Klicke auf eine E-Mail, um sie zu lesen, und hake bis zu {max} Handelsbestätigungen an, aus denen das Profil entsteht. Eine Transaktion muss nicht gewählt werden.",
+      "columns": {
+        "select": "Verwenden",
+        "date": "Datum",
+        "email": "E-Mail",
+        "transaction": "Buchung"
+      },
+      "select": "Die E-Mail {subject} als Beispiel verwenden",
+      "needsTransaction": "Wähle zuerst eine Buchung für diese E-Mail.",
+      "limitReached": "Höchstens {max} Beispiele. Entferne bei einem den Haken, um ein anderes zu wählen.",
+      "noTransaction": "Keine gewählt",
+      "tradeNoTransaction": "Bei einer Handelsbestätigung nicht nötig",
+      "selectedCount": "{count} von {max} Beispielen angehakt",
+      "continue": "Weiter zum Assistenten",
+      "emailLoading": "E-Mail wird geladen",
+      "emailError": "Die E-Mail konnte nicht geladen werden.",
+      "dialogTitle": "E-Mail und Buchung: {subject}",
+      "emailHeading": "E-Mail"
+    },
+    "generate": {
+      "help": "Der Assistent liest diese E-Mails und die Buchungen, die sie bezahlt haben, und schreibt einen Profil-Entwurf für {domain}. Noch ist nichts freigegeben.",
+      "reviseHelp": "Sag dem Assistenten, was geändert werden soll. Er aktualisiert denselben Entwurf anhand dieser E-Mails und Buchungen.",
+      "tradeHelp": "Der Assistent liest diese Handelsbestätigungen und schreibt ein Profilentwurf für {domain}, der die jeweils gemeldete Wertpapiertransaktion vorschlägt. Noch ist nichts freigegeben.",
+      "tradeSample": "Handelsbestätigung",
+      "feedbackLabel": "Gewünschte Änderungen",
+      "feedbackPlaceholder": "Zum Beispiel: Die Summe ist die Zeile mit „Gezahlter Betrag“, nicht die Zwischensumme.",
+      "send": "An die KI senden",
+      "sendFeedback": "Notiz an die KI senden",
+      "retry": "Erneut an die KI senden",
+      "back": "Zurück",
+      "running": "Der Assistent schreibt das Profil...",
+      "runningHint": "Das kann eine Minute dauern. Lass diese Seite geöffnet.",
+      "noDraft": "Der Assistent hat keinen Entwurf gespeichert.",
+      "tryAgain": "Du kannst es erneut senden oder zurückgehen und die Beispiele ändern.",
+      "failed": "Der Assistent war nicht erreichbar.",
+      "sendFailed": "Die Anfrage konnte nicht gesendet werden."
+    },
+    "waiting": {
+      "heading": "Warten auf deinen KI-Agenten",
+      "body": "An den KI-Posteingang gesendet. Dein Agent erstellt das Profil, sobald er sich verbindet; du kannst dies schließen und später wiederkommen.",
+      "working": "Dein Agent hat die Anfrage übernommen und arbeitet daran.",
+      "polling": "Solange diese Seite geöffnet ist, prüft sie alle {seconds} Sekunden.",
+      "checkFailed": "Die Anfrage konnte nicht geprüft werden. Es wird in Kürze erneut versucht.",
+      "ended": "Die Anfrage wurde ohne neuen Entwurf geschlossen (verworfen oder abgelaufen). Du kannst neu beginnen.",
+      "inboxLink": "KI-Posteingang öffnen",
+      "checkNow": "Jetzt prüfen",
+      "startOver": "Neu beginnen"
+    },
+    "preview": {
+      "loading": "E-Mails werden mit dem Entwurf gelesen...",
+      "error": "Die Vorschau konnte nicht ausgeführt werden.",
+      "retry": "Erneut versuchen",
+      "assistantSaid": "Der Assistent sagt",
+      "help": "So würde der Entwurf mit den E-Mails dieser Domain verfahren. Es wurde nichts gespeichert oder verknüpft.",
+      "selectedHeading": "Ausgewählte E-Mails",
+      "othersHeading": "Weitere E-Mails von dieser Domain",
+      "othersCapped": "Angezeigt werden die neuesten {shown} von {total} weiteren E-Mails.",
+      "columns": {
+        "email": "E-Mail",
+        "expected": "Erwartete Buchung",
+        "parsed": "Vom Entwurf gelesen",
+        "agrees": "Stimmt überein",
+        "outcome": "Ergebnis",
+        "matched": "Zugeordnete Buchung"
+      },
+      "nothingRead": "Es konnte nichts gelesen werden",
+      "notStated": "nicht angegeben",
+      "parsedDate": "Datum: {date}",
+      "parsedTotal": "Summe: {total}",
+      "parsedLines": "{count, plural, one {# Zeile} other {# Zeilen}}",
+      "parsedTrade": "{action, select, BUY {Kauft {quantity} Anteile {symbol}} SELL {Verkauft {quantity} Anteile {symbol}} DIVIDEND {{symbol} zahlt eine Dividende} REINVEST {Reinvestiert eine Dividende in {quantity} Anteile {symbol}} other {Handelt {symbol}}}",
+      "tradeInconsistent": "Der Preis passt nicht zur Summe, daher wird er nicht automatisch angewendet",
+      "noExpectation": "Keine",
+      "noMatch": "Keine Buchung",
+      "agreesYes": "Ja",
+      "agreesNo": "Nein",
+      "agreesUnknown": "Nicht geprüft",
+      "nothingToShow": "Der Entwurf hat keine E-Mails zum Anzeigen.",
+      "backToSamples": "Zurück zu den Beispielen",
+      "backToAi": "Zurück zur KI",
+      "accept": "Übernehmen und verarbeiten",
+      "approved": "Profil freigegeben",
+      "changedElsewhere": "Das Profil wurde an anderer Stelle geändert. Lade die Vorschau neu.",
+      "approveFailed": "Das Profil konnte nicht freigegeben werden.",
+      "approvedProcessing": "Das Profil ist freigegeben. Die gespeicherten E-Mails von {domain} werden damit gelesen.",
+      "done": "Fertig",
+      "outcomes": {
+        "matched": "Buchung zugeordnet",
+        "ambiguous": "Mehrere Buchungen passen",
+        "unmatched": "Keine Buchung zugeordnet",
+        "parse_failed": "Konnte nicht gelesen werden",
+        "not_applicable": "Von diesem Profil nicht gelesen",
+        "skip_line": "Übersprungen (Überspringen-Zeile gefunden)",
+        "wait_line": "Zurückgestellt (Bestellung nicht endgültig)",
+        "discard_ignore": "Von diesem Profil ignoriert",
+        "discard_delete": "Von diesem Profil gelöscht",
+        "no_html": "Kein HTML-Teil",
+        "trade": "Schlägt einen Handel vor",
+        "trade_exists": "Bereits gebucht",
+        "component": "Kauf-E-Mail (wartet auf Rückzahlung)"
+      },
+      "parsedTradeAccount": "Konto: {account}",
+      "accountWithCurrency": "{name} ({currency})",
+      "accountUnknown": "unbekannt",
+      "parsedTradeNoAccount": "Kein Konto für diesen Handel gefunden",
+      "parsedTradeCurrency": "Währung: {currency}"
+    }
+  },
+  "trade": {
+    "summary": "{action, select, BUY {Kauf: {quantity} Anteile {symbol} für {total}, datiert auf {date}.} SELL {Verkauf: {quantity} Anteile {symbol} für {total}, datiert auf {date}.} DIVIDEND {Dividende von {symbol}: {total}, datiert auf {date}.} REINVEST {Reinvestition einer Dividende in {quantity} Anteile {symbol} für {total}, datiert auf {date}.} other {{symbol} für {total}, datiert auf {date}.}}",
+    "account": "In der E-Mail genanntes Konto: {account}",
+    "priceMismatch": "Der Durchschnittspreis passt nicht zu den Anteilen und der Summe, daher wird dieser Handel nicht automatisch angewendet.",
+    "dividendMismatch": "Der Betrag je Anteil passt nicht zu den Anteilen und der Summe, daher wird diese Dividende nicht automatisch angewendet.",
+    "dividendShares": "Gezahlt auf {quantity} Anteile",
+    "dividendPerShare": "Betrag je Anteil in der E-Mail: {price}",
+    "incomplete": "Das Profil konnte aus dieser E-Mail keinen vollständigen Handel lesen.",
+    "totalFromPrice": "die aus dem Preis abgeleitete Summe",
+    "dateUnknown": "der Tag, an dem die E-Mail eintraf",
+    "price": "Durchschnittspreis in der E-Mail: {price} je Anteil",
+    "proposalSecurity": "Wertpapier: {name}",
+    "proposalAccount": "Konto: {account}",
+    "proposalPrice": "Preis: {price} je Anteil",
+    "proposalDividendPerShare": "Betrag je Anteil: {price}",
+    "proposalCommission": "Provision: {commission}",
+    "proposalReview": "Gebucht wird erst, wenn du freigibst.",
+    "proposalReviewLink": "Im Posteingang prüfen",
+    "aiWaiting": "Der KI-Agent hat den Trade noch nicht vorgeschlagen. Sein Vorschlag erscheint hier und im Prüfungs-Posteingang.",
+    "aiBooked": "Aus dem Vorschlag des KI-Agenten gebucht: siehe die Transaktion oben.",
+    "aiNoProposal": "Für diese E-Mail wartet kein Vorschlag des KI-Agenten.",
+    "currencyFrom": "Währung: {currency}, {source, select, amount {vom Betrag genannt} marker {aus einer Währungsmarkierung des Profils} other {aus deinem Wertpapier für das Kürzel}}",
+    "bookTo": "Gebucht auf: {account}",
+    "bookToNotTradable": "Gebucht auf {account}, das kein offenes Depotkonto ist, daher kann der Handel dort nicht gebucht werden.",
+    "bookToUnknown": "Gebucht auf ein Konto, das nicht in deiner Liste ist, daher kann der Handel dort nicht gebucht werden."
+  },
+  "linkedHint": {
+    "emails": "Eine Banktransaktion, die in E-Mails mehrerer Absender beschrieben wird (zum Beispiel ein Shop und sein Anbieter für Ratenzahlung)? Wähle zusammen bis zu {max} E-Mails von jedem dieser Absender und entwirf verknüpfte Profile.",
+    "profiles": "Die Anleitung unten entwirft ein Profil für einen Absender. Eine Banktransaktion, die in E-Mails mehrerer Absender beschrieben wird (zum Beispiel ein Shop und sein Anbieter für Ratenzahlung)? Wähle auf dem Tab E-Mails bis zu {max} E-Mails von jedem dieser Absender und entwirf verknüpfte Profile.",
+    "openEmails": "Tab E-Mails öffnen"
+  }
+}

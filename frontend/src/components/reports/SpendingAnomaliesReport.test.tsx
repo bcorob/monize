@@ -20,14 +20,17 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
-vi.mock("@/hooks/useNumberFormat", () => ({
-  useNumberFormat: () => ({
-    formatCurrencyCompact: (n: number) => `$${n.toFixed(2)}`,
-    formatCurrency: (n: number) => `$${n.toFixed(2)}`,
-    defaultCurrency: "CAD",
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrencyCompact: (n: number) => `$${n.toFixed(2)}`,
+      formatCurrency: (n: number) => `$${n.toFixed(2)}`,
+      defaultCurrency: "CAD",
+    }),
+};
+});
 const mockGetSpendingAnomalies = vi.fn();
 
 vi.mock("@/lib/built-in-reports", () => ({
@@ -185,7 +188,7 @@ describe("SpendingAnomaliesReport", () => {
       expect(screen.getByText("Large purchase")).toBeInTheDocument();
     });
     fireEvent.click(screen.getByText("Large purchase"));
-    expect(mockPush).toHaveBeenCalledWith("/transactions?search=Store%20X");
+    expect(mockPush).toHaveBeenCalledWith("/transactions?search=payee%3A%3D%22Store%20X%22");
   });
 
   it("changes the sensitivity threshold and refetches", async () => {
@@ -283,5 +286,34 @@ describe("SpendingAnomaliesReport", () => {
     expect(mockPush).toHaveBeenCalledWith(
       "/transactions?categoryId=cat-dining",
     );
+  });
+
+  it("names the currencies left out of the analysis when a rate is missing", async () => {
+    mockGetSpendingAnomalies.mockResolvedValue({
+      statistics: { mean: 10, stdDev: 2 },
+      anomalies: [],
+      counts: { high: 0, medium: 0, low: 0 },
+      currency: "CAD",
+      missingCurrencies: ["JPY"],
+      excludedCount: 3,
+    });
+    render(<SpendingAnomaliesReport />);
+    const notice = await screen.findByTestId("partial-data-notice");
+    expect(notice).toHaveTextContent("JPY");
+    expect(notice).toHaveTextContent("CAD");
+  });
+
+  it("shows no partial-data note when every transaction converted", async () => {
+    mockGetSpendingAnomalies.mockResolvedValue({
+      statistics: { mean: 10, stdDev: 2 },
+      anomalies: [],
+      counts: { high: 0, medium: 0, low: 0 },
+      currency: "CAD",
+      missingCurrencies: [],
+      excludedCount: 0,
+    });
+    render(<SpendingAnomaliesReport />);
+    await screen.findByText(/No spending anomalies detected/);
+    expect(screen.queryByTestId("partial-data-notice")).not.toBeInTheDocument();
   });
 });

@@ -1,13 +1,17 @@
 import { describe, it, expect, vi } from 'vitest';
 import { screen, fireEvent } from '@testing-library/react';
 import { render } from '@/test/render';
-import { PayeeSummaryCards, type PayeePeriodTotals } from './PayeeSummaryCards';
+import {
+  PayeeSummaryCards,
+  type PayeePeriodTotals,
+  type PayeeRecurringSummary,
+} from './PayeeSummaryCards';
 import type { DisplayCurrencyStrategy } from '@/components/transactions/widget-shared';
 import type { PayeeDetail } from '@/types/payee';
 
 const strategy: DisplayCurrencyStrategy = {
   displayCurrency: 'CAD',
-  toDisplay: (amount) => amount,
+  converted: false,
 };
 
 function detailFixture(overrides: Partial<PayeeDetail> = {}): PayeeDetail {
@@ -22,6 +26,11 @@ function detailFixture(overrides: Partial<PayeeDetail> = {}): PayeeDetail {
       website: null,
       hasLogo: false,
       logoFetchedAt: null,
+      contactLookupAt: null,
+      contactLookupSource: null,
+      address: null,
+      email: null,
+      phone: null,
       isActive: true,
       createdAt: '2024-01-01T00:00:00.000Z',
     },
@@ -47,7 +56,7 @@ function renderCards(
     lifetime?: PayeePeriodTotals | null;
     thisYear?: PayeePeriodTotals | null;
     lastYear?: PayeePeriodTotals | null;
-    recurring?: { cadence: string; amount: number; previousAmount: number } | null;
+    recurring?: PayeeRecurringSummary | null;
     isMultiCurrency?: boolean;
   } = {},
 ) {
@@ -102,11 +111,29 @@ describe('PayeeSummaryCards', () => {
 
   it('shows the detected cadence with a price-increase note', () => {
     renderCards({
-      recurring: { cadence: 'monthly', amount: 16.99, previousAmount: 14.99 },
+      recurring: {
+        cadence: 'monthly',
+        amount: 16.99,
+        previousAmount: 14.99,
+        currencyCode: 'CAD',
+      },
     });
     expect(screen.getByText('Recurring')).toBeInTheDocument();
     expect(screen.getByText(/Monthly/)).toBeInTheDocument();
     expect(screen.getByText(/Up from/)).toBeInTheDocument();
+  });
+
+  it('shows a recurring charge in the currency it was billed in (issue #2155)', () => {
+    renderCards({
+      recurring: {
+        cadence: 'monthly',
+        amount: 16.99,
+        previousAmount: 14.99,
+        currencyCode: 'EUR',
+      },
+    });
+    expect(screen.getByText(/€16\.99/)).toBeInTheDocument();
+    expect(screen.getByText(/Up from .*€14\.99/)).toBeInTheDocument();
   });
 
   it('omits the recurring card when no cadence was detected', () => {
@@ -144,6 +171,11 @@ describe('PayeeSummaryCards', () => {
           website: null,
           hasLogo: false,
           logoFetchedAt: null,
+          contactLookupAt: null,
+          contactLookupSource: null,
+          address: null,
+          email: null,
+          phone: null,
           isActive: true,
           createdAt: '2024-01-01T00:00:00.000Z',
         },

@@ -3,7 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { cn } from '@/lib/utils';
 
-type ChartView = 'pie' | 'bar' | 'stacked' | 'line' | 'area' | 'table';
+export type ChartView = 'pie' | 'bar' | 'stacked' | 'line' | 'area' | 'sankey' | 'table';
 
 interface ChartViewToggleProps {
   value: ChartView;
@@ -19,8 +19,22 @@ const CHART_ICON_PATHS: Record<ChartView, string> = {
   stacked: 'M5 4 H10 V20 H5 Z M5 12 H10 M14 4 H19 V20 H14 Z M14 9 H19',
   line: 'M3 17l4-4 4 4 4-8 4 4',
   area: 'M3 17l4-4 4 4 4-8 4 4V21H3z',
+  sankey: 'M3 5h4c6 0 6 6 14 6M3 5v4M3 19h4c6 0 6-8 14-8M3 15v4',
   table: 'M3 10h18M3 14h18M3 6h18M3 18h18',
 };
+
+/**
+ * One chart view's icon, for a switcher that draws its own chrome (a widget
+ * header's `WidgetSegmentedControl`) but should show the same pictures as this
+ * toggle.
+ */
+export function ChartViewIcon({ view, className = 'h-5 w-5' }: { view: ChartView; className?: string }) {
+  return (
+    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={CHART_ICON_PATHS[view]} />
+    </svg>
+  );
+}
 
 export function ChartViewToggle({
   value,
@@ -38,6 +52,7 @@ export function ChartViewToggle({
     stacked: t('chartViewToggle.stackedChart'),
     line: t('chartViewToggle.lineChart'),
     area: t('chartViewToggle.areaChart'),
+    sankey: t('chartViewToggle.sankeyChart'),
     table: t('chartViewToggle.table'),
   };
 
@@ -53,9 +68,7 @@ export function ChartViewToggle({
           )}
           title={chartTitles[view]}
         >
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={CHART_ICON_PATHS[view]} />
-          </svg>
+          <ChartViewIcon view={view} />
         </button>
       ))}
     </div>

@@ -8,7 +8,7 @@ vi.mock('@/lib/investments', () => ({
     getAllocationByTag: vi.fn(),
     getCountryWeightings: vi.fn(),
     getAssetClassWeightings: vi.fn(),
-    getPortfolioTagKeys: vi.fn(),
+    getPortfolioTagSummary: vi.fn(),
     getAllocationByTagKey: vi.fn(),
   },
 }));
@@ -21,12 +21,15 @@ vi.mock('recharts', () => ({
   Tooltip: () => null,
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
+    }),
+  };
+});
 vi.mock('@/hooks/useExchangeRates', () => ({
   useExchangeRates: () => ({
     defaultCurrency: 'CAD',
@@ -45,8 +48,10 @@ const emptyCountry = {
 };
 const emptyAssetClass = emptyCountry;
 
-// The chart fetches the by-tag and by-country allocations eagerly on mount to
-// decide which selectors to offer, so every render kicks off async effects.
+// The chart fetches the tag summary and the country / asset-class look-throughs
+// eagerly on mount to decide which selectors to offer, so every render kicks off
+// async effects. The by-tag ALLOCATION is not among them -- it costs a portfolio
+// valuation on the server and is fetched only when the tag view is selected.
 async function renderChart(props: Parameters<typeof AssetAllocationChart>[0]) {
   let result: ReturnType<typeof render>;
   await act(async () => {
@@ -62,7 +67,10 @@ describe('AssetAllocationChart', () => {
     (investmentsApi.getAllocationByTag as any).mockResolvedValue(emptyTag);
     (investmentsApi.getCountryWeightings as any).mockResolvedValue(emptyCountry);
     (investmentsApi.getAssetClassWeightings as any).mockResolvedValue(emptyAssetClass);
-    (investmentsApi.getPortfolioTagKeys as any).mockResolvedValue([]);
+    (investmentsApi.getPortfolioTagSummary as any).mockResolvedValue({
+      keys: [],
+      hasTaggedHoldings: false,
+    });
     (investmentsApi.getAllocationByTagKey as any).mockResolvedValue(emptyTag);
   });
 
@@ -186,6 +194,12 @@ describe('AssetAllocationChart', () => {
     };
     (investmentsApi.getAllocationByTag as any).mockImplementation(
       async (ids?: string[]) => (ids ? untaggedOnly : tagAllocation),
+    );
+    (investmentsApi.getPortfolioTagSummary as any).mockImplementation(
+      async (ids?: string[]) => ({
+        keys: [],
+        hasTaggedHoldings: !ids,
+      }),
     );
     const allocation = {
       totalValue: 10000,
@@ -313,30 +327,59 @@ describe('AssetAllocationChart', () => {
 
     it('offers and renders the by-tag allocation when tags are in use', async () => {
       (investmentsApi.getAllocationByTag as any).mockResolvedValue(tagAllocation);
+      (investmentsApi.getPortfolioTagSummary as any).mockResolvedValue({
+        keys: [],
+        hasTaggedHoldings: true,
+      });
 
       await renderChart({ allocation: securityAllocation, isLoading: false, accountIds: [] });
 
-      expect(investmentsApi.getAllocationByTag).toHaveBeenCalledWith(undefined);
+      // The valuation-backed allocation is not paid for until the view is
+      // selected; only the cheap tag summary has been asked for.
+      expect(investmentsApi.getAllocationByTag).not.toHaveBeenCalled();
+      expect(investmentsApi.getPortfolioTagSummary).toHaveBeenCalledWith(undefined);
       const tagButton = await screen.findByText('By tag');
 
       await act(async () => {
         fireEvent.click(tagButton);
       });
 
+      expect(investmentsApi.getAllocationByTag).toHaveBeenCalledWith(undefined);
       expect(await screen.findByText('AI')).toBeInTheDocument();
       expect(screen.getByText('Untagged')).toBeInTheDocument();
     });
 
-    it('hides the by-tag selector when no holdings are tagged', async () => {
-      (investmentsApi.getAllocationByTag as any).mockResolvedValue({
-        totalValue: 10000,
-        allocation: [
-          { symbol: null, name: 'Untagged', type: 'untagged', value: 10000, percentage: 100, color: '#9ca3af', currencyCode: 'CAD' },
-        ],
+    it('fetches the by-tag allocation once, on the first selection', async () => {
+      (investmentsApi.getAllocationByTag as any).mockResolvedValue(tagAllocation);
+      (investmentsApi.getPortfolioTagSummary as any).mockResolvedValue({
+        keys: [],
+        hasTaggedHoldings: true,
       });
 
       await renderChart({ allocation: securityAllocation, isLoading: false, accountIds: [] });
 
+      await act(async () => {
+        fireEvent.click(await screen.findByText('By tag'));
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByText('By security'));
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByText('By tag'));
+      });
+
+      expect(investmentsApi.getAllocationByTag).toHaveBeenCalledTimes(1);
+    });
+
+    it('hides the by-tag selector when no holdings are tagged', async () => {
+      (investmentsApi.getPortfolioTagSummary as any).mockResolvedValue({
+        keys: [],
+        hasTaggedHoldings: false,
+      });
+
+      await renderChart({ allocation: securityAllocation, isLoading: false, accountIds: [] });
+
+      expect(investmentsApi.getAllocationByTag).not.toHaveBeenCalled();
       expect(screen.queryByText('By tag')).not.toBeInTheDocument();
       // With no other groupings available, the toggle is absent entirely.
       expect(screen.queryByText('By security')).not.toBeInTheDocument();
@@ -345,6 +388,7 @@ describe('AssetAllocationChart', () => {
     it('does not fetch tags or show the selector when enableTagGrouping is false', async () => {
       await renderChart({ allocation: securityAllocation, isLoading: false, enableTagGrouping: false });
       expect(investmentsApi.getAllocationByTag).not.toHaveBeenCalled();
+      expect(investmentsApi.getPortfolioTagSummary).not.toHaveBeenCalled();
       expect(screen.queryByText('By tag')).not.toBeInTheDocument();
     });
   });
@@ -420,11 +464,12 @@ describe('AssetAllocationChart', () => {
     const assetClassResult = {
       totalPortfolioValue: 10000,
       totalDirectValue: 4000,
-      totalEtfValue: 5000,
-      unclassifiedValue: 1000,
+      totalEtfValue: 5500,
+      unclassifiedValue: 500,
       items: [
-        { assetClass: 'Equity', directValue: 4000, etfValue: 2000, totalValue: 6000, percentage: 60 },
-        { assetClass: 'Fixed Income', directValue: 0, etfValue: 3000, totalValue: 3000, percentage: 30 },
+        { assetClass: 'Equities', assetClassKey: 'equity', directValue: 4000, etfValue: 2000, totalValue: 6000, percentage: 60 },
+        { assetClass: 'Fixed Income', assetClassKey: 'fixedIncome', directValue: 0, etfValue: 3000, totalValue: 3000, percentage: 30 },
+        { assetClass: 'Real Estate', assetClassKey: null, directValue: 0, etfValue: 500, totalValue: 500, percentage: 5 },
       ],
     };
 
@@ -440,8 +485,11 @@ describe('AssetAllocationChart', () => {
         fireEvent.click(button);
       });
 
-      expect(await screen.findByText('Equity')).toBeInTheDocument();
+      // Canonical classes are named from the translation catalog; a class the
+      // user typed is shown as typed.
+      expect(await screen.findByText('Equities')).toBeInTheDocument();
       expect(screen.getByText('Fixed Income')).toBeInTheDocument();
+      expect(screen.getByText('Real Estate')).toBeInTheDocument();
       // The unclassified remainder becomes the catch-all slice.
       expect(screen.getByText('Other Asset Classes')).toBeInTheDocument();
     });
@@ -470,13 +518,11 @@ describe('AssetAllocationChart', () => {
       totalDirectValue: 10000,
       totalEtfValue: 0,
       unclassifiedValue: 0,
-      items: [{ assetClass: 'Equity', directValue: 10000, etfValue: 0, totalValue: 10000, percentage: 100 }],
+      items: [{ assetClass: 'Equities', assetClassKey: 'equity', directValue: 10000, etfValue: 0, totalValue: 10000, percentage: 100 }],
     });
-    (investmentsApi.getAllocationByTag as any).mockResolvedValue({
-      totalValue: 10000,
-      allocation: [
-        { symbol: null, name: 'AI', type: 'tag', value: 8000, percentage: 80, color: '#abcdef', currencyCode: 'CAD' },
-      ],
+    (investmentsApi.getPortfolioTagSummary as any).mockResolvedValue({
+      keys: [],
+      hasTaggedHoldings: true,
     });
     (investmentsApi.getCountryWeightings as any).mockResolvedValue({
       totalPortfolioValue: 10000,

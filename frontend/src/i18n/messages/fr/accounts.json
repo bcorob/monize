@@ -1,4 +1,13 @@
 {
+  "paymentMatching": {
+    "toggleLabel": "{kind, select, mortgage {Associer les paiements bancaires importés à ce prêt hypothécaire} other {Associer les paiements bancaires importés à ce prêt}}",
+    "toggleHelp": "Lorsqu'une opération bancaire importée correspond au modèle de bénéficiaire, Monize l'utilise pour régler le paiement prévu et la répartit entre capital et intérêts, au lieu d'enregistrer une opération de facture distincte.",
+    "payeePattern": "Modèle de bénéficiaire",
+    "payeePatternPlaceholder": "ex. *MA BANQUE*",
+    "descriptionPattern": "Modèle de description (facultatif)",
+    "descriptionPatternPlaceholder": "ex. *Échéance de prêt*",
+    "fromAccount": "Rapproché des prélèvements de {account}."
+  },
   "nameSuffix": {
     "cash": "Espèces",
     "brokerage": "Courtage"
@@ -22,9 +31,7 @@
     "noMatch": "Aucun compte ne correspond à vos filtres.",
     "clearFilters": "Effacer les filtres",
     "filter": {
-      "all": "Tous",
-      "active": "Actifs",
-      "closed": "Clôturés",
+      "allCount": "Tous ({count})",
       "netWorthAll": "Patrimoine net : Tous",
       "inNetWorth": "Inclus dans le valeur nette",
       "excludedFromNetWorth": "Exclu du valeur nette",
@@ -32,7 +39,10 @@
       "typeAriaLabel": "Filtrer par type de compte",
       "searchPlaceholder": "Rechercher des comptes...",
       "searchAriaLabel": "Rechercher des comptes par nom",
-      "searchClear": "Effacer la recherche"
+      "searchClear": "Effacer la recherche",
+      "activeCount": "Actifs ({count})",
+      "closedCount": "Clôturés ({count})",
+      "statusLabel": "Statut"
     },
     "accountCount": "{filtered} sur {total} comptes",
     "groupCount": "{count, plural, one {# compte} other {# comptes}}",
@@ -40,6 +50,8 @@
       "accountName": "Nom du compte",
       "type": "Type",
       "status": "Statut",
+      "lastReconciled": "Dernier rapprochement",
+      "unreconciled": "Non rapprochées",
       "balance": "Solde",
       "actions": "Actions"
     },
@@ -50,8 +62,11 @@
     "statusClosed": "Clôturé",
     "marketValue": "Valeur de marché",
     "combinedBreakdown": "Placements {investments} · Liquidités {cash}",
+    "combinedInvestments": "Placements {amount}",
+    "combinedCash": "Liquidités {amount}",
     "combinedUnknown": "Total indisponible",
     "combinedUnknownTooltip": "{count, plural, one {# position n'a pas de cours, le total de ce compte ne peut donc pas être calculé} other {# positions n'ont pas de cours, le total de ce compte ne peut donc pas être calculé}}",
+    "combinedUnknownValuation": "Certaines positions de ce compte n'ont pas pu être converties dans votre devise de référence, son total ne peut donc pas être calculé. Ajoutez le taux de change manquant sur la page Devises.",
     "combinedUnknownNoPortfolio": "Les positions n'ont pas pu être chargées, le total de ce compte ne peut donc pas être calculé",
     "limit": "Limite : {amount}",
     "pairedWith": "Associé à {name}",
@@ -81,7 +96,11 @@
     "jointSharedBy": "Partagé par {owner}",
     "jointSharedWith": "Partagé avec {count, plural, one {# personne} other {# personnes}}",
     "includeInNetWorth": "Inclure dans ma valeur nette",
-    "excludeFromNetWorth": "Exclure de ma valeur nette"
+    "excludeFromNetWorth": "Exclure de ma valeur nette",
+    "neverReconciled": "Jamais",
+    "lastReconciledOn": "Rapproché le {date}",
+    "neverReconciledCard": "Jamais rapproché",
+    "unreconciledCard": "{count, plural, one {{formatted} non rapprochée} other {{formatted} non rapprochées}}"
   },
   "contextMenu": {
     "subtypeBrokerage": "Courtage",
@@ -117,17 +136,23 @@
     "accountType": "Type de compte",
     "currency": "Devise",
     "currencyLocked": "La devise est verrouillée car ce compte contient déjà des transactions. La modifier re-libeller silencieusement les soldes existants.",
+    "accountTypeKindLocked": "La devise est verrouillée par les transactions de ce compte : il ne peut donc pas passer de Portefeuille crypto à un type de compte en monnaie fiduciaire, ni l'inverse.",
+    "currencyPlaceholder": "Sélectionnez une devise...",
+    "noCryptoCurrencies": "Un portefeuille crypto contient une cryptomonnaie, et aucune n'est encore configurée. Ajoutez-en une sur la <currencies>page Devises</currencies>, puis choisissez-la ici. <guide>Comment ajouter une cryptomonnaie</guide>",
     "openingBalance": "Solde d'ouverture",
     "loanAmount": "Montant du prêt",
     "mortgageAmount": "Montant du prêt hypothécaire",
     "accountNumber": "Numéro de compte (facultatif)",
     "institution": "Établissement (facultatif)",
-    "institutionRequired": "Prêteur / Établissement (obligatoire)",
+    "institutionRequired": "Prêteur / Établissement",
     "institutionPlaceholder": "Sélectionner ou créer un établissement…",
     "newInstitutionTitle": "Nouvel établissement",
     "creditLimit": "Limite de crédit (facultatif)",
+    "balanceAlertsHeading": "Alertes de solde",
+    "lowBalanceThreshold": "Prévenir en dessous de (facultatif)",
+    "highBalanceThreshold": "Prévenir au-dessus de (facultatif)",
     "interestRateOptional": "Taux d'intérêt % (facultatif)",
-    "interestRateRequired": "Taux d'intérêt % (obligatoire)",
+    "interestRateRequired": "Taux d'intérêt %",
     "description": "Description (facultatif)",
     "excludeFromNetWorth": "Exclure du valeur nette",
     "favourite": "Favori",
@@ -157,13 +182,12 @@
       "mortgage": "Prêt hypothécaire",
       "asset": "Actif",
       "cash": "Espèces",
+      "crypto": "Portefeuille crypto",
       "other": "Autre"
     },
     "statementDueDayPlaceholder": "ex. 15",
     "statementSettlementDayPlaceholder": "ex. 25",
     "fxFeeTitle": "Frais de conversion en devise étrangère (facultatif)",
-    "fxFeePercent": "Pourcentage des frais",
-    "fxFeePercentPlaceholder": "p. ex. 2,5",
     "jointSharedWith": "Compte joint partagé avec {count, plural, one {# personne} other {# personnes}}",
     "jointManage": "Gérer le partage",
     "cashSection": {
@@ -192,10 +216,10 @@
   },
   "loanFields": {
     "title": "Détails du remboursement de prêt",
-    "paymentAmount": "Montant du paiement (obligatoire)",
-    "paymentFrequency": "Fréquence de paiement (obligatoire)",
-    "firstPaymentDate": "Date du premier paiement (obligatoire)",
-    "paymentFromAccount": "Paiement depuis le compte (obligatoire)",
+    "paymentAmount": "Montant du paiement",
+    "paymentFrequency": "Fréquence de paiement",
+    "firstPaymentDate": "Date du premier paiement",
+    "paymentFromAccount": "Paiement depuis le compte",
     "interestCategory": "Catégorie d'intérêts",
     "selectFrequency": "Sélectionner la fréquence…",
     "selectAccount": "Sélectionner un compte…",
@@ -222,33 +246,32 @@
     "analyzingHistory": "Analyse de l'historique des transactions…",
     "detectedPayments": "{count} paiements détectés du {from} au {to}.",
     "confidence": "Fiabilité :",
-    "lastSplit": "Dernière répartition : {currency}{principal} capital / {currency}{interest} intérêts",
-    "extraPayments": "{count, plural, one {# remboursement anticipé} other {# remboursements anticipés}} détecté(s) (moy. {currency}{avg}/période)",
+    "lastSplit": "Dernière répartition : {principal} capital / {interest} intérêts",
+    "extraPayments": "{count, plural, one {# remboursement anticipé} other {# remboursements anticipés}} détecté(s) (moy. {avg}/période)",
     "reviewValues": "Vérifiez et ajustez les valeurs ci-dessous avant d'enregistrer.",
-    "regularPaymentAmount": "Montant du paiement régulier *",
+    "regularPaymentAmount": "Montant du paiement régulier",
     "includeExtraPrincipal": "Inclure un remboursement anticipé du capital",
     "extraPrincipalPerPayment": "Capital supplémentaire par paiement",
-    "totalPayment": "Paiement total : {currency}{amount}",
+    "totalPayment": "Paiement total : {amount}",
     "useDetectedSplit": "Utiliser la répartition capital/intérêts des transactions importées",
-    "useDetectedSplitDesc": "Utilisera {currency}{interest} pour les intérêts, le reste au capital",
+    "useDetectedSplitDesc": "Utilisera {interest} pour les intérêts, le reste au capital",
     "calculateFromRate": "Calculera la répartition à partir du taux d'intérêt et du solde actuel",
-    "paymentFrequency": "Fréquence de paiement *",
-    "paymentFromAccount": "Paiement depuis le compte *",
+    "paymentFrequency": "Fréquence de paiement",
+    "paymentFromAccount": "Paiement depuis le compte",
     "selectAccount": "Sélectionner un compte…",
-    "nextPaymentDate": "Date du prochain paiement *",
+    "nextPaymentDate": "Date du prochain paiement",
     "annualInterestRate": "Taux d'intérêt annuel (%)",
     "interestRatePlaceholder": "ex. 5,5",
     "estimatedFromHistory": "Estimé à partir de l'historique : {rate}%",
     "interestExpenseCategory": "Catégorie de charges d'intérêts",
+    "interestExpenseCategoryRequired": "Catégorie de charges d'intérêts",
     "detectedCategory": "Détecté : {name}",
     "selectCategory": "Sélectionner une catégorie…",
     "payeeLender": "Bénéficiaire / Prêteur",
     "selectOrCreatePayee": "Sélectionner ou créer un bénéficiaire…",
     "mortgageDetails": "Détails du prêt hypothécaire",
-    "canadianMortgage": "Prêt hypothécaire canadien (composition semestrielle)",
-    "variableRate": "Taux variable",
     "amortizationMonths": "Amortissement (mois)",
-    "termMonths": "Durée (mois)",
+    "termMonths": "Terme à taux fixe (mois)",
     "autoPost": "Enregistrer automatiquement les transactions à l'échéance",
     "skip": "Ignorer",
     "setUpPayments": "Configurer les paiements",
@@ -264,26 +287,46 @@
     },
     "toasts": {
       "setupComplete": "Paiements récurrents configurés pour {account}"
+    },
+    "firstInstallment": "Première échéance",
+    "firstInstallmentHelp": "Ce prêt hypothécaire n'a pas de paiement fixe : chaque échéance est calculée à partir du solde, du taux et de la durée d'amortissement. Voici celle due le {date}, capital supplémentaire compris.",
+    "firstInstallmentPending": "Saisissez la date du prochain paiement pour calculer la première échéance.",
+    "firstInstallmentCalculating": "Calcul de la première échéance...",
+    "firstInstallmentFailed": "La première échéance n'a pas pu être calculée. Vérifiez les valeurs ci-dessous et réessayez.",
+    "paymentMatching": {
+      "autoPostDisabled": "Désactivé automatiquement : le rapprochement des paiements règle cette facture à partir du prélèvement de la banque lui-même, elle ne doit donc pas aussi s'enregistrer elle-même.",
+      "payeePatternRequired": "Saisissez un modèle de bénéficiaire comportant un caractère générique *"
     }
   },
   "mortgageFields": {
     "title": "Détails du prêt hypothécaire",
-    "canadianMortgage": "Prêt hypothécaire canadien",
-    "canadianMortgageDesc": "Utilise la composition semestrielle pour les taux fixes (obligatoire au Canada)",
-    "variableRate": "Taux variable",
-    "variableRateDesc": "Le taux peut changer durant la durée (utilise la composition mensuelle)",
-    "variableRateLoanDetailsLink": "Enregistrez les changements de taux dans les <link>détails du prêt</link>.",
-    "termLength": "Durée du terme",
-    "termLengthNoTerm": "Laisser à 0 ans et 0 mois pour aucun terme.",
-    "amortizationPeriod": "Période d'amortissement (obligatoire)",
+    "type": {
+      "label": "Type de prêt hypothécaire",
+      "ANNUITY": "Annuité (versement constant)",
+      "CANADIAN_FIXED": "Taux fixe canadien",
+      "LINEAR": "Linéaire (capital constant)",
+      "INTEREST_ONLY": "Intérêts seulement",
+      "help": {
+        "ANNUITY": "Votre versement total est le même chaque mois. Choisissez-le aussi pour un prêt à taux variable.",
+        "CANADIAN_FIXED": "Un contrat canadien à taux fixe ; les intérêts sont composés deux fois par an.",
+        "LINEAR": "La part de capital est la même chaque mois et le total diminue.",
+        "INTEREST_ONLY": "Vous ne payez que les intérêts et le solde ne bouge pas."
+      }
+    },
+    "rateChangesLoanDetailsLink": "Enregistrez les changements de taux dans les <link>détails du prêt</link>.",
+    "termLength": "Terme à taux fixe",
+    "termLengthHelp": "Durée de votre taux d'intérêt ou du terme de votre contrat, par exemple un taux fixe de 5 ans. Monize peut vous le rappeler avant son échéance. Laisser à 0 ans et 0 mois pour aucun terme.",
+    "amortizationPeriod": "Période d'amortissement",
     "years": "Années",
     "months": "Mois",
-    "paymentFrequency": "Fréquence de paiement (obligatoire)",
-    "firstPaymentDate": "Date du premier paiement (obligatoire)",
-    "paymentFromAccount": "Paiement depuis le compte (obligatoire)",
-    "interestCategory": "Catégorie d'intérêts",
+    "paymentFrequency": "Fréquence de paiement",
+    "firstPaymentDate": "Date du premier paiement",
+    "paymentFromAccount": "Paiement depuis le compte",
+    "paymentFromAccountEditHelp": "La modifier transfère les prochains paiements planifiés et la règle de rapprochement des paiements vers le nouveau compte. Les paiements déjà comptabilisés ne changent pas.",
+    "interestCategory": "Catégorie d'intérêts (facultatif)",
+    "interestCategoryRequired": "Catégorie d'intérêts",
     "interestBookingMode": {
-      "label": "Comment les intérêts sont-ils enregistrés ?",
+      "label": "Comptabilisation des intérêts",
       "help": "Pour que la détection du taux les lise correctement. Auto convient le plus souvent.",
       "AUTO": "Automatique (recommandé)",
       "SPLIT": "Ligne fractionnée du paiement",
@@ -330,6 +373,72 @@
       "memoLabel": "Texte de mémo de remboursement anticipé",
       "memoPlaceholder": "p. ex. remboursement anticipé",
       "memoHelp": "Correspondance de sous-chaîne insensible à la casse avec le mémo du paiement, le mémo de la transaction source ou le mémo d'une ventilation."
+    },
+    "prepaymentMode": {
+      "label": "Effet d'un remboursement anticipé",
+      "SHORTEN_TERM": "Raccourcit la durée (même capital chaque mois)",
+      "LOWER_INSTALLMENT": "Réduit l'échéance (même date de fin)",
+      "help": "Renseignez-vous auprès de votre prêteur. Si, après un remboursement anticipé, la part de capital du relevé est inchangée, la durée a été raccourcie."
+    },
+    "previewFirstInstallment": "Première échéance :",
+    "detect": {
+      "toggle": "Vous hésitez ? Saisissez quelques échéances",
+      "title": "Trouver votre type de prêt hypothécaire",
+      "intro": "Recopiez deux ou trois échéances consécutives d'un relevé, de la plus ancienne à la plus récente. Le solde est facultatif : avec lui et le taux d'intérêt, Monize peut déterminer si les intérêts sont composés deux fois par an.",
+      "installment": "Échéance {number}",
+      "principal": "Capital",
+      "interest": "Intérêts",
+      "balance": "Solde avant (facultatif)",
+      "rowIncomplete": "Saisissez le capital et les intérêts, ou laissez la ligne vide.",
+      "rate": "Vérifié par rapport au taux d'intérêt saisi plus haut, {rate}.",
+      "noRate": "Aucun taux d'intérêt n'est saisi plus haut, la capitalisation ne peut donc pas être vérifiée.",
+      "needsFrequency": "Choisissez d'abord la fréquence de paiement ci-dessous : les échéances sont lues à ce rythme.",
+      "submit": "Suggérer un type",
+      "close": "Fermer",
+      "suggested": "Type suggéré : {type}",
+      "noSuggestion": "Aucun type suggéré.",
+      "lowConfidence": "Fiabilité faible : vérifiez avec votre contrat ou renseignez-vous auprès de votre prêteur avant de l'utiliser.",
+      "use": "Utiliser ce type",
+      "failed": "Les échéances n'ont pas pu être vérifiées car la requête a échoué. Réessayez.",
+      "reason": {
+        "TOO_FEW_SAMPLES": "Il faut au moins deux échéances consécutives pour comparer.",
+        "INVALID_SAMPLE": "Une échéance a un montant négatif ou illisible.",
+        "NO_PAYMENT": "Les échéances ne remboursent aucun capital et ne facturent aucun intérêt.",
+        "AMBIGUOUS_CONSTANT_PRINCIPAL_AND_INSTALLMENT": "Le capital et le total sont identiques à chaque échéance, ce qui correspond aussi bien à un prêt linéaire qu'à un prêt à annuités. Essayez des échéances plus espacées ou vérifiez votre contrat.",
+        "ACCELERATED_FREQUENCY": "Ces échéances semblent linéaires ou à intérêts seulement, ce qui est impossible avec une fréquence de paiement accélérée. Vérifiez la fréquence de paiement.",
+        "NO_RULE_FITS": "Ni le capital ni le total ne restent identiques d'une échéance à l'autre. Si le taux a changé entre elles, utilisez des échéances d'une même période de taux.",
+        "ZERO_PRINCIPAL": "Aucun capital n'est remboursé, le solde ne bouge donc pas.",
+        "ZERO_PRINCIPAL_RATE_MISMATCH": "Aucun capital n'est remboursé, mais les intérêts ne correspondent pas au taux indiqué appliqué au solde. Vérifiez le taux.",
+        "CONSTANT_PRINCIPAL": "La part de capital est la même à chaque fois et le total diminue.",
+        "CONSTANT_PRINCIPAL_RATE_MISMATCH": "La part de capital est la même à chaque fois, mais les intérêts ne correspondent pas au taux indiqué appliqué au solde. Vérifiez le taux.",
+        "CONSTANT_INSTALLMENT_SEMI_ANNUAL": "Le total est le même à chaque fois et les intérêts correspondent au taux indiqué composé deux fois par an.",
+        "CONSTANT_INSTALLMENT_NOMINAL": "Le total est le même à chaque fois et les intérêts correspondent au taux indiqué sans capitalisation semestrielle.",
+        "CONSTANT_INSTALLMENT_RATE_UNCHECKED": "Le total est le même à chaque fois. Sans le solde avant chaque échéance et le taux d'intérêt, la capitalisation semestrielle n'a pas pu être vérifiée.",
+        "CONSTANT_INSTALLMENT_COMPOUNDING_AMBIGUOUS": "Le total est le même à chaque fois, mais le solde est trop faible pour distinguer une capitalisation semestrielle. Un contrat canadien à taux fixe le précise dans ses conditions.",
+        "CONSTANT_INSTALLMENT_RATE_MISMATCH": "Le total est le même à chaque fois, mais les intérêts ne correspondent à aucune des deux conventions au taux indiqué. Les intérêts sont peut-être calculés au jour ; vérifiez le taux."
+      },
+      "history": {
+        "action": "Détecter le type de prêt hypothécaire",
+        "title": "Type de prêt hypothécaire d'après vos paiements",
+        "intro": "Déterminé à partir des dernières échéances enregistrées à un même taux. Rien ne change tant que vous n'avez pas enregistré le compte.",
+        "current": "Type actuel : {type}",
+        "alreadySet": "Ce prêt hypothécaire a déjà le type suggéré.",
+        "rate": "Taux d'intérêt en vigueur : {rate}",
+        "noRate": "Aucun taux d'intérêt n'est enregistré pour ces dates, la capitalisation n'a donc pas été vérifiée.",
+        "noSamples": "Aucune échéance enregistrée comportant à la fois une part de capital et une part d'intérêts n'a été trouvée. Enregistrez vos paiements ventilés en capital et intérêts pour utiliser cette fonction.",
+        "colDate": "Date",
+        "colPrincipal": "Capital",
+        "colInterest": "Intérêts",
+        "colBalance": "Solde avant",
+        "balanceUnknown": "Inconnu",
+        "failed": "L'historique des paiements n'a pas pu être lu car la requête a échoué. Réessayez.",
+        "cancel": "Annuler",
+        "use": "Modifier le compte avec ce type"
+      }
+    },
+    "originalPrincipal": {
+      "label": "Capital initial emprunté",
+      "help": "Le montant que vous avez emprunté à l'origine. Pour un compte dont l'historique enregistré commence après le début du prêt, il s'agit du montant emprunté, et non du solde initial — qui est la dette au début de votre historique."
     }
   },
   "assetFields": {
@@ -352,13 +461,19 @@
   "validation": {
     "nameRequired": "Le nom du compte est obligatoire",
     "currencyCodeLength": "Le code de devise doit comporter 3 caractères",
+    "currencyRequired": "Sélectionnez une devise",
     "institutionRequired": "Veuillez sélectionner ou créer un établissement",
     "interestRateRequired": "Le taux d'intérêt est obligatoire",
     "paymentAmountRequired": "Le montant du paiement est obligatoire",
     "paymentFrequencyRequired": "La fréquence de paiement est obligatoire",
     "paymentStartDateRequired": "La date du premier paiement est obligatoire",
     "paymentAccountRequired": "Le compte de paiement est obligatoire",
-    "amortizationRequired": "La période d'amortissement est obligatoire"
+    "amortizationRequired": "La période d'amortissement est obligatoire",
+    "interestCategoryRequired": "Choisissez la catégorie dans laquelle les intérêts de ce prêt sont comptabilisés",
+    "acceleratedNeedsAnnuity": "Ce prêt hypothécaire est remboursé selon un calendrier accéléré, que seul un prêt à annuités possède. Un prêt linéaire ou in fine exige une fréquence de paiement régulière : conservez un type à annuités.",
+    "paymentMatchingPayeePatternRequired": "Saisissez un modèle de bénéficiaire pour identifier le prélèvement de la banque",
+    "paymentMatchingPayeePatternWildcard": "Le modèle de bénéficiaire doit comporter un caractère générique *",
+    "paymentMatchingDescriptionPatternWildcard": "Le modèle de description doit comporter un caractère générique *"
   },
   "loanDetail": {
     "backToAccounts": "Retour aux comptes",
@@ -386,7 +501,12 @@
       "estRemainingInterest": "Intérêts restants est.",
       "notSet": "Non défini",
       "notAvailable": "N/D",
-      "paidOff": "Remboursé"
+      "paidOff": "Remboursé",
+      "nextInstallment": "Prochaine échéance",
+      "dueOn": "Due le {date}",
+      "finalPayment": "Paiement final",
+      "nextInstallmentDue": "Prochaine échéance (due le {date})",
+      "finalPaymentDue": "Paiement final (dû le {date})"
     },
     "schedule": {
       "title": "Calendrier d'amortissement",
@@ -455,7 +575,19 @@
       "budgetLabel": "Paiement mensuel total",
       "budgetHint": "Consacrez chaque mois un total fixe au prêt ; le remboursement anticipé est ce qui reste après la mensualité. Quand la mensualité baisse, le remboursement augmente pour garder le même total.",
       "budgetBelowInstallment": "C'est inférieur à la mensualité actuelle ({amount}) ; augmentez-le pour rembourser par anticipation.",
-      "windowInverted": "La date de début est postérieure à la date de fin, ce plan ne s'applique donc jamais."
+      "windowInverted": "La date de début est postérieure à la date de fin, ce plan ne s'applique donc jamais.",
+      "unavailable": {
+        "title": "La simulation de remboursement anticipé ne peut pas encore être calculée pour ce prêt.",
+        "reasonPaidOff": "Ce prêt n'a aucun solde restant dû, il n'y a donc plus rien à amortir.",
+        "reasonNoFrequency": "Aucune périodicité de paiement n'est définie pour ce prêt. Ajoutez-la dans les paramètres du compte.",
+        "reasonNoRate": "Aucun taux d'intérêt n'est enregistré pour ce prêt. Définissez le taux dans les paramètres du compte, ou enregistrez un changement de taux daté d'aujourd'hui ou avant. Un taux affiché par ligne dans l'échéancier ci-dessous est reconstruit à partir des intérêts facturés et n'est pas un taux enregistré.",
+        "reasonNoPayment": "Le montant de l'échéance ne peut pas être déterminé. Enregistrez les échéances régulières comme des virements vers le compte du prêt (capital, avec les intérêts en ligne de ventilation ou en dépense catégorisée distincte), ou définissez le montant du paiement dans les paramètres du compte. Les paiements enregistrés comme des dépenses ordinaires sur le compte source n'atteignent jamais le compte du prêt, donc l'échéancier ne peut pas les voir.",
+        "reasonNoAmortization": "Ce prêt hypothécaire n'a pas de durée d'amortissement : ses échéances et la fin de son terme ne peuvent donc pas être calculées. Définissez la durée d'amortissement dans les paramètres du compte.",
+        "reasonNoPaymentStart": "Ce prêt hypothécaire n'a pas de date de premier paiement : les paiements restants jusqu'à la fin de son terme ne peuvent donc pas être comptés. Configurez son paiement planifié depuis les paramètres du compte ; la première date d'échéance saisie devient le paiement 1.",
+        "reasonNoPrincipal": "Ce prêt hypothécaire n'a pas de montant initial : son amortissement constant ne peut donc pas être calculé. Définissez le montant du prêt dans les paramètres du compte."
+      },
+      "budgetBelowNextInstallment": "C'est inférieur à la prochaine échéance ({amount}, due le {date}) ; augmentez-le au-delà pour effectuer un remboursement anticipé.",
+      "shortenTermNeedsPrincipal": "Ce prêt hypothécaire n'a pas de montant initial : une durée raccourcie ne peut donc pas être simulée. Choisissez de réduire l'échéance, ou définissez le montant du prêt dans les paramètres du compte."
     },
     "comparison": {
       "newPayoff": "Nouvelle date de remboursement",
@@ -471,7 +603,8 @@
       "newInstallment": "Nouvelle mensualité",
       "installmentDrop": "{payment} (−{reduction})",
       "monthlyPayment": "Paiement mensuel",
-      "overpaymentAtFrequency": "{frequency}: +{amount}"
+      "overpaymentAtFrequency": "{frequency}: +{amount}",
+      "firstPayment": "Premier paiement"
     },
     "chart": {
       "title": "Chronologie du remboursement",
@@ -538,6 +671,71 @@
       "seriesActual": "Solde réel",
       "unknown": "Inconnu"
     },
+    "paymentMatching": {
+      "title": "Rapprochement des paiements",
+      "description": "Reconnaît le prélèvement de chaque échéance par la banque et l'impute sur l'échéancier du prêt en capital et intérêts, au lieu d'enregistrer la facture séparément.",
+      "noSchedule": "Le rapprochement des paiements impute les prélèvements de la banque sur le paiement programmé du prêt. Configurez d'abord les paiements de ce prêt.",
+      "noRule": "Aucune règle de rapprochement des paiements n'est liée à ce prêt.",
+      "createOne": "En créer une",
+      "ruleLabel": "Règle :",
+      "ruleLoading": "Chargement de la règle",
+      "ruleFailed": "La règle de rapprochement des paiements n'a pas pu être chargée.",
+      "scheduleLoading": "Chargement du paiement programmé",
+      "scheduleFailed": "Le paiement programmé du prêt n'a pas pu être chargé.",
+      "retry": "Réessayer",
+      "autoPost": {
+        "title": "Le paiement programmé s'enregistre encore lui-même",
+        "body": "L'enregistrement automatique est activé sur la facture de ce prêt : une échéance que la règle impute à partir du prélèvement de la banque serait donc aussi enregistrée par la facture. Désactivez l'enregistrement automatique de la facture dans Factures et dépôts."
+      },
+      "preconditions": {
+        "openingBalance": "Le solde d'ouverture du prêt doit correspondre à la dette au début de l'historique traité ; les intérêts de chaque échéance sont calculés sur ce montant.",
+        "originalPrincipal": "Le capital initial doit être le montant emprunté à l'origine, et non le solde d'ouverture.",
+        "scheduleStart": "Les prélèvements datés d'avant le {date}, date de début du paiement programmé, n'ont aucune échéance à laquelle être rapprochés."
+      },
+      "process": {
+        "button": "Traiter l'historique",
+        "scope": "Applique la règle aux prélèvements de {account}, du plus ancien au plus récent.",
+        "running": "Traitement de l'historique : {count, plural, one {# échéance imputée} other {# échéances imputées}} jusqu'à présent.",
+        "done": "{count, plural, =0 {Aucune échéance n'a été imputée.} one {# échéance a été imputée.} other {# échéances ont été imputées.}}",
+        "undo": "Chaque page du traitement peut être annulée depuis l'historique des actions.",
+        "failed": "Le traitement de l'historique s'est arrêté",
+        "stuckTitle": "Le traitement de l'historique n'a pas pu continuer",
+        "stuck": "Plus de {limit, number} transactions sont datées du {date}, le traitement ne peut donc pas dépasser ce jour. Imputez le reste depuis Outils > Règles avec un filtre plus précis.",
+        "stuckUnknown": "Le serveur n'a pas indiqué jusqu'où le traitement est allé, il ne peut donc pas continuer. Rechargez la page et réessayez."
+      },
+      "create": {
+        "title": "Créer une règle de rapprochement des paiements",
+        "description": "La règle impute les prélèvements correspondants du compte du paiement programmé du prêt, et l'enregistrement automatique de la facture est désactivé.",
+        "descriptionWithAccount": "La règle impute les prélèvements correspondants de {account}, et l'enregistrement automatique de la facture est désactivé.",
+        "submit": "Créer la règle",
+        "payeePatternRequired": "Saisissez un modèle de bénéficiaire contenant un caractère générique *",
+        "descriptionPatternWildcard": "Un modèle de description doit contenir un caractère générique *",
+        "failed": "La règle de rapprochement des paiements n'a pas pu être créée.",
+        "done": "Règle « {name} » créée"
+      },
+      "settled": {
+        "title": "Échéances imputées",
+        "titleWithCount": "Échéances imputées ({count})",
+        "colDueDate": "Date d'échéance",
+        "colTransaction": "Transaction",
+        "colPrincipal": "Capital",
+        "colInterest": "Intérêts",
+        "colExtra": "Capital supplémentaire",
+        "colDebtBefore": "Dette avant",
+        "openTransaction": "Ouvrir la transaction",
+        "void": "Annulée",
+        "notRecorded": "Non enregistré",
+        "empty": {
+          "title": "Aucune échéance imputée pour l'instant",
+          "body": "Traitez l'historique ou importez les prélèvements de la banque pour imputer des échéances."
+        },
+        "error": {
+          "title": "Les échéances imputées n'ont pas pu être chargées",
+          "body": "Il ne s'agit pas d'une liste vide. Réessayez pour voir quelles échéances ont été imputées.",
+          "retry": "Réessayer"
+        }
+      }
+    },
     "lineOfCredit": {
       "currentBalance": "Solde actuel",
       "creditLimit": "Limite de crédit",
@@ -549,7 +747,10 @@
     },
     "rateHistory": {
       "scheduledUpdateTitle": "Mettre à jour le paiement planifié ?",
-      "scheduledUpdateMessage": "Le paiement de facture planifié « {name} » peut être mis à jour selon le nouveau taux : {payment} au total, réparti en {principal} de capital et {interest} d’intérêts. Le mettre à jour maintenant ?",
+      "scheduledUpdateNextPaymentUnchanged": "Le paiement de facture planifié « {name} » correspond déjà à l’échéancier des taux. Prochain paiement le {date} : inchangé ({payment}).",
+      "scheduledUpdateNextPaymentChanged": "Le paiement de facture planifié « {name} » peut être mis à jour selon l’échéancier des taux. Prochain paiement le {date} : {before} → {after}, réparti en {principal} de capital et {interest} d’intérêts.",
+      "scheduledUpdateNextPaymentNew": "Le paiement de facture planifié « {name} » peut être mis à jour selon l’échéancier des taux. Prochain paiement le {date} : {payment}, réparti en {principal} de capital et {interest} d’intérêts.",
+      "scheduledUpdateUpcomingChange": "À partir du {date}, le paiement devient {amount}.",
       "scheduledUpdateDefaultName": "ce prêt hypothécaire",
       "scheduledUpdateConfirm": "Mettre à jour le paiement",
       "scheduledUpdateSkip": "Laisser tel quel",
@@ -616,6 +817,54 @@
       "memoLabel": "Note de remboursement anticipé",
       "memoPlaceholder": "ex. Capital supplémentaire",
       "memoHelp": "Les paiements dont la note contient ce texte sont comptés comme des remboursements anticipés (insensible à la casse)."
+    },
+    "notAmortizing": {
+      "title": "Ce prêt ne se rembourse pas, la date de remboursement estimée et les intérêts restants sont donc inconnus.",
+      "paymentBelowInterest": "L'échéance ({payment}) est inférieure aux intérêts mensuels (environ {interest}) à {rate}%, donc le solde ne baisse jamais. Enregistrez l'échéance réelle (l'entrée de l'historique des taux ou le montant de paiement du compte) pour qu'elle couvre les intérêts.",
+      "beyondHorizon": "L'échéance couvre les intérêts, mais la durée dépasse l'horizon de projection, donc la date de remboursement et les intérêts restants ne sont pas affichés."
+    }
+  },
+  "loanFees": {
+    "title": "Frais du prêt hypothécaire",
+    "help": "Assurances, taxes ou autres frais prélevés avec chaque paiement du prêt hypothécaire. Chaque ligne de frais devient une ligne distincte du paiement programmé, imputée à la catégorie de votre choix. Des frais peuvent être un montant fixe, un pourcentage du solde actuel (recalculé à chaque paiement) ou un pourcentage du solde initial, facturés par paiement ou par an.",
+    "panelDescription": "Frais prélevés avec chaque paiement programmé du prêt hypothécaire. L'enregistrement met à jour les lignes du prochain paiement.",
+    "none": "Aucuns frais ne sont prélevés avec le paiement de ce prêt hypothécaire.",
+    "name": "Nom des frais",
+    "category": "Catégorie",
+    "calculation": "Mode de calcul",
+    "basis": "La valeur s'applique",
+    "amount": "Montant",
+    "rate": "Taux",
+    "add": "Ajouter des frais",
+    "remove": "Supprimer ces frais",
+    "edit": "Modifier les frais",
+    "editTitle": "Frais du prêt hypothécaire",
+    "save": "Enregistrer les frais",
+    "cancel": "Annuler",
+    "saved": "Les frais du prêt hypothécaire ont été enregistrés.",
+    "saveFailed": "Les frais du prêt hypothécaire n'ont pas pu être enregistrés.",
+    "loading": "Chargement des frais…",
+    "loadFailed": "Les frais du prêt hypothécaire n'ont pas pu être chargés.",
+    "retry": "Réessayer",
+    "unknownCategory": "Catégorie inconnue",
+    "unknownValue": "inconnu",
+    "summaryPerPayment": "{value} par paiement, {calculation}",
+    "summaryAnnual": "{value} par an, {calculation}",
+    "paymentMatchingConflict": "Le rapprochement des paiements ne peut pas encore solder un paiement qui comprend des frais. Désactivez le rapprochement des paiements ou supprimez les frais.",
+    "paymentMatchingNote": "Ce prêt hypothécaire a une règle de rapprochement des paiements. Le rapprochement ne peut pas encore régler un paiement qui comprend des frais : aucun frais ne peut donc être ajouté tant que la règle existe.",
+    "calculations": {
+      "fixed": "Montant fixe",
+      "percentCurrentBalance": "Pourcentage du solde actuel",
+      "percentOriginalBalance": "Pourcentage du solde initial"
+    },
+    "bases": {
+      "perPayment": "Par paiement",
+      "annual": "Par an"
+    },
+    "errors": {
+      "required": "Obligatoire",
+      "duplicate": "Chaque ligne de frais doit avoir sa propre catégorie, autre que la catégorie d'intérêts",
+      "range": "Saisissez un taux de 100 % au maximum"
     }
   }
 }

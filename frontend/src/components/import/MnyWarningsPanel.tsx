@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { ChevronRightIcon } from '@heroicons/react/20/solid';
-import { formatCurrency } from '@/lib/format';
+import { ChevronRightIcon } from '@heroicons/react/24/outline';
 import { useDateFormat } from '@/hooks/useDateFormat';
+import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { MnyFlaggedRow, MnyWarningSummary } from '@/lib/import-mny';
+import { Th } from '@/components/ui/Table';
 
 interface MnyWarningsPanelProps {
   warnings: MnyWarningSummary[];
@@ -131,27 +132,28 @@ export function MnyWarningsPanel({ warnings, heading }: MnyWarningsPanelProps) {
 function FlaggedRowsTable({ rows }: { rows: MnyFlaggedRow[] }) {
   const t = useTranslations('import');
   const { formatDate } = useDateFormat();
+  const { formatCurrency } = useNumberFormat();
 
   return (
     <div className="scrollbar-slim max-h-80 overflow-y-auto overflow-x-auto pr-1">
       <table className="min-w-full text-xs">
         <thead>
-          <tr className="text-left uppercase tracking-wide text-muted-foreground">
-            <th className="px-2 py-1 font-medium">
+          <tr>
+            <Th className="px-2 py-1">
               {t('mnyWarnings.table.date')}
-            </th>
-            <th className="px-2 py-1 font-medium">
+            </Th>
+            <Th className="px-2 py-1">
               {t('mnyWarnings.table.account')}
-            </th>
-            <th className="px-2 py-1 font-medium">
+            </Th>
+            <Th className="px-2 py-1">
               {t('mnyWarnings.table.payee')}
-            </th>
-            <th className="px-2 py-1 text-right font-medium">
+            </Th>
+            <Th align="right" className="px-2 py-1">
               {t('mnyWarnings.table.amount')}
-            </th>
-            <th className="px-2 py-1 font-medium">
+            </Th>
+            <Th className="px-2 py-1">
               {t('mnyWarnings.table.problem')}
-            </th>
+            </Th>
           </tr>
         </thead>
         <tbody className="divide-y divide-border">

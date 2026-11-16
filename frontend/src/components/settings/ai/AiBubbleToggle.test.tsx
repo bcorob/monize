@@ -35,8 +35,16 @@ beforeEach(() => {
 });
 
 describe('AiBubbleToggle', () => {
+  it('is not offered at all when no AI provider is configured', () => {
+    // The bubble hides itself on the same fact, so a switch here would be a
+    // setting whose only effect is nothing happening.
+    const { container } = render(<AiBubbleToggle />);
+    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+  });
+
   it('renders the heading and an off switch by default', () => {
-    render(<AiBubbleToggle />);
+    render(<AiBubbleToggle aiConfigured />);
     expect(screen.getByText('Floating chat bubble')).toBeInTheDocument();
     expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', 'false');
   });
@@ -46,7 +54,7 @@ describe('AiBubbleToggle', () => {
       aiBubbleEnabled: true,
     });
 
-    render(<AiBubbleToggle />);
+    render(<AiBubbleToggle aiConfigured />);
     fireEvent.click(screen.getByRole('switch'));
 
     await waitFor(() => {
@@ -65,7 +73,7 @@ describe('AiBubbleToggle', () => {
       aiBubbleEnabled: false,
     });
 
-    render(<AiBubbleToggle />);
+    render(<AiBubbleToggle aiConfigured />);
     expect(screen.getByRole('switch')).toHaveAttribute('aria-checked', 'true');
     fireEvent.click(screen.getByRole('switch'));
 
@@ -82,7 +90,7 @@ describe('AiBubbleToggle', () => {
       new Error('Network error'),
     );
 
-    render(<AiBubbleToggle />);
+    render(<AiBubbleToggle aiConfigured />);
     fireEvent.click(screen.getByRole('switch'));
     // Drain the rejection handler microtask.
     await act(async () => {});
@@ -98,7 +106,7 @@ describe('AiBubbleToggle', () => {
   });
 
   it('disables the switch when the disabled prop is set', () => {
-    render(<AiBubbleToggle disabled />);
+    render(<AiBubbleToggle disabled aiConfigured />);
     expect(screen.getByRole('switch')).toBeDisabled();
   });
 });

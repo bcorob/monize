@@ -16,6 +16,7 @@ import {
   getLocaleLabel,
 } from '@/i18n/config';
 import { loadNamespaceMessages } from '@/i18n/messages';
+import { preferenceCookieAttributes } from '@/lib/preference-cookie';
 
 /**
  * The confirmation toast must be readable by the user who just switched, so
@@ -61,7 +62,7 @@ export function LanguageSelector({ value, onChange }: LanguageSelectorProps) {
     // 'browser' follows the browser's language: persist the sentinel but drive
     // the active locale (cookie + confirmation toast) with the detected locale.
     const effective = next === 'browser' ? browserLocale : next;
-    Cookies.set(LOCALE_COOKIE, effective, { sameSite: 'lax', expires: 365 });
+    Cookies.set(LOCALE_COOKIE, effective, preferenceCookieAttributes());
 
     startTransition(async () => {
       try {

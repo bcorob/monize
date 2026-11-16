@@ -10,6 +10,7 @@ import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { createLogger } from '@/lib/logger';
 import { aggregateGroupedTotals, DisplayCurrencyStrategy } from './widget-shared';
+import { CHART_TOOLTIP_CLASS } from '@/lib/chart-style';
 
 const logger = createLogger('TagKeyBreakdownChart');
 
@@ -42,13 +43,14 @@ function ChartTooltip({
   payload?: Array<{ payload: { name: string; value: number; percentage: number } }>;
   fmt: (v: number) => string;
 }) {
+  const { formatPercent } = useNumberFormat();
   if (active && payload && payload.length) {
     const d = payload[0].payload;
     return (
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3">
+      <div className={CHART_TOOLTIP_CLASS}>
         <p className="font-medium text-gray-900 dark:text-gray-100">{d.name}</p>
         <p className="text-gray-600 dark:text-gray-400">
-          {fmt(d.value)} ({d.percentage.toFixed(1)}%)
+          {fmt(d.value)} ({formatPercent(d.percentage, 1)})
         </p>
       </div>
     );
@@ -67,8 +69,8 @@ function ChartTooltip({
  */
 export function TagKeyBreakdownChart({ tagKey, params }: TagKeyBreakdownChartProps) {
   const t = useTranslations('transactions');
-  const { formatCurrencyCompact: formatCurrency } = useNumberFormat();
-  const { convertToDefault, defaultCurrency } = useExchangeRates();
+  const { formatCurrencyCompact: formatCurrency, formatPercent } = useNumberFormat();
+  const { defaultCurrency } = useExchangeRates();
 
   const [rows, setRows] = useState<GroupedTotal[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -99,33 +101,31 @@ export function TagKeyBreakdownChart({ tagKey, params }: TagKeyBreakdownChartPro
   const tCommon = useTranslations('common');
   const { chartData, displayCurrency, excludedCount } = useMemo(() => {
     const currencies = new Set(rows.map((r) => r.currencyCode));
+    // Several currencies read the server's conversion of each value, made at
+    // each transaction's own rate or date, never today's (issue #2106).
     const strategy: DisplayCurrencyStrategy =
       currencies.size <= 1
         ? {
             displayCurrency: [...currencies][0] ?? defaultCurrency,
-            toDisplay: (amount) => amount,
+            converted: false,
           }
         : {
-            displayCurrency: defaultCurrency,
-            toDisplay: (amount, from) => convertToDefault(amount, from),
+            displayCurrency: rows[0]?.convertedCurrency ?? defaultCurrency,
+            converted: true,
           };
 
     // No rate, no slice: a bar cannot represent unknown. Count the tags left out
     // so the chart can say it is a subtotal rather than presenting a breakdown
     // that sums to 100% of only the tags that converted.
-    let excludedCount = 0;
-    const aggregated = aggregateGroupedTotals(rows, strategy)
-      .filter((r): r is typeof r & { total: number } => {
-        if (r.total === null) {
-          excludedCount += 1;
-          return false;
-        }
-        return true;
-      })
-      .map((r) => ({
-        name: r.name ?? '',
-        value: Math.abs(r.total),
-      }));
+    const grouped = aggregateGroupedTotals(rows, strategy);
+    const converted = grouped.filter(
+      (r): r is typeof r & { total: number } => r.total !== null,
+    );
+    const excludedCount = grouped.length - converted.length;
+    const aggregated = converted.map((r) => ({
+      name: r.name ?? '',
+      value: Math.abs(r.total),
+    }));
 
     const top = aggregated.slice(0, TOP_N);
     const rest = aggregated.slice(TOP_N);
@@ -148,7 +148,7 @@ export function TagKeyBreakdownChart({ tagKey, params }: TagKeyBreakdownChartPro
     }));
 
     return { chartData: data, displayCurrency: strategy.displayCurrency, excludedCount };
-  }, [rows, convertToDefault, defaultCurrency, t]);
+  }, [rows, defaultCurrency, t]);
 
   const fmt = (v: number) => formatCurrency(v, displayCurrency);
 
@@ -163,7 +163,7 @@ export function TagKeyBreakdownChart({ tagKey, params }: TagKeyBreakdownChartPro
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6">
         {heading}
         <div className="h-64 flex items-center justify-center">
-          <div className="animate-pulse w-48 h-48 rounded-full bg-gray-200 dark:bg-gray-700" />
+          <div className="animate-pulse skeleton-shimmer w-48 h-48 rounded-full bg-gray-200 dark:bg-gray-700" />
         </div>
       </div>
     );
@@ -214,7 +214,7 @@ export function TagKeyBreakdownChart({ tagKey, params }: TagKeyBreakdownChartPro
               {item.name}
             </span>
             <span className="text-gray-900 dark:text-gray-100 ml-auto">
-              {item.percentage.toFixed(1)}%
+              {formatPercent(item.percentage, 1)}
             </span>
           </div>
         ))}

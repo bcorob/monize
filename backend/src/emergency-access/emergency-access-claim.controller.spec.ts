@@ -1,7 +1,9 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { ConfigService } from "@nestjs/config";
 import { DataSource } from "typeorm";
-import { BadRequestException, NotFoundException } from "@nestjs/common";
+import { BadRequestException, Logger, NotFoundException } from "@nestjs/common";
+import { Reflector } from "@nestjs/core";
+import { DEMO_RESTRICTED_KEY } from "../common/guards/demo-mode.guard";
 import { EmergencyAccessClaimController } from "./emergency-access-claim.controller";
 import { EmergencyAccessContact } from "./entities/emergency-access-contact.entity";
 import { EmergencyAccessSettings } from "./entities/emergency-access-settings.entity";
@@ -13,6 +15,9 @@ import { EncryptionService } from "../common/encryption/encryption.service";
 import { hashToken } from "../auth/crypto.util";
 import { getRequestContext } from "../common/request-context";
 import { createScopedDbMocks } from "../test-helpers/scoped-db-testing";
+import { PersonalAccessToken } from "../auth/entities/personal-access-token.entity";
+import { TrustedDevice } from "../users/entities/trusted-device.entity";
+import { OAUTH_GRANT_REVOKER } from "../auth/credential-revocation";
 
 jest.mock("../common/db/scoped-db", () =>
   jest.requireActual("../test-helpers/scoped-db-testing").scopedDbMockModule(),
@@ -23,6 +28,9 @@ describe("EmergencyAccessClaimController", () => {
   let contactsRepo: Record<string, jest.Mock>;
   let settingsRepo: Record<string, jest.Mock>;
   let usersRepo: Record<string, jest.Mock>;
+  let patRepo: Record<string, jest.Mock>;
+  let trustedDevicesRepo: Record<string, jest.Mock>;
+  let oauthProviderService: { revokeAllForUser: jest.Mock };
   let tokenService: Record<string, jest.Mock>;
   let authService: Record<string, jest.Mock>;
   let passwordBreach: Record<string, jest.Mock>;
@@ -42,6 +50,8 @@ describe("EmergencyAccessClaimController", () => {
   const RAW_TOKEN = "a".repeat(64);
   /** Whether the conditional consume returns a row this run. */
   let claimWins: boolean;
+  /** Whether the owner came back since the grant (the cron has not run yet). */
+  let ownerReturned: boolean;
   const TOKEN_HASH = hashToken(RAW_TOKEN);
 
   beforeEach(async () => {
@@ -59,6 +69,9 @@ describe("EmergencyAccessClaimController", () => {
     };
     settingsRepo = { findOne: jest.fn() };
     usersRepo = { findOne: jest.fn() };
+    patRepo = { update: jest.fn() };
+    trustedDevicesRepo = { delete: jest.fn() };
+    oauthProviderService = { revokeAllForUser: jest.fn().mockResolvedValue(0) };
     tokenService = {
       revokeAllUserRefreshTokens: jest.fn(),
       generateTokenPair: jest
@@ -103,6 +116,8 @@ describe("EmergencyAccessClaimController", () => {
       [EmergencyAccessContact, contactsRepo as never],
       [EmergencyAccessSettings, settingsRepo as never],
       [User, usersRepo as never],
+      [PersonalAccessToken, patRepo as never],
+      [TrustedDevice, trustedDevicesRepo as never],
     ]);
     Object.assign(scoped.manager, queryRunner.manager);
     queryRunner.manager = scoped.manager;
@@ -115,7 +130,10 @@ describe("EmergencyAccessClaimController", () => {
      * answers the way that statement does.
      */
     claimWins = true;
+    ownerReturned = false;
     scoped.manager.query.mockImplementation(async (sql: string) => {
+      if (String(sql).includes("SELECT id FROM emergency_access_contacts"))
+        return ownerReturned ? [] : [{ id: "c1" }];
       if (!String(sql).includes("UPDATE emergency_access_contacts")) return [];
       return claimWins ? [[{ id: "c1", owner_user_id: ownerId }], 1] : [[], 0];
     });
@@ -130,6 +148,7 @@ describe("EmergencyAccessClaimController", () => {
         { provide: PasswordBreachService, useValue: passwordBreach },
         { provide: EncryptionService, useValue: encryption },
         { provide: ConfigService, useValue: configService },
+        { provide: OAUTH_GRANT_REVOKER, useValue: oauthProviderService },
       ],
     }).compile();
 
@@ -137,13 +156,14 @@ describe("EmergencyAccessClaimController", () => {
   });
 
   describe("preview", () => {
-    it("returns owner info + decrypted message for a valid token", async () => {
+    it("returns only the contact's first name and the expiry for a valid token", async () => {
+      const expiresAt = new Date(Date.now() + 100000);
       contactsRepo.findOne.mockResolvedValue({
         id: "c1",
         ownerUserId: ownerId,
         firstName: "Carol",
         claimTokenHash: TOKEN_HASH,
-        claimTokenExpiresAt: new Date(Date.now() + 100000),
+        claimTokenExpiresAt: expiresAt,
         claimTokenUsedAt: null,
       });
       settingsRepo.findOne.mockResolvedValue({
@@ -157,14 +177,62 @@ describe("EmergencyAccessClaimController", () => {
       });
 
       const res = await controller.preview({ token: RAW_TOKEN });
-      expect(res.ownerFirstName).toBe("Owner");
-      expect(res.contactFirstName).toBe("Carol");
-      expect(res.message).toBe("secret");
+
+      // The owner's identity and the decrypted message wait for `complete`: a
+      // bare token proves nothing about who holds it (#2173).
+      expect(res).toEqual({ contactFirstName: "Carol", expiresAt });
+      expect(encryption.decrypt).not.toHaveBeenCalled();
+      expect(settingsRepo.findOne).not.toHaveBeenCalled();
+      expect(usersRepo.findOne).not.toHaveBeenCalled();
+    });
+
+    it("writes an audit line naming the contact and owner for a valid token", async () => {
+      const log = jest.spyOn(Logger.prototype, "log").mockImplementation();
+      try {
+        contactsRepo.findOne.mockResolvedValue({
+          id: "c1",
+          ownerUserId: ownerId,
+          firstName: "Carol",
+          claimTokenHash: TOKEN_HASH,
+          claimTokenExpiresAt: new Date(Date.now() + 100000),
+          claimTokenUsedAt: null,
+        });
+
+        await controller.preview({ token: RAW_TOKEN });
+
+        expect(log).toHaveBeenCalledWith(
+          `Emergency access claim link previewed for contact c1 of user ${ownerId}`,
+        );
+      } finally {
+        log.mockRestore();
+      }
+    });
+
+    it("writes no audit line for an invalid token", async () => {
+      const log = jest.spyOn(Logger.prototype, "log").mockImplementation();
+      try {
+        contactsRepo.findOne.mockResolvedValue(null);
+
+        await expect(
+          controller.preview({ token: RAW_TOKEN }),
+        ).rejects.toBeInstanceOf(NotFoundException);
+
+        expect(log).not.toHaveBeenCalled();
+      } finally {
+        log.mockRestore();
+      }
+    });
+
+    it("is demo-restricted, like complete (#2180)", () => {
+      const reflector = new Reflector();
+      for (const handler of [controller.preview, controller.complete]) {
+        expect(reflector.get(DEMO_RESTRICTED_KEY, handler)).toBe(true);
+      }
     });
 
     // RLS (task C4): the claimant is the grantee, not the owner, so the
     // owner-keyed reads run under a system context.
-    it("runs the owner-keyed reads under a system context", async () => {
+    it("runs the owner-keyed contact read under a system context", async () => {
       let ctx: ReturnType<typeof getRequestContext>;
       contactsRepo.findOne.mockImplementation(() => {
         ctx = getRequestContext();
@@ -177,9 +245,6 @@ describe("EmergencyAccessClaimController", () => {
           claimTokenUsedAt: null,
         });
       });
-      settingsRepo.findOne.mockResolvedValue({ ownerUserId: ownerId });
-      usersRepo.findOne.mockResolvedValue({ id: ownerId, firstName: "Owner" });
-
       await controller.preview({ token: RAW_TOKEN });
 
       expect(ctx).toEqual({ system: true });
@@ -201,6 +266,26 @@ describe("EmergencyAccessClaimController", () => {
       await expect(
         controller.preview({ token: RAW_TOKEN }),
       ).rejects.toBeInstanceOf(NotFoundException);
+    });
+  });
+
+  describe("an owner who returned since the grant", () => {
+    it("reads as an invalid link in preview, with the usual refusal", async () => {
+      ownerReturned = true;
+      await expect(controller.preview({ token: RAW_TOKEN })).rejects.toThrow(
+        "This emergency access link is invalid, expired, or has already been used.",
+      );
+    });
+
+    it("reads as an invalid link in complete, before any breach lookup", async () => {
+      ownerReturned = true;
+      await expect(
+        controller.complete(
+          { token: RAW_TOKEN, newPassword: "Password12345!" },
+          { cookie: jest.fn(), json: jest.fn() } as never,
+        ),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(passwordBreach.isBreached).not.toHaveBeenCalled();
     });
   });
 
@@ -232,8 +317,17 @@ describe("EmergencyAccessClaimController", () => {
         res as never,
       );
 
-      const [sql, params] = queryRunner.manager.query.mock.calls[0];
+      const consumeIndex = queryRunner.manager.query.mock.calls.findIndex(
+        ([text]) => String(text).includes("UPDATE emergency_access_contacts"),
+      );
+      const [sql, params] = queryRunner.manager.query.mock.calls[consumeIndex];
       expect(sql).toContain("UPDATE emergency_access_contacts");
+      // An owner who came back since the grant voids the link at once, not at the
+      // next daily cron: the predicate is part of the consume statement.
+      expect(sql).toContain("NOT EXISTS");
+      expect(sql).toContain("emergency_access_settings");
+      expect(sql).toContain("COALESCE(u.last_activity_at, u.last_login)");
+      expect(sql).toContain("< s.grant_after_days");
       expect(sql).toContain("claim_token_used_at IS NULL");
       expect(sql).toContain("claim_token_expires_at >= CURRENT_TIMESTAMP");
       expect(sql).toContain("RETURNING");
@@ -243,7 +337,7 @@ describe("EmergencyAccessClaimController", () => {
       const credentialWrite =
         queryRunner.manager.createQueryBuilder.mock.invocationCallOrder[0];
       expect(
-        queryRunner.manager.query.mock.invocationCallOrder[0],
+        queryRunner.manager.query.mock.invocationCallOrder[consumeIndex],
       ).toBeLessThan(credentialWrite);
     });
 
@@ -262,6 +356,9 @@ describe("EmergencyAccessClaimController", () => {
       expect(queryRunner.manager.createQueryBuilder).not.toHaveBeenCalled();
       expect(tokenService.generateTokenPair).not.toHaveBeenCalled();
       expect(res.cookie).not.toHaveBeenCalled();
+      expect(res.json).not.toHaveBeenCalled();
+      expect(settingsRepo.findOne).not.toHaveBeenCalled();
+      expect(encryption.decrypt).not.toHaveBeenCalled();
     });
 
     it("rejects breached passwords", async () => {
@@ -302,7 +399,16 @@ describe("EmergencyAccessClaimController", () => {
           claimTokenUsedAt: null,
         })
         .mockResolvedValueOnce({ id: ownerId });
-      usersRepo.findOne.mockResolvedValue({ id: ownerId, isActive: true });
+      usersRepo.findOne.mockResolvedValue({
+        id: ownerId,
+        isActive: true,
+        firstName: "Owner",
+        lastName: "One",
+      });
+      settingsRepo.findOne.mockResolvedValue({
+        ownerUserId: ownerId,
+        messageCiphertext: "enc(secret)",
+      });
 
       const res = makeRes();
       await controller.complete(
@@ -320,7 +426,42 @@ describe("EmergencyAccessClaimController", () => {
         "a",
         expect.any(Object),
       );
-      expect(res.json).toHaveBeenCalledWith({ ok: true });
+      expect(res.json).toHaveBeenCalledWith({
+        ok: true,
+        ownerFirstName: "Owner",
+        ownerLastName: "One",
+        message: "secret",
+      });
+    });
+
+    it("ends the previous holder's PATs, trusted devices and OAuth grants", async () => {
+      // The claim replaced the password and cut the web sessions, but a
+      // personal access token or an MCP client's OAuth grant the previous
+      // holder had handed out kept working on the claimed account.
+      queryRunner.manager.findOne.mockResolvedValue({ id: ownerId });
+      usersRepo.findOne.mockResolvedValue({ id: ownerId, isActive: true });
+
+      await controller.complete(
+        { token: RAW_TOKEN, newPassword: "Aa1!correcthorse" },
+        makeRes() as never,
+      );
+
+      expect(patRepo.update).toHaveBeenCalledWith(
+        { userId: ownerId, isRevoked: false },
+        { isRevoked: true },
+      );
+      expect(trustedDevicesRepo.delete).toHaveBeenCalledWith({
+        userId: ownerId,
+      });
+      expect(oauthProviderService.revokeAllForUser).toHaveBeenCalledWith(
+        ownerId,
+      );
+      // After the commit, like the session revocation it follows.
+      expect(
+        oauthProviderService.revokeAllForUser.mock.invocationCallOrder[0],
+      ).toBeGreaterThan(
+        tokenService.revokeAllUserRefreshTokens.mock.invocationCallOrder[0],
+      );
     });
 
     it("rolls back when the token is no longer valid in-transaction", async () => {
@@ -421,96 +562,69 @@ describe("EmergencyAccessClaimController", () => {
     });
   });
 
-  describe("preview missing data", () => {
-    function validContact() {
-      return {
-        id: "c1",
-        ownerUserId: ownerId,
-        firstName: "Carol",
-        claimTokenHash: TOKEN_HASH,
-        claimTokenExpiresAt: new Date(Date.now() + 100000),
-        claimTokenUsedAt: null,
-      };
+  describe("the message returned by complete", () => {
+    async function completedMessage(): Promise<unknown> {
+      queryRunner.manager.findOne.mockResolvedValue({ id: ownerId });
+      usersRepo.findOne.mockResolvedValue({ id: ownerId, firstName: "Owner" });
+      const res = { cookie: jest.fn(), json: jest.fn() };
+      await controller.complete(
+        { token: RAW_TOKEN, newPassword: "Aa1!correcthorse" },
+        res as never,
+      );
+      return (res.json.mock.calls[0][0] as { message: unknown }).message;
     }
 
-    it("throws when the settings row is missing", async () => {
-      contactsRepo.findOne.mockResolvedValue(validContact());
+    it("is null when the settings row is missing", async () => {
       settingsRepo.findOne.mockResolvedValue(null);
-      usersRepo.findOne.mockResolvedValue({
-        id: ownerId,
-        firstName: "Owner",
-      });
-      await expect(
-        controller.preview({ token: RAW_TOKEN }),
-      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(await completedMessage()).toBeNull();
     });
 
-    it("throws when the owner row is missing", async () => {
-      contactsRepo.findOne.mockResolvedValue(validContact());
+    it("is null when the owner wrote no message", async () => {
       settingsRepo.findOne.mockResolvedValue({
         ownerUserId: ownerId,
         messageCiphertext: null,
       });
-      usersRepo.findOne.mockResolvedValue(null);
-      await expect(
-        controller.preview({ token: RAW_TOKEN }),
-      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(await completedMessage()).toBeNull();
     });
 
-    it("returns a null message when decryption throws", async () => {
-      contactsRepo.findOne.mockResolvedValue(validContact());
+    it("is null when decryption throws", async () => {
       settingsRepo.findOne.mockResolvedValue({
         ownerUserId: ownerId,
         messageCiphertext: "enc(garbage)",
       });
-      usersRepo.findOne.mockResolvedValue({
-        id: ownerId,
-        firstName: "Owner",
-        lastName: "One",
-      });
       encryption.decrypt.mockImplementation(() => {
         throw new Error("bad key");
       });
-
-      const res = await controller.preview({ token: RAW_TOKEN });
-      expect(res.message).toBeNull();
+      expect(await completedMessage()).toBeNull();
     });
 
-    it("returns a null message when the encryption key is not configured", async () => {
-      contactsRepo.findOne.mockResolvedValue(validContact());
+    it("is null when the encryption key is not configured", async () => {
       settingsRepo.findOne.mockResolvedValue({
         ownerUserId: ownerId,
         messageCiphertext: "enc(unreadable)",
       });
-      usersRepo.findOne.mockResolvedValue({
-        id: ownerId,
-        firstName: "Owner",
-        lastName: "One",
-      });
       encryption.isConfigured.mockReturnValue(false);
-
-      const res = await controller.preview({ token: RAW_TOKEN });
-      expect(res.message).toBeNull();
-      expect(encryption.decrypt).not.toHaveBeenCalled();
+      const warn = jest.spyOn(Logger.prototype, "warn").mockImplementation();
+      try {
+        expect(await completedMessage()).toBeNull();
+        expect(encryption.decrypt).not.toHaveBeenCalled();
+        expect(warn).toHaveBeenCalledWith(
+          expect.stringContaining("Encryption key not configured"),
+        );
+      } finally {
+        warn.mockRestore();
+      }
     });
 
-    it("returns a null message when decrypt throws a non-Error value", async () => {
-      contactsRepo.findOne.mockResolvedValue(validContact());
+    it("is null when decrypt throws a non-Error value", async () => {
       settingsRepo.findOne.mockResolvedValue({
         ownerUserId: ownerId,
         messageCiphertext: "enc(corrupt)",
       });
-      usersRepo.findOne.mockResolvedValue({
-        id: ownerId,
-        firstName: "Owner",
-        lastName: "One",
-      });
       encryption.decrypt.mockImplementation(() => {
         throw "raw-string-not-an-Error";
       });
-
-      const res = await controller.preview({ token: RAW_TOKEN });
-      expect(res.message).toBeNull();
+      expect(await completedMessage()).toBeNull();
     });
   });
 
@@ -530,6 +644,7 @@ describe("EmergencyAccessClaimController", () => {
           { provide: PasswordBreachService, useValue: passwordBreach },
           { provide: EncryptionService, useValue: encryption },
           { provide: ConfigService, useValue: configService },
+          { provide: OAUTH_GRANT_REVOKER, useValue: oauthProviderService },
         ],
       }).compile();
       const prodController = prodModule.get(EmergencyAccessClaimController);

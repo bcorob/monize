@@ -5,6 +5,10 @@ import { calculateMortgagePaymentAmount, generateLoanSchedule } from './loan-sch
 import { Account } from '@/types/account';
 import { Transaction } from '@/types/transaction';
 
+// Every fixture is dated in the past; `todayYmd` is a required argument.
+const AFTER_ALL_FIXTURES = '2999-12-31';
+
+
 function makeAccount(overrides: Partial<Account> = {}): Account {
   return {
     id: 'loan-1',
@@ -21,8 +25,7 @@ function makeAccount(overrides: Partial<Account> = {}): Account {
     // A repayment period is required in the UI; ~21 months amortizes the
     // default 10k at 6% near the default 500 payment.
     amortizationMonths: 21,
-    isCanadianMortgage: false,
-    isVariableRate: false,
+    mortgageType: 'ANNUITY',
     ...overrides,
   } as Account;
 }
@@ -42,7 +45,7 @@ function makeHistory(
         linkedTransaction: null,
       }) as Transaction,
   );
-  return deriveLoanPaymentHistory(account, transactions);
+  return deriveLoanPaymentHistory(account, transactions, [], [], AFTER_ALL_FIXTURES);
 }
 
 describe('computePastImpact', () => {
@@ -203,7 +206,7 @@ describe('computePastImpact', () => {
     // (2022-05-13). The starting payment must fall back to that row's recorded
     // installment -- otherwise the schedule silently drops to the PMT-over-term
     // minimum payment and stretches a ~4-year payoff to the full 25-year
-    // amortization. Variable-rate Canadian mortgage, accelerated bi-weekly,
+    // amortization. An annuity mortgage, accelerated bi-weekly,
     // with the recorded rate/payment steps.
     const account = makeAccount({
       accountType: 'MORTGAGE',
@@ -215,8 +218,7 @@ describe('computePastImpact', () => {
       amortizationMonths: 300,
       termMonths: 60,
       paymentStartDate: '2022-04-25',
-      isCanadianMortgage: true,
-      isVariableRate: true,
+      mortgageType: 'ANNUITY',
     });
     // The schedule now starts at the earliest actual payment, so the recorded
     // transactions sit on the real installment dates (2022-05-13 onward), not a
@@ -270,8 +272,7 @@ describe('computePastImpact', () => {
       amortizationMonths: 300,
       termMonths: 60,
       paymentStartDate: '2025-01-15',
-      isCanadianMortgage: true,
-      isVariableRate: false,
+      mortgageType: 'CANADIAN_FIXED',
     });
     const history = makeHistory(account, []);
 
@@ -284,16 +285,14 @@ describe('computePastImpact', () => {
       4,
       300,
       'ACCELERATED_BIWEEKLY',
-      true,
-      false,
+      'CANADIAN_FIXED',
     );
     const reference = generateLoanSchedule({
       startingBalance: 300000,
       annualRate: 4,
       paymentAmount: accelPayment,
       frequency: 'ACCELERATED_BIWEEKLY',
-      isCanadian: true,
-      isVariableRate: false,
+      mortgageType: 'CANADIAN_FIXED',
       firstPaymentDate: new Date('2025-01-15'),
     });
 
@@ -349,7 +348,7 @@ describe('computePastImpact', () => {
       currentBalance: 0,
       paymentStartDate: null,
     });
-    const emptyHistory = deriveLoanPaymentHistory(bare, []);
+    const emptyHistory = deriveLoanPaymentHistory(bare, [], [], [], AFTER_ALL_FIXTURES);
 
     expect(computePastImpact(bare, emptyHistory)).toBeNull();
   });
@@ -397,7 +396,7 @@ describe('computePastImpact', () => {
       { id: 'p1', accountId: account.id, transactionDate: '2025-01-15', amount: 1750, linkedTransaction: null },
       { id: 'p2', accountId: account.id, transactionDate: '2025-02-15', amount: 1750, linkedTransaction: null },
     ] as Transaction[];
-    const history = deriveLoanPaymentHistory(account, transactions);
+    const history = deriveLoanPaymentHistory(account, transactions, [], [], AFTER_ALL_FIXTURES);
     expect(history.startingBalance).toBe(0); // ledger path with no opening balance
 
     const impact = computePastImpact(account, history);
@@ -430,7 +429,7 @@ describe('computePastImpact', () => {
       { id: 'r2', accountId: account.id, transactionDate: '2025-02-15', amount: 500, linkedTransaction: null },
       { id: 'o2', accountId: account.id, transactionDate: '2025-03-10', amount: 2500, description: 'EXTRA to principal', linkedTransaction: null },
     ] as Transaction[];
-    const history = deriveLoanPaymentHistory(account, transactions);
+    const history = deriveLoanPaymentHistory(account, transactions, [], [], AFTER_ALL_FIXTURES);
 
     const impact = computePastImpact(account, history)!;
 
@@ -468,10 +467,18 @@ describe('computePastImpact', () => {
           accountId: account.id,
           transactionDate: `2020-${String(i + 1).padStart(2, '0')}-15`,
           amount: 20000,
-          linkedTransaction: null,
-        }) as Transaction,
+          // Interest is recorded on each repayment (A26-L34): without it the
+          // saving is unknown rather than a number.
+          linkedTransaction: {
+            id: `parent-${i}`,
+            splits: [
+              { transferAccountId: account.id, amount: -20000 },
+              { transferAccountId: null, categoryId: 'cat-interest', amount: -100 },
+            ],
+          },
+        }) as unknown as Transaction,
     );
-    const history = deriveLoanPaymentHistory(account, transactions);
+    const history = deriveLoanPaymentHistory(account, transactions, [], [], AFTER_ALL_FIXTURES);
     // The forward projection from today's remaining 40k -- the loan detail
     // page's baseline, passed in the way the app now does.
     const currentProjection = generateLoanSchedule({
@@ -523,9 +530,10 @@ describe('computePastImpact', () => {
     expect(impact).not.toBeNull();
     // On-contract payments leave the projection within a month of the original
     expect(impact!.monthsAlreadySaved).toBeLessThanOrEqual(1);
-    // No interest was recorded in history (no linked splits), so the saving
-    // is capped rather than negative
-    expect(impact!.interestAlreadySaved).toBeGreaterThanOrEqual(0);
+    // No interest was recorded in history (no linked splits) at a 6% rate, so the
+    // interest saved is unknown, not a figure built on unrecorded interest
+    // (A26-L34); the interest-recorded case is pinned in its own describe below.
+    expect(impact!.interestAlreadySaved).toBeNull();
   });
 
   it('reports an unknown saving when the remaining interest is unknown', () => {
@@ -590,7 +598,7 @@ describe('computePastImpact', () => {
       currentBalance: -290000,
       interestRate: 5,
       amortizationMonths: 300,
-      isCanadianMortgage: true,
+      mortgageType: 'CANADIAN_FIXED',
       paymentAmount: 2000,
     });
     const history = makeHistory(account, [10000]);
@@ -598,7 +606,7 @@ describe('computePastImpact', () => {
     const impact = computePastImpact(account, history);
 
     expect(impact).not.toBeNull();
-    const expectedPayment = calculateMortgagePaymentAmount(300000, 5, 300, 'MONTHLY', true, false);
+    const expectedPayment = calculateMortgagePaymentAmount(300000, 5, 300, 'MONTHLY', 'CANADIAN_FIXED');
     // The original schedule amortizes with the derived payment: its first
     // row's payment matches the PMT-derived amount
     expect(impact!.originalSchedule.rows[0].payment).toBeCloseTo(expectedPayment, 0);
@@ -684,5 +692,65 @@ describe('computePastImpact with rate history', () => {
     expect(withStep.originalSchedule.totalInterest).toBeGreaterThan(
       withoutStep.originalSchedule.totalInterest,
     );
+  });
+});
+
+describe('computePastImpact interest already saved for a loan booking interest elsewhere (A26-L34, A26-S20-06)', () => {
+  // 10,000 at 6 percent, four installments of 450 principal + 50 interest paid on
+  // contract, so the overpayments have saved nothing.
+  const account = makeAccount({ currentBalance: -8200 });
+  const remainingProjection = (rate: number) =>
+    generateLoanSchedule({
+      startingBalance: 8200,
+      annualRate: rate,
+      paymentAmount: 500,
+      frequency: 'MONTHLY',
+      firstPaymentDate: new Date(2025, 4, 15),
+    });
+  const installments = (withInterest: boolean, loan: Account = account): Transaction[] =>
+    [0, 1, 2, 3].map(
+      (i) =>
+        ({
+          id: `tx-${i}`,
+          accountId: loan.id,
+          transactionDate: `2025-${String(i + 1).padStart(2, '0')}-15`,
+          amount: 450,
+          linkedTransaction: withInterest
+            ? {
+                id: `parent-${i}`,
+                splits: [
+                  { transferAccountId: loan.id, amount: -450 },
+                  { transferAccountId: null, categoryId: 'cat-interest', amount: -50 },
+                ],
+              }
+            : null,
+        }) as unknown as Transaction,
+    );
+
+  it('keeps its figure when the repayments recorded their interest', () => {
+    const history = deriveLoanPaymentHistory(account, installments(true), [], [], AFTER_ALL_FIXTURES);
+    const impact = computePastImpact(account, history, remainingProjection(6))!;
+
+    expect(history.cumulativeInterest).toBe(200);
+    expect(impact.interestAlreadySaved).toBe(0);
+  });
+
+  it('is unknown when no repayment recorded interest', () => {
+    const history = deriveLoanPaymentHistory(account, installments(false), [], [], AFTER_ALL_FIXTURES);
+    const impact = computePastImpact(account, history, remainingProjection(6))!;
+
+    expect(history.cumulativeInterest).toBe(0);
+    expect(impact.interestAlreadySaved).toBeNull();
+    // The other figures do not depend on the unrecorded interest.
+    expect(impact.monthsAlreadySaved).not.toBeNull();
+  });
+
+  it('keeps a number for an interest-free loan, where zero interest is the fact', () => {
+    const free = makeAccount({ interestRate: 0, currentBalance: -8200 });
+    const history = deriveLoanPaymentHistory(free, installments(false, free), [], [], AFTER_ALL_FIXTURES);
+    const impact = computePastImpact(free, history, remainingProjection(0))!;
+
+    expect(impact.interestAlreadySaved).not.toBeNull();
+    expect(impact.interestAlreadySaved).toBe(0);
   });
 });

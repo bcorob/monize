@@ -7,16 +7,24 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
-vi.mock("@/hooks/useNumberFormat", () => ({
-  useNumberFormat: () => ({
-    formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
-    formatCurrency: (n: number) => `$${n.toFixed(2)}`,
-    formatCurrencyAxis: (n: number) => `$${n}`,
-    defaultCurrency: "CAD",
-  }),
-}));
-
-const STABLE_RANGE = { start: "2024-01-01", end: "2025-01-01" };
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
+      formatCurrency: (n: number) => `$${n.toFixed(2)}`,
+      formatCurrencyAxis: (n: number) => `$${n}`,
+      defaultCurrency: "CAD",
+    }),
+};
+});
+// The selection the mocked range hook reports; a test moves it and re-renders.
+const mockRange = { end: "2025-01-01" };
+const STABLE_RANGE = {
+  start: "2024-01-01",
+  get end() { return mockRange.end; },
+};
 vi.mock("@/hooks/useDateRange", () => ({
   useDateRange: () => ({
     dateRange: "1y",
@@ -44,9 +52,9 @@ vi.mock("@/components/ui/ChartViewToggle", () => ({
 }));
 
 vi.mock("@/components/ui/ExportDropdown", () => ({
-  ExportDropdown: ({ onExportPdf, onExportCsv }: any) => (
+  ExportDropdown: ({ onExportPdf, onExportCsv, disabled }: any) => (
     <div data-testid="export-dropdown">
-      <button data-testid="export-pdf" onClick={onExportPdf}>PDF</button>
+      <button data-testid="export-pdf" onClick={onExportPdf} data-disabled={String(disabled === true)}>PDF</button>
       {onExportCsv && (
         <button data-testid="export-csv" onClick={onExportCsv}>CSV</button>
       )}
@@ -95,6 +103,7 @@ describe("MonthlySpendingTrendReport", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPush.mockClear();
+    mockRange.end = "2025-01-01";
   });
 
   it("shows loading state initially", () => {
@@ -116,8 +125,8 @@ describe("MonthlySpendingTrendReport", () => {
   it("renders chart and summary with sample data", async () => {
     mockGetIncomeVsExpenses.mockResolvedValue({
       data: [
-        { month: "2024-01", income: 5000, expenses: 3000, net: 2000 },
-        { month: "2024-02", income: 5200, expenses: 3500, net: 1700 },
+        { period: "2024-01", periodStart: "2024-01-01", periodEnd: "2024-01-31", income: 5000, expenses: 3000, net: 2000 },
+        { period: "2024-02", periodStart: "2024-02-01", periodEnd: "2024-02-29", income: 5200, expenses: 3500, net: 1700 },
       ],
     });
     render(<MonthlySpendingTrendReport />);
@@ -127,6 +136,17 @@ describe("MonthlySpendingTrendReport", () => {
     expect(screen.getByText("Total Expenses")).toBeInTheDocument();
     expect(screen.getByText("Avg Monthly Income")).toBeInTheDocument();
     expect(screen.getByText("Avg Monthly Expenses")).toBeInTheDocument();
+  });
+
+  it("tells the reader when rows without a rate were left out of the totals", async () => {
+    mockGetIncomeVsExpenses.mockResolvedValue({
+      data: [{ period: "2024-01", periodStart: "2024-01-01", periodEnd: "2024-01-31", income: 5000, expenses: 3000, net: 2000 }],
+      currency: "USD",
+      missingCurrencies: ["JPY"],
+      excludedCount: 2,
+    });
+    render(<MonthlySpendingTrendReport />);
+    expect(await screen.findByText(/JPY/)).toBeInTheDocument();
   });
 
   it("renders date range selector", async () => {
@@ -139,7 +159,7 @@ describe("MonthlySpendingTrendReport", () => {
 
   it("renders line chart when data present", async () => {
     mockGetIncomeVsExpenses.mockResolvedValue({
-      data: [{ month: "2024-01", income: 5000, expenses: 3000, net: 2000 }],
+      data: [{ period: "2024-01", periodStart: "2024-01-01", periodEnd: "2024-01-31", income: 5000, expenses: 3000, net: 2000 }],
     });
     render(<MonthlySpendingTrendReport />);
     await waitFor(() => {
@@ -158,7 +178,7 @@ describe("MonthlySpendingTrendReport", () => {
 
   it("navigates to transactions page with date range on chart click", async () => {
     mockGetIncomeVsExpenses.mockResolvedValue({
-      data: [{ month: "2024-01", income: 5000, expenses: 3000, net: 2000 }],
+      data: [{ period: "2024-01", periodStart: "2024-01-01", periodEnd: "2024-01-31", income: 5000, expenses: 3000, net: 2000 }],
     });
     render(<MonthlySpendingTrendReport />);
     await waitFor(() => {
@@ -173,9 +193,9 @@ describe("MonthlySpendingTrendReport", () => {
   it("renders sortable table view, sorts each column, navigates and exports CSV", async () => {
     mockGetIncomeVsExpenses.mockResolvedValue({
       data: [
-        { month: "2024-02", income: 5200, expenses: 3500, net: 1700 },
-        { month: "2024-01", income: 5000, expenses: 3000, net: 2000 },
-        { month: "2024-03", income: 1000, expenses: 2000, net: -1000 },
+        { period: "2024-02", periodStart: "2024-02-01", periodEnd: "2024-02-29", income: 5200, expenses: 3500, net: 1700 },
+        { period: "2024-01", periodStart: "2024-01-01", periodEnd: "2024-01-31", income: 5000, expenses: 3000, net: 2000 },
+        { period: "2024-03", periodStart: "2024-03-01", periodEnd: "2024-03-31", income: 1000, expenses: 2000, net: -1000 },
       ],
     });
     const { container } = render(<MonthlySpendingTrendReport />);
@@ -198,5 +218,46 @@ describe("MonthlySpendingTrendReport", () => {
     expect(rows.length).toBeGreaterThan(0);
     await act(async () => { fireEvent.click(rows[0]); });
     await act(async () => { fireEvent.click(screen.getByTestId("export-csv")); });
+  });
+});
+
+describe("MonthlySpendingTrendReport: a reload is not the previous answer", () => {
+  const answer = { data: [{ period: "2024-01", periodStart: "2024-01-01", periodEnd: "2024-01-31", income: 5000, expenses: 3000, net: 2000 }] };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRange.end = "2025-01-01";
+  });
+
+  async function loadThenChangeRange(next: () => unknown) {
+    mockGetIncomeVsExpenses.mockResolvedValue(answer);
+    let view!: ReturnType<typeof render>;
+    await act(async () => {
+      view = render(<MonthlySpendingTrendReport />);
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId("export-pdf")).toHaveAttribute("data-disabled", "false"),
+    );
+
+    mockGetIncomeVsExpenses.mockImplementation(next);
+    mockRange.end = "2025-02-01";
+    await act(async () => {
+      view.rerender(<MonthlySpendingTrendReport />);
+    });
+    await waitFor(() =>
+      expect(mockGetIncomeVsExpenses).toHaveBeenLastCalledWith(
+        expect.objectContaining({ endDate: "2025-02-01" }),
+      ),
+    );
+  }
+
+  it("disables the export while the next request has failed", async () => {
+    await loadThenChangeRange(() => Promise.reject(new Error("500")));
+    expect(screen.getByTestId("export-pdf")).toHaveAttribute("data-disabled", "true");
+  });
+
+  it("disables the export while the next request is pending", async () => {
+    await loadThenChangeRange(() => new Promise(() => {}));
+    expect(screen.getByTestId("export-pdf")).toHaveAttribute("data-disabled", "true");
   });
 });

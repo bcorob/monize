@@ -34,19 +34,22 @@
   },
   "page": {
     "title": "लेनदेन आयात करें",
-    "subtitle": "QIF, OFX/QFX, या CSV फ़ाइलों से लेनदेन आयात करें, या पूरी Microsoft Money (.mny) फ़ाइल ले आएँ"
+    "subtitle": "QIF/QMTF, OFX/QFX, या CSV फ़ाइलों से लेनदेन आयात करें, या पूरी Microsoft Money (.mny) फ़ाइल ले आएँ"
   },
   "upload": {
     "heading": "लेनदेन फ़ाइलें अपलोड करें",
-    "instructions": "आयात करने के लिए एक या अधिक फ़ाइलें चुनें। समर्थित प्रारूप: QIF, OFX/QFX, CSV और Microsoft Money (.mny)।\nबल्क आयात के लिए आप एक ही प्रकार की कई फ़ाइलें चुन सकते हैं। Microsoft Money फ़ाइलें एक-एक करके आयात करें — एक .mny फ़ाइल में पूरी प्रोफ़ाइल होती है।",
+    "instructions": "आयात करने के लिए एक या अधिक फ़ाइलें चुनें। समर्थित प्रारूप: QIF/QMTF, OFX/QFX, CSV और Microsoft Money (.mny)।\nबल्क आयात के लिए आप एक ही प्रकार की कई फ़ाइलें चुन सकते हैं। Microsoft Money फ़ाइलें एक-एक करके आयात करें — एक .mny फ़ाइल में पूरी प्रोफ़ाइल होती है।",
     "importingTo": "इसमें आयात हो रहा है:",
     "clickToSelect": "फ़ाइल(ें) चुनने के लिए क्लिक करें",
+    "orDragAndDrop": "या उन्हें यहाँ खींचकर छोड़ें",
+    "dropToImport": "आयात करने के लिए छोड़ें",
+    "unsupportedDrop": "ये फ़ाइलें आयात नहीं की जा सकतीं: {names}। QIF/QMTF, OFX, QFX, CSV या Microsoft Money (.mny) फ़ाइलों का उपयोग करें।",
     "processing": "प्रसंस्करण हो रहा है...",
-    "acceptedFormats": "QIF, OFX, QFX, CSV, या Microsoft Money (.mny)",
+    "acceptedFormats": "QIF/QMTF, OFX, QFX, CSV, या Microsoft Money (.mny)",
     "mnyFailedHeading": "यह Microsoft Money फ़ाइल खोली नहीं जा सकी",
-    "wikiNotice": {
+    "docsNotice": {
       "title": "आयात करने से पहले",
-      "body": "कुछ भी आयात करने से पहले विकी का <money>Importing from Microsoft Money</money> या <quicken>Importing from Quicken</quicken> अनुभाग पढ़ें।"
+      "body": "कुछ भी आयात करने से पहले दस्तावेज़ का <money>Importing from Microsoft Money</money> या <quicken>Importing from Quicken</quicken> अनुभाग पढ़ें। OFX/QFX और QIF फ़ाइलों की अपनी-अपनी खासियतें हैं — देखें <ofx>Importing OFX/QFX Files</ofx> और <qif>Importing Quicken QIF Files</qif>।"
     }
   },
   "selectAccount": {
@@ -78,23 +81,25 @@
     "heading": "CSV कॉलम मैपिंग",
     "description": "अपने CSV कॉलम को लेनदेन फ़ील्ड से मैप करें। नीचे डेटा का पूर्वावलोकन देखें और मैपिंग कॉन्फ़िगर करें।",
     "firstRowIsHeader": "पहली पंक्ति हेडर है",
-    "delimiterLabel": "सीमांकक:",
-    "dateFormatLabel": "दिनांक प्रारूप:",
+    "delimiterLabel": "सीमांकक",
+    "dateFormatLabel": "दिनांक प्रारूप",
     "customOption": "कस्टम...",
     "customPlaceholder": "जैसे DD.MM.YYYY",
     "dataPreview": "डेटा पूर्वावलोकन",
     "columnMappingTitle": "कॉलम मैपिंग",
-    "dateField": "दिनांक *",
+    "columnMappingHelp": "हर CSV कॉलम को किसी ट्रांज़ैक्शन फ़ील्ड से मैप करें। तारीख़, राशि का प्रकार, और Amount या Debit/Credit में से कोई एक आवश्यक है; बाकी वैकल्पिक हैं।",
+    "dateField": "दिनांक",
     "amountTypeField": "राशि प्रकार",
     "singleAmountOption": "एकल राशि कॉलम",
     "splitAmountOption": "अलग डेबिट/क्रेडिट",
-    "amountField": "राशि *",
+    "amountField": "राशि",
     "signField": "चिह्न",
+    "signFieldHelp": "राशि के चिह्न को कैसे पढ़ा जाता है: 'जैसा है' एक सकारात्मक संख्या को जमा मानता है, 'उलटें' उसे निकासी मानता है (क्रेडिट कार्ड स्टेटमेंट के लिए उपयोगी, जहाँ शुल्क सकारात्मक दिखते हैं), और एक ट्रांज़ैक्शन-टाइप कॉलम चिह्न के बजाय अपने ही मानों से दिशा तय करता है।",
     "signNormal": "यथावत (सकारात्मक = जमा)",
     "signReverse": "उल्टा (सकारात्मक = निकासी)",
     "signTypeColumn": "लेनदेन प्रकार कॉलम उपयोग करें",
-    "debitField": "डेबिट *",
-    "creditField": "क्रेडिट *",
+    "debitField": "डेबिट",
+    "creditField": "क्रेडिट",
     "typeColumnTitle": "लेनदेन प्रकार कॉलम",
     "typeColumnDescription": "वह कॉलम चुनें जो प्रति पंक्ति आय, व्यय, या स्थानांतरण इंगित करता है।",
     "valuesFound": "पाए गए मान: {values}",
@@ -137,8 +142,8 @@
     "kindBanking": "बैंकिंग लेनदेन",
     "kindInvestment": "निवेश लेनदेन",
     "investmentModeHint": "पंक्तियों को क्रिया कॉलम के आधार पर वर्गीकृत किया जाता है। जो क्रिया मान मेल नहीं खाते, उन्हें जुड़े हुए नकद खाते में नकद जमा या निकासी के रूप में आयात किया जाता है।",
-    "actionField": "क्रिया *",
-    "securityField": "प्रतिभूति (प्रतीक या नाम) *",
+    "actionField": "क्रिया",
+    "securityField": "प्रतिभूति (प्रतीक या नाम)",
     "quantityField": "मात्रा",
     "priceField": "मूल्य",
     "commissionField": "कमीशन",
@@ -278,6 +283,15 @@
       "missingSplitRatio": "अनुपात के बिना विभाजन"
     },
     "rejectedGoBack": "कॉलम या क्रिया कीवर्ड बदलने के लिए कॉलम मैपिंग चरण पर वापस जाएं।",
+    "unreadableDatesNotice": "{count, plural, one {# पंक्ति की तारीख {format} के रूप में पढ़ी नहीं जा सकती और वह आयात नहीं की जाएगी} other {# पंक्तियों की तारीखें {format} के रूप में पढ़ी नहीं जा सकतीं और वे आयात नहीं की जाएंगी}}:",
+    "unreadableDateRow": "पंक्ति {line}: \"{rawDate}\"",
+    "missingDateRow": "पंक्ति {line}: कोई तारीख नहीं",
+    "unreadableDatesMore": "...और {count} अन्य",
+    "unreadableDatesGoBack": "यदि फ़ाइल अपनी तारीखें किसी अन्य क्रम में लिखती है, तो कॉलम मैपिंग चरण पर वापस जाएं और फ़ाइल का तारीख प्रारूप चुनें।",
+    "unreadableAmountsNotice": "{count, plural, one {# पंक्ति की राशि पढ़ी नहीं जा सकती और वह आयात नहीं की जाएगी} other {# पंक्तियों की राशियाँ पढ़ी नहीं जा सकतीं और वे आयात नहीं की जाएंगी}}:",
+    "unreadableAmountRow": "पंक्ति {line}: \"{rawAmount}\"",
+    "unreadableAmountsMore": "...और {count} अन्य",
+    "unreadableAmountsGoBack": "जांचें कि राशि वाले कॉलम सही ढंग से मैप किए गए हैं, या फ़ाइल में इन पंक्तियों को ठीक करके उसे फिर से आयात करें।",
     "importButton": "लेनदेन आयात करें"
   },
   "complete": {
@@ -287,7 +301,7 @@
     "totalImported": "कुल आयात किए गए:",
     "totalImportedSuffix": "लेनदेन",
     "totalSkipped": "कुल छोड़े गए:",
-    "totalSkippedSuffix": "डुप्लिकेट स्थानांतरण",
+    "totalSkippedSuffix": "लेनदेन",
     "totalErrors": "कुल त्रुटियां:",
     "categoriesCreated": "बनाई गई श्रेणियां:",
     "accountsCreated": "बनाए गए खाते:",
@@ -299,17 +313,36 @@
     "imported": "आयात किए गए:",
     "importedSuffix": "लेनदेन",
     "skipped": "छोड़े गए:",
-    "skippedSuffix": "डुप्लिकेट स्थानांतरण",
+    "skippedSuffix": "लेनदेन",
     "errors": "त्रुटियां:",
     "errorsLabel": "त्रुटियां:",
     "andMoreErrors": "...और {count} अधिक त्रुटियां",
+    "skippedRowsHeading": "छोड़ी गई पंक्तियाँ:",
+    "skippedRow": "{date}: {amount}, {payee} ({reason})",
+    "skippedRowNoPayee": "{date}: {amount} ({reason})",
+    "skipReasonAlreadyImported": "पहले से आयात किया गया",
+    "skipReasonDuplicateTransfer": "ट्रांसफ़र पहले से दर्ज है",
+    "skipReasonUnreadableDate": "तारीख पढ़ी नहीं जा सकी",
+    "skipReasonNoDate": "कोई तारीख नहीं",
+    "skipReasonUnreadableAmount": "राशि पढ़ी नहीं जा सकी",
+    "skippedRowRawAmount": "\"{rawAmount}\"",
+    "skipReasonMissingSecurity": "प्रतिभूति अनुपलब्ध",
+    "skipReasonMissingQuantity": "मात्रा अनुपलब्ध",
+    "skipReasonMissingAmount": "राशि अनुपलब्ध",
+    "skipReasonMissingProceeds": "मूल्य या प्राप्त राशि के बिना बिक्री",
+    "skipReasonMissingSplitRatio": "अनुपात के बिना विभाजन",
+    "skippedRowLineDate": "पंक्ति {line}, \"{rawDate}\"",
+    "skippedRowLine": "पंक्ति {line}",
+    "skippedRowLineAt": "पंक्ति {line}, {date}",
+    "andMoreSkipped": "...और {count} छोड़ी गई पंक्तियाँ",
     "loanSetupHeading": "आवर्ती भुगतान सेट करें",
     "loanSetupDescription": "निम्नलिखित ऋण/बंधक खाते बिना अनुसूचित भुगतान के आयात किए गए। अपनी ऋण प्रगति ट्रैक करना जारी रखने के लिए आवर्ती भुगतान सेट करें।",
     "setUpPayments": "भुगतान सेट करें",
     "scheduledPaymentsConfigured": "{count} खाते{plural} के लिए अनुसूचित भुगतान कॉन्फ़िगर किए गए।",
     "viewInvestments": "निवेश देखें",
     "viewTransactions": "लेनदेन देखें",
-    "importMoreFiles": "अधिक फ़ाइलें आयात करें"
+    "importMoreFiles": "अधिक फ़ाइलें आयात करें",
+    "bondRowsWithoutSeries": "{count, plural, one {# बॉन्ड खरीद बिना सीरीज़ के आयात की गई। सिक्योरिटी के बॉन्ड लॉट में उसकी सीरीज़ चुनें।} other {# बॉन्ड खरीद बिना सीरीज़ के आयात की गईं। सिक्योरिटी के बॉन्ड लॉट में उनकी सीरीज़ चुनें।}}"
   },
   "multiAccountReview": {
     "heading": "बहु-खाता QIF आयात",
@@ -327,7 +360,10 @@
     "securitiesNotice": "इस फ़ाइल में {count} प्रतिभूत{plural} हैं जिन्हें आयात से पहले मैप करने की आवश्यकता है।",
     "nextMapSecurities": "अगला: प्रतिभूतियां मैप करें",
     "importAll": "सभी आयात करें",
-    "transactionCount": "{count} लेनदेन{plural}"
+    "transactionCount": "{count} लेनदेन{plural}",
+    "chooseAccountType": "प्रकार चुनें",
+    "accountTypeFor": "{name} के लिए खाता प्रकार",
+    "accountTypesNeeded": "फ़ाइल यह नहीं बताती कि {count, plural, one {# खाता} other {# खाते}} किस प्रकार के हैं। आयात करने से पहले प्रत्येक के लिए एक प्रकार चुनें।"
   },
   "navigation": {
     "back": "वापस",
@@ -344,6 +380,7 @@
     "heading": "अपनी Microsoft Money फ़ाइल की समीक्षा करें",
     "fileSummary": "{filename} -- {era}, आधार मुद्रा {currency}। नीचे दिए शेष फ़ाइल से ही गणना किए गए हैं, इसलिए आयात करने से पहले आप उन्हें Money से मिला सकते हैं।",
     "era": {
+      "money99": "Money 97-99 प्रारूप",
       "money2001": "Money 2001 प्रारूप",
       "money2002": "Money 2002 प्रारूप",
       "moneyPlus": "Money Plus / Sunset प्रारूप",
@@ -355,6 +392,7 @@
       "transfersLinked": "{count} स्थानांतरण जोड़े गए",
       "payees": "प्राप्तकर्ता",
       "categories": "श्रेणियाँ",
+      "tags": "वर्गीकरण से टैग",
       "accounts": "खाते",
       "securities": "प्रतिभूतियाँ",
       "investments": "निवेश लेन-देन",
@@ -395,7 +433,7 @@
       "importPrices": "मूल्य इतिहास आयात करें",
       "importPricesHint": "Money का अपना रिकॉर्ड कि हर प्रतिभूति दिन-प्रतिदिन कितने की थी। यदि आप मौजूदा भावों से शुरू करना चाहें तो इसे बंद कर दें।",
       "importExchangeRates": "विनिमय दरें आयात करें",
-      "importExchangeRatesHint": "आपकी फ़ाइल की मुद्राओं के बीच ऐतिहासिक दरें, ताकि पुराने विदेशी मुद्रा लेन-देन उसी तरह परिवर्तित हों जैसे Money करता था।",
+      "importExchangeRatesHint": "आपकी फ़ाइल की मुद्राओं के बीच ऐतिहासिक दरें, जिनका उपयोग केवल उन तिथियों के लिए होता है जिनकी कोई दर Monize के पास नहीं है। पहले से सहेजी गई दरें कभी नहीं बदली जातीं।",
       "wipeExistingData": "नए सिरे से शुरू करें: पहले मेरा मौजूदा Monize डेटा हटाएँ",
       "wipeExistingDataHint": "आयात से पहले वही \"मेरा डेटा हटाएँ\" कार्रवाई चलाता है जो सेटिंग्स में है। आपसे पुष्टि माँगी जाएगी। Money फ़ाइल को अपने मौजूदा डेटा में जोड़ने के लिए इसे बंद रखें।"
     },
@@ -424,7 +462,7 @@
     }
   },
   "mnyWipe": {
-    "heading": "पहले अपना मौजूदा डेटा हटाएँ?",
+    "heading": "मौजूदा डेटा हटाएँ",
     "body": "यह आयात शुरू होने से पहले वही \"मेरा डेटा हटाएँ\" कार्रवाई चलाता है जो सेटिंग्स -> खतरा क्षेत्र में है। यह हटाता है:",
     "removes": {
       "transactions": "हर लेन-देन और विभाजन",
@@ -434,8 +472,8 @@
       "budgets": "हर बजट, कस्टम रिपोर्ट, टैग और आयात मैपिंग"
     },
     "irreversible": "इसे पूर्ववत नहीं किया जा सकता। यदि इसके बाद आयात विफल होता है, तो हटाया गया डेटा वापस नहीं आता।",
-    "typeToConfirm": "पुष्टि के लिए {word} टाइप करें:",
-    "passwordLabel": "अपना पासवर्ड दर्ज करें:",
+    "typeToConfirm": "पुष्टि के लिए {word} टाइप करें",
+    "passwordLabel": "पासवर्ड",
     "oidcNote": "आपके पहचान प्रदाता ने इस सत्र की पुष्टि पहले ही कर दी है, इसलिए पासवर्ड की आवश्यकता नहीं है।",
     "confirm": "मेरा डेटा हटाएँ और आयात करें"
   },
@@ -455,7 +493,8 @@
     },
     "failedHeading": "आयात पूरा नहीं हुआ",
     "retry": "फिर से प्रयास करें",
-    "startOver": "नए सिरे से शुरू करें"
+    "startOver": "नए सिरे से शुरू करें",
+    "learnMore": "अधिक जानें"
   },
   "mnyComplete": {
     "heading": "आयात पूरा हुआ",
@@ -469,6 +508,7 @@
       "splits": "विभाजन पंक्तियाँ",
       "payees": "प्राप्तकर्ता",
       "categories": "श्रेणियाँ",
+      "taggedRows": "वर्गीकरण से टैग की गई पंक्तियाँ",
       "securities": "प्रतिभूतियाँ",
       "investments": "निवेश लेन-देन",
       "prices": "मूल्य",
@@ -492,7 +532,8 @@
     },
     "warningsHeading": "इस आयात के बारे में टिप्पणियाँ",
     "downloadReport": "रिपोर्ट डाउनलोड करें",
-    "done": "पूर्ण"
+    "done": "पूर्ण",
+    "bondRowsWithoutSeries": "{count, plural, one {# बॉन्ड खरीद बिना सीरीज़ के आयात की गई। सिक्योरिटी के बॉन्ड लॉट में उसकी सीरीज़ चुनें।} other {# बॉन्ड खरीद बिना सीरीज़ के आयात की गईं। सिक्योरिटी के बॉन्ड लॉट में उनकी सीरीज़ चुनें।}}"
   },
   "mnyWarnings": {
     "missingTable": "इस Money संस्करण में आयात द्वारा उपयोग की जाने वाली {count, plural, one {# तालिका} other {# तालिकाएँ}} नहीं है।",
@@ -503,6 +544,7 @@
     "categoryFlattened": "{count, plural, one {# श्रेणी} other {# श्रेणियाँ}} दो स्तरों से अधिक गहरी थीं और उन्हें उनकी मूल श्रेणी में समाहित कर दिया गया।",
     "categoryTypeInferred": "{count, plural, one {# श्रेणी} other {# श्रेणियों}} के लिए Money का आय चिह्न अनुपलब्ध था; आय या व्यय श्रेणी संरचना से निर्धारित किया गया।",
     "degeneratePayeeSkipped": "Money द्वारा आंतरिक रूप से रखे गए {count, plural, one {# स्थानधारक प्राप्तकर्ता} other {# स्थानधारक प्राप्तकर्ता}} छोड़ दिए गए।",
+    "unknownClassificationItem": "{count, plural, one {# लेन-देन ने ऐसे वर्गीकरण आइटम का नाम दिया} other {# लेन-देनों ने ऐसे वर्गीकरण आइटम का नाम दिया}} जो फ़ाइल में परिभाषित नहीं है, और उन्हें उस टैग के बिना आयात किया गया।",
     "unusableTransaction": "{count, plural, one {# लेन-देन} other {# लेन-देन}} में कोई खाता या उपयोग योग्य तिथि नहीं थी, इसलिए उन्हें छोड़ दिया गया।",
     "orphanedTransferSide": "{count, plural, one {# स्थानांतरण} other {# स्थानांतरणों}} का दूसरा पक्ष फ़ाइल में नहीं था, इसलिए उन्हें छोड़ दिया गया।",
     "orphanedSplit": "{count, plural, one {# विभाजन पंक्ति} other {# विभाजन पंक्तियों}} का कोई मूल लेन-देन नहीं था, इसलिए उन्हें छोड़ दिया गया।",
@@ -512,6 +554,7 @@
     "duplicateSecuritySymbol": "{count, plural, one {# प्रतिभूति} other {# प्रतिभूतियाँ}} किसी अन्य के साथ प्रतीक साझा करती थीं; अलग बनी रहें इसलिए बाद वाली का नाम बदल दिया गया।",
     "generatedSecuritySymbol": "{count, plural, one {# प्रतिभूति} other {# प्रतिभूतियों}} का Money में कोई प्रतीक नहीं है, इसलिए एक अस्थायी प्रतीक बनाया गया और मूल्य अद्यतन बंद रखे गए।",
     "unknownInvestmentAction": "{count, plural, one {# निवेश लेन-देन} other {# निवेश लेन-देन}} में ऐसी क्रिया थी जिसे Monize नहीं पहचानता, और उन्हें छोड़ दिया गया।",
+    "stockOptionNotImported": "{count, plural, one {# कर्मचारी स्टॉक विकल्प घटना} other {# कर्मचारी स्टॉक विकल्प घटनाएँ}} (अनुदान, निहित होना और समाप्ति) में न नकद आया-गया न शेयर, इसलिए उन्हें आयात नहीं किया गया।",
     "unconfirmedInvestmentAction": "{count, plural, one {# निवेश लेन-देन} other {# निवेश लेन-देन}} में Money की ऐसी क्रिया थी जिसका अर्थ अनुमानित है, प्रलेखित नहीं; उन्हें Money से मिलाकर देखें।",
     "missingInvestmentDetail": "{count, plural, one {# निवेश लेन-देन} other {# निवेश लेन-देन}} में फ़ाइल में शेयर विवरण नहीं था और उन्हें केवल नकद राशि के रूप में आयात किया गया।",
     "investmentAccountMismatch": "{count, plural, one {# निवेश लेन-देन} other {# निवेश लेन-देन}} ऐसे खाते में था जो निवेश खाता नहीं है, और उन्हें छोड़ दिया गया।",
@@ -521,6 +564,9 @@
     "unusableBill": "{count, plural, one {# निर्धारित बिल} other {# निर्धारित बिलों}} में कोई खाता, उपयोग योग्य तिथि या पहचानी गई आवृत्ति नहीं थी, इसलिए उन्हें छोड़ दिया गया।",
     "billFrequencyApproximated": "{count, plural, one {# निर्धारित बिल} other {# निर्धारित बिल}} ऐसा दोहराव अंतराल उपयोग करते हैं जिसे Monize ठीक-ठीक व्यक्त नहीं कर सकता, इसलिए निकटतम छोटा अंतराल उपयोग किया गया।",
     "loanInterestCategoryUnclear": "{count, plural, one {# ऋण भुगतान में} other {# ऋण भुगतानों में}} मूलधन के अलावा कई श्रेणियाँ शामिल थीं, इसलिए ऋण की ब्याज श्रेणी अनसेट रह गई। जाँचें कि क्या भुगतान में एस्क्रो (escrow) शामिल है और आयात के बाद ब्याज श्रेणी सेट करें।",
+    "transferAmountMismatch": "{count, plural, one {# निवेश खाते में ट्रांसफ़र} other {# निवेश खाते में ट्रांसफ़र}} में निवेश पक्ष पर बैंक पक्ष से अलग राशि दर्ज थी। निवेश पक्ष को दर्ज राशि के अनुसार ही आयात किया गया।",
+    "crossCurrencyTradeUnconverted": "{count, plural, one {# लेन-देन, जिसमें प्रतिभूति किसी दूसरी मुद्रा में उद्धृत थी,} other {# लेन-देन, जिनमें प्रतिभूति किसी दूसरी मुद्रा में उद्धृत थी,}} खाते की मुद्रा में सहेजे गए, क्योंकि न तो फ़ाइल में और न ही विनिमय दर प्रदाता के पास लेन-देन की तारीख़ के आसपास उस मुद्रा जोड़ी की विनिमय दर है। विनिमय दर जोड़ें, फिर हर लेन-देन की कीमत सुधारें।",
+    "crossCurrencyTradeMarketRate": "{count, plural, one {# लेन-देन, जिसमें प्रतिभूति किसी दूसरी मुद्रा में उद्धृत थी,} other {# लेन-देन, जिनमें प्रतिभूति किसी दूसरी मुद्रा में उद्धृत थी,}} लेन-देन की तारीख़ की बाज़ार विनिमय दर पर बदले गए, क्योंकि फ़ाइल में उस तारीख़ के आसपास कोई दर नहीं है। अपने रिकॉर्ड से हर लेन-देन की कीमत जाँचें।",
     "showTransactions": "{count, plural, one {# लेन-देन दिखाएँ} other {# लेन-देन दिखाएँ}}",
     "hideTransactions": "लेन-देन छिपाएँ",
     "reviewInMoney": "इन्हें Microsoft Money में खोलकर जाँचें या ठीक करें, फिर दोबारा निर्यात और आयात करें।",
@@ -539,12 +585,89 @@
     "mnyImportFailed": "आयात के दौरान कुछ गड़बड़ हुई। कुछ भी सहेजा नहीं गया -- आप फिर से प्रयास कर सकते हैं।",
     "mnyJobStalled": "आयात ने प्रतिक्रिया देना बंद कर दिया, संभवतः सर्वर पुनः आरंभ होने के कारण। आपकी अपलोड की गई फ़ाइल अभी भी यहाँ है, इसलिए फिर से प्रयास करना सुरक्षित है।",
     "mnyJobStalledAfterCommit": "आयात ने आपका डेटा सहेजने के बाद प्रतिक्रिया देना बंद कर दिया, संभवतः सर्वर पुनः आरंभ होने के कारण। आयात किए गए रिकॉर्ड आपके खाते में हैं, इसलिए वही फ़ाइल दोबारा आयात करने पर वे दोहरे हो जाएंगे। कुछ और आयात करने से पहले अपने खाते जांचें।",
+    "mnyImportFailedAfterCommit": "इम्पोर्ट ने आपका डेटा सहेज लिया, लेकिन उसके बाद का एक चरण विफल हो गया। इम्पोर्ट किए गए रिकॉर्ड आपके खाते में हैं, इसलिए उसी फ़ाइल को फिर से इम्पोर्ट करने पर वे दोहराए जाएँगे। कुछ और इम्पोर्ट करने से पहले अपने खाते जाँच लें।",
+    "mnyAlreadyImported": "यह फ़ाइल पहले ही आपके खाते में इम्पोर्ट की जा चुकी है, इसलिए इसे फिर से इम्पोर्ट करने पर इसके रिकॉर्ड दोहराए जाएँगे। उन्हें बदलने के लिए फिर से शुरू करें और अपना मौजूदा डेटा बदलने का विकल्प चुनें।",
     "mnyStagedFileMissing": "अपलोड की गई Money फ़ाइल अब उपलब्ध नहीं है। कृपया इसे फिर से अपलोड करें।",
     "mnyFileTruncated": "यह Money फ़ाइल अपूर्ण लगती है। अपलोड बाधित हो सकता है।",
     "mnyNotAMoneyFile": "यह फ़ाइल Microsoft Money (.mny) फ़ाइल नहीं है।",
-    "mnyUnsupportedVersion": "यह फ़ाइल Money 97 या 98 से बनी है। इसे निःशुल्क Money Plus Sunset संस्करण में एक बार खोलकर सहेजें, फिर परिणाम आयात करें।",
+    "mnyUnsupportedVersion": "यह फ़ाइल Microsoft Money के ऐसे संस्करण से बनी है जिसे Monize पढ़ नहीं सकता। इसे निःशुल्क Money Plus Sunset संस्करण में एक बार खोलकर सहेजें, फिर परिणाम आयात करें।",
     "mnyPasswordRequired": "यह Money फ़ाइल पासवर्ड से सुरक्षित है।",
     "mnyPasswordIncorrect": "यह पासवर्ड Money फ़ाइल को नहीं खोलता।",
     "mnyUnreadableDatabase": "यह Money फ़ाइल डिक्रिप्ट हो गई, लेकिन इसकी सामग्री पढ़ी नहीं जा सकी। यह क्षतिग्रस्त हो सकती है।"
+  },
+  "preview": {
+    "choice": {
+      "legend": "{payee} आयात न होने पर क्या करें",
+      "skip": "अभी छोड़ें",
+      "except": "अपवादों में जोड़ें"
+    },
+    "payeeTip": {
+      "name": "बैंक से: {original}। मैप किया गया: {name}",
+      "alias": "बैंक से: {original}। मैप किया गया: {name} (उपनाम \"{pattern}\")",
+      "aliasNoPattern": "बैंक से: {original}। मैप किया गया: {name} (उपनाम)",
+      "new": "बैंक से: {original}। मैप किया गया: {name} (नया भुगतानकर्ता)",
+      "rule": "बैंक से: {original}। मैप किया गया: {name} (नियम द्वारा तय)",
+      "ruleNone": "बैंक से: {original}। मैप किया गया: कोई भुगतानकर्ता नहीं (नियम द्वारा तय)"
+    },
+    "expand": {
+      "show": "{payee} का विवरण दिखाएँ",
+      "hide": "{payee} का विवरण छिपाएँ"
+    },
+    "rules": {
+      "heading": "आयात नियम",
+      "none": "कोई आयात नियम इस लेन-देन से मेल नहीं खाया।",
+      "skipped": "{action}: छोड़ा गया ({reason})",
+      "stopped": "इसके बाद के नियम रोक देता है।",
+      "applied": "लागू किए गए: {actions}",
+      "openNewTab": "नियम {name} को नए टैब में खोलें"
+    },
+    "ruleTest": {
+      "loading": "नियम परीक्षण का परिणाम लोड हो रहा है",
+      "error": "नियम परीक्षण का परिणाम लोड नहीं हो सका।",
+      "retry": "फिर कोशिश करें",
+      "noRules": "आपके पास कोई आयात नियम नहीं है, इसलिए परखने के लिए कुछ नहीं था।",
+      "showNotMatched": "जो नियम मेल नहीं खाए, उन्हें दिखाएँ ({count})",
+      "hideNotMatched": "जो नियम मेल नहीं खाए, उन्हें छिपाएँ ({count})",
+      "noChanges": "यह मेल खाया, लेकिन इस लेन-देन में कुछ नहीं बदलता।",
+      "badge": {
+        "matched": "मेल खाया",
+        "notMatched": "मेल नहीं खाया",
+        "notEvaluated": "जाँचा नहीं गया"
+      },
+      "notEvaluated": {
+        "afterStop": "जाँचा नहीं गया: पिछले नियम ने आगे के नियम रोक दिए।",
+        "disabled": "जाँचा नहीं गया: नियम बंद है।",
+        "invalid": "जाँचा नहीं गया: नियम मान्य नहीं है। इसे ठीक करने के लिए खोलें।",
+        "outside_active_window": "जाँचा नहीं गया: पंक्ति की तिथि नियम की सक्रिय तिथियों से बाहर है।"
+      },
+      "condition": {
+        "met": "शर्त पूरी हुई",
+        "notMet": "शर्त पूरी नहीं हुई",
+        "actual": "इस लेन-देन में मान: {value}",
+        "noValue": "कोई नहीं",
+        "noTags": "कोई टैग नहीं",
+        "capture": "{name} = {value}",
+        "omitted": "शर्त के इस हिस्से का ब्योरा नहीं दिखाया गया है।"
+      },
+      "skipReasons": {
+        "already_set": "इसमें पहले से मान है और नियम केवल खाली को भरता है",
+        "no_change": "इसमें पहले से वही है जो नियम सेट करता",
+        "payee_unresolved": "नियम जो प्राप्तकर्ता बनाता है, उसे खोजा नहीं जा सका"
+      }
+    },
+    "payee": {
+      "heading": "भुगतानकर्ता",
+      "unknown": "इस लेन-देन के लिए भुगतानकर्ता की जानकारी नहीं है।",
+      "original": "बैंक का पाठ: {original}",
+      "name": "आपके मौजूदा भुगतानकर्ता {name} से मेल खाता है।",
+      "alias": "उपनाम \"{pattern}\" के ज़रिए {name} से जुड़ता है।",
+      "aliasNoPattern": "एक उपनाम के ज़रिए {name} से जुड़ता है।",
+      "new": "इस नाम का कोई भुगतानकर्ता अभी नहीं है, इसलिए {name} बनाया जाएगा।",
+      "rule": "एक आयात नियम भुगतानकर्ता तय करता है: {name}।",
+      "ruleNone": "एक आयात नियम भुगतानकर्ता हटा देता है।",
+      "none": "बैंक ने कोई प्रतिपक्ष नहीं बताया, इसलिए लेन-देन का कोई भुगतानकर्ता नहीं है।",
+      "openAliases": "भुगतानकर्ता के उपनाम खोलें",
+      "openAliasesNewTab": "भुगतानकर्ता के उपनाम नए टैब में खोलें"
+    }
   }
 }

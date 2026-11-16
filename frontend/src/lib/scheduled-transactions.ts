@@ -10,8 +10,20 @@ import {
   OverrideCheckResult,
   PostScheduledTransactionData,
   LoanProjectionAnchor,
+  LoanOccurrencesProjection,
+  ScheduleAmountEstimate,
+  FrequencyType,
 } from '@/types/scheduled-transaction';
 import { dedupe, invalidateBalanceCaches, invalidateCache } from './apiCache';
+
+/** The occurrence a Post or Skip acts on (`occurrencePin` builds it). */
+type OccurrencePinData = Pick<
+  PostScheduledTransactionData,
+  'expectedOccurrenceDate' | 'expectedOverrideId'
+>;
+
+/** The most occurrences one loan projection prices (spec 8.5; the server's DTO bound). */
+export const LOAN_OCCURRENCES_MAX_COUNT = 60;
 
 export const scheduledTransactionsApi = {
   // Create a new scheduled transaction
@@ -86,6 +98,44 @@ export const scheduledTransactionsApi = {
     return response.data;
   },
 
+  /**
+   * The next `count` occurrences of a loan bill, each priced at its own due
+   * date on the debt the earlier ones leave (INV-LOAN-009). The server bounds
+   * `count` to `LOAN_OCCURRENCES_MAX_COUNT`. Not cached: the answer moves with
+   * every posting, override and rate change on the loan.
+   */
+  getLoanOccurrences: async (
+    id: string,
+    count: number,
+  ): Promise<LoanOccurrencesProjection> => {
+    const response = await apiClient.get<LoanOccurrencesProjection>(
+      `/scheduled-transactions/${id}/loan-occurrences`,
+      { params: { count } },
+    );
+    return response.data;
+  },
+
+  /**
+   * The estimate a schedule on `accountId` paying `payeeId` in `categoryId`
+   * would carry (issue #2096): the schedule form's preview, computed by the
+   * same server code as a saved schedule's. Not cached: every payment moves it.
+   */
+  // A transaction's estimate is matched on its payee and category; a
+  // transfer's on the account it transfers to (issue #2164).
+  getAmountEstimate: async (
+    accountId: string,
+    basis:
+      | { payeeId: string; categoryId: string }
+      | { transferAccountId: string; frequency: FrequencyType },
+    nextDueDate?: string,
+  ): Promise<ScheduleAmountEstimate> => {
+    const response = await apiClient.get<ScheduleAmountEstimate>(
+      `/scheduled-transactions/amount-estimate/${accountId}`,
+      { params: { ...basis, ...(nextDueDate ? { nextDueDate } : {}) } },
+    );
+    return response.data;
+  },
+
   // Get single scheduled transaction by ID
   getById: async (id: string): Promise<ScheduledTransaction> => {
     const response = await apiClient.get<ScheduledTransaction>(`/scheduled-transactions/${id}`);
@@ -114,10 +164,10 @@ export const scheduledTransactionsApi = {
   // Post scheduled transaction (create actual transaction and advance).
   // Returns null when the scheduled transaction was a one-time entry and was
   // deleted as part of the post.
-  post: async (id: string, data?: PostScheduledTransactionData): Promise<ScheduledTransaction | null> => {
+  post: async (id: string, data: PostScheduledTransactionData): Promise<ScheduledTransaction | null> => {
     const response = await apiClient.post<ScheduledTransaction | null>(
       `/scheduled-transactions/${id}/post`,
-      data || {},
+      data,
     );
     invalidateCache('scheduled:');
     // Posting writes a real transaction, so every balance derived from it is
@@ -127,10 +177,12 @@ export const scheduledTransactionsApi = {
     return response.data;
   },
 
-  // Skip this occurrence and advance to next due date
-  skip: async (id: string): Promise<ScheduledTransaction> => {
+  // Skip this occurrence and advance to next due date. `pin` is the occurrence
+  // the user is skipping (`occurrencePin`); the server refuses a stale one.
+  skip: async (id: string, pin: OccurrencePinData): Promise<ScheduledTransaction> => {
     const response = await apiClient.post<ScheduledTransaction>(
       `/scheduled-transactions/${id}/skip`,
+      pin,
     );
     invalidateCache('scheduled:');
     return response.data;

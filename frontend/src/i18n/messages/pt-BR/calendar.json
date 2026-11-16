@@ -1,0 +1,120 @@
+{
+  "view": {
+    "label": "Visualização",
+    "table": "Tabela",
+    "calendar": "Calendário"
+  },
+  "grid": {
+    "label": "Mês"
+  },
+  "toolbar": {
+    "layers": "Camadas"
+  },
+  "layers": {
+    "transactions": "Transações",
+    "balances": "Saldos",
+    "values": "Valores",
+    "dailyChange": "Variação diária"
+  },
+  "legend": {
+    "label": "Legenda",
+    "scheduled": "Agendado"
+  },
+  "chip": {
+    "noPayee": "Sem favorecido",
+    "overdue": "Atrasado",
+    "scheduled": "Agendado",
+    "noSymbol": "Sem símbolo"
+  },
+  "day": {
+    "itemCount": "{count, plural, one {# item} other {# itens}}",
+    "moreChips": "+{count} mais",
+    "newTransaction": "Nova transação neste dia",
+    "noItems": "Nada neste dia.",
+    "scheduledHint": "Agendado. Abra Contas e depósitos para alterar.",
+    "newInvestmentTransaction": "Nova transação de investimento neste dia"
+  },
+  "banner": {
+    "title": "Alguns valores não são exibidos",
+    "rowCap": "Este mês contém {count} transações, mais do que as {limit} que um calendário pode exibir. Restrinja os filtros para vê-las.",
+    "scheduledUnavailable": "Nao foi possivel carregar os itens agendados deste mes. As linhas mostradas estao completas; faltam as agendadas.",
+    "scheduledTruncated": "Alguns itens agendados nao sao mostrados tao a frente. Aproxime-se de hoje para ver todos.",
+    "balancesScopeEmpty": "Não há contas no escopo, então não há saldo para mostrar. Escolha uma conta nos filtros.",
+    "balancesMissingRates": "Não há taxa de câmbio disponível para {pairs} em alguns dias deste mês, então esses totais não são mostrados. Abra Moedas e atualize as taxas.",
+    "balancesForecastGaps": "O saldo projetado está retido porque estes itens agendados ainda não podem ser precificados: {schedules}.",
+    "balancesForecastWithheld": "O saldo projetado está retido: pelo menos um item agendado ainda não pode ser precificado, e o motivo não foi informado.",
+    "balancesUnforecastable": "{count, plural, one {# conta do escopo não tem projeção própria, então os totais projetados ficam retidos.} other {# contas do escopo não têm projeção própria, então os totais projetados ficam retidos.}}",
+    "valuesUnpriced": "Não há preço disponível para {securities} em alguns dias deste mês, então esses valores não são mostrados. Adicione um preço no histórico de preços do ativo ou atualize os preços.",
+    "valuesMissingRates": "Não há taxa de câmbio disponível para {pairs} em alguns dias deste mês, então esses valores não são mostrados. Abra Moedas e atualize as taxas.",
+    "notesUnavailable": "Suas notas não puderam ser carregadas para este mês. Qualquer nota que você escreveu continua salva."
+  },
+  "errors": {
+    "monthFailed": "Não foi possível carregar este mês.",
+    "balancesFailed": "Não foi possível carregar os saldos deste mês.",
+    "valuesFailed": "Não foi possível carregar os valores da carteira deste mês.",
+    "movementsFailed": "Não foi possível carregar as variações diárias deste mês.",
+    "movementDetailFailed": "Não foi possível carregar o detalhamento deste dia."
+  },
+  "balance": {
+    "actualTitle": "Saldo no fim do dia",
+    "projectedTitle": "Saldo projetado",
+    "projected": "Projetado",
+    "projectedHint": "Projetado a partir do saldo no fim de hoje e de todos os itens agendados com vencimento até este dia.",
+    "projectedFromItems": "Projetado a partir do saldo no fim de hoje e de todos os itens agendados com vencimento até este dia, incluindo os listados abaixo.",
+    "partial": "Parcial: foi possível apurar {amount} do escopo; o restante não, então nenhum total é mostrado.",
+    "missingRates": "Não há taxa de câmbio para {pairs} no dia a que este valor se refere. Abra Moedas e atualize as taxas.",
+    "unforecastable": "{count, plural, one {# conta do escopo não tem projeção própria, então o total projetado fica retido.} other {# contas do escopo não têm projeção própria, então o total projetado fica retido.}}"
+  },
+  "value": {
+    "title": "Valor da carteira",
+    "unpriced": "Não há preço disponível para {securities} neste dia, então o valor não é mostrado. Adicione um preço no histórico de preços do ativo ou atualize os preços.",
+    "missingRates": "Não há taxa de câmbio para {pairs} neste dia, então o valor não é mostrado. Abra Moedas e atualize as taxas."
+  },
+  "change": {
+    "openDetail": "Ver o que se moveu neste dia",
+    "detailTitle": "O que se moveu em {date}",
+    "headline": "Movimento de mercado",
+    "headlineValue": "{amount} ({percent})",
+    "gains": "Ganhos",
+    "losses": "Perdas",
+    "unchanged": "{count, plural, one {# ativo fechou sem alteração.} other {# ativos fecharam sem alteração.}}",
+    "remainder": "Caixa, distribuições e operações",
+    "row": "{quantity} cotas, de {from} para {to} {currency}",
+    "reasons": {
+      "notTradingDay": "Nenhum ativo em carteira teve preço neste dia, então não houve pregão a informar.",
+      "unpricedHolding": "Uma posição não teve preço neste dia nem no anterior, então a variação é desconhecida.",
+      "missingRate": "Faltava uma taxa de câmbio, então a variação não pôde ser convertida.",
+      "flowIncomplete": "Um depósito ou saque deste dia não pôde ser convertido, então a variação não pode ser separada dele.",
+      "cashIncomplete": "Uma conta de caixa não reportou saldo para este dia, então o valor do dia está incompleto e a variação é desconhecida.",
+      "noPriorValue": "Não há um valor anterior para comparar com este dia.",
+      "zeroBaseline": "A carteira estava vazia no dia anterior, então não há percentual a calcular."
+    }
+  },
+  "notes": {
+    "title": "Nota",
+    "add": "Adicionar uma nota",
+    "saveFailed": "Não foi possível salvar a nota. Tente novamente.",
+    "deleteFailed": "Não foi possível excluir a nota. Tente novamente.",
+    "deleteTitle": "Excluir esta nota?",
+    "deleteMessage": "A nota deste dia é removida. Isso não pode ser desfeito.",
+    "discardTitle": "Descartar esta nota?",
+    "discardMessage": "A nota que você está escrevendo não foi salva. Sair deste dia a descarta.",
+    "discardConfirm": "Descartar",
+    "startDate": "Primeiro dia",
+    "endDate": "Último dia",
+    "spanRange": "{start} a {end}",
+    "spanCount": "{count, plural, one {# dia} other {# dias}}",
+    "spanBackwards": "O último dia não pode ser anterior ao primeiro.",
+    "spanTooLong": "Uma nota pode abranger no máximo {days} dias.",
+    "spanMissesDay": "Os dias escolhidos não incluem o dia em que você está escrevendo esta nota.",
+    "deleteSpanMessage": "{count, plural, one {A nota deste dia será removida. Isso não pode ser desfeito.} other {Esta nota abrange # dias e todos serão apagados. Isso não pode ser desfeito.}}"
+  },
+  "monthPicker": {
+    "title": "Ir para outro mês",
+    "typeLabel": "Digite um mês ou um ano",
+    "placeholder": "ex. mar 1998, 1998-03, 3/1998",
+    "unreadable": "Não conseguimos ler isso como um mês. Tente um ano, o nome de um mês ou 1998-03.",
+    "previousYear": "Ano anterior",
+    "nextYear": "Próximo ano"
+  }
+}

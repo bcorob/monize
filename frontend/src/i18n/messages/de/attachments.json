@@ -11,9 +11,76 @@
   "uploaded": "Anhang hinzugefügt",
   "deleted": "Anhang gelöscht",
   "loadFailed": "Anhänge konnten nicht geladen werden",
+  "retry": "Erneut versuchen",
   "uploadFailed": "Anhang konnte nicht hochgeladen werden",
   "deleteFailed": "Anhang konnte nicht gelöscht werden",
   "tooLarge": "Datei ist zu groß (maximal {max})",
   "unsupported": "Nicht unterstützter Dateityp. Erlaubt: Bilder oder PDF",
-  "tooMany": "Maximal {max} Anhänge pro Transaktion"
+  "tooMany": "Maximal {max} Anhänge pro Transaktion",
+  "fromWarranty": "Aus der Garantie: {name}",
+  "fromLinkedWarranty": "Aus einer verknüpften Garantie",
+  "scan": {
+    "button": "Dokument scannen",
+    "title": "Dokument scannen",
+    "description": "Ein Foto eines Dokuments vor dem Anhängen begradigen und aufbereiten.",
+    "analysing": "Dokument wird im Foto gesucht…",
+    "failed": "Das Dokument konnte nicht gescannt werden. Sie können das Foto trotzdem unverändert anhängen.",
+    "viewEnhanced": "Aufbereitet",
+    "viewOriginal": "Original",
+    "rotate": "Drehen",
+    "styleLabel": "Finish",
+    "styles": {
+      "colour": "Farbe",
+      "grayscale": "Graustufen",
+      "blackAndWhite": "Schwarzweiß",
+      "none": "Keine Aufbereitung"
+    },
+    "styleHints": {
+      "colour": "Gleicht die Beleuchtung aus, hebt den Kontrast an und schärft den Text.",
+      "grayscale": "Dieselbe Aufbereitung ohne Farbe. Kleiner und ohne den Farbstich, den Papier bei Kunstlicht annimmt.",
+      "blackAndWhite": "Nur Tinte und Papier. Am besten für gedruckten Text; Fotos und Logos werden dabei flach.",
+      "none": "Begradigt und zugeschnitten, sonst genau wie fotografiert. Verwenden Sie dies, wenn die Aufbereitung das Motiv verdirbt."
+    },
+    "adjustments": {
+      "brightness": "Helligkeit ({value})",
+      "contrast": "Kontrast ({value})"
+    },
+    "resetAdjustments": "Helligkeit und Kontrast zurücksetzen",
+    "adjustHint": "Wechseln Sie zu „Original“, um die Ecken zu ziehen, falls die Kanten falsch sind.",
+    "updating": "Vorschau wird aktualisiert …",
+    "noDocumentFound": "Es wurden keine Dokumentkanten gefunden, daher wurde das ganze Foto verwendet. Wechseln Sie zu „Original“ und ziehen Sie die Ecken selbst.",
+    "previewEnhancedAlt": "Vorschau des aufbereiteten Scans",
+    "previewOriginalAlt": "Vorschau des Originalfotos",
+    "useEnhanced": "Aufbereitete Version verwenden",
+    "keepOriginal": "Nur Original behalten",
+    "retake": "Neu aufnehmen",
+    "cancel": "Abbrechen",
+    "originalTooLarge": "Das Originalfoto ist größer als {max}, daher wird nur der aufbereitete Scan angehängt.",
+    "warnings": {
+      "blurry": "Das Foto wirkt unscharf. Eine neue Aufnahme ergibt einen schärferen Scan.",
+      "edgesOutsideFrame": "Das Dokument reicht bis an den Rand des Fotos, daher könnte eine Seite abgeschnitten sein. Nimm es erneut auf und lass rund um die ganze Seite einen Rand, sodass keine Seite den Bildrand berührt.",
+      "lowResolution": "Der Scan ist recht klein, kleine Schrift kann schwer lesbar sein."
+    },
+    "corners": {
+      "label": "Dokumentecken",
+      "topLeft": "Ecke oben links",
+      "topRight": "Ecke oben rechts",
+      "bottomRight": "Ecke unten rechts",
+      "bottomLeft": "Ecke unten links"
+    },
+    "originalKept": "Original behalten"
+  },
+  "preview": {
+    "loading": "Vorschau wird geladen…",
+    "failed": "Die Vorschau konnte nicht geladen werden. Sie können die Datei trotzdem herunterladen.",
+    "storeUnavailable": "Diese Datei liegt in einem Speicher-Backend, das dieser Server derzeit nicht erreichen kann, daher ist keine Vorschau und kein Download möglich. Es ist nichts verloren: Bitten Sie Ihre Administration, die Einstellungen für den Anhang-Speicher wiederherzustellen.",
+    "unsupported": "Dieser Dateityp kann nicht als Vorschau angezeigt werden. Sie können ihn trotzdem herunterladen.",
+    "fit": "An Bildschirm anpassen",
+    "actualSize": "Originalgröße",
+    "versionLabel": "Version",
+    "zoomLabel": "Zoom",
+    "pageCount": "{count, plural, one {# Seite} other {# Seiten}}",
+    "page": "Seite {page} von {total}",
+    "open": "Vorschau von {name}"
+  }
 }

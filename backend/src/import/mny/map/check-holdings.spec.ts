@@ -84,6 +84,7 @@ function tx(
     accruedInterest: 0,
     totalAmount: 0,
     currencyCode: "USD",
+    securityCurrencyCode: "USD",
     exchangeRate: 1,
     cashAmount: 0,
     status: TransactionStatus.CLEARED,
@@ -91,6 +92,7 @@ function tx(
     categoryHandle: null,
     description: null,
     linkedInvestmentId: null,
+    tagHandles: [],
     ...overrides,
   };
 }

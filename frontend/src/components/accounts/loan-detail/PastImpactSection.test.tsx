@@ -7,12 +7,19 @@ import { deriveLoanPaymentHistory } from '@/lib/loan-history';
 import { Account } from '@/types/account';
 import { Transaction } from '@/types/transaction';
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
-  }),
-}));
+// Every fixture is dated in the past; `todayYmd` is a required argument.
+const AFTER_ALL_FIXTURES = '2999-12-31';
 
+
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
+    }),
+  };
+});
 vi.mock('@/hooks/useChartDateFormat', () => ({
   useChartDateFormat: () => (date: string) => date.slice(0, 7),
 }));
@@ -31,8 +38,7 @@ function makeAccount(overrides: Partial<Account> = {}): Account {
     paymentStartDate: '2025-01-15',
     originalPrincipal: 10000,
     amortizationMonths: 21,
-    isCanadianMortgage: false,
-    isVariableRate: false,
+    mortgageType: 'ANNUITY',
     ...overrides,
   } as Account;
 }
@@ -48,7 +54,7 @@ function makeHistory(account: Account) {
         linkedTransaction: null,
       }) as Transaction,
   );
-  return deriveLoanPaymentHistory(account, transactions);
+  return deriveLoanPaymentHistory(account, transactions, [], [], AFTER_ALL_FIXTURES);
 }
 
 /**

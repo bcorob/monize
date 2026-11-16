@@ -4,19 +4,29 @@
     "subtitle": "Аналіз ваших шаблонів витрат і аномалій на основі AI"
   },
   "list": {
-    "lastUpdated": "Останнє оновлення: {date} {time}",
     "refreshButton": "Оновити аналітику",
-    "generating": "Генерування...",
+    "refreshAge": "({time})",
+    "summary": {
+      "active": "Активна аналітика",
+      "alerts": "Сповіщення",
+      "warnings": "Попередження"
+    },
     "allTypes": "Всі типи",
-    "allSeverities": "Всі рівні",
+    "typeFilterLabel": "Тип",
+    "severityFilterLabel": "Важливість",
+    "severityFilter": {
+      "all": "Усі ({count})",
+      "alert": "Сповіщення ({count})",
+      "warning": "Попередження ({count})",
+      "info": "Інформація ({count})"
+    },
     "showDismissed": "Показати відхилені",
     "emptyNoInsights": "Аналітику ще не згенеровано. Натисніть «Оновити аналітику», щоб проаналізувати ваші шаблони витрат.",
     "emptyFiltered": "Жодна аналітика не відповідає поточним фільтрам.",
     "generateButton": "Генерувати аналітику",
-    "alertCount": "{count, plural, one {# сповіщення} other {# сповіщень}}",
-    "warningCount": "{count, plural, one {# попередження} other {# попереджень}}",
     "errorLoadFailed": "Не вдалося завантажити аналітику. Спробуйте ще раз.",
     "errorGenerateFailed": "Не вдалося згенерувати аналітику. Переконайтеся, що налаштовано провайдера AI.",
+    "errorDismissFailed": "Не вдалося відхилити аналітику. Спробуйте ще раз.",
     "errorTimeout": "Генерування аналітики займає більше часу, ніж очікувалось. Зачекайте або оновіть сторінку."
   },
   "card": {

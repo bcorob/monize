@@ -35,7 +35,7 @@ export function CategoryKeyInfoCard({
 }: CategoryKeyInfoCardProps) {
   const t = useTranslations('categoryDetail');
   const { formatDate } = useDateFormat();
-  const { formatCurrency } = useNumberFormat();
+  const { formatCurrency, formatNumber } = useNumberFormat();
 
   const { category, stats, largestTransaction, defaultCategoryForPayees } = detail;
 
@@ -64,12 +64,12 @@ export function CategoryKeyInfoCard({
     {
       key: 'subcategories',
       label: t('keyInfo.subcategories'),
-      value: stats.subcategoryCount > 0 ? stats.subcategoryCount.toLocaleString() : null,
+      value: stats.subcategoryCount > 0 ? formatNumber(stats.subcategoryCount, 0) : null,
     },
     {
       key: 'payees',
       label: t('keyInfo.payees'),
-      value: stats.payeeCount > 0 ? stats.payeeCount.toLocaleString() : null,
+      value: stats.payeeCount > 0 ? formatNumber(stats.payeeCount, 0) : null,
     },
     {
       key: 'created',

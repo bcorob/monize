@@ -1,8 +1,16 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { Injectable } from "@nestjs/common";
 import { randomUUID } from "crypto";
+import { DataSource, EntityManager } from "typeorm";
+
 import { AttachmentDto } from "../query/dto/ai-query.dto";
 import { validateAttachments } from "../query/attachment-validation";
 import { RelayAttachmentRef } from "./ai-relay.types";
+import { RelayAttachmentKind } from "./entities/ai-relay-attachment.entity";
+import { affectedRowCount, returnedRows } from "../../common/db/query-result";
+import {
+  runOutsideActiveScopedManager,
+  withScopedDb,
+} from "../../common/db/scoped-db";
 
 /** URI scheme the agent reads to fetch a relayed attachment as an MCP resource. */
 export const ATTACHMENT_URI_SCHEME = "monize-attachment";
@@ -13,155 +21,195 @@ export function attachmentUri(id: string): string {
 }
 
 /**
- * How long a stored attachment is retained before it is pruned. Matched to the
- * relay broker's HARD_WAIT_MS so an attachment always outlives the longest a
- * prompt can stay in flight (the agent can still read it right up to the moment
- * the browser gives up).
+ * How long a stored attachment is retained before the relay sweep reclaims it.
+ * Matched to the relay broker's HARD_WAIT_MS so an attachment always outlives
+ * the longest a prompt can stay in flight (the agent can still read it right up
+ * to the moment the browser gives up).
  */
-const ATTACHMENT_TTL_MS = 20 * 60 * 1000; // 20 minutes
+export const ATTACHMENT_TTL_MS = 20 * 60 * 1000; // 20 minutes
 
-/**
- * Cap on attachments retained per user. Bounds memory for this single-process,
- * in-memory broker if a user uploads many attachments whose prompts never
- * settle. Oldest entries (by store time) are evicted first.
- */
-const MAX_STORED_ATTACHMENTS = 50;
-
-/** A validated attachment held in memory for an in-flight relayed prompt. */
+/** A validated attachment, with the bytes read back. */
 export interface StoredAttachment {
   id: string;
   userId: string;
-  kind: "image" | "pdf" | "text";
+  kind: RelayAttachmentKind;
   mediaType: string;
   filename: string;
-  /** Decoded bytes (already validated for size and magic-byte signature). */
+  /** Decoded bytes (validated for size and magic-byte signature on upload). */
   data: Buffer;
-  /** Epoch ms the attachment was stored; used for TTL pruning and LRU eviction. */
-  at: number;
+}
+
+/** The metadata row plus its bytes, as the lookup reads them back. */
+interface AttachmentRow {
+  id: string;
+  filename: string;
+  kind: RelayAttachmentKind;
+  mime: string;
+  data: Buffer;
 }
 
 /**
- * In-memory, per-process store for attachments uploaded with a relayed prompt.
+ * Attachments uploaded with a relayed prompt.
  *
- * Mirrors the AiRelayService broker's ephemeral design: nothing touches the DB
- * or disk, and a multi-replica deployment would need a shared backplane. The
- * agent never receives the bytes directly -- it reads them through the
- * `monize-attachment://<id>` MCP resource, which looks them up here scoped to
- * the calling user. The nested map keying makes a cross-user read structurally
- * impossible: an id is only ever resolved within its owner's bucket.
+ * Rows, not a per-process `Map`: the browser uploads to whichever replica
+ * served its POST and the agent reads the file through whichever replica served
+ * its MCP request, and in memory those are two different pods.
+ *
+ * Not `ATTACHMENT_STORAGE_PROVIDER` either, which the plan proposed: the
+ * provider's `database` implementation writes `attachment_blobs`, whose primary
+ * key is a foreign key to `transaction_attachments` and whose policy reads the
+ * owner from that row, so a relay attachment -- which has no transaction --
+ * cannot be stored there at all. Branching on the bound provider's name would
+ * be the generic solution that looks fine in isolation and wrong in place. The
+ * table pair here mirrors `transaction_attachments`/`attachment_blobs` instead,
+ * and buys something the provider cannot: bytes and metadata commit or roll
+ * back together, with no window where one exists without the other, and the
+ * cascade reclaims the bytes so the sweep has nothing external to leak.
+ *
+ * A cross-user read stays structurally impossible: every statement filters on
+ * `user_id` as well as the id, so the id alone never addresses a file.
  */
 @Injectable()
 export class RelayAttachmentStore {
-  private readonly logger = new Logger(RelayAttachmentStore.name);
-
-  /** userId -> (attachmentId -> attachment). */
-  private readonly byUser = new Map<string, Map<string, StoredAttachment>>();
+  constructor(private readonly dataSource: DataSource) {}
 
   /**
-   * Validate and persist attachments for a user, returning lightweight refs
-   * (no bytes) to carry on the claimed prompt. Re-runs the shared
-   * validateAttachments (size limits + magic bytes) so the client is never
+   * Validate and persist attachments for a user, returning lightweight refs (no
+   * bytes) to carry on the queued prompt. Re-runs the shared
+   * `validateAttachments` (size limits + magic bytes) so the client is never
    * trusted, exactly like the native query path.
+   *
+   * One transaction for the whole batch: a rejected file leaves nothing behind,
+   * and a prompt never reaches the agent referring to a file that is missing.
    */
-  store(userId: string, attachments: AttachmentDto[]): RelayAttachmentRef[] {
+  async store(
+    userId: string,
+    attachments: AttachmentDto[],
+  ): Promise<RelayAttachmentRef[]> {
     if (attachments.length === 0) {
       return [];
     }
     validateAttachments(attachments);
 
-    const now = Date.now();
-    const existing =
-      this.byUser.get(userId) ?? new Map<string, StoredAttachment>();
-    // Build the next bucket immutably from the existing entries plus the new ones.
-    const next = new Map(existing);
-
-    const refs: RelayAttachmentRef[] = attachments.map((att) => {
-      const id = randomUUID();
+    const prepared = attachments.map((att) => ({
+      id: randomUUID(),
+      filename: att.filename,
+      kind: att.kind,
+      mediaType: att.mediaType,
       // Strip any stray whitespace/newlines from the base64 before decoding.
-      const data = Buffer.from(att.data.replace(/\s+/g, ""), "base64");
-      next.set(id, {
-        id,
-        userId,
-        kind: att.kind,
-        mediaType: att.mediaType,
-        filename: att.filename,
-        data,
-        at: now,
-      });
-      return {
-        id,
-        filename: att.filename,
-        mediaType: att.mediaType,
-        kind: att.kind,
-        uri: attachmentUri(id),
-      };
+      data: Buffer.from(att.data.replace(/\s+/g, ""), "base64"),
+    }));
+
+    return this.outside(async (manager) => {
+      for (const item of prepared) {
+        await manager.query(
+          `INSERT INTO ai_relay_attachments
+             (id, user_id, filename, kind, mime, size, expires_at)
+           VALUES ($1, $2, $3, $4, $5, $6,
+                   CURRENT_TIMESTAMP + ($7::numeric / 1000 * INTERVAL '1 second'))`,
+          [
+            item.id,
+            userId,
+            item.filename,
+            item.kind,
+            item.mediaType,
+            item.data.length,
+            ATTACHMENT_TTL_MS,
+          ],
+        );
+        await manager.query(
+          `INSERT INTO ai_relay_attachment_blobs (attachment_id, data)
+           VALUES ($1, $2)`,
+          [item.id, item.data],
+        );
+      }
+      return prepared.map((item) => ({
+        id: item.id,
+        filename: item.filename,
+        mediaType: item.mediaType,
+        kind: item.kind,
+        uri: attachmentUri(item.id),
+      }));
     });
-
-    this.byUser.set(userId, this.enforceBounds(next, now));
-    return refs;
   }
 
   /**
-   * Look up a stored attachment for a user, or undefined if it is unknown or
-   * expired. Prunes expired entries for the user on access.
+   * Look up a stored attachment for a user, or undefined if it is unknown,
+   * expired, or somebody else's. The owner filter is in the statement, so an id
+   * the agent guessed resolves to nothing rather than to another user's file.
    */
-  get(userId: string, id: string): StoredAttachment | undefined {
-    this.pruneExpired(userId);
-    return this.byUser.get(userId)?.get(id);
+  async get(userId: string, id: string): Promise<StoredAttachment | undefined> {
+    const [row] = returnedRows<AttachmentRow>(
+      await this.outside((manager) =>
+        manager.query(
+          `SELECT a.id, a.filename, a.kind, a.mime, b.data
+             FROM ai_relay_attachments a
+             JOIN ai_relay_attachment_blobs b ON b.attachment_id = a.id
+            WHERE a.id = $1 AND a.user_id = $2
+              AND a.expires_at > CURRENT_TIMESTAMP`,
+          [id, userId],
+        ),
+      ),
+    );
+    if (!row) {
+      return undefined;
+    }
+    return {
+      id: row.id,
+      userId,
+      kind: row.kind,
+      mediaType: row.mime,
+      filename: row.filename,
+      data: row.data,
+    };
   }
 
   /**
-   * Eagerly drop attachments once their prompt has settled. TTL is the
-   * backstop; this just reclaims memory sooner. Missing ids are ignored.
+   * Drop a settled prompt's attachments. The TTL and the relay sweep are the
+   * backstop; this just reclaims the space sooner. Missing ids are ignored, and
+   * an id belonging to somebody else is one of them.
    */
-  releaseForPrompt(userId: string, ids: string[]): void {
-    const bucket = this.byUser.get(userId);
-    if (!bucket || ids.length === 0) {
+  async releaseForPrompt(userId: string, ids: string[]): Promise<void> {
+    if (ids.length === 0) {
       return;
     }
-    const next = new Map(bucket);
-    for (const id of ids) {
-      next.delete(id);
-    }
-    if (next.size === 0) {
-      this.byUser.delete(userId);
-    } else {
-      this.byUser.set(userId, next);
-    }
-  }
-
-  /** Drop expired entries for a user; clean up the empty bucket. */
-  private pruneExpired(userId: string): void {
-    const bucket = this.byUser.get(userId);
-    if (!bucket) {
-      return;
-    }
-    const cutoff = Date.now() - ATTACHMENT_TTL_MS;
-    const live = [...bucket.entries()].filter(([, v]) => v.at >= cutoff);
-    if (live.length === 0) {
-      this.byUser.delete(userId);
-    } else if (live.length !== bucket.size) {
-      this.byUser.set(userId, new Map(live));
-    }
+    await this.outside((manager) =>
+      manager.query(
+        // The blobs go with them: the foreign key cascades.
+        `DELETE FROM ai_relay_attachments
+          WHERE user_id = $1 AND id = ANY($2::uuid[])`,
+        [userId, ids],
+      ),
+    );
   }
 
   /**
-   * Drop expired entries and evict oldest until within the per-user cap. Pure:
-   * returns the bounded bucket rather than mutating in place.
+   * Take every attachment past its TTL, whatever prompt it belonged to. Called
+   * by the relay sweep inside its transaction; returns how many rows went.
+   *
+   * Nothing to order against an object store, because there is none: the bytes
+   * are a cascading child row, so they are gone exactly when the metadata is,
+   * or not at all.
    */
-  private enforceBounds(
-    bucket: Map<string, StoredAttachment>,
-    now: number,
-  ): Map<string, StoredAttachment> {
-    const cutoff = now - ATTACHMENT_TTL_MS;
-    let entries = [...bucket.entries()].filter(([, v]) => v.at >= cutoff);
-    if (entries.length > MAX_STORED_ATTACHMENTS) {
-      const ordered = [...entries].sort((a, b) => a[1].at - b[1].at);
-      entries = ordered.slice(entries.length - MAX_STORED_ATTACHMENTS);
-      this.logger.warn(
-        `Relay attachment store for a user exceeded ${MAX_STORED_ATTACHMENTS}; evicted oldest`,
-      );
-    }
-    return new Map(entries);
+  async sweepExpired(manager: EntityManager): Promise<number> {
+    return affectedRowCount(
+      await manager.query(
+        `DELETE FROM ai_relay_attachments
+          WHERE expires_at <= CURRENT_TIMESTAMP`,
+      ),
+    );
+  }
+
+  /**
+   * Every statement runs in its own short transaction, outside whatever
+   * transaction the caller is in -- the same rule `AiRelayService` follows, and
+   * for the same reason: an attachment the browser just uploaded has to be
+   * visible to an agent polling another replica the moment the prompt is
+   * queued.
+   */
+  private outside<T>(fn: (manager: EntityManager) => Promise<T>): Promise<T> {
+    return runOutsideActiveScopedManager(() =>
+      withScopedDb(this.dataSource, fn),
+    );
   }
 }

@@ -16,12 +16,13 @@
     "chartUnavailable": "Grafiek tijdelijk niet beschikbaar"
   },
   "viewTabs": {
-    "list": "Lijst",
-    "calendar": "Kalender",
+    "filterLabel": "Schematype",
     "filterAll": "Alle ({count})",
     "filterBills": "Facturen ({count})",
     "filterDeposits": "Stortingen ({count})",
-    "todayButton": "Vandaag"
+    "chipBills": "Facturen",
+    "chipDeposits": "Stortingen",
+    "clearType": "Alle schematypen tonen"
   },
   "form": {
     "titleNew": "Nieuwe geplande transactie",
@@ -53,7 +54,11 @@
     "totalOfAccounts": "Totaal van rekeningen",
     "legendAriaLabel": "Prognoselijnen",
     "tooltipTransactionForAccount": "{name} ({account})",
-    "unavailableMissingRates": "Deze prognose kan niet worden getoond in {displayCurrency}: er is geen wisselkoers beschikbaar voor {currencies}, en een geprojecteerd saldo bouwt voort op elke eerdere dag. Voeg een koers toe, of kies een rekening met één valuta."
+    "unavailableMissingRates": "Deze prognose kan niet worden getoond in {displayCurrency}: er is geen wisselkoers beschikbaar voor {currencies}, en een geprojecteerd saldo bouwt voort op elke eerdere dag. Voeg een koers toe, of kies een rekening met één valuta.",
+    "untitledTransaction": "Transactie",
+    "tooltipEstimated": "(geschat)",
+    "unavailableUnknownEstimates": "Deze prognose kan nog niet worden getoond: het geschatte bedrag van een rekening erin is onbekend, en een geprojecteerd saldo bouwt voort op elke dag ervoor. Voer het bedrag van die keer in, of zet Schatten uit bij de rekening.",
+    "unknownEstimateItem": "{name}: {reason}"
   },
   "calendar": {
     "days": {
@@ -72,5 +77,11 @@
     "notFound": "Geplande betaling niet gevonden",
     "loadFailed": "Geplande transacties laden mislukt",
     "overridesDeleteFailed": "Overschrijvingen verwijderen mislukt"
+  },
+  "toolbar": {
+    "showing": "<b>{shown}</b> van <b>{total}</b> facturen en stortingen weergegeven",
+    "exportButton": "Exporteren",
+    "exportTitle": "Facturen en stortingen exporteren naar CSV",
+    "exported": "{count, plural, one {# schema geëxporteerd} other {# schema's geëxporteerd}}"
   }
 }

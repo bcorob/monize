@@ -58,6 +58,15 @@ describe('ImportDefaultCategoriesDialog', () => {
     mockGetDefaultCountries.mockResolvedValue(['CA', 'GB', 'US']);
   });
 
+  it('is named by its Modal title, with the explanation in a tooltip rather than a paragraph', async () => {
+    await renderDialog();
+    const dialog = screen.getByRole('dialog', { name: 'Import default categories' });
+    expect(dialog).toHaveAccessibleDescription(/Start from a ready-made set/);
+    // The explanation is the tooltip's, not a paragraph every reader re-reads.
+    expect(screen.queryByText(/Start from a ready-made set/, { selector: 'p' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+  });
+
   it('lists the generic option plus every country from the API', async () => {
     await renderDialog();
 

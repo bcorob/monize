@@ -14,6 +14,13 @@ export interface CategoryAccountBreakdownRow {
   transactionCount: number;
   total: number;
   lastTransactionDate: string | null;
+  /** The reader's reporting currency, which `convertedTotal` is in. */
+  convertedCurrency: string;
+  /**
+   * `total` with each part at its own settled rate or the market rate on its
+   * own date (issue #2106); null while a part has no admissible rate.
+   */
+  convertedTotal: number | null;
 }
 
 /**
@@ -60,6 +67,7 @@ export interface CategoryDetailDto {
   category: Category & {
     effectiveColor: string | null;
     effectiveIcon: string | null;
+    effectiveAutoSign: boolean;
   };
   stats: CategoryDetailStats;
   accounts: CategoryAccountBreakdownRow[];

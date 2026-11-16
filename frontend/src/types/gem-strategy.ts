@@ -52,6 +52,12 @@ export type GemWarningCode =
   | "NO_POSITION"
   | "FIRST_RUN"
   | "STALE_PRICES"
+  /**
+   * A required leg's price history does not reach the momentum window's start,
+   * so the current period has no signal. `roles` names the legs and
+   * `requiredFrom` the date their instruments need prices back to.
+   */
+  | "SHORT_HISTORY"
   | "CALCULATION_FAILED";
 
 export interface GemWarning {
@@ -60,6 +66,8 @@ export interface GemWarning {
   roles?: GemAssetRole[];
   /** How many things the warning is about, when the number is the point. */
   count?: number;
+  /** For `SHORT_HISTORY`: ISO date the `roles` instruments need prices back to. */
+  requiredFrom?: string;
 }
 
 /** An instrument bound to a strategy role. `symbol`/`name` are null when the role has no ETF yet. */

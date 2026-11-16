@@ -22,6 +22,7 @@ function repoDouble(existing: Record<string, unknown> | null = {}) {
             paymentAmount: null,
             paymentFrequency: null,
             paymentStartDate: null,
+            mortgageType: "ANNUITY",
             ...existing,
           },
     ),
@@ -77,6 +78,36 @@ describe("writeLoans", () => {
         paymentStartDate: "2026-08-01",
       },
     );
+  });
+
+  it.each(["LINEAR", "INTEREST_ONLY"])(
+    "leaves a %s mortgage's payment null on a re-import, filling the rest",
+    async (mortgageType) => {
+      // The user switched the imported mortgage to a method with no constant
+      // payment; writing one would fail accounts_payment_amount_method_check
+      // and abort the whole re-import.
+      const repo = repoDouble({ accountType: "MORTGAGE", mortgageType });
+
+      await writeLoans(managerFor(repo), "user-1", input());
+
+      const patch = repo.update.mock.calls[0][1];
+      expect(patch).not.toHaveProperty("paymentAmount");
+      expect(patch).toMatchObject({
+        paymentFrequency: FrequencyType.MONTHLY,
+        paymentStartDate: "2026-08-01",
+      });
+    },
+  );
+
+  it("still fills an annuity mortgage's missing payment", async () => {
+    const repo = repoDouble({
+      accountType: "MORTGAGE",
+      mortgageType: "CANADIAN_FIXED",
+    });
+
+    await writeLoans(managerFor(repo), "user-1", input());
+
+    expect(repo.update.mock.calls[0][1]).toMatchObject({ paymentAmount: 1600 });
   });
 
   it("never overwrites settings the account already carries", async () => {

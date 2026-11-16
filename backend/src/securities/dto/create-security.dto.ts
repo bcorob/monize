@@ -15,9 +15,13 @@ import {
   ValidateIf,
   ValidateNested,
 } from "class-validator";
-import { Type } from "class-transformer";
+import { Transform, Type } from "class-transformer";
 import { SanitizeHtml } from "../../common/decorators/sanitize-html.decorator";
 import { IsCurrencyCode } from "../../common/validators/is-currency-code.validator";
+import {
+  QUOTE_PROVIDER_NAMES,
+  QuoteProviderName,
+} from "../providers/quote-provider.interface";
 
 /**
  * One slice of a manual allocation breakdown (e.g. a country and its share of
@@ -40,6 +44,49 @@ export class AllocationWeightDto {
 }
 
 export class CreateSecurityDto {
+  @ApiProperty({ required: false, default: false })
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsBoolean()
+  priceChartEnabled?: boolean;
+
+  /**
+   * The alert threshold, in percent, at the column's own scale: NUMERIC(9,4),
+   * the same as its sibling `notification_portfolio_state.move_alert_percent`.
+   *
+   * Four, not two, and the number is not a taste: the column, this validator
+   * and `NumericInput decimalPlaces={4}` in `SecurityForm` all state the same
+   * precision, so a stored value always round-trips through the form exactly.
+   * Where they disagree the finer side is displayed rounded and then committed
+   * at that rounding on the next blur (`NumericInput.handleBlur` re-emits when
+   * rounding moved the value), which moves a threshold on a save the user made
+   * about another field.
+   *
+   * The bound is on the DTO because the form is not the only writer -- the API,
+   * the AI assistant and MCP reach this too, and PostgreSQL would silently
+   * round a finer value into the column rather than refuse it.
+   */
+  @ApiProperty({ required: false, nullable: true, minimum: 0.1, maximum: 1000 })
+  @IsOptional()
+  @IsNumber({ allowNaN: false, allowInfinity: false, maxDecimalPlaces: 4 })
+  @Min(0.1)
+  @Max(1000)
+  priceAlertPercent?: number | null;
+
+  /**
+   * Turns off every scheduled and background price fetch for this security
+   * (`isRefreshEligible` in `security-price.service.ts`). Imports set it on a
+   * symbol they had to invent; the user sets it for anything a provider cannot
+   * price. Prices entered by hand or carried by transactions still count.
+   */
+  @ApiProperty({
+    required: false,
+    default: false,
+    description: "Disable automatic price updates for this security",
+  })
+  @ValidateIf((_object, value) => value !== undefined)
+  @IsBoolean()
+  skipPriceUpdates?: boolean;
+
   @ApiProperty({ example: "AAPL", description: "Stock symbol or ticker" })
   @IsString()
   @MaxLength(20)
@@ -163,11 +210,11 @@ export class CreateSecurityDto {
     description:
       "Per-security provider override; omit or null to use the user default",
     required: false,
-    enum: ["yahoo", "msn"],
+    enum: QUOTE_PROVIDER_NAMES,
   })
   @IsOptional()
-  @IsIn(["yahoo", "msn"])
-  quoteProvider?: "yahoo" | "msn";
+  @IsIn([...QUOTE_PROVIDER_NAMES])
+  quoteProvider?: QuoteProviderName;
 
   @ApiProperty({
     example: "a1u3p2",
@@ -179,6 +226,55 @@ export class CreateSecurityDto {
   @MaxLength(50)
   @SanitizeHtml()
   msnInstrumentId?: string;
+
+  @ApiProperty({
+    example:
+      "https://www.ariva.de/1-unze-kruegerrand-gold-kurs/kurse/historische-kurse",
+    description:
+      "Web page whose price table the 'html_table' provider reads; empty or null clears it",
+    required: false,
+    nullable: true,
+  })
+  @IsOptional()
+  @ValidateIf((_o, value) => value !== null && value !== "")
+  @IsString()
+  @MaxLength(2048)
+  @IsUrl({
+    protocols: ["http", "https"],
+    require_protocol: true,
+    require_tld: true,
+  })
+  quoteUrl?: string | null;
+
+  @ApiProperty({
+    description:
+      "The bond program (GET /bonds/programs) to link this security to; " +
+      "null unlinks. A linked security is priced by the bond engine only, and " +
+      "its currency must equal the program's.",
+    required: false,
+    nullable: true,
+    format: "uuid",
+  })
+  // One canonical spelling (lower case) before anything compares or stores the
+  // id: the same instrument in capitals is not a different link.
+  @Transform(({ value }) =>
+    typeof value === "string" ? value.toLowerCase() : value,
+  )
+  @IsOptional()
+  @ValidateIf((_o, value) => value !== null && value !== undefined)
+  @IsUUID()
+  bondProgramId?: string | null;
+
+  @ApiProperty({
+    description:
+      "Fetch every new series of the linked program automatically (the daily series job). Off by default.",
+    required: false,
+  })
+  // Not nullable: the column is NOT NULL, so null is refused here rather than
+  // reaching the database.
+  @ValidateIf((_o, value) => value !== undefined)
+  @IsBoolean()
+  bondAutoFetch?: boolean;
 
   @ApiProperty({
     description:

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import apiClient from './api';
 import { categoriesApi } from './categories';
-import { invalidateCache } from './apiCache';
+import { invalidateCache, setCache, getCached, clearAllCache } from './apiCache';
 
 vi.mock('./api', () => ({
   default: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
@@ -104,5 +104,35 @@ describe('categoriesApi', () => {
     const second = await categoriesApi.getAll();
     expect(apiClient.get).not.toHaveBeenCalled();
     expect(second).toEqual(first);
+  });
+});
+
+describe('categoriesApi derived caches (INV-CACHE-001)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearAllCache();
+    setCache('budgets:dashboard', { id: 'b' });
+    setCache('accounts:all:false', [{ id: 'a' }]);
+  });
+
+  it('reassignTransactions drops budgets:dashboard and accounts:', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({
+      data: { transactionsUpdated: 1, splitsUpdated: 0 },
+    });
+    await categoriesApi.reassignTransactions('cat-1', 'cat-2');
+    expect(getCached('budgets:dashboard')).toBeUndefined();
+    expect(getCached('accounts:all:false')).toBeUndefined();
+  });
+
+  it('update drops budgets:dashboard', async () => {
+    vi.mocked(apiClient.patch).mockResolvedValue({ data: { id: 'cat-1' } });
+    await categoriesApi.update('cat-1', { isIncome: true } as any);
+    expect(getCached('budgets:dashboard')).toBeUndefined();
+  });
+
+  it('delete drops budgets:dashboard', async () => {
+    vi.mocked(apiClient.delete).mockResolvedValue({});
+    await categoriesApi.delete('cat-1');
+    expect(getCached('budgets:dashboard')).toBeUndefined();
   });
 });

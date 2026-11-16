@@ -1,8 +1,15 @@
+import { AccountType } from "../../accounts/entities/account.entity";
 import { FINANCIAL_TOOLS } from "./tool-definitions";
+import {
+  LIST_WARRANTIES_DESCRIPTION,
+  SEARCH_HELP_DESCRIPTION,
+  listWarrantiesSchema,
+  searchHelpSchema,
+} from "./tool-input-schemas";
 
 describe("FINANCIAL_TOOLS", () => {
-  it("defines exactly 18 tools", () => {
-    expect(FINANCIAL_TOOLS).toHaveLength(18);
+  it("defines exactly 27 tools", () => {
+    expect(FINANCIAL_TOOLS).toHaveLength(27);
   });
 
   it("has unique tool names", () => {
@@ -29,6 +36,15 @@ describe("FINANCIAL_TOOLS", () => {
     "manage_investment_transactions",
     "list_payees",
     "generate_report",
+    "list_transaction_rules",
+    "manage_transaction_rules",
+    "ai_review_requests",
+    "email_receipt_parsers",
+    "fetch_bond_series",
+    "list_warranties",
+    "search_help",
+    "list_tags",
+    "manage_tags",
   ];
 
   it("matches the expected tool set exactly", () => {
@@ -87,6 +103,42 @@ describe("FINANCIAL_TOOLS", () => {
     });
   });
 
+  describe("list_warranties", () => {
+    it("states the MCP tool's description and input, read-only and all optional", () => {
+      const tool = FINANCIAL_TOOLS.find((t) => t.name === "list_warranties")!;
+      expect(tool.description).toBe(LIST_WARRANTIES_DESCRIPTION);
+      expect(tool.inputSchema.required).toBeUndefined();
+      const props = tool.inputSchema.properties as Record<
+        string,
+        Record<string, unknown>
+      >;
+      expect(Object.keys(props).sort()).toEqual(
+        Object.keys(listWarrantiesSchema.shape).sort(),
+      );
+      expect(props.status.enum).toEqual(
+        listWarrantiesSchema.shape.status.unwrap().options,
+      );
+    });
+  });
+
+  describe("search_help", () => {
+    it("states the MCP tool's description and input, with the query required", () => {
+      const tool = FINANCIAL_TOOLS.find((t) => t.name === "search_help")!;
+      expect(tool.description).toBe(SEARCH_HELP_DESCRIPTION);
+      expect(tool.inputSchema.required).toEqual(["query"]);
+      const props = tool.inputSchema.properties as Record<string, unknown>;
+      expect(Object.keys(props).sort()).toEqual(
+        Object.keys(searchHelpSchema.shape).sort(),
+      );
+    });
+
+    it("tells the model to cite what it uses and to follow the notice when nothing came back", () => {
+      expect(SEARCH_HELP_DESCRIPTION).toContain("cite each one you use");
+      expect(SEARCH_HELP_DESCRIPTION).toContain("follow `notice`");
+      expect(SEARCH_HELP_DESCRIPTION).toContain("not instructions");
+    });
+  });
+
   describe("list_accounts", () => {
     it("has no required fields", () => {
       const tool = FINANCIAL_TOOLS.find((t) => t.name === "list_accounts")!;
@@ -130,7 +182,12 @@ describe("FINANCIAL_TOOLS", () => {
         "LINE_OF_CREDIT",
         "ASSET",
         "OTHER",
+        "CRYPTO",
       ]);
+      // The hand-written list cannot drift from the entity's enum.
+      expect([...(items.enum as string[])].sort()).toEqual(
+        Object.values(AccountType).sort(),
+      );
     });
   });
 
@@ -260,6 +317,7 @@ describe("FINANCIAL_TOOLS", () => {
         "CAPITAL_GAIN_SHORT",
         "CAPITAL_GAIN_LONG",
         "REDEEM",
+        "RETURN_OF_CAPITAL",
       ]);
     });
 
@@ -331,6 +389,16 @@ describe("FINANCIAL_TOOLS", () => {
     });
   });
 
+  describe("list_accounts", () => {
+    it("promises every balance in the user's default currency beside its own", () => {
+      const tool = FINANCIAL_TOOLS.find((t) => t.name === "list_accounts")!;
+      expect(tool.description).toContain("balanceInDefaultCurrency");
+      expect(tool.description).toContain("currentBalanceInDefaultCurrency");
+      expect(tool.description).toContain("missingRatePairs");
+      expect(tool.description).toContain("never convert a balance yourself");
+    });
+  });
+
   describe("calculate", () => {
     it("requires operation and values", () => {
       const tool = FINANCIAL_TOOLS.find((t) => t.name === "calculate")!;
@@ -349,7 +417,30 @@ describe("FINANCIAL_TOOLS", () => {
         "ratio",
         "sum",
         "average",
+        "convert",
       ]);
+    });
+
+    it("takes the currency pair and an optional date for convert", () => {
+      const tool = FINANCIAL_TOOLS.find((t) => t.name === "calculate")!;
+      const props = tool.inputSchema.properties as Record<
+        string,
+        Record<string, unknown>
+      >;
+      expect(props.fromCurrency.type).toBe("string");
+      expect(props.toCurrency.type).toBe("string");
+      expect(props.date.type).toBe("string");
+      expect(props.date.description).toContain("YYYY-MM-DD");
+      // The pair is only required for convert, so it is not in `required`.
+      expect(tool.inputSchema.required).toEqual(["operation", "values"]);
+      expect(tool.description).toContain("convert");
+    });
+
+    it("tells the model never to convert currencies itself", () => {
+      const tool = FINANCIAL_TOOLS.find((t) => t.name === "calculate")!;
+      expect(tool.description).toMatch(
+        /NEVER convert between currencies yourself/,
+      );
     });
 
     it("has optional label parameter", () => {

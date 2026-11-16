@@ -32,6 +32,63 @@ describe("readReferenceData", () => {
     ]);
   });
 
+  it("reads classifications from CT, dropping the category tree's own row", () => {
+    const db = fakeMnyDatabase({
+      CT: {
+        columns: ["hct", "szFull"],
+        rows: [
+          { hct: 0, szFull: "Category" },
+          { hct: 1, szFull: "Properties" },
+          // No usable handle: nothing in CAT can point at it.
+          { hct: null, szFull: "damaged" },
+        ],
+      },
+    });
+
+    expect(readReferenceData(db).classifications).toEqual([
+      { handle: 1, name: "Properties" },
+    ]);
+  });
+
+  it("reads which tree a CAT row belongs to, defaulting to the category tree", () => {
+    const withType = fakeMnyDatabase({
+      CAT: {
+        columns: ["hcat", "szFull", "hcatParent", "nLevel", "hct", "lType"],
+        rows: [
+          {
+            hcat: 552,
+            szFull: "20 Spring Apartment",
+            hcatParent: null,
+            nLevel: 0,
+            hct: 1,
+            lType: -1,
+          },
+        ],
+      },
+    });
+    expect(readReferenceData(withType).categories[0]).toMatchObject({
+      handle: 552,
+      classification: 1,
+    });
+
+    // A vintage without `hct` has no classifications: every row is a category.
+    const without = fakeMnyDatabase({
+      CAT: {
+        columns: ["hcat", "szFull", "hcatParent", "nLevel", "lType"],
+        rows: [
+          {
+            hcat: 200,
+            szFull: "Groceries",
+            hcatParent: 131,
+            nLevel: 1,
+            lType: 0,
+          },
+        ],
+      },
+    });
+    expect(readReferenceData(without).categories[0].classification).toBe(0);
+  });
+
   it("reads exchange rates", () => {
     const db = fakeMnyDatabase({
       CRNC_EXCHG: {

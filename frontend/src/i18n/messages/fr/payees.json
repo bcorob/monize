@@ -8,9 +8,11 @@
     "autoMergePayees": "Fusionner automatiquement les bénéficiaires",
     "newPayee": "+ Nouveau bénéficiaire",
     "searchPlaceholder": "Rechercher des bénéficiaires...",
+    "statusFilterLabel": "Statut",
     "statusAll": "Tous ({count})",
     "statusActive": "Actifs ({count})",
     "statusInactive": "Inactifs ({count})",
+    "categoryFilterLabel": "Catégorie par défaut",
     "categoryFilterAll": "Tous les bénéficiaires ({count})",
     "categoryFilterNoCategory": "Sans catégorie par défaut ({count})",
     "categoryFilterUncategorized": "Trans. sans catégorie ({count})",
@@ -34,7 +36,8 @@
       "inactive": "Inactifs",
       "withoutCategory": "Sans catégorie"
     },
-    "applyDefaultCategories": "Appliquer les catégories par défaut"
+    "applyDefaultCategories": "Appliquer les catégories par défaut",
+    "lookupSettings": "Paramètres de recherche de bénéficiaires"
   },
   "list": {
     "columns": {
@@ -82,13 +85,27 @@
     "categoryLabel": "Catégorie par défaut",
     "notesLabel": "Notes (facultatif)",
     "websiteLabel": "Site web",
+    "addressLabel": "Adresse",
+    "emailLabel": "E-mail",
+    "phoneLabel": "Téléphone",
     "submitCreate": "Créer le bénéficiaire",
     "submitUpdate": "Mettre à jour le bénéficiaire",
     "applyCategoryLabel": "Appliquer cette catégorie aux transactions existantes",
     "applyCategoryNone": "Ne pas modifier les transactions existantes",
     "applyCategoryUncategorized": "Uniquement les transactions sans catégorie ({count})",
     "applyCategoryAll": "Toutes les transactions ({count})",
-    "applyCategoryHelp": "Les virements et les transactions ventilées ne sont jamais modifiés."
+    "applyCategoryHelp": "Les virements et les transactions ventilées ne sont jamais modifiés.",
+    "lookup": {
+      "button": "Rechercher les coordonnées",
+      "searching": "Recherche des coordonnées...",
+      "suggested": "Suggéré par la recherche :",
+      "replaced": "Remplacé par la recherche :",
+      "clear": "Annuler les modifications de la recherche",
+      "nothingFound": "Aucune coordonnée publique n'a été trouvée pour ce nom.",
+      "noProvider": "Configurez une source dans les <link>paramètres de recherche de bénéficiaires</link> pour trouver des coordonnées.",
+      "failed": "La recherche n'a pas pu aboutir. Réessayez plus tard.",
+      "quotaExceeded": "Les recherches Google Places de ce mois sont épuisées. Augmentez la limite dans les <link>paramètres de recherche de bénéficiaires</link>, ou attendez le mois prochain."
+    }
   },
   "merge": {
     "title": "Fusionner le bénéficiaire",
@@ -112,7 +129,6 @@
   },
   "categoryAutoAssign": {
     "title": "Attribuer automatiquement les catégories par défaut",
-    "howItWorksTitle": "Comment ça fonctionne",
     "howItWorksBody": "Cette fonctionnalité analyse votre historique de transactions pour suggérer des catégories par défaut aux bénéficiaires. Elle identifie la catégorie la plus fréquemment utilisée pour chaque bénéficiaire et propose de l'attribuer comme catégorie par défaut pour les transactions futures. Vous pouvez toujours modifier la catégorie par défaut si nécessaire.",
     "minTransactionsLabel": "Transactions minimales : {count}",
     "minTransactionsHelp": "Ne prendre en compte que les bénéficiaires ayant au moins ce nombre de transactions",
@@ -133,6 +149,7 @@
       "line2": "Essayez de modifier les paramètres ci-dessus."
     },
     "columns": {
+      "assign": "Attribuer",
       "payee": "Bénéficiaire",
       "suggestedCategory": "Catégorie suggérée",
       "match": "Correspondance"
@@ -150,7 +167,6 @@
   },
   "autoMerge": {
     "title": "Fusionner automatiquement les bénéficiaires",
-    "howItWorksTitle": "Comment ça marche",
     "howItWorksBody": "Cette fonction analyse vos bénéficiaires et regroupe les variantes dont un nom prolonge un autre - par exemple \"Lidl\", \"LIDL sp. z o.o.\" et \"LIDL WARSZAWA 0421\" reposent tous sur \"Lidl\". Chaque groupe est fusionné en un seul bénéficiaire canonique, et un alias générique (tel que \"*LIDL*\") est créé afin que les futurs imports soient associés automatiquement. Les bénéficiaires qui ne partagent qu'un mot commun (comme \"Royal Electric\" et \"Royal City Nursery\") restent séparés. Vérifiez et ajustez chaque groupe avant de l'appliquer.",
     "backupRecommendation": "Recommandé : créez une <link>sauvegarde</link> avant d'effectuer des modifications.",
     "minGroupSizeLabel": "Taille minimale du groupe : {count}",
@@ -210,7 +226,6 @@
   },
   "deactivateUnused": {
     "title": "Désactiver les bénéficiaires inutilisés",
-    "howItWorksTitle": "Comment ça fonctionne",
     "howItWorksBody": "Cette fonctionnalité identifie les bénéficiaires rarement utilisés et les désactive. Les bénéficiaires désactivés n'apparaissent plus dans les listes déroulantes lors de la création de transactions, mais leurs transactions historiques sont conservées. Vous pouvez réactiver un bénéficiaire à tout moment depuis la liste des bénéficiaires.",
     "maxTransactionsLabel": "{count, plural, one {# transaction ou moins} other {# transactions ou moins}}",
     "maxTransactionsHelp": "N'inclure que les bénéficiaires ayant ce nombre de transactions ou moins",
@@ -228,6 +243,7 @@
       "line2": "Essayez de modifier les paramètres ci-dessus."
     },
     "columns": {
+      "deactivate": "Désactiver",
       "payee": "Bénéficiaire",
       "transactions": "Transactions",
       "lastUsed": "Dernière utilisation"
@@ -243,7 +259,7 @@
     }
   },
   "reactivate": {
-    "title": "Réactiver le bénéficiaire ?",
+    "title": "Réactiver le bénéficiaire",
     "message": "Le bénéficiaire « {name} » a été désactivé précédemment. Souhaitez-vous le réactiver pour qu'il apparaisse à nouveau dans les listes déroulantes ?",
     "keepInactiveButton": "Non, laisser inactif",
     "reactivateButton": "Réactiver",
@@ -252,7 +268,7 @@
   "aliases": {
     "heading": "Alias",
     "description": "Les alias associent les noms de bénéficiaires importés à ce bénéficiaire. Utilisez * comme joker (ex. : « STARBUCKS* »). Non sensible à la casse.",
-    "loading": "Chargement...",
+    "loading": "Chargement des alias...",
     "noAliases": "Aucun alias configuré",
     "removeTitle": "Supprimer l'alias",
     "removeButton": "Supprimer",
@@ -270,7 +286,10 @@
   },
   "selectCategoryPlaceholder": "Sélectionner une catégorie...",
   "validation": {
-    "nameRequired": "Le nom du bénéficiaire est requis"
+    "nameRequired": "Le nom du bénéficiaire est requis",
+    "emailInvalid": "Saisissez une adresse e-mail valide",
+    "phoneInvalid": "Saisissez un numéro de téléphone valide",
+    "phoneNeedsCountryCode": "Ajoutez l'indicatif du pays, par exemple +1 206 448 8762"
   },
   "defaultCategoryBackfill": {
     "allConfirmTitle": "Appliquer les catégories par défaut ?",

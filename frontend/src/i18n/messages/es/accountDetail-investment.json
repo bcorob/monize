@@ -5,6 +5,8 @@
     "dividendsInterest": "Dividendos e intereses",
     "realizedGains": "Ganancias realizadas",
     "ytd": "En lo que va del año",
+    "realizedKnownPart": "Parte conocida: {amount}",
+    "realizedUnknownReason": "Esta ganancia no se puede calcular: la posición contiene acciones que se añadieron sin costo, por lo que se desconoce el costo de las acciones vendidas. Abre la transacción que las añadió e introduce su precio.",
     "empty": "No hay ingresos por inversiones este año"
   },
   "register": {

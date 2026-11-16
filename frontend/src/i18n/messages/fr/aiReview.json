@@ -1,0 +1,120 @@
+{
+  "page": {
+    "title": "Boîte de révision par l'IA",
+    "subtitle": "Les transactions qu'une règle a demandé de faire réviser par une IA, les profils qu'on a demandé à un assistant de rédiger, et les modifications qu'un assistant propose à votre approbation."
+  },
+  "filter": {
+    "label": "Filtrer par statut",
+    "open": "Ouvertes",
+    "pending": "En attente",
+    "claimed": "En cours de révision",
+    "proposed": "Proposée",
+    "applied": "Appliquée",
+    "rejected": "Rejetée",
+    "expired": "Expirée"
+  },
+  "kindFilter": {
+    "label": "Filtrer par type",
+    "all": "Tous",
+    "email_receipt": "Reçus par e-mail",
+    "transaction_review": "Règles",
+    "option": "{label} ({count})"
+  },
+  "status": {
+    "pending": "En attente",
+    "claimed": "En cours de révision",
+    "proposed": "Proposée",
+    "applied": "Appliquée",
+    "rejected": "Rejetée",
+    "expired": "Expirée"
+  },
+  "columns": {
+    "date": "Date",
+    "request": "Demande",
+    "amount": "Montant",
+    "status": "Statut"
+  },
+  "row": {
+    "noPayee": "Aucun bénéficiaire",
+    "transactionMissing": "Cette transaction n'existe plus",
+    "rule": "Règle : {name}",
+    "manualRequest": "Demandée manuellement",
+    "trade": "{action, select, BUY {Achat de {quantity} parts de {symbol}} SELL {Vente de {quantity} parts de {symbol}} DIVIDEND {Dividende de {symbol}} REINVEST {Réinvestissement d'un dividende en {quantity} parts de {symbol}} other {Opération sur {symbol}}}",
+    "receiptInstruction": {
+      "automatic": "Compléter cette transaction à partir de l'e-mail de commande joint : la répartir par article avec une catégorie chacun, ou définir la description.",
+      "chat": "Vous avez demandé la reconnaissance de l'e-mail de commande joint : répartir cette transaction par produit avec une catégorie chacun, ou définir la description.",
+      "categorize": "Attribuer une catégorie à chaque article de l'e-mail de commande joint qu'aucune règle n'a catégorisé, puis proposer la répartition de cette transaction ou définir la description.",
+      "parsed": "Un analyseur enregistré a lu l'e-mail de commande et propose ces lignes de catégorie et cette description pour la transaction.",
+      "trade": "Un e-mail de confirmation d'opération lu par un profil enregistré propose cette transaction d'investissement. Vérifiez le compte, le titre, les parts et le total auprès de votre courtier avant d'approuver.",
+      "tradeChat": "Vous avez demandé de reconnaître la confirmation d'opération jointe : proposez la transaction d'investissement qu'elle indique, un achat, une vente, un dividende en espèces ou un dividende réinvesti."
+    },
+    "emailReceipt": "Reçu par e-mail : {subject} de {sender}",
+    "emailReceiptForwarded": "Reçu par e-mail : {subject} de {sender}, transféré par {forwarder}",
+    "emailReceiptMissing": "Reçu par e-mail (l'e-mail a été supprimé)",
+    "parserDraft": "Brouillon d'profil à partir de {count, plural, one {# e-mail} other {# e-mails}} ({domain})",
+    "viewEmailReceipts": "Voir les reçus par e-mail",
+    "agentNote": "Note de l'assistant : {reason}",
+    "dates": "Créée le {created}, expire le {expires}",
+    "viewTransaction": "Voir la transaction",
+    "waitingForAgent": "En attente d'un agent IA. <link>Connectez un fournisseur d'IA dans les Paramètres</link> ou laissez un client MCP la prendre en charge.",
+    "parserDraftReady": "Brouillon d'profil prêt. <link>Testez-le et approuvez-le dans les paramètres des profils</link>.",
+    "tradePending": "Une opération provenant d'un courriel, pas encore lue",
+    "tradeEmail": "E-mail de confirmation d'opération",
+    "parserDraftIds": "ID des brouillons de profil : {ids}"
+  },
+  "actions": {
+    "dismiss": "Ignorer"
+  },
+  "proposal": {
+    "errorTitle": "Cette proposition ne peut plus être appliquée"
+  },
+  "bulk": {
+    "selectRow": "Sélectionner {name}",
+    "selectAll": "Sélectionner toutes les demandes affichées qui peuvent être approuvées ou envoyées",
+    "approveSelected": "Approuver la sélection ({count})",
+    "approveAllShown": "Approuver toutes celles affichées ({count})",
+    "summary": "{approved, plural, one {# proposition appliquée} other {# propositions appliquées}}, {failed, plural, one {# non appliquée} other {# non appliquées}}.",
+    "closeSummary": "Fermer",
+    "failure": "{name} : {reason}",
+    "noReason": "Aucun motif n'a été indiqué",
+    "unknownRequest": "Une demande",
+    "failed": "Impossible d'appliquer les propositions",
+    "dialog": {
+      "title": "{count, plural, one {Appliquer # proposition ?} other {Appliquer # propositions ?}}",
+      "message": "Chaque proposition est vérifiée par rapport à sa transaction dans son état actuel et appliquée séparément. Une proposition qui ne convient plus est ignorée et signalée, et les autres sont tout de même appliquées. Relisez les propositions avant de les approuver.",
+      "confirm": "{count, plural, one {Appliquer # proposition} other {Appliquer # propositions}}"
+    }
+  },
+  "sendToAssistant": {
+    "button": "Envoyer {count, plural, one {# demande en attente} other {# demandes en attente}} à l'assistant IA",
+    "buttonSelected": "Envoyer {count, plural, one {# demande sélectionnée} other {# demandes sélectionnées}} à l'assistant IA",
+    "prompt": "Traite mes demandes de revue par l'IA en attente avec l'outil ai_review_requests : liste-les, prends chacune en charge, suis son instruction et soumets une proposition. Pour une demande de brouillon de profil, crée plutôt le profil avec l'outil email_receipt_parsers. Rien n'est modifié tant que je n'ai pas approuvé les propositions dans la boîte de revue par l'IA.",
+    "promptSelected": "Traite {count, plural, one {cette demande de revue par l'IA} other {ces # demandes de revue par l'IA}} avec l'outil ai_review_requests : {ids}. Prends chacune en charge par son id, suis son instruction et soumets une proposition. Pour une demande de brouillon de profil, crée plutôt le profil avec l'outil email_receipt_parsers. Ne touche pas aux autres demandes. Rien n'est modifié tant que je n'ai pas approuvé les propositions dans la boîte de revue par l'IA.",
+    "opened": "Le chat s'est ouvert avec un message préparé. Lisez-le et appuyez sur Envoyer.",
+    "unavailable": "L'assistant IA ne peut pas répondre pour l'instant. Connectez un fournisseur d'IA dans les Paramètres ou connectez votre client MCP. Les demandes restent en attente ici."
+  },
+  "dismissDialog": {
+    "title": "Ignorer cette demande ?",
+    "message": "Plus personne ne sera sollicité pour traiter cette demande. Rien de ce qu'elle concernait n'est modifié.",
+    "confirm": "Ignorer la demande"
+  },
+  "loading": "Chargement des demandes de révision...",
+  "error": {
+    "title": "Impossible de charger les demandes de révision",
+    "body": "La liste ne s'est pas chargée : elle n'est peut-être pas vide. Vérifiez votre connexion et réessayez.",
+    "retry": "Réessayer"
+  },
+  "empty": {
+    "title": "Aucune demande de révision",
+    "body": "Les demandes apparaissent ici lorsqu'une règle dotée de l'action « Demander une révision par l'IA » correspond à une transaction. Un assistant IA, ou un client MCP comme l'agent relais, traite la file et propose une modification à approuver.",
+    "filteredTitle": "Aucune demande avec ce statut",
+    "filteredBody": "Choisissez un autre statut pour voir d'autres demandes."
+  },
+  "toasts": {
+    "approved": "Proposition appliquée",
+    "dismissed": "Demande ignorée",
+    "dismissFailed": "Impossible d'ignorer la demande",
+    "approveFailed": "Impossible d'appliquer la proposition",
+    "changed": "Cette demande a changé entre-temps. La liste a été rechargée."
+  }
+}

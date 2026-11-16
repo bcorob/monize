@@ -11,10 +11,20 @@ import { Budget, BudgetType, BudgetStrategy } from "./entities/budget.entity";
 import { BudgetPeriod, PeriodStatus } from "./entities/budget-period.entity";
 import { User } from "../users/entities/user.entity";
 import { UserPreference } from "../users/entities/user-preference.entity";
+import { NotificationPreferenceService } from "../notification-center/notification-preference.service";
+import { NotificationCategory } from "../notification-center/entities/notification.entity";
 import {
   createScopedDbMocks,
   DataSourceMock,
 } from "../test-helpers/scoped-db-testing";
+import {
+  createJobClaimMock,
+  jobClaimProvider,
+  type JobClaimMock,
+} from "../test-helpers/job-claim-testing";
+import { JobClaimType } from "../common/jobs/job-claim.service";
+import { NoOpenPeriodError } from "./budget-period.service";
+import { rolloverMonthKey } from "./budget-period-cron.service";
 
 jest.mock("../common/db/scoped-db", () =>
   jest.requireActual("../test-helpers/scoped-db-testing").scopedDbMockModule(),
@@ -23,6 +33,7 @@ jest.mock("../common/db/scoped-db", () =>
 describe("BudgetPeriodCronService", () => {
   let scopedDataSource: DataSourceMock;
   let service: BudgetPeriodCronService;
+  let jobClaims: JobClaimMock;
   let budgetsRepository: Record<string, jest.Mock>;
   let periodsRepository: Record<string, jest.Mock>;
   let usersRepository: Record<string, jest.Mock>;
@@ -31,6 +42,7 @@ describe("BudgetPeriodCronService", () => {
   let budgetReportsService: Record<string, jest.Mock>;
   let emailService: Record<string, jest.Mock>;
   let configService: Record<string, jest.Mock>;
+  let notificationPreferences: { resolveEmail: jest.Mock };
 
   const mockBudget: Budget = {
     id: "budget-1",
@@ -62,6 +74,7 @@ describe("BudgetPeriodCronService", () => {
         rolloverType: "NONE" as any,
         rolloverCap: null,
         flexGroup: null,
+        bucketId: null,
         alertWarnPercent: 80,
         alertCriticalPercent: 95,
         notes: null,
@@ -84,6 +97,7 @@ describe("BudgetPeriodCronService", () => {
         rolloverType: "NONE" as any,
         rolloverCap: null,
         flexGroup: null,
+        bucketId: null,
         alertWarnPercent: 80,
         alertCriticalPercent: 95,
         notes: null,
@@ -169,6 +183,18 @@ describe("BudgetPeriodCronService", () => {
       findOne: jest.fn().mockResolvedValue(null),
     };
 
+    // Mirror the real resolver's master-gate: with no per-category row,
+    // resolveEmail == the user's notification_email, so the existing
+    // preferencesRepository fixtures keep controlling the email path.
+    notificationPreferences = {
+      resolveEmail: jest.fn(async (userId: string) => {
+        const prefs = await preferencesRepository.findOne({
+          where: { userId },
+        });
+        return prefs ? prefs.notificationEmail !== false : true;
+      }),
+    };
+
     budgetPeriodService = {
       closePeriod: jest.fn().mockResolvedValue(mockClosedPeriod),
     };
@@ -206,6 +232,8 @@ describe("BudgetPeriodCronService", () => {
       [User, usersRepository as never],
       [UserPreference, preferencesRepository as never],
     ]));
+
+    jobClaims = createJobClaimMock();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -250,6 +278,11 @@ describe("BudgetPeriodCronService", () => {
           },
         },
         { provide: DataSource, useValue: scopedDataSource },
+        {
+          provide: NotificationPreferenceService,
+          useValue: notificationPreferences,
+        },
+        jobClaimProvider(jobClaims),
       ],
     }).compile();
 
@@ -272,6 +305,144 @@ describe("BudgetPeriodCronService", () => {
       });
       expect(periodsRepository.findOne).not.toHaveBeenCalled();
       expect(budgetPeriodService.closePeriod).not.toHaveBeenCalled();
+    });
+
+    // One month rolls over once per owner, and every replica fires this cron.
+    it("claims the owner and month before touching anything", async () => {
+      budgetsRepository.find.mockResolvedValue([mockBudget]);
+      periodsRepository.findOne.mockResolvedValue(null);
+
+      await service.closeExpiredPeriods();
+
+      expect(jobClaims.claimOnce).toHaveBeenCalledWith(
+        JobClaimType.BudgetPeriodRollover,
+        "11111111-1111-1111-1111-111111111111",
+        rolloverMonthKey(new Date()),
+      );
+    });
+
+    it("takes one claim for an owner with several budgets", async () => {
+      const second = { ...mockBudget, id: "budget-2", name: "Second" };
+      budgetsRepository.find.mockResolvedValue([mockBudget, second]);
+      periodsRepository.findOne.mockResolvedValue(null);
+
+      await service.closeExpiredPeriods();
+
+      // Per owner, not per budget: the rollover's unit of work is the owner,
+      // and `job_claims.user_id` is a foreign key to `users` so there is no
+      // deployment-wide claim to take instead.
+      expect(jobClaims.claimOnce).toHaveBeenCalledTimes(1);
+    });
+
+    // The whole point of the claim: the replica that lost does no work at all,
+    // rather than racing the winner budget by budget.
+    it("skips the owner entirely when another replica holds the claim", async () => {
+      jobClaims.claimOnce.mockResolvedValue(false);
+      budgetsRepository.find.mockResolvedValue([mockBudget]);
+      periodsRepository.findOne.mockResolvedValue({
+        ...mockOpenPeriod,
+        periodEnd: "2025-12-31",
+      });
+
+      await service.closeExpiredPeriods();
+
+      expect(periodsRepository.findOne).not.toHaveBeenCalled();
+      expect(budgetPeriodService.closePeriod).not.toHaveBeenCalled();
+    });
+
+    // A rollout can briefly run two processes on one replica, and the loser of
+    // `closePeriod`'s row lock sees this. It is the normal outcome of that tick,
+    // not a failure to log a stack for.
+    it("counts a NoOpenPeriodError as a skip, not an error", async () => {
+      budgetsRepository.find.mockResolvedValue([mockBudget]);
+      periodsRepository.findOne.mockResolvedValue({
+        ...mockOpenPeriod,
+        periodEnd: "2025-12-31",
+      });
+      budgetPeriodService.closePeriod.mockRejectedValue(
+        new NoOpenPeriodError(),
+      );
+      const errorSpy = jest
+        .spyOn(service["logger"], "error")
+        .mockImplementation(() => undefined);
+
+      await service.closeExpiredPeriods();
+
+      expect(errorSpy).not.toHaveBeenCalled();
+      errorSpy.mockRestore();
+    });
+
+    it("still counts a real failure as an error", async () => {
+      budgetsRepository.find.mockResolvedValue([mockBudget]);
+      periodsRepository.findOne.mockResolvedValue({
+        ...mockOpenPeriod,
+        periodEnd: "2025-12-31",
+      });
+      budgetPeriodService.closePeriod.mockRejectedValue(
+        new Error("Connection reset"),
+      );
+      const errorSpy = jest
+        .spyOn(service["logger"], "error")
+        .mockImplementation(() => undefined);
+
+      await service.closeExpiredPeriods();
+
+      expect(errorSpy).toHaveBeenCalled();
+      errorSpy.mockRestore();
+    });
+
+    // A claim is not a record that the work was done. Keeping it after a
+    // failure asserts a rollover that did not happen, and because this cron is
+    // monthly there is no later tick to notice.
+    it("hands the month back when a budget's close failed", async () => {
+      budgetsRepository.find.mockResolvedValue([mockBudget]);
+      periodsRepository.findOne.mockResolvedValue({
+        ...mockOpenPeriod,
+        periodEnd: "2025-12-31",
+      });
+      budgetPeriodService.closePeriod.mockRejectedValue(
+        new Error("could not serialize access"),
+      );
+      jest
+        .spyOn(service["logger"], "error")
+        .mockImplementation(() => undefined);
+
+      await service.closeExpiredPeriods();
+
+      expect(jobClaims.releasePermanentClaim).toHaveBeenCalledWith(
+        JobClaimType.BudgetPeriodRollover,
+        "11111111-1111-1111-1111-111111111111",
+        rolloverMonthKey(new Date()),
+      );
+    });
+
+    it("keeps the month when every budget got through", async () => {
+      budgetsRepository.find.mockResolvedValue([mockBudget]);
+      periodsRepository.findOne.mockResolvedValue({
+        ...mockOpenPeriod,
+        periodEnd: "2025-12-31",
+      });
+
+      await service.closeExpiredPeriods();
+
+      expect(jobClaims.releasePermanentClaim).not.toHaveBeenCalled();
+    });
+
+    // The loser of the row lock is a normal tick, not a failure -- so it must
+    // not hand back a month the winner has just rolled over.
+    it("keeps the month when the only error was a NoOpenPeriodError", async () => {
+      budgetsRepository.find.mockResolvedValue([mockBudget]);
+      periodsRepository.findOne.mockResolvedValue({
+        ...mockOpenPeriod,
+        periodEnd: "2025-12-31",
+      });
+      budgetPeriodService.closePeriod.mockRejectedValue(
+        new NoOpenPeriodError(),
+      );
+
+      await service.closeExpiredPeriods();
+
+      expect(jobClaims.releasePermanentClaim).not.toHaveBeenCalled();
     });
 
     it("skips budgets with no open period", async () => {
@@ -471,6 +642,27 @@ describe("BudgetPeriodCronService", () => {
 
       await service.sendMonthlySummaryEmails(closedPeriods);
 
+      expect(usersRepository.findOne).not.toHaveBeenCalled();
+      expect(emailService.sendMail).not.toHaveBeenCalled();
+    });
+
+    it("skips users whose BUDGETS email channel is off, master on", async () => {
+      // The monthly summary is a BUDGETS email: a per-category off must
+      // suppress it even while the global master switch is on and the digest
+      // toggle is on (audit Finding 1 -- it used to gate on the master only).
+      preferencesRepository.findOne.mockResolvedValue({
+        userId: "11111111-1111-1111-1111-111111111111",
+        notificationEmail: true,
+        budgetDigestEnabled: true,
+      });
+      notificationPreferences.resolveEmail.mockResolvedValue(false);
+
+      await service.sendMonthlySummaryEmails(closedPeriods);
+
+      expect(notificationPreferences.resolveEmail).toHaveBeenCalledWith(
+        "11111111-1111-1111-1111-111111111111",
+        NotificationCategory.BUDGETS,
+      );
       expect(usersRepository.findOne).not.toHaveBeenCalled();
       expect(emailService.sendMail).not.toHaveBeenCalled();
     });

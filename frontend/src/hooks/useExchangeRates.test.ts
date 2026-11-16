@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
 import { useExchangeRates, buildRateMap, convertWithRateMap } from './useExchangeRates';
 
@@ -22,9 +22,25 @@ vi.mock('@/lib/logger', () => ({
 
 import { exchangeRatesApi } from '@/lib/exchange-rates';
 
+// The fixtures are dated 2025-01-15; pin today so the age bound (45 days,
+// INV-FX-001) is the thing under test and not the wall clock.
+const TODAY = '2025-01-20';
+
+function daysAgo(n: number): string {
+  const d = new Date(`${TODAY}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
 describe('useExchangeRates', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(`${TODAY}T12:00:00Z`));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('loads rates on mount', async () => {
@@ -156,6 +172,74 @@ describe('useExchangeRates', () => {
     await waitFor(() => expect(result.current.isLoading).toBe(false));
     expect(result.current.getRate('USD')).toBe(1.36);
   });
+
+  describe('rate age and orientation (INV-FX-001, INV-FX-003)', () => {
+    const row = (id: number, from: string, to: string, rate: number, rateDate: string) => ({
+      id, fromCurrency: from, toCurrency: to, rate, rateDate, source: 'test',
+    });
+
+    it('treats a rate older than the bound as unknown, but keeps it in rates', async () => {
+      vi.mocked(exchangeRatesApi.getLatestRates).mockResolvedValue([
+        row(1, 'CHF', 'USD', 1.1, '2020-03-01'),
+      ]);
+      const { result } = renderHook(() => useExchangeRates());
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.convert(100000, 'CHF', 'USD')).toBeNull();
+      expect(result.current.getRate('CHF', 'USD')).toBeNull();
+      expect(result.current.getRate('USD', 'CHF')).toBeNull();
+      expect(result.current.rates).toHaveLength(1);
+    });
+
+    it('converts at a 10 day old rate', async () => {
+      vi.mocked(exchangeRatesApi.getLatestRates).mockResolvedValue([
+        row(1, 'USD', 'CAD', 1.3, daysAgo(10)),
+      ]);
+      const { result } = renderHook(() => useExchangeRates());
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.convert(100, 'USD', 'CAD')).toBeCloseTo(130, 2);
+    });
+
+    it('prefers a fresh inverse row over a stale direct row', async () => {
+      vi.mocked(exchangeRatesApi.getLatestRates).mockResolvedValue([
+        row(1, 'USD', 'CAD', 1.3, daysAgo(60)),
+        row(2, 'CAD', 'USD', 0.7142857143, TODAY),
+      ]);
+      const { result } = renderHook(() => useExchangeRates());
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.convert(1000, 'USD', 'CAD')).toBeCloseTo(1400, 2);
+      expect(result.current.getRate('USD', 'CAD')).toBeCloseTo(1.4, 6);
+    });
+
+    it('prefers a fresh inverse row over an older direct row inside the bound', async () => {
+      vi.mocked(exchangeRatesApi.getLatestRates).mockResolvedValue([
+        row(1, 'USD', 'CAD', 1.3, daysAgo(40)),
+        row(2, 'CAD', 'USD', 0.7142857143, daysAgo(2)),
+      ]);
+      const { result } = renderHook(() => useExchangeRates());
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.convert(1000, 'USD', 'CAD')).toBeCloseTo(1400, 2);
+    });
+
+    it('prefers the newer direct row over an older inverse row', async () => {
+      vi.mocked(exchangeRatesApi.getLatestRates).mockResolvedValue([
+        row(1, 'USD', 'CAD', 1.3, daysAgo(1)),
+        row(2, 'CAD', 'USD', 0.7142857143, daysAgo(30)),
+      ]);
+      const { result } = renderHook(() => useExchangeRates());
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.convert(1000, 'USD', 'CAD')).toBeCloseTo(1300, 2);
+    });
+
+    it('uses the direct row on a date tie', async () => {
+      vi.mocked(exchangeRatesApi.getLatestRates).mockResolvedValue([
+        row(1, 'USD', 'CAD', 1.3, daysAgo(3)),
+        row(2, 'CAD', 'USD', 0.7142857143, daysAgo(3)),
+      ]);
+      const { result } = renderHook(() => useExchangeRates());
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+      expect(result.current.convert(1000, 'USD', 'CAD')).toBeCloseTo(1300, 2);
+    });
+  });
 });
 
 describe('buildRateMap', () => {
@@ -164,6 +248,15 @@ describe('buildRateMap', () => {
       { id: 1, fromCurrency: 'USD', toCurrency: 'CAD', rate: 1.36, rateDate: '2025-01-15', source: 'test' },
     ]);
     expect(map.get('USD->CAD')).toBe(1.36);
+  });
+
+  it('keeps only the newer orientation of a pair', () => {
+    const map = buildRateMap([
+      { id: 1, fromCurrency: 'USD', toCurrency: 'CAD', rate: 1.3, rateDate: '2024-01-01', source: 'test' },
+      { id: 2, fromCurrency: 'CAD', toCurrency: 'USD', rate: 0.7142857143, rateDate: '2024-06-01', source: 'test' },
+    ]);
+    expect(map.has('USD->CAD')).toBe(false);
+    expect(map.get('CAD->USD')).toBe(0.7142857143);
   });
 });
 

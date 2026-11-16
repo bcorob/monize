@@ -177,6 +177,139 @@ describe("IsSafeUrl validator", () => {
     it("rejects 169.254.x.x (link-local)", async () => {
       await expectInvalid("https://169.254.1.1/api");
     });
+
+    // 100.64.0.0/10 (CGNAT, Tailscale) and 198.18.0.0/15 (benchmarking) are not
+    // public hosts; the edges prove the ranges are not wider than their CIDRs.
+    it.each([
+      "100.64.0.1",
+      "100.100.100.100",
+      "100.127.255.254",
+      "198.18.0.1",
+      "198.19.255.255",
+    ])("rejects %s (CGNAT / benchmark range)", async (ip) => {
+      await expectInvalid(`http://${ip}:8080/v1`);
+    });
+
+    it("rejects an IPv4-mapped CGNAT address", async () => {
+      await expectInvalid("http://[::ffff:100.100.100.100]:8080/v1");
+    });
+
+    it.each(["100.63.255.255", "100.128.0.1", "198.17.0.1", "198.20.0.1"])(
+      "still allows %s (outside the blocked ranges)",
+      async (ip) => {
+        await expectValid(`http://${ip}:8080/v1`);
+      },
+    );
+  });
+
+  // `URL.hostname` keeps the brackets on an IPv6 literal, and every check in the
+  // validator compares against unbracketed forms: net.isIP("[::1]") is 0,
+  // normalizeIp returns null, and /^::1$/ does not match. So every case below
+  // passed the strict check until `unbracketHost` was added -- an SSRF bypass on
+  // any client-supplied URL, reachable through one bracket pair.
+  describe("IPv6 literals (bracketed-host bypass prevention)", () => {
+    it("rejects [::1] (loopback)", async () => {
+      await expectInvalid("https://[::1]/api");
+    });
+
+    it("rejects [::1] on an explicit port", async () => {
+      await expectInvalid("https://[::1]:8080/api");
+    });
+
+    it("rejects [::] (unspecified)", async () => {
+      await expectInvalid("https://[::]/api");
+    });
+
+    it("rejects a unique-local address", async () => {
+      await expectInvalid("https://[fd00::1]/api");
+    });
+
+    it("rejects a link-local address", async () => {
+      await expectInvalid("https://[fe80::1]/api");
+    });
+
+    it("rejects an IPv4-mapped loopback", async () => {
+      await expectInvalid("https://[::ffff:127.0.0.1]/api");
+    });
+
+    it("allows a public IPv6 address", async () => {
+      await expectValid("https://[2606:4700:4700::1111]/api");
+    });
+
+    // An IPv6 address can embed an IPv4 one in more than one spelling, and the
+    // URL parser rewrites all of them to hex -- so a rule written per-spelling
+    // covers whichever ones its author thought of. The first pass here handled
+    // `::ffff:` with a two-group tail, which left IPv4-compatible and
+    // IPv4-translated LOOPBACK accepted: `https://[::127.0.0.1]/` arrives as
+    // `::7f00:1` and matched no pattern at all.
+    it.each([
+      // IPv4-compatible, the deprecated `::a.b.c.d` form.
+      ["loopback, IPv4-compatible", "https://[::127.0.0.1]/api"],
+      ["private, IPv4-compatible", "https://[::10.0.0.1]/api"],
+      ["metadata, IPv4-compatible", "https://[::169.254.169.254]/api"],
+      // IPv4-translated, `::ffff:0:a.b.c.d`.
+      ["loopback, IPv4-translated", "https://[::ffff:0:127.0.0.1]/api"],
+      ["private, IPv4-translated", "https://[::ffff:0:192.168.1.1]/api"],
+      // Already-hex spellings, which is what the parser hands the validator.
+      ["loopback, written in hex", "https://[::7f00:1]/api"],
+      ["mapped loopback in hex", "https://[::ffff:7f00:1]/api"],
+      // NAT64: the prefix exists so a gateway forwards it to the embedded
+      // address, which is the whole hazard.
+      ["private behind the NAT64 prefix", "https://[64:ff9b::10.0.0.1]/api"],
+      [
+        "loopback behind the local-use NAT64 prefix",
+        "https://[64:ff9b:1::127.0.0.1]/api",
+      ],
+    ])("rejects %s", async (_name, url) => {
+      await expectInvalid(url);
+    });
+
+    // A CIDR block is a mask over the first 16 bits, and spelling it as a text
+    // prefix covered a fraction of what it claimed: `/^fc00:/` plus `/^fd/` left
+    // `fc01::1` through `fcff::1` -- most of unique-local fc00::/7 -- reading as
+    // public, and `/^fe80:/` left `fe90::` to `febf::` of link-local fe80::/10.
+    // Every one of these was accepted as a push endpoint this server then POSTs
+    // to on a schedule.
+    it.each([
+      ["the bottom of fc00::/7", "https://[fc00::1]/api"],
+      ["the block the prefix rule missed", "https://[fc01::1]/api"],
+      ["the top of the fc half", "https://[fcff:ffff::1]/api"],
+      ["the fd half", "https://[fd00::1]/api"],
+      ["the top of fc00::/7", "https://[fdff:ffff::1]/api"],
+      ["the bottom of fe80::/10", "https://[fe80::1]/api"],
+      ["the middle of fe80::/10", "https://[fe90::1]/api"],
+      ["the top of fe80::/10", "https://[febf:ffff::1]/api"],
+      ["deprecated site-local", "https://[fec0::1]/api"],
+      ["link-local all-nodes multicast", "https://[ff02::1]/api"],
+    ])("rejects %s", async (_name, url) => {
+      await expectInvalid(url);
+    });
+
+    // The boundaries from the outside, which is what makes the masks a range
+    // rather than a wider ban: fb.. is below fc00::/7 and fe00 is below
+    // fe80::/10, and both are ordinary global space.
+    it.each([
+      ["just below fc00::/7", "https://[fbff:ffff::1]/api"],
+      ["just below fe80::/10", "https://[fe00::1]/api"],
+      ["documentation space", "https://[2001:db8::1]/api"],
+    ])("allows %s", async (_name, url) => {
+      await expectValid(url);
+    });
+
+    // The other direction, because a check that rejects everything is not a
+    // check: an embedded PUBLIC address stays reachable.
+    it.each([
+      ["a mapped public address", "https://[::ffff:8.8.8.8]/api"],
+      ["a public address behind NAT64", "https://[64:ff9b::8.8.8.8]/api"],
+      // Not an embedding at all -- an ordinary address whose last 32 bits
+      // happen to spell one.
+      [
+        "an ordinary address with a low-bit tail",
+        "https://[2001:db8::7f00:1]/api",
+      ],
+    ])("allows %s", async (_name, url) => {
+      await expectValid(url);
+    });
   });
 
   describe("alternative IP encodings (SSRF bypass prevention)", () => {

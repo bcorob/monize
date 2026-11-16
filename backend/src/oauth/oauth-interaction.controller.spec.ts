@@ -1,5 +1,6 @@
 import { OAuthInteractionController } from "./oauth-interaction.controller";
 import { getRequestContext } from "../common/request-context";
+import { SecurityNoticeService } from "../notifications/security-notice.service";
 
 // resolveCookieUser reads the user under withUserContext(payload.sub), which
 // validates the id is a UUID (a real auth_token cookie carries a UUID sub).
@@ -14,6 +15,7 @@ describe("OAuthInteractionController", () => {
     findUser?: jest.Mock;
     publicUrl?: string;
     mcpResourceUrl?: string;
+    oauthClientAuthorized?: jest.Mock;
   }) {
     const interactionFinished = overrides.interactionFinished ?? jest.fn();
     const provider = {
@@ -83,13 +85,24 @@ describe("OAuthInteractionController", () => {
         .fn()
         .mockReturnValue(overrides.publicUrl ?? "https://app.monize.test"),
     } as any;
+    const oauthClientAuthorized =
+      overrides.oauthClientAuthorized ?? jest.fn().mockResolvedValue(undefined);
     const controller = new OAuthInteractionController(
       providerService,
       jwtService,
       authService,
       configService,
+      {
+        oauthClientAuthorized,
+      } as Partial<SecurityNoticeService> as SecurityNoticeService,
     );
-    return { controller, provider, interactionFinished, providerService };
+    return {
+      controller,
+      provider,
+      interactionFinished,
+      providerService,
+      oauthClientAuthorized,
+    };
   }
 
   function makeRes() {
@@ -235,6 +248,34 @@ describe("OAuthInteractionController", () => {
       expect(res.send).toHaveBeenCalledWith(
         expect.stringContaining("Read your financial data"),
       );
+    });
+
+    it("shows the redirect_uri origin of THIS authorization request, not the client's metadata", async () => {
+      // Dynamic Client Registration is open, so the client's name is chosen by
+      // whoever registered it. The destination shown must be the request's own
+      // redirect_uri, which the provider validated before the interaction.
+      const { controller } = makeController({
+        interactionDetails: jest.fn().mockResolvedValue({
+          uid: "u",
+          prompt: { name: "consent" },
+          params: {
+            client_id: "claude-desktop",
+            scope: "monize:read",
+            redirect_uri: "https://attacker.example:8443/callback?x=1",
+          },
+        }),
+      });
+      const req = { cookies: { auth_token: "valid" } } as any;
+      const res = makeRes();
+
+      await controller.render(req, res);
+
+      const html = res.send.mock.calls[0][0] as string;
+      expect(html).toContain("Claude Desktop");
+      expect(html).toContain(
+        '<p class="origin">https://attacker.example:8443</p>',
+      );
+      expect(html).not.toContain("/callback");
     });
 
     it("renders an honest closed-window page when the interaction is stale (consumed/expired)", async () => {
@@ -824,6 +865,76 @@ describe("OAuthInteractionController", () => {
       expect(GrantMock.find).toHaveBeenCalledWith("g1");
       expect(existing.addOIDCScope).toHaveBeenCalledWith("openid monize:read");
       expect(existing.save).toHaveBeenCalled();
+    });
+
+    describe("security notice", () => {
+      const run = async (
+        Grant: unknown,
+        extra: { oauthClientAuthorized?: jest.Mock; grantId?: string } = {},
+      ) => {
+        const made = makeController({
+          interactionDetails: jest.fn().mockResolvedValue({
+            uid: "u1",
+            prompt: { name: "consent", details: consentDetails },
+            params: { client_id: "claude-desktop" },
+            session: { accountId: USER_ID },
+            grantId: extra.grantId,
+          }),
+          Grant: Grant as any,
+          oauthClientAuthorized: extra.oauthClientAuthorized,
+        });
+        await made.controller.confirm(
+          { cookies: { auth_token: "tok" } } as any,
+          makeRes(),
+        );
+        return made;
+      };
+      const newGrant = (save = jest.fn().mockResolvedValue("grant-new")) =>
+        class GrantMock {
+          addOIDCScope() {}
+          addOIDCClaims() {}
+          addResourceScope() {}
+          save = save;
+          static find = jest.fn().mockResolvedValue(null);
+        };
+
+      it("announces a newly created grant once, before the interaction finishes", async () => {
+        const { oauthClientAuthorized, interactionFinished } =
+          await run(newGrant());
+        expect(oauthClientAuthorized).toHaveBeenCalledTimes(1);
+        expect(oauthClientAuthorized).toHaveBeenCalledWith(USER_ID, {
+          grantId: "grant-new",
+          clientId: "claude-desktop",
+          clientName: "Claude Desktop",
+        });
+        expect(oauthClientAuthorized.mock.invocationCallOrder[0]).toBeLessThan(
+          interactionFinished.mock.invocationCallOrder[0],
+        );
+      });
+
+      it("does not announce an adopted existing grant", async () => {
+        class GrantMock {
+          static find = jest.fn().mockResolvedValue({
+            accountId: USER_ID,
+            clientId: "claude-desktop",
+            addOIDCScope: jest.fn(),
+            addOIDCClaims: jest.fn(),
+            addResourceScope: jest.fn(),
+            save: jest.fn().mockResolvedValue("grant-existing"),
+          });
+        }
+        const { oauthClientAuthorized } = await run(GrantMock, {
+          grantId: "g1",
+        });
+        expect(oauthClientAuthorized).not.toHaveBeenCalled();
+      });
+
+      it("still finishes the interaction when the notice service throws", async () => {
+        const { interactionFinished } = await run(newGrant(), {
+          oauthClientAuthorized: jest.fn().mockRejectedValue(new Error("boom")),
+        });
+        expect(interactionFinished).toHaveBeenCalled();
+      });
     });
 
     /**

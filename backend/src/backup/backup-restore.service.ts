@@ -1,8 +1,14 @@
 import {
+  validateSharedSnapshot,
+  prepareSharedRestore,
+  claimRestoredSharedGroups,
+} from "./shared-backup";
+import {
   BadRequestException,
   Injectable,
   Logger,
   NotFoundException,
+  Optional,
   UnauthorizedException,
 } from "@nestjs/common";
 import { DataSource, EntityTarget, ObjectLiteral, Repository } from "typeorm";
@@ -12,6 +18,10 @@ import { gunzip } from "zlib";
 import { promisify } from "util";
 import { withScopedDb } from "../common/db/scoped-db";
 import { withPreserveTimestamps } from "../common/db/with-context";
+import { recalculateUserCurrentBalances } from "../accounts/accounts.service";
+import { todayInTimezoneOrUtc } from "../common/date-utils";
+import { preferredCurrency } from "../common/default-currency.util";
+import { getEffectiveTimezoneOfUser } from "../common/users-by-timezone.util";
 import { UserMaintenanceService } from "../common/jobs/user-maintenance.service";
 import { EncryptionService } from "../common/encryption/encryption.service";
 import { OidcReauthService } from "../auth/oidc/oidc-reauth.service";
@@ -20,30 +30,62 @@ import { tr } from "../i18n/translate";
 import { gemConfigFingerprint } from "../strategies/gem-signal.service";
 import { GemStrategy } from "../strategies/entities/gem-strategy.entity";
 import { GemStrategyAsset } from "../strategies/entities/gem-strategy-asset.entity";
-import { collectRowIdRemap, deepRemapIds } from "./backup-id-remap.util";
+import { collectRowIdRemap } from "./backup-id-remap.util";
 import {
   BackupDecryptionError,
   decryptBackup,
+  decryptBackupWithDataKey,
   isEncryptedBackup,
 } from "./backup-crypto.util";
 import { resolveRestoreExpandedLimitBytes } from "./backup-limits";
-import { resolveStoredBackupPassword } from "./backup-password.util";
+import {
+  resolveStoredBackupDataKey,
+  resolveStoredBackupPassword,
+} from "./backup-password.util";
 import { restoreProcessingGate } from "./restore-processing-gate";
+import { validateRestoredNotifications } from "./notification-restore-bounds";
+import { validateRestoredSchedules } from "./restore-custom-recurrence";
 import { RESTORE_PLAN } from "./restore-plan";
+import {
+  remapRestoreRow,
+  resolveRestoreReferences,
+} from "./restore-references";
 import {
   BACKUP_VERSION,
   BackupData,
   BackupPasswordRequiredError,
   backupTables,
+  MAX_CURRENCY_KIND_MISMATCH_NAMES,
+  MAX_UNLINKED_BOND_SYMBOLS,
+  MAX_UNRECOVERED_BOND_SERIES,
   parseArtifactCompleteness,
+  renameLegacyTableKeys,
   RestoreBackupInput,
   RestoreResult,
 } from "./backup-format";
+import { applyLegacyNormalizations } from "./restore-legacy-normalizations";
 import { restoreAiProviderKey } from "./ai-provider-key-transport";
+import { keyBearingExportTables } from "./export-table-queries";
 import { BackupAttachmentTransferService } from "./backup-attachment-transfer.service";
 import { BackupRestoreDatabaseService } from "./backup-restore-database.service";
+import { BackupBondSeriesRecoveryService } from "./backup-bond-series-recovery.service";
+import { BondPriceService } from "../bonds/bond-price.service";
+import { clearForeignSeriesOfUser } from "../bonds/bond-series-resolver";
+import { invalidatePortfolioSummary } from "../securities/portfolio-summary-memo";
+import { CryptoFxProvider } from "../currencies/providers/crypto-fx.provider";
+import { RateHistoryCatchUpService } from "../currencies/rate-history-catch-up.service";
+import { NetWorthService } from "../net-worth/net-worth.service";
 
 const gunzipAsync = promisify(gunzip);
+
+/** The (remapped) primary keys of a restored table's rows. */
+function restoredIds(
+  rows: ReadonlyArray<Record<string, unknown>> | undefined,
+): string[] {
+  return (rows ?? [])
+    .map((row) => row.id)
+    .filter((id): id is string => typeof id === "string");
+}
 
 /**
  * Restore orchestration: the processing gate, decryption, decompression, format
@@ -68,6 +110,18 @@ export class BackupRestoreService {
     private readonly attachments: BackupAttachmentTransferService,
     private readonly db: BackupRestoreDatabaseService,
     private readonly maintenance: UserMaintenanceService,
+    private readonly bondPrices: BondPriceService,
+    private readonly bondSeries: BackupBondSeriesRecoveryService,
+    private readonly rateHistoryCatchUp: RateHistoryCatchUpService,
+    private readonly netWorth: NetWorthService,
+    /**
+     * Told after the commit that `currencies` may hold rows it has not read
+     * (`ensureCurrenciesExist` inserts the backup's coins), so a restored coin
+     * is not routed to a fiat provider until the adapter's cache expires.
+     * Optional, as in `CurrenciesService`: without it the restore loses only
+     * the early re-read.
+     */
+    @Optional() private readonly cryptoFx?: CryptoFxProvider,
   ) {}
 
   /**
@@ -141,8 +195,47 @@ export class BackupRestoreService {
         // Everything below holds a slot, so nothing below is cancellable: the
         // signal above bounds the wait for the slot and is not consulted again.
         const gzippedPayload = await this.maybeDecrypt(input, user);
-        const rawData = await this.decompressAndParse(gzippedPayload);
-        this.validateBackupFormat(rawData);
+        const parsed = await this.decompressAndParse(gzippedPayload);
+        this.validateBackupFormat(parsed);
+
+        // An artifact older than a table rename addresses that table by its old
+        // name. Move it onto the current one here, before anything walks the
+        // document, so every later phase sees one shape -- as a new document,
+        // never by rewriting the parsed one in place.
+        const legacyNames = renameLegacyTableKeys(parsed);
+        const rawData = legacyNames.data;
+        if (legacyNames.renamed.length > 0) {
+          this.logger.log(
+            `Backup for user ${userId} uses legacy table names: ${legacyNames.renamed.join(", ")}`,
+          );
+        }
+        for (const dropped of legacyNames.discarded) {
+          // Warned, not logged: rows in the artifact are not being restored.
+          this.logger.warn(
+            `Backup for user ${userId} carries both ${dropped.table} and ` +
+              `${dropped.supersededBy}; keeping ${dropped.supersededBy} and ` +
+              `discarding ${dropped.rows} row(s) under the legacy name.`,
+          );
+        }
+
+        validateRestoredNotifications(rawData.notifications);
+        validateRestoredSchedules(rawData.scheduled_transactions);
+
+        // Every primary key and reference in canonical UUID form, and every
+        // reference naming a row of the same file -- refused here, before the
+        // re-authentication and before anything is written, when one does not.
+        // A reference outside the file is how a crafted backup reached another
+        // user's rows (restore-references.ts); the remap below can only close
+        // the graph over ids it recognises, so recognition comes first.
+        const references = resolveRestoreReferences(
+          validateSharedSnapshot(rawData),
+        );
+        for (const { table, column, rows } of references.severed) {
+          this.logger.warn(
+            `Backup for user ${userId}: ${rows} ${table}.${column} value(s) ` +
+              "name rows the file does not contain; restoring them unlinked.",
+          );
+        }
 
         await this.verifyAuthentication(user, input);
 
@@ -157,15 +250,31 @@ export class BackupRestoreService {
 
         this.warnIfArtifactIncomplete(userId, rawData);
 
+        // The bond series the file's rows reference and this catalog lacks are
+        // fetched from the official source now, before anything is deleted or
+        // staged: an external effect that cannot roll back, and a network wait
+        // that does not belong in the transaction (INV-BOND-008, "a restore of
+        // the person's own backup"). A refused fetch is recorded, never fatal.
+        const recovery = await this.bondSeries.recover(userId, references.data);
+
         // Remap every primary key in the backup to a fresh UUID (and rewrite all
         // references to those keys, including ids embedded in JSONB columns) so the
         // restore behaves as if the backup came from an entirely separate system.
         // Without this, restoring one user's backup into another user's account on
         // the SAME system would collide on the original UUIDs: the inserts would be
         // silently skipped by ON CONFLICT DO NOTHING, and the Phase-3 deferred-FK
-        // UPDATEs (keyed only by id) would mutate the OTHER user's rows.
-        const idRemap = this.buildBackupIdRemap(rawData);
-        const data = this.remapBackupIds(rawData, idRemap);
+        // UPDATEs would mutate the OTHER user's rows.
+        //
+        // The remap alone never guaranteed that. It only covers ids it recognises
+        // and references to rows the file contains; a key spelled in another UUID
+        // form, or a reference to a row the file does not carry, passed through
+        // untouched. `resolveRestoreReferences` above is what closes both, and
+        // the Phase-3 UPDATEs are additionally scoped to this user's rows.
+        const idRemap = this.buildBackupIdRemap(recovery.data);
+        const data = prepareSharedRestore(
+          this.remapBackupIds(recovery.data, idRemap),
+          userId,
+        );
         this.rehashGemSignalFingerprints(data, idRemap);
 
         this.logger.log(`Starting backup restore for user ${userId}`);
@@ -248,6 +357,26 @@ export class BackupRestoreService {
                 // restoring the tables with FK references to currencies(code).
                 await this.db.ensureCurrenciesExist(manager, data, userId);
 
+                // Phase 2a': a security's bond link survives only where this
+                // deployment's catalog holds the instrument; else it is restored
+                // unlinked (the table is reference data, not part of a backup).
+                const { counts: severedCatalogLinks, severed } =
+                  await this.db.severUnavailableCatalogLinks(manager, data);
+                const unlinkedCount =
+                  severedCatalogLinks["securities.bond_program_id"] ?? 0;
+                // Transactions whose series this deployment's catalog lacks are
+                // restored without one (their lots are inferred from the date).
+                const unlinkedSeriesCount =
+                  severedCatalogLinks[
+                    "investment_transactions.bond_instrument_id"
+                  ] ?? 0;
+                const unlinkedSymbols = (
+                  severed["securities.bond_program_id"] ?? []
+                )
+                  .map((row) => row.symbol)
+                  .filter((symbol): symbol is string => symbol !== null)
+                  .slice(0, MAX_UNLINKED_BOND_SYMBOLS);
+
                 // Phase 2b: insert every backed-up table in FK-safe order. The order,
                 // the row-count key and whether user_id is forced live in
                 // RESTORE_PLAN, which restore-plan.spec.ts checks against the schema's
@@ -276,17 +405,52 @@ export class BackupRestoreService {
                   );
                 }
 
+                await claimRestoredSharedGroups(manager, data, userId);
+
+                // Phase 2c: rows from an artifact older than a migration that
+                // changed what a value means get that migration's backfill; the
+                // migration itself ran once, long before these rows arrived.
+                await applyLegacyNormalizations(manager, userId, data);
+
                 // Phase 3: Restore deferred FK columns that were stripped during insert
                 // to avoid circular/forward reference violations.
-                await this.db.restoreDeferredFkColumns(manager, data);
+                await this.db.restoreDeferredFkColumns(manager, data, userId);
+
+                // INV-BOND-007: whatever the file said, a row keeps a series
+                // only of its own security's program.
+                await clearForeignSeriesOfUser(manager, userId);
+
+                // INV-CRYPTO-001 and crypto spec decision 11: the kind of a
+                // currency is this deployment's, so a restored account,
+                // security or reporting currency may disagree with it. Reported
+                // beside `restored`, never refused (see the method).
+                const kindMismatches = await this.db.findCurrencyKindMismatches(
+                  manager,
+                  userId,
+                );
+
+                // The file's current_balance is as of the backup day; a row
+                // dated after it and on or before today is in no stored figure.
+                // Same derivation as the recalculation cron, so it is idempotent.
+                const today = todayInTimezoneOrUtc(
+                  await getEffectiveTimezoneOfUser(manager, userId),
+                );
+                await recalculateUserCurrentBalances(manager, userId, today);
+
+                // The staged objects now have their metadata rows: drop their
+                // upload intents in the same transaction, so both commit or both
+                // roll back. Throws if the sweeper claimed one first.
+                await this.attachments.clearStagingIntents(manager, stagedKeys);
 
                 this.logger.log(`Backup restore completed for user ${userId}`);
-                // `skippedAttachments` and `unusableAiProviderKeys` are reported
-                // beside `restored`, never inside it: the client sums `restored`'s
-                // values to show a row total, and neither a count of rows that were
-                // deliberately not written nor a count of rows whose contents did not
-                // survive belongs in that sum. Both are omitted at zero so "no field"
-                // and "nothing to report" are the same answer.
+                // `skippedAttachments`, `unusableAiProviderKeys`,
+                // `unlinkedBondSecurities` and `unrecoveredBondSeries` are
+                // reported beside `restored`, never
+                // inside it: the client sums `restored`'s values to show a row
+                // total, and neither a count of rows that were deliberately not
+                // written, a count of rows whose contents did not survive nor a
+                // count of links dropped belongs in that sum. All are omitted at
+                // zero so "no field" and "nothing to report" are the same answer.
                 return {
                   message: "Backup restored successfully",
                   restored,
@@ -294,16 +458,99 @@ export class BackupRestoreService {
                   ...(unusableAiProviderKeys > 0
                     ? { unusableAiProviderKeys }
                     : {}),
+                  ...(unlinkedCount > 0
+                    ? {
+                        unlinkedBondSecurities: {
+                          count: unlinkedCount,
+                          symbols: unlinkedSymbols,
+                        },
+                      }
+                    : {}),
+                  ...(unlinkedSeriesCount > 0
+                    ? { unlinkedBondSeries: { count: unlinkedSeriesCount } }
+                    : {}),
+                  ...(kindMismatches.accounts.length > 0 ||
+                  kindMismatches.securities.length > 0 ||
+                  kindMismatches.defaultCurrency !== null
+                    ? {
+                        currencyKindMismatches: {
+                          accounts: kindMismatches.accounts.slice(
+                            0,
+                            MAX_CURRENCY_KIND_MISMATCH_NAMES,
+                          ),
+                          accountCount: kindMismatches.accounts.length,
+                          securities: kindMismatches.securities.slice(
+                            0,
+                            MAX_CURRENCY_KIND_MISMATCH_NAMES,
+                          ),
+                          securityCount: kindMismatches.securities.length,
+                          defaultCurrency: kindMismatches.defaultCurrency,
+                        },
+                      }
+                    : {}),
+                  ...(recovery.unrecovered.length > 0
+                    ? {
+                        unrecoveredBondSeries: {
+                          count: recovery.unrecovered.length,
+                          series: recovery.unrecovered.slice(
+                            0,
+                            MAX_UNRECOVERED_BOND_SERIES,
+                          ),
+                        },
+                      }
+                    : {}),
                 };
               }),
             ),
           )
           .then(async (result) => {
+            // The restore may have inserted currencies (a coin among them);
+            // the crypto adapter re-reads on its next question rather than
+            // after its cache expires. After the commit, so the read sees them.
+            this.cryptoFx?.forgetCurrencies();
             // After the commit, never before: until it lands, the metadata that
             // references these objects may come back with a rollback.
             await this.attachments.deleteDisplacedAttachmentObjects(
               displacedKeys,
               [...stagedKeys, ...sourceKeys],
+            );
+            // A restore replaces the accounts, holdings and prices the memoized
+            // portfolio valuation was computed from.
+            invalidatePortfolioSummary(userId);
+            // The file's bond_engine price rows were computed by another
+            // deployment's catalog and engine; price every linked security
+            // here from this one rather than trusting them until the cron.
+            await this.bondPrices.recomputeLinkedSecurities(
+              userId,
+              (backupTables(data).securities ?? []).map((row) =>
+                typeof row.id === "string" ? row.id : null,
+              ),
+            );
+            // `exchange_rates` is shared reference data, not part of a
+            // backup, so the restored rows reach back years before anything
+            // this deployment has stored for their currencies: the history an
+            // import pulls (issue #2186) is pulled here too (issue #2226). In
+            // the background, after the commit, because each round may spend
+            // `GAP_FILL_BUDGET_MS` on the provider.
+            const restoredAccountIds = restoredIds(backupTables(data).accounts);
+            this.rateHistoryCatchUp.start(
+              userId,
+              restoredAccountIds,
+              "Post-restore",
+              () => {
+                // Snapshots and the memoized valuation read before the rates
+                // landed converted without them.
+                invalidatePortfolioSummary(userId);
+                for (const accountId of restoredAccountIds) {
+                  this.netWorth
+                    .recalculateAccount(userId, accountId)
+                    .catch((err) =>
+                      this.logger.warn(
+                        `Post-restore net worth recalc failed for account ${accountId}: ${err.message}`,
+                      ),
+                    );
+                }
+              },
             );
             return result;
           })
@@ -327,7 +574,9 @@ export class BackupRestoreService {
    * If the upload is encrypted, decrypt it using (in order of preference):
    * 1) the explicit backupPassword the frontend sent for this restore,
    * 2) the user's auth password (most backups encrypt with this),
-   * 3) the user's currently stored backup password.
+   * 3) the retired stored backup password, for a row not yet converted,
+   * 4) the user's stored backup data key, which opens the automatic backups
+   *    written since their last re-wrap (docs/specs/backup-envelope-key-wrapping.md).
    *
    * Returns the inner gzipped JSON payload, or the input unchanged if it's
    * not encrypted. Throws BackupPasswordRequiredError when we know it's
@@ -342,19 +591,28 @@ export class BackupRestoreService {
       return input.compressedData;
     }
 
-    const candidates: string[] = [];
-    if (input.backupPassword) candidates.push(input.backupPassword);
-    if (input.password) candidates.push(input.password);
-    const stored = resolveStoredBackupPassword(
+    const envelope = input.compressedData;
+    const candidates: Array<() => Promise<Buffer>> = [];
+    const passwords = [
+      input.backupPassword,
+      input.password,
+      resolveStoredBackupPassword(user, this.encryption, this.logger),
+    ];
+    for (const pw of passwords) {
+      if (pw) candidates.push(() => decryptBackup(envelope, pw));
+    }
+    const dataKey = resolveStoredBackupDataKey(
       user,
       this.encryption,
       this.logger,
     );
-    if (stored) candidates.push(stored);
+    if (dataKey) {
+      candidates.push(() => decryptBackupWithDataKey(envelope, dataKey));
+    }
 
-    for (const pw of candidates) {
+    for (const attempt of candidates) {
       try {
-        return await decryptBackup(input.compressedData, pw);
+        return await attempt();
       } catch (err) {
         if (!(err instanceof BackupDecryptionError)) throw err;
         // try next candidate
@@ -528,31 +786,40 @@ export class BackupRestoreService {
    */
   private restoreAiProviderKeys(userId: string, data: BackupData): number {
     const tables = backupTables(data);
-    const rows = tables.ai_provider_configs;
-    if (!rows || rows.length === 0) return 0;
-
     let unusable = 0;
-    tables.ai_provider_configs = rows.map((row) => {
-      const result = restoreAiProviderKey(row, this.encryption);
-      if (result.outcome === "dropped-unencryptable") {
-        unusable += 1;
-      } else if (
-        result.outcome === "kept-foreign-ciphertext" &&
-        !this.encryption.canDecrypt(result.row.api_key_enc as string)
-      ) {
-        // An older artifact, written before keys travelled in plaintext. It only
-        // restores onto the instance that produced it; anywhere else the column
-        // is populated and unreadable, which is exactly the failure this field
-        // exists to stop being silent.
-        unusable += 1;
-      }
-      return result.row;
-    });
+
+    // Every table whose rows carry an `api_key_enc`, asked of the export rather
+    // than restated here. The transport is keyed on that column name rather
+    // than on the table, so a table added to the export with an encrypted key
+    // and left out of this loop would restore populated and unreadable --
+    // exactly the failure the transport exists to stop, and exactly what a
+    // hand-kept second copy of the list lets back in.
+    for (const table of keyBearingExportTables() as (keyof BackupData)[]) {
+      const rows = tables[table];
+      if (!rows || rows.length === 0) continue;
+
+      tables[table] = rows.map((row) => {
+        const result = restoreAiProviderKey(row, this.encryption);
+        if (result.outcome === "dropped-unencryptable") {
+          unusable += 1;
+        } else if (
+          result.outcome === "kept-foreign-ciphertext" &&
+          !this.encryption.canDecrypt(result.row.api_key_enc as string)
+        ) {
+          // An older artifact, written before keys travelled in plaintext. It only
+          // restores onto the instance that produced it; anywhere else the column
+          // is populated and unreadable, which is exactly the failure this field
+          // exists to stop being silent.
+          unusable += 1;
+        }
+        return result.row;
+      });
+    }
 
     if (unusable > 0) {
       this.logger.warn(
-        `Restoring ${unusable} AI provider configuration(s) for user ${userId} without a ` +
-          "usable API key: the artifact carried instance-key ciphertext this server " +
+        `Restoring ${unusable} stored API key(s) for user ${userId} without a ` +
+          "usable value: the artifact carried instance-key ciphertext this server " +
           "cannot read, or ENCRYPTION_KEY is unset here. The rows are restored; " +
           "the keys must be re-entered.",
       );
@@ -588,16 +855,6 @@ export class BackupRestoreService {
     }
   }
 
-  /**
-   * Builds a map from every primary-key UUID in the backup to a freshly
-   * generated UUID. Currencies are intentionally excluded: they are shared,
-   * global rows keyed by `code` (not by a per-user UUID) and are referenced by
-   * code, so they must keep their original identifiers. Non-UUID ids (e.g.
-   * `security_prices.id` is BIGSERIAL) are also excluded -- they get a fresh
-   * value assigned by the DB on insert (see insertRows), and remapping them
-   * to UUIDs here would (a) corrupt them and (b) clobber unrelated bigint
-   * values in other columns that happen to share the same string form.
-   */
   /**
    * Re-hash each GEM signal's `config_fingerprint` onto the remapped security
    * ids.
@@ -636,6 +893,13 @@ export class BackupRestoreService {
       else assetsByStrategy.set(key, [asset]);
     }
 
+    // The hash carries the reporting currency; the backup's own preference row
+    // is the one the signals were stamped under.
+    const reportingCurrency = preferredCurrency({
+      defaultCurrency: data.user_preferences?.[0]?.default_currency as
+        string | undefined,
+    });
+
     /** The backup's snake_case rows in the shape the hash function wants. */
     const fingerprintOf = (
       strategy: Record<string, unknown>,
@@ -654,6 +918,7 @@ export class BackupRestoreService {
               securityId: securityIdOf(asset),
             }) as GemStrategyAsset,
         ),
+        reportingCurrency,
       );
 
     for (const strategy of data.gem_strategies ?? []) {
@@ -682,6 +947,20 @@ export class BackupRestoreService {
     }
   }
 
+  /**
+   * Builds a map from every primary-key UUID in the backup to a freshly
+   * generated UUID. Currencies are intentionally excluded: they are shared,
+   * global rows keyed by `code` (not by a per-user UUID) and are referenced by
+   * code, so they must keep their original identifiers. Non-UUID ids (e.g.
+   * `security_prices.id` is BIGSERIAL) are also excluded -- they get a fresh
+   * value assigned by the DB on insert (see insertRows), and remapping them
+   * to UUIDs here would (a) corrupt them and (b) clobber unrelated bigint
+   * values in other columns that happen to share the same string form.
+   *
+   * Every restored table's UUID keys are canonical by the time this runs
+   * (`resolveRestoreReferences`), which is what makes "in the map" the same
+   * question as "a row of this file" for the database's own comparison.
+   */
   private buildBackupIdRemap(data: BackupData): Map<string, string> {
     const remap = new Map<string, string>();
     for (const [table, rows] of Object.entries(data)) {
@@ -697,24 +976,24 @@ export class BackupRestoreService {
    * transaction `tag_ids` or override `splits`) rewritten via the remap. The
    * `user_id` columns are never remapped here -- they are not backup row ids,
    * and insertRows() forces them to the restoring user. Currencies are passed
-   * through unchanged.
+   * through unchanged. A UUID nested in a JSONB or array value that names no
+   * row of the file is replaced by a fresh id that names nothing
+   * (`remapRestoreRow`), so it cannot survive as a pointer to another user's row.
    */
   private remapBackupIds(
     data: BackupData,
     remap: Map<string, string>,
   ): BackupData {
-    if (remap.size === 0) return data;
+    // One map for the whole document, so a stale id nested in two places is
+    // replaced by the same fresh id in both (see `remapRestoreRow`).
+    const unresolved = new Map<string, string>();
     const result: Record<string, unknown> = { ...data };
     for (const [table, rows] of Object.entries(data)) {
       if (table === "currencies" || !Array.isArray(rows)) continue;
-      result[table] = rows.map((row) => this.deepRemapIds(row, remap));
+      result[table] = rows.map((row) =>
+        remapRestoreRow(row, remap, unresolved, randomUUID),
+      );
     }
     return result as unknown as BackupData;
-  }
-
-  /** See backup-id-remap.util.ts -- shared with the support (de-identified)
-   *  export so the two walkers cannot drift. */
-  private deepRemapIds(value: unknown, remap: Map<string, string>): unknown {
-    return deepRemapIds(value, remap);
   }
 }

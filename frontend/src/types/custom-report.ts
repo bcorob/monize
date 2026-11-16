@@ -55,6 +55,8 @@ export enum TableColumn {
   MEMO = 'MEMO',
   CATEGORY = 'CATEGORY',
   ACCOUNT = 'ACCOUNT',
+  ACCOUNT_AMOUNT = 'ACCOUNT_AMOUNT',
+  ORIGINAL_AMOUNT = 'ORIGINAL_AMOUNT',
   TAG = 'TAG',
 }
 
@@ -144,6 +146,20 @@ export interface AggregatedDataPoint {
   memo?: string;
   category?: string;
   account?: string;
+  /**
+   * The row's own amount in its account's currency, unconverted and signed as
+   * `value` is; `accountCurrency` names its currency. A column of these mixes
+   * currencies, so it has no total.
+   */
+  accountAmount?: number;
+  accountCurrency?: string;
+  /**
+   * What a row entered in a foreign currency was entered as, unconverted and
+   * signed as `value` is; `originalCurrency` names its currency. Absent on an
+   * ordinary row and on a split line. A column of these has no total.
+   */
+  originalAmount?: number;
+  originalCurrency?: string;
   // Budget variance fields (for BUDGET_VARIANCE metric)
   budgeted?: number;
   actual?: number;
@@ -156,9 +172,16 @@ export interface ReportTimeframe {
 }
 
 export interface ReportSummary {
-  total: number;
+  /**
+   * `null` while any row was left out for want of an exchange rate; read
+   * `knownTotal` and mark it partial. Never render `null` as zero.
+   */
+  total: number | null;
+  /** Sum of the rows that converted: the total when nothing was excluded. */
+  knownTotal: number;
   count: number;
-  average: number;
+  /** `null` with `total`. */
+  average: number | null;
 }
 
 export interface ReportResult {
@@ -169,6 +192,14 @@ export interface ReportResult {
   timeframe: ReportTimeframe;
   data: AggregatedDataPoint[];
   summary: ReportSummary;
+  /** Reporting currency every money figure is expressed in. */
+  currency: string;
+  /** Source currencies with no rate into `currency`; their rows are in no figure. */
+  missingCurrencies: string[];
+  /** Rows (or split lines) left out of every figure for want of a rate. */
+  excludedCount: number;
+  /** The row limit cut the read short (newest rows dropped): every figure is a subtotal. */
+  truncated?: boolean;
   tableColumns?: TableColumn[];
 }
 
@@ -230,6 +261,8 @@ export const TABLE_COLUMN_LABELS: Record<TableColumn, string> = {
   [TableColumn.MEMO]: 'Memo',
   [TableColumn.CATEGORY]: 'Category',
   [TableColumn.ACCOUNT]: 'Account',
+  [TableColumn.ACCOUNT_AMOUNT]: 'Amount (account currency)',
+  [TableColumn.ORIGINAL_AMOUNT]: 'Amount (original currency)',
   [TableColumn.TAG]: 'Tag',
 };
 

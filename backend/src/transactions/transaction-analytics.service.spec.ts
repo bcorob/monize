@@ -4,8 +4,36 @@ import { TransactionAnalyticsService } from "./transaction-analytics.service";
 import { Transaction } from "./entities/transaction.entity";
 import { Category } from "../categories/entities/category.entity";
 import { UserPreference } from "../users/entities/user-preference.entity";
-import { buildTransactionSearchClause } from "./transaction-search.util";
+import { buildTransactionSearchWhere } from "./transaction-search.util";
+import {
+  parseTransactionSearch,
+  SearchFormats,
+} from "./transaction-search-query.util";
 import { createScopedDbMocks } from "../test-helpers/scoped-db-testing";
+import { Currency } from "../currencies/entities/currency.entity";
+import { currencyPlacesRepoMock } from "../test-helpers/currency-places-testing";
+import { Account } from "../accounts/entities/account.entity";
+import {
+  convertRateBasis,
+  transactionRateBasis,
+} from "../built-in-reports/report-currency.service";
+
+/**
+ * The condition and parameters the search helper adds for `raw`, at the
+ * split grain every call site uses (advanced-search plan, question 5).
+ */
+function expectedSearch(
+  raw: string,
+  aliases: { transaction: string; splits: string; paramPrefix?: string },
+  formats: SearchFormats = {},
+): [string, Record<string, unknown>] {
+  const clause = buildTransactionSearchWhere(
+    parseTransactionSearch(raw, formats).terms,
+    { paramPrefix: "srch", ...aliases, grain: "split" },
+  );
+  if (!clause) throw new Error(`no search clause for ${raw}`);
+  return [clause.sql, clause.params];
+}
 
 jest.mock("../common/db/scoped-db", () =>
   jest.requireActual("../test-helpers/scoped-db-testing").scopedDbMockModule(),
@@ -16,6 +44,8 @@ describe("TransactionAnalyticsService", () => {
   let transactionsRepository: Record<string, jest.Mock>;
   let categoriesRepository: Record<string, jest.Mock>;
   let userPreferenceRepository: Record<string, jest.Mock>;
+  let accountsRepository: Record<string, jest.Mock>;
+  let managerMock: Record<string, jest.Mock>;
 
   const userId = "user-1";
 
@@ -55,6 +85,7 @@ describe("TransactionAnalyticsService", () => {
       setParameters: jest.fn().mockReturnValue(mockQueryBuilder),
       distinct: jest.fn().mockReturnValue(mockQueryBuilder),
       getRawMany: jest.fn().mockResolvedValue([]),
+      getQueryAndParameters: jest.fn().mockReturnValue(["SELECT grouped", []]),
     });
 
     transactionsRepository = {
@@ -81,7 +112,17 @@ describe("TransactionAnalyticsService", () => {
       findOne: jest.fn().mockResolvedValue(null),
     };
 
-    const { dataSource } = createScopedDbMocks([
+    // The FX fee summary reads its account's currency; CAD unless a case
+    // says otherwise.
+    accountsRepository = {
+      findOne: jest
+        .fn()
+        .mockResolvedValue({ id: "acc-1", currencyCode: "CAD" }),
+    };
+
+    const { dataSource, manager } = createScopedDbMocks([
+      [Currency, currencyPlacesRepoMock({ BTC: 8 })],
+      [Account, accountsRepository],
       [Transaction, transactionsRepository],
       [Category, categoriesRepository],
       [UserPreference, userPreferenceRepository],
@@ -97,6 +138,23 @@ describe("TransactionAnalyticsService", () => {
     service = module.get<TransactionAnalyticsService>(
       TransactionAnalyticsService,
     );
+    // The exchange-rate history `buildRateIndex` loads: none unless a case
+    // supplies rows.
+    managerMock = manager;
+    managerMock.query.mockResolvedValue([]);
+  });
+
+  /** One stored `exchange_rates` row, in the shape the rate index reads. */
+  const storedRate = (
+    from: string,
+    to: string,
+    rate: number,
+    date: string,
+  ) => ({
+    from_currency: from,
+    to_currency: to,
+    rate: String(rate),
+    rate_date: date,
   });
 
   describe("getRegisterFilterOptions", () => {
@@ -201,6 +259,222 @@ describe("TransactionAnalyticsService", () => {
         firstTransactionDate: null,
         lastTransactionDate: null,
         byCurrency: {},
+      });
+    });
+
+    it("converts each foreign bucket at its rows' own dates into the reporting currency (issue #2106)", async () => {
+      userPreferenceRepository.findOne.mockResolvedValue({
+        defaultCurrency: "CAD",
+      });
+      // One read: the CAD bucket whole, the USD bucket by day (100 in January,
+      // 100 in June).
+      mockQueryBuilder.getRawMany.mockResolvedValueOnce([
+        {
+          currencyCode: "CAD",
+          fx_day: null,
+          fx_original_currency: null,
+          fx_exchange_rate: null,
+          totalIncome: "0",
+          totalExpenses: "50",
+          transactionCount: "1",
+          firstDate: "2026-03-01",
+          lastDate: "2026-03-01",
+        },
+        {
+          currencyCode: "USD",
+          fx_day: "2026-01-12",
+          fx_original_currency: null,
+          fx_exchange_rate: "1",
+          totalIncome: "0",
+          totalExpenses: "100",
+          transactionCount: "1",
+          firstDate: "2026-01-12",
+          lastDate: "2026-01-12",
+        },
+        {
+          currencyCode: "USD",
+          fx_day: "2026-06-12",
+          fx_original_currency: null,
+          fx_exchange_rate: "1",
+          totalIncome: "0",
+          totalExpenses: "100",
+          transactionCount: "1",
+          firstDate: "2026-06-12",
+          lastDate: "2026-06-12",
+        },
+      ]);
+      managerMock.query.mockResolvedValue([
+        storedRate("USD", "CAD", 1.25, "2026-01-10"),
+        storedRate("USD", "CAD", 1.4, "2026-06-10"),
+      ]);
+
+      const result = await service.getSummary(
+        userId,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { inReportingCurrency: true },
+      );
+
+      // 50 CAD + 100 USD at 1.25 + 100 USD at 1.40; at one rate it read 330.
+      expect(result.converted).toEqual({
+        currency: "CAD",
+        totalIncome: 0,
+        totalExpenses: 315,
+        netCashFlow: -315,
+        knownIncome: 0,
+        knownExpenses: 315,
+        includedTransactionCount: 3,
+        excludedTransactionCount: 0,
+        missingCurrencies: [],
+      });
+      // The per-currency view folds the day parts back together.
+      expect(result.byCurrency.USD).toEqual({
+        totalIncome: 0,
+        totalExpenses: 200,
+        netCashFlow: -200,
+        transactionCount: 2,
+      });
+      expect(result.transactionCount).toBe(3);
+      expect(result.firstTransactionDate).toBe("2026-01-12");
+      expect(result.lastTransactionDate).toBe("2026-06-12");
+      // The filtered rows are read once (issue #2130), split by day and own
+      // rate outside the reporting currency.
+      expect(mockQueryBuilder.getRawMany).toHaveBeenCalledTimes(1);
+      expect(mockQueryBuilder.setParameter).toHaveBeenCalledWith(
+        "fxReportingCurrency",
+        "CAD",
+      );
+      expect(mockQueryBuilder.addGroupBy).toHaveBeenCalledWith("fx_day");
+      expect(mockQueryBuilder.addGroupBy).toHaveBeenCalledWith(
+        "fx_exchange_rate",
+      );
+    });
+
+    it("converts a part at its own rate in the same read (INV-FX-002)", async () => {
+      userPreferenceRepository.findOne.mockResolvedValue({
+        defaultCurrency: "CAD",
+      });
+      // USD 100 settled into CAD at its own 1.30 (0.7692307692 USD per CAD).
+      mockQueryBuilder.getRawMany.mockResolvedValueOnce([
+        {
+          currencyCode: "USD",
+          fx_day: "2026-06-12",
+          fx_original_currency: "CAD",
+          fx_exchange_rate: "0.7692307692",
+          totalIncome: "0",
+          totalExpenses: "100",
+          transactionCount: "1",
+        },
+      ]);
+
+      const result = await service.getSummary(
+        userId,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { inReportingCurrency: true },
+      );
+
+      expect(result.converted?.totalExpenses).toBe(130);
+      // Its own rate reaches CAD, so no rate history is loaded.
+      expect(managerMock.query).not.toHaveBeenCalled();
+    });
+
+    it("adds no reporting-currency read unless the caller asks for it", async () => {
+      mockQueryBuilder.getRawMany.mockResolvedValueOnce([
+        {
+          currencyCode: "USD",
+          totalIncome: "0",
+          totalExpenses: "5",
+          transactionCount: "1",
+        },
+        {
+          currencyCode: "EUR",
+          totalIncome: "0",
+          totalExpenses: "5",
+          transactionCount: "1",
+        },
+      ]);
+
+      const result = await service.getSummary(userId);
+
+      expect(result).not.toHaveProperty("converted");
+      expect(mockQueryBuilder.getRawMany).toHaveBeenCalledTimes(1);
+      // Nor is the read split by day and rate.
+      expect(mockQueryBuilder.addGroupBy).not.toHaveBeenCalledWith("fx_day");
+    });
+
+    it("leaves a bucket with no admissible rate out and names it", async () => {
+      userPreferenceRepository.findOne.mockResolvedValue({
+        defaultCurrency: "CAD",
+      });
+      mockQueryBuilder.getRawMany.mockResolvedValueOnce([
+        {
+          currencyCode: "CAD",
+          fx_day: null,
+          fx_original_currency: null,
+          fx_exchange_rate: null,
+          totalIncome: "10",
+          totalExpenses: "50",
+          transactionCount: "1",
+        },
+        {
+          currencyCode: "JPY",
+          fx_day: "2026-01-12",
+          fx_original_currency: null,
+          fx_exchange_rate: "1",
+          totalIncome: "0",
+          totalExpenses: "1000",
+          transactionCount: "1",
+        },
+      ]);
+      managerMock.query.mockResolvedValue([]);
+
+      const result = await service.getSummary(
+        userId,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { inReportingCurrency: true },
+      );
+
+      expect(result.converted).toMatchObject({
+        totalIncome: null,
+        totalExpenses: null,
+        netCashFlow: null,
+        knownIncome: 10,
+        knownExpenses: 50,
+        includedTransactionCount: 1,
+        excludedTransactionCount: 1,
+        missingCurrencies: ["JPY"],
       });
     });
 
@@ -667,7 +941,7 @@ describe("TransactionAnalyticsService", () => {
 
         expect(categoriesRepository.find).toHaveBeenCalledWith({
           where: { userId },
-          select: ["id", "parentId"],
+          select: ["id", "parentId", "isIncome"],
         });
 
         // Should pass category IDs inline via Brackets
@@ -929,11 +1203,10 @@ describe("TransactionAnalyticsService", () => {
         );
 
         expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-          buildTransactionSearchClause({
+          ...expectedSearch("grocery", {
             transaction: "transaction",
             splits: "splits",
           }),
-          { search: "%grocery%", searchAmount: null, searchDate: null },
         );
       });
 
@@ -949,11 +1222,10 @@ describe("TransactionAnalyticsService", () => {
         );
 
         expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-          buildTransactionSearchClause({
+          ...expectedSearch("coffee", {
             transaction: "transaction",
             splits: "splits",
           }),
-          { search: "%coffee%", searchAmount: null, searchDate: null },
         );
       });
 
@@ -1069,8 +1341,10 @@ describe("TransactionAnalyticsService", () => {
           { payeeIds: ["payee-1"] },
         );
         expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-          expect.stringContaining("ILIKE"),
-          { search: "%rent%", searchAmount: null, searchDate: null },
+          ...expectedSearch("rent", {
+            transaction: "transaction",
+            splits: "splits",
+          }),
         );
       });
 
@@ -1259,6 +1533,35 @@ describe("TransactionAnalyticsService", () => {
       expect(result.transferCount).toBe(6);
     });
 
+    it("keeps a BTC wallet's transfers at its eight places (INV-MONEY-001)", async () => {
+      mockQueryBuilder.getRawMany.mockResolvedValue([
+        {
+          accountId: "acc-wallet",
+          accountName: "Wallet",
+          currencyCode: "BTC",
+          inbound: "0.01249993",
+          outbound: "0.00502500",
+          count: "2",
+        },
+      ]);
+
+      const result = await service.getTransfersByAccount(
+        userId,
+        "2026-01-01",
+        "2026-01-31",
+      );
+
+      // At the fiat four places the inbound read 0.0125 and the outbound 0.005.
+      expect(result.accounts[0]).toMatchObject({
+        currency: "BTC",
+        inbound: 0.01249993,
+        outbound: 0.005025,
+        net: 0.00747493,
+      });
+      expect(result.totalInbound).toBe(0.01249993);
+      expect(result.totalOutbound).toBe(0.005025);
+    });
+
     it("selects the account id for deep-links and maps a missing id to null", async () => {
       mockQueryBuilder.getRawMany.mockResolvedValue([
         {
@@ -1314,6 +1617,13 @@ describe("TransactionAnalyticsService", () => {
   });
 
   describe("getMonthlyTotals", () => {
+    // The default reporting currency of these specs is USD (no preference row).
+    const usdDay = (month: string, txDate: string) => ({
+      month,
+      currencyCode: "USD",
+      txDate,
+    });
+
     it("returns empty array when no transactions exist", async () => {
       mockQueryBuilder.getRawMany.mockResolvedValue([]);
 
@@ -1324,23 +1634,23 @@ describe("TransactionAnalyticsService", () => {
 
     it("returns monthly totals sorted by month", async () => {
       mockQueryBuilder.getRawMany.mockResolvedValue([
-        { month: "2025-01", total: "-500.50", count: "10" },
-        { month: "2025-02", total: "-300.25", count: "8" },
-        { month: "2025-03", total: "200.00", count: "5" },
+        { ...usdDay("2025-01", "2025-01-10"), total: "-500.50", count: "10" },
+        { ...usdDay("2025-02", "2025-02-10"), total: "-300.25", count: "8" },
+        { ...usdDay("2025-03", "2025-03-10"), total: "200.00", count: "5" },
       ]);
 
       const result = await service.getMonthlyTotals(userId);
 
       expect(result).toEqual([
-        { month: "2025-01", total: -500.5, count: 10 },
-        { month: "2025-02", total: -300.25, count: 8 },
-        { month: "2025-03", total: 200, count: 5 },
+        { month: "2025-01", currency: "USD", total: -500.5, count: 10 },
+        { month: "2025-02", currency: "USD", total: -300.25, count: 8 },
+        { month: "2025-03", currency: "USD", total: 200, count: 5 },
       ]);
     });
 
     it("rounds totals to storage precision (four decimal places)", async () => {
       mockQueryBuilder.getRawMany.mockResolvedValue([
-        { month: "2025-01", total: "-123.456", count: "3" },
+        { ...usdDay("2025-01", "2025-01-10"), total: "-123.456", count: "3" },
       ]);
 
       const result = await service.getMonthlyTotals(userId);
@@ -1350,12 +1660,125 @@ describe("TransactionAnalyticsService", () => {
 
     it("handles null values in raw query results", async () => {
       mockQueryBuilder.getRawMany.mockResolvedValue([
-        { month: "2025-01", total: null, count: null },
+        { ...usdDay("2025-01", "2025-01-10"), total: null, count: null },
       ]);
 
       const result = await service.getMonthlyTotals(userId);
 
-      expect(result[0]).toEqual({ month: "2025-01", total: 0, count: 0 });
+      expect(result[0]).toEqual({
+        month: "2025-01",
+        currency: "USD",
+        total: 0,
+        count: 0,
+      });
+    });
+
+    it("converts each currency at its own date instead of adding them", async () => {
+      managerMock.query.mockResolvedValue([
+        storedRate("EUR", "USD", 2, "2025-01-01"),
+      ]);
+      mockQueryBuilder.getRawMany.mockResolvedValue([
+        { ...usdDay("2025-01", "2025-01-10"), total: "-10", count: "1" },
+        {
+          month: "2025-01",
+          currencyCode: "EUR",
+          txDate: "2025-01-12",
+          total: "-5",
+          count: "1",
+        },
+      ]);
+
+      const result = await service.getMonthlyTotals(userId);
+
+      expect(result).toEqual([
+        { month: "2025-01", currency: "USD", total: -20, count: 2 },
+      ]);
+    });
+
+    it("withholds the total of a month with an unconvertible currency", async () => {
+      mockQueryBuilder.getRawMany.mockResolvedValue([
+        { ...usdDay("2025-01", "2025-01-10"), total: "-10", count: "1" },
+        {
+          month: "2025-01",
+          currencyCode: "EUR",
+          txDate: "2025-01-12",
+          total: "-5",
+          count: "1",
+        },
+      ]);
+
+      const result = await service.getMonthlyTotals(userId);
+
+      expect(result).toEqual([
+        {
+          month: "2025-01",
+          currency: "USD",
+          total: null,
+          knownSubtotal: -10,
+          count: 2,
+        },
+      ]);
+    });
+
+    it("keeps a single-currency result in that currency, unconverted", async () => {
+      mockQueryBuilder.getRawMany.mockResolvedValue([
+        {
+          month: "2025-01",
+          currencyCode: "EUR",
+          txDate: "2025-01-12",
+          total: "-5",
+          count: "1",
+        },
+      ]);
+
+      const result = await service.getMonthlyTotals(userId);
+
+      expect(result).toEqual([
+        { month: "2025-01", currency: "EUR", total: -5, count: 1 },
+      ]);
+    });
+
+    it("converts a part at its own rate, reading no rate history (INV-FX-002)", async () => {
+      userPreferenceRepository.findOne.mockResolvedValue({
+        defaultCurrency: "EUR",
+      });
+      // USD 125 settled at 1.25 USD per EUR: EUR 100, whatever the market said.
+      mockQueryBuilder.getRawMany.mockResolvedValue([
+        {
+          month: "2025-12",
+          currencyCode: "EUR",
+          txDate: "2025-12-02",
+          total: "-50",
+          count: "1",
+        },
+        {
+          month: "2025-12",
+          currencyCode: "USD",
+          txDate: "2025-12-31",
+          fx_original_currency: "EUR",
+          fx_exchange_rate: "1.25000000",
+          total: "-125",
+          count: "1",
+        },
+      ]);
+
+      const result = await service.getMonthlyTotals(userId);
+
+      expect(result).toEqual([
+        { month: "2025-12", currency: "EUR", total: -150, count: 2 },
+      ]);
+      expect(mockQueryBuilder.addGroupBy).toHaveBeenCalledWith(
+        "fx_exchange_rate",
+      );
+      expect(managerMock.query).not.toHaveBeenCalled();
+    });
+
+    it("leaves voided rows out of the monthly totals", async () => {
+      await service.getMonthlyTotals(userId);
+
+      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
+        "(transaction.status IS NULL OR transaction.status != 'VOID')",
+      );
     });
 
     it("always filters by userId", async () => {
@@ -1523,11 +1946,10 @@ describe("TransactionAnalyticsService", () => {
       );
 
       expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        buildTransactionSearchClause({
+        ...expectedSearch("grocery", {
           transaction: "transaction",
           splits: "splits",
         }),
-        { search: "%grocery%", searchAmount: null, searchDate: null },
       );
     });
 
@@ -1968,6 +2390,9 @@ describe("TransactionAnalyticsService", () => {
       expect(result.totalIncome).toBe(1000);
       expect(result.totalExpenses).toBe(200);
       expect(result.netCashFlow).toBe(800);
+      expect(result.totalsCurrency).toBe("USD");
+      expect(result.fxComplete).toBe(true);
+      expect(result.missingRatePairs).toEqual([]);
       expect(result.transactionCount).toBe(5);
       expect(result.byCurrency).toBeUndefined();
       expect(result.breakdown).toBeUndefined();
@@ -1977,16 +2402,21 @@ describe("TransactionAnalyticsService", () => {
       mockQueryBuilder.getRawMany.mockResolvedValue([
         {
           currencyCode: "USD",
+          txDate: "2026-01-10",
           totalIncome: "1000",
           totalExpenses: "200",
           transactionCount: "5",
         },
         {
           currencyCode: "EUR",
+          txDate: "2026-01-10",
           totalIncome: "500",
           totalExpenses: "100",
           transactionCount: "3",
         },
+      ]);
+      managerMock.query.mockResolvedValue([
+        storedRate("EUR", "USD", 1.1, "2026-01-05"),
       ]);
 
       const result = await service.getLlmQueryTransactions(userId, {
@@ -1998,6 +2428,10 @@ describe("TransactionAnalyticsService", () => {
       expect(Object.keys(result.byCurrency || {})).toEqual(
         expect.arrayContaining(["USD", "EUR"]),
       );
+      // Each row converted at its own date's rate: 1000 + 500 * 1.1 income.
+      expect(result.totalIncome).toBe(1550);
+      expect(result.totalExpenses).toBe(310);
+      expect(result.netCashFlow).toBe(1240);
     });
 
     it("includes breakdown when groupBy is provided", async () => {
@@ -2010,7 +2444,10 @@ describe("TransactionAnalyticsService", () => {
             transactionCount: "5",
           },
         ])
-        .mockResolvedValueOnce([{ label: "Food", total: "150", count: "10" }]);
+        .mockResolvedValueOnce([]) // converted totals
+        .mockResolvedValueOnce([
+          { currencyCode: "USD", label: "Food", total: "150", count: "10" },
+        ]);
 
       const result = await service.getLlmQueryTransactions(userId, {
         startDate: "2026-01-01",
@@ -2022,9 +2459,7 @@ describe("TransactionAnalyticsService", () => {
     });
 
     it("forwards filters and search to the breakdown query", async () => {
-      mockQueryBuilder.getRawMany
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([]);
+      mockQueryBuilder.getRawMany.mockResolvedValue([]);
 
       await service.getLlmQueryTransactions(userId, {
         startDate: "2026-01-01",
@@ -2062,6 +2497,9 @@ describe("TransactionAnalyticsService", () => {
       expect(result.totalIncome).toBe(1000);
       expect(result.totalExpenses).toBe(200);
       expect(result.netCashFlow).toBe(800);
+      expect(result.totalsCurrency).toBe("USD");
+      expect(result.fxComplete).toBe(true);
+      expect(result.missingRatePairs).toEqual([]);
       expect(result.transactionCount).toBe(5);
       expect(result.groupedBy).toBe("none");
       expect(result.breakdown).toBeUndefined();
@@ -2080,9 +2518,9 @@ describe("TransactionAnalyticsService", () => {
 
       expect(result.groupedBy).toBe("none");
       expect(result.breakdown).toBeUndefined();
-      // Only the summary query runs, not a second breakdown query.
+      // Only the summary and its converted totals run, not a breakdown query.
       expect(transactionsRepository.createQueryBuilder).toHaveBeenCalledTimes(
-        1,
+        2,
       );
     });
 
@@ -2096,7 +2534,10 @@ describe("TransactionAnalyticsService", () => {
             transactionCount: "5",
           },
         ])
-        .mockResolvedValueOnce([{ label: "Food", total: "150", count: "10" }]);
+        .mockResolvedValueOnce([]) // converted totals
+        .mockResolvedValueOnce([
+          { currencyCode: "USD", label: "Food", total: "150", count: "10" },
+        ]);
 
       const result = await service.getLlmListTransactions(userId, {
         startDate: "2026-01-01",
@@ -2111,6 +2552,7 @@ describe("TransactionAnalyticsService", () => {
     it("includes the transfer rollup when transfersOnly is true", async () => {
       mockQueryBuilder.getRawMany
         .mockResolvedValueOnce([]) // summary
+        .mockResolvedValueOnce([]) // converted totals
         .mockResolvedValueOnce([
           {
             accountName: "Savings",
@@ -2147,7 +2589,10 @@ describe("TransactionAnalyticsService", () => {
     it("computes both a breakdown and the transfer rollup together", async () => {
       mockQueryBuilder.getRawMany
         .mockResolvedValueOnce([]) // summary
-        .mockResolvedValueOnce([{ label: "Food", total: "100", count: "5" }]) // breakdown
+        .mockResolvedValueOnce([]) // converted totals
+        .mockResolvedValueOnce([
+          { currencyCode: "USD", label: "Food", total: "100", count: "5" },
+        ]) // breakdown
         .mockResolvedValueOnce([]); // transfers
 
       const result = await service.getLlmListTransactions(userId, {
@@ -2165,16 +2610,21 @@ describe("TransactionAnalyticsService", () => {
       mockQueryBuilder.getRawMany.mockResolvedValue([
         {
           currencyCode: "USD",
+          txDate: "2026-01-10",
           totalIncome: "1000",
           totalExpenses: "200",
           transactionCount: "5",
         },
         {
           currencyCode: "EUR",
+          txDate: "2026-01-10",
           totalIncome: "500",
           totalExpenses: "100",
           transactionCount: "3",
         },
+      ]);
+      managerMock.query.mockResolvedValue([
+        storedRate("EUR", "USD", 1.1, "2026-01-05"),
       ]);
 
       const result = await service.getLlmListTransactions(userId, {
@@ -2213,18 +2663,15 @@ describe("TransactionAnalyticsService", () => {
         { amountTo: -10 },
       );
       expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        buildTransactionSearchClause({
+        ...expectedSearch("coffee", {
           transaction: "transaction",
           splits: "splits",
         }),
-        { search: "%coffee%", searchAmount: null, searchDate: null },
       );
     });
 
     it("forwards payee/amount filters into the grouped breakdown query", async () => {
-      mockQueryBuilder.getRawMany
-        .mockResolvedValueOnce([]) // summary
-        .mockResolvedValueOnce([]); // breakdown
+      mockQueryBuilder.getRawMany.mockResolvedValue([]);
 
       await service.getLlmListTransactions(userId, {
         startDate: "2026-01-01",
@@ -2248,14 +2695,12 @@ describe("TransactionAnalyticsService", () => {
     });
 
     it("applies the expenses direction to the breakdown query", async () => {
-      mockQueryBuilder.getRawMany
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([]);
+      mockQueryBuilder.getRawMany.mockResolvedValue([]);
 
       await service.getLlmListTransactions(userId, {
         startDate: "2026-01-01",
         endDate: "2026-01-31",
-        groupBy: "category",
+        groupBy: "payee",
         direction: "expenses",
       });
 
@@ -2266,9 +2711,7 @@ describe("TransactionAnalyticsService", () => {
     });
 
     it("applies the income direction to the breakdown query", async () => {
-      mockQueryBuilder.getRawMany
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([]);
+      mockQueryBuilder.getRawMany.mockResolvedValue([]);
 
       await service.getLlmListTransactions(userId, {
         startDate: "2026-01-01",
@@ -2288,7 +2731,14 @@ describe("TransactionAnalyticsService", () => {
     async function runWithGroupBy(groupBy: string, rows: any[]) {
       mockQueryBuilder.getRawMany
         .mockResolvedValueOnce([]) // summary
-        .mockResolvedValueOnce(rows); // breakdown
+        .mockResolvedValueOnce([]) // converted totals
+        .mockResolvedValueOnce(
+          rows.map((r) => ({
+            currencyCode: "USD",
+            txDate: "2026-01-10",
+            ...r,
+          })),
+        ); // breakdown
       const result = await service.getLlmQueryTransactions(userId, {
         startDate: "2026-01-01",
         endDate: "2026-01-31",
@@ -2375,8 +2825,8 @@ describe("TransactionAnalyticsService", () => {
 
     it("groups by year and returns one row per year", async () => {
       const rows = await runWithGroupBy("year", [
-        { year: "2024", total: "100", count: "5" },
-        { year: "2025", total: "200", count: "10" },
+        { period: "2024", total: "100", count: "5" },
+        { period: "2025", total: "200", count: "10" },
       ]);
 
       expect(rows).toHaveLength(2);
@@ -2385,7 +2835,7 @@ describe("TransactionAnalyticsService", () => {
 
     it("groups by month and returns one row per month", async () => {
       const rows = await runWithGroupBy("month", [
-        { month: "2026-01", total: "100", count: "5" },
+        { period: "2026-01", total: "100", count: "5" },
       ]);
 
       expect(rows[0].month).toBe("2026-01");
@@ -2393,21 +2843,19 @@ describe("TransactionAnalyticsService", () => {
 
     it("groups by week", async () => {
       const rows = await runWithGroupBy("week", [
-        { week: "2026-01-05", total: "50", count: "2" },
+        { period: "2026-01-05", total: "50", count: "2" },
       ]);
 
       expect(rows[0].week).toBe("2026-01-05");
     });
 
     it("applies expenses direction filter", async () => {
-      mockQueryBuilder.getRawMany
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([]);
+      mockQueryBuilder.getRawMany.mockResolvedValue([]);
 
       await service.getLlmQueryTransactions(userId, {
         startDate: "2026-01-01",
         endDate: "2026-01-31",
-        groupBy: "category",
+        groupBy: "payee",
         direction: "expenses",
       });
 
@@ -2417,10 +2865,88 @@ describe("TransactionAnalyticsService", () => {
       expect(calls).toMatch(/< 0/);
     });
 
-    it("applies income direction filter", async () => {
+    it("nets a refund into its category instead of adding it", async () => {
+      // Groceries: -100 spent, +30 refunded -> the signed sum, negated, is 70.
       mockQueryBuilder.getRawMany
         .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([]);
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          {
+            categoryId: "cat-food",
+            currencyCode: "USD",
+            txDate: "2026-01-10",
+            total: "70",
+            count: "2",
+          },
+          {
+            categoryId: "cat-travel",
+            currencyCode: "USD",
+            txDate: "2026-01-10",
+            total: "-20",
+            count: "1",
+          },
+        ]);
+
+      const result = await service.getLlmQueryTransactions(userId, {
+        startDate: "2026-01-01",
+        endDate: "2026-01-31",
+        groupBy: "category",
+        direction: "expenses",
+      });
+
+      const selects = (mockQueryBuilder.select.mock.calls as any[][])
+        .concat(mockQueryBuilder.addSelect.mock.calls as any[][])
+        .map((c) => c[0])
+        .join(" | ");
+      expect(selects).toContain("SUM(-COALESCE(ts.amount, t.amount))");
+      expect(selects).not.toContain("SUM(ABS(");
+      // A category whose credits exceed its debits is not a spending row.
+      expect(
+        (result.breakdown as any[]).map((r) => [r.categoryId, r.total]),
+      ).toEqual([["cat-food", 70]]);
+    });
+
+    it("nets a correction into its income category and drops a net-negative one", async () => {
+      // Salary: +5000 and a -200 correction -> 4800, as the income report shows.
+      mockQueryBuilder.getRawMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          {
+            categoryId: "cat-food",
+            currencyCode: "USD",
+            txDate: "2026-01-10",
+            total: "4800",
+            count: "2",
+          },
+          {
+            categoryId: "cat-travel",
+            currencyCode: "USD",
+            txDate: "2026-01-10",
+            total: "-20",
+            count: "1",
+          },
+        ]);
+
+      const result = await service.getLlmQueryTransactions(userId, {
+        startDate: "2026-01-01",
+        endDate: "2026-01-31",
+        groupBy: "category",
+        direction: "income",
+      });
+
+      const wheres = (mockQueryBuilder.andWhere.mock.calls as any[][]).map(
+        (c) => c[0],
+      );
+      expect(wheres).toContain("COALESCE(ts.amount, t.amount) <> 0");
+      expect(wheres).not.toContain("COALESCE(ts.amount, t.amount) > 0");
+      expect(
+        (result.breakdown as any[]).map((r) => [r.categoryId, r.total]),
+      ).toEqual([["cat-food", 4800]]);
+    });
+
+    it("applies income direction filter", async () => {
+      mockQueryBuilder.getRawMany.mockResolvedValue([]);
 
       await service.getLlmQueryTransactions(userId, {
         startDate: "2026-01-01",
@@ -2437,46 +2963,245 @@ describe("TransactionAnalyticsService", () => {
   });
 
   describe("getLlmPeriodComparison", () => {
+    const periods = {
+      period1Start: "2026-01-01",
+      period1End: "2026-01-31",
+      period2Start: "2026-02-01",
+      period2End: "2026-02-28",
+    };
+    const row = (fields: Record<string, string>) => ({
+      currencyCode: "USD",
+      txDate: "2026-01-10",
+      ...fields,
+    });
+
     it("compares two periods grouped by category by default", async () => {
       mockQueryBuilder.getRawMany
         .mockResolvedValueOnce([
-          { categoryId: "cat-food", total: "100", count: "5" },
+          row({ categoryId: "cat-food", total: "100", count: "5" }),
         ])
         .mockResolvedValueOnce([
-          { categoryId: "cat-food", total: "150", count: "8" },
+          row({ categoryId: "cat-food", total: "150", count: "8" }),
         ]);
 
-      const result = await service.getLlmPeriodComparison(userId, {
-        period1Start: "2026-01-01",
-        period1End: "2026-01-31",
-        period2Start: "2026-02-01",
-        period2End: "2026-02-28",
-      });
+      const result = await service.getLlmPeriodComparison(userId, periods);
 
       expect(result.period1.total).toBe(100);
       expect(result.period2.total).toBe(150);
       expect(result.totalChange).toBe(50);
       expect(result.totalChangePercent).toBe(50);
+      expect(result.totalsCurrency).toBe("USD");
+      expect(result.fxComplete).toBe(true);
+      expect(result.missingRatePairs).toEqual([]);
       expect(result.comparison[0].label).toBe("Food");
       expect(result.comparison[0].change).toBe(50);
+    });
+
+    it("converts a part at its own rate, reading no rate history (INV-FX-002)", async () => {
+      userPreferenceRepository.findOne.mockResolvedValue({
+        defaultCurrency: "EUR",
+      });
+      mockQueryBuilder.getRawMany
+        .mockResolvedValueOnce([
+          // USD 125 settled at 1.25 USD per EUR: EUR 100.
+          row({
+            categoryId: "cat-food",
+            total: "125",
+            count: "1",
+            fx_original_currency: "EUR",
+            fx_exchange_rate: "1.25000000",
+          }),
+        ])
+        .mockResolvedValueOnce([
+          row({
+            currencyCode: "EUR",
+            categoryId: "cat-food",
+            total: "150",
+            count: "1",
+          }),
+        ]);
+
+      const result = await service.getLlmPeriodComparison(userId, periods);
+
+      expect(result.period1.total).toBe(100);
+      expect(result.period2.total).toBe(150);
+      expect(result.fxComplete).toBe(true);
+      expect(mockQueryBuilder.addGroupBy).toHaveBeenCalledWith(
+        "fx_exchange_rate",
+      );
+      expect(managerMock.query).not.toHaveBeenCalled();
+    });
+
+    it("converts each part at the rate for its own date into the default currency", async () => {
+      userPreferenceRepository.findOne.mockResolvedValue({
+        defaultCurrency: "PLN",
+      });
+      mockQueryBuilder.getRawMany
+        .mockResolvedValueOnce([
+          row({
+            currencyCode: "PLN",
+            categoryId: "cat-food",
+            total: "400",
+            count: "1",
+          }),
+        ])
+        .mockResolvedValueOnce([
+          row({
+            currencyCode: "PLN",
+            txDate: "2026-02-10",
+            categoryId: "cat-food",
+            total: "4000",
+            count: "1",
+          }),
+          row({
+            currencyCode: "USD",
+            txDate: "2026-02-15",
+            categoryId: "cat-food",
+            total: "1000",
+            count: "1",
+          }),
+        ]);
+      // PLN->USD 0.2739726027 is USD->PLN 3.65, struck before the USD row.
+      managerMock.query.mockResolvedValue([
+        storedRate("PLN", "USD", 0.2739726027, "2026-02-12"),
+      ]);
+
+      const result = await service.getLlmPeriodComparison(userId, periods);
+
+      expect(result.totalsCurrency).toBe("PLN");
+      expect(result.fxComplete).toBe(true);
+      expect(result.period1.total).toBe(400);
+      expect(result.period2.total).toBe(7650);
+      expect(result.totalChange).toBe(7250);
+      expect(result.totalChangePercent).toBe(1812.5);
+      expect(result.comparison).toEqual([
+        {
+          label: "Food",
+          period1Amount: 400,
+          period2Amount: 7650,
+          change: 7250,
+          changePercent: 1812.5,
+        },
+      ]);
+      // One rate load per period, for the foreign currency only.
+      const loads = managerMock.query.mock.calls.filter(([sql]) =>
+        String(sql).includes("exchange_rates"),
+      );
+      expect(loads).toHaveLength(1);
+      expect(loads[0][1][0]).toEqual(["USD"]);
+    });
+
+    it("withholds the totals and names the pair when a rate is missing", async () => {
+      userPreferenceRepository.findOne.mockResolvedValue({
+        defaultCurrency: "PLN",
+      });
+      mockQueryBuilder.getRawMany
+        .mockResolvedValueOnce([
+          row({
+            currencyCode: "PLN",
+            categoryId: "cat-food",
+            total: "400",
+            count: "1",
+          }),
+        ])
+        .mockResolvedValueOnce([
+          row({
+            currencyCode: "PLN",
+            txDate: "2026-02-10",
+            categoryId: "cat-food",
+            total: "4000",
+            count: "1",
+          }),
+          row({
+            currencyCode: "USD",
+            txDate: "2026-02-15",
+            categoryId: "cat-food",
+            total: "1000",
+            count: "1",
+          }),
+        ]);
+
+      const result = await service.getLlmPeriodComparison(userId, periods);
+
+      expect(result.fxComplete).toBe(false);
+      expect(result.missingRatePairs).toEqual(["USD->PLN"]);
+      expect(result.period1.total).toBe(400);
+      expect(result.period2.total).toBeNull();
+      expect(result.period2.knownSubtotal).toBe(4000);
+      expect(result.totalChange).toBeNull();
+      expect(result.totalChangePercent).toBeNull();
+      // The row still shows what converted, never the foreign amount as is.
+      expect(result.comparison[0].period2Amount).toBe(4000);
+    });
+
+    it("does not price a date with a rate struck after it", async () => {
+      userPreferenceRepository.findOne.mockResolvedValue({
+        defaultCurrency: "PLN",
+      });
+      mockQueryBuilder.getRawMany
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([
+          row({
+            currencyCode: "USD",
+            txDate: "2026-02-10",
+            categoryId: "cat-food",
+            total: "1000",
+            count: "1",
+          }),
+        ]);
+      managerMock.query.mockResolvedValue([
+        storedRate("PLN", "USD", 0.2739726027, "2026-02-12"),
+      ]);
+
+      const result = await service.getLlmPeriodComparison(userId, periods);
+
+      expect(result.fxComplete).toBe(false);
+      expect(result.missingRatePairs).toEqual(["USD->PLN"]);
+      expect(result.period2.total).toBeNull();
+    });
+
+    it("sums expenses over rows of both signs, so a refund reduces its category", async () => {
+      mockQueryBuilder.getRawMany
+        .mockResolvedValueOnce([
+          row({ categoryId: "cat-food", total: "100", count: "5" }),
+        ])
+        .mockResolvedValueOnce([
+          // Food: 120 spent, 20 refunded -> 100 net (the SQL sums -amount).
+          row({ categoryId: "cat-food", total: "100", count: "6" }),
+          // Travel was refunded in full and more: not a row in a spend report.
+          row({ categoryId: "cat-travel", total: "-30", count: "2" }),
+        ]);
+
+      const result = await service.getLlmPeriodComparison(userId, periods);
+
+      expect(result.comparison.map((c) => c.label)).toEqual(["Food"]);
+      expect(result.period2.total).toBe(100);
+      const selected = (mockQueryBuilder.addSelect.mock.calls as any[][]).map(
+        (c) => c[0],
+      );
+      expect(selected).toContain("SUM(-COALESCE(ts.amount, t.amount))");
+      const wheres = (mockQueryBuilder.andWhere.mock.calls as any[][]).map(
+        (c) => c[0],
+      );
+      expect(wheres).toContain("COALESCE(ts.amount, t.amount) <> 0");
+      expect(wheres).not.toContain("COALESCE(ts.amount, t.amount) < 0");
     });
 
     it("returns 100% change when period1 is zero but period2 is non-zero", async () => {
       mockQueryBuilder.getRawMany
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([
-          { categoryId: "cat-travel", total: "50", count: "3" },
+          row({ categoryId: "cat-travel", total: "50", count: "3" }),
         ]);
 
-      const result = await service.getLlmPeriodComparison(userId, {
-        period1Start: "2026-01-01",
-        period1End: "2026-01-31",
-        period2Start: "2026-02-01",
-        period2End: "2026-02-28",
-      });
+      const result = await service.getLlmPeriodComparison(userId, periods);
 
       const newRow = result.comparison.find((c) => c.label === "Travel");
       expect(newRow?.changePercent).toBe(100);
+      // A complete answer: the overall percentage over a zero base is 0, as
+      // it always was, not a withheld figure.
+      expect(result.totalChangePercent).toBe(0);
+      expect(result.totalChange).toBe(50);
     });
 
     it("returns 0% change when both periods are zero", async () => {
@@ -2484,32 +3209,25 @@ describe("TransactionAnalyticsService", () => {
         .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
 
-      const result = await service.getLlmPeriodComparison(userId, {
-        period1Start: "2026-01-01",
-        period1End: "2026-01-31",
-        period2Start: "2026-02-01",
-        period2End: "2026-02-28",
-      });
+      const result = await service.getLlmPeriodComparison(userId, periods);
 
       expect(result.totalChange).toBe(0);
       expect(result.totalChangePercent).toBe(0);
+      expect(result.fxComplete).toBe(true);
     });
 
     it("supports payee groupBy with aggregation threshold", async () => {
       mockQueryBuilder.getRawMany
         .mockResolvedValueOnce([
-          { label: "Costco", total: "500", count: "10" },
-          { label: "Small", total: "10", count: "1" },
+          row({ label: "Costco", total: "500", count: "10" }),
+          row({ label: "Small", total: "10", count: "1" }),
         ])
         .mockResolvedValueOnce([
-          { label: "Costco", total: "600", count: "12" },
+          row({ label: "Costco", total: "600", count: "12" }),
         ]);
 
       const result = await service.getLlmPeriodComparison(userId, {
-        period1Start: "2026-01-01",
-        period1End: "2026-01-31",
-        period2Start: "2026-02-01",
-        period2End: "2026-02-28",
+        ...periods,
         groupBy: "payee",
         direction: "expenses",
       });
@@ -2521,16 +3239,15 @@ describe("TransactionAnalyticsService", () => {
 
     it("supports income direction", async () => {
       mockQueryBuilder.getRawMany
-        .mockResolvedValueOnce([{ label: "Salary", total: "1000", count: "1" }])
         .mockResolvedValueOnce([
-          { label: "Salary", total: "1100", count: "1" },
+          row({ label: "Salary", total: "1000", count: "1" }),
+        ])
+        .mockResolvedValueOnce([
+          row({ label: "Salary", total: "1100", count: "1" }),
         ]);
 
       const result = await service.getLlmPeriodComparison(userId, {
-        period1Start: "2026-01-01",
-        period1End: "2026-01-31",
-        period2Start: "2026-02-01",
-        period2End: "2026-02-28",
+        ...periods,
         direction: "income",
       });
 
@@ -2543,10 +3260,7 @@ describe("TransactionAnalyticsService", () => {
         .mockResolvedValueOnce([]);
 
       await service.getLlmPeriodComparison(userId, {
-        period1Start: "2026-01-01",
-        period1End: "2026-01-31",
-        period2Start: "2026-02-01",
-        period2End: "2026-02-28",
+        ...periods,
         direction: "both",
       });
 
@@ -2558,6 +3272,236 @@ describe("TransactionAnalyticsService", () => {
         (c) => typeof c === "string" && /[<>] 0/.test(c),
       );
       expect(directionCalls).toHaveLength(0);
+    });
+  });
+
+  describe("converted totals of the LLM list", () => {
+    const list = () =>
+      service.getLlmListTransactions(userId, {
+        startDate: "2026-09-01",
+        endDate: "2026-09-30",
+      });
+    const flowRows = [
+      {
+        currencyCode: "PLN",
+        txDate: "2026-09-10",
+        totalIncome: "0",
+        totalExpenses: "4000",
+        transactionCount: "1",
+      },
+      {
+        currencyCode: "USD",
+        txDate: "2026-09-15",
+        totalIncome: "0",
+        totalExpenses: "1000",
+        transactionCount: "1",
+      },
+    ];
+
+    beforeEach(() => {
+      userPreferenceRepository.findOne.mockResolvedValue({
+        defaultCurrency: "PLN",
+      });
+      mockQueryBuilder.getRawMany.mockResolvedValue(flowRows);
+    });
+
+    it("converts every row at its own date and names the currency", async () => {
+      managerMock.query.mockResolvedValue([
+        storedRate("PLN", "USD", 0.2739726027, "2026-09-12"),
+      ]);
+
+      const result = await list();
+
+      expect(result.totalsCurrency).toBe("PLN");
+      expect(result.fxComplete).toBe(true);
+      expect(result.totalExpenses).toBe(7650);
+      expect(result.totalIncome).toBe(0);
+      expect(result.netCashFlow).toBe(-7650);
+      expect(result.knownExpensesSubtotal).toBe(7650);
+      // The unconverted per-currency view is kept, each in its own currency.
+      expect(Object.keys(result.byCurrency ?? {}).sort()).toEqual([
+        "PLN",
+        "USD",
+      ]);
+    });
+
+    it("withholds the totals while a pair has no rate and keeps the known part", async () => {
+      const result = await list();
+
+      expect(result.fxComplete).toBe(false);
+      expect(result.missingRatePairs).toEqual(["USD->PLN"]);
+      expect(result.totalIncome).toBeNull();
+      expect(result.totalExpenses).toBeNull();
+      expect(result.netCashFlow).toBeNull();
+      expect(result.knownExpensesSubtotal).toBe(4000);
+      expect(result.knownIncomeSubtotal).toBe(0);
+    });
+
+    it("withholds the totals when only a breakdown row cannot be converted", async () => {
+      mockQueryBuilder.getRawMany
+        .mockResolvedValueOnce([]) // summary
+        .mockResolvedValueOnce([
+          {
+            currencyCode: "PLN",
+            txDate: "2026-09-10",
+            totalIncome: "0",
+            totalExpenses: "4000",
+          },
+        ]) // converted totals: all PLN
+        .mockResolvedValueOnce([
+          {
+            currencyCode: "PLN",
+            txDate: "2026-09-10",
+            label: "Food",
+            total: "4000",
+            count: "3",
+          },
+          {
+            currencyCode: "USD",
+            txDate: "2026-09-15",
+            label: "Food",
+            total: "1000",
+            count: "3",
+          },
+        ]);
+
+      const result = await service.getLlmListTransactions(userId, {
+        startDate: "2026-09-01",
+        endDate: "2026-09-30",
+        groupBy: "payee",
+      });
+
+      expect(result.fxComplete).toBe(false);
+      expect(result.totalExpenses).toBeNull();
+      expect(result.breakdown).toEqual([
+        {
+          payee: "Food",
+          payeeId: null,
+          total: null,
+          knownSubtotal: 4000,
+          count: 6,
+        },
+      ]);
+    });
+
+    describe("a row carrying its own rate (INV-FX-002)", () => {
+      // EUR 100 charged to a USD card as USD 125 (1 EUR = 1.25 USD) on a day
+      // the market said 1.175: the row's own rate converts it, as Spending by
+      // Category does, not the market's EUR 106.383 (discussion #2105).
+      const ownRateRow = {
+        currencyCode: "USD",
+        txDate: "2025-12-31",
+        fx_original_currency: "EUR",
+        fx_exchange_rate: "1.25000000",
+      };
+      const reportRule = () =>
+        convertRateBasis(
+          125,
+          transactionRateBasis(
+            {
+              currencyCode: "USD",
+              transactionDate: "2025-12-31",
+              originalCurrencyCode: "EUR",
+              exchangeRate: "1.25000000",
+            },
+            "EUR",
+          ),
+          "EUR",
+          new Map(),
+        );
+
+      beforeEach(() => {
+        userPreferenceRepository.findOne.mockResolvedValue({
+          defaultCurrency: "EUR",
+        });
+        managerMock.query.mockResolvedValue([
+          storedRate("EUR", "USD", 1.175, "2025-12-31"),
+        ]);
+      });
+
+      it("converts the totals at the row's own rate, the reports' figure", async () => {
+        mockQueryBuilder.getRawMany.mockResolvedValue([
+          { ...ownRateRow, totalIncome: "0", totalExpenses: "125" },
+        ]);
+
+        const result = await service.getLlmListTransactions(userId, {
+          startDate: "2025-12-01",
+          endDate: "2025-12-31",
+        });
+
+        expect(result.fxComplete).toBe(true);
+        expect(result.totalExpenses).toBe(100);
+        expect(result.totalExpenses).toBe(reportRule());
+        // Each foreign part is grouped by the rate it settled at.
+        expect(mockQueryBuilder.addSelect).toHaveBeenCalledWith(
+          "CASE WHEN transaction.currencyCode <> :fxReportingCurrency THEN transaction.exchangeRate END",
+          "fx_exchange_rate",
+        );
+        expect(mockQueryBuilder.addGroupBy).toHaveBeenCalledWith(
+          "fx_exchange_rate",
+        );
+        expect(mockQueryBuilder.setParameter).toHaveBeenCalledWith(
+          "fxReportingCurrency",
+          "EUR",
+        );
+        // Its own rate reaches EUR, so no market history is read.
+        expect(managerMock.query).not.toHaveBeenCalled();
+      });
+
+      it("converts a breakdown row at its own rate", async () => {
+        mockQueryBuilder.getRawMany.mockResolvedValue([
+          { ...ownRateRow, categoryId: "cat-travel", total: "125", count: "1" },
+        ]);
+
+        const result = await service.getLlmQueryTransactions(userId, {
+          startDate: "2025-12-01",
+          endDate: "2025-12-31",
+          groupBy: "category",
+          direction: "expenses",
+        });
+
+        expect(result.breakdown).toEqual([
+          expect.objectContaining({ categoryId: "cat-travel", total: 100 }),
+        ]);
+        expect(mockQueryBuilder.addSelect).toHaveBeenCalledWith(
+          "CASE WHEN t.currencyCode <> :fxReportingCurrency THEN t.originalCurrencyCode END",
+          "fx_original_currency",
+        );
+      });
+
+      it("falls back to the market rate for a stored 1 across two currencies", async () => {
+        mockQueryBuilder.getRawMany.mockResolvedValue([
+          {
+            ...ownRateRow,
+            fx_exchange_rate: "1.00000000",
+            totalIncome: "0",
+            totalExpenses: "117.5",
+          },
+        ]);
+
+        const result = await service.getLlmListTransactions(userId, {
+          startDate: "2025-12-01",
+          endDate: "2025-12-31",
+        });
+
+        expect(result.totalExpenses).toBe(100);
+      });
+    });
+
+    it("needs no rate for a zero amount", async () => {
+      mockQueryBuilder.getRawMany.mockResolvedValue([
+        {
+          currencyCode: "USD",
+          txDate: "2026-09-15",
+          totalIncome: "0",
+          totalExpenses: "0",
+        },
+      ]);
+
+      const result = await list();
+
+      expect(result.fxComplete).toBe(true);
+      expect(result.totalExpenses).toBe(0);
     });
   });
 
@@ -2752,6 +3696,111 @@ describe("TransactionAnalyticsService", () => {
       expect(mockQueryBuilder.having).toHaveBeenCalledWith("COUNT(*) >= 3");
     });
 
+    it("detects a charge per currency and says which", async () => {
+      mockQueryBuilder.getRawMany.mockResolvedValue([
+        {
+          payeeName: "Spotify",
+          currencyCode: "USD",
+          amounts: [10, 10, 10],
+          dates: ["2025-10-01", "2025-11-01", "2025-12-01"],
+          txnCount: "3",
+        },
+      ]);
+
+      const result = await service.getRecurringCharges(userId, start, end);
+
+      // A payee billed in two currencies is two series, never one whose
+      // "price change" is a change of unit (issue #2155).
+      expect(mockQueryBuilder.addGroupBy).toHaveBeenCalledWith(
+        "t.currencyCode",
+      );
+      expect(result[0].currencyCode).toBe("USD");
+      // No reporting currency asked for, so nothing converted and no rate read.
+      expect(result[0].converted).toBeUndefined();
+      expect(managerMock.query).not.toHaveBeenCalled();
+    });
+
+    it("orders every per-occurrence array the same way, ties included", async () => {
+      await service.getRecurringCharges(userId, start, end);
+
+      const arrays = (mockQueryBuilder.addSelect.mock.calls as any[][])
+        .map((c) => c[0] as string)
+        .filter((sql) => sql.startsWith("ARRAY_AGG("));
+      expect(arrays).toHaveLength(4);
+      // Two charges on one day keep their own amount, date and rate.
+      for (const sql of arrays) {
+        expect(sql).toMatch(/ORDER BY t\.transactionDate ASC, t\.id ASC\)$/);
+      }
+    });
+
+    describe("with a reporting currency", () => {
+      const usdCharge = {
+        payeeName: "Spotify",
+        currencyCode: "USD",
+        amounts: [12.5, 12.5, 13.2],
+        dates: ["2025-10-01", "2025-11-03", "2025-12-01"],
+        // The latest settled into EUR at its own 1.10 USD per EUR; the
+        // previous carries the column's default 1, which is not a rate.
+        originalCurrencies: [null, "EUR", "EUR"],
+        exchangeRates: ["1", "1", "1.10000000"],
+        txnCount: "3",
+      };
+
+      it("converts the latest at its own rate and the previous at its date's", async () => {
+        mockQueryBuilder.getRawMany.mockResolvedValue([usdCharge]);
+        // EUR->USD 1.25 struck on the previous occurrence's day, and a later
+        // 1.30 that must not reach it (INV-FX-001's look-ahead clause).
+        managerMock.query.mockResolvedValue([
+          storedRate("EUR", "USD", 1.25, "2025-11-03"),
+          storedRate("EUR", "USD", 1.3, "2025-11-20"),
+        ]);
+
+        const result = await service.getRecurringCharges(userId, start, end, {
+          reportingCurrency: "EUR",
+        });
+
+        expect(result[0].currentAmount).toBe(13.2);
+        expect(result[0].converted).toEqual({
+          currency: "EUR",
+          // 13.20 / 1.10, never 13.20 / 1.30 and never 13.20 itself.
+          currentAmount: 12,
+          // 12.50 / 1.25 on its own date.
+          previousAmount: 10,
+        });
+      });
+
+      it("reports an occurrence with no rate as unknown, not the native amount", async () => {
+        mockQueryBuilder.getRawMany.mockResolvedValue([usdCharge]);
+
+        const result = await service.getRecurringCharges(userId, start, end, {
+          reportingCurrency: "EUR",
+        });
+
+        expect(result[0].converted).toEqual({
+          currency: "EUR",
+          currentAmount: 12,
+          previousAmount: null,
+        });
+      });
+
+      it("needs no rate for a charge already in the reporting currency", async () => {
+        mockQueryBuilder.getRawMany.mockResolvedValue([
+          { ...usdCharge, currencyCode: "EUR" },
+        ]);
+
+        const result = await service.getRecurringCharges(userId, start, end, {
+          reportingCurrency: "EUR",
+        });
+
+        expect(result[0].converted).toEqual({
+          currency: "EUR",
+          currentAmount: 13.2,
+          previousAmount: 12.5,
+        });
+        expect(managerMock.query).not.toHaveBeenCalled();
+      });
+    });
+
     it("accepts an account and payees together", async () => {
       // Neither option supersedes the other; the payee surfaces send one id,
       // the account panel sends an account, and nothing stops a caller
@@ -2773,6 +3822,53 @@ describe("TransactionAnalyticsService", () => {
   });
 
   describe("getGroupedTotals", () => {
+    /**
+     * `readTopGroupParts` runs the grouped read as SQL of its own on the
+     * manager. Serve it from the query builder's mocked rows, each keyed as the
+     * read keys its group and bounded to the largest `limit` groups as the SQL
+     * bounds them; every other `query` is the rate history in `rates`.
+     */
+    let rates: unknown[] = [];
+    const givenRates = (rows: unknown[]) => {
+      rates = rows;
+    };
+    const routeGroupedRead = () => {
+      rates = [];
+      managerMock.query.mockImplementation(
+        async (sql: string, params: unknown[] = []) => {
+          if (!sql.includes("WITH parts")) return rates;
+          const magnitude = /SUM\(parts\."(\w+)"\)/.exec(sql)?.[1] ?? "total";
+          const limit = params[params.length - 1] as number;
+          const rows = (
+            (await mockQueryBuilder.getRawMany()) as Record<string, any>[]
+          ).map((row) => ({
+            ...row,
+            group_key:
+              "value" in row
+                ? `${row.value}|${row.currencyCode}`
+                : `${row.id ?? ""}#${row.name ?? ""}|${row.currencyCode}`,
+          }));
+          const sizes = new Map<string, number>();
+          for (const row of rows) {
+            sizes.set(
+              row.group_key,
+              (sizes.get(row.group_key) ?? 0) +
+                Math.abs(Number(row[magnitude])),
+            );
+          }
+          const kept = new Set(
+            [...sizes.entries()]
+              .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+              .slice(0, limit)
+              .map(([key]) => key),
+          );
+          return rows.filter((row) => kept.has(row.group_key));
+        },
+      );
+    };
+
+    beforeEach(routeGroupedRead);
+
     it("widens the ownership predicate by the authorized joint ids", async () => {
       await service.getGroupedTotals(userId, {
         groupBy: "payee",
@@ -2786,12 +3882,16 @@ describe("TransactionAnalyticsService", () => {
     });
 
     it("groups by category with split-aware id and name expressions", async () => {
+      userPreferenceRepository.findOne.mockResolvedValue({
+        defaultCurrency: "CAD",
+      });
       mockQueryBuilder.getRawMany.mockResolvedValue([
         {
           id: "cat-1",
           name: "Groceries",
           currencyCode: "CAD",
           total: "-450.7512",
+          magnitude: "450.7512",
           count: "12",
         },
         {
@@ -2799,6 +3899,7 @@ describe("TransactionAnalyticsService", () => {
           name: null,
           currencyCode: "CAD",
           total: "-25.25",
+          magnitude: "25.25",
           count: "2",
         },
       ]);
@@ -2834,8 +3935,163 @@ describe("TransactionAnalyticsService", () => {
           currencyCode: "CAD",
           total: -450.7512,
           count: 12,
+          convertedCurrency: "CAD",
+          convertedTotal: -450.7512,
         },
-        { id: null, name: null, currencyCode: "CAD", total: -25.25, count: 2 },
+        {
+          id: null,
+          name: null,
+          currencyCode: "CAD",
+          total: -25.25,
+          count: 2,
+          convertedCurrency: "CAD",
+          convertedTotal: -25.25,
+        },
+      ]);
+    });
+
+    it("keeps free-text payees apart when converting them (issue #2106)", async () => {
+      userPreferenceRepository.findOne.mockResolvedValue({
+        defaultCurrency: "CAD",
+      });
+      const part = (name: string, total: string) => ({
+        id: null,
+        name,
+        currencyCode: "USD",
+        fx_day: "2026-01-12",
+        fx_original_currency: null,
+        fx_exchange_rate: "1",
+        total,
+        magnitude: total.replace("-", ""),
+        count: "1",
+      });
+      mockQueryBuilder.getRawMany.mockResolvedValueOnce([
+        part("Cafe A", "-10"),
+        part("Shop B", "-90"),
+      ]);
+      givenRates([storedRate("USD", "CAD", 1.25, "2026-01-10")]);
+
+      const result = await service.getGroupedTotals(userId, {
+        groupBy: "payee",
+      });
+
+      // Largest first, as the read used to order them.
+      expect(result.map((r) => [r.name, r.convertedTotal])).toEqual([
+        ["Shop B", -112.5],
+        ["Cafe A", -12.5],
+      ]);
+    });
+
+    it("converts a foreign group at its rows' own rates and dates (issue #2106)", async () => {
+      userPreferenceRepository.findOne.mockResolvedValue({
+        defaultCurrency: "CAD",
+      });
+      const part = (
+        id: string | null,
+        day: string,
+        total: string,
+        own?: { currency: string; rate: string },
+      ) => ({
+        id,
+        name: id === null ? null : "Groceries",
+        currencyCode: "USD",
+        fx_day: day,
+        fx_original_currency: own?.currency ?? null,
+        fx_exchange_rate: own?.rate ?? "1",
+        total,
+        magnitude: total.replace("-", ""),
+        count: "1",
+      });
+      mockQueryBuilder.getRawMany.mockResolvedValueOnce([
+        part("cat-1", "2026-01-12", "-100"),
+        // Settled into CAD at its own 1.30: 130 CAD, whatever the market said.
+        part("cat-1", "2026-06-12", "-100", {
+          currency: "CAD",
+          rate: "0.7692307692",
+        }),
+        part("cat-1", "2026-06-12", "-100"),
+        part(null, "2026-01-12", "-10"),
+      ]);
+      givenRates([
+        storedRate("USD", "CAD", 1.25, "2026-01-10"),
+        storedRate("USD", "CAD", 1.4, "2026-06-10"),
+      ]);
+
+      const result = await service.getGroupedTotals(userId, {
+        groupBy: "category",
+      });
+
+      expect(result).toEqual([
+        {
+          id: "cat-1",
+          name: "Groceries",
+          currencyCode: "USD",
+          total: -300,
+          count: 3,
+          convertedCurrency: "CAD",
+          convertedTotal: -395,
+        },
+        {
+          id: null,
+          name: null,
+          currencyCode: "USD",
+          total: -10,
+          count: 1,
+          convertedCurrency: "CAD",
+          convertedTotal: -12.5,
+        },
+      ]);
+      // One read of the filtered rows (issue #2130), split by day and own
+      // rate outside the reporting currency.
+      expect(mockQueryBuilder.getRawMany).toHaveBeenCalledTimes(1);
+      expect(mockQueryBuilder.setParameter).toHaveBeenCalledWith(
+        "fxReportingCurrency",
+        "CAD",
+      );
+    });
+
+    it("withholds a group's converted total while a part has no rate", async () => {
+      userPreferenceRepository.findOne.mockResolvedValue({
+        defaultCurrency: "CAD",
+      });
+      mockQueryBuilder.getRawMany.mockResolvedValueOnce([
+        {
+          id: "cat-1",
+          name: "Groceries",
+          currencyCode: "USD",
+          fx_day: "2026-01-12",
+          fx_original_currency: null,
+          fx_exchange_rate: "1",
+          total: "-100",
+          magnitude: "100",
+          count: "1",
+        },
+        // No rate on or before this day.
+        {
+          id: "cat-1",
+          name: "Groceries",
+          currencyCode: "USD",
+          fx_day: "2025-01-12",
+          fx_original_currency: null,
+          fx_exchange_rate: "1",
+          total: "20",
+          magnitude: "20",
+          count: "1",
+        },
+      ]);
+      givenRates([storedRate("USD", "CAD", 1.25, "2026-01-10")]);
+
+      const result = await service.getGroupedTotals(userId, {
+        groupBy: "category",
+      });
+
+      expect(result).toEqual([
+        expect.objectContaining({
+          id: "cat-1",
+          total: -80,
+          count: 2,
+          convertedTotal: null,
+        }),
       ]);
     });
 
@@ -2863,19 +4119,68 @@ describe("TransactionAnalyticsService", () => {
     });
 
     it("orders by absolute total and clamps the limit", async () => {
-      await service.getGroupedTotals(userId, {
+      // 600 payees in the reporting currency, the smallest first.
+      const rows = Array.from({ length: 600 }, (_, i) => ({
+        id: `payee-${i}`,
+        name: `Payee ${i}`,
+        currencyCode: "USD",
+        fx_day: null,
+        fx_original_currency: null,
+        fx_exchange_rate: null,
+        total: String(-(i + 1)),
+        magnitude: String(i + 1),
+        count: "1",
+      }));
+      mockQueryBuilder.getRawMany.mockResolvedValue(rows);
+
+      const clamped = await service.getGroupedTotals(userId, {
         groupBy: "payee",
         limit: 9999,
       });
 
-      expect(mockQueryBuilder.orderBy).toHaveBeenCalledWith(
+      expect(mockQueryBuilder.addSelect).toHaveBeenCalledWith(
         "SUM(ABS(COALESCE(splits.amount, transaction.amount)))",
-        "DESC",
+        "magnitude",
       );
-      expect(mockQueryBuilder.limit).toHaveBeenCalledWith(500);
+      expect(clamped).toHaveLength(500);
+      expect(clamped[0].id).toBe("payee-599");
+      expect(clamped[499].id).toBe("payee-100");
 
-      await service.getGroupedTotals(userId, { groupBy: "payee" });
-      expect(mockQueryBuilder.limit).toHaveBeenCalledWith(100);
+      const byDefault = await service.getGroupedTotals(userId, {
+        groupBy: "payee",
+      });
+      expect(byDefault).toHaveLength(100);
+    });
+
+    it("ranks a group by the magnitude of all its parts", async () => {
+      userPreferenceRepository.findOne.mockResolvedValue({
+        defaultCurrency: "CAD",
+      });
+      const part = (id: string, day: string, magnitude: string) => ({
+        id,
+        name: id,
+        currencyCode: "USD",
+        fx_day: day,
+        fx_original_currency: null,
+        fx_exchange_rate: "1",
+        total: `-${magnitude}`,
+        magnitude,
+        count: "1",
+      });
+      // "split" is 30 + 30 over two days: larger than "single"'s 50 once
+      // folded, though each of its parts is smaller.
+      mockQueryBuilder.getRawMany.mockResolvedValueOnce([
+        part("single", "2026-01-12", "50"),
+        part("split", "2026-01-12", "30"),
+        part("split", "2026-01-13", "30"),
+      ]);
+
+      const result = await service.getGroupedTotals(userId, {
+        groupBy: "payee",
+        limit: 1,
+      });
+
+      expect(result.map((r) => [r.id, r.total])).toEqual([["split", -60]]);
     });
 
     it("returns an empty array when nothing matches", async () => {
@@ -2925,10 +4230,72 @@ describe("TransactionAnalyticsService", () => {
   });
 
   describe("getTransactionBreakdownByTagKey", () => {
+    /**
+     * `readTopGroupParts` runs the grouped read as SQL of its own on the
+     * manager. Serve it from the query builder's mocked rows, each keyed as the
+     * read keys its group and bounded to the largest `limit` groups as the SQL
+     * bounds them; every other `query` is the rate history in `rates`.
+     */
+    let rates: unknown[] = [];
+    const givenRates = (rows: unknown[]) => {
+      rates = rows;
+    };
+    const routeGroupedRead = () => {
+      rates = [];
+      managerMock.query.mockImplementation(
+        async (sql: string, params: unknown[] = []) => {
+          if (!sql.includes("WITH parts")) return rates;
+          const magnitude = /SUM\(parts\."(\w+)"\)/.exec(sql)?.[1] ?? "total";
+          const limit = params[params.length - 1] as number;
+          const rows = (
+            (await mockQueryBuilder.getRawMany()) as Record<string, any>[]
+          ).map((row) => ({
+            ...row,
+            group_key:
+              "value" in row
+                ? `${row.value}|${row.currencyCode}`
+                : `${row.id ?? ""}#${row.name ?? ""}|${row.currencyCode}`,
+          }));
+          const sizes = new Map<string, number>();
+          for (const row of rows) {
+            sizes.set(
+              row.group_key,
+              (sizes.get(row.group_key) ?? 0) +
+                Math.abs(Number(row[magnitude])),
+            );
+          }
+          const kept = new Set(
+            [...sizes.entries()]
+              .sort((a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : 1))
+              .slice(0, limit)
+              .map(([key]) => key),
+          );
+          return rows.filter((row) => kept.has(row.group_key));
+        },
+      );
+    };
+
+    beforeEach(routeGroupedRead);
+
     it("maps per-currency rows keyed by the parsed tag value", async () => {
+      userPreferenceRepository.findOne.mockResolvedValue({
+        defaultCurrency: "CAD",
+      });
       mockQueryBuilder.getRawMany.mockResolvedValue([
-        { value: "usa", currencyCode: "CAD", total: "200", count: "2" },
-        { value: "poland", currencyCode: "CAD", total: "100", count: "1" },
+        {
+          value: "poland",
+          currencyCode: "CAD",
+          total: "100",
+          magnitude: "100",
+          count: "1",
+        },
+        {
+          value: "usa",
+          currencyCode: "CAD",
+          total: "200",
+          magnitude: "200",
+          count: "2",
+        },
       ]);
 
       const result = await service.getTransactionBreakdownByTagKey(
@@ -2938,13 +4305,23 @@ describe("TransactionAnalyticsService", () => {
       );
 
       expect(result).toEqual([
-        { id: "usa", name: "usa", currencyCode: "CAD", total: 200, count: 2 },
+        {
+          id: "usa",
+          name: "usa",
+          currencyCode: "CAD",
+          total: 200,
+          count: 2,
+          convertedCurrency: "CAD",
+          convertedTotal: 200,
+        },
         {
           id: "poland",
           name: "poland",
           currencyCode: "CAD",
           total: 100,
           count: 1,
+          convertedCurrency: "CAD",
+          convertedTotal: 100,
         },
       ]);
       // Joins the transaction's tags and groups by value + currency.
@@ -2955,6 +4332,49 @@ describe("TransactionAnalyticsService", () => {
       expect(mockQueryBuilder.addGroupBy).toHaveBeenCalledWith(
         "transaction.currencyCode",
       );
+    });
+
+    it("converts a foreign value's parts at their own dates in the one read", async () => {
+      userPreferenceRepository.findOne.mockResolvedValue({
+        defaultCurrency: "CAD",
+      });
+      const part = (day: string, total: string) => ({
+        value: "usa",
+        currencyCode: "USD",
+        fx_day: day,
+        fx_original_currency: null,
+        fx_exchange_rate: "1",
+        total,
+        magnitude: total,
+        count: "1",
+      });
+      mockQueryBuilder.getRawMany.mockResolvedValueOnce([
+        part("2026-01-12", "100"),
+        part("2026-06-12", "100"),
+      ]);
+      givenRates([
+        storedRate("USD", "CAD", 1.25, "2026-01-10"),
+        storedRate("USD", "CAD", 1.4, "2026-06-10"),
+      ]);
+
+      const result = await service.getTransactionBreakdownByTagKey(
+        "user-1",
+        "country",
+        {},
+      );
+
+      expect(result).toEqual([
+        {
+          id: "usa",
+          name: "usa",
+          currencyCode: "USD",
+          total: 200,
+          count: 2,
+          convertedCurrency: "CAD",
+          convertedTotal: 265,
+        },
+      ]);
+      expect(mockQueryBuilder.getRawMany).toHaveBeenCalledTimes(1);
     });
 
     it("binds the key (never interpolates it)", async () => {
@@ -2979,6 +4399,9 @@ describe("TransactionAnalyticsService", () => {
     });
 
     it("maps monthly rows per paid currency with numeric fee totals", async () => {
+      userPreferenceRepository.findOne.mockResolvedValue({
+        defaultCurrency: "CAD",
+      });
       mockQueryBuilder.getRawMany.mockResolvedValue([
         { month: "2026-01", currencyCode: "EUR", feeTotal: "12.5", count: "3" },
         { month: "2026-01", currencyCode: "USD", feeTotal: "0", count: "2" },
@@ -2987,10 +4410,77 @@ describe("TransactionAnalyticsService", () => {
 
       const result = await service.getFxFeeSummary(userId, "acc-1");
 
+      // The account is in the reporting currency, so the fee is its own figure.
+      const same = { convertedCurrency: "CAD" };
       expect(result).toEqual([
-        { month: "2026-01", currencyCode: "EUR", feeTotal: 12.5, count: 3 },
-        { month: "2026-01", currencyCode: "USD", feeTotal: 0, count: 2 },
-        { month: "2026-02", currencyCode: "EUR", feeTotal: 4.25, count: 1 },
+        {
+          month: "2026-01",
+          currencyCode: "EUR",
+          feeTotal: 12.5,
+          count: 3,
+          ...same,
+          convertedFeeTotal: 12.5,
+        },
+        {
+          month: "2026-01",
+          currencyCode: "USD",
+          feeTotal: 0,
+          count: 2,
+          ...same,
+          convertedFeeTotal: 0,
+        },
+        {
+          month: "2026-02",
+          currencyCode: "EUR",
+          feeTotal: 4.25,
+          count: 1,
+          ...same,
+          convertedFeeTotal: 4.25,
+        },
+      ]);
+    });
+
+    it("converts a foreign account's fees at each transaction's own date (issue #2106)", async () => {
+      userPreferenceRepository.findOne.mockResolvedValue({
+        defaultCurrency: "USD",
+      });
+      mockQueryBuilder.getRawMany
+        .mockResolvedValueOnce([
+          { month: "2026-01", currencyCode: "EUR", feeTotal: "20", count: "2" },
+        ])
+        .mockResolvedValueOnce([
+          {
+            month: "2026-01",
+            currencyCode: "EUR",
+            txDate: "2026-01-05",
+            exchangeRate: "1.5",
+            feeTotal: "10",
+          },
+          {
+            month: "2026-01",
+            currencyCode: "EUR",
+            txDate: "2026-01-25",
+            exchangeRate: "1.5",
+            feeTotal: "10",
+          },
+        ]);
+      managerMock.query.mockResolvedValue([
+        storedRate("USD", "CAD", 1.25, "2026-01-04"),
+        storedRate("USD", "CAD", 1.6, "2026-01-24"),
+      ]);
+
+      const result = await service.getFxFeeSummary(userId, "acc-1");
+
+      // 10 CAD at 1.25 plus 10 CAD at 1.60 per USD.
+      expect(result).toEqual([
+        {
+          month: "2026-01",
+          currencyCode: "EUR",
+          feeTotal: 20,
+          count: 2,
+          convertedCurrency: "USD",
+          convertedFeeTotal: 14.25,
+        },
       ]);
     });
 
@@ -3034,11 +4524,42 @@ describe("TransactionAnalyticsService", () => {
       const expr = feeSelect[0] as string;
       // The fee is folded into amount for both ordinary and split entries.
       expect(expr).toContain(
-        "ROUND(transaction.originalAmount * transaction.exchangeRate, 2) - transaction.amount",
+        "ROUND(transaction.originalAmount * transaction.exchangeRate, CAST(:feeDecimals AS int)) - transaction.amount",
+      );
+      // A fiat account re-derives the base at the four places it always did.
+      expect(mockQueryBuilder.setParameter).toHaveBeenCalledWith(
+        "feeDecimals",
+        4,
       );
       // No dependency on any fee-split join.
       expect(expr).not.toContain("fxFeeSplit");
       expect(mockQueryBuilder.leftJoin).not.toHaveBeenCalled();
+    });
+
+    it("re-derives a BTC account's fee at the coin's eight places (INV-MONEY-001)", async () => {
+      accountsRepository.findOne.mockResolvedValue({
+        id: "acc-1",
+        currencyCode: "BTC",
+      });
+      mockQueryBuilder.getRawMany.mockResolvedValue([
+        {
+          month: "2026-03",
+          currencyCode: "CAD",
+          feeTotal: "0.00002500",
+          count: "1",
+        },
+      ]);
+
+      const result = await service.getFxFeeSummary(userId, "acc-1");
+
+      expect(mockQueryBuilder.setParameter).toHaveBeenCalledWith(
+        "feeDecimals",
+        8,
+      );
+      // A 2,500-sat fee, which four places read as zero.
+      expect(result).toMatchObject([
+        { month: "2026-03", currencyCode: "CAD", feeTotal: 0.000025, count: 1 },
+      ]);
     });
   });
 });

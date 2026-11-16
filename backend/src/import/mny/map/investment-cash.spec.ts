@@ -6,8 +6,10 @@ import {
   MnyInvestmentCashSource,
 } from "../model/mny-import-model";
 import {
+  adoptCashLegTags,
   applyInvestmentCashSources,
   investmentWritesOwnCashRow,
+  referencedTradeTags,
   tradesByHandle,
 } from "./investment-cash";
 
@@ -40,6 +42,7 @@ function trade(
     accruedInterest: 0,
     totalAmount: 2400,
     currencyCode: "USD",
+    securityCurrencyCode: "USD",
     exchangeRate: 1,
     cashAmount: -2400,
     status: TransactionStatus.CLEARED,
@@ -47,6 +50,7 @@ function trade(
     categoryHandle: null,
     description: null,
     linkedInvestmentId: null,
+    tagHandles: [],
     ...overrides,
   };
 }
@@ -60,6 +64,7 @@ function investments(
     referencedPayees: new Set(),
     referencedCategories: new Set(),
     transfersPaired: 0,
+    rateGaps: [],
     skipped: 0,
     warnings: [],
   };
@@ -185,6 +190,26 @@ describe("applyInvestmentCashSources", () => {
     expect(result.transactions[0].exchangeRate).toBe(1.3);
   });
 
+  it("keeps the rate a converted trade already carries", () => {
+    // A CAD account buying a USD security: the total is in USD and the rate
+    // 1.25 is security -> account. The funding row settles in the account's own
+    // currency, so adopting it must not reset the rate to 1.
+    const result = applyInvestmentCashSources(
+      investments([
+        trade({
+          currencyCode: "CAD",
+          securityCurrencyCode: "USD",
+          totalAmount: 2400,
+          exchangeRate: 1.25,
+          cashAmount: -3_000,
+        }),
+      ]),
+      new Map([[21, source({ currencyCode: "CAD", amount: -3_000 })]]),
+    );
+
+    expect(result.transactions[0].exchangeRate).toBe(1.25);
+  });
+
   it("does not invent a rate it cannot derive", () => {
     // Unreachable from a real file -- a trade with no total moves no cash, so
     // it is never paired -- but a rate is a division and Infinity is worse than
@@ -247,5 +272,44 @@ describe("applyInvestmentCashSources", () => {
 
     expect(result.transactions[1].cashTransactionId).toBeNull();
     expect(result.transactions[1].cashAccountKey).toBe("acct-6");
+  });
+});
+
+describe("adoptCashLegTags", () => {
+  it("unions the sleeve row's items onto the trade that replaces it, each once", () => {
+    const result = adoptCashLegTags(
+      investments([
+        trade({ handle: 21, tagHandles: [552] }),
+        trade({ id: "22222222-2222-2222-2222-222222222222", handle: 22 }),
+      ]),
+      new Map([[21, [552, 700]]]),
+    );
+
+    expect(result.transactions.map((row) => row.tagHandles)).toEqual([
+      [552, 700],
+      [],
+    ]);
+  });
+
+  it("returns the input untouched when no sleeve row carried anything", () => {
+    const input = investments([trade()]);
+
+    expect(adoptCashLegTags(input, new Map())).toBe(input);
+  });
+});
+
+describe("referencedTradeTags", () => {
+  it("counts only trades whose cash leg this import writes", () => {
+    const result = referencedTradeTags(
+      investments([
+        trade({ tagHandles: [552] }),
+        // Funded from a banking row: that row carried its own tags.
+        trade({ cashTransactionId: "tx-1", tagHandles: [700] }),
+        // Share-only: no cash leg for a tag to land on.
+        trade({ cashAccountKey: null, cashAmount: 0, tagHandles: [701] }),
+      ]),
+    );
+
+    expect([...result]).toEqual([552]);
   });
 });

@@ -1,6 +1,7 @@
 import {
   useState,
   useEffect,
+  useLayoutEffect,
   useCallback,
   useRef,
   DependencyList,
@@ -127,20 +128,44 @@ export function useReportData<T>(
   // Read through a ref so a key changing does not itself retrigger a fetch --
   // `deps` remains the only trigger, exactly as before.
   const requestKeyRef = useRef(options.requestKey);
-  requestKeyRef.current = options.requestKey;
 
   // Keep the latest fetcher in a ref so changing its identity (common with
   // inline closures) does not by itself retrigger a fetch -- only `deps` and
   // explicit reloads do. This matches the manual loadData pattern it replaces.
   const fetcherRef = useRef(fetcher);
-  fetcherRef.current = fetcher;
 
   // Same reasoning as the fetcher: read through a ref so redefining it inline
   // does not become a fetch trigger.
   const keyForResultRef = useRef(options.keyForResult);
-  keyForResultRef.current = options.keyForResult;
+
+  // Refreshed after every commit rather than during render. A layout effect
+  // runs before every passive effect in the tree, so the fetch effect below and
+  // any child effect that calls `reload` or `setData` see this commit's values.
+  useLayoutEffect(() => {
+    requestKeyRef.current = options.requestKey;
+    fetcherRef.current = fetcher;
+    keyForResultRef.current = options.keyForResult;
+  });
 
   const runIdRef = useRef(0);
+
+  /**
+   * The key `adoptAs` last supplied, so the dependency change it causes does
+   * not immediately re-fetch what it just delivered.
+   *
+   * Moving the selection is what makes the caller's `deps` change, so the
+   * effect below fires on the very next render -- for a report the server has
+   * already returned in full. That round trip can only produce the same thing,
+   * and when it fails it replaces a successful create or delete with an error
+   * screen.
+   *
+   * Only ever set for a key that differs from the current one. Setting it for
+   * the key already selected would strand it: the deps do not change, so the
+   * effect never runs to consume it, and the *next* genuine navigation back to
+   * that key would be skipped and show whatever was on screen. Reachable when
+   * a delete falls back to the scenario already selected.
+   */
+  const adoptedKeyRef = useRef<string | null>(null);
 
   const run = useCallback(() => {
     const runId = ++runIdRef.current;
@@ -212,24 +237,6 @@ export function useReportData<T>(
     setError(null);
     setIsLoading(false);
   }, []);
-
-  /**
-   * The key `adoptAs` last supplied, so the dependency change it causes does
-   * not immediately re-fetch what it just delivered.
-   *
-   * Moving the selection is what makes the caller's `deps` change, so the
-   * effect below fires on the very next render -- for a report the server has
-   * already returned in full. That round trip can only produce the same thing,
-   * and when it fails it replaces a successful create or delete with an error
-   * screen.
-   *
-   * Only ever set for a key that differs from the current one. Setting it for
-   * the key already selected would strand it: the deps do not change, so the
-   * effect never runs to consume it, and the *next* genuine navigation back to
-   * that key would be skipped and show whatever was on screen. Reachable when
-   * a delete falls back to the scenario already selected.
-   */
-  const adoptedKeyRef = useRef<string | null>(null);
 
   const adoptAs = useCallback((value: T, key: string) => {
     runIdRef.current += 1;

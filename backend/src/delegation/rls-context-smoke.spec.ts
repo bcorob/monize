@@ -4,6 +4,9 @@ import { AccountDelegateGrant } from "./entities/account-delegate-grant.entity";
 import { User } from "../users/entities/user.entity";
 import { UserPreference } from "../users/entities/user-preference.entity";
 import { RefreshToken } from "../auth/entities/refresh-token.entity";
+import { PersonalAccessToken } from "../auth/entities/personal-access-token.entity";
+import { TrustedDevice } from "../users/entities/trusted-device.entity";
+import { OAUTH_GRANT_REVOKER } from "../auth/credential-revocation";
 import { Account } from "../accounts/entities/account.entity";
 import { getRequestContext, RequestContext } from "../common/request-context";
 import { withUserContext } from "../common/db/with-context";
@@ -116,6 +119,13 @@ describe("Shared Access RLS identity smoke (real withScopedDb)", () => {
       { get: jest.fn((_k: string, d: string) => d) } as never,
       dataSource as never,
       {} as never,
+      {
+        get: jest.fn((token: unknown) =>
+          token === OAUTH_GRANT_REVOKER
+            ? { revokeAllForUser: jest.fn().mockResolvedValue(0) }
+            : undefined,
+        ),
+      } as never,
     );
     return mocks;
   }
@@ -253,6 +263,7 @@ describe("Shared Access RLS identity smoke (real withScopedDb)", () => {
       findOne: { id: DELEGATE_ID, isDelegateOnly: true, oidcSubject: null },
       save: {},
     });
+    const refreshTokens = repo("refreshTokens", { update: { affected: 2 } });
     build([
       [
         AccountDelegate,
@@ -269,8 +280,18 @@ describe("Shared Access RLS identity smoke (real withScopedDb)", () => {
       ],
       [User, usersRepo],
       [Account, repo("accounts", { count: 0 })],
-      [RefreshToken, repo("refreshTokens", { update: { affected: 2 } })],
+      [RefreshToken, refreshTokens],
+      [PersonalAccessToken, repo("pats", { update: { affected: 1 } })],
+      [TrustedDevice, repo("trustedDevices", { delete: { affected: 1 } })],
     ]);
+    // The converging refresh revocation after the commit opens with a raw
+    // SELECT of the delegate's live families; none are left here.
+    const setConfig = manager.query.getMockImplementation();
+    manager.query.mockImplementation((sql: string, params?: unknown[]) =>
+      sql.includes("SELECT DISTINCT family_id")
+        ? Promise.resolve([])
+        : (setConfig?.(sql, params) ?? Promise.resolve(undefined)),
+    );
 
     await withUserContext(OWNER_ID, () =>
       service.resetDelegatePassword(OWNER_ID, DELEGATION_ID),
@@ -285,6 +306,14 @@ describe("Shared Access RLS identity smoke (real withScopedDb)", () => {
     // a reset that reported success.
     expect(identities()).toContain("users.save: bypass");
     expect(identities()).toContain("refreshTokens.update: bypass");
+    // So must the PATs and trusted devices the old password stood behind.
+    expect(identities()).toContain("pats.update: bypass");
+    expect(identities()).toContain("trustedDevices.delete: bypass");
+    // And the post-commit convergence reaches the delegate's own sessions.
+    expect(manager.query).toHaveBeenCalledWith(
+      expect.stringContaining("SELECT DISTINCT family_id"),
+      [DELEGATE_ID, null],
+    );
   });
 
   it("revokeDelegate decides whether to delete the login on rows it can actually read", async () => {

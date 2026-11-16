@@ -1,0 +1,120 @@
+{
+  "page": {
+    "title": "AI 審核收件匣",
+    "subtitle": "規則要求 AI 審查的交易、助手被要求起草的設定檔，以及助手為您批准而提議的編輯。"
+  },
+  "filter": {
+    "label": "依狀態篩選",
+    "open": "未完成",
+    "pending": "待處理",
+    "claimed": "審核中",
+    "proposed": "已提議",
+    "applied": "已套用",
+    "rejected": "已拒絕",
+    "expired": "已過期"
+  },
+  "kindFilter": {
+    "label": "依類型篩選",
+    "all": "全部",
+    "email_receipt": "郵件收據",
+    "transaction_review": "規則",
+    "option": "{label}（{count}）"
+  },
+  "status": {
+    "pending": "待處理",
+    "claimed": "審核中",
+    "proposed": "已提議",
+    "applied": "已套用",
+    "rejected": "已拒絕",
+    "expired": "已過期"
+  },
+  "columns": {
+    "date": "日期",
+    "request": "請求",
+    "amount": "金額",
+    "status": "狀態"
+  },
+  "row": {
+    "noPayee": "無收款人",
+    "transactionMissing": "此交易已不存在",
+    "rule": "規則：{name}",
+    "manualRequest": "手動請求",
+    "trade": "{action, select, BUY {買入 {quantity} 份 {symbol}} SELL {賣出 {quantity} 份 {symbol}} DIVIDEND {{symbol} 的股利} REINVEST {將股利再投資於 {quantity} 份 {symbol}} other {{symbol} 的交易}}",
+    "receiptInstruction": {
+      "automatic": "根據附加的訂單郵件完善此交易：依商品行拆分並為每行指定類別，或設定描述。",
+      "chat": "你要求辨識附加的訂單郵件：依產品拆分此交易並為每項指定類別，或設定描述。",
+      "categorize": "為附加訂單郵件中沒有被任何規則分類的每個商品指定類別，然後提議此交易的拆分或設定描述。",
+      "parsed": "已儲存的解析器讀取了訂單郵件，並為此交易提議這些類別行和此描述。",
+      "trade": "已儲存的解析器讀取的交易確認郵件提出了這筆投資交易。核准前，請與你的券商核對帳戶、證券、數量和合計。",
+      "tradeChat": "你要求辨識所附的交易確認：請提出它所回報的投資交易，即買入、賣出、現金股利或股利再投資。"
+    },
+    "emailReceipt": "郵件收據：來自 {sender} 的 {subject}",
+    "emailReceiptForwarded": "郵件收據：來自 {sender} 的 {subject}，轉寄者 {forwarder}",
+    "emailReceiptMissing": "郵件收據（該郵件已被刪除）",
+    "parserDraft": "來自 {count, plural, one {# 封電子郵件} other {# 封電子郵件}} 的設定檔草稿 ({domain})",
+    "viewEmailReceipts": "檢視郵件收據",
+    "agentNote": "助理備註：{reason}",
+    "dates": "建立於 {created}，到期於 {expires}",
+    "viewTransaction": "檢視交易",
+    "waitingForAgent": "正在等待 AI 代理。請<link>在設定中連接 AI 提供者</link>，或讓 MCP 用戶端來認領。",
+    "parserDraftReady": "設定檔草稿已準備好。<link>在設定檔設定中測試並核准它</link>。",
+    "tradePending": "來自郵件的交易，尚未讀取",
+    "tradeEmail": "交易確認郵件",
+    "parserDraftIds": "設定檔草稿 ID：{ids}"
+  },
+  "actions": {
+    "dismiss": "忽略"
+  },
+  "proposal": {
+    "errorTitle": "此提議已無法套用"
+  },
+  "bulk": {
+    "selectRow": "選取 {name}",
+    "selectAll": "選取所有顯示的可核准或可傳送的請求",
+    "approveSelected": "核准所選（{count}）",
+    "approveAllShown": "核准顯示的全部（{count}）",
+    "summary": "已套用 {approved, plural, one {# 則提議} other {# 則提議}}，{failed, plural, one {# 則未套用} other {# 則未套用}}。",
+    "closeSummary": "關閉",
+    "failure": "{name}：{reason}",
+    "noReason": "未提供原因",
+    "unknownRequest": "一個請求",
+    "failed": "無法套用這些提議",
+    "dialog": {
+      "title": "{count, plural, one {套用 # 則提議？} other {套用 # 則提議？}}",
+      "message": "每則提議都會對照交易目前的狀態進行檢查，並單獨套用。不再適用的提議會被略過並回報，其餘的仍會套用。核准之前請先審核這些提議。",
+      "confirm": "{count, plural, one {套用 # 則提議} other {套用 # 則提議}}"
+    }
+  },
+  "sendToAssistant": {
+    "button": "將 {count, plural, other {# 個待處理請求}}傳送給 AI 助理",
+    "buttonSelected": "將 {count, plural, other {# 個所選請求}}傳送給 AI 助理",
+    "prompt": "使用 ai_review_requests 工具處理我待處理的 AI 審核請求：列出它們，逐一認領，依照其指示操作並提交提議。對於設定檔草稿請求，請改用 email_receipt_parsers 工具建立設定檔。在我於 AI 審核收件匣中核准提議之前，不會變更任何內容。",
+    "promptSelected": "使用 ai_review_requests 工具處理{count, plural, other {這 # 個 AI 審核請求}}：{ids}。依 ID 逐一認領，依照其指示操作並提交提議。對於設定檔草稿請求，請改用 email_receipt_parsers 工具建立設定檔。不要處理其他請求。在我於 AI 審核收件匣中核准提議之前，不會變更任何內容。",
+    "opened": "已開啟聊天並附上準備好的訊息。請閱讀後按下傳送。",
+    "unavailable": "AI 助理現在無法回答。請在設定中連接 AI 提供者，或連接你的 MCP 用戶端。請求會繼續在這裡等待。"
+  },
+  "dismissDialog": {
+    "title": "忽略此請求？",
+    "message": "不會再有人被要求處理此請求。它所涉及的內容不會變更。",
+    "confirm": "忽略請求"
+  },
+  "loading": "正在載入審核請求...",
+  "error": {
+    "title": "無法載入審核請求",
+    "body": "清單未能載入，因此可能並非空白。請檢查網路連線後重試。",
+    "retry": "重試"
+  },
+  "empty": {
+    "title": "沒有審核請求",
+    "body": "當帶有「請求 AI 審核」動作的規則符合某筆交易時，請求會出現在這裡。AI 助理或中繼代理等 MCP 用戶端會處理佇列，並提出修改供您核准。",
+    "filteredTitle": "沒有此狀態的請求",
+    "filteredBody": "選擇其他狀態以檢視其他請求。"
+  },
+  "toasts": {
+    "approved": "提議已套用",
+    "dismissed": "請求已忽略",
+    "dismissFailed": "無法忽略該請求",
+    "approveFailed": "無法套用該提議",
+    "changed": "此請求在此期間已變更。清單已重新載入。"
+  }
+}

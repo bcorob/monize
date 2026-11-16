@@ -6,7 +6,7 @@
       "category": "Danh mục",
       "amount": "Số tiền",
       "schedule": "Lịch",
-      "auto": "Tự động",
+      "auto": "Tự động đăng",
       "actions": "Hành động"
     },
     "empty": {
@@ -22,8 +22,9 @@
     "modifiedBadge": "{count} đã sửa",
     "modifiedTitle": "{count, plural, one {# lần xuất hiện sắp tới đã được sửa} other {# lần xuất hiện sắp tới đã được sửa}}",
     "modifiedAmountTitle": "Đã sửa cho lần xuất hiện tiếp theo",
+    "modifiedDateTitle": "Ngày đã được thay đổi cho lần này",
+    "splitBadge": "Phần chia ({count})",
     "autoPostBadge": "Bật",
-    "autoPostTitle": "Tự động đăng khi đến hạn",
     "inactiveSuffix": " — Không hoạt động",
     "actionTitles": {
       "post": "Đăng giao tác",
@@ -62,7 +63,8 @@
       "skipFailed": "Không thể bỏ qua lần xuất hiện",
       "deleteFailed": "Không thể xóa"
     },
-    "foreignAmountTitle": "Số tiền người nhận tính phí, bằng đơn vị tiền tệ của họ"
+    "foreignAmountTitle": "Số tiền người nhận tính phí, bằng đơn vị tiền tệ của họ",
+    "estimatedLabel": "Ước tính"
   },
   "filters": {
     "label": "Bộ lọc",
@@ -74,9 +76,7 @@
     "accountsLabel": "Tài khoản",
     "accountsPlaceholder": "Tất cả tài khoản",
     "categoriesLabel": "Danh mục",
-    "categoriesPlaceholder": "Tất cả danh mục",
-    "collapseAriaLabel": "Thu gọn bộ lọc",
-    "expandAriaLabel": "Mở rộng bộ lọc"
+    "categoriesPlaceholder": "Tất cả danh mục"
   },
   "postDialog": {
     "title": "Đăng giao tác",
@@ -114,7 +114,8 @@
       "totalAmountRequired": "Cần có tổng số tiền",
       "splitsMinimum": "Giao tác chia cần ít nhất 2 phần",
       "splitsTotal": "Tổng số tiền các phần phải bằng số tiền giao tác",
-      "fxRateUnavailable": "Không có tỷ giá từ {from} sang {to} vào ngày này."
+      "fxRateUnavailable": "Không có tỷ giá từ {from} sang {to} vào ngày này.",
+      "estimateUnknown": "Không biết số tiền ước tính của lần này. Hãy nhập số tiền để ghi."
     },
     "latestPlaceholder": "Mới nhất: {price}",
     "descriptionPlaceholder": "Mô tả...",
@@ -127,18 +128,40 @@
       "noRateWarning": "Không tìm thấy tỷ giá từ {from} sang {to} vào {date}. Hãy chọn ngày khác, hoặc làm mới tỷ giá.",
       "feeCaption": "Bao gồm phí giao dịch nước ngoài {percent}% ({fee}).",
       "totalInCurrency": "Tổng bằng {currency}"
-    }
+    },
+    "estimatedHint": "Số tiền này là ước tính; hãy đổi thành số bạn thực sự đã trả. {detail}"
   },
   "occurrencePicker": {
     "title": "Chọn ngày xuất hiện",
-    "description": "Chọn lần xuất hiện nào của \"{name}\" để sửa đổi:",
+    "description": "Chọn lần xuất hiện nào của \"{name}\" để sửa đổi. Thay đổi một lần ở đây chỉ ghi đè ngày đó; mọi lần xuất hiện khác vẫn tiếp tục theo lịch. <guide>Tìm hiểu thêm</guide>.",
     "modifiedBadge": "Đã sửa",
     "nextDueBadge": "Đến hạn tiếp theo",
     "dateMoved": "Ngày đã được chuyển từ {date}",
     "amountChange": "Số tiền: {amount}",
     "categoryChange": "Danh mục: {category}",
     "noteChange": "Ghi chú: {note}",
-    "splitModified": "Phần chia đã được sửa"
+    "splitModified": "Phần chia đã được sửa",
+    "estimatedAmount": "Ước tính: {amount}",
+    "estimateUnknown": "Không rõ ước tính"
+  },
+  "loanOccurrence": {
+    "loading": "Đang tính khoản thanh toán của từng kỳ.",
+    "loadFailed": "Không thể tải khoản thanh toán của từng kỳ.",
+    "retry": "Thử lại",
+    "amountUnknown": "Không rõ khoản thanh toán",
+    "notProjected": "Chưa tính khoản thanh toán xa đến vậy",
+    "paymentChangesBadge": "Khoản thanh toán thay đổi",
+    "editorUnknown": "Không thể tính khoản thanh toán của kỳ này, nên số tiền để trống. {reason}",
+    "editorLinesUnknown": "Không thể tính phần gốc và lãi của kỳ này, nên các dòng bắt đầu từ các dòng của lịch. {reason}",
+    "amountRequired": "Hãy nhập số tiền của kỳ này trước khi lưu.",
+    "missing": {
+      "rate": "Chưa ghi nhận lãi suất cho ngày {date}. Hãy thêm vào lịch sử lãi suất của khoản vay.",
+      "cadence": "Không thể tính theo tần suất thanh toán của khoản vay ({frequency}). Hãy kiểm tra tần suất thanh toán của khoản vay.",
+      "overrideLines": "Các dòng của kỳ này không phải là gốc, lãi và gốc trả thêm. Hãy sửa các dòng.",
+      "overrideOnSettledDebt": "Khoản vay đã tất toán trước ngày này, nên không thể chia số tiền của kỳ này thành gốc và lãi. Hãy sửa hoặc đặt lại kỳ này.",
+      "earlierOccurrence": "Phụ thuộc vào kỳ ngày {date}, kỳ mà khoản thanh toán không thể tính được.",
+      "unknown": "Không có lý do được đưa ra."
+    }
   },
   "overrideEditor": {
     "title": "Chỉnh sửa lần xuất hiện",
@@ -179,7 +202,9 @@
       "quantityRequired": "Số lượng phải lớn hơn không",
       "priceRequired": "Giá phải lớn hơn không",
       "totalAmountRequired": "Cần có tổng số tiền"
-    }
+    },
+    "estimatedHint": "Số tiền này là ước tính cho lần này. Giữ nguyên thì lần này sẽ tiếp tục theo ước tính khi có các khoản thanh toán mới. {detail}",
+    "keepEstimate": "Giữ số tiền này, ngay cả khi các khoản thanh toán mới làm thay đổi ước tính"
   },
   "form": {
     "tabs": {
@@ -205,7 +230,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "Tái đầu tư lãi vốn dài hạn",
       "CAPITAL_GAIN_SHORT": "Lãi vốn ngắn hạn",
       "CAPITAL_GAIN_LONG": "Lãi vốn dài hạn",
-      "REDEEM": "Đáo hạn CD/trái phiếu"
+      "REDEEM": "Đáo hạn CD/trái phiếu",
+      "RETURN_OF_CAPITAL": "Hoàn vốn"
     },
     "submitCreate": "Tạo",
     "submitUpdate": "Cập nhật",
@@ -237,7 +263,7 @@
     "toAccountLabel": "Đến tài khoản",
     "toAccountPlaceholder": "Chọn tài khoản đích...",
     "transferAmountLabel": "Số tiền chuyển",
-    "transferCategoryLabel": "Danh mục (Tùy chọn)",
+    "transferCategoryLabel": "Danh mục (tùy chọn)",
     "transferCategoryNote": "Tùy chọn: phân loại khoản chuyển này (ví dụ: khoản đóng góp đầu tư định kỳ) để nó xuất hiện trong bảng phân tích danh mục hằng tháng. Khoản này không được tính là thu nhập hay chi phí.",
     "actionLabel": "Hành động",
     "securityLabel": "Giấy chứng khoán",
@@ -248,6 +274,7 @@
     "commissionLabel": "Hoa hồng",
     "totalValueLabel": "Tổng giá trị",
     "fundingAccountLabel": "Tài khoản tài trợ (tùy chọn)",
+    "fundingAccountTooltip": "Tài khoản mà tiền mặt của lịch này thực sự được quyết toán, không phải tài khoản môi giới ở trên: tài khoản mà dự báo dòng tiền ghi nợ hoặc ghi có. Để trống để dùng tài khoản tiền mặt riêng của tài khoản môi giới.",
     "fundingAccountPlaceholder": "Sử dụng tiền mặt môi giới (mặc định)",
     "fundingAccountHelp": "Mặc định là mặt tiền mặt của tài khoản đầu tư. Chọn tài khoản khác để mô hình hóa đóng góp + mua.",
     "endConditionTitle": "Điều kiện kết thúc (tùy chọn)",
@@ -282,14 +309,21 @@
       "quantityRequired": "Số lượng phải lớn hơn không",
       "priceRequired": "Giá phải lớn hơn không",
       "totalAmountRequired": "Tổng số tiền là bắt buộc cho hành động này",
-      "fxRateRequired": "Hãy nhập số tiền bằng đơn vị tiền tệ đã chọn trước khi lưu. Hiện chưa có tỷ giá."
+      "fxRateRequired": "Hãy nhập số tiền bằng đơn vị tiền tệ đã chọn trước khi lưu. Hiện chưa có tỷ giá.",
+      "estimateNeedsPayeeAndCategory": "Chọn người nhận và danh mục để ước tính số tiền."
     },
     "fx": {
       "amountInCurrency": "Số tiền bằng {currency}",
       "estimateCaption": "Khoảng {total} theo tỷ giá 1 {from} = {rate} {to}.",
       "noRateWarning": "Không tìm thấy tỷ giá từ {from} sang {to}. Hãy chọn đơn vị tiền tệ khác, hoặc nhập số tiền bằng {to}.",
       "feeCaption": "Bao gồm phí giao dịch nước ngoài {percent}% ({fee})."
-    }
+    },
+    "estimateLabel": "Ước tính",
+    "estimateTooltip": "Tính số tiền của mỗi lần từ các khoản thanh toán trong 24 tháng qua cho người nhận này thuộc danh mục này, theo từng tháng, để hóa đơn tốn nhiều hơn vào một số tháng được dự báo như vậy. Bạn vẫn có thể thay đổi bất kỳ lần nào và xác nhận số tiền khi ghi.",
+    "estimateTooltipTransfer": "Tính số tiền của từng lần từ các chuyển khoản đến tài khoản này trong 24 tháng qua. Khi tài khoản nợ nhiều hơn, khoản thanh toán được tăng cho khớp: với thẻ tín dụng có ngày chốt sao kê và ngày đến hạn, đó là khoản thanh toán cho sao kê đã chốt và khoản cho chu kỳ hiện tại; nếu không, là khoản thanh toán kế tiếp. Bạn vẫn có thể thay đổi bất kỳ lần nào, và xác nhận số tiền khi ghi.",
+    "estimateDelegateDisabled": "Chỉ chủ sở hữu mới có thể bật hoặc tắt ước tính: ước tính đọc các khoản thanh toán trong mọi tài khoản của chủ sở hữu.",
+    "estimatedAmountNote": "Tự động tính từ lịch sử thanh toán. {detail}",
+    "autoPostDisabledEstimate": "Số tiền ước tính được xác nhận khi bạn ghi, nên không được ghi tự động."
   },
   "postTransaction": {
     "minSplits": "Giao tác chia cần ít nhất 2 phần",
@@ -308,10 +342,83 @@
     "EVERY4MONTHS": "Mỗi 4 tháng",
     "SEMIANNUAL": "Hai lần một năm",
     "YEARLY": "Hàng năm",
-    "EVERY2YEARS": "Mỗi 2 năm"
+    "EVERY2YEARS": "Mỗi 2 năm",
+    "CUSTOM": "Tùy chỉnh"
+  },
+  "customRecurrence": {
+    "title": "Lặp lại",
+    "unitLabel": "Lặp lại theo",
+    "units": {
+      "WEEK": "Hàng tuần",
+      "MONTH": "Hàng tháng",
+      "YEAR": "Hàng năm"
+    },
+    "every": "Mỗi",
+    "intervalLabel": "Lặp lại mỗi",
+    "unitSuffix": {
+      "WEEK": "{interval, plural, other {tuần vào}}",
+      "MONTH": "{interval, plural, other {tháng vào ngày}}",
+      "YEAR": "{interval, plural, other {năm vào}}"
+    },
+    "weekdaysLabel": "Các ngày trong tuần",
+    "monthDaysLabel": "Các ngày trong tháng",
+    "lastDayChip": "Ngày cuối",
+    "lastDay": "ngày cuối",
+    "dayOfMonth": "{day, selectordinal, other {#}}",
+    "monthHint": "Ngày vượt quá cuối của tháng ngắn sẽ rơi vào ngày cuối tháng đó, và hai ngày trùng cùng một ngày chỉ được ghi một lần.",
+    "datesLabel": "Các ngày trong năm",
+    "monthLabel": "Tháng",
+    "dayLabel": "Ngày",
+    "addDate": "Thêm ngày",
+    "removeDate": "Xóa {date}",
+    "yearHint": "Ngày 29 tháng 2 rơi vào ngày 28 tháng 2 ở những năm không có ngày này.",
+    "summary": {
+      "WEEK": "{interval, plural, other {Mỗi # tuần vào {days}}}",
+      "MONTH": "{interval, plural, other {Mỗi # tháng vào ngày {days}}}",
+      "YEAR": "{interval, plural, other {Mỗi # năm vào {days}}}"
+    },
+    "errors": {
+      "noDays": {
+        "WEEK": "Chọn ít nhất một ngày trong tuần.",
+        "MONTH": "Chọn ít nhất một ngày trong tháng.",
+        "YEAR": "Thêm ít nhất một ngày."
+      },
+      "interval": "Nhập một số từ 1 đến 12.",
+      "invalid": "Không thể lưu mẫu này. Hãy chọn lại các ngày."
+    },
+    "firstOccurrence": "Lần xuất hiện đầu tiên: {date}",
+    "nextOccurrence": "Lần xuất hiện tiếp theo: {date}",
+    "nextOccurrenceOffPattern": "Lần xuất hiện tiếp theo: {date}. Ngày này nằm ngoài mẫu; các lần sau sẽ theo mẫu.",
+    "orphanWarning": "{count, plural, other {# lần xuất hiện đã sửa ({dates}) không còn khớp với mẫu này và sẽ bị xóa khi bạn lưu.}}",
+    "notForLoan": "Khoản thanh toán khoản vay hoặc thế chấp không thể dùng tần suất tùy chỉnh; hãy chọn tần suất cố định.",
+    "notForPayroll": "Hóa đơn lương có giới hạn khấu trừ không thể dùng tần suất tùy chỉnh; hãy chọn tần suất cố định."
   },
   "validation": {
     "nameRequired": "Tên là bắt buộc",
     "dueDateRequired": "Ngày đến hạn là bắt buộc"
+  },
+  "estimate": {
+    "thePayee": "người nhận này",
+    "theAccount": "tài khoản này",
+    "theCategory": "danh mục này",
+    "basis": "Ước tính từ {count, plural, other {# khoản thanh toán}}, lần gần nhất vào {date}.",
+    "basisWithGrowth": "Ước tính từ {count, plural, other {# khoản thanh toán}}, lần gần nhất vào {date}, với mức thay đổi {growth} so với cùng kỳ năm trước.",
+    "basisYear": "Trung bình của {count, plural, other {# khoản thanh toán}} trong 12 tháng qua, lần gần nhất vào {date}.",
+    "basisRecent": "Trung bình của {count, plural, other {# khoản thanh toán}} gần nhất, lần gần nhất vào {date}.",
+    "basisRecentWithGrowth": "Trung bình của {count, plural, other {# khoản thanh toán}} gần nhất, lần gần nhất vào {date}, với mức thay đổi {growth} so với cùng kỳ năm trước.",
+    "basisSeasonal": "Trung bình của {count, plural, other {# khoản thanh toán}} gần nhất, được điều chỉnh theo mùa của từng tháng, lần gần nhất vào {date}.",
+    "basisSeasonalWithGrowth": "Trung bình của {count, plural, other {# khoản thanh toán}} gần nhất, được điều chỉnh theo mùa của từng tháng, lần gần nhất vào {date}, với mức thay đổi {growth} so với cùng kỳ năm trước.",
+    "basisWithheld": "Ước tính từ lịch sử thanh toán của người nhận và danh mục.",
+    "basisWithheldTransfer": "Ước tính từ lịch sử chuyển khoản đến {account}.",
+    "raisedToBalance": "Đã tăng để trả đủ số {account} còn nợ cho lần thanh toán này.",
+    "basisAndRaise": "{basis} {raised}",
+    "noHistoryTransfer": "Không có chuyển khoản nào từ tài khoản này đến {account} trong {months} tháng qua, nên chưa biết số tiền. Hãy nhập số tiền của từng lần, hoặc ghi một chuyển khoản.",
+    "missingRateTransfer": "Không có tỷ giá từ {from} sang {to} để quy đổi một chuyển khoản trước đây hoặc số {account} còn nợ, nên chưa biết số tiền. Hãy thêm tỷ giá ở trang Tiền tệ.",
+    "noBasisTransfer": "Hãy chọn tài khoản đích để ước tính số tiền từ các chuyển khoản đến tài khoản đó.",
+    "pendingTransfer": "Số tiền được tính từ các chuyển khoản đến tài khoản này và số nó còn nợ.",
+    "noHistory": "Không có khoản thanh toán nào cho {payee} trong {category} trong {months} tháng qua, nên chưa biết số tiền. Hãy nhập số tiền của mỗi lần, hoặc ghi một khoản thanh toán.",
+    "missingRate": "Không có tỷ giá từ {from} sang {to} để quy đổi một khoản thanh toán trước đây, nên chưa biết số tiền. Hãy thêm tỷ giá ở trang Tiền tệ.",
+    "noBasis": "Chọn người nhận và danh mục để ước tính số tiền từ lịch sử thanh toán của chúng.",
+    "pending": "Số tiền được tính từ lịch sử thanh toán của người nhận và danh mục."
   }
 }

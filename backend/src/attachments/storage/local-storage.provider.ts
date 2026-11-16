@@ -43,6 +43,15 @@ export const DEFAULT_ATTACHMENT_CONTAINER_DIR = "/data/attachments";
 @Injectable()
 export class LocalStorageProvider implements AttachmentStorageProvider {
   readonly name = "local";
+
+  /**
+   * Always: the directory is defaulted and created on demand, so there is no
+   * configuration whose absence makes this backend unaddressable. An empty or
+   * unmounted directory is a failed *load* of one key, which is a different
+   * report -- the bytes were expected here and are not.
+   */
+  readonly addressable = true;
+
   private readonly logger = new Logger(LocalStorageProvider.name);
   private readonly baseDir: string;
 

@@ -34,7 +34,6 @@
     "units": "Birim",
     "avgCostPerUnit": "Ort. maliyet / birim",
     "heldInAccounts": "Hesaplarda tutulan",
-    "openAccount": "{name} hesabını Yatırımlar sayfasında göster",
     "unitsShare": "{units} ({share})",
     "valueUnknown": "Fiyatlanmadı",
     "approx": "~ {amount}"
@@ -74,15 +73,20 @@
     "sector": "Sektör",
     "industry": "Endüstri",
     "provider": "Sağlayıcı",
-    "lastPrice": "Son fiyat"
+    "lastPrice": "Son fiyat",
+    "bondDescription": "Tahvil açıklaması"
   },
   "tabs": {
     "ariaLabel": "Menkul kıymet bölümleri",
     "overview": "Genel bakış",
     "transactions": "İşlemler",
     "prices": "Fiyat geçmişi",
+    "terms": "Koşul geçmişi",
     "documents": "Belgeler",
     "news": "Haberler"
+  },
+  "bondPrices": {
+    "title": "Fiyat geçmişi"
   },
   "about": {
     "title": "Hakkında",
@@ -121,6 +125,8 @@
     "fees": "Ücretler",
     "realizedPl": "Gerçekleşmiş K/Z",
     "realizedMixed": "{currencies} para birimlerinde gerçekleşti, bu yüzden toplanmadı",
+    "realizedUnknownReason": "Bu kazanç hesaplanamıyor: pozisyonda maliyetsiz eklenmiş hisseler var, bu yüzden satılan hisselerin maliyeti bilinmiyor. Onları ekleyen işlemi açın ve fiyatlarını girin.",
+    "realizedKnownPart": "Bilinen kısım: {amount}",
     "totalReturn": "Toplam getiri",
     "totalReturnValue": "{amount} ({percent})",
     "totalReturnTitle": "Gerçekleşmemiş kazanç, artı satışlarda gerçekleştirdiğin ve gelir olarak aldığın tutar, eksi ücretler; koyduğun sermayeye oranla. O sermaye üzerinde basit bir getiri: yıllıklandırılmamıştır ve dilimleri tutma süresine göre ağırlıklandırmaz.",
@@ -147,6 +153,8 @@
     "title": "Pozisyon kapatıldı",
     "description": "Bu menkul kıymeti artık tutmuyorsun. Geçmişi aşağıda kalmaya devam ediyor.",
     "realizedPl": "Gerçekleşmiş K/Z",
+    "realizedUnknownReason": "Bu kazanç hesaplanamıyor: pozisyonda maliyetsiz eklenmiş hisseler vardı, bu yüzden satılan hisselerin maliyeti bilinmiyor. Onları ekleyen işlemi açın ve fiyatlarını girin.",
+    "realizedKnownPart": "Bilinen kısım: {amount}",
     "heldFrom": "Tutulmaya başlandığı tarih",
     "heldRange": "{start} - {end}"
   },
@@ -165,7 +173,24 @@
     "sectorEmpty": "Sektör dağılımı kayıtlı değil. Monize bunu fonlar ve ETF'ler için sağlayıcıdan doldurur.",
     "countryEmpty": "Ülke dağılımı kayıtlı değil. Menkul kıymeti düzenlerken girebilirsin.",
     "assetClassEmpty": "Varlık sınıfı dağılımı henüz kayıtlı değil.",
-    "remainder": "{percent} sınıflandırılmamış"
+    "remainder": "{percent} sınıflandırılmamış",
+    "bond": {
+      "seriesTab": "Seriler",
+      "maturityTab": "Vade",
+      "empty": "Bu tahvil türünün henüz hiçbir serisine sahip değilsiniz.",
+      "someUnknown": "Bazı değerler bilinmiyor, bu nedenle paylar gösterilmiyor.",
+      "issuerCountry": "İhraççı ülke",
+      "rate": "Faiz oranı",
+      "interest": "Faiz",
+      "term": "Vadeye kalan süre",
+      "interestValue": "{capitalization}, dönem: {period}",
+      "rateType": {
+        "FIXED": "Sabit",
+        "BENCHMARK_PLUS_SPREAD": "Değişken (gösterge + marj)",
+        "INFLATION_PLUS_MARGIN_AS_RATE": "Enflasyona endeksli (gösterge + marj)",
+        "ZERO_COUPON_DISCOUNT": "Sıfır kuponlu (iskontolu)"
+      }
+    }
   },
   "documents": {
     "title": "Belgeler",
@@ -225,6 +250,16 @@
       "deleted": "Belge silindi",
       "saveFailed": "Belge kaydedilemedi",
       "deleteFailed": "Belge silinemedi"
+    },
+    "issueLetters": {
+      "title": "İhraç mektupları",
+      "loadFailed": "İhraç mektupları yüklenemedi.",
+      "empty": "Bu tahvil türü için henüz kayıtlı bir ihraç mektubu yok.",
+      "held": "Elde tutulan",
+      "onSale": "Satışta",
+      "noLetter": "Bu seri için kayıtlı mektup yok",
+      "open": "Resmî PDF",
+      "openNamed": "{series} serisinin ihraç mektubunu aç"
     }
   },
   "news": {
@@ -237,6 +272,243 @@
     "empty": {
       "title": "Şu anda başlık yok",
       "description": "Bu sembolle ilgili son zamanlarda bir şey yayımlanmadı. Buraya döndüğünde liste yenilenir."
+    }
+  },
+  "bond": {
+    "loading": "Tahvil değerlemesi yükleniyor...",
+    "loadFailed": "Tahvil değerlemesi yüklenemedi.",
+    "unknown": "Bilinmiyor",
+    "asOf": "Değerleme tarihi",
+    "termsSource": "Koşullar: {document}",
+    "termsManual": "Koşullar bir yönetici tarafından elle girildi",
+    "noLots": "Bu tarihte açık lot yok.",
+    "totals": {
+      "quantity": "Elde tutulan tahviller",
+      "grossValue": "Brüt değer",
+      "earlyRedemptionValue": "Erken itfa değeri",
+      "accruedInterest": "Birikmiş faiz",
+      "unknownLot": "En az bir lotun rakamı yok, bu nedenle toplam verilmiyor.",
+      "unknownRefusal": "Lotlar hesaplanamıyor, bu nedenle toplam verilmiyor."
+    },
+    "lots": {
+      "purchaseDate": "Satın alındı",
+      "assumed": "Varsayılan",
+      "assumedTitle": "Gerçek satın alma tarihi bilinmiyor: bu lot, bağlı bir gönderen tarafı olmayan bir transferle geldi.",
+      "quantity": "Miktar",
+      "maturity": "Vade",
+      "period": "Mevcut dönem",
+      "periodValue": "{index}: {start} - {end}",
+      "rate": "Oran",
+      "principal": "Tahvil başına anapara",
+      "principalIssuePrice": "Maliyet girilmedi: ihale fiyatı kullanılır",
+      "accruedInterest": "Birikmiş faiz",
+      "grossValue": "Brüt değer",
+      "earlyRedemption": "Erken itfa",
+      "nextCashFlow": "Sonraki nakit akışı",
+      "cashFlowValue": "{type} {amount}, {date}",
+      "noCashFlow": "Yok",
+      "projected": "Tahmini",
+      "maturityValue": "Vadedeki değer",
+      "maturityKnown": "Biliniyor",
+      "maturityProjected": "Tahmini",
+      "matured": "Vadesi doldu",
+      "refused": "Değerlenmedi",
+      "amountUnknown": "Tutar bilinmiyor"
+    },
+    "rateSource": {
+      "TERMS": "Şartlar",
+      "ANNOUNCED": "Duyuruldu",
+      "DERIVED": "Türetildi",
+      "PROJECTED": "Tahmini"
+    },
+    "cashFlowType": {
+      "INTEREST": "Faiz",
+      "PRINCIPAL": "Anapara"
+    },
+    "earlyRefusal": {
+      "NOT_REDEEMABLE": "Erken itfa edilemez",
+      "TOO_EARLY": "İtfa için çok erken",
+      "TOO_LATE": "İtfa için çok geç",
+      "RECORD_DAY": "Kayıt gününde itfa edilemez",
+      "MATURED": "Vadesi doldu",
+      "RATE_UNKNOWN": "Oran henüz bilinmiyor",
+      "TERMS_INCOMPLETE": "Şartlar eksik"
+    },
+    "lotsRefusal": {
+      "SPLIT": "Lotlar türetilemiyor: bir tahvil bölünmez.",
+      "FRACTIONAL_QUANTITY": "Lotlar türetilemiyor: bir miktar tam sayıda tahvil değil.",
+      "OVER_REMOVAL": "Lotlar türetilemiyor: elde tutulandan fazla tahvil çıkarılmış.",
+      "INVALID_QUANTITY": "Lotlar türetilemiyor: bir miktar eksik, negatif veya çok büyük.",
+      "REMOVAL_EXCEEDS_SERIES": "Lotlar belirlenemiyor: bir seriden elde tutulandan fazla tahvil çıkarıldı.",
+      "SERIES_NOT_DETERMINED": "Lotlar belirlenemiyor: bir alımın serisi bilinmiyor."
+    },
+    "lotsRefusalDetail": {
+      "SPLIT": "Bu menkul kıymette bir bölünme kaydı var ({action}, {date}); tahvil bölünmez.",
+      "FRACTIONAL_QUANTITY": "{date} tarihli {action}, tam sayı olmayan {quantity} tahvili hareket ettiriyor.",
+      "OVER_REMOVAL": "{date} tarihli {action}, eldekinden fazla olan {quantity} tahvili çıkarıyor.",
+      "INVALID_QUANTITY": "{date} tarihli {action} işleminin miktarı eksik, negatif veya çok büyük.",
+      "REMOVAL_EXCEEDS_SERIES": "{date} tarihli {action}, serisinden {quantity} tahvil çıkarıyor; bu, o seride tutulandan fazla.",
+      "SERIES_NOT_DETERMINED": "{date} tarihli {action} seri belirtmiyor ve o gün tahvil türünün kayıtlı hiçbir serisi satışta değildi. Seriyi indirip işlemde seçin."
+    },
+    "assumptions": {
+      "title": "Projeksiyon varsayımları",
+      "latestObservation": "{benchmark} sonraki tüm dönemler için {value} olarak varsayılmıştır, son yayımlanan değer ({observation})",
+      "supplied": "{benchmark} sonraki tüm dönemler için {value} olarak varsayılmıştır",
+      "suppliedSimpleAnnual": "{benchmark} değerinin sonraki her ay için yılda {value} büyüdüğü varsayılır (basit yıllık büyüme, bileşik değil)"
+    },
+    "missing": {
+      "title": "Hâlâ gereken veriler",
+      "item": "{benchmark} {observation} — yayımlayan: {publisher}",
+      "itemNoPublisher": "{benchmark} {observation} — yayımlayan bilinmiyor"
+    },
+    "recompute": {
+      "button": "Fiyatları yeniden hesapla",
+      "done": "Fiyatlar yeniden hesaplandı: {written} yazıldı, {deleted} kaldırıldı.",
+      "failed": "Fiyatlar yeniden hesaplanamadı."
+    },
+    "rate": {
+      "title": "Faiz oranı",
+      "rule": {
+        "fixed": "Tüm vade boyunca sabit {rate}",
+        "firstThen": "Dönem 1: {firstRate}. Sonrasında {benchmark} + {addend}",
+        "every": "Her dönem: {benchmark} + {addend}",
+        "floorZero": "{benchmark} değeri negatifse 0 sayılır",
+        "dailyFloor": "Günlük oran (endeks artı marj) hiçbir zaman {floor} değerinin altına inmez",
+        "discount": "Nominal değerden iskonto",
+        "daily": "Her gün: {benchmark} + {addend}, günlük toplanır",
+        "lockout": "Bir dönemin sonundan önceki {days, plural, one {# iş günü} other {# iş günü}} içindeki ihale o dönem için kullanılmaz"
+      },
+      "daily": "Günlük, {benchmark}",
+      "dailyNoIndex": "Günlük, {benchmark}: henüz kayıtlı endeks yok",
+      "dailyRun": "{from} tarihinden itibaren: {rate}",
+      "dailyRunUnknown": "{from} tarihinden itibaren: kayıtlı endeks yok",
+      "lotHeading": "{date} tarihinde alınan lot",
+      "range": "{start} - {end}",
+      "current": "Güncel",
+      "columns": {
+        "period": "Dönem",
+        "dates": "Tarihler",
+        "rate": "Oran",
+        "source": "Kaynak",
+        "how": "Nasıl belirlenir"
+      },
+      "how": {
+        "stated": "Belirtilen oran",
+        "observed": "{benchmark} {observation}: {value} + {addend}",
+        "floored": "({floor} değerine yükseltildi)",
+        "missing": "{benchmark} {observation}: henüz yayımlanmadı"
+      },
+      "nextRateReset": "Sonraki faiz oranı yenileme tarihi: {date}",
+      "nextCapitalization": "Sonraki anaparaya ekleme (kapitalizasyon) tarihi: {date}"
+    },
+    "indexation": {
+      "inflation": "Enflasyona endeksli: {date} tarihinden itibaren (2. dönem) faiz oranı {benchmark} + {addend} olup her dönem yeniden hesaplanır",
+      "floating": "Değişken faiz: {date} tarihinden itibaren (2. dönem) faiz oranı {benchmark} + {addend} olup her dönem yeniden hesaplanır"
+    },
+    "interestParts": {
+      "fixed": "Sabit faiz (1. dönem)",
+      "margin": "Marjdan gelen faiz",
+      "inflation": "Enflasyondan gelen faiz",
+      "benchmark": "Referans orandan gelen faiz",
+      "announced": "Duyurulan faiz",
+      "fixedTerm": "Sabit oranlı faiz"
+    },
+    "chart": {
+      "title": "Her dönem sonunda birikmiş faiz",
+      "assumption": "{benchmark} = {value} varsayımıyla projeksiyon",
+      "projectedNote": "Daha açık renkli çubuklar projeksiyon dönemleridir",
+      "stoppedAt": "Faiz {period}. dönemden itibaren bilinmiyor, bu yüzden grafik ondan önce bitiyor."
+    },
+    "scenarios": {
+      "title": "Enflasyon senaryoları",
+      "titleBenchmark": "Faiz oranı senaryoları",
+      "projection": "Projeksiyon",
+      "caption": "Varsayılan değere göre projeksiyonlu vade değeri ve faiz",
+      "intro": "Bunlar kesinlik değil, projeksiyondur: başlamamış her dönem için ilk sütundaki {benchmark} değeri varsayılır. Bilinen ve duyurulan dönemler değişmez. Oran tablosunu ve grafiği görmek için bir satır seçin.",
+      "custom": "Kendi {benchmark} değeriniz (%)",
+      "add": "Senaryo ekle",
+      "useDefault": "Varsayılan varsayımı kullan",
+      "selected": "Seçili",
+      "loading": "Senaryolar yükleniyor...",
+      "loadFailed": "Senaryolar yüklenemedi.",
+      "columns": {
+        "assumed": "Varsayılan: {benchmark}",
+        "maturityValue": "Vade değeri (projeksiyon)",
+        "totalInterest": "Toplam faiz (projeksiyon)"
+      },
+      "asOfNote": "Yukarıda seçilen {date} tarihi itibarıyla değerlendi: rakamlar o gün elde tutulan tahvilleri kapsar."
+    },
+    "benchmarks": {
+      "PL_CPI_GUS_YOY": "TÜFE, 12 ay (GUS)",
+      "PL_NBP_REFERENCE": "NBP referans faizi",
+      "US_CPI_U_NSA": "TÜFE (CPI-U), tüm kalemler, mevsimsellikten arındırılmamış (BLS)",
+      "US_TBILL_13W_MMY": "13 haftalık Hazine bonosu getirisi"
+    },
+    "valuationRefusal": {
+      "PURCHASE_OUTSIDE_SALE_WINDOW": "Bu seri yalnızca {from} ile {to} arasında satın alınabilir. Bu lot {purchaseDate} tarihinde alındığı için değerlenmez.",
+      "PURCHASE_AFTER_MATURITY": "Bu seri {maturityDate} tarihinde vadesi geldi. Bu lot {purchaseDate} tarihinde, yani o gün veya sonrasında alındığı için değerlenmez."
+    },
+    "marketPriceRequired": "Bu menkul kıymet piyasada işlem gören bir seri içerir, bu yüzden fiyatı şartlarından çıkmaz. Monize bunun için fiyat yazmaz: fiyatı kendiniz girin. Aşağıdaki lotların değerleri şartlardan hesaplanır ve piyasa değeri değildir.",
+    "partial": {
+      "title": "Bu değerleme eksik; rakamları kısmi olarak değerlendirin.",
+      "terms": "Tahvilin koşulları eksik (örneğin bir takvim yüklü değil).",
+      "reference": "Referans veriler eksik; hâlâ gereken verilerin listesi için aşağıya bakın.",
+      "earlyRedemption": "Erken itfa koşulları eksik, bu nedenle erken itfa değerleri eksik olabilir.",
+      "other": "En az bir lot henüz tam olarak değerlenemiyor (örneğin bir oran bilinmiyor)."
+    },
+    "projectionMissing": {
+      "title": "Sonraki dönemler tahmin edilemiyor",
+      "item": "{benchmark}: yayımlanmış bir değer yok ve bir varsayım belirlenmemiş, bu nedenle sonraki dönemler tahmin edilemiyor (yayımlayan: {publisher})",
+      "itemNoPublisher": "{benchmark}: yayımlanmış bir değer yok ve bir varsayım belirlenmemiş, bu nedenle sonraki dönemler tahmin edilemiyor (yayımlayan bilinmiyor)"
+    },
+    "coverage": {
+      "asOf": "{benchmark} verileri {date} itibarıyla",
+      "none": "Henüz kayıtlı {benchmark} verisi yok"
+    },
+    "issuers": {
+      "PL_MF": "Maliye Bakanlığı (PL)",
+      "US_TREASURY": "ABD Hazine Bakanlığı (US)"
+    },
+    "redemption": {
+      "title": "Erken itfa koşulları",
+      "fixedFee": "Erken itfa ücreti: tahvil başına {amount}.",
+      "forfeitAccrued": "Erken itfada, içinde bulunulan dönemde işleyen faiz ödenmez.",
+      "floorAllPeriods": "Ücret, hiçbir dönemde itfa tutarını nominal değerin altına düşürmez.",
+      "floorFirstPeriod": "Ücret, itfa tutarını yalnızca ilk dönemde nominal değerin altına düşüremez; sonraki dönemlerde böyle bir alt sınır yoktur."
+    },
+    "programs": {
+      "OTS": "OTS: 3 aylık sabit faizli tasarruf tahvilleri",
+      "ROR": "ROR: 1 yıllık değişken faizli tasarruf tahvilleri",
+      "DOR": "DOR: 2 yıllık değişken faizli tasarruf tahvilleri",
+      "TOS": "TOS: 3 yıllık sabit faizli tasarruf tahvilleri",
+      "COI": "COI: 4 yıllık enflasyona endeksli tasarruf tahvilleri",
+      "EDO": "EDO: 10 yıllık enflasyona endeksli tasarruf tahvilleri",
+      "ROS": "ROS: 6 yıllık enflasyona endeksli aile tasarruf tahvilleri",
+      "ROD": "ROD: 12 yıllık enflasyona endeksli aile tasarruf tahvilleri",
+      "BILL": "BILL: Hazine bonoları, 4 ila 52 hafta, iskontolu satılır",
+      "NOTE": "NOTE: Hazine tahvilleri (note), 2 ila 10 yıl, sabit altı aylık kupon",
+      "BOND": "BOND: Hazine tahvilleri (bond), 20 ve 30 yıl, sabit altı aylık kupon",
+      "TIPS": "TIPS: enflasyona endeksli Hazine tahvilleri, anapara CPI-U'ya endeksli",
+      "FRN": "FRN: değişken faizli Hazine tahvilleri, 2 yıl, üç aylık faiz"
+    },
+    "series": {
+      "title": "Serileriniz",
+      "column": "Seri",
+      "nextRateChange": "Sonraki faiz değişikliği",
+      "total": "Tahvil türü toplamı",
+      "purchasedRange": "{from} - {to}",
+      "expand": "{series} ayrıntılarını göster",
+      "collapse": "{series} ayrıntılarını gizle",
+      "partial": "Kısmi"
+    },
+    "program": {
+      "title": "Tahvil türü",
+      "newest": "En yeni serinin koşulları, {series}.",
+      "noTerms": "Koşullar henüz bilinmiyor: bu tahvil türünün hiçbir serisine sahip değilsiniz ve hiçbiri satışta değil.",
+      "autoFetchFailed": "Ayar kaydedilemedi."
+    },
+    "onSale": {
+      "title": "Şimdi satışta"
     }
   }
 }

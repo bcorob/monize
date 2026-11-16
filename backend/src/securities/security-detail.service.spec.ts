@@ -4,6 +4,7 @@ import { SecuritiesService } from "./securities.service";
 import { PortfolioService } from "./portfolio.service";
 import { InvestmentTransactionsService } from "./investment-transactions.service";
 import { InvestmentAction } from "./entities/investment-transaction.entity";
+import { TransactionStatus } from "../transactions/entities/transaction-status.enum";
 
 const SECURITY_ID = "sec-1";
 const USER_ID = "user-1";
@@ -42,6 +43,8 @@ function historyTransaction(overrides: Record<string, unknown> = {}) {
     commission: 5,
     totalAmount: 6005,
     description: null,
+    linkedTransactionId: null,
+    status: TransactionStatus.CLEARED,
     runningQuantityAccount: 60,
     runningQuantityAll: 60,
     ...overrides,
@@ -120,7 +123,10 @@ describe("SecurityDetailService", () => {
   const getDetail = () => service.getDetail(USER_ID, SECURITY_ID);
 
   beforeEach(async () => {
-    securitiesService = { findOne: jest.fn().mockResolvedValue(security) };
+    securitiesService = {
+      findOne: jest.fn().mockResolvedValue(security),
+      getDailyPriceChange: jest.fn().mockResolvedValue(null),
+    };
     portfolioService = { getPortfolioSummary: jest.fn() };
     investmentTransactionsService = {
       getSecurityTransactionHistory: jest.fn(),
@@ -149,6 +155,24 @@ describe("SecurityDetailService", () => {
       USER_ID,
       SECURITY_ID,
     );
+  });
+
+  it("returns the daily change the securities service resolved, and null on refusal", async () => {
+    const change = {
+      currentPrice: 110,
+      previousPrice: 100,
+      dailyChange: 10,
+      dailyChangePercent: 10,
+      priceDate: "2026-02-09",
+    };
+    securitiesService.getDailyPriceChange.mockResolvedValue(change);
+    expect((await getDetail()).dailyChange).toEqual(change);
+    expect(securitiesService.getDailyPriceChange).toHaveBeenCalledWith(
+      SECURITY_ID,
+    );
+
+    securitiesService.getDailyPriceChange.mockResolvedValue(null);
+    expect((await getDetail()).dailyChange).toBeNull();
   });
 
   it("propagates a not-found security instead of returning an empty detail", async () => {
@@ -481,7 +505,8 @@ describe("SecurityDetailService", () => {
     it("separates invested, sold, income and fees by action", async () => {
       const { activity } = await getDetail();
 
-      expect(activity.totalInvested).toBe(6000);
+      // Stored total, commission included: 6,005, not 60 x 100.
+      expect(activity.totalInvested).toBe(6005);
       expect(activity.totalSold).toBe(2497);
       // Dividend plus interest; both are income, not a change of position.
       expect(activity.dividends).toBe(130.75);
@@ -514,6 +539,145 @@ describe("SecurityDetailService", () => {
 
       const { activity } = await getDetail();
       expect(activity.totalInvested).toBe(400);
+    });
+
+    it("adds nothing for a paired transfer, priced or not", async () => {
+      given({
+        transactions: [
+          historyTransaction({
+            action: InvestmentAction.BUY,
+            quantity: 10,
+            price: 100,
+            totalAmount: 1010,
+            commission: 10,
+          }),
+          historyTransaction({
+            id: "tx-out",
+            linkedTransactionId: "tx-in",
+            action: InvestmentAction.TRANSFER_OUT,
+            quantity: 10,
+            price: null,
+            totalAmount: 0,
+            commission: 0,
+          }),
+          historyTransaction({
+            id: "tx-in",
+            linkedTransactionId: "tx-out",
+            action: InvestmentAction.TRANSFER_IN,
+            quantity: 10,
+            price: null,
+            totalAmount: 0,
+            commission: 0,
+          }),
+        ],
+      });
+
+      const { activity } = await getDetail();
+      expect(activity.totalInvested).toBe(1010);
+    });
+
+    it("reports invested capital as unknown for an unpaired transfer in with no cost", async () => {
+      given({
+        transactions: [
+          historyTransaction({
+            action: InvestmentAction.TRANSFER_IN,
+            quantity: 10,
+            price: null,
+            totalAmount: 0,
+            commission: 0,
+          }),
+        ],
+      });
+
+      const { activity } = await getDetail();
+      expect(activity.totalInvested).toBeNull();
+    });
+
+    it("reports invested capital as unknown when an acquisition has no price", async () => {
+      given({
+        transactions: [
+          historyTransaction({
+            action: InvestmentAction.BUY,
+            quantity: 10,
+            price: null,
+            totalAmount: 0,
+            commission: 0,
+          }),
+        ],
+      });
+
+      const { activity } = await getDetail();
+      expect(activity.totalInvested).toBeNull();
+    });
+
+    it("counts a reinvested distribution as income at its shares' cost", async () => {
+      // Discussion #1670: the reinvested shares are in the cost basis the card
+      // sets this figure against, so without their income a DRIP holding's
+      // distributions read as no return at all.
+      given({
+        transactions: [
+          historyTransaction({
+            action: InvestmentAction.REINVEST,
+            quantity: 2,
+            price: 50,
+            totalAmount: 0,
+            commission: 0,
+          }),
+          historyTransaction({
+            id: "tx-2",
+            action: InvestmentAction.REINVEST_INTEREST,
+            quantity: 1,
+            price: 12.5,
+            totalAmount: 0,
+            commission: 0,
+          }),
+          historyTransaction({
+            id: "tx-3",
+            action: InvestmentAction.TRANSFER_IN,
+            quantity: 10,
+            price: 30,
+            totalAmount: 0,
+            commission: 0,
+          }),
+        ],
+      });
+
+      const { activity } = await getDetail();
+      expect(activity.dividends).toBe(112.5);
+    });
+
+    it("leaves a VOID row out of every money total, though it stays a record", async () => {
+      given({
+        transactions: [
+          historyTransaction({
+            action: InvestmentAction.DIVIDEND,
+            totalAmount: 40,
+            commission: 0,
+          }),
+          historyTransaction({
+            id: "tx-void",
+            action: InvestmentAction.DIVIDEND,
+            status: TransactionStatus.VOID,
+            totalAmount: 500,
+            commission: 9,
+          }),
+          historyTransaction({
+            id: "tx-void-buy",
+            action: InvestmentAction.BUY,
+            status: TransactionStatus.VOID,
+            quantity: 10,
+            price: 100,
+            totalAmount: 1000,
+            commission: 0,
+          }),
+        ],
+      });
+
+      const { activity } = await getDetail();
+      expect(activity.dividends).toBe(40);
+      expect(activity.fees).toBe(0);
+      expect(activity.totalInvested).toBe(0);
+      expect(activity.transactionCount).toBe(3);
     });
 
     it("takes the first and last dates from the ordered history", async () => {
@@ -593,6 +757,28 @@ describe("SecurityDetailService", () => {
       // of rendering the same blank it uses for "never sold".
       expect(activity.realizedSaleCount).toBe(2);
       expect(activity.realizedGainCurrencies).toEqual(["EUR", "PLN"]);
+    });
+
+    it("does not total gains when one sale's gain is unknown, and names the known part", async () => {
+      investmentTransactionsService.getRealizedGains.mockResolvedValue([
+        {
+          securityId: SECURITY_ID,
+          realizedGain: 1000,
+          accountCurrencyCode: "PLN",
+        },
+        {
+          securityId: SECURITY_ID,
+          realizedGain: null,
+          accountCurrencyCode: "PLN",
+        },
+      ]);
+
+      const { activity } = await getDetail();
+      expect(activity.realizedGain).toBeNull();
+      expect(activity.realizedGainComplete).toBe(false);
+      expect(activity.realizedGainKnownSubtotal).toBe(1000);
+      expect(activity.realizedGainCurrency).toBe("PLN");
+      expect(activity.realizedSaleCount).toBe(2);
     });
 
     it("reports nothing when the security was never sold", async () => {

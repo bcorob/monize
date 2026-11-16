@@ -2,7 +2,7 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { gainLossColor } from '@/lib/format';
+import { gainLossColor, getDecimalPlacesForCurrency, roundToDecimals } from '@/lib/format';
 import { Skeleton } from '@/components/ui/LoadingSkeleton';
 import {
   AreaChart,
@@ -21,11 +21,14 @@ import { computeBalanceGradient, computeBalanceSummary } from '@/lib/balance-his
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useChartDateFormat } from '@/hooks/useChartDateFormat';
 import { ChartDownloadButton } from '@/components/ui/ChartDownloadButton';
+import { ChartCollapseButton } from '@/components/transactions/ChartCollapseControls';
 import {
   ChartFlagShadowFilter,
   computeMinMaxFlagIndices,
   renderMinMaxFlagDots,
 } from '@/components/investments/portfolio-chart-utils';
+import { CHART_GRID_PROPS, CHART_TOOLTIP_CLASS } from '@/lib/chart-style';
+import { ChartActiveDot } from '@/components/ui/ChartActiveDot';
 
 
 /**
@@ -61,10 +64,12 @@ interface BalanceHistoryChartProps {
    */
   title?: string;
   /**
-   * Keep sub-cent precision. A balance is money and rounds to 2dp, but a price
-   * series can be quoted at 4-6dp (a fund NAV, a penny stock, a crypto pair):
-   * rounding those to cents flattens the line to zero and makes every tooltip
-   * read "$0.00" while the table beside it shows 0.000342.
+   * Keep sub-cent precision. A balance is money and rounds to its currency's
+   * places (`getDecimalPlacesForCurrency`: cents for most fiat, a coin's
+   * four), but a price series can be quoted at 4-6dp (a fund NAV, a penny
+   * stock, a crypto pair): rounding those to cents flattens the line to zero
+   * and makes every tooltip read "$0.00" while the table beside it shows
+   * 0.000342. The footer figures keep the quoted values too.
    */
   precise?: boolean;
   /**
@@ -136,6 +141,8 @@ interface BalanceHistoryChartProps {
    * and the footer already states the first, latest and lowest figures.
    */
   hideExtremeFlags?: boolean;
+  /** Offer the header button that folds the chart away (the Transactions page). */
+  onCollapse?: () => void;
 }
 
 interface ChartPoint {
@@ -188,13 +195,13 @@ function calendarTicks(from: number, to: number, unit: 'year' | 'month'): number
 function BalanceTooltip({
   active,
   payload,
-  formatCurrency,
+  formatValue,
   neutral = false,
   markersByDate,
 }: {
   active?: boolean;
   payload?: Array<{ payload: ChartPoint }>;
-  formatCurrency: (v: number) => string;
+  formatValue: (v: number) => string;
   /** Skip the by-sign colouring, for a series whose sign means nothing. */
   neutral?: boolean;
   /** Events pinned on each day, listed under the value. */
@@ -203,7 +210,7 @@ function BalanceTooltip({
   if (active && payload?.[0]) {
     const data = payload[0].payload;
     return (
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3">
+      <div className={CHART_TOOLTIP_CLASS}>
         <p className="font-medium text-gray-900 dark:text-gray-100 mb-1">
           {data.label}
         </p>
@@ -214,7 +221,7 @@ function BalanceTooltip({
               : gainLossColor(data.balance ?? 0)
           }`}
         >
-          {data.balance === null ? '\u2014' : formatCurrency(data.balance)}
+          {data.balance === null ? '\u2014' : formatValue(data.balance)}
         </p>
         {markersByDate?.get(data.date)?.map((marker, i) => (
           <p
@@ -250,18 +257,25 @@ export function BalanceHistoryChart({
   plotHeight = 'default',
   markerSnap = 'earlier',
   hideExtremeFlags = false,
+  onCollapse,
 }: BalanceHistoryChartProps) {
   const t = useTranslations('transactions');
   const tc = useTranslations('common');
   const chartTitle = title ?? t('charts.balanceHistory.title');
   const {
-    formatCurrency: formatCurrencyFull,
+    formatCurrency,
     formatCurrencyPrecise,
     formatCurrencyAxis,
     formatCurrencyFlag,
     formatSignedPercent,
+    defaultCurrency,
   } = useNumberFormat();
   const isPercent = valueFormat === 'percent';
+  // A balance rounds to its currency's own places (a coin's four, not cents);
+  // a price keeps what it was quoted at.
+  const balanceDecimals = precise
+    ? null
+    : getDecimalPlacesForCurrency(currencyCode || defaultCurrency);
   // A caller that names its own figures is not plotting a balance, so the
   // overdrawn-account alarm below does not apply to it.
   const isBalanceSeries = summaryLabels === undefined;
@@ -279,19 +293,19 @@ export function BalanceHistoryChart({
   const [dismissedLow, setDismissedLow] = useState<number | null>(null);
   const downloadFilename = accountName ? `${chartTitle} - ${accountName}` : chartTitle;
 
-  const formatCurrency = useCallback(
+  const formatValue = useCallback(
     (value: number) =>
       isPercent
         ? formatSignedPercent(value)
         : precise
           ? formatCurrencyPrecise(value, currencyCode)
-          : formatCurrencyFull(value, currencyCode),
+          : formatCurrency(value, currencyCode),
     [
       isPercent,
       formatSignedPercent,
       precise,
       formatCurrencyPrecise,
-      formatCurrencyFull,
+      formatCurrency,
       currencyCode,
     ],
   );
@@ -343,13 +357,11 @@ export function BalanceHistoryChart({
       date: d.date,
       t: parseLocalDate(d.date).getTime(),
       label: formatChartDate(parseLocalDate(d.date), 'MMM d, yyyy'),
-      // Money rounds to cents; a price keeps what it was quoted at.
+      // Money rounds to its currency's places; a price keeps what it was quoted at.
       balance:
-        d.balance === null
-          ? null
-          : precise
-            ? d.balance
-            : Math.round(d.balance * 100) / 100,
+        d.balance === null || balanceDecimals === null
+          ? d.balance
+          : roundToDecimals(d.balance, balanceDecimals),
     }));
 
     // A month tick per month reads well over ~2 years or less; beyond that the
@@ -363,7 +375,7 @@ export function BalanceHistoryChart({
       axisTicks: calendarTicks(first, last, useYearTicks ? 'year' : 'month'),
       axisPattern: (useYearTicks ? 'yyyy' : 'MMM') as ChartDatePattern,
     };
-  }, [data, formatChartDate, precise]);
+  }, [data, formatChartDate, balanceDecimals]);
 
   // The exact span the chart covers, shown under the title so the timeframe is
   // always explicit (e.g. the all-history default is no longer a silent range).
@@ -416,7 +428,10 @@ export function BalanceHistoryChart({
     return byDate;
   }, [pinnedMarkers]);
 
-  const summary = useMemo(() => computeBalanceSummary(chartData), [chartData]);
+  const summary = useMemo(
+    () => computeBalanceSummary(chartData, balanceDecimals),
+    [chartData, balanceDecimals],
+  );
   /** Footer figure colour: by sign, unless the sign means nothing here. */
   const valueColor = (value: number) =>
     neutralValues ? 'text-gray-900 dark:text-gray-100' : gainLossColor(value);
@@ -468,10 +483,17 @@ export function BalanceHistoryChart({
   if (isLoading) {
     return (
       <div className={`bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 mb-6 ${cardMinHeight}`}>
-        {!hideTitle && (
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-            {chartTitle}
-          </h3>
+        {(!hideTitle || onCollapse) && (
+          <div className="flex items-start justify-between mb-4 gap-2">
+            {!hideTitle ? (
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                {chartTitle}
+              </h3>
+            ) : (
+              <span />
+            )}
+            {onCollapse && <ChartCollapseButton onCollapse={onCollapse} />}
+          </div>
         )}
         <div className={`${plotClass} flex items-center justify-center`}>
           <Skeleton className="w-full h-full" />
@@ -483,10 +505,17 @@ export function BalanceHistoryChart({
   if (chartData.length === 0) {
     return (
       <div className={`bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 mb-6 ${cardMinHeight}`}>
-        {!hideTitle && (
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-            {chartTitle}
-          </h3>
+        {(!hideTitle || onCollapse) && (
+          <div className="flex items-start justify-between mb-4 gap-2">
+            {!hideTitle ? (
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                {chartTitle}
+              </h3>
+            ) : (
+              <span />
+            )}
+            {onCollapse && <ChartCollapseButton onCollapse={onCollapse} />}
+          </div>
         )}
         <div className={`${plotClass} flex items-center justify-center text-gray-500 dark:text-gray-400`}>
           <p>{t('charts.balanceHistory.noData')}</p>
@@ -517,7 +546,10 @@ export function BalanceHistoryChart({
             </p>
           )}
         </div>
-        <ChartDownloadButton chartRef={chartRef} filename={downloadFilename} />
+        <div className="flex items-center gap-2">
+          <ChartDownloadButton chartRef={chartRef} filename={downloadFilename} />
+          {onCollapse && <ChartCollapseButton onCollapse={onCollapse} />}
+        </div>
       </div>
 
       {/* overflow-hidden: while the account-widget column animates the card's
@@ -539,7 +571,7 @@ export function BalanceHistoryChart({
               </linearGradient>
             </defs>
             <ChartFlagShadowFilter />
-            <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+            <CartesianGrid {...CHART_GRID_PROPS} />
             {/* A time scale, not a category axis: distance along it is elapsed
                 time, so ten years of monthly closes cannot occupy the same width
                 as ten years of daily ones. */}
@@ -570,7 +602,7 @@ export function BalanceHistoryChart({
             <Tooltip
               content={
                 <BalanceTooltip
-                  formatCurrency={formatCurrency}
+                  formatValue={formatValue}
                   neutral={neutralValues}
                   markersByDate={markersByDate}
                 />
@@ -669,7 +701,7 @@ export function BalanceHistoryChart({
                   dismissLabel: tc('chartFlag.dismiss'),
                 })
               }
-              activeDot={{ r: 6, fill: chartColors.primary }}
+              activeDot={ChartActiveDot}
             />
           </AreaChart>
         </ResponsiveContainer>
@@ -684,20 +716,20 @@ export function BalanceHistoryChart({
           <div>
             <div className="text-sm text-gray-500 dark:text-gray-400">{summaryLabels?.starting ?? t('charts.balanceHistory.starting')}</div>
             <div className={`font-semibold ${valueColor(summary.startBalance)}`}>
-              {formatCurrency(summary.startBalance)}
+              {formatValue(summary.startBalance)}
             </div>
           </div>
           <div>
             <div className="text-sm text-gray-500 dark:text-gray-400">{summaryLabels?.current ?? t('charts.balanceHistory.current')}</div>
             <div className={`font-semibold ${valueColor(summary.currentBalance)}`}>
-              {formatCurrency(summary.currentBalance)}
+              {formatValue(summary.currentBalance)}
             </div>
           </div>
           {summary.hasFutureData && (
             <div>
               <div className="text-sm text-gray-500 dark:text-gray-400">{summaryLabels?.ending ?? t('charts.balanceHistory.ending')}</div>
               <div className={`font-semibold ${valueColor(summary.endBalance)}`}>
-                {formatCurrency(summary.endBalance)}
+                {formatValue(summary.endBalance)}
               </div>
             </div>
           )}
@@ -714,7 +746,7 @@ export function BalanceHistoryChart({
                   : t('charts.balanceHistory.minBalance')}
             </div>
             <div className={`font-semibold ${valueColor(summary.minBalance)}`}>
-              {formatCurrency(summary.minBalance)}
+              {formatValue(summary.minBalance)}
               {isBalanceSeries && summary.goesNegative && !isLiability && (
                 <span className="ml-1 text-xs text-red-500">!</span>
               )}

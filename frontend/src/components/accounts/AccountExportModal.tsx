@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { accountsApi } from '@/lib/accounts';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import { getExportDateFormatOptions } from '@/lib/constants';
+import { resolveDateFormatPattern } from '@/lib/date-parse';
 import { createLogger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errors';
 
@@ -22,35 +23,6 @@ interface AccountExportModalProps {
   accountName: string;
 }
 
-function resolveBrowserDateFormat(): string {
-  try {
-    const formatter = new Intl.DateTimeFormat(undefined, {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    });
-    const parts = formatter.formatToParts(new Date(2024, 11, 31));
-    const order = parts
-      .filter((p) => p.type === 'year' || p.type === 'month' || p.type === 'day')
-      .map((p) => p.type);
-
-    const sep = parts.find((p) => p.type === 'literal')?.value || '/';
-
-    if (order[0] === 'year' && order[1] === 'month' && order[2] === 'day') {
-      return `YYYY${sep}MM${sep}DD`;
-    }
-    if (order[0] === 'month' && order[1] === 'day' && order[2] === 'year') {
-      return `MM${sep}DD${sep}YYYY`;
-    }
-    if (order[0] === 'day' && order[1] === 'month' && order[2] === 'year') {
-      return `DD${sep}MM${sep}YYYY`;
-    }
-    return 'YYYY-MM-DD';
-  } catch {
-    return 'YYYY-MM-DD';
-  }
-}
-
 export function AccountExportModal({
   isOpen,
   onClose,
@@ -60,6 +32,7 @@ export function AccountExportModal({
   const t = useTranslations('accounts');
   const tc = useTranslations('common');
   const userDateFormat = usePreferencesStore((state) => state.preferences?.dateFormat) || 'browser';
+  const language = usePreferencesStore((state) => state.preferences?.language);
 
   const FORMAT_OPTIONS = [
     { value: 'csv', label: 'CSV' },
@@ -82,7 +55,10 @@ export function AccountExportModal({
 
     let resolvedDateFormat: string;
     if (dateFormat === 'browser') {
-      resolvedDateFormat = resolveBrowserDateFormat();
+      // The same resolution useDateFormat applies to "browser": the reader's UI
+      // language decides the order, not whatever locale the runtime reports.
+      const locale = language && language !== 'xx' && language !== 'browser' ? language : undefined;
+      resolvedDateFormat = resolveDateFormatPattern('browser', locale);
     } else if (dateFormat === 'custom') {
       if (!customDateFormat.trim()) {
         toast.error(t('exportModal.customDateFormatEmpty'));
@@ -110,11 +86,14 @@ export function AccountExportModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} maxWidth="sm">
-      <div className="p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-          {t('exportModal.title', { name: accountName })}
-        </h2>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidth="sm"
+      className="p-6"
+      title={t('exportModal.title', { name: accountName })}
+    >
+      <div>
 
         <div className="space-y-4">
           <Select

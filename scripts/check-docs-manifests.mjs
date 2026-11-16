@@ -37,12 +37,41 @@ const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const DOCS = [
   'README.md',
   'CONTRIBUTING.md',
+  'AGENTS.md',
   'CLAUDE.md',
+  'e2e/CLAUDE.md',
+  'backend/src/mcp/CLAUDE.md',
+  'docs/guard-tests.md',
+  'docs/agent-instructions.md',
+  'docs/backend/mcp.md',
   'helm/README.md',
   'database/CLAUDE.md',
   'backend/CLAUDE.md',
   'frontend/CLAUDE.md',
   'CONTAINER_BUILD.md',
+  // Each layer's rules, moved out of its CLAUDE.md so that file could stay an
+  // index; they carry the same commands and tables it used to.
+  'docs/backend/README.md',
+  'docs/backend/testing.md',
+  'docs/backend/modules-and-runtime.md',
+  'docs/backend/entities-and-dtos.md',
+  'docs/backend/database-access-and-tenancy.md',
+  'docs/backend/transactions-and-money.md',
+  'docs/backend/securities-and-providers.md',
+  'docs/backend/ai-and-payees.md',
+  'docs/backend/notifications-and-push.md',
+  'docs/backend/backup.md',
+  'docs/backend/cron-and-background-work.md',
+  'docs/frontend/README.md',
+  'docs/frontend/api-and-cache.md',
+  'docs/frontend/ui-conventions.md',
+  'docs/frontend/forms-and-formatting.md',
+  'docs/frontend/tables-and-registers.md',
+  'docs/frontend/financial-figures.md',
+  'docs/frontend/pwa-push-share.md',
+  'docs/frontend/testing.md',
+  'docs/frontend/theming.md',
+  'docs/frontend/screens-and-dialogs.md',
 ];
 
 /**
@@ -279,7 +308,7 @@ const NPM_RUN = /npm run ([\w:.-]+)/g;
 
 function collectScriptNames() {
   const names = new Set();
-  for (const dir of ['', 'backend', 'frontend', 'e2e']) {
+  for (const dir of ['', 'backend', 'frontend', 'e2e', 'desktop', 'mobile']) {
     const manifest = join(REPO_ROOT, dir, 'package.json');
     if (!existsSync(manifest)) continue;
     const { scripts = {} } = JSON.parse(readFileSync(manifest, 'utf8'));

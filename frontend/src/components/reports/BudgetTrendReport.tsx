@@ -14,17 +14,28 @@ import {
 } from 'recharts';
 import { budgetsApi } from '@/lib/budgets';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
+import { useDateFormat } from '@/hooks/useDateFormat';
+import { useChartMonthFormat } from '@/hooks/useChartMonthFormat';
 import { useTranslations } from 'next-intl';
 import { useReportData } from '@/hooks/useReportData';
-import { ExportDropdown } from '@/components/ui/ExportDropdown';
+import { ReportToolbarActions } from '@/components/reports/ReportToolbarActions';
 import { ReportError } from '@/components/reports/ReportError';
 import { chartColors } from '@/lib/chart-colors';
 import { resolvePdfColor } from '@/components/reports/resolve-pdf-color';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { CHART_GRID_PROPS, CHART_TOOLTIP_CLASS } from '@/lib/chart-style';
+import { ChartActiveDot } from '@/components/ui/ChartActiveDot';
 
 
 export function BudgetTrendReport() {
   const t = useTranslations('reports');
-  const { formatCurrencyCompact: formatCurrency } = useNumberFormat();
+  const { formatCurrencyCompact: formatCurrency, formatPercentTrimmed } = useNumberFormat();
+  // Two month formatters, for two different surfaces: the PDF's month COLUMN
+  // follows the user's date-format preference like every other date in a table,
+  // while the chart's month AXIS localizes the month name like every other
+  // chart. `useChartMonthFormat` explains why swapping them is a defect.
+  const { formatMonth } = useDateFormat();
+  const formatChartMonth = useChartMonthFormat();
   const chartRef = useRef<HTMLDivElement>(null);
   const [selectedBudgetIdState, setSelectedBudgetId] = useState<string>('');
   const [months, setMonths] = useState(12);
@@ -71,10 +82,10 @@ export function BudgetTrendReport() {
     const { exportToPdf } = await import('@/lib/pdf-export');
     const headers = [t('budgetTrend.colMonth'), t('budgetTrend.colBudgeted'), t('budgetTrend.colActual'), t('budgetTrend.colPercentUsed')];
     const rows = trendData.map((point) => [
-      point.month,
+      formatMonth(point.monthKey),
       formatCurrency(point.budgeted),
       formatCurrency(point.actual),
-      `${point.percentUsed}%`,
+      `${formatPercentTrimmed(point.percentUsed)}`,
     ]);
     await exportToPdf({
       title: t('budgetTrend.pdfTitle'),
@@ -136,32 +147,28 @@ export function BudgetTrendReport() {
             <option value={12}>{t('budgetTrend.months12')}</option>
             <option value={24}>{t('budgetTrend.months24')}</option>
           </select>
-          <div className="ml-auto">
-            <ExportDropdown onExportPdf={handleExportPdf} />
-          </div>
+          <ReportToolbarActions onExportPdf={handleExportPdf} />
         </div>
       </div>
 
       {/* Chart */}
       <div ref={chartRef} className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 px-2 py-4 sm:p-6">
         {trendData.length === 0 ? (
-          <p className="text-gray-500 dark:text-gray-400 text-center py-8">
-            {t('budgetTrend.noData')}
-          </p>
+          <EmptyState title={t('budgetTrend.noData')} />
         ) : (
           <>
             <div className="h-80">
               <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <LineChart data={trendData}>
-                  <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
-                  <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                  <CartesianGrid {...CHART_GRID_PROPS} />
+                  <XAxis dataKey="monthKey" tick={{ fontSize: 12 }} tickFormatter={(value: string) => formatChartMonth(value)} />
                   <YAxis tickFormatter={(v) => formatCurrency(v)} tick={{ fontSize: 12 }} />
                   <Tooltip
                     content={({ active, payload, label }) => {
                       if (!active || !payload || payload.length === 0) return null;
                       return (
-                        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3">
-                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">{label}</p>
+                        <div className={CHART_TOOLTIP_CLASS}>
+                          <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">{formatChartMonth(String(label))}</p>
                           {payload.map((entry) => (
                             <p key={entry.dataKey as string} className="text-sm" style={{ color: entry.color }}>
                               {entry.name}: {formatCurrency(entry.value as number)}
@@ -173,6 +180,7 @@ export function BudgetTrendReport() {
                   />
                   <Legend />
                   <Line
+                    activeDot={ChartActiveDot}
                     type="monotone"
                     dataKey="budgeted"
                     stroke={chartColors.primary}
@@ -182,6 +190,7 @@ export function BudgetTrendReport() {
                     name={t('budgetTrend.seriesBudgeted')}
                   />
                   <Line
+                    activeDot={ChartActiveDot}
                     type="monotone"
                     dataKey="actual"
                     stroke={chartColors.income}

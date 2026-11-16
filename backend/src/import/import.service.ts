@@ -4,9 +4,12 @@ import {
   NotFoundException,
   ConflictException,
   Logger,
+  Inject,
+  forwardRef,
 } from "@nestjs/common";
 import { DataSource, EntityManager, In, IsNull } from "typeorm";
 import { withScopedDb } from "../common/db/scoped-db";
+import { lockHoldingScope } from "../common/db/locks";
 import {
   Account,
   AccountType,
@@ -25,6 +28,10 @@ import type {
   QifFullParseResult,
   QifAccountBlock,
 } from "./qif-parser";
+import {
+  accountsMissingType,
+  applyAccountTypeChoices,
+} from "./qif-account-type-choice";
 import { parseOfx, validateOfxContent } from "./ofx-parser";
 import {
   parseCsv,
@@ -47,13 +54,29 @@ import {
   UpdateColumnMappingDto,
   CsvHeadersResponseDto,
   ColumnMappingResponseDto,
+  SKIPPED_ROWS_LIMIT,
 } from "./dto/import.dto";
-import { ImportContext, updateAccountBalance } from "./import-context";
+import {
+  accountMoneyDecimals,
+  assertImportAmountPrecision,
+  ImportContext,
+  loadMoneyDecimals,
+  recordSkippedRow,
+  restoreRowCounters,
+  snapshotRowCounters,
+  updateAccountBalance,
+  closedAccountError,
+} from "./import-context";
+import { loadHeldExternalIds } from "./ofx-external-id";
+import { MONEY_SCALE, roundMoney } from "../common/round.util";
+import { isExternalIdConflict } from "../transactions/transaction-external-id";
 import { ImportEntityCreatorService } from "./import-entity-creator.service";
 import { ImportPostProcessingService } from "./import-post-processing.service";
 import { ImportInvestmentProcessorService } from "./import-investment-processor.service";
 import { ImportRegularProcessorService } from "./import-regular-processor.service";
+import { orderByDateStable } from "../common/date-order.util";
 import { Security } from "../securities/entities/security.entity";
+import { HoldingsService } from "../securities/holdings.service";
 import { Tag } from "../tags/entities/tag.entity";
 import {
   Transaction,
@@ -62,6 +85,10 @@ import {
 import { deletionBalanceEffect } from "../common/deletion-balance.util";
 import { TransactionSplit } from "../transactions/entities/transaction-split.entity";
 import { tr } from "../i18n/translate";
+import { TransactionRulesApplierService } from "../transaction-rules/transaction-rules-applier.service";
+import { insertCategoryIfAbsent } from "./insert-category-if-absent";
+import { splitCategoryPath } from "./category-path.util";
+import { assertAccountCurrencyKindIn } from "../accounts/account-currency-kind.util";
 
 @Injectable()
 export class ImportService {
@@ -73,7 +100,65 @@ export class ImportService {
     private entityCreator: ImportEntityCreatorService,
     private investmentProcessor: ImportInvestmentProcessorService,
     private regularProcessor: ImportRegularProcessorService,
+    private rulesApplier: TransactionRulesApplierService,
+    @Inject(forwardRef(() => HoldingsService))
+    private holdingsService: HoldingsService,
   ) {}
+
+  /**
+   * Take the holdings advisory lock for every investment account this import
+   * can reach, as the first lock of the import's transaction.
+   *
+   * Advisory locks come before row locks (`common/db/locks.ts`). An import
+   * row-locks `accounts` on every balance write and only then reached
+   * `rebuildImportedHoldings`, which takes the advisory lock -- the opposite
+   * order from an investment write, so an import running beside a trade on
+   * the same account could deadlock both (40P01).
+   *
+   * The scope is every investment account the user already has rather than
+   * the set the import turns out to touch, because that set is discovered as
+   * the file is read. Accounts the import creates inside this transaction are
+   * covered by the rebuild's own re-entrant call: no other transaction can
+   * see them, so nothing can be holding their lock.
+   */
+  private async lockImportedHoldingScopes(
+    manager: EntityManager,
+    userId: string,
+  ): Promise<void> {
+    const accounts = await manager.find(Account, {
+      where: { userId, accountType: AccountType.INVESTMENT },
+      select: ["id"],
+    });
+    await lockHoldingScope(
+      manager,
+      accounts.map((account) => account.id),
+    );
+  }
+
+  /**
+   * Re-derive the imported accounts' holdings from the ledger the import has
+   * just written, inside the import's own transaction.
+   *
+   * An import arrives in file order, which is not date order. A per-row
+   * incremental average cost therefore blended a later-dated purchase into a
+   * position that, replayed, had already been sold down -- the stored figure
+   * and `POST /holdings/rebuild` disagreed (issue #1388). The rebuild filters
+   * non-investment accounts out itself, so the caller passes whatever it
+   * touched.
+   */
+  private async rebuildImportedHoldings(
+    manager: EntityManager,
+    userId: string,
+    accountIds: Iterable<string>,
+  ): Promise<void> {
+    const ids = Array.from(new Set(accountIds));
+    if (ids.length === 0) return;
+    await this.holdingsService.rebuildAccountsFromTransactions(
+      userId,
+      ids,
+      manager,
+    );
+  }
 
   // --- QIF ---
 
@@ -182,7 +267,14 @@ export class ImportService {
       throw new BadRequestException(validation.error);
     }
 
-    const result = parseQifFull(dto.content, dto.dateFormat as DateFormat);
+    const parsed = parseQifFull(dto.content, dto.dateFormat as DateFormat);
+    const result: QifFullParseResult = {
+      ...parsed,
+      accountBlocks: applyAccountTypeChoices(
+        parsed.accountBlocks,
+        dto.accountTypes,
+      ),
+    };
 
     if (result.accountBlocks.length === 0) {
       throw new BadRequestException(
@@ -193,13 +285,28 @@ export class ImportService {
       );
     }
 
+    // An account the file gives no type is never created under an assumed
+    // one; the review step asks, and the import refuses before writing.
+    const untyped = accountsMissingType(result.accountBlocks);
+    if (untyped.length > 0) {
+      throw new BadRequestException(
+        tr(
+          "errors.import.accountTypeRequired",
+          `Choose an account type for: ${untyped.join(", ")}`,
+          { accounts: untyped.join(", ") },
+        ),
+      );
+    }
+
     const affectedAccountIds = new Set<string>();
+    const settledScheduleIds = new Set<string>();
     const importStartTime = new Date();
     let hasInvestment = false;
 
     const importResult: ImportResultDto = {
       imported: 0,
       skipped: 0,
+      skippedRows: [],
       errors: 0,
       errorMessages: [],
       categoriesCreated: 0,
@@ -219,13 +326,27 @@ export class ImportService {
     // bad row roll back without discarding the rest of the file.
     try {
       await withScopedDb(this.dataSource, async (manager) => {
-        // Step 1: Create categories from !Type:Cat definitions
+        // First lock of the transaction: advisory before row locks.
+        await this.lockImportedHoldingScopes(manager, userId);
+
+        // The user's import-trigger rules, once for the whole file (design 6.3).
+        const importRules = await this.rulesApplier.loadRulesFor(
+          manager,
+          userId,
+          "import",
+        );
+
+        // Step 1: Create categories from !Type:Cat definitions. `categoryMap`
+        // is keyed by the full path a transaction names; `processedCategories`
+        // by one level ("name|parentId"), shared so step 1b reuses step 1's.
         const categoryMap = new Map<string, string | null>();
+        const processedCategories = new Map<string, string>();
         await this.createCategoriesFromDefs(
           manager,
           userId,
           result.categoryDefs,
           categoryMap,
+          processedCategories,
           importResult,
         );
 
@@ -236,6 +357,7 @@ export class ImportService {
           userId,
           result.accountBlocks,
           categoryMap,
+          processedCategories,
           importResult,
         );
 
@@ -327,6 +449,7 @@ export class ImportService {
             );
             continue;
           }
+          if (account.isClosed) throw closedAccountError();
 
           const isInvestment = block.accountType === "INVESTMENT";
           if (isInvestment) hasInvestment = true;
@@ -361,6 +484,10 @@ export class ImportService {
             userId,
             accountId,
             account,
+            moneyDecimals: await loadMoneyDecimals(
+              manager,
+              account.currencyCode,
+            ),
             categoryMap,
             accountMap,
             loanCategoryMap: new Map(),
@@ -369,12 +496,21 @@ export class ImportService {
             importStartTime,
             dateCounters: new Map(),
             affectedAccountIds,
+            settledScheduleIds,
             importResult,
             transferDupCounts: new Map(),
+            // A QIF file carries no bank ids.
+            heldExternalIds: new Map(),
+            importRules,
           };
 
           // Apply opening balance
           if (block.openingBalance !== null) {
+            assertImportAmountPrecision(
+              ctx,
+              block.openingBalance,
+              "opening balance",
+            );
             await this.entityCreator.applyOpeningBalance(
               manager,
               accountId,
@@ -383,13 +519,18 @@ export class ImportService {
             );
           }
 
-          // Process transactions
-          let txIndex = 0;
-          for (const qifTx of block.transactions) {
-            txIndex++;
+          // Process transactions oldest first, and within a date in file
+          // order, so a rule that settles loan installments folds forward
+          // through time (INV-RULE-005). `txIndex` stays the row's place in
+          // the file, which the messages name.
+          for (const { row: qifTx, position: txIndex } of orderByDateStable(
+            block.transactions,
+            (row) => row.date,
+          )) {
             try {
               const savepointName = `tx_import_${txIndex}`;
               await manager.query(`SAVEPOINT ${savepointName}`);
+              const counters = snapshotRowCounters(importResult);
               try {
                 if (isInvestment) {
                   await this.investmentProcessor.processTransaction(ctx, qifTx);
@@ -399,6 +540,7 @@ export class ImportService {
                 await manager.query(`RELEASE SAVEPOINT ${savepointName}`);
               } catch (error) {
                 await manager.query(`ROLLBACK TO SAVEPOINT ${savepointName}`);
+                restoreRowCounters(importResult, counters);
                 importResult.errors++;
                 importResult.errorMessages.push(
                   `Error importing transaction ${txIndex}/${block.transactions.length} in "${block.accountName}" on ${qifTx.date}: ${error.message}`,
@@ -417,7 +559,14 @@ export class ImportService {
               );
             }
           }
+
+          // An investment file after which a removal of a bond-program security
+          // is not covered by the lots is refused as a whole (INV-BOND-007); the
+          // rows are not in date order, so it is checked once, here.
+          await ctx.bond?.guard.verify();
         }
+
+        await this.rebuildImportedHoldings(manager, userId, affectedAccountIds);
 
         // Post-block cleanup: detect and remove Quicken merged split transfers
         // that were imported before their split counterparts (reverse block order).
@@ -444,7 +593,12 @@ export class ImportService {
     }
 
     // Post-import processing
-    await this.postImportProcessing(userId, hasInvestment, affectedAccountIds);
+    await this.postImportProcessing(
+      userId,
+      hasInvestment,
+      affectedAccountIds,
+      settledScheduleIds,
+    );
 
     // Detect loan/mortgage accounts needing payment setup
     importResult.loanAccountsNeedingSetup =
@@ -455,7 +609,8 @@ export class ImportService {
 
   /**
    * Create categories from !Type:Cat definitions.
-   * Handles parent:child hierarchy (e.g., "Utilities:Electricity").
+   * Every colon is a level (e.g., "Housing:Mortgage:Interest" is three
+   * categories, each the parent of the next); see `splitCategoryPath`.
    * Sets isIncome based on QIF I/E flags.
    */
   private async createCategoriesFromDefs(
@@ -463,73 +618,65 @@ export class ImportService {
     userId: string,
     categoryDefs: QifFullParseResult["categoryDefs"],
     categoryMap: Map<string, string | null>,
+    processedCategories: Map<string, string>,
     importResult: ImportResultDto,
   ): Promise<void> {
-    // Cache to avoid duplicate creation: "name|parentId" -> categoryId
-    const processedCategories = new Map<string, string>();
-
     for (const def of categoryDefs) {
       // For Quicken categories starting with underscore, use description as name
       const effectiveName =
         def.name.startsWith("_") && def.description
           ? def.description
           : def.name;
-      const parts = effectiveName.split(":");
-      const isSubcategory = parts.length > 1;
 
-      if (isSubcategory) {
-        const parentName = parts[0].trim();
-        const childName = parts.slice(1).join(":").trim();
+      const leafId = await this.findOrCreateCategoryPath(
+        manager,
+        userId,
+        splitCategoryPath(effectiveName),
+        def.isIncome,
+        processedCategories,
+        importResult,
+      );
+      if (leafId === null) continue;
 
-        // Find or create parent
-        const parentId = await this.findOrCreateCategoryDef(
-          manager,
-          userId,
-          parentName,
-          null,
-          def.isIncome,
-          processedCategories,
-          categoryMap,
-          importResult,
-        );
-
-        // Find or create child
-        await this.findOrCreateCategoryDef(
-          manager,
-          userId,
-          childName,
-          parentId,
-          def.isIncome,
-          processedCategories,
-          categoryMap,
-          importResult,
-        );
-
-        // Map the full effective name for transaction category resolution
-        const childId = processedCategories.get(`${childName}|${parentId}`)!;
-        categoryMap.set(effectiveName, childId);
-        // Also map the original QIF name if it differs (underscore substitution)
-        if (def.name !== effectiveName) {
-          categoryMap.set(def.name, childId);
-        }
-      } else {
-        // Top-level category
-        const catId = await this.findOrCreateCategoryDef(
-          manager,
-          userId,
-          effectiveName,
-          null,
-          def.isIncome,
-          processedCategories,
-          categoryMap,
-          importResult,
-        );
-        // Also map the original QIF name if it differs (underscore substitution)
-        if (def.name !== effectiveName) {
-          categoryMap.set(def.name, catId);
-        }
+      // Map the full effective name for transaction category resolution
+      categoryMap.set(effectiveName, leafId);
+      // Also map the original QIF name if it differs (underscore substitution)
+      if (def.name !== effectiveName) {
+        categoryMap.set(def.name, leafId);
       }
     }
+  }
+
+  /**
+   * Find or create every level of a category path, root first, and return the
+   * id of the last one; null for a path with no segments.
+   *
+   * The caller maps the id to the full path. No level is mapped by its bare
+   * name: "Interest" under "Housing:Mortgage" is not the top-level "Interest",
+   * and a bare-name entry would file transactions and later paths under the
+   * wrong branch.
+   */
+  private async findOrCreateCategoryPath(
+    manager: EntityManager,
+    userId: string,
+    segments: readonly string[],
+    isIncome: boolean,
+    processedCategories: Map<string, string>,
+    importResult: ImportResultDto,
+  ): Promise<string | null> {
+    let parentId: string | null = null;
+    for (const segment of segments) {
+      parentId = await this.findOrCreateCategoryDef(
+        manager,
+        userId,
+        segment,
+        parentId,
+        isIncome,
+        processedCategories,
+        importResult,
+      );
+    }
+    return parentId;
   }
 
   private async findOrCreateCategoryDef(
@@ -539,7 +686,6 @@ export class ImportService {
     parentId: string | null,
     isIncome: boolean,
     processedCategories: Map<string, string>,
-    categoryMap: Map<string, string | null>,
     importResult: ImportResultDto,
   ): Promise<string> {
     const cacheKey = `${name}|${parentId || "null"}`;
@@ -561,20 +707,21 @@ export class ImportService {
 
     if (existing) {
       processedCategories.set(cacheKey, existing.id);
-      categoryMap.set(name, existing.id);
       return existing.id;
     }
 
-    const newCategory = manager.create(Category, {
+    // Adopts a row another transaction created since the lookup above rather
+    // than aborting the whole import on its unique violation (INV-IMPORT-003).
+    const saved = await insertCategoryIfAbsent(manager, {
       userId,
       name,
       parentId,
       isIncome,
     });
-    const saved = await manager.save(newCategory);
     processedCategories.set(cacheKey, saved.id);
-    categoryMap.set(name, saved.id);
-    importResult.categoriesCreated++;
+    if (saved.inserted) {
+      importResult.categoriesCreated++;
+    }
     return saved.id;
   }
 
@@ -589,17 +736,9 @@ export class ImportService {
     userId: string,
     blocks: QifFullParseResult["accountBlocks"],
     categoryMap: Map<string, string | null>,
+    processedCategories: Map<string, string>,
     importResult: ImportResultDto,
   ): Promise<void> {
-    const processedCategories = new Map<string, string>();
-
-    // Copy existing categoryMap entries into processedCategories for dedup
-    for (const [name, id] of categoryMap) {
-      if (id) {
-        processedCategories.set(`${name}|null`, id);
-      }
-    }
-
     // Collect all unique category names from all blocks
     const allCategories = new Set<string>();
     for (const block of blocks) {
@@ -611,48 +750,16 @@ export class ImportService {
     }
 
     for (const categoryName of allCategories) {
-      const parts = categoryName.split(":");
-      const isSubcategory = parts.length > 1;
-
-      if (isSubcategory) {
-        const parentName = parts[0].trim();
-        const childName = parts.slice(1).join(":").trim();
-
-        const parentId = await this.findOrCreateCategoryDef(
-          manager,
-          userId,
-          parentName,
-          null,
-          false,
-          processedCategories,
-          categoryMap,
-          importResult,
-        );
-
-        await this.findOrCreateCategoryDef(
-          manager,
-          userId,
-          childName,
-          parentId,
-          false,
-          processedCategories,
-          categoryMap,
-          importResult,
-        );
-
-        const childId = processedCategories.get(`${childName}|${parentId}`)!;
-        categoryMap.set(categoryName, childId);
-      } else {
-        await this.findOrCreateCategoryDef(
-          manager,
-          userId,
-          categoryName,
-          null,
-          false,
-          processedCategories,
-          categoryMap,
-          importResult,
-        );
+      const leafId = await this.findOrCreateCategoryPath(
+        manager,
+        userId,
+        splitCategoryPath(categoryName),
+        false,
+        processedCategories,
+        importResult,
+      );
+      if (leafId !== null) {
+        categoryMap.set(categoryName, leafId);
       }
     }
   }
@@ -697,9 +804,12 @@ export class ImportService {
         continue;
       }
 
-      // Create new account
-      const accountType =
-        (block.accountType as AccountType) || AccountType.CHEQUING;
+      // Create new account. Every named block has a type by now: the
+      // import refused before its transaction began otherwise.
+      const accountType = block.accountType as AccountType;
+      // INV-CRYPTO-001, before this account's write; a refusal rolls the
+      // whole import back.
+      await assertAccountCurrencyKindIn(manager, accountType, currencyCode);
 
       if (accountType === AccountType.INVESTMENT) {
         // Create investment account pair
@@ -857,11 +967,11 @@ export class ImportService {
       throw new BadRequestException(validation.error);
     }
 
-    const result = parseOfx(dto.content);
-
+    // The figures are read at the storage scale; the processor refuses any
+    // that carry more places than the destination account's currency does.
     return this.importParsedTransactions(
       userId,
-      result,
+      parseOfx(dto.content),
       dto.accountId,
       dto.categoryMappings,
       dto.accountMappings,
@@ -1130,6 +1240,26 @@ export class ImportService {
       openingBalance: result.openingBalance,
       openingBalanceDate: result.openingBalanceDate,
       investmentSummary: result.investmentSummary,
+      ...(result.unreadableDateRows
+        ? {
+            unreadableDates: {
+              count: result.unreadableDateRows.length,
+              rows: result.unreadableDateRows
+                .slice(0, SKIPPED_ROWS_LIMIT)
+                .map(({ rowNumber, rawDate }) => ({ rowNumber, rawDate })),
+            },
+          }
+        : {}),
+      ...(result.unreadableAmountRows
+        ? {
+            unreadableAmounts: {
+              count: result.unreadableAmountRows.length,
+              rows: result.unreadableAmountRows
+                .slice(0, SKIPPED_ROWS_LIMIT)
+                .map(({ rowNumber, rawAmount }) => ({ rowNumber, rawAmount })),
+            },
+          }
+        : {}),
     };
   }
 
@@ -1142,16 +1272,28 @@ export class ImportService {
     securityMappings?: SecurityMappingDto[],
     _dateFormat?: DateFormat,
   ): Promise<ImportResultDto> {
-    const account = await withScopedDb(this.dataSource, (manager) =>
-      manager.getRepository(Account).findOne({
-        where: { id: accountId, userId },
-      }),
+    // The account currency's money precision is read with the account; the
+    // processors refuse a file amount that carries more places than it.
+    const { account, moneyDecimals } = await withScopedDb(
+      this.dataSource,
+      async (manager) => {
+        const found = await manager.getRepository(Account).findOne({
+          where: { id: accountId, userId },
+        });
+        return {
+          account: found,
+          moneyDecimals: found
+            ? await loadMoneyDecimals(manager, found.currencyCode)
+            : undefined,
+        };
+      },
     );
-    if (!account) {
+    if (!account || moneyDecimals === undefined) {
       throw new NotFoundException(
         tr("errors.import.accountNotFound", "Account not found"),
       );
     }
+    if (account.isClosed) throw closedAccountError();
 
     // Validate file type matches destination account type
     const isInvestment = result.accountType === "INVESTMENT";
@@ -1201,11 +1343,13 @@ export class ImportService {
 
     const affectedAccountIds = new Set<string>();
     affectedAccountIds.add(accountId);
+    const settledScheduleIds = new Set<string>();
     const importStartTime = new Date();
 
     const importResult: ImportResultDto = {
       imported: 0,
       skipped: 0,
+      skippedRows: [],
       errors: 0,
       errorMessages: [],
       categoriesCreated: 0,
@@ -1220,16 +1364,57 @@ export class ImportService {
       },
     };
 
+    // The parse already left these rows out; the result names them in file
+    // order, so the first SKIPPED_ROWS_LIMIT listed are the file's first.
+    const leftOutRows = [
+      ...(result.unreadableDateRows ?? []).map((row) => ({
+        row: {
+          date: "",
+          amount: row.amount,
+          payee: row.payee,
+          rowNumber: row.rowNumber,
+          rawDate: row.rawDate,
+        },
+        reason: "unreadableDate" as const,
+      })),
+      ...(result.unreadableAmountRows ?? []).map((row) => ({
+        row: {
+          date: row.date,
+          amount: 0,
+          payee: row.payee,
+          rowNumber: row.rowNumber,
+          rawAmount: row.rawAmount,
+        },
+        reason: "unreadableAmount" as const,
+      })),
+      ...(result.rejectedInvestmentRows ?? []).map((row) => ({
+        row: {
+          date: row.date,
+          amount: row.amount,
+          payee: row.payee,
+          rowNumber: row.rowNumber,
+        },
+        reason: row.reason,
+      })),
+    ].sort((a, b) => a.row.rowNumber - b.row.rowNumber);
+    for (const { row, reason } of leftOutRows) {
+      recordSkippedRow(importResult, row, reason, account.currencyCode);
+    }
+
     // One transaction for the whole import, exactly as the former QueryRunner
     // block was: per-transaction SAVEPOINTs inside it let a single bad row roll
     // back without discarding the rest of the file.
     try {
       await withScopedDb(this.dataSource, async (manager) => {
+        // First lock of the transaction: advisory before row locks.
+        await this.lockImportedHoldingScopes(manager, userId);
+
         const ctx: ImportContext = {
           manager,
           userId,
           accountId,
           account,
+          moneyDecimals,
           categoryMap,
           accountMap,
           loanCategoryMap,
@@ -1238,8 +1423,22 @@ export class ImportService {
           importStartTime,
           dateCounters: new Map<string, number>(),
           affectedAccountIds,
+          settledScheduleIds,
           importResult,
           transferDupCounts: new Map<string, number>(),
+          // One lookup for every bank id the file carries, not one per row.
+          heldExternalIds: isInvestment
+            ? new Map()
+            : await loadHeldExternalIds(
+                manager,
+                accountId,
+                result.transactions,
+              ),
+          // The user's import-trigger rules, once for the whole file (design
+          // 6.3). An investment file has no regular rows to evaluate.
+          importRules: isInvestment
+            ? []
+            : await this.rulesApplier.loadRulesFor(manager, userId, "import"),
         };
 
         // Create new entities
@@ -1280,6 +1479,11 @@ export class ImportService {
 
         // Apply opening balance
         if (result.openingBalance !== null) {
+          assertImportAmountPrecision(
+            ctx,
+            result.openingBalance,
+            "opening balance",
+          );
           await this.entityCreator.applyOpeningBalance(
             manager,
             accountId,
@@ -1288,14 +1492,19 @@ export class ImportService {
           );
         }
 
-        // Import transactions
-        let txIndex = 0;
+        // Import transactions oldest first, and within a date in file order,
+        // so a rule that settles loan installments folds forward through time
+        // (INV-RULE-005). `txIndex` stays the row's place in the file, which
+        // the messages name.
         const totalTransactions = result.transactions.length;
-        for (const qifTx of result.transactions) {
-          txIndex++;
+        for (const { row: qifTx, position: txIndex } of orderByDateStable(
+          result.transactions,
+          (row) => row.date,
+        )) {
           try {
             const savepointName = `tx_import_${txIndex}`;
             await manager.query(`SAVEPOINT ${savepointName}`);
+            const counters = snapshotRowCounters(importResult);
             try {
               if (isInvestment) {
                 await this.investmentProcessor.processTransaction(ctx, qifTx);
@@ -1305,13 +1514,28 @@ export class ImportService {
               await manager.query(`RELEASE SAVEPOINT ${savepointName}`);
             } catch (error) {
               await manager.query(`ROLLBACK TO SAVEPOINT ${savepointName}`);
-              importResult.errors++;
-              importResult.errorMessages.push(
-                `Error importing transaction ${txIndex}/${totalTransactions} on ${qifTx.date}: ${error.message}`,
-              );
-              this.logger.warn(
-                `Error importing transaction ${txIndex}/${totalTransactions}: ${error.message}`,
-              );
+              // The payee the row created and the rule change it counted were
+              // rolled back with it, so their counters go back too.
+              restoreRowCounters(importResult, counters);
+              if (isExternalIdConflict(error)) {
+                // Another writer committed a row holding this row's bank id
+                // after the processor's lookup missed it; the unique index
+                // refused this insert, so the row is already in the account.
+                recordSkippedRow(
+                  importResult,
+                  qifTx,
+                  "alreadyImported",
+                  account.currencyCode,
+                );
+              } else {
+                importResult.errors++;
+                importResult.errorMessages.push(
+                  `Error importing transaction ${txIndex}/${totalTransactions} on ${qifTx.date}: ${error.message}`,
+                );
+                this.logger.warn(
+                  `Error importing transaction ${txIndex}/${totalTransactions}: ${error.message}`,
+                );
+              }
             }
           } catch (savepointError) {
             importResult.errors++;
@@ -1323,6 +1547,11 @@ export class ImportService {
             );
           }
         }
+
+        // See the multi-account import: checked once, after the whole file.
+        await ctx.bond?.guard.verify();
+
+        await this.rebuildImportedHoldings(manager, userId, affectedAccountIds);
       });
     } catch (error) {
       this.logger.error(
@@ -1339,7 +1568,12 @@ export class ImportService {
     }
 
     // Post-import processing
-    await this.postImportProcessing(userId, isInvestment, affectedAccountIds);
+    await this.postImportProcessing(
+      userId,
+      isInvestment,
+      affectedAccountIds,
+      settledScheduleIds,
+    );
 
     // Detect loan/mortgage accounts needing payment setup
     importResult.loanAccountsNeedingSetup =
@@ -1617,8 +1851,10 @@ export class ImportService {
 
       let matched = false;
       for (const group of splitGroups) {
-        const total = Math.round(Number(group.totalAmount) * 10000);
-        const expected = Math.round(Number(candidate.amount) * 10000);
+        // Compared at the storage scale, so the match holds at any currency's
+        // precision.
+        const total = roundMoney(Number(group.totalAmount), MONEY_SCALE);
+        const expected = roundMoney(Number(candidate.amount), MONEY_SCALE);
         if (total === expected && Number(group.splitCount) >= 2) {
           // Reliable match: delete the merged transfer and its linked counterpart
           const linkedId = candidate.linked_transaction_id;
@@ -1641,6 +1877,7 @@ export class ImportService {
               manager,
               candidate.account_id,
               candidateDelta,
+              await accountMoneyDecimals(manager, candidate.account_id),
             );
           }
           affectedAccountIds.add(candidate.account_id);
@@ -1656,6 +1893,7 @@ export class ImportService {
                   manager,
                   linkedTx.accountId,
                   linkedDelta,
+                  await accountMoneyDecimals(manager, linkedTx.accountId),
                 );
               }
               // The counterpart can live in an account this import never
@@ -1714,8 +1952,14 @@ export class ImportService {
     userId: string,
     isInvestment: boolean,
     affectedAccountIds: Set<string>,
+    settledScheduleIds: ReadonlySet<string>,
   ): Promise<void> {
-    await this.postProcessing.run(userId, isInvestment, affectedAccountIds);
+    await this.postProcessing.run(
+      userId,
+      isInvestment,
+      affectedAccountIds,
+      settledScheduleIds,
+    );
   }
 
   /**

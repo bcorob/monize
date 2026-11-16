@@ -6,5 +6,10 @@
     "placeholders": {
       "referenceNumber": "Check #, confirmation #..."
     }
+  },
+  "searchSyntax": {
+    "examples": {
+      "reference": "Check or reference number 10 exactly"
+    }
   }
 }

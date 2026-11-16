@@ -1,6 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@/test/render';
 import { BudgetHeatmap } from './BudgetHeatmap';
+import { usePreferencesStore } from '@/store/preferencesStore';
+import type { UserPreferences } from '@/types/auth';
 
 // Mock next/navigation
 const mockPush = vi.fn();
@@ -16,6 +18,9 @@ describe('BudgetHeatmap', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-02-15T12:00:00Z'));
     localStorage.clear();
+    // Reset before each test, while nothing is mounted: a store write under a
+    // mounted tree re-renders it outside act().
+    usePreferencesStore.setState({ preferences: null });
   });
 
   afterEach(() => {
@@ -80,18 +85,70 @@ describe('BudgetHeatmap', () => {
     expect(todayCell.className).toContain('ring-2');
   });
 
-  it('shows spending in cell title', () => {
+  it("names a day's spending in a visible readout, not a hover-only title", () => {
+    usePreferencesStore.setState({
+      preferences: { dateFormat: 'YYYY-MM-DD' } as UserPreferences,
+    });
     render(
       <BudgetHeatmap
-        dailySpending={[{ date: '2026-02-10', amount: 125.50 }]}
+        dailySpending={[
+          { date: '2026-02-10', amount: 125.50 },
+          { date: '2026-02-12', amount: 40 },
+        ]}
         periodStart="2026-02-01"
         periodEnd="2026-02-28"
         formatCurrency={mockFormat}
       />,
     );
 
-    const cell = screen.getByTestId('heatmap-cell-2026-02-10');
-    expect(cell).toHaveAttribute('title', 'Feb 10: $125.50');
+    // A phone and a keyboard never reach a title.
+    expect(document.querySelector('[title]')).toBeNull();
+    // Until a day is chosen, the readout names the busiest one, in the
+    // reader's own date format.
+    const readout = screen.getByTestId('heatmap-readout');
+    expect(readout).toHaveTextContent('2026-02-10: $125.50');
+
+    fireEvent.mouseEnter(screen.getByTestId('heatmap-cell-2026-02-12'));
+    expect(readout).toHaveTextContent('2026-02-12: $40.00');
+
+    fireEvent.focus(screen.getByTestId('heatmap-cell-2026-02-03'));
+    expect(readout).toHaveTextContent('2026-02-03: $0.00');
+    // The same words are the day's accessible name.
+    expect(
+      screen.getByRole('button', { name: '2026-02-10: $125.50' }),
+    ).toBeInTheDocument();
+  });
+
+  it('draws no readout while the period has no spending', () => {
+    render(
+      <BudgetHeatmap
+        dailySpending={[]}
+        periodStart="2026-02-01"
+        periodEnd="2026-02-28"
+        formatCurrency={mockFormat}
+      />,
+    );
+
+    expect(screen.queryByTestId('heatmap-readout')).toBeNull();
+  });
+
+  it('names the month in the reader\'s language', () => {
+    usePreferencesStore.setState({
+      preferences: { language: 'fr' } as UserPreferences,
+    });
+    render(
+      <BudgetHeatmap
+        dailySpending={[]}
+        periodStart="2026-02-01"
+        periodEnd="2026-02-28"
+        formatCurrency={mockFormat}
+      />,
+    );
+
+    const month = new Intl.DateTimeFormat('fr', { month: 'long', year: 'numeric' }).format(
+      new Date(2026, 1, 1),
+    );
+    expect(screen.getByText(`Spending Heatmap - ${month}`)).toBeInTheDocument();
   });
 
   it('renders legend', () => {
@@ -162,7 +219,7 @@ describe('BudgetHeatmap', () => {
     );
   });
 
-  it('renders date cells with link role', () => {
+  it('renders date cells as buttons the keyboard reaches', () => {
     render(
       <BudgetHeatmap
         dailySpending={[]}
@@ -173,6 +230,7 @@ describe('BudgetHeatmap', () => {
     );
 
     const cell = screen.getByTestId('heatmap-cell-2026-02-01');
-    expect(cell).toHaveAttribute('role', 'link');
+    expect(cell.tagName).toBe('BUTTON');
+    expect(cell).toHaveAttribute('type', 'button');
   });
 });

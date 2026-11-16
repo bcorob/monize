@@ -2,10 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, act, waitFor, fireEvent } from '@/test/render';
 import { RecurringChargesPanel } from './RecurringChargesPanel';
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({ formatCurrency: (a: number) => `$${a.toFixed(2)}` }),
-}));
-vi.mock('@/hooks/useDateFormat', () => ({
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({ ...numberFormatMockDefaults(), formatCurrency: (a: number) => `$${a.toFixed(2)}` }),
+  };
+});vi.mock('@/hooks/useDateFormat', () => ({
   useDateFormat: () => ({ dateFormat: 'browser', datePattern: 'YYYY-MM-DD', formatDate: (d: string) => d }),
 }));
 
@@ -99,6 +101,17 @@ describe('RecurringChargesPanel', () => {
     expect(amount).toBeInTheDocument();
     expect(amount.className).toContain('text-red-600');
     expect(screen.getByText(/Next due 2026-07-01/)).toBeInTheDocument();
+  });
+
+  it('describes a Custom schedule by its rule', async () => {
+    mockGetScheduled.mockResolvedValue([
+      schedule({
+        frequency: 'CUSTOM',
+        customRecurrence: { unit: 'MONTH', interval: 1, monthDays: [1, 15] },
+      }),
+    ]);
+    await renderPanel();
+    await waitFor(() => expect(screen.getByText(/Every month on the 1st and 15th/)).toBeInTheDocument());
   });
 
   it('colours scheduled bills by kind (income green, transfer blue)', async () => {

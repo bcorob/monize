@@ -1,8 +1,87 @@
 {
   "page": {
-    "welcomePrefix": "Bem-vindo",
-    "welcomeWithName": "Bem-vindo, {name}!",
-    "subtitle": "Aqui está a sua visão geral financeira"
+    "greeting": {
+      "morning": "Bom dia",
+      "morningWithName": "Bom dia, {name}",
+      "afternoon": "Boa tarde",
+      "afternoonWithName": "Boa tarde, {name}",
+      "evening": "Boa noite",
+      "eveningWithName": "Boa noite, {name}"
+    }
+  },
+  "hero": {
+    "label": "Resumo do património líquido",
+    "netWorth": "Património líquido",
+    "changeThisMonth": "<dir>{direction, select, up {Subiu} other {Desceu}}</dir> {amount} este mês",
+    "changeThisMonthWithPercent": "<dir>{direction, select, up {Subiu} other {Desceu}}</dir> {amount} · {percent} este mês",
+    "assets": "<strong><value></value></strong> em ativos",
+    "liabilities": "<strong><value></value></strong> em passivos",
+    "invested": "<strong><value></value></strong> investidos",
+    "investedUnpriced": "Sem preço atual para {symbols}, por isso essas posições não estão incluídas. Atualize os preços na página Investimentos, ou adicione um no histórico de preços do título.",
+    "portfolioLabel": "Resumo da carteira",
+    "portfolioValueFor": "Valor da carteira <names>({accounts})</names>",
+    "portfolioEmpty": "Ainda não há contas de investimento. Adicione uma para ver aqui a sua carteira.",
+    "portfolioLoadFailed": "Não foi possível carregar a sua carteira. Recarregue o painel para tentar de novo.",
+    "portfolioChangeFailed": "Não foi possível carregar a variação deste período. Recarregue o painel para tentar de novo.",
+    "changeOverWindow": "<dir>{direction, select, up {Subiu} other {Desceu}}</dir> {amount} · {window}",
+    "holdings": "<strong><value></value></strong> em posições",
+    "cash": "<strong><value></value></strong> em liquidez",
+    "metricLine": "<strong><value></value></strong> {metric}",
+    "metricNames": {
+      "simpleReturn": "Retorno Simples",
+      "twr": "TWR",
+      "mwr": "MWR",
+      "cagr": "CAGR"
+    },
+    "showSet": "Mostrar {name}",
+    "cycleControls": "Escolher o que o destaque mostra",
+    "cagrUnavailable": "A CAGR precisa de pelo menos um ano de histórico de investimento nestas contas, com mais entradas do que saídas.",
+    "intradayUnavailable": "Algumas destas posições não têm preços intradiários, por isso não é possível desenhar um gráfico de um dia. Escolha um período mais longo em Personalizar."
+  },
+  "trivia": {
+    "title": "Curiosidades",
+    "position": "{index} de {total}",
+    "previous": "Curiosidade anterior",
+    "next": "Curiosidade seguinte",
+    "empty": "As curiosidades aparecem aqui quando houver histórico suficiente: dois meses de património líquido, investimentos com preço, alguns meses de despesas e receitas ou garantias que acompanha. A lista é refeita todas as manhãs.",
+    "off": "As curiosidades de IA estão desativadas. Ative-as em <link>Definições de IA</link>.",
+    "topics": {
+      "netWorth": "Património líquido",
+      "investments": "Investimentos",
+      "spending": "Despesas",
+      "income": "Receitas",
+      "activity": "Os seus registos",
+      "warranties": "Garantias"
+    },
+    "aiGenerated": "Escrito por IA a partir dos seus números",
+    "facts": {
+      "netWorthSinceStart": "O seu património líquido era de {startAmount} em {startMonth}. Desde então ganhou {startGain}, pelo que é cerca de {startMultiple} vezes maior.",
+      "netWorthBiggestJump": "{jumpMonth} foi o seu maior salto num único mês. O património líquido subiu {jumpAmount}, de {jumpFrom} em {jumpPreviousMonth} para {jumpTo}.",
+      "netWorthHighPoint": "O seu ponto mais alto foi {peakAmount} em {peakMonth}. Agora está {peakBelow} abaixo.",
+      "netWorthAtHighPoint": "Está no seu ponto mais alto: o património líquido nunca esteve acima de {currentHigh}.",
+      "netWorthBiggestDip": "A sua maior queda levou o património líquido de {dipFromAmount} em {dipFromMonth} para {dipToAmount} em {dipToMonth}, uma descida de {dipPercent}.",
+      "netWorthBiggestDipRecovered": "A sua maior queda levou o património líquido de {dipFromAmount} em {dipFromMonth} para {dipToAmount} em {dipToMonth}. Já tinha recuperado em {dipRecoveredMonth}.",
+      "netWorthLargestAsset": "{assetName} vale {assetValue}, ou {assetPercent} dos seus ativos.",
+      "investmentsShareOfAssets": "Os seus investimentos valem {investmentsValue}, o que corresponde a {investmentsPercent} dos seus ativos.",
+      "investmentsGain": "Os seus investimentos ganharam {gainAmount} ({gainPercent}) face ao custo base de {gainCostBasis}.",
+      "investmentsLoss": "Os seus investimentos estão {gainAmount} ({gainPercent}) abaixo do custo base de {gainCostBasis}.",
+      "investmentsCagr": "A rentabilidade anualizada dos seus investimentos é de cerca de {cagrPercent} (CAGR).",
+      "investmentsBiggestHolding": "A sua maior posição é {holdingSymbol}, com cerca de {holdingPercent} da carteira ({holdingValue} em {holdingAccounts}).",
+      "investmentsBestPerformer": "O seu melhor desempenho é {bestSymbol}, com uma subida de {bestPercent}. Custou {bestCost} e agora vale {bestValue}.",
+      "investmentsForeignAccount": "A sua conta {foreignName} é detida em {foreignCurrency}. As posições de {foreignBalance} equivalem a {foreignConverted} a uma taxa de cerca de {foreignRate}.",
+      "investmentsLargestAccount": "A sua maior conta de investimento é {largestName}, com {largestValue}.",
+      "spendingTopCategory": "Nos últimos doze meses, {topCategoryName} ficou com a maior parte das suas despesas: {topCategoryAmount}, ou seja, {topCategoryPercent}.",
+      "spendingTopPayee": "Nos últimos doze meses, gastou mais em {topPayeeName}: {topPayeeAmount}.",
+      "spendingBiggestMonth": "{biggestSpendMonth} foi o seu mês de maior despesa dos últimos doze, com {biggestSpendAmount}.",
+      "incomeKeptShare": "Nos últimos doze meses ficou com {keptAmount} do que entrou, o que corresponde a {keptPercent} das suas receitas.",
+      "incomeSurplusMonths": "Meses dos últimos {windowMonths} em que entrou mais do que saiu: {surplusMonths}.",
+      "incomeTopSource": "{topSourceName} trouxe {topSourcePercent} das suas receitas nos últimos doze meses.",
+      "activityTransactions": "Transações nos seus registos: {transactionCount}, desde {firstTransactionMonth}.",
+      "activityPayees": "Beneficiários que guarda no Monize: {payeeCount}. Categorias: {categoryCount}.",
+      "activityScheduled": "Transações agendadas que o Monize acompanha por si: {scheduledCount}.",
+      "warrantiesCovered": "Garantias que acompanha e que ainda estão em vigor: {warrantyCount}.",
+      "warrantiesNextExpiry": "A próxima garantia a terminar é {nextWarrantyName}, em {nextWarrantyMonth}."
+    }
   },
   "favouriteAccounts": {
     "title": "Contas Favoritas",
@@ -21,12 +100,10 @@
   "upcomingBills": {
     "title": "Faturas e Depósitos Próximos",
     "empty": "Sem faturas, depósitos ou transferências em atraso ou próximos dentro dos seus períodos de lembrete.",
-    "perReminderSettings": "Por definições de lembrete",
     "postTransaction": "Lançar esta transação",
     "manual": "Manual",
-    "manualTitle": "Requer lançamento manual",
     "negativeBalanceWarning": "Esta transação irá colocar o saldo da conta abaixo de zero",
-    "viewAll": "Ver todas as faturas e depósitos",
+    "negativeBalanceLegend": "Deixa a conta abaixo de zero",
     "moreItems": "+{count} mais",
     "overdue": "Em atraso",
     "today": "Hoje",
@@ -38,7 +115,23 @@
       "transfer": "Transferência",
       "reminder": "Lembrete",
       "unknown": "Desconhecido"
-    }
+    },
+    "scope": {
+      "dueSoon": "A vencer em breve",
+      "all": "Todos os futuros"
+    },
+    "viewLabel": "Vista",
+    "viewList": "Lista",
+    "viewCalendar": "Calendário",
+    "previousMonth": "Mês anterior",
+    "nextMonth": "Mês seguinte",
+    "emptyAll": "Não há faturas, depósitos ou transferências ativas agendadas.",
+    "estimated": "Estimado"
+  },
+  "cashFlowForecast": {
+    "title": "Previsão de fluxo de caixa",
+    "period": "Período de previsão",
+    "loadFailed": "Não foi possível carregar as transações já datadas depois de hoje, pelo que a previsão não pode ser apresentada. Recarregue o painel para tentar novamente."
   },
   "gettingStarted": {
     "title": "Primeiros Passos",
@@ -76,8 +169,12 @@
     "title": "Análise de Despesas",
     "empty": "Sem análises disponíveis. Visite a página de Análises para gerar a sua primeira análise.",
     "goToInsights": "Ir para Análises",
-    "viewAll": "Ver todas as análises",
     "activeCount": "{count} ativas"
+  },
+  "warrantiesExpiring": {
+    "title": "Garantias a expirar em breve",
+    "empty": "Nada expira nos próximos 30 dias",
+    "loadFailed": "Não foi possível carregar as garantias a expirar. Recarregue o painel para tentar novamente."
   },
   "topMovers": {
     "title": "Maiores Variações",
@@ -88,13 +185,20 @@
       "noLosers": "Sem descidas hoje."
     },
     "dailyChange": "Variação diária",
+    "dailyChangeOn": "Variação diária · {date}",
     "openPriceHistory": "Histórico de preços de {symbol}",
     "refreshPrices": "Atualizar cotações",
     "viewPortfolio": "Ver portefólio",
     "filter": {
-      "all": "Todos",
-      "gainers": "Subidas",
-      "losers": "Descidas"
+      "all": "Todos ({count})",
+      "gainers": "Subidas ({count})",
+      "losers": "Descidas ({count})",
+      "label": "Direção"
+    },
+    "metric": {
+      "label": "Mostrar",
+      "price": "Preço",
+      "holdings": "Posições"
     }
   },
   "favouriteSecurities": {
@@ -102,15 +206,17 @@
     "empty": "Ainda sem títulos favoritos. Visite a <securitiesLink>página de Títulos</securitiesLink> e marque os títulos que pretende acompanhar aqui.",
     "noPriceYet": "Sem cotação ainda",
     "dailyChange": "Variação diária",
+    "dailyChangeOn": "Variação diária · {date}",
     "openPriceHistory": "Histórico de preços de {symbol}",
-    "refreshPrices": "Atualizar cotações",
-    "manage": "Gerir títulos"
+    "refreshPrices": "Atualizar cotações"
   },
   "netWorth": {
     "title": "Valor Líquido",
     "empty": "Ainda não existem dados de valor líquido disponíveis.",
-    "past12Months": "Últimos 12 meses",
-    "viewReport": "Ver relatório completo"
+    "barStyle": "Estilo das barras",
+    "barStyleNetWorth": "Valor líquido",
+    "barStyleAccountType": "Por tipo de conta",
+    "loadFailed": "Não foi possível carregar o histórico do seu valor líquido. Recarregue o painel para tentar novamente."
   },
   "assetsVsLiabilities": {
     "title": "Ativos vs Passivos",
@@ -118,14 +224,22 @@
     "current": "Atual",
     "netWorthLabel": "Valor Líquido",
     "assets": "Ativos",
-    "liabilities": "Passivos"
+    "liabilities": "Passivos",
+    "partialName": "{name} (parcial)",
+    "viewCallouts": "Etiquetas",
+    "viewLegend": "Legenda"
   },
   "expensesPieChart": {
     "title": "Despesas por Categoria",
     "empty": "Sem dados de despesas para este período.",
     "total": "Total",
     "uncategorized": "Sem categoria",
-    "other": "Outros"
+    "other": "Outros",
+    "insideOther": "{count, plural, one {# categoria em Outros} other {# categorias em Outros}}",
+    "topLevelOnly": "Categorias de topo",
+    "topLevelOnlyHint": "Contar as subcategorias na categoria principal",
+    "viewCallouts": "Etiquetas",
+    "viewLegend": "Legenda"
   },
   "incomeExpenses": {
     "title": "Receitas vs Despesas",
@@ -135,18 +249,85 @@
   },
   "customize": {
     "button": "Personalizar",
-    "title": "Personalizar painel",
-    "description": "A disposição abaixo reflete o seu painel: os widgets fluem da esquerda para a direita, dois por linha em ecrãs grandes.",
     "moveEarlier": "Mover {name} para a frente",
     "moveLater": "Mover {name} para trás",
-    "dragToReorder": "Arraste os widgets para os reorganizar, ou use os botões de seta.",
-    "hiddenWidgets": "Widgets ocultos",
-    "hide": "Ocultar {name}",
-    "show": "Mostrar {name}",
     "atLeastOne": "Selecione pelo menos um widget para mostrar no painel.",
     "reset": "Repor predefinições",
     "toasts": {
       "saveFailed": "Falha ao guardar a disposição do painel"
+    },
+    "hero": {
+      "title": "Destaque do painel",
+      "description": "Os números iniciais e o gráfico por baixo da saudação: o seu património líquido, a sua carteira ou Auto para alternar entre ambos a cada minuto.",
+      "show": "Mostrar o destaque do painel",
+      "range": "Gráfico",
+      "set": "Mostrar",
+      "sets": {
+        "auto": "Auto",
+        "netWorth": "Património líquido",
+        "portfolio": "Valor da carteira"
+      },
+      "metric": "Indicador",
+      "metrics": {
+        "simpleReturn": "Retorno Simples",
+        "twr": "TWR",
+        "mwr": "MWR",
+        "cagr": "CAGR"
+      }
+    }
+  },
+  "edit": {
+    "barLabel": "Organizar o painel",
+    "addWidget": "Adicionar widget",
+    "heroSettings": "Definições do destaque",
+    "done": "Concluído",
+    "phoneNote": "Os tamanhos dos widgets aplicam-se em ecrãs mais largos.",
+    "remove": "Remover {name}",
+    "grip": "Mover {name}",
+    "gripHint": "Arraste para mover {name} ou prima as teclas de seta",
+    "moved": "{name} movido para a posição {position} de {count}",
+    "removed": "{name} removido",
+    "added": "{name} adicionado",
+    "resized": "{name} agora tem {size}",
+    "resizedBoth": "{name} agora tem {width} e {height}",
+    "twoChanges": "{first}. {second}",
+    "placeholder": "Aparece no painel assim que tiver algo para mostrar.",
+    "addTitle": "Adicionar widget",
+    "addDescription": "Um widget que adicionar fica no fim do painel. Nada é guardado até escolher Concluído.",
+    "addEmpty": "Todos os widgets já estão no seu painel",
+    "addToSpace": "Adicionar widget a este espaço ({width})",
+    "addSlotDescription": "Só são listados os widgets que cabem neste espaço, e o que escolher preenche-o. Nada é guardado até escolher Concluído.",
+    "addSlotEmpty": "Nenhum widget oculto cabe neste espaço. Arraste um widget para aqui para o mover.",
+    "resize": "Redimensionar {name}",
+    "resizeHint": "Arraste para redimensionar {name} ou prima as teclas de seta",
+    "widthLabel": "Largura",
+    "heightLabel": "Altura",
+    "presetName": "{short}, {name}",
+    "widthOf": "Largura de {name}",
+    "heightOf": "Altura de {name}",
+    "widthShort": {
+      "third": "1/3",
+      "half": "1/2",
+      "twoThirds": "2/3",
+      "full": "Total"
+    },
+    "widthName": {
+      "third": "Um terço de largura",
+      "half": "Meia largura",
+      "twoThirds": "Dois terços de largura",
+      "full": "Largura total"
+    },
+    "heightShort": {
+      "auto": "Auto",
+      "compact": "P",
+      "standard": "M",
+      "tall": "G"
+    },
+    "heightName": {
+      "auto": "Altura automática",
+      "compact": "Altura compacta",
+      "standard": "Altura padrão",
+      "tall": "Altura elevada"
     }
   },
   "favouriteReports": {
@@ -156,22 +337,28 @@
   },
   "widgets": {
     "configure": "Configurar {name}",
+    "asOf": "em {date}",
     "done": "Concluído",
     "configSaveFailed": "Não foi possível guardar as definições do widget. Tente novamente.",
     "timeframe": "Período",
     "accounts": "Contas",
     "chartType": "Tipo de gráfico",
     "view": "Vista",
+    "viewCalloutsHint": "As etiquetas precisam de um ecrã mais largo. Onde não cabem, é apresentada a legenda.",
     "displayName": "Nome a apresentar",
     "description": "Descrição",
     "descriptionPlaceholder": "Adicione uma descrição opcional",
     "rangeLabels": {
+      "1d": "1D",
+      "1w": "1S",
+      "mtd": "MTD",
       "1m": "1M",
       "3m": "3M",
       "6m": "6M",
       "1y": "1Y",
       "2y": "2Y",
       "5y": "5Y",
+      "10y": "10Y",
       "ytd": "YTD",
       "all": "Tudo"
     }
@@ -179,7 +366,10 @@
   "portfolioValue": {
     "title": "Valor do Portefólio",
     "empty": "Ainda não há histórico de investimentos para mostrar.",
-    "refresh": "Atualizar valor atual"
+    "refresh": "Atualizar valor atual",
+    "investmentResult": "Resultado do Investimento",
+    "periodBreakdownInvestedTooltip": "O valor dos títulos variou {valueChange} neste período. Desse montante, {netInvested} foi aplicado, descontadas as vendas, e os títulos pagaram {income} em dividendos e juros. Uma distribuição reinvestida em ações conta em ambos os montantes. O valor acima é o que os investimentos renderam por si mesmos, sem contar o dinheiro não investido.",
+    "notAvailable": "N/D"
   },
   "spendingByPayee": {
     "title": "Despesas por Beneficiário",
@@ -225,14 +415,19 @@
       "MUTUAL_FUND": "Fundos de Investimento",
       "BOND": "Obrigações",
       "CASH": "Dinheiro"
-    }
+    },
+    "viewType": "Tipo de título",
+    "viewAssetClass": "Classe de ativos",
+    "otherAssetClasses": "Outros",
+    "emptyAssetClass": "Ainda não há repartição por classe de ativos."
   },
   "geographicAllocation": {
     "title": "Alocação Geográfica",
     "empty": "Nenhuma posição para mostrar.",
     "viewRegion": "Região",
     "viewExchange": "Bolsa",
-    "viewCountry": "País"
+    "viewCountry": "País",
+    "listingBasisNote": "Agrupado pela bolsa onde cada posição está cotada. Mude para País para ver dentro dos fundos."
   },
   "recurringExpenses": {
     "title": "Principais Despesas Recorrentes",
@@ -240,7 +435,9 @@
     "minOccurrences": "Ocorrências mínimas",
     "minOccurrencesOption": "{count} ou mais",
     "occurrences": "{count} ocorrências",
-    "monthlyEstimate": "Estimativa Mensal"
+    "monthlyEstimate": "Estimativa Mensal",
+    "viewCallouts": "Etiquetas",
+    "viewLegend": "Legenda"
   },
   "weekendVsWeekday": {
     "title": "Despesas: Fim de Semana vs Dia de Semana",
@@ -249,5 +446,14 @@
     "weekdayLabel": "Dia de Semana",
     "viewOverview": "Visão Geral",
     "viewByDay": "Por Dia"
+  },
+  "cashFlowSankey": {
+    "title": "Sankey de fluxo de caixa",
+    "empty": "Sem rendimentos, despesas ou transferências neste período.",
+    "depth": "Detalhe",
+    "depthCategories": "Categorias",
+    "depthSubcategories": "Subcategorias",
+    "viewDiagram": "Diagrama",
+    "viewTable": "Tabela"
   }
 }

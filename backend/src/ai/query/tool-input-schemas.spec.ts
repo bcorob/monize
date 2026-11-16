@@ -2,6 +2,7 @@
 // AiQueryDto module, whose class-transformer decorators need reflect-metadata
 // at load time (Nest loads it for us everywhere else).
 import "reflect-metadata";
+import { AccountType } from "../../accounts/entities/account.entity";
 import {
   validateToolInput,
   listTransactionsSchema,
@@ -16,7 +17,7 @@ import {
   renderChartSchema,
   manageInvestmentTransactionsSchema,
   manageTransactionsSchema,
-  createTransactionsSchema,
+  listWarrantiesSchema,
 } from "./tool-input-schemas";
 
 describe("tool-input-schemas", () => {
@@ -291,6 +292,14 @@ describe("tool-input-schemas", () => {
       });
       expect(result.success).toBe(false);
     });
+
+    it("accepts every AccountType at once, CRYPTO included", () => {
+      const result = listAccountsSchema.safeParse({
+        accountTypes: Object.values(AccountType),
+      });
+      expect(Object.values(AccountType)).toContain("CRYPTO");
+      expect(result.success).toBe(true);
+    });
   });
 
   describe("getCategoriesSchema", () => {
@@ -482,6 +491,38 @@ describe("tool-input-schemas", () => {
         items: [createItem],
       });
       expect(result.success).toBe(true);
+    });
+
+    it("accepts a bond series code on create, bounded, and as the only field of an update", () => {
+      expect(
+        manageInvestmentTransactionsSchema.safeParse({
+          operation: "create",
+          items: [{ ...createItem, bondSeriesCode: "EDO1036" }],
+        }).success,
+      ).toBe(true);
+      expect(
+        manageInvestmentTransactionsSchema.safeParse({
+          operation: "create",
+          items: [{ ...createItem, bondSeriesCode: "X".repeat(41) }],
+        }).success,
+      ).toBe(false);
+      expect(
+        manageInvestmentTransactionsSchema.safeParse({
+          operation: "create",
+          items: [{ ...createItem, bondSeriesCode: "  " }],
+        }).success,
+      ).toBe(false);
+      expect(
+        manageInvestmentTransactionsSchema.safeParse({
+          operation: "update",
+          items: [
+            {
+              transactionId: "11111111-1111-4111-8111-111111111111",
+              bondSeriesCode: "EDO1036",
+            },
+          ],
+        }).success,
+      ).toBe(true);
     });
 
     it("accepts a minimal cash-only create (INTEREST)", () => {
@@ -716,6 +757,36 @@ describe("tool-input-schemas", () => {
       }
     });
 
+    it("accepts a currency conversion with an optional date", () => {
+      const withDate = calculateSchema.safeParse({
+        operation: "convert",
+        values: [1500],
+        fromCurrency: "CAD",
+        toCurrency: "USD",
+        date: "2026-09-01",
+      });
+      const withoutDate = calculateSchema.safeParse({
+        operation: "convert",
+        values: ["1500"],
+        fromCurrency: "CAD",
+        toCurrency: "USD",
+      });
+      expect(withDate.success).toBe(true);
+      expect(withoutDate.success).toBe(true);
+      if (withoutDate.success) expect(withoutDate.data.values).toEqual([1500]);
+    });
+
+    it("rejects a conversion date that is not YYYY-MM-DD", () => {
+      const result = calculateSchema.safeParse({
+        operation: "convert",
+        values: [1],
+        fromCurrency: "CAD",
+        toCurrency: "USD",
+        date: "01/09/2026",
+      });
+      expect(result.success).toBe(false);
+    });
+
     it("accepts optional label", () => {
       const result = calculateSchema.safeParse({
         operation: "sum",
@@ -892,6 +963,207 @@ describe("tool-input-schemas", () => {
     });
   });
 
+  describe("manageTransactionsSchema (foreign-currency entries)", () => {
+    const TXID = "11111111-1111-4111-8111-111111111111";
+
+    it("accepts a create with an original amount in place of the amount", () => {
+      expect(
+        manageTransactionsSchema.safeParse({
+          operation: "create",
+          items: [
+            {
+              accountName: "Checking",
+              date: "2026-01-15",
+              originalAmount: -100,
+              originalCurrencyCode: "EUR",
+            },
+          ],
+        }).success,
+      ).toBe(true);
+      expect(
+        manageTransactionsSchema.safeParse({
+          operation: "create",
+          items: [{ accountName: "Checking", date: "2026-01-15" }],
+        }).success,
+      ).toBe(false);
+    });
+
+    it("counts a change to the entry alone as an edit", () => {
+      expect(
+        manageTransactionsSchema.safeParse({
+          operation: "update",
+          items: [{ transactionId: TXID, exchangeRate: 1.1 }],
+        }).success,
+      ).toBe(true);
+      expect(
+        manageTransactionsSchema.safeParse({
+          operation: "update",
+          items: [{ transactionId: TXID, originalCurrencyCode: "USD" }],
+        }).success,
+      ).toBe(true);
+    });
+
+    it("refuses a currency code that is not three letters long", () => {
+      expect(
+        manageTransactionsSchema.safeParse({
+          operation: "update",
+          items: [{ transactionId: TXID, originalCurrencyCode: "EURO" }],
+        }).success,
+      ).toBe(false);
+    });
+  });
+
+  describe("manageTransactionsSchema (tags)", () => {
+    const TXID = "11111111-1111-4111-8111-111111111111";
+
+    it("accepts a tag-only update as a change on its own", () => {
+      expect(
+        manageTransactionsSchema.safeParse({
+          operation: "update",
+          items: [{ transactionId: TXID, addTagNames: ["Trip"] }],
+        }).success,
+      ).toBe(true);
+      expect(
+        manageTransactionsSchema.safeParse({
+          operation: "update",
+          items: [{ transactionId: TXID, removeTagNames: ["Old"] }],
+        }).success,
+      ).toBe(true);
+    });
+
+    it("does not count empty tag lists as a change", () => {
+      expect(
+        manageTransactionsSchema.safeParse({
+          operation: "update",
+          items: [{ transactionId: TXID, addTagNames: [] }],
+        }).success,
+      ).toBe(false);
+    });
+
+    it("refuses tags on a create or a delete, where they would be dropped", () => {
+      expect(
+        manageTransactionsSchema.safeParse({
+          operation: "create",
+          items: [
+            {
+              accountName: "Checking",
+              amount: -10,
+              date: "2026-01-15",
+              addTagNames: ["Trip"],
+            },
+          ],
+        }).success,
+      ).toBe(false);
+      expect(
+        manageTransactionsSchema.safeParse({
+          operation: "delete",
+          items: [{ transactionId: TXID, removeTagNames: ["Old"] }],
+        }).success,
+      ).toBe(false);
+    });
+
+    it("accepts splitTags as a change on its own, on an update only", () => {
+      const splitTags = [{ splitId: TXID, addTagNames: ["Trip"] }];
+      expect(
+        manageTransactionsSchema.safeParse({
+          operation: "update",
+          items: [{ transactionId: TXID, splitTags }],
+        }).success,
+      ).toBe(true);
+      expect(
+        manageTransactionsSchema.safeParse({
+          operation: "update",
+          items: [
+            {
+              transactionId: TXID,
+              splitTags: [{ splitId: TXID, addTagNames: [] }],
+            },
+          ],
+        }).success,
+      ).toBe(false);
+      expect(
+        manageTransactionsSchema.safeParse({
+          operation: "delete",
+          items: [{ transactionId: TXID, splitTags }],
+        }).success,
+      ).toBe(false);
+    });
+
+    it("refuses a splitTags entry that names no tag, even beside another change", () => {
+      const result = manageTransactionsSchema.safeParse({
+        operation: "update",
+        items: [
+          {
+            transactionId: TXID,
+            description: "x",
+            splitTags: [{ splitId: TXID }],
+          },
+        ],
+      });
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0].message).toMatch(/names no tag/);
+      }
+    });
+
+    it("refuses splitTags beside a splits replacement, and a splitId that is not one", () => {
+      expect(
+        manageTransactionsSchema.safeParse({
+          operation: "update",
+          items: [
+            {
+              transactionId: TXID,
+              splits: [
+                { categoryName: "A", amount: -1 },
+                { categoryName: "B", amount: -1 },
+              ],
+              splitTags: [{ splitId: TXID, removeTagNames: ["Old"] }],
+            },
+          ],
+        }).success,
+      ).toBe(false);
+      expect(
+        manageTransactionsSchema.safeParse({
+          operation: "update",
+          items: [
+            {
+              transactionId: TXID,
+              splitTags: [{ splitId: "line-1", addTagNames: ["Trip"] }],
+            },
+          ],
+        }).success,
+      ).toBe(false);
+    });
+
+    it("bounds the names and takes a split line's splitId", () => {
+      expect(
+        manageTransactionsSchema.safeParse({
+          operation: "update",
+          items: [
+            {
+              transactionId: TXID,
+              addTagNames: Array.from({ length: 21 }, (_, i) => `T${i}`),
+            },
+          ],
+        }).success,
+      ).toBe(false);
+      expect(
+        manageTransactionsSchema.safeParse({
+          operation: "update",
+          items: [
+            {
+              transactionId: TXID,
+              splits: [
+                { categoryName: "A", amount: -1, splitId: TXID },
+                { categoryName: "B", amount: -1 },
+              ],
+            },
+          ],
+        }).success,
+      ).toBe(true);
+    });
+  });
+
   describe("manageTransactionsSchema (attachments)", () => {
     const TXID = "11111111-1111-4111-8111-111111111111";
     const createItem = {
@@ -962,35 +1234,65 @@ describe("tool-input-schemas", () => {
     });
   });
 
-  describe("bulk schemas", () => {
-    const txRow = { accountName: "Checking", amount: -10, date: "2026-01-15" };
-
-    it("accepts 1 to 25 rows", () => {
-      expect(
-        createTransactionsSchema.safeParse({ rows: [txRow] }).success,
-      ).toBe(true);
-      const rows25 = Array.from({ length: 25 }, () => ({ ...txRow }));
-      expect(createTransactionsSchema.safeParse({ rows: rows25 }).success).toBe(
-        true,
-      );
+  describe("manageTransactionsSchema (amount precision)", () => {
+    const item = (amount: number) => ({
+      accountName: "Wallet",
+      amount,
+      date: "2026-01-15",
     });
-
-    it("rejects an empty batch and a batch over 25 rows", () => {
-      expect(createTransactionsSchema.safeParse({ rows: [] }).success).toBe(
-        false,
-      );
-      const rows26 = Array.from({ length: 26 }, () => ({ ...txRow }));
-      expect(createTransactionsSchema.safeParse({ rows: rows26 }).success).toBe(
-        false,
-      );
-    });
-
-    it("validates each row against the singular row shape", () => {
-      // Missing required amount on a row.
-      const result = createTransactionsSchema.safeParse({
-        rows: [{ accountName: "Checking", date: "2026-01-15" }],
+    const parse = (amount: number) =>
+      manageTransactionsSchema.safeParse({
+        operation: "create",
+        items: [item(amount)],
       });
+
+    it("accepts a coin amount of 8 decimal places", () => {
+      expect(parse(-0.000025).success).toBe(true);
+      expect(parse(1.23456789).success).toBe(true);
+    });
+
+    it("keeps accepting a fiat amount of 2 or 4 places", () => {
+      expect(parse(-12.5).success).toBe(true);
+      expect(parse(-12.3457).success).toBe(true);
+    });
+
+    it("refuses 9 decimal places", () => {
+      const result = parse(0.123456789);
       expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(JSON.stringify(result.error.issues)).toContain(
+          "amount supports at most 8 decimal places",
+        );
+      }
+    });
+  });
+
+  describe("listWarrantiesSchema", () => {
+    it("accepts no arguments and a limit a model wrote as a string", () => {
+      expect(listWarrantiesSchema.parse({})).toEqual({});
+      expect(
+        listWarrantiesSchema.parse({
+          status: "expiring",
+          q: "laptop",
+          limit: "10",
+        }),
+      ).toEqual({ status: "expiring", q: "laptop", limit: 10 });
+    });
+
+    it.each([
+      [{ status: "soon" }],
+      [{ q: "x".repeat(101) }],
+      [{ limit: 0 }],
+      [{ limit: 51 }],
+      [{ limit: 2.5 }],
+    ])("refuses %p", (input) => {
+      expect(listWarrantiesSchema.safeParse(input).success).toBe(false);
+    });
+
+    it("is the schema the executor validates list_warranties against", () => {
+      expect(validateToolInput("list_warranties", { limit: 99 }).success).toBe(
+        false,
+      );
     });
   });
 });

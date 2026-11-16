@@ -3,7 +3,10 @@ import * as path from "path";
 import { DataSource } from "typeorm";
 
 import { applyAppRoleGrants, provisionAppRole } from "@/common/db/app-role";
+import { compareMigrationFilenames } from "@/common/db/migration-filename";
 import { DEFAULT_APP_USER } from "@/common/db/rls-config";
+
+import { applyProductionConstraints } from "./schema-constraints";
 
 /**
  * RLS task T1: make the integration harness look like a real database.
@@ -95,7 +98,7 @@ export function findTriggerMigrations(): string[] {
   const files = fs
     .readdirSync(MIGRATIONS_DIR)
     .filter((f) => f.endsWith(".sql"))
-    .sort()
+    .sort(compareMigrationFilenames)
     .filter((f) =>
       /RETURNS\s+TRIGGER/i.test(
         stripSqlComments(fs.readFileSync(path.join(MIGRATIONS_DIR, f), "utf8")),
@@ -120,11 +123,11 @@ export function findRlsMigrations(includeEnable = false): string[] {
   const files = fs
     .readdirSync(MIGRATIONS_DIR)
     .filter((f) => f.endsWith(".sql"))
-    // Filename order, which is what db-migrate uses -- note that `116_*` and
-    // `117_*` each have two files, so numeric-prefix order is ambiguous and
-    // alphabetical tie-breaking is what keeps `117_security_documents` ahead of
+    // Apply order, which is what db-migrate uses: numeric prefix, then the
+    // full filename -- `116_*` and `117_*` each have two files, and that
+    // tiebreak is what keeps `117_security_documents` ahead of
     // `118_security_documents_rls`.
-    .sort();
+    .sort(compareMigrationFilenames);
 
   const rlsFiles = files.filter((f) => {
     const sql = stripSqlComments(
@@ -172,6 +175,28 @@ export function findRlsMigrations(includeEnable = false): string[] {
  * Used as a post-condition -- what was declared has to exist in `pg_policies`
  * once the files have been applied.
  */
+/**
+ * Table renames a migration performs, as `old -> new`.
+ *
+ * A name in an older file's policy list can be renamed by a later migration
+ * (`budget_alerts` became `notifications` in 179), and the policy then lives
+ * under the new name -- the renaming migration re-creates it. The post-condition
+ * below resolves through this map so it demands the policy where it actually
+ * is, while a declared table that is absent AND never renamed still fails: that
+ * is the typo the check exists to catch.
+ *
+ * `ALTER TABLE`, deliberately not `ALTER ... RENAME TO` -- migration 179 renames
+ * five indexes in the same file, and an index carries no policy.
+ */
+export function renamedTables(rawSql: string): Array<[string, string]> {
+  const sql = stripSqlComments(rawSql);
+  return [
+    ...sql.matchAll(
+      /ALTER\s+TABLE\s+(?:IF\s+EXISTS\s+)?(\w+)\s+RENAME\s+TO\s+(\w+)/gi,
+    ),
+  ].map((m) => [m[1], m[2]] as [string, string]);
+}
+
 export function declaredPolicyTables(rawSql: string): string[] {
   // Comments stripped for the same reason as in the selector: these files
   // discuss policies in prose, and a sentence naming one would become a
@@ -241,10 +266,64 @@ function updatedAtTriggers(): { trigger: string; table: string }[] {
 }
 
 /**
+ * The table constraints TypeORM cannot express, extracted from `schema.sql`.
+ *
+ * `synchronize` builds the schema from entity metadata, and there is no
+ * decorator for an `EXCLUDE` constraint -- so without this step
+ * `ex_calendar_day_notes_user_span` exists in production and nowhere in the test
+ * database, and every assertion that overlapping day-note spans are refused
+ * (INV-DAYNOTE-001) would pass while proving nothing.
+ *
+ * Read from `schema.sql` rather than rebuilt from a literal here, so the
+ * harness gets the constraint the real database gets. A table that gains one
+ * gains it here too, by adding a row to `EXCLUSION_CONSTRAINTS` below.
+ */
+const EXCLUSION_CONSTRAINTS: ReadonlyArray<{
+  table: string;
+  constraint: string;
+}> = [
+  {
+    table: "calendar_day_notes",
+    constraint: "ex_calendar_day_notes_user_span",
+  },
+];
+
+function exclusionConstraints(): {
+  table: string;
+  constraint: string;
+  definition: string;
+}[] {
+  if (!fs.existsSync(SCHEMA_SQL)) {
+    throw new Error(`Schema not found at ${SCHEMA_SQL}`);
+  }
+  const sql = fs.readFileSync(SCHEMA_SQL, "utf8");
+
+  return EXCLUSION_CONSTRAINTS.map(({ table, constraint }) => {
+    // The clause as schema.sql writes it, up to the balancing paren of
+    // `EXCLUDE USING gist (...)`. Non-greedy to the `)` that closes it, which
+    // is the last thing before either a comma or the table's own `)`.
+    const pattern = new RegExp(
+      `CONSTRAINT\\s+${constraint}\\s+(EXCLUDE\\s+USING\\s+\\w+\\s*\\([\\s\\S]*?\\n\\s*\\))`,
+      "i",
+    );
+    const match = sql.match(pattern);
+    if (!match) {
+      throw new Error(
+        `Could not find ${constraint} in ${SCHEMA_SQL}. The extraction pattern and the ` +
+          "schema have diverged; fix the pattern rather than skipping the constraint, or " +
+          "every assertion that depends on it passes vacuously.",
+      );
+    }
+    return { table, constraint, definition: match[1] };
+  });
+}
+
+/**
  * Brings a `synchronize`-built test database up to the shape the real one has:
  * the runtime role and its grants, the RLS helper functions and policies, the
- * behavioural triggers that enforce rules the entities cannot express, and the
- * `updated_at` triggers.
+ * behavioural triggers that enforce rules the entities cannot express, the
+ * constraints they cannot express either, the unique keys and CHECKs they
+ * merely omit, and the `updated_at` triggers.
  *
  * Call after the schema exists (i.e. after `DataSource.initialize()` with
  * `synchronize: true`). Idempotent, and re-applied per suite because
@@ -285,6 +364,7 @@ export async function applyRlsPolicies(
   //    what ships.
   const migrations = findRlsMigrations(includeEnable);
   const declared = new Set<string>();
+  const renamedTo = new Map<string, string>();
 
   for (const file of migrations) {
     const sql = fs.readFileSync(file, "utf8");
@@ -294,10 +374,14 @@ export async function applyRlsPolicies(
       // Name the file: a bare Postgres error in a 6-file apply is unhelpful.
       throw new Error(
         `Failed applying RLS migration ${path.basename(file)}: ${(err as Error).message}`,
+        { cause: err },
       );
     }
     for (const table of declaredPolicyTables(sql)) {
       declared.add(table);
+    }
+    for (const [from, to] of renamedTables(sql)) {
+      renamedTo.set(from, to);
     }
   }
 
@@ -318,7 +402,21 @@ export async function applyRlsPolicies(
       )
     ).map((r: { tablename: string }) => r.tablename),
   );
-  const missing = [...declared].filter((t) => !policied.has(t)).sort();
+  // A declared name is resolved through the rename chain first: the policy for a
+  // renamed table exists under its current name. Bounded by the map's size so a
+  // pathological `a -> b -> a` in the files cannot spin here.
+  const currentName = (table: string): string => {
+    let name = table;
+    for (let hops = 0; hops <= renamedTo.size; hops += 1) {
+      const next = renamedTo.get(name);
+      if (next === undefined || next === name) return name;
+      name = next;
+    }
+    return name;
+  };
+  const missing = [...declared]
+    .filter((t) => !policied.has(currentName(t)))
+    .sort();
   if (missing.length > 0) {
     throw new Error(
       `RLS migrations declare policies for tables that have none after apply: ${missing.join(", ")}.`,
@@ -335,6 +433,7 @@ export async function applyRlsPolicies(
     } catch (err) {
       throw new Error(
         `Failed applying trigger migration ${path.basename(file)}: ${(err as Error).message}`,
+        { cause: err },
       );
     }
   }
@@ -355,4 +454,31 @@ export async function applyRlsPolicies(
        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()`,
     );
   }
+
+  // 6. The constraints entity metadata cannot express. `btree_gist` first: an
+  //    EXCLUDE mixing an equality column with a range needs it, and the real
+  //    database gets it from schema.sql.
+  const exclusions = exclusionConstraints();
+  if (exclusions.length > 0) {
+    await dataSource.query("CREATE EXTENSION IF NOT EXISTS btree_gist");
+  }
+  for (const { table, constraint, definition } of exclusions) {
+    const [{ exists: tableExists }] = await dataSource.query(
+      "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = $1) AS exists",
+      [table],
+    );
+    if (!tableExists) continue;
+
+    await dataSource.query(
+      `ALTER TABLE "${table}" DROP CONSTRAINT IF EXISTS "${constraint}"`,
+    );
+    await dataSource.query(
+      `ALTER TABLE "${table}" ADD CONSTRAINT "${constraint}" ${definition}`,
+    );
+  }
+
+  // 7. The unique keys and CHECKs schema.sql declares and the entities omit, so
+  //    an `ON CONFLICT` naming a production key has an arbiter here and a write
+  //    production refuses is refused here too (A26-S05-01).
+  await applyProductionConstraints(dataSource);
 }

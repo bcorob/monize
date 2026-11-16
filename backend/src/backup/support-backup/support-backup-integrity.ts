@@ -1,4 +1,5 @@
 import { TableMap } from "./support-backup-scope";
+import { withSharedSupportRefs } from "./support-backup-shared-refs";
 
 /**
  * Referential-integrity scrub for trimmed exports. Account scoping and date
@@ -13,6 +14,8 @@ import { TableMap } from "./support-backup-scope";
  *   meaningless without their target, e.g. a transfer split whose target
  *   account is gone -- keeping it with a null would violate a CHECK
  *   constraint).
+ * - `error`: refuse a broken shared-journal reference; removing allocations or
+ *   refund sources would alter financial facts or violate journal constraints.
  *
  * The map lists physical FKs from database/schema.sql between tables that the
  * support backup exports. FKs to `users` and `currencies` are excluded: users
@@ -22,10 +25,12 @@ import { TableMap } from "./support-backup-scope";
 export interface RefRule {
   column: string;
   refTable: string;
-  onMissing: "null" | "dropRow";
+  onMissing: "null" | "dropRow" | "error";
+  /** Same-named owner/group columns that complete a composite foreign key. */
+  scope?: readonly string[];
 }
 
-const REFS: Record<string, RefRule[]> = {
+const REFS: Record<string, RefRule[]> = withSharedSupportRefs({
   categories: [
     { column: "parent_id", refTable: "categories", onMissing: "null" },
   ],
@@ -39,6 +44,38 @@ const REFS: Record<string, RefRule[]> = {
   payee_aliases: [
     { column: "payee_id", refTable: "payees", onMissing: "dropRow" },
   ],
+  // A parser outlives its payee (the column is ON DELETE SET NULL), so a payee
+  // the file does not carry clears the reference instead of dropping the parser.
+  email_receipt_parsers: [
+    { column: "payee_id", refTable: "payees", onMissing: "null" },
+  ],
+  // A warranty outlives its payee and its purchase (both ON DELETE SET NULL),
+  // so either one the file does not carry clears the reference.
+  warranties: [
+    { column: "payee_id", refTable: "payees", onMissing: "null" },
+    { column: "transaction_id", refTable: "transactions", onMissing: "null" },
+  ],
+  // A claim cannot outlive its warranty (NOT NULL, ON DELETE CASCADE).
+  warranty_claims: [
+    { column: "warranty_id", refTable: "warranties", onMissing: "dropRow" },
+  ],
+  // A rule cannot outlive its bill or its category (both NOT NULL, CASCADE).
+  payroll_deduction_rules: [
+    {
+      column: "scheduled_transaction_id",
+      refTable: "scheduled_transactions",
+      onMissing: "dropRow",
+    },
+    { column: "category_id", refTable: "categories", onMissing: "dropRow" },
+  ],
+  // A rule's figures per period cannot outlive the rule (NOT NULL, CASCADE).
+  payroll_deduction_rule_periods: [
+    {
+      column: "rule_id",
+      refTable: "payroll_deduction_rules",
+      onMissing: "dropRow",
+    },
+  ],
   // transaction_attachments.transaction_id is a real FK (the entity models the
   // relation) between two fully-exported tables, so the coverage guard requires
   // it here even though the de-identified support backup excludes the table. A
@@ -51,6 +88,40 @@ const REFS: Record<string, RefRule[]> = {
       column: "transaction_id",
       refTable: "transactions",
       onMissing: "dropRow",
+    },
+    // The other parent (WTY-003: exactly one of the two is set, so a null here
+    // is a transaction's attachment, not a dangling link). A warranty's
+    // document cannot outlive its warranty (ON DELETE CASCADE), hence dropRow.
+    {
+      column: "warranty_id",
+      refTable: "warranties",
+      onMissing: "dropRow",
+    },
+    // A scan pair's original points at the visible attachment it was scanned
+    // from (INV-ATTACHMENT-002). `null` rather than `dropRow`, and the reason
+    // is structural: a self-referential `dropRow` is a cycle to the pass-bound
+    // guard, which cannot bound a chain whose length depends on the data
+    // (`support-backup-integrity.spec.ts`) -- which is why every other
+    // self-referential rule here nulls too. Nothing is lost by it, because the
+    // dangling case cannot arise: both halves of a pair carry the same
+    // `transaction_id`, so the rule above removes them together or not at all.
+    // The table is in `ALWAYS_EXCLUDED_TABLES` besides, so this entry exists to
+    // satisfy the coverage guard, which is driven by the FULL backup's table
+    // set rather than the support export's.
+    {
+      column: "original_of_attachment_id",
+      refTable: "transaction_attachments",
+      onMissing: "null",
+    },
+  ],
+  // The nullable source FK is modeled by the entity and covered by the live-FK
+  // integration guard. A reminder retains its template after source deletion;
+  // the cron stops it when it sees the null reference.
+  notification_reminders: [
+    {
+      column: "source_notification_id",
+      refTable: "notifications",
+      onMissing: "null",
     },
   ],
   accounts: [
@@ -82,6 +153,11 @@ const REFS: Record<string, RefRule[]> = {
     {
       column: "scheduled_transaction_id",
       refTable: "scheduled_transactions",
+      onMissing: "null",
+    },
+    {
+      column: "payment_matching_rule_id",
+      refTable: "transaction_rules",
       onMissing: "null",
     },
   ],
@@ -186,6 +262,15 @@ const REFS: Record<string, RefRule[]> = {
       refTable: "scheduled_transactions",
       onMissing: "dropRow",
     },
+    // `dropRow`, the scrub's form of the column's ON DELETE CASCADE: a `rule`
+    // claim cannot hold a null here (`chk_stp_rule_claim_transaction`), so
+    // nulling it would make the file unrestorable.
+    {
+      column: "transaction_id",
+      refTable: "transactions",
+      onMissing: "dropRow",
+    },
+    { column: "rule_id", refTable: "transaction_rules", onMissing: "null" },
   ],
   scheduled_transaction_split_tags: [
     {
@@ -231,10 +316,20 @@ const REFS: Record<string, RefRule[]> = {
   loan_scenarios: [
     { column: "account_id", refTable: "accounts", onMissing: "dropRow" },
   ],
+  // A fee cannot outlive its mortgage or its category (both NOT NULL, CASCADE).
+  loan_fees: [
+    { column: "account_id", refTable: "accounts", onMissing: "dropRow" },
+    { column: "category_id", refTable: "categories", onMissing: "dropRow" },
+  ],
+  budget_buckets: [
+    { column: "budget_id", refTable: "budgets", onMissing: "dropRow" },
+  ],
   budget_categories: [
     { column: "budget_id", refTable: "budgets", onMissing: "dropRow" },
     { column: "category_id", refTable: "categories", onMissing: "null" },
     { column: "transfer_account_id", refTable: "accounts", onMissing: "null" },
+    // Nullable, ON DELETE SET NULL: a line without its bucket is unassigned.
+    { column: "bucket_id", refTable: "budget_buckets", onMissing: "null" },
   ],
   budget_periods: [
     { column: "budget_id", refTable: "budgets", onMissing: "dropRow" },
@@ -252,7 +347,16 @@ const REFS: Record<string, RefRule[]> = {
     },
     { column: "category_id", refTable: "categories", onMissing: "null" },
   ],
-  budget_alerts: [
+  budget_period_buckets: [
+    {
+      column: "budget_period_id",
+      refTable: "budget_periods",
+      onMissing: "dropRow",
+    },
+    // Nullable, ON DELETE SET NULL: the row keeps bucket_name without it.
+    { column: "bucket_id", refTable: "budget_buckets", onMissing: "null" },
+  ],
+  notifications: [
     { column: "budget_id", refTable: "budgets", onMissing: "null" },
     {
       column: "budget_category_id",
@@ -300,7 +404,7 @@ const REFS: Record<string, RefRule[]> = {
       onMissing: "null",
     },
   ],
-};
+});
 
 /**
  * Exposed for the integration completeness guard, which asserts REFS covers
@@ -344,22 +448,22 @@ export function scrubToFixedPoint(
 ): TableMap {
   const out: TableMap = { ...tables };
 
-  // Present-id sets are cached across passes and only the tables that actually
+  // Target rows are cached across passes and only the tables that actually
   // lost rows in a pass are invalidated -- a late pass typically drops a few
   // junction rows and shouldn't rebuild the (large, unchanged) transactions
   // set. `changedTables` also drives convergence: an empty set means fixpoint.
-  const idSets = new Map<string, Set<string>>();
-  const idsOf = (table: string): Set<string> => {
-    let ids = idSets.get(table);
-    if (!ids) {
-      ids = new Set(
-        (out[table] ?? [])
-          .map((row) => str(row.id))
-          .filter((id): id is string => id !== null),
-      );
-      idSets.set(table, ids);
+  const indexed = new Map<string, Map<string, Record<string, unknown>>>();
+  const rowsOf = (table: string): Map<string, Record<string, unknown>> => {
+    let rows = indexed.get(table);
+    if (!rows) {
+      rows = new Map();
+      for (const row of out[table] ?? []) {
+        const id = str(row.id);
+        if (id !== null) rows.set(id, row);
+      }
+      indexed.set(table, rows);
     }
-    return ids;
+    return rows;
   };
 
   let converged = false;
@@ -375,8 +479,22 @@ export function scrubToFixedPoint(
       for (const row of rows) {
         const toNull = rules.filter((rule) => {
           const ref = str(row[rule.column]);
-          return ref !== null && !idsOf(rule.refTable).has(ref);
+          if (ref === null) return false;
+          const target = rowsOf(rule.refTable).get(ref);
+          return (
+            !target ||
+            (rule.scope ?? []).some(
+              (column) =>
+                str(row[column]) === null || row[column] !== target[column],
+            )
+          );
         });
+        const refused = toNull.find((rule) => rule.onMissing === "error");
+        if (refused) {
+          throw new Error(
+            `Support backup has an incomplete shared journal at ${table}.${refused.column}`,
+          );
+        }
         if (toNull.some((rule) => rule.onMissing === "dropRow")) {
           tableChanged = true;
           continue;
@@ -394,7 +512,7 @@ export function scrubToFixedPoint(
       if (tableChanged) {
         out[table] = next;
         // This table's id set shrank, so any reference to it must re-check.
-        idSets.delete(table);
+        indexed.delete(table);
         changedTables.add(table);
       }
     }
@@ -497,6 +615,16 @@ const UNIQUE_MASKED_TEXT: Record<string, UniqueTextKey[]> = {
     { column: "name", groupBy: ["account_id"], caseInsensitive: true },
   ],
   import_column_mappings: [{ column: "name", maxLen: 100 }],
+  // UNIQUE (budget_id, name); case-insensitive because the service refuses a
+  // name that differs from another of the budget's only by case.
+  budget_buckets: [
+    {
+      column: "name",
+      groupBy: ["budget_id"],
+      caseInsensitive: true,
+      maxLen: 50,
+    },
+  ],
 };
 
 /**

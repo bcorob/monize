@@ -38,6 +38,79 @@ describe("YahooFinanceService", () => {
     (service as any).crumbExpiresAt = Date.now() + 3600000;
   };
 
+  /**
+   * The crypto exchange rate provider may remember an absence, so it needs
+   * "Yahoo says no such symbol" kept apart from "Yahoo did not answer"
+   * (INV-FX-005); `fetchQuote` folds both into `null`.
+   */
+  describe("fetchQuoteAnswer", () => {
+    it("answers the quote, asking the symbol as given", async () => {
+      mockFetchResponse({
+        chart: {
+          result: [
+            {
+              meta: {
+                symbol: "BTC-CAD",
+                regularMarketPrice: 137250.12,
+                regularMarketTime: 1762353000,
+              },
+            },
+          ],
+        },
+      });
+
+      const answer = await service.fetchQuoteAnswer("BTC-CAD");
+
+      expect(answer?.quote?.regularMarketPrice).toBe(137250.12);
+      expect(answer?.quote?.regularMarketTime).toBe(1762353000);
+      const [url] = (global.fetch as jest.Mock).mock.calls[0];
+      expect(url).toContain("/v8/finance/chart/BTC-CAD?");
+      expect(global.fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([404, 422])(
+      "answers no quote when Yahoo reports the symbol absent with %i",
+      async (status) => {
+        mockFetchResponse({}, false, status);
+
+        expect(await service.fetchQuoteAnswer("NOPE-CAD")).toEqual({
+          quote: null,
+        });
+        // No alternate listing is tried for a coin pair.
+        expect(global.fetch).toHaveBeenCalledTimes(1);
+      },
+    );
+
+    it("answers no quote for a 200 whose chart error says Not Found", async () => {
+      mockFetchResponse({
+        chart: { result: null, error: { code: "Not Found" } },
+      });
+
+      expect(await service.fetchQuoteAnswer("NOPE-CAD")).toEqual({
+        quote: null,
+      });
+    });
+
+    it("is null for a fault, an unknown body or a network error: not an answer", async () => {
+      mockFetchResponse({}, false, 500);
+      expect(await service.fetchQuoteAnswer("BTC-CAD")).toBeNull();
+
+      mockFetchResponse({
+        chart: { result: null, error: { code: "Too Many Requests" } },
+      });
+      expect(await service.fetchQuoteAnswer("BTC-CAD")).toBeNull();
+
+      mockFetchError(new Error("ECONNRESET"));
+      expect(await service.fetchQuoteAnswer("BTC-CAD")).toBeNull();
+    });
+
+    it("leaves fetchQuote's answer for an absent symbol at null", async () => {
+      mockFetchResponse({}, false, 404);
+
+      expect(await service.fetchQuote("NOPE-CAD", "CRYPTO")).toBeNull();
+    });
+  });
+
   describe("fetchQuote", () => {
     it("should fetch and return quote data for a valid symbol", async () => {
       mockFetchResponse({
@@ -270,6 +343,28 @@ describe("YahooFinanceService", () => {
       expect(result!.regularMarketVolume).toBe(10000000);
     });
 
+    it("keeps a null GBX field undefined instead of turning it into 0", async () => {
+      mockFetchResponse({
+        chart: {
+          result: [
+            {
+              meta: {
+                symbol: "VOD.L",
+                currency: "GBp",
+                regularMarketPrice: null,
+                regularMarketDayHigh: 7300,
+              },
+            },
+          ],
+        },
+      });
+
+      const result = await service.fetchQuote("VOD.L");
+
+      expect(result!.regularMarketPrice).toBeUndefined();
+      expect(result!.regularMarketDayHigh).toBe(73);
+    });
+
     it("should not convert prices when currency is GBP (pounds)", async () => {
       mockFetchResponse({
         chart: {
@@ -435,6 +530,136 @@ describe("YahooFinanceService", () => {
       expect(results.size).toBe(1);
       expect(results.has("AAPL")).toBe(true);
       expect(results.has("INVALID")).toBe(false);
+    });
+  });
+
+  describe("fetchHistoricalSeries", () => {
+    // The bars carry no currency, so the bundle has to: an acceptance point
+    // cannot refuse a foreign listing it was never told about.
+    it("carries the series currency, with the pence unit mapped to pounds once", async () => {
+      mockFetchResponse({
+        chart: {
+          result: [
+            {
+              meta: { currency: "GBp", symbol: "VOD.L" },
+              timestamp: [1700000000],
+              indicators: {
+                quote: [
+                  {
+                    open: [5000],
+                    high: [5200],
+                    low: [4900],
+                    close: [5150],
+                    volume: [1000000],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      });
+
+      const series = await service.fetchHistoricalSeries("VOD.L");
+
+      expect(series).not.toBeNull();
+      expect(series!.currencyCode).toBe("GBP");
+      expect(series!.symbol).toBe("VOD.L");
+      // Pence divided into pounds exactly once, by the same read of the same
+      // field that named the currency.
+      expect(series!.prices[0].close).toBe(51.5);
+    });
+
+    it("reports no currency rather than guessing when the payload omits one", async () => {
+      mockFetchResponse({
+        chart: {
+          result: [
+            {
+              timestamp: [1700000000],
+              indicators: {
+                quote: [
+                  {
+                    open: [180],
+                    high: [185],
+                    low: [178],
+                    close: [183],
+                    volume: [50000000],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      });
+
+      const series = await service.fetchHistoricalSeries("AAPL");
+
+      expect(series!.currencyCode).toBeNull();
+      expect(series!.prices).toHaveLength(1);
+    });
+  });
+
+  describe("fetchHistoricalSeries", () => {
+    // The bars carry no currency, so the bundle has to: an acceptance point
+    // cannot refuse a foreign listing it was never told about.
+    it("carries the series currency, with the pence unit mapped to pounds once", async () => {
+      mockFetchResponse({
+        chart: {
+          result: [
+            {
+              meta: { currency: "GBp", symbol: "VOD.L" },
+              timestamp: [1700000000],
+              indicators: {
+                quote: [
+                  {
+                    open: [5000],
+                    high: [5200],
+                    low: [4900],
+                    close: [5150],
+                    volume: [1000000],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      });
+
+      const series = await service.fetchHistoricalSeries("VOD.L");
+
+      expect(series).not.toBeNull();
+      expect(series!.currencyCode).toBe("GBP");
+      expect(series!.symbol).toBe("VOD.L");
+      // Pence divided into pounds exactly once, by the same read of the same
+      // field that named the currency.
+      expect(series!.prices[0].close).toBe(51.5);
+    });
+
+    it("reports no currency rather than guessing when the payload omits one", async () => {
+      mockFetchResponse({
+        chart: {
+          result: [
+            {
+              timestamp: [1700000000],
+              indicators: {
+                quote: [
+                  {
+                    open: [180],
+                    high: [185],
+                    low: [178],
+                    close: [183],
+                    volume: [50000000],
+                  },
+                ],
+              },
+            },
+          ],
+        },
+      });
+
+      const series = await service.fetchHistoricalSeries("AAPL");
+
+      expect(series!.currencyCode).toBeNull();
+      expect(series!.prices).toHaveLength(1);
     });
   });
 
@@ -688,6 +913,54 @@ describe("YahooFinanceService", () => {
       expect(await service.fetchHistorical("AAPL")).toBeNull();
     });
 
+    it("reads a 400 that names an absent window as an answer, and any other 400 as none", async () => {
+      // Issue #1409. Yahoo carries no USD/CAD history before December 2003 and
+      // refuses the window with a 400 -- which IS an answer about the symbol
+      // and the window, so the caller may remember it as empty. Read as a
+      // refusal, the empty-window memory could never be written and a
+      // since-inception valuation re-issued the same doomed calls on every
+      // load. A 400 about the request itself stays a refusal.
+      const respondWith = (body: unknown) => {
+        global.fetch = jest.fn().mockResolvedValue({
+          ok: false,
+          status: 400,
+          text: () => Promise.resolve(JSON.stringify(body)),
+          json: () => Promise.resolve(body),
+        });
+      };
+
+      respondWith({
+        chart: {
+          result: null,
+          error: {
+            code: "Bad Request",
+            description:
+              "Data doesn't exist for startDate = 1000684800, endDate = 1004486400",
+          },
+        },
+      });
+      expect(await service.fetchHistorical("USDCAD=X")).toEqual([]);
+
+      respondWith({
+        chart: {
+          result: null,
+          error: {
+            code: "Bad Request",
+            description: "Invalid input - interval=1z is not supported.",
+          },
+        },
+      });
+      expect(await service.fetchHistorical("AAPL")).toBeNull();
+
+      // A body that is not JSON at all says nothing about the symbol either.
+      global.fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        status: 400,
+        text: () => Promise.resolve("<html>Bad Request</html>"),
+      });
+      expect(await service.fetchHistorical("AAPL")).toBeNull();
+    });
+
     it("should return null when indicators are missing", async () => {
       mockFetchResponse({
         chart: { result: [{ timestamp: [1700000000] }] },
@@ -797,6 +1070,68 @@ describe("YahooFinanceService", () => {
       expect(result![0].date.getHours()).toBe(0);
       expect(result![0].date.getMinutes()).toBe(0);
       expect(result![0].date.getSeconds()).toBe(0);
+    });
+  });
+
+  describe("searchQuotes", () => {
+    it("asks the search endpoint for the count and answers the quotes", async () => {
+      mockFetchResponse({
+        quotes: [
+          { symbol: "MYRUSD=X", quoteType: "CURRENCY", shortname: "MYR/USD" },
+          { symbol: "MAYBANK.KL", quoteType: "EQUITY" },
+        ],
+      });
+
+      const result = await service.searchQuotes("Ringgit Malaysia", 20);
+
+      expect(result).toEqual([
+        { symbol: "MYRUSD=X", quoteType: "CURRENCY", shortname: "MYR/USD" },
+        { symbol: "MAYBANK.KL", quoteType: "EQUITY" },
+      ]);
+      const url = (global.fetch as jest.Mock).mock.calls[0][0] as string;
+      expect(url).toBe(
+        "https://query1.finance.yahoo.com/v1/finance/search?q=Ringgit%20Malaysia&quotesCount=20&newsCount=0",
+      );
+    });
+
+    it("drops an item without a symbol", async () => {
+      mockFetchResponse({
+        quotes: [{ quoteType: "CURRENCY" }, { symbol: "EURUSD=X" }],
+      });
+
+      expect(await service.searchQuotes("euro", 5)).toEqual([
+        { symbol: "EURUSD=X" },
+      ]);
+    });
+
+    it.each([
+      ["no quotes", { quotes: [] }],
+      ["no quotes property", {}],
+    ])("is an empty answer for %s", async (_label, body) => {
+      mockFetchResponse(body);
+
+      expect(await service.searchQuotes("xyz", 20)).toEqual([]);
+    });
+
+    it("is no answer on a non-OK response", async () => {
+      mockFetchResponse({}, false, 500);
+
+      expect(await service.searchQuotes("xyz", 20)).toBeNull();
+    });
+
+    it("is no answer on a network error", async () => {
+      mockFetchError(new Error("Network failure"));
+
+      expect(await service.searchQuotes("xyz", 20)).toBeNull();
+    });
+
+    it("records the answer with the breaker once the body arrives", async () => {
+      const recordSuccess = jest.spyOn(health, "recordSuccess");
+      mockFetchResponse({ quotes: [] });
+
+      await service.searchQuotes("xyz", 20);
+
+      expect(recordSuccess).toHaveBeenCalledWith("yahoo_finance");
     });
   });
 
@@ -1147,6 +1482,111 @@ describe("YahooFinanceService", () => {
     });
   });
 
+  /**
+   * Discussion #2005 / issue #379: a coin was looked up as USD on Yahoo's `CCC`
+   * venue whatever its quote fiat, because the exchange guess reads every
+   * dotless symbol as USD. Saved that way, every EUR price for `BTC-EUR` is
+   * refused by `verifyProviderCurrency` and the holding never gets a value.
+   */
+  describe("lookupSecurityMany for a cryptocurrency", () => {
+    const coin = (symbol: string, extra: Record<string, string> = {}) => ({
+      symbol,
+      shortname: `${symbol} coin`,
+      quoteType: "CRYPTOCURRENCY",
+      exchange: "CCC",
+      exchDisp: "CCC",
+      typeDisp: "Cryptocurrency",
+      ...extra,
+    });
+
+    it("takes the currency from the fiat leg and names the canonical exchange", async () => {
+      mockFetchResponse({ quotes: [coin("BTC-EUR")] });
+
+      const [result] = await service.lookupSecurityMany("BTC-EUR");
+
+      expect(result).toMatchObject({
+        symbol: "BTC-EUR",
+        exchange: "CRYPTO",
+        securityType: "CRYPTO",
+        currencyCode: "EUR",
+      });
+    });
+
+    it("reads a USD pair as USD and a CAD pair as CAD", async () => {
+      mockFetchResponse({ quotes: [coin("BTC-USD"), coin("DOT-CAD")] });
+
+      const results = await service.lookupSecurityMany("BTC");
+
+      expect(
+        results.map((r) => [r.symbol, r.exchange, r.currencyCode]),
+      ).toEqual([
+        ["BTC-USD", "CRYPTO", "USD"],
+        ["DOT-CAD", "CRYPTO", "CAD"],
+      ]);
+    });
+
+    it("recognises a coin by quoteType alone", async () => {
+      mockFetchResponse({
+        quotes: [{ symbol: "ETH-GBP", quoteType: "CRYPTOCURRENCY" }],
+      });
+
+      const [result] = await service.lookupSecurityMany("ETH-GBP");
+
+      expect(result).toMatchObject({
+        exchange: "CRYPTO",
+        securityType: "CRYPTO",
+        currencyCode: "GBP",
+      });
+    });
+
+    // Unknown is null, never USD: the form then asks the person for the
+    // currency instead of saving one every price will be refused against.
+    it("reports no currency for a coin symbol without a fiat leg", async () => {
+      mockFetchResponse({ quotes: [coin("BTC"), coin("BTC-USDT")] });
+
+      const results = await service.lookupSecurityMany("BTC");
+
+      expect(results.map((r) => [r.symbol, r.currencyCode])).toEqual([
+        ["BTC", null],
+        ["BTC-USDT", null],
+      ]);
+      expect(results.every((r) => r.exchange === "CRYPTO")).toBe(true);
+    });
+
+    it("still reads a dotless US equity as USD", async () => {
+      mockFetchResponse({
+        quotes: [
+          {
+            symbol: "BRK-B",
+            quoteType: "EQUITY",
+            exchDisp: "NYSE",
+            typeDisp: "Equity",
+          },
+        ],
+      });
+
+      const [result] = await service.lookupSecurityMany("BRK-B");
+
+      expect(result).toMatchObject({
+        symbol: "BRK-B",
+        exchange: "NYSE",
+        securityType: "STOCK",
+        currencyCode: "USD",
+      });
+    });
+
+    it("applies the same rule to the single-result lookup", async () => {
+      mockFetchResponse({ quotes: [coin("BTC-EUR")] });
+
+      const result = await service.lookupSecurity("BTC-EUR");
+
+      expect(result).toMatchObject({
+        exchange: "CRYPTO",
+        currencyCode: "EUR",
+      });
+    });
+  });
+
   describe("getYahooSymbol", () => {
     it("should return symbol with .TO suffix for TSX exchange", () => {
       expect(service.getYahooSymbol("RY", "TSX")).toBe("RY.TO");
@@ -1186,6 +1626,13 @@ describe("YahooFinanceService", () => {
 
     it("should return symbol unchanged for unknown exchange", () => {
       expect(service.getYahooSymbol("TEST", "UNKNOWN_EXCHANGE")).toBe("TEST");
+    });
+
+    // A coin is quoted under its full Yahoo symbol; an exchange suffix would
+    // name a listing that does not exist.
+    it("returns a crypto pair unchanged on the CRYPTO exchange", () => {
+      expect(service.getYahooSymbol("BTC-EUR", "CRYPTO")).toBe("BTC-EUR");
+      expect(service.getYahooSymbol("BTC-EUR", "CCC")).toBe("BTC-EUR");
     });
 
     it("should handle case-insensitive exchange matching", () => {
@@ -1255,6 +1702,45 @@ describe("YahooFinanceService", () => {
     it("returns no alternates for a currency pair", () => {
       expect(service.getAlternateSymbols("USDCAD=X")).toEqual([]);
       expect(service.getAlternateSymbols("CADUSD=X")).toEqual([]);
+    });
+
+    // A coin trades on no exchange either, so `BTC-EUR.TO` is three more
+    // guaranteed misses on every refresh Yahoo did not answer. The exchange
+    // says so, whatever the symbol's last leg: `USDT` is no ISO code.
+    it("returns no alternates for a security on the crypto exchange", () => {
+      expect(service.getAlternateSymbols("BTC-EUR", "CRYPTO")).toEqual([]);
+      expect(service.getAlternateSymbols("BTC-USDT", "CRYPTO")).toEqual([]);
+      expect(service.getAlternateSymbols("BTC", "CRYPTO")).toEqual([]);
+    });
+
+    // A coin created before the lookup named `CRYPTO` still carries `CCC`.
+    it("returns no alternates for a coin still on Yahoo's CCC venue", () => {
+      expect(service.getAlternateSymbols("DOT-CAD", "CCC")).toEqual([]);
+    });
+
+    // The symbol's shape decides nothing: a hyphenated listing keeps its
+    // Canadian suffixes, as does a dotless symbol with no exchange.
+    it("keeps the alternates of a hyphenated listing", () => {
+      expect(service.getAlternateSymbols("ENB-PFU", "TSX")).toEqual([
+        "ENB-PFU.TO",
+        "ENB-PFU.V",
+        "ENB-PFU.CN",
+      ]);
+      expect(service.getAlternateSymbols("RY", null)).toEqual([
+        "RY.TO",
+        "RY.V",
+        "RY.CN",
+      ]);
+    });
+
+    // Each fetch path hands the security's exchange through, so a coin that
+    // misses costs one request, not four.
+    it("tries no alternates when a crypto quote misses", async () => {
+      mockFetchResponse({ chart: { result: [] } });
+
+      await service.fetchQuote("BTC-USDT", "CRYPTO");
+
+      expect(global.fetch).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -2267,7 +2753,7 @@ describe("YahooFinanceService", () => {
      * object once however many layers hand it on -- so a mock that rejects with
      * the same instance every time reports five failures as one and the breaker
      * never opens. `A mock must return what the real collaborator returns`
-     * (backend/CLAUDE.md).
+     * (docs/backend/testing.md).
      */
     const rejectEveryFetch = (make: () => Error) => {
       global.fetch = jest.fn(() => Promise.reject(make()));
@@ -2317,6 +2803,7 @@ describe("YahooFinanceService", () => {
 
       expect(await service.fetchQuote("MSFT")).toBeNull();
       expect(await service.lookupSecurityMany("micro")).toEqual([]);
+      expect(await service.searchQuotes("ringgit", 20)).toBeNull();
       expect(
         await service.fetchIntradaySeries("MSFT", null, {
           interval: "5m",

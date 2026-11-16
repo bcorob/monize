@@ -13,8 +13,10 @@
  * call sites to spell out the same two classes -- the value is written once, and
  * `TransactionList.test.tsx` asserts the header and the row still match.
  *
- * Only below `sm`: above it the full date is what renders, so there is nothing
- * to compensate for and the table keeps its ordinary inset.
+ * Only below `sm`, whatever renders in the date cell: the tightening exists to
+ * hand width to a payee that has none to spare, which is only true of phones.
+ * Above `sm` a shortened date simply leaves whitespace and the table keeps its
+ * ordinary inset.
  */
 export interface RegisterDateColumnPadding {
   /** Extra class for the Date column's header and cells. */

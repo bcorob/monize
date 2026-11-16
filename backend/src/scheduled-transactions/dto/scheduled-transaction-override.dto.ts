@@ -1,7 +1,6 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import {
   IsString,
-  IsNumber,
   IsOptional,
   IsUUID,
   IsBoolean,
@@ -17,6 +16,9 @@ import { Type } from "class-transformer";
 import { SanitizeHtml } from "../../common/decorators/sanitize-html.decorator";
 import { InvestmentSplitDto } from "../../transactions/dto/create-transaction-split.dto";
 import { SplitKind } from "../../transactions/entities/split-kind.enum";
+import { TRANSACTION_NOTE_MAX_LENGTH } from "../../common/transaction-note";
+import { IsMoneyAmount } from "../../common/validators/is-money-amount.validator";
+import { IsShareQuantity } from "../../common/validators/is-share-quantity.validator";
 
 export class OverrideSplitDto {
   // Stable id of the override split this row continues (issue #1167 F4). Echoed
@@ -67,7 +69,7 @@ export class OverrideSplitDto {
   investment?: InvestmentSplitDto;
 
   @ApiProperty({ description: "Amount for this split" })
-  @IsNumber({ maxDecimalPlaces: 4 })
+  @IsMoneyAmount()
   @Min(-999999999999)
   @Max(999999999999)
   amount: number;
@@ -75,7 +77,7 @@ export class OverrideSplitDto {
   @ApiPropertyOptional({ description: "Memo for this split" })
   @IsOptional()
   @IsString()
-  @MaxLength(500)
+  @MaxLength(TRANSACTION_NOTE_MAX_LENGTH)
   @SanitizeHtml()
   memo?: string | null;
 }
@@ -97,7 +99,7 @@ export class CreateScheduledTransactionOverrideDto {
 
   @ApiPropertyOptional({ description: "Overridden amount" })
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 4 })
+  @IsMoneyAmount()
   @Min(-999999999999)
   @Max(999999999999)
   amount?: number | null;
@@ -110,7 +112,7 @@ export class CreateScheduledTransactionOverrideDto {
   @ApiPropertyOptional({ description: "Overridden description" })
   @IsOptional()
   @IsString()
-  @MaxLength(500)
+  @MaxLength(TRANSACTION_NOTE_MAX_LENGTH)
   @SanitizeHtml()
   description?: string | null;
 
@@ -133,14 +135,14 @@ export class CreateScheduledTransactionOverrideDto {
 
   @ApiPropertyOptional({ description: "Per-occurrence investment quantity" })
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 8 })
+  @IsShareQuantity()
   @Min(0)
   @Max(999999999999)
   investmentQuantity?: number | null;
 
   @ApiPropertyOptional({ description: "Per-occurrence investment price" })
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 10 })
+  @IsMoneyAmount(10)
   @Min(0)
   @Max(999999999999)
   investmentPrice?: number | null;
@@ -150,7 +152,7 @@ export class CreateScheduledTransactionOverrideDto {
       "Per-occurrence investment total amount (for DIVIDEND/INTEREST/CAPITAL_GAIN)",
   })
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 4 })
+  @IsMoneyAmount(4)
   @Min(-999999999999)
   @Max(999999999999)
   investmentTotalAmount?: number | null;
@@ -172,7 +174,7 @@ export class UpdateScheduledTransactionOverrideDto {
 
   @ApiPropertyOptional({ description: "Overridden amount" })
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 4 })
+  @IsMoneyAmount()
   @Min(-999999999999)
   @Max(999999999999)
   amount?: number | null;
@@ -185,7 +187,7 @@ export class UpdateScheduledTransactionOverrideDto {
   @ApiPropertyOptional({ description: "Overridden description" })
   @IsOptional()
   @IsString()
-  @MaxLength(500)
+  @MaxLength(TRANSACTION_NOTE_MAX_LENGTH)
   @SanitizeHtml()
   description?: string | null;
 
@@ -208,14 +210,14 @@ export class UpdateScheduledTransactionOverrideDto {
 
   @ApiPropertyOptional({ description: "Per-occurrence investment quantity" })
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 8 })
+  @IsShareQuantity()
   @Min(0)
   @Max(999999999999)
   investmentQuantity?: number | null;
 
   @ApiPropertyOptional({ description: "Per-occurrence investment price" })
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 10 })
+  @IsMoneyAmount(10)
   @Min(0)
   @Max(999999999999)
   investmentPrice?: number | null;
@@ -225,7 +227,7 @@ export class UpdateScheduledTransactionOverrideDto {
       "Per-occurrence investment total amount (for DIVIDEND/INTEREST/CAPITAL_GAIN)",
   })
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 4 })
+  @IsMoneyAmount(4)
   @Min(-999999999999)
   @Max(999999999999)
   investmentTotalAmount?: number | null;

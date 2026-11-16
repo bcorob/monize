@@ -34,6 +34,20 @@ describe('MonteCarloSaveAsDialog', () => {
     expect(screen.queryByText(/Save scenario as/)).not.toBeInTheDocument();
   });
 
+  it('is named by its title, passed through Modal rather than drawn in the body', () => {
+    render(
+      <MonteCarloSaveAsDialog
+        isOpen
+        initialName="Existing"
+        onCancel={vi.fn()}
+        onSubmit={vi.fn()}
+      />,
+    );
+    // A hand-drawn heading leaves the dialog unnamed; Modal's `title` wires
+    // aria-labelledby.
+    expect(screen.getByRole('dialog', { name: 'Save scenario as' })).toBeInTheDocument();
+  });
+
   it('pre-fills the name field with initialName when opened', () => {
     render(
       <MonteCarloSaveAsDialog
@@ -122,7 +136,7 @@ describe('MonteCarloSaveAsDialog', () => {
     expect(save).toBeDisabled();
   });
 
-  it('does not invoke onSubmit when the name is empty', () => {
+  it('does not invoke onSubmit when the name is empty', async () => {
     const onSubmit = vi.fn();
     render(
       <MonteCarloSaveAsDialog
@@ -132,7 +146,10 @@ describe('MonteCarloSaveAsDialog', () => {
         onSubmit={onSubmit}
       />,
     );
-    fireEvent.submit(screen.getByLabelText(/^Name$/).closest('form')!);
+    // react-hook-form validates asynchronously; let it settle inside act.
+    await act(async () => {
+      fireEvent.submit(screen.getByLabelText(/^Name$/).closest('form')!);
+    });
     expect(onSubmit).not.toHaveBeenCalled();
   });
 

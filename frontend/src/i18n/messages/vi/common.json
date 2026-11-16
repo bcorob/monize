@@ -10,6 +10,8 @@
     "versionLabel": "Phiên bản {version}",
     "expandAll": "Mở rộng tất cả",
     "collapseAll": "Thu gọn tất cả",
+    "changeCount": "{count, plural, other {# thay đổi}}",
+    "otherSections": "Bản sửa lỗi và chi tiết",
     "viewFullNotes": "Xem ghi chú phát hành đầy đủ",
     "dontShowAgain": "Không hiển thị lại",
     "showNextLogin": "Hiển thị ở lần đăng nhập tiếp theo",
@@ -38,6 +40,14 @@
     "scheduleRecurring": "Lên lịch định kỳ",
     "more": "Thêm thao tác"
   },
+  "columns": {
+    "button": "Cột",
+    "buttonWithHidden": "Cột, {count} đã ẩn",
+    "menuLabel": "Hiện hoặc ẩn cột",
+    "showAll": "Hiện tất cả",
+    "hideColumn": "Ẩn cột",
+    "sheetSubtitle": "Hiện lại cột từ menu Cột."
+  },
   "loading": "Đang tải...",
   "pagination": {
     "showing": "Hiển thị",
@@ -60,6 +70,7 @@
   },
   "exportDropdown": {
     "export": "Xuất",
+    "exportCsv": "Xuất CSV",
     "exporting": "Đang xuất...",
     "exportPdf": "Xuất PDF",
     "exportReport": "Xuất báo cáo",
@@ -88,6 +99,7 @@
     "stackedChart": "Cột xếp chồng 100%",
     "lineChart": "Biểu đồ đường",
     "areaChart": "Biểu đồ vùng",
+    "sankeyChart": "Biểu đồ dòng chảy",
     "table": "Bảng"
   },
   "formActions": {
@@ -118,8 +130,15 @@
     "search": "Tìm kiếm...",
     "selectAll": "Chọn tất cả",
     "clear": "Xóa",
+    "clearSearch": "Xóa tìm kiếm",
     "noOptions": "Không tìm thấy tùy chọn",
     "selectedCount": "Đã chọn {count}"
+  },
+  "categoryFilter": {
+    "uncategorized": "Chưa phân loại",
+    "transfers": "Chuyển tiền",
+    "allIncome": "Tất cả danh mục thu nhập",
+    "allExpenses": "Tất cả danh mục chi tiêu"
   },
   "combobox": {
     "createOption": "Tạo \"{value}\"",
@@ -137,6 +156,7 @@
   },
   "dateInput": {
     "shortcutsTitle": "Phím tắt bàn phím",
+    "openPicker": "Mở bộ chọn ngày",
     "today": "Hôm nay",
     "firstDayOfYear": "Ngày đầu năm",
     "lastDayOfYear": "Ngày cuối năm",
@@ -158,6 +178,7 @@
     "CASH": "Tiền mặt",
     "LINE_OF_CREDIT": "Hạn mức tín dụng",
     "ASSET": "Tài sản",
+    "CRYPTO": "Ví tiền mã hóa",
     "OTHER": "Khác"
   },
   "accountFilter": {
@@ -241,12 +262,20 @@
     "marker": "—",
     "srLabel": "Không có số tiền",
     "scheduledFx": "Không thể xác định số tiền hiện tại: không có tỷ giá cho cặp tiền tệ thanh toán của mục đã lên lịch này. Số tiền đã lưu được tính theo tỷ giá cũ nên không được hiển thị.",
-    "displayFx": "Không thể hiển thị số tiền này ở đây: giá trị đã biết, nhưng không có tỷ giá để chuyển đổi sang đơn vị tiền tệ của tổng này. Hãy làm mới tỷ giá trên trang Tiền tệ."
+    "displayFx": "Không thể hiển thị số tiền này ở đây: giá trị đã biết, nhưng không có tỷ giá để chuyển đổi sang đơn vị tiền tệ của tổng này. Hãy làm mới tỷ giá trên trang Tiền tệ.",
+    "noCashBalance": "Không thể tính giá trị này: một tài khoản tiền mặt trong chế độ xem này không báo cáo số dư cho ngày này, nên số tiền nó nắm giữ là không xác định chứ không phải bằng không. Hãy tải lại báo cáo; nếu vẫn xảy ra, số dư của ngày đó không tính được và điều này đáng để báo cáo.",
+    "noPrice": "Không thể tính giá trị này: số cổ phần nắm giữ đã biết, nhưng chứng khoán không có giá để định giá. Hãy làm mới giá, hoặc tự thêm một giá trong lịch sử giá của chứng khoán.",
+    "noBaseline": "Không thể tính con số này: đây là một phép so sánh và không có giá trị trước đó để so sánh. Không thiếu gì cả, nên cũng không có gì để thêm.",
+    "staleQuote": "Không thể tính thay đổi trong ngày: giá mới nhất của chứng khoán cũ hơn phiên giao dịch gần nhất, nên mọi thay đổi tính từ đó là của một ngày trước. Hãy làm mới giá, hoặc kiểm tra nhà cung cấp giá của chứng khoán.",
+    "unknownCurrency": "Không thể hiển thị số tiền này: bản ghi không nêu chứng khoán nào, nên không rõ đồng tiền của con số. Hãy mở giao dịch và gán cho nó một chứng khoán để các số tiền của nó có thể được gắn nhãn."
   },
   "density": {
     "title": "Chuyển đổi mật độ hàng",
     "normal": "Bình thường",
     "compact": "Thu gọn",
     "dense": "Dày đặc"
+  },
+  "scheduledOverdue": {
+    "included": "Bao gồm {count, plural, one {# giao dịch theo lịch quá hạn} other {# giao dịch theo lịch quá hạn}}"
   }
 }

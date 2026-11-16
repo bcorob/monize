@@ -11,8 +11,11 @@ describe("convertWithRateLookup", () => {
     expect(convertWithRateLookup(100, "USD", "USD", getRate)).toBe(100);
   });
 
-  it("returns the amount unchanged when the from currency is empty", () => {
-    expect(convertWithRateLookup(100, "", "USD", getRate)).toBe(100);
+  it("answers null when either currency code is empty (INV-FX-001)", () => {
+    // An empty code names no currency; it is unknown, not "the same currency".
+    expect(convertWithRateLookup(100, "", "USD", getRate)).toBeNull();
+    expect(convertWithRateLookup(100, "USD", "", getRate)).toBeNull();
+    expect(convertWithRateLookup(100, "", "", getRate)).toBeNull();
   });
 
   it("applies the direct rate when available", () => {

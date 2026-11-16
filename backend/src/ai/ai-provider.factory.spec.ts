@@ -7,6 +7,7 @@ import { OpenAiProvider } from "./providers/openai.provider";
 import { OllamaProvider } from "./providers/ollama.provider";
 import { OllamaCloudProvider } from "./providers/ollama-cloud.provider";
 import { OpenAiCompatibleProvider } from "./providers/openai-compatible.provider";
+import * as longRunningFetchModule from "./providers/long-running-fetch";
 
 describe("AiProviderFactory", () => {
   let factory: AiProviderFactory;
@@ -116,5 +117,32 @@ describe("AiProviderFactory", () => {
   it("does not decrypt when apiKeyEnc is null", () => {
     factory.createProvider(makeConfig({ provider: "ollama", apiKeyEnc: null }));
     expect(mockEncryptionService.decrypt).not.toHaveBeenCalled();
+  });
+
+  describe("egress policy", () => {
+    const providerFetchSpy = jest.spyOn(
+      longRunningFetchModule,
+      "providerFetch",
+    );
+
+    afterEach(() => providerFetchSpy.mockClear());
+
+    it("builds with the strictest policy when the caller names none", () => {
+      factory.createProvider(
+        makeConfig({ provider: "ollama", baseUrl: "http://10.0.0.5:11434" }),
+      );
+      expect(providerFetchSpy).toHaveBeenCalledWith("public-only");
+    });
+
+    it.each(["public-or-allowlisted", "any"] as const)(
+      "builds with the %s policy it is handed",
+      (policy) => {
+        factory.createProvider(
+          makeConfig({ provider: "openai-compatible", baseUrl: "http://x" }),
+          policy,
+        );
+        expect(providerFetchSpy).toHaveBeenCalledWith(policy);
+      },
+    );
   });
 });

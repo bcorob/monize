@@ -11,9 +11,76 @@
   "uploaded": "Allegato aggiunto",
   "deleted": "Allegato eliminato",
   "loadFailed": "Impossibile caricare gli allegati",
+  "retry": "Riprova",
   "uploadFailed": "Impossibile caricare l'allegato",
   "deleteFailed": "Impossibile eliminare l'allegato",
   "tooLarge": "Il file è troppo grande (massimo {max})",
   "unsupported": "Tipo di file non supportato. Consentiti: immagini o PDF",
-  "tooMany": "Massimo {max} allegati per transazione"
+  "tooMany": "Massimo {max} allegati per transazione",
+  "fromWarranty": "Dalla garanzia: {name}",
+  "fromLinkedWarranty": "Da una garanzia collegata",
+  "scan": {
+    "button": "Scansiona documento",
+    "title": "Scansiona documento",
+    "description": "Raddrizza e pulisci la foto di un documento prima di allegarla.",
+    "analysing": "Ricerca di un documento nella foto…",
+    "failed": "Non è stato possibile scansionare il documento. Puoi comunque allegare la foto così com’è.",
+    "viewEnhanced": "Migliorata",
+    "viewOriginal": "Originale",
+    "rotate": "Ruota",
+    "styleLabel": "Resa",
+    "styles": {
+      "colour": "A colori",
+      "grayscale": "Scala di grigi",
+      "blackAndWhite": "Bianco e nero",
+      "none": "Nessun miglioramento"
+    },
+    "styleHints": {
+      "colour": "Uniforma l’illuminazione, aumenta il contrasto e rende più nitido il testo.",
+      "grayscale": "La stessa pulizia senza il colore. Più leggera e priva della dominante che la carta assume con la luce artificiale.",
+      "blackAndWhite": "Solo inchiostro e carta. Ideale per il testo stampato; appiattirà foto e loghi.",
+      "none": "Raddrizzata e ritagliata, per il resto esattamente come fotografata. Da usare quando il miglioramento rovina il soggetto."
+    },
+    "adjustments": {
+      "brightness": "Luminosità ({value})",
+      "contrast": "Contrasto ({value})"
+    },
+    "resetAdjustments": "Reimposta luminosità e contrasto",
+    "adjustHint": "Passa a «Originale» per trascinare gli angoli se i bordi non sono corretti.",
+    "updating": "Aggiornamento dell’anteprima…",
+    "noDocumentFound": "Non sono stati trovati i bordi del documento, quindi è stata usata l’intera foto. Passa a «Originale» e sistema tu gli angoli.",
+    "previewEnhancedAlt": "Anteprima della scansione migliorata",
+    "previewOriginalAlt": "Anteprima della foto originale",
+    "useEnhanced": "Usa la versione migliorata",
+    "keepOriginal": "Conserva solo l’originale",
+    "retake": "Riscatta",
+    "cancel": "Annulla",
+    "originalTooLarge": "La foto originale supera {max}, quindi verrà allegata solo la scansione migliorata.",
+    "warnings": {
+      "blurry": "La foto sembra mossa. Riscattarla darà una scansione più nitida.",
+      "edgesOutsideFrame": "Il documento arriva al bordo della foto, quindi un lato potrebbe risultare tagliato. Riscatta la foto lasciando un margine intorno all’intera pagina, senza che nessun lato tocchi il bordo.",
+      "lowResolution": "La scansione è piuttosto piccola, il testo minuto potrebbe risultare difficile da leggere."
+    },
+    "corners": {
+      "label": "Angoli del documento",
+      "topLeft": "Angolo in alto a sinistra",
+      "topRight": "Angolo in alto a destra",
+      "bottomRight": "Angolo in basso a destra",
+      "bottomLeft": "Angolo in basso a sinistra"
+    },
+    "originalKept": "originale conservato"
+  },
+  "preview": {
+    "loading": "Caricamento dell'anteprima…",
+    "failed": "Impossibile caricare l'anteprima. Puoi comunque scaricare il file.",
+    "storeUnavailable": "Questo file si trova in un archivio che il server non riesce a raggiungere al momento, quindi non può essere visualizzato né scaricato. Non è andato perso nulla: chiedi all'amministrazione di ripristinare le impostazioni dell'archivio allegati.",
+    "unsupported": "Questo tipo di file non può essere visualizzato in anteprima. Puoi comunque scaricarlo.",
+    "fit": "Adatta allo schermo",
+    "actualSize": "Dimensione reale",
+    "versionLabel": "Versione",
+    "zoomLabel": "Zoom",
+    "pageCount": "{count, plural, one {# pagina} other {# pagine}}",
+    "page": "Pagina {page} di {total}",
+    "open": "Anteprima di {name}"
+  }
 }

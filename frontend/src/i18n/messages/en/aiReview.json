@@ -1,0 +1,120 @@
+{
+  "page": {
+    "title": "AI review inbox",
+    "subtitle": "Transactions a rule asked an AI to review, profiles an assistant was asked to draft, and the edits an assistant proposed for you to approve."
+  },
+  "filter": {
+    "label": "Filter by status",
+    "open": "Open",
+    "pending": "Pending",
+    "claimed": "In review",
+    "proposed": "Proposed",
+    "applied": "Applied",
+    "rejected": "Rejected",
+    "expired": "Expired"
+  },
+  "kindFilter": {
+    "label": "Filter by kind",
+    "all": "All",
+    "email_receipt": "Email receipts",
+    "transaction_review": "Rules",
+    "option": "{label} ({count})"
+  },
+  "status": {
+    "pending": "Pending",
+    "claimed": "In review",
+    "proposed": "Proposed",
+    "applied": "Applied",
+    "rejected": "Rejected",
+    "expired": "Expired"
+  },
+  "columns": {
+    "date": "Date",
+    "request": "Request",
+    "amount": "Amount",
+    "status": "Status"
+  },
+  "row": {
+    "noPayee": "No payee",
+    "transactionMissing": "This transaction no longer exists",
+    "rule": "Rule: {name}",
+    "manualRequest": "Requested manually",
+    "trade": "{action, select, BUY {Buy {quantity} shares of {symbol}} SELL {Sell {quantity} shares of {symbol}} DIVIDEND {Dividend from {symbol}} REINVEST {Reinvest a dividend in {quantity} shares of {symbol}} other {Trade in {symbol}}}",
+    "receiptInstruction": {
+      "automatic": "Enrich this transaction from the attached order email: split it by line items with a category each, or set the description.",
+      "chat": "You asked for the attached order email to be recognized: split this transaction by product with a category each, or set the description.",
+      "categorize": "Assign a category to each item of the attached order email that no rule categorized, then propose the split of this transaction or set the description.",
+      "parsed": "A saved parser read the order email and proposes these category lines and this description for the transaction.",
+      "trade": "A trade confirmation email read by a saved profile proposes this investment transaction. Check the account, the security, the shares and the total against your brokerage before approving.",
+      "tradeChat": "You asked for the attached trade confirmation to be recognized: propose the investment transaction it reports, a buy, a sell, a cash dividend or a reinvested dividend."
+    },
+    "emailReceipt": "Email receipt: {subject} from {sender}",
+    "emailReceiptForwarded": "Email receipt: {subject} from {sender}, forwarded by {forwarder}",
+    "emailReceiptMissing": "Email receipt (the email was deleted)",
+    "parserDraft": "Profile draft from {count, plural, one {# email} other {# emails}} ({domain})",
+    "viewEmailReceipts": "View email receipts",
+    "agentNote": "Note from the assistant: {reason}",
+    "dates": "Created {created}, expires {expires}",
+    "viewTransaction": "View transaction",
+    "waitingForAgent": "Waiting for an AI agent. <link>Connect an AI provider in Settings</link>, or let an MCP client claim it.",
+    "parserDraftReady": "Draft profile ready. <link>Test and approve it in the profile settings</link>.",
+    "tradePending": "A trade from an email, not read yet",
+    "tradeEmail": "Trade confirmation email",
+    "parserDraftIds": "Draft profile IDs: {ids}"
+  },
+  "actions": {
+    "dismiss": "Dismiss"
+  },
+  "proposal": {
+    "errorTitle": "This proposal can no longer be applied"
+  },
+  "bulk": {
+    "selectRow": "Select {name}",
+    "selectAll": "Select all requests shown that can be approved or sent",
+    "approveSelected": "Approve selected ({count})",
+    "approveAllShown": "Approve all shown ({count})",
+    "summary": "{approved, plural, one {# proposal} other {# proposals}} applied, {failed, plural, one {# not applied} other {# not applied}}.",
+    "closeSummary": "Close",
+    "failure": "{name}: {reason}",
+    "noReason": "No reason was given",
+    "unknownRequest": "A request",
+    "failed": "Could not apply the proposals",
+    "dialog": {
+      "title": "{count, plural, one {Apply # proposal?} other {Apply # proposals?}}",
+      "message": "Each proposal is checked against its transaction as it is now and applied on its own. One that no longer fits is skipped and reported, and the rest are still applied. Review the proposals before approving them.",
+      "confirm": "{count, plural, one {Apply # proposal} other {Apply # proposals}}"
+    }
+  },
+  "sendToAssistant": {
+    "button": "Send {count, plural, one {# pending request} other {# pending requests}} to the AI assistant",
+    "buttonSelected": "Send {count, plural, one {# selected request} other {# selected requests}} to the AI assistant",
+    "prompt": "Work through my pending AI review requests with the ai_review_requests tool: list them, claim each one, follow its instruction and submit a proposal. For a profile draft request, build the profile with the email_receipt_parsers tool instead. Nothing is changed until I approve the proposals in the AI review inbox.",
+    "promptSelected": "Work through {count, plural, one {this AI review request} other {these # AI review requests}} with the ai_review_requests tool: {ids}. Claim each one by its id, follow its instruction and submit a proposal. For a profile draft request, build the profile with the email_receipt_parsers tool instead. Leave the other requests alone. Nothing is changed until I approve the proposals in the AI review inbox.",
+    "opened": "Opened the chat with a prepared message. Read it and press Send.",
+    "unavailable": "The AI assistant cannot answer now. Connect an AI provider in Settings, or connect your MCP client. The requests keep waiting here."
+  },
+  "dismissDialog": {
+    "title": "Dismiss this request?",
+    "message": "Nobody will be asked to work on this request again. Nothing it was about is changed.",
+    "confirm": "Dismiss request"
+  },
+  "loading": "Loading review requests...",
+  "error": {
+    "title": "Could not load the review requests",
+    "body": "The list did not load, so it may not be empty. Check your connection and try again.",
+    "retry": "Try again"
+  },
+  "empty": {
+    "title": "No review requests",
+    "body": "Requests appear here when a rule with the Ask for an AI review action matches a transaction. An AI assistant, or an MCP client such as the relay agent, works through the queue and proposes an edit for you to approve.",
+    "filteredTitle": "No requests with this status",
+    "filteredBody": "Choose another status to see other requests."
+  },
+  "toasts": {
+    "approved": "Proposal applied",
+    "dismissed": "Request dismissed",
+    "dismissFailed": "Could not dismiss the request",
+    "approveFailed": "Could not apply the proposal",
+    "changed": "This request changed in the meantime. The list was reloaded."
+  }
+}

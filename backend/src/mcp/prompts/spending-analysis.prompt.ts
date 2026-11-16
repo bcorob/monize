@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { z } from "zod";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 
 @Injectable()
 export class McpSpendingAnalysisPrompt {
@@ -10,7 +10,7 @@ export class McpSpendingAnalysisPrompt {
       {
         title: "Spending analysis",
         description: "Analyze spending patterns in a category or overall",
-        argsSchema: {
+        argsSchema: z.object({
           category: z
             .string()
             .optional()
@@ -19,7 +19,7 @@ export class McpSpendingAnalysisPrompt {
             .string()
             .optional()
             .describe("Time period (e.g., 'last 3 months', '2025')"),
-        },
+        }),
       },
       async (args) => {
         const category = args.category || "all categories";

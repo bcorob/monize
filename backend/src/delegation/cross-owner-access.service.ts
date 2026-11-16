@@ -3,7 +3,7 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { DataSource, In } from "typeorm";
+import { DataSource, EntityManager, In } from "typeorm";
 import { withScopedDb } from "../common/db/scoped-db";
 import { withSystemContext } from "../common/db/with-context";
 import { tr } from "../i18n/translate";
@@ -105,6 +105,74 @@ export class CrossOwnerAccessService {
   }
 
   /**
+   * Re-assert, inside the write's own transaction, the access
+   * `accountAccessFor` (or `JointAccountsService.jointAccessFor`) granted
+   * earlier.
+   *
+   * Authorization runs in the grantee's identity and the write under the
+   * system bypass, which is a different transaction, so a revoke that
+   * committed between the two let the write land in the owner's ledger after
+   * consent was withdrawn (A26-M04). Called on the write's manager, after its
+   * row locks and before its first write: `FOR SHARE` on the delegation and
+   * grant rows makes a concurrent revoke (a `DELETE` of the delegation, which
+   * cascades to the grants) wait for this transaction to commit, or makes this
+   * read see the rows gone. Refuses with the same 404 / 403 the first check
+   * answers. An account the real user owns needs no grant.
+   */
+  async assertAccessStillHeld(
+    m: EntityManager,
+    realUserId: string,
+    accountId: string,
+    op: DelegateOperation,
+    { joint = false }: { joint?: boolean } = {},
+  ): Promise<void> {
+    const owners: { user_id: string }[] = await m.query(
+      `SELECT user_id FROM accounts WHERE id = $1`,
+      [accountId],
+    );
+    if (owners.length === 0) throw this.accountNotFound(accountId);
+    const ownerUserId = owners[0].user_id;
+    if (ownerUserId === realUserId) return;
+
+    const grants: {
+      can_create: boolean;
+      can_edit: boolean;
+      can_delete: boolean;
+    }[] = await m.query(
+      `SELECT g.can_create, g.can_edit, g.can_delete
+         FROM account_delegates d
+         JOIN account_delegate_grants g ON g.delegation_id = d.id
+        WHERE d.owner_user_id = $1
+          AND d.delegate_user_id = $2
+          AND d.status = 'active'
+          AND g.account_id = $3
+          AND g.can_read
+          AND ($4::boolean IS FALSE OR g.is_joint)
+          FOR SHARE OF d, g`,
+      [ownerUserId, realUserId, accountId, joint],
+    );
+    if (grants.length === 0) throw this.accountNotFound(accountId);
+    const [grant] = grants;
+    const allowed = this.grantAllows(
+      {
+        canCreate: grant.can_create,
+        canEdit: grant.can_edit,
+        canDelete: grant.can_delete,
+      },
+      op,
+    );
+    if (!allowed) {
+      throw new ForbiddenException(
+        tr(
+          "errors.delegation.accountOperationNotGranted",
+          `The account owner has not granted you permission to ${op} transactions in this account.`,
+          { operation: op },
+        ),
+      );
+    }
+  }
+
+  /**
    * Every account id the real user may read: their own accounts plus every
    * `can_read`-granted account across all active delegations where they are
    * the delegate. One definition serves counterpart masking in both contexts
@@ -162,13 +230,14 @@ export class CrossOwnerAccessService {
       // real user's rows; only the fields below leave this method.
       const [accounts, self] = await withSystemContext(() =>
         withScopedDb(this.dataSource, async (manager) => {
-          return Promise.all([
-            manager.getRepository(Account).find({
-              where: { userId: realUserId },
-              order: { name: "ASC" },
-            }),
-            manager.getRepository(User).findOne({ where: { id: realUserId } }),
-          ]);
+          const own = await manager.getRepository(Account).find({
+            where: { userId: realUserId },
+            order: { name: "ASC" },
+          });
+          const user = await manager
+            .getRepository(User)
+            .findOne({ where: { id: realUserId } });
+          return [own, user] as const;
         }),
       );
       const ownerLabel = self ? this.userLabel(self) : realUserId;
@@ -290,7 +359,7 @@ export class CrossOwnerAccessService {
   }
 
   private grantAllows(
-    grant: AccountDelegateGrant,
+    grant: Pick<AccountDelegateGrant, "canCreate" | "canEdit" | "canDelete">,
     op: DelegateOperation,
   ): boolean {
     switch (op) {

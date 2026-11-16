@@ -16,11 +16,13 @@ vi.mock('next/navigation', () => ({
 }));
 
 let mockPreferences: any = { twoFactorEnabled: false, theme: 'system' };
+const mockUpdatePreferences = vi.fn();
 
 vi.mock('@/store/preferencesStore', () => ({
   usePreferencesStore: (selector?: any) => {
     const state = {
       preferences: mockPreferences,
+      updatePreferences: mockUpdatePreferences,
       isLoaded: true,
       _hasHydrated: true,
     };
@@ -79,5 +81,17 @@ describe('Setup2FAPage', () => {
     render(<Setup2FAPage />);
     screen.getByText('Complete Setup').click();
     expect(mockRouterPush).toHaveBeenCalledWith('/dashboard');
+  });
+
+  // ProtectedRoute sends a FORCE_2FA user back to /setup-2fa while the store
+  // still says 2FA is off; leaving without recording the enrolment looped the
+  // user through setup again.
+  it('records the enrolment in the preferences store before leaving', () => {
+    render(<Setup2FAPage />);
+    screen.getByText('Complete Setup').click();
+    expect(mockUpdatePreferences).toHaveBeenCalledWith({ twoFactorEnabled: true });
+    expect(mockUpdatePreferences.mock.invocationCallOrder[0]).toBeLessThan(
+      mockRouterPush.mock.invocationCallOrder[0],
+    );
   });
 });

@@ -31,7 +31,7 @@ import {
  * SQL naming the table directly, which involves no import at all.
  *
  * The inventory comes from `git ls-files`, not a hardcoded file list, so a file
- * split or rename cannot disarm it -- the failure mode `backend/CLAUDE.md`
+ * split or rename cannot disarm it -- the failure mode `docs/backend/backup.md`
  * describes, where four guards went on passing while scanning code that had
  * moved out from under them.
  *
@@ -51,7 +51,8 @@ const ALLOWED: Record<string, string> = {
     "Module wiring (TypeOrmModule.forFeature).",
   "backend/src/oauth/postgres.adapter.ts":
     "The oidc-provider Adapter implementation -- the reason the exception exists. " +
-    "Every method is keyed by an opaque provider id (id/model/grantId/userCode/uid).",
+    "Every method is keyed by an opaque provider id (id/model/grantId/userCode/uid), " +
+    "except sweepOAuthPayloads, the daily expiry sweep, keyed by expires_at alone.",
   "backend/src/oauth/oauth-provider.service.ts":
     "Constructs the adapter factory, and revokeAllForUser -- the second access " +
     "path, keyed by an application user id. Admin-initiated, id server-derived, " +

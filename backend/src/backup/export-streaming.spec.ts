@@ -12,6 +12,7 @@ import {
   ATTACHMENT_STORAGE_PROVIDER,
   AttachmentStorageProvider,
 } from "../attachments/storage/attachment-storage.interface";
+import { AttachmentStorageRegistry } from "../attachments/storage/attachment-storage.registry";
 import { createScopedDbMocks } from "../test-helpers/scoped-db-testing";
 import { emulatePgCursors } from "../test-helpers/pg-cursor-mock";
 import { EncryptionService } from "../common/encryption/encryption.service";
@@ -91,6 +92,7 @@ describe("export streaming", () => {
       get name() {
         return storageName;
       },
+      addressable: true,
       save: jest.fn().mockResolvedValue(undefined),
       load: jest.fn(async (key: string) => {
         events.push(`load:${key}`);
@@ -106,6 +108,12 @@ describe("export streaming", () => {
         BackupExportService,
         { provide: DataSource, useValue: scoped.dataSource },
         { provide: ATTACHMENT_STORAGE_PROVIDER, useValue: storage },
+        {
+          // The real registry over the same double, because the export now reads
+          // each row through the backend the ROW names.
+          provide: AttachmentStorageRegistry,
+          useValue: new AttachmentStorageRegistry(storage, [storage]),
+        },
         {
           // The export decrypts AI provider keys so they can be re-encrypted on
           // the way back in (ai-provider-key-transport.ts). These tests are

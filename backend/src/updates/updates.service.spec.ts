@@ -12,6 +12,7 @@ import {
   isNewerVersion,
   parseVersion,
 } from "./updates.service";
+import { UpdateCheckState } from "./entities/update-check-state.entity";
 
 jest.mock("../common/db/scoped-db", () =>
   jest.requireActual("../test-helpers/scoped-db-testing").scopedDbMockModule(),
@@ -48,6 +49,11 @@ describe("UpdatesService", () => {
   let configGet: jest.Mock;
   let originalFetch: typeof fetch;
   let fetchMock: jest.Mock;
+  /** The singleton row, as the table would hold it. Null before a first check. */
+  let checkRow: UpdateCheckState | null;
+  /** Whether the stored answer is older than the window (the claim's predicate). */
+  let windowOpen: boolean;
+  let manager: Record<string, jest.Mock>;
 
   const buildRelease = (overrides: Partial<Record<string, unknown>> = {}) => ({
     tag_name: "v99.0.0",
@@ -81,9 +87,58 @@ describe("UpdatesService", () => {
     preferencesRepo = preferencesRow.repo;
     configGet = jest.fn().mockReturnValue(undefined);
 
-    const { dataSource } = createScopedDbMocks([
+    // A stand-in for `update_check_state` that answers the way the table does:
+    // the conditional upsert is the claim, and what a later read returns is
+    // whatever the claim's winner then wrote. A `query` mock that merely
+    // recorded calls would let every assertion below pass against nothing.
+    checkRow = null;
+    windowOpen = true;
+    const updateStateRepo = {
+      findOne: jest.fn(async () => checkRow),
+    } as unknown as Record<string, jest.Mock>;
+
+    const scopedMocks = createScopedDbMocks([
       [UserPreference, preferencesRepo],
+      [UpdateCheckState, updateStateRepo],
     ]);
+    manager = scopedMocks.manager as Record<string, jest.Mock>;
+    const dataSource = scopedMocks.dataSource;
+    manager.query.mockImplementation(
+      async (sql: string, params: unknown[] = []) => {
+        if (sql.includes("INSERT INTO update_check_state")) {
+          if (!windowOpen) return [];
+          checkRow = {
+            id: true,
+            checkedAt: new Date(),
+            latestVersion: checkRow?.latestVersion ?? null,
+            releaseUrl: checkRow?.releaseUrl ?? null,
+            releaseName: checkRow?.releaseName ?? null,
+            publishedAt: checkRow?.publishedAt ?? null,
+            lastError: checkRow?.lastError ?? null,
+          };
+          return [{ id: true }];
+        }
+        if (sql.includes("latest_version = $1")) {
+          checkRow = {
+            ...(checkRow as UpdateCheckState),
+            latestVersion: params[0] as string,
+            releaseUrl: params[1] as string,
+            releaseName: params[2] as string,
+            publishedAt: new Date(params[3] as string),
+            lastError: null,
+          };
+          return [[], 1];
+        }
+        if (sql.includes("SET last_error = $1")) {
+          checkRow = {
+            ...(checkRow as UpdateCheckState),
+            lastError: params[0] as string | null,
+          };
+          return [[], 1];
+        }
+        return [];
+      },
+    );
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -109,6 +164,80 @@ describe("UpdatesService", () => {
   afterEach(() => {
     global.fetch = originalFetch;
     jest.restoreAllMocks();
+  });
+
+  describe("the twelve-hour window", () => {
+    // The claim and the freshness check are one statement, so two replicas
+    // ticking together cannot both pass a read and both call GitHub. The rate
+    // limit is per IP and shared by every replica behind one egress address.
+    it("asks GitHub only when it took the window", async () => {
+      windowOpen = false;
+      fetchMock.mockResolvedValue(mockOkResponse(buildRelease()));
+
+      await service.refreshLatestRelease();
+
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it("claims with a conditional upsert, not a read then a write", async () => {
+      fetchMock.mockResolvedValueOnce(mockOkResponse(buildRelease()));
+
+      await service.refreshLatestRelease();
+
+      const [claimSql, params] = manager.query.mock.calls[0];
+      expect(claimSql).toContain("INSERT INTO update_check_state");
+      expect(claimSql).toContain("ON CONFLICT (id) DO UPDATE");
+      expect(claimSql).toContain("update_check_state.checked_at");
+      expect(claimSql).toContain("RETURNING id");
+      expect(params[0]).toBe(12 * 60 * 60 * 1000);
+    });
+
+    // A failed check still holds the window: stamping only on success would
+    // turn an unreachable GitHub into a request from every replica every tick.
+    it("holds the window after a failure", async () => {
+      fetchMock.mockRejectedValueOnce(new Error("ECONNRESET"));
+
+      await service.refreshLatestRelease();
+
+      const claimSql = manager.query.mock.calls[0][0] as string;
+      expect(claimSql).toContain("SET checked_at = CURRENT_TIMESTAMP");
+      expect(checkRow?.lastError).toBe("unreachable");
+    });
+
+    // The reason the answer moved onto a row: a second replica has never
+    // fetched anything and still answers /updates the same way.
+    it("serves an answer this instance never fetched", async () => {
+      checkRow = {
+        id: true,
+        checkedAt: new Date(),
+        latestVersion: "99.0.0",
+        releaseUrl: "https://example.test/99",
+        releaseName: "Monize 99.0.0",
+        publishedAt: new Date("2026-01-01T00:00:00Z"),
+        lastError: null,
+      };
+      preferencesRepo.findOne.mockResolvedValue(null);
+
+      const status = await service.getStatus("user-1");
+
+      expect(fetchMock).not.toHaveBeenCalled();
+      expect(status.latestVersion).toBe("99.0.0");
+      expect(status.updateAvailable).toBe(true);
+    });
+
+    // An instance that could reach GitHub yesterday and cannot today still
+    // knows there is an update; blanking it would downgrade "cannot check" to
+    // "nothing to install".
+    it("keeps the last known version when a later check fails", async () => {
+      fetchMock.mockResolvedValueOnce(mockOkResponse(buildRelease()));
+      await service.refreshLatestRelease();
+
+      fetchMock.mockRejectedValueOnce(new Error("ECONNRESET"));
+      await service.refreshLatestRelease();
+
+      expect(checkRow?.latestVersion).toBe("99.0.0");
+      expect(checkRow?.lastError).toBe("unreachable");
+    });
   });
 
   describe("refreshLatestRelease", () => {

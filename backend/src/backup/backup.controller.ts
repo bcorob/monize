@@ -4,6 +4,7 @@ import {
   Get,
   Delete,
   Body,
+  Param,
   UseGuards,
   Request,
   Res,
@@ -20,7 +21,9 @@ import {
   ApiResponse,
 } from "@nestjs/swagger";
 import { Response } from "express";
+import { pipeline } from "stream/promises";
 import { BackupService } from "./backup.service";
+import { AutoBackupService } from "./auto-backup.service";
 import { BackupEncryptionService } from "./backup-encryption.service";
 import { SupportBackupService } from "./support-backup/support-backup.service";
 import { CreateSupportBackupDto } from "./support-backup/dto/create-support-backup.dto";
@@ -106,6 +109,7 @@ export class BackupController {
     private readonly backupService: BackupService,
     private readonly backupEncryption: BackupEncryptionService,
     private readonly supportBackupService: SupportBackupService,
+    private readonly autoBackupService: AutoBackupService,
   ) {}
 
   /** Download headers shared by the plain and support export endpoints, so
@@ -263,8 +267,7 @@ export class BackupController {
       "x-restore-password",
     );
     const oidcIdToken = req.headers["x-restore-oidc-token"] as
-      | string
-      | undefined;
+      string | undefined;
     const backupPassword = decodePasswordHeader(
       req.headers["x-backup-password"] as string | undefined,
       "x-backup-password",
@@ -311,6 +314,66 @@ export class BackupController {
       // second large upload could be admitted beside this one.
       releaseRestoreReservation(req);
     }
+  }
+
+  /**
+   * The automatic backups this server is holding for the caller.
+   *
+   * Reading and downloading one's own artifacts is the same kind of thing as a
+   * manual export -- it acts on the caller's own data -- so it lives here,
+   * open to every signed-in user, rather than on the admin-only
+   * `AutoBackupController` where the schedule and the retention policy are
+   * configured. A user who cannot see the settings can still see, take and
+   * restore the files those settings produced for them.
+   */
+  @Get("stored-backups")
+  @ApiOperation({
+    summary: "List the automatic backups stored on the server for this user",
+  })
+  @ApiResponse({ status: 200, description: "Stored backups listed" })
+  async listStoredBackups(@Request() req) {
+    return this.autoBackupService.listStoredBackups(req.user.id);
+  }
+
+  @Get("stored-backups/:filename")
+  @DemoRestricted()
+  @ApiOperation({
+    summary: "Download one automatic backup stored on the server",
+  })
+  @ApiResponse({ status: 200, description: "Backup file streamed" })
+  @ApiResponse({
+    status: 404,
+    description:
+      "No such artifact in this user's backup folder. Also the answer for a name the server does not write, because the difference tells a caller nothing they may act on",
+  })
+  async downloadStoredBackup(
+    @Request() req,
+    @Param("filename") filename: string,
+    @Res() res: Response,
+  ) {
+    const artifact = await this.autoBackupService.openStoredBackup(
+      req.user.id,
+      filename,
+    );
+    res.setHeader(
+      "Content-Type",
+      artifact.filename.endsWith(".mzbe")
+        ? "application/octet-stream"
+        : "application/gzip",
+    );
+    res.setHeader("Content-Length", String(artifact.sizeBytes));
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${artifact.filename}"`,
+    );
+    // `pipeline` rather than `.pipe`: it destroys the source when the client
+    // hangs up mid-download, which a bare pipe leaves open until the stream
+    // drains into a socket nobody is reading. The store hands back a stream
+    // rather than a path so that the same route serves a container directory and
+    // an object store; a presigned-URL redirect would move an authenticated,
+    // demo-restricted, owner-scoped download onto a URL carrying its own
+    // authority that outlives the request.
+    await pipeline(artifact.stream, res);
   }
 
   @Get("encryption")

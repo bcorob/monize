@@ -129,16 +129,43 @@ export function formatDateWithoutYear(date: Date | string, pattern: string): str
 }
 
 /**
+ * A leading `YYYY-MM` with a real calendar month, optionally followed by the
+ * rest of an ISO date (`2029-04-15`, `2029-04-15T00:00:00Z`) -- the payoff-date
+ * callers pass those. A single-digit month is accepted because it always was.
+ * `2026-13` and `2026-00` are refused: a month index outside 1-12 silently
+ * rolls into another year rather than reading as the value it was written as.
+ */
+const MONTH_KEY_PREFIX = /^(\d{4})-(0[1-9]|1[0-2]|[1-9])(?![0-9])/;
+
+/**
  * Format a year-month value (YYYY-MM) according to the user's date format,
  * dropping the day component. Used for month column headers where only the
  * month and year are meaningful, so headers follow the same ordering and
  * separators as full dates rendered elsewhere.
+ *
+ * **A value with no parseable month comes back unchanged.** Several callers
+ * hand this a value they cannot vouch for -- a recharts tooltip `label` is
+ * optional, so `formatMonth(String(label))` arrives as the literal
+ * `'undefined'`, and a monthKey can be absent mid rolling deploy. The old body
+ * called `.padStart` on the split result before any format branch, so those
+ * threw a TypeError inside a tooltip's render and blanked the whole report
+ * subtree beneath it. Guarding here fixes every call site at once, which is why
+ * the guard is here and not at any of them.
+ *
  * @param month - Year-month string in YYYY-MM form
  * @param format - Date format string or 'browser' for locale-based formatting
  * @param locale - Optional BCP 47 locale used only when format is 'browser'
+ * @returns The formatted month, or the input unchanged when it holds no month
+ *   ( `''` when the argument is not a string at all, since there is nothing to
+ *   hand back and printing `"undefined"` in a label is worse than printing
+ *   nothing).
  */
 export function formatMonth(month: string, format: string = 'browser', locale?: string): string {
-  const [yearStr, monStr] = month.split('-');
+  if (typeof month !== 'string') return '';
+  const parsed = MONTH_KEY_PREFIX.exec(month);
+  if (!parsed) return month;
+
+  const [, yearStr, monStr] = parsed;
   const year = Number(yearStr);
   const monthIndex = Number(monStr) - 1;
   const monthPadded = monStr.padStart(2, '0');
@@ -185,7 +212,8 @@ export type ChartDatePattern =
   | 'MMM d, yyyy' // Jan 5, 2025
   | 'MMM d HH:mm' // Jan 5, 14:30
   | 'HH:mm' // 14:30
-  | 'yyyy'; // 2025
+  | 'yyyy' // 2025
+  | 'EEEE MMMM d'; // Thursday, November 6 (order and punctuation follow the locale)
 
 const CHART_DATE_OPTIONS: Record<ChartDatePattern, Intl.DateTimeFormatOptions> = {
   MMM: { month: 'short' },
@@ -197,6 +225,7 @@ const CHART_DATE_OPTIONS: Record<ChartDatePattern, Intl.DateTimeFormatOptions> =
   'MMM d HH:mm': { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false },
   'HH:mm': { hour: '2-digit', minute: '2-digit', hour12: false },
   yyyy: { year: 'numeric' },
+  'EEEE MMMM d': { weekday: 'long', month: 'long', day: 'numeric' },
 };
 
 /**

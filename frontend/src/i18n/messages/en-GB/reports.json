@@ -26,6 +26,9 @@
   "filterBuilder": {
     "categoryUncategorized": "Uncategorised"
   },
+  "recurringExpenses": {
+    "categoryUncategorized": "Uncategorised"
+  },
   "uncategorizedTransactions": {
     "totalUncategorized": "Total Uncategorised",
     "uncategorizedExpenses": "Uncategorised Expenses",
@@ -58,11 +61,15 @@
   "monteCarloPerformance": {
     "rowAnnualizedVolatilityLabel": "Annualised Volatility"
   },
-  "monthlyComparison": {
-    "pdfAnnualizedReturn": "Annualised Return"
-  },
+  "monthlyComparison": {},
   "securityPerformance": {
     "annualizedReturn": "Annualised Return",
     "pdfAnnualizedReturn": "Annualised Return"
+  },
+  "sankey": {
+    "nodes": {
+      "uncategorizedIncome": "Uncategorised income",
+      "uncategorizedExpense": "Uncategorised expenses"
+    }
   }
 }

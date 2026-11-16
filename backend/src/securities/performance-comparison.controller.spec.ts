@@ -13,7 +13,7 @@ const SEC_A = "22222222-2222-4222-8222-222222222222";
  * *through* it rather than against hand-built objects. A DTO spec that
  * constructs the payload itself never sends what the client sends -- an
  * untouched date control submits `""`, not `undefined`, and that is exactly the
- * case `@IsOptional` alone gets wrong (`backend/CLAUDE.md`, DTO conventions).
+ * case `@IsOptional` alone gets wrong (`docs/backend/entities-and-dtos.md`, DTO conventions).
  */
 const pipe = new ValidationPipe({
   whitelist: true,

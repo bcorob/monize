@@ -330,14 +330,13 @@
       "fillMissingDone": "{count, plural, one {# instrument toegevoegd} other {# instrumenten toegevoegd}}. Sla de instellingen op om hun koersen te laden en het eerste signaal te berekenen.",
       "fillMissingError": "De voorgestelde instrumenten konden niet worden toegevoegd.",
       "lookbackMonths": "Momentumperiode (maanden)",
-      "taxRatePercent": "Belastingtarief (%)",
-      "commissionAmount": "Kosten per transactie",
+      "taxRatePercent": "Belastingtarief (optioneel)",
+      "commissionAmount": "Kosten per transactie (optioneel)",
       "rulesSourceUrl": "Link naar de regels die u volgt",
       "rulesSourceUrlPlaceholder": "https://example.com/dual-momentum",
       "rulesSourceLabel": "Tekst om voor die link te tonen",
       "rulesSourceLabelPlaceholder": "example.com",
       "rulesSourceHint": "Beide optioneel en zonder invloed op enige berekening. Ze zetten in de voettekst van het rapport een link naar de plek waar de regels van deze strategie staan beschreven — een artikel, een boekpagina, uw eigen aantekeningen — zodat u later kunt nagaan tegen welke versie u haar hebt ingericht.",
-      "optional": "Optioneel",
       "save": "Instellingen opslaan",
       "saved": "Strategie-instellingen opgeslagen.",
       "saveError": "De strategie-instellingen konden niet worden opgeslagen.",
@@ -358,7 +357,9 @@
       "NO_POSITION": "De strategierekeningen bezitten geen instrumenten.",
       "FIRST_RUN": "Deze strategie is nog niet geëvalueerd – het eerste signaal verschijnt na de volgende geplande evaluatie.",
       "STALE_PRICES": "Sommige koersen achter dit rapport zijn niet actueel; het signaal kan veranderen zodra ze zijn ververst. Het oudst, of helemaal ontbrekend, zijn:",
-      "CALCULATION_FAILED": "Het signaal kon niet uit de beschikbare gegevens worden berekend."
+      "CALCULATION_FAILED": "Het signaal kon niet uit de beschikbare gegevens worden berekend.",
+      "SHORT_HISTORY": "Onvoldoende koershistorie om de huidige periode te berekenen. Deze rollen hebben koersen nodig tot {from}:",
+      "shortHistoryFix": "Open elk van deze instrumenten en gebruik ‘Nog een jaar koershistorie toevoegen’, en open dit rapport daarna opnieuw."
     },
     "footer": {
       "pastResults": "Resultaten uit het verleden bieden geen garantie voor de toekomst.",

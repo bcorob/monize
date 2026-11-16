@@ -54,9 +54,10 @@ export function useInvestmentData() {
   } = useFormModal<InvestmentTransaction>();
   const [lastPriceUpdate, setLastPriceUpdate] = useState<string | null>(null);
   const [transactionFilters, setTransactionFilters] = useState<TransactionFilters>({});
-  // Bumped by every write on either register. The sections this hook fetches
-  // are reloaded directly; the Portfolio Value chart fetches its own series and
-  // is only reachable as a prop, so it takes this as its `refreshKey`.
+  // Bumped by every write on either register and by a price refresh that
+  // updated a quote. The sections this hook fetches are reloaded directly; the
+  // Portfolio Value chart and the performance card fetch their own figures and
+  // are only reachable as props, so they take this as their reload key.
   const [writeRefreshKey, setWriteRefreshKey] = useState(0);
 
   // Cash transaction state
@@ -72,7 +73,17 @@ export function useInvestmentData() {
   const [cashFilters, setCashFiltersState] = useState<CashFilterValues>(EMPTY_CASH_FILTERS);
   const [cashPayees, setCashPayees] = useState<Payee[]>([]);
   const [cashCategories, setCashCategories] = useState<Category[]>([]);
-  const [initialLoadComplete, setInitialLoadComplete] = useState(false);
+  // Set once the first load has settled and the automatic price refresh has
+  // been started for it. A ref: nothing renders from it.
+  const initialLoadCompleteRef = useRef(false);
+  // Whether the first portfolio summary has answered (or failed). The summary
+  // values the portfolio over its whole history, and so do the chart and the
+  // performance card that load beside it; a price refresh that lands while
+  // they are still running reloads all of them, so the server values the
+  // same history a second time while the first is still in flight (#1888).
+  // It is also what the summary sections wait on before leaving their
+  // skeletons (`isSummaryLoading`).
+  const [initialSummarySettled, setInitialSummarySettled] = useState(false);
 
   // Cash transaction form modal
   const {
@@ -82,22 +93,32 @@ export function useInvestmentData() {
     unsavedChangesDialog: cashUnsavedChangesDialog, formSubmitRef: cashFormSubmitRef,
   } = useFormModal<Transaction>();
 
-  const loadInvestmentAccounts = useCallback(async () => {
-    try {
-      const accountsData = await investmentsApi.getInvestmentAccounts();
-      setAccounts(accountsData);
-    } catch (error) {
-      logger.error('Failed to load investment accounts:', error);
-    }
+  // The loaders the effects below call keep their state writes in an inner
+  // async function. Every write follows the `await`, and holding them there
+  // rather than in the loader itself is what lets an effect call the loader
+  // without being read as a synchronous setState.
+  const loadInvestmentAccounts = useCallback(() => {
+    const fetchAccounts = async () => {
+      try {
+        const accountsData = await investmentsApi.getInvestmentAccounts();
+        setAccounts(accountsData);
+      } catch (error) {
+        logger.error('Failed to load investment accounts:', error);
+      }
+    };
+    return fetchAccounts();
   }, []);
 
-  const loadAllAccounts = useCallback(async () => {
-    try {
-      const accountsData = await accountsApi.getAll();
-      setAllAccounts(accountsData);
-    } catch (error) {
-      logger.error('Failed to load all accounts:', error);
-    }
+  const loadAllAccounts = useCallback(() => {
+    const fetchAccounts = async () => {
+      try {
+        const accountsData = await accountsApi.getAll();
+        setAllAccounts(accountsData);
+      } catch (error) {
+        logger.error('Failed to load all accounts:', error);
+      }
+    };
+    return fetchAccounts();
   }, []);
 
   const loadCashFilterData = useCallback(async () => {
@@ -113,31 +134,39 @@ export function useInvestmentData() {
     }
   }, []);
 
-  const loadPriceStatus = useCallback(async () => {
-    try {
-      const status = await investmentsApi.getPriceStatus();
-      setLastPriceUpdate(status.lastUpdated);
-    } catch (error) {
-      logger.error('Failed to load price status:', error);
-    }
+  const loadPriceStatus = useCallback(() => {
+    const fetchStatus = async () => {
+      try {
+        const status = await investmentsApi.getPriceStatus();
+        setLastPriceUpdate(status.lastUpdated);
+      } catch (error) {
+        logger.error('Failed to load price status:', error);
+      }
+    };
+    return fetchStatus();
   }, []);
 
-  // Track whether the initial load has completed so subsequent reloads
-  // (price refresh, account selection change, pagination, filter change)
-  // can run "in the background" while sections keep showing their existing
-  // data. Without this, every refresh flips isLoading=true and every
-  // skeleton-gated section re-mounts from blank -- which is the
-  // "everything redraws when prices refresh" bug. The Portfolio Value chart
-  // is unaffected because it already has its own keep-data-while-loading
-  // pattern; this generalises that behaviour to the rest of the page.
-  const hasLoadedRef = useRef(false);
+  // A response belongs to the request that produced it. An older selection's
+  // slower answer must not overwrite the current one (e.g. a remembered
+  // selection fetched on mount, then superseded by ?accountId=).
+  const summarySeqRef = useRef(0);
+  const transactionsSeqRef = useRef(0);
+  const cashSeqRef = useRef(0);
 
+  // A reload after the page has drawn (a write, a price refresh, a failed
+  // delete) runs in the background: the sections keep their figures until the
+  // new ones land and never return to their skeletons. Only the first load
+  // shows those, and the first load's own loaders clear them. Flipping a
+  // loading flag here put the summary, the allocation and the holdings back to
+  // skeletons a second after they first drew, whenever the automatic price
+  // refresh found a new quote.
   const loadAllPortfolioData = useCallback(async (
     accountIds: string[],
     page: number = 1,
     filters: TransactionFilters = {},
   ) => {
-    if (!hasLoadedRef.current) setIsLoading(true);
+    const summarySeq = ++summarySeqRef.current;
+    const txSeq = ++transactionsSeqRef.current;
     try {
       const ids = accountIds.length > 0 ? accountIds : undefined;
       const [summaryData, txResponse] = await Promise.all([
@@ -152,23 +181,36 @@ export function useInvestmentData() {
           endDate: filters.endDate,
         }),
       ]);
-      setPortfolioSummary(summaryData);
-      setTransactions(txResponse.data || []);
-      setPagination(txResponse.pagination);
+      if (summarySeqRef.current === summarySeq) {
+        setPortfolioSummary(summaryData);
+        setInitialSummarySettled(true);
+      }
+      if (transactionsSeqRef.current === txSeq) {
+        setTransactions(txResponse.data || []);
+        setPagination(txResponse.pagination);
+      }
     } catch (error) {
       logger.error('Failed to load portfolio data:', error);
-      setPortfolioSummary(null);
-      setTransactions([]);
-      setPagination(null);
-    } finally {
-      if (!hasLoadedRef.current) setIsLoading(false);
-      hasLoadedRef.current = true;
+      if (summarySeqRef.current === summarySeq) {
+        setPortfolioSummary(null);
+        // This request superseded the first summary's, so its answer is the
+        // one the summary sections were waiting on.
+        setInitialSummarySettled(true);
+      }
+      if (transactionsSeqRef.current === txSeq) {
+        setTransactions([]);
+        setPagination(null);
+      }
     }
   }, []);
 
   const { isRefreshing: isRefreshingPrices, triggerManualRefresh: handleRefreshPrices, triggerAutoRefresh } = usePriceRefresh({
     onRefreshComplete: (lastUpdated) => {
-      loadAllPortfolioData(selectedAccountIds, currentPage, transactionFilters);
+      // New prices move every figure valued from them, not only the summary
+      // this hook fetches: the value chart and both period-result surfaces
+      // (Value change / Investment result, Portfolio performance) fetch their
+      // own and re-ask only when this key moves.
+      setWriteRefreshKey((key) => key + 1);
       // Prefer the refresh result's timestamp: savePriceData UPDATEs existing
       // rows in place, so the DB-backed lastUpdated (createdAt) wouldn't advance
       // on same-day refreshes. Fall back to the DB value if the result didn't
@@ -178,45 +220,62 @@ export function useInvestmentData() {
       } else {
         loadPriceStatus();
       }
+      // Returned so the refresh button keeps spinning until the summary has
+      // been re-valued: the sections keep their previous figures meanwhile,
+      // and the spinner is what says they are about to change.
+      return loadAllPortfolioData(selectedAccountIds, currentPage, transactionFilters);
     },
   });
 
-  const loadPortfolioSummary = useCallback(async (accountIds: string[]) => {
-    try {
-      const ids = accountIds.length > 0 ? accountIds : undefined;
-      const summaryData = await investmentsApi.getPortfolioSummary(ids);
-      setPortfolioSummary(summaryData);
-    } catch (error) {
-      logger.error('Failed to load portfolio summary:', error);
-      setPortfolioSummary(null);
-    }
+  const loadPortfolioSummary = useCallback((accountIds: string[]) => {
+    const fetchSummary = async () => {
+      const seq = ++summarySeqRef.current;
+      try {
+        const ids = accountIds.length > 0 ? accountIds : undefined;
+        const summaryData = await investmentsApi.getPortfolioSummary(ids);
+        if (summarySeqRef.current !== seq) return;
+        setPortfolioSummary(summaryData);
+      } catch (error) {
+        logger.error('Failed to load portfolio summary:', error);
+        if (summarySeqRef.current !== seq) return;
+        setPortfolioSummary(null);
+      }
+      setInitialSummarySettled(true);
+    };
+    return fetchSummary();
   }, []);
 
-  const loadTransactions = useCallback(async (
+  const loadTransactions = useCallback((
     accountIds: string[],
     page: number = 1,
     filters: TransactionFilters = {},
   ) => {
-    try {
-      const ids = accountIds.length > 0 ? accountIds : undefined;
-      const txResponse = await investmentsApi.getTransactions({
-        accountIds: ids ? ids.join(',') : undefined,
-        page,
-        limit: PAGE_SIZE,
-        symbol: filters.symbol,
-        action: filters.action,
-        startDate: filters.startDate,
-        endDate: filters.endDate,
-      });
-      setTransactions(txResponse.data || []);
-      setPagination(txResponse.pagination);
-    } catch (error) {
-      logger.error('Failed to load transactions:', error);
-      setTransactions([]);
-      setPagination(null);
-    } finally {
-      setIsLoading(false);
-    }
+    const fetchTransactions = async () => {
+      const seq = ++transactionsSeqRef.current;
+      try {
+        const ids = accountIds.length > 0 ? accountIds : undefined;
+        const txResponse = await investmentsApi.getTransactions({
+          accountIds: ids ? ids.join(',') : undefined,
+          page,
+          limit: PAGE_SIZE,
+          symbol: filters.symbol,
+          action: filters.action,
+          startDate: filters.startDate,
+          endDate: filters.endDate,
+        });
+        if (transactionsSeqRef.current !== seq) return;
+        setTransactions(txResponse.data || []);
+        setPagination(txResponse.pagination);
+      } catch (error) {
+        logger.error('Failed to load transactions:', error);
+        if (transactionsSeqRef.current !== seq) return;
+        setTransactions([]);
+        setPagination(null);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    return fetchTransactions();
   }, []);
 
   // Derive cash account IDs from selected brokerage accounts
@@ -237,9 +296,12 @@ export function useInvestmentData() {
     page: number = 1,
     filters: { payeeIds?: string[]; categoryIds?: string[]; startDate?: string; endDate?: string } = {},
   ) => {
+    const seq = ++cashSeqRef.current;
     if (accountIds.length === 0) {
       setCashTransactions([]);
       setCashPagination(null);
+      // A superseded request no longer clears the flag it set.
+      setCashTransactionsLoading(false);
       return;
     }
     setCashTransactionsLoading(true);
@@ -253,6 +315,7 @@ export function useInvestmentData() {
         startDate: filters.startDate || undefined,
         endDate: filters.endDate || undefined,
       });
+      if (cashSeqRef.current !== seq) return;
       setCashTransactions(response.data || []);
       setCashStartingBalance(response.startingBalance);
       setCashPagination(response.pagination ? {
@@ -262,10 +325,11 @@ export function useInvestmentData() {
       } : null);
     } catch (error) {
       logger.error('Failed to load cash transactions:', error);
+      if (cashSeqRef.current !== seq) return;
       setCashTransactions([]);
       setCashPagination(null);
     } finally {
-      setCashTransactionsLoading(false);
+      if (cashSeqRef.current === seq) setCashTransactionsLoading(false);
     }
   }, []);
 
@@ -364,11 +428,11 @@ export function useInvestmentData() {
   ]);
 
   useEffect(() => {
-    if (!isLoading && !initialLoadComplete) {
-      setInitialLoadComplete(true);
+    if (!isLoading && initialSummarySettled && !initialLoadCompleteRef.current) {
+      initialLoadCompleteRef.current = true;
       triggerAutoRefresh();
     }
-  }, [isLoading, initialLoadComplete, triggerAutoRefresh]);
+  }, [isLoading, initialSummarySettled, triggerAutoRefresh]);
 
   // Track which edit ID we have already handled
   const editHandledRef = useRef<string | null>(null);
@@ -542,8 +606,13 @@ export function useInvestmentData() {
     accounts, allAccounts, selectedAccountIds, selectableAccounts,
     handleAccountChange,
 
-    // Portfolio
+    // Portfolio. `isSummaryLoading` gates the sections drawn from the summary
+    // (summary card, allocation, holdings); `isLoading` gates the brokerage
+    // register. The register answers in a fraction of the time the summary's
+    // valuation takes, and gating the summary sections on it showed them as
+    // "no data" until the summary arrived.
     portfolioSummary, isLoading,
+    isSummaryLoading: !initialSummarySettled,
     loadAllPortfolioData, refreshAfterWrite, writeRefreshKey,
 
     // Brokerage transactions

@@ -1,3 +1,4 @@
+import { exportedAttachment } from "./shared-backup";
 import { BackupCompletenessReport } from "./backup-format";
 import { attachmentDigestConsistent } from "./attachment-integrity.util";
 import { DEFAULT_EXPORT_BATCH_ROWS, ExportReader } from "./export-cursor";
@@ -41,6 +42,20 @@ export type AttachmentObjectReader = (
   row: Record<string, unknown>,
 ) => Promise<AttachmentReadResult>;
 
+/**
+ * Whether a row's own `storage_provider` names an object store this export can
+ * read from.
+ *
+ * A predicate rather than the bound provider's name, which is what this file used
+ * to compare each row against. Those two are the same value only once a storage
+ * switch has finished relocating (`AttachmentStorageMigrator`): mid-relocation, a
+ * comparison against the bound provider counted every not-yet-moved attachment as
+ * missing and made the artifact incomplete -- for bytes this process could read
+ * perfectly well, through the backend the row itself names. `database` is always
+ * false here: its bytes travel in `attachment_blobs` with the rows.
+ */
+export type ExternalProviderPredicate = (providerName: string) => boolean;
+
 export interface AttachmentAudit {
   report: BackupCompletenessReport;
   /**
@@ -59,7 +74,7 @@ export interface AttachmentAudit {
 /** Every attachment metadata row for the user, in id order. */
 const ATTACHMENT_METADATA_SQL = `SELECT id, storage_provider, byte_size, sha256
          FROM transaction_attachments
-        WHERE user_id = $1
+        WHERE ${exportedAttachment()}
         ORDER BY id`;
 
 /**
@@ -72,7 +87,7 @@ const ATTACHMENT_METADATA_SQL = `SELECT id, storage_provider, byte_size, sha256
  * The comparison itself is still `attachment-integrity.util.ts` -- the same
  * predicate the export's object reader and the restore's staging use. A second
  * copy of "does this match its metadata" written in SQL is exactly the drift
- * `backend/CLAUDE.md` warns about, so the digest travels and the judgement does
+ * `AGENTS.md` warns about, so the digest travels and the judgement does
  * not.
  */
 const ATTACHMENT_BLOB_DIGEST_SQL = `SELECT ab.attachment_id,
@@ -80,7 +95,7 @@ const ATTACHMENT_BLOB_DIGEST_SQL = `SELECT ab.attachment_id,
                 encode(sha256(ab.data), 'hex') AS sha256
            FROM attachment_blobs ab
            JOIN transaction_attachments ta ON ab.attachment_id = ta.id
-          WHERE ta.user_id = $1`;
+          WHERE ${exportedAttachment("ta")}`;
 
 interface BlobDigest {
   byteSize: number;
@@ -117,7 +132,7 @@ async function readBlobDigests(
  */
 export async function auditAttachments(
   reader: ExportReader,
-  provider: string,
+  isReadable: ExternalProviderPredicate,
   readObject: AttachmentObjectReader,
 ): Promise<AttachmentAudit> {
   const digests = await readBlobDigests(reader);
@@ -149,14 +164,11 @@ export async function auditAttachments(
         }
         continue;
       }
-      // No blob, and nowhere else to look. On a `database` deployment the bytes
-      // were supposed to be in `attachment_blobs` and are not; on any other, a
-      // row written by a backend this runtime cannot address travels as metadata
-      // only. Neither case opens an object store: there is nothing there to open.
-      if (
-        provider === "database" ||
-        String(row.storage_provider ?? "") !== provider
-      ) {
+      // No blob, and nowhere else to look. A `database`-provider row's bytes were
+      // supposed to be in `attachment_blobs` and are not; a row naming a backend
+      // this deployment cannot address travels as metadata only. Neither case
+      // opens an object store: there is nothing there to open.
+      if (!isReadable(String(row.storage_provider ?? "database"))) {
         missing += 1;
         continue;
       }
@@ -219,7 +231,7 @@ export async function auditAttachments(
  * read, so the body cannot carry an object the headers said was missing.
  */
 export function externalAttachmentRows(
-  provider: string,
+  isReadable: ExternalProviderPredicate,
   readObject: AttachmentObjectReader,
   options: {
     only?: ReadonlySet<string>;
@@ -227,16 +239,15 @@ export function externalAttachmentRows(
   } = {},
 ): (reader: ExportReader) => AsyncGenerator<Record<string, unknown>> {
   return async function* (reader: ExportReader) {
-    // The `database` provider's bytes are already in the rows the table query
-    // returned; there is no object store to read.
-    if (provider === "database") return;
-
     for await (const batch of reader.rows(
       ATTACHMENT_METADATA_SQL,
       DEFAULT_EXPORT_BATCH_ROWS,
     )) {
       for (const row of batch) {
-        if (String(row.storage_provider ?? "") !== provider) continue;
+        // A `database`-provider row's bytes are already in the rows the table
+        // query returned, and a backend this deployment cannot address has
+        // nothing to read: the predicate answers both.
+        if (!isReadable(String(row.storage_provider ?? "database"))) continue;
         const id = String(row.id ?? "");
         if (options.only && !options.only.has(id)) continue;
         const result = await readObject(id, row);

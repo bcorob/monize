@@ -84,6 +84,24 @@ export class User {
   @Exclude()
   emailVerificationTokenExpiry: Date | null;
 
+  // A self-service email change waiting for its confirmation link to be
+  // followed. `email` stays the live address until then; the token column holds
+  // only the sha256 hash of what was emailed to `pendingEmail`.
+  @Column({ name: "pending_email", type: "varchar", nullable: true })
+  pendingEmail: string | null;
+
+  @Column({ name: "email_change_token", type: "varchar", nullable: true })
+  @Exclude()
+  emailChangeToken: string | null;
+
+  @Column({
+    name: "email_change_token_expiry",
+    type: "timestamp",
+    nullable: true,
+  })
+  @Exclude()
+  emailChangeTokenExpiry: Date | null;
+
   @Column({ type: "varchar", default: "user" })
   role: string;
 
@@ -158,9 +176,35 @@ export class User {
   })
   backupEncryptionEnabled: boolean;
 
+  // Legacy: a recoverable copy of the backup password. Superseded by the three
+  // backup_key_* columns and cleared as each row is converted
+  // (docs/specs/backup-envelope-key-wrapping.md); nothing writes it any more.
   @Column({ name: "backup_password_enc", type: "text", nullable: true })
   @Exclude()
   backupPasswordEnc: string | null;
+
+  // The user's backup data key (base64) as ciphertext under ENCRYPTION_KEY,
+  // so the automatic backup can be encrypted without the password.
+  @Column({ name: "backup_key_enc", type: "text", nullable: true })
+  @Exclude()
+  backupKeyEnc: string | null;
+
+  // The same data key wrapped under the password that opens this user's
+  // backups (base64); copied into every automatic backup's header.
+  @Column({ name: "backup_key_wrap", type: "text", nullable: true })
+  @Exclude()
+  backupKeyWrap: string | null;
+
+  // SHA-256 of the password_hash the wrap was made for; NULL when the wrap is
+  // under an OIDC account's dedicated backup password.
+  @Column({
+    name: "backup_key_password_ref",
+    type: "varchar",
+    length: 64,
+    nullable: true,
+  })
+  @Exclude()
+  backupKeyPasswordRef: string | null;
 
   @OneToOne(() => UserPreference, (preference) => preference.user)
   preferences: UserPreference;

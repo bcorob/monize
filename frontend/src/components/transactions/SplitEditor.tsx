@@ -3,40 +3,57 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import { Input } from '@/components/ui/Input';
-import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { Combobox } from '@/components/ui/Combobox';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { InfoTooltip } from '@/components/ui/InfoTooltip';
 import { Category } from '@/types/category';
 import { Account } from '@/types/account';
-import { Tag } from '@/types/tag';
-import { CreateSplitData, InvestmentSplitDetails } from '@/types/transaction';
+import { Tag, TagUsageMap } from '@/types/tag';
+import { InvestmentSplitDetails } from '@/types/transaction';
+import type { SplitRow } from './split-rows';
 import { buildCategoryTree } from '@/lib/categoryUtils';
-import { roundToCents, roundToDecimals, getCurrencySymbol, formatAmountWithCommas, getDecimalPlacesForCurrency } from '@/lib/format';
+import { FALLBACK_DEFAULT_CURRENCY } from '@/lib/default-currency';
+import {
+  roundMoney,
+  sumMoney,
+  roundToDecimals,
+  roundToEntryPlaces,
+  getCurrencySymbol,
+  getDecimalPlacesForCurrency,
+  awaitsRegisteredPlaces,
+  MONEY_SCALE,
+  moneyDecimalsForCurrency,
+} from '@/lib/format';
+import { useLocalizedAmount } from '@/hooks/useLocalizedAmount';
 import { buildAccountDropdownOptions } from '@/lib/account-utils';
 import { useAccountOptionLabel } from '@/hooks/useMainAccountName';
 import { InvestmentSplitFields } from './InvestmentSplitFields';
+import { RemoveSplitLineButton } from './SplitLineButtons';
+import {
+  useSplitTransferFxAutofill,
+  currentTransferTargetAmount,
+  SplitFxPatch,
+} from './useSplitTransferFxAutofill';
+import { splitTransferPair } from './split-transfer-currency';
+import { SplitAmountFields } from './SplitAmountFields';
+import { TRANSACTION_NOTE_MAX_LENGTH } from '@/lib/transaction-note';
+import { buildTagOptions } from '@/lib/tag-options';
+import { Th } from '@/components/ui/Table';
+import { newClientId } from '@/lib/client-id';
 
-export type SplitType = 'category' | 'transfer' | 'investment';
-
-export interface SplitRow extends CreateSplitData {
-  id: string; // Temporary ID for React keys
-  splitType: SplitType;
-  // Real user intent (issue #1167 R9-F2): true once the user edits this line's FX
-  // rate input, so a re-entered rate on a *continuing* investment line is honoured
-  // for the current pair even when its value equals the stale stored one. Reset
-  // when the security (and thus the pair) changes. UI-only -- the serializer turns
-  // it into `rateExplicit`; it never reaches an ordinary transaction DTO.
-  exchangeRateEdited?: boolean;
-}
+export type { SplitType, SplitRow } from './split-rows';
+export { createEmptySplits, toSplitRows, toCreateSplitData } from './split-rows';
 
 interface SplitEditorProps {
   splits: SplitRow[];
   onChange: (splits: SplitRow[]) => void;
   categories: Category[];
   tags?: Tag[];
+  /** Orders the tag picker recent-first (`buildTagOptions`); absent means A-Z. */
+  tagUsage?: TagUsageMap;
   accounts?: Account[];
   sourceAccountId?: string;
   /** When the parent account is INVESTMENT_CASH, the investment split kind is enabled. */
@@ -70,30 +87,58 @@ interface SplitEditorProps {
    * matches nothing is discarded, which is what every split line used to do.
    */
   onCreateCategory?: (name: string) => Promise<Category | null | undefined>;
+  /**
+   * The parent transaction's date (`YYYY-MM-DD`). An investment line prefills its
+   * FX rate from the rate for this day (INV-FX-001), never the latest.
+   */
+  transactionDate?: string;
+  /**
+   * Offer an "Amount Received" on a transfer line whose target account is in
+   * another currency, prefilled from the rate for `transactionDate` and
+   * editable. Only the transaction form sets it: the field is saved as the
+   * line's `transferTargetAmount`, which the scheduled surfaces do not store.
+   */
+  crossCurrencyTransfers?: boolean;
 }
+
+// A stable default, so an absent prop does not rebuild the tag options every render.
+const NO_TAG_USAGE: TagUsageMap = {};
 
 export function SplitEditor({
   splits,
   onChange,
   categories,
   tags = [],
+  tagUsage = NO_TAG_USAGE,
   accounts = [],
   sourceAccountId = '',
   parentAccountSubType,
   transactionAmount,
   disabled = false,
   onTransactionAmountChange,
-  currencyCode = 'CAD',
+  currencyCode = FALLBACK_DEFAULT_CURRENCY,
   onConvertToRegular,
   displayCurrencyCode,
   displayRate,
   onCreateCategory,
+  transactionDate,
+  crossCurrencyTransfers = false,
 }: SplitEditorProps) {
   const t = useTranslations('transactions');
+  // Read-only amounts, grouped in the user's number locale (en-US unchanged).
+  const formatAmountLocal = useLocalizedAmount();
   const accountOptionLabel = useAccountOptionLabel({ withCurrency: false });
   const investmentSplitsEnabled = parentAccountSubType === 'INVESTMENT_CASH';
   const currencySymbol = getCurrencySymbol(currencyCode);
-  const decimals = getDecimalPlacesForCurrency(currencyCode);
+  // A coin the registry does not hold yet is entered at the column scale
+  // (`awaitsRegisteredPlaces`), not `Intl`'s guess of two, so a line typed
+  // before `GET /currencies` answers is not rounded to cents.
+  const decimals = awaitsRegisteredPlaces(currencyCode)
+    ? MONEY_SCALE
+    : getDecimalPlacesForCurrency(currencyCode);
+  // The account currency's money precision: four for fiat, a coin's eight.
+  // Every line, total, remainder and distribution rounds and sums at it.
+  const money = moneyDecimalsForCurrency(currencyCode);
   const [localSplits, setLocalSplits] = useState<SplitRow[]>(splits);
 
   // Foreign-currency editing toggle. Available only when a display currency and
@@ -118,9 +163,12 @@ export function SplitEditor({
   const toDisplayAmount = (accountAmount: number) =>
     foreignActive ? roundToDecimals(accountAmount / rate, activeDecimals) : accountAmount;
   // Convert an amount typed in the currently shown currency back to the stored
-  // account currency (always rounded to cents, matching the rest of the editor).
+  // account currency, rounded to cents as the rest of the editor does, or to a
+  // coin's own places from the currency registry (a -0.0051 BTC line was
+  // stored as -0.01).
+  const toStoredPlaces = (amount: number) => roundToEntryPlaces(amount, currencyCode);
   const fromDisplayAmount = (displayAmount: number) =>
-    foreignActive ? roundToCents(displayAmount * rate) : roundToCents(displayAmount);
+    toStoredPlaces(foreignActive ? displayAmount * rate : displayAmount);
   // Index of the split pending removal that would convert the transaction back
   // to a regular one (only set while the confirmation dialog is open).
   const [convertPendingIndex, setConvertPendingIndex] = useState<number | null>(null);
@@ -140,12 +188,7 @@ export function SplitEditor({
   }), [categories]);
 
   // Memoize tag options for multiselect
-  const tagOptions = useMemo(() =>
-    [...tags]
-      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
-      .map(tag => ({ value: tag.id, label: tag.name })),
-    [tags]
-  );
+  const tagOptions = useMemo(() => buildTagOptions(tags, tagUsage), [tags, tagUsage]);
 
   // Memoize account options (excluding source account, asset accounts, investment accounts, and closed accounts)
   const accountOptions = useMemo(() => {
@@ -163,10 +206,13 @@ export function SplitEditor({
     );
   }, [accounts, sourceAccountId, supportsTransfers, splits, accountOptionLabel]);
 
-  // Sync with parent when splits prop changes
-  useEffect(() => {
+  // Sync with parent when splits prop changes (the "info from previous render"
+  // pattern rather than a setState in an effect)
+  const [syncedSplits, setSyncedSplits] = useState(splits);
+  if (syncedSplits !== splits) {
+    setSyncedSplits(splits);
     setLocalSplits(splits);
-  }, [splits]);
+  }
 
   // A category created from a split line is applied before the parent's own
   // state update has re-rendered this component, so the new row is not in
@@ -180,11 +226,63 @@ export function SplitEditor({
     [categories],
   );
 
-  const splitsTotal = localSplits.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
-  const remaining = Number(transactionAmount) - splitsTotal;
+  // The splits as last committed, for a rate that arrives between renders.
+  const splitsRef = useRef(localSplits);
+  useEffect(() => {
+    splitsRef.current = localSplits;
+  });
+
+  const defaultSign: 1 | -1 = Number(transactionAmount) > 0 ? 1 : -1;
+  const transferPairOf = (split: SplitRow) =>
+    crossCurrencyTransfers
+      ? splitTransferPair(split, accounts, currencyCode, sourceAccountId, defaultSign)
+      : null;
+  const applyFxPatches = (patches: Record<string, SplitFxPatch>) => {
+    const next = splitsRef.current.map((split) =>
+      patches[split.id] ? { ...split, ...patches[split.id] } : split,
+    );
+    splitsRef.current = next;
+    setLocalSplits(next);
+    onChange(next);
+  };
+  const transferFx = useSplitTransferFxAutofill<SplitRow>({
+    fromCurrency: currencyCode,
+    date: transactionDate,
+    lines: localSplits,
+    pairOf: transferPairOf,
+    defaultSign,
+    onPatch: applyFxPatches,
+  });
+
+  // Every change to the lines lands here. A moved amount re-derives the
+  // received amount of a cross-currency transfer line still holding a derived
+  // one; a typed received amount skips that, since it is the user's figure.
+  const commitSplits = (next: SplitRow[], options: { reconcile?: boolean } = {}) => {
+    const committed =
+      options.reconcile === false ? next : transferFx.reconcile(localSplits, next);
+    splitsRef.current = committed;
+    setLocalSplits(committed);
+    onChange(committed);
+  };
+
+  const handleTargetAmountChange = (index: number, value: number | undefined) => {
+    const line = localSplits[index];
+    const newSplits = [...localSplits];
+    newSplits[index] = { ...line, ...transferFx.editTarget(line, value) };
+    commitSplits(newSplits, { reconcile: false });
+  };
+
+  // Summed and compared at the account currency's money precision (four for
+  // fiat, a coin's eight), the rule the server's `validateSplitAmountSum`
+  // applies (`sumMoney` of the lines against `roundMoney` of the total). A
+  // one-cent tolerance read a 0.0049 BTC remainder as balanced, disabled "Add
+  // remaining", and the save was refused. A fiat amount is entered at two
+  // places, so its lines already sum exactly.
+  const splitsTotal = sumMoney(localSplits.map((s) => Number(s.amount) || 0), money);
+  const remaining = roundMoney(roundMoney(Number(transactionAmount), money) - splitsTotal, money);
   // Balance is always judged in the account currency so distribution and the
   // balanced/remaining indicators stay exact regardless of the display currency.
-  const isBalanced = Math.abs(remaining) < 0.01;
+  const isBalanced = remaining === 0;
   // Footer figures rendered in whichever currency the amounts are shown in.
   const displaySplitsTotal = toDisplayAmount(splitsTotal);
   const displayRemaining = toDisplayAmount(remaining);
@@ -200,6 +298,7 @@ export function SplitEditor({
           ...newSplits[index],
           splitType: 'category',
           transferAccountId: undefined,
+          transferTargetAmount: undefined,
           investment: undefined,
         };
       } else if (value === 'transfer') {
@@ -207,6 +306,7 @@ export function SplitEditor({
           ...newSplits[index],
           splitType: 'transfer',
           categoryId: undefined,
+          transferTargetAmount: undefined,
           investment: undefined,
         };
       } else {
@@ -215,11 +315,11 @@ export function SplitEditor({
           splitType: 'investment',
           categoryId: undefined,
           transferAccountId: undefined,
+          transferTargetAmount: undefined,
           investment: newSplits[index].investment ?? { action: 'BUY' },
         };
       }
-      setLocalSplits(newSplits);
-      onChange(newSplits);
+      commitSplits(newSplits);
       return;
     }
 
@@ -245,15 +345,28 @@ export function SplitEditor({
         amount,
         exchangeRateEdited,
       };
-      setLocalSplits(newSplits);
-      onChange(newSplits);
+      commitSplits(newSplits);
+      return;
+    }
+
+    // A received amount belongs to the account it arrived in: another target
+    // starts empty and is filled from that pair's rate, as on a transfer.
+    if (field === 'transferAccountId') {
+      newSplits[index] = {
+        ...newSplits[index],
+        transferAccountId: value,
+        transferTargetAmount: undefined,
+        transferTargetFromCurrency: undefined,
+      };
+      commitSplits(newSplits);
       return;
     }
 
     // If changing category, adjust the amount sign based on income/expense
     if (field === 'categoryId' && value) {
       const category = findCategory(value);
-      if (category) {
+      // A category with automatic sign turned off keeps whatever sign was typed.
+      if (category && category.effectiveAutoSign !== false) {
         const currentAmount = Number(newSplits[index].amount) || 0;
         if (currentAmount !== 0) {
           const absAmount = Math.abs(currentAmount);
@@ -297,7 +410,7 @@ export function SplitEditor({
             const currentAmount = Number(newSplits[index].amount) || 0;
             const isJustSignChange = Math.abs(currentAmount) === Math.abs(newAmount) && Math.abs(currentAmount) !== 0;
 
-            if (!isJustSignChange) {
+            if (!isJustSignChange && category.effectiveAutoSign !== false) {
               const absAmount = Math.abs(newAmount);
               value = category.isIncome ? absAmount : -absAmount;
             }
@@ -307,8 +420,7 @@ export function SplitEditor({
     }
 
     newSplits[index] = { ...newSplits[index], [field]: value };
-    setLocalSplits(newSplits);
-    onChange(newSplits);
+    commitSplits(newSplits);
   };
 
   // The apply step of an asynchronous create has to run against the splits as
@@ -338,16 +450,15 @@ export function SplitEditor({
 
   const addSplit = () => {
     const newSplit: SplitRow = {
-      id: `temp-${Date.now()}-${Math.random()}`,
+      id: `temp-${newClientId()}`,
       splitType: 'category',
       categoryId: undefined,
       transferAccountId: undefined,
-      amount: Math.round(remaining * 100) / 100, // Pre-fill with remaining amount, rounded to 2 decimals
+      amount: roundMoney(remaining, money), // Pre-fill with the remaining amount, at the currency's money precision
       memo: '',
     };
     const newSplits = [...localSplits, newSplit];
-    setLocalSplits(newSplits);
-    onChange(newSplits);
+    commitSplits(newSplits);
   };
 
   // Whether removing the row at `index` is allowed. Above two splits removal is
@@ -366,8 +477,7 @@ export function SplitEditor({
   const removeSplit = (index: number) => {
     if (localSplits.length > 2) {
       const newSplits = localSplits.filter((_, i) => i !== index);
-      setLocalSplits(newSplits);
-      onChange(newSplits);
+      commitSplits(newSplits);
       return;
     }
     // At two splits, deleting one converts back to a regular transaction.
@@ -386,57 +496,54 @@ export function SplitEditor({
   const distributeEvenly = () => {
     if (localSplits.length === 0) return;
 
-    const totalAmount = Math.round(Number(transactionAmount) * 100) / 100;
-    // Round each split to 2 decimal places (cents)
-    const amountPerSplit = Math.round((totalAmount / localSplits.length) * 100) / 100;
+    const totalAmount = roundMoney(Number(transactionAmount), money);
+    // Each split at the currency's money precision.
+    const amountPerSplit = roundMoney(totalAmount / localSplits.length, money);
 
     // Distribute evenly, putting the remainder on the last row for an exact sum.
     const newSplits = localSplits.map((split, index) => {
       if (index === localSplits.length - 1) {
-        const otherSplitsTotal = Math.round(amountPerSplit * (localSplits.length - 1) * 100) / 100;
-        const lastAmount = Math.round((totalAmount - otherSplitsTotal) * 100) / 100;
+        const otherSplitsTotal = roundMoney(amountPerSplit * (localSplits.length - 1), money);
+        const lastAmount = roundMoney(totalAmount - otherSplitsTotal, money);
         return { ...split, amount: lastAmount };
       }
       return { ...split, amount: amountPerSplit };
     });
 
-    setLocalSplits(newSplits);
-    onChange(newSplits);
+    commitSplits(newSplits);
   };
 
   // Add unassigned amount to a specific split
   const addRemainingToSplit = (index: number) => {
-    if (Math.abs(remaining) < 0.01) return; // No remaining amount
+    if (isBalanced) return; // No remaining amount
 
     const newSplits = [...localSplits];
     const currentAmount = Number(newSplits[index].amount) || 0;
-    newSplits[index] = { ...newSplits[index], amount: Math.round((currentAmount + remaining) * 100) / 100 };
-    setLocalSplits(newSplits);
-    onChange(newSplits);
+    newSplits[index] = { ...newSplits[index], amount: roundMoney(currentAmount + remaining, money) };
+    commitSplits(newSplits);
   };
 
   // Distribute the remaining amount proportionally across the splits based on
   // their current amounts.
   const distributeProportionally = () => {
-    if (localSplits.length === 0 || Math.abs(remaining) < 0.01) return;
+    if (localSplits.length === 0 || isBalanced) return;
 
-    const absTotal = localSplits.reduce((sum, s) => sum + Math.abs(Number(s.amount) || 0), 0);
+    const absTotal = sumMoney(localSplits.map((s) => Math.abs(Number(s.amount) || 0)), money);
     const lastSplit = localSplits[localSplits.length - 1];
 
     // If all splits are zero, fall back to equal distribution.
-    if (absTotal < 0.01) {
-      const perSplit = Math.round((remaining / localSplits.length) * 100) / 100;
+    if (absTotal === 0) {
+      const perSplit = roundMoney(remaining / localSplits.length, money);
       const newSplits = localSplits.map((split, index) => {
         const currentAmount = Number(split.amount) || 0;
         if (index === localSplits.length - 1) {
-          const distributed = Math.round(perSplit * (localSplits.length - 1) * 100) / 100;
-          const lastPortion = Math.round((remaining - distributed) * 100) / 100;
-          return { ...split, amount: Math.round((currentAmount + lastPortion) * 100) / 100 };
+          const distributed = roundMoney(perSplit * (localSplits.length - 1), money);
+          const lastPortion = roundMoney(remaining - distributed, money);
+          return { ...split, amount: roundMoney(currentAmount + lastPortion, money) };
         }
-        return { ...split, amount: Math.round((currentAmount + perSplit) * 100) / 100 };
+        return { ...split, amount: roundMoney(currentAmount + perSplit, money) };
       });
-      setLocalSplits(newSplits);
-      onChange(newSplits);
+      commitSplits(newSplits);
       return;
     }
 
@@ -447,31 +554,47 @@ export function SplitEditor({
 
       if (split === lastSplit) {
         // Last split absorbs the rounding remainder
-        const lastPortion = Math.round((remaining - distributedSoFar) * 100) / 100;
-        return { ...split, amount: Math.round((currentAmount + lastPortion) * 100) / 100 };
+        const lastPortion = roundMoney(remaining - distributedSoFar, money);
+        return { ...split, amount: roundMoney(currentAmount + lastPortion, money) };
       }
 
-      const portion = Math.round(remaining * proportion * 100) / 100;
+      const portion = roundMoney(remaining * proportion, money);
       distributedSoFar += portion;
-      return { ...split, amount: Math.round((currentAmount + portion) * 100) / 100 };
+      return { ...split, amount: roundMoney(currentAmount + portion, money) };
     });
 
-    setLocalSplits(newSplits);
-    onChange(newSplits);
+    commitSplits(newSplits);
   };
 
   // Set the transaction total to the sum of splits
   const setTotalToSplitsSum = () => {
     if (onTransactionAmountChange && splitsTotal !== 0) {
-      onTransactionAmountChange(Math.round(splitsTotal * 100) / 100);
+      onTransactionAmountChange(roundMoney(splitsTotal, money));
     }
   };
+
+  const renderAmountFields = (split: SplitRow, index: number) => (
+    <SplitAmountFields
+      pair={transferPairOf(split)}
+      amountCurrencyCode={foreignActive ? (displayCurrencyCode as string) : currencyCode}
+      amountSymbol={activeSymbol}
+      amountDecimals={activeDecimals}
+      amountValue={toDisplayAmount(split.amount)}
+      onAmountChange={(value) => handleSplitChange(index, 'amount', fromDisplayAmount(value ?? 0))}
+      receivedValue={currentTransferTargetAmount(split, currencyCode)}
+      onReceivedChange={(value) => handleTargetAmountChange(index, value)}
+      disabled={disabled}
+    />
+  );
 
   return (
     <div className="space-y-4">
       <div className="flex justify-between items-center gap-2 flex-wrap">
         <div className="flex items-center gap-2">
-          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('splitEditor.header')}</h4>
+          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 flex items-center">
+            {t('splitEditor.header')}
+            <InfoTooltip text={t('splitEditor.headerTooltip')} learnMore="transactionSplits" />
+          </h4>
           {canToggleCurrency && (
             <div
               className="inline-flex overflow-hidden rounded-md border border-gray-300 dark:border-gray-600 text-xs"
@@ -513,7 +636,7 @@ export function SplitEditor({
             variant="outline"
             size="sm"
             onClick={distributeProportionally}
-            disabled={disabled || localSplits.length === 0 || Math.abs(remaining) < 0.01}
+            disabled={disabled || localSplits.length === 0 || isBalanced}
             title={t('splitEditor.distributeProportionallyTitle')}
           >
             {t('splitEditor.distributeProportionally')}
@@ -548,25 +671,19 @@ export function SplitEditor({
                     <button
                       type="button"
                       onClick={() => addRemainingToSplit(index)}
-                      disabled={disabled || Math.abs(remaining) < 0.01}
+                      disabled={disabled || isBalanced}
                       className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                      title={Math.abs(remaining) < 0.01 ? t('splitEditor.noUnassigned') : t('splitEditor.addRemaining')}
+                      title={isBalanced ? t('splitEditor.noUnassigned') : t('splitEditor.addRemaining')}
                     >
                       <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
                       </svg>
                     </button>
-                    <button
-                      type="button"
+                    <RemoveSplitLineButton
                       onClick={() => removeSplit(index)}
                       disabled={disabled || !canRemoveRow(index)}
-                      className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 disabled:opacity-50 disabled:cursor-not-allowed"
                       title={!canRemoveRow(index) ? t('splitEditor.removeMinimum') : localSplits.length <= 2 ? t('splitEditor.removeAndConvert') : t('splitEditor.removeSplit')}
-                    >
-                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                      </svg>
-                    </button>
+                    />
                   </div>
                 </div>
                 {supportsTransfers && (
@@ -592,6 +709,8 @@ export function SplitEditor({
                     }
                     disabled={disabled}
                     currencyCode={currencyCode}
+                    transactionDate={transactionDate}
+                    rateEdited={split.exchangeRateEdited}
                   />
                 ) : split.splitType === 'category' || !supportsTransfers ? (
                   // Same picker as the non-split form's Category field: an id-backed
@@ -631,19 +750,13 @@ export function SplitEditor({
                   />
                 )}
                 <div className="grid grid-cols-2 gap-2">
-                  <CurrencyInput
-                    prefix={activeSymbol}
-                    value={toDisplayAmount(split.amount)}
-                    onChange={(value) => handleSplitChange(index, 'amount', fromDisplayAmount(value ?? 0))}
-                    allowSignToggle
-                    disabled={disabled}
-                    className="w-full"
-                  />
+                  {renderAmountFields(split, index)}
                   <Input
                     type="text"
                     value={split.memo || ''}
                     onChange={(e) => handleSplitChange(index, 'memo', e.target.value)}
                     placeholder={t('splitEditor.mobileMemoPlaceholder')}
+                    maxLength={TRANSACTION_NOTE_MAX_LENGTH}
                     disabled={disabled}
                     className="w-full"
                   />
@@ -679,13 +792,13 @@ export function SplitEditor({
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('splitEditor.total')}</span>
                 <span className={`font-medium ${isBalanced ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
-                  {activeSymbol}{formatAmountWithCommas(displaySplitsTotal, activeDecimals)}
+                  {activeSymbol}{formatAmountLocal(displaySplitsTotal, activeDecimals)}
                 </span>
                 {isBalanced ? (
                   <span className="text-xs text-green-600 dark:text-green-400">{t('splitEditor.balanced')}</span>
                 ) : (
                   <span className="text-xs text-red-600 dark:text-red-400">
-                    {t('splitEditor.remaining', { symbol: activeSymbol, amount: formatAmountWithCommas(displayRemaining, activeDecimals) })}
+                    {t('splitEditor.remaining', { symbol: activeSymbol, amount: formatAmountLocal(displayRemaining, activeDecimals) })}
                   </span>
                 )}
               </div>
@@ -696,7 +809,7 @@ export function SplitEditor({
                   disabled={disabled}
                   className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline disabled:opacity-50 whitespace-nowrap"
                 >
-                  {t('splitEditor.setTotal', { symbol: activeSymbol, amount: formatAmountWithCommas(displaySplitsTotal, activeDecimals) })}
+                  {t('splitEditor.setTotal', { symbol: activeSymbol, amount: formatAmountLocal(displaySplitsTotal, activeDecimals) })}
                 </button>
               )}
             </div>
@@ -710,25 +823,25 @@ export function SplitEditor({
           <thead className="bg-gray-50 dark:bg-gray-800 rounded-t-lg">
             <tr>
               {supportsTransfers && (
-                <th className="px-1 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase" style={{ width: '14%' }}>
+                <Th className="px-1 py-2" style={{ width: '14%' }}>
                   {t('splitEditor.columns.type')}
-                </th>
+                </Th>
               )}
-              <th className="px-1 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase" style={{ width: supportsTransfers ? '32%' : '45%' }}>
+              <Th className="px-1 py-2" style={{ width: supportsTransfers ? '32%' : '45%' }}>
                 {supportsTransfers ? t('splitEditor.columns.categoryAccount') : t('splitEditor.columns.category')}
-              </th>
-              <th className="px-1 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase" style={{ width: supportsTransfers ? '20%' : '13%' }}>
+              </Th>
+              <Th className="px-1 py-2" style={{ width: supportsTransfers ? '20%' : '13%' }}>
                 {t('splitEditor.columns.amount')}
-              </th>
-              <th className="px-1 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase" style={{ width: '17%' }}>
+              </Th>
+              <Th className="px-1 py-2" style={{ width: '17%' }}>
                 {t('splitEditor.columns.memo')}
-              </th>
+              </Th>
               {tagOptions.length > 0 && (
-                <th className="px-1 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase" style={{ width: '15%' }}>
+                <Th className="px-1 py-2" style={{ width: '15%' }}>
                   {t('splitEditor.columns.tags')}
-                </th>
+                </Th>
               )}
-              <th className="px-1 py-2" style={{ width: '5%' }}></th>
+              <Th className="px-1 py-2" style={{ width: '5%' }} />
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
@@ -766,6 +879,8 @@ export function SplitEditor({
                       }
                       disabled={disabled}
                       currencyCode={currencyCode}
+                      transactionDate={transactionDate}
+                      rateEdited={split.exchangeRateEdited}
                     />
                   ) : split.splitType === 'category' || !supportsTransfers ? (
                     // Same picker as the non-split form's Category field: an id-backed
@@ -806,14 +921,7 @@ export function SplitEditor({
                   )}
                 </td>
                 <td className="px-1 py-2">
-                  <CurrencyInput
-                    prefix={activeSymbol}
-                    value={toDisplayAmount(split.amount)}
-                    onChange={(value) => handleSplitChange(index, 'amount', fromDisplayAmount(value ?? 0))}
-                    allowSignToggle
-                    disabled={disabled}
-                    className="w-full"
-                  />
+                  {renderAmountFields(split, index)}
                 </td>
                 <td className="px-1 py-2">
                   <Input
@@ -821,6 +929,7 @@ export function SplitEditor({
                     value={split.memo || ''}
                     onChange={(e) => handleSplitChange(index, 'memo', e.target.value)}
                     placeholder={t('splitEditor.memoPlaceholder')}
+                    maxLength={TRANSACTION_NOTE_MAX_LENGTH}
                     disabled={disabled}
                     className="w-full"
                   />
@@ -841,9 +950,9 @@ export function SplitEditor({
                     <button
                       type="button"
                       onClick={() => addRemainingToSplit(index)}
-                      disabled={disabled || Math.abs(remaining) < 0.01}
+                      disabled={disabled || isBalanced}
                       className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 disabled:opacity-50 disabled:cursor-not-allowed"
-                      title={Math.abs(remaining) < 0.01 ? t('splitEditor.noUnassigned') : t('splitEditor.addRemaining')}
+                      title={isBalanced ? t('splitEditor.noUnassigned') : t('splitEditor.addRemaining')}
                     >
                       <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                         <path
@@ -854,22 +963,11 @@ export function SplitEditor({
                         />
                       </svg>
                     </button>
-                    <button
-                      type="button"
+                    <RemoveSplitLineButton
                       onClick={() => removeSplit(index)}
                       disabled={disabled || !canRemoveRow(index)}
-                      className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300 disabled:opacity-50 disabled:cursor-not-allowed"
                       title={!canRemoveRow(index) ? t('splitEditor.removeMinimum') : localSplits.length <= 2 ? t('splitEditor.removeAndConvert') : t('splitEditor.removeSplit')}
-                    >
-                      <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-                        />
-                      </svg>
-                    </button>
+                    />
                   </div>
                 </td>
               </tr>
@@ -904,13 +1002,13 @@ export function SplitEditor({
                         isBalanced ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'
                       }`}
                     >
-                      {activeSymbol}{formatAmountWithCommas(displaySplitsTotal, activeDecimals)}
+                      {activeSymbol}{formatAmountLocal(displaySplitsTotal, activeDecimals)}
                     </span>
                     {isBalanced ? (
                       <span className="text-xs text-green-600 dark:text-green-400">{t('splitEditor.balanced')}</span>
                     ) : (
                       <span className="text-xs text-red-600 dark:text-red-400 whitespace-nowrap">
-                        {t('splitEditor.needAmount', { symbol: activeSymbol, amount: formatAmountWithCommas(displayTransactionAmount, activeDecimals), remaining: formatAmountWithCommas(displayRemaining, activeDecimals) })}
+                        {t('splitEditor.needAmount', { symbol: activeSymbol, amount: formatAmountLocal(displayTransactionAmount, activeDecimals), remaining: formatAmountLocal(displayRemaining, activeDecimals) })}
                       </span>
                     )}
                   </div>
@@ -921,7 +1019,7 @@ export function SplitEditor({
                       disabled={disabled}
                       className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 underline disabled:opacity-50 whitespace-nowrap"
                     >
-                      {t('splitEditor.setTotal', { symbol: activeSymbol, amount: formatAmountWithCommas(displaySplitsTotal, activeDecimals) })}
+                      {t('splitEditor.setTotal', { symbol: activeSymbol, amount: formatAmountLocal(displaySplitsTotal, activeDecimals) })}
                     </button>
                   )}
                 </div>
@@ -943,207 +1041,4 @@ export function SplitEditor({
       />
     </div>
   );
-}
-
-// Helper function to generate temporary IDs for new splits
-export function createEmptySplits(transactionAmount: number): SplitRow[] {
-  const halfAmount = Math.round((Number(transactionAmount) / 2) * 100) / 100;
-  const otherHalf = Math.round((Number(transactionAmount) - halfAmount) * 100) / 100;
-
-  return [
-    {
-      id: `temp-${Date.now()}-1`,
-      splitType: 'category',
-      categoryId: undefined,
-      transferAccountId: undefined,
-      amount: halfAmount,
-      memo: '',
-    },
-    {
-      id: `temp-${Date.now()}-2`,
-      splitType: 'category',
-      categoryId: undefined,
-      transferAccountId: undefined,
-      amount: otherHalf,
-      memo: '',
-    },
-  ];
-}
-
-// Convert API splits to SplitRow format. Accepts both transaction splits (with
-// `investmentTransaction` relation) and scheduled-transaction splits (with the
-// investment payload denormalized as `investment*` columns on the row itself).
-// A real server-issued split id is a UUID. A synthetic React key (a
-// pre-migration override's `override-N`, or a `temp-...` row the user just
-// added) is not, and must never be treated as source identity (issue #1167
-// R8-F1) -- it would be rejected by the DTO's `@IsUUID` and could masquerade as
-// a persistent id.
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-function isUuid(value: string | null | undefined): value is string {
-  return typeof value === 'string' && UUID_RE.test(value);
-}
-
-export function toSplitRows(splits: {
-  id?: string;
-  kind?: 'category' | 'transfer' | 'investment';
-  categoryId?: string | null;
-  transferAccountId?: string | null;
-  amount: number;
-  memo?: string | null;
-  tags?: { id: string }[];
-  investmentTransaction?: {
-    action: string;
-    securityId: string | null;
-    quantity: number | null;
-    price: number | null;
-    commission: number;
-    exchangeRate: number;
-  } | null;
-  // Scheduled-transaction-split shape
-  investmentAction?: string | null;
-  investmentSecurityId?: string | null;
-  investmentQuantity?: number | null;
-  investmentPrice?: number | null;
-  investmentCommission?: number | null;
-  investmentExchangeRate?: number | null;
-  investmentExchangeRateFromCurrency?: string | null;
-  investmentExchangeRateToCurrency?: string | null;
-  // Override JSON shape
-  splitKind?: 'category' | 'transfer' | 'investment';
-  investment?: {
-    action: string;
-    securityId?: string;
-    quantity?: number;
-    price?: number;
-    commission?: number;
-    exchangeRate?: number;
-    exchangeRateFromCurrency?: string;
-    exchangeRateToCurrency?: string;
-  };
-}[]): SplitRow[] {
-  return splits.map((split, index) => {
-    const kind: SplitType =
-      split.kind === 'investment' ||
-      split.splitKind === 'investment' ||
-      split.investmentTransaction ||
-      split.investmentAction ||
-      split.investment
-        ? 'investment'
-        : split.transferAccountId
-          ? 'transfer'
-          : 'category';
-    let investment: InvestmentSplitDetails | undefined;
-    if (split.investmentTransaction) {
-      investment = {
-        action: split.investmentTransaction.action as InvestmentSplitDetails['action'],
-        securityId: split.investmentTransaction.securityId ?? undefined,
-        quantity: Number(split.investmentTransaction.quantity ?? 0),
-        price: Number(split.investmentTransaction.price ?? 0),
-        commission: Number(split.investmentTransaction.commission ?? 0),
-        // A persisted rate of null is unknown FX, not 1 (issue #1167 R10-F1):
-        // coercing it to 1 lets the server bless a synthetic 1 as the current
-        // pair. Preserve undefined so the split carries no rate.
-        exchangeRate:
-          split.investmentTransaction.exchangeRate != null
-            ? Number(split.investmentTransaction.exchangeRate)
-            : undefined,
-      };
-    } else if (split.investmentAction) {
-      investment = {
-        action: split.investmentAction as InvestmentSplitDetails['action'],
-        securityId: split.investmentSecurityId ?? undefined,
-        quantity: Number(split.investmentQuantity ?? 0),
-        price: Number(split.investmentPrice ?? 0),
-        commission: Number(split.investmentCommission ?? 0),
-        // A persisted scheduled rate of null is unknown FX, not 1 (issue #1167
-        // R10-F1): coercing it to 1 lets a cosmetic edit bless a synthetic 1 as
-        // the current cross-currency pair. Preserve undefined -- the cross-currency
-        // field then resolves the real rate, and a matched null-rate source is not
-        // stamped unless the user actually enters one.
-        exchangeRate:
-          split.investmentExchangeRate != null
-            ? Number(split.investmentExchangeRate)
-            : undefined,
-        // Carry the server-recorded currency pair (issue #1167 F5-1) so a Post
-        // that resends this line unchanged lets the server tell a still-valid
-        // rate from a since-stale one, rather than trusting the scalar blindly.
-        exchangeRateFromCurrency:
-          split.investmentExchangeRateFromCurrency ?? undefined,
-        exchangeRateToCurrency:
-          split.investmentExchangeRateToCurrency ?? undefined,
-      };
-    } else if (split.investment) {
-      investment = {
-        action: split.investment.action as InvestmentSplitDetails['action'],
-        securityId: split.investment.securityId,
-        quantity: split.investment.quantity,
-        price: split.investment.price,
-        commission: split.investment.commission,
-        exchangeRate: split.investment.exchangeRate,
-        exchangeRateFromCurrency: split.investment.exchangeRateFromCurrency,
-        exchangeRateToCurrency: split.investment.exchangeRateToCurrency,
-      };
-    }
-    return {
-      id: split.id || `temp-${Date.now()}-${index}`,
-      // The source split's real id (undefined for a row the user just added), so
-      // an edit/post can name it as `sourceSplitId` and the server decides FX
-      // provenance by identity (issue #1167 F4). Only a real server id (a UUID)
-      // may become source identity: a synthetic React key (a pre-migration
-      // override's `override-N`, or a `temp-` row) is UI-only and would be
-      // rejected by the DTO's `@IsUUID` and, worse, could masquerade as a
-      // persistent id (issue #1167 R8-F1). Anything else stays undefined, which
-      // the server reads as "new/unidentified line".
-      sourceSplitId: isUuid(split.id) ? split.id : undefined,
-      splitType: kind,
-      categoryId: split.categoryId || undefined,
-      transferAccountId: split.transferAccountId || undefined,
-      investment,
-      amount: Number(split.amount),
-      memo: split.memo || '',
-      tagIds: split.tags?.map(t => t.id) || [],
-    };
-  });
-}
-
-// Convert SplitRow to API format (removes temporary id and splitType)
-// Convert SplitRow to API format (removes temporary id and splitType).
-//
-// `includeSourceIdentity` is opt-in and OFF by default: `sourceSplitId` is a
-// scheduled-transaction correlation field (issue #1167 F4) that the ordinary
-// transaction DTO does not accept, so emitting it there fails validation under
-// `forbidNonWhitelisted` (R7-F1). Only the scheduled create/update surface passes
-// it true.
-export function toCreateSplitData(
-  splits: SplitRow[],
-  options: { includeSourceIdentity?: boolean } = {},
-): CreateSplitData[] {
-  return splits.map((split) => ({
-    splitKind: split.splitType,
-    categoryId: split.splitType === 'category' ? split.categoryId : undefined,
-    transferAccountId: split.splitType === 'transfer' ? split.transferAccountId : undefined,
-    investment: split.splitType === 'investment' ? split.investment : undefined,
-    amount: split.amount,
-    memo: split.memo || undefined,
-    tagIds: split.tagIds && split.tagIds.length > 0 ? split.tagIds : undefined,
-    // Carry the source split id only for scheduled surfaces that decide FX
-    // provenance by identity; undefined for a row the user added.
-    sourceSplitId: options.includeSourceIdentity
-      ? split.sourceSplitId
-      : undefined,
-    // The line's FX rate is a deliberate value for the current settlement pair,
-    // so the server stamps that pair rather than treating the line as an
-    // unidentified legacy row (issue #1167 R8-F2/R9-F2). True for a genuinely new
-    // investment line (no source identity), or a continuing one whose rate the
-    // user actually edited (`exchangeRateEdited`) -- the latter closes the
-    // same-value re-entry edge where the re-typed value equals the stale stored
-    // one. Scheduled surfaces only, alongside the source-identity opt-in.
-    rateExplicit:
-      options.includeSourceIdentity &&
-      split.splitType === 'investment' &&
-      (!split.sourceSplitId || split.exchangeRateEdited === true)
-        ? true
-        : undefined,
-  }));
 }

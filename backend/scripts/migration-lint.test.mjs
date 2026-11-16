@@ -8,6 +8,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   RULES,
   stripComments,
@@ -16,9 +19,12 @@ import {
   isBlockGuarded,
   normalizeIdentifier,
   collectPragmas,
+  collectDrops,
   lintSql,
   lintDirectory,
   NON_RERUNNABLE_DATA_MIGRATIONS,
+  GRANDFATHERED_CONTRACT_MIGRATIONS,
+  missingGrandfatheredContracts,
   missingOneShotMigrations,
 } from "./migration-lint.mjs";
 
@@ -51,9 +57,38 @@ test("stripComments removes block comments and leaves double dashes inside liter
   assert.ok(literal.includes("-- not a comment"));
 });
 
-test("stripComments leaves dollar-quoted bodies untouched", () => {
+test("stripComments reaches inside a dollar-quoted body", () => {
+  // The body is plpgsql, and splitStatements turns it into statements the rules
+  // read -- so a comment left in it is scanned as code.
   const sql = "DO $$ BEGIN -- inner\n RAISE NOTICE 'x'; END $$;";
-  assert.ok(stripComments(sql).includes("-- inner"));
+  const stripped = stripComments(sql);
+  assert.ok(!stripped.includes("inner"));
+  // Byte offsets survive, so a finding still names the right line.
+  assert.equal(stripped.length, sql.length);
+  assert.equal(stripped.split("\n").length, sql.split("\n").length);
+  // The code around it is untouched.
+  assert.ok(stripped.includes("RAISE NOTICE 'x'"));
+});
+
+test("a comment inside a block cannot open a string or fake a statement", () => {
+  // Both halves of this happened in one comment. An apostrophe in prose opened
+  // a literal that swallowed every statement separator after it, so the DROP
+  // stopped preceding the CREATE it guards; and the words naming the rule were
+  // matched as the statement the rule looks for.
+  const sql = [
+    "DO $$",
+    "BEGIN",
+    "    -- the loop's other failure -- CREATE POLICY validating user_id",
+    "    EXECUTE format('DROP POLICY IF EXISTS %I ON %I', t, t);",
+    "    EXECUTE format('CREATE POLICY %I ON %I USING (true)', t, t);",
+    "END $$;",
+  ].join("\n");
+  const stripped = stripComments(sql);
+  assert.ok(!stripped.includes("validating"));
+  const statements = splitStatements(stripped);
+  const create = statements.findIndex((st) => /CREATE\s+POLICY/i.test(st.text));
+  assert.ok(create > 0);
+  assert.ok(collectDrops(statements, create).has("policy:%i"));
 });
 
 test("splitStatements separates top-level statements and reports offsets", () => {
@@ -155,7 +190,7 @@ test("DROP without IF EXISTS is flagged for every object kind", () => {
     flags(stmt, "drop-without-if-exists");
   }
   clean("DROP TABLE IF EXISTS t;");
-  clean("ALTER TABLE t DROP COLUMN IF EXISTS a;");
+  clean("-- contract-after: 1.19.0\nALTER TABLE t DROP COLUMN IF EXISTS a;");
 });
 
 test("ADD CONSTRAINT needs a preceding DROP CONSTRAINT IF EXISTS of the same name", () => {
@@ -371,7 +406,9 @@ test("a REVOKE FROM PUBLIC stays legal for the migration that will need it", () 
 });
 
 test("statements that are re-runnable by nature are not flagged", () => {
-  clean("ALTER TABLE t ALTER COLUMN a TYPE NUMERIC(20, 6);");
+  clean(
+    "-- contract-after: 1.19.0\nALTER TABLE t ALTER COLUMN a TYPE NUMERIC(20, 6);",
+  );
   clean("ALTER TABLE t ALTER COLUMN a SET DEFAULT 'x';");
   clean("ALTER TABLE t ALTER COLUMN a DROP NOT NULL;");
   clean("UPDATE t SET a = 'x' WHERE a IS NULL;");
@@ -446,7 +483,9 @@ test("every registered one-shot data migration still exists, with a reason", () 
   // assumption the whole lint rests on, so a stale entry silently excuses a file
   // that is not there -- and a new one with no reason excuses it with no
   // argument. Both are the register failing at the only job it has.
-  const dir = fileURLToPath(new URL("../../database/migrations", import.meta.url));
+  const dir = fileURLToPath(
+    new URL("../../database/migrations", import.meta.url),
+  );
   const { files } = lintDirectory(dir);
   assert.deepEqual(missingOneShotMigrations(files), []);
   for (const [name, reason] of NON_RERUNNABLE_DATA_MIGRATIONS) {
@@ -462,4 +501,146 @@ test("a registered one-shot migration that has been deleted is reported", () => 
     ...NON_RERUNNABLE_DATA_MIGRATIONS.keys(),
   ]);
   assert.ok(NON_RERUNNABLE_DATA_MIGRATIONS.size > 0);
+});
+
+// ---------------------------------------------------------------------------
+// contract-without-expand
+// ---------------------------------------------------------------------------
+
+const CONTRACT = "contract-without-expand";
+const migrationsDir = fileURLToPath(
+  new URL("../../database/migrations", import.meta.url),
+);
+
+test("a bare contract statement is refused, a contract-after marker admits it", () => {
+  flags("ALTER TABLE t DROP COLUMN IF EXISTS c;", CONTRACT);
+  clean("-- contract-after: 1.19.0\nALTER TABLE t DROP COLUMN IF EXISTS c;");
+  // Any line of the file counts, not only the one before the statement.
+  clean("ALTER TABLE t DROP COLUMN IF EXISTS c;\n-- contract-after: 1.19.0\n");
+});
+
+test("a malformed contract-after marker is a finding and admits nothing", () => {
+  for (const marker of ["soon", "1.19", "v1.19.0", ""]) {
+    const found = lintSql(
+      `-- contract-after: ${marker}\nALTER TABLE t DROP COLUMN IF EXISTS c;`,
+    ).findings;
+    assert.ok(
+      found.some((f) => f.rule === "pragma" && /X\.Y\.Z/.test(f.message)),
+    );
+    assert.ok(
+      found.some((f) => f.rule === CONTRACT),
+      marker,
+    );
+  }
+});
+
+test("every contracting statement is refused", () => {
+  for (const stmt of [
+    "ALTER TABLE t DROP COLUMN c;",
+    "ALTER TABLE t RENAME COLUMN a TO b;",
+    "ALTER TABLE t RENAME a TO b;",
+    "ALTER TABLE IF EXISTS t RENAME TO u;",
+    "ALTER TABLE t ALTER COLUMN a SET NOT NULL;",
+    "ALTER TABLE t ALTER COLUMN a TYPE TEXT;",
+    "ALTER TABLE t ALTER COLUMN a SET DATA TYPE TEXT;",
+    "DO $$ BEGIN IF EXISTS (SELECT 1 FROM pg_class) THEN ALTER TABLE t DROP COLUMN c; END IF; END $$;",
+  ]) {
+    flags(stmt, CONTRACT);
+  }
+});
+
+test("statements the expand/contract table allows are not refused", () => {
+  for (const stmt of [
+    "DROP TABLE IF EXISTS t;",
+    "DROP INDEX IF EXISTS i;",
+    "ALTER TABLE t DROP CONSTRAINT IF EXISTS c;",
+    "ALTER TABLE t RENAME CONSTRAINT a TO b;",
+    "ALTER INDEX IF EXISTS a RENAME TO b;",
+    "ALTER TABLE t ALTER COLUMN a DROP NOT NULL;",
+    "ALTER TABLE t ADD COLUMN IF NOT EXISTS a INT;",
+    "ALTER TYPE e ADD VALUE IF NOT EXISTS 'x';",
+  ]) {
+    assert.ok(!rulesOf(stmt).includes(CONTRACT), stmt);
+  }
+});
+
+test("a contract word in a string literal or a comment is not a statement", () => {
+  const notContract = (sql) => assert.ok(!rulesOf(sql).includes(CONTRACT), sql);
+  notContract(
+    "INSERT INTO n (b) VALUES ('ALTER TABLE t DROP COLUMN c') ON CONFLICT DO NOTHING;",
+  );
+  notContract("-- ALTER TABLE t DROP COLUMN c;\nSELECT 1;");
+  notContract("/* ALTER TABLE t RENAME COLUMN a TO b; */ SELECT 1;");
+  notContract("COMMENT ON TABLE t IS 'was: ALTER COLUMN a SET NOT NULL';");
+});
+
+test("the disable pragma is not a substitute for the marker", () => {
+  const found = lintSql(
+    "-- migration-lint-disable-next-line contract-without-expand: it is fine\n" +
+      "ALTER TABLE t DROP COLUMN IF EXISTS c;",
+  ).findings;
+  assert.ok(found.some((f) => f.rule === CONTRACT));
+  assert.ok(
+    found.some(
+      (f) => f.rule === "pragma" && /cannot be disabled/.test(f.message),
+    ),
+  );
+});
+
+test("a grandfathered file passes lintDirectory; the same body under another name does not", () => {
+  const name = Object.keys(GRANDFATHERED_CONTRACT_MIGRATIONS)[0];
+  const dir = mkdtempSync(join(tmpdir(), "migration-lint-"));
+  try {
+    const body = "ALTER TABLE t DROP COLUMN IF EXISTS c;\n";
+    writeFileSync(join(dir, name), body);
+    writeFileSync(join(dir, "20990101000000_new_contract.sql"), body);
+    const { findings } = lintDirectory(dir);
+    assert.deepEqual(
+      findings.map((f) => [f.file, f.rule]),
+      [["20990101000000_new_contract.sql", CONTRACT]],
+    );
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test("a grandfathered entry whose file is gone is reported", () => {
+  assert.deepEqual(
+    missingGrandfatheredContracts([]),
+    Object.keys(GRANDFATHERED_CONTRACT_MIGRATIONS),
+  );
+  assert.deepEqual(
+    missingGrandfatheredContracts(
+      Object.keys(GRANDFATHERED_CONTRACT_MIGRATIONS),
+    ),
+    [],
+  );
+});
+
+test("the grandfather register is frozen, annotated, and names files that still exist", () => {
+  assert.ok(Object.isFrozen(GRANDFATHERED_CONTRACT_MIGRATIONS));
+  const { files } = lintDirectory(migrationsDir);
+  assert.deepEqual(missingGrandfatheredContracts(files), []);
+  for (const [name, note] of Object.entries(
+    GRANDFATHERED_CONTRACT_MIGRATIONS,
+  )) {
+    assert.ok(note.length > 20, `${name} needs a note`);
+  }
+  assert.match(
+    GRANDFATHERED_CONTRACT_MIGRATIONS[
+      "20260908120000_remove_notification_browser.sql"
+    ],
+    /A26-L09/,
+  );
+});
+
+test("every register member really contains a contracting statement", () => {
+  const { findings } = lintDirectory(migrationsDir, {});
+  const files = new Set(
+    findings.filter((f) => f.rule === CONTRACT).map((f) => f.file),
+  );
+  assert.deepEqual(
+    [...files].sort(),
+    Object.keys(GRANDFATHERED_CONTRACT_MIGRATIONS).sort(),
+  );
 });

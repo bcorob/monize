@@ -1,0 +1,323 @@
+{
+  "terms": "edo0524",
+  "notes": "EDO0524 (letter 20/2014: first period 4.00%, margin 1.50% from period 2, fee 2.00) rebuilt from the same structure as the EDO1036 manifest; it is not in the catalog. The letter allows an early request until one month before maturity; the fixture states 30 days. The interest table is the Ministry's PDF of 2023-04-18; its values are the accrued interest of one bond bought on the first sale day.",
+  "cases": [
+    {
+      "id": "EDO0524-OFF-1",
+      "description": "official example: bought 2014-05-10 at 4.00%, period 2 at 1.50%, early redemption requested 2015-06-09, interest accrued to 2015-06-16 is 4.16, fee 2.00, payout before tax 100 + 4.16 - 2 = 102.16 (101.75 after 0.41 tax)",
+      "source": "https://www.obligacjeskarbowe.pl/oferta-obligacji/obligacje-10-letnie-edo/edo1036/",
+      "lot": {
+        "purchaseDate": "2014-05-10",
+        "quantity": 1
+      },
+      "asOf": "2015-06-16",
+      "announcedRates": {
+        "2": "0.0150"
+      },
+      "expect": {
+        "accruedInterest": "4.16",
+        "earlyRedemptionValue": "102.16",
+        "currentPeriod": {
+          "index": 2,
+          "annualRate": "0.0150",
+          "rateSource": "ANNOUNCED"
+        }
+      }
+    },
+    {
+      "id": "EDO0524-OFF-1D",
+      "description": "same lot and day as the official example, period 2 rate derived from GUS CPI of 2015-03 (-1.50%, floored to 0) + 1.50% margin = 1.50%, the rate the page states",
+      "source": "https://www.obligacjeskarbowe.pl/oferta-obligacji/obligacje-10-letnie-edo/edo1036/ and letter 20/2014 annex 1; benchmark data: see benchmarks",
+      "lot": {
+        "purchaseDate": "2014-05-10",
+        "quantity": 1
+      },
+      "asOf": "2015-06-16",
+      "benchmarks": {
+        "PL_CPI_GUS_YOY": {
+          "kind": "MONTHLY",
+          "publisher": "GUS",
+          "source": "stat.gov.pl, Miesieczne wskazniki cen towarow i uslug konsumpcyjnych od 1982 roku (CSV), 'Analogiczny miesiac poprzedniego roku = 100', Polska; downloaded 2026-10-11 from https://stat.gov.pl/download/gfx/portalinformacyjny/pl/defaultstronaopisowa/4741/1/1/miesiecznewskaznikicentowarowiuslugkonsumpcyjnychod1982roku_8.csv",
+          "values": {
+            "2015-03": "-0.0150"
+          }
+        }
+      },
+      "expect": {
+        "accruedInterest": "4.16",
+        "earlyRedemptionValue": "102.16",
+        "currentPeriod": {
+          "index": 2,
+          "annualRate": "0.0150",
+          "rateSource": "DERIVED"
+        }
+      },
+      "expectedRates": {
+        "2": {
+          "annualRate": "0.0150",
+          "rateSource": "DERIVED",
+          "addend": "0.0150",
+          "benchmark": {
+            "benchmarkId": "PL_CPI_GUS_YOY",
+            "observation": "2015-03",
+            "value": "-0.0150",
+            "flooredValue": "0.0000"
+          }
+        }
+      }
+    },
+    {
+      "id": "EDO0524-TAB-1",
+      "description": "official interest table EDO0524 (bought on the first sale day 2014-05-01), period 10 at 17.60% = GUS CPI of 2023-03 (16.10%) + 1.50%: 47.10 accrued on 2023-05-02 (a = 1, ACT = 366); every earlier rate derived from the CPI of March",
+      "source": "https://www.obligacjeskarbowe.pl/media_files/807d9254-4b31-4e00-864e-90a7579a83a8.pdf",
+      "lot": {
+        "purchaseDate": "2014-05-01",
+        "quantity": 1
+      },
+      "asOf": "2023-05-02",
+      "benchmarks": {
+        "PL_CPI_GUS_YOY": {
+          "kind": "MONTHLY",
+          "publisher": "GUS",
+          "source": "stat.gov.pl, Miesieczne wskazniki cen towarow i uslug konsumpcyjnych od 1982 roku (CSV), 'Analogiczny miesiac poprzedniego roku = 100', Polska; downloaded 2026-10-11 from https://stat.gov.pl/download/gfx/portalinformacyjny/pl/defaultstronaopisowa/4741/1/1/miesiecznewskaznikicentowarowiuslugkonsumpcyjnychod1982roku_8.csv",
+          "values": {
+            "2015-03": "-0.0150",
+            "2016-03": "-0.0090",
+            "2017-03": "0.0200",
+            "2018-03": "0.0130",
+            "2019-03": "0.0170",
+            "2020-03": "0.0460",
+            "2021-03": "0.0320",
+            "2022-03": "0.1100",
+            "2023-03": "0.1610"
+          }
+        }
+      },
+      "expect": {
+        "accruedInterest": "47.10",
+        "currentPeriod": {
+          "index": 10,
+          "annualRate": "0.1760",
+          "rateSource": "DERIVED"
+        },
+        "valuationComplete": true
+      }
+    },
+    {
+      "id": "EDO0524-TAB-2",
+      "description": "official interest table EDO0524 (bought on the first sale day 2014-05-01), period 10 at 17.60% = GUS CPI of 2023-03 (16.10%) + 1.50%: 50.28 accrued on 2023-06-16 (a = 46, ACT = 366); every earlier rate derived from the CPI of March",
+      "source": "https://www.obligacjeskarbowe.pl/media_files/807d9254-4b31-4e00-864e-90a7579a83a8.pdf",
+      "lot": {
+        "purchaseDate": "2014-05-01",
+        "quantity": 1
+      },
+      "asOf": "2023-06-16",
+      "benchmarks": {
+        "PL_CPI_GUS_YOY": {
+          "kind": "MONTHLY",
+          "publisher": "GUS",
+          "source": "stat.gov.pl, Miesieczne wskazniki cen towarow i uslug konsumpcyjnych od 1982 roku (CSV), 'Analogiczny miesiac poprzedniego roku = 100', Polska; downloaded 2026-10-11 from https://stat.gov.pl/download/gfx/portalinformacyjny/pl/defaultstronaopisowa/4741/1/1/miesiecznewskaznikicentowarowiuslugkonsumpcyjnychod1982roku_8.csv",
+          "values": {
+            "2015-03": "-0.0150",
+            "2016-03": "-0.0090",
+            "2017-03": "0.0200",
+            "2018-03": "0.0130",
+            "2019-03": "0.0170",
+            "2020-03": "0.0460",
+            "2021-03": "0.0320",
+            "2022-03": "0.1100",
+            "2023-03": "0.1610"
+          }
+        }
+      },
+      "expect": {
+        "accruedInterest": "50.28",
+        "currentPeriod": {
+          "index": 10,
+          "annualRate": "0.1760",
+          "rateSource": "DERIVED"
+        },
+        "valuationComplete": true
+      },
+      "expectedRates": {
+        "1": {
+          "annualRate": "0.0400",
+          "rateSource": "TERMS"
+        },
+        "2": {
+          "annualRate": "0.0150",
+          "rateSource": "DERIVED",
+          "addend": "0.0150",
+          "benchmark": {
+            "benchmarkId": "PL_CPI_GUS_YOY",
+            "observation": "2015-03",
+            "value": "-0.0150",
+            "flooredValue": "0.0000"
+          }
+        },
+        "3": {
+          "annualRate": "0.0150",
+          "rateSource": "DERIVED",
+          "addend": "0.0150",
+          "benchmark": {
+            "benchmarkId": "PL_CPI_GUS_YOY",
+            "observation": "2016-03",
+            "value": "-0.0090",
+            "flooredValue": "0.0000"
+          }
+        },
+        "4": {
+          "annualRate": "0.0350",
+          "rateSource": "DERIVED",
+          "addend": "0.0150",
+          "benchmark": {
+            "benchmarkId": "PL_CPI_GUS_YOY",
+            "observation": "2017-03",
+            "value": "0.0200",
+            "flooredValue": "0.0200"
+          }
+        },
+        "5": {
+          "annualRate": "0.0280",
+          "rateSource": "DERIVED",
+          "addend": "0.0150",
+          "benchmark": {
+            "benchmarkId": "PL_CPI_GUS_YOY",
+            "observation": "2018-03",
+            "value": "0.0130",
+            "flooredValue": "0.0130"
+          }
+        },
+        "6": {
+          "annualRate": "0.0320",
+          "rateSource": "DERIVED",
+          "addend": "0.0150",
+          "benchmark": {
+            "benchmarkId": "PL_CPI_GUS_YOY",
+            "observation": "2019-03",
+            "value": "0.0170",
+            "flooredValue": "0.0170"
+          }
+        },
+        "7": {
+          "annualRate": "0.0610",
+          "rateSource": "DERIVED",
+          "addend": "0.0150",
+          "benchmark": {
+            "benchmarkId": "PL_CPI_GUS_YOY",
+            "observation": "2020-03",
+            "value": "0.0460",
+            "flooredValue": "0.0460"
+          }
+        },
+        "8": {
+          "annualRate": "0.0470",
+          "rateSource": "DERIVED",
+          "addend": "0.0150",
+          "benchmark": {
+            "benchmarkId": "PL_CPI_GUS_YOY",
+            "observation": "2021-03",
+            "value": "0.0320",
+            "flooredValue": "0.0320"
+          }
+        },
+        "9": {
+          "annualRate": "0.1250",
+          "rateSource": "DERIVED",
+          "addend": "0.0150",
+          "benchmark": {
+            "benchmarkId": "PL_CPI_GUS_YOY",
+            "observation": "2022-03",
+            "value": "0.1100",
+            "flooredValue": "0.1100"
+          }
+        },
+        "10": {
+          "annualRate": "0.1760",
+          "rateSource": "DERIVED",
+          "addend": "0.0150",
+          "benchmark": {
+            "benchmarkId": "PL_CPI_GUS_YOY",
+            "observation": "2023-03",
+            "value": "0.1610",
+            "flooredValue": "0.1610"
+          }
+        }
+      }
+    },
+    {
+      "id": "EDO0524-TAB-3",
+      "description": "official interest table EDO0524 (bought on the first sale day 2014-05-01), period 10 at 17.60% = GUS CPI of 2023-03 (16.10%) + 1.50%: 64.28 accrued on 2023-12-31 (a = 244, ACT = 366); every earlier rate derived from the CPI of March",
+      "source": "https://www.obligacjeskarbowe.pl/media_files/807d9254-4b31-4e00-864e-90a7579a83a8.pdf",
+      "lot": {
+        "purchaseDate": "2014-05-01",
+        "quantity": 1
+      },
+      "asOf": "2023-12-31",
+      "benchmarks": {
+        "PL_CPI_GUS_YOY": {
+          "kind": "MONTHLY",
+          "publisher": "GUS",
+          "source": "stat.gov.pl, Miesieczne wskazniki cen towarow i uslug konsumpcyjnych od 1982 roku (CSV), 'Analogiczny miesiac poprzedniego roku = 100', Polska; downloaded 2026-10-11 from https://stat.gov.pl/download/gfx/portalinformacyjny/pl/defaultstronaopisowa/4741/1/1/miesiecznewskaznikicentowarowiuslugkonsumpcyjnychod1982roku_8.csv",
+          "values": {
+            "2015-03": "-0.0150",
+            "2016-03": "-0.0090",
+            "2017-03": "0.0200",
+            "2018-03": "0.0130",
+            "2019-03": "0.0170",
+            "2020-03": "0.0460",
+            "2021-03": "0.0320",
+            "2022-03": "0.1100",
+            "2023-03": "0.1610"
+          }
+        }
+      },
+      "expect": {
+        "accruedInterest": "64.28",
+        "currentPeriod": {
+          "index": 10,
+          "annualRate": "0.1760",
+          "rateSource": "DERIVED"
+        },
+        "valuationComplete": true
+      }
+    },
+    {
+      "id": "EDO0524-TAB-4",
+      "description": "official interest table EDO0524 (bought on the first sale day 2014-05-01), period 10 at 17.60% = GUS CPI of 2023-03 (16.10%) + 1.50%: 72.83 accrued on 2024-04-30 (a = 365, ACT = 366); every earlier rate derived from the CPI of March",
+      "source": "https://www.obligacjeskarbowe.pl/media_files/807d9254-4b31-4e00-864e-90a7579a83a8.pdf",
+      "lot": {
+        "purchaseDate": "2014-05-01",
+        "quantity": 1
+      },
+      "asOf": "2024-04-30",
+      "benchmarks": {
+        "PL_CPI_GUS_YOY": {
+          "kind": "MONTHLY",
+          "publisher": "GUS",
+          "source": "stat.gov.pl, Miesieczne wskazniki cen towarow i uslug konsumpcyjnych od 1982 roku (CSV), 'Analogiczny miesiac poprzedniego roku = 100', Polska; downloaded 2026-10-11 from https://stat.gov.pl/download/gfx/portalinformacyjny/pl/defaultstronaopisowa/4741/1/1/miesiecznewskaznikicentowarowiuslugkonsumpcyjnychod1982roku_8.csv",
+          "values": {
+            "2015-03": "-0.0150",
+            "2016-03": "-0.0090",
+            "2017-03": "0.0200",
+            "2018-03": "0.0130",
+            "2019-03": "0.0170",
+            "2020-03": "0.0460",
+            "2021-03": "0.0320",
+            "2022-03": "0.1100",
+            "2023-03": "0.1610"
+          }
+        }
+      },
+      "expect": {
+        "accruedInterest": "72.83",
+        "currentPeriod": {
+          "index": 10,
+          "annualRate": "0.1760",
+          "rateSource": "DERIVED"
+        },
+        "valuationComplete": true
+      }
+    }
+  ]
+}

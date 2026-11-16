@@ -4,6 +4,7 @@
     "subtitle": "Gérez les devises utilisées dans vos comptes et titres",
     "refreshRates": "Actualiser les taux",
     "refreshing": "Actualisation...",
+    "statusFilterLabel": "Statut",
     "newCurrency": "+ Nouvelle devise",
     "searchPlaceholder": "Rechercher par code ou nom...",
     "statusAll": "Toutes ({count})",
@@ -13,6 +14,15 @@
     "modalTitleNew": "Nouvelle devise",
     "loading": "Chargement des devises...",
     "count": "{count, plural, one {# devise} other {# devises}}",
+    "providers": {
+      "line": "Taux fournis par {providers}",
+      "separator": ", puis ",
+      "names": {
+        "frankfurter": "Frankfurter (taux de référence de la BCE)",
+        "yahoo": "Yahoo Finance",
+        "crypto": "Paires crypto (Yahoo)"
+      }
+    },
     "toasts": {
       "loadFailed": "Échec du chargement des devises",
       "updated": "Devise mise à jour avec succès",
@@ -24,6 +34,7 @@
       "statusFailed": "Échec de la mise à jour du statut de la devise",
       "ratesRefreshed": "Taux de change actualisés : {updated} paires mises à jour",
       "ratesRefreshedWithFailed": "Taux de change actualisés : {updated} mis à jour, {failed} échoués",
+      "ratesAllFailed": "Aucun taux de change n'a pu être récupéré ; le fournisseur n'a pas répondu",
       "ratesFailed": "Échec de l'actualisation des taux de change"
     },
     "summary": {
@@ -44,6 +55,8 @@
       "actions": "Actions"
     },
     "defaultBadge": "Par défaut",
+    "cryptoBadge": "Crypto",
+    "noPriceSymbol": "Aucun symbole de cours",
     "statusBadge": {
       "active": "Active",
       "activeShort": "Act",
@@ -61,9 +74,10 @@
       "activate": "Activer",
       "deleteCurrency": "Supprimer la devise"
     },
-    "usageTooltip": "{accounts} compte(s), {securities} titre(s)",
     "usageAccounts": "{count, plural, one {# cpt} other {# cpts}}",
     "usageSecurities": "{count, plural, one {# titre} other {# titres}}",
+    "rateHelp": "Ce que vaut une unité de chaque devise en {currency}.",
+    "rateMissing": "Aucun taux de change enregistré pour {from} vers {to}.",
     "empty": {
       "title": "Aucune devise",
       "subtitle": "Commencez par ajouter une devise."
@@ -88,6 +102,20 @@
     "symbolLabel": "Symbole",
     "symbolPlaceholder": "ex. $, €, £, ¥",
     "decimalPlacesLabel": "Nombre de décimales",
+    "kindLabel": "Type",
+    "kindOptions": {
+      "fiat": "Devise fiduciaire",
+      "crypto": "Cryptomonnaie"
+    },
+    "kindLocked": "{code} est utilisée, son type ne peut donc pas être modifié.",
+    "quoteSymbolLabel": "Symbole de cours (facultatif)",
+    "quoteSymbolPlaceholder": "ex. BTC-EUR",
+    "quoteSymbolHelp": "Le symbole Yahoo Finance à partir duquel le cours de la cryptomonnaie est obtenu : son ticker, un tiret et la devise dans laquelle elle est cotée, comme BTC-EUR. Les taux de change de la cryptomonnaie sont récupérés via ce symbole.",
+    "verifyButton": "Vérifier",
+    "quoteSymbolPricedIn": "Cotée en {currency}",
+    "quoteSymbolMissing": "Sans symbole de cours, la devise n'a pas de taux de change.",
+    "quoteSymbolNotCrypto": "{symbol} n'est pas une cryptomonnaie. Saisissez la paire d'une cryptomonnaie, comme BTC-EUR.",
+    "quoteSymbolNotFound": "Aucune cryptomonnaie trouvée pour {symbol}",
     "lookupButton": "Rechercher",
     "lookingUp": "Recherche en cours...",
     "clearButton": "Effacer",
@@ -99,9 +127,14 @@
       "found": "Trouvé : {details}",
       "notFound": "Aucune devise trouvée pour « {query} »",
       "lookupFailed": "Échec de la recherche - veuillez réessayer",
-      "reactivateFailed": "Échec de la réactivation de la devise"
+      "reactivateFailed": "Échec de la réactivation de la devise",
+      "verifyEmpty": "Saisissez un symbole de cours comme BTC-EUR pour le vérifier",
+      "verifyFailed": "Échec de la vérification du symbole de cours"
     },
     "inactiveNotice": "{code} figure déjà dans votre liste, mais est inactive.",
+    "nonIsoNotice": "{code} n'est pas un code de devise standard. S'il s'agit d'une cryptomonnaie, définissez son type sur Cryptomonnaie. <guide>En savoir plus sur les cryptomonnaies dans le guide d'utilisation</guide>.",
+    "switchToCrypto": "Utiliser Cryptomonnaie",
+    "cryptoPrecisionNotice": "Les montants en cryptomonnaie sont conservés avec jusqu'à huit décimales, la précision à laquelle ils sont enregistrés ; des frais inférieurs à {smallest} ne peuvent donc pas être saisis. <guide>Voir comment enregistrer les frais de portefeuille</guide>.",
     "reactivateButton": "Réactiver {code}",
     "reactivating": "Réactivation..."
   },
@@ -110,6 +143,53 @@
     "nameRequired": "Le nom est obligatoire",
     "nameMax": "Le nom ne doit pas dépasser 100 caractères",
     "symbolRequired": "Le symbole est obligatoire",
-    "symbolMax": "Le symbole ne doit pas dépasser 10 caractères"
+    "symbolMax": "Le symbole ne doit pas dépasser 10 caractères",
+    "quoteSymbolMax": "Le symbole de cours ne doit pas dépasser 20 caractères",
+    "quoteSymbolRequiresCrypto": "Seule une cryptomonnaie a un symbole de cours",
+    "quoteSymbolNotAPair": "Saisissez une paire comme BTC-EUR : la cryptomonnaie, un tiret et un code de devise de trois lettres"
+  },
+  "rateHistory": {
+    "title": "Historique des taux",
+    "stored": "Historique enregistré : {start} à {end} ({count} observations)",
+    "none": "Aucun historique enregistré pour {pair}",
+    "loading": "Vérification de l'historique des taux enregistré...",
+    "loadFailed": "Impossible de lire l'historique des taux enregistré",
+    "fillGaps": "Combler les lacunes de l'historique",
+    "filling": "Récupération des taux manquants...",
+    "fillGapsTitle": "Récupère les taux quotidiens qui manquent à vos rapports, depuis la première date où vos données utilisent {code} jusqu'à aujourd'hui.",
+    "hint": "Les rapports datés d'avant le premier taux enregistré ne peuvent pas convertir {pair}.",
+    "list": {
+      "heading": "Taux enregistrés",
+      "invertedHelp": "Un taux marqué (inversé) est l'inverse de ce que Monize a réellement enregistré pour cette paire, et non une observation différente.",
+      "direction": "Affiché en {to} pour 1 {from}.",
+      "loading": "Chargement des taux enregistrés...",
+      "loadFailed": "Impossible de lire les taux enregistrés",
+      "empty": "Aucun taux enregistré à afficher",
+      "truncated": "Affichage des {count} taux enregistrés les plus récents ; les plus anciens ne sont pas listés.",
+      "inverted": "inversé",
+      "unknownRate": "Inconnu",
+      "columns": {
+        "date": "Date",
+        "rate": "Taux",
+        "source": "Source"
+      },
+      "sources": {
+        "yahooFinance": "Yahoo Finance",
+        "frankfurter": "Frankfurter (BCE)",
+        "mnyImport": "Import Money",
+        "yahooCrypto": "Paires crypto (Yahoo)",
+        "unknown": "Inconnu"
+      }
+    },
+    "toasts": {
+      "filled": "{count} taux ajoutés ; l'historique commence désormais le {start}",
+      "partial": "{count} taux enregistrés ; l'historique commence maintenant le {start}. Il reste {windows} lacunes à récupérer, appuyez à nouveau pour continuer.",
+      "moreToFetch": "Aucun taux n'a été enregistré cette fois ; il reste {windows} lacunes à récupérer, appuyez à nouveau pour continuer.",
+      "noGaps": "{pair} a déjà un taux quotidien pour chaque date dont vos rapports ont besoin",
+      "noNewRates": "Aucun nouveau taux n'a été enregistré pour {pair}",
+      "unused": "Aucun de vos comptes, titres ou mouvements n'utilise {code}, il n'y a donc aucun taux à récupérer",
+      "providerFloor": "Le fournisseur n'a aucun taux pour {pair} avant le {date}",
+      "failed": "Impossible de combler l'historique des taux"
+    }
   }
 }

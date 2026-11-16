@@ -16,12 +16,13 @@
     "chartUnavailable": "Diagramm vorübergehend nicht verfügbar"
   },
   "viewTabs": {
-    "list": "Liste",
-    "calendar": "Kalender",
+    "filterLabel": "Zeitplantyp",
     "filterAll": "Alle ({count})",
     "filterBills": "Rechnungen ({count})",
     "filterDeposits": "Einzahlungen ({count})",
-    "todayButton": "Heute"
+    "chipBills": "Rechnungen",
+    "chipDeposits": "Einzahlungen",
+    "clearType": "Alle Zeitplantypen anzeigen"
   },
   "form": {
     "titleNew": "Neue terminierte Buchung",
@@ -53,7 +54,11 @@
     "totalOfAccounts": "Gesamt aller Konten",
     "legendAriaLabel": "Prognoselinien",
     "tooltipTransactionForAccount": "{name} ({account})",
-    "unavailableMissingRates": "Diese Prognose kann nicht in {displayCurrency} angezeigt werden: Für {currencies} ist kein Wechselkurs verfügbar, und ein prognostizierter Saldo baut auf jedem vorherigen Tag auf. Fügen Sie einen Kurs hinzu, oder wählen Sie ein Konto mit nur einer Währung."
+    "unavailableMissingRates": "Diese Prognose kann nicht in {displayCurrency} angezeigt werden: Für {currencies} ist kein Wechselkurs verfügbar, und ein prognostizierter Saldo baut auf jedem vorherigen Tag auf. Fügen Sie einen Kurs hinzu, oder wählen Sie ein Konto mit nur einer Währung.",
+    "untitledTransaction": "Buchung",
+    "tooltipEstimated": "(geschätzt)",
+    "unavailableUnknownEstimates": "Diese Prognose kann noch nicht angezeigt werden: Der geschätzte Betrag einer Rechnung darin ist unbekannt, und ein prognostizierter Saldo baut auf jedem Tag davor auf. Geben Sie den Betrag dieses Termins ein oder schalten Sie Schätzen bei der Rechnung aus.",
+    "unknownEstimateItem": "{name}: {reason}"
   },
   "calendar": {
     "days": {
@@ -72,5 +77,11 @@
     "notFound": "Terminierte Zahlung nicht gefunden",
     "loadFailed": "Terminierte Buchungen konnten nicht geladen werden",
     "overridesDeleteFailed": "Überschreibungen konnten nicht gelöscht werden"
+  },
+  "toolbar": {
+    "showing": "<b>{shown}</b> von <b>{total}</b> Rechnungen und Einzahlungen",
+    "exportButton": "Exportieren",
+    "exportTitle": "Rechnungen und Einzahlungen als CSV exportieren",
+    "exported": "{count, plural, one {# Zeitplan exportiert} other {# Zeitpläne exportiert}}"
   }
 }

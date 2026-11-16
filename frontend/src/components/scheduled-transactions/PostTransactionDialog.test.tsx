@@ -35,7 +35,8 @@ vi.mock('@/lib/logger', () => ({
   }),
 }));
 
-vi.mock('@/lib/format', () => ({
+vi.mock('@/lib/format', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/format')>()),
   FX_RATE_DISPLAY_DECIMALS: 6,
   getCurrencySymbol: () => '$',
   getDecimalPlacesForCurrency: () => 2,
@@ -66,15 +67,18 @@ vi.mock('@/hooks/useDateFormat', () => ({
   useDateFormat: () => ({ formatDate: (d: string) => d, dateFormat: 'browser', datePattern: 'YYYY-MM-DD' }),
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (n: number, _c?: string) => `$${n.toFixed(2)}`,
-    formatNumber: (n: number, d: number = 2) => n.toFixed(d),
-    // Mirrors the real formatPrice: up to 6 decimals, trailing zeros trimmed.
-    formatPrice: (n: number) => n.toFixed(6).replace(/0+$/, '').replace(/\.$/, ''),
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (n: number, _c?: string) => `$${n.toFixed(2)}`,
+      formatNumber: (n: number, d: number = 2) => n.toFixed(d),
+      // Mirrors the real formatPrice: up to 6 decimals, trailing zeros trimmed.
+      formatPrice: (n: number) => n.toFixed(6).replace(/0+$/, '').replace(/\.$/, ''),
+    }),
+  };
+});
 vi.mock('@/lib/forecast', () => ({
   getProjectedBalanceAtDate: (account: any) => Number(account.currentBalance) || 0,
 }));
@@ -226,15 +230,15 @@ describe('PostTransactionDialog', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('calls onClose when X button is clicked', () => {
-    const onClose = vi.fn();
-    render(<PostTransactionDialog {...defaultProps} onClose={onClose} />);
-    const closeButtons = screen.getAllByRole('button');
-    const xButton = closeButtons.find(b => b.querySelector('svg path[d*="M6 18L18 6"]'));
-    if (xButton) {
-      fireEvent.click(xButton);
-      expect(onClose).toHaveBeenCalled();
-    }
+  it('is named by its title through Modal and draws no corner X', () => {
+    render(<PostTransactionDialog {...defaultProps} />);
+    expect(screen.getByRole('dialog', { name: 'Post Transaction' })).toBeInTheDocument();
+    // Cancel in the button row is what closes it: no unnamed icon-only button
+    // sits beside the title.
+    const iconOnly = screen
+      .getAllByRole('button')
+      .filter((b) => b.querySelector('svg') && !b.textContent?.trim() && !b.getAttribute('aria-label'));
+    expect(iconOnly).toHaveLength(0);
   });
 
   // --- Description field ---
@@ -328,6 +332,10 @@ describe('PostTransactionDialog', () => {
   it('shows transfer indicator block for transfer transactions', () => {
     render(<PostTransactionDialog {...defaultProps} scheduledTransaction={transferTransaction} />);
     expect(screen.getByText(/Transfer:/)).toBeInTheDocument();
+    // The icon is spaced from its text by the row's gap, not a margin on it.
+    const row = screen.getByText(/Transfer:/).parentElement!;
+    expect(row.className).toContain('gap-2');
+    expect(row.querySelector('svg')?.getAttribute('class') ?? '').not.toMatch(/\bmr-/);
     // "Savings" appears in both the description and the transfer indicator
     const savingsElements = screen.getAllByText(/Savings/);
     expect(savingsElements.length).toBeGreaterThanOrEqual(1);
@@ -472,6 +480,42 @@ describe('PostTransactionDialog', () => {
     // Should use overrideDate (2025-02-20), not nextDueDate (2025-02-15)
     const dateInput = screen.getByLabelText('Transaction Date') as HTMLInputElement;
     expect(dateInput.value).toBe('2025-02-20');
+  });
+
+  // A26-S08-01: the post names the occurrence the dialog opened on, so a stale
+  // dialog cannot post the occurrence the cron or another tab already moved past.
+  it('posts the occurrence pin: the slot and no override when none governs it', async () => {
+    mockPostApi.mockClear();
+    render(<PostTransactionDialog {...defaultProps} />);
+
+    const buttons = screen.getAllByText('Post Transaction');
+    fireEvent.click(buttons[buttons.length - 1]);
+
+    await waitFor(() => {
+      expect(mockPostApi).toHaveBeenCalledWith('s1', expect.objectContaining({
+        expectedOccurrenceDate: '2025-02-15',
+        expectedOverrideId: null,
+      }));
+    });
+  });
+
+  it('posts the override date and the override id when an override moved the date', async () => {
+    mockPostApi.mockClear();
+    const moved = {
+      ...transactionWithOverride,
+      nextOverride: { ...transactionWithOverride.nextOverride, id: 'ovr-1' },
+    };
+    render(<PostTransactionDialog {...defaultProps} scheduledTransaction={moved} />);
+
+    const buttons = screen.getAllByText('Post Transaction');
+    fireEvent.click(buttons[buttons.length - 1]);
+
+    await waitFor(() => {
+      expect(mockPostApi).toHaveBeenCalledWith('s1', expect.objectContaining({
+        expectedOccurrenceDate: '2025-02-20',
+        expectedOverrideId: 'ovr-1',
+      }));
+    });
   });
 
   it('initializes transaction date to nextDueDate when no override exists', () => {
@@ -700,7 +744,9 @@ describe('PostTransactionDialog', () => {
     });
   });
 
-  it('omits referenceNumber from payload when empty', async () => {
+  it('sends an empty referenceNumber when none is entered', async () => {
+    // An omitted key makes the backend fall back to the schedule's stored
+    // reference, so an empty field is sent as an empty string (issue #1979).
     const onPosted = vi.fn();
     render(<PostTransactionDialog {...defaultProps} onPosted={onPosted} />);
 
@@ -711,7 +757,36 @@ describe('PostTransactionDialog', () => {
     await waitFor(() => {
       expect(mockPostApi).toHaveBeenCalled();
       const payload = mockPostApi.mock.calls[0][1];
-      expect(payload.referenceNumber).toBeUndefined();
+      expect(payload.referenceNumber).toBe('');
+    });
+  });
+
+  it('prefills the reference number stored on the schedule (issue #1979)', () => {
+    render(
+      <PostTransactionDialog
+        {...defaultProps}
+        scheduledTransaction={{ ...defaultProps.scheduledTransaction, referenceNumber: 'ACCT-42' }}
+      />,
+    );
+    const refInput = screen.getByPlaceholderText('Cheque #, confirmation #...') as HTMLInputElement;
+    expect(refInput.value).toBe('ACCT-42');
+  });
+
+  it('sends an empty referenceNumber when the stored one is cleared', async () => {
+    render(
+      <PostTransactionDialog
+        {...defaultProps}
+        scheduledTransaction={{ ...defaultProps.scheduledTransaction, referenceNumber: 'ACCT-42' }}
+      />,
+    );
+    fireEvent.change(screen.getByPlaceholderText('Cheque #, confirmation #...'), { target: { value: '' } });
+
+    const buttons = screen.getAllByText('Post Transaction');
+    fireEvent.click(buttons[buttons.length - 1]);
+
+    await waitFor(() => {
+      expect(mockPostApi).toHaveBeenCalled();
+      expect(mockPostApi.mock.calls[0][1].referenceNumber).toBe('');
     });
   });
 
@@ -1266,7 +1341,7 @@ describe('PostTransactionDialog', () => {
       expect(totalInput.value).toBe('750');
     });
 
-    it('updates Total Price when Quantity is changed', async () => {
+    it('keeps Total Price and updates Price when Quantity is changed', async () => {
       render(
         <PostTransactionDialog
           {...defaultProps}
@@ -1274,10 +1349,29 @@ describe('PostTransactionDialog', () => {
         />,
       );
       await settlePriceLookup();
-      const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
-      fireEvent.change(qtyInput, { target: { value: '5' } });
+      const qtyInput = screen.getByLabelText('Quantity (Shares)') as HTMLInputElement;
+      fireEvent.change(qtyInput, { target: { value: '8' } });
       const totalInput = screen.getByLabelText('Total Price') as HTMLInputElement;
-      // 5 * 100 = 500
+      const priceInput = screen.getByLabelText('Price per Share') as HTMLInputElement;
+      // Total 1000 stays; price becomes 1000 / 8 = 125
+      expect(totalInput.value).toBe('1,000');
+      expect(Number(priceInput.value)).toBeCloseTo(125, 6);
+    });
+
+    it('updates Total Price from Quantity when no total is set', async () => {
+      render(
+        <PostTransactionDialog
+          {...defaultProps}
+          scheduledTransaction={investmentTransaction}
+        />,
+      );
+      await settlePriceLookup();
+      const totalInput = screen.getByLabelText('Total Price') as HTMLInputElement;
+      fireEvent.change(totalInput, { target: { value: '' } });
+      fireEvent.blur(totalInput);
+      const qtyInput = screen.getByLabelText('Quantity (Shares)') as HTMLInputElement;
+      fireEvent.change(qtyInput, { target: { value: '5' } });
+      // No total to keep -- 5 * 100 = 500
       expect(totalInput.value).toBe('500');
     });
 
@@ -1293,12 +1387,12 @@ describe('PostTransactionDialog', () => {
       fireEvent.change(totalInput, { target: { value: '250' } });
       // Trigger blur to commit the value
       fireEvent.blur(totalInput);
-      const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
+      const qtyInput = screen.getByLabelText('Quantity (Shares)') as HTMLInputElement;
       // 250 / 100 = 2.5
       expect(Number(qtyInput.value)).toBeCloseTo(2.5, 6);
     });
 
-    it('updates Quantity when Price changes and Total is already set', async () => {
+    it('keeps Quantity and updates Total Price when Price changes', async () => {
       await act(async () => {
         render(
           <PostTransactionDialog
@@ -1308,13 +1402,60 @@ describe('PostTransactionDialog', () => {
         );
       });
       // Initial: qty=10, price=100, total=1000 (seeded)
-      const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
+      const priceInput = screen.getByLabelText('Price per Share') as HTMLInputElement;
       await act(async () => {
         fireEvent.change(priceInput, { target: { value: '200' } });
       });
-      // Total was 1000, price now 200 → qty should be 5
-      const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
+      // Quantity 10 stays; total becomes 10 * 200 = 2000
+      const qtyInput = screen.getByLabelText('Quantity (Shares)') as HTMLInputElement;
+      const totalInput = screen.getByLabelText('Total Price') as HTMLInputElement;
+      expect(Number(qtyInput.value)).toBeCloseTo(10, 6);
+      expect(totalInput.value).toBe('2,000');
+    });
+
+    it('updates Quantity from Total when Price changes and no quantity is set', async () => {
+      await act(async () => {
+        render(
+          <PostTransactionDialog
+            {...defaultProps}
+            scheduledTransaction={investmentTransaction}
+          />,
+        );
+      });
+      const qtyInput = screen.getByLabelText('Quantity (Shares)') as HTMLInputElement;
+      await act(async () => {
+        fireEvent.change(qtyInput, { target: { value: '' } });
+      });
+      const priceInput = screen.getByLabelText('Price per Share') as HTMLInputElement;
+      await act(async () => {
+        fireEvent.change(priceInput, { target: { value: '200' } });
+      });
+      // Total 1000 kept, 1000 / 200 = 5
       expect(Number(qtyInput.value)).toBeCloseTo(5, 6);
+    });
+
+    it('enters the actual quantity then the actual price without re-editing (issue #1468)', async () => {
+      await act(async () => {
+        render(
+          <PostTransactionDialog
+            {...defaultProps}
+            scheduledTransaction={investmentTransaction}
+          />,
+        );
+      });
+      const qtyInput = screen.getByLabelText('Quantity (Shares)') as HTMLInputElement;
+      const priceInput = screen.getByLabelText('Price per Share') as HTMLInputElement;
+      const totalInput = screen.getByLabelText('Total Price') as HTMLInputElement;
+      await act(async () => {
+        fireEvent.change(qtyInput, { target: { value: '9.5' } });
+      });
+      await act(async () => {
+        fireEvent.change(priceInput, { target: { value: '104.2' } });
+      });
+      // Both typed facts stand; the total follows them: 9.5 * 104.2 = 989.9
+      expect(Number(qtyInput.value)).toBeCloseTo(9.5, 6);
+      expect(Number(priceInput.value)).toBeCloseTo(104.2, 6);
+      expect(totalInput.value).toBe('989.9');
     });
 
     it('auto-fills Price from latest market price on open, preserving total and adjusting quantity', async () => {
@@ -1325,14 +1466,14 @@ describe('PostTransactionDialog', () => {
           scheduledTransaction={investmentTransaction}
         />,
       );
-      const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
+      const priceInput = screen.getByLabelText('Price per Share') as HTMLInputElement;
       await waitFor(() => {
         expect(Number(priceInput.value)).toBeCloseTo(123.45, 6);
       });
       // Scheduled total (10 * 100 = 1000) is preserved -- the new price
       // recomputes the quantity (1000 / 123.45 ~= 8.10044553), not the total.
       const totalInput = screen.getByLabelText('Total Price') as HTMLInputElement;
-      const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
+      const qtyInput = screen.getByLabelText('Quantity (Shares)') as HTMLInputElement;
       await waitFor(() => {
         expect(Number(qtyInput.value)).toBeCloseTo(1000 / 123.45, 4);
       });
@@ -1389,8 +1530,8 @@ describe('PostTransactionDialog', () => {
       await waitFor(() => {
         expect(mockGetSecurityPrices).toHaveBeenCalledWith('sec1', { limit: 1 });
       });
-      const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
-      const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
+      const priceInput = screen.getByLabelText('Price per Share') as HTMLInputElement;
+      const qtyInput = screen.getByLabelText('Quantity (Shares)') as HTMLInputElement;
       // Stored override wins: price stays 250 and quantity stays 4, not
       // 123.45 with the quantity rescaled to hold a 1,000 total.
       expect(Number(priceInput.value)).toBe(250);
@@ -1408,7 +1549,7 @@ describe('PostTransactionDialog', () => {
           scheduledTransaction={investmentTransaction}
         />,
       );
-      const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
+      const priceInput = screen.getByLabelText('Price per Share') as HTMLInputElement;
       await waitFor(() => {
         expect(Number(priceInput.value)).toBeCloseTo(123.45, 6);
       });
@@ -1448,7 +1589,7 @@ describe('PostTransactionDialog', () => {
       await waitFor(() => {
         expect(mockGetSecurityPrices).toHaveBeenCalledWith('sec1', { limit: 1 });
       });
-      const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
+      const qtyInput = screen.getByLabelText('Quantity (Shares)') as HTMLInputElement;
       // The saved 4 shares stand, not rescaled by the market refresh.
       expect(Number(qtyInput.value)).toBe(4);
     });
@@ -1469,7 +1610,7 @@ describe('PostTransactionDialog', () => {
           scheduledTransaction={investmentTransaction}
         />,
       );
-      const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
+      const priceInput = screen.getByLabelText('Price per Share') as HTMLInputElement;
       // Type a price while the fetch is still pending.
       await act(async () => {
         fireEvent.change(priceInput, { target: { value: '99' } });
@@ -1575,8 +1716,8 @@ describe('PostTransactionDialog', () => {
         />,
       );
       await settlePriceLookup();
-      const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
-      const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
+      const qtyInput = screen.getByLabelText('Quantity (Shares)') as HTMLInputElement;
+      const priceInput = screen.getByLabelText('Price per Share') as HTMLInputElement;
       const totalInput = screen.getByLabelText('Total Price') as HTMLInputElement;
       expect(Number(qtyInput.value)).toBe(4);
       expect(Number(priceInput.value)).toBe(250);
@@ -1608,7 +1749,7 @@ describe('PostTransactionDialog', () => {
       );
       const row = (await screen.findByText('CA RRSP - Cash')).closest('div')!;
       await waitFor(() => {
-        const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
+        const priceInput = screen.getByLabelText('Price per Share') as HTMLInputElement;
         expect(Number(priceInput.value)).toBeCloseTo(26.15, 6);
       });
       await waitFor(() => {
@@ -1679,8 +1820,8 @@ describe('PostTransactionDialog', () => {
         />,
       );
       await settlePriceLookup();
-      const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
-      const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
+      const qtyInput = screen.getByLabelText('Quantity (Shares)') as HTMLInputElement;
+      const priceInput = screen.getByLabelText('Price per Share') as HTMLInputElement;
       expect(Number(qtyInput.value)).toBe(10); // base
       expect(Number(priceInput.value)).toBe(100); // base
     });
@@ -1696,9 +1837,14 @@ describe('PostTransactionDialog', () => {
       await settlePriceLookup();
       expect(screen.getByText('$4000.00')).toBeInTheDocument();
 
-      // User edits quantity to 5 → cash impact -500 → 4500.
-      const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
+      // Editing quantity keeps the total (price follows), so the cash impact holds.
+      const qtyInput = screen.getByLabelText('Quantity (Shares)') as HTMLInputElement;
       fireEvent.change(qtyInput, { target: { value: '5' } });
+      expect(screen.getByText('$4000.00')).toBeInTheDocument();
+
+      // Editing price keeps quantity 5 → 5 * 100 = -500 → 4500.
+      const priceInput = screen.getByLabelText('Price per Share') as HTMLInputElement;
+      fireEvent.change(priceInput, { target: { value: '100' } });
       expect(screen.getByText('$4500.00')).toBeInTheDocument();
       expect(screen.queryByText('$4000.00')).not.toBeInTheDocument();
     });
@@ -1833,9 +1979,9 @@ describe('PostTransactionDialog', () => {
           scheduledTransaction={addSharesTx}
         />,
       );
-      expect(screen.getByLabelText('Quantity (shares)')).toBeInTheDocument();
+      expect(screen.getByLabelText('Quantity (Shares)')).toBeInTheDocument();
       // No price/total inputs for quantity-only actions
-      expect(screen.queryByLabelText('Price per share')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Price per Share')).not.toBeInTheDocument();
       expect(screen.queryByLabelText('Total Price')).not.toBeInTheDocument();
     });
 
@@ -1852,7 +1998,7 @@ describe('PostTransactionDialog', () => {
           scheduledTransaction={addSharesTx}
         />,
       );
-      const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
+      const qtyInput = screen.getByLabelText('Quantity (Shares)') as HTMLInputElement;
       fireEvent.change(qtyInput, { target: { value: '8' } });
       expect(Number(qtyInput.value)).toBe(8);
 
@@ -1878,7 +2024,7 @@ describe('PostTransactionDialog', () => {
           scheduledTransaction={addSharesTx}
         />,
       );
-      const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
+      const qtyInput = screen.getByLabelText('Quantity (Shares)') as HTMLInputElement;
       fireEvent.change(qtyInput, { target: { value: '' } });
       expect(qtyInput.value).toBe('');
     });
@@ -1915,7 +2061,7 @@ describe('PostTransactionDialog', () => {
       );
       await waitFor(() => {
         expect(
-          Number((screen.getByLabelText('Price per share') as HTMLInputElement).value),
+          Number((screen.getByLabelText('Price per Share') as HTMLInputElement).value),
         ).toBe(100);
       });
       expect(
@@ -1933,7 +2079,7 @@ describe('PostTransactionDialog', () => {
       );
       await act(async () => {});
       await waitFor(() => {
-        expect(screen.getByLabelText('Price per share')).toBeInTheDocument();
+        expect(screen.getByLabelText('Price per Share')).toBeInTheDocument();
       });
     });
 
@@ -1953,7 +2099,7 @@ describe('PostTransactionDialog', () => {
       );
       await act(async () => {});
       await waitFor(() => {
-        expect(screen.getByLabelText('Price per share')).toBeInTheDocument();
+        expect(screen.getByLabelText('Price per Share')).toBeInTheDocument();
       });
       expect(
         screen.queryByText(/No price history yet for this security/),
@@ -2513,5 +2659,109 @@ describe('PostTransactionDialog - rate lookup while stepping the date', () => {
     // No rate and no pinned amount: the backend resolves for the posting date.
     expect(payload.exchangeRate).toBeUndefined();
     expect(payload.amount).toBeUndefined();
+  });
+});
+
+// Issue #2096: an estimated occurrence opens at its month's estimate.
+describe('PostTransactionDialog: an estimated schedule (issue #2096)', () => {
+  const baseRow = {
+    id: 's1', name: 'Heating', amount: -999, currencyCode: 'CAD',
+    accountId: 'a1', categoryId: 'c1', description: '',
+    nextDueDate: '2025-02-15T00:00:00Z', isTransfer: false, isSplit: false,
+    account: { name: 'Checking' },
+  } as any;
+  const statedOverride = {
+    amount: -250, categoryId: 'c1', description: null,
+    overrideDate: '2025-02-15', isSplit: false, splits: null,
+  };
+  const defaultProps = {
+    isOpen: true,
+    scheduledTransaction: baseRow,
+    categories: [{ id: 'c1', name: 'Utilities', parentId: null }] as any[],
+    accounts: [{ id: 'a1', name: 'Checking', currentBalance: 5000 }] as any[],
+    scheduledTransactions: [] as any[],
+    futureTransactions: [] as any[],
+    onClose: vi.fn(),
+    onPosted: vi.fn(),
+  };
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const estimate = (months: Record<string, { amount: number; basis: 'seasonal' | 'recent' }>) => ({
+    status: Object.keys(months).length > 0 ? 'estimated' : 'no-history',
+    currencyCode: 'CAD',
+    months,
+    paymentCount: Object.keys(months).length > 0 ? 6 : 0,
+    latestPaymentDate: Object.keys(months).length > 0 ? '2025-01-15' : null,
+    growthRate: null,
+    historyMonths: 24,
+    missingPair: null,
+  });
+  const heating = {
+    // The snapshot amount, -999, is what the dialog must not post.
+    ...baseRow,
+    amountIsEstimated: true,
+    amountEstimate: estimate({ '2025-02': { amount: -212.5, basis: 'seasonal' } }),
+  } as any;
+
+  it("posts the month's estimate and says it is one", async () => {
+    mockPostApi.mockClear();
+    render(<PostTransactionDialog {...defaultProps} scheduledTransaction={heating} />);
+
+    expect(screen.getByText(/This amount is an estimate/)).toBeInTheDocument();
+    const buttons = screen.getAllByText('Post Transaction');
+    fireEvent.click(buttons[buttons.length - 1]);
+
+    await waitFor(() => {
+      expect(mockPostApi).toHaveBeenCalledWith(
+        's1',
+        expect.objectContaining({ amount: -212.5 }),
+      );
+    });
+  });
+
+  it('refuses to post an unknown estimate left empty', async () => {
+    mockPostApi.mockClear();
+    render(
+      <PostTransactionDialog
+        {...defaultProps}
+        scheduledTransaction={{ ...heating, amountEstimate: estimate({}) }}
+      />,
+    );
+
+    const buttons = screen.getAllByText('Post Transaction');
+    fireEvent.click(buttons[buttons.length - 1]);
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(
+        "This occurrence's estimated amount is unknown. Enter the amount to post it.",
+      );
+    });
+    expect(mockPostApi).not.toHaveBeenCalled();
+  });
+
+  it('posts an override that states the amount, not the estimate', async () => {
+    mockPostApi.mockClear();
+    render(
+      <PostTransactionDialog
+        {...defaultProps}
+        scheduledTransaction={{
+          ...heating,
+          nextOverride: statedOverride,
+        }}
+      />,
+    );
+
+    expect(screen.queryByText(/This amount is an estimate/)).not.toBeInTheDocument();
+    const buttons = screen.getAllByText('Post Transaction');
+    fireEvent.click(buttons[buttons.length - 1]);
+
+    await waitFor(() => {
+      expect(mockPostApi).toHaveBeenCalledWith(
+        's1',
+        expect.objectContaining({ amount: -250 }),
+      );
+    });
   });
 });

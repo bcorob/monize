@@ -1,0 +1,120 @@
+{
+  "page": {
+    "title": "Hộp thư xem xét của AI",
+    "subtitle": "Các giao dịch mà một quy tắc yêu cầu IA xem xét, hồ sơ mà một trợ lý được yêu cầu soạn thảo, và các chỉnh sửa mà một trợ lý đề xuất để bạn phê duyệt."
+  },
+  "filter": {
+    "label": "Lọc theo trạng thái",
+    "open": "Đang mở",
+    "pending": "Đang chờ",
+    "claimed": "Đang xem xét",
+    "proposed": "Đã đề xuất",
+    "applied": "Đã áp dụng",
+    "rejected": "Đã từ chối",
+    "expired": "Đã hết hạn"
+  },
+  "kindFilter": {
+    "label": "Lọc theo loại",
+    "all": "Tất cả",
+    "email_receipt": "Hóa đơn qua email",
+    "transaction_review": "Quy tắc",
+    "option": "{label} ({count})"
+  },
+  "status": {
+    "pending": "Đang chờ",
+    "claimed": "Đang xem xét",
+    "proposed": "Đã đề xuất",
+    "applied": "Đã áp dụng",
+    "rejected": "Đã từ chối",
+    "expired": "Đã hết hạn"
+  },
+  "columns": {
+    "date": "Ngày",
+    "request": "Yêu cầu",
+    "amount": "Số tiền",
+    "status": "Trạng thái"
+  },
+  "row": {
+    "noPayee": "Không có người nhận",
+    "transactionMissing": "Giao dịch này không còn tồn tại",
+    "rule": "Quy tắc: {name}",
+    "manualRequest": "Yêu cầu thủ công",
+    "trade": "{action, select, BUY {Mua {quantity} cổ phần {symbol}} SELL {Bán {quantity} cổ phần {symbol}} DIVIDEND {Cổ tức từ {symbol}} REINVEST {Tái đầu tư cổ tức vào {quantity} cổ phần {symbol}} other {Giao dịch {symbol}}}",
+    "receiptInstruction": {
+      "automatic": "Bổ sung giao dịch này từ email đơn hàng đính kèm: tách theo từng mặt hàng với một danh mục cho mỗi mặt hàng, hoặc đặt mô tả.",
+      "chat": "Bạn đã yêu cầu nhận dạng email đơn hàng đính kèm: tách giao dịch này theo sản phẩm với một danh mục cho mỗi sản phẩm, hoặc đặt mô tả.",
+      "categorize": "Gán danh mục cho từng mặt hàng trong email đơn hàng đính kèm mà chưa quy tắc nào phân loại, sau đó đề xuất cách tách giao dịch này hoặc đặt mô tả.",
+      "parsed": "Một trình phân tích đã lưu đã đọc email đơn hàng và đề xuất các dòng danh mục cùng mô tả này cho giao dịch.",
+      "trade": "Email xác nhận giao dịch do một trình phân tích đã lưu đọc đề xuất giao dịch đầu tư này. Trước khi phê duyệt, hãy đối chiếu tài khoản, chứng khoán, số lượng và tổng với công ty môi giới của bạn.",
+      "tradeChat": "Bạn đã yêu cầu nhận diện xác nhận giao dịch đính kèm: hãy đề xuất giao dịch đầu tư mà nó báo cáo, là mua, bán, cổ tức tiền mặt hoặc cổ tức tái đầu tư."
+    },
+    "emailReceipt": "Hóa đơn qua email: {subject} từ {sender}",
+    "emailReceiptForwarded": "Hóa đơn qua email: {subject} từ {sender}, người chuyển tiếp {forwarder}",
+    "emailReceiptMissing": "Hóa đơn qua email (email đã bị xóa)",
+    "parserDraft": "Dự thảo hồ sơ từ {count, plural, one {# email} other {# email}} ({domain})",
+    "viewEmailReceipts": "Xem hóa đơn qua email",
+    "agentNote": "Ghi chú của trợ lý: {reason}",
+    "dates": "Tạo ngày {created}, hết hạn ngày {expires}",
+    "viewTransaction": "Xem giao dịch",
+    "waitingForAgent": "Đang chờ một tác nhân AI. <link>Kết nối nhà cung cấp AI trong Cài đặt</link>, hoặc để một ứng dụng khách MCP nhận yêu cầu.",
+    "parserDraftReady": "Dự thảo hồ sơ sẵn sàng. <link>Kiểm tra và phê duyệt nó trong cài đặt hồ sơ</link>.",
+    "tradePending": "Một giao dịch từ email, chưa được đọc",
+    "tradeEmail": "Email xác nhận giao dịch",
+    "parserDraftIds": "ID các hồ sơ dự thảo: {ids}"
+  },
+  "actions": {
+    "dismiss": "Bỏ qua"
+  },
+  "proposal": {
+    "errorTitle": "Đề xuất này không thể áp dụng nữa"
+  },
+  "bulk": {
+    "selectRow": "Chọn {name}",
+    "selectAll": "Chọn tất cả yêu cầu đang hiển thị có thể duyệt hoặc gửi",
+    "approveSelected": "Phê duyệt mục đã chọn ({count})",
+    "approveAllShown": "Phê duyệt tất cả mục đang hiển thị ({count})",
+    "summary": "Đã áp dụng {approved, plural, one {# đề xuất} other {# đề xuất}}, {failed, plural, one {# chưa được áp dụng} other {# chưa được áp dụng}}.",
+    "closeSummary": "Đóng",
+    "failure": "{name}: {reason}",
+    "noReason": "Không có lý do nào được đưa ra",
+    "unknownRequest": "Một yêu cầu",
+    "failed": "Không thể áp dụng các đề xuất",
+    "dialog": {
+      "title": "{count, plural, one {Áp dụng # đề xuất?} other {Áp dụng # đề xuất?}}",
+      "message": "Mỗi đề xuất được kiểm tra với giao dịch ở trạng thái hiện tại và được áp dụng riêng. Đề xuất nào không còn phù hợp sẽ bị bỏ qua và được báo cáo, còn các đề xuất khác vẫn được áp dụng. Hãy xem xét các đề xuất trước khi phê duyệt.",
+      "confirm": "{count, plural, one {Áp dụng # đề xuất} other {Áp dụng # đề xuất}}"
+    }
+  },
+  "sendToAssistant": {
+    "button": "Gửi {count, plural, other {# yêu cầu đang chờ}} cho trợ lý AI",
+    "buttonSelected": "Gửi {count, plural, other {# yêu cầu đã chọn}} cho trợ lý AI",
+    "prompt": "Xử lý các yêu cầu đánh giá AI đang chờ của tôi bằng công cụ ai_review_requests: liệt kê, nhận từng yêu cầu, làm theo hướng dẫn và gửi đề xuất. Với yêu cầu bản nháp hồ sơ, hãy tạo hồ sơ bằng công cụ email_receipt_parsers. Không có gì thay đổi cho đến khi tôi duyệt các đề xuất trong hộp đánh giá AI.",
+    "promptSelected": "Xử lý {count, plural, other {# yêu cầu đánh giá AI này}} bằng công cụ ai_review_requests: {ids}. Nhận từng yêu cầu theo id, làm theo hướng dẫn và gửi đề xuất. Với yêu cầu bản nháp hồ sơ, hãy tạo hồ sơ bằng công cụ email_receipt_parsers. Không động đến các yêu cầu khác. Không có gì thay đổi cho đến khi tôi duyệt các đề xuất trong hộp đánh giá AI.",
+    "opened": "Đã mở trò chuyện với tin nhắn được chuẩn bị sẵn. Hãy đọc và nhấn Gửi.",
+    "unavailable": "Trợ lý AI hiện không thể trả lời. Hãy kết nối nhà cung cấp AI trong Cài đặt hoặc kết nối ứng dụng MCP của bạn. Các yêu cầu vẫn chờ ở đây."
+  },
+  "dismissDialog": {
+    "title": "Bỏ qua yêu cầu này?",
+    "message": "Sẽ không ai được nhờ xử lý yêu cầu này nữa. Những gì yêu cầu nói đến không bị thay đổi.",
+    "confirm": "Bỏ qua yêu cầu"
+  },
+  "loading": "Đang tải các yêu cầu xem xét...",
+  "error": {
+    "title": "Không thể tải các yêu cầu xem xét",
+    "body": "Danh sách chưa được tải nên có thể không trống. Hãy kiểm tra kết nối và thử lại.",
+    "retry": "Thử lại"
+  },
+  "empty": {
+    "title": "Chưa có yêu cầu xem xét",
+    "body": "Yêu cầu xuất hiện ở đây khi một quy tắc có hành động “Yêu cầu AI xem xét” khớp với một giao dịch. Trợ lý AI, hoặc một ứng dụng khách MCP như tác nhân chuyển tiếp, sẽ xử lý hàng đợi và đề xuất thay đổi để bạn phê duyệt.",
+    "filteredTitle": "Không có yêu cầu nào ở trạng thái này",
+    "filteredBody": "Hãy chọn trạng thái khác để xem các yêu cầu khác."
+  },
+  "toasts": {
+    "approved": "Đã áp dụng đề xuất",
+    "dismissed": "Đã bỏ qua yêu cầu",
+    "dismissFailed": "Không thể bỏ qua yêu cầu",
+    "approveFailed": "Không thể áp dụng đề xuất",
+    "changed": "Yêu cầu này đã thay đổi trong lúc đó. Danh sách đã được tải lại."
+  }
+}

@@ -29,6 +29,35 @@ describe('ReportAccountMultiSelect', () => {
     expect(screen.queryByText('TFSA - Brokerage')).not.toBeInTheDocument();
   });
 
+  it('lists favourites first, in their arrangement, then the rest alphabetically, with a rule between', () => {
+    const mixed = [
+      { id: 'c1', name: 'Zeta Chequing', accountType: 'CHEQUING', isFavourite: false, favouriteSortOrder: 0 },
+      { id: 'c2', name: 'Beta Savings', accountType: 'SAVINGS', isFavourite: true, favouriteSortOrder: 2 },
+      { id: 'c3', name: 'Alpha Card', accountType: 'CREDIT_CARD', isFavourite: false, favouriteSortOrder: 0 },
+      { id: 'c4', name: 'Yankee Chequing', accountType: 'CHEQUING', isFavourite: true, favouriteSortOrder: 1 },
+    ] as unknown as Account[];
+    render(<ReportAccountMultiSelect accounts={mixed} value={[]} onChange={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Filter by account' }));
+
+    const rows = screen.getAllByRole('checkbox').map((box) => box.closest('label')!);
+    expect(rows.map((row) => row.textContent)).toEqual([
+      'Yankee Chequing',
+      'Beta Savings',
+      'Alpha Card',
+      'Zeta Chequing',
+    ]);
+    // The first non-favourite opens its own group.
+    expect(rows[2].className).toContain('border-t');
+    expect(rows[1].className).not.toContain('border-t');
+  });
+
+  it('draws no rule when nothing is a favourite', () => {
+    render(<ReportAccountMultiSelect accounts={accounts} value={[]} onChange={() => {}} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Filter by account' }));
+    const rows = screen.getAllByRole('checkbox').map((box) => box.closest('label')!);
+    expect(rows.some((row) => row.className.includes('border-t'))).toBe(false);
+  });
+
   it('reflects a toggle immediately but debounces the onChange notification', async () => {
     vi.useFakeTimers();
     const onChange = vi.fn();

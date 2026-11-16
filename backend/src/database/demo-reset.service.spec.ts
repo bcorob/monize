@@ -1,3 +1,4 @@
+import { DEMO_CLEAR_TABLES } from "./demo-clear";
 import { Test, TestingModule } from "@nestjs/testing";
 import { DataSource } from "typeorm";
 import { DemoResetService } from "./demo-reset.service";
@@ -7,7 +8,6 @@ import { getRequestContext } from "../common/request-context";
 import { createScopedDbMocks } from "../test-helpers/scoped-db-testing";
 import {
   createJobClaimMock,
-  TEST_LEASE_TOKEN,
   jobClaimProvider,
   type JobClaimMock,
 } from "../test-helpers/job-claim-testing";
@@ -94,7 +94,9 @@ describe("DemoResetService", () => {
       call[0].includes("SELECT id FROM users"),
     );
     expect(userQuery).toBeDefined();
-    expect(userQuery[0]).toContain("demo@monize.com");
+    // Parameterized, not interpolated: the email travels as $1.
+    expect(userQuery[0]).not.toContain("demo@monize.com");
+    expect(userQuery[1]).toEqual(["demo@monize.com"]);
   });
 
   // RLS (task C3): the reset's cross-user raw SQL runs under a system context.
@@ -150,19 +152,35 @@ describe("DemoResetService", () => {
         .filter((call: string[]) => call[0].includes("DELETE FROM"))
         .map((call: string[]) => call[0]);
 
-      // Should delete 18 tables in FK-safe order
-      expect(deleteCalls.length).toBe(18);
-
-      // First deletes should be the leaf dependencies
-      expect(deleteCalls[0]).toContain("investment_transactions");
-      expect(deleteCalls[1]).toContain("holdings");
-      expect(deleteCalls[2]).toContain("security_prices");
-      expect(deleteCalls[3]).toContain("securities");
-
-      // Institutions are removed after accounts (FK-safe).
-      expect(deleteCalls).toContain(
-        "DELETE FROM institutions WHERE user_id = $1",
+      // Every table on the shared clear list is wiped, in its order: the
+      // reset and the first seed share one list, so neither can leave a
+      // feature's rows behind.
+      const tables = deleteCalls
+        .map((sql: string) => /DELETE FROM (\w+)/.exec(sql)![1])
+        .filter((t: string) => DEMO_CLEAR_TABLES.some(([name]) => name === t));
+      // The shared-expense detach runs first and deletes the bridge rows itself.
+      expect(tables.slice(-DEMO_CLEAR_TABLES.length)).toEqual(
+        DEMO_CLEAR_TABLES.map(([name]) => name),
       );
+      expect(tables).toEqual(
+        expect.arrayContaining([
+          "warranties",
+          "scheduled_transactions",
+          "shared_groups",
+          "custom_reports",
+        ]),
+      );
+
+      // Non-cascading children go before their parents.
+      const at = (t: string) =>
+        deleteCalls.findIndex((sql: string) =>
+          sql.includes(`DELETE FROM ${t} `),
+        );
+      expect(at("holdings")).toBeLessThan(at("securities"));
+      expect(at("security_prices")).toBeLessThan(at("securities"));
+
+      // The reset-done claim is never part of the wipe.
+      expect(tables).not.toContain("job_claims");
 
       // Last deletes should be the root tables
       expect(deleteCalls[deleteCalls.length - 1]).toContain("user_preferences");
@@ -228,22 +246,44 @@ describe("DemoResetService", () => {
       });
     });
 
-    it("takes a lease before wiping anything", async () => {
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it("claims the UTC day permanently before wiping anything", async () => {
+      // 23:30 in UTC-5 is already the next UTC day: the key follows UTC, like
+      // the intra-day window key, so every replica derives the same one.
+      jest.useFakeTimers({ doNotFake: ["nextTick", "setImmediate"] });
+      jest.setSystemTime(new Date("2026-03-14T04:00:00.000Z"));
+
       await service.resetDemoData();
 
-      expect(jobClaims.claimLease).toHaveBeenCalledWith(
+      expect(jobClaims.claimOnce).toHaveBeenCalledWith(
         JobClaimType.DemoReset,
         "demo-user-id",
-        expect.any(String),
-        expect.any(Number),
+        "reset:2026-03-14",
+      );
+      // A lease records only "running now"; it is freed on success, so a
+      // replica whose tick lands after the first finished would reset again.
+      expect(jobClaims.claimLease).not.toHaveBeenCalled();
+      expect(jobClaims.releaseLease).not.toHaveBeenCalled();
+    });
+
+    it("keys the claim by a YYYY-MM-DD day", async () => {
+      await service.resetDemoData();
+
+      expect(jobClaims.claimOnce).toHaveBeenCalledWith(
+        JobClaimType.DemoReset,
+        "demo-user-id",
+        expect.stringMatching(/^reset:\d{4}-\d{2}-\d{2}$/),
       );
     });
 
-    it("wipes nothing when another replica holds the lease", async () => {
-      // A wipe-and-reseed is the one job a duplicate run cannot repair by
-      // repeating: the second replica's DELETE lands inside the first
-      // replica's seed and both finish with a partial demo.
-      jobClaims.claimLease.mockResolvedValue(null);
+    it("wipes nothing when another replica already reset the demo today", async () => {
+      // The second replica's tick may land after the first has finished; a
+      // day already claimed means the demo was reset today, and a second
+      // wipe-and-reseed is exactly what the claim exists to stop.
+      jobClaims.claimOnce.mockResolvedValue(false);
 
       await service.resetDemoData();
 
@@ -254,7 +294,7 @@ describe("DemoResetService", () => {
       expect(demoSeedService.seedDemoData).not.toHaveBeenCalled();
     });
 
-    it("hands the lease back even when the reset throws", async () => {
+    it("keeps the day claimed when the reset throws", async () => {
       queryRunner.query.mockImplementation((sql: string) => {
         if (sql.includes("SELECT id FROM users")) {
           return Promise.resolve([{ id: "demo-user-id" }]);
@@ -265,16 +305,12 @@ describe("DemoResetService", () => {
         return Promise.resolve([]);
       });
 
-      await service.resetDemoData();
+      await expect(service.resetDemoData()).resolves.toBeUndefined();
 
-      expect(jobClaims.releaseLease).toHaveBeenCalledWith(
-        JobClaimType.DemoReset,
-        "demo-user-id",
-        expect.any(String),
-        // With the token: a reset that outran its own lease must not release the
-        // one the replica now reseeding holds (audit DR-RRV4-01).
-        TEST_LEASE_TOKEN,
-      );
+      // A partial reset beats a doubled one, and tomorrow's key is fresh.
+      expect(jobClaims.claimOnce).toHaveBeenCalledTimes(1);
+      expect(jobClaims.releasePermanentClaim).not.toHaveBeenCalled();
+      expect(jobClaims.releaseLease).not.toHaveBeenCalled();
     });
 
     it("does not claim anything when there is no demo user", async () => {
@@ -282,6 +318,7 @@ describe("DemoResetService", () => {
 
       await service.resetDemoData();
 
+      expect(jobClaims.claimOnce).not.toHaveBeenCalled();
       expect(jobClaims.claimLease).not.toHaveBeenCalled();
     });
   });
@@ -361,10 +398,14 @@ describe("DemoResetService", () => {
         );
         const balanceCalls = dataSource.query.mock.calls.filter(
           (call: string[]) =>
-            call[0].includes("UPDATE accounts SET current_balance"),
+            /UPDATE accounts\s+SET current_balance/.test(call[0]),
         );
 
         expect(balanceCalls.length).toBe(insertCalls.length);
+        // The shared delta statement: no SQL-side ROUND on the balance.
+        for (const [sql] of balanceCalls) {
+          expect(sql).not.toMatch(/ROUND/i);
+        }
 
         // Balance update amount should match the inserted transaction amount
         for (let i = 0; i < insertCalls.length; i++) {
@@ -438,7 +479,7 @@ describe("DemoResetService", () => {
         for (const group of writeGroups) {
           expect(
             group.some((sql) =>
-              sql.includes("UPDATE accounts SET current_balance"),
+              /UPDATE accounts\s+SET current_balance/.test(sql),
             ),
           ).toBe(true);
         }

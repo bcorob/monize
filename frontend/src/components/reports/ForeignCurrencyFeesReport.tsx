@@ -12,6 +12,7 @@ import { useFormModal } from '@/hooks/useFormModal';
 import { usePersistedAccountFilter } from '@/hooks/usePersistedAccountFilter';
 import { createLogger } from '@/lib/logger';
 import { Modal } from '@/components/ui/Modal';
+import { transactionModalProps } from '@/components/transactions/transaction-modal';
 import { MultiSelect, MultiSelectOption } from '@/components/ui/MultiSelect';
 import { UnsavedChangesDialog } from '@/components/ui/UnsavedChangesDialog';
 import { TransactionForm } from '@/components/transactions/TransactionForm';
@@ -25,12 +26,13 @@ import type {
   PaginationInfo,
   Transaction,
 } from '@/types/transaction';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { fromMoneyUnits, moneyDecimalsForCurrency, toMoneyUnits } from '@/lib/format';
+import { useCurrencyDecimalsVersion } from '@/hooks/useCurrencyDecimalsVersion';
 
 const logger = createLogger('ForeignCurrencyFeesReport');
 
 const PAGE_SIZE = 25;
-// Integer ten-thousandths, matching the backend's decimal(20,4) money scale.
-const SCALE = 10000;
 
 const hasFxFee = (account: Account): boolean => Number(account.fxFeePercent) > 0;
 
@@ -56,7 +58,7 @@ export function ForeignCurrencyFeesReport() {
   const tr = useTranslations('reports');
   const tCommon = useTranslations('common');
   const router = useRouter();
-  const { defaultCurrency, convertToDefault } = useExchangeRates();
+  const { defaultCurrency } = useExchangeRates();
 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [accountsLoaded, setAccountsLoaded] = useState(false);
@@ -139,23 +141,29 @@ export function ForeignCurrencyFeesReport() {
     return currencies.size === 1 ? [...currencies][0] : defaultCurrency;
   }, [effectiveAccountIds, accountsById, defaultCurrency]);
 
+  // A fee in another currency is the server's conversion, each fee at its own
+  // transaction's rate or date; a month of fees at today's rate would move
+  // with the currency rather than with what the bank charged (issue #2106).
   const convertFee = useCallback(
-    (amount: number, accountCurrency: string): number | null => {
-      if (accountCurrency === displayCurrency) return amount;
-      return convertToDefault(amount, accountCurrency || defaultCurrency);
-    },
-    [displayCurrency, convertToDefault, defaultCurrency],
+    (row: FxFeeMonthlyTotal, accountCurrency: string): number | null =>
+      accountCurrency === displayCurrency ? row.feeTotal : (row.convertedFeeTotal ?? null),
+    [displayCurrency],
   );
+
+  // Nothing to fetch (no account in scope, or the account list has not
+  // arrived): the fee rows are empty and settled for this key. Adjusted during
+  // render rather than from the loading effect below.
+  const feeRequestEmpty = !accountsLoaded || effectiveAccountIds.length === 0;
+  if (feeRequestEmpty && (feeLoadedKey !== accountKey || feeResults.length > 0)) {
+    setFeeResults([]);
+    setFeeLoadedKey(accountKey);
+  }
 
   const isFeeLoading = accountKey.length > 0 && feeLoadedKey !== accountKey;
 
   // Per-account monthly fee rows, tagged with each account's own currency.
   useEffect(() => {
-    if (!accountsLoaded || effectiveAccountIds.length === 0) {
-      setFeeResults([]);
-      setFeeLoadedKey(accountKey);
-      return;
-    }
+    if (!accountsLoaded || effectiveAccountIds.length === 0) return;
     let cancelled = false;
     (async () => {
       const results = await Promise.all(
@@ -196,10 +204,14 @@ export function ForeignCurrencyFeesReport() {
   );
 
   // Roll every account's rows up to one converted fee total per month, honouring
-  // the currency filter. Accumulated in integer ten-thousandths to avoid drift.
+  // the currency filter. Accumulated in integer units of the display
+  // currency's money precision (four for fiat, a coin's eight when every
+  // account in scope is that coin) to avoid drift.
+  const registryVersion = useCurrencyDecimalsVersion();
   const monthlyFees = useMemo(() => {
     const active = selectedCurrencies.length > 0 ? new Set(selectedCurrencies) : null;
-    const byMonth = new Map<string, { cents: number; count: number }>();
+    const decimals = moneyDecimalsForCurrency(displayCurrency);
+    const byMonth = new Map<string, { units: bigint; count: number }>();
     // A fee whose currency has no rate to the display currency is left out of
     // the chart (added at its face value it would be a figure in another
     // currency), so its currency is named and it is counted -- the chart is a
@@ -209,14 +221,14 @@ export function ForeignCurrencyFeesReport() {
     for (const result of feeResults) {
       for (const row of result.rows) {
         if (active && !active.has(row.currencyCode)) continue;
-        const converted = convertFee(row.feeTotal, result.currency);
+        const converted = convertFee(row, result.currency);
         if (converted === null) {
           missing.add(result.currency);
           excludedCount += row.count;
           continue;
         }
-        const bucket = byMonth.get(row.month) ?? { cents: 0, count: 0 };
-        bucket.cents += Math.round(converted * SCALE);
+        const bucket = byMonth.get(row.month) ?? { units: BigInt(0), count: 0 };
+        if (Number.isFinite(converted)) bucket.units += toMoneyUnits(converted, decimals);
         bucket.count += row.count;
         byMonth.set(row.month, bucket);
       }
@@ -225,11 +237,12 @@ export function ForeignCurrencyFeesReport() {
       .sort(([a], [b]) => a.localeCompare(b))
       .map(([month, bucket]) => ({
         month,
-        total: bucket.cents / SCALE,
+        total: fromMoneyUnits(bucket.units, decimals),
         count: bucket.count,
       }));
     return { data, missingCurrencies: [...missing], excludedCount };
-  }, [feeResults, selectedCurrencies, convertFee]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the registry version re-runs the read
+  }, [feeResults, selectedCurrencies, convertFee, displayCurrency, registryVersion]);
 
   const currencyKey = selectedCurrencies.join(',');
   const availableKey = availableCurrencies.join(',');
@@ -330,9 +343,7 @@ export function ForeignCurrencyFeesReport() {
   if (accountsLoaded && eligibleAccounts.length === 0) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6">
-        <p className="text-gray-500 dark:text-gray-400 text-center py-8">
-          {tr('foreignCurrencyFees.noEligibleAccounts')}
-        </p>
+        <EmptyState title={tr('foreignCurrencyFees.noEligibleAccounts')} />
       </div>
     );
   }
@@ -342,13 +353,17 @@ export function ForeignCurrencyFeesReport() {
       {/* Controls */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4">
         <div className="flex flex-wrap gap-3 items-center">
+          {/* Both pickers take the card's width on a phone -- side by side
+              they are wider than the screen -- and their toolbar widths from
+              `sm` up. */}
           <ReportAccountMultiSelect
             accounts={accounts}
             value={selectedAccountIds}
             onChange={handleAccountChange}
             filter={hasFxFee}
+            className="w-full sm:w-48"
           />
-          <div className="w-52 max-w-full">
+          <div className="w-full max-w-full sm:w-52">
             <MultiSelect
               ariaLabel={t('currencyFilter.label')}
               options={currencyOptions}
@@ -400,10 +415,7 @@ export function ForeignCurrencyFeesReport() {
         />
       </div>
 
-      <Modal isOpen={showForm} onClose={close} {...modalProps} maxWidth="6xl" className="p-6 !max-w-[69rem]">
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-          {t('list.editTitle')}
-        </h2>
+      <Modal isOpen={showForm} onClose={close} {...modalProps} {...transactionModalProps} title={t('list.editTitle')}>
         <TransactionForm
           key={editingTransaction?.id || 'none'}
           transaction={editingTransaction}

@@ -2,6 +2,7 @@
 
 import { MutableRefObject } from 'react';
 import { useTranslations } from 'next-intl';
+import { XMarkIcon } from '@heroicons/react/24/outline';
 import { useForm, useWatch } from 'react-hook-form';
 import '@/lib/zodConfig';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -123,9 +124,7 @@ export function TagForm({ tag, onSubmit, onCancel, onDirtyChange, submitRef }: T
               title={t('form.noColour')}
             >
               {!watchedColor && (
-                <svg className="w-4 h-4 text-gray-400 dark:text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <XMarkIcon className="w-4 h-4 text-gray-400 dark:text-gray-500" aria-hidden="true" />
               )}
             </button>
             {colourPalette.map((opt) => (

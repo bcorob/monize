@@ -1,0 +1,297 @@
+<!doctype html>
+<!-- Generated from website/docs/getting-started.md by frontend/scripts/build-website-docs.mjs. Edit the Markdown, then run "npm run docs:build" in frontend/. -->
+<html lang="en" data-theme="dark" class="docs-root"><head><meta charSet="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><link rel="preload" as="image" href="/assets/img/monize-logo.svg"/><title>Getting Started - Monize documentation</title><meta name="description" content="Installation, first-time setup, and initial configuration."/><meta name="theme-color" content="#4fa091"/><link rel="canonical" href="https://monize.net/docs/getting-started"/><link rel="icon" type="image/svg+xml" href="/assets/img/monize-logo.svg"/><meta property="og:type" content="article"/><meta property="og:site_name" content="Monize"/><meta property="og:title" content="Getting Started - Monize documentation"/><meta property="og:description" content="Installation, first-time setup, and initial configuration."/><meta property="og:url" content="https://monize.net/docs/getting-started"/><link rel="stylesheet" href="/assets/css/styles.css"/><link rel="stylesheet" href="/assets/css/docs.css"/><script src="/assets/js/theme-boot.js"></script></head><body class="docs"><a class="skip" href="#content">Skip to content</a><header id="hdr" class="dhdr"><button id="sideBtn" class="icobtn dside-btn" type="button" aria-label="Open the page list" aria-controls="side" aria-expanded="false">☰</button><a class="brand" href="/"><img class="logo" src="/assets/img/monize-logo.svg" alt="" width="30" height="30"/><span>Monize</span></a><a class="dlabel" href="/docs/">Docs</a><button class="dsearch" type="button" data-search-open="" aria-haspopup="dialog" aria-label="Search the documentation"><svg aria-hidden="true" viewBox="0 0 20 20" width="16" height="16"><circle cx="8.5" cy="8.5" r="5.5" fill="none" stroke="currentColor" stroke-width="2"></circle><path d="M13 13l4.5 4.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path></svg><span>Search docs</span><kbd>/</kbd></button><nav class="dnav" aria-label="Site"><a href="/">Home</a><a href="https://demo.monize.net" rel="noopener">Live demo</a><a href="https://github.com/kenlasko/monize" rel="noopener">GitHub</a></nav><button id="theme" class="icobtn" type="button" title="Toggle light / dark" aria-label="Toggle colour theme">☾</button></header><div class="dshade" id="shade" hidden=""></div><div class="dlayout"><aside class="dside" id="side"><nav aria-label="Documentation"><a class="dhome" href="/docs/">Overview</a><div class="dgroup"><p class="dgroup-t">Getting started</p><ul><li><a href="/docs/getting-started" aria-current="page">Getting Started</a></li><li><a href="/docs/windows">Monize for Windows</a></li><li><a href="/docs/importing-transactions">Importing Transactions</a></li><li><a href="/docs/importing-from-quicken">Importing from Quicken</a></li><li><a href="/docs/importing-from-microsoft-money">Importing from Microsoft Money</a></li></ul></div><div class="dgroup"><p class="dgroup-t">Core features</p><ul><li><a href="/docs/dashboard">Dashboard</a></li><li><a href="/docs/accounts">Accounts</a></li><li><a href="/docs/transactions">Transactions</a></li><li><a href="/docs/budgets">Budgets</a></li><li><a href="/docs/investments">Investments</a></li><li><a href="/docs/bills-and-deposits">Bills and Deposits</a></li><li><a href="/docs/taxes">Taxes</a></li><li><a href="/docs/email-receipts">Email Receipts</a></li><li><a href="/docs/shared-expenses">Shared Expenses</a></li><li><a href="/docs/warranties">Warranties</a></li></ul></div><div class="dgroup"><p class="dgroup-t">Organizing and reporting</p><ul><li><a href="/docs/categories-and-payees">Categories and Payees</a></li><li><a href="/docs/tags">Tags</a></li><li><a href="/docs/rules">Rules</a></li><li><a href="/docs/reports">Reports</a></li><li><a href="/docs/currency-management">Currency Management</a></li></ul></div><div class="dgroup"><p class="dgroup-t">AI</p><ul><li><a href="/docs/ai">AI</a></li></ul></div><div class="dgroup"><p class="dgroup-t">Administration</p><ul><li><a href="/docs/settings-and-security">Settings and Security</a></li><li><a href="/docs/shared-access">Shared Access (Delegated Users)</a></li><li><a href="/docs/emergency-access">Emergency Access</a></li><li><a href="/docs/backup-and-restore">Backup and Restore</a></li></ul></div></nav></aside><main id="content" class="dmain" tabindex="-1"><nav class="crumbs" aria-label="Breadcrumb"><a href="/docs/">Docs</a><span aria-hidden="true">/</span><span>Getting started</span></nav><article class="doc"><h1>Getting Started</h1><details class="toc-m"><summary>On this page</summary><ul><li class="d2"><a href="#prerequisites">Prerequisites</a></li><li class="d2"><a href="#installation">Installation</a></li><li class="d3"><a href="#using-docker-compose-recommended">Using Docker Compose (Recommended)</a></li><li class="d3"><a href="#using-kubernetes-helm">Using Kubernetes (Helm)</a></li><li class="d3"><a href="#on-windows-installer">On Windows (Installer)</a></li><li class="d2"><a href="#updating-docker-images">Updating Docker Images</a></li><li class="d2"><a href="#first-time-setup">First-Time Setup</a></li><li class="d3"><a href="#registration">Registration</a></li><li class="d3"><a href="#setting-your-home-currency">Setting Your Home Currency</a></li><li class="d3"><a href="#setting-up-categories">Setting Up Categories</a></li><li class="d2"><a href="#creating-your-first-account">Creating Your First Account</a></li><li class="d2"><a href="#navigating-the-application">Navigating the Application</a></li><li class="d3"><a href="#primary-navigation">Primary Navigation</a></li><li class="d3"><a href="#tools-menu">Tools Menu</a></li><li class="d3"><a href="#admin-menu">Admin Menu</a></li><li class="d3"><a href="#header-buttons">Header Buttons</a></li><li class="d3"><a href="#getting-help-in-the-app">Getting Help in the App</a></li><li class="d3"><a href="#the-header-help-menu">The Header Help Menu</a></li><li class="d3"><a href="#searching-the-guide">Searching the Guide</a></li><li class="d2"><a href="#installing-as-a-progressive-web-app">Installing as a Progressive Web App</a></li><li class="d3"><a href="#what-you-get">What You Get</a></li><li class="d3"><a href="#before-you-install">Before You Install</a></li><li class="d3"><a href="#installing-on-desktop-chrome-edge-brave">Installing on Desktop (Chrome, Edge, Brave)</a></li><li class="d3"><a href="#installing-on-android-chrome-edge-samsung-internet">Installing on Android (Chrome, Edge, Samsung Internet)</a></li><li class="d3"><a href="#installing-on-iphone-or-ipad-safari">Installing on iPhone or iPad (Safari)</a></li><li class="d3"><a href="#installing-on-firefox-for-android">Installing on Firefox for Android</a></li><li class="d3"><a href="#sharing-files-into-monize">Sharing Files into Monize</a></li><li class="d3"><a href="#uninstalling">Uninstalling</a></li><li class="d3"><a href="#troubleshooting">Troubleshooting</a></li><li class="d2"><a href="#next-steps">Next Steps</a></li></ul></details><p>This guide walks you through setting up Monize and getting your financial data organized.</p>
+<h2 id="prerequisites">Prerequisites<a class="hlink" href="#prerequisites" aria-label="Link to this section">#</a></h2>
+<p>Before installing Monize, ensure you have:</p>
+<ul>
+<li><strong>Docker</strong> and <strong>Docker Compose</strong> installed on your server</li>
+<li>A minimum of 1 GB RAM available</li>
+<li>A modern web browser (Chrome, Firefox, Safari, or Edge)</li>
+</ul>
+<aside class="callout callout-tip">
+<p class="callout-title">Tip</p>
+<p><strong>Just want Monize on one Windows PC?</strong> <a href="/docs/windows">Monize for Windows</a> is a single installer with everything included: no Docker, no server and no setup. It is reachable from that PC only, so read <a href="/docs/windows#what-the-windows-app-cannot-do">what it cannot do</a> first.</p>
+</aside>
+<h2 id="installation">Installation<a class="hlink" href="#installation" aria-label="Link to this section">#</a></h2>
+<h3 id="using-docker-compose-recommended">Using Docker Compose (Recommended)<a class="hlink" href="#using-docker-compose-recommended" aria-label="Link to this section">#</a></h3>
+<ol>
+<li>Clone the repository (or download <code>docker-compose.prod.yml</code> and <code>.env.example</code> from it):</li>
+</ol>
+<pre><code class="language-bash">git clone https://github.com/kenlasko/monize.git
+cd monize
+</code></pre>
+<ol start="2">
+<li>Create your <code>.env</code> file by copying the bundled example:</li>
+</ol>
+<pre><code class="language-bash">cp .env.example .env
+</code></pre>
+<p>The repository ships a <code>.env.example</code> that documents <strong>every</strong> setting Monize
+supports, grouped into sections and with the defaults and explanatory comments
+inline. Anything you do not need can be left commented out -- you do not have to
+hunt for settings elsewhere. The sections are:</p>
+<div class="table-wrap"><table><thead><tr><th>Section</th><th>What it covers</th></tr></thead><tbody><tr><td>Database</td><td>PostgreSQL connection, TLS, and the optional Row-Level Security roles</td></tr><tr><td>Application</td><td><code>JWT_SECRET</code>, <code>ENCRYPTION_KEY</code>, and general app settings</td></tr><tr><td>URLs &amp; Ports</td><td>Host port mappings and the public address of the app (<code>PUBLIC_APP_URL</code>)</td></tr><tr><td>Authentication</td><td>Local login and registration toggles</td></tr><tr><td>OIDC / OpenID Connect</td><td>Single sign-on provider configuration (optional)</td></tr><tr><td>Bank Sync Diagnostics</td><td>Extra logging for the Open Banking connection (optional)</td></tr><tr><td>Email Notifications</td><td>SMTP server settings (optional)</td></tr><tr><td>Demo Mode</td><td>Demo restrictions and the daily reset (optional)</td></tr><tr><td>MCP / OAuth Debug Logging</td><td>Extra diagnostics for MCP and OAuth (optional)</td></tr><tr><td>AI Integration</td><td>Anthropic, OpenAI, and Ollama settings (optional), including the <strong>Email receipts</strong> settings: mailbox polling limits, the private-host allowlist, and Google / Microsoft 365 sign-in (see <a href="/docs/email-receipts">Email Receipts</a>)</td></tr><tr><td>Attachments</td><td>Transaction attachment storage: database, local filesystem, or S3</td></tr><tr><td>Backup</td><td>Backup directory, scheduling, and off-site copies</td></tr><tr><td>Quote Providers</td><td>Investment price/quote sources</td></tr><tr><td>Exchange Rate Providers</td><td>Where exchange rates come from</td></tr><tr><td>Update Checks</td><td>New-version notifications</td></tr><tr><td>Microsoft Money (.mny) Import</td><td>The largest Money file that can be uploaded (see <a href="/docs/importing-from-microsoft-money#self-hosting-failures">Importing from Microsoft Money</a>)</td></tr><tr><td>Frontend</td><td>Local development only</td></tr></tbody></table></div>
+<p>At minimum, set <code>JWT_SECRET</code>, <code>ENCRYPTION_KEY</code> and a database password before starting:</p>
+<pre><code class="language-bash"># Required -- both ship empty, and the server will not start until they are set
+JWT_SECRET=your-secret-key-minimum-32-characters-long
+ENCRYPTION_KEY=your-encryption-key-minimum-32-characters
+
+# Database (the example file&#x27;s values)
+POSTGRES_DB=monize
+POSTGRES_USER=monize_user
+POSTGRES_PASSWORD=your-database-password
+</code></pre>
+<aside class="callout callout-important">
+<p class="callout-title">Important</p>
+<p>Both keys must be at least 32 characters long, and the server refuses to start
+without either of them. Generate them with <code>openssl rand -base64 32</code> and
+<code>openssl rand -hex 32</code>. A published placeholder or an obviously typed
+<code>JWT_SECRET</code> still starts, but is logged as a warning and shown to
+administrators until you replace it.</p>
+</aside>
+<aside class="callout callout-caution">
+<p class="callout-title">Caution</p>
+<p><strong>Set <code>ENCRYPTION_KEY</code>, keep it safe, and never change it.</strong> It encrypts what
+Monize stores in the database: AI provider API keys, emergency-access
+credentials, the key your automatic backups are encrypted with, and the
+browser-push and OIDC signing keys. Changing or losing it later does not
+re-encrypt anything -- it makes what is already stored unreadable, and
+automatic backups stop until every user signs in again. Store it wherever you
+keep your other deployment secrets, and back it up.
+(<a href="/docs/backup-and-restore#passwords-keys-and-what-you-must-not-lose">Backup and Restore</a>
+has the full picture of what depends on it.)</p>
+<p>Upgrading from a version where this setting was called <code>AI_ENCRYPTION_KEY</code>?
+The old name is still accepted (and wins if both are set), so an existing
+deployment keeps working untouched. Set <code>ENCRYPTION_KEY</code> to the <strong>same</strong> value
+if you want to move to the new name.</p>
+</aside>
+<p>Likewise, changing <code>JWT_SECRET</code> later signs everyone out, stops authenticator
+(two-factor) codes from working and forgets trusted devices.</p>
+<ol start="3">
+<li>Start the application with the prebuilt images:</li>
+</ol>
+<pre><code class="language-bash">docker compose -f docker-compose.prod.yml up -d
+</code></pre>
+<p>The <code>-f</code> is required: the repository has no default Compose file. To build the
+images from source instead (for development), use <code>docker-compose.dev.yml</code>.</p>
+<ol start="4">
+<li>Open Monize at <code>http://localhost:3001</code> (the <code>FRONTEND_PORT</code> and
+<code>PUBLIC_APP_URL</code> settings in <code>.env</code>). If you reach it through a reverse proxy
+or another host name, set <code>PUBLIC_APP_URL</code> to that address.</li>
+</ol>
+<h3 id="using-kubernetes-helm">Using Kubernetes (Helm)<a class="hlink" href="#using-kubernetes-helm" aria-label="Link to this section">#</a></h3>
+<p>Helm charts are provided in the <code>helm/</code> directory for Kubernetes deployments. Refer to the Helm README for detailed configuration options.</p>
+<h3 id="on-windows-installer">On Windows (Installer)<a class="hlink" href="#on-windows-installer" aria-label="Link to this section">#</a></h3>
+<p>Download <code>Monize-Setup-&lt;version&gt;.exe</code> from the <a href="https://github.com/kenlasko/monize/releases/latest" rel="noopener" class="ext">latest release</a> and run it. Everything Monize needs is inside, including its database, and it installs for your Windows account without administrator rights. It runs on that PC only. <a href="/docs/windows">Monize for Windows</a> covers installing, updates, backups and the features a single-PC installation cannot offer.</p>
+<h2 id="updating-docker-images">Updating Docker Images<a class="hlink" href="#updating-docker-images" aria-label="Link to this section">#</a></h2>
+<p>Monize publishes prebuilt images to the GitHub Container Registry
+(<code>ghcr.io/kenlasko/monize-backend</code> and <code>ghcr.io/kenlasko/monize-frontend</code>). To
+update, pull the new images and recreate the containers:</p>
+<pre><code class="language-bash">docker compose -f docker-compose.prod.yml pull
+docker compose -f docker-compose.prod.yml up -d
+</code></pre>
+<p>Use whichever compose file you started Monize with. <code>up -d</code> only recreates the
+services whose image changed, and your data stays in the <code>postgres</code> volume.</p>
+<ul>
+<li><strong>Database migrations run automatically.</strong> The backend applies any pending
+migrations each time it starts, so there is no separate upgrade step.</li>
+<li><strong>Back up first.</strong> Take a backup before updating (see
+<a href="/docs/backup-and-restore">Backup and Restore</a>), especially across several versions.</li>
+<li><strong>Pinned tags.</strong> If you pin an image tag instead of <code>latest</code>, edit the tag in
+your compose file before running <code>pull</code>.</li>
+<li><strong>Clean up.</strong> Run <code>docker image prune</code> to remove the old, unused images.</li>
+</ul>
+<h2 id="first-time-setup">First-Time Setup<a class="hlink" href="#first-time-setup" aria-label="Link to this section">#</a></h2>
+<h3 id="registration">Registration<a class="hlink" href="#registration" aria-label="Link to this section">#</a></h3>
+<p>When you first open Monize, you see the sign-in page.</p>
+<figure><img src="/docs/images/login-page.png" alt="Sign-in page" width="1600" height="1000" loading="lazy" decoding="async" class="shot-dark"/><img src="/docs/images/login-page.light.png" alt="Sign-in page" width="1600" height="1000" loading="lazy" decoding="async" class="shot-light"/><figcaption>Sign-in page</figcaption></figure>
+<ol>
+<li>Click <strong>create a new account</strong> under the title</li>
+<li>Enter your <strong>Email address</strong>, <strong>First name</strong>, <strong>Last name</strong>, <strong>Password</strong> and <strong>Confirm password</strong>. The password must be at least 12 characters and contain an uppercase letter, a lowercase letter, a number and a special character</li>
+<li>Click <strong>Create account</strong></li>
+</ol>
+<figure><img src="/docs/images/registration-page.png" alt="Create your account" width="1600" height="1000" loading="lazy" decoding="async" class="shot-dark"/><img src="/docs/images/registration-page.light.png" alt="Create your account" width="1600" height="1000" loading="lazy" decoding="async" class="shot-light"/><figcaption>Create your account</figcaption></figure>
+<aside class="callout callout-important">
+<p class="callout-title">Important</p>
+<p><strong>The first account registered on a new server becomes its administrator.</strong>
+Register your own account before you share the address with anyone else. The
+administrator sees an extra <strong>Admin</strong> menu (see <a href="/docs/settings-and-security">Settings and Security</a>).</p>
+</aside>
+<p>What happens next depends on how the server is set up:</p>
+<ul>
+<li><strong>Email verification.</strong> When the server can send email (SMTP is configured), every account after the first is sent a verification link instead of being signed in. The <strong>Check your email</strong> screen offers <strong>Resend verification email</strong>; click the link in the email, then sign in.</li>
+<li><strong>Single sign-on.</strong> When OIDC is configured, the page also offers <strong>Sign up with SSO</strong>, and an administrator can turn off local registration altogether, in which case the link does not appear.</li>
+</ul>
+<p>Once your account is created, two short screens follow before the dashboard:</p>
+<ol>
+<li>
+<p><strong>Secure Your Account</strong> offers to set up two-factor authentication: re-enter your password, scan the QR code with an authenticator app, and enter its 6-digit code. Click <strong>Skip for now</strong> to do it later from <strong>Settings &gt; Security</strong>. If the administrator requires two-factor authentication, there is no skip button.</p>
+<figure><img src="/docs/images/getting-started-secure-account.png" alt="Secure Your Account: the optional two-factor setup after registration" width="1600" height="1000" loading="lazy" decoding="async" class="shot-dark"/><img src="/docs/images/getting-started-secure-account.light.png" alt="Secure Your Account: the optional two-factor setup after registration" width="1600" height="1000" loading="lazy" decoding="async" class="shot-light"/><figcaption>Secure Your Account: the optional two-factor setup after registration</figcaption></figure>
+</li>
+<li>
+<p><strong>Set Your Preferences</strong> asks for the <strong>Language</strong> of the interface and your <strong>Default currency</strong>. Click <strong>Continue</strong> to save them, or <strong>Skip for now</strong> to keep the defaults. Both can be changed later in Settings.</p>
+<figure><img src="/docs/images/getting-started-preferences.png" alt="Set Your Preferences: language and default currency" width="1600" height="1000" loading="lazy" decoding="async" class="shot-dark"/><img src="/docs/images/getting-started-preferences.light.png" alt="Set Your Preferences: language and default currency" width="1600" height="1000" loading="lazy" decoding="async" class="shot-light"/><figcaption>Set Your Preferences: language and default currency</figcaption></figure>
+</li>
+</ol>
+<p>You then land on the dashboard. Until you dismiss it, a <strong>Getting Started</strong> card at the top links to the first things to set up -- your settings, your categories, your first account, and an import -- and <strong>Take the tour</strong> starts a short guided introduction to the app. Every guided tour can be started again later from <strong>Settings &gt; Guided Tours</strong>.</p>
+<figure><img src="/docs/images/getting-started-dashboard-card.png" alt="The Getting Started card on the dashboard" width="1504" height="205" loading="lazy" decoding="async" class="shot-dark"/><img src="/docs/images/getting-started-dashboard-card.light.png" alt="The Getting Started card on the dashboard" width="1504" height="205" loading="lazy" decoding="async" class="shot-light"/><figcaption>The Getting Started card on the dashboard</figcaption></figure>
+<h3 id="setting-your-home-currency">Setting Your Home Currency<a class="hlink" href="#setting-your-home-currency" aria-label="Link to this section">#</a></h3>
+<p>Your default currency is the primary currency used for reporting and net worth calculations. If you skipped it during registration, or want to change it, click <strong>Settings</strong> (the gear icon with your name in the top-right corner), then choose <strong>Default Currency</strong> under <strong>Preferences &gt; Language &amp; Region</strong>. The same section holds the language, theme, date and number formats, and timezone.</p>
+<figure><img src="/docs/images/settings-page.png" alt="Settings: the Preferences section with the default currency" width="1600" height="1000" loading="lazy" decoding="async" class="shot-dark"/><img src="/docs/images/settings-page.light.png" alt="Settings: the Preferences section with the default currency" width="1600" height="1000" loading="lazy" decoding="async" class="shot-light"/><figcaption>Settings: the Preferences section with the default currency</figcaption></figure>
+<h3 id="setting-up-categories">Setting Up Categories<a class="hlink" href="#setting-up-categories" aria-label="Link to this section">#</a></h3>
+<p>A new account starts with no categories. Open <strong>Tools &gt; Categories</strong> and click <strong>Import Default Categories</strong> to start from a ready-made set of income and expense categories: pick your <strong>Country</strong> to also get its tax and benefit categories, and the <strong>Language</strong> the names are created in. Or click <strong>Create Your Own</strong> to build the list yourself. See <a href="/docs/categories-and-payees">Categories and Payees</a> for the details.</p>
+<p>If you are about to import from Quicken or Microsoft Money, you can skip this: the import creates the categories your file uses.</p>
+<h2 id="creating-your-first-account">Creating Your First Account<a class="hlink" href="#creating-your-first-account" aria-label="Link to this section">#</a></h2>
+<ol>
+<li>Navigate to <strong>Accounts</strong> from the top navigation bar</li>
+<li>Click <strong>+ New Account</strong></li>
+<li>Fill in the account details:
+<ul>
+<li><strong>Account Name</strong> -- A descriptive name (e.g., &quot;Main Chequing&quot;)</li>
+<li><strong>Account Type</strong> -- Chequing, Savings, Credit Card, Investment, Loan, Line of Credit, Mortgage, Asset, Cash, Crypto Wallet or Other (see <a href="/docs/accounts">Accounts</a> for details)</li>
+<li><strong>Currency</strong> -- The currency this account operates in</li>
+<li><strong>Opening Balance</strong> -- The balance the account starts from, before any transaction you record or import</li>
+<li>Optional details: the account number, the <strong>Institution</strong>, a credit limit, an interest rate, a foreign currency conversion fee and a description, plus <strong>Add to favourites</strong> and <strong>Exclude from Net Worth</strong>. Some types ask for more, such as a credit card&#x27;s statement dates or a loan&#x27;s terms</li>
+</ul>
+</li>
+<li>Click <strong>Create Account</strong></li>
+</ol>
+<figure><img src="/docs/images/getting-started-new-account.png" alt="The New Account form" width="880" height="782" loading="lazy" decoding="async" class="shot-dark"/><img src="/docs/images/getting-started-new-account.light.png" alt="The New Account form" width="880" height="782" loading="lazy" decoding="async" class="shot-light"/><figcaption>The New Account form</figcaption></figure>
+<p>An <strong>Investment</strong> account is created as a linked pair by default: a cash account for money moving in and out, and a brokerage account for the securities (see <a href="/docs/investments">Investments</a>).</p>
+<p>If you already have your history in another program or in your bank&#x27;s downloads, you can create accounts as part of an import instead -- see <a href="/docs/importing-transactions">Importing Transactions</a>.</p>
+<h2 id="navigating-the-application">Navigating the Application<a class="hlink" href="#navigating-the-application" aria-label="Link to this section">#</a></h2>
+<p>The bar at the top of every page gives access to all major features. Click the Monize logo to return to the dashboard.</p>
+<figure><img src="/docs/images/navigation-bar.png" alt="The navigation bar" width="1600" height="65" loading="lazy" decoding="async" class="shot-dark"/><img src="/docs/images/navigation-bar.light.png" alt="The navigation bar" width="1600" height="65" loading="lazy" decoding="async" class="shot-light"/><figcaption>The navigation bar</figcaption></figure>
+<h3 id="primary-navigation">Primary Navigation<a class="hlink" href="#primary-navigation" aria-label="Link to this section">#</a></h3>
+<div class="table-wrap"><table><thead><tr><th>Menu Item</th><th>Description</th></tr></thead><tbody><tr><td><strong>Transactions</strong></td><td>View, search, and manage all transactions</td></tr><tr><td><strong>Bills &amp; Deposits</strong></td><td>Manage scheduled and recurring transactions</td></tr><tr><td><strong>Investments</strong></td><td>Track your investment portfolio</td></tr><tr><td><strong>Accounts</strong></td><td>Manage your accounts and view balances</td></tr><tr><td><strong>Budgets</strong></td><td>Plan and track spending against budgets</td></tr><tr><td><strong>Reports</strong></td><td>Access built-in and custom reports</td></tr><tr><td><strong>AI</strong></td><td>A menu with <strong>Insights</strong>, the <strong>AI Assistant</strong> and the <strong>AI Review Inbox</strong> (see <a href="/docs/ai">AI</a>)</td></tr></tbody></table></div>
+<h3 id="tools-menu">Tools Menu<a class="hlink" href="#tools-menu" aria-label="Link to this section">#</a></h3>
+<p>Click the <strong>Tools</strong> dropdown to access additional features:</p>
+<div class="table-wrap"><table><thead><tr><th>Tool</th><th>Description</th></tr></thead><tbody><tr><td><strong>Payees</strong></td><td>Manage payee records, aliases and default categories</td></tr><tr><td><strong>Categories</strong></td><td>Manage income and expense categories</td></tr><tr><td><strong>Securities</strong></td><td>Manage investment securities</td></tr><tr><td><strong>Currencies</strong></td><td>View and manage currencies and exchange rates</td></tr><tr><td><strong>Institutions</strong></td><td>The banks and brokerages your accounts belong to</td></tr><tr><td><strong>Tags</strong></td><td>Manage transaction tags for flexible labelling</td></tr><tr><td><strong>Warranties</strong></td><td>Track warranties, their receipts and their claims (see <a href="/docs/warranties">Warranties</a>)</td></tr><tr><td><strong>Taxes</strong></td><td>Payroll deduction rules with yearly maximums. See <a href="/docs/taxes">Taxes</a></td></tr><tr><td><strong>Rules</strong></td><td>Fill in categories, payees and tags automatically when a transaction is created or imported. See <a href="/docs/rules">Rules</a></td></tr><tr><td><strong>Email Receipts</strong></td><td>Turn order confirmations from a mailbox into itemized transactions (see <a href="/docs/email-receipts">Email Receipts</a>)</td></tr><tr><td><strong>Import Transactions</strong></td><td>Import CSV, OFX/QFX and QIF files, or a whole Microsoft Money file</td></tr></tbody></table></div>
+<figure><img src="/docs/images/tools-dropdown.png" alt="The Tools menu" width="192" height="462" loading="lazy" decoding="async" class="shot-dark"/><img src="/docs/images/tools-dropdown.light.png" alt="The Tools menu" width="192" height="462" loading="lazy" decoding="async" class="shot-light"/><figcaption>The Tools menu</figcaption></figure>
+<h3 id="admin-menu">Admin Menu<a class="hlink" href="#admin-menu" aria-label="Link to this section">#</a></h3>
+<p>The instance administrator also sees an <strong>Admin</strong> menu with <strong>User Management</strong>, <strong>Notification Settings</strong> and <strong>Backups</strong> (see <a href="/docs/settings-and-security">Settings and Security</a>).</p>
+<h3 id="header-buttons">Header Buttons<a class="hlink" href="#header-buttons" aria-label="Link to this section">#</a></h3>
+<p>The right-hand side of the bar holds:</p>
+<ul>
+<li><strong>Search</strong> -- Search your transactions from anywhere</li>
+<li><strong>Action History</strong> -- Your recent changes, with <strong>Undo</strong> and <strong>Redo</strong></li>
+<li><strong>Notifications</strong> -- The bell, with a count of unread notifications</li>
+<li><strong>Help</strong> -- The <strong>?</strong> icon: help for the page you&#x27;re on, search the guide, keyboard shortcuts, take the tour, What&#x27;s new, and links to report an issue or start a discussion on GitHub</li>
+<li><strong>Settings</strong> -- The gear icon with your first name: preferences, security, two-factor authentication, trusted devices, sharing, backups and more</li>
+<li><strong>Logout</strong> -- Sign out of the application</li>
+</ul>
+<p>On a phone or tablet, a bar at the bottom of the screen replaces the menus. It holds up to three tabs of your choice (Home, Transactions and Accounts unless you change them in <a href="/docs/settings-and-security#preferences">Preferences</a>), a <strong>+</strong> button, and <strong>More</strong>, which opens a drawer with everything else, including Help, Settings and Logout. The <strong>+</strong> button does the page&#x27;s own main action: on Accounts it opens a new account, on Payees a new payee, on Bills &amp; Deposits a new scheduled transaction, and so on for Categories, Tags, Budgets, Investments, Securities, Currencies, Institutions, Reports, Rules, Warranties, Payroll Deductions and Shared Expenses (a new group, or a new person on the People tab). Everywhere else it opens a new transaction. As you scroll, the page title moves into the header at the top.</p>
+<h3 id="getting-help-in-the-app">Getting Help in the App<a class="hlink" href="#getting-help-in-the-app" aria-label="Link to this section">#</a></h3>
+<p>Most pages carry a <strong>?</strong> icon beside their title. Click it and the matching part of this guide opens in a <strong>help panel</strong> at the right edge of the window, with the page you were on still beside it. On a phone the panel is a sheet that slides up from the bottom.</p>
+<p>The panel&#x27;s header has these controls:</p>
+<div class="table-wrap"><table><thead><tr><th>Control</th><th>What it does</th></tr></thead><tbody><tr><td><strong>Back</strong> and <strong>Forward</strong></td><td>Step through the guide pages you have opened in the panel, like a browser</td></tr><tr><td><strong>Open on monize.net</strong></td><td>Opens the same page and section on the website, in a new tab</td></tr><tr><td><strong>Pin</strong></td><td>Keeps the panel open while you move to other pages of Monize, so you can follow a guide while you work. An unpinned panel closes when you go to another page</td></tr><tr><td><strong>Search</strong></td><td>Opens the search dialog described below</td></tr><tr><td><strong>Expand</strong></td><td>Fills the window for easier reading; the same button shrinks it back</td></tr><tr><td><strong>Close</strong></td><td>Closes the panel. <strong>Esc</strong> does the same, or shrinks an expanded panel first</td></tr></tbody></table></div>
+<p>Under the header, <strong>On this page</strong> lists the sections of the guide page you are reading, and links to other pages in the guide open inside the panel. The panel shares its edge of the window with the AI assistant, so opening one closes the other. On a desktop, drag the panel&#x27;s left edge to make it wider or narrower (or focus the edge and use the <strong>Left</strong> and <strong>Right</strong> arrow keys, <strong>Home</strong> and <strong>End</strong>); Monize remembers the width in this browser. The footer names the version of the guide bundled with this instance, and points you to monize.net for the latest.</p>
+<p>A page with a matching guided tour shows <strong>Show me</strong> under the panel&#x27;s header, which closes the panel and starts it; a tour that walks through a page ends with <strong>Read the full guide</strong>, opening that page here.</p>
+<h3 id="the-header-help-menu">The Header Help Menu<a class="hlink" href="#the-header-help-menu" aria-label="Link to this section">#</a></h3>
+<p>Click the <strong>?</strong> icon in the header to open the Help menu:</p>
+<ul>
+<li><strong>Help for this page</strong> -- the same page the <strong>?</strong> beside the title opens, when the page has one</li>
+<li><strong>Search help</strong> -- opens the search dialog described below</li>
+<li><strong>Keyboard shortcuts</strong> -- a quick reference for search, undo/redo and closing a dialog or panel</li>
+<li><strong>Take the tour</strong> -- starts the guided tour for the page you&#x27;re on, or the introduction tour on a page with none</li>
+<li><strong>What&#x27;s new</strong> -- the release notes for this version</li>
+<li><strong>Report an issue</strong> and <strong>Discussions</strong> -- the GitHub links also on <strong>Settings &gt; Help &amp; Support</strong></li>
+</ul>
+<p>On a phone, these same entries are in the navigation drawer instead of the header.</p>
+<h3 id="searching-the-guide">Searching the Guide<a class="hlink" href="#searching-the-guide" aria-label="Link to this section">#</a></h3>
+<p>Press <strong>Ctrl+K</strong> (<strong>Cmd+K</strong> on a Mac) anywhere to open the command palette: one search box over your accounts, payees, categories, bills, securities, reports, settings, transactions and this guide. Use the <strong>Up</strong> and <strong>Down</strong> arrow keys to move through the results, <strong>Enter</strong> to open one, and <strong>Tab</strong> to jump to the actions, such as starting a new transaction for the payee you searched for (<strong>Ctrl+Enter</strong>, or <strong>Cmd+Enter</strong> on a Mac). <strong>Esc</strong> closes it.</p>
+<figure><img src="/docs/images/command-palette.png" alt="The command palette showing payees, bills and transactions for a search" width="672" height="803" loading="lazy" decoding="async" class="shot-dark"/><img src="/docs/images/command-palette.light.png" alt="The command palette showing payees, bills and transactions for a search" width="672" height="803" loading="lazy" decoding="async" class="shot-light"/><figcaption>The command palette showing payees, bills and transactions for a search</figcaption></figure>
+<p>Type a bare <strong>?</strong> anywhere you are not already typing into a field to search only the guide, without leaving the screen you are on. Sections from the page you are viewing are ranked first, so the ? shortcut on, say, the Budgets page lists Budgets sections before anything else; type to search everywhere else too. Use the <strong>Up</strong> and <strong>Down</strong> arrow keys to move through the results and <strong>Enter</strong> to open one in the help panel, or <strong>Esc</strong> to close the search without opening anything. The same dialog opens from the help panel&#x27;s own <strong>Search</strong> button.</p>
+<p>A few things to know:</p>
+<ul>
+<li><strong>The guide comes with your Monize.</strong> The panel shows the guide for the version you are running, screenshots included, so it works without an internet connection. Each screenshot matches the light or dark theme Monize is in, and switches when you change the theme. Under each one, <strong>View screenshot on monize.net</strong> opens the same picture on this website.</li>
+<li><strong>Ctrl-click, Cmd-click or middle-click the ? icon</strong> to open the page on monize.net in a new tab instead of in the panel. If the guide cannot be loaded, the icon does that for a plain click too.</li>
+<li><strong>The guide is in English</strong>, whatever language Monize is set to. In another language the panel says so at the top; the buttons and labels around it are translated.</li>
+<li><strong>Settings &gt; Help &amp; Support</strong> has a <strong>Documentation</strong> entry that opens the panel at the start of the guide.</li>
+</ul>
+<h2 id="installing-as-a-progressive-web-app">Installing as a Progressive Web App<a class="hlink" href="#installing-as-a-progressive-web-app" aria-label="Link to this section">#</a></h2>
+<p>Monize is a <strong>Progressive Web App (PWA)</strong>, which means it can be installed directly from your browser and launched like a native application -- no app store required.</p>
+<h3 id="what-you-get">What You Get<a class="hlink" href="#what-you-get" aria-label="Link to this section">#</a></h3>
+<ul>
+<li><strong>Standalone window</strong> -- Monize opens in its own window without browser tabs, address bar, or other browser chrome, giving it a native app feel</li>
+<li><strong>Home screen / app launcher icon</strong> -- Launch Monize with a single tap or click, just like any other installed app</li>
+<li><strong>Faster startup</strong> -- Static assets (JavaScript, stylesheets, fonts, images) are cached locally by the service worker, so the app shell loads quickly on subsequent visits</li>
+<li><strong>Works on any modern device</strong> -- Desktop (Windows, macOS, Linux) and mobile (Android, iOS / iPadOS)</li>
+</ul>
+<blockquote>
+<p><strong>Note:</strong> The PWA caches the app itself, but your financial data still requires a network connection to your Monize server. The PWA does not provide fully offline access to transactions, accounts, or reports.</p>
+</blockquote>
+<h3 id="before-you-install">Before You Install<a class="hlink" href="#before-you-install" aria-label="Link to this section">#</a></h3>
+<aside class="callout callout-note">
+<p class="callout-title">Note</p>
+<p><strong>Monize for Windows:</strong> the app already has its own window. To install Monize as a browser app on the same PC, choose <strong>Open in browser</strong> in the tray menu and install it from there; <code>http://127.0.0.1</code> counts as local, so the browser offers it. Phones and other devices cannot reach the Windows app.</p>
+</aside>
+<ul>
+<li>Monize must be accessed over <strong>HTTPS</strong> (or over <code>http://localhost</code> for local development). Browsers will not offer installation on plain HTTP URLs.</li>
+<li>Use a modern browser that supports PWAs (Chrome, Edge, Safari, Firefox, Brave, Opera, or Samsung Internet).</li>
+</ul>
+<h3 id="installing-on-desktop-chrome-edge-brave">Installing on Desktop (Chrome, Edge, Brave)<a class="hlink" href="#installing-on-desktop-chrome-edge-brave" aria-label="Link to this section">#</a></h3>
+<ol>
+<li>Open Monize in your browser and sign in</li>
+<li>Look for the <strong>install icon</strong> in the address bar (a small monitor or computer icon, often on the right-hand side)</li>
+<li>Click the icon, then click <strong>Install</strong></li>
+<li>Monize will open in its own window and an icon will be added to your applications list, Start menu, or Dock</li>
+</ol>
+<p>Alternatively, open the browser menu (three dots) and choose <strong>Install Monize...</strong> or <strong>Apps &gt; Install this site as an app</strong>.</p>
+<h3 id="installing-on-android-chrome-edge-samsung-internet">Installing on Android (Chrome, Edge, Samsung Internet)<a class="hlink" href="#installing-on-android-chrome-edge-samsung-internet" aria-label="Link to this section">#</a></h3>
+<ol>
+<li>Open Monize in your mobile browser and sign in</li>
+<li>Tap the <strong>menu button</strong> (three dots in the top-right corner)</li>
+<li>Tap <strong>Install app</strong> or <strong>Add to Home screen</strong></li>
+<li>Confirm by tapping <strong>Install</strong></li>
+<li>The Monize icon will appear on your home screen and app drawer</li>
+</ol>
+<h3 id="installing-on-iphone-or-ipad-safari">Installing on iPhone or iPad (Safari)<a class="hlink" href="#installing-on-iphone-or-ipad-safari" aria-label="Link to this section">#</a></h3>
+<p>Safari does not show an automatic install prompt, so you need to add Monize from the Share menu:</p>
+<ol>
+<li>Open Monize in <strong>Safari</strong> (other iOS browsers do not support PWA installation)</li>
+<li>Tap the <strong>Share</strong> button (the square with an upward arrow) at the bottom of the screen</li>
+<li>Scroll down and tap <strong>Add to Home Screen</strong></li>
+<li>Edit the name if desired, then tap <strong>Add</strong></li>
+<li>The Monize icon will appear on your home screen</li>
+</ol>
+<h3 id="installing-on-firefox-for-android">Installing on Firefox for Android<a class="hlink" href="#installing-on-firefox-for-android" aria-label="Link to this section">#</a></h3>
+<ol>
+<li>Open Monize in Firefox and sign in</li>
+<li>Tap the <strong>menu button</strong> (three dots)</li>
+<li>Tap <strong>Install</strong> or <strong>Add to Home screen</strong></li>
+<li>Confirm the installation</li>
+</ol>
+<h3 id="sharing-files-into-monize">Sharing Files into Monize<a class="hlink" href="#sharing-files-into-monize" aria-label="Link to this section">#</a></h3>
+<p>Once installed, Monize appears in the operating system&#x27;s share sheet on Android and in desktop Chromium browsers (Safari on iPhone and iPad does not support this). Share a receipt or a bank download to Monize and a <strong>Shared with Monize</strong> screen lists every file it received, with the reason beside any it cannot use, and offers what to do with them:</p>
+<ul>
+<li><strong>Attach to a new transaction</strong> -- for images and PDFs</li>
+<li><strong>Import as a statement</strong> -- for CSV, OFX, QFX and QIF files; this opens the import wizard with the files already loaded (see <a href="/docs/importing-transactions#sharing-files-from-another-app">Importing Transactions</a>)</li>
+<li><strong>Send to AI Assistant</strong> -- when an AI provider is set up</li>
+<li><strong>Discard</strong></li>
+</ul>
+<p>Nothing is saved until you choose. Shared files wait on the device for an hour, and Monize must have been opened on the device at least once before the share sheet can hand it files.</p>
+<h3 id="uninstalling">Uninstalling<a class="hlink" href="#uninstalling" aria-label="Link to this section">#</a></h3>
+<p>To remove the installed PWA:</p>
+<ul>
+<li><strong>Desktop</strong> -- Open the installed Monize window, click the three-dot menu inside it, and choose <strong>Uninstall Monize...</strong>. On Windows and macOS you can also uninstall from the operating system&#x27;s usual apps list.</li>
+<li><strong>Android</strong> -- Long-press the Monize icon and tap <strong>Uninstall</strong> (or drag it to the uninstall zone)</li>
+<li><strong>iOS / iPadOS</strong> -- Long-press the Monize icon on the home screen and tap <strong>Remove App &gt; Delete App</strong></li>
+</ul>
+<h3 id="troubleshooting">Troubleshooting<a class="hlink" href="#troubleshooting" aria-label="Link to this section">#</a></h3>
+<ul>
+<li><strong>I don&#x27;t see an install option.</strong> Confirm you are accessing Monize over HTTPS, that you are using a supported browser, and that the site is fully loaded. Some browsers require a short interaction with the page before offering installation.</li>
+<li><strong>The app shows stale content after an update.</strong> Close and reopen the installed window to let the service worker pick up the new version. On desktop you can also right-click the app icon and reload.</li>
+<li><strong>I want to reinstall after uninstalling.</strong> Clear the site&#x27;s cache and service worker data in your browser, then revisit Monize to see the install prompt again.</li>
+</ul>
+<h2 id="next-steps">Next Steps<a class="hlink" href="#next-steps" aria-label="Link to this section">#</a></h2>
+<p>Once you have Monize installed and your first account created, here are recommended next steps:</p>
+<ol>
+<li><strong>Migrating from Microsoft Money?</strong> Follow the detailed <a href="/docs/importing-from-microsoft-money">Importing from Microsoft Money</a> guide -- Monize reads your <code>.mny</code> file directly</li>
+<li><strong>Migrating from Quicken?</strong> Follow the detailed <a href="/docs/importing-from-quicken">Importing from Quicken</a> guide</li>
+<li><strong>Set up your categories</strong> -- Customize the default categories in <a href="/docs/categories-and-payees">Categories and Payees</a></li>
+<li><strong>Add your accounts</strong> -- Create all your financial accounts in <a href="/docs/accounts">Accounts</a></li>
+<li><strong>Schedule recurring transactions</strong> -- Set up your bills and regular deposits in <a href="/docs/bills-and-deposits">Bills and Deposits</a></li>
+<li><strong>Explore reports</strong> -- Check out the <a href="/docs/reports">Reports</a> section to see what insights are available</li>
+<li><strong>Import from your bank</strong> -- Bring in CSV, OFX/QFX or QIF downloads with <a href="/docs/importing-transactions">Importing Transactions</a></li>
+<li><strong>Secure your account</strong> -- Set up two-factor authentication and review the other options in <a href="/docs/settings-and-security">Settings and Security</a></li>
+</ol></article><nav class="pager" aria-label="Previous and next page"><a class="pg pg-prev" href="/docs/"><span>Previous</span><b>Monize Documentation</b></a><a class="pg pg-next" href="/docs/windows"><span>Next</span><b>Monize for Windows</b></a></nav><p class="dedit"><a href="https://github.com/kenlasko/monize/edit/main/website/docs/getting-started.md" rel="noopener">Edit this page on GitHub</a><a href="https://github.com/kenlasko/monize/issues/new" rel="noopener">Report a problem with the docs</a></p></main><aside class="dtoc" aria-label="On this page"><p>On this page</p><ul><li class="d2"><a href="#prerequisites">Prerequisites</a></li><li class="d2"><a href="#installation">Installation</a></li><li class="d3"><a href="#using-docker-compose-recommended">Using Docker Compose (Recommended)</a></li><li class="d3"><a href="#using-kubernetes-helm">Using Kubernetes (Helm)</a></li><li class="d3"><a href="#on-windows-installer">On Windows (Installer)</a></li><li class="d2"><a href="#updating-docker-images">Updating Docker Images</a></li><li class="d2"><a href="#first-time-setup">First-Time Setup</a></li><li class="d3"><a href="#registration">Registration</a></li><li class="d3"><a href="#setting-your-home-currency">Setting Your Home Currency</a></li><li class="d3"><a href="#setting-up-categories">Setting Up Categories</a></li><li class="d2"><a href="#creating-your-first-account">Creating Your First Account</a></li><li class="d2"><a href="#navigating-the-application">Navigating the Application</a></li><li class="d3"><a href="#primary-navigation">Primary Navigation</a></li><li class="d3"><a href="#tools-menu">Tools Menu</a></li><li class="d3"><a href="#admin-menu">Admin Menu</a></li><li class="d3"><a href="#header-buttons">Header Buttons</a></li><li class="d3"><a href="#getting-help-in-the-app">Getting Help in the App</a></li><li class="d3"><a href="#the-header-help-menu">The Header Help Menu</a></li><li class="d3"><a href="#searching-the-guide">Searching the Guide</a></li><li class="d2"><a href="#installing-as-a-progressive-web-app">Installing as a Progressive Web App</a></li><li class="d3"><a href="#what-you-get">What You Get</a></li><li class="d3"><a href="#before-you-install">Before You Install</a></li><li class="d3"><a href="#installing-on-desktop-chrome-edge-brave">Installing on Desktop (Chrome, Edge, Brave)</a></li><li class="d3"><a href="#installing-on-android-chrome-edge-samsung-internet">Installing on Android (Chrome, Edge, Samsung Internet)</a></li><li class="d3"><a href="#installing-on-iphone-or-ipad-safari">Installing on iPhone or iPad (Safari)</a></li><li class="d3"><a href="#installing-on-firefox-for-android">Installing on Firefox for Android</a></li><li class="d3"><a href="#sharing-files-into-monize">Sharing Files into Monize</a></li><li class="d3"><a href="#uninstalling">Uninstalling</a></li><li class="d3"><a href="#troubleshooting">Troubleshooting</a></li><li class="d2"><a href="#next-steps">Next Steps</a></li></ul></aside></div><footer class="dfoot"><div class="wrap"><span>Monize is released under the AGPL-3.0 licence.</span><span><a href="/">monize.net</a> · <a href="https://demo.monize.net" rel="noopener">Live demo</a> · <a href="https://github.com/kenlasko/monize" rel="noopener">GitHub</a></span></div></footer><div class="sdlg" id="search" role="dialog" aria-modal="true" aria-label="Search the documentation" hidden=""><div class="sbox"><label class="sfield"><span class="sr">Search the documentation</span><input id="q" type="search" placeholder="Search the docs, e.g. &quot;split transaction&quot;" autoComplete="off" spellCheck="false" aria-controls="sres"/></label><ul id="sres" class="sres" role="listbox" aria-label="Results"></ul><p class="shint" id="shint"><kbd>↑</kbd><kbd>↓</kbd> to move, <kbd>Enter</kbd> to open, <kbd>Esc</kbd> to close</p></div></div><script src="/assets/js/docs.js" defer=""></script></body></html>

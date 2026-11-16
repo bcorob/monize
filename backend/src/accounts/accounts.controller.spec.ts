@@ -1,14 +1,29 @@
+import "reflect-metadata";
 import { Test, TestingModule } from "@nestjs/testing";
-import { BadRequestException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ParseUUIDPipe,
+  ValidationPipe,
+} from "@nestjs/common";
+import { GUARDS_METADATA, ROUTE_ARGS_METADATA } from "@nestjs/common/constants";
 import { AccountsController } from "./accounts.controller";
 import { AccountsService } from "./accounts.service";
 import { AccountExportService } from "./account-export.service";
 import { LoanPaymentDetectorService } from "./loan-payment-detector.service";
 import { LoanPaymentSetupService } from "./loan-payment-setup.service";
+import { LoanPaymentMatchingService } from "./loan-payment-matching.service";
 import { StatementCycleService } from "./statement-cycle.service";
 import { BalanceForecastService } from "./balance-forecast.service";
+import { DailyBalanceTotalsService } from "./daily-balance-totals.service";
+import { DailyBalanceTotalsQueryDto } from "./dto/daily-balance-totals-query.dto";
 import { AccountBalancesReportService } from "./account-balances-report.service";
 import { DelegationService } from "../delegation/delegation.service";
+import { PaymentMatchingDto } from "./dto/payment-matching.dto";
+import { CreateAccountDto } from "./dto/create-account.dto";
+import { UpdateAccountDto } from "./dto/update-account.dto";
+import { SetupLoanPaymentsDto } from "./dto/setup-loan-payments.dto";
+import { TransactionRuleResponseDto } from "../transaction-rules/dto/transaction-rule-response.dto";
+import { LoanSettlementResponseDto } from "./dto/payment-matching.dto";
 
 describe("AccountsController", () => {
   let controller: AccountsController;
@@ -16,9 +31,14 @@ describe("AccountsController", () => {
   let mockExportService: Partial<Record<keyof AccountExportService, jest.Mock>>;
   let mockStatementCycleService: Record<string, jest.Mock>;
   let mockBalanceForecastService: Record<string, jest.Mock>;
+  let mockDailyBalanceTotals: Record<string, jest.Mock>;
   let mockBalancesReport: Record<string, jest.Mock>;
   let mockDelegationService: Record<string, jest.Mock>;
   let mockCrossOwnerAccess: Record<string, jest.Mock>;
+  let mockLoanPaymentSetup: Record<string, jest.Mock>;
+  let mockPaymentMatching: jest.Mocked<
+    Pick<LoanPaymentMatchingService, "createMatchingRule" | "listSettlements">
+  >;
   let mockJointAccounts: Record<string, jest.Mock>;
   const mockReq = { user: { id: "user-1", realUserId: "user-1" } };
 
@@ -34,6 +54,8 @@ describe("AccountsController", () => {
       getInvestmentAccountPair: jest.fn(),
       update: jest.fn(),
       updateMortgageRate: jest.fn(),
+      detectMortgageTypeFromSamples: jest.fn(),
+      detectMortgageTypeFromHistory: jest.fn(),
       close: jest.fn(),
       reopen: jest.fn(),
       getTransactionCount: jest.fn(),
@@ -56,6 +78,14 @@ describe("AccountsController", () => {
       getBalanceForecast: jest.fn(),
     };
 
+    mockDailyBalanceTotals = {
+      getDailyBalanceTotals: jest.fn(),
+      // The rows as the service converted them; here, the rows themselves.
+      withReportingCurrency: jest.fn(
+        async (_userId: string, rows: unknown) => rows,
+      ),
+    };
+
     mockBalancesReport = {
       getBalancesAsOf: jest.fn(),
     };
@@ -70,6 +100,16 @@ describe("AccountsController", () => {
 
     mockCrossOwnerAccess = {
       transferCandidatesFor: jest.fn().mockResolvedValue([]),
+    };
+
+    mockLoanPaymentSetup = {
+      setupLoanPayments: jest.fn(),
+      previewFirstInstallment: jest.fn(),
+    };
+
+    mockPaymentMatching = {
+      createMatchingRule: jest.fn(),
+      listSettlements: jest.fn(),
     };
 
     mockJointAccounts = {
@@ -97,7 +137,11 @@ describe("AccountsController", () => {
         },
         {
           provide: LoanPaymentSetupService,
-          useValue: { setupLoanPayments: jest.fn() },
+          useValue: mockLoanPaymentSetup,
+        },
+        {
+          provide: LoanPaymentMatchingService,
+          useValue: mockPaymentMatching,
         },
         {
           provide: StatementCycleService,
@@ -106,6 +150,10 @@ describe("AccountsController", () => {
         {
           provide: BalanceForecastService,
           useValue: mockBalanceForecastService,
+        },
+        {
+          provide: DailyBalanceTotalsService,
+          useValue: mockDailyBalanceTotals,
         },
         {
           provide: AccountBalancesReportService,
@@ -131,6 +179,32 @@ describe("AccountsController", () => {
     }).compile();
 
     controller = module.get<AccountsController>(AccountsController);
+  });
+
+  describe("previewLoanPaymentSetup()", () => {
+    it("prices the setup for the JWT's user, never one from the request", async () => {
+      const preview = {
+        derivesInstallment: true,
+        principalPayment: 833.3333,
+        interestPayment: 500,
+        paymentAmount: 1333.3333,
+      };
+      mockLoanPaymentSetup.previewFirstInstallment.mockResolvedValue(preview);
+      const dto = { paymentFrequency: "MONTHLY", nextDueDate: "2024-01-01" };
+
+      await expect(
+        controller.previewLoanPaymentSetup(
+          { user: { id: "user-1" } },
+          "mortgage-1",
+          dto,
+        ),
+      ).resolves.toBe(preview);
+      expect(mockLoanPaymentSetup.previewFirstInstallment).toHaveBeenCalledWith(
+        "user-1",
+        "mortgage-1",
+        dto,
+      );
+    });
   });
 
   describe("getTransferCandidates()", () => {
@@ -293,8 +367,7 @@ describe("AccountsController", () => {
         amortizationMonths: 300,
         paymentFrequency: "monthly",
         paymentStartDate: "2024-01-01",
-        isCanadian: true,
-        isVariableRate: false,
+        mortgageType: "CANADIAN_FIXED",
       };
       mockAccountsService.previewMortgageAmortization!.mockReturnValue({
         paymentAmount: 1500,
@@ -313,9 +386,43 @@ describe("AccountsController", () => {
         300,
         "monthly",
         new Date("2024-01-01"),
-        true,
-        false,
+        "CANADIAN_FIXED",
       );
+    });
+
+    it("passes the requested type, else the default type", () => {
+      mockAccountsService.previewMortgageAmortization!.mockReturnValue({
+        paymentAmount: 1500,
+        endDate: new Date("2049-01-01"),
+      });
+      const base = {
+        mortgageAmount: 300000,
+        interestRate: 4.5,
+        amortizationMonths: 300,
+        paymentFrequency: "MONTHLY",
+        paymentStartDate: "2024-01-01",
+      };
+      const typeArg = () => {
+        const calls =
+          mockAccountsService.previewMortgageAmortization!.mock.calls;
+        return calls[calls.length - 1][5];
+      };
+
+      controller.previewMortgageAmortization({
+        ...base,
+        mortgageType: "ANNUITY",
+      } as any);
+      expect(typeArg()).toBe("ANNUITY");
+
+      controller.previewMortgageAmortization({
+        ...base,
+        mortgageType: "CANADIAN_FIXED",
+      } as any);
+      expect(typeArg()).toBe("CANADIAN_FIXED");
+
+      // No type: the default type.
+      controller.previewMortgageAmortization(base as any);
+      expect(typeArg()).toBe("ANNUITY");
     });
   });
 
@@ -566,6 +673,47 @@ describe("AccountsController", () => {
     });
   });
 
+  describe("detectMortgageType()", () => {
+    it("delegates the request's samples to accountsService", () => {
+      const dto = {
+        samples: [
+          { principal: 432.9, interest: 1500, balanceBefore: 300000 },
+          { principal: 435.06, interest: 1497.84, balanceBefore: 299567.1 },
+        ],
+        interestRate: 6,
+        paymentFrequency: "MONTHLY" as const,
+      };
+      const suggestion = {
+        type: "ANNUITY",
+        confidence: "high",
+        reason: "CONSTANT_INSTALLMENT_NOMINAL",
+      };
+      mockAccountsService.detectMortgageTypeFromSamples!.mockReturnValue(
+        suggestion,
+      );
+
+      expect(controller.detectMortgageType(dto)).toBe(suggestion);
+      expect(
+        mockAccountsService.detectMortgageTypeFromSamples,
+      ).toHaveBeenCalledWith(dto);
+    });
+  });
+
+  describe("detectMortgageTypeFromHistory()", () => {
+    it("delegates with the userId from the JWT and the account id", async () => {
+      mockAccountsService.detectMortgageTypeFromHistory!.mockResolvedValue(
+        "suggestion",
+      );
+
+      await expect(
+        controller.detectMortgageTypeFromHistory(mockReq, "account-1"),
+      ).resolves.toBe("suggestion");
+      expect(
+        mockAccountsService.detectMortgageTypeFromHistory,
+      ).toHaveBeenCalledWith("user-1", "account-1");
+    });
+  });
+
   describe("updateMortgageRate()", () => {
     it("delegates to accountsService.updateMortgageRate with userId, id, and dto fields", () => {
       const dto = {
@@ -735,6 +883,89 @@ describe("AccountsController", () => {
     });
   });
 
+  describe("getDailyBalanceTotals()", () => {
+    const query = {
+      startDate: "2026-06-01",
+      endDate: "2026-06-30",
+    } as DailyBalanceTotalsQueryDto;
+
+    it("passes the requested scope through for an owner", async () => {
+      mockDailyBalanceTotals.getDailyBalanceTotals.mockResolvedValue("totals");
+
+      const result = await controller.getDailyBalanceTotals(mockReq, {
+        ...query,
+        accountIds: ["acc-1"],
+        displayCurrency: "CAD",
+      } as DailyBalanceTotalsQueryDto);
+
+      expect(result).toBe("totals");
+      expect(mockDailyBalanceTotals.getDailyBalanceTotals).toHaveBeenCalledWith(
+        "user-1",
+        "2026-06-01",
+        "2026-06-30",
+        ["acc-1"],
+        "CAD",
+        [],
+      );
+    });
+
+    it("widens an owner's scope with the joint accounts they were granted", async () => {
+      mockJointAccounts.jointAccountIdSetFor.mockResolvedValue(
+        new Set(["joint-1"]),
+      );
+      mockDailyBalanceTotals.getDailyBalanceTotals.mockResolvedValue("totals");
+
+      await controller.getDailyBalanceTotals(mockReq, query);
+
+      expect(mockDailyBalanceTotals.getDailyBalanceTotals).toHaveBeenCalledWith(
+        "user-1",
+        "2026-06-01",
+        "2026-06-30",
+        undefined,
+        undefined,
+        ["joint-1"],
+      );
+    });
+
+    it("narrows an acting delegate to their readable accounts", async () => {
+      mockDelegationService.readableAccountIds.mockResolvedValue([
+        "acc-1",
+        "acc-2",
+      ]);
+      mockDailyBalanceTotals.getDailyBalanceTotals.mockResolvedValue("totals");
+
+      await controller.getDailyBalanceTotals(
+        { user: { id: "owner-1", isActing: true, delegationId: "d-1" } },
+        {
+          ...query,
+          accountIds: ["acc-2", "acc-9"],
+        } as DailyBalanceTotalsQueryDto,
+      );
+
+      expect(mockDailyBalanceTotals.getDailyBalanceTotals).toHaveBeenCalledWith(
+        "owner-1",
+        "2026-06-01",
+        "2026-06-30",
+        ["acc-2"],
+        undefined,
+        [],
+      );
+    });
+
+    it("gives a delegate with no readable accounts an empty scope, never every account", async () => {
+      mockDelegationService.readableAccountIds.mockResolvedValue([]);
+      mockDailyBalanceTotals.getDailyBalanceTotals.mockResolvedValue("totals");
+
+      await controller.getDailyBalanceTotals(
+        { user: { id: "owner-1", isActing: true, delegationId: "d-1" } },
+        query,
+      );
+
+      const ids = mockDailyBalanceTotals.getDailyBalanceTotals.mock.calls[0][3];
+      expect(ids).toEqual(["00000000-0000-0000-0000-000000000000"]);
+    });
+  });
+
   describe("getDailyBalances()", () => {
     it("delegates to accountsService.getDailyBalances with parsed accountIds", async () => {
       mockAccountsService.getDailyBalances!.mockReturnValue("balances");
@@ -754,6 +985,17 @@ describe("AccountsController", () => {
         ["acc-1", "acc-2"],
         false,
         [],
+      );
+    });
+
+    it("converts each row into the reporting currency at its own date (issue #2106)", async () => {
+      mockAccountsService.getDailyBalances!.mockResolvedValue("balances");
+
+      await controller.getDailyBalances(mockReq, "2025-01-01", "2025-12-31");
+
+      expect(mockDailyBalanceTotals.withReportingCurrency).toHaveBeenCalledWith(
+        "user-1",
+        "balances",
       );
     });
 
@@ -1257,6 +1499,211 @@ describe("AccountsController", () => {
 
       expect(mockJointAccounts.jointAccountsFor).not.toHaveBeenCalled();
       expect(mockJointAccounts.jointShareCountsForOwner).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("payment matching routes", () => {
+    const loanId = "7b0d6f3e-2a4c-4c1e-9d55-0f4a3e9b8c21";
+    const matching: PaymentMatchingDto = { payeePattern: "ING HYPOTHEKEN*" };
+
+    const paramPipes = (method: string, name: string): unknown[] => {
+      const meta = Reflect.getMetadata(
+        ROUTE_ARGS_METADATA,
+        AccountsController,
+        method,
+      ) as Record<string, { data?: string; pipes: unknown[] }>;
+      return Object.values(meta).find((m) => m.data === name)?.pipes ?? [];
+    };
+
+    it("creates the rule for the JWT's user and the path's loan", async () => {
+      const rule = {
+        id: "rule-1",
+        name: "Mortgage payment - Hypotheek",
+      } as TransactionRuleResponseDto;
+      mockPaymentMatching.createMatchingRule.mockResolvedValue(rule);
+
+      await expect(
+        controller.createPaymentMatchingRule(mockReq, loanId, matching),
+      ).resolves.toBe(rule);
+      expect(mockPaymentMatching.createMatchingRule).toHaveBeenCalledWith(
+        "user-1",
+        loanId,
+        matching,
+      );
+    });
+
+    it("lists the settled installments for the JWT's user and the path's loan", async () => {
+      const settled: LoanSettlementResponseDto[] = [
+        {
+          claimId: "claim-1",
+          dueDate: "2024-01-01",
+          postedDate: "2024-01-03",
+          transactionId: "tx-1",
+          transactionStatus: "UNRECONCILED",
+          principal: 833.33,
+          interest: 500,
+          extraPrincipal: 0,
+          debtBefore: 300000,
+          installmentNumber: 1,
+          ruleId: "rule-1",
+        },
+      ];
+      mockPaymentMatching.listSettlements.mockResolvedValue(settled);
+
+      await expect(
+        controller.getLoanSettlements(mockReq, loanId),
+      ).resolves.toBe(settled);
+      expect(mockPaymentMatching.listSettlements).toHaveBeenCalledWith(
+        "user-1",
+        loanId,
+      );
+    });
+
+    it("parses :id as a UUID on both routes, under the JWT guard", () => {
+      expect(paramPipes("createPaymentMatchingRule", "id")).toContain(
+        ParseUUIDPipe,
+      );
+      expect(paramPipes("getLoanSettlements", "id")).toContain(ParseUUIDPipe);
+      expect(
+        Reflect.getMetadata(GUARDS_METADATA, AccountsController),
+      ).toHaveLength(1);
+    });
+
+    describe("request validation (whitelist + forbidNonWhitelisted)", () => {
+      const INTEREST_CATEGORY_ID = "a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d";
+      const pipe = new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      });
+      const body = (type: new () => object, value: unknown) =>
+        pipe.transform(value, { type: "body", metatype: type });
+
+      it("accepts a payee glob with the optional description glob and policies", async () => {
+        await expect(
+          body(PaymentMatchingDto, {
+            payeePattern: "ING*",
+            descriptionPattern: "*Hypotheek*",
+            excess: "refuse",
+            shortfall: "interest_first",
+          }),
+        ).resolves.toBeInstanceOf(PaymentMatchingDto);
+        await expect(
+          body(PaymentMatchingDto, {
+            payeePattern: "ING*",
+            descriptionPattern: "",
+          }),
+        ).resolves.toBeInstanceOf(PaymentMatchingDto);
+      });
+
+      it.each([
+        ["an unknown field", { payeePattern: "ING*", sourceAccountId: loanId }],
+        ["no payee pattern", {}],
+        ["an empty payee pattern", { payeePattern: "" }],
+        ["a payee pattern without a wildcard", { payeePattern: "ING" }],
+        [
+          "a payee pattern over 200 characters",
+          { payeePattern: `${"a".repeat(200)}*` },
+        ],
+        [
+          "a description pattern without a wildcard",
+          { payeePattern: "ING*", descriptionPattern: "rent" },
+        ],
+        [
+          "an unknown excess policy",
+          { payeePattern: "ING*", excess: "ignore" },
+        ],
+        [
+          "an unknown shortfall policy",
+          { payeePattern: "ING*", shortfall: "extra_principal" },
+        ],
+      ])("refuses %s", async (_label, value) => {
+        await expect(body(PaymentMatchingDto, value)).rejects.toBeInstanceOf(
+          BadRequestException,
+        );
+      });
+
+      it("validates paymentMatching nested on the create and the setup, unknown keys included", async () => {
+        const create = {
+          name: "Hypotheek",
+          accountType: "MORTGAGE",
+          currencyCode: "EUR",
+        };
+        await expect(
+          body(CreateAccountDto, { ...create, paymentMatching: matching }),
+        ).resolves.toMatchObject({ paymentMatching: matching });
+        await expect(
+          body(CreateAccountDto, {
+            ...create,
+            paymentMatching: { ...matching, ruleId: "x" },
+          }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        await expect(
+          body(CreateAccountDto, {
+            ...create,
+            paymentMatching: { payeePattern: "ING" },
+          }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        const setup = {
+          paymentAmount: 1333.33,
+          paymentFrequency: "MONTHLY",
+          sourceAccountId: loanId,
+          nextDueDate: "2024-01-01",
+          interestCategoryId: INTEREST_CATEGORY_ID,
+        };
+        await expect(
+          body(SetupLoanPaymentsDto, { ...setup, paymentMatching: matching }),
+        ).resolves.toMatchObject({ paymentMatching: matching });
+        await expect(
+          body(SetupLoanPaymentsDto, {
+            ...setup,
+            paymentMatching: { ...matching, extra: 1 },
+          }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+      });
+
+      it("refuses a payment setup without an interest category", async () => {
+        await expect(
+          body(SetupLoanPaymentsDto, {
+            paymentAmount: 1333.33,
+            paymentFrequency: "MONTHLY",
+            sourceAccountId: loanId,
+            nextDueDate: "2024-01-01",
+          }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+      });
+
+      it("takes originalPrincipal as a positive amount at 4dp on create, edit and setup", async () => {
+        const create = {
+          name: "Hypotheek",
+          accountType: "MORTGAGE",
+          currencyCode: "EUR",
+        };
+        await expect(
+          body(CreateAccountDto, { ...create, originalPrincipal: 300000.1234 }),
+        ).resolves.toMatchObject({ originalPrincipal: 300000.1234 });
+        await expect(
+          body(UpdateAccountDto, { originalPrincipal: 300000 }),
+        ).resolves.toMatchObject({ originalPrincipal: 300000 });
+        await expect(
+          body(UpdateAccountDto, { originalPrincipal: null }),
+        ).resolves.toMatchObject({ originalPrincipal: null });
+        await expect(
+          body(SetupLoanPaymentsDto, {
+            paymentAmount: 1333.33,
+            paymentFrequency: "MONTHLY",
+            sourceAccountId: loanId,
+            nextDueDate: "2024-01-01",
+            interestCategoryId: INTEREST_CATEGORY_ID,
+            originalPrincipal: 300000,
+          }),
+        ).resolves.toMatchObject({ originalPrincipal: 300000 });
+        for (const bad of [0, -1, 1.23456, "300000"]) {
+          await expect(
+            body(UpdateAccountDto, { originalPrincipal: bad }),
+          ).rejects.toBeInstanceOf(BadRequestException);
+        }
+      });
     });
   });
 });

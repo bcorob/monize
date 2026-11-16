@@ -94,6 +94,9 @@
     "largestValue": "{amount} pada {date}",
     "overpaymentFor": "Penerima Pembayaran Ekstra untuk",
     "website": "Situs web",
+    "address": "Alamat",
+    "phone": "Telepon",
+    "email": "Email",
     "notes": "Catatan"
   },
   "tabs": {
@@ -127,5 +130,23 @@
     "needsMoreHistory": "Diperlukan setidaknya {years} tahun riwayat untuk membedakan pola musiman dari kebetulan.",
     "empty": "Belum ada pengeluaran untuk dirinci per bulan",
     "monthTooltip": "{month}: rata-rata {amount} selama {years, plural, one {# tahun} other {# tahun}}"
+  },
+  "contactLookup": {
+    "button": "Cari detail kontak",
+    "inProgress": "Mencari...",
+    "nothingNew": "Tidak ditemukan detail kontak baru.",
+    "noProvider": "Siapkan sumber di pengaturan pencarian penerima untuk menemukan detail kontak.",
+    "failed": "Pencarian tidak dapat diselesaikan. Coba lagi nanti.",
+    "dialogTitle": "Konfirmasi detail kontak",
+    "dialogSubtitle": "Tidak ada yang disimpan untuk {name} sampai Anda mengonfirmasi.",
+    "pickMatch": "Nama itu cocok dengan {count, plural, other {# bisnis}}. Pilih yang Anda bayar:",
+    "unlabelledMatch": "Kecocokan tanpa nama",
+    "willAdd": "Tambahkan",
+    "willReplace": "Ganti",
+    "cancel": "Batal",
+    "confirm": "{count, plural, other {Simpan # perubahan}}",
+    "applied": "{count, plural, other {# detail kontak disimpan}}",
+    "applyFailed": "Tidak dapat menyimpan detail kontak",
+    "quotaExceeded": "Pencarian Google Places bulan ini sudah habis. Naikkan batasnya di pengaturan pencarian penerima, atau tunggu bulan depan."
   }
 }

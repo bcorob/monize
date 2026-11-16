@@ -34,6 +34,12 @@
     "dismiss": "Dismiss",
     "dismissAriaLabel": "Dismiss update notification"
   },
+  "jwtSecretBanner": {
+    "label": "JWT_SECRET is weak.",
+    "detail": "It is a published placeholder or too predictable, so session tokens can be forged. Generate a strong one with <code>openssl rand -base64 32</code>. Changing it stops authenticator codes from working and forgets trusted devices: users sign in with a backup code and set up 2FA again, and you reset 2FA in <users>User Management</users> for anyone without one. Read <code>docs/backend/modules-and-runtime.md</code> (Changing JWT_SECRET) first.",
+    "dismiss": "Dismiss",
+    "dismissAriaLabel": "Dismiss JWT_SECRET warning"
+  },
   "actionHistory": {
     "title": "Action History",
     "buttonAriaLabel": "Action History",
@@ -58,6 +64,7 @@
       "tag": "Tag",
       "account": "Account",
       "scheduled_transaction": "Scheduled",
+      "scheduled_posting": "Scheduled",
       "security": "Security",
       "budget": "Budget",
       "custom_report": "Report"
@@ -79,7 +86,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "Reinvest Long-Term Cap Gain",
       "CAPITAL_GAIN_SHORT": "Short-Term Capital Gain",
       "CAPITAL_GAIN_LONG": "Long-Term Capital Gain",
-      "REDEEM": "Redeem CD/Bond"
+      "REDEEM": "Redeem CD/Bond",
+      "RETURN_OF_CAPITAL": "Return of Capital"
     },
     "descriptions": {
       "createdAccount": "Created account \"{name}\"",
@@ -99,6 +107,7 @@
       "deletedInvestmentReport": "Deleted investment report \"{name}\"",
       "createdPayee": "Created payee \"{name}\"",
       "updatedPayee": "Updated payee \"{name}\"",
+      "lookedUpPayeeContact": "Looked up contact details for payee \"{name}\"",
       "deletedPayee": "Deleted payee \"{name}\"",
       "createdReport": "Created report \"{name}\"",
       "updatedReport": "Updated report \"{name}\"",
@@ -106,6 +115,7 @@
       "createdScheduledTransaction": "Created scheduled transaction \"{name}\"",
       "updatedScheduledTransaction": "Updated scheduled transaction \"{name}\"",
       "deletedScheduledTransaction": "Deleted scheduled transaction \"{name}\"",
+      "postedScheduledTransaction": "Posted scheduled transaction \"{name}\"",
       "createdSecurity": "Created security \"{symbol}\"",
       "updatedSecurity": "Updated security \"{symbol}\"",
       "deletedSecurity": "Deleted security \"{symbol}\"",
@@ -115,26 +125,23 @@
       "createdTransaction": "Created transaction {payee} {amount}",
       "updatedTransaction": "Updated transaction {payee} {amount}",
       "deletedTransaction": "Deleted transaction {payee} {amount}",
+      "convertedToTransfer": "Converted transaction {payee} {amount} to a transfer",
+      "convertedToTransaction": "Converted transfer {payee} {amount} to a transaction",
       "bulkUpdatedTransactions": "Bulk updated {count, plural, one {# transaction} other {# transactions}}",
       "createdTransfer": "Created transfer {amount} from {from} to {to}",
       "createdInvestmentTransaction": "Created {action} transaction",
       "updatedInvestmentTransaction": "Updated {action} transaction",
       "deletedInvestmentTransaction": "Deleted {action} transaction",
       "transferredSecurity": "Transferred security between accounts",
-      "updatedSecurityTransfer": "Updated security transfer"
-    },
-    "timeAgo": {
-      "justNow": "just now",
-      "minutes": "{count}m ago",
-      "hours": "{count}h ago",
-      "days": "{count}d ago"
+      "updatedSecurityTransfer": "Updated security transfer",
+      "ranTransactionRule": "Ran rule \"{name}\" on {count, plural, one {# transaction} other {# transactions}}"
     },
     "undonePrefix": "Undone: {description}",
     "redonePrefix": "Redone: {description}"
   },
   "pageHeader": {
-    "helpAriaLabel": "Open the Monize wiki for help with this section",
-    "helpTooltip": "Open the Monize wiki for help with this section"
+    "helpAriaLabel": "Help for this page",
+    "helpTooltip": "Help for this page"
   },
   "bootSplash": {
     "loading": "Loading Monize",
@@ -145,5 +152,17 @@
     "title": "Unable to connect",
     "message": "Monize could not reach the server. Check your connection and try again.",
     "retry": "Try again"
+  },
+  "pushBanner": {
+    "enableTitle": "Turn on notifications?",
+    "enableBody": "Monize can remind you about bills and budget limits on this device, even when the app is closed. Your browser will ask you to allow it.",
+    "enableButton": "Turn on",
+    "enabling": "Turning on…",
+    "installIosTitle": "Add Monize to your Home Screen first.",
+    "installIosBody": "On iPhone and iPad, notifications only work from the installed app. Tap Share, then Add to Home Screen, and open Monize from there.",
+    "blockedTitle": "Notifications are blocked for Monize.",
+    "blockedBody": "Allow them in your browser's site settings for this page. Monize cannot ask again on its own.",
+    "blockedIosBody": "Open iOS Settings, then Notifications, then Monize, and allow them there. If Monize is not listed, remove it from the Home Screen and add it again.",
+    "dismiss": "Not now"
   }
 }

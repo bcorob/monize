@@ -1,0 +1,154 @@
+{
+  "manifest": "ots0127",
+  "cases": [
+    {
+      "id": "OTS-C1",
+      "description": "OTS0127 interest at maturity 100 x 0.02 / 4 = 0.50 (letter para 14)",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2026-10-20",
+      "expect": {
+        "accruedInterest": "0.03",
+        "grossValue": "100.03",
+        "currentPeriod": {
+          "index": 1,
+          "annualRate": "0.0200",
+          "rateSource": "TERMS"
+        }
+      },
+      "knownCashflows": [
+        {
+          "date": "2027-01-15",
+          "type": "INTEREST",
+          "amount": "0.50",
+          "status": "KNOWN",
+          "period": 1
+        }
+      ]
+    },
+    {
+      "id": "OTS-W",
+      "description": "OTS0127 maturity value 100.00 + 0.50 = 100.50 (letter para 17)",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2026-10-20",
+      "expect": {
+        "maturityValueKnown": "100.50",
+        "maturityDate": "2027-01-15"
+      }
+    },
+    {
+      "id": "OTS-E1",
+      "description": "OTS0127 early, a = 47: accrued 0.2554 is forfeited, proceeds = face 100.00 (letter para 23 pt 3-4)",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2026-12-01",
+      "expect": {
+        "earlyRedemptionValue": "100.00"
+      }
+    },
+    {
+      "id": "OTS-Q",
+      "description": "OTS0127 early with quantity 30: 30 x 100.00",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 30
+      },
+      "asOf": "2026-12-01",
+      "expect": {
+        "earlyRedemptionValue": "3000.00",
+        "quantity": 30
+      }
+    },
+    {
+      "id": "OTS-T0",
+      "description": "OTS0127 day 6 after purchase is too early",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2026-10-21",
+      "expect": {
+        "earlyRedemptionValue": null,
+        "earlyRedemptionRefusal": "TOO_EARLY"
+      }
+    },
+    {
+      "id": "OTS-T0b",
+      "description": "OTS0127 day 7 after purchase is still too early (the sale day is not counted)",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2026-10-22",
+      "expect": {
+        "earlyRedemptionValue": null,
+        "earlyRedemptionRefusal": "TOO_EARLY"
+      }
+    },
+    {
+      "id": "OTS-T1",
+      "description": "OTS0127 day 8 after purchase is allowed",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2026-10-23",
+      "expect": {
+        "earlyRedemptionValue": "100.00",
+        "earlyRedemptionRefusal": null
+      }
+    },
+    {
+      "id": "OTS-L0",
+      "description": "OTS0127 20 days before maturity is allowed",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2026-12-26",
+      "expect": {
+        "earlyRedemptionValue": "100.00",
+        "earlyRedemptionRefusal": null
+      }
+    },
+    {
+      "id": "OTS-L1",
+      "description": "OTS0127 19 days before maturity is too late",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2026-12-27",
+      "expect": {
+        "earlyRedemptionValue": null,
+        "earlyRedemptionRefusal": "TOO_LATE"
+      }
+    },
+    {
+      "id": "OTS-A1",
+      "description": "OTS0127 a = 47, D = 92, F = 4: accrued 0.26 (0.2554), shown although an early redemption forfeits it",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2026-12-01",
+      "expect": {
+        "accruedInterest": "0.26",
+        "grossValue": "100.26",
+        "earlyRedemptionValue": "100.00",
+        "currentPeriod": {
+          "index": 1,
+          "annualRate": "0.0200",
+          "rateSource": "TERMS"
+        }
+      }
+    }
+  ]
+}

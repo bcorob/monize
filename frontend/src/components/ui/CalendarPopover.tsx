@@ -75,7 +75,6 @@ export function CalendarPopover({ value, onSelect, onClose, anchorRef }: Calenda
     if (spaceBelow < POPOVER_HEIGHT + gap + 8 && spaceAbove > spaceBelow) {
       top = Math.max(8, rect.top - POPOVER_HEIGHT - gap);
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time position derived from the mounted anchor's DOM rect
     setPosition({ top, left });
   }, [anchorRef]);
 

@@ -1,9 +1,12 @@
 import { BadRequestException, ForbiddenException } from "@nestjs/common";
 import { Test, TestingModule } from "@nestjs/testing";
+import type { Response } from "express";
 import { TransactionsController } from "./transactions.controller";
 import { TransactionsService } from "./transactions.service";
 import { DelegateTransferMaskInterceptor } from "../delegation/interceptors/delegate-transfer-mask.interceptor";
 import { DelegationService } from "../delegation/delegation.service";
+import { TransactionBulkCreateService } from "./transaction-bulk-create.service";
+import { TransactionConversionService } from "./transaction-conversion.service";
 
 describe("TransactionsController", () => {
   let controller: TransactionsController;
@@ -12,18 +15,29 @@ describe("TransactionsController", () => {
   let mockJointRegister: Record<string, jest.Mock>;
   let mockCrossOwnerAccess: Record<string, jest.Mock>;
   let mockDelegationService: Record<string, jest.Mock>;
+  let mockBulkCreate: Record<string, jest.Mock>;
+  let mockConversion: Record<string, jest.Mock>;
   const mockReq = { user: { id: "user-1" } };
+  /** The passthrough response a create handler may set a status on. */
+  const mockRes = () =>
+    ({ status: jest.fn() }) as never as Response & {
+      status: jest.Mock;
+    };
 
   // Valid UUIDs for testing
   const uuid1 = "00000000-0000-0000-0000-000000000001";
   const uuid2 = "00000000-0000-0000-0000-000000000002";
   const uuid3 = "00000000-0000-0000-0000-000000000003";
+  /** Position of `jointAccountIds` among `TransactionsService.findAll`'s args. */
+  const JOINT_IDS_ARG = 20;
 
   beforeEach(async () => {
     mockService = {
-      create: jest.fn(),
+      createWithOutcome: jest.fn(),
+      createTransferWithOutcome: jest.fn(),
       findAll: jest.fn(),
       findOne: jest.fn(),
+      findOneForDisplay: jest.fn(),
       update: jest.fn(),
       remove: jest.fn(),
       markCleared: jest.fn(),
@@ -36,7 +50,6 @@ describe("TransactionsController", () => {
       updateSplits: jest.fn(),
       addSplit: jest.fn(),
       removeSplit: jest.fn(),
-      createTransfer: jest.fn(),
       getLinkedTransaction: jest.fn(),
       removeTransfer: jest.fn(),
       updateTransfer: jest.fn(),
@@ -63,7 +76,7 @@ describe("TransactionsController", () => {
       // Own rows by default, so existing own-context tests take the
       // ordinary owner-scoped paths untouched.
       ownsRow: jest.fn().mockResolvedValue(true),
-      create: jest.fn(),
+      createWithOutcome: jest.fn(),
       update: jest.fn(),
       remove: jest.fn(),
       markCleared: jest.fn(),
@@ -71,6 +84,15 @@ describe("TransactionsController", () => {
 
     mockDelegationService = {
       readableAccountIds: jest.fn().mockResolvedValue([]),
+    };
+
+    mockBulkCreate = {
+      createMany: jest.fn(),
+    };
+
+    mockConversion = {
+      convertToTransfer: jest.fn(),
+      convertToTransaction: jest.fn(),
     };
 
     mockCrossOwnerAccess = {
@@ -108,39 +130,142 @@ describe("TransactionsController", () => {
           provide: require("./joint-register.service").JointRegisterService,
           useValue: mockJointRegister,
         },
+        { provide: TransactionBulkCreateService, useValue: mockBulkCreate },
+        { provide: TransactionConversionService, useValue: mockConversion },
       ],
     }).compile();
 
     controller = module.get<TransactionsController>(TransactionsController);
   });
 
+  describe("conversion routes", () => {
+    it("convertToTransfer() hands the row id and the transfer body to the conversion service", async () => {
+      const dto = { fromAccountId: uuid1, toAccountId: uuid2, amount: 50 };
+      const legs = { fromTransaction: { id: uuid3 }, toTransaction: {} };
+      mockConversion.convertToTransfer.mockResolvedValue(legs);
+
+      const result = await controller.convertToTransfer(
+        mockReq,
+        uuid3,
+        dto as never,
+      );
+
+      expect(mockConversion.convertToTransfer).toHaveBeenCalledWith(
+        "user-1",
+        uuid3,
+        dto,
+      );
+      expect(result).toBe(legs);
+    });
+
+    it("convertToTransaction() hands the row id and the transaction body to the conversion service", async () => {
+      const dto = { accountId: uuid1, amount: -50 };
+      mockConversion.convertToTransaction.mockResolvedValue({ id: uuid3 });
+
+      const result = await controller.convertToTransaction(
+        mockReq,
+        uuid3,
+        dto as never,
+      );
+
+      expect(mockConversion.convertToTransaction).toHaveBeenCalledWith(
+        "user-1",
+        uuid3,
+        dto,
+      );
+      expect(result).toEqual({ id: uuid3 });
+    });
+  });
+
   describe("create()", () => {
-    it("delegates to service.create with userId and dto", async () => {
+    it("delegates to service.createWithOutcome with userId and dto", async () => {
       const dto = { accountId: uuid1, amount: -50 };
       const expected = { id: "tx-1", accountId: uuid1, amount: -50 };
-      mockService.create.mockResolvedValue(expected);
+      mockService.createWithOutcome.mockResolvedValue({
+        transaction: expected,
+        created: true,
+      });
 
-      const result = await controller.create(mockReq, dto as any);
+      const result = await controller.create(mockReq, dto as any, mockRes());
 
       expect(result).toEqual(expected);
-      expect(mockService.create).toHaveBeenCalledWith("user-1", dto);
+      expect(mockService.createWithOutcome).toHaveBeenCalledWith(
+        "user-1",
+        dto,
+        { actorIsNotOwner: false },
+      );
+    });
+
+    it("leaves the status at 201 for a new row and answers 200 for a repeated externalId", async () => {
+      const dto = { accountId: uuid1, amount: -50, externalId: "bank-1" };
+      const fresh = mockRes();
+      mockService.createWithOutcome.mockResolvedValueOnce({
+        transaction: { id: "tx-1" },
+        created: true,
+      });
+      await controller.create(mockReq, dto as any, fresh);
+      expect(fresh.status).not.toHaveBeenCalled();
+
+      const repeated = mockRes();
+      mockService.createWithOutcome.mockResolvedValueOnce({
+        transaction: { id: "tx-1" },
+        created: false,
+      });
+      const result = await controller.create(mockReq, dto as any, repeated);
+      expect(result).toEqual({ id: "tx-1" });
+      expect(repeated.status).toHaveBeenCalledWith(200);
+    });
+
+    it("tells the service the actor is not the owner when a delegate is acting", async () => {
+      const dto = { accountId: uuid1, amount: -50 };
+      mockService.createWithOutcome.mockResolvedValue({
+        transaction: { id: "tx-1" },
+        created: true,
+      });
+
+      await controller.create(
+        {
+          user: {
+            id: "owner-1",
+            realUserId: "delegate-1",
+            isActing: true,
+            delegationId: "d1",
+          },
+        },
+        dto as any,
+        mockRes(),
+      );
+
+      expect(mockService.createWithOutcome).toHaveBeenCalledWith(
+        "owner-1",
+        dto,
+        { actorIsNotOwner: true },
+      );
+      expect(mockCrossOwnerAccess.isAccountOwnedBy).not.toHaveBeenCalled();
     });
   });
 
   describe("joint register branching (own context)", () => {
     it("routes create for a foreign account through the joint path", async () => {
       mockCrossOwnerAccess.isAccountOwnedBy.mockResolvedValue(false);
-      mockJointRegister.create.mockResolvedValue({ id: "tx-9" });
+      mockJointRegister.createWithOutcome.mockResolvedValue({
+        transaction: { id: "tx-9" },
+        created: true,
+      });
       const dto = { accountId: uuid1, amount: -5 } as never;
 
       const result = await controller.create(
         { user: { id: "user-1", realUserId: "user-1" } },
         dto,
+        mockRes(),
       );
 
       expect(result).toEqual({ id: "tx-9" });
-      expect(mockJointRegister.create).toHaveBeenCalledWith("user-1", dto);
-      expect(mockService.create).not.toHaveBeenCalled();
+      expect(mockJointRegister.createWithOutcome).toHaveBeenCalledWith(
+        "user-1",
+        dto,
+      );
+      expect(mockService.createWithOutcome).not.toHaveBeenCalled();
     });
 
     it("routes update/remove/clear for an unowned row through the joint path", async () => {
@@ -266,12 +391,13 @@ describe("TransactionsController", () => {
         undefined,
         undefined,
         undefined,
-        undefined,
-        undefined,
+        "date",
+        "DESC",
         undefined,
         undefined,
         undefined,
         [],
+        undefined,
       );
     });
 
@@ -302,12 +428,13 @@ describe("TransactionsController", () => {
         undefined,
         undefined,
         undefined,
-        undefined,
-        undefined,
+        "date",
+        "DESC",
         undefined,
         undefined,
         undefined,
         [],
+        undefined,
       );
     });
 
@@ -332,12 +459,13 @@ describe("TransactionsController", () => {
         undefined,
         undefined,
         undefined,
-        undefined,
-        undefined,
+        "date",
+        "DESC",
         undefined,
         undefined,
         undefined,
         [],
+        undefined,
       );
     });
 
@@ -374,12 +502,13 @@ describe("TransactionsController", () => {
         undefined,
         undefined,
         undefined,
-        undefined,
-        undefined,
+        "date",
+        "DESC",
         undefined,
         undefined,
         undefined,
         [],
+        undefined,
       );
     });
 
@@ -417,12 +546,13 @@ describe("TransactionsController", () => {
         undefined,
         undefined,
         undefined,
-        undefined,
-        undefined,
+        "date",
+        "DESC",
         undefined,
         undefined,
         undefined,
         [],
+        undefined,
       );
     });
 
@@ -462,12 +592,13 @@ describe("TransactionsController", () => {
         undefined,
         undefined,
         undefined,
-        undefined,
-        undefined,
+        "date",
+        "DESC",
         undefined,
         undefined,
         undefined,
         [],
+        undefined,
       );
     });
 
@@ -483,9 +614,43 @@ describe("TransactionsController", () => {
 
       const calls = mockService.findAll.mock.calls as unknown[][];
       const lastCall = calls[calls.length - 1];
-      // hasAttachments sits just before the trailing jointAccountIds arg.
-      expect(lastCall[lastCall.length - 2]).toBe(true);
-      expect(lastCall[lastCall.length - 1]).toEqual([]);
+      // hasAttachments sits before the trailing jointAccountIds and
+      // externalId args.
+      expect(lastCall[lastCall.length - 3]).toBe(true);
+      expect(lastCall[lastCall.length - 2]).toEqual([]);
+      expect(lastCall[lastCall.length - 1]).toBeUndefined();
+    });
+
+    // externalId is the last query param, after sortBy and sortDirection.
+    const findAllWithExternalId = (externalId: unknown) =>
+      (controller.findAll as (...a: unknown[]) => Promise<unknown>)(
+        mockReq,
+        ...Array(24).fill(undefined),
+        externalId,
+      );
+
+    it("passes externalId through to the service unchanged", async () => {
+      mockService.findAll.mockResolvedValue({ data: [], total: 0 });
+
+      await findAllWithExternalId(" bank-row-1 ");
+
+      const calls = mockService.findAll.mock.calls as unknown[][];
+      const lastCall = calls[calls.length - 1];
+      expect(lastCall[lastCall.length - 1]).toBe(" bank-row-1 ");
+    });
+
+    it("rejects an empty externalId rather than matching nothing", async () => {
+      await expect(findAllWithExternalId("")).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(mockService.findAll).not.toHaveBeenCalled();
+    });
+
+    it("rejects a repeated externalId key", async () => {
+      await expect(findAllWithExternalId(["a", "b"])).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(mockService.findAll).not.toHaveBeenCalled();
     });
 
     // ── Validation tests ────────────────────────────────────────
@@ -665,12 +830,13 @@ describe("TransactionsController", () => {
         undefined,
         undefined,
         ["UNRECONCILED", "CLEARED"],
-        undefined,
-        undefined,
+        "date",
+        "DESC",
         undefined,
         undefined,
         undefined,
         [],
+        undefined,
       );
     });
 
@@ -694,7 +860,7 @@ describe("TransactionsController", () => {
       const call = mockService.findAll.mock.calls[0];
       expect(call[0]).toBe("owner-9"); // the owner's register, byte-identical
       expect(call[1]).toEqual([uuid1]);
-      expect(call[call.length - 1]).toEqual([]); // no widened predicate
+      expect(call[JOINT_IDS_ARG]).toEqual([]); // no widened predicate
     });
 
     it("widens the register scope with authorized joint ids for mixed lists", async () => {
@@ -707,13 +873,13 @@ describe("TransactionsController", () => {
       await controller.findAll(mockReq);
       let call = mockService.findAll.mock.calls[0];
       expect(call[0]).toBe("user-1");
-      expect(call[call.length - 1]).toEqual([uuid2]);
+      expect(call[JOINT_IDS_ARG]).toEqual([uuid2]);
 
       // Mixed explicit filter: only requested ids that are joint pass.
       await controller.findAll(mockReq, undefined, `${uuid1},${uuid2}`);
       call = mockService.findAll.mock.calls[1];
       expect(call[1]).toEqual([uuid1, uuid2]);
-      expect(call[call.length - 1]).toEqual([uuid2]);
+      expect(call[JOINT_IDS_ARG]).toEqual([uuid2]);
       expect(mockJointAccounts.jointAccessFor).not.toHaveBeenCalled();
     });
 
@@ -761,6 +927,171 @@ describe("TransactionsController", () => {
           "not-a-uuid",
         ),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe("exportRegister()", () => {
+    const page = (
+      data: Record<string, unknown>[],
+      hasMore: boolean,
+    ): {
+      data: Record<string, unknown>[];
+      pagination: { hasMore: boolean };
+    } => ({
+      data,
+      pagination: { hasMore },
+    });
+    const row = (id: string, extra: Record<string, unknown> = {}) => ({
+      id,
+      transactionDate: "2026-01-15",
+      amount: "-10.0000",
+      currencyCode: "CAD",
+      status: "UNRECONCILED",
+      description: null,
+      payeeName: null,
+      isSplit: false,
+      isTransfer: false,
+      account: { id: uuid1, name: "Chequing", currentBalance: 1234 },
+      payee: null,
+      category: null,
+      tags: [],
+      linkedTransaction: null,
+      splits: [],
+      ...extra,
+    });
+
+    it("walks every page of the register in one request (issue #2198)", async () => {
+      mockService.findAll
+        .mockResolvedValueOnce(page([row("tx-1"), row("tx-2")], true))
+        .mockResolvedValueOnce(page([row("tx-3")], false));
+
+      const result = await controller.exportRegister(mockReq, uuid1);
+
+      expect(result.data.map((r) => r.id)).toEqual(["tx-1", "tx-2", "tx-3"]);
+      expect(mockService.findAll).toHaveBeenCalledTimes(2);
+      // Page number and the API's largest page size, in findAll's page and
+      // limit positions; the account filter rides along on every page.
+      expect(mockService.findAll.mock.calls.map((c) => [c[6], c[7]])).toEqual([
+        [1, 200],
+        [2, 200],
+      ]);
+      expect(mockService.findAll.mock.calls[1][1]).toEqual([uuid1]);
+      // No page is ever asked to land on a target row.
+      expect(mockService.findAll.mock.calls[0][10]).toBeUndefined();
+    });
+
+    it("answers with only the fields the file is built from", async () => {
+      mockService.findAll.mockResolvedValueOnce(page([row("tx-1")], false));
+
+      const result = await controller.exportRegister(mockReq);
+
+      expect(result.data[0].account).toEqual({ name: "Chequing" });
+    });
+
+    it("passes the register's filters and order to every page", async () => {
+      mockService.findAll.mockResolvedValueOnce(page([], false));
+
+      await controller.exportRegister(
+        mockReq,
+        undefined,
+        `${uuid1},${uuid2}`,
+        "2026-01-01",
+        "2026-01-31",
+        undefined,
+        uuid3,
+        undefined,
+        undefined,
+        true,
+        "coffee",
+        "-50",
+        "50",
+        undefined,
+        "cleared,void",
+        undefined,
+        undefined,
+        undefined,
+        "USD",
+        true,
+        "amount",
+        "asc",
+      );
+
+      const args = mockService.findAll.mock.calls[0];
+      expect(args[0]).toBe("user-1");
+      expect(args[1]).toEqual([uuid1, uuid2]);
+      expect(args[2]).toBe("2026-01-01");
+      expect(args[3]).toBe("2026-01-31");
+      expect(args[4]).toEqual([uuid3]);
+      expect(args[8]).toBe(true);
+      expect(args[9]).toBe("coffee");
+      expect(args[11]).toBe(-50);
+      expect(args[12]).toBe(50);
+      expect(args[14]).toEqual(["CLEARED", "VOID"]);
+      expect(args[15]).toBe("amount");
+      expect(args[16]).toBe("ASC");
+      expect(args[18]).toEqual(["USD"]);
+      expect(args[19]).toBe(true);
+    });
+
+    it("refuses an invalid filter before reading anything", async () => {
+      await expect(
+        controller.exportRegister(mockReq, undefined, undefined, "not-a-date"),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockService.findAll).not.toHaveBeenCalled();
+    });
+
+    it("exports nothing for a delegate who can read none of the accounts", async () => {
+      mockDelegationService.readableAccountIds.mockResolvedValue([]);
+      const actingReq = {
+        user: { id: "owner-1", isActing: true, delegationId: "del-1" },
+      };
+
+      const result = await controller.exportRegister(actingReq);
+
+      expect(result).toEqual({ data: [] });
+      expect(mockService.findAll).not.toHaveBeenCalled();
+    });
+
+    it("masks a counterpart the delegate cannot read before dropping the fields the mask keys on", async () => {
+      mockDelegationService.readableAccountIds.mockResolvedValue([uuid1]);
+      mockCrossOwnerAccess.readableAccountIdSetFor.mockResolvedValue(
+        new Set([uuid1]),
+      );
+      mockService.findAll.mockResolvedValueOnce(
+        page(
+          [
+            row("tx-1", {
+              userId: "owner-1",
+              isTransfer: true,
+              payeeName: "Transfer to Secret Savings",
+              linkedTransaction: {
+                userId: "owner-1",
+                accountId: uuid2,
+                account: { id: uuid2, name: "Secret Savings" },
+              },
+            }),
+          ],
+          false,
+        ),
+      );
+      const actingReq = {
+        user: {
+          id: "owner-1",
+          realUserId: "deleg-1",
+          isActing: true,
+          delegationId: "del-1",
+        },
+      };
+
+      const result = await controller.exportRegister(actingReq);
+
+      expect(mockCrossOwnerAccess.readableAccountIdSetFor).toHaveBeenCalledWith(
+        "deleg-1",
+      );
+      expect(result.data[0].linkedTransaction).toEqual({
+        account: { name: "Hidden account" },
+      });
+      expect(result.data[0].payeeName).toBe("Transfer to Hidden account");
     });
   });
 
@@ -817,14 +1148,25 @@ describe("TransactionsController", () => {
   });
 
   describe("findOne()", () => {
-    it("delegates to service.findOne with userId and id", async () => {
-      const expected = { id: "tx-1", amount: -50 };
-      mockService.findOne.mockResolvedValue(expected);
+    it("answers with the row as the register shows it, counts included", async () => {
+      const expected = {
+        id: "tx-1",
+        amount: -50,
+        linkedInvestmentTransactionId: null,
+        attachmentCount: 1,
+        warrantyCount: 2,
+      };
+      mockService.findOneForDisplay.mockResolvedValue(expected);
 
       const result = await controller.findOne(mockReq, "tx-1");
 
       expect(result).toEqual(expected);
-      expect(mockService.findOne).toHaveBeenCalledWith("user-1", "tx-1", []);
+      expect(mockService.findOneForDisplay).toHaveBeenCalledWith(
+        "user-1",
+        "tx-1",
+        [],
+      );
+      expect(mockService.findOne).not.toHaveBeenCalled();
     });
   });
 
@@ -1029,23 +1371,74 @@ describe("TransactionsController", () => {
     });
   });
 
-  describe("createTransfer()", () => {
-    it("delegates to service.createTransfer with userId and dto", async () => {
+  describe("bulkCreate()", () => {
+    it("hands the items to the bulk service as the authenticated actor", async () => {
       const dto = {
-        fromAccountId: uuid1,
-        toAccountId: uuid2,
-        amount: 500,
+        items: [{ transaction: { accountId: uuid1, amount: -5 } }],
       };
-      const expected = { id: "tx-1", linkedTransactionId: "tx-2" };
-      mockService.createTransfer.mockResolvedValue(expected);
+      const expected = {
+        created: 1,
+        existing: 0,
+        failed: 0,
+        results: [
+          { index: 0, kind: "transaction", status: "created", id: "tx-1" },
+        ],
+      };
+      mockBulkCreate.createMany.mockResolvedValue(expected);
 
-      const result = await controller.createTransfer(mockReq, dto as any);
+      const result = await controller.bulkCreate(
+        { user: { id: "user-1", realUserId: "user-1" } },
+        dto as never,
+      );
 
-      expect(result).toEqual(expected);
-      expect(mockService.createTransfer).toHaveBeenCalledWith("user-1", dto, {
-        effectiveUserId: "user-1",
-        realUserId: "user-1",
+      expect(result).toBe(expected);
+      expect(mockBulkCreate.createMany).toHaveBeenCalledWith(
+        { effectiveUserId: "user-1", realUserId: "user-1" },
+        dto,
+      );
+    });
+  });
+
+  describe("createTransfer()", () => {
+    const dto = {
+      fromAccountId: uuid1,
+      toAccountId: uuid2,
+      amount: 500,
+    };
+    const transfer = {
+      fromTransaction: { id: "tx-1" },
+      toTransaction: { id: "tx-2" },
+    };
+
+    it("delegates to service.createTransferWithOutcome with userId and dto", async () => {
+      mockService.createTransferWithOutcome.mockResolvedValue({
+        transfer,
+        created: true,
       });
+      const res = mockRes();
+
+      const result = await controller.createTransfer(mockReq, dto as any, res);
+
+      expect(result).toEqual(transfer);
+      expect(res.status).not.toHaveBeenCalled();
+      expect(mockService.createTransferWithOutcome).toHaveBeenCalledWith(
+        "user-1",
+        dto,
+        { effectiveUserId: "user-1", realUserId: "user-1" },
+      );
+    });
+
+    it("answers 200 when the externalId named an existing transfer", async () => {
+      mockService.createTransferWithOutcome.mockResolvedValue({
+        transfer,
+        created: false,
+      });
+      const res = mockRes();
+
+      const result = await controller.createTransfer(mockReq, dto as any, res);
+
+      expect(result).toEqual(transfer);
+      expect(res.status).toHaveBeenCalledWith(200);
     });
   });
 
@@ -1672,6 +2065,68 @@ describe("TransactionsController", () => {
     });
   });
 
+  describe("findAll() sorting", () => {
+    /**
+     * The controller takes 25 positional parameters and the two sort ones are
+     * last, so the call is built rather than spelled out. Nest fills them from
+     * `@Query`, which is why a test may hand an array: Express does exactly
+     * that for a repeated key.
+     */
+    const callWithSort = (sortBy?: unknown, sortDirection?: unknown) =>
+      (
+        controller.findAll as unknown as (
+          ...args: unknown[]
+        ) => Promise<unknown>
+      )(mockReq, ...new Array(22).fill(undefined), sortBy, sortDirection);
+
+    /** The `sortBy` and `sortDirection` the service was called with. */
+    const sortReceived = () => {
+      const calls = mockService.findAll.mock.calls;
+      const call = calls[calls.length - 1];
+      return { sortBy: call[15], sortDirection: call[16] };
+    };
+
+    beforeEach(() => {
+      mockService.findAll.mockResolvedValue({ data: [], total: 0 });
+    });
+
+    it("passes the register's own order when the caller asks for none", async () => {
+      await callWithSort(undefined, undefined);
+      expect(sortReceived()).toEqual({ sortBy: "date", sortDirection: "DESC" });
+    });
+
+    it("passes a joined-column sort through to the service", async () => {
+      await callWithSort("category", "asc");
+      expect(sortReceived()).toEqual({
+        sortBy: "category",
+        sortDirection: "ASC",
+      });
+    });
+
+    it("rejects a column the register does not sort by", async () => {
+      // Tags is the one to guard: it is a column on screen, and ordering by it
+      // would duplicate rows on the paginated-join path.
+      await expect(callWithSort("tags", undefined)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(mockService.findAll).not.toHaveBeenCalled();
+    });
+
+    it("rejects a direction that is not asc or desc", async () => {
+      await expect(callWithSort("date", "newest")).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(mockService.findAll).not.toHaveBeenCalled();
+    });
+
+    it("rejects a repeated query key instead of coercing it", async () => {
+      await expect(callWithSort(["date", "amount"], undefined)).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(mockService.findAll).not.toHaveBeenCalled();
+    });
+  });
+
   describe("findAll() amount filters", () => {
     it("parses amountFrom and amountTo as floats", async () => {
       mockService.findAll.mockResolvedValue({ data: [], total: 0 });
@@ -1711,12 +2166,13 @@ describe("TransactionsController", () => {
         500.25,
         undefined,
         undefined,
-        undefined,
-        undefined,
+        "date",
+        "DESC",
         undefined,
         undefined,
         undefined,
         [],
+        undefined,
       );
     });
 
@@ -1991,5 +2447,104 @@ describe("TransactionsController", () => {
       expect(result).toEqual([]);
       expect(mockService.getFxFeeSummary).not.toHaveBeenCalled();
     });
+  });
+
+  describe("search on the totals endpoints", () => {
+    // Each endpoint the Transactions page reads beside the register takes the
+    // same `search`, so each refuses a non-string and cuts at the parser's
+    // cap, as `findAll` does; otherwise the totals could read a longer string
+    // than the rows they sit beside.
+    const long = "x".repeat(250);
+    const endpoints: Array<
+      [string, (search: unknown) => unknown, () => unknown]
+    > = [
+      [
+        "getSummary",
+        (search) =>
+          controller.getSummary(
+            mockReq,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            search as string,
+          ),
+        () => mockService.getSummary.mock.calls[0][6],
+      ],
+      [
+        "getGroupedTotals",
+        (search) =>
+          controller.getGroupedTotals(
+            mockReq,
+            "payee",
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            search as string,
+          ),
+        () => mockService.getGroupedTotals.mock.calls[0][1].search,
+      ],
+      [
+        "getTagKeyBreakdown",
+        (search) =>
+          controller.getTagKeyBreakdown(
+            mockReq,
+            "country",
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            search as string,
+          ),
+        () => mockService.getTagKeyBreakdown.mock.calls[0][2].search,
+      ],
+      [
+        "getMonthlyTotals",
+        (search) =>
+          controller.getMonthlyTotals(
+            mockReq,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            search as string,
+          ),
+        () => mockService.getMonthlyTotals.mock.calls[0][6],
+      ],
+    ];
+
+    beforeEach(() => {
+      mockService.getSummary.mockResolvedValue({});
+      mockService.getGroupedTotals.mockResolvedValue([]);
+      mockService.getTagKeyBreakdown.mockResolvedValue([]);
+      mockService.getMonthlyTotals.mockResolvedValue([]);
+    });
+
+    it.each(endpoints)(
+      "%s cuts the search at 200 characters",
+      async (_name, call, searchSent) => {
+        await call(long);
+        expect(searchSent()).toBe("x".repeat(200));
+      },
+    );
+
+    it.each(endpoints)(
+      "%s refuses a repeated search key",
+      async (_name, call) => {
+        await expect(
+          Promise.resolve().then(() => call(["a", "b"])),
+        ).rejects.toThrow(BadRequestException);
+      },
+    );
   });
 });

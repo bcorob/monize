@@ -88,6 +88,39 @@ describe('createLogger on the server', () => {
     expect(serialized).toContain('at bar (file.ts:2:2)');
   });
 
+  // undici's fetch throws `TypeError: fetch failed` and keeps the reason in
+  // `cause`; a log without it left a 502 from the API proxy undiagnosable.
+  it('appends the cause chain to a flattened Error', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const root = Object.assign(new Error('invalid transfer-encoding header'), {
+      code: 'UND_ERR_INVALID_ARG',
+    });
+    root.stack = 'InvalidArgumentError: invalid transfer-encoding header\n    at processHeader (request.js:1:1)';
+    const error = new TypeError('fetch failed', { cause: root });
+    error.stack = 'TypeError: fetch failed\n    at fetch (index.js:1:1)';
+    createLogger('Proxy').error('API proxy error:', error);
+    const serialized = spy.mock.calls[0][2] as string;
+    expect(serialized).not.toContain('\n');
+    expect(serialized).toContain('TypeError: fetch failed');
+    expect(serialized).toContain(
+      'caused by: InvalidArgumentError: invalid transfer-encoding header',
+    );
+    expect(serialized).toContain('at processHeader (request.js:1:1)');
+  });
+
+  it('describes a non-Error cause and stops on a cyclic chain', () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    createLogger('Module').error(new Error('outer', { cause: { code: 'ECONNRESET' } }));
+    expect(spy.mock.calls[0][1]).toContain('caused by: {"code":"ECONNRESET"}');
+
+    const cyclic = new Error('loop');
+    Object.assign(cyclic, { cause: cyclic });
+    createLogger('Module').error(cyclic);
+    const serialized = spy.mock.calls[1][1] as string;
+    expect(serialized).toContain('[cause chain truncated]');
+    expect(serialized.match(/caused by: /g)).toHaveLength(5);
+  });
+
   it('passes non-Error arguments through untouched', () => {
     const spy = vi.spyOn(console, 'info').mockImplementation(() => {});
     const payload = { count: 1 };

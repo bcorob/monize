@@ -1,5 +1,7 @@
+import { requestContextStorage } from "../common/request-context";
 import {
   getCurrentMonthPeriodDates,
+  getFollowingMonthPeriodDates,
   getMonthPeriodDates,
   getPreviousMonthPeriodDates,
   parsePeriodFromYYYYMM,
@@ -65,6 +67,21 @@ describe("budget-date.utils", () => {
         new RegExp(`^${today.getFullYear()}-${expectedMonth}-\\d{2}$`),
       );
     });
+
+    it("uses the request timezone's calendar day, not UTC's", () => {
+      // 01:00 UTC on 1 November is still 18:00 on 31 October in Los Angeles.
+      jest.useFakeTimers({ now: new Date("2026-11-01T01:00:00.000Z") });
+      try {
+        requestContextStorage.run({ timezone: "America/Los_Angeles" }, () => {
+          expect(getCurrentMonthPeriodDates()).toEqual({
+            periodStart: "2026-10-01",
+            periodEnd: "2026-10-31",
+          });
+        });
+      } finally {
+        jest.useRealTimers();
+      }
+    });
   });
 
   describe("getPreviousMonthPeriodDates", () => {
@@ -76,6 +93,20 @@ describe("budget-date.utils", () => {
       expect(result.periodStart).toBe(
         `${prevMonth.getFullYear()}-${expectedMonth}-01`,
       );
+    });
+
+    it("uses the request timezone's calendar day, not UTC's", () => {
+      jest.useFakeTimers({ now: new Date("2026-11-01T01:00:00.000Z") });
+      try {
+        requestContextStorage.run({ timezone: "America/Los_Angeles" }, () => {
+          expect(getPreviousMonthPeriodDates()).toEqual({
+            periodStart: "2026-09-01",
+            periodEnd: "2026-09-30",
+          });
+        });
+      } finally {
+        jest.useRealTimers();
+      }
     });
   });
 
@@ -106,6 +137,36 @@ describe("budget-date.utils", () => {
     it("should return null for invalid month", () => {
       expect(parsePeriodFromYYYYMM("2026-00")).toBeNull();
       expect(parsePeriodFromYYYYMM("2026-13")).toBeNull();
+    });
+  });
+
+  describe("getFollowingMonthPeriodDates", () => {
+    it("returns the month after a month-end period end", () => {
+      expect(getFollowingMonthPeriodDates("2026-10-31")).toEqual({
+        periodStart: "2026-11-01",
+        periodEnd: "2026-11-30",
+      });
+    });
+
+    it("rolls December over into January of the next year", () => {
+      expect(getFollowingMonthPeriodDates("2026-12-31")).toEqual({
+        periodStart: "2027-01-01",
+        periodEnd: "2027-01-31",
+      });
+    });
+
+    it("ends February on the 28th in a non-leap year", () => {
+      expect(getFollowingMonthPeriodDates("2026-01-31")).toEqual({
+        periodStart: "2026-02-01",
+        periodEnd: "2026-02-28",
+      });
+    });
+
+    it("uses the month after a mid-month period end", () => {
+      expect(getFollowingMonthPeriodDates("2026-10-21")).toEqual({
+        periodStart: "2026-11-01",
+        periodEnd: "2026-11-30",
+      });
     });
   });
 });

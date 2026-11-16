@@ -10,6 +10,8 @@
     "versionLabel": "Sürüm {version}",
     "expandAll": "Tümünü genişlet",
     "collapseAll": "Tümünü daralt",
+    "changeCount": "{count, plural, other {# değişiklik}}",
+    "otherSections": "Düzeltmeler ve ayrıntılar",
     "viewFullNotes": "Tüm sürüm notlarını görüntüle",
     "dontShowAgain": "Bir daha gösterme",
     "showNextLogin": "Sonraki girişte göster",
@@ -38,6 +40,14 @@
     "scheduleRecurring": "Tekrarlayan Olarak Zamanla",
     "more": "Daha Fazla İşlem"
   },
+  "columns": {
+    "button": "Sütunlar",
+    "buttonWithHidden": "Sütunlar, {count} gizli",
+    "menuLabel": "Sütunları göster veya gizle",
+    "showAll": "Tümünü göster",
+    "hideColumn": "Sütunu gizle",
+    "sheetSubtitle": "Sütunlar menüsünden geri getirebilirsiniz."
+  },
   "loading": "Yükleniyor...",
   "pagination": {
     "showing": "Gösterilen",
@@ -60,6 +70,7 @@
   },
   "exportDropdown": {
     "export": "Dışa Aktar",
+    "exportCsv": "CSV Dışa Aktar",
     "exporting": "Dışa aktarılıyor...",
     "exportPdf": "PDF Olarak Dışa Aktar",
     "exportReport": "Raporu dışa aktar",
@@ -88,6 +99,7 @@
     "stackedChart": "%100 Yığılmış Çubuk",
     "lineChart": "Çizgi Grafik",
     "areaChart": "Alan Grafik",
+    "sankeyChart": "Akış Diyagramı",
     "table": "Tablo"
   },
   "formActions": {
@@ -118,8 +130,15 @@
     "search": "Ara...",
     "selectAll": "Tümünü Seç",
     "clear": "Temizle",
+    "clearSearch": "Aramayı temizle",
     "noOptions": "Seçenek bulunamadı",
     "selectedCount": "{count} seçildi"
+  },
+  "categoryFilter": {
+    "uncategorized": "Kategorisiz",
+    "transfers": "Transferler",
+    "allIncome": "Tüm gelir kategorileri",
+    "allExpenses": "Tüm gider kategorileri"
   },
   "combobox": {
     "createOption": "\"{value}\" oluştur",
@@ -137,6 +156,7 @@
   },
   "dateInput": {
     "shortcutsTitle": "Klavye kısayolları",
+    "openPicker": "Tarih seçiciyi aç",
     "today": "Bugün",
     "firstDayOfYear": "Yılın ilk günü",
     "lastDayOfYear": "Yılın son günü",
@@ -158,6 +178,7 @@
     "CASH": "Nakit",
     "LINE_OF_CREDIT": "Kredi Hattı",
     "ASSET": "Varlık",
+    "CRYPTO": "Kripto Cüzdan",
     "OTHER": "Diğer"
   },
   "accountFilter": {
@@ -241,12 +262,20 @@
     "marker": "—",
     "srLabel": "Tutar kullanılamıyor",
     "scheduledFx": "Geçerli tutar hesaplanamıyor: bu planlanmış kaydın uzlaşma para birimi çifti için döviz kuru bulunamadı. Kaydedilen tutar daha eski bir kurla hesaplandığı için gösterilmiyor.",
-    "displayFx": "Bu tutar burada gösterilemiyor: miktar biliniyor, ancak bu toplamın para birimine çevirmek için kur bulunmuyor. Kurları Para Birimleri sayfasından yenileyin."
+    "displayFx": "Bu tutar burada gösterilemiyor: miktar biliniyor, ancak bu toplamın para birimine çevirmek için kur bulunmuyor. Kurları Para Birimleri sayfasından yenileyin.",
+    "noCashBalance": "Bu değer hesaplanamıyor: bu görünümdeki bir nakit hesabı bu gün için bakiye bildirmedi, dolayısıyla içindeki tutar sıfır değil, bilinmiyor. Raporu yeniden yükleyin; sorun sürerse günün bakiyeleri hesaplanamamıştır ve bunu bildirmeye değer.",
+    "noPrice": "Bu değer hesaplanamıyor: elde tutulan pay adedi biliniyor, ancak menkul kıymetin bunları değerlemek için bir fiyatı yok. Fiyatları yenileyin veya menkul kıymetin fiyat geçmişine elle bir fiyat ekleyin.",
+    "noBaseline": "Bu değer hesaplanamıyor: bir karşılaştırma ve karşılaştırılacak daha önceki bir değer yok. Eksik bir şey yok, bu yüzden eklenecek bir şey de yok.",
+    "staleQuote": "Günlük değişim hesaplanamıyor: menkul kıymetin en güncel fiyatı son işlem seansından daha eski, dolayısıyla bundan hesaplanacak her değişim önceki bir güne ait olur. Fiyatları yenileyin veya menkul kıymetin fiyat sağlayıcısını kontrol edin.",
+    "unknownCurrency": "Bu tutar gösterilemiyor: kayıt bir menkul kıymet belirtmiyor, bu yüzden rakamın para birimi bilinmiyor. İşlemi açıp ona bir menkul kıymet atayın ki tutarları etiketlenebilsin."
   },
   "density": {
     "title": "Satır yoğunluğunu değiştir",
     "normal": "Normal",
     "compact": "Kompakt",
     "dense": "Yoğun"
+  },
+  "scheduledOverdue": {
+    "included": "{count, plural, one {# vadesi geçmiş zamanlanmış işlem} other {# vadesi geçmiş zamanlanmış işlem}} dahil"
   }
 }

@@ -1,0 +1,321 @@
+{
+  "page": {
+    "title": "保証",
+    "subtitle": "購入したもの、保証の終了日、購入先",
+    "newButton": "保証を追加",
+    "exportButton": "CSV をエクスポート",
+    "importButton": "CSV をインポート",
+    "loading": "保証を読み込み中...",
+    "loadFailed": "保証を読み込めませんでした。",
+    "retry": "再試行",
+    "summary": {
+      "active": "有効",
+      "expiring": "まもなく期限切れ",
+      "expired": "期限切れ",
+      "lifetime": "永久保証",
+      "unavailable": "未読み込み",
+      "expiringHint": "{days} 日以内"
+    },
+    "filters": {
+      "label": "ステータスで絞り込む",
+      "all": "すべて",
+      "expiring": "期限切れ間近",
+      "active": "有効",
+      "expired": "期限切れ",
+      "lifetime": "永久保証",
+      "counted": {
+        "all": "すべて（{count}）",
+        "expiring": "期限切れ間近（{count}）",
+        "active": "有効（{count}）",
+        "expired": "期限切れ（{count}）",
+        "lifetime": "永久保証（{count}）"
+      }
+    },
+    "search": {
+      "label": "保証を検索",
+      "placeholder": "名前、販売店、型番、シリアル番号で検索"
+    },
+    "archivedToggle": "アーカイブ済みを表示",
+    "transactionChip": {
+      "label": "1 件の取引の保証",
+      "clear": "すべての保証を表示"
+    },
+    "pager": {
+      "itemName": "件の保証",
+      "total": "{count, plural, other {{total} 件の保証}}"
+    },
+    "empty": {
+      "title": "保証はまだありません",
+      "description": "保証を追加すると、保証がいつ終わるかを把握できます。",
+      "filteredTitle": "一致する保証はありません",
+      "filteredDescription": "別のステータスを選ぶか、検索をクリアしてください。",
+      "archivedTitle": "アーカイブ済みの保証はありません"
+    },
+    "modal": {
+      "newTitle": "新しい保証",
+      "editTitle": "保証を編集"
+    },
+    "delete": {
+      "title": "保証を削除",
+      "message": "「{name}」を削除しますか？保証請求と書類も一緒に削除され、元に戻すことはできません。"
+    },
+    "toasts": {
+      "created": "保証を追加しました",
+      "updated": "保証を更新しました",
+      "deleted": "保証を削除しました",
+      "archived": "保証をアーカイブしました",
+      "unarchived": "保証を復元しました",
+      "createFailed": "保証を追加できませんでした",
+      "updateFailed": "保証を更新できませんでした",
+      "deleteFailed": "保証を削除できませんでした",
+      "archiveFailed": "保証をアーカイブできませんでした",
+      "unarchiveFailed": "保証を復元できませんでした",
+      "prefillFailed": "その取引を読み込めなかったため、保証は空の状態で始まります",
+      "exported": "{count, plural, other {{shown} 件の保証をエクスポートしました}}",
+      "exportFailed": "保証をエクスポートできませんでした"
+    }
+  },
+  "status": {
+    "lifetime": "永久保証",
+    "active": "有効",
+    "expiring": "まもなく期限切れ",
+    "expired": "期限切れ"
+  },
+  "daysLeft": {
+    "left": "{count, plural, other {残り {days} 日}}",
+    "today": "本日期限切れ",
+    "ago": "{count, plural, other {{days} 日前に期限切れ}}",
+    "leftYears": "残り {yearsCount, plural, other {{years} 年}} {daysCount, plural, other {{days} 日}}",
+    "agoYears": "{yearsCount, plural, other {{years} 年}} {daysCount, plural, other {{days} 日}} 前に期限切れ"
+  },
+  "kind": {
+    "manufacturer": "メーカー保証",
+    "extended": "延長保証",
+    "store": "販売店保証",
+    "other": "その他"
+  },
+  "list": {
+    "columns": {
+      "name": "名前",
+      "status": "ステータス",
+      "expiresOn": "期限",
+      "purchaseDate": "購入日",
+      "price": "価格",
+      "documents": "書類",
+      "claims": "未完了の請求",
+      "actions": "操作"
+    },
+    "sortLabel": "並べ替え",
+    "lifetime": "永久保証",
+    "noPrice": "なし",
+    "actions": {
+      "archive": "アーカイブ",
+      "unarchive": "アーカイブを解除"
+    }
+  },
+  "form": {
+    "nameLabel": "名前",
+    "namePlaceholder": "購入したもの",
+    "vendorLabel": "販売店",
+    "vendorPlaceholder": "販売店を選択または入力",
+    "modelLabel": "型番",
+    "serialsLabel": "シリアル番号",
+    "serialLabel": "シリアル番号 {index}",
+    "addSerial": "シリアル番号を追加",
+    "removeSerial": "シリアル番号 {index} を削除",
+    "serialsLimit": "シリアル番号は最大 {max} 件",
+    "kindLabel": "保証の種類",
+    "purchaseDateLabel": "購入日",
+    "expiry": {
+      "label": "保証の終了",
+      "date": "日付で指定",
+      "duration": "期間で指定",
+      "lifetime": "なし",
+      "expiresOnLabel": "期限日",
+      "years": "年",
+      "months": "か月",
+      "days": "日",
+      "computed": "{date} に期限切れ",
+      "needsPurchaseDate": "終了日を計算するには購入日を入力してください",
+      "lifetimeHint": "永久保証には終了日もリマインダーもありません"
+    },
+    "priceLabel": "購入価格",
+    "productUrlLabel": "製品ページ",
+    "productUrlPlaceholder": "https://",
+    "notesLabel": "メモ",
+    "submitCreate": "保証を追加",
+    "submitUpdate": "変更を保存"
+  },
+  "validation": {
+    "nameRequired": "名前を入力してください",
+    "nameTooLong": "200 文字以内で入力してください",
+    "vendorTooLong": "200 文字以内で入力してください",
+    "modelTooLong": "100 文字以内で入力してください",
+    "serialTooLong": "各シリアル番号は 100 文字以内で入力してください",
+    "serialsTooMany": "シリアル番号は最大 10 件です",
+    "purchaseDateRequired": "購入日を入力してください",
+    "expiresOnRequired": "保証の終了日を入力してください",
+    "expiresBeforePurchase": "保証の終了日を購入日より前にすることはできません",
+    "durationRequired": "0 より長い期間を入力してください",
+    "priceNegative": "価格をマイナスにすることはできません",
+    "priceNeedsCurrency": "価格の通貨を選択してください",
+    "urlInvalid": "http:// または https:// で始まるウェブアドレスを入力してください",
+    "urlTooLong": "500 文字以内で入力してください",
+    "notesTooLong": "2000 文字以内で入力してください"
+  },
+  "detail": {
+    "back": "保証に戻る",
+    "loading": "保証を読み込み中...",
+    "loadFailed": "この保証を読み込めませんでした。",
+    "notFound": "この保証は見つかりませんでした。",
+    "retry": "再試行",
+    "archivedBadge": "アーカイブ済み",
+    "switcher": {
+      "trigger": "保証を切り替える",
+      "placeholder": "保証を絞り込む...",
+      "noMatches": "一致する保証はありません"
+    },
+    "summary": {
+      "expires": "期限",
+      "purchased": "購入日",
+      "price": "購入価格",
+      "openClaims": "未完了の請求"
+    },
+    "card": {
+      "title": "詳細",
+      "kind": "保証の種類",
+      "vendor": "販売店",
+      "serialNumbers": "シリアル番号",
+      "model": "型番",
+      "productUrl": "製品ページ",
+      "notes": "メモ",
+      "none": "なし",
+      "lifetime": "永久保証"
+    },
+    "transaction": {
+      "title": "購入",
+      "edit": "{date} の購入を編集：{payee}、{amount}",
+      "viewInRegister": "取引一覧で表示",
+      "loadFailed": "購入を読み込めませんでした",
+      "dateInAccount": "{date} · {account}",
+      "none": "リンクされた取引はありません",
+      "unreadable": "この購入は、あなたが閲覧できない口座にあります。",
+      "noPayee": "支払先なし"
+    }
+  },
+  "documents": {
+    "title": "書類",
+    "empty": "書類はまだありません",
+    "pendingHint": "書類は保証を保存したときにアップロードされます。",
+    "tooMany": "保証ごとに最大 {max} 件の書類",
+    "uploadFailedAfterCreate": "保証を追加しましたが、{count, plural, one {この書類} other {これらの書類}}をアップロードできませんでした: {names}。保証の「書類」セクションから追加してください。",
+    "kindFor": "{name} の書類の種類",
+    "kindUpdateFailed": "書類の種類を変更できませんでした",
+    "addExisting": "既存を追加",
+    "addExistingTitle": "既存の書類を追加",
+    "addExistingHelp": "取引または別の保証にすでにアップロードしたファイルを選択してください。この保証にはコピーが追加され、元のファイルはそのまま残ります。",
+    "addExistingFrom": "書類の現在の場所",
+    "fromTransaction": "取引",
+    "fromWarranty": "別の保証",
+    "addExistingDocument": "書類",
+    "addExistingKind": "この保証での書類タイプ",
+    "addExistingNone": "追加できる書類がありません。",
+    "addExistingLoadFailed": "書類を読み込めませんでした。もう一度お試しください。",
+    "addExistingFailed": "書類を追加できませんでした",
+    "addExistingSubmit": "書類を追加",
+    "choose": "選択…",
+    "preview": "プレビュー",
+    "kinds": {
+      "receipt": "レシート",
+      "manual": "取扱説明書",
+      "photo": "写真",
+      "warranty": "保証",
+      "other": "その他"
+    }
+  },
+  "claims": {
+    "title": "保証請求",
+    "add": "請求を追加",
+    "empty": "保証請求はまだありません",
+    "loading": "保証請求を読み込み中...",
+    "loadFailed": "保証請求を読み込めませんでした。",
+    "retry": "再試行",
+    "statuses": {
+      "open": "対応中",
+      "approved": "承認済み",
+      "denied": "却下",
+      "resolved": "解決済み"
+    },
+    "claimedOn": "{date} に請求",
+    "resolvedOnLine": "{date} に完了",
+    "resolutionLine": "対応結果：{text}",
+    "modal": {
+      "newTitle": "新しい保証請求",
+      "editTitle": "保証請求を編集"
+    },
+    "form": {
+      "claimDateLabel": "請求日",
+      "statusLabel": "ステータス",
+      "descriptionLabel": "説明",
+      "resolutionLabel": "対応結果",
+      "resolvedOnLabel": "完了日",
+      "resolvedOnHint": "解決済みまたは却下された請求のみ",
+      "submitCreate": "請求を追加",
+      "submitUpdate": "変更を保存"
+    },
+    "validation": {
+      "claimDateRequired": "請求日を入力してください",
+      "resolvedOnBeforeClaim": "請求日より前に完了させることはできません",
+      "textTooLong": "2000 文字以内で入力してください"
+    },
+    "delete": {
+      "title": "保証請求を削除",
+      "message": "{date} の保証請求を削除しますか？元に戻すことはできません。"
+    },
+    "toasts": {
+      "created": "保証請求を追加しました",
+      "updated": "保証請求を更新しました",
+      "deleted": "保証請求を削除しました",
+      "createFailed": "保証請求を追加できませんでした",
+      "updateFailed": "保証請求を更新できませんでした",
+      "deleteFailed": "保証請求を削除できませんでした"
+    }
+  },
+  "import": {
+    "title": "CSV から保証をインポート",
+    "description": "Warracker の列形式の CSV ファイル（Warracker またはこのページからエクスポートしたものなど）。保存する前にすべての行を確認できます。",
+    "fileLabel": "CSV ファイル",
+    "chooseFile": "ファイルを選択",
+    "noFileChosen": "ファイルが選択されていません",
+    "checking": "ファイルを確認中...",
+    "previewFailed": "ファイルを確認できませんでした",
+    "summary": "{count, plural, other {{total} 行中 {valid} 行をインポートできます。}}",
+    "invalidSummary": "{count, plural, other {{shown} 行が無効なため、このままではインポートできません。}}",
+    "skipInvalid": "無効な行をスキップして残りをインポートする",
+    "nothingToImport": "ファイルを修正して、もう一度選択してください。",
+    "skippedColumns": "インポートされない列：",
+    "columns": {
+      "line": "行",
+      "name": "名前",
+      "expires": "期限",
+      "outcome": "結果",
+      "problems": "問題"
+    },
+    "outcome": {
+      "valid": "準備完了",
+      "invalid": "無効",
+      "created": "インポート済み"
+    },
+    "unnamed": "（名前なし）",
+    "noExpiry": "未設定",
+    "lifetime": "永久保証",
+    "errorItem": "エラー：{message}",
+    "warningItem": "注意：{message}",
+    "submit": "インポート",
+    "submitCount": "{count, plural, other {{shown} 件の保証をインポート}}",
+    "toasts": {
+      "imported": "{count, plural, other {{shown} 件の保証をインポートしました}}",
+      "failed": "保証をインポートできませんでした"
+    }
+  }
+}

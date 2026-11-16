@@ -1,0 +1,102 @@
+{
+  "description": "Parity fixture for booking a split set in a currency's smallest unit (issue #1581). Run by backend/src/common/currency-minor-unit.util.spec.ts and frontend/src/lib/minor-unit-booking.test.ts: the server recognises an unchanged Post dialog by booking the stored template itself, so the two layers must agree figure for figure.",
+  "booking": [
+    {
+      "name": "the issue #1581 installment books in cents, principal taking the rounding",
+      "amounts": [-864.5833, -306.0625],
+      "parentAmount": -1170.6458,
+      "decimals": 2,
+      "absorbIndex": 0,
+      "expected": { "amounts": [-864.59, -306.06], "parentAmount": -1170.65 }
+    },
+    {
+      "name": "a currency without a minor unit books whole units",
+      "amounts": [-86458.33, -30606.25],
+      "parentAmount": -117064.58,
+      "decimals": 0,
+      "absorbIndex": 0,
+      "expected": { "amounts": [-86459, -30606], "parentAmount": -117065 }
+    },
+    {
+      "name": "a set already in the unit is unchanged",
+      "amounts": [-500, -1000],
+      "parentAmount": -1500,
+      "decimals": 2,
+      "absorbIndex": 0,
+      "expected": { "amounts": [-500, -1000], "parentAmount": -1500 }
+    },
+    {
+      "name": "a negative residual lands on the absorbing line too",
+      "amounts": [0.335, 0.665],
+      "parentAmount": 1,
+      "decimals": 2,
+      "absorbIndex": 1,
+      "expected": { "amounts": [0.34, 0.66], "parentAmount": 1 }
+    },
+    {
+      "name": "with no line named to absorb, the lines are only rounded",
+      "amounts": [-864.5833, -306.0625],
+      "parentAmount": -1170.6458,
+      "decimals": 2,
+      "absorbIndex": -1,
+      "expected": { "amounts": [-864.58, -306.06], "parentAmount": -1170.65 }
+    },
+    {
+      "name": "lines that never summed to the parent are only rounded, never forced to it",
+      "amounts": [-864.5833, -306.0625],
+      "parentAmount": -1500,
+      "decimals": 2,
+      "absorbIndex": 0,
+      "expected": { "amounts": [-864.58, -306.06], "parentAmount": -1500 }
+    }
+  ],
+  "absorbIndex": [
+    {
+      "name": "the principal line of a mortgage payment, even when interest is larger",
+      "lines": [
+        { "amount": -900, "transferAccountId": null, "memo": "Interest" },
+        { "amount": -100, "transferAccountId": "mortgage-1", "memo": "Extra Principal" },
+        { "amount": -300, "transferAccountId": "mortgage-1", "memo": "Principal" }
+      ],
+      "accountTypes": { "mortgage-1": "MORTGAGE" },
+      "expected": 2
+    },
+    {
+      "name": "the principal line of a loan payment",
+      "lines": [
+        { "amount": -50, "transferAccountId": null, "memo": null },
+        { "amount": -20, "transferAccountId": "loan-1", "memo": null }
+      ],
+      "accountTypes": { "loan-1": "LOAN" },
+      "expected": 1
+    },
+    {
+      "name": "the principal line of a line-of-credit payment",
+      "lines": [
+        { "amount": -50, "transferAccountId": null, "memo": null },
+        { "amount": -20, "transferAccountId": "loc-1", "memo": "principal" }
+      ],
+      "accountTypes": { "loc-1": "LINE_OF_CREDIT" },
+      "expected": 1
+    },
+    {
+      "name": "a credit card is not a loan: the largest line",
+      "lines": [
+        { "amount": -20, "transferAccountId": "card-1", "memo": null },
+        { "amount": -50, "transferAccountId": null, "memo": null }
+      ],
+      "accountTypes": { "card-1": "CREDIT_CARD" },
+      "expected": 1
+    },
+    {
+      "name": "a split set that pays no loan: the largest line, the first of equals",
+      "lines": [
+        { "amount": -10, "transferAccountId": "savings-1", "memo": null },
+        { "amount": -30, "transferAccountId": null, "memo": null },
+        { "amount": 30, "transferAccountId": null, "memo": null }
+      ],
+      "accountTypes": { "savings-1": "SAVINGS" },
+      "expected": 1
+    }
+  ]
+}

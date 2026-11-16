@@ -1,0 +1,351 @@
+{
+  "comment": "Truth table for detectMortgageType (docs/specs/mortgage-types.md, table 10), read by mortgage-type-detection.util.spec.ts. Samples are consecutive installments, oldest first, as positive amounts posted to the cent; balanceBefore is the debt each was priced on. The linear rows are the spec's worked example (EUR 300,000, 30 years monthly, 2% then 4%, repayments of 20,000 on 2025-07-01 and 15,000 on 2026-01-01), the Canadian rows the demo seed's Scotiabank terms (5.24% semi-annual, 385,000, 2,370 a month) and a 6% loan, where 0.4939% a month (CANADIAN_FIXED) and 0.5000% (ANNUITY) separate the compounding. Tolerance is one cent per sample. A null type is a refusal and always carries its reason.",
+  "cases": [
+    {
+      "name": "linear worked example, first two payments",
+      "quotedAnnualRate": 2,
+      "frequency": "MONTHLY",
+      "samples": [
+        { "principal": 833.33, "interest": 500.0, "balanceBefore": 300000.0 },
+        { "principal": 833.33, "interest": 498.61, "balanceBefore": 299166.67 }
+      ],
+      "expected": {
+        "type": "LINEAR",
+        "confidence": "high",
+        "reason": "CONSTANT_PRINCIPAL"
+      }
+    },
+    {
+      "name": "linear worked example, first three payments",
+      "quotedAnnualRate": 2,
+      "frequency": "MONTHLY",
+      "samples": [
+        { "principal": 833.33, "interest": 500.0, "balanceBefore": 300000.0 },
+        { "principal": 833.33, "interest": 498.61, "balanceBefore": 299166.67 },
+        { "principal": 833.33, "interest": 497.22, "balanceBefore": 298333.33 }
+      ],
+      "expected": {
+        "type": "LINEAR",
+        "confidence": "high",
+        "reason": "CONSTANT_PRINCIPAL"
+      }
+    },
+    {
+      "name": "linear SHORTEN_TERM across the 20,000 repayment (2025-06-01, 2025-07-01)",
+      "quotedAnnualRate": 2,
+      "frequency": "MONTHLY",
+      "samples": [
+        { "principal": 833.33, "interest": 476.39, "balanceBefore": 285833.33 },
+        { "principal": 833.33, "interest": 441.67, "balanceBefore": 265000.0 }
+      ],
+      "expected": {
+        "type": "LINEAR",
+        "confidence": "high",
+        "reason": "CONSTANT_PRINCIPAL"
+      }
+    },
+    {
+      "name": "linear LOWER_INSTALLMENT after the 20,000 repayment (2025-07-01, 2025-08-01)",
+      "quotedAnnualRate": 2,
+      "frequency": "MONTHLY",
+      "samples": [
+        { "principal": 774.85, "interest": 441.67, "balanceBefore": 265000.0 },
+        { "principal": 774.85, "interest": 440.38, "balanceBefore": 264225.15 }
+      ],
+      "expected": {
+        "type": "LINEAR",
+        "confidence": "high",
+        "reason": "CONSTANT_PRINCIPAL"
+      }
+    },
+    {
+      "name": "linear without balances: the shape alone decides the method",
+      "quotedAnnualRate": 2,
+      "frequency": "MONTHLY",
+      "samples": [
+        { "principal": 833.33, "interest": 500.0 },
+        { "principal": 833.33, "interest": 498.61 }
+      ],
+      "expected": {
+        "type": "LINEAR",
+        "confidence": "high",
+        "reason": "CONSTANT_PRINCIPAL"
+      }
+    },
+    {
+      "name": "linear whose interest is not the quoted rate's",
+      "quotedAnnualRate": 3,
+      "frequency": "MONTHLY",
+      "samples": [
+        { "principal": 833.33, "interest": 500.0, "balanceBefore": 300000.0 },
+        { "principal": 833.33, "interest": 498.61, "balanceBefore": 299166.67 }
+      ],
+      "expected": {
+        "type": "LINEAR",
+        "confidence": "low",
+        "reason": "CONSTANT_PRINCIPAL_RATE_MISMATCH"
+      }
+    },
+    {
+      "name": "linear across the 2027-01-01 rate rise: the installment rises, no rule fits",
+      "quotedAnnualRate": 4,
+      "frequency": "MONTHLY",
+      "samples": [
+        { "principal": 833.33, "interest": 393.06, "balanceBefore": 235833.33 },
+        { "principal": 833.33, "interest": 783.33, "balanceBefore": 235000.0 }
+      ],
+      "expected": {
+        "type": null,
+        "confidence": "low",
+        "reason": "NO_RULE_FITS"
+      }
+    },
+    {
+      "name": "linear shape at an accelerated frequency, which LINEAR refuses",
+      "quotedAnnualRate": 2,
+      "frequency": "ACCELERATED_BIWEEKLY",
+      "samples": [
+        { "principal": 384.62, "interest": 230.77 },
+        { "principal": 384.62, "interest": 230.47 }
+      ],
+      "expected": {
+        "type": null,
+        "confidence": "low",
+        "reason": "ACCELERATED_FREQUENCY"
+      }
+    },
+    {
+      "name": "interest only, worked example terms",
+      "quotedAnnualRate": 2,
+      "frequency": "MONTHLY",
+      "samples": [
+        { "principal": 0, "interest": 500.0, "balanceBefore": 300000.0 },
+        { "principal": 0, "interest": 500.0, "balanceBefore": 300000.0 }
+      ],
+      "expected": {
+        "type": "INTEREST_ONLY",
+        "confidence": "high",
+        "reason": "ZERO_PRINCIPAL"
+      }
+    },
+    {
+      "name": "interest only without balances",
+      "quotedAnnualRate": null,
+      "frequency": "MONTHLY",
+      "samples": [
+        { "principal": 0, "interest": 500.0 },
+        { "principal": 0, "interest": 500.0 },
+        { "principal": 0, "interest": 500.0 }
+      ],
+      "expected": {
+        "type": "INTEREST_ONLY",
+        "confidence": "high",
+        "reason": "ZERO_PRINCIPAL"
+      }
+    },
+    {
+      "name": "interest only whose interest is not the quoted rate's",
+      "quotedAnnualRate": 2,
+      "frequency": "MONTHLY",
+      "samples": [
+        { "principal": 0, "interest": 509.59, "balanceBefore": 300000.0 },
+        { "principal": 0, "interest": 460.27, "balanceBefore": 300000.0 }
+      ],
+      "expected": {
+        "type": "INTEREST_ONLY",
+        "confidence": "low",
+        "reason": "ZERO_PRINCIPAL_RATE_MISMATCH"
+      }
+    },
+    {
+      "name": "Canadian fixed, the demo seed's Scotiabank terms",
+      "quotedAnnualRate": 5.24,
+      "frequency": "MONTHLY",
+      "samples": [
+        { "principal": 706.9, "interest": 1663.1, "balanceBefore": 385000.0 },
+        { "principal": 709.95, "interest": 1660.05, "balanceBefore": 384293.1 },
+        { "principal": 713.02, "interest": 1656.98, "balanceBefore": 383583.15 }
+      ],
+      "expected": {
+        "type": "CANADIAN_FIXED",
+        "confidence": "high",
+        "reason": "CONSTANT_INSTALLMENT_SEMI_ANNUAL"
+      }
+    },
+    {
+      "name": "Canadian fixed at 6%: 0.4939% a month, not 0.5000%",
+      "quotedAnnualRate": 6,
+      "frequency": "MONTHLY",
+      "samples": [
+        { "principal": 437.83, "interest": 1481.59, "balanceBefore": 300000.0 },
+        { "principal": 440.0, "interest": 1479.42, "balanceBefore": 299562.17 }
+      ],
+      "expected": {
+        "type": "CANADIAN_FIXED",
+        "confidence": "high",
+        "reason": "CONSTANT_INSTALLMENT_SEMI_ANNUAL"
+      }
+    },
+    {
+      "name": "annuity at 6%: 0.5000% a month, not 0.4939%",
+      "quotedAnnualRate": 6,
+      "frequency": "MONTHLY",
+      "samples": [
+        { "principal": 432.9, "interest": 1500.0, "balanceBefore": 300000.0 },
+        { "principal": 435.06, "interest": 1497.84, "balanceBefore": 299567.1 },
+        { "principal": 437.24, "interest": 1495.66, "balanceBefore": 299132.04 }
+      ],
+      "expected": {
+        "type": "ANNUITY",
+        "confidence": "high",
+        "reason": "CONSTANT_INSTALLMENT_NOMINAL"
+      }
+    },
+    {
+      "name": "annuity at an accelerated frequency, which the annuity methods allow",
+      "quotedAnnualRate": 6,
+      "frequency": "ACCELERATED_BIWEEKLY",
+      "samples": [
+        { "principal": 274.14, "interest": 692.31, "balanceBefore": 300000.0 },
+        { "principal": 274.77, "interest": 691.68, "balanceBefore": 299725.86 }
+      ],
+      "expected": {
+        "type": "ANNUITY",
+        "confidence": "high",
+        "reason": "CONSTANT_INSTALLMENT_NOMINAL"
+      }
+    },
+    {
+      "name": "annuity without balances: the compounding cannot be checked",
+      "quotedAnnualRate": 6,
+      "frequency": "MONTHLY",
+      "samples": [
+        { "principal": 432.9, "interest": 1500.0 },
+        { "principal": 435.06, "interest": 1497.84 }
+      ],
+      "expected": {
+        "type": "ANNUITY",
+        "confidence": "low",
+        "reason": "CONSTANT_INSTALLMENT_RATE_UNCHECKED"
+      }
+    },
+    {
+      "name": "annuity without a quoted rate",
+      "quotedAnnualRate": null,
+      "frequency": "MONTHLY",
+      "samples": [
+        { "principal": 432.9, "interest": 1500.0, "balanceBefore": 300000.0 },
+        { "principal": 435.06, "interest": 1497.84, "balanceBefore": 299567.1 }
+      ],
+      "expected": {
+        "type": "ANNUITY",
+        "confidence": "low",
+        "reason": "CONSTANT_INSTALLMENT_RATE_UNCHECKED"
+      }
+    },
+    {
+      "name": "annuity whose interest is charged by day count, matching neither convention",
+      "quotedAnnualRate": 6,
+      "frequency": "MONTHLY",
+      "samples": [
+        { "principal": 404.13, "interest": 1528.77, "balanceBefore": 300000.0 },
+        { "principal": 553.94, "interest": 1378.96, "balanceBefore": 299595.87 }
+      ],
+      "expected": {
+        "type": "ANNUITY",
+        "confidence": "low",
+        "reason": "CONSTANT_INSTALLMENT_RATE_MISMATCH"
+      }
+    },
+    {
+      "name": "annuity on a debt too small for the two conventions to differ by a cent",
+      "quotedAnnualRate": 6,
+      "frequency": "MONTHLY",
+      "samples": [
+        { "principal": 50.0, "interest": 0.5, "balanceBefore": 100.0 },
+        { "principal": 50.25, "interest": 0.25, "balanceBefore": 50.0 }
+      ],
+      "expected": {
+        "type": "ANNUITY",
+        "confidence": "low",
+        "reason": "CONSTANT_INSTALLMENT_COMPOUNDING_AMBIGUOUS"
+      }
+    },
+    {
+      "name": "ambiguous pair at 0%: equal totals that are also equal principal",
+      "quotedAnnualRate": 0,
+      "frequency": "MONTHLY",
+      "samples": [
+        { "principal": 833.33, "interest": 0, "balanceBefore": 300000.0 },
+        { "principal": 833.33, "interest": 0, "balanceBefore": 299166.67 }
+      ],
+      "expected": {
+        "type": null,
+        "confidence": "low",
+        "reason": "AMBIGUOUS_CONSTANT_PRINCIPAL_AND_INSTALLMENT"
+      }
+    },
+    {
+      "name": "level installment with a falling principal (a rate rise between the samples)",
+      "quotedAnnualRate": 6,
+      "frequency": "MONTHLY",
+      "samples": [
+        { "principal": 440.0, "interest": 1479.42 },
+        { "principal": 437.83, "interest": 1481.59 }
+      ],
+      "expected": {
+        "type": null,
+        "confidence": "low",
+        "reason": "NO_RULE_FITS"
+      }
+    },
+    {
+      "name": "neither principal nor installment constant",
+      "quotedAnnualRate": 6,
+      "frequency": "MONTHLY",
+      "samples": [
+        { "principal": 400.0, "interest": 500.0 },
+        { "principal": 450.0, "interest": 300.0 }
+      ],
+      "expected": {
+        "type": null,
+        "confidence": "low",
+        "reason": "NO_RULE_FITS"
+      }
+    },
+    {
+      "name": "nothing paid on either sample",
+      "quotedAnnualRate": 6,
+      "frequency": "MONTHLY",
+      "samples": [
+        { "principal": 0, "interest": 0 },
+        { "principal": 0, "interest": 0 }
+      ],
+      "expected": { "type": null, "confidence": "low", "reason": "NO_PAYMENT" }
+    },
+    {
+      "name": "one sample: a refusal, never a guess",
+      "quotedAnnualRate": 2,
+      "frequency": "MONTHLY",
+      "samples": [
+        { "principal": 833.33, "interest": 500.0, "balanceBefore": 300000.0 }
+      ],
+      "expected": {
+        "type": null,
+        "confidence": "low",
+        "reason": "TOO_FEW_SAMPLES"
+      }
+    },
+    {
+      "name": "no samples",
+      "quotedAnnualRate": 2,
+      "frequency": "MONTHLY",
+      "samples": [],
+      "expected": {
+        "type": null,
+        "confidence": "low",
+        "reason": "TOO_FEW_SAMPLES"
+      }
+    }
+  ]
+}

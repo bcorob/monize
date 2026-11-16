@@ -9,7 +9,8 @@
     "stepCounter": "{current} de {total}",
     "skippedTitle": "Visita guiada terminada",
     "skippedBody": "Alguns passos foram ignorados porque o respetivo ecrã ou controlo não estava disponível. Pode refazer a visita guiada a qualquer momento nas Definições.",
-    "move": "Mover este cartão — arraste-o ou desloque-o com as teclas de seta"
+    "move": "Mover este cartão — arraste-o ou desloque-o com as teclas de seta",
+    "readGuide": "Ler o guia completo"
   },
   "offer": {
     "heading": "Faça uma visita guiada rápida",
@@ -45,7 +46,8 @@
     "requirementsLoading": "A verificar se pode fazer esta visita guiada…",
     "requires": {
       "transactionEntry": "Adicione primeiro uma conta — esta visita mostra como registar uma transação.",
-      "securitiesExist": "Adicione primeiro um título — esta visita abre um a partir da sua lista de títulos."
+      "securitiesExist": "Adicione primeiro um título — esta visita abre um a partir da sua lista de títulos.",
+      "ownerView": "Volte primeiro aos seus próprios dados. Esta visita apresenta funcionalidades indisponíveis quando atua em nome de outra pessoa."
     },
     "start": "Iniciar",
     "restart": "Repetir",
@@ -67,7 +69,7 @@
         },
         "dashboard": {
           "title": "O seu painel",
-          "body": "Este é o seu painel. Utilize o botão **Personalizar** no canto superior direito para reorganizar ou ocultar widgets, de modo a que os resumos mais importantes para si fiquem no topo."
+          "body": "Este é o seu painel. Escolha a engrenagem **Personalizar** junto à saudação para o organizar: mova ou remova widgets onde estão, escolha **Adicionar widget** para obter mais e **Concluído** para manter a disposição."
         },
         "tools": {
           "title": "O menu Ferramentas",
@@ -76,6 +78,14 @@
         "accounts": {
           "title": "As suas contas",
           "body": "Adicione aqui as suas contas bancárias, de cartão de crédito, de empréstimo e de investimento com o botão destacado. Cada saldo e transação pertence a uma conta."
+        },
+        "openAccountDetail": {
+          "title": "Abra a vista detalhada de uma conta",
+          "body": "Cada conta tem uma página adaptada ao seu tipo. Escolha **Detalhes** — o ícone de olho na linha de uma conta — para a abrir. No telemóvel, mantenha a conta premida e escolha **Detalhes**."
+        },
+        "accountDetailView": {
+          "title": "Uma vista feita para esta conta",
+          "body": "Esta página muda consoante o tipo de conta, por isso uma conta bancária, um cartão de crédito, um empréstimo, uma conta de investimento ou um ativo mostram cada um os valores e as ferramentas que lhes convêm. Volte aqui quando quiser através de **Detalhes** na lista de contas."
         },
         "transactions": {
           "title": "Transações",
@@ -303,6 +313,374 @@
             "title": "Volte na avaliação seguinte",
             "body": "A GEM toma uma decisão por período, e a data da próxima está no topo do relatório. Até esse dia não há nada a fazer. Quando chegar, verifique se o sinal mudou; se mudou, execute as operações através da sua corretora e registe-as no Monize, para que a comparação da carteira continue a bater. Pode repetir esta visita a qualquer momento em **Visitas guiadas** nas **Definições**."
           }
+        }
+      }
+    },
+    "v1_16_0": {
+      "notifications": {
+        "title": "Notificações",
+        "steps": {
+          "welcome": {
+            "title": "O Monize já o pode avisar",
+            "body": "Uma fatura a vencer, um orçamento ultrapassado, um saldo que cruza um limite que definiu, uma cópia de segurança falhada. Esta visita mostra onde isso chega e como escolhe o que o alcança por email ou no telemóvel."
+          },
+          "bell": {
+            "title": "O sino é o registo",
+            "body": "Todas as notificações que o Monize gera são escritas aqui, independentemente do que ligue ou desligue. O email e as notificações push são cópias enviadas depois; esta lista é o original, e o número no sino conta o que ainda não leu."
+          },
+          "panel": {
+            "title": "O que uma notificação traz",
+            "body": "Cada uma diz o que aconteceu e liga para a página que o mostra: a fatura, o orçamento, a conta. **Marcar todos como lidos** limpa o contador sem remover nada. Se quiser ser relembrado, cada notificação tem **Lembrar-me**: mais uma vez após um intervalo, ou a repetir até a parar — e pode pará-la a partir da própria notificação quando chega ao telemóvel."
+          },
+          "filters": {
+            "title": "Reduza a lista e depois atue sobre ela",
+            "body": "A linha de cima filtra por gravidade e a de baixo separa **Financeiros** de **Sistema** — cópias de segurança, entrega de correio e tudo aquilo em que só um administrador pode agir. **Eliminar todos** segue o filtro que estiver aplicado e alcança todas as correspondências, não apenas as visíveis, pelo que pode limpar uma série de alertas de sistema já resolvidos e deixar os restantes."
+          },
+          "settings": {
+            "title": "Onde a entrega é decidida",
+            "body": "**Definições → Notificações** contém o resto desta visita. No topo do cartão estão o interruptor do email e o resumo semanal de orçamentos; abaixo, a grelha que decide tudo o resto e, a seguir, os seus dispositivos push."
+          },
+          "matrix": {
+            "title": "Uma linha por tipo, uma coluna por canal",
+            "body": "Escolha, para cada tipo de notificação, se sai como **Email (relatório)**, **Email (alerta)**, **Push** ou por **UnifiedPush** para um distribuidor que aloja você mesmo. Não há coluna para o sino, porque o sino recebe sempre a linha. **Intervalo** é a última coluna: dispensa o email e o push quando algo do mesmo grupo já saiu dentro dessa janela — a entrada no sino é escrita à mesma. Cada interruptor guarda no momento em que o muda."
+          },
+          "push": {
+            "title": "Os seus dispositivos",
+            "body": "Registe aqui um navegador e o Monize consegue alcançá-lo com a aplicação fechada. Assina as suas próprias mensagens, por isso não há nenhuma conta Google ou Apple pelo meio. Cada dispositivo pode ser testado e removido por si só, e um dispositivo que deixa de estar acessível diz porquê. No iPhone funciona depois de adicionar o Monize ao ecrã principal; se o seu administrador não tiver ligado as notificações push nesta instância, é isso que aparece aqui."
+          },
+          "portfolio": {
+            "title": "Movimento dos investimentos",
+            "body": "Uma vez por dia, quando as suas contas de investimento se movem mais do que o valor que definir aqui. Mede o movimento de mercado e os dividendos: dinheiro que deposita ou levanta não é um movimento."
+          },
+          "finish": {
+            "title": "Mais um sítio onde olhar",
+            "body": "Os alertas de saldo vivem na própria conta: edite qualquer conta e defina **Avisar abaixo de** ou **Avisar acima de**. Disparam quando o saldo *cruza* o limite, por isso é avisado uma vez em vez de a cada pagamento que o mantém lá. Pode repetir esta visita quando quiser a partir das Definições."
+          }
+        }
+      },
+      "reportTagBreakdown": {
+        "title": "Repartir um relatório por etiqueta",
+        "steps": {
+          "welcome": {
+            "title": "Veja os seus relatórios por etiqueta, não só por categoria",
+            "body": "Receitas vs Despesas e a Demonstração de Fluxo de Caixa já podem ser repartidas pelo valor de uma etiqueta à sua escolha — despesas domésticas versus uma atividade paralela, por exemplo — e mostram as transferências entre elas sem nunca contar uma transferência como receita."
+          },
+          "breakdown": {
+            "title": "Repartir por chave de etiqueta",
+            "body": "Escolha aqui uma chave de etiqueta, como **scope**, e o relatório divide-se numa secção por cada valor usado com ela, mais uma secção **Sem etiqueta** para o resto.",
+            "fallbackBody": "Este controlo aparece assim que etiquetar uma transação com uma etiqueta **chave:valor**, como **scope:household**. Adicione uma, e Repartir por chave de etiqueta aparecerá aqui."
+          },
+          "buckets": {
+            "title": "Totais por valor, com as transferências à parte",
+            "body": "Escolher uma chave abre um separador por valor mais **Sem etiqueta**, cada um com as suas próprias receitas e despesas. O dinheiro movido entre contas aparece como **Entradas etiquetadas** e **Saídas etiquetadas** — visível, mas nunca contado como receita."
+          },
+          "finish": {
+            "title": "É assim a repartição por etiqueta",
+            "body": "Etiquete transações com um par chave:valor como scope:household onde quiser esta vista, e volte a esta visita guiada quando quiser a partir de Definições."
+          }
+        }
+      }
+    },
+    "v1_17_0": {
+      "transactionRules": {
+        "title": "Regras de transações",
+        "steps": {
+          "welcome": {
+            "title": "Regras que arrumam as suas transações",
+            "body": "Quando uma transação é criada ou importada e cumpre as condições que definiu, uma regra pode definir a sua categoria ou beneficiário, adicionar etiquetas, reescrever a descrição ou pedir a uma IA que a reveja. Uma regra nunca altera um montante, uma conta ou uma data."
+          },
+          "tools": {
+            "title": "As regras estão em Ferramentas",
+            "body": "Abra **Ferramentas** para encontrar **Regras**. O passo seguinte mostra o menu."
+          },
+          "rulesLink": {
+            "title": "Abrir Regras",
+            "body": "Escolha **Regras**. Lista todas as suas regras e é aí que cria uma nova."
+          },
+          "list": {
+            "title": "As suas regras, por ordem",
+            "body": "Cada linha é uma regra, com um interruptor para a ligar ou desligar e ações para a mover, executar, duplicar ou eliminar. As regras são verificadas de cima para baixo, pelo que a ordem conta quando duas alteram o mesmo. Se ainda não tem regras, este cartão explica o que é uma regra."
+          },
+          "create": {
+            "title": "Criar uma regra",
+            "body": "**Criar regra** abre o editor com uma regra em branco. Nada é guardado até escolher **Guardar regra**."
+          },
+          "when": {
+            "title": "Quando: que transações analisa",
+            "body": "Escolha se a regra analisa uma transação quando é **criada**, quando é **importada** ou em ambos os casos. **Parar de processar as outras regras** ignora as regras abaixo desta para qualquer transação que ela reconheça."
+          },
+          "if": {
+            "title": "Se: que transações correspondem",
+            "body": "Monte as condições com campos como beneficiário, descrição, montante e categoria. O seletor **Visual** e **Expressão** mostra as mesmas condições como cartões ou como uma linha de texto. Num padrão, * representa qualquer texto e '{name}' guarda o texto nesse ponto para que uma ação o possa reutilizar."
+          },
+          "then": {
+            "title": "Então: o que altera",
+            "body": "As ações são executadas pela ordem indicada. Uma regra pode definir a categoria ou o beneficiário, adicionar ou remover etiquetas, definir a descrição ou pedir a uma IA que reveja a transação. Não existe nenhuma ação para um montante, uma conta ou uma data."
+          },
+          "test": {
+            "title": "Testar, executar e anular",
+            "body": "**Testar regra** experimenta o rascunho nas suas transações existentes e mostra o que alteraria. Nada é alterado. Depois de guardada a regra, **Executar nas transações existentes** mostra uma pré-visualização e aplica-a ao que já tem, e pode anular essa execução no histórico de ações."
+          },
+          "reviews": {
+            "title": "A caixa de revisão de IA",
+            "body": "Uma regra com **Pedir uma revisão da IA** não altera a transação, coloca-a aqui. Um assistente propõe uma edição e nada é escrito até a aprovar. Também pode dispensar um pedido. Encontra-a em **IA** como **Caixa de revisão de IA**."
+          }
+        }
+      }
+    },
+    "v1_20_0": {
+      "warranties": {
+        "title": "Garantias",
+        "steps": {
+          "welcome": {
+            "title": "Acompanhe as suas garantias",
+            "body": "Uma garantia regista o que comprou, quando termina a cobertura e quem lho vendeu, com o recibo, o manual e eventuais reclamações. Pode ser associada à compra no seu registo de transações. Uma garantia nunca altera um saldo, um relatório ou um total. Esta visita mostra as formas de adicionar uma e onde aparecem depois."
+          },
+          "warrantiesLink": {
+            "title": "As garantias estão em Ferramentas",
+            "body": "Abra **Ferramentas** e escolha **Garantias** para ver todas as suas garantias."
+          },
+          "overview": {
+            "title": "A cobertura num relance",
+            "body": "Estes cartões contam as suas garantias **A expirar em breve**, **Ativas**, **Expiradas** e **Vitalícias**. Escolha um cartão para filtrar a lista abaixo. Também pode pesquisar, ordenar e mostrar as garantias arquivadas. Escolha uma garantia na lista para abrir a respetiva página, com os documentos, as reclamações e a compra a que está associada."
+          },
+          "addWarranty": {
+            "title": "Método 1: adicionar aqui",
+            "body": "**Adicionar garantia** abre um formulário em branco. Introduza o produto, o vendedor e a data de compra e, depois, quando termina a cobertura: **Numa data**, **Após um prazo** ou **Nunca** para uma garantia vitalícia. Pode anexar o recibo ou o manual antes de guardar."
+          },
+          "importCsv": {
+            "title": "Método 2: importar um ficheiro CSV",
+            "body": "**Importar CSV** lê um ficheiro com as colunas do Warracker, como uma exportação do Warracker ou desta página. Vê todas as linhas e eventuais problemas antes de algo ser guardado."
+          },
+          "inRegister": {
+            "title": "Garantias no registo",
+            "body": "Uma transação com garantia mostra um escudo no registo. Pesquise **has:warranty** para encontrar todas essas transações."
+          },
+          "newTransaction": {
+            "title": "Método 3: ao registar uma compra",
+            "body": "Escolha **+ Nova Transação** para abrir o formulário."
+          },
+          "warrantiesLine": {
+            "title": "A linha Garantias",
+            "body": "Aqui, **Adicionar garantia** guarda primeiro a nova transação e depois abre o formulário da garantia preenchido com os dados dela. Quando editar a transação mais tarde, esta linha lista as respetivas garantias, e cada uma abre a sua página.",
+            "fallbackBody": "A linha Garantias não aparece numa conta conjunta, porque uma garantia é só sua. Escolha uma das suas contas e o formulário mostra uma linha **Garantias** acima dos botões. Aí, **Adicionar garantia** guarda primeiro a nova transação e depois abre o formulário da garantia preenchido com os dados dela. Quando editar a transação mais tarde, a linha lista as respetivas garantias."
+          },
+          "closeForm": {
+            "title": "Fechar o formulário",
+            "body": "Escolha **Cancelar** para o fechar sem guardar, ou guarde a transação se introduziu uma verdadeira."
+          },
+          "dashboardWidget": {
+            "title": "Ver no painel o que está a expirar",
+            "body": "Escolha **Personalizar**, depois **Adicionar widget**, selecione **Garantias a expirar em breve** e escolha **Concluído**. Lista as próximas garantias a expirar, e o título abre a página Garantias."
+          },
+          "reminders": {
+            "title": "Lembretes antes do fim da cobertura",
+            "body": "O Monize envia um lembrete 30 dias e 7 dias antes de uma garantia expirar, e no próprio dia. Os lembretes chegam aqui, e pode adiar um deles ou abrir a garantia a partir dele. Escolha como lhe chegam em **Definições**, em **Notificações**, como **Lembretes de garantia**."
+          }
+        }
+      },
+      "payrollDeductions": {
+        "title": "Deduções salariais",
+        "steps": {
+          "welcome": {
+            "title": "Pare as deduções no máximo anual",
+            "body": "Algumas deduções do vencimento, como a reforma ou o seguro de desemprego, param quando o máximo do ano é atingido e recomeçam no ano seguinte. Uma regra de dedução salarial indica esse máximo ao Monize, para que o vencimento deixe de descontar a dedução quando ele é atingido. **Antes de começar, precisa de uma fatura de salário agendada:** o seu vencimento configurado como um depósito agendado, com as deduções em linhas separadas."
+          },
+          "payrollBill": {
+            "title": "Primeiro, configure o seu vencimento",
+            "body": "Se ainda não o fez, escolha **+ Nova agenda** e crie o seu vencimento como um depósito. Divida-o numa linha para o salário bruto e numa linha negativa por cada dedução, cada uma com a sua categoria. Se uma dedução não estiver a ser descontada agora porque o máximo deste ano já foi atingido, adicione mesmo assim uma linha de divisão para ela, como uma despesa de valor zero, para que uma regra a possa limitar e ela recomece após o reinício. Só um depósito ativo que credita mais do que desconta pode ter regras, e só as suas linhas de dedução podem ser limitadas."
+          },
+          "taxesLink": {
+            "title": "As deduções salariais estão em Impostos",
+            "body": "Abra **Ferramentas** e escolha **Impostos** para encontrar as ferramentas fiscais."
+          },
+          "taxesCard": {
+            "title": "Abra Deduções salariais",
+            "body": "Escolha este cartão para abrir as regras de dedução salarial."
+          },
+          "newRule": {
+            "title": "Crie as regras de um vencimento",
+            "body": "**+ Nova regra** abre o formulário. Escolha a sua fatura de salário agendada e depois um máximo anual para cada categoria de dedução que pretende limitar. Indique a data de reinício, normalmente 1 de janeiro. Se a fatura não tiver linhas de dedução, o formulário pede-lhe que as adicione primeiro à fatura."
+          },
+          "rulesList": {
+            "title": "As suas regras",
+            "body": "Cada regra mostra a fatura, a categoria, o máximo anual, a data de reinício e quanto cada vencimento desconta. Edite uma regra para mudar o máximo, ou elimine-a para que o vencimento volte a descontar a linha completa. Eliminar uma regra nunca altera uma transação registada."
+          },
+          "periodTables": {
+            "title": "O que já foi descontado",
+            "body": "Quando tiver uma regra, **Mostrar acumulado do ano** mostra quanto cada categoria descontou neste período e a margem que resta até ao máximo. **Mostrar períodos anteriores** mostra quanto descontou nos anos anteriores."
+          },
+          "forecast": {
+            "title": "Aplicado quando o vencimento é registado",
+            "body": "Quando o vencimento é registado, cada linha limitada é reduzida à margem que resta até ao máximo, até zero, e recomeça após a data de reinício. A previsão de fluxo de caixa, aqui e no painel, mostra o mesmo antecipadamente, para que veja o seu salário líquido subir quando um máximo é atingido."
+          },
+          "reminders": {
+            "title": "Um lembrete antes de cada reinício",
+            "body": "Dois meses antes de uma regra reiniciar, o Monize pede-lhe aqui que confirme o máximo do ano seguinte. Se não fizer nada, a regra mantém o máximo e reinicia na sua data. Escolha como os lembretes lhe chegam em **Definições**, em **Notificações**, como **Contas e agendados**."
+          }
+        }
+      },
+      "sharedExpenses": {
+        "title": "Despesas partilhadas",
+        "steps": {
+          "welcome": {
+            "title": "Viajem juntos, mantenham as contas claras",
+            "body": "Saiba como registar compras do grupo e reembolsos. Esta visita não cria registos por si."
+          },
+          "tools": {
+            "title": "Abrir as despesas partilhadas",
+            "body": "Encontra **Despesas partilhadas** em **Ferramentas**. No telemóvel, utilize o menu de navegação."
+          },
+          "newGroup": {
+            "title": "Comece pelo seu grupo",
+            "body": "Em **Novo grupo**, indique o nome da viagem, as pessoas e a moeda de acerto de contas. As pessoas não precisam de contas Monize. Cada compra pode envolver membros diferentes."
+          },
+          "chooseGroup": {
+            "title": "Explore um grupo",
+            "body": "Abra um grupo para continuar. Se ainda não tiver nenhum, escolha **Ignorar este passo** e crie um depois da visita."
+          },
+          "expenses": {
+            "title": "Quem pagou e para quem?",
+            "body": "Com permissão de edição, utilize **Adicionar despesa** para escolher quem pagou e os beneficiários. **Dividir entre** permite partes iguais, montantes exatos, percentagens e partes de valor zero."
+          },
+          "balances": {
+            "title": "Verifique os saldos e acerte contas",
+            "body": "**Saldos** mostra quem deve a quem e sugere reembolsos. Registe um reembolso depois de entregar o dinheiro. **Ficheiros** e **Atividade** guardam os comprovativos e o histórico."
+          },
+          "done": {
+            "title": "Tudo pronto para a próxima viagem",
+            "body": "Os registos partilhados ficam separados das transações pessoais. Repita esta visita a qualquer momento em **Definições**, na secção **Visitas guiadas**."
+          }
+        }
+      }
+    },
+    "v1_21_0": {
+      "commandPalette": {
+        "title": "Paleta de comandos",
+        "steps": {
+          "welcome": {
+            "title": "Encontre tudo numa só caixa",
+            "body": "A paleta de comandos pesquisa de uma só vez as suas contas, beneficiários, categorias, faturas, valores mobiliários, relatórios, definições, transações e o guia do utilizador, a partir de qualquer ecrã. Funciona com o teclado, por isso esta visita é para um computador."
+          },
+          "openPalette": {
+            "title": "Abra a paleta",
+            "body": "Prima **Ctrl+K** (**Cmd+K** num Mac). A visita continua quando a paleta abrir."
+          },
+          "searchBox": {
+            "title": "Escreva o que procura",
+            "body": "Experimente um beneficiário, uma conta, um relatório como **Valor Líquido** ou uma definição como **Moedas**. Os resultados atualizam-se enquanto escreve, e as transações e as secções do guia também são pesquisadas."
+          },
+          "results": {
+            "title": "Mova-se e abra",
+            "body": "Use as setas **Cima** e **Baixo** para se mover e **Enter** para abrir um resultado. **Tab** salta para as ações, e **Ctrl+Enter** (**Cmd+Enter** num Mac) inicia uma nova transação para o beneficiário que melhor corresponde."
+          },
+          "closePalette": {
+            "title": "Feche a paleta",
+            "body": "Clique em **esc** para a fechar por agora. Fora desta visita, a tecla **Esc** faz o mesmo."
+          },
+          "done": {
+            "title": "Um atalho a recordar",
+            "body": "Prima **Ctrl+K** sempre que quiser ir a algum lado. Sobre uma caixa de diálogo aberta, pesquisa antes o guia. Num telemóvel, use a pesquisa do cabeçalho. Repita esta visita quando quiser em **Definições**, em **Visitas guiadas**."
+          }
+        }
+      },
+      "inAppHelp": {
+        "title": "Ajuda dentro da aplicação",
+        "steps": {
+          "welcome": {
+            "title": "O guia do utilizador, junto ao seu trabalho",
+            "body": "O guia do utilizador do Monize abre agora dentro da aplicação, junto à página em que está, com capturas de ecrã no seu tema. Vem incluído no seu Monize, por isso funciona offline. Esta visita mostra onde o encontrar."
+          },
+          "pageHelp": {
+            "title": "Abra a ajuda desta página",
+            "body": "Clique no **?** junto ao título da página. O guia abre na secção sobre esta página."
+          },
+          "panel": {
+            "title": "Leia junto à página",
+            "body": "O painel fica junto à página em que estava. **Nesta página** lista as secções, e as ligações para outras páginas do guia abrem aqui. Num computador, arraste a margem esquerda do painel para o alargar ou estreitar."
+          },
+          "panelControls": {
+            "title": "Controlos do painel",
+            "body": "Recue com **Voltar** e avance com **Avançar** pelas páginas que abriu, use **Pesquisar** no guia, **Fixe** o painel para que fique aberto noutras páginas, ou abra a página em monize.net. Clique em **Fechar** (o **X**) para continuar."
+          },
+          "helpMenu": {
+            "title": "O menu Ajuda",
+            "body": "O **?** no cabeçalho reúne a ajuda da página atual, a pesquisa no guia, os atalhos de teclado, a visita desta página e as novidades. Também pode premir **?** em qualquer lugar onde não esteja a escrever para pesquisar o guia."
+          },
+          "learnMore": {
+            "title": "Saiba mais, onde precisa",
+            "body": "Procure **Saiba mais** nas dicas, nos ecrãs vazios e junto a algumas mensagens de erro. Cada um abre a secção do guia que o explica."
+          },
+          "done": {
+            "title": "Pergunte pelas suas palavras",
+            "body": "O assistente de IA também pode responder a perguntas como “como é que eu...” a partir do guia e indicar-lhe que secções usou. Repita esta visita quando quiser em **Definições**, em **Visitas guiadas**."
+          }
+        }
+      },
+      "dashboardEdit": {
+        "title": "Organizar o painel",
+        "steps": {
+          "welcome": {
+            "title": "Organize o seu painel no próprio local",
+            "body": "Agora move, redimensiona, adiciona e remove widgets diretamente no painel, e nada é guardado até o indicar. Esta visita percorre o modo de edição."
+          },
+          "enterEdit": {
+            "title": "Entre no modo de edição",
+            "body": "Clique na roda dentada junto à saudação. A visita continua quando o modo de edição abrir."
+          },
+          "editBar": {
+            "title": "A barra de edição",
+            "body": "**Adicionar widget** lista os widgets que não estão no seu painel. **Definições do destaque** escolhe o que o destaque no topo mostra, e **Repor predefinições** repõe a disposição padrão."
+          },
+          "arrange": {
+            "title": "Mover, redimensionar e remover",
+            "body": "Arraste um widget pela pega (os seis pontos) ou use as suas setas. Num ecrã largo, **Largura** e **Altura** alteram o tamanho, ou arraste o canto inferior direito. O **X** remove-o, e o mosaico tracejado **Adicionar widget** adiciona um. Experimente."
+          },
+          "finish": {
+            "title": "Manter ou repor",
+            "body": "Clique em **Concluído** para guardar a disposição, ou em **Cancelar** para a deixar como estava. A sua disposição sincroniza entre os seus dispositivos."
+          },
+          "done": {
+            "title": "Faça-o seu",
+            "body": "À procura de algo novo para adicionar? O widget **Curiosidades** mostra um facto diário sobre o seu dinheiro. Repita esta visita quando quiser em **Definições**, em **Visitas guiadas**."
+          }
+        }
+      }
+    }
+  },
+  "emailReceipts": {
+    "basics": {
+      "title": "Recibos por e-mail",
+      "steps": {
+        "welcome": {
+          "title": "Porquê ler recibos por e-mail",
+          "body": "Uma transação bancária mostra quanto pagou e quando. Não mostra o que comprou. O e-mail de confirmação da encomenda mostra. O Monize lê estes e-mails, encontra a transação que cada um pagou e propõe uma descrição, um beneficiário e uma divisão por linha, com uma categoria para cada linha. Aprova cada proposta antes de ela alterar uma transação."
+        },
+        "aiRequired": {
+          "title": "Na prática, precisa de um fornecedor de IA",
+          "body": "O Monize lê um e-mail com um **perfil**: um conjunto de padrões para um domínio de remetente, por exemplo uma loja. Pode escrever um perfil à mão, mas cada padrão tem de corresponder às linhas exatas dos e-mails dessa loja, por isso, na prática, é uma IA que o escreve. A IA escreve o perfil uma só vez, a partir de alguns e-mails de exemplo. Depois de o aprovar, o perfil lê cada novo e-mail dessa loja sem a IA."
+        },
+        "aiProviders": {
+          "title": "Configure primeiro um fornecedor de IA",
+          "body": "Adicione aqui um fornecedor e teste a ligação. Sem fornecedor, o assistente de perfis não consegue escrever um perfil e os e-mails de uma loja sem perfil ficam por ler."
+        },
+        "tabs": {
+          "title": "Quatro separadores, pela ordem de utilização",
+          "body": "**Visão geral** mostra o que o Monize leu. Em **Caixa de correio**, ligue uma caixa que contenha apenas confirmações de encomendas. O Monize só a lê: nunca move, assinala nem elimina uma mensagem. **Perfis** contém um perfil por loja. **E-mails** lista cada e-mail e o seu estado."
+        },
+        "uncovered": {
+          "title": "Lojas sem perfil",
+          "body": "Esta caixa lista os domínios de remetente que nenhum perfil consegue ler ainda. Escolha um para iniciar o assistente. Selecione até cinco dos seus e-mails e associe cada um à transação bancária que pagou. A IA escreve um perfil e testa-o nestes pares. Depois vê uma pré-visualização de todos os e-mails dessa loja e aceita o perfil ou pede uma alteração com uma nota curta.",
+          "fallbackBody": "Ainda não tem e-mails de uma loja sem perfil. Depois de ligar a caixa de correio, cada domínio de remetente aparece aqui como uma etiqueta, por exemplo **shop.example (12)**: o domínio e o número dos seus e-mails. Escolha a etiqueta para iniciar o assistente. Selecione até cinco dos seus e-mails e associe cada um à transação bancária que pagou. A IA escreve um perfil e testa-o nestes pares. Depois vê uma pré-visualização de todos os e-mails dessa loja e aceita o perfil ou pede uma alteração com uma nota curta."
+        },
+        "profiles": {
+          "title": "Os seus perfis",
+          "body": "Cada linha é um perfil, aprovado ou rascunho. **Criar um novo perfil manualmente** abre o editor de um perfil escrito à mão. Use-o para corrigir um pequeno detalhe num rascunho da IA. Quando aprova um perfil, o Monize lê de imediato os e-mails do seu domínio.",
+          "fallbackBody": "Ainda não tem perfis. Cada perfil que aceitar aparece aqui como uma linha, por exemplo **Shop Example**, domínio **shop.example**, estado **Aprovado**. **Criar um novo perfil manualmente** abre o editor de um perfil escrito à mão. Use-o apenas para corrigir um pequeno detalhe num rascunho da IA. Quando aprova um perfil, o Monize lê de imediato os e-mails do seu domínio."
+        },
+        "reviews": {
+          "title": "Aprove as propostas",
+          "body": "Cada e-mail que corresponde a uma transação torna-se uma proposta na **Caixa de revisão de IA**, no menu **IA**. Uma proposta mostra, por exemplo, as linhas de uma encomenda com uma categoria para cada linha. Nada muda nas suas transações até aprovar a proposta aí."
         }
       }
     }

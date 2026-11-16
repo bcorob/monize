@@ -30,11 +30,6 @@
       "actions": "Azioni"
     },
     "accountCount": "{count, plural, =0 {Nessun conto} one {# conto} other {# conti}}",
-    "statusFilter": {
-      "all": "Tutti",
-      "active": "Attivi",
-      "closed": "Chiusi"
-    },
     "actions": {
       "manageAccounts": "Conti"
     },

@@ -13,7 +13,7 @@ vi.mock('@/lib/ai', () => ({
 }));
 
 vi.mock('react-hot-toast', () => ({
-  toast: {
+  default: {
     success: (...args: unknown[]) => mockToastSuccess(...args),
     error: (...args: unknown[]) => mockToastError(...args),
   },

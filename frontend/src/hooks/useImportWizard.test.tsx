@@ -1,16 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { renderHook, act, waitFor } from '@testing-library/react';
-import { ReactNode } from 'react';
-import { NextIntlClientProvider } from 'next-intl';
-import importEn from '@/i18n/messages/en/import.json';
+import { renderHook, act, waitFor } from '@/test/render';
 
-// Hook emits toasts via next-intl; resolve them against the real English
-// catalog so renderHook has an intl context.
-const wrapper = ({ children }: { children: ReactNode }) => (
-  <NextIntlClientProvider locale="en" messages={{ import: importEn }}>
-    {children}
-  </NextIntlClientProvider>
-);
 import { useImportWizard } from './useImportWizard';
 
 // --- Mocks ---
@@ -228,7 +218,7 @@ describe('useImportWizard - initial load', () => {
     mockGetCategories.mockResolvedValue([baseCategory()]);
     mockGetSecurities.mockResolvedValue([baseSecurity()]);
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
 
     await waitFor(() => {
       expect(result.current.accounts).toHaveLength(1);
@@ -242,7 +232,7 @@ describe('useImportWizard - initial load', () => {
 
   it('handles initial load failure by showing toast error', async () => {
     mockGetAllAccounts.mockRejectedValue(new Error('boom'));
-    renderHook(() => useImportWizard(), { wrapper });
+    renderHook(() => useImportWizard());
     await waitFor(() => {
       expect(mockGetAllAccounts).toHaveBeenCalled();
     });
@@ -250,7 +240,7 @@ describe('useImportWizard - initial load', () => {
 
   it('handles getColumnMappings rejection without breaking load', async () => {
     mockGetColumnMappings.mockRejectedValueOnce(new Error('nope'));
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => {
       expect(result.current.savedColumnMappings).toEqual([]);
     });
@@ -261,7 +251,7 @@ describe('useImportWizard - initial load', () => {
     const account = baseAccount({ id: 'acc-1' });
     mockGetAllAccounts.mockResolvedValue([account]);
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
 
     await waitFor(() => {
       expect(result.current.preselectedAccount?.id).toBe('acc-1');
@@ -272,7 +262,7 @@ describe('useImportWizard - initial load', () => {
     mockSearchParamsGet = (key) => (key === 'accountId' ? 'unknown' : null);
     mockGetAllAccounts.mockResolvedValue([baseAccount()]);
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => {
       expect(result.current.accounts).toHaveLength(1);
     });
@@ -285,7 +275,7 @@ describe('useImportWizard - QIF file upload', () => {
     mockGetAllAccounts.mockResolvedValue([baseAccount()]);
     mockParseQif.mockResolvedValue(baseParsedQif());
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.accounts).toHaveLength(1));
 
     await act(async () => {
@@ -303,7 +293,7 @@ describe('useImportWizard - QIF file upload', () => {
     mockGetAllAccounts.mockResolvedValue([baseAccount({ id: 'acc-1' })]);
     mockParseQif.mockResolvedValue(baseParsedQif({ categories: ['Food'] }));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.accounts).toHaveLength(1));
 
     await act(async () => {
@@ -316,7 +306,7 @@ describe('useImportWizard - QIF file upload', () => {
 
   it('parses OFX file (.ofx detected by extension)', async () => {
     mockParseOfx.mockResolvedValue(baseParsedQif());
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -328,7 +318,7 @@ describe('useImportWizard - QIF file upload', () => {
   });
 
   it('rejects when files of mixed types are uploaded', async () => {
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -342,7 +332,7 @@ describe('useImportWizard - QIF file upload', () => {
   });
 
   it('handles empty file selection (no-op)', async () => {
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -353,7 +343,7 @@ describe('useImportWizard - QIF file upload', () => {
 
   it('parses bulk QIF files', async () => {
     mockParseQif.mockResolvedValue(baseParsedQif({ categories: [] }));
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -366,9 +356,25 @@ describe('useImportWizard - QIF file upload', () => {
     expect(result.current.importFiles).toHaveLength(2);
   });
 
+  it('reads a Quicken for Mac .qmtf file as QIF, alongside .qif files', async () => {
+    mockParseQif.mockResolvedValue(baseParsedQif({ categories: [] }));
+    const { result } = renderHook(() => useImportWizard());
+    await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
+
+    await act(async () => {
+      await result.current.handleFileSelect(
+        fileEvent([makeFile('Export.QMTF', '1'), makeFile('b.qif', '2')]),
+      );
+    });
+
+    expect(result.current.fileType).toBe('qif');
+    expect(mockParseQif).toHaveBeenCalledTimes(2);
+    expect(result.current.importFiles).toHaveLength(2);
+  });
+
   it('handles QIF parse error', async () => {
     mockParseQif.mockRejectedValue(new Error('bad'));
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -390,7 +396,7 @@ describe('useImportWizard - QIF file upload', () => {
     });
     mockGetSecurities.mockResolvedValue([]);
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     const content = '!Account\nNAcct1\n^\n!Account\nNAcct2\n^\n!Type:Cat\nNFood\n^';
@@ -407,7 +413,7 @@ describe('useImportWizard - QIF file upload', () => {
     mockParseQifMulti.mockResolvedValue({ isMultiAccount: false, categoryDefs: [], tagDefs: [], accounts: [], totalTransactionCount: 0, securities: [], detectedDateFormat: 'MM/DD/YYYY', sampleDates: [] });
     mockParseQif.mockResolvedValue(baseParsedQif({ categories: [] }));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     const content = '!Account\nNAcct1\n^\n!Account\nNAcct2\n^';
@@ -421,8 +427,8 @@ describe('useImportWizard - QIF file upload', () => {
 
 describe('useImportWizard - CSV upload', () => {
   it('parses CSV headers and goes to csvColumnMapping step', async () => {
-    mockParseCsvHeaders.mockResolvedValue({ headers: ['Date', 'Amount', 'Memo'], sampleRows: [['1/1/24', '10', 'x']], rowCount: 1 });
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    mockParseCsvHeaders.mockResolvedValue({ headers: ['Date', 'Amount', 'Memo'], sampleRows: [['1/1/24', '10', 'x']], rowCount: 1, columnDateFormats: ['MM/DD/YYYY', null, null] });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -432,11 +438,12 @@ describe('useImportWizard - CSV upload', () => {
     expect(result.current.step).toBe('csvColumnMapping');
     expect(result.current.fileType).toBe('csv');
     expect(result.current.csvHeaders).toEqual(['Date', 'Amount', 'Memo']);
+    expect(result.current.csvColumnDateFormats).toEqual(['MM/DD/YYYY', null, null]);
   });
 
   it('handles bulk CSV upload', async () => {
-    mockParseCsvHeaders.mockResolvedValue({ headers: ['Date', 'Amount'], sampleRows: [], rowCount: 0 });
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    mockParseCsvHeaders.mockResolvedValue({ headers: ['Date', 'Amount'], sampleRows: [], rowCount: 0, columnDateFormats: [null, null] });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -451,7 +458,7 @@ describe('useImportWizard - CSV upload', () => {
   });
 
   it('CSV column mapping change updates state', async () => {
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     act(() => {
@@ -461,7 +468,7 @@ describe('useImportWizard - CSV upload', () => {
   });
 
   it('CSV transfer rules change updates state', async () => {
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     act(() => {
@@ -471,24 +478,25 @@ describe('useImportWizard - CSV upload', () => {
   });
 
   it('CSV delimiter change re-parses headers', async () => {
-    mockParseCsvHeaders.mockResolvedValue({ headers: ['A', 'B'], sampleRows: [], rowCount: 0 });
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    mockParseCsvHeaders.mockResolvedValue({ headers: ['A', 'B'], sampleRows: [], rowCount: 0, columnDateFormats: [null, null] });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
       await result.current.handleFileSelect(fileEvent([makeFile('a.csv', 'A,B')]));
     });
 
-    mockParseCsvHeaders.mockResolvedValue({ headers: ['X', 'Y'], sampleRows: [], rowCount: 0 });
+    mockParseCsvHeaders.mockResolvedValue({ headers: ['X', 'Y'], sampleRows: [['15.03.2026', '1']], rowCount: 1, columnDateFormats: ['DD/MM/YYYY', null] });
     await act(async () => {
       await result.current.handleCsvDelimiterChange(';');
     });
 
     expect(result.current.csvColumnMapping.delimiter).toBe(';');
+    expect(result.current.csvColumnDateFormats).toEqual(['DD/MM/YYYY', null]);
   });
 
   it('CSV delimiter change with no files is a no-op', async () => {
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -498,8 +506,8 @@ describe('useImportWizard - CSV upload', () => {
   });
 
   it('CSV delimiter change handles parse error', async () => {
-    mockParseCsvHeaders.mockResolvedValue({ headers: ['A'], sampleRows: [], rowCount: 0 });
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    mockParseCsvHeaders.mockResolvedValue({ headers: ['A'], sampleRows: [], rowCount: 0, columnDateFormats: [null] });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -514,8 +522,8 @@ describe('useImportWizard - CSV upload', () => {
   });
 
   it('CSV hasHeader change re-parses headers', async () => {
-    mockParseCsvHeaders.mockResolvedValue({ headers: ['A'], sampleRows: [], rowCount: 0 });
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    mockParseCsvHeaders.mockResolvedValue({ headers: ['A'], sampleRows: [], rowCount: 0, columnDateFormats: [null] });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -529,7 +537,7 @@ describe('useImportWizard - CSV upload', () => {
   });
 
   it('CSV hasHeader change with no files is a no-op', async () => {
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -539,10 +547,10 @@ describe('useImportWizard - CSV upload', () => {
   });
 
   it('CSV mapping complete parses files and advances step', async () => {
-    mockParseCsvHeaders.mockResolvedValue({ headers: ['Date', 'Amount'], sampleRows: [], rowCount: 0 });
+    mockParseCsvHeaders.mockResolvedValue({ headers: ['Date', 'Amount'], sampleRows: [], rowCount: 0, columnDateFormats: [null, null] });
     mockParseCsv.mockResolvedValue(baseParsedQif({ categories: [], transferAccounts: [] }));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -564,7 +572,7 @@ describe('useImportWizard - CSV upload', () => {
       .mockResolvedValueOnce({ headers: ['Different'], sampleRows: [], rowCount: 0 });
     mockParseCsv.mockResolvedValue(baseParsedQif({ categories: [] }));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -582,7 +590,7 @@ describe('useImportWizard - CSV upload', () => {
   });
 
   it('CSV mapping complete with no files is a no-op', async () => {
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -592,9 +600,9 @@ describe('useImportWizard - CSV upload', () => {
   });
 
   it('CSV mapping complete handles parse error', async () => {
-    mockParseCsvHeaders.mockResolvedValue({ headers: ['A'], sampleRows: [], rowCount: 0 });
+    mockParseCsvHeaders.mockResolvedValue({ headers: ['A'], sampleRows: [], rowCount: 0, columnDateFormats: [null] });
     mockParseCsv.mockRejectedValue(new Error('bad'));
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -611,7 +619,7 @@ describe('useImportWizard - CSV upload', () => {
     mockCreateColumnMapping.mockResolvedValue({
       id: 'm1', name: 'Test', columnMappings: {}, transferRules: [], createdAt: '', updatedAt: '',
     });
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -624,7 +632,7 @@ describe('useImportWizard - CSV upload', () => {
     mockCreateColumnMapping
       .mockResolvedValueOnce({ id: 'm1', name: 'A', columnMappings: {}, transferRules: [], createdAt: '', updatedAt: '' })
       .mockResolvedValueOnce({ id: 'm1', name: 'A', columnMappings: {}, transferRules: [], createdAt: '', updatedAt: '' });
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => { await result.current.handleSaveColumnMapping('A'); });
@@ -635,7 +643,7 @@ describe('useImportWizard - CSV upload', () => {
 
   it('CSV save column mapping handles error', async () => {
     mockCreateColumnMapping.mockRejectedValue(new Error('boom'));
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -645,7 +653,7 @@ describe('useImportWizard - CSV upload', () => {
   });
 
   it('CSV load column mapping restores config and rules', async () => {
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     act(() => {
@@ -662,7 +670,7 @@ describe('useImportWizard - CSV upload', () => {
   });
 
   it('CSV load column mapping with no transfer rules defaults to empty', async () => {
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     act(() => {
@@ -681,7 +689,7 @@ describe('useImportWizard - CSV upload', () => {
       id: 'm1', name: 'X', columnMappings: {}, transferRules: [], createdAt: '', updatedAt: '',
     });
     mockDeleteColumnMapping.mockResolvedValue(undefined);
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => { await result.current.handleSaveColumnMapping('X'); });
@@ -693,7 +701,7 @@ describe('useImportWizard - CSV upload', () => {
 
   it('CSV delete column mapping handles error', async () => {
     mockDeleteColumnMapping.mockRejectedValue(new Error('boom'));
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => { await result.current.handleDeleteColumnMapping('m1'); });
@@ -717,11 +725,11 @@ describe('useImportWizard - CSV investment mode', () => {
   }
 
   it('pre-enables investment mode when headers look like a brokerage export', async () => {
-    mockParseCsvHeaders.mockResolvedValue({ headers: investmentHeaders, sampleRows: [], rowCount: 0 });
+    mockParseCsvHeaders.mockResolvedValue({ headers: investmentHeaders, sampleRows: [], rowCount: 0, columnDateFormats: investmentHeaders.map(() => null) });
     mockLooksLikeInvestmentCsv.mockReturnValue(true);
     mockAutoMatchInvestmentColumns.mockReturnValue({ actionColumn: 1, securityColumn: 2, quantityColumn: 3 });
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await uploadCsv(result);
@@ -735,10 +743,10 @@ describe('useImportWizard - CSV investment mode', () => {
   });
 
   it('does not pre-enable investment mode for a bank-looking CSV', async () => {
-    mockParseCsvHeaders.mockResolvedValue({ headers: ['Date', 'Amount'], sampleRows: [], rowCount: 0 });
+    mockParseCsvHeaders.mockResolvedValue({ headers: ['Date', 'Amount'], sampleRows: [], rowCount: 0, columnDateFormats: [null, null] });
     mockLooksLikeInvestmentCsv.mockReturnValue(false);
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await uploadCsv(result, 'bank.csv');
@@ -748,10 +756,10 @@ describe('useImportWizard - CSV investment mode', () => {
   });
 
   it('enabling investment mode clears sign/type-column fields and transfer rules', async () => {
-    mockParseCsvHeaders.mockResolvedValue({ headers: investmentHeaders, sampleRows: [], rowCount: 0 });
+    mockParseCsvHeaders.mockResolvedValue({ headers: investmentHeaders, sampleRows: [], rowCount: 0, columnDateFormats: investmentHeaders.map(() => null) });
     mockAutoMatchInvestmentColumns.mockReturnValue({ actionColumn: 1, securityColumn: 2 });
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await uploadCsv(result);
@@ -788,13 +796,13 @@ describe('useImportWizard - CSV investment mode', () => {
   });
 
   it('disabling investment mode clears the investment-specific fields', async () => {
-    mockParseCsvHeaders.mockResolvedValue({ headers: investmentHeaders, sampleRows: [], rowCount: 0 });
+    mockParseCsvHeaders.mockResolvedValue({ headers: investmentHeaders, sampleRows: [], rowCount: 0, columnDateFormats: investmentHeaders.map(() => null) });
     mockLooksLikeInvestmentCsv.mockReturnValue(true);
     mockAutoMatchInvestmentColumns.mockReturnValue({
       actionColumn: 1, securityColumn: 2, quantityColumn: 3, priceColumn: 4, commissionColumn: 5,
     });
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await uploadCsv(result);
@@ -825,7 +833,7 @@ describe('useImportWizard - CSV investment mode', () => {
       id: 'brk-1', name: 'Brokerage', accountType: 'INVESTMENT', accountSubType: 'INVESTMENT_BROKERAGE',
     });
     mockGetAllAccounts.mockResolvedValue([brokerage]);
-    mockParseCsvHeaders.mockResolvedValue({ headers: investmentHeaders, sampleRows: [], rowCount: 0 });
+    mockParseCsvHeaders.mockResolvedValue({ headers: investmentHeaders, sampleRows: [], rowCount: 0, columnDateFormats: investmentHeaders.map(() => null) });
     mockParseCsv.mockResolvedValue(baseParsedQif({
       accountType: 'INVESTMENT',
       categories: [],
@@ -834,7 +842,7 @@ describe('useImportWizard - CSV investment mode', () => {
     }));
     mockImportCsv.mockResolvedValue(importResult({ imported: 4 }));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.accounts).toHaveLength(1));
 
     await uploadCsv(result);
@@ -864,7 +872,7 @@ describe('useImportWizard - CSV investment mode', () => {
 
   it('regular parse builds no security mappings and omits them from the payload', async () => {
     mockGetAllAccounts.mockResolvedValue([baseAccount()]);
-    mockParseCsvHeaders.mockResolvedValue({ headers: ['Date', 'Amount'], sampleRows: [], rowCount: 0 });
+    mockParseCsvHeaders.mockResolvedValue({ headers: ['Date', 'Amount'], sampleRows: [], rowCount: 0, columnDateFormats: [null, null] });
     // Even with a stray securities value, a non-investment parse must not
     // produce security mappings.
     mockParseCsv.mockResolvedValue(baseParsedQif({
@@ -874,7 +882,7 @@ describe('useImportWizard - CSV investment mode', () => {
     }));
     mockImportCsv.mockResolvedValue(importResult({ imported: 2 }));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.accounts).toHaveLength(1));
 
     await uploadCsv(result, 'bank.csv');
@@ -896,14 +904,14 @@ describe('useImportWizard - CSV investment mode', () => {
 
   it('a securities list from a non-investment parse is ignored', async () => {
     mockGetAllAccounts.mockResolvedValue([baseAccount()]);
-    mockParseCsvHeaders.mockResolvedValue({ headers: ['Date', 'Amount'], sampleRows: [], rowCount: 0 });
+    mockParseCsvHeaders.mockResolvedValue({ headers: ['Date', 'Amount'], sampleRows: [], rowCount: 0, columnDateFormats: [null, null] });
     mockParseCsv.mockResolvedValue(baseParsedQif({
       accountType: 'CHEQUING',
       categories: [],
       securities: ['AAPL'],
     }));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.accounts).toHaveLength(1));
 
     await uploadCsv(result, 'bank.csv');
@@ -920,7 +928,7 @@ describe('useImportWizard - CSV investment mode', () => {
       id: 'brk-1', name: 'Brokerage', accountType: 'INVESTMENT', accountSubType: 'INVESTMENT_BROKERAGE',
     });
     mockGetAllAccounts.mockResolvedValue([brokerage]);
-    mockParseCsvHeaders.mockResolvedValue({ headers: investmentHeaders, sampleRows: [], rowCount: 0 });
+    mockParseCsvHeaders.mockResolvedValue({ headers: investmentHeaders, sampleRows: [], rowCount: 0, columnDateFormats: investmentHeaders.map(() => null) });
     mockParseCsv.mockResolvedValue(baseParsedQif({
       accountType: 'INVESTMENT',
       categories: [],
@@ -928,7 +936,7 @@ describe('useImportWizard - CSV investment mode', () => {
       investmentSummary,
     }));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.accounts).toHaveLength(1));
 
     await uploadCsv(result);
@@ -948,14 +956,14 @@ describe('useImportWizard - CSV investment mode', () => {
       id: 'brk-1', name: 'Brokerage', accountType: 'INVESTMENT', accountSubType: 'INVESTMENT_BROKERAGE',
     });
     mockGetAllAccounts.mockResolvedValue([baseAccount(), brokerage]);
-    mockParseCsvHeaders.mockResolvedValue({ headers: investmentHeaders, sampleRows: [], rowCount: 0 });
+    mockParseCsvHeaders.mockResolvedValue({ headers: investmentHeaders, sampleRows: [], rowCount: 0, columnDateFormats: investmentHeaders.map(() => null) });
     mockParseCsv.mockResolvedValue(baseParsedQif({
       accountType: 'INVESTMENT',
       categories: [],
       securities: [],
     }));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.accounts).toHaveLength(2));
 
     await uploadCsv(result);
@@ -975,7 +983,7 @@ describe('useImportWizard - account creation', () => {
     mockParseQif.mockResolvedValue(baseParsedQif({ categories: [] }));
     mockCreateAccount.mockResolvedValue(baseAccount({ id: 'new-1', name: 'New' }));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     // upload a file so importFiles is populated
@@ -999,7 +1007,7 @@ describe('useImportWizard - account creation', () => {
       brokerageAccount: baseAccount({ id: 'brk-1', name: 'Brokerage', accountSubType: 'INVESTMENT_BROKERAGE' }),
     });
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -1020,7 +1028,7 @@ describe('useImportWizard - account creation', () => {
   });
 
   it('rejects account creation when name is empty', async () => {
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -1033,7 +1041,7 @@ describe('useImportWizard - account creation', () => {
     mockParseQif.mockResolvedValue(baseParsedQif({ categories: [] }));
     mockCreateAccount.mockRejectedValue(new Error('fail'));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -1050,7 +1058,7 @@ describe('useImportWizard - account creation', () => {
 describe('useImportWizard - mapping handlers', () => {
   it('handleAccountMappingChange updates accountId', async () => {
     mockParseQif.mockResolvedValue(baseParsedQif({ transferAccounts: ['Other'], categories: [] }));
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -1076,7 +1084,7 @@ describe('useImportWizard - mapping handlers', () => {
     mockParseQif.mockResolvedValue(baseParsedQif({ securities: ['XYZ'], categories: [] }));
     mockGetSecurities.mockResolvedValue([baseSecurity({ id: 'sec-aapl', symbol: 'AAPL', name: 'Apple' })]);
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.securities).toHaveLength(1));
 
     await act(async () => {
@@ -1117,7 +1125,7 @@ describe('useImportWizard - mapping handlers', () => {
 
 describe('useImportWizard - security lookup', () => {
   it('rejects too-short query', async () => {
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -1129,7 +1137,7 @@ describe('useImportWizard - security lookup', () => {
   it('shows toast when no candidates returned', async () => {
     mockParseQif.mockResolvedValue(baseParsedQif({ securities: ['XYZ'], categories: [] }));
     mockLookupCandidates.mockResolvedValue([]);
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -1148,7 +1156,7 @@ describe('useImportWizard - security lookup', () => {
       { symbol: 'XYZ', name: 'XYZ Co', securityType: 'STOCK', exchange: 'NYSE', currencyCode: 'USD' },
     ]);
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -1168,7 +1176,7 @@ describe('useImportWizard - security lookup', () => {
       { symbol: 'XYZ', name: 'B', securityType: 'STOCK', exchange: 'TSX' },
     ]);
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -1194,7 +1202,7 @@ describe('useImportWizard - security lookup', () => {
       { symbol: 'B', name: 'B', securityType: 'STOCK' },
     ]);
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -1213,7 +1221,7 @@ describe('useImportWizard - security lookup', () => {
     mockParseQif.mockResolvedValue(baseParsedQif({ securities: ['XYZ'], categories: [] }));
     mockLookupCandidates.mockResolvedValue([{ symbol: 'XYZ', name: 'X', securityType: 'STOCK' }]);
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -1230,7 +1238,7 @@ describe('useImportWizard - security lookup', () => {
     mockParseQif.mockResolvedValue(baseParsedQif({ securities: ['XYZ'], categories: [] }));
     mockLookupCandidates.mockRejectedValue(new Error('boom'));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -1249,7 +1257,7 @@ describe('useImportWizard - import handlers', () => {
     mockParseQif.mockResolvedValue(baseParsedQif({ categories: [] }));
     mockImportQif.mockResolvedValue(importResult({ imported: 5 }));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.accounts).toHaveLength(1));
 
     await act(async () => {
@@ -1268,7 +1276,7 @@ describe('useImportWizard - import handlers', () => {
     mockParseQif.mockResolvedValue(baseParsedQif({ categories: [] }));
     mockImportQif.mockResolvedValue(importResult({ imported: 3, errors: 2 }));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.accounts).toHaveLength(1));
 
     await act(async () => {
@@ -1284,11 +1292,11 @@ describe('useImportWizard - import handlers', () => {
 
   it('imports CSV successfully', async () => {
     mockGetAllAccounts.mockResolvedValue([baseAccount()]);
-    mockParseCsvHeaders.mockResolvedValue({ headers: ['D', 'A'], sampleRows: [], rowCount: 0 });
+    mockParseCsvHeaders.mockResolvedValue({ headers: ['D', 'A'], sampleRows: [], rowCount: 0, columnDateFormats: [null, null] });
     mockParseCsv.mockResolvedValue(baseParsedQif({ categories: [] }));
     mockImportCsv.mockResolvedValue(importResult({ imported: 3 }));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.accounts).toHaveLength(1));
 
     await act(async () => {
@@ -1310,7 +1318,7 @@ describe('useImportWizard - import handlers', () => {
     mockParseOfx.mockResolvedValue(baseParsedQif({ categories: [] }));
     mockImportOfx.mockResolvedValue(importResult({ imported: 2 }));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.accounts).toHaveLength(1));
 
     await act(async () => {
@@ -1325,7 +1333,7 @@ describe('useImportWizard - import handlers', () => {
   });
 
   it('rejects import with no files', async () => {
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
     await act(async () => {
       await result.current.handleImport();
@@ -1337,7 +1345,7 @@ describe('useImportWizard - import handlers', () => {
     mockGetAllAccounts.mockResolvedValue([]);
     mockParseQif.mockResolvedValue(baseParsedQif({ categories: [] }));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -1355,7 +1363,7 @@ describe('useImportWizard - import handlers', () => {
     mockImportQif.mockResolvedValueOnce(importResult({ imported: 1 }))
                   .mockResolvedValueOnce(importResult({ imported: 0, errors: 1, errorMessages: ['x'] }));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.accounts).toHaveLength(1));
 
     await act(async () => {
@@ -1375,12 +1383,43 @@ describe('useImportWizard - import handlers', () => {
     expect(result.current.bulkImportResult?.totalErrors).toBe(1);
   });
 
+  it('keeps each file\'s skipped rows in the bulk result', async () => {
+    const skippedRow = {
+      date: '2026-01-15', amount: -50, currencyCode: 'CAD', payee: 'Store', reason: 'alreadyImported' as const,
+    };
+    mockGetAllAccounts.mockResolvedValue([baseAccount()]);
+    mockParseQif.mockResolvedValue(baseParsedQif({ categories: [] }));
+    mockImportQif.mockResolvedValueOnce(importResult({ imported: 1 }))
+                  .mockResolvedValueOnce(importResult({ imported: 0, skipped: 1, skippedRows: [skippedRow] }));
+
+    const { result } = renderHook(() => useImportWizard());
+    await waitFor(() => expect(result.current.accounts).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.handleFileSelect(fileEvent([
+        makeFile('a.qif', '1'),
+        makeFile('b.qif', '2'),
+      ]));
+    });
+    act(() => {
+      result.current.setFileAccountId(0, 'acc-1');
+      result.current.setFileAccountId(1, 'acc-1');
+    });
+    await act(async () => {
+      await result.current.handleImport();
+    });
+    expect(result.current.bulkImportResult?.fileResults.map((r) => r.skippedRows)).toEqual([
+      undefined,
+      [skippedRow],
+    ]);
+  });
+
   it('bulk import handles thrown error per file', async () => {
     mockGetAllAccounts.mockResolvedValue([baseAccount()]);
     mockParseQif.mockResolvedValue(baseParsedQif({ categories: [] }));
     mockImportQif.mockRejectedValue(new Error('boom'));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.accounts).toHaveLength(1));
 
     await act(async () => {
@@ -1414,7 +1453,7 @@ describe('useImportWizard - import handlers', () => {
       }))
       .mockResolvedValueOnce(importResult({ imported: 1 }));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.accounts).toHaveLength(1));
 
     await act(async () => {
@@ -1452,7 +1491,7 @@ describe('useImportWizard - import handlers', () => {
       loanAccountsNeedingSetup: [{ accountId: 'l1', accountName: 'Loan1', accountType: 'LOAN' }],
     }));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.accounts).toHaveLength(1));
 
     await act(async () => {
@@ -1476,7 +1515,7 @@ describe('useImportWizard - import handlers', () => {
     mockParseQif.mockResolvedValue(baseParsedQif({ categories: [] }));
     mockImportQif.mockRejectedValue(new Error('catastrophic'));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.accounts).toHaveLength(1));
 
     await act(async () => {
@@ -1501,7 +1540,7 @@ describe('useImportWizard - multi-account import', () => {
     });
     mockImportQifMulti.mockResolvedValue(importResult({ imported: 5 }));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     const content = '!Account\nNA\n^\n!Account\nNB\n^';
@@ -1518,7 +1557,7 @@ describe('useImportWizard - multi-account import', () => {
   });
 
   it('multi-account import is no-op without content', async () => {
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -1535,7 +1574,7 @@ describe('useImportWizard - multi-account import', () => {
     });
     mockImportQifMulti.mockRejectedValue(new Error('boom'));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -1555,7 +1594,7 @@ describe('useImportWizard - multi-account import', () => {
     });
     mockImportQifMulti.mockResolvedValue(importResult({ imported: 5, errors: 2 }));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
 
     await act(async () => {
@@ -1566,6 +1605,40 @@ describe('useImportWizard - multi-account import', () => {
     });
     expect(result.current.importResult?.errors).toBe(2);
   });
+
+  it('detects a Quicken for Mac export from upper-case headers and sends the chosen account types', async () => {
+    mockParseQifMulti.mockResolvedValue({
+      isMultiAccount: true, categoryDefs: [], tagDefs: [],
+      accounts: [
+        { accountName: 'Checking', accountType: 'CHEQUING', transactionCount: 1, dateRange: { start: '', end: '' } },
+        { accountName: 'Old Wallet', accountType: null, transactionCount: 0, dateRange: { start: '', end: '' } },
+      ],
+      totalTransactionCount: 1, securities: [], detectedDateFormat: 'MM/DD/YYYY', sampleDates: [],
+    });
+    mockImportQifMulti.mockResolvedValue(importResult({ imported: 1 }));
+
+    const { result } = renderHook(() => useImportWizard());
+    await waitFor(() => expect(mockGetCurrencies).toHaveBeenCalled());
+
+    const content = '!ACCOUNT\r\nNChecking\r\n^\r\n!ACCOUNT\r\nNOld Wallet\r\n^\r\n!TYPE:Bank\r\n';
+    await act(async () => {
+      await result.current.handleFileSelect(fileEvent([makeFile('export.qmtf', content)]));
+    });
+    expect(mockParseQifMulti).toHaveBeenCalledWith(content);
+    expect(result.current.step).toBe('multiAccountReview');
+
+    act(() => {
+      result.current.handleMultiAccountAccountTypeChange('Old Wallet', 'CASH');
+    });
+    await act(async () => {
+      await result.current.handleMultiAccountImport();
+    });
+    expect(mockImportQifMulti).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accountTypes: [{ accountName: 'Old Wallet', accountType: 'CASH' }],
+      }),
+    );
+  });
 });
 
 describe('useImportWizard - import more / reset', () => {
@@ -1574,7 +1647,7 @@ describe('useImportWizard - import more / reset', () => {
     mockParseQif.mockResolvedValue(baseParsedQif({ categories: [] }));
     mockImportQif.mockResolvedValue(importResult());
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.accounts).toHaveLength(1));
 
     await act(async () => {
@@ -1599,20 +1672,28 @@ describe('useImportWizard - derived options', () => {
       baseCategory({ id: 'c1', name: 'Food' }),
       baseCategory({ id: 'c2', name: 'Sub', parentId: 'c1' }),
     ]);
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.categories).toHaveLength(2));
     expect(result.current.categoryOptions.length).toBeGreaterThan(0);
   });
 
-  it('produces parentCategoryOptions from top-level categories only', async () => {
+  it('produces parentCategoryOptions from every level, labelled with the full path', async () => {
+    // A three-level QIF category is suggested under its deepest existing
+    // level, so a nested category must be selectable as a parent.
     mockGetCategories.mockResolvedValue([
       baseCategory({ id: 'c1', name: 'A' }),
       baseCategory({ id: 'c2', name: 'B', parentId: 'c1' }),
+      baseCategory({ id: 'c3', name: 'C', parentId: 'c2' }),
     ]);
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
-    await waitFor(() => expect(result.current.categories).toHaveLength(2));
-    expect(result.current.parentCategoryOptions.find(o => o.value === 'c1')).toBeTruthy();
-    expect(result.current.parentCategoryOptions.find(o => o.value === 'c2')).toBeFalsy();
+    const { result } = renderHook(() => useImportWizard());
+    await waitFor(() => expect(result.current.categories).toHaveLength(3));
+    expect(result.current.parentCategoryOptions).toEqual([
+      { value: '', label: 'No parent (top-level)' },
+      { value: 'c1', label: 'A' },
+      { value: 'c2', label: 'A: B' },
+      { value: 'c3', label: 'A: B: C' },
+    ]);
+    expect(result.current.categoryOptions.find(o => o.value === 'c3')?.label).toBe('A: B: C');
   });
 
   it('getAccountOptions excludes loan/mortgage/brokerage accounts', async () => {
@@ -1622,7 +1703,7 @@ describe('useImportWizard - derived options', () => {
       baseAccount({ id: 'a3', name: 'Mortgage', accountType: 'MORTGAGE' }),
       baseAccount({ id: 'a4', name: 'Brk', accountType: 'INVESTMENT', accountSubType: 'INVESTMENT_BROKERAGE' }),
     ]);
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.accounts).toHaveLength(4));
 
     const opts = result.current.getAccountOptions();
@@ -1635,7 +1716,7 @@ describe('useImportWizard - derived options', () => {
 
   it('getSecurityOptions includes a skip option and all securities', async () => {
     mockGetSecurities.mockResolvedValue([baseSecurity({ id: 's1', symbol: 'A', name: 'Apple' })]);
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.securities).toHaveLength(1));
     const opts = result.current.getSecurityOptions();
     expect(opts[0].value).toBe('');
@@ -1644,7 +1725,7 @@ describe('useImportWizard - derived options', () => {
 
   it('currencyOptions sorts default currency first', async () => {
     mockPrefDefaultCurrency = 'CAD';
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.currencyOptions.length).toBeGreaterThan(0));
     expect(result.current.currencyOptions[0].value).toBe('CAD');
   });
@@ -1658,7 +1739,7 @@ describe('useImportWizard - derived options', () => {
       { code: 'CAD', name: 'CA Dollar', symbol: 'CA$', decimalPlaces: 2, isActive: true },
       { code: 'AUD', name: 'AU Dollar', symbol: 'A$', decimalPlaces: 2, isActive: true },
     ]);
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.currencyOptions.length).toBe(3));
     expect(result.current.currencyOptions[0].value).toBe('CAD');
     expect(result.current.currencyOptions.slice(1).map((o) => o.value)).toEqual(['AUD', 'USD']);
@@ -1673,7 +1754,7 @@ describe('useImportWizard - selectAccount auto-select effect', () => {
     ]);
     mockParseQif.mockResolvedValue(baseParsedQif({ accountType: 'CHEQUING', categories: [] }));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.accounts).toHaveLength(2));
 
     await act(async () => {
@@ -1691,7 +1772,7 @@ describe('useImportWizard - selectAccount auto-select effect', () => {
     ]);
     mockParseQif.mockResolvedValue(baseParsedQif({ accountType: 'CHEQUING', categories: [] }));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.accounts).toHaveLength(1));
 
     await act(async () => {
@@ -1709,7 +1790,7 @@ describe('useImportWizard - selectAccount auto-select effect', () => {
     ]);
     mockParseQif.mockResolvedValue(baseParsedQif({ accountType: 'INVESTMENT', categories: [] }));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.accounts).toHaveLength(2));
 
     await act(async () => {
@@ -1728,7 +1809,7 @@ describe('useImportWizard - mapAccounts effect', () => {
     ]);
     mockParseQif.mockResolvedValue(baseParsedQif({ transferAccounts: ['Savings Acct'], categories: [] }));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.accounts).toHaveLength(1));
 
     await act(async () => {
@@ -1751,7 +1832,7 @@ describe('useImportWizard - mapSecurities bulk lookup effect', () => {
       symbol: 'UNKN', name: 'Unknown Co', securityType: 'STOCK', exchange: 'NYSE', currencyCode: 'USD',
     });
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.accounts).toHaveLength(1));
 
     await act(async () => {
@@ -1773,7 +1854,7 @@ describe('useImportWizard - mapSecurities bulk lookup effect', () => {
     mockParseQif.mockResolvedValue(baseParsedQif({ securities: ['UNKN'], categories: [] }));
     mockLookupSecurity.mockRejectedValue(new Error('boom'));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.accounts).toHaveLength(1));
 
     await act(async () => {
@@ -1794,7 +1875,7 @@ describe('useImportWizard - mapSecurities bulk lookup effect', () => {
     mockGetSecurities.mockResolvedValue([]);
     mockParseQif.mockResolvedValue(baseParsedQif({ securities: [], categories: [] }));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.accounts).toHaveLength(1));
 
     await act(async () => {
@@ -1811,7 +1892,7 @@ describe('useImportWizard - shouldShowMapAccounts', () => {
     mockGetAllAccounts.mockResolvedValue([baseAccount()]);
     mockParseQif.mockResolvedValue(baseParsedQif({ accountType: 'INVESTMENT', transferAccounts: ['X'], categories: [] }));
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.accounts).toHaveLength(1));
 
     await act(async () => {
@@ -1865,7 +1946,7 @@ describe('useImportWizard - .mny wipe confirmation', () => {
       completedAt: null,
     });
 
-    const { result } = renderHook(() => useImportWizard(), { wrapper });
+    const { result } = renderHook(() => useImportWizard());
     await waitFor(() => expect(result.current.accounts).toHaveLength(1));
 
     await act(async () => {
@@ -1932,5 +2013,79 @@ describe('useImportWizard - .mny wipe confirmation', () => {
 
     expect(result.current.showMnyWipeConfirm).toBe(false);
     expect(mockMnyStart).not.toHaveBeenCalled();
+  });
+});
+
+describe('useImportWizard - handleFiles (Web Share Target hand-off)', () => {
+  // The OS hands over `File` objects with no input element behind them, so the
+  // wizard's entry point takes files rather than a change event. Everything
+  // after this point is identical to a file the user picked.
+  it('drives the wizard from a bare File array', async () => {
+    mockGetAllAccounts.mockResolvedValue([baseAccount()]);
+    mockParseQif.mockResolvedValue(baseParsedQif());
+
+    const { result } = renderHook(() => useImportWizard());
+    await waitFor(() => expect(result.current.accounts).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.handleFiles([makeFile('shared.qif', 'data')]);
+    });
+
+    expect(mockParseQif).toHaveBeenCalled();
+    expect(result.current.step).toBe('selectAccount');
+    expect(result.current.importFiles).toHaveLength(1);
+    expect(result.current.importFiles[0].fileName).toBe('shared.qif');
+  });
+
+  it('detects a shared CSV by extension, as the picker path does', async () => {
+    mockGetAllAccounts.mockResolvedValue([baseAccount()]);
+    mockParseCsvHeaders.mockResolvedValue({ headers: ['Date', 'Amount'], sampleRows: [], rowCount: 0, columnDateFormats: [null, null] });
+    mockAutoMatchCsvColumns.mockReturnValue({});
+    mockLooksLikeInvestmentCsv.mockReturnValue(false);
+
+    const { result } = renderHook(() => useImportWizard());
+    await waitFor(() => expect(result.current.accounts).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.handleFiles([makeFile('january.csv', 'Date,Amount')]);
+    });
+
+    expect(result.current.step).toBe('csvColumnMapping');
+    expect(result.current.fileType).toBe('csv');
+  });
+
+  it('is a no-op for an empty hand-off', async () => {
+    mockGetAllAccounts.mockResolvedValue([baseAccount()]);
+
+    const { result } = renderHook(() => useImportWizard());
+    await waitFor(() => expect(result.current.accounts).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.handleFiles([]);
+    });
+
+    expect(mockParseQif).not.toHaveBeenCalled();
+    expect(result.current.step).toBe('upload');
+  });
+
+  // The change handler is now a thin adapter, so both doors must behave the
+  // same: a defect fixed in one would otherwise survive in the other.
+  it('is what the file input\'s change handler delegates to', async () => {
+    mockGetAllAccounts.mockResolvedValue([baseAccount()]);
+    mockParseQif.mockResolvedValue(baseParsedQif());
+
+    const { result } = renderHook(() => useImportWizard());
+    await waitFor(() => expect(result.current.accounts).toHaveLength(1));
+
+    await act(async () => {
+      await result.current.handleFileSelect(fileEvent([makeFile('picked.qif', 'data')]));
+    });
+    const viaInput = result.current.importFiles.map((f) => f.fileName);
+
+    await act(async () => {
+      await result.current.handleFiles([makeFile('picked.qif', 'data')]);
+    });
+
+    expect(result.current.importFiles.map((f) => f.fileName)).toEqual(viaInput);
   });
 });

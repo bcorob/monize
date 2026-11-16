@@ -20,15 +20,17 @@
     "typeExpense": "Dépense",
     "typeUnknown": "Sens inconnu",
     "amountUnavailable": "Montant non disponible",
+    "estimated": "Estimé",
+    "estimateUnknown": "Estimation inconnue : saisissez le montant lors de l'enregistrement",
     "button": "Voir les Factures &amp; Dépôts"
   },
   "mortgageReminder": {
-    "subject": "Monize : 1 renouvellement de prêt hypothécaire à venir",
-    "subjectPlural": "Monize : {{ count }} renouvellements de prêt hypothécaire à venir",
-    "heading": "Rappel de renouvellement de prêt hypothécaire",
+    "subject": "Monize : 1 terme de taux hypothécaire se termine bientôt",
+    "subjectPlural": "Monize : {{ count }} termes de taux hypothécaire se terminent bientôt",
+    "heading": "Rappel de fin de terme de taux hypothécaire",
     "greeting": "Bonjour {{ name }},",
-    "introOne": "Vous avez 1 prêt hypothécaire dont le terme arrive bientôt à renouvellement. Contactez votre prêteur pour discuter des options de renouvellement avant la fin du terme :",
-    "introMany": "Vous avez {{ count }} prêts hypothécaires dont le terme arrive bientôt à renouvellement. Contactez votre prêteur pour discuter des options de renouvellement avant la fin du terme :",
+    "introOne": "Le terme de taux actuel de 1 prêt hypothécaire se termine bientôt. Contactez votre prêteur avant sa fin pour convenir de votre prochain taux ou du renouvellement :",
+    "introMany": "Le terme de taux actuel de {{ count }} prêts hypothécaires se termine bientôt. Contactez votre prêteur avant la fin de chacun pour convenir du prochain taux ou du renouvellement :",
     "colMortgage": "Prêt hypothécaire",
     "colTermEndDate": "Date de fin de terme",
     "colTimeRemaining": "Temps restant",
@@ -117,6 +119,21 @@
     "button": "Vérifier l'e-mail",
     "disclaimer": "Ce lien expirera dans 24 heures. Si vous n'avez pas créé de compte Monize, vous pouvez ignorer cet e-mail en toute sécurité."
   },
+  "emailChangeConfirm": {
+    "subject": "Confirmez votre nouvelle adresse e-mail Monize",
+    "heading": "Confirmez votre nouvelle adresse e-mail",
+    "greeting": "Bonjour {{ name }},",
+    "intro": "Une demande a été faite pour utiliser cette adresse pour un compte Monize. Votre adresse e-mail ne changera pas tant que vous ne l'aurez pas confirmée en cliquant sur le bouton ci-dessous :",
+    "button": "Confirmer le changement d'e-mail",
+    "disclaimer": "Ce lien expirera dans 24 heures. Si vous n'avez pas demandé ce changement, vous pouvez ignorer cet e-mail en toute sécurité."
+  },
+  "emailChangeNotice": {
+    "subject": "Demande de changement d'adresse e-mail Monize",
+    "heading": "Changement d'adresse e-mail demandé",
+    "greeting": "Bonjour {{ name }},",
+    "body1": "Une demande a été faite pour remplacer l'adresse e-mail de votre compte Monize par {{ email }}. Le changement ne prendra effet qu'une fois confirmé depuis cette adresse.",
+    "body2": "Si vous n'êtes pas à l'origine de cette demande, changez immédiatement votre mot de passe et vérifiez les appareils connectés à votre compte."
+  },
   "accountInvite": {
     "subject": "Votre compte Monize est prêt",
     "heading": "Votre compte Monize est prêt",
@@ -186,5 +203,232 @@
     "greeting": "Bonjour {{ name }},",
     "intro": "<strong>{{ provider }}</strong> a répondu à nouveau à {{ restoredAt }}. La panne a duré {{ duration }}.",
     "backfill": "Les cours et l'historique d'indices manquants pendant la panne sont récupérés lors de la prochaine actualisation planifiée ; aucune action n'est nécessaire."
+  },
+  "systemAlert": {
+    "subject": "Monize: {{ title }}",
+    "heading": "Alerte système",
+    "greeting": "Bonjour {{ name }},",
+    "intro": "Un problème sur votre installation Monize requiert l'attention d'un administrateur.",
+    "footer": "Cette alerte apparaît aussi dans la cloche de notifications de l'application. Elle est émise au plus une fois par incident, quel que soit le nombre de réplicas du serveur qui l'ont détecté."
+  },
+  "notificationImmediate": {
+    "subject": "Vous avez une nouvelle notification Monize",
+    "eyebrow": "Notification Monize",
+    "button": "Ouvrir dans Monize",
+    "footer": "Vous recevez ceci car l'e-mail immédiat est activé pour ce type de notification. Modifiez-le dans Paramètres, Notifications."
+  },
+  "notificationCopy": {
+    "billDue": {
+      "titleOverdue": "{{ payee }} en retard",
+      "titleToday": "{{ payee }} à payer aujourd'hui",
+      "titleTomorrow": "{{ payee }} à payer demain",
+      "titleInDays": "{{ payee }} à payer dans {{ days }} jours",
+      "amountDue": "{{ amount }} à payer le {{ date }}",
+      "amountUnavailable": "Montant indisponible (aucun taux de change actuel), à payer le {{ date }}"
+    },
+    "gemSignal": {
+      "riskTitle": "{{ strategy }} est passée en {{ state }}",
+      "riskMessage": "Votre stratégie GEM « {{ strategy }} » est passée de {{ fromState }} à {{ toState }}. Ouvrez pour examiner la recommandation.",
+      "allocationTitle": "{{ strategy }} a changé de cible",
+      "allocationMessage": "Votre stratégie GEM « {{ strategy }} » cible désormais {{ target }}. Ouvrez pour examiner la recommandation.",
+      "riskOn": "risk-on",
+      "riskOff": "risk-off",
+      "roles": {
+        "US_EQUITY": "S&P 500",
+        "EX_US_EQUITY": "Marchés développés hors États-Unis",
+        "EM_EQUITY": "Marchés émergents",
+        "SAFE": "Actif sûr",
+        "RISK_FREE": "Référence sans risque"
+      },
+      "allocationMessageUnknown": "Votre stratégie GEM « {{ strategy }} » a changé de cible. Ouvrez-la pour consulter la recommandation."
+    },
+    "portfolioMovement": {
+      "titleUp": "Placements en hausse de {{ percent }} %",
+      "titleDown": "Placements en baisse de {{ percent }} %",
+      "messageUp": "Vos placements sont en hausse de {{ percent }} % du {{ from }} au {{ to }}, hors dépôts et retraits. Ouvrez pour examiner.",
+      "messageDown": "Vos placements sont en baisse de {{ percent }} % du {{ from }} au {{ to }}, hors dépôts et retraits. Ouvrez pour examiner."
+    },
+    "balanceThreshold": {
+      "titleLow": "{{ account }} est en dessous de votre seuil",
+      "titleHigh": "{{ account }} est au-dessus de votre seuil",
+      "messageLow": "{{ account }} est descendu à {{ balance }}, en dessous de votre seuil de {{ threshold }}.",
+      "messageHigh": "{{ account }} est monté à {{ balance }}, au-dessus de votre seuil de {{ threshold }}."
+    },
+    "system": {
+      "backupFailed": {
+        "title": "Échec de la sauvegarde automatique",
+        "message": "La sauvegarde automatique de {{ user }} a échoué : {{ error }}"
+      },
+      "backupPartial": {
+        "title": "Sauvegarde automatique incomplète",
+        "messageAttachments": "La sauvegarde de {{ user }} a été écrite, mais {{ missing }} pièces jointes sur {{ expected }} n'ont pas pu être incluses et {{ inconsistent }} ne correspondaient pas à leurs métadonnées. Les sauvegardes complètes ont été préservées.",
+        "messagePromotion": "La sauvegarde quotidienne de {{ user }} a réussi, mais sa copie hebdomadaire ou mensuelle n'a pas pu être écrite : {{ error }}",
+        "messageRetention": "La sauvegarde de {{ user }} a réussi, mais les anciens fichiers de sauvegarde n'ont pas pu être nettoyés : {{ error }}"
+      },
+      "encryptionKeyMissing": {
+        "title": "Clé de chiffrement non configurée",
+        "message": "ENCRYPTION_KEY n'est pas définie : les sauvegardes sont écrites en clair et les secrets ne peuvent pas être enregistrés. Une future version refusera de démarrer sans elle."
+      },
+      "jwtSecretWeak": {
+        "title": "JWT_SECRET est faible",
+        "message": "JWT_SECRET est une valeur d'exemple publiée ou trop prévisible : des jetons de session peuvent donc être falsifiés. Générez-en une robuste (openssl rand -base64 32). La modifier rend inutilisables les codes des applications d'authentification et oublie les appareils de confiance : les utilisateurs se connectent avec un code de secours et reconfigurent la 2FA, et vous réinitialisez la 2FA dans Gestion des utilisateurs pour ceux qui n'en ont pas. Consultez d'abord docs/backend/modules-and-runtime.md (Changing JWT_SECRET)."
+      },
+      "smtpFailure": {
+        "title": "L'envoi d'e-mails échoue",
+        "message": "Monize n'a pas pu envoyer d'e-mail : {{ error }}. Les notifications et les rappels ne sont pas distribués."
+      },
+      "providerOutage": {
+        "title": "{{ provider }} ne répond pas",
+        "message": "Les données de marché de {{ provider }} sont indisponibles. Les cours et les indices peuvent être obsolètes jusqu'à ce qu'il réponde de nouveau."
+      },
+      "providerRecovered": {
+        "title": "{{ provider }} répond de nouveau",
+        "message": "La panne est terminée et les données de marché de {{ provider }} sont de nouveau mises à jour."
+      },
+      "scheduledPostFailed": {
+        "title": "{{ name }} n'a pas pu être enregistrée",
+        "message": "Votre transaction planifiée arrivant à échéance le {{ date }} n'a pas été enregistrée automatiquement : {{ error }}. Vous pouvez l'enregistrer manuellement depuis Factures et dépôts."
+      }
+    },
+    "budget": {
+      "overTitle": "{{ category }} dépasse le budget",
+      "overMessage": "Vous avez dépensé {{ amount }} sur votre budget de {{ limit }} pour {{ category }} ({{ percent }} %).",
+      "criticalTitle": "{{ category }} approche de la limite",
+      "warningTitle": "{{ category }} atteint la limite du budget",
+      "thresholdMessage": "Vous avez utilisé {{ percent }} % de votre budget pour {{ category }} ({{ amount }} sur {{ limit }}).",
+      "projectedTitle": "Un dépassement du budget est prévu pour {{ category }}",
+      "projectedMessage": "À votre rythme actuel, les dépenses pour {{ category }} devraient atteindre {{ projected }} à la fin de la période (budget : {{ budgeted }}).",
+      "flexTitle": "Groupe flexible « {{ group }} » à {{ percent }} %",
+      "flexMessage": "Le groupe flexible « {{ group }} » a utilisé {{ spent }} sur son budget total de {{ budgeted }} ({{ percent }} %).",
+      "incomeTitle": "Revenus inférieurs aux prévisions",
+      "incomeMessage": "Vos revenus réels ({{ actual }}) représentent {{ ratio }} % des revenus attendus ({{ expected }}) à ce stade de la période.",
+      "milestoneTitle": "Budget sur la bonne voie",
+      "milestoneMessage": "{{ progress }} % de la période s'est écoulée et vous n'avez utilisé que {{ percent }} % de votre budget total. Continuez ainsi !",
+      "seasonalTitle": "Hausse saisonnière prévue pour {{ category }}",
+      "seasonalMessage": "En {{ month }} dernier, vous avez dépensé {{ increase }} fois plus que d'habitude pour {{ category }}. Pensez à ajuster votre budget."
+    },
+    "priceMovement": {
+      "title": "Alerte de variation du cours: {{ symbol }} ({{ percent }}%)",
+      "message": "{{ symbol }} : {{ percent }}% par rapport à la séance précédente disponible."
+    },
+    "bankSync": {
+      "expiringTitleToday": "{{ institution }} : l'accès bancaire prend fin aujourd'hui",
+      "expiringTitleOneDay": "{{ institution }} : l'accès bancaire prend fin d'ici 1 jour",
+      "expiringTitleDays": "{{ institution }} : l'accès bancaire prend fin d'ici {{ days }} jours",
+      "expiringMessage": "Votre consentement permettant à Monize de lire {{ institution }} prend fin le {{ date }}. Renouvelez la connexion dans Monize pour continuer à synchroniser.",
+      "expiredTitle": "{{ institution }} : l'accès bancaire a pris fin",
+      "expiredMessage": "Votre consentement permettant à Monize de lire {{ institution }} a pris fin. Renouvelez la connexion dans Monize pour reprendre la synchronisation.",
+      "failedTitle": "{{ institution }} : échec de la synchronisation",
+      "failedMessage": "La synchronisation quotidienne de {{ institution }} a échoué pour : {{ accounts }}. Ouvrez les paramètres de synchronisation bancaire pour en voir la cause.",
+      "failedCredentialsMessage": "La synchronisation quotidienne de {{ institution }} n'a pas pu démarrer, car les identifiants de la synchronisation bancaire sont absents ou ont été refusés. Vérifiez-les dans les paramètres de synchronisation bancaire.",
+      "unnamedAccount": "un compte",
+      "importedTitle": "{{ institution }} : nouvelles transactions importées",
+      "importedMessage": "Transactions importées depuis {{ institution }} par la synchronisation quotidienne : {{ imported }}.",
+      "importedNoneTitle": "{{ institution }} : aucune nouvelle transaction",
+      "importedNoneMessage": "La synchronisation quotidienne de {{ institution }} n'a trouvé aucune nouvelle transaction."
+    },
+    "bond": {
+      "maturitySoonTitle": "{{ series }} arrive à échéance le {{ date }}",
+      "maturitySoonMessage": "{{ quantity }} × {{ series }} arrivent à échéance le {{ date }}. {{ payout }}",
+      "interestTitle": "{{ series }} : paiement d'intérêts le {{ date }}",
+      "interestMessage": "{{ quantity }} × {{ series }} versent {{ amount }} d'intérêts le {{ date }}. Enregistrez-les sur la page du titre s'ils ne figurent pas encore dans votre compte.",
+      "interestMessageUnknown": "{{ quantity }} × {{ series }} versent des intérêts le {{ date }}. Le montant n'est pas encore connu : un taux dont il dépend n'est pas publié.",
+      "rateResetTitle": "{{ series }} : nouvelle période d'intérêts",
+      "rateResetMessage": "{{ series }} est entrée dans la période {{ period }} le {{ date }} au taux de {{ rate }} par an.",
+      "unbookedTitle": "{{ series }} : échue, remboursement non enregistré",
+      "unbookedMessage": "{{ quantity }} × {{ series }} sont arrivées à échéance le {{ date }} et aucun remboursement n'est enregistré. {{ payout }} Enregistrez le remboursement sur la page du titre.",
+      "payoutKnown": "Le montant versé est de {{ payout }}.",
+      "payoutUnknown": "Le montant versé n'est pas encore connu : {{ reason }}.",
+      "reason": {
+        "RATE_UNKNOWN": "un taux dont il dépend n'est pas encore publié",
+        "TERMS_INCOMPLETE": "les conditions de la série sont incomplètes",
+        "PURCHASE_OUTSIDE_SALE_WINDOW": "une date d'achat est en dehors de la période de vente de la série",
+        "PURCHASE_AFTER_MATURITY": "une date d'achat est égale ou postérieure à l'échéance de la série",
+        "other": "il ne peut pas être calculé à partir des données enregistrées"
+      },
+      "benchmarkTitle": "{{ benchmark }} : nouvelle observation {{ observation }}",
+      "benchmarkMessage": "{{ publisher }} a publié {{ benchmark }} pour {{ observation }} : {{ value }}. Il est utilisé par {{ series }}.",
+      "benchmarkMessageMore": "{{ publisher }} a publié {{ benchmark }} pour {{ observation }} : {{ value }}. Il est utilisé par {{ series }} et {{ more }} autres.",
+      "missingTitle": "Chiffres obligataires pas encore connus",
+      "missingMessage": "Certains chiffres obligataires ne peuvent pas être calculés : {{ causes }}.",
+      "benchmarks": {
+        "PL_CPI_GUS_YOY": "Inflation IPC, 12 mois (GUS)",
+        "PL_NBP_REFERENCE": "Taux de référence de la NBP"
+      },
+      "cause": {
+        "observation": "l'observation {{ observation }} de {{ benchmark }} ({{ publisher }}) n'est pas enregistrée : elle n'est pas encore publiée, ou le flux n'a pas été récupéré depuis ; actualisez sur la page de l'obligation",
+        "observationNoPublisher": "l'observation {{ observation }} de {{ benchmark }} n'est pas enregistrée : elle n'est pas encore publiée, ou le flux n'a pas été récupéré depuis ; actualisez sur la page de l'obligation",
+        "terms": "les conditions de {{ series }} sont incomplètes ; actualisez la série sur la page de l'obligation",
+        "purchase": "un achat de {{ series }} le {{ date }} est en dehors de sa période de vente ({{ from }} au {{ to }}) ; corrigez la date d'achat",
+        "purchaseAfterMaturity": "un achat de {{ series }} le {{ date }} est égal ou postérieur à son échéance ({{ maturity }}) ; corrigez la date d'achat",
+        "lots": "les lots ne peuvent pas être déduits du registre ({{ code }}) ; corrigez le registre",
+        "lotsRow": "{{ action }} du {{ date }} : les lots ne peuvent pas être déduits ({{ code }}) ; corrigez la transaction",
+        "lotsRowSeries": "{{ action }} du {{ date }} : aucune série attribuée ({{ code }}) ; choisissez la série dans cette transaction",
+        "lotsRowRemoval": "{{ action }} du {{ date }} : retire plus que ce que le compte détient de cette série ({{ code }}) ; corrigez la transaction"
+      },
+      "action": {
+        "BUY": "achat",
+        "SELL": "vente",
+        "REINVEST": "réinvestissement",
+        "ADD_SHARES": "ajout de titres",
+        "REMOVE_SHARES": "retrait de titres",
+        "SPLIT": "split",
+        "TRANSFER_IN": "transfert entrant",
+        "TRANSFER_OUT": "transfert sortant",
+        "other": "transaction"
+      }
+    },
+    "emailReceiptsAttention": {
+      "title": "Les reçus par courrier nécessitent attention",
+      "message": "Votre boîte de réception des reçus contient {{ noParser }} sans profil et {{ parseFailed }} que votre profil n'a pas reconnus. Ouvrez pour vérifier."
+    },
+    "aiReview": {
+      "readyTitle": "Des propositions de revue IA vous attendent",
+      "readyMessage": "Propositions en attente de votre décision : {{ count }}. Nouvelles depuis la dernière notification : {{ added }}. Ouvrez pour les examiner.",
+      "expiringTitle": "Des propositions de revue IA expirent bientôt",
+      "expiringMessage": "Propositions qui expirent dans 3 jours : {{ count }}. La première expire le {{ date }}. Ouvrez pour les examiner."
+    },
+    "warranty": {
+      "expiringTitle": "{{ name }} : la garantie expire bientôt",
+      "expiringMessage": "La garantie de {{ name }} expire le {{ date }}. Ouvrez-la pour consulter ses documents ou enregistrer une réclamation.",
+      "todayTitle": "{{ name }} : la garantie expire aujourd'hui",
+      "todayMessage": "La garantie de {{ name }} expire aujourd'hui, le {{ date }}. Ouvrez-la pour consulter ses documents ou enregistrer une réclamation."
+    },
+    "security": {
+      "oauthTitle": "Nouvelle application connectée : {{ clientName }}",
+      "oauthMessage": "L'application {{ clientName }} vient de recevoir l'accès à votre compte Monize. Si ce n'était pas vous, changez votre mot de passe maintenant : cela révoque l'accès de toutes les applications connectées.",
+      "relayTitle": "Une nouvelle connexion a répondu à votre chat IA",
+      "relayMessage": "Une connexion qui n'avait jamais répondu à votre chat IA Monize vient de récupérer une requête. Si vous n'avez pas connecté cet assistant, changez votre mot de passe."
+    },
+    "payrollDeduction": {
+      "resetTitle": "{{ category }} : confirmez le maximum de l'an prochain",
+      "resetMessage": "La retenue {{ category }} sur {{ bill }} se réinitialise le {{ date }}. Mettez à jour le maximum annuel s'il change ; sinon {{ amount }} s'applique de nouveau."
+    },
+    "shared": {
+      "title": "Dépenses partagées",
+      "message": "Un groupe partagé a été mis à jour. Ouvrez Monize pour le consulter."
+    }
+  },
+  "backupOffsite": {
+    "copySubject": "Sauvegarde Monize {{ filename }}",
+    "copyHeading": "Votre sauvegarde Monize est jointe",
+    "copyIntro": "Voici la sauvegarde automatique {{ tier }} de votre compte Monize du {{ date }}. Le fichier est joint à cet e-mail.",
+    "copyEncrypted": "La pièce jointe est chiffrée avec votre mot de passe de sauvegarde Monize. Elle ne peut pas être ouverte sans ce mot de passe, et Monize ne peut pas le récupérer pour vous -- conservez-le ailleurs que dans cette boîte de réception.",
+    "copyRestore": "Pour la restaurer, ouvrez Monize, allez dans Paramètres, Sauvegarde et restauration, téléversez ce fichier et saisissez votre mot de passe de sauvegarde.",
+    "copyVerify": "Le SHA-256 ci-dessus porte sur les octets joints : vous pourrez ainsi vérifier plus tard que la copie conservée est bien celle que cet e-mail a livrée.",
+    "tooLargeSubject": "La sauvegarde Monize {{ filename }} était trop volumineuse pour être envoyée par e-mail",
+    "tooLargeHeading": "Votre sauvegarde Monize n'a pas été envoyée par e-mail",
+    "tooLargeIntro": "La sauvegarde du jour fait {{ size }}, ce qui dépasse la limite de {{ limit }} que cette installation autorise pour une sauvegarde envoyée par e-mail (BACKUP_EMAIL_MAX_BYTES).",
+    "tooLargeNoBytes": "Rien n'a été joint à cet e-mail et aucun lien de téléchargement n'est proposé -- un lien nécessiterait un identifiant capable de relire vos sauvegardes depuis le stockage, ce dont cette fonctionnalité ne dispose pas.",
+    "tooLargeUnaffected": "La sauvegarde elle-même a été écrite normalement. La copie sur ce serveur n'est pas affectée, ni celle sur votre destination S3 si vous en avez activé une.",
+    "tooLargeWhatToDo": "Pour conserver hors de cette machine une copie d'une sauvegarde de cette taille, téléchargez-la depuis Paramètres, Sauvegarde et restauration, activez la destination S3, ou demandez à votre administrateur d'augmenter la limite d'envoi par e-mail.",
+    "labelFile": "Fichier",
+    "labelSize": "Taille",
+    "labelTier": "Conservation",
+    "labelLimit": "Limite e-mail",
+    "labelDigest": "SHA-256",
+    "tierDaily": "quotidienne",
+    "tierWeekly": "hebdomadaire",
+    "tierMonthly": "mensuelle"
   }
 }

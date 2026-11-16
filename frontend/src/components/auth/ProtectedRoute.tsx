@@ -23,6 +23,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
   const _hasHydrated = useAuthStore((s) => s._hasHydrated);
   const preferences = usePreferencesStore((s) => s.preferences);
   const [force2fa, setForce2fa] = useState(false);
+  const [oidcPasswordLogin, setOidcPasswordLogin] = useState(false);
   useUndoRedo();
 
   useEffect(() => {
@@ -36,6 +37,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     if (isAuthenticated && user?.hasPassword) {
       authApi.getAuthMethods().then((methods) => {
         setForce2fa(methods.force2fa);
+        setOidcPasswordLogin(methods.oidcPasswordLogin === true);
         useDemoStore.getState().setDemoMode(methods.demo ?? false);
       }).catch(() => {});
     }
@@ -57,6 +59,8 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     if (
       force2fa &&
       user?.hasPassword &&
+      // setup2FA refuses an SSO account while password sign-in is off
+      !(user.authProvider === 'oidc' && !oidcPasswordLogin) &&
       !user?.mustChangePassword &&
       preferences &&
       !preferences.twoFactorEnabled &&
@@ -65,7 +69,7 @@ export function ProtectedRoute({ children }: ProtectedRouteProps) {
     ) {
       router.push('/setup-2fa');
     }
-  }, [force2fa, user, preferences, pathname, router]);
+  }, [force2fa, oidcPasswordLogin, user, preferences, pathname, router]);
 
   if (!_hasHydrated || isLoading) {
     return (

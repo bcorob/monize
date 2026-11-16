@@ -1,3 +1,12 @@
+import { demoAccounts } from "./accounts";
+import { getPeriodicRate } from "../../accounts/mortgage-amortization.util";
+import {
+  DEFAULT_PERIODS_PER_YEAR,
+  periodsPerYearForStoredFrequency,
+} from "../../accounts/payment-frequency.util";
+import { roundToDecimals } from "../../common/round.util";
+import { payrollPaycheque, type PayrollYearToDate } from "./payroll";
+
 export interface DemoTransaction {
   accountKey: string;
   date: string;
@@ -7,12 +16,32 @@ export interface DemoTransaction {
   description: string;
   status: string;
   currencyCode?: string;
-  // For split transactions
+  // For split transactions. A split with `transferAccountKey` is a transfer
+  // leg into that account (no category), the way a scheduled loan payment
+  // posts its principal.
   isSplit?: boolean;
-  splits?: { categoryPath: string; amount: number; memo: string }[];
+  splits?: DemoSplit[];
   // For transfers
   isTransfer?: boolean;
   transferAccountKey?: string;
+  /**
+   * What arrived on the other side of a cross-currency transfer, unsigned and
+   * in the target account's currency (the API's `toAmount`). Absent for a
+   * same-currency transfer, whose counterpart moves the same amount.
+   */
+  transferToAmount?: number;
+}
+
+export interface DemoSplit {
+  categoryPath?: string;
+  transferAccountKey?: string;
+  amount: number;
+  memo: string;
+  /**
+   * What a cross-currency transfer line delivered, unsigned and in the target
+   * account's currency (the API's `transferTargetAmount`, INV-SPLITFX-001).
+   */
+  transferTargetAmount?: number;
 }
 
 /** Seeded random number generator for consistent results */
@@ -49,6 +78,19 @@ export function generateTransactions(referenceDate: Date): DemoTransaction[] {
   const startDate = new Date(referenceDate);
   startDate.setMonth(startDate.getMonth() - 12);
 
+  // The mortgage's debt before each installment, from its opening balance.
+  const mortgage = demoAccounts.find((a) => a.key === "mortgage")!;
+  const MORTGAGE_PAYMENT = mortgage.paymentAmount!;
+  const mortgageRate = getPeriodicRate(
+    mortgage.interestRate!,
+    periodsPerYearForStoredFrequency(mortgage.paymentFrequency!) ??
+      DEFAULT_PERIODS_PER_YEAR,
+    mortgage.mortgageType!,
+  );
+  let mortgageDebt = Math.abs(mortgage.openingBalance);
+  // Payroll deductions collected so far in each calendar year.
+  const payrollYearToDate = new Map<number, PayrollYearToDate>();
+
   const startYear = startDate.getFullYear();
   const startMonth = startDate.getMonth();
 
@@ -69,62 +111,64 @@ export function generateTransactions(referenceDate: Date): DemoTransaction[] {
         ? { status: "UNRECONCILED" }
         : { status: "CLEARED" };
 
-    // === SALARY (biweekly: 15th and last day) ===
-    const salary15 = getMonthDate(year, month, 15);
-    if (salary15 <= referenceDate) {
+    // === SALARY (biweekly: 15th and 28th) ===
+    // Posted as a payslip: a gross salary line and the payroll deductions,
+    // CPP and EI stopping at their yearly maximums. The deposit is the net.
+    for (const payDay of [15, 28]) {
+      const payDate = getMonthDate(year, month, payDay);
+      if (payDate > referenceDate) continue;
+      let ytd = payrollYearToDate.get(year);
+      if (!ytd) {
+        ytd = new Map();
+        payrollYearToDate.set(year, ytd);
+      }
+      const { net, splits } = payrollPaycheque(ytd);
       transactions.push({
         accountKey: "chequing",
-        date: formatDate(salary15),
+        date: formatDate(payDate),
         payeeName: "Maple Leaf Technologies",
         categoryPath: "Salary",
-        amount: 2250.0,
+        amount: net,
         description: "Biweekly salary deposit",
-        ...clearedStatus,
-      });
-    }
-    const salaryEnd = getMonthDate(year, month, 28);
-    if (salaryEnd <= referenceDate) {
-      transactions.push({
-        accountKey: "chequing",
-        date: formatDate(salaryEnd),
-        payeeName: "Maple Leaf Technologies",
-        categoryPath: "Salary",
-        amount: 2250.0,
-        description: "Biweekly salary deposit",
+        isSplit: true,
+        splits,
         ...clearedStatus,
       });
     }
 
     // === MORTGAGE ===
+    // The installment posts the way a scheduled mortgage payment does: one
+    // chequing split, the principal a transfer leg into the mortgage and the
+    // interest a category leg, the interest charged on the debt the ledger
+    // carries before the payment at the mortgage's own periodic rate. The
+    // mortgage-type detector reads it back as CANADIAN_FIXED
+    // (docs/specs/mortgage-types.md, section 10).
     const mortgageDate = getMonthDate(year, month, 1);
     if (mortgageDate <= referenceDate && mortgageDate >= startDate) {
-      // Payment from chequing (full payment including principal + interest)
+      const interest = roundToDecimals(mortgageDebt * mortgageRate, 2);
+      const principal = roundToDecimals(MORTGAGE_PAYMENT - interest, 2);
+      mortgageDebt = roundToDecimals(mortgageDebt - principal, 2);
       transactions.push({
         accountKey: "chequing",
         date: formatDate(mortgageDate),
         payeeName: "Scotiabank Mortgage",
-        categoryPath: "Housing > Rent/Mortgage",
-        amount: -2370.0,
+        // Not written for a split parent: only its legs carry categories.
+        categoryPath: "Housing > Mortgage Interest",
+        amount: -MORTGAGE_PAYMENT,
         description: "Monthly mortgage payment",
-        ...clearedStatus,
-      });
-
-      // Principal portion applied to mortgage account
-      // Canadian fixed-rate: semi-annual compounding
-      // Monthly rate = (1 + 0.0524/2)^(1/6) - 1 ≈ 0.004327
-      const monthlyRate = Math.pow(1 + 0.0524 / 2, 1 / 6) - 1;
-      // Approximate balance after i months of payments
-      const balanceAfterPayments = 385000 - i * 700; // rough approximation
-      const interestPortion = balanceAfterPayments * monthlyRate;
-      const principalPortion = Math.round((2370 - interestPortion) * 100) / 100;
-
-      transactions.push({
-        accountKey: "mortgage",
-        date: formatDate(mortgageDate),
-        payeeName: "Scotiabank Mortgage",
-        categoryPath: "Housing > Rent/Mortgage",
-        amount: principalPortion,
-        description: "Mortgage principal payment",
+        isSplit: true,
+        splits: [
+          {
+            transferAccountKey: "mortgage",
+            amount: -principal,
+            memo: "Principal",
+          },
+          {
+            categoryPath: "Housing > Mortgage Interest",
+            amount: -interest,
+            memo: "Interest",
+          },
+        ],
         ...clearedStatus,
       });
     }
@@ -668,8 +712,92 @@ export function generateTransactions(referenceDate: Date): DemoTransaction[] {
     }
   }
 
+  transactions.push(...bitcoinWalletTransactions(referenceDate));
+
   // Sort by date
   transactions.sort((a, b) => a.date.localeCompare(b.date));
 
   return transactions;
+}
+
+/** The day `days` before `referenceDate`. */
+function daysBefore(referenceDate: Date, days: number): Date {
+  const date = new Date(referenceDate);
+  date.setDate(date.getDate() - days);
+  return date;
+}
+
+/** The status the monthly loop gives a row dated `date`. */
+function statusFor(date: Date, referenceDate: Date): string {
+  const olderThan2Months =
+    new Date(date.getFullYear(), date.getMonth(), 1) <
+    new Date(referenceDate.getFullYear(), referenceDate.getMonth() - 2, 1);
+  if (olderThan2Months) return "RECONCILED";
+  const currentMonth =
+    date.getFullYear() === referenceDate.getFullYear() &&
+    date.getMonth() === referenceDate.getMonth();
+  return currentMonth ? "UNRECONCILED" : "CLEARED";
+}
+
+/**
+ * The Bitcoin Wallet's history (`docs/specs/crypto-accounts.md` decision 9):
+ * bought from Primary Chequing with the bitcoin received stated, spent once,
+ * and sold back to chequing as a split whose second line is the network fee.
+ * Fixed figures, no draw from the seeded generator, so adding them leaves
+ * every other row's figures where they were. Satoshi-level, at the coin's
+ * eight places (`docs/specs/money-precision.md` section 6): the purchase
+ * states 0.01249993 BTC received for 1,700.00 CAD, and the sale's network fee
+ * is 2,500 sats. The wallet ends at
+ * 0.01249993 - 0.00043210 - 0.00502500 = 0.00704283 BTC.
+ */
+function bitcoinWalletTransactions(referenceDate: Date): DemoTransaction[] {
+  const bought = daysBefore(referenceDate, 60);
+  const spent = daysBefore(referenceDate, 40);
+  const sold = daysBefore(referenceDate, 10);
+  return [
+    {
+      accountKey: "chequing",
+      date: formatDate(bought),
+      payeeName: "Transfer",
+      categoryPath: "",
+      amount: -1700.0,
+      description: "Bought bitcoin",
+      status: statusFor(bought, referenceDate),
+      isTransfer: true,
+      transferAccountKey: "crypto",
+      transferToAmount: 0.01249993,
+    },
+    {
+      accountKey: "crypto",
+      date: formatDate(spent),
+      payeeName: "Starbucks",
+      categoryPath: "Food > Coffee Shops",
+      amount: -0.0004321,
+      description: "Coffee, paid in bitcoin",
+      status: statusFor(spent, referenceDate),
+    },
+    {
+      accountKey: "crypto",
+      date: formatDate(sold),
+      payeeName: "Transfer",
+      categoryPath: "",
+      amount: -0.005025,
+      description: "Sold bitcoin",
+      status: statusFor(sold, referenceDate),
+      isSplit: true,
+      splits: [
+        {
+          transferAccountKey: "chequing",
+          amount: -0.005,
+          memo: "Sold bitcoin",
+          transferTargetAmount: 650.0,
+        },
+        {
+          categoryPath: "Fees > Network fee",
+          amount: -0.000025,
+          memo: "Network fee",
+        },
+      ],
+    },
+  ];
 }

@@ -9,28 +9,41 @@ import { BudgetPeriod, PeriodStatus } from "./entities/budget-period.entity";
 import { Transaction } from "../transactions/entities/transaction.entity";
 import { TransactionSplit } from "../transactions/entities/transaction-split.entity";
 import { BudgetsService } from "./budgets.service";
-import { getMonthEndYMD } from "../common/date-utils";
+import { formatMonthKey, getMonthEndYMD } from "../common/date-utils";
 import {
   HealthScoreResult,
   HealthScoreHistoryPoint,
   SavingsRatePoint,
 } from "./budget-reports.service";
-import { roundMoney, roundToDecimals } from "../common/round.util";
+import { roundMoney, roundToDecimals, sumMoney } from "../common/round.util";
+import {
+  budgetExcludedAccountIds,
+  CategorySpending,
+  excludeBudgetAccounts,
+  queryCategorySpending,
+  queryCategorySpendingBuckets,
+  resolveCategorySpent,
+  resolveOutsideTransferIncome,
+  isTransferIncomeLine,
+  budgetTransfersInAsIncome,
+} from "./budget-spending.util";
+import {
+  convertRateParts,
+  RatePartRow,
+  splitByRateBasis,
+} from "../built-in-reports/rate-basis-parts";
+import { Budget } from "./entities/budget.entity";
 
-const MONTH_NAMES = [
-  "January",
-  "February",
-  "March",
-  "April",
-  "May",
-  "June",
-  "July",
-  "August",
-  "September",
-  "October",
-  "November",
-  "December",
-];
+/** A transaction's calendar month, `YYYY-MM`. */
+const MONTH_SQL = "TO_CHAR(DATE_TRUNC('month', t.transaction_date), 'YYYY-MM')";
+
+/** What an income row is split by so each part converts at its own rate. */
+const INCOME_RATE_BASIS = {
+  currency: "t.currency_code",
+  date: "t.transaction_date",
+  originalCurrency: "t.original_currency_code",
+  exchangeRate: "t.exchange_rate",
+};
 
 @Injectable()
 export class BudgetHealthReportsService {
@@ -167,18 +180,25 @@ export class BudgetHealthReportsService {
       let underBudgetBonus = 0;
       let essentialWeightPenalty = 0;
 
+      // An open period has no frozen actuals: read the budget page's own,
+      // converted into the budget's currency, once for the period.
+      const openSpending =
+        period.status === PeriodStatus.OPEN
+          ? await this.periodSpending(userId, budget, period)
+          : null;
+
       for (const pc of cats) {
         const budgeted = Number(pc.budgetedAmount) || 0;
         if (budgeted <= 0) continue;
 
         let actual = Number(pc.actualAmount) || 0;
-        // For open periods, compute actuals from transactions
-        if (period.status === PeriodStatus.OPEN && pc.categoryId) {
-          actual = await this.computeCategoryActual(
-            userId,
-            pc.categoryId,
-            period.periodStart,
-            period.periodEnd,
+        if (openSpending && pc.categoryId) {
+          // A category with a row that had no rate has no known actual: it is
+          // left out of the score rather than scored on its converted part.
+          if (openSpending.incompleteCategoryIds.has(pc.categoryId)) continue;
+          actual = Math.max(
+            -(openSpending.spendingMap.get(pc.categoryId) ?? 0),
+            0,
           );
         }
 
@@ -208,7 +228,7 @@ export class BudgetHealthReportsService {
       const score = Math.min(100, Math.max(0, Math.round(rawScore)));
 
       result.push({
-        month: this.formatPeriodMonth(period.periodStart),
+        monthKey: this.formatPeriodMonthKey(period.periodStart),
         score,
         label: this.getScoreLabel(score),
       });
@@ -231,229 +251,176 @@ export class BudgetHealthReportsService {
       (bc) => !bc.isIncome,
     );
 
-    const incomeCategoryIds = incomeCategories
-      .filter((bc) => bc.categoryId !== null)
-      .map((bc) => bc.categoryId as string);
-    const expenseCategoryIds = expenseCategories
-      .filter((bc) => bc.categoryId !== null && !bc.isTransfer)
-      .map((bc) => bc.categoryId as string);
+    // A transfer income line is an income line too (issue #2141), so a budget
+    // whose only income line is one reads its income from its lines, not the
+    // all-deposits fallback below, as its summary does (spec section 5).
+    const incomeLines = incomeCategories.filter(
+      (bc) => bc.categoryId !== null || isTransferIncomeLine(bc),
+    );
+    const spendingLines = [
+      ...incomeLines,
+      ...expenseCategories.filter(
+        (bc) => bc.categoryId !== null && !bc.isTransfer,
+      ),
+    ];
 
+    const excludedAccountIds = budgetExcludedAccountIds(budget.config);
     const today = new Date();
 
-    // Compute full date range for all months at once
-    const startD = new Date(
-      today.getFullYear(),
-      today.getMonth() - (months - 1),
-      1,
-    );
-    const rangeStart = `${startD.getFullYear()}-${String(startD.getMonth() + 1).padStart(2, "0")}-01`;
-    const rangeEnd = getMonthEndYMD(today.getFullYear(), today.getMonth() + 1);
-
-    // Batch queries: group by month across entire range
+    // No income categories: the income side is every positive non-transfer
+    // transaction of the window, converted into the budget's currency at each
+    // row's own rate or the market rate on its date (issue #2155). A month
+    // with a foreign row that has no rate is reported incomplete and keeps
+    // only its budget-currency income (`convertRateParts` withholds the
+    // month's whole foreign figure); nothing is added 1:1.
     const incomeByMonth = new Map<string, number>();
-    const expenseByMonth = new Map<string, number>();
-
-    const queries: Promise<void>[] = [];
-
-    // Income query (batch)
-    if (incomeCategoryIds.length > 0) {
-      queries.push(
-        withScopedDb(this.dataSource, (m) =>
-          m
-            .getRepository(Transaction)
-            .createQueryBuilder("t")
-            .select(
-              "TO_CHAR(DATE_TRUNC('month', t.transaction_date), 'YYYY-MM')",
-              "month",
-            )
-            .addSelect("COALESCE(SUM(t.amount), 0)", "total")
-            .where("t.user_id = :userId", { userId })
-            .andWhere("t.category_id IN (:...incomeCategoryIds)", {
-              incomeCategoryIds,
-            })
-            .andWhere("t.transaction_date >= :start", { start: rangeStart })
-            .andWhere("t.transaction_date <= :end", { end: rangeEnd })
-            .andWhere("t.status != :void", { void: "VOID" })
-            .andWhere("t.is_split = false")
-            .groupBy(
-              "TO_CHAR(DATE_TRUNC('month', t.transaction_date), 'YYYY-MM')",
-            )
-            .getRawMany()
-            .then((rows) => {
-              for (const row of rows) {
-                incomeByMonth.set(
-                  row.month,
-                  (incomeByMonth.get(row.month) || 0) +
-                    Math.abs(parseFloat(row.total || "0")),
-                );
-              }
-            }),
-        ),
+    const foreignIncomeMonths = new Set<string>();
+    if (incomeLines.length === 0) {
+      const startD = new Date(
+        today.getFullYear(),
+        today.getMonth() - (months - 1),
+        1,
       );
-
-      // Income splits query (batch)
-      queries.push(
-        withScopedDb(this.dataSource, (m) =>
-          m
-            .getRepository(TransactionSplit)
-            .createQueryBuilder("s")
-            .innerJoin("s.transaction", "t")
-            .select(
-              "TO_CHAR(DATE_TRUNC('month', t.transaction_date), 'YYYY-MM')",
-              "month",
-            )
-            .addSelect("COALESCE(SUM(s.amount), 0)", "total")
-            .where("t.user_id = :userId", { userId })
-            .andWhere("s.category_id IN (:...incomeCategoryIds)", {
-              incomeCategoryIds,
-            })
-            .andWhere("t.transaction_date >= :start", { start: rangeStart })
-            .andWhere("t.transaction_date <= :end", { end: rangeEnd })
-            .andWhere("t.status != :void", { void: "VOID" })
-            .andWhere("s.amount > 0")
-            .groupBy(
-              "TO_CHAR(DATE_TRUNC('month', t.transaction_date), 'YYYY-MM')",
-            )
-            .getRawMany()
-            .then((rows) => {
-              for (const row of rows) {
-                incomeByMonth.set(
-                  row.month,
-                  (incomeByMonth.get(row.month) || 0) +
-                    Math.abs(parseFloat(row.total || "0")),
-                );
-              }
-            }),
-        ),
+      const rangeStart = `${startD.getFullYear()}-${String(startD.getMonth() + 1).padStart(2, "0")}-01`;
+      const rangeEnd = getMonthEndYMD(
+        today.getFullYear(),
+        today.getMonth() + 1,
       );
-    } else {
-      // No income categories: use all positive non-transfer transactions
-      queries.push(
-        withScopedDb(this.dataSource, (m) =>
-          m
-            .getRepository(Transaction)
-            .createQueryBuilder("t")
-            .select(
-              "TO_CHAR(DATE_TRUNC('month', t.transaction_date), 'YYYY-MM')",
-              "month",
-            )
-            .addSelect("COALESCE(SUM(t.amount), 0)", "total")
-            .where("t.user_id = :userId", { userId })
-            .andWhere("t.amount > 0")
-            .andWhere("t.is_transfer = false")
-            .andWhere("t.transaction_date >= :start", { start: rangeStart })
-            .andWhere("t.transaction_date <= :end", { end: rangeEnd })
-            .andWhere("t.status != :void", { void: "VOID" })
-            .groupBy(
-              "TO_CHAR(DATE_TRUNC('month', t.transaction_date), 'YYYY-MM')",
-            )
-            .getRawMany()
-            .then((rows) => {
-              for (const row of rows) {
-                incomeByMonth.set(row.month, parseFloat(row.total || "0"));
-              }
-            }),
-        ),
+      const { rows, converted } = await withScopedDb(
+        this.dataSource,
+        async (m) => {
+          const qb = excludeBudgetAccounts(
+            m
+              .getRepository(Transaction)
+              .createQueryBuilder("t")
+              .select(MONTH_SQL, "month")
+              .addSelect("t.currency_code", "currencyCode")
+              .addSelect("COALESCE(SUM(t.amount), 0)", "total")
+              .where("t.user_id = :userId", { userId })
+              .andWhere("t.amount > 0")
+              .andWhere("t.is_transfer = false")
+              .andWhere("t.transaction_date >= :start", { start: rangeStart })
+              .andWhere("t.transaction_date <= :end", { end: rangeEnd })
+              .andWhere("t.status != :void", { void: "VOID" }),
+            excludedAccountIds,
+          )
+            .groupBy(MONTH_SQL)
+            .addGroupBy("t.currency_code");
+          splitByRateBasis(qb, INCOME_RATE_BASIS, budget.currencyCode);
+          const parts: RatePartRow[] = await qb.getRawMany();
+          return {
+            rows: parts,
+            converted: await convertRateParts(
+              (sql, params) => m.query(sql, params),
+              parts,
+              budget.currencyCode,
+              (row) => row.month,
+              { sums: ["total"], currency: "currencyCode" },
+              this.logger,
+            ),
+          };
+        },
       );
+      for (const row of rows) {
+        if (row.currencyCode !== budget.currencyCode) continue;
+        incomeByMonth.set(
+          row.month,
+          (incomeByMonth.get(row.month) || 0) + parseFloat(row.total || "0"),
+        );
+      }
+      for (const [month, figures] of converted) {
+        if (figures.total === null) {
+          foreignIncomeMonths.add(month);
+          continue;
+        }
+        incomeByMonth.set(
+          month,
+          (incomeByMonth.get(month) || 0) + figures.total,
+        );
+      }
     }
 
-    // Expense queries (batch: direct + splits in parallel)
-    if (expenseCategoryIds.length > 0) {
-      queries.push(
-        withScopedDb(this.dataSource, (m) =>
-          m
-            .getRepository(Transaction)
-            .createQueryBuilder("t")
-            .select(
-              "TO_CHAR(DATE_TRUNC('month', t.transaction_date), 'YYYY-MM')",
-              "month",
-            )
-            .addSelect("COALESCE(ABS(SUM(t.amount)), 0)", "total")
-            .where("t.user_id = :userId", { userId })
-            .andWhere("t.category_id IN (:...expenseCategoryIds)", {
-              expenseCategoryIds,
+    // The budget page's own actuals in one query over the window, bucketed by
+    // month: net within the category, converted into the budget's currency, the
+    // budget's excluded accounts left out.
+    // With no line on either side the read still runs for the transfers in
+    // `config.transfersInAsIncome` counts, on the budget's other lines (it
+    // needs one to name the budget); `sumSide` reads `spendingLines` only.
+    const queryLines =
+      spendingLines.length > 0 || !budgetTransfersInAsIncome(budget.config)
+        ? spendingLines
+        : budget.categories || [];
+    const spendingByMonth =
+      queryLines.length > 0
+        ? (
+            await withScopedDb(this.dataSource, (m) => {
+              const first = new Date(
+                today.getFullYear(),
+                today.getMonth() - (months - 1),
+                1,
+              );
+              return queryCategorySpendingBuckets(
+                m.getRepository(Transaction),
+                m.getRepository(TransactionSplit),
+                userId,
+                queryLines,
+                formatMonthKey(first.getFullYear(), first.getMonth() + 1) +
+                  "-01",
+                getMonthEndYMD(today.getFullYear(), today.getMonth() + 1),
+                (txDate) => txDate.slice(0, 7),
+              );
             })
-            .andWhere("t.transaction_date >= :start", { start: rangeStart })
-            .andWhere("t.transaction_date <= :end", { end: rangeEnd })
-            .andWhere("t.status != :void", { void: "VOID" })
-            .andWhere("t.is_split = false")
-            .andWhere("t.amount < 0")
-            .groupBy(
-              "TO_CHAR(DATE_TRUNC('month', t.transaction_date), 'YYYY-MM')",
-            )
-            .getRawMany()
-            .then((rows) => {
-              for (const row of rows) {
-                expenseByMonth.set(
-                  row.month,
-                  (expenseByMonth.get(row.month) || 0) +
-                    parseFloat(row.total || "0"),
-                );
-              }
-            }),
-        ),
-      );
+          ).buckets
+        : null;
 
-      queries.push(
-        withScopedDb(this.dataSource, (m) =>
-          m
-            .getRepository(TransactionSplit)
-            .createQueryBuilder("s")
-            .innerJoin("s.transaction", "t")
-            .select(
-              "TO_CHAR(DATE_TRUNC('month', t.transaction_date), 'YYYY-MM')",
-              "month",
-            )
-            .addSelect("COALESCE(ABS(SUM(s.amount)), 0)", "total")
-            .where("t.user_id = :userId", { userId })
-            .andWhere("s.category_id IN (:...expenseCategoryIds)", {
-              expenseCategoryIds,
-            })
-            .andWhere("t.transaction_date >= :start", { start: rangeStart })
-            .andWhere("t.transaction_date <= :end", { end: rangeEnd })
-            .andWhere("t.status != :void", { void: "VOID" })
-            .andWhere("s.amount < 0")
-            .groupBy(
-              "TO_CHAR(DATE_TRUNC('month', t.transaction_date), 'YYYY-MM')",
-            )
-            .getRawMany()
-            .then((rows) => {
-              for (const row of rows) {
-                expenseByMonth.set(
-                  row.month,
-                  (expenseByMonth.get(row.month) || 0) +
-                    parseFloat(row.total || "0"),
-                );
-              }
-            }),
-        ),
-      );
-    }
-
-    await Promise.all(queries);
-
-    // Build result from aggregated monthly data
     const result: SavingsRatePoint[] = [];
 
     for (let i = months - 1; i >= 0; i--) {
       const d = new Date(today.getFullYear(), today.getMonth() - i, 1);
       const year = d.getFullYear();
       const month = d.getMonth();
-      const monthKey = `${year}-${String(month + 1).padStart(2, "0")}`;
-      const monthLabel = `${MONTH_NAMES[month].substring(0, 3)} ${year}`;
+      const monthKey = formatMonthKey(year, month + 1);
 
-      const income = incomeByMonth.get(monthKey) || 0;
-      const expenses = expenseByMonth.get(monthKey) || 0;
+      const spending = spendingByMonth?.get(monthKey) ?? null;
+      const sumSide = (isIncome: boolean): number =>
+        spending
+          ? sumMoney(
+              spendingLines
+                .filter((bc) => bc.isIncome === isIncome)
+                .map((bc) =>
+                  resolveCategorySpent(
+                    bc,
+                    spending.spendingMap,
+                    spending.transferSpendingMap,
+                    spending.transferIncomeMap,
+                  ),
+                ),
+            )
+          : 0;
+
+      // `config.transfersInAsIncome` adds to either side's income.
+      const income = sumMoney([
+        incomeLines.length > 0
+          ? sumSide(true)
+          : incomeByMonth.get(monthKey) || 0,
+        spending ? resolveOutsideTransferIncome(spending) : 0,
+      ]);
+      const expenses = sumSide(false);
       const savings = income - expenses;
       const savingsRate =
         income > 0 ? roundToDecimals((savings / income) * 100, 2) : 0;
 
       result.push({
-        month: monthLabel,
+        monthKey,
         income: roundMoney(income),
         expenses: roundMoney(expenses),
         savings: roundMoney(savings),
         savingsRate,
+        valuationComplete:
+          !foreignIncomeMonths.has(monthKey) &&
+          (spending?.incompleteCategoryIds.size ?? 0) === 0 &&
+          (spending?.incompleteTransferIncomeAccountIds.size ?? 0) === 0 &&
+          spending?.outsideTransferIncomeComplete !== false,
       });
     }
 
@@ -494,48 +461,29 @@ export class BudgetHealthReportsService {
     return 0;
   }
 
-  private async computeCategoryActual(
+  /**
+   * The expense actuals of one period through `queryCategorySpending`: net
+   * within each category, converted into the budget's currency at each row's
+   * own rate or date, the budget's excluded accounts left out. Before issue
+   * #2155 an open period summed raw amounts across currencies.
+   */
+  private periodSpending(
     userId: string,
-    categoryId: string,
-    periodStart: string,
-    periodEnd: string,
-  ): Promise<number> {
-    const [directResult, splitResult] = await Promise.all([
-      withScopedDb(this.dataSource, (m) =>
-        m
-          .getRepository(Transaction)
-          .createQueryBuilder("t")
-          .select("COALESCE(SUM(t.amount), 0)", "total")
-          .where("t.user_id = :userId", { userId })
-          .andWhere("t.category_id = :categoryId", { categoryId })
-          .andWhere("t.transaction_date >= :start", { start: periodStart })
-          .andWhere("t.transaction_date <= :end", { end: periodEnd })
-          .andWhere("t.status != :void", { void: "VOID" })
-          .andWhere("t.is_split = false")
-          .getRawOne(),
+    budget: Budget,
+    period: BudgetPeriod,
+  ): Promise<CategorySpending> {
+    const lines = (budget.categories || []).filter(
+      (bc) => !bc.isIncome && !bc.isTransfer && bc.categoryId !== null,
+    );
+    return withScopedDb(this.dataSource, (m) =>
+      queryCategorySpending(
+        m.getRepository(Transaction),
+        m.getRepository(TransactionSplit),
+        userId,
+        lines,
+        period.periodStart,
+        period.periodEnd,
       ),
-      withScopedDb(this.dataSource, (m) =>
-        m
-          .getRepository(TransactionSplit)
-          .createQueryBuilder("s")
-          .innerJoin("s.transaction", "t")
-          .select("COALESCE(SUM(s.amount), 0)", "total")
-          .where("t.user_id = :userId", { userId })
-          .andWhere("s.category_id = :categoryId", { categoryId })
-          .andWhere("t.transaction_date >= :start", { start: periodStart })
-          .andWhere("t.transaction_date <= :end", { end: periodEnd })
-          .andWhere("t.status != :void", { void: "VOID" })
-          .getRawOne(),
-      ),
-    ]);
-
-    // Expenses are negative; negate to get positive spending, clamp to 0
-    return Math.max(
-      -(
-        parseFloat(directResult?.total || "0") +
-        parseFloat(splitResult?.total || "0")
-      ),
-      0,
     );
   }
 
@@ -546,10 +494,10 @@ export class BudgetHealthReportsService {
     return "Off Track";
   }
 
-  private formatPeriodMonth(periodStart: string): string {
+  private formatPeriodMonthKey(periodStart: string): string {
     const parts = periodStart.split("-");
     const year = parseInt(parts[0], 10);
     const month = parseInt(parts[1], 10);
-    return `${MONTH_NAMES[month - 1].substring(0, 3)} ${year}`;
+    return formatMonthKey(year, month);
   }
 }

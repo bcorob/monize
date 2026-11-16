@@ -76,7 +76,10 @@
     "collapseAria": "Masquer les informations du compte",
     "showAccountNumber": "Afficher le numéro de compte",
     "hideAccountNumber": "Masquer le numéro de compte",
-    "show": "Afficher les informations du compte"
+    "show": "Afficher les informations du compte",
+    "nextInstallment": "Prochaine échéance",
+    "finalPayment": "Paiement final",
+    "amountDueOn": "{amount}, dû le {date}"
   },
   "page": {
     "title": "Transactions",
@@ -121,13 +124,19 @@
       "balance": "Solde",
       "attachments": "Pièces jointes",
       "status": "Statut",
+      "statusHelp": "Non rapproché, Encaissé ou Rapproché sont des étapes vers la correspondance avec un relevé bancaire. Annulé annule une transaction mais conserve son enregistrement ; elle ne modifie plus le solde du compte.",
       "actions": "Actions"
+    },
+    "sort": {
+      "balanceHiddenHint": "Triez par date pour voir le solde courant",
+      "stripLabel": "Trier par"
     },
     "dateDisplay": {
       "toggleLabel": "Masquer l’année",
       "toggleTitle": "Retirer l’année des dates pour laisser plus de place au bénéficiaire"
     },
     "attachmentsCount": "{count, plural, one {# pièce jointe} other {# pièces jointes}}",
+    "warrantiesCount": "{count, plural, one {# garantie} other {# garanties}}",
     "today": "Aujourd'hui",
     "export": {
       "button": "Exporter",
@@ -165,7 +174,6 @@
     },
     "row": {
       "viewPayeeTitle": "Voir les détails de {name}",
-      "ref": "Réf. : {number}",
       "investmentLabel": "Investissement",
       "linkedInvestmentTitle": "Voir dans Investissements",
       "filterByDate": "Filtrer par date « {date} »",
@@ -212,13 +220,13 @@
       "title": "Filtres",
       "clear": "Effacer",
       "hide": "Masquer",
-      "show": "Afficher"
+      "show": "Afficher les filtres"
     },
     "accounts": {
-      "label": "Afficher les comptes :",
-      "all": "Tous",
-      "active": "Actifs",
-      "closed": "Fermés"
+      "label": "Afficher les comptes",
+      "allCount": "Tous ({count})",
+      "activeCount": "Actifs ({count})",
+      "closedCount": "Fermés ({count})"
     },
     "fields": {
       "accounts": "Comptes",
@@ -251,7 +259,7 @@
       "statuses": "Tous les statuts",
       "amountMin": "Min",
       "amountMax": "Max",
-      "search": "Rechercher bénéficiaire, catégorie, montant, étiquette, description, référence #...",
+      "search": "Rechercher, ou essayez #10 ou payee:costco",
       "tagKeyValue": "p. ex. usa"
     },
     "tagKeyNone": "Toutes (aucun filtre de clé)",
@@ -312,7 +320,7 @@
     },
     "modal": {
       "title": "Mise à jour groupée des transactions",
-      "subtitle": "Mettre à jour {count, plural, one {# transaction sélectionnée} other {# transactions sélectionnées}}. Activez les champs à modifier.",
+      "help": "Activez les champs à modifier.",
       "submitLabel": "Mettre à jour {count, plural, one {# transaction} other {# transactions}}",
       "payee": "Bénéficiaire",
       "category": "Catégorie",
@@ -360,8 +368,9 @@
       "fromAccount": "Compte source",
       "toAccount": "Compte destination",
       "transferAmount": "Montant du virement",
-      "transferAmountWithCurrency": "Montant du virement ({currency})",
-      "amountReceived": "Montant reçu ({currency})",
+      "amountReceivedLabel": "Montant reçu",
+      "transferAmountInCurrency": "Montant du virement ({currency})",
+      "amountReceivedInCurrency": "Montant reçu ({currency})",
       "payeeOptional": "Bénéficiaire (facultatif)",
       "categoryOptional": "Catégorie (facultatif)"
     },
@@ -391,10 +400,16 @@
     "submitCreateAndNewDescription": "Enregistrer et en saisir une autre, avec le même compte et la même date.",
     "submitOptions": "Choisir ce qui se passe après la création",
     "submitUpdate": "Mettre à jour {mode}",
+    "submitConvert": "Convertir en {mode}",
     "reconciledConfirm": {
       "title": "Modifier une transaction rapprochée ?",
       "message": "Cette transaction est rapprochée. La modifier affectera un rapprochement terminé. Voulez-vous quand même enregistrer vos modifications ?",
       "confirm": "Enregistrer les modifications"
+    },
+    "counterpartConfirm": {
+      "title": "Convertir ce virement ?",
+      "message": "L'autre côté de ce virement a déjà été pointé ou rapproché. Le convertir en transaction supprime cette écriture de l'autre compte et modifie un solde vérifié avec un relevé. Voulez-vous continuer ?",
+      "confirm": "Convertir quand même"
     },
     "modeLabel": {
       "transfer": "Virement",
@@ -424,6 +439,8 @@
       "destinationRequired": "Veuillez sélectionner un compte destination",
       "sameAccount": "Les comptes source et destination doivent être différents",
       "negativeTransfer": "Le montant du virement ne doit pas être négatif",
+      "convertedToTransfer": "Converti en virement",
+      "convertedToTransaction": "Converti en transaction",
       "payeeCreated": "Bénéficiaire « {name} » créé",
       "payeeCreateFailed": "Échec de la création du bénéficiaire",
       "payeeReactivated": "Bénéficiaire « {name} » réactivé",
@@ -458,10 +475,20 @@
       },
       "feeCaption": "Comprend des frais de transaction à l'étranger de {percent}% ({fee})."
     },
-    "jointSplitDisabled": "Seul le propriétaire peut gérer les transactions ventilées d'un compte partagé"
+    "jointSplitDisabled": "Seul le propriétaire peut gérer les transactions ventilées d'un compte partagé",
+    "warranties": {
+      "title": "Garanties",
+      "add": "Ajouter une garantie",
+      "expires": "Expire le {date}",
+      "loading": "Chargement des garanties",
+      "loadError": "Les garanties de cette transaction n'ont pas pu être chargées.",
+      "empty": "Aucune garantie pour l'instant"
+    },
+    "conversionLockedNote": "Ce virement appartient à une transaction fractionnée ou au compte d'un autre propriétaire ; il ne peut donc rester ici qu'un virement. Modifiez-le depuis la répartition ou supprimez-le et créez l'écriture souhaitée."
   },
   "splitEditor": {
     "header": "Détails de la répartition",
+    "headerTooltip": "Chaque ligne peut être une catégorie, un virement vers un autre compte ou un investissement. Les lignes doivent totaliser le montant de la transaction ; Répartir équitablement et Répartir proportionnellement répartissent le reste pour vous.",
     "distributeProportionally": "Répartir proportionnellement",
     "distributeProportionallyTitle": "Répartir le montant restant proportionnellement selon le montant de chaque répartition",
     "distributeEvenly": "Répartir équitablement",
@@ -521,7 +548,7 @@
     "quantityPlaceholder": "Quantité",
     "pricePlaceholder": "Prix",
     "commissionPlaceholder": "Commission",
-    "amountPlaceholder": "Montant ({currency})",
+    "amountOnlyPlaceholder": "Montant",
     "ratePlaceholder": "{to} pour 1 {from}",
     "ariaRate": "Taux de change ({to} pour 1 {from})",
     "rateHint": "La quantité, le prix et la commission sont en {from} ; ce taux convertit l'impact de trésorerie en {to}.",
@@ -551,6 +578,7 @@
       "total": "Total",
       "transactions": "Transactions",
       "tooltip": "{count, plural, one {# transaction} other {# transactions}}",
+      "partialNote": "Certains montants n'ont pas de taux de change et ne sont pas inclus dans ces totaux.",
       "quarterLabel": "T{quarter} {year}",
       "quarterTick": "T{quarter} {year}",
       "granularityLabel": "Regroupement",
@@ -575,6 +603,11 @@
       "log": "Log",
       "autoTitle": "Auto ({scale})",
       "scaleTitle": "Échelle {label}"
+    },
+    "collapse": {
+      "hide": "Masquer le graphique",
+      "show": "Afficher le graphique",
+      "hidden": "Graphique masqué"
     }
   },
   "toasts": {
@@ -597,5 +630,71 @@
     "title": "Dépenses par {key}",
     "other": "Autres",
     "noData": "Aucune dépense étiquetée à répartir pour cette clé."
+  },
+  "searchSyntax": {
+    "open": "Syntaxe de recherche",
+    "title": "Syntaxe de recherche",
+    "fields": "Champs : payee, memo, cat, tag, account, ref, amount, date, status, is, has. Choisissez un exemple pour le placer dans la zone de recherche.",
+    "examples": {
+      "allWords": "Chaque mot apparaît quelque part",
+      "phrase": "Cette expression exacte",
+      "exclude": "Exclure tout ce qui correspond à refund",
+      "fieldContains": "Le bénéficiaire contient costco",
+      "fieldExact": "Le bénéficiaire est exactement Costco",
+      "reference": "Numéro de chèque ou de référence exactement 10",
+      "wildcard": "La référence commence par 10",
+      "amountOver": "Montant supérieur à 100",
+      "amountRange": "Montant de 50 à 100",
+      "datePeriod": "N’importe quel jour de mars 2026",
+      "isSplit": "Opérations ventilées",
+      "hasAttachment": "Possède une pièce jointe",
+      "hasWarranty": "Possède une garantie"
+    }
+  },
+  "searchInterpretation": {
+    "label": "Recherche :",
+    "negated": "pas {phrase}",
+    "malformed": "{raw} (non compris, recherché comme texte)",
+    "empty": "{raw} (vide, ignoré)",
+    "status": "Statut est {value}",
+    "any": "« {value} » partout",
+    "fields": {
+      "payee": "Bénéficiaire",
+      "memo": "Note",
+      "cat": "Catégorie",
+      "tag": "Étiquette",
+      "account": "Compte",
+      "ref": "Référence",
+      "amount": "Montant",
+      "date": "Date",
+      "status": "Statut",
+      "is": "Type",
+      "has": "Possède"
+    },
+    "ops": {
+      "contains": "{field} contient « {value} »",
+      "exact": "{field} est « {value} »",
+      "glob": "{field} correspond à « {value} »",
+      "eq": "{field} est {value}",
+      "gt": "{field} supérieur à {value}",
+      "gte": "{field} {value} ou plus",
+      "lt": "{field} inférieur à {value}",
+      "lte": "{field} {value} ou moins",
+      "between": "{field} de {value} à {valueTo}"
+    },
+    "enum": {
+      "is": {
+        "transfer": "Virements",
+        "split": "Opérations ventilées",
+        "uncategorized": "Sans catégorie"
+      },
+      "has": {
+        "attachment": "Possède une pièce jointe",
+        "warranty": "Possède une garantie",
+        "ref": "Possède un numéro de référence",
+        "memo": "Possède une note",
+        "tag": "Possède une étiquette"
+      }
+    }
   }
 }

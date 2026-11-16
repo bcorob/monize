@@ -11,9 +11,76 @@
   "uploaded": "Anexo adicionado",
   "deleted": "Anexo excluído",
   "loadFailed": "Falha ao carregar os anexos",
+  "retry": "Tentar novamente",
   "uploadFailed": "Falha ao enviar o anexo",
   "deleteFailed": "Falha ao excluir o anexo",
   "tooLarge": "O arquivo é muito grande (máximo {max})",
   "unsupported": "Tipo de arquivo não suportado. Permitidos: imagens ou PDF",
-  "tooMany": "Máximo de {max} anexos por transação"
+  "tooMany": "Máximo de {max} anexos por transação",
+  "fromWarranty": "Da garantia: {name}",
+  "fromLinkedWarranty": "De uma garantia vinculada",
+  "scan": {
+    "button": "Digitalizar documento",
+    "title": "Digitalizar documento",
+    "description": "Endireite e limpe a foto de um documento antes de anexá-la.",
+    "analysing": "Procurando um documento na foto…",
+    "failed": "Não foi possível digitalizar o documento. Você ainda pode anexar a foto como está.",
+    "viewEnhanced": "Melhorada",
+    "viewOriginal": "Original",
+    "rotate": "Girar",
+    "styleLabel": "Acabamento",
+    "styles": {
+      "colour": "Cor",
+      "grayscale": "Tons de cinza",
+      "blackAndWhite": "Preto e branco",
+      "none": "Sem melhoria"
+    },
+    "styleHints": {
+      "colour": "Uniformiza a iluminação, aumenta o contraste e deixa o texto mais nítido.",
+      "grayscale": "A mesma limpeza sem a cor. Menor e livre do tom que o papel ganha sob luz artificial.",
+      "blackAndWhite": "Apenas tinta e papel. Ideal para texto impresso; vai achatar fotos e logotipos.",
+      "none": "Endireitado e recortado, no mais exatamente como foi fotografado. Use quando a melhoria estraga o assunto."
+    },
+    "adjustments": {
+      "brightness": "Brilho ({value})",
+      "contrast": "Contraste ({value})"
+    },
+    "resetAdjustments": "Redefinir brilho e contraste",
+    "adjustHint": "Mude para “Original” para arrastar os cantos se as bordas estiverem erradas.",
+    "updating": "Atualizando a pré-visualização…",
+    "noDocumentFound": "Nenhuma borda do documento foi encontrada, então a foto inteira foi usada. Mude para “Original” e posicione os cantos você mesmo.",
+    "previewEnhancedAlt": "Prévia da digitalização melhorada",
+    "previewOriginalAlt": "Prévia da foto original",
+    "useEnhanced": "Usar a versão melhorada",
+    "keepOriginal": "Manter apenas o original",
+    "retake": "Tirar de novo",
+    "cancel": "Cancelar",
+    "originalTooLarge": "A foto original passa de {max}, então apenas a digitalização melhorada será anexada.",
+    "warnings": {
+      "blurry": "A foto parece tremida. Tirá-la de novo dará uma digitalização mais nítida.",
+      "edgesOutsideFrame": "O documento chega à borda da foto, então um lado pode ficar cortado. Tire a foto novamente deixando uma margem ao redor de toda a página, sem que nenhum lado encoste na borda.",
+      "lowResolution": "A digitalização ficou pequena, letras miúdas podem ser difíceis de ler."
+    },
+    "corners": {
+      "label": "Cantos do documento",
+      "topLeft": "Canto superior esquerdo",
+      "topRight": "Canto superior direito",
+      "bottomRight": "Canto inferior direito",
+      "bottomLeft": "Canto inferior esquerdo"
+    },
+    "originalKept": "original mantido"
+  },
+  "preview": {
+    "loading": "Carregando a pré-visualização…",
+    "failed": "Não foi possível carregar a pré-visualização. Você ainda pode baixar o arquivo.",
+    "storeUnavailable": "Este arquivo está em um armazenamento que este servidor não consegue acessar agora, então não pode ser visualizado nem baixado. Nada foi perdido: peça à administração para restaurar as configurações de armazenamento de anexos.",
+    "unsupported": "Este tipo de arquivo não pode ser pré-visualizado. Você ainda pode baixá-lo.",
+    "fit": "Ajustar à tela",
+    "actualSize": "Tamanho real",
+    "versionLabel": "Versão",
+    "zoomLabel": "Zoom",
+    "pageCount": "{count, plural, one {# página} other {# páginas}}",
+    "page": "Página {page} de {total}",
+    "open": "Pré-visualizar {name}"
+  }
 }

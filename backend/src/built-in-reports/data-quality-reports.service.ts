@@ -1,8 +1,20 @@
 import { Injectable } from "@nestjs/common";
 import { DataSource } from "typeorm";
 import { withScopedDb } from "../common/db/scoped-db";
-import { ReportCurrencyService } from "./report-currency.service";
-import { roundMoney, sumMoney, toMoneyNumber } from "../common/round.util";
+import {
+  ConversionGaps,
+  RawRateBasis,
+  ReportCurrencyService,
+  wholeGroups,
+  rateBasisColumnsSql,
+} from "./report-currency.service";
+import { FxAggregate } from "../common/fx-aggregate";
+import {
+  MONEY_SCALE,
+  roundMoney,
+  sumMoney,
+  toMoneyNumber,
+} from "../common/round.util";
 import {
   UncategorizedTransactionsResponse,
   UncategorizedTransactionItem,
@@ -51,13 +63,13 @@ export class DataQualityReportsService {
   ): Promise<UncategorizedTransactionsResponse> {
     const defaultCurrency =
       await this.currencyService.getDefaultCurrency(userId);
-    const rateMap = await this.currencyService.buildRateMap(defaultCurrency);
 
     let query = `
       SELECT
         t.id,
         t.transaction_date,
         t.currency_code,
+        ${rateBasisColumnsSql("$3")},
         ${REPORTABLE_TX_AMOUNT} as amount,
         COALESCE(p.name, t.payee_name) as payee_name,
         t.description,
@@ -81,8 +93,8 @@ export class DataQualityReportsService {
         )
     `;
 
-    const params: (string | number)[] = [userId, endDate];
-    let paramIndex = 3;
+    const params: (string | number)[] = [userId, endDate, defaultCurrency];
+    let paramIndex = 4;
 
     if (startDate) {
       query += ` AND t.transaction_date >= $${paramIndex}`;
@@ -93,10 +105,9 @@ export class DataQualityReportsService {
     query += ` ORDER BY t.transaction_date DESC LIMIT $${paramIndex}`;
     params.push(limit);
 
-    interface RawUncategorizedTx {
+    interface RawUncategorizedTx extends RawRateBasis {
       id: string;
       transaction_date: string;
-      currency_code: string;
       amount: string;
       payee_name: string | null;
       description: string | null;
@@ -108,23 +119,40 @@ export class DataQualityReportsService {
       this.dataSource,
       (m) => m.query(query, params),
     );
+    const convertRow = await this.currencyService.buildConverter(
+      rows,
+      defaultCurrency,
+    );
 
-    const transactions: UncategorizedTransactionItem[] = rows.map((row) => ({
-      id: row.id,
-      transactionDate: new Date(row.transaction_date)
-        .toISOString()
-        .split("T")[0],
-      amount: this.currencyService.convertAmount(
-        toMoneyNumber(row.amount),
-        row.currency_code,
-        defaultCurrency,
-        rateMap,
-      ),
-      payeeName: row.payee_name,
-      description: row.description,
-      accountName: row.account_name,
-      accountId: row.account_id,
-    }));
+    // The list is the work queue for filing these rows, so a row whose currency
+    // has no rate stays on it. It keeps its ORIGINAL amount under its OWN
+    // currency code: an unconverted amount under the reporting currency's name
+    // is the defect INV-FX-001 forbids. The summary totals below leave it out.
+    const transactions: UncategorizedTransactionItem[] = rows.map((row) => {
+      // An amount in the row's own currency, read before conversion: a coin's
+      // sum keeps its stored 8 places (MONEY_SCALE, lossless; a fiat figure reads
+      // the same), so a 2,500-sat total is not rounded to zero before it is
+      // converted (INV-MONEY-001).
+      const amount = toMoneyNumber(row.amount, MONEY_SCALE);
+      const converted = convertRow(amount, row);
+      // The amount and its label move together: either both converted, or
+      // both the row's own.
+      const shown =
+        converted === null
+          ? { amount, currencyCode: row.currency_code }
+          : { amount: converted, currencyCode: defaultCurrency };
+      return {
+        id: row.id,
+        transactionDate: new Date(row.transaction_date)
+          .toISOString()
+          .split("T")[0],
+        ...shown,
+        payeeName: row.payee_name,
+        description: row.description,
+        accountName: row.account_name,
+        accountId: row.account_id,
+      };
+    });
 
     // The reportable amount is derived ONCE, in a CTE: six of these in one
     // aggregate is six correlated sub-queries per split parent, and the six
@@ -132,6 +160,7 @@ export class DataQualityReportsService {
     let summarySource = `
       SELECT
         t.currency_code,
+        ${rateBasisColumnsSql("$3")},
         ${REPORTABLE_TX_AMOUNT} as amount
       FROM transactions t
       LEFT JOIN accounts a ON a.id = t.account_id
@@ -149,9 +178,9 @@ export class DataQualityReportsService {
         )
     `;
 
-    const summaryParams: string[] = [userId, endDate];
+    const summaryParams: string[] = [userId, endDate, defaultCurrency];
     if (startDate) {
-      summarySource += ` AND t.transaction_date >= $3`;
+      summarySource += ` AND t.transaction_date >= $4`;
       summaryParams.push(startDate);
     }
 
@@ -162,6 +191,8 @@ export class DataQualityReportsService {
       WITH reportable AS (${summarySource})
       SELECT
         currency_code,
+        tx_date,
+        own_rate,
         COUNT(*) as total_count,
         COUNT(*) FILTER (WHERE amount < 0) as expense_count,
         COALESCE(SUM(ABS(amount)) FILTER (WHERE amount < 0), 0) as expense_total,
@@ -169,11 +200,10 @@ export class DataQualityReportsService {
         COALESCE(SUM(amount) FILTER (WHERE amount > 0), 0) as income_total
       FROM reportable
       WHERE amount IS NOT NULL
-      GROUP BY currency_code
+      GROUP BY currency_code, tx_date, own_rate
     `;
 
-    interface RawSummary {
-      currency_code: string;
+    interface RawSummary extends RawRateBasis {
       total_count: string;
       expense_count: string;
       expense_total: string;
@@ -184,39 +214,58 @@ export class DataQualityReportsService {
     const summaryRows: RawSummary[] = await withScopedDb(this.dataSource, (m) =>
       m.query(summaryQuery, summaryParams),
     );
+    const convert = wholeGroups(
+      summaryRows,
+      await this.currencyService.buildConverter(summaryRows, defaultCurrency),
+      (row) => row.currency_code,
+      (row) => [
+        toMoneyNumber(row.expense_total, MONEY_SCALE),
+        toMoneyNumber(row.income_total, MONEY_SCALE),
+      ],
+    );
 
     let totalCount = 0;
     let expenseCount = 0;
-    let expenseTotal = 0;
+    const expenseTotal = new FxAggregate();
     let incomeCount = 0;
-    let incomeTotal = 0;
+    const incomeTotal = new FxAggregate();
+    const gaps = new ConversionGaps();
     for (const row of summaryRows) {
+      // A count needs no rate: a row in a currency with none still has to be
+      // filed, so it is counted. Its amount is in no total.
       totalCount += parseInt(row.total_count, 10);
       expenseCount += parseInt(row.expense_count, 10);
-      expenseTotal += this.currencyService.convertAmount(
-        toMoneyNumber(row.expense_total),
-        row.currency_code,
-        defaultCurrency,
-        rateMap,
-      );
       incomeCount += parseInt(row.income_count, 10);
-      incomeTotal += this.currencyService.convertAmount(
-        toMoneyNumber(row.income_total),
-        row.currency_code,
-        defaultCurrency,
-        rateMap,
+      const expense = convert(
+        toMoneyNumber(row.expense_total, MONEY_SCALE),
+        row,
       );
+      const income = convert(toMoneyNumber(row.income_total, MONEY_SCALE), row);
+      if (expense === null || income === null) {
+        gaps.record(row.currency_code, row.currency_code);
+        continue;
+      }
+      expenseTotal.addConverted(expense);
+      incomeTotal.addConverted(income);
     }
+    const knownExpenseTotal = roundMoney(expenseTotal.knownSubtotal);
+    const knownIncomeTotal = roundMoney(incomeTotal.knownSubtotal);
 
     return {
       transactions,
       summary: {
         totalCount,
         expenseCount,
-        expenseTotal: roundMoney(expenseTotal),
+        expenseTotal: gaps.headline(knownExpenseTotal),
+        knownExpenseTotal,
         incomeCount,
-        incomeTotal: roundMoney(incomeTotal),
+        incomeTotal: gaps.headline(knownIncomeTotal),
+        knownIncomeTotal,
+        currencyCode: defaultCurrency,
       },
+      currency: defaultCurrency,
+      missingCurrencies: gaps.missingCurrencies,
+      excludedCount: gaps.excludedCount,
     };
   }
 
@@ -231,13 +280,12 @@ export class DataQualityReportsService {
     const checkPayee = sensitivity !== "low";
 
     const params: string[] = [userId, endDate];
-    let paramIndex = 3;
+    const paramIndex = 3;
 
     let dateFilter = `AND t.transaction_date <= $2`;
     if (startDate) {
       dateFilter = `AND t.transaction_date >= $${paramIndex} AND t.transaction_date <= $2`;
       params.push(startDate);
-      paramIndex++;
     }
 
     const query = `
@@ -290,7 +338,8 @@ export class DataQualityReportsService {
       transactionDate: new Date(row.transaction_date)
         .toISOString()
         .split("T")[0],
-      amount: toMoneyNumber(row.amount),
+      // The row's own account currency, shown as stored: all of its places.
+      amount: toMoneyNumber(row.amount, MONEY_SCALE),
       payeeName: row.payee_name,
       description: row.description,
       accountName: row.account_name,
@@ -390,7 +439,7 @@ export class DataQualityReportsService {
           );
 
           let confidence: "high" | "medium" | "low" = "low";
-          let reason = "Same amount";
+          let reason: string;
 
           if (allSameDate && allSamePayee) {
             confidence = "high";

@@ -1,0 +1,321 @@
+{
+  "page": {
+    "title": "Gwarancje",
+    "subtitle": "Co kupiłeś, kiedy kończy się ochrona i kto to sprzedał",
+    "newButton": "Dodaj gwarancję",
+    "exportButton": "Eksportuj CSV",
+    "importButton": "Importuj CSV",
+    "loading": "Wczytywanie gwarancji...",
+    "loadFailed": "Nie udało się wczytać Twoich gwarancji.",
+    "retry": "Spróbuj ponownie",
+    "summary": {
+      "active": "Aktywne",
+      "expiring": "Wkrótce wygasają",
+      "expired": "Wygasłe",
+      "lifetime": "Dożywotnie",
+      "unavailable": "Nie wczytano",
+      "expiringHint": "W ciągu {days} dni"
+    },
+    "filters": {
+      "label": "Filtruj według statusu",
+      "all": "Wszystkie",
+      "expiring": "Wygasające",
+      "active": "Aktywne",
+      "expired": "Wygasłe",
+      "lifetime": "Dożywotnie",
+      "counted": {
+        "all": "Wszystkie ({count})",
+        "expiring": "Wygasające ({count})",
+        "active": "Aktywne ({count})",
+        "expired": "Wygasłe ({count})",
+        "lifetime": "Dożywotnie ({count})"
+      }
+    },
+    "search": {
+      "label": "Szukaj gwarancji",
+      "placeholder": "Szukaj po nazwie, sprzedawcy, modelu lub numerze seryjnym"
+    },
+    "archivedToggle": "Pokaż zarchiwizowane",
+    "transactionChip": {
+      "label": "Gwarancje jednej transakcji",
+      "clear": "Pokaż wszystkie gwarancje"
+    },
+    "pager": {
+      "itemName": "gwarancji",
+      "total": "{count, plural, one {{total} gwarancja} few {{total} gwarancje} many {{total} gwarancji} other {{total} gwarancji}}"
+    },
+    "empty": {
+      "title": "Nie ma jeszcze gwarancji",
+      "description": "Dodaj gwarancję, aby wiedzieć, kiedy kończy się ochrona.",
+      "filteredTitle": "Brak pasujących gwarancji",
+      "filteredDescription": "Wybierz inny status lub wyczyść wyszukiwanie.",
+      "archivedTitle": "Brak zarchiwizowanych gwarancji"
+    },
+    "modal": {
+      "newTitle": "Nowa gwarancja",
+      "editTitle": "Edytuj gwarancję"
+    },
+    "delete": {
+      "title": "Usuń gwarancję",
+      "message": "Usunąć \"{name}\"? Jej zgłoszenia i dokumenty zostaną usunięte razem z nią. Tej operacji nie można cofnąć."
+    },
+    "toasts": {
+      "created": "Dodano gwarancję",
+      "updated": "Zaktualizowano gwarancję",
+      "deleted": "Usunięto gwarancję",
+      "archived": "Zarchiwizowano gwarancję",
+      "unarchived": "Przywrócono gwarancję",
+      "createFailed": "Nie udało się dodać gwarancji",
+      "updateFailed": "Nie udało się zaktualizować gwarancji",
+      "deleteFailed": "Nie udało się usunąć gwarancji",
+      "archiveFailed": "Nie udało się zarchiwizować gwarancji",
+      "unarchiveFailed": "Nie udało się przywrócić gwarancji",
+      "prefillFailed": "Nie udało się wczytać tej transakcji, więc gwarancja zaczyna się od pustego formularza",
+      "exported": "{count, plural, one {Wyeksportowano {shown} gwarancję} few {Wyeksportowano {shown} gwarancje} many {Wyeksportowano {shown} gwarancji} other {Wyeksportowano {shown} gwarancji}}",
+      "exportFailed": "Nie udało się wyeksportować gwarancji"
+    }
+  },
+  "status": {
+    "lifetime": "Dożywotnia",
+    "active": "Aktywna",
+    "expiring": "Wkrótce wygasa",
+    "expired": "Wygasła"
+  },
+  "daysLeft": {
+    "left": "{count, plural, one {Został {days} dzień} few {Zostały {days} dni} many {Zostało {days} dni} other {Zostało {days} dnia}}",
+    "today": "Wygasa dzisiaj",
+    "ago": "{count, plural, one {Wygasła {days} dzień temu} few {Wygasła {days} dni temu} many {Wygasła {days} dni temu} other {Wygasła {days} dnia temu}}",
+    "leftYears": "Zostało: {yearsCount, plural, one {{years} rok} few {{years} lata} many {{years} lat} other {{years} roku}}, {daysCount, plural, one {{days} dzień} few {{days} dni} many {{days} dni} other {{days} dnia}}",
+    "agoYears": "Wygasła: {yearsCount, plural, one {{years} rok} few {{years} lata} many {{years} lat} other {{years} roku}}, {daysCount, plural, one {{days} dzień} few {{days} dni} many {{days} dni} other {{days} dnia}} temu"
+  },
+  "kind": {
+    "manufacturer": "Od producenta",
+    "extended": "Rozszerzona",
+    "store": "Od sklepu",
+    "other": "Inna"
+  },
+  "list": {
+    "columns": {
+      "name": "Nazwa",
+      "status": "Status",
+      "expiresOn": "Wygasa",
+      "purchaseDate": "Data zakupu",
+      "price": "Cena",
+      "documents": "Dokumenty",
+      "claims": "Otwarte zgłoszenia",
+      "actions": "Akcje"
+    },
+    "sortLabel": "Sortuj według",
+    "lifetime": "Dożywotnia",
+    "noPrice": "Brak",
+    "actions": {
+      "archive": "Archiwizuj",
+      "unarchive": "Przywróć z archiwum"
+    }
+  },
+  "form": {
+    "nameLabel": "Nazwa",
+    "namePlaceholder": "Co kupiłeś",
+    "vendorLabel": "Sprzedawca",
+    "vendorPlaceholder": "Wybierz lub wpisz sprzedawcę",
+    "modelLabel": "Numer modelu",
+    "serialsLabel": "Numery seryjne",
+    "serialLabel": "Numer seryjny {index}",
+    "addSerial": "Dodaj numer seryjny",
+    "removeSerial": "Usuń numer seryjny {index}",
+    "serialsLimit": "Maksymalnie {max} numerów seryjnych",
+    "kindLabel": "Rodzaj gwarancji",
+    "purchaseDateLabel": "Data zakupu",
+    "expiry": {
+      "label": "Koniec ochrony",
+      "date": "W wybranym dniu",
+      "duration": "Po upływie okresu",
+      "lifetime": "Nigdy",
+      "expiresOnLabel": "Wygasa",
+      "years": "Lata",
+      "months": "Miesiące",
+      "days": "Dni",
+      "computed": "Wygasa {date}",
+      "needsPurchaseDate": "Wprowadź datę zakupu, aby obliczyć datę zakończenia",
+      "lifetimeHint": "Gwarancja dożywotnia nie ma daty zakończenia ani przypomnienia"
+    },
+    "priceLabel": "Cena zakupu",
+    "productUrlLabel": "Strona produktu",
+    "productUrlPlaceholder": "https://",
+    "notesLabel": "Notatki",
+    "submitCreate": "Dodaj gwarancję",
+    "submitUpdate": "Zapisz zmiany"
+  },
+  "validation": {
+    "nameRequired": "Wprowadź nazwę",
+    "nameTooLong": "Użyj najwyżej 200 znaków",
+    "vendorTooLong": "Użyj najwyżej 200 znaków",
+    "modelTooLong": "Użyj najwyżej 100 znaków",
+    "serialTooLong": "Użyj najwyżej 100 znaków w każdym numerze seryjnym",
+    "serialsTooMany": "Maksymalnie 10 numerów seryjnych",
+    "purchaseDateRequired": "Wprowadź datę zakupu",
+    "expiresOnRequired": "Wprowadź datę zakończenia gwarancji",
+    "expiresBeforePurchase": "Gwarancja nie może się skończyć przed datą zakupu",
+    "durationRequired": "Wprowadź okres dłuższy niż zero",
+    "priceNegative": "Cena nie może być ujemna",
+    "priceNeedsCurrency": "Wybierz walutę ceny",
+    "urlInvalid": "Wprowadź adres internetowy zaczynający się od http:// lub https://",
+    "urlTooLong": "Użyj najwyżej 500 znaków",
+    "notesTooLong": "Użyj najwyżej 2000 znaków"
+  },
+  "detail": {
+    "back": "Wróć do gwarancji",
+    "loading": "Wczytywanie gwarancji...",
+    "loadFailed": "Nie udało się wczytać tej gwarancji.",
+    "notFound": "Nie znaleziono tej gwarancji.",
+    "retry": "Spróbuj ponownie",
+    "archivedBadge": "Zarchiwizowana",
+    "switcher": {
+      "trigger": "Przełącz gwarancję",
+      "placeholder": "Filtruj gwarancje...",
+      "noMatches": "Brak pasujących gwarancji"
+    },
+    "summary": {
+      "expires": "Wygasa",
+      "purchased": "Data zakupu",
+      "price": "Cena zakupu",
+      "openClaims": "Otwarte zgłoszenia"
+    },
+    "card": {
+      "title": "Szczegóły",
+      "kind": "Rodzaj gwarancji",
+      "vendor": "Sprzedawca",
+      "serialNumbers": "Numery seryjne",
+      "model": "Numer modelu",
+      "productUrl": "Strona produktu",
+      "notes": "Notatki",
+      "none": "Brak",
+      "lifetime": "Dożywotnia"
+    },
+    "transaction": {
+      "title": "Zakup",
+      "edit": "Edytuj zakup z {date}: {payee}, {amount}",
+      "viewInRegister": "Zobacz w rejestrze",
+      "loadFailed": "Nie udało się wczytać zakupu",
+      "dateInAccount": "{date} · {account}",
+      "none": "Brak powiązanej transakcji",
+      "unreadable": "Zakup znajduje się na koncie, którego nie możesz odczytać.",
+      "noPayee": "Brak odbiorcy"
+    }
+  },
+  "documents": {
+    "title": "Dokumenty",
+    "empty": "Nie ma jeszcze dokumentów",
+    "pendingHint": "Dokumenty zostaną przesłane po zapisaniu gwarancji.",
+    "tooMany": "Maksymalnie {max} dokumentów na gwarancję",
+    "uploadFailedAfterCreate": "Gwarancja dodana, ale nie udało się przesłać {count, plural, one {tego dokumentu} few {tych dokumentów} many {tych dokumentów} other {tych dokumentów}}: {names}. Dodaj {count, plural, one {go} few {je} many {je} other {je}} w sekcji Dokumenty gwarancji.",
+    "kindFor": "Rodzaj dokumentu dla {name}",
+    "kindUpdateFailed": "Nie udało się zmienić rodzaju dokumentu",
+    "addExisting": "Dodaj istniejący",
+    "addExistingTitle": "Dodaj istniejący dokument",
+    "addExistingHelp": "Wybierz plik, który już przesłano do transakcji lub innej gwarancji. Do tej gwarancji zostanie dodana kopia; oryginał pozostaje na swoim miejscu.",
+    "addExistingFrom": "Gdzie dokument znajduje się teraz",
+    "fromTransaction": "Transakcja",
+    "fromWarranty": "Inna gwarancja",
+    "addExistingDocument": "Dokument",
+    "addExistingKind": "Rodzaj dokumentu w tej gwarancji",
+    "addExistingNone": "Nie ma tu dokumentów do dodania.",
+    "addExistingLoadFailed": "Nie udało się wczytać dokumentów. Spróbuj ponownie.",
+    "addExistingFailed": "Nie udało się dodać dokumentu",
+    "addExistingSubmit": "Dodaj dokument",
+    "choose": "Wybierz…",
+    "preview": "Podgląd",
+    "kinds": {
+      "receipt": "Paragon",
+      "manual": "Instrukcja",
+      "photo": "Zdjęcie",
+      "warranty": "Gwarancja",
+      "other": "Inny"
+    }
+  },
+  "claims": {
+    "title": "Zgłoszenia gwarancyjne",
+    "add": "Dodaj zgłoszenie",
+    "empty": "Nie ma jeszcze zgłoszeń",
+    "loading": "Wczytywanie zgłoszeń...",
+    "loadFailed": "Nie udało się wczytać zgłoszeń.",
+    "retry": "Spróbuj ponownie",
+    "statuses": {
+      "open": "Otwarte",
+      "approved": "Uznane",
+      "denied": "Odrzucone",
+      "resolved": "Załatwione"
+    },
+    "claimedOn": "Zgłoszono {date}",
+    "resolvedOnLine": "Zamknięto {date}",
+    "resolutionLine": "Rozstrzygnięcie: {text}",
+    "modal": {
+      "newTitle": "Nowe zgłoszenie",
+      "editTitle": "Edytuj zgłoszenie"
+    },
+    "form": {
+      "claimDateLabel": "Data zgłoszenia",
+      "statusLabel": "Status",
+      "descriptionLabel": "Opis",
+      "resolutionLabel": "Rozstrzygnięcie",
+      "resolvedOnLabel": "Data zamknięcia",
+      "resolvedOnHint": "Tylko dla zgłoszenia załatwionego lub odrzuconego",
+      "submitCreate": "Dodaj zgłoszenie",
+      "submitUpdate": "Zapisz zmiany"
+    },
+    "validation": {
+      "claimDateRequired": "Wprowadź datę zgłoszenia",
+      "resolvedOnBeforeClaim": "Zgłoszenia nie można zamknąć przed jego złożeniem",
+      "textTooLong": "Użyj najwyżej 2000 znaków"
+    },
+    "delete": {
+      "title": "Usuń zgłoszenie",
+      "message": "Usunąć zgłoszenie z {date}? Tej operacji nie można cofnąć."
+    },
+    "toasts": {
+      "created": "Dodano zgłoszenie",
+      "updated": "Zaktualizowano zgłoszenie",
+      "deleted": "Usunięto zgłoszenie",
+      "createFailed": "Nie udało się dodać zgłoszenia",
+      "updateFailed": "Nie udało się zaktualizować zgłoszenia",
+      "deleteFailed": "Nie udało się usunąć zgłoszenia"
+    }
+  },
+  "import": {
+    "title": "Importuj gwarancje z pliku CSV",
+    "description": "Plik CSV z kolumnami Warrackera, na przykład wyeksportowany z Warrackera lub z tej strony. Zobaczysz każdy wiersz, zanim cokolwiek zostanie zapisane.",
+    "fileLabel": "Plik CSV",
+    "chooseFile": "Wybierz plik",
+    "noFileChosen": "Nie wybrano pliku",
+    "checking": "Sprawdzanie pliku...",
+    "previewFailed": "Nie udało się sprawdzić pliku",
+    "summary": "{count, plural, one {Można zaimportować {valid} z {total} wiersza.} few {Można zaimportować {valid} z {total} wierszy.} many {Można zaimportować {valid} z {total} wierszy.} other {Można zaimportować {valid} z {total} wiersza.}}",
+    "invalidSummary": "{count, plural, one {{shown} wiersz jest nieprawidłowy i nie można go zaimportować w tej postaci.} few {{shown} wiersze są nieprawidłowe i nie można ich zaimportować w tej postaci.} many {{shown} wierszy jest nieprawidłowych i nie można ich zaimportować w tej postaci.} other {{shown} wiersza jest nieprawidłowe i nie można ich zaimportować w tej postaci.}}",
+    "skipInvalid": "Pomiń nieprawidłowe wiersze i zaimportuj pozostałe",
+    "nothingToImport": "Popraw plik i wybierz go ponownie.",
+    "skippedColumns": "Kolumny pominięte przy imporcie:",
+    "columns": {
+      "line": "Wiersz",
+      "name": "Nazwa",
+      "expires": "Wygasa",
+      "outcome": "Wynik",
+      "problems": "Problemy"
+    },
+    "outcome": {
+      "valid": "Gotowy",
+      "invalid": "Nieprawidłowy",
+      "created": "Zaimportowany"
+    },
+    "unnamed": "(bez nazwy)",
+    "noExpiry": "Nie ustawiono",
+    "lifetime": "Dożywotnia",
+    "errorItem": "Błąd: {message}",
+    "warningItem": "Uwaga: {message}",
+    "submit": "Importuj",
+    "submitCount": "{count, plural, one {Importuj {shown} gwarancję} few {Importuj {shown} gwarancje} many {Importuj {shown} gwarancji} other {Importuj {shown} gwarancji}}",
+    "toasts": {
+      "imported": "{count, plural, one {Zaimportowano {shown} gwarancję} few {Zaimportowano {shown} gwarancje} many {Zaimportowano {shown} gwarancji} other {Zaimportowano {shown} gwarancji}}",
+      "failed": "Nie udało się zaimportować gwarancji"
+    }
+  }
+}

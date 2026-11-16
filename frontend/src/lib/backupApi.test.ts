@@ -389,6 +389,58 @@ describe('backupApi', () => {
     await backupApi.disableEncryption();
     expect(apiClient.delete).toHaveBeenCalledWith('/backup/encryption');
   });
+
+  it('listStoredBackups returns the listing and the schedule state together', async () => {
+    const report = {
+      enabled: true,
+      backups: [
+        {
+          filename: 'monize-backup-daily-2026-04-15.json.gz',
+          modifiedAt: '2026-04-15T02:00:00.000Z',
+          size: 2048,
+          encrypted: false,
+        },
+      ],
+    };
+    vi.mocked(apiClient.get).mockResolvedValue({ data: report });
+
+    await expect(backupApi.listStoredBackups()).resolves.toEqual(report);
+    expect(apiClient.get).toHaveBeenCalledWith('/backup/stored-backups');
+  });
+
+  it('downloadStoredBackup returns a File named as the server named it', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({
+      data: new Blob(['bytes']),
+    });
+
+    const file = await backupApi.downloadStoredBackup(
+      'monize-backup-daily-2026-04-15.mzbe',
+    );
+
+    expect(apiClient.get).toHaveBeenCalledWith(
+      '/backup/stored-backups/monize-backup-daily-2026-04-15.mzbe',
+      { responseType: 'blob', timeout: 120000 },
+    );
+    // A `File`, not a `Blob`: `restoreBackup` reads the extension to decide
+    // whether the body is already compressed or an encrypted envelope, so an
+    // artifact from this list has to arrive carrying its name.
+    expect(file).toBeInstanceOf(File);
+    expect(file.name).toBe('monize-backup-daily-2026-04-15.mzbe');
+  });
+
+  it('downloadStoredBackup surfaces the JSON reason behind a blob error', async () => {
+    vi.mocked(apiClient.get).mockRejectedValue({
+      response: { data: new Blob([JSON.stringify({ message: 'Not found' })]) },
+    });
+
+    // Axios delivers error bodies as Blobs for a blob request, which hides the
+    // backend's message from the toast unless it is parsed back.
+    await expect(
+      backupApi.downloadStoredBackup('monize-backup-daily-2026-04-15.mzbe'),
+    ).rejects.toMatchObject({
+      response: { data: { message: 'Not found' } },
+    });
+  });
 });
 
 describe('isEncryptedBackupFile', () => {

@@ -8,6 +8,7 @@ import { Category } from '@/types/category';
 import { Payee } from '@/types/payee';
 import { Tag } from '@/types/tag';
 import { MultiSelect, MultiSelectOption } from '@/components/ui/MultiSelect';
+import { PlusIcon, XMarkIcon } from '@heroicons/react/24/outline';
 
 interface FilterBuilderProps {
   value: FilterGroup[];
@@ -153,9 +154,7 @@ export function FilterBuilder({ value, onChange, accounts, categories, payees, t
           onClick={addGroup}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md transition-colors"
         >
-          <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-          </svg>
+          <PlusIcon className="h-4 w-4" aria-hidden="true" />
           {t('filterBuilder.addFilterGroup')}
         </button>
       </div>
@@ -184,9 +183,7 @@ export function FilterBuilder({ value, onChange, accounts, categories, payees, t
                 className="p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
                 title={t('filterBuilder.removeGroup')}
               >
-                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
+                <XMarkIcon className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
             <div className="space-y-2">
@@ -237,9 +234,7 @@ export function FilterBuilder({ value, onChange, accounts, categories, payees, t
                       className="flex-shrink-0 p-1 text-gray-400 hover:text-red-500 dark:hover:text-red-400 transition-colors mt-0.5"
                       title={t('filterBuilder.removeCondition')}
                     >
-                      <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                      </svg>
+                      <XMarkIcon className="h-4 w-4" aria-hidden="true" />
                     </button>
                   </div>
                 </div>
@@ -250,9 +245,7 @@ export function FilterBuilder({ value, onChange, accounts, categories, payees, t
               onClick={() => addCondition(gi)}
               className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
             >
-              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-              </svg>
+              <PlusIcon className="h-3.5 w-3.5" aria-hidden="true" />
               {t('filterBuilder.addOrCondition')}
             </button>
           </div>
@@ -264,9 +257,7 @@ export function FilterBuilder({ value, onChange, accounts, categories, payees, t
         onClick={addGroup}
         className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30 hover:bg-blue-100 dark:hover:bg-blue-900/50 rounded-md transition-colors"
       >
-        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-        </svg>
+        <PlusIcon className="h-4 w-4" aria-hidden="true" />
         {t('filterBuilder.addAndGroup')}
       </button>
     </div>

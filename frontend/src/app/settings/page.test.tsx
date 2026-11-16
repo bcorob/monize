@@ -94,6 +94,7 @@ vi.mock('@/lib/auth', () => ({
     revokeAllTrustedDevices: vi.fn(),
     logout: vi.fn().mockResolvedValue(undefined),
     getTokens: vi.fn().mockResolvedValue([]),
+    getSelfProfile: vi.fn().mockResolvedValue(null),
     createToken: vi.fn(),
     revokeToken: vi.fn(),
   },
@@ -178,37 +179,36 @@ describe('SettingsPage', () => {
   });
 
   describe('automatic backup section', () => {
-    it('is hidden from a non-admin, in the page and in the nav', async () => {
+    // Automatic-backup configuration is a deployment/operator concern and has
+    // moved out of user Settings onto its own admin-only surface
+    // (Admin -> Backups, `/admin/backups`). It is no longer rendered here for
+    // anyone, ordinary user or administrator.
+    it('is not in Settings for a non-admin', async () => {
       const { container } = render(<SettingsPage />);
       await waitFor(() => {
-        expect(screen.getByText('Settings')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Settings', level: 1 })).toBeInTheDocument();
       });
 
-      // Automatic backups decide what the server writes to its own disk, so
-      // they are an operator setting; non-admins are enrolled by the backend
-      // and have nothing to configure.
       expect(container.querySelector('#auto-backup')).not.toBeInTheDocument();
       expect(screen.queryByText('Automatic Backup')).toBeNull();
     });
 
-    it('is shown to an administrator', async () => {
+    it('is not in Settings for an administrator either', async () => {
       authRole.current = 'admin';
       const { container } = render(<SettingsPage />);
       await waitFor(() => {
-        expect(screen.getByText('Settings')).toBeInTheDocument();
+        expect(screen.getByRole('heading', { name: 'Settings', level: 1 })).toBeInTheDocument();
       });
 
-      await waitFor(() => {
-        expect(container.querySelector('#auto-backup')).toBeInTheDocument();
-      });
-      expect(screen.getAllByText('Automatic Backup').length).toBeGreaterThan(0);
+      expect(container.querySelector('#auto-backup')).not.toBeInTheDocument();
+      expect(screen.queryByText('Automatic Backup')).toBeNull();
     });
   });
 
   it('renders the Settings heading after loading', async () => {
     render(<SettingsPage />);
     await waitFor(() => {
-      expect(screen.getByText('Settings')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Settings', level: 1 })).toBeInTheDocument();
     });
   });
 
@@ -282,6 +282,33 @@ describe('SettingsPage', () => {
     });
   });
 
+  it('links the Email Receipts card at its hub page, right after Bank Sync in both places', async () => {
+    const { container } = render(<SettingsPage />);
+    await waitFor(() => {
+      const card = screen
+        .getAllByText('Email Receipts')
+        .map((el) => el.closest('a'))
+        .find((a) => a?.getAttribute('href') === '/email-receipts' && a.closest('#email-receipts'));
+      expect(card).toBeTruthy();
+    });
+    const anchors = Array.from(container.querySelectorAll('[id].scroll-mt-32'))
+      .filter((el) => !el.parentElement?.closest('[id].scroll-mt-32'))
+      .map((el) => el.id);
+    expect(anchors.indexOf('email-receipts')).toBe(anchors.indexOf('bank-sync') + 1);
+  });
+
+  it('links the Bank Sync card at the bank sync page', async () => {
+    render(<SettingsPage />);
+    await waitFor(() => {
+      // The card, not the nav entry: the nav link is an in-page anchor.
+      const card = screen
+        .getAllByText('Bank Sync')
+        .map((el) => el.closest('a'))
+        .find((a) => a?.getAttribute('href') === '/settings/bank-sync');
+      expect(card).toBeTruthy();
+    });
+  });
+
   it('links the Guided Tours card at the tours page', async () => {
     render(<SettingsPage />);
     await waitFor(() => {
@@ -297,7 +324,7 @@ describe('SettingsPage', () => {
   it('wraps sections with id attributes for scroll targets', async () => {
     const { container } = render(<SettingsPage />);
     await waitFor(() => {
-      expect(screen.getByText('Settings')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Settings', level: 1 })).toBeInTheDocument();
     });
 
     const expectedIds = ['profile', 'preferences', 'notifications', 'security', 'api-access', 'backup-restore', 'about', 'danger-zone'];
@@ -306,10 +333,50 @@ describe('SettingsPage', () => {
     }
   });
 
+  /**
+   * The nav order and the body order are ONE order, and nothing held them
+   * together: `SETTINGS_SECTION_IDS` drives the sidebar while the sections are
+   * laid out by hand in the JSX below it, so moving a section in one place and
+   * not the other gives a nav entry that scrolls past the thing it names -- with
+   * both halves still compiling and every other test still green.
+   *
+   * Read out of the DOM in both directions rather than from the source, so it
+   * holds whatever renders: the nav's own buttons and links against the anchors
+   * they address.
+   */
+  it('lays the sections out in the order the nav lists them', async () => {
+    const { container } = render(<SettingsPage />);
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Settings', level: 1 })).toBeInTheDocument();
+    });
+
+    // Top-level sections only: a section can hold its own scroll target (the
+    // 2FA block inside Security is one), which shares the offset class but is
+    // not a nav entry.
+    const anchors = Array.from(container.querySelectorAll('[id].scroll-mt-32'))
+      .filter((el) => !el.parentElement?.closest('[id].scroll-mt-32'))
+      .map((el) => el.id)
+      .filter(Boolean);
+    // The sidebar renders one item per section, in the list's order.
+    const nav = container.querySelector('nav[aria-label]');
+    const navIds = Array.from(nav?.querySelectorAll('li') ?? [])
+      .map((li) => li.textContent?.trim())
+      .filter((label): label is string => Boolean(label));
+
+    expect(anchors.length).toBeGreaterThan(3);
+    expect(navIds.length).toBe(anchors.length);
+    // Bank Sync sits immediately below AI Settings, in both.
+    expect(anchors.indexOf('bank-sync')).toBe(anchors.indexOf('ai-settings') + 1);
+    expect(navIds.indexOf('Bank Sync')).toBe(navIds.indexOf('AI Settings') + 1);
+    // Guided Tours sits immediately above About, in both.
+    expect(anchors.indexOf('tours')).toBe(anchors.indexOf('about') - 1);
+    expect(navIds.indexOf('Guided Tours')).toBe(navIds.indexOf('About') - 1);
+  });
+
   it('sets up IntersectionObserver for scroll spy', async () => {
     render(<SettingsPage />);
     await waitFor(() => {
-      expect(screen.getByText('Settings')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Settings', level: 1 })).toBeInTheDocument();
     });
 
     expect(IntersectionObserver).toHaveBeenCalled();
@@ -339,7 +406,7 @@ describe('SettingsPage', () => {
     });
     render(<SettingsPage />);
     await waitFor(() => {
-      expect(screen.getByText('Settings')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Settings', level: 1 })).toBeInTheDocument();
     });
     // Trigger a section nav click
     const navLinks = screen.getAllByLabelText('Settings sections');

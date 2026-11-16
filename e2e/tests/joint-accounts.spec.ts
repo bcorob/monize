@@ -1,5 +1,6 @@
 import { test, expect } from '../fixtures';
 import { loginUser } from '../helpers/auth';
+import { E2E_DEFAULT_PASSWORD } from '../helpers/credentials';
 import { gotoStable } from '../helpers/nav';
 import {
   createApiClient,
@@ -29,7 +30,7 @@ test.describe('Joint accounts', () => {
       openingBalance: 5000,
     });
     const email = `e2e-joint-${uniqueId()}@test.example.com`;
-    const password = 'E2eTestPass123!';
+    const password = E2E_DEFAULT_PASSWORD;
     const delegate = await createDelegate(api, { email, password });
 
     const granteeContext = await browser.newContext();
@@ -200,7 +201,7 @@ test.describe('Joint accounts', () => {
     });
     const delegate = await createDelegate(api, {
       email: `e2e-joint-pure-${uniqueId()}@test.example.com`,
-      password: 'E2eTestPass123!',
+      password: E2E_DEFAULT_PASSWORD,
     });
     // The delegate never claims a full account, so the joint flag is refused.
     const res = await rawApiRequest(

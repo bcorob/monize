@@ -79,3 +79,21 @@ export const ACCOUNT_BALANCE_AS_OF_SQL = `SELECT ${LEDGER_BALANCE_EXPRESSION} AS
    ${ledgerBalanceJoin("$3")}
   WHERE a.id = $1 AND a.user_id = $2
   GROUP BY a.id, a.opening_balance`;
+
+/**
+ * The same balance for several dates in one statement: `$1` account, `$2`
+ * owner, `$3` a `date[]` of as-of dates, one row per date (`as_of` as
+ * `YYYY-MM-DD`). Composed from the same join as `ACCOUNT_BALANCE_AS_OF_SQL`,
+ * bounded at each unnested date, so the two cannot drift: the settlement of
+ * several bank rows against a loan prices every slot of a pass off this
+ * (`docs/specs/loan-installment-settlement.md` section 7.1), and
+ * `datedLoanDebts` equals `datedLoanDebt` date by date because they are one
+ * predicate.
+ */
+export const ACCOUNT_BALANCES_AS_OF_DATES_SQL = `SELECT TO_CHAR(d.as_of, 'YYYY-MM-DD') AS as_of,
+        ${LEDGER_BALANCE_EXPRESSION} AS balance
+   FROM accounts a
+   CROSS JOIN unnest($3::date[]) AS d(as_of)
+   ${ledgerBalanceJoin("d.as_of")}
+  WHERE a.id = $1 AND a.user_id = $2
+  GROUP BY a.id, a.opening_balance, d.as_of`;

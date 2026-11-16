@@ -11,7 +11,7 @@ export type ActionTone =
   | 'accent' // purple -- merge, schedule recurring
   | 'neutral'; // gray  -- duplicate, filters, secondary
 
-/** Key into the shared inline-SVG icon set (see ActionIcon.tsx). */
+/** Key into the shared row-action icon set (see ActionIcon.tsx). */
 export type ActionIconKey =
   | 'edit'
   | 'view'
@@ -29,7 +29,10 @@ export type ActionIconKey =
   | 'activate'
   | 'favorite'
   | 'transactions'
-  | 'filter';
+  | 'filter'
+  | 'moveUp'
+  | 'moveDown'
+  | 'hide';
 
 /**
  * A single per-row action. Callers build these from already-translated labels and

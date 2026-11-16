@@ -17,9 +17,12 @@ import {
 import { builtInReportsApi } from '@/lib/built-in-reports';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useReportData } from '@/hooks/useReportData';
+import { PartialTotal } from '@/components/ui/PartialTotal';
+import { UnknownAmount } from '@/components/ui/UnknownAmount';
+import { reportTotal } from '@/lib/currency-total';
 import { useWidgetConfig } from '@/hooks/useWidgetConfig';
 import { resolveRangePreset } from '@/lib/date-range';
-import { chartColors, CHART_SERIES } from '@/lib/chart-colors';
+import { CHART_SERIES } from '@/lib/chart-colors';
 import { ChartTooltipPanel } from '@/components/reports/ChartTooltip';
 import { DateRangeSelector } from '@/components/ui/DateRangeSelector';
 import { WidgetCard, WidgetConfigRow, WidgetMessage } from './WidgetCard';
@@ -29,6 +32,7 @@ import {
   WEEKEND_RANGES,
   WeekendConfig,
 } from './widget-config';
+import { CHART_GRID_PROPS } from '@/lib/chart-style';
 
 const WIDGET_ID = 'weekend-weekday';
 const WEEKEND_COLOR = CHART_SERIES[4];
@@ -42,7 +46,7 @@ export function WeekendVsWeekdayWidget({ isLoading }: WeekendVsWeekdayWidgetProp
   const t = useTranslations('dashboard');
   const tc = useTranslations('common');
   const dayNames = tc.raw('weekdaysShort') as string[];
-  const { formatCurrencyCompact: formatCurrency, formatCurrencyAxis } = useNumberFormat();
+  const { formatCurrencyCompact: formatCurrency, formatCurrencyAxis, formatPercent, defaultCurrency } = useNumberFormat();
   const { config, updateConfig } = useWidgetConfig<WeekendConfig>(
     WIDGET_ID,
     WEEKEND_WEEKDAY_DEFAULT,
@@ -71,14 +75,21 @@ export function WeekendVsWeekdayWidget({ isLoading }: WeekendVsWeekdayWidgetProp
   }, [reportData, dayNames]);
 
   const summary = reportData?.summary;
-  const weekendTotal = summary?.weekendTotal ?? 0;
-  const weekdayTotal = summary?.weekdayTotal ?? 0;
+  // A total is `null` when a row could not be converted; what is shown is the
+  // part that did, marked as a subtotal. The share of an unknown total is not a
+  // number, so it is withheld rather than computed over the known parts.
+  const weekendKnown = reportTotal(summary?.weekendTotal ?? summary?.knownWeekendTotal ?? 0, summary?.weekendTotal === null ? reportData : null);
+  const weekdayKnown = reportTotal(summary?.weekdayTotal ?? summary?.knownWeekdayTotal ?? 0, summary?.weekdayTotal === null ? reportData : null);
+  const weekendTotal = weekendKnown.value;
+  const weekdayTotal = weekdayKnown.value;
+  const reportingCurrency = reportData?.currency ?? defaultCurrency;
+  const shareKnown = summary?.weekendTotal != null && summary?.weekdayTotal != null;
   const totalSpending = weekendTotal + weekdayTotal;
   const weekendPercent = totalSpending > 0 ? (weekendTotal / totalSpending) * 100 : 0;
 
   const pieData = [
-    { name: t('weekendVsWeekday.weekendLabel'), value: weekendTotal, color: WEEKEND_COLOR },
-    { name: t('weekendVsWeekday.weekdayLabel'), value: weekdayTotal, color: WEEKDAY_COLOR },
+    { name: t('weekendVsWeekday.weekendLabel'), value: weekendTotal, total: weekendKnown, color: WEEKEND_COLOR },
+    { name: t('weekendVsWeekday.weekdayLabel'), value: weekdayTotal, total: weekdayKnown, color: WEEKDAY_COLOR },
   ];
 
   const configControls = (
@@ -119,14 +130,14 @@ export function WeekendVsWeekdayWidget({ isLoading }: WeekendVsWeekdayWidgetProp
       configTitle={t('weekendVsWeekday.title')}
     >
       {loading ? (
-        <div className="flex-1 min-h-[260px] animate-pulse rounded-md bg-gray-100 dark:bg-gray-700/50" />
+        <div className="flex-1 min-h-[260px] animate-pulse skeleton-shimmer rounded-md bg-gray-100 dark:bg-gray-700/50" />
       ) : totalSpending === 0 ? (
         <WidgetMessage>{t('weekendVsWeekday.empty')}</WidgetMessage>
       ) : config.view === 'byDay' ? (
         <div className="flex-1 min-h-[260px]">
           <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <BarChart data={dayData} margin={{ left: 4, right: 8, top: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+              <CartesianGrid {...CHART_GRID_PROPS} />
               <XAxis dataKey="day" tick={{ fontSize: 11 }} />
               <YAxis tickFormatter={formatCurrencyAxis} tick={{ fontSize: 11 }} width={56} />
               <Tooltip
@@ -171,12 +182,12 @@ export function WeekendVsWeekdayWidget({ isLoading }: WeekendVsWeekdayWidgetProp
                   content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
                     const d = payload[0].payload as { name: string; value: number };
-                    const pct = totalSpending > 0 ? ((d.value / totalSpending) * 100).toFixed(1) : '0';
+                    const pct = totalSpending > 0 ? (d.value / totalSpending) * 100 : 0;
                     return (
                       <ChartTooltipPanel>
                         <p className="font-medium text-gray-900 dark:text-gray-100">{d.name}</p>
                         <p className="text-gray-600 dark:text-gray-400">
-                          {formatCurrency(d.value)} ({pct}%)
+                          {shareKnown ? `${formatCurrency(d.value)} (${formatPercent(pct, 1)})` : formatCurrency(d.value)}
                         </p>
                       </ChartTooltipPanel>
                     );
@@ -186,7 +197,7 @@ export function WeekendVsWeekdayWidget({ isLoading }: WeekendVsWeekdayWidgetProp
             </ResponsiveContainer>
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
               <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                {weekendPercent.toFixed(0)}%
+                {shareKnown ? formatPercent(weekendPercent, 0) : <UnknownAmount reason="displayFx" />}
               </span>
               <span className="text-xs text-gray-500 dark:text-gray-400">
                 {t('weekendVsWeekday.weekendLabel')}
@@ -199,7 +210,9 @@ export function WeekendVsWeekdayWidget({ isLoading }: WeekendVsWeekdayWidgetProp
                 <span className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: slice.color }} />
                 <span className="text-gray-500 dark:text-gray-400 truncate">{slice.name}</span>
                 <span className="ml-auto font-medium text-gray-900 dark:text-gray-100">
-                  {formatCurrency(slice.value)}
+                  <PartialTotal total={slice.total} displayCurrency={reportingCurrency}>
+                    {formatCurrency(slice.value)}
+                  </PartialTotal>
                 </span>
               </div>
             ))}

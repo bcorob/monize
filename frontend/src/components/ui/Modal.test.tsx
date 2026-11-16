@@ -1,3 +1,4 @@
+import { StrictMode } from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@/test/render';
 import { Modal, __resetModalStateForTesting } from './Modal';
@@ -24,6 +25,15 @@ afterEach(() => {
 });
 
 describe('Modal', () => {
+  it('sits near the top of the screen when anchored, and centred otherwise', () => {
+    const { rerender } = render(<Modal isOpen onClose={vi.fn()} title="T">body</Modal>);
+    const backdrop = () => screen.getByRole('dialog').parentElement as HTMLElement;
+    expect(backdrop().className).toContain('items-center');
+    rerender(<Modal isOpen onClose={vi.fn()} title="T" anchorTop>body</Modal>);
+    expect(backdrop().className).toContain('items-start');
+    expect(backdrop().className).not.toContain('items-center');
+  });
+
   it('renders nothing when not open', () => {
     const { container } = render(<Modal isOpen={false}>Content</Modal>);
     expect(container.firstChild).toBeNull();
@@ -226,6 +236,16 @@ describe('Modal', () => {
       backSpy.mockRestore();
     });
 
+    it('does not navigate during Strict Mode effect replay and removes one entry on real unmount', async () => {
+      const view = render(<StrictMode><Modal isOpen pushHistory>Shared entry</Modal></StrictMode>);
+      await act(async () => {});
+      expect(pushStateSpy).toHaveBeenCalledTimes(1);
+      expect(backSpy).not.toHaveBeenCalled();
+      view.unmount();
+      await act(async () => {});
+      expect(backSpy).toHaveBeenCalledTimes(1);
+    });
+
     it('pushes history entry when modal opens with pushHistory', () => {
       const { rerender } = render(<Modal isOpen={true} pushHistory>Content</Modal>);
       expect(pushStateSpy).toHaveBeenCalledWith(
@@ -332,6 +352,49 @@ describe('Modal', () => {
           <Modal isOpen={false} pushHistory onClose={childClose}>Child</Modal>
         </>
       );
+    });
+
+    it('lets the next modal close on Back after one closed itself with no other open', () => {
+      const first = render(<Modal isOpen pushHistory onClose={vi.fn()}>First</Modal>);
+      first.rerender(<Modal isOpen={false} pushHistory onClose={vi.fn()}>First</Modal>);
+      expect(backSpy).toHaveBeenCalledTimes(1);
+      // The popstate that back() causes, arriving with no modal open to see it.
+      act(() => {
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      });
+      first.unmount();
+
+      const onClose = vi.fn();
+      render(<Modal isOpen pushHistory onClose={onClose}>Second</Modal>);
+      act(() => {
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      });
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the parent open when a child closed by itself pops its entry', () => {
+      const parentClose = vi.fn();
+      const { rerender } = render(
+        <>
+          <Modal isOpen pushHistory onClose={parentClose}>Parent</Modal>
+          <Modal isOpen pushHistory onClose={vi.fn()}>Child</Modal>
+        </>,
+      );
+      rerender(
+        <>
+          <Modal isOpen pushHistory onClose={parentClose}>Parent</Modal>
+          <Modal isOpen={false} pushHistory onClose={vi.fn()}>Child</Modal>
+        </>,
+      );
+      act(() => {
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      });
+      expect(parentClose).not.toHaveBeenCalled();
+      // The next Back is the reader's, and closes the parent.
+      act(() => {
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      });
+      expect(parentClose).toHaveBeenCalledTimes(1);
     });
 
     it('cleans up modal stack on unmount', () => {
@@ -676,30 +739,59 @@ describe('Modal header, footer and body', () => {
     expect(screen.getByRole('dialog')).not.toHaveAttribute('aria-labelledby');
   });
 
-  it('closes from the header button, through the same path as Escape', () => {
-    const onClose = vi.fn();
-    const onBeforeClose = vi.fn(() => false);
+  it('draws the title as the New Transaction heading, with no close button or rule', () => {
+    // Cancel / Close in the button row, Escape and the backdrop close a dialog;
+    // an X beside the title and a strip under it are the drift the reference
+    // dialog does not have.
     render(
-      <Modal isOpen={true} title="Edit" onClose={onClose} onBeforeClose={onBeforeClose}>
+      <Modal isOpen={true} title="Edit" onClose={vi.fn()} footer={<button>Save</button>}>
         <p>body</p>
       </Modal>,
     );
-
-    fireEvent.click(screen.getByRole('button', { name: 'Close' }));
-
-    // onBeforeClose returning false must veto the close here too -- a second
-    // close path that skipped the guard would discard unsaved edits.
-    expect(onBeforeClose).toHaveBeenCalled();
-    expect(onClose).not.toHaveBeenCalled();
-  });
-
-  it('draws no close button when the modal cannot be closed', () => {
-    render(
-      <Modal isOpen={true} title="Working">
-        <p>body</p>
-      </Modal>,
+    const heading = screen.getByRole('heading', { name: 'Edit' });
+    expect(heading.className).toContain('text-2xl');
+    expect(heading.className).toContain('font-bold');
+    expect(heading.parentElement!.className).not.toContain('border-b');
+    expect(screen.getByRole('button', { name: 'Save' }).parentElement!.className).not.toContain(
+      'border-t',
     );
     expect(screen.queryByRole('button', { name: 'Close' })).not.toBeInTheDocument();
+  });
+
+  it('shows the description in a tooltip beside the title, not a paragraph under it', () => {
+    render(
+      <Modal isOpen={true} title="Import" description="Rows are previewed first.">
+        <p>body</p>
+      </Modal>,
+    );
+    expect(screen.getByRole('button', { name: 'Rows are previewed first.' })).toBeInTheDocument();
+    expect(screen.queryByRole('paragraph')).not.toHaveTextContent('Rows are previewed first.');
+  });
+
+  it('does not open the description tooltip by focusing it when the dialog opens', () => {
+    const raf = vi.spyOn(globalThis, 'requestAnimationFrame').mockImplementation((cb) => {
+      cb(0);
+      return 0;
+    });
+    render(
+      <Modal isOpen={true} title="Import" description="Rows are previewed first.">
+        <input aria-label="File" />
+      </Modal>,
+    );
+    expect(screen.getByLabelText('File')).toHaveFocus();
+    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    raf.mockRestore();
+  });
+
+  it('puts the heading inside the panel padding the caller gives at the default padding', () => {
+    render(
+      <Modal isOpen={true} title="New Transaction" className="p-6">
+        <p>body</p>
+      </Modal>,
+    );
+    const block = screen.getByRole('heading', { name: 'New Transaction' }).parentElement!;
+    expect(block.className).toContain('mb-4');
+    expect(block.className).not.toContain('px-4');
   });
 
   it('renders a footer when given one', () => {
@@ -732,5 +824,134 @@ describe('Modal header, footer and body', () => {
     expect(wrapper).not.toBe(screen.getByRole('dialog'));
     expect(wrapper.className).toContain('p-4');
   });
-});
 
+  describe('height cap', () => {
+    it('lets a default panel grow to the viewport less the backdrop inset before it scrolls', () => {
+      render(<Modal isOpen={true}>Content</Modal>);
+      const dialog = screen.getByRole('dialog');
+      const backdrop = dialog.parentElement!;
+      // 2rem is the backdrop's p-4 on both edges; the two move together.
+      expect(backdrop.className).toMatch(/(^|\s)p-4(\s|$)/);
+      expect(dialog.className).toContain('max-h-[calc(100dvh-2rem)]');
+      expect(dialog.className).toContain('overflow-y-auto');
+      // A fraction of the viewport scrolled a long form while the window
+      // still had room for it.
+      expect(dialog.className).not.toMatch(/max-h-\[\d+d?vh\]/);
+      // Content-sized: the cap is a ceiling, never a height.
+      expect(dialog.className).not.toMatch(/(^|\s)h-\[/);
+    });
+  });
+
+  describe('fixedHeight', () => {
+    const open = (props: Partial<React.ComponentProps<typeof Modal>> = {}) =>
+      render(
+        <Modal isOpen={true} title="Heading" footer={<button>Save</button>} {...props}>
+          <p>Body text</p>
+        </Modal>,
+      );
+
+    it('makes the panel a fixed-height column that does not scroll itself', () => {
+      open({ fixedHeight: true });
+      const dialog = screen.getByRole('dialog');
+      for (const cls of ['h-[min(90vh,56rem)]', 'flex', 'flex-col', 'overflow-hidden']) {
+        expect(dialog.className).toContain(cls);
+      }
+      expect(dialog.className).not.toContain('max-h-[calc(100dvh-2rem)]');
+      expect(dialog.className).not.toContain('overflow-y-auto');
+    });
+
+    it('keeps the header and the footer at their own height around a body that takes the rest', () => {
+      open({ fixedHeight: true });
+      const dialog = screen.getByRole('dialog');
+      const header = screen.getByRole('heading', { name: 'Heading' }).parentElement!;
+      const body = screen.getByText('Body text').parentElement!;
+      const footer = screen.getByRole('button', { name: 'Save' }).parentElement!;
+      expect(header.className).toContain('shrink-0');
+      expect(footer.className).toContain('shrink-0');
+      for (const cls of ['flex', 'flex-col', 'flex-1', 'min-h-0']) {
+        expect(body.className).toContain(cls);
+      }
+      expect(Array.from(dialog.children)).toEqual([header, body, footer]);
+    });
+
+    it('wraps the body even without padding, and pads it when asked', () => {
+      const { unmount } = open({ fixedHeight: true });
+      expect(screen.getByText('Body text').parentElement!.className).not.toContain('p-4');
+      unmount();
+      open({ fixedHeight: true, padding: 'md' });
+      expect(screen.getByText('Body text').parentElement!.className).toContain('p-4');
+    });
+
+    it('gives a phone the whole viewport together with fullScreenOnPhone', () => {
+      open({ fixedHeight: true, fullScreenOnPhone: true });
+      const dialog = screen.getByRole('dialog');
+      expect(dialog.className).toContain('max-sm:h-dvh');
+      expect(dialog.className).toContain('h-[min(90vh,56rem)]');
+    });
+
+    it('changes nothing by default', () => {
+      open({ padding: 'md' });
+      const dialog = screen.getByRole('dialog');
+      expect(dialog.className).toContain('max-h-[calc(100dvh-2rem)]');
+      expect(dialog.className).toContain('overflow-y-auto');
+      expect(dialog.className).not.toContain('h-[min(90vh,56rem)]');
+      expect(dialog.className).not.toContain('flex-col');
+      const header = screen.getByRole('heading', { name: 'Heading' }).parentElement!;
+      const footer = screen.getByRole('button', { name: 'Save' }).parentElement!;
+      expect(header.className).not.toContain('shrink-0');
+      expect(footer.className).not.toContain('shrink-0');
+      const body = screen.getByText('Body text').parentElement!;
+      expect(body.className).toBe('p-4 sm:p-6');
+    });
+
+    it('is ignored by the drawer variant', () => {
+      open({ fixedHeight: true, variant: 'drawer-left' });
+      const dialog = screen.getByRole('dialog');
+      expect(dialog.className).not.toContain('h-[min(90vh,56rem)]');
+      expect(screen.getByText('Body text').parentElement!.className).not.toContain('min-h-0');
+    });
+  });
+
+  describe('fullScreenOnPhone', () => {
+    it('fills the phone viewport with max-sm variants and leaves the base classes alone', () => {
+      render(
+        <Modal isOpen={true} fullScreenOnPhone>
+          Content
+        </Modal>,
+      );
+      const dialog = screen.getByRole('dialog');
+      const backdrop = dialog.parentElement!;
+      expect(backdrop.className).toContain('max-sm:p-0');
+      // The base inset stays, so sm+ keeps the centred card.
+      expect(backdrop.className).toContain('p-4');
+      for (const cls of [
+        'max-sm:h-dvh',
+        'max-sm:max-h-none',
+        'max-sm:max-w-none',
+        'max-sm:rounded-none',
+      ]) {
+        expect(dialog.className).toContain(cls);
+      }
+      expect(dialog.className).toContain('max-h-[calc(100dvh-2rem)]');
+      expect(dialog.className).toContain('rounded-lg');
+      // Never the bare utility: it would sort before `rounded-lg` and lose.
+      expect(dialog.className).not.toMatch(/(^|\s)h-dvh(\s|$)/);
+    });
+
+    it('emits none of it by default', () => {
+      render(<Modal isOpen={true}>Content</Modal>);
+      const dialog = screen.getByRole('dialog');
+      expect(dialog.className).not.toContain('max-sm:');
+      expect(dialog.parentElement!.className).not.toContain('max-sm:');
+    });
+
+    it('is ignored by the drawer variant', () => {
+      render(
+        <Modal isOpen={true} variant="drawer-left" fullScreenOnPhone>
+          Content
+        </Modal>,
+      );
+      expect(screen.getByRole('dialog').className).not.toContain('max-sm:');
+    });
+  });
+});

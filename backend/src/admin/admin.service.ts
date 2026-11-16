@@ -1,4 +1,8 @@
 import {
+  assertSharedOwnershipTransferred,
+  eraseSharedUser,
+} from "../shared-expenses/shared-erasure";
+import {
   Injectable,
   Logger,
   BadRequestException,
@@ -7,7 +11,11 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { DataSource, EntityManager } from "typeorm";
+import {
+  localAuthEnabled,
+  oidcPasswordLoginAllowed,
+} from "../auth/oidc/oidc-password-login";
+import { DataSource, EntityManager, FindOptionsWhere } from "typeorm";
 import { withScopedDb } from "../common/db/scoped-db";
 import { withSystemContext } from "../common/db/with-context";
 import * as bcrypt from "bcryptjs";
@@ -20,9 +28,15 @@ import { User } from "../users/entities/user.entity";
 import { UserPreference } from "../users/entities/user-preference.entity";
 import { RefreshToken } from "../auth/entities/refresh-token.entity";
 import { PersonalAccessToken } from "../auth/entities/personal-access-token.entity";
+import { TrustedDevice } from "../users/entities/trusted-device.entity";
+import { patchUserPreferences } from "../users/user-preference-writer";
 import { generateReadablePassword } from "./utils/password-generator";
 import { hashToken } from "../auth/crypto.util";
 import { OAuthProviderService } from "../oauth/oauth-provider.service";
+import {
+  revokeRefreshSessionsAfterCommit,
+  revokeStandingCredentials,
+} from "../auth/credential-revocation";
 import { UsersService } from "../users/users.service";
 import {
   lockAdminsForUpdate,
@@ -32,6 +46,45 @@ import { EmailService } from "../notifications/email.service";
 import { accountInviteTemplate } from "../notifications/email-templates";
 import { CreateUserDto } from "./dto/create-user.dto";
 import { toUserProfile, UserProfile } from "../users/user-profile";
+import {
+  AttachmentsService,
+  AttachmentStorageUsage,
+} from "../attachments/attachments.service";
+import {
+  AutoBackupService,
+  StoredBackupUsage,
+} from "../backup/auto-backup.service";
+import { CLEARED_BACKUP_KEY } from "../backup/backup-encryption.service";
+
+/**
+ * Who the admin screens manage: everybody except the owner-managed delegate
+ * identities -- users that exist solely because an account owner added them via
+ * Shared Access, and are managed from that owner's page instead.
+ *
+ * One constant rather than the clause spelled out per query, because the user
+ * list and the storage figures beside it have to enumerate the same people: a
+ * user in one and not the other would render as an account storing nothing.
+ */
+const MANAGED_USERS: FindOptionsWhere<User> = { isDelegateOnly: false };
+
+/** The order both managed-user listings use, oldest account first. */
+const MANAGED_USERS_ORDER = { createdAt: "ASC" } as const;
+
+/**
+ * What one user occupies on this deployment's storage, as the admin user list
+ * shows it.
+ *
+ * Two independent figures, kept apart on purpose: attachments are counted from
+ * metadata rows and are always known, while the backups are counted by
+ * enumerating whatever store this deployment writes to and can therefore be
+ * unknown. Summing them into one number would have to answer for a component
+ * that may be missing, so no such total is offered.
+ */
+export interface AdminUserStorageUsage {
+  readonly userId: string;
+  readonly backups: StoredBackupUsage;
+  readonly attachments: AttachmentStorageUsage;
+}
 
 /**
  * The admin create-user response: the complete profile plus the fields only
@@ -57,6 +110,8 @@ export class AdminService {
     private configService: ConfigService,
     private emailService: EmailService,
     private readonly i18n: I18nService,
+    private readonly attachmentsService: AttachmentsService,
+    private readonly autoBackupService: AutoBackupService,
   ) {}
 
   async findAllUsers(): Promise<UserProfile[]> {
@@ -73,11 +128,63 @@ export class AdminService {
     // still shows up here.
     const users = await withScopedDb(this.dataSource, (manager) =>
       manager.getRepository(User).find({
-        where: { isDelegateOnly: false },
-        order: { createdAt: "ASC" },
+        where: MANAGED_USERS,
+        order: MANAGED_USERS_ORDER,
       }),
     );
     return users.map((user) => toUserProfile(user));
+  }
+
+  /**
+   * What each managed user occupies on this deployment's storage: their
+   * automatic backups and their attachments.
+   *
+   * Its own endpoint rather than extra fields on the user list, because the two
+   * cost very different things to answer. The list is one query; this
+   * enumerates the backup store once per user, which on an object store is a
+   * round trip each -- folding it in would make opening User Management wait on
+   * S3, and a store that has gone slow would look like a broken page rather
+   * than like two columns that have not filled in yet.
+   */
+  async getUserStorageUsage(): Promise<AdminUserStorageUsage[]> {
+    return withSystemContext(() => this.getUserStorageUsageWithinContext());
+  }
+
+  private async getUserStorageUsageWithinContext(): Promise<
+    AdminUserStorageUsage[]
+  > {
+    const users = await withScopedDb(this.dataSource, (manager) =>
+      manager.getRepository(User).find({
+        where: MANAGED_USERS,
+        order: MANAGED_USERS_ORDER,
+        select: { id: true },
+      }),
+    );
+
+    // One grouped aggregate for every user's attachments, against the metadata
+    // rows that record each file's size -- so the figure is the same whichever
+    // provider holds the bytes (database, local or S3) and no object store is
+    // enumerated for it at all.
+    const attachmentsByUser =
+      await this.attachmentsService.summarizeUsageByUser();
+
+    // The backups, by contrast, are only knowable by asking the store, and the
+    // store keeps one namespace per user. Sequentially: on the `s3` target each
+    // call is a ListObjectsV2, and fanning an unbounded user list out in
+    // parallel would put the whole deployment's users on the wire at once for a
+    // page that is not latency-critical.
+    const usage: AdminUserStorageUsage[] = [];
+    for (const user of users) {
+      usage.push({
+        userId: user.id,
+        backups: await this.autoBackupService.summarizeStoredBackups(user.id),
+        // A user with no attachments has no aggregate row; zero is the honest
+        // figure for an account that stores nothing, and is not a stand-in for
+        // an answer nobody could obtain.
+        attachments: attachmentsByUser.get(user.id) ?? { files: 0, bytes: 0 },
+      });
+    }
+    return usage;
   }
 
   async createUser(dto: CreateUserDto): Promise<CreatedAdminUserProfile> {
@@ -337,7 +444,12 @@ export class AdminService {
       }
 
       targetUser.isActive = isActive;
-      return repo.save(targetUser);
+      const updated = await repo.save(targetUser);
+      // A disable and the end of its standing credentials are one commit.
+      if (!isActive) {
+        await this.revokeStandingAccess(manager, targetUserId);
+      }
+      return updated;
     });
 
     // SECURITY: Revoke all refresh tokens, PATs, and OIDC artifacts when
@@ -347,7 +459,7 @@ export class AdminService {
     // grants, sessions). Without the OIDC sweep, an MCP client could keep
     // calling tools for up to the access-token TTL even after deactivation.
     if (!isActive) {
-      await this.revokeSessionsAndTokens(targetUserId);
+      await this.endSessionsAfterCommit(targetUserId);
     }
 
     return toUserProfile(saved);
@@ -401,6 +513,7 @@ export class AdminService {
           ),
         );
       }
+      await assertSharedOwnershipTransferred(manager, targetUserId);
       return found;
     });
 
@@ -440,6 +553,7 @@ export class AdminService {
         );
       }
 
+      await eraseSharedUser(manager, targetUserId);
       const refreshTokens = manager.getRepository(RefreshToken);
       await refreshTokens.delete({ userId: targetUserId });
       await refreshTokens.delete({ actingAsUserId: targetUserId });
@@ -487,6 +601,30 @@ export class AdminService {
       );
     }
 
+    if (
+      targetUser.authProvider === "oidc" &&
+      !localAuthEnabled(this.configService)
+    ) {
+      throw new BadRequestException(
+        tr(
+          "errors.admin.localAuthDisabled",
+          "Password sign-in is turned off on this server",
+        ),
+      );
+    }
+
+    if (
+      targetUser.authProvider === "oidc" &&
+      !oidcPasswordLoginAllowed(this.configService)
+    ) {
+      throw new BadRequestException(
+        tr(
+          "errors.admin.ssoPasswordLoginDisabled",
+          "Password sign-in is turned off for SSO accounts. Use Unlink SSO instead.",
+        ),
+      );
+    }
+
     if (!targetUser.passwordHash) {
       throw new BadRequestException(
         tr(
@@ -496,44 +634,272 @@ export class AdminService {
       );
     }
 
+    const { temporaryPassword, passwordHash } =
+      await this.generateTemporaryPassword();
+    this.applyTemporaryPassword(targetUser, passwordHash);
+    // The new password, its PATs and its trusted devices are one commit: a
+    // reset whose revocation fails leaves the old password in place rather than
+    // a new password with the old credentials still live (INV-AUTH-005).
+    await withScopedDb(this.dataSource, async (manager) => {
+      await manager.getRepository(User).save(targetUser);
+      await this.revokeStandingAccess(manager, targetUserId);
+    });
+
+    // SECURITY: then every refresh session and OIDC artifact, so the forced
+    // password change applies everywhere — web, CLI/API, and MCP.
+    await this.endSessionsAfterCommit(targetUserId);
+
+    return { temporaryPassword };
+  }
+
+  /** A fresh readable password and its hash; hashed outside any transaction. */
+  private async generateTemporaryPassword(): Promise<{
+    temporaryPassword: string;
+    passwordHash: string;
+  }> {
     const temporaryPassword = generateReadablePassword();
     const saltRounds = 12;
-    targetUser.passwordHash = await bcrypt.hash(temporaryPassword, saltRounds);
-    targetUser.mustChangePassword = true;
-    targetUser.resetToken = null;
-    targetUser.resetTokenExpiry = null;
-    await withScopedDb(this.dataSource, (manager) =>
-      manager.getRepository(User).save(targetUser),
-    );
+    return {
+      temporaryPassword,
+      passwordHash: await bcrypt.hash(temporaryPassword, saltRounds),
+    };
+  }
 
-    // SECURITY: Revoke all refresh tokens, PATs, and OIDC artifacts so the
-    // forced password change applies everywhere — web, CLI/API, and MCP.
-    await this.revokeSessionsAndTokens(targetUserId);
+  /** Give `user` the hashed temporary password, forced change, and no reset token or lockout. */
+  private applyTemporaryPassword(user: User, passwordHash: string): void {
+    user.passwordHash = passwordHash;
+    user.mustChangePassword = true;
+    user.resetToken = null;
+    user.resetTokenExpiry = null;
+    // An admin reset is a recovery action: the temporary password must work.
+    user.failedLoginAttempts = 0;
+    user.lockedUntil = null;
+  }
+
+  /**
+   * Convert an SSO account back to a local one with a temporary password, so
+   * the person can sign in while the IdP is down or SSO is not wanted for them.
+   * TOTP fields stay as they are (`resetUserTwoFactor` is the recovery for a
+   * lost device). A backup key an SSO account holds may sit under a dedicated
+   * backup password (no login-password ref), which a local account does not
+   * use, so the key is cleared here; the next password login wraps a new one
+   * under the new password.
+   */
+  async unlinkUserSso(
+    adminId: string,
+    targetUserId: string,
+  ): Promise<{ temporaryPassword: string }> {
+    return withSystemContext(() =>
+      this.unlinkUserSsoWithinContext(adminId, targetUserId),
+    );
+  }
+
+  private async unlinkUserSsoWithinContext(
+    adminId: string,
+    targetUserId: string,
+  ): Promise<{ temporaryPassword: string }> {
+    if (adminId === targetUserId) {
+      throw new ForbiddenException(
+        tr(
+          "errors.admin.cannotUnlinkOwnSso",
+          "You cannot unlink your own SSO account through the admin panel",
+        ),
+      );
+    }
+
+    if (!localAuthEnabled(this.configService)) {
+      throw new BadRequestException(
+        tr(
+          "errors.admin.localAuthDisabled",
+          "Password sign-in is turned off on this server",
+        ),
+      );
+    }
+
+    // Hash before the transaction: bcrypt must not hold the row lock.
+    const { temporaryPassword, passwordHash } =
+      await this.generateTemporaryPassword();
+    await withScopedDb(this.dataSource, async (manager) => {
+      const repo = manager.getRepository(User);
+      const targetUser = await repo.findOne({
+        where: { id: targetUserId },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (!targetUser) {
+        throw new NotFoundException(
+          tr("errors.admin.userNotFound", "User not found"),
+        );
+      }
+      if (targetUser.authProvider !== "oidc") {
+        throw new BadRequestException(
+          tr(
+            "errors.admin.notSsoAccount",
+            "This account is not an SSO account",
+          ),
+        );
+      }
+      if (!targetUser.email) {
+        throw new BadRequestException(
+          tr(
+            "errors.admin.unlinkSsoNeedsEmail",
+            "This account has no email address, so it cannot sign in with a password",
+          ),
+        );
+      }
+      targetUser.authProvider = "local";
+      targetUser.oidcSubject = null;
+      targetUser.pendingOidcSubject = null;
+      targetUser.oidcLinkPending = false;
+      targetUser.oidcLinkToken = null;
+      targetUser.oidcLinkExpiresAt = null;
+      this.applyTemporaryPassword(targetUser, passwordHash);
+      if (targetUser.backupKeyWrap) {
+        Object.assign(targetUser, CLEARED_BACKUP_KEY);
+      }
+      await repo.save(targetUser);
+      await this.revokeStandingAccess(manager, targetUserId);
+    });
+    await this.endSessionsAfterCommit(targetUserId);
 
     return { temporaryPassword };
   }
 
   /**
-   * Revoke every authenticated surface for a user: web sessions (refresh
-   * tokens), CLI/API access (PATs) and MCP/OAuth clients. The two token
-   * revocations share one transaction so a user can never be left half
-   * revoked; the OIDC sweep runs after, as it always did.
+   * Switch off a user's two-factor authentication so they can sign in with
+   * their password and enroll again.
+   *
+   * The recovery for a user who lost their authenticator and their backup
+   * codes, and for everyone enrolled before a `JWT_SECRET` change: the TOTP
+   * secret is encrypted under a key derived from it, so after a change it can
+   * no longer be decrypted and authenticator codes stop working. That is why
+   * this never decrypts anything -- it clears the columns, whatever they hold.
+   *
+   * One transaction: the TOTP secret, the staged setup secret and the backup
+   * codes are cleared, the preference flag is switched off, trusted devices
+   * (which skip the second factor) are deleted and the user's refresh tokens
+   * are revoked, so a reset cannot commit half done or leave a session that was
+   * established under the old enrollment. Under FORCE_2FA the user is sent to
+   * set 2FA up again at their next sign-in (`ProtectedRoute`).
+   *
+   * Refused for the caller themself, like the other credential actions here: a
+   * stolen admin session must not be able to strip its own second factor
+   * without the code `disable2FA` asks for. Refused with a 400, rather than
+   * reported as a success, for a user with no 2FA state at all, so the admin
+   * learns they picked the wrong account.
    */
-  private async revokeSessionsAndTokens(targetUserId: string): Promise<void> {
-    await withScopedDb(this.dataSource, async (manager: EntityManager) => {
+  async resetUserTwoFactor(
+    adminId: string,
+    targetUserId: string,
+  ): Promise<{ reset: true }> {
+    return withSystemContext(() =>
+      this.resetUserTwoFactorWithinContext(adminId, targetUserId),
+    );
+  }
+
+  private async resetUserTwoFactorWithinContext(
+    adminId: string,
+    targetUserId: string,
+  ): Promise<{ reset: true }> {
+    if (adminId === targetUserId) {
+      throw new ForbiddenException(
+        tr(
+          "errors.admin.cannotResetOwnTwoFactor",
+          "You cannot reset your own two-factor authentication through the admin panel",
+        ),
+      );
+    }
+
+    await withScopedDb(this.dataSource, async (manager) => {
+      const users = manager.getRepository(User);
+      // Locked, so the "has 2FA" check and the clearing below see one state
+      // even against a concurrent enrollment by the user.
+      const targetUser = await users.findOne({
+        where: { id: targetUserId },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (!targetUser) {
+        throw new NotFoundException(
+          tr("errors.admin.userNotFound", "User not found"),
+        );
+      }
+      const preferences = await manager
+        .getRepository(UserPreference)
+        .findOne({ where: { userId: targetUserId } });
+      const hasTwoFactor =
+        targetUser.twoFactorSecret !== null ||
+        targetUser.pendingTwoFactorSecret !== null ||
+        targetUser.backupCodes !== null ||
+        preferences?.twoFactorEnabled === true;
+      if (!hasTwoFactor) {
+        throw new BadRequestException(
+          tr(
+            "errors.admin.twoFactorNotEnabled",
+            "This user does not have two-factor authentication set up.",
+          ),
+        );
+      }
+
+      await users.update(
+        { id: targetUserId },
+        {
+          twoFactorSecret: null,
+          pendingTwoFactorSecret: null,
+          backupCodes: null,
+        },
+      );
+      await patchUserPreferences(manager, targetUserId, {
+        twoFactorEnabled: false,
+      });
+      await manager.getRepository(TrustedDevice).delete({
+        userId: targetUserId,
+      });
       await manager
         .getRepository(RefreshToken)
         .update(
           { userId: targetUserId, isRevoked: false },
           { isRevoked: true },
         );
-      await manager
-        .getRepository(PersonalAccessToken)
-        .update(
-          { userId: targetUserId, isRevoked: false },
-          { isRevoked: true },
-        );
     });
+
+    this.logger.log(
+      `Administrator ${adminId} reset two-factor authentication for user ${targetUserId}`,
+    );
+    return { reset: true };
+  }
+
+  /**
+   * Revoking every authenticated surface for a user -- web sessions (refresh
+   * tokens), CLI/API access (PATs), trusted devices and MCP/OAuth clients -- is
+   * two halves, and this is the one that commits with the caller's write:
+   * a first-pass refresh revoke, PATs and trusted devices. The blanket refresh
+   * UPDATE misses a successor a concurrent rotation inserts after its snapshot,
+   * so `endSessionsAfterCommit` must follow the commit.
+   */
+  private async revokeStandingAccess(
+    manager: EntityManager,
+    targetUserId: string,
+  ): Promise<void> {
+    await manager
+      .getRepository(RefreshToken)
+      .update({ userId: targetUserId, isRevoked: false }, { isRevoked: true });
+    await revokeStandingCredentials(manager, targetUserId);
+  }
+
+  /** The half that runs after the commit: converging refresh revoke, OAuth. */
+  private async endSessionsAfterCommit(targetUserId: string): Promise<void> {
+    await revokeRefreshSessionsAfterCommit(
+      this.dataSource,
+      targetUserId,
+      this.logger,
+    );
     await this.oauthProviderService.revokeAllForUser(targetUserId);
+  }
+
+  /** Both halves, for a path with no credential write of its own (delete). */
+  private async revokeSessionsAndTokens(targetUserId: string): Promise<void> {
+    await withScopedDb(this.dataSource, (manager: EntityManager) =>
+      this.revokeStandingAccess(manager, targetUserId),
+    );
+    await this.endSessionsAfterCommit(targetUserId);
   }
 }

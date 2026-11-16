@@ -1,0 +1,64 @@
+{
+  "product": "ROS",
+  "validFrom": "2024-01",
+  "addend": "margin",
+  "hasFee": true,
+  "structure": {
+    "instrument": {
+      "issuerCountryCode": "PL",
+      "issuerCode": "PL_MF",
+      "programCode": "ROS",
+      "currency": "PLN",
+      "marketability": "RETAIL_REDEEMABLE",
+      "faceValue": "100.00"
+    },
+    "rateRule": {
+      "type": "INFLATION_PLUS_MARGIN_AS_RATE",
+      "benchmarkId": "PL_CPI_GUS_YOY",
+      "benchmarkFloor": "0",
+      "observation": {
+        "type": "MONTHLY_VALUE_MONTHS_BEFORE_START",
+        "months": 2
+      }
+    },
+    "redemption": {
+      "type": "ON_DEMAND",
+      "earliestDaysAfterPurchase": 7,
+      "latestDaysBeforeMaturity": 20,
+      "blackouts": [],
+      "penalties": [
+        {
+          "type": "FIXED_FEE_PER_UNIT"
+        }
+      ],
+      "proceedsFloor": {
+        "type": "FACE_VALUE",
+        "appliesTo": "ALL_PERIODS"
+      }
+    },
+    "rest": {
+      "schemaVersion": 1,
+      "schedule": {
+        "anchor": "LOT_PURCHASE_DATE",
+        "periodMonths": 12,
+        "periodCount": 6,
+        "rollDay": "ANCHOR_DAY_CLAMPED",
+        "calendarId": "PL"
+      },
+      "accrual": {
+        "type": "ACTUAL_DAYS_IN_PERIOD"
+      },
+      "principalRule": {
+        "type": "FIXED_NOMINAL"
+      },
+      "capitalization": {
+        "type": "COMPOUND_AT_PERIOD_END",
+        "baseRounding": "NONE"
+      },
+      "rounding": {
+        "moneyDecimals": 2,
+        "mode": "HALF_UP"
+      }
+    }
+  }
+}

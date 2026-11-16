@@ -12,14 +12,17 @@ vi.mock('@/hooks/useWidgetConfig', () => ({
   useWidgetConfig: () => ({ config: configState.current, updateConfig }),
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (n: number) => `$${n}`,
-    formatCurrencyCompact: (n: number) => `$${n}`,
-    formatCurrencyAxis: (n: number) => `$${n}`,
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (n: number) => `$${n}`,
+      formatCurrencyCompact: (n: number) => `$${n}`,
+      formatCurrencyAxis: (n: number) => `$${n}`,
+    }),
+  };
+});
 const getSpendingByPayee = vi.fn();
 vi.mock('@/lib/built-in-reports', () => ({
   builtInReportsApi: { getSpendingByPayee: (...a: unknown[]) => getSpendingByPayee(...a) },
@@ -56,5 +59,19 @@ describe('SpendingByPayeeWidget', () => {
     getSpendingByPayee.mockResolvedValue({ data: [], totalSpending: 0 });
     await renderWidget();
     expect(screen.getByText('No spending in this period.')).toBeInTheDocument();
+  });
+
+  it('marks the total a subtotal when a payee row was left out', async () => {
+    getSpendingByPayee.mockResolvedValue({
+      data: [{ payeeId: 'p1', payeeName: 'Grocer', total: 50 }],
+      totalSpending: null,
+      knownSpending: 50,
+      currency: 'CAD',
+      missingCurrencies: ['JPY'],
+      excludedCount: 1,
+    });
+    await renderWidget();
+    expect(screen.getByTestId('partial-total')).toHaveTextContent('$50');
+    expect(screen.queryByText('$0')).not.toBeInTheDocument();
   });
 });

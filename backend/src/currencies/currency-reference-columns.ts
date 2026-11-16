@@ -14,14 +14,22 @@
 export const CURRENCY_REFERENCE_COLUMNS: Readonly<
   Record<string, readonly string[]>
 > = {
+  shared_groups: ["currency_code"],
+  shared_entries: ["original_currency_code"],
   user_currency_preferences: ["currency_code"],
   // Global reference data with no owner. Present for completeness (the guard
   // test compares against every FK in the schema) but never in a user's export.
   exchange_rates: ["from_currency", "to_currency"],
+  exchange_rate_coverage: ["from_currency", "to_currency"],
+  // Global reference data with no owner (the bond catalog), never in an export.
+  bond_programs: ["currency_code"],
+  bond_instruments: ["currency_code"],
   accounts: ["currency_code"],
   transactions: ["currency_code", "original_currency_code"],
   securities: ["currency_code"],
   scheduled_transactions: ["currency_code", "original_currency_code"],
   budgets: ["currency_code"],
+  // The informational purchase price's currency; NULL when no price is set.
+  warranties: ["currency_code"],
   user_preferences: ["default_currency"],
 };

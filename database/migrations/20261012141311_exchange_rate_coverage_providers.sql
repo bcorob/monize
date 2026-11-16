@@ -1,0 +1,14 @@
+-- Scope each `exchange_rate_coverage` row to the provider chain that wrote it.
+--
+-- The row records what A provider held for a pair, not which configured
+-- providers produced the record, so a floor learned while Yahoo was the only
+-- provider kept blocking history Frankfurter can supply after `FX_PROVIDERS`
+-- (or its default) changed. `providers` holds the ordered source slugs of the
+-- chain that wrote the row, joined with commas; a row whose value differs from
+-- the running chain's reads as unestablished and is replaced, not merged, on
+-- the next write.
+--
+-- Nullable, and no backfill: an existing row's NULL differs from every chain's
+-- fingerprint, so every row written before this column existed reads as stale
+-- and is rewritten by the next fill.
+ALTER TABLE exchange_rate_coverage ADD COLUMN IF NOT EXISTS providers VARCHAR(200);

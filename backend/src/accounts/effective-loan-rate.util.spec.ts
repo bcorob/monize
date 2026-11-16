@@ -32,7 +32,7 @@ describe("effectiveAnnualRateOn", () => {
 
   it("reads a decimal column arriving as a string", () => {
     // `numeric` crosses the driver as a string; the rule must not compare or
-    // return one (backend/CLAUDE.md, raw-select rule).
+    // return one (docs/backend/entities-and-dtos.md, raw-select rule).
     expect(
       effectiveAnnualRateOn(
         [{ effectiveDate: "2026-01-01", annualRate: "7.2500" }],

@@ -1,0 +1,321 @@
+{
+  "page": {
+    "title": "वारंटी",
+    "subtitle": "आपने क्या खरीदा, उसकी वारंटी कब खत्म होती है और किसने बेचा",
+    "newButton": "वारंटी जोड़ें",
+    "exportButton": "CSV निर्यात करें",
+    "importButton": "CSV आयात करें",
+    "loading": "वारंटी लोड हो रही हैं...",
+    "loadFailed": "आपकी वारंटी लोड नहीं हो सकीं।",
+    "retry": "फिर से कोशिश करें",
+    "summary": {
+      "active": "सक्रिय",
+      "expiring": "जल्द समाप्त",
+      "expired": "समाप्त",
+      "lifetime": "आजीवन",
+      "unavailable": "लोड नहीं हुआ",
+      "expiringHint": "{days} दिनों के भीतर"
+    },
+    "filters": {
+      "label": "स्थिति के अनुसार फ़िल्टर करें",
+      "all": "सभी",
+      "expiring": "समाप्त होने वाली",
+      "active": "सक्रिय",
+      "expired": "समाप्त",
+      "lifetime": "आजीवन",
+      "counted": {
+        "all": "सभी ({count})",
+        "expiring": "समाप्त होने वाली ({count})",
+        "active": "सक्रिय ({count})",
+        "expired": "समाप्त ({count})",
+        "lifetime": "आजीवन ({count})"
+      }
+    },
+    "search": {
+      "label": "वारंटी खोजें",
+      "placeholder": "नाम, विक्रेता, मॉडल या सीरियल नंबर खोजें"
+    },
+    "archivedToggle": "संग्रहीत दिखाएँ",
+    "transactionChip": {
+      "label": "एक लेनदेन की वारंटी",
+      "clear": "सभी वारंटी दिखाएँ"
+    },
+    "pager": {
+      "itemName": "वारंटी",
+      "total": "{count, plural, one {{total} वारंटी} other {{total} वारंटी}}"
+    },
+    "empty": {
+      "title": "अभी तक कोई वारंटी नहीं",
+      "description": "वारंटी जोड़ें ताकि पता रहे कि वह कब खत्म होती है।",
+      "filteredTitle": "कोई मेल खाती वारंटी नहीं",
+      "filteredDescription": "कोई दूसरी स्थिति आज़माएँ या खोज साफ़ करें।",
+      "archivedTitle": "कोई संग्रहीत वारंटी नहीं"
+    },
+    "modal": {
+      "newTitle": "नई वारंटी",
+      "editTitle": "वारंटी संपादित करें"
+    },
+    "delete": {
+      "title": "वारंटी हटाएँ",
+      "message": "\"{name}\" हटाएँ? इसके दावे और दस्तावेज़ भी साथ में हट जाएँगे, और इसे पूर्ववत नहीं किया जा सकता।"
+    },
+    "toasts": {
+      "created": "वारंटी जोड़ी गई",
+      "updated": "वारंटी अपडेट की गई",
+      "deleted": "वारंटी हटाई गई",
+      "archived": "वारंटी संग्रहीत की गई",
+      "unarchived": "वारंटी बहाल की गई",
+      "createFailed": "वारंटी नहीं जोड़ी जा सकी",
+      "updateFailed": "वारंटी अपडेट नहीं की जा सकी",
+      "deleteFailed": "वारंटी हटाई नहीं जा सकी",
+      "archiveFailed": "वारंटी संग्रहीत नहीं की जा सकी",
+      "unarchiveFailed": "वारंटी बहाल नहीं की जा सकी",
+      "prefillFailed": "वह लेनदेन लोड नहीं हो सका, इसलिए वारंटी खाली से शुरू होती है",
+      "exported": "{count, plural, one {{shown} वारंटी निर्यात की गई} other {{shown} वारंटी निर्यात की गईं}}",
+      "exportFailed": "वारंटी निर्यात नहीं की जा सकीं"
+    }
+  },
+  "status": {
+    "lifetime": "आजीवन",
+    "active": "सक्रिय",
+    "expiring": "जल्द समाप्त",
+    "expired": "समाप्त"
+  },
+  "daysLeft": {
+    "left": "{count, plural, one {{days} दिन शेष} other {{days} दिन शेष}}",
+    "today": "आज समाप्त",
+    "ago": "{count, plural, one {{days} दिन पहले समाप्त} other {{days} दिन पहले समाप्त}}",
+    "leftYears": "{yearsCount, plural, one {{years} वर्ष} other {{years} वर्ष}}, {daysCount, plural, one {{days} दिन} other {{days} दिन}} शेष",
+    "agoYears": "{yearsCount, plural, one {{years} वर्ष} other {{years} वर्ष}}, {daysCount, plural, one {{days} दिन} other {{days} दिन}} पहले समाप्त"
+  },
+  "kind": {
+    "manufacturer": "निर्माता",
+    "extended": "विस्तारित",
+    "store": "स्टोर",
+    "other": "अन्य"
+  },
+  "list": {
+    "columns": {
+      "name": "नाम",
+      "status": "स्थिति",
+      "expiresOn": "समाप्ति",
+      "purchaseDate": "खरीद तिथि",
+      "price": "मूल्य",
+      "documents": "दस्तावेज़",
+      "claims": "खुले दावे",
+      "actions": "कार्रवाइयाँ"
+    },
+    "sortLabel": "इसके अनुसार क्रमबद्ध करें",
+    "lifetime": "आजीवन",
+    "noPrice": "कोई नहीं",
+    "actions": {
+      "archive": "संग्रहीत करें",
+      "unarchive": "संग्रह से निकालें"
+    }
+  },
+  "form": {
+    "nameLabel": "नाम",
+    "namePlaceholder": "आपने क्या खरीदा",
+    "vendorLabel": "विक्रेता",
+    "vendorPlaceholder": "विक्रेता चुनें या लिखें",
+    "modelLabel": "मॉडल नंबर",
+    "serialsLabel": "सीरियल नंबर",
+    "serialLabel": "सीरियल नंबर {index}",
+    "addSerial": "सीरियल नंबर जोड़ें",
+    "removeSerial": "सीरियल नंबर {index} हटाएँ",
+    "serialsLimit": "अधिकतम {max} सीरियल नंबर",
+    "kindLabel": "वारंटी का प्रकार",
+    "purchaseDateLabel": "खरीद तिथि",
+    "expiry": {
+      "label": "वारंटी कब खत्म होगी",
+      "date": "किसी तिथि पर",
+      "duration": "किसी अवधि के बाद",
+      "lifetime": "कभी नहीं",
+      "expiresOnLabel": "समाप्ति तिथि",
+      "years": "वर्ष",
+      "months": "महीने",
+      "days": "दिन",
+      "computed": "{date} को समाप्त",
+      "needsPurchaseDate": "यह गणना करने के लिए कि वारंटी कब खत्म होगी, खरीद तिथि दर्ज करें",
+      "lifetimeHint": "आजीवन वारंटी की कोई समाप्ति तिथि और कोई रिमाइंडर नहीं होता"
+    },
+    "priceLabel": "खरीद मूल्य",
+    "productUrlLabel": "उत्पाद पेज",
+    "productUrlPlaceholder": "https://",
+    "notesLabel": "नोट्स",
+    "submitCreate": "वारंटी जोड़ें",
+    "submitUpdate": "बदलाव सहेजें"
+  },
+  "validation": {
+    "nameRequired": "नाम दर्ज करें",
+    "nameTooLong": "अधिकतम 200 वर्ण उपयोग करें",
+    "vendorTooLong": "अधिकतम 200 वर्ण उपयोग करें",
+    "modelTooLong": "अधिकतम 100 वर्ण उपयोग करें",
+    "serialTooLong": "हर सीरियल नंबर के लिए अधिकतम 100 वर्ण उपयोग करें",
+    "serialsTooMany": "अधिकतम 10 सीरियल नंबर",
+    "purchaseDateRequired": "खरीद तिथि दर्ज करें",
+    "expiresOnRequired": "वारंटी खत्म होने की तिथि दर्ज करें",
+    "expiresBeforePurchase": "वारंटी खरीद तिथि से पहले खत्म नहीं हो सकती",
+    "durationRequired": "शून्य से अधिक अवधि दर्ज करें",
+    "priceNegative": "मूल्य ऋणात्मक नहीं हो सकता",
+    "priceNeedsCurrency": "मूल्य की मुद्रा चुनें",
+    "urlInvalid": "http:// या https:// से शुरू होने वाला वेब पता दर्ज करें",
+    "urlTooLong": "अधिकतम 500 वर्ण उपयोग करें",
+    "notesTooLong": "अधिकतम 2000 वर्ण उपयोग करें"
+  },
+  "detail": {
+    "back": "वारंटी पर वापस जाएँ",
+    "loading": "वारंटी लोड हो रही है...",
+    "loadFailed": "यह वारंटी लोड नहीं हो सकी।",
+    "notFound": "यह वारंटी नहीं मिली।",
+    "retry": "फिर से कोशिश करें",
+    "archivedBadge": "संग्रहीत",
+    "switcher": {
+      "trigger": "वारंटी बदलें",
+      "placeholder": "वारंटी फ़िल्टर करें...",
+      "noMatches": "कोई मेल खाती वारंटी नहीं"
+    },
+    "summary": {
+      "expires": "समाप्ति",
+      "purchased": "खरीद तिथि",
+      "price": "खरीद मूल्य",
+      "openClaims": "खुले दावे"
+    },
+    "card": {
+      "title": "विवरण",
+      "kind": "वारंटी का प्रकार",
+      "vendor": "विक्रेता",
+      "serialNumbers": "सीरियल नंबर",
+      "model": "मॉडल नंबर",
+      "productUrl": "उत्पाद पेज",
+      "notes": "नोट्स",
+      "none": "कोई नहीं",
+      "lifetime": "आजीवन"
+    },
+    "transaction": {
+      "title": "खरीद",
+      "edit": "{date} की खरीदारी संपादित करें: {payee}, {amount}",
+      "viewInRegister": "रजिस्टर में देखें",
+      "loadFailed": "खरीदारी लोड नहीं हो सकी",
+      "dateInAccount": "{date} · {account}",
+      "none": "कोई जुड़ा हुआ लेनदेन नहीं",
+      "unreadable": "यह खरीद ऐसे खाते में है जिसे आप पढ़ नहीं सकते।",
+      "noPayee": "कोई प्राप्तकर्ता नहीं"
+    }
+  },
+  "documents": {
+    "title": "दस्तावेज़",
+    "empty": "अभी तक कोई दस्तावेज़ नहीं",
+    "pendingHint": "वारंटी सहेजने पर दस्तावेज़ अपलोड किए जाएँगे।",
+    "tooMany": "प्रति वारंटी अधिकतम {max} दस्तावेज़",
+    "uploadFailedAfterCreate": "वारंटी जोड़ी गई, लेकिन {count, plural, one {यह दस्तावेज़} other {ये दस्तावेज़}} अपलोड नहीं हो {count, plural, one {सका} other {सके}}: {names}। {count, plural, one {इसे} other {इन्हें}} वारंटी के दस्तावेज़ अनुभाग से जोड़ें।",
+    "kindFor": "{name} के लिए दस्तावेज़ का प्रकार",
+    "kindUpdateFailed": "दस्तावेज़ का प्रकार बदलने में विफल",
+    "addExisting": "मौजूदा जोड़ें",
+    "addExistingTitle": "मौजूदा दस्तावेज़ जोड़ें",
+    "addExistingHelp": "कोई ऐसी फ़ाइल चुनें जिसे आप पहले ही किसी लेन-देन या दूसरी वारंटी पर अपलोड कर चुके हैं। इस वारंटी में एक प्रति जोड़ी जाती है; मूल फ़ाइल अपनी जगह पर ही रहती है।",
+    "addExistingFrom": "दस्तावेज़ अभी कहाँ है",
+    "fromTransaction": "एक लेन-देन",
+    "fromWarranty": "दूसरी वारंटी",
+    "addExistingDocument": "दस्तावेज़",
+    "addExistingKind": "इस वारंटी पर दस्तावेज़ प्रकार",
+    "addExistingNone": "यहाँ जोड़ने के लिए कोई दस्तावेज़ नहीं है।",
+    "addExistingLoadFailed": "दस्तावेज़ लोड नहीं हो सके। कृपया फिर से प्रयास करें।",
+    "addExistingFailed": "दस्तावेज़ जोड़ने में विफल",
+    "addExistingSubmit": "दस्तावेज़ जोड़ें",
+    "choose": "चुनें...",
+    "preview": "पूर्वावलोकन",
+    "kinds": {
+      "receipt": "रसीद",
+      "manual": "मैनुअल",
+      "photo": "फ़ोटो",
+      "warranty": "वारंटी",
+      "other": "अन्य"
+    }
+  },
+  "claims": {
+    "title": "दावे",
+    "add": "दावा जोड़ें",
+    "empty": "अभी तक कोई दावा नहीं",
+    "loading": "दावे लोड हो रहे हैं...",
+    "loadFailed": "दावे लोड नहीं हो सके।",
+    "retry": "फिर से कोशिश करें",
+    "statuses": {
+      "open": "खुला",
+      "approved": "स्वीकृत",
+      "denied": "अस्वीकृत",
+      "resolved": "सुलझा हुआ"
+    },
+    "claimedOn": "{date} को दावा किया",
+    "resolvedOnLine": "{date} को बंद",
+    "resolutionLine": "समाधान: {text}",
+    "modal": {
+      "newTitle": "नया दावा",
+      "editTitle": "दावा संपादित करें"
+    },
+    "form": {
+      "claimDateLabel": "दावे की तिथि",
+      "statusLabel": "स्थिति",
+      "descriptionLabel": "विवरण",
+      "resolutionLabel": "समाधान",
+      "resolvedOnLabel": "बंद होने की तिथि",
+      "resolvedOnHint": "केवल सुलझे हुए या अस्वीकृत दावे के लिए",
+      "submitCreate": "दावा जोड़ें",
+      "submitUpdate": "बदलाव सहेजें"
+    },
+    "validation": {
+      "claimDateRequired": "दावे की तिथि दर्ज करें",
+      "resolvedOnBeforeClaim": "दावा किए जाने से पहले वह बंद नहीं हो सकता",
+      "textTooLong": "अधिकतम 2000 वर्ण उपयोग करें"
+    },
+    "delete": {
+      "title": "दावा हटाएँ",
+      "message": "{date} को किया गया दावा हटाएँ? इसे पूर्ववत नहीं किया जा सकता।"
+    },
+    "toasts": {
+      "created": "दावा जोड़ा गया",
+      "updated": "दावा अपडेट किया गया",
+      "deleted": "दावा हटाया गया",
+      "createFailed": "दावा नहीं जोड़ा जा सका",
+      "updateFailed": "दावा अपडेट नहीं किया जा सका",
+      "deleteFailed": "दावा हटाया नहीं जा सका"
+    }
+  },
+  "import": {
+    "title": "CSV से वारंटी आयात करें",
+    "description": "Warracker के कॉलम वाली CSV फ़ाइल, जैसे Warracker से या इस पेज से निर्यात की गई फ़ाइल। कुछ भी सहेजे जाने से पहले आप हर पंक्ति देखते हैं।",
+    "fileLabel": "CSV फ़ाइल",
+    "chooseFile": "फ़ाइल चुनें",
+    "noFileChosen": "कोई फ़ाइल नहीं चुनी गई",
+    "checking": "फ़ाइल की जाँच हो रही है...",
+    "previewFailed": "फ़ाइल की जाँच नहीं हो सकी",
+    "summary": "{count, plural, one {{total} में से {valid} पंक्ति आयात की जा सकती है।} other {{total} में से {valid} पंक्तियाँ आयात की जा सकती हैं।}}",
+    "invalidSummary": "{count, plural, one {{shown} पंक्ति अमान्य है और जैसी है वैसी आयात नहीं की जा सकती।} other {{shown} पंक्तियाँ अमान्य हैं और जैसी हैं वैसी आयात नहीं की जा सकतीं।}}",
+    "skipInvalid": "अमान्य पंक्तियाँ छोड़ें और बाकी आयात करें",
+    "nothingToImport": "फ़ाइल ठीक करें और उसे फिर से चुनें।",
+    "skippedColumns": "आयात न किए गए कॉलम:",
+    "columns": {
+      "line": "पंक्ति",
+      "name": "नाम",
+      "expires": "समाप्ति",
+      "outcome": "परिणाम",
+      "problems": "समस्याएँ"
+    },
+    "outcome": {
+      "valid": "तैयार",
+      "invalid": "अमान्य",
+      "created": "आयात किया गया"
+    },
+    "unnamed": "(कोई नाम नहीं)",
+    "noExpiry": "सेट नहीं है",
+    "lifetime": "आजीवन",
+    "errorItem": "त्रुटि: {message}",
+    "warningItem": "ध्यान दें: {message}",
+    "submit": "आयात करें",
+    "submitCount": "{count, plural, one {{shown} वारंटी आयात करें} other {{shown} वारंटी आयात करें}}",
+    "toasts": {
+      "imported": "{count, plural, one {{shown} वारंटी आयात की गई} other {{shown} वारंटी आयात की गईं}}",
+      "failed": "वारंटी आयात नहीं की जा सकीं"
+    }
+  }
+}

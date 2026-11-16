@@ -5,11 +5,12 @@ import { useTranslations } from 'next-intl';
 import { Skeleton } from '@/components/ui/LoadingSkeleton';
 import { budgetsApi } from '@/lib/budgets';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
-import { ExportDropdown } from '@/components/ui/ExportDropdown';
+import { ReportToolbarActions } from '@/components/reports/ReportToolbarActions';
 import { SortableHeader } from '@/components/ui/SortableHeader';
 import { useSortableTable, compareValues } from '@/hooks/useSortableTable';
 import { useReportData } from '@/hooks/useReportData';
 import { ReportError } from '@/components/reports/ReportError';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 type SeasonalMapSortField = 'category' | 'typical' | `month${number}`;
 
@@ -82,13 +83,10 @@ export function SeasonalSpendingMapReport() {
 
   // Build heatmap grid data: categories x months
   const { gridData, globalMax } = useMemo(() => {
-    let max = 0;
     const grid = (patterns ?? []).map((pattern) => {
       const monthValues = MONTH_LABELS.map((_, idx) => {
         const monthData = pattern.monthlyAverages.find((m) => m.month === idx + 1);
-        const value = monthData?.average ?? 0;
-        if (value > max) max = value;
-        return value;
+        return monthData?.average ?? 0;
       });
       return {
         categoryId: pattern.categoryId,
@@ -98,6 +96,12 @@ export function SeasonalSpendingMapReport() {
         typical: pattern.typicalMonthlySpend,
       };
     });
+    let max = 0;
+    for (const row of grid) {
+      for (const value of row.values) {
+        if (value > max) max = value;
+      }
+    }
     return { gridData: grid, globalMax: max };
   }, [patterns, MONTH_LABELS]);
 
@@ -195,18 +199,14 @@ export function SeasonalSpendingMapReport() {
               <option key={b.id} value={b.id}>{b.name}</option>
             ))}
           </select>
-          <div className="ml-auto">
-            <ExportDropdown onExportPdf={handleExportPdf} />
-          </div>
+          <ReportToolbarActions onExportPdf={handleExportPdf} />
         </div>
       </div>
 
       {/* Heatmap */}
-      <div ref={chartRef} className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4 sm:p-6">
+      <div ref={chartRef} className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 px-2 py-4 sm:p-6">
         {gridData.length === 0 ? (
-          <p className="text-gray-500 dark:text-gray-400 text-center py-8">
-            {t('seasonalSpendingMap.noData')}
-          </p>
+          <EmptyState title={t('seasonalSpendingMap.noData')} />
         ) : (
           <>
             <div className="overflow-x-auto">

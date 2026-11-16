@@ -10,8 +10,9 @@ This contract applies to both surfaces that expose a calculation (REST API and
 AI/MCP tools) and to every layer in between. `docs/time-series-contract.md`
 covers the time-dimension rules (historical prices, backtests, period returns);
 this document covers point-in-time calculation semantics. Rounding and
-precision rules live in the root `CLAUDE.md` (Financial Math) and are not
-repeated here.
+precision rules live in `AGENTS.md` (Financial Math), with the per-currency
+rule (`moneyDecimalsFor`, INV-MONEY-001) in `docs/financial-semantics.md`
+section 4, and are not repeated here.
 
 ## 1. Missing values propagate; they do not disappear
 
@@ -90,6 +91,50 @@ amount:
 A caller that stores only one side's currency -- a scheduled transaction -- sends
 neither code and lets the service derive both. Sending a stored code risks it
 having gone stale, which now fails the posting rather than corrupting it.
+
+### 1.3 A withheld figure carries its repair
+
+"This cannot be worked out because some data is missing" is not an answer; it
+is the shape of one. Every figure a surface withholds owes the reader three
+things, and a surface that gives fewer has not finished:
+
+1. **What is missing, by name.** The security (its symbol, never its id), the
+   currency pair, the account, and the dates the gap covers. The server
+   already carries these -- `FxAggregate.missingPairs`, `unpricedSecurityIds`,
+   `unknownCashAccountIds`, per-point `missingRatePairs` -- and the client
+   resolves ids to names before printing them. A count alone ("3 positions
+   unpriced") is a subtotal of an explanation.
+2. **How the reader obtains it.** Each cause has one repair and the copy names
+   it: an unpriced holding is a price to refresh or add on the security's
+   price history; a missing rate is history to add on the Currencies page; a
+   cash account with no balance for the day is a reload and, if it persists,
+   a defect to report; a boundary (no earlier value to compare against) has no
+   repair and says so. `UnknownAmount`'s `reason` on the client is the catalog
+   of these repairs; a new cause is a new reason there, not a new sentence in
+   a component.
+3. **What the system tried first.** Where a provider can supply the missing
+   observation, the read path fetches it before it discloses the gap: bounded
+   (one calendar month per pair per call, a fixed number of months per
+   request), best-effort (a provider failure is logged and the report renders
+   with the gap still named, never a failed request), re-read from the
+   database rather than patched in memory, and never invented (a pair the
+   provider does not carry stays missing). `ExchangeRateService.ensureRatesForDate`
+   is the fetch, and `AccountBalancesReportService.ratesForReport` the shape
+   of a caller: compute what is unanswerable, fetch, re-read, disclose the
+   rest. A cron, an LLM tool or an export takes the opt-out and reads only
+   what is stored.
+
+Two states are not missing data and must never be shown as it. A request
+that has not answered is loading; a request that failed is a failure, named
+as one with the invitation to ask again. A card that falls to "not enough
+history" or "nothing to show" because its request was rejected makes a claim
+about the portfolio it has no grounds for (`docs/frontend/api-and-cache.md`).
+
+The test obligation follows the three parts: a spec per surface that every
+server reason renders its own named cause (a table over the reason union, so
+a new reason fails it until it has copy); a spec that the read path calls the
+fetch once per missing unit and re-reads before it discloses; and a spec that
+a rejected request renders as a failure, not as an empty result.
 
 ## 2. Cost basis and tax
 
@@ -410,3 +455,27 @@ These rules are worth only what the code and the documents agree on.
   `frontend/src/test/ui-conventions.test.ts` are the worked examples). Such a
   claim is true when written and silently false at the first call site added
   afterwards, which is exactly when nobody re-reads the comment.
+
+## 11. Rules recorded from `AGENTS.md`
+
+### A weighting is in one currency or it is meaningless
+
+Summing `quantity * nativePrice` across currencies weights holdings by exchange rate as much as by size. Convert every value into one common currency before weighting (which currency does not matter; that they share one does), through the same resolver everything else uses. An unpriced holding dropped from the weights makes the priced subset stand in for the portfolio: refuse the whole statistic (`null`) rather than report a subset's.
+
+### A completeness flag nobody displays is not a completeness signal
+
+Backend, AI adapter and MCP all carried `valuationComplete` while `frontend/src/types/investment.ts` omitted it, so the one surface users read rendered a subtotal under "Total Portfolio Value". Adding metadata to a response is half the change; the consumer that branches on it is the other half -- grep the frontend types for the interface in the same commit, and relabel a partial figure rather than leaving a total's caption over it.
+
+Read the field defensively at the consumer (`=== false`, not `!`): during a rolling deploy, absent means "no information". And read the flag from the *same aggregate that produced the numbers on screen* -- a view that switches which aggregate it displays switches which completeness it trusts.
+
+### A completeness flag covers every total it is documented to cover, on every surface
+
+`fxComplete` claimed to describe all of `PortfolioSummary`'s `total*` fields while one aggregate's gaps went only to the log. Union every aggregate's gaps, and derive anything downstream (a rate, a ratio) only when its own inputs are complete. The flag must survive the trip to each consumer -- the compact LLM shape dropped it, so AI/MCP quoted a subtotal as settled; for a model, the human-readable summary line has to say so too.
+
+The converse is equally wrong: **zero needs no rate.** Asking for one made an empty foreign account take the whole portfolio's totals down to "unknown".
+
+Completeness has more than one cause: track each separately (`fxComplete`, `pricesComplete`) and give consumers one flag meaning "every component of every total is known" (`valuationComplete`). Nested totals need their own answer -- a per-account total converts into the *account's* currency, the top-level into the *user's*, two different conversion graphs, so a global flag cannot speak for a total it did not compute.
+
+### A gain is a value less the cost of the same holdings
+
+A portfolio's or an account's gain is the market value of the holdings that were valued less the cost of THOSE holdings: `gainMarketValue - gainCostBasis` (`PortfolioCalculationService.calculateHoldingsWithValues`, `accountTotals`). Charging an unpriced holding's cost against a value that never included it read a 50,000 cost with no price as a 50,000 loss (A26-M38): 100,000 priced at a cost of 80,000 beside 50,000 of unpriced cost printed -30,000 and -23.08 percent, where the valued part had gained +20,000 and +25 percent. A holding enters the gain only when both its value and its cost converted into the currency of the total; the cost left out is reported as `unpricedCostBasis`, `totalCostBasis` keeps every holding's cost for the basis card, and `valuationComplete === false` marks the gain and the return as figures over the valued holdings only, on screen, in the PDF and in the assistant's summary line.

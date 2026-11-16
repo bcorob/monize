@@ -15,12 +15,15 @@ vi.mock('@/lib/csv-export', () => ({
   exportToCsv: vi.fn(),
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
-  }),
-}));
-vi.mock('@/hooks/useDateFormat', async () => {
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
+    }),
+  };
+});vi.mock('@/hooks/useDateFormat', async () => {
   const { format, parseISO } = await import('date-fns');
   return {
     useDateFormat: () => ({
@@ -182,7 +185,9 @@ describe('AmortizationScheduleTable', () => {
       />,
     );
 
-    expect(screen.getByText('Extra Principal')).toBeInTheDocument();
+    // The header and the per-row phone captions both spell the column, so the
+    // label now appears more than once in the DOM (one tree, restyled at `sm`).
+    expect(screen.getAllByText('Extra Principal').length).toBeGreaterThan(0);
     expect(screen.getAllByText('$200.00').length).toBeGreaterThan(0);
   });
 
@@ -209,8 +214,9 @@ describe('AmortizationScheduleTable', () => {
     );
 
     // The extra-principal column appears for a historical overpayment even
-    // without a simulator scenario, and shows the overpaid amount.
-    expect(screen.getByText('Extra Principal')).toBeInTheDocument();
+    // without a simulator scenario, and shows the overpaid amount. (The header
+    // and the phone captions share the label, so it appears more than once.)
+    expect(screen.getAllByText('Extra Principal').length).toBeGreaterThan(0);
     const overpaymentRow = screen
       .getAllByRole('row')
       .find((row) => row.textContent?.includes('Feb 15, 2025'));
@@ -310,10 +316,98 @@ describe('AmortizationScheduleTable', () => {
     // Aggregate payment = 919 + 3070 = 3989 (also echoed in the totals row).
     expect(screen.getAllByText('$3989.00').length).toBeGreaterThan(0);
 
-    // Expanding reveals the two dated detail rows.
-    fireEvent.click(screen.getByRole('button', { name: /Show or hide the payments/ }));
+    // The whole aggregate row is the toggle (a row, not a small button), so the
+    // whole mobile card taps to expand -- see the tap-anywhere test below.
+    fireEvent.click(screen.getByRole('row', { name: /Show or hide the payments/ }));
     expect(screen.getByText('May 5, 2026')).toBeInTheDocument();
     expect(screen.getByText('May 29, 2026')).toBeInTheDocument();
+  });
+
+  it('expands a month group by tapping anywhere on the whole card, not only the count control', () => {
+    // On a phone the aggregate row is a two-line card; the requirement is that
+    // tapping the card (here, a money cell far from the caret/count) toggles it,
+    // not only the small "N entries" control. The row carries the click.
+    const events: LoanPaymentEvent[] = [
+      {
+        date: '2026-05-05',
+        principal: 765,
+        interest: 154,
+        balance: 142000,
+        cumulativePrincipal: 765,
+        cumulativeInterest: 154,
+        type: 'REGULAR' as const,
+        annualRate: 5.5,
+      },
+      {
+        date: '2026-05-29',
+        principal: 2534,
+        interest: 536,
+        balance: 139466,
+        cumulativePrincipal: 3299,
+        cumulativeInterest: 690,
+        type: 'OVERPAYMENT' as const,
+        annualRate: null,
+      },
+    ];
+    render(
+      <AmortizationScheduleTable historyEvents={events} projectionRows={[]} currencyCode="CAD" />,
+    );
+
+    const aggregateRow = screen.getByRole('row', { name: /Show or hide the payments/ });
+    expect(aggregateRow).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('May 5, 2026')).not.toBeInTheDocument();
+
+    // Click a money cell inside the row (the interest total), not the caret.
+    const interestCell = aggregateRow.querySelector('td.col-start-2.row-start-2');
+    expect(interestCell).not.toBeNull();
+    fireEvent.click(interestCell as Element);
+
+    expect(aggregateRow).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('May 5, 2026')).toBeInTheDocument();
+    expect(screen.getByText('May 29, 2026')).toBeInTheDocument();
+
+    // Collapses again on a second tap of the same card.
+    fireEvent.click(interestCell as Element);
+    expect(aggregateRow).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('May 5, 2026')).not.toBeInTheDocument();
+  });
+
+  it('toggles a month group from the keyboard (Enter and Space on the row)', () => {
+    const events: LoanPaymentEvent[] = [
+      {
+        date: '2026-05-05',
+        principal: 765,
+        interest: 154,
+        balance: 142000,
+        cumulativePrincipal: 765,
+        cumulativeInterest: 154,
+        type: 'REGULAR' as const,
+        annualRate: 5.5,
+      },
+      {
+        date: '2026-05-29',
+        principal: 2534,
+        interest: 536,
+        balance: 139466,
+        cumulativePrincipal: 3299,
+        cumulativeInterest: 690,
+        type: 'OVERPAYMENT' as const,
+        annualRate: null,
+      },
+    ];
+    render(
+      <AmortizationScheduleTable historyEvents={events} projectionRows={[]} currencyCode="CAD" />,
+    );
+
+    const aggregateRow = screen.getByRole('row', { name: /Show or hide the payments/ });
+    // The row is focusable (the activation contract), so Enter and Space work.
+    expect(aggregateRow).toHaveAttribute('tabindex', '0');
+
+    fireEvent.keyDown(aggregateRow, { key: 'Enter' });
+    expect(screen.getByText('May 5, 2026')).toBeInTheDocument();
+
+    fireEvent.keyDown(aggregateRow, { key: ' ' });
+    expect(screen.queryByText('May 5, 2026')).not.toBeInTheDocument();
   });
 
   it('leaves a single-entry month as a plain row (no toggle)', () => {
@@ -325,8 +419,9 @@ describe('AmortizationScheduleTable', () => {
       />,
     );
 
-    // Two distinct months, one entry each: no aggregate toggle appears.
-    expect(screen.queryByRole('button', { name: /Show or hide the payments/ })).not.toBeInTheDocument();
+    // Two distinct months, one entry each: no aggregate toggle appears (no row
+    // carries the toggle's accessible name).
+    expect(screen.queryByRole('row', { name: /Show or hide the payments/ })).not.toBeInTheDocument();
     expect(screen.getByText('Jan 15, 2025')).toBeInTheDocument();
     expect(screen.getByText('Feb 15, 2025')).toBeInTheDocument();
   });
@@ -348,7 +443,8 @@ describe('AmortizationScheduleTable', () => {
       />,
     );
 
-    expect(screen.getByText('Rate')).toBeInTheDocument();
+    // The Rate column header, plus the per-row phone caption on the rate cell.
+    expect(screen.getAllByText('Rate').length).toBeGreaterThan(0);
     // Historical rate is the rate observed from the interest charged, shown
     // read-only -- there is no editable cell or controls without `editing`.
     expect(screen.getByText('5.50%')).toBeInTheDocument();
@@ -392,5 +488,27 @@ describe('AmortizationScheduleTable', () => {
     // The first projected row is dated 2026-08-15.
     fireEvent.click(screen.getAllByLabelText(/Edit interest rate/)[0]);
     expect(openAddWith).toHaveBeenCalledWith('2026-08-15', expect.any(Number));
+  });
+
+  it('captions each amount within the row so a phone needs no column header', () => {
+    // Below `sm` the header is hidden and the row wraps into a grid, so every
+    // value must name its own column inside the row -- otherwise a phone reader
+    // sees a column of unlabelled numbers. The table is one tree restyled by
+    // CSS, so these captions ride in each row's markup at every width.
+    render(
+      <AmortizationScheduleTable
+        historyEvents={makeHistoryEvents(2, 5)}
+        projectionRows={[]}
+        currencyCode="CAD"
+      />,
+    );
+
+    const janRow = screen
+      .getAllByRole('row')
+      .find((row) => row.textContent?.includes('Jan 15, 2025'));
+    expect(janRow).toBeDefined();
+    for (const caption of ['Payment', 'Interest', 'Principal', 'Rate', 'Balance']) {
+      expect(janRow?.textContent).toContain(caption);
+    }
   });
 });

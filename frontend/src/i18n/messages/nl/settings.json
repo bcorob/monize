@@ -19,10 +19,11 @@
     "passwordRequired": "Huidig wachtwoord is vereist om e-mail te wijzigen",
     "noChanges": "Geen wijzigingen om op te slaan",
     "passwordConfirmNote": "Wachtwoordbevestiging is vereist bij het wijzigen van jouw e-mailadres.",
+    "pendingEmailNotice": "Er is een bevestigingslink naar {email} gestuurd. Je e-mailadres wordt gewijzigd zodra je die link volgt.",
     "saveButton": "Profiel opslaan",
-    "savingButton": "Opslaan...",
     "toasts": {
       "success": "Profiel succesvol bijgewerkt",
+      "confirmationSent": "Kijk in {email} voor een link om je nieuwe e-mailadres te bevestigen",
       "updateFailed": "Bijwerken van profiel mislukt"
     },
     "validation": {
@@ -36,7 +37,8 @@
   },
   "security": {
     "heading": "Beveiliging",
-    "ssoNotice": "Jouw account maakt gebruik van Single Sign-On (SSO) voor authenticatie. Het onderstaande wachtwoord wordt niet gebruikt voor inloggen, maar kan als reservekopie worden bewaard als SSO wordt uitgeschakeld.",
+    "ssoPasswordFallbackNotice": "Jouw account maakt gebruik van Single Sign-On (SSO). Je kunt ook inloggen met het onderstaande wachtwoord als SSO niet beschikbaar is. Schakel tweestapsverificatie in om deze reserve-inlog te beveiligen.",
+    "ssoNotice": "Uw account gebruikt Single Sign-On (SSO). Inloggen met een wachtwoord is op deze server uitgeschakeld voor SSO-accounts.",
     "currentPasswordLabel": "Huidig wachtwoord",
     "currentPasswordPlaceholder": "Voer huidig wachtwoord in",
     "newPasswordLabel": "Nieuw wachtwoord",
@@ -44,7 +46,6 @@
     "confirmPasswordLabel": "Bevestig nieuw wachtwoord",
     "confirmPasswordPlaceholder": "Bevestig nieuw wachtwoord",
     "changePasswordButton": "Wachtwoord wijzigen",
-    "changingPasswordButton": "Wijzigen...",
     "toasts": {
       "passwordChanged": "Wachtwoord succesvol gewijzigd",
       "passwordChangeFailed": "Wijzigen van wachtwoord mislukt"
@@ -58,14 +59,28 @@
       "addLayerDescription": "Voeg een extra beveiligingslaag toe aan jouw account.",
       "enableButton": "2FA inschakelen",
       "disableButton": "2FA uitschakelen",
+      "resetButton": "2FA opnieuw instellen",
       "disableModal": {
         "title": "Tweefactorauthenticatie uitschakelen",
-        "description": "Voer jouw huidige 6-cijferige code in om het uitschakelen van 2FA te bevestigen.",
+        "description": "Voer de 6-cijferige code uit jouw authenticator-app of een van jouw back-upcodes (xxxx-xxxx) in om het uitschakelen van 2FA te bevestigen.",
         "verificationCodeLabel": "Verificatiecode",
         "disablingButton": "Uitschakelen...",
         "toasts": {
           "disabled": "Tweefactorauthenticatie uitgeschakeld",
           "disableFailed": "Uitschakelen van tweefactorauthenticatie mislukt"
+        }
+      },
+      "resetModal": {
+        "title": "Tweefactorauthenticatie opnieuw instellen",
+        "description": "Gebruik dit als jouw authenticator-app of back-upcodes mogelijk zijn uitgelekt, of als jouw authenticatorcodes niet meer werken (bijvoorbeeld na een wijziging van het servergeheim).",
+        "effect": "Je huidige authenticator, back-upcodes en vertrouwde apparaten werken daarna niet meer, en je wordt op alle andere apparaten afgemeld. Daarna stel je meteen een nieuwe authenticator in.",
+        "passwordLabel": "Accountwachtwoord",
+        "codeLabel": "Authenticator- of back-upcode",
+        "codeHint": "Voer de 6-cijferige code uit jouw authenticator-app in. Als je authenticator niet meer werkt, voer dan in plaats daarvan een van jouw back-upcodes (xxxx-xxxx) in.",
+        "resettingButton": "Opnieuw instellen...",
+        "toasts": {
+          "reset": "Tweefactorauthenticatie opnieuw ingesteld. Stel nu je nieuwe authenticator in.",
+          "resetFailed": "Opnieuw instellen van 2FA mislukt"
         }
       }
     },
@@ -90,6 +105,8 @@
       "noDevices": "Geen vertrouwde apparaten. Wanneer je \"Niet opnieuw vragen op deze browser\" aanvinkt tijdens 2FA-aanmelding, verschijnt het apparaat hier.",
       "currentBadge": "Huidig",
       "revokeButton": "Intrekken",
+      "ipAddress": "IP: {ip}",
+      "dates": "Toegevoegd {added} · Laatst gebruikt {lastUsed} · Vervalt {expires}",
       "revokeAllModal": {
         "title": "Alle vertrouwde apparaten intrekken",
         "description": "Dit verwijdert alle vertrouwde apparaten. Je moet jouw 2FA-code invoeren bij jouw volgende aanmelding vanaf elk apparaat."
@@ -110,8 +127,20 @@
   },
   "preferences": {
     "heading": "Voorkeuren",
+    "groups": {
+      "languageRegion": "Taal & regio",
+      "appearance": "Weergave",
+      "datesNumbers": "Datums & getallen",
+      "investments": "Beleggingen",
+      "transactions": "Transacties",
+      "application": "Applicatie",
+      "defaultViews": "Standaardweergaven",
+      "mobileNavigation": "Mobiele navigatie"
+    },
     "themeLabel": "Thema",
     "defaultCurrencyLabel": "Standaardvaluta",
+    "defaultCurrencyHelp": "Wordt gebruikt om uw rekeningen, nettowaarde en rapporten te totaliseren, en is de valuta waarnaar de kolom Koers op de pagina Valuta's omrekent.",
+    "defaultCurrencyNoCrypto": "Cryptovaluta worden hier niet aangeboden: totalen en rapporten worden altijd in een fiatvaluta weergegeven.",
     "preferredExchangesLabel": "Voorkeursbeurzen (voor effectopzoekingen)",
     "preferredExchangesHelp": "Selecteer maximaal 3 beurzen in volgorde van prioriteit. Deze worden gebruikt bij het opzoeken van effecten.",
     "exchangePriorityPlaceholder": "Prioriteit {n}",
@@ -131,10 +160,22 @@
     "lockReconciledLabel": "Afgestemde transacties vergrendelen",
     "lockReconciledTooltip": "Zolang dit uit staat, waarschuwt Monize vóór een bewerking die de datum of het bedrag van een afgestemde transactie zou verschuiven, en staat die daarna toe. Zolang het aan staat, kunnen afgestemde transacties helemaal niet worden bewerkt, verwijderd of ongedaan gemaakt. Zet het weer uit om een correctie te maken.",
     "timeFormatLabel": "Tijdnotatie",
+    "timeFormatOptions": {
+      "h24": "24-uurs (14:30)",
+      "h12": "12-uurs (2:30 PM)"
+    },
     "recentTransactionsLabel": "Recente transacties in snel invullen",
     "recentTransactionsHelp": "Aantal vermeldingen dat wordt weergegeven in de popover van de geschiedenis-knop naast het veld Begunstigde op transactieformulieren.",
-    "saveButton": "Voorkeuren opslaan",
-    "savingButton": "Opslaan...",
+    "mapProviderLabel": "Kaartaanbieder voor adressen",
+    "mapProviderHelp": "Welke kaartendienst wordt geopend wanneer u in een desktopbrowser op een adres klikt. Telefoons en tablets openen altijd hun eigen kaarten-app, wat u hier ook kiest. Automatisch gebruikt OpenStreetMap op de desktop.",
+    "mapProviderOptions": {
+      "device": "Automatisch",
+      "apple": "Apple Maps",
+      "bing": "Bing Maps",
+      "google": "Google Maps",
+      "openstreetmap": "OpenStreetMap",
+      "waze": "Waze"
+    },
     "toasts": {
       "saved": "Voorkeuren opgeslagen",
       "saveFailed": "Opslaan van voorkeuren mislukt",
@@ -182,10 +223,47 @@
       "highcontrast": "Hoog contrast",
       "colorblind": "Kleurenblindveilig"
     },
-    "timezoneBrowserOption": "Browsertijdzone gebruiken (automatisch gedetecteerd als {tz})"
+    "timezoneBrowserOption": "Browsertijdzone gebruiken (automatisch gedetecteerd als {tz})",
+    "defaultViews": {
+      "intro": "Deze gelden in elke browser zonder eigen instelling, zoals een nieuw apparaat of een privévenster. Een wijziging die je op een pagina maakt, onthoudt die browser en heeft voorrang.",
+      "rowsLabel": "Rijdichtheid",
+      "hideRegisterYearLabel": "Jaar verbergen in registerdatums",
+      "chartCollapsedLabel": "Beginnen met de grafiek op de pagina Transacties ingeklapt",
+      "widgetsCollapsedLabel": "Beginnen met de rekening-, begunstigde- en categorie-info ingeklapt",
+      "accountOpenTargetLabel": "Standaardweergave van rekening",
+      "accountOpenTargetOptions": {
+        "register": "De transacties tonen",
+        "dashboard": "Het dashboard tonen"
+      },
+      "accountOpenTargetHelp": "Geldt als je op een rekening klikt op de pagina Rekeningen of bij Favoriete rekeningen op het dashboard.",
+      "columnsLabel": "Getoonde kolommen",
+      "columnsHelp": "Vink een vakje uit om die kolom standaard te verbergen. Het menu Kolommen van een tabel wijzigt dit alleen in die browser.",
+      "columnTables": {
+        "transactions": "Transacties",
+        "investmentHoldings": "Beleggingsposities",
+        "investmentRegister": "Beleggingstransacties"
+      },
+      "applyHere": "Deze standaarden in deze browser gebruiken",
+      "applyHereHelp": "Wist de weergave-instellingen die deze browser heeft opgeslagen, zodat de standaarden hierboven ook hier gelden.",
+      "appliedHere": "Deze browser gebruikt nu je standaardweergaven"
+    },
+    "mobileTabs": {
+      "intro": "Kies maximaal drie tabbladen voor de balk onder aan je telefoon of tablet. De knop Toevoegen en Meer zijn er altijd.",
+      "slotLabel": "Tabblad {number}",
+      "none": "Geen"
+    }
   },
   "notifications": {
     "heading": "Meldingen",
+    "portfolioAlert": {
+      "title": "Waardeverandering van beleggingen",
+      "description": "Waarschuw mij eenmaal per dag wanneer mijn beleggingsrekeningen buiten een drempel bewegen, gemeten aan marktveranderingen en dividenden (stortingen en opnames worden uitgesloten).",
+      "enableLabel": "Waarschuwingen voor beleggingsbewegingen inschakelen",
+      "thresholdLabel": "Waarschuwen wanneer de dagelijkse beweging minstens is",
+      "saveError": "Kon de drempel niet opslaan",
+      "loadError": "Kon de instelling voor beleggingswaarschuwingen niet laden",
+      "retry": "Opnieuw proberen"
+    },
     "smtpNotConfigured": "E-mailmeldingen zijn niet beschikbaar. SMTP is niet geconfigureerd door de beheerder.",
     "emailNotificationsTitle": "E-mailmeldingen",
     "emailNotificationsDescription": "Ontvang e-mailherinneringen voor aankomende rekeningen en budgetwaarschuwingen",
@@ -212,6 +290,148 @@
       "digestUpdateFailed": "Bijwerken van voorkeur voor budgetoverzicht mislukt",
       "digestDayFailed": "Bijwerken van dag van budgetoverzicht mislukt",
       "testEmailFailed": "Verzenden van teste-mail mislukt"
+    },
+    "push": {
+      "heading": "Browserpush",
+      "collapsedDevices": "{count, plural, =0 {Geen apparaten geregistreerd} one {# apparaat geregistreerd} other {# apparaten geregistreerd}}",
+      "collapsedDevicesWithRetired": "{count, plural, =0 {Geen apparaten geregistreerd} one {# apparaat geregistreerd} other {# apparaten geregistreerd}}, {retired, plural, one {# ingetrokken} other {# ingetrokken}}",
+      "collapsedDevicesUnavailable": "Apparatenlijst niet beschikbaar",
+      "diagnostics": {
+        "summary": "Meldingsdiagnose",
+        "intro": "Wat deze browser en dit apparaat aan Monize melden over meldingen. Ververs na het wijzigen van een instelling en gebruik daarna Kopiëren om het volledige rapport te versturen.",
+        "refresh": "Vernieuwen",
+        "copy": "Rapport kopiëren",
+        "copied": "Diagnose naar klembord gekopieerd"
+      },
+      "description": "Registreer dit apparaat zodat Monize het ook kan bereiken als de app gesloten is. Voorlopig wordt alleen de testmelding zo bezorgd; al het andere komt nog steeds in de bel.",
+      "androidNotify": "Op Android is een verleende toestemming niet genoeg: het systeem kan meldingen alsnog verbergen. Houd het Monize-pictogram op je startscherm ingedrukt, tik op App-info, dan Meldingen, en zorg dat ze aan staan.",
+      "permissionHint": "Als je dit aanzet, vraagt je browser toestemming om meldingen te tonen. Er wordt niets verzonden voordat je die geeft.",
+      "enableButton": "Inschakelen op dit apparaat",
+      "enablingButton": "Inschakelen...",
+      "sendTestButton": "Testmelding versturen",
+      "sendingTestButton": "Versturen...",
+      "removeButton": "Verwijderen",
+      "removeDialog": {
+        "title": "Apparaat verwijderen",
+        "message": "{device} verwijderen? Het ontvangt geen pushmeldingen meer totdat push daar weer wordt ingeschakeld."
+      },
+      "thisDevice": "Dit apparaat",
+      "held": "Afgemeld op dit apparaat. Pushmeldingen worden hervat zodra je hier weer inlogt.",
+      "unifiedpushBadge": "UnifiedPush",
+      "unnamedDevice": "Naamloos apparaat",
+      "noLiveDevices": "Nog geen apparaat geregistreerd. Schakel push in op dit apparaat om een test te versturen.",
+      "noDeliverableDevices": "Je bent op elk apparaat afgemeld, dus een test kan nergens worden afgeleverd. Pushmeldingen worden op een apparaat hervat zodra je daar weer inlogt.",
+      "notConfigured": "Browserpush is niet beschikbaar op deze Monize-instantie. Een beheerder kan het inschakelen in het Admin-gedeelte.",
+      "disabledByAdmin": "Een beheerder heeft browserpush uitgeschakeld voor deze Monize-instantie.",
+      "keyUnreadable": "Monize kan het pushsleutelpaar van deze instantie niet lezen, dus er wordt niets bezorgd. Een beheerder kan dit herstellen door het sleutelpaar in het Admin-gedeelte te vervangen.",
+      "serverKeyMissing": "Deze Monize-instantie mist de encryptiesleutel die nodig is om het push-sleutelpaar te openen, dus er kan niets bezorgd worden. Een beheerder moet die in de deployment instellen en opnieuw opstarten.",
+      "statusUnavailable": "Monize kon niet controleren of browserpush beschikbaar is. Herlaad de pagina om het opnieuw te proberen.",
+      "devicesUnavailable": "Monize kon je geregistreerde apparaten niet laden. De rest van deze pagina werkt gewoon; herlaad om het opnieuw te proberen.",
+      "unsupported": {
+        "unsupported": "Deze browser kan geen pushmeldingen ontvangen.",
+        "denied": "Meldingen zijn geblokkeerd voor Monize in deze browser. Sta ze toe in de site-instellingen en herlaad deze pagina.",
+        "ios-browser": "Op iPhone en iPad werken pushmeldingen pas als Monize op het beginscherm is geïnstalleerd. Gebruik Deel en daarna Zet op beginscherm, en open Monize van daaruit.",
+        "shell": {
+          "electron": "Meldingen zijn niet beschikbaar in het Monize-bureaubladvenster. Open Monize in uw browser via het systeemvakmenu (\"Open in browser\"); daar blijven pushmeldingen gewoon werken.",
+          "capacitor": "Pushmeldingen zijn nog niet beschikbaar in de Monize-app voor Android. Open Monize in uw browser om ze te ontvangen."
+        }
+      },
+      "native": "De Monize-desktopapp toont je meldingen op deze pc zolang de app draait, ook als het venster naar het systeemvak is gesloten, dus hier hoeft niets te worden ingeschakeld. De meldingsinstellingen van Windows bepalen hoe ze verschijnen.",
+      "disabledReason": {
+        "GONE": "Niet meer bereikbaar. Schakel push opnieuw in in die browser.",
+        "KEY_ROTATED": "Stopgezet toen deze instantie haar pushsleutelpaar verving. Schakel push opnieuw in in die browser.",
+        "FAILING": "Stopgezet na herhaalde afleverfouten. Schakel push opnieuw in in die browser."
+      },
+      "toasts": {
+        "enabled": "Pushmeldingen ingeschakeld op dit apparaat",
+        "enableFailed": "Pushmeldingen konden niet worden ingeschakeld",
+        "permissionDenied": "Deze browser blokkeert meldingen van Monize. Sta ze toe in de site-instellingen en probeer het opnieuw.",
+        "permissionDeniedIos": "Meldingen zijn geblokkeerd voor Monize. Open iOS-instellingen, dan Meldingen, dan Monize, om ze toe te staan.",
+        "permissionDismissed": "Meldingen zijn niet ingeschakeld. Kies Toestaan wanneer de browser het vraagt.",
+        "permissionNoPrompt": "Meldingen zijn niet aangezet en er verscheen geen verzoek. Open iOS-instellingen, dan Meldingen, dan Monize, en sta ze daar toe. Staat Monize er niet bij, verwijder het dan van het beginscherm, voeg het opnieuw toe (Deel, dan Zet op beginscherm) en probeer het nog eens.",
+        "removed": "Apparaat verwijderd",
+        "removeFailed": "Apparaat kon niet worden verwijderd",
+        "testSent": "{count, plural, one {Testmelding verstuurd naar 1 apparaat} other {Testmelding verstuurd naar # apparaten}}",
+        "testPartial": "De testmelding bereikte {delivered} van {attempted} apparaten",
+        "testFailed": "De testmelding kon niet worden afgeleverd",
+        "pushServiceRefused": "De pushdienst van de browser heeft de registratie geweigerd. Probeer het zo opnieuw; blijft het mislukken, controleer dan de pushinstellingen van de browser.",
+        "pushServiceRefusedBrave": "Brave blokkeert de pushdienst standaard. Open in Brave Instellingen, dan Privacy en beveiliging, zet \"Google-services gebruiken voor pushberichten\" aan, herstart de browser en probeer het opnieuw."
+      },
+      "testResults": {
+        "heading": "Laatste test, per apparaat",
+        "status": {
+          "sent": "afgeleverd bij de pushdienst",
+          "expired": "abonnement verlopen; schakel push op dat apparaat opnieuw in",
+          "transient": "niet afgeleverd (tijdelijke fout); probeer het opnieuw",
+          "unconfigured": "deze instantie kan pushberichten nu niet ondertekenen"
+        }
+      },
+      "transport": {
+        "webpush": "Webpush",
+        "unifiedpush": "UnifiedPush"
+      },
+      "facts": {
+        "endpoint": "Eindpunt",
+        "transport": "Bezorgd via",
+        "registeredIp": "Geregistreerd vanaf",
+        "registered": "Geregistreerd",
+        "lastSeen": "Laatst actief",
+        "lastDelivery": "Laatste bezorging",
+        "noDelivery": "Nog niets bezorgd",
+        "userAgent": "Browser",
+        "unknownIp": "Onbekend"
+      }
+    },
+    "preferences": {
+      "heading": "Hoe ik meldingen ontvang",
+      "description": "Kies welke soorten Monize per e-mail of push verstuurt, en hoe vaak.",
+      "categoryHeader": "Melding",
+      "channels": {
+        "emailReport": "E-mail (rapport)",
+        "emailNotification": "E-mail (waarschuwing)",
+        "push": "Push",
+        "unifiedpush": "UnifiedPush",
+        "unifiedpushHint": "Meldingen worden bezorgd via een distributor-app die je zelf draait, zoals ntfy, in plaats van de pushdienst van de browserleverancier. Registreer een eindpunt in die app om dit kanaal te gebruiken."
+      },
+      "categories": {
+        "PAYMENTS": "Rekeningen en gepland",
+        "BUDGETS": "Budgetten",
+        "SYSTEM": "Systeemwaarschuwingen",
+        "BALANCES": "Rekeningsaldi",
+        "INVESTMENTS": "Beleggingswaarde",
+        "STRATEGIES": "Strategiesignalen",
+        "BANK_SYNC": "Bankkoppelingen",
+        "BANK_SYNC_ACTIVITY": "Resultaten van banksynchronisatie",
+        "EMAIL_RECEIPTS": "E-mailkwitanties",
+        "BONDS": "Obligaties",
+        "AI_REVIEW": "AI-beoordelingsvoorstellen",
+        "WARRANTIES": "Garantieherinneringen",
+        "SECURITY": "Beveiliging",
+        "SHARED_EXPENSES": "Gedeelde uitgaven"
+      },
+      "channelNotApplicable": "Niet van toepassing op dit type melding",
+      "emailToggleLabel": "Rapport-e-mail voor {category}",
+      "emailNotificationToggleLabel": "Waarschuwings-e-mail voor {category}",
+      "pushToggleLabel": "Push voor {category}",
+      "unifiedpushToggleLabel": "UnifiedPush voor {category}",
+      "saveFailed": "Kon die instelling niet opslaan",
+      "emailUnavailable": "Schakel hierboven e-mailmeldingen in om deze per e-mail te versturen.",
+      "pushUnavailable": "Er is geen apparaat geregistreerd voor push, dus dit kanaal kan niets bezorgen.",
+      "throttle": {
+        "label": "Wachttijd",
+        "ariaLabel": "Wachttijd voor {category}",
+        "hint": "Sla een waarschuwing of push over als er binnen dit venster al een uit dezelfde groep is verstuurd.",
+        "options": {
+          "0": "Uit",
+          "5": "5 minuten",
+          "15": "15 minuten",
+          "30": "30 minuten",
+          "60": "1 uur",
+          "360": "6 uur",
+          "1440": "24 uur"
+        }
+      },
+      "pushEnableHint": "Deze browser is niet geregistreerd voor pushmeldingen."
     }
   },
   "help": {
@@ -229,9 +449,10 @@
       "label": "Discussies",
       "description": "Stel vragen en deel ideeën met de community."
     },
-    "wiki": {
-      "label": "Wiki",
-      "description": "Blader door handleidingen en documentatie."
+    "docs": {
+      "label": "Documentatie",
+      "description": "Blader door de gebruikershandleiding.",
+      "openOnline": "Openen op monize.net"
     },
     "supportBackup": {
       "label": "Supportback-up maken",
@@ -280,7 +501,7 @@
   "supportBackup": {
     "title": "Supportback-up maken",
     "howItWorks": "Dit maakt een gede-identificeerde kopie van je back-up: namen worden gemaskeerd (eerste en laatste twee tekens blijven), notities/omschrijvingen/rekeningnummers worden verwijderd en elk bedrag wordt vermenigvuldigd met één verborgen factor, terwijl publieke waarden (wisselkoersen, koersen, rentetarieven) intact blijven. Het bestand wordt altijd versleuteld met het onderstaande wachtwoord en herstelt als een normale back-up. Dit beschermt tegen terloopse blootstelling, niet tegen iemand die je al kent — datums, frequenties en structuur blijven behouden zodat bugs reproduceerbaar zijn.",
-    "sectionsLabel": "Wat opnemen",
+    "sectionsLabel": "Op te nemen onderdelen",
     "sections": {
       "investments": "Beleggingen (effecten, posities, koersen)",
       "scheduled": "Geplande transacties",
@@ -325,6 +546,17 @@
       "description": "Verwijder financiële gegevens uit jouw account. Dit kan niet ongedaan worden gemaakt.",
       "openButton": "Gegevens verwijderen...",
       "alwaysDeletedHeading": "Het volgende wordt altijd verwijderd:",
+      "alwaysDeletedItems": {
+        "transactions": "Alle transacties en splitsingen",
+        "scheduled": "Alle geplande/terugkerende transacties",
+        "securities": "Alle effecten, koersen, posities en beleggingstransacties",
+        "budgets": "Alle budgetten en budgetwaarschuwingen",
+        "monthlySummaries": "Maandelijkse rekeningsaldo-overzichten",
+        "customReports": "Aangepaste rapporten, tags en importtoewijzingen",
+        "actionHistory": "Actiegeschiedenis (ongedaan maken/opnieuw)",
+        "rules": "Alle transactieregels",
+        "institutions": "Financiële instellingen"
+      },
       "optionalHeading": "Optioneel ook verwijderen:",
       "accountsOption": "Rekeningen",
       "categoriesOption": "Categorieën",
@@ -370,7 +602,8 @@
   },
   "apiAccess": {
     "heading": "API-toegang",
-    "description": "Maak persoonlijke toegangstokens aan om externe AI-tools zoals Claude Desktop via MCP te verbinden.",
+    "description": "Maak persoonlijke toegangstokens aan om externe AI-tools zoals Claude Desktop via MCP te verbinden of om de REST API op /api/v1 aan te roepen.",
+    "restrictedNote": "Leestokens kunnen alleen lezen. Eindpunten voor aanmelden, beveiliging, beheer, delen en back-ups zijn niet beschikbaar voor tokens.",
     "createTokenButton": "Token aanmaken",
     "mcpServerUrlLabel": "MCP-server-URL",
     "mcpServerUrlHelp": "Gebruik deze URL bij het configureren van MCP-clients zoals Claude Code of Claude Desktop.",
@@ -384,7 +617,7 @@
     "revokeButton": "Intrekken",
     "revokeModal": {
       "title": "Token intrekken",
-      "message": "Dit token werkt onmiddellijk niet meer. Alle MCP-verbindingen die er gebruik van maken worden verbroken.",
+      "message": "Dit token werkt onmiddellijk niet meer. Alle MCP-verbindingen of API-clients die er gebruik van maken worden verbroken.",
       "confirmLabel": "Intrekken"
     },
     "createModal": {
@@ -430,26 +663,27 @@
       "copyUrlFailed": "Kopiëren van URL mislukt",
       "loadFailed": "Laden van API-tokens mislukt",
       "createFailed": "Aanmaken van token mislukt",
-      "revokeFailed": "Intrekken van token mislukt"
+      "revokeFailed": "Intrekken van token mislukt",
+      "reauthFailed": "Bevestigen van opnieuw verifiëren mislukt"
+    },
+    "stepUp": {
+      "reason": "Met een token is je account bereikbaar zonder in te loggen, dus bevestig dat jij het bent voordat je er een aanmaakt."
     },
     "relative": {
-      "never": "Nooit",
-      "today": "Vandaag",
-      "yesterday": "Gisteren",
-      "daysAgo": "{count} dagen geleden",
-      "monthsAgo": "{count} maanden geleden"
+      "never": "Nooit"
     }
   },
   "autoBackup": {
     "heading": "Automatische back-up",
-    "description": "Maak automatisch een back-up van jouw gegevens naar een map op een schema. Omdat Monize in Docker draait, moet je een hostmap als volume in de container koppelen (bijv. -v /host/backups:/data/backups).",
-    "adminManagedNote": "Alleen beheerders kunnen deze instellingen wijzigen. Alle andere gebruikers worden automatisch volgens hetzelfde schema en bewaarbeleid geback-upt, elk in een eigen map.",
+    "description": "Eén schema voor de hele installatie: de server maakt een back-up van de gegevens van elk account naar de opslag hieronder. Omdat Monize in Docker draait, moet een lokale map als volume in de container worden gekoppeld (bijv. -v /host/backups:/data/backups).",
+    "adminManagedNote": "Alleen beheerders kunnen dit beleid wijzigen, en het geldt voor elk account op deze installatie, elk in een eigen map.",
+    "demoDisabledNote": "Deze bedieningselementen zijn alleen-lezen in de demomodus.",
     "loadingText": "Laden...",
     "enableLabel": "Automatische back-ups inschakelen",
     "backupFolderLabel": "Back-upmap",
     "backupFolderPlaceholder": "/data/backups",
-    "perUserFolderHelp": "De back-ups van elke gebruiker komen in een eigen map binnen deze map, genoemd naar hun gebruikers-ID.",
-    "perUserFolderHelpWithPath": "De back-ups van elke gebruiker komen in een eigen map binnen deze map, genoemd naar hun gebruikers-ID. De jouwe: {path}",
+    "perUserFolderHelp": "De back-ups van elk account komen in een eigen map hierbinnen, genoemd naar hun account-ID.",
+    "perUserFolderHelpWithPath": "De back-ups van elk account komen in een eigen map hierbinnen, genoemd naar hun account-ID. Voorbeeld: {path}",
     "browseButton": "Bladeren...",
     "validateButton": "Valideren",
     "validatingButton": "Valideren...",
@@ -471,26 +705,26 @@
       "monthlyHelp": "Één per maand bewaard"
     },
     "status": {
-      "heading": "Status",
-      "lastBackup": "Laatste back-up",
-      "nextBackup": "Volgende back-up",
+      "heading": "Status van de installatie",
+      "lastBackup": "Meest recente back-up",
+      "nextBackup": "Volgende geplande back-up",
       "error": "Fout",
       "success": "Geslaagd",
-      "failed": "Mislukt",
-      "partial": "Gedeeltelijk"
+      "partial": "Gedeeltelijk",
+      "failed": "Mislukt"
     },
-    "saveButton": "Instellingen opslaan",
-    "savingButton": "Opslaan...",
-    "runNowButton": "Nu back-up uitvoeren",
-    "runningButton": "Back-up uitvoeren...",
+    "saveButton": "Beleid opslaan",
+    "runNowButton": "Nu elk account back-uppen",
+    "runningButton": "Back-up bezig...",
     "toasts": {
-      "saved": "Instellingen voor automatische back-up opgeslagen",
-      "backupCreated": "Back-up aangemaakt: {filename}",
+      "saved": "Back-upbeleid opgeslagen en toegepast op elk account",
       "folderValid": "Map is geldig en beschrijfbaar",
       "loadFailed": "Laden van instellingen voor automatische back-up mislukt",
       "saveFailed": "Opslaan van instellingen mislukt",
       "runFailed": "Uitvoeren van back-up mislukt",
-      "browseFailed": "Bladeren door mappen mislukt"
+      "browseFailed": "Bladeren door mappen mislukt",
+      "backupRunFinished": "{backedUp} van {requested} {requested, plural, one {account} other {accounts}} geback-upt",
+      "backupRunIncomplete": "{backedUp} van {requested} geback-upt: {partial} gedeeltelijk, {failed} mislukt. Bekijk de status hieronder."
     },
     "folderErrors": {
       "required": "Mappad is vereist",
@@ -505,9 +739,22 @@
     },
     "noStorage": {
       "title": "Deze installatie heeft geen back-upopslag",
-      "body": "Automatische back-ups zouden naar {folderPath} worden geschreven, waar deze installatie niet kan schrijven. Een beheerder moet daar opslag aankoppelen voordat een schema kan worden uitgevoerd."
+      "body": "Automatische back-ups zouden naar {folderPath} worden geschreven, waar deze installatie niet naar kan schrijven. Een beheerder moet die opslag beschikbaar maken voordat een schema kan draaien."
     },
-    "never": "Nooit"
+    "never": "Nooit",
+    "coverage": {
+      "accounts": "Gepland op {scheduled} van {total} {total, plural, one {actief account} other {actieve accounts}} op deze installatie.",
+      "unknown": "Hoe ver dit beleid reikt, is niet beschikbaar."
+    },
+    "storage": {
+      "heading": "Back-upopslag",
+      "providerLocal": "Lokale map",
+      "providerS3": "S3-compatibele objectopslag",
+      "providerUnknown": "Opslag",
+      "localHelp": "Ingesteld via BACKUP_STORAGE_PROVIDER. De back-ups van elk account komen in een eigen map hierbinnen, genoemd naar hun account-ID.",
+      "fixedHelp": "Ingesteld via BACKUP_STORAGE_PROVIDER. De bucket en het sleutelvoorvoegsel zijn van de installatie, dus hier valt geen map te kiezen; de back-ups van elk account komen onder een eigen sleutelvoorvoegsel.",
+      "artifactCount": "Deze opslag bevat op dit moment {count} {count, plural, one {back-upbestand} other {back-upbestanden}} voor uw account. Van opslag wisselen verplaatst bestaande back-ups niet."
+    }
   },
   "backupRestore": {
     "heading": "Back-up en herstel",
@@ -557,8 +804,8 @@
       },
       "toasts": {
         "success": "Back-up succesvol gedownload",
-        "incomplete": "Back-up gedownload, maar deze is ONVOLLEDIG: {unusable} van {total} bijlage(n) konden niet intact worden opgeslagen ({missing} ontbreken, {inconsistent} zijn niet door de integriteitscontrole gekomen). Beschouw dit bestand niet als een volledige back-up — herstel de bijlageopslag en exporteer opnieuw.",
-        "failed": "Aanmaken van back-up mislukt"
+        "failed": "Aanmaken van back-up mislukt",
+        "incomplete": "Back-up gedownload, maar deze is ONVOLLEDIG: {unusable} van {total} bijlage(n) konden niet intact worden opgeslagen ({missing} ontbreken, {inconsistent} zijn niet door de integriteitscontrole gekomen). Beschouw dit bestand niet als een volledige back-up — herstel de bijlageopslag en exporteer opnieuw."
       }
     },
     "restore": {
@@ -580,16 +827,130 @@
         "pleaseEnterPassword": "Voer jouw wachtwoord in om te bevestigen",
         "encryptedNeedsPassword": "Deze back-up is versleuteld. Voer het wachtwoord waarmee deze is aangemaakt in het veld \"Back-upwachtwoord\" in en probeer het opnieuw.",
         "failed": "Terugzetten van back-up mislukt",
+        "interrupted": "Het herstel werd onderbroken voordat de server antwoordde. Een herstel wordt volledig of helemaal niet uitgevoerd, dus uw gegevens zijn volledig hersteld of ongewijzigd. Laad de pagina opnieuw om te zien welke van de twee, voordat u het opnieuw probeert.",
         "reauthRedirect": "Je gaat naar je identiteitsprovider om te bevestigen dat jij het bent. Kies het back-upbestand opnieuw wanneer je terugkomt."
-      }
+      },
+      "selectedFile": "Geselecteerd: {filename}"
     },
     "restoreResult": {
       "title": "Herstel voltooid",
-      "description": "Jouw gegevens zijn succesvol hersteld. Hier is een overzicht van wat is hersteld:",
       "totalRecords": "Totaal records",
-      "doneButton": "Gereed",
       "skippedAttachments": "{count, plural, one {# bijlage is niet teruggezet} other {# bijlagen zijn niet teruggezet}}: de back-up bevatte er geen bruikbare bytes voor — ze ontbraken of kwamen niet door hun checksum bij het exporteren, of het bestand is van vóór zelfstandige back-ups. Maak een nieuwe back-up zodra de bijlageopslag in orde is.",
-      "unusableAiProviderKeys": "{count, plural, one {# AI-provider is teruggezet zonder bruikbare API-sleutel} other {# AI-providers zijn teruggezet zonder bruikbare API-sleutels}}: de back-up is gemaakt voordat providersleutels erin werden meegenomen, dus de opgeslagen sleutel hoort bij de server die het bestand maakte, of deze server heeft geen versleutelingssleutel ingesteld om er een op te slaan. Open Instellingen → AI-providers en voer de API-sleutel opnieuw in."
+      "unusableAiProviderKeys": "{count, plural, one {# AI-provider is teruggezet zonder bruikbare API-sleutel} other {# AI-providers zijn teruggezet zonder bruikbare API-sleutels}}: de back-up is gemaakt voordat providersleutels erin werden meegenomen, dus de opgeslagen sleutel hoort bij de server die het bestand maakte, of deze server heeft geen versleutelingssleutel ingesteld om er een op te slaan. Open Instellingen → AI-providers en voer de API-sleutel opnieuw in.",
+      "unlinkedBondSecurities": "{count, plural, one {# obligatiefonds is teruggezet zonder koppeling aan zijn obligatie-instrument} other {# obligatiefondsen zijn teruggezet zonder koppeling aan hun obligatie-instrumenten}}: de obligatiecatalogus van deze server bevat de serie niet (of in een andere valuta), dus de obligatie-engine waardeert ze niet meer en hun berekende koersen zijn niet teruggezet. Open elk effect en koppel het opnieuw aan een obligatie-instrument.",
+      "unlinkedBondSeries": "{count, plural, one {# obligatietransactie heeft} other {# obligatietransacties hebben}} de serie verloren omdat de serie niet uit de officiële bron kon worden opgehaald. Ze zijn zonder serie hersteld en blijven zonder serie tot je die ophaalt.",
+      "unrecoveredBondSeries": "Obligatieseries uit de back-up die niet konden worden opgehaald: {count}.",
+      "unrecoveredBondSeriesItem": "{series} ({country}): {reason}",
+      "unrecoveredBondSeriesMore": "en nog {count}",
+      "unrecoveredBondSeriesAction": "Om ze te herstellen, open je het obligatie-effect, haal je de serie op via de pagina (Vernieuwen) en kies je de serie bij de transacties die er geen hebben.",
+      "unrecoveredBondSeriesReason": {
+        "not-published": "de uitgever heeft deze serie (nog) niet gepubliceerd",
+        "source-unavailable": "de officiële bron heeft niet geantwoord; probeer het later opnieuw",
+        "no-adapter": "deze server heeft geen bron voor het land van deze uitgever",
+        "refused": "het antwoord van de officiële bron is niet geaccepteerd",
+        "rate-limited": "de officiële bron vroeg om te vertragen; probeer het later opnieuw",
+        "not-attempted": "te veel series in één herstelactie; niet geprobeerd",
+        "other": "onbekende reden"
+      },
+      "doneButton": "Gereed",
+      "unlinkedBondSecuritiesList": "Betrokken effecten: {symbols}.",
+      "unlinkedBondSecuritiesMore": "en nog {count}",
+      "currencyKindMismatchAccounts": "{count, plural, one {# rekening is teruggezet met een valuta waarvan de soort niet bij het rekeningtype past} other {# rekeningen zijn teruggezet met een valuta waarvan de soort niet bij het rekeningtype past}}: een cryptorekening heeft een cryptovaluta nodig en elke andere rekening een fiatvaluta. Op deze server is de valuta van de andere soort. Wijzig de valuta van de rekening, of de soort van de valuta op de pagina Valuta's.",
+      "currencyKindMismatchAccountsList": "Betrokken rekeningen: {names}.",
+      "currencyKindMismatchSecurities": "{count, plural, one {# effect is op deze server genoteerd in een cryptovaluta} other {# effecten zijn op deze server genoteerd in een cryptovaluta}}, terwijl een effect een fiatvaluta nodig heeft. Wijzig de valuta van het effect, of de soort van de valuta op de pagina Valuta's.",
+      "currencyKindMismatchSecuritiesList": "Betrokken effecten: {symbols}.",
+      "currencyKindMismatchMore": "en nog {count}",
+      "currencyKindMismatchDefaultCurrency": "Uw standaardvaluta, {code}, is op deze server een cryptovaluta, maar totalen en rapporten worden altijd in een fiatvaluta weergegeven. Kies een fiatvaluta als standaardvaluta in Instellingen → Voorkeuren.",
+      "counts": {
+        "sharedGroups": "Groepen voor gedeelde uitgaven",
+        "sharedParticipants": "Groepsdeelnemers",
+        "sharedEntries": "Groepsboekingen",
+        "sharedAllocations": "Verdelingen van uitgaven",
+        "sharedActivity": "Groepsactiviteit",
+        "sharedPeople": "Contacten voor gedeelde uitgaven",
+        "sharedPersonLinks": "Gekoppelde contacten",
+        "sharedIntegrations": "Koppelingen met persoonlijke financiën",
+        "sharedPostings": "Persoonlijke boekingen van gedeelde uitgaven",
+        "sharedLedgerLinks": "Gekoppelde persoonlijke transacties",
+        "budgetBuckets": "Budgetpotjes",
+        "budgetPeriodBuckets": "Budgetperiodepotjes"
+      }
+    },
+    "storedBackups": {
+      "heading": "Automatische back-ups",
+      "description": "Back-ups die deze server volgens zijn eigen schema voor u heeft gemaakt. Download er een om zelf een kopie te bewaren, of herstel er een mee via het formulier hieronder.",
+      "adminScheduleNote": "De instellingen voor automatische back-ups staan in <link>Beheer → Back-ups</link>.",
+      "loading": "Back-ups laden...",
+      "loadFailed": "De op de server opgeslagen back-ups konden niet worden geladen",
+      "retryButton": "Opnieuw proberen",
+      "empty": "Deze server bewaart nog geen automatische back-ups voor u.",
+      "columns": {
+        "filename": "Bestand",
+        "modified": "Gewijzigd op",
+        "size": "Grootte",
+        "actions": "Acties"
+      },
+      "downloadButton": "Downloaden",
+      "restoreButton": "Herstellen",
+      "workingButton": "Bezig...",
+      "downloadFailed": "De back-up kon niet worden gedownload",
+      "offsite": {
+        "disclosure": "Externe bestemmingen",
+        "disclosureDescription": "Na elke volledige automatische back-up kan een versleutelde kopie naar S3-opslag worden gestuurd, per e-mail, of allebei: drie kopieën, twee soorten opslag, waarvan één buiten deze machine. Alleen een versleutelde back-up wordt verstuurd.",
+        "encryptionUnavailable": "Deze server heeft geen versleutelingssleutel ingesteld, dus inloggegevens voor een eigen bucket kunnen niet worden opgeslagen. De eigen bucket van deze server en kopieën per e-mail blijven werken.",
+        "loading": "Uw externe bestemmingen laden...",
+        "loadFailed": "Uw externe back-upbestemmingen konden niet worden geladen",
+        "retryButton": "Opnieuw proberen",
+        "demoNote": "Externe bestemmingen kunnen niet worden gewijzigd in de demo.",
+        "saveButton": "Bestemmingen opslaan",
+        "saved": "Externe bestemmingen opgeslagen",
+        "saveFailed": "Uw externe back-upbestemmingen konden niet worden opgeslagen",
+        "s3": {
+          "heading": "S3-opslag",
+          "modeLabel": "Bestemming van kopieën",
+          "modeOff": "Uit",
+          "modeDeployment": "Bucket van deze server",
+          "modeOwn": "Mijn eigen bucket",
+          "deploymentUnavailable": "Deze server heeft geen eigen externe bucket; een beheerder zou er een moeten inrichten. U kunt in plaats daarvan een eigen bucket gebruiken.",
+          "bucketLabel": "Bucket",
+          "regionLabel": "Regio",
+          "regionHelp": "Veel S3-compatibele diensten negeren dit.",
+          "prefixLabel": "Sleutelprefix",
+          "prefixHelp": "Optionele map in de bucket, zodat uw back-ups die met andere gegevens kunnen delen.",
+          "endpointLabel": "Endpoint",
+          "endpointHelp": "Alleen voor een S3-compatibele dienst zoals MinIO, R2 of B2. Laat dit leeg voor AWS.",
+          "forcePathStyleLabel": "Padgebaseerde adressering gebruiken",
+          "forcePathStyleHelp": "Vereist door MinIO en enkele andere S3-compatibele diensten.",
+          "accessKeyIdLabel": "Toegangssleutel-ID",
+          "secretAccessKeyLabel": "Geheime toegangssleutel",
+          "storedPlaceholder": "•••• opgeslagen",
+          "credentialsHelp": "Inloggegevens worden versleuteld op deze server bewaard en worden nooit meer getoond. Laat deze velden leeg om de reeds opgeslagen gegevens te behouden.",
+          "clearCredentialsButton": "Opgeslagen inloggegevens verwijderen",
+          "clearConfirmTitle": "Opgeslagen inloggegevens verwijderen?",
+          "clearConfirmMessage": "Deze server vergeet uw toegangssleutel-ID en geheime toegangssleutel. Er worden geen kopieën meer naar uw bucket gestuurd totdat u ze opnieuw invoert.",
+          "credentialsCleared": "Opgeslagen inloggegevens verwijderd",
+          "clearFailed": "De opgeslagen inloggegevens konden niet worden verwijderd"
+        },
+        "email": {
+          "heading": "E-mail",
+          "toggleLabel": "Mail mij een kopie van elke voltooide automatische back-up",
+          "addressLabel": "Kopieën sturen naar",
+          "addressPlaceholder": "gebruiker@voorbeeld.nl",
+          "sizeNote": "Een back-up boven de groottelimiet van deze server wordt niet bijgevoegd; u ontvangt in plaats daarvan een bericht met de bestandsnaam."
+        },
+        "rowStatus": {
+          "iconTitle": "{destination}: {status}",
+          "destinationS3": "S3",
+          "destinationEmail": "E-mail",
+          "statusPending": "In afwachting",
+          "statusUploading": "Verzenden",
+          "statusUploaded": "Gekopieerd",
+          "statusFailed": "Mislukt",
+          "statusConflict": "Conflict",
+          "statusSkippedUnencrypted": "Overgeslagen: niet versleuteld",
+          "statusSkippedTooLarge": "Overgeslagen: te groot"
+        }
+      }
     }
   },
   "sharedAccess": {
@@ -659,16 +1020,57 @@
       "sections": "Secties",
       "shared": "Gedeelde gegevens"
     },
+    "ops": {
+      "read": "Lezen",
+      "create": "Aanmaken",
+      "edit": "Bewerken",
+      "delete": "Verwijderen",
+      "joint": "Gezamenlijk"
+    },
     "sections": {
-      "description": "Verleen alleen-lezentoegang tot hele appsecties. Rekeninggebonden gegevens vereisen ook per-rekeningtoegang."
+      "description": "Verleen alleen-lezentoegang tot hele appsecties. Rekeninggebonden gegevens vereisen ook per-rekeningtoegang.",
+      "bills": {
+        "label": "Facturen & stortingen",
+        "description": "Geplande transacties voor verleende rekeningen"
+      },
+      "investments": {
+        "label": "Beleggingen",
+        "description": "Posities en beleggingstransacties voor verleende rekeningen"
+      },
+      "budgets": {
+        "label": "Budget",
+        "description": "Budgetcijfers, alleen-lezen"
+      },
+      "reports": {
+        "label": "Rapporten",
+        "description": "Rapporten, alleen-lezen"
+      },
+      "ai": {
+        "label": "AI-assistent",
+        "description": "Gebruikt de AI-provider die de eigenaar heeft ingesteld"
+      },
+      "aiRequiresFullAccess": "De AI-assistent leest alle rekeningen en secties en antwoordt daarom pas voor deze gedelegeerde zodra die al je rekeningen en elke andere sectie kan lezen.",
+      "warranties": {
+        "label": "Garanties",
+        "description": "Garanties met hun documenten en claims. Een gekoppelde aankoop is alleen zichtbaar bij een rekening die de gemachtigde mag lezen."
+      },
+      "toggleLabel": "Onderdeel {section}"
     },
     "accounts": {
       "noAccounts": "Geen rekeningen om te verlenen.",
       "grantAll": "Alles verlenen",
-      "jointRequiresFullAccount": "Gezamenlijke rekeningen kunnen alleen worden gedeeld met gebruikers die een eigen Monize-account hebben"
+      "jointRequiresFullAccount": "Gezamenlijke rekeningen kunnen alleen worden gedeeld met gebruikers die een eigen Monize-account hebben",
+      "grantAllLabel": "{op} alle {type}-rekeningen",
+      "grantLabel": "{op}-toegang tot {account}"
     },
     "shared": {
-      "description": "LEZEN van begunstigden, categorieën en labels is altijd toegestaan. Dit regelt aanmaken/bewerken/verwijderen."
+      "description": "LEZEN van begunstigden, categorieën en labels is altijd toegestaan. Dit regelt aanmaken/bewerken/verwijderen.",
+      "toggleLabel": "{op} {resource}",
+      "resources": {
+        "payees": "Begunstigden",
+        "categories": "Categorieën",
+        "tags": "Labels"
+      }
     },
     "saveButton": "Opslaan",
     "toasts": {
@@ -687,11 +1089,13 @@
     "emergencyAccess": "Noodtoegang",
     "apiAccess": "API-toegang",
     "aiSettings": "AI-instellingen",
+    "emailReceipts": "E-mailbonnen",
     "backupRestore": "Back-up en herstel",
-    "autoBackup": "Automatische back-up",
     "help": "Help & ondersteuning",
     "dangerZone": "Gevarenzone",
-    "about": "Over"
+    "about": "Over",
+    "payeeLookup": "Begunstigde opzoeken",
+    "bankSync": "Banksynchronisatie"
   },
   "page": {
     "title": "Instellingen",
@@ -715,6 +1119,14 @@
       "title": "AI-instellingen",
       "description": "Configureer AI-providers, beheer API-sleutels en bekijk gebruiksstatistieken."
     },
+    "emailReceiptsCard": {
+      "title": "E-mailbonnen",
+      "description": "Koppel een mailbox voor bestelbevestigingen en beheer de profielen die ze lezen."
+    },
+    "bankSyncCard": {
+      "title": "Banksynchronisatie",
+      "description": "Koppel je bank via Open Banking en importeer de geboekte transacties in je rekeningen."
+    },
     "delegateSecurityError": "Kan jouw beveiligingsinstellingen niet laden.",
     "toasts": {
       "securityLoadFailed": "Laden van beveiligingsinstellingen mislukt",
@@ -732,6 +1144,14 @@
       "enabled": "Zwevende chatbubbel ingeschakeld",
       "disabled": "Zwevende chatbubbel uitgeschakeld",
       "saveFailed": "Kan de instelling voor de chatbubbel niet bijwerken"
+    },
+    "trivia": {
+      "title": "AI-weetjes",
+      "subtitle": "Vult de widget Weetjes op je dashboard met feiten over je nettovermogen en beleggingen. Ze worden elke ochtend opnieuw opgebouwd en door AI geformuleerd als je een provider hebt ingesteld. Voeg de widget toe via Aanpassen op het dashboard. Als dit uitstaat, toont de widget geen feiten en wordt er geen provider gevraagd.",
+      "toggleLabel": "De widget Weetjes op het dashboard vullen met AI-weetjes",
+      "enabled": "AI-weetjes ingeschakeld",
+      "disabled": "AI-weetjes uitgeschakeld",
+      "saveFailed": "Kan de instelling voor AI-weetjes niet bijwerken"
     },
     "demoRestricted": {
       "heading": "Beperkt in demomodus",
@@ -812,7 +1232,6 @@
       "editMessageButton": "Bewerken",
       "messagePlaceholder": "Notities, instructies, locaties van belangrijke documenten...",
       "maxCharsNote": "Maximaal 4000 tekens. Versleuteld opgeslagen.",
-      "cancelButton": "Annuleren",
       "saveButton": "Bericht opslaan",
       "toasts": {
         "saved": "Bericht opgeslagen",
@@ -857,7 +1276,7 @@
       "grantStatus": "Verleningsstatus: ",
       "unknown": "onbekend",
       "never": "nooit",
-      "daysAgo": "{count} dag{plural} geleden",
+      "withRelative": "{timestamp} ({relative})",
       "grantedOn": "verleend op {timestamp}",
       "notYetGranted": "nog niet verleend",
       "timerNote": "De timer wordt automatisch gereset elke keer dat je de app gebruikt -- aanmelden, een pagina bekijken, een transactie vastleggen, alles wat geauthenticeerd is."
@@ -874,6 +1293,17 @@
     },
     "stepUp": {
       "reason": "Verifieer jouw identiteit opnieuw om jouw noodtoegang-bericht te bekijken of te bewerken."
+    },
+    "validation": {
+      "wholeDays": "Alleen hele dagen",
+      "minDays": "{min, plural, one {Moet minstens # dag zijn} other {Moet minstens # dagen zijn}}",
+      "maxDays": "{max, plural, one {Mag hoogstens # dag zijn} other {Mag hoogstens # dagen zijn}}",
+      "reminderBeforeGrant": "Het aantal herinneringsdagen moet kleiner zijn dan het aantal toegangsdagen",
+      "messageMax": "Het bericht mag hoogstens {max} tekens bevatten",
+      "firstNameRequired": "Voornaam is verplicht",
+      "firstNameMax": "De voornaam mag hoogstens {max} tekens bevatten",
+      "emailInvalid": "Voer een geldig e-mailadres in",
+      "emailMax": "Het e-mailadres mag hoogstens {max} tekens bevatten"
     },
     "toasts": {
       "loadFailed": "Laden van noodtoegang mislukt",
@@ -908,6 +1338,10 @@
       "editButton": "Bewerken",
       "deleteButton": "Verwijderen"
     },
+    "deleteDialog": {
+      "title": "AI-provider verwijderen",
+      "message": "{name} verwijderen? De opgeslagen API-sleutel wordt mee verwijderd. Dit kan niet ongedaan worden gemaakt."
+    },
     "configForm": {
       "addTitle": "AI-provider toevoegen",
       "editTitle": "Provider bewerken",
@@ -919,6 +1353,7 @@
       "ollamaCloudNote": "Modelnamen moeten het achtervoegsel -cloud bevatten (bijv. gpt-oss:20b-cloud).",
       "apiKeyLabel": "API-sleutel",
       "baseUrlLabel": "Basis-URL",
+      "baseUrlPrivateNote": "Een privé- of lokaal adres (localhost, 192.168.x.x of een containernaam) werkt alleen voor een beheerder, of wanneer de serverbeheerder dat adres toestaat. Gebruik anders een adres dat bereikbaar is vanaf internet.",
       "priorityLabel": "Prioriteit",
       "priorityHelp": "Lager getal = hogere prioriteit. Gebruikt voor de terugvalopvolgorde.",
       "costRatesHeading": "Kostentarieven (optioneel)",
@@ -1027,5 +1462,468 @@
       "all": "Alle tijd"
     },
     "estCostTooltip": "Geschat op basis van de kostentarieven die je hebt geconfigureerd bij elke provider. Activiteit zonder bijbehorend tarief is uitgesloten."
+  },
+  "payeeLookup": {
+    "title": "Begunstigde opzoeken",
+    "subtitle": "Waar de website, het adres, het e-mailadres en het telefoonnummer van een begunstigde vandaan komen, en wanneer een zoekopdracht vanzelf loopt.",
+    "saved": "Instellingen voor begunstigde opzoeken opgeslagen",
+    "saveFailed": "Kan de instellingen voor begunstigde opzoeken niet opslaan",
+    "loadFailed": "Kan de instellingen voor begunstigde opzoeken niet laden. Laad de pagina opnieuw om het nog eens te proberen.",
+    "googlePlaces": {
+      "toggleLabel": "Google Places gebruiken voor het opzoeken van begunstigden",
+      "notConfigured": "Voeg een Google Places API-sleutel toe om bedrijven op te zoeken in de directory van Google in plaats van via je AI-provider.",
+      "operatorManaged": "Ingesteld door de beheerder van deze server. Je kunt het uitzetten voor je eigen begunstigden.",
+      "configure": "Instellen",
+      "edit": "Bewerken",
+      "removeKey": "Sleutel verwijderen",
+      "usage": "Deze maand gebruikt: {used} van {cap}",
+      "usageNoCap": "Deze maand gebruikt: {used}. Geen maandlimiet.",
+      "keyUnreadable": "Deze server kan de opgeslagen API-sleutel niet lezen. Dat gebeurt wanneer een back-up op een andere instantie wordt teruggezet, of nadat de encryptiesleutel is gewijzigd. Voer de sleutel opnieuw in om dit op te lossen.",
+      "encryptionUnavailable": "Deze server heeft geen encryptiesleutel ingesteld, dus een API-sleutel kan niet veilig worden bewaard. Vraag je beheerder er een in te stellen.",
+      "modalTitle": "Google Places",
+      "modalSubtitle": "Monize stuurt de naam van de begunstigde en het adres dat je al hebt naar Google, en slaat daar niets op.",
+      "apiKeyLabel": "API-sleutel",
+      "apiKeyPlaceholder": "Plak je Google Places API-sleutel",
+      "apiKeyHelp": "Maak in de Google Cloud-console een sleutel met de Places API (New) ingeschakeld. Laat leeg om de al opgeslagen sleutel te behouden.",
+      "capToggleLabel": "Verzoeken per maand beperken",
+      "capHelp": "Google geeft {free} gratis Text Search-verzoeken per maand voor de velden die deze zoekopdracht nodig heeft. Boven de limiet valt het opzoeken terug op je AI-provider.",
+      "capLabel": "Verzoeken per maand",
+      "capRange": "Voer een getal tussen {min} en {max} in.",
+      "test": "Testen",
+      "testing": "Bezig met testen...",
+      "testSuccess": "Google heeft de sleutel geaccepteerd.",
+      "save": "Opslaan",
+      "cancel": "Annuleren",
+      "setupInstructions": "Installatie-instructies"
+    },
+    "automatic": {
+      "title": "Automatisch contactgegevens van begunstigden opzoeken",
+      "subtitle": "Zoek automatisch de website, het adres, het e-mailadres en het telefoonnummer van een nieuwe begunstigde op. De naam van de begunstigde wordt verstuurd, samen met eventuele notities, website, adres, e-mailadres en telefoonnummer die er al zijn, zodat het opzoeken het juiste bedrijf en de juiste vestiging kan onderscheiden.",
+      "toggleLabel": "Automatisch contactgegevens van begunstigden opzoeken inschakelen",
+      "enabled": "Automatisch contactgegevens opzoeken ingeschakeld",
+      "disabled": "Automatisch contactgegevens opzoeken uitgeschakeld",
+      "saveFailed": "Kan de instelling voor contactgegevens opzoeken niet bijwerken",
+      "noSource": "Schakel hierboven een bron in om begunstigden automatisch op te zoeken. Met beide uit kan niets een zoekopdracht beantwoorden."
+    },
+    "order": {
+      "title": "Welke bron als eerste antwoordt",
+      "placesTitle": "Google Places",
+      "placesHelp": "Gegevens uit de bedrijvengids, goedkoper per zoekopdracht. Google heeft geen e-mailadres.",
+      "aiTitle": "Bestaande AI-provider",
+      "aiHelp": "Kan een e-mailadres vinden en kost bij elke zoekopdracht een modelaanroep.",
+      "aiToggleLabel": "Een AI-provider gebruiken voor het opzoeken van begunstigden",
+      "aiProviderLabel": "Te gebruiken provider",
+      "aiProviderAny": "Elke provider, op volgorde van prioriteit",
+      "moveUp": "Omhoog",
+      "moveDown": "Omlaag"
+    }
+  },
+  "bankSync": {
+    "backLink": "Terug naar instellingen",
+    "title": "Banksynchronisatie",
+    "subtitle": "Importeer de geboekte transacties van je bankrekeningen via Open Banking",
+    "demoRestricted": {
+      "heading": "Beperkt in demomodus",
+      "body": "Banksynchronisatie is uitgeschakeld in demomodus."
+    },
+    "loadFailed": {
+      "title": "Kan banksynchronisatie niet laden",
+      "retry": "Opnieuw proberen"
+    },
+    "credentials": {
+      "title": "Enable Banking-applicatie",
+      "subtitle": "Monize leest je bankrekeningen via je eigen Enable Banking-applicatie. Registreer er een in het Enable Banking-controlepaneel en voer hier de applicatie-ID en de privésleutel ervan in.",
+      "notConfigured": "Er is nog geen applicatie ingesteld.",
+      "applicationId": "Applicatie-ID",
+      "keyStored": "Er is een privésleutel opgeslagen.",
+      "keyMissing": "Er is geen privésleutel opgeslagen.",
+      "configure": "Inloggegevens instellen",
+      "edit": "Inloggegevens bewerken",
+      "remove": "Inloggegevens verwijderen",
+      "test": "Verbinding testen",
+      "testing": "Testen...",
+      "encryptionUnavailable": "Deze server heeft geen encryptiesleutel ingesteld, dus inloggegevens kunnen niet worden opgeslagen.",
+      "redirectUrlLabel": "Omleidings-URL",
+      "redirectUrlHelp": "Registreer precies deze URL als omleidings-URL in het Enable Banking-controlepaneel. Je bank stuurt je er weer naartoe nadat je toegang hebt verleend.",
+      "redirectUrlNotPublic": "De omleidings-URL hoeft niet bereikbaar te zijn vanaf internet. Alleen je browser opent hem.",
+      "redirectUrlHttpWarning": "Een “Production”-applicatie accepteert alleen een https-omleidings-URL. Deze gebruikt http en werkt daarom alleen met een “Sandbox”-applicatie. Stel PUBLIC_APP_URL in op het https-adres van Monize.",
+      "copy": "Kopiëren",
+      "copied": "Gekopieerd",
+      "copyFailed": "Kopiëren is mislukt",
+      "testSuccess": "De applicatie werkt: {name}",
+      "testSuccessNoName": "De applicatie werkt.",
+      "testRedirectMissing": "De applicatie werkt, maar de omleidings-URL hierboven is er niet voor geregistreerd. Voeg hem toe in het Enable Banking-controlepaneel.",
+      "testFailed": "De provider heeft deze inloggegevens niet geaccepteerd.",
+      "testError": "Kan de inloggegevens niet testen",
+      "saved": "Inloggegevens opgeslagen. Gebruik Verbinding testen om ze te controleren.",
+      "saveFailed": "Kan de inloggegevens niet opslaan",
+      "removed": "Inloggegevens verwijderd",
+      "removeFailed": "Kan de inloggegevens niet verwijderen",
+      "removeConfirm": {
+        "title": "Inloggegevens verwijderen",
+        "message": "De opgeslagen applicatie-ID en privésleutel worden uit Monize verwijderd. Je moet ze opnieuw invoeren voordat je een bank kunt koppelen of synchroniseren.",
+        "confirm": "Verwijderen"
+      },
+      "help": {
+        "show": "Hulp bij instellen tonen",
+        "hide": "Hulp bij instellen verbergen",
+        "whatIsTitle": "Wat is Enable Banking?",
+        "whatIsBody": "Enable Banking is een bedrijf met een licentie in de EU als aanbieder van rekeninginformatiediensten (AISP) onder PSD2. Het maakt namens jou verbinding met je bank en geeft Monize toegang met alleen leesrechten tot je rekeningen, saldi en transacties. Je logt in bij je eigen bank. Monize en Enable Banking zien je bankwachtwoord nooit. Enable Banking werkt met banken in de Europese Economische Ruimte.",
+        "dataFlow": "Nadat je je bank hebt gekoppeld, kan Enable Banking je bankgegevens lezen: je rekeninggegevens gaan op weg naar Monize via de dienst van Enable Banking. Enable Banking geeft aan dat het deze gegevens niet opslaat. De voorwaarden zijn van toepassing: <terms>API-voorwaarden van Enable Banking</terms>.",
+        "whatIsFree": "Voor persoonlijk gebruik is een gratis applicatie in beperkte productiemodus genoeg. Die leest alleen de rekeningen die je in het controlepaneel eraan koppelt.",
+        "setupTitle": "Zo stel je het in",
+        "step1": "Maak een account aan bij <link>Enable Banking</link> (kies “Get Started” en wacht op de bevestigingsmail). Meld je daarna aan bij het controlepaneel en open “API applications”.",
+        "step2": "Kies “Production”. Monize leest je echte bankrekeningen alleen via een Production-applicatie. Kies “Sandbox” alleen als je de koppeling eerst wilt uitproberen: die toont alleen demogegevens van testbanken.",
+        "step3": "Laat “Generate in the browser” geselecteerd voor de privésleutel.",
+        "step4": "Voer de onderstaande waarden in het formulier in. Voor “Production” is elk veld verplicht.",
+        "registrationValuesTitle": "Waarden om in het formulier te plakken",
+        "registrationValuesNote": "De labels en waarden blijven in het Engels, omdat het controlepaneel in het Engels is.",
+        "registrationTemplatesNote": "De twee URL's verwijzen naar de Monize-sjablonen. In de beperkte modus controleert Enable Banking ze niet. Als anderen jouw Monize-instantie gebruiken, publiceer dan in plaats daarvan je eigen pagina's met je eigen naam.",
+        "emailPlaceholder": "Je e-mailadres",
+        "copyField": "{field} kopiëren",
+        "step5": "Kies “Register”. Je browser slaat het bestand met de privésleutel (.pem) op. Houd dit bestand geheim.",
+        "step6": "Bij “Production” toont de nieuwe applicatie “Inactive”. Kies “Activate by linking accounts”, kies het land, je bank en het gebruikstype (“personal” voor een privérekening, “business” voor een zakelijke rekening) en kies “Link”. Log daarna in bij je bank en autoriseer je rekeningen. Kies niet “Request activation”: daarmee vraag je algemene beschikbaarheid aan, die je voor persoonlijk gebruik niet nodig hebt. Zonder gekoppelde rekeningen geeft de bank geen rekeningen terug. Kies later, wanneer je de bank in Monize koppelt, hetzelfde gebruikstype.",
+        "step7": "Voer de applicatie-ID uit de applicatielijst in en laad hier het bestand met de privésleutel.",
+        "sandboxNote": "Transacties van een Sandbox-applicatie zijn demogegevens. Koppel een Sandbox-bankrekening alleen aan een testrekening in Monize, niet aan een rekening met je echte transacties.",
+        "networkTitle": "Netwerktoegang",
+        "networkBody": "Als de bank je terugstuurt, opent je browser de omleidings-URL. De servers van Enable Banking maken geen verbinding met Monize. Monize hoeft dus niet bereikbaar te zijn vanaf internet of vanaf de IP-adressen van Enable Banking. De omleidings-URL moet openen in de browser die je gebruikt om toegang te autoriseren.",
+        "networkOutbound": "De Monize-server moet via HTTPS (poort 443) verbinding kunnen maken met api.enablebanking.com."
+      },
+      "modalSource": "Haal de applicatie-ID en de privésleutel op in het <link>Enable Banking-controlepaneel</link>."
+    },
+    "credentialsModal": {
+      "title": "Enable Banking-inloggegevens",
+      "subtitle": "Versleuteld opgeslagen op deze server. De privésleutel wordt nooit meer getoond.",
+      "applicationIdLabel": "Applicatie-ID",
+      "applicationIdPlaceholder": "De ID van je Enable Banking-applicatie",
+      "applicationIdRequired": "Voer de applicatie-ID in",
+      "applicationIdTooLong": "De applicatie-ID is te lang",
+      "privateKeyLabel": "Privésleutel (PEM)",
+      "privateKeyPlaceholder": "Plak de PEM-privésleutel van je applicatie",
+      "privateKeyStoredPlaceholder": "Er is een sleutel opgeslagen. Laat dit leeg om hem te behouden, of plak een nieuwe om hem te vervangen.",
+      "privateKeyHelp": "Plak het hele PEM-bestand dat je hebt gedownload toen je de applicatie registreerde.",
+      "privateKeyRequired": "Voer de privésleutel in",
+      "privateKeyInvalid": "Dit lijkt geen PEM-privésleutel. Het moet een blok zijn dat begint met BEGIN en eindigt met PRIVATE KEY.",
+      "privateKeyTooLong": "De privésleutel is te lang",
+      "loadKeyFile": "Sleutelbestand laden",
+      "keyFileTooLarge": "Het bestand is groter dan 16 KB. Kies het .pem-bestand dat Enable Banking heeft opgeslagen.",
+      "keyFileReadFailed": "Het bestand kan niet worden gelezen.",
+      "cancel": "Annuleren",
+      "save": "Opslaan",
+      "saving": "Bezig met opslaan..."
+    },
+    "connections": {
+      "title": "Gekoppelde banken",
+      "subtitle": "Elke bankrekening is gekoppeld aan één Monize-rekening, en de geboekte transacties ervan worden daarin geïmporteerd.",
+      "connect": "Bank koppelen",
+      "credentialsFirst": "Stel hierboven je Enable Banking-inloggegevens in voordat je een bank koppelt.",
+      "loadFailed": "Kan je bankkoppelingen niet laden.",
+      "empty": {
+        "title": "Geen banken gekoppeld",
+        "description": "Koppel een bank om de geboekte transacties ervan in je Monize-rekeningen te importeren."
+      }
+    },
+    "connect": {
+      "title": "Bank koppelen",
+      "subtitle": "Je wordt naar je bank gestuurd om toegang met alleen leesrechten te autoriseren.",
+      "whySecondAuthorization": "Je autoriseert hier opnieuw bij je bank, ook als je dezelfde rekeningen al hebt gekoppeld in het controlepaneel van Enable Banking. Het controlepaneel toont alleen welke rekeningen de applicatie mag lezen, en de bijbehorende toestemming eindigt dezelfde dag. Met deze stap krijgt Monize een eigen toestemming om saldi en transacties te lezen, voor maximaal 180 dagen. Als die bijna afloopt, toont de verbindingskaart “Toestemming verlengen”.",
+      "countryLabel": "Land",
+      "countryPlaceholder": "Selecteer een land",
+      "institutionLabel": "Bank",
+      "institutionPlaceholder": "Zoek je bank",
+      "institutionsLoading": "Banken laden...",
+      "institutionsFailed": "Kan de lijst met banken niet laden.",
+      "retry": "Opnieuw proberen",
+      "noInstitutions": "De provider vermeldt geen banken voor dit land.",
+      "psuTypeLabel": "Rekeninghouder",
+      "psuPersonal": "Particulier",
+      "psuBusiness": "Zakelijk",
+      "consentDays": "{days, plural, one {Deze bank staat toegang toe voor maximaal # dag voordat je hem moet verlengen.} other {Deze bank staat toegang toe voor maximaal # dagen voordat je hem moet verlengen.}}",
+      "continue": "Verder naar bank",
+      "continuing": "Verbinden...",
+      "cancel": "Annuleren",
+      "unsafeUrl": "Het bankadres dat de server heeft teruggegeven is geen veilig https-adres, dus Monize heeft het niet geopend.",
+      "failed": "Kan de koppeling niet starten"
+    },
+    "connection": {
+      "status": {
+        "pending": "In behandeling",
+        "active": "Actief",
+        "expired": "Verlopen",
+        "revoked": "Ingetrokken",
+        "failed": "Mislukt"
+      },
+      "validUntil": "Toegang geldig tot {date}",
+      "expiresSoon": "Verloopt binnenkort",
+      "autoSync": "Eén keer per dag automatisch synchroniseren",
+      "autoSyncOn": "Automatische synchronisatie ingeschakeld",
+      "autoSyncOff": "Automatische synchronisatie uitgeschakeld",
+      "autoSyncFailed": "Kan de automatische synchronisatie niet wijzigen",
+      "renew": "Toestemming verlengen",
+      "renewFailed": "Kan de verlenging niet starten",
+      "syncAll": "Alles synchroniseren",
+      "syncingAll": "Synchroniseren...",
+      "syncAllFailed": "Kan deze bank niet synchroniseren",
+      "disconnect": "Ontkoppelen",
+      "disconnected": "Bank ontkoppeld",
+      "disconnectFailed": "Kan de bank niet ontkoppelen",
+      "disconnectConfirm": {
+        "title": "{bank} ontkoppelen",
+        "message": "Monize stopt met het synchroniseren van deze bank en vraagt haar de toegang te beëindigen. Al geïmporteerde transacties blijven staan, en als je de bank opnieuw koppelt, worden ze niet een tweede keer geïmporteerd.",
+        "confirm": "Ontkoppelen"
+      },
+      "pendingHint": "De autorisatie bij de bank is niet voltooid. Verleng de toestemming om het nog eens te proberen; de gekoppelde rekeningen blijven behouden.",
+      "noAccounts": "De bank heeft voor deze koppeling geen rekeningen gemeld.",
+      "accountsHeading": "Bankrekeningen",
+      "matchAccounts": "Koppelen op rekeningnummer",
+      "matching": "Bezig met koppelen...",
+      "matchLinked": "{count, plural, one {# bankrekening is gekoppeld aan de rekening met hetzelfde nummer} other {# bankrekeningen zijn gekoppeld aan de rekeningen met dezelfde nummers}}",
+      "matchSuggested": "{count, plural, one {# bankrekening komt overeen met meer dan één van je rekeningen: kies zelf de rekening} other {# bankrekeningen komen overeen met meer dan één van je rekeningen: kies zelf de rekeningen}}",
+      "matchBoth": "{linked}. {suggested}",
+      "matchNone": "Er is geen bankrekening gekoppeld: geen enkele heeft een rekeningnummer dat overeenkomt met een van je rekeningen.",
+      "matchFailed": "De bankrekeningen konden niet worden gekoppeld",
+      "syncAllNeedsPreview": "Alles synchroniseren wacht tot de eerste import van elke nieuw gekoppelde rekening is bevestigd. Gebruik Nu synchroniseren bij die rekening om het voorbeeld te openen.",
+      "notifySuccess": "Melding na de dagelijkse synchronisatie",
+      "notifySuccessOptions": {
+        "always": "Na elke synchronisatie",
+        "when_imported": "Alleen als er transacties zijn geïmporteerd",
+        "never": "Nooit"
+      },
+      "notifySuccessSaved": "Meldingsinstelling opgeslagen",
+      "notifySuccessFailed": "De meldingsinstelling kon niet worden gewijzigd",
+      "tagOperationType": "Transacties taggen met het bewerkingstype van de bank",
+      "tagOperationTypeHelp": "Elke geïmporteerde transactie krijgt een tag met de naam van het bewerkingstype van de bank, zoals Kaartbetaling of Inkomende overboeking, zodat regels en rapporten die kunnen gebruiken.",
+      "tagOperationTypeOn": "Tags voor bewerkingstype ingeschakeld",
+      "tagOperationTypeOff": "Tags voor bewerkingstype uitgeschakeld",
+      "tagOperationTypeFailed": "De tags voor bewerkingstype konden niet worden gewijzigd"
+    },
+    "profileNotes": {
+      "title": "Zo werkt de API van deze bank",
+      "show": "Toon hoe de API van deze bank werkt",
+      "hide": "Verberg hoe de API van deze bank werkt",
+      "severity": {
+        "warning": "Waarschuwing:",
+        "info": "Opmerking:"
+      }
+    },
+    "account": {
+      "unnamed": "Naamloze bankrekening",
+      "linkLabel": "Monize-rekening",
+      "notLinked": "Niet gekoppeld",
+      "noEligibleAccounts": "Er is geen open Monize-rekening in deze valuta beschikbaar om aan te koppelen.",
+      "linkFailed": "Kan de rekening niet koppelen",
+      "unlinked": "Rekening ontkoppeld",
+      "unlinkFailed": "Kan de rekening niet ontkoppelen",
+      "syncFrom": "Importeren vanaf {date}",
+      "changeCutoff": "Begindatum wijzigen",
+      "syncNow": "Nu synchroniseren",
+      "syncing": "Synchroniseren...",
+      "syncFailed": "Kan deze rekening niet synchroniseren",
+      "neverSynced": "Nog niet gesynchroniseerd",
+      "lastSynced": "Laatst gesynchroniseerd {time}",
+      "lastSyncOk": "Geslaagd",
+      "lastSyncFailed": "Mislukt",
+      "bankBalance": "Banksaldo",
+      "bankBalanceAsOf": "{amount} per {date}",
+      "balanceNotReported": "Niet gemeld door de bank",
+      "balanceNotSynced": "Nog niet gesynchroniseerd",
+      "monizeBalance": "Monize-saldo",
+      "difference": "Verschil",
+      "differenceHelp": "Het banksaldo is wat de bank op de getoonde datum heeft gemeld. Het kan transacties bevatten die de bank nog niet heeft geboekt, of pas na die datum heeft geboekt, dus een klein verschil tussen synchronisaties is normaal.",
+      "differenceHidden": "Het banksaldo staat in {bankCurrency} en de Monize-rekening in {monizeCurrency}, dus er wordt geen verschil getoond.",
+      "deletedNote": "Een transactie die je in Monize verwijdert, wordt door een latere synchronisatie niet opnieuw geïmporteerd, dus een verwijderde rij blijft verwijderd.",
+      "createNew": "Nieuwe rekening maken",
+      "suggestedName": "{type} {number}",
+      "createdLinked": "Rekening gemaakt en gekoppeld",
+      "createdLinkFailed": "De rekening is gemaakt, maar kon niet worden gekoppeld",
+      "preview": "Voorbeeld",
+      "firstSyncPreview": "De eerste import wordt bevestigd aan de hand van een voorbeeld van de transacties."
+    },
+    "link": {
+      "title": "Koppelen aan {account}",
+      "editTitle": "Begindatum voor {account}",
+      "syncFromLabel": "Transacties importeren vanaf",
+      "syncFromHelp": "Ingevuld met de datum die Monize standaard kiest. Maak het veld leeg en Monize kiest hem voor je.",
+      "beforeCutoff": "Transacties die de bank vóór deze datum heeft geboekt, worden nooit geïmporteerd.",
+      "duplicateWarning": "Een datum vóór de nieuwste transactie in de rekening kan dubbele transacties opleveren van transacties die je al hebt ingevoerd.",
+      "save": "Rekening koppelen",
+      "saveEdit": "Opslaan",
+      "saving": "Bezig met opslaan...",
+      "cancel": "Annuleren",
+      "saved": "Rekening gekoppeld",
+      "editSaved": "Begindatum opgeslagen",
+      "saveFailed": "Kan de koppeling niet opslaan",
+      "loadingDefaults": "Rekening wordt gelezen...",
+      "defaultsFailed": "De nieuwste transactie in deze rekening kon niet worden gelezen, dus Monize kan niet zeggen of deze begindatum duplicaten kan veroorzaken.",
+      "newestTransaction": "Nieuwste transactie in deze rekening: {date}",
+      "emptyAccount": "{days, plural, one {De rekening is leeg: de import beslaat de laatste dag} other {De rekening is leeg: de import beslaat de laatste # dagen}}"
+    },
+    "sync": {
+      "summary": "{imported, plural, =0 {Geen transacties geïmporteerd} one {# transactie geïmporteerd} other {# transacties geïmporteerd}}, {skipped, plural, =0 {geen overgeslagen} one {# overgeslagen omdat al geïmporteerd} other {# overgeslagen omdat al geïmporteerd}}, {refused, plural, =0 {geen geweigerd} one {# geweigerd} other {# geweigerd}}",
+      "summaryWithReasons": "{summary}. Geweigerd: {reasons}",
+      "outcomeUnknown": "Het resultaat van de synchronisatie is nog niet bekend. Laad de pagina opnieuw om te zien wat er is geïmporteerd.",
+      "failedAccountItem": "{account} ({message})",
+      "allFailed": "Synchroniseren mislukt voor: {accounts}",
+      "partialFailure": "{summary}. Synchroniseren mislukt voor: {accounts}",
+      "reason": {
+        "missing_date": "{count, plural, one {# zonder datum} other {# zonder datum}}",
+        "future_date": "{count, plural, one {# met een datum in de toekomst} other {# met een datum in de toekomst}}",
+        "invalid_amount": "{count, plural, one {# met een ongeldig bedrag} other {# met een ongeldig bedrag}}",
+        "unknown_direction": "{count, plural, one {# met een onbekende richting} other {# met een onbekende richting}}",
+        "currency_mismatch": "{count, plural, one {# in een andere valuta} other {# in een andere valuta}}",
+        "other": "{count, plural, one {# om een andere reden} other {# om een andere reden}}",
+        "missing_identity": "Banktransactie-ID ontbreekt: {count, number}"
+      },
+      "needsPreview": "Open het voorbeeld voor {accounts} en bevestig de eerste import",
+      "withNeedsPreview": "{message}. {needsPreview}"
+    },
+    "callback": {
+      "title": "Je bank koppelen",
+      "subtitle": "Even geduld terwijl Monize de koppeling voltooit",
+      "success": "Bank gekoppeld",
+      "successNamed": "Gekoppeld aan {bank}",
+      "bankError": "Je bank heeft geen toegang verleend: {message}",
+      "missingState": "De bank heeft geen geldig antwoord teruggegeven. Start de koppeling opnieuw.",
+      "notActive": "De koppeling is niet voltooid",
+      "failed": "Kan de koppeling niet voltooien",
+      "autoLinked": "{count, plural, one {# bankrekening is gekoppeld aan de rekening met hetzelfde nummer. Controleer haar vóór de eerste import.} other {# bankrekeningen zijn gekoppeld aan de rekeningen met dezelfde nummers. Controleer ze vóór de eerste import.}}",
+      "autoSuggested": "{count, plural, one {# bankrekening komt overeen met meer dan één van je rekeningen: kies de rekening in de lijst.} other {# bankrekeningen komen overeen met meer dan één van je rekeningen: kies de rekeningen in de lijst.}}"
+    },
+    "accountType": {
+      "CACC": "Betaalrekening",
+      "CARD": "Kaart",
+      "SVGS": "Spaarrekening",
+      "LOAN": "Lening",
+      "other": "Rekeningtype {code}"
+    },
+    "mismatch": {
+      "bankCard": "De bank meldt deze rekening als een kaart, maar het type van {account} is {type}, niet {creditCard}. De transacties van een kaart zouden in het verkeerde soort rekening worden geïmporteerd.",
+      "monizeCard": "Het type van {account} is {creditCard}, maar de bank meldt deze rekening als: {bankType}. Controleer of dit de juiste bankrekening is.",
+      "confirm": "Ik begrijp het, koppel de rekeningen toch"
+    },
+    "preview": {
+      "title": "Voorbeeld van de import in {account}",
+      "description": "Er wordt niets geïmporteerd totdat je bevestigt. Dit meldt de bank en dit zou Monize met elke transactie doen.",
+      "loading": "Bank wordt gelezen...",
+      "loadFailed": "Van deze rekening kon geen voorbeeld worden gemaakt",
+      "retry": "Opnieuw proberen",
+      "close": "Sluiten",
+      "import": "{count, plural, =0 {Bevestigen: niets nieuws om te importeren} one {# transactie importeren} other {# transacties importeren}}",
+      "importing": "Bezig met importeren...",
+      "importFailed": "De transacties konden niet worden geïmporteerd",
+      "planChanged": "De gegevens van de bank zijn gewijzigd sinds dit voorbeeld, dus er is niets geïmporteerd. Het voorbeeld is opnieuw gelezen: controleer het en importeer nogmaals.",
+      "monizeBalance": "Monize-saldo nu",
+      "balanceAfter": "Monize-saldo na de import",
+      "bankBalance": "Banksaldo",
+      "bankBalanceAsOf": "{amount} per {date}",
+      "bankBalanceNotReported": "Niet gemeld door de bank",
+      "difference": "Verschil na de import",
+      "differenceHelp": "Het banksaldo min het Monize-saldo na de import. Nul betekent dat beide overeenkomen. Het banksaldo kan transacties bevatten die de bank nog niet heeft geboekt, dus een klein verschil is normaal.",
+      "differenceHidden": "Het banksaldo is in {bankCurrency} en de Monize-rekening in {monizeCurrency}, dus er wordt geen verschil getoond.",
+      "filterLabel": "Transacties tonen",
+      "filter": {
+        "all": "Alle",
+        "new": "Nieuw",
+        "duplicate": "Al geïmporteerd",
+        "refused": "Geweigerd",
+        "pending": "In behandeling",
+        "before_cutoff": "Vóór de begindatum",
+        "withCount": "{label} ({count})",
+        "excluded": "Uitzonderingen"
+      },
+      "outcome": {
+        "new": "Nieuw",
+        "duplicate": "Al geïmporteerd",
+        "refused": "Geweigerd",
+        "pending": "In behandeling",
+        "before_cutoff": "Vóór de begindatum",
+        "excluded": "Uitzondering"
+      },
+      "refusal": {
+        "missing_date": "Geen datum",
+        "future_date": "Met een datum in de toekomst",
+        "invalid_amount": "Ongeldig bedrag",
+        "unknown_direction": "Onbekende richting",
+        "currency_mismatch": "Andere valuta",
+        "other": "Geweigerd",
+        "missing_identity": "Banktransactie-ID ontbreekt"
+      },
+      "columns": {
+        "date": "Datum",
+        "payee": "Begunstigde",
+        "category": "Categorie",
+        "status": "Status",
+        "amount": "Bedrag",
+        "select": "Selectie en details"
+      },
+      "noPayee": "Geen begunstigde",
+      "dateUnknown": "Geen datum",
+      "amountUnknown": "Onbekend",
+      "empty": {
+        "all": "De bank heeft voor deze periode geen transacties teruggegeven.",
+        "filtered": "Geen transacties in deze lijst."
+      },
+      "selectAllNew": "Alle nieuwe transacties in deze lijst selecteren",
+      "selectAllExceptions": "Alle uitzonderingen in deze lijst selecteren",
+      "selectRow": "{payee} importeren",
+      "selectException": "{payee} uit de uitzonderingen verwijderen",
+      "summary": "{import} importeren, {skip} overslaan, {except} toevoegen aan uitzonderingen",
+      "importNothing": "Bevestigen zonder te importeren",
+      "exceptions": {
+        "intro": "Transacties in de uitzonderingen worden nooit geïmporteerd. Verwijder er een uit de uitzonderingen om hem weer als nieuw te zien.",
+        "remove": "{count, plural, =0 {Uit uitzonderingen verwijderen} other {# uit uitzonderingen verwijderen}}",
+        "removing": "Verwijderen...",
+        "removed": "{count, plural, one {# transactie is uit de uitzonderingen verwijderd} other {# transacties zijn uit de uitzonderingen verwijderd}}",
+        "removedNone": "Er is niets uit de uitzonderingen verwijderd",
+        "removeFailed": "De uitzonderingen konden niet worden verwijderd"
+      },
+      "details": {
+        "operation": {
+          "heading": "Bewerkingstype",
+          "none": "Geen tag voor bewerkingstype bij deze transactie.",
+          "tag": "Tag uit het bewerkingstype van de bank: {tag}"
+        }
+      },
+      "historyBatch": "Geschiedenisbatch: {from} tot {to}.",
+      "historyBatchRemaining": "Geschiedenisbatch: {from} tot {to}. Er is meer geschiedenis. Open na deze import het voorbeeld van de volgende batch."
+    },
+    "simplefin": {
+      "provider": "Gegevensprovider",
+      "description": "Verbind banken in <bridge>SimpleFIN Bridge</bridge> en plak hier een eenmalig insteltoken. De toegang is alleen-lezen.",
+      "openBridge": "SimpleFIN Bridge openen",
+      "setupToken": "Insteltoken",
+      "connect": "SimpleFIN verbinden",
+      "connected": "SimpleFIN is verbonden.",
+      "savedDiscoveryFailed": "Verbonden, maar het vinden van rekeningen vereist aandacht. Probeer opnieuw zonder nieuw token.",
+      "refresh": "Rekeningen vernieuwen",
+      "failed": "De aanvraag kon niet worden voltooid. Controleer de verbindingsstatus voordat u een nieuw token gebruikt.",
+      "loadFailed": "De SimpleFIN-status kon niet worden geladen.",
+      "encryptionRequired": "Vraag een beheerder om versleuteling in te stellen voordat u SimpleFIN verbindt.",
+      "remove": "SimpleFIN uit Monize verwijderen",
+      "removeTitle": "Toegang voor alle instellingen verwijderen?",
+      "removeBody": "Dit schakelt alle SimpleFIN-synchronisatie in Monize uit en bewaart uw geschiedenis. Trek het apptoken in Bridge in om externe toegang te beëindigen.",
+      "replaceTitle": "SimpleFIN-toegang vervangen?",
+      "replaceBody": "Dit vervangt toegang voor alle instellingen. Bestaande rekeningkoppelingen blijven; gewijzigde identiteiten moeten worden gecontroleerd.",
+      "quota": "{remaining} aanvragen over",
+      "nextEligible": "Volgende beschikbaarheid: {date}",
+      "stopTitle": "Synchronisatie van {bank} stoppen?",
+      "stopBody": "Bestaande koppelingen en transacties blijven behouden.",
+      "stop": "Synchronisatie stoppen",
+      "stopped": "Synchronisatie gestopt",
+      "title": "SimpleFIN",
+      "enableBanking": "Enable Banking",
+      "errors": {
+        "unauthorized": "Verbind opnieuw met een nieuw insteltoken.",
+        "payment_required": "Controleer uw SimpleFIN Bridge-abonnement.",
+        "rate_limited": "Aanvraaglimiet bereikt. Wacht voordat u vernieuwt.",
+        "no_accounts": "Er zijn geen rekeningen gedeeld. Controleer de toegang in Bridge.",
+        "partial_data": "Sommige rekeninggegevens zijn onvolledig. Controleer Bridge en vernieuw daarna.",
+        "identity_review": "Rekeningidentiteiten zijn gewijzigd. Controleer de koppelingen voordat u synchronisatie inschakelt.",
+        "invalid_response": "Bridge gaf niet-ondersteunde gegevens terug. Vernieuw later.",
+        "unavailable": "SimpleFIN antwoordde niet. Probeer het later opnieuw."
+      },
+      "resume": "Synchronisatie hervatten",
+      "lastKnownConnected": "SimpleFIN was verbonden bij de laatste geslaagde controle."
+    }
   }
 }

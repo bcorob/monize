@@ -1,4 +1,5 @@
 import {
+  applyDecorators,
   Controller,
   Get,
   Post,
@@ -14,7 +15,10 @@ import {
   ParseUUIDPipe,
   ParseBoolPipe,
   BadRequestException,
+  HttpStatus,
+  Res,
 } from "@nestjs/common";
+import type { Response } from "express";
 import {
   ApiTags,
   ApiOperation,
@@ -24,10 +28,12 @@ import {
   ApiQuery,
 } from "@nestjs/swagger";
 import { AuthGuard } from "@nestjs/passport";
+import { Throttle } from "@nestjs/throttler";
 import { TransactionsService } from "./transactions.service";
 import {
   AllowDelegate,
   DelegatedAccountParam,
+  DelegatedBodyAccounts,
   DelegatedTransactionParam,
   DelegatedTransferBody,
   DelegatedTransferParam,
@@ -49,6 +55,10 @@ import { TransferActor } from "./transaction-transfer.service";
 import { GetRecentTransactionsDto } from "./dto/get-recent-transactions.dto";
 import { BulkReconcileDto } from "./dto/bulk-reconcile.dto";
 import { BulkUpdateDto, BulkDeleteDto } from "./dto/bulk-update.dto";
+import { BulkCreateTransactionsDto } from "./dto/bulk-create.dto";
+import { TransactionBulkCreateService } from "./transaction-bulk-create.service";
+import { TransactionConversionService } from "./transaction-conversion.service";
+import { ConvertToTransferDto } from "./dto/convert-to-transfer.dto";
 import { MarkClearedDto } from "./dto/mark-cleared.dto";
 import { UpdateTransactionStatusDto } from "./dto/update-transaction-status.dto";
 import {
@@ -63,15 +73,52 @@ import {
 } from "../common/query-param-utils";
 import { tr } from "../i18n/translate";
 import {
+  MAX_SEARCH_LENGTH,
+  MAX_SEARCH_TERMS,
+  SEARCH_ENUM_VALUES,
+} from "./transaction-search-query.util";
+import {
   TagKeyFilter,
   TagKeyFilterOp,
   TAG_KEY_FILTER_OPS,
   tagKeyOpNeedsValue,
 } from "./tag-key-filter.util";
+import {
+  parseTransactionSort,
+  TransactionSortSelection,
+} from "./register-sort-param";
+import { TRANSACTION_SORT_FIELDS } from "./register-order";
+import {
+  collectRegisterExportRows,
+  TransactionExportRow,
+} from "./register-export";
+import { AllowPat, NoPat } from "../auth/pat-access/pat-access.decorator";
 
 const ALL_TRANSACTION_STATUSES = new Set<string>(
   Object.values(TransactionStatus),
 );
+
+/** The `search` parameter's Swagger text, one for every endpoint that takes it. */
+const SEARCH_PARAM_DESCRIPTION =
+  `Search text, at most ${MAX_SEARCH_LENGTH} characters and ` +
+  `${MAX_SEARCH_TERMS} terms. A bare word matches description, payee, ` +
+  "category, amount, reference number, split memo and tag; words are ANDed, " +
+  '"quotes" make a phrase and -word excludes. field:text is contains, ' +
+  "field:=text exact, * a wildcard, over payee, memo, cat, tag, account, " +
+  `ref, amount, date, status (${SEARCH_ENUM_VALUES.status.join("|")}), ` +
+  `is (${SEARCH_ENUM_VALUES.is.join("|")}) and has ` +
+  `(${SEARCH_ENUM_VALUES.has.join("|")}). #10 is reference exactly 10; ` +
+  "amounts and dates take >, >=, <, <= and a..b (date:2026-03 is that month).";
+
+/**
+ * The `search` query value: refused when not a string (a repeated key arrives
+ * as an array) and cut at the parser's length cap, on every endpoint that
+ * takes one, so the register and its totals read the same string.
+ */
+function searchParam(search: unknown): string | undefined {
+  const value = assertStringParam(search, "search");
+  return value ? value.slice(0, MAX_SEARCH_LENGTH) : undefined;
+}
 
 /**
  * Build a KEY:VALUE tag filter from the `tagKey` / `tagKeyOp` / `tagKeyValue`
@@ -88,8 +135,9 @@ function parseTagKeyFilter(
   if (key.length > 100) {
     throw new BadRequestException(
       tr(
-        "errors.transactions.tagKeyTooLong",
-        "tagKey must not exceed 100 characters",
+        "errors.params.maxLength",
+        'The value of "tagKey" must not exceed 100 characters',
+        { param: "tagKey", max: "100" },
       ),
     );
   }
@@ -109,8 +157,9 @@ function parseTagKeyFilter(
     if (value === "") {
       throw new BadRequestException(
         tr(
-          "errors.transactions.tagKeyValueRequired",
-          "tagKeyValue is required for contains / notContains",
+          "errors.params.isRequired",
+          'A value for "tagKeyValue" is required',
+          { param: "tagKeyValue" },
         ),
       );
     }
@@ -142,6 +191,168 @@ function parseTransactionStatuses(
   return statuses.length > 0 ? (statuses as TransactionStatus[]) : undefined;
 }
 
+/** The register's filter query parameters, as they arrive. */
+interface RawRegisterFilters {
+  accountId?: string;
+  accountIds?: string;
+  startDate?: string;
+  endDate?: string;
+  categoryId?: string;
+  categoryIds?: string;
+  payeeId?: string;
+  payeeIds?: string;
+  includeInvestmentBrokerage?: boolean;
+  search?: string;
+  amountFrom?: string;
+  amountTo?: string;
+  tagIds?: string;
+  statuses?: string;
+  tagKey?: string;
+  tagKeyOp?: string;
+  tagKeyValue?: string;
+  originalCurrencyCodes?: string;
+  hasAttachments?: boolean;
+  sortBy?: string;
+  sortDirection?: string;
+  externalId?: string;
+}
+
+/** The register's filters parsed, with the scope the query runs in. */
+interface RegisterListing {
+  userId: string;
+  accountIds?: string[];
+  startDate?: string;
+  endDate?: string;
+  categoryIds?: string[];
+  payeeIds?: string[];
+  includeInvestmentBrokerage: boolean;
+  search?: string;
+  amountFrom?: number;
+  amountTo?: number;
+  tagIds?: string[];
+  statuses?: TransactionStatus[];
+  sortBy: TransactionSortSelection["sortBy"];
+  sortDirection: TransactionSortSelection["sortDirection"];
+  tagKeyFilter?: TagKeyFilter;
+  originalCurrencyCodes?: string[];
+  hasAttachments?: boolean;
+  jointAccountIds: string[];
+  externalId?: string;
+}
+
+/**
+ * The Swagger entries for the register's filters, shared by the paged list
+ * and its export so the two routes document the same query.
+ */
+function RegisterFilterApiQueries() {
+  return applyDecorators(
+    ApiQuery({
+      name: "accountId",
+      required: false,
+      description:
+        "Filter by account ID (single value, deprecated - use accountIds)",
+    }),
+    ApiQuery({
+      name: "accountIds",
+      required: false,
+      description: "Filter by account IDs (comma-separated)",
+    }),
+    ApiQuery({
+      name: "startDate",
+      required: false,
+      description: "Filter by start date (YYYY-MM-DD)",
+    }),
+    ApiQuery({
+      name: "endDate",
+      required: false,
+      description: "Filter by end date (YYYY-MM-DD)",
+    }),
+    ApiQuery({
+      name: "categoryId",
+      required: false,
+      description:
+        "Filter by category ID (single value, deprecated - use categoryIds)",
+    }),
+    ApiQuery({
+      name: "categoryIds",
+      required: false,
+      description:
+        "Filter by category IDs (comma-separated, also matches split transactions)",
+    }),
+    ApiQuery({
+      name: "payeeId",
+      required: false,
+      description:
+        "Filter by payee ID (single value, deprecated - use payeeIds)",
+    }),
+    ApiQuery({
+      name: "payeeIds",
+      required: false,
+      description: "Filter by payee IDs (comma-separated)",
+    }),
+    ApiQuery({
+      name: "includeInvestmentBrokerage",
+      required: false,
+      description:
+        "Include transactions from investment brokerage accounts (default: false)",
+    }),
+    ApiQuery({
+      name: "search",
+      required: false,
+      description: SEARCH_PARAM_DESCRIPTION,
+    }),
+    ApiQuery({
+      name: "amountFrom",
+      required: false,
+      description: "Filter by minimum amount (inclusive)",
+    }),
+    ApiQuery({
+      name: "amountTo",
+      required: false,
+      description: "Filter by maximum amount (inclusive)",
+    }),
+    ApiQuery({
+      name: "tagIds",
+      required: false,
+      description: "Filter by tag IDs (comma-separated)",
+    }),
+    ApiQuery({
+      name: "statuses",
+      required: false,
+      description:
+        "Filter by reconciliation statuses (comma-separated: UNRECONCILED, CLEARED, RECONCILED, VOID)",
+    }),
+    ApiQuery({
+      name: "originalCurrencyCodes",
+      required: false,
+      description:
+        "Filter by the currency a transaction was entered in (comma-separated ISO codes, foreign-currency entries only)",
+    }),
+    ApiQuery({
+      name: "hasAttachments",
+      required: false,
+      description:
+        "Filter by attachment presence (true = only with attachments, false = only without)",
+    }),
+    ApiQuery({
+      name: "sortBy",
+      required: false,
+      description: `Column to sort the register by (default: date). One of: ${TRANSACTION_SORT_FIELDS.join(", ")}`,
+    }),
+    ApiQuery({
+      name: "sortDirection",
+      required: false,
+      description: "Sort direction: asc or desc (default: desc)",
+    }),
+    ApiQuery({
+      name: "externalId",
+      required: false,
+      description:
+        "Only the transaction created with this externalId (exact match, non-empty). Combine with accountIds to name the account, since a key is unique per account; a row in an investment brokerage account also needs includeInvestmentBrokerage=true.",
+    }),
+  );
+}
+
 /**
  * The acting identity for transfer endpoints: the effective user is the
  * ledger being operated on (the owner while a delegate is acting), the real
@@ -158,6 +369,7 @@ function transferActorFrom(req: {
 }
 
 @ApiTags("Transactions")
+@AllowPat()
 @Controller("transactions")
 @UseGuards(AuthGuard("jwt"))
 @UseInterceptors(DelegateTransferMaskInterceptor)
@@ -169,6 +381,8 @@ export class TransactionsController {
     private readonly jointAccounts: JointAccountsService,
     private readonly crossOwnerAccess: CrossOwnerAccessService,
     private readonly jointRegister: JointRegisterService,
+    private readonly bulkCreateService: TransactionBulkCreateService,
+    private readonly conversionService: TransactionConversionService,
   ) {}
 
   /**
@@ -225,77 +439,52 @@ export class TransactionsController {
   @Post()
   @ApiOperation({ summary: "Create a new transaction" })
   @ApiResponse({ status: 201, description: "Transaction created successfully" })
+  @ApiResponse({
+    status: 200,
+    description:
+      "The externalId was already used in the account: the existing transaction, unchanged",
+  })
   @ApiResponse({ status: 400, description: "Bad request" })
   @ApiResponse({ status: 401, description: "Unauthorized" })
   @AllowDelegate()
   @DelegatedAccountParam("accountId")
+  @DelegatedBodyAccounts("splits[].transferAccountId")
   @DelegateRequires("create")
   async create(
     @Request() req,
     @Body() createTransactionDto: CreateTransactionDto,
+    @Res({ passthrough: true }) res: Response,
   ) {
     // Own context targeting an account the caller does not own: the joint
     // register path (authorizes the joint grant, then writes as the owner).
-    if (
+    const outcome =
       !req.user.isActing &&
       !(await this.crossOwnerAccess.isAccountOwnedBy(
         createTransactionDto.accountId,
         req.user.id,
       ))
-    ) {
-      return this.jointRegister.create(
-        req.user.realUserId ?? req.user.id,
-        createTransactionDto,
-      );
-    }
-    return this.transactionsService.create(req.user.id, createTransactionDto);
+        ? await this.jointRegister.createWithOutcome(
+            req.user.realUserId ?? req.user.id,
+            createTransactionDto,
+          )
+        : // An acting delegate writes as the owner but is not the owner: the
+          // owner's structural rules would land in accounts the delegate guard
+          // never checked (no moving money via an account the delegate cannot
+          // access).
+          await this.transactionsService.createWithOutcome(
+            req.user.id,
+            createTransactionDto,
+            { actorIsNotOwner: req.user.isActing === true },
+          );
+    // A repeated externalId created nothing: say so with the status, so a
+    // single-row client can tell a retry's answer from a new row.
+    if (!outcome.created) res.status(HttpStatus.OK);
+    return outcome.transaction;
   }
 
   @Get()
   @ApiOperation({ summary: "Get all transactions for the authenticated user" })
-  @ApiQuery({
-    name: "accountId",
-    required: false,
-    description:
-      "Filter by account ID (single value, deprecated - use accountIds)",
-  })
-  @ApiQuery({
-    name: "accountIds",
-    required: false,
-    description: "Filter by account IDs (comma-separated)",
-  })
-  @ApiQuery({
-    name: "startDate",
-    required: false,
-    description: "Filter by start date (YYYY-MM-DD)",
-  })
-  @ApiQuery({
-    name: "endDate",
-    required: false,
-    description: "Filter by end date (YYYY-MM-DD)",
-  })
-  @ApiQuery({
-    name: "categoryId",
-    required: false,
-    description:
-      "Filter by category ID (single value, deprecated - use categoryIds)",
-  })
-  @ApiQuery({
-    name: "categoryIds",
-    required: false,
-    description:
-      "Filter by category IDs (comma-separated, also matches split transactions)",
-  })
-  @ApiQuery({
-    name: "payeeId",
-    required: false,
-    description: "Filter by payee ID (single value, deprecated - use payeeIds)",
-  })
-  @ApiQuery({
-    name: "payeeIds",
-    required: false,
-    description: "Filter by payee IDs (comma-separated)",
-  })
+  @RegisterFilterApiQueries()
   @ApiQuery({
     name: "page",
     required: false,
@@ -307,55 +496,10 @@ export class TransactionsController {
     description: "Number of transactions per page (default: 50, max: 200)",
   })
   @ApiQuery({
-    name: "includeInvestmentBrokerage",
-    required: false,
-    description:
-      "Include transactions from investment brokerage accounts (default: false)",
-  })
-  @ApiQuery({
-    name: "search",
-    required: false,
-    description:
-      "Search text matched against description, payee, category, subcategory, amount, reference number, split memo, and tag",
-  })
-  @ApiQuery({
-    name: "amountFrom",
-    required: false,
-    description: "Filter by minimum amount (inclusive)",
-  })
-  @ApiQuery({
-    name: "amountTo",
-    required: false,
-    description: "Filter by maximum amount (inclusive)",
-  })
-  @ApiQuery({
-    name: "tagIds",
-    required: false,
-    description: "Filter by tag IDs (comma-separated)",
-  })
-  @ApiQuery({
-    name: "statuses",
-    required: false,
-    description:
-      "Filter by reconciliation statuses (comma-separated: UNRECONCILED, CLEARED, RECONCILED, VOID)",
-  })
-  @ApiQuery({
     name: "targetTransactionId",
     required: false,
     description:
       "Navigate to the page containing this transaction ID (overrides page parameter)",
-  })
-  @ApiQuery({
-    name: "originalCurrencyCodes",
-    required: false,
-    description:
-      "Filter by the currency a transaction was entered in (comma-separated ISO codes, foreign-currency entries only)",
-  })
-  @ApiQuery({
-    name: "hasAttachments",
-    required: false,
-    description:
-      "Filter by attachment presence (true = only with attachments, false = only without)",
   })
   @ApiResponse({
     status: 200,
@@ -389,6 +533,9 @@ export class TransactionsController {
     @Query("originalCurrencyCodes") originalCurrencyCodes?: string,
     @Query("hasAttachments", new ParseBoolPipe({ optional: true }))
     hasAttachments?: boolean,
+    @Query("sortBy") sortBy?: string,
+    @Query("sortDirection") sortDirection?: string,
+    @Query("externalId") externalId?: string,
   ) {
     // Validate pagination parameters
     if (page !== undefined) {
@@ -420,54 +567,214 @@ export class TransactionsController {
       }
     }
 
-    validateDateParam(startDate, "startDate");
-    validateDateParam(endDate, "endDate");
-
     if (targetTransactionId && !UUID_REGEX.test(targetTransactionId)) {
       throw new BadRequestException(
         tr(
-          "errors.transactions.targetTransactionIdInvalidUuid",
-          "targetTransactionId must be a valid UUID",
+          "errors.params.mustBeUuid",
+          'The value of "targetTransactionId" must be a valid UUID',
+          { param: "targetTransactionId" },
         ),
       );
     }
 
-    // Truncate search to prevent excessive ILIKE query length
-    const searchStr = assertStringParam(search, "search");
-    const sanitizedSearch = searchStr ? searchStr.slice(0, 200) : undefined;
+    const listing = await this.resolveRegisterListing(req, {
+      accountId,
+      accountIds,
+      startDate,
+      endDate,
+      categoryId,
+      categoryIds,
+      payeeId,
+      payeeIds,
+      includeInvestmentBrokerage,
+      search,
+      amountFrom,
+      amountTo,
+      tagIds: tagIdsParam,
+      statuses: statusesParam,
+      tagKey,
+      tagKeyOp,
+      tagKeyValue,
+      originalCurrencyCodes,
+      hasAttachments,
+      sortBy,
+      sortDirection,
+      externalId,
+    });
+    if (listing === null) {
+      const safeLimit = limit ? parseInt(limit, 10) : 50;
+      const safePage = page ? parseInt(page, 10) : 1;
+      return {
+        data: [],
+        pagination: {
+          page: safePage,
+          limit: safeLimit,
+          total: 0,
+          totalPages: 0,
+          hasMore: false,
+        },
+      };
+    }
+
+    return this.findRegisterPage(
+      listing,
+      page ? parseInt(page, 10) : undefined,
+      limit ? parseInt(limit, 10) : undefined,
+      targetTransactionId,
+    );
+  }
+
+  @Get("export")
+  @Throttle({ default: { ttl: 60000, limit: 10 } })
+  @ApiOperation({
+    summary:
+      "Every transaction matching the register's filters, in register order, for a CSV export",
+  })
+  @RegisterFilterApiQueries()
+  @ApiResponse({
+    status: 200,
+    description:
+      "All matching transactions in one response, each with only the fields the export writes",
+  })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
+  @AllowDelegate()
+  async exportRegister(
+    @Request() req,
+    @Query("accountId") accountId?: string,
+    @Query("accountIds") accountIds?: string,
+    @Query("startDate") startDate?: string,
+    @Query("endDate") endDate?: string,
+    @Query("categoryId") categoryId?: string,
+    @Query("categoryIds") categoryIds?: string,
+    @Query("payeeId") payeeId?: string,
+    @Query("payeeIds") payeeIds?: string,
+    @Query("includeInvestmentBrokerage", new ParseBoolPipe({ optional: true }))
+    includeInvestmentBrokerage?: boolean,
+    @Query("search") search?: string,
+    @Query("amountFrom") amountFrom?: string,
+    @Query("amountTo") amountTo?: string,
+    @Query("tagIds") tagIdsParam?: string,
+    @Query("statuses") statusesParam?: string,
+    @Query("tagKey") tagKey?: string,
+    @Query("tagKeyOp") tagKeyOp?: string,
+    @Query("tagKeyValue") tagKeyValue?: string,
+    @Query("originalCurrencyCodes") originalCurrencyCodes?: string,
+    @Query("hasAttachments", new ParseBoolPipe({ optional: true }))
+    hasAttachments?: boolean,
+    @Query("sortBy") sortBy?: string,
+    @Query("sortDirection") sortDirection?: string,
+    @Query("externalId") externalId?: string,
+  ): Promise<{ data: TransactionExportRow[] }> {
+    const listing = await this.resolveRegisterListing(req, {
+      accountId,
+      accountIds,
+      startDate,
+      endDate,
+      categoryId,
+      categoryIds,
+      payeeId,
+      payeeIds,
+      includeInvestmentBrokerage,
+      search,
+      amountFrom,
+      amountTo,
+      tagIds: tagIdsParam,
+      statuses: statusesParam,
+      tagKey,
+      tagKeyOp,
+      tagKeyValue,
+      originalCurrencyCodes,
+      hasAttachments,
+      sortBy,
+      sortDirection,
+      externalId,
+    });
+    if (listing === null) return { data: [] };
+
+    const data = await collectRegisterExportRows({
+      fetchPage: (pageNum, pageSize) =>
+        this.findRegisterPage(listing, pageNum, pageSize),
+      readableAccountIds: () =>
+        this.crossOwnerAccess.readableAccountIdSetFor(
+          req.user.realUserId ?? req.user.id,
+        ),
+      isActing: req.user.isActing === true,
+    });
+    return { data };
+  }
+
+  /**
+   * The register's filters, validated and parsed, and the scope the query
+   * runs in -- one definition for the paged list and its export, so a file
+   * holds exactly the rows the register shows. Null means an acting delegate
+   * can read none of the requested accounts: the answer is no rows, never an
+   * unfiltered query, which would leak the whole owner ledger.
+   */
+  private async resolveRegisterListing(
+    req: {
+      user: {
+        id: string;
+        realUserId?: string;
+        isActing?: boolean;
+        // Present whenever isActing is.
+        delegationId: string;
+      };
+    },
+    raw: RawRegisterFilters,
+  ): Promise<RegisterListing | null> {
+    validateDateParam(raw.startDate, "startDate");
+    validateDateParam(raw.endDate, "endDate");
+
+    const sanitizedSearch = searchParam(raw.search);
+    // An exact match, so never trimmed or truncated: a key longer than any
+    // stored one simply matches nothing. An empty one is refused, as a create
+    // refuses it, rather than read as a filter no row can satisfy.
+    const externalIdFilter = assertStringParam(raw.externalId, "externalId");
+    if (externalIdFilter === "") {
+      throw new BadRequestException(
+        tr("errors.params.isRequired", 'A value for "externalId" is required', {
+          param: "externalId",
+        }),
+      );
+    }
 
     const parsedAmountFrom =
-      amountFrom !== undefined ? parseFloat(amountFrom) : undefined;
+      raw.amountFrom !== undefined ? parseFloat(raw.amountFrom) : undefined;
     if (parsedAmountFrom !== undefined && isNaN(parsedAmountFrom)) {
       throw new BadRequestException(
         tr(
-          "errors.transactions.amountFromMustBeNumber",
-          "amountFrom must be a number",
+          "errors.params.mustBeNumber",
+          'The value of "amountFrom" must be a number',
+          { param: "amountFrom" },
         ),
       );
     }
 
     const parsedAmountTo =
-      amountTo !== undefined ? parseFloat(amountTo) : undefined;
+      raw.amountTo !== undefined ? parseFloat(raw.amountTo) : undefined;
     if (parsedAmountTo !== undefined && isNaN(parsedAmountTo)) {
       throw new BadRequestException(
         tr(
-          "errors.transactions.amountToMustBeNumber",
-          "amountTo must be a number",
+          "errors.params.mustBeNumber",
+          'The value of "amountTo" must be a number',
+          { param: "amountTo" },
         ),
       );
     }
 
-    const tagKeyFilter = parseTagKeyFilter(tagKey, tagKeyOp, tagKeyValue);
+    const tagKeyFilter = parseTagKeyFilter(
+      raw.tagKey,
+      raw.tagKeyOp,
+      raw.tagKeyValue,
+    );
+    const sort = parseTransactionSort(raw.sortBy, raw.sortDirection);
 
-    let effectiveAccountIds = parseIds(accountIds, accountId);
+    let effectiveAccountIds = parseIds(raw.accountIds, raw.accountId);
     let registerUserId = req.user.id;
     let jointAccountIds: string[] = [];
     if (req.user.isActing) {
       // A delegate only ever sees transactions for the accounts they were
-      // granted READ on. Intersect any requested ids with the readable set;
-      // an empty result means "no visible accounts" -> empty page (NOT an
-      // unfiltered query, which would leak the whole owner ledger).
+      // granted READ on. Intersect any requested ids with the readable set.
       const readable = await this.delegationService.readableAccountIds(
         req.user.delegationId,
       );
@@ -476,20 +783,7 @@ export class TransactionsController {
         effectiveAccountIds && effectiveAccountIds.length > 0
           ? effectiveAccountIds.filter((id) => readableSet.has(id))
           : readable;
-      if (effectiveAccountIds.length === 0) {
-        const safeLimit = limit ? parseInt(limit, 10) : 50;
-        const safePage = page ? parseInt(page, 10) : 1;
-        return {
-          data: [],
-          pagination: {
-            page: safePage,
-            limit: safeLimit,
-            total: 0,
-            totalPages: 0,
-            hasMore: false,
-          },
-        };
-      }
+      if (effectiveAccountIds.length === 0) return null;
     } else {
       // Own context: joint accounts read natively (joint-accounts spec).
       const scope = await this.resolveOwnContextJointScope(
@@ -500,28 +794,58 @@ export class TransactionsController {
       jointAccountIds = scope.jointAccountIds;
     }
 
-    return this.transactionsService.findAll(
-      registerUserId,
-      effectiveAccountIds,
-      startDate,
-      endDate,
-      parseCategoryIds(categoryIds ?? categoryId),
-      parseIds(payeeIds, payeeId),
-      page ? parseInt(page, 10) : undefined,
-      limit ? parseInt(limit, 10) : undefined,
-      includeInvestmentBrokerage === true,
-      sanitizedSearch,
-      targetTransactionId,
-      parsedAmountFrom,
-      parsedAmountTo,
-      parseUuids(tagIdsParam),
-      parseTransactionStatuses(statusesParam),
-      undefined,
-      undefined,
+    return {
+      userId: registerUserId,
+      accountIds: effectiveAccountIds,
+      startDate: raw.startDate,
+      endDate: raw.endDate,
+      categoryIds: parseCategoryIds(raw.categoryIds ?? raw.categoryId),
+      payeeIds: parseIds(raw.payeeIds, raw.payeeId),
+      includeInvestmentBrokerage: raw.includeInvestmentBrokerage === true,
+      search: sanitizedSearch,
+      amountFrom: parsedAmountFrom,
+      amountTo: parsedAmountTo,
+      tagIds: parseUuids(raw.tagIds),
+      statuses: parseTransactionStatuses(raw.statuses),
+      sortBy: sort.sortBy,
+      sortDirection: sort.sortDirection,
       tagKeyFilter,
-      parseCurrencyCodes(originalCurrencyCodes),
-      hasAttachments,
+      originalCurrencyCodes: parseCurrencyCodes(raw.originalCurrencyCodes),
+      hasAttachments: raw.hasAttachments,
       jointAccountIds,
+      externalId: externalIdFilter,
+    };
+  }
+
+  private findRegisterPage(
+    listing: RegisterListing,
+    page?: number,
+    limit?: number,
+    targetTransactionId?: string,
+  ) {
+    return this.transactionsService.findAll(
+      listing.userId,
+      listing.accountIds,
+      listing.startDate,
+      listing.endDate,
+      listing.categoryIds,
+      listing.payeeIds,
+      page,
+      limit,
+      listing.includeInvestmentBrokerage,
+      listing.search,
+      targetTransactionId,
+      listing.amountFrom,
+      listing.amountTo,
+      listing.tagIds,
+      listing.statuses,
+      listing.sortBy,
+      listing.sortDirection,
+      listing.tagKeyFilter,
+      listing.originalCurrencyCodes,
+      listing.hasAttachments,
+      listing.jointAccountIds,
+      listing.externalId,
     );
   }
 
@@ -570,8 +894,7 @@ export class TransactionsController {
   @ApiQuery({
     name: "search",
     required: false,
-    description:
-      "Search text matched against description, payee, category, subcategory, amount, reference number, split memo, and tag",
+    description: SEARCH_PARAM_DESCRIPTION,
   })
   @ApiQuery({
     name: "amountFrom",
@@ -611,8 +934,9 @@ export class TransactionsController {
     if (parsedAmountFrom !== undefined && isNaN(parsedAmountFrom)) {
       throw new BadRequestException(
         tr(
-          "errors.transactions.amountFromMustBeNumber",
-          "amountFrom must be a number",
+          "errors.params.mustBeNumber",
+          'The value of "amountFrom" must be a number',
+          { param: "amountFrom" },
         ),
       );
     }
@@ -622,8 +946,9 @@ export class TransactionsController {
     if (parsedAmountTo !== undefined && isNaN(parsedAmountTo)) {
       throw new BadRequestException(
         tr(
-          "errors.transactions.amountToMustBeNumber",
-          "amountTo must be a number",
+          "errors.params.mustBeNumber",
+          'The value of "amountTo" must be a number',
+          { param: "amountTo" },
         ),
       );
     }
@@ -643,7 +968,7 @@ export class TransactionsController {
       endDate,
       parseCategoryIds(categoryIds ?? categoryId),
       parseIds(payeeIds, payeeId),
-      search,
+      searchParam(search),
       parsedAmountFrom,
       parsedAmountTo,
       parseUuids(tagIdsParam),
@@ -681,7 +1006,7 @@ export class TransactionsController {
     name: "categoryIds",
     required: false,
     description:
-      "Filter by category IDs (comma-separated, supports 'uncategorized' and 'transfer')",
+      "Filter by category IDs (comma-separated, supports the pseudo-ids 'uncategorized', 'transfer', 'income' and 'expense')",
   })
   @ApiQuery({
     name: "payeeIds",
@@ -696,7 +1021,7 @@ export class TransactionsController {
   @ApiQuery({
     name: "search",
     required: false,
-    description: "Search text (same fields as the summary endpoint)",
+    description: SEARCH_PARAM_DESCRIPTION,
   })
   @ApiQuery({
     name: "amountFrom",
@@ -743,8 +1068,9 @@ export class TransactionsController {
     if (groupBy !== "category" && groupBy !== "payee") {
       throw new BadRequestException(
         tr(
-          "errors.transactions.invalidGroupBy",
-          "groupBy must be 'category' or 'payee'",
+          "errors.params.mustBeOneOf",
+          'The value of "groupBy" must be one of: category, payee',
+          { param: "groupBy", options: "category, payee" },
         ),
       );
     }
@@ -757,8 +1083,9 @@ export class TransactionsController {
     if (parsedAmountFrom !== undefined && isNaN(parsedAmountFrom)) {
       throw new BadRequestException(
         tr(
-          "errors.transactions.amountFromMustBeNumber",
-          "amountFrom must be a number",
+          "errors.params.mustBeNumber",
+          'The value of "amountFrom" must be a number',
+          { param: "amountFrom" },
         ),
       );
     }
@@ -768,8 +1095,9 @@ export class TransactionsController {
     if (parsedAmountTo !== undefined && isNaN(parsedAmountTo)) {
       throw new BadRequestException(
         tr(
-          "errors.transactions.amountToMustBeNumber",
-          "amountTo must be a number",
+          "errors.params.mustBeNumber",
+          'The value of "amountTo" must be a number',
+          { param: "amountTo" },
         ),
       );
     }
@@ -800,7 +1128,7 @@ export class TransactionsController {
       categoryIds: parseCategoryIds(categoryIds),
       payeeIds: parseUuids(payeeIds),
       tagIds: parseUuids(tagIdsParam),
-      search,
+      search: searchParam(search),
       amountFrom: parsedAmountFrom,
       amountTo: parsedAmountTo,
       limit: parsedLimit,
@@ -826,7 +1154,11 @@ export class TransactionsController {
   @ApiQuery({ name: "categoryIds", required: false })
   @ApiQuery({ name: "payeeIds", required: false })
   @ApiQuery({ name: "tagIds", required: false })
-  @ApiQuery({ name: "search", required: false })
+  @ApiQuery({
+    name: "search",
+    required: false,
+    description: SEARCH_PARAM_DESCRIPTION,
+  })
   @ApiQuery({ name: "amountFrom", required: false })
   @ApiQuery({ name: "amountTo", required: false })
   @ApiQuery({ name: "limit", required: false })
@@ -865,8 +1197,9 @@ export class TransactionsController {
     if (parsedAmountFrom !== undefined && isNaN(parsedAmountFrom)) {
       throw new BadRequestException(
         tr(
-          "errors.transactions.amountFromMustBeNumber",
-          "amountFrom must be a number",
+          "errors.params.mustBeNumber",
+          'The value of "amountFrom" must be a number',
+          { param: "amountFrom" },
         ),
       );
     }
@@ -876,8 +1209,9 @@ export class TransactionsController {
     if (parsedAmountTo !== undefined && isNaN(parsedAmountTo)) {
       throw new BadRequestException(
         tr(
-          "errors.transactions.amountToMustBeNumber",
-          "amountTo must be a number",
+          "errors.params.mustBeNumber",
+          'The value of "amountTo" must be a number',
+          { param: "amountTo" },
         ),
       );
     }
@@ -902,7 +1236,7 @@ export class TransactionsController {
         categoryIds: parseCategoryIds(categoryIds),
         payeeIds: parseUuids(payeeIds),
         tagIds: parseUuids(tagIdsParam),
-        search,
+        search: searchParam(search),
         amountFrom: parsedAmountFrom,
         amountTo: parsedAmountTo,
         limit: parsedLimit,
@@ -964,16 +1298,18 @@ export class TransactionsController {
     if (!hasPayeeIds && !accountId) {
       throw new BadRequestException(
         tr(
-          "errors.transactions.recurringFilterRequired",
-          "accountId or payeeIds is required",
+          "errors.params.eitherRequired",
+          'A value for either "accountId" or "payeeIds" is required',
+          { param: "accountId", other: "payeeIds" },
         ),
       );
     }
     if (!startDate || !endDate) {
       throw new BadRequestException(
         tr(
-          "errors.transactions.recurringDatesRequired",
-          "startDate and endDate are required",
+          "errors.params.bothRequired",
+          'Values for both "startDate" and "endDate" are required',
+          { param: "startDate", other: "endDate" },
         ),
       );
     }
@@ -1019,7 +1355,7 @@ export class TransactionsController {
     name: "categoryIds",
     required: false,
     description:
-      "Filter by category IDs (comma-separated, supports 'uncategorized' and 'transfer')",
+      "Filter by category IDs (comma-separated, supports the pseudo-ids 'uncategorized', 'transfer', 'income' and 'expense')",
   })
   @ApiQuery({
     name: "payeeIds",
@@ -1029,8 +1365,7 @@ export class TransactionsController {
   @ApiQuery({
     name: "search",
     required: false,
-    description:
-      "Search text matched against description, payee, category, subcategory, amount, reference number, split memo, and tag",
+    description: SEARCH_PARAM_DESCRIPTION,
   })
   @ApiQuery({
     name: "amountFrom",
@@ -1068,8 +1403,9 @@ export class TransactionsController {
     if (parsedAmountFrom !== undefined && isNaN(parsedAmountFrom)) {
       throw new BadRequestException(
         tr(
-          "errors.transactions.amountFromMustBeNumber",
-          "amountFrom must be a number",
+          "errors.params.mustBeNumber",
+          'The value of "amountFrom" must be a number',
+          { param: "amountFrom" },
         ),
       );
     }
@@ -1079,8 +1415,9 @@ export class TransactionsController {
     if (parsedAmountTo !== undefined && isNaN(parsedAmountTo)) {
       throw new BadRequestException(
         tr(
-          "errors.transactions.amountToMustBeNumber",
-          "amountTo must be a number",
+          "errors.params.mustBeNumber",
+          'The value of "amountTo" must be a number',
+          { param: "amountTo" },
         ),
       );
     }
@@ -1116,7 +1453,7 @@ export class TransactionsController {
       endDate,
       parseCategoryIds(categoryIds),
       parseUuids(payeeIds),
-      search,
+      searchParam(search),
       parsedAmountFrom,
       parsedAmountTo,
       parseUuids(tagIdsParam),
@@ -1275,8 +1612,9 @@ export class TransactionsController {
     if (!statementDate || !DATE_REGEX.test(statementDate)) {
       throw new BadRequestException(
         tr(
-          "errors.transactions.statementDateFormat",
-          "statementDate must be YYYY-MM-DD",
+          "errors.params.mustBeCalendarDate",
+          'The value of "statementDate" must be a date in YYYY-MM-DD format',
+          { param: "statementDate" },
         ),
       );
     }
@@ -1284,8 +1622,9 @@ export class TransactionsController {
     if (isNaN(balance)) {
       throw new BadRequestException(
         tr(
-          "errors.transactions.statementBalanceMustBeNumber",
-          "statementBalance must be a number",
+          "errors.params.mustBeNumber",
+          'The value of "statementBalance" must be a number',
+          { param: "statementBalance" },
         ),
       );
     }
@@ -1327,6 +1666,11 @@ export class TransactionsController {
   @ApiOperation({ summary: "Create a transfer between two accounts" })
   @ApiResponse({ status: 201, description: "Transfer created successfully" })
   @ApiResponse({
+    status: 200,
+    description:
+      "The externalId was already used in the source account by this transfer: the existing transfer, unchanged",
+  })
+  @ApiResponse({
     status: 400,
     description: "Bad request - invalid transfer data",
   })
@@ -1335,15 +1679,38 @@ export class TransactionsController {
   @AllowDelegate()
   @DelegatedTransferBody()
   @DelegateRequires("create")
-  createTransfer(@Request() req, @Body() createTransferDto: CreateTransferDto) {
-    return this.transactionsService.createTransfer(
+  async createTransfer(
+    @Request() req,
+    @Body() createTransferDto: CreateTransferDto,
+    @Res({ passthrough: true }) res: Response,
+  ) {
+    const outcome = await this.transactionsService.createTransferWithOutcome(
       req.user.id,
       createTransferDto,
       transferActorFrom(req),
     );
+    if (!outcome.created) res.status(HttpStatus.OK);
+    return outcome.transfer;
+  }
+
+  @Post("bulk")
+  @ApiOperation({
+    summary: "Create many transactions and transfers in one request",
+    description:
+      "Each item carries a `transaction` (the body POST /transactions takes) or a `transfer` (the body POST /transactions/transfer takes). Each row is created on its own and in date order; a row that fails does not undo the others. The response has one result per item, in the request's order: `created` or `existing` with the new id, or `failed` with the status and message the single-row route would have returned. A row whose `externalId` is already used in its account comes back `existing`, so a batch whose response was lost can be sent again.",
+  })
+  @ApiResponse({
+    status: 201,
+    description: "Every row was attempted; see each result's status",
+  })
+  @ApiResponse({ status: 400, description: "Bad request" })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
+  bulkCreate(@Request() req, @Body() dto: BulkCreateTransactionsDto) {
+    return this.bulkCreateService.createMany(transferActorFrom(req), dto);
   }
 
   @Post("bulk-update")
+  @NoPat()
   @ApiOperation({ summary: "Bulk update transactions by IDs or filters" })
   @ApiResponse({
     status: 200,
@@ -1356,6 +1723,7 @@ export class TransactionsController {
   }
 
   @Post("bulk-delete")
+  @NoPat()
   @ApiOperation({ summary: "Bulk delete transactions by IDs or filters" })
   @ApiResponse({
     status: 200,
@@ -1392,7 +1760,11 @@ export class TransactionsController {
             req.user.realUserId ?? req.user.id,
           )),
         ];
-    return this.transactionsService.findOne(req.user.id, id, jointIds);
+    return this.transactionsService.findOneForDisplay(
+      req.user.id,
+      id,
+      jointIds,
+    );
   }
 
   @Patch(":id")
@@ -1411,6 +1783,7 @@ export class TransactionsController {
   @ApiResponse({ status: 404, description: "Transaction not found" })
   @AllowDelegate()
   @DelegatedTransactionParam("id")
+  @DelegatedBodyAccounts("accountId", "splits[].transferAccountId")
   @DelegateRequires("edit")
   async update(
     @Request() req,
@@ -1654,6 +2027,7 @@ export class TransactionsController {
   @ApiResponse({ status: 404, description: "Transaction not found" })
   @AllowDelegate()
   @DelegatedTransferParam("id")
+  @DelegatedTransferBody()
   @DelegateRequires("edit")
   updateTransfer(
     @Request() req,
@@ -1666,5 +2040,61 @@ export class TransactionsController {
       updateTransferDto,
       transferActorFrom(req),
     );
+  }
+
+  // ==================== Conversion Endpoints ====================
+  // Owner-only, like the bulk routes: a conversion rewrites a row and creates
+  // or removes its counterpart in one transaction, and neither the acting
+  // delegate nor the joint register has a path for that pair of writes.
+
+  @Post(":id/convert-to-transfer")
+  @ApiOperation({
+    summary:
+      "Convert a transaction (plain or split) into one leg of a transfer, keeping its id",
+  })
+  @ApiParam({ name: "id", description: "Transaction UUID" })
+  @ApiResponse({
+    status: 201,
+    description: "Both legs of the transfer the row now belongs to",
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      "The row is already a transfer, or the transfer names another owner's account, or invalid data",
+  })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
+  @ApiResponse({ status: 404, description: "Transaction or account not found" })
+  convertToTransfer(
+    @Request() req,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body() dto: ConvertToTransferDto,
+  ) {
+    return this.conversionService.convertToTransfer(req.user.id, id, dto);
+  }
+
+  @Post(":id/convert-to-transaction")
+  @ApiOperation({
+    summary:
+      "Convert a transfer leg into a transaction (plain or split), removing its counterpart",
+  })
+  @ApiParam({ name: "id", description: "Transaction UUID" })
+  @ApiResponse({ status: 201, description: "The converted transaction" })
+  @ApiResponse({
+    status: 400,
+    description:
+      "Not a transfer, a split-transfer leg, a cross-owner pair, or invalid data",
+  })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
+  @ApiResponse({ status: 404, description: "Transaction not found" })
+  @ApiResponse({
+    status: 409,
+    description: "The other leg changed or vanished while editing",
+  })
+  convertToTransaction(
+    @Request() req,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body() dto: UpdateTransactionDto,
+  ) {
+    return this.conversionService.convertToTransaction(req.user.id, id, dto);
   }
 }

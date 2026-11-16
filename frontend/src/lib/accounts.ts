@@ -13,10 +13,21 @@ import {
   UpdateMortgageRateData,
   UpdateMortgageRateResponse,
   DetectedLoanPayment,
+  DetectMortgageTypeData,
+  MortgageTypeDetection,
+  MortgageTypeHistoryDetection,
   SetupLoanPaymentsData,
   SetupLoanPaymentsResponse,
+  PreviewLoanPaymentSetupData,
+  PreviewLoanPaymentSetupResponse,
   AccountBalancesAsOfResponse,
+  DailyAccountBalance,
+  DailyBalanceTotalsResponse,
+  LoanSettlementRow,
+  PaymentMatching,
+  AccountDeletability,
 } from '@/types/account';
+import type { TransactionRule } from '@/types/transaction-rule';
 import { StatementCycle, InterestPaid } from '@/types/credit-card-detail';
 import { BalanceForecast } from '@/types/banking-detail';
 import {
@@ -24,12 +35,22 @@ import {
   invalidateCache,
   invalidateScheduledFxReadModel,
 } from './apiCache';
+import { invalidateTransactionRulesCache } from './transaction-rules-api';
+
+// The Investments page reads its account list from its own cached endpoint
+// (`investments:accounts`), not from `accounts:`. A write that adds, renames,
+// closes, reopens or removes an account drops both, or the page keeps offering
+// the pre-write list -- a just-created account missing from its selector.
+function invalidateAccountLists(): void {
+  invalidateCache('accounts:');
+  invalidateCache('investments:accounts');
+}
 
 export const accountsApi = {
   // Create account
   create: async (data: CreateAccountData): Promise<Account> => {
     const response = await apiClient.post<Account>('/accounts', data);
-    invalidateCache('accounts:');
+    invalidateAccountLists();
     return response.data;
   },
 
@@ -39,7 +60,7 @@ export const accountsApi = {
       ...data,
       createInvestmentPair: true,
     });
-    invalidateCache('accounts:');
+    invalidateAccountLists();
     return response.data;
   },
 
@@ -56,6 +77,13 @@ export const accountsApi = {
       },
       120_000, // 2 min
     );
+  },
+
+  // Get all accounts, skipping the cache. For a re-read after a write this tab
+  // did not make (another tab or device), which no invalidation here saw.
+  getAllFresh: async (includeInactive: boolean = false): Promise<Account[]> => {
+    invalidateCache(`accounts:all:${includeInactive}`);
+    return accountsApi.getAll(includeInactive);
   },
 
   // Accounts the real user can use as the other side of a cross-owner
@@ -102,7 +130,7 @@ export const accountsApi = {
   // Update account
   update: async (id: string, data: UpdateAccountData): Promise<Account> => {
     const response = await apiClient.patch<Account>(`/accounts/${id}`, data);
-    invalidateCache('accounts:');
+    invalidateAccountLists();
     // Issue #1167: a funding / linked-cash / brokerage account's currency is one
     // side of a scheduled investment's settlement pair, and the cached
     // scheduled-transaction read model holds server-derived FX fields resolved
@@ -116,14 +144,14 @@ export const accountsApi = {
   // Close account
   close: async (id: string): Promise<Account> => {
     const response = await apiClient.post<Account>(`/accounts/${id}/close`);
-    invalidateCache('accounts:');
+    invalidateAccountLists();
     return response.data;
   },
 
   // Reopen account
   reopen: async (id: string): Promise<Account> => {
     const response = await apiClient.post<Account>(`/accounts/${id}/reopen`);
-    invalidateCache('accounts:');
+    invalidateAccountLists();
     return response.data;
   },
 
@@ -175,8 +203,8 @@ export const accountsApi = {
   },
 
   // Check if account can be deleted
-  canDelete: async (id: string): Promise<{ transactionCount: number; investmentTransactionCount: number; canDelete: boolean }> => {
-    const response = await apiClient.get<{ transactionCount: number; investmentTransactionCount: number; canDelete: boolean }>(
+  canDelete: async (id: string): Promise<AccountDeletability> => {
+    const response = await apiClient.get<AccountDeletability>(
       `/accounts/${id}/can-delete`,
     );
     return response.data;
@@ -185,7 +213,7 @@ export const accountsApi = {
   // Delete account (only if no transactions)
   delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/accounts/${id}`);
-    invalidateCache('accounts:');
+    invalidateAccountLists();
   },
 
   // Get daily running balances for accounts (per-account rows with currency)
@@ -197,7 +225,7 @@ export const accountsApi = {
     // of the backend's default one-year window. Only honoured when no
     // startDate is given.
     allTime?: boolean;
-  }): Promise<Array<{ date: string; balance: number; accountId: string; currencyCode: string }>> => {
+  }): Promise<DailyAccountBalance[]> => {
     // Dedupe so multiple components requesting the same range/accounts share
     // a single network call. Daily balances roll forward as transactions
     // change, so cache TTL is short.
@@ -205,13 +233,40 @@ export const accountsApi = {
     return dedupe(
       cacheKey,
       async () => {
-        const response = await apiClient.get<Array<{ date: string; balance: number; accountId: string; currencyCode: string }>>(
+        const response = await apiClient.get<DailyAccountBalance[]>(
           '/accounts/daily-balances',
           { params },
         );
         return response.data;
       },
       30_000, // 30 sec
+    );
+  },
+
+  // The scope's end-of-day TOTAL per calendar day, in one currency: actual
+  // through the server's today, projected after it (the calendar's Balances
+  // layer). Distinct from getDailyBalances, which is per account, in each
+  // account's own currency, and history only.
+  //
+  // Under the `accounts:` prefix on purpose: a transaction write moves these
+  // figures, and that prefix is what invalidateBalanceCaches() drops.
+  getDailyBalanceTotals: async (params: {
+    startDate: string;
+    endDate: string;
+    accountIds?: string;
+    displayCurrency?: string;
+  }): Promise<DailyBalanceTotalsResponse> => {
+    const cacheKey = `accounts:daily-balance-totals:${params.startDate}:${params.endDate}:${params.accountIds ?? ''}:${params.displayCurrency ?? ''}`;
+    return dedupe(
+      cacheKey,
+      async () => {
+        const response = await apiClient.get<DailyBalanceTotalsResponse>(
+          '/accounts/daily-balance-totals',
+          { params },
+        );
+        return response.data;
+      },
+      30_000, // 30 sec -- these move with every transaction write
     );
   },
 
@@ -259,10 +314,60 @@ export const accountsApi = {
     return response.data;
   },
 
+  // Suggest a mortgage type from installments the user typed in. A
+  // suggestion: the server reads and writes nothing, so no cache is
+  // invalidated.
+  detectMortgageType: async (data: DetectMortgageTypeData): Promise<MortgageTypeDetection> => {
+    const response = await apiClient.post<MortgageTypeDetection>('/accounts/mortgage-type/detect', data);
+    return response.data;
+  },
+
+  // Suggest a mortgage type from the loan's own posted installments. Writes
+  // nothing: the account keeps its type until the user saves the edit form.
+  detectMortgageTypeFromHistory: async (id: string): Promise<MortgageTypeHistoryDetection> => {
+    const response = await apiClient.post<MortgageTypeHistoryDetection>(`/accounts/${id}/mortgage-type/detect`);
+    return response.data;
+  },
+
+  // The first installment a LINEAR or INTEREST_ONLY mortgage's payment setup
+  // would schedule, priced by the code the setup checks its payment against.
+  // Writes nothing, so no cache is invalidated.
+  previewLoanPaymentSetup: async (
+    id: string,
+    data: PreviewLoanPaymentSetupData,
+  ): Promise<PreviewLoanPaymentSetupResponse> => {
+    const response = await apiClient.post<PreviewLoanPaymentSetupResponse>(
+      `/accounts/${id}/setup-loan-payments/preview`,
+      data,
+    );
+    return response.data;
+  },
+
   // Set up scheduled loan/mortgage payments
   setupLoanPayments: async (id: string, data: SetupLoanPaymentsData): Promise<SetupLoanPaymentsResponse> => {
     const response = await apiClient.post<SetupLoanPaymentsResponse>(`/accounts/${id}/setup-loan-payments`, data);
     invalidateCache('accounts:');
+    return response.data;
+  },
+
+  // Create the "Payment matching" rule of a loan that has none: the rule, the
+  // loan's pointer to it and the bill's auto-post turned off, in one server
+  // transaction. Moves no money, so only the lists it changes are dropped.
+  createPaymentMatchingRule: async (id: string, data: PaymentMatching): Promise<TransactionRule> => {
+    try {
+      const response = await apiClient.post<TransactionRule>(`/accounts/${id}/payment-matching-rule`, data);
+      return response.data;
+    } finally {
+      invalidateCache('accounts:');
+      invalidateCache('scheduled:');
+      invalidateTransactionRulesCache();
+    }
+  },
+
+  // The installments payment matching settled on a loan, newest first. Never
+  // cached: Process history and every import change it.
+  getLoanSettlements: async (id: string): Promise<LoanSettlementRow[]> => {
+    const response = await apiClient.get<LoanSettlementRow[]>(`/accounts/${id}/loan-settlements`);
     return response.data;
   },
 

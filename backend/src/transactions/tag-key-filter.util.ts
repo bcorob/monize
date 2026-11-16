@@ -18,10 +18,7 @@ import { escapeLikePattern } from "./transaction-search.util";
  * safe to reuse in aggregating queries without inflating row counts.
  */
 export type TagKeyFilterOp =
-  | "hasValue"
-  | "noValue"
-  | "contains"
-  | "notContains";
+  "hasValue" | "noValue" | "contains" | "notContains";
 
 export interface TagKeyFilter {
   /** The tag key to filter on (e.g. "country"). */

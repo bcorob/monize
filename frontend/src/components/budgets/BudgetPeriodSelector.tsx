@@ -1,7 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { format, parseISO } from 'date-fns';
+import { useChartDateFormat } from '@/hooks/useChartDateFormat';
 import type { BudgetPeriod } from '@/types/budget';
 
 interface BudgetPeriodSelectorProps {
@@ -10,9 +10,12 @@ interface BudgetPeriodSelectorProps {
   onPeriodChange: (periodId: string | null) => void;
 }
 
-function formatPeriodLabel(period: BudgetPeriod, t: (key: string, params?: Record<string, string>) => string): string {
-  const start = parseISO(period.periodStart);
-  const label = format(start, 'MMM yyyy');
+function formatPeriodLabel(
+  period: BudgetPeriod,
+  t: (key: string, params?: Record<string, string>) => string,
+  monthLabel: (date: string) => string,
+): string {
+  const label = monthLabel(period.periodStart);
   if (period.status === 'OPEN') return t('periodSelector.current', { label });
   if (period.status === 'PROJECTED') return t('periodSelector.projected', { label });
   return label;
@@ -24,6 +27,9 @@ export function BudgetPeriodSelector({
   onPeriodChange,
 }: BudgetPeriodSelectorProps) {
   const t = useTranslations('budgets');
+  // The month in the reader's own language, not a fixed English pattern.
+  const formatChartDate = useChartDateFormat();
+  const monthLabel = (date: string) => formatChartDate(date, 'MMM yyyy');
 
   if (periods.length <= 1) return null;
 
@@ -46,7 +52,7 @@ export function BudgetPeriodSelector({
         <option value="">{t('periodSelector.currentPeriod')}</option>
         {periods.map((period) => (
           <option key={period.id} value={period.id}>
-            {formatPeriodLabel(period, t)}
+            {formatPeriodLabel(period, t, monthLabel)}
           </option>
         ))}
       </select>

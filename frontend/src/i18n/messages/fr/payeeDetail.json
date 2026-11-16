@@ -94,6 +94,9 @@
     "largestValue": "{amount} le {date}",
     "overpaymentFor": "Bénéficiaire de remboursement anticipé pour",
     "website": "Site web",
+    "address": "Adresse",
+    "phone": "Téléphone",
+    "email": "E-mail",
     "notes": "Notes"
   },
   "tabs": {
@@ -127,5 +130,23 @@
     "needsMoreHistory": "Il faut au moins {years} ans d’historique pour distinguer une saisonnalité du hasard.",
     "empty": "Aucune dépense à répartir par mois pour le moment",
     "monthTooltip": "{month} : {amount} en moyenne sur {years, plural, one {# an} other {# ans}}"
+  },
+  "contactLookup": {
+    "button": "Rechercher les coordonnées",
+    "inProgress": "Recherche...",
+    "nothingNew": "Aucune nouvelle coordonnée n'a été trouvée.",
+    "noProvider": "Configurez une source dans les paramètres de recherche de bénéficiaires pour trouver des coordonnées.",
+    "failed": "La recherche n'a pas pu aboutir. Réessayez plus tard.",
+    "dialogTitle": "Confirmer les coordonnées",
+    "dialogSubtitle": "Rien n'est enregistré pour {name} tant que vous n'avez pas confirmé.",
+    "pickMatch": "Ce nom correspond à {count, plural, one {# entreprise} other {# entreprises}}. Choisissez celle que vous payez :",
+    "unlabelledMatch": "Correspondance sans nom",
+    "willAdd": "Ajouter",
+    "willReplace": "Remplacer",
+    "cancel": "Annuler",
+    "confirm": "{count, plural, one {Enregistrer # modification} other {Enregistrer # modifications}}",
+    "applied": "{count, plural, one {# coordonnée enregistrée} other {# coordonnées enregistrées}}",
+    "applyFailed": "Impossible d'enregistrer les coordonnées",
+    "quotaExceeded": "Les recherches Google Places de ce mois sont épuisées. Augmentez la limite dans les paramètres de recherche de bénéficiaires, ou attendez le mois prochain."
   }
 }

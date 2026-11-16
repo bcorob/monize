@@ -17,6 +17,7 @@ import {
   TimeframeType,
   GroupByType,
   TIMEFRAME_LABELS,
+  MetricType,
 } from '@/types/custom-report';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useDateFormat } from '@/hooks/useDateFormat';
@@ -24,6 +25,11 @@ import { createLogger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errors';
 import { useTranslations } from 'next-intl';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { PartialTotal } from '@/components/ui/PartialTotal';
+import { PartialDataNotice } from '@/components/reports/PartialDataNotice';
+import { isComplete, reportTotal, type ConvertedTotal } from '@/lib/currency-total';
+import { customReportMeasure, isSignedTransactionList } from '@/lib/custom-report-measure';
+import { customReportDrillDownHref } from '@/lib/custom-report-links';
 
 const logger = createLogger('CustomReportViewer');
 
@@ -35,7 +41,7 @@ export function CustomReportViewer({ reportId }: CustomReportViewerProps) {
   const t = useTranslations('reports');
   const tc = useTranslations('common');
   const router = useRouter();
-  const { formatCurrency } = useNumberFormat();
+  const { formatCurrency, formatNumber, defaultCurrency } = useNumberFormat();
   const { formatDate } = useDateFormat();
   const [report, setReport] = useState<CustomReport | null>(null);
   const [result, setResult] = useState<ReportResult | null>(null);
@@ -55,32 +61,64 @@ export function CustomReportViewer({ reportId }: CustomReportViewerProps) {
     }
   }, [reportId, t]);
 
-  const executeReport = useCallback(async () => {
-    if (!report) return;
+  // Whether the auto-execute effect below will run the report for the current
+  // inputs: never before the report has loaded, nor for a custom range whose
+  // dates are incomplete.
+  const willExecute =
+    !!report &&
+    !(overrideTimeframe === TimeframeType.CUSTOM && (!customStartDate || !customEndDate));
 
-    setIsExecuting(true);
-    try {
-      let params: { timeframeType?: TimeframeType; startDate?: string; endDate?: string } = {};
+  // The inputs the report last ran for. When they change, the "becomes
+  // executing" transition happens here, during render, rather than from inside
+  // the effect that sends the request.
+  const [executeInputs, setExecuteInputs] = useState({
+    reportId,
+    report,
+    overrideTimeframe,
+    customStartDate,
+    customEndDate,
+  });
+  if (
+    executeInputs.reportId !== reportId ||
+    executeInputs.report !== report ||
+    executeInputs.overrideTimeframe !== overrideTimeframe ||
+    executeInputs.customStartDate !== customStartDate ||
+    executeInputs.customEndDate !== customEndDate
+  ) {
+    setExecuteInputs({ reportId, report, overrideTimeframe, customStartDate, customEndDate });
+    if (willExecute) setIsExecuting(true);
+  }
 
-      // Use override timeframe if selected
-      if (overrideTimeframe) {
-        params.timeframeType = overrideTimeframe;
+  const executeReport = useCallback(() => {
+    if (!report) return Promise.resolve();
 
-        // Include custom dates if custom timeframe is selected
-        if (overrideTimeframe === TimeframeType.CUSTOM && customStartDate && customEndDate) {
-          params.startDate = customStartDate;
-          params.endDate = customEndDate;
+    // The state writes live in this inner function so they run once the
+    // request settles, never synchronously inside the effect that calls this.
+    const run = async () => {
+      try {
+        let params: { timeframeType?: TimeframeType; startDate?: string; endDate?: string } = {};
+
+        // Use override timeframe if selected
+        if (overrideTimeframe) {
+          params.timeframeType = overrideTimeframe;
+
+          // Include custom dates if custom timeframe is selected
+          if (overrideTimeframe === TimeframeType.CUSTOM && customStartDate && customEndDate) {
+            params.startDate = customStartDate;
+            params.endDate = customEndDate;
+          }
         }
-      }
 
-      const resultData = await customReportsApi.execute(reportId, params);
-      setResult(resultData);
-    } catch (error) {
-      toast.error(getErrorMessage(error, t('customReportViewer.toasts.executeFailed')));
-      logger.error(error);
-    } finally {
-      setIsExecuting(false);
-    }
+        const resultData = await customReportsApi.execute(reportId, params);
+        setResult(resultData);
+      } catch (error) {
+        toast.error(getErrorMessage(error, t('customReportViewer.toasts.executeFailed')));
+        logger.error(error);
+      } finally {
+        setIsExecuting(false);
+      }
+    };
+    return run();
   }, [reportId, report, overrideTimeframe, customStartDate, customEndDate, t]);
 
   useEffect(() => {
@@ -103,25 +141,11 @@ export function CustomReportViewer({ reportId }: CustomReportViewerProps) {
     executeReport();
   }, [report, executeReport, overrideTimeframe, customStartDate, customEndDate]);
 
+  // Into the register over the report's own filters and dates, narrowed to
+  // what was clicked; a listed transaction is flashed on its page.
   const handleDataPointClick = (id: string) => {
     if (!result) return;
-
-    // Navigate to transactions filtered by the clicked item
-    const params = new URLSearchParams();
-    if (result.timeframe.startDate) {
-      params.set('startDate', result.timeframe.startDate);
-    }
-    if (result.timeframe.endDate) {
-      params.set('endDate', result.timeframe.endDate);
-    }
-
-    if (result.groupBy === GroupByType.CATEGORY) {
-      params.set('categoryId', id);
-    } else if (result.groupBy === GroupByType.PAYEE) {
-      params.set('payeeId', id);
-    }
-
-    router.push(`/transactions?${params.toString()}`);
+    router.push(customReportDrillDownHref(report?.filters, result, id));
   };
 
   const timeframeOptions = [
@@ -138,6 +162,41 @@ export function CustomReportViewer({ reportId }: CustomReportViewerProps) {
       color: item.color || CHART_COLOURS[colourIndex++ % CHART_COLOURS.length],
     }));
   }, [result]);
+
+  // The headline, per metric: a count is a number, every other metric money. A
+  // withheld total (a missing rate, or the row limit) is the known part, marked.
+  const metric = report?.config.metric;
+  const formatValue = (value: number) =>
+    metric === MetricType.COUNT ? formatNumber(value, 0) : formatCurrency(value);
+  // A plain "Total" does not say whether a both-direction figure is a signed
+  // net or a sum of unsigned category amounts, so the headline names it.
+  const measure = report ? customReportMeasure(report) : null;
+  const measureLabel = measure ? t(`customReportViewer.measure.${measure}`) : null;
+  const summaryTotal: ConvertedTotal | null = result
+    ? (() => {
+        const withheld = result.summary.total === null;
+        const total = reportTotal(
+          result.summary.total ?? result.summary.knownTotal ?? 0,
+          withheld ? result : null,
+        );
+        // A withheld total is partial even if the response named no currency,
+        // except when only the row limit withheld it: that is not an exclusion
+        // for want of a rate, and the truncation marker below names it.
+        return withheld && isComplete(total) && !result.truncated
+          ? { ...total, excludedCount: 1 }
+          : total;
+      })()
+    : null;
+  const truncatedOnly =
+    !!result?.truncated && result.summary.total === null && !!summaryTotal && isComplete(summaryTotal);
+  // A truncated total is partial too: the Total row (table and PDF) carries the marker.
+  const partialTotal = !summaryTotal
+    ? null
+    : !isComplete(summaryTotal)
+      ? summaryTotal
+      : truncatedOnly
+        ? { ...summaryTotal, excludedCount: 1 }
+        : null;
 
   if (isLoading) {
     return (
@@ -240,13 +299,42 @@ export function CustomReportViewer({ reportId }: CustomReportViewerProps) {
               </span>
             </div>
             <div className="text-right">
+              {measureLabel && (
+                <div className="text-sm text-gray-500 dark:text-gray-400" data-testid="report-measure">
+                  {measureLabel}
+                </div>
+              )}
               <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                {formatCurrency(result.summary.total)}
+                {/* A null total is withheld, not zero: show the part that converted
+                    and mark it. The count metric's total is never null. */}
+                <PartialTotal
+                  total={
+                    truncatedOnly
+                      ? { ...(summaryTotal ?? reportTotal(0, null)), excludedCount: 1 }
+                      : (summaryTotal ?? reportTotal(0, null))
+                  }
+                  displayCurrency={result.currency ?? defaultCurrency}
+                  explanation={truncatedOnly ? t('customReportViewer.truncatedNotice') : undefined}
+                >
+                  {formatValue(summaryTotal?.value ?? 0)}
+                </PartialTotal>
               </div>
               <div className="text-sm text-gray-500 dark:text-gray-400">
                 {t('customReportViewer.transactionCount', { count: result.summary.count })}
               </div>
             </div>
+          </div>
+          {result.truncated && (
+            <p className="mb-4 text-xs text-amber-600 dark:text-amber-400" role="note" data-testid="truncated-notice">
+              {t('customReportViewer.truncatedNotice')}
+            </p>
+          )}
+          <div className="mb-4">
+            <PartialDataNotice
+              missingCurrencies={result.missingCurrencies ?? []}
+              excludedCount={result.excludedCount ?? 0}
+              displayCurrency={result.currency ?? defaultCurrency}
+            />
           </div>
 
           {/* Chart */}
@@ -257,6 +345,11 @@ export function CustomReportViewer({ reportId }: CustomReportViewerProps) {
               groupBy={result.groupBy as GroupByType}
               onDataPointClick={handleDataPointClick}
               tableColumns={result.tableColumns}
+              metric={metric}
+              totalRowValue={summaryTotal?.value}
+              partialTotal={partialTotal}
+              totalLabel={measureLabel ?? undefined}
+              signed={isSignedTransactionList(report)}
               reportTitle={report.name}
               exportFilename={report.name.replace(/[^a-zA-Z0-9]/g, '-').toLowerCase()}
             />

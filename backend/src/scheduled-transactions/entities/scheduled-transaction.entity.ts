@@ -23,6 +23,7 @@ import { InvestmentAction } from "../../securities/entities/investment-transacti
  * a frequency added to one and not the other compiled fine and stepped nowhere.
  */
 import type { FrequencyType } from "../../common/recurrence";
+import type { CustomRecurrence } from "../../common/custom-recurrence";
 export type { FrequencyType };
 
 const dateStringTransformer = {
@@ -76,7 +77,7 @@ export class ScheduledTransaction {
   @JoinColumn({ name: "category_id" })
   category: Category | null;
 
-  @Column({ type: "decimal", precision: 20, scale: 4 })
+  @Column({ type: "decimal", precision: 24, scale: 8 })
   amount: number;
 
   @Column({ type: "varchar", name: "currency_code", length: 3 })
@@ -90,8 +91,8 @@ export class ScheduledTransaction {
   // latest stored rate, and re-derived for the posting date when posted.
   @Column({
     type: "decimal",
-    precision: 20,
-    scale: 4,
+    precision: 24,
+    scale: 8,
     name: "original_amount",
     nullable: true,
     transformer: {
@@ -129,10 +130,26 @@ export class ScheduledTransaction {
 
   @Column({
     type: "varchar",
+    name: "reference_number",
+    length: 100,
+    nullable: true,
+  })
+  referenceNumber: string | null;
+
+  @Column({
+    type: "varchar",
     length: 20,
     default: "MONTHLY",
   })
   frequency: FrequencyType;
+
+  /**
+   * The rule a `CUSTOM` schedule repeats by, in its canonical form; null for
+   * every other frequency (docs/specs/custom-recurrence.md section 2). Every
+   * step of the schedule passes it with `startDate`, which anchors its periods.
+   */
+  @Column({ type: "jsonb", name: "custom_recurrence", nullable: true })
+  customRecurrence: CustomRecurrence | null;
 
   @Column({
     type: "date",
@@ -167,6 +184,16 @@ export class ScheduledTransaction {
 
   @Column({ name: "auto_post", default: false })
   autoPost: boolean;
+
+  /**
+   * Price every occurrence without an amount-stating override from the payee
+   * and category's payment history, per calendar month
+   * (`ScheduledAmountEstimateService`, docs/specs/scheduled-amount-estimate.md).
+   * `amount` is then the snapshot for the next occurrence, never the figure a
+   * surface shows. Plain schedules only, never auto-posted.
+   */
+  @Column({ name: "amount_is_estimated", default: false })
+  amountIsEstimated: boolean;
 
   @Column({ type: "int", name: "reminder_days_before", default: 3 })
   reminderDaysBefore: number;
@@ -241,8 +268,8 @@ export class ScheduledTransaction {
 
   @Column({
     type: "decimal",
-    precision: 20,
-    scale: 4,
+    precision: 24,
+    scale: 8,
     name: "investment_commission",
     nullable: true,
   })
@@ -250,8 +277,8 @@ export class ScheduledTransaction {
 
   @Column({
     type: "decimal",
-    precision: 20,
-    scale: 4,
+    precision: 24,
+    scale: 8,
     name: "investment_total_amount",
     nullable: true,
   })

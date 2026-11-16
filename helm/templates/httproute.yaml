@@ -12,6 +12,34 @@ spec:
   hostnames:
     - {{ include "monize.hostname" . }}
   rules:
+    {{- if .Values.mcp.stickySessions.enabled }}
+    # A 2025-era MCP session lives in ONE backend process and cannot be rebuilt
+    # elsewhere (see the class comment in
+    # backend/src/mcp/mcp-http.controller.ts), so with more than one backend
+    # replica its requests have to keep reaching the replica that answered
+    # `initialize`.
+    #
+    # The rule goes straight to the backend Service: every other route is served
+    # by the frontend, whose middleware proxies to monize-backend-service with a
+    # server-side fetch, and persistence at the gateway would pin the frontend
+    # pod while kube-proxy still spread that fetch across backend replicas.
+    #
+    # `sessionPersistence` is an experimental-channel Gateway API field. Install
+    # the experimental CRDs and check your implementation supports it before
+    # enabling this, or the rule is admitted and silently does nothing.
+    - matches:
+        - path:
+            type: PathPrefix
+            value: {{ .Values.mcp.stickySessions.path }}
+      sessionPersistence:
+        type: Cookie
+        sessionName: {{ .Values.mcp.stickySessions.cookieName | quote }}
+      backendRefs:
+        - kind: Service
+          name: monize-backend-service
+          namespace: {{ .Values.global.namespace }}
+          port: {{ .Values.backend.service.port }}
+    {{- end }}
     - backendRefs:
         - kind: Service
           name: monize-frontend-service

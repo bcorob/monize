@@ -330,14 +330,13 @@
       "fillMissingDone": "{count, plural, one {# strumento aggiunto} other {# strumenti aggiunti}}. Salva la configurazione per caricare i prezzi e calcolare il primo segnale.",
       "fillMissingError": "Non è stato possibile aggiungere gli strumenti suggeriti.",
       "lookbackMonths": "Finestra di momentum (mesi)",
-      "taxRatePercent": "Aliquota fiscale (%)",
-      "commissionAmount": "Commissione per operazione",
+      "taxRatePercent": "Aliquota fiscale (facoltativa)",
+      "commissionAmount": "Commissione per operazione (facoltativa)",
       "rulesSourceUrl": "Link alle regole che segui",
       "rulesSourceUrlPlaceholder": "https://example.com/dual-momentum",
       "rulesSourceLabel": "Testo da mostrare per quel link",
       "rulesSourceLabelPlaceholder": "example.com",
       "rulesSourceHint": "Entrambi facoltativi e senza alcun effetto sui calcoli. Mettono nel piè di pagina del report un link al punto in cui sono scritte le regole seguite da questa strategia — un articolo, una pagina di un libro, i tuoi appunti — così potrai verificare in seguito su quale versione l'hai impostata.",
-      "optional": "Facoltativo",
       "save": "Salva configurazione",
       "saved": "Configurazione della strategia salvata.",
       "saveError": "Non è stato possibile salvare la configurazione della strategia.",
@@ -358,7 +357,9 @@
       "NO_POSITION": "I conti della strategia non detengono alcuno strumento.",
       "FIRST_RUN": "Questa strategia non è ancora stata valutata: il primo segnale comparirà dopo la prossima valutazione pianificata.",
       "STALE_PRICES": "Alcuni prezzi alla base di questo report non sono aggiornati, quindi il segnale può cambiare una volta aggiornati. I più vecchi, o del tutto assenti, sono per:",
-      "CALCULATION_FAILED": "Non è stato possibile calcolare il segnale dai dati disponibili."
+      "CALCULATION_FAILED": "Non è stato possibile calcolare il segnale dai dati disponibili.",
+      "SHORT_HISTORY": "Storico prezzi insufficiente per valutare il periodo corrente. Questi ruoli richiedono prezzi fino al {from}:",
+      "shortHistoryFix": "Apri ciascuno di questi strumenti e usa «Aggiungi un altro anno di storico prezzi», poi riapri questo report."
     },
     "footer": {
       "pastResults": "I risultati passati non garantiscono i rendimenti futuri.",

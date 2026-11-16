@@ -3,6 +3,8 @@ import { DataSource } from "typeorm";
 import { withScopedDb } from "../common/db/scoped-db";
 import * as bcrypt from "bcryptjs";
 import { withSystemContext } from "../common/db/with-context";
+import { DEMO_USER_EMAIL, DEMO_USER_PASSWORD } from "./demo-credentials";
+import { upsertDemoCryptoCurrency } from "./demo-seed-data/crypto-rates";
 
 @Injectable()
 export class SeedService {
@@ -79,15 +81,25 @@ export class SeedService {
       );
     }
 
-    this.logger.log(`Seeded ${currencies.length} currencies`);
+    // The demo's coin: a CRYPTO currency priced from its Yahoo pair. An
+    // existing FIAT row of the code is left as it is (INV-CRYPTO-001).
+    const coinSeeded = await withScopedDb(this.dataSource, (manager) =>
+      upsertDemoCryptoCurrency(manager),
+    );
+    if (!coinSeeded) {
+      this.logger.warn(
+        "BTC exists as a FIAT currency and was not re-typed to CRYPTO for the demo",
+      );
+    }
+
+    this.logger.log(`Seeded ${currencies.length + 1} currencies`);
   }
 
   private async seedDemoUser(): Promise<string> {
     this.logger.log("Seeding demo user");
 
-    const email = "demo@monize.com";
-    const password = "Demo123!";
-    const hashedPassword = await bcrypt.hash(password, 10);
+    const email = DEMO_USER_EMAIL;
+    const hashedPassword = await bcrypt.hash(DEMO_USER_PASSWORD, 10);
 
     const existingUser = await withScopedDb(this.dataSource, (manager) =>
       manager.query("SELECT id FROM users WHERE email = $1", [email]),

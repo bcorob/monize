@@ -5,6 +5,7 @@ import {
   BadRequestException,
   Logger,
 } from "@nestjs/common";
+import { isEmail } from "class-validator";
 import { tr } from "../i18n/translate";
 import { DataSource, Like, In, Not, IsNull } from "typeorm";
 import { Payee } from "./entities/payee.entity";
@@ -25,16 +26,66 @@ import { ActionHistoryService } from "../action-history/action-history.service";
 import { toCountMap } from "../common/count-map.util";
 import { matchesAliasPattern } from "./alias-match.util";
 import { insertPayeeAliasIgnoringDuplicate } from "./insert-payee-alias.util";
+import { reassignPayeeReferences } from "./payee-references";
 import {
   applyPayeeCategoryToAll,
   backfillPayeeCategory,
   countUncategorizedTransactionsByPayee,
 } from "./payee-backfill.util";
 import { stripHtml } from "../common/sanitization.util";
-import { withScopedDb } from "../common/db/scoped-db";
+import type { LlmPayeeList, LlmPayeeQuery } from "./llm-payee-query";
+import { getActiveScopedManager, withScopedDb } from "../common/db/scoped-db";
 import { normalizeWebsite } from "../common/normalize-website";
+import {
+  formatPhoneForDisplay,
+  normalizePhoneOrThrow,
+  resolveUserPhoneRegion,
+} from "../common/phone-number.util";
+import type { CountryCode } from "libphonenumber-js/max";
 import { FaviconService, FetchedLogo } from "../common/favicon/favicon.service";
 import { brandLogoColumns } from "../common/favicon/brand-logo.columns";
+import { PayeeContactLookupService } from "./lookup/payee-contact-lookup.service";
+import { ContactLookupOutcome } from "./lookup/payee-contact-lookup.types";
+import { buildLookupContext } from "./lookup/lookup-context";
+import { PayeeContactEnrichmentService } from "./lookup/payee-contact-enrichment.service";
+import { ContactLookupSource } from "./lookup/payee-contact-lookup.types";
+
+/**
+ * What a preview established about a contact lookup, carried to the commit
+ * so the row is stamped with the same provenance the card was built from.
+ */
+export interface ContactLookupStamp {
+  /** null when the lookup answered but found nothing. */
+  source: ContactLookupSource | null;
+  attemptedAt: Date;
+}
+
+export interface CreatePayeeOptions {
+  /**
+   * Provenance from a preview that already looked the payee up (AI/MCP
+   * confirmation flow). Written with the row; suppresses the background
+   * lookup, which would otherwise repeat work the user already approved.
+   */
+  contactLookup?: ContactLookupStamp;
+
+  /**
+   * The caller is offering the lookup to the user itself (the transaction
+   * page's payee quick-create runs it and shows the confirmation dialogue), so
+   * the automatic background lookup must not also run and write. Without it
+   * the same payee is looked up twice -- two paid calls -- and the values the
+   * dialogue offers have already been stored behind the user.
+   */
+  deferContactLookup?: boolean;
+}
+
+export interface PreviewCreateOptions {
+  /**
+   * Fill contact details the caller did not supply through the user's
+   * contact lookup (when they have enabled it), so the confirmation card
+   * shows what the commit will store.
+   */
+  lookupContact?: boolean;
+}
 
 /**
  * Resolved, sanitized preview of a proposed new payee. Shared by the AI
@@ -52,6 +103,15 @@ export interface CreatePayeePreview {
    * it; `null` means clear it.
    */
   website?: string | null;
+  /** Contact fields, with the same undefined/null contract as {@link website}. */
+  address?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  /**
+   * Present when this preview ran a contact lookup (see
+   * {@link PreviewCreateOptions.lookupContact}); the commit stores it.
+   */
+  contactLookup?: ContactLookupStamp;
 }
 
 /**
@@ -66,6 +126,13 @@ export interface UpdatePayeePreview {
   defaultCategoryName: string | null;
   /** See {@link CreatePayeePreview.website}. */
   website?: string | null;
+  /**
+   * Contact fields, with the same contract as {@link website}: `undefined`
+   * leaves the stored value alone, `null` clears it.
+   */
+  address?: string | null;
+  email?: string | null;
+  phone?: string | null;
 }
 
 /** Resolved preview of a proposed payee deletion. */
@@ -95,6 +162,66 @@ function normalizePayeeName(value: string): string {
     .trim();
 }
 
+/**
+ * What a contact field the user emptied should be stored as.
+ *
+ * The form resends every field on each save, so a cleared input arrives as "" --
+ * which must become NULL rather than an empty string, or "has an address" reads
+ * true for a payee with none and the map renders an empty query. Undefined is
+ * left alone: it means the caller did not mention the field at all.
+ */
+function normalizeContactField(
+  value: string | null | undefined,
+): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const trimmed = value.trim();
+  return trimmed === "" ? null : trimmed;
+}
+
+/**
+ * The contact fields as they will be STORED: trimmed, blanks read as clears,
+ * the email checked and the phone normalized to E.164.
+ *
+ * Every writer goes through here -- the preview an AI or MCP card is built
+ * from, and the create and update that commit -- because a preview has to
+ * compute what the commit will do. Checking only at commit time would show the
+ * user a confirmation card, take their approval, and then fail the request
+ * they had already agreed to; normalizing only at commit time would show them
+ * "(206) 448-8762" on the card and store something else.
+ *
+ * `region` places a number written without a country code (see
+ * `phone-number.util.ts`). It is `null` where the caller could not resolve one,
+ * which makes a bare national number a refusal rather than a guess.
+ */
+function previewContactFields(
+  input: {
+    address?: string | null;
+    email?: string | null;
+    phone?: string | null;
+  },
+  region: CountryCode | null,
+): { address?: string | null; email?: string | null; phone?: string | null } {
+  const email = normalizeContactField(input.email);
+  if (email && !isEmail(email)) {
+    throw new BadRequestException(
+      tr(
+        "errors.payees.invalidEmail",
+        `"${email}" is not a valid email address`,
+        {
+          email,
+        },
+      ),
+    );
+  }
+  const phone = normalizeContactField(input.phone);
+  return {
+    address: normalizeContactField(input.address),
+    email,
+    phone: phone ? normalizePhoneOrThrow(phone, region) : phone,
+  };
+}
+
 @Injectable()
 export class PayeesService {
   private readonly logger = new Logger(PayeesService.name);
@@ -103,9 +230,56 @@ export class PayeesService {
     private dataSource: DataSource,
     private actionHistoryService: ActionHistoryService,
     private faviconService: FaviconService,
+    private contactLookup: PayeeContactLookupService,
+    private contactEnrichment: PayeeContactEnrichmentService,
   ) {}
 
-  async create(userId: string, createPayeeDto: CreatePayeeDto): Promise<Payee> {
+  /**
+   * The contact fields as they will be stored, resolving the caller's phone
+   * region only when there is a number that needs placing.
+   *
+   * The laziness is the point: a region is one more query, and the great
+   * majority of payees carry no phone at all. Every writer -- preview, create
+   * and update alike -- goes through here, so all of them place a number the
+   * same way.
+   */
+  private async storableContactFields(
+    userId: string,
+    input: {
+      address?: string | null;
+      email?: string | null;
+      phone?: string | null;
+    },
+    /**
+     * The phone the row already holds, where there is one. A value equal to it
+     * did not move, so it is passed through untouched -- the same rule `update`
+     * applies, and a preview that did not share it would refuse an edit the
+     * commit would accept.
+     */
+    currentPhone?: string | null,
+  ): Promise<{
+    address?: string | null;
+    email?: string | null;
+    phone?: string | null;
+  }> {
+    const phone = normalizeContactField(input.phone);
+    if (phone && currentPhone && phone === currentPhone) {
+      return {
+        ...previewContactFields({ ...input, phone: null }, null),
+        phone,
+      };
+    }
+    const region = phone
+      ? await resolveUserPhoneRegion(this.dataSource, userId)
+      : null;
+    return previewContactFields(input, region);
+  }
+
+  async create(
+    userId: string,
+    createPayeeDto: CreatePayeeDto,
+    options: CreatePayeeOptions = {},
+  ): Promise<Payee> {
     // The DTO accepts "starbucks.com"; a stored link needs its scheme or the
     // anchor resolves it relative to the current page -- and the favicon
     // resolver needs an absolute address too.
@@ -117,6 +291,16 @@ export class PayeesService {
       ? await this.faviconService.fetchFavicon(website)
       : null;
 
+    // The contact fields the form sends as "" mean "empty", not "a blank
+    // string" -- see normalizeContactField -- and a phone is stored in one
+    // canonical form whichever door wrote it. Through the same function the
+    // preview uses, so an AI or MCP card cannot show one value and the commit
+    // store another; it throws before the transaction below opens, so a
+    // refused number leaves nothing written.
+    const contact = await this.storableContactFields(userId, createPayeeDto);
+    const address = contact.address ?? null;
+    const email = contact.email ?? null;
+    const phone = contact.phone ?? null;
     const saved = await withScopedDb(this.dataSource, async (m) => {
       const repo = m.getRepository(Payee);
       // Check if payee with same name already exists for this user
@@ -144,6 +328,15 @@ export class PayeesService {
         // null -- so the columns are only written when there was an address
         // to resolve.
         ...(website ? brandLogoColumns(logo) : {}),
+        address,
+        email,
+        phone,
+        ...(options.contactLookup
+          ? {
+              contactLookupAt: options.contactLookup.attemptedAt,
+              contactLookupSource: options.contactLookup.source,
+            }
+          : {}),
         userId,
       });
 
@@ -159,6 +352,9 @@ export class PayeesService {
         name: saved.name,
         notes: saved.notes,
         website: saved.website,
+        address: saved.address,
+        email: saved.email,
+        phone: saved.phone,
         defaultCategoryId: saved.defaultCategoryId,
         isActive: saved.isActive,
       },
@@ -166,6 +362,38 @@ export class PayeesService {
       descriptionKey: "createdPayee",
       descriptionParams: { name: saved.name },
     });
+
+    // A payee created with no contact details at all -- a name-only AI/MCP
+    // row, a payee the server created while saving a transaction -- is looked
+    // up in the background, when the user has enabled that. Four conditions,
+    // each load-bearing: the preview path already looked up (its stamp travels
+    // in `options`); the caller is running the lookup itself and will ask the
+    // user (`deferContactLookup`), so a background write would both duplicate
+    // the cost and pre-empt the answer they are about to confirm; something
+    // was supplied (the user's own values are never second-guessed); and there
+    // is no ambient transaction, because this
+    // runs after `withScopedDb` resolved, and "resolved" only means
+    // "committed" when nobody upstream opened a transaction we joined -- a
+    // dispatch inside one would look for a row nobody else can see yet.
+    if (
+      !options.contactLookup &&
+      !options.deferContactLookup &&
+      !website &&
+      !address &&
+      !email &&
+      !phone &&
+      getActiveScopedManager() === undefined
+    ) {
+      // No contact detail was supplied, but a note may still say which
+      // organisation and which place this is ("Toronto branch") -- context
+      // for the lookup, never a field it writes.
+      this.contactEnrichment.dispatchAfterCreate(
+        userId,
+        saved.id,
+        saved.name,
+        buildLookupContext({ notes: saved.notes }),
+      );
+    }
     return saved;
   }
 
@@ -180,13 +408,51 @@ export class PayeesService {
       name: string;
       defaultCategoryId?: string | null;
       website?: string | null;
+      address?: string | null;
+      email?: string | null;
+      phone?: string | null;
     },
+    options: PreviewCreateOptions = {},
   ): Promise<CreatePayeePreview> {
     const name = stripHtml(input.name)?.trim() || "";
+    let contact = await this.storableContactFields(userId, input);
     // Normalise here, not at commit time: a preview has to compute what the
     // commit will do, so the card shows "https://acme.com" for a typed
     // "acme.com" rather than a value the save would then change.
-    const website = normalizeWebsite(input.website);
+    let website = normalizeWebsite(input.website);
+
+    // The lookup runs before the transaction below (it is a provider call)
+    // and only when the row carries no contact details at all: a value the
+    // caller typed is never second-guessed, and a preview that looked up
+    // hands its stamp to the commit so the card and the row agree.
+    let contactLookup: ContactLookupStamp | undefined;
+    if (
+      options.lookupContact &&
+      name &&
+      !website &&
+      !contact.address &&
+      !contact.email &&
+      !contact.phone
+    ) {
+      const outcome = await this.contactLookup.lookup(userId, { name });
+      if (outcome.reason === "ok") {
+        // A preview card is built before anyone can be asked, so it takes the
+        // best match; the alternates are for a surface with a user on it.
+        const best = outcome.suggestions[0];
+        website = best.website ?? undefined;
+        contact = {
+          address: best.address ?? undefined,
+          email: best.email ?? undefined,
+          phone: best.phone ?? undefined,
+        };
+        contactLookup = {
+          source: best.source,
+          attemptedAt: new Date(),
+        };
+      } else if (outcome.reason === "none") {
+        contactLookup = { source: null, attemptedAt: new Date() };
+      }
+    }
 
     return withScopedDb(this.dataSource, async (m) => {
       const existing = await m.getRepository(Payee).findOne({
@@ -220,7 +486,14 @@ export class PayeesService {
         defaultCategoryName = names.get(cat.id) ?? cat.name;
       }
 
-      return { name, defaultCategoryId, defaultCategoryName, website };
+      return {
+        name,
+        defaultCategoryId,
+        defaultCategoryName,
+        website,
+        ...contact,
+        ...(contactLookup ? { contactLookup } : {}),
+      };
     });
   }
 
@@ -286,7 +559,11 @@ export class PayeesService {
       name: string;
       categoryName?: string | null;
       website?: string | null;
+      address?: string | null;
+      email?: string | null;
+      phone?: string | null;
     },
+    options: PreviewCreateOptions = {},
   ): Promise<CreatePayeePreview> {
     let defaultCategoryId: string | null = null;
     if (input.categoryName) {
@@ -294,11 +571,18 @@ export class PayeesService {
         await this.resolveCategoryByName(userId, input.categoryName)
       ).id;
     }
-    return this.previewCreate(userId, {
-      name: input.name,
-      defaultCategoryId,
-      website: input.website,
-    });
+    return this.previewCreate(
+      userId,
+      {
+        name: input.name,
+        defaultCategoryId,
+        website: input.website,
+        address: input.address,
+        email: input.email,
+        phone: input.phone,
+      },
+      options,
+    );
   }
 
   /**
@@ -313,6 +597,9 @@ export class PayeesService {
       newName?: string;
       categoryName?: string | null;
       website?: string | null;
+      address?: string | null;
+      email?: string | null;
+      phone?: string | null;
     },
   ): Promise<UpdatePayeePreview> {
     const payee = await this.resolvePayeeForManage(userId, input.name);
@@ -374,6 +661,7 @@ export class PayeesService {
       defaultCategoryId,
       defaultCategoryName,
       website,
+      ...(await this.storableContactFields(userId, input, payee.phone)),
     };
   }
 
@@ -481,6 +769,87 @@ export class PayeesService {
     });
   }
 
+  /**
+   * The payee list the AI Assistant and the MCP `list_payees` tool both read.
+   *
+   * Built on `findAll`, so the derived figures (transaction count, last used,
+   * alias and uncategorized counts) are computed in exactly one place; this adds
+   * the filtering, ordering and truncation a model needs to ask a narrow
+   * question instead of reading every payee.
+   *
+   * Two things it will not do. The search is a case-insensitive SUBSTRING match
+   * -- `search` used SQL `LIKE`, which Postgres evaluates case-sensitively, so
+   * "amazon" matched nothing while "Amazon" did, and the tool looked like it
+   * only accepted exact names. And a truncated list says so: `totalCount` is
+   * what matched, `payees.length` is what came back, and `truncated` is the
+   * difference, because a capped list presented as the whole one is the same
+   * defect as a subtotal presented as a total.
+   */
+  async getLlmPayees(
+    userId: string,
+    options: LlmPayeeQuery = {},
+  ): Promise<LlmPayeeList> {
+    const rows = await this.findAll(userId, options.status ?? "all");
+
+    const search = options.search?.trim().toLowerCase();
+    const wanted = (
+      required: boolean | undefined,
+      value: string | null | undefined,
+    ) => required === undefined || Boolean(value) === required;
+
+    const matched = rows.filter(
+      (payee) =>
+        (!search || payee.name.toLowerCase().includes(search)) &&
+        wanted(options.hasWebsite, payee.website) &&
+        wanted(options.hasAddress, payee.address) &&
+        wanted(options.hasEmail, payee.email) &&
+        wanted(options.hasPhone, payee.phone) &&
+        (options.hasLogo === undefined || payee.hasLogo === options.hasLogo) &&
+        (options.hasDefaultCategory === undefined ||
+          Boolean(payee.defaultCategoryId) === options.hasDefaultCategory),
+    );
+
+    const byName = (a: Payee, b: Payee) =>
+      a.name.localeCompare(b.name, undefined, { sensitivity: "base" });
+    const sorted = [...matched].sort((a, b) => {
+      switch (options.sortBy) {
+        case "transactionCount":
+          // Busiest first; a tie is ordered by name so the page is stable.
+          return b.transactionCount - a.transactionCount || byName(a, b);
+        case "lastUsed":
+          // Most recent first. A payee never used has no date, and an unknown
+          // date sorts last rather than pretending to be the oldest.
+          if (a.lastUsedDate === b.lastUsedDate) return byName(a, b);
+          if (!a.lastUsedDate) return 1;
+          if (!b.lastUsedDate) return -1;
+          return b.lastUsedDate.localeCompare(a.lastUsedDate);
+        default:
+          return byName(a, b);
+      }
+    });
+
+    const limit = options.limit;
+    const payees =
+      limit !== undefined && limit < sorted.length
+        ? sorted.slice(0, limit)
+        : sorted;
+
+    return {
+      // A model quotes these rows back to the reader, so the phone travels in
+      // the form a person reads -- the same decision the AI executor's
+      // `contactSummary` and the MCP contact card make about a preview. Stored
+      // E.164 is how the column compares two numbers, not an answer to "what is
+      // their number?", and a surface that hands it over unformatted is how one
+      // number ends up printed two ways in one product.
+      payees: payees.map((payee) => ({
+        ...payee,
+        phone: payee.phone ? formatPhoneForDisplay(payee.phone) : payee.phone,
+      })),
+      totalCount: matched.length,
+      truncated: payees.length < matched.length,
+    };
+  }
+
   async findOne(userId: string, id: string): Promise<Payee> {
     const payee = await withScopedDb(this.dataSource, (m) =>
       m.getRepository(Payee).findOne({
@@ -496,6 +865,29 @@ export class PayeesService {
     }
 
     return payee;
+  }
+
+  /**
+   * Look an existing payee's contact details up WITHOUT writing anything.
+   *
+   * The detail screen's button is a proposal, not a save: the user confirms
+   * what changes (and, where the name means more than one organisation or
+   * branch, which of them they are paying) and the confirmation goes through
+   * `update` as their own edit. So this method reads the row -- for the
+   * ownership check and for the context that tells the lookup which place is
+   * meant -- and returns the candidates.
+   */
+  async lookupContactForPayee(
+    userId: string,
+    payeeId: string,
+  ): Promise<ContactLookupOutcome> {
+    const payee = await this.findOne(userId, payeeId);
+    return this.contactLookup.lookup(
+      userId,
+      { name: payee.name, known: buildLookupContext(payee) },
+      // The click is the consent, whether or not the automatic lookup is on.
+      { ignorePreference: true },
+    );
   }
 
   /**
@@ -715,6 +1107,9 @@ export class PayeesService {
       name: payee.name,
       notes: payee.notes,
       website: payee.website,
+      address: payee.address,
+      email: payee.email,
+      phone: payee.phone,
       defaultCategoryId: payee.defaultCategoryId,
       isActive: payee.isActive,
     };
@@ -773,6 +1168,27 @@ export class PayeesService {
         Object.assign(updateFields, brandLogoColumns(logo));
       }
     }
+    if (updatePayeeDto.email !== undefined)
+      updateFields.email = normalizeContactField(updatePayeeDto.email) ?? null;
+    if (updatePayeeDto.phone !== undefined) {
+      const phone = normalizeContactField(updatePayeeDto.phone) ?? null;
+      // A resent value is not an edit. The form sends every field on every
+      // save, so keying the check off the field being PRESENT would re-run it
+      // over a value already on the row -- and a row written before phones
+      // were normalized holds one this build refuses, so renaming such a payee
+      // would fail on a number the user never touched. Only a value that
+      // actually moved is normalized; the stored one is left exactly as it is.
+      updateFields.phone =
+        phone !== null && phone !== payee.phone
+          ? normalizePhoneOrThrow(
+              phone,
+              await resolveUserPhoneRegion(this.dataSource, userId),
+            )
+          : phone;
+    }
+    if (updatePayeeDto.address !== undefined)
+      updateFields.address =
+        normalizeContactField(updatePayeeDto.address) ?? null;
     if (updatePayeeDto.isActive !== undefined)
       updateFields.isActive = updatePayeeDto.isActive;
 
@@ -843,6 +1259,10 @@ export class PayeesService {
       afterData: {
         name: refreshed.name,
         notes: refreshed.notes,
+        website: refreshed.website,
+        address: refreshed.address,
+        email: refreshed.email,
+        phone: refreshed.phone,
         defaultCategoryId: refreshed.defaultCategoryId,
         isActive: refreshed.isActive,
       },
@@ -860,11 +1280,17 @@ export class PayeesService {
 
   async remove(userId: string, id: string): Promise<void> {
     const payee = await this.findOne(userId, id);
+    // Undo re-inserts exactly the columns this snapshot carries, so a field
+    // missing from it does not come back -- the same reason `update` snapshots
+    // the contact fields on both sides.
     const beforeData = {
       id: payee.id,
       name: payee.name,
       notes: payee.notes,
       website: payee.website,
+      address: payee.address,
+      email: payee.email,
+      phone: payee.phone,
       defaultCategoryId: payee.defaultCategoryId,
       isActive: payee.isActive,
     };
@@ -1519,7 +1945,8 @@ export class PayeesService {
 
   /**
    * Merge one payee into another:
-   * 1. Reassign all transactions from source to target payee
+   * 1. Reassign every reference to the source payee to the target
+   *    (`PAYEE_REFERENCE_MOVES`)
    * 2. Optionally add the source payee name as an alias on the target
    * 3. Delete the source payee
    *
@@ -1546,20 +1973,15 @@ export class PayeesService {
     const sourcePayee = await this.findOne(userId, sourcePayeeId);
 
     return withScopedDb(this.dataSource, async (m) => {
-      // 1. Reassign transactions from source to target
-      const txResult = await m.update(
-        Transaction,
-        { payeeId: sourcePayeeId, userId },
-        { payeeId: targetPayeeId, payeeName: targetPayee.name },
-      );
-      const transactionsMigrated = txResult.affected || 0;
-
-      // Also reassign scheduled transactions
-      await m.update(
-        ScheduledTransaction,
-        { payeeId: sourcePayeeId, userId },
-        { payeeId: targetPayeeId, payeeName: targetPayee.name },
-      );
+      // 1. Point everything that references the source (transactions,
+      // scheduled transactions, aliases, warranties, ...) at the target, so the
+      // delete below has nothing left to clear.
+      const moved = await reassignPayeeReferences(m, {
+        userId,
+        sourcePayeeId,
+        target: { id: targetPayeeId, name: targetPayee.name },
+      });
+      const transactionsMigrated = moved["transactions.payee_id"];
 
       // 2. Optionally add source payee name as alias on target
       let aliasAdded = false;
@@ -1592,14 +2014,7 @@ export class PayeesService {
         }
       }
 
-      // 3. Move any aliases from source payee to target payee
-      await m.update(
-        PayeeAlias,
-        { payeeId: sourcePayeeId, userId },
-        { payeeId: targetPayeeId },
-      );
-
-      // 4. Delete the source payee
+      // 3. Delete the source payee
       await m.remove(Payee, sourcePayee);
 
       return {

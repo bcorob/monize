@@ -14,11 +14,15 @@ export interface PayeePeriodTotals {
   net: number;
 }
 
-/** The payee's dominant detected cadence, with its latest and previous amounts. */
+/**
+ * The payee's dominant detected cadence, with its latest and previous amounts
+ * in the currency it was billed in (`currencyCode`), not converted.
+ */
 export interface PayeeRecurringSummary {
   cadence: string;
   amount: number;
   previousAmount: number;
+  currencyCode: string;
 }
 
 interface PayeeSummaryCardsProps {
@@ -53,7 +57,7 @@ export function PayeeSummaryCards({
   onUncategorizedClick,
 }: PayeeSummaryCardsProps) {
   const t = useTranslations('payeeDetail');
-  const { formatCurrency, formatSignedPercent } = useNumberFormat();
+  const { formatCurrency, formatSignedPercent, formatNumber } = useNumberFormat();
   const { formatDate } = useDateFormat();
 
   const { stats, payee } = detail;
@@ -89,7 +93,7 @@ export function PayeeSummaryCards({
     if (!recurring || recurring.previousAmount === recurring.amount) return undefined;
     const key = recurring.amount > recurring.previousAmount ? 'summary.priceUp' : 'summary.priceDown';
     return t(key, {
-      amount: formatCurrency(recurring.previousAmount, displayCurrency),
+      amount: formatCurrency(recurring.previousAmount, recurring.currencyCode),
     });
   })();
 
@@ -117,7 +121,7 @@ export function PayeeSummaryCards({
     },
     {
       label: t('summary.transactions'),
-      value: stats.transactionCount.toLocaleString(),
+      value: formatNumber(stats.transactionCount, 0),
       note: firstYear ? t('summary.sinceYear', { year: firstYear }) : undefined,
     },
     {
@@ -131,7 +135,7 @@ export function PayeeSummaryCards({
       label: t('summary.recurring'),
       value: t('summary.recurringValue', {
         cadence: t(`cadence.${recurring.cadence}`),
-        amount: formatCurrency(recurring.amount, displayCurrency),
+        amount: formatCurrency(recurring.amount, recurring.currencyCode),
       }),
       note: priceChangeNote,
     });
@@ -140,7 +144,7 @@ export function PayeeSummaryCards({
   if (stats.uncategorizedCount > 0) {
     cards.push({
       label: t('summary.uncategorized'),
-      value: stats.uncategorizedCount.toLocaleString(),
+      value: formatNumber(stats.uncategorizedCount, 0),
       valueClass: 'text-yellow-600 dark:text-yellow-400',
       note: payee.defaultCategoryId
         ? t('summary.uncategorizedApply')

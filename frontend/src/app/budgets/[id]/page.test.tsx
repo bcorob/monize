@@ -77,14 +77,18 @@ vi.mock('@/lib/errors', () => ({
 }));
 
 // Mock number format
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
-    formatNumber: (amount: number) => amount.toFixed(2),
-    formatPercent: (amount: number) => `${amount}%`,
-    defaultCurrency: 'USD',
-  }),
-}));
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
+      formatNumber: (amount: number) => amount.toFixed(2),
+      formatPercent: (amount: number) => `${amount}%`,
+      defaultCurrency: 'USD',
+    }),
+  };
+});
 
 // Mock budgets API
 const mockGetSummary = vi.fn();
@@ -94,6 +98,7 @@ const mockGetDailySpending = vi.fn();
 const mockGetTrend = vi.fn();
 const mockDeleteBudget = vi.fn();
 const mockGetPeriodDetail = vi.fn();
+const mockGetAll = vi.fn();
 
 vi.mock('@/lib/budgets', () => ({
   budgetsApi: {
@@ -104,6 +109,7 @@ vi.mock('@/lib/budgets', () => ({
     getTrend: (...args: any[]) => mockGetTrend(...args),
     delete: (...args: any[]) => mockDeleteBudget(...args),
     getPeriodDetail: (...args: any[]) => mockGetPeriodDetail(...args),
+    getAll: (...args: any[]) => mockGetAll(...args),
   },
 }));
 
@@ -130,6 +136,7 @@ vi.mock('@/components/budgets/utils/budget-labels', () => ({
     ROLLOVER: 'Rollover',
     ZERO_BASED: 'Zero-Based',
     FIFTY_THIRTY_TWENTY: '50/30/20',
+    BUCKET: 'Bucket',
   },
 }));
 
@@ -159,9 +166,18 @@ vi.mock('@/components/layout/PageLayout', () => ({
 }));
 
 vi.mock('@/components/layout/PageHeader', () => ({
-  PageHeader: ({ title, actions }: { title: string; actions?: React.ReactNode }) => (
+  PageHeader: ({
+    title,
+    actions,
+    titleAdornment,
+  }: {
+    title: string;
+    actions?: React.ReactNode;
+    titleAdornment?: React.ReactNode;
+  }) => (
     <div data-testid="page-header">
       <h1>{title}</h1>
+      {titleAdornment}
       {actions}
     </div>
   ),
@@ -234,6 +250,7 @@ describe('BudgetDetailPage', () => {
     mockGetDailySpending.mockResolvedValue([]);
     mockGetTrend.mockResolvedValue([]);
     mockDeleteBudget.mockResolvedValue(undefined);
+    mockGetAll.mockResolvedValue([]);
   });
 
   it('shows loading spinner initially', async () => {
@@ -273,13 +290,52 @@ describe('BudgetDetailPage', () => {
     });
   });
 
-  it('renders edit and back buttons', async () => {
+  it('renders the edit button, and the way back as a link above the title', async () => {
     render(<BudgetDetailPage />);
 
     await waitFor(() => {
       expect(screen.getByText('Edit')).toBeInTheDocument();
-      expect(screen.getByText('Back to Budgets')).toBeInTheDocument();
     });
+    // The way back is not an action on the budget: a chevron link on the line
+    // above the title, not a button among the header actions.
+    const back = screen.getByRole('link', { name: 'Back to Budgets' });
+    expect(back).toHaveAttribute('href', '/budgets');
+    const header = screen.getByTestId('page-header');
+    expect(header.contains(back)).toBe(false);
+    expect(back.compareDocumentPosition(header) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Back to Budgets' })).toBeNull();
+  });
+
+  it('switches to another budget from the caret beside the title', async () => {
+    mockGetAll.mockResolvedValue([
+      { ...mockSummary.budget },
+      { ...mockSummary.budget, id: 'budget-2', name: 'Vacation Fund', budgetType: 'ANNUAL' },
+    ]);
+    render(<BudgetDetailPage />);
+
+    const caret = await screen.findByRole('button', { name: 'Switch to another budget' });
+    // Beside the title, inside the header.
+    expect(screen.getByTestId('page-header').contains(caret)).toBe(true);
+    await act(async () => {
+      fireEvent.click(caret);
+    });
+    // The budget on screen is not offered as a destination.
+    expect(screen.queryByRole('menuitem', { name: /February 2026/ })).toBeNull();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitem', { name: /Vacation Fund/ }));
+    });
+    expect(mockPush).toHaveBeenCalledWith('/budgets/budget-2');
+  });
+
+  it('draws no switcher when the budget list fails to load', async () => {
+    mockGetAll.mockRejectedValue(new Error('Network error'));
+    render(<BudgetDetailPage />);
+
+    await waitFor(() => {
+      expect(screen.getByTestId('budget-dashboard')).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('button', { name: 'Switch to another budget' })).toBeNull();
+    expect(toast.error).not.toHaveBeenCalled();
   });
 
   it('calls API with correct budget ID', async () => {
@@ -328,13 +384,6 @@ describe('BudgetDetailPage', () => {
     await waitFor(() => expect(screen.getByText('Edit')).toBeInTheDocument());
     fireEvent.click(screen.getByText('Edit'));
     expect(mockPush).toHaveBeenCalledWith('/budgets/budget-1/edit');
-  });
-
-  it('navigates to budgets list when Back button is clicked', async () => {
-    render(<BudgetDetailPage />);
-    await waitFor(() => expect(screen.getByText('Back to Budgets')).toBeInTheDocument());
-    fireEvent.click(screen.getAllByText('Back to Budgets')[0]);
-    expect(mockPush).toHaveBeenCalledWith('/budgets');
   });
 
   it('shows delete confirm dialog when Delete button is clicked', async () => {

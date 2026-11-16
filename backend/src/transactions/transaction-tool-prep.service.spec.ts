@@ -10,6 +10,7 @@ import { TransactionsService } from "./transactions.service";
 import { TransactionTransferService } from "./transaction-transfer.service";
 import { TransactionAnalyticsService } from "./transaction-analytics.service";
 import { TransactionSplitService } from "./transaction-split.service";
+import { ExchangeRateService } from "../currencies/exchange-rate.service";
 
 describe("TransactionToolPrepService", () => {
   let service: TransactionToolPrepService;
@@ -18,6 +19,7 @@ describe("TransactionToolPrepService", () => {
   let transfer: Record<string, jest.Mock>;
   let analytics: Record<string, jest.Mock>;
   let splitService: Record<string, jest.Mock>;
+  let exchangeRates: Record<string, jest.Mock>;
 
   const userId = "user-1";
 
@@ -62,6 +64,12 @@ describe("TransactionToolPrepService", () => {
         categoryName: "Dining",
         description: null,
         currencyCode: "USD",
+      }),
+      previewTransferTagChange: jest.fn().mockResolvedValue({
+        tagNames: [],
+        newTagNames: [],
+        removeTagIds: [],
+        removeTagNames: [],
       }),
       previewDelete: jest.fn().mockResolvedValue({
         transactionId: "t1",
@@ -117,7 +125,11 @@ describe("TransactionToolPrepService", () => {
         .mockResolvedValue({ categoryIds: ["c1"], unresolved: [] }),
     };
     splitService = {
-      validateSplits: jest.fn(),
+      validateSplitsInCurrency: jest.fn().mockResolvedValue(undefined),
+    };
+    exchangeRates = {
+      getRateForDate: jest.fn().mockResolvedValue(1.0987),
+      getLatestRate: jest.fn().mockResolvedValue(null),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -128,6 +140,7 @@ describe("TransactionToolPrepService", () => {
         { provide: TransactionTransferService, useValue: transfer },
         { provide: TransactionAnalyticsService, useValue: analytics },
         { provide: TransactionSplitService, useValue: splitService },
+        { provide: ExchangeRateService, useValue: exchangeRates },
       ],
     }).compile();
 
@@ -223,6 +236,13 @@ describe("TransactionToolPrepService", () => {
     });
 
     it("resolves split categories, validates the sum, and omits a single category", async () => {
+      // previewCreate returns the amount it was given; the lines sum to it.
+      transactions.previewCreate.mockImplementationOnce(
+        async (_u: string, input: { amount: number }) => ({
+          ...createPreview,
+          amount: input.amount,
+        }),
+      );
       const result = await service.prepareCreateSingle(userId, {
         accountName: "Checking",
         amount: -100,
@@ -237,21 +257,22 @@ describe("TransactionToolPrepService", () => {
         { categoryId: "c1", categoryName: "Dining", amount: -40, memo: "tip" },
       ]);
       // Sum validated against the transaction amount via the domain rule.
-      expect(splitService.validateSplits).toHaveBeenCalledWith(
+      expect(splitService.validateSplitsInCurrency).toHaveBeenCalledWith(
         expect.any(Array),
         -100,
+        "USD",
       );
       // A split parent carries no single category.
       expect(transactions.previewCreate).toHaveBeenCalledWith(
         userId,
-        expect.objectContaining({ categoryId: undefined }),
+        expect.objectContaining({ categoryId: undefined, hasSplits: true }),
       );
     });
 
     it("propagates a validateSplits failure", async () => {
-      splitService.validateSplits.mockImplementationOnce(() => {
-        throw new Error("bad sum");
-      });
+      splitService.validateSplitsInCurrency.mockRejectedValueOnce(
+        new Error("bad sum"),
+      );
       await expect(
         service.prepareCreateSingle(userId, {
           accountName: "Checking",
@@ -492,6 +513,53 @@ describe("TransactionToolPrepService", () => {
       );
     });
 
+    it("marks a single category the AI chose on the preview, and never otherwise", async () => {
+      const marked = await service.prepareUpdate(userId, {
+        transactionId: "t1",
+        categoryName: "Dining",
+        categorySource: "ai",
+      });
+      expect(marked.kind === "standard" && marked.preview.categorySource).toBe(
+        "ai",
+      );
+      const plain = await service.prepareUpdate(userId, {
+        transactionId: "t1",
+        categoryName: "Dining",
+      });
+      expect(plain.kind === "standard" && plain.preview).not.toHaveProperty(
+        "categorySource",
+      );
+    });
+
+    it("carries the AI mark of a split line to its resolved line, for the card", async () => {
+      const result = await service.prepareUpdate(userId, {
+        transactionId: "t1",
+        splits: [
+          { categoryName: "Dining", amount: -20, categorySource: "ai" },
+          { categoryName: "Dining", amount: -10 },
+        ],
+      });
+      expect(result.kind === "standard" && result.splits?.[0]).toMatchObject({
+        categorySource: "ai",
+      });
+      expect(
+        result.kind === "standard" && result.splits?.[1],
+      ).not.toHaveProperty("categorySource");
+    });
+
+    it("hands the tag names to the preview, which decides which of them are additions", async () => {
+      await service.prepareUpdate(userId, {
+        transactionId: "t1",
+        description: "x",
+        tagNames: ["Allegro"],
+      });
+      expect(transactions.previewUpdate).toHaveBeenCalledWith(
+        userId,
+        "t1",
+        expect.objectContaining({ tagNames: ["Allegro"] }),
+      );
+    });
+
     it("resolves splits against the effective amount and clears the category", async () => {
       const result = await service.prepareUpdate(userId, {
         transactionId: "t1",
@@ -504,9 +572,10 @@ describe("TransactionToolPrepService", () => {
       if (result.kind !== "standard") throw new Error("expected standard");
       expect(result.splits).toHaveLength(2);
       // previewUpdate amount is -30, used as the split sum target.
-      expect(splitService.validateSplits).toHaveBeenCalledWith(
+      expect(splitService.validateSplitsInCurrency).toHaveBeenCalledWith(
         expect.any(Array),
         -30,
+        expect.any(String),
       );
       expect(transactions.previewUpdate).toHaveBeenCalledWith(
         userId,
@@ -518,6 +587,401 @@ describe("TransactionToolPrepService", () => {
           splitsAccompany: true,
         }),
       );
+    });
+
+    describe("a replaced split set keeps its lines' tags", () => {
+      // Every resolved line is category c1 (the analytics double), so the
+      // existing lines' categories decide the matching here.
+      const splitTx = {
+        id: "t1",
+        isTransfer: false,
+        isSplit: true,
+        splits: [
+          {
+            id: "s1",
+            categoryId: "c1",
+            amount: "-20.0000",
+            tags: [{ id: "tag-1", name: "Trip" }],
+          },
+          { id: "s2", categoryId: "c9", amount: -10, tags: [] },
+        ],
+      };
+
+      it("carries a line's tags into the signed line and the card", async () => {
+        transactions.findOne.mockResolvedValueOnce(splitTx);
+        const result = await service.prepareUpdate(userId, {
+          transactionId: "t1",
+          splits: [
+            { categoryName: "Dining", amount: -20 },
+            { categoryName: "Dining", amount: -10 },
+          ],
+        });
+        if (result.kind !== "standard") throw new Error("expected standard");
+        expect(result.splits?.[0]).toMatchObject({
+          tagIds: ["tag-1"],
+          tagNames: ["Trip"],
+        });
+        expect(result.splits?.[1]).not.toHaveProperty("tagIds");
+      });
+
+      it("follows a named splitId", async () => {
+        transactions.findOne.mockResolvedValueOnce({
+          ...splitTx,
+          splits: [
+            { ...splitTx.splits[0], categoryId: "c7" },
+            splitTx.splits[1],
+          ],
+        });
+        const result = await service.prepareUpdate(userId, {
+          transactionId: "t1",
+          splits: [
+            { categoryName: "Dining", amount: -10 },
+            { categoryName: "Dining", amount: -20, splitId: "s1" },
+          ],
+        });
+        if (result.kind !== "standard") throw new Error("expected standard");
+        expect(result.splits?.[0]).not.toHaveProperty("tagIds");
+        expect(result.splits?.[1]).toMatchObject({ tagIds: ["tag-1"] });
+      });
+
+      it("refuses a splitId from another transaction", async () => {
+        transactions.findOne.mockResolvedValueOnce(splitTx);
+        await expect(
+          service.prepareUpdate(userId, {
+            transactionId: "t1",
+            splits: [
+              { categoryName: "Dining", amount: -20, splitId: "elsewhere" },
+              { categoryName: "Dining", amount: -10 },
+            ],
+          }),
+        ).rejects.toThrow(/not a split line of this transaction/);
+      });
+
+      describe("two lines of the same category and amount", () => {
+        const gifts = {
+          ...splitTx,
+          splits: [
+            {
+              id: "a",
+              categoryId: "c1",
+              amount: "-25.0000",
+              memo: "Gift A",
+              tags: [{ id: "tag-1", name: "Tag 1" }],
+            },
+            {
+              id: "b",
+              categoryId: "c1",
+              amount: "-25.0000",
+              memo: "Gift B",
+              tags: [{ id: "tag-2", name: "Tag2" }],
+            },
+          ],
+        };
+
+        it.each([
+          [
+            ["Gift A", "Gift B"],
+            ["tag-1", "tag-2"],
+          ],
+          [
+            ["Gift B", "Gift A"],
+            ["tag-2", "tag-1"],
+          ],
+        ])(
+          "keeps each line's tags by its memo, resent as %j",
+          async (memos, tagIds) => {
+            transactions.findOne.mockResolvedValueOnce(gifts);
+            const result = await service.prepareUpdate(userId, {
+              transactionId: "t1",
+              splits: memos.map((memo) => ({
+                categoryName: "Gifts",
+                amount: -25,
+                memo,
+              })),
+            });
+            if (result.kind !== "standard")
+              throw new Error("expected standard");
+            expect(result.splits?.map((line) => line.tagIds)).toEqual(
+              tagIds.map((id) => [id]),
+            );
+          },
+        );
+
+        it("refuses rather than guesses when the memos changed", async () => {
+          transactions.findOne.mockResolvedValueOnce(gifts);
+          await expect(
+            service.prepareUpdate(userId, {
+              transactionId: "t1",
+              splits: [
+                { categoryName: "Gifts", amount: -25, memo: "Gift C" },
+                { categoryName: "Gifts", amount: -25, memo: "Gift D" },
+              ],
+            }),
+          ).rejects.toThrow(/splitId of the line it continues/);
+        });
+      });
+
+      it("carries the tags onto a bulk row's lines too", async () => {
+        transactions.findOne.mockResolvedValueOnce(splitTx);
+        const result = await service.prepareUpdateBulk(userId, [
+          {
+            transactionId: "t1",
+            splits: [
+              { categoryName: "Dining", amount: -20 },
+              { categoryName: "Dining", amount: -10 },
+            ],
+          },
+        ]);
+        expect(result.okRows[0].splits?.[0]).toEqual({
+          categoryId: "c1",
+          amount: -20,
+          memo: null,
+          tagIds: ["tag-1"],
+        });
+        expect(result.previewRows[0].splits?.[0]).toMatchObject({
+          tagNames: ["Trip"],
+        });
+      });
+    });
+
+    it("passes the tags to add and remove to previewUpdate", async () => {
+      await service.prepareUpdate(userId, {
+        transactionId: "t1",
+        tagNames: ["Trip"],
+        removeTagNames: ["Old"],
+      });
+      expect(transactions.previewUpdate).toHaveBeenCalledWith(
+        userId,
+        "t1",
+        expect.objectContaining({
+          tagNames: ["Trip"],
+          removeTagNames: ["Old"],
+        }),
+      );
+    });
+
+    describe("split line tags (splitTags)", () => {
+      const splitTagChanges = [
+        {
+          splitId: "s1",
+          categoryName: "Groceries",
+          amount: -20,
+          memo: null,
+          tagNames: ["Trip"],
+          newTagNames: ["Trip"],
+          removeTagIds: ["tag-o"],
+          removeTagNames: ["Old"],
+        },
+      ];
+
+      it("passes each line's names to previewUpdate", async () => {
+        await service.prepareUpdate(userId, {
+          transactionId: "t1",
+          splitTags: [
+            { splitId: "s1", addTagNames: ["Trip"], removeTagNames: ["Old"] },
+          ],
+        });
+        expect(transactions.previewUpdate).toHaveBeenCalledWith(
+          userId,
+          "t1",
+          expect.objectContaining({
+            splitTags: [
+              { splitId: "s1", addNames: ["Trip"], removeNames: ["Old"] },
+            ],
+          }),
+        );
+      });
+
+      it("refuses splitTags sent with a splits replacement, previewing nothing", async () => {
+        await expect(
+          service.prepareUpdate(userId, {
+            transactionId: "t1",
+            splits: [
+              { categoryName: "Dining", amount: -20 },
+              { categoryName: "Dining", amount: -10 },
+            ],
+            splitTags: [{ splitId: "s1", addTagNames: ["Trip"] }],
+          }),
+        ).rejects.toThrow(/cannot be sent with splits/);
+        expect(transactions.previewUpdate).not.toHaveBeenCalled();
+      });
+
+      it("refuses splitTags on a transfer", async () => {
+        transactions.findOne.mockResolvedValueOnce({
+          id: "t1",
+          isTransfer: true,
+          linkedTransactionId: "t2",
+        });
+        await expect(
+          service.prepareUpdate(userId, {
+            transactionId: "t1",
+            splitTags: [{ splitId: "s1", addTagNames: ["Trip"] }],
+          }),
+        ).rejects.toThrow(/not split/);
+      });
+
+      it("carries the lines' changes onto a bulk row: ids to write, names to show", async () => {
+        transactions.findOne.mockResolvedValueOnce({
+          id: "t1",
+          isTransfer: false,
+        });
+        transactions.previewUpdate.mockResolvedValueOnce({
+          ...(await transactions.previewUpdate()),
+          splitTagChanges,
+          tagsOnly: true,
+        });
+        const result = await service.prepareUpdateBulk(userId, [
+          {
+            transactionId: "t1",
+            splitTags: [{ splitId: "s1", addTagNames: ["Trip"] }],
+          },
+        ]);
+        expect(result.okRows[0]).toMatchObject({
+          splitTagChanges: [
+            { splitId: "s1", tagNames: ["Trip"], removeTagIds: ["tag-o"] },
+          ],
+          tagsOnly: true,
+        });
+        expect(result.okRows[0].splitTagChanges?.[0]).not.toHaveProperty(
+          "removeTagNames",
+        );
+        expect(result.previewRows[0].splitTagChanges).toEqual([
+          {
+            categoryName: "Groceries",
+            amount: -20,
+            tagNames: ["Trip"],
+            newTagNames: ["Trip"],
+            removeTagNames: ["Old"],
+          },
+        ]);
+      });
+    });
+
+    it("previews a transfer's tag change from the edited leg", async () => {
+      transactions.findOne.mockResolvedValueOnce({
+        id: "t1",
+        isTransfer: true,
+        linkedTransactionId: "t2",
+      });
+      transactions.previewTransferTagChange.mockResolvedValueOnce({
+        tagNames: ["Trip"],
+        newTagNames: ["Trip"],
+        removeTagIds: ["tag-o"],
+        removeTagNames: ["Old"],
+      });
+      const result = await service.prepareUpdate(userId, {
+        transactionId: "t1",
+        tagNames: ["Trip"],
+        removeTagNames: ["Old"],
+      });
+      expect(transactions.previewTransferTagChange).toHaveBeenCalledWith(
+        userId,
+        "t1",
+        ["Trip"],
+        ["Old"],
+      );
+      expect(result.preview).toMatchObject({
+        tagNames: ["Trip"],
+        newTagNames: ["Trip"],
+        removeTagIds: ["tag-o"],
+        removeTagNames: ["Old"],
+      });
+    });
+
+    it("refuses a tag-only transfer edit that changes nothing, building no card", async () => {
+      transactions.findOne.mockResolvedValueOnce({
+        id: "t1",
+        isTransfer: true,
+        linkedTransactionId: "t2",
+      });
+      // previewTransferTagChange (the double) finds every tag already there,
+      // and the transfer's fields are as they were.
+      transfer.previewUpdateTransfer.mockResolvedValueOnce({
+        transactionId: "t1",
+        changesFields: false,
+      });
+      await expect(
+        service.prepareUpdate(userId, {
+          transactionId: "t1",
+          tagNames: ["Trip"],
+        }),
+      ).rejects.toThrow(/Nothing to change/);
+    });
+
+    it("lets an edit that asked for no tags reach the surface's own transfer refusal", async () => {
+      // An attachments-only edit of a transfer: the surface, not this check,
+      // says transfers take no attachments.
+      transactions.findOne.mockResolvedValueOnce({
+        id: "t1",
+        isTransfer: true,
+        linkedTransactionId: "t2",
+      });
+      const result = await service.prepareUpdate(userId, {
+        transactionId: "t1",
+      });
+      expect(result.kind).toBe("transfer");
+    });
+
+    it("marks a transfer edit that changes only tags as tag-only", async () => {
+      transactions.findOne.mockResolvedValueOnce({
+        id: "t1",
+        isTransfer: true,
+        linkedTransactionId: "t2",
+      });
+      transactions.previewTransferTagChange.mockResolvedValueOnce({
+        tagNames: ["Trip"],
+        newTagNames: [],
+        removeTagIds: [],
+        removeTagNames: [],
+      });
+      // The date is resent as it is: a value difference decides, not presence.
+      transfer.previewUpdateTransfer.mockResolvedValueOnce({
+        transactionId: "t1",
+        changesFields: false,
+      });
+      const result = await service.prepareUpdate(userId, {
+        transactionId: "t1",
+        date: "2026-02-01",
+        tagNames: ["Trip"],
+      });
+      expect(result.preview).toMatchObject({ tagsOnly: true });
+    });
+
+    it("carries a bulk row's tag change into the signed row and the card", async () => {
+      transactions.previewUpdate.mockResolvedValueOnce({
+        transactionId: "t1",
+        accountId: "a1",
+        accountName: "Checking",
+        amount: -30,
+        transactionDate: "2026-02-01",
+        payeeId: null,
+        payeeName: null,
+        payeeMatched: false,
+        payeeWillBeCreated: false,
+        categoryId: "c1",
+        categoryName: "Dining",
+        description: null,
+        currencyCode: "USD",
+        isReconciled: false,
+        tagNames: ["Trip"],
+        newTagNames: ["Trip"],
+        removeTagIds: ["tag-o"],
+        removeTagNames: ["Old"],
+        tagsOnly: true,
+      });
+      const result = await service.prepareUpdateBulk(userId, [
+        { transactionId: "t1", tagNames: ["Trip"], removeTagNames: ["Old"] },
+      ]);
+      expect(result.okRows[0]).toMatchObject({
+        tagNames: ["Trip"],
+        removeTagIds: ["tag-o"],
+        tagsOnly: true,
+      });
+      expect(result.previewRows[0]).toMatchObject({
+        tagNames: ["Trip"],
+        newTagNames: ["Trip"],
+        removeTagNames: ["Old"],
+      });
     });
 
     it("surfaces previewUpdate's actionable refusal of a category-only edit on an existing split", async () => {
@@ -645,6 +1109,64 @@ describe("TransactionToolPrepService", () => {
     });
   });
 
+  describe("prepareUpdateEach", () => {
+    it("previews a transfer tag edit as its own card, which the bulk preview skips", async () => {
+      const transferTx = {
+        id: "t2",
+        isTransfer: true,
+        linkedTransactionId: "t3",
+      };
+      transactions.previewTransferTagChange.mockResolvedValue({
+        tagNames: ["QA-Test"],
+        newTagNames: ["QA-Test"],
+        removeTagIds: [],
+        removeTagNames: [],
+      });
+      const items = [{ transactionId: "t2", tagNames: ["QA-Test"] }];
+
+      transactions.findOne.mockResolvedValueOnce(transferTx);
+      const bulk = await service.prepareUpdateBulk(userId, items);
+      expect(bulk.skipped).toHaveLength(1);
+
+      transactions.findOne.mockResolvedValueOnce(transferTx);
+      const each = await service.prepareUpdateEach(userId, items);
+      expect(each.skipped).toEqual([]);
+      expect(each.previewRows).toEqual([
+        expect.objectContaining({
+          status: "ok",
+          fromAccountName: "Checking",
+          toAccountName: "Savings",
+          tagNames: ["QA-Test"],
+          newTagNames: ["QA-Test"],
+        }),
+      ]);
+    });
+
+    it("shows a standard edit as the bulk preview does", async () => {
+      const items = [{ transactionId: "t1", amount: -5 }];
+      const bulk = await service.prepareUpdateBulk(userId, items);
+      const each = await service.prepareUpdateEach(userId, items);
+      expect(each.previewRows).toEqual(bulk.previewRows);
+    });
+
+    it("reports a row that cannot be prepared, by index, and previews the rest", async () => {
+      transactions.findOne
+        .mockRejectedValueOnce(new NotFoundException("Transaction not found"))
+        .mockResolvedValueOnce({ id: "t1", isTransfer: false });
+      const result = await service.prepareUpdateEach(userId, [
+        { transactionId: "gone", amount: -5 },
+        { transactionId: "t1", amount: -5 },
+      ]);
+      expect(result.skipped).toEqual([
+        { index: 0, reason: "Transaction not found" },
+      ]);
+      expect(result.previewRows.map((row) => row.status)).toEqual([
+        "error",
+        "ok",
+      ]);
+    });
+  });
+
   describe("prepareUpdateBulk", () => {
     it("maps standard edits to batch rows and skips transfers", async () => {
       transactions.findOne
@@ -694,7 +1216,7 @@ describe("TransactionToolPrepService", () => {
         expect(row.categoryId).toBeNull();
       }
       // Each row is validated against its own amount, not the first row's.
-      expect(splitService.validateSplits).toHaveBeenCalledTimes(2);
+      expect(splitService.validateSplitsInCurrency).toHaveBeenCalledTimes(2);
       expect(result.previewRows[0].splits).toHaveLength(2);
       expect(result.previewRows[0].categoryName).toBeNull();
     });
@@ -946,6 +1468,180 @@ describe("TransactionToolPrepService", () => {
       });
       expect(row.payeeId).toBeNull();
       expect(row.createPayee).toBe(true);
+    });
+  });
+
+  describe("foreign-currency entries", () => {
+    const foreign = {
+      originalAmount: -100,
+      originalCurrencyCode: "EUR",
+      exchangeRate: 1.1,
+    };
+    const foreignPreview = {
+      ...createPreview,
+      amount: -110,
+      originalAmount: -100,
+      originalCurrencyCode: "EUR",
+      exchangeRate: 1.1,
+      exchangeRateSource: "supplied" as const,
+    };
+
+    it("hands the figures and a market-rate lookup to previewCreate", async () => {
+      transactions.previewCreate.mockResolvedValueOnce(foreignPreview);
+      const result = await service.prepareCreate(userId, [
+        { accountName: "Checking", date: "2026-01-15", ...foreign },
+      ]);
+      const input = transactions.previewCreate.mock.calls[0][1];
+      expect(input).toMatchObject({ amount: undefined, foreignEntry: foreign });
+      // The lookup is the stored-rate ladder for the pair and the date.
+      await expect(
+        input.foreignEntry.lookupRate("EUR", "USD", "2026-01-15"),
+      ).resolves.toBe(1.0987);
+      expect(exchangeRates.getRateForDate).toHaveBeenCalledWith(
+        "EUR",
+        "USD",
+        "2026-01-15",
+      );
+      // The card's row shows the entry and where its rate came from.
+      expect(result.previewRows[0]).toMatchObject({
+        status: "ok",
+        amount: -110,
+        originalAmount: -100,
+        originalCurrencyCode: "EUR",
+        exchangeRate: 1.1,
+        exchangeRateSource: "supplied",
+      });
+    });
+
+    it("leaves the unvalidated figures off a row that failed", async () => {
+      transactions.previewCreate.mockRejectedValueOnce(
+        new NotFoundException('Currency "US$" not found'),
+      );
+      const result = await service.prepareCreate(userId, [
+        {
+          accountName: "Checking",
+          date: "2026-01-15",
+          originalAmount: -10,
+          originalCurrencyCode: "US$",
+        },
+      ]);
+      expect(result.previewRows[0].status).toBe("error");
+      expect(result.previewRows[0]).not.toHaveProperty("originalCurrencyCode");
+    });
+
+    it("passes no entry for a row that names none", async () => {
+      await service.prepareCreate(userId, [
+        { accountName: "Checking", amount: -10, date: "2026-01-15" },
+      ]);
+      expect(
+        transactions.previewCreate.mock.calls[0][1].foreignEntry,
+      ).toBeUndefined();
+    });
+
+    it("validates a split create's lines against the amount the entry worked out", async () => {
+      transactions.previewCreate.mockResolvedValueOnce(foreignPreview);
+      await service.prepareCreateSingle(userId, {
+        accountName: "Checking",
+        date: "2026-01-15",
+        ...foreign,
+        splits: [
+          { categoryName: "Dining", amount: -60 },
+          { categoryName: "Dining", amount: -50 },
+        ],
+      });
+      expect(splitService.validateSplitsInCurrency).toHaveBeenCalledWith(
+        expect.any(Array),
+        -110,
+        "USD",
+      );
+    });
+
+    it("refuses an entry on a transfer, on create and on edit, rather than dropping it", async () => {
+      const bulk = await service.prepareCreateTransfer(userId, [
+        {
+          fromAccountName: "Checking",
+          toAccountName: "Savings",
+          amount: 100,
+          date: "2026-01-15",
+          originalAmount: 90,
+          originalCurrencyCode: "EUR",
+        },
+      ]);
+      expect(bulk.okPreviews).toHaveLength(0);
+      expect(bulk.skipped[0].reason).toContain("originalAmount");
+      await expect(
+        service.prepareCreateTransferSingle(userId, {
+          fromAccountName: "Checking",
+          toAccountName: "Savings",
+          amount: 100,
+          date: "2026-01-15",
+          originalCurrencyCode: "EUR",
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      transactions.findOne.mockResolvedValueOnce({
+        id: "t1",
+        isTransfer: true,
+        linkedTransactionId: null,
+      });
+      await expect(
+        service.prepareUpdate(userId, {
+          transactionId: "t1",
+          originalAmount: 90,
+        }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+      // A rate on a transfer edit would be dropped: the edit takes none.
+      transactions.findOne.mockResolvedValueOnce({
+        id: "t1",
+        isTransfer: true,
+        linkedTransactionId: null,
+      });
+      await expect(
+        service.prepareUpdate(userId, {
+          transactionId: "t1",
+          exchangeRate: 0.92,
+        }),
+      ).rejects.toThrow(/exchange rate cannot be changed here/);
+      expect(transfer.previewCreateTransfer).not.toHaveBeenCalled();
+      expect(transfer.previewUpdateTransfer).not.toHaveBeenCalled();
+    });
+
+    it("carries an edit's entry onto a bulk row: the figures signed, the source shown", async () => {
+      transactions.previewUpdate.mockResolvedValueOnce({
+        transactionId: "t1",
+        accountId: "a1",
+        accountName: "Checking",
+        amount: -132,
+        transactionDate: "2026-02-01",
+        payeeId: "p1",
+        payeeName: "Store",
+        payeeMatched: true,
+        payeeWillBeCreated: false,
+        categoryId: "c1",
+        categoryName: "Dining",
+        description: null,
+        currencyCode: "USD",
+        isReconciled: false,
+        originalAmount: -120,
+        originalCurrencyCode: "EUR",
+        exchangeRate: 1.1,
+        exchangeRateSource: "derived",
+      });
+      const result = await service.prepareUpdateBulk(userId, [
+        { transactionId: "t1", originalAmount: -120 },
+      ]);
+      expect(
+        transactions.previewUpdate.mock.calls[0][2].foreignEntry,
+      ).toMatchObject({ originalAmount: -120 });
+      expect(result.okRows[0]).toMatchObject({
+        amount: -132,
+        originalAmount: -120,
+        originalCurrencyCode: "EUR",
+        exchangeRate: 1.1,
+      });
+      expect(result.okRows[0]).not.toHaveProperty("exchangeRateSource");
+      expect(result.previewRows[0]).toMatchObject({
+        exchangeRateSource: "derived",
+      });
     });
   });
 });

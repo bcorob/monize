@@ -180,6 +180,54 @@ describe('formatMonth', () => {
     expect(typeof result).toBe('string');
     expect(result.length).toBeGreaterThan(0);
   });
+
+  it('reads the month out of a full ISO date, as the payoff-date callers pass', () => {
+    expect(formatMonth('2029-04-15', 'YYYY-MM-DD')).toBe('2029-04');
+    expect(formatMonth('2029-04-15T00:00:00Z', 'YYYY-MM-DD')).toBe('2029-04');
+  });
+
+  it('accepts a single-digit month, as it always has', () => {
+    expect(formatMonth('2026-3', 'YYYY-MM-DD')).toBe('2026-03');
+  });
+
+  /**
+   * The guard, and every case in it threw a TypeError before it existed:
+   * `padStart` ran on the split result before any format branch, so a value
+   * with no `-` gave `monStr === undefined`. Two of these reach the helper for
+   * real -- a recharts tooltip `label` is optional, so `String(label)` is the
+   * literal `'undefined'`, and a `monthKey` can be absent mid rolling deploy --
+   * and a throw inside a tooltip's render blanks the report subtree around it.
+   */
+  describe('a value with no parseable month', () => {
+    it.each(['undefined', '', '2026', 'not-a-month', 'null', '2026-13', '2026-00'])(
+      'hands %j back unchanged rather than throwing',
+      (input) => {
+        for (const format of ['browser', 'YYYY-MM-DD', 'MM/DD/YYYY', 'DD/MM/YYYY', 'DD-MMM-YYYY']) {
+          expect(() => formatMonth(input, format)).not.toThrow();
+          expect(formatMonth(input, format)).toBe(input);
+        }
+      },
+    );
+
+    it('renders nothing for an argument that is not a string at all', () => {
+      // TypeScript says this cannot happen; a stale bundle reading a renamed
+      // field says otherwise, and `undefined.split` is a blank screen.
+      expect(() => formatMonth(undefined as unknown as string)).not.toThrow();
+      expect(formatMonth(undefined as unknown as string)).toBe('');
+      expect(formatMonth(null as unknown as string)).toBe('');
+    });
+
+    it('leaves the valid path untouched in every format', () => {
+      // The guard must not have widened into a passthrough: these are the same
+      // expectations as the cases above it, restated as one set.
+      expect(formatMonth('2026-01', 'YYYY-MM-DD')).toBe('2026-01');
+      expect(formatMonth('2026-01', 'MM/DD/YYYY')).toBe('01/2026');
+      expect(formatMonth('2026-01', 'DD/MM/YYYY')).toBe('01/2026');
+      expect(formatMonth('2026-01', 'DD-MMM-YYYY')).toBe('Jan-2026');
+      expect(formatMonth('2026-12', 'YYYY-MM-DD')).toBe('2026-12');
+      expect(formatMonth('2026-01', 'browser', 'en-US')).toBe('01/2026');
+    });
+  });
 });
 
 describe('formatChartDate', () => {
@@ -210,6 +258,11 @@ describe('formatChartDate', () => {
 
   it('formats year-only markers', () => {
     expect(formatChartDate('2026-06-15', 'yyyy', 'en-US')).toBe('2026');
+  });
+
+  it('formats a long weekday date in the locale\'s own order', () => {
+    expect(formatChartDate('2026-11-06', 'EEEE MMMM d', 'en-US')).toBe('Friday, November 6');
+    expect(formatChartDate('2026-11-06', 'EEEE MMMM d', 'en-GB')).toBe('Friday 6 November');
   });
 
   it('falls back to the runtime default locale when none is given', () => {

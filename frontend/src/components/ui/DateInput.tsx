@@ -1,9 +1,10 @@
-import { ChangeEvent, forwardRef, InputHTMLAttributes, KeyboardEvent, useCallback, useEffect, useRef, useState } from 'react';
+import { ChangeEvent, forwardRef, InputHTMLAttributes, KeyboardEvent, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useTranslations } from 'next-intl';
 import { QuestionMarkCircleIcon } from '@heroicons/react/24/outline';
 import { Input } from './Input';
 import { CalendarPopover } from './CalendarPopover';
+import { placePopover } from './InfoTooltip';
 import { cn, getLocalDateString, formatDate, parseDateFromFormat, inputBaseClasses, inputErrorClasses } from '@/lib/utils';
 import {
   TYPEABLE_DATE_SEPARATORS,
@@ -11,6 +12,7 @@ import {
   parseFlexibleDate,
 } from '@/lib/date-parse';
 import { useDateFormat } from '@/hooks/useDateFormat';
+import { isTouchDevice } from '@/lib/touch-device';
 
 interface DateInputProps extends InputHTMLAttributes<HTMLInputElement> {
   label?: string;
@@ -37,17 +39,28 @@ function parseOrToday(value: string): Date {
 function DateShortcutTooltip() {
   const t = useTranslations('common');
   const iconRef = useRef<HTMLSpanElement>(null);
-  const [position, setPosition] = useState<{ top: number; left: number } | null>(null);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
 
-  const showTooltip = useCallback(() => {
-    if (!iconRef.current) return;
-    const rect = iconRef.current.getBoundingClientRect();
-    setPosition({ top: rect.bottom + 6, left: rect.left + rect.width / 2 });
-  }, []);
+  const showTooltip = useCallback(() => setOpen(true), []);
+  const hideTooltip = useCallback(() => setOpen(false), []);
 
-  const hideTooltip = useCallback(() => {
-    setPosition(null);
-  }, []);
+  // Measured before paint: left-aligned to the icon, clamped inside the
+  // viewport and flipped above when it does not fit below (placePopover).
+  useLayoutEffect(() => {
+    if (!open) return;
+    const anchor = iconRef.current;
+    const tooltip = tooltipRef.current;
+    if (!anchor || !tooltip) return;
+    const { top, left } = placePopover(
+      anchor.getBoundingClientRect(),
+      { width: tooltip.offsetWidth, height: tooltip.offsetHeight },
+      'bottom',
+      { width: window.innerWidth, height: window.innerHeight },
+    );
+    tooltip.style.top = `${top}px`;
+    tooltip.style.left = `${left}px`;
+  }, [open]);
 
   return (
     <span
@@ -60,11 +73,12 @@ function DateShortcutTooltip() {
         className="w-3.5 h-3.5 text-gray-400 dark:text-gray-500 cursor-help"
         strokeWidth={2}
       />
-      {position && createPortal(
+      {open && createPortal(
         <div
+          ref={tooltipRef}
           role="tooltip"
-          className="fixed -translate-x-1/2 px-3 py-2 text-xs font-normal text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg whitespace-nowrap z-[100] pointer-events-none"
-          style={{ top: position.top, left: position.left }}
+          className="fixed px-3 py-2 text-xs font-normal text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-lg shadow-lg z-[100] pointer-events-none"
+          style={{ top: 0, left: 0, maxWidth: 'calc(100vw - 16px)' }}
         >
           <>
             <span className="block font-medium mb-1">{t('dateInput.shortcutsTitle')}</span>
@@ -229,9 +243,6 @@ function adjustIsoDate(iso: string, segmentType: DateSegmentType, delta: number)
   return getLocalDateString(new Date(y, m - 1, d + delta));
 }
 
-function isTouchDevice(): boolean {
-  return typeof window !== 'undefined' && window.matchMedia('(pointer: coarse)').matches;
-}
 
 const calendarIconSvg = (
   <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -261,6 +272,7 @@ function getInputMode(): InputMode {
 export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
   ({ onDateChange, onKeyDown, onChange: externalOnChange, onBlur: externalOnBlur, value: externalValue, label, id, name, ...props }, ref) => {
     const inputId = id || (label ? `input-${label.toLowerCase().replace(/\s+/g, '-')}` : undefined);
+    const t = useTranslations('common');
     const { datePattern } = useDateFormat();
     const mode = getInputMode();
 
@@ -271,7 +283,7 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
       const val = (externalValue as string) || '';
       return val ? formatDate(val, datePattern) : '';
     });
-    const isFocusedRef = useRef(false);
+    const [isFocused, setIsFocused] = useState(false);
     const localRef = useRef<HTMLInputElement>(null);
     // Hidden native date input ref for touch mode
     const nativeDateRef = useRef<HTMLInputElement>(null);
@@ -317,15 +329,19 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
     // Sync explicit value prop changes to internal state. When the caller is
     // uncontrolled (RHF register, no value prop), externalValue is undefined
     // and we skip -- the mount effect above reads the ref-injected DOM value
-    // instead.
-    useEffect(() => {
-      if (externalValue === undefined) return;
-      const newIso = (externalValue as string) || '';
-      setIsoValue(newIso);
-      if (!isFocusedRef.current) {
-        setDisplayValue(newIso ? formatDate(newIso, datePattern) : '');
+    // instead. The "info from previous render" pattern rather than a setState
+    // in an effect.
+    const [syncedFor, setSyncedFor] = useState({ externalValue, datePattern });
+    if (syncedFor.externalValue !== externalValue || syncedFor.datePattern !== datePattern) {
+      setSyncedFor({ externalValue, datePattern });
+      if (externalValue !== undefined) {
+        const newIso = (externalValue as string) || '';
+        setIsoValue(newIso);
+        if (!isFocused) {
+          setDisplayValue(newIso ? formatDate(newIso, datePattern) : '');
+        }
       }
-    }, [externalValue, datePattern]);
+    }
 
     // Emit a YYYY-MM-DD value change through all relevant callbacks
     const emitDateChange = useCallback((dateStr: string) => {
@@ -479,13 +495,13 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
 
     // Desktop: complete and reformat on blur
     const handleTextBlur = useCallback((e: React.FocusEvent<HTMLInputElement>) => {
-      isFocusedRef.current = false;
+      setIsFocused(false);
       commitTypedValue();
       externalOnBlur?.(e);
     }, [commitTypedValue, externalOnBlur]);
 
     const handleTextFocus = useCallback(() => {
-      isFocusedRef.current = true;
+      setIsFocused(true);
     }, []);
 
     // Desktop: toggle custom calendar popover
@@ -572,7 +588,8 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
               }}
               onBlur={externalOnBlur}
               onKeyDown={handleKeyDown}
-              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+              disabled={props.disabled}
+              className="absolute inset-0 w-full h-full opacity-0 cursor-pointer disabled:cursor-not-allowed"
             />
             {/* Hidden input bound to react-hook-form for value/ref management */}
             <input
@@ -613,16 +630,18 @@ export const DateInput = forwardRef<HTMLInputElement, DateInputProps>(
             className="pr-9"
             {...props}
           />
+          {/* A disabled field cannot be changed through its popover either. */}
           <button
             type="button"
             tabIndex={-1}
             onClick={handleCalendarClick}
-            aria-label="Open date picker"
-            className="absolute top-px bottom-px right-px z-10 flex items-center pr-2.5 pl-1 bg-white dark:bg-gray-800 rounded-r-md text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300"
+            disabled={props.disabled}
+            aria-label={t('dateInput.openPicker')}
+            className="absolute top-px bottom-px right-px z-10 flex items-center pr-2.5 pl-1 bg-white dark:bg-gray-800 rounded-r-md text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 disabled:cursor-not-allowed disabled:hover:text-gray-400 dark:disabled:hover:text-gray-500"
           >
             {calendarIconSvg}
           </button>
-          {showCalendar && (
+          {showCalendar && !props.disabled && (
             <CalendarPopover
               value={isoValue}
               onSelect={handleCalendarSelect}

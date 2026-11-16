@@ -1,6 +1,6 @@
 import { Account } from '@/types/account';
 import { parseLocalDate } from '@/lib/utils';
-import { LoanHistoryResult } from '@/lib/loan-history';
+import { LoanHistoryResult, observedInstallment } from '@/lib/loan-history';
 import {
   LoanScheduleInput,
   LoanScheduleResult,
@@ -13,8 +13,12 @@ import {
   generateLoanSchedule,
   getPeriodsPerYear,
   monthsBetween,
-  round2,
 } from '@/lib/loan-schedule';
+import { amortizationMethodFor, mortgageTypeOf } from '@/lib/mortgage-type';
+import { methodScheduleTerms } from '@/lib/mortgage-installment';
+import type { MortgageType } from '@/types/account';
+import { roundToCents } from '@/lib/format';
+import { isDebtOutstanding } from '@/lib/loan-frequency';
 
 /**
  * "How much have my overpayments already helped?" — compares the original
@@ -45,7 +49,9 @@ export interface PastImpactResult {
    * contractual schedule, or `null` when either schedule stopped at its
    * projection horizon instead of paying off. Both sides are lifetime figures,
    * so a horizon subtotal on either side makes the difference unknown rather
-   * than small.
+   * than small. Also `null` for a loan whose repayments recorded no interest
+   * while its rate is not 0%: the interest was paid outside the app, so counting
+   * it as zero would credit the borrower with all of it as saved.
    */
   interestAlreadySaved: number | null;
   /**
@@ -94,7 +100,7 @@ export function computePastImpact(
   // today's balance plus every principal dollar already repaid. That equals
   // the opening balance whenever one is known and stays positive when it is
   // blank, so the contractual baseline can still be built from transactions.
-  const reconstructedPrincipal = round2(
+  const reconstructedPrincipal = roundToCents(
     history.currentBalance + history.cumulativePrincipal,
   );
   const originalPrincipal =
@@ -137,8 +143,7 @@ export function computePastImpact(
   }
 
   const frequency = account.paymentFrequency as ScheduleFrequency;
-  const isCanadian = account.isCanadianMortgage || false;
-  const isVariableRate = account.isVariableRate || false;
+  const mortgageType = mortgageTypeOf(account);
 
   // The origination rate comes from the rate history when one exists; the
   // account's scalar rate is only the *current* rate and would corrupt the
@@ -153,6 +158,123 @@ export function computePastImpact(
   // reader has no other way to know that.
   const scalarRate =
     account.interestRate != null ? Number(account.interestRate) : null;
+  const originalSchedule =
+    amortizationMethodFor(mortgageType) === 'ANNUITY'
+      ? contractualAnnuitySchedule({
+          rateChanges,
+          startDate,
+          scalarRate,
+          originalPrincipal,
+          configuredTermMonths,
+          frequency,
+          mortgageType,
+        })
+      : contractualMethodSchedule({
+          account,
+          rateChanges,
+          scalarRate,
+          originalPrincipal,
+          frequency,
+          mortgageType,
+        });
+  if (!originalSchedule) return null;
+
+  // --- Current payoff, from the caller's forward projection ---
+  const isPaidOff = !isDebtOutstanding(history.currentBalance);
+  const lastActualPaymentDate =
+    history.events.length > 0 ? history.events[history.events.length - 1].date : null;
+  const currentPayoffDate = isPaidOff
+    ? lastActualPaymentDate
+    : (currentProjection?.payoffDate ?? null);
+
+  // Both sides of the comparison are lifetime interest, so both have to be
+  // known: `totalInterest` on a schedule that stopped at its projection horizon
+  // is the interest over that horizon, and subtracting it would report a saving
+  // the loan has not made. A loan already paid off contributes a known zero of
+  // remaining interest rather than an unknown (there is nothing left to
+  // project), which is why the settled case is not gated on a projection.
+  //
+  // The remaining interest is resolved to `null` rather than to a `?? 0`
+  // fallback, so the subtraction below cannot compile without the gate. An
+  // unreachable "unknown means zero" branch is still the defect waiting for the
+  // next edit of the condition.
+  const projectedRemainingInterest: number | null = isPaidOff
+    ? 0
+    : currentProjection?.paidOff
+      ? currentProjection.totalInterest
+      : null;
+  // A loan that books its interest outside the app (principal-only repayments,
+  // nothing recorded) has paid interest the history cannot see, so counting it
+  // as zero would credit the borrower with the whole of it as "saved". The
+  // observed installment says whether interest is KNOWN: recorded, or known zero
+  // because the loan's rate is 0% (A26-L34).
+  const interestUnrecorded =
+    history.cumulativeInterest <= 0 &&
+    observedInstallment(history)?.complete === false;
+  const interestAlreadySaved =
+    originalSchedule.paidOff &&
+    projectedRemainingInterest !== null &&
+    !interestUnrecorded
+      ? Math.max(
+          0,
+          roundToCents(
+            originalSchedule.totalInterest -
+              (history.cumulativeInterest + projectedRemainingInterest),
+          ),
+        )
+      : null;
+
+  // Extra principal already paid = the principal from payments recognized as
+  // overpayments (by the loan's overpayment category or memo). This is the sum
+  // the installment schedule shows in its Extra Principal column, so the two
+  // views agree. Integer-cents arithmetic avoids floating-point drift.
+  const extraPrincipalCents = history.events
+    .filter((event) => event.type === 'OVERPAYMENT')
+    .reduce((sum, event) => sum + Math.round(event.principal * 100), 0);
+  const extraPrincipalPaid = extraPrincipalCents / 100;
+
+  return {
+    originalSchedule,
+    currentProjection,
+    originalPayoffDate: originalSchedule.payoffDate,
+    currentPayoffDate,
+    // The sibling of interestAlreadySaved: both compare the original schedule
+    // against where the loan now ends, so both need both ends known. A schedule
+    // that stopped at its projection horizon has no payoff date at all.
+    monthsAlreadySaved:
+      currentPayoffDate != null && originalSchedule.payoffDate != null
+        ? Math.max(
+            0,
+            monthsBetween(currentPayoffDate, originalSchedule.payoffDate),
+          )
+        : null,
+    interestAlreadySaved,
+    extraPrincipalPaid,
+  };
+}
+
+/**
+ * The contractual "if I never overpaid" schedule of an annuity loan: its
+ * recorded origination installment, or a fresh PMT over the configured term
+ * when none is usable. Null when no contractual payment can be determined.
+ */
+function contractualAnnuitySchedule({
+  rateChanges,
+  startDate,
+  scalarRate,
+  originalPrincipal,
+  configuredTermMonths,
+  frequency,
+  mortgageType,
+}: {
+  rateChanges: RateTimelineRow[];
+  startDate: string;
+  scalarRate: number | null;
+  originalPrincipal: number;
+  configuredTermMonths: number;
+  frequency: ScheduleFrequency;
+  mortgageType: MortgageType;
+}): LoanScheduleResult | null {
   const timeline = buildRateTimeline(rateChanges, startDate, scalarRate ?? 0);
 
   const periodsPerYear = getPeriodsPerYear(frequency);
@@ -179,8 +301,7 @@ export function computePastImpact(
         originalPrincipal,
         timeline.startingAnnualRate,
         frequency,
-        isCanadian,
-        isVariableRate,
+        mortgageType,
       );
 
   const contractualPayment = useRecordedInstallment
@@ -190,8 +311,7 @@ export function computePastImpact(
         timeline.startingAnnualRate,
         configuredTermMonths,
         frequency,
-        isCanadian,
-        isVariableRate,
+        mortgageType,
       );
   if (contractualPayment <= 0) return null;
 
@@ -200,8 +320,7 @@ export function computePastImpact(
     annualRate: timeline.startingAnnualRate,
     paymentAmount: contractualPayment,
     frequency,
-    isCanadian,
-    isVariableRate,
+    mortgageType,
     firstPaymentDate: parseLocalDate(startDate),
   };
   // Accelerated payments (monthly / 2 or / 4) are larger than the amortizing
@@ -212,7 +331,7 @@ export function computePastImpact(
   // projection is computed.
   const isAccelerated =
     frequency === 'ACCELERATED_WEEKLY' || frequency === 'ACCELERATED_BIWEEKLY';
-  const originalSchedule = generateLoanSchedule(
+  return generateLoanSchedule(
     useRecordedInstallment
       ? {
           ...base,
@@ -249,67 +368,47 @@ export function computePastImpact(
         },
   );
 
-  // --- Current payoff, from the caller's forward projection ---
-  const isPaidOff = history.currentBalance <= 0.01;
-  const lastActualPaymentDate =
-    history.events.length > 0 ? history.events[history.events.length - 1].date : null;
-  const currentPayoffDate = isPaidOff
-    ? lastActualPaymentDate
-    : (currentProjection?.payoffDate ?? null);
-
-  // Both sides of the comparison are lifetime interest, so both have to be
-  // known: `totalInterest` on a schedule that stopped at its projection horizon
-  // is the interest over that horizon, and subtracting it would report a saving
-  // the loan has not made. A loan already paid off contributes a known zero of
-  // remaining interest rather than an unknown (there is nothing left to
-  // project), which is why the settled case is not gated on a projection.
-  //
-  // The remaining interest is resolved to `null` rather than to a `?? 0`
-  // fallback, so the subtraction below cannot compile without the gate. An
-  // unreachable "unknown means zero" branch is still the defect waiting for the
-  // next edit of the condition.
-  const projectedRemainingInterest: number | null = isPaidOff
-    ? 0
-    : currentProjection?.paidOff
-      ? currentProjection.totalInterest
-      : null;
-  const interestAlreadySaved =
-    originalSchedule.paidOff && projectedRemainingInterest !== null
-      ? Math.max(
-          0,
-          round2(
-            originalSchedule.totalInterest -
-              (history.cumulativeInterest + projectedRemainingInterest),
-          ),
-        )
-      : null;
-
-  // Extra principal already paid = the principal from payments recognized as
-  // overpayments (by the loan's overpayment category or memo). This is the sum
-  // the installment schedule shows in its Extra Principal column, so the two
-  // views agree. Integer-cents arithmetic avoids floating-point drift.
-  const extraPrincipalCents = history.events
-    .filter((event) => event.type === 'OVERPAYMENT')
-    .reduce((sum, event) => sum + Math.round(event.principal * 100), 0);
-  const extraPrincipalPaid = extraPrincipalCents / 100;
-
-  return {
-    originalSchedule,
-    currentProjection,
-    originalPayoffDate: originalSchedule.payoffDate,
-    currentPayoffDate,
-    // The sibling of interestAlreadySaved: both compare the original schedule
-    // against where the loan now ends, so both need both ends known. A schedule
-    // that stopped at its projection horizon has no payoff date at all.
-    monthsAlreadySaved:
-      currentPayoffDate != null && originalSchedule.payoffDate != null
-        ? Math.max(
-            0,
-            monthsBetween(currentPayoffDate, originalSchedule.payoffDate),
-          )
-        : null,
-    interestAlreadySaved,
-    extraPrincipalPaid,
-  };
 }
 
+/**
+ * The contractual schedule of a LINEAR or INTEREST_ONLY mortgage: the method's
+ * own schedule from the amount borrowed at `payment_start_date`, payment 1
+ * (INV-LOAN-005), with the recorded rate steps and no overpayment
+ * (docs/specs/mortgage-types.md, section 5.6). It has no installment to
+ * choose: each row's is the method's. Null when a term the method needs is
+ * missing (section 8).
+ */
+function contractualMethodSchedule({
+  account,
+  rateChanges,
+  scalarRate,
+  originalPrincipal,
+  frequency,
+  mortgageType,
+}: {
+  account: Account;
+  rateChanges: RateTimelineRow[];
+  scalarRate: number | null;
+  originalPrincipal: number;
+  frequency: ScheduleFrequency;
+  mortgageType: MortgageType;
+}): LoanScheduleResult | null {
+  const startDate = account.paymentStartDate?.split('T')[0];
+  if (!startDate) return null;
+  const method = methodScheduleTerms(mortgageType, account, startDate);
+  if (!method?.terms) return null;
+  // See the annuity schedule's note on the `0`: this is read only when there
+  // is no rate history, and the caller has refused a loan without any rate.
+  const timeline = buildRateTimeline(rateChanges, startDate, scalarRate ?? 0);
+  return generateLoanSchedule({
+    startingBalance: originalPrincipal,
+    annualRate: timeline.startingAnnualRate,
+    paymentAmount: 0,
+    frequency,
+    mortgageType,
+    methodTerms: method.terms,
+    firstPaymentDate: parseLocalDate(startDate),
+    rateChanges: timeline.rateChanges,
+    maxPayments: ORIGINAL_SCHEDULE_MAX_PAYMENTS,
+  });
+}

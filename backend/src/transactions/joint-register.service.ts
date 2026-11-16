@@ -4,13 +4,18 @@ import {
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
-import { DataSource } from "typeorm";
+import { DataSource, EntityManager } from "typeorm";
 import { withScopedDb } from "../common/db/scoped-db";
 import { withSystemContext } from "../common/db/with-context";
 import { tr } from "../i18n/translate";
 import { Transaction } from "./entities/transaction.entity";
-import { TransactionsService } from "./transactions.service";
+import {
+  CreateTransactionOutcome,
+  TransactionsService,
+} from "./transactions.service";
 import { JointAccountsService } from "../delegation/joint-accounts.service";
+import { CrossOwnerAccessService } from "../delegation/cross-owner-access.service";
+import { DelegateOperation } from "../delegation/decorators/delegate-access.decorator";
 import { AccountDelegate } from "../delegation/entities/account-delegate.entity";
 import { CreateTransactionDto } from "./dto/create-transaction.dto";
 import { UpdateTransactionDto } from "./dto/update-transaction.dto";
@@ -34,6 +39,10 @@ import { UpdateTransactionDto } from "./dto/update-transaction.dto";
  *
  * Every check that can refuse runs before the system-context window opens;
  * nothing user-controlled selects rows inside it beyond the validated ids.
+ * The grant is then asserted once more inside the write's own transaction
+ * (`stillAuthorized`), because the decision was read in another transaction
+ * and a revoke, or the owner moving the row out of the joint account, can
+ * commit in between (A26-M04).
  */
 @Injectable()
 export class JointRegisterService {
@@ -41,12 +50,54 @@ export class JointRegisterService {
     private dataSource: DataSource,
     private jointAccounts: JointAccountsService,
     private transactionsService: TransactionsService,
+    private crossOwnerAccess: CrossOwnerAccessService,
   ) {}
+
+  /**
+   * The re-check run inside the owner-identity write, after its row lock and
+   * before its first write: the joint grant for `op` still held, and -- for an
+   * existing row -- the row still in the account that grant names. `FOR
+   * SHARE` on the delegation makes a revoke wait for this write to commit.
+   */
+  private stillAuthorized(
+    realUserId: string,
+    accountId: string,
+    op: DelegateOperation,
+    transactionId?: string,
+  ): (m: EntityManager) => Promise<void> {
+    return async (m) => {
+      if (transactionId) {
+        const rows: { account_id: string }[] = await m.query(
+          `SELECT account_id FROM transactions WHERE id = $1`,
+          [transactionId],
+        );
+        if (rows[0]?.account_id !== accountId) {
+          throw this.transactionNotFound(transactionId);
+        }
+      }
+      await this.crossOwnerAccess.assertAccessStillHeld(
+        m,
+        realUserId,
+        accountId,
+        op,
+        { joint: true },
+      );
+    };
+  }
 
   async create(
     realUserId: string,
     dto: CreateTransactionDto,
   ): Promise<Transaction> {
+    const outcome = await this.createWithOutcome(realUserId, dto);
+    return outcome.transaction;
+  }
+
+  /** `create`, saying whether the row already existed under its `externalId`. */
+  async createWithOutcome(
+    realUserId: string,
+    dto: CreateTransactionDto,
+  ): Promise<CreateTransactionOutcome> {
     this.assertPlainDto(dto);
     const access = await this.jointAccounts.jointAccessFor(
       realUserId,
@@ -59,8 +110,13 @@ export class JointRegisterService {
       dto,
     );
     return withSystemContext(() =>
-      this.transactionsService.create(access.ownerUserId, dto, {
+      this.transactionsService.createWithOutcome(access.ownerUserId, dto, {
         createPayeeIfMissing,
+        // The grantee is the actor and the owner the row's user: the owner's
+        // structural rules (transfer, split) must not run on it, or the
+        // grantee would move, and be shown, the owner's other accounts.
+        actorIsNotOwner: true,
+        beforeWrite: this.stillAuthorized(realUserId, dto.accountId, "create"),
       }),
     );
   }
@@ -96,6 +152,12 @@ export class JointRegisterService {
     return withSystemContext(() =>
       this.transactionsService.update(access.ownerUserId, transactionId, dto, {
         createPayeeIfMissing,
+        beforeWrite: this.stillAuthorized(
+          realUserId,
+          row.accountId,
+          "edit",
+          transactionId,
+        ),
       }),
     );
   }
@@ -110,7 +172,14 @@ export class JointRegisterService {
       "delete",
     );
     return withSystemContext(() =>
-      this.transactionsService.remove(access.ownerUserId, transactionId),
+      this.transactionsService.remove(access.ownerUserId, transactionId, {
+        beforeWrite: this.stillAuthorized(
+          realUserId,
+          row.accountId,
+          "delete",
+          transactionId,
+        ),
+      }),
     );
   }
 
@@ -132,6 +201,14 @@ export class JointRegisterService {
         access.ownerUserId,
         transactionId,
         isCleared,
+        {
+          beforeWrite: this.stillAuthorized(
+            realUserId,
+            row.accountId,
+            "edit",
+            transactionId,
+          ),
+        },
       ),
     );
   }

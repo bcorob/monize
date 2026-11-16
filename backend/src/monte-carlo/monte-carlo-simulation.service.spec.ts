@@ -276,6 +276,24 @@ describe("MonteCarloSimulationService", () => {
       );
     });
 
+    it("inflates the withdrawal from today, not from retirement", () => {
+      // W=50000 in today's value, 30 years to retirement, 2.5% inflation:
+      // the first withdrawal is 50000 * 1.025^30 = ~104878.
+      const result = deterministic({
+        startingValue: 1000000,
+        annualContribution: 0,
+        yearsToRetirement: 30,
+        yearsInRetirement: 1,
+        annualWithdrawal: 50000,
+        expectedReturn: 0,
+        inflationRate: 0.025,
+      });
+      expect(1000000 - result.finalDistribution.median).toBeCloseTo(
+        50000 * Math.pow(1.025, 30),
+        0,
+      );
+    });
+
     it("massive withdrawals deplete most paths", () => {
       const result = service.run({
         ...baseParams,
@@ -633,6 +651,101 @@ describe("MonteCarloSimulationService", () => {
       expect(withExtra.finalDistribution.median).toBeLessThan(
         without.finalDistribution.median,
       );
+    });
+
+    it("a seeded run with cash flows reproduces the per-path summation exactly", () => {
+      // The per-year cash-flow totals are computed once per run rather than
+      // once per (simulation, year). These figures were captured from the
+      // implementation that summed inside the simulation loop; any drift in
+      // value or summation order changes them.
+      const result = service.run({
+        startingValue: 250000,
+        yearsToRetirement: 5,
+        annualContribution: 10000,
+        contributionGrowthRate: 0.03,
+        yearsInRetirement: 5,
+        annualWithdrawal: 30000,
+        expectedReturn: 0.06,
+        volatility: 0.12,
+        inflationRate: 0.025,
+        showRealValues: false,
+        simulationCount: 200,
+        targetValue: 100000,
+        randomSeed: "7",
+        cashFlows: [
+          {
+            amount: 20000,
+            flowType: "ONE_TIME",
+            startYear: 3,
+            endYear: null,
+            inflationAdjust: false,
+          },
+          {
+            amount: -4000,
+            flowType: "RECURRING",
+            startYear: 2,
+            endYear: 8,
+            inflationAdjust: true,
+          },
+          {
+            amount: 1500.5,
+            flowType: "RECURRING",
+            startYear: 6,
+            endYear: null,
+            inflationAdjust: false,
+          },
+          {
+            amount: -75000,
+            flowType: "ONE_TIME",
+            startYear: 7,
+            endYear: null,
+            inflationAdjust: true,
+          },
+          {
+            amount: 99999,
+            flowType: "ONE_TIME",
+            startYear: 40,
+            endYear: null,
+            inflationAdjust: false,
+          },
+        ],
+      });
+
+      expect(result.percentiles.p10).toEqual([
+        234912.07, 235794.1476, 267049.397, 268403.1885, 276041.9422,
+        244331.9306, 138359.8504, 95429.6008, 60359.1484, 25182.8208,
+      ]);
+      expect(result.percentiles.p50).toEqual([
+        272123.2397, 291165.5587, 342292.3594, 358148.4682, 379490.3424,
+        369783.248, 265905.2879, 237730.8675, 209826.7996, 176795.8622,
+      ]);
+      expect(result.percentiles.p90).toEqual([
+        311877.5222, 350311.3485, 418464.1577, 473856.3085, 509719.7934,
+        530665.2697, 444827.6407, 432180.65, 424183.7959, 436337.5275,
+      ]);
+      expect(result.finalDistribution).toEqual({
+        min: 0,
+        max: 847584.8546,
+        mean: 213329.3672,
+        median: 176795.8622,
+        stdev: 156089.8877,
+        depletionRate: 0.05,
+      });
+      expect(result.successRate).toBe(0.665);
+      expect(result.performanceSummary.maxDrawdown).toEqual({
+        p10: -0.9185,
+        p25: -0.7134,
+        p50: -0.5507,
+        p75: -0.3519,
+        p90: -0.2459,
+      });
+      expect(result.performanceSummary.endBalanceReal).toEqual({
+        p10: 19672.7793,
+        p25: 83068.3812,
+        p50: 138112.645,
+        p75: 246465.3144,
+        p90: 340866.1791,
+      });
     });
   });
 

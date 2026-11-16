@@ -1,0 +1,81 @@
+{
+  "learnMore": "Meer informatie",
+  "howThisWorks": "Hoe dit werkt",
+  "menu": {
+    "helpForPage": "Hulp voor deze pagina",
+    "search": "Help doorzoeken",
+    "shortcuts": "Toetsencombinaties",
+    "takeTour": "Volg de rondleiding",
+    "whatsNew": "Nieuw",
+    "shellMenu": "Menu van de desktop-app",
+    "reportIssue": "Probleem melden",
+    "discussions": "Discussies"
+  },
+  "shortcuts": {
+    "title": "Toetsencombinaties",
+    "palette": "Opdrachtenpalet",
+    "paletteKeys": "Ctrl/Cmd+K",
+    "search": "Help doorzoeken",
+    "searchKeys": "?",
+    "undo": "Laatste wijziging ongedaan maken",
+    "undoKeys": "Ctrl/Cmd+Z",
+    "redo": "Opnieuw uitvoeren",
+    "redoKeys": "Ctrl/Cmd+Shift+Z of Ctrl/Cmd+Y",
+    "closeDialog": "Open dialoogvenster of paneel sluiten",
+    "closeDialogKeys": "Esc"
+  },
+  "panel": {
+    "title": "Help",
+    "back": "Terug",
+    "forward": "Vooruit",
+    "openOnline": "Openen op monize.net",
+    "pin": "Zet het helppaneel vast zodat het open blijft als je naar een andere pagina gaat",
+    "unpin": "Maak het helppaneel los",
+    "expand": "Helppaneel vergroten",
+    "collapse": "Helppaneel verkleinen",
+    "resize": "Breedte van het helppaneel aanpassen",
+    "resizeValue": "{width} pixels",
+    "close": "Help sluiten",
+    "englishOnly": "Deze handleiding is in het Engels.",
+    "loading": "Help laden",
+    "toc": {
+      "toggle": "Op deze pagina",
+      "label": "Secties op deze pagina"
+    },
+    "error": {
+      "heading": "De help kon niet worden geladen",
+      "body": "De handleiding is niet geladen. Probeer het opnieuw of lees deze pagina op monize.net.",
+      "retry": "Opnieuw proberen"
+    },
+    "search": "Doorzoek de handleiding",
+    "tour": {
+      "prompt": "Deze pagina heeft een rondleiding."
+    },
+    "version": "Handleiding voor Monize {version}",
+    "latestOnline": "De nieuwste handleiding staat op monize.net"
+  },
+  "search": {
+    "title": "Doorzoek de handleiding",
+    "placeholder": "Doorzoek de handleiding",
+    "ariaLabel": "Doorzoek de handleiding",
+    "contextHeading": "Hulp voor dit scherm",
+    "noResults": "Geen resultaten voor \"{query}\"",
+    "error": "Zoeken mislukt. Probeer het opnieuw.",
+    "hint": {
+      "navigate": "om te navigeren",
+      "select": "om te selecteren",
+      "close": "om te sluiten"
+    }
+  },
+  "markdown": {
+    "screenshot": "Schermafbeelding",
+    "viewScreenshot": "Schermafbeelding bekijken op monize.net",
+    "callout": {
+      "note": "Opmerking",
+      "tip": "Tip",
+      "important": "Belangrijk",
+      "warning": "Waarschuwing",
+      "caution": "Let op"
+    }
+  }
+}

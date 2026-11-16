@@ -23,27 +23,3 @@ export function budgetCategoryBarColor(percent: number): string {
   if (percent > 80) return 'bg-amber-400';
   return 'bg-emerald-400';
 }
-
-/** Pace status label */
-export function paceStatusLabel(paceStatus: 'under' | 'on_track' | 'over'): string {
-  switch (paceStatus) {
-    case 'under':
-      return 'Under budget';
-    case 'on_track':
-      return 'On track';
-    case 'over':
-      return 'Over budget';
-  }
-}
-
-/** Pace status text color class */
-export function paceStatusColor(paceStatus: 'under' | 'on_track' | 'over'): string {
-  switch (paceStatus) {
-    case 'under':
-      return 'text-emerald-600 dark:text-emerald-400';
-    case 'on_track':
-      return 'text-blue-600 dark:text-blue-400';
-    case 'over':
-      return 'text-red-600 dark:text-red-400';
-  }
-}

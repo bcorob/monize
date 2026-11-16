@@ -10,10 +10,12 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { ProviderList } from '@/components/settings/ai/ProviderList';
 import { UsageDashboard } from '@/components/settings/ai/UsageDashboard';
 import { AiBubbleToggle } from '@/components/settings/ai/AiBubbleToggle';
+import { AiTriviaToggle } from '@/components/settings/ai/AiTriviaToggle';
 import { aiApi } from '@/lib/ai';
+import { TOUR_ANCHORS, tourAnchor } from '@/lib/tours/anchors';
 import { getErrorMessage } from '@/lib/errors';
 import type { AiProviderConfig, AiUsageSummary, AiStatus } from '@/types/ai';
-import Link from 'next/link';
+import { BackToSettingsLink } from '@/components/settings/BackToSettingsLink';
 import { useDemoMode } from '@/hooks/useDemoMode';
 
 export default function AiSettingsPage() {
@@ -33,21 +35,25 @@ function AiSettingsContent() {
   const [status, setStatus] = useState<AiStatus | null>(null);
   const [usageDays, setUsageDays] = useState<number | undefined>(30);
 
-  const loadData = useCallback(async () => {
-    try {
-      const [configsData, usageData, statusData] = await Promise.all([
-        aiApi.getConfigs(),
-        aiApi.getUsage(usageDays),
-        aiApi.getStatus(),
-      ]);
-      setConfigs(configsData);
-      setUsage(usageData);
-      setStatus(statusData);
-    } catch (error) {
-      toast.error(getErrorMessage(error, t('toasts.loadFailed')));
-    } finally {
-      setIsLoading(false);
-    }
+  const loadData = useCallback(() => {
+    // Writes live in `run` so they land after the request, not during the effect.
+    const run = async () => {
+      try {
+        const [configsData, usageData, statusData] = await Promise.all([
+          aiApi.getConfigs(),
+          aiApi.getUsage(usageDays),
+          aiApi.getStatus(),
+        ]);
+        setConfigs(configsData);
+        setUsage(usageData);
+        setStatus(statusData);
+      } catch (error) {
+        toast.error(getErrorMessage(error, t('toasts.loadFailed')));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    return run();
   }, [usageDays, t]);
 
   useEffect(() => {
@@ -79,18 +85,12 @@ function AiSettingsContent() {
   return (
     <PageLayout>
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-12 pt-6 pb-8">
-        <div className="mb-4">
-          <Link
-            href="/settings"
-            className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-          >
-            &larr; {t('backLink')}
-          </Link>
-        </div>
+        <BackToSettingsLink label={t('backLink')} />
 
         <PageHeader
           title={t('title')}
           subtitle={t('subtitle')}
+          help="aiSettings"
         />
 
         {isDemoMode && (
@@ -104,17 +104,24 @@ function AiSettingsContent() {
           </div>
         )}
 
-        <AiBubbleToggle disabled={isDemoMode} />
+        <div {...tourAnchor(TOUR_ANCHORS.aiProviderList)}>
+          <ProviderList
+            configs={configs}
+            encryptionAvailable={status?.encryptionAvailable ?? false}
+            onConfigsChanged={loadData}
+            hasSystemDefault={status?.hasSystemDefault}
+            systemDefaultProvider={status?.systemDefaultProvider}
+            systemDefaultModel={status?.systemDefaultModel}
+            disabled={isDemoMode}
+          />
+        </div>
 
-        <ProviderList
-          configs={configs}
-          encryptionAvailable={status?.encryptionAvailable ?? false}
-          onConfigsChanged={loadData}
-          hasSystemDefault={status?.hasSystemDefault}
-          systemDefaultProvider={status?.systemDefaultProvider}
-          systemDefaultModel={status?.systemDefaultModel}
+        <AiBubbleToggle
           disabled={isDemoMode}
+          aiConfigured={status?.configured ?? false}
         />
+
+        <AiTriviaToggle disabled={isDemoMode} />
 
         {usage && (
           <UsageDashboard

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@/test/render';
+import { render, screen, fireEvent, waitFor, within } from '@/test/render';
 import { CategoryList } from './CategoryList';
 import { Category } from '@/types/category';
 import { useDensityStore } from '@/store/densityStore';
@@ -51,6 +51,8 @@ function makeCategory(overrides: Partial<Category> & { id: string; name: string 
     color: null,
     effectiveColor: null,
     effectiveIcon: null,
+    autoSign: null,
+    effectiveAutoSign: true,
     isIncome: false,
     isSystem: false,
     createdAt: '2026-01-01T00:00:00Z',
@@ -68,10 +70,40 @@ describe('CategoryList', () => {
   });
 
   // Empty state
-  it('renders empty state when no categories', () => {
-    render(<CategoryList categories={[]} onEdit={onEdit} onRefresh={onRefresh} />);
-    expect(screen.getByText('No categories')).toBeInTheDocument();
-    expect(screen.getByText('Get started by creating a new category.')).toBeInTheDocument();
+  it('renders the first-run empty state with its actions when there are no categories', () => {
+    const onCreate = vi.fn();
+    const onImportDefaults = vi.fn();
+    render(
+      <CategoryList
+        categories={[]}
+        onEdit={onEdit}
+        onRefresh={onRefresh}
+        onCreate={onCreate}
+        onImportDefaults={onImportDefaults}
+      />,
+    );
+    expect(screen.getByRole('heading', { name: 'No categories yet' })).toBeInTheDocument();
+    expect(screen.getByText(/The default set includes common income and expense categories/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Import Default Categories' }));
+    expect(onImportDefaults).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Create Your Own' }));
+    expect(onCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders the no-match empty state, without the first-run actions, when a filter hides every category', () => {
+    render(
+      <CategoryList
+        categories={[]}
+        onEdit={onEdit}
+        onRefresh={onRefresh}
+        isFiltered
+        onCreate={vi.fn()}
+        onImportDefaults={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('heading', { name: 'No categories found' })).toBeInTheDocument();
+    expect(screen.getByText('No categories match your current search or filter.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Import Default Categories' })).not.toBeInTheDocument();
   });
 
   it('does not render table in empty state', () => {
@@ -263,7 +295,7 @@ describe('CategoryList', () => {
 
     // DeleteCategoryDialog should open - it shows the category name in title
     await waitFor(() => {
-      expect(screen.getByText('Delete "Food"?')).toBeInTheDocument();
+      expect(screen.getByText('Delete "Food"')).toBeInTheDocument();
     });
   });
 
@@ -275,13 +307,13 @@ describe('CategoryList', () => {
     render(<CategoryList categories={categories} onEdit={onEdit} onRefresh={onRefresh} />);
     fireEvent.click(screen.getByText('Delete'));
 
-    expect(screen.getByText('Delete "Food"?')).toBeInTheDocument();
+    expect(screen.getByText('Delete "Food"')).toBeInTheDocument();
 
     // Click Cancel
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
     await waitFor(() => {
-      expect(screen.queryByText('Delete "Food"?')).not.toBeInTheDocument();
+      expect(screen.queryByText('Delete "Food"')).not.toBeInTheDocument();
     });
   });
 
@@ -295,7 +327,7 @@ describe('CategoryList', () => {
     fireEvent.click(screen.getByText('Delete'));
 
     await waitFor(() => {
-      expect(screen.getByText('Delete "Food"?')).toBeInTheDocument();
+      expect(screen.getByText('Delete "Food"')).toBeInTheDocument();
     });
 
     // Click the Delete confirm button in the dialog
@@ -324,7 +356,7 @@ describe('CategoryList', () => {
     fireEvent.click(screen.getByText('Delete'));
 
     await waitFor(() => {
-      expect(screen.getByText('Delete "Food"?')).toBeInTheDocument();
+      expect(screen.getByText('Delete "Food"')).toBeInTheDocument();
     });
 
     const deleteButtons = screen.getAllByText('Delete');
@@ -409,6 +441,50 @@ describe('CategoryList', () => {
 
     expect(screen.getByText('Food')).toBeInTheDocument();
     expect(screen.getByText('Salary')).toBeInTheDocument();
+  });
+
+  it('announces the sort on a th aria-sort holding a keyboard button', () => {
+    useDensityStore.setState({ densities: { categories: 'normal' } });
+    const onSort = vi.fn();
+    render(
+      <CategoryList
+        categories={[makeCategory({ id: 'c1', name: 'Food' })]}
+        onEdit={onEdit}
+        onRefresh={onRefresh}
+        sortField="count"
+        sortDirection="desc"
+        onSort={onSort}
+      />,
+    );
+    const countHeader = screen.getByRole('columnheader', { name: /Count/ });
+    expect(countHeader).toHaveAttribute('aria-sort', 'descending');
+    expect(screen.getByRole('columnheader', { name: /Name/ })).toHaveAttribute('aria-sort', 'none');
+    expect(screen.getByRole('columnheader', { name: /Description/ })).not.toHaveAttribute('aria-sort');
+    fireEvent.click(within(countHeader).getByRole('button'));
+    expect(onSort).toHaveBeenCalledWith('count');
+  });
+
+  it('sorts siblings within their parent, never moving a subcategory out of its branch', () => {
+    const categories = [
+      makeCategory({ id: 'p1', name: 'Food', transactionCount: 1 }),
+      makeCategory({ id: 'c1', name: 'Groceries', parentId: 'p1', transactionCount: 2 }),
+      makeCategory({ id: 'c2', name: 'Dining', parentId: 'p1', transactionCount: 50 }),
+      makeCategory({ id: 'p2', name: 'Bills', transactionCount: 10 }),
+    ];
+    render(
+      <CategoryList
+        categories={categories}
+        onEdit={onEdit}
+        onRefresh={onRefresh}
+        sortField="count"
+        sortDirection="desc"
+      />,
+    );
+    const names = screen
+      .getAllByRole('row')
+      .slice(1)
+      .map((row) => within(row).getAllByRole('button')[0].textContent);
+    expect(names).toEqual(['Bills', 'Food', 'Dining', 'Groceries']);
   });
 
   // Density toggle

@@ -19,8 +19,11 @@ test.describe('Budgets', () => {
 
     await page.goto('/budgets');
 
-    await expect(page.getByRole('heading', { name: a.name })).toBeVisible();
-    await expect(page.getByRole('heading', { name: b.name })).toBeVisible();
+    // The list is a table: one row per budget, opened by clicking the row.
+    await expect(page.getByRole('row', { name: new RegExp(a.name) })).toBeVisible();
+    await expect(page.getByRole('row', { name: new RegExp(b.name) })).toBeVisible();
+    await page.getByRole('row', { name: new RegExp(a.name) }).click();
+    await page.waitForURL(new RegExp(`/budgets/${a.id}$`));
   });
 
   test('shows actuals against the budget for the current period', async ({
@@ -79,8 +82,8 @@ test.describe('Budgets', () => {
       .click();
 
     await page.waitForURL(/\/budgets$/);
-    await expect(page.getByRole('heading', { name: budget.name })).toHaveCount(0);
+    await expect(page.getByRole('row', { name: new RegExp(budget.name) })).toHaveCount(0);
     await page.reload();
-    await expect(page.getByRole('heading', { name: budget.name })).toHaveCount(0);
+    await expect(page.getByRole('row', { name: new RegExp(budget.name) })).toHaveCount(0);
   });
 });

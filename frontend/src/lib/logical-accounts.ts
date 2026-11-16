@@ -68,6 +68,29 @@ export interface LogicalAccountPortfolio {
   marketValues: Map<string, number>;
   /** Holdings account id -> how many of its holdings have no price. */
   unpricedCounts: Map<string, number>;
+  /**
+   * Holdings account ids whose valuation is incomplete for ANY cause: a missing
+   * price (`unpricedHoldingsCount`) or a missing exchange rate with every price
+   * present (`valuationComplete === false`). The count above cannot see the
+   * second. Optional: omitted, only the count decides.
+   */
+  incompleteAccountIds?: ReadonlySet<string>;
+}
+
+/**
+ * True when this holdings account's market value is a subtotal, by price or by
+ * rate. The one predicate every surface gates a brokerage's contribution on, so
+ * the row, the group total and the summary cards cannot disagree.
+ */
+export function holdingsValuationIncomplete(
+  holdingsAccountId: string,
+  unpricedCounts: ReadonlyMap<string, number> | undefined,
+  incompleteAccountIds: ReadonlySet<string> | undefined,
+): boolean {
+  return (
+    (unpricedCounts?.get(holdingsAccountId) ?? 0) > 0 ||
+    incompleteAccountIds?.has(holdingsAccountId) === true
+  );
 }
 
 /**
@@ -80,7 +103,7 @@ export interface LogicalAccountPortfolio {
  * today's balance plus everything dated ahead of it, which is what every other
  * surface shows.
  */
-function ownBalance(
+export function ownBalance(
   account: Account,
   ledgerBalances?: ReadonlyMap<string, number>,
 ): number {
@@ -115,7 +138,15 @@ function combinedValueFor(
   const marketValue = portfolio?.marketValues.get(holdingsAccountId);
   if (marketValue !== undefined) {
     // A priced subtotal standing in for a total is the mistake this guards.
-    if ((portfolio!.unpricedCounts.get(holdingsAccountId) ?? 0) > 0) return null;
+    if (
+      holdingsValuationIncomplete(
+        holdingsAccountId,
+        portfolio!.unpricedCounts,
+        portfolio!.incompleteAccountIds,
+      )
+    ) {
+      return null;
+    }
 
     // A brokerage's own `currentBalance` is deliberately kept at 0, so the cash
     // component of a pair comes from the cash half and of a standalone account
@@ -218,13 +249,40 @@ export function buildLogicalAccounts(
 }
 
 /**
+ * The holdings accounts whose valuation is a subtotal: an unpriced holding, or
+ * `valuationComplete === false` (a price present but no rate to convert it).
+ * Read as `=== false`: an absent flag is no information, not incomplete.
+ */
+export function incompleteHoldingAccountIds(
+  holdingsByAccount:
+    | readonly {
+        accountId: string;
+        unpricedHoldingsCount?: number;
+        valuationComplete?: boolean;
+      }[]
+    | null
+    | undefined,
+): Set<string> {
+  return new Set(
+    (holdingsByAccount ?? [])
+      .filter((a) => a.valuationComplete === false || (a.unpricedHoldingsCount ?? 0) > 0)
+      .map((a) => a.accountId),
+  );
+}
+
+/**
  * Build the portfolio maps `buildLogicalAccounts` takes from a portfolio
  * summary's per-account holdings, or `undefined` when there is no summary --
  * which is the signal that market values are unknown.
  */
 export function toLogicalAccountPortfolio(
   holdingsByAccount:
-    | { accountId: string; totalMarketValue: number; unpricedHoldingsCount: number }[]
+    | {
+        accountId: string;
+        totalMarketValue: number;
+        unpricedHoldingsCount: number;
+        valuationComplete?: boolean;
+      }[]
     | null
     | undefined,
 ): LogicalAccountPortfolio | undefined {
@@ -236,6 +294,7 @@ export function toLogicalAccountPortfolio(
     unpricedCounts: new Map(
       holdingsByAccount.map((a) => [a.accountId, a.unpricedHoldingsCount ?? 0]),
     ),
+    incompleteAccountIds: incompleteHoldingAccountIds(holdingsByAccount),
   };
 }
 

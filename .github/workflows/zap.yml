@@ -32,12 +32,19 @@ jobs:
         with:
           persist-credentials: false
 
+      # No Docker Hub login: the images come from mirror.gcr.io, Google's mirror
+      # of the official images (Dockerfiles, docker-compose.e2e.yml).
       - name: Build application images
         # docker-compose.zap.yml overlays the e2e stack to run the frontend as a
         # production build (the dev/Turbopack image inflates the scan with
         # unsafe-eval, unminified vendor chunks and verbose 404s that never ship
         # to users). Scanning the production image reflects what is deployed.
         run: docker compose -f docker-compose.e2e.yml -f docker-compose.zap.yml build
+
+      - name: Pull third-party images
+        # One image at a time with a back-off: compose pulls in parallel and fails
+        # the job on the first 429 (scripts/pull-ci-images.sh).
+        run: scripts/pull-ci-images.sh -f docker-compose.e2e.yml -f docker-compose.zap.yml
 
       - name: Start application stack
         run: docker compose -f docker-compose.e2e.yml -f docker-compose.zap.yml up -d --wait --wait-timeout 600

@@ -1,8 +1,11 @@
 import type {
+  EstimatedMonth,
+  ScheduleAmountEstimate,
   ScheduledTransaction,
   ScheduledTransactionOverride,
 } from '@/types/scheduled-transaction';
 import { sumConverted, type ConvertedTotal } from '@/lib/currency-total';
+import { moneyDecimalsForCurrency, roundMoney, sumMoney } from '@/lib/format';
 
 /**
  * The cash amount one scheduled occurrence would post today, and whether that is
@@ -124,6 +127,169 @@ export function nextOccurrenceEffectiveAmount(
 }
 
 /**
+ * Whether an occurrence governed by `override` (or by none) is priced from the
+ * schedule's history estimate (issue #2096, docs/specs/scheduled-amount-estimate.md
+ * section 6): an override that states an amount, or carries its own split
+ * lines, is that occurrence's amount; any other follows the estimate.
+ */
+export function occurrenceFollowsEstimate(
+  st: ScheduledTransaction,
+  override?: Pick<ScheduledTransactionOverride, 'amount' | 'isSplit'> | null,
+): boolean {
+  if (st.amountIsEstimated !== true) return false;
+  if (!override) return true;
+  return override.amount == null && override.isSplit !== true;
+}
+
+/**
+ * The history estimate for an occurrence of `st` falling on `dueDate`
+ * (`YYYY-MM-DD`): `undefined` when `st` is not estimated, so the caller prices
+ * it as it always has; `null` when the estimate is unknown for that month (no
+ * history, no rate, a month beyond what the server sent), which is rendered as
+ * unknown and never replaced by `st.amount`; the amount otherwise.
+ *
+ * The one reader of `amountEstimate`: the forecast, the Post dialog, the
+ * occurrence editor and the occurrence picker all ask here.
+ */
+export function estimatedOccurrenceAmount(
+  st: ScheduledTransaction,
+  dueDate: string,
+): number | null | undefined {
+  if (st.amountIsEstimated !== true) return undefined;
+  return estimateAmountOn(st.amountEstimate, dueDate);
+}
+
+/**
+ * The amount `estimate` gives an occurrence falling on `dueDate`, or `null`
+ * when it gives none (an unknown estimate, a month it does not hold, or no
+ * estimate read yet). For a form previewing a schedule not saved yet; a saved
+ * row is read through `estimatedOccurrenceAmount`.
+ */
+export function estimateAmountOn(
+  estimate: ScheduleAmountEstimate | null | undefined,
+  dueDate: string,
+): number | null {
+  return estimateEntryOn(estimate, dueDate)?.amount ?? null;
+}
+
+/**
+ * The month entry `estimate` gives an occurrence falling on `dueDate`, its
+ * amount and the rule behind it, or `null` when it gives none. A transfer's
+ * balance floor governing the date (issue #2164) answers before the plain
+ * month, as the server prices it.
+ */
+export function estimateEntryOn(
+  estimate: ScheduleAmountEstimate | null | undefined,
+  dueDate: string,
+): EstimatedMonth | null {
+  if (!estimate) return null;
+  const date = String(dueDate).slice(0, 10);
+  const month = date.slice(0, 7);
+  const floor = (estimate.floors ?? []).find(
+    (f) => date > f.after && date <= f.through,
+  );
+  return floor?.months[month] ?? estimate.months[month] ?? null;
+}
+
+/**
+ * An estimated schedule's typical occurrence: the mean of its estimate over the
+ * twelve months from `fromYmd`'s, for a figure that stands for the bill rather
+ * than for one season (the Bills page's monthly totals). `undefined` when `st`
+ * is not estimated, `null` when any of those months is unknown.
+ */
+export function estimatedTypicalAmount(
+  st: ScheduledTransaction,
+  fromYmd: string,
+): number | null | undefined {
+  if (st.amountIsEstimated !== true) return undefined;
+  const [year, month] = fromYmd.split('-').map(Number);
+  const amounts: number[] = [];
+  for (let i = 0; i < 12; i++) {
+    const index = year * 12 + (month - 1) + i;
+    const key = `${Math.floor(index / 12)}-${String((index % 12) + 1).padStart(2, '0')}`;
+    const entry = st.amountEstimate?.months[key];
+    if (!entry) return null;
+    amounts.push(entry.amount);
+  }
+  const decimals = moneyDecimalsForCurrency(st.currencyCode);
+  return roundMoney(sumMoney(amounts, decimals) / amounts.length, decimals);
+}
+
+/**
+ * The account whose balance one occurrence of `st` actually moves.
+ *
+ * The amount is half the answer; the account is the other half. A scheduled
+ * investment's `accountId` is the BROKERAGE, but its cash settles in the named
+ * funding account or the brokerage's linked cash account -- so a running balance
+ * keyed on `accountId` charges the brokerage for cash it never moves, and the
+ * account that pays is left projecting an outflow it never sees. That is how the
+ * dashboard's below-zero warning fired on a purchase whose funding account covers
+ * it to the cent: the brokerage's own balance is not the cash the trade spends
+ * (issue #1247, INV-OCCURRENCE-003).
+ *
+ * The server's `settlementAccountId` is authoritative -- it is the same decision
+ * `resolveSettlementAccountId` makes for the posting, so a projection cannot
+ * charge a different account than the posting will. When the field is absent (an
+ * older backend mid rolling deploy) the answer is derived from the funding and
+ * linked accounts the client already holds, exactly as the cash-flow forecast has
+ * always derived it.
+ *
+ * `undefined` means "this investment schedule's settlement account cannot be
+ * identified from what the client holds" -- a caller projects nothing rather than
+ * falling back to `accountId`, which is the defect above. A non-investment
+ * schedule always settles in its own account.
+ */
+export function occurrenceSettlementAccountId(
+  st: ScheduledTransaction,
+  accountsById: ReadonlyMap<string, { linkedAccountId?: string | null }>,
+): string | undefined {
+  if (st.settlementAccountId) return st.settlementAccountId;
+  if (!st.isInvestment) return st.accountId;
+  if (st.investmentFundingAccountId) return st.investmentFundingAccountId;
+  return accountsById.get(st.accountId)?.linkedAccountId ?? undefined;
+}
+
+/**
+ * The accounts one occurrence's money moves through: the account it settles in,
+ * and the counterparty of a transfer.
+ *
+ * The settlement account is `occurrenceSettlementAccountId`, never the
+ * occurrence's own `accountId`. For a scheduled investment those two differ:
+ * `accountId` is the brokerage, and the cash leaves the funding account or the
+ * brokerage's linked cash account. A calendar filtered to a chequing account
+ * that read `accountId` would leave out a purchase draining it, and would draw
+ * that purchase on a brokerage whose cash never moves (INV-OCCURRENCE-003).
+ *
+ * An investment schedule whose settlement account cannot be identified from
+ * what the client holds touches no account this function can name, so it is in
+ * no scope -- rather than being charged to the brokerage, which is the defect
+ * above wearing a fallback.
+ */
+export function occurrenceAccountIds(
+  occurrence: { transferAccountId: string | null },
+  schedule: ScheduledTransaction,
+  accountsById: ReadonlyMap<string, { linkedAccountId?: string | null }>,
+): string[] {
+  const settlement = occurrenceSettlementAccountId(schedule, accountsById);
+  const ids: string[] = [];
+  if (settlement) ids.push(settlement);
+  if (occurrence.transferAccountId) ids.push(occurrence.transferAccountId);
+  return ids;
+}
+
+/** Whether any account this occurrence moves money through is in `scope`. */
+export function occurrenceTouchesAccounts(
+  occurrence: { transferAccountId: string | null },
+  schedule: ScheduledTransaction,
+  accountsById: ReadonlyMap<string, { linkedAccountId?: string | null }>,
+  scope: ReadonlySet<string>,
+): boolean {
+  return occurrenceAccountIds(occurrence, schedule, accountsById).some((id) =>
+    scope.has(id),
+  );
+}
+
+/**
  * The date the schedule's *next* occurrence actually falls on.
  *
  * `nextDueDate` is the recurrence slot; an override addressed to that slot can
@@ -136,6 +302,25 @@ export function nextOccurrenceDueDate(st: ScheduledTransaction): string {
   return st.nextOverride?.overrideDate
     ? String(st.nextOverride.overrideDate).split('T')[0]
     : String(st.nextDueDate).split('T')[0];
+}
+
+/**
+ * The occurrence a person is looking at, as the server's Post and Skip routes
+ * take it: the date shown (the override's, else the slot -- `nextOccurrenceDueDate`)
+ * and the id of the override that moved it, `null` when there is none. The server
+ * refuses with 409 once that is no longer the occurrence it would act on, so a
+ * stale tab cannot post the next occurrence early or pay an exhausted schedule
+ * again (audit A26-S08-01). Build it from the row as the user saw it, never from a
+ * re-read, and never from `nextDueDate` or `amount` directly.
+ */
+export function occurrencePin(st: ScheduledTransaction): {
+  expectedOccurrenceDate: string;
+  expectedOverrideId: string | null;
+} {
+  return {
+    expectedOccurrenceDate: nextOccurrenceDueDate(st),
+    expectedOverrideId: st.nextOverride?.id ?? null,
+  };
 }
 
 /**

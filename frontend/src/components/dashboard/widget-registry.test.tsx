@@ -5,6 +5,7 @@ import {
   delegateDashboardWidgets,
   resolveDashboardWidgets,
 } from './widget-registry';
+import { WIDGET_HEIGHTS } from './dashboard-layout';
 
 describe('widget-registry', () => {
   it('default layout matches the pre-customization dashboard', () => {
@@ -28,6 +29,29 @@ describe('widget-registry', () => {
     expect(def!.defaultEnabled).toBe(false);
   });
 
+  it('registers the warranties widget as opt-in, visible to a delegate only with the section', () => {
+    const def = DASHBOARD_WIDGETS.find((w) => w.id === 'warranties-expiring');
+    expect(def).toBeDefined();
+    expect(def!.defaultEnabled).toBe(false);
+    expect(def!.delegateVisible).toBeDefined();
+    expect(def!.delegateVisible!(null)).toBe(false);
+  });
+
+  it('registers the cash flow forecast right after Upcoming Bills, and not for delegates', () => {
+    const ids = DASHBOARD_WIDGETS.map((w) => w.id);
+    expect(ids.indexOf('cash-flow-forecast')).toBe(ids.indexOf('upcoming-bills') + 1);
+    const def = DASHBOARD_WIDGETS.find((w) => w.id === 'cash-flow-forecast')!;
+    expect(def.delegateVisible).toBeUndefined();
+  });
+
+  it('every widget declares a valid minWidth and defaultHeight', () => {
+    expect(DASHBOARD_WIDGETS).toHaveLength(26);
+    for (const w of DASHBOARD_WIDGETS) {
+      expect(['third', 'half'], w.id).toContain(w.minWidth);
+      expect([...WIDGET_HEIGHTS], w.id).toContain(w.defaultHeight);
+    }
+  });
+
   describe('resolveDashboardWidgets', () => {
     it('returns the default layout for an empty or missing preference', () => {
       expect(resolveDashboardWidgets(undefined).map((w) => w.id)).toEqual(
@@ -46,6 +70,12 @@ describe('widget-registry', () => {
       expect(resolved.map((w) => w.id)).toEqual(['insights', 'favourite-reports', 'net-worth']);
     });
 
+    it('drops repeated stored ids, keeping the first', () => {
+      expect(
+        resolveDashboardWidgets(['net-worth', 'net-worth', 'expenses-pie', 'net-worth']).map((w) => w.id),
+      ).toEqual(['net-worth', 'expenses-pie']);
+    });
+
     it('drops unknown ids and falls back to the default when none survive', () => {
       expect(
         resolveDashboardWidgets(['unknown-widget', 'net-worth']).map((w) => w.id),
@@ -57,12 +87,13 @@ describe('widget-registry', () => {
   });
 
   describe('delegateDashboardWidgets', () => {
-    const grants = (bills: boolean) => ({
+    const grants = (bills: boolean, warranties = false) => ({
       bills,
       investments: false,
       budgets: false,
       reports: false,
       ai: false,
+      warranties,
     });
 
     it('shows only Favourite Accounts without the bills grant', () => {
@@ -76,6 +107,13 @@ describe('widget-registry', () => {
       expect(delegateDashboardWidgets(grants(true)).map((w) => w.id)).toEqual([
         'favourite-accounts',
         'upcoming-bills',
+      ]);
+    });
+
+    it('adds Warranties Expiring with the warranties grant', () => {
+      expect(delegateDashboardWidgets(grants(false, true)).map((w) => w.id)).toEqual([
+        'favourite-accounts',
+        'warranties-expiring',
       ]);
     });
   });
@@ -119,6 +157,8 @@ describe('widget-registry', () => {
       'geographic-allocation',
       'recurring-expenses',
       'weekend-weekday',
+      'cash-flow-sankey',
+      'cash-flow-forecast',
     ];
     for (const id of reportWidgetIds) {
       const def = DASHBOARD_WIDGETS.find((w) => w.id === id);

@@ -38,10 +38,13 @@ import {
 import { AccountExportService } from "./account-export.service";
 import { LoanPaymentDetectorService } from "./loan-payment-detector.service";
 import { LoanPaymentSetupService } from "./loan-payment-setup.service";
+import { LoanPaymentMatchingService } from "./loan-payment-matching.service";
 import { StatementCycleService } from "./statement-cycle.service";
 import { BalanceForecastService } from "./balance-forecast.service";
+import { DailyBalanceTotalsService } from "./daily-balance-totals.service";
 import { AccountBalancesReportService } from "./account-balances-report.service";
 import { CreateAccountDto } from "./dto/create-account.dto";
+import { DailyBalanceTotalsQueryDto } from "./dto/daily-balance-totals-query.dto";
 import { UpdateAccountDto } from "./dto/update-account.dto";
 import { ReorderFavouriteAccountsDto } from "./dto/reorder-favourite-accounts.dto";
 import { SetDelegateFavouriteDto } from "./dto/set-delegate-favourite.dto";
@@ -58,12 +61,25 @@ import {
 import {
   SetupLoanPaymentsDto,
   DetectedLoanPaymentResponseDto,
+  PreviewLoanPaymentSetupDto,
+  PreviewLoanPaymentSetupResponseDto,
   SetupLoanPaymentsResponseDto,
 } from "./dto/setup-loan-payments.dto";
+import {
+  DetectMortgageTypeDto,
+  MortgageTypeDetectionResponseDto,
+  MortgageTypeHistoryDetectionResponseDto,
+} from "./dto/detect-mortgage-type.dto";
+import {
+  LoanSettlementResponseDto,
+  PaymentMatchingDto,
+} from "./dto/payment-matching.dto";
+import { TransactionRuleResponseDto } from "../transaction-rules/dto/transaction-rule-response.dto";
 import { PaymentFrequency } from "./loan-amortization.util";
 import { formatDateYMD, todayYMD } from "../common/date-utils";
 import { assertStringParam } from "../common/query-param-utils";
 import { tr } from "../i18n/translate";
+import { AllowPat, PatScope } from "../auth/pat-access/pat-access.decorator";
 
 /**
  * Sanitise a user-supplied date-format string for the account export
@@ -85,7 +101,9 @@ function sanitizeDateFormat(input: string | undefined): string | undefined {
   if (input === undefined) return undefined;
   if (input.length > 20) {
     throw new BadRequestException(
-      tr("errors.accounts.dateFormatTooLong", "dateFormat is too long"),
+      tr("errors.params.isTooLong", 'The value of "dateFormat" is too long', {
+        param: "dateFormat",
+      }),
     );
   }
   if (NAMED_DATE_FORMATS.has(input)) {
@@ -107,7 +125,15 @@ function sanitizeDateFormat(input: string | undefined): string | undefined {
   return stripped;
 }
 
+/**
+ * A UUID that cannot match any real account. An acting delegate with no
+ * readable accounts gets a naturally-empty, correctly-shaped answer instead of
+ * `undefined`, which every scope resolver reads as "all accounts".
+ */
+const NO_SCOPED_ACCOUNT = "00000000-0000-0000-0000-000000000000";
+
 @ApiTags("Accounts")
+@AllowPat()
 @Controller("accounts")
 @UseGuards(AuthGuard("jwt"))
 @ApiBearerAuth()
@@ -117,8 +143,10 @@ export class AccountsController {
     private readonly accountExportService: AccountExportService,
     private readonly loanPaymentDetectorService: LoanPaymentDetectorService,
     private readonly loanPaymentSetupService: LoanPaymentSetupService,
+    private readonly loanPaymentMatchingService: LoanPaymentMatchingService,
     private readonly statementCycleService: StatementCycleService,
     private readonly balanceForecastService: BalanceForecastService,
+    private readonly dailyBalanceTotalsService: DailyBalanceTotalsService,
     private readonly accountBalancesReport: AccountBalancesReportService,
     private readonly delegationService: DelegationService,
     private readonly crossOwnerAccess: CrossOwnerAccessService,
@@ -309,6 +337,65 @@ export class AccountsController {
     return { excluded: dto.excluded };
   }
 
+  /**
+   * Declared before every `:id` route: "daily-balance-totals" is a literal path
+   * segment, and a `:id` route above it would swallow it as an account id.
+   */
+  @Get("daily-balance-totals")
+  @ApiOperation({
+    summary: "Get the scope's end-of-day total for every day of a date range",
+    description:
+      "One total per calendar day across the accounts in scope, in one " +
+      "currency: actual through the server's today, projected after it. " +
+      "Complements GET /accounts/daily-balances, which is per account, per " +
+      "account currency and history only.",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Daily balance totals computed successfully",
+  })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
+  @AllowDelegate()
+  async getDailyBalanceTotals(
+    @Request() req,
+    @Query() query: DailyBalanceTotalsQueryDto,
+  ) {
+    let ids = query.accountIds;
+    let jointIds: string[] = [];
+    if (req.user.isActing) {
+      // Restrict to the delegate's READ-granted accounts (never an
+      // unfiltered owner-wide query), exactly as daily-balances does.
+      const readable = await this.delegationService.readableAccountIds(
+        req.user.delegationId,
+      );
+      const readableSet = new Set(readable);
+      ids =
+        ids && ids.length > 0
+          ? ids.filter((id) => readableSet.has(id))
+          : readable;
+      if (ids.length === 0) ids = [NO_SCOPED_ACCOUNT];
+    } else {
+      // Own context: joint accounts participate exactly like own accounts.
+      // The set is what authorizes them -- the service widens its ownership
+      // predicate to these exact ids and nothing else.
+      const jointSet = await this.jointAccounts.jointAccountIdSetFor(
+        req.user.realUserId ?? req.user.id,
+      );
+      jointIds =
+        ids && ids.length > 0
+          ? ids.filter((id) => jointSet.has(id))
+          : [...jointSet];
+    }
+    return this.dailyBalanceTotalsService.getDailyBalanceTotals(
+      req.user.id,
+      query.startDate,
+      query.endDate,
+      ids,
+      query.displayCurrency,
+      jointIds,
+    );
+  }
+
   @Get("daily-balances")
   @ApiOperation({ summary: "Get daily running balances for accounts" })
   @ApiQuery({ name: "startDate", required: false, example: "2025-01-01" })
@@ -339,11 +426,19 @@ export class AccountsController {
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (sd && !dateRegex.test(sd))
       throw new BadRequestException(
-        tr("errors.accounts.startDateFormat", "startDate must be YYYY-MM-DD"),
+        tr(
+          "errors.params.mustBeCalendarDate",
+          'The value of "startDate" must be a date in YYYY-MM-DD format',
+          { param: "startDate" },
+        ),
       );
     if (ed && !dateRegex.test(ed))
       throw new BadRequestException(
-        tr("errors.accounts.endDateFormat", "endDate must be YYYY-MM-DD"),
+        tr(
+          "errors.params.mustBeCalendarDate",
+          'The value of "endDate" must be a date in YYYY-MM-DD format',
+          { param: "endDate" },
+        ),
       );
     let ids = aIds ? aIds.split(",").filter(Boolean) : undefined;
     let jointIds: string[] = [];
@@ -371,13 +466,19 @@ export class AccountsController {
           ? ids.filter((id) => jointSet.has(id))
           : [...jointSet];
     }
-    return this.accountsService.getDailyBalances(
+    const rows = await this.accountsService.getDailyBalances(
       req.user.id,
       sd,
       ed,
       ids,
       allTimeFlag,
       jointIds,
+    );
+    // Each row also in the reporting currency at its own day's rate, so a
+    // reader summing several currencies never converts a past day at today's.
+    return this.dailyBalanceTotalsService.withReportingCurrency(
+      req.user.id,
+      rows,
     );
   }
 
@@ -404,7 +505,11 @@ export class AccountsController {
     const requested = assertStringParam(asOfDate, "asOfDate");
     if (requested && !/^\d{4}-\d{2}-\d{2}$/.test(requested)) {
       throw new BadRequestException(
-        tr("errors.accounts.asOfDateFormat", "asOfDate must be YYYY-MM-DD"),
+        tr(
+          "errors.params.mustBeCalendarDate",
+          'The value of "asOfDate" must be a date in YYYY-MM-DD format',
+          { param: "asOfDate" },
+        ),
       );
     }
     const date = requested || todayYMD();
@@ -449,6 +554,7 @@ export class AccountsController {
   }
 
   @Post("loan-preview")
+  @PatScope("read")
   @ApiOperation({
     summary: "Preview loan amortization calculation",
     description:
@@ -474,6 +580,7 @@ export class AccountsController {
   }
 
   @Post("mortgage-preview")
+  @PatScope("read")
   @ApiOperation({
     summary: "Preview mortgage amortization calculation",
     description:
@@ -498,13 +605,34 @@ export class AccountsController {
       mortgagePreviewDto.amortizationMonths,
       mortgagePreviewDto.paymentFrequency,
       new Date(mortgagePreviewDto.paymentStartDate),
-      mortgagePreviewDto.isCanadian,
-      mortgagePreviewDto.isVariableRate,
+      // A preview has no stored row, so a request naming no type is the
+      // default type.
+      mortgagePreviewDto.mortgageType ?? "ANNUITY",
     );
     return {
       ...result,
       endDate: formatDateYMD(result.endDate),
     };
+  }
+
+  @Post("mortgage-type/detect")
+  @PatScope("read")
+  @ApiOperation({
+    summary: "Suggest a mortgage type from sample installments",
+    description:
+      "Suggests ANNUITY, CANADIAN_FIXED, LINEAR or INTEREST_ONLY from two or three consecutive installments (principal and interest, optionally the balance each was charged on), the quoted rate and the payment frequency. A suggestion only: nothing is read or written. Fewer than two samples, or samples that fit no rule, answer type null with a reason.",
+  })
+  @ApiResponse({
+    status: 201,
+    description: "Suggestion computed",
+    type: MortgageTypeDetectionResponseDto,
+  })
+  @ApiResponse({ status: 400, description: "Bad request - invalid samples" })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
+  detectMortgageType(
+    @Body() dto: DetectMortgageTypeDto,
+  ): MortgageTypeDetectionResponseDto {
+    return this.accountsService.detectMortgageTypeFromSamples(dto);
   }
 
   @Get(":id/export")
@@ -806,12 +934,20 @@ export class AccountsController {
     const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
     if (!sd || !dateRegex.test(sd)) {
       throw new BadRequestException(
-        tr("errors.accounts.startDateFormat", "startDate must be YYYY-MM-DD"),
+        tr(
+          "errors.params.mustBeCalendarDate",
+          'The value of "startDate" must be a date in YYYY-MM-DD format',
+          { param: "startDate" },
+        ),
       );
     }
     if (!ed || !dateRegex.test(ed)) {
       throw new BadRequestException(
-        tr("errors.accounts.endDateFormat", "endDate must be YYYY-MM-DD"),
+        tr(
+          "errors.params.mustBeCalendarDate",
+          'The value of "endDate" must be a date in YYYY-MM-DD format',
+          { param: "endDate" },
+        ),
       );
     }
     return this.statementCycleService.getInterestPaid(req.user.id, id, sd, ed);
@@ -881,6 +1017,35 @@ export class AccountsController {
     );
   }
 
+  @Post(":id/mortgage-type/detect")
+  @PatScope("read")
+  @ApiOperation({
+    summary: "Suggest a mortgage type from the loan's posted installments",
+    description:
+      "Reads the mortgage's latest posted installments at one rate (paired with their interest the way rate-change detection pairs them, each with the ledger balance before its date) and suggests a type from them. A suggestion only: the account's type is not changed and nothing is written.",
+  })
+  @ApiParam({
+    name: "id",
+    description: "Mortgage account UUID",
+  })
+  @ApiResponse({
+    status: 201,
+    description: "Suggestion computed, with the installments it was read from",
+    type: MortgageTypeHistoryDetectionResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description: "Bad request - not a mortgage account",
+  })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
+  @ApiResponse({ status: 404, description: "Account not found" })
+  detectMortgageTypeFromHistory(
+    @Request() req,
+    @Param("id", ParseUUIDPipe) id: string,
+  ): Promise<MortgageTypeHistoryDetectionResponseDto> {
+    return this.accountsService.detectMortgageTypeFromHistory(req.user.id, id);
+  }
+
   @Get(":id/detect-loan-payments")
   @ApiOperation({
     summary: "Detect loan payment patterns from transaction history",
@@ -905,6 +1070,41 @@ export class AccountsController {
     return this.loanPaymentDetectorService.detectPaymentPattern(
       req.user.id,
       id,
+    );
+  }
+
+  @Post(":id/setup-loan-payments/preview")
+  @PatScope("read")
+  @ApiOperation({
+    summary: "Preview the first installment of a loan payment setup",
+    description:
+      "For a LINEAR or INTEREST_ONLY mortgage, prices the first installment a setup with these terms would schedule -- from the ledger debt through the due date, the rate and the amortization -- through the same code the setup checks its paymentAmount against. Writes nothing. An annuity mortgage or a loan answers derivesInstallment false.",
+  })
+  @ApiParam({
+    name: "id",
+    description: "Loan or mortgage account UUID",
+  })
+  @ApiResponse({
+    status: 201,
+    description: "First installment priced",
+    type: PreviewLoanPaymentSetupResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      "Bad request - a term the mortgage's method needs is missing, or an accelerated frequency",
+  })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
+  @ApiResponse({ status: 404, description: "Account not found" })
+  previewLoanPaymentSetup(
+    @Request() req,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body() dto: PreviewLoanPaymentSetupDto,
+  ): Promise<PreviewLoanPaymentSetupResponseDto> {
+    return this.loanPaymentSetupService.previewFirstInstallment(
+      req.user.id,
+      id,
+      dto,
     );
   }
 
@@ -936,6 +1136,68 @@ export class AccountsController {
     @Body() dto: SetupLoanPaymentsDto,
   ): Promise<SetupLoanPaymentsResponseDto> {
     return this.loanPaymentSetupService.setupLoanPayments(req.user.id, id, dto);
+  }
+
+  @Post(":id/payment-matching-rule")
+  @ApiOperation({
+    summary: "Create the payment matching rule of an existing loan",
+    description:
+      "Creates the rule that settles the bank debits of the loan's scheduled payment against each installment (a settle_loan_installment action over the payment's source account, payee pattern and optional description pattern; triggers create and import; last in the rule order), points the loan at it and turns the bill's auto-post off, in one transaction.",
+  })
+  @ApiParam({
+    name: "id",
+    description: "Mortgage or loan account UUID",
+  })
+  @ApiResponse({
+    status: 201,
+    description: "Rule created",
+    type: TransactionRuleResponseDto,
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      "Bad request - not a mortgage or loan, no scheduled payment, or a pattern the rule cannot hold",
+  })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
+  @ApiResponse({ status: 404, description: "Account not found" })
+  @ApiResponse({
+    status: 409,
+    description: "The loan already has a payment matching rule",
+  })
+  createPaymentMatchingRule(
+    @Request() req,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body() dto: PaymentMatchingDto,
+  ): Promise<TransactionRuleResponseDto> {
+    return this.loanPaymentMatchingService.createMatchingRule(
+      req.user.id,
+      id,
+      dto,
+    );
+  }
+
+  @Get(":id/loan-settlements")
+  @ApiOperation({
+    summary: "List the installments payment matching settled on a loan",
+    description:
+      "The occurrences of the loan's scheduled payment a rule settled from a bank row, with the lines written and the debt each was priced on, newest first, at most 200.",
+  })
+  @ApiParam({
+    name: "id",
+    description: "Mortgage or loan account UUID",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Settled installments",
+    type: [LoanSettlementResponseDto],
+  })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
+  @ApiResponse({ status: 404, description: "Account not found" })
+  getLoanSettlements(
+    @Request() req,
+    @Param("id", ParseUUIDPipe) id: string,
+  ): Promise<LoanSettlementResponseDto[]> {
+    return this.loanPaymentMatchingService.listSettlements(req.user.id, id);
   }
 
   @Post(":id/close")
@@ -1023,7 +1285,8 @@ export class AccountsController {
   })
   @ApiResponse({
     status: 400,
-    description: "Bad request - account has transactions",
+    description:
+      "Bad request - account has transactions or scheduled transactions",
   })
   @ApiResponse({ status: 401, description: "Unauthorized" })
   @ApiResponse({

@@ -7,6 +7,7 @@
     "filterAll": "すべて ({count})",
     "filterExpenses": "支出 ({count})",
     "filterIncome": "収入 ({count})",
+    "typeFilterLabel": "種類",
     "modalTitleNew": "新規カテゴリ",
     "modalTitleEdit": "カテゴリを編集",
     "countSingle": "1 カテゴリ",
@@ -54,6 +55,12 @@
     "typeExpense": "支出",
     "typeIncome": "収入",
     "typeInherited": "種類は親から継承されます",
+    "autoSignLabel": "自動符号",
+    "autoSignOn": "オン",
+    "autoSignOff": "オフ",
+    "autoSignInherit": "親カテゴリから継承",
+    "autoSignInheritedFrom": "親カテゴリ ({name}) から継承: 現在 {state}",
+    "autoSignHelp": "オンにすると、入力した金額は支出カテゴリではマイナス、収入カテゴリではプラスになります。入力したとおりの符号を保つにはオフにしてください。",
     "colourLabel": "色",
     "colourInherit": "親から継承する",
     "colourNone": "色なし",
@@ -65,8 +72,8 @@
     "submitUpdate": "カテゴリを更新"
   },
   "list": {
-    "emptyHeading": "カテゴリがありません",
-    "emptyDescription": "新しいカテゴリを作成して始めましょう。",
+    "emptyHeading": "カテゴリが見つかりません",
+    "emptyDescription": "現在の検索条件またはフィルターに一致するカテゴリはありません。",
     "colName": "名前",
     "colType": "種類",
     "colCount": "件数",
@@ -79,7 +86,7 @@
     "viewTransactionsTitle": "このカテゴリの取引を表示"
   },
   "deleteDialog": {
-    "title": "「{name}」を削除しますか？",
+    "title": "「{name}」を削除",
     "checkingUsage": "使用状況を確認中...",
     "usedBy": "このカテゴリは {count, plural, one {# 件} other {# 件}}（取引またはスケジュール済み請求・入金）で使用されています。",
     "reassignLabel": "再割り当て先：",

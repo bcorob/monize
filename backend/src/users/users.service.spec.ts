@@ -1,5 +1,6 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import {
+  BadRequestException,
   NotFoundException,
   ConflictException,
   ForbiddenException,
@@ -8,6 +9,10 @@ import {
 import { DataSource } from "typeorm";
 import * as bcrypt from "bcryptjs";
 import { UsersService } from "./users.service";
+import {
+  currencyKindRows,
+  isCurrencyKindRead,
+} from "../test-helpers/currency-kind-testing";
 import { User } from "./entities/user.entity";
 import { UserPreference } from "./entities/user-preference.entity";
 import { TrustedDevice } from "./entities/trusted-device.entity";
@@ -15,12 +20,19 @@ import { RefreshToken } from "../auth/entities/refresh-token.entity";
 import { PersonalAccessToken } from "../auth/entities/personal-access-token.entity";
 import { PasswordBreachService } from "../auth/password-breach.service";
 import { ModuleRef } from "@nestjs/core";
+import { OAUTH_GRANT_REVOKER } from "../auth/credential-revocation";
 import { I18nContext } from "nestjs-i18n";
 import { ExchangeRateService } from "../currencies/exchange-rate.service";
 import { CurrenciesService } from "../currencies/currencies.service";
 import { BackupEncryptionService } from "../backup/backup-encryption.service";
 import { DemoModeService } from "../common/demo-mode.service";
 import { OidcReauthService } from "../auth/oidc/oidc-reauth.service";
+import { ConfigService } from "@nestjs/config";
+import { I18nService } from "nestjs-i18n";
+import { QueryFailedError } from "typeorm";
+import { EmailService } from "../notifications/email.service";
+import { EmailChangeService } from "./email-change.service";
+import { hashToken } from "../auth/crypto.util";
 import {
   createUserMaintenanceMock,
   userMaintenanceProvider,
@@ -51,9 +63,18 @@ describe("UsersService", () => {
   let demoModeService: { isDemo: boolean };
   let maintenance: UserMaintenanceMock;
   let exchangeRateService: { refreshAllRates: jest.Mock };
-  let currenciesService: { ensureSystemCurrency: jest.Mock };
-  let backupEncryptionService: { rememberLoginPassword: jest.Mock };
+  let currenciesService: jest.Mocked<
+    Pick<
+      CurrenciesService,
+      | "ensureCurrencyForUser"
+      | "lockCurrenciesCreatedBy"
+      | "removeUnreferencedCurrencies"
+    >
+  >;
+  let backupEncryptionService: { rewrapBackupKey: jest.Mock };
   let moduleRef: { get: jest.Mock };
+  let emailService: { getStatus: jest.Mock; sendMail: jest.Mock };
+  let oauthProviderService: { revokeAllForUser: jest.Mock };
   let mockQueryRunner: Record<string, jest.Mock>;
   let mockDataSource: Record<string, jest.Mock>;
 
@@ -82,7 +103,6 @@ describe("UsersService", () => {
     theme: "system",
     timezone: "browser",
     notificationEmail: true,
-    notificationBrowser: true,
     twoFactorEnabled: false,
     gettingStartedDismissed: false,
     favouriteReportIds: [],
@@ -133,18 +153,30 @@ describe("UsersService", () => {
     };
 
     backupEncryptionService = {
-      rememberLoginPassword: jest.fn().mockResolvedValue(undefined),
+      rewrapBackupKey: jest.fn().mockResolvedValue(undefined),
     };
 
     currenciesService = {
-      ensureSystemCurrency: jest.fn().mockResolvedValue(undefined),
+      ensureCurrencyForUser: jest.fn().mockResolvedValue(undefined),
+      lockCurrenciesCreatedBy: jest.fn().mockResolvedValue([]),
+      removeUnreferencedCurrencies: jest.fn().mockResolvedValue(undefined),
     };
+
+    // SMTP off by default: the email-change tests that need a confirmation
+    // link switch it on.
+    emailService = {
+      getStatus: jest.fn().mockReturnValue({ configured: false }),
+      sendMail: jest.fn().mockResolvedValue(undefined),
+    };
+    oauthProviderService = { revokeAllForUser: jest.fn().mockResolvedValue(0) };
 
     moduleRef = {
       get: jest.fn((token) => {
+        if (token === EmailService) return emailService;
         if (token === ExchangeRateService) return exchangeRateService;
         if (token === BackupEncryptionService) return backupEncryptionService;
         if (token === CurrenciesService) return currenciesService;
+        if (token === OAUTH_GRANT_REVOKER) return oauthProviderService;
         return undefined;
       }),
     };
@@ -193,6 +225,24 @@ describe("UsersService", () => {
         // sentinel survived (P2-005).
         OidcReauthService,
         userMaintenanceProvider(maintenance),
+        // Real instance: the staging, the token hashing and the two sends are
+        // what the email-change tests below assert.
+        EmailChangeService,
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn((_key: string, fallback?: string) => fallback),
+          },
+        },
+        {
+          provide: I18nService,
+          useValue: {
+            translate: jest.fn(
+              (_key: string, opts: { defaultValue: string }) =>
+                opts.defaultValue,
+            ),
+          },
+        },
       ],
     }).compile();
 
@@ -294,7 +344,7 @@ describe("UsersService", () => {
       expect(result.lastName).toBe("Name");
     });
 
-    it("updates email when not taken and password is correct", async () => {
+    it("without SMTP, applies the change on the password check alone", async () => {
       const hashedPassword = await bcrypt.hash("CorrectPass123!", 10);
       usersRepository.findOne
         .mockResolvedValueOnce({ ...mockUser, passwordHash: hashedPassword }) // find user
@@ -399,6 +449,148 @@ describe("UsersService", () => {
       );
     });
 
+    it("rejects email change for an SSO account while password login is off", async () => {
+      usersRepository.findOne.mockResolvedValueOnce({
+        ...mockUser,
+        authProvider: "oidc",
+        passwordHash: "some-hash",
+      });
+
+      await expect(
+        service.updateProfile("user-1", {
+          email: "new@example.com",
+          currentPassword: "anything",
+        }),
+      ).rejects.toThrow(
+        "Cannot change email for accounts without a local password",
+      );
+    });
+
+    describe("email change with SMTP configured", () => {
+      let hashedPassword: string;
+
+      beforeAll(async () => {
+        hashedPassword = await bcrypt.hash("CorrectPass123!", 10);
+      });
+
+      beforeEach(() => {
+        emailService.getStatus.mockReturnValue({ configured: true });
+        usersRepository.findOne
+          .mockResolvedValueOnce({ ...mockUser, passwordHash: hashedPassword })
+          .mockResolvedValueOnce(null);
+        usersRepository.save.mockImplementation((user) => user);
+      });
+
+      const request = () =>
+        service.updateProfile("user-1", {
+          email: "  New.Person@Example.COM ",
+          currentPassword: "CorrectPass123!",
+        });
+
+      it("does not change the live email until the link is followed", async () => {
+        const result = await request();
+
+        expect(result.email).toBe("test@example.com");
+        expect(result.pendingEmail).toBe("new.person@example.com");
+        const saved = usersRepository.save.mock.calls[0][0];
+        expect(saved.email).toBe("test@example.com");
+      });
+
+      it("normalizes the new address the way registration does", async () => {
+        await request();
+
+        expect(usersRepository.findOne).toHaveBeenNthCalledWith(2, {
+          where: { email: "new.person@example.com" },
+        });
+        const saved = usersRepository.save.mock.calls[0][0];
+        expect(saved.pendingEmail).toBe("new.person@example.com");
+      });
+
+      it("stores only the hash of an expiring token and emails the raw one", async () => {
+        await request();
+
+        const saved = usersRepository.save.mock.calls[0][0];
+        const [to, , html] = emailService.sendMail.mock.calls[0];
+        expect(to).toBe("new.person@example.com");
+        const token = /confirm-email-change\?token=([0-9a-f]{64})/.exec(
+          html,
+        )?.[1];
+        expect(token).toBeDefined();
+        expect(saved.emailChangeToken).toBe(hashToken(token!));
+        expect(saved.emailChangeToken).not.toBe(token);
+        const ttl = saved.emailChangeTokenExpiry.getTime() - Date.now();
+        expect(ttl).toBeGreaterThan(23 * 60 * 60 * 1000);
+        expect(ttl).toBeLessThanOrEqual(24 * 60 * 60 * 1000);
+      });
+
+      it("notifies the current address, naming the requested one", async () => {
+        await request();
+
+        expect(emailService.sendMail).toHaveBeenCalledTimes(2);
+        const [to, subject, html] = emailService.sendMail.mock.calls[1];
+        expect(to).toBe("test@example.com");
+        expect(subject).toBe("Monize email change requested");
+        expect(html).toContain("new.person@example.com");
+        expect(html).not.toContain("confirm-email-change");
+      });
+
+      it("sends nothing when the request is refused", async () => {
+        usersRepository.findOne.mockReset();
+        usersRepository.findOne.mockResolvedValueOnce({
+          ...mockUser,
+          passwordHash: hashedPassword,
+        });
+
+        await expect(
+          service.updateProfile("user-1", {
+            email: "new@example.com",
+            currentPassword: "WrongPassword!",
+          }),
+        ).rejects.toThrow("Current password is incorrect");
+        expect(usersRepository.save).not.toHaveBeenCalled();
+        expect(emailService.sendMail).not.toHaveBeenCalled();
+      });
+
+      it("still answers the request when a send fails", async () => {
+        emailService.sendMail.mockRejectedValue(new Error("smtp down"));
+
+        const result = await request();
+
+        expect(result.pendingEmail).toBe("new.person@example.com");
+      });
+    });
+
+    it("answers a unique-index race on an immediate change with 409", async () => {
+      const hashedPassword = await bcrypt.hash("CorrectPass123!", 10);
+      usersRepository.findOne
+        .mockResolvedValueOnce({ ...mockUser, passwordHash: hashedPassword })
+        .mockResolvedValueOnce(null);
+      usersRepository.save.mockRejectedValue(
+        new QueryFailedError("UPDATE users", [], {
+          code: "23505",
+        } as unknown as Error),
+      );
+
+      await expect(
+        service.updateProfile("user-1", {
+          email: "new@example.com",
+          currentPassword: "CorrectPass123!",
+        }),
+      ).rejects.toThrow(ConflictException);
+    });
+
+    it("treats a case-only difference from the current email as unchanged", async () => {
+      usersRepository.findOne.mockResolvedValue({ ...mockUser });
+      usersRepository.save.mockImplementation((user) => user);
+
+      const result = await service.updateProfile("user-1", {
+        email: "TEST@example.com",
+      });
+
+      expect(result.email).toBe("test@example.com");
+      expect(emailService.sendMail).not.toHaveBeenCalled();
+    });
+
     it("does not require password when email is unchanged", async () => {
       usersRepository.findOne.mockResolvedValue({
         ...mockUser,
@@ -439,9 +631,61 @@ describe("UsersService", () => {
       expect(result.theme).toBe("system");
       expect(result.favouriteReportIds).toEqual([]);
     });
+
+    it("reports 2FA as enabled only when a secret is stored under the flag", async () => {
+      preferencesRow.seed({ ...mockPreferences, twoFactorEnabled: true });
+      usersRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        twoFactorSecret: "encrypted-secret",
+      });
+
+      const result = await service.getPreferences("user-1");
+
+      expect(result.twoFactorEnabled).toBe(true);
+      expect(result).toBeInstanceOf(UserPreference);
+    });
+
+    it("reports 2FA as off when the flag is on but no secret is stored", async () => {
+      // Sign-in does not ask for a code in this state, so Settings must not
+      // say 2FA is on: that hid the Enable button and left the user no way to
+      // enroll again. The stored column is left as it is; disabling or
+      // resetting 2FA is what clears it.
+      preferencesRow.seed({ ...mockPreferences, twoFactorEnabled: true });
+      usersRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        twoFactorSecret: null,
+      });
+
+      const result = await service.getPreferences("user-1");
+
+      expect(result.twoFactorEnabled).toBe(false);
+      // Still a UserPreference, so the serializer keeps its @Exclude() columns
+      // out of the response.
+      expect(result).toBeInstanceOf(UserPreference);
+      expect(preferencesRow.row()!.twoFactorEnabled).toBe(true);
+      expect(preferencesRow.patches()).toHaveLength(0);
+    });
   });
 
   describe("updatePreferences -- writes only what was asked for", () => {
+    it("reports 2FA the way sign-in enforces it in the saved preferences", async () => {
+      // The client replaces its preferences with this response, so reading the
+      // raw flag here would put the stale "enabled" straight back after any
+      // Settings save.
+      preferencesRow.seed({ ...mockPreferences, twoFactorEnabled: true });
+      usersRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        twoFactorSecret: null,
+      });
+
+      const result = await service.updatePreferences("user-1", {
+        theme: "dark",
+      });
+
+      expect(result.twoFactorEnabled).toBe(false);
+      expect(result.theme).toBe("dark");
+    });
+
     it("sends exactly the supplied columns to the database", async () => {
       // The regression: this used to mutate a loaded entity and `repo.save` it,
       // which writes back every column that differs from what the entity holds.
@@ -551,14 +795,81 @@ describe("UsersService", () => {
       expect(preferencesRow.row()!.defaultCurrency).toBe("EUR");
     });
 
-    it("ensures the chosen default currency exists when it changes", async () => {
+    it("ensures the chosen default currency for the user, before the preference is written", async () => {
       preferencesRow.seed(mockPreferences);
+      let patchesWhenEnsured = -1;
+      currenciesService.ensureCurrencyForUser.mockImplementation(async () => {
+        patchesWhenEnsured = preferencesRow.patches().length;
+      });
 
       await service.updatePreferences("user-1", { defaultCurrency: "EUR" });
 
-      expect(currenciesService.ensureSystemCurrency).toHaveBeenCalledWith(
+      expect(currenciesService.ensureCurrencyForUser).toHaveBeenCalledWith(
+        "user-1",
         "EUR",
       );
+      expect(patchesWhenEnsured).toBe(0);
+      expect(preferencesRow.row()!.defaultCurrency).toBe("EUR");
+    });
+
+    it("fails the request, writing nothing, when the currency cannot be ensured", async () => {
+      preferencesRow.seed(mockPreferences);
+      currenciesService.ensureCurrencyForUser.mockRejectedValue(
+        new Error("refused"),
+      );
+
+      await expect(
+        service.updatePreferences("user-1", { defaultCurrency: "EUR" }),
+      ).rejects.toThrow("refused");
+
+      expect(preferencesRow.patches()).toHaveLength(0);
+    });
+
+    /**
+     * Decision 11 of `docs/specs/crypto-accounts.md`: every converted figure
+     * is `roundMoney` in the reporting currency at four places, and 0.0001 BTC
+     * is about 14 CAD, so a coin is never the reporting currency. Refused in
+     * the preference write's transaction, before anything is written.
+     */
+    it("refuses a cryptocurrency as the reporting currency, writing nothing", async () => {
+      preferencesRow.seed(mockPreferences);
+      const query = mockQueryRunner.query as jest.Mock;
+      const base = query.getMockImplementation();
+      query.mockImplementation(
+        async (sql: string, params?: unknown[]) =>
+          currencyKindRows(sql, params) ?? base?.(sql, params) ?? [],
+      );
+
+      await expect(
+        service.updatePreferences("user-1", { defaultCurrency: "BTC" }),
+      ).rejects.toThrow(BadRequestException);
+      await expect(
+        service.updatePreferences("user-1", { defaultCurrency: "BTC" }),
+      ).rejects.toThrow("A cryptocurrency cannot be the reporting currency");
+
+      expect(preferencesRow.patches()).toHaveLength(0);
+      expect(currenciesService.ensureCurrencyForUser).not.toHaveBeenCalled();
+      expect(query.mock.calls.some(([sql]) => isCurrencyKindRead(sql))).toBe(
+        true,
+      );
+    });
+
+    it("accepts a fiat reporting currency after reading its kind", async () => {
+      preferencesRow.seed(mockPreferences);
+      const query = mockQueryRunner.query as jest.Mock;
+      const base = query.getMockImplementation();
+      query.mockImplementation(
+        async (sql: string, params?: unknown[]) =>
+          currencyKindRows(sql, params) ?? base?.(sql, params) ?? [],
+      );
+
+      await service.updatePreferences("user-1", { defaultCurrency: "CAD" });
+
+      expect(preferencesRow.row()!.defaultCurrency).toBe("CAD");
+      const kindRead = query.mock.calls.find(([sql]) =>
+        isCurrencyKindRead(sql),
+      );
+      expect(kindRead?.[1]).toEqual(["CAD"]);
     });
 
     it("does not ensure a currency when the default is unchanged", async () => {
@@ -566,7 +877,7 @@ describe("UsersService", () => {
 
       await service.updatePreferences("user-1", { defaultCurrency: "USD" });
 
-      expect(currenciesService.ensureSystemCurrency).not.toHaveBeenCalled();
+      expect(currenciesService.ensureCurrencyForUser).not.toHaveBeenCalled();
     });
 
     it("updates multiple fields at once", async () => {
@@ -638,6 +949,159 @@ describe("UsersService", () => {
       });
     });
 
+    it("merges dashboardWidgetConfig by widget id, keeping slices it was not sent", async () => {
+      // The dashboard's edit mode stored a size; a widget's own settings save,
+      // sending only its slice, must not drop it.
+      preferencesRow.seed({
+        ...mockPreferences,
+        dashboardWidgetConfig: {
+          "net-worth": { gridWidth: "full" },
+          "spending-by-payee": { range: "3m", displayName: "Payees" },
+        },
+      });
+
+      await service.updatePreferences("user-1", {
+        dashboardWidgetConfig: { "spending-by-payee": { range: "6m" } },
+      });
+
+      // The sent slice replaces its stored one whole: the key it left out is
+      // cleared, which is how a widget removes a custom name.
+      expect(preferencesRow.row()!.dashboardWidgetConfig).toEqual({
+        "net-worth": { gridWidth: "full" },
+        "spending-by-payee": { range: "6m" },
+      });
+    });
+
+    it("removes a dashboardWidgetConfig slice sent as null", async () => {
+      preferencesRow.seed({
+        ...mockPreferences,
+        dashboardWidgetConfig: {
+          "net-worth": { gridWidth: "full" },
+          "top-movers": { gridHeight: "tall" },
+        },
+      });
+
+      await service.updatePreferences("user-1", {
+        dashboardWidgetConfig: { "net-worth": null },
+      });
+
+      expect(preferencesRow.row()!.dashboardWidgetConfig).toEqual({
+        "top-movers": { gridHeight: "tall" },
+      });
+    });
+
+    it("leaves dashboardWidgetConfig untouched when not provided", async () => {
+      preferencesRow.seed({
+        ...mockPreferences,
+        dashboardWidgetConfig: { "net-worth": { gridWidth: "full" } },
+      });
+
+      await service.updatePreferences("user-1", { timeFormat: "24h" });
+
+      expect(preferencesRow.row()!.dashboardWidgetConfig).toEqual({
+        "net-worth": { gridWidth: "full" },
+      });
+    });
+
+    it("updates hiddenTableColumns", async () => {
+      preferencesRow.seed(mockPreferences);
+
+      await service.updatePreferences("user-1", {
+        hiddenTableColumns: {
+          transactions: ["refNumber", "attachments"],
+          investmentRegister: ["status"],
+        },
+      });
+
+      const savedData = preferencesRow.row()!;
+      expect(savedData.hiddenTableColumns).toEqual({
+        transactions: ["refNumber", "attachments"],
+        investmentRegister: ["status"],
+      });
+    });
+
+    it("merges hiddenTableColumns by table kind, keeping kinds it was not sent", async () => {
+      // Another device set the holdings default; this save, from a screen that
+      // never saw it, sends only the kind it changed.
+      preferencesRow.seed({
+        ...mockPreferences,
+        hiddenTableColumns: {
+          transactions: ["tags"],
+          investmentHoldings: ["avgCost"],
+        },
+      });
+
+      await service.updatePreferences("user-1", {
+        hiddenTableColumns: { transactions: [] },
+      });
+
+      expect(preferencesRow.row()!.hiddenTableColumns).toEqual({
+        transactions: [],
+        investmentHoldings: ["avgCost"],
+      });
+    });
+
+    it("leaves hiddenTableColumns untouched when not provided", async () => {
+      preferencesRow.seed({
+        ...mockPreferences,
+        hiddenTableColumns: { transactions: ["tags"] },
+      });
+
+      await service.updatePreferences("user-1", { timeFormat: "24h" });
+
+      const savedData = preferencesRow.row()!;
+      expect(savedData.hiddenTableColumns).toEqual({ transactions: ["tags"] });
+    });
+
+    it("updates viewDefaults", async () => {
+      preferencesRow.seed({ ...mockPreferences, viewDefaults: {} });
+
+      await service.updatePreferences("user-1", {
+        viewDefaults: {
+          density: "compact",
+          chartCollapsed: true,
+          accountOpenTarget: "dashboard",
+        },
+      });
+
+      const savedData = preferencesRow.row()!;
+      expect(savedData.viewDefaults).toEqual({
+        density: "compact",
+        chartCollapsed: true,
+        accountOpenTarget: "dashboard",
+      });
+    });
+
+    it("merges viewDefaults into the stored map, keeping keys it was not sent", async () => {
+      // Another device set density; this save, from a screen that never saw
+      // it, sends only the key it changed.
+      preferencesRow.seed({
+        ...mockPreferences,
+        viewDefaults: { density: "compact", chartCollapsed: false },
+      });
+
+      await service.updatePreferences("user-1", {
+        viewDefaults: { chartCollapsed: true },
+      });
+
+      expect(preferencesRow.row()!.viewDefaults).toEqual({
+        density: "compact",
+        chartCollapsed: true,
+      });
+    });
+
+    it("leaves viewDefaults untouched when not provided", async () => {
+      preferencesRow.seed({
+        ...mockPreferences,
+        viewDefaults: { widgetsCollapsed: true },
+      });
+
+      await service.updatePreferences("user-1", { timeFormat: "24h" });
+
+      const savedData = preferencesRow.row()!;
+      expect(savedData.viewDefaults).toEqual({ widgetsCollapsed: true });
+    });
+
     it("updates preferredExchanges", async () => {
       preferencesRow.seed(mockPreferences);
 
@@ -667,13 +1131,13 @@ describe("UsersService", () => {
       ["dateFormat", "MM/DD/YYYY"],
       ["numberFormat", "en-CA"],
       ["timezone", "Europe/London"],
-      ["notificationBrowser", false],
       ["weekStartsOn", 1],
       ["budgetDigestEnabled", true],
       ["budgetDigestDay", 5],
       ["showCreatedAt", true],
       ["timeFormat", "24h"],
       ["defaultQuoteProvider", "yahoo"],
+      ["defaultMapProvider", "google"],
       ["recentTransactionsLimit", 25],
       ["language", "fr"],
       ["colorTheme", "latte"],
@@ -763,7 +1227,7 @@ describe("UsersService", () => {
       );
     });
 
-    it("syncs the stored backup password to the new login password", async () => {
+    it("re-wraps the backup key under the new login password", async () => {
       const hashedPassword = await bcrypt.hash("OldPass123!", 10);
       usersRepository.findOne.mockResolvedValue({
         ...mockUser,
@@ -775,9 +1239,17 @@ describe("UsersService", () => {
         newPassword: "NewPass456!",
       });
 
-      expect(
-        backupEncryptionService.rememberLoginPassword,
-      ).toHaveBeenCalledWith("user-1", "NewPass456!");
+      // Bound to the hash just written, so the wrap is recorded against the
+      // password it was made under.
+      const [, , boundHash] =
+        backupEncryptionService.rewrapBackupKey.mock.calls[0];
+      expect(backupEncryptionService.rewrapBackupKey).toHaveBeenCalledWith(
+        "user-1",
+        "NewPass456!",
+        expect.any(String),
+      );
+      expect(boundHash).not.toBe(hashedPassword);
+      expect(await bcrypt.compare("NewPass456!", boundHash)).toBe(true);
     });
 
     it("password change still succeeds when backup-password sync fails", async () => {
@@ -786,7 +1258,7 @@ describe("UsersService", () => {
         ...mockUser,
         passwordHash: hashedPassword,
       });
-      backupEncryptionService.rememberLoginPassword.mockRejectedValue(
+      backupEncryptionService.rewrapBackupKey.mockRejectedValue(
         new Error("sync failed"),
       );
 
@@ -818,6 +1290,122 @@ describe("UsersService", () => {
       );
     });
 
+    it("revokes trusted devices and every OAuth grant on password change", async () => {
+      // A connected MCP client's OAuth grant outlived a password change, so
+      // whoever the user was rotating the password against kept API access.
+      const hashedPassword = await bcrypt.hash("OldPass123!", 10);
+      usersRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        passwordHash: hashedPassword,
+      });
+
+      await service.changePassword("user-1", {
+        currentPassword: "OldPass123!",
+        newPassword: "NewPass456!",
+      });
+
+      expect(trustedDevicesRepository.delete).toHaveBeenCalledWith({
+        userId: "user-1",
+      });
+      expect(oauthProviderService.revokeAllForUser).toHaveBeenCalledWith(
+        "user-1",
+      );
+    });
+
+    it("converges the refresh sessions after the password commit", async () => {
+      // The in-transaction blanket UPDATE misses a successor a concurrent
+      // rotation inserts after its snapshot (A26-M02); the converging revoke
+      // runs after the commit, in its own transactions.
+      const hashedPassword = await bcrypt.hash("OldPass123!", 10);
+      usersRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        passwordHash: hashedPassword,
+      });
+      const order: string[] = [];
+      const runTransaction =
+        mockDataSource.transaction.getMockImplementation()!;
+      mockDataSource.transaction.mockImplementation(async (...args: any[]) => {
+        order.push("begin");
+        const result = await runTransaction(...args);
+        order.push("commit");
+        return result;
+      });
+      usersRepository.save.mockImplementation(async (u: unknown) => {
+        order.push("save");
+        return u;
+      });
+      const answer = mockQueryRunner.query.getMockImplementation();
+      mockQueryRunner.query.mockImplementation(
+        async (sql: unknown, params?: unknown[]) => {
+          if (String(sql).includes("SELECT DISTINCT family_id")) {
+            order.push("converge");
+            expect(params).toEqual(["user-1", null]);
+            return [];
+          }
+          return answer ? answer(sql, params) : [];
+        },
+      );
+
+      await service.changePassword("user-1", {
+        currentPassword: "OldPass123!",
+        newPassword: "NewPass456!",
+      });
+
+      const write = order.lastIndexOf("save");
+      expect(order.slice(write - 1, write + 5)).toEqual([
+        "begin",
+        "save",
+        "commit",
+        "begin",
+        "converge",
+        "commit",
+      ]);
+    });
+
+    it("writes the password and the row revocations in one transaction", async () => {
+      const hashedPassword = await bcrypt.hash("OldPass123!", 10);
+      usersRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        passwordHash: hashedPassword,
+      });
+      const order: string[] = [];
+      const runTransaction =
+        mockDataSource.transaction.getMockImplementation()!;
+      mockDataSource.transaction.mockImplementation(async (...args: any[]) => {
+        order.push("begin");
+        const result = await runTransaction(...args);
+        order.push("commit");
+        return result;
+      });
+      usersRepository.save.mockImplementation(async (u: unknown) => {
+        order.push("save");
+        return u;
+      });
+      patRepository.update.mockImplementation(async () => {
+        order.push("pats");
+      });
+      oauthProviderService.revokeAllForUser.mockImplementation(async () => {
+        order.push("oauth");
+        return 0;
+      });
+
+      await service.changePassword("user-1", {
+        currentPassword: "OldPass123!",
+        newPassword: "NewPass456!",
+      });
+
+      // The read of the user is its own short transaction; the write and the
+      // PAT revocation share the next one, and the OAuth sweep follows commit.
+      const write = order.lastIndexOf("save");
+      expect(order.slice(write - 1, write + 3)).toEqual([
+        "begin",
+        "save",
+        "pats",
+        "commit",
+      ]);
+      expect(order[order.length - 1]).toBe("oauth");
+    });
+
     it("throws when current password is incorrect", async () => {
       const hashedPassword = await bcrypt.hash("CorrectPass", 10);
       usersRepository.findOne.mockResolvedValue({
@@ -845,6 +1433,22 @@ describe("UsersService", () => {
           newPassword: "NewPass456!",
         }),
       ).rejects.toThrow("No password set for this account");
+    });
+
+    it("refuses an SSO account that kept its password while SSO password sign-in is off", async () => {
+      usersRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        authProvider: "oidc",
+        passwordHash: await bcrypt.hash("OldPass123!", 10),
+      });
+
+      await expect(
+        service.changePassword("user-1", {
+          currentPassword: "OldPass123!",
+          newPassword: "NewPass456!",
+        }),
+      ).rejects.toThrow("No password set for this account");
+      expect(usersRepository.save).not.toHaveBeenCalled();
     });
 
     it("throws when user not found", async () => {
@@ -915,6 +1519,32 @@ describe("UsersService", () => {
       expect(usersRepository.remove).toHaveBeenCalled();
     });
 
+    it("locks the user's custom currencies, then removes the unreferenced ones after the user row", async () => {
+      const hashedPassword = await bcrypt.hash("CorrectPass123!", 10);
+      usersRepository.findOne.mockResolvedValue({
+        ...mockUser,
+        passwordHash: hashedPassword,
+      });
+      currenciesService.lockCurrenciesCreatedBy.mockResolvedValue(["PTS"]);
+
+      await service.deleteAccount("user-1", { password: "CorrectPass123!" });
+
+      expect(currenciesService.lockCurrenciesCreatedBy).toHaveBeenCalledWith(
+        expect.anything(),
+        "user-1",
+      );
+      expect(
+        currenciesService.removeUnreferencedCurrencies,
+      ).toHaveBeenCalledWith(expect.anything(), ["PTS"]);
+      expect(
+        currenciesService.lockCurrenciesCreatedBy.mock.invocationCallOrder[0],
+      ).toBeLessThan(usersRepository.remove.mock.invocationCallOrder[0]);
+      expect(usersRepository.remove.mock.invocationCallOrder[0]).toBeLessThan(
+        currenciesService.removeUnreferencedCurrencies.mock
+          .invocationCallOrder[0],
+      );
+    });
+
     it("deletes sessions and tokens so a non-cascading FK cannot block the delete", async () => {
       const hashedPassword = await bcrypt.hash("CorrectPass123!", 10);
       usersRepository.findOne.mockResolvedValue({
@@ -963,7 +1593,12 @@ describe("UsersService", () => {
         passwordHash: hashedPassword,
       });
       // isActingDelegate -> account_delegates lookup returns a row.
-      mockDataSource.query.mockResolvedValue([{ "?column?": 1 }]);
+      mockDataSource.query.mockImplementation(async (sql: string) =>
+        sql.includes("FROM account_delegates") &&
+        sql.trimStart().startsWith("SELECT")
+          ? [{ "?column?": 1 }]
+          : [],
+      );
 
       const result = await service.deleteAccount("user-1", {
         password: "CorrectPass123!",
@@ -1397,7 +2032,34 @@ describe("UsersService", () => {
         queries.some((q: string) => q.includes("DELETE FROM securities")),
       ).toBe(true);
       expect(
-        queries.some((q: string) => q.includes("DELETE FROM budget_alerts")),
+        queries.some((q: string) => q.includes("DELETE FROM notifications")),
+      ).toBe(true);
+      // A reminder is a template the cron re-emits; left behind, it would keep
+      // writing (and pushing) fresh notifications after "delete my data". The
+      // account survives, so no CASCADE reaches it -- and it goes BEFORE the
+      // notifications delete, which would otherwise SET NULL its source link.
+      const reminders = queries.findIndex((q: string) =>
+        q.includes("DELETE FROM notification_reminders"),
+      );
+      const notifications = queries.findIndex((q: string) =>
+        q.includes("DELETE FROM notifications"),
+      );
+      expect(reminders).toBeGreaterThanOrEqual(0);
+      expect(reminders).toBeLessThan(notifications);
+      // Preferences are settings, not data: the matrix survives like user_preferences.
+      expect(
+        queries.some((q: string) =>
+          q.includes("DELETE FROM notification_preferences"),
+        ),
+      ).toBe(false);
+      // The account survives this flow, so nothing cascades: a device left
+      // behind keeps its endpoint and both encryption keys, and anything a
+      // producer sends still arrives on the phone of somebody who asked for
+      // their data to be gone.
+      expect(
+        queries.some((q: string) =>
+          q.includes("DELETE FROM push_subscriptions"),
+        ),
       ).toBe(true);
       expect(
         queries.some((q: string) => q.includes("DELETE FROM budgets")),
@@ -1413,6 +2075,17 @@ describe("UsersService", () => {
       expect(
         queries.some((q: string) => q.includes("DELETE FROM transactions")),
       ).toBe(true);
+      // A warranty's transaction link is ON DELETE SET NULL and the account
+      // survives, so nothing cascades to it: without its own delete every
+      // warranty and claim outlives "delete my data".
+      const claims = queries.findIndex((q: string) =>
+        q.includes("DELETE FROM warranty_claims"),
+      );
+      const warranties = queries.findIndex((q: string) =>
+        q.includes("DELETE FROM warranties"),
+      );
+      expect(claims).toBeGreaterThanOrEqual(0);
+      expect(claims).toBeLessThan(warranties);
       expect(
         queries.some((q: string) =>
           q.includes("DELETE FROM scheduled_transactions"),
@@ -1431,6 +2104,17 @@ describe("UsersService", () => {
       );
       expect(
         queries.some((q: string) => q.includes("DELETE FROM action_history")),
+      ).toBe(true);
+      // Left behind, these were untouched by "delete my data" (issue #2231):
+      // a rule still fires on new transactions, and an institution's name and
+      // logo still appear, after the user asked for their data to be gone.
+      expect(
+        queries.some((q: string) =>
+          q.includes("DELETE FROM transaction_rules"),
+        ),
+      ).toBe(true);
+      expect(
+        queries.some((q: string) => q.includes("DELETE FROM institutions")),
       ).toBe(true);
     });
 
@@ -1568,9 +2252,11 @@ describe("UsersService", () => {
         ...mockUser,
         passwordHash: hashedPassword,
       });
-      // Make every query return [null, undefined] so the ?? 0 right-hand side
-      // is exercised across all the deleted.<x> = result[1] ?? 0 lines.
-      mockQueryRunner.query.mockResolvedValue([null, undefined]);
+      // DELETEs omit their count so every deleted.<x> = result[1] ?? 0
+      // fallback is exercised; SELECTs still return ordinary empty row sets.
+      mockQueryRunner.query.mockImplementation(async (sql: string) =>
+        sql.trimStart().startsWith("DELETE") ? [null, undefined] : [],
+      );
 
       const r = await service.deleteData("user-1", {
         password: "CorrectPass123!",

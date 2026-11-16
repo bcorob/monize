@@ -9,7 +9,8 @@
     "stepCounter": "{current} dari {total}",
     "skippedTitle": "Tur selesai",
     "skippedBody": "Beberapa langkah dilewati karena layar atau kontrolnya tidak tersedia. Anda dapat mengulang tur kapan saja dari Pengaturan.",
-    "move": "Pindahkan kartu ini — seret, atau geser dengan tombol panah"
+    "move": "Pindahkan kartu ini — seret, atau geser dengan tombol panah",
+    "readGuide": "Baca panduan lengkap"
   },
   "offer": {
     "heading": "Ikuti tur singkat",
@@ -45,7 +46,8 @@
     "requirementsLoading": "Memeriksa apakah Anda bisa mengikuti tur ini…",
     "requires": {
       "transactionEntry": "Tambahkan akun terlebih dahulu — tur ini memandu pencatatan transaksi.",
-      "securitiesExist": "Tambahkan sekuritas terlebih dahulu — tur ini membuka salah satunya dari daftar sekuritas Anda."
+      "securitiesExist": "Tambahkan sekuritas terlebih dahulu — tur ini membuka salah satunya dari daftar sekuritas Anda.",
+      "ownerView": "Kembali ke data Anda sendiri terlebih dahulu. Tur ini membahas fitur yang tidak tersedia saat Anda bertindak untuk orang lain."
     },
     "start": "Mulai",
     "restart": "Ulangi",
@@ -67,7 +69,7 @@
         },
         "dashboard": {
           "title": "Dasbor Anda",
-          "body": "Ini adalah dasbor Anda. Gunakan tombol **Sesuaikan** di kanan atas untuk mengatur ulang atau menyembunyikan widget agar ringkasan yang penting bagi Anda berada tepat di bagian atas."
+          "body": "Ini adalah dasbor Anda. Pilih ikon roda gigi **Sesuaikan** di samping sapaan untuk mengaturnya: pindahkan atau hapus widget di tempatnya, pilih **Tambah widget** untuk menambah, dan **Selesai** untuk menyimpan tata letak."
         },
         "tools": {
           "title": "Menu Alat",
@@ -76,6 +78,14 @@
         "accounts": {
           "title": "Akun Anda",
           "body": "Tambahkan akun bank, kartu kredit, pinjaman, dan investasi Anda di sini dengan tombol yang disorot. Setiap saldo dan transaksi terkait dengan sebuah akun."
+        },
+        "openAccountDetail": {
+          "title": "Buka tampilan detail sebuah akun",
+          "body": "Setiap akun punya halaman yang disesuaikan dengan jenisnya. Pilih **Detail** — ikon mata pada baris akun — untuk membukanya. Di ponsel, tekan lama akunnya lalu pilih **Detail**."
+        },
+        "accountDetailView": {
+          "title": "Tampilan yang dibuat untuk akun ini",
+          "body": "Halaman ini berubah mengikuti jenis akun, sehingga rekening bank, kartu kredit, pinjaman, akun investasi, atau aset masing-masing menampilkan angka dan alat yang paling berguna baginya. Kembali kapan saja lewat **Detail** di daftar akun."
         },
         "transactions": {
           "title": "Transaksi",
@@ -303,6 +313,374 @@
             "title": "Kembalilah pada evaluasi berikutnya",
             "body": "GEM mengambil satu keputusan per periode, dan tanggal evaluasi berikutnya ada di bagian atas laporan. Sampai hari itu tidak ada yang perlu dilakukan. Ketika tiba, periksa apakah sinyalnya berubah; jika ya, lakukan transaksinya melalui broker Anda dan catat di Monize agar perbandingan portofolio tetap cocok. Anda dapat mengulangi tur ini kapan saja dari **Tur berpandu** di **Pengaturan**."
           }
+        }
+      }
+    },
+    "v1_16_0": {
+      "notifications": {
+        "title": "Notifikasi",
+        "steps": {
+          "welcome": {
+            "title": "Monize kini bisa memberi tahu Anda",
+            "body": "Tagihan yang jatuh tempo, anggaran yang terlampaui, saldo yang melewati batas yang Anda tetapkan, cadangan yang gagal. Panduan ini menunjukkan ke mana semua itu tiba, dan bagaimana Anda memilih mana yang sampai lewat email atau di ponsel."
+          },
+          "bell": {
+            "title": "Loncengnya adalah catatannya",
+            "body": "Setiap notifikasi yang dibuat Monize ditulis di sini, apa pun yang Anda nyalakan atau matikan di tempat lain. Email dan push adalah salinan yang dikirim menyusul; daftar ini adalah aslinya, dan angka pada lonceng menghitung yang belum Anda baca."
+          },
+          "panel": {
+            "title": "Apa yang dibawa sebuah notifikasi",
+            "body": "Masing-masing menyebut apa yang terjadi dan menautkan ke halaman yang menampilkannya: tagihan, anggaran, rekening. **Tandai semua sudah dibaca** menihilkan penghitung tanpa menghapus apa pun. Bila ingin diingatkan, setiap notifikasi punya **Ingatkan saya**: sekali lagi setelah jeda, atau berulang sampai Anda hentikan — dan Anda bisa menghentikannya dari notifikasi itu sendiri saat sampai di ponsel."
+          },
+          "filters": {
+            "title": "Persempit daftarnya, lalu bertindak",
+            "body": "Baris atas menyaring menurut tingkat kegawatan, baris bawah memisahkan **Keuangan** dari **Sistem** — cadangan, pengiriman surel, dan hal lain yang hanya bisa ditangani administrator. **Hapus semua** mengikuti saringan yang sedang tampil dan menjangkau seluruh yang cocok, bukan hanya yang di layar, sehingga Anda bisa membersihkan serangkaian peringatan sistem yang sudah selesai dan menyisakan sisanya."
+          },
+          "settings": {
+            "title": "Tempat pengiriman diputuskan",
+            "body": "**Pengaturan → Notifikasi** memuat sisa panduan ini. Di bagian atas kartu ada sakelar email dan ringkasan anggaran mingguan; di bawahnya kisi yang memutuskan segalanya, lalu perangkat push Anda."
+          },
+          "matrix": {
+            "title": "Satu baris per jenis, satu kolom per kanal",
+            "body": "Untuk tiap jenis notifikasi, pilih apakah ia keluar sebagai **Email (laporan)**, **Email (peringatan)**, **Push**, atau lewat **UnifiedPush** ke distributor yang Anda jalankan sendiri. Tidak ada kolom untuk lonceng, karena lonceng selalu menerima barisnya. **Jeda** adalah kolom terakhir: email dan push dilewati bila sesuatu dari grup yang sama sudah keluar dalam rentang itu — catatan di lonceng tetap ditulis. Setiap sakelar tersimpan begitu Anda ubah."
+          },
+          "push": {
+            "title": "Perangkat Anda",
+            "body": "Daftarkan sebuah peramban di sini dan Monize bisa menjangkaunya meski aplikasi tertutup. Monize menandatangani pesannya sendiri, jadi tidak ada akun Google atau Apple di tengah. Tiap perangkat bisa diuji dan dilepas sendiri-sendiri, dan perangkat yang tak lagi terjangkau menyebutkan alasannya. Di iPhone ini berjalan setelah Monize ditambahkan ke Layar Utama; bila administrator belum mengaktifkan push pada instansi ini, keterangannya muncul di sini."
+          },
+          "portfolio": {
+            "title": "Pergerakan nilai investasi",
+            "body": "Sekali sehari, ketika rekening investasi Anda bergerak melebihi jumlah yang Anda tetapkan di sini. Yang diukur adalah gerak pasar dan dividen — uang yang Anda setor atau tarik bukan pergerakan."
+          },
+          "finish": {
+            "title": "Satu tempat lagi",
+            "body": "Peringatan saldo ada pada rekeningnya sendiri: sunting rekening mana pun lalu isi **Beri tahu di bawah** atau **Beri tahu di atas**. Keduanya berbunyi saat saldo *melewati* batasnya, jadi Anda diberi tahu sekali, bukan setelah setiap pembayaran yang menahannya di sana. Panduan ini bisa Anda ulang kapan saja dari Pengaturan."
+          }
+        }
+      },
+      "reportTagBreakdown": {
+        "title": "Rincian laporan berdasarkan tag",
+        "steps": {
+          "welcome": {
+            "title": "Lihat laporan Anda berdasarkan tag, bukan hanya kategori",
+            "body": "Pendapatan vs Pengeluaran dan Laporan Arus Kas kini dapat dirinci berdasarkan nilai tag pilihan Anda — misalnya belanja rumah tangga dibanding usaha sampingan — dan menampilkan transfer di antara keduanya tanpa pernah menghitung transfer sebagai pendapatan."
+          },
+          "breakdown": {
+            "title": "Rincian berdasarkan kunci tag",
+            "body": "Pilih kunci tag di sini, misalnya **scope**, dan laporan akan terbagi menjadi satu bagian per nilai yang pernah Anda gunakan, ditambah bagian **Tanpa tag** untuk sisanya.",
+            "fallbackBody": "Kontrol ini muncul setelah Anda memberi tag **kunci:nilai** pada suatu transaksi, misalnya **scope:household**. Tambahkan satu, dan Rincian berdasarkan kunci tag akan muncul di sini."
+          },
+          "buckets": {
+            "title": "Total per nilai, transfer tetap terpisah",
+            "body": "Memilih kunci membuka satu tab per nilai ditambah **Tanpa tag**, masing-masing dengan pendapatan dan pengeluarannya sendiri. Uang yang dipindahkan antar akun ditampilkan sebagai **Arus masuk bertag** dan **Arus keluar bertag** — terlihat, tetapi tidak pernah dihitung sebagai pendapatan."
+          },
+          "finish": {
+            "title": "Itulah rincian berdasarkan tag",
+            "body": "Beri tag transaksi dengan pasangan kunci:nilai seperti scope:household di mana pun Anda ingin tampilan ini, dan buka kembali tur ini kapan saja dari Pengaturan."
+          }
+        }
+      }
+    },
+    "v1_17_0": {
+      "transactionRules": {
+        "title": "Aturan transaksi",
+        "steps": {
+          "welcome": {
+            "title": "Aturan yang merapikan transaksi Anda",
+            "body": "Saat sebuah transaksi dibuat atau diimpor dan cocok dengan kondisi yang Anda tetapkan, sebuah aturan dapat mengatur kategori atau penerimanya, menambahkan tag, menulis ulang deskripsinya, atau meminta AI meninjaunya. Aturan tidak pernah mengubah jumlah, akun, atau tanggal."
+          },
+          "tools": {
+            "title": "Aturan ada di menu Alat",
+            "body": "Buka **Alat** untuk menemukan **Aturan**. Langkah berikutnya menampilkan menunya."
+          },
+          "rulesLink": {
+            "title": "Buka Aturan",
+            "body": "Pilih **Aturan**. Halaman ini menampilkan semua aturan Anda dan dari sinilah Anda membuat yang baru."
+          },
+          "list": {
+            "title": "Aturan Anda, berurutan",
+            "body": "Setiap baris adalah satu aturan, dengan sakelar untuk menyalakan atau mematikannya dan tindakan untuk memindahkan, menjalankan, menggandakan, atau menghapusnya. Aturan diperiksa dari atas ke bawah, jadi urutan penting saat dua aturan mengubah hal yang sama. Jika belum ada aturan, kartu ini menjelaskan apa itu aturan."
+          },
+          "create": {
+            "title": "Buat aturan",
+            "body": "**Buat aturan** membuka editor dengan aturan kosong. Tidak ada yang disimpan sampai Anda memilih **Simpan aturan**."
+          },
+          "when": {
+            "title": "Kapan: transaksi mana yang diperiksa",
+            "body": "Pilih apakah aturan memeriksa transaksi saat **dibuat**, saat **diimpor**, atau keduanya. **Hentikan pemrosesan aturan lain** melewati aturan di bawahnya untuk setiap transaksi yang cocok dengan aturan ini."
+          },
+          "if": {
+            "title": "Jika: transaksi mana yang cocok",
+            "body": "Susun kondisi dari kolom seperti penerima, deskripsi, jumlah, dan kategori. Sakelar **Visual** dan **Ekspresi** menampilkan kondisi yang sama sebagai kartu atau sebagai satu baris teks. Dalam pola, * berarti teks apa pun dan '{name}' menyimpan teks di posisi itu agar tindakan dapat memakainya lagi."
+          },
+          "then": {
+            "title": "Maka: apa yang berubah",
+            "body": "Tindakan dijalankan sesuai urutan yang tercantum. Aturan dapat mengatur kategori atau penerima, menambah atau menghapus tag, mengatur deskripsi, atau meminta AI meninjau transaksi. Tidak ada tindakan untuk jumlah, akun, atau tanggal."
+          },
+          "test": {
+            "title": "Uji, jalankan, dan urungkan",
+            "body": "**Uji aturan** mencoba draf pada transaksi Anda yang ada dan menunjukkan apa yang akan berubah. Tidak ada yang diubah. Setelah aturan disimpan, **Jalankan pada transaksi yang ada** menampilkan pratinjau dan menerapkannya pada yang sudah Anda miliki, dan Anda dapat mengurungkan proses itu dari riwayat tindakan."
+          },
+          "reviews": {
+            "title": "Kotak masuk peninjauan AI",
+            "body": "Aturan dengan **Minta peninjauan AI** tidak mengubah transaksi, tetapi menaruhnya di sini. Sebuah asisten mengusulkan perubahan, dan tidak ada yang ditulis sampai Anda menyetujuinya. Anda juga dapat menolak permintaan. Temukan di **AI** sebagai **Kotak masuk peninjauan AI**."
+          }
+        }
+      }
+    },
+    "v1_20_0": {
+      "warranties": {
+        "title": "Garansi",
+        "steps": {
+          "welcome": {
+            "title": "Pantau garansi Anda",
+            "body": "Garansi mencatat apa yang Anda beli, kapan perlindungannya berakhir, dan siapa penjualnya, beserta struk, buku panduan, dan klaim apa pun. Garansi dapat ditautkan ke pembelian di daftar transaksi Anda. Garansi tidak pernah mengubah saldo, laporan, atau total. Tur ini menunjukkan cara-cara menambahkan garansi dan di mana garansi itu muncul setelahnya."
+          },
+          "warrantiesLink": {
+            "title": "Garansi ada di menu Alat",
+            "body": "Buka **Alat** dan pilih **Garansi** untuk melihat semua garansi Anda."
+          },
+          "overview": {
+            "title": "Perlindungan dalam sekilas",
+            "body": "Kartu-kartu ini menghitung garansi Anda yang **Segera berakhir**, **Aktif**, **Berakhir**, dan **Seumur hidup**. Pilih sebuah kartu untuk memfilter daftar di bawahnya. Anda juga dapat mencari, mengurutkan, dan menampilkan garansi yang diarsipkan. Pilih garansi di daftar untuk membuka halamannya, dengan dokumen, klaim, dan pembelian yang tertaut dengannya."
+          },
+          "addWarranty": {
+            "title": "Metode 1: tambahkan di sini",
+            "body": "**Tambah garansi** membuka formulir kosong. Masukkan produk, penjual, dan tanggal pembelian, lalu kapan perlindungannya berakhir: **Pada tanggal tertentu**, **Setelah jangka waktu**, atau **Tidak pernah** untuk garansi seumur hidup. Anda dapat melampirkan struk atau buku panduan sebelum menyimpan."
+          },
+          "importCsv": {
+            "title": "Metode 2: impor file CSV",
+            "body": "**Impor CSV** membaca file dengan kolom Warracker, misalnya ekspor dari Warracker atau dari halaman ini. Anda melihat setiap baris dan masalah apa pun sebelum ada yang disimpan."
+          },
+          "inRegister": {
+            "title": "Garansi di daftar transaksi",
+            "body": "Transaksi yang punya garansi menampilkan ikon perisai di daftar transaksi. Cari **has:warranty** untuk menemukan semua transaksi seperti itu."
+          },
+          "newTransaction": {
+            "title": "Metode 3: saat mencatat pembelian",
+            "body": "Pilih **+ Transaksi Baru** untuk membuka formulir."
+          },
+          "warrantiesLine": {
+            "title": "Baris Garansi",
+            "body": "**Tambah garansi** di sini menyimpan transaksi baru terlebih dahulu, lalu membuka formulir garansi yang terisi dari transaksi itu. Saat Anda mengedit transaksi nanti, baris ini menampilkan garansinya, dan masing-masing membuka halamannya.",
+            "fallbackBody": "Baris Garansi tidak ditampilkan untuk akun bersama, karena garansi adalah milik Anda sendiri. Pilih salah satu akun Anda sendiri, dan formulir akan menampilkan baris **Garansi** di atas tombol-tombolnya. **Tambah garansi** di sana menyimpan transaksi baru terlebih dahulu, lalu membuka formulir garansi yang terisi dari transaksi itu. Saat Anda mengedit transaksi nanti, baris itu menampilkan garansinya."
+          },
+          "closeForm": {
+            "title": "Tutup formulir",
+            "body": "Pilih **Batal** untuk menutupnya tanpa menyimpan, atau simpan transaksinya jika Anda memasukkan transaksi sungguhan."
+          },
+          "dashboardWidget": {
+            "title": "Lihat yang segera berakhir di dasbor",
+            "body": "Pilih **Sesuaikan**, lalu **Tambah widget**, pilih **Garansi yang segera berakhir** dan pilih **Selesai**. Widget ini menampilkan garansi berikutnya yang akan berakhir, dan judulnya membuka halaman Garansi."
+          },
+          "reminders": {
+            "title": "Pengingat sebelum perlindungan berakhir",
+            "body": "Monize mengingatkan Anda 30 hari dan 7 hari sebelum garansi berakhir, serta pada hari itu juga. Pengingat muncul di sini, dan Anda dapat menunda pengingat atau membuka garansinya dari situ. Pilih cara pengingat sampai kepada Anda di **Pengaturan**, di bagian **Notifikasi**, sebagai **Pengingat garansi**."
+          }
+        }
+      },
+      "payrollDeductions": {
+        "title": "Potongan Gaji",
+        "steps": {
+          "welcome": {
+            "title": "Hentikan potongan di batas maksimum tahunannya",
+            "body": "Beberapa potongan gaji, seperti dana pensiun atau asuransi ketenagakerjaan, berhenti setelah batas maksimum tahun itu tercapai dan mulai lagi tahun berikutnya. Aturan potongan gaji memberi tahu Monize batas maksimum itu, sehingga gaji berhenti memotong potongan tersebut setelah batasnya tercapai. **Sebelum mulai, Anda memerlukan tagihan gaji terjadwal:** gaji Anda yang diatur sebagai setoran terjadwal, dengan potongannya sebagai baris terpisah."
+          },
+          "payrollBill": {
+            "title": "Pertama, atur gaji Anda",
+            "body": "Jika belum, pilih **+ Jadwal Baru** dan buat gaji Anda sebagai setoran. Pecah menjadi satu baris untuk gaji kotor dan satu baris negatif untuk setiap potongan, masing-masing dengan kategorinya sendiri. Jika suatu potongan sedang tidak dipotong karena batas maksimum tahun ini sudah tercapai, tetap tambahkan baris pecahan untuknya sebagai pengeluaran bernilai nol, agar aturan dapat membatasinya dan potongan itu mulai lagi setelah reset. Hanya setoran aktif yang memasukkan lebih banyak daripada yang dipotong yang dapat memiliki aturan, dan hanya baris potongannya yang dapat dibatasi."
+          },
+          "taxesLink": {
+            "title": "Potongan gaji ada di bawah Pajak",
+            "body": "Buka **Alat** dan pilih **Pajak** untuk menemukan alat pajak."
+          },
+          "taxesCard": {
+            "title": "Buka Potongan Gaji",
+            "body": "Pilih kartu ini untuk membuka aturan potongan gaji."
+          },
+          "newRule": {
+            "title": "Buat aturan untuk sebuah gaji",
+            "body": "**+ Aturan Baru** membuka formulir. Pilih tagihan gaji terjadwal Anda, lalu batas maksimum tahunan untuk setiap kategori potongan yang ingin Anda batasi. Tambahkan tanggal reset, biasanya 1 Januari. Jika tagihan tidak memiliki baris potongan, formulir meminta Anda menambahkannya ke tagihan terlebih dahulu."
+          },
+          "rulesList": {
+            "title": "Aturan Anda",
+            "body": "Setiap aturan menampilkan tagihannya, kategorinya, batas maksimum tahunan, tanggal reset, dan potongan setiap gaji. Edit aturan untuk mengubah batas maksimumnya, atau hapus agar gaji kembali memotong baris penuh. Menghapus aturan tidak pernah mengubah transaksi yang sudah diposting."
+          },
+          "periodTables": {
+            "title": "Yang sudah dipotong",
+            "body": "Setelah Anda memiliki aturan, **Tampilkan tahun berjalan** menampilkan berapa yang telah dipotong setiap kategori pada periode ini dan sisa ruang di bawah batas maksimumnya. **Tampilkan periode sebelumnya** menampilkan berapa yang dipotong pada tahun-tahun sebelumnya."
+          },
+          "forecast": {
+            "title": "Diterapkan saat gaji diposting",
+            "body": "Saat gaji diposting, setiap baris yang dibatasi dikurangi menjadi sisa ruang di bawah batas maksimumnya, hingga nol, lalu mulai lagi setelah tanggal reset. Prakiraan Arus Kas di sini dan di dasbor menampilkan hal yang sama lebih awal, sehingga Anda dapat melihat gaji bersih naik setelah batas maksimum tercapai."
+          },
+          "reminders": {
+            "title": "Pengingat sebelum setiap reset",
+            "body": "Dua bulan sebelum aturan direset, Monize meminta Anda di sini untuk mengonfirmasi batas maksimum tahun berikutnya. Jika Anda tidak melakukan apa pun, aturan mempertahankan batas maksimumnya dan direset pada tanggalnya. Pilih cara pengingat sampai kepada Anda di **Pengaturan**, di bagian **Notifikasi**, sebagai **Tagihan dan terjadwal**."
+          }
+        }
+      },
+      "sharedExpenses": {
+        "title": "Pengeluaran bersama",
+        "steps": {
+          "welcome": {
+            "title": "Berlibur bersama, catatan tetap jelas",
+            "body": "Pelajari cara mencatat pembelian grup dan pembayaran kembali. Tur ini tidak membuat catatan untuk Anda."
+          },
+          "tools": {
+            "title": "Buka pengeluaran bersama",
+            "body": "Temukan **Pengeluaran Bersama** di **Alat**. Di ponsel, gunakan menu navigasi."
+          },
+          "newGroup": {
+            "title": "Mulai dengan grup Anda",
+            "body": "**Grup baru** mengumpulkan nama perjalanan, peserta, dan mata uang penyelesaian. Peserta tidak memerlukan akun Monize. Setiap pembelian dapat melibatkan anggota yang berbeda."
+          },
+          "chooseGroup": {
+            "title": "Jelajahi sebuah grup",
+            "body": "Buka grup untuk melanjutkan. Jika belum punya, pilih **Lewati langkah ini** dan buat grup setelah tur."
+          },
+          "expenses": {
+            "title": "Siapa yang membayar, dan untuk siapa?",
+            "body": "Dengan akses edit, gunakan **Tambahkan pengeluaran** untuk memilih pembayar dan penerima manfaat. **Dibagi antara** mendukung bagian sama rata, jumlah pasti, persentase, dan bagian nol."
+          },
+          "balances": {
+            "title": "Periksa saldo dan selesaikan pembayaran",
+            "body": "**Saldo** menunjukkan siapa berutang kepada siapa dan saran pembayaran kembali. Catat pembayaran setelah uang diserahkan. **Berkas** dan **Aktivitas** menyimpan bukti dan riwayat."
+          },
+          "done": {
+            "title": "Siap untuk perjalanan berikutnya",
+            "body": "Catatan bersama tetap terpisah dari transaksi pribadi. Ulangi tur ini kapan saja dari **Pengaturan**, di **Tur berpandu**."
+          }
+        }
+      }
+    },
+    "v1_21_0": {
+      "commandPalette": {
+        "title": "Palet perintah",
+        "steps": {
+          "welcome": {
+            "title": "Temukan apa saja dari satu kotak",
+            "body": "Palet perintah mencari sekaligus di akun, penerima, kategori, tagihan, sekuritas, laporan, pengaturan, transaksi, dan panduan pengguna Anda, dari layar mana pun. Palet ini bekerja lewat papan ketik, jadi tur ini untuk komputer."
+          },
+          "openPalette": {
+            "title": "Buka palet",
+            "body": "Tekan **Ctrl+K** (**Cmd+K** di Mac). Tur berlanjut setelah palet terbuka."
+          },
+          "searchBox": {
+            "title": "Ketik yang Anda cari",
+            "body": "Coba penerima, akun, laporan seperti **Nilai Bersih**, atau pengaturan seperti **Mata Uang**. Hasil diperbarui saat Anda mengetik, dan transaksi serta bagian panduan juga dicari."
+          },
+          "results": {
+            "title": "Bergerak dan buka",
+            "body": "Gunakan tombol panah **Atas** dan **Bawah** untuk bergerak dan **Enter** untuk membuka hasil. **Tab** melompat ke tindakan, dan **Ctrl+Enter** (**Cmd+Enter** di Mac) memulai transaksi baru untuk penerima yang paling cocok."
+          },
+          "closePalette": {
+            "title": "Tutup palet",
+            "body": "Klik **esc** untuk menutupnya untuk sementara. Di luar tur ini, tombol **Esc** melakukan hal yang sama."
+          },
+          "done": {
+            "title": "Satu pintasan untuk diingat",
+            "body": "Tekan **Ctrl+K** kapan pun Anda ingin melompat ke suatu tempat. Di atas dialog yang terbuka, pintasan ini mencari di panduan. Di ponsel, gunakan pencarian di header. Putar ulang tur ini kapan saja dari **Pengaturan**, di bagian **Tur Berpandu**."
+          }
+        }
+      },
+      "inAppHelp": {
+        "title": "Bantuan di dalam aplikasi",
+        "steps": {
+          "welcome": {
+            "title": "Panduan pengguna, di samping pekerjaan Anda",
+            "body": "Panduan pengguna Monize kini terbuka di dalam aplikasi, di samping halaman yang sedang Anda buka, lengkap dengan tangkapan layar sesuai tema Anda. Panduan ini ikut dalam Monize Anda, sehingga bisa dibuka secara offline. Tur ini menunjukkan tempat menemukannya."
+          },
+          "pageHelp": {
+            "title": "Buka bantuan untuk halaman ini",
+            "body": "Klik **?** di samping judul halaman. Panduan terbuka di bagian yang membahas halaman ini."
+          },
+          "panel": {
+            "title": "Baca berdampingan dengan halaman",
+            "body": "Panel tetap berada di samping halaman yang tadi Anda buka. **Di halaman ini** mencantumkan bagian-bagiannya, dan tautan ke halaman panduan lain terbuka di sini. Di komputer, seret tepi kiri panel untuk melebarkan atau menyempitkannya."
+          },
+          "panelControls": {
+            "title": "Kontrol panel",
+            "body": "Pindah **Kembali** dan **Maju** di antara halaman yang Anda buka, **Cari** di panduan, **Sematkan** panel agar tetap terbuka di halaman lain, atau buka halaman di monize.net. Klik **Tutup** (**X**) untuk melanjutkan."
+          },
+          "helpMenu": {
+            "title": "Menu Bantuan",
+            "body": "Tanda **?** di header berisi bantuan untuk halaman saat ini, pencarian panduan, pintasan papan ketik, tur untuk halaman ini, dan Yang Baru. Anda juga bisa menekan **?** di mana pun Anda tidak sedang mengetik untuk mencari di panduan."
+          },
+          "learnMore": {
+            "title": "Pelajari lebih lanjut, di mana pun Anda perlu",
+            "body": "Cari **Pelajari lebih lanjut** di tooltip, di layar kosong, dan di samping beberapa pesan kesalahan. Masing-masing membuka bagian panduan yang menjelaskannya."
+          },
+          "done": {
+            "title": "Bertanya dengan kata-kata Anda sendiri",
+            "body": "Asisten AI juga dapat menjawab pertanyaan seperti \"bagaimana cara...\" dari panduan dan memberi tahu bagian mana yang ia gunakan. Putar ulang tur ini kapan saja dari **Pengaturan**, di bagian **Tur Berpandu**."
+          }
+        }
+      },
+      "dashboardEdit": {
+        "title": "Menata dasbor",
+        "steps": {
+          "welcome": {
+            "title": "Tata dasbor Anda langsung di tempat",
+            "body": "Kini Anda memindahkan, mengubah ukuran, menambah, dan menghapus widget langsung di dasbor, dan tidak ada yang disimpan sebelum Anda menyetujuinya. Tur ini memandu Anda melalui mode edit."
+          },
+          "enterEdit": {
+            "title": "Masuk ke mode edit",
+            "body": "Klik ikon roda gigi di samping sapaan. Tur berlanjut setelah mode edit terbuka."
+          },
+          "editBar": {
+            "title": "Bilah edit",
+            "body": "**Tambah widget** mencantumkan widget yang belum ada di dasbor Anda. **Pengaturan hero** memilih apa yang ditampilkan hero di bagian atas, dan **Atur ulang ke bawaan** mengembalikan tata letak standar."
+          },
+          "arrange": {
+            "title": "Pindahkan, ubah ukuran, dan hapus",
+            "body": "Seret widget pada gagangnya (enam titik), atau gunakan tanda panahnya. Di layar lebar, **Lebar** dan **Tinggi** mengubah ukurannya, atau seret sudut kanan bawahnya. **X** menghapusnya, dan kotak putus-putus **Tambah widget** menambahkan satu. Silakan coba."
+          },
+          "finish": {
+            "title": "Simpan atau kembalikan",
+            "body": "Klik **Selesai** untuk menyimpan tata letak, atau **Batal** untuk mengembalikannya seperti semula. Tata letak Anda disinkronkan di semua perangkat Anda."
+          },
+          "done": {
+            "title": "Jadikan milik Anda",
+            "body": "Mencari sesuatu yang baru untuk ditambahkan? Widget **Trivia** menampilkan fakta harian tentang uang Anda. Putar ulang tur ini kapan saja dari **Pengaturan**, di bagian **Tur Berpandu**."
+          }
+        }
+      }
+    }
+  },
+  "emailReceipts": {
+    "basics": {
+      "title": "Struk dari surel",
+      "steps": {
+        "welcome": {
+          "title": "Mengapa membaca struk dari surel",
+          "body": "Transaksi bank menunjukkan berapa yang Anda bayar dan kapan. Transaksi itu tidak menunjukkan apa yang Anda beli. Surel konfirmasi pesanan menunjukkannya. Monize membaca surel ini, menemukan transaksi yang dibayar oleh tiap surel, dan mengusulkan deskripsi, penerima pembayaran, serta pemisahan per item dengan satu kategori untuk setiap baris. Anda menyetujui setiap usulan sebelum usulan itu mengubah transaksi."
+        },
+        "aiRequired": {
+          "title": "Dalam praktiknya, Anda memerlukan penyedia AI",
+          "body": "Monize membaca surel dengan **profil**: sekumpulan pola untuk satu domain pengirim, misalnya satu toko. Anda dapat menulis profil dengan tangan, tetapi setiap pola harus cocok dengan baris yang persis sama di surel toko itu, sehingga dalam praktiknya AI yang menulisnya. AI menulis profil satu kali, dari beberapa contoh surel. Setelah Anda menyetujuinya, profil membaca setiap surel baru dari toko itu tanpa AI."
+        },
+        "aiProviders": {
+          "title": "Siapkan penyedia AI terlebih dahulu",
+          "body": "Tambahkan penyedia di sini dan uji koneksinya. Tanpa penyedia, wizard profil tidak dapat menulis profil, dan surel dari toko tanpa profil tetap tidak terbaca."
+        },
+        "tabs": {
+          "title": "Empat tab, sesuai urutan pemakaian",
+          "body": "**Ringkasan** menampilkan apa yang telah dibaca Monize. Di **Kotak surel**, hubungkan kotak surel yang hanya berisi konfirmasi pesanan. Monize hanya membacanya: tidak pernah memindahkan, menandai, atau menghapus pesan. **Profil** berisi satu profil untuk setiap toko. **Surel** mencantumkan setiap surel beserta statusnya."
+        },
+        "uncovered": {
+          "title": "Toko tanpa profil",
+          "body": "Kotak ini mencantumkan domain pengirim yang belum dapat dibaca oleh profil mana pun. Pilih satu untuk memulai wizard. Pilih hingga lima surelnya dan pasangkan masing-masing dengan transaksi bank yang dibayarnya. AI menulis profil dan mengujinya pada pasangan ini. Lalu Anda melihat pratinjau untuk semua surel dari toko itu, dan Anda menerima profil atau meminta perubahan dengan catatan singkat.",
+          "fallbackBody": "Anda belum memiliki surel dari toko tanpa profil. Setelah Anda menghubungkan kotak surel, setiap domain pengirim muncul di sini sebagai tag, misalnya **shop.example (12)**: domain dan jumlah surelnya. Pilih tag untuk memulai wizard. Pilih hingga lima surelnya dan pasangkan masing-masing dengan transaksi bank yang dibayarnya. AI menulis profil dan mengujinya pada pasangan ini. Lalu Anda melihat pratinjau untuk semua surel dari toko itu, dan Anda menerima profil atau meminta perubahan dengan catatan singkat."
+        },
+        "profiles": {
+          "title": "Profil Anda",
+          "body": "Setiap baris adalah satu profil, disetujui atau draf. **Buat profil baru secara manual** membuka editor untuk profil yang ditulis dengan tangan. Gunakan untuk memperbaiki detail kecil pada draf dari AI. Saat Anda menyetujui profil, Monize langsung membaca surel dari domainnya.",
+          "fallbackBody": "Anda belum memiliki profil. Setiap profil yang Anda terima muncul di sini sebagai satu baris, misalnya **Shop Example**, domain **shop.example**, status **Disetujui**. **Buat profil baru secara manual** membuka editor untuk profil yang ditulis dengan tangan. Gunakan hanya untuk memperbaiki detail kecil pada draf dari AI. Saat Anda menyetujui profil, Monize langsung membaca surel dari domainnya."
+        },
+        "reviews": {
+          "title": "Setujui usulan",
+          "body": "Setiap surel yang cocok dengan transaksi menjadi usulan di **Kotak masuk peninjauan AI**, di menu **AI**. Usulan menampilkan, misalnya, item baris sebuah pesanan dengan satu kategori untuk setiap baris. Tidak ada yang berubah pada transaksi Anda sampai Anda menyetujui usulan di sana."
         }
       }
     }

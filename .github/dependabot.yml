@@ -1,0 +1,124 @@
+# Dependabot version updates. See
+# https://docs.github.com/code-security/dependabot/working-with-dependabot/dependabot-options-reference
+#
+# Security updates were already enabled in the repo settings, but they only
+# react to alerts -- and GitHub's default auto-triage rule dismisses alerts on
+# development-scoped npm packages, while CI's `npm audit` still fails on them.
+# Nothing refreshed the lockfiles otherwise, so a direct dependency could sit on
+# a version whose range already allowed the fix (ts-loader ^9.5.4 locked at
+# 9.5.4 while 9.6.2 dropped the vulnerable micromatch/braces chain).
+#
+# Version updates bump direct dependencies only. A vulnerable transitive package
+# still needs its entry in the package.json `overrides` raised by hand.
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    # Skip releases younger than a week, so a compromised or broken publish has
+    # time to be caught and yanked before a PR proposes it. Security updates
+    # are not delayed by this.
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      # One PR for all minor and patch bumps; majors still get a PR each so
+      # their breaking changes are reviewed on their own.
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+    ignore:
+      # TypeScript 7 (the native compiler) ships no JS compiler API, which
+      # ts-jest, typescript-eslint and @nestjs/cli still need. 6.0 is the
+      # bridge release; lift this once those support 7.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # TypeORM 1 changes query semantics (a null or undefined `where` value
+      # now throws) as well as the find-option syntax, so it lands as the
+      # planned series in docs/future-plans/typeorm-1.md, not as a bump.
+      # Remove this when that plan's last task merges.
+      - dependency-name: "typeorm"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+    ignore:
+      # Same TypeScript 7 blocker as the backend, plus Next's build typecheck.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # eslint-plugin-react, eslint-plugin-jsx-a11y and eslint-plugin-import
+      # (all pulled in by eslint-config-next) do not support ESLint 10, and
+      # the Next parser lacks the ESLint 10 scope-manager API. Lift this once
+      # eslint-config-next supports ESLint 10.
+      - dependency-name: "eslint"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "npm"
+    directory: "/desktop"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+    ignore:
+      # Same TypeScript 7 blocker as the backend.
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      # The bundled PostgreSQL is pinned to major 16, matching the server's
+      # database. A major bump needs pg_upgrade and its own plan.
+      - dependency-name: "embedded-postgres"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@embedded-postgres/*"
+        update-types: ["version-update:semver-major"]
+      # The bundled Node major must match what CI tests the backend on, so an
+      # Electron major (which moves the bundled Node) is a planned change.
+      - dependency-name: "electron"
+        update-types: ["version-update:semver-major"]
+
+  - package-ecosystem: "npm"
+    directory: "/e2e"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]
+
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+    groups:
+      minor-and-patch:
+        update-types: ["minor", "patch"]

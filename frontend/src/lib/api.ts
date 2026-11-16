@@ -2,6 +2,8 @@ import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import Cookies from 'js-cookie';
 import { useAuthStore } from '@/store/authStore';
 import { createLogger } from '@/lib/logger';
+import { isSigningOut } from '@/lib/logout-state';
+import { clearUndoRefused } from '@/lib/undoRedoSignal';
 
 const logger = createLogger('API');
 
@@ -44,7 +46,7 @@ apiClient.interceptors.request.use(
   },
   (error) => {
     return Promise.reject(error);
-  }
+  },
 );
 
 // Endpoints where a 401 is a business response (wrong credentials, wrong
@@ -105,7 +107,7 @@ async function refreshCsrfToken(): Promise<boolean> {
   }
 }
 
-async function attemptTokenRefresh(): Promise<boolean> {
+async function postTokenRefresh(): Promise<boolean> {
   try {
     // Use raw axios to avoid interceptor recursion; refresh_token cookie sent automatically
     await axios.post('/api/v1/auth/refresh', {}, { withCredentials: true });
@@ -117,16 +119,51 @@ async function attemptTokenRefresh(): Promise<boolean> {
   }
 }
 
+// One refresh per browser, not per tab. Every tab sends the same refresh
+// cookie, and two tabs presenting it together read as token theft on the
+// server, which signed every session out. A tab that waits on this lock sends
+// the cookie the holder's response already rotated. Without the Web Locks API
+// the per-tab single flight below still applies, and the server's short
+// rotation grace answers the second tab.
+const TOKEN_REFRESH_LOCK = 'monize-token-refresh';
+
+async function attemptTokenRefresh(): Promise<boolean> {
+  const locks = typeof navigator !== 'undefined' ? navigator.locks : undefined;
+  if (!locks) return postTokenRefresh();
+  try {
+    return await locks.request(TOKEN_REFRESH_LOCK, postTokenRefresh);
+  } catch (_) {
+    // The lock itself was refused (an opaque origin, a disabled API); the
+    // refresh never ran, so run it unlocked.
+    return postTokenRefresh();
+  }
+}
+
 // Exported for non-axios callers (e.g. `fetch`-based SSE streams) so they can
 // match the axios interceptor's 401 refresh-and-retry behavior.
 export { attemptTokenRefresh };
 
 apiClient.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Any successful write (a new action, a redo, a successful undo) changes
+    // the history head, so a refused Undo may succeed again.
+    if (response.config?.method && response.config.method !== 'get') clearUndoRefused();
+    return response;
+  },
   async (error: AxiosError) => {
     const originalRequest = error.config as InternalAxiosRequestConfig & {
       _csrfRetried?: boolean;
       _authRetried?: boolean;
+      /**
+       * Opt this request out of the 401 recovery below.
+       *
+       * For best-effort work that deliberately outlives the session it belongs
+       * to -- the push cleanup a sign-out starts and does not wait for. Left in,
+       * its 401 lands after the session is already gone and drives a refresh
+       * attempt and a hard `window.location.replace('/login')`, racing the
+       * sign-out's own navigation and discarding its toast.
+       */
+      _skipAuthRedirect?: boolean;
     };
 
     // Handle 502 (backend unavailable) or network errors (no response at all).
@@ -177,7 +214,9 @@ apiClient.interceptors.response.use(
     if (
       error.response?.status === 401 &&
       !originalRequest?._authRetried &&
+      !originalRequest?._skipAuthRedirect &&
       !isLoggingOut &&
+      !isSigningOut() &&
       !isUnauthEndpoint(originalRequest?.url)
     ) {
       originalRequest._authRetried = true;
@@ -219,7 +258,10 @@ apiClient.interceptors.response.use(
         // Ignore
       }
 
-      if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
+      if (
+        typeof window !== 'undefined' &&
+        !window.location.pathname.includes('/login')
+      ) {
         // Use replace() rather than assigning href so the post-401 page does
         // not stay in history. On PWAs (especially iOS standalone), an
         // assigned href can be deferred during BFCache restore and leave the
@@ -231,7 +273,7 @@ apiClient.interceptors.response.use(
     }
 
     return Promise.reject(error);
-  }
+  },
 );
 
 export default apiClient;

@@ -4,9 +4,11 @@ import { isSupportedLocale } from "./config";
 import { currentRequestLocale } from "./request-locale";
 
 /**
- * Resolve the locale an email addressed to `userId` should be rendered in.
+ * Resolve the locale a message addressed to `userId` should be rendered in --
+ * an email, or a Web Push body, which is composed on the server for the same
+ * reason and therefore has the same question to answer.
  *
- * Email copy must match the recipient's own language, not the request locale of
+ * The copy must match the recipient's own language, not the request locale of
  * whoever triggered the send (an admin provisioning an account, a scheduler, or
  * an attacker tripping the failed-login lockout). Precedence:
  *
@@ -28,12 +30,39 @@ export async function resolveUserEmailLocale(
   preferencesRepo: Repository<UserPreference>,
   userId: string | null | undefined,
 ): Promise<string> {
+  return (await resolveUserEmailFormats(preferencesRepo, userId)).lang;
+}
+
+/**
+ * Both rendering preferences a message addressed to `userId` needs, from the
+ * one row that holds them.
+ *
+ * A figure is localized by its OWN preference: `user_preferences.number_format`
+ * decides separators, grouping and currency placement independently of
+ * `language`, so a caller that resolved only the language and formatted from it
+ * would put `zl18,812.71` inside Polish copy for the reader who set
+ * `numberFormat` and left the UI in English (issue #1316).
+ *
+ * Deliberately one query answering both, and {@link resolveUserEmailLocale}
+ * delegating to it: two readers of the same row are two chances for the language
+ * precedence above to be spelled differently.
+ *
+ * `numberFormat` is returned as stored -- `null` when there is no row, and the
+ * `"browser"` sentinel verbatim -- because `numberFormatterFor` is what knows
+ * that both of those mean "fall back to the language".
+ */
+export async function resolveUserEmailFormats(
+  preferencesRepo: Repository<UserPreference>,
+  userId: string | null | undefined,
+): Promise<{ lang: string; numberFormat: string | null }> {
   if (userId) {
     const prefs = await preferencesRepo.findOne({ where: { userId } });
     const stored = prefs?.language;
+    const numberFormat = prefs?.numberFormat ?? null;
     if (stored && stored !== "browser" && isSupportedLocale(stored)) {
-      return stored;
+      return { lang: stored, numberFormat };
     }
+    return { lang: currentRequestLocale(), numberFormat };
   }
-  return currentRequestLocale();
+  return { lang: currentRequestLocale(), numberFormat: null };
 }

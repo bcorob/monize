@@ -1,7 +1,7 @@
 # Scheduled-investment FX rate: currency-pair provenance (issue #1167)
 
-Status: implemented. Supersedes the deferral note in
-`docs/future-plans/scheduled-investment-fx-currency-pair.md` (the #1154 follow-up).
+Status: implemented (the #1154 follow-up; the deferral note it supersedes has
+been retired).
 
 ## The defect
 

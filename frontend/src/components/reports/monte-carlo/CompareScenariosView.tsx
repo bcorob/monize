@@ -7,6 +7,7 @@ import { useTranslations } from 'next-intl';
 import { AxiosError } from 'axios';
 import { Button } from '@/components/ui/Button';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
+import { useDateFormat } from '@/hooks/useDateFormat';
 import {
   monteCarloApi,
   MonteCarloScenario,
@@ -56,7 +57,15 @@ export interface CompareScenariosViewProps {
 export function CompareScenariosView({ ids }: CompareScenariosViewProps) {
   const t = useTranslations('reports');
   const router = useRouter();
-  const { formatCurrency } = useNumberFormat();
+  const { formatCurrency, formatNumber, formatPercent } = useNumberFormat();
+  const { formatDateTime } = useDateFormat();
+  const neverLabel = t('monteCarloComparePage.never');
+  // One bundle for the pure comparison module, which formats currency, counts,
+  // percentages and run times, each in the reader's own locale and format.
+  const cellFormatters = useMemo(
+    () => ({ formatCurrency, formatNumber, formatPercent, formatInstant: formatDateTime, neverLabel }),
+    [formatCurrency, formatNumber, formatPercent, formatDateTime, neverLabel],
+  );
 
   const dedupedIds = useMemo(() => Array.from(new Set(ids)), [ids]);
   const truncated = ids.length > MAX_COMPARE_SCENARIOS;
@@ -270,7 +279,7 @@ export function CompareScenariosView({ ids }: CompareScenariosViewProps) {
             formatCellValue(
               row.accessor({ scenario: c.scenario!, result: c.result }),
               row.format,
-              formatCurrency,
+              cellFormatters,
             ),
           ),
         ]);
@@ -295,16 +304,16 @@ export function CompareScenariosView({ ids }: CompareScenariosViewProps) {
           disabled={!canExport}
           title={
             canExport
-              ? 'Download the comparison as a CSV file'
-              : 'Wait for at least 2 scenarios to finish loading'
+              ? t('monteCarloComparePage.downloadCsvTitle')
+              : t('monteCarloComparePage.downloadCsvWaitTitle')
           }
         >
-          Download CSV
+          {t('monteCarloComparePage.downloadCsv')}
         </Button>
       </div>
       <CompareMetricTable
         columns={columns}
-        formatCurrency={formatCurrency}
+        formatters={cellFormatters}
         onRetry={handleRetry}
         onRemove={handleRemove}
         onRerun={handleRerun}
@@ -314,33 +323,43 @@ export function CompareScenariosView({ ids }: CompareScenariosViewProps) {
 }
 
 function EmptyState() {
+  const t = useTranslations('reports');
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center space-y-3">
       <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-        No scenarios selected
+        {t('monteCarloComparePage.emptyHeading')}
       </h2>
       <p className="text-sm text-gray-500 dark:text-gray-400">
-        Pick scenarios from the Monte Carlo report to compare them side-by-side.
+        {t('monteCarloComparePage.emptyBody')}
       </p>
       <Link href="/reports/monte-carlo-simulation">
-        <Button variant="primary">Go to Monte Carlo Simulation</Button>
+        <Button variant="primary">
+          {t('monteCarloComparePage.emptyButton')}
+        </Button>
       </Link>
     </div>
   );
 }
 
 function NeedsMoreState({ id }: { id: string }) {
+  const t = useTranslations('reports');
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-8 text-center space-y-3">
       <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-        Need at least 2 scenarios
+        {t('monteCarloComparePage.needsMoreHeading')}
       </h2>
       <p className="text-sm text-gray-500 dark:text-gray-400">
-        Comparison requires 2 or more saved scenarios. You currently have one
-        selected (id: <span className="font-mono">{id}</span>).
+        {t.rich('monteCarloComparePage.needsMoreBody', {
+          id,
+          mono: (chunks) => (
+            <span className="font-mono">{chunks}</span>
+          ),
+        })}
       </p>
       <Link href="/reports/monte-carlo-simulation">
-        <Button variant="primary">Pick more scenarios</Button>
+        <Button variant="primary">
+          {t('monteCarloComparePage.needsMoreButton')}
+        </Button>
       </Link>
     </div>
   );

@@ -2,6 +2,7 @@ import "reflect-metadata";
 import { StrategiesModule } from "./strategies.module";
 import { SecuritiesModule } from "../securities/securities.module";
 import { CurrenciesModule } from "../currencies/currencies.module";
+import { NotificationsModule } from "../notifications/notifications.module";
 
 /**
  * Every constructor dependency this module takes from another module must be
@@ -40,6 +41,8 @@ describe("StrategiesModule dependency graph", () => {
     [
       ...metadata(SecuritiesModule, "exports"),
       ...metadata(CurrenciesModule, "exports"),
+      // The GEM signal-change cron dispatches through NotificationDispatchService.
+      ...metadata(NotificationsModule, "exports"),
     ].map((provider) => provider?.name),
   );
 

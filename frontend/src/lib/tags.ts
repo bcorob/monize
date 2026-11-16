@@ -1,5 +1,5 @@
 import apiClient from './api';
-import { Tag, CreateTagData, UpdateTagData } from '@/types/tag';
+import { Tag, CreateTagData, UpdateTagData, TagUsageMap } from '@/types/tag';
 import { dedupe, invalidateCache } from './apiCache';
 
 export const tagsApi = {
@@ -28,12 +28,16 @@ export const tagsApi = {
   update: async (id: string, data: UpdateTagData): Promise<Tag> => {
     const response = await apiClient.patch<Tag>(`/tags/${id}`, data);
     invalidateCache('tags:');
+    // The portfolio tag allocation is derived from tags.
+    invalidateCache('investments:');
     return response.data;
   },
 
   delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/tags/${id}`);
     invalidateCache('tags:');
+    // The portfolio tag allocation is derived from tags.
+    invalidateCache('investments:');
   },
 
   getTransactionCount: async (id: string): Promise<number> => {
@@ -43,6 +47,12 @@ export const tagsApi = {
 
   getAllTransactionCounts: async (): Promise<Record<string, number>> => {
     const response = await apiClient.get<Record<string, number>>('/tags/transaction-counts');
+    return response.data;
+  },
+
+  // Not cached: usage follows transaction writes, and `tags:` is reference data.
+  getUsage: async (): Promise<TagUsageMap> => {
+    const response = await apiClient.get<TagUsageMap>('/tags/usage');
     return response.data;
   },
 };

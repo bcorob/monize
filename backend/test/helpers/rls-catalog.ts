@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { DataSource } from "typeorm";
+import { DataSource, EntityManager } from "typeorm";
 
 /**
  * Catalog + generic row seeder for the RLS enforcement spec (task T2).
@@ -34,7 +34,7 @@ export interface TableCatalogEntry {
   name: string;
   columns: ColumnInfo[];
   primaryKey: string[];
-  /** Single-column foreign keys, keyed by the referencing column. */
+  /** Foreign-key column pairs, including composite keys, keyed by the referencing column. */
   foreignKeys: Map<string, ForeignKeyInfo>;
 }
 
@@ -118,10 +118,15 @@ export async function loadTableCatalog(
        JOIN LATERAL unnest(con.conkey, con.confkey) AS pairs(attnum, fattnum) ON true
        JOIN pg_attribute att ON att.attrelid = rel.oid AND att.attnum = pairs.attnum
        JOIN pg_attribute fatt ON fatt.attrelid = fref.oid AND fatt.attnum = pairs.fattnum
-      WHERE con.contype = 'f' AND ns.nspname = 'public'
-        AND array_length(con.conkey, 1) = 1`,
+      WHERE con.contype = 'f' AND ns.nspname = 'public'`,
   );
   for (const fk of fks) {
+    // Ownership can have both a users FK and an ownership-preserving composite
+    // FK. Keep the direct owner reference; other pairs resolve the seeded parent.
+    const existing = catalog
+      .get(fk.table_name)
+      ?.foreignKeys.get(fk.column_name);
+    if (existing?.refTable === "users" && fk.ref_table !== "users") continue;
     catalog.get(fk.table_name)?.foreignKeys.set(fk.column_name, {
       column: fk.column_name,
       refTable: fk.ref_table,
@@ -191,6 +196,70 @@ const FKLESS_PARENT_REFS: Record<string, ForeignKeyInfo> = {
 };
 
 /**
+ * Nullable parent references a production CHECK still requires (`table.column`).
+ * The generator leaves a nullable foreign key NULL, so these are filled -- and
+ * ordered -- like a NOT NULL one. `transaction_attachments` has two nullable
+ * parents and `chk_attachment_one_parent` wants exactly one of them: the row
+ * takes its transaction, the parent every attachment had before warranties.
+ */
+const REQUIRED_NULLABLE_PARENTS = new Set([
+  "transaction_attachments.transaction_id",
+]);
+
+/**
+ * Columns a production CHECK constrains to a vocabulary or a shape the generic
+ * generator cannot guess (it writes `t1`, `t2`, ... into a text column and
+ * leaves a nullable column NULL). The integration schema carries production's
+ * CHECKs (test/helpers/schema-constraints.ts), so a generated row must be one
+ * production could hold. Explicit `overrides` still win.
+ *
+ * `ai_review_requests` is an `email_trade` request because that is the kind
+ * whose row has no transaction (`ck_ai_review_requests_trade_shape`); every
+ * other kind needs one (`ck_ai_review_requests_transaction_required`).
+ */
+const PRODUCTION_SHAPED_VALUES: Record<string, Record<string, unknown>> = {
+  // A journal entry has both a contribution and a beneficiary allocation.
+  // seedAll inserts their cohort in one transaction; the real deferred sum
+  // constraints remain enabled, including for these authorization fixtures.
+  shared_entries: {
+    type: "EXPENSE",
+    original_amount: 1,
+    group_amount: 1,
+    fx_rate: 1,
+  },
+  shared_allocations: { kind: "SHARE", original_amount: 1, group_amount: 1 },
+  shared_invitations: { role: "VIEWER" },
+  shared_ledger_links: { kind: "BANK" },
+  ai_review_requests: { kind: "email_trade" },
+  backup_offsite_uploads: {
+    destination: "s3",
+    tier: "daily",
+    status: "pending",
+  },
+  email_receipt_mailboxes: {
+    auth_method: "password",
+    password_enc: "seeded-ciphertext",
+  },
+  // The generator's integers count up across the whole seed, past the year
+  // bounds these CHECKs hold.
+  monte_carlo_cash_flows: { flow_type: "ONE_TIME", start_year: 1 },
+  monte_carlo_scenarios: { years_to_retirement: 30 },
+  // chk_warranty_expiry: a warranty is lifetime or has an expiry date.
+  warranties: { is_lifetime: true },
+  // chk_loan_fees_calculation / chk_loan_fees_value: a fixed fee carries an
+  // amount and no rate.
+  loan_fees: {
+    calculation: "FIXED",
+    basis: "PER_PAYMENT",
+    amount: 1,
+    rate: null,
+  },
+  // chk_budget_buckets_target_type / chk_budget_period_buckets_target_type.
+  budget_buckets: { target_type: "PERCENT" },
+  budget_period_buckets: { target_type: "PERCENT" },
+};
+
+/**
  * Generates one minimal valid row per (table, owner) and remembers what it
  * inserted, so ownership assertions can compare "what the app role can see"
  * against "what was seeded for that user" exactly, by primary key.
@@ -206,8 +275,19 @@ const FKLESS_PARENT_REFS: Record<string, ForeignKeyInfo> = {
 export class RlsRowSeeder {
   private uniq = 0;
 
+  /**
+   * The delegate of every generically seeded `account_delegates` row. The
+   * production CHECK `account_delegates_no_self` refuses a delegation to
+   * oneself, so the owner cannot also be the delegate; the other isolation
+   * user cannot be either, or the delegation would be visible to two users and
+   * the exact-visibility sweep would mean nothing. A third user nobody queries
+   * as, outside `seededRows`, keeps each row its owner's alone.
+   */
+  private counterpartyUserId: string | null = null;
+
   /** Inserted rows: table -> ownerId -> full row (RETURNING *). */
   readonly seededRows = new Map<string, Map<string, Record<string, unknown>>>();
+  private readonly extraRows = new Map<string, Record<string, unknown>[]>();
 
   constructor(
     private readonly dataSource: DataSource,
@@ -235,7 +315,7 @@ export class RlsRowSeeder {
           // keys on it), so it is a real dependency here too -- otherwise the row
           // can be ordered before the user it points at and the insert dies on
           // the foreign key.
-          if (!fk || (col.nullable && !USER_REF_COLUMNS.has(col.name))) {
+          if (!fk || (col.nullable && !this.fillsNullableRef(table, col))) {
             return true;
           }
           if (fk.refTable === table) return true;
@@ -265,16 +345,44 @@ export class RlsRowSeeder {
   buildInsert(
     table: string,
     ownerId: string,
-    overrides: Record<string, unknown> = {},
+    explicit: Record<string, unknown> = {},
   ): BuiltInsert {
+    // The catalog cannot infer a valid branch of a discriminated CHECK.
+    // Supply one valid credential shape; every table/owner still participates
+    // in the catalog-driven visibility and WITH CHECK sweeps.
+    const rowDefaults: Record<string, unknown> =
+      table === "bank_sync_credentials"
+        ? {
+            provider: "simplefin",
+            application_id: null,
+            private_key_enc: null,
+            access_url_enc: "rls-fixture-ciphertext",
+          }
+        : table === "shared_invitations"
+          ? { token_hash: randomUUID().replace(/-/g, "").repeat(2) }
+          : {};
     const entry = this.entry(table);
+    const overrides = { ...PRODUCTION_SHAPED_VALUES[table], ...explicit };
+    const rowValues = { ...rowDefaults, ...overrides };
     const columns: string[] = [];
     const values: unknown[] = [];
 
     for (const col of entry.columns) {
-      if (col.name in overrides) {
+      if (col.name in rowValues) {
         columns.push(col.name);
-        values.push(overrides[col.name]);
+        values.push(rowValues[col.name]);
+        continue;
+      }
+
+      if (table === "account_delegates" && col.name === "delegate_user_id") {
+        if (!this.counterpartyUserId) {
+          throw new Error(
+            "Seeding account_delegates needs a delegate other than its owner: " +
+              "call seedAll first, or pass delegate_user_id as an override",
+          );
+        }
+        columns.push(col.name);
+        values.push(this.counterpartyUserId);
         continue;
       }
 
@@ -295,8 +403,7 @@ export class RlsRowSeeder {
         // is exactly when the bytes most need removing), and skipping it left an
         // ownerless row that neither user could see. The sweep then reported
         // "saw 0 rows" for a table whose policy is fine.
-        const isOwnership = USER_REF_COLUMNS.has(col.name);
-        if (col.nullable && !isOwnership) continue;
+        if (col.nullable && !this.fillsNullableRef(table, col)) continue;
         columns.push(col.name);
         values.push(this.resolveForeignKey(table, fk, ownerId));
         continue;
@@ -328,9 +435,10 @@ export class RlsRowSeeder {
   async seedRowFor(
     table: string,
     ownerId: string,
+    manager: DataSource | EntityManager = this.dataSource,
   ): Promise<Record<string, unknown>> {
     const { sql, values } = this.buildInsert(table, ownerId);
-    const [row] = await this.dataSource.query(sql, values);
+    const [row] = await manager.query(sql, values);
     if (!this.seededRows.has(table)) {
       this.seededRows.set(table, new Map());
     }
@@ -340,12 +448,35 @@ export class RlsRowSeeder {
 
   /** Seeds one row per (table, owner), parents before children. */
   async seedAll(tables: string[], ownerIds: string[]): Promise<void> {
+    if (!this.counterpartyUserId) {
+      const id = randomUUID();
+      const { sql, values } = this.buildInsert("users", id);
+      await this.dataSource.query(sql, values);
+      this.counterpartyUserId = id;
+    }
     const order = this.topoOrder(tables);
     for (const ownerId of ownerIds) {
-      for (const table of order) {
-        await this.seedRowFor(table, ownerId);
-      }
+      await this.dataSource.transaction(async (manager) => {
+        for (const table of order) {
+          await this.seedRowFor(table, ownerId, manager);
+          if (table === "shared_allocations") {
+            const { sql, values } = this.buildInsert(table, ownerId, {
+              kind: "CONTRIBUTION",
+            });
+            const [row] = await manager.query(sql, values);
+            this.extraRows.set(`${table}:${ownerId}`, [row]);
+          }
+        }
+      });
     }
+  }
+
+  /** Exact expected rows, including the conservation partner of an allocation. */
+  seededRowsFor(table: string, ownerId: string): Record<string, unknown>[] {
+    return [
+      this.seededRowFor(table, ownerId),
+      ...(this.extraRows.get(`${table}:${ownerId}`) ?? []),
+    ];
   }
 
   seededRowFor(table: string, ownerId: string): Record<string, unknown> {
@@ -373,6 +504,17 @@ export class RlsRowSeeder {
       return { column: column.name, refTable: "users", refColumn: "id" };
     }
     return undefined;
+  }
+
+  /**
+   * Whether a nullable reference is filled anyway: an ownership column (the
+   * policy keys on it) or a parent a production CHECK requires.
+   */
+  private fillsNullableRef(table: string, column: ColumnInfo): boolean {
+    return (
+      USER_REF_COLUMNS.has(column.name) ||
+      REQUIRED_NULLABLE_PARENTS.has(`${table}.${column.name}`)
+    );
   }
 
   private entry(table: string): TableCatalogEntry {

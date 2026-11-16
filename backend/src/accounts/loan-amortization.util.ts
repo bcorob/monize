@@ -81,10 +81,11 @@ export function calculatePaymentSplit(
   const periodicRate = annualRate / 100 / periodsPerYear;
 
   // Calculate interest for this period
-  const interest = remainingBalance * periodicRate;
+  const interest = roundMoney(remainingBalance * periodicRate);
 
-  // Principal is the remainder after interest
-  let principal = paymentAmount - interest;
+  // Principal is the remainder after the ROUNDED interest, so the two lines
+  // sum to the payment exactly (rounding each apart drifts by 0.0001).
+  let principal = roundMoney(paymentAmount - interest);
 
   // Handle case where payment is less than interest (shouldn't happen with valid inputs)
   if (principal < 0) {
@@ -99,7 +100,7 @@ export function calculatePaymentSplit(
   // Round to storage precision for currency
   return {
     principal: roundMoney(principal),
-    interest: roundMoney(interest),
+    interest,
   };
 }
 
@@ -274,27 +275,4 @@ export function calculatePaymentForTerm(
   return roundMoney(
     (balance * periodicRate) / (1 - Math.pow(1 + periodicRate, -periods)),
   );
-}
-
-/**
- * Calculate the final payment amount when loan balance is less than regular payment
- *
- * @param remainingBalance - Current loan balance
- * @param annualRate - Annual interest rate as percentage
- * @param frequency - Payment frequency
- * @returns The final payment amount needed to pay off the loan
- */
-export function calculateFinalPayment(
-  remainingBalance: number,
-  annualRate: number,
-  frequency: PaymentFrequency,
-): number {
-  const periodsPerYear = getPeriodsPerYear(frequency);
-  const periodicRate = annualRate / 100 / periodsPerYear;
-
-  // Final payment = remaining balance + one period's interest
-  const interest = remainingBalance * periodicRate;
-  const finalPayment = remainingBalance + interest;
-
-  return roundMoney(finalPayment);
 }

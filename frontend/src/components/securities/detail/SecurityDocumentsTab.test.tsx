@@ -8,6 +8,12 @@ const mockGetDocuments = vi.fn();
 const mockCreateDocument = vi.fn();
 const mockUpdateDocument = vi.fn();
 const mockDeleteDocument = vi.fn();
+const mockGetBondValuation = vi.fn();
+const mockGetBondOffer = vi.fn();
+
+vi.mock('@/hooks/useFinancialToday', () => ({
+  useFinancialToday: () => '2027-04-15',
+}));
 
 vi.mock('@/lib/investments', () => ({
   investmentsApi: {
@@ -15,6 +21,8 @@ vi.mock('@/lib/investments', () => ({
     createSecurityDocument: (...args: unknown[]) => mockCreateDocument(...args),
     updateSecurityDocument: (...args: unknown[]) => mockUpdateDocument(...args),
     deleteSecurityDocument: (...args: unknown[]) => mockDeleteDocument(...args),
+    getSecurityBondValuation: (...args: unknown[]) => mockGetBondValuation(...args),
+    getBondOffer: (...args: unknown[]) => mockGetBondOffer(...args),
   },
 }));
 
@@ -219,5 +227,167 @@ describe('SecurityDocumentsTab', () => {
     expect(
       screen.getByRole('button', { name: 'Add document' }),
     ).toBeInTheDocument();
+  });
+
+  describe('the issue letters of a bond-linked security', () => {
+    const bond: Security = { ...security, bondProgramId: 'prog-1' };
+
+    const heldSeries = (overrides: Record<string, unknown> = {}) => ({
+      instrumentId: 'i-held',
+      seriesCode: 'EDO0536',
+      programCode: 'EDO',
+      redemptionTerms: null,
+      termsSource: {
+        provider: 'obligacjeskarbowe.pl',
+        url: 'https://example.test/held.pdf',
+        document: 'List emisyjny nr 99/2026',
+      },
+      ...overrides,
+    });
+    const valuation = (series: unknown[]) => ({
+      securityId: 'sec-1',
+      program: {
+        id: 'prog-1',
+        programCode: 'EDO',
+        issuerCountryCode: 'PL',
+        issuerCode: 'PL_MF',
+        currency: 'PLN',
+      },
+      series,
+    });
+    const offerSeries = (overrides: Record<string, unknown> = {}) => ({
+      instrumentId: 'i-sale',
+      programCode: 'EDO',
+      seriesCode: 'EDO1036',
+      saleWindow: { from: '2026-10-01', to: '2026-10-31' },
+      termsSource: {
+        provider: 'obligacjeskarbowe.pl',
+        url: 'https://example.test/sale.pdf',
+        document: 'List emisyjny nr 120/2026',
+      },
+      ...overrides,
+    });
+    const offer = (series: unknown[]) => ({ countryCode: 'PL', today: '2027-04-15', series });
+
+    async function renderBond() {
+      await act(async () => {
+        render(<SecurityDocumentsTab security={bond} />);
+      });
+    }
+
+    beforeEach(() => {
+      mockGetBondValuation.mockResolvedValue(valuation([heldSeries()]));
+      mockGetBondOffer.mockResolvedValue(offer([offerSeries()]));
+    });
+
+    it('is absent for a security that is not linked to a bond program', async () => {
+      await renderTab();
+      expect(screen.queryByText('Issue letters')).not.toBeInTheDocument();
+      expect(mockGetBondValuation).not.toHaveBeenCalled();
+      expect(mockGetBondOffer).not.toHaveBeenCalled();
+    });
+
+    it('sits above the reader\'s own documents', async () => {
+      await renderBond();
+      const letters = screen.getByRole('heading', { name: 'Issue letters' });
+      const own = screen.getByRole('heading', { name: 'Documents' });
+      expect(
+        letters.compareDocumentPosition(own) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    });
+
+    it('lists the held series and the series on sale that is not held', async () => {
+      await renderBond();
+      expect(mockGetBondValuation).toHaveBeenCalledWith('sec-1', '2027-04-15');
+      expect(mockGetBondOffer).toHaveBeenCalledWith('PL');
+      expect(screen.getByText('EDO0536')).toBeInTheDocument();
+      expect(screen.getByText('Terms: List emisyjny nr 99/2026')).toBeInTheDocument();
+      expect(screen.getByText('EDO1036')).toBeInTheDocument();
+      expect(screen.getByText('Terms: List emisyjny nr 120/2026')).toBeInTheDocument();
+      expect(screen.getByText('Held')).toBeInTheDocument();
+      expect(screen.getByText('On sale')).toBeInTheDocument();
+    });
+
+    it('lists a series once when it is both held and on sale, and skips other programs', async () => {
+      mockGetBondOffer.mockResolvedValue(
+        offer([
+          offerSeries({ instrumentId: 'i-held', seriesCode: 'EDO0536' }),
+          offerSeries({ instrumentId: 'i-other', programCode: 'COI', seriesCode: 'COI1030' }),
+        ]),
+      );
+      await renderBond();
+      expect(screen.getAllByText('EDO0536')).toHaveLength(1);
+      expect(screen.queryByText('COI1030')).not.toBeInTheDocument();
+      expect(screen.queryByText('On sale')).not.toBeInTheDocument();
+    });
+
+    it('links the official PDF in a new tab', async () => {
+      await renderBond();
+      const link = screen.getByRole('link', {
+        name: 'Open the issue letter for EDO0536',
+      });
+      expect(link).toHaveAttribute('href', 'https://example.test/held.pdf');
+      expect(link).toHaveAttribute('target', '_blank');
+      expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+      expect(
+        screen.getByRole('link', { name: 'Open the issue letter for EDO1036' }),
+      ).toHaveAttribute('href', 'https://example.test/sale.pdf');
+    });
+
+    it.each([
+      ['http', 'http://example.test/held.pdf'],
+      ['javascript', 'javascript:alert(1)'],
+      ['empty', ''],
+    ])('renders a %s address as plain text, not a link', async (_name, url) => {
+      mockGetBondValuation.mockResolvedValue(
+        valuation([
+          heldSeries({
+            termsSource: { provider: 'obligacjeskarbowe.pl', url, document: 'List 1/2026' },
+          }),
+        ]),
+      );
+      mockGetBondOffer.mockResolvedValue(offer([]));
+      await renderBond();
+      expect(screen.getByText('Terms: List 1/2026')).toBeInTheDocument();
+      expect(screen.queryByRole('link', { name: /issue letter/ })).not.toBeInTheDocument();
+    });
+
+    it('says a manual series has no published letter and a series without a source has none recorded', async () => {
+      mockGetBondValuation.mockResolvedValue(
+        valuation([
+          heldSeries({ termsSource: { provider: 'manual', url: '', document: 'x' } }),
+          heldSeries({ instrumentId: 'i-2', seriesCode: 'EDO0636', termsSource: undefined }),
+        ]),
+      );
+      mockGetBondOffer.mockResolvedValue(offer([]));
+      await renderBond();
+      expect(screen.getByText('Terms entered by hand by an administrator')).toBeInTheDocument();
+      expect(screen.getByText('No letter recorded for this series')).toBeInTheDocument();
+    });
+
+    it('says none is stored when the bond kind has no series at all', async () => {
+      mockGetBondValuation.mockResolvedValue(valuation([]));
+      mockGetBondOffer.mockResolvedValue(offer([]));
+      await renderBond();
+      expect(
+        screen.getByText('No issue letter is stored for this bond kind yet.'),
+      ).toBeInTheDocument();
+    });
+
+    it('reports a failed read instead of claiming none is stored', async () => {
+      mockGetBondValuation.mockRejectedValue(new Error('boom'));
+      await renderBond();
+      expect(screen.getByText('The issue letters could not be loaded.')).toBeInTheDocument();
+      expect(
+        screen.queryByText('No issue letter is stored for this bond kind yet.'),
+      ).not.toBeInTheDocument();
+    });
+
+    it('keeps the held rows and reports a failed offer read, without the empty state', async () => {
+      mockGetBondOffer.mockRejectedValue(new Error('boom'));
+      await renderBond();
+      expect(screen.getByText('EDO0536')).toBeInTheDocument();
+      expect(screen.getByText('The issue letters could not be loaded.')).toBeInTheDocument();
+    });
   });
 });

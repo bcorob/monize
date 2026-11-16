@@ -1,13 +1,15 @@
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import toast from 'react-hot-toast';
 import { useTranslations } from 'next-intl';
-import { Button } from '@/components/ui/Button';
 import { Select } from '@/components/ui/Select';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { InfoTooltip } from '@/components/ui/InfoTooltip';
+import { HelpLink } from '@/components/help/HelpLink';
+import { useSavedPreference } from '@/hooks/useSavedPreference';
 import { userSettingsApi } from '@/lib/user-settings';
+import type { MapProvider } from '@/lib/contact-links';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import { UserPreferences, UpdatePreferencesData } from '@/types/auth';
 import { getErrorMessage } from '@/lib/errors';
@@ -20,7 +22,13 @@ import { LanguageSelector } from '@/components/settings/LanguageSelector';
 import { ThemeSelector } from '@/components/settings/ThemeSelector';
 import { ColorThemeSelector } from '@/components/settings/ColorThemeSelector';
 import { ColorTheme } from '@/lib/color-themes';
+import { DefaultViewsGroup } from '@/components/settings/DefaultViewsGroup';
+import { MobileTabsGroup } from '@/components/settings/MobileTabsGroup';
 import { TOUR_ANCHORS, tourAnchor } from '@/lib/tours/anchors';
+
+// CRYPTO is a listing label, not a Yahoo exchange: lookup ranking compares Yahoo
+// suffixes and `exchDisp`, so a preference for it could never match a result.
+const PREFERRED_EXCHANGE_OPTIONS = EXCHANGE_OPTIONS.filter((opt) => opt.value !== 'CRYPTO');
 
 const NUMBER_FORMAT_OPTIONS = [
   { value: 'browser', labelKey: 'numberFormatOptions.browser' },
@@ -64,9 +72,31 @@ const WEEK_STARTS_ON_OPTIONS = [
   { value: '6', labelKey: 'weekDays.saturday' },
 ];
 
+const TIME_FORMAT_OPTIONS = [
+  { value: '24h', labelKey: 'timeFormatOptions.h24' },
+  { value: '12h', labelKey: 'timeFormatOptions.h12' },
+];
+
 const QUOTE_PROVIDER_OPTIONS = [
   { value: 'yahoo', label: 'Yahoo Finance' },
   { value: 'msn', label: 'MSN Money' },
+  { value: 'lse', label: 'LSE' },
+  { value: 'deutsche_boerse', label: 'Deutsche Börse' },
+];
+
+/**
+ * Map services an address link can open, in the order the dropdown shows them:
+ * the platform hand-off first, since it is the default, then the services
+ * alphabetically. The values mirror MAP_PROVIDERS in `@/lib/contact-links`,
+ * which is what builds the URL.
+ */
+const MAP_PROVIDER_OPTIONS: { value: MapProvider; labelKey: string }[] = [
+  { value: 'device', labelKey: 'mapProviderOptions.device' },
+  { value: 'apple', labelKey: 'mapProviderOptions.apple' },
+  { value: 'bing', labelKey: 'mapProviderOptions.bing' },
+  { value: 'google', labelKey: 'mapProviderOptions.google' },
+  { value: 'openstreetmap', labelKey: 'mapProviderOptions.openstreetmap' },
+  { value: 'waze', labelKey: 'mapProviderOptions.waze' },
 ];
 
 const RECENT_TRANSACTIONS_LIMIT_OPTIONS = [
@@ -77,6 +107,15 @@ const RECENT_TRANSACTIONS_LIMIT_OPTIONS = [
   { value: '20', label: '20' },
 ];
 
+/**
+ * The card's sixteen controls are split into groups, and the divider is what
+ * makes the split visible: `space-y-6` alone separates a group from its own
+ * rows by too little to read as a boundary. Matches the sub-section rule the
+ * other settings cards draw (NotificationsSection, SecuritySection).
+ */
+const GROUP_HEADING_CLASS = 'text-base font-semibold text-gray-900 dark:text-gray-100 mb-3';
+const GROUP_DIVIDER_CLASS = 'border-t border-gray-200 dark:border-gray-700 pt-6';
+
 interface PreferencesSectionProps {
   preferences: UserPreferences;
   onPreferencesUpdated: (prefs: UserPreferences) => void;
@@ -85,32 +124,105 @@ interface PreferencesSectionProps {
 export function PreferencesSection({ preferences, onPreferencesUpdated }: PreferencesSectionProps) {
   const t = useTranslations('settings.preferences');
   const tc = useTranslations('common');
+  const th = useTranslations('help');
   const updatePreferencesStore = usePreferencesStore((state) => state.updatePreferences);
 
-  const [dateFormat, setDateFormat] = useState(preferences.dateFormat);
-  const [numberFormat, setNumberFormat] = useState(preferences.numberFormat);
-  const [timezone, setTimezone] = useState(preferences.timezone);
+  /**
+   * Persist one preference the moment it changes, optimistically.
+   *
+   * Every control on this screen used to save through one "Save Preferences"
+   * button EXCEPT language, theme and colour theme, which persisted on change
+   * -- so the same screen had two contracts and no way to tell which a given
+   * control followed. This is the one they all follow now.
+   *
+   * The revert is the caller's own setter closed over the value the field held
+   * before the change: an optimistic update that fails has to put back what was
+   * there, and only the caller knows what that was.
+   */
+  const commitPreference = useCallback(
+    (patch: UpdatePreferencesData, revert: () => void) => {
+      void (async () => {
+        try {
+          const updated = await userSettingsApi.updatePreferences(patch);
+          onPreferencesUpdated(updated);
+          updatePreferencesStore(updated);
+          toast.success(t('toasts.saved'));
+        } catch (error) {
+          revert();
+          toast.error(getErrorMessage(error, t('toasts.saveFailed')));
+        }
+      })();
+    },
+    [onPreferencesUpdated, updatePreferencesStore, t],
+  );
+
+  const dateFormat = useSavedPreference('dateFormat', preferences.dateFormat, commitPreference);
+  const numberFormat = useSavedPreference(
+    'numberFormat',
+    preferences.numberFormat,
+    commitPreference,
+  );
+  const timezone = useSavedPreference('timezone', preferences.timezone, commitPreference);
+  const defaultCurrency = useSavedPreference(
+    'defaultCurrency',
+    preferences.defaultCurrency,
+    commitPreference,
+  );
+  const weekStartsOn = useSavedPreference(
+    'weekStartsOn',
+    preferences.weekStartsOn ?? 1,
+    commitPreference,
+  );
+  const showCreatedAt = useSavedPreference(
+    'showCreatedAt',
+    preferences.showCreatedAt ?? false,
+    commitPreference,
+  );
+  const showWhatsNew = useSavedPreference(
+    'showWhatsNew',
+    preferences.showWhatsNew ?? true,
+    commitPreference,
+  );
+  const lockReconciledTransactions = useSavedPreference(
+    'lockReconciledTransactions',
+    preferences.lockReconciledTransactions ?? false,
+    commitPreference,
+  );
+  const timeFormat = useSavedPreference<'timeFormat', '24h' | '12h'>(
+    'timeFormat',
+    preferences.timeFormat ?? '24h',
+    commitPreference,
+  );
+  const preferredExchanges = useSavedPreference<'preferredExchanges', string[]>(
+    'preferredExchanges',
+    preferences.preferredExchanges ?? [],
+    commitPreference,
+  );
+  const defaultQuoteProvider = useSavedPreference<
+    'defaultQuoteProvider',
+    'yahoo' | 'msn' | 'lse' | 'deutsche_boerse'
+  >(
+    'defaultQuoteProvider',
+    preferences.defaultQuoteProvider ?? 'yahoo',
+    commitPreference,
+  );
+  const recentTransactionsLimit = useSavedPreference(
+    'recentTransactionsLimit',
+    preferences.recentTransactionsLimit ?? 5,
+    commitPreference,
+  );
+  const defaultMapProvider = useSavedPreference<'defaultMapProvider', MapProvider>(
+    'defaultMapProvider',
+    preferences.defaultMapProvider ?? 'device',
+    commitPreference,
+  );
+
+  // Theme, colour theme and language persist themselves inside their own
+  // selectors (each has work to do beyond the write -- applying the palette,
+  // switching the active locale), so these three hold display state only.
   const [theme, setTheme] = useState<'light' | 'dark' | 'system'>(preferences.theme);
   const [colorTheme, setColorTheme] = useState<ColorTheme>(preferences.colorTheme ?? 'default');
-  const [defaultCurrency, setDefaultCurrency] = useState(preferences.defaultCurrency);
-  const [weekStartsOn, setWeekStartsOn] = useState(preferences.weekStartsOn ?? 1);
-  const [showCreatedAt, setShowCreatedAt] = useState(preferences.showCreatedAt ?? false);
-  const [showWhatsNew, setShowWhatsNew] = useState(preferences.showWhatsNew ?? true);
-  const [lockReconciledTransactions, setLockReconciledTransactions] = useState(
-    preferences.lockReconciledTransactions ?? false,
-  );
-  const [timeFormat, setTimeFormat] = useState<'24h' | '12h'>(preferences.timeFormat ?? '24h');
-  const [preferredExchanges, setPreferredExchanges] = useState<string[]>(
-    preferences.preferredExchanges ?? [],
-  );
-  const [defaultQuoteProvider, setDefaultQuoteProvider] = useState<'yahoo' | 'msn'>(
-    preferences.defaultQuoteProvider ?? 'yahoo',
-  );
-  const [recentTransactionsLimit, setRecentTransactionsLimit] = useState(
-    preferences.recentTransactionsLimit ?? 5,
-  );
   const [language, setLanguage] = useState(preferences.language ?? 'en');
-  const [isUpdatingPreferences, setIsUpdatingPreferences] = useState(false);
 
   const [availableCurrencies, setAvailableCurrencies] = useState<CurrencyInfo[]>([]);
   const [msnReady, setMsnReady] = useState<boolean | null>(null);
@@ -126,44 +238,18 @@ export function PreferencesSection({ preferences, onPreferencesUpdated }: Prefer
       .catch(() => setMsnReady(null));
   }, []);
 
+  // The reporting currency is fiat: a coin is not offered (the server refuses
+  // one too). A coin already saved there stays listed so the picker shows the
+  // value the account holds rather than a first option it does not.
   const currencyOptions = useMemo(() => {
-    return availableCurrencies.map((c) => ({
-      value: c.code,
-      label: `${c.code} - ${c.name}`,
-    }));
-  }, [availableCurrencies]);
-
-  const handleUpdatePreferences = async () => {
-    setIsUpdatingPreferences(true);
-    try {
-      // Theme and colour theme are applied and persisted immediately by
-      // ThemeSelector / ColorThemeSelector (like language), so they are
-      // intentionally omitted from this bulk save.
-      const data: UpdatePreferencesData = {
-        dateFormat,
-        numberFormat,
-        timezone,
-        defaultCurrency,
-        weekStartsOn,
-        showCreatedAt,
-        showWhatsNew,
-        lockReconciledTransactions,
-        timeFormat,
-        preferredExchanges: preferredExchanges.filter(Boolean),
-        defaultQuoteProvider,
-        recentTransactionsLimit,
-      };
-
-      const updated = await userSettingsApi.updatePreferences(data);
-      onPreferencesUpdated(updated);
-      updatePreferencesStore(updated);
-      toast.success(t('toasts.saved'));
-    } catch (error) {
-      toast.error(getErrorMessage(error, t('toasts.saveFailed')));
-    } finally {
-      setIsUpdatingPreferences(false);
-    }
-  };
+    return availableCurrencies
+      .filter((c) => c.kind !== 'CRYPTO' || c.code === defaultCurrency.value)
+      .map((c) => ({
+        value: c.code,
+        label: `${c.code} - ${c.name}`,
+      }));
+  }, [availableCurrencies, defaultCurrency.value]);
+  const holdsCryptoCurrency = availableCurrencies.some((c) => c.kind === 'CRYPTO');
 
   const browserLocale = getEffectiveLocale('browser', language);
   const numberFormatSample = new Intl.NumberFormat(browserLocale).format(1234.56);
@@ -173,197 +259,276 @@ export function PreferencesSection({ preferences, onPreferencesUpdated }: Prefer
     <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-700/50 rounded-lg p-6 mb-6">
       <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{t('heading')}</h2>
 
-      <div className="space-y-4">
-        <LanguageSelector value={language} onChange={setLanguage} />
-
-        <ThemeSelector value={theme} onChange={setTheme} />
-
-        <ColorThemeSelector value={colorTheme} onChange={setColorTheme} />
-
-        <Select
-          label={t('defaultCurrencyLabel')}
-          options={currencyOptions}
-          value={defaultCurrency}
-          onChange={(e) => setDefaultCurrency(e.target.value)}
-        />
-
+      <div className="space-y-6">
         <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            {t('preferredExchangesLabel')}
-          </label>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-            {t('preferredExchangesHelp')}
-          </p>
-          <div className="grid grid-cols-3 gap-2">
-            {[0, 1, 2].map((i) => (
-              <Combobox
-                key={i}
-                options={EXCHANGE_OPTIONS
-                  .filter(
-                    (opt) =>
-                      !preferredExchanges.includes(opt.value) ||
-                      preferredExchanges[i] === opt.value,
-                  )
-                  .sort((a, b) => a.label.localeCompare(b.label))}
-                value={preferredExchanges[i] || ''}
-                onChange={(value) => {
-                  const updated = [...preferredExchanges];
-                  if (value) {
-                    updated[i] = value;
-                  } else {
-                    updated.splice(i, 1);
-                  }
-                  setPreferredExchanges(updated.filter(Boolean));
-                }}
-                placeholder={t('exchangePriorityPlaceholder', { n: i + 1 })}
-                alwaysShowSubtitle
+          <h3 className={GROUP_HEADING_CLASS}>
+            {t('groups.languageRegion')}
+          </h3>
+          <div className="space-y-4">
+            <LanguageSelector value={language} onChange={setLanguage} />
+
+            <div>
+              <Select
+                label={t('defaultCurrencyLabel')}
+                options={currencyOptions}
+                value={defaultCurrency.value}
+                onChange={(e) => defaultCurrency.set(e.target.value)}
               />
-            ))}
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                {t('defaultCurrencyHelp')}{' '}
+                <HelpLink link="currencyHomeRate" className="underline hover:text-gray-700 dark:hover:text-gray-200">
+                  {th('learnMore')}
+                </HelpLink>
+              </p>
+              {holdsCryptoCurrency && (
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  {t('defaultCurrencyNoCrypto')}
+                </p>
+              )}
+            </div>
           </div>
         </div>
 
-        <div>
-          <Select
-            label={t('defaultQuoteProviderLabel')}
-            options={QUOTE_PROVIDER_OPTIONS}
-            value={defaultQuoteProvider}
-            onChange={(e) => setDefaultQuoteProvider(e.target.value as 'yahoo' | 'msn')}
-          />
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            {t('defaultQuoteProviderHelp')}
-          </p>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            {t('msnNoIntradayNote')}
-          </p>
-          {defaultQuoteProvider === 'msn' && msnReady === false && (
-            <p
-              role="alert"
-              className="text-sm text-red-600 dark:text-red-400 mt-2"
-              data-testid="msn-not-configured-error"
+        <div className={GROUP_DIVIDER_CLASS}>
+          <h3 className={GROUP_HEADING_CLASS}>
+            {t('groups.appearance')}
+          </h3>
+          <div className="space-y-4">
+            <ThemeSelector value={theme} onChange={setTheme} />
+
+            <ColorThemeSelector value={colorTheme} onChange={setColorTheme} />
+          </div>
+        </div>
+
+        <div className={GROUP_DIVIDER_CLASS}>
+          <h3 className={GROUP_HEADING_CLASS}>
+            {t('groups.datesNumbers')}
+          </h3>
+          <div className="space-y-4">
+            <Select
+              label={t('dateFormatLabel')}
+              options={dateFormatOptions}
+              value={dateFormat.value}
+              onChange={(e) => dateFormat.set(e.target.value)}
+            />
+
+            <Select
+              label={t('numberFormatLabel')}
+              options={NUMBER_FORMAT_OPTIONS.map((o) => ({
+                value: o.value,
+                label:
+                  o.value === 'browser'
+                    ? t('numberFormatOptions.browser', { sample: numberFormatSample })
+                    : t(o.labelKey),
+              }))}
+              value={numberFormat.value}
+              onChange={(e) => numberFormat.set(e.target.value)}
+            />
+
+            <Combobox
+              label={t('timezoneLabel')}
+              options={[{ value: 'browser', label: t('timezoneBrowserOption', { tz: getBrowserTimezone() }) }, ...TIMEZONE_OPTIONS.slice(1)]}
+              value={timezone.value}
+              onChange={(value) => timezone.set(value)}
+              placeholder={t('timezonePlaceholder')}
+            />
+
+            <Select
+              label={t('weekStartsOnLabel')}
+              options={WEEK_STARTS_ON_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))}
+              value={String(weekStartsOn.value)}
+              onChange={(e) => weekStartsOn.set(Number(e.target.value))}
+            />
+
+            <div className="flex items-center">
+              <label
+                htmlFor="showCreatedAt"
+                className="flex items-center gap-2 cursor-pointer"
+              >
+                <ToggleSwitch
+                  checked={showCreatedAt.value}
+                  onChange={showCreatedAt.set}
+                  label={t('showCreatedAtLabel')}
+                />
+                <span className="text-sm text-gray-900 dark:text-gray-100">
+                  {t('showCreatedAtLabel')}
+                </span>
+              </label>
+              <InfoTooltip text={t('showCreatedAtTooltip')} />
+            </div>
+
+            {showCreatedAt.value && (
+              <Select
+                label={t('timeFormatLabel')}
+                options={TIME_FORMAT_OPTIONS.map((o) => ({
+                  value: o.value,
+                  label: t(o.labelKey),
+                }))}
+                value={timeFormat.value}
+                onChange={(e) => timeFormat.set(e.target.value as '24h' | '12h')}
+              />
+            )}
+          </div>
+        </div>
+
+        <div className={GROUP_DIVIDER_CLASS}>
+          <h3 className={GROUP_HEADING_CLASS}>
+            {t('groups.investments')}
+          </h3>
+          <div className="space-y-4">
+            <div>
+              <Select
+                label={t('defaultQuoteProviderLabel')}
+                options={QUOTE_PROVIDER_OPTIONS}
+                value={defaultQuoteProvider.value}
+                onChange={(e) => defaultQuoteProvider.set(e.target.value as 'yahoo' | 'msn' | 'lse' | 'deutsche_boerse')}
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {t('defaultQuoteProviderHelp')}
+              </p>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {t('msnNoIntradayNote')}
+              </p>
+              {defaultQuoteProvider.value === 'msn' && msnReady === false && (
+                <p
+                  role="alert"
+                  className="text-sm text-red-600 dark:text-red-400 mt-2"
+                  data-testid="msn-not-configured-error"
+                >
+                  {t('msnNotConfigured')}
+                </p>
+              )}
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                {t('preferredExchangesLabel')}
+              </label>
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                {t('preferredExchangesHelp')}
+              </p>
+              <div className="grid grid-cols-3 gap-2">
+                {[0, 1, 2].map((i) => (
+                  <Combobox
+                    key={i}
+                    options={PREFERRED_EXCHANGE_OPTIONS
+                      .filter(
+                        (opt) =>
+                          !preferredExchanges.value.includes(opt.value) ||
+                          preferredExchanges.value[i] === opt.value,
+                      )
+                      .sort((a, b) => a.label.localeCompare(b.label))}
+                    value={preferredExchanges.value[i] || ''}
+                    onChange={(value) => {
+                      const updated = [...preferredExchanges.value];
+                      if (value) {
+                        updated[i] = value;
+                      } else {
+                        updated.splice(i, 1);
+                      }
+                      preferredExchanges.set(updated.filter(Boolean));
+                    }}
+                    placeholder={t('exchangePriorityPlaceholder', { n: i + 1 })}
+                    alwaysShowSubtitle
+                  />
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className={GROUP_DIVIDER_CLASS}>
+          <h3 className={GROUP_HEADING_CLASS}>
+            {t('groups.transactions')}
+          </h3>
+          <div className="space-y-4">
+            <div>
+              <Select
+                label={t('recentTransactionsLabel')}
+                options={RECENT_TRANSACTIONS_LIMIT_OPTIONS}
+                value={String(recentTransactionsLimit.value)}
+                onChange={(e) => recentTransactionsLimit.set(Number(e.target.value))}
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {t('recentTransactionsHelp')}
+              </p>
+            </div>
+
+            <div className="flex items-center">
+              <label
+                htmlFor="lockReconciledTransactions"
+                className="flex items-center gap-2 cursor-pointer"
+              >
+                <ToggleSwitch
+                  checked={lockReconciledTransactions.value}
+                  onChange={lockReconciledTransactions.set}
+                  label={t('lockReconciledLabel')}
+                />
+                <span className="text-sm text-gray-900 dark:text-gray-100">
+                  {t('lockReconciledLabel')}
+                </span>
+              </label>
+              <InfoTooltip text={t('lockReconciledTooltip')} />
+            </div>
+          </div>
+        </div>
+
+        <DefaultViewsGroup
+          className={GROUP_DIVIDER_CLASS}
+          initial={preferences.viewDefaults}
+          initialHiddenColumns={preferences.hiddenTableColumns}
+          commit={commitPreference}
+        />
+
+        <MobileTabsGroup
+          className={GROUP_DIVIDER_CLASS}
+          initial={preferences.viewDefaults}
+          commit={commitPreference}
+        />
+
+        <div className={GROUP_DIVIDER_CLASS}>
+          <h3 className={GROUP_HEADING_CLASS}>
+            {t('groups.application')}
+          </h3>
+          <div className="space-y-4">
+            <div>
+              <Select
+                label={t('mapProviderLabel')}
+                options={MAP_PROVIDER_OPTIONS.map((option) => ({
+                  value: option.value,
+                  label: t(option.labelKey),
+                }))}
+                value={defaultMapProvider.value}
+                onChange={(e) =>
+                  defaultMapProvider.set(e.target.value as MapProvider)
+                }
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {t('mapProviderHelp')}
+              </p>
+            </div>
+
+            <div
+              {...tourAnchor(TOUR_ANCHORS.settingsWhatsNewToggle)}
+              className="flex items-center"
             >
-              {t('msnNotConfigured')}
-            </p>
-          )}
+              <label
+                htmlFor="showWhatsNew"
+                className="flex items-center gap-2 cursor-pointer"
+              >
+                <ToggleSwitch
+                  checked={showWhatsNew.value}
+                  onChange={showWhatsNew.set}
+                  label={t('showWhatsNewLabel')}
+                />
+                <span className="text-sm text-gray-900 dark:text-gray-100">
+                  {t('showWhatsNewLabel')}
+                </span>
+              </label>
+              <InfoTooltip text={t('showWhatsNewTooltip')} />
+            </div>
+          </div>
         </div>
-
-        <Select
-          label={t('dateFormatLabel')}
-          options={dateFormatOptions}
-          value={dateFormat}
-          onChange={(e) => setDateFormat(e.target.value)}
-        />
-
-        <Select
-          label={t('numberFormatLabel')}
-          options={NUMBER_FORMAT_OPTIONS.map((o) => ({
-            value: o.value,
-            label:
-              o.value === 'browser'
-                ? t('numberFormatOptions.browser', { sample: numberFormatSample })
-                : t(o.labelKey),
-          }))}
-          value={numberFormat}
-          onChange={(e) => setNumberFormat(e.target.value)}
-        />
-
-        <Combobox
-          label={t('timezoneLabel')}
-          options={[{ value: 'browser', label: t('timezoneBrowserOption', { tz: getBrowserTimezone() }) }, ...TIMEZONE_OPTIONS.slice(1)]}
-          value={timezone}
-          onChange={(value) => setTimezone(value)}
-          placeholder={t('timezonePlaceholder')}
-        />
-
-        <Select
-          label={t('weekStartsOnLabel')}
-          options={WEEK_STARTS_ON_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))}
-          value={String(weekStartsOn)}
-          onChange={(e) => setWeekStartsOn(Number(e.target.value))}
-        />
-
-        <div className="flex items-center">
-          <label
-            htmlFor="showCreatedAt"
-            className="flex items-center gap-2 cursor-pointer"
-          >
-            <ToggleSwitch
-              checked={showCreatedAt}
-              onChange={setShowCreatedAt}
-              label={t('showCreatedAtLabel')}
-            />
-            <span className="text-sm text-gray-900 dark:text-gray-100">
-              {t('showCreatedAtLabel')}
-            </span>
-          </label>
-          <InfoTooltip text={t('showCreatedAtTooltip')} />
-        </div>
-
-        {showCreatedAt && (
-          <Select
-            label={t('timeFormatLabel')}
-            options={[
-              { value: '24h', label: '24-hour (14:30)' },
-              { value: '12h', label: '12-hour (2:30 PM)' },
-            ]}
-            value={timeFormat}
-            onChange={(e) => setTimeFormat(e.target.value as '24h' | '12h')}
-          />
-        )}
-
-        <div>
-          <Select
-            label={t('recentTransactionsLabel')}
-            options={RECENT_TRANSACTIONS_LIMIT_OPTIONS}
-            value={String(recentTransactionsLimit)}
-            onChange={(e) => setRecentTransactionsLimit(Number(e.target.value))}
-          />
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            {t('recentTransactionsHelp')}
-          </p>
-        </div>
-
-        <div className="flex items-center">
-          <label
-            htmlFor="lockReconciledTransactions"
-            className="flex items-center gap-2 cursor-pointer"
-          >
-            <ToggleSwitch
-              checked={lockReconciledTransactions}
-              onChange={setLockReconciledTransactions}
-              label={t('lockReconciledLabel')}
-            />
-            <span className="text-sm text-gray-900 dark:text-gray-100">
-              {t('lockReconciledLabel')}
-            </span>
-          </label>
-          <InfoTooltip text={t('lockReconciledTooltip')} />
-        </div>
-
-        <div
-          {...tourAnchor(TOUR_ANCHORS.settingsWhatsNewToggle)}
-          className="flex items-center"
-        >
-          <label
-            htmlFor="showWhatsNew"
-            className="flex items-center gap-2 cursor-pointer"
-          >
-            <ToggleSwitch
-              checked={showWhatsNew}
-              onChange={setShowWhatsNew}
-              label={t('showWhatsNewLabel')}
-            />
-            <span className="text-sm text-gray-900 dark:text-gray-100">
-              {t('showWhatsNewLabel')}
-            </span>
-          </label>
-          <InfoTooltip text={t('showWhatsNewTooltip')} />
-        </div>
-      </div>
-
-      <div className="mt-6 flex justify-end">
-        <Button onClick={handleUpdatePreferences} disabled={isUpdatingPreferences}>
-          {isUpdatingPreferences ? t('savingButton') : t('saveButton')}
-        </Button>
       </div>
     </div>
   );

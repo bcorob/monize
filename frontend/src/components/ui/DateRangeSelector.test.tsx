@@ -17,6 +17,28 @@ describe('DateRangeSelector', () => {
     expect(screen.getByText('1Y')).toBeInTheDocument();
   });
 
+  it('joins a toolbar row as its own items when asked to fill the row height', () => {
+    const { container } = render(
+      <DateRangeSelector ranges={ranges} value="custom" onChange={vi.fn()} showCustom fillRowHeight className="ignored" />,
+    );
+    const root = container.firstElementChild!;
+    // `display: contents`: the presets are a flex item of the toolbar row, so
+    // `items-stretch` gives them the row's height; the custom fields take a
+    // line of their own.
+    expect(root.className).toBe('contents');
+    expect(screen.getByTestId('date-range-presets').className).toContain('flex');
+    expect(root.lastElementChild!.className).toContain('w-full');
+    expect(root.lastElementChild!.className).not.toContain('mt-4');
+  });
+
+  it('keeps its own box by default', () => {
+    const { container } = render(
+      <DateRangeSelector ranges={ranges} value="custom" onChange={vi.fn()} showCustom className="mine" />,
+    );
+    expect(container.firstElementChild!.className).toBe('mine');
+    expect(container.firstElementChild!.lastElementChild!.className).toContain('mt-4');
+  });
+
   it('calls onChange when button clicked', () => {
     const onChange = vi.fn();
     render(<DateRangeSelector ranges={ranges} value="3m" onChange={onChange} />);

@@ -2,6 +2,7 @@ import {
   MnyAccount,
   MnyBill,
   MnyCategory,
+  MnyClassification,
   MnyCurrency,
   MnyExchangeRate,
   MnyFileDefaults,
@@ -99,8 +100,20 @@ export function mnyCategory(overrides: Partial<MnyCategory> = {}): MnyCategory {
     name: "Category",
     parent: null,
     level: 1,
+    classification: 0,
     categoryType: 0,
     taxRelated: false,
+    ...overrides,
+  };
+}
+
+/** A `CT` row for a user-defined classification (never the category tree). */
+export function mnyClassification(
+  overrides: Partial<MnyClassification> = {},
+): MnyClassification {
+  return {
+    handle: 1,
+    name: "Properties",
     ...overrides,
   };
 }
@@ -137,6 +150,8 @@ export function mnyTransaction(
     reference: null,
     memo: null,
     billSeries: null,
+    classification1: null,
+    classification2: null,
     ...overrides,
   };
 }
@@ -258,6 +273,7 @@ export function referenceData(
     accounts: [],
     payees: [],
     categories: [],
+    classifications: [],
     availability: [],
     ...overrides,
   };
@@ -268,6 +284,7 @@ export function transactionData(
   overrides: Partial<MnyTransactionData> = {},
 ): MnyTransactionData {
   return {
+    format: "msisam",
     transactions: [],
     splits: [],
     transfers: [],

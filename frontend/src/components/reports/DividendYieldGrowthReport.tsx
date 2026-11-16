@@ -16,21 +16,30 @@ import {
 } from 'recharts';
 import { subYears } from 'date-fns';
 import { investmentsApi } from '@/lib/investments';
+import { investmentIncomeAmount, investmentRowHasEffect } from '@/lib/investment-actions';
+import { convertRowAmount, rowAmountCurrency } from '@/lib/investment-row-currency';
 import { InvestmentTransaction, HoldingWithMarketValue } from '@/types/investment';
 import { Account } from '@/types/account';
 import { parseLocalDate } from '@/lib/utils';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { gainLossColor } from '@/lib/format';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
-import { ExportDropdown } from '@/components/ui/ExportDropdown';
+import { ReportToolbarActions } from '@/components/reports/ReportToolbarActions';
 import { ReportAccountMultiSelect } from '@/components/reports/ReportAccountMultiSelect';
-import { RefreshPricesButton } from '@/components/reports/RefreshPricesButton';
 import { SortableHeader } from '@/components/ui/SortableHeader';
+import { CAPTION_CLASS, CellLabel, PHONE_HEADER_CLASS } from '@/components/ui/Table';
+import type {
+  SortColumn as TableSortColumn,
+  SortColumnsByField as TableSortColumnsByField,
+} from '@/components/ui/Table';
 import { PartialTotal } from '@/components/ui/PartialTotal';
 import { useSortableTable, compareValues } from '@/hooks/useSortableTable';
 import { createLogger } from '@/lib/logger';
 import { chartColors, CHART_SERIES } from '@/lib/chart-colors';
 import { useTranslations } from 'next-intl';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { SEGMENTED_GROUP_CLASS, segmentClass } from '@/components/ui/segmented-control';
+import { CHART_GRID_PROPS, CHART_TOOLTIP_CLASS } from '@/lib/chart-style';
 
 const logger = createLogger('DividendYieldGrowthReport');
 
@@ -61,12 +70,40 @@ interface FrequencyBucket {
   totalDividends: number;
 }
 
+/**
+ * One sortable column of the per-security yield table, keyed by its own sort
+ * field so the record is exhaustive over `YieldSortField` and each entry names
+ * the field it stands for. Both header rows -- the column header row from `sm`
+ * up and the phone sort strip below it -- render from the same record, so they
+ * can never list different fields, and a new sort field is a compile error here
+ * rather than a column stranded with no control on a phone.
+ */
+type YieldSortColumn = TableSortColumn<YieldSortField, 'right'>;
+type YieldSortColumns = TableSortColumnsByField<YieldSortField, YieldSortColumn>;
+
+// Today's header cell, unchanged.
+const HEADER_CLASS =
+  'px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase';
+
+// A figure cell inside a wrapped card: no padding of its own below `sm` (the
+// row supplies it and the grid does the spacing), this table's own `px-4 py-3`
+// from `sm` up, and smaller type on phones so a figure fits a third of the
+// width. `whitespace-nowrap` is the one property here that is NOT phone-only,
+// and the single respect in which the `sm`-and-up cell differs from today's: a
+// locale that groups thousands with a space (`1 234 567 zl`) could otherwise
+// break a figure in the middle at any width. Right alignment is not a
+// containment device -- a nowrap amount longer than its track overflows the end
+// edge and reopens the wrapper's scroll -- but `overflow-hidden` here would
+// silently cut a figure, which is worse than a crowded one or an honest scroll.
+const MONEY_CELL =
+  'p-0 text-right text-xs whitespace-nowrap sm:table-cell sm:px-4 sm:py-3 sm:text-sm';
+
 const ACCOUNTS_STORAGE_KEY = 'monize-reports-dividend-yield-growth-accounts';
 
 export function DividendYieldGrowthReport() {
   const t = useTranslations('reports');
-  const { formatCurrency: formatCurrencyFull, formatCurrencyAxis, formatSignedPercent } = useNumberFormat();
-  const { defaultCurrency, convertToDefault } = useExchangeRates();
+  const { formatCurrency: formatCurrencyFull, formatCurrencyAxis, formatSignedPercent, formatPercent } = useNumberFormat();
+  const { defaultCurrency, convert } = useExchangeRates();
   const chartRef = useRef<HTMLDivElement>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   // Persisted so the report opens on the accounts the user last chose.
@@ -101,16 +138,33 @@ export function DividendYieldGrowthReport() {
   const displayCurrency = selectedAccount?.currencyCode || defaultCurrency;
 
   /**
-   * A transaction's amount in the display currency, or `null` when the pair has
-   * no rate. Yield is income over value, so an amount that cannot be converted
-   * has to leave both sides of the ratio rather than being added at face value.
+   * A transaction's dividend in the display currency, or `null` when it cannot
+   * be converted. Yield is income over value, so an amount that cannot be
+   * converted has to leave both sides of the ratio rather than being added at
+   * face value. The dividend is in the row's own (security) currency and reaches
+   * the display currency at the row's settlement rate where it has one. A
+   * reinvest created in the app stores no total; the dividend it records is the
+   * cost of the shares it bought.
    */
-  const getTxAmount = useCallback((tx: InvestmentTransaction): number | null => {
-    const amount = Math.abs(tx.totalAmount);
-    if (isSingleAccount) return amount;
-    const txCurrency = accountCurrencyMap.get(tx.accountId) || defaultCurrency;
-    return convertToDefault(amount, txCurrency);
-  }, [isSingleAccount, accountCurrencyMap, defaultCurrency, convertToDefault]);
+  const getTxAmount = useCallback(
+    (tx: InvestmentTransaction): number | null =>
+      convertRowAmount(
+        tx,
+        investmentIncomeAmount(tx),
+        accountCurrencyMap.get(tx.accountId),
+        displayCurrency,
+      ),
+    [accountCurrencyMap, displayCurrency],
+  );
+
+  /**
+   * A holding's market value in the same display currency as the dividends, so
+   * the yield divides one currency by itself.
+   */
+  const toDisplay = useCallback(
+    (amount: number, currency: string): number | null => convert(amount, currency, displayCurrency),
+    [convert, displayCurrency],
+  );
 
   const fmtValue = useCallback((value: number): string => {
     const isForeign = displayCurrency !== defaultCurrency;
@@ -168,12 +222,16 @@ export function DividendYieldGrowthReport() {
         investmentsApi.getPortfolioSummary(
           selectedAccountIds.length > 0 ? selectedAccountIds : undefined,
         ),
+        // Every action whose income is a dividend, paid in cash or reinvested.
+        // The interest and capital-gain refinements of REINVEST are not
+        // dividends, as their cash twins are not.
         fetchAllPages('DIVIDEND'),
         fetchAllPages('REINVEST'),
       ]);
 
       return {
-        transactions: [...dividendTx, ...reinvestTx],
+        // A VOID row is listed by the endpoint as a record; it paid nothing.
+        transactions: [...dividendTx, ...reinvestTx].filter(investmentRowHasEffect),
         holdings: summaryData.holdings,
       };
     },
@@ -206,10 +264,10 @@ export function DividendYieldGrowthReport() {
         // An unpriced holding and an unconvertible one both leave the
         // denominator: `?? 0` would shrink it and inflate the yield.
         if (h.marketValue === null || h.marketValue === undefined) return sum;
-        const converted = convertToDefault(h.marketValue, h.currencyCode);
+        const converted = toDisplay(h.marketValue, h.currencyCode);
         return converted === null ? sum : sum + converted;
       }, 0),
-    [holdings, convertToDefault],
+    [holdings, toDisplay],
   );
 
   const portfolioYield = totalPortfolioValue > 0 ? (trailing12mTotal / totalPortfolioValue) * 100 : 0;
@@ -226,7 +284,7 @@ export function DividendYieldGrowthReport() {
         excludedCount += 1;
         continue;
       }
-      if (convertToDefault(h.marketValue, h.currencyCode) === null) {
+      if (toDisplay(h.marketValue, h.currencyCode) === null) {
         missing.add(h.currencyCode);
         excludedCount += 1;
       }
@@ -235,12 +293,15 @@ export function DividendYieldGrowthReport() {
     for (const tx of transactions) {
       if (parseLocalDate(tx.transactionDate) < cutoff) continue;
       if (getTxAmount(tx) === null) {
-        missing.add(accountCurrencyMap.get(tx.accountId) || defaultCurrency);
+        // The row's own currency is what had no rate; one the row cannot name
+        // is still an exclusion, but names no pair to add.
+        const currency = rowAmountCurrency(tx);
+        if (currency !== null) missing.add(currency);
         excludedCount += 1;
       }
     }
     return { missingCurrencies: [...missing], excludedCount };
-  }, [holdings, transactions, getTxAmount, convertToDefault, accountCurrencyMap, defaultCurrency]);
+  }, [holdings, transactions, getTxAmount, toDisplay]);
 
   // Per-security yield
   const securityYields = useMemo((): SecurityYield[] => {
@@ -266,7 +327,7 @@ export function DividendYieldGrowthReport() {
     const holdingMap = new Map<string, { symbol: string; name: string; marketValue: number }>();
     holdings.forEach((h) => {
       if (h.marketValue === null || h.marketValue === undefined) return;
-      const mv = convertToDefault(h.marketValue, h.currencyCode);
+      const mv = toDisplay(h.marketValue, h.currencyCode);
       if (mv === null) return;
       const existing = holdingMap.get(h.securityId);
       if (existing) {
@@ -292,7 +353,7 @@ export function DividendYieldGrowthReport() {
 
     return results;
      
-  }, [transactions, holdings, getTxAmount, convertToDefault, detectFrequency]);
+  }, [transactions, holdings, getTxAmount, toDisplay, detectFrequency]);
 
   const sortedSecurityYields = useMemo(() => {
     const sorted = [...securityYields];
@@ -319,6 +380,21 @@ export function DividendYieldGrowthReport() {
     });
     return sorted;
   }, [securityYields, yieldSort.sortField, yieldSort.sortDirection]);
+
+  // The five sortable columns of the per-security yield table, keyed by field
+  // so the record is exhaustive over `YieldSortField`. Both header rows render
+  // one control per column, and the declaration order is the column order.
+  const yieldColumns: YieldSortColumns = {
+    symbol: { field: 'symbol', label: t('dividendYieldGrowth.colSecurity') },
+    dividends: { field: 'dividends', label: t('dividendYieldGrowth.col12mDividends'), align: 'right' },
+    marketValue: { field: 'marketValue', label: t('dividendYieldGrowth.colMarketValue'), align: 'right' },
+    yield: { field: 'yield', label: t('dividendYieldGrowth.colYield'), align: 'right' },
+    frequency: { field: 'frequency', label: t('dividendYieldGrowth.colFrequency'), align: 'right' },
+  };
+  // Their order, rendered by BOTH header rows and matched by the cells' DOM
+  // order. Derived from the record rather than re-listed, so a field added to
+  // the union cannot compile with no sort control in either header.
+  const yieldSortColumns: readonly YieldSortColumn[] = Object.values(yieldColumns);
 
   // Year-over-year growth
   const annualData = useMemo((): AnnualDividend[] => {
@@ -415,7 +491,7 @@ export function DividendYieldGrowthReport() {
           `${sy.symbol} - ${sy.name}`,
           fmtValue(sy.trailing12mDividends),
           fmtValue(sy.marketValue),
-          `${sy.yield.toFixed(2)}%`,
+          formatPercent(sy.yield, 2),
           sy.frequency,
         ]),
       };
@@ -446,7 +522,7 @@ export function DividendYieldGrowthReport() {
       title: t('dividendYieldGrowth.pdfTitle'),
       subtitle: viewLabel,
       summaryCards: [
-        { label: t('dividendYieldGrowth.portfolioYield'), value: `${portfolioYield.toFixed(2)}%`, color: '#16a34a' },
+        { label: t('dividendYieldGrowth.portfolioYield'), value: formatPercent(portfolioYield, 2), color: '#16a34a' },
         { label: t('dividendYieldGrowth.trailing12mDividends'), value: fmtValue(trailing12mTotal), color: '#2563eb' },
         { label: t('dividendYieldGrowth.portfolioValue'), value: fmtValue(totalPortfolioValue), color: '#9333ea' },
         { label: t('dividendYieldGrowth.dividendPayers'), value: String(securityYields.length), color: '#111827' },
@@ -479,10 +555,14 @@ export function DividendYieldGrowthReport() {
         <div className="bg-green-50 dark:bg-green-900/20 rounded-lg p-4">
           <div className="text-sm text-green-600 dark:text-green-400">{t('dividendYieldGrowth.portfolioYield')}</div>
           <div className="text-xl font-bold text-green-700 dark:text-green-300">
-            {portfolioYield.toFixed(2)}%
-            {valuationGaps.excludedCount > 0 && (
-              <span className="text-amber-600 dark:text-amber-400" aria-hidden="true"> *</span>
-            )}
+            {/* The yield is the ratio of the two subtotals beside it, so it is
+                a subtotal too, and it wears the marker the same way they do.
+                The hand-rolled amber `*` this replaces was `aria-hidden` with
+                no `sr-only` twin, so the one figure a screen reader was told
+                nothing about was the derived one. */}
+            <PartialTotal total={{ value: portfolioYield, ...valuationGaps }} displayCurrency={displayCurrency}>
+              {formatPercent(portfolioYield, 2)}
+            </PartialTotal>
           </div>
         </div>
         <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
@@ -517,44 +597,47 @@ export function DividendYieldGrowthReport() {
             value={selectedAccountIds}
             onChange={setSelectedAccountIds}
           />
-          <div className="flex gap-2 items-center">
+          <div
+            className={`${SEGMENTED_GROUP_CLASS} flex-wrap`}
+            role="group"
+            aria-label={t('reportPage.viewLabel')}
+          >
             <button
+              type="button"
               onClick={() => setViewType('yield')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                viewType === 'yield' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-              }`}
+              aria-pressed={viewType === 'yield'}
+              className={segmentClass(viewType === 'yield')}
             >
               {t('dividendYieldGrowth.viewPerSecurity')}
             </button>
             <button
+              type="button"
               onClick={() => setViewType('growth')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                viewType === 'growth' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-              }`}
+              aria-pressed={viewType === 'growth'}
+              className={segmentClass(viewType === 'growth')}
             >
               {t('dividendYieldGrowth.viewYearOverYear')}
             </button>
             <button
+              type="button"
               onClick={() => setViewType('frequency')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                viewType === 'frequency' ? 'bg-blue-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-              }`}
+              aria-pressed={viewType === 'frequency'}
+              className={segmentClass(viewType === 'frequency')}
             >
               {t('dividendYieldGrowth.viewFrequency')}
             </button>
           </div>
-          <div className="ml-auto flex gap-2 items-center">
-            <RefreshPricesButton onRefreshComplete={reload} />
-            <ExportDropdown onExportPdf={handleExportPdf} />
-          </div>
+          <ReportToolbarActions
+            onRefreshComplete={reload}
+            onExportPdf={handleExportPdf}
+            disabled={isLoading || !!error}
+          />
         </div>
       </div>
 
       {transactions.length === 0 ? (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6">
-          <p className="text-gray-500 dark:text-gray-400 text-center py-8">
-            {t('dividendYieldGrowth.empty')}
-          </p>
+          <EmptyState title={t('dividendYieldGrowth.empty')} />
         </div>
       ) : viewType === 'yield' ? (
         /* Per-Security Yield Table */
@@ -564,78 +647,85 @@ export function DividendYieldGrowthReport() {
               {t('dividendYieldGrowth.perSecurityTitle')}
             </h3>
           </div>
+          {/* Below `sm` the table becomes a block and each row wraps into a
+              three-column, two-line grid so all five columns fit a phone
+              without a horizontal scroll: the security identity (spanning two
+              tracks) and the headline yield share line 1; the trailing-12-month
+              dividends, the market value and the payout frequency share line 2,
+              one track each. Each bare figure carries a `CellLabel` reusing the
+              column's existing header key, since the column header row is
+              replaced by a phone sort strip below `sm`. From `sm` up it is the
+              ordinary table -- every cell restores this table's own `px-4 py-3`
+              -- and the one deliberate difference above `sm` is
+              `whitespace-nowrap` on the figures (see `MONEY_CELL`). Restyling
+              `display` strips the implicit table semantics, so the ARIA roles
+              are restated explicitly. */}
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-900/50">
-                <tr>
-                  <SortableHeader<YieldSortField>
-                    field="symbol"
-                    sortField={yieldSort.sortField}
-                    sortDirection={yieldSort.sortDirection}
-                    onSort={yieldSort.handleSort}
-                    className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
-                  >
-                    {t('dividendYieldGrowth.colSecurity')}
-                  </SortableHeader>
-                  <SortableHeader<YieldSortField>
-                    field="dividends"
-                    sortField={yieldSort.sortField}
-                    sortDirection={yieldSort.sortDirection}
-                    onSort={yieldSort.handleSort}
-                    align="right"
-                    className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
-                  >
-                    {t('dividendYieldGrowth.col12mDividends')}
-                  </SortableHeader>
-                  <SortableHeader<YieldSortField>
-                    field="marketValue"
-                    sortField={yieldSort.sortField}
-                    sortDirection={yieldSort.sortDirection}
-                    onSort={yieldSort.handleSort}
-                    align="right"
-                    className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
-                  >
-                    {t('dividendYieldGrowth.colMarketValue')}
-                  </SortableHeader>
-                  <SortableHeader<YieldSortField>
-                    field="yield"
-                    sortField={yieldSort.sortField}
-                    sortDirection={yieldSort.sortDirection}
-                    onSort={yieldSort.handleSort}
-                    align="right"
-                    className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
-                  >
-                    {t('dividendYieldGrowth.colYield')}
-                  </SortableHeader>
-                  <SortableHeader<YieldSortField>
-                    field="frequency"
-                    sortField={yieldSort.sortField}
-                    sortDirection={yieldSort.sortDirection}
-                    onSort={yieldSort.handleSort}
-                    align="right"
-                    className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
-                  >
-                    {t('dividendYieldGrowth.colFrequency')}
-                  </SortableHeader>
+            <table role="table" className="block min-w-full divide-y divide-gray-200 dark:divide-gray-700 sm:table">
+              <thead role="rowgroup" className="block bg-gray-50 dark:bg-gray-900/50 sm:table-header-group">
+                {/* Phone sort strip: the same five controls, wrapped. */}
+                <tr role="row" className="flex flex-wrap gap-x-2 gap-y-1 px-2 py-2 sm:hidden">
+                  {yieldSortColumns.map((col) => (
+                    <SortableHeader<YieldSortField>
+                      key={col.field}
+                      field={col.field}
+                      sortField={yieldSort.sortField}
+                      sortDirection={yieldSort.sortDirection}
+                      onSort={yieldSort.handleSort}
+                      className={PHONE_HEADER_CLASS}
+                    >
+                      {col.label}
+                    </SortableHeader>
+                  ))}
+                </tr>
+                <tr role="row" className="hidden sm:table-row">
+                  {yieldSortColumns.map((col) => (
+                    <SortableHeader<YieldSortField>
+                      key={col.field}
+                      field={col.field}
+                      sortField={yieldSort.sortField}
+                      sortDirection={yieldSort.sortDirection}
+                      onSort={yieldSort.handleSort}
+                      align={col.align}
+                      className={HEADER_CLASS}
+                    >
+                      {col.label}
+                    </SortableHeader>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody role="rowgroup" className="block divide-y divide-gray-200 dark:divide-gray-700 sm:table-row-group">
                 {sortedSecurityYields.map((sy) => (
-                  <tr key={sy.symbol} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
-                    <td className="px-4 py-3">
+                  <tr
+                    key={sy.symbol}
+                    role="row"
+                    className="grid grid-cols-3 items-start gap-x-3 gap-y-1.5 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 sm:table-row sm:p-0"
+                  >
+                    {/* The identity: symbol over name. It spans two tracks on
+                        line 1 beside the headline yield; the name wraps on a
+                        phone and hands the wrap back from `sm` up. */}
+                    <td role="cell" className="col-start-1 col-span-2 row-start-1 min-w-0 p-0 sm:table-cell sm:px-4 sm:py-3">
                       <div className="font-medium text-gray-900 dark:text-gray-100">{sy.symbol}</div>
-                      <div className="text-sm text-gray-500 dark:text-gray-400">{sy.name}</div>
+                      <div className="text-sm text-gray-500 dark:text-gray-400 break-words sm:break-normal">{sy.name}</div>
                     </td>
-                    <td className="px-4 py-3 text-right text-sm text-green-600 dark:text-green-400">
+                    <td role="cell" className={`col-start-1 row-start-2 text-green-600 dark:text-green-400 ${MONEY_CELL}`}>
+                      <CellLabel className={CAPTION_CLASS}>{yieldColumns.dividends.label}</CellLabel>
                       {fmtValue(sy.trailing12mDividends)}
                     </td>
-                    <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">
+                    <td role="cell" className={`col-start-2 row-start-2 text-gray-600 dark:text-gray-400 ${MONEY_CELL}`}>
+                      <CellLabel className={CAPTION_CLASS}>{yieldColumns.marketValue.label}</CellLabel>
                       {fmtValue(sy.marketValue)}
                     </td>
-                    <td className="px-4 py-3 text-right text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {sy.yield.toFixed(2)}%
+                    {/* Yield is the headline the report is read for: the right
+                        of line 1, beside the security. */}
+                    <td role="cell" className={`col-start-3 row-start-1 font-medium text-gray-900 dark:text-gray-100 ${MONEY_CELL}`}>
+                      <CellLabel className={CAPTION_CLASS}>{yieldColumns.yield.label}</CellLabel>
+                      {formatPercent(sy.yield, 2)}
                     </td>
-                    <td className="px-4 py-3 text-right text-sm text-gray-500 dark:text-gray-400">
+                    {/* Frequency is a word, so it may wrap; captioned like the
+                        figures, and right-aligned to match the desktop cell. */}
+                    <td role="cell" className="col-start-3 row-start-2 p-0 text-right text-xs text-gray-500 dark:text-gray-400 sm:table-cell sm:px-4 sm:py-3 sm:text-sm">
+                      <CellLabel className={CAPTION_CLASS}>{yieldColumns.frequency.label}</CellLabel>
                       {sy.frequency}
                     </td>
                   </tr>
@@ -655,7 +745,7 @@ export function DividendYieldGrowthReport() {
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                   <BarChart data={annualData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+                    <CartesianGrid {...CHART_GRID_PROPS} />
                     <XAxis dataKey="year" tick={{ fontSize: 11 }} />
                     <YAxis tickFormatter={formatCurrencyAxis} />
                     <Tooltip
@@ -663,7 +753,7 @@ export function DividendYieldGrowthReport() {
                         if (!active || !payload?.length) return null;
                         const d = payload[0].payload as AnnualDividend;
                         return (
-                          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3">
+                          <div className={CHART_TOOLTIP_CLASS}>
                             <p className="font-medium text-gray-900 dark:text-gray-100">{label}</p>
                             <p className="text-sm text-green-600 dark:text-green-400">
                               {t('dividendYieldGrowth.tooltipDividends')} {fmtValue(d.amount)}
@@ -732,7 +822,7 @@ export function DividendYieldGrowthReport() {
               </div>
             </>
           ) : (
-            <p className="text-gray-500 dark:text-gray-400 text-center py-8">{t('dividendYieldGrowth.noAnnualData')}</p>
+            <EmptyState title={t('dividendYieldGrowth.noAnnualData')} />
           )}
         </div>
       ) : (
@@ -746,7 +836,7 @@ export function DividendYieldGrowthReport() {
               <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                   <BarChart data={frequencyData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+                    <CartesianGrid {...CHART_GRID_PROPS} />
                     <XAxis dataKey="frequency" tick={{ fontSize: 11 }} />
                     <YAxis tickFormatter={formatCurrencyAxis} />
                     <Tooltip
@@ -754,7 +844,7 @@ export function DividendYieldGrowthReport() {
                         if (!active || !payload?.length) return null;
                         const d = payload[0].payload as FrequencyBucket;
                         return (
-                          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3">
+                          <div className={CHART_TOOLTIP_CLASS}>
                             <p className="font-medium text-gray-900 dark:text-gray-100">{label}</p>
                             <p className="text-sm text-gray-600 dark:text-gray-400">{t('dividendYieldGrowth.tooltipSecurities', { count: d.count })}</p>
                             <p className="text-sm text-green-600 dark:text-green-400">{t('dividendYieldGrowth.tooltipTotal')} {fmtValue(d.totalDividends)}</p>
@@ -814,7 +904,7 @@ export function DividendYieldGrowthReport() {
               </div>
             </>
           ) : (
-            <p className="text-gray-500 dark:text-gray-400 text-center py-8">{t('dividendYieldGrowth.noFrequencyData')}</p>
+            <EmptyState title={t('dividendYieldGrowth.noFrequencyData')} />
           )}
         </div>
       )}

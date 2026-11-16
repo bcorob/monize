@@ -94,6 +94,9 @@
     "largestValue": "{amount} op {date}",
     "overpaymentFor": "Begunstigde voor extra aflossing van",
     "website": "Website",
+    "address": "Adres",
+    "phone": "Telefoon",
+    "email": "E-mail",
     "notes": "Notities"
   },
   "tabs": {
@@ -127,5 +130,23 @@
     "needsMoreHistory": "Er is minstens {years} jaar historie nodig om een seizoenspatroon van ruis te onderscheiden.",
     "empty": "Nog geen uitgaven om per maand uit te splitsen",
     "monthTooltip": "{month}: gemiddeld {amount} over {years, plural, one {# jaar} other {# jaar}}"
+  },
+  "contactLookup": {
+    "button": "Contactgegevens opzoeken",
+    "inProgress": "Bezig met opzoeken...",
+    "nothingNew": "Er zijn geen nieuwe contactgegevens gevonden.",
+    "noProvider": "Stel een bron in bij instellingen voor begunstigde opzoeken om contactgegevens te vinden.",
+    "failed": "De zoekopdracht kon niet worden voltooid. Probeer het later opnieuw.",
+    "dialogTitle": "Contactgegevens bevestigen",
+    "dialogSubtitle": "Er wordt niets opgeslagen voor {name} totdat u bevestigt.",
+    "pickMatch": "Die naam komt overeen met {count, plural, one {# bedrijf} other {# bedrijven}}. Kies degene aan wie u betaalt:",
+    "unlabelledMatch": "Naamloze overeenkomst",
+    "willAdd": "Toevoegen",
+    "willReplace": "Vervangen",
+    "cancel": "Annuleren",
+    "confirm": "{count, plural, one {# wijziging opslaan} other {# wijzigingen opslaan}}",
+    "applied": "{count, plural, one {# contactgegeven opgeslagen} other {# contactgegevens opgeslagen}}",
+    "applyFailed": "Kan de contactgegevens niet opslaan",
+    "quotaExceeded": "De Google Places-opzoekacties van deze maand zijn op. Verhoog de limiet bij instellingen voor begunstigde opzoeken, of wacht tot volgende maand."
   }
 }

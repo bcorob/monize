@@ -9,7 +9,8 @@
     "stepCounter": "{current} von {total}",
     "skippedTitle": "Tour beendet",
     "skippedBody": "Einige Schritte wurden übersprungen, weil ihr Bildschirm oder Element nicht verfügbar war. Sie können die Tour jederzeit über die Einstellungen erneut starten.",
-    "move": "Diese Karte verschieben — ziehen Sie sie oder bewegen Sie sie mit den Pfeiltasten"
+    "move": "Diese Karte verschieben — ziehen Sie sie oder bewegen Sie sie mit den Pfeiltasten",
+    "readGuide": "Die vollständige Anleitung lesen"
   },
   "offer": {
     "heading": "Machen Sie eine kurze Tour",
@@ -45,7 +46,8 @@
     "requirementsLoading": "Es wird geprüft, ob Sie diese Tour starten können …",
     "requires": {
       "transactionEntry": "Legen Sie zuerst ein Konto an — diese Tour führt durch das Erfassen einer Transaktion.",
-      "securitiesExist": "Legen Sie zuerst ein Wertpapier an — diese Tour öffnet eines aus Ihrer Wertpapierliste."
+      "securitiesExist": "Legen Sie zuerst ein Wertpapier an — diese Tour öffnet eines aus Ihrer Wertpapierliste.",
+      "ownerView": "Wechsle zuerst zurück zu deinen eigenen Daten. Diese Tour zeigt Funktionen, die beim Handeln für eine andere Person nicht verfügbar sind."
     },
     "start": "Starten",
     "restart": "Wiederholen",
@@ -67,7 +69,7 @@
         },
         "dashboard": {
           "title": "Ihr Dashboard",
-          "body": "Das ist Ihr Dashboard. Nutzen Sie die Schaltfläche **Anpassen** oben rechts, um Widgets neu anzuordnen oder auszublenden, damit die für Sie wichtigen Übersichten ganz oben stehen."
+          "body": "Das ist Ihr Dashboard. Wählen Sie das Zahnrad **Anpassen** neben der Begrüßung, um es anzuordnen: Verschieben oder entfernen Sie Widgets direkt dort, wo sie stehen, wählen Sie **Widget hinzufügen** für weitere und **Fertig**, um das Layout zu übernehmen."
         },
         "tools": {
           "title": "Das Menü Tools",
@@ -76,6 +78,14 @@
         "accounts": {
           "title": "Ihre Konten",
           "body": "Fügen Sie hier über die hervorgehobene Schaltfläche Ihre Bank-, Kreditkarten-, Kredit- und Anlagekonten hinzu. Jeder Saldo und jede Buchung gehört zu einem Konto."
+        },
+        "openAccountDetail": {
+          "title": "Detailansicht eines Kontos öffnen",
+          "body": "Jedes Konto hat eine auf seinen Typ zugeschnittene Seite. Wählen Sie **Details** — das Augensymbol in einer Kontozeile — um sie zu öffnen. Auf dem Handy halten Sie das Konto gedrückt und wählen **Details**."
+        },
+        "accountDetailView": {
+          "title": "Eine auf dieses Konto zugeschnittene Ansicht",
+          "body": "Diese Seite richtet sich nach dem Kontotyp: Ein Bankkonto, eine Kreditkarte, ein Kredit, ein Anlagekonto oder ein Vermögenswert zeigt jeweils die Zahlen und Werkzeuge, die dazu passen. Über **Details** in der Kontoliste kommen Sie jederzeit hierher zurück."
         },
         "transactions": {
           "title": "Buchungen",
@@ -303,6 +313,374 @@
             "title": "Kommen Sie zur nächsten Auswertung wieder",
             "body": "GEM trifft eine Entscheidung pro Zeitraum, und das Datum der nächsten steht oben im Bericht. Bis dahin ist nichts zu tun. Wenn sie ansteht, prüfen Sie, ob sich das Signal geändert hat; wenn ja, handeln Sie über Ihren Broker und erfassen Sie die Buchungen in Monize, damit der Portfoliovergleich weiter aufgeht. Diese Tour können Sie jederzeit über **Geführte Touren** in den **Einstellungen** erneut starten."
           }
+        }
+      }
+    },
+    "v1_16_0": {
+      "notifications": {
+        "title": "Benachrichtigungen",
+        "steps": {
+          "welcome": {
+            "title": "Monize kann Ihnen jetzt Bescheid geben",
+            "body": "Eine fällige Rechnung, ein überschrittenes Budget, ein Kontostand, der eine von Ihnen gesetzte Grenze kreuzt, eine fehlgeschlagene Sicherung. Diese Führung zeigt, wo das ankommt und wie Sie festlegen, was Sie per E-Mail oder auf dem Handy erreicht."
+          },
+          "bell": {
+            "title": "Die Glocke ist das Original",
+            "body": "Jede Benachrichtigung, die Monize auslöst, wird hier festgehalten — unabhängig davon, was Sie sonst ein- oder ausschalten. E-Mail und Push sind Kopien, die weitergeschickt werden; diese Liste ist das Original, und die Zahl an der Glocke zählt, was Sie noch nicht gelesen haben."
+          },
+          "panel": {
+            "title": "Was eine Benachrichtigung mitbringt",
+            "body": "Jede sagt, was passiert ist, und verlinkt auf die Seite, die es zeigt — die Rechnung, das Budget, das Konto. **Alle als gelesen markieren** setzt die Zahl zurück, ohne etwas zu entfernen. Wo Sie erinnert werden möchten, gibt es **Erinnere mich**: einmal später oder wiederholt, bis Sie es beenden — und beenden können Sie es auch direkt aus der Benachrichtigung auf dem Handy."
+          },
+          "filters": {
+            "title": "Erst die Liste eingrenzen, dann handeln",
+            "body": "Die obere Reihe filtert nach Dringlichkeit, die untere trennt **Finanziell** von **System** — Sicherungen, Mailversand und anderes, um das sich nur eine Administratorin oder ein Administrator kümmern kann. **Alle löschen** folgt dem gesetzten Filter und erfasst jeden Treffer, nicht nur die sichtbaren, sodass Sie erledigte Systemmeldungen abräumen und den Rest behalten können."
+          },
+          "settings": {
+            "title": "Wo die Zustellung entschieden wird",
+            "body": "**Einstellungen → Benachrichtigungen** trägt den Rest dieser Führung. Oben in der Karte stehen der E-Mail-Schalter und die wöchentliche Budget-Übersicht, darunter das Raster für alles Weitere und dann Ihre Push-Geräte."
+          },
+          "matrix": {
+            "title": "Eine Zeile je Art, eine Spalte je Kanal",
+            "body": "Legen Sie pro Benachrichtigungsart fest, ob sie als **E-Mail (Bericht)**, **E-Mail (Warnung)**, **Push** oder über **UnifiedPush** an einen selbst betriebenen Verteiler geht. Für die Glocke gibt es keine Spalte, weil die Glocke die Zeile immer bekommt. **Sperrzeit** ist die letzte Spalte: E-Mail und Push entfallen, wenn aus derselben Gruppe innerhalb dieses Zeitfensters schon etwas hinausging — der Eintrag in der Glocke wird trotzdem geschrieben. Jeder Schalter speichert sofort."
+          },
+          "push": {
+            "title": "Ihre Geräte",
+            "body": "Melden Sie hier einen Browser an, dann erreicht Monize ihn auch bei geschlossener App. Monize signiert seine Nachrichten selbst, es steht also kein Google- oder Apple-Konto dazwischen. Jedes Gerät lässt sich einzeln testen und entfernen, und ein Gerät, das nicht mehr erreichbar ist, nennt den Grund. Auf dem iPhone funktioniert das, sobald Monize zum Home-Bildschirm hinzugefügt wurde; hat Ihre Administration Push für diese Instanz nicht freigeschaltet, steht das hier stattdessen."
+          },
+          "portfolio": {
+            "title": "Wertentwicklung der Anlagen",
+            "body": "Einmal täglich, wenn sich Ihre Anlagekonten um mehr als den hier gesetzten Betrag bewegen. Gemessen werden Kursbewegungen und Dividenden — Ein- und Auszahlungen zählen nicht als Bewegung."
+          },
+          "finish": {
+            "title": "Noch eine Stelle",
+            "body": "Kontostandsgrenzen liegen am Konto selbst: Bearbeiten Sie ein Konto und setzen Sie **Benachrichtigen unter** oder **Benachrichtigen über**. Sie lösen aus, wenn der Saldo die Grenze *überschreitet* — Sie hören also einmal davon und nicht nach jeder weiteren Buchung. Diese Führung können Sie jederzeit in den Einstellungen wiederholen."
+          }
+        }
+      },
+      "reportTagBreakdown": {
+        "title": "Bericht nach Tag aufschlüsseln",
+        "steps": {
+          "welcome": {
+            "title": "Berichte nach Tag sehen, nicht nur nach Kategorie",
+            "body": "Einnahmen vs. Ausgaben und die Kapitalflussrechnung lassen sich jetzt nach dem Wert eines Tags aufschlüsseln, den Sie wählen — Haushaltsausgaben gegenüber einem Nebenerwerb zum Beispiel — und zeigen Umbuchungen zwischen ihnen, ohne eine Umbuchung je als Einnahme zu zählen."
+          },
+          "breakdown": {
+            "title": "Nach Tag-Schlüssel aufschlüsseln",
+            "body": "Wählen Sie hier einen Tag-Schlüssel, etwa **scope**, und der Bericht teilt sich in einen Abschnitt pro verwendetem Wert auf, plus einen Abschnitt **Ohne Tag** für den Rest.",
+            "fallbackBody": "Dieses Feld erscheint, sobald Sie eine Buchung mit einem **Schlüssel:Wert**-Tag versehen haben, etwa **scope:household**. Fügen Sie eines hinzu, und Nach Tag-Schlüssel aufschlüsseln erscheint hier."
+          },
+          "buckets": {
+            "title": "Summen je Wert, Umbuchungen getrennt ausgewiesen",
+            "body": "Die Wahl eines Schlüssels öffnet einen Tab je Wert plus **Ohne Tag**, jeder mit eigenen Einnahmen und Ausgaben. Zwischen Konten verschobenes Geld erscheint als **Getaggte Zuflüsse** und **Getaggte Abflüsse** — sichtbar, aber nie als Einnahme gezählt."
+          },
+          "finish": {
+            "title": "Das ist die Tag-Aufschlüsselung",
+            "body": "Versehen Sie Buchungen überall dort, wo Sie diese Ansicht möchten, mit einem Schlüssel:Wert-Paar wie scope:household, und rufen Sie diese Tour jederzeit erneut aus den Einstellungen auf."
+          }
+        }
+      }
+    },
+    "v1_17_0": {
+      "transactionRules": {
+        "title": "Transaktionsregeln",
+        "steps": {
+          "welcome": {
+            "title": "Regeln räumen Ihre Transaktionen auf",
+            "body": "Wird eine Transaktion erstellt oder importiert und erfüllt sie Ihre Bedingungen, kann eine Regel ihre Kategorie oder den Zahlungsempfänger setzen, Etiketten hinzufügen, die Beschreibung umschreiben oder eine KI um eine Prüfung bitten. Eine Regel ändert nie einen Betrag, ein Konto oder ein Datum."
+          },
+          "tools": {
+            "title": "Regeln finden Sie unter Tools",
+            "body": "Öffnen Sie **Tools**, um **Regeln** zu finden. Der nächste Schritt zeigt das Menü."
+          },
+          "rulesLink": {
+            "title": "Regeln öffnen",
+            "body": "Wählen Sie **Regeln**. Dort sehen Sie alle Ihre Regeln und legen neue an."
+          },
+          "list": {
+            "title": "Ihre Regeln, der Reihe nach",
+            "body": "Jede Zeile ist eine Regel, mit einem Schalter zum Ein- und Ausschalten und Aktionen zum Verschieben, Ausführen, Duplizieren und Löschen. Die Regeln werden von oben nach unten geprüft, die Reihenfolge zählt also, wenn zwei dasselbe ändern. Ohne Regeln erklärt diese Karte, was eine Regel ist."
+          },
+          "create": {
+            "title": "Regel erstellen",
+            "body": "**Regel erstellen** öffnet den Editor mit einer leeren Regel. Gespeichert wird erst, wenn Sie **Regel speichern** wählen."
+          },
+          "when": {
+            "title": "Wann: welche Transaktionen geprüft werden",
+            "body": "Legen Sie fest, ob die Regel eine Transaktion prüft, wenn sie **erstellt** wird, wenn sie **importiert** wird oder in beiden Fällen. **Weitere Regeln nicht mehr verarbeiten** überspringt die Regeln darunter für jede Transaktion, auf die diese Regel zutrifft."
+          },
+          "if": {
+            "title": "Wenn: welche Transaktionen passen",
+            "body": "Bauen Sie die Bedingungen aus Feldern wie Zahlungsempfänger, Beschreibung, Betrag und Kategorie. Der Schalter **Visuell** und **Ausdruck** zeigt dieselben Bedingungen als Karten oder als eine Textzeile. In einem Muster steht * für beliebigen Text und '{name}' behält den Text an dieser Stelle, damit eine Aktion ihn wiederverwenden kann."
+          },
+          "then": {
+            "title": "Dann: was geändert wird",
+            "body": "Aktionen laufen in der angegebenen Reihenfolge. Eine Regel kann Kategorie oder Zahlungsempfänger setzen, Etiketten hinzufügen oder entfernen, die Beschreibung setzen oder eine KI bitten, die Transaktion zu prüfen. Eine Aktion für Betrag, Konto oder Datum gibt es nicht."
+          },
+          "test": {
+            "title": "Testen, ausführen, rückgängig machen",
+            "body": "**Regel testen** probiert den Entwurf an Ihren bestehenden Transaktionen aus und zeigt, was sich ändern würde. Es wird nichts geändert. Ist die Regel gespeichert, zeigt **Auf bestehende Buchungen anwenden** eine Vorschau und wendet sie auf Vorhandenes an. Einen solchen Lauf können Sie im Aktionsverlauf rückgängig machen."
+          },
+          "reviews": {
+            "title": "Der KI-Prüfungseingang",
+            "body": "Eine Regel mit der Aktion **KI-Prüfung anfordern** ändert die Transaktion nicht, sondern legt sie hier ab. Ein Assistent schlägt eine Änderung vor, und nichts wird geschrieben, bevor Sie zustimmen. Sie können eine Anfrage auch verwerfen. Sie finden ihn im Menü **KI** als **KI-Prüfungseingang**."
+          }
+        }
+      }
+    },
+    "v1_20_0": {
+      "warranties": {
+        "title": "Garantien",
+        "steps": {
+          "welcome": {
+            "title": "Behalten Sie Ihre Garantien im Blick",
+            "body": "Eine Garantie hält fest, was Sie gekauft haben, wann der Schutz endet und wer es verkauft hat, samt Beleg, Handbuch und etwaigen Ansprüchen. Sie lässt sich mit dem Kauf in Ihrem Buchungsregister verknüpfen. Eine Garantie ändert nie einen Saldo, einen Bericht oder eine Summe. Diese Tour zeigt, wie Sie eine anlegen und wo sie danach erscheint."
+          },
+          "warrantiesLink": {
+            "title": "Garantien finden Sie im Menü Tools",
+            "body": "Öffnen Sie **Tools** und wählen Sie **Garantien**, um alle Ihre Garantien zu sehen."
+          },
+          "overview": {
+            "title": "Ihr Garantieschutz auf einen Blick",
+            "body": "Diese Karten zählen Ihre Garantien nach **Läuft bald ab**, **Aktiv**, **Abgelaufen** und **Lebenslang**. Wählen Sie eine Karte, um die Liste darunter zu filtern. Sie können auch suchen, sortieren und archivierte Garantien anzeigen. Wählen Sie eine Garantie in der Liste, um ihre Seite mit ihren Dokumenten, ihren Ansprüchen und dem verknüpften Kauf zu öffnen."
+          },
+          "addWarranty": {
+            "title": "Methode 1: hier anlegen",
+            "body": "**Garantie hinzufügen** öffnet ein leeres Formular. Geben Sie Produkt, Verkäufer und Kaufdatum ein, dann, wann der Schutz endet: **An einem Datum**, **Nach einer Laufzeit** oder **Nie** für eine lebenslange Garantie. Beleg oder Handbuch können Sie vor dem Speichern anhängen."
+          },
+          "importCsv": {
+            "title": "Methode 2: eine CSV-Datei importieren",
+            "body": "**CSV importieren** liest eine Datei mit den Spalten von Warracker, etwa einen Export aus Warracker oder von dieser Seite. Sie sehen jede Zeile und alle Probleme, bevor etwas gespeichert wird."
+          },
+          "inRegister": {
+            "title": "Garantien im Buchungsregister",
+            "body": "Eine Buchung mit Garantie zeigt im Buchungsregister ein Schild. Suchen Sie nach **has:warranty**, um alle solchen Buchungen zu finden."
+          },
+          "newTransaction": {
+            "title": "Methode 3: beim Erfassen eines Kaufs",
+            "body": "Wählen Sie **+ Neue Buchung**, um das Formular zu öffnen."
+          },
+          "warrantiesLine": {
+            "title": "Die Zeile Garantien",
+            "body": "**Garantie hinzufügen** speichert hier zuerst die neue Buchung und öffnet dann das Garantieformular mit ihren Angaben. Wenn Sie eine Buchung später bearbeiten, listet diese Zeile ihre Garantien auf, und jede öffnet ihre Seite.",
+            "fallbackBody": "Bei einem Gemeinschaftskonto wird die Zeile Garantien nicht angezeigt, weil eine Garantie allein Ihnen gehört. Wählen Sie eines Ihrer eigenen Konten, dann zeigt das Formular über seinen Schaltflächen eine Zeile **Garantien**. **Garantie hinzufügen** speichert dort zuerst die neue Buchung und öffnet dann das Garantieformular mit ihren Angaben. Wenn Sie eine Buchung später bearbeiten, listet die Zeile ihre Garantien auf."
+          },
+          "closeForm": {
+            "title": "Formular schließen",
+            "body": "Wählen Sie **Abbrechen**, um es ohne Speichern zu schließen, oder speichern Sie die Buchung, wenn Sie eine echte eingegeben haben."
+          },
+          "dashboardWidget": {
+            "title": "Ablaufende Garantien im Dashboard sehen",
+            "body": "Wählen Sie **Anpassen**, dann **Widget hinzufügen**, wählen Sie **Bald ablaufende Garantien** und anschließend **Fertig**. Das Widget listet die nächsten ablaufenden Garantien auf, und sein Titel öffnet die Seite Garantien."
+          },
+          "reminders": {
+            "title": "Erinnerungen vor Ablauf des Schutzes",
+            "body": "Monize erinnert Sie 30 Tage und 7 Tage vor Ablauf einer Garantie sowie am Ablauftag selbst. Die Erinnerungen erscheinen hier, und Sie können eine zurückstellen oder die Garantie direkt daraus öffnen. Wie sie Sie erreichen, legen Sie in den **Einstellungen** unter **Benachrichtigungen** bei **Garantie-Erinnerungen** fest."
+          }
+        }
+      },
+      "payrollDeductions": {
+        "title": "Lohnabzüge",
+        "steps": {
+          "welcome": {
+            "title": "Abzüge bei ihrem Jahreshöchstbetrag stoppen",
+            "body": "Manche Abzüge vom Gehalt, etwa für die Rente oder die Arbeitslosenversicherung, enden, sobald der Jahreshöchstbetrag erreicht ist, und beginnen im nächsten Jahr neu. Eine Lohnabzugsregel teilt Monize diesen Höchstbetrag mit, damit die Gehaltsbuchung den Abzug nicht mehr einbehält, sobald er erreicht ist. **Bevor Sie beginnen, brauchen Sie eine geplante Gehaltsbuchung:** Ihr Gehalt als geplante Einzahlung, mit den Abzügen als eigenen Zeilen."
+          },
+          "payrollBill": {
+            "title": "Zuerst Ihr Gehalt einrichten",
+            "body": "Falls noch nicht geschehen, wählen Sie **+ Neuer Zeitplan** und legen Sie Ihr Gehalt als Einzahlung an. Teilen Sie sie in eine Zeile für Ihr Bruttogehalt und je eine negative Zeile pro Abzug auf, jede mit eigener Kategorie. Wird ein Abzug gerade nicht einbehalten, weil der Höchstbetrag dieses Jahres schon erreicht ist, fügen Sie trotzdem eine Aufteilungszeile dafür hinzu, als Ausgabe mit dem Betrag null, damit eine Regel ihn begrenzen kann und er nach der Rücksetzung wieder beginnt. Regeln sind nur für eine aktive Einzahlung möglich, die mehr einbringt als sie abzieht, und nur ihre Abzugszeilen lassen sich begrenzen."
+          },
+          "taxesLink": {
+            "title": "Lohnabzüge finden Sie unter Steuern",
+            "body": "Öffnen Sie **Tools** und wählen Sie **Steuern**, um die Steuerwerkzeuge zu finden."
+          },
+          "taxesCard": {
+            "title": "Lohnabzüge öffnen",
+            "body": "Wählen Sie diese Karte, um die Lohnabzugsregeln zu öffnen."
+          },
+          "newRule": {
+            "title": "Die Regeln für ein Gehalt anlegen",
+            "body": "**+ Neue Regel** öffnet das Formular. Wählen Sie Ihre geplante Gehaltsbuchung und dann einen Jahreshöchstbetrag für jede Abzugskategorie, die Sie begrenzen möchten. Geben Sie das Rücksetzdatum an, meist der 1. Januar. Hat die Buchung keine Abzugszeilen, weist das Formular Sie darauf hin, sie zuerst dort hinzuzufügen."
+          },
+          "rulesList": {
+            "title": "Ihre Regeln",
+            "body": "Jede Regel zeigt ihre Buchung, ihre Kategorie, den Jahreshöchstbetrag, das Rücksetzdatum und was jede Gehaltszahlung abzieht. Bearbeiten Sie eine Regel, um ihren Höchstbetrag zu ändern, oder löschen Sie sie, damit das Gehalt wieder die volle Zeile einbehält. Das Löschen einer Regel ändert nie eine gebuchte Transaktion."
+          },
+          "periodTables": {
+            "title": "Was bereits einbehalten wurde",
+            "body": "Sobald Sie eine Regel haben, zeigt **Jahresstand anzeigen**, was jede Kategorie in diesem Zeitraum einbehalten hat und wie viel Spielraum bis zum Höchstbetrag bleibt. **Frühere Zeiträume anzeigen** zeigt, was sie in früheren Jahren einbehalten hat."
+          },
+          "forecast": {
+            "title": "Angewendet, wenn das Gehalt gebucht wird",
+            "body": "Wenn das Gehalt gebucht wird, wird jede begrenzte Zeile auf den verbleibenden Spielraum bis zum Höchstbetrag reduziert, bis auf null, und beginnt nach dem Rücksetzdatum neu. Die Cashflow-Prognose hier und auf dem Dashboard zeigt dasselbe im Voraus, sodass Sie sehen, wie Ihr Nettogehalt steigt, sobald ein Höchstbetrag erreicht ist."
+          },
+          "reminders": {
+            "title": "Eine Erinnerung vor jeder Rücksetzung",
+            "body": "Zwei Monate bevor eine Regel zurückgesetzt wird, bittet Monize Sie hier, den Höchstbetrag für das nächste Jahr zu bestätigen. Tun Sie nichts, behält die Regel ihren Höchstbetrag und wird an ihrem Datum zurückgesetzt. Wie die Erinnerungen Sie erreichen, legen Sie in den **Einstellungen** unter **Benachrichtigungen** bei **Rechnungen und Geplantes** fest."
+          }
+        }
+      },
+      "sharedExpenses": {
+        "title": "Gemeinsame Ausgaben",
+        "steps": {
+          "welcome": {
+            "title": "Gemeinsam reisen, den Überblick behalten",
+            "body": "Erfahre, wie du Gruppenausgaben und Rückzahlungen erfasst. Diese Tour legt keine Einträge für dich an."
+          },
+          "tools": {
+            "title": "Gemeinsame Ausgaben öffnen",
+            "body": "Du findest **Gemeinsame Ausgaben** unter **Tools**. Auf dem Smartphone nutzt du das Navigationsmenü."
+          },
+          "newGroup": {
+            "title": "Mit der Gruppe beginnen",
+            "body": "Unter **Neue Gruppe** legst du den Reisenamen, die Personen und die Abrechnungswährung fest. Die Personen brauchen kein Monize-Konto. An jedem Einkauf können andere Mitglieder beteiligt sein."
+          },
+          "chooseGroup": {
+            "title": "Eine Gruppe erkunden",
+            "body": "Öffne eine Gruppe, um fortzufahren. Wenn du noch keine hast, wähle **Diesen Schritt überspringen** und erstelle sie nach der Tour."
+          },
+          "expenses": {
+            "title": "Wer hat bezahlt, für wen war es?",
+            "body": "Mit Bearbeitungsrechten wählst du unter **Ausgabe hinzufügen** die zahlende Person und die Begünstigten. **Aufteilen auf** unterstützt gleiche Anteile, genaue Beträge, Prozentsätze und Nullanteile."
+          },
+          "balances": {
+            "title": "Salden prüfen und abrechnen",
+            "body": "**Salden** zeigt, wer wem Geld schuldet, und schlägt Rückzahlungen vor. Erfasse eine Rückzahlung, nachdem das Geld übergeben wurde. **Dateien** und **Aktivität** enthalten Belege und den Verlauf."
+          },
+          "done": {
+            "title": "Bereit für die nächste Reise",
+            "body": "Gemeinsame Einträge bleiben von privaten Transaktionen getrennt. Du kannst diese Tour unter **Einstellungen**, **Geführte Touren** jederzeit wiederholen."
+          }
+        }
+      }
+    },
+    "v1_21_0": {
+      "commandPalette": {
+        "title": "Befehlspalette",
+        "steps": {
+          "welcome": {
+            "title": "Alles in einem Feld finden",
+            "body": "Die Befehlspalette durchsucht von jedem Bildschirm aus Ihre Konten, Zahlungsempfänger, Kategorien, Rechnungen, Wertpapiere, Berichte, Einstellungen, Buchungen und die Anleitung auf einmal. Sie lässt sich per Tastatur bedienen, deshalb ist diese Tour für einen Computer gedacht."
+          },
+          "openPalette": {
+            "title": "Die Palette öffnen",
+            "body": "Drücken Sie **Ctrl+K** (auf einem Mac **Cmd+K**). Die Tour geht weiter, sobald sich die Palette öffnet."
+          },
+          "searchBox": {
+            "title": "Geben Sie ein, was Sie suchen",
+            "body": "Probieren Sie einen Zahlungsempfänger, ein Konto, einen Bericht wie **Reinvermögen** oder eine Einstellung wie **Währungen**. Die Ergebnisse aktualisieren sich beim Tippen, und auch Buchungen und Abschnitte der Anleitung werden durchsucht."
+          },
+          "results": {
+            "title": "Bewegen und öffnen",
+            "body": "Mit den Pfeiltasten **Auf** und **Ab** bewegen Sie sich, mit **Enter** öffnen Sie ein Ergebnis. **Tab** springt zu den Aktionen, und **Ctrl+Enter** (auf einem Mac **Cmd+Enter**) startet eine neue Buchung für den am besten passenden Zahlungsempfänger."
+          },
+          "closePalette": {
+            "title": "Die Palette schließen",
+            "body": "Klicken Sie auf **esc**, um sie vorerst zu schließen. Außerhalb dieser Tour erledigt die Taste **Esc** dasselbe."
+          },
+          "done": {
+            "title": "Eine Tastenkombination zum Merken",
+            "body": "Drücken Sie **Ctrl+K**, wann immer Sie irgendwohin springen möchten. Über einem geöffneten Dialog durchsucht sie stattdessen die Anleitung. Auf dem Smartphone nutzen Sie die Suche in der Kopfzeile. Sie können diese Tour jederzeit unter **Einstellungen** im Bereich **Geführte Touren** wiederholen."
+          }
+        }
+      },
+      "inAppHelp": {
+        "title": "Hilfe in der App",
+        "steps": {
+          "welcome": {
+            "title": "Die Anleitung, direkt neben Ihrer Arbeit",
+            "body": "Die Monize-Anleitung öffnet sich jetzt in der App, neben der Seite, auf der Sie sind, mit Screenshots in Ihrem Design. Sie gehört zu Ihrer Monize-Installation und funktioniert deshalb auch offline. Diese Tour zeigt, wo Sie sie finden."
+          },
+          "pageHelp": {
+            "title": "Hilfe zu dieser Seite öffnen",
+            "body": "Klicken Sie auf das **?** neben dem Seitentitel. Die Anleitung öffnet sich beim Abschnitt zu dieser Seite."
+          },
+          "panel": {
+            "title": "Neben der Seite lesen",
+            "body": "Das Fenster bleibt neben der Seite, auf der Sie waren. **Auf dieser Seite** listet die Abschnitte auf, und Links zu anderen Seiten der Anleitung öffnen sich hier. Am Computer ziehen Sie den linken Rand des Fensters, um es breiter oder schmaler zu machen."
+          },
+          "panelControls": {
+            "title": "Steuerung des Fensters",
+            "body": "Gehen Sie mit **Zurück** und **Vor** durch die geöffneten Seiten, **Suchen** Sie in der Anleitung, **Heften** Sie das Fenster an, damit es auf anderen Seiten geöffnet bleibt, oder öffnen Sie die Seite auf monize.net. Klicken Sie auf **Schließen** (das **X**), um fortzufahren."
+          },
+          "helpMenu": {
+            "title": "Das Hilfemenü",
+            "body": "Das **?** in der Kopfzeile bietet Hilfe zur aktuellen Seite, die Suche in der Anleitung, Tastenkombinationen, die Tour zu dieser Seite und Neuigkeiten. Sie können auch überall, wo Sie nicht tippen, **?** drücken, um die Anleitung zu durchsuchen."
+          },
+          "learnMore": {
+            "title": "Mehr erfahren, wo Sie es brauchen",
+            "body": "Achten Sie auf **Mehr erfahren** in Tooltips, auf leeren Bildschirmen und neben manchen Fehlermeldungen. Jeder dieser Links öffnet den Abschnitt der Anleitung, der es erklärt."
+          },
+          "done": {
+            "title": "Fragen Sie in Ihren eigenen Worten",
+            "body": "Der KI-Assistent beantwortet auch Fragen wie „Wie mache ich ...“ anhand der Anleitung und sagt Ihnen, welche Abschnitte er verwendet hat. Sie können diese Tour jederzeit unter **Einstellungen** im Bereich **Geführte Touren** wiederholen."
+          }
+        }
+      },
+      "dashboardEdit": {
+        "title": "Das Dashboard anordnen",
+        "steps": {
+          "welcome": {
+            "title": "Ordnen Sie Ihr Dashboard direkt an",
+            "body": "Sie verschieben, ändern, ergänzen und entfernen Widgets jetzt direkt auf dem Dashboard, und nichts wird gespeichert, bevor Sie es sagen. Diese Tour führt durch den Bearbeitungsmodus."
+          },
+          "enterEdit": {
+            "title": "Den Bearbeitungsmodus starten",
+            "body": "Klicken Sie auf das Zahnrad neben der Begrüßung. Die Tour geht weiter, sobald sich der Bearbeitungsmodus öffnet."
+          },
+          "editBar": {
+            "title": "Die Bearbeitungsleiste",
+            "body": "**Widget hinzufügen** listet die Widgets auf, die nicht auf Ihrem Dashboard sind. **Einstellungen Kopfbereich** legt fest, was der Kopfbereich oben zeigt, und **Auf Standard zurücksetzen** stellt das Standardlayout wieder her."
+          },
+          "arrange": {
+            "title": "Verschieben, Größe ändern und entfernen",
+            "body": "Ziehen Sie ein Widget am Griff (die sechs Punkte) oder nutzen Sie seine Pfeile. Auf einem breiten Bildschirm ändern **Breite** und **Höhe** die Größe, oder ziehen Sie die untere rechte Ecke. Mit dem **X** entfernen Sie es, und die gestrichelte Kachel **Widget hinzufügen** fügt eines hinzu. Probieren Sie es aus."
+          },
+          "finish": {
+            "title": "Behalten oder zurücksetzen",
+            "body": "Klicken Sie auf **Fertig**, um das Layout zu speichern, oder auf **Abbrechen**, um den vorherigen Zustand wiederherzustellen. Ihr Layout wird auf Ihren Geräten synchronisiert."
+          },
+          "done": {
+            "title": "Machen Sie es zu Ihrem",
+            "body": "Suchen Sie etwas Neues zum Hinzufügen? Das Widget **Wissenswertes** zeigt täglich einen Fakt über Ihr Geld. Sie können diese Tour jederzeit unter **Einstellungen** im Bereich **Geführte Touren** wiederholen."
+          }
+        }
+      }
+    }
+  },
+  "emailReceipts": {
+    "basics": {
+      "title": "Belege aus E-Mails",
+      "steps": {
+        "welcome": {
+          "title": "Warum Belege aus E-Mails lesen",
+          "body": "Eine Banktransaktion zeigt, wie viel Sie wann bezahlt haben. Sie zeigt nicht, was Sie gekauft haben. Das zeigt die Bestellbestätigung per E-Mail. Monize liest diese E-Mails, findet die Transaktion, die jede davon bezahlt hat, und schlägt eine Beschreibung, einen Zahlungsempfänger und eine Aufteilung nach Positionen mit je einer Kategorie vor. Jeden Vorschlag bestätigen Sie, bevor er eine Transaktion ändert."
+        },
+        "aiRequired": {
+          "title": "In der Praxis brauchen Sie einen KI-Anbieter",
+          "body": "Monize liest eine E-Mail mit einem **Profil**: einem Satz von Mustern für eine Absenderdomain, zum Beispiel für einen Shop. Sie können ein Profil von Hand schreiben, aber jedes Muster muss genau zu den Zeilen der E-Mails dieses Shops passen. In der Praxis schreibt es deshalb eine KI. Die KI schreibt das Profil einmal, anhand weniger Beispiel-E-Mails. Nach Ihrer Bestätigung liest das Profil jede neue E-Mail dieses Shops ohne die KI."
+        },
+        "aiProviders": {
+          "title": "Richten Sie zuerst einen KI-Anbieter ein",
+          "body": "Fügen Sie hier einen Anbieter hinzu und testen Sie die Verbindung. Ohne Anbieter kann der Profil-Assistent kein Profil schreiben, und E-Mails von einem Shop ohne Profil bleiben ungelesen."
+        },
+        "tabs": {
+          "title": "Vier Tabs, in der Reihenfolge der Nutzung",
+          "body": "**Übersicht** zeigt, was Monize gelesen hat. Verbinden Sie unter **Postfach** ein Postfach, das nur Bestellbestätigungen enthält. Monize liest es nur: Es verschiebt, markiert oder löscht nie eine Nachricht. **Profile** enthält ein Profil pro Shop. **E-Mails** listet jede E-Mail mit ihrem Status auf."
+        },
+        "uncovered": {
+          "title": "Shops ohne Profil",
+          "body": "Dieser Kasten listet die Absenderdomains auf, die noch kein Profil lesen kann. Wählen Sie eine aus, um den Assistenten zu starten. Wählen Sie bis zu fünf ihrer E-Mails aus und ordnen Sie jeder die Banktransaktion zu, die sie bezahlt hat. Die KI schreibt ein Profil und testet es an diesen Paaren. Danach sehen Sie eine Vorschau für alle E-Mails dieses Shops und übernehmen das Profil oder bitten mit einer kurzen Notiz um eine Änderung.",
+          "fallbackBody": "Sie haben noch keine E-Mails von einem Shop ohne Profil. Nachdem Sie das Postfach verbunden haben, erscheint jede Absenderdomain hier als Tag, zum Beispiel **shop.example (12)**: die Domain und die Anzahl ihrer E-Mails. Wählen Sie das Tag, um den Assistenten zu starten. Wählen Sie bis zu fünf ihrer E-Mails aus und ordnen Sie jeder die Banktransaktion zu, die sie bezahlt hat. Die KI schreibt ein Profil und testet es an diesen Paaren. Danach sehen Sie eine Vorschau für alle E-Mails dieses Shops und übernehmen das Profil oder bitten mit einer kurzen Notiz um eine Änderung."
+        },
+        "profiles": {
+          "title": "Ihre Profile",
+          "body": "Jede Zeile ist ein Profil, genehmigt oder Entwurf. **Neues Profil manuell erstellen** öffnet den Editor für ein von Hand geschriebenes Profil. Nutzen Sie ihn, um ein kleines Detail in einem Entwurf der KI zu korrigieren. Wenn Sie ein Profil genehmigen, liest Monize die E-Mails seiner Domain sofort.",
+          "fallbackBody": "Sie haben noch keine Profile. Jedes Profil, das Sie übernehmen, erscheint hier als eine Zeile, zum Beispiel **Shop Example**, Domain **shop.example**, Status **Freigegeben**. **Neues Profil manuell erstellen** öffnet den Editor für ein von Hand geschriebenes Profil. Nutzen Sie ihn nur, um ein kleines Detail in einem Entwurf der KI zu korrigieren. Wenn Sie ein Profil genehmigen, liest Monize die E-Mails seiner Domain sofort."
+        },
+        "reviews": {
+          "title": "Vorschläge bestätigen",
+          "body": "Jede E-Mail, die zu einer Transaktion passt, wird zu einem Vorschlag im **KI-Prüfungseingang** im Menü **KI**. Ein Vorschlag zeigt zum Beispiel die Positionen einer Bestellung mit einer Kategorie für jede Zeile. An Ihren Transaktionen ändert sich nichts, bis Sie den Vorschlag dort bestätigen."
         }
       }
     }

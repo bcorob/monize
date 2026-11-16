@@ -76,50 +76,76 @@ const fakeResult = (overrides: Partial<SimulationResult> = {}): SimulationResult
 
 const dollar = (n: number) => `$${n.toFixed(2)}`;
 
+/**
+ * A deterministic stand-in for `useNumberFormat()`'s bundle. These cases are
+ * about the module's branching, not about locale rendering -- the locale
+ * behaviour is the hook's, tested in `src/hooks/useNumberFormat.test.ts`.
+ */
+const fmts = {
+  formatCurrency: dollar,
+  formatNumber: (n: number, d = 2) => `N(${n},${d})`,
+  formatPercent: (n: number, d = 2) => `${n.toFixed(d)}%`,
+  formatInstant: (iso: string) => `I(${iso})`,
+  neverLabel: 'Never',
+};
+
 describe('formatPercent', () => {
   it('multiplies by 100 and appends %', () => {
-    expect(formatPercent(0.0725)).toBe('7.25%');
+    expect(formatPercent(0.0725, fmts)).toBe('7.25%');
   });
 
   it('renders em-dash for null', () => {
-    expect(formatPercent(null)).toBe('—');
+    expect(formatPercent(null, fmts)).toBe('—');
   });
 
   it('renders em-dash for NaN', () => {
-    expect(formatPercent(Number.NaN)).toBe('—');
+    expect(formatPercent(Number.NaN, fmts)).toBe('—');
   });
 
   it('respects decimal places argument', () => {
-    expect(formatPercent(0.073, 1)).toBe('7.3%');
+    expect(formatPercent(0.073, fmts, 1)).toBe('7.3%');
   });
 });
 
 describe('formatCellValue', () => {
   it('formats currency via the supplied formatter', () => {
-    expect(formatCellValue(1234.5, 'currency', dollar)).toBe('$1234.50');
+    expect(formatCellValue(1234.5, 'currency', fmts)).toBe('$1234.50');
   });
 
   it('formats percent for finite numbers', () => {
-    expect(formatCellValue(0.05, 'percent', dollar)).toBe('5.00%');
+    expect(formatCellValue(0.05, 'percent', fmts)).toBe('5.00%');
   });
 
-  it('formats number with locale separators', () => {
-    expect(formatCellValue(1234567, 'number', dollar)).toBe(
-      (1234567).toLocaleString(),
-    );
+  it('formats a plain number through the supplied number formatter', () => {
+    // Not `(1234567).toLocaleString()`: that is the BROWSER's locale, and the
+    // whole point of routing through the bundle is that Monize's configured
+    // `numberFormat` overrides it (issue #1316).
+    expect(formatCellValue(1234567, 'number', fmts)).toBe('N(1234567,0)');
   });
 
   it('returns text values as-is', () => {
-    expect(formatCellValue('Aggressive', 'text', dollar)).toBe('Aggressive');
+    expect(formatCellValue('Aggressive', 'text', fmts)).toBe('Aggressive');
   });
 
   it('renders booleans as Yes/No', () => {
-    expect(formatCellValue(true, 'boolean', dollar)).toBe('Yes');
-    expect(formatCellValue(false, 'boolean', dollar)).toBe('No');
+    expect(formatCellValue(true, 'boolean', fmts)).toBe('Yes');
+    expect(formatCellValue(false, 'boolean', fmts)).toBe('No');
   });
 
   it('renders em-dash for null', () => {
-    expect(formatCellValue(null, 'currency', dollar)).toBe('—');
+    expect(formatCellValue(null, 'currency', fmts)).toBe('—');
+  });
+
+  it('formats an instant through the supplied date formatter', () => {
+    // Not `new Date(stamp).toLocaleString()`: that follows the browser, not
+    // the reader's date format and timezone preferences.
+    expect(formatCellValue('2025-01-01T12:00:00Z', 'instant', fmts)).toBe(
+      'I(2025-01-01T12:00:00Z)',
+    );
+  });
+
+  it('renders a run that never happened with the translated label', () => {
+    expect(formatCellValue(null, 'instant', { ...fmts, neverLabel: 'Jamais' })).toBe('Jamais');
   });
 });
 
@@ -158,7 +184,7 @@ describe('ROW_GROUPS', () => {
       result: fakeResult({ successRate: null }),
     });
     expect(withResult).toBeNull();
-    expect(formatCellValue(withResult, successRate.format, dollar)).toBe('—');
+    expect(formatCellValue(withResult, successRate.format, fmts)).toBe('—');
   });
 
   it('uses scenario inputs for the inputs group', () => {
@@ -166,6 +192,20 @@ describe('ROW_GROUPS', () => {
     const startingValue = inputs.rows.find((r) => r.key === 'startingValue')!;
     const ctx = { scenario: fakeScenario({ startingValue: 75000 }), result: null };
     expect(startingValue.accessor(ctx)).toBe(75000);
+  });
+
+  it('shows what the run used when it differs from the stored inputs', () => {
+    const inputs = ROW_GROUPS.find((g) => g.key === 'inputs')!;
+    const ctx = {
+      scenario: fakeScenario({ startingValue: 75000, expectedReturn: 0.07, volatility: 0.15 }),
+      result: fakeResult({
+        inputsSnapshot: { startingValue: 250000, expectedReturn: 0.05, volatility: 0.09 },
+      }),
+    };
+    const get = (key: string) => inputs.rows.find((r) => r.key === key)!.accessor(ctx);
+    expect(get('startingValue')).toBe(250000);
+    expect(get('expectedReturn')).toBe(0.05);
+    expect(get('volatility')).toBe(0.09);
   });
 
   it('emits 30 performance rows (10 metrics × p10/p50/p90)', () => {

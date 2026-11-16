@@ -1,8 +1,11 @@
 'use client';
 
 import type { ComponentType, ReactNode, SVGProps } from 'react';
+import Link from 'next/link';
 import {
+  AcademicCapIcon,
   ArrowPathIcon,
+  ArrowsRightLeftIcon,
   ArrowTrendingUpIcon,
   ArrowsUpDownIcon,
   BanknotesIcon,
@@ -12,6 +15,7 @@ import {
   BuildingOffice2Icon,
   CalendarDaysIcon,
   CalendarIcon,
+  ChartBarSquareIcon,
   ChartBarIcon,
   ChartPieIcon,
   ClipboardDocumentCheckIcon,
@@ -21,6 +25,7 @@ import {
   PresentationChartLineIcon,
   RectangleGroupIcon,
   ScaleIcon,
+  ShieldCheckIcon,
   StarIcon,
   UsersIcon,
 } from '@heroicons/react/24/outline';
@@ -28,6 +33,7 @@ import {
 // registry (which imports the widgets, which import WidgetCard, which
 // imports this file).
 import type { DashboardWidgetId } from './widget-registry';
+import { TINT_CLASS } from '@/lib/tint-class';
 
 type WidgetIconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 
@@ -41,6 +47,7 @@ type WidgetIconComponent = ComponentType<SVGProps<SVGSVGElement>>;
 export const WIDGET_ICONS: Record<DashboardWidgetId, WidgetIconComponent> = {
   'favourite-accounts': BuildingLibraryIcon,
   'upcoming-bills': CalendarDaysIcon,
+  'cash-flow-forecast': ChartBarSquareIcon,
   'top-movers': ArrowTrendingUpIcon,
   'favourite-securities': StarIcon,
   'portfolio-value': PresentationChartLineIcon,
@@ -50,6 +57,7 @@ export const WIDGET_ICONS: Record<DashboardWidgetId, WidgetIconComponent> = {
   'income-expenses': ArrowsUpDownIcon,
   'budget-status': ClipboardDocumentCheckIcon,
   insights: LightBulbIcon,
+  trivia: AcademicCapIcon,
   'favourite-reports': BookmarkIcon,
   'spending-by-payee': UsersIcon,
   'monthly-spending-trend': ChartBarIcon,
@@ -61,19 +69,71 @@ export const WIDGET_ICONS: Record<DashboardWidgetId, WidgetIconComponent> = {
   'geographic-allocation': GlobeAltIcon,
   'recurring-expenses': ArrowPathIcon,
   'weekend-weekday': CalendarIcon,
+  'cash-flow-sankey': ArrowsRightLeftIcon,
+  'warranties-expiring': ShieldCheckIcon,
+};
+
+export type WidgetDomain = 'accounts' | 'investments' | 'bills' | 'insights';
+
+/**
+ * The part of the app each widget belongs to, which sets its tint so a long
+ * dashboard can be scanned by colour. `bills` is anything about what is coming
+ * due, `insights` anything that analyses past spending and income.
+ */
+export const WIDGET_DOMAINS: Record<DashboardWidgetId, WidgetDomain> = {
+  'favourite-accounts': 'accounts',
+  'net-worth': 'accounts',
+  'assets-liabilities': 'accounts',
+  'credit-utilization-accounts': 'accounts',
+  'credit-utilization-total': 'accounts',
+  'top-movers': 'investments',
+  'favourite-securities': 'investments',
+  'portfolio-value': 'investments',
+  'sector-weightings': 'investments',
+  'security-type-allocation': 'investments',
+  'geographic-allocation': 'investments',
+  'upcoming-bills': 'bills',
+  'cash-flow-forecast': 'bills',
+  'recurring-expenses': 'bills',
+  'warranties-expiring': 'bills',
+  insights: 'insights',
+  'favourite-reports': 'insights',
+  'expenses-pie': 'insights',
+  'income-expenses': 'insights',
+  'budget-status': 'insights',
+  'spending-by-payee': 'insights',
+  'monthly-spending-trend': 'insights',
+  'income-by-source': 'insights',
+  'weekend-weekday': 'insights',
+  'cash-flow-sankey': 'insights',
+  trivia: 'insights',
 };
 
 /**
- * The tinted icon puck before a widget title. Blue ramp only, so every
- * colour theme re-tints it through its own accent.
+ * Chart tokens, so a palette recolours the domains with everything else. The
+ * categorical slots rather than the semantic ones (`--chart-warning`): a bill
+ * is not a warning, and the slots are the set each palette keeps apart.
  */
+const DOMAIN_TOKEN: Record<WidgetDomain, string> = {
+  accounts: '[--widget-tint:var(--chart-primary)]',
+  investments: '[--widget-tint:var(--chart-5)]',
+  bills: '[--widget-tint:var(--chart-3)]',
+  insights: '[--widget-tint:var(--chart-7)]',
+};
+
+/** The wash and glyph colour of a widget's domain, for anything standing in for it. */
+export function widgetTintClass(id: DashboardWidgetId): string {
+  return `${DOMAIN_TOKEN[WIDGET_DOMAINS[id]]} ${TINT_CLASS}`;
+}
+
+/** The tinted icon puck before a widget title, coloured by the widget's domain. */
 export function WidgetIconPuck({ id }: { id: DashboardWidgetId }) {
   const Icon = WIDGET_ICONS[id];
   if (!Icon) return null;
   return (
     <span
       aria-hidden
-      className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300"
+      className={`flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md ${widgetTintClass(id)}`}
     >
       <Icon className="h-4 w-4" />
     </span>
@@ -83,18 +143,52 @@ export function WidgetIconPuck({ id }: { id: DashboardWidgetId }) {
 const TITLE_CLASS = 'text-lg font-semibold text-gray-900 dark:text-gray-100';
 
 /**
+ * A widget's heading text, as a link to the fuller view of the same figures
+ * when `href` is given and a plain heading when it is not.
+ *
+ * One mechanism for every widget: `WidgetHeading` (the core widgets, which draw
+ * their own card header) and `WidgetCard` (the report-derived ones) both render
+ * the title through this, so the target is named as a route in the widget and
+ * the affordance is written once.
+ */
+export function WidgetTitle({
+  href,
+  className = '',
+  children,
+}: {
+  /** Route the title navigates to. Omit for a widget with no fuller view. */
+  href?: string;
+  /** Extra classes on the heading element. */
+  className?: string;
+  children: ReactNode;
+}) {
+  const headingClass = `${TITLE_CLASS} truncate ${className}`.trimEnd();
+  if (!href) return <h3 className={headingClass}>{children}</h3>;
+  return (
+    <h3 className={headingClass}>
+      <Link
+        href={href}
+        className="rounded-sm hover:text-blue-600 dark:hover:text-blue-400 transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+      >
+        {children}
+      </Link>
+    </h3>
+  );
+}
+
+/**
  * Icon puck + title for the widgets that draw their own card header (the
- * core widgets predating `WidgetCard`). With `onClick` the title is the
- * usual navigate-button; without, a plain heading.
+ * core widgets predating `WidgetCard`). With `href` the title links to the
+ * fuller view; without, it is a plain heading.
  */
 export function WidgetHeading({
   id,
-  onClick,
+  href,
   className = '',
   children,
 }: {
   id: DashboardWidgetId;
-  onClick?: () => void;
+  href?: string;
   /** Extra classes on the wrapper (e.g. `mb-4` where the heading stands alone). */
   className?: string;
   children: ReactNode;
@@ -102,16 +196,7 @@ export function WidgetHeading({
   return (
     <div className={`flex min-w-0 items-center gap-2.5 ${className}`}>
       <WidgetIconPuck id={id} />
-      {onClick ? (
-        <button
-          onClick={onClick}
-          className={`${TITLE_CLASS} truncate text-left hover:text-blue-600 dark:hover:text-blue-400 transition-colors`}
-        >
-          {children}
-        </button>
-      ) : (
-        <h3 className={`${TITLE_CLASS} truncate`}>{children}</h3>
-      )}
+      <WidgetTitle href={href}>{children}</WidgetTitle>
     </div>
   );
 }

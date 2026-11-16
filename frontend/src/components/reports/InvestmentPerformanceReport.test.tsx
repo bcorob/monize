@@ -2,16 +2,19 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@/test/render';
 import { InvestmentPerformanceReport } from './InvestmentPerformanceReport';
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
-    formatCurrency: (n: number, _currency?: string) => `$${n.toFixed(2)}`,
-    formatSignedPercent: (n: number, decimals = 2) =>
-      `${n >= 0 ? '+' : ''}${n.toFixed(decimals)}%`,
-    defaultCurrency: 'CAD',
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
+      formatCurrency: (n: number, _currency?: string) => `$${n.toFixed(2)}`,
+      formatSignedPercent: (n: number, decimals = 2) =>
+        `${n >= 0 ? '+' : ''}${n.toFixed(decimals)}%`,
+      defaultCurrency: 'CAD',
+    }),
+  };
+});
 vi.mock('@/hooks/useExchangeRates', () => ({
   useExchangeRates: () => ({
     convertToDefault: (amount: number, _currency: string) => amount,
@@ -33,9 +36,9 @@ vi.mock('recharts', () => ({
       const C = content.type;
       return (
         <div data-testid="tooltip">
-          <C active={true} payload={[{ name: 'V', value: 100, color: '#000', payload: { name: 'Equities', symbol: 'VFV', marketValue: 100, gainLoss: 10, gainLossPercent: 5, currencyCode: 'CAD', value: 100, percentage: 50 } }]} />
-          <C active={false} payload={[]} />
-          <C active={true} payload={[{ name: 'X', value: 50, color: '#000', payload: { name: 'Bonds', symbol: 'XIC', marketValue: -50, gainLoss: -10, gainLossPercent: -5, currencyCode: 'USD', value: 50, percentage: 25 } }]} />
+          <C {...content.props} active={true} payload={[{ name: 'V', value: 100, color: '#000', payload: { name: 'Equities', symbol: 'VFV', marketValue: 100, gainLoss: 10, gainLossPercent: 5, currencyCode: 'CAD', value: 100, percentage: 50 } }]} />
+          <C {...content.props} active={false} payload={[]} />
+          <C {...content.props} active={true} payload={[{ name: 'X', value: 50, color: '#000', payload: { name: 'Bonds', symbol: 'XIC', marketValue: -50, gainLoss: -10, gainLossPercent: -5, currencyCode: 'USD', value: 50, percentage: 25 } }]} />
         </div>
       );
     }
@@ -46,11 +49,114 @@ vi.mock('recharts', () => ({
 
 const mockGetPortfolioSummary = vi.fn();
 const mockGetInvestmentAccounts = vi.fn();
+const mockGetMarketIndexes = vi.fn();
 
 vi.mock('@/lib/investments', () => ({
   investmentsApi: {
     getPortfolioSummary: (...args: any[]) => mockGetPortfolioSummary(...args),
     getInvestmentAccounts: (...args: any[]) => mockGetInvestmentAccounts(...args),
+    getMarketIndexes: (...args: any[]) => mockGetMarketIndexes(...args),
+  },
+}));
+
+const MARKET_INDEXES = [
+  {
+    code: 'SP500',
+    yahooSymbol: '^GSPC',
+    defaultName: 'S&P 500',
+    currencyCode: 'USD',
+    region: 'NORTH_AMERICA',
+    exchanges: ['NYSE'],
+    coverage: { earliestDate: '2000-01-03', latestDate: '2026-08-05' },
+  },
+];
+
+// The window's figures: the portfolio's for the cards, split by security for
+// the rows (docs/specs/investment-performance-report-period.md).
+const mockPeriodResult = vi.fn();
+const mockSecurityPeriodResults = vi.fn();
+vi.mock('@/lib/net-worth', () => ({
+  netWorthApi: {
+    getInvestmentsPeriodResult: (...args: any[]) => mockPeriodResult(...args),
+    getInvestmentsSecurityPeriodResults: (...args: any[]) => mockSecurityPeriodResults(...args),
+  },
+}));
+
+const PERIOD = {
+  currency: 'CAD',
+  startDate: '2025-11-04',
+  startPriceDate: '2025-11-03',
+  endDate: '2026-11-04',
+  investmentPnl: 640,
+  investmentReturnPercent: 4.2,
+  investedReasons: [],
+};
+
+function periodRow(securityId: string, overrides: Record<string, unknown> = {}) {
+  return {
+    securityId,
+    symbol: securityId.replace('sec-', '').toUpperCase(),
+    name: `Name ${securityId}`,
+    securityCurrency: 'CAD',
+    startQuantity: 10,
+    endQuantity: 10,
+    startClose: 100,
+    endClose: 110,
+    priceChangePercent: 10,
+    priceChangeReason: null,
+    investedValueStart: 1000,
+    investedValueEnd: 1100,
+    investedValueChange: 100,
+    investmentCapitalFlows: 0,
+    investmentIncome: 0,
+    investmentPnl: 100,
+    investmentReturnPercent: 10,
+    investmentReturnMethod: 'twr',
+    investedComplete: true,
+    investedReasons: [],
+    ...overrides,
+  };
+}
+
+function securityResults(rows: ReturnType<typeof periodRow>[], unattributedPnl: number | null = 0) {
+  return {
+    currency: 'CAD',
+    startDate: PERIOD.startDate,
+    endDate: PERIOD.endDate,
+    reasons: [],
+    unattributedPnl,
+    securities: rows,
+  };
+}
+
+// The return chart owns its own fetch (`useTwrSeries`) and is covered by
+// `PortfolioReturnChart.test.tsx`; here it is a stub that records the props it
+// was handed. The report opens on it, so the tests of the by-security chart
+// choose "By security" first.
+const mockReturnChartProps = vi.fn();
+vi.mock('@/components/reports/PortfolioReturnChart', () => ({
+  PortfolioReturnChart: (props: Record<string, unknown>) => {
+    mockReturnChartProps(props);
+    return <div data-testid="return-chart" data-group-by={String(props.groupBy)} />;
+  },
+}));
+
+// The Performance view now draws the historical percent-return comparison chart
+// (one line per held security) instead of a holdings donut. It owns its own
+// fetch, so it is stubbed here; the report's job is only to feed it the held
+// securities and the window.
+const mockPerfChartProps = vi.fn();
+vi.mock('@/components/reports/SecurityComparisonChart', () => ({
+  SecurityComparisonChart: (props: any) => {
+    mockPerfChartProps(props);
+    return (
+      <div
+        data-testid="performance-chart"
+        data-security-ids={(props.securityIds ?? []).join(',')}
+        data-start={props.startDate}
+        data-end={props.endDate}
+      />
+    );
   },
 }));
 
@@ -148,14 +254,30 @@ const fullPortfolio = {
   totalGainLossPercent: 7.54,
 };
 
+async function showBySecurity() {
+  const button = await screen.findByRole('button', { name: 'By security' });
+  await act(async () => {
+    fireEvent.click(button);
+  });
+}
+
 describe('InvestmentPerformanceReport', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockGetMarketIndexes.mockResolvedValue(MARKET_INDEXES);
+    mockPeriodResult.mockResolvedValue(PERIOD);
+    mockSecurityPeriodResults.mockResolvedValue(
+      securityResults([
+        periodRow('sec-vfv', { investmentPnl: 600, investmentReturnPercent: 4.1 }),
+        periodRow('sec-aapl', { investmentPnl: 40, priceChangePercent: -2.5 }),
+      ]),
+    );
   });
 
   it('shows loading state initially', () => {
     mockGetPortfolioSummary.mockReturnValue(new Promise(() => {}));
     mockGetInvestmentAccounts.mockReturnValue(new Promise(() => {}));
+    mockGetMarketIndexes.mockReturnValue(new Promise(() => {}));
     render(<InvestmentPerformanceReport />);
     expect(document.querySelector('.animate-pulse')).toBeTruthy();
   });
@@ -234,6 +356,24 @@ describe('InvestmentPerformanceReport', () => {
         fireEvent.click(pdfBtn);
       });
     }
+  });
+
+  it('draws the historical performance chart for the held securities, deduped', async () => {
+    mockGetPortfolioSummary.mockResolvedValue(fullPortfolio);
+    mockGetInvestmentAccounts.mockResolvedValue([]);
+    render(<InvestmentPerformanceReport />);
+    await showBySecurity();
+    const chart = await screen.findByTestId('performance-chart');
+    // sec-vfv is held in two accounts but is one line, not two; a zero-quantity
+    // holding (sec-xic) still has a return history worth plotting.
+    expect(chart.getAttribute('data-security-ids')).toBe('sec-vfv,sec-xic,sec-aapl');
+    // The window's start and end are handed down (default 1y range), so the
+    // chart requests the same period the report is scoped to.
+    expect(chart.getAttribute('data-start')).toBeTruthy();
+    expect(chart.getAttribute('data-end')).toBeTruthy();
+    // The point-in-time donut is gone from the Performance view; composition
+    // now lives under Allocation.
+    expect(screen.queryByTestId('pie-chart')).not.toBeInTheDocument();
   });
 
   it('handles loss case (negative totalGainLoss)', async () => {
@@ -322,6 +462,476 @@ describe('InvestmentPerformanceReport', () => {
       expect(
         window.localStorage.getItem('monize-reports-investment-performance-accounts'),
       ).toBe(JSON.stringify(['acc-1']));
+    });
+  });
+  describe('the chart modes', () => {
+    const account = (id: string, name: string) => ({
+      id,
+      name,
+      currencyCode: 'CAD',
+      accountSubType: 'INVESTMENT_BROKERAGE',
+    });
+
+    const lastReturnChartProps = () =>
+      mockReturnChartProps.mock.calls[mockReturnChartProps.mock.calls.length - 1][0] as Record<
+        string,
+        unknown
+      >;
+
+    beforeEach(() => {
+      mockGetPortfolioSummary.mockResolvedValue(fullPortfolio);
+      mockGetInvestmentAccounts.mockResolvedValue([
+        account('acc-1', 'TFSA'),
+        account('acc-2', 'RRSP'),
+      ]);
+    });
+
+    it('opens on the portfolio line, over the window the cards are measured over', async () => {
+      render(<InvestmentPerformanceReport />);
+      const chart = await screen.findByTestId('return-chart');
+      expect(chart.getAttribute('data-group-by')).toBe('portfolio');
+      expect(screen.queryByTestId('performance-chart')).not.toBeInTheDocument();
+      const props = lastReturnChartProps();
+      expect(props.range).toBe('1y');
+      expect(props.startDate).toBeTruthy();
+      expect(props.periodStartDate).toBeTruthy();
+      expect(props.endDate).toBeTruthy();
+      expect(
+        screen.getByRole('button', { name: 'Portfolio', pressed: true }),
+      ).toBeInTheDocument();
+    });
+
+    it('draws a brokerage and its cash sibling as one account', async () => {
+      mockGetInvestmentAccounts.mockResolvedValue([
+        { id: 'acc-1', name: 'TFSA - Brokerage', currencyCode: 'CAD', accountSubType: 'INVESTMENT_BROKERAGE', linkedAccountId: 'acc-2' },
+        { id: 'acc-2', name: 'TFSA - Cash', currencyCode: 'CAD', accountSubType: 'INVESTMENT_CASH', linkedAccountId: 'acc-1' },
+        { id: 'acc-3', name: 'RRSP', currencyCode: 'USD', accountSubType: 'INVESTMENT_BROKERAGE', linkedAccountId: null },
+      ]);
+      render(<InvestmentPerformanceReport />);
+      const button = await screen.findByRole('button', { name: 'By account' });
+      await act(async () => {
+        fireEvent.click(button);
+      });
+      await screen.findByTestId('return-chart');
+      expect(lastReturnChartProps().accountIdList).toEqual(['acc-1', 'acc-3']);
+    });
+
+    it('draws one line per investment account when none is filtered', async () => {
+      render(<InvestmentPerformanceReport />);
+      const button = await screen.findByRole('button', { name: 'By account' });
+      await act(async () => {
+        fireEvent.click(button);
+      });
+      expect((await screen.findByTestId('return-chart')).getAttribute('data-group-by')).toBe(
+        'account',
+      );
+      const props = lastReturnChartProps();
+      expect(props.accountIdList).toEqual(['acc-1', 'acc-2']);
+      expect((props.accountName as (id: string) => string)('acc-2')).toBe('RRSP');
+    });
+
+    it('draws only the filtered accounts when the filter names some', async () => {
+      window.localStorage.setItem(
+        'monize-reports-investment-performance-accounts',
+        JSON.stringify(['acc-2']),
+      );
+      render(<InvestmentPerformanceReport />);
+      const button = await screen.findByRole('button', { name: 'By account' });
+      await act(async () => {
+        fireEvent.click(button);
+      });
+      expect(lastReturnChartProps().accountIdList).toEqual(['acc-2']);
+      // And the portfolio grouping reads the same filter, as the cards do.
+      expect(lastReturnChartProps().accountIds).toBe('acc-2');
+    });
+
+    it('draws the first 25 accounts and says so', async () => {
+      const many = Array.from({ length: 27 }, (_, i) => account(`acc-${i + 1}`, `Account ${i + 1}`));
+      mockGetInvestmentAccounts.mockResolvedValue(many);
+      render(<InvestmentPerformanceReport />);
+      const button = await screen.findByRole('button', { name: 'By account' });
+      await act(async () => {
+        fireEvent.click(button);
+      });
+      expect((lastReturnChartProps().accountIdList as string[]).length).toBe(25);
+      expect(screen.getByText('Only the first 25 of 27 accounts are drawn.')).toBeInTheDocument();
+    });
+
+    it('By security is the per-security chart, and Portfolio brings the line back', async () => {
+      render(<InvestmentPerformanceReport />);
+      await showBySecurity();
+      expect(await screen.findByTestId('performance-chart')).toBeInTheDocument();
+      expect(screen.queryByTestId('return-chart')).not.toBeInTheDocument();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Portfolio' }));
+      });
+      expect(await screen.findByTestId('return-chart')).toBeInTheDocument();
+      expect(screen.queryByTestId('performance-chart')).not.toBeInTheDocument();
+    });
+
+    it('keeps the holdings table under every chart', async () => {
+      render(<InvestmentPerformanceReport />);
+      expect((await screen.findAllByText('Vanguard S&P 500')).length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('the window figures', () => {
+    it('shows each security\'s gain, return and % Change for the window', async () => {
+      mockGetPortfolioSummary.mockResolvedValue(fullPortfolio);
+      mockGetInvestmentAccounts.mockResolvedValue([]);
+      render(<InvestmentPerformanceReport />);
+      await screen.findByText('+$600.00');
+      const vfv = screen.getAllByText('VFV')[0].closest('tr')!;
+      expect(vfv).toHaveTextContent('+$600.00');
+      expect(vfv).toHaveTextContent('+4.10%');
+      expect(vfv).toHaveTextContent('+10.00%');
+      // The all-time gain is not under the period caption.
+      expect(vfv).not.toHaveTextContent('$1250.00');
+      const aapl = screen.getByText('AAPL').closest('tr')!;
+      expect(aapl).toHaveTextContent('-2.50%');
+    });
+
+    it('lists a position sold inside the window as a row with no shares', async () => {
+      mockGetPortfolioSummary.mockResolvedValue(fullPortfolio);
+      mockGetInvestmentAccounts.mockResolvedValue([]);
+      mockSecurityPeriodResults.mockResolvedValue(
+        securityResults([
+          periodRow('sec-vfv'),
+          periodRow('sec-gone', { endQuantity: 0, investmentPnl: 75, endClose: 42 }),
+        ]),
+      );
+      render(<InvestmentPerformanceReport />);
+      const sold = (await screen.findByText('GONE')).closest('tr')!;
+      expect(sold).toHaveTextContent('(sold in this period)');
+      expect(sold).toHaveTextContent('+$75.00');
+      expect(sold).toHaveTextContent('$42.00');
+    });
+
+    it('prints income not tied to a security on its own line', async () => {
+      mockGetPortfolioSummary.mockResolvedValue(fullPortfolio);
+      mockGetInvestmentAccounts.mockResolvedValue([]);
+      mockSecurityPeriodResults.mockResolvedValue(securityResults([periodRow('sec-vfv')], 12.5));
+      render(<InvestmentPerformanceReport />);
+      const row = await screen.findByTestId('unattributed-row');
+      expect(row).toHaveTextContent('Income not tied to a security');
+      expect(row).toHaveTextContent('+$12.50');
+    });
+
+    it('names the securities whose figures are withheld, and why', async () => {
+      mockGetPortfolioSummary.mockResolvedValue(fullPortfolio);
+      mockGetInvestmentAccounts.mockResolvedValue([]);
+      mockSecurityPeriodResults.mockResolvedValue(
+        securityResults([
+          periodRow('sec-vfv', {
+            investmentPnl: null,
+            investmentReturnPercent: null,
+            investedReasons: ['incompletePrices'],
+          }),
+          periodRow('sec-aapl', {
+            investmentPnl: null,
+            investmentReturnPercent: null,
+            investedReasons: ['missingRatePairs'],
+          }),
+          periodRow('sec-xic', { priceChangePercent: null, priceChangeReason: 'splitInWindow' }),
+        ]),
+      );
+      render(<InvestmentPerformanceReport />);
+      const notices = await screen.findByTestId('period-notices');
+      expect(notices).toHaveTextContent('Gain/Loss and Return are N/A for VFV');
+      expect(notices).toHaveTextContent('N/A for AAPL: this period needs an exchange rate');
+      expect(notices).toHaveTextContent('% Change is N/A for XIC: the security split');
+    });
+
+    it('explains a return with no base and income that did not convert', async () => {
+      mockGetPortfolioSummary.mockResolvedValue(fullPortfolio);
+      mockGetInvestmentAccounts.mockResolvedValue([]);
+      mockSecurityPeriodResults.mockResolvedValue(
+        securityResults(
+          [
+            periodRow('sec-vfv'),
+            // Sold before the window, a dividend inside it: an amount, no ratio.
+            periodRow('sec-gone', {
+              endQuantity: 0,
+              investmentPnl: 30,
+              investmentReturnPercent: null,
+              investedReasons: ['zeroStart'],
+            }),
+          ],
+          null,
+        ),
+      );
+      render(<InvestmentPerformanceReport />);
+      const notices = await screen.findByTestId('period-notices');
+      expect(notices).toHaveTextContent('Return is N/A for GONE');
+      expect(notices).toHaveTextContent('Income not tied to a security is N/A');
+      expect(screen.getByTestId('unattributed-row')).toHaveTextContent('N/A');
+    });
+
+    it('says the cards failed to load rather than waiting forever', async () => {
+      mockGetPortfolioSummary.mockResolvedValue(fullPortfolio);
+      mockGetInvestmentAccounts.mockResolvedValue([]);
+      mockPeriodResult.mockRejectedValue(new Error('timeout'));
+      render(<InvestmentPerformanceReport />);
+      const gainCard = await screen.findByTestId('period-gain-card');
+      await waitFor(() => expect(gainCard).toHaveTextContent('could not be loaded'));
+      expect(gainCard).toHaveTextContent('N/A');
+    });
+
+    it('says the period failed to load rather than showing zeros', async () => {
+      mockGetPortfolioSummary.mockResolvedValue(fullPortfolio);
+      mockGetInvestmentAccounts.mockResolvedValue([]);
+      mockSecurityPeriodResults.mockRejectedValue(new Error('timeout'));
+      render(<InvestmentPerformanceReport />);
+      const notices = await screen.findByTestId('period-notices');
+      expect(notices).toHaveTextContent('could not be loaded');
+      expect(screen.queryByText('+$0.00')).not.toBeInTheDocument();
+    });
+
+    it('leaves the per-account rows without a period figure', async () => {
+      mockGetPortfolioSummary.mockResolvedValue(fullPortfolio);
+      mockGetInvestmentAccounts.mockResolvedValue([]);
+      render(<InvestmentPerformanceReport />);
+      await screen.findByText('+$600.00');
+      const row = screen.getAllByText('VFV')[0].closest('tr')!;
+      await act(async () => {
+        fireEvent.click(row);
+      });
+      const child = row.nextElementSibling!;
+      const cells = child.querySelectorAll('td');
+      expect([...cells].slice(-3).map((cell) => cell.textContent)).toEqual(['', '', '']);
+    });
+
+    it('sorts by % Change with an unknown last', async () => {
+      mockGetPortfolioSummary.mockResolvedValue(fullPortfolio);
+      mockGetInvestmentAccounts.mockResolvedValue([]);
+      mockSecurityPeriodResults.mockResolvedValue(
+        securityResults([
+          periodRow('sec-vfv', { priceChangePercent: 1 }),
+          periodRow('sec-xic', { priceChangePercent: null, priceChangeReason: 'noStartClose' }),
+          periodRow('sec-aapl', { priceChangePercent: 5 }),
+        ]),
+      );
+      let container!: HTMLElement;
+      await act(async () => {
+        ({ container } = render(<InvestmentPerformanceReport />));
+      });
+      await screen.findByText('+5.00%');
+      const header = [...container.querySelectorAll('thead tr:last-child th')].find((th) =>
+        th.textContent?.includes('% Change'),
+      )!;
+      await act(async () => {
+        fireEvent.click(header);
+      });
+      const order = () =>
+        [...container.querySelectorAll('tbody tr')].map(
+          (tr) => tr.querySelector('td .font-medium')?.textContent,
+        );
+      const first = order();
+      expect(first.at(-1)).toBe('XIC');
+      await act(async () => {
+        fireEvent.click(header);
+      });
+      expect(order().at(-1)).toBe('XIC');
+      expect(order()[0]).not.toBe(first[0]);
+    });
+  });
+
+  describe('value and cost over the priced holdings (A26-M38)', () => {
+    // Priced A: value 100,000, cost 80,000. Unpriced B: cost 50,000. The server's
+    // gain is +20,000 / +25% over A. Value less every cost is -30,000.
+    const incompleteAccount = {
+      accountId: 'acc-1',
+      accountName: 'TFSA',
+      currencyCode: 'CAD',
+      totalMarketValue: 100000,
+      cashBalance: 0,
+      totalCostBasis: 130000,
+      gainCostBasis: 80000,
+      unpricedCostBasis: 50000,
+      totalGainLoss: 20000,
+      totalGainLossPercent: 25,
+      unpricedHoldingsCount: 1,
+      fxComplete: true,
+      missingRatePairs: [],
+      pricesComplete: false,
+      unpricedSecurityIds: ['sec-xic'],
+      valuationComplete: false,
+    };
+    const incompletePortfolio = {
+      ...fullPortfolio,
+      holdingsByAccount: [incompleteAccount],
+      totalPortfolioValue: 100000,
+      totalCostBasis: 130000,
+      gainCostBasis: 80000,
+      unpricedCostBasis: 50000,
+      totalGainLoss: 20000,
+      totalGainLossPercent: 25,
+      fxComplete: true,
+      missingRatePairs: [],
+      pricesComplete: false,
+      unpricedSecurityIds: ['sec-xic'],
+      valuationComplete: false,
+    };
+
+    it('prints the window figure on the cards, never the all-time gain or -30,000', async () => {
+      mockGetPortfolioSummary.mockResolvedValue(incompletePortfolio);
+      mockGetInvestmentAccounts.mockResolvedValue([]);
+      render(<InvestmentPerformanceReport />);
+      const gainCard = await screen.findByTestId('period-gain-card');
+      await waitFor(() => expect(gainCard).toHaveTextContent('+$640.00'));
+
+      expect(screen.queryByText('-$30000.00')).not.toBeInTheDocument();
+      expect(screen.queryByText('+$20000.00')).not.toBeInTheDocument();
+      expect(screen.getByTestId('period-return-card')).toHaveTextContent('+4.20%');
+      // Dated by the session its opening close came from.
+      expect(gainCard).toHaveTextContent('Since the close of trading on');
+    });
+
+    it('asks for one account in its own currency, and only once the accounts are known', async () => {
+      window.localStorage.setItem(
+        'monize-reports-investment-performance-accounts',
+        JSON.stringify(['acc-1']),
+      );
+      mockGetPortfolioSummary.mockResolvedValue(incompletePortfolio);
+      mockGetInvestmentAccounts.mockResolvedValue([
+        { id: 'acc-1', name: 'TFSA', currencyCode: 'USD', accountSubType: 'INVESTMENT_CASH' },
+      ]);
+      render(<InvestmentPerformanceReport />);
+      await screen.findByTestId('period-gain-card');
+      await waitFor(() => expect(mockPeriodResult).toHaveBeenCalled());
+
+      for (const mock of [mockPeriodResult, mockSecurityPeriodResults]) {
+        expect(mock).toHaveBeenCalledTimes(1);
+        expect(mock).toHaveBeenCalledWith(
+          expect.objectContaining({ period: '1y', accountIds: 'acc-1', displayCurrency: 'USD' }),
+        );
+      }
+      window.localStorage.removeItem('monize-reports-investment-performance-accounts');
+    });
+
+    it('reads a withheld window as N/A and names the repair', async () => {
+      mockGetPortfolioSummary.mockResolvedValue(incompletePortfolio);
+      mockGetInvestmentAccounts.mockResolvedValue([]);
+      mockPeriodResult.mockResolvedValue({
+        ...PERIOD,
+        investmentPnl: null,
+        investmentReturnPercent: null,
+        investedReasons: ['incompletePrices'],
+      });
+      render(<InvestmentPerformanceReport />);
+      const gainCard = await screen.findByTestId('period-gain-card');
+      await waitFor(() => expect(gainCard).toHaveTextContent('N/A'));
+      expect(gainCard).toHaveTextContent(/Refresh prices/);
+      expect(screen.getByTestId('period-return-card')).toHaveTextContent('N/A');
+    });
+
+    it('marks the Total Value card partial, and the Cost Basis card only when a cost had no rate', async () => {
+      const cardFigure = (label: string) =>
+        screen.getByText(label).parentElement!.querySelector('[data-testid="partial-total"]');
+
+      mockGetPortfolioSummary.mockResolvedValue(incompletePortfolio);
+      mockGetInvestmentAccounts.mockResolvedValue([]);
+      const { unmount } = render(<InvestmentPerformanceReport />);
+      await waitFor(() => {
+        expect(screen.getByText('Total Value')).toBeInTheDocument();
+      });
+      // An unpriced holding is missing from the value; every cost is counted.
+      expect(cardFigure('Total Value')).not.toBeNull();
+      expect(cardFigure('Cost Basis')).toBeNull();
+      unmount();
+
+      mockGetPortfolioSummary.mockResolvedValue({
+        ...incompletePortfolio,
+        fxComplete: false,
+        missingRatePairs: ['EUR->CAD'],
+      });
+      render(<InvestmentPerformanceReport />);
+      await waitFor(() => {
+        expect(screen.getByText('Cost Basis')).toBeInTheDocument();
+      });
+      expect(cardFigure('Cost Basis')).not.toBeNull();
+    });
+
+    it('leaves a complete portfolio unmarked', async () => {
+      mockGetPortfolioSummary.mockResolvedValue({
+        ...fullPortfolio,
+        fxComplete: true,
+        pricesComplete: true,
+        valuationComplete: true,
+        unpricedSecurityIds: [],
+        missingRatePairs: [],
+      });
+      mockGetInvestmentAccounts.mockResolvedValue([]);
+      render(<InvestmentPerformanceReport />);
+      await screen.findByTestId('period-gain-card');
+
+      expect(screen.queryByTestId('partial-total')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('market index overlay', () => {
+    const ACCOUNTS = [
+      { id: 'acc-1', name: 'TFSA', currencyCode: 'CAD', accountSubType: 'INVESTMENT_BROKERAGE' },
+    ];
+
+    async function addIndex(name: string) {
+      await act(async () => {
+        fireEvent.click(await screen.findByRole('button', { name: 'Add a market index...' }));
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByText(name));
+      });
+    }
+
+    it('hands the chosen indexes to the return chart', async () => {
+      mockGetPortfolioSummary.mockResolvedValue(fullPortfolio);
+      mockGetInvestmentAccounts.mockResolvedValue(ACCOUNTS);
+      render(<InvestmentPerformanceReport />);
+      await screen.findByTestId('return-chart');
+      expect(mockReturnChartProps).toHaveBeenLastCalledWith(
+        expect.objectContaining({ indexCodes: [] }),
+      );
+      expect(screen.queryByText(/Market indexes are drawn as dashed lines/)).not.toBeInTheDocument();
+
+      await addIndex('S&P 500');
+
+      expect(mockReturnChartProps).toHaveBeenLastCalledWith(
+        expect.objectContaining({ indexCodes: ['SP500'] }),
+      );
+      expect(screen.getByText(/Market indexes are drawn as dashed lines/)).toBeInTheDocument();
+    });
+
+    it('hands the chosen indexes to the by-security chart, without the region row', async () => {
+      mockGetPortfolioSummary.mockResolvedValue(fullPortfolio);
+      mockGetInvestmentAccounts.mockResolvedValue(ACCOUNTS);
+      render(<InvestmentPerformanceReport />);
+      await showBySecurity();
+      // Choosing the only index in a region also puts the region's own value in
+      // the selection; it must never reach the API as an index code.
+      await addIndex('S&P 500');
+      expect(mockPerfChartProps).toHaveBeenLastCalledWith(
+        expect.objectContaining({ indexCodes: ['SP500'] }),
+      );
+    });
+
+    it('hides the picker when the index catalog fails, and still renders the report', async () => {
+      mockGetMarketIndexes.mockRejectedValue(new Error('boom'));
+      mockGetPortfolioSummary.mockResolvedValue(fullPortfolio);
+      mockGetInvestmentAccounts.mockResolvedValue(ACCOUNTS);
+      render(<InvestmentPerformanceReport />);
+      await screen.findByTestId('return-chart');
+      expect(screen.queryByRole('button', { name: 'Add a market index...' })).not.toBeInTheDocument();
+    });
+
+    it('hides the picker in the allocation view', async () => {
+      mockGetPortfolioSummary.mockResolvedValue(fullPortfolio);
+      mockGetInvestmentAccounts.mockResolvedValue(ACCOUNTS);
+      render(<InvestmentPerformanceReport />);
+      await screen.findByRole('button', { name: 'Add a market index...' });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Allocation' }));
+      });
+      expect(screen.queryByRole('button', { name: 'Add a market index...' })).not.toBeInTheDocument();
     });
   });
 });

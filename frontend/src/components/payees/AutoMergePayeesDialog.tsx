@@ -287,25 +287,53 @@ export function AutoMergePayeesDialog({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} maxWidth="2xl" className="overflow-hidden flex flex-col">
-      {/* Header */}
-      <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-        <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-          {t('autoMerge.title')}
-        </h2>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto px-6 py-4">
-        {/* Description */}
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidth="2xl"
+      title={t('autoMerge.title')}
+      description={t('autoMerge.howItWorksBody')}
+      className="p-6 overflow-hidden flex flex-col"
+      footer={
+        <>
+          <div className="mr-auto flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+            {applicableGroups.length > 0 && (
+              <>
+                <span>
+                  {t('autoMerge.selectedCount', { count: applicableGroups.length })}
+                </span>
+                <span aria-hidden="true" className="text-gray-300 dark:text-gray-600">
+                  &middot;
+                </span>
+                <span>
+                  {t('autoMerge.payeesMergedCount', { count: payeesToMerge })}
+                </span>
+              </>
+            )}
+          </div>
+          <div className="flex gap-3">
+            <Button variant="secondary" onClick={onClose} disabled={isApplying}>
+              {tc('cancel')}
+            </Button>
+            <Button
+              onClick={handleApply}
+              disabled={isApplying || applicableGroups.length === 0}
+            >
+              {isApplying
+                ? t('autoMerge.applying')
+                : t('autoMerge.applyButton', { count: applicableGroups.length })}
+            </Button>
+          </div>
+        </>
+      }
+    >
+      {/* Content: the one region that scrolls, so the title and the button
+          row stay on screen however many groups the preview finds. */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {/* A one-time warning before a bulk merge, so it stays in the body;
+            how the grouping works is the title's tooltip. */}
         <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800">
-          <h3 className="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-2">
-            {t('autoMerge.howItWorksTitle')}
-          </h3>
-          <p className="text-sm text-blue-700 dark:text-blue-300">
-            {t('autoMerge.howItWorksBody')}
-          </p>
-          <p className="mt-2 text-sm font-bold text-blue-800 dark:text-blue-200">
+          <p className="text-sm font-bold text-blue-800 dark:text-blue-200">
             {t.rich('autoMerge.backupRecommendation', {
               link: (chunks) => (
                 <Link
@@ -527,17 +555,20 @@ export function AutoMergePayeesDialog({
                     }`}
                   >
                     {/* Group header: include toggle + editable canonical name, alias, category */}
-                    <div className="flex items-start gap-3 mb-3">
-                      <div className="mt-1">
-                        <ToggleSwitch
-                          checked={group.included}
-                          onChange={(next) =>
-                            updateGroup(group.id, { included: next })
-                          }
-                          label={t('autoMerge.includeGroupLabel')}
-                        />
-                      </div>
-                      <div className="flex-1 space-y-3">
+                    <div className="mb-3">
+                      <div className="space-y-3">
+                        <label className="flex items-center gap-3 cursor-pointer">
+                          <ToggleSwitch
+                            checked={group.included}
+                            onChange={(next) =>
+                              updateGroup(group.id, { included: next })
+                            }
+                            label={t('autoMerge.includeGroupLabel')}
+                          />
+                          <span className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                            {t('autoMerge.includeGroupLabel')}
+                          </span>
+                        </label>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
                             <label className="block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1">
@@ -696,38 +727,6 @@ export function AutoMergePayeesDialog({
             )}
           </div>
         )}
-      </div>
-
-      {/* Footer */}
-      <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center">
-        <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
-          {applicableGroups.length > 0 && (
-            <>
-              <span>
-                {t('autoMerge.selectedCount', { count: applicableGroups.length })}
-              </span>
-              <span aria-hidden="true" className="text-gray-300 dark:text-gray-600">
-                &middot;
-              </span>
-              <span>
-                {t('autoMerge.payeesMergedCount', { count: payeesToMerge })}
-              </span>
-            </>
-          )}
-        </div>
-        <div className="flex gap-3">
-          <Button variant="secondary" onClick={onClose} disabled={isApplying}>
-            {tc('cancel')}
-          </Button>
-          <Button
-            onClick={handleApply}
-            disabled={isApplying || applicableGroups.length === 0}
-          >
-            {isApplying
-              ? t('autoMerge.applying')
-              : t('autoMerge.applyButton', { count: applicableGroups.length })}
-          </Button>
-        </div>
       </div>
     </Modal>
   );

@@ -27,7 +27,7 @@ export interface WhatsNewStatus {
  *
  * All user_preferences access goes through `withScopedDb` (the RLS-compliant door
  * to the DB), never a new injected repository -- see the RLS ratchet note in
- * the root CLAUDE.md. These methods run from authenticated controllers, so the
+ * `AGENTS.md`. These methods run from authenticated controllers, so the
  * request context supplies the identity `withScopedDb` needs.
  */
 @Injectable()

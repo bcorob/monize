@@ -125,9 +125,9 @@ describe("GemSettingsForm guided-tour anchors", () => {
     expect(group).toContainElement(
       screen.getByLabelText("Momentum window (months)"),
     );
-    expect(group).toContainElement(screen.getByLabelText("Tax rate (%)"));
+    expect(group).toContainElement(screen.getByLabelText("Tax Rate (optional)"));
     expect(group).toContainElement(
-      screen.getByLabelText("Commission per trade"),
+      screen.getByLabelText("Commission per Trade (optional)"),
     );
   });
 

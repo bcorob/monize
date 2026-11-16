@@ -34,7 +34,6 @@
     "units": "Anteile",
     "avgCostPerUnit": "Durchschn. Kosten / Anteil",
     "heldInAccounts": "Gehalten in Konten",
-    "openAccount": "{name} auf der Seite Investitionen anzeigen",
     "unitsShare": "{units} ({share})",
     "valueUnknown": "Kein Kurs",
     "approx": "~ {amount}"
@@ -74,15 +73,20 @@
     "sector": "Sektor",
     "industry": "Branche",
     "provider": "Anbieter",
-    "lastPrice": "Letzter Kurs"
+    "lastPrice": "Letzter Kurs",
+    "bondDescription": "Anleihebeschreibung"
   },
   "tabs": {
     "ariaLabel": "Wertpapier-Abschnitte",
     "overview": "Überblick",
     "transactions": "Transaktionen",
     "prices": "Kurshistorie",
+    "terms": "Bedingungsverlauf",
     "documents": "Dokumente",
     "news": "Nachrichten"
+  },
+  "bondPrices": {
+    "title": "Preisverlauf"
   },
   "about": {
     "title": "Über",
@@ -121,6 +125,8 @@
     "fees": "Gebühren",
     "realizedPl": "Realisierter G/V",
     "realizedMixed": "Realisiert in {currencies}, daher nicht summiert",
+    "realizedUnknownReason": "Dieser Gewinn kann nicht berechnet werden: Die Position enthält Anteile, die ohne Kosten hinzugefügt wurden, daher sind die Kosten der verkauften Anteile unbekannt. Öffnen Sie die Transaktion, die sie hinzugefügt hat, und geben Sie ihren Preis ein.",
+    "realizedKnownPart": "Bekannter Teil: {amount}",
     "totalReturn": "Gesamtrendite",
     "totalReturnValue": "{amount} ({percent})",
     "totalReturnTitle": "Nicht realisierter Gewinn plus das, was du bei Verkäufen realisiert und an Erträgen erhalten hast, abzüglich Gebühren, bezogen auf das eingesetzte Kapital. Eine einfache Rendite auf dieses Kapital: nicht auf ein Jahr gerechnet und nicht nach Haltedauer der Tranchen gewichtet.",
@@ -147,6 +153,8 @@
     "title": "Position geschlossen",
     "description": "Du hältst dieses Wertpapier nicht mehr. Seine Historie bleibt unten verfügbar.",
     "realizedPl": "Realisierter G/V",
+    "realizedUnknownReason": "Dieser Gewinn kann nicht berechnet werden: Die Position enthielt Anteile, die ohne Kosten hinzugefügt wurden, daher sind die Kosten der verkauften Anteile unbekannt. Öffnen Sie die Transaktion, die sie hinzugefügt hat, und geben Sie ihren Preis ein.",
+    "realizedKnownPart": "Bekannter Teil: {amount}",
     "heldFrom": "Gehalten seit",
     "heldRange": "{start} bis {end}"
   },
@@ -165,7 +173,24 @@
     "sectorEmpty": "Es ist keine Sektoraufteilung gespeichert. Monize füllt sie für Fonds und ETFs beim Anbieter ab.",
     "countryEmpty": "Es ist keine Länderaufteilung gespeichert. Du kannst sie beim Bearbeiten des Wertpapiers eintragen.",
     "assetClassEmpty": "Es ist noch keine Aufteilung nach Anlageklassen gespeichert.",
-    "remainder": "{percent} nicht zugeordnet"
+    "remainder": "{percent} nicht zugeordnet",
+    "bond": {
+      "seriesTab": "Serien",
+      "maturityTab": "Fälligkeit",
+      "empty": "Sie halten noch keine Serie dieser Anleiheart.",
+      "someUnknown": "Einige Werte sind unbekannt, daher werden keine Anteile angezeigt.",
+      "issuerCountry": "Land des Emittenten",
+      "rate": "Zinssatz",
+      "interest": "Zinsen",
+      "term": "Laufzeit bis zur Fälligkeit",
+      "interestValue": "{capitalization}, Periode: {period}",
+      "rateType": {
+        "FIXED": "Fest",
+        "BENCHMARK_PLUS_SPREAD": "Variabel (Referenzwert + Aufschlag)",
+        "INFLATION_PLUS_MARGIN_AS_RATE": "Inflationsindexiert (Referenzwert + Marge)",
+        "ZERO_COUPON_DISCOUNT": "Nullkupon (Diskont)"
+      }
+    }
   },
   "documents": {
     "title": "Dokumente",
@@ -225,6 +250,16 @@
       "deleted": "Dokument gelöscht",
       "saveFailed": "Das Dokument konnte nicht gespeichert werden",
       "deleteFailed": "Das Dokument konnte nicht gelöscht werden"
+    },
+    "issueLetters": {
+      "title": "Emissionsschreiben",
+      "loadFailed": "Die Emissionsschreiben konnten nicht geladen werden.",
+      "empty": "Für diese Anleiheart ist noch kein Emissionsschreiben gespeichert.",
+      "held": "Gehalten",
+      "onSale": "Im Verkauf",
+      "noLetter": "Kein Schreiben für diese Serie erfasst",
+      "open": "Offizielles PDF",
+      "openNamed": "Emissionsschreiben der Serie {series} öffnen"
     }
   },
   "news": {
@@ -237,6 +272,243 @@
     "empty": {
       "title": "Derzeit keine Schlagzeilen",
       "description": "Zu diesem Symbol wurde in letzter Zeit nichts veröffentlicht. Die Liste wird aktualisiert, wenn du zurückkommst."
+    }
+  },
+  "bond": {
+    "loading": "Anleihebewertung wird geladen...",
+    "loadFailed": "Die Anleihebewertung konnte nicht geladen werden.",
+    "unknown": "Unbekannt",
+    "asOf": "Bewertet zum",
+    "termsSource": "Bedingungen: {document}",
+    "termsManual": "Bedingungen von einem Administrator manuell erfasst",
+    "noLots": "An diesem Datum sind keine Posten offen.",
+    "totals": {
+      "quantity": "Gehaltene Anleihen",
+      "grossValue": "Bruttowert",
+      "earlyRedemptionValue": "Wert bei vorzeitiger Rückzahlung",
+      "accruedInterest": "Stückzinsen",
+      "unknownLot": "Für mindestens einen Posten liegt kein Wert vor, daher wird keine Summe angegeben.",
+      "unknownRefusal": "Die Posten lassen sich nicht ermitteln, daher wird keine Summe angegeben."
+    },
+    "lots": {
+      "purchaseDate": "Gekauft",
+      "assumed": "Angenommen",
+      "assumedTitle": "Das tatsächliche Kaufdatum ist unbekannt: Dieser Posten kam durch eine Übertragung ohne verknüpfte Senderseite zustande.",
+      "quantity": "Anzahl",
+      "maturity": "Fälligkeit",
+      "period": "Aktuelle Zinsperiode",
+      "periodValue": "{index}: {start} bis {end}",
+      "rate": "Zinssatz",
+      "principal": "Kapitalbasis je Anleihe",
+      "principalIssuePrice": "Keine Anschaffungskosten erfasst: Der Zuteilungspreis wird verwendet",
+      "accruedInterest": "Stückzinsen",
+      "grossValue": "Bruttowert",
+      "earlyRedemption": "Vorzeitige Rückzahlung",
+      "nextCashFlow": "Nächste Zahlung",
+      "cashFlowValue": "{type} {amount} am {date}",
+      "noCashFlow": "Keine",
+      "projected": "Prognose",
+      "maturityValue": "Wert bei Fälligkeit",
+      "maturityKnown": "Bekannt",
+      "maturityProjected": "Prognostiziert",
+      "matured": "Fällig geworden",
+      "refused": "Nicht bewertet",
+      "amountUnknown": "Betrag unbekannt"
+    },
+    "rateSource": {
+      "TERMS": "Bedingungen",
+      "ANNOUNCED": "Angekündigt",
+      "DERIVED": "Abgeleitet",
+      "PROJECTED": "Prognostiziert"
+    },
+    "cashFlowType": {
+      "INTEREST": "Zinsen",
+      "PRINCIPAL": "Kapital"
+    },
+    "earlyRefusal": {
+      "NOT_REDEEMABLE": "Nicht vorzeitig rückzahlbar",
+      "TOO_EARLY": "Zu früh für eine Rückzahlung",
+      "TOO_LATE": "Zu spät für eine Rückzahlung",
+      "RECORD_DAY": "Am Stichtag nicht rückzahlbar",
+      "MATURED": "Fällig geworden",
+      "RATE_UNKNOWN": "Zinssatz noch nicht bekannt",
+      "TERMS_INCOMPLETE": "Bedingungen unvollständig"
+    },
+    "lotsRefusal": {
+      "SPLIT": "Die Posten lassen sich nicht ableiten: Eine Anleihe wird nicht geteilt.",
+      "FRACTIONAL_QUANTITY": "Die Posten lassen sich nicht ableiten: Eine Menge ist keine ganze Zahl von Anleihen.",
+      "OVER_REMOVAL": "Die Posten lassen sich nicht ableiten: Es wurden mehr Anleihen entfernt als gehalten.",
+      "INVALID_QUANTITY": "Die Posten lassen sich nicht ableiten: Eine Menge fehlt, ist negativ oder zu groß.",
+      "REMOVAL_EXCEEDS_SERIES": "Die Lose lassen sich nicht ermitteln: Von einer Serie wurden mehr Anleihen entnommen als gehalten.",
+      "SERIES_NOT_DETERMINED": "Die Lose lassen sich nicht ermitteln: Die Serie eines Kaufs ist unbekannt."
+    },
+    "lotsRefusalDetail": {
+      "SPLIT": "Für dieses Wertpapier ist ein Split erfasst ({action} am {date}); eine Anleihe wird nicht gesplittet.",
+      "FRACTIONAL_QUANTITY": "{action} am {date} bewegt {quantity} Anleihen, was keine ganze Zahl ist.",
+      "OVER_REMOVAL": "{action} am {date} entnimmt {quantity} Anleihen, mehr als vorhanden waren.",
+      "INVALID_QUANTITY": "Die Menge bei {action} am {date} fehlt, ist negativ oder zu groß.",
+      "REMOVAL_EXCEEDS_SERIES": "{action} am {date} entnimmt {quantity} Anleihen seiner Serie, mehr als in dieser Serie gehalten wurden.",
+      "SERIES_NOT_DETERMINED": "{action} am {date} nennt keine Serie, und an diesem Tag war keine gespeicherte Serie der Anleiheart im Verkauf. Rufen Sie die Serie ab und wählen Sie sie in der Buchung."
+    },
+    "assumptions": {
+      "title": "Annahmen der Prognose",
+      "latestObservation": "{benchmark} wird für alle folgenden Perioden mit {value} angenommen, dem zuletzt veröffentlichten Wert ({observation})",
+      "supplied": "{benchmark} wird für alle folgenden Perioden mit {value} angenommen",
+      "suppliedSimpleAnnual": "{benchmark} wird mit einem Wachstum von {value} pro Jahr angenommen (einfaches jährliches Wachstum, ohne Zinseszins), für jeden weiteren Monat"
+    },
+    "missing": {
+      "title": "Noch benötigte Daten",
+      "item": "{benchmark} {observation} — veröffentlicht von {publisher}",
+      "itemNoPublisher": "{benchmark} {observation} — Herausgeber nicht bekannt"
+    },
+    "recompute": {
+      "button": "Preise neu berechnen",
+      "done": "Preise neu berechnet: {written} geschrieben, {deleted} entfernt.",
+      "failed": "Die Preise konnten nicht neu berechnet werden."
+    },
+    "rate": {
+      "title": "Zinssatz",
+      "rule": {
+        "fixed": "Fest {rate} für die gesamte Laufzeit",
+        "firstThen": "Periode 1: {firstRate}. Danach {benchmark} + {addend}",
+        "every": "Jede Periode: {benchmark} + {addend}",
+        "floorZero": "Ein negativer Wert von {benchmark} zählt als 0",
+        "dailyFloor": "Der Tagessatz (Index plus Aufschlag) liegt nie unter {floor}",
+        "discount": "Abschlag auf den Nennwert",
+        "daily": "Jeden Tag: {benchmark} + {addend}, tageweise aufsummiert",
+        "lockout": "Eine Auktion innerhalb von {days, plural, one {# Geschäftstag} other {# Geschäftstagen}} vor einem Periodenende wird für diese Periode nicht verwendet"
+      },
+      "daily": "Täglich, {benchmark}",
+      "dailyNoIndex": "Täglich, {benchmark}: noch kein Index gespeichert",
+      "dailyRun": "Ab {from}: {rate}",
+      "dailyRunUnknown": "Ab {from}: kein Index gespeichert",
+      "lotHeading": "Am {date} gekaufte Position",
+      "range": "{start} bis {end}",
+      "current": "Aktuell",
+      "columns": {
+        "period": "Periode",
+        "dates": "Zeitraum",
+        "rate": "Zinssatz",
+        "source": "Quelle",
+        "how": "Festsetzung"
+      },
+      "how": {
+        "stated": "Angegebener Satz",
+        "observed": "{benchmark} {observation}: {value} + {addend}",
+        "floored": "(auf {floor} angehoben)",
+        "missing": "{benchmark} {observation}: noch nicht veröffentlicht"
+      },
+      "nextRateReset": "Nächste Zinsanpassung: {date}",
+      "nextCapitalization": "Nächste Kapitalisierung: {date}"
+    },
+    "indexation": {
+      "inflation": "Inflationsindexiert: ab {date} (Periode 2) beträgt der Zinssatz {benchmark} + {addend} und wird in jeder Periode neu berechnet",
+      "floating": "Variabler Zins: ab {date} (Periode 2) beträgt der Zinssatz {benchmark} + {addend} und wird in jeder Periode neu berechnet"
+    },
+    "interestParts": {
+      "fixed": "Feste Zinsen (1. Periode)",
+      "margin": "Zinsen aus der Marge",
+      "inflation": "Zinsen aus der Inflation",
+      "benchmark": "Zinsen aus dem Referenzzinssatz",
+      "announced": "Angekündigte Zinsen",
+      "fixedTerm": "Zinsen aus dem festen Zinssatz"
+    },
+    "chart": {
+      "title": "Kumulierte Zinsen am Ende jeder Periode",
+      "assumption": "Prognose unter der Annahme {benchmark} = {value}",
+      "projectedNote": "Hellere Balken sind prognostizierte Perioden",
+      "stoppedAt": "Die Zinsen sind ab Periode {period} nicht bekannt, daher endet das Diagramm davor."
+    },
+    "scenarios": {
+      "title": "Inflationsszenarien",
+      "titleBenchmark": "Zinsszenarien",
+      "projection": "Prognose",
+      "caption": "Prognostizierter Rückzahlungswert und Zinsen je angenommenem Wert",
+      "intro": "Prognosen, keine Gewissheiten: Für jede noch nicht begonnene Periode wird der Wert {benchmark} aus der ersten Spalte angenommen. Bekannte und angekündigte Perioden ändern sich nicht. Wählen Sie eine Zeile, um ihre Zinstabelle und das Diagramm zu sehen.",
+      "custom": "Eigener Wert {benchmark} (%)",
+      "add": "Szenario hinzufügen",
+      "useDefault": "Standardannahme verwenden",
+      "selected": "Ausgewählt",
+      "loading": "Szenarien werden geladen...",
+      "loadFailed": "Die Szenarien konnten nicht geladen werden.",
+      "columns": {
+        "assumed": "Angenommen: {benchmark}",
+        "maturityValue": "Rückzahlungswert (Prognose)",
+        "totalInterest": "Zinsen gesamt (Prognose)"
+      },
+      "asOfNote": "Bewertet zum {date}, dem oben gewählten Datum: Die Zahlen beziehen sich auf die an diesem Tag gehaltenen Anleihen."
+    },
+    "benchmarks": {
+      "PL_CPI_GUS_YOY": "Inflationsrate (VPI), 12 Monate (GUS)",
+      "PL_NBP_REFERENCE": "NBP-Referenzzins",
+      "US_CPI_U_NSA": "CPI-U, alle Waren und Dienstleistungen, nicht saisonbereinigt (BLS)",
+      "US_TBILL_13W_MMY": "Rendite der 13-wöchigen Treasury Bills"
+    },
+    "valuationRefusal": {
+      "PURCHASE_OUTSIDE_SALE_WINDOW": "Diese Serie kann nur vom {from} bis zum {to} gekauft werden. Dieses Los wurde am {purchaseDate} gekauft und wird deshalb nicht bewertet.",
+      "PURCHASE_AFTER_MATURITY": "Diese Serie wurde am {maturityDate} fällig. Diese Position wurde am {purchaseDate} gekauft, also am oder nach diesem Tag, und wird daher nicht bewertet."
+    },
+    "marketPriceRequired": "Dieses Wertpapier enthält eine Serie, die am Markt gehandelt wird, daher ergibt sich ihr Preis nicht aus ihren Bedingungen. Monize schreibt dafür keinen Preis: Geben Sie den Preis selbst ein. Die Werte der Positionen unten werden aus den Bedingungen berechnet und sind keine Marktwerte.",
+    "partial": {
+      "title": "Diese Bewertung ist unvollständig; lesen Sie die Zahlen als Teilwerte.",
+      "terms": "Die Bedingungen der Anleihe sind unvollständig (zum Beispiel ist ein Kalender nicht installiert).",
+      "reference": "Referenzdaten fehlen; siehe die Liste der noch benötigten Daten unten.",
+      "earlyRedemption": "Die Bedingungen der vorzeitigen Rückgabe sind unvollständig, daher können Werte für die vorzeitige Rückgabe fehlen.",
+      "other": "Mindestens ein Los kann noch nicht vollständig bewertet werden (zum Beispiel ist ein Zinssatz nicht bekannt)."
+    },
+    "projectionMissing": {
+      "title": "Spätere Perioden können nicht prognostiziert werden",
+      "item": "{benchmark}: Es ist kein Wert veröffentlicht und keine Annahme festgelegt, daher können spätere Perioden nicht prognostiziert werden (veröffentlicht von {publisher})",
+      "itemNoPublisher": "{benchmark}: Es ist kein Wert veröffentlicht und keine Annahme festgelegt, daher können spätere Perioden nicht prognostiziert werden (Herausgeber unbekannt)"
+    },
+    "coverage": {
+      "asOf": "{benchmark}-Daten, Stand {date}",
+      "none": "Es sind noch keine {benchmark}-Daten gespeichert"
+    },
+    "issuers": {
+      "PL_MF": "Finanzministerium (PL)",
+      "US_TREASURY": "US-Finanzministerium (US)"
+    },
+    "redemption": {
+      "title": "Bedingungen der vorzeitigen Rückgabe",
+      "fixedFee": "Gebühr für die vorzeitige Rückgabe: {amount} pro Anleihe.",
+      "forfeitAccrued": "Bei vorzeitiger Rückgabe verfallen die im laufenden Zeitraum aufgelaufenen Zinsen.",
+      "floorAllPeriods": "Die Gebühr senkt den Erlös in keinem Zeitraum unter den Nennwert.",
+      "floorFirstPeriod": "Nur im ersten Zeitraum senkt die Gebühr den Erlös nicht unter den Nennwert; in späteren Zeiträumen gibt es diese Untergrenze nicht."
+    },
+    "programs": {
+      "OTS": "OTS: 3-monatige festverzinsliche Sparanleihen",
+      "ROR": "ROR: 1-jährige variabel verzinste Sparanleihen",
+      "DOR": "DOR: 2-jährige variabel verzinste Sparanleihen",
+      "TOS": "TOS: 3-jährige festverzinsliche Sparanleihen",
+      "COI": "COI: 4-jährige inflationsindexierte Sparanleihen",
+      "EDO": "EDO: 10-jährige inflationsindexierte Sparanleihen",
+      "ROS": "ROS: 6-jährige inflationsindexierte Familien-Sparanleihen",
+      "ROD": "ROD: 12-jährige inflationsindexierte Familien-Sparanleihen",
+      "BILL": "BILL: Treasury Bills, 4 bis 52 Wochen, mit Abschlag verkauft",
+      "NOTE": "NOTE: Treasury Notes, 2 bis 10 Jahre, fester halbjährlicher Kupon",
+      "BOND": "BOND: Treasury Bonds, 20 und 30 Jahre, fester halbjährlicher Kupon",
+      "TIPS": "TIPS: inflationsgeschützte Staatsanleihen, Kapital an den CPI-U gebunden",
+      "FRN": "FRN: Treasury Floating Rate Notes, 2 Jahre, vierteljährliche Zinsen"
+    },
+    "series": {
+      "title": "Ihre Serien",
+      "column": "Serie",
+      "nextRateChange": "Nächste Zinsanpassung",
+      "total": "Summe der Anleiheart",
+      "purchasedRange": "{from} bis {to}",
+      "expand": "Details zu {series} anzeigen",
+      "collapse": "Details zu {series} ausblenden",
+      "partial": "Teilweise"
+    },
+    "program": {
+      "title": "Die Anleiheart",
+      "newest": "Konditionen der neuesten Serie, {series}.",
+      "noTerms": "Die Konditionen sind noch nicht bekannt: Sie halten keine Serie dieser Anleiheart und keine ist im Verkauf.",
+      "autoFetchFailed": "Die Einstellung konnte nicht gespeichert werden."
+    },
+    "onSale": {
+      "title": "Jetzt im Verkauf"
     }
   }
 }

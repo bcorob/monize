@@ -3,6 +3,8 @@ import { exchangeRatesApi, ExchangeRate } from '@/lib/exchange-rates';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import { createLogger } from '@/lib/logger';
 import { preferredCurrency } from '@/lib/default-currency';
+import { isFxRateStale } from '@/lib/fx-rate-age';
+import { useFinancialToday } from '@/hooks/useFinancialToday';
 
 const logger = createLogger('ExchangeRates');
 
@@ -39,32 +41,35 @@ export function useExchangeRates() {
   const defaultCurrency = preferredCurrency(
     usePreferencesStore((state) => state.preferences?.defaultCurrency),
   );
+  const todayYmd = useFinancialToday();
 
-  const refresh = useCallback(async () => {
-    try {
-      const data = await exchangeRatesApi.getLatestRates();
-      setRates(data);
-      setHasFailed(false);
-    } catch (error) {
-      logger.error('Failed to load exchange rates:', error);
-      setHasFailed(true);
-    } finally {
-      setIsLoading(false);
-    }
+  const refresh = useCallback(() => {
+    // Every state write here follows the `await`. Keeping them in this inner
+    // function rather than in `refresh` itself is what lets the mount effect
+    // call `refresh` without being read as a synchronous setState.
+    const fetchRates = async () => {
+      try {
+        const data = await exchangeRatesApi.getLatestRates();
+        setRates(data);
+        setHasFailed(false);
+      } catch (error) {
+        logger.error('Failed to load exchange rates:', error);
+        setHasFailed(true);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    return fetchRates();
   }, []);
 
   useEffect(() => {
     refresh();
   }, [refresh]);
 
-  // Build a lookup map: "USD->CAD" => 1.365
-  const rateMap = useMemo(() => {
-    const map = new Map<string, number>();
-    rates.forEach((r) => {
-      map.set(`${r.fromCurrency}->${r.toCurrency}`, Number(r.rate));
-    });
-    return map;
-  }, [rates]);
+  // Build a lookup map: "USD->CAD" => 1.365. A row older than
+  // `FX_MAX_RATE_AGE_DAYS` is left out (INV-FX-001): the pair is then unknown.
+  // `rates` keeps every row, the stored fact.
+  const rateMap = useMemo(() => buildOrientedRateMap(rates, todayYmd), [rates, todayYmd]);
 
   /**
    * Convert `amount` into `toCurrency` (default: the user's display currency),
@@ -138,15 +143,43 @@ export function useExchangeRates() {
 }
 
 /**
+ * Rate lookup map, one orientation per pair.
+ *
+ * When both `A->B` and `B->A` are stored, the row with the newer `rateDate`
+ * wins and the other key is left out, so `convert` cannot reach the old row
+ * through "direct first" (INV-FX-003: a pre-1.17 deployment holds a frozen
+ * mirror row). A date tie keeps both, so the direct key answers.
+ * With `todayYmd`, a row older than `FX_MAX_RATE_AGE_DAYS` is dropped first
+ * (INV-FX-001); without it no age bound applies (historical maps).
+ */
+function buildOrientedRateMap(rates: ExchangeRate[], todayYmd?: string): Map<string, number> {
+  const rows = new Map<string, ExchangeRate>();
+  rates.forEach((r) => {
+    if (todayYmd !== undefined && isFxRateStale(r.rateDate, todayYmd)) return;
+    const key = `${r.fromCurrency}->${r.toCurrency}`;
+    const inverse = rows.get(`${r.toCurrency}->${r.fromCurrency}`);
+    if (inverse) {
+      // Newer wins; on a tie both stay and a lookup finds the direct key.
+      const mine = r.rateDate.slice(0, 10);
+      const theirs = inverse.rateDate.slice(0, 10);
+      if (mine > theirs) rows.delete(`${r.toCurrency}->${r.fromCurrency}`);
+      else if (mine < theirs) return;
+    }
+    const same = rows.get(key);
+    if (same && same.rateDate.slice(0, 10) >= r.rateDate.slice(0, 10)) return;
+    rows.set(key, r);
+  });
+  const map = new Map<string, number>();
+  rows.forEach((r, key) => map.set(key, Number(r.rate)));
+  return map;
+}
+
+/**
  * Build a rate map from an array of ExchangeRate objects.
- * Used for historical rate lookups in the NetWorthReport.
+ * Used for historical rate lookups in the NetWorthReport, so no age bound.
  */
 export function buildRateMap(rates: ExchangeRate[]): Map<string, number> {
-  const map = new Map<string, number>();
-  rates.forEach((r) => {
-    map.set(`${r.fromCurrency}->${r.toCurrency}`, Number(r.rate));
-  });
-  return map;
+  return buildOrientedRateMap(rates);
 }
 
 /**

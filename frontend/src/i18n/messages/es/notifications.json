@@ -1,0 +1,287 @@
+{
+  "title": "Notificaciones",
+  "unread": "{count} sin leer",
+  "markAllRead": "Marcar todas como leídas",
+  "loading": "Cargando notificaciones...",
+  "empty": "Sin notificaciones",
+  "undo": "Deshacer",
+  "buttonTitle": "Notificaciones",
+  "buttonAriaLabel": "Notificaciones",
+  "dismissAriaLabel": "Descartar notificación",
+  "closeAriaLabel": "Cerrar notificaciones",
+  "emptyFiltered": "Ninguna notificación coincide con el filtro actual",
+  "deleteAll": "Eliminar todas",
+  "deleteAllConfirmTitle": "Eliminar notificaciones",
+  "deleteAllConfirmMessageAll": "¿Eliminar todas las notificaciones? Esto no se puede deshacer.",
+  "deleteAllConfirmMessageFiltered": "¿Eliminar todas las notificaciones que coinciden con el filtro actual, incluidas las que no se muestran? Esto no se puede deshacer.",
+  "deleted": "{count, plural, one {# notificación eliminada} other {# notificaciones eliminadas}}",
+  "deleteFailed": "No se pudieron eliminar las notificaciones",
+  "filter": {
+    "financial": "Financieras",
+    "system": "Sistema"
+  },
+  "severity": {
+    "critical": "Crítico",
+    "warning": "Advertencia",
+    "success": "Buenas noticias",
+    "info": "Información"
+  },
+  "reminder": {
+    "remindAriaLabel": "Recordarme esto",
+    "stopAriaLabel": "Detener este recordatorio",
+    "stopped": "Recordatorio detenido",
+    "stopFailed": "No se pudo detener el recordatorio",
+    "created": "Recordatorio establecido",
+    "createFailed": "No se pudo establecer el recordatorio",
+    "dialogTitle": "Recordarme",
+    "dialogDescription": "Recibe esta notificación de nuevo más tarde hasta que actúes.",
+    "modeLabel": "Frecuencia",
+    "modeRepeat": "Repetir hasta que lo detenga",
+    "modeOnce": "Solo una vez más",
+    "intervalLabelRepeat": "Recordarme cada",
+    "intervalLabelOnce": "Recordarme después de",
+    "durationMinutes": "{minutes, plural, one {# minuto} other {# minutos}}",
+    "durationHours": "{hours, plural, one {# hora} other {# horas}}",
+    "cancel": "Cancelar",
+    "confirm": "Establecer recordatorio",
+    "pageTitle": "Recordatorios activos",
+    "empty": "No hay recordatorios activos",
+    "loadFailed": "No se pudieron cargar los recordatorios",
+    "retry": "Intentar de nuevo",
+    "nextFire": "Próximo recordatorio: {date}",
+    "openTarget": "Abrir página relacionada",
+    "delegateUnavailable": "Vuelve a tu propia cuenta para gestionar los recordatorios."
+  },
+  "billDue": {
+    "titleOverdue": "{payee} vencido",
+    "titleToday": "{payee} vence hoy",
+    "titleTomorrow": "{payee} vence mañana",
+    "titleInDays": "{payee} vence en {days} días",
+    "amountDue": "{amount} a pagar el {date}",
+    "amountUnavailable": "Importe no disponible (no hay tipo de cambio actual), vence el {date}"
+  },
+  "gemSignal": {
+    "riskTitle": "{strategy} cambió a {state}",
+    "riskMessage": "Tu estrategia GEM «{strategy}» cambió de {fromState} a {toState}. Abre para revisar la recomendación.",
+    "allocationTitle": "{strategy} cambió su objetivo",
+    "allocationMessage": "Tu estrategia GEM «{strategy}» ahora apunta a {target}. Abre para revisar la recomendación.",
+    "riskOn": "risk-on",
+    "riskOff": "risk-off"
+  },
+  "bond": {
+    "maturitySoonTitle": "{series} vence el {date}",
+    "maturitySoonMessage": "{quantity} × {series} vencen el {date}. {payout}",
+    "interestTitle": "{series}: pago de intereses el {date}",
+    "interestMessage": "{quantity} × {series} pagan {amount} de intereses el {date}. Regístrelos en la página del valor si aún no están en su cuenta.",
+    "interestMessageUnknown": "{quantity} × {series} pagan intereses el {date}. El importe aún no se conoce: un tipo del que depende no está publicado.",
+    "rateResetTitle": "{series}: nuevo periodo de intereses",
+    "rateResetMessage": "{series} entró en el periodo {period} el {date} con un tipo de {rate} anual.",
+    "unbookedTitle": "{series}: vencido, amortización sin registrar",
+    "unbookedMessage": "{quantity} × {series} vencieron el {date} y no hay ninguna amortización registrada. {payout} Registre la amortización en la página del valor.",
+    "payoutKnown": "El importe a cobrar es {payout}.",
+    "payoutUnknown": "El importe a cobrar aún no se conoce: {reason}.",
+    "reason": {
+      "RATE_UNKNOWN": "un tipo del que depende aún no está publicado",
+      "TERMS_INCOMPLETE": "las condiciones de la serie están incompletas",
+      "PURCHASE_OUTSIDE_SALE_WINDOW": "una fecha de compra queda fuera del periodo de venta de la serie",
+      "PURCHASE_AFTER_MATURITY": "una fecha de compra es igual o posterior al vencimiento de la serie",
+      "other": "no se puede calcular con los datos almacenados"
+    },
+    "benchmarkTitle": "{benchmark}: nueva observación {observation}",
+    "benchmarkIntro": "{publisher} publicó {benchmark} para {observation}: {value}.",
+    "benchmarkSeries": "{series}: periodo desde el {date} con un tipo de {rate} anual.",
+    "benchmarkSeriesProjected": "{series}: periodo desde el {date} con un tipo proyectado de {rate} anual.",
+    "benchmarkSeriesUnknown": "{series}: periodo desde el {date}, el tipo aún no se conoce.",
+    "benchmarkMore": "Y {more} más.",
+    "missingTitle": "Aún no se conocen las cifras de bonos",
+    "missingMessage": "Algunas cifras de bonos no se pueden calcular. {causes}",
+    "cause": {
+      "observation": "La observación {observation} de {benchmark} ({publisher}) no está almacenada: aún no se ha publicado o el feed no se ha vuelto a obtener. Actualice en la página del bono.",
+      "observationNoPublisher": "La observación {observation} de {benchmark} no está almacenada: aún no se ha publicado o el feed no se ha vuelto a obtener. Actualice en la página del bono.",
+      "terms": "Las condiciones de {series} están incompletas. Actualice la serie en la página del bono.",
+      "purchase": "Una compra de {series} el {date} queda fuera de su periodo de venta ({from} a {to}). Corrija la fecha de compra.",
+      "purchaseAfterMaturity": "Una compra de {series} el {date} es igual o posterior a su vencimiento ({maturity}). Corrija la fecha de compra.",
+      "lots": "Los lotes no se pueden derivar del libro de transacciones ({code}). Corrija el libro.",
+      "lotsRow": "{action} del {date}: no se pueden derivar los lotes ({code}). Corrige la transacción.",
+      "lotsRowSeries": "{action} del {date}: sin serie asignada ({code}). Elige la serie en esa transacción.",
+      "lotsRowRemoval": "{action} del {date}: retira más de lo que la cuenta tiene de esa serie ({code}). Corrige la transacción."
+    },
+    "action": {
+      "BUY": "Compra",
+      "SELL": "Venta",
+      "REINVEST": "Reinversión",
+      "ADD_SHARES": "Adición de acciones",
+      "REMOVE_SHARES": "Retirada de acciones",
+      "SPLIT": "Split",
+      "TRANSFER_IN": "Transferencia entrante",
+      "TRANSFER_OUT": "Transferencia saliente",
+      "other": "Transacción"
+    },
+    "benchmarks": {
+      "PL_CPI_GUS_YOY": "IPC, 12 meses (GUS)",
+      "PL_NBP_REFERENCE": "Tipo de referencia del NBP",
+      "US_CPI_U_NSA": "CPI-U, todos los componentes, sin ajuste estacional (BLS)",
+      "US_TBILL_13W_MMY": "Rendimiento de las letras del Tesoro a 13 semanas"
+    }
+  },
+  "portfolioMovement": {
+    "titleUp": "Inversiones al alza {percent}%",
+    "titleDown": "Inversiones a la baja {percent}%",
+    "messageUp": "Tus inversiones han subido un {percent}% del {from} al {to}, sin contar depósitos ni retiros. Abre para revisar.",
+    "messageDown": "Tus inversiones han bajado un {percent}% del {from} al {to}, sin contar depósitos ni retiros. Abre para revisar."
+  },
+  "balanceThreshold": {
+    "titleLow": "{account} está por debajo de tu umbral",
+    "titleHigh": "{account} está por encima de tu umbral",
+    "messageLow": "{account} bajó a {balance}, por debajo de tu umbral de {threshold}.",
+    "messageHigh": "{account} subió a {balance}, por encima de tu umbral de {threshold}."
+  },
+  "system": {
+    "backupFailed": {
+      "title": "Error en la copia de seguridad automática",
+      "message": "La copia de seguridad automática de {user} falló: {error}"
+    },
+    "backupPartial": {
+      "title": "Copia de seguridad automática incompleta",
+      "messageAttachments": "La copia de seguridad de {user} se escribió, pero no se pudieron incluir {missing} de {expected} archivos adjuntos y {inconsistent} no coincidían con sus metadatos. Las copias completas se conservaron.",
+      "messagePromotion": "La copia diaria de {user} se completó, pero su copia semanal o mensual no se pudo escribir: {error}",
+      "messageRetention": "La copia de seguridad de {user} se completó, pero los archivos de copias antiguas no se pudieron eliminar: {error}"
+    },
+    "encryptionKeyMissing": {
+      "title": "Clave de cifrado sin configurar",
+      "message": "ENCRYPTION_KEY no está definida, por lo que las copias de seguridad se escriben sin cifrar y no se pueden guardar secretos. Una versión futura no arrancará sin ella."
+    },
+    "jwtSecretWeak": {
+      "title": "JWT_SECRET es débil",
+      "message": "JWT_SECRET es un valor de ejemplo publicado o demasiado predecible, así que se pueden falsificar tokens de sesión. Genera uno seguro (openssl rand -base64 32). Cambiarlo hace que dejen de funcionar los códigos de las aplicaciones de autenticación y olvida los dispositivos de confianza: los usuarios inician sesión con un código de respaldo y vuelven a configurar la 2FA, y tú restableces la 2FA en Gestión de usuarios para quien no tenga uno. Consulta antes docs/backend/modules-and-runtime.md (Changing JWT_SECRET)."
+    },
+    "smtpFailure": {
+      "title": "El envío de correo está fallando",
+      "message": "Monize no pudo enviar correo: {error}. Las notificaciones y los recordatorios no se están entregando."
+    },
+    "providerOutage": {
+      "title": "{provider} no responde",
+      "message": "Los datos de mercado de {provider} no están disponibles. Los precios y los datos de índices pueden estar desactualizados hasta que vuelva a responder."
+    },
+    "providerRecovered": {
+      "title": "{provider} responde de nuevo",
+      "message": "La interrupción terminó y los datos de mercado de {provider} se están actualizando de nuevo."
+    },
+    "scheduledPostFailed": {
+      "title": "{name} no se pudo registrar",
+      "message": "Su transacción programada con vencimiento el {date} no se registró automáticamente: {error}. Puede registrarla manualmente desde Facturas y depósitos."
+    }
+  },
+  "priceMovement": {
+    "title": "Alerta de cambio de precio: {symbol} ({percent}%)",
+    "message": "{symbol}: {percent}% respecto a la sesión anterior disponible."
+  },
+  "bankSync": {
+    "expiringTitleToday": "{institution}: el acceso bancario termina hoy",
+    "expiringTitleOneDay": "{institution}: el acceso bancario termina en un plazo de 1 día",
+    "expiringTitleDays": "{institution}: el acceso bancario termina en un plazo de {days} días",
+    "expiringMessage": "Tu consentimiento para que Monize lea {institution} termina el {date}. Renueva la conexión en Monize para seguir sincronizando.",
+    "expiredTitle": "{institution}: el acceso bancario ha terminado",
+    "expiredMessage": "Tu consentimiento para que Monize lea {institution} ha terminado. Renueva la conexión en Monize para reanudar la sincronización.",
+    "failedTitle": "{institution}: error de sincronización",
+    "failedMessage": "La sincronización diaria de {institution} ha fallado para: {accounts}. Abre los ajustes de sincronización bancaria para ver el motivo.",
+    "failedCredentialsMessage": "La sincronización diaria de {institution} no pudo iniciarse porque faltan las credenciales de la sincronización bancaria o fueron rechazadas. Revísalas en los ajustes de sincronización bancaria.",
+    "unnamedAccount": "una cuenta",
+    "importedTitle": "{institution}: nuevas transacciones importadas",
+    "importedMessage": "Transacciones importadas de {institution} por la sincronización diaria: {imported}.",
+    "importedNoneTitle": "{institution}: sin transacciones nuevas",
+    "importedNoneMessage": "La sincronización diaria de {institution} no encontró transacciones nuevas."
+  },
+  "emailReceiptsAttention": {
+    "title": "Los recibos de correo necesitan atención",
+    "message": "Su bandeja de recibos contiene {noParser} sin perfil y {parseFailed} que su perfil no reconoció. Abra para revisar."
+  },
+  "aiReview": {
+    "readyTitle": "Propuestas de IA esperan su aprobación",
+    "readyMessage": "{count, plural, one {# propuesta de IA espera} other {# propuestas de IA esperan}} su aprobación, {added} de ellas nuevas. Abra la bandeja de revisión de IA para aprobarlas o descartarlas.",
+    "expiringTitle": "Propuestas de IA a punto de caducar",
+    "expiringMessage": "{count, plural, one {# propuesta de IA caduca} other {# propuestas de IA caducan}} pronto. La primera caduca el {date}. Abra la bandeja de revisión de IA para aprobarlas o descartarlas."
+  },
+  "warranty": {
+    "expiringTitle": "{name}: la garantía vence en {days, plural, one {# día} other {# días}}",
+    "expiringMessage": "La garantía de {name} vence el {date}. Ábrala para revisar sus documentos o registrar una reclamación.",
+    "todayTitle": "{name}: la garantía vence hoy",
+    "todayMessage": "La garantía de {name} vence hoy, {date}. Ábrala para revisar sus documentos o registrar una reclamación."
+  },
+  "security": {
+    "oauthTitle": "Nueva aplicación conectada: {clientName}",
+    "oauthMessage": "A la aplicación {clientName} se le acaba de conceder acceso a su cuenta de Monize. Si no fue usted, cambie su contraseña ahora: así se revoca el acceso de todas las aplicaciones conectadas.",
+    "relayTitle": "Una nueva conexión respondió a su chat de IA",
+    "relayMessage": "Una conexión que no había respondido antes a su chat de IA de Monize acaba de recoger una solicitud. Si no conectó este asistente, cambie su contraseña."
+  },
+  "payrollDeduction": {
+    "resetTitle": "{category}: confirme el máximo del próximo año",
+    "resetMessage": "La deducción {category} en {bill} se reinicia el {date}. Actualice el máximo anual si cambia; de lo contrario vuelve a aplicarse {amount}."
+  },
+  "shared": {
+    "title": "Gastos compartidos",
+    "message": "Hay novedades en un grupo compartido. Abre Monize para revisarlas."
+  },
+  "native": {
+    "payments": {
+      "title": "Recordatorio de pago",
+      "body": "Una factura o un pago programado requiere tu atención. Abre Monize para ver los detalles."
+    },
+    "budgets": {
+      "title": "Alerta de presupuesto",
+      "body": "Uno de tus presupuestos requiere tu atención. Abre Monize para ver los detalles."
+    },
+    "system": {
+      "title": "Aviso del sistema",
+      "body": "Monize tiene un aviso del sistema para ti. Abre la aplicación para ver los detalles."
+    },
+    "balances": {
+      "title": "Alerta de saldo",
+      "body": "El saldo de una cuenta ha cruzado un umbral que estableciste. Abre Monize para ver los detalles."
+    },
+    "investments": {
+      "title": "Movimiento de inversiones",
+      "body": "Tus inversiones se movieron hoy. Abre Monize para ver los detalles."
+    },
+    "strategies": {
+      "title": "Señal de estrategia",
+      "body": "Una de tus estrategias cambió su recomendación. Abre Monize para ver los detalles."
+    },
+    "bank_sync": {
+      "title": "Conexión bancaria",
+      "body": "Una conexión bancaria requiere tu atención. Abre Monize para ver los detalles."
+    },
+    "bank_sync_activity": {
+      "title": "Sincronización bancaria",
+      "body": "Tu sincronización bancaria tiene novedades. Abre Monize para ver los detalles."
+    },
+    "email_receipts": {
+      "title": "Los recibos de correo necesitan atención",
+      "body": "Algunos correos en su bandeja de entrada de recibos necesitan un perfil o una corrección. Abra Monize para más detalles."
+    },
+    "bonds": {
+      "title": "Aviso de bonos",
+      "body": "Uno de sus bonos tiene novedades. Abra Monize para ver los detalles."
+    },
+    "ai_review": {
+      "title": "Propuestas de revisión de IA",
+      "body": "Algunas propuestas de revisión de IA esperan su decisión. Abra Monize para ver los detalles."
+    },
+    "warranties": {
+      "title": "Recordatorio de garantía",
+      "body": "Una de sus garantías vence pronto. Abra Monize para ver los detalles."
+    },
+    "shared_expenses": {
+      "title": "Gastos compartidos",
+      "body": "Hay novedades en un grupo compartido. Abre Monize para revisarlas."
+    },
+    "security": {
+      "title": "Aviso de seguridad",
+      "body": "Ha cambiado algo en quién puede acceder a su cuenta de Monize. Abra Monize para ver los detalles."
+    },
+    "fallback": {
+      "title": "Monize",
+      "body": "Tienes una notificación nueva en Monize."
+    }
+  }
+}

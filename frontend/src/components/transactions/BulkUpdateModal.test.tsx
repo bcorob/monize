@@ -1,11 +1,30 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@/test/render';
+import { render, screen, fireEvent, waitFor, act } from '@/test/render';
 import { BulkUpdateModal } from './BulkUpdateModal';
 
 // Mock Modal to render children when isOpen
 vi.mock('@/components/ui/Modal', () => ({
-  Modal: ({ isOpen, children }: { isOpen: boolean; onClose: () => void; children: React.ReactNode; maxWidth?: string; className?: string }) =>
-    isOpen ? <div data-testid="modal">{children}</div> : null,
+  Modal: ({
+    isOpen,
+    children,
+    title,
+    description,
+  }: {
+    isOpen: boolean;
+    onClose: () => void;
+    children: React.ReactNode;
+    maxWidth?: string;
+    className?: string;
+    title?: React.ReactNode;
+    description?: string;
+  }) =>
+    isOpen ? (
+      <div data-testid="modal">
+        {title && <h2>{title}</h2>}
+        {description && <span data-testid="modal-description">{description}</span>}
+        {children}
+      </div>
+    ) : null,
 }));
 
 // Mock FormActions to render submit/cancel buttons
@@ -67,6 +86,7 @@ vi.mock('@/components/ui/Select', () => ({
 const mockGetAllCategories = vi.fn().mockResolvedValue([]);
 const mockGetAllPayees = vi.fn().mockResolvedValue([]);
 const mockGetAllTags = vi.fn().mockResolvedValue([]);
+const mockGetTagUsage = vi.fn().mockResolvedValue({});
 
 vi.mock('@/lib/categories', () => ({
   categoriesApi: { getAll: () => mockGetAllCategories() },
@@ -77,7 +97,7 @@ vi.mock('@/lib/payees', () => ({
 }));
 
 vi.mock('@/lib/tags', () => ({
-  tagsApi: { getAll: () => mockGetAllTags() },
+  tagsApi: { getAll: () => mockGetAllTags(), getUsage: () => mockGetTagUsage() },
 }));
 
 vi.mock('@/lib/categoryUtils', () => ({
@@ -97,23 +117,28 @@ describe('BulkUpdateModal', () => {
     mockGetAllCategories.mockResolvedValue([]);
     mockGetAllPayees.mockResolvedValue([]);
     mockGetAllTags.mockResolvedValue([]);
+    mockGetTagUsage.mockResolvedValue({});
   });
 
-  it('renders title and selection count', async () => {
+  it('renders the title, with the selection count on the submit button', async () => {
     render(<BulkUpdateModal {...defaultProps} />);
     await waitFor(() => {
-      expect(screen.getByText('Bulk Update Transactions')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: 'Bulk Update Transactions' })).toBeInTheDocument();
     });
-    expect(screen.getByText(/Update 5 selected transactions/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Update 5 Transactions/ })).toBeInTheDocument();
+    // The how-to is the Modal description (an InfoTooltip), not a paragraph.
+    expect(screen.getByTestId('modal-description')).toHaveTextContent('Toggle the fields you want to change.');
   });
 
-  it('loads categories, payees, and tags when opened', async () => {
+  it('loads categories, payees, and tags when opened, but not tag usage', async () => {
     render(<BulkUpdateModal {...defaultProps} />);
     await waitFor(() => {
       expect(mockGetAllCategories).toHaveBeenCalled();
       expect(mockGetAllPayees).toHaveBeenCalled();
       expect(mockGetAllTags).toHaveBeenCalled();
     });
+    // Usage only orders the tag picker, so it waits until Tags is switched on.
+    expect(mockGetTagUsage).not.toHaveBeenCalled();
   });
 
   it('shows all five toggle fields', async () => {
@@ -284,6 +309,37 @@ describe('BulkUpdateModal', () => {
     await waitFor(() => {
       expect(onSubmit).toHaveBeenCalledWith({ tagIds: ['tag-1'] });
     });
+  });
+
+  it('orders the tag picker recent-first, and A-Z when the usage lookup fails', async () => {
+    const mockTags = [
+      { id: 'tag-1', name: 'Art', color: null, icon: null, userId: 'user-1', createdAt: '', updatedAt: '' },
+      { id: 'tag-2', name: 'Holiday 2026', color: null, icon: null, userId: 'user-1', createdAt: '', updatedAt: '' },
+    ];
+    mockGetAllTags.mockResolvedValue(mockTags);
+    mockGetTagUsage.mockResolvedValue({ 'tag-2': { lastUsed: '2026-10-01', count: 1 } });
+
+    const labels = () =>
+      Array.from(screen.getByTestId('multi-select-tags').querySelectorAll('button')).map(
+        (b) => b.textContent,
+      );
+    const enableTags = async () => {
+      await waitFor(() => expect(mockGetAllTags).toHaveBeenCalled());
+      await waitFor(() => expect(screen.getAllByRole('checkbox')).toHaveLength(5));
+      fireEvent.click(screen.getAllByRole('checkbox')[4]);
+      await waitFor(() => expect(mockGetTagUsage).toHaveBeenCalled());
+    };
+
+    const { unmount } = render(<BulkUpdateModal {...defaultProps} />);
+    await enableTags();
+    await waitFor(() => expect(labels()).toEqual(['Holiday 2026', 'Art']));
+    unmount();
+
+    mockGetTagUsage.mockRejectedValue(new Error('network'));
+    render(<BulkUpdateModal {...defaultProps} />);
+    await enableTags();
+    await act(async () => {});
+    expect(labels()).toEqual(['Art', 'Holiday 2026']);
   });
 
   it('submits empty tagIds array when tags enabled but none selected', async () => {

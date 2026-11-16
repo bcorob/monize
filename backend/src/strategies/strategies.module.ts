@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { CurrenciesModule } from "../currencies/currencies.module";
 import { SecuritiesModule } from "../securities/securities.module";
+import { NotificationsModule } from "../notifications/notifications.module";
 import { Account } from "../accounts/entities/account.entity";
 import { Security } from "../securities/entities/security.entity";
 import { UserPreference } from "../users/entities/user-preference.entity";
@@ -17,6 +18,7 @@ import { GemPerformanceService } from "./gem-performance.service";
 import { GemPriceService } from "./gem-price.service";
 import { GemBackfillService } from "./gem-backfill.service";
 import { GemBacktestService } from "./gem-backtest.service";
+import { GemSignalChangeAlertService } from "./gem-signal-change-alert.service";
 
 /**
  * Rule-based investing strategies. Currently GEM (Global Equities Momentum):
@@ -27,6 +29,10 @@ import { GemBacktestService } from "./gem-backtest.service";
   imports: [
     CurrenciesModule,
     SecuritiesModule,
+    // For NotificationDispatchService: the GEM signal-change cron dispatches a
+    // notification when a strategy's recommendation changes. NotificationsModule
+    // does not import StrategiesModule, so there is no cycle (module-graph.spec).
+    NotificationsModule,
     TypeOrmModule.forFeature([
       GemStrategy,
       GemStrategyAccount,
@@ -46,6 +52,7 @@ import { GemBacktestService } from "./gem-backtest.service";
     GemPriceService,
     GemBackfillService,
     GemBacktestService,
+    GemSignalChangeAlertService,
   ],
   exports: [GemStrategyService],
 })

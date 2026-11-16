@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { z } from "zod";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 
 @Injectable()
 export class McpTransactionLookupPrompt {
@@ -10,13 +10,13 @@ export class McpTransactionLookupPrompt {
       {
         title: "Transaction lookup",
         description: "Help find specific transactions",
-        argsSchema: {
+        argsSchema: z.object({
           query: z
             .string()
             .describe(
               "What to search for (e.g., 'Amazon purchases last month', 'rent payments')",
             ),
-        },
+        }),
       },
       async (args) => {
         return {

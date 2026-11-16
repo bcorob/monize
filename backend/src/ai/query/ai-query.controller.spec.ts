@@ -1,6 +1,16 @@
+import { Reflector } from "@nestjs/core";
 import { Test, TestingModule } from "@nestjs/testing";
+import {
+  ALLOW_DELEGATE_KEY,
+  DELEGATE_FULL_SCOPE_KEY,
+  DELEGATE_SECTION_KEY,
+} from "../../delegation/decorators/delegate-access.decorator";
 import { AiQueryController } from "./ai-query.controller";
-import { AiQueryService, QueryResult } from "./ai-query.service";
+import {
+  AiQueryService,
+  DELEGATE_ALLOWED_AI_TOOLS,
+  QueryResult,
+} from "./ai-query.service";
 
 describe("AiQueryController", () => {
   let controller: AiQueryController;
@@ -37,6 +47,27 @@ describe("AiQueryController", () => {
     controller = module.get<AiQueryController>(AiQueryController);
   });
 
+  it("admits an acting delegate only with the ai section and a whole-ledger grant", () => {
+    const reflector = new Reflector();
+    for (const handler of [
+      AiQueryController.prototype.query,
+      AiQueryController.prototype.streamQuery,
+    ]) {
+      const targets = [handler, AiQueryController];
+      expect(reflector.getAllAndOverride(ALLOW_DELEGATE_KEY, targets)).toBe(
+        true,
+      );
+      expect(reflector.getAllAndOverride(DELEGATE_SECTION_KEY, targets)).toBe(
+        "ai",
+      );
+      // The tools read every account and section; nothing narrows them to
+      // the delegate's grants, so the route needs all of them.
+      expect(
+        reflector.getAllAndOverride(DELEGATE_FULL_SCOPE_KEY, targets),
+      ).toBe(true);
+    }
+  });
+
   describe("query()", () => {
     it("executes query and returns result", async () => {
       const result = await controller.query(mockRequest, {
@@ -47,6 +78,7 @@ describe("AiQueryController", () => {
       expect(mockQueryService.executeQuery).toHaveBeenCalledWith(
         "user-1",
         "How much did I spend in January?",
+        undefined,
         undefined,
         undefined,
       );
@@ -62,11 +94,56 @@ describe("AiQueryController", () => {
         "My balance?",
         undefined,
         undefined,
+        undefined,
       );
+    });
+
+    it("limits an acting delegate to the allow-listed tools", async () => {
+      const delegateRequest = {
+        user: { id: "owner-1", realUserId: "delegate-1" },
+      };
+
+      await controller.query(delegateRequest, { query: "Parse my receipts" });
+
+      const options = mockQueryService.executeQuery.mock.calls[0][4];
+      expect(options.allowTools).toBe(DELEGATE_ALLOWED_AI_TOOLS);
+    });
+
+    it("withdraws no tool from the owner, even with a realUserId equal to the id", async () => {
+      await controller.query(
+        { user: { id: "user-1", realUserId: "user-1" } },
+        { query: "My balance?" },
+      );
+
+      expect(mockQueryService.executeQuery.mock.calls[0][4]).toBeUndefined();
     });
   });
 
   describe("streamQuery()", () => {
+    it("limits an acting delegate's stream to the same tools", async () => {
+      mockQueryService.executeQueryStream.mockReturnValue(
+        (async function* () {
+          yield { type: "content", text: "x" };
+        })(),
+      );
+      const mockRes = {
+        setHeader: jest.fn(),
+        flushHeaders: jest.fn(),
+        write: jest.fn(),
+        end: jest.fn(),
+        on: jest.fn(),
+      };
+
+      await controller.streamQuery(
+        { user: { id: "owner-1", realUserId: "delegate-1" } },
+        { query: "Parse my receipts" },
+        mockRes as any,
+      );
+
+      const options = mockQueryService.executeQueryStream.mock.calls[0][4];
+      expect(options.allowTools).toBe(DELEGATE_ALLOWED_AI_TOOLS);
+    });
+
     it("sets SSE headers and streams events", async () => {
       const events = [
         { type: "thinking", message: "Analyzing..." },
@@ -244,6 +321,7 @@ describe("AiQueryController", () => {
       expect(mockQueryService.executeQueryStream).toHaveBeenCalledWith(
         "user-1",
         "My spending?",
+        undefined,
         undefined,
         undefined,
       );

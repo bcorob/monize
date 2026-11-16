@@ -293,6 +293,57 @@ describe("gem-momentum.util", () => {
   });
 
   describe("momentumSnapshot", () => {
+    // A26-M27: the roles of one evaluation are priced at one session. The
+    // ex-US feed had no closes 2026-09-19..09-30 (an outage), so its newest
+    // close on or before the boundary is 09-18 while the other roles hold the
+    // boundary's own close; it resumes on 10-01, which used to read as
+    // "settled".
+    const gapAtBoundary = {
+      US_EQUITY: series([
+        ["2025-09-30", 100],
+        ["2026-09-30", 110],
+        ["2026-10-01", 110],
+      ]),
+      EX_US_EQUITY: series([
+        ["2025-09-30", 100],
+        ["2026-09-18", 104],
+        ["2026-10-01", 113],
+      ]),
+      SAFE: series([
+        ["2025-09-30", 100],
+        ["2026-09-30", 103],
+        ["2026-10-01", 103],
+      ]),
+    };
+
+    it("does not price a role across a feed gap at the boundary", () => {
+      const m = momentumSnapshot(gapAtBoundary, "2026-09-30", 12);
+
+      expect(m.EX_US_EQUITY).toBeNull();
+      expect(m.US_EQUITY).toBe(10);
+      expect(m.SAFE).toBe(3);
+      // RISK-ON needs every mapped market's momentum: the period defers
+      // instead of recommending US equity off a 12-day-old ex-US close.
+      expect(evaluate(m, ["US_EQUITY", "EX_US_EQUITY", "SAFE"])).toBeNull();
+    });
+
+    it("still prices a role whose market was shut a day or two at the boundary", () => {
+      const m = momentumSnapshot(
+        {
+          ...gapAtBoundary,
+          EX_US_EQUITY: series([
+            ["2025-09-30", 100],
+            ["2026-09-28", 112],
+            ["2026-10-01", 113],
+          ]),
+        },
+        "2026-09-30",
+        12,
+      );
+
+      expect(m.EX_US_EQUITY).toBe(12);
+    });
+
     it("computes each role's lookback return and marks gaps unknown", () => {
       const snapshot = momentumSnapshot(
         {

@@ -24,6 +24,8 @@ import { ExportIconButton } from '@/components/ui/ExportIconButton';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useChartDateFormat } from '@/hooks/useChartDateFormat';
 import { CHART_MAX_POINTS, sampleStockSeries } from '@/lib/chart-sampling';
+import { CHART_GRID_PROPS } from '@/lib/chart-style';
+import { ChartActiveDot } from '@/components/ui/ChartActiveDot';
 
 export interface PayoffChartPoint {
   /** Month key (yyyy-MM), formatted for display by the chart */
@@ -125,7 +127,12 @@ export function buildPayoffComparisonSeries(
     (last, point, index) => (point.historicalBalance !== undefined ? index : last),
     -1,
   );
-  let projectionStartKey: string | null = null;
+  // The first projected month: the one after the last historical point, or --
+  // with no recorded payments yet -- the first month a projection has a value.
+  // Not simply `points[0]`: a loan entered with a past start date has an
+  // original contractual curve reaching back years before the projection
+  // begins, so the first point is origination, not "today".
+  let projectionStartIndex = -1;
   if (hasProjection && lastHistoricalIndex >= 0) {
     const lastHistorical = points[lastHistoricalIndex];
     points = points.map((point, index) =>
@@ -140,10 +147,13 @@ export function buildPayoffComparisonSeries(
           }
         : point,
     );
-    projectionStartKey = points[lastHistoricalIndex + 1]?.monthKey ?? null;
+    projectionStartIndex = lastHistoricalIndex + 1;
   } else if (hasProjection) {
-    projectionStartKey = points[0]?.monthKey ?? null;
+    projectionStartIndex = points.findIndex(
+      (point) => point.baselineBalance !== undefined || point.scenarioBalance !== undefined,
+    );
   }
+  const projectionStartKey = points[projectionStartIndex]?.monthKey ?? null;
 
   // Sample long series down to a readable number of points. Always keep the
   // endpoints and the history->projection transition (last historical point
@@ -159,10 +169,12 @@ export function buildPayoffComparisonSeries(
   const chartPoints = sampleStockSeries(points, {
     maxPoints: CHART_MAX_POINTS,
     keep: (point, index) =>
-      // `lastHistoricalIndex` is -1 with no history, which makes the second
-      // test `index === 0` -- an endpoint the sampler keeps anyway.
+      // With no history the first projected month can sit mid-series (after
+      // the original curve's past months), so it is pinned by its own index
+      // rather than as `lastHistoricalIndex + 1`. Sampled away, the projection
+      // appeared to start at the next retained stride, months after today.
       index === lastHistoricalIndex ||
-      index === lastHistoricalIndex + 1 ||
+      index === projectionStartIndex ||
       // Never sample away a month that had a real overpayment -- its tooltip
       // flag is the whole point of the marker.
       Boolean(point.overpayment),
@@ -266,7 +278,7 @@ export function PayoffComparisonChart({
       <div className="h-80" ref={chartRef}>
         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
           <AreaChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+            <CartesianGrid {...CHART_GRID_PROPS} />
             <XAxis dataKey="label" tick={{ fontSize: 11 }} interval="preserveStartEnd" />
             <YAxis
               tickFormatter={formatCurrencyAxis}
@@ -297,6 +309,7 @@ export function PayoffComparisonChart({
             <Legend />
             {original && (
               <Area
+                activeDot={ChartActiveDot}
                 type="monotone"
                 dataKey="originalBalance"
                 stroke={chartColors.axis}
@@ -309,6 +322,7 @@ export function PayoffComparisonChart({
               />
             )}
             <Area
+              activeDot={ChartActiveDot}
               type="monotone"
               dataKey="historicalBalance"
               stroke={chartColors.expense}
@@ -327,6 +341,7 @@ export function PayoffComparisonChart({
             />
             {baseline && (
               <Area
+                activeDot={ChartActiveDot}
                 type="monotone"
                 dataKey="baselineBalance"
                 stroke={chartColors.primary}
@@ -340,6 +355,7 @@ export function PayoffComparisonChart({
             )}
             {scenario && (
               <Area
+                activeDot={ChartActiveDot}
                 type="monotone"
                 dataKey="scenarioBalance"
                 stroke={chartColors.income}

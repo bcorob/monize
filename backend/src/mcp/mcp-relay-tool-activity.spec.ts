@@ -3,7 +3,8 @@ import {
   installRelayToolActivity,
   wrapToolHandlerForRelay,
 } from "./mcp-relay-tool-activity";
-import { currentMcpSessionId } from "./mcp-session-context";
+import { currentMcpCallerKey } from "./mcp-session-context";
+import { mcpTestCtx } from "./testing/mcp-test-context";
 import type { AiRelayService } from "../ai/relay/ai-relay.service";
 
 describe("wrapToolHandlerForRelay", () => {
@@ -11,7 +12,8 @@ describe("wrapToolHandlerForRelay", () => {
     ({ reportToolActivity: jest.fn() }) as unknown as AiRelayService & {
       reportToolActivity: jest.Mock;
     };
-  const resolveUser = (() => ({ userId: "u1", scopes: "read" })) as any;
+  const ctxFor = (sessionId?: string) =>
+    mcpTestCtx({ userId: "u1", scopes: "read" }, { sessionId });
 
   it("brackets a successful call with start then result (no error)", async () => {
     const relayService = relay();
@@ -19,11 +21,10 @@ describe("wrapToolHandlerForRelay", () => {
     const wrapped = wrapToolHandlerForRelay(
       "get_accounts",
       handler,
-      resolveUser,
       relayService,
     );
 
-    const result = await wrapped({}, { sessionId: "s1" });
+    const result = await wrapped({}, ctxFor("s1"));
 
     expect(result).toEqual({ ok: true });
     // The calling session travels with every report: it is what lets the relay
@@ -43,21 +44,20 @@ describe("wrapToolHandlerForRelay", () => {
     const wrapped = wrapToolHandlerForRelay(
       "manage_transactions",
       async () => {
-        seen.push(currentMcpSessionId());
+        seen.push(currentMcpCallerKey());
         await Promise.resolve();
         // Still ambient after an await -- handlers are async throughout.
-        seen.push(currentMcpSessionId());
+        seen.push(currentMcpCallerKey());
         return { ok: true };
       },
-      resolveUser,
       relayService,
     );
 
-    await wrapped({}, { sessionId: "s1" });
+    await wrapped({}, ctxFor("s1"));
 
     expect(seen).toEqual(["s1", "s1"]);
     // And it does not leak outside the call.
-    expect(currentMcpSessionId()).toBeUndefined();
+    expect(currentMcpCallerKey()).toBeUndefined();
   });
 
   it("reports isError:true when the tool result is an error", async () => {
@@ -65,11 +65,10 @@ describe("wrapToolHandlerForRelay", () => {
     const wrapped = wrapToolHandlerForRelay(
       "create_transaction",
       jest.fn().mockResolvedValue({ isError: true }),
-      resolveUser,
       relayService,
     );
 
-    await wrapped({}, { sessionId: "s1" });
+    await wrapped({}, ctxFor("s1"));
 
     expect((relayService as any).reportToolActivity).toHaveBeenLastCalledWith(
       "u1",
@@ -86,11 +85,10 @@ describe("wrapToolHandlerForRelay", () => {
     const wrapped = wrapToolHandlerForRelay(
       "get_accounts",
       jest.fn().mockRejectedValue(boom),
-      resolveUser,
       relayService,
     );
 
-    await expect(wrapped({}, { sessionId: "s1" })).rejects.toThrow("boom");
+    await expect(wrapped({}, ctxFor("s1"))).rejects.toThrow("boom");
     expect((relayService as any).reportToolActivity).toHaveBeenLastCalledWith(
       "u1",
       "get_accounts",
@@ -105,11 +103,12 @@ describe("wrapToolHandlerForRelay", () => {
     const wrapped = wrapToolHandlerForRelay(
       "get_accounts",
       jest.fn().mockResolvedValue({}),
-      (() => undefined) as any,
       relayService,
     );
 
-    await wrapped({}, {});
+    // A request whose credential the transport never validated: nothing on it
+    // says who is calling, so no activity belongs to anyone.
+    await wrapped({}, mcpTestCtx(undefined));
 
     expect((relayService as any).reportToolActivity).not.toHaveBeenCalled();
   });
@@ -127,11 +126,8 @@ describe("installRelayToolActivity", () => {
       },
     } as any;
 
-    installRelayToolActivity(
-      server,
-      (() => ({ userId: "u1", scopes: "read" })) as any,
-      relayService,
-    );
+    installRelayToolActivity(server, relayService);
+    const callerCtx = mcpTestCtx({ userId: "u1", scopes: "read" });
 
     // Register one data tool and one control tool through the patched method.
     server.registerTool("get_accounts", {}, jest.fn().mockResolvedValue({}));
@@ -141,11 +137,11 @@ describe("installRelayToolActivity", () => {
       jest.fn().mockResolvedValue({ hasPrompt: false }),
     );
 
-    await registered["get_accounts"]({}, { sessionId: "s1" });
+    await registered["get_accounts"]({}, callerCtx);
     expect((relayService as any).reportToolActivity).toHaveBeenCalled();
 
     (relayService as any).reportToolActivity.mockClear();
-    await registered["get_next_prompt"]({}, { sessionId: "s1" });
+    await registered["get_next_prompt"]({}, callerCtx);
     expect((relayService as any).reportToolActivity).not.toHaveBeenCalled();
     expect(RELAY_CONTROL_TOOLS.has("get_next_prompt")).toBe(true);
   });

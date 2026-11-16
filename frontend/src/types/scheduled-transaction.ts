@@ -4,6 +4,8 @@ import { Category } from './category';
 import { Tag } from './tag';
 import { InvestmentAction, Security } from './investment';
 import { SplitKind, InvestmentSplitDetails } from './transaction';
+import type { ScheduledPayrollDeduction } from './payroll-deduction';
+import type { CustomRecurrence } from '@/lib/custom-recurrence';
 
 /**
  * Every frequency a scheduled transaction can have, ordered shortest period
@@ -28,6 +30,7 @@ export const FREQUENCY_VALUES = [
   'SEMIANNUAL',
   'YEARLY',
   'EVERY2YEARS',
+  'CUSTOM',
 ] as const;
 
 export type FrequencyType = (typeof FREQUENCY_VALUES)[number];
@@ -57,6 +60,71 @@ export interface ScheduledTransactionSplit {
   createdAt: string;
 }
 
+/**
+ * Why an estimated schedule's amount is what it is, or unknown
+ * (docs/specs/scheduled-amount-estimate.md section 5).
+ */
+export type ScheduleAmountEstimateStatus =
+  | 'estimated'
+  | 'no-basis'
+  | 'no-history'
+  | 'missing-rate';
+
+/** One month of a schedule's history estimate. */
+export interface EstimatedMonth {
+  amount: number;
+  /**
+   * `seasonal`: the same calendar month's payments; `recent`: the newest
+   * three; `balance`: what a transfer's destination owes raised it (issue #2164).
+   */
+  basis: 'seasonal' | 'recent' | 'balance';
+}
+
+/**
+ * The occurrences a transfer's balance floor governs (issue #2164): one due
+ * after `after` (exclusive) and on or before `through` reads its month from
+ * `months`, the history estimate already raised to what the destination owes.
+ */
+export interface EstimateFloor {
+  after: string;
+  through: string;
+  months: Record<string, EstimatedMonth>;
+}
+
+/**
+ * The history estimate of an estimated schedule, as the list read sends it
+ * (issue #2096). `months` holds one per-occurrence amount per `YYYY-MM`, from
+ * the month before today for two years; a month it does not hold is unknown.
+ * Read it through `estimatedOccurrenceAmount`, never directly.
+ */
+export interface ScheduleAmountEstimate {
+  status: ScheduleAmountEstimateStatus;
+  currencyCode: string;
+  months: Record<string, EstimatedMonth>;
+  /** `null` when withheld: a delegate is not told how often the owner paid. */
+  paymentCount: number | null;
+  /**
+   * How many of those payments set the figure; `null` when withheld, absent
+   * from an older server.
+   */
+  levelPaymentCount?: number | null;
+  /**
+   * Which payments set the figure: `year`, every payment of the last 12
+   * months (no season, no trend); `recent`, the newest three. Absent from an
+   * older server, whose text then names only the payment count.
+   */
+  levelRule?: 'year' | 'recent' | null;
+  /** Whether the history varies by season; absent from an older server. */
+  seasonal?: boolean;
+  latestPaymentDate: string | null;
+  /** The year-over-year growth applied, or null when the history shows no trend. */
+  growthRate: number | null;
+  historyMonths: number;
+  missingPair: { from: string; to: string } | null;
+  /** A transfer's balance floors; empty (or absent from an older server) otherwise. */
+  floors?: EstimateFloor[];
+}
+
 export interface ScheduledTransaction {
   id: string;
   userId: string;
@@ -78,7 +146,10 @@ export interface ScheduledTransaction {
   originalCurrencyCode: string | null;
   exchangeRate: number;
   description: string | null;
+  referenceNumber: string | null;
   frequency: FrequencyType;
+  /** The rule when `frequency` is `CUSTOM`, else null (docs/specs/custom-recurrence.md). */
+  customRecurrence?: CustomRecurrence | null;
   nextDueDate: string;
   startDate: string;
   endDate: string | null;
@@ -86,6 +157,12 @@ export interface ScheduledTransaction {
   totalOccurrences: number | null;
   isActive: boolean;
   autoPost: boolean;
+  // Every occurrence without an amount-stating override is priced from the
+  // payee and category's payment history (issue #2096); `amount` is then only
+  // the server's snapshot and `amountEstimate` the figures. Absent on an older
+  // backend, which never estimates.
+  amountIsEstimated?: boolean;
+  amountEstimate?: ScheduleAmountEstimate | null;
   reminderDaysBefore: number;
   lastPostedDate: string | null;
   isSplit: boolean;
@@ -149,6 +226,20 @@ export interface ScheduledTransaction {
   // older backend, which is no information -- `occurrenceKind` then falls back as
   // it always did.
   effectiveDirectionAmount?: number | null;
+  // Read-only, server-resolved: the account whose balance `effectiveAmount`
+  // actually moves. For an investment schedule that is the SETTLEMENT account
+  // (the named funding account, or the brokerage's linked cash account), not
+  // `accountId`, which is the brokerage. Absent means an older backend, and the
+  // client derives the same answer from the funding/linked account it already
+  // holds (`occurrenceSettlementAccountId`); it is never a licence to project
+  // onto `accountId`, which charged the brokerage for cash it never moved
+  // (issue #1247).
+  settlementAccountId?: string;
+  // Read-only, server-resolved: the payroll deduction rules on this bill with
+  // their figures as of today (docs/specs/payroll-deductions.md section 5.3).
+  // The forecast spends `remaining` occurrence by occurrence and never
+  // re-derives it. Absent on an older backend; empty for a bill without a rule.
+  payrollDeductions?: ScheduledPayrollDeduction[];
   tagIds?: string[];
   splits?: ScheduledTransactionSplit[];
   overrideCount?: number;
@@ -179,14 +270,18 @@ export interface CreateScheduledTransactionData {
   originalAmount?: number | null;
   originalCurrencyCode?: string | null;
   exchangeRate?: number;
-  description?: string;
+  description?: string | null;
+  referenceNumber?: string | null;
   frequency: FrequencyType;
+  /** Required when `frequency` is `CUSTOM`; null clears it. */
+  customRecurrence?: CustomRecurrence | null;
   nextDueDate: string;
   startDate?: string;
   endDate?: string;
   occurrencesRemaining?: number;
   isActive?: boolean;
   autoPost?: boolean;
+  amountIsEstimated?: boolean;
   reminderDaysBefore?: number;
   isTransfer?: boolean;
   transferAccountId?: string;
@@ -319,7 +414,85 @@ export interface LoanProjectionAnchor {
   debt: number | null;
 }
 
+/**
+ * Why a projected loan occurrence's figures are unknown, and so where the
+ * reader repairs it (`docs/specs/scheduled-loan-installment-pricing.md` 8.4).
+ */
+export type LoanOccurrenceMissing =
+  /** No rate is recorded at `date`: the loan's rate history. */
+  | { kind: 'rate'; date: string }
+  /** A payment frequency the pricing cannot count: the loan's frequency. */
+  | { kind: 'cadence'; frequency: string }
+  /** The override's lines are not principal, interest and extra principal. */
+  | { kind: 'override-lines'; overrideId: string }
+  /** The override states an amount for a date by which the debt is settled. */
+  | { kind: 'override-on-settled-debt'; overrideId: string }
+  /** An earlier occurrence's figures are unknown, so this one's debt is. */
+  | { kind: 'earlier-occurrence'; originalDate: string };
+
+/**
+ * One occurrence of a loan bill, priced at its own due date by the server
+ * (spec 8.1). Money is unsigned and booked in the minor unit; `null` is
+ * unknown, never zero, and `missing` says why.
+ */
+/** One mortgage fee line of a projected occurrence: unsigned, in the minor unit. */
+export interface LoanOccurrenceFee {
+  categoryId: string;
+  amount: number;
+}
+
+export interface LoanOccurrence {
+  /** The recurrence slot: the occurrence's identity. */
+  originalDate: string;
+  /** The date it falls on: an override's date when one moved it. */
+  dueDate: string;
+  overrideId: string | null;
+  amount: number | null;
+  principal: number | null;
+  interest: number | null;
+  extraPrincipal: number | null;
+  /**
+   * The bill's mortgage fee lines (docs/specs/mortgage-fees.md section 6),
+   * one per fee by category; `amount` includes them. Null when unknown;
+   * absent from an older server's answer.
+   */
+  fees?: LoanOccurrenceFee[] | null;
+  /**
+   * The accrued interest the bill does not cover: capitalized into the debt
+   * through a negative `principal`. 0 when covered, null when unknown; absent
+   * from an older server's answer.
+   */
+  unpaidInterest?: number | null;
+  annualRate: number | null;
+  debtBefore: number | null;
+  complete: boolean;
+  missing: LoanOccurrenceMissing | null;
+}
+
+/**
+ * `GET /scheduled-transactions/:id/loan-occurrences`. `occurrences` is empty
+ * unless `status` is `priced`; for the other two the bill is not one the loan
+ * pricing re-prices, and its stored figures are what the posting moves.
+ */
+export interface LoanOccurrencesProjection {
+  scheduledTransactionId: string;
+  loanAccountId: string | null;
+  status: 'priced' | 'not-a-loan' | 'declined';
+  currencyCode: string;
+  occurrences: LoanOccurrence[];
+}
+
+/** One projected loan occurrence with the loan its lines pay, as the editor opens it. */
+export interface SelectedLoanOccurrence {
+  loanAccountId: string | null;
+  occurrence: LoanOccurrence;
+}
+
 export interface PostScheduledTransactionData {
+  // The occurrence the user is posting (`occurrencePin`): the server refuses
+  // with 409 once it is no longer the due one.
+  expectedOccurrenceDate: string;
+  expectedOverrideId: string | null;
   transactionDate?: string;
   amount?: number | null;
   // Foreign-currency schedules only: the amount in the entry currency for this
@@ -368,6 +541,11 @@ export interface ScheduledOccurrence {
   overrideId: string | null;
   /** True when an override moved this occurrence off its recurrence slot. */
   moved: boolean;
+  /**
+   * `amount` is the schedule's history estimate for this month (issue #2096).
+   * Absent on an older backend, which never estimates.
+   */
+  estimated?: boolean;
   accountId: string;
   transferAccountId: string | null;
   isTransfer: boolean;

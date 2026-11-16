@@ -24,6 +24,11 @@ vi.mock('@/hooks/useDateFormat', () => ({
   }),
 }));
 
+// Pin "today" so the "add another year" range is computed deterministically.
+vi.mock('@/hooks/useFinancialToday', () => ({
+  useFinancialToday: () => '2026-08-14',
+}));
+
 const { investmentsApi } = await import('@/lib/investments');
 
 const mockSecurity = {
@@ -156,10 +161,15 @@ describe('SecurityPriceHistory', () => {
     window.removeEventListener('unhandledrejection', swallowExpected);
   });
 
-  async function renderComponent() {
+  async function renderComponent(onPricesChanged?: () => void) {
     let result: ReturnType<typeof render>;
     await act(async () => {
-      result = render(<SecurityPriceHistory security={mockSecurity} />);
+      result = render(
+        <SecurityPriceHistory
+          security={mockSecurity}
+          onPricesChanged={onPricesChanged}
+        />,
+      );
     });
     return result!;
   }
@@ -269,6 +279,15 @@ describe('SecurityPriceHistory', () => {
     expect(screen.getByText('No price history available')).toBeInTheDocument();
   });
 
+  it('renders a translated label, not the raw id, for a bond engine price', async () => {
+    (investmentsApi.getSecurityPrices as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: 30, securityId: 'sec-1', priceDate: '2025-06-10', openPrice: null, highPrice: null, lowPrice: null, closePrice: 1, volume: null, source: 'bond_engine', createdAt: 'x' },
+    ]);
+    await renderExpanded();
+    expect(screen.getByText('Bond engine')).toBeInTheDocument();
+    expect(screen.queryByText('bond_engine')).not.toBeInTheDocument();
+  });
+
   it('renders all source label variants including unknowns', async () => {
     (investmentsApi.getSecurityPrices as ReturnType<typeof vi.fn>).mockResolvedValue([
       { id: 10, securityId: 'sec-1', priceDate: '2025-06-10', openPrice: null, highPrice: null, lowPrice: null, closePrice: 1, volume: null, source: 'msn_finance', createdAt: 'x' },
@@ -287,6 +306,22 @@ describe('SecurityPriceHistory', () => {
     expect(screen.getByText('Transfer Out')).toBeInTheDocument();
     expect(screen.getByText('made_up_provider')).toBeInTheDocument();
     expect(screen.getByText('Unknown')).toBeInTheDocument();
+  });
+
+  it('names every provider source as the securities list does, never by its raw id', async () => {
+    // This pane once kept its own label table, which knew Yahoo and MSN only, so
+    // LSE, Deutsche Börse and web-page-table prices showed as "lse",
+    // "deutsche_boerse" and "html_table".
+    (investmentsApi.getSecurityPrices as ReturnType<typeof vi.fn>).mockResolvedValue([
+      { id: 20, securityId: 'sec-1', priceDate: '2025-06-10', openPrice: null, highPrice: null, lowPrice: null, closePrice: 1, volume: null, source: 'lse', createdAt: 'x' },
+      { id: 21, securityId: 'sec-1', priceDate: '2025-06-11', openPrice: null, highPrice: null, lowPrice: null, closePrice: 1, volume: null, source: 'deutsche_boerse', createdAt: 'x' },
+      { id: 22, securityId: 'sec-1', priceDate: '2025-06-12', openPrice: null, highPrice: null, lowPrice: null, closePrice: 1, volume: null, source: 'html_table', createdAt: 'x' },
+    ]);
+    await renderExpanded();
+    expect(screen.getByText('LSE')).toBeInTheDocument();
+    expect(screen.getByText('Deutsche Börse')).toBeInTheDocument();
+    expect(screen.getByText('Web')).toBeInTheDocument();
+    expect(screen.queryByText('html_table')).not.toBeInTheDocument();
   });
 
   it('hides the Add Price button while the add form is open and reopens it on cancel', async () => {
@@ -717,6 +752,142 @@ describe('SecurityPriceHistory', () => {
       await act(async () => {});
 
       expect(toast.error).toHaveBeenCalledWith('Failed to update prices');
+    });
+  });
+
+  // The detail page's chart and quote card hold their own copy of the price
+  // series, fetched once on load -- this pane changing the stored rows must
+  // tell the page to reload its copy too, or the chart keeps showing the
+  // pre-update line until the reader presses the page's separate refresh
+  // button (a different control, easy to miss the connection to).
+  describe('onPricesChanged', () => {
+    it('notifies the parent after a successful force update', async () => {
+      (investmentsApi.backfillSecurityPrices as ReturnType<typeof vi.fn>).mockResolvedValue({
+        symbol: 'AAPL',
+        success: true,
+        pricesLoaded: 252,
+        provider: 'yahoo',
+      });
+      const onPricesChanged = vi.fn();
+      await renderComponent(onPricesChanged);
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Force Update Prices' }));
+      });
+
+      expect(onPricesChanged).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not notify the parent when the force update reports failure', async () => {
+      (investmentsApi.backfillSecurityPrices as ReturnType<typeof vi.fn>).mockResolvedValue({
+        symbol: 'AAPL',
+        success: false,
+        error: 'No historical data available',
+      });
+      const onPricesChanged = vi.fn();
+      await renderComponent(onPricesChanged);
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Force Update Prices' }));
+      });
+
+      expect(onPricesChanged).not.toHaveBeenCalled();
+    });
+
+    it('does not notify the parent when the force update request throws', async () => {
+      (investmentsApi.backfillSecurityPrices as ReturnType<typeof vi.fn>).mockRejectedValue(
+        'boom',
+      );
+      const onPricesChanged = vi.fn();
+      await renderComponent(onPricesChanged);
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Force Update Prices' }));
+      });
+      await act(async () => {});
+
+      expect(onPricesChanged).not.toHaveBeenCalled();
+    });
+
+    it('notifies the parent after adding a price', async () => {
+      (investmentsApi.createSecurityPrice as ReturnType<typeof vi.fn>).mockResolvedValue(
+        mockPrices[0],
+      );
+      const onPricesChanged = vi.fn();
+      await renderComponent(onPricesChanged);
+
+      await act(async () => {
+        fireEvent.click(screen.getByText('+ Add Price'));
+      });
+      fireEvent.change(screen.getByLabelText('Close Price'), {
+        target: { value: '15.5' },
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Add Price' }));
+      });
+
+      expect(onPricesChanged).toHaveBeenCalledTimes(1);
+    });
+
+    it('notifies the parent after deleting a price', async () => {
+      (investmentsApi.deleteSecurityPrice as ReturnType<typeof vi.fn>).mockResolvedValue(
+        undefined,
+      );
+      const onPricesChanged = vi.fn();
+      await renderComponent(onPricesChanged);
+
+      fireEvent.click(screen.getAllByText('Delete')[0]);
+      const confirmButtons = screen.getAllByRole('button', { name: 'Delete' });
+      await act(async () => {
+        fireEvent.click(confirmButtons[confirmButtons.length - 1]);
+      });
+
+      expect(onPricesChanged).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Add Another Year of History', () => {
+    it('backfills the next range deeper than the loaded history and reloads', async () => {
+      const toast = (await import('react-hot-toast')).default;
+      // One stored close from 2024-06-01; against the pinned "today" of
+      // 2026-08-14 that is roughly two years, so one year more asks the
+      // provider for 5y (the next bucket up), which also disables the
+      // holding-period clip so history from before the first trade is kept.
+      (investmentsApi.getSecurityPrices as ReturnType<typeof vi.fn>).mockResolvedValue([
+        {
+          id: 1,
+          securityId: 'sec-1',
+          priceDate: '2024-06-01',
+          openPrice: null,
+          highPrice: null,
+          lowPrice: null,
+          closePrice: 100,
+          volume: null,
+          source: 'yahoo_finance',
+          createdAt: 'x',
+        },
+      ]);
+      (investmentsApi.backfillSecurityPrices as ReturnType<typeof vi.fn>).mockResolvedValue({
+        symbol: 'AAPL',
+        success: true,
+        pricesLoaded: 300,
+        provider: 'yahoo',
+      });
+      await renderComponent();
+
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole('button', { name: 'Add Another Year of History' }),
+        );
+      });
+
+      expect(investmentsApi.backfillSecurityPrices).toHaveBeenCalledWith(
+        'sec-1',
+        '5y',
+      );
+      expect(toast.success).toHaveBeenCalledWith('Updated 300 prices for AAPL');
+      // Reloaded after the fetch (initial mount + post-fetch).
+      expect(investmentsApi.getSecurityPrices).toHaveBeenCalledTimes(2);
     });
   });
 });

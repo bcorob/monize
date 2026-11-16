@@ -10,9 +10,11 @@ import {
   SALT_LENGTH,
   TAG_LENGTH,
   VERSION_FRAMED,
+  VERSION_KEY_WRAPPED,
   VERSION_MONOLITHIC,
 } from "./backup-envelope";
 import { decryptFramedBackup } from "./backup-stream-crypto";
+import { decryptKeyWrappedBackup } from "./backup-key-wrap";
 
 export { BackupDecryptionError };
 
@@ -20,13 +22,14 @@ export { BackupDecryptionError };
  * Whole-payload encryption, and the one door every backup decryption goes
  * through.
  *
- * The format itself -- both versions of it -- is documented in
+ * The format itself -- every version of it -- is documented in
  * `backup-envelope.ts`. What lives here is the monolithic (v1) writer and a
- * reader that accepts either version, because an artifact produced before the
- * streaming container existed must still open. New streamed exports write v2
- * through `createBackupEncryptStream`; the support export still writes v1,
- * deliberately, because it assembles its payload in memory anyway and gains
- * nothing from framing.
+ * reader that accepts every version, because an artifact produced before a
+ * newer container existed must still open. Streamed exports under a typed
+ * password write v2 through `createBackupEncryptStream`; the automatic backup
+ * writes v3 through `createKeyWrappedEncryptStream`; the support export still
+ * writes v1, deliberately, because it assembles its payload in memory anyway and
+ * gains nothing from framing.
  */
 
 /**
@@ -85,6 +88,9 @@ export async function decryptBackup(
   if (version === VERSION_FRAMED) {
     return decryptFramedBackup(envelope, password);
   }
+  if (version === VERSION_KEY_WRAPPED) {
+    return decryptKeyWrappedBackup(envelope, { password });
+  }
 
   assertSupportedKdf(envelope);
 
@@ -109,4 +115,23 @@ export async function decryptBackup(
       "Failed to decrypt backup: the password is incorrect or the file is corrupt",
     );
   }
+}
+
+/**
+ * Decrypt a key-wrapped (v3) envelope with the data key itself, which is what
+ * the server holds for the automatic backups it wrote since the last re-wrap.
+ * Any other version -- or a v3 file written under a different data key --
+ * surfaces as a BackupDecryptionError, so a restore can move on to the next
+ * candidate.
+ */
+export async function decryptBackupWithDataKey(
+  envelope: Buffer,
+  dataKey: Buffer,
+): Promise<Buffer> {
+  if (backupEnvelopeVersion(envelope) !== VERSION_KEY_WRAPPED) {
+    throw new BackupDecryptionError(
+      "Backup file is not encrypted under a stored data key",
+    );
+  }
+  return decryptKeyWrappedBackup(envelope, { dataKey });
 }

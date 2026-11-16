@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import { Transaction, TransactionStatus } from '@/types/transaction';
 import {
+  carryReconcileSelection,
   groupReconcileRows,
+  initialReconcileSelection,
   sortReconcileRows,
   sumAmounts,
   transactionFlow,
@@ -54,6 +56,17 @@ describe('sumAmounts', () => {
       row({ id: `r${i}`, amount: '0.1000' as unknown as number }),
     );
     expect(sumAmounts(rows)).toBe(1);
+  });
+
+  it('sums a coin wallet\'s rows at its eight places', () => {
+    const rows = [
+      row({ id: 'a', amount: '-0.00500000' as unknown as number }),
+      row({ id: 'b', amount: '-0.00002500' as unknown as number }),
+      row({ id: 'c', amount: '0.01249993' as unknown as number }),
+    ];
+    expect(sumAmounts(rows, 8)).toBe(0.00747493);
+    // At the fiat four the 2,500-satoshi fee is lost.
+    expect(sumAmounts(rows)).not.toBe(0.00747493);
   });
 
   it('is zero for no rows', () => {
@@ -220,5 +233,35 @@ describe('groupReconcileRows', () => {
 
   it('returns no groups at all for no rows', () => {
     expect(groupReconcileRows([], true)).toEqual([]);
+  });
+});
+
+describe('initialReconcileSelection', () => {
+  it('ticks every row up to and including the statement date, whatever its status', () => {
+    const rows = [
+      row({ id: 'u', transactionDate: '2026-02-01', status: TransactionStatus.UNRECONCILED }),
+      row({ id: 'c', transactionDate: '2026-02-15', status: TransactionStatus.CLEARED }),
+      row({ id: 'late', transactionDate: '2026-02-16', status: TransactionStatus.CLEARED }),
+    ];
+    expect([...initialReconcileSelection(rows, '2026-02-15')]).toEqual(['u', 'c']);
+  });
+});
+
+describe('carryReconcileSelection', () => {
+  const rows = [
+    row({ id: 'kept', transactionDate: '2026-02-01', status: TransactionStatus.CLEARED }),
+    row({ id: 'unticked', transactionDate: '2026-02-02', status: TransactionStatus.CLEARED }),
+    row({ id: 'new', transactionDate: '2026-02-03' }),
+    row({ id: 'new-late', transactionDate: '2026-03-01' }),
+  ];
+
+  it("keeps a listed row as the user left it, and ticks only the new rows on the statement", () => {
+    const next = carryReconcileSelection(
+      new Set(['kept', 'gone']),
+      new Set(['kept', 'unticked', 'gone']),
+      rows,
+      '2026-02-28',
+    );
+    expect([...next]).toEqual(['kept', 'new']);
   });
 });

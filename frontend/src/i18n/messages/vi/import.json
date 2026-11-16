@@ -34,19 +34,22 @@
   },
   "page": {
     "title": "Nhập Khẩu Giao Dịch",
-    "subtitle": "Nhập khẩu giao dịch từ các tệp QIF, OFX/QFX hoặc CSV, hoặc mang sang toàn bộ một tệp Microsoft Money (.mny)"
+    "subtitle": "Nhập khẩu giao dịch từ các tệp QIF/QMTF, OFX/QFX hoặc CSV, hoặc mang sang toàn bộ một tệp Microsoft Money (.mny)"
   },
   "upload": {
     "heading": "Tải Lên Tệp Giao Dịch",
-    "instructions": "Chọn một hoặc nhiều tệp để nhập khẩu. Các định dạng được hỗ trợ: QIF, OFX/QFX, CSV và Microsoft Money (.mny).\nBạn có thể chọn nhiều tệp cùng loại để nhập khẩu hàng loạt. Hãy nhập từng tệp Microsoft Money một — một tệp .mny chứa toàn bộ một hồ sơ.",
+    "instructions": "Chọn một hoặc nhiều tệp để nhập khẩu. Các định dạng được hỗ trợ: QIF/QMTF, OFX/QFX, CSV và Microsoft Money (.mny).\nBạn có thể chọn nhiều tệp cùng loại để nhập khẩu hàng loạt. Hãy nhập từng tệp Microsoft Money một — một tệp .mny chứa toàn bộ một hồ sơ.",
     "importingTo": "Đang nhập khẩu vào:",
     "clickToSelect": "Nhấp để chọn tệp",
+    "orDragAndDrop": "hoặc kéo và thả tệp vào đây",
+    "dropToImport": "Thả để nhập",
+    "unsupportedDrop": "Không thể nhập các tệp sau: {names}. Hãy dùng tệp QIF/QMTF, OFX, QFX, CSV hoặc Microsoft Money (.mny).",
     "processing": "Đang xử lý...",
-    "acceptedFormats": "QIF, OFX, QFX, CSV hoặc Microsoft Money (.mny)",
+    "acceptedFormats": "QIF/QMTF, OFX, QFX, CSV hoặc Microsoft Money (.mny)",
     "mnyFailedHeading": "Không thể mở tệp Microsoft Money đó",
-    "wikiNotice": {
+    "docsNotice": {
       "title": "Trước khi nhập khẩu",
-      "body": "Hãy đọc mục <money>Importing from Microsoft Money</money> hoặc <quicken>Importing from Quicken</quicken> trên wiki trước khi nhập khẩu bất cứ dữ liệu nào."
+      "body": "Hãy đọc mục <money>Importing from Microsoft Money</money> hoặc <quicken>Importing from Quicken</quicken> trong tài liệu trước khi nhập khẩu bất cứ dữ liệu nào. Tệp OFX/QFX và QIF mỗi loại có những điểm riêng cần lưu ý — xem <ofx>Importing OFX/QFX Files</ofx> và <qif>Importing Quicken QIF Files</qif>."
     }
   },
   "selectAccount": {
@@ -78,23 +81,25 @@
     "heading": "Ánh Xạ Cột CSV",
     "description": "Ánh xạ các cột CSV của bạn với các trường giao dịch. Xem trước dữ liệu bên dưới và cấu hình ánh xạ.",
     "firstRowIsHeader": "Hàng đầu tiên là tiêu đề",
-    "delimiterLabel": "Dấu phân cách:",
-    "dateFormatLabel": "Định dạng ngày:",
+    "delimiterLabel": "Dấu phân cách",
+    "dateFormatLabel": "Định dạng ngày",
     "customOption": "Tùy chỉnh...",
     "customPlaceholder": "vd: DD.MM.YYYY",
     "dataPreview": "Xem trước dữ liệu",
     "columnMappingTitle": "Ánh xạ cột",
-    "dateField": "Ngày *",
+    "columnMappingHelp": "Ánh xạ từng cột CSV vào một trường của giao dịch. Ngày, Loại số tiền và một trong hai trường Số tiền hoặc Nợ/Có là bắt buộc; các trường còn lại là tùy chọn.",
+    "dateField": "Ngày",
     "amountTypeField": "Loại số tiền",
     "singleAmountOption": "Cột số tiền duy nhất",
     "splitAmountOption": "Tách riêng nợ/có",
-    "amountField": "Số tiền *",
+    "amountField": "Số tiền",
     "signField": "Dấu",
+    "signFieldHelp": "Cách đọc dấu của số tiền: 'Giữ nguyên' coi số dương là một khoản gửi vào, 'Đảo ngược' coi đó là một khoản rút ra (dùng cho sao kê thẻ tín dụng khi các khoản phí hiển thị dương), và cột loại giao dịch sẽ quyết định hướng dựa trên giá trị của chính nó thay vì dựa vào dấu.",
     "signNormal": "Nguyên bản (dương = tiền gửi)",
     "signReverse": "Đảo ngược (dương = rút tiền)",
     "signTypeColumn": "Sử dụng cột loại giao dịch",
-    "debitField": "Nợ *",
-    "creditField": "Có *",
+    "debitField": "Nợ",
+    "creditField": "Có",
     "typeColumnTitle": "Cột loại giao dịch",
     "typeColumnDescription": "Chọn cột cho biết thu nhập, chi tiêu hoặc chuyển khoản theo từng hàng.",
     "valuesFound": "Các giá trị tìm thấy: {values}",
@@ -137,8 +142,8 @@
     "kindBanking": "Giao dịch ngân hàng",
     "kindInvestment": "Giao dịch đầu tư",
     "investmentModeHint": "Các hàng được phân loại theo cột hành động. Các giá trị hành động không khớp sẽ được nhập dưới dạng nộp hoặc rút tiền mặt trên tài khoản tiền mặt liên kết.",
-    "actionField": "Hành động *",
-    "securityField": "Chứng khoán (mã hiệu hoặc tên) *",
+    "actionField": "Hành động",
+    "securityField": "Chứng khoán (mã hiệu hoặc tên)",
     "quantityField": "Số lượng",
     "priceField": "Giá",
     "commissionField": "Hoa hồng",
@@ -278,6 +283,15 @@
       "missingSplitRatio": "Tách mà không có tỷ lệ"
     },
     "rejectedGoBack": "Quay lại bước ánh xạ cột để điều chỉnh cột hoặc từ khóa hành động.",
+    "unreadableDatesNotice": "{count, plural, other {# hàng}} có ngày không thể đọc theo định dạng {format} và sẽ không được nhập:",
+    "unreadableDateRow": "Hàng {line}: \"{rawDate}\"",
+    "missingDateRow": "Hàng {line}: không có ngày",
+    "unreadableDatesMore": "...và {count} hàng khác",
+    "unreadableDatesGoBack": "Nếu tệp ghi ngày theo thứ tự khác, hãy quay lại bước ánh xạ cột và chọn định dạng ngày mà tệp sử dụng.",
+    "unreadableAmountsNotice": "{count, plural, other {# hàng}} có số tiền không thể đọc và sẽ không được nhập:",
+    "unreadableAmountRow": "Hàng {line}: \"{rawAmount}\"",
+    "unreadableAmountsMore": "...và {count} hàng khác",
+    "unreadableAmountsGoBack": "Hãy kiểm tra xem các cột số tiền đã được ánh xạ đúng chưa, hoặc sửa các hàng này trong tệp rồi nhập lại.",
     "importButton": "Nhập Khẩu Giao Dịch"
   },
   "complete": {
@@ -287,7 +301,7 @@
     "totalImported": "Tổng đã nhập khẩu:",
     "totalImportedSuffix": "giao dịch",
     "totalSkipped": "Tổng đã bỏ qua:",
-    "totalSkippedSuffix": "chuyển khoản trùng lặp",
+    "totalSkippedSuffix": "giao dịch",
     "totalErrors": "Tổng lỗi:",
     "categoriesCreated": "Danh mục đã tạo:",
     "accountsCreated": "Tài khoản đã tạo:",
@@ -299,17 +313,36 @@
     "imported": "Đã nhập khẩu:",
     "importedSuffix": "giao dịch",
     "skipped": "Đã bỏ qua:",
-    "skippedSuffix": "chuyển khoản trùng lặp",
+    "skippedSuffix": "giao dịch",
     "errors": "Lỗi:",
     "errorsLabel": "Lỗi:",
     "andMoreErrors": "...và {count} lỗi khác",
+    "skippedRowsHeading": "Các dòng đã bỏ qua:",
+    "skippedRow": "{date}: {amount}, {payee} ({reason})",
+    "skippedRowNoPayee": "{date}: {amount} ({reason})",
+    "skipReasonAlreadyImported": "đã nhập trước đó",
+    "skipReasonDuplicateTransfer": "giao dịch chuyển khoản đã được ghi",
+    "skipReasonUnreadableDate": "không đọc được ngày",
+    "skipReasonNoDate": "không có ngày",
+    "skipReasonUnreadableAmount": "không đọc được số tiền",
+    "skippedRowRawAmount": "\"{rawAmount}\"",
+    "skipReasonMissingSecurity": "thiếu chứng khoán",
+    "skipReasonMissingQuantity": "thiếu số lượng",
+    "skipReasonMissingAmount": "thiếu số tiền",
+    "skipReasonMissingProceeds": "bán mà không có giá hoặc số tiền thu về",
+    "skipReasonMissingSplitRatio": "tách mà không có tỷ lệ",
+    "skippedRowLineDate": "Hàng {line}, \"{rawDate}\"",
+    "skippedRowLine": "Hàng {line}",
+    "skippedRowLineAt": "Hàng {line}, {date}",
+    "andMoreSkipped": "...và {count} dòng bị bỏ qua khác",
     "loanSetupHeading": "Thiết Lập Thanh Toán Định Kỳ",
     "loanSetupDescription": "Các tài khoản vay/thế chấp sau đây đã được nhập khẩu mà không có thanh toán định kỳ. Thiết lập thanh toán định kỳ để tiếp tục theo dõi tiến trình vay của bạn.",
     "setUpPayments": "Thiết Lập Thanh Toán",
     "scheduledPaymentsConfigured": "Đã cấu hình thanh toán định kỳ cho {count} tài khoản{plural}.",
     "viewInvestments": "Xem Đầu Tư",
     "viewTransactions": "Xem Giao Dịch",
-    "importMoreFiles": "Nhập Khẩu Thêm Tệp"
+    "importMoreFiles": "Nhập Khẩu Thêm Tệp",
+    "bondRowsWithoutSeries": "{count, plural, other {# giao dịch mua trái phiếu đã được nhập mà không có sê-ri. Hãy chọn sê-ri trong các lô trái phiếu của chứng khoán.}}"
   },
   "multiAccountReview": {
     "heading": "Nhập Khẩu QIF Nhiều Tài Khoản",
@@ -327,7 +360,10 @@
     "securitiesNotice": "Tệp này chứa {count} chứng khoán{plural} cần được ánh xạ trước khi nhập khẩu.",
     "nextMapSecurities": "Tiếp theo: Ánh xạ chứng khoán",
     "importAll": "Nhập Khẩu Tất Cả",
-    "transactionCount": "{count} giao dịch{plural}"
+    "transactionCount": "{count} giao dịch{plural}",
+    "chooseAccountType": "Chọn loại",
+    "accountTypeFor": "Loại tài khoản cho {name}",
+    "accountTypesNeeded": "Tệp không cho biết loại của {count, plural, other {# tài khoản}}. Hãy chọn loại cho từng tài khoản trước khi nhập."
   },
   "navigation": {
     "back": "Quay lại",
@@ -344,6 +380,7 @@
     "heading": "Xem lại tệp Microsoft Money của bạn",
     "fileSummary": "{filename} -- {era}, tiền tệ cơ sở {currency}. Các số dư bên dưới được tính từ chính tệp đó, nên bạn có thể đối chiếu với Money trước khi nhập.",
     "era": {
+      "money99": "định dạng Money 97-99",
       "money2001": "định dạng Money 2001",
       "money2002": "định dạng Money 2002",
       "moneyPlus": "định dạng Money Plus / Sunset",
@@ -355,6 +392,7 @@
       "transfersLinked": "đã liên kết {count} chuyển khoản",
       "payees": "Người nhận",
       "categories": "Danh mục",
+      "tags": "Thẻ từ phân loại",
       "accounts": "Tài khoản",
       "securities": "Chứng khoán",
       "investments": "Giao dịch đầu tư",
@@ -395,7 +433,7 @@
       "importPrices": "Nhập lịch sử giá",
       "importPricesHint": "Bản ghi của chính Money về giá trị từng chứng khoán theo từng ngày. Tắt tùy chọn này nếu bạn muốn bắt đầu từ giá hiện tại.",
       "importExchangeRates": "Nhập tỷ giá hối đoái",
-      "importExchangeRatesHint": "Tỷ giá lịch sử giữa các loại tiền trong tệp của bạn, để các giao dịch ngoại tệ cũ được quy đổi đúng như Money đã quy đổi.",
+      "importExchangeRatesHint": "Tỷ giá lịch sử giữa các loại tiền trong tệp của bạn, chỉ dùng cho những ngày Monize chưa có tỷ giá. Tỷ giá đã lưu sẽ không bao giờ bị thay thế.",
       "wipeExistingData": "Bắt đầu lại: xóa dữ liệu Monize hiện có của tôi trước",
       "wipeExistingDataHint": "Chạy cùng thao tác Xóa dữ liệu của tôi như trong Cài đặt trước khi nhập. Bạn sẽ được yêu cầu xác nhận. Để tắt nếu muốn thêm tệp Money vào dữ liệu hiện có."
     },
@@ -424,7 +462,7 @@
     }
   },
   "mnyWipe": {
-    "heading": "Xóa dữ liệu hiện có trước?",
+    "heading": "Xóa dữ liệu hiện có",
     "body": "Thao tác này chạy cùng tác vụ Xóa dữ liệu của tôi như trong Cài đặt -> Vùng nguy hiểm, trước khi bắt đầu nhập. Nó xóa:",
     "removes": {
       "transactions": "Mọi giao dịch và phân tách",
@@ -434,8 +472,8 @@
       "budgets": "Mọi ngân sách, báo cáo tùy chỉnh, thẻ và ánh xạ nhập"
     },
     "irreversible": "Không thể hoàn tác. Nếu việc nhập sau đó thất bại, dữ liệu đã xóa sẽ không quay lại.",
-    "typeToConfirm": "Nhập {word} để xác nhận:",
-    "passwordLabel": "Nhập mật khẩu của bạn:",
+    "typeToConfirm": "Nhập {word} để xác nhận",
+    "passwordLabel": "Mật khẩu",
     "oidcNote": "Nhà cung cấp danh tính đã xác nhận phiên này, nên không cần mật khẩu.",
     "confirm": "Xóa dữ liệu của tôi và nhập"
   },
@@ -455,7 +493,8 @@
     },
     "failedHeading": "Quá trình nhập chưa hoàn tất",
     "retry": "Thử lại",
-    "startOver": "Bắt đầu lại"
+    "startOver": "Bắt đầu lại",
+    "learnMore": "Tìm hiểu thêm"
   },
   "mnyComplete": {
     "heading": "Đã nhập xong",
@@ -469,6 +508,7 @@
       "splits": "Dòng phân tách",
       "payees": "Người nhận",
       "categories": "Danh mục",
+      "taggedRows": "Dòng được gắn thẻ từ phân loại",
       "securities": "Chứng khoán",
       "investments": "Giao dịch đầu tư",
       "prices": "Giá",
@@ -492,7 +532,8 @@
     },
     "warningsHeading": "Ghi chú về lần nhập này",
     "downloadReport": "Tải báo cáo",
-    "done": "Xong"
+    "done": "Xong",
+    "bondRowsWithoutSeries": "{count, plural, other {# giao dịch mua trái phiếu đã được nhập mà không có sê-ri. Hãy chọn sê-ri trong các lô trái phiếu của chứng khoán.}}"
   },
   "mnyWarnings": {
     "missingTable": "Phiên bản Money này thiếu {count, plural, other {# bảng}} mà quá trình nhập cần dùng.",
@@ -503,6 +544,7 @@
     "categoryFlattened": "{count, plural, other {# danh mục}} sâu hơn hai cấp và đã được gộp vào danh mục cha.",
     "categoryTypeInferred": "{count, plural, other {# danh mục}} thiếu cờ thu nhập của Money; thu hay chi được suy ra từ cây danh mục.",
     "degeneratePayeeSkipped": "{count, plural, other {# người nhận giữ chỗ}} mà Money lưu nội bộ đã bị bỏ qua.",
+    "unknownClassificationItem": "{count, plural, one {# giao dịch tham chiếu đến mục phân loại} other {# giao dịch tham chiếu đến các mục phân loại}} mà tệp không định nghĩa, và đã được nhập mà không có thẻ đó.",
     "unusableTransaction": "{count, plural, other {# giao dịch}} không có tài khoản hoặc ngày dùng được và đã bị bỏ qua.",
     "orphanedTransferSide": "{count, plural, other {# chuyển khoản}} thiếu vế còn lại trong tệp và đã bị bỏ qua.",
     "orphanedSplit": "{count, plural, other {# dòng phân tách}} không có giao dịch cha và đã bị bỏ qua.",
@@ -512,6 +554,7 @@
     "duplicateSecuritySymbol": "{count, plural, other {# chứng khoán}} dùng chung mã với chứng khoán khác; những mã sau đã được đổi tên để giữ riêng biệt.",
     "generatedSecuritySymbol": "{count, plural, other {# chứng khoán}} không có mã trong Money, nên một mã tạm đã được tạo và việc cập nhật giá được tắt.",
     "unknownInvestmentAction": "{count, plural, other {# giao dịch đầu tư}} dùng một thao tác mà Monize không nhận ra và đã bị bỏ qua.",
+    "stockOptionNotImported": "{count, plural, other {# sự kiện quyền chọn cổ phiếu cho nhân viên}} (cấp, hưởng quyền và hết hạn) không di chuyển tiền hay cổ phiếu nên không được nhập.",
     "unconfirmedInvestmentAction": "{count, plural, other {# giao dịch đầu tư}} dùng một thao tác Money có ý nghĩa được suy đoán chứ không được ghi nhận; hãy đối chiếu với Money.",
     "missingInvestmentDetail": "{count, plural, other {# giao dịch đầu tư}} không có chi tiết cổ phiếu trong tệp và chỉ được nhập theo số tiền mặt.",
     "investmentAccountMismatch": "{count, plural, other {# giao dịch đầu tư}} nằm trong tài khoản không phải tài khoản đầu tư và đã bị bỏ qua.",
@@ -521,6 +564,9 @@
     "unusableBill": "{count, plural, other {# hóa đơn theo lịch}} không có tài khoản, ngày dùng được hoặc chu kỳ nhận diện được, nên đã bị bỏ qua.",
     "billFrequencyApproximated": "{count, plural, other {# hóa đơn theo lịch}} dùng khoảng lặp mà Monize không thể diễn đạt chính xác, nên đã dùng khoảng ngắn hơn gần nhất.",
     "loanInterestCategoryUnclear": "{count, plural, other {# khoản thanh toán khoản vay}} bao gồm nhiều danh mục ngoài phần gốc, nên danh mục lãi của khoản vay chưa được đặt. Hãy kiểm tra xem khoản thanh toán có bao gồm escrow (ký quỹ) không và đặt danh mục lãi sau khi nhập.",
+    "transferAmountMismatch": "{count, plural, other {# giao dịch chuyển vào tài khoản đầu tư}} ghi nhận số tiền ở phía đầu tư khác với phía ngân hàng. Phía đầu tư được nhập đúng như đã ghi.",
+    "crossCurrencyTradeUnconverted": "{count, plural, other {# giao dịch chứng khoán niêm yết bằng loại tiền khác}} được lưu bằng loại tiền của tài khoản, vì cả tệp lẫn nhà cung cấp tỷ giá đều không có tỷ giá cho cặp tiền tệ đó gần ngày giao dịch. Hãy thêm tỷ giá, rồi sửa giá của từng giao dịch.",
+    "crossCurrencyTradeMarketRate": "{count, plural, other {# giao dịch chứng khoán niêm yết bằng loại tiền khác}} được quy đổi theo tỷ giá thị trường của ngày giao dịch, vì tệp không có tỷ giá gần ngày đó. Hãy đối chiếu giá của từng giao dịch với hồ sơ của bạn.",
     "showTransactions": "Hiện {count, plural, other {# giao dịch}}",
     "hideTransactions": "Ẩn giao dịch",
     "reviewInMoney": "Mở các giao dịch này trong Microsoft Money để kiểm tra hoặc sửa, sau đó xuất và nhập lại.",
@@ -539,12 +585,89 @@
     "mnyImportFailed": "Đã xảy ra lỗi khi nhập. Không có gì được lưu -- bạn có thể thử lại.",
     "mnyJobStalled": "Quá trình nhập đã ngừng phản hồi, rất có thể vì máy chủ khởi động lại. Tệp bạn tải lên vẫn còn, nên thử lại là an toàn.",
     "mnyJobStalledAfterCommit": "Quá trình nhập đã ngừng phản hồi sau khi đã lưu dữ liệu của bạn, rất có thể vì máy chủ khởi động lại. Các bản ghi đã nhập nằm trong tài khoản của bạn, nên nhập lại cùng tệp đó sẽ khiến chúng bị trùng lặp. Hãy kiểm tra các tài khoản trước khi nhập thứ gì khác.",
+    "mnyImportFailedAfterCommit": "Quá trình nhập đã lưu dữ liệu của bạn, nhưng một bước sau đó đã thất bại. Các bản ghi đã nhập nằm trong tài khoản của bạn, nên nhập lại cùng tệp sẽ tạo bản trùng. Hãy kiểm tra các tài khoản trước khi nhập thứ khác.",
+    "mnyAlreadyImported": "Tệp này đã được nhập vào tài khoản của bạn, nên nhập lại sẽ tạo bản trùng các bản ghi. Để thay thế chúng, hãy bắt đầu lại và chọn thay thế dữ liệu hiện có.",
     "mnyStagedFileMissing": "Tệp Money đã tải lên không còn khả dụng. Vui lòng tải lên lại.",
     "mnyFileTruncated": "Tệp Money này có vẻ chưa hoàn chỉnh. Quá trình tải lên có thể đã bị ngắt.",
     "mnyNotAMoneyFile": "Tệp đó không phải là tệp Microsoft Money (.mny).",
-    "mnyUnsupportedVersion": "Tệp đó được tạo bởi Money 97 hoặc 98. Hãy mở và lưu tệp một lần trong bản Money Plus Sunset miễn phí, rồi nhập kết quả.",
+    "mnyUnsupportedVersion": "Tệp đó được tạo bởi một phiên bản Microsoft Money mà Monize không thể đọc. Hãy mở và lưu tệp một lần trong bản Money Plus Sunset miễn phí, rồi nhập kết quả.",
     "mnyPasswordRequired": "Tệp Money đó được bảo vệ bằng mật khẩu.",
     "mnyPasswordIncorrect": "Mật khẩu đó không mở được tệp Money.",
     "mnyUnreadableDatabase": "Tệp Money đó đã được giải mã nhưng không thể đọc nội dung. Tệp có thể đã bị hỏng."
+  },
+  "preview": {
+    "choice": {
+      "legend": "Làm gì với {payee} nếu không nhập",
+      "skip": "Bỏ qua lúc này",
+      "except": "Thêm vào ngoại lệ"
+    },
+    "payeeTip": {
+      "name": "Từ ngân hàng: {original}. Ánh xạ tới: {name}",
+      "alias": "Từ ngân hàng: {original}. Ánh xạ tới: {name} (bí danh \"{pattern}\")",
+      "aliasNoPattern": "Từ ngân hàng: {original}. Ánh xạ tới: {name} (bí danh)",
+      "new": "Từ ngân hàng: {original}. Ánh xạ tới: {name} (người nhận mới)",
+      "rule": "Từ ngân hàng: {original}. Ánh xạ tới: {name} (do quy tắc đặt)",
+      "ruleNone": "Từ ngân hàng: {original}. Ánh xạ tới: không có người nhận (do quy tắc đặt)"
+    },
+    "expand": {
+      "show": "Hiện chi tiết của {payee}",
+      "hide": "Ẩn chi tiết của {payee}"
+    },
+    "rules": {
+      "heading": "Quy tắc nhập",
+      "none": "Không có quy tắc nhập nào khớp với giao dịch này.",
+      "skipped": "{action}: đã bỏ qua ({reason})",
+      "stopped": "Dừng các quy tắc sau nó.",
+      "applied": "Đã áp dụng: {actions}",
+      "openNewTab": "Mở quy tắc {name} trong tab mới"
+    },
+    "ruleTest": {
+      "loading": "Đang tải kết quả kiểm tra quy tắc",
+      "error": "Không thể tải kết quả kiểm tra quy tắc.",
+      "retry": "Thử lại",
+      "noRules": "Bạn chưa có quy tắc nhập nào nên không có gì để kiểm tra.",
+      "showNotMatched": "Hiện các quy tắc không khớp ({count})",
+      "hideNotMatched": "Ẩn các quy tắc không khớp ({count})",
+      "noChanges": "Quy tắc khớp, nhưng không thay đổi gì ở giao dịch này.",
+      "badge": {
+        "matched": "Khớp",
+        "notMatched": "Không khớp",
+        "notEvaluated": "Chưa đánh giá"
+      },
+      "notEvaluated": {
+        "afterStop": "Chưa đánh giá: một quy tắc trước đó đã dừng các quy tắc.",
+        "disabled": "Chưa đánh giá: quy tắc đang tắt.",
+        "invalid": "Chưa đánh giá: quy tắc không hợp lệ. Hãy mở để sửa.",
+        "outside_active_window": "Chưa đánh giá: ngày của dòng nằm ngoài khoảng ngày hiệu lực của quy tắc."
+      },
+      "condition": {
+        "met": "Điều kiện đạt",
+        "notMet": "Điều kiện không đạt",
+        "actual": "Giá trị trong giao dịch này: {value}",
+        "noValue": "không có",
+        "noTags": "không có thẻ",
+        "capture": "{name} = {value}",
+        "omitted": "Chi tiết của phần điều kiện này không được hiển thị."
+      },
+      "skipReasons": {
+        "already_set": "giao dịch đã có giá trị và quy tắc chỉ điền vào chỗ trống",
+        "no_change": "giao dịch đã có đúng giá trị mà quy tắc sẽ đặt",
+        "payee_unresolved": "không tra cứu được người nhận mà quy tắc tạo ra"
+      }
+    },
+    "payee": {
+      "heading": "Người nhận",
+      "unknown": "Không có thông tin người nhận cho giao dịch này.",
+      "original": "Văn bản của ngân hàng: {original}",
+      "name": "Khớp với người nhận hiện có {name}.",
+      "alias": "Ánh xạ tới {name} qua bí danh \"{pattern}\".",
+      "aliasNoPattern": "Ánh xạ tới {name} qua một bí danh.",
+      "new": "Chưa có người nhận nào mang tên này, nên {name} sẽ được tạo.",
+      "rule": "Một quy tắc nhập đặt người nhận: {name}.",
+      "ruleNone": "Một quy tắc nhập xóa người nhận.",
+      "none": "Ngân hàng không nêu đối tác, nên giao dịch không có người nhận.",
+      "openAliases": "Mở các bí danh của người nhận",
+      "openAliasesNewTab": "Mở các bí danh của người nhận trong tab mới"
+    }
   }
 }

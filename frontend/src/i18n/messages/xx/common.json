@@ -10,6 +10,8 @@
     "versionLabel": "[XX-Version {version}-XX]",
     "expandAll": "[XX-Expand all-XX]",
     "collapseAll": "[XX-Collapse all-XX]",
+    "changeCount": "[XX-{count, plural, one {# change} other {# changes}}-XX]",
+    "otherSections": "[XX-Fixes and details-XX]",
     "viewFullNotes": "[XX-View full release notes-XX]",
     "dontShowAgain": "[XX-Don't show this again-XX]",
     "showNextLogin": "[XX-Show at next login-XX]",
@@ -38,6 +40,14 @@
     "scheduleRecurring": "[XX-Make recurring-XX]",
     "more": "[XX-More actions-XX]"
   },
+  "columns": {
+    "button": "[XX-Columns-XX]",
+    "buttonWithHidden": "[XX-Columns, {count} hidden-XX]",
+    "menuLabel": "[XX-Show or hide columns-XX]",
+    "showAll": "[XX-Show all-XX]",
+    "hideColumn": "[XX-Hide column-XX]",
+    "sheetSubtitle": "[XX-Bring it back from the Columns menu.-XX]"
+  },
   "loading": "[XX-Loading...-XX]",
   "pagination": {
     "showing": "[XX-Showing-XX]",
@@ -60,6 +70,7 @@
   },
   "exportDropdown": {
     "export": "[XX-Export-XX]",
+    "exportCsv": "[XX-Export CSV-XX]",
     "exporting": "[XX-Exporting...-XX]",
     "exportPdf": "[XX-Export PDF-XX]",
     "exportReport": "[XX-Export report-XX]",
@@ -88,6 +99,7 @@
     "stackedChart": "[XX-100% Stacked Bar-XX]",
     "lineChart": "[XX-Line Chart-XX]",
     "areaChart": "[XX-Area Chart-XX]",
+    "sankeyChart": "[XX-Flow Diagram-XX]",
     "table": "[XX-Table-XX]"
   },
   "formActions": {
@@ -118,8 +130,15 @@
     "search": "[XX-Search...-XX]",
     "selectAll": "[XX-Select All-XX]",
     "clear": "[XX-Clear-XX]",
+    "clearSearch": "[XX-Clear Search-XX]",
     "noOptions": "[XX-No options found-XX]",
     "selectedCount": "[XX-{count} selected-XX]"
+  },
+  "categoryFilter": {
+    "uncategorized": "[XX-Uncategorized-XX]",
+    "transfers": "[XX-Transfers-XX]",
+    "allIncome": "[XX-All income categories-XX]",
+    "allExpenses": "[XX-All expense categories-XX]"
   },
   "combobox": {
     "createOption": "[XX-Create \"{value}\"-XX]",
@@ -137,6 +156,7 @@
   },
   "dateInput": {
     "shortcutsTitle": "[XX-Keyboard shortcuts-XX]",
+    "openPicker": "[XX-Open date picker-XX]",
     "today": "[XX-Today-XX]",
     "firstDayOfYear": "[XX-First day of year-XX]",
     "lastDayOfYear": "[XX-Last day of year-XX]",
@@ -158,6 +178,7 @@
     "CASH": "[XX-Cash-XX]",
     "LINE_OF_CREDIT": "[XX-Line of Credit-XX]",
     "ASSET": "[XX-Asset-XX]",
+    "CRYPTO": "[XX-Crypto Wallet-XX]",
     "OTHER": "[XX-Other-XX]"
   },
   "accountFilter": {
@@ -241,12 +262,20 @@
     "marker": "[XX-—-XX]",
     "srLabel": "[XX-Amount not available-XX]",
     "scheduledFx": "[XX-The current amount cannot be worked out: no exchange rate is available for this scheduled item's settlement currency pair. The stored amount was calculated at an older rate, so it is not shown.-XX]",
-    "displayFx": "[XX-This figure cannot be shown here: the amount is known, but no exchange rate is available to convert it into the currency this total is reported in. Refresh your rates on the Currencies page.-XX]"
+    "displayFx": "[XX-This figure cannot be shown here: the amount is known, but no exchange rate is available to convert it into the currency this total is reported in. Refresh your rates on the Currencies page.-XX]",
+    "noCashBalance": "[XX-This value cannot be worked out: a cash account in this view reported no balance for this day, so what it held is unknown rather than zero. Reload the report; if it persists, the day's balances could not be worked out and this is worth reporting.-XX]",
+    "noPrice": "[XX-This value cannot be worked out: the shares held are known, but the security has no price to value them at. Refresh prices, or add one by hand on the security's Price history.-XX]",
+    "noBaseline": "[XX-This figure cannot be worked out: it is a comparison, and there is no earlier value to measure it against. Nothing is missing, so there is nothing to add.-XX]",
+    "staleQuote": "[XX-The day's move cannot be worked out: the security's most recent price is older than the last trading session, so any change from it would be an earlier day's. Refresh prices, or check the security's quote provider.-XX]",
+    "unknownCurrency": "[XX-This amount cannot be shown: the record names no security, so the currency the figure is in is unknown. Open the transaction and give it a security so its amounts can be labelled.-XX]"
   },
   "density": {
     "title": "[XX-Toggle row density-XX]",
     "normal": "[XX-Normal-XX]",
     "compact": "[XX-Compact-XX]",
     "dense": "[XX-Dense-XX]"
+  },
+  "scheduledOverdue": {
+    "included": "[XX-Includes {count, plural, one {# overdue scheduled transaction} other {# overdue scheduled transactions}}-XX]"
   }
 }

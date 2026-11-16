@@ -1,28 +1,104 @@
+import { DataSource } from "typeorm";
+
 import {
   AiRelayService,
   INACTIVITY_TIMEOUT_MS,
+  RelayStreamClosedError,
+  RelayTimeoutError,
+  relayChannel,
+  RELAY_POLL_REFUSED,
   trimRelayHistory,
 } from "./ai-relay.service";
 import { RelayAttachmentStore } from "./relay-attachment.store";
+import { RelayStreamRegistry } from "./relay-stream.registry";
+import { createRelayRowsHarness, RelayRowsHarness } from "./relay-rows.harness";
+import { MemoryEventBus } from "../../common/events/memory-event-bus";
+import { RelayServerEvent } from "./ai-relay.types";
+import { PendingAiAction } from "../actions/ai-action.types";
+
+jest.mock("../../common/db/scoped-db", () =>
+  jest
+    .requireActual("../../test-helpers/scoped-db-testing")
+    .scopedDbMockModule(),
+);
 
 const USER = "user-1";
 const OTHER = "user-2";
+
+const QUEUE_WAIT_MS = 5 * 60 * 1000;
+const IDLE_TIMEOUT_MS = 180 * 1000;
+const BUFFER_TTL_MS = 10 * 60 * 1000;
+const POLL_PARK_MS = 25 * 1000;
+const WAKE_POLL_INTERVAL_MS = 5 * 1000;
+const CONNECTED_WINDOW_MS = 45 * 1000;
 
 // A valid 1x1 PNG (header + minimal body) so attachment validation passes.
 const PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
+function card(actionId: string): PendingAiAction {
+  return {
+    actionId,
+    descriptor: { kind: "create_transaction" },
+  } as unknown as PendingAiAction;
+}
+
+const CRED = "pat:agent";
+
 describe("AiRelayService", () => {
   let service: AiRelayService;
+
+  /** A poll as the holder sees it: a refused poll reads as empty here. */
+  const claim = async (
+    svc: AiRelayService,
+    ...args: Parameters<AiRelayService["waitForPrompt"]>
+  ) => {
+    const r = await svc.waitForPrompt(...args);
+    return r === RELAY_POLL_REFUSED ? null : r;
+  };
+  let harness: RelayRowsHarness;
   let attachmentStore: RelayAttachmentStore;
+  let streams: RelayStreamRegistry;
+  let bus: MemoryEventBus;
+
+  /**
+   * Let every already-resolvable await run: the row statements are immediate
+   * promises and the memory bus delivers on the next microtask, so this is what
+   * "the relay has finished reacting" looks like under fake timers.
+   */
+  const settle = () => jest.advanceTimersByTimeAsync(0);
+
+  /**
+   * Start a turn. Many tests deliberately leave one unanswered, and a rejection
+   * nobody is awaiting yet reads as an unhandled rejection rather than as the
+   * timeout the test is about -- so the promise is marked handled here and
+   * still returned for the assertions.
+   */
+  const start = (
+    user: string,
+    prompt: string,
+    history: Array<{ role: "user" | "assistant"; content: string }> = [],
+    options?: Parameters<AiRelayService["enqueuePrompt"]>[3],
+  ) => {
+    const pending = service.enqueuePrompt(user, prompt, history, options);
+    pending.catch(() => undefined);
+    return pending;
+  };
 
   beforeEach(() => {
-    // Fake timers so the long browser-wait timer set by enqueuePrompt never
-    // leaks onto the real clock in tests that intentionally leave a prompt
-    // unanswered.
+    // Fake timers so the parked waiters never leak onto the real clock in tests
+    // that intentionally leave a prompt unanswered.
     jest.useFakeTimers();
-    attachmentStore = new RelayAttachmentStore();
-    service = new AiRelayService(attachmentStore);
+    harness = createRelayRowsHarness();
+    attachmentStore = harness.attachmentStore;
+    streams = new RelayStreamRegistry();
+    bus = new MemoryEventBus();
+    service = new AiRelayService(
+      harness.dataSource as unknown as DataSource,
+      attachmentStore,
+      streams,
+      bus,
+    );
   });
 
   afterEach(() => {
@@ -30,724 +106,1291 @@ describe("AiRelayService", () => {
     jest.useRealTimers();
   });
 
-  it("delivers an answer when an agent claims a queued prompt and responds", async () => {
-    const pending = service.enqueuePrompt(USER, "hello", []);
+  describe("the round trip", () => {
+    it("delivers an answer when an agent claims a queued prompt and responds", async () => {
+      const pending = start(USER, "hello", []);
+      await settle();
 
-    const claimed = await service.waitForPrompt(USER);
-    expect(claimed).not.toBeNull();
-    expect(claimed?.prompt).toBe("hello");
+      const claimed = await claim(service, USER, undefined, CRED);
+      expect(claimed).not.toBeNull();
+      expect(claimed?.prompt).toBe("hello");
 
-    const delivered = service.postResponse(USER, claimed!.promptId, "hi there");
-    expect(delivered).toBe(true);
+      expect(
+        await service.postResponse(USER, claimed!.promptId, "hi there", CRED),
+      ).toBe(true);
+      await settle();
 
-    await expect(pending).resolves.toEqual({ text: "hi there" });
+      await expect(pending).resolves.toEqual({ text: "hi there" });
+    });
+
+    it("hands a prompt to an already-parked agent", async () => {
+      const parked = claim(service, USER, undefined, CRED);
+      await settle();
+      // The agent is parked with nothing queued yet.
+      expect((await service.getStatus(USER)).state).toBe("listening");
+
+      const pending = start(USER, "q", []);
+      await settle();
+
+      const claimed = await parked;
+      expect(claimed?.prompt).toBe("q");
+
+      await service.postResponse(USER, claimed!.promptId, "a", CRED);
+      await settle();
+      await expect(pending).resolves.toEqual({ text: "a" });
+    });
+
+    it("claims prompts in FIFO order", async () => {
+      const first = start(USER, "first");
+      await settle();
+      const second = start(USER, "second");
+      await settle();
+
+      const a = await claim(service, USER, undefined, CRED);
+      const b = await claim(service, USER, undefined, CRED);
+      expect(a?.prompt).toBe("first");
+      expect(b?.prompt).toBe("second");
+
+      await service.postResponse(USER, a!.promptId, "1", CRED);
+      await service.postResponse(USER, b!.promptId, "2", CRED);
+      await settle();
+      await expect(first).resolves.toEqual({ text: "1" });
+      await expect(second).resolves.toEqual({ text: "2" });
+    });
+
+    it("hands one queued prompt to exactly one of two polling agents", async () => {
+      const pending = start(USER, "only one");
+      await settle();
+
+      const pollA = claim(service, USER, "session-a", CRED);
+      const pollB = claim(service, USER, "session-b", CRED);
+      // The loser parks out its whole window rather than getting a second copy.
+      await jest.advanceTimersByTimeAsync(POLL_PARK_MS + 1000);
+      const [a, b] = await Promise.all([pollA, pollB]);
+
+      expect([a, b].filter(Boolean)).toHaveLength(1);
+
+      const winner = (a ?? b)!;
+      await service.postResponse(USER, winner.promptId, "done", CRED);
+      await settle();
+      await expect(pending).resolves.toEqual({ text: "done" });
+    });
+
+    it("passes history through to the claimed prompt", async () => {
+      const history = [
+        { role: "user" as const, content: "earlier" },
+        { role: "assistant" as const, content: "reply" },
+      ];
+      void start(USER, "now", history);
+      await settle();
+
+      const claimed = await claim(service, USER, undefined, CRED);
+      expect(claimed?.history).toEqual(history);
+    });
+
+    it("trims a long history before handing it to the agent", async () => {
+      const history = Array.from({ length: 30 }, (_, i) => ({
+        role: (i % 2 === 0 ? "user" : "assistant") as "user" | "assistant",
+        content: `turn ${i}`,
+      }));
+      void start(USER, "now", history);
+      await settle();
+
+      const claimed = await claim(service, USER, undefined, CRED);
+      expect(claimed!.history).toHaveLength(10);
+      expect(claimed!.history[9].content).toBe("turn 29");
+    });
+
+    it("publishes a wake-up carrying ids only, never the prompt or the answer", async () => {
+      const seen: Array<Record<string, unknown>> = [];
+      bus.subscribe(relayChannel(USER), (payload) => seen.push(payload));
+
+      const pending = start(USER, "secret question", []);
+      await settle();
+      const claimed = await claim(service, USER, undefined, CRED);
+      await service.postResponse(
+        USER,
+        claimed!.promptId,
+        "secret answer",
+        CRED,
+      );
+      await settle();
+      await pending;
+
+      expect(seen).toHaveLength(2);
+      for (const payload of seen) {
+        expect(Object.keys(payload).sort()).toEqual(["promptId", "userId"]);
+      }
+    });
   });
 
-  it("hands a prompt to an already-parked agent", async () => {
-    const waiterPromise = service.waitForPrompt(USER);
-    // The agent is parked with nothing queued yet.
-    expect(service.getStatus(USER).state).toBe("listening");
+  describe("post_response", () => {
+    it("refuses an unknown or foreign promptId", async () => {
+      const pending = start(USER, "q", []);
+      await settle();
+      const claimed = await claim(service, USER, undefined, CRED);
 
-    const pending = service.enqueuePrompt(USER, "q", []);
-    const claimed = await waiterPromise;
-    expect(claimed?.prompt).toBe("q");
+      expect(await service.postResponse(USER, "prompt-999", "x", CRED)).toBe(
+        false,
+      );
+      expect(
+        await service.postResponse(OTHER, claimed!.promptId, "x", CRED),
+      ).toBe(false);
 
-    service.postResponse(USER, claimed!.promptId, "a");
-    await expect(pending).resolves.toEqual({ text: "a" });
+      await service.postResponse(USER, claimed!.promptId, "ok", CRED);
+      await settle();
+      await expect(pending).resolves.toEqual({ text: "ok" });
+    });
+
+    it("refuses a turn nobody has claimed", async () => {
+      void start(USER, "q", []);
+      await settle();
+
+      // The id is guessable only to a caller that already had it; what refuses
+      // here is the status, which is still `pending`.
+      expect(
+        await service.postResponse(USER, harness.rows[0].id, "x", CRED),
+      ).toBe(false);
+    });
+
+    it("refuses a second answer for the same turn", async () => {
+      const pending = start(USER, "q", []);
+      await settle();
+      const claimed = await claim(service, USER, undefined, CRED);
+
+      expect(
+        await service.postResponse(USER, claimed!.promptId, "first", CRED),
+      ).toBe(true);
+      // The loser of a double post learns it lost from the database, not from a
+      // read it had already passed.
+      expect(
+        await service.postResponse(USER, claimed!.promptId, "second", CRED),
+      ).toBe(false);
+
+      await settle();
+      await expect(pending).resolves.toEqual({ text: "first" });
+    });
   });
 
-  it("claims prompts in FIFO order", async () => {
-    const first = service.enqueuePrompt(USER, "first", []);
-    const second = service.enqueuePrompt(USER, "second", []);
+  describe("timeouts", () => {
+    it("returns null from a parked poll after the poll window", async () => {
+      const parked = claim(service, USER, undefined, CRED);
+      await jest.advanceTimersByTimeAsync(POLL_PARK_MS);
+      await expect(parked).resolves.toBeNull();
+    });
 
-    const a = await service.waitForPrompt(USER);
-    const b = await service.waitForPrompt(USER);
-    expect(a?.prompt).toBe("first");
-    expect(b?.prompt).toBe("second");
+    it("gives up on a never-claimed prompt after the queue wait", async () => {
+      const pending = start(USER, "q", []);
+      const settled = pending.catch((e: unknown) => e);
+      await jest.advanceTimersByTimeAsync(QUEUE_WAIT_MS + 1000);
 
-    service.postResponse(USER, a!.promptId, "1");
-    service.postResponse(USER, b!.promptId, "2");
-    await expect(first).resolves.toEqual({ text: "1" });
-    await expect(second).resolves.toEqual({ text: "2" });
+      const error = await settled;
+      expect(error).toBeInstanceOf(RelayTimeoutError);
+      expect((error as RelayTimeoutError).reason).toBe("no_agent");
+    });
+
+    it("gives up on a claimed prompt that goes silent, and says so", async () => {
+      const pending = start(USER, "q", []);
+      const settled = pending.catch((e: unknown) => e);
+      await settle();
+      await claim(service, USER, undefined, CRED);
+
+      await jest.advanceTimersByTimeAsync(IDLE_TIMEOUT_MS + 1000);
+
+      const error = await settled;
+      expect(error).toBeInstanceOf(RelayTimeoutError);
+      // Different copy from `no_agent`: an agent took this one and went quiet,
+      // and its late answer is still accepted.
+      expect((error as RelayTimeoutError).reason).toBe("disconnected");
+    });
+
+    it("keeps a slow-but-alive agent's turn across the idle window", async () => {
+      const pending = start(USER, "q", []);
+      const settled = pending.catch((e: unknown) => e);
+      await settle();
+      const claimed = await claim(service, USER, undefined, CRED);
+
+      // Three quarters of the way to the deadline, twice: without the liveness
+      // push-out the second one would land past it.
+      for (let i = 0; i < 4; i++) {
+        await jest.advanceTimersByTimeAsync(IDLE_TIMEOUT_MS * 0.75);
+        await service.reportProgress(
+          USER,
+          claimed!.promptId,
+          "still working",
+          undefined,
+          CRED,
+        );
+      }
+
+      await service.postResponse(USER, claimed!.promptId, "finally", CRED);
+      await settle();
+      await expect(settled).resolves.toEqual({ text: "finally" });
+    });
+
+    it("enforces the hard upper bound even for a chatty agent", async () => {
+      const pending = start(USER, "q", []);
+      const settled = pending.catch((e: unknown) => e);
+      await settle();
+      const claimed = await claim(service, USER, undefined, CRED);
+
+      for (let i = 0; i < 30; i++) {
+        await jest.advanceTimersByTimeAsync(60_000);
+        await service.reportProgress(
+          USER,
+          claimed!.promptId,
+          "still here",
+          undefined,
+          CRED,
+        );
+      }
+
+      const error = await settled;
+      expect(error).toBeInstanceOf(RelayTimeoutError);
+      expect((error as RelayTimeoutError).reason).toBe("disconnected");
+    });
+
+    it("stops waiting as soon as the browser's socket closes", async () => {
+      const closed = new AbortController();
+      const pending = start(USER, "q", [], {
+        signal: closed.signal,
+      });
+      const settled = pending.catch((e: unknown) => e);
+      await settle();
+
+      closed.abort();
+      await settle();
+
+      // Not a failure of the turn: the row is untouched, so an agent may still
+      // claim and answer it and the pickup endpoint serves that answer.
+      await expect(settled).resolves.toBeInstanceOf(RelayStreamClosedError);
+      expect(harness.rows[0].status).toBe("pending");
+    });
   });
 
-  it("passes history through to the claimed prompt", async () => {
-    const history = [{ role: "user" as const, content: "earlier" }];
-    service.enqueuePrompt(USER, "q", history);
-    const claimed = await service.waitForPrompt(USER);
-    expect(claimed?.history).toEqual(history);
-  });
+  describe("late answers", () => {
+    it("keeps an answer posted after the browser gave up, and serves it on pickup", async () => {
+      const pending = start(USER, "q", []);
+      const settled = pending.catch((e: unknown) => e);
+      await settle();
+      const claimed = await claim(service, USER, undefined, CRED);
 
-  it("trims a long history before handing it to the agent", async () => {
-    // 30 short turns -> only the most recent 10 reach the agent.
-    const history = Array.from({ length: 30 }, (_, i) => ({
-      role: (i % 2 === 0 ? "user" : "assistant") as "user" | "assistant",
-      content: `turn ${i}`,
-    }));
-    service.enqueuePrompt(USER, "q", history);
-    const claimed = await service.waitForPrompt(USER);
-    expect(claimed?.history).toHaveLength(10);
-    // Newest kept, oldest-first order preserved.
-    expect(claimed?.history[0].content).toBe("turn 20");
-    expect(claimed?.history[9].content).toBe("turn 29");
-  });
+      await jest.advanceTimersByTimeAsync(IDLE_TIMEOUT_MS + 1000);
+      await expect(settled).resolves.toBeInstanceOf(RelayTimeoutError);
 
-  it("rejects post_response for an unknown or foreign prompt", async () => {
-    service.enqueuePrompt(USER, "q", []);
-    const claimed = await service.waitForPrompt(USER);
+      // The agent recovered and posted after the stream was gone.
+      expect(
+        await service.postResponse(USER, claimed!.promptId, "late", CRED),
+      ).toBe(true);
 
-    expect(
-      service.postResponse(USER, "00000000-0000-0000-0000-000000000000", "x"),
-    ).toBe(false);
-    // Wrong user cannot answer another user's prompt.
-    expect(service.postResponse(OTHER, claimed!.promptId, "x")).toBe(false);
-  });
+      await expect(
+        service.takeBufferedResponse(USER, claimed!.promptId),
+      ).resolves.toEqual({ text: "late" });
+    });
 
-  it("ignores a duplicate post_response", async () => {
-    const pending = service.enqueuePrompt(USER, "q", []);
-    const claimed = await service.waitForPrompt(USER);
-    expect(service.postResponse(USER, claimed!.promptId, "a")).toBe(true);
-    expect(service.postResponse(USER, claimed!.promptId, "b")).toBe(false);
-    await expect(pending).resolves.toEqual({ text: "a" });
+    it("hands a late answer over exactly once", async () => {
+      const promptId = await answeredLateTurn();
+
+      await expect(
+        service.takeBufferedResponse(USER, promptId),
+      ).resolves.toEqual({ text: "late" });
+      await expect(
+        service.takeBufferedResponse(USER, promptId),
+      ).resolves.toBeNull();
+    });
+
+    it("does not serve another user's late answer", async () => {
+      const promptId = await answeredLateTurn();
+      await expect(
+        service.takeBufferedResponse(OTHER, promptId),
+      ).resolves.toBeNull();
+    });
+
+    it("stops accepting an answer once the grace after the deadline has run out", async () => {
+      const pending = start(USER, "q", []);
+      const settled = pending.catch(() => undefined);
+      await settle();
+      const claimed = await claim(service, USER, undefined, CRED);
+
+      await jest.advanceTimersByTimeAsync(
+        IDLE_TIMEOUT_MS + BUFFER_TTL_MS + 1000,
+      );
+      await settled;
+
+      expect(
+        await service.postResponse(
+          USER,
+          claimed!.promptId,
+          "far too late",
+          CRED,
+        ),
+      ).toBe(false);
+    });
+
+    it("returns null when picking up an unknown prompt", async () => {
+      await expect(
+        service.takeBufferedResponse(USER, "prompt-999"),
+      ).resolves.toBeNull();
+    });
+
+    /** Drive a turn to "claimed, browser gone, agent answered late". */
+    async function answeredLateTurn(): Promise<string> {
+      const pending = start(USER, "q", []);
+      const settled = pending.catch(() => undefined);
+      await settle();
+      const claimed = await claim(service, USER, undefined, CRED);
+      await jest.advanceTimersByTimeAsync(IDLE_TIMEOUT_MS + 1000);
+      await settled;
+      await service.postResponse(USER, claimed!.promptId, "late", CRED);
+      return claimed!.promptId;
+    }
   });
 
   describe("emitPendingAction", () => {
-    const action = {
-      actionId: "act-1",
-      type: "create_transaction",
-      expiresAt: Date.now() + 1000,
-      descriptor: { type: "create_transaction" },
-      signature: "sig",
-      preview: {},
-    } as any;
-
-    it("returns false when the user has no in-flight prompt", () => {
-      expect(service.emitPendingAction(USER, action)).toBe(false);
+    it("returns false when the user has no relay turn at all", async () => {
+      expect(await service.emitPendingAction(USER, card("a1"))).toBe(false);
     });
 
-    it("emits a pending_action event on the in-flight prompt's stream", async () => {
+    it("emits the card on the turn's own live stream", async () => {
       const emit = jest.fn();
-      service.enqueuePrompt(USER, "add a transaction", [], emit);
-      await service.waitForPrompt(USER);
+      void start(USER, "q", [], { emit });
+      await settle();
+      await claim(service, USER, "session-a", CRED);
 
-      expect(service.emitPendingAction(USER, action)).toBe(true);
-      expect(emit).toHaveBeenCalledWith({ type: "pending_action", action });
+      expect(
+        await service.emitPendingAction(USER, card("a1"), "session-a"),
+      ).toBe(true);
+      expect(emit).toHaveBeenCalledWith({
+        type: "pending_action",
+        action: card("a1"),
+      });
     });
 
-    it("does not target another user's in-flight prompt", async () => {
+    it("does not target another user's turn", async () => {
       const emit = jest.fn();
-      service.enqueuePrompt(USER, "q", [], emit);
-      await service.waitForPrompt(USER);
+      void start(OTHER, "q", [], { emit });
+      await settle();
+      await claim(service, OTHER, "session-a", CRED);
 
-      expect(service.emitPendingAction(OTHER, action)).toBe(false);
+      expect(
+        await service.emitPendingAction(USER, card("a1"), "session-a"),
+      ).toBe(false);
       expect(emit).not.toHaveBeenCalled();
     });
 
-    it("buffers the card (no live stream) when the in-flight prompt has no emit channel", async () => {
-      // A relay turn exists for the user but its stream cannot receive events;
-      // the card is buffered for pickup rather than reported as "not relay".
-      service.enqueuePrompt(USER, "q", []);
-      await service.waitForPrompt(USER);
-      expect(service.emitPendingAction(USER, action)).toBe(true);
-      expect(service.takeBufferedActions(USER)).toEqual([action]);
+    it("buffers the card when the turn has no live stream here", async () => {
+      void start(USER, "q", []);
+      await settle();
+      await claim(service, USER, "session-a", CRED);
+
+      expect(
+        await service.emitPendingAction(USER, card("a1"), "session-a"),
+      ).toBe(true);
+      await expect(service.takeBufferedActions(USER)).resolves.toEqual([
+        card("a1"),
+      ]);
     });
 
-    it("buffers a card emitted after the turn timed out, for pickup", () => {
-      // Simulate a claimed prompt that idle-timed-out: the agent kept composing
-      // a large call, the browser gave up, and the card lands afterwards.
-      const pending = service.enqueuePrompt(USER, "bulk edit", [], jest.fn());
-      pending.catch(() => undefined);
-      void service.waitForPrompt(USER);
-      // Past the idle window: the prompt leaves inFlight, but the user still has
-      // a relay turn (the awaitingLate marker), so a card landing now must be
-      // buffered, not dropped or reported as non-relay.
-      jest.advanceTimersByTime(180 * 1000);
+    it("buffers a card emitted after the browser gave up, for pickup", async () => {
+      const emit = jest.fn();
+      const pending = start(USER, "q", [], { emit });
+      const settled = pending.catch(() => undefined);
+      await settle();
+      await claim(service, USER, "session-a", CRED);
 
-      expect(service.emitPendingAction(USER, action)).toBe(true);
-      expect(service.takeBufferedActions(USER)).toEqual([action]);
-      // Drained on pickup -- a second pickup is empty.
-      expect(service.takeBufferedActions(USER)).toEqual([]);
+      await jest.advanceTimersByTimeAsync(IDLE_TIMEOUT_MS + 1000);
+      await settled;
+
+      expect(
+        await service.emitPendingAction(USER, card("a1"), "session-a"),
+      ).toBe(true);
+      await expect(service.takeBufferedActions(USER)).resolves.toEqual([
+        card("a1"),
+      ]);
     });
 
-    it("does not buffer a card for a user with no relay turn (direct MCP client)", () => {
-      expect(service.emitPendingAction(USER, action)).toBe(false);
-      expect(service.takeBufferedActions(USER)).toEqual([]);
-    });
+    it("does not let a stale turn capture a later write forever", async () => {
+      const pending = start(USER, "q", []);
+      const settled = pending.catch(() => undefined);
+      await settle();
+      await claim(service, USER, "session-a", CRED);
+      await jest.advanceTimersByTimeAsync(IDLE_TIMEOUT_MS + 1000);
+      await settled;
 
-    it("does not treat a direct MCP client's own tool activity as a relay turn", () => {
-      // Every MCP data tool call reports activity before its handler runs --
-      // including manage_transactions itself, called from Claude Desktop with
-      // no relay in sight. That activity must not make the write look like a
-      // relay turn, or the confirmation card lands in the web chat instead of
-      // the client that asked.
-      service.reportToolActivity(USER, "list_accounts", "start");
-      service.reportToolActivity(USER, "list_accounts", "result", false);
-      service.reportToolActivity(USER, "manage_transactions", "start");
+      await jest.advanceTimersByTimeAsync(BUFFER_TTL_MS + 1000);
 
-      expect(service.emitPendingAction(USER, action)).toBe(false);
-      expect(service.takeBufferedActions(USER)).toEqual([]);
+      // Past the grace the turn is over: this is a direct client's write and
+      // must confirm in the client, not in a web chat nobody is watching.
+      expect(
+        await service.emitPendingAction(USER, card("a1"), "session-a"),
+      ).toBe(false);
     });
 
     it("does not hand one session's relay turn to another session's write", async () => {
-      // The web chat's agent (session A) is mid-prompt. Claude Desktop
-      // (session B) is a different MCP session of the SAME user: its write is
-      // not part of A's turn, so its confirmation must stay in Claude Desktop.
       const emit = jest.fn();
-      service.enqueuePrompt(USER, "summarize my spending", [], emit);
-      await service.waitForPrompt(USER, "session-A");
+      void start(USER, "q", [], { emit });
+      await settle();
+      await claim(service, USER, "session-a", CRED);
 
-      expect(service.emitPendingAction(USER, action, "session-B")).toBe(false);
+      expect(
+        await service.emitPendingAction(USER, card("a1"), "session-b"),
+      ).toBe(false);
       expect(emit).not.toHaveBeenCalled();
-      expect(service.takeBufferedActions(USER)).toEqual([]);
-
-      // The claiming session's own write still routes to the web chat.
-      expect(service.emitPendingAction(USER, action, "session-A")).toBe(true);
-      expect(emit).toHaveBeenCalledWith({ type: "pending_action", action });
-    });
-
-    it("does not let a stale timed-out turn capture a later write forever", async () => {
-      // An abandoned web-chat turn leaves an awaitingLate marker. It stands in
-      // for a live turn only while a late answer would still be retained; past
-      // that the turn is over and a direct write must confirm in its client.
-      const pending = service.enqueuePrompt(USER, "q", [], jest.fn());
-      pending.catch(() => undefined);
-      await service.waitForPrompt(USER, "session-A");
-      jest.advanceTimersByTime(180 * 1000); // idle timeout -> awaitingLate
-
-      // Still within the retention window: the marker stands in for the turn.
-      expect(service.emitPendingAction(USER, action, "session-A")).toBe(true);
-      service.takeBufferedActions(USER);
-
-      // Past the 10-minute buffer TTL: the marker no longer answers for it.
-      jest.advanceTimersByTime(10 * 60 * 1000 + 1000);
-      expect(service.emitPendingAction(USER, action, "session-A")).toBe(false);
-      expect(service.takeBufferedActions(USER)).toEqual([]);
     });
 
     it("keeps the turn when the claiming agent reconnects with a new session id", async () => {
-      // An agent whose transport blipped comes back with a fresh MCP session.
-      // It proves ownership by knowing the promptId, so its later card must
-      // still reach the web chat rather than its own client.
       const emit = jest.fn();
-      service.enqueuePrompt(USER, "q", [], emit);
-      const claimed = await service.waitForPrompt(USER, "session-old");
+      void start(USER, "q", [], { emit });
+      await settle();
+      const claimed = await claim(service, USER, "session-a", CRED);
 
-      service.reportProgress(
+      // The agent reconnected: a fresh MCP session, proving ownership by
+      // knowing the (unguessable) promptId.
+      await service.reportProgress(
         USER,
         claimed!.promptId,
-        "still here",
-        "session-new",
+        "back",
+        "session-b",
+        CRED,
       );
 
-      expect(service.emitPendingAction(USER, action, "session-new")).toBe(true);
-      expect(emit).toHaveBeenCalledWith({ type: "pending_action", action });
-      expect(service.emitPendingAction(USER, action, "session-old")).toBe(
-        false,
-      );
+      expect(
+        await service.emitPendingAction(USER, card("a1"), "session-b"),
+      ).toBe(true);
+      expect(emit).toHaveBeenCalledWith({
+        type: "pending_action",
+        action: card("a1"),
+      });
     });
 
-    it("does not route a card to the web chat while a relay agent is merely parked listening", () => {
-      // A relay agent polling get_next_prompt with nothing queued has no
-      // claimed prompt, so a write arriving now is a direct MCP client's and
-      // must confirm there -- not in the web chat.
-      void service.waitForPrompt(USER);
-      expect(service.getStatus(USER).state).toBe("listening");
+    it("does not route a card to the web chat while an agent is merely parked", async () => {
+      void claim(service, USER, "session-a", CRED);
+      await settle();
 
-      expect(service.emitPendingAction(USER, action)).toBe(false);
-      expect(service.takeBufferedActions(USER)).toEqual([]);
+      // Parked is not claimed: there is no turn for this write to belong to.
+      expect(
+        await service.emitPendingAction(USER, card("a1"), "session-a"),
+      ).toBe(false);
+    });
+
+    it("drains buffered cards oldest first and only once", async () => {
+      void start(USER, "q", []);
+      await settle();
+      await claim(service, USER, "session-a", CRED);
+
+      await service.emitPendingAction(USER, card("a1"), "session-a");
+      await jest.advanceTimersByTimeAsync(10);
+      await service.emitPendingAction(USER, card("a2"), "session-a");
+
+      await expect(service.takeBufferedActions(USER)).resolves.toEqual([
+        card("a1"),
+        card("a2"),
+      ]);
+      await expect(service.takeBufferedActions(USER)).resolves.toEqual([]);
+    });
+
+    it("drops a buffered card past its TTL", async () => {
+      void start(USER, "q", []);
+      await settle();
+      await claim(service, USER, "session-a", CRED);
+      await service.emitPendingAction(USER, card("a1"), "session-a");
+
+      await jest.advanceTimersByTimeAsync(BUFFER_TTL_MS + 1000);
+
+      await expect(service.takeBufferedActions(USER)).resolves.toEqual([]);
     });
   });
 
   describe("reportProgress", () => {
-    it("returns false when the user has no in-flight prompt", () => {
-      expect(service.reportProgress(USER, "missing", "working...")).toBe(false);
+    it("returns false when the prompt is not this caller's turn", async () => {
+      expect(
+        await service.reportProgress(USER, "prompt-999", "x", undefined, CRED),
+      ).toBe(false);
     });
 
-    it("streams an assistant_text event on the in-flight prompt", async () => {
+    it("streams an assistant_text event, newline-terminated", async () => {
       const emit = jest.fn();
-      service.enqueuePrompt(USER, "buy XBAL", [], emit);
-      const claimed = await service.waitForPrompt(USER);
+      void start(USER, "q", [], { emit });
+      await settle();
+      const claimed = await claim(service, USER, undefined, CRED);
 
       expect(
-        service.reportProgress(USER, claimed!.promptId, "looking up category"),
+        await service.reportProgress(
+          USER,
+          claimed!.promptId,
+          "looking",
+          undefined,
+          CRED,
+        ),
       ).toBe(true);
       expect(emit).toHaveBeenCalledWith({
         type: "assistant_text",
-        text: "looking up category\n",
+        text: "looking\n",
       });
     });
 
     it("does not target another user's prompt", async () => {
       const emit = jest.fn();
-      service.enqueuePrompt(USER, "q", [], emit);
-      const claimed = await service.waitForPrompt(USER);
+      void start(OTHER, "q", [], { emit });
+      await settle();
+      const claimed = await claim(service, OTHER, undefined, CRED);
 
-      expect(service.reportProgress(OTHER, claimed!.promptId, "x")).toBe(false);
+      expect(
+        await service.reportProgress(
+          USER,
+          claimed!.promptId,
+          "x",
+          undefined,
+          CRED,
+        ),
+      ).toBe(false);
       expect(emit).not.toHaveBeenCalled();
     });
 
     it("returns false once the prompt has been answered", async () => {
       const emit = jest.fn();
-      service.enqueuePrompt(USER, "q", [], emit);
-      const claimed = await service.waitForPrompt(USER);
-      service.postResponse(USER, claimed!.promptId, "done");
+      const pending = start(USER, "q", [], { emit });
+      await settle();
+      const claimed = await claim(service, USER, undefined, CRED);
+      await service.postResponse(USER, claimed!.promptId, "done", CRED);
+      await settle();
+      await pending;
 
-      expect(service.reportProgress(USER, claimed!.promptId, "late")).toBe(
-        false,
-      );
+      expect(
+        await service.reportProgress(
+          USER,
+          claimed!.promptId,
+          "late",
+          undefined,
+          CRED,
+        ),
+      ).toBe(false);
     });
   });
 
   describe("reportToolActivity", () => {
-    it("streams tool_start and tool_result on the in-flight prompt", async () => {
-      const emit = jest.fn();
-      service.enqueuePrompt(USER, "q", [], emit);
-      await service.waitForPrompt(USER);
-
-      service.reportToolActivity(USER, "list_categories", "start");
-      service.reportToolActivity(USER, "list_categories", "result", false);
-
-      expect(emit).toHaveBeenNthCalledWith(1, {
-        type: "tool_start",
-        name: "list_categories",
+    it("streams tool_start and tool_result on the in-flight turn", async () => {
+      const events: RelayServerEvent[] = [];
+      void start(USER, "q", [], {
+        emit: (e) => events.push(e),
       });
-      expect(emit).toHaveBeenNthCalledWith(2, {
-        type: "tool_result",
-        name: "list_categories",
-        isError: false,
-      });
+      await settle();
+      await claim(service, USER, "session-a", CRED);
+
+      await service.reportToolActivity(
+        USER,
+        "list_transactions",
+        "start",
+        false,
+        "session-a",
+      );
+      await service.reportToolActivity(
+        USER,
+        "list_transactions",
+        "result",
+        false,
+        "session-a",
+      );
+
+      expect(events).toEqual([
+        { type: "tool_start", name: "list_transactions" },
+        { type: "tool_result", name: "list_transactions", isError: false },
+      ]);
     });
 
-    it("is a no-op when the user has no in-flight prompt", () => {
-      // No throw, nothing emitted (no prompt to target).
-      expect(() =>
-        service.reportToolActivity(USER, "list_categories", "start"),
-      ).not.toThrow();
+    it("is a no-op when the caller has no relay turn", async () => {
+      await expect(
+        service.reportToolActivity(USER, "list_accounts", "start"),
+      ).resolves.toBeUndefined();
     });
 
     it("does not mirror another session's tool calls into the web chat", async () => {
       const emit = jest.fn();
-      service.enqueuePrompt(USER, "q", [], emit);
-      await service.waitForPrompt(USER, "session-A");
+      void start(USER, "q", [], { emit });
+      await settle();
+      await claim(service, USER, "session-a", CRED);
 
-      // Claude Desktop (session B) working on its own, not on this prompt.
-      service.reportToolActivity(
+      await service.reportToolActivity(
         USER,
         "list_accounts",
         "start",
         false,
-        "session-B",
+        "session-b",
       );
 
       expect(emit).not.toHaveBeenCalled();
     });
 
     it("does not let another session's tool calls keep an abandoned turn alive", async () => {
-      // The poisoning mechanism: liveness from ANY session reset the claimed
-      // prompt's idle timer, so a relay turn whose browser was long gone never
-      // timed out -- and while it sat in flight it captured every direct write
-      // the user made. Only the claiming session's activity is its liveness.
-      const pending = service.enqueuePrompt(USER, "q", [], jest.fn());
-      const rejection = jest.fn();
-      pending.catch(rejection);
-      await service.waitForPrompt(USER, "session-A");
+      const pending = start(USER, "q", []);
+      const settled = pending.catch((e: unknown) => e);
+      await settle();
+      await claim(service, USER, "session-a", CRED);
 
-      // Another session hammers tool calls right through the idle window.
+      // A direct MCP client of the same user keeps working throughout.
       for (let i = 0; i < 4; i++) {
-        jest.advanceTimersByTime(60 * 1000);
-        service.reportToolActivity(
+        await jest.advanceTimersByTimeAsync(IDLE_TIMEOUT_MS * 0.75);
+        await service.reportToolActivity(
           USER,
           "list_accounts",
           "start",
           false,
-          "session-B",
+          "session-b",
         );
-        await Promise.resolve();
       }
 
-      // The abandoned turn timed out on schedule despite the other session.
-      expect(rejection).toHaveBeenCalled();
-      expect(service.getStatus(USER).state).not.toBe("busy");
+      await expect(settled).resolves.toBeInstanceOf(RelayTimeoutError);
     });
   });
 
   describe("status", () => {
-    it("is offline before any agent polls", () => {
-      expect(service.getStatus(USER)).toEqual({ state: "offline", queued: 0 });
+    it("is offline before any agent polls", async () => {
+      expect(await service.getStatus(USER)).toEqual({
+        state: "offline",
+        queued: 0,
+      });
     });
 
-    it("stays offline on tool activity alone (a direct MCP client is not a relay agent)", () => {
-      service.reportToolActivity(USER, "list_accounts", "start");
-      service.reportToolActivity(USER, "list_accounts", "result", false);
-      expect(service.getStatus(USER).state).toBe("offline");
+    it("stays offline on tool activity alone (a direct MCP client is not a relay agent)", async () => {
+      await service.reportToolActivity(USER, "list_accounts", "start");
+      expect((await service.getStatus(USER)).state).toBe("offline");
     });
 
     it("is busy while a claimed prompt is in flight", async () => {
-      service.enqueuePrompt(USER, "q", []);
-      const claimed = await service.waitForPrompt(USER);
-      expect(service.getStatus(USER).state).toBe("busy");
-      service.postResponse(USER, claimed!.promptId, "a");
-      // After responding, no longer busy; the recent poll keeps it "listening".
-      expect(service.getStatus(USER).state).toBe("listening");
+      void start(USER, "q", []);
+      await settle();
+      await claim(service, USER, undefined, CRED);
+
+      expect((await service.getStatus(USER)).state).toBe("busy");
     });
 
-    it("reports the queued count", () => {
-      service.enqueuePrompt(USER, "a", []);
-      service.enqueuePrompt(USER, "b", []);
-      expect(service.getStatus(USER).queued).toBe(2);
-    });
-  });
+    it("reports the queued count, and only live rows", async () => {
+      void start(USER, "one", []);
+      await settle();
+      void start(USER, "two", []);
+      await settle();
 
-  describe("timeouts", () => {
-    it("returns null from a parked poll after the poll window", async () => {
-      const poll = service.waitForPrompt(USER);
-      jest.advanceTimersByTime(25 * 1000);
-      await expect(poll).resolves.toBeNull();
-    });
+      expect((await service.getStatus(USER)).queued).toBe(2);
 
-    it("rejects a never-claimed prompt after the queue wait (offline agent)", async () => {
-      const pending = service.enqueuePrompt(USER, "q", []);
-      const assertion = expect(pending).rejects.toMatchObject({
-        name: "RelayTimeoutError",
-        reason: "no_agent",
-      });
-      // Queue wait is 5 minutes; no agent ever polls.
-      jest.advanceTimersByTime(5 * 60 * 1000);
-      await assertion;
-    });
-
-    it("does not fire the old fixed wall while a claimed agent keeps working", async () => {
-      const pending = service.enqueuePrompt(USER, "q", []);
-      const rejection = jest.fn();
-      pending.catch(rejection);
-      const claimed = await service.waitForPrompt(USER);
-
-      // The agent reports liveness every 80s for 6 minutes -- past the old
-      // 5-minute fixed wall but never silent for a full idle window, so the
-      // browser must NOT have given up.
-      for (let i = 0; i < 4; i++) {
-        jest.advanceTimersByTime(80 * 1000);
-        service.reportProgress(USER, claimed!.promptId, `working ${i}`);
-        await Promise.resolve();
-      }
-      expect(rejection).not.toHaveBeenCalled();
-
-      service.postResponse(USER, claimed!.promptId, "answer");
-      await expect(pending).resolves.toEqual({ text: "answer" });
-    });
-
-    it("times out a claimed prompt that goes silent (idle window)", async () => {
-      const pending = service.enqueuePrompt(USER, "q", []);
-      await service.waitForPrompt(USER);
-      const assertion = expect(pending).rejects.toMatchObject({
-        name: "RelayTimeoutError",
-        reason: "disconnected",
-      });
-      // 180s of total silence after the claim.
-      jest.advanceTimersByTime(180 * 1000);
-      await assertion;
-    });
-
-    it("keeps a slow-but-alive agent alive across the idle window", async () => {
-      const emit = jest.fn();
-      const pending = service.enqueuePrompt(USER, "q", [], emit);
-      const claimed = await service.waitForPrompt(USER);
-
-      // Report liveness every 60s for 5 minutes -- never silent for a full 180s.
-      for (let i = 0; i < 5; i++) {
-        jest.advanceTimersByTime(60 * 1000);
-        service.reportProgress(USER, claimed!.promptId, `step ${i}`);
-      }
-      // Tool activity also counts as liveness.
-      jest.advanceTimersByTime(60 * 1000);
-      service.reportToolActivity(USER, "list_categories", "start");
-      // And a poll.
-      jest.advanceTimersByTime(60 * 1000);
-      void service.waitForPrompt(USER);
-
-      // Still in flight after well past the idle window thanks to liveness.
-      expect(service.getStatus(USER).state).toBe("busy");
-      expect(service.postResponse(USER, claimed!.promptId, "done")).toBe(true);
-      await expect(pending).resolves.toEqual({ text: "done" });
-    });
-
-    it("enforces the hard upper bound even for a chatty agent", async () => {
-      const pending = service.enqueuePrompt(USER, "q", []);
-      const claimed = await service.waitForPrompt(USER);
-      const assertion = expect(pending).rejects.toMatchObject({
-        name: "RelayTimeoutError",
-        reason: "disconnected",
-      });
-
-      // Keep reporting liveness every 60s for the full 20-minute backstop.
-      for (let i = 0; i < 21; i++) {
-        jest.advanceTimersByTime(60 * 1000);
-        service.reportProgress(USER, claimed!.promptId, `tick ${i}`);
-      }
-      await assertion;
-    });
-  });
-
-  describe("late-answer buffer", () => {
-    it("buffers a late answer after the browser timed out and serves it on pickup", async () => {
-      const pending = service.enqueuePrompt(USER, "q", []);
-      const claimed = await service.waitForPrompt(USER);
-      // Idle timeout fires while the agent is still working.
-      const assertion = expect(pending).rejects.toMatchObject({
-        reason: "disconnected",
-      });
-      jest.advanceTimersByTime(180 * 1000);
-      await assertion;
-
-      // The agent recovers and posts late: not dropped, returns true (success).
-      expect(service.postResponse(USER, claimed!.promptId, "late answer")).toBe(
-        true,
-      );
-
-      // The browser picks it up by promptId.
-      expect(service.takeBufferedResponse(USER, claimed!.promptId)).toEqual({
-        text: "late answer",
-      });
-      // Pickup removes it -- a second pickup finds nothing.
-      expect(service.takeBufferedResponse(USER, claimed!.promptId)).toBeNull();
-    });
-
-    it("is idempotent for a double late-post (keeps the first answer)", async () => {
-      const pending = service.enqueuePrompt(USER, "q", []);
-      const claimed = await service.waitForPrompt(USER);
-      pending.catch(() => undefined);
-      jest.advanceTimersByTime(180 * 1000);
-
-      expect(service.postResponse(USER, claimed!.promptId, "first")).toBe(true);
-      // Second post for the same prompt is a no-op success.
-      expect(service.postResponse(USER, claimed!.promptId, "second")).toBe(
-        true,
-      );
-      expect(service.takeBufferedResponse(USER, claimed!.promptId)).toEqual({
-        text: "first",
-      });
-    });
-
-    it("does not serve another user's buffered answer", async () => {
-      const pending = service.enqueuePrompt(USER, "q", []);
-      const claimed = await service.waitForPrompt(USER);
-      pending.catch(() => undefined);
-      jest.advanceTimersByTime(180 * 1000);
-      service.postResponse(USER, claimed!.promptId, "secret");
-
-      expect(service.takeBufferedResponse(OTHER, claimed!.promptId)).toBeNull();
-    });
-
-    it("prunes a buffered answer after its TTL", async () => {
-      const pending = service.enqueuePrompt(USER, "q", []);
-      const claimed = await service.waitForPrompt(USER);
-      pending.catch(() => undefined);
-      jest.advanceTimersByTime(180 * 1000);
-      service.postResponse(USER, claimed!.promptId, "stale");
-
-      // Past the 10-minute buffer TTL.
-      jest.advanceTimersByTime(10 * 60 * 1000 + 1);
-      expect(service.takeBufferedResponse(USER, claimed!.promptId)).toBeNull();
-    });
-
-    it("evicts the oldest buffered answer past the per-user cap", async () => {
-      const promptIds: string[] = [];
-      // Buffer MAX_BUFFERED_PER_USER + 1 (= 21) late answers for one user.
-      for (let i = 0; i < 21; i++) {
-        const pending = service.enqueuePrompt(USER, `q${i}`, []);
-        pending.catch(() => undefined);
-        const claimed = await service.waitForPrompt(USER);
-        promptIds.push(claimed!.promptId);
-        // Advance just enough to expire this prompt's idle timer; stay under the
-        // buffer TTL so earlier entries are not pruned by age, only by the cap.
-        jest.advanceTimersByTime(180 * 1000);
-        service.postResponse(USER, claimed!.promptId, `a${i}`);
-      }
-
-      // The very first answer was evicted to honour the cap.
-      expect(service.takeBufferedResponse(USER, promptIds[0])).toBeNull();
-      // The most recent one survives.
-      expect(service.takeBufferedResponse(USER, promptIds[20])).toEqual({
-        text: "a20",
-      });
-    });
-
-    it("returns null when picking up an unknown prompt", () => {
-      expect(
-        service.takeBufferedResponse(
-          USER,
-          "00000000-0000-0000-0000-000000000000",
-        ),
-      ).toBeNull();
+      await jest.advanceTimersByTimeAsync(QUEUE_WAIT_MS + 1000);
+      expect((await service.getStatus(USER)).queued).toBe(0);
     });
   });
 
   describe("attachments", () => {
-    const pngAttachment = {
-      kind: "image" as const,
-      mediaType: "image/png",
-      filename: "chart.png",
-      data: PNG_BASE64,
-    };
+    const upload = () => [
+      {
+        kind: "image" as const,
+        mediaType: "image/png",
+        filename: "shot.png",
+        data: PNG_BASE64,
+      },
+    ];
 
     it("stores attachments and surfaces refs on the claimed prompt", async () => {
-      service.enqueuePrompt(USER, "what is this?", [], undefined, undefined, [
-        pngAttachment,
-      ]);
-      const claimed = await service.waitForPrompt(USER);
+      void start(USER, "what is this", [], {
+        attachments: upload(),
+      });
+      await settle();
 
-      expect(claimed?.attachments).toHaveLength(1);
-      const ref = claimed!.attachments![0];
-      expect(ref.filename).toBe("chart.png");
-      expect(ref.kind).toBe("image");
-      expect(ref.mediaType).toBe("image/png");
-      expect(ref.uri).toBe(`monize-attachment://${ref.id}`);
-      // The bytes themselves live in the store, keyed by the same user + id.
-      expect(attachmentStore.get(USER, ref.id)?.data.length).toBeGreaterThan(0);
+      const claimed = await claim(service, USER, undefined, CRED);
+      expect(claimed!.attachments).toHaveLength(1);
+      expect(claimed!.attachments![0].filename).toBe("shot.png");
+      await expect(
+        attachmentStore.get(USER, claimed!.attachments![0].id),
+      ).resolves.toBeDefined();
     });
 
     it("omits attachments from the claimed prompt when none were uploaded", async () => {
-      service.enqueuePrompt(USER, "hi", []);
-      const claimed = await service.waitForPrompt(USER);
-      expect(claimed?.attachments).toBeUndefined();
+      void start(USER, "q", []);
+      await settle();
+
+      const claimed = await claim(service, USER, undefined, CRED);
+      expect(claimed!.attachments).toBeUndefined();
     });
 
     it("releases stored attachments once the prompt is answered", async () => {
-      service.enqueuePrompt(USER, "q", [], undefined, undefined, [
-        pngAttachment,
-      ]);
-      const claimed = await service.waitForPrompt(USER);
+      const pending = start(USER, "q", [], {
+        attachments: upload(),
+      });
+      await settle();
+      const claimed = await claim(service, USER, undefined, CRED);
       const id = claimed!.attachments![0].id;
-      expect(attachmentStore.get(USER, id)).toBeDefined();
 
-      service.postResponse(USER, claimed!.promptId, "done");
-      expect(attachmentStore.get(USER, id)).toBeUndefined();
+      await service.postResponse(USER, claimed!.promptId, "a picture", CRED);
+      await settle();
+      await pending;
+
+      await expect(attachmentStore.get(USER, id)).resolves.toBeUndefined();
     });
 
     it("releases stored attachments when no agent ever claims the prompt", async () => {
-      const pending = service.enqueuePrompt(
-        USER,
-        "q",
-        [],
-        undefined,
-        (promptId) => promptId,
-        [pngAttachment],
-      );
-      pending.catch(() => undefined);
-      // The ref id is not exposed without a claim; assert via store size by
-      // reading the only entry through a fresh store lookup is not possible, so
-      // drive the timeout and confirm the user's bucket is emptied.
-      jest.advanceTimersByTime(5 * 60 * 1000);
-      await expect(pending).rejects.toMatchObject({ reason: "no_agent" });
-      // A subsequent claim sees nothing, and any prior id is gone: the bucket
-      // was released. Enqueue a fresh attachment and confirm only one remains.
-      service.enqueuePrompt(USER, "q2", [], undefined, undefined, [
-        pngAttachment,
-      ]);
-      const claimed = await service.waitForPrompt(USER);
-      expect(claimed?.attachments).toHaveLength(1);
+      const pending = start(USER, "q", [], {
+        attachments: upload(),
+      });
+      const settled = pending.catch(() => undefined);
+      await settle();
+      const id = harness.rows[0].prompt.attachments![0].id;
+
+      await jest.advanceTimersByTimeAsync(QUEUE_WAIT_MS + 1000);
+      await settled;
+
+      await expect(attachmentStore.get(USER, id)).resolves.toBeUndefined();
     });
 
-    it("rejects synchronously when an attachment fails validation", () => {
-      expect(() =>
-        service.enqueuePrompt(USER, "q", [], undefined, undefined, [
-          { ...pngAttachment, mediaType: "application/pdf", kind: "pdf" },
-        ]),
-      ).toThrow();
+    it("rejects before the prompt is ever queued when an attachment fails validation", async () => {
+      await expect(
+        service.enqueuePrompt(USER, "q", [], {
+          attachments: [
+            {
+              kind: "image" as const,
+              mediaType: "image/png",
+              filename: "fake.png",
+              data: Buffer.from("not a png").toString("base64"),
+            },
+          ],
+        }),
+      ).rejects.toThrow();
+      expect(harness.rows).toHaveLength(0);
     });
   });
 
   describe("inactivity disconnect", () => {
-    it("signals stop after the inactivity timeout of empty polls", () => {
-      // First empty poll just starts the idle clock.
-      expect(service.shouldStopForIdle(USER)).toBe(false);
-      expect(service.getStatus(USER).idleDisconnected).toBeFalsy();
-
-      // Still within the window: keep listening.
-      jest.advanceTimersByTime(INACTIVITY_TIMEOUT_MS - 1000);
-      expect(service.shouldStopForIdle(USER)).toBe(false);
-
-      // Past the window: stop and flag the disconnect for the chat.
-      jest.advanceTimersByTime(2000);
-      expect(service.shouldStopForIdle(USER)).toBe(true);
-      expect(service.getStatus(USER).idleDisconnected).toBe(true);
+    it("signals stop after the inactivity timeout of empty polls", async () => {
+      await expect(service.shouldStopForIdle(USER)).resolves.toBe(false);
+      await jest.advanceTimersByTimeAsync(INACTIVITY_TIMEOUT_MS + 1000);
+      await expect(service.shouldStopForIdle(USER)).resolves.toBe(true);
+      expect((await service.getStatus(USER)).idleDisconnected).toBe(true);
     });
 
-    it("resets the idle clock when a new prompt arrives", () => {
-      expect(service.shouldStopForIdle(USER)).toBe(false);
-      jest.advanceTimersByTime(INACTIVITY_TIMEOUT_MS + 1000);
+    it("resets the idle clock when a new prompt arrives", async () => {
+      await expect(service.shouldStopForIdle(USER)).resolves.toBe(false);
+      await jest.advanceTimersByTimeAsync(INACTIVITY_TIMEOUT_MS - 1000);
 
-      // A new prompt is activity: it clears the clock and any disconnect flag.
-      // (Swallow the eventual timeout rejection; this test never answers it.)
-      service.enqueuePrompt(USER, "still here", []).catch(() => {});
-      expect(service.getStatus(USER).idleDisconnected).toBeFalsy();
+      void start(USER, "still here", []);
+      await settle();
 
-      // The clock restarts from the next empty poll, so it does not immediately stop.
-      expect(service.shouldStopForIdle(USER)).toBe(false);
+      await jest.advanceTimersByTimeAsync(2000);
+      await expect(service.shouldStopForIdle(USER)).resolves.toBe(false);
     });
 
-    it("clears the idle-disconnect flag once the agent polls again (reconnect)", async () => {
-      service.shouldStopForIdle(USER);
-      jest.advanceTimersByTime(INACTIVITY_TIMEOUT_MS + 1000);
-      expect(service.shouldStopForIdle(USER)).toBe(true);
-      expect(service.getStatus(USER).idleDisconnected).toBe(true);
+    it("clears the idle-disconnect notice once the agent polls again", async () => {
+      await service.shouldStopForIdle(USER);
+      await jest.advanceTimersByTimeAsync(INACTIVITY_TIMEOUT_MS + 1000);
+      await service.shouldStopForIdle(USER);
 
-      // The agent reconnects and polls: the flag clears (status no longer idle).
-      const poll = service.waitForPrompt(USER);
-      expect(service.getStatus(USER).idleDisconnected).toBeFalsy();
-      jest.advanceTimersByTime(30 * 1000);
+      void claim(service, USER, undefined, CRED);
+      await settle();
+
+      expect((await service.getStatus(USER)).idleDisconnected).toBeUndefined();
+    });
+
+    it("does not trip while a conversation is active (a claim resets the clock)", async () => {
+      await expect(service.shouldStopForIdle(USER)).resolves.toBe(false);
+      await jest.advanceTimersByTimeAsync(INACTIVITY_TIMEOUT_MS - 1000);
+
+      void start(USER, "q", []);
+      await settle();
+      await claim(service, USER, undefined, CRED);
+
+      await jest.advanceTimersByTimeAsync(2000);
+      await expect(service.shouldStopForIdle(USER)).resolves.toBe(false);
+    });
+  });
+
+  describe("streams", () => {
+    it("holds no stream once the turn is over", async () => {
+      const pending = start(USER, "q", [], {
+        emit: jest.fn(),
+      });
+      await settle();
+      const claimed = await claim(service, USER, undefined, CRED);
+      await service.postResponse(USER, claimed!.promptId, "done", CRED);
+      await settle();
+      await pending;
+
+      // A stream left registered outlives the socket it was serving.
+      expect(streams.activeCount()).toBe(0);
+    });
+
+    it("holds no stream after the browser gives up", async () => {
+      const pending = start(USER, "q", [], {
+        emit: jest.fn(),
+      });
+      const settled = pending.catch(() => undefined);
+      await jest.advanceTimersByTimeAsync(QUEUE_WAIT_MS + 1000);
+      await settled;
+
+      expect(streams.activeCount()).toBe(0);
+    });
+  });
+
+  describe("across replicas", () => {
+    /** A second backend over the same rows and the same bus. */
+    const secondReplica = () =>
+      new AiRelayService(
+        harness.dataSource as unknown as DataSource,
+        harness.attachmentStore,
+        new RelayStreamRegistry(),
+        bus,
+      );
+
+    it("lets an agent polling one replica claim a prompt queued on another", async () => {
+      const other = secondReplica();
+      const pending = start(USER, "queued over there");
+      await settle();
+
+      const claimed = await claim(other, USER, "session-a", CRED);
+      expect(claimed?.prompt).toBe("queued over there");
+
+      await other.postResponse(
+        USER,
+        claimed!.promptId,
+        "answered over here",
+        CRED,
+      );
+      await settle();
+      await expect(pending).resolves.toEqual({ text: "answered over here" });
+    });
+
+    it("keeps the agent's liveness and the queue on rows, not in a process", async () => {
+      const poll = claim(service, USER, "session-a", CRED);
+      await jest.advanceTimersByTimeAsync(POLL_PARK_MS + 1000);
       await poll;
+      start(USER, "q");
+      await settle();
+
+      // Nothing about this user's tunnel lives in the process that served the
+      // poll, which is the whole point of the move.
+      const other = secondReplica();
+      expect(await other.getStatus(USER)).toEqual({
+        state: "listening",
+        queued: 1,
+      });
     });
 
-    it("does not trip while a conversation is active (claim resets the clock)", () => {
-      // Swallow the eventual in-flight timeout rejection; this test never answers it.
-      service.enqueuePrompt(USER, "q1", []).catch(() => {});
-      // Claiming the queued prompt counts as activity and resets the clock.
-      service.waitForPrompt(USER);
-      jest.advanceTimersByTime(INACTIVITY_TIMEOUT_MS - 1000);
-      // First empty poll after the claim only starts the clock again.
-      expect(service.shouldStopForIdle(USER)).toBe(false);
+    it("hands a card buffered on one replica to a pickup served by another", async () => {
+      start(USER, "q");
+      await settle();
+      await claim(service, USER, "session-a", CRED);
+      await service.emitPendingAction(USER, card("a1"), "session-a");
+
+      await expect(secondReplica().takeBufferedActions(USER)).resolves.toEqual([
+        card("a1"),
+      ]);
+    });
+  });
+
+  describe("the park length", () => {
+    it("parks for the injected length instead of POLL_PARK_MS when one is given", async () => {
+      const short = new AiRelayService(
+        harness.dataSource as unknown as DataSource,
+        attachmentStore,
+        streams,
+        bus,
+        1000,
+      );
+      let result: unknown = "still parked";
+      const poll = claim(short, USER, "session-a", CRED).then((r) => {
+        result = r;
+      });
+
+      await jest.advanceTimersByTimeAsync(500);
+      expect(result).toBe("still parked");
+      await jest.advanceTimersByTimeAsync(600);
+      await poll;
+      expect(result).toBeNull();
+    });
+
+    it("parks for POLL_PARK_MS when nothing is injected", async () => {
+      let result: unknown = "still parked";
+      const poll = claim(service, USER, "session-a", CRED).then((r) => {
+        result = r;
+      });
+
+      await jest.advanceTimersByTimeAsync(POLL_PARK_MS - 1000);
+      expect(result).toBe("still parked");
+      await jest.advanceTimersByTimeAsync(2000);
+      await poll;
+      expect(result).toBeNull();
+    });
+  });
+
+  describe("the agent row", () => {
+    it("keeps one liveness row per user however often the agent polls", async () => {
+      const first = claim(service, USER, "session-a", CRED);
+      await jest.advanceTimersByTimeAsync(POLL_PARK_MS + 1000);
+      await first;
+      const second = claim(service, USER, "session-a", CRED);
+      await jest.advanceTimersByTimeAsync(POLL_PARK_MS + 1000);
+      await second;
+
+      expect(harness.agents.filter((a) => a.userId === USER)).toHaveLength(1);
+      expect(harness.agents[0].lastPollAt).not.toBeNull();
+    });
+
+    it("treats a repeat of one card id as the same card", async () => {
+      start(USER, "q");
+      await settle();
+      await claim(service, USER, "session-a", CRED);
+
+      await service.emitPendingAction(USER, card("a1"), "session-a");
+      await service.emitPendingAction(USER, card("a1"), "session-a");
+
+      // The descriptor's id is the card's identity: the browser must be offered
+      // one card to approve, not two of the same write.
+      await expect(service.takeBufferedActions(USER)).resolves.toEqual([
+        card("a1"),
+      ]);
+    });
+  });
+
+  describe("failures that must not lose committed work", () => {
+    /** Make one statement reject, leaving the harness to answer the rest. */
+    function breakStatement(fragment: string): void {
+      const query = harness.dataSource.manager.query as jest.Mock;
+      const rows = query.getMockImplementation()!;
+      query.mockImplementation(async (sql: string, params?: unknown[]) => {
+        if (String(sql).includes(fragment)) {
+          throw new Error(`statement failed: ${fragment}`);
+        }
+        return rows(sql, params);
+      });
+    }
+
+    it("still reports an answer as delivered when the wake-up cannot be published", async () => {
+      start(USER, "q");
+      await settle();
+      const claimed = await claim(service, USER, "session-a", CRED);
+      jest
+        .spyOn(bus, "publish")
+        .mockRejectedValue(new Error("notification connection is down"));
+
+      // The row is already committed. Reporting failure would have the agent
+      // retry a turn it has finished -- and the retry would be refused, so its
+      // work would look lost twice over.
+      await expect(
+        service.postResponse(USER, claimed!.promptId, "done", CRED),
+      ).resolves.toBe(true);
+      expect(harness.rows[0].status).toBe("answered");
+    });
+
+    it("still queues a prompt when the wake-up cannot be published", async () => {
+      jest
+        .spyOn(bus, "publish")
+        .mockRejectedValue(new Error("notification connection is down"));
+
+      const pending = start(USER, "q");
+      await settle();
+
+      // A waiter re-reads on its own timer, so a lost wake-up costs latency.
+      // Failing here would show a timeout for a prompt live in the queue.
+      expect(harness.rows).toHaveLength(1);
+      const claimed = await claim(service, USER, "session-a", CRED);
+      expect(claimed?.prompt).toBe("q");
+      await service.postResponse(USER, claimed!.promptId, "a", CRED);
+      await jest.advanceTimersByTimeAsync(WAKE_POLL_INTERVAL_MS);
+      await expect(pending).resolves.toEqual({ text: "a" });
+    });
+
+    it("claims and resets the inactivity clock in one transaction", async () => {
+      start(USER, "q");
+      await settle();
+      await claim(service, USER, "session-a", CRED);
+
+      // A second transaction for the clock could fail after the claim was
+      // durable, leaving a turn marked `claimed` by an agent that never learned
+      // its id. That the rollback really happens is a PostgreSQL property and
+      // is asserted in ai-relay-claim.integration.spec.ts; what this proves is
+      // that the two statements were handed to one transaction to begin with.
+      const grouped = harness.transactions.find((tx) =>
+        tx.some((sql) => sql.includes("WITH next AS")),
+      );
+      expect(grouped).toBeDefined();
+      expect(
+        grouped!.some((sql) => sql.includes("INSERT INTO ai_relay_agents")),
+      ).toBe(true);
+    });
+
+    it("still hands over the answer when the attachment release fails", async () => {
+      const pending = start(USER, "q", [], {
+        attachments: [
+          {
+            kind: "image" as const,
+            mediaType: "image/png",
+            filename: "shot.png",
+            data: PNG_BASE64,
+          },
+        ],
+      });
+      await settle();
+      const claimed = await claim(service, USER, "session-a", CRED);
+      jest
+        .spyOn(attachmentStore, "releaseForPrompt")
+        .mockRejectedValue(new Error("delete failed"));
+
+      await service.postResponse(USER, claimed!.promptId, "a picture", CRED);
+      await settle();
+
+      // The answer is already consumed, so throwing here would destroy it. The
+      // TTL and the sweep are the backstop, which is why the release is eager
+      // rather than required.
+      await expect(pending).resolves.toEqual({ text: "a picture" });
+    });
+
+    it("never throws out of reportToolActivity", async () => {
+      start(USER, "q");
+      await settle();
+      await claim(service, USER, "session-a", CRED);
+      breakStatement("SET expires_at = LEAST");
+
+      // The MCP wrapper reports the result phase in a `finally`, where a throw
+      // replaces the tool's own outcome -- so a committed write would surface
+      // as an error the agent then retries.
+      await expect(
+        service.reportToolActivity(
+          USER,
+          "manage_transactions",
+          "result",
+          false,
+          "session-a",
+        ),
+      ).resolves.toBeUndefined();
+    });
+
+    it("keeps one session's tool chip on the turn it is working", async () => {
+      // An agent that polls again mid-turn holds two claimed prompts. An
+      // UPDATE's RETURNING has no order, so the newest claim decides -- the
+      // same choice the card lookup makes.
+      const events: RelayServerEvent[] = [];
+      start(USER, "first");
+      await settle();
+      const first = await claim(service, USER, "session-a", CRED);
+      start(USER, "second", [], { emit: (e) => events.push(e) });
+      await settle();
+      await jest.advanceTimersByTimeAsync(1000);
+      const second = await claim(service, USER, "session-a", CRED);
+      expect(second?.promptId).not.toBe(first?.promptId);
+
+      await service.reportToolActivity(
+        USER,
+        "list_accounts",
+        "start",
+        false,
+        "session-a",
+      );
+
+      expect(events).toContainEqual({
+        type: "tool_start",
+        name: "list_accounts",
+      });
+    });
+  });
+
+  describe("credential binding (#2176)", () => {
+    const MINE = CRED;
+    const THEIRS = "pat:other";
+
+    /** One poll to its natural end, so the caller has been seen and parked. */
+    const pollOnce = async (credential: string, session?: string) => {
+      const poll = service.waitForPrompt(USER, session, credential);
+      await jest.advanceTimersByTimeAsync(POLL_PARK_MS + 1000);
+      return poll;
+    };
+
+    /** A queued turn the holder has claimed and not answered. */
+    const claimAsHolder = async (prompt = "q", session?: string) => {
+      const pending = start(USER, prompt, []);
+      await settle();
+      const claimed = await claim(service, USER, session, MINE);
+      expect(claimed).not.toBeNull();
+      return { pending, claimed: claimed! };
+    };
+
+    it("does not hand a queued prompt to a second credential while the holder is connected", async () => {
+      expect(await pollOnce(MINE)).toBeNull();
+      start(USER, "private question", []);
+      await settle();
+
+      expect(await pollOnce(THEIRS)).toBe(RELAY_POLL_REFUSED);
+      expect(harness.rows[0].status).toBe("pending");
+      expect(harness.rows[0].claimedCredential).toBeNull();
+
+      const claimed = await claim(service, USER, undefined, MINE);
+      expect(claimed?.prompt).toBe("private question");
+      expect(harness.rows[0].claimedCredential).toBe(MINE);
+    });
+
+    it("reports a refused poll and does not record it as a poll", async () => {
+      expect(await pollOnce(MINE)).toBeNull();
+      const before = harness.agents[0].lastPollAt;
+      expect(await pollOnce(THEIRS)).toBe(RELAY_POLL_REFUSED);
+      expect(harness.agents[0].lastPollAt).toBe(before);
+    });
+
+    it("does not read listening when only a refused credential polls", async () => {
+      expect(await pollOnce(MINE)).toBeNull();
+      expect(await pollOnce(THEIRS)).toBe(RELAY_POLL_REFUSED);
+      expect((await service.getStatus(USER)).state).not.toBe("listening");
+    });
+
+    it("records the poll of a holder whose poll came back empty", async () => {
+      const before = Date.now();
+      expect(await pollOnce(MINE)).toBeNull();
+      expect(harness.agents[0].lastPollAt).toBeGreaterThanOrEqual(before);
+    });
+
+    it("refuses another credential's post_response on a live turn, and keeps the real answer", async () => {
+      const { pending, claimed } = await claimAsHolder();
+
+      expect(
+        await service.postResponse(USER, claimed.promptId, "spoofed", THEIRS),
+      ).toBe(false);
+      expect(harness.rows[0].status).toBe("claimed");
+      expect(harness.rows[0].answer).toBeNull();
+
+      expect(
+        await service.postResponse(USER, claimed.promptId, "real", MINE),
+      ).toBe(true);
+      await settle();
+      await expect(pending).resolves.toEqual({ text: "real" });
+    });
+
+    it("does not record a poll for a refused post_response, but does for the holder's", async () => {
+      const { claimed } = await claimAsHolder();
+      const before = harness.agents[0].lastPollAt;
+      await jest.advanceTimersByTimeAsync(10 * 1000);
+
+      await service.postResponse(USER, claimed.promptId, "spoofed", THEIRS);
+      expect(harness.agents[0].lastPollAt).toBe(before);
+
+      await service.postResponse(USER, claimed.promptId, "real", MINE);
+      expect(harness.agents[0].lastPollAt).toBeGreaterThan(before!);
+    });
+
+    it("does not record a poll for a refused report_progress, but does for the holder's", async () => {
+      const { claimed } = await claimAsHolder("q", "session-a");
+      const before = harness.agents[0].lastPollAt;
+      await jest.advanceTimersByTimeAsync(10 * 1000);
+
+      await service.reportProgress(USER, claimed.promptId, "x", "s", THEIRS);
+      expect(harness.agents[0].lastPollAt).toBe(before);
+
+      await service.reportProgress(USER, claimed.promptId, "x", "s", MINE);
+      expect(harness.agents[0].lastPollAt).toBeGreaterThan(before!);
+    });
+
+    it("does not let another credential adopt a turn through report_progress", async () => {
+      const { claimed } = await claimAsHolder("q", "session-a");
+
+      expect(
+        await service.reportProgress(
+          USER,
+          claimed.promptId,
+          "x",
+          "session-evil",
+          THEIRS,
+        ),
+      ).toBe(false);
+      expect(harness.rows[0].claimedBy).toBe("session-a");
+
+      // The same credential on a new session is the agent reconnecting.
+      await service.reportProgress(
+        USER,
+        claimed.promptId,
+        "x",
+        "session-b",
+        MINE,
+      );
+      expect(harness.rows[0].claimedBy).toBe("session-b");
+    });
+
+    it("lets another credential take over once the holder has been silent and has no turn", async () => {
+      expect(await pollOnce(MINE)).toBeNull();
+      await jest.advanceTimersByTimeAsync(CONNECTED_WINDOW_MS + 1000);
+      start(USER, "q", []);
+      await settle();
+
+      const claimed = await claim(service, USER, undefined, THEIRS);
+      expect(claimed?.prompt).toBe("q");
+      expect(harness.agents[0].agentCredential).toBe(THEIRS);
+    });
+
+    it("does not let another credential take over while the holder has a turn in flight", async () => {
+      await claimAsHolder("first");
+      await jest.advanceTimersByTimeAsync(CONNECTED_WINDOW_MS + 1000);
+      start(USER, "second", []);
+      await settle();
+
+      expect(await pollOnce(THEIRS)).toBe(RELAY_POLL_REFUSED);
+      expect(harness.rows[1].status).toBe("pending");
+      expect(harness.agents[0].agentCredential).toBe(MINE);
+    });
+
+    it("lets another credential take over once a holder that died mid-turn has passed the turn's deadline", async () => {
+      await claimAsHolder("first");
+      // The holder goes silent: the turn's idle deadline passes, though its
+      // late-answer grace has not. The chat must not stay locked for the grace.
+      await jest.advanceTimersByTimeAsync(IDLE_TIMEOUT_MS + 1000);
+      start(USER, "second", []);
+      await settle();
+
+      const taken = await claim(service, USER, undefined, THEIRS);
+      expect(taken?.prompt).toBe("second");
+      expect(harness.agents[0].agentCredential).toBe(THEIRS);
+    });
+
+    it("does not let another credential take over within the window after the holder answered", async () => {
+      const { claimed } = await claimAsHolder("first");
+      await service.postResponse(USER, claimed.promptId, "done", MINE);
+      await jest.advanceTimersByTimeAsync(10 * 1000);
+      start(USER, "second", []);
+      await settle();
+
+      // This poll ends 35s after the answer: inside the 45s window.
+      expect(await pollOnce(THEIRS)).toBe(RELAY_POLL_REFUSED);
+      expect(harness.rows[1].status).toBe("pending");
+
+      await jest.advanceTimersByTimeAsync(CONNECTED_WINDOW_MS);
+      const taken = await claim(service, USER, undefined, THEIRS);
+      expect(taken?.prompt).toBe("second");
     });
   });
 
   describe("trimRelayHistory", () => {
     it("returns a short history unchanged", () => {
-      const history = [
-        { role: "user" as const, content: "hi" },
-        { role: "assistant" as const, content: "hello" },
-      ];
+      const history = [{ role: "user" as const, content: "hello" }];
       expect(trimRelayHistory(history)).toEqual(history);
     });
 
     it("keeps only the most recent turns, oldest first", () => {
       const history = Array.from({ length: 25 }, (_, i) => ({
         role: "user" as const,
-        content: `m${i}`,
+        content: `turn ${i}`,
       }));
-      const trimmed = trimRelayHistory(history);
-      expect(trimmed).toHaveLength(10);
-      expect(trimmed[0].content).toBe("m15");
-      expect(trimmed[9].content).toBe("m24");
+      const kept = trimRelayHistory(history);
+      expect(kept).toHaveLength(10);
+      expect(kept[0].content).toBe("turn 15");
+      expect(kept[9].content).toBe("turn 24");
     });
 
     it("drops older turns once the char budget is exhausted", () => {
-      // Three 5000-char turns: only the two newest fit the 12000 budget.
-      const big = (n: number) => ({
-        role: "assistant" as const,
-        content: String(n).repeat(5000),
-      });
-      const trimmed = trimRelayHistory([big(1), big(2), big(3)]);
-      expect(trimmed).toHaveLength(2);
-      expect(trimmed[0].content[0]).toBe("2");
-      expect(trimmed[1].content[0]).toBe("3");
+      const history = [
+        { role: "user" as const, content: "x".repeat(11000) },
+        { role: "assistant" as const, content: "y".repeat(2000) },
+      ];
+      const kept = trimRelayHistory(history);
+      expect(kept).toHaveLength(1);
+      expect(kept[0].content.startsWith("y")).toBe(true);
     });
 
     it("keeps but truncates a single newest turn that exceeds the budget", () => {
-      const huge = { role: "assistant" as const, content: "x".repeat(20000) };
-      const trimmed = trimRelayHistory([huge]);
-      expect(trimmed).toHaveLength(1);
-      expect(trimmed[0].content.length).toBeLessThan(20000);
-      expect(trimmed[0].content.endsWith("[truncated]")).toBe(true);
+      const kept = trimRelayHistory([
+        { role: "user", content: "z".repeat(20000) },
+      ]);
+      expect(kept).toHaveLength(1);
+      expect(kept[0].content.length).toBeLessThan(20000);
+      expect(kept[0].content.endsWith("[truncated]")).toBe(true);
     });
 
     it("returns an empty array for an empty history", () => {

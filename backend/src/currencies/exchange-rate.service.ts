@@ -1,45 +1,158 @@
-import {
-  Injectable,
-  Logger,
-  OnModuleInit,
-  Inject,
-  forwardRef,
-} from "@nestjs/common";
+import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import {
   DataSource,
   EntityManager,
+  FindOperator,
   MoreThanOrEqual,
   LessThanOrEqual,
   And,
 } from "typeorm";
 import { Cron } from "@nestjs/schedule";
 import { ExchangeRate } from "./entities/exchange-rate.entity";
-import { Currency } from "./entities/currency.entity";
+import { Currency, CurrencyKind } from "./entities/currency.entity";
 import { UserPreference } from "../users/entities/user-preference.entity";
-import { YahooFinanceService } from "../securities/yahoo-finance.service";
 import { mapWithConcurrency } from "../common/concurrency.util";
-import { roundFxRate } from "../common/fx-entry.util";
+import { resolveFxRateOrNull, roundFxRate } from "../common/fx-entry.util";
+import { roundMoney } from "../common/round.util";
+import { addDaysYMD, todayYMD } from "../common/date-utils";
 import { withScopedDb } from "../common/db/scoped-db";
+import {
+  buildRateIndex,
+  RateIndex,
+} from "../common/time-series/rate-index.util";
 import { returnedRows } from "../common/db/query-result";
 import { withSystemContext, withUserContext } from "../common/db/with-context";
+import {
+  FetchSyncJob,
+  FetchSyncService,
+} from "../common/jobs/fetch-sync.service";
 import {
   EmptyWindowMemory,
   monthFetchWindow,
 } from "../common/time-series/history-fill";
+import {
+  FX_MAX_RATE_AGE_DAYS,
+  FxRateMode,
+  FxRateResolution,
+  describeFxGap,
+  fxReferenceDate,
+  resolveFxRate,
+} from "../common/time-series/fx-rate-resolver";
 import { preferredCurrency } from "../common/default-currency.util";
-
-// Cap concurrent Yahoo FX fetches so the daily refresh does not burst every
-// currency pair at once (this cron also runs alongside the security price
-// refresh, so the combined load on Yahoo needs to stay bounded).
-const FX_FETCH_CONCURRENCY = 6;
+import {
+  IsCoin,
+  NO_COINS,
+  canonicalRateRefusal,
+  canonicalRateRow,
+  codeOrderedPair,
+  isCanonicalOrientation,
+} from "./canonical-rate.util";
+import { loadCoinLookup } from "./coin-lookup";
+import { loadCurrencyDecimalPlaces } from "./currency-decimal-places";
+import { FxProviderChain } from "./providers/fx-provider-chain";
+import { FxObservation } from "./providers/fx-provider.interface";
 
 /**
- * A pair key that does not distinguish direction, because a fetch does not
- * either: one provider call is persisted both ways, so USD->CAD and CAD->USD
- * are one unit of work and one negative-cache entry.
+ * Cap on concurrent window fills from a read path (`ensureRatesForDate`), so a
+ * report short of many pairs does not burst them all at whichever provider
+ * carries them. The daily refresh needs no cap of its own: it asks the chain
+ * once per base currency, in sequence, and an adapter bounds its own fan-out
+ * (`FX_FETCH_CONCURRENCY` in the Yahoo adapter).
  */
-function directionlessPairKey(from: string, to: string): string {
-  return [from, to].sort().join("|");
+const FX_WINDOW_FILL_CONCURRENCY = 6;
+
+/**
+ * A pair key that does not distinguish direction, because neither the fetch nor
+ * the storage does: one provider call answers USD->CAD and CAD->USD alike, and
+ * the pair is stored once, so the two are one unit of work and one negative-cache
+ * entry.
+ *
+ * Plain code order (`codeOrderedPair`), the order `exchange_rate_coverage`
+ * keys a pair by, and deliberately not the storage orientation: a pair with one
+ * coin side is stored coin -> fiat whichever code sorts first
+ * (`isCanonicalOrientation`), but a key names the pair, not a direction, and
+ * one that moved with `currencies.kind` would disagree with the coverage row
+ * for the same pair.
+ */
+export function directionlessPairKey(from: string, to: string): string {
+  const [first, second] = codeOrderedPair(from, to);
+  return `${first}|${second}`;
+}
+
+/** Whether a `directionlessPairKey` names `code` on either side. */
+export function pairKeyHasCode(pairKey: string, code: string): boolean {
+  return pairKey.split("|").includes(code.toUpperCase());
+}
+
+/**
+ * An inclusive `rate_date` range, both bounds as `YYYY-MM-DD` strings.
+ *
+ * The entity declares `rateDate: Date` because the column is a SQL `date`, but
+ * the values that cross the driver in both directions are strings: `main.ts`
+ * sets the `pg` DATE parser to hand the literal back unparsed, and a select-side
+ * parameter is rendered by `pg` rather than normalised by TypeORM -- so a `Date`
+ * bound is rendered in the process time zone and, west of UTC, names the
+ * previous calendar day. The cast is to the declared column type only; the
+ * comparison itself is string-to-date, which PostgreSQL resolves per calendar
+ * date in every time zone.
+ */
+function ymdSpan(fromYmd: string, toYmd: string): FindOperator<Date> {
+  return And(
+    MoreThanOrEqual(fromYmd),
+    LessThanOrEqual(toYmd),
+  ) as unknown as FindOperator<Date>;
+}
+
+/**
+ * One amount converted at the rate that applied on `date`. `rate` is
+ * `fromCurrency -> toCurrency` at FX precision (10dp); `convertedAmount` is
+ * money (4dp). `date` is the day whose rate was asked for, after clamping a
+ * future date to today.
+ */
+export interface DatedConversion {
+  amount: number;
+  fromCurrency: string;
+  toCurrency: string;
+  date: string;
+  rate: number;
+  convertedAmount: number;
+}
+
+/** A currency in use, as the refresh reads it. */
+interface CurrencyInUse {
+  code: string;
+  kind: CurrencyKind;
+  quoteSymbol: string | null;
+}
+
+/**
+ * The canonical pairs of `codes` (sorted) grouped by the code each is stored
+ * under, keeping only the pairs `keep` admits and the bases left with a quote:
+ * one chain question per base carrying every quote stored against it, because
+ * a provider that publishes a whole base at once answers all of them in one
+ * call, and one that quotes pair by pair fans out inside its adapter. Each
+ * pair is oriented by `isCanonicalOrientation`, so a coin's pairs with a fiat
+ * sit under the coin whichever code sorts first, and each base's quotes are
+ * exactly the pairs stored under it. Bases come in the order their first pair
+ * is met walking `codes` in order, quotes in `codes` order, so the question
+ * order is the same on every replica.
+ */
+export function canonicalPairsByBase(
+  codes: readonly string[],
+  keep: (base: string, quote: string) => boolean,
+  isCoin: IsCoin = NO_COINS,
+): Array<{ base: string; quotes: string[] }> {
+  const byBase = new Map<string, string[]>();
+  for (const [i, a] of codes.entries()) {
+    for (const b of codes.slice(i + 1)) {
+      const [base, quote] = isCanonicalOrientation(a, b, isCoin)
+        ? [a, b]
+        : [b, a];
+      if (!keep(base, quote)) continue;
+      byBase.set(base, [...(byBase.get(base) ?? []), quote]);
+    }
+  }
+  return [...byBase.entries()].map(([base, quotes]) => ({ base, quotes }));
 }
 
 export interface RateUpdateResult {
@@ -81,8 +194,14 @@ export class ExchangeRateService implements OnModuleInit {
 
   constructor(
     private dataSource: DataSource,
-    @Inject(forwardRef(() => YahooFinanceService))
-    private yahooFinanceService: YahooFinanceService,
+    /**
+     * The configured exchange rate providers behind one door. Every provider
+     * question this service asks goes through here, so which provider answers
+     * is `FX_PROVIDERS`' decision and a stored row's `source` is the answering
+     * provider's own slug; nothing in this file names a provider (INV-FX-005).
+     */
+    private readonly fxProviders: FxProviderChain,
+    private readonly fetchSync: FetchSyncService,
   ) {}
 
   /**
@@ -98,6 +217,15 @@ export class ExchangeRateService implements OnModuleInit {
   async onModuleInit(): Promise<void> {
     await withSystemContext(() => this.checkRatesOnStartup());
   }
+
+  /**
+   * How long one replica holds the FX fetch.
+   *
+   * Comfortably longer than a refresh takes and comfortably shorter than the
+   * daily cron's interval, so a replica killed mid-fetch never blocks the next
+   * day's tick: the expiry alone hands the job back.
+   */
+  private readonly FETCH_LEASE_MS = 15 * 60 * 1000;
 
   private async checkRatesOnStartup(): Promise<void> {
     try {
@@ -115,13 +243,28 @@ export class ExchangeRateService implements OnModuleInit {
       );
 
       if (!recentRate) {
-        this.logger.log(
-          "No recent exchange rates found — fetching rates on startup",
+        // A rollout of N pods all find no recent rate and all fetch. The lease
+        // is what makes that one fetch; the per-user historical backfills below
+        // stay outside it, because they are per user, cheap, and already
+        // idempotent.
+        const fetched = await this.fetchSync.withLease(
+          FetchSyncJob.ExchangeRates,
+          this.FETCH_LEASE_MS,
+          async () => {
+            this.logger.log(
+              "No recent exchange rates found — fetching rates on startup",
+            );
+            const summary = await this.refreshAllRates();
+            this.logger.log(
+              `Startup rate refresh: ${summary.updated} updated, ${summary.failed} failed`,
+            );
+          },
         );
-        const summary = await this.refreshAllRates();
-        this.logger.log(
-          `Startup rate refresh: ${summary.updated} updated, ${summary.failed} failed`,
-        );
+        if (!fetched) {
+          this.logger.log(
+            "Startup rate refresh is being done by another replica",
+          );
+        }
       } else {
         this.logger.log("Exchange rates are up to date");
       }
@@ -165,112 +308,107 @@ export class ExchangeRateService implements OnModuleInit {
   }
 
   /**
-   * Fetch exchange rate from Yahoo Finance for a currency pair.
-   * Delegates to YahooFinanceService to avoid duplicating the v8 chart API logic.
+   * An observation as the `from -> to` rate that was asked about. The chain
+   * answers in whichever orientation the provider quoted, so a reverse
+   * observation is reciprocated here at the rate column's precision. A pair
+   * nothing answered never reaches this: the chain hands back no observation
+   * (null) for it and the caller reports the pair as unknown, never as 1.
    */
-  private async fetchYahooRate(
-    from: string,
-    to: string,
-  ): Promise<number | null> {
-    if (from === to) return 1.0;
-
-    const symbol = `${from}${to}=X`;
-    const quote = await this.yahooFinanceService.fetchQuote(symbol);
-    return quote?.regularMarketPrice ?? null;
+  private rateAsAsked(from: string, observation: FxObservation): number {
+    if (observation.from === from) return observation.rate;
+    const reverse = observation.rate;
+    return roundFxRate(1 / reverse);
   }
 
   /**
-   * Fetch historical daily exchange rates from Yahoo Finance for a currency pair.
-   * Delegates to YahooFinanceService to avoid duplicating the v8 chart API logic.
-   */
-  private async fetchYahooHistoricalRates(
-    from: string,
-    to: string,
-  ): Promise<Array<{ date: Date; rate: number }> | null> {
-    if (from === to) return [];
-
-    const symbol = `${from}${to}=X`;
-    const prices = await this.yahooFinanceService.fetchHistorical(symbol);
-    if (!prices) return null;
-
-    return prices.map((p) => ({ date: p.date, rate: p.close }));
-  }
-
-  /**
-   * Like fetchYahooHistoricalRates, but bounded to a [from, to] date window so a
-   * single-date lookup fetches a handful of bars instead of the entire history.
-   */
-  private async fetchYahooHistoricalRatesWindow(
-    from: string,
-    to: string,
-    fromDate: Date,
-    toDate: Date,
-  ): Promise<Array<{ date: Date; rate: number }> | null> {
-    if (from === to) return [];
-
-    const symbol = `${from}${to}=X`;
-    const prices = await this.yahooFinanceService.fetchHistoricalWindow(
-      symbol,
-      null,
-      fromDate,
-      toDate,
-    );
-    if (!prices) return null;
-
-    return prices.map((p) => ({ date: p.date, rate: p.close }));
-  }
-
-  /**
-   * Save or update an exchange rate for a given date,
-   * and also save the inverse rate for the reverse pair.
+   * Save or update one provider observation, in the one orientation the pair is
+   * stored in, dated by the observation and attributed to `source`, the slug of
+   * the provider that made it.
+   *
+   * One row, not two. The inverse row that used to be written beside it existed
+   * so a reverse lookup would find something, but nothing kept the pair
+   * reciprocal, and a write that touched one side only left two rows disagreeing
+   * about one date (`canonicalRateRow`, INV-FX-003). Every reader resolves either
+   * direction through `resolveFxRate`, so the reverse lookup loses nothing.
+   *
+   * The date is the provider's, not the refresh's (plan decision 5): a reference
+   * rate published for Friday is Friday's row whichever day the refresh runs,
+   * and no row is written for a day the provider published nothing. `source`
+   * arrives beside the observation from the chain; this file knows no
+   * provider's name (INV-FX-005).
+   *
+   * `isCoin` is the refresh's own reading of `currencies.kind` for the codes in
+   * use, so a coin pair is stored coin -> fiat (`isCanonicalOrientation`)
+   * without a second read per pair.
    */
   private async saveRate(
-    from: string,
-    to: string,
-    rate: number,
-    date: Date,
+    observation: FxObservation,
+    source: string,
+    isCoin: IsCoin,
   ): Promise<ExchangeRate> {
-    // Both directions in one transaction: a pair persisted only one way would
-    // make the reverse lookup fall through to a live fetch forever.
-    return withScopedDb(this.dataSource, async (manager) => {
-      const result = await this.saveOneDirection(manager, from, to, rate, date);
-
-      // Also save the inverse rate so both directions stay current. Rounded at
-      // the rate column's own precision, not money precision: 1/1.3652 rounded
-      // to 4dp is 0.7325, which converts USD->CAD back to 1.3661 -- an error a
-      // bank statement quoting six decimals would show up immediately.
-      const inverseRate = roundFxRate(1 / rate);
-      await this.saveOneDirection(manager, to, from, inverseRate, date);
-
-      return result;
-    });
+    const { from, to, rate, date } = observation;
+    const row = canonicalRateRow(from, to, rate, isCoin);
+    if (row === null) {
+      // A same-currency pair or a non-positive rate: absent, not applicable.
+      // A rate the column cannot hold (at or above 1e10, or nothing at ten
+      // decimals) is reported as out of range. Refused before the write rather
+      // than stored as a rate nothing may use; the refresh reports this one
+      // pair and carries on with the rest.
+      if (canonicalRateRefusal(from, to, rate, isCoin) === "out_of_range") {
+        throw new Error(
+          `Rate out of range: ${from}/${to} at ${rate} for ${date} does not fit the rate column`,
+        );
+      }
+      throw new Error(
+        `Refusing to store exchange rate ${from}/${to} at ${rate} for ${date}`,
+      );
+    }
+    return withScopedDb(this.dataSource, (manager) =>
+      this.upsertCanonicalRate(
+        manager,
+        row.from,
+        row.to,
+        row.rate,
+        date,
+        source,
+      ),
+    );
   }
 
-  private async saveOneDirection(
+  /**
+   * Upsert one row whose orientation `canonicalRateRow` has already decided,
+   * under the caller's coin lookup (`saveRate`). The codes arrive canonical;
+   * this does not re-order them. `date` is a
+   * `YYYY-MM-DD` string cast by PostgreSQL: a `Date` here would be rendered by
+   * `pg` in the process time zone and, west of UTC, name the previous calendar
+   * day (`ymdSpan` explains the same trap on the read side).
+   */
+  private async upsertCanonicalRate(
     manager: EntityManager,
     from: string,
     to: string,
     rate: number,
-    date: Date,
+    date: string,
+    source: string,
   ): Promise<ExchangeRate> {
     // One statement, arbitrated by `UNIQUE(from_currency, to_currency,
     // rate_date)`. This used to be a `findOne` and then either a save of the
     // found row or an insert -- a check-then-act, and one every replica runs:
     // the exchange-rate cron fires everywhere at 5:05 PM ET, so two processes
     // routinely fetch the same pair for the same day, both find no row, and both
-    // insert. The loser got a unique violation, which inside `saveRate`'s
-    // transaction also lost the inverse direction written beside it.
+    // insert. The loser got a unique violation and the refresh reported a pair
+    // it had in fact fetched as failed.
     //
     // `persistRateSeries` a few lines below already did it this way; the two are
     // now consistent, which matters because they write the same rows.
     const rows: unknown = await manager.query(
       `INSERT INTO exchange_rates (from_currency, to_currency, rate_date, rate, source)
-       VALUES ($1, $2, $3::DATE, $4, 'yahoo_finance')
+       VALUES ($1, $2, $3::DATE, $4, $5)
        ON CONFLICT (from_currency, to_currency, rate_date) DO UPDATE SET
          rate = EXCLUDED.rate,
          source = EXCLUDED.source
        RETURNING id`,
-      [from, to, date, rate],
+      [from, to, date, rate, source],
     );
 
     // `DO UPDATE` always returns the row, so a read-back is only needed to hand
@@ -284,14 +422,15 @@ export class ExchangeRateService implements OnModuleInit {
       // Nothing else can make an upsert return no row, so this is a real fault
       // rather than a state to paper over with a synthesized entity.
       throw new Error(
-        `Failed to persist exchange rate ${from}/${to} for ${date.toISOString().slice(0, 10)}`,
+        `Failed to persist exchange rate ${from}/${to} for ${date}`,
       );
     }
     return saved;
   }
 
   /**
-   * Bulk-upsert a daily rate series for a pair, in both directions.
+   * Bulk-upsert a daily series of observations for one pair, one row per day in
+   * the pair's canonical orientation, every row attributed to `source`.
    *
    * A provider call returns a whole daily series for the period asked for, and
    * costs the same whether that is one day or a hundred. Persisting only the
@@ -300,55 +439,97 @@ export class ExchangeRateService implements OnModuleInit {
    * stepping a date field backwards ran into rate limits. Storing the series
    * makes one call cover the whole window.
    *
-   * Both directions are written for the reason `saveRate` gives: a pair
-   * persisted one way only leaves the reverse lookup falling through to a live
-   * fetch forever.
+   * The points may arrive in either orientation, and in both at once: a chain
+   * answer may merge a provider's direct and reverse symbols, and
+   * `canonicalRateRow` orients each point from its own `from`/`to`, so a window
+   * fetched as `USD->CAD` and one fetched as `CAD->USD` land on the same rows
+   * rather than on two sets that can drift apart (INV-FX-003). One row per day,
+   * the last point for a day winning.
    */
   private async persistRateSeries(
-    from: string,
-    to: string,
-    series: Array<{ date: Date; rate: number }>,
+    points: readonly FxObservation[],
+    source: string,
   ): Promise<number> {
-    // One row per day, last value wins, ignoring anything unusable.
-    const byDay = new Map<string, { date: Date; rate: number }>();
-    for (const point of series) {
-      if (!isFinite(point.rate) || point.rate <= 0) continue;
-      byDay.set(point.date.toISOString().slice(0, 10), point);
-    }
-    const points = Array.from(byDay.values());
     if (points.length === 0) return 0;
+    return withScopedDb(this.dataSource, async (manager) => {
+      // Which codes are coins, read once for the whole series: a pair with one
+      // coin side is stored coin -> fiat (`isCanonicalOrientation`).
+      const isCoin = await loadCoinLookup(manager);
 
-    const rows: Array<[string, string, Date, number]> = [];
-    for (const point of points) {
-      rows.push([from, to, point.date, point.rate]);
-      rows.push([to, from, point.date, roundFxRate(1 / point.rate)]);
-    }
+      // One row per canonical triple, last value wins, ignoring anything unusable.
+      const byDay = new Map<string, [string, string, string, number]>();
+      let outOfRange = 0;
+      for (const point of points) {
+        const row = canonicalRateRow(point.from, point.to, point.rate, isCoin);
+        if (row === null) {
+          // A same-currency point or a non-positive rate: absent, not a rate. A
+          // rate the column cannot hold is skipped and counted, never allowed
+          // to fail the statement for the rest of the window.
+          if (
+            canonicalRateRefusal(point.from, point.to, point.rate, isCoin) ===
+            "out_of_range"
+          ) {
+            outOfRange++;
+          }
+          continue;
+        }
+        byDay.set(`${row.from}|${row.to}|${point.date}`, [
+          row.from,
+          row.to,
+          point.date,
+          row.rate,
+        ]);
+      }
+      if (outOfRange > 0) {
+        this.logger.warn(
+          `Skipped ${outOfRange} exchange rate observation(s) out of range for the rate column (${source})`,
+        );
+      }
+      const rows = [...byDay.values()];
+      if (rows.length === 0) return 0;
 
-    const batchSize = 500;
-    for (let i = 0; i < rows.length; i += batchSize) {
-      const batch = rows.slice(i, i + batchSize);
-      const values = batch
-        .map((_, idx) => {
-          const offset = idx * 4;
-          return `($${offset + 1}, $${offset + 2}, $${offset + 3}::DATE, $${offset + 4}, 'yahoo_finance')`;
-        })
-        .join(", ");
-      const params: any[] = [];
-      for (const [f, t, date, rate] of batch) params.push(f, t, date, rate);
+      const batchSize = 500;
+      for (let i = 0; i < rows.length; i += batchSize) {
+        const batch = rows.slice(i, i + batchSize);
+        const values = batch
+          .map((_, idx) => {
+            const offset = idx * 5;
+            return `($${offset + 1}, $${offset + 2}, $${offset + 3}::DATE, $${offset + 4}, $${offset + 5})`;
+          })
+          .join(", ");
+        const params: Array<string | number> = [];
+        for (const [f, t, date, rate] of batch) {
+          params.push(f, t, date, rate, source);
+        }
 
-      await withScopedDb(this.dataSource, (manager) =>
-        manager.query(
+        await manager.query(
           `INSERT INTO exchange_rates (from_currency, to_currency, rate_date, rate, source)
            VALUES ${values}
            ON CONFLICT (from_currency, to_currency, rate_date) DO UPDATE SET
              rate = EXCLUDED.rate,
              source = EXCLUDED.source`,
           params,
-        ),
-      );
-    }
+        );
+      }
 
-    return points.length;
+      return rows.length;
+    });
+  }
+
+  /**
+   * Store a daily series that did not come through the chain -- the demo
+   * seed's coin rates -- under the `source` the caller names, through the same
+   * writer as a fetched window: each point in its pair's one orientation
+   * (`canonicalRateRow`, INV-FX-003), one row per day, the last point for a
+   * day winning and replacing what the day held. Answers how many rows it
+   * wrote. Not for a provider's observations, which reach the table through
+   * the refresh and the window fills.
+   */
+  async storeRateSeries(
+    points: readonly FxObservation[],
+    source: string,
+  ): Promise<number> {
+    return this.persistRateSeries(points, source);
   }
 
   /**
@@ -366,23 +547,39 @@ export class ExchangeRateService implements OnModuleInit {
    * from the cron is the same identity and joins.
    */
   async refreshAllRates(): Promise<RateRefreshSummary> {
-    return withSystemContext(() => this.refreshAllRatesGlobally());
+    return withSystemContext(() => this.refreshRatesGlobally("all"));
   }
 
-  private async refreshAllRatesGlobally(): Promise<RateRefreshSummary> {
-    const startTime = Date.now();
-    this.logger.log("Starting exchange rate refresh");
+  /**
+   * Refresh only the pairs in use with a CRYPTO currency on at least one side
+   * (`docs/specs/crypto-accounts.md`, decision 6): the weekend tick's body. A
+   * coin trades every day, while Frankfurter publishes no weekend rate and a
+   * fiat pair cannot have moved, so the fiat pairs are not asked. The weekday
+   * refresh (`refreshAllRates`) already covers the crypto pairs. Global for the
+   * same reason as `refreshAllRates`.
+   */
+  async refreshCryptoRates(): Promise<RateRefreshSummary> {
+    return withSystemContext(() => this.refreshRatesGlobally("crypto"));
+  }
 
-    // Fetch all currencies in use: account currencies, security currencies for
-    // active holdings, and every user's preferred default currency. Including
-    // defaults ensures we fetch (CAD, GBP) even when the user has no GBP-
-    // denominated accounts -- otherwise their GBP totals would silently fall
-    // back to unconverted CAD values.
-    const usedCurrencies: { code: string }[] = await withScopedDb(
-      this.dataSource,
-      (manager) =>
-        manager.query(
-          `SELECT DISTINCT code FROM (
+  /**
+   * Every currency in use across the deployment, with the kind and price
+   * symbol the refresh reports a coin's missing symbol by: account currencies,
+   * security currencies for active holdings, and every user's preferred
+   * default currency. Including defaults ensures we fetch (CAD, GBP) even when
+   * the user has no GBP-denominated accounts -- otherwise their GBP totals
+   * would silently fall back to unconverted CAD values. Sorted, so the pair set
+   * and the order the chain is asked in are the same on every replica and
+   * every run rather than whatever order the query returned.
+   */
+  private async currenciesInUse(): Promise<CurrencyInUse[]> {
+    const rows: Array<{
+      code: string;
+      kind?: string | null;
+      quoteSymbol?: string | null;
+    }> = await withScopedDb(this.dataSource, (manager) =>
+      manager.query(
+        `SELECT DISTINCT code, c.kind, c.quote_symbol AS "quoteSymbol" FROM (
          SELECT currency_code AS code FROM accounts WHERE is_closed = false
          UNION
          SELECT s.currency_code AS code
@@ -393,14 +590,46 @@ export class ExchangeRateService implements OnModuleInit {
          UNION
          SELECT default_currency AS code FROM user_preferences
          WHERE default_currency IS NOT NULL
-       ) sub`,
-        ),
+       ) sub
+       LEFT JOIN currencies c USING (code)`,
+      ),
+    );
+    const byCode = new Map<string, CurrencyInUse>();
+    for (const row of rows) {
+      if (byCode.has(row.code)) continue;
+      byCode.set(row.code, {
+        code: row.code,
+        kind: row.kind === "CRYPTO" ? "CRYPTO" : "FIAT",
+        quoteSymbol: row.quoteSymbol ?? null,
+      });
+    }
+    return [...byCode.values()].sort((a, b) =>
+      a.code < b.code ? -1 : a.code > b.code ? 1 : 0,
+    );
+  }
+
+  private async refreshRatesGlobally(
+    scope: "all" | "crypto",
+  ): Promise<RateRefreshSummary> {
+    const startTime = Date.now();
+    this.logger.log(
+      scope === "crypto"
+        ? "Starting cryptocurrency exchange rate refresh"
+        : "Starting exchange rate refresh",
     );
 
-    const codes = usedCurrencies.map((c) => c.code);
+    const inUse = await this.currenciesInUse();
+    const codes = inUse.map((currency) => currency.code);
+    const byCode = new Map(inUse.map((currency) => [currency.code, currency]));
     this.logger.log(`Currencies in use: ${codes.join(", ")}`);
 
-    if (codes.length < 2) {
+    const isCoin = (code: string) => byCode.get(code)?.kind === "CRYPTO";
+    const byBase = canonicalPairsByBase(
+      codes,
+      (base, quote) => (scope === "all" ? true : isCoin(base) || isCoin(quote)),
+      isCoin,
+    );
+    if (byBase.length === 0) {
       return {
         totalPairs: 0,
         updated: 0,
@@ -409,46 +638,58 @@ export class ExchangeRateService implements OnModuleInit {
         lastUpdated: new Date(),
       };
     }
+    const totalPairs = byBase.reduce((n, { quotes }) => n + quotes.length, 0);
 
-    // Build all unique currency pairs from in-use currencies
-    const pairs: { from: string; to: string }[] = [];
-    for (let i = 0; i < codes.length; i++) {
-      for (let j = i + 1; j < codes.length; j++) {
-        pairs.push({
-          from: codes[i],
-          to: codes[j],
-        });
-      }
-    }
-
+    /**
+     * The coin side of a pair no provider carries because the coin has no
+     * price symbol: the repair is on the Currencies page, not in
+     * `FX_PROVIDERS` (spec section 7). `null` for any other uncarried pair.
+     */
+    const unmappedCoin = (base: string, quote: string): string | null =>
+      [base, quote].find(
+        (code) => isCoin(code) && byCode.get(code)?.quoteSymbol == null,
+      ) ?? null;
     const results: RateUpdateResult[] = [];
     let updated = 0;
     let failed = 0;
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Bases in sequence. The chain is asked once per base and an adapter bounds
+    // its own fan-out, so this loop is not where the provider load is shaped.
+    for (const { base, quotes } of byBase) {
+      const answer = await this.fxProviders.latest(base, quotes);
+      for (const quote of quotes) {
+        const pairLabel = `${base}/${quote}`;
+        const observation = answer.found.get(quote);
 
-    // Fetch rates with bounded concurrency
-    await mapWithConcurrency(
-      pairs,
-      FX_FETCH_CONCURRENCY,
-      async ({ from, to }) => {
-        const pairLabel = `${from}/${to}`;
-        const rate = await this.fetchYahooRate(from, to);
-
-        if (rate === null) {
-          results.push({
-            pair: pairLabel,
-            success: false,
-            error: "No rate data available",
-          });
+        if (observation === undefined) {
+          // Three reports with three repairs, kept apart: a quote no carrying
+          // provider answered is an outage the next tick retries; one answered
+          // without a rate resolves from the last admissible day or stays
+          // unknown, never at a guessed figure; a pair no configured provider
+          // carries is a fact about `FX_PROVIDERS` for the operator to act on.
+          const coin = unmappedCoin(base, quote);
+          const error = answer.unanswered.includes(quote)
+            ? "No provider answered"
+            : answer.uncarried.includes(quote)
+              ? coin !== null
+                ? `${coin} has no price symbol; map one on the Currencies page`
+                : `No configured provider carries ${pairLabel}`
+              : "No rate data available";
+          results.push({ pair: pairLabel, success: false, error });
           failed++;
-          return;
+          continue;
         }
 
         try {
-          await this.saveRate(from, to, rate, today);
-          results.push({ pair: pairLabel, success: true, rate });
+          // Saved in the orientation the provider quoted and on the date it
+          // published; `saveRate` stores it in the pair's one canonical
+          // orientation under the provider's own source slug.
+          await this.saveRate(observation, observation.source, isCoin);
+          results.push({
+            pair: pairLabel,
+            success: true,
+            rate: this.rateAsAsked(base, observation),
+          });
           updated++;
         } catch (error) {
           results.push({
@@ -458,16 +699,16 @@ export class ExchangeRateService implements OnModuleInit {
           });
           failed++;
         }
-      },
-    );
+      }
+    }
 
     const duration = Date.now() - startTime;
     this.logger.log(
-      `Exchange rate refresh completed in ${duration}ms: ${updated} updated, ${failed} failed`,
+      `${scope === "crypto" ? "Cryptocurrency exchange rate" : "Exchange rate"} refresh completed in ${duration}ms: ${updated} updated, ${failed} failed`,
     );
 
     return {
-      totalPairs: pairs.length,
+      totalPairs,
       updated,
       failed,
       results,
@@ -553,14 +794,16 @@ export class ExchangeRateService implements OnModuleInit {
       },
     );
 
-    // 3. Determine unique currency pairs and the global earliest date per pair
-    const pairEarliest = new Map<string, Date>();
+    // 3. Determine unique currency pairs and the global earliest date per pair.
+    //    `earliest` is the DATE as text (`::TEXT` in both queries), compared as
+    //    the calendar day it names rather than parsed into a local-midnight
+    //    `Date` and read back through the process time zone.
+    const pairEarliest = new Map<string, string>();
     const allRows = [...accountCurrencyRows, ...securityCurrencyRows];
     for (const row of allRows) {
       if (!row.earliest) continue;
       const pairKey = `${row.currency_code}->${defaultCurrency}`;
-      const earliest = new Date(row.earliest);
-      earliest.setHours(0, 0, 0, 0);
+      const earliest = row.earliest.slice(0, 10);
       const existing = pairEarliest.get(pairKey);
       if (!existing || earliest < existing) {
         pairEarliest.set(pairKey, earliest);
@@ -588,14 +831,18 @@ export class ExchangeRateService implements OnModuleInit {
     let failed = 0;
     let totalRatesLoaded = 0;
 
-    for (const [pairKey, cutoffDate] of pairEarliest.entries()) {
+    for (const [pairKey, earliest] of pairEarliest.entries()) {
       const [from, to] = pairKey.split("->");
 
-      // Skip if we already have historical rates for this pair
+      // Skip if we already have historical rates for this pair, in either
+      // direction: a pair is stored once, so asking only about `from->to` reads
+      // a pair held the other way as uncovered and re-fetches it from the
+      // provider on every run, forever. `readCoverage` asks the same way.
       const existingRates = await withScopedDb(this.dataSource, (manager) =>
         manager.query(
           `SELECT COUNT(*)::INT AS count FROM exchange_rates
-         WHERE from_currency = $1 AND to_currency = $2`,
+         WHERE (from_currency = $1 AND to_currency = $2)
+            OR (from_currency = $2 AND to_currency = $1)`,
           [from, to],
         ),
       );
@@ -606,56 +853,50 @@ export class ExchangeRateService implements OnModuleInit {
         continue;
       }
 
-      const rates = await this.fetchYahooHistoricalRates(from, to);
+      // One question to the chain over the span the user's data covers, from
+      // the earliest transaction through today. An adapter clips its answer to
+      // the window, so the date filter this loop applied over a whole-history
+      // download went with the download.
+      const { points, answered, source } = await this.fxProviders.dailySeries(
+        from,
+        to,
+        earliest,
+        todayYMD(),
+      );
 
-      if (!rates || rates.length === 0) {
+      if (points.length === 0 || source === null) {
+        // Two reports, kept apart: a carrying provider that did not answer is an
+        // outage the next startup retries; providers that answered with nothing
+        // have no history for this pair over the span, and nothing here can
+        // supply it. Neither is a reason to invent a rate (INV-FX-001).
         results.push({
           pair: `${from}/${to}`,
           success: false,
           ratesLoaded: 0,
-          error: "No historical data available",
+          error: answered
+            ? "No historical data available"
+            : "A provider did not answer",
         });
         failed++;
         await new Promise((resolve) => setTimeout(resolve, 500));
         continue;
       }
 
-      // Filter to only keep rates from the earliest transaction date onward
-      let filtered = rates.filter((r) => r.date >= cutoffDate);
-
-      // Deduplicate by date
-      const seen = new Set<string>();
-      filtered = filtered.filter((r) => {
-        const key = r.date.toISOString().substring(0, 10);
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-
-      if (filtered.length === 0) {
-        results.push({ pair: `${from}/${to}`, success: true, ratesLoaded: 0 });
-        successful++;
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        continue;
-      }
-
       try {
-        // Same bulk upsert the single-date lookup uses, which also writes the
-        // inverse pair -- this loop used to store one direction only, so a
-        // CAD->USD lookup went out to the provider even though the USD->CAD
-        // history had just been backfilled.
-        await this.persistRateSeries(from, to, filtered);
+        // The same bulk upsert the single-date lookup uses, oriented row by row
+        // and attributed to the provider that answered.
+        const ratesLoaded = await this.persistRateSeries(points, source);
 
         this.logger.log(
-          `Backfilled ${filtered.length} rates for ${from}/${to} (from ${cutoffDate.toISOString().substring(0, 10)})`,
+          `Backfilled ${ratesLoaded} rates for ${from}/${to} (from ${earliest})`,
         );
         results.push({
           pair: `${from}/${to}`,
           success: true,
-          ratesLoaded: filtered.length,
+          ratesLoaded,
         });
         successful++;
-        totalRatesLoaded += filtered.length;
+        totalRatesLoaded += ratesLoaded;
       } catch (error) {
         this.logger.error(
           `Failed to save historical rates for ${from}/${to}: ${error.message}`,
@@ -720,8 +961,8 @@ export class ExchangeRateService implements OnModuleInit {
     pairs: ReadonlyArray<{ from: string; to: string }>,
     date: string,
   ): Promise<number> {
-    // `persistRateSeries` writes both directions from one fetch, so USD->CAD
-    // and CAD->USD are the same piece of work and must not be fetched twice.
+    // A pair is stored once, whichever way it was asked for, so USD->CAD and
+    // CAD->USD are the same piece of work and must not be fetched twice.
     const wanted = new Map<string, { from: string; to: string }>();
     for (const pair of pairs) {
       if (!pair.from || !pair.to || pair.from === pair.to) continue;
@@ -743,16 +984,19 @@ export class ExchangeRateService implements OnModuleInit {
 
     const loaded = await mapWithConcurrency(
       due,
-      FX_FETCH_CONCURRENCY,
+      FX_WINDOW_FILL_CONCURRENCY,
       async ([key, pair]) => {
         try {
-          const { stored, answered } = await this.fillRateWindow(
+          const { stored, answered, carried } = await this.fillRateWindow(
             pair.from,
             pair.to,
             start,
             end,
           );
-          if (stored === 0 && answered) {
+          // An uncarried pair (a coin with no price symbol) was asked of
+          // nobody: remembering its window would outlive the symbol the reader
+          // maps next, and forgetting it costs no provider call.
+          if (stored === 0 && answered && carried !== false) {
             // Nothing exists for this pair in this era -- a currency that
             // predates the provider's history, or one it does not carry. Note
             // it, so a report reloaded on the same date does not re-ask.
@@ -784,80 +1028,140 @@ export class ExchangeRateService implements OnModuleInit {
   }
 
   /**
-   * One pair, one window, persisted in both directions.
-   *
-   * The reverse symbol is tried when the direct one returns nothing, because
-   * Yahoo carries some pairs under one orientation only and
-   * `persistRateSeries` writes the inverse row regardless -- so `CADUSD=X`
-   * answers a `USD->CAD` question just as well.
+   * Forget this process's on-demand empty windows for every pair with `code`
+   * on either side, because what prices `code` changed (a coin's price symbol
+   * set or re-pointed). Through `ExchangeRateHistoryService.forgetEmptyWindowsFor`.
    */
+  forgetEmptyRateWindowsFor(code: string): void {
+    this.emptyRateWindows.forgetSubjects((pair) => pairKeyHasCode(pair, code));
+  }
+
   /**
-   * @returns the number of observations persisted, and whether the provider
-   *   *answered* at all -- `[]` (no rates for this pair in this window) rather
-   *   than `null` (a transport failure, or a call the breaker refused). Only an
-   *   answer may be remembered as an empty window: the two produce the same
-   *   zero, and the memory holds for 30 minutes.
+   * One pair, one window, persisted in the pair's canonical orientation under
+   * the answering provider's source.
+   *
+   * One question to the chain. Which provider answers, and how -- the Yahoo
+   * adapter asks its direct symbol, then the reverse when the direct answer is
+   * empty or sparse, and merges the two densest first -- is the chain's and the
+   * adapters' business. What comes back is a series in whichever orientations
+   * answered, which `persistRateSeries` orients row by row, so a window fetched
+   * either way lands on the same rows (INV-FX-003).
+   *
+   * @returns the number of observations persisted, and whether the window was
+   *   *answered*: a provider found observations, every carrying provider
+   *   answered with nothing, or no configured provider carries the pair. It is
+   *   `false` the moment a carrying provider did not answer and nothing was
+   *   found, because that provider may hold history the others do not
+   *   (INV-FX-005). Only an answered window may be remembered as empty: an
+   *   outage and an empty window produce the same zero, and the memory holds
+   *   for 30 minutes. And whether the pair is *carried* (`FxDailySeriesResult`):
+   *   `false` when no provider that may be asked carries it, which is a fact
+   *   about the configuration and the coin's mapping rather than about any
+   *   provider's history, so a caller remembers no empty window and records no
+   *   coverage for it.
+   *
+   * Public so `ExchangeRateHistoryService` can reach it: a user-driven history
+   * extension asks the chain exactly the question the on-demand fill asks, and
+   * a second copy of "fetch a window and persist it" is how the two would drift.
    */
-  private async fillRateWindow(
+  async fillRateWindow(
     from: string,
     to: string,
     start: string,
     end: string,
-  ): Promise<{ stored: number; answered: boolean }> {
-    const startDate = new Date(`${start}T00:00:00.000Z`);
-    const endDate = new Date(`${end}T23:59:59.999Z`);
-
-    const direct = await this.fetchYahooHistoricalRatesWindow(
-      from,
-      to,
-      startDate,
-      endDate,
-    );
-    if (direct && direct.length > 0) {
-      return {
-        stored: await this.persistRateSeries(from, to, direct),
-        answered: true,
-      };
+  ): Promise<{ stored: number; answered: boolean; carried: boolean }> {
+    const { points, answered, carried, source } =
+      await this.fxProviders.dailySeries(from, to, start, end);
+    if (points.length === 0 || source === null) {
+      return { stored: 0, answered, carried };
     }
-
-    const reverse = await this.fetchYahooHistoricalRatesWindow(
-      to,
-      from,
-      startDate,
-      endDate,
-    );
-    if (reverse && reverse.length > 0) {
-      return {
-        stored: await this.persistRateSeries(to, from, reverse),
-        answered: true,
-      };
-    }
-
-    // Both directions, not either: "this pair has no rates in this window" is
-    // only known when both symbols answered. One of them answering `[]` while
-    // the other failed or was refused is exactly the half-knowledge that used
-    // to be cached for thirty minutes.
-    return { stored: 0, answered: direct !== null && reverse !== null };
+    return {
+      stored: await this.persistRateSeries(points, source),
+      answered,
+      carried,
+    };
   }
 
   /**
-   * Get the latest exchange rates (most recent per currency pair)
+   * The current rate of every pair, one row per directionless pair.
+   *
+   * The answer `resolveFxRate` gives in `live` mode, listed rather than asked
+   * for: the newest observation of either stored direction that is inside
+   * `FX_MAX_RATE_AGE_DAYS` of today, and nothing for a pair whose newest row is
+   * older (a rate is a price; a nine-month-old one does not describe today). A
+   * tie on the date goes to the canonical orientation, so the choice never
+   * depends on row order.
+   *
+   * One row per pair, not one per stored direction, because a database upgraded
+   * from before 1.17 holds a frozen mirror row (`USD->CAD`) beside the canonical
+   * row the refresh keeps current (`CAD->USD`), and a direct-first reader of a
+   * list that carried both took the frozen one (INV-FX-001, INV-FX-003).
+   *
+   * The bound is a `YYYY-MM-DD` string compared with the row's date, never a
+   * `Date` (see `ymdSpan`). The query still takes the newest row per stored
+   * direction, so it returns at most two rows per pair whatever the history.
    */
   async getLatestRates(): Promise<ExchangeRate[]> {
-    return withScopedDb(this.dataSource, (manager) =>
-      manager
-        .getRepository(ExchangeRate)
-        .createQueryBuilder("er")
-        .distinctOn(["er.from_currency", "er.to_currency"])
-        .orderBy("er.from_currency")
-        .addOrderBy("er.to_currency")
-        .addOrderBy("er.rate_date", "DESC")
-        .getMany(),
+    const today = todayYMD();
+    const oldest = addDaysYMD(today, -FX_MAX_RATE_AGE_DAYS);
+    // `live` mode may take an observation from after today inside the same bound.
+    const newest = addDaysYMD(today, FX_MAX_RATE_AGE_DAYS);
+    const { rows, isCoin } = await withScopedDb(
+      this.dataSource,
+      async (manager) => ({
+        rows: await manager
+          .getRepository(ExchangeRate)
+          .createQueryBuilder("er")
+          .distinctOn(["er.from_currency", "er.to_currency"])
+          .orderBy("er.from_currency")
+          .addOrderBy("er.to_currency")
+          .addOrderBy("er.rate_date", "DESC")
+          .getMany(),
+        // The tie goes to the orientation the pair is stored in now, which
+        // for a coin pair is coin -> fiat (`isCanonicalOrientation`).
+        isCoin: await loadCoinLookup(manager),
+      }),
     );
+
+    const chosen = new Map<string, { row: ExchangeRate; date: string }>();
+    for (const row of rows) {
+      // Zero and negative are absent, not applicable (`resolveFxRate`).
+      if (!(Number(row.rate) > 0)) continue;
+      const date =
+        row.rateDate instanceof Date
+          ? row.rateDate.toISOString().slice(0, 10)
+          : String(row.rateDate).slice(0, 10);
+      if (date < oldest || date > newest) continue;
+      const key = directionlessPairKey(row.fromCurrency, row.toCurrency);
+      const held = chosen.get(key);
+      if (
+        held === undefined ||
+        date > held.date ||
+        (date === held.date &&
+          isCanonicalOrientation(row.fromCurrency, row.toCurrency, isCoin))
+      ) {
+        chosen.set(key, { row, date });
+      }
+    }
+    return [...chosen.values()]
+      .map(({ row }) => row)
+      .sort(
+        (a, b) =>
+          a.fromCurrency.localeCompare(b.fromCurrency) ||
+          a.toCurrency.localeCompare(b.toCurrency),
+      );
   }
 
   /**
-   * Get the latest rate for a specific currency pair
+   * The latest stored rate for a pair, in whichever direction it is stored.
+   *
+   * Both directions are read and `resolveFxRate` chooses between them, so this
+   * answers the same question as every other lookup rather than a
+   * direction-specific one of its own. It used to read the stored pair one way
+   * only, returning `null` whenever the pair happened to be held the other way
+   * -- harmless while every fetch wrote a mirror row, and a silent gap once a
+   * pair is stored once (INV-FX-003). The posting fallbacks and the
+   * scheduled-estimate refresh were the callers that went unanswered.
    */
   async getLatestRate(
     from: string,
@@ -865,39 +1169,161 @@ export class ExchangeRateService implements OnModuleInit {
     /**
      * Reject a stored rate older than this many days, returning null instead.
      *
-     * Omitted, the newest rate is returned whatever its age -- which is what
-     * every caller that only needs an indicative conversion has always got. A
-     * caller whose output is a money figure the user acts on should supply a
-     * bound: a rate is a price like any other, and one from nine months ago
-     * converts a 10,000 USD holding into a confident PLN total that is off by
-     * the year's currency move, with nothing in the payload saying so
-     * (`docs/financial-calculation-contract.md` rules 3 and 4).
+     * Omitted, `FX_MAX_RATE_AGE_DAYS` applies, like every other rate lookup. A
+     * rate is a price: one from nine months ago converts a 10,000 USD holding
+     * into a confident PLN total that is off by the year's currency move, with
+     * nothing in the payload saying so (`docs/financial-calculation-contract.md`
+     * rules 3 and 4). A caller that really wants a different bound passes it;
+     * none asks for an unbounded answer.
      */
-    maxAgeDays?: number,
+    maxAgeDays: number = FX_MAX_RATE_AGE_DAYS,
   ): Promise<number | null> {
     if (from === to) return 1;
-    const where: Record<string, unknown> = {
-      fromCurrency: from,
-      toCurrency: to,
+    const today = todayYMD();
+    // The age bound on the query as well as in the resolver: the resolver
+    // decides admissibility, this just keeps the rows it reads bounded. A
+    // calendar step, not a local-midnight `Date` read back through `toISOString`.
+    // `MoreThanOrEqual` stays spelled out here rather than behind a helper:
+    // `price-boundary.one-door.spec.ts` reads the lower bound of a newest-row
+    // read off the lines around the ordering, and a bound it cannot see is a
+    // bound the next reader cannot see either. The string cast is what
+    // `ymdSpan` explains -- a `Date` bound is rendered by `pg` in the process
+    // time zone and, west of UTC, names the previous calendar day.
+    const bound = {
+      rateDate: MoreThanOrEqual(
+        addDaysYMD(today, -maxAgeDays),
+      ) as unknown as FindOperator<Date>,
     };
-    if (maxAgeDays !== undefined) {
-      const oldest = new Date();
-      oldest.setUTCDate(oldest.getUTCDate() - maxAgeDays);
-      where.rateDate = MoreThanOrEqual(oldest.toISOString().slice(0, 10));
+    const [direct, reverse] = await withScopedDb(
+      this.dataSource,
+      async (manager) => {
+        const repo = manager.getRepository(ExchangeRate);
+        const newest = (f: string, t: string) =>
+          repo.findOne({
+            where: { fromCurrency: f, toCurrency: t, ...bound },
+            order: { rateDate: "DESC" },
+          });
+        return [await newest(from, to), await newest(to, from)] as const;
+      },
+    );
+
+    const observed = (row: ExchangeRate | null) => {
+      if (row === null) return undefined;
+      const date =
+        row.rateDate instanceof Date
+          ? row.rateDate.toISOString().slice(0, 10)
+          : String(row.rateDate).slice(0, 10);
+      return [{ date, rate: Number(row.rate) }];
+    };
+
+    // `live`: the freshest observation rather than one dated on or before today,
+    // which is what "the latest rate" has always meant here, under the same age
+    // bound as every other lookup.
+    return resolveFxRate(
+      from,
+      to,
+      today,
+      (f, t) => (f === from && t === to ? observed(direct) : observed(reverse)),
+      {
+        mode: "live",
+        maxAgeDays,
+        today,
+      },
+    ).rate;
+  }
+
+  /**
+   * The stored observations that could price `onDate`, resolved through the one
+   * door (`resolveFxRate`).
+   *
+   * This is the shared stored-rate step behind `getRateForDate` and any caller
+   * that needs the *whole* answer -- the observation's own date, the direction
+   * it was stored in, and the reason there is none -- rather than a bare
+   * number. Only the admissible span is read (`FX_MAX_RATE_AGE_DAYS` back from
+   * the clamped date, both directions), which is what stops one ancient row
+   * standing in for a date it says nothing about and, equally, stops that row
+   * short-circuiting the provider fetch that would have filled the gap.
+   */
+  async resolveStoredRate(
+    from: string,
+    to: string,
+    onDate: string,
+    options?: { mode?: FxRateMode; maxAgeDays?: number },
+  ): Promise<FxRateResolution> {
+    const mode = options?.mode ?? "historical";
+    const maxAgeDays = options?.maxAgeDays ?? FX_MAX_RATE_AGE_DAYS;
+    const today = todayYMD();
+
+    if (!from || !to || from === to) {
+      return resolveFxRate(from, to, onDate, () => undefined, {
+        mode,
+        maxAgeDays,
+        today,
+      });
     }
-    const rate = await withScopedDb(this.dataSource, (manager) =>
-      manager.getRepository(ExchangeRate).findOne({
-        where,
-        order: { rateDate: "DESC" },
+
+    // The reference day, refusing a value that names none: the span below is a
+    // pair of `YYYY-MM-DD` strings and a request parameter typed `string` may
+    // arrive as an array (`fxReferenceDate`).
+    const reference = fxReferenceDate(onDate, today, mode);
+    if (reference === null) {
+      return resolveFxRate(from, to, onDate, () => undefined, {
+        mode,
+        maxAgeDays,
+        today,
+      });
+    }
+    // The span is expressed as YYYY-MM-DD strings, never `Date` objects.
+    // TypeORM does not normalise a select-side parameter: `pg` renders a `Date`
+    // in the process time zone, and PostgreSQL's cast to `date` keeps whatever
+    // literal date that rendering produced. West of UTC a UTC-midnight `Date`
+    // renders as the previous day, so the upper bound became yesterday and the
+    // reference date's own row -- today's rate, in `live` mode -- dropped out of
+    // the result. A string is compared as the calendar date it names in every
+    // time zone.
+    const floor = addDaysYMD(reference, -maxAgeDays);
+    const span = ymdSpan(floor, reference);
+
+    const rows = await withScopedDb(this.dataSource, (manager) =>
+      manager.getRepository(ExchangeRate).find({
+        where: [
+          { fromCurrency: from, toCurrency: to, rateDate: span },
+          { fromCurrency: to, toCurrency: from, rateDate: span },
+        ],
+        order: { rateDate: "ASC" },
       }),
     );
-    return rate ? Number(rate.rate) : null;
+
+    const observed = new Map<string, Array<{ date: string; rate: number }>>();
+    for (const row of rows) {
+      const key = `${row.fromCurrency}->${row.toCurrency}`;
+      const date =
+        row.rateDate instanceof Date
+          ? row.rateDate.toISOString().slice(0, 10)
+          : String(row.rateDate).slice(0, 10);
+      const list = observed.get(key);
+      const point = { date, rate: Number(row.rate) };
+      if (list) list.push(point);
+      else observed.set(key, [point]);
+    }
+
+    return resolveFxRate(
+      from,
+      to,
+      onDate,
+      (f, t) => observed.get(`${f}->${t}`),
+      {
+        mode,
+        maxAgeDays,
+        today,
+      },
+    );
   }
 
   /**
    * Get the exchange rate for a currency pair as of a specific date.
    *
-   * Unlike getLatestRate (the once-a-day stored snapshot), this returns the
+   * Unlike the once-a-day stored snapshot, this returns the
    * rate that applied on the transaction's date -- essential for back-dated
    * transactions, where the latest snapshot can be far from the historical
    * rate. Precedence:
@@ -906,24 +1332,34 @@ export class ExchangeRateService implements OnModuleInit {
    *      the clamp a future date fell through to a Yahoo window that contains
    *      nothing, and the lookup returned null for a scheduled transaction
    *      posted ahead of time.
-   *   1. The stored rate on the closest date on or before the target. This is
-   *      what makes a weekend or a holiday resolve: Saturday and Sunday carry
-   *      Friday's rate forward, which is the closest day that has one.
-   *   2. A short historical daily window fetched from Yahoo around the target
-   *      date; the value on the closest day on or before the target is used and
-   *      persisted for reuse. The window (not the full "max" history) keeps the
-   *      request small and fast. When the target predates every point in the
-   *      window, the nearest point in either direction wins.
-   *   3. The latest stored rate of any date, as a last resort, so a pair that
-   *      has a rate today still resolves for a date the provider has no data
-   *      for at all.
+   *   1. The stored observations inside the admissible span, resolved by
+   *      `resolveFxRate`: the most recent one on or before the target, in
+   *      either stored direction. This is what makes a weekend or a holiday
+   *      resolve -- Saturday and Sunday carry Friday's rate forward.
+   *   2. When the span holds none, a historical daily window fetched from the
+   *      provider around the target date, resolved by the same rule and
+   *      persisted for reuse. The step is driven by *coverage of the target*,
+   *      not by "does this pair have any row at all": one 2019 row used to
+   *      short-circuit it, which is how a 285-day hole stayed a hole.
    * Returns null when no rate can be determined (so the caller can reject or
-   * flag the operation rather than silently assuming 1.0).
+   * flag the operation rather than silently assuming 1.0). There is no
+   * unbounded "latest stored rate of any date" step any more: a rate is a price
+   * and an arbitrarily old one does not describe the date being asked about
+   * (`docs/time-series-contract.md` section 2.2).
    */
   async getRateForDate(
     from: string,
     to: string,
     date: string | Date,
+    options?: {
+      /**
+       * Fetch a provider window when the stored span covers nothing. Default
+       * true; a read-only caller (a report converting hundreds of rows) passes
+       * false to stay inside the database.
+       */
+      fetchMissing?: boolean;
+      mode?: FxRateMode;
+    },
   ): Promise<number | null> {
     if (from === to) return 1;
 
@@ -934,26 +1370,18 @@ export class ExchangeRateService implements OnModuleInit {
 
     // 0. Clamp a future date to today: today's rate is the best available
     //    estimate, and it is the same figure the bills list is showing.
-    const todayUtc = new Date().toISOString().slice(0, 10);
+    const todayUtc = todayYMD();
     const target = requested > todayUtc ? todayUtc : requested;
-    const targetDate = new Date(`${target}T00:00:00.000Z`);
 
-    // 1. Closest stored rate on or before the target date (carry-forward over
-    //    weekends and holidays).
-    const stored = await withScopedDb(this.dataSource, (manager) =>
-      manager.getRepository(ExchangeRate).findOne({
-        where: {
-          fromCurrency: from,
-          toCurrency: to,
-          rateDate: LessThanOrEqual(targetDate),
-        },
-        order: { rateDate: "DESC" },
-      }),
-    );
-    if (stored) return Number(stored.rate);
+    // 1. The stored history, through the one door.
+    const stored = await this.resolveStoredRate(from, to, target, {
+      mode: options?.mode,
+    });
+    if (stored.rate !== null) return stored.rate;
+    if (options?.fetchMissing === false) return null;
 
-    // 2. Fetch a Yahoo window around the target (not the full "max" history)
-    //    and use the rate on the closest day on or before the target.
+    // 2. Fetch a provider window around the target (not the full "max" history)
+    //    and resolve it by the same rule.
     //
     //    The window is wide because it costs nothing to be: one call returns
     //    the whole daily series for the period, and every bar in it is
@@ -961,40 +1389,24 @@ export class ExchangeRateService implements OnModuleInit {
     //    a date field through a month of history pays for a single fetch, and
     //    the reverse pair is filled in at the same time. It was two weeks back
     //    and one point kept, so neighbouring dates each went back out to the
-    //    provider and ran into its rate limits.
-    const windowStart = new Date(targetDate.getTime() - 45 * 86_400_000);
-    const windowEnd = new Date(targetDate.getTime() + 7 * 86_400_000);
-    const series = await this.fetchYahooHistoricalRatesWindow(
+    //    provider and ran into its rate limits. The span back is the age bound
+    //    itself, so the fetch covers exactly what the bound would accept.
+    const windowStart = addDaysYMD(target, -FX_MAX_RATE_AGE_DAYS);
+    const windowEnd = addDaysYMD(target, 7);
+    const { points, source } = await this.fxProviders.dailySeries(
       from,
       to,
       windowStart,
       windowEnd,
     );
-    if (series && series.length > 0) {
-      const targetTime = targetDate.getTime();
-      const sorted = [...series].sort(
-        (a, b) => a.date.getTime() - b.date.getTime(),
-      );
-      const onOrBefore = sorted.filter((p) => p.date.getTime() <= targetTime);
-      // Prefer the closest day on or before the target -- a Saturday takes
-      // Friday's rate. When the target predates every point in the window, take
-      // the nearest point in either direction instead: a best-effort rate from
-      // the closest day the market traded beats a silent 1.0.
-      const chosen =
-        onOrBefore.length > 0
-          ? onOrBefore[onOrBefore.length - 1]
-          : sorted.reduce((best, point) =>
-              Math.abs(point.date.getTime() - targetTime) <
-              Math.abs(best.date.getTime() - targetTime)
-                ? point
-                : best,
-            );
+    if (points.length > 0 && source !== null) {
       try {
         // The whole window, not just the day that was asked for: the next
-        // lookup for any date in it is then a database read.
-        const stored = await this.persistRateSeries(from, to, series);
+        // lookup for any date in it is then a database read. Persisted whether
+        // or not the target itself resolves, because a neighbouring date may.
+        const persisted = await this.persistRateSeries(points, source);
         this.logger.log(
-          `Stored ${stored} daily ${from}/${to} rates around ${target} from one lookup`,
+          `Stored ${persisted} daily ${from}/${to} rates around ${target} from one lookup`,
         );
       } catch (error) {
         this.logger.warn(
@@ -1003,35 +1415,131 @@ export class ExchangeRateService implements OnModuleInit {
           }`,
         );
       }
-      return chosen.rate;
+      // The same rule as the stored step: the closest observation on or before
+      // the target, never one from after it, in whichever orientation the
+      // provider answered -- `resolveFxRate` reads both and inverts the reverse
+      // one, as it does for the stored rows these just became. A window that
+      // brackets the target but starts after it answers nothing -- it used to
+      // answer with its nearest point in either direction, which is the
+      // look-ahead this closes.
+      const resolved = resolveFxRate(
+        from,
+        to,
+        target,
+        (f, t) => {
+          const observed = points.filter((p) => p.from === f && p.to === t);
+          return observed.length > 0
+            ? observed.map(({ date, rate }) => ({ date, rate }))
+            : undefined;
+        },
+        { mode: options?.mode, today: todayUtc },
+      );
+      if (resolved.rate !== null) return resolved.rate;
     }
 
-    // 3. Nothing for this date anywhere. A pair that has any stored rate at all
-    //    still resolves -- better a known rate from another day than refusing
-    //    the posting outright.
-    return this.getLatestRate(from, to);
+    this.logger.warn(
+      describeFxGap(
+        `${from}->${to}`,
+        target,
+        stored.reason ?? "no_observation",
+      ),
+    );
+    return null;
   }
 
   /**
-   * Get the current spot rate for a currency pair, fetched live from the quote
-   * provider. Tries the direct pair, then the reverse pair (inverted), then
-   * falls back to the most recent stored daily rate when the live fetch is
-   * unavailable (rate limited, unsupported pair, offline).
+   * Convert one amount between two currencies at the rate that applied on a
+   * date -- the shared implementation behind the AI Assistant's and the MCP
+   * server's `calculate` tool (`operation: "convert"`), so a model never does
+   * the conversion itself.
+   *
+   * `date` is optional and defaults to today (`todayYMD`, the caller's request
+   * timezone); a future date is clamped to today by `getRateForDate`, and the
+   * clamped date is what `date` reports back. The rate goes through
+   * `resolveFxRateOrNull`, the one market-rate ladder (the admissible stored
+   * observations on or before the date, then a provider window resolved by the
+   * same rule), so the figure matches what a transaction posted on that date
+   * would carry.
+   *
+   * Returns `null` when no usable rate exists in either direction -- never `1`,
+   * and never the input amount: `docs/specs/fx-conversion-completeness.md`.
+   * Either stored direction answers, because the ladder resolves the pair
+   * through `resolveFxRate`; this does not chase the reverse pair itself.
+   */
+  async convertOnDate(
+    amount: number,
+    fromCurrency: string,
+    toCurrency: string,
+    date?: string,
+  ): Promise<DatedConversion | null> {
+    const from = fromCurrency.toUpperCase();
+    const to = toCurrency.toUpperCase();
+    const requested = (date ?? todayYMD()).slice(0, 10);
+    const today = todayYMD();
+    // The same clamp `getRateForDate` applies, surfaced so the caller learns
+    // which day's rate it actually received.
+    const effectiveDate = requested > today ? today : requested;
+
+    if (from === to) {
+      return {
+        amount,
+        fromCurrency: from,
+        toCurrency: to,
+        date: effectiveDate,
+        rate: 1,
+        convertedAmount: amount,
+      };
+    }
+
+    // One lookup. The second one this used to make -- the pair reversed, the
+    // answer reciprocated -- could never add anything: the ladder it calls
+    // already consults both stored directions and inverts the reverse
+    // observation itself, so a `null` from the first call means the pair is
+    // unknown, not that it is held the other way.
+    const rate = await resolveFxRateOrNull(this, from, to, effectiveDate);
+    if (rate === null) return null;
+
+    return {
+      amount,
+      fromCurrency: from,
+      toCurrency: to,
+      date: effectiveDate,
+      rate,
+      convertedAmount: roundMoney(amount * rate),
+    };
+  }
+
+  /**
+   * Get the current spot rate for a currency pair, fetched live through the
+   * provider chain. `FxProviderChain.live` asks the providers with a live feed
+   * first (Yahoo, which checks a quote below 1 against its reverse symbol and
+   * refuses one too coarse either way), then the chain's latest published
+   * observation, and answers in whichever orientation the provider quoted; the
+   * stored history in `live` mode is the fallback when the chain has nothing
+   * (rate limited, unsupported pair, offline). Plan decision 8.
+   *
+   * The stored fallback is `resolveStoredRate` in `live` mode, not an
+   * unbounded newest-row read: a rate quoted as "right now" is still a price,
+   * so an observation older than `FX_MAX_RATE_AGE_DAYS` is not one. The
+   * unbounded read is what let a 276-day-old rate be cached as live and carried
+   * into a portfolio total that reported itself complete (issue #1390).
    *
    * Use this for "as of now" valuations such as the Investments portfolio
    * summary so they line up with the live intraday Portfolio Value Over Time
    * chart, which fetches live FX directly from the quote provider, rather than
-   * the once-a-day stored snapshot returned by getLatestRate. Returns null when
-   * neither a live quote nor a stored rate is available, letting callers apply
-   * their own fallback (e.g. reverse lookup or treating the rate as 1).
+   * the once-a-day stored snapshot. Returns `null` when neither a live quote
+   * nor an admissible stored rate exists; `null` is unknown, and no caller may
+   * read it as 1 or as the unconverted amount (INV-FX-001).
    */
   async getLiveRate(from: string, to: string): Promise<number | null> {
     if (from === to) return 1;
     try {
-      const direct = await this.fetchYahooRate(from, to);
-      if (direct !== null && direct > 0) return direct;
-      const reverse = await this.fetchYahooRate(to, from);
-      if (reverse !== null && reverse > 0) return 1 / reverse;
+      // Whichever provider and orientation answered; a chain with nothing
+      // falls through to the stored rate and then to null, never to 1.
+      const observation = await this.fxProviders.live(from, to);
+      if (observation !== null) {
+        return this.rateAsAsked(from, observation);
+      }
     } catch (error) {
       this.logger.warn(
         `Live FX fetch ${from}->${to} failed, falling back to stored rate: ${
@@ -1039,7 +1547,38 @@ export class ExchangeRateService implements OnModuleInit {
         }`,
       );
     }
-    return this.getLatestRate(from, to);
+    const stored = await this.resolveStoredRate(from, to, todayYMD(), {
+      mode: "live",
+    });
+    if (stored.rate === null && stored.reason !== null) {
+      this.logger.warn(
+        describeFxGap(`${from}->${to}`, todayYMD(), stored.reason),
+      );
+    }
+    return stored.rate;
+  }
+
+  /**
+   * The stored history a set of dated conversions into `toCurrency` needs, as
+   * the pair index `convertAtDate` reads: every observation of each of
+   * `currencies` against `toCurrency`, in either direction, that a date in
+   * `[startDate, endDate]` could be priced by (`buildRateIndex`). Stored rows
+   * only; nothing is fetched from a provider.
+   */
+  async getRateIndex(
+    currencies: ReadonlySet<string>,
+    toCurrency: string,
+    startDate: string,
+    endDate: string,
+  ): Promise<RateIndex> {
+    return buildRateIndex(
+      (sql, params) =>
+        withScopedDb(this.dataSource, (manager) => manager.query(sql, params)),
+      new Set(currencies),
+      toCurrency,
+      startDate,
+      endDate,
+    );
   }
 
   /**
@@ -1064,6 +1603,19 @@ export class ExchangeRateService implements OnModuleInit {
         where,
         order: { rateDate: "ASC", fromCurrency: "ASC", toCurrency: "ASC" },
       }),
+    );
+  }
+
+  /**
+   * `decimal_places` of each non-ISO code among `codes` (a coin's row), for
+   * text that states an amount in its own currency (`decimalPlacesFor`). One
+   * read, none when every code is ISO.
+   */
+  async getCurrencyDecimalPlaces(
+    codes: readonly string[],
+  ): Promise<ReadonlyMap<string, number>> {
+    return withScopedDb(this.dataSource, (manager) =>
+      loadCurrencyDecimalPlaces(manager, codes),
     );
   }
 
@@ -1105,10 +1657,53 @@ export class ExchangeRateService implements OnModuleInit {
       // RLS (task C2): the currency-detection read spans all users' accounts,
       // securities, holdings and preferences (writes only the global
       // exchange_rates table), so the refresh runs under a system context.
-      await withSystemContext(() => this.refreshAllRates());
+      //
+      // One replica per tick makes the provider calls (task C2). The upserts
+      // beneath are idempotent, so this is about cost and rate limits rather
+      // than about correctness -- which is why a lost lease is a debug line and
+      // never blocks the next tick.
+      await withSystemContext(() =>
+        this.fetchSync.withLease(
+          FetchSyncJob.ExchangeRates,
+          this.FETCH_LEASE_MS,
+          async () => {
+            await this.refreshAllRates();
+          },
+        ),
+      );
     } catch (error) {
       this.logger.error(
         `Scheduled exchange rate refresh failed: ${error.message}`,
+      );
+    }
+  }
+
+  /**
+   * Saturday and Sunday at 5:10 PM New York time: the pairs with a CRYPTO side
+   * only (`refreshCryptoRates`, `docs/specs/crypto-accounts.md` decision 6). A
+   * coin's Yahoo session is the UTC day, still open at 17:10 New York, so each
+   * run stores the current UTC day's quote; the weekday refresh covers the
+   * rest of the week. Held under the same `FetchSyncJob.ExchangeRates` lease
+   * as the weekday refresh, wrapped whole in the system context, for the same
+   * reason: one replica per tick asks the provider, and the upserts beneath
+   * are idempotent, so a lost lease costs quota, never data.
+   */
+  @Cron("10 17 * * 0,6", { timeZone: "America/New_York" })
+  async scheduledCryptoRateRefresh(): Promise<void> {
+    this.logger.log("Running scheduled cryptocurrency exchange rate refresh");
+    try {
+      await withSystemContext(() =>
+        this.fetchSync.withLease(
+          FetchSyncJob.ExchangeRates,
+          this.FETCH_LEASE_MS,
+          async () => {
+            await this.refreshCryptoRates();
+          },
+        ),
+      );
+    } catch (error) {
+      this.logger.error(
+        `Scheduled cryptocurrency exchange rate refresh failed: ${error.message}`,
       );
     }
   }

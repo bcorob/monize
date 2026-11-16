@@ -94,16 +94,44 @@ export interface MnyPayee {
   readonly hidden: boolean;
 }
 
-/** `CAT` -- the category tree. */
+/**
+ * `CT` -- the category "types": one row per tree the `CAT` table holds. Row
+ * `hct` 0 is the ordinary category tree; every other row is a user-defined
+ * classification (Money's "Classification 1" / "Classification 2"), named by
+ * the user (`szFull`), whose items also live in `CAT` with that `hct`.
+ */
+export interface MnyClassification {
+  /** `hct`. 0 is the category tree itself, never a classification. */
+  readonly handle: number | null;
+  /** `szFull`: the name the user gave the classification, e.g. "Properties". */
+  readonly name: string;
+}
+
+/**
+ * `CAT` -- the category tree, and the items of every classification. Which
+ * tree a row belongs to is `classification` (`hct`); only rows of the category
+ * tree (`hct` 0) are categories.
+ */
 export interface MnyCategory {
   /** `hcat` */
   readonly handle: number | null;
   /** `szFull` */
   readonly name: string;
-  /** `hcatParent`: null only for the two roots, INCOME and EXPENSE. */
+  /**
+   * `hcatParent`: null for the two category roots, INCOME and EXPENSE, and for
+   * a classification's top-level items.
+   */
   readonly parent: number | null;
-  /** `nLevel`: 0 for the roots. Sort by this so parents precede children. */
+  /**
+   * `nLevel`: 0 for the category roots and for a classification's top-level
+   * items. Sort by this so parents precede children.
+   */
   readonly level: number;
+  /**
+   * `hct`: the `CT` row this item belongs to. 0 is the category tree; any other
+   * value names a classification, and the row is one of its items.
+   */
+  readonly classification: number;
   /** `lType`: Money's classification code. Not a clean income flag. */
   readonly categoryType: number;
   /** `fTax` */
@@ -192,6 +220,13 @@ export interface MnyTransaction {
   readonly memo: string | null;
   /** `hbillHead`: the bill series this row was posted from. Money 2002+. */
   readonly billSeries: number | null;
+  /**
+   * `lHcls1`: the `CAT.hcat` of the classification-1 item this row carries, or
+   * null (Money writes -1 for none). Classifications become Monize tags.
+   */
+  readonly classification1: number | null;
+  /** `lHcls2`: the classification-2 item, as `classification1`. */
+  readonly classification2: number | null;
 }
 
 /** `TRN_SPLIT` -- which transactions are children of which. */

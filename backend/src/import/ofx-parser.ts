@@ -10,7 +10,7 @@
  * - SGML tags may or may not have closing tags
  * - STMTTRN elements contain individual transactions
  * - DTPOSTED = date (YYYYMMDD or YYYYMMDDHHMMSS[.XXX:TZ])
- * - TRNAMT = amount (signed decimal)
+ * - TRNAMT = amount (signed decimal; a period or a comma separates the decimals)
  * - NAME = payee name
  * - MEMO = memo/description
  * - FITID = financial institution transaction ID
@@ -19,7 +19,7 @@
  */
 
 import type { QifTransaction, QifParseResult } from "./qif-parser";
-import { roundMoney } from "../common/round.util";
+import { MONEY_SCALE, roundMoney } from "../common/round.util";
 
 // Strip HTML angle brackets to prevent stored XSS.
 function stripHtml(value: string): string {
@@ -132,6 +132,27 @@ function extractBlocks(
 }
 
 /**
+ * The rows with the `FITID` dropped from every row whose `FITID` another row of
+ * the same file also carries. The specification makes a `FITID` unique per
+ * account, but some banks give several rows the same one, and keying on it
+ * would skip every row after the first as already imported. Such rows import
+ * without a key, as every OFX row did before the import read it.
+ */
+function dropRepeatedFitIds(
+  transactions: readonly QifTransaction[],
+): QifTransaction[] {
+  const seen = new Map<string, number>();
+  for (const tx of transactions) {
+    if (tx.fitId) seen.set(tx.fitId, (seen.get(tx.fitId) ?? 0) + 1);
+  }
+  return transactions.map((tx) => {
+    if (!tx.fitId || (seen.get(tx.fitId) ?? 0) <= 1) return tx;
+    const { fitId: _repeated, ...withoutFitId } = tx;
+    return withoutFitId;
+  });
+}
+
+/**
  * Validate that content looks like an OFX file.
  */
 export function validateOfxContent(content: string): {
@@ -166,6 +187,11 @@ export function validateOfxContent(content: string): {
 
 /**
  * Parse an OFX file into the standard QifParseResult format.
+ *
+ * Amounts are read at the storage scale (`MONEY_SCALE`, eight places), never at
+ * the destination account's precision: the import processor refuses an amount
+ * with more places than the account's currency carries (INV-MONEY-001), exactly
+ * as it does for QIF and CSV, so a figure is never silently rounded here.
  */
 export function parseOfx(content: string): QifParseResult {
   const transactions: QifTransaction[] = [];
@@ -195,14 +221,18 @@ export function parseOfx(content: string): QifParseResult {
       sampleDates.push(dateStr.substring(0, 8));
     }
 
+    // The OFX specification lets an amount use a comma as its decimal
+    // separator and allows no digit grouping, so "-18,36" is -18.36; a bare
+    // parseFloat stopped at the comma and imported -18.
     const amountStr = getTagValue(block, "TRNAMT");
-    const amount = parseFloat(amountStr);
+    const amount = parseFloat(amountStr.replace(",", "."));
     if (isNaN(amount)) continue;
 
     const trnType = getTagValue(block, "TRNTYPE").toUpperCase();
     const name = getTagValue(block, "NAME");
     const memo = getTagValue(block, "MEMO");
     const checkNum = getTagValue(block, "CHECKNUM");
+    const fitId = getTagValue(block, "FITID");
 
     // Determine cleared status based on transaction type
     const isCleared = true; // OFX transactions are typically already posted
@@ -220,10 +250,11 @@ export function parseOfx(content: string): QifParseResult {
 
     const tx: QifTransaction = {
       date,
-      amount: roundMoney(amount),
+      amount: roundMoney(amount, MONEY_SCALE),
       payee,
       memo: memoText,
       number: truncate(checkNum, 100),
+      ...(fitId ? { fitId } : {}),
       cleared: isCleared,
       reconciled: false,
       category: "",
@@ -245,7 +276,7 @@ export function parseOfx(content: string): QifParseResult {
   return {
     accountType,
     accountName: "",
-    transactions,
+    transactions: dropRepeatedFitIds(transactions),
     categories: [],
     transferAccounts: Array.from(transferAccountNames),
     securities: [],

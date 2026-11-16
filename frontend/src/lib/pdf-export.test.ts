@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { usePreferencesStore } from '@/store/preferencesStore';
 
 // Mock jspdf
 const mockSave = vi.fn();
@@ -58,6 +59,22 @@ const mockAddSummaryCards = vi.fn().mockReturnValue(50);
 vi.mock('./pdf-export-cards', () => ({
   addSummaryCardsToPdf: (...args: unknown[]) => mockAddSummaryCards(...args),
 }));
+
+// A case swaps the catalog the header label is read from; every other case
+// reads the real one.
+const catalogOverride = vi.hoisted(() => ({
+  load: null as null | ((locale: string, namespace: string) => Promise<unknown>),
+}));
+vi.mock('@/i18n/messages', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/i18n/messages')>();
+  return {
+    ...actual,
+    loadNamespaceMessages: (locale: string, namespace: never) =>
+      catalogOverride.load
+        ? catalogOverride.load(locale, namespace)
+        : actual.loadNamespaceMessages(locale, namespace),
+  };
+});
 
 describe('exportToPdf', () => {
   beforeEach(() => {
@@ -430,5 +447,81 @@ describe('exportToPdf', () => {
     });
 
     expect(mockAddPage).toHaveBeenCalled();
+  });
+});
+
+describe('exportToPdf generated-at header', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-03-15T14:30:00.000Z'));
+    usePreferencesStore.setState({ preferences: null });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    catalogOverride.load = null;
+  });
+
+  function generatedText(): string | undefined {
+    return mockText.mock.calls
+      .map((call) => call[0])
+      .find((value) => typeof value === 'string' && /\d{2}:\d{2}/.test(value) && !value.startsWith('Page'));
+  }
+
+  it('writes the date and time in the reader preferences and the label from the catalog', async () => {
+    usePreferencesStore.setState({
+      preferences: {
+        language: 'pl',
+        dateFormat: 'DD.MM.YYYY',
+        timeFormat: '24h',
+        timezone: 'UTC',
+      } as never,
+    });
+    catalogOverride.load = async () => ({
+      pdfExport: { generatedAt: 'Wygenerowano: {timestamp}' },
+    });
+    const { exportToPdf } = await import('./pdf-export');
+
+    await exportToPdf({ title: 'Raport', filename: 'raport' });
+
+    expect(generatedText()).toBe('Wygenerowano: 15.03.2026 14:30');
+  });
+
+  it('honours a 12 hour clock and the reader timezone', async () => {
+    usePreferencesStore.setState({
+      preferences: {
+        language: 'en',
+        dateFormat: 'YYYY-MM-DD',
+        timeFormat: '12h',
+        timezone: 'Asia/Tokyo',
+      } as never,
+    });
+    const { exportToPdf } = await import('./pdf-export');
+
+    await exportToPdf({ title: 'Report', filename: 'report' });
+
+    // 14:30 UTC is 23:30 in Tokyo.
+    expect(generatedText()).toBe('Generated: 2026-03-15 11:30 PM');
+  });
+
+  it('keeps the English label when the catalog cannot be loaded or lacks the key', async () => {
+    usePreferencesStore.setState({
+      preferences: {
+        language: 'pl',
+        dateFormat: 'DD.MM.YYYY',
+        timeFormat: '24h',
+        timezone: 'UTC',
+      } as never,
+    });
+    catalogOverride.load = async () => {
+      throw new Error('catalog unavailable');
+    };
+    const { exportToPdf } = await import('./pdf-export');
+
+    await exportToPdf({ title: 'Raport', filename: 'raport' });
+
+    expect(generatedText()).toBe('Generated: 15.03.2026 14:30');
+    expect(mockSave).toHaveBeenCalledWith('raport.pdf');
   });
 });

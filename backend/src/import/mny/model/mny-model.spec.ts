@@ -12,15 +12,12 @@ import { openMnyFile } from "../msisam/open-mny";
 import { readMnyTables } from "../tables/read-mny-tables";
 import {
   MNY_ACCOUNT_TYPE,
-  MNY_ACTION,
   MNY_CATEGORY_TYPE,
   MNY_CLEARED_STATUS,
   MNY_FREQUENCY,
   MNY_REAL_POSTING_FREQUENCY,
   MNY_TRANSACTION_FLAG,
-  MNY_UNCONFIRMED_ACTIONS,
   decodeReference,
-  hasInvestmentDetail,
   isCurrencyPseudoSecurity,
   isCurrencyQuoteSymbol,
   isDebtAccountRow,
@@ -29,9 +26,14 @@ import {
   isVoided,
   mapAccountType,
   mapFrequency,
-  mapInvestmentAction,
   mapTransactionStatus,
 } from "./mny-model";
+import {
+  MNY_ACTION,
+  MNY_UNCONFIRMED_ACTIONS,
+  hasInvestmentDetail,
+  mapInvestmentAction,
+} from "./mny-actions";
 
 const ALL_FIXTURES = Object.keys(MNY_FIXTURES) as MnyFixtureName[];
 
@@ -216,17 +218,17 @@ describe("mapInvestmentAction", () => {
     [MNY_ACTION.TRANSFER_IN, InvestmentAction.TRANSFER_IN],
     [MNY_ACTION.TRANSFER_OUT, InvestmentAction.TRANSFER_OUT],
   ])("maps act %p to %s", (act, expected) => {
-    expect(mapInvestmentAction(act)).toBe(expected);
+    expect(mapInvestmentAction(act, "msisam")).toBe(expected);
   });
 
   it("maps act 4 to INTEREST, never DIVIDEND", () => {
     // Money's "Interest" activity lands on tax reports as interest income
     // (issue #1149); while the code's name was unknown it imported as
     // DIVIDEND, which misfiled every fixed-income interest payment.
-    expect(mapInvestmentAction(MNY_ACTION.INTEREST)).toBe(
+    expect(mapInvestmentAction(MNY_ACTION.INTEREST, "msisam")).toBe(
       InvestmentAction.INTEREST,
     );
-    expect(mapInvestmentAction(MNY_ACTION.INTEREST)).not.toBe(
+    expect(mapInvestmentAction(MNY_ACTION.INTEREST, "msisam")).not.toBe(
       InvestmentAction.DIVIDEND,
     );
   });
@@ -236,22 +238,22 @@ describe("mapInvestmentAction", () => {
     // differently, and reinvested interest is interest. Collapsing these onto
     // REINVEST/CAPITAL_GAIN/SELL at import time would lose the distinction
     // permanently -- the refinements behave like their base but keep the kind.
-    expect(mapInvestmentAction(MNY_ACTION.ST_CAPITAL_GAINS_DIST)).not.toBe(
-      InvestmentAction.CAPITAL_GAIN,
-    );
-    expect(mapInvestmentAction(MNY_ACTION.LT_CAPITAL_GAINS_DIST)).not.toBe(
-      InvestmentAction.CAPITAL_GAIN,
-    );
-    expect(mapInvestmentAction(MNY_ACTION.REINVEST_INTEREST)).not.toBe(
-      InvestmentAction.REINVEST,
-    );
+    expect(
+      mapInvestmentAction(MNY_ACTION.ST_CAPITAL_GAINS_DIST, "msisam"),
+    ).not.toBe(InvestmentAction.CAPITAL_GAIN);
+    expect(
+      mapInvestmentAction(MNY_ACTION.LT_CAPITAL_GAINS_DIST, "msisam"),
+    ).not.toBe(InvestmentAction.CAPITAL_GAIN);
+    expect(
+      mapInvestmentAction(MNY_ACTION.REINVEST_INTEREST, "msisam"),
+    ).not.toBe(InvestmentAction.REINVEST);
   });
 
   it("maps act 30 to REDEEM, never REMOVE_SHARES", () => {
     // "Redeem CD/Bond" is a disposal with real proceeds -- the cash figure,
     // accrued interest included, has to reach the cash sleeve. REMOVE_SHARES
     // would zero the total and lose the proceeds (issue #1149).
-    expect(mapInvestmentAction(MNY_ACTION.REDEEM_CD_BOND)).toBe(
+    expect(mapInvestmentAction(MNY_ACTION.REDEEM_CD_BOND, "msisam")).toBe(
       InvestmentAction.REDEEM,
     );
   });
@@ -259,12 +261,12 @@ describe("mapInvestmentAction", () => {
   it("maps act 16 to REMOVE_SHARES, never SELL", () => {
     // Mapping it to SELL closes lots against a fabricated sale price and
     // corrupts average cost -- PR #192 issue 4.
-    expect(mapInvestmentAction(MNY_ACTION.REMOVE_SHARES_LEGACY)).toBe(
+    expect(mapInvestmentAction(MNY_ACTION.REMOVE_SHARES_LEGACY, "msisam")).toBe(
       InvestmentAction.REMOVE_SHARES,
     );
-    expect(mapInvestmentAction(MNY_ACTION.REMOVE_SHARES_LEGACY)).not.toBe(
-      InvestmentAction.SELL,
-    );
+    expect(
+      mapInvestmentAction(MNY_ACTION.REMOVE_SHARES_LEGACY, "msisam"),
+    ).not.toBe(InvestmentAction.SELL);
   });
 
   it.each([[6], [17], [18], [20], [99]])(
@@ -274,7 +276,7 @@ describe("mapInvestmentAction", () => {
       // lot, and nothing names them, so nothing says what they do to a
       // position. They are skipped and warned about rather than guessed at.
       // (10 sat in this list until issue #1149 named it "Reinvest Interest".)
-      expect(mapInvestmentAction(act)).toBeNull();
+      expect(mapInvestmentAction(act, "msisam")).toBeNull();
     },
   );
 
@@ -283,8 +285,12 @@ describe("mapInvestmentAction", () => {
     // LOT disagrees -- act 1 opens 3,520 lots in the maintainer's file and
     // closes none -- so every purchase imported as a sale, no cash ever left
     // a brokerage sleeve, and holdings replayed negative.
-    expect(mapInvestmentAction(MNY_ACTION.BUY)).toBe(InvestmentAction.BUY);
-    expect(mapInvestmentAction(MNY_ACTION.BUY)).not.toBe(InvestmentAction.SELL);
+    expect(mapInvestmentAction(MNY_ACTION.BUY, "msisam")).toBe(
+      InvestmentAction.BUY,
+    );
+    expect(mapInvestmentAction(MNY_ACTION.BUY, "msisam")).not.toBe(
+      InvestmentAction.SELL,
+    );
   });
 
   it("maps the codes LOT proves acquire shares onto acquisitions", () => {
@@ -295,13 +301,13 @@ describe("mapInvestmentAction", () => {
       MNY_ACTION.CONTRIBUTION,
       MNY_ACTION.TRANSFER_IN,
     ]) {
-      expect(mapInvestmentAction(act)).not.toBeNull();
+      expect(mapInvestmentAction(act, "msisam")).not.toBeNull();
       expect([
         InvestmentAction.BUY,
         InvestmentAction.REINVEST,
         InvestmentAction.TRANSFER_IN,
         InvestmentAction.ADD_SHARES,
-      ]).toContain(mapInvestmentAction(act));
+      ]).toContain(mapInvestmentAction(act, "msisam"));
     }
   });
 
@@ -315,7 +321,7 @@ describe("mapInvestmentAction", () => {
         InvestmentAction.SELL,
         InvestmentAction.REMOVE_SHARES,
         InvestmentAction.TRANSFER_OUT,
-      ]).toContain(mapInvestmentAction(act));
+      ]).toContain(mapInvestmentAction(act, "msisam"));
     }
   });
 
@@ -339,15 +345,21 @@ describe("mapInvestmentAction", () => {
 
   it("knows that cash distributions carry no TRN_INV row", () => {
     // Iterating TRN_INV instead of TRN drops every cash dividend.
-    expect(hasInvestmentDetail(MNY_ACTION.DIVIDEND)).toBe(false);
-    expect(hasInvestmentDetail(MNY_ACTION.INTEREST)).toBe(false);
-    expect(hasInvestmentDetail(MNY_ACTION.ST_CAPITAL_GAINS_DIST)).toBe(false);
-    expect(hasInvestmentDetail(MNY_ACTION.LT_CAPITAL_GAINS_DIST)).toBe(false);
-    expect(hasInvestmentDetail(MNY_ACTION.BUY)).toBe(true);
-    expect(hasInvestmentDetail(MNY_ACTION.SELL)).toBe(true);
+    expect(hasInvestmentDetail(MNY_ACTION.DIVIDEND, "msisam")).toBe(false);
+    expect(hasInvestmentDetail(MNY_ACTION.INTEREST, "msisam")).toBe(false);
+    expect(
+      hasInvestmentDetail(MNY_ACTION.ST_CAPITAL_GAINS_DIST, "msisam"),
+    ).toBe(false);
+    expect(
+      hasInvestmentDetail(MNY_ACTION.LT_CAPITAL_GAINS_DIST, "msisam"),
+    ).toBe(false);
+    expect(hasInvestmentDetail(MNY_ACTION.BUY, "msisam")).toBe(true);
+    expect(hasInvestmentDetail(MNY_ACTION.SELL, "msisam")).toBe(true);
     // The reinvested distributions buy shares, so their detail is expected.
-    expect(hasInvestmentDetail(MNY_ACTION.REINVEST_INTEREST)).toBe(true);
-    expect(hasInvestmentDetail(MNY_ACTION.REDEEM_CD_BOND)).toBe(true);
+    expect(hasInvestmentDetail(MNY_ACTION.REINVEST_INTEREST, "msisam")).toBe(
+      true,
+    );
+    expect(hasInvestmentDetail(MNY_ACTION.REDEEM_CD_BOND, "msisam")).toBe(true);
   });
 });
 
@@ -382,7 +394,9 @@ describe("currency pseudo-securities", () => {
         (currency) => currency.quoteSymbol !== "",
       );
 
-      expect(quoted.length).toBeGreaterThan(40);
+      // Money 2001+ quote over 40 currencies; Money 99 quotes 24, each in the
+      // same `/XXXUS` shape.
+      expect(quoted.length).toBeGreaterThan(20);
       expect(
         quoted.every((currency) => isCurrencyQuoteSymbol(currency.quoteSymbol)),
       ).toBe(true);
@@ -422,8 +436,10 @@ describe("isIncomeCategoryType", () => {
   );
 
   it("agrees with the root ancestor for every category in every fixture", () => {
-    // The evidence behind the constant: 349 categories across three Money
-    // vintages, no crossover between the lType groups and the two roots.
+    // The evidence behind the constant: categories across four Money vintages,
+    // no crossover between the lType groups and the two roots. Money names
+    // the roots in the file's language: `sample-money99.mny` is Spanish.
+    const INCOME_ROOT_NAMES = new Set(["INCOME", "INGRESOS"]);
     let checked = 0;
 
     for (const fixture of ALL_FIXTURES) {
@@ -440,7 +456,7 @@ describe("isIncomeCategoryType", () => {
 
         const fromType = isIncomeCategoryType(category.categoryType);
         if (fromType !== null) {
-          expect(fromType).toBe(root.name === "INCOME");
+          expect(fromType).toBe(INCOME_ROOT_NAMES.has(root.name));
           checked++;
         } else {
           // Only the roots themselves are unclassifiable.
@@ -507,9 +523,25 @@ describe("mapFrequency", () => {
     // EVERY2YEARS were added for the last two picker entries that had no type.
     // A frequency added here without a Money cadence, or a cadence that starts
     // sharing a type with another, shows up as a duplicate or a gap.
+    // CUSTOM is the one Monize frequency Money has no cadence for: a rule of
+    // chosen days has no fixed cycle (`FREQUENCY_CYCLE_DAYS.CUSTOM` is 0), so
+    // no `(frq, cFrqInst)` pair can name it.
     expect(MONEY_CADENCES.map((row) => row[3]).sort()).toEqual(
-      Object.keys(FREQUENCY_CYCLE_DAYS).sort(),
+      Object.keys(FREQUENCY_CYCLE_DAYS)
+        .filter((frequency) => frequency !== FrequencyType.CUSTOM)
+        .sort(),
     );
+  });
+
+  it("never maps a Money cadence to CUSTOM, which has no cycle", () => {
+    expect(FREQUENCY_CYCLE_DAYS.CUSTOM).toBe(0);
+    for (const unit of Object.values(MNY_FREQUENCY)) {
+      for (const rate of [0.25, 0.5, 1, 2, 3, 4, 52, 365]) {
+        expect(mapFrequency(unit, rate)?.frequency).not.toBe(
+          FrequencyType.CUSTOM,
+        );
+      }
+    }
   });
 
   it("reads cFrqInst as a rate, not as an interval (twice a month)", () => {

@@ -1,7 +1,6 @@
-import { ApiPropertyOptional } from "@nestjs/swagger";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import {
   IsOptional,
-  IsNumber,
   IsUUID,
   IsString,
   IsBoolean,
@@ -9,14 +8,20 @@ import {
   IsEnum,
   Min,
   Max,
+  ValidateIf,
   ValidateNested,
   IsDateString,
   MaxLength,
 } from "class-validator";
 import { Type } from "class-transformer";
+import { IsCalendarDate } from "../../common/validators/is-calendar-date.validator";
 import { SanitizeHtml } from "../../common/decorators/sanitize-html.decorator";
 import { InvestmentSplitDto } from "../../transactions/dto/create-transaction-split.dto";
 import { SplitKind } from "../../transactions/entities/split-kind.enum";
+import { TRANSACTION_NOTE_MAX_LENGTH } from "../../common/transaction-note";
+import { IsMoneyAmount } from "../../common/validators/is-money-amount.validator";
+import { IsFxRate } from "../../common/validators/is-fx-rate.validator";
+import { IsShareQuantity } from "../../common/validators/is-share-quantity.validator";
 
 class InlineSplitDto {
   // Id of the scheduled/override split this inline row came from (issue #1167
@@ -68,7 +73,7 @@ class InlineSplitDto {
   investment?: InvestmentSplitDto;
 
   @ApiPropertyOptional({ description: "Amount for this split" })
-  @IsNumber({ maxDecimalPlaces: 4 })
+  @IsMoneyAmount()
   @Min(-999999999999)
   @Max(999999999999)
   amount: number;
@@ -76,11 +81,34 @@ class InlineSplitDto {
   @ApiPropertyOptional({ description: "Memo for this split" })
   @IsOptional()
   @IsString()
-  @MaxLength(500)
+  @MaxLength(TRANSACTION_NOTE_MAX_LENGTH)
+  @SanitizeHtml()
   memo?: string | null;
 }
 
 export class PostScheduledTransactionDto {
+  // Required at the HTTP boundary (no `@IsOptional`), typed `?:` only because
+  // in-process callers (the auto-post cron, the AI action and the email receipt)
+  // build this DTO without it and pin through `post()`'s `expectedDueDate`
+  // option instead.
+  @ApiProperty({
+    description:
+      "The occurrence the client is posting, YYYY-MM-DD: the override's date when an override moved it, else the due date. Refused with 409 once it is no longer the due occurrence.",
+    example: "2026-09-01",
+  })
+  @IsCalendarDate()
+  expectedOccurrenceDate?: string;
+
+  @ApiPropertyOptional({
+    description:
+      "Id of the override the client saw on that occurrence, or null when it saw none. Refused with 409 when an override was created, replaced or removed since.",
+    nullable: true,
+  })
+  @IsOptional()
+  @ValidateIf((_o, v) => v !== null && v !== "")
+  @IsUUID()
+  expectedOverrideId?: string | null;
+
   @ApiPropertyOptional({
     description: "Transaction date (defaults to next due date)",
   })
@@ -90,7 +118,7 @@ export class PostScheduledTransactionDto {
 
   @ApiPropertyOptional({ description: "Override amount for this posting only" })
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 4 })
+  @IsMoneyAmount()
   @Min(-999999999999)
   @Max(999999999999)
   amount?: number;
@@ -100,7 +128,7 @@ export class PostScheduledTransactionDto {
       "Override foreign amount for this posting only, in the schedule's entry currency. Ignored unless the schedule carries a foreign currency; the account-currency amount is derived from it at the rate for the posting date.",
   })
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 4 })
+  @IsMoneyAmount()
   @Min(-999999999999)
   @Max(999999999999)
   originalAmount?: number;
@@ -110,8 +138,7 @@ export class PostScheduledTransactionDto {
       "Override exchange rate for this posting only (account-currency units per 1 unit of the entry currency). Defaults to the stored rate for the posting date.",
   })
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 10 })
-  @Min(0.000001)
+  @IsFxRate()
   exchangeRate?: number;
 
   @ApiPropertyOptional({
@@ -126,7 +153,8 @@ export class PostScheduledTransactionDto {
   })
   @IsOptional()
   @IsString()
-  @MaxLength(500)
+  @MaxLength(TRANSACTION_NOTE_MAX_LENGTH)
+  @SanitizeHtml()
   description?: string | null;
 
   @ApiPropertyOptional({
@@ -157,7 +185,7 @@ export class PostScheduledTransactionDto {
     description: "Override quantity for this posting only (investment kind)",
   })
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 8 })
+  @IsShareQuantity()
   @Min(0)
   @Max(999999999999)
   investmentQuantity?: number;
@@ -166,7 +194,7 @@ export class PostScheduledTransactionDto {
     description: "Override price for this posting only (investment kind)",
   })
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 10 })
+  @IsMoneyAmount(10)
   @Min(0)
   @Max(999999999999)
   investmentPrice?: number;
@@ -176,7 +204,7 @@ export class PostScheduledTransactionDto {
       "Override total amount for this posting only (investment kind, amount-only actions)",
   })
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 4 })
+  @IsMoneyAmount(4)
   @Min(-999999999999)
   @Max(999999999999)
   investmentTotalAmount?: number;

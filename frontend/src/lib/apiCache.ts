@@ -32,6 +32,11 @@ function bumpGeneration(key: string): void {
   keyGeneration.set(key, currentGeneration(key) + 1);
 }
 
+/**
+ * Read an entry directly. Outside this file this is for tests only: a read in
+ * product code goes through `dedupe`, which also refuses a result that raced an
+ * invalidation. `cache-prefix-classification.guard.test.ts` holds the rule.
+ */
 export function getCached<T>(key: string): T | undefined {
   const entry = cache.get(key);
   if (!entry) return undefined;
@@ -42,8 +47,25 @@ export function getCached<T>(key: string): T | undefined {
   return entry.data as T;
 }
 
+/** Write an entry directly. Outside this file, for tests only (see `getCached`). */
 export function setCache<T>(key: string, data: T, ttl: number = DEFAULT_TTL): void {
   cache.set(key, { data, timestamp: Date.now(), ttl });
+}
+
+/**
+ * Rewrite an existing, unexpired entry in place; a no-op when the key is absent
+ * or expired. For an optimistic rewrite of a list the module itself just
+ * changed. A read goes through `dedupe`, and the mutation that follows still
+ * calls `invalidateCache` so the server's answer replaces the optimistic copy.
+ */
+export function patchCached<T>(
+  key: string,
+  update: (current: T) => T,
+  ttl: number = DEFAULT_TTL,
+): void {
+  const current = getCached<T>(key);
+  if (current === undefined) return;
+  setCache(key, update(current), ttl);
 }
 
 export function invalidateCache(keyPrefix: string): void {
@@ -97,7 +119,14 @@ export function clearAllCache(): void {
  * beside it still shows the pre-write remaining amount -- which is the number a
  * user makes the next spending decision from.
  *
- * Anything derived from transaction rows belongs on this list. Adding a new
+ * It is also called by writes that change a valuation input that is not a
+ * ledger row -- a stored price, a security's currency, an exchange rate -- and
+ * by recategorising writes (a category reassignment, a payee default category
+ * applied to existing rows), because every converted total and every budget
+ * roll-up is derived from them.
+ *
+ * Anything derived from transaction rows belongs on this list, including a
+ * warranty's `linkedTransaction` (the purchase's date, payee and amount). Adding a new
  * cached family that reads them means adding its prefix here in the same
  * change; `balance-cache.guard.test.ts` holds the call sites, and
  * `apiCache.test.ts` holds the prefix set.
@@ -106,6 +135,11 @@ export function invalidateBalanceCaches(): void {
   invalidateCache('accounts:');
   invalidateCache('investments:');
   invalidateCache('budgets:');
+  invalidateCache('warranties:');
+  // A rule's paid-to-date, and the figures the scheduled read model carries
+  // for the forecast, are sums over transaction rows (INV-PAYROLL-003).
+  invalidateCache('payroll-deductions:');
+  invalidateCache('scheduled:');
 }
 
 /**
@@ -114,8 +148,9 @@ export function invalidateBalanceCaches(): void {
  * The `scheduled:all` payload now carries server-derived, current-settlement-pair
  * FX fields (`investmentForecastExchangeRate` / `investmentForecastAmount`, issue
  * #1167). Those are resolved from `exchange_rates` snapshots and from the security's
- * and settlement account's currencies -- none of which a transaction write touches,
- * so this is deliberately NOT part of `invalidateBalanceCaches`. Call it after any
+ * and settlement account's currencies, none of which a transaction write touches.
+ * `invalidateBalanceCaches` drops the family too, for its payroll deduction
+ * figures, but a rate or currency change is not a money write, so it calls this. Call it after any
  * operation that can change one side of a scheduled investment's settlement pair
  * or the rate it resolves at: a successful exchange-rate refresh, an account edit
  * (funding/linked-cash/brokerage currency), or a security edit (currency). Call it

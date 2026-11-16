@@ -76,7 +76,10 @@
     "collapseAria": "Hesap bilgisini gizle",
     "showAccountNumber": "Hesap numarasını göster",
     "hideAccountNumber": "Hesap numarasını gizle",
-    "show": "Hesap bilgisini göster"
+    "show": "Hesap bilgisini göster",
+    "nextInstallment": "Sonraki Taksit",
+    "finalPayment": "Son Ödeme",
+    "amountDueOn": "{amount}, vade {date}"
   },
   "page": {
     "title": "İşlemler",
@@ -121,13 +124,19 @@
       "balance": "Bakiye",
       "attachments": "Ekler",
       "status": "Durum",
+      "statusHelp": "Mutabakatsız, Temizlendi veya Mutabakat Sağlandı, banka hesap özetiyle eşleştirme yolundaki adımlardır. Geçersiz bir işlemi iptal eder ama kaydını saklar; artık hesap bakiyesini hareket ettirmez.",
       "actions": "İşlemler"
+    },
+    "sort": {
+      "balanceHiddenHint": "Yürüyen bakiyeyi görmek için tarihe göre sıralayın",
+      "stripLabel": "Sıralama ölçütü"
     },
     "dateDisplay": {
       "toggleLabel": "Yılı gizle",
       "toggleTitle": "Alacaklının adının daha fazlası sığması için tarihlerden yılı çıkar"
     },
     "attachmentsCount": "{count, plural, other {# ek}}",
+    "warrantiesCount": "{count, plural, other {# garanti}}",
     "today": "Bugün",
     "export": {
       "button": "Dışa Aktar",
@@ -165,7 +174,6 @@
     },
     "row": {
       "viewPayeeTitle": "{name} ayrıntılarını görüntüle",
-      "ref": "Ref: {number}",
       "investmentLabel": "Yatırım",
       "linkedInvestmentTitle": "Yatırımlarda Görüntüle",
       "filterByDate": "\"{date}\" tarihine göre filtrele",
@@ -212,13 +220,13 @@
       "title": "Filtreler",
       "clear": "Temizle",
       "hide": "Gizle",
-      "show": "Göster"
+      "show": "Filtreleri göster"
     },
     "accounts": {
-      "label": "Hesapları göster:",
-      "all": "Tümü",
-      "active": "Aktif",
-      "closed": "Kapalı"
+      "label": "Hesapları göster",
+      "allCount": "Tümü ({count})",
+      "activeCount": "Aktif ({count})",
+      "closedCount": "Kapalı ({count})"
     },
     "fields": {
       "accounts": "Hesaplar",
@@ -251,7 +259,7 @@
       "statuses": "Tüm durumlar",
       "amountMin": "Min",
       "amountMax": "Maks",
-      "search": "Alacaklı, kategori, tutar, etiket, açıklama, referans # ara...",
+      "search": "Arayın ya da #10 veya payee:costco deneyin",
       "tagKeyValue": "örn. usa"
     },
     "tagKeyNone": "Herhangi (anahtar filtresi yok)",
@@ -312,7 +320,7 @@
     },
     "modal": {
       "title": "İşlemleri Toplu Güncelle",
-      "subtitle": "{count, plural, one {# seçili işlemi} other {# seçili işlemi}} güncelleyin. Değiştirmek istediğiniz alanları açın.",
+      "help": "Değiştirmek istediğiniz alanları açın.",
       "submitLabel": "{count, plural, one {# İşlemi Güncelle} other {# İşlemi Güncelle}}",
       "payee": "Alacaklı",
       "category": "Kategori",
@@ -360,8 +368,9 @@
       "fromAccount": "Gönderen Hesap",
       "toAccount": "Alıcı Hesap",
       "transferAmount": "Transfer Tutarı",
-      "transferAmountWithCurrency": "Transfer Tutarı ({currency})",
-      "amountReceived": "Alınan Tutar ({currency})",
+      "amountReceivedLabel": "Alınan Tutar",
+      "transferAmountInCurrency": "Transfer Tutarı ({currency})",
+      "amountReceivedInCurrency": "Alınan Tutar ({currency})",
       "payeeOptional": "Alacaklı (İsteğe Bağlı)",
       "categoryOptional": "Kategori (İsteğe bağlı)"
     },
@@ -391,10 +400,16 @@
     "submitCreateAndNewDescription": "Kaydet ve aynı hesap ve tarihle yenisine başla.",
     "submitOptions": "Oluşturduktan sonra ne olacağını seçin",
     "submitUpdate": "{mode} Güncelle",
+    "submitConvert": "{mode} olarak dönüştür",
     "reconciledConfirm": {
       "title": "Mutabakatlı işlem düzenlensin mi?",
       "message": "Bu işlemde mutabakat sağlandı. Değiştirmek, tamamlanmış bir mutabakatı etkiler. Yine de değişiklikleri kaydetmek istiyor musunuz?",
       "confirm": "Değişiklikleri kaydet"
+    },
+    "counterpartConfirm": {
+      "title": "Bu transfer dönüştürülsün mü?",
+      "message": "Bu transferin diğer tarafı zaten onaylanmış veya mutabakatı yapılmış. İşleme dönüştürmek bu kaydı diğer hesaptan kaldırır ve bir ekstreyle karşılaştırılmış bir bakiyeyi değiştirir. Devam etmek istiyor musunuz?",
+      "confirm": "Yine de dönüştür"
     },
     "modeLabel": {
       "transfer": "Transfer",
@@ -424,6 +439,8 @@
       "destinationRequired": "Lütfen hedef hesap seçin",
       "sameAccount": "Kaynak ve hedef hesaplar farklı olmalıdır",
       "negativeTransfer": "Transfer tutarı negatif olamaz",
+      "convertedToTransfer": "Transfere dönüştürüldü",
+      "convertedToTransaction": "İşleme dönüştürüldü",
       "payeeCreated": "\"{name}\" alacaklısı oluşturuldu",
       "payeeCreateFailed": "Alacaklı oluşturulamadı",
       "payeeReactivated": "\"{name}\" alacaklısı yeniden etkinleştirildi",
@@ -458,10 +475,20 @@
       },
       "feeCaption": "%{percent} yurt dışı işlem ücreti ({fee}) içerir."
     },
-    "jointSplitDisabled": "Paylaşılan bir hesaptaki bölünmüş işlemleri yalnızca sahibi yönetebilir"
+    "jointSplitDisabled": "Paylaşılan bir hesaptaki bölünmüş işlemleri yalnızca sahibi yönetebilir",
+    "warranties": {
+      "title": "Garantiler",
+      "add": "Garanti ekle",
+      "expires": "Bitiş: {date}",
+      "loading": "Garantiler yükleniyor",
+      "loadError": "Bu işlemin garantileri yüklenemedi.",
+      "empty": "Henüz garanti yok"
+    },
+    "conversionLockedNote": "Bu transfer bölünmüş bir işleme veya başka bir sahibin hesabına ait olduğundan burada yalnızca transfer olarak kalabilir. Bölmeden değiştirin veya silip istediğiniz kaydı oluşturun."
   },
   "splitEditor": {
     "header": "Bölüm Ayrıntıları",
+    "headerTooltip": "Her satır bir kategori, başka bir hesaba yapılan transfer veya bir yatırım olabilir. Satırların toplamı işlem tutarına eşit olmalıdır; Eşit Dağıt ve Orantılı Dağıt kalan tutarı sizin için paylaştırır.",
     "distributeProportionally": "Orantılı Dağıt",
     "distributeProportionallyTitle": "Kalan tutarı her bölümün miktarına göre orantılı olarak dağıt",
     "distributeEvenly": "Eşit Dağıt",
@@ -521,7 +548,7 @@
     "quantityPlaceholder": "Miktar",
     "pricePlaceholder": "Fiyat",
     "commissionPlaceholder": "Komisyon",
-    "amountPlaceholder": "Tutar ({currency})",
+    "amountOnlyPlaceholder": "Tutar",
     "ratePlaceholder": "1 {from} için {to}",
     "ariaRate": "Döviz kuru (1 {from} için {to})",
     "rateHint": "Adet, fiyat ve komisyon {from} cinsindendir; bu kur nakit etkisini {to} para birimine çevirir.",
@@ -551,6 +578,7 @@
       "total": "Toplam",
       "transactions": "İşlemler",
       "tooltip": "{count, plural, one {# işlem} other {# işlem}}",
+      "partialNote": "Bazı tutarların döviz kuru yok ve bu toplamlara dahil değil.",
       "quarterLabel": "Ç{quarter} {year}",
       "quarterTick": "Ç{quarter} {year}",
       "granularityLabel": "Gruplama",
@@ -575,6 +603,11 @@
       "log": "Logaritmik",
       "autoTitle": "Otomatik ({scale})",
       "scaleTitle": "{label} ölçeği"
+    },
+    "collapse": {
+      "hide": "Grafiği gizle",
+      "show": "Grafiği göster",
+      "hidden": "Grafik gizli"
     }
   },
   "toasts": {
@@ -597,5 +630,71 @@
     "title": "{key} bazında harcama",
     "other": "Diğer",
     "noData": "Bu anahtar için ayrıştırılacak etiketli harcama yok."
+  },
+  "searchSyntax": {
+    "open": "Arama söz dizimi",
+    "title": "Arama söz dizimi",
+    "fields": "Alanlar: payee, memo, cat, tag, account, ref, amount, date, status, is, has. Arama kutusuna koymak için bir örnek seçin.",
+    "examples": {
+      "allWords": "Her sözcük bir yerde eşleşir",
+      "phrase": "Tam olarak bu ifade",
+      "exclude": "refund ile eşleşen her şeyi hariç tut",
+      "fieldContains": "Alıcı costco içerir",
+      "fieldExact": "Alıcı tam olarak Costco",
+      "reference": "Çek veya referans numarası tam olarak 10",
+      "wildcard": "Referans 10 ile başlar",
+      "amountOver": "Tutar 100'ün üzerinde",
+      "amountRange": "Tutar 50 ile 100 arası",
+      "datePeriod": "Mart 2026'nın herhangi bir günü",
+      "isSplit": "Bölünmüş işlemler",
+      "hasAttachment": "Eki var",
+      "hasWarranty": "Garantisi var"
+    }
+  },
+  "searchInterpretation": {
+    "label": "Aranan:",
+    "negated": "{phrase} değil",
+    "malformed": "{raw} (anlaşılmadı, metin olarak arandı)",
+    "empty": "{raw} (boş, yok sayıldı)",
+    "status": "Durum {value}",
+    "any": "Herhangi bir yerde “{value}”",
+    "fields": {
+      "payee": "Alıcı",
+      "memo": "Not",
+      "cat": "Kategori",
+      "tag": "Etiket",
+      "account": "Hesap",
+      "ref": "Referans",
+      "amount": "Tutar",
+      "date": "Tarih",
+      "status": "Durum",
+      "is": "Tür",
+      "has": "Var"
+    },
+    "ops": {
+      "contains": "{field} “{value}” içerir",
+      "exact": "{field} “{value}”",
+      "glob": "{field} “{value}” ile eşleşir",
+      "eq": "{field} {value}",
+      "gt": "{field} {value} üzerinde",
+      "gte": "{field} {value} veya daha fazla",
+      "lt": "{field} {value} altında",
+      "lte": "{field} {value} veya daha az",
+      "between": "{field} {value} ile {valueTo} arası"
+    },
+    "enum": {
+      "is": {
+        "transfer": "Transferler",
+        "split": "Bölünmüş işlemler",
+        "uncategorized": "Kategorisiz"
+      },
+      "has": {
+        "attachment": "Eki var",
+        "warranty": "Garantisi var",
+        "ref": "Referans numarası var",
+        "memo": "Notu var",
+        "tag": "Etiketi var"
+      }
+    }
   }
 }

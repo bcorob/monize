@@ -4,6 +4,7 @@ import { useState, useRef, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import { useClickOutside } from '@/hooks/useClickOutside';
+import { ChevronDownIcon, PlusIcon } from '@heroicons/react/24/outline';
 
 interface NewReportButtonProps {
   onNewStandard: () => void;
@@ -48,13 +49,9 @@ export function NewReportButton({ onNewStandard, onNewInvestment }: NewReportBut
         aria-haspopup="true"
         aria-expanded={isOpen}
       >
-        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-        </svg>
+        <PlusIcon className="h-4 w-4" aria-hidden="true" />
         {t('newReportButton.newReport')}
-        <svg className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
+        <ChevronDownIcon className="h-3 w-3" aria-hidden="true" />
       </Button>
 
       {isOpen && (

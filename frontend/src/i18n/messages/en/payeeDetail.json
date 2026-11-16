@@ -94,6 +94,9 @@
     "largestValue": "{amount} on {date}",
     "overpaymentFor": "Overpayment Payee For",
     "website": "Website",
+    "address": "Address",
+    "phone": "Phone",
+    "email": "Email",
     "notes": "Notes"
   },
   "tabs": {
@@ -127,5 +130,23 @@
     "needsMoreHistory": "At least {years} years of history are needed before a seasonal pattern can be told from noise.",
     "empty": "No spending to break down by month yet",
     "monthTooltip": "{month}: {amount} on average across {years, plural, one {# year} other {# years}}"
+  },
+  "contactLookup": {
+    "button": "Look up contact details",
+    "inProgress": "Looking up...",
+    "nothingNew": "No new contact details were found.",
+    "noProvider": "Set up a lookup source in Payee lookup settings to find contact details.",
+    "failed": "The lookup could not be completed. Try again later.",
+    "dialogTitle": "Confirm contact details",
+    "dialogSubtitle": "Nothing is saved for {name} until you confirm.",
+    "pickMatch": "That name matches {count, plural, one {# business} other {# businesses}}. Choose the one you pay:",
+    "unlabelledMatch": "Unnamed match",
+    "willAdd": "Add",
+    "willReplace": "Replace",
+    "cancel": "Cancel",
+    "confirm": "Save {count, plural, one {# change} other {# changes}}",
+    "applied": "{count, plural, one {Saved # contact detail} other {Saved # contact details}}",
+    "applyFailed": "Could not save the contact details",
+    "quotaExceeded": "This month's Google Places lookups are used up. Raise the limit in Payee lookup settings, or wait until next month."
   }
 }

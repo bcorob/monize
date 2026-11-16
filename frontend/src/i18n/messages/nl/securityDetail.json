@@ -34,7 +34,6 @@
     "units": "Stukken",
     "avgCostPerUnit": "Gem. kostprijs / stuk",
     "heldInAccounts": "Aangehouden in rekeningen",
-    "openAccount": "{name} op de pagina Beleggingen laten zien",
     "unitsShare": "{units} ({share})",
     "valueUnknown": "Geen koers",
     "approx": "~ {amount}"
@@ -74,15 +73,20 @@
     "sector": "Sector",
     "industry": "Bedrijfstak",
     "provider": "Aanbieder",
-    "lastPrice": "Laatste koers"
+    "lastPrice": "Laatste koers",
+    "bondDescription": "Obligatiebeschrijving"
   },
   "tabs": {
     "ariaLabel": "Onderdelen van het effect",
     "overview": "Overzicht",
     "transactions": "Transacties",
     "prices": "Koershistorie",
+    "terms": "Voorwaardenhistorie",
     "documents": "Documenten",
     "news": "Nieuws"
+  },
+  "bondPrices": {
+    "title": "Koershistorie"
   },
   "about": {
     "title": "Over",
@@ -121,6 +125,8 @@
     "fees": "Kosten",
     "realizedPl": "Gerealiseerde W/V",
     "realizedMixed": "Gerealiseerd in {currencies}, dus niet opgeteld",
+    "realizedUnknownReason": "Deze winst kan niet worden berekend: de positie bevat aandelen die zonder kosten zijn toegevoegd, dus de kostprijs van de verkochte aandelen is onbekend. Open de transactie die ze heeft toegevoegd en voer hun prijs in.",
+    "realizedKnownPart": "Bekend deel: {amount}",
     "totalReturn": "Totaalrendement",
     "totalReturnValue": "{amount} ({percent})",
     "totalReturnTitle": "De ongerealiseerde winst, plus wat je bij verkopen realiseerde en aan inkomsten ontving, minus kosten, ten opzichte van het ingelegde kapitaal. Een eenvoudig rendement op dat kapitaal: het is niet op jaarbasis gezet en weegt tranches niet naar hoe lang je ze aanhield.",
@@ -147,6 +153,8 @@
     "title": "Positie gesloten",
     "description": "Je houdt dit effect niet meer aan. De historie blijft hieronder beschikbaar.",
     "realizedPl": "Gerealiseerde W/V",
+    "realizedUnknownReason": "Deze winst kan niet worden berekend: de positie bevatte aandelen die zonder kosten zijn toegevoegd, dus de kostprijs van de verkochte aandelen is onbekend. Open de transactie die ze heeft toegevoegd en voer hun prijs in.",
+    "realizedKnownPart": "Bekend deel: {amount}",
     "heldFrom": "Aangehouden vanaf",
     "heldRange": "{start} tot {end}"
   },
@@ -165,7 +173,24 @@
     "sectorEmpty": "Er is geen sectoropbouw opgeslagen. Monize vult die voor fondsen en ETF's aan via de aanbieder.",
     "countryEmpty": "Er is geen landenopbouw opgeslagen. Je kunt die invoeren bij het bewerken van het effect.",
     "assetClassEmpty": "Er is nog geen opbouw naar beleggingscategorie opgeslagen.",
-    "remainder": "{percent} niet ingedeeld"
+    "remainder": "{percent} niet ingedeeld",
+    "bond": {
+      "seriesTab": "Series",
+      "maturityTab": "Looptijd",
+      "empty": "U bezit nog geen serie van dit obligatietype.",
+      "someUnknown": "Sommige waarden zijn onbekend, daarom worden er geen aandelen getoond.",
+      "issuerCountry": "Land van de uitgever",
+      "rate": "Rentevoet",
+      "interest": "Rente",
+      "term": "Looptijd tot einde",
+      "interestValue": "{capitalization}, periode: {period}",
+      "rateType": {
+        "FIXED": "Vast",
+        "BENCHMARK_PLUS_SPREAD": "Variabel (referentie + opslag)",
+        "INFLATION_PLUS_MARGIN_AS_RATE": "Inflatiegekoppeld (referentie + marge)",
+        "ZERO_COUPON_DISCOUNT": "Nulcoupon (disconto)"
+      }
+    }
   },
   "documents": {
     "title": "Documenten",
@@ -225,6 +250,16 @@
       "deleted": "Document verwijderd",
       "saveFailed": "Het document kon niet worden opgeslagen",
       "deleteFailed": "Het document kon niet worden verwijderd"
+    },
+    "issueLetters": {
+      "title": "Uitgifteberichten",
+      "loadFailed": "De uitgifteberichten konden niet worden geladen.",
+      "empty": "Voor dit type obligatie is nog geen uitgiftebericht opgeslagen.",
+      "held": "In bezit",
+      "onSale": "In de verkoop",
+      "noLetter": "Geen bericht vastgelegd voor deze serie",
+      "open": "Officiële pdf",
+      "openNamed": "Uitgiftebericht van serie {series} openen"
     }
   },
   "news": {
@@ -237,6 +272,243 @@
     "empty": {
       "title": "Op dit moment geen koppen",
       "description": "Er is recent niets over dit symbool gepubliceerd. De lijst wordt verversd als je terugkomt."
+    }
+  },
+  "bond": {
+    "loading": "Obligatiewaardering laden...",
+    "loadFailed": "De obligatiewaardering kon niet worden geladen.",
+    "unknown": "Onbekend",
+    "asOf": "Gewaardeerd op",
+    "termsSource": "Voorwaarden: {document}",
+    "termsManual": "Voorwaarden handmatig ingevoerd door een beheerder",
+    "noLots": "Op deze datum zijn er geen open partijen.",
+    "totals": {
+      "quantity": "Aangehouden obligaties",
+      "grossValue": "Brutowaarde",
+      "earlyRedemptionValue": "Waarde bij vervroegde aflossing",
+      "accruedInterest": "Opgelopen rente",
+      "unknownLot": "Voor minstens één partij is er geen waarde, dus wordt er geen totaal gegeven.",
+      "unknownRefusal": "De partijen kunnen niet worden bepaald, dus wordt er geen totaal gegeven."
+    },
+    "lots": {
+      "purchaseDate": "Gekocht",
+      "assumed": "Aangenomen",
+      "assumedTitle": "De werkelijke aankoopdatum is onbekend: deze partij is binnengekomen via een overboeking zonder gekoppelde verzendende kant.",
+      "quantity": "Aantal",
+      "maturity": "Einddatum",
+      "period": "Huidige periode",
+      "periodValue": "{index}: {start} tot {end}",
+      "rate": "Rente",
+      "principal": "Hoofdsom per obligatie",
+      "principalIssuePrice": "Geen kostprijs ingevoerd: de veilingprijs wordt gebruikt",
+      "accruedInterest": "Opgelopen rente",
+      "grossValue": "Brutowaarde",
+      "earlyRedemption": "Vervroegde aflossing",
+      "nextCashFlow": "Volgende kasstroom",
+      "cashFlowValue": "{type} {amount} op {date}",
+      "noCashFlow": "Geen",
+      "projected": "Verwacht",
+      "maturityValue": "Waarde op de einddatum",
+      "maturityKnown": "Bekend",
+      "maturityProjected": "Verwacht",
+      "matured": "Vervallen",
+      "refused": "Niet gewaardeerd",
+      "amountUnknown": "Bedrag onbekend"
+    },
+    "rateSource": {
+      "TERMS": "Voorwaarden",
+      "ANNOUNCED": "Aangekondigd",
+      "DERIVED": "Afgeleid",
+      "PROJECTED": "Verwacht"
+    },
+    "cashFlowType": {
+      "INTEREST": "Rente",
+      "PRINCIPAL": "Hoofdsom"
+    },
+    "earlyRefusal": {
+      "NOT_REDEEMABLE": "Niet vervroegd aflosbaar",
+      "TOO_EARLY": "Te vroeg om af te lossen",
+      "TOO_LATE": "Te laat om af te lossen",
+      "RECORD_DAY": "Niet aflosbaar op de registratiedatum",
+      "MATURED": "Afgelopen",
+      "RATE_UNKNOWN": "Rente nog niet bekend",
+      "TERMS_INCOMPLETE": "Voorwaarden onvolledig"
+    },
+    "lotsRefusal": {
+      "SPLIT": "De partijen kunnen niet worden afgeleid: een obligatie wordt niet gesplitst.",
+      "FRACTIONAL_QUANTITY": "De partijen kunnen niet worden afgeleid: een aantal is geen geheel aantal obligaties.",
+      "OVER_REMOVAL": "De partijen kunnen niet worden afgeleid: er zijn meer obligaties verwijderd dan er werden aangehouden.",
+      "INVALID_QUANTITY": "De partijen kunnen niet worden afgeleid: een aantal ontbreekt, is negatief of is te groot.",
+      "REMOVAL_EXCEEDS_SERIES": "De loten kunnen niet worden bepaald: van één serie zijn meer obligaties verwijderd dan aangehouden.",
+      "SERIES_NOT_DETERMINED": "De loten kunnen niet worden bepaald: de serie van een aankoop is onbekend."
+    },
+    "lotsRefusalDetail": {
+      "SPLIT": "Op dit effect is een split vastgelegd ({action} op {date}); een obligatie wordt niet gesplitst.",
+      "FRACTIONAL_QUANTITY": "{action} op {date} verplaatst {quantity} obligaties, wat geen geheel getal is.",
+      "OVER_REMOVAL": "{action} op {date} haalt {quantity} obligaties weg, meer dan er waren.",
+      "INVALID_QUANTITY": "De hoeveelheid van {action} op {date} ontbreekt, is negatief of te groot.",
+      "REMOVAL_EXCEEDS_SERIES": "{action} op {date} verwijdert {quantity} obligaties van zijn serie, meer dan in die serie werden aangehouden.",
+      "SERIES_NOT_DETERMINED": "{action} op {date} noemt geen serie en op die dag was geen opgeslagen serie van de obligatiesoort te koop. Haal de serie op en kies die in de transactie."
+    },
+    "assumptions": {
+      "title": "Aannames van de prognose",
+      "latestObservation": "{benchmark} verondersteld op {value} voor alle latere perioden, de laatst gepubliceerde waarde ({observation})",
+      "supplied": "{benchmark} verondersteld op {value} voor alle latere perioden",
+      "suppliedSimpleAnnual": "{benchmark} wordt verondersteld {value} per jaar te groeien (enkelvoudige jaarlijkse groei, zonder rente op rente) voor elke volgende maand"
+    },
+    "missing": {
+      "title": "Nog benodigde gegevens",
+      "item": "{benchmark} {observation} — gepubliceerd door {publisher}",
+      "itemNoPublisher": "{benchmark} {observation} — uitgever onbekend"
+    },
+    "recompute": {
+      "button": "Koersen herberekenen",
+      "done": "Koersen herberekend: {written} geschreven, {deleted} verwijderd.",
+      "failed": "De koersen konden niet worden herberekend."
+    },
+    "rate": {
+      "title": "Rente",
+      "rule": {
+        "fixed": "Vast {rate} voor de hele looptijd",
+        "firstThen": "Periode 1: {firstRate}. Daarna {benchmark} + {addend}",
+        "every": "Elke periode: {benchmark} + {addend}",
+        "floorZero": "Een negatieve waarde van {benchmark} telt als 0",
+        "dailyFloor": "Het dagtarief (index plus opslag) ligt nooit onder {floor}",
+        "discount": "Korting op de nominale waarde",
+        "daily": "Elke dag: {benchmark} + {addend}, per dag opgeteld",
+        "lockout": "Een veiling binnen {days, plural, one {# werkdag} other {# werkdagen}} voor het einde van een periode wordt voor die periode niet gebruikt"
+      },
+      "daily": "Dagelijks, {benchmark}",
+      "dailyNoIndex": "Dagelijks, {benchmark}: nog geen index opgeslagen",
+      "dailyRun": "Vanaf {from}: {rate}",
+      "dailyRunUnknown": "Vanaf {from}: geen index opgeslagen",
+      "lotHeading": "Lot gekocht op {date}",
+      "range": "{start} tot {end}",
+      "current": "Huidig",
+      "columns": {
+        "period": "Periode",
+        "dates": "Datums",
+        "rate": "Rente",
+        "source": "Bron",
+        "how": "Hoe vastgesteld"
+      },
+      "how": {
+        "stated": "Vermeld tarief",
+        "observed": "{benchmark} {observation}: {value} + {addend}",
+        "floored": "(verhoogd tot {floor})",
+        "missing": "{benchmark} {observation}: nog niet gepubliceerd"
+      },
+      "nextRateReset": "Volgende renteaanpassing: {date}",
+      "nextCapitalization": "Volgende kapitalisatie: {date}"
+    },
+    "indexation": {
+      "inflation": "Inflatiegekoppeld: vanaf {date} (periode 2) is de rente {benchmark} + {addend}, in elke periode opnieuw berekend",
+      "floating": "Variabele rente: vanaf {date} (periode 2) is de rente {benchmark} + {addend}, in elke periode opnieuw berekend"
+    },
+    "interestParts": {
+      "fixed": "Vaste rente (1e periode)",
+      "margin": "Rente uit de marge",
+      "inflation": "Rente uit inflatie",
+      "benchmark": "Rente uit de referentierente",
+      "announced": "Aangekondigde rente",
+      "fixedTerm": "Rente tegen vaste rentevoet"
+    },
+    "chart": {
+      "title": "Cumulatieve rente aan het einde van elke periode",
+      "assumption": "Projectie bij {benchmark} = {value}",
+      "projectedNote": "Lichtere balken zijn geprojecteerde periodes",
+      "stoppedAt": "De rente is vanaf periode {period} niet bekend, dus de grafiek stopt daarvoor."
+    },
+    "scenarios": {
+      "title": "Inflatiescenario's",
+      "titleBenchmark": "Rentescenario's",
+      "projection": "Projectie",
+      "caption": "Geprojecteerde eindwaarde en rente per aangenomen waarde",
+      "intro": "Projecties, geen zekerheden: voor elke periode die nog niet is begonnen wordt de waarde van {benchmark} uit de eerste kolom aangenomen. Bekende en aangekondigde periodes veranderen niet. Selecteer een rij om de rentetabel en de grafiek te zien.",
+      "custom": "Eigen waarde voor {benchmark} (%)",
+      "add": "Scenario toevoegen",
+      "useDefault": "Standaardaanname gebruiken",
+      "selected": "Geselecteerd",
+      "loading": "Scenario's laden...",
+      "loadFailed": "De scenario's konden niet worden geladen.",
+      "columns": {
+        "assumed": "Aangenomen: {benchmark}",
+        "maturityValue": "Eindwaarde (projectie)",
+        "totalInterest": "Totale rente (projectie)"
+      },
+      "asOfNote": "Gewaardeerd op {date}, de hierboven gekozen datum: de bedragen betreffen de obligaties die op die dag werden aangehouden."
+    },
+    "benchmarks": {
+      "PL_CPI_GUS_YOY": "CPI, 12 maanden (GUS)",
+      "PL_NBP_REFERENCE": "NBP-referentierente",
+      "US_CPI_U_NSA": "CPI-U, alle posten, niet seizoensgecorrigeerd (BLS)",
+      "US_TBILL_13W_MMY": "Rendement van 13-weeks schatkistpapier"
+    },
+    "valuationRefusal": {
+      "PURCHASE_OUTSIDE_SALE_WINDOW": "Deze serie kan alleen worden gekocht van {from} tot {to}. Deze partij is gekocht op {purchaseDate} en wordt daarom niet gewaardeerd.",
+      "PURCHASE_AFTER_MATURITY": "Deze serie liep af op {maturityDate}. Deze partij is gekocht op {purchaseDate}, op of na die dag, en wordt daarom niet gewaardeerd."
+    },
+    "marketPriceRequired": "Dit effect bevat een serie die op een markt wordt verhandeld, dus de prijs volgt niet uit de voorwaarden. Monize schrijft er geen prijs voor: voer de prijs zelf in. De waarden van de partijen hieronder zijn berekend uit de voorwaarden en zijn geen marktwaarden.",
+    "partial": {
+      "title": "Deze waardering is onvolledig; lees de bedragen als gedeeltelijk.",
+      "terms": "De voorwaarden van de obligatie zijn onvolledig (bijvoorbeeld een kalender is niet geïnstalleerd).",
+      "reference": "Referentiegegevens ontbreken; zie hieronder de lijst met nog benodigde gegevens.",
+      "earlyRedemption": "De voorwaarden voor vervroegde aflossing zijn onvolledig, dus waarden voor vervroegde aflossing kunnen ontbreken.",
+      "other": "Minstens één partij kan nog niet volledig worden gewaardeerd (bijvoorbeeld een rente is niet bekend)."
+    },
+    "projectionMissing": {
+      "title": "Latere perioden kunnen niet worden geprojecteerd",
+      "item": "{benchmark}: er is geen waarde gepubliceerd en geen aanname ingesteld, dus latere perioden kunnen niet worden geprojecteerd (gepubliceerd door {publisher})",
+      "itemNoPublisher": "{benchmark}: er is geen waarde gepubliceerd en geen aanname ingesteld, dus latere perioden kunnen niet worden geprojecteerd (uitgever onbekend)"
+    },
+    "coverage": {
+      "asOf": "{benchmark}-gegevens per {date}",
+      "none": "Er zijn nog geen {benchmark}-gegevens opgeslagen"
+    },
+    "issuers": {
+      "PL_MF": "Ministerie van Financiën (PL)",
+      "US_TREASURY": "Amerikaanse ministerie van Financiën (US)"
+    },
+    "redemption": {
+      "title": "Voorwaarden voor vroegtijdige aflossing",
+      "fixedFee": "Kosten voor vroegtijdige aflossing: {amount} per obligatie.",
+      "forfeitAccrued": "Bij vroegtijdige aflossing vervalt de rente die in de lopende periode is opgebouwd.",
+      "floorAllPeriods": "De kosten brengen de opbrengst in geen enkele periode onder de nominale waarde.",
+      "floorFirstPeriod": "Alleen in de eerste periode brengen de kosten de opbrengst niet onder de nominale waarde; in latere periodes geldt die ondergrens niet."
+    },
+    "programs": {
+      "OTS": "OTS: spaarobligaties van 3 maanden met vaste rente",
+      "ROR": "ROR: spaarobligaties van 1 jaar met variabele rente",
+      "DOR": "DOR: spaarobligaties van 2 jaar met variabele rente",
+      "TOS": "TOS: spaarobligaties van 3 jaar met vaste rente",
+      "COI": "COI: inflatiegekoppelde spaarobligaties van 4 jaar",
+      "EDO": "EDO: inflatiegekoppelde spaarobligaties van 10 jaar",
+      "ROS": "ROS: inflatiegekoppelde gezinsspaarobligaties van 6 jaar",
+      "ROD": "ROD: inflatiegekoppelde gezinsspaarobligaties van 12 jaar",
+      "BILL": "BILL: schatkistcertificaten, 4 tot 52 weken, met korting verkocht",
+      "NOTE": "NOTE: Treasury notes, 2 tot 10 jaar, vaste halfjaarlijkse coupon",
+      "BOND": "BOND: Treasury bonds, 20 en 30 jaar, vaste halfjaarlijkse coupon",
+      "TIPS": "TIPS: tegen inflatie beschermde staatsobligaties, hoofdsom geïndexeerd op de CPI-U",
+      "FRN": "FRN: Treasury notes met variabele rente, 2 jaar, driemaandelijkse rente"
+    },
+    "series": {
+      "title": "Uw series",
+      "column": "Serie",
+      "nextRateChange": "Volgende renteaanpassing",
+      "total": "Totaal van de obligatiesoort",
+      "purchasedRange": "{from} tot {to}",
+      "expand": "Details van {series} tonen",
+      "collapse": "Details van {series} verbergen",
+      "partial": "Gedeeltelijk"
+    },
+    "program": {
+      "title": "De obligatiesoort",
+      "newest": "Voorwaarden van de nieuwste serie, {series}.",
+      "noTerms": "De voorwaarden zijn nog niet bekend: u bezit geen serie van deze obligatiesoort en er is er geen te koop.",
+      "autoFetchFailed": "De instelling kon niet worden opgeslagen."
+    },
+    "onSale": {
+      "title": "Nu te koop"
     }
   }
 }

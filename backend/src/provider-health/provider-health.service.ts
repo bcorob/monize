@@ -8,6 +8,7 @@ import { withSystemContext } from "../common/db/with-context";
 import {
   describeFetchFailure,
   isTransportFailure,
+  MAX_FETCH_FAILURE_LENGTH,
 } from "../common/http/fetch-failure.util";
 import {
   FAILURE_WINDOW_MS,
@@ -295,6 +296,56 @@ export class ProviderHealthService {
       this.persist(provider, outcome.snapshot, "down");
     }
     return true;
+  }
+
+  /**
+   * The provider answers but what it serves is unusable for days: a feed whose
+   * newest value is stale, a file whose format changed. The breaker never
+   * sees this (only transport failures count, and a once-a-day refresh would
+   * not reach its threshold anyway), so the caller that knows the data has been
+   * bad for long enough says so, and the row goes `down` for the same alert
+   * sweep to report. The episode keeps its first start (see `writeHealth`).
+   */
+  recordDataFailure(provider: string, reason: string): void {
+    const now = this.now();
+    this.persist(
+      provider,
+      {
+        state: "closed",
+        recentFailures: 1,
+        failingSince: now,
+        lastFailureAt: now,
+        lastFailureReason: reason.slice(0, MAX_FETCH_FAILURE_LENGTH),
+        lastSuccessAt: null,
+        suppressedCalls: 0,
+        retryAt: null,
+      },
+      "down",
+    );
+  }
+
+  /**
+   * The provider's data is usable again. Always written: it is called once per
+   * successful store (a daily job), so a `down` row left by a data failure --
+   * possibly by an earlier process -- is cleared without this process having to
+   * remember it.
+   */
+  recordDataRecovered(provider: string): void {
+    const now = this.now();
+    this.persist(
+      provider,
+      {
+        state: "closed",
+        recentFailures: 0,
+        failingSince: null,
+        lastFailureAt: null,
+        lastFailureReason: null,
+        lastSuccessAt: now,
+        suppressedCalls: 0,
+        retryAt: null,
+      },
+      "up",
+    );
   }
 
   /**

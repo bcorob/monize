@@ -34,19 +34,22 @@
   },
   "page": {
     "title": "导入交易",
-    "subtitle": "从 QIF、OFX/QFX 或 CSV 文件导入交易，或整体导入 Microsoft Money (.mny) 文件"
+    "subtitle": "从 QIF/QMTF、OFX/QFX 或 CSV 文件导入交易，或整体导入 Microsoft Money (.mny) 文件"
   },
   "upload": {
     "heading": "上传交易文件",
-    "instructions": "选择一个或多个文件进行导入。支持的格式：QIF、OFX/QFX、CSV 和 Microsoft Money (.mny)。\n您可以选择多个相同类型的文件进行批量导入。请一次导入一个 Microsoft Money 文件——一个 .mny 文件包含完整的账套。",
+    "instructions": "选择一个或多个文件进行导入。支持的格式：QIF/QMTF、OFX/QFX、CSV 和 Microsoft Money (.mny)。\n您可以选择多个相同类型的文件进行批量导入。请一次导入一个 Microsoft Money 文件——一个 .mny 文件包含完整的账套。",
     "importingTo": "导入至：",
     "clickToSelect": "点击选择文件",
+    "orDragAndDrop": "或将文件拖放到此处",
+    "dropToImport": "松开以导入",
+    "unsupportedDrop": "无法导入以下文件：{names}。请使用 QIF/QMTF、OFX、QFX、CSV 或 Microsoft Money (.mny) 文件。",
     "processing": "处理中...",
-    "acceptedFormats": "QIF、OFX、QFX、CSV 或 Microsoft Money (.mny)",
+    "acceptedFormats": "QIF/QMTF、OFX、QFX、CSV 或 Microsoft Money (.mny)",
     "mnyFailedHeading": "无法打开该 Microsoft Money 文件",
-    "wikiNotice": {
+    "docsNotice": {
       "title": "导入之前",
-      "body": "在导入任何内容之前，请先阅读 wiki 中的 <money>Importing from Microsoft Money</money> 或 <quicken>Importing from Quicken</quicken> 一节。"
+      "body": "在导入任何内容之前，请先阅读文档中的 <money>Importing from Microsoft Money</money> 或 <quicken>Importing from Quicken</quicken> 一节。OFX/QFX 和 QIF 文件各有各自的注意事项——请参阅 <ofx>Importing OFX/QFX Files</ofx> 和 <qif>Importing Quicken QIF Files</qif>。"
     }
   },
   "selectAccount": {
@@ -78,23 +81,25 @@
     "heading": "CSV 列映射",
     "description": "将您的 CSV 列映射到交易字段。在下方预览数据并配置映射。",
     "firstRowIsHeader": "第一行为表头",
-    "delimiterLabel": "分隔符：",
-    "dateFormatLabel": "日期格式：",
+    "delimiterLabel": "分隔符",
+    "dateFormatLabel": "日期格式",
     "customOption": "自定义...",
     "customPlaceholder": "例如：DD.MM.YYYY",
     "dataPreview": "数据预览",
     "columnMappingTitle": "列映射",
-    "dateField": "日期 *",
+    "columnMappingHelp": "将每个 CSV 列映射到一个交易字段。日期、金额类型，以及金额或借方/贷方二者之一都是必填项；其余为可选项。",
+    "dateField": "日期",
     "amountTypeField": "金额类型",
     "singleAmountOption": "单个金额列",
     "splitAmountOption": "分开的借方/贷方",
-    "amountField": "金额 *",
+    "amountField": "金额",
     "signField": "符号",
+    "signFieldHelp": "金额符号的读取方式：“原样”将正数视为存入，“反转”将正数视为支出（适用于信用卡账单中扣费显示为正数的情况），而交易类型列则根据其自身的值而不是符号来决定方向。",
     "signNormal": "原样（正值 = 存款）",
     "signReverse": "反转（正值 = 提款）",
     "signTypeColumn": "使用交易类型列",
-    "debitField": "借方 *",
-    "creditField": "贷方 *",
+    "debitField": "借方",
+    "creditField": "贷方",
     "typeColumnTitle": "交易类型列",
     "typeColumnDescription": "选择指示每行收入、支出或转账的列。",
     "valuesFound": "找到的值：{values}",
@@ -137,8 +142,8 @@
     "kindBanking": "银行交易",
     "kindInvestment": "投资交易",
     "investmentModeHint": "各行按操作列进行分类。未匹配的操作值将作为关联现金账户上的现金存入或取出导入。",
-    "actionField": "操作 *",
-    "securityField": "证券（代码或名称） *",
+    "actionField": "操作",
+    "securityField": "证券（代码或名称）",
     "quantityField": "数量",
     "priceField": "价格",
     "commissionField": "佣金",
@@ -278,6 +283,15 @@
       "missingSplitRatio": "拆股缺少比例"
     },
     "rejectedGoBack": "返回列映射步骤以调整列或操作关键词。",
+    "unreadableDatesNotice": "{count, plural, other {# 行}}的日期无法按 {format} 读取，将不会导入：",
+    "unreadableDateRow": "第 {line} 行：“{rawDate}”",
+    "missingDateRow": "第 {line} 行：无日期",
+    "unreadableDatesMore": "...以及另外 {count} 行",
+    "unreadableDatesGoBack": "如果文件中的日期采用其他顺序，请返回列映射步骤并选择文件使用的日期格式。",
+    "unreadableAmountsNotice": "{count, plural, other {# 行}}的金额无法读取，将不会导入：",
+    "unreadableAmountRow": "第 {line} 行：“{rawAmount}”",
+    "unreadableAmountsMore": "...以及另外 {count} 行",
+    "unreadableAmountsGoBack": "请检查金额列是否映射正确，或在文件中更正这些行后重新导入。",
     "importButton": "导入交易"
   },
   "complete": {
@@ -287,7 +301,7 @@
     "totalImported": "导入总数：",
     "totalImportedSuffix": "笔交易",
     "totalSkipped": "跳过总数：",
-    "totalSkippedSuffix": "笔重复转账",
+    "totalSkippedSuffix": "笔交易",
     "totalErrors": "错误总数：",
     "categoriesCreated": "已创建分类数：",
     "accountsCreated": "已创建账户数：",
@@ -299,17 +313,36 @@
     "imported": "已导入：",
     "importedSuffix": "笔交易",
     "skipped": "已跳过：",
-    "skippedSuffix": "笔重复转账",
+    "skippedSuffix": "笔交易",
     "errors": "错误：",
     "errorsLabel": "错误：",
     "andMoreErrors": "...以及另外 {count} 个错误",
+    "skippedRowsHeading": "已跳过的行：",
+    "skippedRow": "{date}：{amount}，{payee}（{reason}）",
+    "skippedRowNoPayee": "{date}：{amount}（{reason}）",
+    "skipReasonAlreadyImported": "已导入",
+    "skipReasonDuplicateTransfer": "转账已记录",
+    "skipReasonUnreadableDate": "无法读取日期",
+    "skipReasonNoDate": "无日期",
+    "skipReasonUnreadableAmount": "无法读取金额",
+    "skippedRowRawAmount": "“{rawAmount}”",
+    "skipReasonMissingSecurity": "缺少证券",
+    "skipReasonMissingQuantity": "缺少数量",
+    "skipReasonMissingAmount": "缺少金额",
+    "skipReasonMissingProceeds": "卖出缺少价格或成交金额",
+    "skipReasonMissingSplitRatio": "拆股缺少比例",
+    "skippedRowLineDate": "第 {line} 行，“{rawDate}”",
+    "skippedRowLine": "第 {line} 行",
+    "skippedRowLineAt": "第 {line} 行，{date}",
+    "andMoreSkipped": "...以及另外 {count} 行已跳过",
     "loanSetupHeading": "设置定期还款",
     "loanSetupDescription": "以下贷款/抵押贷款账户已导入但未配置定期还款。设置定期还款以继续追踪贷款进度。",
     "setUpPayments": "设置还款",
     "scheduledPaymentsConfigured": "已为 {count} 个账户{plural}配置定期还款。",
     "viewInvestments": "查看投资",
     "viewTransactions": "查看交易",
-    "importMoreFiles": "导入更多文件"
+    "importMoreFiles": "导入更多文件",
+    "bondRowsWithoutSeries": "{count, plural, other {有 # 笔债券买入在没有系列的情况下导入。请在该证券的债券批次中选择系列。}}"
   },
   "multiAccountReview": {
     "heading": "多账户 QIF 导入",
@@ -327,7 +360,10 @@
     "securitiesNotice": "此文件包含 {count} 种证券{plural}，需要在导入前进行映射。",
     "nextMapSecurities": "下一步：映射证券",
     "importAll": "全部导入",
-    "transactionCount": "{count} 笔交易{plural}"
+    "transactionCount": "{count} 笔交易{plural}",
+    "chooseAccountType": "选择类型",
+    "accountTypeFor": "{name} 的账户类型",
+    "accountTypesNeeded": "文件未说明 {count, plural, other {# 个账户}}的类型。导入前请为每个账户选择类型。"
   },
   "navigation": {
     "back": "上一步",
@@ -344,6 +380,7 @@
     "heading": "检查您的 Microsoft Money 文件",
     "fileSummary": "{filename} -- {era}，基准货币 {currency}。下面的余额是根据文件本身计算的，因此您可以在导入前与 Money 核对。",
     "era": {
+      "money99": "Money 97-99 格式",
       "money2001": "Money 2001 格式",
       "money2002": "Money 2002 格式",
       "moneyPlus": "Money Plus / Sunset 格式",
@@ -355,6 +392,7 @@
       "transfersLinked": "已关联 {count} 笔转账",
       "payees": "收款人",
       "categories": "类别",
+      "tags": "来自分类的标签",
       "accounts": "账户",
       "securities": "证券",
       "investments": "投资交易",
@@ -395,7 +433,7 @@
       "importPrices": "导入价格历史",
       "importPricesHint": "Money 自己记录的每只证券逐日价值。若您更愿意从当前行情开始，请关闭此项。",
       "importExchangeRates": "导入汇率",
-      "importExchangeRatesHint": "文件中各币种之间的历史汇率，让过去的外币交易按 Money 当时的方式换算。",
+      "importExchangeRatesHint": "文件中各币种之间的历史汇率，仅用于 Monize 尚无汇率的日期。已保存的汇率绝不会被替换。",
       "wipeExistingData": "从零开始：先删除我现有的 Monize 数据",
       "wipeExistingDataHint": "导入前执行与设置中相同的“删除我的数据”操作。系统会要求确认。保持关闭可将 Money 文件添加到现有数据中。"
     },
@@ -424,7 +462,7 @@
     }
   },
   "mnyWipe": {
-    "heading": "先删除你现有的数据吗？",
+    "heading": "删除现有数据",
     "body": "这会在导入开始前执行与设置 -> 危险区域中相同的“删除我的数据”操作。它会删除：",
     "removes": {
       "transactions": "所有交易及其拆分",
@@ -434,8 +472,8 @@
       "budgets": "所有预算、自定义报表、标签和导入映射"
     },
     "irreversible": "此操作无法撤销。如果随后导入失败，已删除的数据不会恢复。",
-    "typeToConfirm": "输入 {word} 以确认：",
-    "passwordLabel": "输入你的密码：",
+    "typeToConfirm": "输入 {word} 以确认",
+    "passwordLabel": "密码",
     "oidcNote": "你的身份提供方已确认此会话，因此无需输入密码。",
     "confirm": "删除我的数据并导入"
   },
@@ -455,7 +493,8 @@
     },
     "failedHeading": "导入未完成",
     "retry": "重试",
-    "startOver": "重新开始"
+    "startOver": "重新开始",
+    "learnMore": "了解详情"
   },
   "mnyComplete": {
     "heading": "导入完成",
@@ -469,6 +508,7 @@
       "splits": "拆分明细",
       "payees": "收款人",
       "categories": "类别",
+      "taggedRows": "按分类打上标签的行",
       "securities": "证券",
       "investments": "投资交易",
       "prices": "价格",
@@ -492,7 +532,8 @@
     },
     "warningsHeading": "关于本次导入的说明",
     "downloadReport": "下载报告",
-    "done": "完成"
+    "done": "完成",
+    "bondRowsWithoutSeries": "{count, plural, other {有 # 笔债券买入在没有系列的情况下导入。请在该证券的债券批次中选择系列。}}"
   },
   "mnyWarnings": {
     "missingTable": "此 Money 版本缺少导入所需的 {count, plural, other {# 张表}}。",
@@ -503,6 +544,7 @@
     "categoryFlattened": "{count, plural, other {# 个类别}}层级超过两层，已合并到其父类别。",
     "categoryTypeInferred": "{count, plural, other {# 个类别}}缺少 Money 的收入标记，收入或支出根据类别树推断。",
     "degeneratePayeeSkipped": "已跳过 Money 内部保留的 {count, plural, other {# 个占位收款人}}。",
+    "unknownClassificationItem": "{count, plural, one {# 笔交易} other {# 笔交易}}引用了文件中未定义的分类项目，已在没有该标签的情况下导入。",
     "unusableTransaction": "{count, plural, other {# 笔交易}}没有账户或可用日期，已跳过。",
     "orphanedTransferSide": "{count, plural, other {# 笔转账}}在文件中缺少对应的另一方，已跳过。",
     "orphanedSplit": "{count, plural, other {# 条拆分明细}}没有对应的父交易，已跳过。",
@@ -512,6 +554,7 @@
     "duplicateSecuritySymbol": "{count, plural, other {# 只证券}}与另一只共用代码；为保持区分，后出现的已重命名。",
     "generatedSecuritySymbol": "{count, plural, other {# 只证券}}在 Money 中没有代码，因此生成了占位代码，并保持价格更新为关闭。",
     "unknownInvestmentAction": "{count, plural, other {# 笔投资交易}}使用了 Monize 无法识别的操作，已跳过。",
+    "stockOptionNotImported": "{count, plural, other {# 个员工股票期权事件}}（授予、归属和到期）既不涉及现金也不涉及股份，未导入。",
     "unconfirmedInvestmentAction": "{count, plural, other {# 笔投资交易}}使用了含义靠推断而非有据可查的 Money 操作，请与 Money 核对。",
     "missingInvestmentDetail": "{count, plural, other {# 笔投资交易}}在文件中没有股数明细，仅按其现金金额导入。",
     "investmentAccountMismatch": "{count, plural, other {# 笔投资交易}}位于非投资账户中，已跳过。",
@@ -521,6 +564,9 @@
     "unusableBill": "{count, plural, other {# 个定期账单}}没有账户、可用日期或可识别的重复周期，已跳过。",
     "billFrequencyApproximated": "{count, plural, other {# 个定期账单}}使用了 Monize 无法精确表达的重复间隔，因此采用了最接近的较短间隔。",
     "loanInterestCategoryUnclear": "{count, plural, other {# 笔贷款还款}}包含了本金以外的多个类别，因此贷款的利息类别未设置。请检查还款是否包含托管款项（escrow），并在导入后设置利息类别。",
+    "transferAmountMismatch": "{count, plural, other {# 笔转入投资账户的转账}}在投资一侧记录的金额与银行一侧不同。投资一侧已按记录的金额导入。",
+    "crossCurrencyTradeUnconverted": "{count, plural, other {# 笔以其他货币计价的证券交易}}已按账户货币保存，因为文件和汇率提供方都没有该货币对在交易日期前后的汇率。请添加汇率，然后更正每笔交易的价格。",
+    "crossCurrencyTradeMarketRate": "{count, plural, other {# 笔以其他货币计价的证券交易}}已按交易日期的市场汇率换算，因为文件中没有该日期前后的汇率。请对照您的记录核对每笔交易的价格。",
     "showTransactions": "显示{count, plural, other {# 笔交易}}",
     "hideTransactions": "隐藏交易",
     "reviewInMoney": "请在 Microsoft Money 中打开这些交易进行核对或更正，然后重新导出并导入。",
@@ -539,12 +585,89 @@
     "mnyImportFailed": "导入过程中出现问题。没有保存任何内容 -- 您可以重试。",
     "mnyJobStalled": "导入已停止响应，很可能是服务器重启所致。您上传的文件仍在，重试是安全的。",
     "mnyJobStalledAfterCommit": "导入在已保存您的数据之后停止响应，很可能是服务器重启所致。导入的记录已在您的账户中，再次导入同一文件会造成重复。请先检查账户，再导入其他文件。",
+    "mnyImportFailedAfterCommit": "导入已保存您的数据,但之后的一个步骤失败了。导入的记录已在您的账户中,再次导入同一文件会造成重复。在导入其他内容之前,请先检查您的账户。",
+    "mnyAlreadyImported": "此文件已导入您的账户,再次导入会使其记录重复。如需替换,请重新开始并选择替换现有数据。",
     "mnyStagedFileMissing": "上传的 Money 文件已不可用，请重新上传。",
     "mnyFileTruncated": "该 Money 文件似乎不完整，上传可能被中断。",
     "mnyNotAMoneyFile": "该文件不是 Microsoft Money (.mny) 文件。",
-    "mnyUnsupportedVersion": "该文件由 Money 97 或 98 创建。请先用免费的 Money Plus Sunset 版本打开并保存一次，然后导入结果。",
+    "mnyUnsupportedVersion": "该文件由 Monize 无法读取的 Microsoft Money 版本创建。请先用免费的 Money Plus Sunset 版本打开并保存一次，然后导入结果。",
     "mnyPasswordRequired": "该 Money 文件受密码保护。",
     "mnyPasswordIncorrect": "该密码无法打开 Money 文件。",
     "mnyUnreadableDatabase": "该 Money 文件已解密，但无法读取其内容，文件可能已损坏。"
+  },
+  "preview": {
+    "choice": {
+      "legend": "{payee} 不导入时如何处理",
+      "skip": "暂时跳过",
+      "except": "添加到例外"
+    },
+    "payeeTip": {
+      "name": "来自银行：{original}。对应：{name}",
+      "alias": "来自银行：{original}。对应：{name}（别名“{pattern}”）",
+      "aliasNoPattern": "来自银行：{original}。对应：{name}（别名）",
+      "new": "来自银行：{original}。对应：{name}（新收款人）",
+      "rule": "来自银行：{original}。对应：{name}（由规则设置）",
+      "ruleNone": "来自银行：{original}。对应：无收款人（由规则设置）"
+    },
+    "expand": {
+      "show": "显示 {payee} 的详情",
+      "hide": "隐藏 {payee} 的详情"
+    },
+    "rules": {
+      "heading": "导入规则",
+      "none": "没有导入规则匹配这笔交易。",
+      "skipped": "{action}：已跳过（{reason}）",
+      "stopped": "停止其后的规则。",
+      "applied": "已应用：{actions}",
+      "openNewTab": "在新标签页中打开规则 {name}"
+    },
+    "ruleTest": {
+      "loading": "正在加载规则测试结果",
+      "error": "无法加载规则测试结果。",
+      "retry": "重试",
+      "noRules": "您没有导入规则，因此没有可测试的内容。",
+      "showNotMatched": "显示未匹配的规则（{count}）",
+      "hideNotMatched": "隐藏未匹配的规则（{count}）",
+      "noChanges": "已匹配，但不会更改这笔交易的任何内容。",
+      "badge": {
+        "matched": "已匹配",
+        "notMatched": "未匹配",
+        "notEvaluated": "未评估"
+      },
+      "notEvaluated": {
+        "afterStop": "未评估：前面的规则已停止后续规则。",
+        "disabled": "未评估：规则已关闭。",
+        "invalid": "未评估：规则无效。请打开它进行修复。",
+        "outside_active_window": "未评估：该行的日期不在规则的生效日期内。"
+      },
+      "condition": {
+        "met": "条件已满足",
+        "notMet": "条件未满足",
+        "actual": "这笔交易中的值：{value}",
+        "noValue": "无",
+        "noTags": "无标签",
+        "capture": "{name} = {value}",
+        "omitted": "条件的这一部分的详细信息未显示。"
+      },
+      "skipReasons": {
+        "already_set": "它已有值，而规则只填写空值",
+        "no_change": "它已是规则要设置的内容",
+        "payee_unresolved": "无法查找规则生成的收款方"
+      }
+    },
+    "payee": {
+      "heading": "收款人",
+      "unknown": "这笔交易没有收款人信息。",
+      "original": "银行文本：{original}",
+      "name": "与您现有的收款人 {name} 匹配。",
+      "alias": "通过别名“{pattern}”对应到 {name}。",
+      "aliasNoPattern": "通过别名对应到 {name}。",
+      "new": "还没有收款人使用此名称，因此将创建 {name}。",
+      "rule": "导入规则设置收款人：{name}。",
+      "ruleNone": "导入规则清除收款人。",
+      "none": "银行没有提供交易对手，因此这笔交易没有收款人。",
+      "openAliases": "打开收款人的别名",
+      "openAliasesNewTab": "在新标签页中打开收款人的别名"
+    }
   }
 }

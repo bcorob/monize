@@ -22,24 +22,61 @@ import { ActionHistoryService } from "../action-history/action-history.service";
 import { CrossOwnerAccessService } from "../delegation/cross-owner-access.service";
 import { ExchangeRateService } from "../currencies/exchange-rate.service";
 import { formatCurrency } from "../common/format-currency.util";
-import { roundMoney } from "../common/round.util";
+import { roundMoney, sumMoney } from "../common/round.util";
 import {
+  applyFxConversion,
   assertTransactionCurrencyMatchesAccount,
   roundFxRate,
   resolveFxRateOrNull,
 } from "../common/fx-entry.util";
+import { assertAmountPrecision } from "../common/amount-precision.util";
+import {
+  loadCurrencyPlaces,
+  loadCurrencyPlacesForRead,
+  moneyDecimalsForCode,
+  precisionCurrencyFor,
+} from "../common/currency-places.util";
 import { stripHtml } from "../common/sanitization.util";
 import { tr } from "../i18n/translate";
-import { withScopedDb } from "../common/db/scoped-db";
-import { lockTransactionRow, lockTransactionRows } from "../common/db/locks";
+import { getActiveScopedManager, withScopedDb } from "../common/db/scoped-db";
+import { isExternalIdConflict } from "./transaction-external-id";
+import {
+  lockTransactionRow,
+  lockTransactionRows,
+  type LockedTransactionRow,
+} from "../common/db/locks";
 import { assertReconciledRowsMutable } from "./reconciled-lock.util";
 import { removeLockedTransactionLeg } from "./remove-transaction-leg";
+import { retotalSplitParent } from "./split-parent-total";
+import { transferLegColumns } from "./transfer-leg-columns";
 import { autoTransferPayeeName } from "./transfer-payee-label.util";
 import { withSystemContext } from "../common/db/with-context";
+import {
+  RuleEffectsPreview,
+  TransactionRulesApplierService,
+} from "../transaction-rules/transaction-rules-applier.service";
 
 export interface TransferResult {
   fromTransaction: Transaction;
   toTransaction: Transaction;
+}
+
+/** The legs `writeTransferLegs` wrote, or found. */
+export interface WrittenTransfer {
+  savedFromId: string;
+  savedToId: string;
+  /**
+   * Set when the request's `externalId` already named a transfer from the
+   * source account to the destination: nothing was written, and the ids are
+   * that transfer's legs, owned by these users (`transaction-external-id.ts`).
+   */
+  existing?: ExistingTransferOwners;
+}
+
+/** Who owns each leg of a transfer found under its `externalId`. */
+export interface ExistingTransferOwners {
+  fromOwnerId: string;
+  toOwnerId: string;
 }
 
 /**
@@ -83,6 +120,12 @@ export interface PreparedTransfer {
   destinationCurrency: string;
   effectiveExchangeRate: number;
   /**
+   * `decimal_places` of both currencies (`loadCurrencyPlaces`), read once when
+   * the transfer was prepared: the amounts were held to them there, and the
+   * write holds them to the same before its first insert (INV-MONEY-001).
+   */
+  currencyPlaces: ReadonlyMap<string, number>;
+  /**
    * The caller's custom payee label, or null. A blank payee is PERSISTED blank
    * (issue #1214): the display label ("Transfer to Savings") is resolved at
    * read time from the counterpart account's current name, never stamped into
@@ -121,6 +164,11 @@ export interface CreateTransferPreview {
   /** Spending category applied to both legs on create (null = none). */
   categoryId: string | null;
   categoryName: string | null;
+  /**
+   * What the user's `create` rules will do to the transfer's legs on approval
+   * (display-only, not signed). Absent when no rule matches.
+   */
+  ruleEffects?: RuleEffectsPreview;
 }
 
 /** Resolved, sanitized preview of an edit the assistant proposes to a transfer. */
@@ -144,7 +192,31 @@ export interface UpdateTransferPreview {
   /** Spending category applied to both legs after the edit (null = none). */
   categoryId: string | null;
   categoryName: string | null;
+  /**
+   * The tag change the edit makes on both legs (`TransactionsService.previewTagChange`
+   * over the edited leg): names added, the new ones among them, and the
+   * carried tags removed. Set by the AI tools' prep, never by this service.
+   */
+  tagNames?: string[];
+  newTagNames?: string[];
+  removeTagIds?: string[];
+  removeTagNames?: string[];
+  /** True when the edit changes the tags and nothing else (see UpdateTransactionPreview). */
+  tagsOnly?: true;
+  /** Whether any of the fields above differs from what the transfer holds now. */
+  changesFields?: boolean;
 }
+
+/**
+ * A write that must commit with a transfer edit (the AI tools' tag change):
+ * run inside the edit's own transaction, after its rows are written, with the
+ * legs that are the user's and the split a split-transfer leg belongs to. A
+ * throw refuses the whole edit with nothing written.
+ */
+export type TransferEditHook = (
+  m: EntityManager,
+  target: { legIds: string[]; parentSplitId: string | null },
+) => Promise<void>;
 
 @Injectable()
 export class TransactionTransferService {
@@ -160,6 +232,9 @@ export class TransactionTransferService {
     private actionHistoryService: ActionHistoryService,
     private crossOwnerAccess: CrossOwnerAccessService,
     private exchangeRateService: ExchangeRateService,
+    // forwardRef: the applier reaches this file back through its imports.
+    @Inject(forwardRef(() => TransactionRulesApplierService))
+    private rulesApplier: TransactionRulesApplierService,
   ) {}
 
   /**
@@ -193,12 +268,21 @@ export class TransactionTransferService {
    *   than posted at 1:1.
    *
    * Direction is destination-currency units per one source-currency unit.
+   *
+   * Each side is in its own account's currency and is held to that currency's
+   * money precision (`places`, `loadCurrencyPlaces`): an amount or a stated
+   * `toAmount` with more places is refused, never rounded; a stated `toAmount`
+   * is otherwise stored as given; a converted one rounds at the destination's
+   * precision (`applyFxConversion` `toDecimals`), so 1,700 CAD into a BTC
+   * wallet keeps its eighth place (INV-MONEY-001). The implied rate of a stated
+   * amount is still `roundFxRate(toAmount / amount)`.
    */
   private async resolveTransferFx(input: {
     fromAccount: Account;
     toAccount: Account;
     amount: number;
     transactionDate: string;
+    places: ReadonlyMap<string, number>;
     suppliedFromCurrencyCode?: string;
     suppliedToCurrencyCode?: string;
     suppliedExchangeRate?: number;
@@ -218,17 +302,32 @@ export class TransactionTransferService {
       input.toAccount.currencyCode,
     );
 
-    const amount = roundMoney(input.amount);
+    assertAmountPrecision(
+      input.amount,
+      precisionCurrencyFor(input.places, fromCurrencyCode),
+      "amount",
+    );
+    if (input.suppliedToAmount !== undefined) {
+      assertAmountPrecision(
+        input.suppliedToAmount,
+        precisionCurrencyFor(input.places, toCurrencyCode),
+        "toAmount",
+      );
+    }
+    const fromDecimals = moneyDecimalsForCode(input.places, fromCurrencyCode);
+    const toDecimals = moneyDecimalsForCode(input.places, toCurrencyCode);
+
+    const amount = roundMoney(input.amount, fromDecimals);
 
     if (fromCurrencyCode === toCurrencyCode) {
       if (
         input.suppliedToAmount !== undefined &&
-        roundMoney(input.suppliedToAmount) !== amount
+        roundMoney(input.suppliedToAmount, toDecimals) !== amount
       ) {
         throw new BadRequestException(
           tr(
             "errors.transactions.transferSameCurrencyMustConserve",
-            `A transfer between two ${toCurrencyCode} accounts must move the same amount on both sides (received ${roundMoney(input.suppliedToAmount)} against ${amount})`,
+            `A transfer between two ${toCurrencyCode} accounts must move the same amount on both sides (received ${roundMoney(input.suppliedToAmount, toDecimals)} against ${amount})`,
             { currency: toCurrencyCode, amount },
           ),
         );
@@ -256,7 +355,7 @@ export class TransactionTransferService {
     // Cross-currency. An explicit settlement amount wins, and its implied rate
     // is stored so the destination row still records how the two sides relate.
     if (input.suppliedToAmount !== undefined) {
-      const toAmount = roundMoney(input.suppliedToAmount);
+      const toAmount = roundMoney(input.suppliedToAmount, toDecimals);
 
       // A settlement amount still has to settle *this* transfer. Both DTO
       // fields allow zero and this branch used to return before checking
@@ -304,7 +403,7 @@ export class TransactionTransferService {
     }
 
     // Zero moves nothing on either side, so it needs no rate ("zero needs no
-    // rate", root CLAUDE.md): a zero-amount scheduled placeholder between two
+    // rate", `AGENTS.md`): a zero-amount scheduled placeholder between two
     // currencies posts as 0 -> 0, and demanding a resolvable pair here refused
     // a transfer that moves nothing. Mirrors the zero-on-both-sides return in
     // the explicit-toAmount branch above.
@@ -346,7 +445,8 @@ export class TransactionTransferService {
       fromCurrencyCode,
       toCurrencyCode,
       exchangeRate,
-      toAmount: roundMoney(amount * exchangeRate),
+      toAmount: applyFxConversion(amount, exchangeRate, null, { toDecimals })
+        .amount,
     };
   }
 
@@ -392,6 +492,8 @@ export class TransactionTransferService {
     existingToAmount: number;
     existingExchangeRate: number | null;
     updateDto: Partial<UpdateTransferDto>;
+    /** `decimal_places` of both accounts' currencies (`loadCurrencyPlaces`). */
+    places: ReadonlyMap<string, number>;
   }): Promise<{
     fromCurrencyCode: string;
     toCurrencyCode: string;
@@ -399,7 +501,30 @@ export class TransactionTransferService {
     toAmount: number;
     repriced: boolean;
   }> {
-    const { updateDto } = input;
+    const { updateDto, places } = input;
+    const fromCode = input.fromAccount.currencyCode;
+    const toCode = input.toAccount.currencyCode;
+    // Refused before anything is compared: an amount with more places than
+    // its currency carries would otherwise compare equal to the stored one at
+    // that precision and be silently dropped (INV-MONEY-001). The amount the
+    // source leg will hold, not the field: a leg moved to an account in
+    // another currency without a new amount carries its stored one there, and
+    // a 0.12345678 BTC leg in a USD account is that same refusal. The write
+    // asserts it again under its lock (`assertLegAmountsFit`).
+    assertAmountPrecision(
+      input.amount,
+      precisionCurrencyFor(places, fromCode),
+      "amount",
+    );
+    if (updateDto.toAmount !== undefined) {
+      assertAmountPrecision(
+        updateDto.toAmount,
+        precisionCurrencyFor(places, toCode),
+        "toAmount",
+      );
+    }
+    const fromDecimals = moneyDecimalsForCode(places, fromCode);
+    const toDecimals = moneyDecimalsForCode(places, toCode);
 
     // A *value* difference, not the presence of a field. The transfer form
     // resends the current accounts, amount and rate on every save -- the frozen
@@ -409,30 +534,61 @@ export class TransactionTransferService {
     // changed a description re-resolved today's rate, restated a 90 EUR
     // destination as 80, and moved the balance with it. Presence is what the
     // client happened to send; a difference is what the user changed.
-    const differs = (supplied: number | undefined, existing: number): boolean =>
-      supplied !== undefined && roundMoney(supplied) !== roundMoney(existing);
+    const differs = (
+      supplied: number | undefined,
+      existing: number,
+      decimals: number,
+    ): boolean =>
+      supplied !== undefined &&
+      roundMoney(supplied, decimals) !== roundMoney(existing, decimals);
 
     const financialStructureChanged =
       (updateDto.fromAccountId !== undefined &&
         updateDto.fromAccountId !== input.existingFromAccountId) ||
       (updateDto.toAccountId !== undefined &&
         updateDto.toAccountId !== input.existingToAccountId) ||
-      differs(updateDto.amount, input.existingFromAmount) ||
-      differs(updateDto.toAmount, input.existingToAmount) ||
+      differs(updateDto.amount, input.existingFromAmount, fromDecimals) ||
+      differs(updateDto.toAmount, input.existingToAmount, toDecimals) ||
       (updateDto.exchangeRate !== undefined &&
         roundFxRate(Number(updateDto.exchangeRate)) !==
           roundFxRate(Number(input.existingExchangeRate ?? 1)));
 
     if (financialStructureChanged) {
+      // An echoed untrusted stored rate (1 on a zero-amount cross-currency
+      // transfer) is not a rate the user chose: resolve one instead.
+      const untrusted =
+        input.fromAccount.currencyCode !== input.toAccount.currencyCode &&
+        this.isStoredRateUntrusted(
+          input.existingFromAmount,
+          input.existingExchangeRate,
+        );
+      const suppliedRate =
+        untrusted &&
+        updateDto.exchangeRate !== undefined &&
+        input.existingExchangeRate != null &&
+        roundFxRate(Number(updateDto.exchangeRate)) ===
+          roundFxRate(Number(input.existingExchangeRate))
+          ? undefined
+          : updateDto.exchangeRate;
+      // The stored toAmount (0) of an untrusted row is an echo too: forwarding
+      // it would make amount 500 against toAmount 0 a refusal.
+      const suppliedToAmount =
+        untrusted &&
+        updateDto.toAmount !== undefined &&
+        roundMoney(updateDto.toAmount, toDecimals) ===
+          roundMoney(input.existingToAmount, toDecimals)
+          ? undefined
+          : updateDto.toAmount;
       const fx = await this.resolveTransferFx({
         fromAccount: input.fromAccount,
         toAccount: input.toAccount,
         amount: input.amount,
         transactionDate: input.transactionDate,
+        places,
         suppliedFromCurrencyCode: updateDto.fromCurrencyCode,
         suppliedToCurrencyCode: updateDto.toCurrencyCode,
-        suppliedExchangeRate: updateDto.exchangeRate,
-        suppliedToAmount: updateDto.toAmount,
+        suppliedExchangeRate: suppliedRate,
+        suppliedToAmount,
       });
       return { ...fx, repriced: true };
     }
@@ -454,6 +610,82 @@ export class TransactionTransferService {
       toAmount: input.existingToAmount,
       repriced: false,
     };
+  }
+
+  private assertAccountsOpen(...accounts: Account[]): void {
+    if (accounts.some((account) => account.isClosed)) {
+      throw new BadRequestException(
+        tr(
+          "errors.accounts.modifyBalanceClosed",
+          "Cannot modify balance of a closed account",
+        ),
+      );
+    }
+  }
+
+  /**
+   * A stored cross-currency rate says nothing when the source leg held zero
+   * (stored as 1 because zero needs no rate) or when it is missing/non-positive.
+   */
+  private isStoredRateUntrusted(
+    existingFromAmount: number,
+    existingRate: number | null | undefined,
+  ): boolean {
+    const rate = Number(existingRate);
+    return existingFromAmount === 0 || !Number.isFinite(rate) || rate <= 0;
+  }
+
+  /**
+   * `decimal_places` of `codes`, read once per operation (`loadCurrencyPlaces`,
+   * `FOR KEY SHARE`) and threaded to every helper that rounds or refuses an
+   * amount in them. Joins the caller's transaction when there is one; read
+   * outside the write's transaction it still waits out a lowering in flight,
+   * and the write re-reads it under the lock where it refuses
+   * (`assertLegAmountsFit`).
+   */
+  private readCurrencyPlaces(
+    codes: readonly (string | null | undefined)[],
+  ): Promise<ReadonlyMap<string, number>> {
+    return withScopedDb(this.dataSource, (m) => loadCurrencyPlaces(m, codes));
+  }
+
+  /**
+   * Refuse, inside the write's transaction and before its first write, a leg
+   * amount with more places than the currency of the account it will sit in
+   * carries (INV-MONEY-001). The places are read on the write's manager
+   * (`loadCurrencyPlaces`, `FOR KEY SHARE`), so a lowering of `decimal_places`
+   * in flight is waited out and one arriving later sees this write in its
+   * scan; the pre-transaction check in `resolveTransferFxForUpdate` read them
+   * in a transaction of its own.
+   */
+  private async assertLegAmountsFit(
+    m: EntityManager,
+    legs: readonly { amount: number; currencyCode: string; field: string }[],
+  ): Promise<void> {
+    const places = await loadCurrencyPlaces(
+      m,
+      legs.map((leg) => leg.currencyCode),
+    );
+    for (const leg of legs) {
+      assertAmountPrecision(
+        leg.amount,
+        precisionCurrencyFor(places, leg.currencyCode),
+        leg.field,
+      );
+    }
+  }
+
+  /**
+   * {@link readCurrencyPlaces} for a preview, which writes nothing: an
+   * unlocked read (`loadCurrencyPlacesForRead`), the same places the commit
+   * then re-reads under its lock.
+   */
+  private readCurrencyPlacesForPreview(
+    codes: readonly (string | null | undefined)[],
+  ): Promise<ReadonlyMap<string, number>> {
+    return withScopedDb(this.dataSource, (m) =>
+      loadCurrencyPlacesForRead(m, codes),
+    );
   }
 
   private triggerNetWorthRecalc(accountId: string, userId: string): void {
@@ -488,13 +720,110 @@ export class TransactionTransferService {
     findOne: (userId: string, id: string) => Promise<Transaction>,
     actor?: TransferActor,
   ): Promise<TransferResult> {
+    const own = await this.findOwnTransferByExternalId(
+      userId,
+      createTransferDto,
+    );
+    if (own) return this.readTransfer(own, findOne);
     const prepared = await this.prepareTransfer(
       userId,
       createTransferDto,
       actor,
     );
-    const { savedFromId, savedToId } = await this.writeTransferLegs(prepared);
-    return this.completeTransfer(prepared, savedFromId, savedToId, findOne);
+    const written = await this.writeTransferLegs(prepared);
+    if (written.existing) {
+      return this.readTransfer(
+        { ...written, existing: written.existing },
+        findOne,
+      );
+    }
+    return this.completeTransfer(
+      prepared,
+      written.savedFromId,
+      written.savedToId,
+      findOne,
+    );
+  }
+
+  /**
+   * Read back a transfer `writeTransferLegs` found under the request's
+   * `externalId`. Nothing was written, so there is nothing to recalculate,
+   * tag or record in the history: those ran when the transfer was created.
+   */
+  async readTransfer(
+    written: WrittenTransfer & { existing: ExistingTransferOwners },
+    findOne: (userId: string, id: string) => Promise<Transaction>,
+  ): Promise<TransferResult> {
+    return {
+      fromTransaction: await findOne(
+        written.existing.fromOwnerId,
+        written.savedFromId,
+      ),
+      toTransaction: await findOne(
+        written.existing.toOwnerId,
+        written.savedToId,
+      ),
+    };
+  }
+
+  /**
+   * The transfer the caller's OWN source leg already holds under
+   * `dto.externalId`, looked up before `prepareTransfer`: a retry of a
+   * committed transfer is answered from the ledger, not re-validated, so it
+   * cannot fail on a rate the provider no longer serves or a precondition that
+   * has since changed, and it asks the provider nothing.
+   *
+   * Only the caller's own rows, under the caller's identity: what it finds is
+   * the caller's own data, so answering before authorization reveals nothing.
+   * A key on a source leg somebody else owns (a cross-owner transfer) is
+   * found inside the write, after authorization (`writeTransferLegs`).
+   */
+  async findOwnTransferByExternalId(
+    userId: string,
+    dto: CreateTransferDto,
+  ): Promise<(WrittenTransfer & { existing: ExistingTransferOwners }) | null> {
+    const externalId = dto.externalId;
+    if (!externalId) return null;
+    return withScopedDb(this.dataSource, (m) =>
+      this.findTransferByExternalId(m, dto, externalId, userId),
+    );
+  }
+
+  /**
+   * The transfer from the source account holding `dto.externalId`, or null.
+   * A key held by anything other than a transfer leg linked into the
+   * destination account is refused rather than answered: returning that row
+   * would tell the caller its transfer exists when it does not.
+   */
+  private async findTransferByExternalId(
+    m: EntityManager,
+    dto: CreateTransferDto,
+    externalId: string,
+    ownerId?: string,
+  ): Promise<(WrittenTransfer & { existing: ExistingTransferOwners }) | null> {
+    const row = await m.getRepository(Transaction).findOne({
+      where: {
+        accountId: dto.fromAccountId,
+        externalId,
+        ...(ownerId ? { userId: ownerId } : {}),
+      },
+      relations: { linkedTransaction: true },
+    });
+    if (!row) return null;
+    const linked = row.linkedTransaction;
+    if (!row.isTransfer || !linked || linked.accountId !== dto.toAccountId) {
+      throw new ConflictException(
+        tr(
+          "errors.transactions.externalIdNotThisTransfer",
+          "This externalId is already used in the source account by a transaction that is not a transfer to this destination account",
+        ),
+      );
+    }
+    return {
+      savedFromId: row.id,
+      savedToId: linked.id,
+      existing: { fromOwnerId: row.userId, toOwnerId: linked.userId },
+    };
   }
 
   /**
@@ -507,12 +836,13 @@ export class TransactionTransferService {
    * foreign account's owner is the decision input -- and a system-identity
    * `withScopedDb` cannot join a user-identity transaction: it throws
    * `IDENTITY_MISMATCH_MESSAGE` rather than silently running under the outer
-   * GUCs. Deciding first is also the rule in backend/CLAUDE.md ("Decide
+   * GUCs. Deciding first is also the rule in docs/backend/database-access-and-tenancy.md ("Decide
    * authorization first, under scoped(), and let only the minimum out").
    *
    * Everything here is a read or a pure computation, so it is safe to run
-   * outside the caller's transaction: account ownership and delegation grants
-   * are not written by the posting that follows.
+   * outside the caller's transaction -- but a delegation grant read here can
+   * be revoked before the legs are written, so `writeTransferLegs` asserts it
+   * again inside the write's own transaction (A26-M04).
    */
   async prepareTransfer(
     userId: string,
@@ -580,12 +910,18 @@ export class TransactionTransferService {
     // is fully decided above, before the bypass window opens.
     const hasForeignLeg = fromOwnerId !== userId || toOwnerId !== userId;
 
-    // Currencies, rate and destination amount all derived from the accounts.
+    // Currencies, rate and destination amount all derived from the accounts,
+    // each amount held to its own currency's money precision.
+    const currencyPlaces = await this.readCurrencyPlaces([
+      fromAccount.currencyCode,
+      toAccount.currencyCode,
+    ]);
     const fx = await this.resolveTransferFx({
       fromAccount,
       toAccount,
       amount,
       transactionDate,
+      places: currencyPlaces,
       suppliedFromCurrencyCode: fromCurrencyCode,
       suppliedToCurrencyCode: toCurrencyCode,
       suppliedExchangeRate: createTransferDto.exchangeRate,
@@ -615,6 +951,7 @@ export class TransactionTransferService {
       sourceCurrency,
       destinationCurrency,
       effectiveExchangeRate,
+      currencyPlaces,
       fromPayeeName,
       toPayeeName,
     };
@@ -633,67 +970,75 @@ export class TransactionTransferService {
   async writeTransferLegs(
     prepared: PreparedTransfer,
     manager?: EntityManager,
-  ): Promise<{ savedFromId: string; savedToId: string }> {
-    const {
-      effectiveUserId: userId,
-      dto,
-      fromOwnerId,
-      toOwnerId,
-      hasForeignLeg,
-      toAmount,
-      sourceCurrency,
-      destinationCurrency,
-      effectiveExchangeRate,
-      fromPayeeName,
-      toPayeeName,
-    } = prepared;
-    const {
-      fromAccountId,
-      toAccountId,
-      transactionDate,
-      amount,
-      description,
-      payeeId,
-      referenceNumber,
-      status = TransactionStatus.UNRECONCILED,
-      categoryId,
-    } = dto;
+  ): Promise<WrittenTransfer> {
+    const { dto, fromOwnerId, toOwnerId, hasForeignLeg } = prepared;
+    const { fromAccountId, toAccountId, transactionDate, amount, externalId } =
+      dto;
+    // The create's column set, shared with the in-place conversion of an
+    // existing row so a converted leg is byte for byte a created one.
+    const legs = transferLegColumns(prepared);
 
     // Both legs, their linkage, and the balance updates commit atomically.
     // Each leg is owned by ITS account's owner; per-user reference data
     // (category, payee link) is only written onto effective-user legs.
-    const writeLegsAtomically = async (m: EntityManager) => {
-      const fromTransaction = m.create(Transaction, {
-        userId: fromOwnerId,
-        accountId: fromAccountId,
-        transactionDate: transactionDate as any,
-        amount: -amount,
-        currencyCode: sourceCurrency,
-        exchangeRate: 1,
-        description: description || null,
-        referenceNumber,
-        status,
-        isTransfer: true,
-        payeeId: fromOwnerId === userId ? payeeId || null : null,
-        payeeName: fromPayeeName,
-        categoryId: fromOwnerId === userId ? categoryId || null : null,
-      });
+    const writeLegsAtomically = async (
+      m: EntityManager,
+    ): Promise<WrittenTransfer> => {
+      // The grant prepareTransfer found was read in the grantee's identity, in
+      // an earlier transaction; re-assert it here, under the bypass, before
+      // the first write, so a revoke that committed in between refuses this
+      // write instead of watching it land (A26-M04).
+      if (hasForeignLeg) {
+        for (const [accountId, ownerId] of [
+          [fromAccountId, fromOwnerId],
+          [toAccountId, toOwnerId],
+        ] as const) {
+          if (ownerId !== prepared.realUserId) {
+            await this.crossOwnerAccess.assertAccessStillHeld(
+              m,
+              prepared.realUserId,
+              accountId,
+              "create",
+            );
+          }
+        }
+      }
+      // A future-dated leg skips `updateBalance` and its `openOnly` refusal, so
+      // a closed account would take the leg and move on the day it falls due.
+      this.assertAccountsOpen(prepared.fromAccount, prepared.toAccount);
+      // Both legs at their currency's precision, before the first insert, in
+      // the write's own transaction (INV-MONEY-001).
+      assertAmountPrecision(
+        amount,
+        precisionCurrencyFor(prepared.currencyPlaces, prepared.sourceCurrency),
+        "amount",
+      );
+      assertAmountPrecision(
+        prepared.toAmount,
+        precisionCurrencyFor(
+          prepared.currencyPlaces,
+          prepared.destinationCurrency,
+        ),
+        "toAmount",
+      );
+      // Advisory, in the write's own transaction and identity: the unique
+      // index refuses a second leg holding the key (caught below).
+      if (externalId) {
+        const existing = await this.findTransferByExternalId(
+          m,
+          dto,
+          externalId,
+        );
+        if (existing) return existing;
+      }
 
-      const toTransaction = m.create(Transaction, {
-        userId: toOwnerId,
-        accountId: toAccountId,
-        transactionDate: transactionDate as any,
-        amount: toAmount,
-        currencyCode: destinationCurrency,
-        exchangeRate: effectiveExchangeRate,
-        description: description || null,
-        referenceNumber,
-        status,
-        isTransfer: true,
-        payeeId: toOwnerId === userId ? payeeId || null : null,
-        payeeName: toPayeeName,
-        categoryId: toOwnerId === userId ? categoryId || null : null,
+      const fromTransaction = m.create(Transaction, {
+        ...legs.from,
+        // The key lives on the source leg only: it is unique per account, and
+        // the request names the transfer from the source account's side.
+        externalId: externalId ?? null,
       });
+      const toTransaction = m.create(Transaction, legs.to);
 
       const savedFromTransaction = await m.save(fromTransaction);
       const savedToTransaction = await m.save(toTransaction);
@@ -708,6 +1053,17 @@ export class TransactionTransferService {
         linkedTransactionId: fromId,
       });
 
+      // Transaction rules (design 6.3): after both legs and their linkage are
+      // written, before the balances and the commit, on this manager, so a
+      // rollback drops the rule effects with the legs. They change payee and
+      // tags only; a VOID transfer is still a row the rules may tag.
+      await this.rulesApplier.applyToNewTransfer(m, {
+        fromLegId: fromId,
+        toLegId: toId,
+        fromOwnerId,
+        toOwnerId,
+      });
+
       // A VOID transfer is a ledger record of something that did not happen, so
       // neither leg may move a balance -- exactly as an ordinary VOID
       // transaction skips its balance update (transactions.service create()).
@@ -716,7 +1072,7 @@ export class TransactionTransferService {
       // VOID, and `recalculateCurrentBalance` -- which excludes VOID rows --
       // then silently "corrected" the accounts the next time anything triggered
       // a recompute. Money appeared to move and then unmove (audit P5-001).
-      if (status === TransactionStatus.VOID) {
+      if (legs.from.status === TransactionStatus.VOID) {
         return { savedFromId: fromId, savedToId: toId };
       }
 
@@ -734,7 +1090,10 @@ export class TransactionTransferService {
         );
       } else {
         await this.accountsService.updateBalance(fromAccountId, -amount);
-        await this.accountsService.updateBalance(toAccountId, toAmount);
+        await this.accountsService.updateBalance(
+          toAccountId,
+          prepared.toAmount,
+        );
       }
 
       return { savedFromId: fromId, savedToId: toId };
@@ -752,14 +1111,35 @@ export class TransactionTransferService {
       return writeLegsAtomically(manager);
     }
 
-    return hasForeignLeg
-      ? // Cross-owner: the foreign leg insert and foreign balance update fail
-        // the owner-only policies, so the (already fully authorized) atomic
-        // block runs under the audited system bypass. No-op at RLS_MODE=off.
-        withSystemContext(() =>
-          withScopedDb(this.dataSource, writeLegsAtomically),
-        )
-      : withScopedDb(this.dataSource, writeLegsAtomically);
+    // Cross-owner: the foreign leg insert and foreign balance update fail
+    // the owner-only policies, so the (already fully authorized) atomic
+    // block runs under the audited system bypass. No-op at RLS_MODE=off.
+    const inWriteIdentity = <T>(fn: () => Promise<T>): Promise<T> =>
+      hasForeignLeg ? withSystemContext(fn) : fn();
+
+    try {
+      return await inWriteIdentity(() =>
+        withScopedDb(this.dataSource, writeLegsAtomically),
+      );
+    } catch (error) {
+      // Another transfer holding the same key committed between the lookup
+      // and this insert; the index refused this one, and the winner is the
+      // answer. Never inside a caller's transaction, which it has aborted.
+      if (
+        !externalId ||
+        !isExternalIdConflict(error) ||
+        getActiveScopedManager()
+      ) {
+        throw error;
+      }
+      const winner = await inWriteIdentity(() =>
+        withScopedDb(this.dataSource, (m) =>
+          this.findTransferByExternalId(m, dto, externalId),
+        ),
+      );
+      if (!winner) throw error;
+      return winner;
+    }
   }
 
   /**
@@ -777,6 +1157,7 @@ export class TransactionTransferService {
     savedFromId: string,
     savedToId: string,
     findOne: (userId: string, id: string) => Promise<Transaction>,
+    options: { recordHistory?: boolean } = {},
   ): Promise<TransferResult> {
     const {
       effectiveUserId,
@@ -795,6 +1176,10 @@ export class TransactionTransferService {
       fromTransaction: await findOne(fromOwnerId, savedFromId),
       toTransaction: await findOne(toOwnerId, savedToId),
     };
+
+    // A scheduled posting records its own entry, which also rewinds the
+    // schedule (issue #2165): one user action, one entry.
+    if (options.recordHistory === false) return result;
 
     await this.recordCreateTransferHistory({
       effectiveUserId,
@@ -860,7 +1245,12 @@ export class TransactionTransferService {
         description: `Created transfer ${formattedAmount} from ${fromAccount.name} to ${toAccount.name}`,
         descriptionKey: "createdTransfer",
         descriptionParams: {
+          // English fallback plus the structured pair the reader's client
+          // formats in their own number locale (issue #1316): a stored string
+          // outlives the request that wrote it and cannot be re-formatted.
           amount: formattedAmount,
+          amountValue: amount,
+          amountCurrency: currencyCode,
           from: fromAccount.name,
           to: toAccount.name,
         },
@@ -883,7 +1273,10 @@ export class TransactionTransferService {
           description: `Created transfer ${formattedAmount} from ${nameFor(fromAccount)} to ${nameFor(toAccount)}`,
           descriptionKey: "createdTransfer",
           descriptionParams: {
+            // See above: English fallback plus the structured pair.
             amount: formattedAmount,
+            amountValue: amount,
+            amountCurrency: currencyCode,
             from: nameFor(fromAccount),
             to: nameFor(toAccount),
           },
@@ -1009,6 +1402,10 @@ export class TransactionTransferService {
       createPayeeIfMissing?: boolean;
       /** Spending category id applied to both legs (null/undefined = none). */
       categoryId?: string | null;
+      /** Stored on both legs as given by createTransfer; absent stores null. */
+      referenceNumber?: string;
+      /** Stored as given by createTransfer; absent stores UNRECONCILED. */
+      status?: TransactionStatus;
     },
   ): Promise<CreateTransferPreview> {
     if (input.fromAccountId === input.toAccountId) {
@@ -1042,11 +1439,16 @@ export class TransactionTransferService {
     // the commit then posts at a real rate -- the user approving one number and
     // receiving another, which is the divergence audit P5-005 describes for
     // investment previews.
+    const previewPlaces = await this.readCurrencyPlacesForPreview([
+      fromAccount.currencyCode,
+      toAccount.currencyCode,
+    ]);
     const previewFx = await this.resolveTransferFx({
       fromAccount,
       toAccount,
       amount: input.amount,
       transactionDate: input.transactionDate,
+      places: previewPlaces,
       suppliedExchangeRate: input.exchangeRate,
       suppliedToAmount: input.toAmount,
     });
@@ -1097,6 +1499,34 @@ export class TransactionTransferService {
       categoryName = category.name;
     }
 
+    // The same planner the commit runs (design I3), over the outgoing leg's
+    // facts, which is what `applyToNewTransfer` evaluates for a same-owner
+    // transfer (both accounts were resolved under this user above).
+    const description = stripHtml(input.description) || null;
+    const ruleEffects = await withScopedDb(this.dataSource, (m) =>
+      this.rulesApplier.previewForRow(m, userId, {
+        accountId: fromAccount.id,
+        currencyCode: fromAccount.currencyCode,
+        amount: -input.amount,
+        isTransfer: true,
+        fromAccountId: fromAccount.id,
+        toAccountId: toAccount.id,
+        payeeId,
+        payeeText: inputPayeeName,
+        categoryId,
+        description,
+        tagIds: [],
+        hasSplits: false,
+        // The values writeTransferLegs stores on the outgoing leg: the date is
+        // the stored calendar date, the status defaults to UNRECONCILED, and a
+        // new row has no attachment.
+        referenceNumber: input.referenceNumber ?? null,
+        transactionDate: input.transactionDate.slice(0, 10),
+        status: input.status ?? TransactionStatus.UNRECONCILED,
+        hasAttachment: false,
+      }),
+    );
+
     return {
       fromAccountId: fromAccount.id,
       fromAccountName: fromAccount.name,
@@ -1104,17 +1534,21 @@ export class TransactionTransferService {
       toAccountId: toAccount.id,
       toAccountName: toAccount.name,
       toCurrencyCode: toAccount.currencyCode,
-      amount: roundMoney(input.amount),
+      amount: roundMoney(
+        input.amount,
+        moneyDecimalsForCode(previewPlaces, fromAccount.currencyCode),
+      ),
       toAmount,
       exchangeRate: previewFx.exchangeRate,
       transactionDate: input.transactionDate,
-      description: stripHtml(input.description) || null,
+      description,
       payeeId,
       payeeName,
       payeeMatched,
       payeeWillBeCreated,
       categoryId,
       categoryName,
+      ...(ruleEffects ? { ruleEffects } : {}),
     };
   }
 
@@ -1161,18 +1595,65 @@ export class TransactionTransferService {
 
     const oldFromAmount = Math.abs(Number(fromTransaction.amount));
     const oldToAmount = Number(toTransaction.amount);
-    const exchangeRate = Number(toTransaction.exchangeRate) || 1;
+    let exchangeRate = Number(toTransaction.exchangeRate) || 1;
+
+    const places = await this.readCurrencyPlacesForPreview([
+      fromTransaction.currencyCode,
+      toTransaction.currencyCode,
+    ]);
+    if (input.amount !== undefined) {
+      assertAmountPrecision(
+        input.amount,
+        precisionCurrencyFor(places, fromTransaction.currencyCode),
+        "amount",
+      );
+    }
+    const fromDecimals = moneyDecimalsForCode(
+      places,
+      fromTransaction.currencyCode,
+    );
+    const toDecimals = moneyDecimalsForCode(places, toTransaction.currencyCode);
 
     const newAmount =
-      input.amount !== undefined ? roundMoney(input.amount) : oldFromAmount;
+      input.amount !== undefined
+        ? roundMoney(input.amount, fromDecimals)
+        : oldFromAmount;
+    const newDate = input.transactionDate ?? fromTransaction.transactionDate;
     // When only the amount changes, scale the destination leg by the stored
     // exchange rate; when nothing money-related changes, keep the stored toAmount.
-    const newToAmount =
+    let newToAmount =
       input.amount !== undefined
-        ? roundMoney(newAmount * exchangeRate)
-        : roundMoney(oldToAmount);
+        ? applyFxConversion(newAmount, exchangeRate, null, {
+            toDecimals,
+          }).amount
+        : roundMoney(oldToAmount, toDecimals);
 
-    const newDate = input.transactionDate ?? fromTransaction.transactionDate;
+    // A zero-amount cross-currency transfer is stored at rate 1 because zero
+    // needs no rate; that 1 is not a settlement rate, so scaling a new amount
+    // by it posts 500 USD as 500 EUR. Resolve the rate the way creation does,
+    // so the preview and the commit agree.
+    if (
+      input.amount !== undefined &&
+      fromTransaction.currencyCode !== toTransaction.currencyCode &&
+      this.isStoredRateUntrusted(oldFromAmount, toTransaction.exchangeRate)
+    ) {
+      const fx = await this.resolveTransferFx({
+        fromAccount: await this.accountsService.findOne(
+          userId,
+          fromTransaction.accountId,
+        ),
+        toAccount: await this.accountsService.findOne(
+          userId,
+          toTransaction.accountId,
+        ),
+        amount: newAmount,
+        transactionDate: String(newDate),
+        places,
+      });
+      exchangeRate = fx.exchangeRate;
+      newToAmount = fx.toAmount;
+    }
+
     const description =
       input.description !== undefined
         ? stripHtml(input.description) || null
@@ -1250,6 +1731,15 @@ export class TransactionTransferService {
       payeeWillBeCreated,
       categoryId,
       categoryName,
+      // A value difference, not a field being present: a form or a model
+      // resends fields it does not change.
+      changesFields:
+        newAmount !== oldFromAmount ||
+        String(newDate) !== String(fromTransaction.transactionDate) ||
+        description !== (fromTransaction.description ?? null) ||
+        payeeName !== (fromTransaction.payeeName ?? null) ||
+        payeeId !== (fromTransaction.payeeId ?? null) ||
+        categoryId !== (fromTransaction.categoryId ?? null),
     };
   }
 
@@ -1386,6 +1876,11 @@ export class TransactionTransferService {
     const removeLeg = async (m: EntityManager, leg: Transaction) => {
       const locked = await lockTransactionRow(m, leg.id, leg.userId);
       if (!locked) return;
+      // Strict reconciled lock, under the leg's own owner's setting: a
+      // reconciled leg refuses the deletion of the pair, as on the same-owner
+      // path (A26-M11). Both legs run in one transaction, so a refusal on the
+      // second rolls back the first.
+      await assertReconciledRowsMutable(m, leg.userId, [locked]);
       await removeLockedTransactionLeg(
         m,
         locked,
@@ -1406,6 +1901,17 @@ export class TransactionTransferService {
       );
       await withSystemContext(() =>
         withScopedDb(this.dataSource, async (m) => {
+          // The delete grant was decided before this system transaction; a
+          // revoke that committed since refuses here, before either leg goes
+          // (A26-M04).
+          for (const leg of ordered) {
+            await this.crossOwnerAccess.assertAccessStillHeld(
+              m,
+              realUserId,
+              leg.accountId,
+              "delete",
+            );
+          }
           for (const leg of ordered) {
             await removeLeg(m, leg);
           }
@@ -1460,6 +1966,17 @@ export class TransactionTransferService {
       userId,
     );
 
+    // Strict reconciled lock over everything this deletion removes: the
+    // parent, its category lines with it, and every leg (A26-M11). The
+    // same-owner pair path asserts its two legs; this branch asserted nothing.
+    await assertReconciledRowsMutable(
+      m,
+      userId,
+      [parent, ...locked.values()].filter(
+        (row): row is LockedTransactionRow => row !== null,
+      ),
+    );
+
     if (parent) {
       for (const legId of siblingLegIds) {
         const leg = locked.get(legId);
@@ -1487,6 +2004,7 @@ export class TransactionTransferService {
     updateDto: Partial<UpdateTransferDto>,
     findOne: (userId: string, id: string) => Promise<Transaction>,
     actor?: TransferActor,
+    withinWrite?: TransferEditHook,
   ): Promise<TransferResult> {
     const realUserId = actor?.realUserId ?? userId;
     const transaction = await findOne(userId, transactionId);
@@ -1514,6 +2032,7 @@ export class TransactionTransferService {
         parentSplit,
         updateDto,
         findOne,
+        withinWrite,
       );
     }
 
@@ -1525,6 +2044,16 @@ export class TransactionTransferService {
       );
     } catch (err) {
       if (!(err instanceof NotFoundException)) throw err;
+      // The AI tools refuse a cross-owner transfer before they build a card;
+      // the hook is never silently dropped on this path.
+      if (withinWrite) {
+        throw new BadRequestException(
+          tr(
+            "errors.ai.crossOwnerTransferUnsupported",
+            "This transfer involves another user's account, which the assistant can't edit or delete yet. Use the Transactions screen instead.",
+          ),
+        );
+      }
       // Cross-owner pair: the counterpart is not the effective user's row.
       return this.updateCrossOwnerTransfer(
         userId,
@@ -1575,6 +2104,15 @@ export class TransactionTransferService {
       );
     }
 
+    // Only an account the transfer is moving INTO is refused: editing a leg that
+    // already sits in a closed account stays possible.
+    if (newFromAccount.id !== oldFromAccountId) {
+      this.assertAccountsOpen(newFromAccount);
+    }
+    if (newToAccount.id !== oldToAccountId) {
+      this.assertAccountsOpen(newToAccount);
+    }
+
     const newAmount = updateDto.amount ?? oldFromAmount;
 
     const oldDate = fromTransaction.transactionDate;
@@ -1585,6 +2123,10 @@ export class TransactionTransferService {
     // conserve, and a cross-currency pair with no supplied rate resolves one
     // rather than posting 1:1 (audit P5-002) -- but only when this edit actually
     // changes the financial structure. See `resolveTransferFxForUpdate`.
+    const places = await this.readCurrencyPlaces([
+      newFromAccount.currencyCode,
+      newToAccount.currencyCode,
+    ]);
     const updateFx = await this.resolveTransferFxForUpdate({
       fromAccount: newFromAccount as Account,
       toAccount: newToAccount as Account,
@@ -1596,6 +2138,7 @@ export class TransactionTransferService {
       existingToAmount: oldToAmount,
       existingExchangeRate: toTransaction.exchangeRate,
       updateDto,
+      places,
     });
     const newExchangeRate = updateFx.exchangeRate;
     const newToAmount = updateFx.toAmount;
@@ -1617,6 +2160,7 @@ export class TransactionTransferService {
       updateFx.fromCurrencyCode,
       fromTransaction.currencyCode,
       oldFromAmount,
+      moneyDecimalsForCode(places, updateFx.fromCurrencyCode),
     );
 
     const toUpdateData = this.buildToUpdateData(
@@ -1683,6 +2227,21 @@ export class TransactionTransferService {
           ),
         );
       }
+      // Each leg's amount, the one it will hold, against the currency of the
+      // account it will sit in, read under the currency row lock inside this
+      // write and before its first write (INV-MONEY-001).
+      await this.assertLegAmountsFit(m, [
+        {
+          amount: newAmount,
+          currencyCode: updateFx.fromCurrencyCode,
+          field: "amount",
+        },
+        {
+          amount: newToAmount,
+          currencyCode: updateFx.toCurrencyCode,
+          field: "toAmount",
+        },
+      ]);
 
       // Whether each leg is included in its account's current balance, read from
       // the LOCKED row. A status change alone flips inclusion, and it used not to
@@ -1730,24 +2289,34 @@ export class TransactionTransferService {
       // there (audit P6-RECHECK-004). So for a non-VOID edit the status stays on
       // the leg the user opened and is stripped from the counterpart.
       //
-      // A VOID crossing is the exception, and it PAIRS the status onto both
+      // A VOID crossing is the exception, and it PAIRS VOID-ness onto both
       // legs: VOID decides balance inclusion, and a same-owner pair must be VOID
       // on both legs or neither or its balances diverge. This matches the bulk
       // path exactly -- `expandTransferCounterparts` drags the counterpart in on
-      // a VOID crossing only, and the same UPDATE stamps the submitted status
-      // onto it -- so the same action reads the same way whether done in the
-      // register or in bulk. Keeping the two surfaces in step is deliberate; the
-      // un-void sub-status question (a reactivated counterpart inheriting the
-      // opened leg's CLEARED/RECONCILED) is a platform-wide decision that must
-      // move both surfaces together, not something for one edit path to answer
-      // alone. `voidChanged` is read from the locked row above, so the
-      // strip-versus-pair choice here is made on the committed status rather
-      // than a stale snapshot -- this scopes only that choice, not the wider
-      // concurrency guard, which compares amount/account/date.
+      // a VOID crossing only -- so the same action reads the same way whether
+      // done in the register or in bulk. `voidChanged` is read from the locked
+      // row above, so the strip-versus-pair choice here is made on the
+      // committed status rather than a stale snapshot -- this scopes only that
+      // choice, not the wider concurrency guard, which compares
+      // amount/account/date.
+      //
+      // Only VOID-ness itself is shared (INV-TRANSFER-001). Entering VOID
+      // stamps the submitted VOID onto both legs; leaving VOID returns the
+      // counterpart to UNRECONCILED, never the status chosen for the leg the
+      // user opened -- CLEARED and RECONCILED are per-ledger, and copying one
+      // across used to remove the counterpart's account from reconciliation
+      // candidates its own statement never touched, with no reconciled date
+      // behind it.
       if (!voidChanged) {
         // `isFromTransaction` already names which leg the user opened, so the
         // counterpart is the other one.
         delete (isFromTransaction ? toUpdateData : fromUpdateData).status;
+      } else if (!isVoid) {
+        const counterpartData = isFromTransaction
+          ? toUpdateData
+          : fromUpdateData;
+        counterpartData.status = TransactionStatus.UNRECONCILED;
+        counterpartData.reconciledDate = null;
       }
 
       if (Object.keys(fromUpdateData).length > 0) {
@@ -1798,6 +2367,13 @@ export class TransactionTransferService {
           );
           await this.accountsService.updateBalance(newToAccountId, newToAmount);
         }
+      }
+      if (withinWrite) {
+        // Both legs are the user's: the locks above are taken by owner.
+        await withinWrite(m, {
+          legIds: [fromTransaction.id, toTransaction.id],
+          parentSplitId: null,
+        });
       }
     });
 
@@ -1855,6 +2431,7 @@ export class TransactionTransferService {
     }
     return this.updateConnectedCrossOwnerTransfer(
       effectiveUserId,
+      realUserId,
       ownLeg,
       counterpart,
       updateDto,
@@ -1881,13 +2458,36 @@ export class TransactionTransferService {
     const fromLeg = isFromLeg ? ownLeg : counterpart;
     const toLeg = isFromLeg ? counterpart : ownLeg;
 
-    // The form resends current values on every edit; only a genuine change is
+    // Each amount is held to its own leg's currency, then compared at it: the
+    // form resends current values on every edit, and only a genuine change is
     // structural.
+    const places = await this.readCurrencyPlaces([
+      fromLeg.currencyCode,
+      toLeg.currencyCode,
+    ]);
+    if (updateDto.amount !== undefined) {
+      assertAmountPrecision(
+        updateDto.amount,
+        precisionCurrencyFor(places, fromLeg.currencyCode),
+        "amount",
+      );
+    }
+    if (updateDto.toAmount !== undefined) {
+      assertAmountPrecision(
+        updateDto.toAmount,
+        precisionCurrencyFor(places, toLeg.currencyCode),
+        "toAmount",
+      );
+    }
+    const fromDecimals = moneyDecimalsForCode(places, fromLeg.currencyCode);
+    const toDecimals = moneyDecimalsForCode(places, toLeg.currencyCode);
     const structuralChange =
       (updateDto.amount !== undefined &&
-        roundMoney(updateDto.amount) !== Math.abs(Number(fromLeg.amount))) ||
+        roundMoney(updateDto.amount, fromDecimals) !==
+          roundMoney(Math.abs(Number(fromLeg.amount)), fromDecimals)) ||
       (updateDto.toAmount !== undefined &&
-        roundMoney(updateDto.toAmount) !== roundMoney(Number(toLeg.amount))) ||
+        roundMoney(updateDto.toAmount, toDecimals) !==
+          roundMoney(Number(toLeg.amount), toDecimals)) ||
       (updateDto.exchangeRate !== undefined &&
         Number(updateDto.exchangeRate) !== Number(toLeg.exchangeRate)) ||
       (!!updateDto.transactionDate &&
@@ -1948,6 +2548,8 @@ export class TransactionTransferService {
             ),
           );
         }
+        // Strict reconciled lock on the one row this path writes (A26-M11).
+        await assertReconciledRowsMutable(m, effectiveUserId, [lockedLeg]);
         const wasVoid = lockedLeg.status === TransactionStatus.VOID;
         const isVoid =
           updateDto.status !== undefined
@@ -2000,6 +2602,7 @@ export class TransactionTransferService {
    */
   private async updateConnectedCrossOwnerTransfer(
     effectiveUserId: string,
+    realUserId: string,
     ownLeg: Transaction,
     counterpart: Transaction,
     updateDto: Partial<UpdateTransferDto>,
@@ -2043,6 +2646,15 @@ export class TransactionTransferService {
     // same-currency accounts could move 100 out and 80 in, and a cross-currency
     // pair could post at a stale or absent rate. Authorization stays separate
     // from arithmetic; only the arithmetic moves here.
+    const places = await this.readCurrencyPlaces([
+      fromTransaction.currencyCode,
+      toTransaction.currencyCode,
+    ]);
+    const fromDecimals = moneyDecimalsForCode(
+      places,
+      fromTransaction.currencyCode,
+    );
+    const toDecimals = moneyDecimalsForCode(places, toTransaction.currencyCode);
     const updateFx = await this.resolveTransferFxForUpdate({
       fromAccount: fromTransaction.account as Account,
       toAccount: toTransaction.account as Account,
@@ -2054,6 +2666,7 @@ export class TransactionTransferService {
       existingToAmount: oldToAmount,
       existingExchangeRate: toTransaction.exchangeRate,
       updateDto,
+      places,
     });
     const newExchangeRate = updateFx.exchangeRate;
     const newToAmount = updateFx.toAmount;
@@ -2069,6 +2682,7 @@ export class TransactionTransferService {
       updateFx.fromCurrencyCode,
       fromTransaction.currencyCode,
       oldFromAmount,
+      fromDecimals,
     );
     const toUpdateData = this.buildToUpdateData(
       updateDto,
@@ -2131,33 +2745,85 @@ export class TransactionTransferService {
 
     await withSystemContext(() =>
       withScopedDb(this.dataSource, async (m) => {
+        // Both legs, ascending by id, each under its own owner -- the order
+        // removeCrossOwnerTransfer takes, so either owner's request queues the
+        // same way (RV4-005). Every delta below reverses `oldFromAmount` /
+        // `oldToAmount` and every inclusion decision reads the legs' statuses,
+        // all from rows loaded before this transaction: two identical edits
+        // each reversed the same old pair, leaving Bob's savings at 1,300.00
+        // beside a ledger of 1,400.00 and Alice's chequing 100.00 high
+        // (A26-H03). So the committed rows are compared with what this edit
+        // was built on, and a difference is a 409.
+        const ordered = [fromTransaction, toTransaction].sort((a, b) =>
+          a.id < b.id ? -1 : a.id > b.id ? 1 : 0,
+        );
+        const lockedById = new Map<string, LockedTransactionRow>();
+        for (const leg of ordered) {
+          const locked = await lockTransactionRow(m, leg.id, leg.userId);
+          if (!locked) {
+            throw new NotFoundException(
+              tr(
+                "errors.transactions.notFoundById",
+                `Transaction with ID ${leg.id} not found`,
+                { id: leg.id },
+              ),
+            );
+          }
+          lockedById.set(leg.id, locked);
+        }
+        // Strict reconciled lock, per ledger: each leg under its own owner's
+        // setting, since each owner reconciles their own statement (A26-M11).
+        for (const leg of ordered) {
+          await assertReconciledRowsMutable(m, leg.userId, [
+            lockedById.get(leg.id)!,
+          ]);
+        }
+        // The edit grant resolveCounterpartAccess found was read before this
+        // system transaction opened; re-assert it on every leg the real user
+        // does not own, so a revoke that committed in between refuses the
+        // write (A26-M04).
+        for (const leg of ordered) {
+          await this.crossOwnerAccess.assertAccessStillHeld(
+            m,
+            realUserId,
+            leg.accountId,
+            "edit",
+          );
+        }
+        const lockedFrom = lockedById.get(fromTransaction.id)!;
+        const lockedTo = lockedById.get(toTransaction.id)!;
+        const unchanged =
+          roundMoney(Math.abs(lockedFrom.amount), fromDecimals) ===
+            roundMoney(oldFromAmount, fromDecimals) &&
+          roundMoney(lockedTo.amount, toDecimals) ===
+            roundMoney(oldToAmount, toDecimals) &&
+          lockedFrom.accountId === fromTransaction.accountId &&
+          lockedTo.accountId === toTransaction.accountId &&
+          lockedFrom.transactionDate === oldDate &&
+          lockedTo.transactionDate === toTransaction.transactionDate &&
+          (lockedFrom.status === TransactionStatus.VOID) === fromVoid.wasVoid &&
+          (lockedTo.status === TransactionStatus.VOID) === toVoid.wasVoid;
+        if (!unchanged) {
+          throw new ConflictException(
+            tr(
+              "errors.transactions.transferChangedConcurrently",
+              "This transfer was changed by another request. Reload it and try again.",
+            ),
+          );
+        }
         // The VOID transition for the status-only branch below is decided from
         // the row THIS write replaces, read under its lock BEFORE the status
         // write -- two concurrent voids each deriving wasVoid from their
         // pre-transaction snapshots both saw ACTIVE and each moved the
         // balance, an idempotent status write beside a doubled move.
-        let lockedOwnLegVoidState: { wasVoid: boolean; amount: number } | null =
-          null;
-        if (updateDto.status !== undefined) {
-          const lockedOwn = await lockTransactionRow(
-            m,
-            ownLeg.id,
-            effectiveUserId,
-          );
-          if (!lockedOwn) {
-            throw new NotFoundException(
-              tr(
-                "errors.transactions.notFoundById",
-                `Transaction with ID ${ownLeg.id} not found`,
-                { id: ownLeg.id },
-              ),
-            );
-          }
-          lockedOwnLegVoidState = {
-            wasVoid: lockedOwn.status === TransactionStatus.VOID,
-            amount: lockedOwn.amount,
-          };
-        }
+        const lockedOwn = lockedById.get(ownLeg.id)!;
+        const lockedOwnLegVoidState =
+          updateDto.status !== undefined
+            ? {
+                wasVoid: lockedOwn.status === TransactionStatus.VOID,
+                amount: lockedOwn.amount,
+              }
+            : null;
 
         if ((updateFx.repriced || dateChanged) && !anyFuture) {
           // Reverse each leg only if that leg was actually included.
@@ -2295,6 +2961,8 @@ export class TransactionTransferService {
     parentTransaction: Transaction,
     newCounterpartAmount: number,
     transactionDate: string,
+    /** The money precision of the split row's (the parent's) currency. */
+    parentDecimals: number,
   ): Promise<{ amount: number; exchangeRate: number }> {
     const legCurrencyCode =
       counterpart.account?.currencyCode ?? counterpart.currencyCode;
@@ -2306,7 +2974,10 @@ export class TransactionTransferService {
       !parentCurrencyCode ||
       legCurrencyCode === parentCurrencyCode
     ) {
-      return { amount: roundMoney(-newCounterpartAmount), exchangeRate: 1 };
+      return {
+        amount: roundMoney(-newCounterpartAmount, parentDecimals),
+        exchangeRate: 1,
+      };
     }
 
     const storedRate = Number(counterpart.exchangeRate);
@@ -2335,7 +3006,7 @@ export class TransactionTransferService {
 
     const exchangeRate = rate;
     return {
-      amount: roundMoney(-newCounterpartAmount / exchangeRate),
+      amount: roundMoney(-newCounterpartAmount / exchangeRate, parentDecimals),
       exchangeRate,
     };
   }
@@ -2346,6 +3017,7 @@ export class TransactionTransferService {
     parentSplit: TransactionSplit,
     updateDto: Partial<UpdateTransferDto>,
     findOne: (userId: string, id: string) => Promise<Transaction>,
+    withinWrite?: TransferEditHook,
   ): Promise<TransferResult> {
     const parentTransaction = await findOne(userId, parentSplit.transactionId);
 
@@ -2397,13 +3069,80 @@ export class TransactionTransferService {
 
     await this.assertCategoryOwned(userId, updateDto.categoryId);
 
+    // The leg's amount is in its own account's currency, the split row's and
+    // the parent's in the parent's: each is held to and rounded at its own
+    // currency's money precision (INV-MONEY-001).
+    const legCurrencyCode =
+      counterpart.account?.currencyCode ?? counterpart.currencyCode;
+    const parentCurrencyCode =
+      parentTransaction.account?.currencyCode ?? parentTransaction.currencyCode;
+    const places = await this.readCurrencyPlaces([
+      legCurrencyCode,
+      parentCurrencyCode,
+    ]);
+    const legDecimals = moneyDecimalsForCode(places, legCurrencyCode);
+    const parentDecimals = moneyDecimalsForCode(places, parentCurrencyCode);
+    // Cross-currency pair: the transfer form sends `amount` in the SOURCE (the
+    // split parent's) currency and `toAmount` in this leg's. Reading `amount` as
+    // the leg's own figure turned 50 EUR into 50 BTC and re-totalled the parent
+    // at 50 / rate. Same-currency pairs keep the original reading of `amount`.
+    const crossCurrency =
+      !!legCurrencyCode &&
+      !!parentCurrencyCode &&
+      legCurrencyCode !== parentCurrencyCode;
+    const legAmountInput =
+      crossCurrency && updateDto.toAmount !== undefined
+        ? updateDto.toAmount
+        : updateDto.amount;
+    // The form loads "Transfer Amount" from the split PARENT, whose amount is the
+    // total of every line. That figure is this line's only when the parent has
+    // one line; on a multi-line parent it is an echo of the total and must not
+    // overwrite the line (the source then follows the stored rate).
+    const parentHasOneLine =
+      roundMoney(Math.abs(Number(parentTransaction.amount)), parentDecimals) ===
+      roundMoney(Math.abs(Number(parentSplit.amount)), parentDecimals);
+    const explicitSourceAmount =
+      crossCurrency &&
+      parentHasOneLine &&
+      updateDto.toAmount !== undefined &&
+      updateDto.amount !== undefined
+        ? updateDto.amount
+        : undefined;
+    if (legAmountInput !== undefined) {
+      assertAmountPrecision(
+        legAmountInput,
+        precisionCurrencyFor(places, legCurrencyCode),
+        updateDto.toAmount !== undefined && crossCurrency
+          ? "toAmount"
+          : "amount",
+      );
+    }
+    if (explicitSourceAmount !== undefined) {
+      assertAmountPrecision(
+        explicitSourceAmount,
+        precisionCurrencyFor(places, parentCurrencyCode),
+        "amount",
+      );
+    }
+
     const oldCounterpartAmount = Number(counterpart.amount);
     const sign = oldCounterpartAmount < 0 ? -1 : 1;
     const newCounterpartAmount =
-      updateDto.amount !== undefined
-        ? roundMoney(sign * Math.abs(updateDto.amount))
+      legAmountInput !== undefined
+        ? roundMoney(sign * Math.abs(legAmountInput), legDecimals)
         : oldCounterpartAmount;
-    const amountChanged = newCounterpartAmount !== oldCounterpartAmount;
+    const legChanged = newCounterpartAmount !== oldCounterpartAmount;
+    // The split row (parent currency) can also change on its own when the
+    // source amount is stated explicitly.
+    const newExplicitSplitAmount =
+      explicitSourceAmount !== undefined && explicitSourceAmount > 0
+        ? roundMoney(-Math.abs(explicitSourceAmount), parentDecimals)
+        : undefined;
+    const sourceChanged =
+      newExplicitSplitAmount !== undefined &&
+      newExplicitSplitAmount !==
+        roundMoney(Number(parentSplit.amount), parentDecimals);
+    const amountChanged = legChanged || sourceChanged;
 
     const oldDate = counterpart.transactionDate;
     const newDate = updateDto.transactionDate ?? oldDate;
@@ -2426,22 +3165,40 @@ export class TransactionTransferService {
       legData.payeeId = updateDto.payeeId || null;
     if (updateDto.payeeName !== undefined)
       legData.payeeName = updateDto.payeeName || null;
-    if (amountChanged) legData.amount = newCounterpartAmount;
+    if (legChanged) legData.amount = newCounterpartAmount;
 
     // The split row on the source transaction is kept in step with the leg: its
     // memo mirrors the leg's description (they are seeded from each other on
     // create), and its amount is the leg's amount converted back into the
     // parent's currency -- which is the leg's negated amount only when the two
-    // accounts share a currency.
+    // accounts share a currency. An explicit source amount (cross-currency
+    // form) wins over the stored rate, and the pair's implied rate is stored.
     const resolvedSource = amountChanged
-      ? await this.resolveSplitLegSourceAmount(
-          counterpart,
-          parentTransaction,
-          newCounterpartAmount,
-          newDate,
-        )
+      ? newExplicitSplitAmount !== undefined
+        ? {
+            amount: newExplicitSplitAmount,
+            exchangeRate: roundFxRate(
+              Math.abs(newCounterpartAmount) / Math.abs(newExplicitSplitAmount),
+            ),
+          }
+        : await this.resolveSplitLegSourceAmount(
+            counterpart,
+            parentTransaction,
+            newCounterpartAmount,
+            newDate,
+            parentDecimals,
+          )
       : undefined;
     const newSplitAmount = resolvedSource?.amount;
+    if (
+      newExplicitSplitAmount !== undefined &&
+      resolvedSource !== undefined &&
+      Number.isFinite(resolvedSource.exchangeRate) &&
+      resolvedSource.exchangeRate > 0 &&
+      Number(counterpart.exchangeRate) !== resolvedSource.exchangeRate
+    ) {
+      legData.exchangeRate = resolvedSource.exchangeRate;
+    }
 
     // A leg whose stored rate was missing forced the fallback lookup above, so
     // record what the pair was actually converted at rather than leaving the row
@@ -2462,6 +3219,56 @@ export class TransactionTransferService {
     // The leg edit, split-row mirror, parent re-total, and balance updates
     // commit atomically.
     await withScopedDb(this.dataSource, async (m) => {
+      // Every delta below is derived from `oldCounterpartAmount` and the
+      // parent's amount, both read before this transaction opened. Two
+      // identical edits each reversed the same old leg amount, so both
+      // accounts moved twice while the ledger moved once: 40.00 -> 50.00 sent
+      // twice left chequing at 4,880.00 beside a ledger of 4,890.00 (A26-H03).
+      // So lock the parent and then the leg -- the by-role order of
+      // common/db/locks.ts, the order removeSplit takes -- and refuse when the
+      // committed rows are not the ones this edit was built on.
+      const lockedParent = await lockTransactionRow(
+        m,
+        parentTransaction.id,
+        userId,
+      );
+      const lockedLeg = await lockTransactionRow(m, counterpart.id, userId);
+      if (!lockedParent || !lockedLeg) {
+        throw new NotFoundException(
+          tr(
+            "errors.transactions.notFoundById",
+            `Transaction with ID ${counterpart.id} not found`,
+            { id: counterpart.id },
+          ),
+        );
+      }
+      // Strict reconciled lock on the rows this edit writes: the leg, and the
+      // parent whenever its split row or total changes (A26-M11).
+      const writesParent = amountChanged || Object.keys(splitData).length > 0;
+      await assertReconciledRowsMutable(
+        m,
+        userId,
+        writesParent ? [lockedParent, lockedLeg] : [lockedLeg],
+      );
+      const unchanged =
+        roundMoney(lockedLeg.amount, legDecimals) ===
+          roundMoney(oldCounterpartAmount, legDecimals) &&
+        lockedLeg.accountId === counterpart.accountId &&
+        lockedLeg.transactionDate === oldDate &&
+        (lockedLeg.status === TransactionStatus.VOID) === counterpartIsVoid &&
+        roundMoney(lockedParent.amount, parentDecimals) ===
+          roundMoney(Number(parentTransaction.amount), parentDecimals) &&
+        lockedParent.accountId === parentTransaction.accountId &&
+        (lockedParent.status === TransactionStatus.VOID) === parentIsVoid;
+      if (!unchanged) {
+        throw new ConflictException(
+          tr(
+            "errors.transactions.transferChangedConcurrently",
+            "This transfer was changed by another request. Reload it and try again.",
+          ),
+        );
+      }
+
       if (Object.keys(legData).length > 0) {
         await m.update(Transaction, counterpart.id, legData);
       }
@@ -2478,10 +3285,13 @@ export class TransactionTransferService {
         } else {
           await this.accountsService.updateBalance(
             counterpart.accountId,
-            // Rounded: the difference of two 4dp decimals is not itself a 4dp
-            // decimal in binary floating point, and this value is the amount a
-            // balance moves by.
-            roundMoney(newCounterpartAmount - oldCounterpartAmount),
+            // Rounded at the leg currency's precision: the difference of two
+            // stored decimals is not itself one in binary floating point, and
+            // this value is the amount a balance moves by.
+            roundMoney(
+              newCounterpartAmount - oldCounterpartAmount,
+              legDecimals,
+            ),
           );
         }
       }
@@ -2491,39 +3301,36 @@ export class TransactionTransferService {
         await m.update(TransactionSplit, parentSplit.id, splitData);
       }
 
-      // When the amount changed, re-total the parent and rebalance the source.
+      // When the amount changed, re-total the parent and rebalance the source,
+      // through the helper `removeSplit` shares (issue #2039): a VOID parent
+      // is excluded from its account's balance, so re-totalling it moves the
+      // record and not the money.
       if (amountChanged && newSplitAmount !== undefined) {
         const siblingSplits = await m.find(TransactionSplit, {
           where: { transactionId: parentTransaction.id },
         });
-        const sumCents = siblingSplits.reduce((acc, s) => {
-          const amt =
-            s.id === parentSplit.id ? newSplitAmount : Number(s.amount);
-          return acc + Math.round(amt * 10000);
-        }, 0);
-        const newParentAmount = sumCents / 10000;
-        const oldParentAmount = Number(parentTransaction.amount);
-
-        await m.update(Transaction, parentTransaction.id, {
-          amount: newParentAmount,
+        // Exact, at the parent currency's precision: a coin parent keeps the
+        // satoshis of every line (INV-MONEY-001).
+        const newParentAmount = sumMoney(
+          siblingSplits.map((s) =>
+            s.id === parentSplit.id ? newSplitAmount : Number(s.amount),
+          ),
+          parentDecimals,
+        );
+        await retotalSplitParent(
+          m,
+          userId,
+          lockedParent,
+          newParentAmount,
+          parentDecimals,
+          this.accountsService,
+        );
+      }
+      if (withinWrite) {
+        await withinWrite(m, {
+          legIds: [counterpart.id],
+          parentSplitId: parentSplit.id,
         });
-
-        // Same rule on the source side: a VOID parent is excluded from its
-        // account's balance, so re-totalling it moves the record and not the
-        // money.
-        if (!parentIsVoid) {
-          if (isTransactionInFuture(parentTransaction.transactionDate)) {
-            await this.accountsService.recalculateCurrentBalance(
-              userId,
-              parentTransaction.accountId,
-            );
-          } else {
-            await this.accountsService.updateBalance(
-              parentTransaction.accountId,
-              roundMoney(newParentAmount - oldParentAmount),
-            );
-          }
-        }
       }
     });
 
@@ -2570,6 +3377,8 @@ export class TransactionTransferService {
      * row on an edit that changed nothing financial (recheck RR3-002).
      */
     existingFromAmount?: number,
+    /** The source currency's money precision, which the amounts compare at. */
+    fromDecimals?: number,
   ): Partial<Transaction> {
     const data: Partial<Transaction> = {};
     if (updateDto.transactionDate)
@@ -2577,7 +3386,8 @@ export class TransactionTransferService {
     if (
       updateDto.amount !== undefined &&
       (existingFromAmount === undefined ||
-        roundMoney(newAmount) !== roundMoney(existingFromAmount))
+        roundMoney(newAmount, fromDecimals) !==
+          roundMoney(existingFromAmount, fromDecimals))
     )
       data.amount = -newAmount;
     if (updateDto.description !== undefined)

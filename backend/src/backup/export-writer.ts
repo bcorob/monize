@@ -1,6 +1,10 @@
 import { Transform, Writable } from "stream";
 import { createGzip } from "zlib";
 import { createBackupEncryptStream } from "./backup-stream-crypto";
+import {
+  BackupEncryptionInput,
+  createKeyWrappedEncryptStream,
+} from "./backup-key-wrap";
 
 /**
  * The write end of an export: JSON text in, gzip (and optionally an encrypted
@@ -42,17 +46,21 @@ export class ExportWriter {
    * has headers to set (and a completeness verdict to reach) before the first
    * byte is unrecoverable.
    *
-   * `async` because deriving the encryption key is ~100ms of scrypt and belongs
-   * on the threadpool, before any stream exists.
+   * `async` because deriving the encryption key from a password is ~100ms of
+   * scrypt and belongs on the threadpool, before any stream exists. A stored
+   * backup key (the automatic backup) needs no derivation and writes v3.
    */
   static async create(
     target: Writable,
-    encryptionPassword?: string,
+    encryption?: BackupEncryptionInput,
   ): Promise<ExportWriter> {
     const gzip = createGzip();
-    const framer = encryptionPassword
-      ? await createBackupEncryptStream(encryptionPassword)
-      : null;
+    const framer =
+      encryption === undefined || encryption === ""
+        ? null
+        : typeof encryption === "string"
+          ? await createBackupEncryptStream(encryption)
+          : createKeyWrappedEncryptStream(encryption);
     if (framer) gzip.pipe(framer);
     return new ExportWriter(gzip, framer ?? gzip, target, framer);
   }

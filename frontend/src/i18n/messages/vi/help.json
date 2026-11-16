@@ -1,0 +1,81 @@
+{
+  "learnMore": "Tìm hiểu thêm",
+  "howThisWorks": "Cách hoạt động",
+  "menu": {
+    "helpForPage": "Trợ giúp cho trang này",
+    "search": "Tìm trong trợ giúp",
+    "shortcuts": "Phím tắt",
+    "takeTour": "Xem hướng dẫn",
+    "whatsNew": "Có gì mới",
+    "shellMenu": "Menu ứng dụng máy tính",
+    "reportIssue": "Báo cáo sự cố",
+    "discussions": "Thảo luận"
+  },
+  "shortcuts": {
+    "title": "Phím tắt",
+    "palette": "Bảng lệnh",
+    "paletteKeys": "Ctrl/Cmd+K",
+    "search": "Tìm trong trợ giúp",
+    "searchKeys": "?",
+    "undo": "Hoàn tác thay đổi gần nhất",
+    "undoKeys": "Ctrl/Cmd+Z",
+    "redo": "Làm lại",
+    "redoKeys": "Ctrl/Cmd+Shift+Z hoặc Ctrl/Cmd+Y",
+    "closeDialog": "Đóng hộp thoại hoặc bảng đang mở",
+    "closeDialogKeys": "Esc"
+  },
+  "panel": {
+    "title": "Trợ giúp",
+    "back": "Quay lại",
+    "forward": "Tiến tới",
+    "openOnline": "Mở trên monize.net",
+    "pin": "Ghim bảng trợ giúp để bảng luôn mở khi bạn chuyển giữa các trang",
+    "unpin": "Bỏ ghim bảng trợ giúp",
+    "expand": "Mở rộng bảng trợ giúp",
+    "collapse": "Thu nhỏ bảng trợ giúp",
+    "resize": "Đổi kích thước bảng trợ giúp",
+    "resizeValue": "{width} pixel",
+    "close": "Đóng trợ giúp",
+    "englishOnly": "Hướng dẫn này bằng tiếng Anh.",
+    "loading": "Đang tải trợ giúp",
+    "toc": {
+      "toggle": "Trên trang này",
+      "label": "Các phần trên trang này"
+    },
+    "error": {
+      "heading": "Không thể tải trợ giúp",
+      "body": "Hướng dẫn chưa được tải. Hãy thử lại hoặc đọc trang này trên monize.net.",
+      "retry": "Thử lại"
+    },
+    "search": "Tìm kiếm trong hướng dẫn",
+    "tour": {
+      "prompt": "Trang này có hướng dẫn tham quan."
+    },
+    "version": "Hướng dẫn cho Monize {version}",
+    "latestOnline": "Hướng dẫn mới nhất có trên monize.net"
+  },
+  "search": {
+    "title": "Tìm kiếm trong hướng dẫn",
+    "placeholder": "Tìm kiếm trong hướng dẫn",
+    "ariaLabel": "Tìm kiếm trong hướng dẫn",
+    "contextHeading": "Trợ giúp cho màn hình này",
+    "noResults": "Không có kết quả cho \"{query}\"",
+    "error": "Tìm kiếm không thành công. Vui lòng thử lại.",
+    "hint": {
+      "navigate": "để di chuyển",
+      "select": "để chọn",
+      "close": "để đóng"
+    }
+  },
+  "markdown": {
+    "screenshot": "Ảnh chụp màn hình",
+    "viewScreenshot": "Xem ảnh chụp màn hình trên monize.net",
+    "callout": {
+      "note": "Ghi chú",
+      "tip": "Mẹo",
+      "important": "Quan trọng",
+      "warning": "Cảnh báo",
+      "caution": "Thận trọng"
+    }
+  }
+}

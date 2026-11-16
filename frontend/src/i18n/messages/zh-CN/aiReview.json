@@ -1,0 +1,120 @@
+{
+  "page": {
+    "title": "AI 审核收件箱",
+    "subtitle": "规则要求 AI 审查的交易、助手被要求起草的配置文件以及助手为您批准而提议的编辑。"
+  },
+  "filter": {
+    "label": "按状态筛选",
+    "open": "未完成",
+    "pending": "待处理",
+    "claimed": "审核中",
+    "proposed": "已提议",
+    "applied": "已应用",
+    "rejected": "已拒绝",
+    "expired": "已过期"
+  },
+  "kindFilter": {
+    "label": "按类型筛选",
+    "all": "全部",
+    "email_receipt": "邮件收据",
+    "transaction_review": "规则",
+    "option": "{label}（{count}）"
+  },
+  "status": {
+    "pending": "待处理",
+    "claimed": "审核中",
+    "proposed": "已提议",
+    "applied": "已应用",
+    "rejected": "已拒绝",
+    "expired": "已过期"
+  },
+  "columns": {
+    "date": "日期",
+    "request": "请求",
+    "amount": "金额",
+    "status": "状态"
+  },
+  "row": {
+    "noPayee": "无收款人",
+    "transactionMissing": "此交易已不存在",
+    "rule": "规则：{name}",
+    "manualRequest": "手动请求",
+    "trade": "{action, select, BUY {买入 {quantity} 份 {symbol}} SELL {卖出 {quantity} 份 {symbol}} DIVIDEND {{symbol} 的股息} REINVEST {将股息再投资于 {quantity} 份 {symbol}} other {{symbol} 的交易}}",
+    "receiptInstruction": {
+      "automatic": "根据附带的订单邮件完善此交易：按商品行拆分并为每行指定类别，或设置描述。",
+      "chat": "你要求识别附带的订单邮件：按产品拆分此交易并为每项指定类别，或设置描述。",
+      "categorize": "为附带订单邮件中没有被任何规则分类的每个商品指定类别，然后提议此交易的拆分或设置描述。",
+      "parsed": "已保存的解析器读取了订单邮件，并为此交易提议这些类别行和此描述。",
+      "trade": "已保存的解析器读取的交易确认邮件提出了这笔投资交易。批准前，请与你的券商核对账户、证券、数量和合计。",
+      "tradeChat": "你要求识别所附的交易确认：请提出它所报告的投资交易，即买入、卖出、现金股息或股息再投资。"
+    },
+    "emailReceipt": "邮件收据：来自 {sender} 的 {subject}",
+    "emailReceiptForwarded": "邮件收据：来自 {sender} 的 {subject}，转发者 {forwarder}",
+    "emailReceiptMissing": "邮件收据（该邮件已被删除）",
+    "parserDraft": "来自 {count, plural, one {# 封电子邮件} other {# 封电子邮件}} 的配置文件草稿 ({domain})",
+    "viewEmailReceipts": "查看邮件收据",
+    "agentNote": "助手备注：{reason}",
+    "dates": "创建于 {created}，到期于 {expires}",
+    "viewTransaction": "查看交易",
+    "waitingForAgent": "正在等待 AI 代理。请<link>在设置中连接 AI 提供商</link>，或让 MCP 客户端来认领。",
+    "parserDraftReady": "配置文件草稿已准备就绪。<link>在配置文件设置中测试并批准它</link>。",
+    "tradePending": "来自邮件的交易，尚未读取",
+    "tradeEmail": "交易确认邮件",
+    "parserDraftIds": "配置文件草稿 ID：{ids}"
+  },
+  "actions": {
+    "dismiss": "忽略"
+  },
+  "proposal": {
+    "errorTitle": "此提议已无法应用"
+  },
+  "bulk": {
+    "selectRow": "选择 {name}",
+    "selectAll": "选择所有显示的可批准或可发送的请求",
+    "approveSelected": "批准所选（{count}）",
+    "approveAllShown": "批准显示的全部（{count}）",
+    "summary": "已应用 {approved, plural, one {# 条提议} other {# 条提议}}，{failed, plural, one {# 条未应用} other {# 条未应用}}。",
+    "closeSummary": "关闭",
+    "failure": "{name}：{reason}",
+    "noReason": "未给出原因",
+    "unknownRequest": "一个请求",
+    "failed": "无法应用这些提议",
+    "dialog": {
+      "title": "{count, plural, one {应用 # 条提议？} other {应用 # 条提议？}}",
+      "message": "每条提议都会对照交易当前的状态进行检查，并单独应用。不再适用的提议会被跳过并报告，其余的仍会应用。批准之前请先审核这些提议。",
+      "confirm": "{count, plural, one {应用 # 条提议} other {应用 # 条提议}}"
+    }
+  },
+  "sendToAssistant": {
+    "button": "将 {count, plural, other {# 个待处理请求}}发送给 AI 助手",
+    "buttonSelected": "将 {count, plural, other {# 个所选请求}}发送给 AI 助手",
+    "prompt": "使用 ai_review_requests 工具处理我待处理的 AI 审核请求：列出它们，逐个认领，按照其指示操作并提交提议。对于配置文件草稿请求，请改用 email_receipt_parsers 工具创建配置文件。在我于 AI 审核收件箱中批准提议之前，不会更改任何内容。",
+    "promptSelected": "使用 ai_review_requests 工具处理{count, plural, other {这 # 个 AI 审核请求}}：{ids}。按 ID 逐个认领，按照其指示操作并提交提议。对于配置文件草稿请求，请改用 email_receipt_parsers 工具创建配置文件。不要处理其他请求。在我于 AI 审核收件箱中批准提议之前，不会更改任何内容。",
+    "opened": "已打开聊天并附上准备好的消息。请阅读后点击发送。",
+    "unavailable": "AI 助手现在无法回答。请在设置中连接 AI 提供商，或连接你的 MCP 客户端。请求会继续在这里等待。"
+  },
+  "dismissDialog": {
+    "title": "忽略此请求？",
+    "message": "不会再有人被要求处理此请求。它所涉及的内容不会更改。",
+    "confirm": "忽略请求"
+  },
+  "loading": "正在加载审核请求...",
+  "error": {
+    "title": "无法加载审核请求",
+    "body": "列表未能加载，因此可能并不为空。请检查网络连接后重试。",
+    "retry": "重试"
+  },
+  "empty": {
+    "title": "没有审核请求",
+    "body": "当带有“请求 AI 审核”操作的规则匹配到某笔交易时，请求会出现在这里。AI 助手或中继代理等 MCP 客户端会处理队列，并提出修改供您批准。",
+    "filteredTitle": "没有此状态的请求",
+    "filteredBody": "选择其他状态以查看其他请求。"
+  },
+  "toasts": {
+    "approved": "提议已应用",
+    "dismissed": "请求已忽略",
+    "dismissFailed": "无法忽略该请求",
+    "approveFailed": "无法应用该提议",
+    "changed": "此请求在此期间已发生变化。列表已重新加载。"
+  }
+}

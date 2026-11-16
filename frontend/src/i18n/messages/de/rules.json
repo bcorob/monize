@@ -1,0 +1,618 @@
+{
+  "page": {
+    "title": "Regeln",
+    "subtitle": "Tags, Kategorien und Zahlungsempfänger automatisch ergänzen, wenn eine Transaktion angelegt oder importiert wird",
+    "createButton": "Regel erstellen",
+    "loading": "Regeln werden geladen...",
+    "totalCount": "{count, plural, one {# Regel} other {# Regeln}}"
+  },
+  "empty": {
+    "title": "Noch keine Regeln",
+    "body": "Eine Regel beobachtet neue und importierte Transaktionen und ergänzt Tags, Kategorien oder Zahlungsempfänger, wenn ihre Bedingungen zutreffen. Erstellen Sie Ihre erste Regel, um loszulegen.",
+    "createButton": "Erste Regel erstellen"
+  },
+  "error": {
+    "title": "Ihre Regeln konnten nicht geladen werden",
+    "body": "Es wird nichts angezeigt, weil die Anfrage fehlgeschlagen ist, nicht weil Sie keine Regeln haben. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+    "retry": "Erneut versuchen"
+  },
+  "list": {
+    "header": {
+      "order": "Reihenfolge",
+      "enabled": "Aktiv",
+      "name": "Regel",
+      "summary": "Zusammenfassung",
+      "actions": "Aktionen"
+    },
+    "summary": "{trigger, select, create {Beim Anlegen} import {Beim Import} both {Beim Anlegen oder Import} other {Kein Auslöser}} · {conditions, plural, =0 {Keine Bedingungen} one {# Bedingung} other {# Bedingungen}} · {actions, plural, =0 {Keine Aktionen} one {# Aktion} other {# Aktionen}}",
+    "enabledLabel": "{name} aktivieren"
+  },
+  "actions": {
+    "moveUp": "Nach oben",
+    "moveDown": "Nach unten",
+    "run": "Auf bestehende Buchungen anwenden",
+    "runInvalid": "Repariere die Regel, bevor du sie anwendest"
+  },
+  "invalid": {
+    "badge": "Ungültig",
+    "tooltip": "Wird übersprungen, bis der Fehler behoben ist: {reasons}.",
+    "reasons": {
+      "referenceMissing": "ein verwendeter Tag, Zahlungsempfänger, eine Kategorie oder ein Konto existiert nicht mehr",
+      "noActions": "sie hat keine Aktionen",
+      "tooLarge": "ihre Bedingungen sind zu umfangreich",
+      "duplicateAction": "sie wiederholt eine Aktion, die nur einmal erlaubt ist",
+      "unreadable": "ihre gespeicherte Definition kann nicht gelesen werden",
+      "other": "ihre Definition ist ungültig"
+    }
+  },
+  "duplicate": {
+    "name": "{name} (Kopie)"
+  },
+  "delete": {
+    "title": "Regel löschen",
+    "message": "Möchten Sie „{name}“ wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden."
+  },
+  "toasts": {
+    "enabled": "Regel aktiviert",
+    "disabled": "Regel deaktiviert",
+    "toggleFailed": "Die Regel konnte nicht geändert werden",
+    "deleted": "Regel gelöscht",
+    "deleteFailed": "Die Regel konnte nicht gelöscht werden",
+    "duplicated": "Regel dupliziert. Die Kopie ist ausgeschaltet, bis Sie sie aktivieren",
+    "duplicateFailed": "Die Regel konnte nicht dupliziert werden",
+    "reorderFailed": "Die Reihenfolge der Regeln konnte nicht geändert werden",
+    "listChanged": "Die Regelliste wurde an anderer Stelle geändert und neu geladen. Versuchen Sie es erneut",
+    "loadFailed": "Regeln konnten nicht geladen werden"
+  },
+  "editor": {
+    "page": {
+      "newTitle": "Neue Regel",
+      "editTitle": "Regel bearbeiten",
+      "subtitle": "Legen Sie fest, wann die Regel läuft, welche Transaktionen sie erfasst und was sie ändert",
+      "backToRules": "Zurück zu Regeln",
+      "loading": "Regel wird geladen..."
+    },
+    "name": {
+      "label": "Name",
+      "placeholder": "Zum Beispiel: Cafés taggen"
+    },
+    "enabled": {
+      "label": "Regel aktiviert"
+    },
+    "sections": {
+      "when": "Wann",
+      "if": "Wenn",
+      "then": "Dann"
+    },
+    "when": {
+      "description": "Legen Sie fest, wann die Regel eine Transaktion prüft",
+      "created": "Eine Transaktion wird erstellt",
+      "imported": "Eine Transaktion wird importiert",
+      "atLeastOne": "Mindestens eine Option muss ausgewählt bleiben",
+      "stopProcessing": "Weitere Regeln nicht mehr verarbeiten",
+      "stopProcessingHelp": "Wenn diese Regel auf eine Transaktion zutrifft, werden die Regeln, die in der Liste danach stehen, für diese Transaktion übersprungen.",
+      "window": {
+        "title": "Aktiv zwischen",
+        "help": "Die Regel gilt nur für Transaktionen, deren Datum in diesem Zeitraum liegt: beim Erstellen oder Importieren sowie beim Testen oder Ausführen der Regel. Ein leeres Datum bedeutet keine Begrenzung.",
+        "from": "Erstes Datum",
+        "to": "Letztes Datum",
+        "backwards": "Das letzte Datum darf nicht vor dem ersten Datum liegen",
+        "noLimit": "keine Begrenzung",
+        "words": "Nur für Transaktionen vom {from} bis {to}"
+      }
+    },
+    "if": {
+      "description": "Die Aktionen laufen nur für Transaktionen, die zutreffen",
+      "everyTransaction": "Noch keine Bedingungen, daher gilt diese Regel für jede Transaktion."
+    },
+    "then": {
+      "description": "Die Aktionen laufen in dieser Reihenfolge",
+      "empty": "Noch keine Aktionen. Fügen Sie mindestens eine hinzu.",
+      "limit": "Eine Regel kann höchstens {max} Aktionen haben."
+    },
+    "group": {
+      "matchAll": "Alle dieser Bedingungen",
+      "matchAny": "Eine dieser Bedingungen",
+      "matchLabel": "Übereinstimmung",
+      "not": "Gruppe negieren",
+      "notHelp": "Eine negierte Gruppe trifft zu, wenn ihre Bedingungen nicht zutreffen.",
+      "title": "Gruppe",
+      "addCondition": "+ Bedingung hinzufügen",
+      "addGroup": "+ Gruppe hinzufügen",
+      "depthLimit": "Gruppen können höchstens {max} Ebenen tief verschachtelt werden.",
+      "sizeLimit": "Das Limit für Bedingungen ist erreicht.",
+      "empty": "Diese Gruppe ist leer."
+    },
+    "condition": {
+      "title": "Bedingung",
+      "field": "Feld",
+      "operator": "Operator",
+      "value": "Wert"
+    },
+    "fields": {
+      "accountId": "Konto",
+      "fromAccountId": "Von Konto (Überweisungen)",
+      "toAccountId": "Auf Konto (Überweisungen)",
+      "type": "Typ",
+      "payeeId": "Zahlungsempfänger",
+      "payeeText": "Zahlungsempfänger-Text wie empfangen",
+      "categoryId": "Kategorie",
+      "description": "Beschreibung",
+      "amount": "Betrag (mit Vorzeichen)",
+      "absAmount": "Betrag (ohne Vorzeichen)",
+      "currencyCode": "Währung",
+      "tagIds": "Tags",
+      "hasSplits": "Hat Aufteilungen",
+      "referenceNumber": "Referenznummer",
+      "dayOfMonth": "Tag des Monats",
+      "weekday": "Wochentag",
+      "status": "Status",
+      "hasAttachment": "Hat einen Anhang",
+      "date": "Datum"
+    },
+    "operators": {
+      "eq": "ist",
+      "neq": "ist nicht",
+      "in": "ist eines von",
+      "notIn": "ist keines von",
+      "isEmpty": "ist leer",
+      "contains": "enthält",
+      "startsWith": "beginnt mit",
+      "matches": "entspricht dem Muster",
+      "lt": "ist kleiner als",
+      "lte": "ist höchstens",
+      "gt": "ist größer als",
+      "gte": "ist mindestens",
+      "between": "liegt zwischen",
+      "hasAny": "hat eines von",
+      "hasAll": "hat alle von",
+      "hasNone": "hat keines von",
+      "inSubtree": "liegt in oder unterhalb von"
+    },
+    "types": {
+      "EXPENSE": "Ausgabe",
+      "INCOME": "Einnahme",
+      "TRANSFER": "Überweisung"
+    },
+    "value": {
+      "account": "Konto auswählen",
+      "accounts": "Konten auswählen",
+      "payee": "Zahlungsempfänger auswählen",
+      "payees": "Zahlungsempfänger auswählen",
+      "category": "Kategorie auswählen",
+      "categories": "Kategorien auswählen",
+      "tags": "Tags auswählen",
+      "currency": "Währung auswählen",
+      "currencies": "Währungen auswählen",
+      "types": "Typen auswählen",
+      "matchesHint": "Verwenden Sie * für beliebigen Text, zum Beispiel *Kaffee*. Ein Muster ohne * trifft nur auf den gesamten Text zu. Mit {capture} behalten Sie den Text an dieser Stelle für die Aktionen dieser Regel, zum Beispiel {example}. Ein Name besteht aus Kleinbuchstaben und Ziffern, und ein Muster kann bis zu {max} Texte behalten.",
+      "amount": "Betrag",
+      "from": "Von",
+      "to": "Bis",
+      "yes": "Ja",
+      "no": "Nein",
+      "days": "Tage auswählen",
+      "weekdays": "Wochentage auswählen",
+      "statuses": "Status auswählen"
+    },
+    "action": {
+      "title": "Aktion",
+      "type": "Aktionstyp",
+      "tags": "Tags",
+      "category": "Kategorie",
+      "payee": "Zahlungsempfänger",
+      "instruction": "Prüfanweisungen",
+      "instructionPlaceholder": "Zum Beispiel: diesen Einkauf nach dem Beleg aufteilen",
+      "instructionHelp": "Die Regel bittet nur um eine Prüfung. Eine Person bestätigt jede Änderung, bevor sie vorgenommen wird.",
+      "onlyIfEmpty": "Nur wenn leer",
+      "onlyIfEmptyHelp": "Wenn aktiviert, füllt die Regel Kategorie oder Zahlungsempfänger nur aus, wenn die Transaktion keine hat. Ein von Hand oder durch die Standardkategorie des Zahlungsempfängers gesetzter Wert wird nicht ersetzt. Deaktivieren Sie die Option, um ihn zu ersetzen.",
+      "add": "+ Aktion hinzufügen",
+      "reviewInbox": "Zum Prüfungseingang",
+      "payeeTemplate": "Name des Zahlungsempfängers",
+      "descriptionTemplate": "Text der Beschreibung",
+      "templateHelp": "Reiner Text. Jeder Platzhalter in geschweiften Klammern wird durch Text aus der Transaktion ersetzt. Wählen Sie unten einen Platzhalter aus, um ihn einzufügen.",
+      "joinHelp": "Der Text wird genau so an die aktuelle Beschreibung angefügt, wie er geschrieben ist. Fügen Sie also gewünschte Leerzeichen oder Trennzeichen selbst ein.",
+      "placeholders": "Platzhalter",
+      "placeholdersHelp": "{payeeText} ist der Zahlungsempfängertext, wie er empfangen wurde. {description} ist die Beschreibung, wie sie beim Ausführen dieser Aktion vorliegt. Die übrigen Platzhalter sind die Erfassungen, die in den Mustern dieser Regel benannt sind.",
+      "insertPlaceholder": "{name} einfügen",
+      "unknownPlaceholders": "Von dieser Regel nicht definiert: {names}. Wählen Sie einen Platzhalter aus der Liste oder erfassen Sie ihn in einem Muster weiter oben.",
+      "invalidPlaceholders": "Kein gültiger Platzhalter: {names}. Ein Name besteht aus Kleinbuchstaben und Ziffern.",
+      "createIfMissing": "Zahlungsempfänger anlegen, falls nicht vorhanden",
+      "createIfMissingHelp": "Wenn aktiviert und kein Zahlungsempfänger zum Namen passt (nach Name, Alias oder ähnlicher Übereinstimmung), wird ein neuer Zahlungsempfänger angelegt. Ein von einer Regel angelegter Zahlungsempfänger bleibt erhalten, wenn Sie den Lauf rückgängig machen.",
+      "onlyIfEmptyDescriptionHelp": "Wenn aktiviert, schreibt die Regel die Beschreibung nur, wenn die Transaktion keine hat. Deaktivieren Sie die Option, um sie jedes Mal zu schreiben.",
+      "mode": "Beschreibungsmodus",
+      "modes": {
+        "replace": "Beschreibung ersetzen",
+        "append": "Nach der Beschreibung anfügen",
+        "prepend": "Vor der Beschreibung einfügen"
+      },
+      "convertHelp": "Die passende Einnahme oder Ausgabe wird zu einer Seite einer Überweisung. Die andere Seite wird auf dem gewählten Konto angelegt, das dieselbe Währung haben muss.",
+      "direction": "Richtung",
+      "directionTo": "Ausgabe: Das Geld geht auf ein anderes Konto",
+      "directionFrom": "Einnahme: Das Geld kommt von einem anderen Konto",
+      "clearCategory": "Kategorie entfernen",
+      "clearCategoryHelp": "Eine Überweisung hat keine Kategorie. Deaktivieren, um die vorhandene Kategorie der Transaktion zu behalten.",
+      "splitPayee": "Zahlungsempfänger der Transaktion (optional)",
+      "splitHint": "Jeder Teil übernimmt seinen Betrag aus einer Erfassung in den Mustern oben oder nimmt den Rest. Die Teile müssen zusammen den Betrag der Transaktion ergeben, sonst lässt die Regel sie unverändert.",
+      "splitNoCaptures": "Es ist noch keine Erfassung definiert. Setzen Sie in einem Muster oben einen Namen in geschweifte Klammern, zum Beispiel PRINCIPAL: {example}, um ihn hier als Betrag zu verwenden.",
+      "partAmountPlaceholder": "Betrag wählen ...",
+      "partRest": "Der Rest",
+      "partAccount": "Konto",
+      "partPayee": "Zahlungsempfänger der anderen Seite (optional)",
+      "partsLimit": "Eine Aufteilung kann höchstens {max} Teile haben.",
+      "guideTitle": "So wird es verwendet",
+      "splitGuideHow": "Füge unter „Wenn“ eine Bedingung für den Zahlungsempfängertext oder die Beschreibung mit dem Operator „entspricht dem Muster“ hinzu und setze an die Stelle der Beträge Namen in geschweiften Klammern, zum Beispiel {first}. Jeder Name wird zu einem Betrag, den du für einen Teil auswählen kannst, oder wähle „Der Rest“. Die Teile müssen zusammen den Betrag der Transaktion ergeben, sonst lässt die Regel die Transaktion unverändert. Ein Teil kann eine Kategorie oder eine Überweisung auf ein anderes Konto sein (eine Überweisung ändert den Kontostand dieses Kontos).",
+      "splitGuideExampleTitle": "Beispiel: eine Darlehensrate",
+      "splitGuideBank": "Banktext: TILGUNG: 1200,50 ZINSEN: 300,25 GEBÜHR: 0,00",
+      "splitGuidePattern": "Muster: *TILGUNG: {first} ZINSEN: {second} GEBÜHR*",
+      "splitGuidePart1": "Teil 1: {first} als Überweisung auf das Darlehenskonto",
+      "splitGuidePart2": "Teil 2: {second} als Kategorie „Darlehen: Zinsen“",
+      "splitGuideResult": "Ergebnis für -1500,75: -1200,50 auf das Darlehenskonto überwiesen und -300,25 Zinsaufwand.",
+      "splitGuideTip": "Tipp: Lege unter „Aktiv zwischen“ ein Startdatum fest, damit ältere abgeglichene Transaktionen nicht geändert werden, und nutze vor dem Speichern den Bereich Test.",
+      "convertGuide": "Eine Ausgabe wird zu einer Überweisung auf das gewählte Konto, eine Einnahme zu einer Überweisung von diesem Konto. Nur der Kontostand des anderen Kontos ändert sich. Tipp: Nutze „Aktiv zwischen“, damit ältere Transaktionen nicht geändert werden.",
+      "splitGuideName1": "tilgung",
+      "splitGuideName2": "zinsen",
+      "loanGuide": "Verwende dies für eine Bankabbuchung, die eine Hypotheken- oder Darlehensrate als einen Betrag bezahlt. Gleiche die Abbuchung unter „Wenn“ nach Konto, Zahlungsempfängertext oder Beschreibung ab. Die Transaktion wird zu einer Aufteilung: Die Tilgung wird auf das Darlehenskonto überwiesen, und die Zinsen gehen in die Zinskategorie, beide bewertet für die Rate, die sie bezahlen. Tipp: Schalte die automatische Buchung der geplanten Zahlung des Darlehens aus, damit die Rate nicht doppelt bezahlt wird, und nutze den Bereich Test, bevor du speicherst.",
+      "loan": {
+        "help": "Die passende Abbuchung bezahlt die nächste Rate des Darlehens, die nahe ihrem Datum fällig ist. Monize ermittelt Tilgung und Zinsen für diese Rate; du gibst nie einen Betrag ein.",
+        "account": "Darlehenskonto",
+        "accountPlaceholder": "Hypothek oder Darlehen auswählen...",
+        "noLoans": "Du hast kein offenes Hypotheken- oder Darlehenskonto zum Begleichen.",
+        "window": "Fälligkeitsfenster",
+        "windowHelp": "Wie weit vom Fälligkeitsdatum entfernt die Bank die Zahlung abbuchen darf. Eine Abbuchung bis zu dieser Anzahl von Tagen vor oder nach dem Fälligkeitsdatum einer Rate bezahlt diese Rate; eine außerhalb des Fensters wird unverändert gelassen.",
+        "daysBefore": "Tage vor dem Fälligkeitsdatum",
+        "daysAfter": "Tage nach dem Fälligkeitsdatum",
+        "excess": "Abbuchung über der Rate",
+        "excessPolicies": {
+          "extra_principal": "Die Differenz als Sondertilgung bezahlen",
+          "refuse": "Die Transaktion unverändert lassen"
+        },
+        "shortfall": "Abbuchung unter der Rate",
+        "shortfallPolicies": {
+          "refuse": "Die Transaktion unverändert lassen",
+          "interest_first": "Zuerst die Zinsen bezahlen, den Rest als Tilgung"
+        },
+        "policyNote": "Eine Differenz von wenigen Cent wird von der Zinsposition aufgefangen.",
+        "policyHelp": "Banken runden jeden Teil einzeln, daher wird eine Abbuchung innerhalb von 5 der kleinsten Einheit der Währung (0,05 bei den meisten Währungen) als genau behandelt, und die Zinsposition übernimmt die Differenz. Eine größere Differenz folgt den beiden Optionen oben.",
+        "interestCategory": "Zinskategorie (optional)",
+        "interestCategoryPlaceholder": "Die eigene Zinskategorie des Darlehens",
+        "autoPostTitle": "Die geplante Zahlung des Darlehens bucht sich selbst",
+        "autoPostBody": "Die automatische Buchung ist für die geplante Zahlung dieses Darlehens aktiviert, sodass sie und die Bankabbuchung, die diese Regel begleicht, dieselbe Rate bezahlen würden. Schalte die automatische Buchung der geplanten Zahlung aus."
+      }
+    },
+    "actionTypes": {
+      "add_tags": "Tags hinzufügen",
+      "remove_tags": "Tags entfernen",
+      "set_category": "Kategorie festlegen",
+      "set_payee": "Zahlungsempfänger festlegen",
+      "request_ai_review": "KI-Prüfung anfordern",
+      "set_payee_from_text": "Zahlungsempfänger aus Text festlegen",
+      "set_description": "Beschreibung festlegen",
+      "convert_to_transfer": "In eine Überweisung umwandeln",
+      "split": "Transaktion aufteilen",
+      "settle_loan_installment": "Eine Darlehensrate begleichen"
+    },
+    "save": {
+      "button": "Regel speichern",
+      "createdToast": "Regel erstellt",
+      "savedToast": "Regel gespeichert",
+      "failedToast": "Die Regel konnte nicht gespeichert werden",
+      "summary": "Die Regel wurde nicht gespeichert. Korrigieren Sie die unten markierten Punkte und versuchen Sie es erneut."
+    },
+    "loadError": {
+      "title": "Die Regel konnte nicht geladen werden",
+      "body": "Es wird nichts angezeigt, weil die Anfrage fehlgeschlagen ist, nicht weil die Regel leer ist. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+      "lookupsBody": "Die Listen der Konten, Zahlungsempfänger, Kategorien, Tags und Währungen konnten nicht geladen werden, daher kann die Regel nicht sicher angezeigt werden. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+      "notFound": "Diese Regel existiert nicht mehr. Möglicherweise wurde sie gelöscht.",
+      "retry": "Erneut versuchen"
+    },
+    "invalid": {
+      "title": "Diese Regel kann nicht laufen",
+      "repaired": "Einige Teile der gespeicherten Definition konnten nicht gelesen werden und wurden hier entfernt oder zurückgesetzt. Prüfen Sie die Regel vor dem Speichern."
+    },
+    "conflict": {
+      "title": "Diese Regel wurde an anderer Stelle geändert",
+      "body": "Laden Sie sie neu, um die aktuelle Version zu sehen. Ihre nicht gespeicherten Änderungen gehen verloren.",
+      "reload": "Neu laden"
+    },
+    "errors": {
+      "codes": {
+        "INVALID_SHAPE": "Dieser Teil hat eine Form, die der Editor nicht versteht.",
+        "UNKNOWN_KEY": "Dieser Teil enthält eine Einstellung, die es nicht gibt.",
+        "UNKNOWN_FIELD": "Wählen Sie ein Feld.",
+        "UNKNOWN_ACTION": "Wählen Sie eine Aktion.",
+        "OPERATOR_NOT_ALLOWED": "Dieses Feld erlaubt diesen Operator nicht.",
+        "VALUE_REQUIRED": "Geben Sie einen Wert ein oder wählen Sie einen aus.",
+        "VALUE_NOT_ALLOWED": "Dieser Operator nimmt keinen Wert an.",
+        "VALUE_TYPE": "Der Wert hat die falsche Art für dieses Feld.",
+        "VALUE_OUT_OF_RANGE": "Der Wert liegt außerhalb des zulässigen Bereichs.",
+        "VALUE_TOO_LONG": "Der Text ist zu lang.",
+        "VALUE_EMPTY": "Geben Sie einen Text ein.",
+        "INVALID_UUID": "Wählen Sie einen Eintrag aus der Liste.",
+        "INVALID_ENUM": "Wählen Sie einen der angebotenen Werte.",
+        "INVALID_CURRENCY": "Wählen Sie eine Währung.",
+        "ARRAY_EMPTY": "Wählen Sie mindestens einen Eintrag.",
+        "ARRAY_TOO_LARGE": "Es sind zu viele Einträge ausgewählt.",
+        "RANGE_ORDER": "Der erste Wert darf nicht größer sein als der zweite.",
+        "MAX_DEPTH": "Die Gruppen sind zu tief verschachtelt. Das Limit sind {maxDepth} Ebenen.",
+        "MAX_LEAVES": "Es gibt zu viele Bedingungen. Das Limit ist {maxLeaves}.",
+        "MAX_NODES": "Es gibt zu viele Bedingungen und Gruppen. Das Limit ist {maxNodes}.",
+        "NO_ACTIONS": "Fügen Sie mindestens eine Aktion hinzu.",
+        "TOO_MANY_ACTIONS": "Es gibt zu viele Aktionen. Das Limit ist {maxActions}.",
+        "DUPLICATE_ACTION": "Eine Regel kann nur eine KI-Prüfung, eine Überweisung, Aufteilung oder Darlehensbegleichung und einen Aufteilungsteil für den Rest enthalten.",
+        "CONFLICTING_ACTIONS": "Eine Überweisungs-, Aufteilungs- oder Darlehensbegleichungsaktion kann nicht mit „Kategorie festlegen“ kombiniert werden, und jeder Teil einer Aufteilung hat entweder eine Kategorie oder ein Konto.",
+        "INVALID_CAPTURE": "Ein Erfassungsname besteht aus Kleinbuchstaben und Ziffern, beginnt mit einem Buchstaben und ist höchstens 20 Zeichen lang.",
+        "TOO_MANY_CAPTURES": "Ein Muster darf höchstens 5 Erfassungen enthalten.",
+        "DUPLICATE_CAPTURE": "Jeder Erfassungsname darf in einer Regel nur einmal vorkommen.",
+        "UNKNOWN_CAPTURE": "Dies verwendet eine Erfassung, die keine Bedingung dieser Regel definiert.",
+        "LOOKS_LIKE_REGEX": "Reguläre Ausdrücke werden nicht unterstützt: | \\ und kurze Klammerklassen wie [xy] gelten als gewöhnliche Zeichen, daher trifft ein als Regex geschriebenes Muster nie das Gemeinte. Um einen von mehreren Texten zu treffen, fügen Sie eine Gruppe „Eine dieser“ hinzu und legen Sie darin für jeden Text eine Bedingung an.",
+        "PATTERN_WITHOUT_WILDCARD": "Ohne * muss dieses Muster dem gesamten Text entsprechen. Verwenden Sie „ist“ für den ganzen Text, „enthält“ für einen Teil davon oder setzen Sie * um den Text, zum Beispiel *Kaffee*.",
+        "REFERENCE_NOT_FOUND": "Ein hier gewählter Eintrag existiert nicht mehr. Wählen Sie einen anderen.",
+        "NAME_REQUIRED": "Geben Sie einen Namen für die Regel ein.",
+        "UNKNOWN": "Dieser Teil ist ungültig."
+      }
+    },
+    "run": {
+      "button": "Auf bestehende Buchungen anwenden",
+      "saveFirst": "Speichere deine Änderungen, um die gespeicherte Regel anzuwenden."
+    },
+    "expression": {
+      "modeLabel": "Bedingungsansicht",
+      "visual": "Visuell",
+      "expression": "Ausdruck",
+      "label": "Bedingungsausdruck",
+      "help": "Schreibe die Bedingungen als Text. Nutze && für alle, || für eine beliebige davon und !( ... ) für Nicht. Elemente werden über ihren Namen angegeben: account(\"Name\"), payee(\"Name\"), category(\"Ober: Unter\") und tag(\"Name\"). Ein Unterstrich _ steht für einen Wert, der noch nicht gewählt ist. matchesGlob nutzt * als Platzhalter. Unterstützt wird nur die Syntax aus den Vorschlägen.",
+      "blocked": "Korrigiere den Ausdruck, um zur visuellen Ansicht zurückzukehren oder zu speichern.",
+      "errorAt": "Zeile {line}, Spalte {column}: {message}",
+      "suggestions": "Vorschläge",
+      "errors": {
+        "tooLong": "Der Ausdruck ist zu lang. Das Limit beträgt {max} Zeichen.",
+        "unexpectedChar": "Das Zeichen {char} wird nicht unterstützt.",
+        "unterminatedString": "Diesem Text fehlt das schließende Anführungszeichen.",
+        "invalidEscape": "Diese Escape-Sequenz wird nicht unterstützt.",
+        "badNumber": "Das ist keine gültige Zahl.",
+        "expectedExpression": "Hier wird eine Bedingung erwartet.",
+        "expectedField": "Hier wird ein Feldname erwartet.",
+        "expectedOperator": "Nach dem Feld wird ein Operator oder eine Methode erwartet.",
+        "expectedValue": "Hier wird ein Wert erwartet.",
+        "expectedSymbol": "Hier wird {symbol} erwartet.",
+        "unexpectedToken": "Unerwartet: {token}.",
+        "unsupported": "Dieser Teil wird nicht unterstützt. Nutze nur die Syntax aus den Vorschlägen.",
+        "unknownField": "Unbekanntes Feld {name}.",
+        "unknownFunction": "Unbekannte Funktion oder Methode {name}.",
+        "operatorNotAllowed": "Das Feld {field} kann nicht mit {operator} verwendet werden.",
+        "wrongValueType": "{expected, select, text {Erwartet wird ein Text in Anführungszeichen.} number {Erwartet wird eine Zahl.} boolean {Erwartet wird true oder false.} list {Erwartet wird eine Liste in eckigen Klammern.} account {Erwartet wird ein Konto, zum Beispiel account(\"Name\").} payee {Erwartet wird ein Zahlungsempfänger, zum Beispiel payee(\"Name\").} category {Erwartet wird eine Kategorie, zum Beispiel category(\"Ober: Unter\").} tag {Erwartet wird ein Tag, zum Beispiel tag(\"Name\").} other {Dieser Wert hat die falsche Art.}}",
+        "invalidEnum": "Verwende einen dieser Werte: {values}.",
+        "invalidCurrency": "Verwende einen dreistelligen Währungscode in Anführungszeichen, zum Beispiel \"CAD\".",
+        "valueTooLong": "Der Text ist zu lang. Das Limit beträgt {max} Zeichen.",
+        "listTooLong": "Die Liste ist zu lang. Das Limit beträgt {max} Einträge.",
+        "unknownEntity": "{kind, select, account {Kein Konto heißt {name}.} payee {Kein Zahlungsempfänger heißt {name}.} category {Keine Kategorie heißt {name}.} tag {Kein Tag heißt {name}.} other {Kein Element heißt {name}.}}",
+        "ambiguousEntity": "{count} Elemente heißen {name}. Füge die Nummer des gemeinten hinzu, zum Beispiel {example}.",
+        "entityOrdinal": "Die Nummer für {name} muss zwischen 1 und {count} liegen.",
+        "maxDepth": "Gruppen sind zu tief verschachtelt. Das Limit beträgt {max} Ebenen.",
+        "maxLeaves": "Es gibt zu viele Bedingungen. Das Limit beträgt {max}.",
+        "maxNodes": "Es gibt zu viele Bedingungen und Gruppen. Das Limit beträgt {max}.",
+        "tooNested": "Zu viele verschachtelte Klammern."
+      }
+    }
+  },
+  "test": {
+    "title": "Test",
+    "description": "Probiere die Regel an deinen bestehenden Buchungen aus. Es wird nichts geändert.",
+    "button": "Regel testen",
+    "again": "Erneut testen",
+    "incomplete": "Vervollständige die Bedingungen und Aktionen oben, um die Regel zu testen.",
+    "idle": "Wähle die Buchungen für den Test und wähle dann „Regel testen“.",
+    "running": "Regel wird getestet...",
+    "failed": "Der Test konnte nicht abgeschlossen werden. {message}",
+    "stale": "Die Regel oder die Filter haben sich seit diesem Ergebnis geändert. Teste erneut, um das aktuelle Ergebnis zu sehen."
+  },
+  "match": {
+    "button": "Regel testen",
+    "buttonLabel": "Regel testen: Bedingungen",
+    "incomplete": "Vervollständige die Bedingungen oben, um zu sehen, auf welche Buchungen sie zutreffen.",
+    "windowBackwards": "Die aktiven Daten enden, bevor sie beginnen, daher kann keine Buchung zutreffen.",
+    "summary": "{count, plural, =0 {Keine passenden Buchungen} one {# passende Buchung} other {# passende Buchungen}}",
+    "summaryPending": "Passende Buchungen",
+    "running": "Passende Buchungen werden gesucht...",
+    "failed": "Die passenden Buchungen konnten nicht geladen werden. {message}",
+    "empty": "Keine bestehenden Buchungen entsprechen diesen Bedingungen.",
+    "truncated": "Nur die neuesten {scanned, number} Buchungen wurden geprüft.",
+    "stale": "Die Bedingungen haben sich seit diesem Test geändert. Wähle erneut „Regel testen“, um die aktuellen Treffer zu sehen."
+  },
+  "run": {
+    "title": "„{name}“ auf bestehende Buchungen anwenden",
+    "description": "Sieh dir vorab an, was die Regel ändern würde, und bestätige dann. Du kannst die Ausführung im Aktionsverlauf rückgängig machen.",
+    "previewButton": "Vorschau",
+    "confirmButton": "Bestätigen und ausführen",
+    "idle": "Wähle Konten und Zeitraum und dann „Vorschau“. Es ändert sich nichts, bis du bestätigst.",
+    "loadingPreview": "Vorschau wird geladen...",
+    "previewFailed": "Die Vorschau konnte nicht geladen werden, daher kann nichts ausgeführt werden. {message}",
+    "stale": "Die Filter haben sich seit dieser Vorschau geändert. Erstelle die Vorschau erneut, bevor du ausführst.",
+    "accountsLoading": "Konten werden geladen...",
+    "accountsFailed": "Deine Konten konnten nicht geladen werden, daher sind die Filter nicht verfügbar.",
+    "retry": "Erneut versuchen",
+    "summary": "{matched, plural, one {# Buchung würde geändert} other {# Buchungen würden geändert}} von {scanned, plural, one {# geprüften Buchung} other {# geprüften Buchungen}}.",
+    "matchesNone": "Diese Regel trifft auf keine der geprüften Buchungen zu ({scanned}). Prüfen Sie die Bedingungen vor dem Speichern. Ein Muster ohne * trifft nur auf den gesamten Text zu.",
+    "noChange": "{matched} von {scanned} geprüften Buchungen erfüllen die Bedingungen der Regel, aber es würde sich nichts ändern (zum Beispiel, weil sie den Wert schon haben und „nur wenn leer“ aktiv ist). Das ist kein Fehler.",
+    "aiReview": "{count, plural, one {# Buchung würde zur KI-Prüfung eingereiht} other {# Buchungen würden zur KI-Prüfung eingereiht}}. Die Anfrage wird beim Bestätigen erstellt.",
+    "truncated": "Es passen mehr Buchungen, als das Limit zulässt. Nur die neuesten sind enthalten. Erhöhe das Limit oder grenze den Zeitraum ein, um den Rest einzubeziehen.",
+    "truncatedOldest": "Es haben mehr Transaktionen übereingestimmt, als das Limit erlaubt. Nur die ältesten sind enthalten, weil diese Regel Darlehensraten in Datumsreihenfolge begleicht. Führe sie nach diesem Lauf erneut aus, um den Rest einzuschließen.",
+    "noMatches": {
+      "title": "Keine Buchung würde geändert",
+      "body": "Keine der geprüften Buchungen passt zur Regel, oder die Regel würde daran nichts ändern."
+    },
+    "table": {
+      "date": "Datum",
+      "payee": "Zahlungsempfänger",
+      "amount": "Betrag",
+      "change": "Geplante Änderung",
+      "noPayee": "Kein Zahlungsempfänger"
+    },
+    "skipped": {
+      "title": "{count, plural, one {# Buchung wird übergangen} other {# Buchungen werden übergangen}}",
+      "line": "{count, plural, one {# Buchung} other {# Buchungen}}: {reason}",
+      "missing": "Beim Darlehen fehlt: {inputs}."
+    },
+    "skipReasons": {
+      "reconciled_locked": "sie ist abgeglichen und gesperrt",
+      "transfer_leg_category": "sie ist eine Überweisung und hat keine Kategorie",
+      "split_category": "sie ist aufgeteilt, die Kategorie gehört daher zu den Teilbuchungen",
+      "cross_owner_transfer_payee": "sie ist eine Überweisung an einen anderen Eigentümer, dessen Zahlungsempfänger diese Regel nicht ändern darf",
+      "empty_render": "der Text einer Aktion ist dafür leer geworden",
+      "payee_not_found": "kein Zahlungsempfänger hat den von der Regel gebildeten Namen, und sie legt keinen an",
+      "other": "die Regel kann sie nicht ändern",
+      "row_is_transfer_leg": "sie ist bereits eine Überweisung",
+      "row_has_splits": "sie ist bereits aufgeteilt",
+      "row_is_void": "sie ist ungültig (storniert)",
+      "zero_amount": "ihr Betrag ist null",
+      "transfer_direction_mismatch": "die Überweisung passt nicht zur Richtung: Eine Ausgabe geht auf ein Konto, eine Einnahme kommt von einem Konto",
+      "transfer_same_account": "das Überweisungskonto ist das Konto der Transaktion selbst",
+      "transfer_account_unavailable": "das Überweisungskonto ist nicht verfügbar (gelöscht oder nicht Ihres)",
+      "transfer_currency_mismatch": "das Überweisungskonto hat eine andere Währung",
+      "split_amount_unparseable": "ein Betrag in ihrem Text ließ sich nicht als Zahl lesen",
+      "split_sum_mismatch": "die Teile ergeben zusammen nicht ihren Betrag",
+      "split_too_few_parts": "nach dem Weglassen von Nullbeträgen bleiben weniger als zwei Teile übrig",
+      "row_from_scheduled_posting": "sie wurde aus der geplanten Zahlung des Darlehens gebucht, die die Rate bereits bezahlt hat",
+      "row_is_income": "sie ist eine Einnahme, und nur eine Abbuchung bezahlt eine Rate",
+      "loan_account_unavailable": "das Darlehenskonto ist nicht verfügbar (es wurde gelöscht, ist geschlossen, gehört dir nicht oder ist keine Hypothek oder kein Darlehen)",
+      "loan_interest_booked_separately": "das Darlehen bucht seine Zinsen als separate Transaktionen, sodass eine Zahlung sie nicht tragen kann",
+      "loan_not_configured": "beim Darlehen fehlt, was zur Bewertung einer Rate nötig ist",
+      "no_installment_in_window": "keine Rate des Darlehens ist innerhalb des Fensters um ihr Datum fällig",
+      "occurrence_already_posted": "die im Fenster fällige Rate ist bereits bezahlt",
+      "loan_debt_retired": "das Darlehen ist bereits abbezahlt",
+      "installment_amount_excess": "sie ist höher als die Rate, und die Regel lässt höhere Abbuchungen unverändert",
+      "installment_amount_shortfall": "sie ist niedriger als die Rate, und die Regel lässt niedrigere Abbuchungen unverändert"
+    },
+    "change": {
+      "category": "Kategorie: {before} → {after}",
+      "payee": "Zahlungsempfänger: {before} → {after}",
+      "payeeNew": "Zahlungsempfänger: {before} → {name} (neu)",
+      "tagsAdded": "Tags hinzugefügt: {tags}",
+      "tagsRemoved": "Tags entfernt: {tags}",
+      "none": "keine",
+      "unknown": "ein gelöschtes Element",
+      "payeeCreated": "{done, select, yes {Ein neuer Zahlungsempfänger wurde angelegt: {name}} other {Ein neuer Zahlungsempfänger wird angelegt: {name}}}",
+      "description": "Beschreibung: {before} → {after}",
+      "descriptionSet": "Beschreibung festlegen auf {value}",
+      "transfer": "{done, select, yes {Wurde zu einer Überweisung mit {account}} other {Wird zu einer Überweisung mit {account}}}",
+      "split": "{done, select, yes {Wurde in {count, plural, one {# Teil} other {# Teile}} aufgeteilt} other {Wird in {count, plural, one {# Teil} other {# Teile}} aufgeteilt}}",
+      "splitPart": "Teil {number}: {amount} {target}",
+      "splitPartMemo": ", Notiz „{memo}“",
+      "splitToTransfer": "auf {account}",
+      "splitToTransferPayee": "auf {account}, Zahlungsempfänger {payee}",
+      "splitToCategory": "als {category}",
+      "splitUncategorised": "ohne Kategorie",
+      "loanSettlement": "{done, select, yes {Wurde Rate {number} von {account} beglichen} other {Wird Rate {number} von {account} beglichen}}, fällig {dueDate}: Tilgung {principal}, Zinsen {interest}{hasExtra, select, yes {, Sondertilgung {extra}} other {}}. Schuld vorher: {debtBefore}"
+    },
+    "filters": {
+      "accounts": "Konten",
+      "allAccounts": "Alle Konten",
+      "startDate": "Von",
+      "endDate": "Bis",
+      "backwards": "Das Startdatum darf nicht nach dem Enddatum liegen.",
+      "limit": "Neueste Buchungen, die geprüft werden",
+      "help": "Geprüft werden nur die neuesten Buchungen im Zeitraum, höchstens {max}."
+    },
+    "errors": {
+      "PREVIEW_CHANGED": "Die Buchungen oder die Regel haben sich seit der Vorschau geändert. Prüfe die neue Vorschau und führe erneut aus.",
+      "RUN_TOO_LARGE": "Diese Ausführung ändert zu viele Buchungen, um in einem Schritt rückgängig gemacht zu werden. Schränke die Konten oder den Zeitraum ein und versuche es erneut.",
+      "INVALID_RULE": "Diese Regel ist nicht gültig und kann daher nicht ausgeführt werden. Öffne sie und repariere sie zuerst.",
+      "DATE_RANGE_INVALID": "Das Startdatum darf nicht nach dem Enddatum liegen.",
+      "draftInvalid": "Die Regel ist unvollständig oder ungültig. Prüfe die Bedingungen und Aktionen oben.",
+      "testFailed": "Beim Testen der Regel ist etwas schiefgegangen.",
+      "previewFailed": "Beim Laden der Vorschau ist etwas schiefgegangen.",
+      "runFailed": "Die Ausführung konnte nicht abgeschlossen werden. Prüfe den Aktionsverlauf, bevor du es erneut versuchst."
+    },
+    "toast": {
+      "done": "{count, plural, =0 {Es wurden keine Buchungen geändert} one {# Buchung geändert} other {# Buchungen geändert}}. Du kannst das im Aktionsverlauf rückgängig machen.",
+      "changedNoUndo": "{count, plural, one {# Buchung geändert} other {# Buchungen geändert}}.",
+      "aiReviewsQueued": "{count, plural, one {# Buchung zur KI-Prüfung eingereiht} other {# Buchungen zur KI-Prüfung eingereiht}}.",
+      "aiReviewsAlreadyQueued": "{count, plural, one {Für # Buchung gab es bereits eine offene KI-Prüfungsanfrage, daher wurde nichts Neues eingereiht} other {Für # Buchungen gab es bereits eine offene KI-Prüfungsanfrage, daher wurde nichts Neues eingereiht}}.",
+      "noChanges": "Es wurden keine Buchungen geändert."
+    },
+    "done": {
+      "summary": "{count, plural, =0 {Es wurden keine Buchungen geändert.} one {# Buchung wurde geändert.} other {# Buchungen wurden geändert.}}",
+      "aiReviewsQueued": "{count, plural, one {# Buchung wurde zur KI-Prüfung eingereiht.} other {# Buchungen wurden zur KI-Prüfung eingereiht.}}",
+      "aiReviewsAlreadyQueued": "{count, plural, one {Für # Buchung war bereits eine KI-Prüfung offen, daher wurde sie nicht erneut eingereiht.} other {Für # Buchungen war bereits eine KI-Prüfung offen, daher wurden sie nicht erneut eingereiht.}}",
+      "undo": "Du kannst die Ausführung im Aktionsverlauf rückgängig machen."
+    },
+    "missingInputs": {
+      "scheduledPayment": "eine geplante Zahlung",
+      "managedTemplate": "eine in Tilgung und Zinsen aufgeteilte Zahlung",
+      "scheduleCalendar": "ein Zahlungsplan",
+      "interestCategory": "eine Zinskategorie",
+      "amortizationMonths": "der Tilgungszeitraum",
+      "paymentStartDate": "das Datum der ersten Zahlung",
+      "paymentFrequency": "das Zahlungsintervall",
+      "originalPrincipal": "der ursprüngliche Darlehensbetrag",
+      "rate": "ein Zinssatz für das Datum",
+      "payment": "der Zahlungsbetrag",
+      "other": "eine Darlehenseinstellung"
+    }
+  },
+  "applications": {
+    "title": "Verlauf",
+    "description": "Die neuesten Buchungen, die diese Regel geändert hat, zuerst die jüngsten.",
+    "loading": "Verlauf wird geladen...",
+    "error": {
+      "title": "Der Verlauf konnte nicht geladen werden",
+      "body": "Es wird nichts angezeigt, weil die Anfrage fehlgeschlagen ist, nicht weil die Regel noch nicht gelaufen ist. Prüfe deine Verbindung und versuche es erneut.",
+      "retry": "Erneut versuchen"
+    },
+    "empty": {
+      "title": "Diese Regel hat noch nichts geändert",
+      "body": "Sobald sie eine Buchung ändert, wird die Änderung hier aufgeführt."
+    },
+    "source": {
+      "create": "Erstellt",
+      "import": "Importiert",
+      "manual": "Manuelle Ausführung",
+      "other": "Sonstige"
+    },
+    "table": {
+      "date": "Datum",
+      "payee": "Zahlungsempfänger",
+      "amount": "Betrag",
+      "source": "Quelle",
+      "change": "Änderung",
+      "appliedAt": "Angewendet",
+      "open": "Buchung öffnen",
+      "noPayee": "Kein Zahlungsempfänger",
+      "view": "Ansehen"
+    }
+  },
+  "words": {
+    "everyTransaction": "Jede Transaktion",
+    "group": {
+      "all": "Alle diese:",
+      "any": "Eine dieser:",
+      "notAll": "Nicht alle diese:",
+      "notAny": "Keine dieser:"
+    },
+    "leaf": "{field} {operator} {value}",
+    "leafNoValue": "{field} {operator}",
+    "range": "{from} und {to}",
+    "text": "„{value}“",
+    "unknownCondition": "Eine Bedingung, die diese Version nicht anzeigen kann",
+    "unknownAction": "Eine Aktion, die diese Version nicht anzeigen kann",
+    "action": {
+      "add_tags": "Tags hinzufügen: {tags}",
+      "remove_tags": "Tags entfernen: {tags}",
+      "set_category": "Kategorie festlegen auf {name}{onlyIfEmpty, select, yes { (nur wenn leer)} other {}}",
+      "set_payee": "Zahlungsempfänger festlegen auf {name}{onlyIfEmpty, select, yes { (nur wenn leer)} other {}}",
+      "request_ai_review": "KI-Prüfung anfordern: {instruction}",
+      "set_payee_from_text": "Zahlungsempfänger aus Text festlegen: „{template}“{createIfMissing, select, yes { (angelegt, falls nicht vorhanden)} other {}}{onlyIfEmpty, select, yes { (nur wenn leer)} other {}}",
+      "set_description": "Beschreibung festlegen ({mode, select, append {anfügen} prepend {voranstellen} other {ersetzen}}): „{template}“{onlyIfEmpty, select, yes { (nur wenn leer)} other {}}",
+      "convert_to_transfer": "In eine Überweisung {direction, select, from {von} other {auf}} {account} umwandeln",
+      "split": "Aufteilen in: {parts}",
+      "settle_loan_installment": "Die Rate von {account} begleichen, bezahlt durch eine Abbuchung bis zu {before, plural, one {# Tag} other {# Tagen}} vor oder {after, plural, one {# Tag} other {# Tagen}} nach ihrem Fälligkeitsdatum; eine höhere Abbuchung {excess, select, refuse {wird unverändert gelassen} other {bezahlt eine Sondertilgung}}, eine niedrigere {shortfall, select, interest_first {bezahlt zuerst die Zinsen} other {wird unverändert gelassen}}"
+    },
+    "splitPart": {
+      "transfer": "{amount} an {account}",
+      "category": "{amount} als {category}",
+      "plain": "{amount}",
+      "rest": "der Rest"
+    }
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "instrument": {
+    "issuerCountryCode": "PL",
+    "issuerCode": "PL_MF",
+    "programCode": "DOR",
+    "seriesCode": "DOR1028",
+    "currency": "PLN",
+    "marketability": "RETAIL_REDEEMABLE",
+    "faceValue": "100.00"
+  },
+  "saleWindow": {
+    "from": "2026-10-01",
+    "to": "2026-10-31"
+  },
+  "schedule": {
+    "anchor": "LOT_PURCHASE_DATE",
+    "periodMonths": 1,
+    "periodCount": 24,
+    "rollDay": "ANCHOR_DAY_CLAMPED",
+    "calendarId": "PL"
+  },
+  "accrual": {
+    "type": "ACTUAL_DAYS_IN_PERIOD"
+  },
+  "principalRule": {
+    "type": "FIXED_NOMINAL"
+  },
+  "rateRule": {
+    "type": "BENCHMARK_PLUS_SPREAD",
+    "benchmarkId": "PL_NBP_REFERENCE",
+    "firstPeriodRate": "0.0415",
+    "spread": "0.0015",
+    "benchmarkFloor": "0",
+    "observation": {
+      "type": "STEP_VALUE_ON_NTH_BUSINESS_DAY_BEFORE_START_MONTH",
+      "businessDays": 10,
+      "calendarId": "PL"
+    }
+  },
+  "capitalization": {
+    "type": "NONE"
+  },
+  "redemption": {
+    "type": "ON_DEMAND",
+    "earliestDaysAfterPurchase": 7,
+    "latestDaysBeforeMaturity": 20,
+    "blackouts": [
+      {
+        "type": "RECORD_DAY_BEFORE_COUPON",
+        "businessDays": 5,
+        "calendarId": "PL"
+      }
+    ],
+    "penalties": [
+      {
+        "type": "FIXED_FEE_PER_UNIT",
+        "amount": "0.70"
+      }
+    ],
+    "proceedsFloor": {
+      "type": "FACE_VALUE",
+      "appliesTo": "FIRST_PERIOD"
+    }
+  },
+  "rounding": {
+    "moneyDecimals": 2,
+    "mode": "HALF_UP"
+  },
+  "source": {
+    "provider": "PL_MF",
+    "url": "https://www.obligacjeskarbowe.pl/media_files/d4585b0f-349e-42b0-a399-a43051310cc3.pdf",
+    "document": "List emisyjny nr 96/2026"
+  }
+}

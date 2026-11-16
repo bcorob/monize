@@ -94,6 +94,9 @@
     "largestValue": "{amount} vào {date}",
     "overpaymentFor": "Người nhận khoản trả thêm cho",
     "website": "Trang web",
+    "address": "Địa chỉ",
+    "phone": "Điện thoại",
+    "email": "Email",
     "notes": "Ghi chú"
   },
   "tabs": {
@@ -127,5 +130,23 @@
     "needsMoreHistory": "Cần ít nhất {years} năm lịch sử để phân biệt mẫu theo mùa với sự tình cờ.",
     "empty": "Chưa có chi tiêu để phân tách theo tháng",
     "monthTooltip": "{month}: trung bình {amount} qua {years, plural, one {# năm} other {# năm}}"
+  },
+  "contactLookup": {
+    "button": "Tra cứu thông tin liên hệ",
+    "inProgress": "Đang tra cứu...",
+    "nothingNew": "Không tìm thấy thông tin liên hệ mới.",
+    "noProvider": "Thiết lập một nguồn trong cài đặt tra cứu người nhận để tìm thông tin liên hệ.",
+    "failed": "Không thể hoàn tất tra cứu. Vui lòng thử lại sau.",
+    "dialogTitle": "Xác nhận thông tin liên hệ",
+    "dialogSubtitle": "Không có gì được lưu cho {name} cho đến khi bạn xác nhận.",
+    "pickMatch": "Tên đó khớp với {count, plural, other {# doanh nghiệp}}. Hãy chọn nơi bạn thanh toán:",
+    "unlabelledMatch": "Kết quả không có tên",
+    "willAdd": "Thêm",
+    "willReplace": "Thay thế",
+    "cancel": "Hủy",
+    "confirm": "{count, plural, other {Lưu # thay đổi}}",
+    "applied": "{count, plural, other {Đã lưu # thông tin liên hệ}}",
+    "applyFailed": "Không thể lưu thông tin liên hệ",
+    "quotaExceeded": "Đã dùng hết lượt tra cứu Google Places trong tháng này. Hãy tăng giới hạn trong cài đặt tra cứu người nhận, hoặc chờ sang tháng sau."
   }
 }

@@ -2,29 +2,131 @@
 
 import { useState, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
+import { format } from 'date-fns';
 import { gainLossColor } from '@/lib/format';
+import { parseLocalDate } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/LoadingSkeleton';
 import { useRouter } from 'next/navigation';
-import { format } from 'date-fns';
 import { builtInReportsApi } from '@/lib/built-in-reports';
 import { UncategorizedTransactionItem } from '@/types/built-in-reports';
-import { parseLocalDate } from '@/lib/utils';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
+import { useDateFormat } from '@/hooks/useDateFormat';
 import { useDateRange } from '@/hooks/useDateRange';
 import { DateRangeSelector } from '@/components/ui/DateRangeSelector';
 import { exportToCsv } from '@/lib/csv-export';
-import { ExportDropdown } from '@/components/ui/ExportDropdown';
+import { ReportToolbarActions } from '@/components/reports/ReportToolbarActions';
 import { SortableHeader } from '@/components/ui/SortableHeader';
+import { CAPTION_CLASS, CellLabel, PHONE_HEADER_CLASS, TH_CLASS } from '@/components/ui/Table';
+import { INTERACTIVE_ROW_FOCUS_CLASS, activateOnKey } from '@/components/ui/interactive-row';
+import type {
+  SortColumn as TableSortColumn,
+  SortColumnsByField as TableSortColumnsByField,
+} from '@/components/ui/Table';
 import { useSortableTable, compareValues } from '@/hooks/useSortableTable';
 import { useReportData } from '@/hooks/useReportData';
 import { ReportError } from '@/components/reports/ReportError';
+import { PartialTotal } from '@/components/ui/PartialTotal';
+import { reportTotal } from '@/lib/currency-total';
+import { LinkifiedText } from '@/components/ui/LinkifiedText';
+import { quoteSearchValue } from '@/lib/search-query';
+import { CheckCircleIcon } from '@heroicons/react/24/outline';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 type SortField = 'date' | 'amount' | 'payee' | 'account';
+
+/**
+ * One sortable column of the transaction table. The four are declared once and
+ * rendered by BOTH header rows -- the column header row (from `sm` up) and the
+ * phone sort strip -- so the two can never list different fields, and each
+ * captioned value cell takes its phone caption from the same entry as its
+ * header.
+ */
+type SortColumn = TableSortColumn<SortField>;
+
+/**
+ * The record the two header rows are built from, keyed by sort field.
+ *
+ * The key is tied to the entry's own `field`, which a plain
+ * `Record<SortField, SortColumn>` does not do: that forces an entry to EXIST
+ * for every member of the union but lets it name a different one, so
+ * `account: { field: 'amount', ... }` would type-check. Both header rows would
+ * then render two controls keyed `amount` (a duplicate React key), tapping
+ * "Account" would sort by Amount, and "Account" would be unsortable -- none of
+ * which a test comparing header LABELS can see, because the labels stay right.
+ * Here it is a compile error instead.
+ */
+type SortColumnsByField = TableSortColumnsByField<SortField, SortColumn>;
+
+// The amount cell inside a wrapped row: no padding of its own below `sm` and
+// this table's own `px-4 py-3` from `sm` up. Smaller type on phones so a
+// six-figure 2dp amount still fits half the width.
+//
+// NOTHING here changes the desktop rendering: `text-right` and
+// `whitespace-nowrap` are both what this cell already carries at every width
+// today, and the nowrap is what keeps a locale that groups thousands with a
+// space (`123 456,78 CHF`) from breaking a figure in the middle. Measured on
+// the replica, the 800px and 1280px renderings are pixel-identical to today in
+// every locale, with every column width and row height unchanged.
+//
+// The budget was measured on a hand-written CSS replica in Chromium at the
+// insets this table really gets -- the report page's `px-4` and the cell's own
+// `px-4`, the card contributing NONE (it is `overflow-hidden`, with a heading
+// row above the table and no padding of its own) -- so 256px of content at
+// 320px and 326px at 390px. Two EQUAL `minmax(0,1fr)` tracks, resolved off
+// `getComputedStyle`: 122px each at 320px and 157px each at 390px. Equal tracks
+// rather than an `auto` one for the identity because each `<tr>` is its OWN
+// grid, so an `auto` track sized by one row's content would land at a different
+// width in the next row and step the figure column left and right down the
+// card.
+//
+// The formatter is `formatCurrency` -- TWO decimals, which is worth 30-40px per
+// cell against the compact formatter the sibling report tables use -- and the
+// widest unit it can produce is not a symbol: it asks for `narrowSymbol`, which
+// falls back to the three-letter ISO code where a currency has none, so CHF is
+// the worst case, and the sign counts too (this column carries both). Measured
+// at `text-xs`, space-grouped: a negative six-figure `-123 456,78 CHF` is
+// 101px, a seven-figure `-1 234 567,89 CHF` 113px and an eight-figure
+// `-12 345 678,90 CHF` 120px -- all inside the 122px track at 320px, and nine
+// figures (128px) is the first past it. At 390px (157px tracks) nine fits with
+// 29px to spare. The widest measured overflow across every figure cell in every
+// locale is zero, checked with a `Range` rect against the cell box rather than
+// `scrollWidth` alone, because a right-track figure that bleeds past its track
+// reopens the wrapper's sideways scroll and the scroll probe cannot see it.
+//
+// THREE tracks were rejected on the same measurement: a third of the same box
+// is 77px at 320px, which the 101px six-figure amount overflows by 24px in
+// every locale. Two tracks it is, and four cells over two tracks is a two-line
+// card.
+const MONEY_CELL = 'p-0 text-right text-xs whitespace-nowrap sm:table-cell sm:px-4 sm:py-3 sm:text-sm';
+
+// The date is a fixed-shape label, not a number. `useDateFormat` keeps the
+// user's full-date preference; its longest preset is the same width class as
+// the old `Dec 25, 2025` label. It keeps the `whitespace-nowrap` it wears today,
+// because a date is one label, and it is spelled out rather than aliased to `MONEY_CELL`
+// deliberately: the two hold nearly the same string for different reasons, and
+// an alias would carry a money-driven edit (a wider type for a longer figure)
+// silently onto the date. The one difference is the alignment -- this table's
+// Date column is LEFT-aligned from `sm` up, unlike its Amount, so the phone's
+// right alignment inside the right-hand track is scoped `max-sm:` and the
+// desktop is untouched.
+const DATE_CELL = 'p-0 text-xs whitespace-nowrap max-sm:text-right sm:table-cell sm:px-4 sm:py-3 sm:text-sm';
+
+/**
+ * Which surface an export row is being built for.
+ *
+ * A CSV is read by a MACHINE and a PDF by a person, so the same column is
+ * written differently for each: the CSV gets the raw amount and an ISO
+ * `yyyy-MM-dd` date, which a spreadsheet sums and sorts, and the PDF gets the
+ * reader's own number and date formats. One function builds both so the two
+ * cannot come to hold different COLUMNS; only the cell rendering branches.
+ */
+type ExportSurface = 'csv' | 'pdf';
 
 export function UncategorizedTransactionsReport() {
   const t = useTranslations('reports');
   const router = useRouter();
-  const { formatCurrency } = useNumberFormat();
+  const { formatCurrency, defaultCurrency } = useNumberFormat();
+  const { formatDate } = useDateFormat();
   const { dateRange, setDateRange, resolvedRange, isValid } = useDateRange({ defaultRange: '3m', alignment: 'day' });
   const { sortField, sortDirection, handleSort } = useSortableTable<SortField>(
     'reports.uncategorized-transactions.sort',
@@ -81,16 +183,63 @@ export function UncategorizedTransactionsReport() {
     return filtered;
   }, [reportData, filterType, sortField, sortDirection]);
 
+  // The four sortable columns, keyed by field so the record is exhaustive and
+  // each entry must name its own key (see `SortColumnsByField`).
+  const columns: SortColumnsByField = {
+    date: { field: 'date', label: t('uncategorizedTransactions.colDate') },
+    payee: { field: 'payee', label: t('uncategorizedTransactions.colPayeeDescription') },
+    account: { field: 'account', label: t('uncategorizedTransactions.colAccount') },
+    amount: { field: 'amount', label: t('uncategorizedTransactions.colAmount'), align: 'right' },
+  };
+
+  // Their order, rendered by BOTH header rows and matched by the cells' DOM
+  // order. DERIVED from the record rather than re-listed: a hand-written list
+  // beside an exhaustive record is not exhaustive, so a field added to the
+  // union would compile and still ship with no sort control in either header.
+  // The record's declaration order is the column order.
+  const sortColumns: readonly SortColumn[] = Object.values(columns);
+
   const handleTransactionClick = (tx: UncategorizedTransactionItem) => {
     const params = new URLSearchParams();
     params.set('categoryIds', 'uncategorized');
     params.set('accountIds', tx.accountId);
-    const search = tx.payeeName || tx.description;
+    // One quoted term, so a multi-word name is not read as AND-ed words: the
+    // payee exactly, or else the description as a phrase (contains, so a
+    // description cut at the search's 200-character cap still matches).
+    const search = tx.payeeName
+      ? quoteSearchValue('payee', tx.payeeName)
+      : tx.description
+        ? quoteSearchValue('memo', tx.description, 'contains')
+        : '';
     if (search) params.set('search', search);
     router.push(`/transactions?${params.toString()}`);
   };
 
-  const getExportData = () => {
+  /**
+   * The rows both exports write, in the columns both write, differing only in
+   * how a machine-read cell is rendered against a human-read one.
+   *
+   * The AMOUNT column reaches the CSV as a `number` and never as a formatted
+   * string. `csv-export.ts`'s injection guard keys off the leading character
+   * and tab-prefixes any text opening with `-` that its `NUMERIC_VALUE` test
+   * cannot read as a number -- and that test admits digits, separators and
+   * currency SYMBOLS, so every currency whose narrow symbol is written in
+   * LETTERS falls outside it: `-zl 1,234.56`, `-CHF 1,234.56`,
+   * `-kr 1,234.56`, `-R$1,234.56` and pl-PL's `-1234,56 zl` are all
+   * tab-prefixed, which makes Excel store the cell as text and the column
+   * stops adding up. That is issue #1134, and a localized amount here is how
+   * it came back. `Number(...)` because a `decimal(20,4)` crosses the wire as
+   * a STRING whatever the type says, and a string never takes the guard's
+   * `typeof value === 'number'` path.
+   *
+   * The DATE column is ISO for the same reason: two readers exporting the same
+   * rows must get one file, and `yyyy-MM-dd` is the form a spreadsheet sorts
+   * and every unconverted sibling export writes. A localized date is
+   * ambiguous (`03/04/2026`) and sorts lexicographically wrong.
+   *
+   * The PDF is a reading surface and takes the reader's own formats for both.
+   */
+  const getExportData = (surface: ExportSurface) => {
     const headers = [
       t('uncategorizedTransactions.csvColDate'),
       t('uncategorizedTransactions.csvColPayee'),
@@ -98,24 +247,26 @@ export function UncategorizedTransactionsReport() {
       t('uncategorizedTransactions.csvColAccount'),
       t('uncategorizedTransactions.csvColAmount'),
     ];
-    const rows = filteredAndSortedTransactions.map((tx) => [
-      format(parseLocalDate(tx.transactionDate), 'yyyy-MM-dd'),
+    const rows: (string | number)[][] = filteredAndSortedTransactions.map((tx) => [
+      surface === 'pdf'
+        ? formatDate(tx.transactionDate)
+        : format(parseLocalDate(tx.transactionDate), 'yyyy-MM-dd'),
       tx.payeeName || t('uncategorizedTransactions.unknownPayee'),
       tx.description || '',
       tx.accountName || t('uncategorizedTransactions.unknownAccount'),
-      tx.amount,
+      surface === 'pdf' ? formatCurrency(tx.amount, tx.currencyCode) : Number(tx.amount),
     ]);
     return { headers, rows };
   };
 
   const handleExportCsv = () => {
-    const { headers, rows } = getExportData();
+    const { headers, rows } = getExportData('csv');
     exportToCsv('uncategorized-transactions', headers, rows);
   };
 
   const handleExportPdf = async () => {
     const { exportToPdf } = await import('@/lib/pdf-export');
-    const { headers, rows } = getExportData();
+    const { headers, rows } = getExportData('pdf');
     await exportToPdf({
       title: t('uncategorizedTransactions.pdfTitle'),
       subtitle: t('uncategorizedTransactions.pdfSubtitle', { count: filteredAndSortedTransactions.length }),
@@ -124,32 +275,38 @@ export function UncategorizedTransactionsReport() {
     });
   };
 
-  if (error) {
-    return <ReportError onRetry={reload} />;
-  }
-
-  if (isLoading) {
-    return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6">
-        <div className="space-y-4">
-          <Skeleton className="h-8 w-1/3" />
-          <Skeleton className="h-64 w-full" />
-        </div>
-      </div>
-    );
-  }
+  // Loading and error render inside the tree below, never as an early return,
+  // so the toolbar stays mounted across a reload.
+  const dataUnavailable = isLoading || !!error;
 
   const summary = reportData?.summary || {
     totalCount: 0,
     expenseCount: 0,
     expenseTotal: 0,
+    knownExpenseTotal: 0,
     incomeCount: 0,
     incomeTotal: 0,
+    knownIncomeTotal: 0,
+    currencyCode: defaultCurrency,
   };
+  // A total is `null` when a currency had no rate; the counts need none and
+  // still include those rows. What is shown is the part that converted, marked
+  // as a subtotal -- never a null drawn as 0. The rows themselves keep their
+  // own currency, so they are formatted with their own `currencyCode` below.
+  const expenseTotal = reportTotal(summary.expenseTotal ?? summary.knownExpenseTotal ?? 0, reportData);
+  const incomeTotal = reportTotal(summary.incomeTotal ?? summary.knownIncomeTotal ?? 0, reportData);
 
   return (
     <div className="space-y-6">
       {/* Summary Cards */}
+      {dataUnavailable ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+          <Skeleton className="h-20 w-full" />
+        </div>
+      ) : (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4">
           <div className="text-sm text-gray-500 dark:text-gray-400">{t('uncategorizedTransactions.totalUncategorized')}</div>
@@ -163,7 +320,9 @@ export function UncategorizedTransactionsReport() {
             {summary.expenseCount}
           </div>
           <div className="text-sm text-gray-500 dark:text-gray-400">
-            {formatCurrency(summary.expenseTotal)}
+            <PartialTotal total={expenseTotal} displayCurrency={summary.currencyCode}>
+              {formatCurrency(expenseTotal.value, summary.currencyCode)}
+            </PartialTotal>
           </div>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4">
@@ -172,7 +331,9 @@ export function UncategorizedTransactionsReport() {
             {summary.incomeCount}
           </div>
           <div className="text-sm text-gray-500 dark:text-gray-400">
-            {formatCurrency(summary.incomeTotal)}
+            <PartialTotal total={incomeTotal} displayCurrency={summary.currencyCode}>
+              {formatCurrency(incomeTotal.value, summary.currencyCode)}
+            </PartialTotal>
           </div>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4">
@@ -185,6 +346,7 @@ export function UncategorizedTransactionsReport() {
           </div>
         </div>
       </div>
+      )}
 
       {/* Controls */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4">
@@ -230,20 +392,22 @@ export function UncategorizedTransactionsReport() {
       </div>
 
       {/* Transactions Table */}
-      {summary.totalCount === 0 ? (
+      {error ? (
+        <ReportError onRetry={reload} />
+      ) : isLoading ? (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6">
-          <div className="text-center py-8">
-            <svg className="h-12 w-12 mx-auto text-green-500 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <p className="text-gray-500 dark:text-gray-400">
-              {t('uncategorizedTransactions.allCategorized')}
-            </p>
+          <div className="space-y-4">
+            <Skeleton className="h-8 w-1/3" />
+            <Skeleton className="h-64 w-full" />
           </div>
+        </div>
+      ) : summary.totalCount === 0 ? (
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6">
+          <EmptyState icon={<CheckCircleIcon />} title={t('uncategorizedTransactions.allCategorized')} />
         </div>
       ) : (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 overflow-hidden">
-          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
                 {t('uncategorizedTransactions.tableTitle')}
@@ -252,78 +416,209 @@ export function UncategorizedTransactionsReport() {
                 {t('uncategorizedTransactions.tableSubtitle')}
               </p>
             </div>
-            <ExportDropdown onExportCsv={handleExportCsv} onExportPdf={handleExportPdf} />
+            <ReportToolbarActions onExportCsv={handleExportCsv} onExportPdf={handleExportPdf} />
           </div>
+          {/* Below `sm` the table becomes a block and each row wraps into a
+              two-column grid of EQUAL `minmax(0,1fr)` tracks (for the reason
+              `MONEY_CELL` measures), so all FOUR columns fit a phone without a
+              horizontal scroll, on TWO lines:
+
+                1  payee + description  | amount
+                2  account              | date
+
+              Two lines because four cells over two tracks cannot be fewer, and
+              two tracks is what this box holds. Measured before: the table is
+              950-974px inside a 288px wrapper at 320px (and inside 358px at
+              390px), so the account and the amount -- the figure the row is
+              read for -- sit entirely behind a sideways scroll on a phone
+              today, the identity column is cut mid-name by the same scroll, and
+              the description is clipped by its own `truncate max-w-xs` a further
+              125px beyond that.
+
+              The left track carries what the row IS -- who was paid, what the
+              entry says, and which ledger it sits in -- and the right what it
+              was and when. The amount takes the right of line 1 beside the
+              identity because it is the figure the row is read for; the date
+              closes the card under it.
+
+              The account is a separate `<td>` (so it is its own grid item and
+              cannot join the identity's line) but reads as a DESCRIPTOR of the
+              identity, so it takes the identity's track on line 2. It KEEPS its
+              caption: an account name is not self-describing beside a payee --
+              `Visa` under `Corner Store` could be read as either -- where the
+              payee and the description are the row itself and need none.
+
+              Which caption goes in which track is a measurement, not a taste.
+              All 60 catalogue strings for the three captioned columns -- the 20
+              locales that DEFINE these keys, the pseudo-locale included; the two
+              lean regional variants (`en-GB`, `en-US`) inherit `en`'s strings
+              per key -- were rendered into the 122px a track gets at 320px, at
+              `CellLabel`'s own type. NONE overflows and NONE needs a second
+              line, in either track, at either width. The two widest strings
+              with no break opportunity anywhere are Amount's `Montante` (pt) at
+              58px and Account's `Rekening` (nl) at 54px -- 64px and 68px of
+              headroom in a 122px track -- so rule 3's "least-breakable caption
+              in the left track" cannot bind here, and the semantic placement
+              above (the amount beside the identity, the account under it) wins
+              rather than fighting it.
+
+              Both text columns are unbounded in the payload, so each sits in a
+              `minmax(0,1fr)` track with `min-w-0`: a track that may be zero plus
+              a cell that may be narrower than its own content is what lets a
+              long name shrink instead of setting the table's minimum width, and
+              `break-words` breaks a word too long for the track.
+              `sm:break-normal` hands today's wrapping back from `sm` up, and the
+              account's `sm:whitespace-nowrap` hands back the nowrap it wears
+              today -- which it must NOT wear on a phone, where a 40-character
+              account name would set a minimum width no track could hold.
+
+              The description keeps its desktop `truncate max-w-xs` from `sm` up
+              and WRAPS below it. That is the one place this layout deliberately
+              renders more than the desktop does, and it is not decoration: where
+              a row has no payee the identity falls back to `Unknown` and the
+              description is the only thing naming the transaction -- it is also
+              the string the row's click sends as the register's search term. At
+              a 122px track a truncation would show about 18 of its characters
+              against the ~55 the 320px desktop cap shows, so truncating here
+              would hide the identity of exactly the rows this report exists to
+              fix.
+
+              Measured cost, at 320px with a 40-character payee, a 60-character
+              description and a 40-character account: a 271px row (215px at
+              390px) against the 65px the same content measures on the 800px
+              desktop row -- but that 65px is reached only by clipping the
+              description and hiding two whole columns behind the scroll, and the
+              same row is already 65px-and-unreadable today. No VALUE cell
+              exceeds one caption line plus one value line (29px) in any locale;
+              the two cells above it are the two unbounded text columns, by
+              design. A row with no description and ordinary names is 88px.
+
+              From `sm` up it is the ordinary table, and unlike the sibling
+              conversions there is no deliberate desktop delta at all. The
+              mechanism is that every declaration this table resolves at >= 640px
+              today is restored by an `sm:` variant here: the padding by
+              `sm:px-4 sm:py-3`, the account's nowrap by `sm:whitespace-nowrap`,
+              the description's cap and ellipsis by `sm:truncate sm:max-w-xs`,
+              all THREE cells that drop to `text-xs` below `sm` (the date, the
+              amount and the account) by `sm:text-sm`, and the wrapping by
+              `sm:break-normal`. The unprefixed classes are then either what the
+              cell already carried at every width (the amount's `text-right`,
+              both figures' `whitespace-nowrap`) or inert once the row is a
+              `table-row` again (the grid, its gaps and the explicit
+              placements). So a Chromium replica renders it pixel-identically to
+              today at 800px in all six measured locales, with every column width
+              and row height unchanged at 800px and 1280px.
+
+              Two costs of restyling one tree, both deliberate. Changing the
+              display roles drops the table semantics below `sm`, which is why
+              the roles are restated explicitly and every bare figure and date
+              carries a `CellLabel` naming its column. And the phone reading
+              order differs from the DOM order, which is the desktop column order
+              the grid placement overrides visually. Both are properties of the
+              mechanism, not of this table. */}
           <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-              <thead className="bg-gray-50 dark:bg-gray-900/50">
-                <tr>
-                  <SortableHeader<SortField>
-                    field="date"
-                    sortField={sortField}
-                    sortDirection={sortDirection}
-                    onSort={handleSort}
-                    className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
-                  >
-                    {t('uncategorizedTransactions.colDate')}
-                  </SortableHeader>
-                  <SortableHeader<SortField>
-                    field="payee"
-                    sortField={sortField}
-                    sortDirection={sortDirection}
-                    onSort={handleSort}
-                    className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
-                  >
-                    {t('uncategorizedTransactions.colPayeeDescription')}
-                  </SortableHeader>
-                  <SortableHeader<SortField>
-                    field="account"
-                    sortField={sortField}
-                    sortDirection={sortDirection}
-                    onSort={handleSort}
-                    className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
-                  >
-                    {t('uncategorizedTransactions.colAccount')}
-                  </SortableHeader>
-                  <SortableHeader<SortField>
-                    field="amount"
-                    sortField={sortField}
-                    sortDirection={sortDirection}
-                    onSort={handleSort}
-                    align="right"
-                    className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
-                  >
-                    {t('uncategorizedTransactions.colAmount')}
-                  </SortableHeader>
+            <table role="table" className="block min-w-full divide-y divide-gray-200 dark:divide-gray-700 sm:table">
+              <thead role="rowgroup" className="block bg-gray-50 dark:bg-gray-900/50 sm:table-header-group">
+                {/* Phone sort strip: the same four controls, as a wrapped row
+                    of compact chips. Column alignment means nothing here --
+                    the column header row is hidden and each data row is a grid
+                    -- so every control is left-aligned and self-naming. The
+                    border is what says "tappable": there is no hover on a
+                    touch screen, and the chip's own fill is a shade off the
+                    header band it sits on (this table's `<thead>` keeps its
+                    `bg-gray-50` / `dark:bg-gray-900/50`). The shared
+                    `PHONE_HEADER_CLASS` keeps this strip identical to its
+                    sibling reports.
+
+                    Four chips, one of them a COMPOUND label -- which is why a
+                    low chip count says little about the strip's height here.
+                    Measured on the Chromium replica at 320px: two lines (80px)
+                    in `en`/`pl`, three in `ru`/`id` (114px) and `de` (130px,
+                    whose `Zahlungsempfänger / Beschreibung` is 214px on its
+                    own), four in the pseudo-locale (148px); at 390px, two
+                    lines in every real locale but `de`. That is a measured
+                    cost, not a reason to drop a control:
+                    `reports.uncategorized-transactions.sort` persists any of
+                    the four, so a field with no control anywhere would leave a
+                    phone POINTING at a sort with no pointer back. */}
+                <tr role="row" className="flex flex-wrap gap-x-2 gap-y-1 px-4 py-2 sm:hidden">
+                  {sortColumns.map((col) => (
+                    <SortableHeader<SortField>
+                      key={col.field}
+                      field={col.field}
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                      className={PHONE_HEADER_CLASS}
+                    >
+                      {col.label}
+                    </SortableHeader>
+                  ))}
+                </tr>
+                <tr role="row" className="hidden sm:table-row">
+                  {sortColumns.map((col) => (
+                    <SortableHeader<SortField>
+                      key={col.field}
+                      field={col.field}
+                      sortField={sortField}
+                      sortDirection={sortDirection}
+                      onSort={handleSort}
+                      align={col.align}
+                      className={TH_CLASS}
+                    >
+                      {col.label}
+                    </SortableHeader>
+                  ))}
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+              <tbody role="rowgroup" className="block divide-y divide-gray-200 dark:divide-gray-700 sm:table-row-group">
+                {/* Each row is the click target at every width, so it is also a
+                    KEYBOARD target: `tabIndex` puts it in the tab order and
+                    `activateOnKey` runs the same handler on Enter and Space
+                    (WCAG 2.1.1). Both come from the one shared module rather
+                    than a per-report copy of the handler. */}
                 {filteredAndSortedTransactions.slice(0, 100).map((tx) => (
                   <tr
                     key={tx.id}
-                    className="hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer"
+                    role="row"
+                    tabIndex={0}
+                    className={`grid grid-cols-2 items-start gap-x-3 gap-y-1.5 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/50 cursor-pointer ${INTERACTIVE_ROW_FOCUS_CLASS} sm:table-row`}
                     onClick={() => handleTransactionClick(tx)}
+                    onKeyDown={activateOnKey(() => handleTransactionClick(tx))}
                   >
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                      {format(parseLocalDate(tx.transactionDate), 'MMM d, yyyy')}
+                    <td
+                      role="cell"
+                      className={`col-start-2 row-start-2 text-gray-900 dark:text-gray-100 ${DATE_CELL}`}
+                    >
+                      <CellLabel className={CAPTION_CLASS}>{columns.date.label}</CellLabel>
+                      {formatDate(tx.transactionDate)}
                     </td>
-                    <td className="px-4 py-3 text-sm">
+                    <td
+                      role="cell"
+                      className="col-start-1 row-start-1 min-w-0 break-words p-0 text-sm sm:table-cell sm:break-normal sm:px-4 sm:py-3"
+                    >
                       <div className="font-medium text-gray-900 dark:text-gray-100">
                         {tx.payeeName || t('uncategorizedTransactions.unknownPayee')}
                       </div>
                       {tx.description && (
-                        <div className="text-gray-500 dark:text-gray-400 truncate max-w-xs">
-                          {tx.description}
+                        <div className="text-gray-500 dark:text-gray-400 sm:truncate sm:max-w-xs">
+                          <LinkifiedText text={tx.description} />
                         </div>
                       )}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                    <td
+                      role="cell"
+                      className="col-start-1 row-start-2 min-w-0 break-words p-0 text-xs text-gray-500 dark:text-gray-400 sm:table-cell sm:break-normal sm:whitespace-nowrap sm:px-4 sm:py-3 sm:text-sm"
+                    >
+                      <CellLabel className={CAPTION_CLASS}>{columns.account.label}</CellLabel>
                       {tx.accountName || t('uncategorizedTransactions.unknownAccount')}
                     </td>
-                    <td className={`px-4 py-3 whitespace-nowrap text-sm text-right font-medium ${
-                      gainLossColor(tx.amount)
-                    }`}>
-                      {formatCurrency(tx.amount)}
+                    <td
+                      role="cell"
+                      className={`col-start-2 row-start-1 font-medium ${gainLossColor(tx.amount)} ${MONEY_CELL}`}
+                    >
+                      <CellLabel className={CAPTION_CLASS}>{columns.amount.label}</CellLabel>
+                      {formatCurrency(tx.amount, tx.currencyCode)}
                     </td>
                   </tr>
                 ))}

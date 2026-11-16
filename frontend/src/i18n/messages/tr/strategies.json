@@ -330,14 +330,13 @@
       "fillMissingDone": "{count, plural, one {# enstrüman eklendi} other {# enstrüman eklendi}}. Fiyatlarını yüklemek ve ilk sinyali hesaplamak için yapılandırmayı kaydedin.",
       "fillMissingError": "Önerilen enstrümanlar eklenemedi.",
       "lookbackMonths": "Momentum penceresi (ay)",
-      "taxRatePercent": "Vergi oranı (%)",
-      "commissionAmount": "İşlem başına komisyon",
+      "taxRatePercent": "Vergi Oranı (isteğe bağlı)",
+      "commissionAmount": "İşlem Başına Komisyon (isteğe bağlı)",
       "rulesSourceUrl": "İzlediğiniz kuralların bağlantısı",
       "rulesSourceUrlPlaceholder": "https://example.com/dual-momentum",
       "rulesSourceLabel": "Bu bağlantı için gösterilecek metin",
       "rulesSourceLabelPlaceholder": "example.com",
       "rulesSourceHint": "İkisi de isteğe bağlıdır ve hiçbir hesabı etkilemez. Raporun alt bilgisine, bu stratejinin izlediği kuralların yazılı olduğu yere — bir makale, bir kitap sayfası, kendi notlarınız — bağlantı koyarlar; böylece daha sonra hangi sürüme göre kurduğunuzu görebilirsiniz.",
-      "optional": "İsteğe bağlı",
       "save": "Yapılandırmayı kaydet",
       "saved": "Strateji yapılandırması kaydedildi.",
       "saveError": "Strateji yapılandırması kaydedilemedi.",
@@ -358,7 +357,9 @@
       "NO_POSITION": "Strateji hesapları hiçbir enstrüman tutmuyor.",
       "FIRST_RUN": "Bu strateji henüz değerlendirilmedi – ilk sinyal, planlanan sonraki değerlendirmeden sonra görünecek.",
       "STALE_PRICES": "Bu raporun dayandığı fiyatların bir kısmı güncel değil; yenilendiklerinde sinyal değişebilir. En eskiler ya da tamamen eksik olanlar:",
-      "CALCULATION_FAILED": "Sinyal, mevcut verilerle hesaplanamadı."
+      "CALCULATION_FAILED": "Sinyal, mevcut verilerle hesaplanamadı.",
+      "SHORT_HISTORY": "Mevcut dönemi hesaplamak için yeterli fiyat geçmişi yok. Bu roller {from} tarihine kadar fiyat gerektiriyor:",
+      "shortHistoryFix": "Bu araçların her birini açıp “Bir yıl daha fiyat geçmişi ekle” seçeneğini kullanın, ardından bu raporu yeniden açın."
     },
     "footer": {
       "pastResults": "Geçmiş sonuçlar gelecekteki getirileri garanti etmez.",

@@ -1,11 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@/test/render';
 import { MortgageFields } from './MortgageFields';
-import { Account } from '@/types/account';
+import { Account, MortgageType } from '@/types/account';
 import { Category } from '@/types/category';
 
 vi.mock('@/lib/categoryUtils', () => ({
   buildCategoryTree: (cats: any[]) => cats.map((c: any) => ({ category: c, depth: 0 })),
+  buildCategoryLabelMap: (cats: any[]) => new Map(cats.map((c: any) => [c.id, c.name])),
 }));
 
 vi.mock('@/components/ui/Combobox', () => ({
@@ -29,6 +30,7 @@ vi.mock('@/components/ui/Combobox', () => ({
 vi.mock('@/lib/accounts', () => ({
   accountsApi: {
     previewMortgageAmortization: vi.fn(),
+    detectMortgageType: vi.fn(),
   },
 }));
 
@@ -64,7 +66,8 @@ const mockAccounts: Account[] = [
     isFavourite: false, favouriteSortOrder: 0, excludeFromNetWorth: false, paymentAmount: null, paymentFrequency: null, paymentStartDate: null,
     sourceAccountId: null, principalCategoryId: null, interestCategoryId: null, overpaymentCategoryId: null, overpaymentMemo: null, overpaymentPayeeId: null, fxFeePercent: null,
     scheduledTransactionId: null, assetCategoryId: null, dateAcquired: null, linkedLoanAccountId: null,
-    isCanadianMortgage: false, isVariableRate: false, termMonths: null, termEndDate: null,
+    mortgageType: 'ANNUITY',
+    termMonths: null, termEndDate: null,
     amortizationMonths: null, originalPrincipal: null,
     statementDueDay: null, statementSettlementDay: null,
     createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',
@@ -77,7 +80,8 @@ const mockAccounts: Account[] = [
     isFavourite: false, favouriteSortOrder: 0, excludeFromNetWorth: false, paymentAmount: null, paymentFrequency: null, paymentStartDate: null,
     sourceAccountId: null, principalCategoryId: null, interestCategoryId: null, overpaymentCategoryId: null, overpaymentMemo: null, overpaymentPayeeId: null, fxFeePercent: null,
     scheduledTransactionId: null, assetCategoryId: null, dateAcquired: null, linkedLoanAccountId: null,
-    isCanadianMortgage: false, isVariableRate: false, termMonths: null, termEndDate: null,
+    mortgageType: 'ANNUITY',
+    termMonths: null, termEndDate: null,
     amortizationMonths: null, originalPrincipal: null,
     statementDueDay: null, statementSettlementDay: null,
     createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',
@@ -87,12 +91,12 @@ const mockAccounts: Account[] = [
 const mockCategories: Category[] = [
   {
     id: 'cat-1', userId: 'user-1', parentId: null, parent: null, children: [],
-    name: 'Interest Expenses', description: null, icon: null, color: null, effectiveColor: null, effectiveIcon: null,
+    name: 'Interest Expenses', description: null, icon: null, color: null, effectiveColor: null, effectiveIcon: null, autoSign: null, effectiveAutoSign: true,
     isIncome: false, isSystem: false, createdAt: '2024-01-01T00:00:00Z',
   },
   {
     id: 'cat-2', userId: 'user-1', parentId: null, parent: null, children: [],
-    name: 'Mortgage Interest', description: null, icon: null, color: null, effectiveColor: null, effectiveIcon: null,
+    name: 'Mortgage Interest', description: null, icon: null, color: null, effectiveColor: null, effectiveIcon: null, autoSign: null, effectiveAutoSign: true,
     isIncome: false, isSystem: false, createdAt: '2024-01-01T00:00:00Z',
   },
 ];
@@ -118,8 +122,7 @@ describe('MortgageFields', () => {
   const defaultProps = {
     currencySymbol: '$',
     watchedCurrency: 'CAD',
-    isCanadianMortgage: true,
-    isVariableRate: false,
+    mortgageType: 'CANADIAN_FIXED' as MortgageType | undefined,
     interestRate: undefined as number | undefined,
     paymentFrequency: undefined as any,
     mortgagePaymentFrequency: undefined as any,
@@ -135,6 +138,11 @@ describe('MortgageFields', () => {
     categories: mockCategories,
     formatCurrency: mockFormatCurrency,
     isEditing: false,
+    sourceAccountId: undefined as string | undefined,
+    paymentMatchingEnabled: false as boolean | undefined,
+    paymentMatchingPayeePattern: undefined as string | undefined,
+    paymentMatchingDescriptionPattern: undefined as string | undefined,
+    institutionName: '',
     selectedInterestCategoryId: '',
     handleInterestCategoryChange: vi.fn(),
     interestBookingMode: 'AUTO' as const,
@@ -154,11 +162,72 @@ describe('MortgageFields', () => {
     vi.useRealTimers();
   });
 
+  describe('fees (docs/specs/mortgage-fees.md)', () => {
+    const fee = {
+      key: 'k-1',
+      categoryId: 'cat-2',
+      name: 'Property tax',
+      calculation: 'FIXED' as const,
+      basis: 'ANNUAL' as const,
+      value: 3600,
+    };
+
+    it('offers the fee editor on create and adds a row', () => {
+      const onLoanFeesChange = vi.fn();
+      render(<MortgageFields {...defaultProps} loanFees={[]} onLoanFeesChange={onLoanFeesChange} />);
+      expect(screen.getByText('Mortgage fees')).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Add a fee' }));
+      expect(onLoanFeesChange).toHaveBeenCalledWith([
+        expect.objectContaining({ calculation: 'FIXED', basis: 'PER_PAYMENT', value: undefined }),
+      ]);
+    });
+
+    it('switches a fee to a percentage and clears its value', () => {
+      const onLoanFeesChange = vi.fn();
+      render(<MortgageFields {...defaultProps} loanFees={[fee]} onLoanFeesChange={onLoanFeesChange} />);
+      fireEvent.change(screen.getByLabelText('Calculated as'), {
+        target: { value: 'PERCENT_CURRENT_BALANCE' },
+      });
+      expect(onLoanFeesChange).toHaveBeenCalledWith([
+        { ...fee, calculation: 'PERCENT_CURRENT_BALANCE', value: undefined },
+      ]);
+    });
+
+    it('says fees and payment matching cannot be combined', () => {
+      render(
+        <MortgageFields
+          {...defaultProps}
+          paymentMatchingEnabled
+          loanFees={[fee]}
+          onLoanFeesChange={vi.fn()}
+        />,
+      );
+      expect(screen.getByRole('alert')).toHaveTextContent('Payment matching cannot settle');
+    });
+
+    it('places the fees last, after the payment recognition fields', () => {
+      render(<MortgageFields {...defaultProps} loanFees={[]} onLoanFeesChange={vi.fn()} />);
+      const interest = screen.getByText('Interest Category');
+      const fees = screen.getByText('Mortgage fees');
+      expect(interest.compareDocumentPosition(fees) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('offers no fee editor on edit', () => {
+      render(<MortgageFields {...defaultProps} isEditing loanFees={[]} onLoanFeesChange={vi.fn()} />);
+      expect(screen.queryByText('Mortgage fees')).not.toBeInTheDocument();
+    });
+
+    it('offers no fee editor without the fee props', () => {
+      render(<MortgageFields {...defaultProps} />);
+      expect(screen.queryByText('Mortgage fees')).not.toBeInTheDocument();
+    });
+  });
+
   it('renders the heading and all form fields', () => {
     render(<MortgageFields {...defaultProps} />);
     expect(screen.getByText('Mortgage Details')).toBeInTheDocument();
-    expect(screen.getByText('Payment Frequency (required)')).toBeInTheDocument();
-    expect(screen.getByText('First Payment Date (required)')).toBeInTheDocument();
+    expect(screen.getByText('Payment Frequency')).toBeInTheDocument();
+    expect(screen.getByText('First Payment Date')).toBeInTheDocument();
     expect(screen.getByText('Interest Category')).toBeInTheDocument();
   });
 
@@ -174,7 +243,7 @@ describe('MortgageFields', () => {
 
   it('renders term length years and months inputs', () => {
     render(<MortgageFields {...defaultProps} />);
-    expect(screen.getByText('Term Length')).toBeInTheDocument();
+    expect(screen.getByText('Rate-Fixed Term')).toBeInTheDocument();
     // Should have Years and Months labels (2 each for term + amortization)
     const yearsLabels = screen.getAllByText('Years');
     const monthsLabels = screen.getAllByText('Months');
@@ -184,7 +253,7 @@ describe('MortgageFields', () => {
 
   it('renders amortization period years and months inputs', () => {
     render(<MortgageFields {...defaultProps} />);
-    expect(screen.getByText('Amortization Period (required)')).toBeInTheDocument();
+    expect(screen.getByText('Amortization Period')).toBeInTheDocument();
   });
 
   it('populates term inputs from termMonths prop', () => {
@@ -227,9 +296,11 @@ describe('MortgageFields', () => {
 
   it('renders source account select with sorted accounts', () => {
     render(<MortgageFields {...defaultProps} />);
-    expect(screen.getByText('Payment From Account (required)')).toBeInTheDocument();
+    expect(screen.getByText('Payment From Account')).toBeInTheDocument();
     expect(screen.getByText('Main Chequing (CAD)')).toBeInTheDocument();
     expect(screen.getByText('Savings (CAD)')).toBeInTheDocument();
+    // The edit-only note about moving the schedule has nothing to move on create
+    expect(screen.queryByText(/moves the upcoming scheduled payments/)).not.toBeInTheDocument();
   });
 
   it('renders interest category select with sorted categories', () => {
@@ -237,12 +308,223 @@ describe('MortgageFields', () => {
     expect(screen.getByText('Interest Category')).toBeInTheDocument();
   });
 
-  it('renders Canadian Mortgage and Variable Rate checkboxes', () => {
+  it('renders one Mortgage Type select in place of the two checkboxes', () => {
     render(<MortgageFields {...defaultProps} />);
-    expect(screen.getByText('Canadian Mortgage')).toBeInTheDocument();
-    expect(screen.getByText('Variable Rate')).toBeInTheDocument();
-    expect(screen.getByText(/semi-annual compounding/)).toBeInTheDocument();
-    expect(screen.getByText(/Rate may change during the term/)).toBeInTheDocument();
+    const select = screen.getByLabelText('Mortgage Type');
+    expect(select.tagName).toBe('SELECT');
+    expect(screen.queryByRole('checkbox', { name: /Canadian Mortgage/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /Variable Rate/ })).not.toBeInTheDocument();
+  });
+
+  it('offers all four types', () => {
+    render(<MortgageFields {...defaultProps} />);
+    const options = Array.from(
+      (screen.getByLabelText('Mortgage Type') as HTMLSelectElement).options,
+    ).map((o) => [o.value, o.textContent]);
+    expect(options).toEqual([
+      ['ANNUITY', 'Annuity (Level Payment)'],
+      ['CANADIAN_FIXED', 'Canadian Fixed Rate'],
+      ['LINEAR', 'Linear (Constant Principal)'],
+      ['INTEREST_ONLY', 'Interest Only'],
+    ]);
+  });
+
+  it.each([
+    ['ANNUITY', 'Your total payment is the same every month. Choose this for a variable-rate mortgage too.'],
+    ['CANADIAN_FIXED', 'A Canadian fixed-rate contract; interest compounds twice a year.'],
+    ['LINEAR', 'The principal part is the same every month and the total falls.'],
+    ['INTEREST_ONLY', 'You pay only interest and the balance does not move.'],
+  ] as const)('shows the help line for the selected %s type', (mortgageType, help) => {
+    render(<MortgageFields {...defaultProps} mortgageType={mortgageType} />);
+    expect(screen.getByText(help)).toBeInTheDocument();
+  });
+
+  it('asks what an extra repayment does for a LINEAR mortgage only', () => {
+    const { rerender } = render(<MortgageFields {...defaultProps} mortgageType="LINEAR" />);
+    const select = screen.getByLabelText('What an Extra Repayment Does') as HTMLSelectElement;
+    expect(Array.from(select.options).map((o) => [o.value, o.textContent])).toEqual([
+      ['SHORTEN_TERM', 'Shortens the term (same principal each month)'],
+      ['LOWER_INSTALLMENT', 'Lowers the installment (same end date)'],
+    ]);
+    expect(mockRegister).toHaveBeenCalledWith('prepaymentMode');
+
+    for (const other of ['ANNUITY', 'CANADIAN_FIXED', 'INTEREST_ONLY'] as const) {
+      rerender(<MortgageFields {...defaultProps} mortgageType={other} />);
+      expect(screen.queryByLabelText('What an Extra Repayment Does')).not.toBeInTheDocument();
+    }
+  });
+
+  it.each(['LINEAR', 'INTEREST_ONLY'] as const)(
+    'offers no accelerated cadence for a %s mortgage',
+    (mortgageType) => {
+      render(<MortgageFields {...defaultProps} mortgageType={mortgageType} />);
+      expect(screen.getByText('Bi-Weekly')).toBeInTheDocument();
+      expect(screen.queryByText('Accelerated Bi-Weekly')).not.toBeInTheDocument();
+      expect(screen.queryByText('Accelerated Weekly')).not.toBeInTheDocument();
+    },
+  );
+
+  it('moves an accelerated cadence to its base when the type has no constant payment', () => {
+    render(
+      <MortgageFields
+        {...defaultProps}
+        mortgageType="ANNUITY"
+        mortgagePaymentFrequency="ACCELERATED_BIWEEKLY"
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Mortgage Type'), {
+      target: { value: 'LINEAR' },
+    });
+    expect(mockSetValue).toHaveBeenCalledWith('mortgagePaymentFrequency', 'BIWEEKLY', {
+      shouldDirty: true,
+      shouldValidate: true,
+    });
+  });
+
+  describe('type detection', () => {
+    async function detectLinear() {
+      vi.mocked(accountsApi.detectMortgageType).mockResolvedValue({
+        type: 'LINEAR',
+        confidence: 'high',
+        reason: 'CONSTANT_PRINCIPAL',
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Not sure? Enter a few installments' }));
+      const principals = screen.getAllByLabelText('Principal');
+      const interests = screen.getAllByLabelText('Interest');
+      fireEvent.change(principals[0], { target: { value: '833.33' } });
+      fireEvent.change(interests[0], { target: { value: '500.00' } });
+      fireEvent.change(principals[1], { target: { value: '833.33' } });
+      fireEvent.change(interests[1], { target: { value: '498.61' } });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Suggest a Type' }));
+      });
+    }
+
+    it('offers the installment entry on create only', () => {
+      const { unmount } = render(<MortgageFields {...defaultProps} />);
+      expect(
+        screen.getByRole('button', { name: 'Not sure? Enter a few installments' }),
+      ).toBeInTheDocument();
+      unmount();
+      render(<MortgageFields {...defaultProps} isEditing />);
+      expect(
+        screen.queryByRole('button', { name: 'Not sure? Enter a few installments' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('sends the quoted rate and cadence already on the form', async () => {
+      render(
+        <MortgageFields
+          {...defaultProps}
+          interestRate={2}
+          mortgagePaymentFrequency="MONTHLY"
+        />,
+      );
+      await detectLinear();
+      expect(accountsApi.detectMortgageType).toHaveBeenCalledWith(
+        expect.objectContaining({ interestRate: 2, paymentFrequency: 'MONTHLY' }),
+      );
+    });
+
+    it('sets the Mortgage Type select when the suggestion is used', async () => {
+      render(
+        <MortgageFields {...defaultProps} mortgageType="ANNUITY" mortgagePaymentFrequency="MONTHLY" />,
+      );
+      await detectLinear();
+      expect(mockSetValue).not.toHaveBeenCalledWith('mortgageType', expect.anything(), expect.anything());
+
+      fireEvent.click(screen.getByRole('button', { name: 'Use This Type' }));
+      expect(mockSetValue).toHaveBeenCalledWith('mortgageType', 'LINEAR', {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+      // A monthly cadence is one LINEAR keeps.
+      expect(mockSetValue).not.toHaveBeenCalledWith(
+        'mortgagePaymentFrequency',
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+
+    it('leaves the select untouched when the panel is closed', async () => {
+      render(
+        <MortgageFields {...defaultProps} mortgageType="ANNUITY" mortgagePaymentFrequency="MONTHLY" />,
+      );
+      await detectLinear();
+      fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+      expect(mockSetValue).not.toHaveBeenCalledWith('mortgageType', expect.anything(), expect.anything());
+    });
+  });
+
+  it('leaves the cadence alone when the new type keeps a constant payment', () => {
+    render(
+      <MortgageFields
+        {...defaultProps}
+        mortgageType="LINEAR"
+        mortgagePaymentFrequency="ACCELERATED_WEEKLY"
+      />,
+    );
+    fireEvent.change(screen.getByLabelText('Mortgage Type'), {
+      target: { value: 'CANADIAN_FIXED' },
+    });
+    expect(mockSetValue).not.toHaveBeenCalledWith(
+      'mortgagePaymentFrequency',
+      expect.anything(),
+      expect.anything(),
+    );
+  });
+
+  it.each([
+    ['LINEAR', 'First Installment:'],
+    ['INTEREST_ONLY', 'First Installment:'],
+    ['ANNUITY', 'Payment Amount:'],
+  ] as const)('captions a %s preview\'s payment as %s', async (mortgageType, caption) => {
+    vi.mocked(accountsApi.previewMortgageAmortization).mockResolvedValue({
+      paymentAmount: 1333.3333,
+      effectiveAnnualRate: 2.02,
+      principalPayment: 833.3333,
+      interestPayment: 500,
+      totalPayments: 360,
+      totalInterest: 90250,
+      residualPayoffAmount: 834.7342,
+      endDate: '2053-12-01',
+    });
+    render(<MortgageFields {...defaultProps}
+      mortgageType={mortgageType}
+      openingBalance={300000} interestRate={2} amortizationMonths={360}
+      mortgagePaymentFrequency="MONTHLY" paymentStartDate="2024-01-01"
+    />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(600); });
+    expect(accountsApi.previewMortgageAmortization).toHaveBeenCalledWith(
+      expect.objectContaining({ mortgageType }),
+    );
+    expect(screen.getByText(caption)).toBeInTheDocument();
+  });
+
+  it('shows an interest-only preview\'s bullet as the final payment', async () => {
+    vi.mocked(accountsApi.previewMortgageAmortization).mockResolvedValue({
+      paymentAmount: 500,
+      effectiveAnnualRate: 2.02,
+      principalPayment: 0,
+      interestPayment: 500,
+      totalPayments: 360,
+      totalInterest: 180000,
+      residualPayoffAmount: 300500,
+      endDate: '2053-12-01',
+    });
+    render(<MortgageFields {...defaultProps}
+      mortgageType="INTEREST_ONLY"
+      openingBalance={300000} interestRate={2} amortizationMonths={360}
+      mortgagePaymentFrequency="MONTHLY" paymentStartDate="2024-01-01"
+    />);
+    await act(async () => { await vi.advanceTimersByTimeAsync(600); });
+    expect(screen.getByText('Final Payment:')).toBeInTheDocument();
+    expect(screen.getByText('$300500.00')).toBeInTheDocument();
+  });
+
+  it('says nothing about monthly compounding', () => {
+    const { container } = render(<MortgageFields {...defaultProps} mortgageType="ANNUITY" />);
+    expect(container.textContent).not.toMatch(/monthly compounding/i);
   });
 
   it('does not show mortgage preview when required fields are missing', () => {
@@ -300,26 +582,40 @@ describe('MortgageFields', () => {
   it('hides payment fields when isEditing is true', () => {
     render(<MortgageFields {...defaultProps} isEditing={true} />);
     expect(screen.getByText('Mortgage Details')).toBeInTheDocument();
-    expect(screen.getByText('Term Length')).toBeInTheDocument();
-    expect(screen.getByText('Amortization Period (required)')).toBeInTheDocument();
-    expect(screen.getByText('Canadian Mortgage')).toBeInTheDocument();
+    expect(screen.getByText('Rate-Fixed Term')).toBeInTheDocument();
+    expect(screen.getByText('Amortization Period')).toBeInTheDocument();
+    expect(screen.getByLabelText('Mortgage Type')).toBeInTheDocument();
     // Payment-setup fields (create-only) should be hidden
-    expect(screen.queryByText('Payment Frequency (required)')).not.toBeInTheDocument();
-    expect(screen.queryByText('First Payment Date (required)')).not.toBeInTheDocument();
-    expect(screen.queryByText('Payment From Account (required)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Payment Frequency')).not.toBeInTheDocument();
+    expect(screen.queryByText('First Payment Date')).not.toBeInTheDocument();
+    // The paying account stays editable; the server moves the schedule and rule with it
+    expect(screen.getByText('Payment From Account')).toBeInTheDocument();
+    expect(
+      screen.getByText(/moves the upcoming scheduled payments and the payment matching rule/),
+    ).toBeInTheDocument();
     // Recognition settings (interest category + overpayment) stay available on edit
-    expect(screen.getByText('Interest Category')).toBeInTheDocument();
+    expect(screen.getByText('Interest Category (optional)')).toBeInTheDocument();
     expect(screen.getByText('Overpayment recognition')).toBeInTheDocument();
   });
 
-  it('shows the Loan Details link when editing and onViewLoanDetails is provided', () => {
-    const onViewLoanDetails = vi.fn();
-    render(<MortgageFields {...defaultProps} isEditing={true} onViewLoanDetails={onViewLoanDetails} />);
-    const link = screen.getByRole('button', { name: 'Loan Details' });
-    expect(link).toBeInTheDocument();
-    fireEvent.click(link);
-    expect(onViewLoanDetails).toHaveBeenCalledTimes(1);
-  });
+  it.each(['ANNUITY', 'CANADIAN_FIXED'] as const)(
+    'shows the Loan Details link for a %s mortgage when editing and onViewLoanDetails is provided',
+    (mortgageType) => {
+      const onViewLoanDetails = vi.fn();
+      render(
+        <MortgageFields
+          {...defaultProps}
+          mortgageType={mortgageType}
+          isEditing={true}
+          onViewLoanDetails={onViewLoanDetails}
+        />,
+      );
+      expect(screen.getByText(/Record rate changes in/)).toBeInTheDocument();
+      const link = screen.getByRole('button', { name: 'Loan Details' });
+      fireEvent.click(link);
+      expect(onViewLoanDetails).toHaveBeenCalledTimes(1);
+    },
+  );
 
   it('hides the Loan Details link when not editing', () => {
     render(<MortgageFields {...defaultProps} isEditing={false} onViewLoanDetails={vi.fn()} />);
@@ -400,7 +696,7 @@ describe('MortgageFields', () => {
     });
   });
 
-  it('passes isCanadian and isVariableRate to preview API', async () => {
+  it.each(['CANADIAN_FIXED', 'ANNUITY'] as const)('sends the %s type to the preview API', async (mortgageType) => {
     vi.mocked(accountsApi.previewMortgageAmortization).mockResolvedValue({
       paymentAmount: 1500, effectiveAnnualRate: 5.06,
       principalPayment: 1200, interestPayment: 300,
@@ -410,16 +706,13 @@ describe('MortgageFields', () => {
     render(<MortgageFields {...defaultProps}
       openingBalance={400000} interestRate={5} amortizationMonths={300}
       mortgagePaymentFrequency="MONTHLY" paymentStartDate="2024-02-01"
-      isCanadianMortgage={true} isVariableRate={true}
+      mortgageType={mortgageType}
     />);
 
     await act(async () => { await vi.advanceTimersByTimeAsync(600); });
 
     expect(accountsApi.previewMortgageAmortization).toHaveBeenCalledWith(
-      expect.objectContaining({
-        isCanadian: true,
-        isVariableRate: true,
-      })
+      expect.objectContaining({ mortgageType })
     );
 
     // Switch to real timers so waitFor can poll properly
@@ -633,35 +926,129 @@ describe('MortgageFields', () => {
 
   it('shows term length help text', () => {
     render(<MortgageFields {...defaultProps} />);
-    expect(screen.getByText('Leave at 0 years and 0 months for no term.')).toBeInTheDocument();
+    expect(screen.getByText(/Leave at 0 years and 0 months for no term\./)).toBeInTheDocument();
   });
 
-  it('shows the Term Length field for Canadian mortgages', () => {
-    render(<MortgageFields {...defaultProps} isCanadianMortgage={true} />);
-    expect(screen.getByText('Term Length')).toBeInTheDocument();
+  it('does not ask for a preview while the type is unknown', async () => {
+    render(<MortgageFields {...defaultProps}
+      mortgageType={undefined}
+      openingBalance={400000} interestRate={5} amortizationMonths={300}
+      mortgagePaymentFrequency="MONTHLY" paymentStartDate="2024-02-01"
+    />);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(600); });
+    expect(accountsApi.previewMortgageAmortization).not.toHaveBeenCalled();
   });
 
-  it('hides the Term Length field for non-Canadian mortgages but keeps the amortization period', () => {
-    render(<MortgageFields {...defaultProps} isCanadianMortgage={false} />);
-    // Term (a Canada-only contract-renewal concept) is hidden...
-    expect(screen.queryByText('Term Length')).not.toBeInTheDocument();
-    expect(screen.queryByText('Leave at 0 years and 0 months for no term.')).not.toBeInTheDocument();
-    // ...but the single repayment period a non-Canadian mortgage has is still shown.
-    expect(screen.getByText('Amortization Period (required)')).toBeInTheDocument();
-  });
+  it.each(['ANNUITY', 'CANADIAN_FIXED', 'LINEAR', 'INTEREST_ONLY'] as const)(
+    'shows the Term Length field for a %s mortgage',
+    (mortgageType) => {
+      render(<MortgageFields {...defaultProps} mortgageType={mortgageType} termMonths={60} />);
+      expect(screen.getByText('Rate-Fixed Term')).toBeInTheDocument();
+      expect(periodInputs()[0]).toHaveValue('5');
+      expect(screen.getByText('Amortization Period')).toBeInTheDocument();
+    },
+  );
 
-  it('clears a stale term when the mortgage is not Canadian', () => {
-    render(<MortgageFields {...defaultProps} isCanadianMortgage={false} termMonths={60} />);
-    expect(mockSetValue).toHaveBeenCalledWith('termMonths', 0, { shouldDirty: false });
-  });
-
-  it('does not clear the term when none is set on a non-Canadian mortgage', () => {
-    render(<MortgageFields {...defaultProps} isCanadianMortgage={false} termMonths={undefined} />);
+  it('keeps the term of a non-Canadian mortgage rather than clearing it', () => {
+    // The term was a Canada-only field that an effect zeroed for every other
+    // mortgage; it is now the rate-fixed period of every type.
+    render(<MortgageFields {...defaultProps} mortgageType="ANNUITY" termMonths={60} />);
     expect(mockSetValue).not.toHaveBeenCalledWith('termMonths', 0, expect.anything());
   });
 
-  it('does not clear the term for a Canadian mortgage that has one', () => {
-    render(<MortgageFields {...defaultProps} isCanadianMortgage={true} termMonths={60} />);
-    expect(mockSetValue).not.toHaveBeenCalledWith('termMonths', 0, expect.anything());
+  it('lets the term of a non-Canadian mortgage be edited', () => {
+    render(<MortgageFields {...defaultProps} mortgageType="ANNUITY" termMonths={60} />);
+    fireEvent.change(periodInputs()[0], { target: { value: '3' } });
+    expect(mockSetValue).toHaveBeenCalledWith('termMonths', 36, { shouldValidate: true, shouldDirty: true });
+  });
+
+  describe('original principal', () => {
+    it('defaults to the mortgage amount until the user edits it', () => {
+      render(<MortgageFields {...defaultProps} openingBalance={300000} />);
+      expect(screen.getByLabelText('Original Principal')).toHaveValue('300000.00');
+    });
+
+    it('keeps an edited value when the opening balance later changes', () => {
+      const { rerender } = render(
+        <MortgageFields {...defaultProps} openingBalance={300000} />,
+      );
+      fireEvent.change(screen.getByLabelText('Original Principal'), {
+        target: { value: '250000' },
+      });
+      expect(mockSetValue).toHaveBeenCalledWith('originalPrincipal', 250000, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+
+      // The prop a parent would pass once `setValue` above lands in the form;
+      // the opening balance itself also moves. The typed value is what shows,
+      // not the (now different) opening balance.
+      rerender(
+        <MortgageFields
+          {...defaultProps}
+          openingBalance={310000}
+          originalPrincipal={250000}
+        />,
+      );
+      expect(screen.getByLabelText('Original Principal')).toHaveValue('250000.00');
+    });
+
+    it('shows on both create and edit', () => {
+      const { unmount } = render(<MortgageFields {...defaultProps} openingBalance={300000} />);
+      expect(screen.getByLabelText('Original Principal')).toBeInTheDocument();
+      unmount();
+      render(<MortgageFields {...defaultProps} isEditing openingBalance={300000} />);
+      expect(screen.getByLabelText('Original Principal')).toBeInTheDocument();
+    });
+  });
+
+  describe('payment matching', () => {
+    it('is offered only while creating', () => {
+      const { unmount } = render(<MortgageFields {...defaultProps} />);
+      expect(screen.getByRole('switch', { name: 'Match imported bank payments to this mortgage' })).toBeInTheDocument();
+      unmount();
+      render(<MortgageFields {...defaultProps} isEditing />);
+      expect(
+        screen.queryByRole('switch', { name: 'Match imported bank payments to this mortgage' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('prefills the payee pattern from the selected institution when switched on', () => {
+      render(<MortgageFields {...defaultProps} institutionName="ING Bank" />);
+      fireEvent.click(screen.getByRole('switch', { name: 'Match imported bank payments to this mortgage' }));
+      expect(mockSetValue).toHaveBeenCalledWith('paymentMatchingEnabled', true, { shouldDirty: true });
+      expect(mockSetValue).toHaveBeenCalledWith('paymentMatchingPayeePattern', '*ING Bank*', {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    });
+
+    it('does not overwrite a payee pattern the user already typed', () => {
+      render(
+        <MortgageFields
+          {...defaultProps}
+          institutionName="ING Bank"
+          paymentMatchingPayeePattern="*Already Typed*"
+        />,
+      );
+      fireEvent.click(screen.getByRole('switch', { name: 'Match imported bank payments to this mortgage' }));
+      expect(mockSetValue).not.toHaveBeenCalledWith(
+        'paymentMatchingPayeePattern',
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+
+    it('shows the source account the debit will be matched against', () => {
+      render(
+        <MortgageFields
+          {...defaultProps}
+          paymentMatchingEnabled
+          sourceAccountId="acc-1"
+        />,
+      );
+      expect(screen.getByText(/Matched against debits from Main Chequing\./)).toBeInTheDocument();
+    });
   });
 });

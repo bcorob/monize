@@ -203,6 +203,36 @@ describe('filterScheduledTransactions - special categories', () => {
     expect(result.map((t) => t.id)).toEqual(['t']);
   });
 
+  it('matches a category type through the record or any split', () => {
+    const salary = makeTransaction({
+      id: 'inc',
+      categoryId: 'cat-salary',
+      category: { id: 'cat-salary', isIncome: true } as any,
+    });
+    const rent = makeTransaction({
+      id: 'exp',
+      categoryId: 'cat-rent',
+      category: { id: 'cat-rent', isIncome: false } as any,
+    });
+    const split = makeTransaction({
+      id: 'split',
+      categoryId: null,
+      isSplit: true,
+      splits: [{ categoryId: 'cat-bonus', category: { id: 'cat-bonus', isIncome: true } }] as any,
+    });
+    const uncat = makeTransaction({ id: 'u', categoryId: null });
+    const income = filterScheduledTransactions(
+      [salary, rent, split, uncat],
+      filters({ selectedCategoryIds: ['income'] }),
+    );
+    expect(income.map((t) => t.id).sort()).toEqual(['inc', 'split']);
+    const expense = filterScheduledTransactions(
+      [salary, rent, split, uncat],
+      filters({ selectedCategoryIds: ['expense'] }),
+    );
+    expect(expense.map((t) => t.id)).toEqual(['exp']);
+  });
+
   it('ORs special pseudo-categories with real category IDs', () => {
     const transfer = makeTransaction({ id: 't', isTransfer: true });
     const rent = makeTransaction({ id: 'r', categoryId: 'cat-housing' });

@@ -55,6 +55,26 @@ export const CURRENCY_METADATA: Record<string, CurrencyMetadata> = {
 };
 
 /**
+ * Whether `code` is a known ISO 4217 currency code: one the curated table
+ * carries, or one the runtime's `Intl` data lists. Case-insensitive. A code
+ * that is neither is not a reference currency, so a user who introduces one
+ * owns it (`CurrenciesService.ensureCurrencyForUser`).
+ */
+export function isKnownIsoCurrency(code: string): boolean {
+  const upper = code.toUpperCase();
+  if (CURRENCY_METADATA[upper]) return true;
+  return INTL_CURRENCY_CODES.has(upper);
+}
+
+// `supportedValuesOf` is in the runtime (Node 18+) but not in this project's
+// TypeScript `lib`, so its one signature is declared here.
+const INTL_CURRENCY_CODES: ReadonlySet<string> = new Set(
+  (
+    Intl as unknown as { supportedValuesOf(key: "currency"): string[] }
+  ).supportedValuesOf("currency"),
+);
+
+/**
  * Resolve display metadata (name, symbol, decimal places) for a currency code.
  * Prefers the curated table above; for codes outside it, derives a proper
  * symbol and decimal count from `Intl` where possible so we set a real symbol

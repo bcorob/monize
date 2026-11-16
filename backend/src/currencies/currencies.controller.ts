@@ -23,6 +23,8 @@ import {
 import { AuthGuard } from "@nestjs/passport";
 import { Throttle } from "@nestjs/throttler";
 import { ParseCurrencyCodePipe } from "../common/pipes/parse-currency-code.pipe";
+import { ParseOptionalCalendarDatePipe } from "../common/pipes/parse-calendar-date.pipe";
+import { isCalendarDate } from "../common/validators/is-calendar-date.validator";
 import { RolesGuard } from "../auth/guards/roles.guard";
 import { Roles } from "../auth/decorators/roles.decorator";
 import { AllowDelegate } from "../delegation/decorators/delegate-access.decorator";
@@ -32,7 +34,14 @@ import {
   HistoricalRateBackfillSummary,
 } from "./exchange-rate.service";
 import {
+  ExchangeRateHistoryService,
+  RateCoverage,
+  RateGapFill,
+  StoredRateList,
+} from "./exchange-rate-history.service";
+import {
   CurrenciesService,
+  CurrencyCatalogEntry,
   CurrencyLookupResult,
   CurrencyUsageMap,
   UserCurrencyView,
@@ -40,16 +49,30 @@ import {
 import { ExchangeRate } from "./entities/exchange-rate.entity";
 import { CreateCurrencyDto } from "./dto/create-currency.dto";
 import { UpdateCurrencyDto } from "./dto/update-currency.dto";
+import { FillRateGapsDto } from "./dto/fill-rate-gaps.dto";
 import { tr } from "../i18n/translate";
+import {
+  FxProviderChain,
+  FxProviderDescription,
+} from "./providers/fx-provider-chain";
+import { AllowPat, NoPat } from "../auth/pat-access/pat-access.decorator";
+
+export interface ExchangeRateStatus {
+  lastUpdated: Date | null;
+  providers: FxProviderDescription[];
+}
 
 @ApiTags("Currencies")
 @ApiBearerAuth()
 @UseGuards(AuthGuard("jwt"))
+@AllowPat()
 @Controller("currencies")
 export class CurrenciesController {
   constructor(
     private readonly exchangeRateService: ExchangeRateService,
+    private readonly exchangeRateHistoryService: ExchangeRateHistoryService,
     private readonly currenciesService: CurrenciesService,
+    private readonly fxProviders: FxProviderChain,
   ) {}
 
   // ── Currency list ───────────────────────────────────────────────
@@ -85,7 +108,7 @@ export class CurrenciesController {
       "Curated currency metadata (code, name, symbol, decimal places) used to pick a currency before any are installed, e.g. at onboarding.",
   })
   @ApiResponse({ status: 200, description: "Known currency catalog" })
-  getCatalog(): CurrencyLookupResult[] {
+  getCatalog(): CurrencyCatalogEntry[] {
     return this.currenciesService.getCatalog();
   }
 
@@ -116,10 +139,16 @@ export class CurrenciesController {
 
   @Get("exchange-rates")
   @AllowDelegate()
-  @ApiOperation({ summary: "Get latest exchange rates" })
+  @ApiOperation({
+    summary: "Get latest exchange rates",
+    description:
+      "One row per currency pair: the newest stored observation of either direction, " +
+      "no older than 45 days. A pair whose newest observation is older is omitted, " +
+      "because its rate is unknown rather than the last one on file.",
+  })
   @ApiResponse({
     status: 200,
-    description: "Latest exchange rates per currency pair",
+    description: "Latest exchange rate per currency pair, one row per pair",
     type: [ExchangeRate],
   })
   getLatestRates(): Promise<ExchangeRate[]> {
@@ -130,16 +159,29 @@ export class CurrenciesController {
   @AllowDelegate()
   @Throttle({ default: { ttl: 60000, limit: 10 } }) // L2: 10 requests per minute
   @ApiOperation({ summary: "Get exchange rates for a date range" })
-  @ApiQuery({ name: "startDate", required: false, type: String })
-  @ApiQuery({ name: "endDate", required: false, type: String })
+  @ApiQuery({
+    name: "startDate",
+    required: false,
+    type: String,
+    example: "2026-07-20",
+  })
+  @ApiQuery({
+    name: "endDate",
+    required: false,
+    type: String,
+    example: "2026-07-27",
+  })
   @ApiResponse({
     status: 200,
     description: "Exchange rates within the date range",
     type: [ExchangeRate],
   })
+  // Both bounds go into a `rate_date` comparison, so each is a day or it is
+  // nothing: the pipe refuses the array Express parses a repeated key into
+  // rather than letting it reach the query as a supposed string.
   getRateHistory(
-    @Query("startDate") startDate?: string,
-    @Query("endDate") endDate?: string,
+    @Query("startDate", ParseOptionalCalendarDatePipe) startDate?: string,
+    @Query("endDate", ParseOptionalCalendarDatePipe) endDate?: string,
   ): Promise<ExchangeRate[]> {
     return this.exchangeRateService.getRateHistory(startDate, endDate);
   }
@@ -173,7 +215,12 @@ export class CurrenciesController {
     @Query("to", ParseCurrencyCodePipe) to: string,
     @Query("date") date: string,
   ): Promise<{ rate: number | null }> {
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date ?? "")) {
+    // `isCalendarDate`, not a bare regular expression on the raw value: Express
+    // parses a repeated key (`?date=x&date=y`) into an array, and `.test` would
+    // coerce that array to text and pass it through to the resolver as a
+    // supposed string (CodeQL `js/type-confusion-through-parameter-tampering`).
+    // It also rejects a day that does not exist, such as `2026-02-30`.
+    if (!isCalendarDate(date)) {
       throw new BadRequestException(
         tr(
           "errors.currencies.invalidRateDate",
@@ -185,13 +232,93 @@ export class CurrenciesController {
     return { rate };
   }
 
+  @Get("exchange-rates/coverage")
+  @AllowDelegate()
+  @Throttle({ default: { ttl: 60000, limit: 10 } }) // L2: as `history`, one indexed aggregate per call
+  @ApiOperation({
+    summary: "Stored exchange rate coverage for a pair",
+    description:
+      "The first and last stored rate date, and the number of days covered, for the given currency against the caller's reporting currency. Both stored directions count as one pair.",
+  })
+  @ApiQuery({ name: "code", required: true, type: String, example: "EUR" })
+  @ApiResponse({ status: 200, description: "Stored coverage for the pair" })
+  @ApiResponse({
+    status: 400,
+    description: "The code is the caller's own reporting currency",
+  })
+  getRateCoverage(
+    @Request() req,
+    @Query("code", ParseCurrencyCodePipe) code: string,
+  ): Promise<RateCoverage> {
+    return this.exchangeRateHistoryService.getCoverage(req.user.id, code);
+  }
+
+  @Get("exchange-rates/stored")
+  @AllowDelegate()
+  @Throttle({ default: { ttl: 60000, limit: 10 } }) // L2: as `coverage`, one indexed read per call
+  @ApiOperation({
+    summary: "Stored exchange rates for a pair",
+    description:
+      "Every stored rate for the given currency against the caller's reporting currency, newest date first, one entry per date. A rate is stated as reporting-currency units per 1 unit of the code; a row stored in the other orientation is returned as its reciprocal with `inverted: true`. Bounded to the newest 2000 dates, and `truncated` says the pair holds more.",
+  })
+  @ApiQuery({ name: "code", required: true, type: String, example: "EUR" })
+  @ApiResponse({ status: 200, description: "Stored rates for the pair" })
+  @ApiResponse({
+    status: 400,
+    description: "The code is the caller's own reporting currency",
+  })
+  getStoredRates(
+    @Request() req,
+    @Query("code", ParseCurrencyCodePipe) code: string,
+  ): Promise<StoredRateList> {
+    return this.exchangeRateHistoryService.getStoredRates(req.user.id, code);
+  }
+
+  /**
+   * Not admin-only, unlike the backfill above.
+   *
+   * The backfill walks every pair on the deployment; this one fetches only the
+   * windows one pair -- the caller's own reporting currency against the code
+   * they are looking at -- cannot answer, over the span their own data uses it.
+   * The rows it writes are shared reference data with no owner, so the log line
+   * names the user id, the same treatment the global refresh gets.
+   */
+  @Post("exchange-rates/fill-gaps")
+  @Throttle({ default: { ttl: 60000, limit: 6 } }) // L2: each call is a bounded run of provider windows
+  @ApiOperation({
+    summary: "Fill the gaps in a pair's stored rate history",
+    description:
+      "Fetches the windows between the first date the caller's data uses the currency and today that no stored observation can answer. Bounded per request: `windowsRemaining` says another press has work to do.",
+  })
+  @ApiResponse({
+    status: 201,
+    description:
+      "Fill summary; `usedFrom: null` means the currency is unused and nothing was fetched, and `providerHasNothingBefore` means the provider's history starts later than the data does",
+  })
+  @ApiResponse({
+    status: 400,
+    description:
+      "The code is the caller's own reporting currency, or no configured provider carries the pair (a coin without a price symbol); nothing is recorded",
+  })
+  @ApiResponse({ status: 503, description: "The provider did not answer" })
+  fillRateGaps(
+    @Request() req,
+    @Body() dto: FillRateGapsDto,
+  ): Promise<RateGapFill> {
+    return this.exchangeRateHistoryService.fillRateGaps(req.user.id, dto.code);
+  }
+
   @Get("exchange-rates/status")
   @AllowDelegate()
   @ApiOperation({ summary: "Get exchange rate update status" })
-  @ApiResponse({ status: 200, description: "Last update time" })
-  async getRateStatus(): Promise<{ lastUpdated: Date | null }> {
+  @ApiResponse({
+    status: 200,
+    description:
+      "Last update time and the configured FX providers, in the order they are tried; `source` is the slug stored on each rate row, `name` identifies the provider itself.",
+  })
+  async getRateStatus(): Promise<ExchangeRateStatus> {
     const lastUpdated = await this.exchangeRateService.getLastUpdateTime();
-    return { lastUpdated };
+    return { lastUpdated, providers: this.fxProviders.describe() };
   }
 
   /**
@@ -217,6 +344,7 @@ export class CurrenciesController {
   }
 
   @Post("exchange-rates/backfill")
+  @NoPat()
   @UseGuards(RolesGuard)
   @Roles("admin")
   @ApiOperation({

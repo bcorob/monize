@@ -1,4 +1,4 @@
-import { Injectable } from "@nestjs/common";
+import { Injectable, Logger } from "@nestjs/common";
 import { DataSource, In } from "typeorm";
 import { withScopedDb } from "../common/db/scoped-db";
 import { Holding } from "../securities/entities/holding.entity";
@@ -12,13 +12,50 @@ import {
   acquisitionCost,
   applyActionToQuantity,
   baseInvestmentAction,
+  investedFlowKind,
   CASH_INCOME_ACTIONS,
+  applyReturnOfCapital,
+  returnOfCapitalAmount,
+  INVESTMENT_REPLAY_ORDER,
+  reinvestedIncomeAmount,
+  isQuantityOnlyAction,
 } from "../securities/investment-replay.util";
 import { Account } from "../accounts/entities/account.entity";
 import { ExchangeRateService } from "../currencies/exchange-rate.service";
 import { InvestmentCellValue } from "./dto/execute-investment-report.dto";
 import { roundToDecimals, sumMoney } from "../common/round.util";
+import { daysBetween } from "../common/time-series/price-boundary.util";
+import { FxAggregate } from "../common/fx-aggregate";
 import { todayYMD } from "../common/date-utils";
+import { addMonthsClamped } from "../common/recurrence";
+import { resolveDailyPriceChange } from "../securities/daily-change.util";
+
+/**
+ * The rows of a holdings computation and how complete their conversion was.
+ *
+ * `fxComplete` and `missingPairs` travel with the rows because the rate gap is
+ * not visible in them: an unresolvable pair leaves `exchangeRate` null on one
+ * row and blanks `portfolioPercent` on *every* row, and nothing in the payload
+ * said why. A consumer reads `fxComplete === false` and relabels the figures;
+ * `missingPairs` names what to fix.
+ *
+ * A missing *price* withholds the same denominator by the same arithmetic and
+ * is a different repair -- refresh the security's price, not the rate table --
+ * so it is tracked separately: `pricesComplete` and `unpricedSymbols`. A
+ * consumer that only read `fxComplete` showed a blank "% of portfolio" column
+ * under no explanation at all whenever one holding had no close.
+ */
+export interface ComputedHoldings {
+  rows: ComputedHolding[];
+  /** False when any pair the rows needed could not be resolved. */
+  fxComplete: boolean;
+  /** `"SEK->USD"` for each unresolvable pair, in first-seen order. */
+  missingPairs: string[];
+  /** False when any held position had no price on or before the as-of date. */
+  pricesComplete: boolean;
+  /** The symbol of each such position, in first-seen order. */
+  unpricedSymbols: string[];
+}
 
 /** One computed holding row plus the fields needed to group it. */
 export interface ComputedHolding {
@@ -56,6 +93,13 @@ interface ReplayState {
   sales: number;
   reinvestments: number;
   realizedGains: number;
+  /**
+   * False once shares of unknown cost (ADD_SHARES / REMOVE_SHARES, an unpriced
+   * acquisition) join the position, until it closes to zero.
+   */
+  basisKnown: boolean;
+  /** False once a sale drew on an unknown basis: `realizedGains` is then a subtotal. */
+  realizedKnown: boolean;
   lastTransactionDate: string | null;
 }
 
@@ -71,17 +115,6 @@ function isoAddDays(iso: string, days: number): string {
   const dt = new Date(Date.UTC(y, m - 1, d));
   dt.setUTCDate(dt.getUTCDate() + days);
   return dt.toISOString().slice(0, 10);
-}
-
-function isoAddMonths(iso: string, months: number): string {
-  const [y, m, d] = iso.split("-").map(Number);
-  const dt = new Date(Date.UTC(y, m - 1, d));
-  dt.setUTCMonth(dt.getUTCMonth() + months);
-  return dt.toISOString().slice(0, 10);
-}
-
-function isoAddYears(iso: string, years: number): string {
-  return isoAddMonths(iso, years * 12);
 }
 
 const SECURITY_TYPE_LABELS: Record<string, string> = {
@@ -136,6 +169,7 @@ function securityCurrencyAcquisitionCost(
     quantity: tx.quantity,
     price: tx.price,
     commission: tx.commission,
+    totalAmount: tx.totalAmount,
   });
 }
 
@@ -150,6 +184,8 @@ function securityCurrencyAcquisitionCost(
  */
 @Injectable()
 export class InvestmentReportDataService {
+  private readonly logger = new Logger(InvestmentReportDataService.name);
+
   constructor(
     private dataSource: DataSource,
     private exchangeRateService: ExchangeRateService,
@@ -194,8 +230,15 @@ export class InvestmentReportDataService {
     asOfDate: string,
     baseCurrency: string,
     mergeAccounts = false,
-  ): Promise<ComputedHolding[]> {
-    if (accountIds.length === 0) return [];
+  ): Promise<ComputedHoldings> {
+    if (accountIds.length === 0)
+      return {
+        rows: [],
+        fxComplete: true,
+        missingPairs: [],
+        pricesComplete: true,
+        unpricedSymbols: [],
+      };
 
     const accountMap = await this.loadAccounts(accountIds);
 
@@ -239,7 +282,7 @@ export class InvestmentReportDataService {
           accountId: In(accountIds),
           status: NON_VOID_INVESTMENT_STATUS,
         },
-        order: { transactionDate: "ASC", createdAt: "ASC" },
+        order: INVESTMENT_REPLAY_ORDER,
       }),
     );
     let groups = this.groupTransactions(transactions, asOfDate);
@@ -262,14 +305,14 @@ export class InvestmentReportDataService {
       this.loadPrices(securityIds, asOfDate),
     ]);
 
-    const fxCache = new Map<string, number>();
+    const fxCache = new Map<string, number | null>();
     const year = Number(asOfDate.slice(0, 4));
     const periodStarts: Record<string, string> = {
       totalReturn1Week: isoAddDays(asOfDate, -7),
       totalReturn4Weeks: isoAddDays(asOfDate, -28),
-      totalReturn3Month: isoAddMonths(asOfDate, -3),
-      totalReturn1Year: isoAddYears(asOfDate, -1),
-      totalReturn3Year: isoAddYears(asOfDate, -3),
+      totalReturn3Month: addMonthsClamped(asOfDate, -3),
+      totalReturn1Year: addMonthsClamped(asOfDate, -12),
+      totalReturn3Year: addMonthsClamped(asOfDate, -36),
       totalReturnYtd: `${year - 1}-12-31`,
     };
 
@@ -277,6 +320,9 @@ export class InvestmentReportDataService {
       holding: ComputedHolding;
       marketValueBase: number | null;
     }[] = [];
+    // Held positions with no close on or before the as-of date. A Set keeps
+    // first-seen order and does not repeat a symbol held in two accounts.
+    const unpricedSymbols = new Set<string>();
 
     for (const group of groups.values()) {
       const security = securityMap.get(group.securityId);
@@ -288,6 +334,17 @@ export class InvestmentReportDataService {
       const prevRow = asOfIdx >= 1 ? prices[asOfIdx - 1] : null;
 
       const lastPrice = asOfRow ? asOfRow.close : null;
+      // A daily move only between adjacent, current sessions; otherwise null.
+      const daily =
+        asOfRow && prevRow
+          ? resolveDailyPriceChange(
+              [
+                { price: asOfRow.close, date: asOfRow.date },
+                { price: prevRow.close, date: prevRow.date },
+              ],
+              asOfDate,
+            )
+          : null;
       const previousClose = prevRow ? prevRow.close : null;
 
       let quantity = roundToDecimals(group.state.quantity, 8);
@@ -322,43 +379,49 @@ export class InvestmentReportDataService {
         continue;
       }
 
+      // Shares of unknown cost are in this position: the basis, and everything
+      // measured against it, is unknown rather than the priced part alone.
+      const knownBasis = group.state.basisKnown ? costBasis : null;
       const averageCost =
-        quantity !== 0 ? roundToDecimals(costBasis / quantity, 6) : null;
+        knownBasis !== null && quantity !== 0
+          ? roundToDecimals(knownBasis / quantity, 6)
+          : null;
       const marketValue =
         lastPrice !== null ? roundToDecimals(quantity * lastPrice, 4) : null;
       const income = roundToDecimals(group.state.income, 4);
       const gain =
-        marketValue !== null
-          ? roundToDecimals(marketValue + income - costBasis, 4)
+        marketValue !== null && knownBasis !== null
+          ? roundToDecimals(marketValue + income - knownBasis, 4)
           : null;
       const priceAppreciation =
-        marketValue !== null
-          ? roundToDecimals(marketValue - costBasis, 4)
+        marketValue !== null && knownBasis !== null
+          ? roundToDecimals(marketValue - knownBasis, 4)
           : null;
       const gainPercent =
-        gain !== null && costBasis > 0
-          ? roundToDecimals((gain / costBasis) * 100, 4)
+        gain !== null && knownBasis !== null && knownBasis > 0
+          ? roundToDecimals((gain / knownBasis) * 100, 4)
           : null;
-      const change =
-        lastPrice !== null && previousClose !== null
-          ? roundToDecimals(lastPrice - previousClose, 6)
-          : null;
-      const changePercent =
-        change !== null && previousClose
-          ? roundToDecimals((change / previousClose) * 100, 4)
-          : null;
+      const change = daily ? roundToDecimals(daily.dailyChange, 6) : null;
+      const changePercent = daily
+        ? roundToDecimals(daily.dailyChangePercent, 4)
+        : null;
       const todaysTotalChange =
         change !== null ? roundToDecimals(change * quantity, 4) : null;
 
       const fxRate = await this.fxRate(
         security.currencyCode,
         baseCurrency,
+        asOfDate,
         fxCache,
       );
       // Unknown rate makes the base-currency value unknown, not equal to the
       // native one.
       const marketValueBase =
         marketValue !== null && fxRate !== null ? marketValue * fxRate : null;
+
+      // Recorded after the closed-position filters above, so a position the
+      // report does not list cannot mark the report incomplete.
+      if (lastPrice === null) unpricedSymbols.add(security.symbol);
 
       const { high: high52, low: low52 } = this.fiftyTwoWeek(prices, asOfDate);
 
@@ -374,7 +437,7 @@ export class InvestmentReportDataService {
         account: accountName,
         quantity,
         averageCost,
-        costBasis,
+        costBasis: knownBasis,
         lastPrice,
         marketValue,
         gain,
@@ -395,7 +458,11 @@ export class InvestmentReportDataService {
         purchases: roundToDecimals(group.state.purchases, 4),
         sales: roundToDecimals(group.state.sales, 4),
         reinvestments: roundToDecimals(group.state.reinvestments, 4),
-        realizedGains: roundToDecimals(group.state.realizedGains, 4),
+        // A sale drawn on shares of unknown cost has no gain; the column is
+        // unknown, not the proceeds measured against the priced part.
+        realizedGains: group.state.realizedKnown
+          ? roundToDecimals(group.state.realizedGains, 4)
+          : null,
         exchangeRate: fxRate === null ? null : roundToDecimals(fxRate, 6),
         lastUpdated: asOfRow?.date ?? null,
         fiftyTwoWeekHigh: high52,
@@ -406,7 +473,7 @@ export class InvestmentReportDataService {
           asOfDate,
           periodStarts,
           marketValue,
-          costBasis,
+          knownBasis,
         ),
       };
 
@@ -426,9 +493,19 @@ export class InvestmentReportDataService {
     }
 
     // Second pass: % of portfolio against total (base-currency) market value.
-    const totalBase = sumMoney(computed.map((c) => c.marketValueBase ?? 0));
+    //
+    // Through `FxAggregate`, so a holding whose rate or price is unknown
+    // withholds the denominator instead of shrinking it: `?? 0` silently
+    // divided by a partial sum, which inflated every other row's share of the
+    // portfolio and wore a total's name while doing it.
+    const portfolioValue = new FxAggregate();
     for (const c of computed) {
-      if (c.marketValueBase !== null && totalBase > 0) {
+      if (c.marketValueBase === null) portfolioValue.addUnknown();
+      else portfolioValue.addConverted(c.marketValueBase);
+    }
+    const totalBase = portfolioValue.total;
+    for (const c of computed) {
+      if (c.marketValueBase !== null && totalBase !== null && totalBase > 0) {
         c.holding.values.portfolioPercent = roundToDecimals(
           (c.marketValueBase / totalBase) * 100,
           4,
@@ -436,7 +513,21 @@ export class InvestmentReportDataService {
       }
     }
 
-    return computed.map((c) => c.holding);
+    // The cache holds one entry per pair the rows actually needed, and a `null`
+    // entry is a pair the door refused. Read here rather than tracked
+    // separately so the report cannot report itself complete while a row's
+    // conversion was refused.
+    const missingPairs = [...fxCache.entries()]
+      .filter(([, rate]) => rate === null)
+      .map(([pair]) => pair);
+
+    return {
+      rows: computed.map((c) => c.holding),
+      fxComplete: missingPairs.length === 0,
+      missingPairs,
+      pricesComplete: unpricedSymbols.size === 0,
+      unpricedSymbols: [...unpricedSymbols],
+    };
   }
 
   // ---------------------------------------------------------------------------
@@ -586,6 +677,8 @@ export class InvestmentReportDataService {
       sales: 0,
       reinvestments: 0,
       realizedGains: 0,
+      basisKnown: true,
+      realizedKnown: true,
       lastTransactionDate: null,
     };
   }
@@ -608,6 +701,7 @@ export class InvestmentReportDataService {
         // say what it cost, and unknown is not free.
         const cost = securityCurrencyAcquisitionCost(tx);
         if (cost !== null) state.costBasis += cost;
+        else state.basisKnown = false;
         state.quantity = applyActionToQuantity(
           state.quantity,
           tx.action,
@@ -615,22 +709,38 @@ export class InvestmentReportDataService {
         );
         if (tx.action === InvestmentAction.BUY) state.purchases += totalAmount;
         if (baseInvestmentAction(tx.action) === InvestmentAction.REINVEST) {
-          state.reinvestments += totalAmount;
+          // A reinvested distribution is income as surely as a cash one, so
+          // `value + income - cost` nets the reinvestment to the distribution
+          // it was. Not `totalAmount` alone: a reinvest created in the app
+          // stores none, and is valued from its quantity and price.
+          const distribution = reinvestedIncomeAmount(tx);
+          if (distribution !== null) {
+            state.reinvestments += distribution;
+            state.income += distribution;
+          }
         }
         break;
       }
       case InvestmentAction.SELL:
       case InvestmentAction.TRANSFER_OUT: {
-        const sellQty = Math.min(quantity, state.quantity);
+        const sellQty = Math.min(quantity, Math.max(state.quantity, 0));
         const avgCost =
           state.quantity > 0 ? state.costBasis / state.quantity : 0;
         const costSold = sellQty * avgCost;
         state.costBasis -= costSold;
-        state.quantity -= sellQty;
+        // The whole sale comes off, as in the holdings rebuild (INV-HOLDING-002);
+        // the part the position did not hold has no known cost.
+        if (sellQty < quantity - 0.0001) state.basisKnown = false;
+        state.quantity = applyActionToQuantity(
+          state.quantity,
+          tx.action,
+          quantity,
+        );
         // Base-normalized: a REDEEM realizes its proceeds like the sale it is.
         if (baseInvestmentAction(tx.action) === InvestmentAction.SELL) {
           state.sales += totalAmount;
           state.realizedGains += totalAmount - costSold;
+          if (!state.basisKnown) state.realizedKnown = false;
         }
         break;
       }
@@ -639,7 +749,27 @@ export class InvestmentReportDataService {
       case InvestmentAction.CAPITAL_GAIN:
         state.income += totalAmount;
         break;
+      case InvestmentAction.RETURN_OF_CAPITAL: {
+        // Not income: it pays back cost, so it comes off the basis, and only
+        // what the basis could not absorb is a realized gain.
+        const amount = returnOfCapitalAmount({ totalAmount: tx.totalAmount });
+        if (amount !== null) {
+          const effect = applyReturnOfCapital(state.costBasis, amount);
+          state.costBasis = effect.costBasis;
+          state.realizedGains += effect.realizedGain;
+          if (!state.basisKnown && effect.realizedGain > 0) {
+            state.realizedKnown = false;
+          }
+        } else {
+          state.basisKnown = false;
+        }
+        break;
+      }
       default:
+        // ADD_SHARES / REMOVE_SHARES move units with no cost in the ledger.
+        if (isQuantityOnlyAction(tx.action) && quantity !== 0) {
+          state.basisKnown = false;
+        }
         state.quantity = applyActionToQuantity(
           state.quantity,
           tx.action,
@@ -651,6 +781,7 @@ export class InvestmentReportDataService {
     if (Math.abs(state.quantity) < 0.0001) {
       state.quantity = 0;
       state.costBasis = 0;
+      state.basisKnown = true;
     }
   }
 
@@ -728,7 +859,19 @@ export class InvestmentReportDataService {
     return s.quantity;
   }
 
-  /** Income (dividends/interest/capital gains) received in (after, upto]. */
+  /**
+   * Cash distributions (dividends/interest/capital gains, and capital
+   * returned) received in (after, upto].
+   *
+   * Cash only, unlike the Income column: a period return compares the market
+   * value, which already holds any shares a reinvestment bought, against the
+   * window's starting value, which holds none of their cost. Adding the
+   * reinvested distribution as well would count it twice.
+   *
+   * A return of capital is not income, but it is in a total return: the price
+   * falls by what was paid back, so leaving the cash out would read the
+   * distribution as a loss.
+   */
   private incomeBetween(
     group: GroupRecord,
     after: string,
@@ -737,7 +880,10 @@ export class InvestmentReportDataService {
     let income = 0;
     for (const tx of group.txs) {
       if (tx.transactionDate <= after || tx.transactionDate > upto) continue;
-      if (CASH_INCOME_ACTIONS.includes(tx.action)) {
+      if (
+        CASH_INCOME_ACTIONS.includes(tx.action) ||
+        tx.action === InvestmentAction.RETURN_OF_CAPITAL
+      ) {
         income += Number(tx.totalAmount) || 0;
       }
     }
@@ -745,8 +891,75 @@ export class InvestmentReportDataService {
   }
 
   /**
-   * Compute the MS Money-style total return columns:
-   *   (current value + income in period - beginning value) / beginning value.
+   * The value that crossed the position's boundary in (after, upto]: shares
+   * bought or moved in (`inflows`) and shares sold or moved out (`outflows`).
+   * A return that ignores them reads a purchase as a gain and a sale as a loss.
+   *
+   * A BUY and a SELL are valued at what they cost and fetched; a transfer or a
+   * share adjustment has no price of its own, so it is valued at the close on
+   * its date. A REINVEST is left out on purpose: it spends income the position
+   * earned, its shares are already in the market value, and counting it as a
+   * deposit would hide that income (`incomeBetween`). A return of capital is a
+   * cash distribution `incomeBetween` already counts.
+   *
+   * `weightedNet` is the Modified Dietz weighting of those flows: each is
+   * weighted by the share of the window's days it was invested, counting its
+   * own day (start-of-day convention: a flow on the window's first day weighs
+   * 1, one on `upto` weighs 1/days), inflows positive and outflows negative
+   * (`docs/specs/investment-report-period-returns.md`).
+   *
+   * `null` when a flow cannot be valued: a missing price is unknown, not free.
+   */
+  private flowsBetween(
+    group: GroupRecord,
+    prices: PriceRow[],
+    after: string,
+    upto: string,
+  ): { inflows: number; outflows: number; weightedNet: number } | null {
+    const inflows: number[] = [];
+    const outflows: number[] = [];
+    // `after < upto` for every window the report asks for, so windowDays > 0.
+    const windowDays = daysBetween(after, upto);
+    const weighted: number[] = [];
+    for (const tx of group.txs) {
+      if (tx.transactionDate <= after || tx.transactionDate > upto) continue;
+      const base = baseInvestmentAction(tx.action);
+      const kind = investedFlowKind(tx.action);
+      if (
+        base === InvestmentAction.REINVEST ||
+        base === InvestmentAction.RETURN_OF_CAPITAL ||
+        (kind !== "capitalIn" && kind !== "capitalOut")
+      ) {
+        continue;
+      }
+      let amount: number | null;
+      if (base === InvestmentAction.BUY) {
+        amount = securityCurrencyAcquisitionCost(tx);
+      } else if (base === InvestmentAction.SELL) {
+        const total = Number(tx.totalAmount);
+        amount = Number.isFinite(total) && total > 0 ? total : null;
+      } else {
+        const price = this.priceOnOrBefore(prices, tx.transactionDate);
+        amount = price === null ? null : (Number(tx.quantity) || 0) * price;
+      }
+      if (amount === null) return null;
+      (kind === "capitalIn" ? inflows : outflows).push(amount);
+      const weight = (daysBetween(tx.transactionDate, upto) + 1) / windowDays;
+      weighted.push((kind === "capitalIn" ? amount : -amount) * weight);
+    }
+    return {
+      inflows: sumMoney(inflows),
+      outflows: sumMoney(outflows),
+      weightedNet: sumMoney(weighted),
+    };
+  }
+
+  /**
+   * Compute the per-security total return columns by the Modified Dietz
+   * method (`docs/specs/investment-report-period-returns.md`):
+   *   (current value + income + sales - beginning value - purchases)
+   *   / (beginning value + day-weighted purchases - day-weighted sales),
+   * flows taken inside the window. Income stays out of the denominator.
    * "All dates" measures against cost basis (return since inception); the
    * annualized column annualizes that figure over the holding period.
    */
@@ -756,7 +969,7 @@ export class InvestmentReportDataService {
     asOfDate: string,
     periodStarts: Record<string, string>,
     marketValue: number | null,
-    costBasis: number,
+    costBasis: number | null,
   ): Record<string, number | null> {
     const result: Record<string, number | null> = {
       totalReturn1Week: null,
@@ -777,14 +990,21 @@ export class InvestmentReportDataService {
       const beginValue = beginQty * beginPrice;
       if (beginValue <= 0) continue;
       const income = this.incomeBetween(group, start, asOfDate);
+      const flows = this.flowsBetween(group, prices, start, asOfDate);
+      // A flow that cannot be valued leaves the return unknown, not wrong.
+      if (flows === null) continue;
+      const denominator = beginValue + flows.weightedNet;
+      if (denominator <= 0) continue;
       result[key] = roundToDecimals(
-        ((marketValue + income - beginValue) / beginValue) * 100,
+        ((marketValue + income + flows.outflows - beginValue - flows.inflows) /
+          denominator) *
+          100,
         4,
       );
     }
 
     // All-dates total return is measured against invested cost.
-    if (marketValue !== null && costBasis > 0) {
+    if (marketValue !== null && costBasis !== null && costBasis > 0) {
       const allIncome = group.state.income;
       const allDates =
         ((marketValue + allIncome - costBasis) / costBasis) * 100;
@@ -809,30 +1029,45 @@ export class InvestmentReportDataService {
   }
 
   /**
-   * Latest rate for a pair, or `null` when there is none.
+   * The rate for a pair **on the report's as-of date**, or `null`.
    *
-   * `null`, not 1: this used to end `rate = reverse !== null ? 1 / reverse : 1`,
-   * so a base-currency column for a security with no rate reported the foreign
-   * number as though the currencies were at par (audit P5-009, same defect as
-   * the net-worth and portfolio paths). Rate 1 is returned only when the two
-   * codes are equal.
+   * It used to call `getLatestRate` regardless of the date, so a report run
+   * "as of" last March valued its holdings at today's rate and changed every
+   * morning; and it returned 1 whenever either code was missing, which is a
+   * base-currency column carrying a foreign number (issue #1390, INV-FX-001).
+   * Rate 1 is returned only when the two codes are equal. The lookup goes
+   * through `getRateForDate`, the one ladder, so this report and every other
+   * surface quote one rate for one pair on one date.
    */
   private async fxRate(
     from: string,
     to: string,
-    cache: Map<string, number>,
+    onDate: string,
+    cache: Map<string, number | null>,
   ): Promise<number | null> {
-    if (!from || !to || from === to) return 1;
+    // A missing code is not a pair, so there is nothing to convert and nothing
+    // to claim: unknown, never 1.
+    if (!from || !to) return null;
+    if (from === to) return 1;
     const key = `${from}->${to}`;
     const cached = cache.get(key);
     if (cached !== undefined) return cached;
-    let rate = await this.exchangeRateService.getLatestRate(from, to);
-    if (rate === null || rate <= 0) {
-      const reverse = await this.exchangeRateService.getLatestRate(to, from);
-      if (reverse === null || reverse <= 0) return null;
-      rate = 1 / reverse;
+    // `fetchMissing: false`: running a report is a read. Fanning out to the
+    // provider per unresolved pair made a GET write rate rows and, with no
+    // negative cache on that path, repeat the fan-out on every refresh.
+    const rate = await this.exchangeRateService.getRateForDate(
+      from,
+      to,
+      onDate,
+      { fetchMissing: false },
+    );
+    const usable = rate !== null && rate > 0 ? rate : null;
+    if (usable === null) {
+      this.logger.warn(
+        `No exchange rate available for ${key} on or before ${onDate}; the affected base-currency figures are reported as unknown rather than converted 1:1`,
+      );
     }
-    cache.set(key, rate);
-    return rate;
+    cache.set(key, usable);
+    return usable;
   }
 }

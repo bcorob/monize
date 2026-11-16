@@ -2,6 +2,7 @@ import { SectorWeightingService } from "./sector-weighting.service";
 import { Security } from "./entities/security.entity";
 import { Holding } from "./entities/holding.entity";
 import { Account } from "../accounts/entities/account.entity";
+import { UserPreference } from "../users/entities/user-preference.entity";
 import {
   createScopedDbMocks,
   ManagerMock,
@@ -16,6 +17,7 @@ describe("SectorWeightingService", () => {
   let securityRepo: Record<string, jest.Mock>;
   let holdingsRepo: Record<string, jest.Mock>;
   let accountsRepo: Record<string, jest.Mock>;
+  let prefsRepo: Record<string, jest.Mock>;
   let manager: ManagerMock;
   let yahooService: Record<string, jest.Mock>;
   let calcService: Record<string, jest.Mock>;
@@ -78,6 +80,9 @@ describe("SectorWeightingService", () => {
     accountsRepo = {
       find: jest.fn().mockResolvedValue([]),
     };
+    prefsRepo = {
+      findOne: jest.fn().mockResolvedValue(null),
+    };
     yahooService = {
       fetchStockSectorInfo: jest.fn().mockResolvedValue(null),
       fetchEtfBreakdowns: jest
@@ -95,12 +100,14 @@ describe("SectorWeightingService", () => {
       convertToDefault: jest
         .fn()
         .mockImplementation((amount) => Promise.resolve(amount)),
+      valueBondHoldings: jest.fn().mockResolvedValue(new Map()),
     };
 
     const { manager: managerMock, dataSource } = createScopedDbMocks([
       [Security, securityRepo],
       [Holding, holdingsRepo],
       [Account, accountsRepo],
+      [UserPreference, prefsRepo],
     ]);
     manager = managerMock;
     manager.query.mockResolvedValue([]);
@@ -402,6 +409,50 @@ describe("SectorWeightingService", () => {
       expect(result.items[0].totalValue).toBe(18000);
     });
 
+    it("converts into the user's reporting currency, not the first account's", async () => {
+      const account = {
+        id: "acct-1",
+        userId: "user-1",
+        accountType: "INVESTMENT",
+        currencyCode: "USD",
+      };
+      accountsRepo.find.mockResolvedValue([account]);
+      calcService.categoriseAccounts.mockReturnValue({
+        cashAccounts: [],
+        brokerageAccounts: [],
+        standaloneAccounts: [account],
+        holdingsAccountIds: ["acct-1"],
+      });
+      holdingsRepo.find.mockResolvedValue([
+        {
+          id: "h1",
+          accountId: "acct-1",
+          securityId: "sec-stock-1",
+          quantity: 100,
+          security: mockStockSecurity,
+        },
+      ]);
+      manager.query.mockResolvedValue([
+        { security_id: "sec-stock-1", close_price: "100" },
+      ]);
+      prefsRepo.findOne.mockResolvedValue({ defaultCurrency: "EUR" });
+      // USD -> EUR at 2: 10,000 USD is 20,000 EUR.
+      calcService.convertToDefault.mockImplementation(
+        (amount: number, from: string, to: string) =>
+          Promise.resolve(from === "USD" && to === "EUR" ? amount * 2 : amount),
+      );
+
+      const result = await service.getSectorWeightings("user-1");
+
+      expect(calcService.convertToDefault).toHaveBeenCalledWith(
+        10000,
+        "USD",
+        "EUR",
+        expect.anything(),
+      );
+      expect(result.totalPortfolioValue).toBe(20000);
+    });
+
     it("distributes ETF value across sectors", async () => {
       const account = {
         id: "acct-1",
@@ -669,6 +720,170 @@ describe("SectorWeightingService", () => {
     });
   });
 
+  describe("a bond-linked holding is its own account's lots", () => {
+    const accounts = ["acct-ike", "acct-reg"].map((id) => ({
+      id,
+      userId: "user-1",
+      accountType: "INVESTMENT",
+      currencyCode: "USD",
+    }));
+    const bond: Partial<Security> = {
+      ...mockNoSectorSecurity,
+      id: "sec-bond",
+      securityType: "BOND",
+      bondProgramId: "prog-1",
+    };
+    const heldIn = (accountId: string) => ({
+      id: `h-${accountId}`,
+      accountId,
+      securityId: "sec-bond",
+      quantity: 10,
+      security: bond,
+    });
+
+    beforeEach(() => {
+      accountsRepo.find.mockResolvedValue(accounts);
+      calcService.categoriseAccounts.mockReturnValue({
+        cashAccounts: [],
+        brokerageAccounts: [],
+        standaloneAccounts: accounts,
+        holdingsAccountIds: accounts.map((a) => a.id),
+      });
+      holdingsRepo.find.mockResolvedValue(accounts.map((a) => heldIn(a.id)));
+      // The blend (117.74) a quantity x price reading would use.
+      manager.query.mockResolvedValue([
+        { security_id: "sec-bond", close_price: "117.74" },
+      ]);
+    });
+
+    it("sums each account's own lots, not quantity x the blend", async () => {
+      calcService.valueBondHoldings.mockResolvedValue(
+        new Map([
+          ["acct-ike:sec-bond", { marketValue: 1354, unitPrice: 135.4 }],
+          ["acct-reg:sec-bond", { marketValue: 1000.8, unitPrice: 100.08 }],
+        ]),
+      );
+
+      const result = await service.getSectorWeightings("user-1");
+
+      expect(result.unclassifiedValue).toBeCloseTo(2354.8, 6);
+    });
+
+    it("hands the price map to the bond valuation, so a traded series is the person's price", async () => {
+      calcService.valueBondHoldings.mockResolvedValue(new Map());
+
+      await service.getSectorWeightings("user-1");
+      await service.getAssetClassWeightings("user-1");
+
+      for (const call of calcService.valueBondHoldings.mock.calls) {
+        expect(call[2]).toEqual(new Map([["sec-bond", 117.74]]));
+      }
+      expect(calcService.valueBondHoldings).toHaveBeenCalledTimes(2);
+    });
+
+    it("leaves an unpriced account out and never falls back to the blend", async () => {
+      calcService.valueBondHoldings.mockResolvedValue(
+        new Map([
+          ["acct-ike:sec-bond", null],
+          ["acct-reg:sec-bond", { marketValue: 1000.8, unitPrice: 100.08 }],
+        ]),
+      );
+
+      const result = await service.getAssetClassWeightings("user-1");
+
+      expect(result.totalPortfolioValue).toBeNull();
+      expect(result.knownSubtotal).toBeCloseTo(1000.8, 6);
+      expect(result.valuationComplete).toBe(false);
+    });
+  });
+
+  describe("a holding left out withholds the total", () => {
+    const account = {
+      id: "acct-1",
+      userId: "user-1",
+      accountType: "INVESTMENT",
+      currencyCode: "USD",
+    };
+    const held = (id: string, symbol: string, currencyCode: string) => ({
+      id: `h-${id}`,
+      accountId: "acct-1",
+      securityId: id,
+      quantity: 10,
+      security: { ...mockStockSecurity, id, symbol, currencyCode },
+    });
+
+    beforeEach(() => {
+      accountsRepo.find.mockResolvedValue([account]);
+      calcService.categoriseAccounts.mockReturnValue({
+        cashAccounts: [],
+        brokerageAccounts: [],
+        standaloneAccounts: [account],
+        holdingsAccountIds: ["acct-1"],
+      });
+      prefsRepo.findOne.mockResolvedValue({ defaultCurrency: "USD" });
+      // sec-ok and sec-jpy are priced; sec-nop has no price row.
+      manager.query.mockResolvedValue([
+        { security_id: "sec-ok", close_price: "100" },
+        { security_id: "sec-jpy", close_price: "5000" },
+      ]);
+      calcService.convertToDefault.mockImplementation(
+        (amount: number, from: string) =>
+          Promise.resolve(from === "JPY" ? null : amount),
+      );
+    });
+
+    it("names the unpriced security and the missing pair, weights over the known part", async () => {
+      holdingsRepo.find.mockResolvedValue([
+        held("sec-ok", "OK", "USD"),
+        held("sec-nop", "NOP", "USD"),
+        held("sec-jpy", "JPY1", "JPY"),
+      ]);
+
+      const result = await service.getSectorWeightings("user-1");
+
+      expect(result.totalPortfolioValue).toBeNull();
+      expect(result.knownSubtotal).toBe(1000);
+      expect(result.valuationComplete).toBe(false);
+      expect(result.pricesComplete).toBe(false);
+      expect(result.fxComplete).toBe(false);
+      expect(result.unpricedSecurityIds).toEqual(["sec-nop"]);
+      expect(result.unpricedSymbols).toEqual(["NOP"]);
+      expect(result.missingRatePairs).toEqual(["JPY->USD"]);
+      expect(result.items[0].percentage).toBe(100);
+    });
+
+    it("withholds the total on the country and asset-class views too", async () => {
+      holdingsRepo.find.mockResolvedValue([
+        held("sec-ok", "OK", "USD"),
+        held("sec-nop", "NOP", "USD"),
+      ]);
+
+      const country = await service.getCountryWeightings("user-1");
+      const assetClass = await service.getAssetClassWeightings("user-1");
+      const llm = await service.getLlmLookThrough("user-1");
+
+      for (const r of [country, assetClass, llm]) {
+        expect(r.totalPortfolioValue).toBeNull();
+        expect(r.knownSubtotal).toBe(1000);
+        expect(r.valuationComplete).toBe(false);
+        expect(r.unpricedSymbols).toEqual(["NOP"]);
+      }
+      expect(llm.byCountry.items[0].percentage).toBe(100);
+    });
+
+    it("keeps the total when every holding is priced and converted", async () => {
+      holdingsRepo.find.mockResolvedValue([held("sec-ok", "OK", "USD")]);
+
+      const result = await service.getSectorWeightings("user-1");
+
+      expect(result.totalPortfolioValue).toBe(1000);
+      expect(result.knownSubtotal).toBe(1000);
+      expect(result.valuationComplete).toBe(true);
+      expect(result.unpricedSecurityIds).toEqual([]);
+      expect(result.missingRatePairs).toEqual([]);
+    });
+  });
+
   describe("ensureSectorDataByIds", () => {
     it("loads securities by IDs and delegates to ensureSectorData", async () => {
       const securities = [
@@ -866,10 +1081,10 @@ describe("SectorWeightingService", () => {
 
       // 10 x $100 = $1,000: equity 600, fixed income 300, Other 100.
       expect(
-        result.items.find((i) => i.assetClass === "Equity")?.etfValue,
+        result.items.find((i) => i.assetClassKey === "equity")?.etfValue,
       ).toBe(600);
       expect(
-        result.items.find((i) => i.assetClass === "Fixed Income")?.etfValue,
+        result.items.find((i) => i.assetClassKey === "fixedIncome")?.etfValue,
       ).toBe(300);
       expect(result.unclassifiedValue).toBe(100);
       expect(result.totalPortfolioValue).toBe(1000);
@@ -892,13 +1107,17 @@ describe("SectorWeightingService", () => {
 
       const result = await service.getAssetClassWeightings("user-1");
 
-      expect(
-        result.items.find((i) => i.assetClass === "Equity")?.directValue,
-      ).toBe(18000);
+      expect(result.items).toEqual([
+        expect.objectContaining({
+          assetClass: "Equities",
+          assetClassKey: "equity",
+          directValue: 18000,
+        }),
+      ]);
       expect(result.unclassifiedValue).toBe(0);
     });
 
-    it("merges class names that differ only by case under the first spelling", async () => {
+    it("merges a lower-case canonical name with the type default under the canonical label", async () => {
       withAccount();
       holdingsRepo.find.mockResolvedValue([
         {
@@ -927,11 +1146,144 @@ describe("SectorWeightingService", () => {
       const result = await service.getAssetClassWeightings("user-1");
 
       expect(result.items).toHaveLength(1);
-      // The fund's own spelling wins; the stock's default folds into it.
-      expect(result.items[0].assetClass).toBe("equity");
+      // Both are the canonical equity class, named by its label.
+      expect(result.items[0].assetClass).toBe("Equities");
+      expect(result.items[0].assetClassKey).toBe("equity");
       expect(result.items[0].etfValue).toBe(1000);
       expect(result.items[0].directValue).toBe(200);
       expect(result.items[0].totalValue).toBe(1200);
+    });
+
+    it("merges a held stock and a fund's Yahoo 'Stocks' slice into one equity bucket", async () => {
+      withAccount();
+      holdingsRepo.find.mockResolvedValue([
+        {
+          id: "h1",
+          accountId: "acct-1",
+          securityId: "sec-stock-1",
+          quantity: 1,
+          security: mockStockSecurity,
+        },
+        {
+          id: "h2",
+          accountId: "acct-1",
+          securityId: "sec-etf-1",
+          quantity: 10,
+          security: {
+            ...mockEtfSecurity,
+            assetWeightings: [{ name: "Stocks", weight: 1 }],
+          },
+        },
+      ]);
+      manager.query.mockResolvedValue([
+        { security_id: "sec-stock-1", close_price: "200" },
+        { security_id: "sec-etf-1", close_price: "100" },
+      ]);
+
+      const result = await service.getAssetClassWeightings("user-1");
+
+      expect(result.items).toEqual([
+        {
+          assetClass: "Equities",
+          assetClassKey: "equity",
+          directValue: 200,
+          etfValue: 1000,
+          totalValue: 1200,
+          percentage: 100,
+        },
+      ]);
+    });
+
+    it("merges a held bond and a fund's Yahoo 'Bonds' slice into one fixed income bucket", async () => {
+      withAccount();
+      holdingsRepo.find.mockResolvedValue([
+        {
+          id: "h1",
+          accountId: "acct-1",
+          securityId: "sec-bond-1",
+          quantity: 5,
+          security: {
+            ...mockStockSecurity,
+            id: "sec-bond-1",
+            symbol: "BOND1",
+            securityType: "BOND",
+          },
+        },
+        {
+          id: "h2",
+          accountId: "acct-1",
+          securityId: "sec-etf-1",
+          quantity: 10,
+          security: {
+            ...mockEtfSecurity,
+            assetWeightings: [
+              { name: "Bonds", weight: 0.9 },
+              { name: "Cash", weight: 0.1 },
+            ],
+          },
+        },
+      ]);
+      manager.query.mockResolvedValue([
+        { security_id: "sec-bond-1", close_price: "100" },
+        { security_id: "sec-etf-1", close_price: "100" },
+      ]);
+
+      const result = await service.getAssetClassWeightings("user-1");
+
+      expect(result.items).toEqual([
+        {
+          assetClass: "Fixed Income",
+          assetClassKey: "fixedIncome",
+          directValue: 500,
+          etfValue: 900,
+          totalValue: 1400,
+          percentage: 93.33,
+        },
+        {
+          assetClass: "Cash",
+          assetClassKey: "cash",
+          directValue: 0,
+          etfValue: 100,
+          totalValue: 100,
+          percentage: 6.67,
+        },
+      ]);
+    });
+
+    it("passes a user-typed class that maps to no canonical class through as typed", async () => {
+      withAccount();
+      holdingsRepo.find.mockResolvedValue([
+        {
+          id: "h1",
+          accountId: "acct-1",
+          securityId: "sec-etf-1",
+          quantity: 10,
+          security: {
+            ...mockEtfSecurity,
+            assetWeightings: [
+              { name: "Real Estate", weight: 0.5 },
+              { name: "real estate", weight: 0.25 },
+              { name: "Stocks", weight: 0.25 },
+            ],
+          },
+        },
+      ]);
+      manager.query.mockResolvedValue([
+        { security_id: "sec-etf-1", close_price: "100" },
+      ]);
+
+      const result = await service.getAssetClassWeightings("user-1");
+
+      expect(
+        result.items.map(({ assetClass, assetClassKey, totalValue }) => ({
+          assetClass,
+          assetClassKey,
+          totalValue,
+        })),
+      ).toEqual([
+        { assetClass: "Real Estate", assetClassKey: null, totalValue: 750 },
+        { assetClass: "Equities", assetClassKey: "equity", totalValue: 250 },
+      ]);
     });
 
     it("filters by the requested accounts and securities", async () => {
@@ -976,7 +1328,7 @@ describe("SectorWeightingService", () => {
       });
       // ...and the excluded security contributes nothing.
       expect(result.items).toHaveLength(1);
-      expect(result.items[0].assetClass).toBe("Equity");
+      expect(result.items[0].assetClassKey).toBe("equity");
       expect(result.totalPortfolioValue).toBe(1000);
     });
 
@@ -1047,7 +1399,7 @@ describe("SectorWeightingService", () => {
       expect(result.byCountry.unclassifiedValue).toBe(250);
       expect(result.byCountry.unclassifiedPercentage).toBe(25);
       expect(result.byAssetClass.items).toEqual([
-        { name: "Equity", value: 500, percentage: 50 },
+        { name: "Equities", value: 500, percentage: 50 },
       ]);
       expect(result.byAssetClass.unclassifiedValue).toBe(500);
       expect(result.byAssetClass.unclassifiedPercentage).toBe(50);

@@ -10,6 +10,7 @@ describe("GemWarningsBanner", () => {
       <GemWarningsBanner
         warnings={[{ code: "LEGACY_PERIODS", count: 3 }]}
         lookbackMonths={12}
+        assets={[]}
       />,
     );
     expect(
@@ -21,7 +22,7 @@ describe("GemWarningsBanner", () => {
 
   it("renders nothing without warnings", () => {
     const { container } = render(
-      <GemWarningsBanner warnings={[]} lookbackMonths={12} />,
+      <GemWarningsBanner warnings={[]} lookbackMonths={12} assets={[]} />,
     );
     expect(container).toBeEmptyDOMElement();
   });
@@ -31,6 +32,7 @@ describe("GemWarningsBanner", () => {
       <GemWarningsBanner
         warnings={[{ code: "CALCULATION_FAILED" }]}
         lookbackMonths={12}
+        assets={[]}
       />,
     );
     expect(screen.getByRole("alert")).toHaveTextContent(
@@ -46,6 +48,7 @@ describe("GemWarningsBanner", () => {
           { code: "STALE_PRICES", roles: ["EX_US_EQUITY"] },
         ]}
         lookbackMonths={12}
+        assets={[]}
       />,
     );
     expect(
@@ -55,11 +58,36 @@ describe("GemWarningsBanner", () => {
     expect(screen.getByText(/Developed markets ex-US/)).toBeInTheDocument();
   });
 
+  it("names the short-history instrument, its symbol, and how to fix it", () => {
+    render(
+      <GemWarningsBanner
+        warnings={[
+          {
+            code: "SHORT_HISTORY",
+            roles: ["EM_EQUITY"],
+            requiredFrom: "2024-07-31",
+          },
+        ]}
+        lookbackMonths={12}
+        assets={[
+          { role: "EM_EQUITY", securityId: "s1", symbol: "IS3N", name: "EM IMI" },
+        ]}
+      />,
+    );
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent(/Not enough price history/);
+    // The role is named with its symbol so the user knows which instrument.
+    expect(alert).toHaveTextContent("IS3N");
+    // And the fix points at the security page's control.
+    expect(alert).toHaveTextContent(/Add another year of price history/);
+  });
+
   it("leaves the in-place empty states to explain account and position gaps", () => {
     const { container } = render(
       <GemWarningsBanner
         warnings={[{ code: "NO_ACCOUNT" }, { code: "NO_POSITION" }]}
         lookbackMonths={12}
+        assets={[]}
       />,
     );
     expect(container).toBeEmptyDOMElement();
@@ -70,6 +98,7 @@ describe("GemWarningsBanner", () => {
       <GemWarningsBanner
         warnings={[{ code: "FIRST_RUN" }]}
         lookbackMonths={12}
+        assets={[]}
       />,
     );
     expect(screen.getByRole("status")).toHaveTextContent(

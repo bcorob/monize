@@ -8,6 +8,8 @@ import { TransactionSplit } from "../transactions/entities/transaction-split.ent
 import { Category } from "../categories/entities/category.entity";
 import { Payee } from "../payees/entities/payee.entity";
 import { BudgetsModule } from "../budgets/budgets.module";
+import { CurrenciesModule } from "../currencies/currencies.module";
+import { ReportCurrencyService } from "../built-in-reports/report-currency.service";
 import { ActionHistoryModule } from "../action-history/action-history.module";
 
 @Module({
@@ -20,9 +22,10 @@ import { ActionHistoryModule } from "../action-history/action-history.module";
       Payee,
     ]),
     BudgetsModule,
+    CurrenciesModule,
     ActionHistoryModule,
   ],
-  providers: [ReportsService],
+  providers: [ReportsService, ReportCurrencyService],
   controllers: [ReportsController],
   exports: [ReportsService],
 })

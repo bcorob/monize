@@ -4,12 +4,17 @@ import {
   readMnyFixture,
 } from "../__fixtures__/mny-fixtures";
 import {
+  MnyNotAMoneyFileError,
   MnyPasswordRequiredError,
   MnyUnreadableDatabaseError,
 } from "../mny-errors";
 import { JET_PAGE_SIZE } from "./jet-header";
 import { decryptMsisamInPlace } from "./msisam-decrypt";
-import { openDecryptedMnyFile, openMnyFile } from "./open-mny";
+import {
+  assertMoneyTables,
+  openDecryptedMnyFile,
+  openMnyFile,
+} from "./open-mny";
 
 function open(fixture: MnyFixtureName) {
   return openMnyFile(readMnyFixture(fixture), MNY_FIXTURES[fixture].password);
@@ -39,6 +44,40 @@ describe("openMnyFile", () => {
     expect(protectedFile.scheme).toBe("new-sha1");
     expect(protectedFile.passwordProtected).toBe(true);
     expect(open("money2008").passwordProtected).toBe(false);
+  });
+
+  it("opens a Money 97-99 file with no decryption, ignoring a password", () => {
+    const db = openMnyFile(readMnyFixture("money99"), "ignored");
+
+    expect(db).toMatchObject({
+      format: "jet3",
+      scheme: "none",
+      passwordProtected: false,
+    });
+    expect(open("money2008").format).toBe("msisam");
+  });
+
+  it("reopens a staged Money 97-99 file unchanged", () => {
+    // `POST /parse` stages the bytes `openMnyFile` was handed; for a Jet 3 file
+    // that is the upload itself, and the job reads it through this door.
+    const staged = readMnyFixture("money99");
+    openMnyFile(staged);
+
+    const db = openDecryptedMnyFile(staged);
+
+    expect(db.format).toBe("jet3");
+    expect(db.getTableOrNull("TRN")?.rowCount).toBe(102);
+  });
+
+  it("refuses a Jet 3 database that does not have Money's tables", () => {
+    expect(() => assertMoneyTables("jet3", ["Customers", "TRN"])).toThrow(
+      MnyNotAMoneyFileError,
+    );
+    expect(() =>
+      assertMoneyTables("jet3", ["ACCT", "TRN", "DHD"]),
+    ).not.toThrow();
+    // An MSISAM file is Money's by its engine name; table sets vary by version.
+    expect(() => assertMoneyTables("msisam", [])).not.toThrow();
   });
 
   it("propagates password errors from the decryptor", () => {

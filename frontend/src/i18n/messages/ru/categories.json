@@ -7,6 +7,7 @@
     "filterAll": "Все ({count})",
     "filterExpenses": "Расходы ({count})",
     "filterIncome": "Доходы ({count})",
+    "typeFilterLabel": "Тип",
     "modalTitleNew": "Новая категория",
     "modalTitleEdit": "Редактировать категорию",
     "countSingle": "1 категория",
@@ -54,6 +55,12 @@
     "typeExpense": "Расход",
     "typeIncome": "Доход",
     "typeInherited": "Тип унаследован от родителя",
+    "autoSignLabel": "Автоматический знак",
+    "autoSignOn": "Вкл.",
+    "autoSignOff": "Выкл.",
+    "autoSignInherit": "Наследовать от родительской",
+    "autoSignInheritedFrom": "Унаследовано от родительской категории ({name}): сейчас {state}",
+    "autoSignHelp": "Если включено, введённая сумма становится отрицательной для категории расходов и положительной для категории доходов. Выключите, чтобы сохранять знак в точности таким, как вы его вводите.",
     "colourLabel": "Цвет",
     "colourInherit": "Унаследовать от родителя",
     "colourNone": "Без цвета",
@@ -65,8 +72,8 @@
     "submitUpdate": "Обновить категорию"
   },
   "list": {
-    "emptyHeading": "Нет категорий",
-    "emptyDescription": "Начните с создания новой категории.",
+    "emptyHeading": "Категории не найдены",
+    "emptyDescription": "Нет категорий, соответствующих текущему поиску или фильтру.",
     "colName": "Название",
     "colType": "Тип",
     "colCount": "Количество",
@@ -79,7 +86,7 @@
     "viewTransactionsTitle": "Просмотреть проводки в этой категории"
   },
   "deleteDialog": {
-    "title": "Удалить «{name}»?",
+    "title": "Удалить «{name}»",
     "checkingUsage": "Проверка использования...",
     "usedBy": "Эта категория используется в {count, plural, one {# элементе} other {# элементах}} (проводки и/или запланированные счета и поступления).",
     "reassignLabel": "Переназначить в:",

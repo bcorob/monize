@@ -9,7 +9,8 @@
     "stepCounter": "{current} / {total}",
     "skippedTitle": "Tur tamamlandı",
     "skippedBody": "Ekranı veya denetimi kullanılamadığı için bazı adımlar atlandı. Turu istediğiniz zaman Ayarlar'dan yeniden alabilirsiniz.",
-    "move": "Bu kartı taşı — sürükleyin veya ok tuşlarıyla kaydırın"
+    "move": "Bu kartı taşı — sürükleyin veya ok tuşlarıyla kaydırın",
+    "readGuide": "Kılavuzun tamamını oku"
   },
   "offer": {
     "heading": "Kısa bir tur yapın",
@@ -45,7 +46,8 @@
     "requirementsLoading": "Bu turu yapıp yapamayacağınız kontrol ediliyor…",
     "requires": {
       "transactionEntry": "Önce bir hesap ekleyin — bu tur bir işlemin nasıl kaydedildiğini anlatır.",
-      "securitiesExist": "Önce bir menkul kıymet ekleyin — bu tur menkul kıymet listenizden birini açar."
+      "securitiesExist": "Önce bir menkul kıymet ekleyin — bu tur menkul kıymet listenizden birini açar.",
+      "ownerView": "Önce kendi verilerinize dönün. Bu tur, başka biri adına işlem yaparken kullanılamayan özellikleri anlatır."
     },
     "start": "Başlat",
     "restart": "Tekrar al",
@@ -67,7 +69,7 @@
         },
         "dashboard": {
           "title": "Panonuz",
-          "body": "Bu sizin panonuz. Önem verdiğiniz özetlerin en üstte yer alması için widget'ları yeniden düzenlemek veya gizlemek üzere sağ üstteki **Özelleştir** düğmesini kullanın."
+          "body": "Bu sizin panonuz. Düzenlemek için karşılama mesajının yanındaki **Özelleştir** dişlisini seçin: widget'ları bulundukları yerde taşıyın veya kaldırın, daha fazlası için **Widget ekle**’yi, düzeni korumak için **Tamam**’ı seçin."
         },
         "tools": {
           "title": "Araçlar menüsü",
@@ -76,6 +78,14 @@
         "accounts": {
           "title": "Hesaplarınız",
           "body": "Banka, kredi kartı, kredi ve yatırım hesaplarınızı buraya vurgulanan düğmeyle ekleyin. Her bakiye ve işlem bir hesaba aittir."
+        },
+        "openAccountDetail": {
+          "title": "Bir hesabın ayrıntılı görünümünü açın",
+          "body": "Her hesabın türüne göre hazırlanmış bir sayfası vardır. Açmak için **Ayrıntılar**'ı — hesap satırındaki göz simgesini — seçin. Telefonda hesaba basılı tutun ve **Ayrıntılar**'ı seçin."
+        },
+        "accountDetailView": {
+          "title": "Bu hesap için hazırlanmış bir görünüm",
+          "body": "Bu sayfa hesap türüne göre değişir; banka hesabı, kredi kartı, kredi, yatırım hesabı veya varlık, her biri kendine en uygun rakamları ve araçları gösterir. Hesaplar listesindeki **Ayrıntılar** ile istediğiniz zaman buraya dönebilirsiniz."
         },
         "transactions": {
           "title": "İşlemler",
@@ -303,6 +313,374 @@
             "title": "Bir sonraki değerlendirmede tekrar gelin",
             "body": "GEM her dönem bir karar verir ve bir sonraki değerlendirmenin tarihi raporun üst kısmında yazar. O güne kadar yapılacak bir şey yok. Gün geldiğinde sinyalin değişip değişmediğine bakın; değiştiyse işlemleri aracı kurumunuz üzerinden yapın ve Monize'ye kaydedin, böylece portföy karşılaştırması tutmaya devam eder. Bu turu istediğiniz zaman **Ayarlar** içindeki **Rehberli turlar** bölümünden yeniden başlatabilirsiniz."
           }
+        }
+      }
+    },
+    "v1_16_0": {
+      "notifications": {
+        "title": "Bildirimler",
+        "steps": {
+          "welcome": {
+            "title": "Monize artık size haber verebiliyor",
+            "body": "Vadesi gelen bir fatura, aşılan bir bütçe, koyduğunuz bir sınırı geçen bir bakiye, başarısız bir yedekleme. Bu tur, bunların nereye düştüğünü ve hangilerinin size e-postayla ya da telefonunuzda ulaşacağını nasıl seçtiğinizi gösteriyor."
+          },
+          "bell": {
+            "title": "Zil kaydın kendisidir",
+            "body": "Monize’ın ürettiği her bildirim, başka neyi açıp kapatırsanız kapatın buraya yazılır. E-posta ve anlık bildirim, sonradan gönderilen kopyalardır; bu liste aslın kendisidir ve zilin üzerindeki sayı henüz okumadıklarınızı sayar."
+          },
+          "panel": {
+            "title": "Bir bildirim neyi taşır",
+            "body": "Her biri ne olduğunu söyler ve onu gösteren sayfaya bağlanır: faturaya, bütçeye, hesaba. **Tümünü okundu işaretle** hiçbir şeyi kaldırmadan sayacı sıfırlar. Hatırlatılmasını istediğiniz bir bildirimde **Bana hatırlat** vardır: bir süre sonra bir kez daha ya da siz durdurana kadar tekrar tekrar — ve telefonunuza ulaştığında bildirimin kendisinden de durdurabilirsiniz."
+          },
+          "filters": {
+            "title": "Önce listeyi daraltın, sonra üzerinde işlem yapın",
+            "body": "Üst sıra önem derecesine göre süzer, alt sıra **Finansal** ile **Sistem**’i ayırır — yedeklemeler, posta teslimi ve yalnızca bir yöneticinin çözebileceği diğer şeyler. **Tümünü sil** ekrandaki filtreyi izler ve yalnızca görünenleri değil eşleşen her kaydı kapsar; böylece çözülmüş sistem uyarılarının tamamını temizleyip gerisini bırakabilirsiniz."
+          },
+          "settings": {
+            "title": "Teslimatın karara bağlandığı yer",
+            "body": "**Ayarlar → Bildirimler** bu turun geri kalanını taşıyor. Kartın üstünde e-posta anahtarı ve haftalık bütçe özeti var; altında geri kalan her şeye karar veren ızgara, sonra da anlık bildirim cihazlarınız."
+          },
+          "matrix": {
+            "title": "Her tür için bir satır, her kanal için bir sütun",
+            "body": "Her bildirim türü için **E-posta (rapor)**, **E-posta (uyarı)**, **Push** ya da kendi işlettiğiniz bir dağıtıcıya giden **UnifiedPush** arasından seçin. Zil için sütun yok, çünkü satırı her zaman zil alır. Son sütun **Bekleme**: aynı gruptan bir şey o pencere içinde zaten çıktıysa e-posta ve anlık bildirim atlanır — zildeki kayıt yine de yazılır. Her anahtar, siz değiştirdiğiniz anda kaydedilir."
+          },
+          "push": {
+            "title": "Cihazlarınız",
+            "body": "Buradan bir tarayıcı kaydedin, Monize uygulama kapalıyken bile ona ulaşsın. Kendi iletilerini kendisi imzalar, yani araya giren bir Google ya da Apple hesabı yoktur. Her cihaz ayrı ayrı sınanabilir ve kaldırılabilir, ulaşılamaz hale gelen bir cihaz da nedenini söyler. iPhone’da bu, Monize Ana Ekran’a eklendikten sonra çalışır; yöneticiniz bu kurulumda anlık bildirimi açmadıysa burada bunu okursunuz."
+          },
+          "portfolio": {
+            "title": "Yatırım değeri hareketi",
+            "body": "Günde bir kez, yatırım hesaplarınız burada belirlediğiniz tutardan fazla hareket ettiğinde. Piyasa hareketini ve temettüleri ölçer: yatırdığınız ya da çektiğiniz para bir hareket değildir."
+          },
+          "finish": {
+            "title": "Bakılacak bir yer daha",
+            "body": "Bakiye uyarıları hesabın kendisinde durur: herhangi bir hesabı düzenleyip **Şunun altında bildir** ya da **Şunun üstünde bildir** değerini girin. Bakiye sınırı *geçtiğinde* tetiklenirler, böylece onu orada tutan her ödemeden sonra değil, bir kez haber alırsınız. Bu turu istediğiniz zaman Ayarlar’dan tekrarlayabilirsiniz."
+          }
+        }
+      },
+      "reportTagBreakdown": {
+        "title": "Bir raporu etikete göre ayırma",
+        "steps": {
+          "welcome": {
+            "title": "Raporlarınızı yalnızca kategoriye değil, etikete göre de görün",
+            "body": "Gelir - Gider Karşılaştırması ve Nakit Akışı artık seçtiğiniz bir etiketin değerine göre ayrılabiliyor — örneğin ev harcamaları ile bir yan iş harcamaları — ve aralarındaki transferleri, bir transferi asla gelir saymadan gösteriyor."
+          },
+          "breakdown": {
+            "title": "Etiket anahtarına göre ayır",
+            "body": "Burada **scope** gibi bir etiket anahtarı seçin; rapor, o anahtarla kullandığınız her değer için bir bölüme, artık kalan her şey için de bir **Etiketsiz** bölümüne ayrılır.",
+            "fallbackBody": "Bu kontrol, bir işlemi **scope:household** gibi bir **anahtar:değer** etiketiyle işaretlediğinizde görünür. Bir tane ekleyin; Etiket anahtarına göre ayır burada görünecektir."
+          },
+          "buckets": {
+            "title": "Değer başına toplamlar, transferler ayrı gösterilir",
+            "body": "Bir anahtar seçmek, her değer için bir sekme artı bir **Etiketsiz** sekmesi açar; her birinin kendi geliri ve gideri vardır. Hesaplar arasında taşınan para **Etiketli girişler** ve **Etiketli çıkışlar** olarak gösterilir — görünürdür ama asla gelir olarak sayılmaz."
+          },
+          "finish": {
+            "title": "İşte etiket ayrımı bu kadar",
+            "body": "Bu görünümü istediğiniz her yerde işlemleri scope:household gibi bir anahtar:değer çiftiyle etiketleyin ve bu turu istediğiniz zaman Ayarlar'dan tekrar açın."
+          }
+        }
+      }
+    },
+    "v1_17_0": {
+      "transactionRules": {
+        "title": "İşlem kuralları",
+        "steps": {
+          "welcome": {
+            "title": "İşlemlerinizi düzenleyen kurallar",
+            "body": "Bir işlem oluşturulduğunda veya içe aktarıldığında ve belirlediğiniz koşullara uyduğunda, bir kural kategorisini ya da alacaklısını ayarlayabilir, etiket ekleyebilir, açıklamasını yeniden yazabilir veya bir yapay zekâdan incelemesini isteyebilir. Bir kural hiçbir zaman tutarı, hesabı veya tarihi değiştirmez."
+          },
+          "tools": {
+            "title": "Kurallar Araçlar menüsünde",
+            "body": "**Kurallar**’ı bulmak için **Araçlar**’ı açın. Sonraki adım menüyü gösterir."
+          },
+          "rulesLink": {
+            "title": "Kurallar’ı açın",
+            "body": "**Kurallar**’ı seçin. Tüm kurallarınız burada listelenir ve yenisini buradan oluşturursunuz."
+          },
+          "list": {
+            "title": "Kurallarınız, sırayla",
+            "body": "Her satır bir kuraldır; kuralı açıp kapatan bir anahtar ile taşıma, çalıştırma, çoğaltma ve silme eylemleri vardır. Kurallar yukarıdan aşağıya doğru denetlenir, bu yüzden iki kural aynı şeyi değiştirdiğinde sıra önemlidir. Henüz kuralınız yoksa bu kart kuralın ne olduğunu anlatır."
+          },
+          "create": {
+            "title": "Kural oluşturun",
+            "body": "**Kural oluştur** düzenleyiciyi boş bir kuralla açar. **Kuralı kaydet**’i seçene kadar hiçbir şey kaydedilmez."
+          },
+          "when": {
+            "title": "Ne zaman: hangi işlemlere bakar",
+            "body": "Kuralın bir işleme oluşturulduğunda, içe aktarıldığında veya her iki durumda bakıp bakmayacağını seçin. **Diğer kuralları işlemeyi durdur**, bu kuralın uyduğu her işlem için altındaki kuralları atlar."
+          },
+          "if": {
+            "title": "Eğer: hangi işlemler uyar",
+            "body": "Koşulları alacaklı, açıklama, tutar ve kategori gibi alanlardan oluşturun. **Görsel** ve **İfade** anahtarı aynı koşulları kartlar olarak ya da tek satırlık metin olarak gösterir. Bir desende * herhangi bir metni ifade eder, '{name}' ise o noktadaki metni saklar; böylece bir eylem onu yeniden kullanabilir."
+          },
+          "then": {
+            "title": "O zaman: ne değişir",
+            "body": "Eylemler listelenen sırayla çalışır. Bir kural kategoriyi veya alacaklıyı ayarlayabilir, etiket ekleyip çıkarabilir, açıklamayı belirleyebilir ya da bir yapay zekâdan işlemi incelemesini isteyebilir. Tutar, hesap veya tarih için bir eylem yoktur."
+          },
+          "test": {
+            "title": "Test edin, çalıştırın, geri alın",
+            "body": "**Kuralı test et**, taslağı mevcut işlemlerinizde dener ve neyi değiştireceğini gösterir. Hiçbir şey değişmez. Kural kaydedildikten sonra **Mevcut işlemlerde çalıştır** bir önizleme gösterir ve kuralı elinizdekilere uygular; bu çalıştırmayı eylem geçmişinden geri alabilirsiniz."
+          },
+          "reviews": {
+            "title": "Yapay zekâ inceleme kutusu",
+            "body": "**Yapay zekâ incelemesi iste** eylemi olan bir kural işlemi değiştirmez, onu buraya koyar. Bir asistan değişiklik önerir ve siz onaylayana kadar hiçbir şey yazılmaz. Bir isteği reddedebilirsiniz de. Kutuyu **YZ** altında **Yapay zekâ inceleme kutusu** olarak bulursunuz."
+          }
+        }
+      }
+    },
+    "v1_20_0": {
+      "warranties": {
+        "title": "Garantiler",
+        "steps": {
+          "welcome": {
+            "title": "Garantilerinizi takip edin",
+            "body": "Bir garanti; ne satın aldığınızı, kapsamının ne zaman bittiğini ve kimden aldığınızı fişi, kılavuzu ve tüm garanti talepleriyle birlikte kaydeder. Kayıt defterinizdeki satın alma işlemine bağlanabilir. Bir garanti hiçbir zaman bakiyeyi, raporu veya toplamı değiştirmez. Bu tur, garanti eklemenin yollarını ve garantilerin sonra nerede göründüğünü gösterir."
+          },
+          "warrantiesLink": {
+            "title": "Garantiler Araçlar menüsünde",
+            "body": "Tüm garantilerinizi görmek için **Araçlar**’ı açın ve **Garantiler**’i seçin."
+          },
+          "overview": {
+            "title": "Garantilerinize bir bakışta",
+            "body": "Bu kartlar **Süresi yakında doluyor**, **Geçerli**, **Süresi dolmuş** ve **Ömür boyu** durumundaki garantilerinizi sayar. Aşağıdaki listeyi filtrelemek için bir kart seçin. Ayrıca arama yapabilir, sıralayabilir ve arşivlenen garantileri gösterebilirsiniz. Belgeleri, talepleri ve bağlı olduğu satın alma işlemiyle birlikte sayfasını açmak için listeden bir garanti seçin."
+          },
+          "addWarranty": {
+            "title": "Yöntem 1: buradan ekleyin",
+            "body": "**Garanti ekle** boş bir form açar. Ürünü, satıcıyı ve satın alma tarihini girin; ardından kapsamın ne zaman biteceğini seçin: **Belirli bir tarihte**, **Belirli bir süre sonra** ya da ömür boyu garanti için **Hiçbir zaman**. Kaydetmeden önce fişi veya kılavuzu ekleyebilirsiniz."
+          },
+          "importCsv": {
+            "title": "Yöntem 2: CSV dosyası içe aktarın",
+            "body": "**CSV içe aktar**, Warracker sütunlarını kullanan bir dosyayı okur; örneğin Warracker’dan ya da bu sayfadan alınmış bir dışa aktarma. Hiçbir şey kaydedilmeden önce her satırı ve tüm sorunları görürsünüz."
+          },
+          "inRegister": {
+            "title": "Kayıt defterindeki garantiler",
+            "body": "Garantisi olan bir işlem, kayıt defterinde bir kalkan simgesiyle görünür. Bu tür tüm işlemleri bulmak için **has:warranty** araması yapın."
+          },
+          "newTransaction": {
+            "title": "Yöntem 3: satın almayı kaydederken",
+            "body": "Formu açmak için **+ Yeni İşlem**’i seçin."
+          },
+          "warrantiesLine": {
+            "title": "Garantiler satırı",
+            "body": "Buradaki **Garanti ekle**, önce yeni işlemi kaydeder, ardından garanti formunu bu işlemin bilgileriyle doldurulmuş olarak açar. Bir işlemi daha sonra düzenlediğinizde bu satır işlemin garantilerini listeler ve her biri kendi sayfasını açar.",
+            "fallbackBody": "Garanti yalnızca size ait olduğu için Garantiler satırı ortak hesaplarda gösterilmez. Kendi hesaplarınızdan birini seçtiğinizde form, düğmelerinin üstünde bir **Garantiler** satırı gösterir. Oradaki **Garanti ekle**, önce yeni işlemi kaydeder, ardından garanti formunu bu işlemin bilgileriyle doldurulmuş olarak açar. Bir işlemi daha sonra düzenlediğinizde satır, işlemin garantilerini listeler."
+          },
+          "closeForm": {
+            "title": "Formu kapatın",
+            "body": "Kaydetmeden kapatmak için **İptal**’i seçin ya da gerçek bir işlem girdiyseniz işlemi kaydedin."
+          },
+          "dashboardWidget": {
+            "title": "Süresi dolacakları panoda görün",
+            "body": "**Özelleştir**’i, ardından **Widget ekle**’yi seçin, **Süresi yakında dolacak garantiler**’i işaretleyin ve **Tamam**’ı seçin. Süresi ilk dolacak garantileri listeler ve başlığı Garantiler sayfasını açar."
+          },
+          "reminders": {
+            "title": "Kapsam bitmeden önce hatırlatıcılar",
+            "body": "Monize, bir garantinin süresi dolmadan 30 gün ve 7 gün önce ve dolduğu gün size hatırlatır. Hatırlatıcılar buraya gelir; birini erteleyebilir ya da garantiyi oradan açabilirsiniz. Size nasıl ulaşacaklarını **Ayarlar** içinde, **Bildirimler** bölümünde, **Garanti hatırlatıcıları** altında seçin."
+          }
+        }
+      },
+      "payrollDeductions": {
+        "title": "Bordro Kesintileri",
+        "steps": {
+          "welcome": {
+            "title": "Kesintileri yıllık üst sınırlarında durdurun",
+            "body": "Emeklilik veya işsizlik sigortası gibi bazı maaş kesintileri, yılın üst sınırına ulaşıldığında durur ve ertesi yıl yeniden başlar. Bir bordro kesintisi kuralı Monize’a bu üst sınırı bildirir; böylece sınıra ulaşıldığında maaş bu kesintiyi yapmayı bırakır. **Başlamadan önce planlı bir bordro faturasına ihtiyacınız var:** maaşınızın, kesintileri ayrı satırlar olarak içeren planlı bir yatırma olarak ayarlanmış hâli."
+          },
+          "payrollBill": {
+            "title": "Önce maaşınızı ayarlayın",
+            "body": "Henüz yapmadıysanız **+ Yeni Zamanlama**’yı seçin ve maaşınızı bir yatırma olarak oluşturun. Brüt maaşınız için bir satıra ve her kesinti için kendi kategorisi olan birer negatif satıra bölün. Bu yılın üst sınırına zaten ulaşıldığı için bir kesinti şu anda yapılmıyorsa, yine de onun için sıfır değerli bir gider olarak bir bölme satırı ekleyin; böylece bir kural onu sınırlayabilir ve sıfırlamadan sonra yeniden başlar. Yalnızca kestiğinden fazlasını yatıran etkin bir yatırma kural taşıyabilir ve yalnızca kesinti satırları sınırlanabilir."
+          },
+          "taxesLink": {
+            "title": "Bordro kesintileri Vergiler altında",
+            "body": "Vergi araçlarını bulmak için **Araçlar**’ı açın ve **Vergiler**’i seçin."
+          },
+          "taxesCard": {
+            "title": "Bordro Kesintileri’ni açın",
+            "body": "Bordro kesintisi kurallarını açmak için bu kartı seçin."
+          },
+          "newRule": {
+            "title": "Bir maaşın kurallarını oluşturun",
+            "body": "**+ Yeni Kural** formu açar. Planlı bordro faturanızı, ardından sınırlamak istediğiniz her kesinti kategorisi için bir yıllık üst sınır seçin. Sıfırlama tarihini ekleyin; genellikle 1 Ocak’tır. Faturada kesinti satırı yoksa form, önce bunları faturaya eklemenizi söyler."
+          },
+          "rulesList": {
+            "title": "Kurallarınız",
+            "body": "Her kural faturasını, kategorisini, yıllık üst sınırı, sıfırlama tarihini ve her maaştan ne kesildiğini gösterir. Üst sınırı değiştirmek için kuralı düzenleyin ya da maaşın satırın tamamını yeniden kesmesi için kuralı silin. Bir kuralı silmek kaydedilmiş bir işlemi asla değiştirmez."
+          },
+          "periodTables": {
+            "title": "Şimdiye kadar kesilenler",
+            "body": "Bir kuralınız olduğunda **Yıl başından bugüne göster**, her kategorinin bu dönemde ne kadar kestiğini ve üst sınırın altında kalan payı gösterir. **Önceki dönemleri göster**, önceki yıllarda ne kadar kestiğini gösterir."
+          },
+          "forecast": {
+            "title": "Maaş kaydedildiğinde uygulanır",
+            "body": "Maaş kaydedildiğinde, sınırlanan her satır üst sınırın altında kalan paya, sıfıra kadar düşürülür ve sıfırlama tarihinden sonra yeniden başlar. Buradaki ve panodaki Nakit Akışı Tahmini aynı şeyi önceden gösterir; böylece bir üst sınıra ulaşıldığında net maaşınızın arttığını görürsünüz."
+          },
+          "reminders": {
+            "title": "Her sıfırlamadan önce bir hatırlatma",
+            "body": "Bir kural sıfırlanmadan iki ay önce Monize burada sizden gelecek yılın üst sınırını onaylamanızı ister. Hiçbir şey yapmazsanız kural üst sınırını korur ve kendi tarihinde sıfırlanır. Hatırlatmaların size nasıl ulaşacağını **Ayarlar** içinde, **Bildirimler** bölümünde, **Faturalar ve planlananlar** altında seçin."
+          }
+        }
+      },
+      "sharedExpenses": {
+        "title": "Paylaşılan giderler",
+        "steps": {
+          "welcome": {
+            "title": "Birlikte gezin, hesabı açık tutun",
+            "body": "Grup alışverişlerini ve geri ödemeleri kaydetmeyi öğrenin. Bu tur sizin yerinize kayıt oluşturmaz."
+          },
+          "tools": {
+            "title": "Paylaşılan giderleri açın",
+            "body": "**Paylaşılan Giderler**, **Araçlar** menüsündedir. Telefonda gezinme menüsünü kullanın."
+          },
+          "newGroup": {
+            "title": "Grubunuzla başlayın",
+            "body": "**Yeni grup** bölümünde gezi adını, kişileri ve hesaplaşma para birimini belirleyin. Kişilerin Monize hesabı olması gerekmez. Her alışveriş farklı üyeleri kapsayabilir."
+          },
+          "chooseGroup": {
+            "title": "Bir grubu keşfedin",
+            "body": "Devam etmek için bir grup açın. Henüz grubunuz yoksa **Bu adımı atla** seçeneğini kullanın ve turdan sonra bir grup oluşturun."
+          },
+          "expenses": {
+            "title": "Kim ödedi, kimler yararlandı?",
+            "body": "Düzenleme yetkiniz varsa **Gider ekle** ile ödeyen kişiyi ve yararlananları seçin. **Şu kişiler arasında paylaş** eşit payları, kesin tutarları, yüzdeleri ve sıfır payları destekler."
+          },
+          "balances": {
+            "title": "Bakiyeleri kontrol edin ve hesaplaşın",
+            "body": "**Bakiyeler** kimin kime borçlu olduğunu ve önerilen geri ödemeleri gösterir. Geri ödemeyi para el değiştirdikten sonra kaydedin. **Dosyalar** ve **Etkinlik** belgeleri ve geçmişi saklar."
+          },
+          "done": {
+            "title": "Sonraki geziniz için hazırsınız",
+            "body": "Paylaşılan kayıtlar kişisel işlemlerden ayrı tutulur. Bu turu istediğiniz zaman **Ayarlar** içindeki **Rehberli turlar** bölümünden yeniden başlatabilirsiniz."
+          }
+        }
+      }
+    },
+    "v1_21_0": {
+      "commandPalette": {
+        "title": "Komut paleti",
+        "steps": {
+          "welcome": {
+            "title": "Her şeyi tek kutudan bulun",
+            "body": "Komut paleti, herhangi bir ekrandan hesaplarınızı, alıcıları, kategorileri, faturaları, menkul kıymetleri, raporları, ayarları, işlemleri ve kullanım kılavuzunu aynı anda arar. Klavyeyle çalışır, bu yüzden bu tur bir bilgisayar içindir."
+          },
+          "openPalette": {
+            "title": "Paleti açın",
+            "body": "**Ctrl+K** tuşlarına basın (Mac'te **Cmd+K**). Palet açılınca tur devam eder."
+          },
+          "searchBox": {
+            "title": "Aradığınızı yazın",
+            "body": "Bir alıcı, bir hesap, **Net Değer** gibi bir rapor ya da **Para Birimleri** gibi bir ayar deneyin. Sonuçlar yazdıkça güncellenir; işlemler ve kılavuz bölümleri de aranır."
+          },
+          "results": {
+            "title": "Gezinin ve açın",
+            "body": "Gezinmek için **Yukarı** ve **Aşağı** ok tuşlarını, bir sonucu açmak için **Enter** tuşunu kullanın. **Tab** eylemlere atlar, **Ctrl+Enter** (Mac'te **Cmd+Enter**) ise en iyi eşleşen alıcı için yeni bir işlem başlatır."
+          },
+          "closePalette": {
+            "title": "Paleti kapatın",
+            "body": "Şimdilik kapatmak için **esc** düğmesine tıklayın. Bu turun dışında **Esc** tuşu da aynı işi yapar."
+          },
+          "done": {
+            "title": "Hatırlanması gereken tek kısayol",
+            "body": "Bir yere atlamak istediğinizde **Ctrl+K** tuşlarına basın. Açık bir iletişim kutusunun üzerindeyken bunun yerine kılavuzda arar. Telefonda üst bilgideki aramayı kullanın. Bu turu istediğiniz zaman **Ayarlar** altındaki **Rehberli Turlar** bölümünden yeniden oynatabilirsiniz."
+          }
+        }
+      },
+      "inAppHelp": {
+        "title": "Uygulama içinde yardım",
+        "steps": {
+          "welcome": {
+            "title": "Kullanım kılavuzu, işinizin yanında",
+            "body": "Monize kullanım kılavuzu artık uygulamanın içinde, bulunduğunuz sayfanın yanında, temanızdaki ekran görüntüleriyle açılıyor. Monize ile birlikte geldiği için çevrimdışı da çalışır. Bu tur nerede bulacağınızı gösterir."
+          },
+          "pageHelp": {
+            "title": "Bu sayfanın yardımını açın",
+            "body": "Sayfa başlığının yanındaki **?** simgesine tıklayın. Kılavuz, bu sayfayı anlatan bölümde açılır."
+          },
+          "panel": {
+            "title": "Sayfayla birlikte okuyun",
+            "body": "Panel, bulunduğunuz sayfanın yanında kalır. **Bu sayfada** bölümleri listeler, kılavuzun diğer sayfalarına giden bağlantılar burada açılır. Bilgisayarda, paneli genişletmek veya daraltmak için sol kenarını sürükleyin."
+          },
+          "panelControls": {
+            "title": "Panel kontrolleri",
+            "body": "Açtığınız sayfalar arasında **Geri** ve **İleri** ile gezinin, kılavuzda **Ara** işlevini kullanın, panelin diğer sayfalarda da açık kalması için **Sabitle** düğmesini kullanın ya da sayfayı monize.net'te açın. Devam etmek için **Kapat** düğmesine (**X**) tıklayın."
+          },
+          "helpMenu": {
+            "title": "Yardım menüsü",
+            "body": "Üst bilgideki **?** simgesi, geçerli sayfanın yardımını, kılavuzda aramayı, klavye kısayollarını, bu sayfanın turunu ve Yenilikler'i içerir. Yazı yazmadığınız her yerde **?** tuşuna basarak da kılavuzda arama yapabilirsiniz."
+          },
+          "learnMore": {
+            "title": "Daha fazla bilgi, ihtiyaç duyduğunuz yerde",
+            "body": "İpuçlarında, boş ekranlarda ve bazı hata iletilerinin yanında **Daha fazla bilgi** bağlantısını arayın. Her biri, konuyu açıklayan kılavuz bölümünü açar."
+          },
+          "done": {
+            "title": "Kendi sözlerinizle sorun",
+            "body": "Yapay zekâ asistanı, kılavuzdan yola çıkarak \"nasıl yapılır...\" gibi soruları da yanıtlayabilir ve hangi bölümleri kullandığını söyler. Bu turu istediğiniz zaman **Ayarlar** altındaki **Rehberli Turlar** bölümünden yeniden oynatabilirsiniz."
+          }
+        }
+      },
+      "dashboardEdit": {
+        "title": "Panoyu düzenleme",
+        "steps": {
+          "welcome": {
+            "title": "Panonuzu yerinde düzenleyin",
+            "body": "Artık widget'ları doğrudan panoda taşıyor, yeniden boyutlandırıyor, ekliyor ve kaldırıyorsunuz; siz söylemeden hiçbir şey kaydedilmez. Bu tur düzenleme modunu adım adım anlatır."
+          },
+          "enterEdit": {
+            "title": "Düzenleme moduna girin",
+            "body": "Karşılama mesajının yanındaki dişli simgesine tıklayın. Düzenleme modu açılınca tur devam eder."
+          },
+          "editBar": {
+            "title": "Düzenleme çubuğu",
+            "body": "**Widget ekle**, panonuzda olmayan widget'ları listeler. **Başlık ayarları** üstteki başlık alanının ne göstereceğini seçer, **Varsayılana sıfırla** ise standart düzeni geri getirir."
+          },
+          "arrange": {
+            "title": "Taşıma, yeniden boyutlandırma ve kaldırma",
+            "body": "Bir widget'ı tutamacından (altı nokta) sürükleyin veya oklarını kullanın. Geniş bir ekranda **Genişlik** ve **Yükseklik** boyutunu değiştirir ya da sağ alt köşesini sürükleyin. **X** onu kaldırır, kesik çizgili **Widget ekle** kutusu ise yenisini ekler. Hadi deneyin."
+          },
+          "finish": {
+            "title": "Kalsın ya da eski haline dönsün",
+            "body": "Düzeni kaydetmek için **Tamam**'a, eski haline döndürmek için **İptal**'e tıklayın. Düzeniniz cihazlarınız arasında eşitlenir."
+          },
+          "done": {
+            "title": "Kendinize göre yapın",
+            "body": "Eklemek için yeni bir şey mi arıyorsunuz? **Bilgi notları** widget'ı, paranızla ilgili günlük bir bilgi gösterir. Bu turu istediğiniz zaman **Ayarlar** altındaki **Rehberli Turlar** bölümünden yeniden oynatabilirsiniz."
+          }
+        }
+      }
+    }
+  },
+  "emailReceipts": {
+    "basics": {
+      "title": "E-postadan makbuzlar",
+      "steps": {
+        "welcome": {
+          "title": "Makbuzlar neden e-postadan okunur",
+          "body": "Banka işlemi ne kadar ve ne zaman ödediğinizi gösterir. Ne satın aldığınızı göstermez. Bunu sipariş onayı e-postası gösterir. Monize bu e-postaları okur, her birinin ödediği işlemi bulur ve bir açıklama, bir alıcı ve her satır için bir kategori içeren kalem kalem bir bölünme önerir. Her öneriyi, bir işlemi değiştirmeden önce siz onaylarsınız."
+        },
+        "aiRequired": {
+          "title": "Pratikte bir yapay zekâ sağlayıcısı gerekir",
+          "body": "Monize bir e-postayı **profil** ile okur: tek bir gönderen alan adı, örneğin bir mağaza için bir desen kümesi. Profili elle yazabilirsiniz, ancak her desen o mağazanın e-postalarındaki satırlarla birebir eşleşmelidir, bu yüzden pratikte onu bir yapay zekâ yazar. Yapay zekâ profili birkaç örnek e-postadan yalnızca bir kez yazar. Siz onayladıktan sonra profil, o mağazadan gelen her yeni e-postayı yapay zekâ olmadan okur."
+        },
+        "aiProviders": {
+          "title": "Önce bir yapay zekâ sağlayıcısı ayarlayın",
+          "body": "Buraya bir sağlayıcı ekleyin ve bağlantıyı sınayın. Sağlayıcı yoksa profil sihirbazı profil yazamaz ve profili olmayan bir mağazanın e-postaları okunmadan kalır."
+        },
+        "tabs": {
+          "title": "Kullanım sırasına göre dört sekme",
+          "body": "**Genel bakış** Monize'nin neleri okuduğunu gösterir. **Posta kutusu** sekmesinde yalnızca sipariş onayları içeren bir posta kutusu bağlayın. Monize onu yalnızca okur: hiçbir iletiyi taşımaz, işaretlemez veya silmez. **Profiller** her mağaza için bir profil içerir. **E-postalar** her e-postayı ve durumunu listeler."
+        },
+        "uncovered": {
+          "title": "Profili olmayan mağazalar",
+          "body": "Bu kutu, henüz hiçbir profilin okuyamadığı gönderen alan adlarını listeler. Sihirbazı başlatmak için birini seçin. E-postalarından en fazla beşini seçin ve her birini ödediği banka işlemiyle eşleştirin. Yapay zekâ bir profil yazar ve bu çiftler üzerinde sınar. Sonra o mağazanın tüm e-postaları için bir önizleme görürsünüz ve profili kabul edersiniz ya da kısa bir notla değişiklik istersiniz.",
+          "fallbackBody": "Henüz profili olmayan bir mağazadan e-postanız yok. Posta kutusunu bağladıktan sonra her gönderen alan adı burada bir etiket olarak görünür, örneğin **shop.example (12)**: alan adı ve e-postalarının sayısı. Sihirbazı başlatmak için etiketi seçin. E-postalarından en fazla beşini seçin ve her birini ödediği banka işlemiyle eşleştirin. Yapay zekâ bir profil yazar ve bu çiftler üzerinde sınar. Sonra o mağazanın tüm e-postaları için bir önizleme görürsünüz ve profili kabul edersiniz ya da kısa bir notla değişiklik istersiniz."
+        },
+        "profiles": {
+          "title": "Profilleriniz",
+          "body": "Her satır, onaylı veya taslak bir profildir. **Yeni profili elle oluştur** elle yazılan bir profilin düzenleyicisini açar. Yapay zekânın taslağındaki küçük bir ayrıntıyı düzeltmek için kullanın. Bir profili onayladığınızda Monize, alan adındaki e-postaları hemen okur.",
+          "fallbackBody": "Henüz profiliniz yok. Kabul ettiğiniz her profil burada bir satır olarak görünür, örneğin **Shop Example**, alan adı **shop.example**, durum **Onaylandı**. **Yeni profili elle oluştur** elle yazılan bir profilin düzenleyicisini açar. Yalnızca yapay zekânın taslağındaki küçük bir ayrıntıyı düzeltmek için kullanın. Bir profili onayladığınızda Monize, alan adındaki e-postaları hemen okur."
+        },
+        "reviews": {
+          "title": "Önerileri onaylayın",
+          "body": "Bir işlemle eşleşen her e-posta, **YZ** menüsündeki **Yapay zekâ inceleme kutusu**nda bir öneri olur. Bir öneri, örneğin bir siparişin kalemlerini ve her satır için bir kategoriyi gösterir. Öneriyi orada onaylayana kadar işlemlerinizde hiçbir şey değişmez."
         }
       }
     }

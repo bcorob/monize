@@ -6,7 +6,7 @@ import {
   ReportResult,
   TimeframeType,
 } from '@/types/custom-report';
-import { getCached, setCache, invalidateCache } from './apiCache';
+import { dedupe, patchCached, invalidateCache } from './apiCache';
 
 // The saved-reports list lives under one cache key; keep the key and TTL in one
 // place so getAll and the optimistic favourite patch below cannot drift.
@@ -29,11 +29,10 @@ export const customReportsApi = {
 
   // Get all custom reports for the current user
   getAll: async (): Promise<CustomReport[]> => {
-    const cached = getCached<CustomReport[]>(REPORTS_CACHE_KEY);
-    if (cached) return cached;
-    const response = await apiClient.get<CustomReport[]>('/reports/custom');
-    setCache(REPORTS_CACHE_KEY, response.data, REPORTS_CACHE_TTL);
-    return response.data;
+    return dedupe(REPORTS_CACHE_KEY, async () => {
+      const response = await apiClient.get<CustomReport[]>('/reports/custom');
+      return response.data;
+    }, REPORTS_CACHE_TTL);
   },
 
   // Get a specific custom report by ID
@@ -72,16 +71,14 @@ export const customReportsApi = {
     // just starred -- already shows the new order (issue #1224). The
     // invalidateCache below drops this optimistic copy once the server answers,
     // on either path, so the next read reconciles against the server.
-    const cached = getCached<CustomReport[]>(REPORTS_CACHE_KEY);
-    if (cached) {
-      setCache(
-        REPORTS_CACHE_KEY,
-        cached.map((report) =>
+    patchCached<CustomReport[]>(
+      REPORTS_CACHE_KEY,
+      (list) =>
+        list.map((report) =>
           report.id === id ? { ...report, isFavourite } : report,
         ),
-        REPORTS_CACHE_TTL,
-      );
-    }
+      REPORTS_CACHE_TTL,
+    );
     try {
       const response = await apiClient.patch<CustomReport>(`/reports/custom/${id}`, {
         isFavourite,

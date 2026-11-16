@@ -30,11 +30,6 @@
       "actions": "İşlemler"
     },
     "accountCount": "{count, plural, =0 {Hesap yok} one {# hesap} other {# hesap}}",
-    "statusFilter": {
-      "all": "Tümü",
-      "active": "Aktif",
-      "closed": "Kapalı"
-    },
     "actions": {
       "manageAccounts": "Hesaplar"
     },

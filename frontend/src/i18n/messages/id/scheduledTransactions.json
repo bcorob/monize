@@ -6,7 +6,7 @@
       "category": "Kategori",
       "amount": "Jumlah",
       "schedule": "Jadwal",
-      "auto": "Otomatis",
+      "auto": "Posting Otomatis",
       "actions": "Tindakan"
     },
     "empty": {
@@ -22,8 +22,9 @@
     "modifiedBadge": "{count} dimodifikasi",
     "modifiedTitle": "{count, plural, one {# kemunculan mendatang dimodifikasi} other {# kemunculan mendatang dimodifikasi}}",
     "modifiedAmountTitle": "Dimodifikasi untuk kemunculan berikutnya",
+    "modifiedDateTitle": "Tanggal diubah untuk kejadian ini",
+    "splitBadge": "Bagi ({count})",
     "autoPostBadge": "Aktif",
-    "autoPostTitle": "Diposting otomatis saat jatuh tempo",
     "inactiveSuffix": " — Tidak Aktif",
     "actionTitles": {
       "post": "Posting transaksi",
@@ -62,7 +63,8 @@
       "skipFailed": "Gagal melewati kemunculan",
       "deleteFailed": "Gagal menghapus"
     },
-    "foreignAmountTitle": "Jumlah yang ditagih penerima, dalam mata uangnya sendiri"
+    "foreignAmountTitle": "Jumlah yang ditagih penerima, dalam mata uangnya sendiri",
+    "estimatedLabel": "Perkiraan"
   },
   "filters": {
     "label": "Filter",
@@ -74,9 +76,7 @@
     "accountsLabel": "Akun",
     "accountsPlaceholder": "Semua akun",
     "categoriesLabel": "Kategori",
-    "categoriesPlaceholder": "Semua kategori",
-    "collapseAriaLabel": "Ciutkan filter",
-    "expandAriaLabel": "Perluas filter"
+    "categoriesPlaceholder": "Semua kategori"
   },
   "postDialog": {
     "title": "Posting Transaksi",
@@ -114,7 +114,8 @@
       "totalAmountRequired": "Total jumlah wajib diisi",
       "splitsMinimum": "Transaksi terbagi memerlukan setidaknya 2 pembagian",
       "splitsTotal": "Jumlah pembagian harus sama dengan jumlah transaksi",
-      "fxRateUnavailable": "Tidak ada nilai tukar yang tersedia untuk {from} ke {to} pada tanggal ini."
+      "fxRateUnavailable": "Tidak ada nilai tukar yang tersedia untuk {from} ke {to} pada tanggal ini.",
+      "estimateUnknown": "Jumlah perkiraan untuk kejadian ini tidak diketahui. Masukkan jumlahnya untuk mempostingnya."
     },
     "latestPlaceholder": "Terbaru: {price}",
     "descriptionPlaceholder": "Deskripsi...",
@@ -127,18 +128,40 @@
       "noRateWarning": "Tidak ada nilai tukar untuk {from} ke {to} pada {date}. Pilih tanggal lain, atau segarkan kurs.",
       "feeCaption": "Termasuk biaya transaksi luar negeri {percent}% ({fee}).",
       "totalInCurrency": "Total dalam {currency}"
-    }
+    },
+    "estimatedHint": "Jumlah ini adalah perkiraan; ubah menjadi jumlah yang benar-benar Anda bayar. {detail}"
   },
   "occurrencePicker": {
     "title": "Pilih Tanggal Kemunculan",
-    "description": "Pilih kemunculan mana dari \"{name}\" yang akan dimodifikasi:",
+    "description": "Pilih kemunculan mana dari \"{name}\" yang akan dimodifikasi. Mengubah satu di sini hanya menimpa tanggal tersebut; setiap kemunculan lainnya tetap mengikuti jadwal. <guide>Pelajari lebih lanjut</guide>.",
     "modifiedBadge": "Dimodifikasi",
     "nextDueBadge": "Jatuh Tempo Berikutnya",
     "dateMoved": "Tanggal dipindahkan dari {date}",
     "amountChange": "Jumlah: {amount}",
     "categoryChange": "Kategori: {category}",
     "noteChange": "Catatan: {note}",
-    "splitModified": "Pembagian dimodifikasi"
+    "splitModified": "Pembagian dimodifikasi",
+    "estimatedAmount": "Perkiraan: {amount}",
+    "estimateUnknown": "Perkiraan tidak diketahui"
+  },
+  "loanOccurrence": {
+    "loading": "Menghitung pembayaran setiap jadwal.",
+    "loadFailed": "Pembayaran setiap jadwal tidak dapat dimuat.",
+    "retry": "Coba lagi",
+    "amountUnknown": "Pembayaran tidak diketahui",
+    "notProjected": "Pembayaran tidak dihitung sejauh ini",
+    "paymentChangesBadge": "Pembayaran berubah",
+    "editorUnknown": "Pembayaran jadwal ini tidak dapat dihitung, jadi jumlahnya dibiarkan kosong. {reason}",
+    "editorLinesUnknown": "Pembagian jadwal ini antara pokok dan bunga tidak dapat dihitung, jadi barisnya dimulai dari baris jadwal. {reason}",
+    "amountRequired": "Masukkan jumlah jadwal ini sebelum menyimpan.",
+    "missing": {
+      "rate": "Tidak ada suku bunga yang tercatat untuk {date}. Tambahkan ke riwayat suku bunga pinjaman.",
+      "cadence": "Frekuensi pembayaran pinjaman ({frequency}) tidak dapat dihitung. Periksa frekuensi pembayaran pinjaman.",
+      "overrideLines": "Baris jadwal ini bukan pokok, bunga, dan pokok tambahan. Edit barisnya.",
+      "overrideOnSettledDebt": "Pinjaman sudah lunas pada tanggal ini, jadi jumlah jadwal ini tidak dapat dibagi menjadi pokok dan bunga. Edit atau atur ulang jadwal ini.",
+      "earlierOccurrence": "Ini bergantung pada jadwal {date}, yang pembayarannya tidak dapat dihitung.",
+      "unknown": "Alasannya tidak diberikan."
+    }
   },
   "overrideEditor": {
     "title": "Edit Kemunculan",
@@ -179,7 +202,9 @@
       "quantityRequired": "Kuantitas harus lebih dari nol",
       "priceRequired": "Harga harus lebih dari nol",
       "totalAmountRequired": "Total jumlah wajib diisi"
-    }
+    },
+    "estimatedHint": "Jumlah ini adalah perkiraan untuk kejadian ini. Biarkan apa adanya dan kejadian ini akan terus mengikuti perkiraan saat pembayaran baru masuk. {detail}",
+    "keepEstimate": "Pertahankan jumlah ini, meskipun pembayaran baru mengubah perkiraan"
   },
   "form": {
     "tabs": {
@@ -205,7 +230,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "Reinvestasi Keuntungan Modal Jangka Panjang",
       "CAPITAL_GAIN_SHORT": "Keuntungan Modal Jangka Pendek",
       "CAPITAL_GAIN_LONG": "Keuntungan Modal Jangka Panjang",
-      "REDEEM": "Pencairan CD/Obligasi"
+      "REDEEM": "Pencairan CD/Obligasi",
+      "RETURN_OF_CAPITAL": "Pengembalian Modal"
     },
     "submitCreate": "Buat",
     "submitUpdate": "Perbarui",
@@ -237,7 +263,7 @@
     "toAccountLabel": "Ke Akun",
     "toAccountPlaceholder": "Pilih akun tujuan...",
     "transferAmountLabel": "Jumlah Transfer",
-    "transferCategoryLabel": "Kategori (Opsional)",
+    "transferCategoryLabel": "Kategori (opsional)",
     "transferCategoryNote": "Opsional: kategorikan transfer ini (mis. kontribusi investasi berulang) agar muncul di rincian kategori bulanan. Ini tidak dihitung sebagai pemasukan atau pengeluaran.",
     "actionLabel": "Tindakan",
     "securityLabel": "Sekuritas",
@@ -248,6 +274,7 @@
     "commissionLabel": "Komisi",
     "totalValueLabel": "Total Nilai",
     "fundingAccountLabel": "Akun Pendanaan (opsional)",
+    "fundingAccountTooltip": "Akun tempat kas dari jadwal ini sebenarnya diselesaikan, bukan akun broker di atas: akun yang didebit atau dikredit oleh prakiraan arus kas. Biarkan kosong untuk menggunakan akun kas milik broker itu sendiri.",
     "fundingAccountPlaceholder": "Gunakan kas broker (default)",
     "fundingAccountHelp": "Default ke sisi kas akun investasi. Pilih akun lain untuk memodelkan kontribusi+beli.",
     "endConditionTitle": "Kondisi Akhir (opsional)",
@@ -282,14 +309,21 @@
       "quantityRequired": "Kuantitas harus lebih dari nol",
       "priceRequired": "Harga harus lebih dari nol",
       "totalAmountRequired": "Total jumlah wajib diisi untuk tindakan ini",
-      "fxRateRequired": "Masukkan jumlah dalam mata uang yang dipilih sebelum menyimpan. Belum ada nilai tukar yang tersedia."
+      "fxRateRequired": "Masukkan jumlah dalam mata uang yang dipilih sebelum menyimpan. Belum ada nilai tukar yang tersedia.",
+      "estimateNeedsPayeeAndCategory": "Pilih penerima dan kategori untuk memperkirakan jumlahnya."
     },
     "fx": {
       "amountInCurrency": "Jumlah dalam {currency}",
       "estimateCaption": "Sekitar {total} pada 1 {from} = {rate} {to}.",
       "noRateWarning": "Tidak ada nilai tukar untuk {from} ke {to}. Pilih mata uang lain, atau masukkan jumlah dalam {to}.",
       "feeCaption": "Termasuk biaya transaksi luar negeri {percent}% ({fee})."
-    }
+    },
+    "estimateLabel": "Perkirakan",
+    "estimateTooltip": "Hitung jumlah setiap kejadian dari pembayaran 24 bulan terakhir kepada penerima ini dalam kategori ini, bulan demi bulan, sehingga tagihan yang lebih mahal di beberapa bulan diperkirakan demikian. Anda tetap dapat mengubah kejadian mana pun, dan mengonfirmasi jumlahnya saat memposting.",
+    "estimateTooltipTransfer": "Hitung jumlah setiap kejadian dari transfer 24 bulan terakhir ke akun ini. Jika tagihan akun lebih besar, pembayaran dinaikkan agar sesuai: pada kartu kredit dengan tanggal penutupan dan jatuh tempo, pembayaran untuk tagihan yang sudah ditutup dan untuk siklus berjalan; selain itu, pembayaran berikutnya. Anda tetap dapat mengubah kejadian mana pun, dan Anda mengonfirmasi jumlahnya saat memposting.",
+    "estimateDelegateDisabled": "Hanya pemilik yang dapat menyalakan atau mematikan perkiraan: perkiraan membaca pembayaran di semua akun pemilik.",
+    "estimatedAmountNote": "Dihitung otomatis dari riwayat pembayaran. {detail}",
+    "autoPostDisabledEstimate": "Jumlah perkiraan dikonfirmasi saat Anda mempostingnya, jadi tidak diposting secara otomatis."
   },
   "postTransaction": {
     "minSplits": "Transaksi terbagi memerlukan setidaknya 2 pembagian",
@@ -308,10 +342,83 @@
     "EVERY4MONTHS": "Setiap 4 Bulan",
     "SEMIANNUAL": "Dua Kali Setahun",
     "YEARLY": "Tahunan",
-    "EVERY2YEARS": "Setiap 2 Tahun"
+    "EVERY2YEARS": "Setiap 2 Tahun",
+    "CUSTOM": "Kustom"
+  },
+  "customRecurrence": {
+    "title": "Berulang",
+    "unitLabel": "Ulangi menurut",
+    "units": {
+      "WEEK": "Mingguan",
+      "MONTH": "Bulanan",
+      "YEAR": "Tahunan"
+    },
+    "every": "Setiap",
+    "intervalLabel": "Ulangi setiap",
+    "unitSuffix": {
+      "WEEK": "{interval, plural, other {minggu pada}}",
+      "MONTH": "{interval, plural, other {bulan pada tanggal}}",
+      "YEAR": "{interval, plural, other {tahun pada}}"
+    },
+    "weekdaysLabel": "Hari dalam seminggu",
+    "monthDaysLabel": "Tanggal dalam sebulan",
+    "lastDayChip": "Hari terakhir",
+    "lastDay": "hari terakhir",
+    "dayOfMonth": "{day, selectordinal, other {#}}",
+    "monthHint": "Tanggal yang melewati akhir bulan pendek jatuh pada hari terakhirnya, dan dua tanggal yang jatuh pada hari yang sama hanya diposting sekali.",
+    "datesLabel": "Tanggal dalam setahun",
+    "monthLabel": "Bulan",
+    "dayLabel": "Tanggal",
+    "addDate": "Tambah tanggal",
+    "removeDate": "Hapus {date}",
+    "yearHint": "Tanggal 29 Februari jatuh pada 28 Februari di tahun yang tidak memilikinya.",
+    "summary": {
+      "WEEK": "{interval, plural, other {Setiap # minggu pada {days}}}",
+      "MONTH": "{interval, plural, other {Setiap # bulan pada tanggal {days}}}",
+      "YEAR": "{interval, plural, other {Setiap # tahun pada {days}}}"
+    },
+    "errors": {
+      "noDays": {
+        "WEEK": "Pilih setidaknya satu hari dalam seminggu.",
+        "MONTH": "Pilih setidaknya satu tanggal dalam sebulan.",
+        "YEAR": "Tambahkan setidaknya satu tanggal."
+      },
+      "interval": "Masukkan angka dari 1 sampai 12.",
+      "invalid": "Pola ini tidak dapat disimpan. Pilih harinya lagi."
+    },
+    "firstOccurrence": "Kemunculan pertama: {date}",
+    "nextOccurrence": "Kemunculan berikutnya: {date}",
+    "nextOccurrenceOffPattern": "Kemunculan berikutnya: {date}. Tanggal ini di luar pola; kemunculan berikutnya mengikuti pola.",
+    "orphanWarning": "{count, plural, other {# kemunculan yang diedit ({dates}) tidak lagi sesuai dengan pola ini dan akan dihapus saat Anda menyimpan.}}",
+    "notForLoan": "Pembayaran pinjaman atau hipotek tidak dapat menggunakan frekuensi kustom; pilih frekuensi tetap.",
+    "notForPayroll": "Tagihan gaji dengan batas potongan tidak dapat menggunakan frekuensi kustom; pilih frekuensi tetap."
   },
   "validation": {
     "nameRequired": "Nama wajib diisi",
     "dueDateRequired": "Tanggal jatuh tempo wajib diisi"
+  },
+  "estimate": {
+    "thePayee": "penerima ini",
+    "theAccount": "akun tersebut",
+    "theCategory": "kategori ini",
+    "basis": "Diperkirakan dari {count, plural, other {# pembayaran}}, yang terakhir pada {date}.",
+    "basisWithGrowth": "Diperkirakan dari {count, plural, other {# pembayaran}}, yang terakhir pada {date}, dengan perubahan {growth} dari tahun ke tahun.",
+    "basisYear": "Rata-rata dari {count, plural, other {# pembayaran}} dalam 12 bulan terakhir, yang terakhir pada {date}.",
+    "basisRecent": "Rata-rata dari {count, plural, other {# pembayaran}} terbaru, yang terakhir pada {date}.",
+    "basisRecentWithGrowth": "Rata-rata dari {count, plural, other {# pembayaran}} terbaru, yang terakhir pada {date}, dengan perubahan {growth} dari tahun ke tahun.",
+    "basisSeasonal": "Rata-rata dari {count, plural, other {# pembayaran}} terbaru, disesuaikan dengan musim setiap bulan, yang terakhir pada {date}.",
+    "basisSeasonalWithGrowth": "Rata-rata dari {count, plural, other {# pembayaran}} terbaru, disesuaikan dengan musim setiap bulan, yang terakhir pada {date}, dengan perubahan {growth} dari tahun ke tahun.",
+    "basisWithheld": "Diperkirakan dari riwayat pembayaran penerima dan kategori.",
+    "basisWithheldTransfer": "Diperkirakan dari riwayat transfer ke {account}.",
+    "raisedToBalance": "Dinaikkan untuk menutup tagihan {account} pada pembayaran ini.",
+    "basisAndRaise": "{basis} {raised}",
+    "noHistoryTransfer": "Tidak ada transfer dari akun ini ke {account} dalam {months} bulan terakhir, jadi jumlahnya tidak diketahui. Masukkan jumlah setiap kejadian, atau catat sebuah transfer.",
+    "missingRateTransfer": "Tidak ada kurs dari {from} ke {to} untuk mengonversi transfer sebelumnya atau tagihan {account}, jadi jumlahnya tidak diketahui. Tambahkan kurs di halaman Mata Uang.",
+    "noBasisTransfer": "Pilih akun tujuan untuk memperkirakan jumlah dari transfer ke akun tersebut.",
+    "pendingTransfer": "Jumlah dihitung dari transfer ke akun ini dan tagihannya.",
+    "noHistory": "Tidak ada pembayaran ke {payee} di {category} dalam {months} bulan terakhir, jadi jumlahnya tidak diketahui. Masukkan jumlah setiap kejadian, atau catat sebuah pembayaran.",
+    "missingRate": "Tidak ada kurs dari {from} ke {to} untuk mengonversi pembayaran sebelumnya, jadi jumlahnya tidak diketahui. Tambahkan kurs di halaman Mata Uang.",
+    "noBasis": "Pilih penerima dan kategori untuk memperkirakan jumlah dari riwayat pembayarannya.",
+    "pending": "Jumlahnya dihitung dari riwayat pembayaran penerima dan kategori."
   }
 }

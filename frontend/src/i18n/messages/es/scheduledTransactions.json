@@ -6,7 +6,7 @@
       "category": "Categoría",
       "amount": "Monto",
       "schedule": "Programación",
-      "auto": "Auto",
+      "auto": "Registro automático",
       "actions": "Acciones"
     },
     "empty": {
@@ -22,8 +22,9 @@
     "modifiedBadge": "{count} modificadas",
     "modifiedTitle": "{count, plural, one {# ocurrencia próxima modificada} other {# ocurrencias próximas modificadas}}",
     "modifiedAmountTitle": "Modificado para la próxima ocurrencia",
+    "modifiedDateTitle": "Fecha modificada para esta ocurrencia",
+    "splitBadge": "División ({count})",
     "autoPostBadge": "Activo",
-    "autoPostTitle": "Se registra automáticamente al vencer",
     "inactiveSuffix": " — Inactiva",
     "actionTitles": {
       "post": "Registrar transacción",
@@ -62,7 +63,8 @@
       "skipFailed": "Error al omitir la ocurrencia",
       "deleteFailed": "Error al eliminar"
     },
-    "foreignAmountTitle": "El importe que cobra el beneficiario, en su propia moneda"
+    "foreignAmountTitle": "El importe que cobra el beneficiario, en su propia moneda",
+    "estimatedLabel": "Estimado"
   },
   "filters": {
     "label": "Filtros",
@@ -74,9 +76,7 @@
     "accountsLabel": "Cuentas",
     "accountsPlaceholder": "Todas las cuentas",
     "categoriesLabel": "Categorías",
-    "categoriesPlaceholder": "Todas las categorías",
-    "collapseAriaLabel": "Contraer filtros",
-    "expandAriaLabel": "Expandir filtros"
+    "categoriesPlaceholder": "Todas las categorías"
   },
   "postDialog": {
     "title": "Registrar transacción",
@@ -114,7 +114,8 @@
       "totalAmountRequired": "El monto total es obligatorio",
       "splitsMinimum": "Los desgloses de transacción requieren al menos 2 partes",
       "splitsTotal": "Los montos de las partes deben ser iguales a la cantidad de la transacción",
-      "fxRateUnavailable": "No hay un tipo de cambio disponible de {from} a {to} en esta fecha."
+      "fxRateUnavailable": "No hay un tipo de cambio disponible de {from} a {to} en esta fecha.",
+      "estimateUnknown": "Se desconoce el importe estimado de esta ocurrencia. Introduzca el importe para registrarla."
     },
     "latestPlaceholder": "Último: {price}",
     "descriptionPlaceholder": "Descripción...",
@@ -127,18 +128,40 @@
       "noRateWarning": "No se encontró un tipo de cambio de {from} a {to} el {date}. Elige otra fecha o actualiza los tipos.",
       "feeCaption": "Incluye una comisión por transacción en el extranjero del {percent}% ({fee}).",
       "totalInCurrency": "Total en {currency}"
-    }
+    },
+    "estimatedHint": "Este importe es una estimación; cámbielo por lo que realmente pagó. {detail}"
   },
   "occurrencePicker": {
     "title": "Seleccionar fecha de ocurrencia",
-    "description": "Elige qué ocurrencia de \"{name}\" deseas modificar:",
+    "description": "Elige qué ocurrencia de \"{name}\" deseas modificar. Cambiar una aquí anula solo esa fecha; las demás ocurrencias seguirán el calendario. <guide>Más información</guide>.",
     "modifiedBadge": "Modificada",
     "nextDueBadge": "Próximo vencimiento",
     "dateMoved": "Fecha cambiada desde {date}",
     "amountChange": "Monto: {amount}",
     "categoryChange": "Categoría: {category}",
     "noteChange": "Nota: {note}",
-    "splitModified": "Desglose modificado"
+    "splitModified": "Desglose modificado",
+    "estimatedAmount": "Estimado: {amount}",
+    "estimateUnknown": "Estimación desconocida"
+  },
+  "loanOccurrence": {
+    "loading": "Calculando el pago de cada vencimiento.",
+    "loadFailed": "No se pudo cargar el pago de cada vencimiento.",
+    "retry": "Reintentar",
+    "amountUnknown": "Pago desconocido",
+    "notProjected": "Pago no calculado con tanta antelación",
+    "paymentChangesBadge": "Cambia el pago",
+    "editorUnknown": "No se puede calcular el pago de este vencimiento, así que el importe empieza vacío. {reason}",
+    "editorLinesUnknown": "No se puede calcular el reparto de este vencimiento entre capital e intereses, así que las líneas empiezan con las de la programación. {reason}",
+    "amountRequired": "Introduce el importe de este vencimiento antes de guardar.",
+    "missing": {
+      "rate": "No hay ningún tipo de interés registrado para el {date}. Añádelo al historial de tipos del préstamo.",
+      "cadence": "La frecuencia de pago del préstamo ({frequency}) no se puede calcular. Revisa la frecuencia de pago del préstamo.",
+      "overrideLines": "Las líneas de este vencimiento no son capital, intereses y capital adicional. Edita sus líneas.",
+      "overrideOnSettledDebt": "El préstamo está liquidado en esta fecha, así que el importe de este vencimiento no se puede dividir en capital e intereses. Edita o restablece el vencimiento.",
+      "earlierOccurrence": "Depende del vencimiento del {date}, cuyo pago no se puede calcular.",
+      "unknown": "No se indicó el motivo."
+    }
   },
   "overrideEditor": {
     "title": "Editar ocurrencia",
@@ -179,7 +202,9 @@
       "quantityRequired": "La cantidad debe ser mayor que cero",
       "priceRequired": "El precio debe ser mayor que cero",
       "totalAmountRequired": "El monto total es obligatorio"
-    }
+    },
+    "estimatedHint": "Este importe es la estimación para esta ocurrencia. Si lo deja tal cual, la ocurrencia seguirá la estimación a medida que lleguen nuevos pagos. {detail}",
+    "keepEstimate": "Mantener este importe aunque nuevos pagos cambien la estimación"
   },
   "form": {
     "tabs": {
@@ -205,7 +230,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "Reinversión de ganancias a largo plazo",
       "CAPITAL_GAIN_SHORT": "Ganancia de capital a corto plazo",
       "CAPITAL_GAIN_LONG": "Ganancia de capital a largo plazo",
-      "REDEEM": "Rescate de CD/bono"
+      "REDEEM": "Rescate de CD/bono",
+      "RETURN_OF_CAPITAL": "Devolución de capital"
     },
     "submitCreate": "Crear",
     "submitUpdate": "Actualizar",
@@ -248,6 +274,7 @@
     "commissionLabel": "Comisión",
     "totalValueLabel": "Valor total",
     "fundingAccountLabel": "Cuenta de financiamiento (opcional)",
+    "fundingAccountTooltip": "La cuenta en la que realmente se liquida el efectivo de esta programación, no la cuenta de inversión de arriba: la que el pronóstico de flujo de caja carga o abona. Déjalo en blanco para usar la propia cuenta de efectivo de la cuenta de inversión.",
     "fundingAccountPlaceholder": "Usar efectivo de la corredora (predeterminado)",
     "fundingAccountHelp": "Usa de forma predeterminada el efectivo de la cuenta de inversión. Elige otra cuenta para modelar aportación + compra.",
     "endConditionTitle": "Condición de fin (opcional)",
@@ -282,14 +309,21 @@
       "quantityRequired": "La cantidad debe ser mayor que cero",
       "priceRequired": "El precio debe ser mayor que cero",
       "totalAmountRequired": "El monto total es obligatorio para esta acción",
-      "fxRateRequired": "Introduce un importe en la moneda elegida antes de guardar. Todavía no hay un tipo de cambio disponible."
+      "fxRateRequired": "Introduce un importe en la moneda elegida antes de guardar. Todavía no hay un tipo de cambio disponible.",
+      "estimateNeedsPayeeAndCategory": "Elija un beneficiario y una categoría a partir de los cuales estimar el importe."
     },
     "fx": {
       "amountInCurrency": "Monto en {currency}",
       "estimateCaption": "Unos {total} a 1 {from} = {rate} {to}.",
       "noRateWarning": "No se encontró un tipo de cambio de {from} a {to}. Elige otra moneda o introduce el importe en {to}.",
       "feeCaption": "Incluye una comisión por transacción en el extranjero del {percent}% ({fee})."
-    }
+    },
+    "estimateLabel": "Estimar",
+    "estimateTooltip": "Calcular el importe de cada ocurrencia a partir de los pagos de los últimos 24 meses a este beneficiario en esta categoría, mes a mes, para que una factura que cuesta más algunos meses se prevea así. Puede seguir cambiando cualquier ocurrencia y confirma el importe al registrarla.",
+    "estimateTooltipTransfer": "Calcular el importe de cada ocurrencia a partir de las transferencias de los últimos 24 meses a esta cuenta. Cuando la cuenta adeuda más, el pago se aumenta hasta cubrirlo: en una tarjeta de crédito con día de corte y día de vencimiento, el pago del extracto cerrado y el del ciclo en curso; si no, el próximo pago. Puede seguir cambiando cualquier ocurrencia y confirma el importe al registrarla.",
+    "estimateDelegateDisabled": "Solo el propietario puede activar o desactivar la estimación: lee los pagos de todas las cuentas del propietario.",
+    "estimatedAmountNote": "Calculado automáticamente a partir del historial de pagos. {detail}",
+    "autoPostDisabledEstimate": "Un importe estimado se confirma al registrarlo, así que no se registra automáticamente."
   },
   "postTransaction": {
     "minSplits": "Los desgloses de transacción requieren al menos 2 partes",
@@ -308,10 +342,83 @@
     "EVERY4MONTHS": "Cada 4 meses",
     "SEMIANNUAL": "Dos veces al año",
     "YEARLY": "Anual",
-    "EVERY2YEARS": "Cada 2 años"
+    "EVERY2YEARS": "Cada 2 años",
+    "CUSTOM": "Personalizada"
+  },
+  "customRecurrence": {
+    "title": "Se repite",
+    "unitLabel": "Repetir por",
+    "units": {
+      "WEEK": "Semanal",
+      "MONTH": "Mensual",
+      "YEAR": "Anual"
+    },
+    "every": "Cada",
+    "intervalLabel": "Repetir cada",
+    "unitSuffix": {
+      "WEEK": "{interval, plural, one {semana en} other {semanas en}}",
+      "MONTH": "{interval, plural, one {mes el día} other {meses el día}}",
+      "YEAR": "{interval, plural, one {año en} other {años en}}"
+    },
+    "weekdaysLabel": "Días de la semana",
+    "monthDaysLabel": "Días del mes",
+    "lastDayChip": "Último día",
+    "lastDay": "último día",
+    "dayOfMonth": "{day, selectordinal, other {#}}",
+    "monthHint": "Un día posterior al final de un mes corto se traslada a su último día, y dos días que coinciden en la misma fecha se registran una sola vez.",
+    "datesLabel": "Fechas del año",
+    "monthLabel": "Mes",
+    "dayLabel": "Día",
+    "addDate": "Añadir fecha",
+    "removeDate": "Quitar {date}",
+    "yearHint": "El 29 de febrero pasa al 28 de febrero en los años que no lo tienen.",
+    "summary": {
+      "WEEK": "{interval, plural, one {Cada semana en {days}} other {Cada # semanas en {days}}}",
+      "MONTH": "{interval, plural, one {Cada mes el día {days}} other {Cada # meses el día {days}}}",
+      "YEAR": "{interval, plural, one {Cada año en {days}} other {Cada # años en {days}}}"
+    },
+    "errors": {
+      "noDays": {
+        "WEEK": "Elige al menos un día de la semana.",
+        "MONTH": "Elige al menos un día del mes.",
+        "YEAR": "Añade al menos una fecha."
+      },
+      "interval": "Introduce un número del 1 al 12.",
+      "invalid": "Este patrón no se puede guardar. Vuelve a elegir los días."
+    },
+    "firstOccurrence": "Primera ocurrencia: {date}",
+    "nextOccurrence": "Próxima ocurrencia: {date}",
+    "nextOccurrenceOffPattern": "Próxima ocurrencia: {date}. Esta fecha está fuera del patrón; las ocurrencias posteriores lo siguen.",
+    "orphanWarning": "{count, plural, one {# ocurrencia editada ({dates}) ya no coincide con este patrón y se eliminará al guardar.} other {# ocurrencias editadas ({dates}) ya no coinciden con este patrón y se eliminarán al guardar.}}",
+    "notForLoan": "El pago de un préstamo o una hipoteca no puede usar una frecuencia personalizada; elige una frecuencia fija.",
+    "notForPayroll": "Una factura de nómina con límites de deducción no puede usar una frecuencia personalizada; elige una frecuencia fija."
   },
   "validation": {
     "nameRequired": "El nombre es obligatorio",
     "dueDateRequired": "La fecha de vencimiento es obligatoria"
+  },
+  "estimate": {
+    "thePayee": "este beneficiario",
+    "theAccount": "la cuenta",
+    "theCategory": "esta categoría",
+    "basis": "Estimado a partir de {count, plural, one {# pago} other {# pagos}}, el último el {date}.",
+    "basisWithGrowth": "Estimado a partir de {count, plural, one {# pago} other {# pagos}}, el último el {date}, con un cambio interanual del {growth}.",
+    "basisYear": "Promedio de {count, plural, one {# pago} other {# pagos}} de los últimos 12 meses, el último el {date}.",
+    "basisRecent": "Promedio de {count, plural, one {el último pago} other {los # últimos pagos}}, el último el {date}.",
+    "basisRecentWithGrowth": "Promedio de {count, plural, one {el último pago} other {los # últimos pagos}}, el último el {date}, con un cambio interanual del {growth}.",
+    "basisSeasonal": "Promedio de {count, plural, one {el último pago} other {los # últimos pagos}}, ajustado a la temporada de cada mes, el último el {date}.",
+    "basisSeasonalWithGrowth": "Promedio de {count, plural, one {el último pago} other {los # últimos pagos}}, ajustado a la temporada de cada mes, el último el {date}, con un cambio interanual del {growth}.",
+    "basisWithheld": "Estimado a partir del historial de pagos del beneficiario y la categoría.",
+    "basisWithheldTransfer": "Estimado a partir del historial de transferencias a {account}.",
+    "raisedToBalance": "Aumentado para cubrir lo que {account} adeuda en este pago.",
+    "basisAndRaise": "{basis} {raised}",
+    "noHistoryTransfer": "No hay transferencias de esta cuenta a {account} en los últimos {months} meses, así que se desconoce el importe. Introduzca el importe de cada ocurrencia o registre una transferencia.",
+    "missingRateTransfer": "No hay tipo de cambio de {from} a {to} para convertir una transferencia anterior o lo que adeuda {account}, así que se desconoce el importe. Añada el tipo en la página Monedas.",
+    "noBasisTransfer": "Elija la cuenta de destino para estimar el importe a partir de las transferencias a ella.",
+    "pendingTransfer": "El importe se calcula a partir de las transferencias a esta cuenta y de lo que adeuda.",
+    "noHistory": "No hay pagos a {payee} en {category} en los últimos {months} meses, así que se desconoce el importe. Introduzca el importe de cada ocurrencia o registre un pago.",
+    "missingRate": "No hay tipo de cambio de {from} a {to} para convertir un pago anterior, así que se desconoce el importe. Añada el tipo en la página Monedas.",
+    "noBasis": "Elija un beneficiario y una categoría para estimar el importe a partir de su historial de pagos.",
+    "pending": "El importe se calcula a partir del historial de pagos del beneficiario y la categoría."
   }
 }

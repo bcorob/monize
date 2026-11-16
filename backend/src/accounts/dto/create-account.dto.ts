@@ -11,7 +11,11 @@ import {
   IsUUID,
   IsDateString,
   IsIn,
+  ValidateNested,
+  IsArray,
+  ArrayMaxSize,
 } from "class-validator";
+import { Type } from "class-transformer";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import {
   AccountType,
@@ -20,6 +24,15 @@ import {
 } from "../entities/account.entity";
 import { SanitizeHtml } from "../../common/decorators/sanitize-html.decorator";
 import { IsCurrencyCode } from "../../common/validators/is-currency-code.validator";
+import {
+  MORTGAGE_TYPES,
+  MortgageType,
+  PREPAYMENT_MODES,
+  PrepaymentMode,
+} from "../mortgage-type.util";
+import { PaymentMatchingDto } from "./payment-matching.dto";
+import { LoanFeeDto } from "../../loan-fees/dto/loan-fee.dto";
+import { MAX_LOAN_FEES } from "../../loan-installments/loan-fees";
 
 /**
  * Payment frequencies a loan account can carry.
@@ -39,6 +52,7 @@ import {
   PAYMENT_FREQUENCIES,
   PaymentFrequency,
 } from "../payment-frequency.util";
+import { IsMoneyAmount } from "../../common/validators/is-money-amount.validator";
 
 /**
  * Re-exported, because every caller has always taken these from the DTO. The
@@ -123,7 +137,7 @@ export class CreateAccountDto {
     default: 0,
   })
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 4 })
+  @IsMoneyAmount()
   @Min(-999999999999)
   @Max(999999999999)
   openingBalance?: number;
@@ -133,7 +147,7 @@ export class CreateAccountDto {
     description: "Credit limit (for credit cards)",
   })
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 4 })
+  @IsMoneyAmount(4)
   @IsPositive()
   creditLimit?: number;
 
@@ -203,7 +217,7 @@ export class CreateAccountDto {
     description: "Monthly payment amount for loans",
   })
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 4 })
+  @IsMoneyAmount(4)
   @IsPositive()
   paymentAmount?: number;
 
@@ -235,7 +249,7 @@ export class CreateAccountDto {
 
   @ApiPropertyOptional({
     description:
-      'Category ID for interest portion of payments (defaults to "Loan Interest")',
+      "Category ID for the interest portion of payments; required for a LOAN or MORTGAGE",
   })
   @IsOptional()
   @IsUUID()
@@ -307,24 +321,24 @@ export class CreateAccountDto {
 
   // Mortgage-specific fields
   @ApiPropertyOptional({
-    example: true,
+    example: "CANADIAN_FIXED",
     description:
-      "Whether this is a Canadian mortgage (uses semi-annual compounding for fixed rates)",
-    default: false,
+      "Mortgage type: ANNUITY (nominal rate divided by the payments per year), CANADIAN_FIXED (semi-annual compounding), LINEAR (constant principal) or INTEREST_ONLY (no principal until the final payment). LINEAR and INTEREST_ONLY require amortizationMonths, paymentStartDate and a non-accelerated payment frequency, and store no paymentAmount. ANNUITY when absent.",
+    enum: MORTGAGE_TYPES,
   })
   @IsOptional()
-  @IsBoolean()
-  isCanadianMortgage?: boolean;
+  @IsIn(MORTGAGE_TYPES)
+  mortgageType?: MortgageType;
 
   @ApiPropertyOptional({
-    example: false,
+    example: "SHORTEN_TERM",
     description:
-      "Whether this is a variable rate mortgage (uses monthly compounding)",
-    default: false,
+      "LINEAR mortgages only: what an extra repayment does to the constant principal. SHORTEN_TERM (the default when absent) keeps it and ends the loan earlier; LOWER_INSTALLMENT re-derives it as the remaining debt over the remaining payments. Stored as null for every other type.",
+    enum: PREPAYMENT_MODES,
   })
   @IsOptional()
-  @IsBoolean()
-  isVariableRate?: boolean;
+  @IsIn(PREPAYMENT_MODES)
+  prepaymentMode?: PrepaymentMode | null;
 
   @ApiPropertyOptional({
     example: 60,
@@ -354,4 +368,37 @@ export class CreateAccountDto {
   @IsString()
   @IsIn(MORTGAGE_PAYMENT_FREQUENCIES)
   mortgagePaymentFrequency?: MortgagePaymentFrequency;
+
+  @ApiPropertyOptional({
+    example: 300000,
+    description:
+      "Loans and mortgages: the amount originally borrowed, kept apart from the opening balance (the debt where this ledger starts). A LINEAR mortgage's constant principal is this over the scheduled payment count; when absent the mortgage paths store the opening balance",
+  })
+  @IsOptional()
+  @IsMoneyAmount(4)
+  @IsPositive()
+  @Max(999999999999)
+  originalPrincipal?: number;
+
+  @ApiPropertyOptional({
+    type: () => PaymentMatchingDto,
+    description:
+      "Mortgages and loans created with their scheduled payment: create the rule that settles the bank debits of the payment against each installment (docs/specs/loan-installment-settlement.md decision 5) and turn the bill's auto-post off. A rule the server cannot create is reported as paymentMatchingError on the saved account, which stays",
+  })
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => PaymentMatchingDto)
+  paymentMatching?: PaymentMatchingDto;
+
+  @ApiPropertyOptional({
+    type: () => [LoanFeeDto],
+    description:
+      "Mortgages only: fees collected with each payment (insurance, taxes, other), each written as its own line of the scheduled payment and priced per installment (docs/specs/mortgage-fees.md). Not accepted together with paymentMatching",
+  })
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(MAX_LOAN_FEES)
+  @ValidateNested({ each: true })
+  @Type(() => LoanFeeDto)
+  loanFees?: LoanFeeDto[];
 }

@@ -1,29 +1,4 @@
 {
-  "alerts": {
-    "title": "Avvisi",
-    "unread": "{count} non letti",
-    "markAllRead": "Segna tutti come letti",
-    "loading": "Caricamento avvisi...",
-    "empty": "Nessun avviso",
-    "undo": "Annulla",
-    "buttonTitle": "Avvisi",
-    "buttonAriaLabel": "Avvisi",
-    "dismissAriaLabel": "Ignora avviso",
-    "severity": {
-      "critical": "Critico",
-      "warning": "Attenzione",
-      "success": "Buone notizie",
-      "info": "Info"
-    },
-    "billDue": {
-      "titleOverdue": "{payee} scaduto",
-      "titleToday": "{payee} in scadenza oggi",
-      "titleTomorrow": "{payee} in scadenza domani",
-      "titleInDays": "{payee} in scadenza tra {days} giorni",
-      "amountDue": "{amount} da pagare il {date}",
-      "amountUnavailable": "Importo non disponibile (nessun tasso di cambio attuale), in scadenza il {date}"
-    }
-  },
   "summary503020": {
     "title": "Allocazione 50/30/20",
     "groups": {
@@ -38,6 +13,7 @@
     "editTitle": "Modifica: {name}",
     "budgetAmount": "Importo budget",
     "rolloverType": "Tipo di riporto",
+    "rolloverTypeTooltip": "Il budget non utilizzato di questa categoria viene riportato al periodo successivo invece di essere azzerato. Le spese eccessive non vengono mai riportate come debito, e un limite di riporto limita quanto si può accumulare.",
     "rolloverCap": "Limite riporto (facoltativo)",
     "rolloverCapPlaceholder": "Nessun limite",
     "flexGroup": "Gruppo flessibile (facoltativo)",
@@ -59,7 +35,10 @@
       "WANT": "Desiderio",
       "SAVING": "Risparmio"
     },
-    "saving": "Salvataggio..."
+    "saving": "Salvataggio...",
+    "remove": "Rimuovi dal budget",
+    "bucket": "Busta",
+    "bucketUnassigned": "Non assegnato"
   },
   "categoryList": {
     "title": "Budget per categoria",
@@ -108,7 +87,6 @@
     "baseIncomePlaceholder": "Entrate mensili previste",
     "active": "Attivo",
     "saveChanges": "Salva modifiche",
-    "saving": "Salvataggio...",
     "typeOptions": {
       "MONTHLY": "Mensile",
       "ANNUAL": "Annuale",
@@ -118,7 +96,8 @@
       "FIXED": "Fisso",
       "ROLLOVER": "Con riporto",
       "ZERO_BASED": "A base zero",
-      "FIFTY_THIRTY_TWENTY": "50/30/20"
+      "FIFTY_THIRTY_TWENTY": "50/30/20",
+      "BUCKET": "Busta"
     }
   },
   "healthGauge": {
@@ -134,7 +113,8 @@
     "title": "Mappa di calore spese - {monthLabel}",
     "ariaLabel": "Mappa di calore spese",
     "less": "Meno",
-    "more": "Più"
+    "more": "Più",
+    "readout": "{date}: {amount}"
   },
   "periodDetail": {
     "summaryCards": {
@@ -159,7 +139,8 @@
     "rolloverBadge": "+{amount} riportato",
     "underBudgetLabel": "{amount} sotto il budget",
     "overBudgetLabel": "{amount} oltre il budget",
-    "carriedForward": "{amount} riportato al periodo successivo"
+    "carriedForward": "{amount} riportato al periodo successivo",
+    "dateRange": "Dal {start} al {end}"
   },
   "periodSelector": {
     "label": "Periodo:",
@@ -208,6 +189,7 @@
   },
   "velocity": {
     "title": "Velocità di spesa",
+    "titleTooltip": "Il tuo tasso di consumo giornaliero e il ritmo di spesa sicuro, proiettati fino alla fine del periodo. Realmente disponibile sottrae le bollette programmate ancora da arrivare, così un budget che sembra avere ancora margine non viene speso per denaro già dovuto.",
     "dailyBurnRate": "Tasso di consumo giornaliero",
     "safeToSpend": "Disponibile da spendere",
     "projectedMonthEnd": "Proiezione fine mese",
@@ -260,6 +242,10 @@
       "FIFTY_THIRTY_TWENTY": {
         "label": "50/30/20",
         "description": "50% necessità, 30% desideri, 20% risparmio. Le categorie sono etichettate per gruppo."
+      },
+      "BUCKET": {
+        "label": "Busta",
+        "description": "Le entrate sono divise in poche buste con un nome. Tieni d'occhio ogni busta, non ogni categoria."
       }
     },
     "profiles": {
@@ -280,6 +266,23 @@
       "analyzeFailed": "Analisi delle spese non riuscita"
     }
   },
+  "lineNames": {
+    "transfersFrom": "Trasferimenti da {name}",
+    "unknown": "Sconosciuto"
+  },
+  "transferIncomeForm": {
+    "hint": "Il denaro in entrata da questo conto conta come reddito del budget, meno quanto vi viene restituito.",
+    "account": "Conto di origine",
+    "accountPlaceholder": "Scegli un conto",
+    "accountRequired": "Scegli il conto da cui arrivano i trasferimenti",
+    "amount": "Importo previsto",
+    "submit": "Aggiungi"
+  },
+  "transfersInAsIncome": {
+    "label": "Conta come reddito i trasferimenti in entrata dai conti esclusi",
+    "hint": "Il denaro trasferito da un conto escluso ai conti di questo budget conta come reddito, meno quanto vi viene restituito. Un conto con una propria riga di trasferimento viene contato su quella riga.",
+    "noExcludedAccounts": "Questo budget non esclude ancora alcun conto, quindi non viene contato nulla."
+  },
   "wizardCategories": {
     "title": "Revisione categorie",
     "noAnalysis": "Nessun dato di analisi. Torna indietro ed esegui prima l'analisi.",
@@ -287,6 +290,7 @@
       "income": "Entrate",
       "expenses": "Uscite",
       "transfers": "Trasferimenti / Risparmio",
+      "transfersIn": "Trasferimenti in entrata (reddito)",
       "trendMedian": "Trend / Mediana",
       "amount": "Importo"
     },
@@ -296,6 +300,7 @@
       "transfers": "Trasferimenti",
       "remaining": "Rimanente"
     },
+    "transfersInHint": "Il denaro in entrata da un conto selezionato conta come reddito, meno quanto vi viene restituito. Seleziona solo i conti da cui ricavi un reddito, come una riserva di risparmio.",
     "allocation503020": "Allocazione 50/30/20",
     "allocationTarget": "(obiettivo {percent}%)",
     "nextButton": "Avanti: Configura",
@@ -326,7 +331,8 @@
       "FIXED": "Imposta importi per categoria. Il budget non speso si azzera a ogni periodo.",
       "ROLLOVER": "Il budget non speso viene riportato in base alle regole di riporto per categoria.",
       "ZERO_BASED": "Ogni euro di entrate è assegnato. Entrate meno uscite deve essere uguale a zero.",
-      "FIFTY_THIRTY_TWENTY": "Categorie raggruppate come Necessità (50%), Desideri (30%), Risparmio (20%)."
+      "FIFTY_THIRTY_TWENTY": "Categorie raggruppate come Necessità (50%), Desideri (30%), Risparmio (20%).",
+      "BUCKET": "Entrate divise in buste con un nome. Ogni categoria appartiene a una busta."
     },
     "linkBudgetToIncome": "Collega il budget alle entrate",
     "linkBudgetToIncomeHint": "Gli importi per categoria diventano percentuali delle tue entrate di base",
@@ -334,6 +340,7 @@
     "estimatedFromAnalysis": "Stimato dall'analisi: {amount}/mese",
     "defaultRolloverType": "Tipo di riporto predefinito",
     "rolloverHint": "Imposta il valore predefinito per tutte le categorie. Puoi personalizzare le singole categorie dopo aver creato il budget.",
+    "rolloverTooltip": "Il budget non utilizzato di una categoria viene riportato al periodo successivo invece di essere azzerato. Le spese eccessive non vengono mai riportate come debito, e un limite di riporto limita quanto una categoria può accumulare.",
     "rolloverOptions": {
       "NONE": "Nessuno -- Si azzera ogni periodo",
       "MONTHLY": "Mensile -- Riportato ogni mese",
@@ -353,6 +360,7 @@
     },
     "flexGroupPlaceholder": "es. Svago",
     "excludedAccountsHint": "Le transazioni dai conti esclusi non verranno conteggiate nei totali del budget.",
+    "excludedAccountsTooltip": "Escludere un conto rimuove le sue transazioni solo dalle spese, dalle entrate, dal riporto e dal punteggio di salute di questo budget. Continuano ad apparire normalmente nelle tue transazioni e nei report, e in qualsiasi altro budget che non esclude il conto.",
     "excludedCount": "{count} {count, plural, one {conto escluso} other {conti esclusi}}",
     "categoriesAndTransfers": "{categories} categorie e {transfers} trasferimenti selezionati",
     "budgetTypeOptions": {
@@ -372,8 +380,10 @@
       "rollover": "Riporto",
       "alerts": "Avvisi",
       "incomeLinked": "Entrate collegate",
-      "excludedAccounts": "Conti esclusi"
+      "excludedAccounts": "Conti esclusi",
+      "transfersInAsIncome": "Trasferimenti in entrata"
     },
+    "transfersInAsIncomeOn": "Quelli dai conti esclusi contano come reddito",
     "rolloverOff": "Disattivato",
     "alertsValue": "Avviso {warn}% / Critico {critical}%",
     "accountCount": "{count} {count, plural, one {conto} other {conti}}",
@@ -392,7 +402,8 @@
     "categoryTypes": {
       "income": "Entrate",
       "expense": "Uscite",
-      "transfer": "Trasferimento"
+      "transfer": "Trasferimento",
+      "transferIn": "Trasferimento in entrata"
     },
     "createButton": "Crea budget",
     "categoryCount": "{count} categorie",
@@ -400,6 +411,19 @@
     "toasts": {
       "created": "Budget creato con successo",
       "failed": "Impossibile creare il budget"
+    }
+  },
+  "wizardBuckets": {
+    "title": "Buste",
+    "description": "Dividi le tue entrate in buste, poi scegli una busta per ogni spesa e trasferimento qui sotto.",
+    "selectLabel": "Busta per {name}",
+    "unassigned": "Non assegnato",
+    "tallyTitle": "Righe per busta",
+    "tallyValue": "{count, plural, one {# riga} other {# righe}} · {amount}",
+    "review": {
+      "lineCount": "{count, plural, one {# riga} other {# righe}}",
+      "unassigned": "{count, plural, one {# riga di spesa o trasferimento non è} other {# righe di spesa o trasferimento non sono}} in nessuna busta. Puoi comunque creare il budget e assegnarle più tardi dalla sua pagina di modifica.",
+      "noBuckets": "Questo budget non ha ancora buste. Puoi comunque crearlo e aggiungere buste più tardi dalla sua pagina di modifica."
     }
   },
   "zeroBasedBar": {
@@ -483,6 +507,23 @@
           "Richiede di classificare ogni spesa per gruppo"
         ],
         "bestFor": "Chi vuole un approccio equilibrato e basato su regole semplici senza monitorare ogni categoria individualmente."
+      },
+      "BUCKET": {
+        "title": "Budget a buste",
+        "description": "Le entrate sono divise in poche buste con un nome, ciascuna con un obiettivo che è una quota delle entrate o un importo fisso. Ogni categoria appartiene a una busta, quindi tieni d'occhio la busta invece di ogni categoria. Una busta può riportare ciò che resta al periodo successivo.",
+        "pros": [
+          "Meno numeri da controllare",
+          "Flessibile all'interno di ogni busta",
+          "Le buste di risparmio possono crescere nel tempo",
+          "Funziona con spese irregolari all'interno di una busta"
+        ],
+        "cons": [
+          "Meno dettaglio per ogni categoria",
+          "Richiede di assegnare le categorie alle buste",
+          "Gli obiettivi in percentuale richiedono entrate note",
+          "I saldi riportati richiedono un controllo ogni tanto"
+        ],
+        "bestFor": "Chi trova i budget per categoria troppo minuziosi ma vuole più struttura del 50/30/20."
       }
     }
   },
@@ -496,11 +537,18 @@
         "description": "Crea il tuo primo budget analizzando la cronologia delle spese. La procedura guidata suggerirà importi realistici basati sulle tue transazioni.",
         "cta": "Crea il tuo primo budget"
       },
+      "loading": "Caricamento dei budget...",
+      "columns": {
+        "name": "Nome",
+        "strategy": "Strategia",
+        "type": "Tipo",
+        "categories": "Categorie",
+        "started": "Inizio",
+        "status": "Stato"
+      },
       "card": {
         "active": "Attivo",
-        "inactive": "Inattivo",
-        "categories": "{count} categorie",
-        "started": "Iniziato il {date}"
+        "inactive": "Inattivo"
       }
     },
     "create": {
@@ -509,6 +557,9 @@
     },
     "detail": {
       "backToBudgets": "Torna ai budget",
+      "switchBudget": "Passa a un altro budget",
+      "switchPlaceholder": "Filtra budget...",
+      "switchNoMatches": "Nessun budget corrispondente",
       "notFound": "Budget non trovato",
       "delete": {
         "title": "Elimina budget",
@@ -526,22 +577,37 @@
     "edit": {
       "subtitlePrefix": "Modifica: ",
       "subtitle": "Aggiorna le impostazioni del budget e le allocazioni per categoria",
-      "backToDashboard": "Torna alla dashboard",
+      "backToBudget": "Torna a {name}",
       "budgetSettings": "Impostazioni budget",
       "categoryAllocations": "Allocazioni per categoria",
       "income": "Entrate",
+      "addTransferIncome": "Aggiungi reddito da trasferimento",
+      "addTransferIncomeTitle": "Aggiungi reddito da trasferimento",
+      "outsideTransferIncome": "Trasferimenti da conti esterni a questo budget",
+      "outsideTransferIncomeHint": "Contato in questo periodo perché il budget conta come reddito i trasferimenti in entrata dai suoi conti esclusi.",
       "expensesWithCount": "Uscite ({count})",
       "resetsEachPeriod": "Si azzera ogni periodo",
       "percentUsed": "{percent}% utilizzato",
       "rolloverType": "Riporto: {type}",
       "editCategoryTitle": "Modifica {name}",
+      "remove": {
+        "title": "Rimuovi categoria",
+        "message": "Rimuovere \"{name}\" da questo budget? La sua allocazione di {amount} non sarà più a budget e la sua cronologia nei periodi di budget passati verrà eliminata. Le tue transazioni non sono interessate. Questa azione non può essere annullata.",
+        "confirm": "Rimuovi"
+      },
       "toasts": {
         "updated": "Budget aggiornato",
         "updateFailed": "Impossibile aggiornare il budget",
         "categoryUpdated": "Categoria aggiornata",
         "categoryFailed": "Impossibile aggiornare la categoria",
-        "loadFailed": "Impossibile caricare il budget"
-      }
+        "loadFailed": "Impossibile caricare il budget",
+        "categoryRemoved": "Categoria rimossa dal budget",
+        "categoryRemoveFailed": "Impossibile rimuovere la categoria",
+        "transferIncomeAdded": "Reddito da trasferimento aggiunto",
+        "transferIncomeFailed": "Impossibile aggiungere il reddito da trasferimento"
+      },
+      "buckets": "Buste",
+      "unassignedBucket": "Non assegnato"
     }
   },
   "validation": {
@@ -552,5 +618,140 @@
   "categoryValidation": {
     "amountMin": "L'importo deve essere 0 o maggiore",
     "mustBeNumber": "Deve essere un numero"
+  },
+  "bucketEditor": {
+    "presetLabel": "Parti da un modello",
+    "presets": {
+      "THREE": "Tre buste",
+      "FOUR": "Quattro buste (60/10/10/20)",
+      "SCRATCH": "Parti da zero"
+    },
+    "presetBucketNames": {
+      "fixedCosts": "Spese fisse",
+      "everydaySpending": "Spese quotidiane",
+      "savings": "Risparmio",
+      "dailyExpenses": "Spese di ogni giorno",
+      "splurge": "Sfizi",
+      "longTermGoals": "Obiettivi a lungo termine",
+      "safetyAndDebt": "Sicurezza e debiti"
+    },
+    "listLabel": "Buste",
+    "empty": {
+      "title": "Ancora nessuna busta",
+      "description": "Parti da un modello o aggiungi una busta, poi assegna a ognuna le sue categorie."
+    },
+    "add": "Aggiungi busta",
+    "limitReached": "Un budget può avere al massimo {max} buste.",
+    "newTitle": "Nuova busta",
+    "editTitle": "Modifica {name}",
+    "summary": "Gli obiettivi in percentuale sommano a {percent}. Gli obiettivi in importo sommano a {amount}.",
+    "row": {
+      "percentTarget": "{percent} delle entrate",
+      "amountTarget": "{amount} per periodo",
+      "noCarry": "Riparte da zero a ogni periodo",
+      "carries": "Viene riportata",
+      "carriesUpTo": "Viene riportata, fino a {cap}",
+      "caption": "{target} · {carry}",
+      "edit": "Modifica",
+      "delete": "Elimina",
+      "editLabel": "Modifica {name}",
+      "deleteLabel": "Elimina {name}"
+    },
+    "targetTypes": {
+      "PERCENT": "Percentuale delle entrate",
+      "AMOUNT": "Importo fisso"
+    },
+    "form": {
+      "name": "Nome",
+      "namePlaceholder": "es. Risparmio",
+      "targetType": "Obiettivo",
+      "targetTypeTooltip": "Un obiettivo in percentuale è una quota delle entrate del budget: le entrate ricevute in questo periodo per un budget collegato alle entrate, altrimenti le entrate di base, altrimenti gli importi delle categorie di entrata. Un importo fisso è uguale a ogni periodo.",
+      "targetPercent": "Percentuale delle entrate",
+      "targetAmount": "Importo per periodo",
+      "carryOver": "Riporta ciò che resta",
+      "carryOverTooltip": "Ciò che resta nella busta alla chiusura di un periodo viene aggiunto al periodo successivo. Una busta in eccesso di spesa non riporta nulla.",
+      "carryCap": "Limite di riporto (facoltativo)",
+      "carryCapPlaceholder": "Nessun limite",
+      "save": "Salva",
+      "saveChanges": "Salva modifiche"
+    },
+    "validation": {
+      "nameRequired": "Inserisci un nome",
+      "nameMax": "Un nome può avere al massimo {max} caratteri",
+      "nameDuplicate": "Un'altra busta ha già questo nome",
+      "targetRequired": "Inserisci un obiettivo",
+      "percentRange": "Un obiettivo in percentuale deve essere maggiore di 0 e al massimo 100",
+      "percentDecimals": "Un obiettivo in percentuale può avere al massimo due decimali",
+      "amountPositive": "Un obiettivo in importo deve essere maggiore di 0",
+      "capNeedsCarryOver": "Un limite di riporto richiede che il riporto sia attivo",
+      "capPositive": "Un limite di riporto deve essere maggiore di 0"
+    },
+    "delete": {
+      "title": "Elimina busta",
+      "message": "Eliminare la busta \"{name}\"? Le sue categorie risulteranno non assegnate.",
+      "confirm": "Elimina"
+    },
+    "replace": {
+      "title": "Sostituisci buste",
+      "message": "Sostituire le buste attuali con \"{preset}\"? Le buste attuali vengono eliminate e le loro categorie risulteranno non assegnate.",
+      "clearMessage": "Eliminare tutte le buste e ripartire da zero? Le loro categorie risulteranno non assegnate.",
+      "confirm": "Sostituisci"
+    },
+    "toasts": {
+      "created": "Busta aggiunta",
+      "updated": "Busta aggiornata",
+      "deleted": "Busta eliminata",
+      "saveFailed": "Impossibile salvare la busta",
+      "deleteFailed": "Impossibile eliminare la busta",
+      "presetApplied": "Modello applicato",
+      "presetFailed": "Impossibile applicare il modello"
+    }
+  },
+  "bucketSummary": {
+    "title": "Ripartizione per buste",
+    "loading": "Caricamento della ripartizione per buste",
+    "loadFailed": "Impossibile caricare la ripartizione per buste. Riprova tra un momento.",
+    "emptyTitle": "Ancora nessuna busta",
+    "emptyDescription": "Aggiungi buste per dividere le tue entrate in quote con un nome.",
+    "emptyAction": "Aggiungi buste",
+    "income": "Entrate delle buste",
+    "incomeUnknown": "Sconosciuto",
+    "incomeSource": {
+      "ACTUAL": "In base alle entrate effettive di questo periodo",
+      "BASE_INCOME": "In base alle entrate di base del budget",
+      "INCOME_LINES": "In base alle categorie di entrata pianificate",
+      "NONE": "Nessuna entrata trovata"
+    },
+    "totalAllocated": "Totale assegnato",
+    "allocatedSoFar": "Assegnato finora",
+    "allocatedSoFarHint": "Alcune buste non hanno ancora un importo noto, quindi questa cifra è parziale.",
+    "unallocated": "Non allocato",
+    "unallocatedUnknown": "Sconosciuto",
+    "overAllocatedHint": "Sovrassegnato: le buste sommano più delle tue entrate.",
+    "targetPercent": "{percent} delle entrate",
+    "targetAmount": "{amount} per periodo",
+    "carriedIn": "{amount} riportati",
+    "spent": "Speso",
+    "available": "Disponibile",
+    "overspent": "In eccesso di spesa",
+    "categories": "{count, plural, one {# categoria} other {# categorie}}",
+    "allocationUnknown": "Imposta le entrate di base del budget o aggiungi una categoria di entrata.",
+    "allocationUnknownAction": "Modifica budget",
+    "unassignedTitle": "Non assegnato",
+    "unassignedDescription": "{count, plural, one {# riga di categoria non è} other {# righe di categoria non sono}} in nessuna busta.",
+    "unassignedPlanned": "Pianificato",
+    "unassignedAction": "Assegnale"
+  },
+  "periodBuckets": {
+    "title": "Buste",
+    "name": "Busta",
+    "target": "Obiettivo",
+    "allocated": "Assegnato",
+    "allocatedUnknown": "Sconosciuto",
+    "carriedIn": "Riportato in entrata",
+    "spent": "Speso",
+    "carriedOut": "Riportato in uscita",
+    "targetPercent": "{percent} delle entrate",
+    "targetAmount": "{amount} per periodo"
   }
 }

@@ -1,3 +1,5 @@
+import { MortgageType } from "../../accounts/mortgage-type.util";
+
 export interface DemoAccount {
   key: string;
   type: string;
@@ -15,11 +17,12 @@ export interface DemoAccount {
   paymentAmount?: number;
   paymentFrequency?: string;
   // Mortgage-specific
-  isCanadianMortgage?: boolean;
-  isVariableRate?: boolean;
+  mortgageType?: MortgageType;
   termMonths?: number;
   amortizationMonths?: number;
   originalPrincipal?: number;
+  // The category a loan's interest is booked to (`interest_category_id`)
+  interestCategoryPath?: string;
 }
 
 export const demoAccounts: DemoAccount[] = [
@@ -87,11 +90,11 @@ export const demoAccounts: DemoAccount[] = [
     paymentFrequency: "MONTHLY",
     description: "Primary residence - 25 year amortization",
     institution: "Scotiabank",
-    isCanadianMortgage: true,
-    isVariableRate: false,
+    mortgageType: "CANADIAN_FIXED",
     termMonths: 60,
     amortizationMonths: 300,
     originalPrincipal: 400000.0,
+    interestCategoryPath: "Housing > Mortgage Interest",
   },
   {
     key: "rrsp",
@@ -130,6 +133,15 @@ export const demoAccounts: DemoAccount[] = [
     currency: "CAD",
     openingBalance: 150.0,
     description: "Cash on hand",
+  },
+  {
+    key: "crypto",
+    type: "CRYPTO",
+    name: "Bitcoin Wallet",
+    currency: "BTC",
+    openingBalance: 0,
+    description: "Hardware wallet",
+    isFavourite: false,
   },
   {
     key: "home",

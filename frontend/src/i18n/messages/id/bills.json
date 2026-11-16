@@ -16,12 +16,13 @@
     "chartUnavailable": "Grafik sementara tidak tersedia"
   },
   "viewTabs": {
-    "list": "Daftar",
-    "calendar": "Kalender",
+    "filterLabel": "Jenis jadwal",
     "filterAll": "Semua ({count})",
     "filterBills": "Tagihan ({count})",
     "filterDeposits": "Setoran ({count})",
-    "todayButton": "Hari Ini"
+    "chipBills": "Tagihan",
+    "chipDeposits": "Setoran",
+    "clearType": "Tampilkan semua jenis jadwal"
   },
   "form": {
     "titleNew": "Transaksi Terjadwal Baru",
@@ -53,7 +54,11 @@
     "totalOfAccounts": "Total Akun",
     "legendAriaLabel": "Garis prakiraan",
     "tooltipTransactionForAccount": "{name} ({account})",
-    "unavailableMissingRates": "Prakiraan ini tidak dapat ditampilkan dalam {displayCurrency}: tidak ada nilai tukar untuk {currencies}, dan saldo proyeksi dibangun dari setiap hari sebelumnya. Tambahkan kurs, atau pilih akun satu mata uang."
+    "unavailableMissingRates": "Prakiraan ini tidak dapat ditampilkan dalam {displayCurrency}: tidak ada nilai tukar untuk {currencies}, dan saldo proyeksi dibangun dari setiap hari sebelumnya. Tambahkan kurs, atau pilih akun satu mata uang.",
+    "untitledTransaction": "Transaksi",
+    "tooltipEstimated": "(perkiraan)",
+    "unavailableUnknownEstimates": "Perkiraan arus kas ini belum dapat ditampilkan: jumlah perkiraan salah satu tagihan di dalamnya tidak diketahui, dan saldo proyeksi dibangun dari setiap hari sebelumnya. Masukkan jumlah kejadian itu, atau nonaktifkan Perkirakan pada tagihan.",
+    "unknownEstimateItem": "{name}: {reason}"
   },
   "calendar": {
     "days": {
@@ -72,5 +77,11 @@
     "notFound": "Pembayaran terjadwal tidak ditemukan",
     "loadFailed": "Gagal memuat transaksi terjadwal",
     "overridesDeleteFailed": "Gagal menghapus penimpaan"
+  },
+  "toolbar": {
+    "showing": "Menampilkan <b>{shown}</b> dari <b>{total}</b> tagihan dan setoran",
+    "exportButton": "Ekspor",
+    "exportTitle": "Ekspor tagihan dan setoran ke CSV",
+    "exported": "{count, plural, one {Diekspor # jadwal} other {Diekspor # jadwal}}"
   }
 }

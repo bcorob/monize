@@ -14,15 +14,18 @@ vi.mock('@/lib/budgets', () => ({
   },
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (n: number) => `$${n.toFixed(2)}`,
-    formatCurrencyCompact: (n: number) => `$${Math.round(n)}`,
-    formatCurrencyAxis: (n: number) => `$${n}`,
-    defaultCurrency: 'USD',
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (n: number) => `$${n.toFixed(2)}`,
+      formatCurrencyCompact: (n: number) => `$${Math.round(n)}`,
+      formatCurrencyAxis: (n: number) => `$${n}`,
+      defaultCurrency: 'USD',
+    }),
+  };
+});
 vi.mock('@/lib/logger', () => ({
   createLogger: () => ({
     error: vi.fn(),
@@ -52,7 +55,7 @@ const makeSeries = (
   categoryId: id,
   categoryName: name,
   data: points.map((p, idx) => ({
-    month: `2025-0${idx + 1}`,
+    monthKey: `2025-0${idx + 1}`,
     budgeted: p.budgeted,
     actual: p.actual,
     variance: p.actual - p.budgeted,
@@ -177,26 +180,34 @@ describe('CategoryPerformanceReport', () => {
     await waitFor(() => {
       expect(screen.getByText('Apples')).toBeInTheDocument();
     });
+    // Every column label now names TWO controls -- the phone sort strip and the
+    // column header row, both built from one column record -- so a header is
+    // addressed by POSITION rather than by text. jsdom applies no media
+    // queries, so both rows are present; the desktop one is identified by the
+    // class that displays it, not by its index among the header rows, so
+    // reordering or removing a header row fails here rather than silently
+    // exercising the other one.
+    const columnHeaderRow = document.querySelector('thead tr.sm\\:table-row')!;
+    expect(columnHeaderRow).not.toBeNull();
+    const columnHeaderTh = (index: number) =>
+      columnHeaderRow.querySelectorAll('th')[index] as HTMLElement;
     // Default sort is avgPercent desc. Click name to switch field, which resets direction to asc.
-    const nameHeader = screen.getByText('Category');
-    const nameTh = nameHeader.closest('th')!;
-    await act(async () => { fireEvent.click(nameHeader); });
+    const nameTh = columnHeaderTh(0);
+    await act(async () => { fireEvent.click(nameTh); });
     // After switching to name, direction is asc (↑)
     await waitFor(() => {
       expect(nameTh.textContent).toContain('↑');
     });
     // Toggle to desc on the same field
-    await act(async () => { fireEvent.click(nameHeader); });
+    await act(async () => { fireEvent.click(nameTh); });
     await waitFor(() => {
       expect(nameTh.textContent).toContain('↓');
     });
     // Switch to variance (resets to asc)
-    const varianceHeader = screen.getByText('Total Variance');
-    await act(async () => { fireEvent.click(varianceHeader); });
+    await act(async () => { fireEvent.click(columnHeaderTh(4)); });
     // Switch to avgPercent (% Used)
-    const pctHeader = screen.getByText('% Used');
-    const pctTh = pctHeader.closest('th')!;
-    await act(async () => { fireEvent.click(pctHeader); });
+    const pctTh = columnHeaderTh(3);
+    await act(async () => { fireEvent.click(pctTh); });
     await waitFor(() => {
       expect(pctTh.textContent).toContain('↑');
     });
@@ -244,6 +255,40 @@ describe('CategoryPerformanceReport', () => {
     await waitFor(() => {
       expect(screen.getByText(/Failed to load report data/)).toBeInTheDocument();
     });
+  });
+
+  it('marks an average holding a partial month, on screen and in the export (issue #2155)', async () => {
+    mockGetAll.mockResolvedValue([makeBudget()]);
+    const partial = makeSeries('a', 'Apples', [
+      { budgeted: 100, actual: 110 },
+      { budgeted: 100, actual: 120 },
+    ]);
+    partial.data[1] = {
+      ...partial.data[1],
+      valuationComplete: false,
+      missingRatePairs: ['JPY->CAD'],
+    };
+    mockGetCategoryTrend.mockResolvedValue([
+      partial,
+      makeSeries('b', 'Bananas', [{ budgeted: 50, actual: 40 }]),
+    ]);
+    await renderReport();
+
+    const markers = await screen.findAllByTestId('partial-total');
+    expect(markers).toHaveLength(1);
+    expect(markers[0].closest('tr')).toHaveTextContent('Apples');
+    expect(screen.getByTestId('budget-trend-partial-note')).toHaveTextContent(
+      'No exchange rate for JPY->CAD: add one on the Currencies page.',
+    );
+
+    const exportBtn = await screen.findByTitle('Export PDF');
+    await act(async () => { fireEvent.click(exportBtn); });
+    await waitFor(() => expect(mockExportToPdf).toHaveBeenCalled());
+    const { headers, rows } = mockExportToPdf.mock.calls[0][0].tableData;
+    const actual = headers.indexOf('Avg Actual');
+    const byName = (name: string) => rows.find((row: string[]) => row.includes(name));
+    expect(byName('Apples')[actual]).toContain('(partial)');
+    expect(byName('Bananas')[actual]).not.toContain('(partial)');
   });
 
   it('exports to PDF when export button clicked', async () => {

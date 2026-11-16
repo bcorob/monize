@@ -34,6 +34,12 @@
     "dismiss": "Bỏ qua",
     "dismissAriaLabel": "Bỏ qua thông báo cập nhật"
   },
+  "jwtSecretBanner": {
+    "label": "JWT_SECRET yếu.",
+    "detail": "Đây là giá trị mẫu đã được công bố hoặc quá dễ đoán, nên token phiên có thể bị giả mạo. Hãy tạo một giá trị mạnh bằng <code>openssl rand -base64 32</code>. Việc thay đổi sẽ khiến mã từ ứng dụng xác thực không còn dùng được và quên các thiết bị đáng tin cậy: người dùng đăng nhập bằng mã dự phòng rồi thiết lập lại 2FA, còn với những ai không có mã dự phòng, bạn đặt lại 2FA trong <users>Quản lý người dùng</users>. Hãy đọc trước <code>docs/backend/modules-and-runtime.md</code> (Changing JWT_SECRET).",
+    "dismiss": "Bỏ qua",
+    "dismissAriaLabel": "Bỏ qua cảnh báo JWT_SECRET"
+  },
   "actionHistory": {
     "title": "Lịch sử hành động",
     "buttonAriaLabel": "Lịch sử hành động",
@@ -58,6 +64,7 @@
       "tag": "Thẻ nhãn",
       "account": "Tài khoản",
       "scheduled_transaction": "Đã lên lịch",
+      "scheduled_posting": "Đã lên lịch",
       "security": "Chứng khoán",
       "budget": "Ngân sách",
       "custom_report": "Báo cáo"
@@ -79,7 +86,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "Tái đầu tư lãi vốn dài hạn",
       "CAPITAL_GAIN_SHORT": "Lãi vốn ngắn hạn",
       "CAPITAL_GAIN_LONG": "Lãi vốn dài hạn",
-      "REDEEM": "Đáo hạn CD/trái phiếu"
+      "REDEEM": "Đáo hạn CD/trái phiếu",
+      "RETURN_OF_CAPITAL": "Hoàn vốn"
     },
     "descriptions": {
       "createdAccount": "Đã tạo tài khoản \"{name}\"",
@@ -99,6 +107,7 @@
       "deletedInvestmentReport": "Đã xóa báo cáo đầu tư \"{name}\"",
       "createdPayee": "Đã tạo người nhận \"{name}\"",
       "updatedPayee": "Đã cập nhật người nhận \"{name}\"",
+      "lookedUpPayeeContact": "Đã tra cứu thông tin liên hệ của người nhận \"{name}\"",
       "deletedPayee": "Đã xóa người nhận \"{name}\"",
       "createdReport": "Đã tạo báo cáo \"{name}\"",
       "updatedReport": "Đã cập nhật báo cáo \"{name}\"",
@@ -106,6 +115,7 @@
       "createdScheduledTransaction": "Đã tạo giao dịch định kỳ \"{name}\"",
       "updatedScheduledTransaction": "Đã cập nhật giao dịch định kỳ \"{name}\"",
       "deletedScheduledTransaction": "Đã xóa giao dịch định kỳ \"{name}\"",
+      "postedScheduledTransaction": "Đã đăng giao dịch định kỳ \"{name}\"",
       "createdSecurity": "Đã tạo chứng khoán \"{symbol}\"",
       "updatedSecurity": "Đã cập nhật chứng khoán \"{symbol}\"",
       "deletedSecurity": "Đã xóa chứng khoán \"{symbol}\"",
@@ -115,26 +125,23 @@
       "createdTransaction": "Đã tạo giao dịch {payee} {amount}",
       "updatedTransaction": "Đã cập nhật giao dịch {payee} {amount}",
       "deletedTransaction": "Đã xóa giao dịch {payee} {amount}",
+      "convertedToTransfer": "Đã chuyển đổi giao dịch {payee} {amount} thành chuyển khoản",
+      "convertedToTransaction": "Đã chuyển đổi chuyển khoản {payee} {amount} thành giao dịch",
       "bulkUpdatedTransactions": "Đã cập nhật hàng loạt {count, plural, one {# giao dịch} other {# giao dịch}}",
       "createdTransfer": "Đã tạo chuyển khoản {amount} từ {from} đến {to}",
       "createdInvestmentTransaction": "Đã tạo giao dịch {action}",
       "updatedInvestmentTransaction": "Đã cập nhật giao dịch {action}",
       "deletedInvestmentTransaction": "Đã xóa giao dịch {action}",
       "transferredSecurity": "Đã chuyển chứng khoán giữa các tài khoản",
-      "updatedSecurityTransfer": "Đã cập nhật chuyển khoản chứng khoán"
-    },
-    "timeAgo": {
-      "justNow": "vừa xong",
-      "minutes": "{count} phút trước",
-      "hours": "{count} giờ trước",
-      "days": "{count} ngày trước"
+      "updatedSecurityTransfer": "Đã cập nhật chuyển khoản chứng khoán",
+      "ranTransactionRule": "Đã chạy quy tắc “{name}” trên {count, plural, other {# giao dịch}}"
     },
     "undonePrefix": "Đã hoàn tác: {description}",
     "redonePrefix": "Đã làm lại: {description}"
   },
   "pageHeader": {
-    "helpAriaLabel": "Mở wiki Monize để được trợ giúp về phần này",
-    "helpTooltip": "Mở wiki Monize để được trợ giúp về phần này"
+    "helpAriaLabel": "Trợ giúp về trang này",
+    "helpTooltip": "Trợ giúp về trang này"
   },
   "bootSplash": {
     "loading": "Đang tải Monize",
@@ -145,5 +152,17 @@
     "title": "Không thể kết nối",
     "message": "Monize không thể kết nối đến máy chủ. Hãy kiểm tra kết nối của bạn và thử lại.",
     "retry": "Thử lại"
+  },
+  "pushBanner": {
+    "enableTitle": "Bật thông báo?",
+    "enableBody": "Monize có thể nhắc bạn về hóa đơn và hạn mức ngân sách trên thiết bị này, kể cả khi ứng dụng đã đóng. Trình duyệt sẽ hỏi quyền của bạn.",
+    "enableButton": "Bật",
+    "enabling": "Đang bật…",
+    "installIosTitle": "Hãy thêm Monize vào Màn hình chính trước.",
+    "installIosBody": "Trên iPhone và iPad, thông báo chỉ hoạt động từ ứng dụng đã cài. Chạm Chia sẻ, rồi Thêm vào Màn hình chính, và mở Monize từ đó.",
+    "blockedTitle": "Thông báo đang bị chặn với Monize.",
+    "blockedBody": "Hãy cho phép trong phần cài đặt trang của trình duyệt cho trang này. Monize không thể tự hỏi lại.",
+    "blockedIosBody": "Mở Cài đặt iOS, rồi Thông báo, rồi Monize, và cho phép ở đó. Nếu không thấy Monize trong danh sách, hãy xóa khỏi Màn hình chính và thêm lại.",
+    "dismiss": "Để sau"
   }
 }

@@ -150,10 +150,7 @@ export const MISSING_CONTEXT_MESSAGE =
  * importing it takes every suite in the repo down.
  */
 export type ScopedDbIsolation =
-  | "READ UNCOMMITTED"
-  | "READ COMMITTED"
-  | "REPEATABLE READ"
-  | "SERIALIZABLE";
+  "READ UNCOMMITTED" | "READ COMMITTED" | "REPEATABLE READ" | "SERIALIZABLE";
 
 export async function withScopedDb<T>(
   dataSource: DataSource,

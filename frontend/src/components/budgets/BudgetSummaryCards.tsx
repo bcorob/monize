@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { SummaryCard, SummaryIcons } from '@/components/ui/SummaryCard';
 
+import { useNumberFormat } from '@/hooks/useNumberFormat';
 interface BudgetSummaryCardsProps {
   totalBudgeted: number;
   totalSpent: number;
@@ -23,6 +24,7 @@ export function BudgetSummaryCards({
   formatCurrency,
 }: BudgetSummaryCardsProps) {
   const t = useTranslations('budgets');
+  const { formatPercentTrimmed } = useNumberFormat();
   const projectedSavings = totalIncome - totalSpent;
   const savingsLabel = projectedSavings >= 0 ? t('summaryCards.onTrack') : t('summaryCards.overBudget');
 
@@ -40,7 +42,7 @@ export function BudgetSummaryCards({
           <span>
             {formatCurrency(totalSpent)}
             <span className="text-sm font-normal text-gray-500 dark:text-gray-400 ml-1">
-              ({Math.round(percentUsed)}%)
+              ({formatPercentTrimmed(Math.round(percentUsed))})
             </span>
           </span>
         }

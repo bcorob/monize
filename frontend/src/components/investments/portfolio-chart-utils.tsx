@@ -3,111 +3,119 @@
 import type { ReactElement } from 'react';
 import { chartColors } from '@/lib/chart-colors';
 import { createLogger } from '@/lib/logger';
+import { useAuthStore } from '@/store/authStore';
+import {
+  clearAllIntradayCache,
+  INTRADAY_CACHE_PREFIX,
+} from '@/lib/identity-session-storage';
+import type { ChartDatePattern } from '@/lib/utils';
 
 const logger = createLogger('PortfolioValueChart');
 
 /**
- * Ranges that pull intraday bars from the live quote provider. 1W/1M move
+ * Ranges that pull intraday bars from the live quote provider. 1W/MTD/1M move
  * from daily-snapshot data to intraday bars when every holding's provider
  * supports it; otherwise the backend signals fallbackToDaily=true and we
  * switch back to the daily endpoint.
+ *
+ * Each is served on its own window, already shaped: the server trims the bars
+ * to the range and opens 1W, MTD and 1M on the close they are measured from
+ * (`PortfolioService.planOpeningClose`), so nothing here reshapes a series.
+ * `portfolio-chart-utils.test.ts` holds this set equal to the backend's
+ * `INTRADAY_RANGES`; a range in one and not the other is a 400 at runtime.
  */
-export const INTRADAY_RANGES = new Set(['1d', '1w', 'mtd', '1m']);
+export type IntradayRange = '1d' | '1w' | 'mtd' | '1m';
+
+export const INTRADAY_RANGES: ReadonlySet<string> = new Set<IntradayRange>([
+  '1d',
+  '1w',
+  'mtd',
+  '1m',
+]);
+
+export function isIntradayRange(range: string): range is IntradayRange {
+  return INTRADAY_RANGES.has(range);
+}
+
+type FormatChartDate = (date: string, pattern: ChartDatePattern) => string;
 
 /**
- * The range the backend serves a chart range from. MTD has no series of its
- * own -- its window is 1 to 31 days long, so it rides on the rolling 1M series
- * and the caller trims it with {@link trimIntradayPoints}. Every intraday
- * request goes through this: passing 'mtd' straight through is a 400 from the
- * `IntradayValueQueryDto` enum, which is the shape of failure that reads as an
- * outage rather than as a missing case.
+ * The label of one point of a month-end-sampled series
+ * (`sampling: 'monthEnd'` / `granularity: 'monthEnd'`).
+ *
+ * The two ends are the closes the period figures are measured between, so
+ * they are named by their day; the points in between are month-ends and are
+ * named by their month. Keyed off the point's own `iso`, never parsed back out
+ * of a localized label.
  */
-export function intradayRangeParam(range: string): '1d' | '1w' | '1m' {
-  return (range === 'mtd' ? '1m' : range) as '1d' | '1w' | '1m';
+export function sampledPointLabel(
+  iso: string,
+  index: number,
+  count: number,
+  formatChartDate: FormatChartDate,
+): string {
+  const boundary = index === 0 || index === count - 1;
+  return formatChartDate(iso, boundary ? 'MMM d, yyyy' : 'MMM yyyy');
 }
 
 /**
- * Shape an intraday series into the one the chart shows.
- *
- * Two adjustments, both keyed off the range and neither optional:
- *
- * - **MTD is trimmed to its window.** It is served a rolling month that reaches
- *   back into the previous one. `windowStart` is a YYYY-MM-DD date compared
- *   against the ISO timestamps' own prefix, so no parsing is involved.
- * - **1M opens at its first day's close** (see
- *   {@link trimIntradayToFirstDayClose}).
- *
- * They live in one function because every intraday render site calls this one,
- * and a shaping step applied at three of four call sites is a chart that
- * disagrees with itself depending on which code path drew it.
+ * The x-axis tick text for a month-end-sampled series, from the point's own
+ * date: the day at either end, then the month, shortening as the series grows.
  */
-export function trimIntradayPoints<T extends { timestamp: string }>(
-  points: T[],
-  range: string,
-  windowStart: string,
-): T[] {
-  const windowed =
-    range === 'mtd' && windowStart
-      ? points.filter((p) => p.timestamp >= windowStart)
-      : points;
-  return trimIntradayToFirstDayClose(windowed, range);
-}
-
-/**
- * Ranges whose intraday series opens at the *close* of its first day rather
- * than partway through it.
- *
- * A 1D chart starts at the day's open, which is what every quote source shows
- * and what `IntradayPoint.open` exists to supply. A 1M chart is a different
- * claim: the month is measured from a close, so opening on the first bar of the
- * day a month ago mixes a mid-session price into a series of closes and reports
- * a change that includes part of a session nobody asked about.
- *
- * 1W and MTD are absent deliberately -- both are measured from the prior close
- * already (`PRIOR_CLOSE_BASELINE_RANGES`), so their first bar is not the
- * baseline and collapsing it would only throw away detail.
- */
-const FIRST_DAY_CLOSE_RANGES = new Set(['1m']);
-
-/**
- * Drop the first day's intraday bars except its last, so the series begins at
- * that day's closing price.
- *
- * Left alone when the whole series is one day: collapsing it would leave a
- * single point and no chart. The last bar of a completed session is its close;
- * for a session still open it is the latest price, which is the best available
- * answer and the same one every other point in the series carries.
- */
-export function trimIntradayToFirstDayClose<T extends { timestamp: string }>(
-  points: T[],
-  range: string,
-): T[] {
-  if (!FIRST_DAY_CLOSE_RANGES.has(range) || points.length === 0) return points;
-  const firstDay = points[0].timestamp.slice(0, 10);
-  let lastOfFirstDay = 0;
-  while (
-    lastOfFirstDay + 1 < points.length &&
-    points[lastOfFirstDay + 1].timestamp.slice(0, 10) === firstDay
-  ) {
-    lastOfFirstDay += 1;
+export function sampledTickLabel(
+  iso: string,
+  index: number,
+  count: number,
+  formatChartDate: FormatChartDate,
+): string {
+  if (index === 0 || index === count - 1) {
+    return formatChartDate(iso, count > 18 ? 'MMM yy' : 'MMM d');
   }
-  // Every point is on the first day: one day of data, nothing to trim against.
-  if (lastOfFirstDay === points.length - 1) return points;
-  // Already the day's only bar. Returning the same reference keeps this a
-  // no-op for callers that compare identity to decide whether to re-render.
-  if (lastOfFirstDay === 0) return points;
-  return points.slice(lastOfFirstDay);
+  if (count > 36) return formatChartDate(iso, 'yyyy');
+  if (count > 18) return formatChartDate(iso, 'MMM yy');
+  return formatChartDate(iso, 'MMM');
 }
 
 /**
- * sessionStorage prefix for cached intraday responses. Per-tab, so the data
- * persists during a navigation but not across browser sessions.
+ * The ticks a long month-end-sampled series shows: one per January, read from
+ * each point's `iso` rather than from a label that only an English locale
+ * starts with "Jan ". `undefined` leaves a short series to the chart's own
+ * spacing.
  */
-export const INTRADAY_CACHE_PREFIX = 'monize-intraday|';
+export function monthEndAxisTicks(
+  points: ReadonlyArray<{ name: string; iso: string }>,
+): string[] | undefined {
+  if (points.length <= 36) return undefined;
+  return points
+    .filter(
+      (point, index) =>
+        index > 0 &&
+        index < points.length - 1 &&
+        point.iso.slice(5, 7) === '01',
+    )
+    .map((point) => point.name);
+}
+
+// The helpers live in `lib/identity-session-storage` so `authStore` can clear
+// them without importing this module; re-exported for the existing callers.
+export { clearAllIntradayCache, INTRADAY_CACHE_PREFIX };
+
+const ANONYMOUS_CACHE_SCOPE = `${INTRADAY_CACHE_PREFIX}anonymous|`;
 
 export interface IntradayCachePayload {
   fetchedAt: number;
-  points: Array<{ timestamp: string; value: number }>;
+  points: Array<{
+    timestamp: string;
+    value: number;
+    securitiesValue?: number;
+    fxComplete?: boolean;
+    pricesComplete?: boolean;
+    cashComplete?: boolean;
+    sessionClose?: true;
+  }>;
+  /** Response-level lists, so a hydrated chart can name what is missing. */
+  missingRatePairs?: string[];
+  unpricedSecurityIds?: string[];
   interval: '1m' | '2m' | '5m' | '15m' | '30m' | '60m' | '90m';
   currency: string;
   fallbackToDaily: boolean;
@@ -115,17 +123,27 @@ export interface IntradayCachePayload {
   failedSymbols: string[];
 }
 
+/**
+ * The key carries the signed-in user and the acting context, so two identities
+ * never share an entry (INV-SHARE-003). With nobody signed in the key is the
+ * anonymous scope, which is never written or read.
+ */
 export function buildIntradayCacheKey(
   range: string,
   accountIds: string[] | undefined,
   currency: string,
 ): string {
+  const { user, actingAsUserId } = useAuthStore.getState();
   const accts = (accountIds ?? []).slice().sort().join(',');
-  return `${INTRADAY_CACHE_PREFIX}${range}|${accts}|${currency}`;
+  const scope = user?.id
+    ? `${INTRADAY_CACHE_PREFIX}u:${user.id}|a:${actingAsUserId ?? 'self'}|`
+    : ANONYMOUS_CACHE_SCOPE;
+  return `${scope}${range}|${accts}|${currency}`;
 }
 
 export function readIntradayCache(key: string): IntradayCachePayload | null {
   if (typeof window === 'undefined') return null;
+  if (key.startsWith(ANONYMOUS_CACHE_SCOPE)) return null;
   try {
     const raw = window.sessionStorage.getItem(key);
     if (!raw) return null;
@@ -140,25 +158,11 @@ export function writeIntradayCache(
   payload: IntradayCachePayload,
 ): void {
   if (typeof window === 'undefined') return;
+  if (key.startsWith(ANONYMOUS_CACHE_SCOPE)) return;
   try {
     window.sessionStorage.setItem(key, JSON.stringify(payload));
   } catch (error) {
     logger.warn('Failed to write intraday cache:', error);
-  }
-}
-
-export function clearAllIntradayCache(): void {
-  if (typeof window === 'undefined') return;
-  try {
-    const ss = window.sessionStorage;
-    const keys: string[] = [];
-    for (let i = 0; i < ss.length; i++) {
-      const k = ss.key(i);
-      if (k && k.startsWith(INTRADAY_CACHE_PREFIX)) keys.push(k);
-    }
-    keys.forEach((k) => ss.removeItem(k));
-  } catch (error) {
-    logger.warn('Failed to clear intraday cache:', error);
   }
 }
 

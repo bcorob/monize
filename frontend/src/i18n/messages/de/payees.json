@@ -8,9 +8,11 @@
     "autoMergePayees": "Zahlungsempfänger automatisch zusammenführen",
     "newPayee": "+ Neuer Zahlungsempfänger",
     "searchPlaceholder": "Zahlungsempfänger suchen...",
+    "statusFilterLabel": "Status",
     "statusAll": "Alle ({count})",
     "statusActive": "Aktiv ({count})",
     "statusInactive": "Inaktiv ({count})",
+    "categoryFilterLabel": "Standardkategorie",
     "categoryFilterAll": "Alle Zahlungsempfänger ({count})",
     "categoryFilterNoCategory": "Ohne Standardkategorie ({count})",
     "categoryFilterUncategorized": "Unkat. Transaktionen ({count})",
@@ -34,7 +36,8 @@
       "inactive": "Inaktiv",
       "withoutCategory": "Ohne Kategorie"
     },
-    "applyDefaultCategories": "Standardkategorien zuweisen"
+    "applyDefaultCategories": "Standardkategorien zuweisen",
+    "lookupSettings": "Einstellungen für Zahlungsempfänger-Suche"
   },
   "list": {
     "columns": {
@@ -82,13 +85,27 @@
     "categoryLabel": "Standardkategorie",
     "notesLabel": "Notizen (optional)",
     "websiteLabel": "Website",
+    "addressLabel": "Adresse",
+    "emailLabel": "E-Mail",
+    "phoneLabel": "Telefon",
     "submitCreate": "Zahlungsempfänger erstellen",
     "submitUpdate": "Zahlungsempfänger aktualisieren",
     "applyCategoryLabel": "Diese Kategorie auf vorhandene Transaktionen anwenden",
     "applyCategoryNone": "Vorhandene Transaktionen nicht ändern",
     "applyCategoryUncategorized": "Nur Transaktionen ohne Kategorie ({count})",
     "applyCategoryAll": "Alle Transaktionen ({count})",
-    "applyCategoryHelp": "Überweisungen und aufgeteilte Transaktionen werden nie geändert."
+    "applyCategoryHelp": "Überweisungen und aufgeteilte Transaktionen werden nie geändert.",
+    "lookup": {
+      "button": "Angaben nachschlagen",
+      "searching": "Kontaktangaben werden gesucht...",
+      "suggested": "Vorschlag aus der Suche:",
+      "replaced": "Von der Suche ersetzt:",
+      "clear": "Änderungen der Suche rückgängig machen",
+      "nothingFound": "Für diesen Namen wurden keine öffentlichen Kontaktangaben gefunden.",
+      "noProvider": "Richte in den <link>Einstellungen zur Zahlungsempfänger-Suche</link> eine Quelle ein, um Kontaktdaten zu finden.",
+      "failed": "Die Suche konnte nicht abgeschlossen werden. Versuchen Sie es später erneut.",
+      "quotaExceeded": "Die Google-Places-Abfragen dieses Monats sind aufgebraucht. Erhöhe das Limit in den <link>Einstellungen zur Zahlungsempfänger-Suche</link> oder warte bis zum nächsten Monat."
+    }
   },
   "merge": {
     "title": "Zahlungsempfänger zusammenführen",
@@ -112,7 +129,6 @@
   },
   "categoryAutoAssign": {
     "title": "Standardkategorien automatisch zuweisen",
-    "howItWorksTitle": "Funktionsweise",
     "howItWorksBody": "Diese Funktion analysiert Ihren Buchungsverlauf, um Standardkategorien für Zahlungsempfänger vorzuschlagen. Sie prüft, welche Kategorie am häufigsten für jeden Zahlungsempfänger verwendet wird, und schlägt vor, diese als Standardkategorie für zukünftige Buchungen festzulegen. Sie können die Standardkategorie jederzeit überschreiben.",
     "minTransactionsLabel": "Mindestanzahl Buchungen: {count}",
     "minTransactionsHelp": "Nur Zahlungsempfänger mit mindestens so vielen Buchungen berücksichtigen",
@@ -133,6 +149,7 @@
       "line2": "Bitte die Einstellungen oben anpassen."
     },
     "columns": {
+      "assign": "Zuweisen",
       "payee": "Zahlungsempfänger",
       "suggestedCategory": "Vorgeschlagene Kategorie",
       "match": "Übereinstimmung"
@@ -150,7 +167,6 @@
   },
   "autoMerge": {
     "title": "Zahlungsempfänger automatisch zusammenführen",
-    "howItWorksTitle": "So funktioniert es",
     "howItWorksBody": "Diese Funktion durchsucht Ihre Zahlungsempfänger und gruppiert Varianten, bei denen ein Name einen anderen erweitert - zum Beispiel bauen \"Lidl\", \"LIDL sp. z o.o.\" und \"LIDL WARSZAWA 0421\" alle auf \"Lidl\" auf. Jede Gruppe wird zu einem einzigen Haupt-Zahlungsempfänger zusammengeführt, und ein Platzhalter-Alias (etwa \"*LIDL*\") wird erstellt, damit künftige Importe automatisch zugeordnet werden. Zahlungsempfänger, die nur ein gemeinsames Wort teilen (wie \"Royal Electric\" und \"Royal City Nursery\"), bleiben getrennt. Prüfen und passen Sie jede Gruppe vor dem Anwenden an.",
     "backupRecommendation": "Empfohlen: Erstellen Sie ein <link>Backup</link>, bevor Sie Änderungen vornehmen.",
     "minGroupSizeLabel": "Mindestgruppengröße: {count}",
@@ -210,7 +226,6 @@
   },
   "deactivateUnused": {
     "title": "Ungenutzte Zahlungsempfänger deaktivieren",
-    "howItWorksTitle": "Funktionsweise",
     "howItWorksBody": "Diese Funktion sucht selten genutzte Zahlungsempfänger und deaktiviert sie. Deaktivierte Zahlungsempfänger erscheinen nicht in Auswahlfeldern beim Erstellen von Buchungen, ihre historischen Buchungen bleiben jedoch erhalten. Sie können einen Zahlungsempfänger jederzeit in der Zahlungsempfängerliste reaktivieren.",
     "maxTransactionsLabel": "{count, plural, one {# oder weniger Buchung} other {# oder weniger Buchungen}}",
     "maxTransactionsHelp": "Nur Zahlungsempfänger mit dieser Anzahl Buchungen oder weniger einbeziehen",
@@ -228,6 +243,7 @@
       "line2": "Bitte die Einstellungen oben anpassen."
     },
     "columns": {
+      "deactivate": "Deaktivieren",
       "payee": "Zahlungsempfänger",
       "transactions": "Buchungen",
       "lastUsed": "Zuletzt verwendet"
@@ -243,7 +259,7 @@
     }
   },
   "reactivate": {
-    "title": "Zahlungsempfänger reaktivieren?",
+    "title": "Zahlungsempfänger reaktivieren",
     "message": "Der Zahlungsempfänger \"{name}\" wurde zuvor deaktiviert. Möchten Sie ihn reaktivieren, damit er wieder in Auswahlfeldern erscheint?",
     "keepInactiveButton": "Nein, inaktiv lassen",
     "reactivateButton": "Reaktivieren",
@@ -252,7 +268,7 @@
   "aliases": {
     "heading": "Aliase",
     "description": "Aliase ordnen importierte Zahlungsempfängernamen diesem Zahlungsempfänger zu. Verwenden Sie * als Platzhalter (z. B. \"STARBUCKS*\"). Groß-/Kleinschreibung wird ignoriert.",
-    "loading": "Wird geladen...",
+    "loading": "Aliase werden geladen...",
     "noAliases": "Keine Aliase konfiguriert",
     "removeTitle": "Alias entfernen",
     "removeButton": "Entfernen",
@@ -270,7 +286,10 @@
   },
   "selectCategoryPlaceholder": "Kategorie auswählen...",
   "validation": {
-    "nameRequired": "Name des Zahlungsempfängers ist erforderlich"
+    "nameRequired": "Name des Zahlungsempfängers ist erforderlich",
+    "emailInvalid": "Geben Sie eine gültige E-Mail-Adresse ein",
+    "phoneInvalid": "Geben Sie eine gültige Telefonnummer ein",
+    "phoneNeedsCountryCode": "Ländervorwahl hinzufügen, zum Beispiel +1 206 448 8762"
   },
   "defaultCategoryBackfill": {
     "allConfirmTitle": "Standardkategorien zuweisen?",

@@ -1,23 +1,56 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { ScheduledTransaction, ScheduledTransactionOverride, FrequencyType } from '@/types/scheduled-transaction';
+import { HelpLink } from '@/components/help/HelpLink';
+import {
+  ScheduledTransaction,
+  ScheduledTransactionOverride,
+  LoanOccurrence,
+  LoanOccurrencesProjection,
+  SelectedLoanOccurrence,
+} from '@/types/scheduled-transaction';
 import { useDateFormat } from '@/hooks/useDateFormat';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { parseLocalDate } from '@/lib/utils';
-import { advanceByFrequency, isOneTime } from '@/lib/frequency';
+import { advanceSchedule, isOneTime, SteppableSchedule } from '@/lib/frequency';
 import { Modal } from '@/components/ui/Modal';
+import { LOAN_OCCURRENCES_MAX_COUNT, scheduledTransactionsApi } from '@/lib/scheduled-transactions';
+import { isLoanBillCandidate } from '@/lib/loan-occurrence';
+import { createLogger } from '@/lib/logger';
+import { useLoanOccurrenceMissingText } from './useLoanOccurrenceMissingText';
+import { estimatedOccurrenceAmount, occurrenceFollowsEstimate } from '@/lib/scheduled-effective-amount';
+
+const logger = createLogger('OccurrenceDatePicker');
 
 interface OccurrenceDatePickerProps {
   isOpen: boolean;
   scheduledTransaction: ScheduledTransaction;
   overrides?: ScheduledTransactionOverride[];
-  onSelect: (date: string) => void;
+  /**
+   * Called with the chosen date and, for a loan bill the server prices per
+   * occurrence, that occurrence's projection, so the editor opens on its own
+   * figures rather than the template's.
+   */
+  onSelect: (date: string, loanOccurrence?: SelectedLoanOccurrence) => void;
   onClose: () => void;
 }
 
-function calculateNextDates(startDate: string, frequency: FrequencyType, count: number): string[] {
+/**
+ * Where the per-occurrence amounts of a loan bill stand. `none`: the bill is
+ * not one the loan pricing re-prices, and the picker lists dates only.
+ */
+type LoanAmountsState =
+  | { kind: 'none' }
+  | { kind: 'loading' }
+  | { kind: 'failed' }
+  | { kind: 'priced'; projection: LoanOccurrencesProjection };
+
+function calculateNextDates(
+  startDate: string,
+  schedule: SteppableSchedule,
+  count: number,
+): string[] {
   const dates: string[] = [];
   let currentDate = parseLocalDate(startDate);
 
@@ -29,8 +62,8 @@ function calculateNextDates(startDate: string, frequency: FrequencyType, count: 
     dates.push(`${year}-${month}-${day}`);
 
     // One-time schedules have no next occurrence.
-    if (isOneTime(frequency)) return dates;
-    currentDate = advanceByFrequency(currentDate, frequency);
+    if (isOneTime(schedule)) return dates;
+    currentDate = advanceSchedule(currentDate, schedule);
   }
 
   return dates;
@@ -48,6 +81,7 @@ export function OccurrenceDatePicker({
   const { formatDate } = useDateFormat();
 
   const { formatCurrency } = useNumberFormat();
+  const missingText = useLoanOccurrenceMissingText();
 
   // Create maps for O(1) lookups
   // originalDateToOverrideDate: maps original calculated dates to their override dates
@@ -71,10 +105,20 @@ export function OccurrenceDatePicker({
     const count = scheduledTransaction.occurrencesRemaining ?? 5;
     return calculateNextDates(
       scheduledTransaction.nextDueDate,
-      scheduledTransaction.frequency,
-      count
+      {
+        frequency: scheduledTransaction.frequency,
+        startDate: scheduledTransaction.startDate,
+        customRecurrence: scheduledTransaction.customRecurrence,
+      },
+      count,
     );
-  }, [scheduledTransaction.nextDueDate, scheduledTransaction.frequency, scheduledTransaction.occurrencesRemaining]);
+  }, [
+    scheduledTransaction.nextDueDate,
+    scheduledTransaction.startDate,
+    scheduledTransaction.frequency,
+    scheduledTransaction.customRecurrence,
+    scheduledTransaction.occurrencesRemaining,
+  ]);
 
   // Build the final list of dates to display:
   // - For each calculated date, if it has an override, show the override date instead
@@ -106,40 +150,139 @@ export function OccurrenceDatePicker({
     return resultDates.sort();
   }, [calculatedDates, originalDateToOverrideDate, overrides]);
 
+  // A loan bill's occurrences are priced by the server, each at its own due
+  // date (INV-LOAN-009): the template's amount is the next installment's at
+  // most. The payload is kept with the request that produced it, and a retry
+  // is a new request, so neither a late answer nor an earlier failure is read
+  // as the current one.
+  const isLoanCandidate = isLoanBillCandidate(scheduledTransaction);
+  const requestCount = Math.min(Math.max(nextDates.length, 1), LOAN_OCCURRENCES_MAX_COUNT);
+  const [attempt, setAttempt] = useState(0);
+  const requestKey =
+    isOpen && isLoanCandidate ? `${scheduledTransaction.id}:${requestCount}:${attempt}` : null;
+  const [loaded, setLoaded] = useState<{ key: string; projection: LoanOccurrencesProjection } | null>(null);
+  const [failedKey, setFailedKey] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!requestKey) return;
+    let cancelled = false;
+    scheduledTransactionsApi
+      .getLoanOccurrences(scheduledTransaction.id, requestCount)
+      .then((projection) => {
+        if (!cancelled) setLoaded({ key: requestKey, projection });
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        logger.error('Failed to load loan occurrences:', error);
+        setFailedKey(requestKey);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [requestKey, scheduledTransaction.id, requestCount]);
+
+  const loanAmounts: LoanAmountsState = !requestKey
+    ? { kind: 'none' }
+    : loaded?.key === requestKey
+      ? loaded.projection.status === 'priced'
+        ? { kind: 'priced', projection: loaded.projection }
+        : { kind: 'none' }
+      : failedKey === requestKey
+        ? { kind: 'failed' }
+        : { kind: 'loading' };
+
+  // The projection's rows by the date each falls on, which is the date this
+  // list shows (an override's date when one moved the occurrence).
+  const pricedProjection = loanAmounts.kind === 'priced' ? loanAmounts.projection : null;
+  const occurrenceByDueDate = useMemo(() => {
+    const byDate = new Map<string, LoanOccurrence>();
+    for (const occurrence of pricedProjection?.occurrences ?? []) {
+      byDate.set(occurrence.dueDate, occurrence);
+    }
+    return byDate;
+  }, [pricedProjection]);
+
   // Track which date is the next due date
   const nextDueDate = scheduledTransaction.nextDueDate.split('T')[0];
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} maxWidth="sm" className="p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-          {t('occurrencePicker.title')}
-        </h3>
-        <button
-          onClick={onClose}
-          className="text-gray-400 hover:text-gray-500 dark:hover:text-gray-300"
-        >
-          <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
-      </div>
-
+    // Titled through Modal, so the dialog is named by its heading; there is no
+    // X, and the Cancel below is rendered in every state (loading and a failed
+    // loan projection included).
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidth="sm"
+      className="p-6"
+      title={t('occurrencePicker.title')}
+    >
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-        {t('occurrencePicker.description', { name: scheduledTransaction.name })}
+        {t.rich('occurrencePicker.description', {
+          name: scheduledTransaction.name,
+          guide: (chunks) => (
+            <HelpLink link="billOccurrenceOverride" className="font-medium underline hover:text-gray-700 dark:hover:text-gray-200">
+              {chunks}
+            </HelpLink>
+          ),
+        })}
       </p>
 
+      {loanAmounts.kind === 'loading' && (
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4" role="status">
+          {t('loanOccurrence.loading')}
+        </p>
+      )}
+      {loanAmounts.kind === 'failed' && (
+        <div
+          className="flex flex-wrap items-center gap-2 text-sm text-red-700 dark:text-red-300 mb-4"
+          role="alert"
+        >
+          <span>{t('loanOccurrence.loadFailed')}</span>
+          <button
+            type="button"
+            onClick={() => setAttempt((n) => n + 1)}
+            className="text-blue-600 hover:underline dark:text-blue-400"
+          >
+            {t('loanOccurrence.retry')}
+          </button>
+        </div>
+      )}
+
       <div className="space-y-2">
-        {nextDates.map((date) => {
+        {nextDates.map((date, index) => {
+          const occurrence = pricedProjection ? occurrenceByDueDate.get(date) : undefined;
+          // The payment changes where this occurrence's known amount differs
+          // from the one listed before it: the dated payment of a rate change
+          // first applying (INV-LOAN-009), or an override's amount.
+          const previous = index > 0 ? occurrenceByDueDate.get(nextDates[index - 1]) : undefined;
+          const paymentChanges =
+            occurrence?.amount != null &&
+            previous?.amount != null &&
+            occurrence.amount !== previous.amount;
           const hasOverride = overrideDateSet.has(date);
           const isNextDue = date === nextDueDate;
           const override = hasOverride ? overrideByDate.get(date) : undefined;
+          // Each month's estimate, where this occurrence follows it (issue
+          // #2096): the figure the forecast projects for the date it falls on.
+          const estimate = occurrenceFollowsEstimate(scheduledTransaction, override)
+            ? estimatedOccurrenceAmount(scheduledTransaction, override?.overrideDate ?? date)
+            : undefined;
           const changes: string[] = [];
           if (override) {
             if (override.originalDate !== override.overrideDate) {
               changes.push(t('occurrencePicker.dateMoved', { date: formatDate(override.originalDate) }));
             }
-            if (override.amount != null && Number(override.amount) !== Number(scheduledTransaction.amount)) {
+            // A priced loan occurrence shows its own amount below, override
+            // included; comparing the override with the template would set it
+            // against a figure the occurrence never had.
+            // An estimated schedule's stored amount is only a snapshot, so any
+            // amount an override states is a change (issue #2096).
+            if (
+              !pricedProjection &&
+              override.amount != null &&
+              (scheduledTransaction.amountIsEstimated === true ||
+                Number(override.amount) !== Number(scheduledTransaction.amount))
+            ) {
               changes.push(t('occurrencePicker.amountChange', { amount: formatCurrency(Math.abs(override.amount), scheduledTransaction.currencyCode) }));
             }
             if (override.category && override.categoryId !== scheduledTransaction.categoryId) {
@@ -155,18 +298,28 @@ export function OccurrenceDatePicker({
           return (
             <button
               key={date}
-              onClick={() => onSelect(date)}
+              onClick={() =>
+                occurrence && pricedProjection
+                  ? onSelect(date, { loanAccountId: pricedProjection.loanAccountId, occurrence })
+                  : onSelect(date)
+              }
+              disabled={loanAmounts.kind === 'loading'}
               className={`w-full px-4 py-3 text-left rounded-lg border transition-colors ${
                 hasOverride
                   ? 'border-purple-300 dark:border-purple-600 bg-purple-50 dark:bg-purple-900/20'
                   : 'border-gray-200 dark:border-gray-700'
-              } hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-purple-300 dark:hover:border-purple-600`}
+              } hover:bg-gray-50 dark:hover:bg-gray-700 hover:border-purple-300 dark:hover:border-purple-600 disabled:cursor-wait disabled:opacity-60`}
             >
               <div className="flex items-center justify-between">
                 <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
                   {formatDate(date)}
                 </span>
                 <div className="flex items-center space-x-2">
+                  {paymentChanges && (
+                    <span className="text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200">
+                      {t('loanOccurrence.paymentChangesBadge')}
+                    </span>
+                  )}
                   {hasOverride && (
                     <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
                       {t('occurrencePicker.modifiedBadge')}
@@ -179,6 +332,37 @@ export function OccurrenceDatePicker({
                   )}
                 </div>
               </div>
+              {pricedProjection && (
+                <div className="mt-1 text-sm">
+                  {occurrence?.amount != null ? (
+                    <span className="text-gray-900 dark:text-gray-100">
+                      {formatCurrency(occurrence.amount, pricedProjection.currencyCode)}
+                    </span>
+                  ) : occurrence ? (
+                    <>
+                      <span className="text-gray-700 dark:text-gray-300">
+                        {t('loanOccurrence.amountUnknown')}
+                      </span>
+                      <span className="block text-xs text-gray-500 dark:text-gray-400">
+                        {missingText(occurrence.missing)}
+                      </span>
+                    </>
+                  ) : (
+                    <span className="text-xs text-gray-500 dark:text-gray-400">
+                      {t('loanOccurrence.notProjected')}
+                    </span>
+                  )}
+                </div>
+              )}
+              {estimate !== undefined && (
+                <div className="mt-1 text-sm text-gray-700 dark:text-gray-300">
+                  {estimate === null
+                    ? t('occurrencePicker.estimateUnknown')
+                    : t('occurrencePicker.estimatedAmount', {
+                        amount: formatCurrency(estimate, scheduledTransaction.currencyCode),
+                      })}
+                </div>
+              )}
               {changes.length > 0 && (
                 <div className="mt-1.5 text-xs text-purple-700 dark:text-purple-300 space-y-0.5">
                   {changes.map((change) => (

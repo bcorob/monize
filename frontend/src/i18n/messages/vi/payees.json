@@ -8,9 +8,11 @@
     "autoMergePayees": "Tự động gộp người nhận",
     "newPayee": "+ Người nhận mới",
     "searchPlaceholder": "Tìm kiếm người nhận...",
+    "statusFilterLabel": "Trạng thái",
     "statusAll": "Tất cả ({count})",
     "statusActive": "Đang hoạt động ({count})",
     "statusInactive": "Không hoạt động ({count})",
+    "categoryFilterLabel": "Danh mục mặc định",
     "categoryFilterAll": "Tất cả người nhận ({count})",
     "categoryFilterNoCategory": "Không có danh mục mặc định ({count})",
     "categoryFilterUncategorized": "Giao dịch chưa phân loại ({count})",
@@ -34,7 +36,8 @@
       "inactive": "Không hoạt động",
       "withoutCategory": "Không có danh mục"
     },
-    "applyDefaultCategories": "Áp dụng danh mục mặc định"
+    "applyDefaultCategories": "Áp dụng danh mục mặc định",
+    "lookupSettings": "Cài đặt tra cứu người nhận"
   },
   "list": {
     "columns": {
@@ -82,13 +85,27 @@
     "categoryLabel": "Danh mục mặc định",
     "notesLabel": "Ghi chú (tùy chọn)",
     "websiteLabel": "Trang web",
+    "addressLabel": "Địa chỉ",
+    "emailLabel": "Email",
+    "phoneLabel": "Điện thoại",
     "submitCreate": "Tạo người nhận",
     "submitUpdate": "Cập nhật người nhận",
     "applyCategoryLabel": "Áp dụng danh mục này cho các giao dịch hiện có",
     "applyCategoryNone": "Không thay đổi giao dịch hiện có",
     "applyCategoryUncategorized": "Chỉ các giao dịch chưa có danh mục ({count})",
     "applyCategoryAll": "Tất cả giao dịch ({count})",
-    "applyCategoryHelp": "Chuyển khoản và giao dịch chia nhỏ không bao giờ bị thay đổi."
+    "applyCategoryHelp": "Chuyển khoản và giao dịch chia nhỏ không bao giờ bị thay đổi.",
+    "lookup": {
+      "button": "Tra cứu thông tin",
+      "searching": "Đang tra cứu thông tin liên hệ...",
+      "suggested": "Được đề xuất từ tra cứu:",
+      "replaced": "Đã thay thế bởi tra cứu:",
+      "clear": "Hoàn tác thay đổi của tra cứu",
+      "nothingFound": "Không tìm thấy thông tin liên hệ công khai cho tên này.",
+      "noProvider": "Thiết lập một nguồn trong <link>cài đặt tra cứu người nhận</link> để tìm thông tin liên hệ.",
+      "failed": "Không thể hoàn tất tra cứu. Vui lòng thử lại sau.",
+      "quotaExceeded": "Đã dùng hết lượt tra cứu Google Places trong tháng này. Hãy tăng giới hạn trong <link>cài đặt tra cứu người nhận</link>, hoặc chờ sang tháng sau."
+    }
   },
   "merge": {
     "title": "Gộp người nhận",
@@ -112,7 +129,6 @@
   },
   "categoryAutoAssign": {
     "title": "Tự động gán danh mục mặc định",
-    "howItWorksTitle": "Cách hoạt động",
     "howItWorksBody": "Tính năng này phân tích lịch sử giao dịch của bạn để đề xuất danh mục mặc định cho người nhận. Nó xem xét danh mục nào được sử dụng phổ biến nhất cho từng người nhận và đề xuất gán danh mục đó làm danh mục mặc định cho các giao dịch trong tương lai. Bạn luôn có thể thay thế danh mục mặc định nếu cần.",
     "minTransactionsLabel": "Số giao dịch tối thiểu: {count}",
     "minTransactionsHelp": "Chỉ xem xét người nhận có ít nhất số giao dịch này",
@@ -133,6 +149,7 @@
       "line2": "Hãy thử điều chỉnh các cài đặt ở trên."
     },
     "columns": {
+      "assign": "Gán",
       "payee": "Người nhận",
       "suggestedCategory": "Danh mục đề xuất",
       "match": "Khớp"
@@ -150,7 +167,6 @@
   },
   "autoMerge": {
     "title": "Tự động gộp người nhận",
-    "howItWorksTitle": "Cách hoạt động",
     "howItWorksBody": "Tính năng này quét người nhận của bạn và nhóm các biến thể mà một tên mở rộng tên khác - ví dụ \"Lidl\", \"LIDL sp. z o.o.\" và \"LIDL WARSZAWA 0421\" đều xây dựng trên \"Lidl\". Mỗi nhóm được gộp thành một người nhận chuẩn, và một bí danh ký tự đại diện (chẳng hạn \"*LIDL*\") được tạo để các lần nhập trong tương lai được khớp tự động. Những người nhận chỉ chia sẻ một từ chung (như \"Royal Electric\" và \"Royal City Nursery\") được giữ riêng. Hãy xem xét và điều chỉnh từng nhóm trước khi áp dụng.",
     "backupRecommendation": "Khuyến nghị: tạo một <link>bản sao lưu</link> trước khi thực hiện thay đổi.",
     "minGroupSizeLabel": "Kích thước nhóm tối thiểu: {count}",
@@ -210,7 +226,6 @@
   },
   "deactivateUnused": {
     "title": "Vô hiệu hóa người nhận không sử dụng",
-    "howItWorksTitle": "Cách hoạt động",
     "howItWorksBody": "Tính năng này tìm người nhận ít được sử dụng và vô hiệu hóa họ. Người nhận bị vô hiệu hóa sẽ không xuất hiện trong danh sách người nhận khi tạo giao dịch, nhưng các giao dịch lịch sử của họ được giữ nguyên. Bạn có thể kích hoạt lại người nhận bất cứ lúc nào từ danh sách người nhận.",
     "maxTransactionsLabel": "{count, plural, one {# giao dịch trở xuống} other {# giao dịch trở xuống}}",
     "maxTransactionsHelp": "Chỉ bao gồm người nhận có số giao dịch này hoặc ít hơn",
@@ -228,6 +243,7 @@
       "line2": "Hãy thử điều chỉnh các cài đặt ở trên."
     },
     "columns": {
+      "deactivate": "Vô hiệu hóa",
       "payee": "Người nhận",
       "transactions": "Giao dịch",
       "lastUsed": "Lần dùng cuối"
@@ -243,7 +259,7 @@
     }
   },
   "reactivate": {
-    "title": "Kích hoạt lại người nhận?",
+    "title": "Kích hoạt lại người nhận",
     "message": "Người nhận \"{name}\" trước đây đã bị vô hiệu hóa. Bạn có muốn kích hoạt lại để nó xuất hiện trong danh sách người nhận không?",
     "keepInactiveButton": "Không, giữ không hoạt động",
     "reactivateButton": "Kích hoạt lại",
@@ -252,7 +268,7 @@
   "aliases": {
     "heading": "Bí danh",
     "description": "Bí danh ánh xạ tên người nhận đã nhập sang người nhận này. Sử dụng * làm ký tự đại diện (ví dụ: \"STARBUCKS*\"). Không phân biệt chữ hoa/thường.",
-    "loading": "Đang tải...",
+    "loading": "Đang tải bí danh...",
     "noAliases": "Chưa có bí danh nào được cấu hình",
     "removeTitle": "Xóa bí danh",
     "removeButton": "Xóa",
@@ -270,7 +286,10 @@
   },
   "selectCategoryPlaceholder": "Chọn danh mục...",
   "validation": {
-    "nameRequired": "Tên người nhận là bắt buộc"
+    "nameRequired": "Tên người nhận là bắt buộc",
+    "emailInvalid": "Nhập địa chỉ email hợp lệ",
+    "phoneInvalid": "Nhập số điện thoại hợp lệ",
+    "phoneNeedsCountryCode": "Hãy thêm mã quốc gia, ví dụ +1 206 448 8762"
   },
   "defaultCategoryBackfill": {
     "allConfirmTitle": "Áp dụng danh mục mặc định?",

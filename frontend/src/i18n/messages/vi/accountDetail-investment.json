@@ -5,6 +5,8 @@
     "dividendsInterest": "Cổ tức & Lãi",
     "realizedGains": "Lãi đã thực hiện",
     "ytd": "Từ đầu năm đến nay",
+    "realizedKnownPart": "Phần đã biết: {amount}",
+    "realizedUnknownReason": "Không thể tính khoản lãi/lỗ này: vị thế có cổ phiếu được thêm vào mà không có chi phí, nên không biết chi phí của số cổ phiếu đã bán. Hãy mở giao dịch đã thêm chúng và nhập giá.",
     "empty": "Không có thu nhập đầu tư nào trong năm nay"
   },
   "register": {

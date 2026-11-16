@@ -17,6 +17,7 @@ import {
 import { UnknownAmount } from '@/components/ui/UnknownAmount';
 import { isComplete } from '@/lib/currency-total';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
+import { OVERDUE_CARRY_DAYS } from '@/lib/forecast';
 
 interface BudgetUpcomingBillsProps {
   scheduledTransactions: ScheduledTransaction[];
@@ -77,7 +78,10 @@ export function BudgetUpcomingBills({
         const dueDate = parseISO(nextOccurrenceDueDate(st));
         const daysUntil = differenceInDays(dueDate, today);
         const daysUntilEnd = differenceInDays(endDate, dueDate);
-        return daysUntil >= 0 && daysUntilEnd >= 0;
+        // A bill due in the last `OVERDUE_CARRY_DAYS` and neither posted nor
+        // skipped is still owed (discussion #1784): the server's safe-to-spend
+        // counts it, and leaving it out here made this panel's figure larger.
+        return daysUntil >= -OVERDUE_CARRY_DAYS && daysUntilEnd >= 0;
       })
       .sort(
         (a, b) =>

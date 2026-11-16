@@ -2,15 +2,18 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act, within } from '@/test/render';
 import { WeekendVsWeekdayReport } from './WeekendVsWeekdayReport';
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrencyCompact: (n: number) => `$${n.toFixed(2)}`,
-    formatCurrency: (n: number) => `$${n.toFixed(2)}`,
-    formatCurrencyAxis: (n: number) => `$${n}`,
-    defaultCurrency: 'CAD',
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrencyCompact: (n: number) => `$${n.toFixed(2)}`,
+      formatCurrency: (n: number) => `$${n.toFixed(2)}`,
+      formatCurrencyAxis: (n: number) => `$${n}`,
+      defaultCurrency: 'CAD',
+    }),
+  };
+});
 vi.mock('@/hooks/useDateRange', () => ({
   useDateRange: () => ({
     dateRange: '3m',
@@ -269,4 +272,58 @@ describe('WeekendVsWeekdayReport', () => {
       }),
     );
   });
+
+  it('marks the null totals as subtotals and withholds every ratio over them', async () => {
+    mockGetWeekendVsWeekday.mockResolvedValue({
+      summary: {
+        weekendTotal: null,
+        weekdayTotal: null,
+        knownWeekendTotal: 50,
+        knownWeekdayTotal: 150,
+        weekendCount: 1,
+        weekdayCount: 3,
+      },
+      byDay: [{ dayOfWeek: 0, total: 50, count: 1 }],
+      byCategory: [],
+      currency: 'CAD',
+      missingCurrencies: ['JPY'],
+      excludedCount: 2,
+    });
+    render(<WeekendVsWeekdayReport />);
+    await waitFor(() => expect(screen.getAllByTestId('partial-total').length).toBeGreaterThan(0));
+    const markers = screen.getAllByTestId('partial-total');
+    expect(markers[0]).toHaveTextContent('$50.00');
+    expect(markers[1]).toHaveTextContent('$150.00');
+    expect(screen.queryByText('$0.00')).not.toBeInTheDocument();
+    // The share of a total nobody knows is not a percentage, and an average
+    // over a total nobody knows is not an average.
+    expect(screen.getAllByTestId('unknown-amount').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/%/)).not.toBeInTheDocument();
+    expect(screen.getByTestId('partial-data-notice')).toHaveTextContent('JPY');
+  });
+
+  // The toolbar holds the date controls, so it stays mounted while the report
+  // reloads and after a failed load: an early return for either state would
+  // unmount it, and the focus of whoever is using it.
+  it('keeps the toolbar mounted while loading and after a failed load', async () => {
+    let fail!: (error: Error) => void;
+    mockGetWeekendVsWeekday.mockReturnValue(
+      new Promise((_resolve, reject) => {
+        fail = reject;
+      }),
+    );
+    render(<WeekendVsWeekdayReport />);
+    const toolbar = screen.getByTestId('date-range-selector');
+    expect(document.querySelector('.animate-pulse')).toBeTruthy();
+
+    await act(async () => {
+      fail(new Error('boom'));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Try Again' })).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('date-range-selector')).toBe(toolbar);
+  });
+
 });

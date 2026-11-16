@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@/test/render';
+import { InformationCircleIcon } from '@heroicons/react/24/outline';
 import { MobileNavDrawer } from './MobileNavDrawer';
 
 vi.mock('next/image', () => ({
@@ -18,29 +19,61 @@ const toolsLinks = [
   { href: '/categories', label: 'Categories' },
   { href: '/import', label: 'Import Transactions', badge: 'Beta' },
 ];
+const helpEntries: React.ComponentProps<typeof MobileNavDrawer>['helpEntries'] = {
+  helpForPage: null,
+  actions: [
+    { key: 'search', label: 'Search help', onClick: vi.fn(), Icon: InformationCircleIcon },
+    { key: 'shortcuts', label: 'Keyboard shortcuts', onClick: vi.fn(), Icon: InformationCircleIcon },
+    { key: 'takeTour', label: 'Take the tour', onClick: vi.fn(), Icon: InformationCircleIcon },
+    { key: 'whatsNew', label: "What's new", onClick: vi.fn(), Icon: InformationCircleIcon },
+  ],
+  links: [
+    {
+      key: 'reportIssue',
+      label: 'Report an issue',
+      href: 'https://github.com/kenlasko/monize/issues/new',
+      Icon: InformationCircleIcon,
+    },
+    {
+      key: 'discussions',
+      label: 'Discussions',
+      href: 'https://github.com/kenlasko/monize/discussions',
+      Icon: InformationCircleIcon,
+    },
+  ],
+};
 
 function renderDrawer(overrides: Partial<React.ComponentProps<typeof MobileNavDrawer>> = {}) {
   const onClose = vi.fn();
   const onNavigate = vi.fn();
+  const onLogout = vi.fn();
   const props: React.ComponentProps<typeof MobileNavDrawer> = {
     isOpen: true,
     onClose,
     pathname: '/dashboard',
     onNavigate,
+    onLogout,
     navLinks,
     aiLinks,
     showAiMenu: true,
     toolsLinks,
     showAdmin: false,
+    helpEntries,
     ...overrides,
   };
   render(<MobileNavDrawer {...props} />);
-  return { onClose, onNavigate };
+  return { onClose, onNavigate, onLogout };
 }
 
 describe('MobileNavDrawer', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('signs out from its Logout row, the only way out on a phone', () => {
+    const { onLogout } = renderDrawer();
+    fireEvent.click(screen.getByRole('button', { name: 'Logout' }));
+    expect(onLogout).toHaveBeenCalledTimes(1);
   });
 
   it('renders nothing when closed', () => {
@@ -71,6 +104,61 @@ describe('MobileNavDrawer', () => {
     expect(screen.queryByText('Insights')).not.toBeInTheDocument();
     // "AI" section header should be gone too (AI Assistant lives under it)
     expect(screen.queryByText('AI Assistant')).not.toBeInTheDocument();
+  });
+
+  describe('Help section', () => {
+    it('renders every action and link, and hides "Help for this page" without one', () => {
+      renderDrawer();
+      expect(screen.queryByText('Help for this page')).not.toBeInTheDocument();
+      expect(screen.getByText('Search help')).toBeInTheDocument();
+      expect(screen.getByText('Keyboard shortcuts')).toBeInTheDocument();
+      expect(screen.getByText('Take the tour')).toBeInTheDocument();
+      expect(screen.getByText("What's new")).toBeInTheDocument();
+      const reportIssue = screen.getByText('Report an issue').closest('a');
+      expect(reportIssue).toHaveAttribute(
+        'href',
+        'https://github.com/kenlasko/monize/issues/new',
+      );
+      expect(reportIssue).toHaveAttribute('target', '_blank');
+      expect(screen.getByText('Discussions').closest('a')).toHaveAttribute(
+        'href',
+        'https://github.com/kenlasko/monize/discussions',
+      );
+    });
+
+    it('shows "Help for this page" when the current page has a help key', () => {
+      renderDrawer({
+        helpEntries: {
+          ...helpEntries,
+          helpForPage: {
+            key: 'helpForPage',
+            label: 'Help for this page',
+            onClick: vi.fn(),
+            Icon: InformationCircleIcon,
+          },
+        },
+      });
+      expect(screen.getByText('Help for this page')).toBeInTheDocument();
+    });
+
+    it('runs an action and closes the drawer', () => {
+      const onClick = vi.fn();
+      const { onClose } = renderDrawer({
+        helpEntries: {
+          ...helpEntries,
+          actions: [{ key: 'search', label: 'Search help', onClick, Icon: InformationCircleIcon }],
+        },
+      });
+      fireEvent.click(screen.getByText('Search help'));
+      expect(onClick).toHaveBeenCalledTimes(1);
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+
+    it('closes the drawer from an external link too', () => {
+      const { onClose } = renderDrawer();
+      fireEvent.click(screen.getByText('Discussions'));
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('omits the Tools section when there are no tools links', () => {

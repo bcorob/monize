@@ -1,5 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { EntityManager, IsNull } from "typeorm";
+import { applyOpeningBalanceChange } from "../accounts/accounts.service";
 import {
   Account,
   AccountType,
@@ -14,6 +15,9 @@ import {
   AccountMappingDto,
   SecurityMappingDto,
 } from "./dto/import.dto";
+import { splitCategoryPath } from "./category-path.util";
+import { assertAccountCurrencyKindIn } from "../accounts/account-currency-kind.util";
+import { assertSecurityCurrencyIsFiatIn } from "../securities/security-currency-kind.util";
 
 /**
  * Map stock exchanges to their primary currency.
@@ -79,9 +83,11 @@ export class ImportEntityCreatorService {
       const categoryName = catMapping.createNew;
       let parentId = catMapping.parentCategoryId || null;
 
-      // If a new parent category name is provided, create (or find) the parent first
+      // If a new parent category name is provided, create (or find) the parent
+      // first. It is a colon-delimited path ("Housing:Mortgage"), so every
+      // level of a deeper QIF or CSV category gets its own row.
       if (!parentId && catMapping.createNewParentCategoryName) {
-        parentId = await this.findOrCreateParentCategory(
+        parentId = await this.findOrCreateParentCategoryPath(
           manager,
           userId,
           catMapping.createNewParentCategoryName,
@@ -130,20 +136,47 @@ export class ImportEntityCreatorService {
     }
   }
 
+  /**
+   * Find or create every level of a parent path, root first, and return the id
+   * of the deepest; null when the path has no segments (the new category is
+   * then top-level).
+   */
+  private async findOrCreateParentCategoryPath(
+    manager: EntityManager,
+    userId: string,
+    parentPath: string,
+    processedCategories: Map<string, string>,
+    importResult: ImportResultDto,
+  ): Promise<string | null> {
+    let parentId: string | null = null;
+    for (const name of splitCategoryPath(parentPath)) {
+      parentId = await this.findOrCreateParentCategory(
+        manager,
+        userId,
+        name,
+        parentId,
+        processedCategories,
+        importResult,
+      );
+    }
+    return parentId;
+  }
+
   private async findOrCreateParentCategory(
     manager: EntityManager,
     userId: string,
-    parentName: string,
+    name: string,
+    parentId: string | null,
     processedCategories: Map<string, string>,
     importResult: ImportResultDto,
   ): Promise<string> {
-    const cacheKey = `${parentName}|null`;
+    const cacheKey = `${name}|${parentId || "null"}`;
     if (processedCategories.has(cacheKey)) {
       return processedCategories.get(cacheKey)!;
     }
 
     const existing = await manager.findOne(Category, {
-      where: { userId, name: parentName, parentId: IsNull() },
+      where: { userId, name, parentId: parentId ?? IsNull() },
     });
 
     if (existing) {
@@ -154,8 +187,8 @@ export class ImportEntityCreatorService {
     const created = await this.insertCategoryIfAbsent(
       manager,
       userId,
-      parentName,
-      null,
+      name,
+      parentId,
     );
     processedCategories.set(cacheKey, created.id);
     if (created.inserted) importResult.categoriesCreated++;
@@ -251,6 +284,10 @@ export class ImportEntityCreatorService {
         continue;
       }
 
+      // INV-CRYPTO-001, before this account's write; a refusal rolls the
+      // whole import back.
+      await assertAccountCurrencyKindIn(manager, accountType, currencyCode);
+
       if (accountType === AccountType.INVESTMENT) {
         const cashAccount = manager.create(Account, {
           userId,
@@ -316,6 +353,11 @@ export class ImportEntityCreatorService {
         loanMapping.newLoanType === "MORTGAGE"
           ? AccountType.MORTGAGE
           : AccountType.LOAN;
+      await assertAccountCurrencyKindIn(
+        manager,
+        loanType,
+        account.currencyCode,
+      );
       const newLoanAccount = manager.create(Account, {
         userId,
         name: loanMapping.createNewLoan,
@@ -358,6 +400,8 @@ export class ImportEntityCreatorService {
           getCurrencyFromExchange(secMapping.exchange) ||
           secMapping.currencyCode ||
           account.currencyCode;
+        // A security is priced in fiat (INV-CRYPTO-001).
+        await assertSecurityCurrencyIsFiatIn(manager, currencyCode);
 
         const newSecurity = new Security();
         newSecurity.userId = userId;
@@ -382,19 +426,14 @@ export class ImportEntityCreatorService {
     account: Account,
     openingBalance: number,
   ): Promise<void> {
-    const existingOpeningBalance = Number(account.openingBalance) || 0;
-    const existingCurrentBalance = Number(account.currentBalance) || 0;
-    const newOpeningBalance = Math.round(openingBalance * 100) / 100;
-
-    const newCurrentBalance =
-      Math.round(
-        (existingCurrentBalance - existingOpeningBalance + newOpeningBalance) *
-          100,
-      ) / 100;
-
-    await manager.update(Account, accountId, {
-      openingBalance: newOpeningBalance,
-      currentBalance: newCurrentBalance,
-    });
+    // A delta under the account lock, at 4dp, rather than an absolute write
+    // computed from `account`, which the caller read in an earlier
+    // transaction (A26-M13). Only the owner is taken from it.
+    await applyOpeningBalanceChange(
+      manager,
+      account.userId,
+      accountId,
+      openingBalance,
+    );
   }
 }

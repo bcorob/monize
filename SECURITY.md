@@ -72,7 +72,10 @@ The following are **out of scope**:
 If you self-host Monize, please follow these guidelines:
 
 - Set `JWT_SECRET` and `ENCRYPTION_KEY` (formerly `AI_ENCRYPTION_KEY`, still accepted) to strong, random values of at least
-  32 characters. Never reuse the example values from `.env.example`.
+  32 characters; the server will not start without either. A `JWT_SECRET` that is a published placeholder or a typed
+  pattern starts but is reported to administrators. Changing `JWT_SECRET` later stops authenticator (2FA) codes from
+  working until users sign in with a backup code or an administrator resets their 2FA; see "Changing JWT_SECRET" in
+  `docs/backend/modules-and-runtime.md` first. Never change `ENCRYPTION_KEY`: a new one cannot read what the old one stored.
 - Run the application behind HTTPS, with TLS terminated at a trusted reverse
   proxy or load balancer.
 - Restrict database network access to the application host(s) only.

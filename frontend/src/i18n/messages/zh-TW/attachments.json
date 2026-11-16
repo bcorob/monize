@@ -11,9 +11,76 @@
   "uploaded": "已新增附件",
   "deleted": "已刪除附件",
   "loadFailed": "載入附件失敗",
+  "retry": "重試",
   "uploadFailed": "上傳附件失敗",
   "deleteFailed": "刪除附件失敗",
   "tooLarge": "檔案過大（最大 {max}）",
   "unsupported": "不支援的檔案類型。允許：圖片或 PDF",
-  "tooMany": "每筆交易最多 {max} 個附件"
+  "tooMany": "每筆交易最多 {max} 個附件",
+  "fromWarranty": "來自保固：{name}",
+  "fromLinkedWarranty": "來自連結的保固",
+  "scan": {
+    "button": "掃描文件",
+    "title": "掃描文件",
+    "description": "在附加前將文件照片校正並清理乾淨。",
+    "analysing": "正在照片中尋找文件…",
+    "failed": "無法掃描此文件。您仍可依原樣附加這張照片。",
+    "viewEnhanced": "強化版",
+    "viewOriginal": "原圖",
+    "rotate": "旋轉",
+    "styleLabel": "處理方式",
+    "styles": {
+      "colour": "彩色",
+      "grayscale": "灰階",
+      "blackAndWhite": "黑白",
+      "none": "不做強化"
+    },
+    "styleHints": {
+      "colour": "讓光線均勻、提高對比並銳化文字。",
+      "grayscale": "同樣的處理，但去掉顏色。檔案更小，也沒有紙張在人造光下泛出的色偏。",
+      "blackAndWhite": "只保留墨水與紙張。最適合印刷文字；照片與標誌會被壓平。",
+      "none": "僅擺正並裁切，其餘與拍攝時完全相同。當強化反而破壞畫面時使用。"
+    },
+    "adjustments": {
+      "brightness": "亮度（{value}）",
+      "contrast": "對比（{value}）"
+    },
+    "resetAdjustments": "重設亮度與對比",
+    "adjustHint": "若邊緣不正確，請切換到「原圖」並拖曳四角。",
+    "updating": "正在更新預覽…",
+    "noDocumentFound": "找不到文件邊緣，因此使用了整張照片。請切換到「原圖」並自行拖曳四角。",
+    "previewEnhancedAlt": "強化掃描預覽",
+    "previewOriginalAlt": "原始照片預覽",
+    "useEnhanced": "使用強化版",
+    "keepOriginal": "僅保留原圖",
+    "retake": "重拍",
+    "cancel": "取消",
+    "originalTooLarge": "原始照片超過 {max}，因此只會附加強化後的掃描檔。",
+    "warnings": {
+      "blurry": "照片看起來有些模糊。重拍可獲得更清晰的掃描檔。",
+      "edgesOutsideFrame": "文件已到照片邊緣，某一邊可能被裁掉。請重新拍攝，在整頁四周留出邊距，讓每條邊都不接觸照片邊框。",
+      "lowResolution": "掃描檔較小，細小的文字可能不易辨認。"
+    },
+    "corners": {
+      "label": "文件四角",
+      "topLeft": "左上角",
+      "topRight": "右上角",
+      "bottomRight": "右下角",
+      "bottomLeft": "左下角"
+    },
+    "originalKept": "已保留原圖"
+  },
+  "preview": {
+    "loading": "正在載入預覽…",
+    "failed": "無法載入預覽。您仍然可以下載該檔案。",
+    "storeUnavailable": "此檔案存放在本伺服器目前無法存取的儲存後端中，因此無法預覽也無法下載。檔案並未遺失：請讓管理員還原附件儲存設定。",
+    "unsupported": "無法預覽此類型的檔案。您仍然可以下載它。",
+    "fit": "符合螢幕",
+    "actualSize": "實際大小",
+    "versionLabel": "版本",
+    "zoomLabel": "縮放",
+    "pageCount": "{count, plural, other {# 頁}}",
+    "page": "第 {page} 頁，共 {total} 頁",
+    "open": "預覽 {name}"
+  }
 }

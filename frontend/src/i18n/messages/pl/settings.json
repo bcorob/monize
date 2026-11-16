@@ -19,10 +19,11 @@
     "passwordRequired": "Bieżące hasło jest wymagane do zmiany adresu e-mail",
     "noChanges": "Brak zmian do zapisania",
     "passwordConfirmNote": "Potwierdzenie hasłem jest wymagane przy zmianie adresu e-mail.",
+    "pendingEmailNotice": "Link potwierdzający został wysłany na adres {email}. Twój adres e-mail zmieni się po kliknięciu tego linku.",
     "saveButton": "Zapisz profil",
-    "savingButton": "Zapisywanie...",
     "toasts": {
       "success": "Zaktualizowano profil",
+      "confirmationSent": "Sprawdź skrzynkę {email}, aby znaleźć link potwierdzający nowy adres e-mail",
       "updateFailed": "Nie udało się zaktualizować profilu"
     },
     "validation": {
@@ -36,7 +37,8 @@
   },
   "security": {
     "heading": "Zabezpieczenia",
-    "ssoNotice": "Twoje konto korzysta z logowania jednokrotnego (SSO). Poniższe hasło nie jest używane do logowania, ale można je zachować jako zapasowe na wypadek wyłączenia SSO.",
+    "ssoPasswordFallbackNotice": "Twoje konto korzysta z logowania jednokrotnego (SSO). Gdy SSO jest niedostępne, możesz też zalogować się poniższym hasłem. Włącz uwierzytelnianie dwuskładnikowe, aby chronić to zapasowe logowanie.",
+    "ssoNotice": "Twoje konto korzysta z logowania jednokrotnego (SSO). Logowanie hasłem jest wyłączone dla kont SSO na tym serwerze.",
     "currentPasswordLabel": "Bieżące hasło",
     "currentPasswordPlaceholder": "Wpisz bieżące hasło",
     "newPasswordLabel": "Nowe hasło",
@@ -44,7 +46,6 @@
     "confirmPasswordLabel": "Potwierdź nowe hasło",
     "confirmPasswordPlaceholder": "Potwierdź nowe hasło",
     "changePasswordButton": "Zmień hasło",
-    "changingPasswordButton": "Zmienianie...",
     "toasts": {
       "passwordChanged": "Zmieniono hasło",
       "passwordChangeFailed": "Nie udało się zmienić hasła"
@@ -58,14 +59,28 @@
       "addLayerDescription": "Dodaj dodatkową warstwę zabezpieczeń do swojego konta.",
       "enableButton": "Włącz 2FA",
       "disableButton": "Wyłącz 2FA",
+      "resetButton": "Zresetuj 2FA",
       "disableModal": {
         "title": "Wyłącz uwierzytelnianie dwuskładnikowe",
-        "description": "Wpisz bieżący 6-cyfrowy kod, aby potwierdzić wyłączenie 2FA.",
+        "description": "Wpisz 6-cyfrowy kod z aplikacji uwierzytelniającej lub jeden z kodów zapasowych (xxxx-xxxx), aby potwierdzić wyłączenie 2FA.",
         "verificationCodeLabel": "Kod weryfikacyjny",
         "disablingButton": "Wyłączanie...",
         "toasts": {
           "disabled": "Wyłączono uwierzytelnianie dwuskładnikowe",
           "disableFailed": "Nie udało się wyłączyć uwierzytelniania dwuskładnikowego"
+        }
+      },
+      "resetModal": {
+        "title": "Zresetuj uwierzytelnianie dwuskładnikowe",
+        "description": "Użyj tej opcji, jeśli aplikacja uwierzytelniająca lub kody zapasowe mogły zostać ujawnione albo jeśli kody uwierzytelniające przestały działać (na przykład po zmianie sekretu serwera).",
+        "effect": "Obecny uwierzytelniacz, kody zapasowe i zaufane urządzenia przestaną działać, a Ty zostaniesz wylogowany na wszystkich innych urządzeniach. Następnie od razu skonfigurujesz nowy uwierzytelniacz.",
+        "passwordLabel": "Hasło konta",
+        "codeLabel": "Kod uwierzytelniający lub zapasowy",
+        "codeHint": "Wpisz 6-cyfrowy kod z aplikacji uwierzytelniającej. Jeśli uwierzytelniacz już nie działa, wpisz zamiast tego jeden z kodów zapasowych (xxxx-xxxx).",
+        "resettingButton": "Resetowanie...",
+        "toasts": {
+          "reset": "Uwierzytelnianie dwuskładnikowe zostało zresetowane. Skonfiguruj teraz nowy uwierzytelniacz.",
+          "resetFailed": "Nie udało się zresetować 2FA"
         }
       }
     },
@@ -90,6 +105,8 @@
       "noDevices": "Brak zaufanych urządzeń. Gdy zaznaczysz „Nie pytaj ponownie w tej przeglądarce” podczas logowania 2FA, urządzenie pojawi się tutaj.",
       "currentBadge": "Bieżące",
       "revokeButton": "Odwołaj",
+      "ipAddress": "IP: {ip}",
+      "dates": "Dodano {added} · Ostatnio użyty {lastUsed} · Wygasa {expires}",
       "revokeAllModal": {
         "title": "Odwołaj wszystkie zaufane urządzenia",
         "description": "Spowoduje to usunięcie wszystkich zaufanych urządzeń. Przy następnym logowaniu z dowolnego urządzenia trzeba będzie wpisać kod 2FA."
@@ -110,8 +127,20 @@
   },
   "preferences": {
     "heading": "Preferencje",
+    "groups": {
+      "languageRegion": "Język i region",
+      "appearance": "Wygląd",
+      "datesNumbers": "Daty i liczby",
+      "investments": "Inwestycje",
+      "transactions": "Transakcje",
+      "application": "Aplikacja",
+      "defaultViews": "Widoki domyślne",
+      "mobileNavigation": "Nawigacja mobilna"
+    },
     "themeLabel": "Motyw",
     "defaultCurrencyLabel": "Domyślna waluta",
+    "defaultCurrencyHelp": "Służy do sumowania Twoich kont, wartości netto i raportów, i jest walutą, na którą przelicza kolumna Kurs na stronie Waluty.",
+    "defaultCurrencyNoCrypto": "Kryptowaluty nie są tu dostępne: sumy i raporty są zawsze wyświetlane w walucie fiducjarnej.",
     "preferredExchangesLabel": "Preferowane giełdy (do wyszukiwania papierów)",
     "preferredExchangesHelp": "Wybierz maksymalnie 3 giełdy w kolejności priorytetu. Będą one preferowane podczas wyszukiwania papierów wartościowych.",
     "exchangePriorityPlaceholder": "Priorytet {n}",
@@ -131,10 +160,22 @@
     "lockReconciledLabel": "Zablokuj uzgodnione transakcje",
     "lockReconciledTooltip": "Gdy ta opcja jest wyłączona, Monize ostrzega przed edycją, która zmieniłaby datę lub kwotę uzgodnionej transakcji, a potem ją dopuszcza. Gdy jest włączona, uzgodnionych transakcji nie można w ogóle edytować, usuwać ani cofać ich uzgodnienia. Wyłącz ją ponownie, aby wprowadzić poprawkę.",
     "timeFormatLabel": "Format czasu",
+    "timeFormatOptions": {
+      "h24": "24-godzinny (14:30)",
+      "h12": "12-godzinny (2:30 PM)"
+    },
     "recentTransactionsLabel": "Ostatnie transakcje w szybkim uzupełnianiu",
     "recentTransactionsHelp": "Liczba wpisów wyświetlanych w okienku przycisku historii obok pola Odbiorca w formularzach transakcji.",
-    "saveButton": "Zapisz preferencje",
-    "savingButton": "Zapisywanie...",
+    "mapProviderLabel": "Dostawca map dla adresów",
+    "mapProviderHelp": "Która usługa map otwiera się po kliknięciu adresu w przeglądarce na komputerze. Telefony i tablety zawsze otwierają własną aplikację map, niezależnie od wyboru w tym miejscu. Automatycznie używa OpenStreetMap na komputerze.",
+    "mapProviderOptions": {
+      "device": "Automatycznie",
+      "apple": "Apple Maps",
+      "bing": "Bing Maps",
+      "google": "Google Maps",
+      "openstreetmap": "OpenStreetMap",
+      "waze": "Waze"
+    },
     "toasts": {
       "saved": "Zapisano preferencje",
       "saveFailed": "Nie udało się zapisać preferencji",
@@ -182,10 +223,47 @@
       "highcontrast": "Wysoki kontrast",
       "colorblind": "Bezpieczny dla daltonistów"
     },
-    "timezoneBrowserOption": "Użyj strefy czasowej przeglądarki (wykryto {tz})"
+    "timezoneBrowserOption": "Użyj strefy czasowej przeglądarki (wykryto {tz})",
+    "defaultViews": {
+      "intro": "Obowiązują w każdej przeglądarce, która nie ma własnego ustawienia, np. na nowym urządzeniu lub w oknie prywatnym. Zmianę wprowadzoną na stronie zapamiętuje dana przeglądarka i ma ona pierwszeństwo.",
+      "rowsLabel": "Gęstość wierszy",
+      "hideRegisterYearLabel": "Ukryj rok w datach rejestru",
+      "chartCollapsedLabel": "Zaczynaj ze zwiniętym wykresem na stronie Transakcje",
+      "widgetsCollapsedLabel": "Zaczynaj ze zwiniętymi informacjami o koncie, odbiorcy i kategorii",
+      "accountOpenTargetLabel": "Domyślny widok konta",
+      "accountOpenTargetOptions": {
+        "register": "Pokaż jego transakcje",
+        "dashboard": "Pokaż jego pulpit"
+      },
+      "accountOpenTargetHelp": "Dotyczy kliknięcia konta na stronie Konta lub w sekcji Ulubione konta na pulpicie.",
+      "columnsLabel": "Widoczne kolumny",
+      "columnsHelp": "Odznacz pole, aby domyślnie ukryć tę kolumnę. Menu Kolumny w tabeli zmienia to tylko w danej przeglądarce.",
+      "columnTables": {
+        "transactions": "Transakcje",
+        "investmentHoldings": "Pozycje inwestycyjne",
+        "investmentRegister": "Transakcje inwestycyjne"
+      },
+      "applyHere": "Użyj tych ustawień domyślnych w tej przeglądarce",
+      "applyHereHelp": "Czyści ustawienia widoku zapisane przez tę przeglądarkę, aby powyższe ustawienia domyślne obowiązywały także tutaj.",
+      "appliedHere": "Ta przeglądarka używa teraz Twoich widoków domyślnych"
+    },
+    "mobileTabs": {
+      "intro": "Wybierz do trzech kart na pasek u dołu telefonu lub tabletu. Przycisk dodawania i Więcej są zawsze widoczne.",
+      "slotLabel": "Karta {number}",
+      "none": "Brak"
+    }
   },
   "notifications": {
     "heading": "Powiadomienia",
+    "portfolioAlert": {
+      "title": "Zmiana wartości inwestycji",
+      "description": "Powiadamiaj raz dziennie, gdy moje konta inwestycyjne zmienią się poza próg, mierzony na podstawie zmian rynkowych i dywidend (wpłaty i wypłaty są wyłączone).",
+      "enableLabel": "Włącz alerty o zmianach inwestycji",
+      "thresholdLabel": "Powiadom, gdy dzienna zmiana wyniesie co najmniej",
+      "saveError": "Nie udało się zapisać progu",
+      "loadError": "Nie udało się wczytać ustawienia alertów inwestycyjnych",
+      "retry": "Ponów próbę"
+    },
     "smtpNotConfigured": "Powiadomienia e-mail są niedostępne. Administrator nie skonfigurował SMTP.",
     "emailNotificationsTitle": "Powiadomienia e-mail",
     "emailNotificationsDescription": "Otrzymuj przypomnienia e-mail o nadchodzących rachunkach i alertach budżetowych",
@@ -212,6 +290,148 @@
       "digestUpdateFailed": "Nie udało się zaktualizować preferencji podsumowania budżetu",
       "digestDayFailed": "Nie udało się zaktualizować dnia podsumowania",
       "testEmailFailed": "Nie udało się wysłać testowego e-maila"
+    },
+    "push": {
+      "heading": "Push w przeglądarce",
+      "collapsedDevices": "{count, plural, =0 {Brak zarejestrowanych urządzeń} one {# zarejestrowane urządzenie} few {# zarejestrowane urządzenia} many {# zarejestrowanych urządzeń} other {# zarejestrowanego urządzenia}}",
+      "collapsedDevicesWithRetired": "{count, plural, =0 {Brak zarejestrowanych urządzeń} one {# zarejestrowane urządzenie} few {# zarejestrowane urządzenia} many {# zarejestrowanych urządzeń} other {# zarejestrowanego urządzenia}}, {retired, plural, one {# wycofane} few {# wycofane} many {# wycofanych} other {# wycofanego}}",
+      "collapsedDevicesUnavailable": "Lista urządzeń niedostępna",
+      "diagnostics": {
+        "summary": "Diagnostyka powiadomień",
+        "intro": "Co ta przeglądarka i to urządzenie zgłaszają Monize na temat powiadomień. Odśwież po zmianie ustawienia, a następnie użyj Kopiuj, aby wysłać pełny raport.",
+        "refresh": "Odśwież",
+        "copy": "Kopiuj raport",
+        "copied": "Skopiowano diagnostykę do schowka"
+      },
+      "description": "Zarejestruj to urządzenie, aby Monize mogło je powiadomić nawet przy zamkniętej aplikacji. Na razie tą drogą dostarczane jest tylko powiadomienie testowe; wszystko inne nadal trafia do dzwonka.",
+      "androidNotify": "Na Androidzie sama zgoda nie wystarczy: system nadal może ukrywać powiadomienia. Przytrzymaj ikonę Monize na ekranie głównym, wybierz „O aplikacji”, potem „Powiadomienia” i upewnij się, że są włączone.",
+      "permissionHint": "Po włączeniu przeglądarka poprosi o zgodę na wyświetlanie powiadomień. Nic nie zostanie wysłane, dopóki jej nie udzielisz.",
+      "enableButton": "Włącz na tym urządzeniu",
+      "enablingButton": "Włączanie...",
+      "sendTestButton": "Wyślij powiadomienie testowe",
+      "sendingTestButton": "Wysyłanie...",
+      "removeButton": "Usuń",
+      "removeDialog": {
+        "title": "Usuń urządzenie",
+        "message": "Usunąć {device}? Przestanie otrzymywać powiadomienia push, dopóki push nie zostanie tam ponownie włączony."
+      },
+      "thisDevice": "To urządzenie",
+      "held": "Wylogowano na tym urządzeniu. Powiadomienia push zostaną wznowione po ponownym zalogowaniu się tutaj.",
+      "unifiedpushBadge": "UnifiedPush",
+      "unnamedDevice": "Urządzenie bez nazwy",
+      "noLiveDevices": "Nie zarejestrowano jeszcze żadnego urządzenia. Włącz push na tym urządzeniu, aby wysłać test.",
+      "noDeliverableDevices": "Wylogowano na wszystkich urządzeniach, więc test nie ma dokąd trafić. Powiadomienia push zostaną wznowione na urządzeniu po ponownym zalogowaniu się na nim.",
+      "notConfigured": "Push w przeglądarce nie jest dostępny w tej instancji Monize. Administrator może go włączyć w sekcji Admin.",
+      "disabledByAdmin": "Administrator wyłączył push w przeglądarce dla tej instancji Monize.",
+      "keyUnreadable": "Monize nie potrafi odczytać pary kluczy push tej instancji, więc nic nie jest dostarczane. Administrator może to naprawić, wymieniając parę kluczy w sekcji Admin.",
+      "serverKeyMissing": "Tej instancji Monize brakuje klucza szyfrującego potrzebnego do otwarcia pary kluczy push, więc nic nie może zostać dostarczone. Administrator musi ustawić go we wdrożeniu i zrestartować aplikację.",
+      "statusUnavailable": "Monize nie mógł sprawdzić, czy push w przeglądarce jest dostępny. Odśwież stronę, aby spróbować ponownie.",
+      "devicesUnavailable": "Monize nie wczytał Twoich zarejestrowanych urządzeń. Reszta tej strony działa normalnie; odśwież, aby spróbować ponownie.",
+      "unsupported": {
+        "unsupported": "Ta przeglądarka nie może odbierać powiadomień push.",
+        "denied": "Powiadomienia dla Monize są zablokowane w tej przeglądarce. Zezwól na nie w ustawieniach witryny, a następnie odśwież tę stronę.",
+        "ios-browser": "Na iPhonie i iPadzie powiadomienia push działają dopiero po zainstalowaniu Monize na ekranie głównym. Użyj Udostępnij, potem Dodaj do ekranu głównego i otwórz Monize stamtąd.",
+        "shell": {
+          "electron": "Powiadomienia nie są dostępne w oknie pulpitu Monize. Otwórz Monize w przeglądarce z menu w zasobniku (\"Open in browser\"), a powiadomienia push nadal będą tam działać.",
+          "capacitor": "Powiadomienia push nie są jeszcze dostępne w aplikacji Monize na Androida. Otwórz Monize w przeglądarce, aby je otrzymywać."
+        }
+      },
+      "native": "Aplikacja komputerowa Monize pokazuje Twoje powiadomienia na tym komputerze, dopóki działa, także gdy jej okno jest zamknięte do zasobnika, więc nie trzeba tu niczego włączać. To, jak się pojawiają, określają ustawienia powiadomień systemu Windows.",
+      "disabledReason": {
+        "GONE": "Nieosiągalne. Włącz push ponownie w tamtej przeglądarce.",
+        "KEY_ROTATED": "Wyłączone, gdy ta instancja wymieniła parę kluczy push. Włącz push ponownie w tamtej przeglądarce.",
+        "FAILING": "Wyłączone po powtarzających się błędach dostarczania. Włącz push ponownie w tamtej przeglądarce."
+      },
+      "toasts": {
+        "enabled": "Włączono powiadomienia push na tym urządzeniu",
+        "enableFailed": "Nie udało się włączyć powiadomień push",
+        "permissionDenied": "Ta przeglądarka blokuje powiadomienia Monize. Zezwól na nie w ustawieniach witryny i spróbuj ponownie.",
+        "permissionDeniedIos": "Powiadomienia dla Monize są zablokowane. Otwórz Ustawienia iOS, potem Powiadomienia, potem Monize, aby na nie zezwolić.",
+        "permissionDismissed": "Powiadomienia nie zostały włączone. Wybierz Zezwól, gdy przeglądarka zapyta.",
+        "permissionNoPrompt": "Powiadomienia nie zostały włączone i nie pojawiło się żadne pytanie. Otwórz Ustawienia iOS, potem Powiadomienia, potem Monize, i zezwól tam. Jeśli Monize nie ma na liście, usuń je z ekranu głównego, dodaj ponownie (Udostępnij, potem Dodaj do ekranu głównego) i spróbuj jeszcze raz.",
+        "removed": "Usunięto urządzenie",
+        "removeFailed": "Nie udało się usunąć urządzenia",
+        "testSent": "{count, plural, one {Wysłano powiadomienie testowe na 1 urządzenie} few {Wysłano powiadomienie testowe na # urządzenia} many {Wysłano powiadomienie testowe na # urządzeń} other {Wysłano powiadomienie testowe na # urządzenia}}",
+        "testPartial": "Powiadomienie testowe dotarło do {delivered} z {attempted} urządzeń",
+        "testFailed": "Nie udało się dostarczyć powiadomienia testowego",
+        "pushServiceRefused": "Usługa push przeglądarki odrzuciła rejestrację. Spróbuj ponownie za chwilę; jeśli błąd się powtarza, sprawdź ustawienia push w przeglądarce.",
+        "pushServiceRefusedBrave": "Brave domyślnie blokuje usługę push. W Brave otwórz Ustawienia, potem Prywatność i bezpieczeństwo, włącz „Używaj usług Google do obsługi wiadomości push”, zrestartuj przeglądarkę i spróbuj ponownie."
+      },
+      "testResults": {
+        "heading": "Ostatni test, na urządzenie",
+        "status": {
+          "sent": "dostarczono do usługi push",
+          "expired": "subskrypcja wygasła; włącz push na tym urządzeniu ponownie",
+          "transient": "nie dostarczono (błąd przejściowy); spróbuj ponownie",
+          "unconfigured": "ta instancja nie może teraz podpisywać wiadomości push"
+        }
+      },
+      "transport": {
+        "webpush": "Web push",
+        "unifiedpush": "UnifiedPush"
+      },
+      "facts": {
+        "endpoint": "Punkt końcowy",
+        "transport": "Dostarczane przez",
+        "registeredIp": "Zarejestrowano z",
+        "registered": "Zarejestrowano",
+        "lastSeen": "Ostatnia aktywność",
+        "lastDelivery": "Ostatnie dostarczenie",
+        "noDelivery": "Nic jeszcze nie dostarczono",
+        "userAgent": "Przeglądarka",
+        "unknownIp": "Nieznany"
+      }
+    },
+    "preferences": {
+      "heading": "Jak mnie powiadamiać",
+      "description": "Wybierz, które rodzaje Monize wysyła e-mailem lub przez push i jak często.",
+      "categoryHeader": "Powiadomienie",
+      "channels": {
+        "emailReport": "E-mail (raport)",
+        "emailNotification": "E-mail (alert)",
+        "push": "Push",
+        "unifiedpush": "UnifiedPush",
+        "unifiedpushHint": "Powiadomienia są dostarczane przez aplikację dystrybutora, którą prowadzisz samodzielnie (na przykład ntfy), zamiast przez usługę push dostawcy przeglądarki. Zarejestruj punkt końcowy w tej aplikacji, aby korzystać z tego kanału."
+      },
+      "categories": {
+        "PAYMENTS": "Rachunki i zaplanowane",
+        "BUDGETS": "Budżety",
+        "SYSTEM": "Alerty systemowe",
+        "BALANCES": "Salda kont",
+        "INVESTMENTS": "Wartość inwestycji",
+        "STRATEGIES": "Sygnały strategii",
+        "BANK_SYNC": "Połączenia bankowe",
+        "BANK_SYNC_ACTIVITY": "Wyniki synchronizacji bankowej",
+        "EMAIL_RECEIPTS": "Potwierdzenia e-maili",
+        "BONDS": "Obligacje",
+        "AI_REVIEW": "Propozycje przeglądu AI",
+        "WARRANTIES": "Przypomnienia o gwarancjach",
+        "SECURITY": "Bezpieczeństwo",
+        "SHARED_EXPENSES": "Rozliczenia"
+      },
+      "channelNotApplicable": "Nie dotyczy tego typu powiadomienia",
+      "emailToggleLabel": "E-mail (raport) dla: {category}",
+      "emailNotificationToggleLabel": "E-mail alertowy dla: {category}",
+      "pushToggleLabel": "Push dla: {category}",
+      "unifiedpushToggleLabel": "UnifiedPush dla {category}",
+      "saveFailed": "Nie udało się zapisać tego ustawienia",
+      "emailUnavailable": "Włącz powyżej powiadomienia e-mail, aby wysyłać je e-mailem.",
+      "pushUnavailable": "Żadne urządzenie nie jest zarejestrowane do powiadomień push, więc ten kanał nic nie dostarczy.",
+      "throttle": {
+        "label": "Odstęp",
+        "ariaLabel": "Odstęp dla: {category}",
+        "hint": "Pomiń alert lub push, jeśli w tym oknie pojawił się już inny z tej samej grupy.",
+        "options": {
+          "0": "Wyłączone",
+          "5": "5 minut",
+          "15": "15 minut",
+          "30": "30 minut",
+          "60": "1 godzina",
+          "360": "6 godzin",
+          "1440": "24 godziny"
+        }
+      },
+      "pushEnableHint": "Ta przeglądarka nie jest zarejestrowana do powiadomień push."
     }
   },
   "help": {
@@ -229,9 +449,10 @@
       "label": "Dyskusje",
       "description": "Zadawaj pytania i dziel się pomysłami ze społecznością."
     },
-    "wiki": {
-      "label": "Wiki",
-      "description": "Przeglądaj przewodniki i dokumentację."
+    "docs": {
+      "label": "Dokumentacja",
+      "description": "Przeglądaj przewodnik użytkownika.",
+      "openOnline": "Otwórz na monize.net"
     },
     "supportBackup": {
       "label": "Utwórz kopię dla wsparcia",
@@ -280,7 +501,7 @@
   "supportBackup": {
     "title": "Utwórz kopię dla wsparcia",
     "howItWorks": "Powstaje zdeidentyfikowana kopia Twojego backupu: nazwy są maskowane (zostają pierwsze i ostatnie dwa znaki), notatki/opisy/numery kont są usuwane, a każda kwota jest mnożona przez jeden ukryty współczynnik, podczas gdy wartości publiczne (kursy walut, ceny, oprocentowanie) pozostają nietknięte. Plik jest zawsze szyfrowany poniższym hasłem i przywraca się jak zwykły backup. Chroni to przed przypadkową ekspozycją, ale nie przed kimś, kto już Cię zna — daty, częstotliwości i struktura są zachowane, aby błędy dało się odtworzyć.",
-    "sectionsLabel": "Co dołączyć",
+    "sectionsLabel": "Sekcje do uwzględnienia",
     "sections": {
       "investments": "Inwestycje (papiery, pozycje, ceny)",
       "scheduled": "Transakcje planowane",
@@ -325,6 +546,17 @@
       "description": "Usuń dane finansowe z konta. Tej operacji nie można cofnąć.",
       "openButton": "Usuń dane...",
       "alwaysDeletedHeading": "Zawsze zostaną usunięte:",
+      "alwaysDeletedItems": {
+        "transactions": "Wszystkie transakcje i podziały",
+        "scheduled": "Wszystkie zaplanowane/cykliczne transakcje",
+        "securities": "Wszystkie papiery wartościowe, ceny, pozycje i transakcje inwestycyjne",
+        "budgets": "Wszystkie budżety i alerty budżetowe",
+        "monthlySummaries": "Miesięczne podsumowania salda konta",
+        "customReports": "Niestandardowe raporty, tagi i mapowania importu",
+        "actionHistory": "Historia działań (cofnij/ponów)",
+        "rules": "Wszystkie reguły transakcji",
+        "institutions": "Instytucje finansowe"
+      },
       "optionalHeading": "Opcjonalnie usuń także:",
       "accountsOption": "Konta",
       "categoriesOption": "Kategorie",
@@ -370,7 +602,8 @@
   },
   "apiAccess": {
     "heading": "Dostęp do API",
-    "description": "Twórz osobiste tokeny dostępu, aby łączyć zewnętrzne narzędzia AI, takie jak Claude Desktop, przez MCP.",
+    "description": "Twórz osobiste tokeny dostępu, aby łączyć zewnętrzne narzędzia AI, takie jak Claude Desktop, przez MCP lub wywoływać REST API pod adresem /api/v1.",
+    "restrictedNote": "Tokeny do odczytu mogą tylko odczytywać. Punkty końcowe logowania, zabezpieczeń, administracji, udostępniania i kopii zapasowych nie są dostępne dla tokenów.",
     "createTokenButton": "Utwórz token",
     "mcpServerUrlLabel": "Adres URL serwera MCP",
     "mcpServerUrlHelp": "Użyj tego adresu URL podczas konfigurowania klientów MCP, takich jak Claude Code lub Claude Desktop.",
@@ -384,7 +617,7 @@
     "revokeButton": "Odwołaj",
     "revokeModal": {
       "title": "Odwołaj token",
-      "message": "Ten token natychmiast przestanie działać. Wszystkie połączenia MCP, które go używają, zostaną rozłączone.",
+      "message": "Ten token natychmiast przestanie działać. Wszystkie połączenia MCP lub klienci API, którzy go używają, zostaną rozłączeni.",
       "confirmLabel": "Odwołaj"
     },
     "createModal": {
@@ -430,26 +663,27 @@
       "copyUrlFailed": "Nie udało się skopiować adresu URL",
       "loadFailed": "Nie udało się wczytać tokenów API",
       "createFailed": "Nie udało się utworzyć tokenu",
-      "revokeFailed": "Nie udało się odwołać tokenu"
+      "revokeFailed": "Nie udało się odwołać tokenu",
+      "reauthFailed": "Nie udało się potwierdzić ponownego uwierzytelnienia"
+    },
+    "stepUp": {
+      "reason": "Token daje dostęp do Twojego konta bez logowania, dlatego potwierdź swoją tożsamość przed jego utworzeniem."
     },
     "relative": {
-      "never": "Nigdy",
-      "today": "Dzisiaj",
-      "yesterday": "Wczoraj",
-      "daysAgo": "{count} dni temu",
-      "monthsAgo": "{count} miesięcy temu"
+      "never": "Nigdy"
     }
   },
   "autoBackup": {
     "heading": "Automatyczna kopia zapasowa",
-    "description": "Automatycznie twórz kopie zapasowe danych do folderu według harmonogramu. Ponieważ Monize działa w Dockerze, musisz zamapować folder hosta do kontenera jako wolumin (np. -v /host/backups:/data/backups).",
-    "adminManagedNote": "Tylko administratorzy mogą zmieniać te ustawienia. Wszyscy pozostali użytkownicy są archiwizowani automatycznie według tego samego harmonogramu i zasad przechowywania, każdy do własnego folderu.",
+    "description": "Jeden harmonogram dla całego wdrożenia: serwer tworzy kopie danych każdego konta w magazynie wskazanym poniżej. Ponieważ Monize działa w Dockerze, lokalny folder trzeba podpiąć do kontenera jako wolumin (np. -v /host/backups:/data/backups).",
+    "adminManagedNote": "Tylko administratorzy mogą zmieniać tę politykę, a obowiązuje ona dla każdego konta w tym wdrożeniu, każde we własnym folderze.",
+    "demoDisabledNote": "W trybie demonstracyjnym te elementy sterujące są tylko do odczytu.",
     "loadingText": "Wczytywanie...",
     "enableLabel": "Włącz automatyczne kopie zapasowe",
     "backupFolderLabel": "Folder kopii zapasowych",
     "backupFolderPlaceholder": "/data/backups",
-    "perUserFolderHelp": "Kopie zapasowe każdego użytkownika trafiają do własnego folderu wewnątrz tego, nazwanego jego identyfikatorem użytkownika.",
-    "perUserFolderHelpWithPath": "Kopie zapasowe każdego użytkownika trafiają do własnego folderu wewnątrz tego, nazwanego jego identyfikatorem użytkownika. Twój: {path}",
+    "perUserFolderHelp": "Kopie każdego konta trafiają do własnego folderu wewnątrz tego, nazwanego identyfikatorem konta.",
+    "perUserFolderHelpWithPath": "Kopie każdego konta trafiają do własnego folderu wewnątrz tego, nazwanego identyfikatorem konta. Przykład: {path}",
     "browseButton": "Przeglądaj...",
     "validateButton": "Sprawdź",
     "validatingButton": "Sprawdzanie...",
@@ -471,26 +705,26 @@
       "monthlyHelp": "Jedna na miesiąc zachowana"
     },
     "status": {
-      "heading": "Status",
-      "lastBackup": "Ostatnia kopia zapasowa",
-      "nextBackup": "Następna kopia zapasowa",
+      "heading": "Stan wdrożenia",
+      "lastBackup": "Najnowsza kopia",
+      "nextBackup": "Następna zaplanowana kopia",
       "error": "Błąd",
       "success": "Sukces",
-      "failed": "Niepowodzenie",
-      "partial": "Częściowa"
+      "partial": "Częściowa",
+      "failed": "Niepowodzenie"
     },
-    "saveButton": "Zapisz ustawienia",
-    "savingButton": "Zapisywanie...",
-    "runNowButton": "Utwórz kopię teraz",
-    "runningButton": "Tworzenie kopii zapasowej...",
+    "saveButton": "Zapisz politykę",
+    "runNowButton": "Utwórz teraz kopie wszystkich kont",
+    "runningButton": "Tworzenie kopii...",
     "toasts": {
-      "saved": "Zapisano ustawienia automatycznej kopii zapasowej",
-      "backupCreated": "Utworzono kopię zapasową: {filename}",
+      "saved": "Polityka kopii zapasowych zapisana i zastosowana do wszystkich kont",
       "folderValid": "Folder jest prawidłowy i zapisywalny",
       "loadFailed": "Nie udało się wczytać ustawień automatycznej kopii zapasowej",
       "saveFailed": "Nie udało się zapisać ustawień",
       "runFailed": "Nie udało się wykonać kopii zapasowej",
-      "browseFailed": "Nie udało się przeglądać folderów"
+      "browseFailed": "Nie udało się przeglądać folderów",
+      "backupRunFinished": "Utworzono kopie {backedUp} z {requested} kont",
+      "backupRunIncomplete": "Utworzono kopie {backedUp} z {requested}: {partial} częściowych, {failed} nieudanych. Sprawdź stan poniżej."
     },
     "folderErrors": {
       "required": "Ścieżka folderu jest wymagana",
@@ -505,9 +739,22 @@
     },
     "noStorage": {
       "title": "Ta instalacja nie ma magazynu kopii zapasowych",
-      "body": "Automatyczne kopie zapasowe byłyby zapisywane w {folderPath}, gdzie ta instalacja nie może pisać. Administrator musi zamontować tam magazyn, zanim harmonogram będzie mógł działać."
+      "body": "Kopie automatyczne byłyby zapisywane w {folderPath}, gdzie to wdrożenie nie może pisać. Administrator musi udostępnić ten magazyn, zanim harmonogram będzie mógł działać."
     },
-    "never": "Nigdy"
+    "never": "Nigdy",
+    "coverage": {
+      "accounts": "Zaplanowana dla {scheduled} z {total} aktywnych kont w tym wdrożeniu.",
+      "unknown": "Zasięg tej polityki jest niedostępny."
+    },
+    "storage": {
+      "heading": "Magazyn kopii zapasowych",
+      "providerLocal": "Folder lokalny",
+      "providerS3": "Magazyn obiektowy zgodny z S3",
+      "providerUnknown": "Magazyn",
+      "localHelp": "Ustawiane przez BACKUP_STORAGE_PROVIDER. Kopie każdego konta trafiają do własnego folderu wewnątrz tego, nazwanego identyfikatorem konta.",
+      "fixedHelp": "Ustawiane przez BACKUP_STORAGE_PROVIDER. Zasobnik i prefiks klucza należą do wdrożenia, więc nie ma tu folderu do wyboru; kopie każdego konta trafiają pod własny prefiks klucza.",
+      "artifactCount": "Ten magazyn zawiera obecnie {count} plików kopii zapasowej Twojego konta. Zmiana magazynu nie przenosi istniejących kopii."
+    }
   },
   "backupRestore": {
     "heading": "Kopia zapasowa i przywracanie",
@@ -557,8 +804,8 @@
       },
       "toasts": {
         "success": "Pobrano kopię zapasową",
-        "incomplete": "Kopia zapasowa została pobrana, ale jest NIEKOMPLETNA: {unusable} z {total} załącznik(ów) nie udało się zapisać w nienaruszonym stanie ({missing} brakuje, {inconsistent} nie przeszło kontroli integralności). Nie traktuj tego pliku jako pełnej kopii zapasowej — napraw magazyn załączników i wyeksportuj ponownie.",
-        "failed": "Nie udało się utworzyć kopii zapasowej"
+        "failed": "Nie udało się utworzyć kopii zapasowej",
+        "incomplete": "Kopia zapasowa została pobrana, ale jest NIEKOMPLETNA: {unusable} z {total} załącznik(ów) nie udało się zapisać w nienaruszonym stanie ({missing} brakuje, {inconsistent} nie przeszło kontroli integralności). Nie traktuj tego pliku jako pełnej kopii zapasowej — napraw magazyn załączników i wyeksportuj ponownie."
       }
     },
     "restore": {
@@ -580,16 +827,130 @@
         "pleaseEnterPassword": "Wpisz hasło, aby potwierdzić",
         "encryptedNeedsPassword": "Ta kopia zapasowa jest zaszyfrowana. Wpisz hasło, którym ją utworzono, w polu \"Hasło kopii zapasowej\" i spróbuj ponownie.",
         "failed": "Nie udało się przywrócić kopii zapasowej",
+        "interrupted": "Przywracanie zostało przerwane, zanim serwer odpowiedział. Przywracanie wykonuje się w całości albo wcale, więc Twoje dane są w pełni przywrócone lub niezmienione. Przed ponowną próbą odśwież stronę, aby to sprawdzić.",
         "reauthRedirect": "Przenosimy Cię do dostawcy tożsamości, aby potwierdzić Twoją tożsamość. Po powrocie wybierz plik kopii zapasowej ponownie."
-      }
+      },
+      "selectedFile": "Wybrano: {filename}"
     },
     "restoreResult": {
       "title": "Przywracanie zakończone",
-      "description": "Twoje dane zostały pomyślnie przywrócone. Oto podsumowanie tego, co przywrócono:",
       "totalRecords": "Łączna liczba rekordów",
-      "doneButton": "Gotowe",
       "skippedAttachments": "{count, plural, one {# załącznik nie został przywrócony} few {# załączniki nie zostały przywrócone} many {# załączników nie zostało przywróconych} other {# załącznika nie zostało przywróconych}}: kopia nie zawierała dla nich użytecznych bajtów — w chwili eksportu brakowało ich albo nie przeszły kontroli sumy, albo plik pochodzi z czasów przed samowystarczalnymi kopiami. Wyeksportuj nową kopię, gdy magazyn załączników będzie sprawny.",
-      "unusableAiProviderKeys": "{count, plural, one {# dostawca AI został przywrócony bez działającego klucza API} few {# dostawców AI zostało przywróconych bez działających kluczy API} many {# dostawców AI zostało przywróconych bez działających kluczy API} other {# dostawcy AI zostało przywróconych bez działających kluczy API}}: kopia zapasowa powstała, zanim klucze dostawców zaczęły w niej podróżować, więc zapisany klucz należy do serwera, który utworzył plik, albo ten serwer nie ma skonfigurowanego klucza szyfrującego, pod którym mógłby go zapisać. Otwórz Ustawienia → Dostawcy AI i wprowadź klucz API ponownie."
+      "unusableAiProviderKeys": "{count, plural, one {# dostawca AI został przywrócony bez działającego klucza API} few {# dostawców AI zostało przywróconych bez działających kluczy API} many {# dostawców AI zostało przywróconych bez działających kluczy API} other {# dostawcy AI zostało przywróconych bez działających kluczy API}}: kopia zapasowa powstała, zanim klucze dostawców zaczęły w niej podróżować, więc zapisany klucz należy do serwera, który utworzył plik, albo ten serwer nie ma skonfigurowanego klucza szyfrującego, pod którym mógłby go zapisać. Otwórz Ustawienia → Dostawcy AI i wprowadź klucz API ponownie.",
+      "unlinkedBondSecurities": "{count, plural, one {# papier obligacyjny został przywrócony bez powiązania z instrumentem obligacji} few {# papiery obligacyjne zostały przywrócone bez powiązania z instrumentami obligacji} many {# papierów obligacyjnych zostało przywróconych bez powiązania z instrumentami obligacji} other {# papieru obligacyjnego zostało przywróconych bez powiązania z instrumentami obligacji}}: katalog obligacji na tym serwerze nie zawiera tej serii (lub zawiera ją w innej walucie), więc silnik obligacji już ich nie wycenia, a ich wyliczone ceny nie zostały przywrócone. Otwórz każdy papier i powiąż go ponownie z instrumentem obligacji.",
+      "unlinkedBondSeries": "{count, plural, one {# transakcja obligacji straciła} few {# transakcje obligacji straciły} many {# transakcji obligacji straciło} other {# transakcji obligacji straciło}} serię, ponieważ nie udało się jej pobrać z oficjalnego źródła. Przywrócono je bez serii i pozostaną bez niej, dopóki jej nie pobierzesz.",
+      "unrecoveredBondSeries": "Serie obligacji wskazane w kopii zapasowej, których nie udało się pobrać: {count}.",
+      "unrecoveredBondSeriesItem": "{series} ({country}): {reason}",
+      "unrecoveredBondSeriesMore": "oraz kolejne: {count}",
+      "unrecoveredBondSeriesAction": "Aby je przywrócić, otwórz papier wartościowy obligacji, pobierz serię na jego stronie (Odśwież) i wybierz serię w transakcjach, które jej nie mają.",
+      "unrecoveredBondSeriesReason": {
+        "not-published": "emitent nie opublikował jeszcze tej serii",
+        "source-unavailable": "oficjalne źródło nie odpowiedziało; spróbuj ponownie później",
+        "no-adapter": "ten serwer nie ma źródła dla kraju tego emitenta",
+        "refused": "odpowiedź oficjalnego źródła nie została zaakceptowana",
+        "rate-limited": "oficjalne źródło poprosiło o zwolnienie tempa; spróbuj ponownie później",
+        "not-attempted": "w jednym przywracaniu było zbyt wiele serii; nie podjęto próby",
+        "other": "nieznana przyczyna"
+      },
+      "doneButton": "Gotowe",
+      "unlinkedBondSecuritiesList": "Dotyczy papierów wartościowych: {symbols}.",
+      "unlinkedBondSecuritiesMore": "i jeszcze {count}",
+      "currencyKindMismatchAccounts": "{count, plural, one {# konto zostało przywrócone z walutą, której rodzaj nie pasuje do jego typu} few {# konta zostały przywrócone z walutą, której rodzaj nie pasuje do ich typu} many {# kont zostało przywróconych z walutą, której rodzaj nie pasuje do ich typu} other {# konta zostało przywróconego z walutą, której rodzaj nie pasuje do ich typu}}: konto kryptowalutowe wymaga kryptowaluty, a każde inne konto waluty fiducjarnej. Na tym serwerze waluta jest drugiego rodzaju. Zmień walutę konta albo rodzaj waluty na stronie Waluty.",
+      "currencyKindMismatchAccountsList": "Dotyczy kont: {names}.",
+      "currencyKindMismatchSecurities": "{count, plural, one {# papier wartościowy jest wyceniany} few {# papiery wartościowe są wyceniane} many {# papierów wartościowych jest wycenianych} other {# papieru wartościowego jest wycenianego}} na tym serwerze w kryptowalucie, a papier wartościowy wymaga waluty fiducjarnej. Zmień walutę papieru wartościowego albo rodzaj waluty na stronie Waluty.",
+      "currencyKindMismatchSecuritiesList": "Dotyczy papierów wartościowych: {symbols}.",
+      "currencyKindMismatchMore": "i jeszcze {count}",
+      "currencyKindMismatchDefaultCurrency": "Twoja domyślna waluta, {code}, jest na tym serwerze kryptowalutą, a sumy i raporty są zawsze wyświetlane w walucie fiducjarnej. Wybierz fiducjarną domyślną walutę w Ustawienia → Preferencje.",
+      "counts": {
+        "sharedGroups": "Wspólne grupy",
+        "sharedParticipants": "Uczestnicy grup",
+        "sharedEntries": "Wpisy grup",
+        "sharedAllocations": "Podziały wydatków",
+        "sharedActivity": "Aktywność grup",
+        "sharedPeople": "Kontakty wspólnych wydatków",
+        "sharedPersonLinks": "Powiązane kontakty",
+        "sharedIntegrations": "Powiązania z finansami osobistymi",
+        "sharedPostings": "Prywatne księgowania wspólnych wydatków",
+        "sharedLedgerLinks": "Powiązane transakcje osobiste",
+        "budgetBuckets": "Koperty budżetu",
+        "budgetPeriodBuckets": "Koperty okresów budżetu"
+      }
+    },
+    "storedBackups": {
+      "heading": "Kopie automatyczne",
+      "description": "Kopie zapasowe utworzone dla Ciebie przez ten serwer według jego własnego harmonogramu. Pobierz jedną, aby mieć własny egzemplarz, albo przywróć z niej dane za pomocą formularza poniżej.",
+      "adminScheduleNote": "Ustawienia automatycznych kopii zapasowych znajdziesz w <link>Administrator → Kopie zapasowe</link>.",
+      "loading": "Wczytywanie kopii zapasowych...",
+      "loadFailed": "Nie udało się wczytać kopii zapasowych przechowywanych na serwerze",
+      "retryButton": "Spróbuj ponownie",
+      "empty": "Ten serwer nie przechowuje jeszcze żadnych automatycznych kopii zapasowych.",
+      "columns": {
+        "filename": "Plik",
+        "modified": "Data modyfikacji",
+        "size": "Rozmiar",
+        "actions": "Akcje"
+      },
+      "downloadButton": "Pobierz",
+      "restoreButton": "Przywróć",
+      "workingButton": "Trwa praca...",
+      "downloadFailed": "Nie udało się pobrać kopii zapasowej",
+      "offsite": {
+        "disclosure": "Miejsca docelowe poza serwerem",
+        "disclosureDescription": "Po każdej ukończonej automatycznej kopii zapasowej zaszyfrowana kopia może trafić do magazynu S3, na e-mail albo w oba miejsca: trzy kopie, dwa rodzaje przechowywania, jedno poza tą maszyną. Wysyłana jest wyłącznie zaszyfrowana kopia zapasowa.",
+        "encryptionUnavailable": "Ten serwer nie ma ustawionego klucza szyfrowania, więc nie można zapisać poświadczeń do Twojego własnego bucketa. Bucket należący do tego serwera i kopie wysyłane e-mailem nadal działają.",
+        "loading": "Wczytywanie miejsc docelowych poza serwerem...",
+        "loadFailed": "Nie udało się wczytać miejsc docelowych kopii poza serwerem",
+        "retryButton": "Spróbuj ponownie",
+        "demoNote": "W wersji demonstracyjnej nie można zmieniać miejsc docelowych poza serwerem.",
+        "saveButton": "Zapisz miejsca docelowe",
+        "saved": "Zapisano miejsca docelowe poza serwerem",
+        "saveFailed": "Nie udało się zapisać miejsc docelowych kopii poza serwerem",
+        "s3": {
+          "heading": "Magazyn S3",
+          "modeLabel": "Miejsce docelowe kopii",
+          "modeOff": "Wyłączone",
+          "modeDeployment": "Bucket tego serwera",
+          "modeOwn": "Mój własny bucket",
+          "deploymentUnavailable": "Ten serwer nie ma własnego zdalnego bucketa, więc musiałby go skonfigurować administrator. Zamiast tego możesz użyć własnego bucketa.",
+          "bucketLabel": "Bucket",
+          "regionLabel": "Region",
+          "regionHelp": "Wiele usług zgodnych z S3 ignoruje tę wartość.",
+          "prefixLabel": "Prefiks klucza",
+          "prefixHelp": "Opcjonalny folder wewnątrz bucketa, dzięki czemu Twoje kopie mogą dzielić go z innymi danymi.",
+          "endpointLabel": "Endpoint",
+          "endpointHelp": "Tylko dla usług zgodnych z S3, takich jak MinIO, R2 lub B2. Dla AWS pozostaw puste.",
+          "forcePathStyleLabel": "Użyj adresowania path-style",
+          "forcePathStyleHelp": "Wymagane przez MinIO i niektóre inne usługi zgodne z S3.",
+          "accessKeyIdLabel": "Identyfikator klucza dostępu",
+          "secretAccessKeyLabel": "Tajny klucz dostępu",
+          "storedPlaceholder": "•••• zapisano",
+          "credentialsHelp": "Poświadczenia są przechowywane na tym serwerze w postaci zaszyfrowanej i nigdy nie są pokazywane ponownie. Pozostaw te pola puste, aby zachować już zapisane.",
+          "clearCredentialsButton": "Usuń zapisane poświadczenia",
+          "clearConfirmTitle": "Usunąć zapisane poświadczenia?",
+          "clearConfirmMessage": "Ten serwer zapomni Twój identyfikator klucza dostępu i tajny klucz dostępu. Do czasu ponownego ich wpisania żadne kopie nie będą wysyłane do Twojego bucketa.",
+          "credentialsCleared": "Usunięto zapisane poświadczenia",
+          "clearFailed": "Nie udało się usunąć zapisanych poświadczeń"
+        },
+        "email": {
+          "heading": "E-mail",
+          "toggleLabel": "Wysyłaj mi e-mailem kopię każdej ukończonej automatycznej kopii zapasowej",
+          "addressLabel": "Wysyłaj kopie na",
+          "addressPlaceholder": "user@example.com",
+          "sizeNote": "Kopia przekraczająca limit rozmiaru na tym serwerze nie jest załączana; zamiast niej otrzymujesz powiadomienie z nazwą pliku."
+        },
+        "rowStatus": {
+          "iconTitle": "{destination}: {status}",
+          "destinationS3": "S3",
+          "destinationEmail": "E-mail",
+          "statusPending": "Oczekuje",
+          "statusUploading": "Wysyłanie",
+          "statusUploaded": "Skopiowana",
+          "statusFailed": "Niepowodzenie",
+          "statusConflict": "Konflikt",
+          "statusSkippedUnencrypted": "Pominięta: bez szyfrowania",
+          "statusSkippedTooLarge": "Pominięta: za duża"
+        }
+      }
     }
   },
   "sharedAccess": {
@@ -659,16 +1020,57 @@
       "sections": "Sekcje",
       "shared": "Dane współdzielone"
     },
+    "ops": {
+      "read": "Odczyt",
+      "create": "Tworzenie",
+      "edit": "Edytuj",
+      "delete": "Usuń",
+      "joint": "Wspólne"
+    },
     "sections": {
-      "description": "Przyznaj dostęp tylko do odczytu do całych sekcji aplikacji. Dane przypisane do kont nadal wymagają dostępu na poziomie poszczególnych kont."
+      "description": "Przyznaj dostęp tylko do odczytu do całych sekcji aplikacji. Dane przypisane do kont nadal wymagają dostępu na poziomie poszczególnych kont.",
+      "bills": {
+        "label": "Rachunki i wpłaty",
+        "description": "Zaplanowane transakcje udostępnionych kont"
+      },
+      "investments": {
+        "label": "Inwestycje",
+        "description": "Pozycje i transakcje inwestycyjne udostępnionych kont"
+      },
+      "budgets": {
+        "label": "Budżety",
+        "description": "Dane budżetu tylko do odczytu"
+      },
+      "reports": {
+        "label": "Raporty",
+        "description": "Raporty tylko do odczytu"
+      },
+      "ai": {
+        "label": "Asystent AI",
+        "description": "Korzysta z dostawcy AI skonfigurowanego przez właściciela"
+      },
+      "aiRequiresFullAccess": "Asystent AI odczytuje wszystkie konta i sekcje, dlatego odpowiada temu pełnomocnikowi dopiero wtedy, gdy może on odczytać wszystkie Twoje konta i każdą pozostałą sekcję.",
+      "warranties": {
+        "label": "Gwarancje",
+        "description": "Gwarancje wraz z dokumentami i zgłoszeniami. Powiązany zakup jest widoczny tylko wtedy, gdy znajduje się na koncie, które pełnomocnik może odczytać."
+      },
+      "toggleLabel": "Sekcja {section}"
     },
     "accounts": {
       "noAccounts": "Brak kont do przyznania.",
       "grantAll": "Przyznaj wszystkie",
-      "jointRequiresFullAccount": "Wspólne konta można udostępniać tylko użytkownikom, którzy mają własne konto Monize"
+      "jointRequiresFullAccount": "Wspólne konta można udostępniać tylko użytkownikom, którzy mają własne konto Monize",
+      "grantAllLabel": "{op} wszystkie konta typu {type}",
+      "grantLabel": "Dostęp {op} do {account}"
     },
     "shared": {
-      "description": "ODCZYT odbiorców, kategorii i tagów jest zawsze dozwolony. To steruje tworzeniem/edycją/usuwaniem."
+      "description": "ODCZYT odbiorców, kategorii i tagów jest zawsze dozwolony. To steruje tworzeniem/edycją/usuwaniem.",
+      "toggleLabel": "{op} {resource}",
+      "resources": {
+        "payees": "Odbiorcy",
+        "categories": "Kategorie",
+        "tags": "Tagi"
+      }
     },
     "saveButton": "Zapisz",
     "toasts": {
@@ -687,11 +1089,13 @@
     "emergencyAccess": "Dostęp awaryjny",
     "apiAccess": "Dostęp do API",
     "aiSettings": "Ustawienia AI",
+    "emailReceipts": "Paragony z e-maili",
     "backupRestore": "Kopia zapasowa i przywracanie",
-    "autoBackup": "Automatyczna kopia zapasowa",
     "help": "Pomoc i wsparcie",
     "dangerZone": "Strefa zagrożenia",
-    "about": "O programie"
+    "about": "O programie",
+    "payeeLookup": "Wyszukiwanie odbiorców",
+    "bankSync": "Synchronizacja bankowa"
   },
   "page": {
     "title": "Ustawienia",
@@ -715,6 +1119,14 @@
       "title": "Ustawienia AI",
       "description": "Skonfiguruj dostawców AI, zarządzaj kluczami API i przeglądaj statystyki użycia."
     },
+    "emailReceiptsCard": {
+      "title": "Paragony z e-maili",
+      "description": "Połącz skrzynkę pocztową z potwierdzeniami zamówień i zarządzaj profilami, które je odczytują."
+    },
+    "bankSyncCard": {
+      "title": "Synchronizacja bankowa",
+      "description": "Połącz swój bank przez Open Banking i importuj jego zaksięgowane transakcje do swoich kont."
+    },
     "delegateSecurityError": "Nie można wczytać Twoich ustawień bezpieczeństwa.",
     "toasts": {
       "securityLoadFailed": "Nie udało się wczytać ustawień zabezpieczeń",
@@ -732,6 +1144,14 @@
       "enabled": "Pływający dymek czatu włączony",
       "disabled": "Pływający dymek czatu wyłączony",
       "saveFailed": "Nie udało się zaktualizować ustawienia dymka czatu"
+    },
+    "trivia": {
+      "title": "Ciekawostki AI",
+      "subtitle": "Wypełnia widżet Ciekawostki na pulpicie faktami o Twojej wartości netto i inwestycjach. Są odbudowywane każdego ranka i formułowane przez AI, jeśli skonfigurowano dostawcę. Dodaj widżet przez Dostosuj na pulpicie. Gdy opcja jest wyłączona, widżet nie pokazuje faktów i nie jest odpytywany żaden dostawca.",
+      "toggleLabel": "Wypełnij widżet Ciekawostki na pulpicie ciekawostkami AI",
+      "enabled": "Ciekawostki AI włączone",
+      "disabled": "Ciekawostki AI wyłączone",
+      "saveFailed": "Nie udało się zaktualizować ustawienia ciekawostek AI"
     },
     "demoRestricted": {
       "heading": "Ograniczone w trybie demo",
@@ -812,7 +1232,6 @@
       "editMessageButton": "Edytuj",
       "messagePlaceholder": "Notatki, instrukcje, lokalizacje ważnych dokumentów...",
       "maxCharsNote": "Maksymalnie 4000 znaków. Przechowywane w postaci zaszyfrowanej.",
-      "cancelButton": "Anuluj",
       "saveButton": "Zapisz wiadomość",
       "toasts": {
         "saved": "Zapisano wiadomość",
@@ -857,7 +1276,7 @@
       "grantStatus": "Status przyznania: ",
       "unknown": "nieznany",
       "never": "nigdy",
-      "daysAgo": "{count} {count, plural, one {dzień} few {dni} many {dni} other {dnia}} temu",
+      "withRelative": "{timestamp} ({relative})",
       "grantedOn": "przyznano {timestamp}",
       "notYetGranted": "jeszcze nie przyznano",
       "timerNote": "Licznik resetuje się automatycznie za każdym razem, gdy korzystasz z aplikacji -- logowanie, przeglądanie strony, zapisanie transakcji, dowolna uwierzytelniona czynność."
@@ -874,6 +1293,17 @@
     },
     "stepUp": {
       "reason": "Zweryfikuj ponownie swoją tożsamość, aby wyświetlić lub edytować wiadomość dostępu awaryjnego."
+    },
+    "validation": {
+      "wholeDays": "Tylko pełne dni",
+      "minDays": "{min, plural, one {Musi wynosić co najmniej # dzień} few {Musi wynosić co najmniej # dni} many {Musi wynosić co najmniej # dni} other {Musi wynosić co najmniej # dnia}}",
+      "maxDays": "{max, plural, one {Może wynosić najwyżej # dzień} few {Może wynosić najwyżej # dni} many {Może wynosić najwyżej # dni} other {Może wynosić najwyżej # dnia}}",
+      "reminderBeforeGrant": "Liczba dni przypomnienia musi być mniejsza niż liczba dni do przyznania dostępu",
+      "messageMax": "Wiadomość może mieć najwyżej {max} znaków",
+      "firstNameRequired": "Imię jest wymagane",
+      "firstNameMax": "Imię może mieć najwyżej {max} znaków",
+      "emailInvalid": "Wpisz prawidłowy adres e-mail",
+      "emailMax": "Adres e-mail może mieć najwyżej {max} znaków"
     },
     "toasts": {
       "loadFailed": "Nie udało się wczytać dostępu awaryjnego",
@@ -908,6 +1338,10 @@
       "editButton": "Edytuj",
       "deleteButton": "Usuń"
     },
+    "deleteDialog": {
+      "title": "Usuń dostawcę AI",
+      "message": "Usunąć {name}? Zapisany klucz API zostanie usunięty razem z nim. Tej operacji nie można cofnąć."
+    },
     "configForm": {
       "addTitle": "Dodaj dostawcę AI",
       "editTitle": "Edytuj dostawcę",
@@ -919,6 +1353,7 @@
       "ollamaCloudNote": "Nazwy modeli muszą zawierać sufiks -cloud (np. gpt-oss:20b-cloud).",
       "apiKeyLabel": "Klucz API",
       "baseUrlLabel": "Bazowy adres URL",
+      "baseUrlPrivateNote": "Adres prywatny lub lokalny (localhost, 192.168.x.x lub nazwa kontenera) działa tylko dla administratora albo gdy operator serwera zezwoli na ten adres. W przeciwnym razie użyj adresu dostępnego z internetu.",
       "priorityLabel": "Priorytet",
       "priorityHelp": "Niższa liczba = wyższy priorytet. Używane do kolejności przełączania awaryjnego.",
       "costRatesHeading": "Stawki kosztów (opcjonalnie)",
@@ -1027,5 +1462,468 @@
       "all": "Cały czas"
     },
     "estCostTooltip": "Szacowane przy użyciu stawek kosztów skonfigurowanych dla każdego dostawcy. Wyklucza aktywność, dla której nie ustawiono pasującej stawki."
+  },
+  "payeeLookup": {
+    "title": "Wyszukiwanie odbiorców",
+    "subtitle": "Skąd pochodzą strona, adres, e-mail i telefon odbiorcy oraz kiedy wyszukiwanie uruchamia się samo.",
+    "saved": "Zapisano ustawienia wyszukiwania odbiorców",
+    "saveFailed": "Nie udało się zapisać ustawień wyszukiwania odbiorców",
+    "loadFailed": "Nie udało się wczytać ustawień wyszukiwania odbiorców. Odśwież stronę, aby spróbować ponownie.",
+    "googlePlaces": {
+      "toggleLabel": "Używaj Google Places do wyszukiwania odbiorców",
+      "notConfigured": "Dodaj klucz API Google Places, aby wyszukiwać firmy w katalogu Google zamiast korzystać z dostawcy AI.",
+      "operatorManaged": "Skonfigurowane przez administratora tego serwera. Możesz to wyłączyć dla własnych odbiorców.",
+      "configure": "Skonfiguruj",
+      "edit": "Edytuj",
+      "removeKey": "Usuń klucz",
+      "usage": "Wykorzystano w tym miesiącu: {used} z {cap}",
+      "usageNoCap": "Wykorzystano w tym miesiącu: {used}. Bez limitu miesięcznego.",
+      "keyUnreadable": "Ten serwer nie może odczytać zapisanego klucza API. Dzieje się tak po przywróceniu kopii zapasowej na innej instancji lub po zmianie klucza szyfrowania. Wprowadź klucz ponownie, aby to naprawić.",
+      "encryptionUnavailable": "Na tym serwerze nie skonfigurowano klucza szyfrowania, więc klucza API nie da się bezpiecznie zapisać. Poproś administratora o jego ustawienie.",
+      "modalTitle": "Google Places",
+      "modalSubtitle": "Monize wysyła do Google nazwę odbiorcy i adres, który już masz, i nic tam nie przechowuje.",
+      "apiKeyLabel": "Klucz API",
+      "apiKeyPlaceholder": "Wklej swój klucz API Google Places",
+      "apiKeyHelp": "Utwórz klucz w konsoli Google Cloud z włączonym Places API (New). Pozostaw puste, aby zachować już zapisany klucz.",
+      "capToggleLabel": "Ogranicz liczbę zapytań w miesiącu",
+      "capHelp": "Google daje {free} bezpłatnych zapytań Text Search miesięcznie dla pól potrzebnych temu wyszukiwaniu. Po przekroczeniu limitu wyszukiwanie wraca do dostawcy AI.",
+      "capLabel": "Zapytania miesięcznie",
+      "capRange": "Wprowadź liczbę z zakresu od {min} do {max}.",
+      "test": "Testuj",
+      "testing": "Testowanie...",
+      "testSuccess": "Google zaakceptował klucz.",
+      "save": "Zapisz",
+      "cancel": "Anuluj",
+      "setupInstructions": "Instrukcja konfiguracji"
+    },
+    "automatic": {
+      "title": "Automatyczne wyszukiwanie danych kontaktowych odbiorcy",
+      "subtitle": "Automatycznie wyszukuj stronę internetową, adres, e-mail i numer telefonu nowego odbiorcy. Wysyłana jest nazwa odbiorcy wraz z zapisanymi już notatkami, stroną, adresem, e-mailem i telefonem, aby wyszukiwanie rozróżniło właściwą firmę i właściwą lokalizację.",
+      "toggleLabel": "Włącz automatyczne wyszukiwanie danych kontaktowych odbiorcy",
+      "enabled": "Automatyczne wyszukiwanie danych kontaktowych włączone",
+      "disabled": "Automatyczne wyszukiwanie danych kontaktowych wyłączone",
+      "saveFailed": "Nie udało się zaktualizować ustawienia wyszukiwania danych kontaktowych",
+      "noSource": "Włącz powyżej jedno źródło, aby automatycznie wyszukiwać odbiorców. Przy obu wyłączonych nic nie odpowie na wyszukiwanie."
+    },
+    "order": {
+      "title": "Które źródło odpowiada najpierw",
+      "placesTitle": "Google Places",
+      "placesHelp": "Dane z katalogu, taniej za wyszukiwanie. Google nie ma adresów e-mail.",
+      "aiTitle": "Istniejący dostawca AI",
+      "aiHelp": "Może znaleźć adres e-mail i kosztuje jedno wywołanie modelu przy każdym wyszukiwaniu.",
+      "aiToggleLabel": "Używaj dostawcy AI do wyszukiwania odbiorców",
+      "aiProviderLabel": "Dostawca do użycia",
+      "aiProviderAny": "Dowolny dostawca, według priorytetu",
+      "moveUp": "W górę",
+      "moveDown": "W dół"
+    }
+  },
+  "bankSync": {
+    "backLink": "Powrót do Ustawień",
+    "title": "Synchronizacja bankowa",
+    "subtitle": "Importuj zaksięgowane transakcje ze swoich kont bankowych przez Open Banking",
+    "demoRestricted": {
+      "heading": "Ograniczone w trybie demo",
+      "body": "Synchronizacja bankowa jest wyłączona w trybie demo."
+    },
+    "loadFailed": {
+      "title": "Nie udało się wczytać synchronizacji bankowej",
+      "retry": "Spróbuj ponownie"
+    },
+    "credentials": {
+      "title": "Aplikacja Enable Banking",
+      "subtitle": "Monize odczytuje Twoje konta bankowe przez Twoją własną aplikację Enable Banking. Zarejestruj ją w panelu Enable Banking. Potem wpisz tutaj jej ID aplikacji i klucz prywatny.",
+      "notConfigured": "Nie skonfigurowano jeszcze żadnej aplikacji.",
+      "applicationId": "ID aplikacji",
+      "keyStored": "Klucz prywatny jest zapisany.",
+      "keyMissing": "Nie zapisano klucza prywatnego.",
+      "configure": "Skonfiguruj dane uwierzytelniające",
+      "edit": "Edytuj dane uwierzytelniające",
+      "remove": "Usuń dane uwierzytelniające",
+      "test": "Testuj połączenie",
+      "testing": "Testowanie...",
+      "encryptionUnavailable": "Na tym serwerze nie skonfigurowano klucza szyfrowania, więc nie można zapisać danych uwierzytelniających.",
+      "redirectUrlLabel": "Adres przekierowania",
+      "redirectUrlHelp": "Zarejestruj dokładnie ten adres jako adres przekierowania w panelu Enable Banking. Bank odsyła Cię na ten adres po udzieleniu dostępu.",
+      "redirectUrlNotPublic": "Adres przekierowania nie musi być dostępny z internetu. Otwiera go tylko przeglądarka.",
+      "redirectUrlHttpWarning": "Aplikacja „Production” przyjmuje tylko adres przekierowania https. Ten adres używa http, więc działa tylko z aplikacją „Sandbox”. Ustaw PUBLIC_APP_URL na adres https Monize.",
+      "copy": "Kopiuj",
+      "copied": "Skopiowano",
+      "copyFailed": "Nie udało się skopiować",
+      "testSuccess": "Aplikacja działa: {name}",
+      "testSuccessNoName": "Aplikacja działa.",
+      "testRedirectMissing": "Aplikacja działa, ale powyższy adres przekierowania nie jest w niej zarejestrowany. Dodaj go w panelu Enable Banking.",
+      "testFailed": "Dostawca nie zaakceptował tych danych uwierzytelniających.",
+      "testError": "Nie udało się przetestować danych uwierzytelniających",
+      "saved": "Zapisano dane uwierzytelniające. Sprawdź je przyciskiem Testuj połączenie.",
+      "saveFailed": "Nie udało się zapisać danych uwierzytelniających",
+      "removed": "Usunięto dane uwierzytelniające",
+      "removeFailed": "Nie udało się usunąć danych uwierzytelniających",
+      "removeConfirm": {
+        "title": "Usuń dane uwierzytelniające",
+        "message": "Zapisane ID aplikacji i klucz prywatny zostaną usunięte z Monize. Musisz wpisać je ponownie, zanim połączysz bank lub uruchomisz synchronizację.",
+        "confirm": "Usuń"
+      },
+      "help": {
+        "show": "Pokaż pomoc w konfiguracji",
+        "hide": "Ukryj pomoc w konfiguracji",
+        "whatIsTitle": "Czym jest Enable Banking?",
+        "whatIsBody": "Enable Banking to firma z licencją w UE jako dostawca usług dostępu do informacji o rachunku (AISP) zgodnie z PSD2. Łączy się z Twoim bankiem w Twoim imieniu. Daje Monize dostęp tylko do odczytu do Twoich kont, sald i transakcji. Logujesz się w swoim banku. Monize i Enable Banking nigdy nie widzą hasła do Twojego banku. Enable Banking współpracuje z bankami w Europejskim Obszarze Gospodarczym.",
+        "dataFlow": "Po połączeniu banku Enable Banking może odczytywać Twoje dane bankowe: dane Twoich kont przechodzą przez jego usługę w drodze do Monize. Enable Banking oświadcza, że nie przechowuje tych danych. Obowiązują jego warunki: <terms>warunki API Enable Banking</terms>.",
+        "whatIsFree": "Do użytku osobistego wystarczy bezpłatna aplikacja w ograniczonym trybie produkcyjnym. Aplikacja odczytuje tylko te konta, które powiążesz z nią w panelu.",
+        "setupTitle": "Jak to skonfigurować",
+        "step1": "Załóż konto w <link>Enable Banking</link> (wybierz „Get Started” i poczekaj na e-mail z potwierdzeniem). Potem zaloguj się do panelu i otwórz „API applications”.",
+        "step2": "Wybierz „Production”. Monize czyta prawdziwe konta bankowe tylko przez aplikację Production. Wybierz „Sandbox” tylko wtedy, gdy chcesz najpierw wypróbować połączenie. Sandbox pokazuje tylko dane demonstracyjne z banków testowych.",
+        "step3": "Dla klucza prywatnego zostaw „Generate in the browser”.",
+        "step4": "Wpisz poniższe wartości w formularzu. Dla „Production” każde pole jest wymagane.",
+        "registrationValuesTitle": "Wartości do wklejenia w formularzu",
+        "registrationValuesNote": "Etykiety i wartości zostają po angielsku, bo panel jest po angielsku.",
+        "registrationTemplatesNote": "Oba adresy prowadzą do szablonów Monize. W trybie ograniczonym Enable Banking ich nie sprawdza. Jeśli z Twojej instancji Monize korzystają inne osoby, opublikuj zamiast tego własne strony ze swoim nazwiskiem.",
+        "emailPlaceholder": "Twój adres e-mail",
+        "copyField": "Kopiuj: {field}",
+        "step5": "Wybierz „Register”. Przeglądarka zapisze plik klucza prywatnego (.pem). Zachowaj ten plik w tajemnicy.",
+        "step6": "Dla „Production” nowa aplikacja ma status „Inactive”. Wybierz „Activate by linking accounts”. Wybierz kraj, swój bank i typ użytkowania („personal” dla konta osobistego, „business” dla konta firmowego), a potem wybierz „Link”. Następnie zaloguj się w swoim banku i autoryzuj swoje konta. Nie wybieraj „Request activation”. Ta opcja prosi o ogólną dostępność, której użytek osobisty nie wymaga. Bez powiązanych kont bank nie zwróci żadnych kont. Później, gdy połączysz bank w Monize, wybierz ten sam typ użytkowania.",
+        "step7": "Wpisz ID aplikacji z listy aplikacji. Wczytaj tutaj plik klucza prywatnego.",
+        "sandboxNote": "Transakcje z aplikacji Sandbox to dane demonstracyjne. Powiąż konto bankowe Sandbox tylko z kontem testowym w Monize. Nie wiąż go z kontem, które zawiera prawdziwe transakcje.",
+        "networkTitle": "Dostęp sieciowy",
+        "networkBody": "Bank odsyła Cię z powrotem. Wtedy Twoja przeglądarka otwiera adres przekierowania. Serwery Enable Banking nie łączą się z Monize. Dlatego Monize nie musi być dostępne z internetu ani z adresów IP Enable Banking. Adres przekierowania musi otwierać się w przeglądarce, której używasz do udzielenia dostępu.",
+        "networkOutbound": "Serwer Monize musi mieć możliwość połączenia z api.enablebanking.com przez HTTPS (port 443)."
+      },
+      "modalSource": "ID aplikacji i klucz prywatny znajdziesz w <link>panelu Enable Banking</link>."
+    },
+    "credentialsModal": {
+      "title": "Dane uwierzytelniające Enable Banking",
+      "subtitle": "Zapisane w postaci zaszyfrowanej na tym serwerze. Klucz prywatny nigdy nie jest pokazywany ponownie.",
+      "applicationIdLabel": "ID aplikacji",
+      "applicationIdPlaceholder": "ID Twojej aplikacji Enable Banking",
+      "applicationIdRequired": "Wpisz ID aplikacji",
+      "applicationIdTooLong": "ID aplikacji jest za długie",
+      "privateKeyLabel": "Klucz prywatny (PEM)",
+      "privateKeyPlaceholder": "Wklej klucz prywatny PEM swojej aplikacji",
+      "privateKeyStoredPlaceholder": "Klucz jest zapisany. Pozostaw to pole puste, aby go zachować. Wklej nowy klucz, aby go zastąpić.",
+      "privateKeyHelp": "Wklej cały plik PEM pobrany podczas rejestracji aplikacji.",
+      "privateKeyRequired": "Wpisz klucz prywatny",
+      "privateKeyInvalid": "To nie wygląda na klucz prywatny PEM. Klucz to blok tekstu. Zaczyna się od BEGIN i kończy na PRIVATE KEY.",
+      "privateKeyTooLong": "Klucz prywatny jest za długi",
+      "loadKeyFile": "Wczytaj plik klucza",
+      "keyFileTooLarge": "Plik jest większy niż 16 KB. Wybierz plik .pem zapisany przez Enable Banking.",
+      "keyFileReadFailed": "Nie udało się odczytać pliku.",
+      "cancel": "Anuluj",
+      "save": "Zapisz",
+      "saving": "Zapisywanie..."
+    },
+    "connections": {
+      "title": "Połączone banki",
+      "subtitle": "Każde konto bankowe jest powiązane z jednym kontem Monize. Jego zaksięgowane transakcje są importowane na to konto.",
+      "connect": "Połącz bank",
+      "credentialsFirst": "Przed połączeniem banku skonfiguruj powyżej dane uwierzytelniające Enable Banking.",
+      "loadFailed": "Nie udało się wczytać Twoich połączeń bankowych.",
+      "empty": {
+        "title": "Brak połączonych banków",
+        "description": "Połącz bank, aby zaimportować jego zaksięgowane transakcje na swoje konta Monize."
+      }
+    },
+    "connect": {
+      "title": "Połącz bank",
+      "subtitle": "Nastąpi przekierowanie do banku, w którym zezwolisz na dostęp tylko do odczytu.",
+      "whySecondAuthorization": "Tutaj autoryzujesz dostęp w banku ponownie, nawet jeśli te same konta zostały już połączone w panelu Enable Banking. Panel tylko wymienia konta, które aplikacja może czytać, a jego zgoda wygasa tego samego dnia. Ten krok daje Monize własną zgodę na odczyt sald i transakcji, na maksymalnie 180 dni. Gdy zgoda będzie wygasać, karta połączenia pokaże „Odnów zgodę”.",
+      "countryLabel": "Kraj",
+      "countryPlaceholder": "Wybierz kraj",
+      "institutionLabel": "Bank",
+      "institutionPlaceholder": "Wyszukaj swój bank",
+      "institutionsLoading": "Wczytywanie banków...",
+      "institutionsFailed": "Nie udało się wczytać listy banków.",
+      "retry": "Spróbuj ponownie",
+      "noInstitutions": "Dostawca nie podaje żadnych banków dla tego kraju.",
+      "psuTypeLabel": "Właściciel konta",
+      "psuPersonal": "Osobiste",
+      "psuBusiness": "Firmowe",
+      "consentDays": "{days, plural, one {Ten bank zezwala na dostęp maksymalnie przez # dzień. Potem musisz go odnowić.} few {Ten bank zezwala na dostęp maksymalnie przez # dni. Potem musisz go odnowić.} many {Ten bank zezwala na dostęp maksymalnie przez # dni. Potem musisz go odnowić.} other {Ten bank zezwala na dostęp maksymalnie przez # dnia. Potem musisz go odnowić.}}",
+      "continue": "Przejdź do banku",
+      "continuing": "Łączenie...",
+      "cancel": "Anuluj",
+      "unsafeUrl": "Adres banku zwrócony przez serwer nie jest bezpiecznym adresem https, więc Monize go nie otworzyło.",
+      "failed": "Nie udało się rozpocząć połączenia"
+    },
+    "connection": {
+      "status": {
+        "pending": "Oczekuje",
+        "active": "Aktywne",
+        "expired": "Wygasło",
+        "revoked": "Odwołane",
+        "failed": "Nieudane"
+      },
+      "validUntil": "Dostęp ważny do {date}",
+      "expiresSoon": "Wkrótce wygasa",
+      "autoSync": "Synchronizuj automatycznie raz dziennie",
+      "autoSyncOn": "Włączono synchronizację automatyczną",
+      "autoSyncOff": "Wyłączono synchronizację automatyczną",
+      "autoSyncFailed": "Nie udało się zmienić synchronizacji automatycznej",
+      "renew": "Odnów zgodę",
+      "renewFailed": "Nie udało się rozpocząć odnowienia",
+      "syncAll": "Synchronizuj wszystko",
+      "syncingAll": "Synchronizowanie...",
+      "syncAllFailed": "Nie udało się zsynchronizować tego banku",
+      "disconnect": "Rozłącz",
+      "disconnected": "Bank rozłączony",
+      "disconnectFailed": "Nie udało się rozłączyć banku",
+      "disconnectConfirm": {
+        "title": "Rozłącz {bank}",
+        "message": "Monize przestaje synchronizować ten bank i prosi go o zakończenie dostępu. Zaimportowane już transakcje pozostają. Ponowne połączenie banku nie importuje ich drugi raz.",
+        "confirm": "Rozłącz"
+      },
+      "pendingHint": "Autoryzacja w banku nie została ukończona. Odnów zgodę, aby spróbować jeszcze raz; powiązane konta zostaną zachowane.",
+      "noAccounts": "Bank nie zgłosił żadnych kont dla tego połączenia.",
+      "accountsHeading": "Konta bankowe",
+      "matchAccounts": "Dopasuj według numeru konta",
+      "matching": "Dopasowywanie...",
+      "matchLinked": "{count, plural, one {# konto bankowe powiązano z kontem o tym samym numerze} few {# konta bankowe powiązano z kontami o tych samych numerach} many {# kont bankowych powiązano z kontami o tych samych numerach} other {# kont bankowych powiązano z kontami o tych samych numerach}}",
+      "matchSuggested": "{count, plural, one {# konto bankowe pasuje do więcej niż jednego z Twoich kont: wybierz jego konto samodzielnie} few {# konta bankowe pasują do więcej niż jednego z Twoich kont: wybierz ich konta samodzielnie} many {# kont bankowych pasuje do więcej niż jednego z Twoich kont: wybierz ich konta samodzielnie} other {# kont bankowych pasuje do więcej niż jednego z Twoich kont: wybierz ich konta samodzielnie}}",
+      "matchBoth": "{linked}. {suggested}",
+      "matchNone": "Nie powiązano żadnego konta bankowego: żadne nie ma numeru konta pasującego do jednego z Twoich kont.",
+      "matchFailed": "Nie udało się dopasować kont bankowych",
+      "syncAllNeedsPreview": "Opcja „Synchronizuj wszystko” czeka, aż pierwszy import każdego nowo powiązanego konta zostanie potwierdzony. Użyj „Synchronizuj teraz” przy tym koncie, aby zobaczyć podgląd.",
+      "notifySuccess": "Powiadom po codziennej synchronizacji",
+      "notifySuccessOptions": {
+        "always": "Po każdej synchronizacji",
+        "when_imported": "Tylko gdy zaimportowano transakcje",
+        "never": "Nigdy"
+      },
+      "notifySuccessSaved": "Zapisano ustawienie powiadomień",
+      "notifySuccessFailed": "Nie udało się zmienić ustawienia powiadomień",
+      "tagOperationType": "Oznaczaj transakcje tagiem typu operacji z banku",
+      "tagOperationTypeHelp": "Każda zaimportowana transakcja dostaje tag o nazwie typu operacji z banku, na przykład Płatność kartą lub Przelew przychodzący, aby reguły i raporty mogły z niego korzystać.",
+      "tagOperationTypeOn": "Tagi typu operacji włączone",
+      "tagOperationTypeOff": "Tagi typu operacji wyłączone",
+      "tagOperationTypeFailed": "Nie udało się zmienić tagów typu operacji"
+    },
+    "profileNotes": {
+      "title": "Jak działa API tego banku",
+      "show": "Pokaż, jak działa API tego banku",
+      "hide": "Ukryj, jak działa API tego banku",
+      "severity": {
+        "warning": "Ostrzeżenie:",
+        "info": "Informacja:"
+      }
+    },
+    "account": {
+      "unnamed": "Konto bankowe bez nazwy",
+      "linkLabel": "Konto Monize",
+      "notLinked": "Niepowiązane",
+      "noEligibleAccounts": "Brak otwartego konta Monize w tej walucie, które można powiązać.",
+      "linkFailed": "Nie udało się powiązać konta",
+      "unlinked": "Konto odłączone",
+      "unlinkFailed": "Nie udało się odłączyć konta",
+      "syncFrom": "Import od {date}",
+      "changeCutoff": "Zmień datę początkową",
+      "syncNow": "Synchronizuj teraz",
+      "syncing": "Synchronizowanie...",
+      "syncFailed": "Nie udało się zsynchronizować tego konta",
+      "neverSynced": "Jeszcze niezsynchronizowane",
+      "lastSynced": "Ostatnia synchronizacja: {time}",
+      "lastSyncOk": "Udana",
+      "lastSyncFailed": "Nieudana",
+      "bankBalance": "Saldo w banku",
+      "bankBalanceAsOf": "{amount} na dzień {date}",
+      "balanceNotReported": "Bank nie podał salda",
+      "balanceNotSynced": "Jeszcze niezsynchronizowane",
+      "monizeBalance": "Saldo w Monize",
+      "difference": "Różnica",
+      "differenceHelp": "Saldo w banku to saldo, które bank podał na pokazany dzień. Może obejmować transakcje, których bank jeszcze nie zaksięgował, lub które zaksięgował po tej dacie. Dlatego mała różnica między synchronizacjami jest normalna.",
+      "differenceHidden": "Saldo w banku jest w {bankCurrency}, a konto Monize jest w {monizeCurrency}, więc różnica nie jest pokazana.",
+      "deletedNote": "Transakcja usunięta w Monize nie jest importowana ponownie przy kolejnej synchronizacji. Usunięty wiersz pozostaje usunięty.",
+      "createNew": "Utwórz nowe konto",
+      "suggestedName": "{type} {number}",
+      "createdLinked": "Konto utworzone i powiązane",
+      "createdLinkFailed": "Konto zostało utworzone, ale nie udało się go powiązać",
+      "preview": "Podgląd",
+      "firstSyncPreview": "Pierwszy import jest potwierdzany na podstawie podglądu transakcji."
+    },
+    "link": {
+      "title": "Powiąż z kontem {account}",
+      "editTitle": "Data początkowa dla konta {account}",
+      "syncFromLabel": "Importuj transakcje od",
+      "syncFromHelp": "Wypełniono datą, którą Monize wybiera domyślnie. Wyczyść pole, a Monize wybierze ją za Ciebie.",
+      "beforeCutoff": "Transakcje zaksięgowane przez bank przed tą datą nigdy nie są importowane.",
+      "duplicateWarning": "Data wcześniejsza niż najnowsza transakcja na koncie może utworzyć duplikaty transakcji, które już wpisano.",
+      "save": "Powiąż konto",
+      "saveEdit": "Zapisz",
+      "saving": "Zapisywanie...",
+      "cancel": "Anuluj",
+      "saved": "Konto powiązane",
+      "editSaved": "Zapisano datę początkową",
+      "saveFailed": "Nie udało się zapisać powiązania",
+      "loadingDefaults": "Wczytywanie danych konta...",
+      "defaultsFailed": "Nie udało się odczytać najnowszej transakcji na tym koncie, więc Monize nie może powiedzieć, czy ta data początkowa może utworzyć duplikaty.",
+      "newestTransaction": "Najnowsza transakcja na tym koncie: {date}",
+      "emptyAccount": "{days, plural, one {Konto jest puste: import obejmuje ostatni dzień} few {Konto jest puste: import obejmuje ostatnie # dni} many {Konto jest puste: import obejmuje ostatnie # dni} other {Konto jest puste: import obejmuje ostatnie # dni}}"
+    },
+    "sync": {
+      "summary": "{imported, plural, =0 {Nie zaimportowano żadnych transakcji} one {Zaimportowano # transakcję} few {Zaimportowano # transakcje} many {Zaimportowano # transakcji} other {Zaimportowano # transakcji}}, {skipped, plural, =0 {nic nie pominięto} one {pominięto # transakcję jako już zaimportowaną} few {pominięto # transakcje jako już zaimportowane} many {pominięto # transakcji jako już zaimportowanych} other {pominięto # transakcji jako już zaimportowanych}}, {refused, plural, =0 {nic nie odrzucono} one {odrzucono # transakcję} few {odrzucono # transakcje} many {odrzucono # transakcji} other {odrzucono # transakcji}}",
+      "summaryWithReasons": "{summary}. Odrzucone: {reasons}",
+      "outcomeUnknown": "Wynik synchronizacji nie jest jeszcze znany. Odśwież stronę, aby zobaczyć, co zostało zaimportowane.",
+      "failedAccountItem": "{account} ({message})",
+      "allFailed": "Nie udało się zsynchronizować: {accounts}",
+      "partialFailure": "{summary}. Nie udało się zsynchronizować: {accounts}",
+      "reason": {
+        "missing_date": "{count, plural, one {# bez daty} few {# bez daty} many {# bez daty} other {# bez daty}}",
+        "future_date": "{count, plural, one {# z datą z przyszłości} few {# z datą z przyszłości} many {# z datą z przyszłości} other {# z datą z przyszłości}}",
+        "invalid_amount": "{count, plural, one {# z nieprawidłową kwotą} few {# z nieprawidłową kwotą} many {# z nieprawidłową kwotą} other {# z nieprawidłową kwotą}}",
+        "unknown_direction": "{count, plural, one {# z nieznanym kierunkiem} few {# z nieznanym kierunkiem} many {# z nieznanym kierunkiem} other {# z nieznanym kierunkiem}}",
+        "currency_mismatch": "{count, plural, one {# w innej walucie} few {# w innej walucie} many {# w innej walucie} other {# w innej walucie}}",
+        "other": "{count, plural, one {# z innego powodu} few {# z innego powodu} many {# z innego powodu} other {# z innego powodu}}",
+        "missing_identity": "Brak identyfikatora transakcji bankowej: {count, number}"
+      },
+      "needsPreview": "Otwórz podgląd dla {accounts} i potwierdź pierwszy import",
+      "withNeedsPreview": "{message}. {needsPreview}"
+    },
+    "callback": {
+      "title": "Łączenie z bankiem",
+      "subtitle": "Poczekaj, aż Monize ukończy łączenie",
+      "success": "Bank połączony",
+      "successNamed": "Połączono z bankiem {bank}",
+      "bankError": "Bank nie udzielił dostępu: {message}",
+      "missingState": "Bank nie zwrócił prawidłowej odpowiedzi. Rozpocznij łączenie ponownie.",
+      "notActive": "Nie ukończono połączenia",
+      "failed": "Nie udało się ukończyć połączenia",
+      "autoLinked": "{count, plural, one {# konto bankowe powiązano z kontem o tym samym numerze. Sprawdź je przed pierwszym importem.} few {# konta bankowe powiązano z kontami o tych samych numerach. Sprawdź je przed pierwszym importem.} many {# kont bankowych powiązano z kontami o tych samych numerach. Sprawdź je przed pierwszym importem.} other {# kont bankowych powiązano z kontami o tych samych numerach. Sprawdź je przed pierwszym importem.}}",
+      "autoSuggested": "{count, plural, one {# konto bankowe pasuje do więcej niż jednego z Twoich kont: wybierz jego konto z listy.} few {# konta bankowe pasują do więcej niż jednego z Twoich kont: wybierz ich konta z listy.} many {# kont bankowych pasuje do więcej niż jednego z Twoich kont: wybierz ich konta z listy.} other {# kont bankowych pasuje do więcej niż jednego z Twoich kont: wybierz ich konta z listy.}}"
+    },
+    "accountType": {
+      "CACC": "Rachunek bieżący",
+      "CARD": "Karta",
+      "SVGS": "Oszczędności",
+      "LOAN": "Pożyczka",
+      "other": "Typ konta {code}"
+    },
+    "mismatch": {
+      "bankCard": "Bank zgłasza to konto jako kartę, ale typ konta {account} to {type}, a nie {creditCard}. Transakcje karty zostałyby zaimportowane do konta niewłaściwego rodzaju.",
+      "monizeCard": "Typ konta {account} to {creditCard}, ale bank zgłasza to konto jako: {bankType}. Sprawdź, czy to właściwe konto bankowe.",
+      "confirm": "Rozumiem, powiąż konta mimo to"
+    },
+    "preview": {
+      "title": "Podgląd importu do konta {account}",
+      "description": "Nic nie zostanie zaimportowane, dopóki nie potwierdzisz. Oto, co zgłasza bank i co Monize zrobiłoby z każdą transakcją.",
+      "loading": "Odpytywanie banku...",
+      "loadFailed": "Nie udało się wyświetlić podglądu tego konta",
+      "retry": "Spróbuj ponownie",
+      "close": "Zamknij",
+      "import": "{count, plural, =0 {Potwierdź: nie ma nic nowego do zaimportowania} one {Importuj # transakcję} few {Importuj # transakcje} many {Importuj # transakcji} other {Importuj # transakcji}}",
+      "importing": "Importowanie...",
+      "importFailed": "Nie udało się zaimportować transakcji",
+      "planChanged": "Dane banku zmieniły się od tego podglądu, więc nic nie zaimportowano. Podgląd został odczytany ponownie: sprawdź go i zaimportuj jeszcze raz.",
+      "monizeBalance": "Saldo Monize teraz",
+      "balanceAfter": "Saldo Monize po imporcie",
+      "bankBalance": "Saldo w banku",
+      "bankBalanceAsOf": "{amount} na dzień {date}",
+      "bankBalanceNotReported": "Bank nie podał salda",
+      "difference": "Różnica po imporcie",
+      "differenceHelp": "Saldo w banku minus saldo Monize po imporcie. Zero oznacza, że oba się zgadzają. Saldo w banku może obejmować transakcje, których bank jeszcze nie zaksięgował, więc niewielka różnica jest normalna.",
+      "differenceHidden": "Saldo w banku jest w {bankCurrency}, a konto Monize w {monizeCurrency}, więc różnica nie jest pokazana.",
+      "filterLabel": "Pokaż transakcje",
+      "filter": {
+        "all": "Wszystkie",
+        "new": "Nowe",
+        "duplicate": "Już zaimportowane",
+        "refused": "Odrzucone",
+        "pending": "Oczekujące",
+        "before_cutoff": "Przed datą początkową",
+        "withCount": "{label} ({count})",
+        "excluded": "Wyjątki"
+      },
+      "outcome": {
+        "new": "Nowa",
+        "duplicate": "Już zaimportowana",
+        "refused": "Odrzucona",
+        "pending": "Oczekująca",
+        "before_cutoff": "Przed datą początkową",
+        "excluded": "Wyjątek"
+      },
+      "refusal": {
+        "missing_date": "Brak daty",
+        "future_date": "Z datą z przyszłości",
+        "invalid_amount": "Nieprawidłowa kwota",
+        "unknown_direction": "Nieznany kierunek",
+        "currency_mismatch": "Inna waluta",
+        "other": "Odrzucona",
+        "missing_identity": "Brak identyfikatora transakcji bankowej"
+      },
+      "columns": {
+        "date": "Data",
+        "payee": "Odbiorca",
+        "category": "Kategoria",
+        "status": "Status",
+        "amount": "Kwota",
+        "select": "Wybór i szczegóły"
+      },
+      "noPayee": "Brak odbiorcy",
+      "dateUnknown": "Brak daty",
+      "amountUnknown": "Nieznana",
+      "empty": {
+        "all": "Bank nie zwrócił żadnych transakcji z tego okresu.",
+        "filtered": "Brak transakcji na tej liście."
+      },
+      "selectAllNew": "Zaznacz wszystkie nowe transakcje na tej liście",
+      "selectAllExceptions": "Zaznacz wszystkie wyjątki na tej liście",
+      "selectRow": "Importuj: {payee}",
+      "selectException": "Usuń z wyjątków: {payee}",
+      "summary": "Importuj: {import}, pomiń: {skip}, dodaj do wyjątków: {except}",
+      "importNothing": "Potwierdź bez importowania",
+      "exceptions": {
+        "intro": "Transakcje z wyjątków nigdy nie są importowane. Usuń transakcję z wyjątków, aby znów widzieć ją jako nową.",
+        "remove": "{count, plural, =0 {Usuń z wyjątków} other {Usuń z wyjątków: #}}",
+        "removing": "Usuwanie...",
+        "removed": "{count, plural, one {Usunięto # transakcję z wyjątków} few {Usunięto # transakcje z wyjątków} many {Usunięto # transakcji z wyjątków} other {Usunięto # transakcji z wyjątków}}",
+        "removedNone": "Nic nie usunięto z wyjątków",
+        "removeFailed": "Nie udało się usunąć wyjątków"
+      },
+      "details": {
+        "operation": {
+          "heading": "Typ operacji",
+          "none": "Brak tagu typu operacji dla tej transakcji.",
+          "tag": "Tag z typu operacji z banku: {tag}"
+        }
+      },
+      "historyBatch": "Partia historii: od {from} do {to}.",
+      "historyBatchRemaining": "Partia historii: od {from} do {to}. Pozostała dalsza historia. Po imporcie tej partii otwórz podgląd następnej."
+    },
+    "simplefin": {
+      "provider": "Dostawca danych",
+      "description": "Połącz banki w <bridge>SimpleFIN Bridge</bridge>, a następnie wklej tutaj jednorazowy token konfiguracji. Dostęp jest tylko do odczytu.",
+      "openBridge": "Otwórz SimpleFIN Bridge",
+      "setupToken": "Token konfiguracji",
+      "connect": "Połącz SimpleFIN",
+      "connected": "SimpleFIN jest połączony.",
+      "savedDiscoveryFailed": "Połączono, ale wykrywanie kont wymaga uwagi. Ponów je bez nowego tokenu.",
+      "refresh": "Odśwież konta",
+      "failed": "Nie udało się wykonać żądania. Sprawdź stan połączenia przed użyciem nowego tokenu.",
+      "loadFailed": "Nie udało się wczytać stanu SimpleFIN.",
+      "encryptionRequired": "Poproś administratora o skonfigurowanie szyfrowania przed połączeniem SimpleFIN.",
+      "remove": "Usuń SimpleFIN z Monize",
+      "removeTitle": "Usunąć dostęp do wszystkich instytucji?",
+      "removeBody": "Wyłącza to całą synchronizację SimpleFIN w Monize i zachowuje historię. Unieważnij token aplikacji w Bridge, aby zakończyć dostęp zdalny.",
+      "replaceTitle": "Zastąpić dostęp SimpleFIN?",
+      "replaceBody": "Zastępuje to dostęp do wszystkich instytucji. Dotychczasowe powiązania kont pozostają; zmienione identyfikatory wymagają sprawdzenia.",
+      "quota": "Pozostało żądań: {remaining}",
+      "nextEligible": "Następna dostępność: {date}",
+      "stopTitle": "Zatrzymać synchronizację {bank}?",
+      "stopBody": "Istniejące powiązania i transakcje zostają zachowane.",
+      "stop": "Zatrzymaj synchronizację",
+      "stopped": "Synchronizacja zatrzymana",
+      "title": "SimpleFIN",
+      "enableBanking": "Enable Banking",
+      "errors": {
+        "unauthorized": "Połącz ponownie, używając nowego tokenu konfiguracji.",
+        "payment_required": "Sprawdź subskrypcję SimpleFIN Bridge.",
+        "rate_limited": "Osiągnięto limit żądań. Poczekaj przed odświeżeniem.",
+        "no_accounts": "Nie udostępniono kont. Sprawdź dostęp w Bridge.",
+        "partial_data": "Część danych kont jest niepełna. Sprawdź Bridge i odśwież.",
+        "identity_review": "Identyfikatory kont zmieniły się. Sprawdź powiązania przed włączeniem synchronizacji.",
+        "invalid_response": "Bridge zwrócił nieobsługiwane dane. Odśwież później.",
+        "unavailable": "SimpleFIN nie odpowiedział. Spróbuj później."
+      },
+      "resume": "Wznów synchronizację",
+      "lastKnownConnected": "Podczas ostatniej udanej kontroli SimpleFIN był połączony."
+    }
   }
 }

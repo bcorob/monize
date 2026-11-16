@@ -147,7 +147,7 @@ describe("ad-hoc user sanitizers", () => {
   const SECRET_FIELD =
     String.raw`(?:passwordHash|resetToken|resetTokenExpiry|twoFactorSecret|` +
     String.raw`pendingTwoFactorSecret|backupCodes|oidcLinkToken|` +
-    String.raw`emailVerificationToken|backupPasswordEnc)`;
+    String.raw`emailVerificationToken|emailChangeToken|backupPasswordEnc)`;
 
   /**
    * The shape of the removed sanitizers: destructure secrets away, spread the

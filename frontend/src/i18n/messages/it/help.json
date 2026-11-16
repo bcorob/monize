@@ -1,0 +1,81 @@
+{
+  "learnMore": "Scopri di più",
+  "howThisWorks": "Come funziona",
+  "menu": {
+    "helpForPage": "Aiuto per questa pagina",
+    "search": "Cerca nell'aiuto",
+    "shortcuts": "Scorciatoie da tastiera",
+    "takeTour": "Fai il tour",
+    "whatsNew": "Novità",
+    "shellMenu": "Menu dell'app desktop",
+    "reportIssue": "Segnala un problema",
+    "discussions": "Discussioni"
+  },
+  "shortcuts": {
+    "title": "Scorciatoie da tastiera",
+    "palette": "Riquadro comandi",
+    "paletteKeys": "Ctrl/Cmd+K",
+    "search": "Cerca nell'aiuto",
+    "searchKeys": "?",
+    "undo": "Annulla l'ultima modifica",
+    "undoKeys": "Ctrl/Cmd+Z",
+    "redo": "Ripeti",
+    "redoKeys": "Ctrl/Cmd+Maiusc+Z o Ctrl/Cmd+Y",
+    "closeDialog": "Chiudi la finestra di dialogo o il pannello aperto",
+    "closeDialogKeys": "Esc"
+  },
+  "panel": {
+    "title": "Guida",
+    "back": "Indietro",
+    "forward": "Avanti",
+    "openOnline": "Apri su monize.net",
+    "pin": "Fissa il pannello della guida per tenerlo aperto mentre passi da una pagina all'altra",
+    "unpin": "Sblocca il pannello della guida",
+    "expand": "Espandi il pannello della guida",
+    "collapse": "Riduci il pannello della guida",
+    "resize": "Ridimensiona il pannello della guida",
+    "resizeValue": "{width} pixel",
+    "close": "Chiudi la guida",
+    "englishOnly": "Questa guida è in inglese.",
+    "loading": "Caricamento della guida",
+    "toc": {
+      "toggle": "In questa pagina",
+      "label": "Sezioni di questa pagina"
+    },
+    "error": {
+      "heading": "Impossibile caricare la guida",
+      "body": "La guida non è stata caricata. Riprova oppure leggi questa pagina su monize.net.",
+      "retry": "Riprova"
+    },
+    "search": "Cerca nella guida",
+    "tour": {
+      "prompt": "Questa pagina ha un tour guidato."
+    },
+    "version": "Guida di Monize {version}",
+    "latestOnline": "La guida più recente è su monize.net"
+  },
+  "search": {
+    "title": "Cerca nella guida",
+    "placeholder": "Cerca nella guida",
+    "ariaLabel": "Cerca nella guida",
+    "contextHeading": "Aiuto per questa schermata",
+    "noResults": "Nessun risultato per \"{query}\"",
+    "error": "Ricerca non riuscita. Riprova.",
+    "hint": {
+      "navigate": "per navigare",
+      "select": "per selezionare",
+      "close": "per chiudere"
+    }
+  },
+  "markdown": {
+    "screenshot": "Schermata",
+    "viewScreenshot": "Visualizza la schermata su monize.net",
+    "callout": {
+      "note": "Nota",
+      "tip": "Suggerimento",
+      "important": "Importante",
+      "warning": "Attenzione",
+      "caution": "Cautela"
+    }
+  }
+}

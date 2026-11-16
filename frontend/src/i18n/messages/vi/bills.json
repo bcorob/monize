@@ -16,12 +16,13 @@
     "chartUnavailable": "Biểu đồ tạm thời không khả dụng"
   },
   "viewTabs": {
-    "list": "Danh sách",
-    "calendar": "Lịch",
+    "filterLabel": "Loại lịch",
     "filterAll": "Tất cả ({count})",
     "filterBills": "Hóa đơn ({count})",
     "filterDeposits": "Tiền gửi ({count})",
-    "todayButton": "Hôm nay"
+    "chipBills": "Hóa đơn",
+    "chipDeposits": "Tiền gửi",
+    "clearType": "Hiển thị tất cả loại lịch"
   },
   "form": {
     "titleNew": "Giao dịch theo lịch mới",
@@ -53,7 +54,11 @@
     "totalOfAccounts": "Tổng các tài khoản",
     "legendAriaLabel": "Các đường dự báo",
     "tooltipTransactionForAccount": "{name} ({account})",
-    "unavailableMissingRates": "Không thể hiển thị dự báo này bằng {displayCurrency}: không có tỷ giá cho {currencies}, và số dư dự phóng dựa trên mọi ngày trước đó. Hãy thêm tỷ giá, hoặc chọn một tài khoản chỉ dùng một loại tiền tệ."
+    "unavailableMissingRates": "Không thể hiển thị dự báo này bằng {displayCurrency}: không có tỷ giá cho {currencies}, và số dư dự phóng dựa trên mọi ngày trước đó. Hãy thêm tỷ giá, hoặc chọn một tài khoản chỉ dùng một loại tiền tệ.",
+    "untitledTransaction": "Giao tác",
+    "tooltipEstimated": "(ước tính)",
+    "unavailableUnknownEstimates": "Chưa thể hiển thị dự báo này: số tiền ước tính của một hóa đơn trong đó chưa biết, và số dư dự kiến được xây dựng trên mọi ngày trước đó. Hãy nhập số tiền của lần đó, hoặc tắt Ước tính trên hóa đơn.",
+    "unknownEstimateItem": "{name}: {reason}"
   },
   "calendar": {
     "days": {
@@ -72,5 +77,11 @@
     "notFound": "Không tìm thấy thanh toán theo lịch",
     "loadFailed": "Không thể tải giao dịch theo lịch",
     "overridesDeleteFailed": "Không thể xóa các ghi đè"
+  },
+  "toolbar": {
+    "showing": "Đang hiển thị <b>{shown}</b> trên <b>{total}</b> hóa đơn và tiền gửi",
+    "exportButton": "Xuất",
+    "exportTitle": "Xuất hóa đơn và tiền gửi sang CSV",
+    "exported": "{count, plural, one {Đã xuất # lịch} other {Đã xuất # lịch}}"
   }
 }

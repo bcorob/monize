@@ -1,4 +1,13 @@
 {
+  "paymentMatching": {
+    "toggleLabel": "{kind, select, mortgage {Khớp các khoản thanh toán ngân hàng đã nhập với khoản vay thế chấp này} other {Khớp các khoản thanh toán ngân hàng đã nhập với khoản vay này}}",
+    "toggleHelp": "Khi một giao dịch ngân hàng đã nhập khớp với mẫu người nhận, Monize sẽ dùng nó để thanh toán khoản đã lên lịch và chia thành gốc và lãi, thay vì ghi một giao dịch hóa đơn riêng.",
+    "payeePattern": "Mẫu người nhận",
+    "payeePatternPlaceholder": "vd. *NGÂN HÀNG CỦA TÔI*",
+    "descriptionPattern": "Mẫu mô tả (không bắt buộc)",
+    "descriptionPatternPlaceholder": "vd. *Trả nợ vay*",
+    "fromAccount": "Được khớp với các khoản ghi nợ từ {account}."
+  },
   "nameSuffix": {
     "cash": "Tiền mặt",
     "brokerage": "Môi giới"
@@ -22,9 +31,7 @@
     "noMatch": "Không có tài khoản nào phù hợp với bộ lọc của bạn.",
     "clearFilters": "Xóa bộ lọc",
     "filter": {
-      "all": "Tất cả",
-      "active": "Đang hoạt động",
-      "closed": "Đã đóng",
+      "allCount": "Tất cả ({count})",
       "netWorthAll": "Tài sản ròng: Tất cả",
       "inNetWorth": "Trong tài sản ròng",
       "excludedFromNetWorth": "Loại khỏi tài sản ròng",
@@ -32,7 +39,10 @@
       "typeAriaLabel": "Lọc theo loại tài khoản",
       "searchPlaceholder": "Tìm kiếm tài khoản...",
       "searchAriaLabel": "Tìm kiếm tài khoản theo tên",
-      "searchClear": "Xóa tìm kiếm"
+      "searchClear": "Xóa tìm kiếm",
+      "activeCount": "Đang hoạt động ({count})",
+      "closedCount": "Đã đóng ({count})",
+      "statusLabel": "Trạng thái"
     },
     "accountCount": "{filtered} trong {total} tài khoản",
     "groupCount": "{count, plural, one {# tài khoản} other {# tài khoản}}",
@@ -40,6 +50,8 @@
       "accountName": "Tên tài khoản",
       "type": "Loại",
       "status": "Trạng thái",
+      "lastReconciled": "Lần đối soát gần nhất",
+      "unreconciled": "Chưa đối soát",
       "balance": "Số dư",
       "actions": "Thao tác"
     },
@@ -50,8 +62,11 @@
     "statusClosed": "Đã đóng",
     "marketValue": "Giá trị thị trường",
     "combinedBreakdown": "Đầu tư {investments} · Tiền mặt {cash}",
+    "combinedInvestments": "Đầu tư {amount}",
+    "combinedCash": "Tiền mặt {amount}",
     "combinedUnknown": "Không có tổng",
     "combinedUnknownTooltip": "{count, plural, other {# khoản nắm giữ không có giá, nên không thể tính tổng của tài khoản này}}",
+    "combinedUnknownValuation": "Một số khoản nắm giữ trong tài khoản này không thể quy đổi sang tiền tệ báo cáo của bạn, nên không thể tính tổng. Hãy thêm tỷ giá còn thiếu trên trang Tiền tệ.",
     "combinedUnknownNoPortfolio": "Không tải được các khoản nắm giữ, nên không thể tính tổng của tài khoản này",
     "limit": "Hạn mức: {amount}",
     "pairedWith": "Ghép với {name}",
@@ -81,7 +96,11 @@
     "jointSharedBy": "Được chia sẻ bởi {owner}",
     "jointSharedWith": "Được chia sẻ với {count, plural, other {# người}}",
     "includeInNetWorth": "Tính vào giá trị tài sản ròng của tôi",
-    "excludeFromNetWorth": "Loại khỏi giá trị tài sản ròng của tôi"
+    "excludeFromNetWorth": "Loại khỏi giá trị tài sản ròng của tôi",
+    "neverReconciled": "Chưa bao giờ",
+    "lastReconciledOn": "Đã đối soát ngày {date}",
+    "neverReconciledCard": "Chưa từng đối soát",
+    "unreconciledCard": "{count, plural, other {{formatted} chưa đối soát}}"
   },
   "contextMenu": {
     "subtypeBrokerage": "Môi giới",
@@ -117,17 +136,23 @@
     "accountType": "Loại tài khoản",
     "currency": "Tiền tệ",
     "currencyLocked": "Tiền tệ bị khóa vì tài khoản này đã có giao dịch. Thay đổi tiền tệ sẽ ngầm định đổi đơn vị của số dư hiện có.",
+    "accountTypeKindLocked": "Tiền tệ bị khóa bởi các giao dịch của tài khoản này, nên tài khoản không thể chuyển giữa Ví tiền mã hóa và một loại tài khoản tiền pháp định.",
+    "currencyPlaceholder": "Chọn tiền tệ...",
+    "noCryptoCurrencies": "Ví tiền mã hóa chứa một loại tiền mã hóa, và hiện chưa có loại nào được thiết lập. Hãy thêm một loại trên <currencies>trang Tiền tệ</currencies>, rồi chọn tại đây. <guide>Cách thêm tiền mã hóa</guide>",
     "openingBalance": "Số dư đầu kỳ",
     "loanAmount": "Số tiền vay",
     "mortgageAmount": "Số tiền thế chấp",
     "accountNumber": "Số tài khoản (tùy chọn)",
     "institution": "Tổ chức (tùy chọn)",
-    "institutionRequired": "Bên cho vay/Tổ chức (bắt buộc)",
+    "institutionRequired": "Bên cho vay/Tổ chức",
     "institutionPlaceholder": "Chọn hoặc tạo tổ chức...",
     "newInstitutionTitle": "Tổ chức mới",
     "creditLimit": "Hạn mức tín dụng (tùy chọn)",
+    "balanceAlertsHeading": "Cảnh báo số dư",
+    "lowBalanceThreshold": "Thông báo khi dưới (tùy chọn)",
+    "highBalanceThreshold": "Thông báo khi trên (tùy chọn)",
     "interestRateOptional": "Lãi suất % (tùy chọn)",
-    "interestRateRequired": "Lãi suất % (bắt buộc)",
+    "interestRateRequired": "Lãi suất %",
     "description": "Mô tả (tùy chọn)",
     "excludeFromNetWorth": "Loại khỏi tài sản ròng",
     "favourite": "Yêu thích",
@@ -157,13 +182,12 @@
       "mortgage": "Thế chấp",
       "asset": "Tài sản",
       "cash": "Tiền mặt",
+      "crypto": "Ví tiền mã hóa",
       "other": "Khác"
     },
     "statementDueDayPlaceholder": "vd. 15",
     "statementSettlementDayPlaceholder": "vd. 25",
     "fxFeeTitle": "Phí chuyển đổi ngoại tệ (tùy chọn)",
-    "fxFeePercent": "Phần trăm phí",
-    "fxFeePercentPlaceholder": "vd. 2,5",
     "jointSharedWith": "Tài khoản chung được chia sẻ với {count, plural, other {# người}}",
     "jointManage": "Quản lý chia sẻ",
     "cashSection": {
@@ -192,10 +216,10 @@
   },
   "loanFields": {
     "title": "Chi tiết thanh toán khoản vay",
-    "paymentAmount": "Số tiền thanh toán (bắt buộc)",
-    "paymentFrequency": "Tần suất thanh toán (bắt buộc)",
-    "firstPaymentDate": "Ngày thanh toán đầu tiên (bắt buộc)",
-    "paymentFromAccount": "Thanh toán từ tài khoản (bắt buộc)",
+    "paymentAmount": "Số tiền thanh toán",
+    "paymentFrequency": "Tần suất thanh toán",
+    "firstPaymentDate": "Ngày thanh toán đầu tiên",
+    "paymentFromAccount": "Thanh toán từ tài khoản",
     "interestCategory": "Danh mục lãi suất",
     "selectFrequency": "Chọn tần suất...",
     "selectAccount": "Chọn tài khoản...",
@@ -222,33 +246,32 @@
     "analyzingHistory": "Đang phân tích lịch sử giao dịch...",
     "detectedPayments": "Đã phát hiện {count} thanh toán từ {from} đến {to}.",
     "confidence": "Độ tin cậy:",
-    "lastSplit": "Phân chia thanh toán cuối cùng: {currency}{principal} gốc / {currency}{interest} lãi",
-    "extraPayments": "{count, plural, one {# khoản thanh toán gốc thêm} other {# khoản thanh toán gốc thêm}} được phát hiện (trung bình {currency}{avg}/kỳ)",
+    "lastSplit": "Phân chia thanh toán cuối cùng: {principal} gốc / {interest} lãi",
+    "extraPayments": "{count, plural, one {# khoản thanh toán gốc thêm} other {# khoản thanh toán gốc thêm}} được phát hiện (trung bình {avg}/kỳ)",
     "reviewValues": "Xem xét và điều chỉnh các giá trị bên dưới trước khi lưu.",
-    "regularPaymentAmount": "Số tiền thanh toán thông thường *",
+    "regularPaymentAmount": "Số tiền thanh toán thông thường",
     "includeExtraPrincipal": "Bao gồm khoản thanh toán thêm vào gốc",
     "extraPrincipalPerPayment": "Gốc thêm mỗi kỳ thanh toán",
-    "totalPayment": "Tổng thanh toán: {currency}{amount}",
+    "totalPayment": "Tổng thanh toán: {amount}",
     "useDetectedSplit": "Sử dụng phân chia gốc/lãi từ giao dịch đã nhập",
-    "useDetectedSplitDesc": "Sẽ dùng {currency}{interest} cho lãi, phần còn lại vào gốc",
+    "useDetectedSplitDesc": "Sẽ dùng {interest} cho lãi, phần còn lại vào gốc",
     "calculateFromRate": "Sẽ tính phân chia từ lãi suất và số dư hiện tại",
-    "paymentFrequency": "Tần suất thanh toán *",
-    "paymentFromAccount": "Thanh toán từ tài khoản *",
+    "paymentFrequency": "Tần suất thanh toán",
+    "paymentFromAccount": "Thanh toán từ tài khoản",
     "selectAccount": "Chọn tài khoản...",
-    "nextPaymentDate": "Ngày thanh toán tiếp theo *",
+    "nextPaymentDate": "Ngày thanh toán tiếp theo",
     "annualInterestRate": "Lãi suất hàng năm (%)",
     "interestRatePlaceholder": "vd. 5,5",
     "estimatedFromHistory": "Ước tính từ lịch sử giao dịch: {rate}%",
     "interestExpenseCategory": "Danh mục chi phí lãi",
+    "interestExpenseCategoryRequired": "Danh mục chi phí lãi",
     "detectedCategory": "Đã phát hiện: {name}",
     "selectCategory": "Chọn danh mục...",
     "payeeLender": "Người nhận thanh toán / Bên cho vay",
     "selectOrCreatePayee": "Chọn hoặc tạo người nhận thanh toán...",
     "mortgageDetails": "Chi tiết thế chấp",
-    "canadianMortgage": "Thế chấp Canada (lãi kép nửa năm)",
-    "variableRate": "Lãi suất thay đổi",
     "amortizationMonths": "Thời gian khấu hao (tháng)",
-    "termMonths": "Thời hạn (tháng)",
+    "termMonths": "Kỳ lãi suất cố định (tháng)",
     "autoPost": "Tự động đăng giao dịch khi đến hạn",
     "skip": "Bỏ qua",
     "setUpPayments": "Thiết lập thanh toán",
@@ -264,26 +287,46 @@
     },
     "toasts": {
       "setupComplete": "Đã thiết lập thanh toán theo lịch cho {account}"
+    },
+    "firstInstallment": "Kỳ trả góp đầu tiên",
+    "firstInstallmentHelp": "Khoản vay thế chấp này không có khoản thanh toán cố định: mỗi kỳ được tính từ số dư, lãi suất và thời gian trả dần. Đây là kỳ đến hạn {date}, bao gồm mọi khoản gốc trả thêm.",
+    "firstInstallmentPending": "Nhập ngày thanh toán tiếp theo để tính kỳ trả góp đầu tiên.",
+    "firstInstallmentCalculating": "Đang tính kỳ trả góp đầu tiên...",
+    "firstInstallmentFailed": "Không thể tính kỳ trả góp đầu tiên. Hãy kiểm tra các giá trị bên dưới và thử lại.",
+    "paymentMatching": {
+      "autoPostDisabled": "Đã tự động tắt: tính năng khớp thanh toán thanh toán hóa đơn này từ khoản ghi nợ của chính ngân hàng, vì vậy hóa đơn không được tự đăng thêm.",
+      "payeePatternRequired": "Nhập mẫu người nhận có chứa ký tự đại diện *"
     }
   },
   "mortgageFields": {
     "title": "Chi tiết thế chấp",
-    "canadianMortgage": "Thế chấp Canada",
-    "canadianMortgageDesc": "Sử dụng lãi kép nửa năm cho lãi suất cố định (theo quy định pháp luật tại Canada)",
-    "variableRate": "Lãi suất thay đổi",
-    "variableRateDesc": "Lãi suất có thể thay đổi trong thời hạn (sử dụng lãi kép hàng tháng)",
-    "variableRateLoanDetailsLink": "Ghi lại các thay đổi lãi suất trong <link>chi tiết khoản vay</link>.",
-    "termLength": "Thời hạn",
-    "termLengthNoTerm": "Để 0 năm và 0 tháng nếu không có thời hạn.",
-    "amortizationPeriod": "Thời gian khấu hao (bắt buộc)",
+    "type": {
+      "label": "Loại thế chấp",
+      "ANNUITY": "Niên kim (trả đều)",
+      "CANADIAN_FIXED": "Lãi suất cố định Canada",
+      "LINEAR": "Tuyến tính (gốc đều)",
+      "INTEREST_ONLY": "Chỉ trả lãi",
+      "help": {
+        "ANNUITY": "Tổng khoản thanh toán của bạn giống nhau mỗi tháng. Cũng chọn loại này cho khoản thế chấp lãi suất thả nổi.",
+        "CANADIAN_FIXED": "Hợp đồng lãi suất cố định của Canada; lãi được nhập gốc hai lần mỗi năm.",
+        "LINEAR": "Phần gốc giống nhau mỗi tháng và tổng khoản thanh toán giảm dần.",
+        "INTEREST_ONLY": "Bạn chỉ trả lãi và dư nợ không thay đổi."
+      }
+    },
+    "rateChangesLoanDetailsLink": "Ghi lại các thay đổi lãi suất trong <link>chi tiết khoản vay</link>.",
+    "termLength": "Kỳ lãi suất cố định",
+    "termLengthHelp": "Lãi suất hoặc kỳ hạn hợp đồng của bạn kéo dài bao lâu, ví dụ lãi suất cố định 5 năm. Monize có thể nhắc bạn trước khi kết thúc. Để 0 năm và 0 tháng nếu không có thời hạn.",
+    "amortizationPeriod": "Thời gian khấu hao",
     "years": "Năm",
     "months": "Tháng",
-    "paymentFrequency": "Tần suất thanh toán (bắt buộc)",
-    "firstPaymentDate": "Ngày thanh toán đầu tiên (bắt buộc)",
-    "paymentFromAccount": "Thanh toán từ tài khoản (bắt buộc)",
-    "interestCategory": "Danh mục lãi suất",
+    "paymentFrequency": "Tần suất thanh toán",
+    "firstPaymentDate": "Ngày thanh toán đầu tiên",
+    "paymentFromAccount": "Thanh toán từ tài khoản",
+    "paymentFromAccountEditHelp": "Thay đổi mục này sẽ chuyển các khoản thanh toán theo lịch sắp tới và quy tắc đối chiếu thanh toán sang tài khoản mới. Các khoản thanh toán đã ghi sổ không thay đổi.",
+    "interestCategory": "Danh mục lãi suất (tùy chọn)",
+    "interestCategoryRequired": "Danh mục lãi suất",
     "interestBookingMode": {
-      "label": "Lãi được ghi nhận thế nào?",
+      "label": "Cách ghi nhận lãi",
       "help": "Để phát hiện lãi suất đọc đúng. Tự động hợp với hầu hết.",
       "AUTO": "Tự động (khuyến nghị)",
       "SPLIT": "Phần tách của khoản thanh toán",
@@ -330,6 +373,72 @@
       "memoLabel": "Nội dung ghi chú trả trước",
       "memoPlaceholder": "vd. trả trước",
       "memoHelp": "So khớp chuỗi con không phân biệt hoa thường với ghi chú của khoản thanh toán, ghi chú của giao dịch nguồn hoặc ghi chú tách."
+    },
+    "prepaymentMode": {
+      "label": "Tác dụng của khoản trả trước",
+      "SHORTEN_TERM": "Rút ngắn kỳ hạn (phần gốc như nhau mỗi tháng)",
+      "LOWER_INSTALLMENT": "Giảm kỳ trả góp (cùng ngày kết thúc)",
+      "help": "Hãy hỏi bên cho vay. Nếu sau khi trả trước, phần gốc trên sao kê không đổi thì kỳ hạn đã được rút ngắn."
+    },
+    "previewFirstInstallment": "Kỳ trả góp đầu tiên:",
+    "detect": {
+      "toggle": "Không chắc? Nhập vài kỳ trả góp",
+      "title": "Tìm loại thế chấp của bạn",
+      "intro": "Sao chép hai hoặc ba kỳ trả góp liên tiếp từ sao kê, kỳ cũ nhất trước. Dư nợ là tùy chọn: khi có dư nợ và lãi suất, Monize có thể biết lãi có được nhập gốc hai lần mỗi năm hay không.",
+      "installment": "Kỳ trả góp {number}",
+      "principal": "Gốc",
+      "interest": "Lãi",
+      "balance": "Dư nợ trước kỳ (tùy chọn)",
+      "rowIncomplete": "Nhập cả gốc và lãi, hoặc để trống dòng này.",
+      "rate": "Đã đối chiếu với lãi suất nhập ở trên, {rate}.",
+      "noRate": "Chưa nhập lãi suất ở trên nên không thể kiểm tra cách nhập gốc.",
+      "needsFrequency": "Hãy chọn tần suất thanh toán bên dưới trước: các kỳ trả góp được đọc theo tần suất đó.",
+      "submit": "Gợi ý loại",
+      "close": "Đóng",
+      "suggested": "Loại được gợi ý: {type}",
+      "noSuggestion": "Không có loại nào được gợi ý.",
+      "lowConfidence": "Độ tin cậy thấp: hãy đối chiếu với hợp đồng hoặc hỏi bên cho vay trước khi dùng.",
+      "use": "Dùng loại này",
+      "failed": "Không thể kiểm tra các kỳ trả góp vì yêu cầu thất bại. Hãy thử lại.",
+      "reason": {
+        "TOO_FEW_SAMPLES": "Cần ít nhất hai kỳ trả góp liên tiếp để so sánh.",
+        "INVALID_SAMPLE": "Một kỳ trả góp có số tiền âm hoặc không đọc được.",
+        "NO_PAYMENT": "Các kỳ trả góp này không trả gốc và không tính lãi.",
+        "AMBIGUOUS_CONSTANT_PRINCIPAL_AND_INSTALLMENT": "Gốc và tổng số tiền giống nhau ở mọi kỳ, phù hợp với cả thế chấp tuyến tính lẫn niên kim. Hãy thử các kỳ cách xa nhau hơn, hoặc kiểm tra hợp đồng.",
+        "ACCELERATED_FREQUENCY": "Các kỳ trả góp này trông giống tuyến tính hoặc chỉ trả lãi, điều không thể xảy ra với tần suất thanh toán tăng tốc. Hãy kiểm tra tần suất thanh toán.",
+        "NO_RULE_FITS": "Cả gốc lẫn tổng số tiền đều không giữ nguyên qua các kỳ này. Nếu lãi suất thay đổi giữa các kỳ, hãy dùng các kỳ trong cùng một giai đoạn lãi suất.",
+        "ZERO_PRINCIPAL": "Không trả gốc nên dư nợ không thay đổi.",
+        "ZERO_PRINCIPAL_RATE_MISMATCH": "Không trả gốc, nhưng tiền lãi không khớp với lãi suất đã nêu trên dư nợ. Hãy kiểm tra lãi suất.",
+        "CONSTANT_PRINCIPAL": "Phần gốc giống nhau mỗi kỳ và tổng số tiền giảm dần.",
+        "CONSTANT_PRINCIPAL_RATE_MISMATCH": "Phần gốc giống nhau mỗi kỳ, nhưng tiền lãi không khớp với lãi suất đã nêu trên dư nợ. Hãy kiểm tra lãi suất.",
+        "CONSTANT_INSTALLMENT_SEMI_ANNUAL": "Tổng số tiền giống nhau mỗi kỳ và tiền lãi khớp với lãi suất đã nêu khi nhập gốc hai lần mỗi năm.",
+        "CONSTANT_INSTALLMENT_NOMINAL": "Tổng số tiền giống nhau mỗi kỳ và tiền lãi khớp với lãi suất đã nêu khi không nhập gốc hai lần mỗi năm.",
+        "CONSTANT_INSTALLMENT_RATE_UNCHECKED": "Tổng số tiền giống nhau mỗi kỳ. Không có dư nợ trước mỗi kỳ và lãi suất nên không thể kiểm tra việc nhập gốc hai lần mỗi năm.",
+        "CONSTANT_INSTALLMENT_COMPOUNDING_AMBIGUOUS": "Tổng số tiền giống nhau mỗi kỳ, nhưng dư nợ quá nhỏ để phân biệt việc nhập gốc hai lần mỗi năm. Hợp đồng lãi suất cố định của Canada có ghi rõ điều này trong điều khoản.",
+        "CONSTANT_INSTALLMENT_RATE_MISMATCH": "Tổng số tiền giống nhau mỗi kỳ, nhưng tiền lãi không khớp với cách tính nào ở lãi suất đã nêu. Lãi có thể được tính theo ngày; hãy kiểm tra lãi suất."
+      },
+      "history": {
+        "action": "Phát hiện loại thế chấp",
+        "title": "Loại thế chấp từ các khoản thanh toán của bạn",
+        "intro": "Đọc từ các kỳ trả góp đã ghi sổ gần nhất ở cùng một lãi suất. Không có gì thay đổi cho đến khi bạn lưu tài khoản.",
+        "current": "Loại hiện tại: {type}",
+        "alreadySet": "Khoản thế chấp này đã có loại được gợi ý.",
+        "rate": "Lãi suất đang áp dụng: {rate}",
+        "noRate": "Không có lãi suất nào được ghi cho các ngày này nên chưa kiểm tra cách nhập gốc.",
+        "noSamples": "Không tìm thấy kỳ trả góp đã ghi sổ nào có cả phần gốc và phần lãi. Hãy ghi các khoản thanh toán dưới dạng tách gốc và lãi để dùng tính năng này.",
+        "colDate": "Ngày",
+        "colPrincipal": "Gốc",
+        "colInterest": "Lãi",
+        "colBalance": "Dư nợ trước kỳ",
+        "balanceUnknown": "Không rõ",
+        "failed": "Không thể đọc lịch sử thanh toán vì yêu cầu thất bại. Hãy thử lại.",
+        "cancel": "Hủy",
+        "use": "Sửa tài khoản với loại này"
+      }
+    },
+    "originalPrincipal": {
+      "label": "Số tiền gốc ban đầu",
+      "help": "Số tiền bạn đã vay ban đầu. Đối với tài khoản có lịch sử ghi nhận bắt đầu sau khi khoản vay bắt đầu, đây là số tiền đã vay, không phải số dư đầu kỳ — là khoản nợ vào đầu lịch sử của bạn."
     }
   },
   "assetFields": {
@@ -352,13 +461,19 @@
   "validation": {
     "nameRequired": "Tên tài khoản là bắt buộc",
     "currencyCodeLength": "Mã tiền tệ phải có đúng 3 ký tự",
+    "currencyRequired": "Chọn tiền tệ",
     "institutionRequired": "Vui lòng chọn hoặc tạo một tổ chức",
     "interestRateRequired": "Lãi suất là bắt buộc",
     "paymentAmountRequired": "Số tiền thanh toán là bắt buộc",
     "paymentFrequencyRequired": "Tần suất thanh toán là bắt buộc",
     "paymentStartDateRequired": "Ngày thanh toán đầu tiên là bắt buộc",
     "paymentAccountRequired": "Tài khoản thanh toán là bắt buộc",
-    "amortizationRequired": "Thời gian khấu hao là bắt buộc"
+    "amortizationRequired": "Thời gian khấu hao là bắt buộc",
+    "interestCategoryRequired": "Chọn danh mục ghi nhận lãi của khoản vay này",
+    "acceleratedNeedsAnnuity": "Khoản vay thế chấp này được trả theo lịch tăng tốc, vốn chỉ có ở khoản vay trả góp đều. Khoản vay trả gốc đều hoặc chỉ trả lãi cần tần suất thanh toán thông thường, vì vậy hãy giữ loại trả góp đều.",
+    "paymentMatchingPayeePatternRequired": "Nhập mẫu người nhận để khớp với khoản ghi nợ của ngân hàng",
+    "paymentMatchingPayeePatternWildcard": "Mẫu người nhận phải chứa ký tự đại diện *",
+    "paymentMatchingDescriptionPatternWildcard": "Mẫu mô tả phải chứa ký tự đại diện *"
   },
   "loanDetail": {
     "backToAccounts": "Quay lại danh sách tài khoản",
@@ -386,7 +501,12 @@
       "estRemainingInterest": "Lãi còn lại (ước tính)",
       "notSet": "Chưa đặt",
       "notAvailable": "Không có",
-      "paidOff": "Đã trả hết"
+      "paidOff": "Đã trả hết",
+      "nextInstallment": "Kỳ trả góp tiếp theo",
+      "dueOn": "Đến hạn {date}",
+      "finalPayment": "Khoản thanh toán cuối",
+      "nextInstallmentDue": "Kỳ trả góp tiếp theo (đến hạn {date})",
+      "finalPaymentDue": "Khoản thanh toán cuối (đến hạn {date})"
     },
     "schedule": {
       "title": "Lịch trả nợ",
@@ -455,7 +575,19 @@
       "budgetLabel": "Tổng thanh toán hàng tháng",
       "budgetHint": "Mỗi tháng chi một tổng cố định cho khoản vay; phần trả thêm là phần còn lại sau khoản trả. Khi khoản trả giảm, phần trả thêm tăng để giữ tổng không đổi.",
       "budgetBelowInstallment": "Thấp hơn khoản trả hiện tại ({amount}); tăng lên để trả thêm.",
-      "windowInverted": "Ngày bắt đầu nằm sau ngày kết thúc nên kế hoạch này không bao giờ được áp dụng."
+      "windowInverted": "Ngày bắt đầu nằm sau ngày kết thúc nên kế hoạch này không bao giờ được áp dụng.",
+      "unavailable": {
+        "title": "Chưa thể tính mô phỏng trả nợ trước hạn cho khoản vay này.",
+        "reasonPaidOff": "Khoản vay này không còn dư nợ, nên không còn gì để khấu hao.",
+        "reasonNoFrequency": "Khoản vay này chưa đặt tần suất thanh toán. Hãy thêm trong cài đặt tài khoản.",
+        "reasonNoRate": "Khoản vay này chưa lưu lãi suất. Hãy đặt lãi suất trong cài đặt tài khoản, hoặc ghi một thay đổi lãi suất có ngày hôm nay hoặc trước đó. Lãi suất hiển thị theo từng dòng trong lịch bên dưới được tái tạo từ tiền lãi đã tính và không phải là lãi suất đã lưu.",
+        "reasonNoPayment": "Không thể xác định số tiền trả góp. Hãy ghi các kỳ trả góp thường xuyên dưới dạng chuyển khoản vào tài khoản khoản vay (gốc, với lãi là dòng tách hoặc một khoản chi có phân loại riêng), hoặc đặt số tiền thanh toán trong cài đặt tài khoản. Các khoản thanh toán được ghi là chi tiêu thông thường trên tài khoản nguồn không bao giờ đến được tài khoản khoản vay, nên lịch không thể thấy chúng.",
+        "reasonNoAmortization": "Khoản vay thế chấp này chưa có thời gian trả dần, nên không thể tính các kỳ trả góp và ngày kết thúc kỳ hạn. Hãy đặt thời gian trả dần trong phần cài đặt tài khoản.",
+        "reasonNoPaymentStart": "Khoản vay thế chấp này chưa có ngày thanh toán đầu tiên, nên không thể đếm số kỳ còn lại đến hết kỳ hạn. Hãy thiết lập khoản thanh toán định kỳ trong phần cài đặt tài khoản; ngày đến hạn đầu tiên bạn nhập sẽ là kỳ thanh toán 1.",
+        "reasonNoPrincipal": "Khoản vay thế chấp này chưa có số tiền gốc ban đầu, nên không thể tính phần gốc cố định. Hãy đặt số tiền vay trong phần cài đặt tài khoản."
+      },
+      "budgetBelowNextInstallment": "Số tiền này thấp hơn kỳ trả góp tiếp theo ({amount}, đến hạn {date}); hãy tăng lên trên mức đó để trả trước.",
+      "shortenTermNeedsPrincipal": "Khoản vay thế chấp này chưa có số tiền gốc ban đầu, nên không thể mô phỏng việc rút ngắn kỳ hạn. Hãy chọn giảm kỳ trả góp, hoặc đặt số tiền vay trong phần cài đặt tài khoản."
     },
     "comparison": {
       "newPayoff": "Ngày trả hết mới",
@@ -471,7 +603,8 @@
       "newInstallment": "Kỳ trả mới",
       "installmentDrop": "{payment} (−{reduction})",
       "monthlyPayment": "Khoản trả hàng tháng",
-      "overpaymentAtFrequency": "{frequency}: +{amount}"
+      "overpaymentAtFrequency": "{frequency}: +{amount}",
+      "firstPayment": "Khoản thanh toán đầu tiên"
     },
     "chart": {
       "title": "Dòng thời gian trả nợ",
@@ -538,6 +671,71 @@
       "seriesActual": "Số dư thực tế",
       "unknown": "Không rõ"
     },
+    "paymentMatching": {
+      "title": "Khớp thanh toán",
+      "description": "Nhận diện khoản ghi nợ của chính ngân hàng cho từng kỳ trả góp và tất toán nó theo lịch của khoản vay dưới dạng gốc và lãi, thay vì đăng hóa đơn riêng.",
+      "noSchedule": "Khớp thanh toán tất toán các khoản ghi nợ của ngân hàng theo khoản thanh toán định kỳ của khoản vay. Hãy thiết lập các khoản thanh toán của khoản vay này trước.",
+      "noRule": "Không có quy tắc khớp thanh toán nào được liên kết với khoản vay này.",
+      "createOne": "Tạo một quy tắc",
+      "ruleLabel": "Quy tắc:",
+      "ruleLoading": "Đang tải quy tắc",
+      "ruleFailed": "Không thể tải quy tắc khớp thanh toán.",
+      "scheduleLoading": "Đang tải khoản thanh toán định kỳ",
+      "scheduleFailed": "Không thể tải khoản thanh toán định kỳ của khoản vay.",
+      "retry": "Thử lại",
+      "autoPost": {
+        "title": "Khoản thanh toán định kỳ vẫn tự đăng",
+        "body": "Tự động đăng đang bật cho hóa đơn của khoản vay này, vì vậy một kỳ trả góp mà quy tắc tất toán từ khoản ghi nợ của ngân hàng cũng sẽ bị hóa đơn đăng thêm. Hãy tắt tự động đăng cho hóa đơn trong Hóa đơn & Tiền gửi."
+      },
+      "preconditions": {
+        "openingBalance": "Số dư đầu kỳ của khoản vay phải là số nợ tại thời điểm bắt đầu phần lịch sử được xử lý; lãi của mọi kỳ trả góp đều được tính dựa trên số dư này.",
+        "originalPrincipal": "Gốc ban đầu phải là số tiền đã vay ban đầu, không phải số dư đầu kỳ.",
+        "scheduleStart": "Các khoản ghi nợ có ngày trước {date}, ngày bắt đầu khoản thanh toán định kỳ, không có kỳ trả góp nào để khớp."
+      },
+      "process": {
+        "button": "Xử lý lịch sử",
+        "scope": "Chạy quy tắc trên các khoản ghi nợ trong {account}, từ cũ nhất trở đi.",
+        "running": "Đang xử lý lịch sử: đã tất toán {count, plural, one {# kỳ trả góp} other {# kỳ trả góp}} cho đến nay.",
+        "done": "{count, plural, =0 {Không có kỳ trả góp nào được tất toán.} one {Đã tất toán # kỳ trả góp.} other {Đã tất toán # kỳ trả góp.}}",
+        "undo": "Mỗi trang của lần chạy có thể được hoàn tác từ lịch sử thao tác.",
+        "failed": "Đã dừng xử lý lịch sử",
+        "stuckTitle": "Không thể tiếp tục xử lý lịch sử",
+        "stuck": "Có hơn {limit, number} giao dịch mang ngày {date}, nên lần chạy không thể vượt qua ngày đó. Hãy tất toán phần còn lại từ Công cụ > Quy tắc với bộ lọc hẹp hơn.",
+        "stuckUnknown": "Máy chủ không cho biết lần chạy đã đến đâu, nên không thể tiếp tục. Hãy tải lại trang và thử lại."
+      },
+      "create": {
+        "title": "Tạo quy tắc khớp thanh toán",
+        "description": "Quy tắc tất toán các khoản ghi nợ khớp từ tài khoản thanh toán định kỳ của khoản vay, và tính năng tự động đăng của hóa đơn sẽ bị tắt.",
+        "descriptionWithAccount": "Quy tắc tất toán các khoản ghi nợ khớp từ {account}, và tính năng tự động đăng của hóa đơn sẽ bị tắt.",
+        "submit": "Tạo quy tắc",
+        "payeePatternRequired": "Nhập mẫu người nhận có chứa ký tự đại diện *",
+        "descriptionPatternWildcard": "Mẫu mô tả phải chứa ký tự đại diện *",
+        "failed": "Không thể tạo quy tắc khớp thanh toán.",
+        "done": "Đã tạo quy tắc \"{name}\""
+      },
+      "settled": {
+        "title": "Các kỳ trả góp đã tất toán",
+        "titleWithCount": "Các kỳ trả góp đã tất toán ({count})",
+        "colDueDate": "Ngày đến hạn",
+        "colTransaction": "Giao dịch",
+        "colPrincipal": "Gốc",
+        "colInterest": "Lãi",
+        "colExtra": "Gốc trả thêm",
+        "colDebtBefore": "Nợ trước đó",
+        "openTransaction": "Mở giao dịch",
+        "void": "Hủy bỏ",
+        "notRecorded": "Chưa ghi nhận",
+        "empty": {
+          "title": "Chưa có kỳ trả góp nào được tất toán",
+          "body": "Hãy xử lý lịch sử hoặc nhập các khoản ghi nợ của ngân hàng để tất toán các kỳ trả góp."
+        },
+        "error": {
+          "title": "Không thể tải các kỳ trả góp đã tất toán",
+          "body": "Đây không phải là danh sách trống. Hãy thử lại để xem những kỳ trả góp nào đã được tất toán.",
+          "retry": "Thử lại"
+        }
+      }
+    },
     "lineOfCredit": {
       "currentBalance": "Số dư hiện tại",
       "creditLimit": "Hạn mức tín dụng",
@@ -549,7 +747,10 @@
     },
     "rateHistory": {
       "scheduledUpdateTitle": "Cập nhật khoản thanh toán đã lên lịch?",
-      "scheduledUpdateMessage": "Khoản thanh toán hóa đơn đã lên lịch \"{name}\" có thể được cập nhật theo lãi suất mới: tổng {payment}, gồm {principal} gốc và {interest} lãi. Cập nhật ngay?",
+      "scheduledUpdateNextPaymentUnchanged": "Khoản thanh toán hóa đơn đã lên lịch \"{name}\" khớp với dòng lãi suất. Lần thanh toán tiếp theo vào {date}: không đổi ({payment}).",
+      "scheduledUpdateNextPaymentChanged": "Khoản thanh toán hóa đơn đã lên lịch \"{name}\" có thể được cập nhật theo dòng lãi suất. Lần thanh toán tiếp theo vào {date}: {before} → {after}, gồm {principal} gốc và {interest} lãi.",
+      "scheduledUpdateNextPaymentNew": "Khoản thanh toán hóa đơn đã lên lịch \"{name}\" có thể được cập nhật theo dòng lãi suất. Lần thanh toán tiếp theo vào {date}: {payment}, gồm {principal} gốc và {interest} lãi.",
+      "scheduledUpdateUpcomingChange": "Từ {date}, khoản thanh toán sẽ là {amount}.",
       "scheduledUpdateDefaultName": "khoản thế chấp này",
       "scheduledUpdateConfirm": "Cập nhật thanh toán",
       "scheduledUpdateSkip": "Giữ nguyên",
@@ -616,6 +817,54 @@
       "memoLabel": "Ghi nhớ khoản trả thêm gốc",
       "memoPlaceholder": "vd. Gốc bổ sung",
       "memoHelp": "Các khoản thanh toán có ghi nhớ chứa nội dung này được tính là khoản trả thêm gốc (không phân biệt chữ hoa/thường)."
+    },
+    "notAmortizing": {
+      "title": "Khoản vay này không được trả hết, nên ngày trả hết dự kiến và tiền lãi còn lại là chưa xác định.",
+      "paymentBelowInterest": "Kỳ trả góp ({payment}) thấp hơn tiền lãi hằng tháng (khoảng {interest}) ở mức {rate}%, nên số dư không bao giờ giảm. Hãy ghi kỳ trả góp thực tế (mục trong lịch sử lãi suất hoặc số tiền thanh toán của tài khoản) để nó bù đắp tiền lãi.",
+      "beyondHorizon": "Kỳ trả góp bù đắp tiền lãi, nhưng thời hạn vượt quá tầm dự báo, nên ngày trả hết và tiền lãi còn lại không được hiển thị."
+    }
+  },
+  "loanFees": {
+    "title": "Phí khoản vay thế chấp",
+    "help": "Bảo hiểm, thuế hoặc các khoản phí khác được thu cùng mỗi lần thanh toán khoản vay thế chấp. Mỗi khoản phí trở thành một dòng riêng của khoản thanh toán định kỳ, được ghi vào danh mục bạn chọn. Một khoản phí có thể là số tiền cố định, phần trăm số dư hiện tại (được tính lại ở mỗi lần thanh toán) hoặc phần trăm số dư ban đầu, được tính theo mỗi lần thanh toán hoặc theo năm.",
+    "panelDescription": "Các khoản phí được thu cùng mỗi khoản thanh toán định kỳ của khoản vay thế chấp. Khi lưu, các dòng của khoản thanh toán tiếp theo sẽ được cập nhật.",
+    "none": "Không có khoản phí nào được thu cùng khoản thanh toán của khoản vay thế chấp này.",
+    "name": "Tên khoản phí",
+    "category": "Danh mục",
+    "calculation": "Cách tính",
+    "basis": "Giá trị áp dụng",
+    "amount": "Số tiền",
+    "rate": "Tỷ lệ",
+    "add": "Thêm khoản phí",
+    "remove": "Xóa khoản phí",
+    "edit": "Sửa các khoản phí",
+    "editTitle": "Phí khoản vay thế chấp",
+    "save": "Lưu các khoản phí",
+    "cancel": "Hủy",
+    "saved": "Đã lưu các khoản phí của khoản vay thế chấp.",
+    "saveFailed": "Không thể lưu các khoản phí của khoản vay thế chấp.",
+    "loading": "Đang tải các khoản phí...",
+    "loadFailed": "Không thể tải các khoản phí của khoản vay thế chấp.",
+    "retry": "Thử lại",
+    "unknownCategory": "Danh mục không rõ",
+    "unknownValue": "không rõ",
+    "summaryPerPayment": "{value} mỗi lần thanh toán, {calculation}",
+    "summaryAnnual": "{value} mỗi năm, {calculation}",
+    "paymentMatchingConflict": "Khớp thanh toán chưa thể tất toán một khoản thanh toán có bao gồm phí. Hãy tắt khớp thanh toán hoặc xóa các khoản phí.",
+    "paymentMatchingNote": "Khoản thế chấp này có quy tắc khớp thanh toán. Khớp thanh toán chưa thể tất toán một khoản thanh toán có phí, nên không thể thêm phí khi quy tắc còn tồn tại.",
+    "calculations": {
+      "fixed": "Số tiền cố định",
+      "percentCurrentBalance": "Phần trăm số dư hiện tại",
+      "percentOriginalBalance": "Phần trăm số dư ban đầu"
+    },
+    "bases": {
+      "perPayment": "Mỗi lần thanh toán",
+      "annual": "Mỗi năm"
+    },
+    "errors": {
+      "required": "Bắt buộc",
+      "duplicate": "Mỗi khoản phí cần một danh mục riêng, khác với danh mục lãi",
+      "range": "Nhập tỷ lệ tối đa 100%"
     }
   }
 }

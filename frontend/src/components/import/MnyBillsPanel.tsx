@@ -1,9 +1,10 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { formatCurrency } from '@/lib/format';
 import { useDateFormat } from '@/hooks/useDateFormat';
+import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { MnyPreviewBill } from '@/lib/import-mny';
+import { Th } from '@/components/ui/Table';
 
 interface MnyBillsPanelProps {
   bills: MnyPreviewBill[];
@@ -38,6 +39,7 @@ export function MnyBillsPanel({
   const t = useTranslations('import');
   const ts = useTranslations('scheduledTransactions');
   const { formatDate } = useDateFormat();
+  const { formatCurrency } = useNumberFormat();
 
   if (unsupported) {
     return (
@@ -84,25 +86,25 @@ export function MnyBillsPanel({
       <div className="bg-card border border-border rounded-lg overflow-x-auto">
         <table className="min-w-full text-sm">
           <thead>
-            <tr className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
-              <th className="px-3 py-2 text-left font-medium">
+            <tr className="border-b border-border">
+              <Th className="px-3 py-2">
                 {t('mnyBills.table.include')}
-              </th>
-              <th className="px-3 py-2 text-left font-medium">
+              </Th>
+              <Th className="px-3 py-2">
                 {t('mnyBills.table.bill')}
-              </th>
-              <th className="px-3 py-2 text-left font-medium">
+              </Th>
+              <Th className="px-3 py-2">
                 {t('mnyBills.table.account')}
-              </th>
-              <th className="px-3 py-2 text-left font-medium">
+              </Th>
+              <Th className="px-3 py-2">
                 {t('mnyBills.table.frequency')}
-              </th>
-              <th className="px-3 py-2 text-left font-medium">
+              </Th>
+              <Th className="px-3 py-2">
                 {t('mnyBills.table.nextDue')}
-              </th>
-              <th className="px-3 py-2 text-right font-medium">
+              </Th>
+              <Th align="right" className="px-3 py-2">
                 {t('mnyBills.table.amount')}
-              </th>
+              </Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@/test/render';
+import { render, screen, fireEvent, within } from '@/test/render';
 import { BulkConfirmationCard } from './BulkConfirmationCard';
 import type { PendingAction } from '@/types/ai';
 
@@ -52,6 +52,36 @@ describe('BulkConfirmationCard', () => {
     expect(screen.getByText('Skipped')).toBeInTheDocument();
     // "1 transaction · 1 skipped" summary.
     expect(screen.getByText(/1 transaction.*1 skipped/)).toBeInTheDocument();
+  });
+
+  it("shows a row's foreign-currency payment and rate beside its amount", () => {
+    render(
+      <BulkConfirmationCard
+        action={makeAction({
+          preview: {
+            rows: [
+              {
+                status: 'ok',
+                accountName: 'Checking',
+                amount: -110,
+                currencyCode: 'USD',
+                transactionDate: '2026-01-15',
+                payeeName: 'Hotel',
+                originalAmount: -100,
+                originalCurrencyCode: 'EUR',
+                exchangeRate: 1.1,
+                exchangeRateSource: 'supplied',
+              },
+            ],
+          },
+        })}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByText(/paid .*100\.00 at 1 EUR = 1\.100000 USD, as given/),
+    ).toBeInTheDocument();
   });
 
   it('approves all valid rows via the single button', () => {
@@ -133,6 +163,44 @@ describe('BulkConfirmationCard', () => {
     expect(screen.getByText(/Buy AAPL/)).toBeInTheDocument();
   });
 
+  it('names the bond series and the accrued interest of a redemption row, and flags a difference from the split', () => {
+    render(
+      <BulkConfirmationCard
+        action={makeAction({
+          type: 'create_investment_transactions',
+          preview: {
+            rows: [
+              {
+                status: 'ok',
+                investmentAction: 'REDEEM',
+                symbol: 'EDO',
+                transactionDate: '2023-04-01',
+                quantity: 10,
+                price: 100,
+                totalAmount: 1000,
+                accruedInterest: 470.5,
+                securityCurrency: 'PLN',
+                bondSeriesCode: 'EDO0423',
+                bondRedemptionSplit: {
+                  principal: 1000,
+                  interest: 470.5,
+                  deduction: 0,
+                  payout: 1470.5,
+                  outcome: 'differs',
+                },
+              },
+            ],
+          },
+        })}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/Series EDO0423/)).toBeInTheDocument();
+    expect(screen.getByText(/Accrued interest/)).toBeInTheDocument();
+    expect(screen.getByText(/Check them before approving/)).toBeInTheDocument();
+  });
+
   describe('batch_actions envelope', () => {
     it('renders an update batch with the edit title and success copy', () => {
       const { rerender } = render(
@@ -199,6 +267,96 @@ describe('BulkConfirmationCard', () => {
       expect(
         screen.getByText(/Automobile: Accessories.*Groceries/),
       ).toBeInTheDocument();
+    });
+
+    it('says which tags each update row changes on its split lines', () => {
+      render(
+        <BulkConfirmationCard
+          action={makeAction({
+            type: 'batch_actions',
+            descriptor: { type: 'batch_actions', operation: 'update' },
+            preview: {
+              rows: [
+                {
+                  status: 'ok',
+                  accountName: 'Checking',
+                  amount: -30,
+                  currencyCode: 'USD',
+                  transactionDate: '2026-01-15',
+                  payeeName: 'Costco',
+                  splitTagChanges: [
+                    {
+                      categoryName: 'Food',
+                      amount: -20,
+                      memo: 'bulk',
+                      tagNames: ['Trip'],
+                      removeTagNames: ['Old'],
+                    },
+                  ],
+                },
+              ],
+            },
+          })}
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+      expect(
+        screen.getByText(/Food .*20\.00 \(bulk\): adds tags: Trip; removes tags: Old/),
+      ).toBeInTheDocument();
+    });
+
+    it('says which tags each update row adds and removes', () => {
+      render(
+        <BulkConfirmationCard
+          action={makeAction({
+            type: 'batch_actions',
+            descriptor: { type: 'batch_actions', operation: 'update' },
+            preview: {
+              rows: [
+                {
+                  status: 'ok',
+                  accountName: 'Checking',
+                  amount: -12.5,
+                  currencyCode: 'USD',
+                  transactionDate: '2026-01-15',
+                  payeeName: 'Starbucks',
+                  tagNames: ['Trip', 'Family'],
+                  newTagNames: ['Family'],
+                  removeTagNames: ['Old'],
+                },
+              ],
+            },
+          })}
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+      expect(
+        screen.getByText(/adds tags: Trip, Family \(new tag\) · removes tags: Old/),
+      ).toBeInTheDocument();
+    });
+
+    it('titles a tag batch and describes each tag change', () => {
+      render(
+        <BulkConfirmationCard
+          action={makeAction({
+            type: 'batch_actions',
+            descriptor: { type: 'batch_actions', operation: 'update_tag' },
+            preview: {
+              rows: [
+                { status: 'ok', name: 'Travel', previousName: 'Trip' },
+                { status: 'ok', name: 'Home', tagIcon: 'house' },
+              ],
+            },
+          })}
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+      expect(screen.getByText('Edit these tags?')).toBeInTheDocument();
+      expect(screen.getByText('renamed from Trip')).toBeInTheDocument();
+      expect(screen.getByText('Icon: house')).toBeInTheDocument();
     });
 
     it('flags reconciled rows in an update batch', () => {
@@ -272,6 +430,85 @@ describe('BulkConfirmationCard', () => {
         />,
       );
       expect(screen.getByText(/2 payees created/)).toBeInTheDocument();
+    });
+
+    it('shows a cleared contact field instead of rendering the change as blank', () => {
+      // null means the edit clears the field and undefined means it does not
+      // touch it. Dropping both on truthiness -- which is what `.filter(Boolean)`
+      // does -- makes a row that empties every contact detail look identical to
+      // a row that changes nothing, and in bulk mode there is no second card to
+      // show what is really being approved.
+      render(
+        <BulkConfirmationCard
+          action={makeAction({
+            type: 'batch_actions',
+            descriptor: { type: 'batch_actions', operation: 'update_payee' },
+            preview: {
+              rows: [
+                {
+                  status: 'ok',
+                  name: 'Hydro One',
+                  categoryName: 'Utilities',
+                  email: null,
+                  phone: null,
+                },
+              ],
+            },
+          })}
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+      expect(screen.getByText('Utilities · None · None')).toBeInTheDocument();
+    });
+
+    it('omits a contact field the edit does not mention', () => {
+      render(
+        <BulkConfirmationCard
+          action={makeAction({
+            type: 'batch_actions',
+            descriptor: { type: 'batch_actions', operation: 'update_payee' },
+            preview: {
+              rows: [
+                { status: 'ok', name: 'Hydro One', categoryName: 'Utilities' },
+              ],
+            },
+          })}
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+      expect(screen.getByText('Utilities')).toBeInTheDocument();
+      expect(screen.queryByText(/None/)).not.toBeInTheDocument();
+    });
+
+    it('shows the address a bulk edit sets, since no individual card will', () => {
+      render(
+        <BulkConfirmationCard
+          action={makeAction({
+            type: 'batch_actions',
+            descriptor: { type: 'batch_actions', operation: 'update_payee' },
+            preview: {
+              rows: [
+                {
+                  status: 'ok',
+                  name: 'Starbucks',
+                  address: '1912 Pike Pl, Seattle',
+                  // What the server sends: the stored E.164 form.
+                  phone: '+12064488762',
+                },
+              ],
+            },
+          })}
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+      // Address last, so the value long enough to wrap does it at the end.
+      expect(
+        // ...shown the way a person reads a number, not as stored.
+        screen.getByText('+1 206 448 8762 · 1912 Pike Pl, Seattle'),
+      ).toBeInTheDocument();
     });
 
     it('renders a delete_payee batch with the delete title', () => {
@@ -554,5 +791,68 @@ describe('BulkConfirmationCard', () => {
     expect(
       screen.getByText('This confirmation expired. Ask again to retry.'),
     ).toBeInTheDocument();
+  });
+
+  describe('rule effects on a created row', () => {
+    const ruleEffects = (structure: unknown) => ({
+      changes: { addTagIds: [], removeTagIds: [], structure },
+      aiReviewRequests: [],
+      labels: { categories: { 'cat-1': 'Loans: Interest' }, payees: {}, tags: {}, rules: {}, accounts: { loan: 'Loan account' } },
+    });
+    const okRow = (effects?: unknown) => ({
+      status: 'ok' as const,
+      accountName: 'Checking',
+      amount: -640.15,
+      currencyCode: 'USD',
+      transactionDate: '2026-10-05',
+      payeeName: 'Bank',
+      ...(effects ? { ruleEffects: effects } : {}),
+    });
+
+    it('lists the transfer or split a rule will write, per row, so the card shows the balance it moves', () => {
+      render(
+        <BulkConfirmationCard
+          action={makeAction({
+            preview: {
+              rows: [
+                okRow(ruleEffects({ kind: 'transfer', accountId: 'loan', clearCategory: true })),
+                okRow(
+                  ruleEffects({
+                    kind: 'split',
+                    parts: [
+                      { amount: -400.15, transferAccountId: 'loan', categoryId: null, payeeId: null, memo: null },
+                      { amount: -240, transferAccountId: null, categoryId: 'cat-1', payeeId: null, memo: null },
+                    ],
+                  }),
+                ),
+                okRow(),
+              ],
+            } as never,
+          })}
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+      const blocks = screen.getAllByTestId('rule-effects');
+      expect(blocks).toHaveLength(2);
+      expect(within(blocks[0]).getByText('Becomes a transfer with Loan account')).toBeInTheDocument();
+      expect(within(blocks[1]).getByText('Will be split into 2 parts')).toBeInTheDocument();
+      expect(within(blocks[1]).getByText('Part 1: -$400.15 to Loan account')).toBeInTheDocument();
+    });
+
+    it('shows nothing for a flagged row, which is never created', () => {
+      render(
+        <BulkConfirmationCard
+          action={makeAction({
+            preview: {
+              rows: [{ ...okRow(ruleEffects({ kind: 'transfer', accountId: 'loan', clearCategory: true })), status: 'error', error: 'Unknown account' }],
+            } as never,
+          })}
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+      expect(screen.queryByTestId('rule-effects')).toBeNull();
+    });
   });
 });

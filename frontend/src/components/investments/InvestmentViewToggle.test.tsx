@@ -1,17 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@/test/render';
-import { NextIntlClientProvider } from 'next-intl';
 import { InvestmentViewToggle } from './InvestmentViewToggle';
-import messages from '@/i18n/messages/en/investments.json';
 
 function renderToggle(
   value: 'brokerage' | 'cash',
   onChange = vi.fn(),
 ) {
   render(
-    <NextIntlClientProvider locale="en" messages={{ investments: messages }}>
-      <InvestmentViewToggle value={value} onChange={onChange} />
-    </NextIntlClientProvider>,
+    <InvestmentViewToggle value={value} onChange={onChange} />,
   );
   return { onChange };
 }

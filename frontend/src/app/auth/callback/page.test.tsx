@@ -74,7 +74,7 @@ vi.mock('@/lib/user-settings', () => ({
   userSettingsApi: { updatePreferences: vi.fn().mockResolvedValue({}) },
 }));
 
-vi.mock('js-cookie', () => ({ default: { set: vi.fn() } }));
+vi.mock('js-cookie', () => ({ default: { set: vi.fn(), get: vi.fn() } }));
 
 vi.mock('@/lib/stepUpToken', () => ({
   stashOidcReauthArtifact: vi.fn(),
@@ -212,7 +212,8 @@ describe('CallbackPage', () => {
     sessionStorage.setItem('postLoginReturnTo', '/some/path?foo=bar');
     const assignSpy = vi.fn();
     Object.defineProperty(window, 'location', {
-      value: { href: '', assign: assignSpy },
+      // The stashed path is resolved against this origin before it is followed.
+      value: { href: '', origin: originalLocation.origin, assign: assignSpy },
       writable: true,
     });
     render(<CallbackPage />);
@@ -220,6 +221,46 @@ describe('CallbackPage', () => {
       expect(window.location.href).toBe('/some/path?foo=bar');
     });
     expect(sessionStorage.getItem('postLoginReturnTo')).toBeNull();
+  });
+
+  // A prefix check (starts with "/", not "//", not "/\") accepts each of these,
+  // and the URL parser then strips the tab/CR/LF and reads "//evil.example" --
+  // a navigation to another origin.
+  it.each([
+    ['tab', '/\t/evil.example/attack'],
+    ['CR', '/\r/evil.example/attack'],
+    ['LF', '/\n/evil.example/attack'],
+    ['backslash', '/\\evil.example/attack'],
+    ['absolute URL', 'https://evil.example/attack'],
+  ])('ignores a stashed returnTo that leaves the origin (%s)', async (_label, stashed) => {
+    mockSearchParams = new URLSearchParams('success=true');
+    mockGetProfile.mockResolvedValue({
+      id: 'user-1', email: 'test@example.com', mustChangePassword: false, hasPassword: false,
+    });
+    sessionStorage.setItem('postLoginReturnTo', stashed);
+    Object.defineProperty(window, 'location', {
+      value: { href: '', origin: originalLocation.origin, assign: vi.fn() },
+      writable: true,
+    });
+    render(<CallbackPage />);
+    await waitFor(() => {
+      expect(mockRouterPush).toHaveBeenCalledWith('/dashboard');
+    });
+    expect(window.location.href).toBe('');
+    expect(sessionStorage.getItem('postLoginReturnTo')).toBeNull();
+  });
+
+  it('does not router.push a stashed returnTo that leaves the origin after a re-auth', async () => {
+    mockSearchParams = new URLSearchParams('reauth=delete-account');
+    sessionStorage.setItem('postLoginReturnTo', '/\t/evil.example/attack');
+    vi.spyOn(window.history, 'replaceState').mockImplementation(() => {});
+    render(<CallbackPage />);
+    await waitFor(() => {
+      expect(mockRouterPush).toHaveBeenCalledWith('/dashboard');
+    });
+    expect(mockRouterPush).not.toHaveBeenCalledWith(
+      expect.stringContaining('evil.example'),
+    );
   });
 
   it('ignores sessionStorage returnTo that starts with //', async () => {

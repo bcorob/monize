@@ -6,6 +6,9 @@
     "colorThemeLabel": "Color theme",
     "colorThemeOptions": {
       "colorblind": "Color-blind safe"
+    },
+    "defaultViews": {
+      "accountOpenTargetHelp": "Applies when you click an account on the Accounts page or in Favorite Accounts on the dashboard."
     }
   },
   "about": {

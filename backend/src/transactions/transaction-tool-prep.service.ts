@@ -29,7 +29,6 @@ import {
   BatchCreateTransferRow,
   ResolvedSplitLine,
   toSplitRowDescriptor,
-  toSplitPreview,
 } from "../ai/actions/ai-action.types";
 import {
   transactionPreviewRow,
@@ -38,18 +37,50 @@ import {
 import { BulkCreateSkip, bulkSkipReason } from "../common/bulk-create.types";
 import { didYouMean } from "../common/name-suggestions.util";
 import { tr } from "../i18n/translate";
+import { TransactionSplit } from "./entities/transaction-split.entity";
+import { ExchangeRateService } from "../currencies/exchange-rate.service";
+import { resolveFxRateOrNull } from "../common/fx-entry.util";
+import {
+  ForeignEntryRequest,
+  hasForeignEntryRequest,
+} from "../common/foreign-entry.util";
+import {
+  ForeignEntryPreviewRequest,
+  foreignEntryWriteFields,
+} from "./foreign-entry-preview";
+import { carrySplitTags } from "./split-tag-carry.util";
+import { updatePreviewRow } from "./update-preview-row.util";
+import {
+  splitTagChangeWriteFields,
+  tagChangeFields,
+  tagChangeWriteFields,
+} from "../tags/tag-change.util";
 
 /** One category-split line on a create/update row (names; resolved internally). */
 export interface SplitLineInput {
   categoryName: string;
   amount: number;
   memo?: string;
+  /**
+   * Update only: the existing line this one continues (a read tool's
+   * `splitId`), whose tags it keeps. Without it a line keeps the tags of an
+   * existing line of the same category, and amount and memo where they tell
+   * lines apart; an ambiguous match is refused (`carrySplitTags`).
+   */
+  splitId?: string;
+  /** `"ai"` marks a category the AI chose, on the confirmation card only. */
+  categorySource?: "ai";
 }
 
-/** Standard create-row input (names; resolved internally). */
-export interface CreateRowInput {
+/**
+ * Standard create-row input (names; resolved internally). A foreign-currency
+ * entry gives `originalAmount` and `originalCurrencyCode`, with `amount` (what
+ * the account was charged), `exchangeRate`, both or neither
+ * (`resolveForeignEntry`); `amount` is then optional.
+ */
+export interface CreateRowInput extends ForeignEntryRequest {
   accountName: string;
-  amount: number;
+  amount?: number;
   date: string;
   payeeName?: string;
   categoryName?: string;
@@ -61,6 +92,12 @@ export interface CreateRowInput {
 
 /** Transfer create-row input (names; resolved internally). */
 export interface TransferRowInput {
+  /**
+   * Refused on a transfer, whose legs each carry their own account's currency:
+   * accepted here only so the refusal can name them instead of dropping them.
+   */
+  originalAmount?: number;
+  originalCurrencyCode?: string;
   fromAccountName: string;
   toAccountName: string;
   amount: number;
@@ -73,8 +110,12 @@ export interface TransferRowInput {
   toAmount?: number;
 }
 
-/** Update-row input (names; resolved internally; >=1 mutable field). */
-export interface UpdateRowInput {
+/**
+ * Update-row input (names; resolved internally; >=1 mutable field). The
+ * foreign-currency fields change the row's entry, its own figures filling in
+ * the rest; the account's own currency as `originalCurrencyCode` clears it.
+ */
+export interface UpdateRowInput extends ForeignEntryRequest {
   transactionId: string;
   amount?: number;
   date?: string;
@@ -84,6 +125,38 @@ export interface UpdateRowInput {
   createPayeeIfMissing?: boolean;
   /** Category splits; when present the transaction's split set is replaced. */
   splits?: SplitLineInput[];
+  /**
+   * Tag names to ADD (created at confirm when missing); the tags the row
+   * carries stay. Sent by `manage_transactions` (`addTagNames`) and by the
+   * review queue from an email-receipt profile's `tag`. On a transfer both
+   * legs get them.
+   */
+  tagNames?: string[];
+  /**
+   * Tag names to REMOVE; a name the row does not carry is no change, one the
+   * user has no tag for is refused. On a transfer, from both legs.
+   */
+  removeTagNames?: string[];
+  /**
+   * Tag changes on existing split lines of a split transaction, by the
+   * `splitId` a read tool returned: names to add (created at confirm when
+   * missing) and remove on that line only; the line's amount, category and
+   * other tags stay. Not with `splits` (a replaced line keeps its tags by its
+   * `splitId`), and not on a transfer.
+   */
+  splitTags?: {
+    splitId: string;
+    addTagNames?: string[];
+    removeTagNames?: string[];
+  }[];
+  /**
+   * The reference number ("Ref #") to set. Set by the review queue from an
+   * email receipt's order number; the chat and MCP tools do not send it.
+   * Standard edits only: a transfer ignores it.
+   */
+  referenceNumber?: string;
+  /** `"ai"` marks `categoryName` as chosen by the AI, on the confirmation card only. */
+  categorySource?: "ai";
 }
 
 export interface PrepareCreateResult {
@@ -148,7 +221,48 @@ export class TransactionToolPrepService {
     @Inject(forwardRef(() => TransactionAnalyticsService))
     private readonly analyticsService: TransactionAnalyticsService,
     private readonly splitService: TransactionSplitService,
+    private readonly exchangeRateService: ExchangeRateService,
   ) {}
+
+  /**
+   * A row's foreign-currency figures for `previewCreate` / `previewUpdate`,
+   * with the market-rate lookup used when the caller gave neither the amount
+   * charged nor a rate; `undefined` when the row names none.
+   */
+  private foreignEntryOf(
+    row: ForeignEntryRequest,
+  ): ForeignEntryPreviewRequest | undefined {
+    if (!hasForeignEntryRequest(row)) return undefined;
+    return {
+      originalAmount: row.originalAmount,
+      originalCurrencyCode: row.originalCurrencyCode,
+      exchangeRate: row.exchangeRate,
+      lookupRate: (from, to, date) =>
+        resolveFxRateOrNull(this.exchangeRateService, from, to, date),
+    };
+  }
+
+  /**
+   * A transfer moves money between two accounts, each leg in its own
+   * account's currency; a cross-currency one takes `exchangeRate` or
+   * `toAmount`, never a foreign entry. Refused rather than dropped.
+   */
+  private assertNoForeignEntryOnTransfer(row: {
+    originalAmount?: number;
+    originalCurrencyCode?: string;
+  }): void {
+    if (
+      row.originalAmount !== undefined ||
+      row.originalCurrencyCode !== undefined
+    ) {
+      throw new BadRequestException(
+        tr(
+          "errors.transactions.fxEntryNotOnTransfer",
+          "originalAmount and originalCurrencyCode are for a transaction in one account. A transfer between accounts in different currencies takes exchangeRate or toAmount when it is created.",
+        ),
+      );
+    }
+  }
 
   private async resolveCategoryId(
     userId: string,
@@ -170,6 +284,8 @@ export class TransactionToolPrepService {
     userId: string,
     splits: SplitLineInput[],
     transactionAmount: number,
+    /** The parent account's currency: the lines are held to its places. */
+    currencyCode: string,
   ): Promise<ResolvedSplitLine[]> {
     const resolved: ResolvedSplitLine[] = [];
     for (const line of splits) {
@@ -183,6 +299,9 @@ export class TransactionToolPrepService {
         categoryName: line.categoryName,
         amount: line.amount,
         memo: line.memo ?? null,
+        ...(line.categorySource === "ai"
+          ? { categorySource: "ai" as const }
+          : {}),
       });
     }
     // Reuse the domain sum/sign validation so the preview rejects bad splits
@@ -192,7 +311,11 @@ export class TransactionToolPrepService {
       amount: s.amount,
       memo: s.memo ?? undefined,
     }));
-    this.splitService.validateSplits(dtos, transactionAmount);
+    await this.splitService.validateSplitsInCurrency(
+      dtos,
+      transactionAmount,
+      currencyCode,
+    );
     return resolved;
   }
 
@@ -250,6 +373,8 @@ export class TransactionToolPrepService {
         payeeName: row.payeeName ?? null,
         categoryName: row.categoryName ?? null,
         description: row.description ?? null,
+        // No foreign-entry figures on a row that failed: its currency code is
+        // unvalidated, and the card formats the code it is given.
       };
 
       const account = await this.accountsService.resolveByName(
@@ -284,6 +409,7 @@ export class TransactionToolPrepService {
           categoryId,
           description: row.description,
           createPayeeIfMissing,
+          foreignEntry: this.foreignEntryOf(row),
         });
         okPreviews.push(preview);
         okCreatePayee.push(createPayeeIfMissing);
@@ -357,6 +483,7 @@ export class TransactionToolPrepService {
       }
 
       try {
+        this.assertNoForeignEntryOnTransfer(row);
         const preview = await this.transferService.previewCreateTransfer(
           userId,
           {
@@ -393,6 +520,7 @@ export class TransactionToolPrepService {
     userId: string,
     row: TransferRowInput,
   ): Promise<CreateTransferPreview> {
+    this.assertNoForeignEntryOnTransfer(row);
     const fromAccount = await this.accountsService.resolveByName(
       userId,
       row.fromAccountName,
@@ -454,11 +582,8 @@ export class TransactionToolPrepService {
     }
     // A split row carries its categories in the splits array; the parent has no
     // single category.
-    const splits = row.splits
-      ? await this.resolveSplits(userId, row.splits, row.amount)
-      : undefined;
     let categoryId: string | undefined;
-    if (!splits && row.categoryName) {
+    if (!row.splits && row.categoryName) {
       const resolved = await this.resolveCategoryId(userId, row.categoryName);
       if (!resolved) throw this.unknownCategoryError(row.categoryName);
       categoryId = resolved;
@@ -471,7 +596,19 @@ export class TransactionToolPrepService {
       categoryId,
       description: row.description,
       createPayeeIfMissing: createPayee,
+      hasSplits: !!row.splits,
+      foreignEntry: this.foreignEntryOf(row),
     });
+    // The lines sum to the amount the row will store, which a foreign entry
+    // may have worked out.
+    const splits = row.splits
+      ? await this.resolveSplits(
+          userId,
+          row.splits,
+          preview.amount,
+          account.currencyCode,
+        )
+      : undefined;
     return { preview, createPayee, splits };
   }
 
@@ -488,10 +625,37 @@ export class TransactionToolPrepService {
       item.transactionId,
     );
 
+    if (item.splitTags?.length && item.splits) {
+      throw new BadRequestException(
+        tr(
+          "errors.tags.splitTagsWithSplits",
+          "splitTags cannot be sent with splits. A replaced line keeps its tags when it names its splitId; change the lines' tags in a separate edit.",
+        ),
+      );
+    }
     if (this.transferService.isTransfer(existing)) {
+      this.assertNoForeignEntryOnTransfer(item);
+      // The transfer edit takes no rate, so one sent would be dropped while the
+      // model reports it changed.
+      if (item.exchangeRate !== undefined) {
+        throw new BadRequestException(
+          tr(
+            "errors.transactions.transferRateNotEditable",
+            "A transfer's exchange rate cannot be changed here. Edit the transfer from the Transactions screen to change its rate.",
+          ),
+        );
+      }
       if (item.splits) {
         throw new BadRequestException(
           "A transfer cannot be converted into a split transaction.",
+        );
+      }
+      if (item.splitTags?.length) {
+        throw new BadRequestException(
+          tr(
+            "errors.tags.splitTagsNotSplit",
+            "splitTags changes the tags on a split transaction's lines, and this transaction is not split. Use addTagNames and removeTagNames for its own tags.",
+          ),
         );
       }
       await this.assertNotCrossOwnerTransfer(userId, existing);
@@ -524,7 +688,37 @@ export class TransactionToolPrepService {
         },
         this.transactionsService.findOne.bind(this.transactionsService),
       );
-      return { kind: "transfer", preview };
+      const tagChange = await this.transactionsService.previewTransferTagChange(
+        userId,
+        item.transactionId,
+        item.tagNames ?? [],
+        item.removeTagNames ?? [],
+      );
+      // An edit that asked only for tags the transfer already has (or does not
+      // have) changes nothing: refused like the standard path, never offered as
+      // a card that rewrites the transfer from this snapshot.
+      const fieldChange = preview.changesFields !== false;
+      const tagChanges =
+        tagChange.tagNames.length > 0 || tagChange.removeTagIds.length > 0;
+      const askedForTags =
+        (item.tagNames?.length ?? 0) > 0 ||
+        (item.removeTagNames?.length ?? 0) > 0;
+      if (!fieldChange && askedForTags && !tagChanges) {
+        throw new BadRequestException(
+          tr(
+            "errors.tags.nothingToChange",
+            "Nothing to change: the transaction already carries every tag to add and none of the tags to remove. Tags on split lines change only through splitTags.",
+          ),
+        );
+      }
+      return {
+        kind: "transfer",
+        preview: {
+          ...preview,
+          ...tagChangeFields(tagChange),
+          ...(tagChanges && !fieldChange ? { tagsOnly: true as const } : {}),
+        },
+      };
     }
 
     const createPayee = item.createPayeeIfMissing ?? true;
@@ -548,14 +742,70 @@ export class TransactionToolPrepService {
         // existing split transaction this is what permits a category or
         // amount change (Truth table B).
         splitsAccompany: item.splits !== undefined,
+        tagNames: item.tagNames,
+        removeTagNames: item.removeTagNames,
+        splitTags: item.splitTags?.map((line) => ({
+          splitId: line.splitId,
+          addNames: line.addTagNames,
+          removeNames: line.removeTagNames,
+        })),
+        referenceNumber: item.referenceNumber,
+        foreignEntry: this.foreignEntryOf(item),
       },
     );
     // Validate splits against the effective amount the edit will leave on the
     // transaction (preview.amount reflects item.amount or the existing value).
-    const splits = item.splits
-      ? await this.resolveSplits(userId, item.splits, preview.amount)
+    const resolved = item.splits
+      ? await this.resolveSplits(
+          userId,
+          item.splits,
+          preview.amount,
+          preview.currencyCode,
+        )
       : undefined;
-    return { kind: "standard", preview, createPayee, splits };
+    // Replacing the set deletes the old lines: each new line keeps the tags of
+    // the line it continues, or they would be lost with it.
+    const splits =
+      resolved && item.splits
+        ? this.withCarriedSplitTags(existing, resolved, item.splits)
+        : undefined;
+    return {
+      kind: "standard",
+      preview:
+        item.categorySource === "ai" && categoryId !== undefined
+          ? { ...preview, categorySource: "ai" }
+          : preview,
+      createPayee,
+      splits,
+    };
+  }
+
+  private withCarriedSplitTags(
+    existing: { splits?: TransactionSplit[] | null },
+    resolved: ResolvedSplitLine[],
+    inputs: SplitLineInput[],
+  ): ResolvedSplitLine[] {
+    const carried = carrySplitTags(
+      (existing.splits ?? []).map((line) => ({
+        id: line.id,
+        categoryId: line.categoryId,
+        amount: line.amount,
+        memo: line.memo,
+        tags: line.tags,
+      })),
+      resolved.map((line, i) => ({
+        categoryId: line.categoryId,
+        amount: line.amount,
+        memo: line.memo,
+        ...(inputs[i]?.splitId ? { splitId: inputs[i].splitId } : {}),
+      })),
+    );
+    return resolved.map((line, i) => {
+      const tags = carried[i];
+      return tags
+        ? { ...line, tagIds: tags.tagIds, tagNames: tags.tagNames }
+        : line;
+    });
   }
 
   /** Preview a single delete (works for standard, split, and transfer). */
@@ -653,24 +903,14 @@ export class TransactionToolPrepService {
           categoryId: splits ? null : preview.categoryId,
           description: preview.description,
           currencyCode: preview.currencyCode,
+          ...foreignEntryWriteFields(preview),
           ...(splits ? { splits: splits.map(toSplitRowDescriptor) } : {}),
+          ...tagChangeWriteFields(preview),
+          ...splitTagChangeWriteFields(preview),
+          ...(preview.tagsOnly ? { tagsOnly: true as const } : {}),
         });
         okIndex.push(i);
-        previewRows.push({
-          status: "ok",
-          accountName: preview.accountName,
-          amount: preview.amount,
-          currencyCode: preview.currencyCode,
-          transactionDate: preview.transactionDate,
-          payeeName: preview.payeeName,
-          payeeWillBeCreated: preview.payeeWillBeCreated,
-          // The card shows the split lines instead of a single category name,
-          // because that is what the row will write.
-          categoryName: splits ? null : preview.categoryName,
-          description: preview.description,
-          isReconciled: preview.isReconciled,
-          ...(splits ? { splits: splits.map(toSplitPreview) } : {}),
-        });
+        previewRows.push(updatePreviewRow(result));
       } catch (err) {
         const reason = this.skipReason(err);
         skipped.push({ index: i, reason });
@@ -683,6 +923,37 @@ export class TransactionToolPrepService {
     }
 
     return { okRows, previewRows, okIndex, skipped };
+  }
+
+  /**
+   * Preview each edit as its own card would: what a single item and
+   * `approvalMode: "individual"` apply, one card per row, where a transfer
+   * edit is a card of its own rather than a skipped row (`prepareUpdateBulk`).
+   * A dryRun of those modes previews through this, so it accepts what their
+   * save accepts.
+   */
+  async prepareUpdateEach(
+    userId: string,
+    items: UpdateRowInput[],
+  ): Promise<{ previewRows: AiActionPreviewRow[]; skipped: BulkCreateSkip[] }> {
+    const previewRows: AiActionPreviewRow[] = [];
+    const skipped: BulkCreateSkip[] = [];
+    for (const [i, item] of items.entries()) {
+      try {
+        previewRows.push(
+          updatePreviewRow(await this.prepareUpdate(userId, item)),
+        );
+      } catch (err) {
+        const reason = this.skipReason(err);
+        skipped.push({ index: i, reason });
+        previewRows.push({
+          status: "error",
+          transactionDate: item.date ?? undefined,
+          error: reason,
+        });
+      }
+    }
+    return { previewRows, skipped };
   }
 
   /** Map each delete to a batch row descriptor best-effort. */

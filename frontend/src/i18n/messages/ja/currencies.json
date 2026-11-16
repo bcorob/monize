@@ -4,6 +4,7 @@
     "subtitle": "勘定科目と有価証券で使用される通貨を管理する",
     "refreshRates": "レートを更新",
     "refreshing": "更新中...",
+    "statusFilterLabel": "ステータス",
     "newCurrency": "+ 新規通貨",
     "searchPlaceholder": "コードまたは名前で検索...",
     "statusAll": "すべて ({count})",
@@ -13,6 +14,15 @@
     "modalTitleNew": "新規通貨",
     "loading": "通貨を読み込み中...",
     "count": "{count, plural, one {# 通貨} other {# 通貨}}",
+    "providers": {
+      "line": "為替レートの取得元: {providers}",
+      "separator": "、次に ",
+      "names": {
+        "frankfurter": "Frankfurter（ECB 参照レート）",
+        "yahoo": "Yahoo Finance",
+        "crypto": "暗号資産ペア (Yahoo)"
+      }
+    },
     "toasts": {
       "loadFailed": "通貨の読み込みに失敗しました",
       "updated": "通貨を更新しました",
@@ -24,6 +34,7 @@
       "statusFailed": "通貨のステータス更新に失敗しました",
       "ratesRefreshed": "為替レートを更新しました：{updated} ペアを更新",
       "ratesRefreshedWithFailed": "為替レートを更新しました：{updated} 件更新、{failed} 件失敗",
+      "ratesAllFailed": "為替レートを取得できませんでした。プロバイダーが応答しませんでした",
       "ratesFailed": "為替レートの更新に失敗しました"
     },
     "summary": {
@@ -44,6 +55,8 @@
       "actions": "操作"
     },
     "defaultBadge": "デフォルト",
+    "cryptoBadge": "暗号資産",
+    "noPriceSymbol": "価格記号なし",
     "statusBadge": {
       "active": "有効",
       "activeShort": "有効",
@@ -61,9 +74,10 @@
       "activate": "有効化",
       "deleteCurrency": "通貨を削除"
     },
-    "usageTooltip": "{accounts} 勘定科目、{securities} 有価証券",
-    "usageAccounts": "{count, plural, one {# 勘定} other {# 勘定}}",
-    "usageSecurities": "{count, plural, one {# 証券} other {# 証券}}",
+    "usageAccounts": "{count, plural, other {# 口座}}",
+    "usageSecurities": "{count, plural, other {# 銘柄}}",
+    "rateHelp": "各通貨の1単位が{currency}でいくらになるか。",
+    "rateMissing": "{from} から {to} への保存済みレートがありません。",
     "empty": {
       "title": "通貨がありません",
       "subtitle": "通貨を追加して始めましょう。"
@@ -88,6 +102,20 @@
     "symbolLabel": "記号",
     "symbolPlaceholder": "例：$、€、£、¥",
     "decimalPlacesLabel": "小数桁数",
+    "kindLabel": "種類",
+    "kindOptions": {
+      "fiat": "法定通貨",
+      "crypto": "暗号資産"
+    },
+    "kindLocked": "{code} は使用中のため、種類を変更できません。",
+    "quoteSymbolLabel": "価格記号（任意）",
+    "quoteSymbolPlaceholder": "例：BTC-EUR",
+    "quoteSymbolHelp": "コインの価格取得元となる Yahoo Finance の記号です。ティッカー、ハイフン、建値通貨の順に入力します（例：BTC-EUR）。コインの為替レートはこの記号を通じて取得されます。",
+    "verifyButton": "確認",
+    "quoteSymbolPricedIn": "{currency} 建て",
+    "quoteSymbolMissing": "価格記号がないと、この通貨には為替レートがありません。",
+    "quoteSymbolNotCrypto": "{symbol} は暗号資産ではありません。BTC-EUR のように、コインのペアを入力してください。",
+    "quoteSymbolNotFound": "{symbol} に該当する暗号資産が見つかりません",
     "lookupButton": "検索",
     "lookingUp": "検索中...",
     "clearButton": "クリア",
@@ -99,9 +127,14 @@
       "found": "見つかりました：{details}",
       "notFound": "「{query}」に一致する通貨が見つかりません",
       "lookupFailed": "検索に失敗しました - もう一度試してください",
-      "reactivateFailed": "通貨を再有効化できませんでした"
+      "reactivateFailed": "通貨を再有効化できませんでした",
+      "verifyEmpty": "確認するには BTC-EUR のような価格記号を入力してください",
+      "verifyFailed": "価格記号の確認に失敗しました"
     },
     "inactiveNotice": "{code} はすでにリストにありますが、無効になっています。",
+    "nonIsoNotice": "{code} は標準的な通貨コードではありません。暗号資産の場合は、種類を「暗号資産」に設定してください。<guide>暗号資産についてはユーザーガイドをご覧ください</guide>。",
+    "switchToCrypto": "暗号資産を使用",
+    "cryptoPrecisionNotice": "暗号資産の金額は保存精度である小数点以下8桁まで保持されるため、{smallest}未満の手数料は入力できません。<guide>ウォレット手数料の記録方法をご覧ください</guide>。",
     "reactivateButton": "{code} を再有効化",
     "reactivating": "再有効化しています..."
   },
@@ -110,6 +143,53 @@
     "nameRequired": "名前は必須です",
     "nameMax": "名前は100文字以内でなければなりません",
     "symbolRequired": "記号は必須です",
-    "symbolMax": "記号は10文字以内でなければなりません"
+    "symbolMax": "記号は10文字以内でなければなりません",
+    "quoteSymbolMax": "価格記号は20文字以内でなければなりません",
+    "quoteSymbolRequiresCrypto": "価格記号を持てるのは暗号資産のみです",
+    "quoteSymbolNotAPair": "BTC-EUR のようにペアを入力してください：コイン、ハイフン、3文字の通貨コード"
+  },
+  "rateHistory": {
+    "title": "レート履歴",
+    "stored": "保存済み履歴：{start} から {end}（{count} 件の観測値）",
+    "none": "{pair} の保存済み履歴はありません",
+    "loading": "保存済みレート履歴を確認しています...",
+    "loadFailed": "保存済みレート履歴を読み込めませんでした",
+    "fillGaps": "レート履歴の欠落を補う",
+    "filling": "不足しているレートを取得しています...",
+    "fillGapsTitle": "レポートに不足している日次レートを、データが {code} を使い始めた日から今日まで取得します。",
+    "hint": "最初に保存されたレートより前の日付のレポートでは、{pair} を換算できません。",
+    "list": {
+      "heading": "保存済みレート",
+      "invertedHelp": "（逆算）と表示されたレートは、Monizeがこのペアについて実際に保存した値の逆数であり、別の観測値ではありません。",
+      "direction": "1 {from} あたりの {to} で表示しています。",
+      "loading": "保存済みレートを読み込んでいます...",
+      "loadFailed": "保存済みレートを読み込めませんでした",
+      "empty": "表示できる保存済みレートはありません",
+      "truncated": "最新の {count} 件の保存済みレートを表示しています。それより古いものは一覧に含まれません。",
+      "inverted": "逆算",
+      "unknownRate": "不明",
+      "columns": {
+        "date": "日付",
+        "rate": "レート",
+        "source": "提供元"
+      },
+      "sources": {
+        "yahooFinance": "Yahoo Finance",
+        "frankfurter": "Frankfurter（ECB）",
+        "mnyImport": "Money インポート",
+        "yahooCrypto": "暗号資産ペア (Yahoo)",
+        "unknown": "不明"
+      }
+    },
+    "toasts": {
+      "filled": "{count} 件のレートを追加しました。履歴は {start} から始まります",
+      "partial": "{count} 件のレートを保存しました。履歴は {start} から始まります。残り {windows} 件の欠落があります。続けるにはもう一度押してください。",
+      "moreToFetch": "今回は保存されたレートがありません。残り {windows} 件の欠落があります。続けるにはもう一度押してください。",
+      "noGaps": "{pair} には、レポートに必要なすべての日付の日次レートがすでにあります",
+      "noNewRates": "{pair} の新しいレートは保存されませんでした",
+      "unused": "{code} を使う口座、保有銘柄、取引がないため、取得するレートはありません",
+      "providerFloor": "提供元には {date} より前の {pair} のレートがありません",
+      "failed": "レート履歴を補えませんでした"
+    }
   }
 }

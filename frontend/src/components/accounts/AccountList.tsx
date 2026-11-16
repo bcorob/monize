@@ -14,7 +14,14 @@ import { useAuthStore } from '@/store/authStore';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/lib/errors';
-import { AccountRow, buildAccountActions, type AccountActionLabels } from './AccountRow';
+import {
+  AccountRow,
+  buildAccountActions,
+  reconcileLedgerOf,
+  unreconciledCountOf,
+  type AccountActionLabels,
+} from './AccountRow';
+import { ACCOUNT_COLUMN_TIER, ACCOUNT_TABLE_CONTAINER, accountActionDensity } from './account-list-columns';
 import { useLongPress } from '@/hooks/useLongPress';
 import { RowActionSheet } from '@/components/ui/row-actions/RowActionSheet';
 import { useTableDensity } from '@/hooks/useTableDensity';
@@ -23,13 +30,35 @@ import { SortIcon } from '@/components/ui/SortIcon';
 import { MultiSelect, MultiSelectOption } from '@/components/ui/MultiSelect';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
 import { formatAccountType } from '@/lib/account-utils';
-import { buildLogicalAccounts, type LogicalAccount } from '@/lib/logical-accounts';
+import { buildLogicalAccounts, holdingsValuationIncomplete, type LogicalAccount } from '@/lib/logical-accounts';
 import { useMainAccountName } from '@/hooks/useMainAccountName';
 import { DensityToggleBar } from '@/components/ui/DensityToggle';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { useViewDefault } from '@/hooks/useViewDefault';
+import { opensAccountDashboard } from '@/lib/account-detail-views';
+import { BUILT_IN_VIEW_DEFAULTS } from '@/lib/view-defaults';
+import { ChevronDownIcon, XMarkIcon } from '@heroicons/react/24/outline';
+import { SEGMENTED_GROUP_CLASS, segmentClass } from '@/components/ui/segmented-control';
 
-type SortField = 'name' | 'type' | 'balance' | 'status';
+type SortField = 'name' | 'type' | 'balance' | 'status' | 'lastReconciled' | 'unreconciled';
 type SortDirection = 'asc' | 'desc';
+
+/**
+ * Every field the list sorts by, with the column label that names it, in the
+ * tier header's own order. The phone's slim control header renders all of
+ * them: the chosen field is persisted across sessions, so a header offering
+ * fewer would leave the list ordered by a field the phone can neither see nor
+ * undo.
+ */
+const SORT_FIELD_LABEL_KEYS = [
+  { field: 'name', labelKey: 'list.columns.accountName' },
+  { field: 'type', labelKey: 'list.columns.type' },
+  { field: 'status', labelKey: 'list.columns.status' },
+  { field: 'lastReconciled', labelKey: 'list.columns.lastReconciled' },
+  { field: 'unreconciled', labelKey: 'list.columns.unreconciled' },
+  { field: 'balance', labelKey: 'list.columns.balance' },
+] as const satisfies ReadonlyArray<{ field: SortField; labelKey: string }>;
 
 // LocalStorage keys for filter persistence
 const STORAGE_KEYS = {
@@ -44,11 +73,18 @@ const STORAGE_KEYS = {
   collapsedGroups: 'accounts.filter.collapsedGroups',
 };
 
+type AccountGroupType = AccountType | "SHARED_SETTLEMENT";
+const accountGroup = (account: Account): AccountGroupType =>
+  account.managedPurpose === "SHARED_SETTLEMENT"
+    ? "SHARED_SETTLEMENT"
+    : account.accountType;
+
 // Display order for account-type groups: assets first, then liabilities.
-const ACCOUNT_TYPE_ORDER: AccountType[] = [
+const ACCOUNT_TYPE_ORDER: AccountGroupType[] = [
   'CHEQUING',
   'SAVINGS',
   'CASH',
+  'CRYPTO',
   'INVESTMENT',
   'ASSET',
   'CREDIT_CARD',
@@ -56,6 +92,7 @@ const ACCOUNT_TYPE_ORDER: AccountType[] = [
   'LOAN',
   'MORTGAGE',
   'OTHER',
+  "SHARED_SETTLEMENT",
 ];
 
 // Helper to get stored value
@@ -81,6 +118,12 @@ interface AccountListProps {
    */
   unpricedHoldingCounts?: Map<string, number>;
   /**
+   * Holdings account ids whose valuation is a subtotal for any cause, a missing
+   * exchange rate included -- which `unpricedHoldingCounts` cannot see. Such an
+   * account's row shows no total, like an unpriced one.
+   */
+  incompleteHoldingAccountIds?: ReadonlySet<string>;
+  /**
    * True when the portfolio-summary request failed, so every brokerage market
    * value is unknown rather than a real zero. Group totals exclude and mark
    * those accounts instead of folding a fabricated 0 in.
@@ -93,6 +136,84 @@ interface AccountListProps {
   onRefresh: () => void;
 }
 
+/**
+ * A column label with its sort indicator. Rendered by the full column header
+ * and by the phone's slim control header from this one place, so the label a
+ * sort control carries cannot drift from the field it sorts.
+ */
+function ColumnSortLabel({
+  label,
+  field,
+  sortField,
+  sortDirection,
+  align = 'start',
+}: {
+  label: string;
+  field: SortField;
+  sortField: SortField;
+  sortDirection: SortDirection;
+  align?: 'start' | 'end';
+}) {
+  return (
+    <div className={`flex items-center${align === 'end' ? ' justify-end' : ''}`}>
+      {label}
+      <SortIcon field={field} sortField={sortField} sortDirection={sortDirection} />
+    </div>
+  );
+}
+
+/**
+ * The chevron, type name and account count of a group header, in both layouts.
+ * `labelClassName` is how the wrapped layout lets the type name truncate: a
+ * group header that cannot shrink sets the table's minimum width, and on a
+ * phone that is not merely a scrollbar -- mobile Chrome sizes the viewport
+ * `position: fixed` attaches to from the widest content on the page.
+ */
+function GroupHeaderLabel({
+  label,
+  count,
+  isCollapsed,
+  labelClassName = '',
+}: {
+  label: string;
+  count: string;
+  isCollapsed: boolean;
+  labelClassName?: string;
+}) {
+  return (
+    <>
+      <ChevronDownIcon className={`w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform ${isCollapsed ? '-rotate-90' : ''}`} aria-hidden="true" />
+      <span className={`font-semibold text-gray-700 dark:text-gray-200 ${labelClassName}`}>{label}</span>
+      <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">{count}</span>
+    </>
+  );
+}
+
+/** A group's converted total, in both layouts (partial when a rate is missing). */
+function GroupHeaderTotal({
+  total,
+  displayCurrency,
+  format,
+}: {
+  total: ConvertedTotal;
+  displayCurrency: string;
+  format: (value: number, currencyCode?: string) => string;
+}) {
+  return (
+    <span
+      className={`text-sm font-medium ${
+        total.value >= 0
+          ? 'text-gray-700 dark:text-gray-200'
+          : 'text-red-600 dark:text-red-400'
+      }`}
+    >
+      <PartialTotal total={total} displayCurrency={displayCurrency}>
+        {format(total.value, displayCurrency)}
+      </PartialTotal>
+    </span>
+  );
+}
+
 /** A group with nothing in it: complete, and zero. */
 const EMPTY_CONVERTED_TOTAL: ConvertedTotal = {
   value: 0,
@@ -100,9 +221,16 @@ const EMPTY_CONVERTED_TOTAL: ConvertedTotal = {
   excludedCount: 0,
 };
 
-export function AccountList({ accounts, institutions, brokerageMarketValues, unpricedHoldingCounts, portfolioFailed, defaultCurrency, convertToDefault, onEdit, onRefresh }: AccountListProps) {
+export function AccountList({ accounts, institutions, brokerageMarketValues, unpricedHoldingCounts, incompleteHoldingAccountIds, portfolioFailed, defaultCurrency, convertToDefault, onEdit, onRefresh }: AccountListProps) {
   const t = useTranslations('accounts');
+  const ts = useTranslations("sharedExpenses");
   const tc = useTranslations('common');
+  const groupLabel = useCallback(
+    (type: AccountGroupType) =>
+      type === "SHARED_SETTLEMENT"
+        ? ts("settlements")
+        : formatAccountType(type, tc),
+    [ts, tc],);
   const stripAccountName = useMainAccountName();
   const router = useRouter();
   const isDelegateView = useAuthStore((s) => !!s.actingAsUserId);
@@ -147,8 +275,8 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
   );
   // Account-type filter: an empty list means "all types". Persisted so the
   // chosen types survive navigating away and back to the page.
-  const [filterTypes, setFilterTypes] = useState<AccountType[]>(() =>
-    getStoredValue<AccountType[]>(STORAGE_KEYS.types, [])
+  const [filterTypes, setFilterTypes] = useState<AccountGroupType[]>(() =>
+    getStoredValue<AccountGroupType[]>(STORAGE_KEYS.types, []),
   );
   // Free-text filter on account name.
   const [filterSearch, setFilterSearch] = useState<string>(() =>
@@ -156,12 +284,12 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
   );
 
   // Collapsed account-type groups - initialize from localStorage
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<AccountType>>(() => {
-    const stored = getStoredValue<AccountType[]>(STORAGE_KEYS.collapsedGroups, []);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<AccountGroupType>>(() => {
+    const stored = getStoredValue<AccountGroupType[]>(STORAGE_KEYS.collapsedGroups, [],);
     return new Set(stored);
-  });
+  },);
 
-  const toggleGroup = useCallback((type: AccountType) => {
+  const toggleGroup = useCallback((type: AccountGroupType) => {
     setCollapsedGroups((prev) => {
       const next = new Set(prev);
       if (next.has(type)) {
@@ -224,14 +352,21 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
   // /investments matches its `accountId` query against, the filter is silently
   // dropped and the user lands on whatever selection was already stored. The
   // full portfolio view stays one click away, from the row's View Transactions
-  // action and from the detail page's own link.
+  // action and from the detail page's own link. A reader who chose the
+  // dashboard in Settings (`accountOpenTarget`) gets every account's detail
+  // page, its register still one click away from the same action.
+  const accountOpenTarget =
+    useViewDefault('accountOpenTarget') ?? BUILT_IN_VIEW_DEFAULTS.accountOpenTarget;
   const handleRowClick = useCallback((account: Account) => {
-    if (account.accountSubType === 'INVESTMENT_BROKERAGE') {
+    if (
+      account.accountSubType === 'INVESTMENT_BROKERAGE' ||
+      opensAccountDashboard(account.accountType, accountOpenTarget)
+    ) {
       router.push(`/accounts/${account.id}`);
     } else {
       router.push(`/transactions?accountId=${account.id}`);
     }
-  }, [router]);
+  }, [router, accountOpenTarget]);
 
   const { getRowHandlers } = useLongPress<Account>({
     onLongPress: setContextAccount,
@@ -254,6 +389,24 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
   }), [t, tc]);
   const { density } = useDensityPreference('accounts');
   const { cellPadding, headerPadding } = useTableDensity(density);
+  // Model B: on a phone, density picks the LAYOUT rather than only the row
+  // height. At Normal each account is a wrapped card carrying the type and
+  // status this table hides below `sm`/`md`; Compact and Dense keep the tier
+  // table, unchanged, and so does every non-phone width. Exactly one branch
+  // renders per row, chosen here.
+  const isMobile = useIsMobile();
+  const wrapped = isMobile && density === 'normal';
+  // The scroll wrapper's width, for the one width rule CSS cannot express:
+  // whether Normal's text action buttons fit or give way to icons.
+  const [tableWrapper, setTableWrapper] = useState<HTMLDivElement | null>(null);
+  const [tableWidth, setTableWidth] = useState<number | null>(null);
+  useEffect(() => {
+    if (!tableWrapper || typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(([entry]) => setTableWidth(entry.contentRect.width));
+    observer.observe(tableWrapper);
+    return () => observer.disconnect();
+  }, [tableWrapper]);
+  const actionDensity = accountActionDensity(density, tableWidth);
 
   // Every account as the user thinks of it: a linked brokerage/cash pair is one
   // entry, so it filters, sorts, counts and renders as a single account.
@@ -266,8 +419,16 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
     return buildLogicalAccounts(withOverrides, stripAccountName, {
       marketValues: brokerageMarketValues ?? new Map(),
       unpricedCounts: unpricedHoldingCounts ?? new Map(),
+      incompleteAccountIds: incompleteHoldingAccountIds,
     });
-  }, [accounts, favOverrides, stripAccountName, brokerageMarketValues, unpricedHoldingCounts]);
+  }, [accounts, favOverrides, stripAccountName, brokerageMarketValues, unpricedHoldingCounts, incompleteHoldingAccountIds]);
+
+  // The segments' counts are over every account, as on Currencies, so a
+  // segment says how many it holds before any other filter narrows it.
+  const statusCounts = useMemo(() => {
+    const closed = logicalAccounts.filter((l) => l.primary.isClosed).length;
+    return { all: logicalAccounts.length, active: logicalAccounts.length - closed, closed };
+  }, [logicalAccounts]);
 
   // Keyed on the primary id, which is the id every row action carries.
   const logicalById = useMemo(
@@ -296,7 +457,7 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
     }
     if (filterTypes.length > 0) {
       const typeSet = new Set(filterTypes);
-      result = result.filter((l) => typeSet.has(l.primary.accountType));
+      result = result.filter((l) => typeSet.has(accountGroup(l.primary)));
     }
     const search = filterSearch.trim().toLowerCase();
     if (search) {
@@ -328,6 +489,19 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
         case 'status':
           comparison = (a.primary.isClosed ? 1 : 0) - (b.primary.isClosed ? 1 : 0);
           break;
+        case 'lastReconciled':
+          // Ascending puts the longest-unreconciled first: never reconciled
+          // (and no ledger to reconcile) ahead of the oldest date.
+          comparison = (reconcileLedgerOf(a.primary, a)?.lastReconciledDate ?? '').localeCompare(
+            reconcileLedgerOf(b.primary, b)?.lastReconciledDate ?? '',
+          );
+          break;
+        case 'unreconciled':
+          // A row with no count to show (no ledger to reconcile, or a joint
+          // row) sorts below an account with nothing outstanding.
+          comparison =
+            (unreconciledCountOf(a.primary, a) ?? -1) - (unreconciledCountOf(b.primary, b) ?? -1);
+          break;
       }
       return sortDirection === 'asc' ? comparison : -comparison;
     });
@@ -336,13 +510,13 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
   // Account-type options for the type filter, limited to the types actually
   // present and ordered to match the grouped list below (unknown types last).
   const typeOptions = useMemo<MultiSelectOption[]>(() => {
-    const present = new Set(accounts.map((a) => a.accountType));
+    const present = new Set(accounts.map(accountGroup));
     const ordered = ACCOUNT_TYPE_ORDER.filter((type) => present.has(type));
     for (const type of present) {
       if (!ordered.includes(type)) ordered.push(type);
     }
-    return ordered.map((type) => ({ value: type, label: formatAccountType(type, tc) }));
-  }, [accounts, tc]);
+    return ordered.map((type) => ({ value: type, label: groupLabel(type) }));
+  }, [accounts, groupLabel]);
 
   // Build a map of account IDs to names for showing linked account pairs
   const accountNameMap = useMemo(() => {
@@ -361,17 +535,17 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
   // Group logical accounts by account type. A pair no longer needs adjacency
   // ordering -- it is one entry.
   const groupedAccounts = useMemo(() => {
-    const groups = new Map<AccountType, LogicalAccount[]>();
+    const groups = new Map<AccountGroupType, LogicalAccount[]>();
     for (const logical of filteredAndSortedAccounts) {
-      const existing = groups.get(logical.primary.accountType);
+      const existing = groups.get(accountGroup(logical.primary));
       if (existing) {
         existing.push(logical);
       } else {
-        groups.set(logical.primary.accountType, [logical]);
+        groups.set(accountGroup(logical.primary), [logical]);
       }
     }
 
-    const result: { type: AccountType; accounts: LogicalAccount[] }[] = [];
+    const result: { type: AccountGroupType; accounts: LogicalAccount[] }[] = [];
     for (const type of ACCOUNT_TYPE_ORDER) {
       const list = groups.get(type);
       if (list && list.length > 0) {
@@ -399,7 +573,7 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
     // A group total is partial when one of its accounts has no rate to the
     // display currency; `sumConverted` keeps the subtotal and the missing pairs
     // together so the header can mark it instead of quietly under-reporting.
-    const totals = new Map<AccountType, ConvertedTotal>();
+    const totals = new Map<AccountGroupType, ConvertedTotal>();
     for (const { type, accounts: groupAccounts } of groupedAccounts) {
       // Sum over each entity's underlying ledgers (a brokerage pair is primary
       // plus its cash sub-account) so the arithmetic is exactly what it was
@@ -418,7 +592,8 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
       // folded in as a fabricated 0.
       const isUnknownBrokerage = (account: Account) =>
         account.accountSubType === 'INVESTMENT_BROKERAGE' &&
-        (portfolioFailed === true || (unpricedHoldingCounts?.get(account.id) ?? 0) > 0);
+        (portfolioFailed === true ||
+          holdingsValuationIncomplete(account.id, unpricedHoldingCounts, incompleteHoldingAccountIds));
       const known = members.filter((account) => !isUnknownBrokerage(account));
       const unknownCount = members.length - known.length;
       const converted = sumConverted(
@@ -437,13 +612,13 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
       });
     }
     return totals;
-  }, [groupedAccounts, brokerageMarketValues, unpricedHoldingCounts, portfolioFailed, convertToDefault]);
+  }, [groupedAccounts, brokerageMarketValues, unpricedHoldingCounts, incompleteHoldingAccountIds, portfolioFailed, convertToDefault]);
 
   // Flatten groups into a sequence of header / row entries with stable striping
   // indices so AccountRow alternation continues to look right across groups.
   const renderItems = useMemo(() => {
     type Item =
-      | { kind: 'header'; type: AccountType; count: number; total: ConvertedTotal; isCollapsed: boolean }
+      | { kind: 'header'; type: AccountGroupType; count: number; total: ConvertedTotal; isCollapsed: boolean }
       | { kind: 'row'; logical: LogicalAccount; index: number };
     const items: Item[] = [];
     let rowIndex = 0;
@@ -475,11 +650,9 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
   );
 
   // Clear the net worth filter if no accounts are excluded (e.g. user toggled the flag off)
-  useEffect(() => {
-    if (!hasExcludedAccounts && filterNetWorth) {
-      setFilterNetWorth('');
-    }
-  }, [hasExcludedAccounts, filterNetWorth]);
+  if (!hasExcludedAccounts && filterNetWorth) {
+    setFilterNetWorth('');
+  }
 
   // Only show the joint filter when at least one account is shared to the
   // caller; clear it when the last joint account disappears (revoke).
@@ -487,11 +660,9 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
     () => accounts.some((a) => a.isJoint),
     [accounts],
   );
-  useEffect(() => {
-    if (!hasJointAccounts && filterJoint) {
-      setFilterJoint('');
-    }
-  }, [hasJointAccounts, filterJoint]);
+  if (!hasJointAccounts && filterJoint) {
+    setFilterJoint('');
+  }
 
   const handleSort = (field: SortField) => {
     if (sortField === field) {
@@ -648,76 +819,21 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
     [onRefresh, t],
   );
 
-  const formatCurrency = useCallback((amount: number | string | null | undefined, currency: string) => {
-    const numericAmount = Number(amount) || 0;
-    const formatted = formatCurrencyBase(numericAmount, currency);
-
-    // Only show currency code if it differs from user's default currency
-    if (currency !== defaultCurrency) {
-      return `${formatted} ${currency}`;
-    }
-    return formatted;
-  }, [formatCurrencyBase, defaultCurrency]);
-
   if (accounts.length === 0) {
     return (
-      <EmptyState title={t('list.empty')} />
+      <EmptyState title={t('list.empty')} help="accounts" />
     );
   }
 
   return (
     <div>
-      {/* Filter Bar */}
+      {/* Status segmented control */}
       <div className="px-3 sm:px-6 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800">
-        <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
           <div className="flex items-center gap-4">
-            {/* Status segmented control and Net Worth filter */}
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
-              {/* Status segmented control */}
-              <div className="inline-flex rounded-md shadow-sm">
-              <button
-                onClick={() => setFilterStatus('')}
-                className={`px-3 py-1.5 text-sm font-medium rounded-l-md border ${
-                  filterStatus === ''
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
-                }`}
-              >
-                {t('list.filter.all')}
-              </button>
-              <button
-                onClick={() => setFilterStatus('active')}
-                className={`px-3 py-1.5 text-sm font-medium border-t border-b ${
-                  filterStatus === 'active'
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
-                }`}
-              >
-                {t('list.filter.active')}
-              </button>
-              <button
-                onClick={() => setFilterStatus('closed')}
-                className={`px-3 py-1.5 text-sm font-medium rounded-r-md border ${
-                  filterStatus === 'closed'
-                    ? 'bg-blue-600 text-white border-blue-600'
-                    : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
-                }`}
-              >
-                {t('list.filter.closed')}
-              </button>
-              </div>
-
-              {/* Account-type filter (multi-select) */}
-              <div className="w-full sm:w-52">
-                <MultiSelect
-                  ariaLabel={t('list.filter.typeAriaLabel')}
-                  options={typeOptions}
-                  value={filterTypes}
-                  onChange={(vals) => setFilterTypes(vals as AccountType[])}
-                  placeholder={t('list.filter.typePlaceholder')}
-                />
-              </div>
-
+            {/* Search first, then the status segments with their counts, then
+                the narrower filters: the list page's toolbar order. */}
+            <div className="flex flex-col sm:flex-row sm:flex-wrap items-start sm:items-center gap-2 sm:gap-3">
               {/* Free-text name filter */}
               <div className="relative w-full sm:w-52">
                 <input
@@ -735,11 +851,41 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
                     aria-label={t('list.filter.searchClear')}
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
                   >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    <XMarkIcon className="w-4 h-4" aria-hidden="true" />
                   </button>
                 )}
+              </div>
+
+              {/* Status segmented control */}
+              <div role="group" aria-label={t('list.filter.statusLabel')} className={SEGMENTED_GROUP_CLASS}>
+                {(
+                  [
+                    ['', t('list.filter.allCount', { count: statusCounts.all })],
+                    ['active', t('list.filter.activeCount', { count: statusCounts.active })],
+                    ['closed', t('list.filter.closedCount', { count: statusCounts.closed })],
+                  ] as const
+                ).map(([status, label]) => (
+                  <button
+                    key={status || 'all'}
+                    type="button"
+                    onClick={() => setFilterStatus(status)}
+                    aria-pressed={filterStatus === status}
+                    className={segmentClass(filterStatus === status)}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Account-type filter (multi-select) */}
+              <div className="w-full sm:w-52">
+                <MultiSelect
+                  ariaLabel={t('list.filter.typeAriaLabel')}
+                  options={typeOptions}
+                  value={filterTypes}
+                  onChange={(vals) => setFilterTypes(vals as AccountGroupType[])}
+                  placeholder={t('list.filter.typePlaceholder')}
+                />
               </div>
 
               {/* Net Worth filter -- only shown when at least one account is excluded */}
@@ -750,8 +896,12 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
                   className="text-sm font-sans border border-gray-300 dark:border-gray-600 rounded-md px-3 py-1.5 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 min-w-[16rem]"
                 >
                   <option value="">{t('list.filter.netWorthAll')}</option>
-                  <option value="included">{t('list.filter.inNetWorth')}</option>
-                  <option value="excluded">{t('list.filter.excludedFromNetWorth')}</option>
+                  <option value="included">
+                    {t('list.filter.inNetWorth')}
+                  </option>
+                  <option value="excluded">
+                    {t('list.filter.excludedFromNetWorth')}
+                  </option>
                 </select>
               )}
 
@@ -791,52 +941,127 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
         />
       ) : (
       <div>
-        {/* Density toggle */}
+        {/* On a phone the wrapped card labels its own values, so the column
+              header is dropped -- but the controls in that header row must not
+              go with it: these `<th>`s are how the list is sorted, and the
+              chosen field is persisted, so a header showing fewer fields than
+              the sort can be in would leave the list ordered by something the
+              phone can neither see nor undo. A slim control header carries all
+              six as buttons -- the card shows all six values -- and no column
+              label of its own: the single card cell below holds name, balance,
+              type, status, last reconciled and the unreconciled count at once, so naming this header after any one of
+              them would misdescribe the column to a screen reader. Each button
+              names itself with the label of the field it sorts by. */}
         <DensityToggleBar view="accounts" />
-        <div className="overflow-x-auto">
+        <div ref={setTableWrapper} className={`overflow-x-auto ${ACCOUNT_TABLE_CONTAINER}`}>
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+          {/* The one column is always sorted by something, and `aria-sort`
+                  is the only place that direction is announced -- the arrow in
+                  each button's label is a glyph, not a state. */}
           <thead className="bg-gray-50 dark:bg-gray-800">
+            {wrapped ? (
+            <tr>
+              {/* The one column is always sorted by something, and `aria-sort`
+                  is the only place that direction is announced -- the arrow in
+                  each button's label is a glyph, not a state. */}
+              <th
+                className={`${headerPadding} text-left`}
+                aria-sort={sortDirection === 'asc' ? 'ascending' : 'descending'}
+              >
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                  {SORT_FIELD_LABEL_KEYS.map(({ field, labelKey }) => (
+                    <button
+                      key={field}
+                      type="button"
+                      onClick={() => handleSort(field)}
+                      className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider rounded focus-visible:outline-2 focus-visible:outline-blue-500"
+                    >
+                      <ColumnSortLabel
+                        label={t(labelKey)}
+                        field={field}
+                        sortField={sortField}
+                        sortDirection={sortDirection}
+                      />
+                    </button>
+                  ))}
+                </div>
+              </th>
+            </tr>
+            ) : (
             <tr>
               <th
                 className={`${headerPadding} text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none`}
                 onClick={() => handleSort('name')}
               >
-                <div className="flex items-center">
-                  {t('list.columns.accountName')}
-                  <SortIcon field="name" sortField={sortField} sortDirection={sortDirection} />
-                </div>
+                <ColumnSortLabel
+                  label={t('list.columns.accountName')}
+                  field="name"
+                  sortField={sortField}
+                  sortDirection={sortDirection}
+                />
               </th>
               <th
-                className={`${headerPadding} text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none hidden sm:table-cell`}
+                className={`${headerPadding} text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none ${ACCOUNT_COLUMN_TIER.type}`}
                 onClick={() => handleSort('type')}
               >
-                <div className="flex items-center">
-                  {t('list.columns.type')}
-                  <SortIcon field="type" sortField={sortField} sortDirection={sortDirection} />
-                </div>
+                <ColumnSortLabel
+                  label={t('list.columns.type')}
+                  field="type"
+                  sortField={sortField}
+                  sortDirection={sortDirection}
+                />
               </th>
               <th
-                className={`${headerPadding} text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none hidden md:table-cell w-1 whitespace-nowrap`}
+                className={`${headerPadding} text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none ${ACCOUNT_COLUMN_TIER.status} w-1 whitespace-nowrap`}
                 onClick={() => handleSort('status')}
               >
-                <div className="flex items-center">
-                  {t('list.columns.status')}
-                  <SortIcon field="status" sortField={sortField} sortDirection={sortDirection} />
-                </div>
+                <ColumnSortLabel
+                  label={t('list.columns.status')}
+                  field="status"
+                  sortField={sortField}
+                  sortDirection={sortDirection}
+                />
+              </th>
+              <th
+                className={`${headerPadding} text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none ${ACCOUNT_COLUMN_TIER.lastReconciled} w-1 whitespace-nowrap`}
+                onClick={() => handleSort('lastReconciled')}
+              >
+                <ColumnSortLabel
+                  label={t('list.columns.lastReconciled')}
+                  field="lastReconciled"
+                  sortField={sortField}
+                  sortDirection={sortDirection}
+                />
+              </th>
+              <th
+                className={`${headerPadding} text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none ${ACCOUNT_COLUMN_TIER.unreconciled} w-1 whitespace-nowrap`}
+                onClick={() => handleSort('unreconciled')}
+              >
+                <ColumnSortLabel
+                  label={t('list.columns.unreconciled')}
+                  field="unreconciled"
+                  sortField={sortField}
+                  sortDirection={sortDirection}
+                  align="end"
+                />
               </th>
               <th
                 className={`${headerPadding} text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none`}
                 onClick={() => handleSort('balance')}
               >
-                <div className="flex items-center justify-end">
-                  {t('list.columns.balance')}
-                  <SortIcon field="balance" sortField={sortField} sortDirection={sortDirection} />
-                </div>
+                <ColumnSortLabel
+                  label={t('list.columns.balance')}
+                  field="balance"
+                  sortField={sortField}
+                  sortDirection={sortDirection}
+                  align="end"
+                />
               </th>
               <th className={`${headerPadding} text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden min-[480px]:table-cell sticky right-0 bg-gray-50 dark:bg-gray-800`}>
                 {t('list.columns.actions')}
               </th>
             </tr>
+            )}
           </thead>
           <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
             {renderItems.map((item) =>
@@ -847,44 +1072,70 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
                   onClick={() => toggleGroup(item.type)}
                   aria-expanded={!item.isCollapsed}
                 >
+                  {/* A grid, not a flex row, and for the reason the card
+                          rows are: `minmax(0,1fr)` is a track that may be
+                          zero, so the label truncates instead of setting the
+                          table's minimum width. `min-w-0` on a flex item does
+                          not do that -- the item still contributes the full
+                          width of its nowrap text -- and a group header wider
+                          than the phone displaces every fixed-position panel
+                          on the page. */}
+                  {wrapped ? (
+                    <td className={cellPadding}>
+                      {/* A grid, not a flex row, and for the reason the card
+                          rows are: `minmax(0,1fr)` is a track that may be
+                          zero, so the label truncates instead of setting the
+                          table's minimum width. `min-w-0` on a flex item does
+                          not do that -- the item still contributes the full
+                          width of its nowrap text -- and a group header wider
+                          than the phone displaces every fixed-position panel
+                          on the page. */}
+                      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 text-sm">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <GroupHeaderLabel
+                            label={groupLabel(item.type)}
+                            count={t('list.groupCount', { count: item.count })}
+                            isCollapsed={item.isCollapsed}
+                            labelClassName="truncate"
+                          />
+                        </div>
+                        <span className="text-right whitespace-nowrap">
+                          <GroupHeaderTotal
+                            total={item.total}
+                            displayCurrency={defaultCurrency}
+                            format={formatCurrencyBase}
+                          />
+                        </span>
+                      </div>
+                    </td>
+                  ) : (
+                  <>
                   <td className={cellPadding}>
                     <div className="flex items-center gap-2 min-w-0 text-sm">
-                      <svg
-                        className={`w-4 h-4 text-gray-500 dark:text-gray-400 transition-transform ${item.isCollapsed ? '-rotate-90' : ''}`}
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        aria-hidden="true"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                      </svg>
-                      <span className="font-semibold text-gray-700 dark:text-gray-200">
-                        {formatAccountType(item.type, tc)}
-                      </span>
-                      <span className="text-xs text-gray-500 dark:text-gray-400">
-                        {t('list.groupCount', { count: item.count })}
-                      </span>
+                      <GroupHeaderLabel
+                        label={groupLabel(item.type)}
+                        count={t('list.groupCount', { count: item.count })}
+                        isCollapsed={item.isCollapsed}
+                      />
                     </div>
                   </td>
-                  <td className="hidden sm:table-cell" aria-hidden="true" />
-                  <td className="hidden md:table-cell" aria-hidden="true" />
+                  <td className={ACCOUNT_COLUMN_TIER.type} aria-hidden="true" />
+                  <td className={ACCOUNT_COLUMN_TIER.status} aria-hidden="true" />
+                  <td className={ACCOUNT_COLUMN_TIER.lastReconciled} aria-hidden="true" />
+                  <td className={ACCOUNT_COLUMN_TIER.unreconciled} aria-hidden="true" />
                   <td className={`${cellPadding} text-right whitespace-nowrap`}>
-                    <span
-                      className={`text-sm font-medium ${
-                        item.total.value >= 0
-                          ? 'text-gray-700 dark:text-gray-200'
-                          : 'text-red-600 dark:text-red-400'
-                      }`}
-                    >
-                      <PartialTotal total={item.total} displayCurrency={defaultCurrency}>
-                        {formatCurrencyBase(item.total.value, defaultCurrency)}
-                      </PartialTotal>
-                    </span>
+                    <GroupHeaderTotal
+                      total={item.total}
+                      displayCurrency={defaultCurrency}
+                      format={formatCurrencyBase}
+                    />
                   </td>
                   <td
                     className="hidden min-[480px]:table-cell sticky right-0 bg-gray-100 dark:bg-gray-800 group-hover:bg-gray-200 dark:group-hover:bg-gray-700"
                     aria-hidden="true"
                   />
+                  </>
+                  )}
                 </tr>
               ) : (
                 <AccountRow
@@ -893,14 +1144,16 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
                   logical={item.logical}
                   index={item.index}
                   density={density}
+                  actionDensity={actionDensity}
+                  wrapped={wrapped}
                   cellPadding={cellPadding}
                   isDeletable={deletableAccounts.has(item.logical.id)}
                   accountNameMap={accountNameMap}
                   institution={item.logical.primary.institutionId ? institutionsById.get(item.logical.primary.institutionId) : undefined}
                   brokerageMarketValue={item.logical.holdingsAccountId ? brokerageMarketValues?.get(item.logical.holdingsAccountId) : undefined}
                   unpricedHoldingsCount={item.logical.holdingsAccountId ? unpricedHoldingCounts?.get(item.logical.holdingsAccountId) : undefined}
+                  valuationIncomplete={item.logical.holdingsAccountId ? incompleteHoldingAccountIds?.has(item.logical.holdingsAccountId) === true : false}
                   defaultCurrency={defaultCurrency}
-                  formatCurrency={formatCurrency}
                   formatCurrencyBase={formatCurrencyBase}
                   convertToDefault={convertToDefault}
                   formatAccountType={(type) => formatAccountType(type, tc)}
@@ -953,7 +1206,7 @@ export function AccountList({ accounts, institutions, brokerageMarketValues, unp
         onClose={() => setContextAccount(null)}
       />
 
-      {/* Close Account Confirmation Dialog */}
+      {/* Delete Account Confirmation Dialog */}
       <ConfirmDialog
         isOpen={closeDialogOpen}
         title={t('confirmDialog.closeTitle')}

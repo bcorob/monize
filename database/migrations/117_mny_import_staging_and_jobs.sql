@@ -4,7 +4,7 @@
 -- Why the bytes live in the database rather than on the pod's disk: with more
 -- than one backend replica the /import/mny/start call can land on a different
 -- pod than the upload that produced the staged file, so the database is the only
--- store both can reach. See docs/future-plans/mny-import.md, ADR-2.
+-- store both can reach. See docs/specs/mny-import.md, ADR-2.
 --
 -- The staged bytes are the DECRYPTED Money file. The user's Money password is a
 -- request-scoped multipart field on the parse call and is never persisted, so a

@@ -20,6 +20,7 @@ build/
 .next/
 out/
 *.tsbuildinfo
+frontend/next-env.d.ts
 
 # IDE
 .vscode/
@@ -50,6 +51,13 @@ coverage/
 e2e/test-results/
 e2e/playwright-report/
 e2e/blob-report/
+e2e/test-results-readme/
+e2e/test-results-docs-*/
+e2e/playwright-readme-report/
+e2e/readme-recordings/
+
+# Local tool caches (trail/graft code-graph tooling; machine-local, never committed)
+graft/
 
 # Temporary files
 tmp/
@@ -75,9 +83,14 @@ secrets/
 credentials/
 *.docx
 *.pdf
+!backend/src/bonds/adapters/pl/series/fixtures/*.pdf
 *.mny
 !backend/src/import/mny/__fixtures__/sample*.mny
 
 # Claude Code
 .claude/worktrees/
 .claude/settings.local.json
+
+# Standalone Chromium push integration artifacts
+e2e/playwright-push-report/
+e2e/test-results-push/

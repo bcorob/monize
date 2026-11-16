@@ -94,6 +94,9 @@
     "largestValue": "{date} 的 {amount}",
     "overpaymentFor": "作為以下帳戶的額外還款收款人",
     "website": "網站",
+    "address": "地址",
+    "phone": "電話",
+    "email": "電子郵件",
     "notes": "備註"
   },
   "tabs": {
@@ -127,5 +130,23 @@
     "needsMoreHistory": "至少需要 {years} 年的歷史才能把季節性規律與偶然區分開。",
     "empty": "尚無支出可按月分解",
     "monthTooltip": "{month}：{years, plural, one {# 年} other {# 年}}平均 {amount}"
+  },
+  "contactLookup": {
+    "button": "查詢聯絡資訊",
+    "inProgress": "正在查詢...",
+    "nothingNew": "找不到新的聯絡資訊。",
+    "noProvider": "請在收款人查詢設定中設定查詢來源，以尋找聯絡資訊。",
+    "failed": "查詢無法完成，請稍後再試。",
+    "dialogTitle": "確認聯絡資訊",
+    "dialogSubtitle": "在您確認之前，不會為 {name} 儲存任何內容。",
+    "pickMatch": "該名稱符合 {count, plural, other {# 家商家}}。請選擇您付款的那一家：",
+    "unlabelledMatch": "未命名的相符項目",
+    "willAdd": "新增",
+    "willReplace": "取代",
+    "cancel": "取消",
+    "confirm": "{count, plural, other {儲存 # 項變更}}",
+    "applied": "{count, plural, other {已儲存 # 項聯絡資訊}}",
+    "applyFailed": "無法儲存聯絡資訊",
+    "quotaExceeded": "本月的 Google Places 查詢次數已用完。請在收款人查詢設定中提高上限，或等到下個月。"
   }
 }

@@ -6,10 +6,18 @@
   },
   "loanPaymentSetup": {
     "analyzingHistory": "Analysing transaction history...",
-    "amortizationMonths": "Amortisation (months)"
+    "amortizationMonths": "Amortisation (months)",
+    "firstInstallmentHelp": "This mortgage has no fixed payment: each installment is worked out from the balance, the rate and the amortisation period. This is the one due {date}, including any extra principal."
   },
   "mortgageFields": {
-    "amortizationPeriod": "Amortisation Period (required)",
+    "amortizationPeriod": "Amortisation Period",
     "previewTitle": "Amortisation Preview"
+  },
+  "loanDetail": {
+    "simulator": {
+      "unavailable": {
+        "reasonNoAmortization": "This mortgage has no amortisation period, so its installments and its term end cannot be worked out. Set the amortisation period in the account settings."
+      }
+    }
   }
 }

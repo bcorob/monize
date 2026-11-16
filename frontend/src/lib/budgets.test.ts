@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import apiClient from './api';
 import { budgetsApi } from './budgets';
-import { invalidateCache } from './apiCache';
+import { invalidateCache, invalidateBalanceCaches, getCached, clearAllCache } from './apiCache';
 
 vi.mock('./api', () => ({
   default: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
@@ -58,6 +58,15 @@ describe('budgetsApi', () => {
     expect(apiClient.post).toHaveBeenCalledWith('/budgets/b-1/categories', {
       categoryId: 'c-1',
       amount: 100,
+    });
+  });
+
+  it('addTransferIncomeLine posts to /budgets/:id/categories/transfer-income', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { id: 'bc-2' } });
+    await budgetsApi.addTransferIncomeLine('b-1', { transferAccountId: 'a-1', amount: 2000 });
+    expect(apiClient.post).toHaveBeenCalledWith('/budgets/b-1/categories/transfer-income', {
+      transferAccountId: 'a-1',
+      amount: 2000,
     });
   });
 
@@ -125,41 +134,6 @@ describe('budgetsApi', () => {
     vi.mocked(apiClient.post).mockResolvedValue({ data: { id: 'p-1' } });
     await budgetsApi.closePeriod('b-1');
     expect(apiClient.post).toHaveBeenCalledWith('/budgets/b-1/periods/close');
-  });
-
-  it('getAlerts fetches alerts with default unreadOnly=false', async () => {
-    vi.mocked(apiClient.get).mockResolvedValue({ data: [] });
-    await budgetsApi.getAlerts();
-    expect(apiClient.get).toHaveBeenCalledWith('/budgets/alerts', {
-      params: { unreadOnly: false },
-    });
-  });
-
-  it('getAlerts fetches alerts with unreadOnly=true', async () => {
-    vi.mocked(apiClient.get).mockResolvedValue({ data: [] });
-    await budgetsApi.getAlerts(true);
-    expect(apiClient.get).toHaveBeenCalledWith('/budgets/alerts', {
-      params: { unreadOnly: true },
-    });
-  });
-
-  it('markAlertRead patches alert', async () => {
-    vi.mocked(apiClient.patch).mockResolvedValue({ data: { id: 'a-1' } });
-    await budgetsApi.markAlertRead('a-1');
-    expect(apiClient.patch).toHaveBeenCalledWith('/budgets/alerts/a-1/read');
-  });
-
-  it('markAllAlertsRead patches all alerts', async () => {
-    vi.mocked(apiClient.patch).mockResolvedValue({ data: { updated: 3 } });
-    const result = await budgetsApi.markAllAlertsRead();
-    expect(apiClient.patch).toHaveBeenCalledWith('/budgets/alerts/read-all');
-    expect(result.updated).toBe(3);
-  });
-
-  it('deleteAlert removes alert', async () => {
-    vi.mocked(apiClient.delete).mockResolvedValue({});
-    await budgetsApi.deleteAlert('a-1');
-    expect(apiClient.delete).toHaveBeenCalledWith('/budgets/alerts/a-1');
   });
 
   it('getTrend fetches trend with default 6 months', async () => {
@@ -232,6 +206,41 @@ describe('budgetsApi', () => {
     expect(apiClient.get).toHaveBeenCalledWith('/budgets/dashboard-summary');
   });
 
+  it('getBuckets fetches /budgets/:id/buckets', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: [{ id: 'bk-1' }] });
+    const result = await budgetsApi.getBuckets('b-1');
+    expect(apiClient.get).toHaveBeenCalledWith('/budgets/b-1/buckets');
+    expect(result).toHaveLength(1);
+  });
+
+  it('createBucket posts to /budgets/:id/buckets', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { id: 'bk-1' } });
+    const data = { name: 'Savings', targetType: 'PERCENT', targetValue: 20 } as const;
+    const result = await budgetsApi.createBucket('b-1', data);
+    expect(apiClient.post).toHaveBeenCalledWith('/budgets/b-1/buckets', data);
+    expect(result.id).toBe('bk-1');
+  });
+
+  it('updateBucket patches /budgets/:id/buckets/:bucketId', async () => {
+    vi.mocked(apiClient.patch).mockResolvedValue({ data: { id: 'bk-1' } });
+    await budgetsApi.updateBucket('b-1', 'bk-1', { carryCap: null });
+    expect(apiClient.patch).toHaveBeenCalledWith('/budgets/b-1/buckets/bk-1', {
+      carryCap: null,
+    });
+  });
+
+  it('deleteBucket calls DELETE /budgets/:id/buckets/:bucketId', async () => {
+    vi.mocked(apiClient.delete).mockResolvedValue({});
+    await budgetsApi.deleteBucket('b-1', 'bk-1');
+    expect(apiClient.delete).toHaveBeenCalledWith('/budgets/b-1/buckets/bk-1');
+  });
+
+  it('getBucketStatus fetches /budgets/:id/reports/bucket-status', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: { buckets: [] } });
+    await budgetsApi.getBucketStatus('b-1');
+    expect(apiClient.get).toHaveBeenCalledWith('/budgets/b-1/reports/bucket-status');
+  });
+
   it('getCategoryBudgetStatus returns empty object for empty input', async () => {
     const result = await budgetsApi.getCategoryBudgetStatus([]);
     expect(result).toEqual({});
@@ -251,5 +260,24 @@ describe('budgetsApi', () => {
     await budgetsApi.getCategoryBudgetStatus(['c-1']);
     await budgetsApi.getCategoryBudgetStatus(['c-1']);
     expect(apiClient.post).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('budgetsApi category status race (INV-CACHE-001)', () => {
+  it('a late pre-invalidation response does not land in the cache', async () => {
+    vi.clearAllMocks();
+    clearAllCache();
+    let resolveOld: (v: unknown) => void = () => {};
+    vi.mocked(apiClient.post).mockImplementationOnce(
+      () => new Promise((resolve) => { resolveOld = resolve; }),
+    );
+    const oldRead = budgetsApi.getCategoryBudgetStatus(['c1']);
+
+    invalidateBalanceCaches();
+
+    resolveOld({ data: { c1: { spent: 1 } } });
+    await oldRead;
+
+    expect(getCached('budgets:cat-status:c1')).toBeUndefined();
   });
 });

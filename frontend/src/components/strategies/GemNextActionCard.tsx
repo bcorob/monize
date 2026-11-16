@@ -251,20 +251,20 @@ export function GemNextActionCard({
             {t("gem.action.executedButChanged")}
           </p>
           <div className="mt-3">
-            <Button variant="outline" onClick={onAddTransactions}>
-              <PlusIcon className="mr-1.5 h-4 w-4" aria-hidden="true" />
+            <Button variant="outline" onClick={onAddTransactions} className="gap-1.5">
+              <PlusIcon className="h-4 w-4" aria-hidden="true" />
               {t("gem.action.addTransactions")}
             </Button>
           </div>
         </>
       ) : (
         <div className="mt-4 grid gap-2 sm:grid-cols-2">
-          <Button onClick={onMarkExecuted} isLoading={isSaving}>
-            <CheckIcon className="mr-1.5 h-4 w-4" aria-hidden="true" />
+          <Button onClick={onMarkExecuted} isLoading={isSaving} className="gap-1.5">
+            <CheckIcon className="h-4 w-4" aria-hidden="true" />
             {t("gem.action.markExecuted")}
           </Button>
-          <Button variant="outline" onClick={onAddTransactions}>
-            <PlusIcon className="mr-1.5 h-4 w-4" aria-hidden="true" />
+          <Button variant="outline" onClick={onAddTransactions} className="gap-1.5">
+            <PlusIcon className="h-4 w-4" aria-hidden="true" />
             {t("gem.action.addTransactions")}
           </Button>
         </div>

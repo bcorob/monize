@@ -3,14 +3,18 @@ import { ConfigService } from "@nestjs/config";
 import { I18nService } from "nestjs-i18n";
 import { DataSource } from "typeorm";
 import { AccountsService } from "./accounts.service";
+import { ScheduledOccurrenceService } from "../scheduled-transactions/scheduled-occurrence.service";
 import { MortgageReminderService } from "./mortgage-reminder.service";
 import { Account, AccountType } from "./entities/account.entity";
 import { User } from "../users/entities/user.entity";
 import { UserPreference } from "../users/entities/user-preference.entity";
+import { NotificationPreference } from "../notification-center/entities/notification-preference.entity";
+import { NotificationPreferenceService } from "../notification-center/notification-preference.service";
 import { EmailService } from "../notifications/email.service";
 import { ScheduledTransactionsService } from "../scheduled-transactions/scheduled-transactions.service";
 import { NetWorthService } from "../net-worth/net-worth.service";
 import { PortfolioService } from "../securities/portfolio.service";
+import { ExchangeRateService } from "../currencies/exchange-rate.service";
 import { LoanMortgageAccountService } from "./loan-mortgage-account.service";
 import { ActionHistoryService } from "../action-history/action-history.service";
 import { createScopedDbMocks } from "../test-helpers/scoped-db-testing";
@@ -41,9 +45,10 @@ describe("accounts module RLS context smoke (real withScopedDb)", () => {
     const { manager, dataSource } = createScopedDbMocks([
       [Account, accountsRepo],
     ]);
-    // The per-user body issues five queries in order: the timezone fan-out (its
+    // The per-user body issues six queries in order: the timezone fan-out (its
     // own withScopedDb) finds one UTC user; then, inside the system-context
-    // withScopedDb, the due-account scan, the FOR UPDATE lock
+    // withScopedDb, the due-account scan, the read-only balance comparison, the
+    // FOR UPDATE lock
     // (lockAccountsForBalanceWrite -- it holds the rows before the ledger read,
     // audit P4-005), the balance recompute, and the bulk UPDATE. The lock query
     // sits between the scan and the recompute, so the mock chain has to account
@@ -51,6 +56,9 @@ describe("accounts module RLS context smoke (real withScopedDb)", () => {
     manager.query
       .mockResolvedValueOnce([{ user_id: OWNER_ID, timezone: "UTC" }])
       .mockResolvedValueOnce([{ account_id: "a1" }])
+      .mockResolvedValueOnce([
+        { account_id: "a1", balance: "150", current_balance: "100" },
+      ])
       .mockResolvedValueOnce([{ id: "a1" }])
       .mockResolvedValueOnce([{ account_id: "a1", balance: "150" }])
       .mockResolvedValueOnce(undefined);
@@ -63,7 +71,9 @@ describe("accounts module RLS context smoke (real withScopedDb)", () => {
         { provide: ScheduledTransactionsService, useValue: {} },
         { provide: NetWorthService, useValue: {} },
         { provide: PortfolioService, useValue: {} },
+        { provide: ExchangeRateService, useValue: {} },
         { provide: LoanMortgageAccountService, useValue: {} },
+        { provide: ScheduledOccurrenceService, useValue: {} },
       ],
     }).compile();
     const service = module.get(AccountsService);
@@ -89,10 +99,15 @@ describe("accounts module RLS context smoke (real withScopedDb)", () => {
     const lockIndex = manager.query.mock.calls.findIndex(
       (c) => typeof c[0] === "string" && c[0].includes("FOR UPDATE"),
     );
-    const sumIndex = manager.query.mock.calls.findIndex(
-      (c) =>
-        typeof c[0] === "string" && c[0].includes("COALESCE(SUM(t.amount)"),
-    );
+    const sumIndex =
+      manager.query.mock.calls.length -
+      1 -
+      [...manager.query.mock.calls]
+        .reverse()
+        .findIndex(
+          (c) =>
+            typeof c[0] === "string" && c[0].includes("COALESCE(SUM(t.amount)"),
+        );
     expect(lockIndex).toBeGreaterThanOrEqual(0);
     expect(lockIndex).toBeLessThan(sumIndex);
   });
@@ -124,16 +139,26 @@ describe("accounts module RLS context smoke (real withScopedDb)", () => {
         .fn()
         .mockResolvedValue({ notificationEmail: true, language: "en" }),
     };
+    // The email gate now runs through NotificationPreferenceService.resolveEmail,
+    // whose own withScopedDb reads NotificationPreference beside UserPreference
+    // -- both must resolve under the per-user context this test proves.
+    const notificationPreferencesRepo = {
+      findOne: jest.fn().mockResolvedValue(null),
+    };
     const { dataSource } = createScopedDbMocks([
       [Account, accountsRepo],
       [User, usersRepo],
       [UserPreference, preferencesRepo],
+      [NotificationPreference, notificationPreferencesRepo],
     ]);
     const sendMail = jest.fn().mockResolvedValue(undefined);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         MortgageReminderService,
+        // The real service, so its nested withScopedDb read is exercised under
+        // the ambient user context (not mocked away).
+        NotificationPreferenceService,
         jobClaimProvider(jobClaims),
         { provide: DataSource, useValue: dataSource },
         {
@@ -166,6 +191,8 @@ describe("accounts module RLS context smoke (real withScopedDb)", () => {
 
     expect(accountsRepo.find).toHaveBeenCalled();
     expect(preferencesRepo.findOne).toHaveBeenCalled();
+    // The resolver's nested withScopedDb read ran under the same user context.
+    expect(notificationPreferencesRepo.findOne).toHaveBeenCalled();
     expect(usersRepo.findOne).toHaveBeenCalled();
     expect(sendMail).toHaveBeenCalledTimes(1);
   });
@@ -182,7 +209,9 @@ describe("accounts module RLS context smoke (real withScopedDb)", () => {
         { provide: ScheduledTransactionsService, useValue: {} },
         { provide: NetWorthService, useValue: {} },
         { provide: PortfolioService, useValue: {} },
+        { provide: ExchangeRateService, useValue: {} },
         { provide: LoanMortgageAccountService, useValue: {} },
+        { provide: ScheduledOccurrenceService, useValue: {} },
       ],
     }).compile();
     const service = module.get(AccountsService);

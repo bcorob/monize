@@ -4,6 +4,7 @@
     "subtitle": "Kelola mata uang yang digunakan di akun dan efek Anda",
     "refreshRates": "Perbarui Kurs",
     "refreshing": "Memperbarui...",
+    "statusFilterLabel": "Status",
     "newCurrency": "+ Mata Uang Baru",
     "searchPlaceholder": "Cari berdasarkan kode atau nama...",
     "statusAll": "Semua ({count})",
@@ -13,6 +14,15 @@
     "modalTitleNew": "Mata Uang Baru",
     "loading": "Memuat mata uang...",
     "count": "{count, plural, one {# mata uang} other {# mata uang}}",
+    "providers": {
+      "line": "Kurs dari {providers}",
+      "separator": ", lalu ",
+      "names": {
+        "frankfurter": "Frankfurter (kurs referensi ECB)",
+        "yahoo": "Yahoo Finance",
+        "crypto": "Pasangan kripto (Yahoo)"
+      }
+    },
     "toasts": {
       "loadFailed": "Gagal memuat mata uang",
       "updated": "Mata uang berhasil diperbarui",
@@ -24,6 +34,7 @@
       "statusFailed": "Gagal memperbarui status mata uang",
       "ratesRefreshed": "Kurs tukar diperbarui: {updated} pasang diperbarui",
       "ratesRefreshedWithFailed": "Kurs tukar diperbarui: {updated} berhasil, {failed} gagal",
+      "ratesAllFailed": "Tidak ada kurs yang dapat diambil; penyedia tidak merespons",
       "ratesFailed": "Gagal memperbarui kurs tukar"
     },
     "summary": {
@@ -44,6 +55,8 @@
       "actions": "Tindakan"
     },
     "defaultBadge": "Bawaan",
+    "cryptoBadge": "Kripto",
+    "noPriceSymbol": "Tidak ada simbol harga",
     "statusBadge": {
       "active": "Aktif",
       "activeShort": "Akt",
@@ -61,9 +74,10 @@
       "activate": "Aktifkan",
       "deleteCurrency": "Hapus Mata Uang"
     },
-    "usageTooltip": "{accounts} akun, {securities} efek",
     "usageAccounts": "{count, plural, one {# akun} other {# akun}}",
-    "usageSecurities": "{count, plural, one {# efek} other {# efek}}",
+    "usageSecurities": "{count, plural, one {# sekuritas} other {# sekuritas}}",
+    "rateHelp": "Nilai satu unit setiap mata uang dalam {currency}.",
+    "rateMissing": "Tidak ada kurs tukar tersimpan untuk {from} ke {to}.",
     "empty": {
       "title": "Tidak ada mata uang",
       "subtitle": "Mulailah dengan menambahkan mata uang."
@@ -88,6 +102,20 @@
     "symbolLabel": "Simbol",
     "symbolPlaceholder": "mis., $, €, £, ¥",
     "decimalPlacesLabel": "Tempat Desimal",
+    "kindLabel": "Jenis",
+    "kindOptions": {
+      "fiat": "Mata Uang Fiat",
+      "crypto": "Mata Uang Kripto"
+    },
+    "kindLocked": "{code} sedang digunakan, sehingga jenisnya tidak dapat diubah.",
+    "quoteSymbolLabel": "Simbol Harga (opsional)",
+    "quoteSymbolPlaceholder": "mis. BTC-EUR",
+    "quoteSymbolHelp": "Simbol Yahoo Finance yang menjadi sumber harga koin: tikernya, tanda hubung, dan mata uang tempat koin dikuotasikan, seperti BTC-EUR. Kurs koin diambil melalui simbol ini.",
+    "verifyButton": "Verifikasi",
+    "quoteSymbolPricedIn": "Dihargai dalam {currency}",
+    "quoteSymbolMissing": "Tanpa simbol harga, mata uang ini tidak memiliki kurs.",
+    "quoteSymbolNotCrypto": "{symbol} bukan mata uang kripto. Masukkan pasangan koin, seperti BTC-EUR.",
+    "quoteSymbolNotFound": "Tidak ada mata uang kripto ditemukan untuk {symbol}",
     "lookupButton": "Cari",
     "lookingUp": "Mencari...",
     "clearButton": "Hapus",
@@ -99,9 +127,14 @@
       "found": "Ditemukan: {details}",
       "notFound": "Tidak ada mata uang ditemukan untuk \"{query}\"",
       "lookupFailed": "Pencarian gagal - silakan coba lagi",
-      "reactivateFailed": "Gagal mengaktifkan kembali mata uang"
+      "reactivateFailed": "Gagal mengaktifkan kembali mata uang",
+      "verifyEmpty": "Masukkan simbol harga seperti BTC-EUR untuk diverifikasi",
+      "verifyFailed": "Gagal memverifikasi simbol harga"
     },
     "inactiveNotice": "{code} sudah ada di daftar Anda, tetapi tidak aktif.",
+    "nonIsoNotice": "{code} bukan kode mata uang standar. Jika ini mata uang kripto, setel jenisnya ke Mata Uang Kripto. <guide>Baca tentang mata uang kripto di panduan pengguna</guide>.",
+    "switchToCrypto": "Gunakan Mata Uang Kripto",
+    "cryptoPrecisionNotice": "Jumlah dalam mata uang kripto disimpan hingga delapan tempat desimal, sesuai presisi penyimpanannya, sehingga biaya di bawah {smallest} tidak dapat dimasukkan. <guide>Lihat cara mencatat biaya dompet</guide>.",
     "reactivateButton": "Aktifkan kembali {code}",
     "reactivating": "Mengaktifkan kembali..."
   },
@@ -110,6 +143,53 @@
     "nameRequired": "Nama diperlukan",
     "nameMax": "Nama harus 100 karakter atau kurang",
     "symbolRequired": "Simbol diperlukan",
-    "symbolMax": "Simbol harus 10 karakter atau kurang"
+    "symbolMax": "Simbol harus 10 karakter atau kurang",
+    "quoteSymbolMax": "Simbol harga harus 20 karakter atau kurang",
+    "quoteSymbolRequiresCrypto": "Hanya mata uang kripto yang memiliki simbol harga",
+    "quoteSymbolNotAPair": "Masukkan pasangan seperti BTC-EUR: koin, tanda hubung, dan kode mata uang tiga huruf"
+  },
+  "rateHistory": {
+    "title": "Riwayat kurs",
+    "stored": "Riwayat tersimpan: {start} hingga {end} ({count} observasi)",
+    "none": "Tidak ada riwayat tersimpan untuk {pair}",
+    "loading": "Memeriksa riwayat kurs tersimpan...",
+    "loadFailed": "Tidak dapat membaca riwayat kurs tersimpan",
+    "fillGaps": "Isi celah riwayat kurs",
+    "filling": "Mengambil kurs yang hilang...",
+    "fillGapsTitle": "Mengambil kurs harian yang hilang dari laporan Anda, dari tanggal pertama data Anda memakai {code} hingga hari ini.",
+    "hint": "Laporan dengan tanggal sebelum kurs tersimpan pertama tidak dapat mengonversi {pair}.",
+    "list": {
+      "heading": "Kurs tersimpan",
+      "invertedHelp": "Kurs yang ditandai (dibalik) adalah kebalikan dari apa yang sebenarnya disimpan Monize untuk pasangan ini, bukan pengamatan yang berbeda.",
+      "direction": "Ditampilkan sebagai {to} per 1 {from}.",
+      "loading": "Memuat kurs tersimpan...",
+      "loadFailed": "Tidak dapat membaca kurs tersimpan",
+      "empty": "Tidak ada kurs tersimpan untuk ditampilkan",
+      "truncated": "Menampilkan {count} kurs tersimpan terbaru; yang lebih lama tidak ditampilkan.",
+      "inverted": "dibalik",
+      "unknownRate": "Tidak diketahui",
+      "columns": {
+        "date": "Tanggal",
+        "rate": "Kurs",
+        "source": "Sumber"
+      },
+      "sources": {
+        "yahooFinance": "Yahoo Finance",
+        "frankfurter": "Frankfurter (ECB)",
+        "mnyImport": "Impor Money",
+        "yahooCrypto": "Pasangan kripto (Yahoo)",
+        "unknown": "Tidak diketahui"
+      }
+    },
+    "toasts": {
+      "filled": "Menambahkan {count} kurs; riwayat kini dimulai {start}",
+      "partial": "{count} kurs tersimpan; riwayat kini dimulai {start}. Masih ada {windows} celah untuk diambil, tekan lagi untuk melanjutkan.",
+      "moreToFetch": "Kali ini tidak ada kurs yang tersimpan; masih ada {windows} celah untuk diambil, tekan lagi untuk melanjutkan.",
+      "noGaps": "{pair} sudah memiliki kurs harian untuk setiap tanggal yang dibutuhkan laporan Anda",
+      "noNewRates": "Tidak ada kurs baru yang tersimpan untuk {pair}",
+      "unused": "Tidak ada akun, kepemilikan, atau transaksi Anda yang memakai {code}, jadi tidak ada kurs untuk diambil",
+      "providerFloor": "Penyedia tidak memiliki kurs untuk {pair} sebelum {date}",
+      "failed": "Tidak dapat mengisi riwayat kurs"
+    }
   }
 }

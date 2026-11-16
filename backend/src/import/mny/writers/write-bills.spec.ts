@@ -51,6 +51,7 @@ function bill(overrides: Partial<MappedBill> = {}): MappedBill {
     transferAccountKey: null,
     investment: null,
     splits: [],
+    tagHandles: [],
     ...overrides,
   };
 }
@@ -66,6 +67,7 @@ function input(overrides: Partial<WriteBillsInput> = {}): WriteBillsInput {
     ]),
     payeeIdByHandle: new Map([[42, "payee-42"]]),
     payeeNameByHandle: new Map([[42, "Hydro One"]]),
+    tagIdByHandle: new Map([[552, "tag-552"]]),
     categoryIdByHandle: new Map([
       [60, "category-60"],
       [61, "category-61"],
@@ -80,6 +82,20 @@ function input(overrides: Partial<WriteBillsInput> = {}): WriteBillsInput {
 }
 
 describe("writeBills", () => {
+  it("stores the template's resolved tags on the schedule, dropping unknown items", async () => {
+    const scheduled = repoDouble();
+
+    await writeBills(
+      managerFor(scheduled, repoDouble()),
+      "user-1",
+      input({ bills: [bill({ tagHandles: [552, 999] })] }),
+    );
+
+    expect(scheduled.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ tagIds: ["tag-552"] }),
+    );
+  });
+
   it("creates an active, non-auto-posting schedule from a plain bill", async () => {
     const scheduled = repoDouble();
     const splits = repoDouble();

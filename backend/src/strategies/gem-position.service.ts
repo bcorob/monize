@@ -85,6 +85,8 @@ interface AggregatedHolding {
   costBasis: number | null;
   /** Currency the security is priced and costed in. */
   currencyCode: string;
+  /** Set when a bond program prices the security: its value is its lots'. */
+  bondProgramId: string | null;
   /** The breakdowns the security is described by, as stored. */
   composition: GemSecurityComposition;
 }
@@ -146,6 +148,7 @@ export class GemPositionService {
       account_quantities: Record<string, string>;
       cost_basis: string | null;
       currency_code: string;
+      bond_program_id: string | null;
       country_weightings: GemWeighting[] | null;
       asset_weightings: GemWeighting[] | null;
       sector_weightings: Array<{ sector: string; weight: number }> | null;
@@ -176,6 +179,7 @@ export class GemPositionService {
                   ELSE SUM(h.quantity * h.average_cost)
                 END AS cost_basis,
                 s.currency_code,
+                s.bond_program_id,
                 -- The breakdowns the compliance comparison runs on: what a
                 -- fund contains decides how much of it is already on target,
                 -- not whether its ticker matches.
@@ -199,7 +203,7 @@ export class GemPositionService {
             -- A security emptied everywhere disappears entirely, which is the
             -- right answer: it is not held.
             AND ABS(h.quantity) >= $3
-          GROUP BY h.security_id, s.symbol, s.name, s.currency_code,
+          GROUP BY h.security_id, s.symbol, s.name, s.currency_code, s.bond_program_id,
                    s.country_weightings, s.asset_weightings, s.sector_weightings`,
         [accountIds, userId, QUANTITY_TOLERANCE],
       ),
@@ -217,6 +221,7 @@ export class GemPositionService {
       ),
       costBasis: row.cost_basis === null ? null : Number(row.cost_basis),
       currencyCode: row.currency_code,
+      bondProgramId: row.bond_program_id,
       composition: toComposition(row),
     }));
   }
@@ -357,26 +362,23 @@ export class GemPositionService {
     if (!from || from === to) return amount;
     const key = `${from}->${to}`;
     if (!cache.has(key)) {
+      // One lookup, which answers from either stored direction. This used to ask
+      // twice and reciprocate the second answer itself -- a second copy of a
+      // decision `resolveFxRate` owns, and copies are how resolvers drift.
+      //
       // Bounded to the same fortnight as the prices these amounts are struck
       // from. An unbounded rate fails the way the unbounded price did, only
       // more quietly: nothing on the page is denominated in the rate, so a
       // nine-month-old one simply makes every converted figure wrong by the
       // year's currency move.
-      const direct = await this.exchangeRateService.getLatestRate(
-        from,
-        to,
-        RATE_MAX_AGE_DAYS,
-      );
-      if (direct !== null) {
-        cache.set(key, direct);
-      } else {
-        const reverse = await this.exchangeRateService.getLatestRate(
-          to,
+      cache.set(
+        key,
+        await this.exchangeRateService.getLatestRate(
           from,
+          to,
           RATE_MAX_AGE_DAYS,
-        );
-        cache.set(key, reverse !== null && reverse !== 0 ? 1 / reverse : null);
-      }
+        ),
+      );
     }
     const rate = cache.get(key) ?? null;
     return rate === null ? null : amount * rate;
@@ -548,15 +550,43 @@ export class GemPositionService {
         accounts.map((account) => account.id),
       );
     const rateCache = new Map<string, number | null>();
+    // A bond-linked position is worth its own accounts' lots: the program-wide
+    // blend also averages in lots of accounts outside this strategy's set.
+    const bondValues = await this.portfolioCalculation.valueBondHoldings(
+      userId,
+      aggregated.flatMap((holding) =>
+        holding.bondProgramId
+          ? [...holding.quantityByAccount].map(([accountId, quantity]) => ({
+              id: `${accountId}:${holding.securityId}`,
+              accountId,
+              securityId: holding.securityId,
+              quantity,
+              security: { bondProgramId: holding.bondProgramId },
+            }))
+          : [],
+      ),
+      prices,
+    );
     const valued: GemHolding[] = [];
     for (const holding of aggregated) {
       const role = roleBySecurity.get(holding.securityId) ?? null;
       const price = prices.get(holding.securityId);
+      let nativeValue: number | null;
+      if (holding.bondProgramId) {
+        const own = [...holding.quantityByAccount.keys()].map((accountId) =>
+          bondValues.get(`${accountId}:${holding.securityId}`),
+        );
+        nativeValue = own.every((v) => v)
+          ? sumMoney(own.map((v) => v?.marketValue as number))
+          : null;
+      } else {
+        nativeValue = price === undefined ? null : holding.quantity * price;
+      }
       const marketValue =
-        price === undefined
+        nativeValue === null
           ? null
           : await this.convertMoney(
-              holding.quantity * price,
+              nativeValue,
               holding.currencyCode,
               currencyCode,
               rateCache,

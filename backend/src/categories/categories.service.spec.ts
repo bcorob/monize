@@ -44,6 +44,7 @@ describe("CategoriesService", () => {
     icon: null,
     color: null,
     isIncome: false,
+    autoSign: null,
     isSystem: false,
     createdAt: new Date("2025-01-01"),
   };
@@ -59,6 +60,7 @@ describe("CategoriesService", () => {
     icon: null,
     color: null,
     isIncome: false,
+    autoSign: null,
     isSystem: false,
     createdAt: new Date("2025-01-02"),
   };
@@ -243,6 +245,31 @@ describe("CategoriesService", () => {
       expect(categoriesRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({ isIncome: true }),
       );
+    });
+
+    it("keeps an explicit autoSign on a subcategory instead of inheriting it like isIncome", async () => {
+      // Contrast with the test above: isIncome is forced to the parent's
+      // value, autoSign is the subcategory's own choice and is never forced.
+      const incomeParent = {
+        ...mockCategory,
+        id: "income-parent",
+        isIncome: true,
+        autoSign: true,
+      };
+      categoriesRepository.findOne.mockResolvedValue(incomeParent);
+      categoriesRepository.save.mockImplementation((data) => data);
+
+      const result = await service.create("user-1", {
+        name: "Refunds",
+        parentId: "income-parent",
+        isIncome: false,
+        autoSign: false,
+      });
+
+      expect(categoriesRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ isIncome: true, autoSign: false }),
+      );
+      expect(result.autoSign).toBe(false);
     });
 
     it("throws NotFoundException when parent category does not exist", async () => {
@@ -497,12 +524,190 @@ describe("CategoriesService", () => {
       // Parent chain lookups must include userId for user isolation
       expect(categoriesRepository.findOne).toHaveBeenNthCalledWith(2, {
         where: { id: "p", userId: "user-1" },
-        select: ["id", "color", "icon", "parentId"],
+        select: ["id", "color", "icon", "autoSign", "parentId"],
       });
       expect(categoriesRepository.findOne).toHaveBeenNthCalledWith(3, {
         where: { id: "gp", userId: "user-1" },
-        select: ["id", "color", "icon", "parentId"],
+        select: ["id", "color", "icon", "autoSign", "parentId"],
       });
+    });
+  });
+
+  describe("effective auto-sign resolution", () => {
+    const setupFindAll = (categories: Category[]) => {
+      const catQb = createMockQueryBuilder({
+        getMany: jest.fn().mockResolvedValue(categories),
+      });
+      categoriesRepository.createQueryBuilder.mockReturnValue(catQb);
+      transactionsRepository.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder(),
+      );
+      splitsRepository.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder(),
+      );
+    };
+
+    it("treats a root with no explicit value as on", async () => {
+      setupFindAll([{ ...mockCategory, id: "r", autoSign: null }]);
+
+      const result = await service.findAll("user-1");
+
+      expect((result[0] as any).effectiveAutoSign).toBe(true);
+      expect(result[0].autoSign).toBeNull();
+    });
+
+    it("inherits an explicit off from the parent when the child has none", async () => {
+      setupFindAll([
+        { ...mockCategory, id: "r", parentId: null, autoSign: false },
+        { ...mockChildCategory, id: "c", parentId: "r", autoSign: null },
+      ]);
+
+      const result = await service.findAll("user-1");
+      const child = result.find((c) => c.id === "c");
+
+      expect((child as any).effectiveAutoSign).toBe(false);
+      // The stored value is untouched; only the computed one is inherited.
+      expect(child!.autoSign).toBeNull();
+    });
+
+    it("lets a child's explicit on win over its parent's off", async () => {
+      setupFindAll([
+        { ...mockCategory, id: "r", parentId: null, autoSign: false },
+        { ...mockChildCategory, id: "c", parentId: "r", autoSign: true },
+      ]);
+
+      const result = await service.findAll("user-1");
+      const child = result.find((c) => c.id === "c");
+
+      expect((child as any).effectiveAutoSign).toBe(true);
+      expect(child!.autoSign).toBe(true);
+    });
+
+    it("inherits through several levels with no explicit value", async () => {
+      setupFindAll([
+        { ...mockCategory, id: "r", parentId: null, autoSign: false },
+        { ...mockCategory, id: "p", parentId: "r", autoSign: null },
+        { ...mockCategory, id: "g", parentId: "p", autoSign: null },
+      ]);
+
+      const result = await service.findAll("user-1");
+
+      expect((result.find((c) => c.id === "p") as any).effectiveAutoSign).toBe(
+        false,
+      );
+      expect((result.find((c) => c.id === "g") as any).effectiveAutoSign).toBe(
+        false,
+      );
+    });
+
+    it("stops at the nearest explicit value", async () => {
+      setupFindAll([
+        { ...mockCategory, id: "r", parentId: null, autoSign: false },
+        { ...mockCategory, id: "p", parentId: "r", autoSign: null },
+        { ...mockCategory, id: "g", parentId: "p", autoSign: true },
+      ]);
+
+      const result = await service.findAll("user-1");
+
+      expect((result.find((c) => c.id === "g") as any).effectiveAutoSign).toBe(
+        true,
+      );
+      expect((result.find((c) => c.id === "p") as any).effectiveAutoSign).toBe(
+        false,
+      );
+    });
+
+    it("treats an orphaned child with no explicit value as on", async () => {
+      setupFindAll([
+        { ...mockCategory, id: "o", parentId: "missing", autoSign: null },
+      ]);
+
+      const result = await service.findAll("user-1");
+
+      expect((result[0] as any).effectiveAutoSign).toBe(true);
+    });
+  });
+
+  describe("findOne effectiveAutoSign", () => {
+    it("resolves effectiveAutoSign from parent via DB lookup", async () => {
+      const child = { ...mockChildCategory, id: "c1", parentId: "p1" };
+      const parent = {
+        ...mockCategory,
+        id: "p1",
+        parentId: null,
+        autoSign: false,
+      };
+      categoriesRepository.findOne
+        .mockResolvedValueOnce(child) // findOne: load child
+        .mockResolvedValueOnce(parent); // findOne: parent chain lookup
+
+      const result = await service.findOne("user-1", "c1");
+
+      expect(result.effectiveAutoSign).toBe(false);
+      expect(result.autoSign).toBeNull();
+    });
+
+    it("keeps walking for autoSign after colour and icon are resolved", async () => {
+      const child = {
+        ...mockChildCategory,
+        id: "c1",
+        parentId: "p1",
+        color: "#ef4444",
+        icon: "cart",
+        autoSign: null,
+      };
+      const parent = {
+        ...mockCategory,
+        id: "p1",
+        parentId: null,
+        autoSign: false,
+      };
+      categoriesRepository.findOne
+        .mockResolvedValueOnce(child)
+        .mockResolvedValueOnce(parent);
+
+      const result = await service.findOne("user-1", "c1");
+
+      expect(result.effectiveAutoSign).toBe(false);
+      expect(categoriesRepository.findOne).toHaveBeenNthCalledWith(2, {
+        where: { id: "p1", userId: "user-1" },
+        select: ["id", "color", "icon", "autoSign", "parentId"],
+      });
+    });
+
+    it("returns the category's own explicit value without walking up", async () => {
+      const child = {
+        ...mockChildCategory,
+        id: "c1",
+        parentId: "p1",
+        color: "#ef4444",
+        icon: "cart",
+        autoSign: false,
+      };
+      categoriesRepository.findOne.mockResolvedValueOnce(child);
+
+      const result = await service.findOne("user-1", "c1");
+
+      expect(result.effectiveAutoSign).toBe(false);
+      expect(categoriesRepository.findOne).toHaveBeenCalledTimes(1);
+    });
+
+    it("defaults to on for a root with no explicit value", async () => {
+      categoriesRepository.findOne.mockResolvedValue(mockCategory);
+
+      const result = await service.findOne("user-1", "cat-1");
+
+      expect(result.effectiveAutoSign).toBe(true);
+    });
+
+    it("defaults to on when no ancestor sets a value", async () => {
+      categoriesRepository.findOne
+        .mockResolvedValueOnce({ ...mockChildCategory, id: "c1" })
+        .mockResolvedValueOnce({ ...mockCategory, id: "cat-1" });
+
+      const result = await service.findOne("user-1", "c1");
+
+      expect(result.effectiveAutoSign).toBe(true);
     });
   });
 
@@ -829,6 +1034,7 @@ describe("CategoriesService", () => {
         ...mockCategory,
         effectiveColor: null,
         effectiveIcon: null,
+        effectiveAutoSign: true,
       });
       expect(categoriesRepository.findOne).toHaveBeenCalledWith({
         where: { id: "cat-1", userId: "user-1" },
@@ -1033,6 +1239,77 @@ describe("CategoriesService", () => {
 
       // update should not be called for children
       expect(txManager.update).not.toHaveBeenCalled();
+    });
+
+    it("stores a child's explicit autoSign instead of forcing it like isIncome", async () => {
+      const parentCat = {
+        ...mockCategory,
+        id: "cat-1",
+        isIncome: false,
+        autoSign: false,
+      };
+      categoriesRepository.findOne
+        .mockResolvedValueOnce({ ...mockChildCategory, autoSign: null }) // load child
+        .mockResolvedValueOnce(parentCat) // child's ancestor walk
+        .mockResolvedValueOnce(parentCat); // update: load parent for isIncome
+      categoriesRepository.save.mockImplementation((data) => data);
+
+      const result = await service.update("user-1", "cat-2", {
+        autoSign: true,
+      });
+
+      expect(result.autoSign).toBe(true);
+      expect(txManager.save).toHaveBeenCalledWith(
+        Category,
+        expect.objectContaining({ id: "cat-2", autoSign: true }),
+      );
+    });
+
+    it("does not cascade an autoSign change to descendants", async () => {
+      categoriesRepository.findOne.mockResolvedValue({
+        ...mockCategory,
+        autoSign: null,
+      });
+
+      const result = await service.update("user-1", "cat-1", {
+        autoSign: false,
+      });
+
+      expect(result.autoSign).toBe(false);
+      // The isIncome cascade reads children through manager.find and writes
+      // them through manager.update; neither runs for autoSign.
+      expect(txManager.find).not.toHaveBeenCalled();
+      expect(txManager.update).not.toHaveBeenCalled();
+    });
+
+    it("clears autoSign when the dto sets it to null", async () => {
+      categoriesRepository.findOne.mockResolvedValue({
+        ...mockCategory,
+        autoSign: false,
+      });
+
+      const result = await service.update("user-1", "cat-1", {
+        autoSign: null,
+      });
+
+      expect(result.autoSign).toBeNull();
+      expect(txManager.save).toHaveBeenCalledWith(
+        Category,
+        expect.objectContaining({ autoSign: null }),
+      );
+    });
+
+    it("leaves autoSign alone when the dto omits it", async () => {
+      categoriesRepository.findOne.mockResolvedValue({
+        ...mockCategory,
+        autoSign: false,
+      });
+
+      const result = await service.update("user-1", "cat-1", {
+        name: "Renamed",
+      });
+
+      expect(result.autoSign).toBe(false);
     });
   });
 
@@ -1403,56 +1680,6 @@ describe("CategoriesService", () => {
 
       expect(result).toBeNull();
       expect(categoriesRepository.findOne).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe("findLoanCategories", () => {
-    it("returns loan principal and interest categories", async () => {
-      const loanParent = { ...mockCategory, id: "loan-parent", name: "Loan" };
-      const principal = {
-        ...mockCategory,
-        id: "loan-p",
-        name: "Loan Principal",
-        parentId: "loan-parent",
-      };
-      const interest = {
-        ...mockCategory,
-        id: "loan-i",
-        name: "Loan Interest",
-        parentId: "loan-parent",
-      };
-
-      categoriesRepository.findOne
-        .mockResolvedValueOnce(loanParent)
-        .mockResolvedValueOnce(principal)
-        .mockResolvedValueOnce(interest);
-
-      const result = await service.findLoanCategories("user-1");
-
-      expect(result.principalCategory).toEqual(principal);
-      expect(result.interestCategory).toEqual(interest);
-    });
-
-    it("returns nulls when Loan parent does not exist", async () => {
-      categoriesRepository.findOne.mockResolvedValue(null);
-
-      const result = await service.findLoanCategories("user-1");
-
-      expect(result.principalCategory).toBeNull();
-      expect(result.interestCategory).toBeNull();
-    });
-
-    it("returns null for missing child categories under existing Loan parent", async () => {
-      const loanParent = { ...mockCategory, id: "loan-parent", name: "Loan" };
-      categoriesRepository.findOne
-        .mockResolvedValueOnce(loanParent)
-        .mockResolvedValueOnce(null)
-        .mockResolvedValueOnce(null);
-
-      const result = await service.findLoanCategories("user-1");
-
-      expect(result.principalCategory).toBeNull();
-      expect(result.interestCategory).toBeNull();
     });
   });
 

@@ -3,6 +3,8 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { nextDensity, type DensityLevel } from '@/hooks/useTableDensity';
 import { createLogger } from '@/lib/logger';
+import { useViewDefault } from '@/hooks/useViewDefault';
+import { BUILT_IN_VIEW_DEFAULTS } from '@/lib/view-defaults';
 
 const logger = createLogger('Density');
 
@@ -27,6 +29,11 @@ const logger = createLogger('Density');
  * so a 13" laptop and a desktop monitor signed into the same account should not
  * have to agree. Issue #1193 asks for exactly that -- "persisted in this
  * browser indefinitely".
+ *
+ * What the account does hold is a *default* (the `density` view default, set
+ * in Settings -> Preferences): the level a view starts at in a browser that
+ * has saved nothing for it, so a new browser, phone or private window does not
+ * start every table at the built-in level. A level saved here still wins.
  */
 export const DENSITY_STORAGE_KEY = 'monize-density';
 
@@ -52,7 +59,13 @@ export type DensityView =
   | 'payeeDetail'
   | 'accountRegister'
   | 'accountFxFees'
-  | 'fxFeesReport';
+  | 'fxFeesReport'
+  | 'ruleMatch'
+  | 'rules'
+  | 'warranties'
+  | 'aiReviews'
+  | 'emailReceipts'
+  | 'adminUsers';
 
 export const DENSITY_VIEWS: readonly DensityView[] = [
   'transactions',
@@ -71,6 +84,12 @@ export const DENSITY_VIEWS: readonly DensityView[] = [
   'accountRegister',
   'accountFxFees',
   'fxFeesReport',
+  'ruleMatch',
+  'rules',
+  'warranties',
+  'aiReviews',
+  'emailReceipts',
+  'adminUsers',
 ];
 
 /**
@@ -98,7 +117,7 @@ export const LEGACY_DENSITY_KEYS: Readonly<Record<string, DensityView>> = {
   'monize-payee-detail-density': 'payeeDetail',
 };
 
-export const DEFAULT_DENSITY: DensityLevel = 'normal';
+export const DEFAULT_DENSITY: DensityLevel = BUILT_IN_VIEW_DEFAULTS.density;
 
 const DENSITY_LEVELS: readonly DensityLevel[] = ['normal', 'compact', 'dense'];
 
@@ -153,10 +172,28 @@ export function migrateLegacyDensity(): DensityMap {
   return migrated;
 }
 
+/**
+ * The level a view renders at: this browser's saved level, else the account's
+ * default, else the built-in one.
+ */
+export function resolveDensity(
+  local: DensityLevel | undefined,
+  accountDefault: DensityLevel | undefined,
+): DensityLevel {
+  return local ?? accountDefault ?? DEFAULT_DENSITY;
+}
+
 interface DensityState {
   densities: DensityMap;
   setDensity: (view: DensityView, density: DensityLevel) => void;
-  cycleDensity: (view: DensityView) => void;
+  /**
+   * Step a view to the next level. `accountDefault` is where a view this
+   * browser has saved nothing for starts, so the step is from the level on
+   * screen rather than from the built-in one.
+   */
+  cycleDensity: (view: DensityView, accountDefault?: DensityLevel) => void;
+  /** Forget every view's saved level, so the account default applies again. */
+  clearDensities: () => void;
 }
 
 export const useDensityStore = create<DensityState>()(
@@ -167,13 +204,15 @@ export const useDensityStore = create<DensityState>()(
       setDensity: (view, density) =>
         set((state) => ({ densities: { ...state.densities, [view]: density } })),
 
-      cycleDensity: (view) =>
+      cycleDensity: (view, accountDefault) =>
         set((state) => ({
           densities: {
             ...state.densities,
-            [view]: nextDensity(state.densities[view] ?? DEFAULT_DENSITY),
+            [view]: nextDensity(resolveDensity(state.densities[view], accountDefault)),
           },
         })),
+
+      clearDensities: () => set({ densities: {} }),
     }),
     {
       name: DENSITY_STORAGE_KEY,
@@ -205,10 +244,13 @@ export const useDensityStore = create<DensityState>()(
  * Pass the view whose level you want. Selectors are subscribed individually so
  * a component re-renders when *its* level moves and not when another view's
  * does, and `setDensity`/`cycleDensity` are bound to the view so a caller
- * cannot write to the wrong bucket by forgetting an argument.
+ * cannot write to the wrong bucket by forgetting an argument. A view this
+ * browser has saved nothing for shows the account's default level.
  */
 export function useDensityPreference(view: DensityView) {
-  const density = useDensityStore((state) => state.densities[view] ?? DEFAULT_DENSITY);
+  const local = useDensityStore((state) => state.densities[view]);
+  const accountDefault = useViewDefault('density');
+  const density = resolveDensity(local, accountDefault);
   const setForView = useDensityStore((state) => state.setDensity);
   const cycleForView = useDensityStore((state) => state.cycleDensity);
 
@@ -216,7 +258,10 @@ export function useDensityPreference(view: DensityView) {
     (level: DensityLevel) => setForView(view, level),
     [setForView, view],
   );
-  const cycleDensity = useCallback(() => cycleForView(view), [cycleForView, view]);
+  const cycleDensity = useCallback(
+    () => cycleForView(view, accountDefault),
+    [cycleForView, view, accountDefault],
+  );
 
   return { density, setDensity, cycleDensity };
 }

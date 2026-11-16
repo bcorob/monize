@@ -20,15 +20,17 @@
     "typeExpense": "[XX-Expense-XX]",
     "typeUnknown": "[XX-Direction unknown-XX]",
     "amountUnavailable": "[XX-Amount unavailable-XX]",
+    "estimated": "[XX-Estimated-XX]",
+    "estimateUnknown": "[XX-Estimate unknown: enter the amount when you post it-XX]",
     "button": "[XX-View Bills &amp; Deposits-XX]"
   },
   "mortgageReminder": {
-    "subject": "[XX-Monize: 1 upcoming mortgage renewal-XX]",
-    "subjectPlural": "[XX-Monize: {{ count }} upcoming mortgage renewals-XX]",
-    "heading": "[XX-Mortgage Renewal Reminder-XX]",
+    "subject": "[XX-Monize: 1 mortgage rate term ending soon-XX]",
+    "subjectPlural": "[XX-Monize: {{ count }} mortgage rate terms ending soon-XX]",
+    "heading": "[XX-Mortgage Rate Term Reminder-XX]",
     "greeting": "[XX-Hi {{ name }},-XX]",
-    "introOne": "[XX-You have 1 mortgage with an upcoming term renewal. Contact your lender to discuss renewal options before the term ends:-XX]",
-    "introMany": "[XX-You have {{ count }} mortgages with an upcoming term renewal. Contact your lender to discuss renewal options before the term ends:-XX]",
+    "introOne": "[XX-You have 1 mortgage whose current rate term ends soon. Contact your lender before it ends to arrange your next rate or renewal:-XX]",
+    "introMany": "[XX-You have {{ count }} mortgages whose current rate term ends soon. Contact your lender before each one ends to arrange the next rate or renewal:-XX]",
     "colMortgage": "[XX-Mortgage-XX]",
     "colTermEndDate": "[XX-Term End Date-XX]",
     "colTimeRemaining": "[XX-Time Remaining-XX]",
@@ -117,6 +119,21 @@
     "button": "[XX-Verify Email-XX]",
     "disclaimer": "[XX-This link will expire in 24 hours. If you did not create a Monize account, you can safely ignore this email.-XX]"
   },
+  "emailChangeConfirm": {
+    "subject": "[XX-Confirm your new Monize email-XX]",
+    "heading": "[XX-Confirm your new email address-XX]",
+    "greeting": "[XX-Hi {{ name }},-XX]",
+    "intro": "[XX-A request was made to use this address for a Monize account. Your email will not change until you confirm it by clicking the button below:-XX]",
+    "button": "[XX-Confirm Email Change-XX]",
+    "disclaimer": "[XX-This link will expire in 24 hours. If you did not request this change, you can safely ignore this email.-XX]"
+  },
+  "emailChangeNotice": {
+    "subject": "[XX-Monize email change requested-XX]",
+    "heading": "[XX-Email change requested-XX]",
+    "greeting": "[XX-Hi {{ name }},-XX]",
+    "body1": "[XX-A request was made to change the email address of your Monize account to {{ email }}. The change takes effect only once it is confirmed from that address.-XX]",
+    "body2": "[XX-If you did not make this request, change your password immediately and review the devices signed in to your account.-XX]"
+  },
   "accountInvite": {
     "subject": "[XX-Your Monize account is ready-XX]",
     "heading": "[XX-Your Monize account is ready-XX]",
@@ -186,5 +203,232 @@
     "greeting": "[XX-Hi {{ name }},-XX]",
     "intro": "[XX-<strong>{{ provider }}</strong> answered again at {{ restoredAt }}. The outage lasted {{ duration }}.-XX]",
     "backfill": "[XX-Prices and index history missed during the outage are picked up by the next scheduled refresh; no action is needed.-XX]"
+  },
+  "systemAlert": {
+    "subject": "[XX-Monize: {{ title }}-XX]",
+    "heading": "[XX-System alert-XX]",
+    "greeting": "[XX-Hi {{ name }},-XX]",
+    "intro": "[XX-An issue on your Monize deployment needs an administrator's attention.-XX]",
+    "footer": "[XX-This alert is also shown in the app's notification bell. It is raised at most once per occurrence, however many server replicas noticed it.-XX]"
+  },
+  "notificationImmediate": {
+    "subject": "[XX-You have a new Monize notification-XX]",
+    "eyebrow": "[XX-Monize notification-XX]",
+    "button": "[XX-Open in Monize-XX]",
+    "footer": "[XX-You are receiving this because immediate email is on for this notification type. Change it in Settings, Notifications.-XX]"
+  },
+  "notificationCopy": {
+    "billDue": {
+      "titleOverdue": "[XX-{{ payee }} overdue-XX]",
+      "titleToday": "[XX-{{ payee }} due today-XX]",
+      "titleTomorrow": "[XX-{{ payee }} due tomorrow-XX]",
+      "titleInDays": "[XX-{{ payee }} due in {{ days }} days-XX]",
+      "amountDue": "[XX-{{ amount }} due on {{ date }}-XX]",
+      "amountUnavailable": "[XX-Amount unavailable (no current exchange rate), due on {{ date }}-XX]"
+    },
+    "gemSignal": {
+      "riskTitle": "[XX-{{ strategy }} switched to {{ state }}-XX]",
+      "riskMessage": "[XX-Your GEM strategy \"{{ strategy }}\" changed from {{ fromState }} to {{ toState }}. Open to review the recommendation.-XX]",
+      "allocationTitle": "[XX-{{ strategy }} changed its target-XX]",
+      "allocationMessage": "[XX-Your GEM strategy \"{{ strategy }}\" now targets {{ target }}. Open to review the recommendation.-XX]",
+      "riskOn": "[XX-risk-on-XX]",
+      "riskOff": "[XX-risk-off-XX]",
+      "roles": {
+        "US_EQUITY": "[XX-S&P 500-XX]",
+        "EX_US_EQUITY": "[XX-Developed markets ex-US-XX]",
+        "EM_EQUITY": "[XX-Emerging markets-XX]",
+        "SAFE": "[XX-Safe asset-XX]",
+        "RISK_FREE": "[XX-Risk-free benchmark-XX]"
+      },
+      "allocationMessageUnknown": "[XX-Your GEM strategy \"{{ strategy }}\" changed its target. Open to review the recommendation.-XX]"
+    },
+    "emailReceiptsAttention": {
+      "title": "[XX-Email receipts need attention-XX]",
+      "message": "[XX-Your receipts inbox holds {{ noParser }} without a profile and {{ parseFailed }} that their profile did not recognize. Open to review.-XX]"
+    },
+    "aiReview": {
+      "readyTitle": "[XX-AI review proposals wait for you-XX]",
+      "readyMessage": "[XX-Proposals waiting for your decision: {{ count }}. New since the last notice: {{ added }}. Open to review.-XX]",
+      "expiringTitle": "[XX-AI review proposals expire soon-XX]",
+      "expiringMessage": "[XX-Proposals that expire within 3 days: {{ count }}. The first one expires on {{ date }}. Open to review.-XX]"
+    },
+    "warranty": {
+      "expiringTitle": "[XX-{{ name }}: warranty expires soon-XX]",
+      "expiringMessage": "[XX-The warranty for {{ name }} expires on {{ date }}. Open to review its documents or record a claim.-XX]",
+      "todayTitle": "[XX-{{ name }}: warranty expires today-XX]",
+      "todayMessage": "[XX-The warranty for {{ name }} expires today, {{ date }}. Open to review its documents or record a claim.-XX]"
+    },
+    "security": {
+      "oauthTitle": "[XX-New app connected: {{ clientName }}-XX]",
+      "oauthMessage": "[XX-The application {{ clientName }} was just granted access to your Monize account. If this wasn't you, change your password now: that revokes every connected application's access.-XX]",
+      "relayTitle": "[XX-A new connection answered your AI chat-XX]",
+      "relayMessage": "[XX-A connection that has not answered your Monize AI chat before just picked up a prompt. If you did not connect this assistant, change your password.-XX]"
+    },
+    "payrollDeduction": {
+      "resetTitle": "[XX-{{ category }}: confirm next year's maximum-XX]",
+      "resetMessage": "[XX-The {{ category }} deduction on {{ bill }} resets on {{ date }}. Update the yearly maximum if it changes; otherwise {{ amount }} applies again.-XX]"
+    },
+    "portfolioMovement": {
+      "titleUp": "[XX-Investments up {{ percent }}%-XX]",
+      "titleDown": "[XX-Investments down {{ percent }}%-XX]",
+      "messageUp": "[XX-Your investments are up {{ percent }}% from {{ from }} to {{ to }}, excluding deposits and withdrawals. Open to review.-XX]",
+      "messageDown": "[XX-Your investments are down {{ percent }}% from {{ from }} to {{ to }}, excluding deposits and withdrawals. Open to review.-XX]"
+    },
+    "balanceThreshold": {
+      "titleLow": "[XX-{{ account }} is below your threshold-XX]",
+      "titleHigh": "[XX-{{ account }} is above your threshold-XX]",
+      "messageLow": "[XX-{{ account }} dropped to {{ balance }}, below your {{ threshold }} threshold.-XX]",
+      "messageHigh": "[XX-{{ account }} rose to {{ balance }}, above your {{ threshold }} threshold.-XX]"
+    },
+    "system": {
+      "backupFailed": {
+        "title": "[XX-Automatic backup failed-XX]",
+        "message": "[XX-The automatic backup for {{ user }} failed: {{ error }}-XX]"
+      },
+      "backupPartial": {
+        "title": "[XX-Automatic backup incomplete-XX]",
+        "messageAttachments": "[XX-The backup for {{ user }} was written, but {{ missing }} of {{ expected }} attachments could not be included and {{ inconsistent }} did not match their metadata. Complete backups were preserved.-XX]",
+        "messagePromotion": "[XX-The daily backup for {{ user }} succeeded, but its weekly or monthly copy could not be written: {{ error }}-XX]",
+        "messageRetention": "[XX-The backup for {{ user }} succeeded, but old backup files could not be cleaned up: {{ error }}-XX]"
+      },
+      "encryptionKeyMissing": {
+        "title": "[XX-Encryption key not configured-XX]",
+        "message": "[XX-ENCRYPTION_KEY is not set, so backups are written unencrypted and secrets cannot be stored. A future release will refuse to start without it.-XX]"
+      },
+      "jwtSecretWeak": {
+        "title": "[XX-JWT_SECRET is weak-XX]",
+        "message": "[XX-JWT_SECRET is a published placeholder or too predictable, so session tokens can be forged. Generate a strong one (openssl rand -base64 32). Changing it stops authenticator codes from working and forgets trusted devices: users sign in with a backup code and set up 2FA again, and you reset 2FA in User Management for anyone without one. See docs/backend/modules-and-runtime.md (Changing JWT_SECRET) first.-XX]"
+      },
+      "smtpFailure": {
+        "title": "[XX-Email delivery is failing-XX]",
+        "message": "[XX-Monize could not send email: {{ error }}. Notifications and reminders are not being delivered.-XX]"
+      },
+      "providerOutage": {
+        "title": "[XX-{{ provider }} is not responding-XX]",
+        "message": "[XX-Market data from {{ provider }} is unavailable. Prices and index data may be out of date until it answers again.-XX]"
+      },
+      "providerRecovered": {
+        "title": "[XX-{{ provider }} is answering again-XX]",
+        "message": "[XX-The outage is over and market data from {{ provider }} is updating again.-XX]"
+      },
+      "scheduledPostFailed": {
+        "title": "[XX-{{ name }} could not be posted-XX]",
+        "message": "[XX-Your scheduled transaction due {{ date }} did not post automatically: {{ error }}. You can post it manually from Bills.-XX]"
+      }
+    },
+    "budget": {
+      "overTitle": "[XX-{{ category }} is over budget-XX]",
+      "overMessage": "[XX-You have spent {{ amount }} of your {{ limit }} budget for {{ category }} ({{ percent }}%).-XX]",
+      "criticalTitle": "[XX-{{ category }} approaching limit-XX]",
+      "warningTitle": "[XX-{{ category }} reaching budget limit-XX]",
+      "thresholdMessage": "[XX-You have used {{ percent }}% of your {{ category }} budget ({{ amount }} of {{ limit }}).-XX]",
+      "projectedTitle": "[XX-{{ category }} projected to overspend-XX]",
+      "projectedMessage": "[XX-At your current pace, {{ category }} is projected to reach {{ projected }} by the end of the period (budget: {{ budgeted }}).-XX]",
+      "flexTitle": "[XX-Flex group \"{{ group }}\" at {{ percent }}%-XX]",
+      "flexMessage": "[XX-The \"{{ group }}\" flex group has used {{ spent }} of its combined {{ budgeted }} budget ({{ percent }}%).-XX]",
+      "incomeTitle": "[XX-Income below expected-XX]",
+      "incomeMessage": "[XX-Your actual income ({{ actual }}) is at {{ ratio }}% of expected income ({{ expected }}) at this point in the period.-XX]",
+      "milestoneTitle": "[XX-Budget on track-XX]",
+      "milestoneMessage": "[XX-You are {{ progress }}% through the period and have only used {{ percent }}% of your total budget. Keep it up!-XX]",
+      "seasonalTitle": "[XX-Seasonal spike expected for {{ category }}-XX]",
+      "seasonalMessage": "[XX-Last {{ month }} you spent {{ increase }}x your usual on {{ category }}. Consider adjusting your budget.-XX]"
+    },
+    "priceMovement": {
+      "title": "[XX-Price change alert: {{ symbol }} ({{ percent }}%)-XX]",
+      "message": "[XX-{{ symbol }}: {{ percent }}% compared with the previous available session.-XX]"
+    },
+    "bankSync": {
+      "expiringTitleToday": "[XX-{{ institution }}: bank access ends today-XX]",
+      "expiringTitleOneDay": "[XX-{{ institution }}: bank access ends within 1 day-XX]",
+      "expiringTitleDays": "[XX-{{ institution }}: bank access ends within {{ days }} days-XX]",
+      "expiringMessage": "[XX-Your consent for Monize to read {{ institution }} ends on {{ date }}. Renew the connection in Monize to keep syncing.-XX]",
+      "expiredTitle": "[XX-{{ institution }}: bank access has ended-XX]",
+      "expiredMessage": "[XX-Your consent for Monize to read {{ institution }} has ended. Renew the connection in Monize to resume syncing.-XX]",
+      "failedTitle": "[XX-{{ institution }}: sync failed-XX]",
+      "failedMessage": "[XX-The daily sync of {{ institution }} failed for: {{ accounts }}. Open bank sync settings to see why.-XX]",
+      "failedCredentialsMessage": "[XX-The daily sync of {{ institution }} could not start because the bank sync credentials are missing or were rejected. Check them in bank sync settings.-XX]",
+      "unnamedAccount": "[XX-an account-XX]",
+      "importedTitle": "[XX-{{ institution }}: new transactions imported-XX]",
+      "importedMessage": "[XX-Transactions imported from {{ institution }} by the daily sync: {{ imported }}.-XX]",
+      "importedNoneTitle": "[XX-{{ institution }}: no new transactions-XX]",
+      "importedNoneMessage": "[XX-The daily sync of {{ institution }} found no new transactions.-XX]"
+    },
+    "bond": {
+      "maturitySoonTitle": "[XX-{{ series }} matures on {{ date }}-XX]",
+      "maturitySoonMessage": "[XX-{{ quantity }} x {{ series }} mature on {{ date }}. {{ payout }}-XX]",
+      "interestTitle": "[XX-{{ series }}: interest payment on {{ date }}-XX]",
+      "interestMessage": "[XX-{{ quantity }} x {{ series }} pay {{ amount }} of interest on {{ date }}. Book it on the security page if it is not in your account yet.-XX]",
+      "interestMessageUnknown": "[XX-{{ quantity }} x {{ series }} pay interest on {{ date }}. The amount is not known yet: a rate it depends on is not published.-XX]",
+      "rateResetTitle": "[XX-{{ series }}: new interest period-XX]",
+      "rateResetMessage": "[XX-{{ series }} entered period {{ period }} on {{ date }} at {{ rate }} a year.-XX]",
+      "unbookedTitle": "[XX-{{ series }}: matured, redemption not booked-XX]",
+      "unbookedMessage": "[XX-{{ quantity }} x {{ series }} matured on {{ date }} and no redemption is booked. {{ payout }} Book the redemption on the security page.-XX]",
+      "payoutKnown": "[XX-The payout is {{ payout }}.-XX]",
+      "payoutUnknown": "[XX-The payout is not known yet: {{ reason }}.-XX]",
+      "reason": {
+        "RATE_UNKNOWN": "[XX-a rate it depends on is not published yet-XX]",
+        "TERMS_INCOMPLETE": "[XX-the terms of the series are incomplete-XX]",
+        "PURCHASE_OUTSIDE_SALE_WINDOW": "[XX-a purchase date is outside the sale window of the series-XX]",
+        "PURCHASE_AFTER_MATURITY": "[XX-a purchase date is on or after the maturity of the series-XX]",
+        "other": "[XX-it cannot be worked out from the data stored-XX]"
+      },
+      "benchmarkTitle": "[XX-{{ benchmark }}: new observation {{ observation }}-XX]",
+      "benchmarkMessage": "[XX-{{ publisher }} published {{ benchmark }} for {{ observation }}: {{ value }}. It is read by {{ series }}.-XX]",
+      "benchmarkMessageMore": "[XX-{{ publisher }} published {{ benchmark }} for {{ observation }}: {{ value }}. It is read by {{ series }} and {{ more }} more.-XX]",
+      "missingTitle": "[XX-Bond figures are not known yet-XX]",
+      "missingMessage": "[XX-Some bond figures cannot be worked out: {{ causes }}.-XX]",
+      "benchmarks": {
+        "PL_CPI_GUS_YOY": "[XX-CPI, 12 months (GUS)-XX]",
+        "PL_NBP_REFERENCE": "[XX-NBP reference rate-XX]"
+      },
+      "cause": {
+        "observation": "[XX-the {{ observation }} observation of {{ benchmark }} ({{ publisher }}) is not stored: it is not published yet, or the feed has not been fetched since; refresh on the bond page-XX]",
+        "observationNoPublisher": "[XX-the {{ observation }} observation of {{ benchmark }} is not stored: it is not published yet, or the feed has not been fetched since; refresh on the bond page-XX]",
+        "terms": "[XX-the terms of {{ series }} are incomplete; refresh the series on the bond page-XX]",
+        "purchase": "[XX-a purchase of {{ series }} on {{ date }} is outside its sale window ({{ from }} to {{ to }}); correct the purchase date-XX]",
+        "purchaseAfterMaturity": "[XX-a purchase of {{ series }} on {{ date }} is on or after its maturity ({{ maturity }}); correct the purchase date-XX]",
+        "lots": "[XX-the lots cannot be derived from the ledger ({{ code }}); correct the ledger-XX]",
+        "lotsRow": "[XX-the {{ action }} dated {{ date }} makes the lots impossible to derive ({{ code }}); correct the transaction-XX]",
+        "lotsRowSeries": "[XX-the {{ action }} dated {{ date }} is not placed in a series ({{ code }}); choose the series on that transaction-XX]",
+        "lotsRowRemoval": "[XX-the {{ action }} dated {{ date }} removes more than the account holds of that series ({{ code }}); correct the transaction-XX]"
+      },
+      "action": {
+        "BUY": "[XX-purchase-XX]",
+        "SELL": "[XX-sale-XX]",
+        "REINVEST": "[XX-reinvestment-XX]",
+        "ADD_SHARES": "[XX-share addition-XX]",
+        "REMOVE_SHARES": "[XX-share removal-XX]",
+        "SPLIT": "[XX-split-XX]",
+        "TRANSFER_IN": "[XX-incoming transfer-XX]",
+        "TRANSFER_OUT": "[XX-outgoing transfer-XX]",
+        "other": "[XX-transaction-XX]"
+      }
+    },
+    "shared": {
+      "title": "[XX-Shared expenses-XX]",
+      "message": "[XX-A shared group has an update. Open Monize to review it.-XX]"
+    }
+  },
+  "backupOffsite": {
+    "copySubject": "[XX-Monize backup {{ filename }}-XX]",
+    "copyHeading": "[XX-Your Monize backup is attached-XX]",
+    "copyIntro": "[XX-This is the automatic {{ tier }} backup of your Monize account for {{ date }}. The file is attached to this email.-XX]",
+    "copyEncrypted": "[XX-The attachment is encrypted with your Monize backup password. It cannot be opened without that password, and Monize cannot recover it for you -- keep the password somewhere other than this mailbox.-XX]",
+    "copyRestore": "[XX-To restore it, open Monize, go to Settings, Backup &amp; Restore, upload this file and enter your backup password.-XX]",
+    "copyVerify": "[XX-The SHA-256 above is of the attached bytes, so you can check later that the copy you kept is the one this email delivered.-XX]",
+    "tooLargeSubject": "[XX-Monize backup {{ filename }} was too large to email-XX]",
+    "tooLargeHeading": "[XX-Your Monize backup was not emailed-XX]",
+    "tooLargeIntro": "[XX-Today's backup is {{ size }}, which is over the {{ limit }} this deployment allows for an emailed backup (BACKUP_EMAIL_MAX_BYTES).-XX]",
+    "tooLargeNoBytes": "[XX-Nothing was attached to this email, and no download link is offered -- a link would need a credential that could read your backups back out of storage, which this feature does not hold.-XX]",
+    "tooLargeUnaffected": "[XX-The backup itself was written normally. The copy on this server is unaffected, and so is the copy on your S3 destination if you have one enabled.-XX]",
+    "tooLargeWhatToDo": "[XX-To keep an off-machine copy of a backup this size, download it from Settings, Backup &amp; Restore, enable the S3 destination, or ask your administrator to raise the email limit.-XX]",
+    "labelFile": "[XX-File-XX]",
+    "labelSize": "[XX-Size-XX]",
+    "labelTier": "[XX-Retention-XX]",
+    "labelLimit": "[XX-Email limit-XX]",
+    "labelDigest": "[XX-SHA-256-XX]",
+    "tierDaily": "[XX-daily-XX]",
+    "tierWeekly": "[XX-weekly-XX]",
+    "tierMonthly": "[XX-monthly-XX]"
   }
 }

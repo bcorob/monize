@@ -3,25 +3,32 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { aiApi } from '@/lib/ai';
-import { AiInsight, AiStatus, InsightType, InsightSeverity, INSIGHT_TYPE_LABELS, INSIGHT_SEVERITY_LABELS } from '@/types/ai';
+import { AiInsight, AiStatus, InsightType, InsightSeverity, INSIGHT_TYPE_LABELS } from '@/types/ai';
 import { InsightCard } from './InsightCard';
 import { RelayStatusBar } from '@/components/ai/RelayStatusBar';
 import { createLogger } from '@/lib/logger';
 import Link from 'next/link';
-import { useDateFormat } from '@/hooks/useDateFormat';
-import { usePreferencesStore } from '@/store/preferencesStore';
-import { formatTime } from '@/lib/utils';
+import { ArrowPathIcon, ExclamationCircleIcon } from '@heroicons/react/24/outline';
+import { useRelativeTime } from '@/hooks/useRelativeTime';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/Button';
+import { Select } from '@/components/ui/Select';
+import { SummaryCard, SummaryIcons } from '@/components/ui/SummaryCard';
+import { summaryGridClass } from '@/components/accounts/shared/SummaryCardGrid';
+import { SEGMENTED_TOOLBAR_GROUP_CLASS, toolbarSegmentClass } from '@/components/ui/segmented-control';
+import { PageHeader } from '@/components/layout/PageHeader';
 
 const logger = createLogger('InsightsList');
+
+/** The severity segments, most urgent first. */
+const SEVERITY_FILTERS = ['', 'alert', 'warning', 'info'] as const;
 
 const POLL_INTERVAL = 5000;
 const MAX_POLL_ATTEMPTS = 150; // 150 * 5s = 12.5 minutes max for CPU inference
 
 export function InsightsList() {
   const t = useTranslations('insights');
-  const { formatDate } = useDateFormat();
-  const timeFormat = usePreferencesStore((s) => s.preferences?.timeFormat) || '24h';
+  const formatRelativeTime = useRelativeTime();
   const [insights, setInsights] = useState<AiInsight[]>([]);
   const [total, setTotal] = useState(0);
   const [lastGeneratedAt, setLastGeneratedAt] = useState<string | null>(null);
@@ -48,11 +55,7 @@ export function InsightsList() {
     try {
       for (let i = 0; i < MAX_POLL_ATTEMPTS; i++) {
         await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL));
-        const response = await aiApi.getInsights({
-          type: filterType || undefined,
-          severity: filterSeverity || undefined,
-          includeDismissed: showDismissed,
-        });
+        const response = await aiApi.getInsights({ includeDismissed: showDismissed });
 
         if (!response.isGenerating) {
           setInsights(response.insights);
@@ -79,31 +82,40 @@ export function InsightsList() {
         setIsGenerating(false);
       }
     }
-  }, [filterType, filterSeverity, showDismissed, t]);
+  }, [showDismissed, t]);
 
-  const loadInsights = useCallback(async () => {
-    try {
-      setError(null);
-      const response = await aiApi.getInsights({
-        type: filterType || undefined,
-        severity: filterSeverity || undefined,
-        includeDismissed: showDismissed,
-      });
-      setInsights(response.insights);
-      setTotal(response.total);
-      setLastGeneratedAt(response.lastGeneratedAt);
+  // A change of filter starts a new read: its error is cleared from this render on ("info from previous render").
+  const filterKey = `${filterType}|${filterSeverity}|${showDismissed}`;
+  const [loadedFilterKey, setLoadedFilterKey] = useState(filterKey);
+  if (loadedFilterKey !== filterKey) {
+    setLoadedFilterKey(filterKey);
+    setError(null);
+  }
 
-      // Resume polling if generation is in progress on the server
-      if (response.isGenerating) {
-        pollForResults(response.lastGeneratedAt);
+  // The writes live in the inner `run`, so they happen after the request, not during the effect.
+  const loadInsights = useCallback(() => {
+    const run = async () => {
+      try {
+        // Every insight the user has (the server caps the list), filtered by
+        // type and severity here, so each severity segment can carry its count.
+        const response = await aiApi.getInsights({ includeDismissed: showDismissed });
+        setInsights(response.insights);
+        setTotal(response.total);
+        setLastGeneratedAt(response.lastGeneratedAt);
+
+        // Resume polling if generation is in progress on the server
+        if (response.isGenerating) {
+          pollForResults(response.lastGeneratedAt);
+        }
+      } catch (err) {
+        logger.error('Failed to load insights:', err);
+        setError(t('list.errorLoadFailed'));
+      } finally {
+        setIsLoading(false);
       }
-    } catch (err) {
-      logger.error('Failed to load insights:', err);
-      setError(t('list.errorLoadFailed'));
-    } finally {
-      setIsLoading(false);
-    }
-  }, [filterType, filterSeverity, showDismissed, pollForResults, t]);
+    };
+    return run();
+  }, [showDismissed, pollForResults, t]);
 
   useEffect(() => {
     loadInsights();
@@ -125,6 +137,7 @@ export function InsightsList() {
 
   const handleDismiss = async (id: string) => {
     setDismissingId(id);
+    setError(null);
     try {
       await aiApi.dismissInsight(id);
       setInsights((prev) =>
@@ -135,13 +148,21 @@ export function InsightsList() {
       setTotal((prev) => (showDismissed ? prev : prev - 1));
     } catch (err) {
       logger.error('Failed to dismiss insight:', err);
+      setError(t('list.errorDismissFailed'));
     } finally {
       setDismissingId(null);
     }
   };
 
-  const alertCount = insights.filter((i) => i.severity === 'alert' && !i.isDismissed).length;
-  const warningCount = insights.filter((i) => i.severity === 'warning' && !i.isDismissed).length;
+  const active = insights.filter((i) => !i.isDismissed);
+  const alertCount = active.filter((i) => i.severity === 'alert').length;
+  const warningCount = active.filter((i) => i.severity === 'warning').length;
+  const ofType = filterType ? insights.filter((i) => i.type === filterType) : insights;
+  const severityCount = (severity: InsightSeverity | '') =>
+    severity ? ofType.filter((i) => i.severity === severity).length : ofType.length;
+  const visibleInsights = filterSeverity
+    ? ofType.filter((i) => i.severity === filterSeverity)
+    : ofType;
   const aiNotConfigured = aiStatus !== null && !aiStatus.configured;
   // Insights are generated through the user's own agent via the reverse MCP
   // relay, which only works while that agent is connected. Rather than a static
@@ -150,10 +171,36 @@ export function InsightsList() {
   // trigger a generation.
   const relayActive = aiStatus?.relayActive === true;
 
+  const header = (
+    <PageHeader
+      title={t('page.title')}
+      subtitle={t('page.subtitle')}
+      help='aiInsights'
+      actions={
+        <Button
+          variant="outline"
+          onClick={handleGenerate}
+          isLoading={isGenerating}
+          disabled={aiNotConfigured}
+          className="gap-1.5 whitespace-nowrap"
+        >
+          {!isGenerating && <ArrowPathIcon className="h-4 w-4" aria-hidden="true" />}
+          {t('list.refreshButton')}
+          {lastGeneratedAt && (
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {t('list.refreshAge', { time: formatRelativeTime(lastGeneratedAt) })}
+            </span>
+          )}
+        </Button>
+      }
+    />
+  );
+
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        <div className="animate-pulse space-y-4">
+      <>
+        {header}
+        <div className="animate-pulse skeleton-shimmer space-y-4">
           {[1, 2, 3].map((i) => (
             <div
               key={i}
@@ -161,12 +208,14 @@ export function InsightsList() {
             />
           ))}
         </div>
-      </div>
+      </>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <>
+      {header}
+      <div className="space-y-4">
       {/* AI not configured banner */}
       {aiNotConfigured && (
         <div className="p-4 bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg">
@@ -195,64 +244,51 @@ export function InsightsList() {
           before generating. Renders nothing when the relay is not active. */}
       {!aiNotConfigured && <RelayStatusBar enabled={relayActive} />}
 
-      {/* Header with stats and actions */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex items-center gap-3">
-          {alertCount > 0 && (
-            <span className="px-2 py-1 text-xs font-medium bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 rounded-full">
-              {t('list.alertCount', { count: alertCount })}
-            </span>
-          )}
-          {warningCount > 0 && (
-            <span className="px-2 py-1 text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 rounded-full">
-              {t('list.warningCount', { count: warningCount })}
-            </span>
-          )}
-          {lastGeneratedAt && (() => {
-            const d = new Date(lastGeneratedAt);
-            const time24 = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
-            return (
-              <span className="text-xs text-gray-500 dark:text-gray-400">
-                {t('list.lastUpdated', { date: formatDate(d), time: formatTime(time24, timeFormat) })}
-              </span>
-            );
-          })()}
-        </div>
-        <button
-          onClick={handleGenerate}
-          disabled={isGenerating || aiNotConfigured}
-          className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {isGenerating ? t('list.generating') : t('list.refreshButton')}
-        </button>
+      {/* Summary row */}
+      <div className={summaryGridClass(3)}>
+        <SummaryCard label={t('list.summary.active')} value={active.length} icon={SummaryIcons.list} />
+        <SummaryCard
+          label={t('list.summary.alerts')}
+          value={alertCount}
+          icon={<ExclamationCircleIcon className="h-6 w-6 text-red-400" />}
+          valueColor={alertCount > 0 ? 'red' : 'default'}
+        />
+        <SummaryCard
+          label={t('list.summary.warnings')}
+          value={warningCount}
+          icon={SummaryIcons.warning}
+          valueColor={warningCount > 0 ? 'yellow' : 'default'}
+        />
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2 items-center">
-        <select
+      <div className="flex flex-wrap items-center gap-4">
+        <Select
+          aria-label={t('list.typeFilterLabel')}
           value={filterType}
           onChange={(e) => setFilterType(e.target.value as InsightType | '')}
-          className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-        >
-          <option value="">{t('list.allTypes')}</option>
-          {Object.keys(INSIGHT_TYPE_LABELS).map((value) => (
-            <option key={value} value={value}>
-              {t(`insightTypes.${value}`)}
-            </option>
+          options={[
+            { value: '', label: t('list.allTypes') },
+            ...Object.keys(INSIGHT_TYPE_LABELS).map((value) => ({
+              value,
+              label: t(`insightTypes.${value}`),
+            })),
+          ]}
+          className="w-full sm:w-auto"
+        />
+        <div role="group" aria-label={t('list.severityFilterLabel')} className={SEGMENTED_TOOLBAR_GROUP_CLASS}>
+          {SEVERITY_FILTERS.map((severity) => (
+            <button
+              key={severity || 'all'}
+              type="button"
+              onClick={() => setFilterSeverity(severity)}
+              aria-pressed={filterSeverity === severity}
+              className={toolbarSegmentClass(filterSeverity === severity)}
+            >
+              {t(`list.severityFilter.${severity || 'all'}`, { count: severityCount(severity) })}
+            </button>
           ))}
-        </select>
-        <select
-          value={filterSeverity}
-          onChange={(e) => setFilterSeverity(e.target.value as InsightSeverity | '')}
-          className="px-3 py-1.5 text-sm border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
-        >
-          <option value="">{t('list.allSeverities')}</option>
-          {Object.keys(INSIGHT_SEVERITY_LABELS).map((value) => (
-            <option key={value} value={value}>
-              {t(`insightSeverities.${value}`)}
-            </option>
-          ))}
-        </select>
+        </div>
         <label className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400">
           <input
             type="checkbox"
@@ -272,24 +308,20 @@ export function InsightsList() {
       )}
 
       {/* Insights list */}
-      {insights.length === 0 ? (
+      {visibleInsights.length === 0 ? (
         <EmptyState
           title={total === 0 ? t('list.emptyNoInsights') : t('list.emptyFiltered')}
           action={
             total === 0 && !aiNotConfigured ? (
-              <button
-                onClick={handleGenerate}
-                disabled={isGenerating}
-                className="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
-              >
-                {isGenerating ? t('list.generating') : t('list.generateButton')}
-              </button>
+              <Button onClick={handleGenerate} isLoading={isGenerating}>
+                {t('list.generateButton')}
+              </Button>
             ) : undefined
           }
         />
       ) : (
         <div className="space-y-3">
-          {insights.map((insight) => (
+          {visibleInsights.map((insight) => (
             <InsightCard
               key={insight.id}
               insight={insight}
@@ -299,6 +331,7 @@ export function InsightsList() {
           ))}
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

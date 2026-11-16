@@ -1,7 +1,8 @@
 import { Test, TestingModule } from "@nestjs/testing";
+import { ConflictException } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { TypeOrmModule } from "@nestjs/typeorm";
-import { DataSource } from "typeorm";
+import { DataSource, QueryRunner } from "typeorm";
 
 import { MnyStagingService } from "@/import/mny/mny-staging.service";
 import { ImportStagedFile } from "@/import/mny/entities/import-staged-file.entity";
@@ -280,6 +281,162 @@ describe("MnyStagingService (integration)", () => {
       const reloaded = await jobs.findOne({ where: { id: job.id } });
       expect(reloaded).not.toBeNull();
       expect(reloaded!.stagedFileId).toBeNull();
+    });
+  });
+
+  /**
+   * A job INSERT still open on another connection (A26-L14, MON-L04 residual).
+   *
+   * The INSERT holds a key-share lock on the staged row until it commits. A
+   * single `DELETE ... WHERE NOT EXISTS (job)` evaluated its sub-select on a
+   * snapshot taken before that INSERT committed, waited on the lock, and then
+   * deleted the row without looking again -- so the job ran and found its
+   * bytes gone. Each case below holds the INSERT open, starts the deleter,
+   * gives it time to block, commits, and asserts the bytes survived.
+   */
+  describe("a job whose INSERT has not committed yet", () => {
+    let runner: QueryRunner | null = null;
+
+    /** Opens a transaction inserting a pending job over `stagedFileId`. */
+    async function holdJobInsert(
+      userId: string,
+      stagedFileId: string,
+    ): Promise<QueryRunner> {
+      const opened = dataSource.createQueryRunner();
+      await opened.connect();
+      await opened.startTransaction();
+      await opened.query(
+        `INSERT INTO import_jobs (user_id, staged_file_id, status, options)
+         VALUES ($1, $2, 'pending', '{}'::jsonb)`,
+        [userId, stagedFileId],
+      );
+      runner = opened;
+      return opened;
+    }
+
+    /** Lets a deleter that is going to block on the row lock reach it. */
+    const settle = () => new Promise((resolve) => setTimeout(resolve, 300));
+
+    async function stagedFileOfJob(stagedFileId: string) {
+      return dataSource.query(
+        `SELECT staged_file_id FROM import_jobs WHERE staged_file_id = $1`,
+        [stagedFileId],
+      );
+    }
+
+    afterEach(async () => {
+      if (runner?.isTransactionActive) {
+        await runner.rollbackTransaction();
+      }
+      await runner?.release();
+      runner = null;
+    });
+
+    it("keeps an expired file the sweep raced a job creation for", async () => {
+      const staged = await asUser(userA, () =>
+        service.stage(userA, { filename: "x.mny", data: Buffer.from("x") }),
+      );
+      await dataSource.query(
+        "UPDATE import_staged_files SET expires_at = CURRENT_TIMESTAMP - INTERVAL '1 hour' WHERE id = $1",
+        [staged.id],
+      );
+      const open = await holdJobInsert(userA, staged.id);
+
+      const sweep = service.sweepExpiredFiles();
+      await settle();
+      await open.commitTransaction();
+      await sweep;
+
+      expect(
+        await asUser(userA, () => service.findInfo(userA, staged.id)),
+      ).not.toBeNull();
+      expect(await stagedFileOfJob(staged.id)).toHaveLength(1);
+    });
+
+    it("keeps an expired file a pending job needs, once committed", async () => {
+      const staged = await asUser(userA, () =>
+        service.stage(userA, { filename: "x.mny", data: Buffer.from("x") }),
+      );
+      await dataSource.query(
+        "UPDATE import_staged_files SET expires_at = CURRENT_TIMESTAMP - INTERVAL '1 hour' WHERE id = $1",
+        [staged.id],
+      );
+      const open = await holdJobInsert(userA, staged.id);
+      await open.commitTransaction();
+
+      await service.sweepExpiredFiles();
+
+      expect(
+        await asUser(userA, () => service.findInfo(userA, staged.id)),
+      ).not.toBeNull();
+    });
+
+    it("keeps a superseded file a job is being created for", async () => {
+      const first = await asUser(userA, () =>
+        service.stage(userA, { filename: "1.mny", data: Buffer.from("1") }),
+      );
+      const open = await holdJobInsert(userA, first.id);
+
+      const restage = asUser(userA, () =>
+        service.stage(userA, { filename: "2.mny", data: Buffer.from("2") }),
+      );
+      await settle();
+      await open.commitTransaction();
+      await restage;
+
+      expect(
+        await asUser(userA, () => service.findInfo(userA, first.id)),
+      ).not.toBeNull();
+      expect(await stagedFileOfJob(first.id)).toHaveLength(1);
+    });
+
+    it("refuses a discard while a job is being created for the file", async () => {
+      const staged = await asUser(userA, () =>
+        service.stage(userA, { filename: "x.mny", data: Buffer.from("x") }),
+      );
+      const open = await holdJobInsert(userA, staged.id);
+
+      const discard = asUser(userA, () => service.remove(userA, staged.id));
+      // Attach the handler now: the rejection may land before the commit.
+      const outcome = discard.then(
+        () => "removed",
+        (error: unknown) => error,
+      );
+      await settle();
+      await open.commitTransaction();
+
+      expect(await outcome).toBeInstanceOf(ConflictException);
+      expect(
+        await asUser(userA, () => service.findInfo(userA, staged.id)),
+      ).not.toBeNull();
+    });
+
+    it("refuses a discard of a file a pending job needs", async () => {
+      const staged = await asUser(userA, () =>
+        service.stage(userA, { filename: "x.mny", data: Buffer.from("x") }),
+      );
+      const open = await holdJobInsert(userA, staged.id);
+      await open.commitTransaction();
+
+      await expect(
+        asUser(userA, () => service.remove(userA, staged.id)),
+      ).rejects.toBeInstanceOf(ConflictException);
+    });
+
+    it("still discards a file whose job finished", async () => {
+      const staged = await asUser(userA, () =>
+        service.stage(userA, { filename: "x.mny", data: Buffer.from("x") }),
+      );
+      const open = await holdJobInsert(userA, staged.id);
+      await open.query(
+        `UPDATE import_jobs SET status = 'failed' WHERE staged_file_id = $1`,
+        [staged.id],
+      );
+      await open.commitTransaction();
+
+      expect(await asUser(userA, () => service.remove(userA, staged.id))).toBe(
+        true,
+      );
     });
   });
 });

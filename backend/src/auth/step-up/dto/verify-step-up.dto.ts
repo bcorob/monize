@@ -12,7 +12,10 @@ import { ApiProperty } from "@nestjs/swagger";
  * surface means adding a new value here and decorating its handlers with
  * `@RequireStepUp(purpose)`.
  */
-export const STEP_UP_PURPOSES = ["emergency-access"] as const;
+export const STEP_UP_PURPOSES = [
+  "emergency-access",
+  "personal-access-token",
+] as const;
 export type StepUpPurpose = (typeof STEP_UP_PURPOSES)[number];
 
 export class VerifyStepUpDto {

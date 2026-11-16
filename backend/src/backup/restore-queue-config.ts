@@ -19,7 +19,7 @@ import { resolvePositiveInt } from "../common/env-number.util";
  * operator's to set.
  *
  * Declared as one table of `{ envVar, default, description }` and resolved in a
- * loop, per the numeric-knob rule in `backend/CLAUDE.md`: a new knob cannot arrive
+ * loop, per the numeric-knob rule in `docs/backend/modules-and-runtime.md`: a new knob cannot arrive
  * without a name, a default and a sentence, and `restore-queue-config.spec.ts`
  * checks `.env.example` in both directions.
  */

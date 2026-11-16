@@ -3,13 +3,24 @@ import {
   PercentileBand,
   SimulationResult,
 } from '@/lib/monte-carlo';
+import type { NumberFormatters } from '@/hooks/useNumberFormat';
 
-export type RowFormat = 'currency' | 'percent' | 'number' | 'text' | 'boolean';
+export type RowFormat = 'currency' | 'percent' | 'number' | 'text' | 'boolean' | 'instant';
 
 export type ScenarioContext = {
   scenario: MonteCarloScenario;
   result: SimulationResult | null;
 };
+
+// A run may have used the current balance or historical returns, so what it
+// actually ran with (the snapshot) wins over the stored scenario field.
+function ranInput(
+  ctx: ScenarioContext,
+  key: 'startingValue' | 'expectedReturn' | 'volatility',
+): number {
+  const ran = ctx.result?.inputsSnapshot?.[key];
+  return typeof ran === 'number' ? ran : Number(ctx.scenario[key]);
+}
 
 export type MetricRow = {
   key: string;
@@ -30,23 +41,51 @@ export type RowGroup = {
   rows: MetricRow[];
 };
 
-export function formatPercent(value: number | null, dp = 2): string {
+/**
+ * The locale-aware formatters this pure module needs, supplied by the caller.
+ *
+ * This module cannot call `useNumberFormat()` -- it is not a component -- and it
+ * must not reach for `toFixed`/`toLocaleString` either: the first is `.` in
+ * every locale and the second follows the *browser*, which is exactly what an
+ * explicit `numberFormat` preference overrides. So the caller passes the hook's
+ * own functions down. Percentages arrive here as fractions (0.0725 = 7.25%)
+ * while `formatPercent` takes percentage units, hence the x100 at the seam.
+ *
+ * An instant (a run's timestamp) is formatted by `useDateFormat` for the same
+ * reason, and a run that never happened reads as the caller's translated
+ * `neverLabel` rather than an English literal.
+ */
+export type CompareCellFormatters = NumberFormatters & {
+  formatInstant: (isoInstant: string) => string;
+  neverLabel: string;
+};
+
+export function formatPercent(
+  value: number | null,
+  formatters: Pick<CompareCellFormatters, 'formatPercent'>,
+  dp = 2,
+): string {
   if (value === null || !Number.isFinite(value)) return '—';
-  return `${(value * 100).toFixed(dp)}%`;
+  return formatters.formatPercent(value * 100, dp);
 }
 
 export function formatCellValue(
   value: number | string | boolean | null,
   format: RowFormat,
-  formatCurrency: (n: number) => string,
+  formatters: CompareCellFormatters,
 ): string {
+  if (format === 'instant') {
+    if (value === null) return formatters.neverLabel;
+    return typeof value === 'string' ? formatters.formatInstant(value) : '—';
+  }
   if (value === null) return '—';
   if (format === 'text') return String(value);
   if (format === 'boolean') return value ? 'Yes' : 'No';
   if (typeof value !== 'number' || !Number.isFinite(value)) return '—';
-  if (format === 'currency') return formatCurrency(value);
-  if (format === 'percent') return formatPercent(value);
-  return value.toLocaleString();
+  if (format === 'currency') return formatters.formatCurrency(value);
+  if (format === 'percent') return formatPercent(value, formatters);
+  // A count, not money: no fixed decimals, but still the user's separators.
+  return formatters.formatNumber(value, 0);
 }
 
 const last = <T>(arr: T[] | undefined): T | null =>
@@ -151,13 +190,10 @@ export const ROW_GROUPS: RowGroup[] = [
       {
         key: 'lastRunAt',
         label: 'Last run',
-        format: 'text',
-        accessor: (ctx) => {
-          // Prefer the freshly-returned run timestamp so Re-run reflects
-          // immediately; fall back to the persisted scenario value.
-          const stamp = ctx.result?.ranAt ?? ctx.scenario.lastRunAt;
-          return stamp ? new Date(stamp).toLocaleString() : 'Never';
-        },
+        format: 'instant',
+        // Prefer the freshly-returned run timestamp so Re-run reflects
+        // immediately; fall back to the persisted scenario value.
+        accessor: (ctx) => ctx.result?.ranAt ?? ctx.scenario.lastRunAt ?? null,
       },
     ],
   },
@@ -169,7 +205,7 @@ export const ROW_GROUPS: RowGroup[] = [
         key: 'startingValue',
         label: 'Starting value',
         format: 'currency',
-        accessor: (ctx) => Number(ctx.scenario.startingValue),
+        accessor: (ctx) => ranInput(ctx, 'startingValue'),
       },
       {
         key: 'yearsToRetirement',
@@ -205,13 +241,13 @@ export const ROW_GROUPS: RowGroup[] = [
         key: 'expectedReturn',
         label: 'Expected return',
         format: 'percent',
-        accessor: (ctx) => Number(ctx.scenario.expectedReturn),
+        accessor: (ctx) => ranInput(ctx, 'expectedReturn'),
       },
       {
         key: 'volatility',
         label: 'Volatility',
         format: 'percent',
-        accessor: (ctx) => Number(ctx.scenario.volatility),
+        accessor: (ctx) => ranInput(ctx, 'volatility'),
       },
       {
         key: 'inflationRate',

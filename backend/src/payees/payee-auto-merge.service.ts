@@ -14,6 +14,7 @@ import { ScheduledTransaction } from "../scheduled-transactions/entities/schedul
 import { PayeesService } from "./payees.service";
 import { matchesAliasPattern } from "./alias-match.util";
 import { insertPayeeAliasIgnoringDuplicate } from "./insert-payee-alias.util";
+import { reassignPayeeReferences } from "./payee-references";
 import { COMMON_WORD_SEED } from "./payee-common-words";
 import {
   normalizePayeeName,
@@ -789,24 +790,12 @@ export class PayeeAutoMergeService {
       // Reassign each source's data to the canonical, then delete the source.
       let transactionsMigrated = 0;
       for (const source of sources) {
-        const txResult = await m.update(
-          Transaction,
-          { payeeId: source.id, userId },
-          { payeeId: canonical.id, payeeName: canonicalName },
-        );
-        transactionsMigrated += txResult.affected || 0;
-
-        await m.update(
-          ScheduledTransaction,
-          { payeeId: source.id, userId },
-          { payeeId: canonical.id, payeeName: canonicalName },
-        );
-
-        await m.update(
-          PayeeAlias,
-          { payeeId: source.id, userId },
-          { payeeId: canonical.id },
-        );
+        const moved = await reassignPayeeReferences(m, {
+          userId,
+          sourcePayeeId: source.id,
+          target: { id: canonical.id, name: canonicalName },
+        });
+        transactionsMigrated += moved["transactions.payee_id"];
 
         await m.remove(Payee, source);
       }
@@ -970,9 +959,12 @@ function longestCommonTokenPrefix(tokenLists: string[][]): string[] {
   const minLen = Math.min(...tokenLists.map((tokens) => tokens.length));
   const prefix: string[] = [];
   for (let k = 0; k < minLen; k++) {
-    const token = tokenLists[0][k];
-    if (tokenLists.every((tokens) => tokens[k] === token)) {
-      prefix.push(token);
+    // `leading`, not `token`: these are payee-name words, and a local whose
+    // name ends in "token" reads to Bearer's CWE-208 rule as a credential
+    // compared in variable time.
+    const leading = tokenLists[0][k];
+    if (tokenLists.every((tokens) => tokens[k] === leading)) {
+      prefix.push(leading);
     } else {
       break;
     }

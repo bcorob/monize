@@ -1,0 +1,1457 @@
+{
+  "settingsPage": {
+    "redirecting": "Abriendo la página Recibos por correo...",
+    "redirectLink": "Ir a la configuración del buzón"
+  },
+  "page": {
+    "title": "Recibos por correo",
+    "subtitle": "Lee las confirmaciones de pedido de un buzón y conviértelas en transacciones detalladas: qué está conectado, en qué ha quedado cada correo y qué te está esperando"
+  },
+  "mailbox": {
+    "heading": "Buzón",
+    "description": "Las confirmaciones de pedido se leen por IMAP desde un buzón dedicado. Monize solo lo lee: nunca modifica, mueve ni elimina ningún mensaje.",
+    "loading": "Cargando el buzón",
+    "dedicatedWarning": "Usa un buzón dedicado. Se lee cada mensaje de la carpeta, así que solo debería contener confirmaciones de pedido.",
+    "encryptionUnavailable": "Este servidor no puede cifrar secretos, así que no se puede guardar la contraseña ni la conexión de un buzón. Pide al administrador que configure el cifrado.",
+    "error": {
+      "title": "No se pudo cargar el buzón",
+      "body": "La solicitud falló, así que todavía no se sabe nada de tu buzón. Inténtalo de nuevo.",
+      "retry": "Reintentar"
+    },
+    "oauth": {
+      "heading": "Conectar una cuenta",
+      "explanation": "Google y Microsoft 365 suelen rechazar una contraseña normal. Inicia sesión con el proveedor: concedes a Monize acceso al buzón y nunca escribes aquí su contraseña.",
+      "connect": {
+        "google": "Conectar con Google",
+        "microsoft": "Conectar con Microsoft"
+      },
+      "providerNames": {
+        "google": "Google",
+        "microsoft": "Microsoft 365"
+      },
+      "providersUnavailable": "No se pudo comprobar si el inicio de sesión con Google o Microsoft está disponible. El formulario manual de abajo sigue funcionando.",
+      "startFailed": "No se pudo iniciar la sesión",
+      "badAuthorizationUrl": "El servidor devolvió una dirección de inicio de sesión que no es una página web segura, así que no se abrió.",
+      "connectedAs": "Conectado a {provider} como {username}.",
+      "notConnected": "La conexión con {provider} no está activa, así que el buzón no se está leyendo. Vuelve a conectar para reanudar.",
+      "reconnect": "Volver a conectar",
+      "disconnect": "Desconectar",
+      "disconnectDialog": {
+        "title": "¿Desconectar el buzón?",
+        "message": "Monize eliminará su acceso guardado a {provider} y dejará de leer el buzón. Los correos ya guardados se conservan."
+      },
+      "disconnected": "Buzón desconectado",
+      "disconnectFailed": "No se pudo desconectar el buzón",
+      "revokeNote": "Desconectar no elimina el permiso que concediste. Para retirarlo, quita Monize en la página de permisos de {provider}.",
+      "revokeLink": {
+        "google": "Abrir los permisos de la cuenta de Google",
+        "microsoft": "Abrir los permisos de aplicaciones de Microsoft"
+      },
+      "saveButton": "Guardar configuración",
+      "saved": "Configuración del buzón guardada",
+      "saveFailed": "No se pudo guardar la configuración del buzón"
+    },
+    "form": {
+      "intro": "O introduce los datos de cualquier buzón IMAP. La mayoría de los proveedores exigen una contraseña de aplicación en lugar de la contraseña de tu cuenta.",
+      "hostLabel": "Servidor IMAP",
+      "portLabel": "Puerto",
+      "securityLabel": "Seguridad de la conexión",
+      "securityOptions": {
+        "tls": "TLS (normalmente puerto 993)",
+        "starttls": "STARTTLS (normalmente puerto 143)"
+      },
+      "usernameLabel": "Nombre de usuario",
+      "passwordLabel": "Contraseña",
+      "passwordStoredPlaceholder": "Hay una contraseña guardada. Escribe para reemplazarla.",
+      "passwordRequiredHelp": "Obligatoria para un buzón nuevo o cuando cambia el servidor o el nombre de usuario.",
+      "passwordKeepHelp": "Déjala en blanco para conservar la contraseña guardada. No se vuelve a mostrar nunca.",
+      "saveButton": "Guardar buzón",
+      "saved": "Buzón guardado",
+      "saveFailed": "No se pudo guardar el buzón",
+      "test": {
+        "button": "Probar conexión",
+        "ok": "{count, plural, one {La conexión funciona. La carpeta contiene # mensaje.} other {La conexión funciona. La carpeta contiene # mensajes.}}",
+        "error": "La conexión falló: {error}",
+        "failed": "No se pudo probar la conexión"
+      }
+    },
+    "settings": {
+      "folderLabel": "Carpeta",
+      "folderHelp": "La carpeta que se lee. Se abre en solo lectura.",
+      "enabledLabel": "Leer el buzón automáticamente",
+      "enabledHelp": "Controla solo la lectura automática: si está activado, Monize lee el buzón cada 15 minutos. Desactivarlo no desconecta el buzón, y Consultar ahora lo lee tanto si está activado como si no.",
+      "aiModeLabel": "Modo de IA",
+      "aiModeHelp": "Si la consulta puede usar el proveedor de IA que configuraste en los recibos. Reconocer con IA y Preparar un perfil con IA consultan al asistente en el chat sea cual sea el modo, y una respuesta de la IA es siempre una propuesta o un borrador que tú apruebas.",
+      "aiModes": {
+        "off": "Desactivado",
+        "on_demand": "Bajo demanda",
+        "automatic": "Automático"
+      },
+      "aiModeDescriptions": {
+        "off": "La consulta nunca llama a la IA para los recibos.",
+        "on_demand": "La consulta nunca llama a la IA. Tú consultas al asistente con Reconocer con IA o Preparar un perfil con IA.",
+        "automatic": "La consulta pregunta a la IA sobre un recibo asociado que ningún perfil aprobado pudo leer por completo, y redacta un perfil para un remitente que no tiene ninguno."
+      },
+      "autoApplyLabel": "Aplicar las propuestas automáticamente",
+      "autoApplyHelp": "Desactivado por defecto. Una propuesta se aplica sin preguntar solo cuando se cumple todo lo siguiente: un perfil aprobado leyó todo el correo, la transacción se encontró por un número de pedido o una referencia, o por importe y beneficiario exactos, con un único candidato, y la propuesta cuadra al céntimo. Una confirmación de operación se registra sin preguntar solo cuando su perfil de operaciones está aprobado, leyó la operación completa, el precio cuadra con las participaciones y el total (un dividendo en efectivo que solo indica su importe no tiene nada que comprobar), y tus cuentas aún no contienen una operación igual. Todo lo demás espera tu aprobación.",
+      "profileLimitLabel": "Contar las propuestas de perfiles en el límite diario de la IA",
+      "profileLimitHelp": "Activado por defecto: una edición que un perfil propone a partir de un correo cuenta en el límite diario de cambios propuestos por la IA, como cualquier otra propuesta de la IA. Desactívalo cuando un lote grande de correos guardados agotaría el límite. Solo las propuestas de perfiles están exentas; toda propuesta sigue esperando tu aprobación."
+    },
+    "status": {
+      "lastPolled": "Última consulta",
+      "lastSuccess": "Última consulta correcta",
+      "never": "Nunca",
+      "lastError": "Último error: {error}",
+      "lastErrorAt": "Último error ({at}): {error}",
+      "pollNow": "Consultar ahora",
+      "pollResult": "Consulta finalizada: {fetched, plural, one {# correo guardado} other {# correos guardados}}, {skipped} omitidos, {processed} procesados.",
+      "pollResultLink": "Ver los correos guardados",
+      "pollFailed": "La consulta falló",
+      "deleteButton": "Eliminar buzón",
+      "deleteDialog": {
+        "title": "¿Eliminar el buzón?",
+        "message": "Se eliminarán la configuración del buzón y todos los correos guardados, y se descartarán las solicitudes de revisión abiertas que provienen de ellos. Los correos del propio buzón no se tocan."
+      },
+      "deleted": "Buzón eliminado",
+      "deleteFailed": "No se pudo eliminar el buzón"
+    },
+    "import": {
+      "title": "Importar correos archivados",
+      "description": "Un archivo conserva el remitente y la fecha de compra de la tienda, a diferencia de un correo reenviado. Suba correos exportados para leer confirmaciones de pedido antiguas.",
+      "fileLabel": "Archivos de correo (.eml, .mbox, .msg o .zip)",
+      "chooseFiles": "Elegir archivos",
+      "noFileChosen": "No se ha elegido ningún archivo",
+      "selected": "Seleccionados: {count}",
+      "button": "Importar",
+      "preparing": "Preparando los archivos...",
+      "sending": "Enviando la parte {current} de {total}",
+      "processing": "Procesando correos: {done} de {total}",
+      "cancel": "Cancelar",
+      "tooLargeTotal": "Los archivos seleccionados juntos superan {max}. Impórtelos en grupos más pequeños.",
+      "failed": "La importación falló",
+      "result": {
+        "heading": "Resultado de la importación",
+        "file": "{name}: {stored} guardados, {duplicates} duplicados, {skipped} omitidos",
+        "summary": "{processed, plural, one {Se procesó # correo en espera.} other {Se procesaron # correos en espera.}}",
+        "pendingLeft": "{count, plural, one {# correo sigue esperando a ser procesado. Monize lo procesa en la próxima lectura del buzón.} other {# correos siguen esperando a ser procesados. Monize los procesa en la próxima lectura del buzón.}}",
+        "processFailed": "{count, plural, one {No se pudo procesar # correo.} other {No se pudieron procesar # correos.}}",
+        "processingStopped": "Se detuvo el procesamiento de los correos importados. Los correos se conservan. Monize los procesa en la próxima lectura del buzón.",
+        "truncated": "{count} mensajes no se leyeron porque una importación tiene un límite. Impórtelos de nuevo en una segunda ejecución.",
+        "oversized": "{name}: no se enviaron {count} mensajes de más de {max}.",
+        "stopped": "La importación se detuvo después de {done} de {total} partes. Los correos ya importados se conservan. Importe los mismos archivos otra vez para continuar. Los correos ya importados no se guardan dos veces.",
+        "cancelled": "La importación se canceló después de {done} de {total} partes. Los correos ya importados se conservan.",
+        "errors": {
+          "unsupported_format": "{name}: este formato no es compatible. Los formatos compatibles son .eml, .mbox, .msg y .zip.",
+          "invalid_archive": "{name}: el archivo ZIP está dañado o no se puede leer.",
+          "archive_too_large": "{name}: el archivo ZIP descomprimido supera el límite de importación. Descomprímalo y suba el archivo .mbox que contiene.",
+          "empty": "{name}: el archivo no contiene correos."
+        },
+        "ignored": "{name}: se omitieron {count} otros archivos del archivo comprimido."
+      },
+      "guide": {
+        "toggle": "Cómo exportar correos desde su proveedor",
+        "gmailLabel": {
+          "title": "Gmail: todos los correos con una etiqueta",
+          "step1": "Abra takeout.google.com y elija «Anular la selección de todo».",
+          "step2": "Seleccione «Correo» y elija «Se incluyen todos los datos de Correo».",
+          "step3": "Elija solo su etiqueta y cree la exportación.",
+          "step4": "Suba el archivo .zip descargado tal como está, sin importar su tamaño. No necesita descomprimirlo."
+        },
+        "gmailOne": {
+          "title": "Gmail: un solo correo",
+          "step1": "Abra el correo.",
+          "step2": "Elija «Más» y después «Descargar mensaje».",
+          "step3": "Suba el archivo .eml."
+        },
+        "imap": {
+          "title": "Otros proveedores: Outlook.com, Yahoo, Onet, WP, Interia, o2, iCloud, Zoho",
+          "step1": "Añada el buzón a Thunderbird mediante IMAP e instale el complemento ImportExportTools NG.",
+          "step2": "Seleccione los correos o una carpeta y haga clic con el botón derecho.",
+          "step3": "Elija ImportExportTools NG y exporte como EML o como mbox.",
+          "step4": "Suba los archivos."
+        },
+        "outlook": {
+          "title": "Outlook de escritorio",
+          "body": "Seleccione los correos y arrástrelos a una carpeta de su disco. Outlook escribe archivos .msg. Suba varios a la vez o empaquetados en un solo archivo .zip."
+        },
+        "apple": {
+          "title": "Apple Mail",
+          "step1": "Elija «Buzón» y después «Exportar buzón». Apple Mail escribe una carpeta.",
+          "step2": "Suba el archivo llamado mbox dentro de la carpeta, o arrastre correos al Finder para obtener archivos .eml."
+        },
+        "tip": "Consejo: reenviar correos con un script pierde el remitente y la fecha de la tienda. Importar archivos los conserva."
+      }
+    }
+  },
+  "parsers": {
+    "heading": "Perfiles",
+    "description": "Un perfil lee las confirmaciones de pedido de un remitente con patrones que tú escribes o revisas, e indica cómo se encuentra la transacción bancaria. Una vez aprobado, funciona sin la IA.",
+    "newButton": "Crear un perfil nuevo manualmente",
+    "loading": "Cargando los perfiles",
+    "error": {
+      "title": "No se pudieron cargar los perfiles",
+      "body": "La solicitud falló. Inténtalo de nuevo.",
+      "retry": "Reintentar"
+    },
+    "empty": {
+      "title": "Aún no hay perfiles",
+      "body": "Crea uno para un remitente de confirmaciones de pedido, o redacta uno a partir de un correo guardado en la página Recibos por correo."
+    },
+    "columns": {
+      "name": "Perfil",
+      "status": "Estado",
+      "payee": "Beneficiario",
+      "actions": "Acciones"
+    },
+    "status": {
+      "draft": "Borrador",
+      "approved": "Aprobado"
+    },
+    "source": {
+      "manual": "Escrito por ti",
+      "ai": "Redactado por la IA"
+    },
+    "invalid": "No válido",
+    "noPayee": "Sin beneficiario",
+    "payeeUnknown": "Beneficiario no encontrado",
+    "payeeUnavailable": "Lista de beneficiarios no disponible",
+    "actions": {
+      "approve": "Aprobar",
+      "viewJson": "Ver JSON"
+    },
+    "toasts": {
+      "approved": "Perfil aprobado",
+      "approveFailed": "No se pudo aprobar el perfil",
+      "changedElsewhere": "Este perfil se cambió en otro lugar. Se ha vuelto a cargar la lista.",
+      "deleted": "Perfil eliminado",
+      "deleteFailed": "No se pudo eliminar el perfil",
+      "emailsIgnored": "{count, plural, one {# correo ignorado} other {# correos ignorados}}",
+      "emailsDeleted": "{count, plural, one {# correo eliminado} other {# correos eliminados}}",
+      "bulkFailed": "No se pudo terminar con los correos de este perfil. Los que ya se procesaron se quedan así."
+    },
+    "bulk": {
+      "ignoreTitle": "¿Ignorar los correos de este perfil?",
+      "ignoreMessage": "{count, plural, one {# correo que lee {name} se ignorará} other {# correos que lee {name} se ignorarán}}: no propondrán nada y sus propuestas abiertas se cerrarán.{kept, plural, =0 {} one { # correo que ya se aplicó o que no se pudo leer se queda como está.} other { # correos que ya se aplicaron o que no se pudieron leer se quedan como están.}}",
+      "ignoreConfirm": "Ignorar correos",
+      "deleteTitle": "¿Eliminar los correos de este perfil?",
+      "deleteMessage": "{count, plural, one {# correo que lee {name} se eliminará} other {# correos que lee {name} se eliminarán}}, junto con sus propuestas abiertas. Esto no se puede deshacer.{kept, plural, =0 {} one { # correo cuya propuesta ya se aplicó se queda.} other { # correos cuyas propuestas ya se aplicaron se quedan.}}",
+      "deleteConfirm": "Eliminar correos"
+    },
+    "deleteDialog": {
+      "title": "¿Eliminar el perfil?",
+      "message": "Se eliminará el perfil {name}. Los correos que ya leyó conservan sus resultados."
+    },
+    "jsonDialog": {
+      "title": "Definición de {name}",
+      "help": "La definición del perfil tal como está guardada. La sección de coincidencia muestra los ajustes en vigor, incluidos los valores predeterminados. Aquí es de solo lectura; usa Editar para cambiarla.",
+      "contentLabel": "JSON de la definición",
+      "copy": "Copiar",
+      "copied": "JSON copiado",
+      "copyFailed": "No se pudo copiar el JSON"
+    },
+    "processOffer": {
+      "title": "¿Procesar ahora los correos guardados?",
+      "message": "¿Procesar ahora {count, plural, one {# correo guardado} other {# correos guardados}} de {domains}? Cada uno se vuelve a leer con este perfil; lo que propone espera en la bandeja de revisión salvo que la aplicación automática esté activada.",
+      "confirm": "Procesar ahora",
+      "later": "Ahora no"
+    },
+    "reparse": "Volver a analizar los correos ({count})",
+    "kindTrade": "Operaciones bursátiles",
+    "discardIgnore": "Ignora sus correos",
+    "discardDelete": "Elimina sus correos"
+  },
+  "editor": {
+    "createTitle": "Nuevo perfil",
+    "editTitle": "Editar perfil",
+    "loading": "Cargando beneficiarios, categorías, cuentas y monedas",
+    "lookupsError": {
+      "title": "No se pudieron cargar los beneficiarios, las categorías, las cuentas o las monedas",
+      "body": "Los selectores los necesitan, así que el editor todavía no se puede abrir. Inténtalo de nuevo.",
+      "retry": "Reintentar"
+    },
+    "draftNote": "Este perfil es un borrador. No lee nada hasta que lo apruebes.",
+    "draftAiNote": "La IA redactó este perfil a partir de tus correos de muestra. Pruébalo con cada uno de ellos y revisa cada patrón; después apruébalo desde la lista. No lee nada hasta que lo hagas.",
+    "identityHeading": "Qué correos lee",
+    "nameLabel": "Nombre",
+    "payeeLabel": "Beneficiario",
+    "payeePlaceholder": "Sin beneficiario",
+    "domainsLabel": "Dominios del remitente",
+    "domainsHelp": "Uno por línea, hasta {max}. Un subdominio de un dominio de la lista también coincide.",
+    "subjectLabel": "El asunto contiene",
+    "subjectHelp": "Opcional, uno por línea, hasta {max}. El asunto debe contener al menos uno de ellos, sin distinguir mayúsculas de minúsculas.",
+    "saveButton": "Guardar perfil",
+    "created": "Perfil creado",
+    "updated": "Perfil guardado",
+    "saveFailed": "No se pudo guardar el perfil",
+    "conflict": "Este perfil se cambió en otro lugar desde que lo abriste. Vuelve a cargarlo para ver la versión actual. Tus ediciones aquí no se han guardado.",
+    "conflictReload": "Volver a cargar el perfil",
+    "required": {
+      "heading": "El perfil todavía no se puede guardar. Corrija primero lo siguiente:",
+      "item": "{field}: {problem}",
+      "nameMissing": "Escriba un nombre para el perfil.",
+      "domainsMissing": "Escriba al menos un dominio remitente, como shop.example.com.",
+      "domainsInvalid": "No es un nombre de dominio: {values}. Escriba dominios como shop.example.com, uno por línea.",
+      "domainsTooMany": "Escriba como máximo {max} dominios remitentes.",
+      "subjectTooMany": "Escriba como máximo {max} palabras del asunto.",
+      "subjectTooLong": "Cada palabra del asunto puede tener como máximo {max} caracteres.",
+      "server": "El servidor rechazó este campo. El motivo aparece debajo del formulario."
+    },
+    "patterns": {
+      "sourceLabel": "Origen de las líneas",
+      "sourceHint": "Con qué representación del correo se comparan los patrones siguientes. Texto es la parte de texto del correo, una línea por salto de línea. HTML lee la parte HTML: cada bloque y cada celda de una tabla se convierte en su propia línea, de modo que el nombre de un producto que el texto reparte en varias líneas queda entero. La vista Líneas del correo muestra exactamente lo que da cada origen.",
+      "sourceOptions": {
+        "text": "Texto",
+        "html": "HTML"
+      },
+      "globHelp": "Cada patrón se compara con una línea completa del correo, sin distinguir mayúsculas de minúsculas. Usa {star} para cualquier texto y un nombre entre llaves, como {capture}, para capturar un valor. Cada campo admite hasta {max} patrones, uno por línea. Para coincidir con líneas consecutivas, une un patrón por línea con {lineBreak}, por ejemplo {example}.",
+      "orderIdLabel": "Patrones del número de pedido",
+      "orderIdHint": "Debe capturar {capture}. Ejemplo: Número de pedido: {capture}",
+      "totalLabel": "Patrones del total",
+      "amountHint": "Debe capturar {capture}. Ejemplo: Total del pedido {capture}",
+      "shippingLabel": "Patrones de los gastos de envío",
+      "discountLabel": "Patrones del descuento",
+      "feesLabel": "Patrones de comisiones",
+      "itemsHeading": "Líneas de artículos",
+      "startAfterLabel": "Los artículos empiezan después de",
+      "startAfterHint": "Opcional. Los artículos se leen desde la línea siguiente a la primera línea que contiene este texto.",
+      "stopAtLabel": "Los artículos terminan en",
+      "stopAtHint": "Opcional. Los artículos terminan antes de la primera línea que contiene este texto.",
+      "itemPatternsLabel": "Patrones de artículos",
+      "itemPatternsHint": "Debe capturar {name} y también {amount} (el total de la línea) o {price} (el precio unitario, opcionalmente con {qty}), nunca ambos. Ejemplo: {name} x {qty} {price}"
+    },
+    "categories": {
+      "heading": "Categorías",
+      "help": "Escribe el nombre de una categoría y elígela de la lista. El nombre se guarda en el perfil, y la categoría debe existir cuando se guarde el perfil.",
+      "categoryPlaceholder": "Sin categoría",
+      "defaultLabel": "Categoría predeterminada",
+      "defaultHelp": "Se usa para los artículos que no coinciden con ninguna regla.",
+      "shippingLabel": "Categoría de envío",
+      "shippingHelp": "La categoría de la línea de envío.",
+      "feesLabel": "Categoría de comisiones",
+      "feesHelp": "La categoría de la línea de comisiones.",
+      "unknownCategory": "No hay ninguna categoría llamada {name}. Elige una de la lista o créala primero.",
+      "rulesInJson": "Las reglas de categoría por nombre de artículo son una opción avanzada: añádelas a la definición del perfil en el modo JSON."
+    },
+    "mode": {
+      "label": "Modo de edición",
+      "form": "Formulario",
+      "json": "JSON",
+      "formUnavailable": "Esta definición usa algo que el formulario no puede mostrar: entradas con etiqueta, artículos de varias líneas o claves para las que no tiene campo. Edítala como JSON.",
+      "jsonInvalid": "El JSON todavía no es válido, así que no se puede mostrar el formulario. Corrígelo primero."
+    },
+    "json": {
+      "label": "Definición del perfil (JSON)",
+      "help": "La misma definición que genera el formulario. El servidor la comprueba al guardar, y la prueba de abajo la lee tal como está ahora.",
+      "parseError": "Esto no es JSON válido, o no es un objeto JSON. Corrígelo para guardar o probar el perfil."
+    },
+    "matching": {
+      "heading": "Coincidencia",
+      "help": "Cómo se encuentra la transacción bancaria que pagó un correo. Las estrategias se prueban por orden: decide la primera que deja exactamente una transacción, varias son ambiguas y ninguna pasa a la siguiente.",
+      "instruction": "Lo mejor es un número de referencia tomado de la descripción de la operación bancaria. Si no hay ninguno, se usan la fecha y el importe. De forma predeterminada las estrategias se prueban en este orden: referencia (cuando el perfil tiene patrones de referencia), número de pedido, importe y beneficiario, importe y fecha.",
+      "referenceLabel": "Patrones de referencia",
+      "referenceHint": "El identificador que la tienda o la pasarela de pago pone en la operación bancaria, como un texto del extracto o el concepto de una transferencia. Debe capturar {capture}.",
+      "strategiesLabel": "Estrategias, en el orden en que se prueban",
+      "strategiesHelp": "El número de pedido y la referencia buscan el valor en la descripción, el beneficiario o el número de referencia de la transacción. Importe y beneficiario necesita el importe más un indicio del beneficiario. Importe y fecha necesita solo el importe, dentro de la ventana. Al menos una debe seguir activada.",
+      "strategyPosition": "{position}. {name}",
+      "moveUp": "Mover {name} antes",
+      "moveDown": "Mover {name} después",
+      "strategies": {
+        "reference": "Referencia",
+        "orderId": "Número de pedido",
+        "amount_payee": "Importe y beneficiario",
+        "amount_date": "Importe y fecha"
+      },
+      "referenceNeeded": "La estrategia de referencia está activada pero no hay patrones de referencia, así que no encontrará nada.",
+      "referenceInLabel": "Buscar la referencia y el número de pedido en",
+      "referenceInHint": "Nunca se buscan los valores de menos de 4 caracteres.",
+      "referenceIn": {
+        "description": "Descripción",
+        "payee": "Nombre del beneficiario",
+        "referenceNumber": "Número de referencia"
+      },
+      "daysBeforeLabel": "Días antes de la compra",
+      "daysAfterLabel": "Días después de la compra",
+      "daysHint": "La ventana alrededor de la fecha de compra. Por defecto {default}, como máximo {max}.",
+      "toleranceLabel": "Tolerancia del importe",
+      "toleranceHint": "Cuánto puede diferir el importe del banco del total del correo. Por defecto 0, como máximo {max}."
+    },
+    "proposal": {
+      "heading": "Propuesta",
+      "tagLabel": "Añadir una etiqueta a las transacciones que categoriza este perfil",
+      "tagHelp": "La etiqueta se crea si no tienes ninguna con ese nombre. Se muestra en la propuesta y no se escribe nada hasta que la apruebes.",
+      "tagNameLabel": "Nombre de la etiqueta",
+      "aiCategoriesLabel": "Dejar que la IA elija la categoría de los artículos que no coinciden con ninguna regla",
+      "aiCategoriesHelp": "Cuando un artículo no coincide con ninguna regla de categoría y no hay categoría predeterminada, se pregunta a la IA por su categoría de entre tu lista de categorías. La elección se marca como de la IA en la propuesta. Con esto desactivado, nunca se pregunta a la IA."
+    },
+    "kind": {
+      "label": "Tipo de perfil",
+      "receipt": "Recibo de pedido",
+      "trade": "Operación bursátil",
+      "receiptHelp": "Lee una confirmación de pedido y encuentra la transacción bancaria que la pagó.",
+      "tradeHelp": "Lee una confirmación de operación del bróker y propone la transacción de inversión que informa: una compra, una venta, un dividendo en efectivo o un dividendo reinvertido."
+    },
+    "trade": {
+      "guardsHeading": "Qué correos del remitente lee",
+      "guardsHelp": "Opcional. Cada patrón se compara con una línea completa del correo, un patrón por línea.",
+      "guards": {
+        "requireLine": "Líneas obligatorias",
+        "requireLineHint": "El perfil lee un correo solo cuando contiene una de estas líneas; si no, se prueba el siguiente perfil del remitente.",
+        "skipIfLine": "Líneas que omiten el correo",
+        "skipIfLineHint": "Un correo con una de estas líneas se aparta, como una orden cancelada.",
+        "waitIfLine": "Líneas que retienen el correo",
+        "waitIfLineHint": "Un correo con una de estas líneas se retiene y se vuelve a leer más tarde, como una ejecución parcial."
+      },
+      "fieldsHeading": "La operación",
+      "fieldsHelp": "El tipo de operación, el símbolo y un total o un precio son obligatorios, y también el número de acciones salvo en un dividendo en efectivo. El tipo se lee de su texto: Dividend o Distribution es un dividendo en efectivo, Reinvest o DRIP un dividendo reinvertido, y si no, Buy o Sell. Cada campo admite patrones, uno por línea, probados en orden.",
+      "fields": {
+        "tradeAction": "Patrones del tipo de operación",
+        "tradeSymbol": "Patrones del símbolo",
+        "tradeQuantity": "Patrones del número de acciones",
+        "tradeTotal": "Patrones del total de la operación",
+        "tradePrice": "Patrones del precio por acción",
+        "tradeCommission": "Patrones de la comisión",
+        "tradeDate": "Patrones de la fecha de la operación",
+        "tradeAccount": "Patrones de la cuenta"
+      },
+      "fieldHint": "Debe capturar {capture}. Ejemplo: {example}",
+      "amountsHelp": "El total es el importe ejecutado, con la comisión incluida en una compra o un dividendo reinvertido; en un dividendo en efectivo es el importe pagado. El precio (en un dividendo, el importe por acción) sirve de comprobación y, con el número de acciones, da el total cuando el correo no indica ninguno. Un importe que nombra su moneda (US$, C$, USD, €) fija también la moneda de la operación.",
+      "rulesHeading": "Reglas de cuenta",
+      "rulesHelp": "En qué cuenta se registra la operación. Las reglas se prueban en orden contra el texto de cuenta que leen los patrones de la cuenta, y gana la primera que se aplica; {star} es cualquier texto. Una regla con moneda solo se aplica a una operación en esa moneda, así que dos cuentas que el bróker escribe igual, como un RRSP en CAD y otro en USD mostrados ambos como RRSP, son dos reglas con el mismo texto y monedas distintas. Si el correo no muestra texto de cuenta, solo puede aplicarse una regla cuyo texto sea {star}. La cuenta predeterminada cubre el resto.",
+      "currencyOrder": "La moneda de la operación se toma, en este orden: del propio importe cuando nombra una (US$, C$, USD, €), luego del primer marcador de moneda de abajo que coincida con una línea del correo, luego de la moneda de tu valor para el símbolo. Una regla con moneda nunca adivina: si ninguno de los tres indica la moneda, el correo te espera en vez de registrarse en una de las cuentas.",
+      "ruleMatchLabel": "Texto de cuenta de la regla {rule}",
+      "ruleMatchPlaceholder": "Texto de cuenta, como RRSP",
+      "ruleCurrencyLabel": "Moneda de la regla {rule}",
+      "ruleAccountLabel": "Cuenta de la regla {rule}",
+      "ruleMoveUp": "Subir la regla {rule}",
+      "ruleMoveDown": "Bajar la regla {rule}",
+      "ruleRemove": "Quitar la regla {rule}",
+      "ruleAdd": "Añadir una regla de cuenta",
+      "rulesMax": "Como máximo {max} reglas.",
+      "rulesWithoutAccountText": "No hay patrones de la cuenta, así que las reglas se prueban contra un texto vacío: solo puede aplicarse una regla cuyo texto sea {star}.",
+      "anyCurrency": "Cualquier moneda",
+      "baseCurrency": "{code} (tu moneda base)",
+      "currencyPlaceholder": "Elige una moneda",
+      "accountPlaceholder": "Elige una cuenta",
+      "accountOption": "{name} ({currency})",
+      "accountNotTradableOption": "{name} (no es una cuenta de corretaje abierta)",
+      "accountUnknownOption": "Una cuenta que no está en tu lista",
+      "accountNotTradable": "No se puede registrar una operación en esta cuenta: está cerrada, es una cuenta de efectivo o no es una cuenta de inversión.",
+      "accountUnknown": "Esta cuenta no está en tu lista: puede que se haya eliminado. Elige otra.",
+      "defaultAccountLabel": "Cuenta predeterminada",
+      "defaultAccountNone": "Sin cuenta predeterminada",
+      "defaultAccountHint": "La cuenta cuando no se aplica ninguna regla. Sin ella, un correo al que no se aplica ninguna regla te espera.",
+      "markersHeading": "Marcadores de moneda",
+      "markersHelp": "Texto que nombra la moneda de la operación cuando sus importes no lo hacen, como una línea que dice que los importes están en dólares estadounidenses junto a un $ sin más. Cada marcador se compara con cada línea del correo ({star} es cualquier texto), y el primer marcador, en orden, que coincide nombra la moneda. Los marcadores solo se usan cuando el importe no nombra ninguna moneda.",
+      "markerMatchLabel": "Texto del marcador {marker}",
+      "markerMatchPlaceholder": "Como *U.S. dollars*",
+      "markerCurrencyLabel": "Moneda del marcador {marker}",
+      "markerMoveUp": "Subir el marcador {marker}",
+      "markerMoveDown": "Bajar el marcador {marker}",
+      "markerRemove": "Quitar el marcador {marker}",
+      "markerAdd": "Añadir un marcador de moneda",
+      "markersMax": "Como máximo {max} marcadores."
+    },
+    "discard": {
+      "label": "Correos coincidentes",
+      "read": "Leerlos",
+      "ignore": "Ignorarlos",
+      "delete": "Eliminarlos",
+      "readHelp": "El perfil lee cada correo coincidente con los patrones de abajo.",
+      "ignoreHelp": "Cada correo que coincide con este perfil se ignora al llegar: no propone nada. Para remitentes con cuyo correo nunca quieres tratar.",
+      "deleteHelp": "Cada correo que coincide con este perfil se elimina de Monize al llegar (sigue en tu buzón). Un correo eliminado no se puede recuperar.",
+      "noReading": "Este perfil no lee nada, así que no necesita patrones, categorías ni vinculación. Los dominios de remitente y las palabras del asunto de arriba deciden qué correos toma."
+    }
+  },
+  "problems": {
+    "heading": "La definición del perfil no es válida:",
+    "item": "{where}: {problem}",
+    "paths": {
+      "definition": "La definición",
+      "line": "{field}, línea {line}",
+      "rule": "Regla de categoría {rule}, {part}",
+      "entryPart": "{field}, entrada {line}, {part}",
+      "skipLine": "Línea que se omite {line}",
+      "recordStep": "Paso de registro {step}",
+      "recordStepPart": "Paso de registro {step}, {part}",
+      "recordAlternative": "Paso de registro {step}, alternativa {alternative}",
+      "accountRule": "Regla de cuenta {rule}",
+      "accountRulePart": "Regla de cuenta {rule}, {part}",
+      "currencyMarker": "Marcador de moneda {marker}",
+      "currencyMarkerPart": "Marcador de moneda {marker}, {part}"
+    },
+    "fields": {
+      "orderId": "Patrones del número de pedido",
+      "total": "Patrones del total",
+      "shipping": "Patrones de los gastos de envío",
+      "discount": "Patrones del descuento",
+      "itemPatterns": "Patrones de artículos",
+      "startAfter": "Los artículos empiezan después de",
+      "stopAt": "Los artículos terminan en",
+      "items": "Líneas de artículos",
+      "categoryRules": "Reglas de categoría",
+      "rulePattern": "patrón",
+      "ruleCategory": "categoría",
+      "defaultCategory": "Categoría predeterminada",
+      "shippingCategory": "Categoría de envío",
+      "feesCategory": "Categoría de comisiones",
+      "balanceTolerance": "Tolerancia del saldo",
+      "fees": "Patrones de comisiones",
+      "skipLines": "Líneas que se omiten",
+      "record": "Registro",
+      "label": "etiqueta",
+      "value": "valor",
+      "within": "dentro de",
+      "line": "línea",
+      "optional": "opcional",
+      "paid": "Patrones del importe pagado",
+      "payee": "Patrones del comercio",
+      "requireLine": "Líneas obligatorias",
+      "skipIfLine": "Líneas que omiten el correo",
+      "waitIfLine": "Líneas que retienen el correo",
+      "source": "Origen de las líneas",
+      "single": "Artículo único",
+      "singleName": "Nombre del artículo único",
+      "joinWrapped": "Unir líneas partidas",
+      "ruleField": "campo",
+      "reference": "Patrones de referencia",
+      "match": "La sección de coincidencia",
+      "matchBy": "Estrategias de coincidencia",
+      "matchReferenceIn": "Campos en los que se busca la referencia",
+      "matchDaysBefore": "Días antes de la compra",
+      "matchDaysAfter": "Días después de la compra",
+      "matchTolerance": "Tolerancia del importe",
+      "tag": "Etiqueta",
+      "aiCategories": "Categorías de la IA",
+      "trade": "La sección de la operación",
+      "tradeAction": "Patrones del tipo de operación",
+      "tradeSymbol": "Patrones del símbolo",
+      "tradeQuantity": "Patrones del número de acciones",
+      "tradeTotal": "Patrones del total de la operación",
+      "tradePrice": "Patrones del precio por acción",
+      "tradeCommission": "Patrones de la comisión",
+      "tradeDate": "Patrones de la fecha de la operación",
+      "tradeAccount": "Patrones de la cuenta",
+      "accountRules": "Reglas de cuenta",
+      "currencyMarkers": "Marcadores de moneda",
+      "defaultAccount": "Cuenta predeterminada",
+      "ruleAccount": "cuenta",
+      "ruleCurrency": "moneda",
+      "role": "Rol del perfil",
+      "link": "La sección «link»",
+      "linkDaysBefore": "Días antes del pago",
+      "linkFromDomains": "Dominios de remitente de los correos de compra",
+      "linkKey": "Patrones de la clave de vínculo"
+    },
+    "codes": {
+      "not_object": "no es una definición válida",
+      "unknown_key": "no es algo que un perfil pueda tener",
+      "unsupported_version": "es una versión que este servidor no lee (usa la versión 2)",
+      "invalid_type": "tiene un tipo de valor incorrecto",
+      "empty": "no puede estar vacío",
+      "too_many": "tiene demasiadas entradas (como máximo {max})",
+      "too_long": "es demasiado largo (como máximo {max} caracteres)",
+      "control_character": "contiene un carácter de control",
+      "malformed_capture": "tiene una captura entre llaves que no es válida",
+      "too_many_captures": "tiene demasiadas capturas",
+      "duplicate_capture": "usa dos veces el mismo nombre de captura",
+      "capture_not_allowed": "usa un nombre de captura que este campo no acepta",
+      "capture_missing": "le falta una captura que este campo necesita",
+      "capture_conflict": "captura a la vez el total de la línea y el precio unitario. Usa solo uno de ellos.",
+      "invalid_uuid": "no es una categoría válida",
+      "out_of_range": "debe ser un número entero de 1 a {max}",
+      "items_patterns_and_record": "tiene patrones y un registro a la vez. Usa solo uno de ellos.",
+      "items_shape_missing": "necesita patrones o un registro",
+      "skip_lines_need_record": "solo se puede usar junto con un registro",
+      "record_name_missing": "debe capturar {capture} en uno de sus pasos",
+      "items_single_conflict": "tiene un artículo único junto a patrones o un registro. Usa solo uno de ellos.",
+      "join_wrapped_needs_patterns": "solo funciona con patrones de artículos",
+      "invalid_value": "tiene un valor que este campo no acepta",
+      "duplicate_entry": "enumera dos veces la misma entrada",
+      "reference_field_missing": "necesita patrones de referencia (la estrategia de referencia está activada)",
+      "out_of_range_days": "debe ser un número entero de 0 a {max}",
+      "out_of_range_tolerance": "debe ser un importe de 0,00 a {max}",
+      "trade_conflict": "no puede estar en un perfil de operación bursátil, que solo lee la operación",
+      "trade_amount_missing": "necesita patrones del total o del precio (al menos uno de los dos)",
+      "trade_account_missing": "necesita una cuenta predeterminada o reglas de cuenta",
+      "invalid_currency": "no es un código de moneda de 3 letras, como USD",
+      "too_many_lines": "abarca demasiadas líneas (como máximo {max})",
+      "line_break_not_allowed": "se compara con un solo texto (el nombre de un artículo, el comercio o una cuenta), así que no puede abarcar varias líneas",
+      "invalid_uuid_account": "no es una cuenta válida",
+      "role_invalid": "debe ser standalone, component o settlement",
+      "link_key_requires_component": "solo se puede usar cuando el rol es component",
+      "link_key_missing": "es necesario cuando el rol es component",
+      "link_capture_requires_settlement": "usa una captura de link o instalment, que solo acepta un perfil settlement",
+      "link_requires_settlement": "solo se puede usar cuando el rol es settlement",
+      "link_domain_invalid": "no es un dominio de remitente válido (como máximo {max} dominios)",
+      "link_days_invalid": "debe ser un número entero de 0 a {max}",
+      "role_trade_conflict": "no puede ser component ni settlement en un perfil de operación de bolsa, que solo lee la operación"
+    }
+  },
+  "test": {
+    "heading": "Probar con un correo guardado",
+    "help": "Lee un correo guardado con los patrones de arriba, guardados o no, y muestra qué se encontraría y con qué transacción coincidiría. No se escribe nada.",
+    "loadFailed": "No se pudieron cargar los correos guardados, así que todavía no hay nada con lo que probar.",
+    "noReceipts": "Todavía no hay correos guardados. Consulta primero el buzón.",
+    "receiptLabel": "Correo",
+    "choosePlaceholder": "Elige un correo",
+    "receiptOption": "{subject} de {sender} ({date})",
+    "button": "Probar",
+    "failed": "La prueba falló",
+    "matchHeading": "Coincidencia de transacción",
+    "matched": "Vincularía la transacción del {date} por {amount} ({payee}), encontrada por {how}.",
+    "matchKinds": {
+      "order_id": "número de pedido",
+      "amount_payee": "importe y beneficiario",
+      "amount_only": "importe",
+      "manual": "tu elección",
+      "reference": "referencia",
+      "amount_date": "importe y fecha"
+    },
+    "noPayee": "sin beneficiario",
+    "ambiguous": "{count, plural, one {# transacción encaja} other {# transacciones encajan}} igual de bien, así que no se vincularía ninguna hasta que elijas.",
+    "unmatched": "Ninguna transacción coincide, entre {count, plural, one {# candidata} other {# candidatas}}.",
+    "jsonInvalid": "El JSON no es válido, así que todavía no hay nada que probar.",
+    "component": {
+      "heading": "Correo de compra (component): clave de vínculo {linkKey}",
+      "noLinkKey": "Correo de compra (component): no se leyó ninguna clave de vínculo, así que ningún correo de pago puede encontrarlo.",
+      "noneWaiting": "Ningún correo de pago está esperando esta clave de vínculo.",
+      "waiting": "{count, plural, one {# correo de pago está esperando} other {# correos de pago están esperando}} esta clave de vínculo:",
+      "settlement": "{subject} ({date})"
+    },
+    "outcome": {
+      "not_applicable": "Este perfil no leería este correo: ninguna de sus líneas obligatorias está en él, así que se probaría el siguiente perfil del remitente.",
+      "skip_line": "Este perfil dejaría este correo aparte: contiene una línea en la que omite.",
+      "wait_line": "Este perfil retendría este correo: una línea indica que el pedido no es definitivo, así que se vuelve a leer más tarde.",
+      "discard_ignore": "Este perfil ignoraría este correo: ignora cada correo que coincide.",
+      "discard_delete": "Este perfil eliminaría este correo: elimina cada correo que coincide.",
+      "no_html": "Este perfil lee la parte HTML del correo, y este correo no la tiene, así que se marcaría como ilegible (sin HTML)."
+    },
+    "matchedBy": {
+      "heading": "Encontrado por",
+      "none": "No se leyó ningún valor de este correo.",
+      "fields": {
+        "orderId": "Número de pedido",
+        "total": "Total",
+        "paid": "Pagado",
+        "shipping": "Envío",
+        "discount": "Descuento",
+        "payee": "Comercio",
+        "requireLine": "Línea obligatoria",
+        "skipIfLine": "Línea de omisión",
+        "waitIfLine": "Línea de espera",
+        "reference": "Referencia",
+        "linkKey": "Clave de vínculo",
+        "action": "Tipo de operación",
+        "symbol": "Símbolo",
+        "quantity": "Acciones",
+        "price": "Precio",
+        "commission": "Comisión",
+        "date": "Fecha",
+        "account": "Cuenta",
+        "currency": "Marcador de moneda"
+      },
+      "entryLine": "entrada {entry} ({pattern}), línea {line}: {text}",
+      "entrySubject": "entrada {entry} ({pattern}), el asunto: {text}",
+      "entryLines": "entrada {entry} ({pattern}), líneas {first} a {last}:",
+      "blockLine": "línea {line}: {text}",
+      "labelled": "entrada {entry}, etiqueta {label} en la línea {labelLine} ({labelText}), valor {pattern} en la línea {line}: {text}",
+      "item": "Artículo {number}",
+      "itemLine": "{pattern}, línea {line}: {text}"
+    },
+    "trace": {
+      "heading": "Qué examinó el buscador de coincidencias",
+      "window": "Transacciones del {from} al {to} ({before} días antes, {after} días después de la compra): {considered, plural, one {# considerada} other {# consideradas}}.",
+      "tolerance": "El importe puede diferir en {amount}.",
+      "attempt": "{position}. {name}",
+      "kept": "{count, plural, =0 {no dejó ninguna} one {dejó # transacción} other {dejó # transacciones}}",
+      "decided": "Decidió",
+      "transaction": "{date}, {amount}, {payee}",
+      "noPayee": "sin beneficiario",
+      "strategies": {
+        "reference": "Referencia",
+        "orderId": "Número de pedido",
+        "amount_payee": "Importe y beneficiario",
+        "amount_date": "Importe y fecha"
+      }
+    }
+  },
+  "parsed": {
+    "notFound": "No encontrado",
+    "noCategory": "Sin categoría",
+    "unknownCategory": "Categoría desconocida",
+    "categoryUnavailable": "Categorías no cargadas",
+    "noItems": "No se leyó ninguna línea de artículo.",
+    "orderId": "Número de pedido",
+    "total": "Total",
+    "shipping": "Envío",
+    "discount": "Descuento",
+    "columns": {
+      "item": "Artículo",
+      "qty": "Cant.",
+      "amount": "Importe",
+      "category": "Categoría"
+    },
+    "complete": "Leído por completo",
+    "incomplete": "No leído por completo",
+    "reasons": {
+      "no_total": "El correo no indica ningún total.",
+      "no_items": "No se encontró ninguna línea de artículo.",
+      "items_unbalanced": "Las líneas de artículos no suman el total.",
+      "items_uncategorized": "Algunas líneas de artículos no tienen categoría.",
+      "shipping_uncategorized": "La línea de envío no tiene categoría.",
+      "item_amount_missing": "Un artículo no tiene importe y el correo no tiene un único total que asignarle."
+    },
+    "readByAi": "Leído por la IA",
+    "readFromStructuredData": "Leído de datos estructurados",
+    "paid": "Pagado",
+    "payee": "Comercio",
+    "reference": "Referencia",
+    "categoryByAi": "IA",
+    "linkKey": "Clave de vínculo",
+    "kinds": {
+      "shipping": "Envío",
+      "fee": "Comisión",
+      "discount": "Descuento"
+    },
+    "parts": {
+      "heading": "Partes",
+      "part": "Parte",
+      "link": "Vínculo",
+      "outcome": "Resultado",
+      "noLink": "Sin vínculo",
+      "component": "Correo de compra: {subject} ({date}).",
+      "componentProfile": "Perfil: {name}.",
+      "componentNet": "Total de la compra: {amount}.",
+      "taken": "Ya utilizado: {amount}."
+    },
+    "linkOutcomes": {
+      "no_link": "La parte no tiene vínculo, así que sigue siendo una línea.",
+      "not_found": "No se encontró ningún correo de compra para este vínculo, así que la parte sigue siendo una línea.",
+      "component_incomplete": "El correo de compra no se leyó por completo, así que la parte sigue siendo una línea.",
+      "component_used": "Otros pagos ya usaron toda la compra, así que la parte sigue siendo una línea.",
+      "joined": "Sustituida por las líneas del correo de compra.",
+      "scaled": "Sustituida por las líneas del correo de compra, ajustadas a esta parte.",
+      "amount_exceeds": "La parte supera lo que queda de la compra, así que sigue siendo una línea."
+    }
+  },
+  "state": {
+    "pending": "Pendiente de lectura",
+    "skipped": "Omitido",
+    "no_parser": "No perfil",
+    "parse_failed": "No se pudo leer",
+    "unmatched": "No se encontró ninguna transacción",
+    "ambiguous": "Encajan varias transacciones",
+    "review_conflict": "Hay otra solicitud abierta",
+    "ignored": "Ignorado",
+    "proposed": "Pendiente de aprobación",
+    "applied": "Aplicado",
+    "dismissed": "Descartado",
+    "expired": "Caducado",
+    "pending_ai": "Esperando a la IA",
+    "request_missing": "Falta la solicitud",
+    "component": "Esperando su pago"
+  },
+  "receipts": {
+    "loading": "Cargando correos",
+    "links": {
+      "reviewInbox": "Abrir la bandeja de revisión de IA",
+      "settings": "Configuración del buzón"
+    },
+    "filter": {
+      "label": "Filtrar por estado",
+      "option": "{label} ({count})",
+      "all": "Todos",
+      "pending": "Pendiente de lectura",
+      "skipped": "Omitido",
+      "no_parser": "No perfil",
+      "parse_failed": "No se pudo leer",
+      "unmatched": "No se encontró ninguna transacción",
+      "ambiguous": "Encajan varias transacciones",
+      "review_conflict": "Hay otra solicitud abierta",
+      "review": "En revisión",
+      "ignored": "Ignorado",
+      "component": "Esperando el pago"
+    },
+    "search": {
+      "label": "Buscar correos",
+      "placeholder": "Buscar por asunto, remitente o contenido...",
+      "in": "Buscar en",
+      "fields": {
+        "all": "Todos los campos",
+        "subject": "Asunto",
+        "sender": "Remitente",
+        "body": "Contenido"
+      },
+      "from": "Desde la fecha",
+      "to": "Hasta la fecha",
+      "rangeBackwards": "La fecha final es anterior a la inicial. El rango de fechas no se aplica.",
+      "clear": "Borrar búsqueda"
+    },
+    "domainFilter": {
+      "label": "Dominio del remitente",
+      "all": "Todos los remitentes",
+      "option": "{domain} ({count})",
+      "unknown": "No se pudieron cargar los recuentos de remitentes.",
+      "help": "Mostrando los correos de {domain} y sus subdominios. Selecciona varios para redactar un perfil para el remitente.",
+      "waitingForAi": "Esperando a la IA"
+    },
+    "columns": {
+      "select": "Seleccionar",
+      "date": "Fecha",
+      "email": "Correo",
+      "transaction": "Transacción",
+      "state": "Estado",
+      "actions": "Acciones"
+    },
+    "transactionSummary": "{date}, {amount}, {payee}",
+    "noPayee": "sin beneficiario",
+    "noTransaction": "Ninguna todavía",
+    "error": {
+      "title": "No se pudieron cargar los correos",
+      "body": "La solicitud falló, así que todavía no se sabe nada de tus correos. Inténtalo de nuevo.",
+      "retry": "Reintentar"
+    },
+    "empty": {
+      "title": "No hay correos",
+      "body": "Las confirmaciones de pedido aparecen aquí una vez que se ha leído el buzón.",
+      "filteredTitle": "No hay correos con este estado",
+      "filteredBody": "Elige otro estado para ver el resto.",
+      "searchTitle": "Ningún correo coincide con la búsqueda",
+      "searchBody": "Cambie las palabras o las fechas, o borre la búsqueda para ver todos los correos.",
+      "noMailboxBody": "Todavía no hay ningún buzón conectado. Conecta uno para empezar a leer confirmaciones de pedido.",
+      "connectButton": "Conectar un buzón"
+    },
+    "actions": {
+      "view": "Ver",
+      "reprocess": "Reprocesar",
+      "link": "Elegir transacción",
+      "recognizeAi": "Reconocer con IA",
+      "recognizeTradeAi": "Reconocer como operación con IA",
+      "approve": "Aprobar",
+      "draftParser": "Preparar un perfil con IA",
+      "createParser": "Crear perfil",
+      "ignore": "Ignorar",
+      "reviewTrade": "Revisar en la bandeja"
+    },
+    "toasts": {
+      "approved": "Propuesta aprobada",
+      "approveFailed": "No se pudo aprobar la propuesta",
+      "reprocessed": "Correo reprocesado",
+      "reprocessFailed": "No se pudo reprocesar el correo",
+      "ignored": "Correo ignorado",
+      "ignoreFailed": "No se pudo ignorar el correo",
+      "deleted": "Correo eliminado",
+      "deleteFailed": "No se pudo eliminar el correo"
+    },
+    "ignoreDialog": {
+      "title": "¿Ignorar este correo?",
+      "message": "El correo {subject} no propondrá nada, y su solicitud de revisión abierta se descartará.",
+      "confirm": "Ignorar"
+    },
+    "deleteDialog": {
+      "title": "¿Eliminar este correo?",
+      "message": "Se eliminará el correo guardado {subject} y se descartará su solicitud de revisión abierta. El mensaje del buzón no se toca, y una consulta posterior no lo volverá a obtener."
+    },
+    "selection": {
+      "label": "Correos seleccionados",
+      "select": "Seleccionar {subject}",
+      "selectAll": "Seleccionar todos los correos de esta lista",
+      "count": "{count, plural, one {# correo seleccionado} other {# correos seleccionados}}",
+      "draftButton": "Preparar un perfil con IA ({count})",
+      "clear": "Borrar selección",
+      "deleteButton": "Eliminar ({count})",
+      "ignoreButton": "Ignorar ({count})",
+      "pageSelected": "Los {count} correos de esta página están seleccionados.",
+      "selectAllMatching": "Seleccionar los {total} correos que coinciden con este filtro.",
+      "allMatchingSelected": "Los {total} correos que coinciden con este filtro están seleccionados.",
+      "hiddenSelected": "{hidden, plural, one {# de los correos seleccionados no aparece en esta lista.} many {# de los correos seleccionados no aparecen en esta lista.} other {# de los correos seleccionados no aparecen en esta lista.}}",
+      "reprocessButton": "Reprocesar ({count})",
+      "restoreButton": "Restaurar ignorados ({count})",
+      "restoreButtonAll": "Restaurar ignorados",
+      "approveButton": "Aprobar propuestas ({count})",
+      "approveButtonAll": "Aprobar propuestas",
+      "progress": "Procesados: {processed}, pendientes: {remaining}",
+      "progressStarting": "Iniciando",
+      "stop": "Detener",
+      "narrowedSelected": "{total} correos seleccionados: todos los que coinciden con este filtro, salvo los excluidos más abajo.",
+      "deselect": {
+        "label": "Deseleccionar por",
+        "state": "Estado: {state}",
+        "sender": "Remitente: {domain}",
+        "before": "Recibidos antes de un día",
+        "after": "Recibidos después de un día",
+        "beforeLabel": "Deseleccionar correos recibidos antes del",
+        "afterLabel": "Deseleccionar correos recibidos después del",
+        "apply": "Deseleccionar",
+        "cancel": "Cancelar"
+      },
+      "exclusion": {
+        "label": "Excluidos de la selección",
+        "state": "Sin el estado {state}",
+        "sender": "Sin los de {domain}",
+        "from": "Recibidos el {date} o después",
+        "to": "Recibidos el {date} o antes",
+        "remove": "Volver a incluir: {label}"
+      },
+      "draftBlocked": {
+        "skipped": "Un correo que no se pudo leer no tiene texto para preparar un perfil. Quítalo de la selección.",
+        "allMatching": "Un perfil se prepara con correos que seleccionas tú, como máximo {max}. Borra esta selección y selecciona hasta {max} correos.",
+        "mixedKinds": "Los correos seleccionados mezclan confirmaciones de operaciones y correos de pedidos. Un perfil lee un solo tipo, así que selecciona solo confirmaciones de operaciones o solo correos de pedidos.",
+        "tooManyPerDomain": "Se pueden usar como máximo {perDomain} correos de un remitente. Selecciona {perDomain} correos o menos de cada remitente ({domains}).",
+        "tooManyDomains": "Se pueden usar juntos como máximo {maxDomains} remitentes ({domains}). Selecciona correos de {maxDomains} remitentes o menos.",
+        "tradeOneDomain": "Un perfil de operación lee los correos de un solo remitente ({domains}). Selecciona confirmaciones de operación de un solo remitente."
+      }
+    },
+    "pager": {
+      "itemName": "correos",
+      "total": "{count, plural, one {# correo} other {# correos}}",
+      "page": "Página {page}"
+    },
+    "draft": {
+      "failed": "No se pudo iniciar la redacción de un perfil",
+      "queued": "En cola: la solicitud espera a un agente en la bandeja de revisión de IA. Ahora no hay ningún asistente disponible para responder.",
+      "handoffFailed": "La solicitud está en cola, pero no se pudieron abrir los correos en el chat. Espera a un agente en la bandeja de revisión de IA.",
+      "inboxLink": "Abrir la bandeja de revisión de IA",
+      "opened": "Se abrió el chat con los correos adjuntos. Lee el mensaje y pulsa Enviar.",
+      "chatPrompt": "Crea un perfil de recibos de correo para {count, plural, one {este correo de pedido} other {estos # correos de pedido}} de {domain}. Reclama la solicitud de revisión de IA {requestId}, prueba tu perfil con cada correo adjunto mediante la herramienta email_receipt_profiles, corrígelo hasta que cada uno se lea por completo y guárdalo después como borrador para la solicitud {requestId}.",
+      "mixedKinds": "Los correos seleccionados mezclan confirmaciones de operaciones y correos de pedidos. Un perfil lee un solo tipo, así que selecciona solo confirmaciones de operaciones o solo correos de pedidos.",
+      "chatPromptTrade": "Crea un perfil de operaciones para {count, plural, one {esta confirmación de operación} other {estas # confirmaciones de operación}} de {domain}. Reclama la solicitud de revisión de IA {requestId}, prueba tu perfil con cada correo adjunto mediante la herramienta email_receipt_parsers, corrígelo hasta que de cada uno se lea una operación completa y guárdalo después como borrador para la solicitud {requestId}."
+    },
+    "tradeBadge": "Operación",
+    "bulkDialog": {
+      "delete": {
+        "title": "¿Eliminar correos?",
+        "message": "¿{count, plural, one {Eliminar # correo} other {Eliminar # correos}}{scope, select, both { de {domain} en el estado {status}} domain { de {domain}} status { en el estado {status}} other {}}? No se puede deshacer. Para conservar los correos y evitar que propongan nada, elige «Ignorar». Los correos vinculados a una transacción se conservan."
+      },
+      "ignore": {
+        "title": "¿Ignorar correos?",
+        "message": "¿{count, plural, one {Ignorar # correo} other {Ignorar # correos}}{scope, select, both { de {domain} en el estado {status}} domain { de {domain}} status { en el estado {status}} other {}}? No propondrán nada y se descartarán sus solicitudes de revisión abiertas. Los correos vinculados a una transacción se dejan como están.",
+        "confirm": "Ignorar"
+      },
+      "countChanged": "El número de correos coincidentes es ahora {count}. No se cambió nada. Revisa el número y confirma de nuevo.",
+      "approve": {
+        "title": "¿Aprobar propuestas?",
+        "message": "{count, plural, one {¿Aprobar # propuesta} other {¿Aprobar # propuestas}}? Cada una se aplica como lo hace el botón Confirmar de la bandeja de revisión de IA.",
+        "trades": "{count, plural, one {# correo de operación queda fuera. Apruébelo en su tarjeta de la bandeja de revisión de IA.} other {# correos de operaciones quedan fuera. Apruébelos en sus tarjetas de la bandeja de revisión de IA.}}",
+        "confirm": "Aprobar"
+      },
+      "searchNote": "Solo se incluyen los correos que coinciden con la búsqueda.",
+      "narrowedNote": "Los correos excluidos de la selección no se modifican."
+    },
+    "bulk": {
+      "result": {
+        "deleted": "{count, plural, one {# correo eliminado.} other {# correos eliminados.}}",
+        "ignored": "{count, plural, one {# correo ignorado.} other {# correos ignorados.}}",
+        "unchanged": "{count, plural, one {# correo ya estaba ignorado.} other {# correos ya estaban ignorados.}}",
+        "notIgnorable": "{count, plural, one {# correo no se pudo ignorar: no se pudo leer o su propuesta ya se aplicó.} other {# correos no se pudieron ignorar: no se pudieron leer o sus propuestas ya se aplicaron.}}",
+        "skippedLinked": "{count, plural, one {Se conservó # correo vinculado a una transacción.} other {Se conservaron # correos vinculados a una transacción.}}",
+        "reprocessed": "{count, plural, one {# correo reprocesado.} other {# correos reprocesados.}}",
+        "restored": "{count, plural, one {# correo ignorado leído de nuevo.} other {# correos ignorados leídos de nuevo.}}",
+        "reprocessFailed": "{count, plural, one {# correo falló.} other {# correos fallaron.}}",
+        "stopped": "{count, plural, one {Detenido. # correo quedó sin procesar.} other {Detenido. # correos quedaron sin procesar.}}",
+        "approved": "{count, plural, one {# propuesta aprobada.} other {# propuestas aprobadas.}}",
+        "approveFailed": "{count, plural, one {# propuesta no se pudo aprobar.} other {# propuestas no se pudieron aprobar.}}"
+      },
+      "deleteFailed": "No se pudieron eliminar los correos",
+      "ignoreFailed": "No se pudieron ignorar los correos",
+      "noneLeft": "Ya no coincide ningún correo. No se cambió nada.",
+      "reprocessFailed": "No se pudieron reprocesar los correos",
+      "approveFailed": "No se pudieron aprobar las propuestas",
+      "noApprovable": "Ninguna propuesta de esta selección se puede aprobar.",
+      "narrowFailed": "No se pudieron contar los correos. El cambio no se aplicó."
+    },
+    "linkedDraftDialog": {
+      "title": "¿Preparar perfiles vinculados?",
+      "message": "Has seleccionado correos de varios remitentes: {domains}. Úsalo solo cuando los datos de una transacción bancaria estén repartidos en correos de varios remitentes, por ejemplo una tienda y su proveedor de pago aplazado, o una tienda y una pasarela de pago. Para preparar perfiles de tiendas sin relación, cancela y prepara un dominio cada vez. Una solicitud admite como máximo {perDomain} correos por remitente y {maxDomains} remitentes.",
+      "domainEntry": "{domain} ({count, plural, one {# correo} other {# correos}})",
+      "confirm": "Preparar perfiles vinculados"
+    }
+  },
+  "detail": {
+    "title": "Recibo por correo",
+    "loading": "Cargando el correo",
+    "error": {
+      "title": "No se pudo cargar el correo",
+      "body": "La solicitud falló. Inténtalo de nuevo.",
+      "retry": "Reintentar"
+    },
+    "from": "De",
+    "received": "Recibido",
+    "forwardedBy": "Reenviado por",
+    "originalSent": "Enviado por la tienda",
+    "subject": "Asunto",
+    "state": "Estado",
+    "parser": "Perfil",
+    "noParser": "Ninguno",
+    "structuredSource": "Datos estructurados",
+    "matchedBy": "Asociado por",
+    "matchKinds": {
+      "order_id": "Número de pedido",
+      "amount_payee": "Importe y beneficiario",
+      "amount_only": "Importe",
+      "manual": "Tu elección",
+      "reference": "Referencia",
+      "amount_date": "Importe y fecha"
+    },
+    "transaction": "Transacción",
+    "transactionSummary": "{date}, {amount}, {payee}",
+    "noPayee": "sin beneficiario",
+    "viewTransaction": "Ver transacción",
+    "noTransaction": "Ninguna todavía",
+    "reasons": {
+      "too_large": "El correo supera el límite de tamaño, así que se guardó sin leerlo.",
+      "undecodable": "No se pudo decodificar el correo, así que se guardó sin leerlo.",
+      "draft_failed": "La IA no pudo redactar un perfil para este remitente.",
+      "parser_invalid": "El perfil de este remitente no es válido. Edítalo en los ajustes de perfiles.",
+      "no_total": "El perfil no encontró ningún total en este correo.",
+      "no_items": "El perfil no encontró líneas de artículos.",
+      "items_unbalanced": "Las líneas de artículos no suman el total.",
+      "items_uncategorized": "Algunas líneas de artículos no tienen categoría.",
+      "shipping_uncategorized": "La línea de envío no tiene categoría.",
+      "amount_differs": "El total leído difiere del importe de la transacción, así que solo se propone una descripción.",
+      "proposal_fallback": "Se rechazó la propuesta detallada, así que solo se propone una descripción.",
+      "nothing_to_propose": "El correo no aporta nada a esta transacción.",
+      "proposal_refused": "Se rechazó la propuesta, así que no se propuso nada.",
+      "skip_line": "Se encontró una línea en la que este perfil omite, así que el correo se ignoró.",
+      "wait_line": "Una línea indica que el pedido todavía no es definitivo, así que el correo se leerá de nuevo más adelante.",
+      "profile_ignore": "El perfil de este correo ignora cada correo que coincide.",
+      "no_html": "Este perfil lee la parte HTML del correo, y este correo no la tiene.",
+      "schema_org": "No hizo falta ningún perfil: el pedido se leyó de los datos estructurados (schema.org) del correo.",
+      "item_amount_missing": "Un artículo no tiene importe y el correo no tiene un único total que asignarle.",
+      "trade_no_action": "El perfil no encontró ninguna compra, venta, dividendo ni reinversión en este correo.",
+      "trade_no_symbol": "El perfil no encontró ningún símbolo bursátil en este correo.",
+      "trade_no_quantity": "El perfil no encontró ninguna cantidad de participaciones en este correo, que una compra, una venta o un dividendo reinvertido necesita.",
+      "trade_no_amount": "El perfil no encontró ni un total ni un precio en este correo.",
+      "trade_no_account": "El perfil no pudo saber a qué cuenta corresponde esta operación.",
+      "trade_exists": "Tus cuentas ya contienen esta operación, así que no se propuso nada.",
+      "trade_linked": "Vinculado a la transacción que informa, así que no se propuso nada.",
+      "trade_no_currency": "El perfil no pudo saber en qué moneda está esta operación, así que no pudo elegir su cuenta.",
+      "awaiting_settlement": "Correo de compra guardado. Espera el correo de pago que lo cubre.",
+      "settled": "Correo de compra guardado. Los correos de pago unidos a él cubren su importe completo.",
+      "instalment": "Correo de compra guardado. Los pagos cubrieron una parte; el resto aún está por pagar.",
+      "partially_linked": "Algunas partes de este pago aún no tienen correo de compra. Se muestran como una línea cada una.",
+      "enriched_by_other": "La transacción coincidente ya fue completada por otro correo. Ábrela y usa Vincular para reemplazar ese complemento, o ignora este correo.",
+      "no_link_key": "Este correo de compra no contiene ninguna clave de vínculo, así que ningún pago puede encontrarlo."
+    },
+    "reasonUnknown": "Motivo: {reason}",
+    "requestNote": "Solicitud de revisión ({state}): {note}",
+    "parsedHeading": "Lo que leyó el perfil",
+    "tradeHeading": "Operación leída del correo",
+    "tradeCandidatesHeading": "Transacciones existentes que podrían ser esta operación",
+    "tradeCandidatesHelp": "Estas transacciones de inversión podrían ser la operación que informa este correo. Vincula la que sea: no se crea ninguna transacción nueva, y se marca como pagado el recibo o ingreso programado que cubre.",
+    "notParsed": "Todavía no se ha leído nada de este correo.",
+    "candidatesHeading": "Transacciones que encajan",
+    "candidatesHelp": "Varias transacciones encajan igual de bien con este correo. Elige la que pagó.",
+    "linkButton": "Vincular a esta transacción",
+    "linked": "Correo vinculado a la transacción",
+    "linkFailed": "No se pudo vincular el correo",
+    "bodyHeading": "Correo",
+    "textLabel": "Texto del correo",
+    "noText": "El correo no tiene texto.",
+    "bodyView": {
+      "label": "Mostrar el correo como",
+      "html": "HTML",
+      "text": "Texto",
+      "lines": "Líneas"
+    },
+    "remoteImagesNote": "No se cargan las imágenes remotas.",
+    "htmlFrameTitle": "El correo con el formato que le dio su remitente",
+    "structured": {
+      "heading": "Datos estructurados (schema.org)",
+      "help": "Un pedido o factura que el correo lleva como marcado para clientes de correo. Solo se lee cuando no se aplica ningún perfil o el perfil no encuentra un total.",
+      "found": "Encontrado",
+      "notFound": "No encontrado",
+      "notFoundHelp": "El correo no lleva marcado de pedido, o no indica ningún total ni artículos.",
+      "seller": "Vendedor",
+      "currency": "Moneda",
+      "orderDate": "Fecha del pedido",
+      "unitPrice": "Precio unitario"
+    },
+    "lines": {
+      "help": "Las líneas con las que se comparan los patrones de un perfil, numeradas como las numera la lista «Encontrado por» de una prueba.",
+      "sourceLabel": "Origen de las líneas",
+      "sources": {
+        "text": "Texto",
+        "html": "HTML"
+      },
+      "noHtml": "Este correo no tiene parte HTML, así que un perfil que lee HTML no puede leerlo.",
+      "capped": "Solo se leen las primeras {max} líneas.",
+      "empty": "No hay líneas.",
+      "listLabel": "Líneas numeradas del correo"
+    },
+    "linkedReceipts": {
+      "componentsHeading": "Correos de compra vinculados",
+      "component": "Parte {part}: {subject} ({date})",
+      "settlementsHeading": "Pagado por",
+      "settlement": "{subject} ({date}), parte {amount}",
+      "enrichedBy": "Ya completada por: {subject}",
+      "openButton": "Abrir",
+      "open": "Abrir el correo {subject}"
+    },
+    "tradeTransactionSummary": "{action, select, BUY {Compra de {quantity} {symbol} por {total} el {date}.} SELL {Venta de {quantity} {symbol} por {total} el {date}.} DIVIDEND {Dividendo de {symbol} de {total} el {date}.} REINVEST {Dividendo reinvertido en {quantity} {symbol} por {total} el {date}.} other {{quantity} {symbol} por {total} el {date}.}}",
+    "noTradeTransaction": "Ninguna todavía: la operación se registra al aprobar su propuesta, o se vincula a una que ya esté en tu registro.",
+    "candidateShares": "{quantity} acciones",
+    "tradeNoCandidates": "Ninguna transacción de inversión de esta cuenta, tipo de operación y símbolo dentro de una semana del día de la operación está libre para vincular. Si registraste la operación tú mismo, revisa su cuenta y fecha; si no, aprueba la propuesta en la bandeja de revisión.",
+    "aiTradeHeading": "Operación que propone el agente de IA",
+    "aiTradeReader": "Ninguno: el agente de IA lo lee como una operación",
+    "noAiTradeTransaction": "Ninguna todavía: la operación se registra al aprobar la propuesta del agente de IA.",
+    "tradeProposalHeading": "Lo que registraría su propuesta"
+  },
+  "picker": {
+    "heading": "Elige la transacción",
+    "help": "No se asoció ninguna transacción automáticamente. Estas son tus transacciones del intervalo de fechas de abajo, que empieza siendo los días en torno a la compra. Elige la que pagó o cambia las fechas para buscar más lejos.",
+    "fromLabel": "Desde",
+    "toLabel": "Hasta",
+    "searchPlaceholder": "Buscar por beneficiario, descripción o importe...",
+    "loading": "Cargando transacciones",
+    "error": "No se pudieron cargar las transacciones.",
+    "retry": "Reintentar",
+    "empty": "No tienes transacciones en este periodo que se puedan vincular. Puedes ampliar las fechas de arriba para buscar más lejos.",
+    "emptySearch": "Ninguna transacción de este periodo coincide con la búsqueda. Puedes ampliar las fechas de arriba.",
+    "rangeReversed": "La fecha Desde es posterior a la fecha Hasta.",
+    "rangeIncomplete": "Introduce ambas fechas para listar las transacciones.",
+    "row": "{date}, {amount}, {payee}",
+    "noPayee": "sin beneficiario",
+    "linkButton": "Vincular",
+    "hasMore": "Solo se muestran las primeras {count}. Usa la búsqueda para reducir la lista.",
+    "ai": {
+      "heading": "Elige la transacción para la IA",
+      "help": "Estas son tus transacciones del intervalo de fechas de abajo, que empieza siendo los días en torno a la compra. Elige la que la IA debe desglosar según los productos del correo o cambia las fechas para buscar más lejos.",
+      "linkButton": "Usar esta transacción"
+    },
+    "sample": {
+      "heading": "Elige la transacción que pagó este correo",
+      "help": "Estas son tus transacciones del intervalo de fechas de abajo, que empieza siendo los días en torno a la compra. La elección se conserva en la guía y sirve para comprobar el perfil; no se vincula nada al correo. Cambia las fechas para buscar más lejos.",
+      "linkButton": "Usar esta transacción"
+    }
+  },
+  "callback": {
+    "title": "Conectando el buzón",
+    "connecting": "Finalizando la conexión",
+    "toasts": {
+      "connected": "Buzón conectado"
+    },
+    "success": {
+      "title": "Buzón conectado",
+      "body": "Conectado como {username}. Volviendo a la configuración."
+    },
+    "providerError": {
+      "title": "No se completó el inicio de sesión",
+      "withDescription": "El proveedor indicó: {error}. {description}",
+      "withoutDescription": "El proveedor indicó: {error}."
+    },
+    "missingParameters": {
+      "title": "Esta página se abrió sin un resultado de inicio de sesión",
+      "body": "Empieza de nuevo desde la configuración de recibos por correo y usa uno de los botones Conectar."
+    },
+    "failed": {
+      "title": "No se pudo conectar el buzón",
+      "fallback": "El servidor rechazó la conexión. Empieza de nuevo desde la configuración de recibos por correo."
+    },
+    "backLink": "Volver a la configuración de recibos por correo"
+  },
+  "recognize": {
+    "title": "Reconocer con IA",
+    "tradeTitle": "Reconocer como operación con IA",
+    "tradeMessage": "La IA leerá este correo como confirmación de una operación de corretaje y propondrá la transacción de inversión que informa (cuenta, compra, venta, dividendo en efectivo o dividendo reinvertido, símbolo, participaciones y total). No se guarda nada hasta que lo apruebes.",
+    "tradeConfirm": "Reconocer como operación",
+    "transactionSummary": "{date}, {amount}, {payee}",
+    "noPayee": "sin beneficiario",
+    "confirmMessage": "Este correo está vinculado a la transacción {summary}. La IA leerá el correo y propondrá cómo desglosar esta transacción por producto. ¿Continuar con esta transacción?",
+    "confirm": "Reconocer con IA",
+    "chooseOther": "Elegir otra transacción",
+    "candidatesHeading": "¿Qué transacción pagó el correo?",
+    "candidatesHelp": "Varias transacciones encajan con este correo. Elige la que debe usar la IA o busca otra.",
+    "candidatesLoading": "Cargando las transacciones que encajan",
+    "candidatesError": "No se pudieron cargar las transacciones que encajan.",
+    "retry": "Reintentar",
+    "useButton": "Usar esta transacción",
+    "searchOther": "Buscar otras transacciones",
+    "back": "Atrás",
+    "failed": "No se pudo iniciar el reconocimiento",
+    "queued": "En cola: ahora no hay ningún asistente de IA disponible para responder, así que la solicitud espera en la bandeja de revisión de IA a que la tome un agente (por ejemplo, mediante MCP).",
+    "handoffFailed": "La solicitud está en cola, pero no se pudo abrir el correo en el chat. Espera en la bandeja de revisión de IA a que la tome un agente (por ejemplo, mediante MCP).",
+    "inboxLink": "Abrir la bandeja de revisión de IA",
+    "opened": "Se abrió el chat con el correo adjunto. Lee el mensaje y pulsa Enviar.",
+    "chatPrompt": "Reconoce los productos, las cantidades y los precios del correo de pedido adjunto y desglosa mi transacción del {date} ({payee}, {amount}) por producto, con una categoría para cada uno. Toma la solicitud de revisión de IA {requestId} y envía tu propuesta para ella.",
+    "tradeChatPrompt": "Reconoce la operación del correo de confirmación del corredor adjunto: la cuenta, si es una compra, una venta, un dividendo en efectivo o un dividendo reinvertido, el símbolo, las participaciones (un dividendo en efectivo puede no indicar ninguna), el total ejecutado y la fecha. Reclama la solicitud de revisión con IA {requestId} y envía la operación para ella.",
+    "tradeDetachesTransaction": "Leído como operación, este correo deja de corresponder a {summary}: la operación crea su propia transacción de inversión."
+  },
+  "hub": {
+    "tabs": {
+      "ariaLabel": "Secciones de los recibos por correo",
+      "overview": "Resumen",
+      "emails": "Correos",
+      "profiles": "Perfiles",
+      "mailbox": "Buzón"
+    },
+    "demoRestricted": {
+      "heading": "Restringido en el modo de demostración",
+      "body": "Conectar un buzón y escribir perfiles están desactivados en el modo de demostración."
+    }
+  },
+  "process": {
+    "retryFailed": "Reintentar los correos fallidos ({count})",
+    "starting": "Iniciando...",
+    "progress": "{processed, plural, one {# correo procesado} other {# correos procesados}}, quedan {remaining}.",
+    "cancel": "Cancelar",
+    "cancelling": "Cancelando...",
+    "summary": "{count, plural, one {# correo procesado.} other {# correos procesados.}}",
+    "cancelledSummary": "Cancelado tras {count, plural, one {# correo.} other {# correos.}}",
+    "outcomes": "Terminaron así: {outcomes}.",
+    "passedOver": "{count, plural, one {# correo produjo un error y se omitió.} other {# correos produjeron un error y se omitieron.}}",
+    "failed": "El procesamiento se detuvo porque falló una solicitud.",
+    "failedWithReason": "El procesamiento se detuvo: {reason}",
+    "outcome": "{count} {state}",
+    "deletedOutcome": "{count} eliminados",
+    "close": "Cerrar"
+  },
+  "overview": {
+    "loading": "Cargando el resumen...",
+    "error": {
+      "title": "No se pudo cargar el resumen",
+      "body": "La solicitud falló, así que nada de lo que aparece aquí debe tomarse por vacío. Inténtalo de nuevo.",
+      "retry": "Reintentar"
+    },
+    "mailbox": {
+      "title": "Buzón",
+      "none": "Todavía no hay ningún buzón conectado.",
+      "connect": "Conectar un buzón",
+      "manage": "Abrir la configuración del buzón",
+      "state": {
+        "notConnected": "No conectado",
+        "failing": "La última consulta falló",
+        "off": "La consulta está desactivada",
+        "polling": "Consultando"
+      },
+      "auth": {
+        "password": "Inicio de sesión con contraseña",
+        "oauth2": "Inicio de sesión con un proveedor"
+      },
+      "lastSuccess": "Última consulta correcta {when}",
+      "neverPolled": "Aún no se ha consultado correctamente.",
+      "lastError": "Último error: {error}"
+    },
+    "emails": {
+      "title": "Correos",
+      "stored": "guardados",
+      "processable": "{count, plural, one {# correo se puede procesar de nuevo} other {# correos se pueden procesar de nuevo}}.",
+      "open": "Abrir los correos"
+    },
+    "proposals": {
+      "title": "Propuestas",
+      "waiting": "esperando tu aprobación",
+      "review": "Revisar las propuestas",
+      "open": "Abrir la bandeja de revisión de IA"
+    },
+    "profiles": {
+      "title": "Perfiles",
+      "approved": "aprobados",
+      "drafts": "{count, plural, one {# borrador espera tu aprobación} other {# borradores esperan tu aprobación}}.",
+      "manage": "Abrir los perfiles"
+    },
+    "uncovered": {
+      "title": "Remitentes sin perfil",
+      "help": "Estos remitentes enviaron correos que ningún perfil lee. Crea un perfil para uno de ellos: la guía de la pestaña Perfiles te acompaña paso a paso.",
+      "none": "Todos los remitentes de los correos guardados están cubiertos por un perfil.",
+      "row": "{domain} ({count, plural, one {# correo} other {# correos}})",
+      "create": "Crear un perfil"
+    }
+  },
+  "wizard": {
+    "heading": "Empieza con los recibos por correo",
+    "intro": "Cuatro pasos desde cero hasta tu primera propuesta.",
+    "done": "(hecho)",
+    "steps": {
+      "mailbox": {
+        "title": "Conecta un buzón",
+        "body": "Usa un buzón dedicado que reciba tus confirmaciones de pedido. Monize solo lo lee.",
+        "action": "Conectar un buzón"
+      },
+      "emails": {
+        "title": "Obtén los correos",
+        "body": "Los correos se leen cuando se consulta el buzón. Consúltalo desde la configuración del buzón para ver los primeros.",
+        "action": "Abrir los correos"
+      },
+      "profile": {
+        "title": "Crea un perfil para un remitente",
+        "body": "Un perfil le dice a Monize cómo leer las confirmaciones de pedido de un remitente. Escribe uno o redáctalo a partir de un correo guardado.",
+        "action": "Abrir los perfiles"
+      },
+      "review": {
+        "title": "Revisa las propuestas",
+        "body": "Cada correo se convierte en una propuesta sobre una transacción. No se cambia nada hasta que la apruebes.",
+        "action": "Abrir la bandeja de revisión de IA"
+      }
+    }
+  },
+  "profileWizard": {
+    "heading": "Crear un perfil para {domain}",
+    "stepsLabel": "Pasos de la guía",
+    "stepName": "{number}. {name}",
+    "steps": {
+      "samples": "Muestras",
+      "generate": "Generar",
+      "preview": "Vista previa y aceptación"
+    },
+    "cancel": "Cancelar",
+    "existingDraft": "Este dominio ya tiene un perfil en borrador.",
+    "useExistingDraft": "Empezar en la vista previa con el borrador",
+    "uncovered": {
+      "heading": "Crear un perfil para un dominio",
+      "help": "Dominios de remitentes con correos guardados y sin perfil aprobado. Elige uno para iniciar la guía.",
+      "loading": "Cargando los dominios de remitentes",
+      "error": "No se pudieron cargar los dominios de remitentes.",
+      "retry": "Reintentar",
+      "none": "Todos los remitentes de los correos guardados están cubiertos por un perfil."
+    },
+    "samples": {
+      "loading": "Cargando los correos",
+      "error": "No se pudieron cargar los correos.",
+      "retry": "Reintentar",
+      "empty": {
+        "title": "No hay correos de este dominio",
+        "body": "Ningún correo guardado tiene un remitente en {domain}."
+      },
+      "help": "Haz clic en un correo para leerlo y elegir la transacción que pagó. Después marca hasta {max} correos a partir de los cuales escribir el perfil; un correo solo se puede marcar cuando tiene una transacción.",
+      "tradeToggle": "Estos correos son confirmaciones de operaciones de un corredor (crean una transacción de inversión, así que no se asocia ninguna transacción bancaria)",
+      "tradeHelp": "Haz clic en un correo para leerlo y marca hasta {max} confirmaciones para escribir el perfil. No hace falta elegir ninguna transacción.",
+      "columns": {
+        "select": "Usar",
+        "date": "Fecha",
+        "email": "Correo",
+        "transaction": "Transacción"
+      },
+      "select": "Usar el correo {subject} como muestra",
+      "needsTransaction": "Primero elige una transacción para este correo.",
+      "limitReached": "Como máximo {max} muestras. Desmarca una para elegir otra.",
+      "noTransaction": "Ninguna elegida",
+      "tradeNoTransaction": "No hace falta en una confirmación de operación",
+      "selectedCount": "{count} de {max} muestras marcadas",
+      "continue": "Continuar con el asistente",
+      "emailLoading": "Cargando el correo",
+      "emailError": "No se pudo cargar el correo.",
+      "dialogTitle": "Correo y transacción: {subject}",
+      "emailHeading": "Correo"
+    },
+    "generate": {
+      "help": "El asistente lee estos correos y las transacciones que pagaron y escribe un borrador de perfil para {domain}. Todavía no hay nada aprobado.",
+      "reviseHelp": "Dile al asistente qué cambiar. Actualiza el mismo borrador a partir de estos correos y transacciones.",
+      "tradeHelp": "El asistente lee estas confirmaciones y escribe un borrador de perfil para {domain} que propone la transacción de inversión que informa cada una. Todavía no se aprueba nada.",
+      "tradeSample": "Confirmación de operación",
+      "feedbackLabel": "Cambios solicitados",
+      "feedbackPlaceholder": "Por ejemplo: el total es la línea que dice Importe pagado, no el subtotal.",
+      "send": "Enviar a la IA",
+      "sendFeedback": "Enviar nota a la IA",
+      "retry": "Enviar a la IA de nuevo",
+      "back": "Atrás",
+      "running": "El asistente está escribiendo el perfil...",
+      "runningHint": "Esto puede tardar un minuto. Mantén esta página abierta.",
+      "noDraft": "El asistente no guardó un borrador.",
+      "tryAgain": "Puedes enviarlo de nuevo o volver atrás y cambiar las muestras.",
+      "failed": "No se pudo contactar con el asistente.",
+      "sendFailed": "No se pudo enviar la solicitud."
+    },
+    "waiting": {
+      "heading": "Esperando a tu agente de IA",
+      "body": "Enviado a la bandeja de IA. Tu agente preparará el perfil cuando se conecte; puedes cerrar esto y volver más tarde.",
+      "working": "Tu agente ha recogido la solicitud y está trabajando en ella.",
+      "polling": "Mientras esta página está abierta, comprueba cada {seconds} segundos.",
+      "checkFailed": "No se pudo comprobar la solicitud. Se volverá a intentar en breve.",
+      "ended": "La solicitud se cerró sin un nuevo borrador (se descartó o caducó). Puedes empezar de nuevo.",
+      "inboxLink": "Abrir la bandeja de IA",
+      "checkNow": "Comprobar ahora",
+      "startOver": "Empezar de nuevo"
+    },
+    "preview": {
+      "loading": "Leyendo los correos con el borrador...",
+      "error": "No se pudo ejecutar la vista previa.",
+      "retry": "Reintentar",
+      "assistantSaid": "El asistente dice",
+      "help": "Esto es lo que haría el borrador con los correos de este dominio. No se ha guardado ni vinculado nada.",
+      "selectedHeading": "Correos seleccionados",
+      "othersHeading": "Otros correos de este dominio",
+      "othersCapped": "Mostrando los {shown} más recientes de otros {total} correos.",
+      "columns": {
+        "email": "Correo",
+        "expected": "Transacción esperada",
+        "parsed": "Leído por el borrador",
+        "agrees": "Coincide",
+        "outcome": "Resultado",
+        "matched": "Transacción asociada"
+      },
+      "nothingRead": "No se pudo leer nada",
+      "notStated": "no indicado",
+      "parsedDate": "Fecha: {date}",
+      "parsedTotal": "Total: {total}",
+      "parsedLines": "{count, plural, one {# línea} other {# líneas}}",
+      "parsedTrade": "{action, select, BUY {Compra {quantity} participaciones de {symbol}} SELL {Vende {quantity} participaciones de {symbol}} DIVIDEND {Paga un dividendo de {symbol}} REINVEST {Reinvierte un dividendo en {quantity} participaciones de {symbol}} other {Opera con {symbol}}}",
+      "tradeInconsistent": "El precio no coincide con el total, así que no se aplicará automáticamente",
+      "noExpectation": "Ninguna",
+      "noMatch": "Sin transacción",
+      "agreesYes": "Sí",
+      "agreesNo": "No",
+      "agreesUnknown": "Sin comprobar",
+      "nothingToShow": "El borrador no tiene correos que mostrar.",
+      "backToSamples": "Volver a las muestras",
+      "backToAi": "Volver a la IA",
+      "accept": "Aceptar y procesar",
+      "approved": "Perfil aprobado",
+      "changedElsewhere": "El perfil se cambió en otro lugar. Vuelve a cargar la vista previa.",
+      "approveFailed": "No se pudo aprobar el perfil.",
+      "approvedProcessing": "El perfil está aprobado. Los correos guardados de {domain} se están leyendo con él.",
+      "done": "Hecho",
+      "outcomes": {
+        "matched": "Coincidió con una transacción",
+        "ambiguous": "Coinciden varias transacciones",
+        "unmatched": "Ninguna transacción coincidió",
+        "parse_failed": "No se pudo leer",
+        "not_applicable": "No lo lee este perfil",
+        "skip_line": "Omitido (se encontró una línea de omisión)",
+        "wait_line": "En espera (pedido no definitivo)",
+        "discard_ignore": "Ignorado por este perfil",
+        "discard_delete": "Eliminado por este perfil",
+        "no_html": "Sin parte HTML",
+        "trade": "Propone una operación",
+        "trade_exists": "Ya está en tu registro",
+        "component": "Correo de compra (espera el pago)"
+      },
+      "parsedTradeAccount": "Cuenta: {account}",
+      "accountWithCurrency": "{name} ({currency})",
+      "accountUnknown": "desconocida",
+      "parsedTradeNoAccount": "No se encontró ninguna cuenta para esta operación",
+      "parsedTradeCurrency": "Moneda: {currency}"
+    }
+  },
+  "trade": {
+    "summary": "{action, select, BUY {Compra: {quantity} participaciones de {symbol} por {total}, con fecha {date}.} SELL {Venta: {quantity} participaciones de {symbol} por {total}, con fecha {date}.} DIVIDEND {Dividendo de {symbol} de {total}, con fecha {date}.} REINVEST {Reinversión de un dividendo en {quantity} participaciones de {symbol} por {total}, con fecha {date}.} other {{symbol} por {total}, con fecha {date}.}}",
+    "account": "Cuenta indicada en el correo: {account}",
+    "priceMismatch": "El precio medio no coincide con las participaciones y el total, así que esta operación no se aplicará automáticamente.",
+    "dividendMismatch": "El importe por acción no coincide con las participaciones y el total, así que este dividendo no se aplicará automáticamente.",
+    "dividendShares": "Pagado sobre {quantity} participaciones",
+    "dividendPerShare": "Importe por acción en el correo: {price}",
+    "incomplete": "El perfil no pudo leer una operación completa en este correo.",
+    "totalFromPrice": "el total que implica el precio",
+    "dateUnknown": "el día en que llegó el correo",
+    "price": "Precio medio en el correo: {price} por acción",
+    "proposalSecurity": "Valor: {name}",
+    "proposalAccount": "Cuenta: {account}",
+    "proposalPrice": "Precio: {price} por acción",
+    "proposalDividendPerShare": "Importe por acción: {price}",
+    "proposalCommission": "Comisión: {commission}",
+    "proposalReview": "No se registra nada hasta que lo apruebes.",
+    "proposalReviewLink": "Revisarla en la bandeja",
+    "aiWaiting": "El agente de IA aún no ha propuesto la operación. Su propuesta aparecerá aquí y en la bandeja de revisión.",
+    "aiBooked": "Registrada a partir de la propuesta del agente de IA: consulta la transacción de arriba.",
+    "aiNoProposal": "No hay ninguna propuesta del agente de IA pendiente para este correo.",
+    "currencyFrom": "Moneda: {currency}, {source, select, amount {nombrada por el importe} marker {de un marcador de moneda del perfil} other {de tu valor para el símbolo}}",
+    "bookTo": "Se registra en: {account}",
+    "bookToNotTradable": "Se registra en {account}, que no es una cuenta de corretaje abierta, así que la operación no puede registrarse allí.",
+    "bookToUnknown": "Se registra en una cuenta que no está en tu lista, así que la operación no puede registrarse allí."
+  },
+  "linkedHint": {
+    "emails": "¿Una transacción bancaria descrita en correos de varios remitentes (por ejemplo, una tienda y su proveedor de pago aplazado)? Selecciona juntos hasta {max} correos de cada uno de esos remitentes y prepara perfiles vinculados.",
+    "profiles": "La guía de abajo prepara un perfil para un solo remitente. ¿Una transacción bancaria descrita en correos de varios remitentes (por ejemplo, una tienda y su proveedor de pago aplazado)? Selecciona en la pestaña Correos hasta {max} correos de cada uno de esos remitentes y prepara perfiles vinculados.",
+    "openEmails": "Abrir la pestaña Correos"
+  }
+}

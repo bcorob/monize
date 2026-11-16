@@ -2,25 +2,28 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen } from '@/test/render';
 import { HoldingsList } from './HoldingsList';
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (n: number) => `$${n.toFixed(2)}`,
-    formatCurrencyPrecise: (n: number) => {
-      const abs = Math.abs(n);
-      let digits = 2;
-      if (n !== 0 && abs < 0.005) {
-        digits = Math.min(6, Math.max(2, -Math.floor(Math.log10(abs)) + 2));
-      }
-      return `$${n.toFixed(digits)}`;
-    },
-    formatSignedPercent: (n: number, decimals = 2) =>
-      `${n >= 0 ? '+' : ''}${n.toFixed(decimals)}%`,
-    formatQuantity: (n: number) =>
-      new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 4 }).format(n),
-    numberFormat: 'en-US',
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (n: number) => `$${n.toFixed(2)}`,
+      formatCurrencyPrecise: (n: number) => {
+        const abs = Math.abs(n);
+        let digits = 2;
+        if (n !== 0 && abs < 0.005) {
+          digits = Math.min(6, Math.max(2, -Math.floor(Math.log10(abs)) + 2));
+        }
+        return `$${n.toFixed(digits)}`;
+      },
+      formatSignedPercent: (n: number, decimals = 2) =>
+        `${n >= 0 ? '+' : ''}${n.toFixed(decimals)}%`,
+      formatQuantity: (n: number) =>
+        new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 4 }).format(n),
+      numberFormat: 'en-US',
+    }),
+  };
+});
 describe('HoldingsList', () => {
   it('renders loading state', () => {
     render(<HoldingsList holdings={[]} isLoading={true} />);

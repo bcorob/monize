@@ -24,4 +24,10 @@ describe('SettingsLoading', () => {
     const { getAllByTestId } = render(<SettingsLoading />);
     expect(getAllByTestId('skeleton').length).toBeGreaterThan(0);
   });
+
+  it('takes the Settings page width, so the page does not jump when it loads', () => {
+    const { container } = render(<SettingsLoading />);
+    expect(container.querySelector('.max-w-6xl')).not.toBeNull();
+    expect(container.querySelector('.max-w-2xl')).toBeNull();
+  });
 });

@@ -5,7 +5,8 @@ import {
   UpdateInvestmentReportData,
   InvestmentReportResult,
 } from '@/types/investment-report';
-import { getCached, setCache, invalidateCache } from './apiCache';
+import { InvestmentTransactionSummary } from '@/types/investment';
+import { dedupe, patchCached, invalidateCache } from './apiCache';
 
 // The saved investment-reports list lives under one cache key; keep the key and
 // TTL in one place so getAll and the optimistic favourite patch cannot drift.
@@ -21,7 +22,40 @@ export interface ExecuteInvestmentReportParams {
   accountIds?: string[];
 }
 
+/** The filter the transaction-history report is showing, for its KPIs. */
+export interface InvestmentTransactionSummaryParams {
+  accountIds?: string[];
+  startDate?: string;
+  endDate?: string;
+  actions?: string[];
+}
+
 export const investmentReportsApi = {
+  /**
+   * Volume, count and by-action subtotals over the WHOLE filtered set.
+   *
+   * Asked of the server rather than added up beside the table: the rows are in
+   * each security's own currency, and the client fetches only a bounded number
+   * of pages, so a figure derived here would be an unlabelled cross-currency sum
+   * of part of the data (issue #1394).
+   */
+  getTransactionSummary: async (
+    params: InvestmentTransactionSummaryParams,
+  ): Promise<InvestmentTransactionSummary> => {
+    const response = await apiClient.get<InvestmentTransactionSummary>(
+      '/reports/investment-transactions/summary',
+      {
+        params: {
+          accountIds: params.accountIds?.length ? params.accountIds.join(',') : undefined,
+          startDate: params.startDate || undefined,
+          endDate: params.endDate || undefined,
+          actions: params.actions?.length ? params.actions.join(',') : undefined,
+        },
+      },
+    );
+    return response.data;
+  },
+
   create: async (data: CreateInvestmentReportData): Promise<InvestmentReport> => {
     const response = await apiClient.post<InvestmentReport>('/reports/investment', data);
     invalidateCache('investment-reports:');
@@ -29,11 +63,10 @@ export const investmentReportsApi = {
   },
 
   getAll: async (): Promise<InvestmentReport[]> => {
-    const cached = getCached<InvestmentReport[]>(INVESTMENT_REPORTS_CACHE_KEY);
-    if (cached) return cached;
-    const response = await apiClient.get<InvestmentReport[]>('/reports/investment');
-    setCache(INVESTMENT_REPORTS_CACHE_KEY, response.data, INVESTMENT_REPORTS_CACHE_TTL);
-    return response.data;
+    return dedupe(INVESTMENT_REPORTS_CACHE_KEY, async () => {
+      const response = await apiClient.get<InvestmentReport[]>('/reports/investment');
+      return response.data;
+    }, INVESTMENT_REPORTS_CACHE_TTL);
   },
 
   getById: async (id: string): Promise<InvestmentReport> => {
@@ -73,16 +106,14 @@ export const investmentReportsApi = {
     // just starred -- already shows the new order (issue #1224). The
     // invalidateCache below drops this optimistic copy once the server answers,
     // on either path, so the next read reconciles against the server.
-    const cached = getCached<InvestmentReport[]>(INVESTMENT_REPORTS_CACHE_KEY);
-    if (cached) {
-      setCache(
-        INVESTMENT_REPORTS_CACHE_KEY,
-        cached.map((report) =>
+    patchCached<InvestmentReport[]>(
+      INVESTMENT_REPORTS_CACHE_KEY,
+      (list) =>
+        list.map((report) =>
           report.id === id ? { ...report, isFavourite } : report,
         ),
-        INVESTMENT_REPORTS_CACHE_TTL,
-      );
-    }
+      INVESTMENT_REPORTS_CACHE_TTL,
+    );
     try {
       const response = await apiClient.patch<InvestmentReport>(`/reports/investment/${id}`, {
         isFavourite,

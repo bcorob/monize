@@ -6,6 +6,7 @@ import { SplitKind } from "../../../transactions/entities/split-kind.enum";
 import { roundMoney } from "../../../common/round.util";
 import { FUNDING_ACCOUNT_ACTIONS } from "../../../securities/investment-replay.util";
 import { MappedBill } from "../model/mny-import-model";
+import { tagIdsFor } from "./write-tags";
 
 /**
  * Writer for the bills the wizard selected, as Monize scheduled transactions.
@@ -30,6 +31,8 @@ export interface WriteBillsInput {
   readonly securityIdByHandle: ReadonlyMap<number, string>;
   /** Account key -> its investment-pair partner, for funding accounts. */
   readonly linkedKeyByKey: ReadonlyMap<string, string>;
+  /** Classification item (`CAT.hcat`) -> Monize tag id, from `writeTags`. */
+  readonly tagIdByHandle: ReadonlyMap<number, string>;
 }
 
 export interface WrittenBills {
@@ -145,7 +148,7 @@ export async function writeBills(
       investmentCommission: investment === null ? null : investment.commission,
       investmentTotalAmount:
         investment === null ? null : roundMoney(Math.abs(bill.amount)),
-      tagIds: [],
+      tagIds: tagIdsFor(bill.tagHandles, input.tagIdByHandle),
     });
 
     for (const split of bill.splits) {

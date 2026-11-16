@@ -3,6 +3,7 @@
     "noneToUpdate": "無證券需要更新",
     "updated": "{count, plural, one {# 個證券價格已更新} other {# 個證券價格已更新}}",
     "partialFailure": "價格已更新：{updated} 成功，{failed} 失敗{symbols}",
+    "partialFailureWithReasons": "價格已更新：{updated} 成功，{failed} 失敗{symbols}\n{reasons}",
     "failed": "重新整理價格失敗"
   },
   "page": {
@@ -10,6 +11,7 @@
     "subtitle": "管理您的股票、ETF、共同基金及其他證券",
     "newSecurity": "+ 新增證券",
     "searchPlaceholder": "依代號或名稱搜尋...",
+    "statusFilterLabel": "狀態",
     "statusAll": "全部（{count}）",
     "statusActive": "活躍（{count}）",
     "statusInactive": "非活躍（{count}）",
@@ -49,6 +51,7 @@
       "name": "名稱",
       "type": "類型",
       "shares": "股數",
+      "value": "市值",
       "exchange": "交易所",
       "currency": "貨幣",
       "provider": "提供者",
@@ -63,12 +66,10 @@
       "inactive": "非活躍",
       "inactiveShort": "非"
     },
-    "providerTitle": {
-      "override": "個別證券的提供者覆寫設定",
-      "inherited": "繼承自您的預設報價提供者偏好設定"
-    },
+    "providerInherited": "{provider}（預設）",
     "columnTitles": {
       "shares": "所有科目中目前持有的股數",
+      "value": "所有帳戶中持有的股數按最新價格計算，以證券本身的貨幣計價",
       "source": "最近一次價格的來源"
     },
     "actions": {
@@ -115,7 +116,11 @@
     "exchangeLabel": "交易所",
     "currencyLabel": "貨幣",
     "currencyNotConfigured": "{code} — 不在你的貨幣清單中",
+    "currencyPlaceholder": "選擇貨幣...",
+    "currencyNotReported": "資料提供者沒有回報這個加密貨幣的計價貨幣。請選擇它所使用的法定貨幣。",
     "quoteProviderLabel": "報價提供者",
+    "skipPriceUpdatesLabel": "停用自動價格更新",
+    "skipPriceUpdatesHelp": "Monize 將不會為此證券取得價格。適用於沒有提供者能夠報價的證券；您自行輸入的價格仍然有效。選擇其他報價提供者或 MSN 金融工具 ID 會重新啟用更新。",
     "msnIdLabel": "MSN 金融商品 ID（進階）",
     "lookupProviderAriaLabel": "查找提供者",
     "lookupButton": "查找",
@@ -139,7 +144,11 @@
     "providers": {
       "auto": "自動",
       "yahoo": "Yahoo",
-      "msn": "MSN"
+      "msn": "MSN",
+      "lse": "LSE",
+      "deutsche_boerse": "Deutsche Börse",
+      "bond_engine": "債券引擎",
+      "html_table": "網頁表格"
     },
     "types": {
       "select": "選擇類型...",
@@ -189,16 +198,50 @@
       "deleteConfirm": "刪除",
       "deleteSuccess": "已刪除資產類別「{name}」",
       "deleteFailed": "無法刪除資產類別「{name}」"
+    },
+    "bondFetchAction": "從官方來源取得 {code}",
+    "bondFetching": "正在從發行機構取得 {code} 及其參考利率。這最多可能需要一分鐘。",
+    "bondFetchFailed": "無法取得該系列。",
+    "bondCurrencyLocked": "此證券已連結至 {linkedCurrency} 的債券種類。請將幣別改回 {linkedCurrency},或先取消連結該債券種類(取消連結會刪除其計算價格)。",
+    "bondProgramLabel": "債券種類",
+    "bondProgramNone": "未連結",
+    "bondProgramCurrent": "已連結的債券種類",
+    "bondProgramLoading": "正在載入債券種類...",
+    "bondProgramLoadFailed": "無法載入債券種類,因此暫時無法連結債券種類。",
+    "bondProgramRetry": "重試",
+    "bondNoPrograms": "債券目錄中還沒有任何債券種類。",
+    "bondAutoFetchLabel": "自動取得此債券種類的新系列",
+    "bondAutoFetchHelp": "開啟後,Monize 每天都會從官方來源讀取此債券種類的新系列,這樣您無需先取得系列即可記錄買入。",
+    "bondCountryLabel": "國家",
+    "bondCountryOther": "其他",
+    "bondCountryOtherInfo": "如需支援其他國家的債券，可在專案的 <link>GitHub</link> 上提出請求。",
+    "quoteTable": {
+      "urlLabel": "價格表網頁",
+      "urlHelp": "頁面需要一個表格，其標題列包含日期欄與收盤價欄。",
+      "test": "測試",
+      "previewFailed": "無法讀取此頁面。",
+      "summary": "{first} 至 {last}，共 {count, plural, other {# 天}}",
+      "columns": "使用的欄位：{columns}",
+      "currency": "頁面上的貨幣：{currency}",
+      "noCurrency": "頁面未註明貨幣；價格依該證券的貨幣儲存。",
+      "skipped": "{count, plural, other {已略過 # 列無法讀取的資料}}",
+      "headers": {
+        "date": "日期",
+        "open": "開盤",
+        "high": "最高",
+        "low": "最低",
+        "close": "收盤",
+        "volume": "成交量"
+      }
     }
   },
   "priceForm": {
     "dateLabel": "日期",
     "closePriceLabel": "收盤價",
-    "openPriceLabel": "開盤價",
-    "highPriceLabel": "最高價",
-    "lowPriceLabel": "最低價",
-    "volumeLabel": "成交量",
-    "optionalPlaceholder": "選填",
+    "openPriceLabel": "開盤價（選填）",
+    "highPriceLabel": "最高價（選填）",
+    "lowPriceLabel": "最低價（選填）",
+    "volumeLabel": "成交量（選填）",
     "submitCreate": "新增價格",
     "submitUpdate": "更新價格"
   },
@@ -246,7 +289,9 @@
     },
     "collapseAll": "全部收合",
     "expandAll": "全部展開",
-    "groupCount": "{count} 筆價格"
+    "groupCount": "{count} 筆價格",
+    "addYearButton": "再新增一年歷史",
+    "addYearTitle": "向資料提供者再取得一年歷史價格"
   },
   "transactionHistory": {
     "accountLabel": "科目",
@@ -284,7 +329,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "長期資本利得再投資",
       "CAPITAL_GAIN_SHORT": "短期資本利得",
       "CAPITAL_GAIN_LONG": "長期資本利得",
-      "REDEEM": "贖回定存單/債券"
+      "REDEEM": "贖回定存單/債券",
+      "RETURN_OF_CAPITAL": "資本返還"
     },
     "toasts": {
       "loadHistoryFailed": "載入歷史失敗",
@@ -333,11 +379,20 @@
     "nameRequired": "名稱為必填",
     "nameMax": "名稱不得超過 255 個字元",
     "currencyRequired": "貨幣為必填",
-    "descriptionMax": "描述不能超過5000個字元"
+    "bondProgramRequired": "債券種類為必填",
+    "descriptionMax": "描述不能超過5000個字元",
+    "quoteUrlRequired": "請輸入包含價格表的頁面。",
+    "quoteUrlInvalid": "請輸入以 http:// 或 https:// 開頭的完整網址。"
   },
   "priceValidation": {
     "dateRequired": "日期為必填",
     "priceRequired": "價格為必填",
     "priceNonNegative": "價格必須為非負數"
+  },
+  "priceAlert": {
+    "label": "價格變動提醒 (%)",
+    "help": "留空以停用。相對於上一個有資料的交易日，價格上漲或下跌時提醒，每個證券每個 UTC 日最多一次。",
+    "range": "請輸入 0.1 至 1000 之間的百分比。",
+    "chartLabel": "在價格提醒中附加圖表"
   }
 }

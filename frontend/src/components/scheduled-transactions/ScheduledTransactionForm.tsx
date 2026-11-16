@@ -1,7 +1,8 @@
 'use client';
 
+import { FALLBACK_DEFAULT_CURRENCY } from '@/lib/default-currency';
 import { useState, useEffect, useMemo, useRef, MutableRefObject } from 'react';
-import { useForm, Controller, Resolver } from 'react-hook-form';
+import { useForm, useWatch, Controller, Resolver } from 'react-hook-form';
 import '@/lib/zodConfig';
 import { MAX_REMINDER_DAYS_BEFORE } from '@/lib/scheduled-reminder-bounds';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -16,19 +17,30 @@ import { Combobox } from '@/components/ui/Combobox';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { Modal } from '@/components/ui/Modal';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
+import { InfoTooltip } from '@/components/ui/InfoTooltip';
 import { TagForm } from '@/components/tags/TagForm';
 import { SplitEditor, SplitRow, createEmptySplits, toSplitRows, toCreateSplitData } from '@/components/transactions/SplitEditor';
+import { bookSplitRowsAtMinorUnit } from '@/lib/minor-unit-booking';
 import { CurrencyPickerButton } from '@/components/transactions/CurrencyPickerButton';
 import { scheduledTransactionsApi } from '@/lib/scheduled-transactions';
+import { estimateAmountOn } from '@/lib/scheduled-effective-amount';
+import { useAmountEstimateText } from './useAmountEstimateText';
+import { useAuthStore } from '@/store/authStore';
 import { exchangeRatesApi } from '@/lib/exchange-rates';
 import { investmentsApi } from '@/lib/investments';
-import { getLocalDateString } from '@/lib/utils';
+import { getLocalDateString, parseLocalDate } from '@/lib/utils';
+import { advanceByFrequency } from '@/lib/frequency';
 import { payeesApi } from '@/lib/payees';
 import { categoriesApi } from '@/lib/categories';
 import { createCategoryFromInput } from '@/lib/category-create';
 import { accountsApi } from '@/lib/accounts';
 import { tagsApi } from '@/lib/tags';
-import { ScheduledTransaction, FrequencyType, FREQUENCY_VALUES } from '@/types/scheduled-transaction';
+import {
+  ScheduledTransaction,
+  ScheduleAmountEstimate,
+  FrequencyType,
+  FREQUENCY_VALUES,
+} from '@/types/scheduled-transaction';
 import { InvestmentAction, Security } from '@/types/investment';
 import { baseInvestmentAction } from '@/lib/investment-actions';
 import { Transaction } from '@/types/transaction';
@@ -36,8 +48,18 @@ import { Payee } from '@/types/payee';
 import { Category } from '@/types/category';
 import { Account } from '@/types/account';
 import { Tag } from '@/types/tag';
+import { useTagPickerOptions } from '@/hooks/useTagPickerOptions';
 import { buildCategoryTree } from '@/lib/categoryUtils';
-import { roundToCents, getCurrencySymbol, FX_RATE_DISPLAY_DECIMALS } from '@/lib/format';
+import {
+  roundToCents,
+  roundMoney,
+  sumMoney,
+  roundToEntryPlaces,
+  entryDecimalPlaces,
+  moneyDecimalsForCurrency,
+  getCurrencySymbol,
+  FX_RATE_DISPLAY_DECIMALS,
+} from '@/lib/format';
 import { buildAccountDropdownOptions } from '@/lib/account-utils';
 import { useAccountOptionLabel } from '@/hooks/useMainAccountName';
 import { getErrorMessage } from '@/lib/errors';
@@ -50,6 +72,12 @@ import { optionalUuid, optionalString, optionalNumber } from '@/lib/zod-helpers'
 import { useFormSubmitRef } from '@/hooks/useFormSubmitRef';
 import { useFormDirtyNotify } from '@/hooks/useFormDirtyNotify';
 import { FormActions } from '@/components/ui/FormActions';
+import { TRANSACTION_NOTE_MAX_LENGTH } from '@/lib/transaction-note';
+import { ExclamationTriangleIcon } from '@heroicons/react/24/outline';
+import { CustomRecurrence, normalizeCustomRecurrence } from '@/lib/custom-recurrence';
+import { customRecurrenceErrorKey } from '@/lib/custom-recurrence-edit';
+import { CustomRecurrenceEditor } from './CustomRecurrenceEditor';
+import { useCustomRecurrenceField } from './useCustomRecurrenceField';
 
 const logger = createLogger('ScheduledTxForm');
 
@@ -58,11 +86,11 @@ export type ScheduledTransactionMode = 'transaction' | 'split' | 'transfer' | 'i
 
 // Mirrors visibility rules in InvestmentTransactionForm — keep in sync.
 const SECURITY_REQUIRED_ACTIONS: InvestmentAction[] = [
-  'BUY', 'SELL', 'DIVIDEND', 'CAPITAL_GAIN', 'SPLIT', 'REINVEST', 'ADD_SHARES', 'REMOVE_SHARES',
+  'BUY', 'SELL', 'DIVIDEND', 'CAPITAL_GAIN', 'RETURN_OF_CAPITAL', 'SPLIT', 'REINVEST', 'ADD_SHARES', 'REMOVE_SHARES',
 ];
 const QUANTITY_PRICE_ACTIONS: InvestmentAction[] = ['BUY', 'SELL', 'REINVEST'];
 const QUANTITY_ONLY_ACTIONS: InvestmentAction[] = ['ADD_SHARES', 'REMOVE_SHARES', 'SPLIT'];
-const AMOUNT_ONLY_ACTIONS: InvestmentAction[] = ['DIVIDEND', 'INTEREST', 'CAPITAL_GAIN'];
+const AMOUNT_ONLY_ACTIONS: InvestmentAction[] = ['DIVIDEND', 'INTEREST', 'CAPITAL_GAIN', 'RETURN_OF_CAPITAL'];
 const FUNDING_ACCOUNT_ACTIONS: InvestmentAction[] = ['BUY', 'SELL'];
 
 const SCHEDULABLE_INVESTMENT_ACTIONS: InvestmentAction[] = [
@@ -70,6 +98,8 @@ const SCHEDULABLE_INVESTMENT_ACTIONS: InvestmentAction[] = [
   // Money's distribution vocabulary (issue #1149): schedulable like their base.
   'REINVEST_INTEREST', 'REINVEST_CAPITAL_GAIN_SHORT', 'REINVEST_CAPITAL_GAIN_LONG',
   'CAPITAL_GAIN_SHORT', 'CAPITAL_GAIN_LONG', 'REDEEM',
+  // A fund's regular return of capital (issue #1800).
+  'RETURN_OF_CAPITAL',
 ];
 
 const buildScheduledTransactionSchema = (t: (key: string) => string) => z.object({
@@ -79,15 +109,21 @@ const buildScheduledTransactionSchema = (t: (key: string) => string) => z.object
   payeeName: optionalString,
   categoryId: optionalUuid,
   amount: z.number({ error: 'Amount is required' }),
-  currencyCode: z.string().default('CAD'),
+  currencyCode: z.string().default(FALLBACK_DEFAULT_CURRENCY),
   description: optionalString,
   referenceNumber: optionalString,
   frequency: z.enum(FREQUENCY_VALUES),
+  // The Custom rule (docs/specs/custom-recurrence.md); checked below, and sent
+  // only while the frequency is Custom.
+  customRecurrence: z.custom<CustomRecurrence | null>().nullable().optional(),
   nextDueDate: z.string().min(1, t('validation.dueDateRequired')),
   endDate: optionalString,
   occurrencesRemaining: optionalNumber,
   isActive: z.boolean().default(true),
   autoPost: z.boolean().default(false),
+  // Price each occurrence from the payee and category's payment history
+  // (issue #2096); never together with auto-post.
+  amountIsEstimated: z.boolean().default(false),
   // Bounded like the server bounds it: the value reaches a date computation, and
   // an out-of-range one used to come back as a raw 400 from a form that had
   // happily accepted it (issue #1247 review).
@@ -98,6 +134,10 @@ const buildScheduledTransactionSchema = (t: (key: string) => string) => z.object
       message: `Must be ${MAX_REMINDER_DAYS_BEFORE} days or fewer`,
     })
     .default(3),
+}).superRefine((data, ctx) => {
+  if (data.frequency !== 'CUSTOM') return;
+  const errorKey = customRecurrenceErrorKey(data.customRecurrence);
+  if (errorKey) ctx.addIssue({ code: 'custom', path: ['customRecurrence'], message: t(errorKey) });
 });
 
 type ScheduledTransactionFormData = z.infer<ReturnType<typeof buildScheduledTransactionSchema>>;
@@ -117,6 +157,12 @@ interface ScheduledTransactionFormProps {
   submitRef?: MutableRefObject<(() => void) | null>;
 }
 
+/** The rule as the API stores it, from a form value the schema has already checked. */
+function canonicalCustomRecurrence(rule: CustomRecurrence | null | undefined): CustomRecurrence | null {
+  const result = normalizeCustomRecurrence(rule);
+  return result.ok ? result.rule : null;
+}
+
 // Determine if an existing scheduled transaction is a transfer
 function isScheduledTransfer(st?: ScheduledTransaction): boolean {
   if (!st) return false;
@@ -126,6 +172,47 @@ function isScheduledTransfer(st?: ScheduledTransaction): boolean {
 // Get the transfer destination account ID from an existing transfer
 function getTransferAccountId(st?: ScheduledTransaction): string {
   return st?.transferAccountId || '';
+}
+
+/** What an estimate preview is asked for (issues #2096, #2164). */
+interface EstimateRequest {
+  accountId: string;
+  basis:
+    | { payeeId: string; categoryId: string }
+    | { transferAccountId: string; frequency: FrequencyType };
+  nextDueDate: string;
+}
+
+/**
+ * The key an estimate preview is requested and kept by, the request itself
+ * serialized, or `null` while its basis is incomplete: a transaction's payee
+ * and category (issue #2096), a transfer's destination and frequency (issue
+ * #2164, a card's statement cycle applies to a monthly transfer).
+ */
+function estimateRequestKeyOf(fields: {
+  transfer: boolean;
+  accountId: string | null | undefined;
+  payeeId: string | null | undefined;
+  categoryId: string | null | undefined;
+  transferAccountId: string | null | undefined;
+  frequency: FrequencyType | null | undefined;
+  nextDueDate: string | null | undefined;
+}): string | null {
+  if (!fields.accountId) return null;
+  let basis: EstimateRequest['basis'];
+  if (fields.transfer) {
+    if (!fields.transferAccountId || fields.transferAccountId === fields.accountId) return null;
+    basis = { transferAccountId: fields.transferAccountId, frequency: fields.frequency || 'MONTHLY' };
+  } else {
+    if (!fields.payeeId || !fields.categoryId) return null;
+    basis = { payeeId: fields.payeeId, categoryId: fields.categoryId };
+  }
+  const request: EstimateRequest = {
+    accountId: fields.accountId,
+    basis,
+    nextDueDate: fields.nextDueDate || '',
+  };
+  return JSON.stringify(request);
 }
 
 export function ScheduledTransactionForm({
@@ -197,7 +284,7 @@ export function ScheduledTransactionForm({
   // True only once a price request completes and returns no usable close -- the
   // one state that means "this security genuinely has no price history". Kept
   // apart from marketPrice == null, which is also the loading window and a failed
-  // lookup: a failed lookup is not an empty dataset (frontend/CLAUDE.md).
+  // lookup: a failed lookup is not an empty dataset (docs/frontend/api-and-cache.md).
   const [priceHistoryEmpty, setPriceHistoryEmpty] = useState(false);
   const [investmentTotalValue, setInvestmentTotalValue] = useState<number | ''>(() => {
     const q = scheduledTransaction?.investmentQuantity;
@@ -226,19 +313,34 @@ export function ScheduledTransactionForm({
     scheduledTransaction?.occurrencesRemaining !== null &&
     scheduledTransaction?.occurrencesRemaining !== undefined
   );
-  const [splits, setSplits] = useState<SplitRow[]>(
+  // A stored template is priced at 4dp (a LINEAR mortgage installment is
+  // 864.5833 + 306.0625 = 1,170.6458); the form edits it in the currency's
+  // smallest unit, lines and parent alike, or saving a cents parent over the
+  // 4dp lines is refused (issue #1581).
+  const [bookedTemplate] = useState(() =>
     scheduledTransaction?.splits && scheduledTransaction.splits.length > 0 && !isScheduledTransfer(scheduledTransaction)
-      ? toSplitRows(scheduledTransaction.splits)
-      : templateTransaction?.splits && templateTransaction.splits.length > 0 && !templateTransaction.isTransfer
-        ? toSplitRows(templateTransaction.splits)
-        : []
+      ? bookSplitRowsAtMinorUnit(
+          toSplitRows(scheduledTransaction.splits),
+          Number(scheduledTransaction.amount),
+          scheduledTransaction.currencyCode,
+          scheduledTransaction.splits,
+        )
+      : null,
+  );
+  const [splits, setSplits] = useState<SplitRow[]>(
+    bookedTemplate
+      ? bookedTemplate.rows
+      : scheduledTransaction?.splits && scheduledTransaction.splits.length > 0 && !isScheduledTransfer(scheduledTransaction)
+        ? toSplitRows(scheduledTransaction.splits)
+        : templateTransaction?.splits && templateTransaction.splits.length > 0 && !templateTransaction.isTransfer
+          ? toSplitRows(templateTransaction.splits)
+          : []
   );
 
   const {
     register,
     handleSubmit,
     setValue,
-    watch,
     control,
     formState: { errors, isDirty },
   } = useForm<ScheduledTransactionFormData>({
@@ -251,17 +353,20 @@ export function ScheduledTransactionForm({
           payeeName: scheduledTransaction.payeeName || '',
           categoryId: scheduledTransaction.categoryId || '',
           amount: isScheduledTransfer(scheduledTransaction)
-            ? Math.abs(Math.round(Number(scheduledTransaction.amount) * 100) / 100)
-            : Math.round(Number(scheduledTransaction.amount) * 100) / 100,
+            ? Math.abs(roundToEntryPlaces(Number(scheduledTransaction.amount), scheduledTransaction.currencyCode))
+            : (bookedTemplate?.parentAmount ??
+              roundToEntryPlaces(Number(scheduledTransaction.amount), scheduledTransaction.currencyCode)),
           currencyCode: scheduledTransaction.currencyCode,
           description: scheduledTransaction.description || '',
-          referenceNumber: '',
+          referenceNumber: scheduledTransaction.referenceNumber || '',
           frequency: scheduledTransaction.frequency,
+          customRecurrence: scheduledTransaction.customRecurrence ?? null,
           nextDueDate: scheduledTransaction.nextDueDate.split('T')[0],
           endDate: scheduledTransaction.endDate?.split('T')[0] || '',
           occurrencesRemaining: scheduledTransaction.occurrencesRemaining ?? undefined,
           isActive: scheduledTransaction.isActive,
           autoPost: scheduledTransaction.autoPost,
+          amountIsEstimated: scheduledTransaction.amountIsEstimated === true,
           reminderDaysBefore: scheduledTransaction.reminderDaysBefore,
         }
       : templateTransaction
@@ -272,13 +377,18 @@ export function ScheduledTransactionForm({
             payeeName: templateTransaction.payeeName || '',
             categoryId: templateTransaction.categoryId || '',
             amount: templateTransaction.isTransfer
-              ? Math.abs(Math.round(Number(templateTransaction.amount) * 100) / 100)
-              : Math.round(Number(templateTransaction.amount) * 100) / 100,
+              ? Math.abs(roundToEntryPlaces(Number(templateTransaction.amount), templateTransaction.currencyCode))
+              : roundToEntryPlaces(Number(templateTransaction.amount), templateTransaction.currencyCode),
             currencyCode: templateTransaction.currencyCode,
             description: templateTransaction.description || '',
             referenceNumber: '',
             frequency: 'MONTHLY' as FrequencyType,
-            nextDueDate: getLocalDateString(),
+            // The schedule's first occurrence is one month after the transaction
+            // it was created from, not today -- the user is scheduling its
+            // recurrence going forward, not re-dating the transaction itself.
+            nextDueDate: templateTransaction.transactionDate
+              ? getLocalDateString(advanceByFrequency(parseLocalDate(templateTransaction.transactionDate), 'MONTHLY'))
+              : getLocalDateString(),
             isActive: true,
             autoPost: false,
             reminderDaysBefore: 3,
@@ -296,10 +406,15 @@ export function ScheduledTransactionForm({
 
   useFormDirtyNotify(isDirty, onDirtyChange);
 
-  const watchedAccountId = watch('accountId');
-  const watchedAmount = watch('amount');
-  const watchedFrequency = watch('frequency');
-  const watchedCurrencyCode = watch('currencyCode');
+  const watchedAccountId = useWatch({ control, name: 'accountId' });
+  const watchedAmount = useWatch({ control, name: 'amount' });
+  const watchedFrequency = useWatch({ control, name: 'frequency' });
+  const watchedCurrencyCode = useWatch({ control, name: 'currencyCode' });
+  const watchedIsActive = useWatch({ control, name: 'isActive' });
+  const watchedNextDueDate = useWatch({ control, name: 'nextDueDate' });
+  const watchedAutoPost = useWatch({ control, name: 'autoPost' });
+  const watchedEstimate = useWatch({ control, name: 'amountIsEstimated' });
+  const watchedCustomRecurrence = useWatch({ control, name: 'customRecurrence' });
 
   // Auto-set currencyCode from the selected account
   useEffect(() => {
@@ -312,6 +427,9 @@ export function ScheduledTransactionForm({
   }, [watchedAccountId, accounts, setValue]);
 
   const currencySymbol = getCurrencySymbol(watchedCurrencyCode || defaultCurrency);
+  // A coin's amounts are entered at its own places (four while the registry
+  // has not answered); any ISO currency keeps the input's two.
+  const amountDecimalPlaces = entryDecimalPlaces(watchedCurrencyCode || defaultCurrency);
 
   // ── Foreign-currency entry ────────────────────────────────────────────────
   //
@@ -357,37 +475,105 @@ export function ScheduledTransactionForm({
     !!entryCurrency &&
     entryCurrency.toUpperCase() !== accountCurrency.toUpperCase();
 
+  // The Estimate option: a single-category, account-currency schedule (issue
+  // #2096) or a transfer (issue #2164), as the server allows.
+  const estimating =
+    ((mode === 'transaction' && !isForeign) || mode === 'transfer') && watchedEstimate === true;
+  const estimateText = useAmountEstimateText();
+  // A delegate does not turn the estimate on or off, and is refused its
+  // preview: it reads the owner's payments in every account (issue #2096).
+  const isActingDelegate = useAuthStore((state) => !!state.actingAsUserId);
+  // The preview is the payload of the request that produced it, keyed by what
+  // it was asked for, so a stale answer for another payee is never shown
+  // (docs/frontend/api-and-cache.md). A saved schedule's own estimate stands in
+  // until the first answer arrives.
+  const estimateRequestKey = estimating
+    ? estimateRequestKeyOf({
+        transfer: mode === 'transfer',
+        accountId: watchedAccountId,
+        payeeId: selectedPayeeId,
+        categoryId: selectedCategoryId,
+        transferAccountId: transferToAccountId,
+        frequency: watchedFrequency,
+        nextDueDate: watchedNextDueDate,
+      })
+    : null;
+  const [estimatePreview, setEstimatePreview] = useState<{
+    key: string;
+    estimate: ScheduleAmountEstimate | null;
+  } | null>(() => {
+    if (!scheduledTransaction?.amountEstimate) return null;
+    const key = estimateRequestKeyOf({
+      transfer: isScheduledTransfer(scheduledTransaction),
+      accountId: scheduledTransaction.accountId,
+      payeeId: scheduledTransaction.payeeId,
+      categoryId: scheduledTransaction.categoryId,
+      transferAccountId: scheduledTransaction.transferAccountId,
+      frequency: scheduledTransaction.frequency,
+      nextDueDate: scheduledTransaction.nextDueDate.split('T')[0],
+    });
+    return key ? { key, estimate: scheduledTransaction.amountEstimate } : null;
+  });
+  useEffect(() => {
+    if (!estimateRequestKey || isActingDelegate) return;
+    const request = JSON.parse(estimateRequestKey) as EstimateRequest;
+    let cancelled = false;
+    scheduledTransactionsApi
+      .getAmountEstimate(request.accountId, request.basis, request.nextDueDate || undefined)
+      .then((estimate) => {
+        if (!cancelled) setEstimatePreview({ key: estimateRequestKey, estimate });
+      })
+      .catch((err) => {
+        // A failed lookup is not "no history", and not a reason to drop the
+        // saved schedule's own estimate (a delegate is refused the preview):
+        // whatever was shown stays, and the save still works the estimate out
+        // on the server.
+        logger.warn?.('Failed to fetch the amount estimate', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [estimateRequestKey, isActingDelegate]);
+  const currentEstimate =
+    estimateRequestKey && estimatePreview?.key === estimateRequestKey
+      ? estimatePreview.estimate
+      : null;
+  const nextEstimateAmount = estimateAmountOn(currentEstimate, watchedNextDueDate || '');
+
   const fxFeePercent = selectedAccount?.fxFeePercent ?? undefined;
+  // An account-currency figure at the places the form enters it in: cents, or
+  // a coin's own (`roundToEntryPlaces`).
+  const toAccountPlaces = (amount: number) => roundToEntryPlaces(amount, accountCurrency);
   const convertedBase =
     isForeign && foreignAmount !== undefined && fxRate != null
-      ? roundToCents(foreignAmount * fxRate)
+      ? toAccountPlaces(foreignAmount * fxRate)
       : undefined;
   const fxFeeApplies =
     isForeign && convertedBase !== undefined && !!fxFeePercent && fxFeePercent > 0;
   const fxFeeAmount = fxFeeApplies
-    ? -roundToCents((Math.abs(convertedBase as number) * (fxFeePercent as number)) / 100)
+    ? -toAccountPlaces((Math.abs(convertedBase as number) * (fxFeePercent as number)) / 100)
     : 0;
   const fxTotal =
-    convertedBase !== undefined ? roundToCents(convertedBase + fxFeeAmount) : undefined;
+    convertedBase !== undefined ? toAccountPlaces(convertedBase + fxFeeAmount) : undefined;
 
   // Derive the account-currency `amount` from the foreign amount and rate,
   // folding in the account's foreign-transaction fee. Matches `recomputeFx` in
   // TransactionForm and `applyFxConversion` on the backend.
   const recomputeFx = (fAmount: number | undefined, rate: number | null) => {
     if (fAmount === undefined || rate == null) return;
-    const base = roundToCents(fAmount * rate);
+    const base = toAccountPlaces(fAmount * rate);
     const fee =
       fxFeePercent && fxFeePercent > 0
-        ? -roundToCents((Math.abs(base) * fxFeePercent) / 100)
+        ? -toAccountPlaces((Math.abs(base) * fxFeePercent) / 100)
         : 0;
-    setValue('amount', roundToCents(base + fee), {
+    setValue('amount', toAccountPlaces(base + fee), {
       shouldDirty: true,
       shouldValidate: true,
     });
   };
 
   const handleForeignAmountChange = (value: number | undefined) => {
-    const rounded = value === undefined ? undefined : roundToCents(value);
+    const rounded = value === undefined ? undefined : roundToEntryPlaces(value, entryCurrency);
     setForeignAmount(rounded);
     recomputeFx(rounded, fxRate);
   };
@@ -412,9 +598,10 @@ export function ScheduledTransactionForm({
 
   // Re-sign the foreign amount when the category changes, so an expense
   // category flips it negative exactly as the account-currency path does.
-  const resignForeignAmount = (isIncome: boolean) => {
+  const resignForeignAmount = (category: Category) => {
+    if (category.effectiveAutoSign === false) return;
     if (foreignAmount === undefined || foreignAmount === 0) return;
-    const signed = isIncome ? Math.abs(foreignAmount) : -Math.abs(foreignAmount);
+    const signed = category.isIncome ? Math.abs(foreignAmount) : -Math.abs(foreignAmount);
     if (signed !== foreignAmount) {
       setForeignAmount(signed);
       recomputeFx(signed, fxRate);
@@ -482,8 +669,9 @@ export function ScheduledTransactionForm({
   );
 
   // Funding account options: anything that can carry cash, except the
-  // brokerage's paired cash side and asset/brokerage accounts. Mirrors the
-  // filtering in InvestmentTransactionForm.
+  // brokerage's paired cash side, asset/brokerage accounts and crypto wallets
+  // (a coin is not the fiat a trade settles in). Mirrors the filtering in
+  // InvestmentTransactionForm.
   const fundingAccountOptions = useMemo(() =>
     buildAccountDropdownOptions(
       accounts,
@@ -491,6 +679,7 @@ export function ScheduledTransactionForm({
         !a.isClosed &&
         a.id !== watchedAccountId &&
         a.accountType !== 'ASSET' &&
+        a.accountType !== 'CRYPTO' &&
         a.accountSubType !== 'INVESTMENT_BROKERAGE' &&
         a.accountSubType !== 'INVESTMENT_CASH',
       accountOptionLabel,
@@ -533,12 +722,7 @@ export function ScheduledTransactionForm({
   );
 
   // Memoize tag options
-  const tagOptions = useMemo(() =>
-    [...tags]
-      .sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }))
-      .map(tag => ({ value: tag.id, label: tag.name })),
-    [tags]
-  );
+  const { tagOptions, tagUsage } = useTagPickerOptions(tags);
 
   // Load securities lazily — only fetch when the user actually enters investment mode.
   useEffect(() => {
@@ -563,16 +747,25 @@ export function ScheduledTransactionForm({
   // a quantity-price action has a Price field to fill; amount-only (DIVIDEND ...)
   // and quantity-only (ADD_SHARES ...) actions never use a close, so skip the
   // request for them -- matching the two dialogs, which gate the fetch the same way.
+  //
+  // Each change of those inputs resets what the last answer left behind, during
+  // render (the "info from previous render" pattern) rather than in the effect:
+  // no request, no close; and "no price history" is a completed-empty result,
+  // not the loading window and not a failed lookup.
+  const wantsMarketPrice =
+    mode === 'investment' && !!investmentSecurityId && isQuantityPriceAction;
+  const priceRequestKey = `${mode}|${investmentSecurityId}|${isQuantityPriceAction}`;
+  const [priceRequestFor, setPriceRequestFor] = useState(priceRequestKey);
+  if (priceRequestFor !== priceRequestKey) {
+    setPriceRequestFor(priceRequestKey);
+    if (!wantsMarketPrice) setMarketPrice(null);
+    setPriceHistoryEmpty(false);
+  }
   useEffect(() => {
     if (mode !== 'investment' || !investmentSecurityId || !isQuantityPriceAction) {
-      setMarketPrice(null);
-      setPriceHistoryEmpty(false);
       return;
     }
     let cancelled = false;
-    // Reset while the request is in flight: "no price history" is a
-    // completed-empty result, not the loading window and not a failed lookup.
-    setPriceHistoryEmpty(false);
     investmentsApi.getSecurityPrices(investmentSecurityId, { limit: 1 })
       .then((prices) => {
         if (cancelled) return;
@@ -769,7 +962,7 @@ export function ScheduledTransactionForm({
       tagsApi.getAll(),
     ])
       .then(async ([accountsData, categoriesData, payeesData, tagsData]) => {
-        setAccounts(accountsData);
+        setAccounts(accountsData.filter((account) => !account.managedPurpose));
         setCategories(categoriesData);
         setTags(tagsData);
 
@@ -796,13 +989,73 @@ export function ScheduledTransactionForm({
   }, [scheduledTransaction?.payeeId, t]);
 
   // Handle mode changes
+  // Turning the estimate on turns auto-post off (the server refuses the pair)
+  // and gives the schema a number while no estimate is known.
+  const handleEstimateChange = (next: boolean) => {
+    setValue('amountIsEstimated', next, { shouldDirty: true });
+    if (next) {
+      setValue('autoPost', false, { shouldDirty: true });
+      if (watchedAmount === undefined || watchedAmount === null) {
+        setValue('amount', 0, { shouldValidate: true });
+      }
+    }
+  };
+
+  // The Estimate toggle and the note under an estimated amount, on the
+  // Transaction tab (issue #2096) and the Transfer tab (issue #2164).
+  const renderEstimateToggle = () => (
+    <div className="flex shrink-0 flex-col">
+      <span className="mb-1 flex items-center gap-1 text-sm font-medium text-gray-700 dark:text-gray-300">
+        {t('form.estimateLabel')}
+        <InfoTooltip
+          text={
+            isActingDelegate
+              ? t('form.estimateDelegateDisabled')
+              : mode === 'transfer'
+                ? t('form.estimateTooltipTransfer')
+                : t('form.estimateTooltip')
+          }
+        />
+      </span>
+      <div className="flex flex-1 items-center">
+        <ToggleSwitch
+          checked={estimating}
+          onChange={handleEstimateChange}
+          label={t('form.estimateLabel')}
+          disabled={isLoading || isActingDelegate}
+        />
+      </div>
+    </div>
+  );
+  const renderEstimateNote = () =>
+    estimating ? (
+      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+        {t('form.estimatedAmountNote', {
+          detail: estimateText(
+            currentEstimate,
+            {
+              payeeName: payees.find((p) => p.id === selectedPayeeId)?.name ?? null,
+              categoryName: categories.find((c) => c.id === selectedCategoryId)?.name ?? null,
+              ...(mode === 'transfer'
+                ? {
+                    transferAccountName:
+                      accounts.find((a) => a.id === transferToAccountId)?.name ?? null,
+                  }
+                : {}),
+            },
+            watchedNextDueDate || undefined,
+          ),
+        })}
+      </p>
+    ) : null;
+
   const handleModeChange = (newMode: ScheduledTransactionMode) => {
     setMode(newMode);
 
     if (newMode === 'split') {
       if (splits.length === 0) {
         const amount = watchedAmount || 0;
-        setSplits(createEmptySplits(amount));
+        setSplits(createEmptySplits(amount, watchedCurrencyCode || defaultCurrency));
       }
       setSelectedCategoryId('');
       setValue('categoryId', '', { shouldDirty: true });
@@ -884,12 +1137,15 @@ export function ScheduledTransactionForm({
           // and let the conversion re-derive the account-currency amount.
           const category = categories.find((c) => c.id === payee.defaultCategoryId);
           if (category && isForeign) {
-            resignForeignAmount(category.isIncome);
+            resignForeignAmount(category);
           } else if (category && watchedAmount !== undefined && watchedAmount !== 0) {
             const absAmount = Math.abs(watchedAmount);
-            const newAmount = category.isIncome ? absAmount : -absAmount;
+            // Automatic sign off for this category: keep the typed sign.
+            const newAmount = category.effectiveAutoSign !== false
+              ? (category.isIncome ? absAmount : -absAmount)
+              : watchedAmount;
             if (newAmount !== watchedAmount) {
-              const rounded = roundToCents(newAmount);
+              const rounded = toAccountPlaces(newAmount);
               setValue('amount', rounded, { shouldDirty: true });
             }
           }
@@ -929,12 +1185,15 @@ export function ScheduledTransactionForm({
       if (mode !== 'transfer' && category && isForeign) {
         // The typed amount is the foreign one; re-sign it and let the
         // conversion re-derive the account-currency amount.
-        resignForeignAmount(category.isIncome);
+        resignForeignAmount(category);
       } else if (mode !== 'transfer' && category && watchedAmount !== undefined && watchedAmount !== 0) {
         const absAmount = Math.abs(watchedAmount);
-        const newAmount = category.isIncome ? absAmount : -absAmount;
+        // Automatic sign off for this category: keep the typed sign.
+        const newAmount = category.effectiveAutoSign !== false
+          ? (category.isIncome ? absAmount : -absAmount)
+          : watchedAmount;
         if (newAmount !== watchedAmount) {
-          const rounded = roundToCents(newAmount);
+          const rounded = toAccountPlaces(newAmount);
           setValue('amount', rounded, { shouldDirty: true, shouldValidate: true });
         }
       }
@@ -970,7 +1229,7 @@ export function ScheduledTransactionForm({
   };
 
   const handleTransactionAmountChange = (amount: number) => {
-    const rounded = roundToCents(amount);
+    const rounded = toAccountPlaces(amount);
     setValue('amount', rounded, { shouldDirty: true, shouldValidate: true });
   };
 
@@ -995,6 +1254,13 @@ export function ScheduledTransactionForm({
       return;
     }
 
+    // An estimate is matched on the payee and the category (issue #2096); a
+    // transfer's on its destination, which the check below requires.
+    if (estimating && mode !== 'transfer' && (!selectedPayeeId || !selectedCategoryId)) {
+      toast.error(t('form.toasts.estimateNeedsPayeeAndCategory'));
+      return;
+    }
+
     // Validate transfer destination
     if (mode === 'transfer') {
       if (!transferToAccountId) {
@@ -1013,9 +1279,14 @@ export function ScheduledTransactionForm({
         toast.error(t('form.toasts.splitsMinimum'));
         return;
       }
-      const splitsTotal = splits.reduce((sum, s) => sum + (Number(s.amount) || 0), 0);
-      const remaining = Math.abs(Number(data.amount) - splitsTotal);
-      if (remaining >= 0.01) {
+      // At the server's precision (`validateSplitAmountSum`): the lines must
+      // equal the amount exactly at the split currency's money precision (four
+      // for fiat, a coin's eight), the currency the split editor enters them
+      // in. A one-cent tolerance let a 0.0049 BTC remainder through to a save
+      // the server refuses.
+      const splitsMoneyDecimals = moneyDecimalsForCurrency(watchedCurrencyCode || defaultCurrency);
+      const splitsTotal = sumMoney(splits.map((s) => Number(s.amount) || 0), splitsMoneyDecimals);
+      if (splitsTotal !== roundMoney(Number(data.amount), splitsMoneyDecimals)) {
         toast.error(t('form.toasts.splitsTotal'));
         return;
       }
@@ -1060,20 +1331,35 @@ export function ScheduledTransactionForm({
 
     setIsLoading(true);
     try {
-      // Strip referenceNumber (backend doesn't support it for scheduled transactions)
-      const { referenceNumber: _ref, ...formData } = data;
-
       // Build the payload based on mode
       let payload: any = {
-        ...formData,
-        endDate: useEndDate ? formData.endDate : undefined,
-        occurrencesRemaining: useOccurrences ? formData.occurrencesRemaining : undefined,
+        ...data,
+        // A cleared field is an empty string that the schema turns into
+        // undefined, and an omitted key leaves the stored value in place on
+        // update; send an explicit null so clearing it sticks.
+        description: data.description || null,
+        referenceNumber: data.referenceNumber || null,
+        endDate: useEndDate ? data.endDate : undefined,
+        occurrencesRemaining: useOccurrences ? data.occurrencesRemaining : undefined,
         tagIds: selectedTagIds.length > 0 ? selectedTagIds : [],
+        // The canonical rule while Custom; null otherwise, which clears it.
+        customRecurrence: data.frequency === 'CUSTOM' ? canonicalCustomRecurrence(data.customRecurrence) : null,
+        // Only a single-category, account-currency schedule estimates; the
+        // server replaces the amount with the next occurrence's estimate.
+        amountIsEstimated: estimating,
+        ...(estimating && {
+          autoPost: false,
+          amount: nextEstimateAmount ?? Number(data.amount ?? 0),
+        }),
       };
 
       if (mode === 'transfer') {
-        // Amount should be negative (money leaving source account)
-        const transferAmount = -Math.abs(Number(formData.amount));
+        // Amount should be negative (money leaving source account); an
+        // estimated transfer sends its next occurrence's estimate, which the
+        // server replaces with its own.
+        const transferAmount = -Math.abs(
+          Number(estimating ? (nextEstimateAmount ?? data.amount ?? 0) : data.amount),
+        );
         payload = {
           ...payload,
           amount: transferAmount,
@@ -1100,7 +1386,7 @@ export function ScheduledTransactionForm({
         const estPrice = investmentPrice === '' ? 0 : Number(investmentPrice);
         const estTotal = investmentTotalAmount === '' ? 0 : Number(investmentTotalAmount);
         const estCommission = investmentCommission === '' ? 0 : Number(investmentCommission);
-        let displayAmount = formData.amount;
+        let displayAmount = data.amount;
         if (QUANTITY_PRICE_ACTIONS.includes(baseInvestmentAction(investmentAction))) {
           const sign = baseInvestmentAction(investmentAction) === 'SELL' ? 1 : -1;
           displayAmount = sign * (estQty * estPrice + (sign === -1 ? estCommission : -estCommission));
@@ -1186,10 +1472,55 @@ export function ScheduledTransactionForm({
   };
   useFormSubmitRef(submitRef, handleSubmit, onSubmit);
 
-  const frequencyOptions = FREQUENCY_VALUES.map((value) => ({
-    value,
-    label: t(`frequency.${value}`),
-  }));
+  const customRecurrence = useCustomRecurrenceField({
+    scheduledTransaction,
+    accounts,
+    splitTransferAccountIds:
+      mode === 'split' ? splits.map((split) => (split.splitType === 'transfer' ? split.transferAccountId : null)) : [],
+    frequency: watchedFrequency,
+    nextDueDate: watchedNextDueDate,
+    rule: watchedCustomRecurrence,
+    setRule: (rule) => setValue('customRecurrence', rule, { shouldDirty: true, shouldValidate: true }),
+  });
+  const frequencyOptions = customRecurrence.frequencyOptions;
+  const frequencyField = register('frequency', {
+    onChange: (e) => customRecurrence.onFrequencyChange(e.target.value),
+  });
+
+  // The due date, and while Custom the date the pattern posts first.
+  const renderNextDueDate = () => (
+    <div>
+      <DateInput
+        label={t('form.nextDueDateLabel')}
+        error={errors.nextDueDate?.message}
+        onDateChange={(date) => setValue('nextDueDate', date, { shouldDirty: true, shouldValidate: true })}
+        {...register('nextDueDate')}
+      />
+      {customRecurrence.occurrenceCaption && (
+        <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{customRecurrence.occurrenceCaption}</p>
+      )}
+    </div>
+  );
+
+  // The Custom editor under the frequency, and the edited occurrences a new
+  // pattern would delete (docs/specs/custom-recurrence.md section 5).
+  const renderCustomRecurrence = () => (
+    <>
+      {customRecurrence.editorProps && <CustomRecurrenceEditor {...customRecurrence.editorProps} />}
+      {customRecurrence.editorProps && !watchedCustomRecurrence && errors.customRecurrence?.message && (
+        <p className="text-sm text-red-600 dark:text-red-400">{errors.customRecurrence.message}</p>
+      )}
+      {customRecurrence.customRefusal && (
+        <p className="text-sm text-red-600 dark:text-red-400">{customRecurrence.customRefusal}</p>
+      )}
+      {customRecurrence.orphanWarning && (
+        <p role="status" className="flex items-start gap-2 text-sm text-amber-700 dark:text-amber-400">
+          <ExclamationTriangleIcon className="h-5 w-5 shrink-0" aria-hidden="true" />
+          <span>{customRecurrence.orphanWarning}</span>
+        </p>
+      )}
+    </>
+  );
 
   // Conversion caption under the Amount field while entering another currency.
   // It says what the account will be charged today and at what rate, and is
@@ -1229,7 +1560,9 @@ export function ScheduledTransactionForm({
     if (watchedFrequency === 'ONCE') return null;
     return (
       <div className="border-t border-gray-200 dark:border-gray-700 pt-4 space-y-4">
-        <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('form.endConditionTitle')}</h3>
+        <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+          {t('form.endConditionTitle')}
+        </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label className="flex items-center gap-2 mb-2 cursor-pointer w-fit">
@@ -1298,7 +1631,7 @@ export function ScheduledTransactionForm({
     <div className="flex items-center space-x-6">
       <label className="flex items-center gap-2 cursor-pointer">
         <ToggleSwitch
-          checked={!!watch('isActive')}
+          checked={!!watchedIsActive}
           onChange={(next) => setValue('isActive', next, { shouldDirty: true })}
           label={t('form.activeLabel')}
         />
@@ -1306,16 +1639,22 @@ export function ScheduledTransactionForm({
           {t('form.activeLabel')}
         </span>
       </label>
-      <label className="flex items-center gap-2 cursor-pointer">
-        <ToggleSwitch
-          checked={!!watch('autoPost')}
-          onChange={(next) => setValue('autoPost', next, { shouldDirty: true })}
-          label={t('form.autoPostLabel')}
-        />
-        <span className="block text-sm text-gray-900 dark:text-gray-100">
-          {t('form.autoPostLabel')}
-        </span>
-      </label>
+      <span className="flex items-center gap-1">
+        <label className="flex items-center gap-2 cursor-pointer">
+          <ToggleSwitch
+            checked={!!watchedAutoPost && !estimating}
+            onChange={(next) => setValue('autoPost', next, { shouldDirty: true })}
+            label={t('form.autoPostLabel')}
+            // An estimate is a forecast a person confirms when posting, so an
+            // estimated schedule is never posted automatically (issue #2096).
+            disabled={estimating}
+          />
+          <span className="block text-sm text-gray-900 dark:text-gray-100">
+            {t('form.autoPostLabel')}
+          </span>
+        </label>
+        {estimating && <InfoTooltip text={t('form.autoPostDisabledEstimate')} />}
+      </span>
     </div>
   );
 
@@ -1360,14 +1699,19 @@ export function ScheduledTransactionForm({
   // Shared Description textarea section
   const renderDescription = () => (
     <div>
-      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">{t('form.descriptionLabel')}</label>
+      <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+        {t('form.descriptionLabel')}
+      </label>
       <textarea
         rows={2}
+        maxLength={TRANSACTION_NOTE_MAX_LENGTH}
         className="block w-full rounded-md border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 shadow-sm focus:border-blue-500 focus:ring-blue-500"
         {...register('description')}
       />
       {errors.description && (
-        <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.description.message}</p>
+        <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+          {errors.description.message}
+        </p>
       )}
     </div>
   );
@@ -1392,7 +1736,7 @@ export function ScheduledTransactionForm({
         ))}
       </div>
 
-      {/* ==================== Transaction Tab ==================== */}
+      {/* Row 1: Name */}
       {mode === 'transaction' && (
         <div className="space-y-4">
           {/* Row 1: Name */}
@@ -1416,12 +1760,7 @@ export function ScheduledTransactionForm({
               ]}
               {...register('accountId')}
             />
-            <DateInput
-              label={t('form.nextDueDateLabel')}
-              error={errors.nextDueDate?.message}
-              onDateChange={(date) => setValue('nextDueDate', date, { shouldDirty: true, shouldValidate: true })}
-              {...register('nextDueDate')}
-            />
+            {renderNextDueDate()}
           </div>
 
           {/* Row 3: Payee, Category + Split Transaction button */}
@@ -1484,7 +1823,9 @@ export function ScheduledTransactionForm({
                   value={entryCurrency}
                   accountCurrencyCode={accountCurrency}
                   onChange={handleEntryCurrencyChange}
-                  disabled={isLoading}
+                  // An estimate is in the account's currency: switching to a
+                  // foreign entry would silently turn it off.
+                  disabled={isLoading || estimating}
                 />
                 <div className="flex-1 min-w-0">
                   <CurrencyInput
@@ -1494,18 +1835,33 @@ export function ScheduledTransactionForm({
                         : t('form.amountLabel')
                     }
                     prefix={getCurrencySymbol(isForeign ? entryCurrency : accountCurrency)}
-                    value={isForeign ? foreignAmount : watchedAmount}
+                    decimalPlaces={entryDecimalPlaces(isForeign ? entryCurrency : accountCurrency)}
+                    // Estimating, the field shows the next occurrence's
+                    // estimate and is not edited; an unknown estimate is an
+                    // empty field, never the stored snapshot.
+                    value={
+                      isForeign
+                        ? foreignAmount
+                        : estimating
+                          ? (nextEstimateAmount ?? undefined)
+                          : watchedAmount
+                    }
                     onChange={
                       isForeign
                         ? handleForeignAmountChange
                         : (value) => setValue('amount', value ?? 0, { shouldValidate: true })
                     }
                     allowSignToggle
+                    disabled={estimating}
                     error={errors.amount?.message}
                   />
                 </div>
+                {/* Between Amount and Reference Number, taking its width from
+                    the Amount input (issue #2096). */}
+                {!isForeign && renderEstimateToggle()}
               </div>
               {isForeign && renderFxCaption()}
+              {renderEstimateNote()}
             </div>
             <Input
               label={t('form.referenceNumberLabel')}
@@ -1523,7 +1879,7 @@ export function ScheduledTransactionForm({
               error={errors.frequency?.message}
               value={watchedFrequency || 'MONTHLY'}
               options={frequencyOptions}
-              {...register('frequency')}
+              {...frequencyField}
             />
             <Controller
               name="reminderDaysBefore"
@@ -1544,6 +1900,7 @@ export function ScheduledTransactionForm({
               )}
             />
           </div>
+          {renderCustomRecurrence()}
 
           {/* Tags */}
           {renderTags()}
@@ -1559,10 +1916,10 @@ export function ScheduledTransactionForm({
         </div>
       )}
 
-      {/* ==================== Split Tab ==================== */}
+      {/* Row 1: Name */}
       {mode === 'split' && (
         <div className="space-y-4">
-          {/* Row 1: Name */}
+          {/* Row 2: Account, Next Due Date */}
           <Input
             label={t('form.nameLabel')}
             type="text"
@@ -1583,12 +1940,7 @@ export function ScheduledTransactionForm({
               ]}
               {...register('accountId')}
             />
-            <DateInput
-              label={t('form.nextDueDateLabel')}
-              error={errors.nextDueDate?.message}
-              onDateChange={(date) => setValue('nextDueDate', date, { shouldDirty: true, shouldValidate: true })}
-              {...register('nextDueDate')}
-            />
+            {renderNextDueDate()}
           </div>
 
           {/* Row 3: Payee, Total Amount */}
@@ -1609,6 +1961,7 @@ export function ScheduledTransactionForm({
             <CurrencyInput
               label={t('form.totalAmountLabel')}
               prefix={currencySymbol}
+              decimalPlaces={amountDecimalPlaces}
               value={watchedAmount}
               onChange={(value) => setValue('amount', value ?? 0, { shouldValidate: true })}
               error={errors.amount?.message}
@@ -1628,6 +1981,7 @@ export function ScheduledTransactionForm({
               label={t('form.descriptionLabel')}
               type="text"
               placeholder={t('form.descriptionPlaceholder')}
+              maxLength={TRANSACTION_NOTE_MAX_LENGTH}
               error={errors.description?.message}
               {...register('description')}
             />
@@ -1636,7 +1990,9 @@ export function ScheduledTransactionForm({
           {/* Row 5: Split Editor */}
           <div className="border-t dark:border-gray-700 pt-4">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">{t('form.splitTransactionTitle')}</h3>
+              <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
+                {t('form.splitTransactionTitle')}
+              </h3>
               <button
                 type="button"
                 onClick={() => handleModeChange('transaction')}
@@ -1650,6 +2006,7 @@ export function ScheduledTransactionForm({
               onChange={setSplits}
               categories={categories}
               tags={tags}
+              tagUsage={tagUsage}
               accounts={accounts}
               sourceAccountId={watchedAccountId || ''}
               parentAccountSubType={
@@ -1660,6 +2017,7 @@ export function ScheduledTransactionForm({
               currencyCode={watchedCurrencyCode || defaultCurrency}
               onConvertToRegular={handleConvertToRegular}
               onCreateCategory={createCategoryFromTypedName}
+              transactionDate={watchedNextDueDate}
             />
           </div>
 
@@ -1673,7 +2031,7 @@ export function ScheduledTransactionForm({
               error={errors.frequency?.message}
               value={watchedFrequency || 'MONTHLY'}
               options={frequencyOptions}
-              {...register('frequency')}
+              {...frequencyField}
             />
             <Controller
               name="reminderDaysBefore"
@@ -1694,16 +2052,17 @@ export function ScheduledTransactionForm({
               )}
             />
           </div>
+          {renderCustomRecurrence()}
 
-          {/* Row 7: End Condition */}
+          {/* ==================== Transfer Tab ==================== */}
           {renderEndCondition('Split')}
 
-          {/* Row 8: Active/Auto-post and actions */}
+          {/* Row 1: Name */}
           {renderFooter('Split')}
         </div>
       )}
 
-      {/* ==================== Transfer Tab ==================== */}
+      {/* Row 1: Name */}
       {mode === 'transfer' && (
         <div className="space-y-4">
           {/* Row 1: Name */}
@@ -1717,12 +2076,7 @@ export function ScheduledTransactionForm({
 
           {/* Row 2: Next Due Date */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <DateInput
-              label={t('form.nextDueDateLabel')}
-              error={errors.nextDueDate?.message}
-              onDateChange={(date) => setValue('nextDueDate', date, { shouldDirty: true, shouldValidate: true })}
-              {...register('nextDueDate')}
-            />
+            {renderNextDueDate()}
           </div>
 
           {/* Row 3: From Account, To Account */}
@@ -1750,14 +2104,33 @@ export function ScheduledTransactionForm({
 
           {/* Row 4: Transfer Amount, Reference Number (mirrors the Transaction tab) */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <CurrencyInput
-              label={t('form.transferAmountLabel')}
-              prefix={currencySymbol}
-              value={watchedAmount}
-              onChange={(value) => setValue('amount', value !== undefined ? Math.abs(value) : 0, { shouldValidate: true })}
-              allowNegative={false}
-              error={errors.amount?.message}
-            />
+            <div>
+              <div className="flex items-stretch space-x-2">
+                <div className="flex-1 min-w-0">
+                  <CurrencyInput
+                    label={t('form.transferAmountLabel')}
+                    prefix={currencySymbol}
+                    decimalPlaces={amountDecimalPlaces}
+                    // Estimating, the field shows the next occurrence's
+                    // estimate (issue #2164) and is not edited; an unknown
+                    // estimate is an empty field, never the stored snapshot.
+                    value={
+                      estimating
+                        ? nextEstimateAmount != null
+                          ? Math.abs(nextEstimateAmount)
+                          : undefined
+                        : watchedAmount
+                    }
+                    onChange={(value) => setValue('amount', value !== undefined ? Math.abs(value) : 0, { shouldValidate: true })}
+                    allowNegative={false}
+                    disabled={estimating}
+                    error={errors.amount?.message}
+                  />
+                </div>
+                {renderEstimateToggle()}
+              </div>
+              {renderEstimateNote()}
+            </div>
             <Input
               label={t('form.referenceNumberLabel')}
               type="text"
@@ -1810,7 +2183,7 @@ export function ScheduledTransactionForm({
               error={errors.frequency?.message}
               value={watchedFrequency || 'MONTHLY'}
               options={frequencyOptions}
-              {...register('frequency')}
+              {...frequencyField}
             />
             <Controller
               name="reminderDaysBefore"
@@ -1831,6 +2204,7 @@ export function ScheduledTransactionForm({
               )}
             />
           </div>
+          {renderCustomRecurrence()}
 
           {/* Tags */}
           {renderTags()}
@@ -1846,7 +2220,7 @@ export function ScheduledTransactionForm({
         </div>
       )}
 
-      {/* ==================== Investment Tab ==================== */}
+      {/* Row 1: Name */}
       {mode === 'investment' && (
         <div className="space-y-4">
           {/* Row 1: Name */}
@@ -1870,12 +2244,7 @@ export function ScheduledTransactionForm({
               ]}
               {...register('accountId')}
             />
-            <DateInput
-              label={t('form.nextDueDateLabel')}
-              error={errors.nextDueDate?.message}
-              onDateChange={(date) => setValue('nextDueDate', date, { shouldDirty: true, shouldValidate: true })}
-              {...register('nextDueDate')}
-            />
+            {renderNextDueDate()}
           </div>
 
           {/* Row 3: Action, Security (Security when required) */}
@@ -1946,8 +2315,20 @@ export function ScheduledTransactionForm({
                 />
                 {FUNDING_ACCOUNT_ACTIONS.includes(baseInvestmentAction(investmentAction)) && (
                   <div>
+                    <div className="flex items-center mb-1">
+                      <label
+                        htmlFor="scheduled-funding-account"
+                        className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+                      >
+                        {t('form.fundingAccountLabel')}
+                      </label>
+                      <InfoTooltip
+                        text={t('form.fundingAccountTooltip')}
+                        learnMore="billSettlementAccount"
+                      />
+                    </div>
                     <Select
-                      label={t('form.fundingAccountLabel')}
+                      id="scheduled-funding-account"
                       value={investmentFundingAccountId}
                       onChange={(e) => setInvestmentFundingAccountId(e.target.value)}
                       options={[
@@ -2000,7 +2381,7 @@ export function ScheduledTransactionForm({
               error={errors.frequency?.message}
               value={watchedFrequency || 'MONTHLY'}
               options={frequencyOptions}
-              {...register('frequency')}
+              {...frequencyField}
             />
             <Controller
               name="reminderDaysBefore"
@@ -2021,6 +2402,7 @@ export function ScheduledTransactionForm({
               )}
             />
           </div>
+          {renderCustomRecurrence()}
 
           {/* Tags */}
           {renderTags()}

@@ -1,12 +1,22 @@
 #!/usr/bin/env bash
-# Prune orphaned, untagged GHCR manifests for the Monize container packages.
+# Prune orphaned GHCR manifests for the Monize container packages: untagged
+# leftovers, and the retired per-PR (`:pr-<n>`) preview tags.
 #
-# Why this exists: the CI publishes moving tags (`:latest`, `:beta`,
-# `:pr-<n>`). Every time one of those tags is re-pointed at a new digest, the
-# digest it used to point at loses its tag and becomes a dangling, SHA-only
-# manifest. Per-PR builds (`:pr-<n>` is force-moved on every push to a PR) and
-# the `:beta` tag (moved on every merge to main) generate these by the dozen.
-# GHCR never garbage-collects them, so they accumulate indefinitely.
+# Why this exists: the CI publishes moving tags (`:latest`, `:beta`). Every
+# time one is re-pointed at a new digest, the digest it used to point at loses
+# its tag and becomes a dangling, SHA-only manifest. The `:beta` tag (moved on
+# every merge to main) generates these by the dozen, and GHCR never
+# garbage-collects them, so they accumulate indefinitely.
+#
+# The second job is a one-way sweep. Per-PR preview images were published as
+# `:pr-<n>` from PR #731 until per-PR publishing was retired; those tags were
+# never pruned by anything, because this script only ever deleted UNTAGGED
+# versions and a `pr-` tag counts as a tag. 481 of them accumulated, holding
+# ~17.7 GB -- roughly three quarters of the registry footprint -- against
+# per-version download counts that track age uniformly (one per six days, no
+# tag an outlier), i.e. crawler traffic rather than anyone pulling one. So the
+# sweep deletes them, and once the back catalogue is gone it is a permanent
+# no-op: nothing publishes a `pr-` tag any more.
 #
 # The hard part is doing this SAFELY. Not every untagged manifest is garbage:
 #
@@ -20,10 +30,19 @@
 #      referrers. Deleting them breaks `gh attestation verify` / `cosign`.
 #
 # So we cannot "delete all untagged". Instead we build a KEEP set of every
-# digest that a live tag still references -- the tag's own digest, its platform
-# children, and any OCI referrers of those -- and only delete untagged
-# manifests that are NOT in the keep set AND older than a grace window (which
-# protects an in-flight multi-arch push whose index tag has not landed yet).
+# digest that a LIVE tag still references -- the tag's own digest, its platform
+# children, and any OCI referrers of those -- and only delete manifests that
+# are NOT in the keep set AND older than a grace window (which protects an
+# in-flight multi-arch push whose index tag has not landed yet).
+#
+# "Live" is decided by scripts/lib/ghcr-version-class.jq, which both passes
+# read so the keep set and the delete loop cannot disagree about what a live
+# tag is. A `pr-` version is deliberately left OUT of the keep set, so its
+# platform children and referrers fall to the untagged sweep on the same run.
+# The one case that predicate exists for: a version can carry several tags at
+# once, so a digest wearing both `pr-1290` and `beta` is a single version and
+# deleting it for the first tag would unpublish the second. Only a version
+# whose tags are ALL per-PR tags is prunable.
 #
 # The script FAILS CLOSED: if it cannot resolve a tagged manifest (auth or
 # network error), it aborts rather than risk deleting a referenced child.
@@ -49,6 +68,10 @@ REGISTRY_TOKEN="${REGISTRY_TOKEN:-$GH_API_TOKEN}"
 
 API="https://api.github.com"
 REG="https://ghcr.io"
+
+# jq module directory. version_class (lib/ghcr-version-class.jq) is the one
+# predicate deciding what may be deleted; both passes below include it.
+JQ_LIB="$(cd "$(dirname "${BASH_SOURCE[0]}")/lib" && pwd)"
 
 cutoff_epoch="$(date -u -d "${GRACE_DAYS} days ago" +%s)"
 
@@ -123,9 +146,12 @@ for PKG in ${PACKAGES}; do
     fi
   }
 
-  # Build the keep set from every TAGGED version.
+  # Build the keep set from every version carrying a LIVE tag. A `pr-` version
+  # is excluded, so it protects neither itself nor its own children.
   keep_file="$(mktemp)"
-  tagged_digests="$(jq -rs '.[] | select(((.metadata.container.tags // []) | length) > 0) | .name' "${versions_file}")"
+  live_digests="$(jq -L "${JQ_LIB}" -rs \
+    'include "ghcr-version-class"; .[] | select(version_class == "keep") | .name' \
+    "${versions_file}")"
   while IFS= read -r d; do
     [ -z "${d}" ] && continue
     echo "${d}" >>"${keep_file}"
@@ -138,15 +164,23 @@ for PKG in ${PACKAGES}; do
       done <<<"${children}"
     fi
     resolve_referrers "${d}" >>"${keep_file}" || true
-  done <<<"${tagged_digests}"
+  done <<<"${live_digests}"
   sort -u "${keep_file}" -o "${keep_file}"
   echo "Keep set (digests referenced by a live tag): $(wc -l <"${keep_file}" | tr -d ' ')"
 
-  # Delete untagged versions that are neither referenced nor within the grace
-  # window. Tagged versions are never touched.
+  # Delete versions that carry no live tag, are not referenced by one, and are
+  # older than the grace window. A version with any live tag is never touched.
   while IFS= read -r row; do
-    tags_len="$(printf '%s' "${row}" | jq '(.metadata.container.tags // []) | length')"
-    [ "${tags_len}" -gt 0 ] && continue
+    class="$(printf '%s' "${row}" | jq -L "${JQ_LIB}" -r \
+      'include "ghcr-version-class"; version_class')"
+    [ "${class}" = "keep" ] && continue
+
+    if [ "${class}" = "per-pr" ]; then
+      what="per-PR $(printf '%s' "${row}" |
+        jq -r '(.metadata.container.tags // []) | join(",")')"
+    else
+      what="untagged"
+    fi
 
     digest="$(printf '%s' "${row}" | jq -r '.name')"
     vid="$(printf '%s' "${row}" | jq -r '.id')"
@@ -164,9 +198,9 @@ for PKG in ${PACKAGES}; do
     fi
 
     if [ "${DRY_RUN}" = "true" ]; then
-      echo "DRY-RUN would delete untagged ${digest} id=${vid} (${created})"
+      echo "DRY-RUN would delete ${what} ${digest} id=${vid} (${created})"
     else
-      echo "DELETE untagged ${digest} id=${vid} (${created})"
+      echo "DELETE ${what} ${digest} id=${vid} (${created})"
       gh_api -X DELETE \
         "${API}/users/${OWNER}/packages/container/${PKG}/versions/${vid}"
     fi

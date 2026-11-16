@@ -9,13 +9,16 @@ const configState = { current: { range: '3m', view: 'overview' as 'overview' | '
 vi.mock('@/hooks/useWidgetConfig', () => ({
   useWidgetConfig: () => ({ config: configState.current, updateConfig: vi.fn() }),
 }));
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrencyCompact: (n: number) => `$${n}`,
-    formatCurrencyAxis: (n: number) => `$${n}`,
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrencyCompact: (n: number) => `$${n}`,
+      formatCurrencyAxis: (n: number) => `$${n}`,
+    }),
+  };
+});
 const getWeekendVsWeekday = vi.fn();
 vi.mock('@/lib/built-in-reports', () => ({
   builtInReportsApi: { getWeekendVsWeekday: (...a: unknown[]) => getWeekendVsWeekday(...a) },
@@ -66,5 +69,32 @@ describe('WeekendVsWeekdayWidget', () => {
     });
     await renderWidget();
     expect(screen.getByText('No spending in this period.')).toBeInTheDocument();
+  });
+
+  it('shows the known parts as subtotals and withholds the weekend share', async () => {
+    getWeekendVsWeekday.mockResolvedValue({
+      summary: {
+        weekendTotal: null,
+        weekdayTotal: null,
+        knownWeekendTotal: 50,
+        knownWeekdayTotal: 150,
+        weekendCount: 1,
+        weekdayCount: 3,
+      },
+      byDay: [{ dayOfWeek: 0, total: 50, count: 1 }],
+      byCategory: [],
+      currency: 'CAD',
+      missingCurrencies: ['JPY'],
+      excludedCount: 2,
+    });
+    await renderWidget();
+    const markers = screen.getAllByTestId('partial-total');
+    expect(markers).toHaveLength(2);
+    expect(markers[0]).toHaveTextContent('$50');
+    expect(markers[1]).toHaveTextContent('$150');
+    // A share of an unknown total is not 25%, and certainly not 0%.
+    expect(screen.queryByText('25%')).not.toBeInTheDocument();
+    expect(screen.queryByText('0%')).not.toBeInTheDocument();
+    expect(screen.getByTestId('unknown-amount')).toBeInTheDocument();
   });
 });

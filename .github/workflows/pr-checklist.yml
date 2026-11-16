@@ -5,12 +5,15 @@ name: PR Checklist
 #   1. Keep the template checklist with every box ticked.
 #   2. Link a discussion or issue that a maintainer has marked
 #      `approved-to-build`.
+# Alternatively, a maintainer can apply the same `approved-to-build` label directly
+# to the PR to satisfy the check.
 # Make this a required status check in the `main` branch protection rule so PRs
 # can't merge until it passes. (It already is — see the protection settings.)
 
 on:
   pull_request:
-    types: [opened, edited, reopened, synchronize]
+    # labeled/unlabeled re-run the check when `approved-to-build` is toggled.
+    types: [opened, edited, reopened, synchronize, labeled, unlabeled]
     branches: [main]
   # Also trigger on direct pushes to main so the required status check is
   # satisfied for commits the CI release job pushes (e.g. the version-bump).
@@ -48,6 +51,7 @@ jobs:
           OWNER: ${{ github.repository_owner }}
           REPO: ${{ github.event.repository.name }}
           APPROVAL_LABEL: approved-to-build
+          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
         run: |
           set -uo pipefail
 
@@ -68,6 +72,15 @@ jobs:
               exit 0
               ;;
           esac
+
+          # A maintainer can approve the PR directly by applying the approval label to it.
+          # Only users with triage/write access can label PRs, so outside
+          # contributors can't self-approve. Label names are case-insensitive.
+          if printf '%s' "${PR_LABELS:-[]}" | jq -e --arg l "$APPROVAL_LABEL" \
+              'any(.[]; ascii_downcase == ($l | ascii_downcase))' >/dev/null 2>&1; then
+            echo "PR carries the '$APPROVAL_LABEL' label; skipping checklist enforcement."
+            exit 0
+          fi
 
           if [ -z "${PR_BODY:-}" ]; then
             echo "::error::PR description is empty. Use the pull request template and fill it in."

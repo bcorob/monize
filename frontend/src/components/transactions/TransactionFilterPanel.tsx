@@ -1,5 +1,6 @@
 'use client';
 
+import { FilterPanelHeader } from '@/components/ui/FilterPanelHeader';
 import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { MultiSelect, MultiSelectOption } from '@/components/ui/MultiSelect';
@@ -13,10 +14,15 @@ import { Account } from '@/types/account';
 import { Category } from '@/types/category';
 import { Payee } from '@/types/payee';
 import { Tag } from '@/types/tag';
-import { TransactionStatus } from '@/types/transaction';
+import { SearchInterpretation, TransactionStatus } from '@/types/transaction';
 import { TimePeriod, TIME_PERIOD_OPTIONS, resolveTimePeriod } from '@/lib/time-periods';
 import { collectTagKeys } from '@/lib/tag-key-value';
+import { orderAccountsForPicker } from '@/lib/account-utils';
 import { TagKeyOp } from '@/hooks/useTransactionFilters';
+import { SearchSyntaxHelp } from './SearchSyntaxHelp';
+import { SearchInterpretationLine } from './SearchInterpretationLine';
+import { SEGMENTED_GROUP_CLASS, segmentClass } from '@/components/ui/segmented-control';
+import { XMarkIcon } from '@heroicons/react/24/outline';
 
 
 interface TransactionFilterPanelProps {
@@ -27,6 +33,8 @@ interface TransactionFilterPanelProps {
   filterEndDate: string;
   filterSearch: string;
   searchInput: string;
+  /** How the server read the applied search, from the last register response. */
+  searchInterpretation?: SearchInterpretation;
   filterAccountStatus: 'active' | 'closed' | '';
   filterTimePeriod: string;
   filterAmountFrom: string;
@@ -63,6 +71,8 @@ interface TransactionFilterPanelProps {
   setFiltersExpanded: (value: boolean) => void;
   activeFilterCount: number;
   filteredAccounts: Account[];
+  /** How many accounts each status segment holds. */
+  accountStatusCounts: { all: number; active: number; closed: number };
   selectedAccounts: Account[];
   selectedCategories: Category[];
   selectedPayees: Payee[];
@@ -75,6 +85,15 @@ interface TransactionFilterPanelProps {
   onClearFilters: () => void;
   bulkSelectMode?: boolean;
   onToggleBulkSelectMode?: () => void;
+  /**
+   * Withhold the time-period and date fields, and the chip that summarises
+   * them.
+   *
+   * Calendar mode's date filter is the month on screen (design decision 2), so
+   * offering a second one would let the two disagree with no way to tell which
+   * the rows answered. Every other filter still reaches the request.
+   */
+  hideDateRange?: boolean;
 }
 
 export function TransactionFilterPanel({
@@ -85,6 +104,7 @@ export function TransactionFilterPanel({
   filterEndDate,
   filterSearch,
   searchInput,
+  searchInterpretation,
   filterAccountStatus,
   filterTimePeriod,
   filterAmountFrom,
@@ -121,6 +141,7 @@ export function TransactionFilterPanel({
   setFiltersExpanded,
   activeFilterCount,
   filteredAccounts,
+  accountStatusCounts,
   selectedAccounts,
   selectedCategories,
   selectedPayees,
@@ -133,6 +154,7 @@ export function TransactionFilterPanel({
   onClearFilters,
   bulkSelectMode,
   onToggleBulkSelectMode,
+  hideDateRange = false,
 }: TransactionFilterPanelProps) {
   const t = useTranslations('transactions');
 
@@ -188,17 +210,21 @@ export function TransactionFilterPanel({
     .map((code) => ({ value: code, label: code }));
   const hasCurrencyFilter = CURRENCY_FILTER_OPTIONS.length > 0;
 
+  // Same order the account switcher beside this filter uses -- these two
+  // controls sit on one page over one set of accounts, so the chips and the
+  // caret's Favourites section cannot be arranged differently. `.sort()` also
+  // reorders in place, and `filteredAccounts` is a memo other consumers read.
+  const { favourites: favouriteAccounts } = orderAccountsForPicker(filteredAccounts);
+
   return (
     <>
       {/* Quick Account Select - Favourites */}
-      {filteredAccounts.filter(a => a.isFavourite).length > 0 && (
+      {favouriteAccounts.length > 0 && (
         <div className="flex items-center gap-2 mb-4 overflow-x-auto scrollbar-hide">
           <span className="text-xs font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap flex-shrink-0">
             {t('filter.favourites')}
           </span>
-          {filteredAccounts
-            .filter(a => a.isFavourite)
-            .sort((a, b) => a.favouriteSortOrder - b.favouriteSortOrder)
+          {favouriteAccounts
             .map(account => {
               const isSelected = filterAccountIds.includes(account.id);
               return (
@@ -229,51 +255,13 @@ export function TransactionFilterPanel({
 
       {/* Filters - Collapsible Panel */}
       <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-700/50 rounded-lg mb-6">
-        {/* Filter Header - Always Visible, Clickable to toggle */}
-        <div
-          className="px-4 py-3 sm:px-6 cursor-pointer select-none"
-          onClick={() => setFiltersExpanded(!filtersExpanded)}
-        >
-          <div className="flex items-center justify-between gap-4">
-            {/* Left side: Filter icon, title, and count */}
-            <div className="flex items-center gap-2 min-w-0">
-              <svg className="w-5 h-5 text-gray-500 dark:text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-              </svg>
-              <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{t('filter.panel.title')}</span>
-              {activeFilterCount > 0 && (
-                <span className="inline-flex items-center justify-center min-w-[20px] h-5 px-1.5 text-xs font-medium rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200">
-                  {activeFilterCount}
-                </span>
-              )}
-            </div>
-
-            {/* Right side: Clear and Toggle buttons */}
-            <div className="flex items-center gap-2 flex-shrink-0">
-              {activeFilterCount > 0 && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onClearFilters();
-                  }}
-                  className="text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-                >
-                  {t('filter.panel.clear')}
-                </button>
-              )}
-              <span className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 dark:text-blue-400">
-                {filtersExpanded ? t('filter.panel.hide') : t('filter.panel.show')}
-                <svg
-                  className={`w-4 h-4 transition-transform duration-200 ${filtersExpanded ? 'rotate-180' : ''}`}
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                </svg>
-              </span>
-            </div>
-          </div>
+        <div className="px-4 py-3 sm:px-6">
+          <FilterPanelHeader
+            expanded={filtersExpanded}
+            count={activeFilterCount}
+            onToggle={() => setFiltersExpanded(!filtersExpanded)}
+            onClear={onClearFilters}
+          />
 
           {/* Active Filter Chips - Show when collapsed and filters are active */}
           {!filtersExpanded && activeFilterCount > 0 && (
@@ -290,9 +278,7 @@ export function TransactionFilterPanel({
                     className="ml-0.5 -mr-1 p-0.5 rounded-full inline-flex items-center justify-center hover:bg-emerald-200 dark:hover:bg-emerald-800"
                     aria-label={t('filter.chips.removeAccount', { name: account.name })}
                   >
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    <XMarkIcon className="w-3 h-3" aria-hidden="true" />
                   </button>
                 </span>
               ))}
@@ -308,9 +294,7 @@ export function TransactionFilterPanel({
                     className="ml-0.5 -mr-1 p-0.5 rounded-full inline-flex items-center justify-center hover:bg-purple-200 dark:hover:bg-purple-800"
                     aria-label={t('filter.chips.removePayee', { name: payee.name })}
                   >
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    <XMarkIcon className="w-3 h-3" aria-hidden="true" />
                   </button>
                 </span>
               ))}
@@ -332,9 +316,7 @@ export function TransactionFilterPanel({
                     className="ml-0.5 -mr-1 p-0.5 rounded-full inline-flex items-center justify-center hover:bg-blue-200 dark:hover:bg-blue-800"
                     aria-label={t('filter.chips.removeCategory', { name: cat.name })}
                   >
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    <XMarkIcon className="w-3 h-3" aria-hidden="true" />
                   </button>
                 </span>
               ))}
@@ -356,14 +338,12 @@ export function TransactionFilterPanel({
                     className="ml-0.5 -mr-1 p-0.5 rounded-full inline-flex items-center justify-center hover:bg-rose-200 dark:hover:bg-rose-800"
                     aria-label={t('filter.chips.removeTag', { name: tag.name })}
                   >
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    <XMarkIcon className="w-3 h-3" aria-hidden="true" />
                   </button>
                 </span>
               ))}
               {/* Date range chip - Amber */}
-              {(filterStartDate || filterEndDate) && (
+              {!hideDateRange && (filterStartDate || filterEndDate) && (
                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-amber-100 dark:bg-amber-900 text-amber-800 dark:text-amber-200 whitespace-nowrap">
                   {filterStartDate && filterEndDate
                     ? `${formatDate(filterStartDate)} - ${formatDate(filterEndDate)}`
@@ -378,9 +358,7 @@ export function TransactionFilterPanel({
                     className="ml-0.5 -mr-1 p-0.5 rounded-full inline-flex items-center justify-center hover:bg-amber-200 dark:hover:bg-amber-800"
                     aria-label={t('filter.chips.removeDate')}
                   >
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    <XMarkIcon className="w-3 h-3" aria-hidden="true" />
                   </button>
                 </span>
               )}
@@ -400,9 +378,7 @@ export function TransactionFilterPanel({
                     className="ml-0.5 -mr-1 p-0.5 rounded-full inline-flex items-center justify-center hover:bg-teal-200 dark:hover:bg-teal-800"
                     aria-label={t('filter.chips.removeAmount')}
                   >
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    <XMarkIcon className="w-3 h-3" aria-hidden="true" />
                   </button>
                 </span>
               )}
@@ -418,9 +394,7 @@ export function TransactionFilterPanel({
                     className="ml-0.5 -mr-1 p-0.5 rounded-full inline-flex items-center justify-center hover:bg-indigo-200 dark:hover:bg-indigo-800"
                     aria-label={t('filter.chips.removeAccount', { name: STATUS_LABELS[status] })}
                   >
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    <XMarkIcon className="w-3 h-3" aria-hidden="true" />
                   </button>
                 </span>
               ))}
@@ -436,9 +410,7 @@ export function TransactionFilterPanel({
                     className="ml-0.5 -mr-1 p-0.5 rounded-full inline-flex items-center justify-center hover:bg-cyan-200 dark:hover:bg-cyan-800"
                     aria-label={t('filter.chips.removeCurrency', { name: code })}
                   >
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    <XMarkIcon className="w-3 h-3" aria-hidden="true" />
                   </button>
                 </span>
               ))}
@@ -453,9 +425,7 @@ export function TransactionFilterPanel({
                     className="ml-0.5 -mr-1 p-0.5 rounded-full inline-flex items-center justify-center hover:bg-lime-200 dark:hover:bg-lime-800"
                     aria-label={t('filter.chips.removeAttachments')}
                   >
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    <XMarkIcon className="w-3 h-3" aria-hidden="true" />
                   </button>
                 </span>
               )}
@@ -468,9 +438,7 @@ export function TransactionFilterPanel({
                     className="ml-0.5 -mr-1 p-0.5 rounded-full inline-flex items-center justify-center hover:bg-gray-200 dark:hover:bg-gray-600"
                     aria-label={t('filter.chips.removeSearch')}
                   >
-                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    <XMarkIcon className="w-3 h-3" aria-hidden="true" />
                   </button>
                 </span>
               )}
@@ -487,38 +455,27 @@ export function TransactionFilterPanel({
             <div className="px-4 pb-4 sm:px-6 border-t border-gray-200 dark:border-gray-700">
               {/* Account status segmented control + Bulk Update button */}
               <div className="flex flex-wrap items-center gap-3 pt-4 pb-2">
-                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('filter.accounts.label')}</span>
-                <div className="inline-flex rounded-md shadow-sm">
-                  <button
-                    onClick={() => setFilterAccountStatus('')}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-l-md border ${
-                      filterAccountStatus === ''
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
-                    }`}
-                  >
-                    {t('filter.accounts.all')}
-                  </button>
-                  <button
-                    onClick={() => setFilterAccountStatus('active')}
-                    className={`px-3 py-1.5 text-sm font-medium border-t border-b ${
-                      filterAccountStatus === 'active'
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
-                    }`}
-                  >
-                    {t('filter.accounts.active')}
-                  </button>
-                  <button
-                    onClick={() => setFilterAccountStatus('closed')}
-                    className={`px-3 py-1.5 text-sm font-medium rounded-r-md border ${
-                      filterAccountStatus === 'closed'
-                        ? 'bg-blue-600 text-white border-blue-600'
-                        : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
-                    }`}
-                  >
-                    {t('filter.accounts.closed')}
-                  </button>
+                <span id="filter-account-status-label" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  {t('filter.accounts.label')}
+                </span>
+                <div role="group" aria-labelledby="filter-account-status-label" className={SEGMENTED_GROUP_CLASS}>
+                  {(
+                    [
+                      ['', t('filter.accounts.allCount', { count: accountStatusCounts.all })],
+                      ['active', t('filter.accounts.activeCount', { count: accountStatusCounts.active })],
+                      ['closed', t('filter.accounts.closedCount', { count: accountStatusCounts.closed })],
+                    ] as const
+                  ).map(([status, label]) => (
+                    <button
+                      key={status || 'all'}
+                      type="button"
+                      onClick={() => setFilterAccountStatus(status)}
+                      aria-pressed={filterAccountStatus === status}
+                      className={segmentClass(filterAccountStatus === status)}
+                    >
+                      {label}
+                    </button>
+                  ))}
                 </div>
                 {onToggleBulkSelectMode && (
                   <Button
@@ -625,13 +582,21 @@ export function TransactionFilterPanel({
                   given to Time Period), the narrow controls 20 (1fr), and
                   Search 60 (3fr). The Currency column is dropped when it isn't
                   shown. */}
+              {/* Written out rather than composed: Tailwind emits a utility
+                  only for a class it can find as a literal in the source. */}
               <div
                 className={`grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4 ${
-                  hasCurrencyFilter
-                    ? 'lg:grid-cols-[34fr_27fr_27fr_20fr_20fr_20fr_20fr_60fr]'
-                    : 'lg:grid-cols-[34fr_27fr_27fr_20fr_20fr_20fr_60fr]'
+                  hideDateRange
+                    ? hasCurrencyFilter
+                      ? 'lg:grid-cols-[20fr_20fr_20fr_20fr_60fr]'
+                      : 'lg:grid-cols-[20fr_20fr_20fr_60fr]'
+                    : hasCurrencyFilter
+                      ? 'lg:grid-cols-[34fr_27fr_27fr_20fr_20fr_20fr_20fr_60fr]'
+                      : 'lg:grid-cols-[34fr_27fr_27fr_20fr_20fr_20fr_60fr]'
                 }`}
               >
+                {!hideDateRange && (
+                  <>
                 <Select
                   label={t('filter.fields.timePeriod')}
                   options={TIME_PERIOD_OPTIONS.map((o) => ({ value: o.value, label: t(o.labelKey) }))}
@@ -680,6 +645,8 @@ export function TransactionFilterPanel({
                     }
                   }}
                 />
+                  </>
+                )}
 
                 <CurrencyInput
                   label={t('filter.fields.amountFrom')}
@@ -727,13 +694,25 @@ export function TransactionFilterPanel({
                   }
                 />
 
-                <Input
-                  label={t('filter.fields.search')}
-                  type="text"
-                  value={searchInput}
-                  onChange={(e) => handleSearchChange(e.target.value)}
-                  placeholder={t('filter.placeholders.search')}
-                />
+                {/* Search sits last on this row, right of Attachments, where
+                    the 60fr column gives it the room a typed query needs. */}
+                <div>
+                  <div className="flex items-end gap-1">
+                    <div className="min-w-0 flex-1">
+                      <Input
+                        label={t('filter.fields.search')}
+                        type="text"
+                        value={searchInput}
+                        onChange={(e) => handleSearchChange(e.target.value)}
+                        placeholder={t('filter.placeholders.search')}
+                      />
+                    </div>
+                    <SearchSyntaxHelp onExample={handleSearchChange} />
+                  </div>
+                  {filterSearch && (
+                    <SearchInterpretationLine interpretation={searchInterpretation} />
+                  )}
+                </div>
               </div>
 
               {/* Bulk Update button - mobile only (full width at bottom) */}

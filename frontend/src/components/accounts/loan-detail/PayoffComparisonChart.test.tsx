@@ -30,13 +30,16 @@ vi.mock('recharts', () => ({
   ),
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrencyCompact: (amount: number) => `$${amount.toFixed(0)}`,
-    formatCurrencyAxis: (amount: number) => `$${amount}`,
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrencyCompact: (amount: number) => `$${amount.toFixed(0)}`,
+      formatCurrencyAxis: (amount: number) => `$${amount}`,
+    }),
+  };
+});
 vi.mock('@/hooks/useChartDateFormat', () => ({
   useChartDateFormat: () => (date: string) => date.slice(0, 7),
 }));
@@ -236,6 +239,37 @@ describe('buildPayoffComparisonSeries', () => {
     const lastHist = points.find((p) => p.monthKey === lastHistMonth);
     expect(lastHist?.historicalBalance).toBeDefined();
     expect(points.some((p) => p.monthKey === projectionStartKey)).toBe(true);
+  });
+
+  it('starts the projection at its first month when a past-start loan has no history', () => {
+    // A mortgage entered with a 2020 start and no recorded payments: the
+    // original curve reaches back to 2020, so the first projected month sits
+    // mid-series and must survive sampling and carry the "Today" marker.
+    const original = generateLoanSchedule({
+      startingBalance: 500000,
+      annualRate: 5,
+      paymentAmount: 2923,
+      frequency: 'MONTHLY',
+      firstPaymentDate: new Date(2020, 0, 1),
+    });
+    const projection = generateLoanSchedule({
+      startingBalance: 500000,
+      annualRate: 5,
+      paymentAmount: 2923,
+      frequency: 'MONTHLY',
+      firstPaymentDate: new Date(2026, 10, 9),
+    });
+
+    const { chartPoints: points, projectionStartKey } = buildPayoffComparisonSeries(
+      [],
+      projection,
+      null,
+      original,
+    );
+
+    expect(projectionStartKey).toBe('2026-11');
+    const firstProjected = points.find((p) => p.baselineBalance !== undefined);
+    expect(firstProjected?.monthKey).toBe('2026-11');
   });
 
   it('adds the original contractual series from the fourth argument', () => {

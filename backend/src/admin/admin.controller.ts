@@ -42,6 +42,15 @@ export class AdminController {
     return this.adminService.findAllUsers();
   }
 
+  @Get("storage")
+  @ApiOperation({
+    summary: "Per-user backup and attachment storage usage (admin only)",
+  })
+  @ApiResponse({ status: 200, description: "Storage usage per user" })
+  storageUsage() {
+    return this.adminService.getUserStorageUsage();
+  }
+
   @Post()
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: "Create a new user account (admin only)" })
@@ -89,5 +98,35 @@ export class AdminController {
   })
   resetPassword(@Request() req, @Param("id", ParseUUIDPipe) id: string) {
     return this.adminService.resetUserPassword(req.user.id, id);
+  }
+
+  @Post(":id/unlink-sso")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      "Convert an SSO account to a local account with a temporary password (admin only)",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "SSO unlinked, returns temporary password",
+  })
+  @ApiResponse({ status: 400, description: "The user is not an SSO account" })
+  unlinkSso(@Request() req, @Param("id", ParseUUIDPipe) id: string) {
+    return this.adminService.unlinkUserSso(req.user.id, id);
+  }
+
+  @Post(":id/reset-2fa")
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary:
+      "Reset a user's two-factor authentication and sign them out (admin only)",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "2FA cleared, trusted devices removed, sessions revoked",
+  })
+  @ApiResponse({ status: 400, description: "The user has no 2FA set up" })
+  resetTwoFactor(@Request() req, @Param("id", ParseUUIDPipe) id: string) {
+    return this.adminService.resetUserTwoFactor(req.user.id, id);
   }
 }

@@ -7,6 +7,7 @@
     "tryIt": "[XX-Try it — the tour continues once you do-XX]",
     "skipStep": "[XX-Skip this step-XX]",
     "move": "[XX-Move this card — drag it, or nudge it with the arrow keys-XX]",
+    "readGuide": "[XX-Read the full guide-XX]",
     "stepCounter": "[XX-{current} of {total}-XX]",
     "skippedTitle": "[XX-Tour finished-XX]",
     "skippedBody": "[XX-Some steps were skipped because their screen or control wasn't available. You can retake the tour anytime from Settings.-XX]"
@@ -45,7 +46,8 @@
     "requirementsLoading": "[XX-Checking whether you can take this tour…-XX]",
     "requires": {
       "transactionEntry": "[XX-Add an account first — this tour walks through recording a transaction.-XX]",
-      "securitiesExist": "[XX-Add a security first — this tour opens one from your securities list.-XX]"
+      "securitiesExist": "[XX-Add a security first — this tour opens one from your securities list.-XX]",
+      "ownerView": "[XX-Switch back to your own data first. This tour covers features that are not available while you act for someone else.-XX]"
     },
     "start": "[XX-Start-XX]",
     "restart": "[XX-Retake-XX]",
@@ -67,7 +69,7 @@
         },
         "dashboard": {
           "title": "[XX-Your dashboard-XX]",
-          "body": "[XX-This is your dashboard. Use the **Customize** button in the top-right to rearrange or hide widgets so the summaries you care about sit right at the top.-XX]"
+          "body": "[XX-This is your dashboard. Choose the **Customize** gear beside the greeting to arrange it: move or remove widgets where they stand, choose **Add Widget** for more, and **Done** to keep the layout.-XX]"
         },
         "tools": {
           "title": "[XX-The Tools menu-XX]",
@@ -76,6 +78,14 @@
         "accounts": {
           "title": "[XX-Your accounts-XX]",
           "body": "[XX-Add your bank, credit card, loan, and investment accounts here with the highlighted button. Every balance and transaction belongs to an account.-XX]"
+        },
+        "openAccountDetail": {
+          "title": "[XX-Open an account's detailed view-XX]",
+          "body": "[XX-Each account has a page built for its type. Choose **Details** — the eye icon on an account row — to open it. On a phone, press and hold the account and choose **Details**.-XX]"
+        },
+        "accountDetailView": {
+          "title": "[XX-A view built for this account-XX]",
+          "body": "[XX-This page changes with the account type, so a bank account, credit card, loan, investment account, or asset each shows the figures and tools that suit it. Come back anytime with **Details** from the Accounts list.-XX]"
         },
         "transactions": {
           "title": "[XX-Transactions-XX]",
@@ -303,6 +313,374 @@
             "title": "[XX-Come back at the next evaluation-XX]",
             "body": "[XX-GEM makes one decision per period, and the date of the next one is at the top of the report. There is nothing to do until then. When it arrives, check whether the signal changed; if it did, place the trades through your broker and record them in Monize so the portfolio comparison keeps adding up. You can retake this tour anytime from **Guided tours** in **Settings**.-XX]"
           }
+        }
+      }
+    },
+    "v1_16_0": {
+      "notifications": {
+        "title": "[XX-Notifications-XX]",
+        "steps": {
+          "welcome": {
+            "title": "[XX-Monize can tell you things now-XX]",
+            "body": "[XX-A bill falling due, a budget going over, a balance crossing a line you set, a backup that failed. This walkthrough covers where those arrive, and how you choose which ones reach you by email or on your phone.-XX]"
+          },
+          "bell": {
+            "title": "[XX-The bell is the record-XX]",
+            "body": "[XX-Every notification Monize raises is written here, whatever else you switch on or off. Email and push are copies sent onward; this list is the original, and the number on the bell counts what you have not read yet.-XX]"
+          },
+          "panel": {
+            "title": "[XX-What a notification carries-XX]",
+            "body": "[XX-Each one says what happened and links to the page that shows it — the bill, the budget, the account. **Mark all read** clears the count without removing anything. A notification you want to be reminded about has a **Remind me** action: once more after a delay, or repeating until you stop it, and you can stop it from the notification itself when it reaches your phone.-XX]"
+          },
+          "filters": {
+            "title": "[XX-Narrow the list, then act on it-XX]",
+            "body": "[XX-The top row filters by severity and the bottom row separates **Financial** from **System** — backups, mail delivery and other things only an administrator can act on. **Delete all** follows whatever filter is showing and reaches every match, not only the ones on screen, so you can clear a run of resolved system alerts and leave the rest.-XX]"
+          },
+          "settings": {
+            "title": "[XX-Where delivery is decided-XX]",
+            "body": "[XX-**Settings → Notifications** holds the rest of this tour. The top of the card is the email switch and the weekly budget digest; below it is the grid that decides everything else, then your push devices.-XX]"
+          },
+          "matrix": {
+            "title": "[XX-One row per kind, one column per channel-XX]",
+            "body": "[XX-Choose per notification type whether it goes out as a **report email**, an **alert email**, a **push**, or through **UnifiedPush** to a distributor you run yourself. There is no column for the bell because the bell always gets the row. **Cooldown** is the last column: skip the email and the push when something from the same group already went out inside that window — the bell entry is still written. Every switch saves the moment you flip it.-XX]"
+          },
+          "push": {
+            "title": "[XX-Your devices-XX]",
+            "body": "[XX-Register a browser here and Monize can reach it while the app is closed. It signs its own messages, so there is no Google or Apple account in the middle. Each device can be tested and removed on its own, and a device that stops being reachable says why. On an iPhone this works once Monize is added to the Home Screen; if your administrator has not switched push on for this instance, this block says so instead.-XX]"
+          },
+          "portfolio": {
+            "title": "[XX-Investment movement-XX]",
+            "body": "[XX-Once a day, when your investment accounts move by more than the amount you set here. It measures market movement and dividends — money you pay in or take out is not a move.-XX]"
+          },
+          "finish": {
+            "title": "[XX-One more place to look-XX]",
+            "body": "[XX-Balance alerts live on the account itself: edit any account and set **Notify below** or **Notify above**. They fire when the balance *crosses* the line, so you are told once rather than after every payment that keeps it there. You can retake this tour anytime from Settings.-XX]"
+          }
+        }
+      },
+      "reportTagBreakdown": {
+        "title": "[XX-Break down a report by tag-XX]",
+        "steps": {
+          "welcome": {
+            "title": "[XX-See your reports by tag, not just category-XX]",
+            "body": "[XX-Income vs Expenses and Cash Flow can now split by the value of a tag you choose — household spending versus a side stall, say — and show transfers between them without ever counting a transfer as income.-XX]"
+          },
+          "breakdown": {
+            "title": "[XX-Break down by tag key-XX]",
+            "body": "[XX-Pick a tag key here, such as **scope**, and the report splits into one section per value you have used it with, plus an **Untagged** section for everything else.-XX]",
+            "fallbackBody": "[XX-This control appears once you have tagged a transaction with a **key:value** tag, such as **scope:household**. Add one, and Break down by tag key shows up here.-XX]"
+          },
+          "buckets": {
+            "title": "[XX-Per-value totals, and transfers kept separate-XX]",
+            "body": "[XX-Choosing a key opens a tab per value plus **Untagged**, each with its own income and expenses. Money moved between accounts shows as **Tagged inflows** and **Tagged outflows** — visible, but never counted as income.-XX]"
+          },
+          "finish": {
+            "title": "[XX-That's the tag breakdown-XX]",
+            "body": "[XX-Tag transactions with a key:value pair like scope:household wherever you want this view, and revisit this tour anytime from Settings.-XX]"
+          }
+        }
+      }
+    },
+    "v1_17_0": {
+      "transactionRules": {
+        "title": "[XX-Transaction rules-XX]",
+        "steps": {
+          "welcome": {
+            "title": "[XX-Rules that tidy your transactions-XX]",
+            "body": "[XX-When a transaction is created or imported and matches the conditions you set, a rule can set its category or payee, add tags, rewrite its description or ask an AI to review it. A rule never changes an amount, an account or a date.-XX]"
+          },
+          "tools": {
+            "title": "[XX-Rules are in the Tools menu-XX]",
+            "body": "[XX-Open **Tools** to find **Rules**. The next step shows the menu.-XX]"
+          },
+          "rulesLink": {
+            "title": "[XX-Open Rules-XX]",
+            "body": "[XX-Choose **Rules**. It lists every rule you have and is where you create a new one.-XX]"
+          },
+          "list": {
+            "title": "[XX-Your rules, in order-XX]",
+            "body": "[XX-Each row is one rule, with a switch to turn it on or off and actions to move it, run it, duplicate it or delete it. Rules are checked from the top down, so the order matters when two of them change the same thing. With no rules yet, this card explains what a rule is.-XX]"
+          },
+          "create": {
+            "title": "[XX-Create a rule-XX]",
+            "body": "[XX-**Create rule** opens the editor with a blank rule. Nothing is saved until you choose **Save rule**.-XX]"
+          },
+          "when": {
+            "title": "[XX-When: which transactions it looks at-XX]",
+            "body": "[XX-Choose whether the rule looks at a transaction when it is **created**, when it is **imported**, or both. **Stop processing other rules** skips the rules below this one for any transaction it matches.-XX]"
+          },
+          "if": {
+            "title": "[XX-If: which transactions match-XX]",
+            "body": "[XX-Build the conditions from fields such as payee, description, amount and category. The **Visual** and **Expression** switch shows the same conditions as cards or as one line of text. In a pattern, * stands for any text and '{name}' keeps the text at that spot so an action can reuse it.-XX]"
+          },
+          "then": {
+            "title": "[XX-Then: what it changes-XX]",
+            "body": "[XX-Actions run in the order listed. A rule can set the category or payee, add or remove tags, set the description, or ask an AI to review the transaction. There is no action for an amount, an account or a date.-XX]"
+          },
+          "test": {
+            "title": "[XX-Test, run and undo-XX]",
+            "body": "[XX-**Test rule** tries the draft on your existing transactions and shows what it would change. Nothing is changed. Once a rule is saved, **Run on existing transactions** shows a preview and applies it to what you already have, and you can undo that run from the action history.-XX]"
+          },
+          "reviews": {
+            "title": "[XX-The AI review inbox-XX]",
+            "body": "[XX-A rule with **Ask for an AI review** does not change the transaction. It puts it here instead. An assistant proposes an edit, and nothing is written until you approve it. You can also dismiss a request. Find it under **AI** as **AI Review Inbox**.-XX]"
+          }
+        }
+      }
+    },
+    "v1_20_0": {
+      "warranties": {
+        "title": "[XX-Warranties-XX]",
+        "steps": {
+          "welcome": {
+            "title": "[XX-Keep track of your warranties-XX]",
+            "body": "[XX-A warranty records what you bought, when its coverage ends and who sold it, with its receipt, manual and any claims. It can be linked to the purchase in your register. A warranty never changes a balance, a report or a total. This tour shows the ways to add one and where they show up afterwards.-XX]"
+          },
+          "warrantiesLink": {
+            "title": "[XX-Warranties are in the Tools menu-XX]",
+            "body": "[XX-Open **Tools** and choose **Warranties** to see every warranty you have.-XX]"
+          },
+          "overview": {
+            "title": "[XX-Coverage at a glance-XX]",
+            "body": "[XX-These cards count your warranties that are **Expiring soon**, **Active**, **Expired** and **Lifetime**. Choose a card to filter the list below. You can also search, sort and show archived warranties. Choose a warranty in the list to open its page, with its documents, its claims and the purchase it is linked to.-XX]"
+          },
+          "addWarranty": {
+            "title": "[XX-Method 1: add one here-XX]",
+            "body": "[XX-**Add warranty** opens a blank form. Enter the product, the vendor and the purchase date, then when the coverage ends: **On a date**, **After a duration**, or **Never** for a lifetime warranty. You can attach the receipt or the manual before you save.-XX]"
+          },
+          "importCsv": {
+            "title": "[XX-Method 2: import a CSV file-XX]",
+            "body": "[XX-**Import CSV** reads a file in Warracker's columns, such as an export from Warracker or from this page. You see every row and any problems before anything is saved.-XX]"
+          },
+          "inRegister": {
+            "title": "[XX-Warranties in the register-XX]",
+            "body": "[XX-A transaction with a warranty shows a shield in the register. Search for **has:warranty** to find every such transaction.-XX]"
+          },
+          "newTransaction": {
+            "title": "[XX-Method 3: while you record a purchase-XX]",
+            "body": "[XX-Choose **+ New Transaction** to open the form.-XX]"
+          },
+          "warrantiesLine": {
+            "title": "[XX-The Warranties line-XX]",
+            "body": "[XX-**Add warranty** here saves the new transaction first, then opens the warranty form filled in from it. When you edit a transaction later, this line lists its warranties, and each one opens its page.-XX]",
+            "fallbackBody": "[XX-The Warranties line is not shown for a joint account, because a warranty is your own. Choose one of your own accounts and the form shows a **Warranties** line above its buttons. **Add warranty** there saves the new transaction first, then opens the warranty form filled in from it. When you edit a transaction later, the line lists its warranties.-XX]"
+          },
+          "closeForm": {
+            "title": "[XX-Close the form-XX]",
+            "body": "[XX-Choose **Cancel** to close it without saving, or save the transaction if you entered a real one.-XX]"
+          },
+          "dashboardWidget": {
+            "title": "[XX-See what is expiring on the dashboard-XX]",
+            "body": "[XX-Choose **Customize**, then **Add Widget**, pick **Warranties expiring soon** and choose **Done**. It lists the next warranties to expire, and its title opens the Warranties page.-XX]"
+          },
+          "reminders": {
+            "title": "[XX-Reminders before coverage ends-XX]",
+            "body": "[XX-Monize reminds you 30 days and 7 days before a warranty expires, and on the day. The reminders arrive here, and you can snooze one or open the warranty from it. Choose how they reach you under **Settings**, in **Notifications**, as **Warranty reminders**.-XX]"
+          }
+        }
+      },
+      "payrollDeductions": {
+        "title": "[XX-Payroll Deductions-XX]",
+        "steps": {
+          "welcome": {
+            "title": "[XX-Stop deductions at their yearly maximum-XX]",
+            "body": "[XX-Some paycheque deductions, such as pension or employment insurance, stop once the year's maximum is collected and start again the next year. A payroll deduction rule tells Monize that maximum, so the paycheque stops collecting the deduction when it is reached. **Before you start, you need a payroll scheduled bill:** your paycheque set up as a scheduled deposit, with its deductions as separate lines.-XX]"
+          },
+          "payrollBill": {
+            "title": "[XX-First, set up your paycheque-XX]",
+            "body": "[XX-If you have not already, choose **+ New Schedule** and create your paycheque as a deposit. Split it into a line for your gross pay and one negative line for each deduction, each with its own category. If a deduction is not being taken right now because this year's maximum is already reached, still add a split line for it, as a zero-value expense, so a rule can cap it and it starts again after the reset. Only an active deposit that pays in more than it takes out can carry rules, and only its deduction lines can be capped.-XX]"
+          },
+          "taxesLink": {
+            "title": "[XX-Payroll Deductions are under Taxes-XX]",
+            "body": "[XX-Open **Tools** and choose **Taxes** to find the tax tools.-XX]"
+          },
+          "taxesCard": {
+            "title": "[XX-Open Payroll Deductions-XX]",
+            "body": "[XX-Choose this card to open the payroll deduction rules.-XX]"
+          },
+          "newRule": {
+            "title": "[XX-Create the rules for a paycheque-XX]",
+            "body": "[XX-**+ New Rule** opens the form. Choose your payroll scheduled bill, then a yearly maximum for each deduction category you want to cap. Add the reset date, usually 1 January. If the bill has no deduction lines, the form tells you to add them to the bill first.-XX]"
+          },
+          "rulesList": {
+            "title": "[XX-Your rules-XX]",
+            "body": "[XX-Each rule shows its bill, its category, the yearly maximum, the reset date and what each paycheque deducts. Edit a rule to change its maximum, or delete it to let the paycheque collect the full line again. Deleting a rule never changes a posted transaction.-XX]"
+          },
+          "periodTables": {
+            "title": "[XX-What has been collected-XX]",
+            "body": "[XX-Once you have a rule, **Show year-to-date** lists what each category has collected this period and the room left under its maximum. **Show previous periods** lists what it collected in earlier years.-XX]"
+          },
+          "forecast": {
+            "title": "[XX-Applied when the paycheque posts-XX]",
+            "body": "[XX-When the paycheque posts, each capped line is reduced to the room left under its maximum, down to zero, and starts again after the reset date. The Cash Flow Forecast here and on the dashboard shows the same thing ahead of time, so you can see your take-home pay rise once a maximum is reached.-XX]"
+          },
+          "reminders": {
+            "title": "[XX-A reminder before each reset-XX]",
+            "body": "[XX-Two months before a rule resets, Monize asks you here to confirm next year's maximum. If you do nothing, the rule keeps its maximum and resets on its date. Choose how the reminders reach you under **Settings**, in **Notifications**, as **Bills and scheduled**.-XX]"
+          }
+        }
+      },
+      "sharedExpenses": {
+        "title": "[XX-Shared expenses-XX]",
+        "steps": {
+          "welcome": {
+            "title": "[XX-Share a trip, keep clear balances-XX]",
+            "body": "[XX-See how to track group purchases and repayments. This walkthrough does not create records for you.-XX]"
+          },
+          "tools": {
+            "title": "[XX-Open Shared Expenses-XX]",
+            "body": "[XX-Find **Shared Expenses** in **Tools**. On a phone, use the navigation menu.-XX]"
+          },
+          "newGroup": {
+            "title": "[XX-Start with your group-XX]",
+            "body": "[XX-**New Group** brings together the trip name, people and settlement currency. People do not need Monize accounts. Each purchase can involve different members.-XX]"
+          },
+          "chooseGroup": {
+            "title": "[XX-Explore a group-XX]",
+            "body": "[XX-Open a group to continue. If you have none yet, use **Skip this step** and create one after the tour.-XX]"
+          },
+          "expenses": {
+            "title": "[XX-Who paid, and who benefited?-XX]",
+            "body": "[XX-With edit access, use **Add Expense** to choose the payer and beneficiaries. **Split Between** supports equal shares, exact amounts, percentages and zero shares.-XX]"
+          },
+          "balances": {
+            "title": "[XX-Check balances and settle up-XX]",
+            "body": "[XX-**Balances** shows who owes whom and suggested repayments. Record a repayment after money changes hands. **Files** and **Activity** keep receipts and history.-XX]"
+          },
+          "done": {
+            "title": "[XX-Ready for your next trip-XX]",
+            "body": "[XX-Shared entries stay separate from personal transactions. Replay this walkthrough anytime from **Settings**, under **Guided tours**.-XX]"
+          }
+        }
+      }
+    },
+    "v1_21_0": {
+      "commandPalette": {
+        "title": "[XX-Command palette-XX]",
+        "steps": {
+          "welcome": {
+            "title": "[XX-Find anything from one box-XX]",
+            "body": "[XX-The command palette searches your accounts, payees, categories, bills, securities, reports, settings, transactions and the user guide at once, from any screen. It works from the keyboard, so this tour is for a computer.-XX]"
+          },
+          "openPalette": {
+            "title": "[XX-Open the palette-XX]",
+            "body": "[XX-Press **Ctrl+K** (**Cmd+K** on a Mac). The tour continues once the palette opens.-XX]"
+          },
+          "searchBox": {
+            "title": "[XX-Type what you are looking for-XX]",
+            "body": "[XX-Try a payee, an account, a report such as **Net Worth**, or a setting such as **Currencies**. Results update as you type, and transactions and guide sections are searched too.-XX]"
+          },
+          "results": {
+            "title": "[XX-Move and open-XX]",
+            "body": "[XX-Use the **Up** and **Down** arrow keys to move and **Enter** to open a result. **Tab** jumps to the actions, and **Ctrl+Enter** (**Cmd+Enter** on a Mac) starts a new transaction for the payee that matches best.-XX]"
+          },
+          "closePalette": {
+            "title": "[XX-Close the palette-XX]",
+            "body": "[XX-Click **esc** to close it for now. Outside this tour, the **Esc** key does the same.-XX]"
+          },
+          "done": {
+            "title": "[XX-One shortcut to remember-XX]",
+            "body": "[XX-Press **Ctrl+K** whenever you want to jump somewhere. Over an open dialog it searches the guide instead. On a phone, use the search in the header. Replay this tour anytime from **Settings**, under **Guided tours**.-XX]"
+          }
+        }
+      },
+      "inAppHelp": {
+        "title": "[XX-Help inside the app-XX]",
+        "steps": {
+          "welcome": {
+            "title": "[XX-The user guide, beside your work-XX]",
+            "body": "[XX-The Monize user guide now opens inside the app, next to the page you are on, with screenshots in your theme. It comes with your Monize, so it works offline. This tour shows where to find it.-XX]"
+          },
+          "pageHelp": {
+            "title": "[XX-Open help for this page-XX]",
+            "body": "[XX-Click the **?** beside the page title. The guide opens at the section about this page.-XX]"
+          },
+          "panel": {
+            "title": "[XX-Read alongside the page-XX]",
+            "body": "[XX-The panel stays beside the page you were on. **On this page** lists the sections, and links to other guide pages open here. On a computer, drag the panel's left edge to make it wider or narrower.-XX]"
+          },
+          "panelControls": {
+            "title": "[XX-Panel controls-XX]",
+            "body": "[XX-Step **Back** and **Forward** through the pages you opened, **Search** the guide, **Pin** the panel so it stays open on other pages, or open the page on monize.net. Click **Close** (the **X**) to continue.-XX]"
+          },
+          "helpMenu": {
+            "title": "[XX-The Help menu-XX]",
+            "body": "[XX-The **?** in the header holds help for the current page, guide search, keyboard shortcuts, the tour for this page and What's New. You can also press **?** anywhere you are not typing to search the guide.-XX]"
+          },
+          "learnMore": {
+            "title": "[XX-Learn more, where you need it-XX]",
+            "body": "[XX-Look for **Learn more** in tooltips, on empty screens and beside some error messages. Each one opens the section of the guide that explains it.-XX]"
+          },
+          "done": {
+            "title": "[XX-Ask in your own words-XX]",
+            "body": "[XX-The AI assistant can also answer \"how do I...\" questions from the guide and tell you which sections it used. Replay this tour anytime from **Settings**, under **Guided tours**.-XX]"
+          }
+        }
+      },
+      "dashboardEdit": {
+        "title": "[XX-Arranging the dashboard-XX]",
+        "steps": {
+          "welcome": {
+            "title": "[XX-Arrange your dashboard in place-XX]",
+            "body": "[XX-You now move, resize, add and remove widgets right on the dashboard, and nothing is saved until you say so. This tour walks through edit mode.-XX]"
+          },
+          "enterEdit": {
+            "title": "[XX-Enter edit mode-XX]",
+            "body": "[XX-Click the gear beside the greeting. The tour continues once edit mode opens.-XX]"
+          },
+          "editBar": {
+            "title": "[XX-The edit bar-XX]",
+            "body": "[XX-**Add Widget** lists the widgets that are not on your dashboard. **Hero Settings** chooses what the hero at the top shows, and **Reset to default** puts the standard layout back.-XX]"
+          },
+          "arrange": {
+            "title": "[XX-Move, resize and remove-XX]",
+            "body": "[XX-Drag a widget by its grip (the six dots), or use its arrows. On a wide screen, **Width** and **Height** change its size, or drag its bottom-right corner. The **X** removes it, and the dashed **Add Widget** tile adds one. Go ahead and try.-XX]"
+          },
+          "finish": {
+            "title": "[XX-Keep it or put it back-XX]",
+            "body": "[XX-Click **Done** to save the layout, or **Cancel** to put it back the way it was. Your layout syncs across your devices.-XX]"
+          },
+          "done": {
+            "title": "[XX-Make it yours-XX]",
+            "body": "[XX-Looking for something new to add? The **Trivia** widget shows a daily fact about your money. Replay this tour anytime from **Settings**, under **Guided tours**.-XX]"
+          }
+        }
+      }
+    }
+  },
+  "emailReceipts": {
+    "basics": {
+      "title": "[XX-Receipts from email-XX]",
+      "steps": {
+        "welcome": {
+          "title": "[XX-Why read receipts from email-XX]",
+          "body": "[XX-A bank transaction tells you how much you paid and when. It does not tell you what you bought. The order confirmation email does. Monize reads these emails, finds the transaction that each one paid for and proposes a description, a payee and a split by line item, with a category for each line. You approve each proposal before it changes a transaction.-XX]"
+        },
+        "aiRequired": {
+          "title": "[XX-In practice, you need an AI provider-XX]",
+          "body": "[XX-Monize reads an email with a **profile**: a set of patterns for one sender domain, for example one shop. You can write a profile by hand, but each pattern must match the exact lines of that shop's emails, so in practice an AI writes it. The AI writes the profile one time, from a few sample emails. After you approve it, the profile reads each new email from that shop without the AI.-XX]"
+        },
+        "aiProviders": {
+          "title": "[XX-Set up an AI provider first-XX]",
+          "body": "[XX-Add a provider here and test the connection. Without a provider, the profile wizard cannot write a profile, and emails from a shop with no profile stay unread.-XX]"
+        },
+        "tabs": {
+          "title": "[XX-Four tabs, in the order you use them-XX]",
+          "body": "[XX-**Overview** shows what Monize has read. In **Mailbox**, connect a mailbox that holds only order confirmations. Monize only reads it: it never moves, flags or deletes a message. **Profiles** holds one profile for each shop. **Emails** lists each email and its state.-XX]"
+        },
+        "uncovered": {
+          "title": "[XX-Shops with no profile-XX]",
+          "body": "[XX-This box lists the sender domains that no profile can read yet. Choose one to start the wizard. Select up to five of its emails and pair each one with the bank transaction it paid for. The AI writes a profile and tests it on these pairs. Then you see a preview for all emails from that shop, and you accept the profile or ask for a change with a short note.-XX]",
+          "fallbackBody": "[XX-You have no emails from a shop without a profile yet. After you connect the mailbox, each sender domain appears here as a tag, for example **shop.example (12)**: the domain and the number of its emails. Choose the tag to start the wizard. Select up to five of its emails and pair each one with the bank transaction it paid for. The AI writes a profile and tests it on these pairs. Then you see a preview for all emails from that shop, and you accept the profile or ask for a change with a short note.-XX]"
+        },
+        "profiles": {
+          "title": "[XX-Your profiles-XX]",
+          "body": "[XX-Each row is one profile, approved or draft. **Create a new profile manually** opens the editor for a profile written by hand. Use it to correct a small detail in a draft from the AI. When you approve a profile, Monize reads the emails from its domain immediately.-XX]",
+          "fallbackBody": "[XX-You have no profiles yet. Each profile you accept appears here as one row, for example **Shop Example**, domain **shop.example**, status **Approved**. **Create a new profile manually** opens the editor for a profile written by hand. Use it only to correct a small detail in a draft from the AI. When you approve a profile, Monize reads the emails from its domain immediately.-XX]"
+        },
+        "reviews": {
+          "title": "[XX-Approve the proposals-XX]",
+          "body": "[XX-Each email that matches a transaction becomes a proposal in the **AI Review Inbox**, in the **AI** menu. A proposal shows, for example, the line items of an order with a category for each line. Nothing changes in your transactions until you approve the proposal there.-XX]"
         }
       }
     }

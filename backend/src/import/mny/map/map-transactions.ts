@@ -23,6 +23,7 @@ import {
 } from "../model/mny-model";
 import { MnyWarning, MnyWarningRow } from "../model/mny-warnings";
 import { MnyTransactionData } from "../tables/read-transactions";
+import { transactionTagHandles } from "./map-classifications";
 import { TransferIndex, indexTransfers } from "./map-transfers";
 
 /**
@@ -102,6 +103,8 @@ interface Context {
   readonly externalFunders: ReadonlyMap<number, number>;
   /** Split leg handle -> the trade that leg embeds. */
   readonly investmentSplitLegs: ReadonlyMap<number, number>;
+  /** Sleeve row handle -> the skipped investment row it is the cash side of. */
+  readonly unwrittenTradeCashRows: ReadonlyMap<number, number>;
   readonly warnings: MnyWarning[];
 }
 
@@ -142,13 +145,21 @@ interface Indexes {
   readonly externalFunders: ReadonlyMap<number, number>;
   /** Split leg handle -> the trade that leg embeds. */
   readonly investmentSplitLegs: ReadonlyMap<number, number>;
+  /**
+   * Sleeve row handle -> the investment row it pairs with, for a pairing whose
+   * trade this import does not write. See `classifyTradeCashSides`.
+   */
+  readonly unwrittenTradeCashRows: ReadonlyMap<number, number>;
   readonly warnings: MnyWarning[];
 }
 
 /** Everything the posting predicate reads before the trade-cash classification. */
 type PostingIndexes = Omit<
   Indexes,
-  "tradeCashLegs" | "externalFunders" | "investmentSplitLegs"
+  | "tradeCashLegs"
+  | "externalFunders"
+  | "investmentSplitLegs"
+  | "unwrittenTradeCashRows"
 >;
 
 function buildIndexes(input: MapTransactionsInput): Indexes {
@@ -292,6 +303,15 @@ function isImportablePosting(
  * that moves no cash, leaves Money's row alone: dropping it would lose the money
  * it records, and embedding a trade that does not exist would wire a split to
  * nothing.
+ *
+ * Such a row in the skipped trade's **own** sleeve is named here too
+ * (`unwrittenTradeCashRows`). It keeps its money and imports as an ordinary
+ * row, taking the investment row's category when it has none -- the same
+ * treatment Money 99's other income and expenses get. Wiring it to a
+ * synthesized counterpart instead puts that counterpart in the row's own
+ * account, the pair nets to zero, and the cash Money shows in the sleeve is
+ * gone: an interest payment whose `act` was unknown left a Money 99 cash
+ * account short by exactly its amount.
  */
 function classifyTradeCashSides(
   rows: readonly MnyTransaction[],
@@ -301,10 +321,12 @@ function classifyTradeCashSides(
   tradeCashLegs: ReadonlySet<number>;
   externalFunders: ReadonlyMap<number, number>;
   investmentSplitLegs: ReadonlyMap<number, number>;
+  unwrittenTradeCashRows: ReadonlyMap<number, number>;
 } {
   const tradeCashLegs = new Set<number>();
   const externalFunders = new Map<number, number>();
   const investmentSplitLegs = new Map<number, number>();
+  const unwrittenTradeCashRows = new Map<number, number>();
 
   for (const row of rows) {
     const handle = row.handle;
@@ -316,7 +338,13 @@ function classifyTradeCashSides(
       continue;
     }
     const trade = input.tradesByHandle.get(partner);
-    if (trade === undefined || trade.cashAmount === 0) {
+    if (trade === undefined) {
+      if (isUnwrittenTradeCashRow(row, partner, indexes, input)) {
+        unwrittenTradeCashRows.set(handle, partner);
+      }
+      continue;
+    }
+    if (trade.cashAmount === 0) {
       continue;
     }
 
@@ -355,7 +383,41 @@ function classifyTradeCashSides(
     }
   }
 
-  return { tradeCashLegs, externalFunders, investmentSplitLegs };
+  return {
+    tradeCashLegs,
+    externalFunders,
+    investmentSplitLegs,
+    unwrittenTradeCashRows,
+  };
+}
+
+/**
+ * True for a top-level posting in the cash sleeve of the brokerage holding
+ * `partner`, an investment row whose trade the investment mapper skipped.
+ */
+function isUnwrittenTradeCashRow(
+  row: MnyTransaction,
+  partner: number,
+  indexes: PostingIndexes,
+  input: MapTransactionsInput,
+): boolean {
+  const far = indexes.byHandle.get(partner);
+  if (
+    far === undefined ||
+    far.security === null ||
+    far.account === null ||
+    indexes.parentOfChild.has(row.handle as number) ||
+    indexes.childrenByParent.has(row.handle as number) ||
+    !isPostingRow(row, indexes, input)
+  ) {
+    return false;
+  }
+  const brokerageKey = input.accountKeyByHandle.get(far.account);
+  const sleeveKey =
+    brokerageKey === undefined
+      ? undefined
+      : input.cashKeyByAccountKey.get(brokerageKey);
+  return sleeveKey !== undefined && sleeveKey === accountKeyOf(row, input);
 }
 
 /**
@@ -394,6 +456,7 @@ function buildCashCounterparts(
   indexes: Indexes,
   input: MapTransactionsInput,
   idByHandle: ReadonlyMap<number, string>,
+  warnings: MnyWarning[],
 ): Map<number, CashCounterpart> {
   const counterparts = new Map<number, CashCounterpart>();
 
@@ -408,7 +471,8 @@ function buildCashCounterparts(
     // same wiring `counterpartId` uses in the other direction.
     if (
       indexes.externalFunders.has(handle) ||
-      indexes.investmentSplitLegs.has(handle)
+      indexes.investmentSplitLegs.has(handle) ||
+      indexes.unwrittenTradeCashRows.has(handle)
     ) {
       continue;
     }
@@ -443,14 +507,49 @@ function buildCashCounterparts(
       continue;
     }
 
+    // The near row's account: a split leg may carry none, and then it is the
+    // parent payment's account that the leg's money leaves.
+    const nearAccount =
+      row.account ??
+      (parent === undefined ? null : indexes.byHandle.get(parent)?.account) ??
+      null;
+    const nearCurrency =
+      nearAccount === null
+        ? undefined
+        : input.currencyByHandle.get(nearAccount);
+    const farCurrency = input.currencyByHandle.get(far.account);
+    // Each side carries its own account's amount in its own currency. Within
+    // one currency the counterpart mirrors the bank side, so the pair sums to
+    // zero; across currencies the mirror would credit the bank's amount under
+    // the sleeve's currency, so the far row's own amount is used instead.
+    const amount =
+      nearCurrency !== undefined &&
+      farCurrency !== undefined &&
+      nearCurrency !== farCurrency
+        ? roundMoney(Math.sign(-row.amount) * Math.abs(far.amount))
+        : roundMoney(-row.amount);
+
+    // Compare with Money's own far row rather than with the mapper's sums,
+    // which the expected-balance check shares and so cannot disagree with.
+    if (
+      far.amount !== 0 &&
+      roundMoney(Math.abs(amount)) !== roundMoney(Math.abs(far.amount))
+    ) {
+      warnings.push({
+        code: "transferAmountMismatch",
+        subject: `htrn=${partner}`,
+        detail: `money ${far.amount} imported ${amount}`,
+        row: warningRow(far, input),
+      });
+    }
+
     counterparts.set(partner, {
       id: randomUUID(),
       handle: partner,
       accountKey: cashKey,
       transactionDate: (far.date ?? row.date) as string,
-      // The mirror of the bank side, so the pair sums to zero.
-      amount: roundMoney(-row.amount),
-      currencyCode: input.currencyByHandle.get(far.account) ?? "",
+      amount,
+      currencyCode: farCurrency ?? "",
       status: mapTransactionStatus(row.clearedStatus, row.flags),
       payeeHandle: row.payee,
       categoryHandle: null,
@@ -460,6 +559,9 @@ function buildCashCounterparts(
       linkedTransactionId: nearId,
       splits: [],
       collapsedTradeHandle: null,
+      // Money's classification sits on the bank row, which keeps it; the
+      // synthesized sleeve side is Monize's own row and carries none.
+      tagHandles: [],
     });
   }
 
@@ -516,6 +618,7 @@ function mapSplitChild(
       investmentHandle: embeddedTrade,
       amount: child.amount,
       memo: child.memo,
+      tagHandles: transactionTagHandles(child),
     };
   }
 
@@ -542,6 +645,7 @@ function mapSplitChild(
       investmentHandle: null,
       amount: child.amount,
       memo: child.memo,
+      tagHandles: transactionTagHandles(child),
     };
   }
 
@@ -565,6 +669,7 @@ function mapSplitChild(
     investmentHandle: null,
     amount: child.amount,
     memo: child.memo,
+    tagHandles: transactionTagHandles(child),
   };
 }
 
@@ -666,8 +771,13 @@ function mapOne(
   // A split parent is never itself a transfer: its transfer legs are splits.
   // Neither is a row funding a trade in another account -- Money pairs it with
   // the trade, but in Monize that row *is* the trade's cash leg (issue #1212).
+  // Nor is a sleeve row whose trade was skipped: there is no trade to pair it
+  // with, so it stands alone and keeps the money Money shows.
+  const skippedTrade = context.unwrittenTradeCashRows.get(handle);
   const partner =
-    splits.length > 0 || context.externalFunders.has(handle)
+    splits.length > 0 ||
+    context.externalFunders.has(handle) ||
+    skippedTrade !== undefined
       ? null
       : (context.transfers.partnerByHandle.get(handle) ?? null);
   const linkedTransactionId =
@@ -707,13 +817,20 @@ function mapOne(
     status,
     payeeHandle: row.payee,
     // A split parent carries no category of its own: the legs do.
-    categoryHandle: splits.length > 0 ? null : row.category,
+    categoryHandle:
+      splits.length > 0
+        ? null
+        : (row.category ??
+          (skippedTrade === undefined
+            ? null
+            : (context.byHandle.get(skippedTrade)?.category ?? null))),
     description: row.memo,
     referenceNumber: decodeReference(row.reference),
     isTransfer: linkedTransactionId !== null,
     linkedTransactionId,
     splits,
     collapsedTradeHandle,
+    tagHandles: transactionTagHandles(row),
   };
 }
 
@@ -899,6 +1016,7 @@ export function mapTransactions(
     indexes,
     input,
     idByHandle,
+    warnings,
   );
 
   const context: Context = {
@@ -912,6 +1030,7 @@ export function mapTransactions(
     cashCounterparts,
     externalFunders: indexes.externalFunders,
     investmentSplitLegs: indexes.investmentSplitLegs,
+    unwrittenTradeCashRows: indexes.unwrittenTradeCashRows,
     warnings,
   };
 
@@ -936,6 +1055,25 @@ export function mapTransactions(
       .filter((handle): handle is number => handle !== null),
   );
 
+  // Money's own sleeve-side cash rows are not imported; the trade writes the
+  // leg. Their classification goes with it (`adoptCashLegTags`).
+  const tradeCashLegTagHandles = new Map<number, readonly number[]>();
+  for (const handle of indexes.tradeCashLegs) {
+    const row = indexes.byHandle.get(handle);
+    const trade = indexes.transfers.partnerByHandle.get(handle);
+    const handles = row === undefined ? [] : transactionTagHandles(row);
+    if (trade !== undefined && handles.length > 0) {
+      tradeCashLegTagHandles.set(trade, handles);
+    }
+  }
+
+  const referencedTags = new Set(
+    transactions.flatMap((transaction) => [
+      ...transaction.tagHandles,
+      ...transaction.splits.flatMap((split) => split.tagHandles),
+    ]),
+  );
+
   const transferSplits = transactions.reduce(
     (count, transaction) =>
       count +
@@ -948,6 +1086,8 @@ export function mapTransactions(
     transactions,
     referencedPayees,
     referencedCategories,
+    referencedTags,
+    tradeCashLegTagHandles,
     transfersLinked: countPlainTransferPairs(context) + transferSplits,
     skipped: reportUnusable(rows, indexes, input, warnings),
     tradeCashLegs: indexes.tradeCashLegs.size,

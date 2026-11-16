@@ -1,0 +1,81 @@
+{
+  "learnMore": "Más información",
+  "howThisWorks": "Cómo funciona esto",
+  "menu": {
+    "helpForPage": "Ayuda para esta página",
+    "search": "Buscar ayuda",
+    "shortcuts": "Atajos de teclado",
+    "takeTour": "Hacer el recorrido",
+    "whatsNew": "Novedades",
+    "shellMenu": "Menú de la aplicación de escritorio",
+    "reportIssue": "Reportar un problema",
+    "discussions": "Debates"
+  },
+  "shortcuts": {
+    "title": "Atajos de teclado",
+    "palette": "Paleta de comandos",
+    "paletteKeys": "Ctrl/Cmd+K",
+    "search": "Buscar ayuda",
+    "searchKeys": "?",
+    "undo": "Deshacer el último cambio",
+    "undoKeys": "Ctrl/Cmd+Z",
+    "redo": "Rehacer",
+    "redoKeys": "Ctrl/Cmd+Mayús+Z o Ctrl/Cmd+Y",
+    "closeDialog": "Cerrar el cuadro de diálogo o el panel abierto",
+    "closeDialogKeys": "Esc"
+  },
+  "panel": {
+    "title": "Ayuda",
+    "back": "Atrás",
+    "forward": "Adelante",
+    "openOnline": "Abrir en monize.net",
+    "pin": "Fija el panel de ayuda para que siga abierto al cambiar de página",
+    "unpin": "Desfijar el panel de ayuda",
+    "expand": "Ampliar el panel de ayuda",
+    "collapse": "Reducir el panel de ayuda",
+    "resize": "Cambiar el ancho del panel de ayuda",
+    "resizeValue": "{width} píxeles",
+    "close": "Cerrar la ayuda",
+    "englishOnly": "Esta guía está en inglés.",
+    "loading": "Cargando la ayuda",
+    "toc": {
+      "toggle": "En esta página",
+      "label": "Secciones de esta página"
+    },
+    "error": {
+      "heading": "No se pudo cargar la ayuda",
+      "body": "La guía no se cargó. Inténtalo de nuevo o lee esta página en monize.net.",
+      "retry": "Reintentar"
+    },
+    "search": "Buscar en la guía",
+    "tour": {
+      "prompt": "Esta página tiene un recorrido guiado."
+    },
+    "version": "Guía de Monize {version}",
+    "latestOnline": "La guía más reciente está en monize.net"
+  },
+  "search": {
+    "title": "Buscar en la guía",
+    "placeholder": "Buscar en la guía",
+    "ariaLabel": "Buscar en la guía",
+    "contextHeading": "Ayuda para esta pantalla",
+    "noResults": "Sin resultados para \"{query}\"",
+    "error": "Error al buscar. Inténtalo de nuevo.",
+    "hint": {
+      "navigate": "para navegar",
+      "select": "para seleccionar",
+      "close": "para cerrar"
+    }
+  },
+  "markdown": {
+    "screenshot": "Captura de pantalla",
+    "viewScreenshot": "Ver la captura de pantalla en monize.net",
+    "callout": {
+      "note": "Nota",
+      "tip": "Consejo",
+      "important": "Importante",
+      "warning": "Advertencia",
+      "caution": "Precaución"
+    }
+  }
+}

@@ -7,11 +7,22 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
-vi.mock("@/hooks/useNumberFormat", () => ({
-  useNumberFormat: () => ({
-    formatCurrencyCompact: (n: number) => `$${n.toFixed(2)}`,
-    formatCurrency: (n: number) => `$${n.toFixed(2)}`,
-    defaultCurrency: "CAD",
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrencyCompact: (n: number) => `$${n.toFixed(2)}`,
+      formatCurrency: (n: number) => `$${n.toFixed(2)}`,
+      defaultCurrency: "CAD",
+    }),
+};
+});
+
+vi.mock('@/hooks/useDateFormat', () => ({
+  useDateFormat: () => ({
+    formatDate: (date: string) => `preferred-date:${date}`,
+    formatDateWithoutYear: (date: string) => `preferred-short-date:${date}`,
   }),
 }));
 
@@ -44,7 +55,7 @@ vi.mock("recharts", () => ({
           <C
             {...props}
             active={true}
-            payload={[{ payload: { payeeName: "Tooltip Payee", occurrences: 9, frequency: "Weekly", totalAmount: 12.34, averageAmount: 1.23, color: "#3b82f6" } }]}
+            payload={[{ payload: { payeeName: "Tooltip Payee", occurrences: 9, frequency: "WEEKLY", totalAmount: 12.34, averageAmount: 1.23, color: "#3b82f6" } }]}
           />
           <C {...props} active={false} payload={[]} />
         </div>
@@ -122,7 +133,7 @@ describe("RecurringExpensesReport", () => {
           payeeId: "p-1",
           payeeName: "Netflix",
           categoryName: "Entertainment",
-          frequency: "Monthly",
+          frequency: "MONTHLY",
           occurrences: 6,
           averageAmount: 15.99,
           totalAmount: 95.94,
@@ -164,7 +175,7 @@ describe("RecurringExpensesReport", () => {
           payeeId: "p-1",
           payeeName: "Netflix",
           categoryName: "Entertainment",
-          frequency: "Monthly",
+          frequency: "MONTHLY",
           occurrences: 6,
           averageAmount: 15.99,
           totalAmount: 95.94,
@@ -174,7 +185,7 @@ describe("RecurringExpensesReport", () => {
           payeeId: "p-2",
           payeeName: "Gym",
           categoryName: "Health",
-          frequency: "Monthly",
+          frequency: "MONTHLY",
           occurrences: 6,
           averageAmount: 50.0,
           totalAmount: 300.0,
@@ -203,7 +214,7 @@ describe("RecurringExpensesReport", () => {
           payeeId: "p-1",
           payeeName: "Weekly Sub",
           categoryName: "Subscriptions",
-          frequency: "Weekly",
+          frequency: "WEEKLY",
           occurrences: 24,
           averageAmount: 5.0,
           totalAmount: 120.0,
@@ -213,7 +224,7 @@ describe("RecurringExpensesReport", () => {
           payeeId: "p-2",
           payeeName: "Bi-weekly Pay",
           categoryName: "Services",
-          frequency: "Bi-weekly",
+          frequency: "BIWEEKLY",
           occurrences: 12,
           averageAmount: 30.0,
           totalAmount: 360.0,
@@ -222,8 +233,8 @@ describe("RecurringExpensesReport", () => {
         {
           payeeId: null,
           payeeName: "Quarterly Bill",
-          categoryName: "Utilities",
-          frequency: "Quarterly",
+          categoryName: null,
+          frequency: "OCCASIONAL",
           occurrences: 3,
           averageAmount: 100.0,
           totalAmount: 300.0,
@@ -236,8 +247,102 @@ describe("RecurringExpensesReport", () => {
     await waitFor(() => {
       expect(screen.getByText("Weekly")).toBeInTheDocument();
     });
-    expect(screen.getByText("Bi-weekly")).toBeInTheDocument();
-    expect(screen.getByText("Quarterly")).toBeInTheDocument();
+    expect(screen.getByText("Every 2 Weeks")).toBeInTheDocument();
+    expect(screen.getByText("Occasional")).toBeInTheDocument();
+    expect(screen.getByText("Uncategorized")).toBeInTheDocument();
+    expect(screen.getByText("Weekly")).toHaveClass("bg-purple-100");
+    expect(screen.getByText("Occasional")).toHaveClass("bg-gray-100");
+  });
+
+  // During a rolling deploy an older backend answers with a frequency code this
+  // build has no entry for. `FREQUENCY_BADGE_CLASS[code]` was `undefined` --
+  // which an interpolated className carries to the DOM as the literal class
+  // name `undefined` -- and the catalogue lookup missed, rendering the raw
+  // `reports.recurringExpenses.frequency.<code>` key path on screen.
+  it("falls back for a frequency code this build does not know", async () => {
+    mockGetRecurringExpenses.mockResolvedValue({
+      data: [
+        {
+          payeeId: "p-1",
+          payeeName: "Legacy Sub",
+          categoryName: "Subscriptions",
+          // What an older backend sent before the codes were uppercased.
+          frequency: "Monthly" as unknown as "MONTHLY",
+          occurrences: 6,
+          averageAmount: 10,
+          totalAmount: 60,
+          lastTransactionDate: "2025-01-15",
+        },
+      ],
+      summary: { uniquePayees: 1, totalRecurring: 60, monthlyEstimate: 10 },
+    });
+    render(<RecurringExpensesReport />);
+    await waitFor(() => expect(screen.getByText("Legacy Sub")).toBeInTheDocument());
+    // The code itself, never the key path.
+    const badge = screen.getByText("Monthly");
+    expect(badge.textContent).not.toContain("recurringExpenses.frequency");
+    // IRREGULAR's neutral classes, never the literal `undefined`.
+    expect(badge).toHaveClass("bg-gray-100");
+    expect(badge.className).not.toContain("undefined");
+  });
+
+  // The Frequency column is ORDINAL: sorting it on the localized LABEL gives
+  // "Every 2 Weeks, Irregular, Monthly, Occasional, Weekly" ascending --
+  // alphabetical, and a different order in every language. Ascending must be
+  // most frequent first, which is `RECURRING_EXPENSE_FREQUENCIES`' own order.
+  it("sorts the frequency column by frequency, not by its label's alphabet", async () => {
+    const row = (payeeName: string, frequency: string) => ({
+      payeeId: null,
+      payeeName,
+      categoryName: null,
+      frequency: frequency as unknown as "MONTHLY",
+      occurrences: 6,
+      averageAmount: 10,
+      totalAmount: 60,
+      lastTransactionDate: "2025-01-15",
+    });
+    mockGetRecurringExpenses.mockResolvedValue({
+      // Deliberately in an order neither the frequency order nor the alphabet.
+      data: [
+        row("Occasional Co", "OCCASIONAL"),
+        row("Weekly Co", "WEEKLY"),
+        row("Irregular Co", "IRREGULAR"),
+        row("Monthly Co", "MONTHLY"),
+        row("Biweekly Co", "BIWEEKLY"),
+      ],
+      summary: { uniquePayees: 5, totalRecurring: 300, monthlyEstimate: 50 },
+    });
+    const { container } = render(<RecurringExpensesReport />);
+    await waitFor(() => expect(screen.getByText("Weekly Co")).toBeInTheDocument());
+
+    // The Frequency header is the third column of the column header row.
+    const columnHeader = container.querySelectorAll("table thead tr")[1];
+    const frequencyHeader = columnHeader.querySelectorAll("th")[2];
+    fireEvent.click(frequencyHeader);
+
+    const payees = Array.from(container.querySelectorAll("tbody tr")).map(
+      (tr) => tr.querySelector("td")?.textContent,
+    );
+    expect(payees).toEqual([
+      "Weekly Co",
+      "Biweekly Co",
+      "Monthly Co",
+      "Occasional Co",
+      "Irregular Co",
+    ]);
+
+    // Descending is the same order reversed, not another alphabet.
+    fireEvent.click(frequencyHeader);
+    const reversed = Array.from(container.querySelectorAll("tbody tr")).map(
+      (tr) => tr.querySelector("td")?.textContent,
+    );
+    expect(reversed).toEqual([
+      "Irregular Co",
+      "Occasional Co",
+      "Monthly Co",
+      "Biweekly Co",
+      "Weekly Co",
+    ]);
   });
 
   it("renders minimum occurrences selector", async () => {
@@ -247,7 +352,7 @@ describe("RecurringExpensesReport", () => {
     });
     render(<RecurringExpensesReport />);
     await waitFor(() => {
-      expect(screen.getByText("Minimum occurrences:")).toBeInTheDocument();
+      expect(screen.getByText("Minimum Occurrences")).toBeInTheDocument();
     });
     expect(screen.getByText("(in last 6 months)")).toBeInTheDocument();
   });
@@ -259,7 +364,7 @@ describe("RecurringExpensesReport", () => {
           payeeId: "p-1",
           payeeName: "Netflix",
           categoryName: "Entertainment",
-          frequency: "Monthly",
+          frequency: "MONTHLY",
           occurrences: 6,
           averageAmount: 15.99,
           totalAmount: 95.94,
@@ -287,7 +392,7 @@ describe("RecurringExpensesReport", () => {
           payeeId: null,
           payeeName: "Unknown Store",
           categoryName: "Shopping",
-          frequency: "Monthly",
+          frequency: "MONTHLY",
           occurrences: 4,
           averageAmount: 50,
           totalAmount: 200,
@@ -300,6 +405,50 @@ describe("RecurringExpensesReport", () => {
     await waitFor(() => expect(screen.getByText("Unknown Store")).toBeInTheDocument());
     fireEvent.click(screen.getByText("Unknown Store"));
     expect(mockPush).not.toHaveBeenCalled();
+    // ...and a row whose click does nothing is not a tab stop either: a focus
+    // stop that does nothing on Enter is one the reader has to escape.
+    expect(screen.getByText("Unknown Store").closest("tr")).not.toHaveAttribute(
+      "tabindex",
+    );
+  });
+
+  // The row is the click target where it names a payee, so it has to be
+  // reachable and operable from the keyboard there as well (WCAG 2.1.1).
+  // Before the fix this row was a `cursor-pointer` `<tr>` with an `onClick` and
+  // no `tabIndex` and no `onKeyDown` -- the whole suite was green over a row no
+  // keyboard user could use, so this case is what fails on that shape.
+  it("activates a payee row from the keyboard", async () => {
+    mockGetRecurringExpenses.mockResolvedValue({
+      data: [
+        {
+          payeeId: "p-1",
+          payeeName: "Netflix",
+          categoryName: "Entertainment",
+          frequency: "MONTHLY",
+          occurrences: 6,
+          averageAmount: 15.99,
+          totalAmount: 95.94,
+          lastTransactionDate: "2025-01-15",
+        },
+      ],
+      summary: { uniquePayees: 1, totalRecurring: 95.94, monthlyEstimate: 15.99 },
+    });
+    render(<RecurringExpensesReport />);
+    await waitFor(() => expect(screen.getByText("Netflix")).toBeInTheDocument());
+    const row = screen.getByText("Netflix").closest("tr") as HTMLElement;
+    expect(row).toHaveAttribute("tabindex", "0");
+
+    fireEvent.keyDown(row, { key: "Enter" });
+    expect(mockPush).toHaveBeenCalledWith("/transactions?payeeId=p-1");
+
+    mockPush.mockClear();
+    fireEvent.keyDown(row, { key: " " });
+    expect(mockPush).toHaveBeenCalledWith("/transactions?payeeId=p-1");
+
+    // A key the row does not claim stays the browser's.
+    mockPush.mockClear();
+    fireEvent.keyDown(row, { key: "a" });
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
   it("exports CSV when export button clicked", async () => {
@@ -308,8 +457,8 @@ describe("RecurringExpensesReport", () => {
         {
           payeeId: "p-1",
           payeeName: "Netflix",
-          categoryName: "Entertainment",
-          frequency: "Monthly",
+          categoryName: null,
+          frequency: "MONTHLY",
           occurrences: 6,
           averageAmount: 15.99,
           totalAmount: 95.94,
@@ -326,6 +475,52 @@ describe("RecurringExpensesReport", () => {
       expect.any(Array),
       expect.any(Array),
     );
+    expect(mockExportToCsv.mock.calls[0][2][0].slice(0, 3)).toEqual([
+      "Netflix",
+      "Uncategorized",
+      "Monthly",
+    ]);
+    // A CSV is machine-read, so the Last Paid column is ISO and NOT the
+    // reader's preferred format: two readers exporting the same rows must get
+    // one file, and a localized date is ambiguous and sorts lexicographically
+    // wrong. `preferred-date:...` here would be asserting that defect; the PDF
+    // keeps the reader's format, which the mobileWrapped suite pins.
+    expect(mockExportToCsv.mock.calls[0][2][0][6]).toBe("2025-01-15");
+  });
+
+  it("writes the reader's own date format to the PDF, where the CSV writes ISO", async () => {
+    mockGetRecurringExpenses.mockResolvedValue({
+      data: [
+        {
+          payeeId: "p-1",
+          payeeName: "Netflix",
+          categoryName: null,
+          frequency: "MONTHLY",
+          occurrences: 6,
+          averageAmount: 15.99,
+          totalAmount: 95.94,
+          lastTransactionDate: "2025-01-15",
+        },
+      ],
+      summary: { uniquePayees: 1, totalRecurring: 95.94, monthlyEstimate: 15.99 },
+    });
+    render(<RecurringExpensesReport />);
+    await waitFor(() => expect(screen.getByTestId("export-pdf")).toBeInTheDocument());
+    await act(async () => {
+      fireEvent.click(screen.getByTestId("export-pdf"));
+    });
+    await waitFor(() => expect(mockExportToPdf).toHaveBeenCalledTimes(1));
+    // Same record, same columns, same order as the CSV -- a PDF is a READING
+    // surface, so the one cell whose rendering depends on its reader differs.
+    expect(mockExportToPdf.mock.calls[0][0].tableData.rows[0]).toEqual([
+      "Netflix",
+      "Uncategorized",
+      "Monthly",
+      6,
+      15.99,
+      95.94,
+      "preferred-date:2025-01-15",
+    ]);
   });
 
   it("changes min occurrences when selector changes", async () => {
@@ -334,7 +529,7 @@ describe("RecurringExpensesReport", () => {
       summary: { uniquePayees: 0, totalRecurring: 0, monthlyEstimate: 0 },
     });
     render(<RecurringExpensesReport />);
-    await waitFor(() => expect(screen.getByText("Minimum occurrences:")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText("Minimum Occurrences")).toBeInTheDocument());
     const select = screen.getByRole("combobox");
     fireEvent.change(select, { target: { value: "5" } });
     await waitFor(() => expect(mockGetRecurringExpenses).toHaveBeenCalledWith(5));
@@ -347,7 +542,7 @@ describe("RecurringExpensesReport", () => {
           payeeId: "p-1",
           payeeName: "Netflix",
           categoryName: "Entertainment",
-          frequency: "Monthly",
+          frequency: "MONTHLY",
           occurrences: 6,
           averageAmount: 15.99,
           totalAmount: 95.94,
@@ -368,6 +563,7 @@ describe("RecurringExpensesReport", () => {
     expect(arg.summaryCards).toHaveLength(3);
     expect(arg.chartLegend[0].label).toContain("Netflix");
     expect(arg.tableData.rows[0][0]).toBe("Netflix");
+    expect(arg.tableData.rows[0][6]).toBe("preferred-date:2025-01-15");
   });
 
   it("renders the custom tooltip and navigates on pie slice click", async () => {
@@ -377,7 +573,7 @@ describe("RecurringExpensesReport", () => {
           payeeId: "p-1",
           payeeName: "Netflix",
           categoryName: "Entertainment",
-          frequency: "Monthly",
+          frequency: "MONTHLY",
           occurrences: 6,
           averageAmount: 15.99,
           totalAmount: 95.94,
@@ -401,7 +597,7 @@ describe("RecurringExpensesReport", () => {
           payeeId: "p1",
           payeeName: "Netflix",
           categoryName: "Entertainment",
-          frequency: "Monthly",
+          frequency: "MONTHLY",
           occurrences: 6,
           averageAmount: 15,
           totalAmount: 90,
@@ -411,7 +607,7 @@ describe("RecurringExpensesReport", () => {
           payeeId: "p2",
           payeeName: "Spotify",
           categoryName: "Entertainment",
-          frequency: "Monthly",
+          frequency: "MONTHLY",
           occurrences: 6,
           averageAmount: 10,
           totalAmount: 60,
@@ -437,5 +633,38 @@ describe("RecurringExpensesReport", () => {
       if (!__ths[__i]) break;
       await act(async () => { fireEvent.click(__ths[__i]); });
     }
+  });
+
+  it("marks the null summary totals as subtotals and shows no 0.00", async () => {
+    mockGetRecurringExpenses.mockResolvedValue({
+      data: [
+        {
+          payeeId: "p-1",
+          payeeName: "Netflix",
+          categoryName: "Entertainment",
+          frequency: "MONTHLY",
+          occurrences: 6,
+          averageAmount: 50,
+          totalAmount: 50,
+          lastTransactionDate: "2025-01-15",
+        },
+      ],
+      summary: {
+        uniquePayees: 1,
+        totalRecurring: null,
+        knownTotalRecurring: 50,
+        monthlyEstimate: null,
+        knownMonthlyEstimate: 50,
+        monthCount: 6,
+      },
+      currency: "CAD",
+      missingCurrencies: ["JPY"],
+      excludedCount: 1,
+    });
+    render(<RecurringExpensesReport />);
+    await waitFor(() => expect(screen.getAllByTestId("partial-total")).toHaveLength(2));
+    screen.getAllByTestId("partial-total").forEach((marker) => expect(marker).toHaveTextContent("$50.00"));
+    expect(screen.queryByText("$0.00")).not.toBeInTheDocument();
+    expect(screen.getByTestId("partial-data-notice")).toHaveTextContent("JPY");
   });
 });

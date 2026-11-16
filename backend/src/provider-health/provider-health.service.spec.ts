@@ -216,6 +216,33 @@ describe("ProviderHealthService", () => {
     });
   });
 
+  describe("recordDataFailure and recordDataRecovered", () => {
+    const writes = () =>
+      manager.query.mock.calls
+        .filter((call) =>
+          String(call[0]).includes("INSERT INTO provider_health"),
+        )
+        .map((call) => call[1] as unknown[]);
+
+    it("writes a down row with the reason, without the breaker having opened", async () => {
+      service.recordDataFailure(PROVIDER, "newest observation is stale");
+      await flushWrites();
+      const [params] = writes();
+      expect(params[0]).toBe(PROVIDER);
+      expect(params[1]).toBe("down");
+      expect(String(params[5])).toBe("newest observation is stale");
+      expect(service.wouldRefuse(PROVIDER)).toBe(false);
+    });
+
+    it("writes an up row on recovery, whichever process recorded the failure", async () => {
+      service.recordDataRecovered(PROVIDER);
+      await flushWrites();
+      const [params] = writes();
+      expect(params[1]).toBe("up");
+      expect(params[6]).toBeInstanceOf(Date);
+    });
+  });
+
   describe("recordSuccess", () => {
     it("says so once when the provider comes back, with what was refused", async () => {
       driveOpen();

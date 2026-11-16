@@ -4,10 +4,12 @@ import { PaymentSetupDialog } from './PaymentSetupDialog';
 import type { Account } from '@/types/account';
 import type { StatementCycle } from '@/types/credit-card-detail';
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({ formatCurrency: (a: number) => `$${a.toFixed(2)}` }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({ ...numberFormatMockDefaults(), formatCurrency: (a: number) => `$${a.toFixed(2)}` }),
+  };
+});
 const mockGetAll = vi.fn();
 vi.mock('@/lib/accounts', () => ({
   accountsApi: { getAll: (...a: unknown[]) => mockGetAll(...a) },

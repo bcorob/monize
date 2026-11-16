@@ -27,6 +27,7 @@ describe("computeInvestmentCashImpact", () => {
     InvestmentAction.DIVIDEND,
     InvestmentAction.INTEREST,
     InvestmentAction.CAPITAL_GAIN,
+    InvestmentAction.RETURN_OF_CAPITAL,
   ])(
     "treats %s with default qty=1 and uses price as the cash amount",
     (action) => {
@@ -66,6 +67,7 @@ describe("isInvestmentActionAllowedInSplit", () => {
       InvestmentAction.INTEREST,
       InvestmentAction.CAPITAL_GAIN,
       InvestmentAction.REINVEST,
+      InvestmentAction.RETURN_OF_CAPITAL,
     ].forEach((a) => expect(isInvestmentActionAllowedInSplit(a)).toBe(true));
   });
 

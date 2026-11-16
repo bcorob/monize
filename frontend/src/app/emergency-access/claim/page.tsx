@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useState, Suspense } from 'react';
+import { useEffect, useRef, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import '@/lib/zodConfig';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import Link from 'next/link';
-import Image from 'next/image';
+import { AuthShell } from '@/components/auth/AuthShell';
 import toast from 'react-hot-toast';
 import { useTranslations } from 'next-intl';
 import { Input } from '@/components/ui/Input';
@@ -16,7 +16,10 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { emergencyAccessApi } from '@/lib/emergency-access';
 import { buildPasswordSchema } from '@/lib/zod-helpers';
 import { getErrorMessage } from '@/lib/errors';
-import type { EmergencyAccessClaimPreview } from '@/types/emergency-access';
+import type {
+  EmergencyAccessClaimPreview,
+  EmergencyAccessClaimResult,
+} from '@/types/emergency-access';
 
 const buildSchema = (t: (key: string) => string, tc: (key: string) => string) => z
   .object({
@@ -42,6 +45,10 @@ function EmergencyClaimForm() {
   );
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [claimed, setClaimed] = useState<EmergencyAccessClaimResult | null>(
+    null,
+  );
+  const headingRef = useRef<HTMLHeadingElement>(null);
 
   const {
     register,
@@ -50,10 +57,9 @@ function EmergencyClaimForm() {
   } = useForm<FormData>({ resolver: zodResolver(buildSchema(t, tc)) });
 
   useEffect(() => {
-    if (!token) {
-      setLoadingPreview(false);
-      return;
-    }
+    // Without a token the missing-token message renders before the loading
+    // flag is read, so there is nothing to clear.
+    if (!token) return;
     let cancelled = false;
     emergencyAccessApi
       .previewClaim(token)
@@ -76,6 +82,12 @@ function EmergencyClaimForm() {
       cancelled = true;
     };
   }, [token, t]);
+
+  // The form that held focus is gone once the claim succeeds; move focus to
+  // the message heading so a screen reader reads it and the message first.
+  useEffect(() => {
+    if (claimed) headingRef.current?.focus();
+  }, [claimed]);
 
   if (!token) {
     return (
@@ -115,16 +127,51 @@ function EmergencyClaimForm() {
     );
   }
 
-  const ownerName =
-    [preview.ownerFirstName, preview.ownerLastName].filter(Boolean).join(' ') ||
-    t('ownerFallback');
+  // The owner's message is revealed only once the claim has succeeded (#2173).
+  if (claimed?.message) {
+    return (
+      <div className="mt-8 space-y-6">
+        <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
+          <h3
+            ref={headingRef}
+            tabIndex={-1}
+            className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
+            {t('messageHeading', { name: claimed.ownerFirstName || t('ownerFirstNameFallback') })}
+          </h3>
+          <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono">
+            {claimed.message}
+          </p>
+        </div>
+        <Button
+          type="button"
+          variant="primary"
+          size="lg"
+          className="w-full"
+          onClick={() => router.push('/dashboard')}
+        >
+          {t('continueToDashboard')}
+        </Button>
+      </div>
+    );
+  }
 
   const onSubmit = async (data: FormData) => {
     setSubmitting(true);
     try {
-      await emergencyAccessApi.completeClaim(token, data.newPassword);
+      const result = await emergencyAccessApi.completeClaim(
+        token,
+        data.newPassword,
+      );
+      const ownerName =
+        [result.ownerFirstName, result.ownerLastName]
+          .filter(Boolean)
+          .join(' ') || t('ownerFallback');
       toast.success(t('toasts.success', { name: ownerName }));
-      router.push('/dashboard');
+      if (result.message) {
+        setClaimed(result);
+      } else {
+        router.push('/dashboard');
+      }
     } catch (err) {
       toast.error(
         getErrorMessage(
@@ -141,27 +188,12 @@ function EmergencyClaimForm() {
     <div className="mt-8 space-y-6">
       <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800 rounded-lg p-4 space-y-2">
         <p className="text-sm text-blue-900 dark:text-blue-100">
-          {t.rich('intro', {
-            contactName: preview.contactFirstName,
-            ownerName,
-            b: (chunks) => <strong>{chunks}</strong>,
-          })}
+          {t('intro', { contactName: preview.contactFirstName })}
         </p>
         <p className="text-sm text-blue-900 dark:text-blue-100">
           {t('introDetail')}
         </p>
       </div>
-
-      {preview.message && (
-        <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-          <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-2">
-            {t('messageHeading', { name: preview.ownerFirstName ?? t('ownerFirstNameFallback') })}
-          </h3>
-          <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap font-mono">
-            {preview.message}
-          </p>
-        </div>
-      )}
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
         <div>
@@ -203,31 +235,16 @@ export default function EmergencyClaimPage() {
   const t = useTranslations('emergencyAccess');
   const tc = useTranslations('common');
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-md w-full space-y-8">
-        <div>
-          <Image
-            src="/icons/monize-logo-transparent.svg"
-            alt="Monize"
-            width={96}
-            height={96}
-            className="mx-auto rounded-xl"
-            priority
-          />
-          <h2 className="mt-4 text-center text-3xl font-extrabold text-gray-900 dark:text-gray-100">
-            {t('title')}
-          </h2>
-        </div>
-        <Suspense
-          fallback={
-            <div className="text-center text-gray-500 dark:text-gray-400">
-              {tc('loading')}
-            </div>
-          }
-        >
-          <EmergencyClaimForm />
-        </Suspense>
-      </div>
-    </div>
+    <AuthShell plain title={t('title')}>
+      <Suspense
+        fallback={
+          <div className="text-center text-gray-500 dark:text-gray-400">
+            {tc('loading')}
+          </div>
+        }
+      >
+        <EmergencyClaimForm />
+      </Suspense>
+    </AuthShell>
   );
 }

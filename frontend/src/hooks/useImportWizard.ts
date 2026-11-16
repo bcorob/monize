@@ -50,6 +50,7 @@ import {
   buildAccountMappings,
   buildSecurityMappings,
   findMatchingSecurityBySymbol,
+  getCategoryPath,
 } from '@/app/import/import-matching';
 import { preferredCurrency } from '@/lib/default-currency';
 
@@ -62,6 +63,8 @@ function detectFileType(fileName: string): ImportFileType {
   // Checked before anything reads the file: a .mny is a Jet database, and the
   // QIF fallback would hand its bytes to File.text().
   if (ext === 'mny') return 'mny';
+  // .qif, and Quicken for Mac's .qmtf transfer file, which is QIF under
+  // another extension.
   return 'qif';
 }
 
@@ -140,14 +143,31 @@ export function useImportWizard() {
   const [multiAccountData, setMultiAccountData] = useState<ParsedQifMultiAccountResponse | null>(null);
   const [multiAccountContent, setMultiAccountContent] = useState<string>('');
   const [multiAccountCurrency, setMultiAccountCurrency] = useState(defaultCurrency);
+  const [multiAccountTypeChoices, setMultiAccountTypeChoices] = useState<Record<string, string>>({});
 
   // CSV-specific state
   const [fileType, setFileType] = useState<ImportFileType>('qif');
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [csvSampleRows, setCsvSampleRows] = useState<string[][]>([]);
+  const [csvColumnDateFormats, setCsvColumnDateFormats] = useState<(string | null)[]>([]);
   const [csvColumnMapping, setCsvColumnMapping] = useState<CsvColumnMappingConfig>(DEFAULT_CSV_COLUMN_MAPPING);
   const [csvTransferRules, setCsvTransferRules] = useState<CsvTransferRule[]>([]);
   const [savedColumnMappings, setSavedColumnMappings] = useState<SavedColumnMapping[]>([]);
+  /**
+   * True once accounts, categories, securities and currencies are all in.
+   *
+   * The wizard matches a file's categories against the user's categories, its
+   * symbols against their securities and its filename against their accounts,
+   * so those lists are a PREREQUISITE for `handleFiles`, not merely data that
+   * arrives eventually: run against empty lists, every match fails, and a
+   * failed category match is an offer to CREATE a category the user already
+   * has. A human picking a file cannot realistically get ahead of this load;
+   * the Web Share Target's automatic hand-off can and does, so it waits on it.
+   *
+   * Stays false if the load failed: the shared files are then left in the stash
+   * for a retry rather than handed to a wizard that knows nothing.
+   */
+  const [dataLoaded, setDataLoaded] = useState(false);
 
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const isBulkImport = importFiles.length > 1;
@@ -228,6 +248,7 @@ export function useImportWizard() {
         setSecurities(securitiesData);
         setCurrencies(currenciesData);
         setSavedColumnMappings(columnMappingsData);
+        setDataLoaded(true);
 
         if (preselectedAccountId) {
           const accountExists = accountsData.some((a) => a.id === preselectedAccountId);
@@ -250,10 +271,11 @@ export function useImportWizard() {
     }
   }, [step]);
 
-  // Auto-select best matching account when on selectAccount step with no selection
-  useEffect(() => {
-    if (step !== 'selectAccount' || selectedAccountId || accounts.length === 0) return;
-
+  // Auto-select best matching account when on selectAccount step with no selection.
+  // Applied during render, not in an effect: the selection it writes is what
+  // ends the condition, so it settles in one extra render pass. Without a file
+  // there is no row to write it to, and the condition would never end.
+  if (step === 'selectAccount' && !selectedAccountId && accounts.length > 0 && importFiles.length > 0) {
     const qifType = parsedData?.accountType;
     const isQifInvestment = qifType === 'INVESTMENT';
     const compatibleAccounts = accounts.filter((a) => {
@@ -271,38 +293,42 @@ export function useImportWizard() {
         setSelectedAccountId(compatibleAccounts[0].id, 'none');
       }
     }
-  }, [step, selectedAccountId, accounts, parsedData, setSelectedAccountId]);
+  }
 
-  // Re-match account mappings when entering mapAccounts step
-  useEffect(() => {
-    if (step !== 'mapAccounts' || accountMappings.length === 0) return;
+  // Re-match account mappings when entering mapAccounts step, or when the
+  // accounts change while on it. Keyed on the step and the accounts list from
+  // the previous render, so a mapping the user changes afterwards is left alone.
+  const [accountRematchKey, setAccountRematchKey] = useState({ step, accounts });
+  if (accountRematchKey.step !== step || accountRematchKey.accounts !== accounts) {
+    setAccountRematchKey({ step, accounts });
+    if (step === 'mapAccounts' && accountMappings.length > 0) {
+      setAccountMappings(prev => prev.map(mapping => {
+        if (mapping.accountId) return mapping;
 
-    setAccountMappings(prev => prev.map(mapping => {
-      if (mapping.accountId) return mapping;
-
-      const accLower = mapping.originalName.toLowerCase();
-      const accWithSlash = accLower.replace(/-/g, '/');
-      const existingAcc = accounts.find((a) => {
-        const aName = a.name.toLowerCase();
-        return aName === accLower || aName === accWithSlash;
-      });
-      if (existingAcc) {
-        const targetId = existingAcc.accountSubType === 'INVESTMENT_BROKERAGE' && existingAcc.linkedAccountId
-          ? existingAcc.linkedAccountId
-          : existingAcc.id;
-        return { originalName: mapping.originalName, accountId: targetId };
-      }
-      const investmentCashAcc = accounts.find((a) => {
-        const aName = a.name.toLowerCase();
-        return (aName === `${accLower} - cash` || aName === `${accWithSlash} - cash`)
-          && a.accountSubType === 'INVESTMENT_CASH';
-      });
-      if (investmentCashAcc) {
-        return { originalName: mapping.originalName, accountId: investmentCashAcc.id };
-      }
-      return mapping;
-    }));
-  }, [step, accounts]); // eslint-disable-line react-hooks/exhaustive-deps
+        const accLower = mapping.originalName.toLowerCase();
+        const accWithSlash = accLower.replace(/-/g, '/');
+        const existingAcc = accounts.find((a) => {
+          const aName = a.name.toLowerCase();
+          return aName === accLower || aName === accWithSlash;
+        });
+        if (existingAcc) {
+          const targetId = existingAcc.accountSubType === 'INVESTMENT_BROKERAGE' && existingAcc.linkedAccountId
+            ? existingAcc.linkedAccountId
+            : existingAcc.id;
+          return { originalName: mapping.originalName, accountId: targetId };
+        }
+        const investmentCashAcc = accounts.find((a) => {
+          const aName = a.name.toLowerCase();
+          return (aName === `${accLower} - cash` || aName === `${accWithSlash} - cash`)
+            && a.accountSubType === 'INVESTMENT_CASH';
+        });
+        if (investmentCashAcc) {
+          return { originalName: mapping.originalName, accountId: investmentCashAcc.id };
+        }
+        return mapping;
+      }));
+    }
+  }
 
   // Run bulk security lookup when entering mapSecurities step
   useEffect(() => {
@@ -359,15 +385,21 @@ export function useImportWizard() {
     runBulkLookup();
   }, [step, initialLookupDone, securityMappings, preferredExchanges, defaultCurrency]);
 
-  const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files || files.length === 0) return;
+  /**
+   * Take a set of files and drive the wizard from them.
+   *
+   * Split out from the change handler so the Web Share Target's review screen
+   * can hand over files the OS provided: they arrive as `File` objects with no
+   * input element behind them, and everything from here on is identical to a
+   * file the user picked.
+   */
+  const handleFiles = useCallback(async (fileArray: File[]) => {
+    if (fileArray.length === 0) return;
 
     setIsLoading(true);
     setInitialLookupDone(false);
 
     try {
-      const fileArray = Array.from(files);
 
       // Detect file types and enforce same type
       const detectedTypes = fileArray.map((f) => detectFileType(f.name));
@@ -406,6 +438,7 @@ export function useImportWizard() {
         const headersResponse = await importApi.parseCsvHeaders(content);
         setCsvHeaders(headersResponse.headers);
         setCsvSampleRows(headersResponse.sampleRows);
+        setCsvColumnDateFormats(headersResponse.columnDateFormats);
 
         // Store all file contents
         const fileDataArray: ImportFileData[] = [];
@@ -446,7 +479,8 @@ export function useImportWizard() {
           const content = await fileArray[0].text();
 
           // Quick check: does this file contain multiple !Account sections or !Type:Cat?
-          const accountMatches = content.match(/^!Account$/gm);
+          // Headers are matched in any case: Quicken for Mac writes !ACCOUNT and !TYPE:Cat.
+          const accountMatches = content.match(/^!Account[ \t]*$/gim);
           const hasCatSection = /^!Type:Cat\s*$/im.test(content);
 
           if ((accountMatches && accountMatches.length > 1) || hasCatSection) {
@@ -457,6 +491,7 @@ export function useImportWizard() {
               setMultiAccountData(multiResult);
               setMultiAccountContent(content);
               setMultiAccountCurrency(defaultCurrency);
+              setMultiAccountTypeChoices({});
               if (multiResult.detectedDateFormat) {
                 setDateFormat(multiResult.detectedDateFormat);
               }
@@ -541,6 +576,16 @@ export function useImportWizard() {
     }
   }, [accounts, categories, securities, defaultCurrency, preselectedAccountId, t, uploadMny]);
 
+  /** The file input's change event, reduced to the files it carries. */
+  const handleFileSelect = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      const files = e.target.files;
+      if (!files || files.length === 0) return;
+      await handleFiles(Array.from(files));
+    },
+    [handleFiles],
+  );
+
   // CSV column mapping handlers
   const handleCsvColumnMappingChange = useCallback((mapping: CsvColumnMappingConfig) => {
     setCsvColumnMapping(mapping);
@@ -591,6 +636,7 @@ export function useImportWizard() {
       const headersResponse = await importApi.parseCsvHeaders(importFiles[0].fileContent, delimiter);
       setCsvHeaders(headersResponse.headers);
       setCsvSampleRows(headersResponse.sampleRows);
+      setCsvColumnDateFormats(headersResponse.columnDateFormats);
       setCsvColumnMapping(prev => ({ ...prev, delimiter }));
     } catch (error) {
       toast.error(getErrorMessage(error, t('toasts.parseCsvDelimiterFailed')));
@@ -608,6 +654,7 @@ export function useImportWizard() {
       const headersResponse = await importApi.parseCsvHeaders(importFiles[0].fileContent, csvColumnMapping.delimiter);
       setCsvHeaders(headersResponse.headers);
       setCsvSampleRows(headersResponse.sampleRows);
+      setCsvColumnDateFormats(headersResponse.columnDateFormats);
     } catch (error) {
       toast.error(getErrorMessage(error, t('toasts.updateCsvPreviewFailed')));
     } finally {
@@ -870,8 +917,15 @@ export function useImportWizard() {
     setLookupPickerCandidates([]);
   }, []);
 
+  const handleMultiAccountAccountTypeChange = useCallback((accountName: string, accountType: string) => {
+    setMultiAccountTypeChoices((prev) => ({ ...prev, [accountName]: accountType }));
+  }, []);
+
   const handleMultiAccountImport = async () => {
     if (!multiAccountContent || !multiAccountData) return;
+    const chosenAccountTypes = Object.entries(multiAccountTypeChoices)
+      .filter(([, accountType]) => accountType)
+      .map(([accountName, accountType]) => ({ accountName, accountType }));
 
     setIsLoading(true);
     try {
@@ -880,6 +934,7 @@ export function useImportWizard() {
         currencyCode: multiAccountCurrency,
         dateFormat,
         securityMappings: securityMappings.length > 0 ? securityMappings : undefined,
+        accountTypes: chosenAccountTypes.length > 0 ? chosenAccountTypes : undefined,
       });
 
       setImportResult(result);
@@ -964,6 +1019,7 @@ export function useImportWizard() {
               accountName: targetAccount?.name || 'Unknown',
               imported: result.imported,
               skipped: result.skipped,
+              skippedRows: result.skippedRows,
               errors: result.errors,
               errorMessages: result.errorMessages,
               loanAccountsNeedingSetup: result.loanAccountsNeedingSetup,
@@ -1072,20 +1128,17 @@ export function useImportWizard() {
     const options = [{ value: '', label: 'Skip (no category)' }];
     const tree = buildCategoryTree(categories);
     tree.forEach(({ category }) => {
-      const parentCategory = category.parentId
-        ? categories.find((c) => c.id === category.parentId) : null;
-      options.push({
-        value: category.id,
-        label: parentCategory ? `${parentCategory.name}: ${category.name}` : category.name,
-      });
+      options.push({ value: category.id, label: getCategoryPath(category, categories) });
     });
     return options;
   }, [categories]);
 
+  // Every category, not only the top-level ones: a QIF path three or four
+  // levels deep is suggested under its deepest existing level.
   const parentCategoryOptions = useMemo(() => {
     const options = [{ value: '', label: 'No parent (top-level)' }];
-    categories.filter((c) => !c.parentId).forEach((c) => {
-      options.push({ value: c.id, label: c.name });
+    buildCategoryTree(categories).forEach(({ category }) => {
+      options.push({ value: category.id, label: getCategoryPath(category, categories) });
     });
     return options;
   }, [categories]);
@@ -1146,8 +1199,10 @@ export function useImportWizard() {
     setMultiAccountData(null);
     setMultiAccountContent('');
     setMultiAccountCurrency(defaultCurrency);
+    setMultiAccountTypeChoices({});
     setCsvHeaders([]);
     setCsvSampleRows([]);
+    setCsvColumnDateFormats([]);
     setCsvColumnMapping(DEFAULT_CSV_COLUMN_MAPPING);
     setCsvTransferRules([]);
   };
@@ -1211,7 +1266,7 @@ export function useImportWizard() {
     accounts, categories, securities,
     categoryMappings, setCategoryMappings, accountMappings, securityMappings,
     handleAccountMappingChange, handleSecurityMappingChange, handleSecurityLookup,
-    isLoading, importResult, bulkImportResult, handleImport, handleFileSelect, handleImportMore,
+    isLoading, dataLoaded, importResult, bulkImportResult, handleImport, handleFileSelect, handleFiles, handleImportMore,
     lookupLoadingIndex, bulkLookupInProgress,
     lookupPickerQuery, lookupPickerCandidates, handleLookupPickerPick, handleLookupPickerCancel,
     showCreateAccount, setShowCreateAccount, creatingForFileIndex, setCreatingForFileIndex,
@@ -1223,9 +1278,10 @@ export function useImportWizard() {
     scrollContainerRef, dateFormat, setDateFormat, defaultCurrency,
     // Multi-account QIF
     multiAccountData, multiAccountCurrency, setMultiAccountCurrency, handleMultiAccountImport,
+    multiAccountTypeChoices, handleMultiAccountAccountTypeChange,
     // CSV-specific exports
     fileType,
-    csvHeaders, csvSampleRows,
+    csvHeaders, csvSampleRows, csvColumnDateFormats,
     csvColumnMapping, handleCsvColumnMappingChange,
     handleCsvInvestmentModeChange,
     csvTransferRules, handleCsvTransferRulesChange,

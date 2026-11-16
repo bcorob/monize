@@ -122,7 +122,7 @@ describe('ProfileSection', () => {
     expect(screen.getByLabelText('Last Name')).toHaveValue('');
   });
 
-  it('shows Saving... text while profile is being updated', async () => {
+  it('shows the save button loading while profile is being updated', async () => {
     let resolvePromise: (value: unknown) => void;
     const pendingPromise = new Promise((resolve) => {
       resolvePromise = resolve;
@@ -134,15 +134,18 @@ describe('ProfileSection', () => {
     fireEvent.change(screen.getByLabelText('First Name'), { target: { value: 'Jane' } });
     fireEvent.submit(screen.getByRole('button', { name: 'Save Profile' }));
 
+    // <Button isLoading>: the label stays, the button spins and is disabled.
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Saving...' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Saving...' })).toBeDisabled();
+      const saving = screen.getByRole('button', { name: 'Save Profile' });
+      expect(saving).toBeDisabled();
+      expect(saving.querySelector('svg.animate-spin')).not.toBeNull();
     });
+    expect(screen.queryByText('Saving...')).not.toBeInTheDocument();
 
     resolvePromise!({ ...mockUser, firstName: 'Jane' });
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Save Profile' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Save Profile' })).not.toBeDisabled();
     });
   });
 
@@ -164,5 +167,46 @@ describe('ProfileSection', () => {
         currentPassword: 'MyPass123!',
       });
     });
+  });
+
+  it('tells the reader a confirmation was sent when the server only staged the change', async () => {
+    const stagedUser = { ...mockUser, pendingEmail: 'new@example.com' };
+    (userSettingsApi.updateProfile as ReturnType<typeof vi.fn>).mockResolvedValue(stagedUser);
+
+    render(<ProfileSection user={mockUser} onUserUpdated={mockOnUserUpdated} />);
+
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'new@example.com' } });
+    fireEvent.change(screen.getByLabelText('Current Password'), { target: { value: 'MyPass123!' } });
+    fireEvent.submit(screen.getByRole('button', { name: 'Save Profile' }));
+
+    await waitFor(() => {
+      expect(toast.success).toHaveBeenCalledWith(
+        'Check new@example.com for a link to confirm your new email address',
+      );
+    });
+    expect(toast.success).not.toHaveBeenCalledWith('Profile updated successfully');
+    // The field shows the live address again, not the one still unconfirmed.
+    expect(screen.getByLabelText('Email')).toHaveValue('test@example.com');
+  });
+
+  it('shows the address an email change is waiting on', () => {
+    render(
+      <ProfileSection
+        user={{ ...mockUser, pendingEmail: 'pending@example.com' }}
+        onUserUpdated={mockOnUserUpdated}
+      />,
+    );
+
+    expect(
+      screen.getByText(
+        'A confirmation link was sent to pending@example.com. Your email address changes once you follow it.',
+      ),
+    ).toBeInTheDocument();
+  });
+
+  it('shows no pending notice when no change is waiting', () => {
+    render(<ProfileSection user={mockUser} onUserUpdated={mockOnUserUpdated} />);
+
+    expect(screen.queryByText(/A confirmation link was sent/)).not.toBeInTheDocument();
   });
 });

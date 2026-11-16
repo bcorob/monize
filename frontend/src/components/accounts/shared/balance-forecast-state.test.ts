@@ -109,6 +109,27 @@ describe('readBalanceForecast', () => {
   });
 });
 
+describe('readBalanceForecast: overdue occurrences (discussion #1784)', () => {
+  const overdue = { date: '2026-03-02', count: 2, amount: -300 };
+
+  it('adopts the overdue summary of a complete forecast', () => {
+    expect(readBalanceForecast(forecast({ overdue })).overdue).toEqual(overdue);
+  });
+
+  it('reads an absent summary (older backend) as nothing overdue', () => {
+    expect(readBalanceForecast(forecast()).overdue).toBeNull();
+  });
+
+  it('drops the summary when the projection is withheld', () => {
+    const state = readBalanceForecast(forecast({ complete: false, overdue }));
+    expect(state.overdue).toBeNull();
+  });
+
+  it('has nothing overdue when the request failed', () => {
+    expect(readBalanceForecast(null).overdue).toBeNull();
+  });
+});
+
 describe('projectedBalanceFrom', () => {
   it('is the forecast’s last point when the forecast is complete', () => {
     expect(projectedBalanceFrom(readBalanceForecast(forecast()), 999)).toBe(250);

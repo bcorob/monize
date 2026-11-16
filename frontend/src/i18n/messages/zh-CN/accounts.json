@@ -1,4 +1,13 @@
 {
+  "paymentMatching": {
+    "toggleLabel": "{kind, select, mortgage {将导入的银行付款与此房贷匹配} other {将导入的银行付款与此贷款匹配}}",
+    "toggleHelp": "当导入的银行交易与收款人模式匹配时，Monize 会用它结清计划付款，并将其拆分为本金和利息，而不是记录单独的账单交易。",
+    "payeePattern": "收款人模式",
+    "payeePatternPlaceholder": "例如 *我的银行*",
+    "descriptionPattern": "描述模式（可选）",
+    "descriptionPatternPlaceholder": "例如 *贷款还款*",
+    "fromAccount": "与来自 {account} 的扣款进行匹配。"
+  },
   "nameSuffix": {
     "cash": "现金",
     "brokerage": "证券"
@@ -22,9 +31,7 @@
     "noMatch": "没有账户符合您的筛选条件。",
     "clearFilters": "清除筛选",
     "filter": {
-      "all": "全部",
-      "active": "活跃",
-      "closed": "已关闭",
+      "allCount": "全部 ({count})",
       "netWorthAll": "资产净值：全部",
       "inNetWorth": "计入资产净值",
       "excludedFromNetWorth": "不计入资产净值",
@@ -32,7 +39,10 @@
       "typeAriaLabel": "按账户类型筛选",
       "searchPlaceholder": "搜索账户...",
       "searchAriaLabel": "按名称搜索账户",
-      "searchClear": "清除搜索"
+      "searchClear": "清除搜索",
+      "activeCount": "活跃 ({count})",
+      "closedCount": "已关闭 ({count})",
+      "statusLabel": "状态"
     },
     "accountCount": "{total} 个账户中的 {filtered} 个",
     "groupCount": "{count, plural, one {# 个账户} other {# 个账户}}",
@@ -40,6 +50,8 @@
       "accountName": "账户名称",
       "type": "类型",
       "status": "状态",
+      "lastReconciled": "上次对账",
+      "unreconciled": "未对账",
       "balance": "余额",
       "actions": "操作"
     },
@@ -50,8 +62,11 @@
     "statusClosed": "已关闭",
     "marketValue": "市值",
     "combinedBreakdown": "投资 {investments} · 现金 {cash}",
+    "combinedInvestments": "投资 {amount}",
+    "combinedCash": "现金 {amount}",
     "combinedUnknown": "无法显示总额",
     "combinedUnknownTooltip": "{count, plural, other {有 # 项持仓没有价格，因此无法计算该账户的总额}}",
+    "combinedUnknownValuation": "此账户中的部分持仓无法换算为您的报告货币，因此无法计算其总额。请在货币页面添加缺少的汇率。",
     "combinedUnknownNoPortfolio": "无法加载持仓，因此无法计算该账户的总额",
     "limit": "额度：{amount}",
     "pairedWith": "与 {name} 关联",
@@ -81,7 +96,11 @@
     "jointSharedBy": "由 {owner} 共享",
     "jointSharedWith": "已与 {count, plural, other {# 人}}共享",
     "includeInNetWorth": "计入我的净资产",
-    "excludeFromNetWorth": "从我的净资产中排除"
+    "excludeFromNetWorth": "从我的净资产中排除",
+    "neverReconciled": "从未",
+    "lastReconciledOn": "已对账至 {date}",
+    "neverReconciledCard": "从未对账",
+    "unreconciledCard": "{count, plural, other {{formatted} 笔未对账}}"
   },
   "contextMenu": {
     "subtypeBrokerage": "券商账户",
@@ -117,17 +136,23 @@
     "accountType": "账户类型",
     "currency": "货币",
     "currencyLocked": "货币已锁定，因为此账户已有交易记录。更改货币将静默地重新计价现有余额。",
+    "accountTypeKindLocked": "此账户的交易已锁定货币，因此无法在加密钱包和法定货币账户类型之间切换。",
+    "currencyPlaceholder": "选择货币...",
+    "noCryptoCurrencies": "加密钱包持有一种加密货币，目前尚未设置任何加密货币。请在<currencies>货币页面</currencies>添加一种，然后在此选择。<guide>如何添加加密货币</guide>",
     "openingBalance": "期初余额",
     "loanAmount": "贷款金额",
     "mortgageAmount": "抵押贷款金额",
     "accountNumber": "账号（可选）",
     "institution": "机构（可选）",
-    "institutionRequired": "贷款方/机构（必填）",
+    "institutionRequired": "贷款方/机构",
     "institutionPlaceholder": "选择或创建机构...",
     "newInstitutionTitle": "新建机构",
     "creditLimit": "信用额度（可选）",
+    "balanceAlertsHeading": "余额提醒",
+    "lowBalanceThreshold": "低于时通知（可选）",
+    "highBalanceThreshold": "高于时通知（可选）",
     "interestRateOptional": "利率 %（可选）",
-    "interestRateRequired": "利率 %（必填）",
+    "interestRateRequired": "利率 %",
     "description": "描述（可选）",
     "excludeFromNetWorth": "不计入资产净值",
     "favourite": "收藏",
@@ -157,13 +182,12 @@
       "mortgage": "抵押贷款",
       "asset": "资产",
       "cash": "现金",
+      "crypto": "加密钱包",
       "other": "其他"
     },
     "statementDueDayPlaceholder": "例如 15",
     "statementSettlementDayPlaceholder": "例如 25",
     "fxFeeTitle": "外币兑换手续费 （可选）",
-    "fxFeePercent": "手续费百分比",
-    "fxFeePercentPlaceholder": "例如 2.5",
     "jointSharedWith": "联名账户，已与 {count, plural, other {# 人}}共享",
     "jointManage": "管理共享",
     "cashSection": {
@@ -192,10 +216,10 @@
   },
   "loanFields": {
     "title": "贷款还款详情",
-    "paymentAmount": "还款金额（必填）",
-    "paymentFrequency": "还款频率（必填）",
-    "firstPaymentDate": "首次还款日期（必填）",
-    "paymentFromAccount": "还款来源账户（必填）",
+    "paymentAmount": "还款金额",
+    "paymentFrequency": "还款频率",
+    "firstPaymentDate": "首次还款日期",
+    "paymentFromAccount": "还款来源账户",
     "interestCategory": "利息科目",
     "selectFrequency": "选择频率...",
     "selectAccount": "选择账户...",
@@ -222,33 +246,32 @@
     "analyzingHistory": "正在分析交易历史...",
     "detectedPayments": "检测到 {count} 笔还款，时间范围：{from} 至 {to}。",
     "confidence": "置信度：",
-    "lastSplit": "上次还款拆分：{currency}{principal} 本金 / {currency}{interest} 利息",
-    "extraPayments": "检测到 {count, plural, one {# 笔额外本金还款} other {# 笔额外本金还款}}（平均每期 {currency}{avg}）",
+    "lastSplit": "上次还款拆分：{principal} 本金 / {interest} 利息",
+    "extraPayments": "检测到 {count, plural, one {# 笔额外本金还款} other {# 笔额外本金还款}}（平均每期 {avg}）",
     "reviewValues": "保存前请检查并调整以下数值。",
-    "regularPaymentAmount": "常规还款金额 *",
+    "regularPaymentAmount": "常规还款金额",
     "includeExtraPrincipal": "包含额外本金还款",
     "extraPrincipalPerPayment": "每期额外本金",
-    "totalPayment": "还款总额：{currency}{amount}",
+    "totalPayment": "还款总额：{amount}",
     "useDetectedSplit": "使用导入交易中的本息拆分",
-    "useDetectedSplitDesc": "将使用 {currency}{interest} 作为利息，剩余部分计入本金",
+    "useDetectedSplitDesc": "将使用 {interest} 作为利息，剩余部分计入本金",
     "calculateFromRate": "将根据利率和当前余额计算拆分",
-    "paymentFrequency": "还款频率 *",
-    "paymentFromAccount": "还款来源账户 *",
+    "paymentFrequency": "还款频率",
+    "paymentFromAccount": "还款来源账户",
     "selectAccount": "选择账户...",
-    "nextPaymentDate": "下次还款日期 *",
+    "nextPaymentDate": "下次还款日期",
     "annualInterestRate": "年利率（%）",
     "interestRatePlaceholder": "例如 5.5",
     "estimatedFromHistory": "根据交易历史估算：{rate}%",
     "interestExpenseCategory": "利息支出科目",
+    "interestExpenseCategoryRequired": "利息支出科目",
     "detectedCategory": "已检测到：{name}",
     "selectCategory": "选择科目...",
     "payeeLender": "收款人/贷款方",
     "selectOrCreatePayee": "选择或创建收款人...",
     "mortgageDetails": "抵押贷款详情",
-    "canadianMortgage": "加拿大抵押贷款（半年复利）",
-    "variableRate": "浮动利率",
     "amortizationMonths": "摊销期（月）",
-    "termMonths": "贷款期限（月）",
+    "termMonths": "固定利率期限（月）",
     "autoPost": "到期时自动过账",
     "skip": "跳过",
     "setUpPayments": "设置还款",
@@ -264,26 +287,46 @@
     },
     "toasts": {
       "setupComplete": "已为 {account} 设置计划还款"
+    },
+    "firstInstallment": "首期还款",
+    "firstInstallmentHelp": "此按揭没有固定还款额：每期还款根据余额、利率和摊还期限计算。这是 {date} 到期的一期，包含任何额外本金。",
+    "firstInstallmentPending": "请输入下次还款日期以计算首期还款。",
+    "firstInstallmentCalculating": "正在计算首期还款...",
+    "firstInstallmentFailed": "无法计算首期还款。请检查下方的数值后重试。",
+    "paymentMatching": {
+      "autoPostDisabled": "已自动关闭：付款匹配会根据银行自身的扣款结清此账单，因此该账单不应再自行记账。",
+      "payeePatternRequired": "请输入包含 * 通配符的收款人模式"
     }
   },
   "mortgageFields": {
     "title": "抵押贷款详情",
-    "canadianMortgage": "加拿大抵押贷款",
-    "canadianMortgageDesc": "固定利率使用半年复利（加拿大法定要求）",
-    "variableRate": "浮动利率",
-    "variableRateDesc": "利率可能在贷款期内变动（使用月复利）",
-    "variableRateLoanDetailsLink": "在<link>贷款详情</link>中记录利率变更。",
-    "termLength": "贷款期限",
-    "termLengthNoTerm": "年和月均填 0 表示无固定期限。",
-    "amortizationPeriod": "摊销期（必填）",
+    "type": {
+      "label": "抵押贷款类型",
+      "ANNUITY": "等额本息",
+      "CANADIAN_FIXED": "加拿大固定利率",
+      "LINEAR": "等额本金",
+      "INTEREST_ONLY": "只付利息",
+      "help": {
+        "ANNUITY": "每月还款总额相同。浮动利率抵押贷款也选此项。",
+        "CANADIAN_FIXED": "加拿大固定利率合同；利息每年复利两次。",
+        "LINEAR": "每月本金部分相同，还款总额逐月减少。",
+        "INTEREST_ONLY": "只支付利息，余额不变。"
+      }
+    },
+    "rateChangesLoanDetailsLink": "在<link>贷款详情</link>中记录利率变更。",
+    "termLength": "固定利率期限",
+    "termLengthHelp": "利率或合同期限的持续时间，例如 5 年固定利率。Monize 可以在到期前提醒您。年和月均填 0 表示无固定期限。",
+    "amortizationPeriod": "摊销期",
     "years": "年",
     "months": "月",
-    "paymentFrequency": "还款频率（必填）",
-    "firstPaymentDate": "首次还款日期（必填）",
-    "paymentFromAccount": "还款来源账户（必填）",
-    "interestCategory": "利息科目",
+    "paymentFrequency": "还款频率",
+    "firstPaymentDate": "首次还款日期",
+    "paymentFromAccount": "还款来源账户",
+    "paymentFromAccountEditHelp": "更改后，即将到来的计划付款和付款匹配规则将转移到新账户。已入账的付款不会改变。",
+    "interestCategory": "利息科目（可选）",
+    "interestCategoryRequired": "利息科目",
     "interestBookingMode": {
-      "label": "利息如何记账？",
+      "label": "利息记录方式",
       "help": "让利率检测正确读取。多数情况用自动即可。",
       "AUTO": "自动（推荐）",
       "SPLIT": "付款的拆分项",
@@ -330,6 +373,72 @@
       "memoLabel": "超额还款备注文本",
       "memoPlaceholder": "例如 超额还款",
       "memoHelp": "对付款备注、其来源交易备注或拆分备注进行不区分大小写的子字符串匹配。"
+    },
+    "prepaymentMode": {
+      "label": "提前还款的效果",
+      "SHORTEN_TERM": "缩短期限（每月本金相同）",
+      "LOWER_INSTALLMENT": "降低月供（结束日期不变）",
+      "help": "请向贷款机构确认。提前还款后，如果对账单上的本金部分不变，则期限已缩短。"
+    },
+    "previewFirstInstallment": "首期还款：",
+    "detect": {
+      "toggle": "不确定？输入几期还款",
+      "title": "查找您的抵押贷款类型",
+      "intro": "从对账单中复制连续两到三期还款，从最早的一期开始。余额为可选项：有了余额和利率，Monize 就能判断利息是否每年复利两次。",
+      "installment": "第 {number} 期",
+      "principal": "本金",
+      "interest": "利息",
+      "balance": "还款前余额（可选）",
+      "rowIncomplete": "请同时输入本金和利息，或将此行留空。",
+      "rate": "已与上方输入的利率 {rate} 核对。",
+      "noRate": "上方未输入利率，因此无法检查复利方式。",
+      "needsFrequency": "请先在下方选择还款频率：将按该频率读取这些还款。",
+      "submit": "推荐类型",
+      "close": "关闭",
+      "suggested": "推荐类型：{type}",
+      "noSuggestion": "未推荐类型。",
+      "lowConfidence": "可信度低：使用前请与合同核对，或咨询贷款机构。",
+      "use": "使用此类型",
+      "failed": "请求失败，无法检查这些还款。请重试。",
+      "reason": {
+        "TOO_FEW_SAMPLES": "至少需要连续两期还款才能比较。",
+        "INVALID_SAMPLE": "某期还款的金额为负数或无法读取。",
+        "NO_PAYMENT": "这些还款既未偿还本金，也未收取利息。",
+        "AMBIGUOUS_CONSTANT_PRINCIPAL_AND_INSTALLMENT": "每期的本金和还款总额都相同，这既符合等额本金，也符合等额本息抵押贷款。请尝试间隔更远的几期，或查看您的合同。",
+        "ACCELERATED_FREQUENCY": "这些还款看起来是等额本金或只付利息，而加速还款频率不可能是这两种。请检查还款频率。",
+        "NO_RULE_FITS": "这些还款中本金和还款总额都不固定。如果利率在期间发生变化，请使用同一利率期内的还款。",
+        "ZERO_PRINCIPAL": "未偿还本金，因此余额不变。",
+        "ZERO_PRINCIPAL_RATE_MISMATCH": "未偿还本金，但利息与按所报利率对余额计算的结果不符。请检查利率。",
+        "CONSTANT_PRINCIPAL": "每期本金部分相同，还款总额逐期减少。",
+        "CONSTANT_PRINCIPAL_RATE_MISMATCH": "每期本金部分相同，但利息与按所报利率对余额计算的结果不符。请检查利率。",
+        "CONSTANT_INSTALLMENT_SEMI_ANNUAL": "每期还款总额相同，且利息与所报利率按每年复利两次计算的结果相符。",
+        "CONSTANT_INSTALLMENT_NOMINAL": "每期还款总额相同，且利息与所报利率在不按每年复利两次计算时相符。",
+        "CONSTANT_INSTALLMENT_RATE_UNCHECKED": "每期还款总额相同。缺少每期还款前的余额和利率，无法检查是否每年复利两次。",
+        "CONSTANT_INSTALLMENT_COMPOUNDING_AMBIGUOUS": "每期还款总额相同，但余额太小，无法区分是否每年复利两次。加拿大固定利率合同会在条款中注明这一点。",
+        "CONSTANT_INSTALLMENT_RATE_MISMATCH": "每期还款总额相同，但在所报利率下，利息与两种计算方式都不符。利息可能按日计算；请检查利率。"
+      },
+      "history": {
+        "action": "检测抵押贷款类型",
+        "title": "根据还款判断抵押贷款类型",
+        "intro": "根据同一利率下最近已入账的还款读取。保存账户之前不会有任何更改。",
+        "current": "当前类型：{type}",
+        "alreadySet": "此抵押贷款已是推荐的类型。",
+        "rate": "适用利率：{rate}",
+        "noRate": "这些日期没有记录利率，因此未检查复利方式。",
+        "noSamples": "未找到同时包含本金和利息部分的已入账还款。要使用此功能，请将还款记录为本金和利息的拆分。",
+        "colDate": "日期",
+        "colPrincipal": "本金",
+        "colInterest": "利息",
+        "colBalance": "还款前余额",
+        "balanceUnknown": "未知",
+        "failed": "请求失败，无法读取还款历史。请重试。",
+        "cancel": "取消",
+        "use": "以此类型编辑账户"
+      }
+    },
+    "originalPrincipal": {
+      "label": "原始本金",
+      "help": "您最初借入的金额。对于记录历史晚于贷款开始日期的账户，这是借入的金额，而不是期初余额——期初余额是您历史记录开始时的债务。"
     }
   },
   "assetFields": {
@@ -352,13 +461,19 @@
   "validation": {
     "nameRequired": "账户名称为必填项",
     "currencyCodeLength": "货币代码必须为 3 个字符",
+    "currencyRequired": "请选择货币",
     "institutionRequired": "请选择或创建机构",
     "interestRateRequired": "利率为必填项",
     "paymentAmountRequired": "还款金额为必填项",
     "paymentFrequencyRequired": "还款频率为必填项",
     "paymentStartDateRequired": "首次还款日期为必填项",
     "paymentAccountRequired": "还款来源账户为必填项",
-    "amortizationRequired": "摊销期为必填项"
+    "amortizationRequired": "摊销期为必填项",
+    "interestCategoryRequired": "请选择记录此贷款利息的科目",
+    "acceleratedNeedsAnnuity": "此按揭按加速还款计划支付，只有等额本息按揭才有这种计划。等额本金或只付利息的按揭需要常规还款频率，因此请保留等额本息类型。",
+    "paymentMatchingPayeePatternRequired": "请输入用于识别银行扣款的收款人模式",
+    "paymentMatchingPayeePatternWildcard": "收款人模式必须包含 * 通配符",
+    "paymentMatchingDescriptionPatternWildcard": "描述模式必须包含 * 通配符"
   },
   "loanDetail": {
     "backToAccounts": "返回账户",
@@ -386,7 +501,12 @@
       "estRemainingInterest": "预计剩余利息",
       "notSet": "未设置",
       "notAvailable": "无",
-      "paidOff": "已还清"
+      "paidOff": "已还清",
+      "nextInstallment": "下期还款",
+      "dueOn": "到期日 {date}",
+      "finalPayment": "最后一期还款",
+      "nextInstallmentDue": "下期还款（到期日 {date}）",
+      "finalPaymentDue": "最后一期还款（到期日 {date}）"
     },
     "schedule": {
       "title": "还款计划",
@@ -455,7 +575,19 @@
       "budgetLabel": "每月总还款",
       "budgetHint": "每月为贷款支出固定总额；还款之外剩下的就是额外还款。还款额下降时，额外还款增加以保持总额不变。",
       "budgetBelowInstallment": "低于当前还款额（{amount}）；提高金额才能额外还款。",
-      "windowInverted": "开始日期晚于结束日期，因此此计划永远不会生效。"
+      "windowInverted": "开始日期晚于结束日期，因此此计划永远不会生效。",
+      "unavailable": {
+        "title": "暂时无法为这笔贷款计算提前还款模拟。",
+        "reasonPaidOff": "这笔贷款没有未偿还余额，因此没有需要摊还的部分。",
+        "reasonNoFrequency": "这笔贷款未设置还款频率。请在账户设置中添加。",
+        "reasonNoRate": "这笔贷款没有已保存的利率。请在账户设置中设置利率，或记录一条日期为今天或更早的利率变更。下方计划表中按行显示的利率是根据已计收的利息重建的，并非已保存的利率。",
+        "reasonNoPayment": "无法确定分期金额。请将定期分期记为向贷款账户的转账（本金，利息作为拆分行或单独归类的支出），或在账户设置中设置还款金额。在来源账户记为普通支出的付款永远不会到达贷款账户，因此计划表无法看到它们。",
+        "reasonNoAmortization": "此按揭没有设置摊还期限，因此无法计算其每期还款额和期限结束日期。请在账户设置中设置摊还期限。",
+        "reasonNoPaymentStart": "此按揭没有设置首次还款日期，因此无法计算到期限结束前剩余的还款期数。请在账户设置中设置其定期还款；您输入的第一个到期日将成为第 1 期还款。",
+        "reasonNoPrincipal": "此按揭没有设置原始金额，因此无法计算其等额本金。请在账户设置中设置按揭金额。"
+      },
+      "budgetBelowNextInstallment": "低于下期还款额（{amount}，到期日 {date}）；请调高到该金额以上才能提前还款。",
+      "shortenTermNeedsPrincipal": "此按揭没有设置原始金额，因此无法模拟缩短期限。请选择降低月供，或在账户设置中设置按揭金额。"
     },
     "comparison": {
       "newPayoff": "新的还清日期",
@@ -471,7 +603,8 @@
       "newInstallment": "新还款额",
       "installmentDrop": "{payment} (−{reduction})",
       "monthlyPayment": "每月还款",
-      "overpaymentAtFrequency": "{frequency}: +{amount}"
+      "overpaymentAtFrequency": "{frequency}: +{amount}",
+      "firstPayment": "首次付款"
     },
     "chart": {
       "title": "还清时间线",
@@ -538,6 +671,71 @@
       "seriesActual": "实际余额",
       "unknown": "未知"
     },
+    "paymentMatching": {
+      "title": "付款匹配",
+      "description": "识别银行对每期还款的自身扣款，并按贷款还款计划将其结算为本金和利息，而不是单独记录账单。",
+      "noSchedule": "付款匹配会根据贷款的计划还款结算银行扣款。请先为此贷款设置还款。",
+      "noRule": "此贷款未关联付款匹配规则。",
+      "createOne": "创建一条",
+      "ruleLabel": "规则：",
+      "ruleLoading": "正在加载规则",
+      "ruleFailed": "无法加载付款匹配规则。",
+      "scheduleLoading": "正在加载计划还款",
+      "scheduleFailed": "无法加载贷款的计划还款。",
+      "retry": "重试",
+      "autoPost": {
+        "title": "计划还款仍会自动记账",
+        "body": "此贷款的账单已开启自动过账，因此规则根据银行扣款结算的每期还款也会被账单再次记账。请在“账单与存款”中关闭该账单的自动过账。"
+      },
+      "preconditions": {
+        "openingBalance": "贷款的期初余额必须是所处理历史开始时的欠款；每期还款的利息都基于此计算。",
+        "originalPrincipal": "原始本金必须是最初借入的金额，而不是期初余额。",
+        "scheduleStart": "日期早于计划还款开始日 {date} 的扣款没有可匹配的还款期。"
+      },
+      "process": {
+        "button": "处理历史记录",
+        "scope": "按从旧到新的顺序，对 {account} 中的扣款运行规则。",
+        "running": "正在处理历史记录：目前已结算 {count, plural, one {# 期还款} other {# 期还款}}。",
+        "done": "{count, plural, =0 {未结算任何还款。} one {已结算 # 期还款。} other {已结算 # 期还款。}}",
+        "undo": "本次运行的每一页都可以在操作历史中撤销。",
+        "failed": "历史记录处理已停止",
+        "stuckTitle": "无法继续处理历史记录",
+        "stuck": "日期为 {date} 的交易超过 {limit, number} 笔，因此运行无法越过该日。请在“工具 > 规则”中使用更精确的筛选条件结算其余交易。",
+        "stuckUnknown": "服务器未告知运行进行到的位置，因此无法继续。请重新加载页面后重试。"
+      },
+      "create": {
+        "title": "创建付款匹配规则",
+        "description": "该规则将结算来自贷款计划还款账户的匹配扣款，并关闭账单的自动过账。",
+        "descriptionWithAccount": "该规则将结算来自 {account} 的匹配扣款，并关闭账单的自动过账。",
+        "submit": "创建规则",
+        "payeePatternRequired": "请输入包含 * 通配符的收款人模式",
+        "descriptionPatternWildcard": "描述模式必须包含 * 通配符",
+        "failed": "无法创建付款匹配规则。",
+        "done": "已创建规则“{name}”"
+      },
+      "settled": {
+        "title": "已结算的还款",
+        "titleWithCount": "已结算的还款（{count}）",
+        "colDueDate": "到期日",
+        "colTransaction": "交易",
+        "colPrincipal": "本金",
+        "colInterest": "利息",
+        "colExtra": "额外本金",
+        "colDebtBefore": "还款前欠款",
+        "openTransaction": "打开交易",
+        "void": "作废",
+        "notRecorded": "未记录",
+        "empty": {
+          "title": "尚无已结算的还款",
+          "body": "处理历史记录或导入银行扣款，以结算还款。"
+        },
+        "error": {
+          "title": "无法加载已结算的还款",
+          "body": "这并不是空列表。请重试以查看哪些还款已结算。",
+          "retry": "重试"
+        }
+      }
+    },
     "lineOfCredit": {
       "currentBalance": "当前余额",
       "creditLimit": "信用额度",
@@ -549,7 +747,10 @@
     },
     "rateHistory": {
       "scheduledUpdateTitle": "更新预定付款？",
-      "scheduledUpdateMessage": "预定账单付款“{name}”可更新以匹配新利率：共 {payment}，其中本金 {principal}、利息 {interest}。立即更新？",
+      "scheduledUpdateNextPaymentUnchanged": "预定账单付款“{name}”与利率时间线一致。下次付款日 {date}：不变（{payment}）。",
+      "scheduledUpdateNextPaymentChanged": "预定账单付款“{name}”可根据利率时间线更新。下次付款日 {date}：{before} → {after}，其中本金 {principal}、利息 {interest}。",
+      "scheduledUpdateNextPaymentNew": "预定账单付款“{name}”可根据利率时间线更新。下次付款日 {date}：{payment}，其中本金 {principal}、利息 {interest}。",
+      "scheduledUpdateUpcomingChange": "自 {date} 起，付款将变为 {amount}。",
       "scheduledUpdateDefaultName": "此抵押贷款",
       "scheduledUpdateConfirm": "更新付款",
       "scheduledUpdateSkip": "保持不变",
@@ -616,6 +817,54 @@
       "memoLabel": "提前还款备注",
       "memoPlaceholder": "例如：额外本金",
       "memoHelp": "备注包含此文本的付款将计为提前还款（不区分大小写）。"
+    },
+    "notAmortizing": {
+      "title": "这笔贷款无法还清，因此预计还清日期和剩余利息未知。",
+      "paymentBelowInterest": "分期（{payment}）低于 {rate}% 的每月利息（约 {interest}），因此余额永远不会减少。请记录真实的分期（利率历史条目或账户的还款金额），使其能覆盖利息。",
+      "beyondHorizon": "分期可覆盖利息，但期限超出预测范围，因此不显示还清日期和剩余利息。"
+    }
+  },
+  "loanFees": {
+    "title": "抵押贷款费用",
+    "help": "随每期抵押贷款还款一并收取的保险、税费或其他费用。每项费用都会成为计划还款中单独的一行，记入您选择的分类。费用可以是固定金额、当前余额的百分比（每次还款时重新计算）或原始余额的百分比，按每期还款或按年收取。",
+    "panelDescription": "随每期计划抵押贷款还款一并收取的费用。保存后会更新下一期还款的各行。",
+    "none": "此抵押贷款的还款不收取任何费用。",
+    "name": "费用名称",
+    "category": "分类",
+    "calculation": "计算方式",
+    "basis": "数值适用于",
+    "amount": "金额",
+    "rate": "费率",
+    "add": "添加费用",
+    "remove": "移除费用",
+    "edit": "编辑费用",
+    "editTitle": "抵押贷款费用",
+    "save": "保存费用",
+    "cancel": "取消",
+    "saved": "抵押贷款费用已保存。",
+    "saveFailed": "无法保存抵押贷款费用。",
+    "loading": "正在加载费用...",
+    "loadFailed": "无法加载抵押贷款费用。",
+    "retry": "重试",
+    "unknownCategory": "未知分类",
+    "unknownValue": "未知",
+    "summaryPerPayment": "每期还款 {value}，{calculation}",
+    "summaryAnnual": "每年 {value}，{calculation}",
+    "paymentMatchingConflict": "付款匹配目前还无法结算包含费用的还款。请关闭付款匹配或移除这些费用。",
+    "paymentMatchingNote": "此按揭有一条付款匹配规则。付款匹配尚不能结算包含费用的付款，因此在该规则存在期间无法添加费用。",
+    "calculations": {
+      "fixed": "固定金额",
+      "percentCurrentBalance": "当前余额的百分比",
+      "percentOriginalBalance": "原始余额的百分比"
+    },
+    "bases": {
+      "perPayment": "每期还款",
+      "annual": "每年"
+    },
+    "errors": {
+      "required": "必填",
+      "duplicate": "每项费用都需要单独的分类，且不能是利息类别",
+      "range": "请输入不超过 100% 的费率"
     }
   }
 }

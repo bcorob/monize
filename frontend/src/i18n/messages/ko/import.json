@@ -34,19 +34,22 @@
   },
   "page": {
     "title": "거래 가져오기",
-    "subtitle": "QIF, OFX/QFX 또는 CSV 파일에서 거래를 가져오거나 Microsoft Money (.mny) 파일 전체를 가져옵니다"
+    "subtitle": "QIF/QMTF, OFX/QFX 또는 CSV 파일에서 거래를 가져오거나 Microsoft Money (.mny) 파일 전체를 가져옵니다"
   },
   "upload": {
     "heading": "거래 파일 업로드",
-    "instructions": "가져올 파일을 하나 이상 선택하세요. 지원 형식: QIF, OFX/QFX, CSV, Microsoft Money (.mny).\n대량 가져오기를 위해 동일한 유형의 파일을 여러 개 선택할 수 있습니다. Microsoft Money 파일은 한 번에 하나씩 가져오세요. .mny 파일에는 프로필 전체가 들어 있습니다.",
+    "instructions": "가져올 파일을 하나 이상 선택하세요. 지원 형식: QIF/QMTF, OFX/QFX, CSV, Microsoft Money (.mny).\n대량 가져오기를 위해 동일한 유형의 파일을 여러 개 선택할 수 있습니다. Microsoft Money 파일은 한 번에 하나씩 가져오세요. .mny 파일에는 프로필 전체가 들어 있습니다.",
     "importingTo": "가져오기 대상:",
     "clickToSelect": "파일을 선택하려면 클릭하세요",
+    "orDragAndDrop": "또는 여기로 끌어다 놓으세요",
+    "dropToImport": "놓아서 가져오기",
+    "unsupportedDrop": "다음 파일은 가져올 수 없습니다: {names}. QIF/QMTF, OFX, QFX, CSV 또는 Microsoft Money(.mny) 파일을 사용하세요.",
     "processing": "처리 중...",
-    "acceptedFormats": "QIF, OFX, QFX, CSV 또는 Microsoft Money (.mny)",
+    "acceptedFormats": "QIF/QMTF, OFX, QFX, CSV 또는 Microsoft Money (.mny)",
     "mnyFailedHeading": "이 Microsoft Money 파일을 열 수 없습니다",
-    "wikiNotice": {
+    "docsNotice": {
       "title": "가져오기 전에",
-      "body": "무엇이든 가져오기 전에 위키의 <money>Importing from Microsoft Money</money> 또는 <quicken>Importing from Quicken</quicken> 섹션을 먼저 읽어 보세요."
+      "body": "무엇이든 가져오기 전에 문서의 <money>Importing from Microsoft Money</money> 또는 <quicken>Importing from Quicken</quicken> 섹션을 먼저 읽어 보세요. OFX/QFX 파일과 QIF 파일은 각각 고유한 특이점이 있습니다 — <ofx>Importing OFX/QFX Files</ofx> 및 <qif>Importing Quicken QIF Files</qif>를 참고하세요."
     }
   },
   "selectAccount": {
@@ -78,23 +81,25 @@
     "heading": "CSV 열 매핑",
     "description": "CSV 열을 거래 필드에 매핑하세요. 아래 데이터를 미리 보고 매핑을 구성하세요.",
     "firstRowIsHeader": "첫 번째 행을 헤더로 사용",
-    "delimiterLabel": "구분자:",
-    "dateFormatLabel": "날짜 형식:",
+    "delimiterLabel": "구분자",
+    "dateFormatLabel": "날짜 형식",
     "customOption": "사용자 지정...",
     "customPlaceholder": "예: DD.MM.YYYY",
     "dataPreview": "데이터 미리보기",
     "columnMappingTitle": "열 매핑",
-    "dateField": "날짜 *",
+    "columnMappingHelp": "각 CSV 열을 거래 필드에 매핑합니다. 날짜, 금액 유형, 그리고 금액 또는 차변/대변 중 하나는 필수이며 나머지는 선택 사항입니다.",
+    "dateField": "날짜",
     "amountTypeField": "금액 유형",
     "singleAmountOption": "단일 금액 열",
     "splitAmountOption": "차변/대변 분리",
-    "amountField": "금액 *",
+    "amountField": "금액",
     "signField": "부호",
+    "signFieldHelp": "금액의 부호를 읽는 방법: '그대로'는 양수를 입금으로 처리하고, '반전'은 양수를 출금으로 처리합니다(청구액이 양수로 표시되는 신용카드 내역서에 유용합니다). 거래 유형 열을 사용하면 부호 대신 해당 열 자체의 값으로 방향이 결정됩니다.",
     "signNormal": "있는 그대로 (양수 = 입금)",
     "signReverse": "반전 (양수 = 출금)",
     "signTypeColumn": "거래 유형 열 사용",
-    "debitField": "차변 *",
-    "creditField": "대변 *",
+    "debitField": "차변",
+    "creditField": "대변",
     "typeColumnTitle": "거래 유형 열",
     "typeColumnDescription": "행별로 수입, 지출 또는 이체를 나타내는 열을 선택하세요.",
     "valuesFound": "발견된 값: {values}",
@@ -137,8 +142,8 @@
     "kindBanking": "은행 거래",
     "kindInvestment": "투자 거래",
     "investmentModeHint": "행은 작업 열을 기준으로 분류됩니다. 일치하지 않는 작업 값은 연결된 현금 계정의 현금 입금 또는 출금으로 가져옵니다.",
-    "actionField": "작업 *",
-    "securityField": "유가증권 (종목 코드 또는 이름) *",
+    "actionField": "작업",
+    "securityField": "유가증권 (종목 코드 또는 이름)",
     "quantityField": "수량",
     "priceField": "가격",
     "commissionField": "수수료",
@@ -278,6 +283,15 @@
       "missingSplitRatio": "비율 없는 분할"
     },
     "rejectedGoBack": "열 매핑 단계로 돌아가 열이나 작업 키워드를 조정하세요.",
+    "unreadableDatesNotice": "{count, plural, other {#개 행}}의 날짜를 {format} 형식으로 읽을 수 없어 가져오지 않습니다:",
+    "unreadableDateRow": "{line}행: \"{rawDate}\"",
+    "missingDateRow": "{line}행: 날짜 없음",
+    "unreadableDatesMore": "...외 {count}개",
+    "unreadableDatesGoBack": "파일의 날짜가 다른 순서로 적혀 있다면 열 매핑 단계로 돌아가 파일이 사용하는 날짜 형식을 선택하세요.",
+    "unreadableAmountsNotice": "{count, plural, other {#개 행}}의 금액을 읽을 수 없어 가져오지 않습니다:",
+    "unreadableAmountRow": "{line}행: \"{rawAmount}\"",
+    "unreadableAmountsMore": "...외 {count}개",
+    "unreadableAmountsGoBack": "금액 열이 올바르게 매핑되었는지 확인하거나, 파일에서 이 행들을 수정한 후 다시 가져오세요.",
     "importButton": "거래 가져오기"
   },
   "complete": {
@@ -287,7 +301,7 @@
     "totalImported": "총 가져온 항목:",
     "totalImportedSuffix": "건의 거래",
     "totalSkipped": "총 건너뛴 항목:",
-    "totalSkippedSuffix": "건의 중복 이체",
+    "totalSkippedSuffix": "건의 거래",
     "totalErrors": "총 오류:",
     "categoriesCreated": "생성된 카테고리:",
     "accountsCreated": "생성된 계정:",
@@ -299,17 +313,36 @@
     "imported": "가져온 항목:",
     "importedSuffix": "건의 거래",
     "skipped": "건너뛴 항목:",
-    "skippedSuffix": "건의 중복 이체",
+    "skippedSuffix": "건의 거래",
     "errors": "오류:",
     "errorsLabel": "오류:",
     "andMoreErrors": "...외 {count}건의 오류",
+    "skippedRowsHeading": "건너뛴 행:",
+    "skippedRow": "{date}: {amount}, {payee} ({reason})",
+    "skippedRowNoPayee": "{date}: {amount} ({reason})",
+    "skipReasonAlreadyImported": "이미 가져옴",
+    "skipReasonDuplicateTransfer": "이미 기록된 이체",
+    "skipReasonUnreadableDate": "날짜를 읽을 수 없음",
+    "skipReasonNoDate": "날짜 없음",
+    "skipReasonUnreadableAmount": "금액을 읽을 수 없음",
+    "skippedRowRawAmount": "\"{rawAmount}\"",
+    "skipReasonMissingSecurity": "유가증권 없음",
+    "skipReasonMissingQuantity": "수량 없음",
+    "skipReasonMissingAmount": "금액 없음",
+    "skipReasonMissingProceeds": "가격이나 매도 대금 없는 매도",
+    "skipReasonMissingSplitRatio": "비율 없는 분할",
+    "skippedRowLineDate": "{line}행, \"{rawDate}\"",
+    "skippedRowLine": "{line}행",
+    "skippedRowLineAt": "{line}행, {date}",
+    "andMoreSkipped": "...외 {count}개 행 건너뜀",
     "loanSetupHeading": "정기 상환 설정",
     "loanSetupDescription": "다음 대출/모기지 계정은 예약된 상환 없이 가져왔습니다. 대출 진행 상황을 계속 추적하려면 정기 상환을 설정하세요.",
     "setUpPayments": "상환 설정",
     "scheduledPaymentsConfigured": "{count}개 계정에 대한 예약 상환이 설정되었습니다.",
     "viewInvestments": "투자 보기",
     "viewTransactions": "거래 보기",
-    "importMoreFiles": "파일 더 가져오기"
+    "importMoreFiles": "파일 더 가져오기",
+    "bondRowsWithoutSeries": "{count, plural, other {채권 매수 #건이 시리즈 없이 가져와졌습니다. 증권의 채권 로트에서 시리즈를 선택하세요.}}"
   },
   "multiAccountReview": {
     "heading": "다중 계정 QIF 가져오기",
@@ -327,7 +360,10 @@
     "securitiesNotice": "이 파일에는 가져오기 전에 매핑이 필요한 {count}개의 유가증권이 포함되어 있습니다.",
     "nextMapSecurities": "다음: 유가증권 매핑",
     "importAll": "모두 가져오기",
-    "transactionCount": "{count}건의 거래"
+    "transactionCount": "{count}건의 거래",
+    "chooseAccountType": "유형 선택",
+    "accountTypeFor": "{name}의 계정 유형",
+    "accountTypesNeeded": "파일에 {count, plural, other {#개 계정}}의 유형이 나와 있지 않습니다. 가져오기 전에 각각의 유형을 선택하세요."
   },
   "navigation": {
     "back": "뒤로",
@@ -344,6 +380,7 @@
     "heading": "Microsoft Money 파일 확인",
     "fileSummary": "{filename} -- {era}, 기준 통화 {currency}. 아래 잔액은 파일 자체에서 계산한 값이므로 가져오기 전에 Money와 비교할 수 있습니다.",
     "era": {
+      "money99": "Money 97-99 형식",
       "money2001": "Money 2001 형식",
       "money2002": "Money 2002 형식",
       "moneyPlus": "Money Plus / Sunset 형식",
@@ -355,6 +392,7 @@
       "transfersLinked": "이체 {count}건 연결",
       "payees": "거래처",
       "categories": "범주",
+      "tags": "분류에서 만든 태그",
       "accounts": "계정",
       "securities": "증권",
       "investments": "투자 거래",
@@ -395,7 +433,7 @@
       "importPrices": "가격 이력 가져오기",
       "importPricesHint": "각 증권이 날마다 얼마였는지에 대한 Money 자체의 기록입니다. 현재 시세부터 시작하려면 끄세요.",
       "importExchangeRates": "환율 가져오기",
-      "importExchangeRatesHint": "파일에 있는 통화 간의 과거 환율입니다. 과거 외화 거래가 Money가 환산하던 대로 환산됩니다.",
+      "importExchangeRatesHint": "파일에 있는 통화 간의 과거 환율입니다. Monize에 환율이 없는 날짜에만 사용됩니다. 이미 저장된 환율은 절대 대체되지 않습니다.",
       "wipeExistingData": "새로 시작: 기존 Monize 데이터를 먼저 삭제",
       "wipeExistingDataHint": "가져오기 전에 설정의 내 데이터 삭제와 동일한 작업을 실행합니다. 확인을 요청합니다. 기존 데이터에 Money 파일을 추가하려면 꺼 두세요."
     },
@@ -424,7 +462,7 @@
     }
   },
   "mnyWipe": {
-    "heading": "기존 데이터를 먼저 삭제할까요?",
+    "heading": "기존 데이터 삭제",
     "body": "가져오기가 시작되기 전에 설정 -> 위험 구역과 동일한 내 데이터 삭제 작업을 실행합니다. 삭제되는 항목:",
     "removes": {
       "transactions": "모든 거래 및 분할",
@@ -434,8 +472,8 @@
       "budgets": "모든 예산, 사용자 지정 보고서, 태그 및 가져오기 매핑"
     },
     "irreversible": "이 작업은 되돌릴 수 없습니다. 이후 가져오기가 실패해도 삭제된 데이터는 복구되지 않습니다.",
-    "typeToConfirm": "확인하려면 {word}를 입력하세요:",
-    "passwordLabel": "비밀번호를 입력하세요:",
+    "typeToConfirm": "확인하려면 {word}를 입력하세요",
+    "passwordLabel": "비밀번호",
     "oidcNote": "ID 공급자가 이미 이 세션을 확인했으므로 비밀번호가 필요하지 않습니다.",
     "confirm": "내 데이터 삭제 후 가져오기"
   },
@@ -455,7 +493,8 @@
     },
     "failedHeading": "가져오기가 완료되지 않았습니다",
     "retry": "다시 시도",
-    "startOver": "처음부터 다시"
+    "startOver": "처음부터 다시",
+    "learnMore": "자세히 알아보기"
   },
   "mnyComplete": {
     "heading": "가져오기 완료",
@@ -469,6 +508,7 @@
       "splits": "분할 항목",
       "payees": "거래처",
       "categories": "범주",
+      "taggedRows": "분류에서 태그를 지정한 행",
       "securities": "증권",
       "investments": "투자 거래",
       "prices": "가격",
@@ -492,7 +532,8 @@
     },
     "warningsHeading": "이번 가져오기에 대한 참고 사항",
     "downloadReport": "보고서 다운로드",
-    "done": "완료"
+    "done": "완료",
+    "bondRowsWithoutSeries": "{count, plural, other {채권 매수 #건이 시리즈 없이 가져와졌습니다. 증권의 채권 로트에서 시리즈를 선택하세요.}}"
   },
   "mnyWarnings": {
     "missingTable": "이 Money 버전에는 가져오기에 사용하는 테이블 {count, plural, other {#개}}가 없습니다.",
@@ -503,6 +544,7 @@
     "categoryFlattened": "{count, plural, other {#개 범주}}가 두 단계보다 깊어 상위 범주로 합쳤습니다.",
     "categoryTypeInferred": "{count, plural, other {#개 범주}}에 Money의 수입 표시가 없어 범주 트리에서 수입/지출을 판단했습니다.",
     "degeneratePayeeSkipped": "Money가 내부적으로 유지하는 {count, plural, other {#개 자리표시 거래처}}를 건너뛰었습니다.",
+    "unknownClassificationItem": "{count, plural, one {# 건의 거래} other {# 건의 거래}}가 파일에 정의되지 않은 분류 항목을 참조하여 해당 태그 없이 가져왔습니다.",
     "unusableTransaction": "{count, plural, other {#건 거래}}에 계정이나 사용 가능한 날짜가 없어 건너뛰었습니다.",
     "orphanedTransferSide": "{count, plural, other {#건 이체}}의 상대편이 파일에 없어 건너뛰었습니다.",
     "orphanedSplit": "{count, plural, other {#개 분할 항목}}에 상위 거래가 없어 건너뛰었습니다.",
@@ -512,6 +554,7 @@
     "duplicateSecuritySymbol": "{count, plural, other {증권 #개}}가 다른 증권과 심볼을 공유했습니다. 서로 구분되도록 나중 것의 이름을 바꿨습니다.",
     "generatedSecuritySymbol": "{count, plural, other {증권 #개}}에 Money의 심볼이 없어 임시 심볼을 만들고 가격 업데이트는 꺼 두었습니다.",
     "unknownInvestmentAction": "{count, plural, other {투자 거래 #건}}이 Monize가 인식하지 못하는 작업을 사용해 건너뛰었습니다.",
+    "stockOptionNotImported": "{count, plural, other {직원 스톡옵션 이벤트 #건}}(부여, 베스팅, 만료)은 현금이나 주식을 움직이지 않아 가져오지 않았습니다.",
     "unconfirmedInvestmentAction": "{count, plural, other {투자 거래 #건}}이 의미가 문서화되지 않고 추정된 Money 작업을 사용했습니다. Money와 대조해 확인하세요.",
     "missingInvestmentDetail": "{count, plural, other {투자 거래 #건}}에 파일상 주식 명세가 없어 현금 금액으로만 가져왔습니다.",
     "investmentAccountMismatch": "{count, plural, other {투자 거래 #건}}이 투자 계정이 아닌 계정에 있어 건너뛰었습니다.",
@@ -521,6 +564,9 @@
     "unusableBill": "{count, plural, other {#개 예약된 청구}}에 계정, 사용 가능한 날짜 또는 인식된 반복 주기가 없어 건너뛰었습니다.",
     "billFrequencyApproximated": "{count, plural, other {#개 예약된 청구}}가 Monize에서 정확히 표현할 수 없는 반복 주기를 사용하여 가장 가까운 더 짧은 주기를 사용했습니다.",
     "loanInterestCategoryUnclear": "{count, plural, other {#건의 대출 상환}}에 원금 외 여러 카테고리가 포함되어 있어 대출의 이자 카테고리가 설정되지 않았습니다. 상환에 에스크로(escrow)가 포함되는지 확인하고 가져오기 후 이자 카테고리를 설정하세요.",
+    "transferAmountMismatch": "{count, plural, other {#건의 투자 계좌로의 이체}}에서 투자 쪽에 기록된 금액이 은행 쪽과 달랐습니다. 투자 쪽은 기록된 대로 가져왔습니다.",
+    "crossCurrencyTradeUnconverted": "{count, plural, other {#건의 다른 통화 표시 증권 거래}}는 파일과 환율 제공업체 모두에 거래일 부근의 해당 통화쌍 환율이 없어 계좌 통화로 저장되었습니다. 환율을 추가한 다음 각 거래의 가격을 수정하세요.",
+    "crossCurrencyTradeMarketRate": "{count, plural, other {#건의 다른 통화 표시 증권 거래}}는 파일에 거래일 부근의 환율이 없어 거래일의 시장 환율로 환산되었습니다. 각 거래의 가격을 기록과 대조해 확인하세요.",
     "showTransactions": "{count, plural, other {#건 거래}} 표시",
     "hideTransactions": "거래 숨기기",
     "reviewInMoney": "Microsoft Money에서 이 거래들을 열어 확인하거나 수정한 뒤 다시 내보내고 가져오세요.",
@@ -539,12 +585,89 @@
     "mnyImportFailed": "가져오는 중 문제가 발생했습니다. 저장된 것은 없으므로 다시 시도할 수 있습니다.",
     "mnyJobStalled": "가져오기가 응답을 멈췄습니다. 서버가 재시작되었을 가능성이 큽니다. 업로드한 파일은 남아 있으므로 다시 시도해도 안전합니다.",
     "mnyJobStalledAfterCommit": "가져오기가 데이터를 이미 저장한 뒤 응답을 멈췄습니다. 서버가 재시작되었을 가능성이 큽니다. 가져온 레코드는 계정에 저장되어 있으므로 같은 파일을 다시 가져오면 중복됩니다. 다른 파일을 가져오기 전에 계좌를 확인하세요.",
+    "mnyImportFailedAfterCommit": "가져오기가 데이터를 저장했지만 그 이후 단계가 실패했습니다. 가져온 기록이 계정에 있으므로 같은 파일을 다시 가져오면 중복됩니다. 다른 항목을 가져오기 전에 계좌를 확인하세요.",
+    "mnyAlreadyImported": "이 파일은 이미 계정에 가져왔으므로 다시 가져오면 기록이 중복됩니다. 기록을 바꾸려면 처음부터 다시 시작하고 기존 데이터를 바꾸도록 선택하세요.",
     "mnyStagedFileMissing": "업로드한 Money 파일을 더 이상 사용할 수 없습니다. 다시 업로드하세요.",
     "mnyFileTruncated": "이 Money 파일은 불완전해 보입니다. 업로드가 중단되었을 수 있습니다.",
     "mnyNotAMoneyFile": "이 파일은 Microsoft Money(.mny) 파일이 아닙니다.",
-    "mnyUnsupportedVersion": "이 파일은 Money 97 또는 98로 작성되었습니다. 무료 Money Plus Sunset 버전에서 한 번 열어 저장한 뒤 그 결과를 가져오세요.",
+    "mnyUnsupportedVersion": "이 파일은 Monize가 읽을 수 없는 Microsoft Money 버전으로 작성되었습니다. 무료 Money Plus Sunset 버전에서 한 번 열어 저장한 뒤 그 결과를 가져오세요.",
     "mnyPasswordRequired": "이 Money 파일은 암호로 보호되어 있습니다.",
     "mnyPasswordIncorrect": "이 암호로는 Money 파일을 열 수 없습니다.",
     "mnyUnreadableDatabase": "이 Money 파일은 복호화되었지만 내용을 읽을 수 없습니다. 손상되었을 수 있습니다."
+  },
+  "preview": {
+    "choice": {
+      "legend": "{payee}을(를) 가져오지 않을 때의 처리",
+      "skip": "지금은 건너뛰기",
+      "except": "예외에 추가"
+    },
+    "payeeTip": {
+      "name": "은행 정보: {original}. 매핑: {name}",
+      "alias": "은행 정보: {original}. 매핑: {name} (별칭 \"{pattern}\")",
+      "aliasNoPattern": "은행 정보: {original}. 매핑: {name} (별칭)",
+      "new": "은행 정보: {original}. 매핑: {name} (새 수취인)",
+      "rule": "은행 정보: {original}. 매핑: {name} (규칙으로 설정됨)",
+      "ruleNone": "은행 정보: {original}. 매핑: 수취인 없음 (규칙으로 설정됨)"
+    },
+    "expand": {
+      "show": "{payee} 세부 정보 보기",
+      "hide": "{payee} 세부 정보 숨기기"
+    },
+    "rules": {
+      "heading": "가져오기 규칙",
+      "none": "이 거래와 일치하는 가져오기 규칙이 없습니다.",
+      "skipped": "{action}: 건너뜀 ({reason})",
+      "stopped": "이후 규칙을 중단합니다.",
+      "applied": "적용됨: {actions}",
+      "openNewTab": "규칙 {name}을 새 탭에서 열기"
+    },
+    "ruleTest": {
+      "loading": "규칙 테스트 결과를 불러오는 중",
+      "error": "규칙 테스트 결과를 불러오지 못했습니다.",
+      "retry": "다시 시도",
+      "noRules": "가져오기 규칙이 없어서 테스트할 것이 없었습니다.",
+      "showNotMatched": "일치하지 않은 규칙 보기 ({count})",
+      "hideNotMatched": "일치하지 않은 규칙 숨기기 ({count})",
+      "noChanges": "일치했지만 이 거래에서 바뀌는 것은 없습니다.",
+      "badge": {
+        "matched": "일치",
+        "notMatched": "불일치",
+        "notEvaluated": "평가하지 않음"
+      },
+      "notEvaluated": {
+        "afterStop": "평가하지 않음: 앞의 규칙이 이후 규칙을 중단했습니다.",
+        "disabled": "평가하지 않음: 규칙이 꺼져 있습니다.",
+        "invalid": "평가하지 않음: 규칙이 올바르지 않습니다. 열어서 고치세요.",
+        "outside_active_window": "평가하지 않음: 행의 날짜가 규칙의 활성 기간을 벗어났습니다."
+      },
+      "condition": {
+        "met": "조건 충족",
+        "notMet": "조건 불충족",
+        "actual": "이 거래의 값: {value}",
+        "noValue": "없음",
+        "noTags": "태그 없음",
+        "capture": "{name} = {value}",
+        "omitted": "조건의 이 부분에 대한 자세한 내용은 표시되지 않습니다."
+      },
+      "skipReasons": {
+        "already_set": "이미 값이 있고 규칙은 비어 있는 항목만 채우기 때문",
+        "no_change": "이미 규칙이 설정할 값으로 되어 있기 때문",
+        "payee_unresolved": "규칙이 만드는 수취인을 찾아볼 수 없었기 때문"
+      }
+    },
+    "payee": {
+      "heading": "수취인",
+      "unknown": "이 거래의 수취인 정보가 없습니다.",
+      "original": "은행 텍스트: {original}",
+      "name": "기존 수취인 {name}과(와) 일치합니다.",
+      "alias": "별칭 \"{pattern}\"을(를) 통해 {name}에 매핑됩니다.",
+      "aliasNoPattern": "별칭을 통해 {name}에 매핑됩니다.",
+      "new": "이 이름의 수취인이 아직 없어 {name}이(가) 생성됩니다.",
+      "rule": "가져오기 규칙이 수취인을 설정합니다: {name}.",
+      "ruleNone": "가져오기 규칙이 수취인을 제거합니다.",
+      "none": "은행이 거래 상대방을 알려 주지 않아 이 거래에는 수취인이 없습니다.",
+      "openAliases": "수취인 별칭 열기",
+      "openAliasesNewTab": "수취인 별칭을 새 탭에서 열기"
+    }
   }
 }

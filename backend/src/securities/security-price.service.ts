@@ -1,6 +1,6 @@
 import { Injectable, Logger, NotFoundException } from "@nestjs/common";
 import { tr } from "../i18n/translate";
-import { In, DataSource, EntityManager } from "typeorm";
+import { In, DataSource, EntityManager, Not } from "typeorm";
 import { withScopedDb } from "../common/db/scoped-db";
 import { returnedRows } from "../common/db/query-result";
 import { Cron } from "@nestjs/schedule";
@@ -9,14 +9,24 @@ import { Security } from "./entities/security.entity";
 import { NetWorthService } from "../net-worth/net-worth.service";
 import { UserPreference } from "../users/entities/user-preference.entity";
 import { withSystemContext } from "../common/db/with-context";
-import { lockAccountsForBalanceWrite } from "../common/db/locks";
+import {
+  FetchSyncJob,
+  FetchSyncService,
+} from "../common/jobs/fetch-sync.service";
+import { markHoldingAccountsDirty } from "./holding-accounts-dirty.util";
+import { isPricedByQuoteProvider } from "./provider-priced.util";
 import {
   QuoteProvider,
   QuoteProviderName,
   QuoteResult,
   HistoricalPrice,
+  HistoricalSeries,
   SecurityLookupResult,
 } from "./providers/quote-provider.interface";
+import {
+  normalizeQuoteCurrency,
+  verifyProviderCurrency,
+} from "./providers/quote-currency.util";
 import {
   DEFAULT_QUOTE_PROVIDER,
   QuoteProviderRegistry,
@@ -26,6 +36,10 @@ import { getMarketSessionFromQuote } from "./providers/market-session.util";
 import { isSessionSettled } from "./providers/settled-bar.util";
 import { assertDailySeries } from "./providers/daily-spacing.util";
 import { MARKET_PRICED_TRADE_ACTIONS } from "./investment-replay.util";
+import {
+  invalidateAllPortfolioSummaries,
+  invalidatePortfolioSummary,
+} from "./portfolio-summary-memo";
 import { BackfillRange } from "./dto/backfill-prices-query.dto";
 import { CreateSecurityPriceDto } from "./dto/create-security-price.dto";
 import { UpdateSecurityPriceDto } from "./dto/update-security-price.dto";
@@ -40,18 +54,41 @@ import {
   monthFetchWindow,
 } from "../common/time-series/history-fill";
 import { daysBetween } from "../common/time-series/price-boundary.util";
+import { BOND_ENGINE_PRICE_SOURCE } from "../bonds/bond-price-source";
+import { assertManualPriceIsCashPrice } from "../bonds/bond-write-guard";
+import { SecurityType } from "./security-enums";
 
 export { SecurityLookupResult } from "./providers/quote-provider.interface";
 
 // Lowercased action names a transaction-derived price row is stored under.
 // Derived from the shared trade list so a new Money-vocabulary action cannot
 // write a source this guard list does not recognize (an unlisted source would
-// never be overwritten or cleaned up again).
+// never be overwritten or cleaned up again). It is also the whole list of rows
+// a transaction-derived price may replace: another transaction price, and
+// nothing else. A bond-engine row is not among them (INV-BOND-005): a
+// transaction price is one lot's trade price, not the holding's value, so for a
+// linked security the engine's row replaces a transaction-derived one and never
+// the reverse; the engine's own upsert replaces every non-manual row, so the
+// two orders end the same.
 const TRANSACTION_SOURCES = [
   ...MARKET_PRICED_TRADE_ACTIONS.map((action) => action.toLowerCase()),
   "transfer_in",
   "transfer_out",
 ];
+
+/**
+ * A provider write is re-checked against the link at the moment of the write,
+ * not only when the security list was loaded: a refresh or backfill can hold an
+ * unlinked security in memory for minutes while the user links it to a bond
+ * instrument (INV-BOND-005, the engine is a linked security's only automatic
+ * price source). `$1` is the security id in every statement that uses these.
+ */
+const BOND_LINKED_SQL = `SELECT 1 FROM securities bl
+   WHERE bl.id = $1::UUID AND bl.bond_program_id IS NOT NULL`;
+
+/** The existing rows a provider may replace: neither a manual nor a bond-engine price. */
+const PROVIDER_MAY_REPLACE_SQL = `security_prices.source IS DISTINCT FROM 'manual'
+         AND security_prices.source IS DISTINCT FROM '${BOND_ENGINE_PRICE_SOURCE}'`;
 
 // Cap simultaneous external quote fetches so a large securities universe does
 // not fire hundreds of concurrent Yahoo/MSN requests and trip rate limits.
@@ -143,24 +180,53 @@ function trackPriceWrite<T>(work: Promise<T>): Promise<T> {
 }
 
 function sourceFor(provider: QuoteProviderName | undefined): string {
-  return provider === "msn" ? "msn_finance" : "yahoo_finance";
+  switch (provider) {
+    case "msn":
+      return "msn_finance";
+    case "lse":
+      return "lse";
+    case "deutsche_boerse":
+      return "deutsche_boerse";
+    case "html_table":
+      return "html_table";
+    default:
+      return "yahoo_finance";
+  }
 }
 
 /**
- * A security is eligible for price refresh when skipPriceUpdates is false,
- * OR the user has explicitly opted in by setting a per-security provider
- * override or supplying an MSN Instrument ID. The latter exists because
- * QIF/OFX imports auto-flag securities with skipPriceUpdates=true (since the
- * symbol is auto-generated and may not be a real ticker), and we don't want
- * the user to also have to manually clear that flag after picking a provider.
+ * The providers ordered with the user's default first, the rest in registry
+ * order. Used where every provider is consulted -- lookup aggregation and the
+ * authoritative-currency probe -- rather than the narrower price-refresh
+ * fallback in `QuoteProviderRegistry.resolveForSecurity`.
+ */
+function orderProvidersByDefault(
+  providers: QuoteProvider[],
+  defaultName: QuoteProviderName | null | undefined,
+): QuoteProvider[] {
+  const primary = defaultName ?? DEFAULT_QUOTE_PROVIDER;
+  return [...providers].sort(
+    (a, b) => (b.name === primary ? 1 : 0) - (a.name === primary ? 1 : 0),
+  );
+}
+
+/**
+ * A security linked to a bond instrument is never eligible: the bond engine is
+ * its only automatic price source (`isPricedByQuoteProvider`, INV-BOND-005).
+ * Otherwise a security is eligible for scheduled price refresh when
+ * skipPriceUpdates is false. The flag is the user's own switch (the security
+ * form's "disable automatic price updates"), and imports set it on the
+ * securities whose symbol they invented. A per-security provider override or
+ * MSN Instrument ID does not override it: choosing one clears the flag at
+ * write time (`SecuritiesService.update`), so a security that still carries
+ * the flag is one the user has asked not to be fetched.
  */
 function isRefreshEligible(s: {
   skipPriceUpdates: boolean;
-  quoteProvider: string | null;
-  msnInstrumentId: string | null;
+  bondProgramId?: string | null;
 }): boolean {
-  if (!s.skipPriceUpdates) return true;
-  return Boolean(s.quoteProvider) || Boolean(s.msnInstrumentId);
+  if (!isPricedByQuoteProvider(s)) return false;
+  return !s.skipPriceUpdates;
 }
 
 export interface PriceUpdateResult {
@@ -189,6 +255,24 @@ export interface DailySettlementSummary {
   failed: number;
 }
 
+/**
+ * Narrows the active securities a deployment-wide pass (refresh, settlement)
+ * selects. Omitted, the pass covers every active security.
+ */
+export interface SecurityPassScope {
+  /**
+   * Only securities of this type. Keyed on `securityType`, the discriminator a
+   * person picks and the lookup maps, never on `exchange`: a coin created
+   * before the lookup named `CRYPTO` still carries Yahoo's `CCC`.
+   */
+  readonly securityType?: SecurityType;
+}
+
+/** How a log line names the securities a pass covers. */
+function describePassScope(scope: SecurityPassScope): string {
+  return scope.securityType ?? "all";
+}
+
 export interface HistoricalBackfillResult {
   symbol: string;
   success: boolean;
@@ -213,6 +297,28 @@ interface UserContext {
 interface HistoricalWithProvider {
   prices: HistoricalPrice[];
   provider: QuoteProviderName;
+  /**
+   * The currency the provider says these bars are in, normalized. Carried from
+   * the provider's own answer so every write site can refuse a series that
+   * belongs to another listing of the same ticker.
+   */
+  currencyCode: string | null;
+}
+
+/**
+ * What an acceptance point came back with: the answer, or the reason there is
+ * none to store. A refusal is a *reported* fact about the security -- the
+ * provider answered about a different currency -- so it reaches the user as
+ * that security's error rather than as "no price data available".
+ */
+interface QuoteAcceptance {
+  quote: QuoteResult | null;
+  refusal?: string;
+}
+
+interface HistoricalAcceptance {
+  bundle: HistoricalWithProvider | null;
+  refusal?: string;
 }
 
 @Injectable()
@@ -229,7 +335,17 @@ export class SecurityPriceService {
     private dataSource: DataSource,
     private netWorthService: NetWorthService,
     private providers: QuoteProviderRegistry,
+    private readonly fetchSync: FetchSyncService,
   ) {}
+
+  /**
+   * How long one replica holds the price fetch.
+   *
+   * The refresh plus settlement plus the snapshot recalc is the longest of the
+   * three fetch jobs, so the lease is the longest -- and still far shorter than
+   * the daily interval, so a killed replica never blocks tomorrow.
+   */
+  private readonly FETCH_LEASE_MS = 30 * 60 * 1000;
 
   // ─── User preference loading ─────────────────────────────────────────────
 
@@ -275,11 +391,18 @@ export class SecurityPriceService {
   /**
    * Try each provider in registry order. Both "throws" and "returns null"
    * trigger the fallback. Returns the first quote that has a usable price.
+   *
+   * `group` is every security the caller will write this answer to -- the
+   * symbol/exchange group the fetch is made for, defaulting to `security`
+   * alone. The fetch-time currency check passes the answer on when *any*
+   * member could store it (see `acceptedBySomeMember`); the refusal that
+   * decides what is written is still made per security at the write.
    */
   private async fetchQuoteWithFallback(
     security: Security,
     ctx: UserContext,
-  ): Promise<QuoteResult | null> {
+    group: readonly Security[] = [security],
+  ): Promise<QuoteAcceptance> {
     const ordered = this.providers.resolveForSecurity(
       security,
       ctx.defaultQuoteProvider,
@@ -289,6 +412,7 @@ export class SecurityPriceService {
       `Refresh ${security.symbol}: override=${security.quoteProvider ?? "(none)"} default=${ctx.defaultQuoteProvider} → trying [${ordered.map((p) => p.name).join(", ")}]`,
     );
 
+    let refusal: string | undefined;
     for (const provider of ordered) {
       try {
         const quote = await provider.fetchQuote(
@@ -297,10 +421,24 @@ export class SecurityPriceService {
           this.optsFor(provider, security, ctx),
         );
         if (quote && quote.regularMarketPrice !== undefined) {
+          // A price is a number in a currency, and the row it would be written
+          // to carries only the number. So the answer is checked here, before
+          // anybody can store it, and a provider quoting another listing of
+          // this ticker is passed over rather than accepted -- the next
+          // provider gets its turn and faces the same check.
+          const mismatch = this.acceptedBySomeMember(
+            group,
+            quote.currencyCode,
+            provider.name,
+          );
+          if (mismatch) {
+            refusal = mismatch;
+            continue;
+          }
           this.logger.log(
             `Refresh ${security.symbol}: ${provider.name} returned price=${quote.regularMarketPrice}`,
           );
-          return { ...quote, provider: provider.name };
+          return { quote: { ...quote, provider: provider.name } };
         }
         this.logger.log(
           `Refresh ${security.symbol}: ${provider.name} returned no usable price`,
@@ -314,29 +452,47 @@ export class SecurityPriceService {
     this.logger.warn(
       `Refresh ${security.symbol}: no provider returned a price`,
     );
-    return null;
+    return { quote: null, refusal };
   }
 
+  /** Same group semantics as `fetchQuoteWithFallback`. */
   private async fetchHistoricalWithFallback(
     security: Security,
     range: string,
     ctx: UserContext,
-  ): Promise<HistoricalWithProvider | null> {
+    group: readonly Security[] = [security],
+  ): Promise<HistoricalAcceptance> {
     const ordered = this.providers.resolveForSecurity(
       security,
       ctx.defaultQuoteProvider,
     );
 
+    let refusal: string | undefined;
     for (const provider of ordered) {
       try {
-        const prices = await provider.fetchHistorical(
+        const series = await provider.fetchHistoricalSeries(
           security.symbol,
           security.exchange,
           range,
           this.optsFor(provider, security, ctx),
         );
-        if (prices && prices.length > 0) {
-          return { prices, provider: provider.name };
+        if (series && series.prices.length > 0) {
+          const mismatch = this.acceptedBySomeMember(
+            group,
+            series.currencyCode,
+            provider.name,
+          );
+          if (mismatch) {
+            refusal = mismatch;
+            continue;
+          }
+          return {
+            bundle: {
+              prices: series.prices,
+              provider: provider.name,
+              currencyCode: series.currencyCode,
+            },
+          };
         }
       } catch (err) {
         this.logger.warn(
@@ -344,7 +500,91 @@ export class SecurityPriceService {
         );
       }
     }
-    return null;
+    return { bundle: null, refusal };
+  }
+
+  /**
+   * The one comparison every price acceptance point makes: does the currency
+   * the provider reported match the one the security is recorded in.
+   *
+   * Returns the message to report when it does not, and `null` when the answer
+   * may be stored. A provider that reports no currency at all (MSN's chart
+   * series) is accepted as unverified rather than refused, because refusing it
+   * would leave those securities with no prices; the decision is logged.
+   *
+   * At a *write* this is called per security, never per group: the refresh and
+   * backfill passes fetch once for a representative and write for every
+   * security sharing its symbol and exchange, and those securities can be
+   * recorded in different currencies. At a *fetch* the group form
+   * `acceptedBySomeMember` asks it of the whole group instead.
+   */
+  private refuseForeignCurrency(
+    security: Pick<Security, "symbol" | "currencyCode">,
+    reported: string | null | undefined,
+    provider: QuoteProviderName,
+    opts: { warnUnverified?: boolean } = {},
+  ): string | null {
+    const verdict = verifyProviderCurrency(security.currencyCode, reported);
+    if (verdict.accepted) {
+      if (!verdict.verified && opts.warnUnverified !== false) {
+        this.logger.warn(
+          `Storing ${provider} prices for ${security.symbol} unverified: ` +
+            (verdict.reason === "provider-silent"
+              ? "the provider reported no trading currency"
+              : "the security has no recorded currency"),
+        );
+      }
+      return null;
+    }
+    const message = tr(
+      "errors.securities.providerCurrencyMismatch",
+      `Price update refused for ${security.symbol}: ${provider} quotes it in ${verdict.reported}, but the security is recorded in ${verdict.configured}. Correct the security's currency, symbol or exchange, then refresh.`,
+      {
+        symbol: security.symbol,
+        provider,
+        reported: verdict.reported,
+        configured: verdict.configured,
+      },
+    );
+    // The log is the operator's, in English; `message` is the reader's, in
+    // the request's locale, and a translated line among English ones made the
+    // server log read in whichever language the last caller used.
+    this.logger.warn(
+      `Price update refused for ${security.symbol}: ${provider} quotes it in ${verdict.reported}, but the security is recorded in ${verdict.configured}`,
+    );
+    return message;
+  }
+
+  /**
+   * The fetch-time form of `refuseForeignCurrency`, asked of a whole
+   * symbol/exchange group at once.
+   *
+   * A group is keyed on symbol and exchange, never on currency, so its members
+   * can be recorded in different currencies and at most some of them are right
+   * about any one provider answer. Judging the fetch on the representative
+   * alone let one user's mis-recorded currency stop the fetch for every other
+   * holder of that ticker: the whole group was marked failed although the
+   * answer was storable for all but one of them. So the fetch passes the answer
+   * on as soon as *one* member could store it, and the per-security check at
+   * the write (the only refusal point that matters) decides who actually gets
+   * it. Returns `null` to accept, or the refusal message when no member can.
+   */
+  private acceptedBySomeMember(
+    group: readonly Security[],
+    reported: string | null | undefined,
+    provider: QuoteProviderName,
+  ): string | null {
+    const accepting = group.find(
+      (member) =>
+        verifyProviderCurrency(member.currencyCode, reported).accepted,
+    );
+    // Either way this delegates, so the unverified-storage warning and the
+    // refusal message are written in exactly one place.
+    return this.refuseForeignCurrency(
+      accepting ?? group[0],
+      reported,
+      provider,
+    );
   }
 
   private optsFor(
@@ -359,6 +599,10 @@ export class SecurityPriceService {
           : undefined,
       currencyCode: security.currencyCode,
       preferredExchanges: ctx.preferredExchanges,
+      quoteUrl:
+        provider.name === "html_table"
+          ? (security.quoteUrl ?? undefined)
+          : undefined,
     };
   }
 
@@ -463,13 +707,36 @@ export class SecurityPriceService {
 
   // ─── Grouping ────────────────────────────────────────────────────────────
 
+  /**
+   * One fetch is made per group and its answer is written to every member, so
+   * two securities may share a group only when they would ask the provider the
+   * same question. A web page's address is part of that question: the symbol of
+   * an `html_table` security is whatever its owner typed, so two users' "ACME"
+   * on different pages must never be priced from one of the pages.
+   */
   private groupKey(security: Security): string {
     return [
       security.symbol,
       security.exchange || "",
       security.quoteProvider || "",
       security.msnInstrumentId || "",
+      security.quoteProvider === "html_table" ? (security.quoteUrl ?? "") : "",
     ].join("|");
+  }
+
+  /**
+   * The active securities a deployment-wide pass reads, narrowed by `scope`.
+   * The refresh and the settlement both select through here, so a scoped run
+   * settles exactly the securities it refreshed. Callers apply
+   * `isRefreshEligible` themselves.
+   */
+  private loadActiveSecurities(scope: SecurityPassScope): Promise<Security[]> {
+    const where = scope.securityType
+      ? { isActive: true, securityType: scope.securityType }
+      : { isActive: true };
+    return withScopedDb(this.dataSource, (m) =>
+      m.getRepository(Security).find({ where }),
+    );
   }
 
   // ─── Refresh (current price) ─────────────────────────────────────────────
@@ -502,19 +769,21 @@ export class SecurityPriceService {
    * for as long as that row existed. A duplicate fetch costs one request; the
    * skip cost a wrong closing price on every day the user watched the market.
    */
-  async refreshAllPrices(): Promise<PriceRefreshSummary> {
-    return withSystemContext(() => this.refreshAllPricesGlobally());
+  async refreshAllPrices(
+    scope: SecurityPassScope = {},
+  ): Promise<PriceRefreshSummary> {
+    return withSystemContext(() => this.refreshAllPricesGlobally(scope));
   }
 
-  private async refreshAllPricesGlobally(): Promise<PriceRefreshSummary> {
+  private async refreshAllPricesGlobally(
+    scope: SecurityPassScope,
+  ): Promise<PriceRefreshSummary> {
     const startTime = Date.now();
-    this.logger.log("Starting price refresh for all securities");
-
-    const allActive = await withScopedDb(this.dataSource, (m) =>
-      m.getRepository(Security).find({
-        where: { isActive: true },
-      }),
+    this.logger.log(
+      `Starting price refresh for ${describePassScope(scope)} securities`,
     );
+
+    const allActive = await this.loadActiveSecurities(scope);
     const securities = allActive.filter((s) => isRefreshEligible(s));
 
     if (securities.length === 0) {
@@ -554,20 +823,20 @@ export class SecurityPriceService {
           defaultQuoteProvider: DEFAULT_QUOTE_PROVIDER,
           preferredExchanges: [],
         };
-        return this.fetchQuoteWithFallback(rep, ctx);
+        return this.fetchQuoteWithFallback(rep, ctx, group);
       },
     );
 
     for (let i = 0; i < groups.length; i++) {
       const group = groups[i];
-      const quote = quotes[i];
+      const { quote, refusal } = quotes[i];
 
       if (!quote || quote.regularMarketPrice === undefined) {
         for (const security of group) {
           results.push({
             symbol: security.symbol,
             success: false,
-            error: "No price data available",
+            error: refusal ?? "No price data available",
           });
           failed++;
         }
@@ -597,8 +866,27 @@ export class SecurityPriceService {
 
       const tradingDate = formatDateYMD(getTradingDateFromQuote(quote));
       for (const security of group) {
+        // Per security, although the quote was fetched once for the group: the
+        // group is keyed on symbol and exchange, not on currency, so two users
+        // holding the same ticker can have recorded it differently and only one
+        // of them may be right about this answer.
+        const mismatch = this.refuseForeignCurrency(
+          security,
+          quote.currencyCode,
+          quote.provider ?? DEFAULT_QUOTE_PROVIDER,
+          { warnUnverified: false },
+        );
+        if (mismatch) {
+          results.push({
+            symbol: security.symbol,
+            success: false,
+            error: mismatch,
+          });
+          failed++;
+          continue;
+        }
         try {
-          await this.savePriceData(security.id, tradingDate, quote);
+          await this.savePriceData(security, tradingDate, quote);
           await this.persistMarketSession(security, quote);
           results.push({
             symbol: security.symbol,
@@ -649,7 +937,7 @@ export class SecurityPriceService {
         .map((s) => s.symbol)
         .join(", ");
       this.logger.log(
-        `Skipping ${skipped} security/securities flagged with skipPriceUpdates and no explicit provider override: ${skippedSymbols}`,
+        `Skipping ${skipped} security/securities with price updates disabled: ${skippedSymbols}`,
       );
     }
     securities.length = 0;
@@ -688,13 +976,13 @@ export class SecurityPriceService {
 
     for (let i = 0; i < securities.length; i++) {
       const security = securities[i];
-      const quote = quotes[i];
+      const { quote, refusal } = quotes[i];
 
       if (!quote || quote.regularMarketPrice === undefined) {
         results.push({
           symbol: security.symbol,
           success: false,
-          error: "No price data available",
+          error: refusal ?? "No price data available",
         });
         failed++;
         continue;
@@ -719,7 +1007,7 @@ export class SecurityPriceService {
 
       try {
         const tradingDate = formatDateYMD(getTradingDateFromQuote(quote));
-        await this.savePriceData(security.id, tradingDate, quote);
+        await this.savePriceData(security, tradingDate, quote);
         await this.persistMarketSession(security, quote);
         results.push({
           symbol: security.symbol,
@@ -753,10 +1041,11 @@ export class SecurityPriceService {
    * provider tag, defaulting to yahoo_finance for back-compat.
    */
   private async savePriceData(
-    securityId: string,
+    security: Security,
     priceDate: string,
     quote: QuoteResult,
   ): Promise<SecurityPrice> {
+    const securityId = security.id;
     const source = sourceFor(quote.provider);
     // The instant the quote was struck, which `priceDate` cannot carry and
     // `createdAt` does not track: a same-day refresh updates the row in place,
@@ -810,6 +1099,7 @@ export class SecurityPriceService {
                           AND adj.adjusted_close IS NOT NULL
                      ) THEN $6::NUMERIC ELSE NULL END,
                 $7::BIGINT, $8::VARCHAR, $9::TIMESTAMPTZ
+          WHERE NOT EXISTS (${BOND_LINKED_SQL})
          ON CONFLICT (security_id, price_date) DO UPDATE SET
            close_price    = EXCLUDED.close_price,
            adjusted_close = EXCLUDED.adjusted_close,
@@ -819,7 +1109,7 @@ export class SecurityPriceService {
            volume      = COALESCE(EXCLUDED.volume,      security_prices.volume),
            source      = EXCLUDED.source,
            quoted_at   = COALESCE(EXCLUDED.quoted_at,   security_prices.quoted_at)
-         WHERE security_prices.source IS DISTINCT FROM 'manual'
+         WHERE ${PROVIDER_MAY_REPLACE_SQL}
          RETURNING id`,
         [
           securityId,
@@ -850,6 +1140,11 @@ export class SecurityPriceService {
           `Failed to persist price for security ${securityId} on ${priceDate}`,
         );
       }
+      // A stored price changes what the portfolio is worth, so the memoized
+      // valuation for this security's owner is dropped here rather than in each
+      // of the refresh entry points -- the same argument `bulkUpsertPrices`
+      // makes for holding its guard once instead of in four callers.
+      invalidatePortfolioSummary(security.userId);
       return saved;
     });
   }
@@ -946,7 +1241,7 @@ export class SecurityPriceService {
     userId: string,
     query: string,
     preferredExchanges?: string[],
-    provider?: "yahoo" | "msn" | "auto",
+    provider?: "yahoo" | "msn" | "lse" | "deutsche_boerse" | "auto",
   ): Promise<SecurityLookupResult[]> {
     const contexts = await this.loadUserContexts([userId]);
     const ctx = contexts.get(userId) || {
@@ -975,23 +1270,30 @@ export class SecurityPriceService {
       }
     };
 
-    if (provider === "yahoo" || provider === "msn") {
+    if (provider && provider !== "auto") {
       return fetchFromProvider(this.providers.getByName(provider));
     }
 
-    // auto: try the user's primary provider first; only fall back to the
-    // secondary provider when the primary returns no candidates. Mirrors
-    // fetchQuoteWithFallback so lookups respect the same Primary/Secondary
-    // preference used during price refresh.
-    const ordered = this.providers.resolveForSecurity(
-      { quoteProvider: null },
+    // auto: aggregate candidates from every provider, the user's default first,
+    // so a security's own exchange surfaces alongside the ticker providers -- an
+    // LSE line searched by its TIDM, a Börse Frankfurt line searched by ISIN --
+    // and the user picks the listing they actually hold. Search is where the
+    // exchange-specific providers earn their place; price refresh keeps the
+    // narrower general-provider fallback (resolveForSecurity).
+    const aggregated: SecurityLookupResult[] = [];
+    const seen = new Set<string>();
+    for (const p of orderProvidersByDefault(
+      this.providers.listAll(),
       ctx.defaultQuoteProvider,
-    );
-    for (const p of ordered) {
-      const results = await fetchFromProvider(p);
-      if (results.length > 0) return results;
+    )) {
+      for (const result of await fetchFromProvider(p)) {
+        const key = `${result.symbol}|${result.exchange ?? ""}`.toUpperCase();
+        if (seen.has(key)) continue;
+        seen.add(key);
+        aggregated.push(result);
+      }
     }
-    return [];
+    return aggregated;
   }
 
   /**
@@ -1011,14 +1313,17 @@ export class SecurityPriceService {
       defaultQuoteProvider: DEFAULT_QUOTE_PROVIDER,
       preferredExchanges: [],
     };
-    const ordered = this.providers.resolveForSecurity(
-      { quoteProvider: null },
+    const ordered = orderProvidersByDefault(
+      this.providers.listAll(),
       ctx.defaultQuoteProvider,
     );
     for (const p of ordered) {
       try {
         const quote = await p.fetchQuote(symbol, exchange);
-        const currency = quote?.currencyCode?.trim();
+        // Through the same normalization the acceptance check applies, so the
+        // currency a security is created with is comparable -- letter for
+        // letter -- with the one every later price answer is measured against.
+        const currency = normalizeQuoteCurrency(quote?.currencyCode);
         if (currency) return currency;
       } catch (err) {
         this.logger.warn(
@@ -1029,10 +1334,15 @@ export class SecurityPriceService {
     return null;
   }
 
+  /**
+   * When a quote provider last wrote a price. A bond-engine row is written every
+   * day by accrual, whatever the providers are doing, so it does not move this
+   * marker: an outage of the quote providers must stay visible.
+   */
   async getLastUpdateTime(): Promise<Date | null> {
     const latest = await withScopedDb(this.dataSource, (m) =>
       m.getRepository(SecurityPrice).findOne({
-        where: {},
+        where: { source: Not(BOND_ENGINE_PRICE_SOURCE) },
         order: { createdAt: "DESC" },
       }),
     );
@@ -1065,17 +1375,6 @@ export class SecurityPriceService {
     const startTime = Date.now();
     this.logger.log("Starting historical price backfill");
 
-    const allActive = await withScopedDb(this.dataSource, (m) =>
-      m.getRepository(Security).find({
-        where: { isActive: true },
-      }),
-    );
-    const securities = allActive.filter((s) => isRefreshEligible(s));
-
-    const userContexts = await this.loadUserContexts(
-      securities.map((s) => s.userId),
-    );
-
     const earliestTxRows: Array<{ security_id: string; earliest: string }> =
       await withScopedDb(this.dataSource, (m) =>
         m.query(
@@ -1088,6 +1387,28 @@ export class SecurityPriceService {
       );
     const earliestTxDate = new Map(
       earliestTxRows.map((r) => [r.security_id, r.earliest]),
+    );
+
+    // Active securities, plus every security the user has ever held.
+    //
+    // `SecuritiesService.deactivate` refuses while any holding is non-zero, so
+    // an INACTIVE security is by definition one that was bought, held, and sold
+    // out completely -- and the days it was held are days the portfolio series
+    // still has to value. Filtering this backfill by `isActive` meant the one
+    // operation whose whole purpose is price HISTORY could never fill the
+    // history of the position a reader is looking at, so its holding period
+    // read as an unpriced gap forever (#1389). The daily quote refresh is a
+    // different question and is deliberately left alone: today's quote for
+    // something nobody holds buys nothing.
+    const allSecurities = await withScopedDb(this.dataSource, (m) =>
+      m.getRepository(Security).find(),
+    );
+    const securities = allSecurities.filter(
+      (s) => (s.isActive || earliestTxDate.has(s.id)) && isRefreshEligible(s),
+    );
+
+    const userContexts = await this.loadUserContexts(
+      securities.map((s) => s.userId),
     );
 
     const oneYearAgo = new Date();
@@ -1123,27 +1444,34 @@ export class SecurityPriceService {
         groupEarliestDates.length > 0 &&
         groupEarliestDates.some((d) => d < oneYearAgoStr);
 
-      const daily = await this.fetchHistoricalWithFallback(
+      const dailyAttempt = await this.fetchHistoricalWithFallback(
         representative,
         range ?? "1y",
         ctx,
+        group,
       );
+      const daily = dailyAttempt.bundle;
 
       let maxBundle: HistoricalWithProvider | null = null;
+      let maxRefusal: string | undefined;
       if (!range && needsOlderData) {
-        maxBundle = await this.fetchHistoricalWithFallback(
+        const maxAttempt = await this.fetchHistoricalWithFallback(
           representative,
           "max",
           ctx,
+          group,
         );
+        maxBundle = maxAttempt.bundle;
+        maxRefusal = maxAttempt.refusal;
       }
 
       if (!daily && !maxBundle) {
+        const refusal = dailyAttempt.refusal ?? maxRefusal;
         for (const security of group) {
           results.push({
             symbol: security.symbol,
             success: false,
-            error: "No historical data available",
+            error: refusal ?? "No historical data available",
           });
           failed++;
         }
@@ -1204,8 +1532,26 @@ export class SecurityPriceService {
           continue;
         }
 
+        // The series was fetched for the representative; this security only
+        // shares its symbol and exchange, not necessarily its currency.
+        const mismatch = this.refuseForeignCurrency(
+          security,
+          winner.currencyCode,
+          winner.provider,
+          { warnUnverified: false },
+        );
+        if (mismatch) {
+          results.push({
+            symbol: security.symbol,
+            success: false,
+            error: mismatch,
+          });
+          failed++;
+          continue;
+        }
+
         try {
-          await this.bulkUpsertPrices(security.id, prices, source);
+          await this.bulkUpsertPrices(security, prices, source);
 
           this.logger.log(
             `Backfilled ${prices.length} prices for ${security.symbol} via ${winner.provider} ` +
@@ -1254,10 +1600,11 @@ export class SecurityPriceService {
    * MSN-sourced data can be stored with source='msn_finance'.
    */
   private async bulkUpsertPrices(
-    securityId: string,
+    security: Security,
     prices: HistoricalPrice[],
     source: string,
   ): Promise<void> {
+    const securityId = security.id;
     // Before anything is written, and over the whole payload rather than per
     // batch: a provider asked for a long range may answer with weekly or
     // monthly bars, and stored into a daily table those rows are
@@ -1280,10 +1627,12 @@ export class SecurityPriceService {
     const batchSize = 500;
     for (let i = 0; i < prices.length; i += batchSize) {
       const batch = prices.slice(i, i + batchSize);
+      // Typed so the rows can be a subquery (a bare VALUES list types a
+      // parameter as text), which is what lets the link predicate gate them.
       const values = batch
         .map((_, idx) => {
           const offset = idx * 9;
-          return `($${offset + 1}::UUID, $${offset + 2}::DATE, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7}, $${offset + 8}, $${offset + 9})`;
+          return `($${offset + 1}::UUID, $${offset + 2}::DATE, $${offset + 3}::NUMERIC, $${offset + 4}::NUMERIC, $${offset + 5}::NUMERIC, $${offset + 6}::NUMERIC, $${offset + 7}::NUMERIC, $${offset + 8}::BIGINT, $${offset + 9}::VARCHAR)`;
         })
         .join(", ");
 
@@ -1316,14 +1665,14 @@ export class SecurityPriceService {
       // something it is not. The column's contract already says so -- NULL for
       // rows that are not a struck quote.
       //
-      // A `manual` row is a correction the user typed, so the provider does not
-      // get to overwrite it. `refreshAllPricesGlobally` used to be the only
-      // place that respected manual entries, which meant a backfill silently
-      // undid every one of them.
+      // A `manual` row is a correction the user typed, and a `bond_engine` row
+      // is a linked security's own price, so the provider overwrites neither;
+      // and a security linked since the list was loaded gets no row at all.
       await withScopedDb(this.dataSource, (m) =>
         m.query(
           `INSERT INTO security_prices (security_id, price_date, open_price, high_price, low_price, close_price, adjusted_close, volume, source)
-         VALUES ${values}
+         SELECT v.* FROM (VALUES ${values}) AS v
+          WHERE NOT EXISTS (${BOND_LINKED_SQL})
          ON CONFLICT (security_id, price_date) DO UPDATE SET
            close_price = EXCLUDED.close_price,
            open_price = EXCLUDED.open_price,
@@ -1333,11 +1682,15 @@ export class SecurityPriceService {
            volume = EXCLUDED.volume,
            source = EXCLUDED.source,
            quoted_at = NULL
-         WHERE security_prices.source IS DISTINCT FROM 'manual'`,
+         WHERE ${PROVIDER_MAY_REPLACE_SQL}`,
           params,
         ),
       );
     }
+    // Every historical write path (catalog backfill, per-security backfill,
+    // holding-period backfill, settlement) ends here, so the owner's memoized
+    // valuation is forgotten here too.
+    invalidatePortfolioSummary(security.userId);
   }
 
   // ─── Daily settlement ────────────────────────────────────────────────────
@@ -1361,17 +1714,19 @@ export class SecurityPriceService {
    * having to notice and ask. A bar whose session is still open is left alone,
    * because settling it would store the same half-day the quote already did.
    */
-  async settleDailyBars(): Promise<DailySettlementSummary> {
-    return withSystemContext(() => this.settleDailyBarsGlobally());
+  async settleDailyBars(
+    scope: SecurityPassScope = {},
+  ): Promise<DailySettlementSummary> {
+    return withSystemContext(() => this.settleDailyBarsGlobally(scope));
   }
 
-  private async settleDailyBarsGlobally(): Promise<DailySettlementSummary> {
+  private async settleDailyBarsGlobally(
+    scope: SecurityPassScope,
+  ): Promise<DailySettlementSummary> {
     const startTime = Date.now();
     const now = new Date();
 
-    const allActive = await withScopedDb(this.dataSource, (m) =>
-      m.getRepository(Security).find({ where: { isActive: true } }),
-    );
+    const allActive = await this.loadActiveSecurities(scope);
     const securities = allActive.filter((s) => isRefreshEligible(s));
     if (securities.length === 0) {
       return {
@@ -1402,7 +1757,12 @@ export class SecurityPriceService {
           defaultQuoteProvider: DEFAULT_QUOTE_PROVIDER,
           preferredExchanges: [],
         };
-        return this.fetchHistoricalWithFallback(rep, SETTLEMENT_RANGE, ctx);
+        return this.fetchHistoricalWithFallback(
+          rep,
+          SETTLEMENT_RANGE,
+          ctx,
+          group,
+        );
       },
     );
 
@@ -1411,7 +1771,7 @@ export class SecurityPriceService {
     let failed = 0;
 
     for (const [i, group] of groups.entries()) {
-      const bundle = bundles[i];
+      const bundle = bundles[i].bundle;
       if (!bundle || bundle.prices.length === 0) {
         failed += group.length;
         continue;
@@ -1419,6 +1779,20 @@ export class SecurityPriceService {
       const source = sourceFor(bundle.provider);
 
       for (const security of group) {
+        // Settlement writes the official bars over the day's quotes, so it is
+        // a price write like any other and faces the same check -- per
+        // security, because the group shares a symbol rather than a currency.
+        if (
+          this.refuseForeignCurrency(
+            security,
+            bundle.currencyCode,
+            bundle.provider,
+            { warnUnverified: false },
+          )
+        ) {
+          failed++;
+          continue;
+        }
         // Per security rather than per group: the session lives on the row, and
         // a symbol nothing has quoted yet has none, which is a different answer
         // from a symbol whose exchange is known.
@@ -1428,7 +1802,7 @@ export class SecurityPriceService {
         if (settled.length === 0) continue;
 
         try {
-          await this.bulkUpsertPrices(security.id, settled, source);
+          await this.bulkUpsertPrices(security, settled, source);
           securitiesSettled++;
           barsSettled += settled.length;
         } catch (error) {
@@ -1455,28 +1829,66 @@ export class SecurityPriceService {
     };
   }
 
+  /**
+   * The closing job: every active security, after the US close on a weekday.
+   */
   @Cron("0 17 * * 1-5", { timeZone: "America/New_York" })
   async scheduledPriceRefresh(): Promise<void> {
-    this.logger.log("Running scheduled price refresh");
+    await this.runScheduledPriceRefresh({});
+  }
+
+  /**
+   * The weekend tick, for cryptocurrency only. A coin trades every day and its
+   * Yahoo session is the UTC day, still open at 17:00 New York, so each run
+   * settles the previous UTC day's bar and stores the current day's quote as
+   * provisional: Saturday's run settles Friday, Sunday's settles Saturday, and
+   * Monday's weekday run settles Sunday. Without it all three waited for
+   * Monday, and no cron stored a weekend quote. Every other security is closed
+   * and is left alone: asking for it would only spend quota on a bar that
+   * cannot have changed.
+   */
+  @Cron("0 17 * * 0,6", { timeZone: "America/New_York" })
+  async scheduledWeekendCryptoRefresh(): Promise<void> {
+    await this.runScheduledPriceRefresh({ securityType: "CRYPTO" });
+  }
+
+  /** The body both closing crons share, over the securities `scope` selects. */
+  private async runScheduledPriceRefresh(
+    scope: SecurityPassScope,
+  ): Promise<void> {
+    this.logger.log(
+      `Running scheduled price refresh for ${describePassScope(scope)} securities`,
+    );
     try {
       // RLS (task C2): the price refresh groups securities across users by
       // symbol (irreducibly cross-user), and the snapshot recalc fans out over
       // every investment account, so the whole job runs under a system context.
-      await withSystemContext(async () => {
-        const result = await this.refreshAllPrices();
-        // Settlement runs *after* the quote refresh, and its writes are the
-        // ones that survive: the quote is what the security is worth right now
-        // (and is all a still-open market can offer), the bar is what the
-        // finished session actually did. Ordering them the other way round
-        // would leave the day holding a 17:00 quote again.
-        const settlement = await this.settleDailyBars();
-        if (result.updated > 0 || settlement.barsSettled > 0) {
-          this.logger.log(
-            "Recalculating investment snapshots after price refresh",
-          );
-          await this.netWorthService.recalculateAllInvestmentSnapshots();
-        }
-      });
+      // One replica per tick calls the provider (task C2). The price upserts are
+      // idempotent, so this is a cost control: N replicas is N times the quota
+      // and N chances to trip the breaker on a provider that is merely slow.
+      // The settlement and the snapshot recalc ride inside the lease because
+      // they are what this run's fetch is for.
+      await withSystemContext(() =>
+        this.fetchSync.withLease(
+          FetchSyncJob.SecurityPrices,
+          this.FETCH_LEASE_MS,
+          async () => {
+            const result = await this.refreshAllPrices(scope);
+            // Settlement runs *after* the quote refresh, and its writes are the
+            // ones that survive: the quote is what the security is worth right now
+            // (and is all a still-open market can offer), the bar is what the
+            // finished session actually did. Ordering them the other way round
+            // would leave the day holding a 17:00 quote again.
+            const settlement = await this.settleDailyBars(scope);
+            if (result.updated > 0 || settlement.barsSettled > 0) {
+              this.logger.log(
+                "Recalculating investment snapshots after price refresh",
+              );
+              await this.netWorthService.recalculateAllInvestmentSnapshots();
+            }
+          },
+        ),
+      );
     } catch (error) {
       this.logger.error(`Scheduled price refresh failed: ${error.message}`);
     }
@@ -1536,6 +1948,8 @@ export class SecurityPriceService {
     range: string,
     opts: { force?: boolean } = {},
   ): Promise<number> {
+    // A forced backfill ignores skipPriceUpdates, never the bond link.
+    if (!isPricedByQuoteProvider(security)) return 0;
     if (security.skipPriceUpdates && !opts.force) return 0;
 
     const [ctx] =
@@ -1545,11 +1959,16 @@ export class SecurityPriceService {
       preferredExchanges: [],
     };
 
-    const bundle = await this.fetchHistoricalWithFallback(
+    const { bundle, refusal } = await this.fetchHistoricalWithFallback(
       security,
       range,
       userCtx,
     );
+    // A refused series is a reported fault, not an absence: this method throws
+    // so the user who asked for the history is told why they got none, while
+    // `backfillSecurityRange` keeps turning it into a zero for the background
+    // callers that only want a count.
+    if (refusal) throw new Error(refusal);
     if (!bundle || bundle.prices.length === 0) {
       this.logger.warn(`No historical prices available for ${security.symbol}`);
       return 0;
@@ -1560,7 +1979,7 @@ export class SecurityPriceService {
     }
 
     await this.bulkUpsertPrices(
-      security.id,
+      security,
       bundle.prices,
       sourceFor(bundle.provider),
     );
@@ -1599,9 +2018,9 @@ export class SecurityPriceService {
    * the total null -- rather than failing the request. Nothing here invents a
    * price.
    *
-   * `skipPriceUpdates` is honoured (via `isRefreshEligible`): an import that
-   * auto-generated a symbol marked it precisely because fetching against it is
-   * pointless.
+   * `skipPriceUpdates` is honoured (via `isRefreshEligible`): the user turned
+   * updates off for the security, or an import that auto-generated a symbol
+   * marked it precisely because fetching against it is pointless.
    *
    * Returns the number of daily bars persisted.
    */
@@ -1715,25 +2134,28 @@ export class SecurityPriceService {
     const fromDate = new Date(`${start}T00:00:00.000Z`);
     const toDate = new Date(`${end}T23:59:59.999Z`);
     // Whether any provider gave an answer, as opposed to failing or being
-    // refused by its breaker.
+    // refused by its breaker -- and whether EVERY routed provider did. A month
+    // is "empty" only when all of them were heard from: one answering [] for a
+    // window it lacks says nothing while the next one failed (A26-L20).
     let answered = false;
+    let allAnswered = true;
 
     for (const provider of this.providers.resolveForSecurity(
       security,
       userCtx.defaultQuoteProvider,
     )) {
       const opts = this.optsFor(provider, security, userCtx);
-      let prices: HistoricalPrice[] | null = null;
+      let series: HistoricalSeries | null;
       try {
-        prices = provider.fetchHistoricalWindow
-          ? await provider.fetchHistoricalWindow(
+        series = provider.fetchHistoricalWindowSeries
+          ? await provider.fetchHistoricalWindowSeries(
               security.symbol,
               security.exchange,
               fromDate,
               toDate,
               opts,
             )
-          : await provider.fetchHistorical(
+          : await provider.fetchHistoricalSeries(
               security.symbol,
               security.exchange,
               rangeReaching(date),
@@ -1743,27 +2165,41 @@ export class SecurityPriceService {
         this.logger.warn(
           `${provider.name} historical fill failed for ${security.symbol}: ${err instanceof Error ? err.message : String(err)}`,
         );
+        allAnswered = false;
         continue;
       }
       // `[]` is an answer -- the provider has no bars in this window -- while
       // `null` is no answer at all. The difference is what decides whether the
       // caller may remember the window as empty, so it is tracked rather than
       // collapsed into "nothing came back".
-      if (prices !== null) answered = true;
-      if (!prices || prices.length === 0) continue;
+      if (series !== null) answered = true;
+      else allAnswered = false;
+      if (!series || series.prices.length === 0) continue;
+
+      // This path reaches `bulkUpsertPrices` without going through either
+      // fallback helper, so it is an acceptance point of its own and makes the
+      // same comparison. A refused provider gives this security's next one its
+      // turn; the fill stays best-effort and stores nothing it cannot vouch for.
+      if (
+        this.refuseForeignCurrency(security, series.currencyCode, provider.name)
+      ) {
+        // Bars about another listing are not "no bars": not an empty month.
+        allAnswered = false;
+        continue;
+      }
 
       await this.bulkUpsertPrices(
-        security.id,
-        prices,
+        security,
+        series.prices,
         sourceFor(provider.name),
       );
       this.logger.log(
-        `Filled ${prices.length} prices for ${security.symbol} around ${date} via ${provider.name}`,
+        `Filled ${series.prices.length} prices for ${security.symbol} around ${date} via ${provider.name}`,
       );
-      return { stored: prices.length, answered: true };
+      return { stored: series.prices.length, answered: true };
     }
 
-    return { stored: 0, answered };
+    return { stored: 0, answered: answered && allAnswered };
   }
 
   /**
@@ -1793,6 +2229,18 @@ export class SecurityPriceService {
           { securityId },
         ),
       );
+    }
+
+    // The user asked for it explicitly, so say why nothing will be fetched.
+    if (!isPricedByQuoteProvider(security)) {
+      return {
+        symbol: security.symbol,
+        success: false,
+        error: tr(
+          "errors.securities.bondPricedByEngine",
+          "This security is linked to a bond instrument and is priced by the bond engine, not by a quote provider. Use Recompute prices instead.",
+        ),
+      };
     }
 
     const ctx = (await this.loadUserContexts([userId])).get(userId) ?? {
@@ -1842,16 +2290,25 @@ export class SecurityPriceService {
 
     const needsOlderData = !!earliestTx && earliestTx < oneYearAgoStr;
 
-    const daily = await this.fetchHistoricalWithFallback(security, "1y", ctx);
-    const maxBundle = needsOlderData
+    const dailyAttempt = await this.fetchHistoricalWithFallback(
+      security,
+      "1y",
+      ctx,
+    );
+    const maxAttempt = needsOlderData
       ? await this.fetchHistoricalWithFallback(security, "max", ctx)
       : null;
+    const daily = dailyAttempt.bundle;
+    const maxBundle = maxAttempt?.bundle ?? null;
 
     if (!daily && !maxBundle) {
       return {
         symbol: security.symbol,
         success: false,
-        error: "No historical data available",
+        error:
+          dailyAttempt.refusal ??
+          maxAttempt?.refusal ??
+          "No historical data available",
       };
     }
 
@@ -1875,7 +2332,13 @@ export class SecurityPriceService {
 
     // Clip to the holding period: from the first transaction date (or 1y ago
     // when the security has never been transacted) through the latest price.
-    const cutoffStr = earliestTx ?? oneYearAgoStr;
+    // Never later than 1y ago, though -- a security bought last month is a
+    // holding period the user can already see on the register; what a force
+    // update exists to fill in is the price *history* behind it, and clipping
+    // to the purchase date threw away the 1y of daily bars already fetched
+    // above for exactly this security.
+    const cutoffStr =
+      earliestTx && earliestTx < oneYearAgoStr ? earliestTx : oneYearAgoStr;
     // UTC midnight, matching the UTC-midnight dates `barDate` produces. The
     // old `setHours(0, 0, 0, 0)` made this local midnight, so the cutoff moved
     // by a day depending on where the container runs.
@@ -1893,7 +2356,7 @@ export class SecurityPriceService {
 
     const source = sourceFor(winner.provider);
     try {
-      await this.bulkUpsertPrices(security.id, prices, source);
+      await this.bulkUpsertPrices(security, prices, source);
     } catch (error) {
       this.logger.error(
         `Failed to force-backfill prices for ${security.symbol}: ${error instanceof Error ? error.message : String(error)}`,
@@ -1921,8 +2384,10 @@ export class SecurityPriceService {
    * Upsert a transaction-derived price for a security on a given date.
    * Computes average price from all price-relevant transactions on that date.
    * Never overwrites provider-sourced (yahoo_finance, msn_finance) or manual
-   * prices — the ON CONFLICT WHERE clause restricts updates to rows whose
-   * existing source is itself a transaction action.
+   * prices or bond-engine prices — the ON CONFLICT WHERE clause restricts
+   * updates to rows whose existing source is itself a transaction action (the
+   * engine's value of a linked security replaces a trade price of its day, never
+   * the reverse).
    */
   async upsertTransactionPrice(
     securityId: string,
@@ -2027,7 +2492,6 @@ export class SecurityPriceService {
     );
 
     let created = 0;
-    let skipped = 0;
     const batchSize = 500;
 
     for (let i = 0; i < pairs.length; i += batchSize) {
@@ -2067,11 +2531,15 @@ export class SecurityPriceService {
       created += affected;
     }
 
-    skipped = pairs.length - created;
+    const skipped = pairs.length - created;
 
     this.logger.log(
       `Transaction price backfill completed: ${pairs.length} processed, ${created} created/updated, ${skipped} skipped`,
     );
+
+    // A maintenance pass over every user's transaction-derived prices; there is
+    // no single owner to invalidate, so the whole memo goes.
+    if (created > 0) invalidateAllPortfolioSummaries();
 
     return { processed: pairs.length, created, skipped };
   }
@@ -2096,53 +2564,21 @@ export class SecurityPriceService {
    * investment-transaction edit leaves via its balance write. The security is
    * per-user, so every holder is an account of the same `userId`.
    *
-   * One residual window remains, and it is why this says "recovered from the
-   * data" rather than "crash-durable": both `now()` here and the `accounts`
-   * `updated_at` trigger stamp **transaction-start** time, not the instant of
-   * the write. A concurrent recompute that begins after this transaction starts
-   * but commits its (still-stale) snapshots before it can leave `computed_at`
-   * newer than this marker, and then the sweep's `updated_at > computed_at`
-   * predicate misses the account -- so if the post-commit debounce is also lost
-   * to a crash, that snapshot waits for the next touch of the account instead of
-   * the sweep. The account row lock above serializes this write against such a
-   * recompute of the same account, which is what narrows the window to the
-   * near-impossible; the snapshot self-heals on the account's next change
-   * regardless. Making the marker unconditionally crash-durable would mean
-   * stamping `clock_timestamp()`, which the shared `updated_at` trigger clobbers
-   * back to transaction-start for every table -- out of proportion to a window
-   * this small.
+   * The marker's one residual window, and the account row lock that narrows it
+   * (`lockAccountsForBalanceWrite`, taken inside the helper), are explained on
+   * `markHoldingAccountsDirty` in `holding-accounts-dirty.util.ts`.
    *
    * Returns the affected account ids so the caller can, after commit, schedule
    * the debounced recompute as a latency optimization on top of the marker.
+   * The statement itself is `markHoldingAccountsDirty`
+   * (`holding-accounts-dirty.util.ts`), shared with the bond-engine price writer.
    */
   private async markHoldingAccountsDirty(
     manager: EntityManager,
     securityId: string,
     userId: string,
   ): Promise<string[]> {
-    const rows: Array<{ account_id: string }> = await manager.query(
-      `SELECT DISTINCT account_id FROM investment_transactions
-        WHERE security_id = $1 AND status != 'VOID'`,
-      [securityId],
-    );
-    const accountIds = (rows ?? []).map((r) => r.account_id);
-    if (accountIds.length > 0) {
-      // Take the account row locks in ascending-id order *before* the UPDATE,
-      // exactly as every other account writer does (common/db/locks.ts). The
-      // UPDATE's own `WHERE id = ANY(...)` would otherwise lock rows in scan
-      // order, and the debounced recompute this mutation schedules runs in the
-      // background -- so saving a second manual price while a prior save's
-      // recompute is in flight could lock the same holding accounts in opposite
-      // orders, a 40P01 deadlock surfacing as a generic 500 (review MZ-1242,
-      // same class as audit RV4-005).
-      await lockAccountsForBalanceWrite(manager, accountIds, userId);
-      await manager.query(
-        `UPDATE accounts SET updated_at = now()
-          WHERE id = ANY($1::UUID[]) AND user_id = $2`,
-        [accountIds, userId],
-      );
-    }
-    return accountIds;
+    return markHoldingAccountsDirty(manager, securityId, userId);
   }
 
   /**
@@ -2155,6 +2591,10 @@ export class SecurityPriceService {
    * which the debounced timer captures.
    */
   private scheduleSnapshotRecalc(accountIds: string[], userId: string): void {
+    // Also when no account holds the security: the manual price still changed
+    // what a future valuation will say, and the per-account loop below would
+    // invalidate nothing.
+    invalidatePortfolioSummary(userId);
     for (const accountId of accountIds) {
       this.netWorthService.triggerDebouncedRecalc(accountId, userId);
     }
@@ -2172,6 +2612,13 @@ export class SecurityPriceService {
     const { saved, accountIds } = await withScopedDb(
       this.dataSource,
       async (m) => {
+        // Refused before the write, in its transaction (INV-BOND-005).
+        await assertManualPriceIsCashPrice(m, userId, securityId, [
+          dto.closePrice,
+          dto.openPrice,
+          dto.highPrice,
+          dto.lowPrice,
+        ]);
         const rows: unknown = await m.query(
           `INSERT INTO security_prices
            (security_id, price_date, open_price, high_price, low_price,
@@ -2183,6 +2630,10 @@ export class SecurityPriceService {
            high_price  = COALESCE(EXCLUDED.high_price,  security_prices.high_price),
            low_price   = COALESCE(EXCLUDED.low_price,   security_prices.low_price),
            volume      = COALESCE(EXCLUDED.volume,      security_prices.volume),
+           -- A manual close written over the engine's row must not carry the
+           -- engine's adjusted close along: its own input has none.
+           adjusted_close = CASE WHEN security_prices.source = '${BOND_ENGINE_PRICE_SOURCE}'
+                                 THEN NULL ELSE security_prices.adjusted_close END,
            source      = 'manual'
          RETURNING id`,
           [
@@ -2243,11 +2694,21 @@ export class SecurityPriceService {
     if (dto.lowPrice !== undefined) price.lowPrice = dto.lowPrice;
     if (dto.volume !== undefined) price.volume = dto.volume;
     if (dto.priceDate !== undefined) price.priceDate = dto.priceDate;
+    // A manual correction of the engine's row keeps no adjusted close of its own.
+    if (price.source === BOND_ENGINE_PRICE_SOURCE) price.adjustedClose = null;
     price.source = "manual";
 
     const { saved, accountIds } = await withScopedDb(
       this.dataSource,
       async (m) => {
+        // The values this request sets, refused before the write (INV-BOND-005);
+        // a stored value the request leaves alone does not block an unrelated edit.
+        await assertManualPriceIsCashPrice(m, userId, securityId, [
+          dto.closePrice,
+          dto.openPrice,
+          dto.highPrice,
+          dto.lowPrice,
+        ]);
         const saved = await m.getRepository(SecurityPrice).save(price);
         // Stale marker in the same transaction as the price write (see markHoldingAccountsDirty).
         const accountIds = await this.markHoldingAccountsDirty(

@@ -7,6 +7,7 @@
     "filterAll": "सभी ({count})",
     "filterExpenses": "व्यय ({count})",
     "filterIncome": "आय ({count})",
+    "typeFilterLabel": "प्रकार",
     "modalTitleNew": "नई श्रेणी",
     "modalTitleEdit": "श्रेणी संपादित करें",
     "countSingle": "1 श्रेणी",
@@ -54,6 +55,12 @@
     "typeExpense": "व्यय",
     "typeIncome": "आय",
     "typeInherited": "मूल से विरासत में मिला प्रकार",
+    "autoSignLabel": "स्वचालित चिह्न",
+    "autoSignOn": "चालू",
+    "autoSignOff": "बंद",
+    "autoSignInherit": "मूल श्रेणी से लें",
+    "autoSignInheritedFrom": "मूल श्रेणी ({name}) से लिया गया: अभी {state}",
+    "autoSignHelp": "चालू होने पर, आपके द्वारा टाइप की गई राशि व्यय श्रेणी के लिए ऋणात्मक और आय श्रेणी के लिए धनात्मक कर दी जाती है। चिह्न को ठीक वैसा ही रखने के लिए जैसा आप दर्ज करते हैं, इसे बंद करें।",
     "colourLabel": "रंग",
     "colourInherit": "मूल से विरासत में लें",
     "colourNone": "कोई रंग नहीं",
@@ -65,8 +72,8 @@
     "submitUpdate": "श्रेणी अपडेट करें"
   },
   "list": {
-    "emptyHeading": "कोई श्रेणी नहीं",
-    "emptyDescription": "नई श्रेणी बनाकर शुरू करें।",
+    "emptyHeading": "कोई श्रेणी नहीं मिली",
+    "emptyDescription": "कोई श्रेणी आपकी वर्तमान खोज या फ़िल्टर से मेल नहीं खाती।",
     "colName": "नाम",
     "colType": "प्रकार",
     "colCount": "संख्या",
@@ -79,7 +86,7 @@
     "viewTransactionsTitle": "इस श्रेणी के लेनदेन देखें"
   },
   "deleteDialog": {
-    "title": "\"{name}\" हटाएं?",
+    "title": "\"{name}\" हटाएं",
     "checkingUsage": "उपयोग जांचा जा रहा है...",
     "usedBy": "यह श्रेणी {count, plural, one {# आइटम} other {# आइटमों}} द्वारा उपयोग की जाती है (लेनदेन और/या अनुसूचित बिल और जमा)।",
     "reassignLabel": "को पुनः असाइन करें:",

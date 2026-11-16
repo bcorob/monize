@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import toast from 'react-hot-toast';
@@ -10,17 +10,24 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { SummaryCard, SummaryIcons } from '@/components/ui/SummaryCard';
 import { Modal } from '@/components/ui/Modal';
+import { securityFormModalProps } from '@/components/securities/security-form-modal';
 import { UnsavedChangesDialog } from '@/components/ui/UnsavedChangesDialog';
 import { Pagination } from '@/components/ui/Pagination';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import dynamic from 'next/dynamic';
 import { investmentsApi } from '@/lib/investments';
 import { Security, CreateSecurityData, Holding } from '@/types/investment';
+import { useMobileAddAction } from '@/store/mobileAddActionStore';
 const SecurityForm = dynamic(() => import('@/components/securities/SecurityForm').then(m => m.SecurityForm), { ssr: false });
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { CARD_CLASS } from '@/components/ui/Card';
 import { SecurityList, type SecurityHoldings, type SecurityTransactions, type SecuritySortField, type SortDirection } from '@/components/securities/SecurityList';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
+import { usePriceRefresh } from '@/hooks/usePriceRefresh';
+import { BondRefreshProgress } from '@/components/securities/BondRefreshProgress';
+import { SEGMENTED_TOOLBAR_GROUP_CLASS, toolbarSegmentClass } from '@/components/ui/segmented-control';
+import { RefreshPricesButton } from '@/components/investments/RefreshPricesButton';
+import { securityPositionValue, compareSecurityValues } from '@/lib/security-value';
 import { createLogger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errors';
 import { useFormModal } from '@/hooks/useFormModal';
@@ -62,42 +69,91 @@ function SecuritiesContent() {
   const [currentPage, setCurrentPage] = useState(1);
   const [sortField, setSortField] = useLocalStorage<SecuritySortField>('monize-securities-sort-field', 'symbol');
   const [sortDirection, setSortDirection] = useLocalStorage<SortDirection>('monize-securities-sort-dir', 'asc');
+  const [lastPriceUpdate, setLastPriceUpdate] = useState<string | null>(null);
+  // The program whose post-save refresh is running; null hides the progress bar.
+  const [bondRefreshProgramId, setBondRefreshProgramId] = useState<string | null>(null);
 
-  const loadData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const [data, holdingsData, usedIds] = await Promise.all([
-        investmentsApi.getSecurities(true),
-        investmentsApi.getHoldings(),
-        investmentsApi.getUsedSecurityIds(),
-      ]);
-      setAllSecurities(data);
-      setTransactionSecurityIds(new Set(usedIds));
+  // The mount load: the state already says loading.
+  const fetchData = useCallback(() => {
+    // Writes live in `run` so they land after the request, not during the effect.
+    const run = async () => {
+      try {
+        const [data, holdingsData, usedIds] = await Promise.all([
+          investmentsApi.getSecurities(true),
+          investmentsApi.getHoldings(),
+          investmentsApi.getUsedSecurityIds(),
+        ]);
+        setAllSecurities(data);
+        setTransactionSecurityIds(new Set(usedIds));
 
-      // Aggregate holdings by securityId, filtering out negligible quantities
-      const holdingsMap: SecurityHoldings = {};
-      holdingsData.forEach((h: Holding) => {
-        const currentQty = holdingsMap[h.securityId] || 0;
-        // Convert quantity to number in case it's returned as a string from the API
-        const quantity = typeof h.quantity === 'string' ? parseFloat(h.quantity) : h.quantity;
-        const newQty = currentQty + quantity;
-        // Only include if quantity is meaningful (not just rounding errors)
-        if (Math.abs(newQty) > 0.00000001) {
-          holdingsMap[h.securityId] = newQty;
-        } else {
-          // Remove if it rounds to zero
-          delete holdingsMap[h.securityId];
-        }
-      });
+        // Aggregate holdings by securityId, filtering out negligible quantities
+        const holdingsMap: SecurityHoldings = {};
+        holdingsData.forEach((h: Holding) => {
+          const currentQty = holdingsMap[h.securityId] || 0;
+          // Convert quantity to number in case it's returned as a string from the API
+          const quantity = typeof h.quantity === 'string' ? parseFloat(h.quantity) : h.quantity;
+          const newQty = currentQty + quantity;
+          // Only include if quantity is meaningful (not just rounding errors)
+          if (Math.abs(newQty) > 0.00000001) {
+            holdingsMap[h.securityId] = newQty;
+          } else {
+            // Remove if it rounds to zero
+            delete holdingsMap[h.securityId];
+          }
+        });
 
-      setHoldings(holdingsMap);
-    } catch (error) {
-      toast.error(getErrorMessage(error, t('page.toasts.loadFailed')));
-      logger.error(error);
-    } finally {
-      setIsLoading(false);
-    }
+        setHoldings(holdingsMap);
+      } catch (error) {
+        toast.error(getErrorMessage(error, t('page.toasts.loadFailed')));
+        logger.error(error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    return run();
   }, [t]);
+
+  const loadData = useCallback(() => {
+    setIsLoading(true);
+    return fetchData();
+  }, [fetchData]);
+
+  const loadPriceStatus = useCallback(() => {
+    // Writes live in `run` so they land after the request, not during the effect.
+    const run = async () => {
+      try {
+        const status = await investmentsApi.getPriceStatus();
+        setLastPriceUpdate(status.lastUpdated);
+      } catch (error) {
+        // The age of the last refresh is decoration beside the list; failing to
+        // read it must not take the page's own error handling with it.
+        logger.error(error);
+      }
+    };
+    return run();
+  }, []);
+
+  // The same control the Investments page carries, doing the same work through
+  // the same hook: refresh every eligible security's quote, then reload. The
+  // Value column beside each row is `shares * lastPrice`, so a refresh that did
+  // not re-read the securities would leave the new prices off the screen that
+  // asked for them.
+  const { isRefreshing: isRefreshingPrices, triggerManualRefresh } = usePriceRefresh({
+    onRefreshComplete: (lastUpdated) => {
+      loadData();
+      // Prefer the refresh result's own timestamp: a same-day refresh UPDATEs
+      // the price row in place, so the DB-backed `createdAt` would not advance.
+      if (lastUpdated) {
+        setLastPriceUpdate(lastUpdated);
+      } else {
+        loadPriceStatus();
+      }
+    },
+  });
+
+  const handleRefreshPrices = useCallback(() => {
+    void triggerManualRefresh();
+  }, [triggerManualRefresh]);
 
   // Legacy `?price=<id>` links land on the detail page's Price history tab.
   useEffect(() => {
@@ -115,8 +171,12 @@ function SecuritiesContent() {
   }, [allSecurities, statusFilter]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    loadPriceStatus();
+  }, [loadPriceStatus]);
 
   const handleCreateNew = () => {
     openCreate();
@@ -137,15 +197,40 @@ function SecuritiesContent() {
 
   const handleFormSubmit = async (data: CreateSecurityData) => {
     try {
+      // A linked bond with auto-fetch on gets its data through the list's own
+      // Refresh: the server fetches the program's current offer, then recomputes.
+      let refreshId: string | null = null;
+      let refreshProgramId: string | null = null;
       if (editingSecurity) {
         await investmentsApi.updateSecurity(editingSecurity.id, data);
         toast.success(t('page.toasts.updated'));
+        // The form omits link fields that did not change, so an absent field
+        // keeps the stored value; only a present, different program is a change.
+        const programId = data.bondProgramId !== undefined ? data.bondProgramId : editingSecurity.bondProgramId;
+        const autoFetch = data.bondAutoFetch !== undefined ? data.bondAutoFetch : editingSecurity.bondAutoFetch;
+        const wasOn = !!editingSecurity.bondProgramId && editingSecurity.bondAutoFetch === true;
+        const isOn = !!programId && autoFetch === true;
+        const programChanged = data.bondProgramId !== undefined && data.bondProgramId !== editingSecurity.bondProgramId;
+        if (isOn && (!wasOn || programChanged)) {
+          refreshId = editingSecurity.id;
+          refreshProgramId = programId ?? null;
+        }
       } else {
-        await investmentsApi.createSecurity(data);
+        const created = await investmentsApi.createSecurity(data);
         toast.success(t('page.toasts.created'));
+        if (data.bondProgramId && data.bondAutoFetch === true) {
+          refreshId = created.id;
+          refreshProgramId = data.bondProgramId;
+        }
       }
       close();
       loadData();
+      if (refreshId && refreshProgramId) {
+        setBondRefreshProgramId(refreshProgramId);
+        void triggerManualRefresh([refreshId]).finally(() => setBondRefreshProgramId(null));
+      } else if (refreshId) {
+        void triggerManualRefresh([refreshId]);
+      }
     } catch (error) {
       toast.error(getErrorMessage(error, editingSecurity ? t('page.toasts.updateFailed') : t('page.toasts.createFailed')));
       throw error;
@@ -219,6 +304,15 @@ function SecuritiesContent() {
   // Sort
   const sortedSecurities = useMemo(() => {
     return [...filteredSecurities].sort((a, b) => {
+      // Value is the one field whose unknowns must not sort as small numbers,
+      // so it answers before the direction is applied rather than after.
+      if (sortField === 'value') {
+        return compareSecurityValues(
+          securityPositionValue(holdings[a.id] || 0, a.lastPrice),
+          securityPositionValue(holdings[b.id] || 0, b.lastPrice),
+          sortDirection,
+        );
+      }
       let comparison = 0;
       if (sortField === 'symbol') {
         comparison = a.symbol.localeCompare(b.symbol, undefined, { sensitivity: 'base' });
@@ -249,9 +343,15 @@ function SecuritiesContent() {
   }, [sortedSecurities, currentPage]);
 
   // Reset to page 1 when search or filter changes
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, statusFilter]);
+  const handleSearchChange = (query: string) => {
+    if (query !== searchQuery) setCurrentPage(1);
+    setSearchQuery(query);
+  };
+
+  const handleStatusFilterChange = (status: 'all' | 'active' | 'inactive') => {
+    if (status !== statusFilter) setCurrentPage(1);
+    setStatusFilter(status);
+  };
 
   const handleSort = useCallback((field: SecuritySortField) => {
     if (sortField === field) {
@@ -271,19 +371,17 @@ function SecuritiesContent() {
 
   // Deep link to a specific security (e.g. the AI chat "View securities" link):
   // jump to the client-side page that contains it once the list has loaded, so
-  // the row can flash and scroll into view. Runs once per arrival.
+  // the row can flash and scroll into view. Runs once per arrival, during render
+  // rather than in an effect.
   const highlightId = useHighlightParam();
-  const highlightJumpedRef = useRef(false);
-  useEffect(() => {
-    if (!highlightId || highlightJumpedRef.current || sortedSecurities.length === 0) {
-      return;
-    }
+  const [highlightJumped, setHighlightJumped] = useState(false);
+  if (highlightId && !highlightJumped && sortedSecurities.length > 0) {
     const index = sortedSecurities.findIndex((s) => s.id === highlightId);
     if (index >= 0) {
-      highlightJumpedRef.current = true;
+      setHighlightJumped(true);
       setCurrentPage(Math.floor(index / PAGE_SIZE) + 1);
     }
-  }, [highlightId, sortedSecurities]);
+  }
 
   const activeCount = allSecurities.filter((s) => s.isActive).length;
   const inactiveCount = allSecurities.filter((s) => !s.isActive).length;
@@ -292,17 +390,32 @@ function SecuritiesContent() {
   const distinctExchanges = useMemo(() => new Set(allSecurities.map(s => s.exchange).filter(Boolean)).size, [allSecurities]);
   const distinctCurrencies = useMemo(() => new Set(allSecurities.map(s => s.currencyCode).filter(Boolean)).size, [allSecurities]);
 
+  useMobileAddAction(t('page.newSecurity'), handleCreateNew);
+
   return (
     <PageLayout>
       <main className="px-4 sm:px-6 lg:px-12 pt-6 pb-8">
         <PageHeader
           title={t('page.title')}
           subtitle={t('page.subtitle')}
-          helpUrl="https://github.com/kenlasko/monize/wiki/Investments"
-          actions={<Button onClick={handleCreateNew}>{t('page.newSecurity')}</Button>}
+          help='securities'
+          actions={
+            <>
+              <RefreshPricesButton
+                onClick={handleRefreshPrices}
+                isRefreshing={isRefreshingPrices}
+                lastPriceUpdate={lastPriceUpdate}
+              />
+              <Button onClick={handleCreateNew}>{t('page.newSecurity')}</Button>
+            </>
+          }
+        />
+        <BondRefreshProgress
+          programId={bondRefreshProgramId}
+          active={bondRefreshProgramId !== null}
         />
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 mb-6">
           <SummaryCard label={t('summary.totalSecurities')} value={allSecurities.length} icon={SummaryIcons.barChart} />
           <SummaryCard label={t('summary.types')} value={distinctTypes} icon={SummaryIcons.tag} />
           <SummaryCard label={t('summary.exchanges')} value={distinctExchanges} icon={SummaryIcons.list} />
@@ -310,30 +423,23 @@ function SecuritiesContent() {
         </div>
 
         {/* Search and Status Filter */}
-        <div className="mb-6 flex flex-col sm:flex-row gap-4">
+        <div className="mb-6 flex flex-wrap items-center gap-4">
           <input
             type="text"
             placeholder={t('page.searchPlaceholder')}
+            aria-label={t('page.searchPlaceholder')}
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="block w-full sm:max-w-md rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400 dark:focus:border-blue-400 dark:focus:ring-blue-400"
+            onChange={(e) => handleSearchChange(e.target.value)}
+            className="block w-full sm:w-auto sm:flex-1 sm:max-w-md rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400 dark:focus:border-blue-400 dark:focus:ring-blue-400"
           />
-          <div className="flex rounded-md shadow-sm">
+          <div role="group" aria-label={t('page.statusFilterLabel')} className={SEGMENTED_TOOLBAR_GROUP_CLASS}>
             {(['all', 'active', 'inactive'] as const).map((status) => (
               <button
                 key={status}
-                onClick={() => setStatusFilter(status)}
-                className={`px-4 py-2 text-sm font-medium border ${
-                  statusFilter === status
-                    ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-500 dark:border-blue-500'
-                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-                } ${
-                  status === 'all' ? 'rounded-l-md' : ''
-                } ${
-                  status === 'inactive' ? 'rounded-r-md' : ''
-                } ${
-                  status !== 'all' ? '-ml-px' : ''
-                }`}
+                type="button"
+                onClick={() => handleStatusFilterChange(status)}
+                aria-pressed={statusFilter === status}
+                className={toolbarSegmentClass(statusFilter === status)}
               >
                 {status === 'active' ? t('page.statusActive', { count: activeCount }) :
                  status === 'inactive' ? t('page.statusInactive', { count: inactiveCount }) :
@@ -344,10 +450,13 @@ function SecuritiesContent() {
         </div>
 
         {/* Form Modal */}
-        <Modal isOpen={showForm} onClose={close} {...modalProps} maxWidth="3xl" className="p-6">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-            {isEditing ? t('page.modalTitleEdit') : t('page.modalTitleNew')}
-          </h2>
+        <Modal
+          isOpen={showForm}
+          onClose={close}
+          {...modalProps}
+          {...securityFormModalProps}
+          title={isEditing ? t('page.modalTitleEdit') : t('page.modalTitleNew')}
+        >
           <SecurityForm
             security={editingSecurity}
             onSubmit={handleFormSubmit}

@@ -81,6 +81,12 @@ Notes for past releases live alongside this file, one Markdown file per version
 matching [GitHub Release](https://github.com/kenlasko/monize/releases), newest
 first:
 
+- [v1.21.0](1.21.0.md)
+- [v1.20.0](1.20.0.md)
+- [v1.19.0](1.19.0.md)
+- [v1.18.0](1.18.0.md)
+- [v1.17.0](1.17.0.md)
+- [v1.16.0](1.16.0.md)
 - [v1.15.1](1.15.1.md)
 - [v1.15.0](1.15.0.md)
 - [v1.14.0](1.14.0.md)

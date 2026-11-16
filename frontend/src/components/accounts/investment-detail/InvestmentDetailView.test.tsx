@@ -3,9 +3,12 @@ import { render, screen, act, waitFor, fireEvent } from '@/test/render';
 import { InvestmentDetailView } from './InvestmentDetailView';
 import type { Account } from '@/types/account';
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({ formatCurrency: (a: number) => `$${a.toFixed(2)}` }),
-}));
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({ ...numberFormatMockDefaults(), formatCurrency: (a: number) => `$${a.toFixed(2)}` }),
+  };
+});
 
 // Stub the heavy portfolio components -- they have their own tests.
 vi.mock('@/components/investments/PortfolioSummaryCard', () => ({
@@ -56,6 +59,14 @@ vi.mock('@/lib/accounts', () => ({
 const mockGetPortfolioSummary = vi.fn();
 const mockGetAllTransactionPages = vi.fn();
 const mockGetRealizedGains = vi.fn();
+// One market rate, so a foreign row's conversion is observable: 1 USD = 1.4 CAD.
+vi.mock('@/hooks/useExchangeRates', () => ({
+  useExchangeRates: () => ({
+    convert: (amount: number, from: string, to: string) =>
+      from === to ? amount : from === 'USD' && to === 'CAD' ? amount * 1.4 : null,
+  }),
+}));
+
 vi.mock('@/lib/investments', () => ({
   investmentsApi: {
     getPortfolioSummary: (...a: unknown[]) => mockGetPortfolioSummary(...a),
@@ -104,9 +115,9 @@ beforeEach(() => {
   mockGetAllTransactionPages.mockImplementation((params: { action?: string }) =>
     Promise.resolve(
       params?.action === 'DIVIDEND'
-        ? [{ id: 'd1', action: 'DIVIDEND', totalAmount: 50 }]
+        ? [{ id: 'd1', action: 'DIVIDEND', totalAmount: 50, amountCurrencyCode: 'CAD' }]
         : params?.action === 'INTEREST'
-          ? [{ id: 'i1', action: 'INTEREST', totalAmount: 10 }]
+          ? [{ id: 'i1', action: 'INTEREST', totalAmount: 10, amountCurrencyCode: 'CAD' }]
           : [],
     ),
   );
@@ -135,6 +146,62 @@ describe('InvestmentDetailView', () => {
     expect(screen.getByText('$100.00')).toBeInTheDocument();
   });
 
+  // Discussion #1670: a reinvested dividend or interest payment is income as
+  // surely as a cash one. The app writes a reinvest with no total, so the
+  // figure values it at quantity x price.
+  it('counts reinvested dividends and interest in the YTD figure', async () => {
+    mockGetAllTransactionPages.mockImplementation((params: { action?: string }) =>
+      Promise.resolve(
+        params?.action === 'DIVIDEND'
+          ? [{ id: 'd1', action: 'DIVIDEND', totalAmount: 50, amountCurrencyCode: 'CAD' }]
+          : params?.action === 'REINVEST'
+            ? [{ id: 'r1', action: 'REINVEST', quantity: 2, price: 15, commission: 0, totalAmount: 0, amountCurrencyCode: 'CAD' }]
+            : params?.action === 'REINVEST_INTEREST'
+              ? [{ id: 'r2', action: 'REINVEST_INTEREST', quantity: 1, price: 4, commission: 0, totalAmount: 0, amountCurrencyCode: 'CAD' }]
+              : [],
+      ),
+    );
+
+    await renderView();
+    // 50 cash + 30 reinvested dividend + 4 reinvested interest.
+    await waitFor(() => expect(screen.getByText('$84.00')).toBeInTheDocument());
+  });
+
+  // A USD dividend in a CAD account is in USD. Read as CAD it was 50; at the
+  // row's own settlement rate it is 67.50, and a VOID row paid nothing.
+  it("converts each payment from its own currency at the row's rate, and leaves a VOID row out", async () => {
+    mockGetAllTransactionPages.mockImplementation((params: { action?: string }) =>
+      Promise.resolve(
+        params?.action === 'DIVIDEND'
+          ? [
+              { id: 'd1', action: 'DIVIDEND', accountId: 'br-1', totalAmount: 50, amountCurrencyCode: 'USD', exchangeRate: 1.35 },
+              { id: 'd2', action: 'DIVIDEND', accountId: 'br-1', status: 'VOID', totalAmount: 900, amountCurrencyCode: 'CAD' },
+            ]
+          : [],
+      ),
+    );
+
+    await renderView();
+    await waitFor(() => expect(screen.getByText('$67.50')).toBeInTheDocument());
+  });
+
+  it('shows the year as unknown when a payment cannot be converted', async () => {
+    mockGetAllTransactionPages.mockImplementation((params: { action?: string }) =>
+      Promise.resolve(
+        params?.action === 'DIVIDEND'
+          ? [
+              { id: 'd1', action: 'DIVIDEND', accountId: 'br-1', totalAmount: 50, amountCurrencyCode: 'CAD' },
+              { id: 'd2', action: 'DIVIDEND', accountId: 'br-1', totalAmount: 10, amountCurrencyCode: 'JPY', exchangeRate: 0 },
+            ]
+          : [],
+      ),
+    );
+
+    await renderView();
+    await waitFor(() => expect(screen.getByTestId('unknown-amount')).toBeInTheDocument());
+    expect(screen.queryByText('$50.00')).not.toBeInTheDocument();
+  });
+
   // The YTD income figure asked for 500 rows in one page. The endpoint caps a
   // page at 200 and answers 400 rather than clamping, the .catch() below turned
   // that into an empty list, and the figure read $0.00 for every account, every
@@ -144,7 +211,12 @@ describe('InvestmentDetailView', () => {
     await waitFor(() => expect(mockGetAllTransactionPages).toHaveBeenCalled());
 
     const params = mockGetAllTransactionPages.mock.calls.map(([p]) => p);
-    expect(params.map((p) => p.action).sort()).toEqual(['DIVIDEND', 'INTEREST']);
+    expect(params.map((p) => p.action).sort()).toEqual([
+      'DIVIDEND',
+      'INTEREST',
+      'REINVEST',
+      'REINVEST_INTEREST',
+    ]);
     // No caller-supplied page size: the helper's default is the cap itself.
     expect(params.every((p) => p.limit === undefined && p.pageSize === undefined)).toBe(true);
     expect(params.every((p) => p.accountIds === 'br-1,cash-1')).toBe(true);
@@ -161,6 +233,7 @@ describe('InvestmentDetailView', () => {
               id: `d${i}`,
               action: 'DIVIDEND',
               totalAmount: 2,
+              amountCurrencyCode: 'CAD',
             }))
           : [],
       ),

@@ -14,7 +14,7 @@ import {
   Legend,
 } from 'recharts';
 import { builtInReportsApi } from '@/lib/built-in-reports';
-import { MonthlyIncomeExpenseItem } from '@/types/built-in-reports';
+import { IncomeExpensePeriodItem } from '@/types/built-in-reports';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useReportData } from '@/hooks/useReportData';
 import { useChartDateFormat } from '@/hooks/useChartDateFormat';
@@ -22,6 +22,7 @@ import { useWidgetConfig } from '@/hooks/useWidgetConfig';
 import { resolveRangePreset } from '@/lib/date-range';
 import { chartColors } from '@/lib/chart-colors';
 import { ChartTooltip } from '@/components/reports/ChartTooltip';
+import { PartialDataNotice } from '@/components/reports/PartialDataNotice';
 import { DateRangeSelector } from '@/components/ui/DateRangeSelector';
 import { WidgetCard, WidgetConfigRow, WidgetMessage } from './WidgetCard';
 import {
@@ -29,6 +30,8 @@ import {
   TREND_RANGES,
   RangeConfig,
 } from './widget-config';
+import { CHART_GRID_PROPS } from '@/lib/chart-style';
+import { ChartActiveDot } from '@/components/ui/ChartActiveDot';
 
 const WIDGET_ID = 'monthly-spending-trend';
 
@@ -61,9 +64,9 @@ export function MonthlySpendingTrendWidget({ isLoading }: MonthlySpendingTrendWi
 
   const chartData = useMemo(
     () =>
-      (response?.data ?? []).map((item: MonthlyIncomeExpenseItem) => ({
-        name: item.month,
-        fullName: formatChartDate(parseISO(item.month + '-01'), 'MMM yyyy'),
+      (response?.data ?? []).map((item: IncomeExpensePeriodItem) => ({
+        name: item.period,
+        fullName: formatChartDate(parseISO(item.periodStart), 'MMM yyyy'),
         Expenses: Math.round(item.expenses),
         Income: Math.round(item.income),
       })),
@@ -86,6 +89,7 @@ export function MonthlySpendingTrendWidget({ isLoading }: MonthlySpendingTrendWi
   return (
     <WidgetCard
       title={t('monthlySpendingTrend.title')}
+      titleHref="/reports/monthly-spending-trend"
       widgetId={WIDGET_ID}
       headerRight={
         <span className="text-sm text-gray-500 dark:text-gray-400">
@@ -96,14 +100,20 @@ export function MonthlySpendingTrendWidget({ isLoading }: MonthlySpendingTrendWi
       configTitle={t('monthlySpendingTrend.title')}
     >
       {loading ? (
-        <div className="flex-1 min-h-[260px] animate-pulse rounded-md bg-gray-100 dark:bg-gray-700/50" />
+        <div className="flex-1 min-h-[260px] animate-pulse skeleton-shimmer rounded-md bg-gray-100 dark:bg-gray-700/50" />
       ) : chartData.length === 0 ? (
         <WidgetMessage>{t('monthlySpendingTrend.empty')}</WidgetMessage>
       ) : (
+        <>
+        <PartialDataNotice
+          missingCurrencies={response?.missingCurrencies ?? []}
+          excludedCount={response?.excludedCount ?? 0}
+          displayCurrency={response?.currency ?? ''}
+        />
         <div className="flex-1 min-h-[260px]">
           <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <LineChart data={chartData} margin={{ left: 4, right: 8, top: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+              <CartesianGrid {...CHART_GRID_PROPS} />
               <XAxis
                 dataKey="name"
                 tickFormatter={(value) => chartData.find((d) => d.name === value)?.fullName ?? String(value)}
@@ -117,13 +127,14 @@ export function MonthlySpendingTrendWidget({ isLoading }: MonthlySpendingTrendWi
                     label={
                       (payload?.[0]?.payload as { fullName?: string } | undefined)?.fullName
                     }
-                    payload={payload as { name?: string; value?: number; color?: string }[]}
+                    payload={payload as readonly { name?: string; value?: number; color?: string }[]}
                     formatValue={(v) => formatCurrency(Number(v))}
                   />
                 )}
               />
               <Legend />
               <Line
+                activeDot={ChartActiveDot}
                 type="monotone"
                 dataKey="Expenses"
                 name={t('monthlySpendingTrend.expenses')}
@@ -132,6 +143,7 @@ export function MonthlySpendingTrendWidget({ isLoading }: MonthlySpendingTrendWi
                 dot={false}
               />
               <Line
+                activeDot={ChartActiveDot}
                 type="monotone"
                 dataKey="Income"
                 name={t('monthlySpendingTrend.income')}
@@ -142,6 +154,7 @@ export function MonthlySpendingTrendWidget({ isLoading }: MonthlySpendingTrendWi
             </LineChart>
           </ResponsiveContainer>
         </div>
+        </>
       )}
     </WidgetCard>
   );

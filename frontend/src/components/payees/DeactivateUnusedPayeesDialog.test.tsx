@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, fireEvent, act } from '@/test/render';
+import { render, screen, fireEvent, act } from '@/test/render';
+import { TH_CLASS } from '@/components/ui/Table';
 import { DeactivateUnusedPayeesDialog } from './DeactivateUnusedPayeesDialog';
 import { payeesApi } from '@/lib/payees';
 import toast from 'react-hot-toast';
@@ -68,10 +69,13 @@ describe('DeactivateUnusedPayeesDialog', () => {
 
   describe('initial state', () => {
     it('renders the dialog with title and description', async () => {
-      const { getByText } = await renderDialog();
+      await renderDialog();
 
-      expect(getByText('Deactivate Unused Payees')).toBeInTheDocument();
-      expect(getByText('How it works')).toBeInTheDocument();
+      // Titled through Modal: named by its title, with how it works as the
+      // title's tooltip instead of a box under it.
+      const dialog = screen.getByRole('dialog', { name: 'Deactivate Unused Payees' });
+      expect(dialog).toHaveAccessibleDescription(/finds payees that are rarely used/);
+      expect(screen.queryByText('How it works')).not.toBeInTheDocument();
     });
 
     it('shows preview button', async () => {
@@ -99,6 +103,29 @@ describe('DeactivateUnusedPayeesDialog', () => {
       expect(getByText('Old Store')).toBeInTheDocument();
       expect(getByText('Never Used')).toBeInTheDocument();
       expect(getByText('Candidates (2 found)')).toBeInTheDocument();
+    });
+
+    it('heads every column with the shared header cell, the switches included', async () => {
+      vi.mocked(payeesApi.getDeactivationPreview).mockResolvedValue(mockCandidates);
+      const { getByText } = await renderDialog();
+
+      await act(async () => {
+        fireEvent.click(getByText('Preview Unused Payees'));
+      });
+
+      const headers = screen.getAllByRole('columnheader');
+      expect(headers.map((h) => h.textContent)).toEqual([
+        'Deactivate',
+        'Payee',
+        'Transactions',
+        'Last Used',
+      ]);
+      for (const header of headers) {
+        for (const cls of ['text-xs', 'uppercase', 'tracking-wider', 'text-gray-500']) {
+          expect(TH_CLASS).toContain(cls);
+          expect(header.className).toContain(cls);
+        }
+      }
     });
 
     it('shows "Never used" for candidates with null lastUsedDate', async () => {

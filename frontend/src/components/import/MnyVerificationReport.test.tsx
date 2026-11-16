@@ -43,6 +43,8 @@ function result(overrides: Partial<MnyImportResult> = {}): MnyImportResult {
     accountsCreated: 3,
     payeesCreated: 40,
     categoriesCreated: 30,
+    tagsCreated: 0,
+    tagLinksApplied: 0,
     transactionsCreated: 120,
     splitsCreated: 8,
     transfersLinked: 12,
@@ -51,7 +53,14 @@ function result(overrides: Partial<MnyImportResult> = {}): MnyImportResult {
     pricesImported: 0,
     exchangeRatesImported: 0,
     billsCreated: 0,
-    skipped: { accounts: 0, payees: 0, categories: 0, transactions: 0, bills: 0 },
+    skipped: {
+      accounts: 0,
+      payees: 0,
+      categories: 0,
+      tags: 0,
+      transactions: 0,
+      bills: 0,
+    },
     existingDataRemoved: false,
     holdings: [],
     verification: [line()],
@@ -135,6 +144,24 @@ describe('MnyVerificationReport', () => {
     expect(tileValue('Payees')).toContain('40');
   });
 
+  it('shows how many rows were tagged from classifications, even when every tag already existed', () => {
+    const { unmount } = render(<MnyVerificationReport {...defaultProps} />);
+    expect(screen.queryByText('Rows tagged from classifications')).toBeNull();
+    unmount();
+
+    // A re-import into a populated profile creates no tag but links rows to
+    // the existing ones; the count of links is what tells the user it worked.
+    render(
+      <MnyVerificationReport
+        {...defaultProps}
+        result={result({ tagsCreated: 0, tagLinksApplied: 67 })}
+      />,
+    );
+    const tileValue = (label: string) =>
+      screen.getByText(label).parentElement?.textContent;
+    expect(tileValue('Rows tagged from classifications')).toContain('67');
+  });
+
   it('says so when existing data was wiped first', () => {
     render(
       <MnyVerificationReport
@@ -146,6 +173,23 @@ describe('MnyVerificationReport', () => {
     expect(
       screen.getByText(/Your existing data was removed before this import/),
     ).toBeInTheDocument();
+  });
+
+  it('shows how many bond purchases were imported without a series', () => {
+    render(
+      <MnyVerificationReport
+        {...defaultProps}
+        result={result({ bondRowsWithoutSeries: 1 })}
+      />,
+    );
+    expect(
+      screen.getByText(/1 bond purchase was imported without a series/),
+    ).toBeInTheDocument();
+  });
+
+  it('shows no bond series line when the count is absent', () => {
+    render(<MnyVerificationReport {...defaultProps} />);
+    expect(screen.queryByText(/imported without a series/)).not.toBeInTheDocument();
   });
 
   it('lists warnings with their counts', () => {

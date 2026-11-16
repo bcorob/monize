@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, useWatch, Controller } from 'react-hook-form';
 import '@/lib/zodConfig';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -82,7 +82,6 @@ export function InvestmentReportForm({
     register,
     handleSubmit,
     control,
-    watch,
     formState: { errors, isSubmitting },
   } = useForm<FormData>({
     resolver: zodResolver(schema),
@@ -170,7 +169,7 @@ export function InvestmentReportForm({
     })),
   ];
   const accountOptions = accounts.map((a) => ({ value: a.id, label: a.name }));
-  const watchGroupBy = watch('groupBy');
+  const watchGroupBy = useWatch({ control, name: 'groupBy' });
 
   if (isLoadingData) {
     return (

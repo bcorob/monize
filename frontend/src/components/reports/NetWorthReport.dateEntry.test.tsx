@@ -75,7 +75,8 @@ describe('NetWorthReport custom date entry', () => {
     await renderReport();
 
     const startDate = screen.getByLabelText('Start Date') as HTMLInputElement;
-    startDate.focus();
+    // DateInput tracks focus in state, so focusing it is a React update.
+    await act(async () => { startDate.focus(); });
     expect(document.activeElement).toBe(startDate);
 
     const pending = deferred<typeof MONTHS>();
@@ -104,7 +105,8 @@ describe('NetWorthReport custom date entry', () => {
     await renderReport();
 
     const startDate = screen.getByLabelText('Start Date') as HTMLInputElement;
-    startDate.focus();
+    // DateInput tracks focus in state, so focusing it is a React update.
+    await act(async () => { startDate.focus(); });
 
     // "9", "9-", "9-1", "9-14": none of these is a complete date, so none of
     // them may reach the report as one.

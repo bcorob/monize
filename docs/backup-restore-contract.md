@@ -29,10 +29,12 @@ concerns this document describes:
 | `backend/src/backup/export-json-stream.ts` | The document, assembled one row at a time under a chunk budget (and the in-memory collection the support export needs). |
 | `backend/src/backup/export-attachments.ts` | The completeness audit that holds no bytes, and the external objects carried one at a time. |
 | `backend/src/backup/export-writer.ts` | gzip, the encrypted container, backpressure, and unwinding when the client leaves. |
-| `backend/src/backup/backup-envelope.ts`, `backup-stream-crypto.ts` | The encrypted-backup format: both container versions, and the framed one's writer and reader. |
+| `backend/src/backup/backup-envelope.ts`, `backup-stream-crypto.ts`, `backup-key-wrap.ts` | The encrypted-backup format: all three container versions, the framed writer and reader, and the key-wrapped (v3) container the automatic backup writes. |
 | `backend/src/backup/backup-restore.service.ts` | §3 and §6: the processing gate, decryption, decompression, format validation, re-authentication ordering, id remapping, and the one transaction the rest runs inside. |
 | `backend/src/backup/backup-attachment-transfer.service.ts` | §4's restore half: staging carried bytes, the legacy ownership proof, and both object-store cleanup paths. |
-| `backend/src/backup/backup-restore-database.service.ts` | The restore's SQL: teardown, currency preparation, row inserts, deferred-FK repair. |
+| `backend/src/backup/backup-restore-database.service.ts` | The restore's SQL: currency preparation, row inserts, deferred-FK repair; delegates the teardown. |
+| `backend/src/backup/restore-wipe.ts` | The restore's teardown: the FK-safe `DELETE` of everything the user owns, on the restore's own transaction. |
+| `backend/src/backup/backup-bond-series-recovery.service.ts`, `restore-bond-series.ts`, `export-bond-catalog.ts` | §3a: the catalog-identity member the export writes, and the restore's fetch of the series it names before the transaction. |
 | `backend/src/backup/backup-format.ts` | The file format itself -- version, `BackupData`, the two result types -- shared by all four. |
 | `backend/src/backup/export-table-queries.ts` | §2's other half: what is read, in what order, and what is deliberately not read. |
 | `backend/src/backup/restore-plan.ts` | §2: insertion order and deferred foreign keys, as data. |
@@ -56,10 +58,14 @@ every live table is either exported or named in
 - Attachment **bytes** for every provider, base64-encoded in `attachment_blobs`.
   (This said "only for the `database` provider" long after section 4 stopped
   being true of it.) See section 4.
+- The identity of every bond series the user's rows reference, in the
+  `bondCatalog` member (section 3a); never its terms.
 - Every currency definition the user's data references, whoever created it —
   not just the ones they created. Currencies are shared, and a code without its
   definition means the restore invents a name, symbol and decimal places.
-- AI provider API keys, **decrypted**, in `api_key_plaintext`
+- AI provider API keys and the Google Places key for the payee lookup,
+  **decrypted**, in `api_key_plaintext` (both tables spell the column
+  `api_key_enc`, which is what makes one transport serve them)
   (`backend/src/backup/ai-provider-key-transport.ts`). `api_key_enc` is
   ciphertext under `ENCRYPTION_KEY`, which is server configuration and cannot
   travel — shipping the master key beside the ciphertext would make encrypting
@@ -71,7 +77,8 @@ every live table is either exported or named in
   encrypted with the user's password is fine; an unencrypted export (an OIDC
   account that has set no backup password) and an unencrypted automatic backup on
   disk are not, and `BackupExportService` logs when it writes one. The support
-  (de-identified) backup drops `ai_provider_configs` outright
+  (de-identified) backup drops `ai_provider_configs` and
+  `payee_lookup_settings` outright
   (`support-backup-rules.ts`) and must keep doing so.
 
   A key the exporting instance cannot itself decrypt travels as ciphertext,
@@ -119,6 +126,18 @@ self-referential FK from migration 093 that nobody added to the deferred list, s
 every user who linked a property to its mortgage held a valid backup that could
 not be restored — and nothing said so until the restore ran.
 
+### Notification field bounds on restore
+
+`notification-restore-bounds.ts` validates notification title/target/dedupe-key
+types before re-authentication, attachment staging and any destructive SQL.
+The dynamic insert applies `boundRestoredNotification`, sharing the producer
+door's bounds: titles over 255 UTF-16 code units get an ellipsis, dedupe keys
+are truncated to 120, and targets over 255 are dropped rather than cut.
+Each adjustment is logged. This deliberately normalizes oversized archive
+values instead of failing with PostgreSQL 22001; source IDs (after remapping),
+timestamps and other notification fields retain the normal restore policy.
+The same-origin navigation check remains at each consumer.
+
 ## 3. Rejection happens before the destruction
 
 A restore deletes everything the user owns and then inserts the backup, in one
@@ -128,6 +147,7 @@ delete:
 - decryption;
 - decompression, under a hard expanded-size ceiling (section 6);
 - version and envelope validation;
+- **the reference graph** (below);
 - re-authentication (section 5);
 - **staging of external attachment objects** (section 4).
 
@@ -141,6 +161,144 @@ write — the check precedes every `DELETE FROM` on every path.
 Any SQL or foreign-key error rolls the whole transaction back. The one effect
 that is not transactional is the object store; that is what makes staging-first
 necessary rather than merely tidy.
+
+### A restored reference names a row of the same file (INV-BACKUP-009)
+
+The uploaded document is untrusted, and `RLS_MODE` defaults to `off`, so the
+restore code is the only thing between a crafted file and another user's rows.
+`insertRows` forces `user_id` on the tables that have one; every other
+identifier comes from the file. That used to be enough only for the ids the
+remap recognised: a reference to a row the file did not contain (another user's
+account on a transaction, their security on a price or holding, their schedule
+on an override) was inserted verbatim, and a primary key spelled in a UUID form
+PostgreSQL accepts but `UUID_REGEX` does not (no hyphens, braces) escaped the
+remap, conflicted on insert, and was then rewritten in place by the Phase-3
+`UPDATE ... WHERE id = $2`.
+
+`resolveRestoreReferences` (`backend/src/backup/restore-references.ts`) now runs
+before re-authentication -- it is free, and it writes nothing:
+
+- every UUID primary key and reference column is canonicalised with
+  `canonicalUuid`, which accepts exactly the spellings PostgreSQL's `uuid`
+  input does; a key or reference that is not a UUID refuses the restore;
+- every reference must name a row of the referenced table **in the same file**,
+  or the restore is refused with a 400 naming the table, column and value. The
+  reference columns are `RESTORE_REFERENCE_COLUMNS`, which
+  `restore-references.spec.ts` checks against every foreign key and every scalar
+  UUID column of every restored table in `database/schema.sql`;
+- two columns a genuine export can leave dangling are set NULL instead and
+  logged (`SEVERED_WHEN_UNRESOLVED`): `transactions.linked_transaction_id`,
+  whose counterpart is another user's transaction on a cross-owner transfer --
+  so a restore now comes back with such a leg unlinked rather than re-linked
+  one-way to a row the file cannot vouch for -- and `accounts.institution_id`
+  from a backup older than the institution export;
+- a reference to reference data the backup never carries is a catalog reference
+  (`CATALOG_REFERENCE_COLUMNS`: `securities.bond_program_id` -> the bond
+  programs and `investment_transactions.bond_instrument_id` -> the bond series),
+  canonicalised like any other and then kept only where this deployment's own
+  catalog holds the row and, for a program link, in the security's currency;
+  otherwise it is written NULL and logged
+  (`BackupRestoreDatabaseService.severUnavailableCatalogLinks`, which iterates
+  `CATALOG_REFERENCE_COLUMNS`), so a restore never fails on a row this
+  deployment does not hold. What else a severed link costs is declared beside the
+  column list (`CATALOG_ON_SEVERED`): the file's `bond_engine` price rows of a
+  security it unlinked are not restored, and the series of that security's rows
+  are dropped with the link. The restore says so: the result carries
+  `unlinkedBondSecurities: { count, symbols }` (omitted at zero, outside
+  `restored`; `symbols` names at most `MAX_UNLINKED_BOND_SYMBOLS` = 50 of them,
+  `count` is the full number) and the restore dialogue lists them, because the
+  bond engine no longer prices those securities. A transaction whose series the
+  catalog lacks is restored without it and counted in
+  `unlinkedBondSeries: { count }` (omitted at zero, outside `restored`). Such a
+  row is not read "from the transaction date" afterwards: an ADD_SHARES or an
+  unpaired TRANSFER_IN can never be re-inferred, and the security's valuation
+  refuses it until the series is chosen again -- which is why the restore
+  fetches the series first (section 3a) and a NULL is the outcome only for a
+  series the official source could not supply. After the inserts
+  `clearForeignSeriesOfUser` nulls any series that is not of its own security's
+  program, whatever the file said (INV-BOND-007). The program id and the series
+  id are derived from their codes (`bondProgramId`, `bondInstrumentId`), so each
+  is the same on every deployment; programs are seeded at boot (INV-BOND-008
+  allows programs), so a program link resolves on any deployment that installs
+  the country's adapter and needs no recovery of its own.
+  The file's `bond_engine` price rows of a security whose link survived came from
+  another deployment's catalog and engine, so after the restore commits
+  `BackupRestoreService` calls `BondPriceService.recomputeLinkedSecurities` with
+  the ids it restored (it keeps the program-linked ones, best effort, logged; the
+  daily job repairs a failure) and the engine's own prices replace the file's.
+
+### 3a. The bond series a backup references are fetched before the restore (INV-BOND-008)
+
+A fresh deployment's catalog holds no series (INV-BOND-008: nothing is fetched or
+stored until a person asks), so a restore onto a new server used to lose every
+series for good. The person's decision to hold those bonds was made when they
+added them, and the restore is the person's own action, so it may fetch the
+series the file references from the official source -- only those, and only
+through the existing door.
+
+- **What travels.** Every backup writes a `bondCatalog` member beside
+  `completeness`: `{ series: [{ bondInstrumentId, issuerCountryCode, issuerCode,
+  programCode, seriesCode }] }`, one entry per series the user's investment
+  transactions reference (`readBondCatalogIdentity`, `export-bond-catalog.ts`,
+  read inside the export's `REPEATABLE READ` snapshot). It is identity only,
+  never terms: a rate enters the catalog only from the official source or an
+  administrator (INV-BOND-006), so a file is never the origin of one. It is a
+  document member, not a table and not a version bump -- `validateBackupFormat`
+  compares `version` for equality, every walker skips a non-array value, and it
+  is added the way `completeness` was. A backup without it (written before it
+  existed, or by the support export, which has none) restores exactly as before.
+- **What the restore does, in order.** After re-authentication and before
+  attachment staging and the transaction, `BackupBondSeriesRecoveryService`
+  keeps the entries some row names, looks each up in the catalog by
+  `(country, issuer, series)`, and fetches the missing ones through
+  `BondSeriesService.fetchSeries` -- the same adapters, the same hardened door, no
+  fetching code of its own -- sequentially, at most
+  `MAX_BOND_SERIES_FETCHES_PER_RESTORE` = 200 per restore, with `BACKFILL_GAP_MS`
+  between two fetches (the pacing toward the issuer is the backfill's; the sleep is
+  injectable). It then looks every
+  identity up again and points each row's `bond_instrument_id` at the catalog's id
+  for that identity; the transaction's `severUnavailableCatalogLinks` finds the
+  series present and keeps the link. The member is untrusted text: an entry that
+  is not five well-formed strings is ignored, an entry no row names fetches
+  nothing, and a series fetched under another issuer than the entry named is not
+  the entry's.
+- **Pacing, not the per-user limit.** A restore is a bounded one-off action of
+  the person, so its fetches pass `{ limiter: "none" }` to `fetchSeries` and are
+  not charged against the interactive 10-per-minute allowance (`bond-series-fetch`);
+  otherwise a restore would recover ten series and report the rest. The option is
+  an internal parameter of `fetchSeries`: the REST route, the assistant and MCP
+  call it with three arguments and no DTO or tool schema reaches it, so they
+  still charge the allowance. The gap and the cap of 200 are what bound the load
+  on the issuer.
+- **Why before the transaction.** A fetch is an external effect that cannot roll
+  back (`docs/external-side-effects.md`) and a network wait does not belong in
+  the transaction holding every one of the user's rows. The catalog store is
+  idempotent and global (an advisory lock per instrument, an immutable first terms
+  version), so a series fetched for a restore that then fails is what the
+  person's next fetch would have stored; nothing fetched is undone.
+- **What a failed fetch leaves.** Nothing but a record. The restore does not
+  fail, the series is not stored, and the rows that named it keep NULL as before.
+  The result lists it in `unrecoveredBondSeries: { count, series: [{
+  issuerCountryCode, seriesCode, reason }] }` (omitted at zero, outside
+  `restored`, `series` capped at `MAX_UNRECOVERED_BOND_SERIES` = 50, `count` the
+  full number), with the reason: `not-published`, `source-unavailable`,
+  `no-adapter` (no installed adapter for the country), `refused` (the source
+  answered and the answer was not acceptable), `rate-limited` (an HTTP 429
+  answered, the source's own, since the restore is not charged the per-user
+  allowance; the pass stops and reports the rest) and
+  `not-attempted` (past the cap). `unlinkedBondSeries` still counts the rows
+  that lost their series.
+
+Every key is then remapped to a fresh id, so the restored graph is closed over
+rows this restore inserted. A UUID nested in a JSONB or array value
+(`tag_ids`, override `splits`, `monte_carlo_scenarios.account_ids`, report
+filters) cannot be classified by column, so one that names no row of the file is
+replaced with a fresh id that names nothing (`remapRestoreRow`); it was a stale
+reference or someone else's, and neither may come back as a working pointer.
+Finally, every Phase-3 repair is confined to the restoring user's rows --
+`user_id = $3`, or the owning parent's for a table without one
+(`DeferredFkRepair.ownedThrough`) -- as the guard that still holds if an id ever
+reaches it by another route.
 
 ## 4. Attachments: the bytes travel
 
@@ -170,6 +328,15 @@ That makes the artifact self-sufficient, which has three consequences:
   onto a `database` deployment and vice versa; the bytes land wherever this runtime
   keeps them and `storage_provider` is rewritten to match. Both directions used to
   be an unrestorable skip.
+- **The export reads each row's own backend, not the bound one.** Those two differ
+  while a storage switch is being relocated (`AttachmentStorageMigrator`, and
+  `docs/external-side-effects.md` section 2), so comparing every row against
+  `ATTACHMENT_STORAGE_PROVIDER` counted each not-yet-moved attachment as missing and
+  made the artifact **incomplete** -- for bytes the process could read perfectly
+  well. Readability is now `AttachmentStorageRegistry.resolve`, so an artifact taken
+  mid-relocation is complete. A row naming a backend this deployment has no
+  configuration for is still counted missing, which is the honest answer: nothing
+  can read those bytes here.
 
 What it costs, stated plainly: artifacts are larger. What it no longer costs is
 memory. The export used to accumulate every carried object as base64 in one array
@@ -360,12 +527,39 @@ sites are handled so it does not:
   object before re-raising. The discard swallows its own delete failures, so a
   failed tidy-up cannot mask the error that aborted the restore.
 
-**Known gap:** this covers *catchable* failures only. A process crash or kill
-between staging and commit still orphans the staged objects, and there is no
-sweeper or recovery pass for them yet. It is a bounded storage cost, never a row
-promising bytes that are gone, so it is a leak to reclaim rather than a
-correctness hazard — tracked as a separate follow-up, not closed by the #1094
-fix.
+**A staged object carries an upload intent, so a process death leaves bytes the
+sweeper can find (INV-ATTACHMENT-001).** `tryStageAttachmentObject` follows the
+protocol of `AttachmentsService.create` through the helpers in
+`attachments/storage/object-intent.ts`, and does not hand-roll the SQL:
+
+- **Before each put**, `recordObjectIntent` commits an `attachment_blob_tombstones`
+  row for the staged key on its own connection, with the lease
+  `RESTORE_STAGING_INTENT_LEASE_MS` (two hours). It covers staging the rest of the
+  artifact, the 15-minute maintenance lease the transaction runs under
+  (`USER_MAINTENANCE_LEASE_MS`) and the transaction itself; the 15-minute upload
+  lease covers one put and is too short. The lease is a latency mechanism, not the
+  safety one: a longer value only delays reclaiming the bytes of a dead process.
+  The `database` provider records nothing (its bytes roll back with the
+  transaction). If the intent cannot be recorded, the bytes are not written and
+  the attachment is dropped exactly as one whose put failed (`skippedAttachments`).
+- **In the restore transaction**, `clearStagingIntents` runs `clearObjectIntent`
+  for every staged key, one statement after another on the transaction's manager,
+  after the rows are written. The delete is fenced on `swept_at IS NULL`: if the
+  sweeper claimed a key first it throws, the restore rolls back, and the existing
+  `.catch` discards the staged objects. The intents therefore commit away together
+  with the rows that now own the bytes, or not at all.
+- **On failure**, `discardStagedAttachmentObjects` drops an intent
+  (`dropCommittedObjectIntent`, best effort) only after the object's delete
+  succeeded. When the delete fails, or the process dies before the discard runs,
+  the intent stays and the hourly `AttachmentOrphanSweeper` removes the bytes once
+  the lease has expired (and re-deletes during its late-write quarantine).
+- Source keys read in place (`sourceKeys`) are never written, so they take no
+  intent; only keys the restore wrote (`stagedKeys`) do.
+
+`backend/test/integration/backup-restore-staging.integration.spec.ts` holds this
+on the `local` provider in a real temporary directory: a failure inside the
+transaction with the discard suppressed leaves the bytes and one intent per
+staged key, and one sweeper pass after the leases expire removes them.
 
 Operationally: for an artifact that carries its own bytes there is nothing to
 restore alongside it — that is the point. The sidecar directory or bucket only
@@ -780,6 +974,15 @@ cleanly is worse than one that does not decrypt at all. v1 envelopes still open:
 every backup a user already holds is one, and the support export still writes one
 because it assembles in memory anyway.
 
+**The key-wrapped container (`MZBE` v3).** The automatic backup's frames are
+v2's, sealed under a per-file key derived (HKDF) from the user's random data key
+rather than under a key derived from the password, and the header carries that
+data key wrapped under the password. The cron holds the data key and never the
+password; the file still opens with the password alone, and the restore prompt
+does not change. Readers accept v1, v2 and v3; the manual download still writes
+v2 under the password typed for it. `docs/specs/backup-envelope-key-wrapping.md`
+has the layout and the key flow.
+
 **What this does not settle.** The claim is bounded peak RSS, and the honest
 measurement of that is the cgroup-constrained harness this repository still does
 not have (`DR-F3R6-002` / `DR-F3R7-003`). What the suite proves instead is the
@@ -792,27 +995,213 @@ line now — but the restore's shape is unchanged: its `express.raw` upload is b
 before any of our code runs, so making the restore stream is a different change from
 this one, and it is what would replace a measured multiple with a bound.
 
-## 7. Automatic backups on disk
+**Still owed from the admission work (issue #1073):** a full-path restore
+measurement under a real cgroup memory limit (`/sys/fs/cgroup/memory.peak`
+read after each case, the in-process sample kept beside it). `PEAK_MULTIPLE`
+and `restoreProcessBaselineBytes` are estimates until that record is
+committed; every ceiling above is derived by dividing by the same estimate.
 
-- **Per-user directory.** Each user's artifacts go in a server-computed
-  subdirectory of the root, named by their user id. Filenames carry only
-  frequency and date, so isolation has to come from the path — and retention only
-  ever enumerates one user's directory. Files sitting directly in a root predate
-  this, carry no owner in their names, and are left exactly where they are.
-- **Crash-atomic writes.** Temp file in the same directory, `fsync`, atomic
-  rename, `fsync` the directory. A final filename never refers to a partial file,
-  and a failed write leaves the previous artifact intact. Stale temp files are
-  swept separately from retention, because a partial write is not a backup and
-  counting one would silently shorten the retention window.
+## 7. Automatic backups in the store
+
+**Who configures it, and where.** Automatic backup is a deployment/operator
+concern, not an account preference, so its configuration surface is admin-only:
+**Admin → Backups** (`frontend/src/app/admin/backups/page.tsx`, route
+`/admin/backups`), reading and writing the admin-restricted `AutoBackupController`
+endpoints. That page states plainly what an automatic backup is — a **compressed
+per-user backup file** of a user's own financial records, written to the store on
+a schedule and pruned by retention — and what it is **not**: a full
+PostgreSQL/database dump. The schedule, folder and retention configured there are
+**one deployment policy that every active account runs on** (below). It is
+related to, but not the same on-disk format as, the manual per-account export a
+person can download themselves. It does not capture the schema, another
+deployment's data, or server configuration; whole-instance disaster recovery is a
+separate backup of PostgreSQL and the attachment storage. On the Windows desktop
+build that backup is the whole data folder (`pgdata` and `attachments` together
+with the shell's configuration file and Chromium's key file) copied while the app
+is stopped, which is what `desktop/scripts/Backup-Monize.ps1` does; it restores
+only under the same Windows account, because the configuration file holds the
+database passwords encrypted with DPAPI, so a new PC recovers from per-user
+backups instead. A person's own manual
+export/restore stays in **Settings → Backup & Restore**
+(`frontend/src/components/settings/BackupRestoreSection.tsx`), open to every user
+and touching only their own data. The two were previously stacked in one Settings
+screen, which made a deployment policy look like a personal preference.
+
+**Configuring the schedule is an operator's; the artifacts it produces are the
+user's.** Settings → Backup & Restore therefore carries a folded **Automatic
+Backups** listing
+(`frontend/src/components/settings/StoredBackupsSubsection.tsx`) of the files
+this server is holding for the signed-in account, with a download and a restore
+per file. It reads `GET /backup/stored-backups` and
+`GET /backup/stored-backups/:filename` on the *unrestricted* `BackupController`,
+not on `AutoBackupController`: a user who may not change the policy still has to
+be able to take and restore what it produced for them. Three things bound it —
+only the caller's own server-computed folder is enumerated (never the legacy flat
+root, whose filenames carry no owner), only names `classifyBackupFileName`
+recognises are served, and the listing reports the caller's own `enabled` so the
+section is absent on a deployment that runs no automatic backups. A download
+opens what the **store** holds under that name, never the caller's string: the
+requested name is matched against the store's own entry, which is what is opened
+and streamed, so the value reaching the filesystem is one this deployment wrote.
+On the `local` store the join is still containment-checked, because a validated
+name with an unvalidated join is a decorative check; on the `s3` store the name
+is composed into a key that cannot leave the user's prefix and there is no path
+to traverse at all. The route streams the store's stream rather than a file
+handle, and deliberately does **not** redirect to a presigned URL: that would
+move an authenticated, demo-restricted, owner-scoped download onto a URL
+carrying its own authority that outlives the request. Restoring from
+that list **downloads the artifact and hands it to the existing restore form**,
+so the encryption sniff, the warning, the account-password or OIDC confirmation
+and the summary dialogue are the same ones a file picked from disk goes through;
+there is no second restore path to keep in step.
+
+**The policy is the deployment's, and it reaches every account.** What Admin →
+Backups edits is one `AutoBackupPolicy` — `enabled`, folder, frequency, time,
+timezone and the three retention counts. `AutoBackupService.reconcileManagedUsers`
+writes it onto every active account's `auto_backup_settings` row, at the top of
+the hourly cron and again the moment the policy is saved, so an operator does not
+wait an hour to see a change take. The per-account row stays the runtime source
+the cron claims and records against; only its **bookkeeping** columns
+(`last_backup_at`, `last_backup_status`, `last_backup_error`, `next_backup_at`)
+are that account's own. Three consequences worth stating:
+
+- **Where the policy lives.** Its own singleton row, `auto_backup_policy` —
+  a boolean primary key with `CHECK (id)`, the shape `update_check_state` and
+  `push_instance_config` use. It is RLS-exempt (no owner column) and excluded
+  from `INTENTIONALLY_EXCLUDED_TABLES`, so no account's archive carries it.
+  It previously lived on the earliest-created active administrator's
+  `auto_backup_settings` row, which let three ordinary operations silently
+  rewrite a deployment-wide setting: **deactivating or demoting** that
+  administrator handed the policy to the next one, whose row usually did not
+  exist, so every account reverted to the built-in defaults — and with them a
+  folder that may not be mounted, failing every backup; **deleting** them
+  cascaded the policy away; and **restoring their own backup** replayed a
+  months-old policy over the whole instance, with `withPreserveTimestamps`
+  keeping even `updated_at` from showing it had moved.
+- **A deployment that has never saved** runs on `defaultPolicy()`, which is
+  **enabled**: the enrollment it replaces hardcoded `enabled: true` for managed
+  users, so a disabled default would have switched automatic backups off for
+  every such deployment.
+- **Every active account, with no exception.** Two have been made here and both
+  cost somebody their backups: first every administrator was excluded, so a
+  second operator who never opened the screen was enrolled by nothing; then the
+  account holding the policy was excluded, which on a deployment whose
+  administrator had never pressed Save left the operator's own data the single
+  account the policy did not reach — while the screen counted it as covered. A
+  row that already matches costs one comparison and no write, so an exception
+  buys nothing.
+- **Disabling the policy disarms every account**, by clearing `next_backup_at`;
+  leaving it behind would have a disabled policy keep taking backups. An account
+  a disabled policy has never reached gets no row written at all.
+- **A reconcile writes only the columns it owns.** `next_backup_at` is the
+  cron's **claim** (`claimDueBackup`), so a whole-entity `save` carrying a
+  snapshot read before the loop could revert a claim another replica had just
+  taken and have that account backed up twice — the mirror image of the reason
+  `recordBackupOutcome` was already a targeted `UPDATE`. A held value is
+  overwritten in exactly two cases, both of them an operator asking for
+  something now: a disabled policy clears it, and a change to a
+  **schedule-defining** field (`frequency`, `backupTime`, `timezone`) replaces
+  it. Neither can revert a claim into the past — the claim's whole property is
+  `next_backup_at > now` and `calculateNextBackupAt` returns a future slot, so
+  one future value gives way to another. Every other drift (retention, folder)
+  only fills in a row that has none (`COALESCE(next_backup_at, …)`). Carrying
+  the old value forward unconditionally ran the next backup on the schedule the
+  operator had just replaced — up to a week late on `weekly` — with the status
+  line contradicting the form that set it. `runBackupForUser` records its
+  outcome through `recordBackupOutcome` for the same reason, and a manual run
+  deliberately does not move the automatic schedule at all.
+
+The admin surface reads back what the deployment is actually doing rather than
+one row: `accountCount` (active accounts the policy governs) beside
+`scheduledAccountCount` (how many of them hold an armed row right now), and
+deployment-wide `lastBackup*` / `nextBackupAt` aggregates — the most recent run of
+any account and the soonest next run of any armed one. A policy screen reporting
+one row's `lastBackupAt` says "Last backup: today" on an instance where eleven of
+twelve accounts have never been backed up at all. The counts are **two** numbers
+because a single one could only have been `accountCount`, which states coverage
+the deployment may not have: an account whose reconcile threw is logged, skipped,
+and still governed by the policy. They match on a settled deployment.
+
+**"Back Up Every Account Now" means every account.** `runManualBackup` fans out
+over every active account through the same per-user path the cron uses, caller
+first, one at a time; one account's failure never stops the rest. The fan-out is
+**claimed deployment-wide** before it starts — a conditional `UPDATE` on
+`auto_backup_policy.manual_run_claimed_at`, released in a `finally` **by token**
+so a run that outran `MANUAL_RUN_CLAIM_TTL_HOURS` cannot free the claim a later
+one has since taken, and bounded by that TTL so a killed replica frees it — because the button
+walks every account inside one request, and a proxy timeout that leaves the run
+going plus an operator who presses again otherwise interleaves two full passes
+over the same rows. A second caller is refused, not queued. It answers
+counts (`usersRequested`, `usersBackedUp`, `usersSkipped`, `usersFailed`,
+`usersPartial`) plus `filename` for the caller's *own* artifact only — one
+filename cannot describe a fan-out. A run that wrote nothing refuses rather than
+answering 200 with zeroes: the single account's own error when exactly one
+failed, so its status and reason survive; the count and the first reason when
+more did; the maintenance conflict when every account was skipped. Backing up one
+row under a deployment policy was the same defect as the policy governing one
+row — an operator pressed it to prove backups worked and proved it for
+themselves only.
+
+**Which store is in use is named, not inferred.** `describeCapability` carries
+`storageProvider` (the bound target's `name`) beside `locationSelectable`, and the
+settings screen shows a storage row on every deployment: the provider, the store's
+own display location, and how many artifacts it already holds for the reader. The
+folder input, Browse and Validate render only where `locationSelectable` is true,
+the save omits `folderPath` where it is false (an object store's `acceptBase`
+refuses one, so the form used to fail every save on `s3`), and the run button is
+no longer gated on a stored folder — an object store has none, which hid it
+entirely on every `s3` deployment. `locationSelectable` answers "may I choose a
+location"; it never answered "where do my backups live".
+
+- **The store is a target, not a directory.** Every storage operation goes
+  through `BACKUP_STORAGE_TARGET`
+  (`backend/src/backup/storage/backup-storage.interface.ts`), selected by
+  `BACKUP_STORAGE_PROVIDER`: `local` (the default) writes to a container
+  directory, `s3` puts the artifacts in an S3-compatible bucket. Nothing above
+  the store knows which is bound — the naming, the tiers, the promotion and the
+  retention arithmetic are the same either way, and the key layout is the same
+  tree. `docs/specs/backup-storage-targets.md` is the specification.
+- **Switching stores is forward-only.** Nothing is migrated. The previous
+  recovery points stay where they were and the new store's listing cannot see
+  them, so an operator keeps the old volume or bucket until the new store holds
+  a full retention window. The Backup settings page reports how many artifacts
+  the **current** store holds, so the gap is visible rather than inferred.
+- **Per-user namespace.** Each user's artifacts go in a server-computed
+  namespace named by their user id — a sharded subdirectory on `local`, the same
+  sharded key prefix on `s3`. Filenames carry only frequency and date, so
+  isolation has to come from the namespace, and retention only ever enumerates
+  one user's. Artifacts sitting directly in a `local` root predate this, carry no
+  owner in their names, and are left exactly where they are; the `s3` store has
+  never had a layout without an owner in the key.
+- **Published whole or not at all (INV-BACKUP-006).** There is no `write`
+  operation on the seam, only `publish`, so a caller cannot ask for a non-atomic
+  one. `local`: temp file in the same directory, `fsync`, length check, atomic
+  rename, `fsync` the directory. `s3`: one `PutObject` with a known
+  `Content-Length` and a declared `ChecksumSHA256`, which the service applies to
+  the key only on a complete, checksum-matching upload. Either way a final name
+  never refers to a partial artifact and a failed publish leaves the previous one
+  intact. Leftovers of an interrupted write are swept separately from retention,
+  because a partial write is not a backup and counting one would silently shorten
+  the retention window; on `s3` there is nothing to sweep.
 - **Confined destinations.** `BACKUP_ALLOWED_ROOTS` (defaulting to
   `BACKUP_CONTAINER_DIR`) bounds every user-influenced path, canonically — a
-  symlink inside a permitted directory cannot lead out of one.
+  symlink inside a permitted directory cannot lead out of one. It is the `local`
+  store's own concern and appears nowhere in the seam. An `s3` store has no
+  folder for a user to choose or an admin to browse, so the setting is inert
+  there: `updateSettings` refuses a `folderPath`, `validateFolder` and
+  `browseFolders` answer a typed refusal, and the capability report carries
+  `locationSelectable: false` for the settings screen to hide its picker on.
+- **The store and the off-machine copy are two places (INV-BACKUP-007).** The
+  store's variables are `BACKUP_STORE_S3_*`; `BACKUP_S3_*` is the off-machine
+  destination's. A deployment whose two resolve to one bucket and overlapping
+  prefix refuses to start: the off-machine copy exists to survive the loss of the
+  store, so one bucket holding both is a 3-2-1 arrangement that is actually a 1.
 - **Completeness is part of an artifact's identity, not a note beside it
   (F3RB-001, issue #1069).** A run that knows its artifact is incomplete publishes
   it as `monize-backup-partial-<date>.<ext>`, in its own retention tier; nothing
   named `daily-`, `weekly-` or `monthly-` is ever written by such a run. The name
   is chosen *after* the export, from what the export found, because
-  `writeFileAtomic` replaces a final name by design: choosing it first destroyed
+  a publish replaces a final name by design: choosing it first destroyed
   that day's complete artifact and then recorded `partial` in the settings row,
   with nothing left to preserve. Retention then read the ordinary name and counted
   it as a complete daily, so `retentionDaily = 3` over three partial days could
@@ -836,20 +1225,26 @@ this one, and it is what would replace a measured multiple with a bound.
   artifact could not be read back without the user's password. The fix stops new
   losses; it does not reclassify history it cannot inspect.
 
-  What it does *not* yet fix: `Run Backup Now` still reports a partial run through
-  the ordinary "Backup created: `<filename>`" toast, so the only thing telling the
-  user is `partial-` in the name it shows them. The service returns a message
-  saying more (`runManualBackup`) and the frontend does not use it.
+  A manual run that produced any partial artifact now says so: `runManualBackup`
+  counts `usersPartial` and spells out in its message that those artifacts were
+  written as partials, were not promoted and displaced no complete backup, and
+  the settings screen shows that as a plain toast rather than a success one. It
+  previously reported every run through "Backup created: `<filename>`", so the
+  only thing telling the user was `partial-` in the name it showed them.
 
 - **Encryption is on by default, and its key is announced before it is enforced
-  (issue #1269).** An automatic backup is encrypted with the user's own password
-  whenever the server holds a usable copy: captured for a local account when they
-  type it (registration, login, password change) or when they confirm it in
-  Settings, and set explicitly by an OIDC account. The copy lives in
-  `users.backup_password_enc` under `EncryptionService`, keyed by
-  `ENCRYPTION_KEY`. `AI_ENCRYPTION_KEY` is the variable's former name: still
-  read, and still preferred where both are set, so an existing deployment
-  upgrades without re-keying a column.
+  (issue #1269).** An automatic backup opens with the user's own password
+  whenever the server holds a usable backup key for them: a random data key
+  wrapped under the password when a local account types it (registration, login,
+  password change) or confirms it in Settings, and under the dedicated backup
+  password an OIDC account sets. The server keeps the data key in
+  `users.backup_key_enc` under `EncryptionService`, keyed by `ENCRYPTION_KEY`,
+  and the wrap in `users.backup_key_wrap`; it never keeps the password
+  (INV-BACKUP-008). The retired `users.backup_password_enc`, which did, is
+  converted and cleared at each user's next sign-in or automatic backup.
+  `AI_ENCRYPTION_KEY` is the variable's former name: still read, and still
+  preferred where both are set, so an existing deployment upgrades without
+  re-keying a column.
 
   The key is **announced before it is enforced**. A deployment with neither
   variable still boots — refusing would turn an upgrade into an outage for
@@ -865,30 +1260,53 @@ this one, and it is what would replace a measured multiple with a bound.
   plaintext, while the release notes, the docs and Settings all said backups were
   encrypted by default. Two rules follow. **A plaintext automatic backup is
   logged, every time** — it stays a legitimate outcome (an OIDC account with no
-  backup password; a local account whose password has not been captured yet) but
+  backup password; a local account with no backup key yet) but
   never a silent one. And **"this server cannot encrypt" is reported separately
   from "this user has not enabled it"** (`available` beside `enabled` in
   `getStatus`), because the two have different fixes and rendering both as a
   blank space is what made the defect invisible.
 
 - **`ENCRYPTION_KEY` does not open a backup file; the user's password does.** The
-  artifact is encrypted with the password it was written under, so a restore
-  needs *that* password and nothing else — losing `ENCRYPTION_KEY` does not lock
-  anyone out of a backup they can still supply the password for. What losing it
-  does cost: every AI provider key and emergency-access credential in the
-  database becomes unreadable, the stored copy of each user's backup password
-  becomes unreadable, and automatic backups then *refuse to run* (the
-  `unrecoverable` outcome above) until the copy is recaptured at the next
-  sign-in. The password half has its own trap, which the wiki states plainly: a
-  local account's artifact opens with the login password **as it was when that
-  artifact was written**, so changing a password strands every backup taken
-  before the change unless the old one is written down.
+  artifact carries its data key wrapped under the password it was written under,
+  so a restore needs *that* password and nothing else — losing `ENCRYPTION_KEY`
+  does not lock anyone out of a backup they can still supply the password for.
+  What losing it does cost: every AI provider key and emergency-access credential
+  in the database becomes unreadable, each user's stored backup data key becomes
+  unreadable, and automatic backups then *refuse to run* (the `unrecoverable`
+  outcome above) until a fresh key is wrapped at the next sign-in. The password
+  half has its own trap, which the wiki states plainly: a local account's
+  artifact opens with the login password **as it was when that artifact was
+  written**, so changing a password strands every backup taken before the change
+  unless the old one is written down. A password change wraps a fresh data key,
+  so the old password opens only the files written before it. A password changed
+  by a reset link, an admin or an emergency claim does not re-wrap: the key's
+  `backup_key_password_ref` no longer matches the account's hash, and the next
+  automatic backup drops it and is written unencrypted (and logged) until the
+  user signs in again, rather than under a password they no longer know.
 
 On Kubernetes this needs `backend.persistence.backups.enabled` (see
 `helm/README.md`). With a read-only root filesystem and no mount, a schedule
 reports errors forever while the UI shows it as configured.
 
 ## 8. Cross-version and cross-instance limits
+
+The retired `user_preferences.notification_browser` column (migration 188) is
+ignored when restoring older artifacts: `insertRows` filters columns against
+`information_schema.columns` on the receiving database. Other preferences and
+the per-category push matrix are restored normally; the retired flag is never
+translated into matrix values because it did not gate delivery.
+
+The two retired mortgage flags, `accounts.is_canadian_mortgage` and
+`accounts.is_variable_rate` (unused since 1.20.0, dropped by the mortgage-type
+contract migration), ARE translated before the restore strips them, because
+they decided how a mortgage compounds: `insertRows` resolves every `accounts`
+row through `backend/src/accounts/legacy-mortgage-type.util.ts`, which then
+drops both keys, so the insert names no column the schema lacks. A backup
+taken before the type existed restores a Canadian fixed-rate mortgage as
+`CANADIAN_FIXED` rather than the column default, and a row whose
+`mortgage_type` is null (any non-mortgage, or a mortgage an older release
+wrote) restores with the type the migrations give it, never a null the
+`NOT NULL` column would refuse (`docs/specs/mortgage-types.md`, section 4.2).
 
 Known and unresolved; none of these is a bug report waiting to be filed:
 
@@ -902,7 +1320,9 @@ Known and unresolved; none of these is a bug report waiting to be filed:
   it reports the file as not being in the encrypted Monize format. Restoring
   backwards across that boundary means an unencrypted export, or restoring on a
   build at least as new as the one that produced the file. The reverse direction
-  is fine: every version reads v1.
+  is fine: every version reads v1. Automatic backups are `MZBE` v3 from the
+  release that stopped storing passwords, and the same holds one step further on:
+  a build from before it does not open them.
 - **AI provider keys written by an older build do not cross instances.** Keys now
   travel decrypted and are re-encrypted on arrival (§1), so a current artifact is
   portable. One made before that carries `api_key_enc` under the exporting
@@ -926,6 +1346,62 @@ Known and unresolved; none of these is a bug report waiting to be filed:
   key, which does not belong inside the transaction holding every one of the
   user's rows — and does not belong on a list endpoint at all, which is why
   `getConfigs` still reports only whether the column is populated.
+- **A renamed table needs an alias, and this is the mechanism.** A backup keys
+  its tables by SQL table name, so renaming a table renames a key that every
+  artifact written before the rename does not carry. Nothing about that failure
+  is loud: `insertRows` is handed `undefined` for the new key, restores zero rows
+  and reports zero — silent data loss inside an operation whose whole promise is
+  that nothing is lost. The version cannot carry the fix, since it is compared
+  for strict equality (above) and bumping it would reject every existing artifact
+  rather than read one. `LEGACY_TABLE_KEYS` in `backend/src/backup/backup-format.ts`
+  maps each current name to the names older artifacts used, and
+  `renameLegacyTableKeys` moves the key once, on the parsed document, before
+  anything walks it — id remapping, attachment staging, currency pre-creation and
+  the insert loop all address tables by name, and a rule applied at one of them
+  is a rule that holds for one of them. An artifact carrying both names keeps the
+  current one: it was written by an instance that already knew it — and because
+  that decision *discards* the legacy rows, it is reported rather than made
+  quietly: `renameLegacyTableKeys` returns `{ renamed, discarded }` and the
+  restore logs a warning naming the table and the row count, since rows in the
+  artifact that do not come back are exactly what a restore may not be silent
+  about. So far the map holds one entry, `notifications` ← `budget_alerts`
+  (migration 179).
+  `backup-format.spec.ts` covers the moves and
+  `backend/src/common/db/migration-table-renames.spec.ts` reads the renames out
+  of the migrations themselves, so the next rename is checked without being
+  registered.
+- **A migration that changes what a stored value means is replayed on the
+  restored rows (A26-S06-04).** The migration backfills the rows the database
+  holds when it runs, once; a restore inserts rows as the file stores them, so an
+  older artifact brings the old meaning back. `LEGACY_NORMALIZATIONS`
+  (`backend/src/backup/restore-legacy-normalizations.ts`) is a registry of those
+  backfills keyed by the migration that introduced each change. It is applied
+  inside the restore transaction after the rows are inserted, scoped to
+  `user_id = $1`, with the `WHERE` mirroring the migration's. One entry exists:
+  `skip_price_updates` (`20261012131846`), which became the user's own switch, so
+  a pre-1.19 `true` on a security with a `quote_provider` or an
+  `msn_instrument_id` is cleared, as the migration did.
+
+  Whether an artifact is older is decided by `artifactPredates`. The export writes
+  an optional `producedBy: { schemaMigration }` member (`readProducedBy`,
+  `export-produced-by.ts`): the newest applied migration by
+  `compareMigrationFilenames`, read from `schema_migrations` (the runtime role may
+  `SELECT` it), or `null` when the ledger does not exist. With a usable marker the
+  artifact is older when the marker is strictly before the entry's migration. A
+  marker that is `null`, not a string, or not a migration filename is treated as
+  absent. `BACKUP_VERSION` stays `1`: the member is optional, and an artifact
+  without it restores as before.
+
+  Without a marker the artifact is older only on **positive evidence**, written on
+  each registry entry: its `user_preferences` rows exist and carry no
+  `hidden_table_columns` key. That column came from
+  `20261012133629_user_preferences_hidden_table_columns.sql`; both migrations
+  first shipped in release 1.19.0 and neither in 1.18.0, and the export is a
+  `SELECT *`, so a null value is still a key. A marker-less artifact that has the
+  key comes from 1.19.0, where `true` is a deliberate switch and is kept. With no
+  preference rows nothing is known, so nothing is normalized. A new entry states
+  its own evidence rule; a migration with no such column to lean on has no safe
+  marker-less rule and normalizes only artifacts that carry a marker.
 - **Delegation is reset.** `account_delegates`, `account_delegate_grants` and
   `delegate_account_favourites` are excluded by design, and cascade away when
   accounts are deleted. A restore therefore removes existing grants and
@@ -955,3 +1431,13 @@ restore contract, not privacy policy:
   user's real UUID. Two support files from two users of one instance would then be
   correlatable by the creator id they share, which is the one thing the remap
   exists to prevent.
+
+## 10. Rules recorded from `AGENTS.md`
+
+### A lenient decoder is not a validator
+
+`Buffer.from(value, "base64")` silently discards characters outside the alphabet instead of failing -- on `x-export-password` that encrypts a backup under a password nobody knows and reports success. Anywhere a decode result is used as a credential or a key, assert the round trip.
+
+### A count of things you did not do never goes in the total of things you did
+
+`restored` is summed by the client, so deliberately skipped attachments are a sibling field (`skippedAttachments`, omitted when zero) -- "a subtotal is not a total", applied to counts. And the user has to be *told*: a success dialogue silent about files that did not come back is worse than the number being in the wrong place.

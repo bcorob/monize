@@ -178,13 +178,9 @@ export function GemScenarioSwitcher({
         maxWidth="sm"
         pushHistory
         className="p-6"
+        title={t("gem.scenarios.createTitle")}
+        description={t("gem.scenarios.createHint")}
       >
-        <h2 className="mb-1 text-xl font-bold text-gray-900 dark:text-gray-100">
-          {t("gem.scenarios.createTitle")}
-        </h2>
-        <p className="mb-4 text-sm text-gray-500 dark:text-gray-400">
-          {t("gem.scenarios.createHint")}
-        </p>
         <Input
           label={t("gem.scenarios.nameLabel")}
           value={newName}

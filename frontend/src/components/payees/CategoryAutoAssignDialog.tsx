@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/Button';
@@ -14,6 +14,7 @@ import toast from 'react-hot-toast';
 import { createLogger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errors';
 
+import { useNumberFormat } from '@/hooks/useNumberFormat';
 const logger = createLogger('CategoryAutoAssign');
 
 interface CategoryAutoAssignDialogProps {
@@ -39,6 +40,8 @@ export function CategoryAutoAssignDialog({
   const [isApplying, setIsApplying] = useState(false);
   const [hasPreviewLoaded, setHasPreviewLoaded] = useState(false);
   const t = useTranslations('payees');
+  const tc = useTranslations('common');
+  const { formatPercentTrimmed } = useNumberFormat();
   const router = useRouter();
 
   // Jump to the Transactions page filtered to this payee's uncategorized
@@ -80,14 +83,16 @@ export function CategoryAutoAssignDialog({
   }, [minTransactions, minPercentage, onlyWithoutCategory, t]);
 
   // Reset state when dialog opens
-  useEffect(() => {
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  if (wasOpen !== isOpen) {
+    setWasOpen(isOpen);
     if (isOpen) {
       setSuggestions([]);
       setSelectedIds(new Set());
       setBackfillTransactions(false);
       setHasPreviewLoaded(false);
     }
-  }, [isOpen]);
+  }
 
   // Total uncategorized transactions across the selected payees -- the scope of
   // the optional backfill, shown in its label.
@@ -153,26 +158,37 @@ export function CategoryAutoAssignDialog({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} maxWidth="2xl" className="overflow-hidden flex flex-col">
-      {/* Header */}
-        <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-            {t('categoryAutoAssign.title')}
-          </h2>
-        </div>
-
-        {/* Content */}
-        <div className="flex-1 overflow-y-auto px-6 py-4">
-          {/* Description */}
-          <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/30 rounded-lg border border-blue-200 dark:border-blue-800">
-            <h3 className="text-sm font-semibold text-blue-800 dark:text-blue-200 mb-2">
-              {t('categoryAutoAssign.howItWorksTitle')}
-            </h3>
-            <p className="text-sm text-blue-700 dark:text-blue-300">
-              {t('categoryAutoAssign.howItWorksBody')}
-            </p>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidth="2xl"
+      title={t('categoryAutoAssign.title')}
+      description={t('categoryAutoAssign.howItWorksBody')}
+      className="p-6 overflow-hidden flex flex-col"
+      footer={
+        <>
+          <div className="mr-auto text-sm text-gray-500 dark:text-gray-400">
+            {selectedIds.size > 0 && (
+              <span>{t('categoryAutoAssign.selectedCount', { count: selectedIds.size })}</span>
+            )}
           </div>
-
+          <div className="flex gap-3">
+            <Button variant="secondary" onClick={onClose} disabled={isApplying}>
+              {tc('cancel')}
+            </Button>
+            <Button
+              onClick={handleApply}
+              disabled={isApplying || selectedIds.size === 0}
+            >
+              {isApplying ? t('categoryAutoAssign.applying') : t('categoryAutoAssign.applyButton', { count: selectedIds.size })}
+            </Button>
+          </div>
+        </>
+      }
+    >
+        {/* Content: the one region that scrolls, so the title and the button
+            row stay on screen however long the suggestion list grows. */}
+        <div className="min-h-0 flex-1 overflow-y-auto">
           {/* Settings */}
           <div className="space-y-6 mb-6">
             {/* Minimum Transactions */}
@@ -283,7 +299,9 @@ export function CategoryAutoAssignDialog({
                   <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                     <thead className="bg-gray-50 dark:bg-gray-700">
                       <tr>
-                        <th className="w-10 px-3 py-2"></th>
+                        <th className="w-10 px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                          {t('categoryAutoAssign.columns.assign')}
+                        </th>
                         <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
                           {t('categoryAutoAssign.columns.payee')}
                         </th>
@@ -351,7 +369,7 @@ export function CategoryAutoAssignDialog({
                                   ? 'text-blue-600 dark:text-blue-400'
                                   : 'text-yellow-600 dark:text-yellow-400'
                             }`}>
-                              {suggestion.percentage}%
+                              {formatPercentTrimmed(suggestion.percentage)}
                             </span>
                           </td>
                         </tr>
@@ -383,26 +401,6 @@ export function CategoryAutoAssignDialog({
             </div>
           )}
         </div>
-
-        {/* Footer */}
-        <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center">
-          <div className="text-sm text-gray-500 dark:text-gray-400">
-            {selectedIds.size > 0 && (
-              <span>{t('categoryAutoAssign.selectedCount', { count: selectedIds.size })}</span>
-            )}
-          </div>
-          <div className="flex gap-3">
-            <Button variant="secondary" onClick={onClose} disabled={isApplying}>
-              Cancel
-            </Button>
-            <Button
-              onClick={handleApply}
-              disabled={isApplying || selectedIds.size === 0}
-            >
-              {isApplying ? t('categoryAutoAssign.applying') : t('categoryAutoAssign.applyButton', { count: selectedIds.size })}
-            </Button>
-          </div>
-        </div>
-      </Modal>
+    </Modal>
   );
 }

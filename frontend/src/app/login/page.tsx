@@ -18,11 +18,16 @@ import { TwoFactorVerify } from '@/components/auth/TwoFactorVerify';
 import { AuthShell } from '@/components/auth/AuthShell';
 import { IncompleteLogoutNotice } from '@/components/auth/IncompleteLogoutNotice';
 import { clearLogoutIncomplete } from '@/lib/logout-state';
-import { User } from '@/types/auth';
+import { DEMO_USER_EMAIL, DEMO_USER_PASSWORD } from '@/lib/demo-credentials';
+import { TwoFactorSignInDetails, User } from '@/types/auth';
 import { createLogger } from '@/lib/logger';
 import { buildEmailSchema } from '@/lib/zod-helpers';
+import { safeReturnTo } from '@/lib/return-to';
 
 const logger = createLogger('Login');
+
+/** The 2FA controls in Settings > Security (`id="two-factor"` in SecuritySection). */
+const SECURITY_TWO_FACTOR_HREF = '/settings#two-factor';
 
 const buildLoginSchema = (t: (key: string) => string, tc: (key: string) => string) => z.object({
   email: buildEmailSchema(tc),
@@ -32,26 +37,19 @@ const buildLoginSchema = (t: (key: string) => string, tc: (key: string) => strin
 
 type LoginFormData = z.infer<ReturnType<typeof buildLoginSchema>>;
 
-/**
- * Validate a `returnTo` query parameter so we can safely redirect after login.
- * Restricts to same-origin path-only values to prevent open-redirect abuse via
- * absolute URLs, protocol-relative URLs, or backslash tricks.
- */
-function safeReturnTo(value: string | null): string | null {
-  if (!value) return null;
-  if (!value.startsWith('/') || value.startsWith('//') || value.startsWith('/\\')) {
-    return null;
-  }
-  return value;
-}
-
 export default function LoginPage() {
   const t = useTranslations('auth');
   const tc = useTranslations('common');
   const router = useRouter();
   const searchParams = useSearchParams();
   const returnTo = safeReturnTo(searchParams?.get('returnTo') ?? null);
-  const { login } = useAuthStore();
+  const login = useAuthStore((s) => s.login);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const hasHydrated = useAuthStore((s) => s._hasHydrated);
+  const profile = useAuthStore((s) => s.user);
+  // Set when a sign-in completes on this page, whose handlers choose the
+  // destination themselves; the restored-session redirect below stays out of it.
+  const [signedInHere, setSignedInHere] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [twoFactorState, setTwoFactorState] = useState<{ tempToken: string } | null>(null);
   // Set when login is rejected because the account's email is unverified. The
@@ -77,6 +75,29 @@ export default function LoginPage() {
     fetchAuthMethods();
   }, []);
 
+  // A session restored on this page (the persisted flag plus a profile that
+  // loaded, possibly through a token refresh) leaves /login: showing the form
+  // over a live session tells the next person at the device they are signed
+  // out when they are not. Decided on the loaded profile, not on the cookie,
+  // so a cookie for a deleted or inactive user still reaches the form.
+  const sessionRestored = hasHydrated && isAuthenticated && !!profile && !signedInHere;
+  // The persisted flag says a session may exist, and getProfile has not
+  // answered yet: hold the form back until it does.
+  const restoringSession = isAuthenticated && !hasHydrated && !signedInHere;
+
+  useEffect(() => {
+    if (!sessionRestored || !profile) return;
+    if (profile.mustChangePassword) {
+      router.replace('/change-password');
+    } else if (returnTo) {
+      // Full-page navigation, as after a sign-in: returnTo may be a
+      // server-side OAuth interaction route.
+      window.location.replace(returnTo);
+    } else {
+      router.replace('/dashboard');
+    }
+  }, [sessionRestored, profile, returnTo, router]);
+
   const {
     register,
     handleSubmit,
@@ -91,8 +112,8 @@ export default function LoginPage() {
   useEffect(() => {
     if (authMethods.demo) {
       reset({
-        email: 'demo@monize.com',
-        password: 'Demo123!',
+        email: DEMO_USER_EMAIL,
+        password: DEMO_USER_PASSWORD,
       });
     }
   }, [authMethods.demo, reset]);
@@ -116,6 +137,7 @@ export default function LoginPage() {
       // supersedes whatever the previous session left behind, including a
       // logout the server never confirmed.
       clearLogoutIncomplete();
+      setSignedInHere(true);
       login(response.user!, 'httpOnly');
       if (authMethods.demo) {
         toast.success(t('toasts.welcomeDemo'), { duration: 6000 });
@@ -127,7 +149,7 @@ export default function LoginPage() {
       } else if (returnTo) {
         // Full-page navigation so server-side OAuth interaction routes see
         // the freshly issued auth_token cookie on the very next request.
-        window.location.href = returnTo;
+        window.location.assign(returnTo);
       } else {
         router.push('/dashboard');
       }
@@ -139,8 +161,9 @@ export default function LoginPage() {
     }
   };
 
-  const handle2FAVerified = (user: User) => {
+  const handle2FAVerified = (user: User, details?: TwoFactorSignInDetails) => {
     clearLogoutIncomplete();
+    setSignedInHere(true);
     login(user, 'httpOnly');
     if (authMethods.demo) {
       toast.success(t('toasts.welcomeDemo'), { duration: 6000 });
@@ -149,8 +172,20 @@ export default function LoginPage() {
     }
     if (user.mustChangePassword) {
       router.push('/change-password');
+    } else if (details?.usedBackupCode) {
+      // A backup code usually means the authenticator is lost or no longer
+      // verifies (a changed server secret): take the user to the 2FA controls
+      // in Settings > Security, where Reset 2FA replaces it. This outranks
+      // returnTo, which the user can reach again once 2FA is sorted out.
+      toast(
+        details.backupCodesRemaining === null
+          ? t('toasts.signedInWithBackupCode')
+          : t('toasts.signedInWithBackupCodeRemaining', { count: details.backupCodesRemaining }),
+        { duration: 10000 },
+      );
+      router.push(SECURITY_TWO_FACTOR_HREF);
     } else if (returnTo) {
-      window.location.href = returnTo;
+      window.location.assign(returnTo);
     } else {
       router.push('/dashboard');
     }
@@ -185,7 +220,7 @@ export default function LoginPage() {
     authApi.initiateOidc();
   };
 
-  if (isLoadingMethods) {
+  if (isLoadingMethods || restoringSession || sessionRestored) {
     return (
       <AuthShell plain>
         <div className="text-center text-gray-500 dark:text-gray-400">{tc('loading')}</div>

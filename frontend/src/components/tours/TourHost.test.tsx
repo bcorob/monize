@@ -23,6 +23,7 @@ import { act, render, screen, waitFor, fireEvent, cleanup } from '@/test/render'
 import { TourHost } from './TourHost';
 import { useTourStore } from '@/store/tourStore';
 import { useAuthStore } from '@/store/authStore';
+import { useHelpStore } from '@/store/helpStore';
 import { TOUR_ANCHORS } from '@/lib/tours/anchors';
 import type { TourDefinition } from '@/lib/tours/types';
 
@@ -70,6 +71,7 @@ beforeEach(() => {
   listAccounts.mockClear().mockResolvedValue([]);
   useTourStore.setState({ active: null, progress: {}, progressLoaded: false });
   useAuthStore.setState({ isAuthenticated: true });
+  useHelpStore.setState({ open: false, history: [], cursor: -1 });
 });
 
 afterEach(() => {
@@ -117,6 +119,36 @@ describe('TourHost', () => {
     });
     expect(useTourStore.getState().active).toBeNull();
     expect(saveProgress).toHaveBeenCalledWith('test/centered', 'completed');
+  });
+
+  it('opens the guide and finishes the tour from "Read the full guide" on the last step', async () => {
+    const WITH_DOCS: TourDefinition = { ...CENTERED, id: 'test/with-docs', docs: 'dashboard' };
+    await mountHost();
+    await start(WITH_DOCS);
+    await waitFor(() =>
+      expect(screen.getByText('Welcome to Monize')).toBeInTheDocument(),
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByText('Next'));
+    });
+    await waitFor(() =>
+      expect(screen.getByText('Your dashboard')).toBeInTheDocument(),
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByText('Next'));
+    });
+    await waitFor(() =>
+      expect(screen.getByText("You're all set")).toBeInTheDocument(),
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Read the full guide'));
+    });
+    const help = useHelpStore.getState();
+    expect(help.open).toBe(true);
+    expect(help.history[help.cursor]).toEqual({ page: 'dashboard' });
+    expect(useTourStore.getState().active).toBeNull();
+    expect(saveProgress).toHaveBeenCalledWith('test/with-docs', 'completed');
   });
 
   it('dismisses on Escape (capture phase) and persists a dismissal', async () => {
@@ -419,6 +451,161 @@ describe('TourHost', () => {
     expect(saveProgress).toHaveBeenCalledWith('test/skip', 'completed');
   });
 
+
+  describe('the account-detail pair', () => {
+    // The two real intro steps, so the copy under test is the shipped copy.
+    const DETAIL: TourDefinition = {
+      id: 'test/account-detail',
+      area: 'intro',
+      i18nPrefix: 'intro.basics',
+      steps: [
+        {
+          id: 'openAccountDetail',
+          requires: 'accountsExist',
+          route: '/accounts',
+          anchorId: null,
+          unobtrusive: true,
+          advance: { type: 'route', route: '/accounts/' },
+        },
+        {
+          id: 'accountDetailView',
+          requires: 'accountsExist',
+          route: '/accounts',
+          routeMatch: '/accounts/',
+          anchorId: null,
+          unobtrusive: true,
+        },
+        { id: 'finish', route: '/accounts', anchorId: null },
+      ],
+    };
+
+    async function mountAt(path: string) {
+      mockPathname = path;
+      let utils!: ReturnType<typeof render>;
+      await act(async () => {
+        utils = render(<TourHost />);
+      });
+      return utils;
+    }
+
+    async function navigateTo(
+      utils: ReturnType<typeof render>,
+      path: string,
+    ) {
+      mockPathname = path;
+      await act(async () => {
+        utils.rerender(<TourHost />);
+      });
+    }
+
+    it('advances onto any account detail route the user opens', async () => {
+      listAccounts.mockResolvedValue([{ id: 'a', accountType: 'CREDIT_CARD' }]);
+      const utils = await mountAt('/accounts');
+      await start(DETAIL);
+
+      await waitFor(() =>
+        expect(
+          screen.getByText("Open an account's detailed view"),
+        ).toBeInTheDocument(),
+      );
+      // The instruction names Details and both ways to reach it, so a mobile
+      // user has something to do; nothing here anchors on the desktop icon.
+      expect(screen.getByText(/press and hold/i)).toBeInTheDocument();
+
+      await navigateTo(utils, '/accounts/6f1c4e2a');
+
+      // Whichever account they chose: the step is pinned to the prefix.
+      await waitFor(() =>
+        expect(
+          screen.getByText('A view built for this account'),
+        ).toBeInTheDocument(),
+      );
+      expect(useTourStore.getState().active!.skippedCount).toBe(0);
+    });
+
+    it('continues the tour for a user with no account to open', async () => {
+      // No accounts: there is no Details page anywhere, so waiting for a route
+      // change the user cannot make would strand them.
+      listAccounts.mockResolvedValue([]);
+      await mountAt('/accounts');
+      await start(DETAIL);
+
+      await waitFor(() =>
+        expect(screen.getByText("You're all set")).toBeInTheDocument(),
+      );
+      // Both omissions are deliberate, so the tour is not marked degraded.
+      expect(useTourStore.getState().active!.skippedCount).toBe(0);
+    });
+
+    it('omits the pair for an account with no dedicated detail page', async () => {
+      listAccounts.mockResolvedValue([{ id: 'a', accountType: 'NOT_A_TYPE' }]);
+      await mountAt('/accounts');
+      await start(DETAIL);
+
+      await waitFor(() =>
+        expect(screen.getByText("You're all set")).toBeInTheDocument(),
+      );
+    });
+
+    it('skips the detail step instead of hanging when the prompt is skipped', async () => {
+      // Skipped from the list, the user never reaches '/accounts/<id>' -- and
+      // the engine cannot navigate there, so the step would sit in its
+      // navigating phase behind an overlay that renders nothing.
+      listAccounts.mockResolvedValue([{ id: 'a', accountType: 'CHEQUING' }]);
+      await mountAt('/accounts');
+      await start(DETAIL);
+
+      await waitFor(() =>
+        expect(
+          screen.getByText("Open an account's detailed view"),
+        ).toBeInTheDocument(),
+      );
+      await act(async () => {
+        fireEvent.click(screen.getByText('Skip this step'));
+      });
+
+      await waitFor(() =>
+        expect(screen.getByText("You're all set")).toBeInTheDocument(),
+      );
+    });
+
+    it('offers no Back onto the detail step once the user has left it', async () => {
+      listAccounts.mockResolvedValue([{ id: 'a', accountType: 'CHEQUING' }]);
+      const utils = await mountAt('/accounts');
+      await start(DETAIL);
+
+      await waitFor(() =>
+        expect(
+          screen.getByText("Open an account's detailed view"),
+        ).toBeInTheDocument(),
+      );
+      await navigateTo(utils, '/accounts/6f1c4e2a');
+      await waitFor(() =>
+        expect(
+          screen.getByText('A view built for this account'),
+        ).toBeInTheDocument(),
+      );
+
+      // On to the last step, and back to the accounts list with it.
+      await act(async () => {
+        fireEvent.click(screen.getByText('Next'));
+      });
+      await navigateTo(utils, '/accounts');
+      await waitFor(() =>
+        expect(screen.getByText("You're all set")).toBeInTheDocument(),
+      );
+
+      // Back reaches the prompt, never the step pinned to the account's own id.
+      await act(async () => {
+        fireEvent.click(screen.getByText('Back'));
+      });
+      await waitFor(() =>
+        expect(
+          screen.getByText("Open an account's detailed view"),
+        ).toBeInTheDocument(),
+      );
+    });
+  });
 
   it('stands in for a missing anchor when the step asked to', async () => {
     const tour: TourDefinition = {

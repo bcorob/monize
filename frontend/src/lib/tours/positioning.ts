@@ -1,3 +1,4 @@
+import { clamp } from '@/lib/clamp';
 import type { TourPlacement } from './types';
 
 export interface Rect {
@@ -27,11 +28,6 @@ export interface TooltipPosition {
 /** Gap between the anchor and the tooltip, and the min margin from the viewport edge. */
 const GAP = 12;
 const EDGE_MARGIN = 8;
-
-function clamp(value: number, min: number, max: number): number {
-  if (max < min) return min;
-  return Math.min(Math.max(value, min), max);
-}
 
 /**
  * Pure tooltip placement. Mirrors CalendarPopover's flip/clamp approach: prefer

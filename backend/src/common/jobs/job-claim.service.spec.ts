@@ -223,6 +223,145 @@ describe("JobClaimService", () => {
     });
   });
 
+  describe("renewLease (A26-L13)", () => {
+    it("pushes the expiry out as the attempt that holds the lease", async () => {
+      manager.query.mockResolvedValue([[], 1]);
+
+      const held = await service.renewLease(
+        JobClaimType.AiInsightGeneration,
+        USER,
+        "generation",
+        LEASE,
+        60_000,
+      );
+
+      expect(held).toBe(true);
+      const [declareSql, declareParams] = manager.query.mock.calls[0];
+      expect(declareSql).toContain("set_config('app.job_claim_lease_token'");
+      expect(declareParams).toEqual([LEASE]);
+      const [sql, params] = manager.query.mock.calls[1];
+      expect(sql).toContain("SET expires_at = CURRENT_TIMESTAMP +");
+      expect(sql).toContain("lease_token = $4::uuid");
+      expect(sql).toContain("delivered_at IS NULL");
+      expect(params).toEqual([
+        "ai_insight_generation",
+        USER,
+        "generation",
+        LEASE,
+        "60000",
+      ]);
+    });
+
+    it("answers false once another attempt retook the lease", async () => {
+      manager.query.mockResolvedValue([[], 0]);
+
+      await expect(
+        service.renewLease(
+          JobClaimType.AiInsightGeneration,
+          USER,
+          "generation",
+          LEASE,
+          60_000,
+        ),
+      ).resolves.toBe(false);
+    });
+  });
+
+  describe("whileLeaseHeld (A26-L13)", () => {
+    afterEach(() => jest.useRealTimers());
+
+    it("renews every third of the TTL while the work runs, and stops when it settles", async () => {
+      jest.useFakeTimers();
+      const renew = jest.spyOn(service, "renewLease").mockResolvedValue(true);
+      let finish!: () => void;
+      const work = new Promise<string>((resolve) => {
+        finish = () => resolve("done");
+      });
+
+      const running = service.whileLeaseHeld(
+        JobClaimType.EmailReceiptPoll,
+        USER,
+        "mailbox",
+        LEASE,
+        30_000,
+        () => work,
+      );
+      await jest.advanceTimersByTimeAsync(10_000);
+      expect(renew).toHaveBeenCalledTimes(1);
+      expect(renew).toHaveBeenCalledWith(
+        "email_receipt_poll",
+        USER,
+        "mailbox",
+        LEASE,
+        30_000,
+      );
+      await jest.advanceTimersByTimeAsync(20_000);
+      expect(renew).toHaveBeenCalledTimes(3);
+
+      finish();
+      await expect(running).resolves.toBe("done");
+      await jest.advanceTimersByTimeAsync(60_000);
+      expect(renew).toHaveBeenCalledTimes(3);
+    });
+
+    it("stops renewing when the work throws, and rethrows", async () => {
+      jest.useFakeTimers();
+      const renew = jest.spyOn(service, "renewLease").mockResolvedValue(true);
+
+      await expect(
+        service.whileLeaseHeld(
+          JobClaimType.EmailReceiptPoll,
+          USER,
+          "mailbox",
+          LEASE,
+          30_000,
+          () => Promise.reject(new Error("provider down")),
+        ),
+      ).rejects.toThrow("provider down");
+      await jest.advanceTimersByTimeAsync(60_000);
+      expect(renew).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("holdsLease (A26-L13)", () => {
+    it("reads this attempt's row FOR UPDATE on the caller's manager", async () => {
+      manager.query.mockResolvedValue([{ held: 1 }]);
+
+      await expect(
+        service.holdsLease(
+          manager as never,
+          JobClaimType.AiInsightGeneration,
+          USER,
+          "generation",
+          LEASE,
+        ),
+      ).resolves.toBe(true);
+      const [sql, params] = manager.query.mock.calls[0];
+      expect(sql).toContain("lease_token = $4::uuid");
+      expect(sql).toContain("FOR UPDATE");
+      expect(params).toEqual([
+        "ai_insight_generation",
+        USER,
+        "generation",
+        LEASE,
+      ]);
+    });
+
+    it("answers false when the row carries another attempt's token", async () => {
+      manager.query.mockResolvedValue([]);
+
+      await expect(
+        service.holdsLease(
+          manager as never,
+          JobClaimType.AiInsightGeneration,
+          USER,
+          "generation",
+          LEASE,
+        ),
+      ).resolves.toBe(false);
+    });
+  });
+
   describe("wasDelivered", () => {
     it("is true only for a row carrying a delivery timestamp", async () => {
       manager.query.mockResolvedValue([{ "1": 1 }]);

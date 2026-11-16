@@ -1,8 +1,14 @@
+import { SharedReviewService } from "../../shared-expenses/shared-review.service";
 import { Injectable } from "@nestjs/common";
 import { describeSkippedRows } from "../../common/bulk-create.types";
 import { z } from "zod";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import type {
+  InputRequiredResult,
+  ServerContext,
+} from "@modelcontextprotocol/server";
 import { TransactionsService } from "../../transactions/transactions.service";
+import { TRANSACTION_SORT_FIELDS } from "../../transactions/register-order";
 import { PayeesService } from "../../payees/payees.service";
 import { AccountsService } from "../../accounts/accounts.service";
 import { TransactionAnalyticsService } from "../../transactions/transaction-analytics.service";
@@ -19,12 +25,19 @@ import {
 } from "../../ai/relay/relay-attachment.store";
 import { AiActionBuilderService } from "../../ai/actions/ai-action-builder.service";
 import {
+  AiActionSplitTagChangePreview,
   ApprovalMode,
   AttachmentRefDescriptor,
   PendingAiAction,
+  UpdateTransactionDescriptor,
+  UpdateTransferDescriptor,
   resolveApprovalMode,
   toSplitDtoRows,
 } from "../../ai/actions/ai-action.types";
+import {
+  updateTransactionCommitArgs,
+  updateTransferCommitArgs,
+} from "../../ai/actions/edit-commit-args";
 import {
   AttachmentDto,
   MAX_ATTACHMENT_BASE64_LENGTH,
@@ -36,17 +49,25 @@ import { sniffAttachmentMime } from "../../attachments/attachment-mime.util";
 import { withUserContext } from "../../common/db/with-context";
 import { RELAY_PREVIEW_SHOWN, emitRelayCard } from "../mcp-relay-confirm";
 import {
-  UserContextResolver,
+  resolveUserContext,
   requireScope,
   toolResult,
   toolError,
   safeToolError,
-  confirmWrite,
 } from "../mcp-context";
+import {
+  cardKey,
+  confirmItemsForCards,
+  confirmWrite,
+  confirmWriteMany,
+  isAsk,
+} from "../mcp-confirm";
 import { McpWriteLimiter } from "../mcp-write-limiter";
 import {
   getDefaultDateRange,
   resolveComparePeriods,
+  numberArg,
+  booleanArg,
 } from "../../common/tool-schemas";
 import {
   didYouMean,
@@ -58,6 +79,25 @@ import {
   manageTransactionsOutput,
 } from "../tool-output-schemas";
 import { READ_ONLY, WRITE } from "../mcp-annotations";
+import {
+  uuidString,
+  nameList,
+  manageOperation,
+  approvalMode,
+  dryRun,
+  itemsArray,
+} from "./schema-fragments";
+import { TRANSACTION_NOTE_MAX_LENGTH } from "../../common/transaction-note";
+import {
+  ForeignEntryRateSource,
+  pickForeignEntryRequest,
+} from "../../common/foreign-entry.util";
+import {
+  ForeignEntryFields,
+  foreignEntryDisplayFields,
+  foreignEntryWriteFields,
+} from "../../transactions/foreign-entry-preview";
+import { SEARCH_SYNTAX_SUMMARY } from "../../transactions/transaction-search-query.util";
 
 type ManageOperation = "create" | "update" | "delete";
 
@@ -68,6 +108,54 @@ type ManageOperation = "create" | "update" | "delete";
  */
 const RECONCILED_CONFIRM_NOTE =
   "\nWarning: this transaction is reconciled. Changing it will affect a completed reconciliation.";
+
+/** The tag change an edit makes, as lines of an MCP confirmation prompt. */
+function tagConfirmNote(change: {
+  tagNames?: string[];
+  removeTagNames?: string[];
+  splitTagChanges?: readonly AiActionSplitTagChangePreview[];
+}): string {
+  const lineNote = (line: AiActionSplitTagChangePreview) =>
+    [
+      line.tagNames?.length ? `add ${line.tagNames.join(", ")}` : "",
+      line.removeTagNames?.length
+        ? `remove ${line.removeTagNames.join(", ")}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("; ");
+  return (
+    (change.tagNames?.length
+      ? `\nAdd tags: ${change.tagNames.join(", ")}`
+      : "") +
+    (change.removeTagNames?.length
+      ? `\nRemove tags: ${change.removeTagNames.join(", ")}`
+      : "") +
+    (change.splitTagChanges ?? [])
+      .map(
+        (line) =>
+          `\nSplit line ${line.categoryName ?? "(no category)"} ${line.amount}${line.legAccountName ? ` (and its transfer in ${line.legAccountName})` : ""} tags: ${lineNote(line)}`,
+      )
+      .join("")
+  );
+}
+
+/** How a confirmation names where a foreign entry's rate came from. */
+const RATE_SOURCE_NOTE: Record<ForeignEntryRateSource, string> = {
+  supplied: "rate as given",
+  derived: "rate derived from the two amounts",
+  market: "market rate for the date",
+};
+
+/** The foreign-currency entry a create or edit sets, as a confirmation line. */
+function fxConfirmNote(p: ForeignEntryFields): string {
+  if (p.originalCurrencyCode === undefined) return "";
+  if (p.originalCurrencyCode === null) return "\nForeign currency: removed";
+  const source = p.exchangeRateSource
+    ? ` (${RATE_SOURCE_NOTE[p.exchangeRateSource]})`
+    : "";
+  return `\nPaid: ${p.originalAmount} ${p.originalCurrencyCode} at ${p.exchangeRate}${source}`;
+}
 
 /**
  * One file to save on the transaction: either a relayed chat attachment
@@ -97,8 +185,25 @@ interface ManageItem {
   createPayeeIfMissing?: boolean;
   exchangeRate?: number;
   toAmount?: number;
+  // non-transfer: entered in another currency
+  originalAmount?: number;
+  originalCurrencyCode?: string;
   // split transactions (category splits only)
-  splits?: { categoryName: string; amount: number; memo?: string }[];
+  splits?: {
+    categoryName: string;
+    amount: number;
+    memo?: string;
+    splitId?: string;
+  }[];
+  // update: tags added and removed (the others stay)
+  addTagNames?: string[];
+  removeTagNames?: string[];
+  // update: tags added and removed on existing split lines
+  splitTags?: {
+    splitId: string;
+    addTagNames?: string[];
+    removeTagNames?: string[];
+  }[];
   // files to save on the transaction (create/update, single item only)
   attachments?: ManageAttachmentInput[];
 }
@@ -106,6 +211,7 @@ interface ManageItem {
 @Injectable()
 export class McpTransactionsTools {
   constructor(
+    private readonly sharedReview: SharedReviewService,
     private readonly transactionsService: TransactionsService,
     private readonly payeesService: PayeesService,
     private readonly analyticsService: TransactionAnalyticsService,
@@ -119,113 +225,91 @@ export class McpTransactionsTools {
     private readonly relayAttachmentStore: RelayAttachmentStore,
   ) {}
 
-  register(server: McpServer, resolve: UserContextResolver) {
+  register(server: McpServer) {
     server.registerTool(
       "list_transactions",
       {
         title: "List transactions",
         annotations: READ_ONLY,
         description:
-          "List and aggregate the user's cash transactions. Accepts NAMES for accounts, categories, and payees -- they are resolved internally, so you do NOT need to call get_accounts/list_categories/list_payees first. Returns a rich summary by default: income/expense/net totals, per-currency totals, an optional grouped breakdown (groupBy: category/payee/year/month/week), and an optional per-account transfer rollup (transfersOnly). Set includeTransactions=true ONLY when the user wants the individual rows -- it adds the raw transaction list (which costs many tokens); otherwise the summary alone answers spending/income/total questions. Transfers between the user's own accounts are excluded from the income/expense totals (use transfersOnly to see them).",
-        inputSchema: {
+          "Cash income, expenses and net totals with optional grouping. " +
+          "Own-account transfers are excluded; transfersOnly adds their " +
+          "per-account rollup. Prefer totals; includeTransactions adds costly raw rows.",
+        inputSchema: z.object({
           searchText: z
             .string()
             .max(200)
             .optional()
-            .describe("Search payee names or transaction descriptions"),
+            .describe(SEARCH_SYNTAX_SUMMARY),
           startDate: z
             .string()
             .max(10)
             .optional()
-            .describe("Start date (YYYY-MM-DD). Defaults to 30 days ago."),
-          endDate: z
-            .string()
-            .max(10)
-            .optional()
-            .describe("End date (YYYY-MM-DD). Defaults to today."),
+            .describe("Defaults to 30 days ago."),
+          endDate: z.string().max(10).optional().describe("Defaults to today."),
           accountNames: z
             .array(z.string().max(100))
             .max(50)
             .optional()
-            .describe("Optional account names to filter to"),
+            .describe("Account names."),
           categoryNames: z
             .array(z.string().max(100))
             .max(100)
             .optional()
             .describe(
-              'Optional category names to filter to, in the "Parent: Child" form the read tools return. A bare subcategory name shared by two parents is rejected rather than guessed, and the error lists the qualified names.',
+              "Category names. An ambiguous bare child name is rejected, and the error lists the qualified ones.",
             ),
           payeeNames: z
             .array(z.string().max(100))
             .max(100)
             .optional()
-            .describe("Optional payee names to filter to"),
-          minAmount: z
-            .number()
-            .min(-999999999999)
-            .max(999999999999)
+            .describe("Payee names."),
+          minAmount: numberArg(z.number().min(-999999999999).max(999999999999))
             .optional()
-            .describe("Minimum signed amount"),
-          maxAmount: z
-            .number()
-            .min(-999999999999)
-            .max(999999999999)
+            .describe("Minimum signed amount."),
+          maxAmount: numberArg(z.number().min(-999999999999).max(999999999999))
             .optional()
-            .describe("Maximum signed amount"),
+            .describe("Maximum signed amount."),
           direction: z
             .enum(["expenses", "income", "both"])
             .optional()
-            .describe("Filter the grouped breakdown by direction"),
+            .describe("Narrows the grouped breakdown."),
           groupBy: z
             .enum(["category", "payee", "year", "month", "week", "none"])
             .optional()
             .describe(
-              "How to group the breakdown (default 'none' = totals only, no breakdown)",
+              "Default 'none', which returns totals with no breakdown.",
             ),
-          transfersOnly: z
-            .boolean()
+          transfersOnly: booleanArg()
             .optional()
-            .describe(
-              "When true, also compute the per-account transfer rollup (inbound/outbound/net)",
-            ),
-          includeTransactions: z
-            .boolean()
+            .describe("Also compute the per-account transfer rollup."),
+          includeTransactions: booleanArg()
             .optional()
             .default(false)
             .describe(
-              "When true, also include the raw transaction list (costs more tokens). Default false -- the summary alone usually suffices. Foreign-currency rows also carry read-only originalAmount, originalCurrencyCode, and exchangeRate metadata (amount stays in the account currency); informational only, creating foreign-currency transactions is not supported.",
+              "A foreign-currency row carries originalAmount, originalCurrencyCode and exchangeRate beside the account-currency amount.",
             ),
-          limit: z
-            .number()
-            .int()
-            .min(1)
-            .max(100)
+          limit: numberArg(z.number().int().min(1).max(100))
             .optional()
             .default(50)
-            .describe(
-              "Max raw rows when includeTransactions is true (max 100)",
-            ),
-          sortBy: z
-            .enum(["date", "amount", "payee"])
-            .optional()
-            .default("date")
-            .describe(
-              "Which field to sort the raw rows by (when includeTransactions is true): 'date' (default), 'amount', or 'payee'",
-            ),
+            .describe("Max raw rows, up to 100."),
+          // No `.describe` on either: the enum carries the values and
+          // `.default` carries the default, so prose restating them is the
+          // redundancy `tools-list-budget.spec.ts` exists to keep out of every
+          // request's context. Only "which end desc is" needs saying.
+          sortBy: z.enum(TRANSACTION_SORT_FIELDS).optional().default("date"),
           sortDirection: z
             .enum(["asc", "desc"])
             .optional()
             .default("desc")
-            .describe(
-              "Sort direction for the raw rows (when includeTransactions is true): 'desc' (newest first, default) or 'asc' (oldest first)",
-            ),
-        },
+            .describe("desc is newest first."),
+        }),
         outputSchema: listTransactionsOutput,
       },
-      async (args, extra) => {
-        const ctx = resolve(extra.sessionId);
-        if (!ctx) return toolError("No user context");
-        const check = requireScope(ctx.scopes, "read");
+      async (args, ctx) => {
+        const user = resolveUserContext(ctx);
+        if (!user) return toolError("No user context");
+        const check = requireScope(user.scopes, "read");
         if (check.error) return check.result;
 
         try {
@@ -233,7 +317,7 @@ export class McpTransactionsTools {
           const startDate = args.startDate ?? defaults.startDate;
           const endDate = args.endDate ?? defaults.endDate;
 
-          const resolved = await this.resolveListFilters(ctx.userId, {
+          const resolved = await this.resolveListFilters(user.userId, {
             accountNames: args.accountNames,
             categoryNames: args.categoryNames,
             payeeNames: args.payeeNames,
@@ -241,7 +325,7 @@ export class McpTransactionsTools {
           if (resolved.error) return toolError(resolved.error);
 
           const data = await this.analyticsService.getLlmListTransactions(
-            ctx.userId,
+            user.userId,
             {
               startDate,
               endDate,
@@ -258,11 +342,13 @@ export class McpTransactionsTools {
           );
 
           if (!args.includeTransactions) {
-            return toolResult(data);
+            return toolResult(
+              await this.sharedReview.annotate(user.userId, data),
+            );
           }
 
           const rows = await this.transactionsService.getLlmTransactionRows(
-            ctx.userId,
+            user.userId,
             {
               accountId: resolved.accountIds?.[0],
               categoryId: resolved.categoryIds?.[0],
@@ -278,13 +364,15 @@ export class McpTransactionsTools {
             },
           );
 
-          return toolResult({
-            ...data,
-            transactions: rows.transactions,
-            total: rows.total,
-            hasMore: rows.hasMore,
-            truncatedTransactionList: rows.hasMore,
-          });
+          return toolResult(
+            await this.sharedReview.annotate(user.userId, {
+              ...data,
+              transactions: rows.transactions,
+              total: rows.total,
+              hasMore: rows.hasMore,
+              truncatedTransactionList: rows.hasMore,
+            }),
+          );
         } catch (err: unknown) {
           return safeToolError(err);
         }
@@ -297,49 +385,28 @@ export class McpTransactionsTools {
         title: "Compare periods",
         annotations: READ_ONLY,
         description:
-          "Compare spending or income between two time periods. Returns side-by-side comparison showing absolute and percentage changes per group. If any of the four period dates are omitted, defaults to the previous full month (period1) vs the current month-to-date (period2). Returns the same shape as the AI Assistant's compare_periods tool.",
-        inputSchema: {
-          period1Start: z
-            .string()
-            .max(10)
-            .optional()
-            .describe(
-              "First period start (YYYY-MM-DD). Defaults to the start of last month.",
-            ),
-          period1End: z
-            .string()
-            .max(10)
-            .optional()
-            .describe(
-              "First period end (YYYY-MM-DD). Defaults to the last day of last month.",
-            ),
-          period2Start: z
-            .string()
-            .max(10)
-            .optional()
-            .describe(
-              "Second period start (YYYY-MM-DD). Defaults to the start of the current month.",
-            ),
-          period2End: z
-            .string()
-            .max(10)
-            .optional()
-            .describe("Second period end (YYYY-MM-DD). Defaults to today."),
+          "Spending/income change per group across two periods. Dates default " +
+          "to last full month versus this month to date.",
+        inputSchema: z.object({
+          period1Start: z.string().max(10).optional(),
+          period1End: z.string().max(10).optional(),
+          period2Start: z.string().max(10).optional(),
+          period2End: z.string().max(10).optional(),
           groupBy: z
             .enum(["category", "payee"])
             .optional()
-            .describe("How to group comparison (default: category)"),
+            .describe("Default 'category'."),
           direction: z
             .enum(["expenses", "income", "both"])
             .optional()
-            .describe("Filter by direction (default: expenses)"),
-        },
+            .describe("Default 'expenses'."),
+        }),
         outputSchema: comparePeriodsOutput,
       },
-      async (args, extra) => {
-        const ctx = resolve(extra.sessionId);
-        if (!ctx) return toolError("No user context");
-        const check = requireScope(ctx.scopes, "read");
+      async (args, ctx) => {
+        const user = resolveUserContext(ctx);
+        if (!user) return toolError("No user context");
+        const check = requireScope(user.scopes, "read");
         if (check.error) return check.result;
 
         try {
@@ -350,7 +417,7 @@ export class McpTransactionsTools {
             period2End: args.period2End,
           });
           const data = await this.analyticsService.getLlmPeriodComparison(
-            ctx.userId,
+            user.userId,
             {
               period1Start: periods.period1Start,
               period1End: periods.period1End,
@@ -360,7 +427,9 @@ export class McpTransactionsTools {
               direction: args.direction,
             },
           );
-          return toolResult(data);
+          return toolResult(
+            await this.sharedReview.annotate(user.userId, data),
+          );
         } catch (err: unknown) {
           return safeToolError(err);
         }
@@ -373,179 +442,183 @@ export class McpTransactionsTools {
         title: "Manage transactions",
         annotations: WRITE,
         description:
-          "Create, update, or delete the user's cash transactions (including transfers between their own accounts). Accepts NAMES for account, category, and payee -- they are resolved internally, so you do NOT need to call get_accounts/list_categories first. operation = 'create' | 'update' | 'delete' with an items array (1-25 rows). " +
-          "create (standard): { accountName, amount, date, payeeName?, categoryName?, description?, createPayeeIfMissing? } (amount positive=income, negative=expense). " +
-          "create (transfer): { fromAccountName, toAccountName, amount, date, description?, payeeName?, categoryName?, createPayeeIfMissing?, exchangeRate?, toAmount? } -- an item is a transfer when toAccountName is present; payeeName is an optional custom label matched to an existing payee (or created if missing, like a normal transaction) and applied to both legs (omit to leave the payee blank; blank transfer payees display as 'Transfer to/from <account>' resolved from the current account name); categoryName is an optional spending category stored on both legs (surfaces the transfer in the monthly category breakdown without counting as income/expense). " +
-          "update: { transactionId, amount?, date?, payeeName?, categoryName?, description?, createPayeeIfMissing? } (>=1 field; a category-only change is transactionId + categoryName; transfers auto-detected; categoryName also applies to a transfer -- it is stored on both legs and surfaces the transfer in the monthly category breakdown without making it count as income/expense; payeeName sets the transfer's custom label, matched to an existing payee or created if missing). " +
-          "split transactions (create or update): add a 'splits' array of { categoryName, amount, memo? } (>= 2 lines, category splits only) instead of a single categoryName; split amounts must sum to the transaction amount. Updating an EXISTING split transaction: parent fields (date, payeeName, description) work without splits, but changing its categories or its amount requires resending the COMPLETE splits array (the tool errors with instructions otherwise). Read tools return one row per split line (same transaction id, distinct splitId), and always the COMPLETE set for each transaction even when you filtered by category -- so read the current lines first, then resend all of them with your change applied. Several split transactions CAN be sent in one call: each item carries its own complete splits array, and every row is previewed and applied with its own set. " +
-          "delete: { transactionId } (removes linked transfer legs / split children too). " +
-          "attachments (create or update): add an 'attachments' array to save files permanently on the transaction; each entry is EITHER { attachmentUri } referencing a monize-attachment:// chat file relayed from the Monize web chat, OR { fileData, fileName } with inline base64 bytes. Images and PDFs only, max 5 MB each. Single-item calls only; not valid on transfers, delete, or dryRun. An attachments-only update (transactionId + attachments) is a valid edit. " +
-          "approvalMode controls the confirmation: by default 6 or more items show one confirmation for the whole batch and 1-5 items show one confirmation per item; pass 'individual' to force one confirmation per item at any count; ignored for a single item. Set dryRun=true to preview every item without saving. The user is asked to confirm before anything is saved (web chat card via relay, or an MCP confirmation dialog).",
-        inputSchema: {
-          operation: z
-            .enum(["create", "update", "delete"])
-            .describe("The operation to perform on every item."),
-          items: z
-            .array(
-              z.object({
-                accountName: z
-                  .string()
-                  .max(100)
-                  .optional()
-                  .describe("create (standard): account name."),
-                fromAccountName: z
-                  .string()
-                  .max(100)
-                  .optional()
-                  .describe("create (transfer): source account name."),
-                toAccountName: z
-                  .string()
-                  .max(100)
-                  .optional()
-                  .describe(
-                    "create (transfer): destination account name (presence makes the item a transfer).",
-                  ),
-                transactionId: z
-                  .string()
-                  .uuid()
-                  .optional()
-                  .describe("update/delete: transaction ID."),
-                amount: z
-                  .number()
-                  .min(-999999999999)
-                  .max(999999999999)
-                  .optional()
-                  .describe(
-                    "Signed amount (standard create/update) or positive transfer amount.",
-                  ),
-                date: z
-                  .string()
-                  .max(10)
-                  .optional()
-                  .describe("Transaction date (YYYY-MM-DD)."),
-                payeeName: z
-                  .string()
-                  .max(100)
-                  .optional()
-                  .describe(
-                    "Optional payee name (standard create/update; or a custom transfer label for create/update transfer). Matched to an existing payee when one exists, otherwise handled per createPayeeIfMissing. Omit (transfer) to leave the payee blank; blank transfer payees display as 'Transfer to/from <account>' resolved from the current account name.",
-                  ),
-                categoryName: z
-                  .string()
-                  .max(100)
-                  .optional()
-                  .describe(
-                    'Optional category name (standard create/update, or transfer create/update -- on a transfer it is stored on both legs), qualified as "Parent: Child" -- a bare subcategory name shared by two parents is rejected, not guessed.',
-                  ),
-                description: z
-                  .string()
-                  .max(500)
-                  .optional()
-                  .describe("Optional description or memo."),
-                createPayeeIfMissing: z
-                  .boolean()
-                  .optional()
-                  .describe(
-                    "When the payee name matches no existing payee, create a new payee (default true) or keep as free text (false). Applies to standard and transfer create/update.",
-                  ),
-                exchangeRate: z
-                  .number()
-                  .min(0)
-                  .max(1_000_000)
-                  .optional()
-                  .describe(
-                    "create (transfer): exchange rate for a cross-currency transfer.",
-                  ),
-                toAmount: z
-                  .number()
-                  .min(-999999999999)
-                  .max(999999999999)
-                  .optional()
-                  .describe(
-                    "create (transfer): explicit destination amount (overrides exchangeRate).",
-                  ),
-                splits: z
-                  .array(
-                    z.object({
-                      categoryName: z
-                        .string()
-                        .min(1)
-                        .max(100)
-                        .describe(
-                          'Category for this split line, qualified as "Parent: Child" for a subcategory (required when the subcategory name is shared by more than one parent).',
-                        ),
-                      amount: z
-                        .number()
-                        .min(-999999999999)
-                        .max(999999999999)
-                        .describe("Signed amount for this split line."),
-                      memo: z
-                        .string()
-                        .max(500)
-                        .optional()
-                        .describe("Optional memo for this split line."),
-                    }),
-                  )
-                  .max(50)
-                  .optional()
-                  .describe(
-                    "Category splits (create/update). >= 2 lines instead of a single categoryName; amounts must sum to the transaction amount. On an EXISTING split transaction, a category or amount change requires resending the complete split set (parent fields work without it); read the current lines first. Several items may each carry their own splits array in one call.",
-                  ),
-                attachments: z
-                  .array(
-                    z.object({
-                      attachmentUri: z
-                        .string()
-                        .max(300)
-                        .optional()
-                        .describe(
-                          "monize-attachment://<id> URI (or bare id) of a chat file relayed from the Monize web chat. Mutually exclusive with fileData.",
-                        ),
-                      fileData: z
-                        .string()
-                        .max(MAX_ATTACHMENT_BASE64_LENGTH)
-                        .optional()
-                        .describe(
-                          "Inline base64 file bytes (image or PDF, max 5 MB decoded). Requires fileName. Mutually exclusive with attachmentUri.",
-                        ),
-                      fileName: z
-                        .string()
-                        .max(255)
-                        .optional()
-                        .describe("Filename for fileData."),
-                    }),
-                  )
-                  .min(1)
-                  .max(MAX_ATTACHMENTS)
-                  .optional()
-                  .describe(
-                    "create/update: files to save permanently on the transaction (images/PDF only). Single-item calls only; not valid on transfers, delete, or dryRun.",
-                  ),
-              }),
-            )
-            .min(1)
-            .max(25)
-            .describe("The rows to act on (1-25)."),
-          approvalMode: z
-            .enum(["bulk", "individual"])
-            .optional()
-            .describe(
-              "How multi-item batches are approved: by default 6 or more items show one card for the whole batch and 1-5 items show one card per item; 'individual' forces one card per item at any count. Ignored for a single item.",
-            ),
-          dryRun: z
-            .boolean()
-            .optional()
-            .default(false)
-            .describe(
-              "If true, validate and return a per-item preview without saving anything.",
-            ),
-        },
+          "Create, update or delete cash transactions; an item with " +
+          "toAccountName is a transfer between the user's own accounts. A " +
+          "split carries a `splits` array instead of categoryName, its lines " +
+          "summing to the amount. On an EXISTING split transaction, parent " +
+          "fields (date, payeeName, description) change without splits, but a " +
+          "category or amount change needs the COMPLETE splits array. Read " +
+          "tools return one row per split line (same id, distinct splitId), " +
+          "always the whole set even when filtered by category: read the lines " +
+          "first and resend every one with your change. Several split " +
+          "transactions CAN be sent in one call, each with its own complete " +
+          "array. addTagNames/removeTagNames change only those tags (both " +
+          "legs of a transfer); a split line's own tags only via splitTags. " +
+          "Deleting a row removes its transfer legs and " +
+          "split children too.",
+        inputSchema: z.object({
+          operation: manageOperation(),
+          items: itemsArray(
+            z.object({
+              accountName: z
+                .string()
+                .max(100)
+                .optional()
+                .describe("create: the account, for a non-transfer."),
+              fromAccountName: z
+                .string()
+                .max(100)
+                .optional()
+                .describe("create: transfer source."),
+              toAccountName: z
+                .string()
+                .max(100)
+                .optional()
+                .describe(
+                  "create: transfer destination. Its presence makes the item a transfer.",
+                ),
+              transactionId: uuidString()
+                .optional()
+                .describe("update/delete: the row's id."),
+              amount: numberArg(z.number().min(-999999999999).max(999999999999))
+                .optional()
+                .describe(
+                  "Signed amount, or the positive amount moved by a transfer.",
+                ),
+              date: z.string().max(10).optional().describe("Transaction date."),
+              payeeName: z
+                .string()
+                .max(100)
+                .optional()
+                .describe(
+                  "Matched to an existing payee, else handled per createPayeeIfMissing. On a transfer it is a custom label; omitted, the transfer reads as 'Transfer to/from <account>'.",
+                ),
+              categoryName: z
+                .string()
+                .max(100)
+                .optional()
+                .describe(
+                  "The category. On a transfer it is stored on both legs and surfaces it in the category breakdown without counting as income or expense.",
+                ),
+              description: z
+                .string()
+                .max(TRANSACTION_NOTE_MAX_LENGTH)
+                .optional()
+                .describe("Description or memo."),
+              createPayeeIfMissing: booleanArg()
+                .optional()
+                .describe(
+                  "An unmatched payee name creates a payee (default) or stays free text.",
+                ),
+              exchangeRate: numberArg(z.number().min(0).max(9_999_999_999))
+                .optional()
+                .describe(
+                  "Rate for a cross-currency transfer (create) or originalCurrencyCode.",
+                ),
+              toAmount: numberArg(
+                z.number().min(-999999999999).max(999999999999),
+              )
+                .optional()
+                .describe(
+                  "create: explicit destination amount, overriding exchangeRate.",
+                ),
+              originalAmount: numberArg(
+                z.number().min(-999999999999).max(999999999999),
+              )
+                .optional()
+                .describe(
+                  "Signed, in originalCurrencyCode; not on a transfer. With amount charged, exchangeRate, both (must agree) or neither (market rate).",
+                ),
+              originalCurrencyCode: z
+                .string()
+                .length(3)
+                .optional()
+                .describe(
+                  "Currency paid in. update: the account's own clears it.",
+                ),
+              splits: z
+                .array(
+                  z.object({
+                    categoryName: z
+                      .string()
+                      .min(1)
+                      .max(100)
+                      .describe("Category for this line."),
+                    amount: numberArg(
+                      z.number().min(-999999999999).max(999999999999),
+                    ).describe("Signed amount for this line."),
+                    memo: z
+                      .string()
+                      .max(TRANSACTION_NOTE_MAX_LENGTH)
+                      .optional()
+                      .describe("Memo for this line."),
+                    splitId: uuidString()
+                      .optional()
+                      .describe("update: keeps this existing line's tags."),
+                  }),
+                )
+                .max(50)
+                .optional()
+                .describe(
+                  "Two or more category lines instead of a single categoryName. See the tool description for editing an existing split.",
+                ),
+              addTagNames: nameList(20)
+                .optional()
+                .describe("update: a new name creates the tag."),
+              removeTagNames: nameList(20).optional().describe("update only."),
+              splitTags: z
+                .array(
+                  z.object({
+                    splitId: uuidString(),
+                    addTagNames: nameList(20).optional(),
+                    removeTagNames: nameList(20).optional(),
+                  }),
+                )
+                .min(1)
+                .max(50)
+                .optional()
+                .describe("update: tags of existing lines. Not with splits."),
+              attachments: z
+                .array(
+                  z.object({
+                    attachmentUri: z
+                      .string()
+                      .max(300)
+                      .optional()
+                      .describe(
+                        "A monize-attachment:// URI (or bare id) of a web-chat file. Exclusive with fileData.",
+                      ),
+                    fileData: z
+                      .string()
+                      .max(MAX_ATTACHMENT_BASE64_LENGTH)
+                      .optional()
+                      .describe(
+                        "Inline base64 bytes, max 5 MB decoded. Needs fileName. Exclusive with attachmentUri.",
+                      ),
+                    fileName: z
+                      .string()
+                      .max(255)
+                      .optional()
+                      .describe("Filename for fileData."),
+                  }),
+                )
+                .min(1)
+                .max(MAX_ATTACHMENTS)
+                .optional()
+                .describe(
+                  "Images or PDFs to save on the transaction. Single-item calls only; not valid on a transfer, a delete or a dryRun.",
+                ),
+            }),
+          ),
+          approvalMode: approvalMode(),
+          dryRun: dryRun(),
+        }),
         outputSchema: manageTransactionsOutput,
       },
-      async (args, extra) => {
-        const ctx = resolve(extra.sessionId);
-        if (!ctx) return toolError("No user context");
-        const check = requireScope(ctx.scopes, "write");
+      async (args, ctx) => {
+        const user = resolveUserContext(ctx);
+        if (!user) return toolError("No user context");
+        const check = requireScope(user.scopes, "write");
         if (check.error) return check.result;
 
         const operation = args.operation as ManageOperation;
@@ -556,6 +629,34 @@ export class McpTransactionsTools {
         );
 
         try {
+          // Tags are an edit of an existing row; a create or a delete that
+          // names them would silently drop them.
+          if (
+            operation !== "update" &&
+            items.some(
+              (i) =>
+                i.addTagNames !== undefined ||
+                i.removeTagNames !== undefined ||
+                i.splitTags !== undefined,
+            )
+          ) {
+            return toolError(
+              "addTagNames, removeTagNames and splitTags are used only with operation update.",
+            );
+          }
+          // A splitTags entry that names no tag would be dropped silently.
+          const emptyLine = items
+            .flatMap((i) => i.splitTags ?? [])
+            .find(
+              (line) =>
+                (line.addTagNames?.length ?? 0) === 0 &&
+                (line.removeTagNames?.length ?? 0) === 0,
+            );
+          if (emptyLine) {
+            return toolError(
+              `splitTags entry for splitId ${emptyLine.splitId} names no tag: give addTagNames or removeTagNames.`,
+            );
+          }
           // Attachments only ride the singular create/update card, mirroring
           // the AI Assistant executor's rules.
           let attachmentDtos: AttachmentDto[] | undefined;
@@ -578,8 +679,8 @@ export class McpTransactionsTools {
                 "Attachments cannot be added to transfers: attach files to a standard transaction instead.",
               );
             }
-            const resolved = this.resolveMcpAttachments(
-              ctx.userId,
+            const resolved = await this.resolveMcpAttachments(
+              user.userId,
               items[0].attachments as ManageAttachmentInput[],
             );
             if ("error" in resolved) return toolError(resolved.error);
@@ -587,34 +688,39 @@ export class McpTransactionsTools {
           }
 
           if (args.dryRun) {
-            return this.manageDryRun(ctx.userId, operation, items);
+            return this.manageDryRun(
+              user.userId,
+              operation,
+              items,
+              approvalMode,
+            );
           }
           if (operation === "create") {
             return await this.manageCreate(
               server,
-              ctx.userId,
+              ctx,
+              user.userId,
               items,
               approvalMode,
-              extra.requestId,
               attachmentDtos,
             );
           }
           if (operation === "update") {
             return await this.manageUpdate(
               server,
-              ctx.userId,
+              ctx,
+              user.userId,
               items,
               approvalMode,
-              extra.requestId,
               attachmentDtos,
             );
           }
           return await this.manageDelete(
             server,
-            ctx.userId,
+            ctx,
+            user.userId,
             items,
             approvalMode,
-            extra.requestId,
           );
         } catch (err: unknown) {
           return safeToolError(err);
@@ -699,7 +805,7 @@ export class McpTransactionsTools {
       if (unresolved.length > 0) {
         // Best-effort suggestion: a lookup failure must not mask the
         // "unknown payee" error, so fall back to no hint.
-        let suggestion = "";
+        let suggestion: string;
         try {
           const matches = await this.payeesService.search(
             userId,
@@ -734,18 +840,21 @@ export class McpTransactionsTools {
   private toCreateRow(item: ManageItem): CreateRowInput {
     return {
       accountName: item.accountName as string,
-      amount: item.amount as number,
+      amount: item.amount,
       date: item.date as string,
       payeeName: item.payeeName,
       categoryName: item.categoryName,
       description: item.description,
       createPayeeIfMissing: item.createPayeeIfMissing,
       splits: item.splits,
+      ...pickForeignEntryRequest(item),
     };
   }
 
   private toTransferRow(item: ManageItem): TransferRowInput {
     return {
+      originalAmount: item.originalAmount,
+      originalCurrencyCode: item.originalCurrencyCode,
       fromAccountName: item.fromAccountName as string,
       toAccountName: item.toAccountName as string,
       amount: item.amount as number,
@@ -796,6 +905,10 @@ export class McpTransactionsTools {
       description: item.description,
       createPayeeIfMissing: item.createPayeeIfMissing,
       splits: item.splits,
+      tagNames: item.addTagNames,
+      removeTagNames: item.removeTagNames,
+      splitTags: item.splitTags,
+      ...pickForeignEntryRequest(item),
     };
   }
 
@@ -821,6 +934,7 @@ export class McpTransactionsTools {
             accountName: preview.accountName,
             amount: preview.amount,
             currencyCode: preview.currencyCode,
+            ...foreignEntryDisplayFields(preview),
             transactionDate: preview.transactionDate,
             payeeName: preview.payeeName,
             splits: (splits ?? []).map((s) => ({
@@ -855,12 +969,18 @@ export class McpTransactionsTools {
           accountName: preview.accountName,
           amount: preview.amount,
           currencyCode: preview.currencyCode,
+          ...foreignEntryDisplayFields(preview),
           transactionDate: preview.transactionDate,
           splits: (splits ?? []).map((s) => ({
             categoryName: s.categoryName,
             amount: s.amount,
             memo: s.memo,
+            ...(s.tagNames?.length ? { tagNames: s.tagNames } : {}),
           })),
+          ...(preview.tagNames?.length ? { tagNames: preview.tagNames } : {}),
+          ...(preview.removeTagNames?.length
+            ? { removeTagNames: preview.removeTagNames }
+            : {}),
         },
       ],
       skipped: [],
@@ -868,11 +988,15 @@ export class McpTransactionsTools {
     });
   }
 
-  /** Dry-run preview for every item without writing. */
+  /**
+   * Dry-run preview for every item without writing, through the path the save
+   * would take for the same request and approval mode (`manageUpdate`).
+   */
   private async manageDryRun(
     userId: string,
     operation: ManageOperation,
     items: ManageItem[],
+    approvalMode: ApprovalMode,
   ) {
     // A single split create/update is its own rich unit; the bulk preview
     // helpers do not carry splits.
@@ -906,15 +1030,18 @@ export class McpTransactionsTools {
       });
     }
     if (operation === "update") {
-      const bulk = await this.prepService.prepareUpdateBulk(
-        userId,
-        items.map((i) => this.toUpdateRow(i)),
-      );
+      // A single item and individual approval save one card per row, where a
+      // transfer is its own card; only a bulk card skips transfers.
+      const rows = items.map((i) => this.toUpdateRow(i));
+      const prepared =
+        items.length === 1 || approvalMode === "individual"
+          ? await this.prepService.prepareUpdateEach(userId, rows)
+          : await this.prepService.prepareUpdateBulk(userId, rows);
       return toolResult({
         dryRun: true,
         operation,
-        previews: bulk.previewRows,
-        skipped: bulk.skipped,
+        previews: prepared.previewRows,
+        skipped: prepared.skipped,
         message:
           "This is a preview. Call again with dryRun=false to apply the changes.",
       });
@@ -939,19 +1066,27 @@ export class McpTransactionsTools {
    */
   private async emitOrConfirm(
     server: McpServer,
+    ctx: ServerContext,
     userId: string,
     pendingAction: PendingAiAction,
     confirmMessage: string,
-    requestId: unknown,
-  ): Promise<"relay" | "accepted" | "declined"> {
-    if (emitRelayCard(this.relayService, userId, pendingAction)) {
+  ): Promise<"relay" | "accepted" | "declined" | { ask: InputRequiredResult }> {
+    // Only the round that ASKS may hand the confirmation to the web chat. On a
+    // retry the human has already answered in their own client, and a relay
+    // turn that began in between would swallow that answer.
+    if (
+      !ctx.mcpReq.requestState() &&
+      (await emitRelayCard(this.relayService, userId, pendingAction))
+    ) {
       return "relay";
     }
     const confirmation = await confirmWrite(
       server,
+      ctx,
       confirmMessage,
-      requestId as never,
+      pendingAction.descriptor,
     );
+    if (isAsk(confirmation)) return confirmation;
     return confirmation === "declined" ? "declined" : "accepted";
   }
 
@@ -960,10 +1095,10 @@ export class McpTransactionsTools {
    * DTOs: relay URIs read the parked chat file, inline base64 is sniffed for a
    * supported type. Returns an error string the model can act on.
    */
-  private resolveMcpAttachments(
+  private async resolveMcpAttachments(
     userId: string,
     entries: ManageAttachmentInput[],
-  ): { dtos: AttachmentDto[] } | { error: string } {
+  ): Promise<{ dtos: AttachmentDto[] } | { error: string }> {
     const dtos: AttachmentDto[] = [];
     for (const entry of entries) {
       const hasUri = entry.attachmentUri !== undefined;
@@ -976,7 +1111,7 @@ export class McpTransactionsTools {
       }
       if (hasUri) {
         const id = this.parseAttachmentUri(entry.attachmentUri as string);
-        const stored = this.relayAttachmentStore.get(userId, id);
+        const stored = await this.relayAttachmentStore.get(userId, id);
         if (!stored) {
           return {
             error: `Unknown or expired attachment reference "${entry.attachmentUri}". Chat attachments expire about 20 minutes after upload; ask the user to re-send the file.`,
@@ -1047,7 +1182,7 @@ export class McpTransactionsTools {
         existingTransactionId,
       ),
     );
-    const stored = this.relayAttachmentStore.store(userId, dtos);
+    const stored = await this.relayAttachmentStore.store(userId, dtos);
     return previews.map((preview, i) => ({
       attachmentRefId: stored[i].id,
       filename: preview.filename,
@@ -1071,25 +1206,29 @@ export class McpTransactionsTools {
     for (const dto of dtos) {
       const buffer = Buffer.from(dto.data, "base64");
       const attachment = await withUserContext(userId, () =>
-        this.attachmentsService.create(userId, transactionId, {
-          originalname: dto.filename,
-          buffer,
-          size: buffer.length,
-        }),
+        this.attachmentsService.create(
+          userId,
+          { kind: "transaction", id: transactionId },
+          {
+            originalname: dto.filename,
+            buffer,
+            size: buffer.length,
+          },
+        ),
       );
       created.push({ id: attachment.id, filename: attachment.filename });
     }
-    this.releaseAttachmentRefs(userId, refs);
+    await this.releaseAttachmentRefs(userId, refs);
     return created;
   }
 
   /** Drop parked refs a declined/committed confirmation no longer needs. */
-  private releaseAttachmentRefs(
+  private async releaseAttachmentRefs(
     userId: string,
     refs?: AttachmentRefDescriptor[],
-  ): void {
+  ): Promise<void> {
     if (refs?.length) {
-      this.relayAttachmentStore.releaseForPrompt(
+      await this.relayAttachmentStore.releaseForPrompt(
         userId,
         refs.map((r) => r.attachmentRefId),
       );
@@ -1106,12 +1245,12 @@ export class McpTransactionsTools {
   /** Create one category-split transaction (single rich item). */
   private async manageCreateSplit(
     server: McpServer,
+    ctx: ServerContext,
     userId: string,
     item: ManageItem,
-    requestId: unknown,
     attachmentDtos?: AttachmentDto[],
   ) {
-    const budget = this.writeLimiter.reserve(userId, 1);
+    const budget = await this.writeLimiter.reserve(userId, 1);
     if (budget) return budget;
     const { preview, createPayee, splits } =
       await this.prepService.prepareCreateSingle(
@@ -1129,14 +1268,22 @@ export class McpTransactionsTools {
     );
     const outcome = await this.emitOrConfirm(
       server,
+      ctx,
       userId,
       action,
-      `Create this split transaction?\nAccount: ${preview.accountName}\nAmount: ${preview.amount} ${preview.currencyCode}\nDate: ${preview.transactionDate}\nSplits: ${(splits ?? []).map((s) => `${s.categoryName} ${s.amount}`).join(", ")}${this.attachmentConfirmNote(attachmentRefs)}`,
-      requestId,
+      `Create this split transaction?\nAccount: ${preview.accountName}\nAmount: ${preview.amount} ${preview.currencyCode}${fxConfirmNote(preview)}\nDate: ${preview.transactionDate}\nSplits: ${(splits ?? []).map((s) => `${s.categoryName} ${s.amount}`).join(", ")}${this.attachmentConfirmNote(attachmentRefs)}`,
     );
+    if (isAsk(outcome)) {
+      // The refs park the file bytes for the round that commits, and this
+      // round does not: it returns the question. Round two re-derives its own,
+      // so holding these would leave a duplicate copy of every uploaded file
+      // in the store until its TTL.
+      await this.releaseAttachmentRefs(userId, attachmentRefs);
+      return outcome.ask;
+    }
     if (outcome === "relay") return toolResult(RELAY_PREVIEW_SHOWN);
     if (outcome === "declined") {
-      this.releaseAttachmentRefs(userId, attachmentRefs);
+      await this.releaseAttachmentRefs(userId, attachmentRefs);
       return toolError(
         "Cancelled: the confirmation was declined, so no transaction was created.",
       );
@@ -1151,11 +1298,12 @@ export class McpTransactionsTools {
         payeeName: preview.payeeName ?? undefined,
         description: preview.description ?? undefined,
         currencyCode: preview.currencyCode,
+        ...foreignEntryWriteFields(preview),
         splits: toSplitDtoRows(splits ?? []),
       },
       { createPayeeIfMissing: createPayee },
     );
-    this.writeLimiter.record(userId, "create_transaction");
+    await this.writeLimiter.record(userId, "create_transaction");
     const attachments =
       attachmentDtos && attachmentRefs
         ? await this.persistAttachmentsDirect(
@@ -1175,10 +1323,10 @@ export class McpTransactionsTools {
 
   private async manageCreate(
     server: McpServer,
+    ctx: ServerContext,
     userId: string,
     items: ManageItem[],
     approvalMode: ApprovalMode,
-    requestId: unknown,
     attachmentDtos?: AttachmentDto[],
   ) {
     const single = items.length === 1;
@@ -1188,9 +1336,9 @@ export class McpTransactionsTools {
     if (single && items[0].splits) {
       return this.manageCreateSplit(
         server,
+        ctx,
         userId,
         items[0],
-        requestId,
         attachmentDtos,
       );
     }
@@ -1217,7 +1365,7 @@ export class McpTransactionsTools {
       );
     }
 
-    const budget = this.writeLimiter.reserve(userId, okCount);
+    const budget = await this.writeLimiter.reserve(userId, okCount);
     if (budget) return budget;
 
     if (single) {
@@ -1234,14 +1382,19 @@ export class McpTransactionsTools {
         );
         const outcome = await this.emitOrConfirm(
           server,
+          ctx,
           userId,
           action,
-          `Create this transaction?\nAccount: ${preview.accountName}\nAmount: ${preview.amount} ${preview.currencyCode}\nDate: ${preview.transactionDate}${this.attachmentConfirmNote(attachmentRefs)}`,
-          requestId,
+          `Create this transaction?\nAccount: ${preview.accountName}\nAmount: ${preview.amount} ${preview.currencyCode}${fxConfirmNote(preview)}\nDate: ${preview.transactionDate}${this.attachmentConfirmNote(attachmentRefs)}`,
         );
+        if (isAsk(outcome)) {
+          // See manageCreateSplit: the asking round parks nothing it keeps.
+          await this.releaseAttachmentRefs(userId, attachmentRefs);
+          return outcome.ask;
+        }
         if (outcome === "relay") return toolResult(RELAY_PREVIEW_SHOWN);
         if (outcome === "declined") {
-          this.releaseAttachmentRefs(userId, attachmentRefs);
+          await this.releaseAttachmentRefs(userId, attachmentRefs);
           return toolError(
             "Cancelled: the confirmation was declined, so no transaction was created.",
           );
@@ -1257,10 +1410,11 @@ export class McpTransactionsTools {
             categoryId: preview.categoryId ?? undefined,
             description: preview.description ?? undefined,
             currencyCode: preview.currencyCode,
+            ...foreignEntryWriteFields(preview),
           },
           { createPayeeIfMissing: std.okCreatePayee[0] },
         );
-        this.writeLimiter.record(userId, "create_transaction");
+        await this.writeLimiter.record(userId, "create_transaction");
         const attachments =
           attachmentDtos && attachmentRefs
             ? await this.persistAttachmentsDirect(
@@ -1282,11 +1436,12 @@ export class McpTransactionsTools {
       const action = this.actionBuilder.buildCreateTransfer(userId, preview);
       const outcome = await this.emitOrConfirm(
         server,
+        ctx,
         userId,
         action,
         `Create this transfer?\nFrom: ${preview.fromAccountName}\nTo: ${preview.toAccountName}\nAmount: ${preview.amount} ${preview.fromCurrencyCode}\nDate: ${preview.transactionDate}`,
-        requestId,
       );
+      if (isAsk(outcome)) return outcome.ask;
       if (outcome === "relay") return toolResult(RELAY_PREVIEW_SHOWN);
       if (outcome === "declined")
         return toolError(
@@ -1307,7 +1462,7 @@ export class McpTransactionsTools {
         payeeName: preview.payeeName ?? undefined,
         categoryId: preview.categoryId ?? undefined,
       });
-      this.writeLimiter.record(userId, "create_transfer");
+      await this.writeLimiter.record(userId, "create_transfer");
       return toolResult({ id: result.fromTransaction.id, count: 1 });
     }
 
@@ -1320,7 +1475,7 @@ export class McpTransactionsTools {
           this.actionBuilder.buildCreateTransfer(userId, p),
         ),
       ];
-      return this.runIndividual(server, userId, cards, requestId, [
+      return this.runIndividual(server, ctx, userId, cards, [
         ...std.skipped,
         ...xfer.skipped,
       ]);
@@ -1348,18 +1503,23 @@ export class McpTransactionsTools {
       );
     }
     // Relay: emit each card to the web chat.
-    if (emitRelayCard(this.relayService, userId, cards[0])) {
+    if (
+      !ctx.mcpReq.requestState() &&
+      (await emitRelayCard(this.relayService, userId, cards[0]))
+    ) {
       for (let i = 1; i < cards.length; i++) {
-        emitRelayCard(this.relayService, userId, cards[i]);
+        await emitRelayCard(this.relayService, userId, cards[i]);
       }
       return toolResult(RELAY_PREVIEW_SHOWN);
     }
     const skipped = [...std.skipped, ...xfer.skipped];
     const confirmation = await confirmWrite(
       server,
+      ctx,
       `Create ${okCount} transaction(s)?${skipped.length ? ` (${skipped.length} skipped)` : ""}`,
-      requestId as never,
+      cards.map((card) => card.descriptor),
     );
+    if (isAsk(confirmation)) return confirmation.ask;
     if (confirmation === "declined") {
       return toolError(
         "Cancelled: the confirmation was declined, so nothing was created.",
@@ -1379,11 +1539,12 @@ export class McpTransactionsTools {
           categoryId: preview.categoryId ?? undefined,
           description: preview.description ?? undefined,
           currencyCode: preview.currencyCode,
+          ...foreignEntryWriteFields(preview),
         },
         { createPayeeIfMissing: std.okCreatePayee[i] },
       );
       ids.push(tx.id);
-      this.writeLimiter.record(userId, "create_transaction");
+      await this.writeLimiter.record(userId, "create_transaction");
     }
     for (const preview of xfer.okPreviews) {
       const payeeId = await this.resolveTransferPayeeId(userId, preview);
@@ -1402,17 +1563,17 @@ export class McpTransactionsTools {
         categoryId: preview.categoryId ?? undefined,
       });
       ids.push(result.fromTransaction.id);
-      this.writeLimiter.record(userId, "create_transfer");
+      await this.writeLimiter.record(userId, "create_transfer");
     }
     return toolResult({ ids, count: ids.length, skipped });
   }
 
   private async manageUpdate(
     server: McpServer,
+    ctx: ServerContext,
     userId: string,
     items: ManageItem[],
     approvalMode: ApprovalMode,
-    requestId: unknown,
     attachmentDtos?: AttachmentDto[],
   ) {
     const single = items.length === 1;
@@ -1422,7 +1583,7 @@ export class McpTransactionsTools {
         userId,
         this.toUpdateRow(items[0]),
       );
-      const budget = this.writeLimiter.reserve(userId, 1);
+      const budget = await this.writeLimiter.reserve(userId, 1);
       if (budget) return budget;
       if (result.kind === "transfer" && attachmentDtos) {
         return toolError(
@@ -1434,32 +1595,30 @@ export class McpTransactionsTools {
         const action = this.actionBuilder.buildUpdateTransfer(userId, preview);
         const outcome = await this.emitOrConfirm(
           server,
+          ctx,
           userId,
           action,
-          `Apply this transfer edit?\nFrom: ${preview.fromAccountName}\nTo: ${preview.toAccountName}\nAmount: ${preview.amount} ${preview.fromCurrencyCode}\nDate: ${preview.transactionDate}${preview.categoryName ? `\nCategory: ${preview.categoryName}` : ""}`,
-          requestId,
+          `Apply this transfer edit?\nFrom: ${preview.fromAccountName}\nTo: ${preview.toAccountName}\nAmount: ${preview.amount} ${preview.fromCurrencyCode}\nDate: ${preview.transactionDate}${preview.categoryName ? `\nCategory: ${preview.categoryName}` : ""}${tagConfirmNote(preview)}`,
         );
+        if (isAsk(outcome)) return outcome.ask;
         if (outcome === "relay") return toolResult(RELAY_PREVIEW_SHOWN);
         if (outcome === "declined")
           return toolError(
             "Cancelled: the confirmation was declined, so the transfer was not changed.",
           );
         const payeeId = await this.resolveTransferPayeeId(userId, preview);
+        const args = updateTransferCommitArgs(
+          action.descriptor as UpdateTransferDescriptor,
+          payeeId,
+        );
         const r = await this.transactionsService.updateTransfer(
           userId,
           preview.transactionId,
-          {
-            amount: preview.amount,
-            transactionDate: preview.transactionDate,
-            exchangeRate: preview.exchangeRate,
-            toAmount: preview.toAmount,
-            description: preview.description ?? undefined,
-            payeeId,
-            payeeName: preview.payeeName ?? undefined,
-            categoryId: preview.categoryId,
-          },
+          args.dto,
+          undefined,
+          args.tagChange,
         );
-        this.writeLimiter.record(userId, "update_transfer");
+        await this.writeLimiter.record(userId, "update_transfer");
         return toolResult({ id: r.fromTransaction.id, count: 1 });
       }
       const preview = result.preview;
@@ -1480,44 +1639,42 @@ export class McpTransactionsTools {
       const reconciledNote = preview.isReconciled
         ? RECONCILED_CONFIRM_NOTE
         : "";
-      const attachmentNote = this.attachmentConfirmNote(attachmentRefs);
+      const attachmentNote =
+        this.attachmentConfirmNote(attachmentRefs) + tagConfirmNote(preview);
       const confirmMessage = splits
-        ? `Apply this transaction edit?\nAccount: ${preview.accountName}\nAmount: ${preview.amount} ${preview.currencyCode}\nDate: ${preview.transactionDate}\nSplits: ${splits.map((s) => `${s.categoryName} ${s.amount}`).join(", ")}${attachmentNote}${reconciledNote}`
-        : `Apply this transaction edit?\nAccount: ${preview.accountName}\nAmount: ${preview.amount} ${preview.currencyCode}\nDate: ${preview.transactionDate}${attachmentNote}${reconciledNote}`;
+        ? `Apply this transaction edit?\nAccount: ${preview.accountName}\nAmount: ${preview.amount} ${preview.currencyCode}${fxConfirmNote(preview)}\nDate: ${preview.transactionDate}\nSplits: ${splits.map((s) => `${s.categoryName} ${s.amount}`).join(", ")}${attachmentNote}${reconciledNote}`
+        : `Apply this transaction edit?\nAccount: ${preview.accountName}\nAmount: ${preview.amount} ${preview.currencyCode}${fxConfirmNote(preview)}\nDate: ${preview.transactionDate}${attachmentNote}${reconciledNote}`;
       const outcome = await this.emitOrConfirm(
         server,
+        ctx,
         userId,
         action,
         confirmMessage,
-        requestId,
       );
+      if (isAsk(outcome)) {
+        // See manageCreateSplit: the asking round parks nothing it keeps.
+        await this.releaseAttachmentRefs(userId, attachmentRefs);
+        return outcome.ask;
+      }
       if (outcome === "relay") return toolResult(RELAY_PREVIEW_SHOWN);
       if (outcome === "declined") {
-        this.releaseAttachmentRefs(userId, attachmentRefs);
+        await this.releaseAttachmentRefs(userId, attachmentRefs);
         return toolError(
           "Cancelled: the confirmation was declined, so the transaction was not changed.",
         );
       }
+      // What is written is the signed descriptor the user approved, through
+      // the mapping every commit path shares.
+      const args = updateTransactionCommitArgs(
+        action.descriptor as UpdateTransactionDescriptor,
+      );
       const tx = await this.transactionsService.update(
         userId,
         preview.transactionId,
-        {
-          amount: preview.amount,
-          transactionDate: preview.transactionDate,
-          payeeId: preview.payeeId ?? undefined,
-          payeeName: preview.payeeName ?? undefined,
-          // Replacing the split set clears any single category on the parent.
-          categoryId: splits ? undefined : (preview.categoryId ?? undefined),
-          description: preview.description ?? undefined,
-          currencyCode: preview.currencyCode,
-          // Splits ride inside the same DTO so update() rebuilds the set in
-          // the same transaction, under the same row lock, as the scalar
-          // fields (invariant I1) -- never as a separate follow-up write.
-          splits: splits ? toSplitDtoRows(splits) : undefined,
-        },
-        { createPayeeIfMissing: result.createPayee },
+        args.dto,
+        { ...args.options, createPayeeIfMissing: result.createPayee },
       );
-      this.writeLimiter.record(userId, "update_transaction");
+      await this.writeLimiter.record(userId, "update_transaction");
       const attachments =
         attachmentDtos && attachmentRefs
           ? await this.persistAttachmentsDirect(
@@ -1563,9 +1720,9 @@ export class McpTransactionsTools {
         return toolError(
           `None of the transaction edits could be prepared.${describeSkippedRows(skipped, items.length)}`,
         );
-      const budget = this.writeLimiter.reserve(userId, cards.length);
+      const budget = await this.writeLimiter.reserve(userId, cards.length);
       if (budget) return budget;
-      return this.runIndividual(server, userId, cards, requestId, skipped);
+      return this.runIndividual(server, ctx, userId, cards, skipped);
     }
 
     // bulk mode
@@ -1577,7 +1734,7 @@ export class McpTransactionsTools {
       return toolError(
         `None of the transaction edits could be prepared.${describeSkippedRows(bulk.skipped, items.length)}`,
       );
-    const budget = this.writeLimiter.reserve(userId, bulk.okRows.length);
+    const budget = await this.writeLimiter.reserve(userId, bulk.okRows.length);
     if (budget) return budget;
     const action = this.actionBuilder.buildBatchActions(
       userId,
@@ -1585,46 +1742,44 @@ export class McpTransactionsTools {
       bulk.okRows,
       bulk.previewRows,
     );
-    if (emitRelayCard(this.relayService, userId, action)) {
+    if (
+      !ctx.mcpReq.requestState() &&
+      (await emitRelayCard(this.relayService, userId, action))
+    ) {
       return toolResult(RELAY_PREVIEW_SHOWN);
     }
     const confirmation = await confirmWrite(
       server,
+      ctx,
       `Apply ${bulk.okRows.length} transaction edit(s)?${bulk.skipped.length ? ` (${bulk.skipped.length} skipped)` : ""}`,
-      requestId as never,
+      action.descriptor,
     );
+    if (isAsk(confirmation)) return confirmation.ask;
     if (confirmation === "declined")
       return toolError(
         "Cancelled: the confirmation was declined, so nothing was changed.",
       );
     const ids: string[] = [];
     for (const row of bulk.okRows) {
+      const args = updateTransactionCommitArgs(row);
       const tx = await this.transactionsService.update(
         userId,
         row.transactionId,
-        {
-          amount: row.amount,
-          transactionDate: row.transactionDate,
-          payeeId: row.payeeId ?? undefined,
-          payeeName: row.payeeName ?? undefined,
-          categoryId: row.categoryId ?? undefined,
-          description: row.description ?? undefined,
-          currencyCode: row.currencyCode,
-        },
-        { createPayeeIfMissing: row.createPayee === true },
+        args.dto,
+        args.options,
       );
       ids.push(tx.id);
-      this.writeLimiter.record(userId, "update_transaction");
+      await this.writeLimiter.record(userId, "update_transaction");
     }
     return toolResult({ ids, count: ids.length, skipped: bulk.skipped });
   }
 
   private async manageDelete(
     server: McpServer,
+    ctx: ServerContext,
     userId: string,
     items: ManageItem[],
     approvalMode: ApprovalMode,
-    requestId: unknown,
   ) {
     const single = items.length === 1;
 
@@ -1633,23 +1788,24 @@ export class McpTransactionsTools {
         userId,
         items[0].transactionId as string,
       );
-      const budget = this.writeLimiter.reserve(userId, 1);
+      const budget = await this.writeLimiter.reserve(userId, 1);
       if (budget) return budget;
       const action = this.actionBuilder.buildDeleteTransaction(userId, preview);
       const outcome = await this.emitOrConfirm(
         server,
+        ctx,
         userId,
         action,
         `Delete this transaction?\nAccount: ${preview.accountName}\nAmount: ${preview.amount} ${preview.currencyCode}\nDate: ${preview.transactionDate}${preview.isReconciled ? RECONCILED_CONFIRM_NOTE : ""}`,
-        requestId,
       );
+      if (isAsk(outcome)) return outcome.ask;
       if (outcome === "relay") return toolResult(RELAY_PREVIEW_SHOWN);
       if (outcome === "declined")
         return toolError(
           "Cancelled: the confirmation was declined, so the transaction was not deleted.",
         );
       await this.transactionsService.removeAny(userId, preview.transactionId);
-      this.writeLimiter.record(userId, "delete_transaction");
+      await this.writeLimiter.record(userId, "delete_transaction");
       return toolResult({ id: preview.transactionId, deleted: true, count: 1 });
     }
 
@@ -1673,9 +1829,9 @@ export class McpTransactionsTools {
         return toolError(
           `None of the transactions could be prepared.${describeSkippedRows(skipped, items.length)}`,
         );
-      const budget = this.writeLimiter.reserve(userId, cards.length);
+      const budget = await this.writeLimiter.reserve(userId, cards.length);
       if (budget) return budget;
-      return this.runIndividual(server, userId, cards, requestId, skipped);
+      return this.runIndividual(server, ctx, userId, cards, skipped);
     }
 
     const bulk = await this.prepService.prepareDeleteBulk(
@@ -1686,7 +1842,7 @@ export class McpTransactionsTools {
       return toolError(
         `None of the transactions could be prepared.${describeSkippedRows(bulk.skipped, items.length)}`,
       );
-    const budget = this.writeLimiter.reserve(userId, bulk.okRows.length);
+    const budget = await this.writeLimiter.reserve(userId, bulk.okRows.length);
     if (budget) return budget;
     const action = this.actionBuilder.buildBatchActions(
       userId,
@@ -1694,14 +1850,19 @@ export class McpTransactionsTools {
       bulk.okRows,
       bulk.previewRows,
     );
-    if (emitRelayCard(this.relayService, userId, action)) {
+    if (
+      !ctx.mcpReq.requestState() &&
+      (await emitRelayCard(this.relayService, userId, action))
+    ) {
       return toolResult(RELAY_PREVIEW_SHOWN);
     }
     const confirmation = await confirmWrite(
       server,
+      ctx,
       `Delete ${bulk.okRows.length} transaction(s)?${bulk.skipped.length ? ` (${bulk.skipped.length} skipped)` : ""}`,
-      requestId as never,
+      action.descriptor,
     );
+    if (isAsk(confirmation)) return confirmation.ask;
     if (confirmation === "declined")
       return toolError(
         "Cancelled: the confirmation was declined, so nothing was deleted.",
@@ -1710,7 +1871,7 @@ export class McpTransactionsTools {
     for (const row of bulk.okRows) {
       await this.transactionsService.removeAny(userId, row.transactionId);
       ids.push(row.transactionId);
-      this.writeLimiter.record(userId, "delete_transaction");
+      await this.writeLimiter.record(userId, "delete_transaction");
     }
     return toolResult({ ids, count: ids.length, skipped: bulk.skipped });
   }
@@ -1721,26 +1882,33 @@ export class McpTransactionsTools {
    */
   private async runIndividual(
     server: McpServer,
+    ctx: ServerContext,
     userId: string,
     cards: PendingAiAction[],
-    requestId: unknown,
     skipped: { index: number; reason: string }[],
   ) {
-    // Relay path: emit each card; the browser confirms+commits each.
-    if (emitRelayCard(this.relayService, userId, cards[0])) {
+    // Relay path: emit each card; the browser confirms+commits each. Only the
+    // round that asks may do this -- see emitOrConfirm.
+    if (
+      !ctx.mcpReq.requestState() &&
+      (await emitRelayCard(this.relayService, userId, cards[0]))
+    ) {
       for (let i = 1; i < cards.length; i++) {
-        emitRelayCard(this.relayService, userId, cards[i]);
+        await emitRelayCard(this.relayService, userId, cards[i]);
       }
       return toolResult(RELAY_PREVIEW_SHOWN);
     }
+    // Every card is asked in ONE round. A round per card would be 25 rounds on
+    // a full batch, and a multi-round-trip flow is two.
+    const answers = await confirmWriteMany(
+      server,
+      ctx,
+      confirmItemsForCards(cards, (card) => this.confirmLineFor(card)),
+    );
+    if (!(answers instanceof Map)) return answers.ask;
     const ids: string[] = [];
-    for (const card of cards) {
-      const confirmation = await confirmWrite(
-        server,
-        this.confirmLineFor(card),
-        requestId as never,
-      );
-      if (confirmation === "declined") continue;
+    for (const [index, card] of cards.entries()) {
+      if (answers.get(cardKey(index)) === "declined") continue;
       const id = await this.commitCard(userId, card);
       if (id) ids.push(id);
     }
@@ -1752,13 +1920,13 @@ export class McpTransactionsTools {
     switch (card.type) {
       case "create_transfer":
       case "update_transfer":
-        return `${card.type === "create_transfer" ? "Create" : "Edit"} transfer?\nFrom: ${p.fromAccountName}\nTo: ${p.toAccountName}\nAmount: ${p.amount} ${p.currencyCode}`;
+        return `${card.type === "create_transfer" ? "Create" : "Edit"} transfer?\nFrom: ${p.fromAccountName}\nTo: ${p.toAccountName}\nAmount: ${p.amount} ${p.currencyCode}${tagConfirmNote(p)}`;
       case "delete_transaction":
         return `Delete this transaction?\nAccount: ${p.accountName}${p.isReconciled ? RECONCILED_CONFIRM_NOTE : ""}`;
       case "update_transaction":
-        return `Apply this transaction edit?\nAccount: ${p.accountName}\nAmount: ${p.amount} ${p.currencyCode}${p.isReconciled ? RECONCILED_CONFIRM_NOTE : ""}`;
+        return `Apply this transaction edit?\nAccount: ${p.accountName}\nAmount: ${p.amount} ${p.currencyCode}${fxConfirmNote(p)}${tagConfirmNote(p)}${p.isReconciled ? RECONCILED_CONFIRM_NOTE : ""}`;
       default:
-        return `Create this transaction?\nAccount: ${p.accountName}\nAmount: ${p.amount} ${p.currencyCode}`;
+        return `Create this transaction?\nAccount: ${p.accountName}\nAmount: ${p.amount} ${p.currencyCode}${fxConfirmNote(p)}`;
     }
   }
 
@@ -1781,10 +1949,11 @@ export class McpTransactionsTools {
             categoryId: d.categoryId ?? undefined,
             description: d.description ?? undefined,
             currencyCode: d.currencyCode,
+            ...foreignEntryWriteFields(d),
           },
           { createPayeeIfMissing: d.createPayee === true },
         );
-        this.writeLimiter.record(userId, "create_transaction");
+        await this.writeLimiter.record(userId, "create_transaction");
         return tx.id;
       }
       case "create_transfer": {
@@ -1802,49 +1971,36 @@ export class McpTransactionsTools {
           payeeId,
           payeeName: d.payeeName ?? undefined,
         });
-        this.writeLimiter.record(userId, "create_transfer");
+        await this.writeLimiter.record(userId, "create_transfer");
         return r.fromTransaction.id;
       }
       case "update_transaction": {
+        const args = updateTransactionCommitArgs(d);
         const tx = await this.transactionsService.update(
           userId,
           d.transactionId,
-          {
-            amount: d.amount,
-            transactionDate: d.transactionDate,
-            payeeId: d.payeeId ?? undefined,
-            payeeName: d.payeeName ?? undefined,
-            categoryId: d.categoryId ?? undefined,
-            description: d.description ?? undefined,
-            currencyCode: d.currencyCode,
-          },
-          { createPayeeIfMissing: d.createPayee === true },
+          args.dto,
+          args.options,
         );
-        this.writeLimiter.record(userId, "update_transaction");
+        await this.writeLimiter.record(userId, "update_transaction");
         return tx.id;
       }
       case "update_transfer": {
         const payeeId = await this.resolveTransferPayeeId(userId, d);
+        const args = updateTransferCommitArgs(d, payeeId);
         const r = await this.transactionsService.updateTransfer(
           userId,
           d.transactionId,
-          {
-            amount: d.amount,
-            transactionDate: d.transactionDate,
-            exchangeRate: d.exchangeRate,
-            toAmount: d.toAmount,
-            description: d.description ?? undefined,
-            payeeId,
-            payeeName: d.payeeName ?? undefined,
-            categoryId: d.categoryId,
-          },
+          args.dto,
+          undefined,
+          args.tagChange,
         );
-        this.writeLimiter.record(userId, "update_transfer");
+        await this.writeLimiter.record(userId, "update_transfer");
         return r.fromTransaction.id;
       }
       case "delete_transaction": {
         await this.transactionsService.removeAny(userId, d.transactionId);
-        this.writeLimiter.record(userId, "delete_transaction");
+        await this.writeLimiter.record(userId, "delete_transaction");
         return d.transactionId;
       }
       default:

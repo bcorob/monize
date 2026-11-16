@@ -10,6 +10,8 @@
     "versionLabel": "バージョン {version}",
     "expandAll": "すべて展開",
     "collapseAll": "すべて折りたたむ",
+    "changeCount": "{count, plural, other {# 件の変更}}",
+    "otherSections": "修正と詳細",
     "viewFullNotes": "リリースノート全体を表示",
     "dontShowAgain": "今後表示しない",
     "showNextLogin": "次回ログイン時に表示",
@@ -38,6 +40,14 @@
     "scheduleRecurring": "定期取引としてスケジュール",
     "more": "その他の操作"
   },
+  "columns": {
+    "button": "列",
+    "buttonWithHidden": "列（{count} 件非表示）",
+    "menuLabel": "列の表示/非表示",
+    "showAll": "すべて表示",
+    "hideColumn": "列を非表示",
+    "sheetSubtitle": "「列」メニューから再表示できます。"
+  },
   "loading": "読み込み中...",
   "pagination": {
     "showing": "表示中",
@@ -60,6 +70,7 @@
   },
   "exportDropdown": {
     "export": "エクスポート",
+    "exportCsv": "CSVエクスポート",
     "exporting": "エクスポート中...",
     "exportPdf": "PDF をエクスポート",
     "exportReport": "レポートをエクスポート",
@@ -88,6 +99,7 @@
     "stackedChart": "100% 積み上げ棒グラフ",
     "lineChart": "折れ線グラフ",
     "areaChart": "面グラフ",
+    "sankeyChart": "フロー図",
     "table": "テーブル"
   },
   "formActions": {
@@ -118,8 +130,15 @@
     "search": "検索...",
     "selectAll": "すべて選択",
     "clear": "クリア",
+    "clearSearch": "検索をクリア",
     "noOptions": "オプションが見つかりません",
     "selectedCount": "{count} 選択中"
+  },
+  "categoryFilter": {
+    "uncategorized": "未分類",
+    "transfers": "振替",
+    "allIncome": "すべての収入カテゴリ",
+    "allExpenses": "すべての支出カテゴリ"
   },
   "combobox": {
     "createOption": "\"{value}\" を作成",
@@ -137,6 +156,7 @@
   },
   "dateInput": {
     "shortcutsTitle": "キーボードショートカット",
+    "openPicker": "日付ピッカーを開く",
     "today": "今日",
     "firstDayOfYear": "年の初日",
     "lastDayOfYear": "年の最終日",
@@ -158,6 +178,7 @@
     "CASH": "現金",
     "LINE_OF_CREDIT": "信用枠",
     "ASSET": "資産",
+    "CRYPTO": "暗号資産ウォレット",
     "OTHER": "その他"
   },
   "accountFilter": {
@@ -241,12 +262,20 @@
     "marker": "—",
     "srLabel": "金額を取得できません",
     "scheduledFx": "現在の金額を算出できません。この予定項目の決済通貨ペアの為替レートが取得できないためです。保存されている金額は以前のレートで計算されたものなので表示しません。",
-    "displayFx": "この金額はここでは表示できません。金額自体は判明していますが、この合計の通貨に換算するための為替レートがありません。「通貨」ページでレートを更新してください。"
+    "displayFx": "この金額はここでは表示できません。金額自体は判明していますが、この合計の通貨に換算するための為替レートがありません。「通貨」ページでレートを更新してください。",
+    "noCashBalance": "この値は算出できません。このビューの現金口座がこの日の残高を報告していないため、保有額はゼロではなく不明です。レポートを再読み込みしてください。解消しない場合は、その日の残高を算出できなかったことになり、報告する価値があります。",
+    "noPrice": "この金額は算出できません。保有株数は判明していますが、評価に使える株価が銘柄にありません。株価を更新するか、銘柄の「価格履歴」で手動で追加してください。",
+    "noBaseline": "この数値は算出できません。これは比較値であり、比較する対象となる前の値がありません。不足しているものはなく、追加するものもありません。",
+    "staleQuote": "当日の変動は算出できません。銘柄の最新価格が直近の取引セッションより古いため、そこから求めた変動は過去の日のものになります。価格を更新するか、銘柄の価格提供元を確認してください。",
+    "unknownCurrency": "この金額は表示できません。レコードに証券が指定されていないため、数値の通貨が不明です。取引を開いて証券を指定すると、金額にラベルを付けられます。"
   },
   "density": {
     "title": "行の密度を切り替え",
     "normal": "標準",
     "compact": "コンパクト",
     "dense": "密集"
+  },
+  "scheduledOverdue": {
+    "included": "期限超過のスケジュール済み取引 {count, plural, one {# 件} other {# 件}}を含む"
   }
 }

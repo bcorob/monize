@@ -57,8 +57,11 @@ test.describe('Settings', () => {
     await page.goto('/settings');
     const currency = page.getByLabel('Default Currency');
     await expect(currency).toBeVisible({ timeout: 15000 });
+    // Preferences save on change: the selection itself is the commit, and there
+    // is no button to press afterwards. The toast is the confirmation, and the
+    // reload below is what proves it reached the server rather than only the
+    // optimistic local state.
     await currency.selectOption('GBP');
-    await page.getByRole('button', { name: /save preferences/i }).click();
 
     await expect(page.getByText(/preferences saved/i)).toBeVisible();
     await page.reload();

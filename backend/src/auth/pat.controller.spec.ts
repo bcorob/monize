@@ -1,6 +1,9 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { PatController } from "./pat.controller";
 import { PatService } from "./pat.service";
+import { GUARDS_METADATA } from "@nestjs/common/constants";
+import { StepUpGuard } from "./step-up/step-up.guard";
+import { REQUIRE_STEP_UP_KEY } from "./step-up/require-step-up.decorator";
 
 describe("PatController", () => {
   let controller: PatController;
@@ -29,7 +32,10 @@ describe("PatController", () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [PatController],
       providers: [{ provide: PatService, useValue: patService }],
-    }).compile();
+    })
+      .overrideGuard(StepUpGuard)
+      .useValue({ canActivate: () => true })
+      .compile();
 
     controller = module.get<PatController>(PatController);
   });
@@ -65,6 +71,36 @@ describe("PatController", () => {
         name: "New Token",
         scopes: "read,write",
       });
+    });
+  });
+
+  describe("step-up", () => {
+    // A PAT outlives the session that mints it, so a stolen session cookie
+    // could be turned into persistent API access with no second proof.
+    it("guards the controller with StepUpGuard", () => {
+      const guards = Reflect.getMetadata(GUARDS_METADATA, PatController);
+      expect(guards).toContain(StepUpGuard);
+    });
+
+    it("requires a personal-access-token step-up to create a token", () => {
+      expect(
+        Reflect.getMetadata(
+          REQUIRE_STEP_UP_KEY,
+          PatController.prototype.create,
+        ),
+      ).toBe("personal-access-token");
+    });
+
+    it("does not ask for step-up to list or revoke", () => {
+      expect(
+        Reflect.getMetadata(REQUIRE_STEP_UP_KEY, PatController.prototype.list),
+      ).toBeUndefined();
+      expect(
+        Reflect.getMetadata(
+          REQUIRE_STEP_UP_KEY,
+          PatController.prototype.revoke,
+        ),
+      ).toBeUndefined();
     });
   });
 

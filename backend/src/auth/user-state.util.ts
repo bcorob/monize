@@ -4,9 +4,7 @@ export interface UserAuthState {
 }
 
 export type AuthDenialReason =
-  | "not_found"
-  | "inactive"
-  | "must_change_password";
+  "not_found" | "inactive" | "must_change_password";
 
 export interface CheckUserAuthStateOptions {
   enforceMustChangePassword: boolean;

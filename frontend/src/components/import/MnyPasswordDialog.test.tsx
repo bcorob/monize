@@ -16,7 +16,11 @@ describe('MnyPasswordDialog', () => {
   it('says the password is used once and never stored', () => {
     render(<MnyPasswordDialog {...defaultProps} />);
 
-    expect(screen.getByText(/never stored/)).toBeInTheDocument();
+    // In the title's tooltip, not a paragraph read again on every open.
+    expect(
+      screen.getByRole('dialog', { name: 'This Money file needs a password' }),
+    ).toHaveAccessibleDescription(/never stored/);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('says something different when the password was already rejected', () => {
@@ -24,9 +28,9 @@ describe('MnyPasswordDialog', () => {
 
     // "this file needs a password" and "that password is wrong" are different
     // problems for the person typing.
-    expect(
-      screen.getByText(/That password did not open the file/),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      /That password did not open the file/,
+    );
   });
 
   it('submits the password that was typed', () => {

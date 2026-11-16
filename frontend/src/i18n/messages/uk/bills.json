@@ -16,12 +16,13 @@
     "chartUnavailable": "Графік тимчасово недоступний"
   },
   "viewTabs": {
-    "list": "Список",
-    "calendar": "Календар",
+    "filterLabel": "Тип розкладу",
     "filterAll": "Усі ({count})",
     "filterBills": "Рахунки ({count})",
     "filterDeposits": "Надходження ({count})",
-    "todayButton": "Сьогодні"
+    "chipBills": "Рахунки",
+    "chipDeposits": "Надходження",
+    "clearType": "Показати всі типи розкладів"
   },
   "form": {
     "titleNew": "Нова запланована транзакція",
@@ -53,7 +54,11 @@
     "totalOfAccounts": "Разом за рахунками",
     "legendAriaLabel": "Лінії прогнозу",
     "tooltipTransactionForAccount": "{name} ({account})",
-    "unavailableMissingRates": "Цей прогноз не можна показати у {displayCurrency}: немає курсу обміну для {currencies}, а прогнозований баланс спирається на кожен попередній день. Додайте курс або виберіть рахунок з однією валютою."
+    "unavailableMissingRates": "Цей прогноз не можна показати у {displayCurrency}: немає курсу обміну для {currencies}, а прогнозований баланс спирається на кожен попередній день. Додайте курс або виберіть рахунок з однією валютою.",
+    "untitledTransaction": "Транзакція",
+    "tooltipEstimated": "(оцінка)",
+    "unavailableUnknownEstimates": "Цей прогноз поки не можна показати: оціночна сума одного з рахунків у ньому невідома, а прогнозний залишок будується на кожному попередньому дні. Введіть суму цього платежу або вимкніть «Оцінка» в рахунку.",
+    "unknownEstimateItem": "{name}: {reason}"
   },
   "calendar": {
     "days": {
@@ -72,5 +77,11 @@
     "notFound": "Запланований платіж не знайдено",
     "loadFailed": "Не вдалося завантажити заплановані транзакції",
     "overridesDeleteFailed": "Не вдалося видалити перевизначення"
+  },
+  "toolbar": {
+    "showing": "Показано <b>{shown}</b> з <b>{total}</b> рахунків і надходжень",
+    "exportButton": "Експорт",
+    "exportTitle": "Експортувати рахунки та надходження в CSV",
+    "exported": "{count, plural, one {Експортовано # розклад} few {Експортовано # розклади} many {Експортовано # розкладів} other {Експортовано # розкладу}}"
   }
 }

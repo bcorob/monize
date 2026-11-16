@@ -1,25 +1,32 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent, act } from '@/test/render';
+import { render, screen, waitFor, fireEvent, act, within } from '@/test/render';
 import { RealizedGainsReport } from './RealizedGainsReport';
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (n: number, _currency?: string) => `$${n.toFixed(2)}`,
-    formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
-    formatCurrencyAxis: (n: number) => `$${n}`,
-    defaultCurrency: 'CAD',
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (n: number, _currency?: string) => `$${n.toFixed(2)}`,
+      formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
+      formatCurrencyAxis: (n: number) => `$${n}`,
+      defaultCurrency: 'CAD',
+    }),
+  };
+});
 vi.mock('@/hooks/useExchangeRates', () => ({
   useExchangeRates: () => ({
-    convertToDefault: (amount: number, _currency: string) => amount,
     defaultCurrency: 'CAD',
   }),
 }));
 
+// The selection the mocked range hook reports; a test moves it and re-renders.
+const mockRange = { end: '2026-01-01' };
 vi.mock('@/hooks/useDateRange', () => {
-  const resolvedRange = { start: '2025-01-01', end: '2026-01-01' };
+  const resolvedRange = {
+    start: '2025-01-01',
+    get end() { return mockRange.end; },
+  };
   return {
     useDateRange: () => ({
       dateRange: '1y',
@@ -34,6 +41,12 @@ vi.mock('@/hooks/useDateRange', () => {
   };
 });
 
+vi.mock('@/hooks/useDateFormat', () => ({
+  useDateFormat: () => ({
+    formatDate: (value: string) => value,
+  }),
+}));
+
 vi.mock('@/lib/utils', () => ({
   parseLocalDate: (d: string) => new Date(d + 'T00:00:00'),
   cn: (...inputs: any[]) => inputs.flat(Infinity).filter(Boolean).join(' '),
@@ -44,10 +57,10 @@ vi.mock('@/components/ui/DateRangeSelector', () => ({
 }));
 
 vi.mock('@/components/ui/ExportDropdown', () => ({
-  ExportDropdown: ({ onExportCsv, onExportPdf }: any) => (
+  ExportDropdown: ({ onExportCsv, onExportPdf, disabled }: any) => (
     <div data-testid="export-dropdown">
       <button data-testid="export-csv" onClick={onExportCsv}>CSV</button>
-      <button data-testid="export-pdf" onClick={onExportPdf}>PDF</button>
+      <button data-testid="export-pdf" onClick={onExportPdf} data-disabled={String(disabled === true)}>PDF</button>
     </div>
   ),
 }));
@@ -91,7 +104,25 @@ vi.mock('@/lib/logger', () => ({
   }),
 }));
 
-const gainEntry = (overrides: Partial<Record<string, unknown>> = {}) => ({
+// The server's reporting-currency figures default to the native ones (a CAD
+// reader of CAD accounts); a case that is about conversion states its own.
+const gainEntry = (overrides: Partial<Record<string, unknown>> = {}) => {
+  const entry = {
+    ...gainEntryNative(),
+    ...overrides,
+  } as Record<string, unknown>;
+  return {
+    inReportingCurrency: {
+      currency: 'CAD',
+      proceeds: entry.proceeds,
+      costBasis: entry.costBasis,
+      realizedGain: entry.realizedGain,
+    },
+    ...entry,
+  };
+};
+
+const gainEntryNative = () => ({
   transactionId: 'sell-1',
   transactionDate: '2025-06-15',
   accountId: 'acc-1',
@@ -107,12 +138,12 @@ const gainEntry = (overrides: Partial<Record<string, unknown>> = {}) => ({
   proceeds: 5500,
   costBasis: 5000,
   realizedGain: 500,
-  ...overrides,
 });
 
 describe('RealizedGainsReport', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockRange.end = '2026-01-01';
   });
 
   it('shows loading state initially', () => {
@@ -156,12 +187,67 @@ describe('RealizedGainsReport', () => {
     expect(screen.getByText('Securities Sold')).toBeInTheDocument();
   });
 
+  describe('a sale of unknown cost', () => {
+    const unknownEntry = () =>
+      gainEntry({
+        transactionId: 'sell-unknown',
+        symbol: 'MSFT',
+        securityName: 'Microsoft Corp.',
+        proceeds: 3500,
+        costBasis: null,
+        realizedGain: null,
+      });
+
+    it('shows the total gain as unknown and names the known part separately', async () => {
+      mockGetRealizedGains.mockResolvedValue([gainEntry(), unknownEntry()]);
+      mockGetInvestmentAccounts.mockResolvedValue([]);
+      render(<RealizedGainsReport />);
+      await waitFor(() => {
+        expect(screen.getByText('Realized Gain/Loss')).toBeInTheDocument();
+      });
+      // The gain card holds the unknown marker, not the 500 of the other sale.
+      const card = screen.getByText('Realized Gain/Loss').parentElement as HTMLElement;
+      expect(within(card).getByTestId('unknown-amount')).toBeInTheDocument();
+      expect(within(card).queryByText('+$500.00')).not.toBeInTheDocument();
+      expect(within(card).getByText('Known part: $500.00')).toBeInTheDocument();
+      expect(screen.getByText(/1 sale has an unknown cost/)).toBeInTheDocument();
+    });
+
+    it('shows the unknown marker beside a symbol whose sale has no known cost', async () => {
+      mockGetRealizedGains.mockResolvedValue([gainEntry(), unknownEntry()]);
+      mockGetInvestmentAccounts.mockResolvedValue([]);
+      render(<RealizedGainsReport />);
+      await waitFor(() => {
+        expect(screen.getByTitle('Table')).toBeInTheDocument();
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByTitle('Table'));
+      });
+      expect(screen.getAllByTestId('unknown-amount').length).toBeGreaterThanOrEqual(2);
+      expect(screen.getAllByText('MSFT').length).toBeGreaterThan(0);
+    });
+
+    it('exports the unknown cost as a marker, not a number', async () => {
+      mockGetRealizedGains.mockResolvedValue([unknownEntry()]);
+      mockGetInvestmentAccounts.mockResolvedValue([]);
+      render(<RealizedGainsReport />);
+      await waitFor(() => {
+        expect(screen.getByTestId('export-csv')).toBeInTheDocument();
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('export-csv'));
+      });
+      const rows = mockExportToCsv.mock.calls[0][2] as (string | number)[][];
+      expect(rows[0].slice(3, 6)).toEqual([3500, 'Unknown', 'Unknown']);
+    });
+  });
+
   it('renders view type toggle buttons', async () => {
     mockGetRealizedGains.mockResolvedValue([]);
     mockGetInvestmentAccounts.mockResolvedValue([]);
     render(<RealizedGainsReport />);
     await waitFor(() => {
-      expect(screen.getByTitle('Chart')).toBeInTheDocument();
+      expect(screen.getByTitle('Bar Chart')).toBeInTheDocument();
     });
     expect(screen.getByTitle('Table')).toBeInTheDocument();
   });
@@ -184,6 +270,40 @@ describe('RealizedGainsReport', () => {
       expect(screen.getByText(/Sell Transactions/)).toBeInTheDocument();
     });
     expect(screen.getByText('AAPL')).toBeInTheDocument();
+  });
+
+  it('labels a return of capital row and shows no shares or price for it (#1800)', async () => {
+    mockGetRealizedGains.mockResolvedValue([
+      gainEntry({
+        transactionId: 'roc-1',
+        action: 'RETURN_OF_CAPITAL',
+        quantity: 0,
+        price: 0,
+        proceeds: 700,
+        costBasis: 500,
+        realizedGain: 200,
+      }),
+    ]);
+    mockGetInvestmentAccounts.mockResolvedValue([]);
+    render(<RealizedGainsReport />);
+    await waitFor(() => {
+      expect(screen.getByText('Return of capital beyond cost basis')).toBeInTheDocument();
+    });
+    const row = screen.getByText('Return of capital beyond cost basis').closest('tr')!;
+    const cells = within(row).getAllByRole('cell');
+    // Shares and price: nothing was sold, so nothing to show.
+    expect(cells[2]).toHaveTextContent(/^Shares-$/);
+    expect(cells[3]).toHaveTextContent(/^Price-$/);
+  });
+
+  it('does not label an ordinary sale as a return of capital', async () => {
+    mockGetRealizedGains.mockResolvedValue([gainEntry({ action: 'SELL' })]);
+    mockGetInvestmentAccounts.mockResolvedValue([]);
+    render(<RealizedGainsReport />);
+    await waitFor(() => {
+      expect(screen.getByText(/Sell Transactions/)).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Return of capital beyond cost basis')).not.toBeInTheDocument();
   });
 
   it('queries the realized-gains endpoint with the selected date range', async () => {
@@ -225,7 +345,7 @@ describe('RealizedGainsReport', () => {
     });
     expect(screen.getByText('Realized Gains Detail')).toBeInTheDocument();
     await act(async () => {
-      fireEvent.click(screen.getByTitle('Chart'));
+      fireEvent.click(screen.getByTitle('Bar Chart'));
     });
     expect(screen.getByText('Realized Gains by Security')).toBeInTheDocument();
   });
@@ -426,7 +546,7 @@ describe('RealizedGainsReport', () => {
     await waitFor(() => {
       expect(screen.getByText(/Failed to load report data/)).toBeInTheDocument();
     });
-    expect(screen.getByRole('button', { name: /Try again/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Try Again/ })).toBeInTheDocument();
   });
 
   it('handles API error for accounts gracefully', async () => {
@@ -457,17 +577,73 @@ describe('RealizedGainsReport', () => {
     });
   });
 
-  it('uses convertToDefault when no account is selected (All Accounts)', async () => {
+  it("labels the unit price in the security's currency, not the account's", async () => {
+    // A EUR security sold from a CAD account: the price is the raw transaction
+    // value in the security's currency, while proceeds/basis/gain beside it are
+    // the server's conversion into the account's. Labelling the price with the
+    // account's (or the reader's) currency is issue #1394's mislabel, and it is
+    // what `fmtValue(entry.price)` did here.
+    mockGetInvestmentAccounts.mockResolvedValue([
+      { id: 'acc-1', name: 'TFSA', currencyCode: 'CAD', accountSubType: 'INVESTMENT_CASH' },
+    ]);
+    mockGetRealizedGains.mockResolvedValue([
+      gainEntry({ securityCurrencyCode: 'EUR', price: 110, accountCurrencyCode: 'CAD' }),
+    ]);
+    render(<RealizedGainsReport />);
+    await waitFor(() => expect(screen.getByTitle('Table')).toBeInTheDocument());
+    await act(async () => { fireEvent.click(screen.getByTitle('Table')); });
+
+    await waitFor(() => {
+      expect(screen.getByText('$110.00 EUR')).toBeInTheDocument();
+    });
+    // The proceeds are the account's currency, so they carry no foreign suffix
+    // (the figure appears in the KPI card and in the row).
+    expect(screen.getAllByText('$5500.00').length).toBeGreaterThan(0);
+    expect(screen.queryByText('$5500.00 CAD')).not.toBeInTheDocument();
+  });
+
+  it("names the pair the server could not resolve, not the account's currency (issue #2106)", async () => {
     mockGetInvestmentAccounts.mockResolvedValue([]);
     mockGetRealizedGains.mockResolvedValue([
-      gainEntry({ accountCurrencyCode: 'USD', proceeds: 1000, costBasis: 800, realizedGain: 200 }),
+      gainEntry({
+        accountCurrencyCode: 'USD',
+        securityCurrencyCode: 'EUR',
+        inReportingCurrency: {
+          currency: 'CAD',
+          proceeds: null,
+          costBasis: null,
+          realizedGain: null,
+          missingRatePairs: ['EUR->CAD'],
+        },
+      }),
+    ]);
+    render(<RealizedGainsReport />);
+
+    const note = await screen.findByText(/EUR/, { selector: 'p' });
+    expect(note.textContent).not.toMatch(/\bUSD\b/);
+  });
+
+  it("reads the server's reporting-currency figures for All Accounts (issue #2106)", async () => {
+    mockGetInvestmentAccounts.mockResolvedValue([]);
+    // 1,000 USD of proceeds against an 800 USD basis; in CAD the basis is what
+    // the shares cost when bought (1,040) and the proceeds what the sale paid
+    // (1,400), so the gain is 360 CAD -- not 200 at any one rate.
+    mockGetRealizedGains.mockResolvedValue([
+      gainEntry({
+        accountCurrencyCode: 'USD',
+        proceeds: 1000,
+        costBasis: 800,
+        realizedGain: 200,
+        inReportingCurrency: { currency: 'CAD', proceeds: 1400, costBasis: 1040, realizedGain: 360 },
+      }),
     ]);
     render(<RealizedGainsReport />);
     await waitFor(() => {
       expect(screen.getByText('Total Proceeds')).toBeInTheDocument();
     });
-    // No account selected -> toDisplay calls convertToDefault (which is identity in mock)
-    expect(screen.getByText(/Sell Transactions/)).toBeInTheDocument();
+    expect(screen.getAllByText('$1400.00').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/\$360\.00/).length).toBeGreaterThan(0);
+    expect(screen.queryByText('$1000.00')).not.toBeInTheDocument();
   });
 
   it('exercises sort headers on security and sells tables', async () => {
@@ -513,5 +689,42 @@ describe('RealizedGainsReport', () => {
         expect.objectContaining({ accountIds: 'acc-1' }),
       );
     });
+  });
+});
+
+describe('RealizedGainsReport: a reload is not the previous answer', () => {
+  const answer = [gainEntry()];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetInvestmentAccounts.mockResolvedValue([]);
+    mockRange.end = '2026-01-01';
+  });
+
+  async function loadThenChangeRange(next: () => unknown) {
+    mockGetRealizedGains.mockResolvedValue(answer);
+    let view!: ReturnType<typeof render>;
+    await act(async () => {
+      view = render(<RealizedGainsReport />);
+    });
+    await waitFor(() =>
+      expect(screen.getByTestId('export-pdf')).toHaveAttribute('data-disabled', 'false'),
+    );
+
+    mockGetRealizedGains.mockImplementation(next);
+    mockRange.end = '2026-02-01';
+    await act(async () => {
+      view.rerender(<RealizedGainsReport />);
+    });
+    await waitFor(() =>
+      expect(mockGetRealizedGains).toHaveBeenLastCalledWith(
+        expect.objectContaining({ endDate: '2026-02-01' }),
+      ),
+    );
+  }
+
+  it('disables the export while the next request is pending', async () => {
+    await loadThenChangeRange(() => new Promise(() => {}));
+    expect(screen.getByTestId('export-pdf')).toHaveAttribute('data-disabled', 'true');
   });
 });

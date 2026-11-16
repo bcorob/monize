@@ -12,6 +12,8 @@ import { Account, AccountType } from "./entities/account.entity";
 import { User } from "../users/entities/user.entity";
 import { UserPreference } from "../users/entities/user-preference.entity";
 import { EmailService } from "../notifications/email.service";
+import { NotificationPreferenceService } from "../notification-center/notification-preference.service";
+import { NotificationCategory } from "../notification-center/entities/notification.entity";
 import {
   createJobClaimMock,
   TEST_LEASE_TOKEN,
@@ -28,6 +30,7 @@ describe("MortgageReminderService", () => {
   let preferencesRepository: Record<string, jest.Mock>;
   let emailService: Record<string, jest.Mock>;
   let configService: Record<string, jest.Mock>;
+  let notificationPreferences: { resolveEmail: jest.Mock };
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -80,6 +83,18 @@ describe("MortgageReminderService", () => {
       findOne: jest.fn(),
     };
 
+    // Mirror the real resolver's master-gate: with no per-category row,
+    // resolveEmail == the user's notification_email, so the existing
+    // preferencesRepository fixtures keep controlling the email path.
+    notificationPreferences = {
+      resolveEmail: jest.fn(async (userId: string) => {
+        const prefs = await preferencesRepository.findOne({
+          where: { userId },
+        });
+        return prefs ? prefs.notificationEmail !== false : true;
+      }),
+    };
+
     emailService = {
       getStatus: jest.fn().mockReturnValue({ configured: true }),
       sendMail: jest.fn().mockResolvedValue(undefined),
@@ -110,6 +125,10 @@ describe("MortgageReminderService", () => {
             translate: (key: string, opts?: { defaultValue?: string }) =>
               opts?.defaultValue ?? key,
           },
+        },
+        {
+          provide: NotificationPreferenceService,
+          useValue: notificationPreferences,
         },
       ],
     }).compile();
@@ -282,7 +301,7 @@ describe("MortgageReminderService", () => {
       expect(emailService.sendMail).toHaveBeenCalledTimes(1);
       const [to, subject, html] = emailService.sendMail.mock.calls[0];
       expect(to).toBe("user1@example.com");
-      expect(subject).toBe("Monize: 1 upcoming mortgage renewal");
+      expect(subject).toBe("Monize: 1 mortgage rate term ending soon");
       expect(html).toContain("Home Mortgage");
       expect(html).toContain("Hi Alice,");
     });
@@ -302,7 +321,7 @@ describe("MortgageReminderService", () => {
 
       expect(emailService.sendMail).toHaveBeenCalledTimes(1);
       const [, subject, html] = emailService.sendMail.mock.calls[0];
-      expect(subject).toBe("Monize: 2 upcoming mortgage renewals");
+      expect(subject).toBe("Monize: 2 mortgage rate terms ending soon");
       expect(html).toContain("Home Mortgage");
       expect(html).toContain("Cottage Mortgage");
     });
@@ -357,6 +376,27 @@ describe("MortgageReminderService", () => {
 
       await service.checkMortgageRenewals();
 
+      expect(usersRepository.findOne).not.toHaveBeenCalled();
+      expect(emailService.sendMail).not.toHaveBeenCalled();
+    });
+
+    it("skips user whose PAYMENTS email channel is off, master on", async () => {
+      // A mortgage renewal reminder is a PAYMENTS email: a per-category off
+      // must suppress it even while the global master switch is on (audit
+      // Finding 1 -- it used to gate on the master only).
+      accountsRepository.find.mockResolvedValue([mockMortgage]);
+      preferencesRepository.findOne.mockResolvedValue({
+        userId: "11111111-1111-1111-1111-111111111111",
+        notificationEmail: true,
+      });
+      notificationPreferences.resolveEmail.mockResolvedValue(false);
+
+      await service.checkMortgageRenewals();
+
+      expect(notificationPreferences.resolveEmail).toHaveBeenCalledWith(
+        "11111111-1111-1111-1111-111111111111",
+        NotificationCategory.PAYMENTS,
+      );
       expect(usersRepository.findOne).not.toHaveBeenCalled();
       expect(emailService.sendMail).not.toHaveBeenCalled();
     });

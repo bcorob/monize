@@ -9,9 +9,14 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import { NumericInput } from '@/components/ui/NumericInput';
+import { InfoTooltip } from '@/components/ui/InfoTooltip';
+import { Select } from '@/components/ui/Select';
 import { getCurrencySymbol } from '@/lib/format';
+import { budgetLineName } from './utils/budget-line-name';
 import type {
+  BudgetBucket,
   BudgetCategory,
+  BudgetStrategy,
   UpdateBudgetCategoryData,
 } from '@/types/budget';
 
@@ -27,6 +32,8 @@ const buildBudgetCategoryFormSchema = (t: (key: string) => string) => z.object({
   alertWarnPercent: z.string().regex(/^\d*$/, t('categoryValidation.mustBeNumber')),
   alertCriticalPercent: z.string().regex(/^\d*$/, t('categoryValidation.mustBeNumber')),
   notes: z.string().max(1000).optional().or(z.literal('')),
+  // '' is unassigned.
+  bucketId: z.string(),
 });
 
 type BudgetCategoryFormData = z.infer<ReturnType<typeof buildBudgetCategoryFormSchema>>;
@@ -36,7 +43,13 @@ interface BudgetCategoryFormProps {
   currencyCode: string;
   onSave: (data: UpdateBudgetCategoryData) => Promise<void>;
   onCancel: () => void;
+  /** Offers a "Remove from budget" action; the caller confirms and deletes. */
+  onRemove?: () => void;
   isSaving?: boolean;
+  /** The budget's saved strategy; a Bucket budget offers the bucket select. */
+  strategy?: BudgetStrategy;
+  /** The budget's buckets, the select's options beside "Unassigned". */
+  buckets?: readonly BudgetBucket[];
 }
 
 const ROLLOVER_VALUES = ['NONE', 'MONTHLY', 'QUARTERLY', 'ANNUAL'] as const;
@@ -47,7 +60,10 @@ export function BudgetCategoryForm({
   currencyCode,
   onSave,
   onCancel,
+  onRemove,
   isSaving = false,
+  strategy,
+  buckets = [],
 }: BudgetCategoryFormProps) {
   const t = useTranslations('budgets');
   const tc = useTranslations('common');
@@ -68,8 +84,13 @@ export function BudgetCategoryForm({
       alertWarnPercent: String(category.alertWarnPercent),
       alertCriticalPercent: String(category.alertCriticalPercent),
       notes: category.notes ?? '',
+      bucketId: category.bucketId ?? '',
     },
   });
+
+  const isTransferIncome = category.isTransfer && category.isIncome;
+  // An income line cannot belong to a bucket (design decision 7).
+  const showBucketSelect = strategy === 'BUCKET' && !category.isIncome;
 
   // eslint-disable-next-line react-hooks/incompatible-library
   const watchedRolloverType = watch('rolloverType');
@@ -84,6 +105,7 @@ export function BudgetCategoryForm({
       alertWarnPercent: parseInt(formData.alertWarnPercent) || 80,
       alertCriticalPercent: parseInt(formData.alertCriticalPercent) || 95,
       notes: formData.notes || undefined,
+      ...(showBucketSelect ? { bucketId: formData.bucketId || null } : {}),
     };
 
     await onSave(data);
@@ -92,7 +114,12 @@ export function BudgetCategoryForm({
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
       <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-        {t('categoryForm.editTitle', { name: category.category?.parent ? `${category.category.parent.name}: ${category.category.name}` : category.category?.name ?? 'Category' })}
+        {t('categoryForm.editTitle', {
+          name: budgetLineName(category, {
+            transfersFrom: (name) => t('lineNames.transfersFrom', { name }),
+            unknown: t('lineNames.unknown'),
+          }),
+        })}
       </h3>
 
       <Controller
@@ -114,9 +141,12 @@ export function BudgetCategoryForm({
       />
 
       <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          {t('categoryForm.rolloverType')}
-        </label>
+        <div className="flex items-center mb-1">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            {t('categoryForm.rolloverType')}
+          </label>
+          <InfoTooltip text={t('categoryForm.rolloverTypeTooltip')} learnMore="budgetRollover" />
+        </div>
         <select
           {...register('rolloverType')}
           className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
@@ -156,21 +186,36 @@ export function BudgetCategoryForm({
         placeholder={t('categoryForm.flexGroupPlaceholder')}
       />
 
-      <div>
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-          {t('categoryForm.categoryGroup')}
-        </label>
-        <select
-          {...register('categoryGroup')}
-          className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
-        >
-          {GROUP_VALUES.map((value) => (
-            <option key={value} value={value}>
-              {value === '' ? t('categoryForm.groupOptions.none') : t(`categoryForm.groupOptions.${value}`)}
-            </option>
-          ))}
-        </select>
-      </div>
+      {/* A transfer income line is money arriving, not a need, want or saving. */}
+      {!isTransferIncome && (
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            {t('categoryForm.categoryGroup')}
+          </label>
+          <select
+            {...register('categoryGroup')}
+            className="w-full border border-gray-300 dark:border-gray-600 rounded-md px-3 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+          >
+            {GROUP_VALUES.map((value) => (
+              <option key={value} value={value}>
+                {value === '' ? t('categoryForm.groupOptions.none') : t(`categoryForm.groupOptions.${value}`)}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
+      {showBucketSelect && (
+        <Select
+          id="budget-category-bucket"
+          label={t('categoryForm.bucket')}
+          {...register('bucketId')}
+          options={[
+            { value: '', label: t('categoryForm.bucketUnassigned') },
+            ...buckets.map((bucket) => ({ value: bucket.id, label: bucket.name })),
+          ]}
+        />
+      )}
 
       <div className="grid grid-cols-2 gap-4">
         <Controller
@@ -218,13 +263,20 @@ export function BudgetCategoryForm({
         placeholder={t('categoryForm.notesPlaceholder')}
       />
 
-      <div className="flex justify-end gap-3 pt-2">
-        <Button type="button" variant="outline" onClick={onCancel}>
-          {tc('cancel')}
-        </Button>
-        <Button type="submit" disabled={isSaving}>
-          {isSaving ? t('categoryForm.saving') : tc('save')}
-        </Button>
+      <div className={`flex flex-wrap gap-3 pt-2 ${onRemove ? 'justify-between' : 'justify-end'}`}>
+        {onRemove && (
+          <Button type="button" variant="danger" onClick={onRemove} disabled={isSaving}>
+            {t('categoryForm.remove')}
+          </Button>
+        )}
+        <div className="flex gap-3">
+          <Button type="button" variant="outline" onClick={onCancel}>
+            {tc('cancel')}
+          </Button>
+          <Button type="submit" disabled={isSaving}>
+            {isSaving ? t('categoryForm.saving') : tc('save')}
+          </Button>
+        </div>
       </div>
     </form>
   );

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { useTourStore } from '@/store/tourStore';
 import {
@@ -10,6 +11,7 @@ import {
 } from '@/store/whatsNewStore';
 import { whatsNewApi, type ReleaseNotes } from '@/lib/whats-new';
 import { createLogger } from '@/lib/logger';
+import { isPublicPath } from '@/lib/public-paths';
 import { WhatsNewModal } from './WhatsNewModal';
 
 const logger = createLogger('WhatsNew');
@@ -31,9 +33,16 @@ const logger = createLogger('WhatsNew');
  * a session that never logs out. The backend status alone is version-scoped,
  * not session-scoped, so gating on it alone reopened the modal on every refresh
  * until acknowledged.
+ *
+ * It never auto-opens on a public route (`isPublicPath`): those screens tell
+ * the visitor they are signed out, so a signed-in digest over them contradicts
+ * the page. The triggers are left armed there and spent once the user reaches
+ * the app. The manual open from the version label still works, in its
+ * signed-out variant.
  */
 export function WhatsNewHost() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const onPublicRoute = isPublicPath(usePathname());
   const isOpen = useWhatsNewStore((s) => s.isOpen);
   const open = useWhatsNewStore((s) => s.open);
   const close = useWhatsNewStore((s) => s.close);
@@ -74,7 +83,7 @@ export function WhatsNewHost() {
         // Both are evaluated, never short-circuited: the login flag has to be
         // spent and the version recorded on every authenticated check, or a
         // load with nothing to show leaves a trigger armed for a later refresh.
-        if ('autoShow' in res) {
+        if ('autoShow' in res && !onPublicRoute) {
           const cameFromLogin = consumeWhatsNewPendingForLogin();
           const isNewToThisBrowser = recordAnnouncedVersion(res.currentVersion);
           if ((cameFromLogin || isNewToThisBrowser) && res.autoShow && res.notes) {
@@ -93,7 +102,7 @@ export function WhatsNewHost() {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, open, setBackendVersion]);
+  }, [isAuthenticated, onPublicRoute, open, setBackendVersion]);
 
   // A tour started from the offer list has to have the modal out of its way (it
   // drives the app underneath), so bring the modal back once the tour is done --
@@ -139,7 +148,7 @@ export function WhatsNewHost() {
       isOpen={isOpen}
       notes={notes}
       loading={loading}
-      authenticated={isAuthenticated}
+      authenticated={isAuthenticated && !onPublicRoute}
       currentVersion={currentVersion}
       onClose={close}
       onTourStart={closeForTour}

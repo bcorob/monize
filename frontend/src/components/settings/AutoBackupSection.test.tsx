@@ -25,11 +25,15 @@ vi.mock('@/store/preferencesStore', () => ({
   ),
 }));
 
+const mockUseDemoMode = vi.fn(() => false);
+vi.mock('@/hooks/useDemoMode', () => ({
+  useDemoMode: () => mockUseDemoMode(),
+}));
+
 import { backupApi } from '@/lib/backupApi';
 import toast from 'react-hot-toast';
 
 const defaultSettings = {
-  userId: '123',
   enabled: false,
   folderPath: '',
   frequency: 'daily' as const,
@@ -42,8 +46,15 @@ const defaultSettings = {
   lastBackupStatus: null,
   lastBackupError: null,
   nextBackupAt: null,
-  createdAt: '2026-01-01',
-  updatedAt: '2026-01-01',
+};
+
+// A capability whose store has a folder to choose: the `local` default every
+// test that is not about the store itself assumes.
+const localCapability = {
+  available: true,
+  folderPath: '/data/backups',
+  locationSelectable: true,
+  storageProvider: 'local',
 };
 
 async function renderAutoBackupSection() {
@@ -57,12 +68,10 @@ async function renderAutoBackupSection() {
 describe('AutoBackupSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockUseDemoMode.mockReturnValue(false);
     (
       backupApi.getAutoBackupCapability as ReturnType<typeof vi.fn>
-    ).mockResolvedValue({
-      available: true,
-      folderPath: '/data/backups',
-    });
+    ).mockResolvedValue(localCapability);
     (backupApi.getAutoBackupSettings as ReturnType<typeof vi.fn>).mockResolvedValue(
       defaultSettings,
     );
@@ -125,7 +134,7 @@ describe('AutoBackupSection', () => {
   it('enables save button when form is dirty', async () => {
     await renderAutoBackupSection();
 
-    const saveButton = screen.getByText('Save Settings');
+    const saveButton = screen.getByText('Save Policy');
     expect(saveButton).toBeDisabled();
 
     await act(async () => {
@@ -198,7 +207,7 @@ describe('AutoBackupSection', () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByText('Save Settings'));
+      fireEvent.click(screen.getByText('Save Policy'));
     });
 
     await waitFor(() => {
@@ -211,7 +220,7 @@ describe('AutoBackupSection', () => {
           retentionMonthly: 6,
         }),
       );
-      expect(toast.success).toHaveBeenCalledWith('Auto-backup settings saved');
+      expect(toast.success).toHaveBeenCalledWith('Backup policy saved and applied to every account');
     });
   });
 
@@ -229,7 +238,7 @@ describe('AutoBackupSection', () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByText('Save Settings'));
+      fireEvent.click(screen.getByText('Save Policy'));
     });
 
     await waitFor(() => {
@@ -237,43 +246,62 @@ describe('AutoBackupSection', () => {
     });
   });
 
-  it('shows Run Backup Now button when folder is configured', async () => {
-    (backupApi.getAutoBackupSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
-      ...defaultSettings,
-      folderPath: '/backups',
-    });
-
+  it('offers the run even where the store has no folder to configure', async () => {
+    // Gating this on a stored folder hid the button entirely on every object
+    // store deployment, which has none. Whether the store can be written to is
+    // the capability's answer, not the settings row's.
     await renderAutoBackupSection();
 
-    expect(screen.getByText('Run Backup Now')).toBeInTheDocument();
+    expect(screen.getByText('Back Up Every Account Now')).toBeInTheDocument();
   });
 
-  it('does not show Run Backup Now button when no folder configured', async () => {
-    await renderAutoBackupSection();
-
-    expect(screen.queryByText('Run Backup Now')).not.toBeInTheDocument();
-  });
-
-  it('runs manual backup', async () => {
+  it('runs a backup of every account and reports the count', async () => {
     (backupApi.getAutoBackupSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
       ...defaultSettings,
       folderPath: '/backups',
     });
     (backupApi.runAutoBackup as ReturnType<typeof vi.fn>).mockResolvedValue({
-      message: 'Backup completed',
-      filename: 'monize-backup-2026-04-02T10-00-00.json.gz',
+      message: 'Backed up 3 of 3 account(s)',
+      usersRequested: 3,
+      usersBackedUp: 3,
+      usersSkipped: 0,
+      usersFailed: 0,
+      usersPartial: 0,
+      filename: 'monize-backup-daily-2026-04-02.json.gz',
     });
 
     await renderAutoBackupSection();
 
     await act(async () => {
-      fireEvent.click(screen.getByText('Run Backup Now'));
+      fireEvent.click(screen.getByText('Back Up Every Account Now'));
     });
 
     await waitFor(() => {
       expect(backupApi.runAutoBackup).toHaveBeenCalled();
-      expect(toast.success).toHaveBeenCalledWith(
-        'Backup created: monize-backup-2026-04-02T10-00-00.json.gz',
+      expect(toast.success).toHaveBeenCalledWith('Backed up 3 of 3 accounts');
+    });
+  });
+
+  it('does not report a run that failed or wrote a partial as a success', async () => {
+    (backupApi.runAutoBackup as ReturnType<typeof vi.fn>).mockResolvedValue({
+      message: 'Backed up 2 of 3 account(s), 1 partial, 1 failed',
+      usersRequested: 3,
+      usersBackedUp: 2,
+      usersSkipped: 0,
+      usersFailed: 1,
+      usersPartial: 1,
+    });
+
+    await renderAutoBackupSection();
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Back Up Every Account Now'));
+    });
+
+    await waitFor(() => {
+      expect(toast.success).not.toHaveBeenCalled();
+      expect(toast).toHaveBeenCalledWith(
+        'Backed up 2 of 3: 1 partial, 1 failed. Check the status below.',
       );
     });
   });
@@ -289,10 +317,12 @@ describe('AutoBackupSection', () => {
 
     await renderAutoBackupSection();
 
-    expect(screen.getByText('Status')).toBeInTheDocument();
-    expect(screen.getByText('Last backup')).toBeInTheDocument();
+    // Deployment-wide: the most recent run of any account and the soonest
+    // next one, not the signed-in administrator's own row.
+    expect(screen.getByText('Deployment Status')).toBeInTheDocument();
+    expect(screen.getByText('Most recent backup')).toBeInTheDocument();
     expect(screen.getByText('Success')).toBeInTheDocument();
-    expect(screen.getByText('Next backup')).toBeInTheDocument();
+    expect(screen.getByText('Next scheduled backup')).toBeInTheDocument();
   });
 
   it('shows error details when last backup failed', async () => {
@@ -374,7 +404,7 @@ describe('AutoBackupSection', () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByText('Save Settings'));
+      fireEvent.click(screen.getByText('Save Policy'));
     });
 
     await waitFor(() => {
@@ -407,7 +437,7 @@ describe('AutoBackupSection', () => {
     });
 
     await act(async () => {
-      fireEvent.click(screen.getByText('Save Settings'));
+      fireEvent.click(screen.getByText('Save Policy'));
     });
 
     await waitFor(() => {
@@ -523,7 +553,7 @@ describe('AutoBackupSection', () => {
       // in a directory that only contains shard directories.
       expect(
         screen.getByText(
-          /Yours: \/data\/backups\/12\/34\/12345678-1234-1234-1234-123456789abc/,
+          /Example: \/data\/backups\/12\/34\/12345678-1234-1234-1234-123456789abc/,
         ),
       ).toBeInTheDocument();
     });
@@ -532,15 +562,150 @@ describe('AutoBackupSection', () => {
       await renderAutoBackupSection();
 
       expect(
-        screen.getByText(/their own folder inside this one/),
-      ).toBeInTheDocument();
+        screen.getAllByText(/their own folder inside this one/).length,
+      ).toBeGreaterThan(0);
     });
 
-    it('says the settings are administrator-only and everyone else is enrolled', async () => {
+    it('says the policy is administrator-only and governs every account', async () => {
       await renderAutoBackupSection();
 
       expect(
-        screen.getByText(/Only administrators can change these settings/),
+        screen.getByText(/Only administrators can change this policy/),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(/governs every account on this deployment/),
+      ).toBeInTheDocument();
+    });
+
+    it('says how many accounts the policy covers', async () => {
+      // "Daily at 02:00" over a count of 1 on a twelve-account instance is the
+      // defect this line makes visible.
+      (backupApi.getAutoBackupSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ...defaultSettings,
+        accountCount: 12,
+        scheduledAccountCount: 12,
+      });
+
+      await renderAutoBackupSection();
+
+      expect(
+        screen.getByText(
+          'Scheduled on 12 of 12 active accounts on this deployment.',
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it('does not invent a coverage count the server did not send', async () => {
+      await renderAutoBackupSection();
+
+      expect(
+        screen.getByText('How far this policy reaches is not available.'),
+      ).toBeInTheDocument();
+    });
+
+    it('shows the gap when the policy has not reached every account', async () => {
+      // A single number could only have been the total, which states coverage
+      // the deployment does not have.
+      (backupApi.getAutoBackupSettings as ReturnType<typeof vi.fn>).mockResolvedValue({
+        ...defaultSettings,
+        accountCount: 12,
+        scheduledAccountCount: 11,
+      });
+
+      await renderAutoBackupSection();
+
+      expect(
+        screen.getByText(
+          'Scheduled on 11 of 12 active accounts on this deployment.',
+        ),
+      ).toBeInTheDocument();
+    });
+  });
+
+  /**
+   * Which store is bound is a fact an operator needs whether or not they may
+   * change it, and on an object store the storage row is the only place it is
+   * stated. It used to be stated nowhere: the section rendered a folder input,
+   * a Browse and a Validate against endpoints that refuse on `s3`, posted a
+   * folderPath that failed every save, and hid the run button entirely because
+   * an object store stores no folder.
+   */
+  describe('which store is in use', () => {
+    it('names the local folder store and keeps the folder picker', async () => {
+      await renderAutoBackupSection();
+
+      expect(screen.getByText('Local folder')).toBeInTheDocument();
+      expect(screen.getByLabelText('Backup Folder')).toBeInTheDocument();
+      expect(screen.getByText('Browse...')).toBeInTheDocument();
+    });
+
+    it('names the object store and hides the folder controls on it', async () => {
+      (
+        backupApi.getAutoBackupCapability as ReturnType<typeof vi.fn>
+      ).mockResolvedValue({
+        available: true,
+        folderPath: 's3://monize-backups/store/',
+        locationSelectable: false,
+        storageProvider: 's3',
+        artifactCount: 4,
+      });
+
+      await renderAutoBackupSection();
+
+      expect(
+        screen.getByText('S3-compatible object storage'),
+      ).toBeInTheDocument();
+      expect(screen.getByText('s3://monize-backups/store/')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Backup Folder')).not.toBeInTheDocument();
+      expect(screen.queryByText('Browse...')).not.toBeInTheDocument();
+      expect(screen.queryByText('Validate')).not.toBeInTheDocument();
+      // The run is still offered: an object store has no folder, and gating on
+      // one hid the button on every `s3` deployment.
+      expect(screen.getByText('Back Up Every Account Now')).toBeInTheDocument();
+    });
+
+    it('sends no folderPath on a store that refuses one', async () => {
+      (
+        backupApi.getAutoBackupCapability as ReturnType<typeof vi.fn>
+      ).mockResolvedValue({
+        available: true,
+        folderPath: 's3://monize-backups/store/',
+        locationSelectable: false,
+        storageProvider: 's3',
+      });
+      (
+        backupApi.updateAutoBackupSettings as ReturnType<typeof vi.fn>
+      ).mockResolvedValue(defaultSettings);
+
+      await renderAutoBackupSection();
+
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Backup Frequency'), {
+          target: { value: 'weekly' },
+        });
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByText('Save Policy'));
+      });
+
+      await waitFor(() => {
+        expect(backupApi.updateAutoBackupSettings).toHaveBeenCalledWith(
+          expect.not.objectContaining({ folderPath: expect.anything() }),
+        );
+      });
+    });
+
+    it('says how many artifacts the current store already holds', async () => {
+      (
+        backupApi.getAutoBackupCapability as ReturnType<typeof vi.fn>
+      ).mockResolvedValue({ ...localCapability, artifactCount: 0 });
+
+      await renderAutoBackupSection();
+
+      // Zero is a number, not an absence: switching store is forward-only, so
+      // an empty new store is the thing an operator most needs to see.
+      expect(
+        screen.getByText(/currently holds 0 backup files/),
       ).toBeInTheDocument();
     });
   });
@@ -613,7 +778,7 @@ describe('AutoBackupSection', () => {
         fireEvent.click(toggle);
       });
       await act(async () => {
-        fireEvent.click(screen.getByText('Save Settings'));
+        fireEvent.click(screen.getByText('Save Policy'));
       });
 
       // Off has to reach the server, not merely the local state -- the schedule
@@ -636,7 +801,7 @@ describe('AutoBackupSection', () => {
       await screen.findByRole('status');
 
       expect(
-        screen.getByRole('button', { name: 'Run Backup Now' }),
+        screen.getByRole('button', { name: 'Back Up Every Account Now' }),
       ).toBeDisabled();
     });
   });
@@ -666,7 +831,7 @@ describe('AutoBackupSection', () => {
         expect(screen.getByRole('switch')).not.toBeDisabled();
       });
       expect(
-        screen.getByText('Run Backup Now').closest('button'),
+        screen.getByText('Back Up Every Account Now').closest('button'),
       ).not.toBeDisabled();
       // A failed read is not a definitive "unavailable", so no banner either.
       expect(screen.queryByRole('status')).not.toBeInTheDocument();
@@ -764,13 +929,77 @@ describe('AutoBackupSection', () => {
         });
       });
       await act(async () => {
-        fireEvent.click(screen.getByText('Save Settings'));
+        fireEvent.click(screen.getByText('Save Policy'));
       });
 
       await waitFor(() => {
         expect(backupApi.getAutoBackupCapability).toHaveBeenCalledTimes(2);
       });
       expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    });
+  });
+
+  /**
+   * The four mutating AutoBackupController endpoints (validate-folder,
+   * browse-folders, run-auto-backup, PATCH auto-backup-settings) are
+   * @DemoRestricted, so in demo mode the controls that reach them can only ever
+   * error. Disable them (with the enable toggle) rather than hide them -- a
+   * control the user is looking at is disabled, not removed.
+   */
+  describe('in demo mode', () => {
+    it('disables Save, Validate, Run and Browse and the enable toggle', async () => {
+      mockUseDemoMode.mockReturnValue(true);
+      (
+        backupApi.getAutoBackupSettings as ReturnType<typeof vi.fn>
+      ).mockResolvedValue({
+        ...defaultSettings,
+        enabled: true,
+        folderPath: '/data/backups',
+      });
+
+      await renderAutoBackupSection();
+
+      expect(screen.getByRole('switch')).toBeDisabled();
+      expect(screen.getByText('Browse...').closest('button')).toBeDisabled();
+      expect(screen.getByText('Validate').closest('button')).toBeDisabled();
+      expect(screen.getByText('Save Policy').closest('button')).toBeDisabled();
+      expect(
+        screen.getByRole('button', { name: 'Back Up Every Account Now' }),
+      ).toBeDisabled();
+      expect(
+        screen.getByText(/read-only in demo mode/i),
+      ).toBeInTheDocument();
+    });
+
+    it('leaves the controls enabled when not in demo mode', async () => {
+      // A dirty form so Save's own precondition does not stand in for the demo
+      // gate, a configured folder so Run and Validate are live.
+      (
+        backupApi.getAutoBackupSettings as ReturnType<typeof vi.fn>
+      ).mockResolvedValue({
+        ...defaultSettings,
+        enabled: true,
+        folderPath: '/data/backups',
+      });
+
+      await renderAutoBackupSection();
+
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Backup Folder'), {
+          target: { value: '/data/backups/new' },
+        });
+      });
+
+      expect(screen.getByRole('switch')).not.toBeDisabled();
+      expect(screen.getByText('Browse...').closest('button')).not.toBeDisabled();
+      expect(screen.getByText('Validate').closest('button')).not.toBeDisabled();
+      expect(
+        screen.getByText('Save Policy').closest('button'),
+      ).not.toBeDisabled();
+      expect(
+        screen.getByRole('button', { name: 'Back Up Every Account Now' }),
+      ).not.toBeDisabled();
+      expect(screen.queryByText(/read-only in demo mode/i)).not.toBeInTheDocument();
     });
   });
 });

@@ -12,12 +12,28 @@ import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { StepUpAuthModal } from '@/components/auth/StepUpAuthModal';
 import { authApi } from '@/lib/auth';
-import { PersonalAccessToken } from '@/types/auth';
+import apiClient from '@/lib/api';
+import {
+  StepUpRequiredError,
+  consumeOidcReauthArtifact,
+  consumeOidcStepUpPending,
+  rethrowStepUpError,
+  useStepUpTokenStore,
+} from '@/lib/stepUpToken';
+import { PersonalAccessToken, SelfUserProfile } from '@/types/auth';
 import { getErrorMessage } from '@/lib/errors';
 import { useDateFormat } from '@/hooks/useDateFormat';
+import { useRelativeTime } from '@/hooks/useRelativeTime';
 
 const MCP_PATH = '/api/v1/mcp';
+
+/**
+ * Creating a token is step-up protected: a PAT outlives the session that mints
+ * it, so the server asks for the account's strongest factor again first.
+ */
+const STEP_UP_PURPOSE = 'personal-access-token';
 
 const SCOPE_OPTIONS = [
   { value: 'read', labelKey: 'createModal.scopes.read.label', descriptionKey: 'createModal.scopes.read.description' },
@@ -25,11 +41,14 @@ const SCOPE_OPTIONS = [
 ];
 
 const EXPIRY_OPTIONS = [
-  { value: '', labelKey: 'createModal.expiry.none' },
   { value: '30', labelKey: 'createModal.expiry.d30' },
   { value: '90', labelKey: 'createModal.expiry.d90' },
   { value: '365', labelKey: 'createModal.expiry.y1' },
+  { value: '', labelKey: 'createModal.expiry.none' },
 ];
+
+/** The server's own default, so a form that is never touched matches an omitted `expiresAt`. */
+const DEFAULT_EXPIRY_DAYS = '90';
 
 const buildCreateTokenSchema = (t: (key: string) => string) => z.object({
   name: z.string().min(1, t('createModal.validation.nameRequired')).max(100, t('createModal.validation.nameMax')),
@@ -38,32 +57,29 @@ const buildCreateTokenSchema = (t: (key: string) => string) => z.object({
 
 type CreateTokenFormData = z.infer<ReturnType<typeof buildCreateTokenSchema>>;
 
-function relativeOrFormatted(
-  dateStr: string | null,
-  formatDate: (date: Date | string) => string,
-  getRelative: (diffDays: number | null) => string,
-): string {
-  if (!dateStr) return getRelative(null);
-  const date = new Date(dateStr);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+/** The create form as it was, carried across a step-up or an OIDC round trip. */
+interface PendingCreate {
+  name: string;
+  expiryDays: string;
+  scopes: string[];
+}
 
-  if (diffDays < 365) return getRelative(diffDays);
-  return formatDate(date);
+function isPendingCreate(value: unknown): value is PendingCreate {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.name === 'string' &&
+    typeof v.expiryDays === 'string' &&
+    Array.isArray(v.scopes) &&
+    v.scopes.every((scope) => typeof scope === 'string')
+  );
 }
 
 export function ApiAccessSection() {
   const t = useTranslations('settings.apiAccess');
   const tc = useTranslations('common');
-  const getRelative = (diffDays: number | null): string => {
-    if (diffDays === null) return t('relative.never');
-    if (diffDays === 0) return t('relative.today');
-    if (diffDays === 1) return t('relative.yesterday');
-    if (diffDays < 30) return t('relative.daysAgo', { count: diffDays });
-    return t('relative.monthsAgo', { count: Math.floor(diffDays / 30) });
-  };
   const { formatDate } = useDateFormat();
+  const relativeTime = useRelativeTime();
   const [tokens, setTokens] = useState<PersonalAccessToken[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -78,6 +94,13 @@ export function ApiAccessSection() {
   const [mcpUrlCopied, setMcpUrlCopied] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
+  // Step-up: the modal needs the account's factor (authProvider + hasPassword),
+  // which only the full self profile carries.
+  const [selfUser, setSelfUser] = useState<SelfUserProfile | null>(null);
+  const [stepUpOpen, setStepUpOpen] = useState(false);
+  const [pendingCreate, setPendingCreate] = useState<PendingCreate | null>(null);
+  const clearStepUp = useStepUpTokenStore((s) => s.clear);
+
   const {
     register,
     handleSubmit,
@@ -87,7 +110,7 @@ export function ApiAccessSection() {
     resolver: zodResolver(buildCreateTokenSchema(t)),
     defaultValues: {
       name: '',
-      expiryDays: '',
+      expiryDays: DEFAULT_EXPIRY_DAYS,
     },
   });
 
@@ -95,56 +118,135 @@ export function ApiAccessSection() {
     ? `${window.location.origin}${MCP_PATH}`
     : MCP_PATH;
 
-  const loadTokens = useCallback(async () => {
-    try {
-      const data = await authApi.getTokens();
-      setTokens(data);
-    } catch (error) {
-      toast.error(getErrorMessage(error, t('toasts.loadFailed')));
-    } finally {
-      setIsLoading(false);
-    }
+  // The writes live in the inner `run`, so they happen after the request, not during the effect.
+  const loadTokens = useCallback(() => {
+    const run = async () => {
+      try {
+        const data = await authApi.getTokens();
+        setTokens(data);
+      } catch (error) {
+        toast.error(getErrorMessage(error, t('toasts.loadFailed')));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    return run();
   }, [t]);
 
   useEffect(() => {
     loadTokens();
   }, [loadTokens]);
 
-  const handleCreate = async (formData: CreateTokenFormData) => {
-    if (selectedScopes.length === 0) {
-      toast.error(t('toasts.selectScope'));
+  useEffect(() => {
+    authApi
+      .getSelfProfile()
+      .then((user) => setSelfUser(user))
+      .catch(() => {
+        // Without it the step-up modal cannot pick a factor and stays closed;
+        // creating a token then fails with the server's own message.
+      });
+  }, []);
+
+  /** Ask for the step-up, remembering the form so it can be submitted after. */
+  const requestStepUp = (pending: PendingCreate) => {
+    clearStepUp(STEP_UP_PURPOSE);
+    setPendingCreate(pending);
+    setStepUpOpen(true);
+  };
+
+  const submitCreate = async (pending: PendingCreate) => {
+    const stepUpToken = useStepUpTokenStore.getState().getValid(STEP_UP_PURPOSE);
+    if (!stepUpToken) {
+      requestStepUp(pending);
       return;
     }
 
     setIsCreating(true);
     try {
-      let expiresAt: string | undefined;
-      if (formData.expiryDays) {
+      // `null` is an explicit "never expires": an omitted value means 90 days server-side.
+      let expiresAt: string | null = null;
+      if (pending.expiryDays) {
         const date = new Date();
-        date.setDate(date.getDate() + parseInt(formData.expiryDays));
+        date.setDate(date.getDate() + parseInt(pending.expiryDays));
         expiresAt = date.toISOString();
       }
 
-      const result = await authApi.createToken({
-        name: formData.name.trim(),
-        scopes: selectedScopes.join(','),
-        expiresAt,
-      });
+      const result = await authApi
+        .createToken(
+          {
+            name: pending.name.trim(),
+            scopes: pending.scopes.join(','),
+            expiresAt,
+          },
+          stepUpToken,
+        )
+        .catch((error: unknown) => rethrowStepUpError(error));
 
       setCreatedToken(result.token);
       setTokens((prev) => [result, ...prev]);
       setCopied(false);
     } catch (error) {
+      if (error instanceof StepUpRequiredError) {
+        // Expired or rejected between verifying and submitting: ask again.
+        requestStepUp(pending);
+        return;
+      }
       toast.error(getErrorMessage(error, t('toasts.createFailed')));
     } finally {
       setIsCreating(false);
     }
   };
 
+  const handleCreate = async (formData: CreateTokenFormData) => {
+    if (selectedScopes.length === 0) {
+      toast.error(t('toasts.selectScope'));
+      return;
+    }
+    await submitCreate({
+      name: formData.name,
+      expiryDays: formData.expiryDays,
+      scopes: selectedScopes,
+    });
+  };
+
+  // Finish a step-up that went through the identity provider. The modal
+  // stashed the form and sent the user away; the auth callback brought them
+  // back here with a one-time artifact, which is exchanged for a step-up token
+  // before the form is reopened as it was.
+  useEffect(() => {
+    const pending = consumeOidcStepUpPending(STEP_UP_PURPOSE);
+    if (!pending) return;
+    const resumed = isPendingCreate(pending.payload) ? pending.payload : null;
+    (async () => {
+      try {
+        const artifact = consumeOidcReauthArtifact();
+        const res = await apiClient.post<{
+          stepUpToken: string;
+          expiresAt: string;
+        }>('/auth/step-up', {
+          purpose: STEP_UP_PURPOSE,
+          oidcReauthToken: artifact ?? undefined,
+        });
+        useStepUpTokenStore
+          .getState()
+          .set(STEP_UP_PURPOSE, res.data.stepUpToken, res.data.expiresAt);
+        if (resumed) {
+          resetForm({ name: resumed.name, expiryDays: resumed.expiryDays });
+          setSelectedScopes(resumed.scopes);
+          setShowCreateModal(true);
+        }
+      } catch (error) {
+        toast.error(getErrorMessage(error, t('toasts.reauthFailed')));
+      }
+    })();
+    // Once per mount: the sentinel is consumed on the first call.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleCloseCreateModal = () => {
     setShowCreateModal(false);
     setCreatedToken(null);
-    resetForm();
+    resetForm({ name: '', expiryDays: DEFAULT_EXPIRY_DAYS });
     setSelectedScopes(['read']);
     setCopied(false);
   };
@@ -192,6 +294,9 @@ export function ApiAccessSection() {
           </h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             {t('description')}
+          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            {t('restrictedNote')}
           </p>
         </div>
         <Button
@@ -289,7 +394,7 @@ export function ApiAccessSection() {
                 <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   {t('created')} {formatDate(new Date(token.createdAt))}
                   {' \u00B7 '}
-                  {t('lastUsed')} {relativeOrFormatted(token.lastUsedAt, formatDate, getRelative)}
+                  {t('lastUsed')} {token.lastUsedAt ? relativeTime(token.lastUsedAt) : t('relative.never')}
                   {token.expiresAt && (
                     <>
                       {' \u00B7 '}
@@ -316,9 +421,9 @@ export function ApiAccessSection() {
         <div className="p-6">
           {createdToken ? (
             <div className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                 {t('createdModal.title')}
-              </h3>
+              </h2>
               <div className="p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
                 <p className="text-sm text-amber-700 dark:text-amber-300">
                   {t('createdModal.warningNote')}
@@ -347,9 +452,9 @@ export function ApiAccessSection() {
             </div>
           ) : (
             <form onSubmit={handleSubmit(handleCreate)} className="space-y-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                 {t('createModal.title')}
-              </h3>
+              </h2>
               <Input
                 label={t('createModal.tokenNameLabel')}
                 {...register('name')}
@@ -412,6 +517,26 @@ export function ApiAccessSection() {
           )}
         </div>
       </Modal>
+
+      <StepUpAuthModal
+        isOpen={stepUpOpen && !!selfUser}
+        purpose={STEP_UP_PURPOSE}
+        authProvider={selfUser?.authProvider ?? 'local'}
+        hasPassword={selfUser?.hasPassword ?? false}
+        reason={t('stepUp.reason')}
+        oidcReturnTo="/settings"
+        oidcResumePayload={pendingCreate ? { ...pendingCreate } : undefined}
+        onClose={() => {
+          setStepUpOpen(false);
+          setPendingCreate(null);
+        }}
+        onVerified={() => {
+          const pending = pendingCreate;
+          setStepUpOpen(false);
+          setPendingCreate(null);
+          if (pending) void submitCreate(pending);
+        }}
+      />
 
       {/* Revoke Confirmation */}
       <ConfirmDialog

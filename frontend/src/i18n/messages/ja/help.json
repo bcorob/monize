@@ -1,0 +1,81 @@
+{
+  "learnMore": "詳細を見る",
+  "howThisWorks": "仕組み",
+  "menu": {
+    "helpForPage": "このページのヘルプ",
+    "search": "ヘルプを検索",
+    "shortcuts": "キーボードショートカット",
+    "takeTour": "ツアーを開始",
+    "whatsNew": "新着情報",
+    "shellMenu": "デスクトップアプリのメニュー",
+    "reportIssue": "問題を報告",
+    "discussions": "ディスカッション"
+  },
+  "shortcuts": {
+    "title": "キーボードショートカット",
+    "palette": "コマンドパレット",
+    "paletteKeys": "Ctrl/Cmd+K",
+    "search": "ヘルプを検索",
+    "searchKeys": "?",
+    "undo": "直前の変更を元に戻す",
+    "undoKeys": "Ctrl/Cmd+Z",
+    "redo": "やり直す",
+    "redoKeys": "Ctrl/Cmd+Shift+Z または Ctrl/Cmd+Y",
+    "closeDialog": "開いているダイアログまたはパネルを閉じる",
+    "closeDialogKeys": "Esc"
+  },
+  "panel": {
+    "title": "ヘルプ",
+    "back": "戻る",
+    "forward": "進む",
+    "openOnline": "monize.net で開く",
+    "pin": "ヘルプパネルを固定して、ページを移動しても開いたままにします",
+    "unpin": "ヘルプパネルの固定を解除",
+    "expand": "ヘルプパネルを広げる",
+    "collapse": "ヘルプパネルを狭める",
+    "resize": "ヘルプパネルの幅を変更",
+    "resizeValue": "{width} ピクセル",
+    "close": "ヘルプを閉じる",
+    "englishOnly": "このガイドは英語です。",
+    "loading": "ヘルプを読み込み中",
+    "toc": {
+      "toggle": "このページの内容",
+      "label": "このページのセクション"
+    },
+    "error": {
+      "heading": "ヘルプを読み込めませんでした",
+      "body": "ガイドを読み込めませんでした。もう一度お試しいただくか、このページを monize.net でご覧ください。",
+      "retry": "再試行"
+    },
+    "search": "ガイドを検索",
+    "tour": {
+      "prompt": "このページにはガイド付きツアーがあります。"
+    },
+    "version": "Monize {version} のガイド",
+    "latestOnline": "最新のガイドは monize.net にあります"
+  },
+  "search": {
+    "title": "ガイドを検索",
+    "placeholder": "ガイドを検索",
+    "ariaLabel": "ガイドを検索",
+    "contextHeading": "この画面のヘルプ",
+    "noResults": "「{query}」の結果はありません",
+    "error": "検索に失敗しました。もう一度お試しください。",
+    "hint": {
+      "navigate": "で移動",
+      "select": "で選択",
+      "close": "で閉じる"
+    }
+  },
+  "markdown": {
+    "screenshot": "スクリーンショット",
+    "viewScreenshot": "monize.net でスクリーンショットを見る",
+    "callout": {
+      "note": "メモ",
+      "tip": "ヒント",
+      "important": "重要",
+      "warning": "警告",
+      "caution": "注意"
+    }
+  }
+}

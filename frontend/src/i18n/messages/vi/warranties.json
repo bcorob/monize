@@ -1,0 +1,321 @@
+{
+  "page": {
+    "title": "Bảo hành",
+    "subtitle": "Bạn đã mua gì, khi nào hết bảo hành và ai đã bán",
+    "newButton": "Thêm bảo hành",
+    "exportButton": "Xuất CSV",
+    "importButton": "Nhập CSV",
+    "loading": "Đang tải bảo hành...",
+    "loadFailed": "Không thể tải các bảo hành của bạn.",
+    "retry": "Thử lại",
+    "summary": {
+      "active": "Còn hiệu lực",
+      "expiring": "Sắp hết hạn",
+      "expired": "Đã hết hạn",
+      "lifetime": "Trọn đời",
+      "unavailable": "Chưa tải",
+      "expiringHint": "Trong vòng {days} ngày"
+    },
+    "filters": {
+      "label": "Lọc theo trạng thái",
+      "all": "Tất cả",
+      "expiring": "Sắp hết hạn",
+      "active": "Còn hiệu lực",
+      "expired": "Đã hết hạn",
+      "lifetime": "Trọn đời",
+      "counted": {
+        "all": "Tất cả ({count})",
+        "expiring": "Sắp hết hạn ({count})",
+        "active": "Còn hiệu lực ({count})",
+        "expired": "Đã hết hạn ({count})",
+        "lifetime": "Trọn đời ({count})"
+      }
+    },
+    "search": {
+      "label": "Tìm bảo hành",
+      "placeholder": "Tìm theo tên, người bán, mẫu hoặc số sê-ri"
+    },
+    "archivedToggle": "Hiện mục đã lưu trữ",
+    "transactionChip": {
+      "label": "Bảo hành của một giao dịch",
+      "clear": "Hiện tất cả bảo hành"
+    },
+    "pager": {
+      "itemName": "bảo hành",
+      "total": "{count, plural, other {{total} bảo hành}}"
+    },
+    "empty": {
+      "title": "Chưa có bảo hành nào",
+      "description": "Thêm bảo hành để theo dõi khi nào bảo hành kết thúc.",
+      "filteredTitle": "Không có bảo hành phù hợp",
+      "filteredDescription": "Thử trạng thái khác hoặc xóa nội dung tìm kiếm.",
+      "archivedTitle": "Không có bảo hành đã lưu trữ"
+    },
+    "modal": {
+      "newTitle": "Bảo hành mới",
+      "editTitle": "Chỉnh sửa bảo hành"
+    },
+    "delete": {
+      "title": "Xóa bảo hành",
+      "message": "Xóa \"{name}\"? Các yêu cầu bảo hành và tài liệu của nó cũng sẽ bị xóa, và không thể hoàn tác."
+    },
+    "toasts": {
+      "created": "Đã thêm bảo hành",
+      "updated": "Đã cập nhật bảo hành",
+      "deleted": "Đã xóa bảo hành",
+      "archived": "Đã lưu trữ bảo hành",
+      "unarchived": "Đã khôi phục bảo hành",
+      "createFailed": "Không thể thêm bảo hành",
+      "updateFailed": "Không thể cập nhật bảo hành",
+      "deleteFailed": "Không thể xóa bảo hành",
+      "archiveFailed": "Không thể lưu trữ bảo hành",
+      "unarchiveFailed": "Không thể khôi phục bảo hành",
+      "prefillFailed": "Không thể tải giao dịch đó, nên bảo hành bắt đầu trống",
+      "exported": "{count, plural, other {Đã xuất {shown} bảo hành}}",
+      "exportFailed": "Không thể xuất các bảo hành"
+    }
+  },
+  "status": {
+    "lifetime": "Trọn đời",
+    "active": "Còn hiệu lực",
+    "expiring": "Sắp hết hạn",
+    "expired": "Đã hết hạn"
+  },
+  "daysLeft": {
+    "left": "{count, plural, other {Còn {days} ngày}}",
+    "today": "Hết hạn hôm nay",
+    "ago": "{count, plural, other {Đã hết hạn {days} ngày trước}}",
+    "leftYears": "Còn {yearsCount, plural, other {{years} năm}}, {daysCount, plural, other {{days} ngày}}",
+    "agoYears": "Đã hết hạn {yearsCount, plural, other {{years} năm}}, {daysCount, plural, other {{days} ngày}} trước"
+  },
+  "kind": {
+    "manufacturer": "Nhà sản xuất",
+    "extended": "Mở rộng",
+    "store": "Cửa hàng",
+    "other": "Khác"
+  },
+  "list": {
+    "columns": {
+      "name": "Tên",
+      "status": "Trạng thái",
+      "expiresOn": "Hết hạn",
+      "purchaseDate": "Ngày mua",
+      "price": "Giá",
+      "documents": "Tài liệu",
+      "claims": "Yêu cầu đang mở",
+      "actions": "Thao tác"
+    },
+    "sortLabel": "Sắp xếp theo",
+    "lifetime": "Trọn đời",
+    "noPrice": "Không có",
+    "actions": {
+      "archive": "Lưu trữ",
+      "unarchive": "Bỏ lưu trữ"
+    }
+  },
+  "form": {
+    "nameLabel": "Tên",
+    "namePlaceholder": "Món bạn đã mua",
+    "vendorLabel": "Người bán",
+    "vendorPlaceholder": "Chọn hoặc nhập người bán",
+    "modelLabel": "Số mẫu",
+    "serialsLabel": "Số sê-ri",
+    "serialLabel": "Số sê-ri {index}",
+    "addSerial": "Thêm số sê-ri",
+    "removeSerial": "Xóa số sê-ri {index}",
+    "serialsLimit": "Tối đa {max} số sê-ri",
+    "kindLabel": "Loại bảo hành",
+    "purchaseDateLabel": "Ngày mua",
+    "expiry": {
+      "label": "Hết bảo hành",
+      "date": "Vào một ngày",
+      "duration": "Sau một khoảng thời gian",
+      "lifetime": "Không bao giờ",
+      "expiresOnLabel": "Hết hạn vào",
+      "years": "Năm",
+      "months": "Tháng",
+      "days": "Ngày",
+      "computed": "Hết hạn vào {date}",
+      "needsPurchaseDate": "Nhập ngày mua để tính ngày kết thúc",
+      "lifetimeHint": "Bảo hành trọn đời không có ngày kết thúc và không có lời nhắc"
+    },
+    "priceLabel": "Giá mua",
+    "productUrlLabel": "Trang sản phẩm",
+    "productUrlPlaceholder": "https://",
+    "notesLabel": "Ghi chú",
+    "submitCreate": "Thêm bảo hành",
+    "submitUpdate": "Lưu thay đổi"
+  },
+  "validation": {
+    "nameRequired": "Nhập tên",
+    "nameTooLong": "Dùng tối đa 200 ký tự",
+    "vendorTooLong": "Dùng tối đa 200 ký tự",
+    "modelTooLong": "Dùng tối đa 100 ký tự",
+    "serialTooLong": "Dùng tối đa 100 ký tự cho mỗi số sê-ri",
+    "serialsTooMany": "Tối đa 10 số sê-ri",
+    "purchaseDateRequired": "Nhập ngày mua",
+    "expiresOnRequired": "Nhập ngày bảo hành kết thúc",
+    "expiresBeforePurchase": "Bảo hành không thể kết thúc trước ngày mua",
+    "durationRequired": "Nhập khoảng thời gian lớn hơn 0",
+    "priceNegative": "Giá không được âm",
+    "priceNeedsCurrency": "Chọn đơn vị tiền tệ của giá",
+    "urlInvalid": "Nhập địa chỉ web bắt đầu bằng http:// hoặc https://",
+    "urlTooLong": "Dùng tối đa 500 ký tự",
+    "notesTooLong": "Dùng tối đa 2000 ký tự"
+  },
+  "detail": {
+    "back": "Quay lại Bảo hành",
+    "loading": "Đang tải bảo hành...",
+    "loadFailed": "Không thể tải bảo hành này.",
+    "notFound": "Không tìm thấy bảo hành này.",
+    "retry": "Thử lại",
+    "archivedBadge": "Đã lưu trữ",
+    "switcher": {
+      "trigger": "Chuyển bảo hành",
+      "placeholder": "Lọc bảo hành...",
+      "noMatches": "Không có bảo hành nào khớp"
+    },
+    "summary": {
+      "expires": "Hết hạn",
+      "purchased": "Ngày mua",
+      "price": "Giá mua",
+      "openClaims": "Yêu cầu đang mở"
+    },
+    "card": {
+      "title": "Chi tiết",
+      "kind": "Loại bảo hành",
+      "vendor": "Người bán",
+      "serialNumbers": "Số sê-ri",
+      "model": "Số mẫu",
+      "productUrl": "Trang sản phẩm",
+      "notes": "Ghi chú",
+      "none": "Không có",
+      "lifetime": "Trọn đời"
+    },
+    "transaction": {
+      "title": "Giao dịch mua",
+      "edit": "Sửa giao dịch mua ngày {date}: {payee}, {amount}",
+      "viewInRegister": "Xem trong sổ ghi",
+      "loadFailed": "Không thể tải giao dịch mua",
+      "dateInAccount": "{date} · {account}",
+      "none": "Không có giao dịch liên kết",
+      "unreadable": "Giao dịch mua nằm trong tài khoản mà bạn không thể đọc.",
+      "noPayee": "Không có người nhận thanh toán"
+    }
+  },
+  "documents": {
+    "title": "Tài liệu",
+    "empty": "Chưa có tài liệu nào",
+    "pendingHint": "Tài liệu sẽ được tải lên khi bạn lưu bảo hành.",
+    "tooMany": "Tối đa {max} tài liệu cho mỗi bảo hành",
+    "uploadFailedAfterCreate": "Đã thêm bảo hành, nhưng không thể tải lên {count, plural, one {tài liệu này} other {các tài liệu này}}: {names}. Hãy thêm từ mục Tài liệu của bảo hành.",
+    "kindFor": "Loại tài liệu cho {name}",
+    "kindUpdateFailed": "Không thay đổi được loại tài liệu",
+    "addExisting": "Thêm tài liệu có sẵn",
+    "addExistingTitle": "Thêm tài liệu có sẵn",
+    "addExistingHelp": "Chọn một tệp bạn đã tải lên giao dịch hoặc một bảo hành khác. Một bản sao sẽ được thêm vào bảo hành này; bản gốc vẫn giữ nguyên chỗ cũ.",
+    "addExistingFrom": "Tài liệu hiện đang ở đâu",
+    "fromTransaction": "Một giao dịch",
+    "fromWarranty": "Một bảo hành khác",
+    "addExistingDocument": "Tài liệu",
+    "addExistingKind": "Loại tài liệu trong bảo hành này",
+    "addExistingNone": "Không có tài liệu nào để thêm ở đây.",
+    "addExistingLoadFailed": "Không thể tải các tài liệu. Vui lòng thử lại.",
+    "addExistingFailed": "Không thể thêm tài liệu",
+    "addExistingSubmit": "Thêm tài liệu",
+    "choose": "Chọn…",
+    "preview": "Xem trước",
+    "kinds": {
+      "receipt": "Biên lai",
+      "manual": "Sách hướng dẫn",
+      "photo": "Ảnh",
+      "warranty": "Bảo hành",
+      "other": "Khác"
+    }
+  },
+  "claims": {
+    "title": "Yêu cầu bảo hành",
+    "add": "Thêm yêu cầu",
+    "empty": "Chưa có yêu cầu nào",
+    "loading": "Đang tải yêu cầu...",
+    "loadFailed": "Không thể tải các yêu cầu.",
+    "retry": "Thử lại",
+    "statuses": {
+      "open": "Đang mở",
+      "approved": "Đã chấp thuận",
+      "denied": "Bị từ chối",
+      "resolved": "Đã giải quyết"
+    },
+    "claimedOn": "Yêu cầu ngày {date}",
+    "resolvedOnLine": "Đóng ngày {date}",
+    "resolutionLine": "Kết quả xử lý: {text}",
+    "modal": {
+      "newTitle": "Yêu cầu mới",
+      "editTitle": "Chỉnh sửa yêu cầu"
+    },
+    "form": {
+      "claimDateLabel": "Ngày yêu cầu",
+      "statusLabel": "Trạng thái",
+      "descriptionLabel": "Mô tả",
+      "resolutionLabel": "Kết quả xử lý",
+      "resolvedOnLabel": "Ngày đóng",
+      "resolvedOnHint": "Chỉ dành cho yêu cầu đã giải quyết hoặc bị từ chối",
+      "submitCreate": "Thêm yêu cầu",
+      "submitUpdate": "Lưu thay đổi"
+    },
+    "validation": {
+      "claimDateRequired": "Nhập ngày yêu cầu",
+      "resolvedOnBeforeClaim": "Yêu cầu không thể đóng trước ngày được gửi",
+      "textTooLong": "Dùng tối đa 2000 ký tự"
+    },
+    "delete": {
+      "title": "Xóa yêu cầu",
+      "message": "Xóa yêu cầu đã gửi ngày {date}? Không thể hoàn tác thao tác này."
+    },
+    "toasts": {
+      "created": "Đã thêm yêu cầu",
+      "updated": "Đã cập nhật yêu cầu",
+      "deleted": "Đã xóa yêu cầu",
+      "createFailed": "Không thể thêm yêu cầu",
+      "updateFailed": "Không thể cập nhật yêu cầu",
+      "deleteFailed": "Không thể xóa yêu cầu"
+    }
+  },
+  "import": {
+    "title": "Nhập bảo hành từ CSV",
+    "description": "Tệp CSV theo các cột của Warracker, chẳng hạn tệp xuất từ Warracker hoặc từ trang này. Bạn sẽ thấy từng hàng trước khi bất cứ thứ gì được lưu.",
+    "fileLabel": "Tệp CSV",
+    "chooseFile": "Chọn tệp",
+    "noFileChosen": "Chưa chọn tệp",
+    "checking": "Đang kiểm tra tệp...",
+    "previewFailed": "Không thể kiểm tra tệp",
+    "summary": "{count, plural, other {Có thể nhập {valid} trên {total} hàng.}}",
+    "invalidSummary": "{count, plural, other {{shown} hàng không hợp lệ và không thể nhập ở dạng hiện tại.}}",
+    "skipInvalid": "Bỏ qua các hàng không hợp lệ và nhập phần còn lại",
+    "nothingToImport": "Hãy sửa tệp rồi chọn lại.",
+    "skippedColumns": "Các cột không được nhập:",
+    "columns": {
+      "line": "Dòng",
+      "name": "Tên",
+      "expires": "Hết hạn",
+      "outcome": "Kết quả",
+      "problems": "Vấn đề"
+    },
+    "outcome": {
+      "valid": "Sẵn sàng",
+      "invalid": "Không hợp lệ",
+      "created": "Đã nhập"
+    },
+    "unnamed": "(không có tên)",
+    "noExpiry": "Chưa đặt",
+    "lifetime": "Trọn đời",
+    "errorItem": "Lỗi: {message}",
+    "warningItem": "Lưu ý: {message}",
+    "submit": "Nhập",
+    "submitCount": "{count, plural, other {Nhập {shown} bảo hành}}",
+    "toasts": {
+      "imported": "{count, plural, other {Đã nhập {shown} bảo hành}}",
+      "failed": "Không thể nhập các bảo hành"
+    }
+  }
+}

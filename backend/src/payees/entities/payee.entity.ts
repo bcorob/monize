@@ -11,6 +11,7 @@ import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { Exclude } from "class-transformer";
 import { Category } from "../../categories/entities/category.entity";
 import { User } from "../../users/entities/user.entity";
+import { ContactLookupSource } from "../lookup/payee-contact-lookup.types";
 
 @Entity("payees")
 @Unique(["userId", "name"])
@@ -77,6 +78,56 @@ export class Payee {
   @ApiPropertyOptional()
   @Column({ type: "timestamp", name: "logo_fetched_at", nullable: true })
   logoFetchedAt: Date | null;
+
+  /**
+   * Free-text postal address. One field rather than structured parts: formats
+   * are locale-specific, and the only consumer is a maps handoff that takes a
+   * single query string anyway.
+   */
+  @ApiPropertyOptional({ example: "1912 Pike Pl, Seattle, WA 98101" })
+  @Column({ type: "text", nullable: true })
+  address: string | null;
+
+  @ApiPropertyOptional({ example: "hello@starbucks.com" })
+  @Column({ type: "varchar", length: 255, nullable: true })
+  email: string | null;
+
+  /**
+   * E.164 with an optional RFC 3966 extension suffix (`+12064488762`,
+   * `+442079460958;ext=12`), normalized on write by `PayeesService`. Rows
+   * written before that rule are not backfilled, so a reader formats through
+   * `formatPhoneForDisplay` rather than assuming the shape.
+   */
+  @ApiPropertyOptional({ example: "+12064488762" })
+  @Column({ type: "varchar", length: 50, nullable: true })
+  phone: string | null;
+
+  /**
+   * When a contact lookup last got an answer for this payee -- found
+   * something, or established there was nothing to find. Stamped by the
+   * background enrichment and the on-demand re-run; the enrichment's UPDATE is
+   * keyed on this being NULL, so the automatic path runs at most once. A failed
+   * attempt (provider offline, no answer) leaves it NULL so a later attempt can
+   * still run.
+   */
+  @ApiPropertyOptional()
+  @Column({ type: "timestamptz", name: "contact_lookup_at", nullable: true })
+  contactLookupAt: Date | null;
+
+  /**
+   * Which lookup wrote at least one of the contact fields. NULL when every
+   * stored value was typed by the user (including a form save of a prefilled
+   * suggestion, which the user reviewed). The detail page's "looked up
+   * automatically" badge keys off this, not off contactLookupAt.
+   */
+  @ApiPropertyOptional({ example: "ai-web-search" })
+  @Column({
+    type: "varchar",
+    name: "contact_lookup_source",
+    length: 32,
+    nullable: true,
+  })
+  contactLookupSource: ContactLookupSource | null;
 
   @ApiProperty({ example: true, description: "Whether the payee is active" })
   @Column({ type: "boolean", name: "is_active", default: true })

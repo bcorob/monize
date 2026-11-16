@@ -17,6 +17,7 @@ import { TransactionStatus } from "../../transactions/entities/transaction-statu
 import { TransactionSplit } from "../../transactions/entities/transaction-split.entity";
 import { Security } from "./security.entity";
 import { User } from "../../users/entities/user.entity";
+import { BondInstrument } from "../../bonds/entities/bond-instrument.entity";
 
 const numericTransformer = {
   to: (value: number | null): number | null => value,
@@ -44,6 +45,12 @@ const numericTransformer = {
  * (`securities/investment-replay.util.ts`) so a refinement cannot behave
  * differently from its base by accident; only income-classification surfaces
  * read the raw value.
+ *
+ * RETURN_OF_CAPITAL (issue #1800) is a base action of its own, not a
+ * refinement: its cash arrives like a DIVIDEND's, but it is not income -- it
+ * pays back part of what the shares cost, so it reduces the position's cost
+ * basis (`applyReturnOfCapital`), and only what exceeds the basis is a gain.
+ * `docs/specs/return-of-capital.md` is the definition.
  */
 export enum InvestmentAction {
   BUY = "BUY",
@@ -63,6 +70,7 @@ export enum InvestmentAction {
   CAPITAL_GAIN_SHORT = "CAPITAL_GAIN_SHORT",
   CAPITAL_GAIN_LONG = "CAPITAL_GAIN_LONG",
   REDEEM = "REDEEM",
+  RETURN_OF_CAPITAL = "RETURN_OF_CAPITAL",
 }
 
 @Entity("investment_transactions")
@@ -159,8 +167,8 @@ export class InvestmentTransaction {
   @ApiProperty({ example: 9.99, description: "Commission or fee" })
   @Column({
     type: "decimal",
-    precision: 20,
-    scale: 4,
+    precision: 24,
+    scale: 8,
     default: 0,
     transformer: numericTransformer,
   })
@@ -172,8 +180,8 @@ export class InvestmentTransaction {
   })
   @Column({
     type: "decimal",
-    precision: 20,
-    scale: 4,
+    precision: 24,
+    scale: 8,
     name: "total_amount",
     transformer: numericTransformer,
   })
@@ -214,6 +222,26 @@ export class InvestmentTransaction {
   })
   status: TransactionStatus;
 
+  @ApiProperty({
+    nullable: true,
+    format: "uuid",
+    description:
+      "The bond series (bond instrument) a share-moving row of a program-linked security acts on. " +
+      "An acquisition's is given or inferred from the date; a removal's is optional. Null otherwise.",
+  })
+  @Column({ type: "uuid", nullable: true, name: "bond_instrument_id" })
+  bondInstrumentId: string | null;
+
+  // Declared so the integration schema, built from the entities, carries the
+  // `fk_investment_transactions_bond_instrument ... ON DELETE RESTRICT` of the
+  // migration. Never loaded; `bondInstrumentId` is what the code reads and writes.
+  @ManyToOne(() => BondInstrument, { onDelete: "RESTRICT", nullable: true })
+  @JoinColumn({
+    name: "bond_instrument_id",
+    foreignKeyConstraintName: "fk_investment_transactions_bond_instrument",
+  })
+  bondInstrument?: BondInstrument | null;
+
   @ManyToOne(() => Account)
   @JoinColumn({ name: "account_id" })
   account: Account;
@@ -251,4 +279,24 @@ export class InvestmentTransaction {
    */
   @ApiProperty({ required: false, example: 87.5 })
   accruedInterest?: number;
+
+  /**
+   * The unit each money field above is in, stamped on the row by
+   * `attachInvestmentRowCurrencies` so no consumer has to infer it from the
+   * account it is filed under. Not columns: they are derived from the loaded
+   * `security`, `account` and `fundingAccount` relations, and are absent on a
+   * response whose path does not load them -- absent means no information.
+   * `investment-transaction-currencies.util.ts` holds the derivation.
+   */
+  @ApiProperty({ required: false, example: "EUR" })
+  amountCurrencyCode?: string | null;
+
+  @ApiProperty({ required: false, example: "EUR" })
+  priceCurrencyCode?: string | null;
+
+  @ApiProperty({ required: false, example: "EUR" })
+  commissionCurrencyCode?: string | null;
+
+  @ApiProperty({ required: false, example: "PLN" })
+  settlementCurrencyCode?: string | null;
 }

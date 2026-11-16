@@ -173,7 +173,7 @@ describe('CustomReportForm', () => {
     });
     expect(screen.getByText('Visualization')).toBeInTheDocument();
     expect(screen.getByText('Time Period')).toBeInTheDocument();
-    expect(screen.getByText('Filters (Optional)')).toBeInTheDocument();
+    expect(screen.getByText('Filters (optional)')).toBeInTheDocument();
     expect(screen.getByText('Aggregation Options')).toBeInTheDocument();
   });
 

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { DataSource } from "typeorm";
 import { Transaction } from "../transactions/entities/transaction.entity";
+import { applyRegisterOrder } from "../transactions/register-order";
 import { Category } from "../categories/entities/category.entity";
 import { AccountType } from "./entities/account.entity";
 import { AccountsService } from "./accounts.service";
@@ -10,6 +11,10 @@ import {
   payloadHasCrossOwnerTransfer,
 } from "../delegation/transfer-mask.util";
 import { roundMoney } from "../common/round.util";
+import {
+  loadCurrencyPlacesForRead,
+  moneyDecimalsForCode,
+} from "../common/currency-places.util";
 import { withScopedDb } from "../common/db/scoped-db";
 import { transferPayeeLabel } from "../transactions/transfer-payee-label.util";
 
@@ -77,6 +82,19 @@ export function csvTransferLabel(accountName: string, amount: number): string {
 const NUMERIC_CSV_VALUE =
   /^[+-]?[\p{Nd}\p{Sc}\s.,'’]*\p{Nd}[\p{Nd}\p{Sc}\s.,'’]*%?$/u;
 
+/**
+ * An amount as an export file writes it: a plain decimal at the account
+ * currency's precision with its trailing zeros dropped, so a fiat figure reads
+ * exactly as `Number#toString` always printed it (`-67.99`, `12.345`) and a
+ * coin below a millionth (`0.00000025` BTC) is never written in the
+ * exponential form (`2.5e-7`) a spreadsheet or a QIF reader misparses.
+ */
+export function exportAmount(value: number, decimals: number): string {
+  const fixed = roundMoney(value, decimals).toFixed(decimals);
+  const trimmed = fixed.replace(/(\.\d*?)0+$/, "$1").replace(/\.$/, "");
+  return trimmed === "-0" ? "0" : trimmed;
+}
+
 interface CsvExportOptions {
   expandSplits?: boolean;
   dateFormat?: string;
@@ -110,16 +128,21 @@ export class AccountExportService {
       realUserId,
     );
 
+    const decimals = await this.accountMoneyDecimals(account.currencyCode);
+
     const rows: string[] = [];
     rows.push(this.csvHeader());
 
     let runningBalance = Number(account.openingBalance) || 0;
 
     for (const tx of transactions) {
+      // A VOID row records something that did not happen, so it moves nothing
+      // and simply carries the balance above it down its own line -- which is
+      // what the register shows too.
       if (tx.status !== "VOID") {
-        runningBalance = roundMoney(runningBalance + tx.amount);
+        runningBalance = roundMoney(runningBalance + tx.amount, decimals);
       }
-      const balance = tx.status === "VOID" ? runningBalance : runningBalance;
+      const balance = runningBalance;
 
       if (tx.isSplit && expandSplits) {
         rows.push(
@@ -132,6 +155,7 @@ export class AccountExportService {
             tx.amount,
             tx.status,
             balance,
+            decimals,
           ),
         );
         for (const split of tx.splits) {
@@ -148,6 +172,7 @@ export class AccountExportService {
               split.amount,
               "",
               null,
+              decimals,
             ),
           );
         }
@@ -167,6 +192,7 @@ export class AccountExportService {
             tx.amount,
             tx.status,
             balance,
+            decimals,
           ),
         );
       }
@@ -189,12 +215,14 @@ export class AccountExportService {
       realUserId,
     );
 
+    const decimals = await this.accountMoneyDecimals(account.currencyCode);
+
     const lines: string[] = [];
     lines.push(`!Type:${this.accountTypeToQif(account.accountType)}`);
 
     for (const tx of transactions) {
       lines.push(`D${this.formatExportDate(tx.date, dateFormat)}`);
-      lines.push(`T${tx.amount}`);
+      lines.push(`T${exportAmount(tx.amount, decimals)}`);
 
       if (tx.payeeName) {
         lines.push(`P${tx.payeeName}`);
@@ -224,7 +252,7 @@ export class AccountExportService {
           if (split.memo) {
             lines.push(`E${split.memo}`);
           }
-          lines.push(`$${split.amount}`);
+          lines.push(`$${exportAmount(split.amount, decimals)}`);
         }
       } else if (tx.isTransfer) {
         lines.push(`L[${tx.transferAccountName}]`);
@@ -243,8 +271,8 @@ export class AccountExportService {
     accountId: string,
     realUserId = userId,
   ): Promise<ExportTransaction[]> {
-    const rawTransactions = await withScopedDb(this.dataSource, (m) =>
-      m
+    const rawTransactions = await withScopedDb(this.dataSource, (m) => {
+      const query = m
         .getRepository(Transaction)
         .createQueryBuilder("transaction")
         .leftJoinAndSelect("transaction.payee", "payee")
@@ -255,12 +283,15 @@ export class AccountExportService {
         .leftJoinAndSelect("transaction.linkedTransaction", "linkedTransaction")
         .leftJoinAndSelect("linkedTransaction.account", "linkedAccount")
         .where("transaction.userId = :userId", { userId })
-        .andWhere("transaction.accountId = :accountId", { accountId })
-        .orderBy("transaction.transactionDate", "ASC")
-        .addOrderBy("transaction.createdAt", "ASC")
-        .addOrderBy("transaction.id", "ASC")
-        .getMany(),
-    );
+        .andWhere("transaction.accountId = :accountId", { accountId });
+      // The register's own order, oldest first, because the column beside
+      // these rows is a running balance. This file used to spell the order out
+      // and left off the amount leg: when `created_at` cannot separate two
+      // rows -- a whole import shares one value -- their signs do, and an
+      // export that ordered a purchase before the transfer funding it showed
+      // the account overdrawn on a day it was never short.
+      return applyRegisterOrder(query, "transaction", "ASC").getMany();
+    });
 
     // The linkedTransaction.account join is unfiltered, so after unshare the
     // export would leak the counterpart's live account name; the response
@@ -360,6 +391,7 @@ export class AccountExportService {
     amount: number,
     status: string,
     runningBalance: number | null,
+    decimals: number,
   ): string {
     return [
       this.escapeCsv(date),
@@ -367,9 +399,9 @@ export class AccountExportService {
       this.escapeCsv(payee),
       this.escapeCsv(category),
       this.escapeCsv(description),
-      amount.toString(),
+      exportAmount(amount, decimals),
       this.escapeCsv(status),
-      runningBalance !== null ? runningBalance.toString() : "",
+      runningBalance !== null ? exportAmount(runningBalance, decimals) : "",
     ].join(",");
   }
 
@@ -396,6 +428,18 @@ export class AccountExportService {
     return safe;
   }
 
+  /**
+   * The money precision of the exported account's currency, read once per
+   * export: the running balance accumulates at it and every amount prints at
+   * it.
+   */
+  private async accountMoneyDecimals(currencyCode: string): Promise<number> {
+    const places = await withScopedDb(this.dataSource, (m) =>
+      loadCurrencyPlacesForRead(m, [currencyCode]),
+    );
+    return moneyDecimalsForCode(places, currencyCode);
+  }
+
   private accountTypeToQif(accountType: AccountType): string {
     switch (accountType) {
       case AccountType.CHEQUING:
@@ -407,7 +451,9 @@ export class AccountExportService {
         return "CCard";
       case AccountType.INVESTMENT:
         return "Invst";
+      // QIF has no wallet type; a coin wallet is an asset account.
       case AccountType.ASSET:
+      case AccountType.CRYPTO:
         return "Oth A";
       case AccountType.LINE_OF_CREDIT:
       case AccountType.LOAN:

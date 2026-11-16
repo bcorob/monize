@@ -184,7 +184,9 @@ test.describe('Investment account consolidation', () => {
 
     // Both halves are closed, so the account shows once under the closed
     // filter and not at all under the active one.
-    await page.getByRole('button', { name: 'Closed', exact: true }).click();
+    // The status segments carry their counts ("Closed (1)").
+    const statusFilter = page.getByRole('group', { name: 'Status' });
+    await statusFilter.getByRole('button', { name: /^Closed \(/ }).click();
     await expect(page.locator('tr', { hasText: name })).toHaveCount(1);
 
     await page
@@ -192,7 +194,7 @@ test.describe('Investment account consolidation', () => {
       .getByRole('button', { name: 'Reopen', exact: true })
       .click();
 
-    await page.getByRole('button', { name: 'Active', exact: true }).click();
+    await statusFilter.getByRole('button', { name: /^Active \(/ }).click();
     await expect(page.locator('tr', { hasText: name })).toHaveCount(1);
   });
 });

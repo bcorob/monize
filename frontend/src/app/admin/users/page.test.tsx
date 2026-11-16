@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@/test/render';
 import AdminUsersPage from './page';
+import { authApi } from '@/lib/auth';
 
 // Mock next/image
 vi.mock('next/image', () => ({
@@ -81,7 +82,10 @@ const mockCreateUser = vi.fn();
 const mockUpdateUserRole = vi.fn();
 const mockUpdateUserStatus = vi.fn();
 const mockResetUserPassword = vi.fn();
+const mockResetUserTwoFactor = vi.fn();
 const mockDeleteUser = vi.fn();
+const mockUnlinkSso = vi.fn();
+const mockGetUserStorage = vi.fn();
 
 vi.mock('@/lib/admin', () => ({
   adminApi: {
@@ -90,7 +94,10 @@ vi.mock('@/lib/admin', () => ({
     updateUserRole: (...args: any[]) => mockUpdateUserRole(...args),
     updateUserStatus: (...args: any[]) => mockUpdateUserStatus(...args),
     resetUserPassword: (...args: any[]) => mockResetUserPassword(...args),
+    resetUserTwoFactor: (...args: any[]) => mockResetUserTwoFactor(...args),
     deleteUser: (...args: any[]) => mockDeleteUser(...args),
+    unlinkSso: (...args: any[]) => mockUnlinkSso(...args),
+    getUserStorage: (...args: any[]) => mockGetUserStorage(...args),
   },
 }));
 
@@ -170,8 +177,15 @@ vi.mock('@/components/admin/ResetPasswordModal', () => ({
 }));
 
 vi.mock('@/components/admin/UserManagementTable', () => ({
-  UserManagementTable: ({ users, currentUserId, onChangeRole, onToggleStatus, onResetPassword, onDeleteUser }: any) => (
+  UserManagementTable: ({ users, storage, currentUserId, oidcPasswordLogin, onChangeRole, onToggleStatus, onResetPassword, onUnlinkSso, onResetTwoFactor, onDeleteUser }: any) => (
     <div data-testid="user-table">
+      <span data-testid="oidc-password-login">{String(oidcPasswordLogin)}</span>
+      <span data-testid="storage-status">{storage.status}</span>
+      {storage.status === 'ready' && (
+        <span data-testid="storage-users">
+          {[...storage.byUser.keys()].join(',')}
+        </span>
+      )}
       {users.map((user: any) => (
         <div key={user.id} data-testid={`user-row-${user.id}`}>
           <span>{user.email || user.firstName}</span>
@@ -184,6 +198,8 @@ vi.mock('@/components/admin/UserManagementTable', () => ({
                 {user.isActive ? 'Disable' : 'Enable'}
               </button>
               <button onClick={() => onResetPassword(user)}>Reset Password</button>
+              <button onClick={() => onUnlinkSso(user)}>Unlink SSO</button>
+              <button onClick={() => onResetTwoFactor(user)}>Reset 2FA</button>
               <button onClick={() => onDeleteUser(user)}>Delete</button>
             </>
           )}
@@ -204,6 +220,69 @@ describe('AdminUsersPage', () => {
     vi.clearAllMocks();
     mockGetUsers.mockResolvedValue(mockUsers);
     mockGetSmtpStatus.mockResolvedValue({ configured: true });
+    mockGetUserStorage.mockResolvedValue(
+      mockUsers.map((user) => ({
+        userId: user.id,
+        backups: { enabled: true, artifacts: 3, bytes: 3000 },
+        attachments: { files: 2, bytes: 200 },
+      })),
+    );
+  });
+
+  describe('SSO password login', () => {
+    it('passes false to the table by default', async () => {
+      render(<AdminUsersPage />);
+      await waitFor(() => expect(screen.getByTestId('user-table')).toBeInTheDocument());
+      expect(screen.getByTestId('oidc-password-login')).toHaveTextContent('false');
+    });
+
+    it('passes the server flag to the table when it is true', async () => {
+      const methods = {
+        local: true, oidc: true, registration: false, smtp: false, force2fa: false, demo: false,
+      };
+      vi.mocked(authApi.getAuthMethods).mockResolvedValue({ ...methods, oidcPasswordLogin: true } as any);
+      render(<AdminUsersPage />);
+      await waitFor(() =>
+        expect(screen.getByTestId('oidc-password-login')).toHaveTextContent('true'),
+      );
+      vi.mocked(authApi.getAuthMethods).mockResolvedValue(methods as any);
+    });
+  });
+
+  describe('Storage usage', () => {
+    it('hands the table a reading keyed by user id', async () => {
+      render(<AdminUsersPage />);
+
+      await waitFor(() =>
+        expect(screen.getByTestId('storage-status')).toHaveTextContent('ready'),
+      );
+      expect(screen.getByTestId('storage-users')).toHaveTextContent(
+        'admin-id,user-1,user-2',
+      );
+    });
+
+    it('reports its own failure without failing the user list', async () => {
+      mockGetUserStorage.mockRejectedValue(new Error('store unreachable'));
+
+      render(<AdminUsersPage />);
+
+      await waitFor(() =>
+        expect(screen.getByTestId('storage-status')).toHaveTextContent('error'),
+      );
+      // The rows are the other request's and are unaffected by it.
+      expect(screen.getByTestId('user-row-user-1')).toBeInTheDocument();
+    });
+
+    it('re-reads the figures when an account is created, so the new row is covered', async () => {
+      mockCreateUser.mockResolvedValue({});
+      render(<AdminUsersPage />);
+      await waitFor(() => expect(mockGetUserStorage).toHaveBeenCalledTimes(1));
+
+      fireEvent.click(screen.getByText('+ New User'));
+      fireEvent.click(screen.getByText('Created With Invite'));
+
+      await waitFor(() => expect(mockGetUserStorage).toHaveBeenCalledTimes(2));
+    });
   });
 
   describe('Rendering', () => {
@@ -317,6 +396,83 @@ describe('AdminUsersPage', () => {
         expect(screen.getByTestId('reset-password-modal')).toBeInTheDocument();
         expect(screen.getByText(/TempPass123!/)).toBeInTheDocument();
       });
+    });
+  });
+
+  describe('Unlink SSO', () => {
+    it('confirms, unlinks, shows the temporary password and reloads the list', async () => {
+      mockUnlinkSso.mockResolvedValue({ temporaryPassword: 'Tmp-pass-1' });
+      render(<AdminUsersPage />);
+      await waitFor(() => expect(screen.getByTestId('user-table')).toBeInTheDocument());
+
+      fireEvent.click(screen.getAllByText('Unlink SSO')[0]);
+      await waitFor(() => expect(screen.getByTestId('confirm-dialog')).toBeInTheDocument());
+      expect(mockUnlinkSso).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByText('Unlink SSO', { selector: '[data-testid="confirm-dialog"] button' }));
+      await waitFor(() => expect(mockUnlinkSso).toHaveBeenCalledWith('user-1'));
+      await waitFor(() =>
+        expect(screen.getByTestId('reset-password-modal')).toHaveTextContent('Tmp-pass-1'),
+      );
+      await waitFor(() => expect(mockGetUsers).toHaveBeenCalledTimes(2));
+    });
+
+    it('reports a refusal as an error toast', async () => {
+      mockUnlinkSso.mockRejectedValue(new Error('400'));
+      const toast = await import('react-hot-toast');
+      render(<AdminUsersPage />);
+      await waitFor(() => expect(screen.getByTestId('user-table')).toBeInTheDocument());
+
+      fireEvent.click(screen.getAllByText('Unlink SSO')[0]);
+      await waitFor(() => expect(screen.getByTestId('confirm-dialog')).toBeInTheDocument());
+      fireEvent.click(screen.getByText('Unlink SSO', { selector: '[data-testid="confirm-dialog"] button' }));
+
+      await waitFor(() => expect(toast.default.error).toHaveBeenCalledWith('Failed to unlink SSO'));
+      expect(screen.queryByTestId('reset-password-modal')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('Two-factor reset', () => {
+    it('confirms, resets, reports success and reloads the list', async () => {
+      mockResetUserTwoFactor.mockResolvedValue({ reset: true });
+      const toast = await import('react-hot-toast');
+      render(<AdminUsersPage />);
+      await waitFor(() => expect(screen.getByTestId('user-table')).toBeInTheDocument());
+      expect(mockGetUsers).toHaveBeenCalledTimes(1);
+
+      fireEvent.click(screen.getAllByText('Reset 2FA')[0]);
+      await waitFor(() => {
+        expect(screen.getByTestId('confirm-dialog')).toBeInTheDocument();
+        expect(screen.getByText(/switches off two-factor authentication for Alice/)).toBeInTheDocument();
+      });
+      expect(mockResetUserTwoFactor).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByText('Reset 2FA', { selector: '[data-testid="confirm-dialog"] button' }));
+      await waitFor(() => expect(mockResetUserTwoFactor).toHaveBeenCalledWith('user-1'));
+      await waitFor(() =>
+        expect(toast.default.success).toHaveBeenCalledWith(
+          'Two-factor authentication was reset for Alice. They have been signed out.',
+        ),
+      );
+      await waitFor(() => expect(mockGetUsers).toHaveBeenCalledTimes(2));
+      expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument();
+    });
+
+    it('reports a refusal (such as a user with no 2FA) as an error toast', async () => {
+      mockResetUserTwoFactor.mockRejectedValue(new Error('400'));
+      const toast = await import('react-hot-toast');
+      render(<AdminUsersPage />);
+      await waitFor(() => expect(screen.getByTestId('user-table')).toBeInTheDocument());
+
+      fireEvent.click(screen.getAllByText('Reset 2FA')[0]);
+      await waitFor(() => expect(screen.getByTestId('confirm-dialog')).toBeInTheDocument());
+      fireEvent.click(screen.getByText('Reset 2FA', { selector: '[data-testid="confirm-dialog"] button' }));
+
+      await waitFor(() =>
+        expect(toast.default.error).toHaveBeenCalledWith(
+          'Failed to reset two-factor authentication',
+        ),
+      );
     });
   });
 

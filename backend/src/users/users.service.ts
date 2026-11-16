@@ -1,9 +1,12 @@
 import {
+  detachSharedLedgerForErasure,
+  eraseSharedUser,
+} from "../shared-expenses/shared-erasure";
+import {
   Injectable,
   BadRequestException,
   Logger,
   NotFoundException,
-  ConflictException,
   ForbiddenException,
   UnauthorizedException,
 } from "@nestjs/common";
@@ -14,6 +17,7 @@ import {
   ObjectLiteral,
   Repository,
 } from "typeorm";
+import { ConfigService } from "@nestjs/config";
 import { withScopedDb } from "../common/db/scoped-db";
 import * as bcrypt from "bcryptjs";
 import { tr } from "../i18n/translate";
@@ -24,9 +28,13 @@ import {
   ensureUserPreferencesRow,
   type UserPreferencePatch,
 } from "./user-preference-writer";
-import { TrustedDevice } from "./entities/trusted-device.entity";
 import { RefreshToken } from "../auth/entities/refresh-token.entity";
 import { PersonalAccessToken } from "../auth/entities/personal-access-token.entity";
+import {
+  revokeOAuthGrantsAfterCommit,
+  revokeStandingCredentials,
+  revokeRefreshSessionsAfterCommit,
+} from "../auth/credential-revocation";
 import { UpdateProfileDto } from "./dto/update-profile.dto";
 import { UpdatePreferencesDto } from "./dto/update-preferences.dto";
 import { ChangePasswordDto } from "./dto/change-password.dto";
@@ -41,8 +49,24 @@ import {
   OidcReauthService,
   type OidcReauthPurpose,
 } from "../auth/oidc/oidc-reauth.service";
+import {
+  localPasswordUsable,
+  oidcPasswordLoginAllowed,
+} from "../auth/oidc/oidc-password-login";
 import { toUserProfile } from "./user-profile";
+import { isTwoFactorActive } from "../auth/two-factor-state";
 import { UserMaintenanceService } from "../common/jobs/user-maintenance.service";
+import { assertReportingCurrencyIsFiatIn } from "../currencies/reporting-currency-kind.util";
+import {
+  EmailChangeService,
+  type StagedEmailChange,
+} from "./email-change.service";
+import {
+  emailInUseConflict,
+  isUniqueViolation,
+  normalizeEmail,
+} from "./email-change.util";
+import { mergeWidgetConfig } from "./widget-config-merge";
 
 @Injectable()
 export class UsersService {
@@ -55,6 +79,8 @@ export class UsersService {
     private demoModeService: DemoModeService,
     private oidcReauth: OidcReauthService,
     private maintenance: UserMaintenanceService,
+    private emailChange: EmailChangeService,
+    private configService: ConfigService,
   ) {}
 
   /**
@@ -95,8 +121,13 @@ export class UsersService {
     }
 
     // SECURITY: Require password confirmation when changing email to prevent
-    // account takeover via compromised session
-    if (dto.email && dto.email !== user.email) {
+    // account takeover via compromised session. The address is normalized the
+    // way registration normalizes it, and with SMTP configured the change is
+    // only staged here: `users.email` moves when the link sent to the new
+    // address is followed (`AuthEmailService.confirmEmailChange`).
+    let stagedChange: StagedEmailChange | null = null;
+    const newEmail = dto.email !== undefined ? normalizeEmail(dto.email) : null;
+    if (newEmail && newEmail !== user.email) {
       if (!dto.currentPassword) {
         throw new BadRequestException(
           tr(
@@ -105,7 +136,11 @@ export class UsersService {
           ),
         );
       }
-      if (!user.passwordHash) {
+      // `!user.passwordHash` narrows the type for bcrypt; the helper is the policy.
+      if (
+        !user.passwordHash ||
+        !localPasswordUsable(user, oidcPasswordLoginAllowed(this.configService))
+      ) {
         throw new BadRequestException(
           tr(
             "errors.users.emailChangeNoLocalPassword",
@@ -125,17 +160,22 @@ export class UsersService {
           ),
         );
       }
+      // Advisory only: under RLS enforcement this scope sees no other user's
+      // row. The unique index is the guard, at confirmation (or at the save
+      // below when the change applies immediately).
       const existingUser = await this.scoped(User, (repo) =>
         repo.findOne({
-          where: { email: dto.email },
+          where: { email: newEmail },
         }),
       );
       if (existingUser) {
-        throw new ConflictException(
-          tr("errors.users.emailInUse", "Email already in use"),
-        );
+        throw emailInUseConflict();
       }
-      user.email = dto.email;
+      if (this.emailChange.requiresConfirmation()) {
+        stagedChange = this.emailChange.stage(user, newEmail);
+      } else {
+        this.emailChange.applyImmediately(user, newEmail);
+      }
     }
 
     if (dto.firstName !== undefined) {
@@ -145,7 +185,16 @@ export class UsersService {
       user.lastName = dto.lastName;
     }
 
-    const saved = await this.scoped(User, (repo) => repo.save(user));
+    let saved: User;
+    try {
+      saved = await this.scoped(User, (repo) => repo.save(user));
+    } catch (error) {
+      if (isUniqueViolation(error)) throw emailInUseConflict();
+      throw error;
+    }
+    if (stagedChange) {
+      await this.emailChange.sendMessages(saved, stagedChange);
+    }
     return toUserProfile(saved);
   }
 
@@ -166,7 +215,29 @@ export class UsersService {
         .findOne({ where: { userId } });
       // The insert above guarantees the row; the non-null assertion records that
       // rather than inventing a fallback that could mask a real absence.
-      return preferences!;
+      return this.asReported(manager, userId, preferences!);
+    });
+  }
+
+  /**
+   * The preferences row as the client should read it: `twoFactorEnabled` says
+   * whether sign-in actually asks for a second factor (`isTwoFactorActive`), not
+   * only what the column holds. A flag left on over a cleared secret otherwise
+   * shows Settings a 2FA that sign-in never asks for, and hides the Enable
+   * button the user needs to enroll again. A copy, so the entity TypeORM loaded
+   * is not mutated, and still a `UserPreference`, so the serializer keeps
+   * honouring its `@Exclude()` columns.
+   */
+  private async asReported(
+    manager: EntityManager,
+    userId: string,
+    preferences: UserPreference,
+  ): Promise<UserPreference> {
+    const user = await manager
+      .getRepository(User)
+      .findOne({ where: { id: userId } });
+    return Object.assign(new UserPreference(), preferences, {
+      twoFactorEnabled: isTwoFactorActive(preferences, user),
     });
   }
 
@@ -204,20 +275,23 @@ export class UsersService {
     if (dto.notificationEmail !== undefined) {
       patch.notificationEmail = dto.notificationEmail;
     }
-    if (dto.notificationBrowser !== undefined) {
-      patch.notificationBrowser = dto.notificationBrowser;
-    }
     if (dto.gettingStartedDismissed !== undefined) {
       patch.gettingStartedDismissed = dto.gettingStartedDismissed;
     }
     if (dto.aiBubbleEnabled !== undefined) {
       patch.aiBubbleEnabled = dto.aiBubbleEnabled;
     }
+    if (dto.aiTriviaEnabled !== undefined) {
+      patch.aiTriviaEnabled = dto.aiTriviaEnabled;
+    }
     if (dto.showWhatsNew !== undefined) {
       patch.showWhatsNew = dto.showWhatsNew;
     }
     if (dto.lockReconciledTransactions !== undefined) {
       patch.lockReconciledTransactions = dto.lockReconciledTransactions;
+    }
+    if (dto.payeeContactLookupEnabled !== undefined) {
+      patch.payeeContactLookupEnabled = dto.payeeContactLookupEnabled;
     }
     if (dto.weekStartsOn !== undefined) {
       patch.weekStartsOn = dto.weekStartsOn;
@@ -234,13 +308,6 @@ export class UsersService {
     if (dto.dashboardWidgets !== undefined) {
       patch.dashboardWidgets = dto.dashboardWidgets;
     }
-    if (dto.dashboardWidgetConfig !== undefined) {
-      // A free-form JSONB map: `QueryDeepPartialEntity` treats a bare
-      // `Record<string, unknown>` as a possible nested-entity patch, so say
-      // plainly that this value is the column's whole contents.
-      patch.dashboardWidgetConfig =
-        dto.dashboardWidgetConfig as UserPreference["dashboardWidgetConfig"];
-    }
     if (dto.showCreatedAt !== undefined) {
       patch.showCreatedAt = dto.showCreatedAt;
     }
@@ -252,6 +319,9 @@ export class UsersService {
     }
     if (dto.defaultQuoteProvider !== undefined) {
       patch.defaultQuoteProvider = dto.defaultQuoteProvider;
+    }
+    if (dto.defaultMapProvider !== undefined) {
+      patch.defaultMapProvider = dto.defaultMapProvider;
     }
     if (dto.recentTransactionsLimit !== undefined) {
       patch.recentTransactionsLimit = dto.recentTransactionsLimit;
@@ -273,11 +343,73 @@ export class UsersService {
       async (manager) => {
         await ensureUserPreferencesRow(manager, userId);
         const repo = manager.getRepository(UserPreference);
-        const before = await repo.findOne({ where: { userId } });
+        // viewDefaults and hiddenTableColumns merge into the stored map (by
+        // key, and by table kind) rather than replacing it, so a save from a
+        // Settings screen opened before another device changed a different
+        // default keeps that default. The merge reads the stored map, so the
+        // row is locked for it: two concurrent saves of different keys then
+        // both land.
+        const merges =
+          dto.viewDefaults !== undefined ||
+          dto.hiddenTableColumns !== undefined ||
+          dto.dashboardWidgetConfig !== undefined;
+        const before = await repo.findOne({
+          where: { userId },
+          ...(merges && {
+            lock: { mode: "pessimistic_write" as const },
+          }),
+        });
+        if (dto.dashboardWidgetConfig !== undefined) {
+          // Merged by widget id: each slice sent replaces that widget's whole
+          // slice, a null slice removes it, and a slice not sent is kept. A
+          // widget's settings save then cannot drop the sizes the dashboard's
+          // edit mode stored in other slices, nor the reverse. Within a slice
+          // the value replaces, so leaving a key out still clears it.
+          patch.dashboardWidgetConfig = mergeWidgetConfig(
+            before?.dashboardWidgetConfig,
+            dto.dashboardWidgetConfig,
+          );
+        }
+        if (dto.viewDefaults !== undefined) {
+          // A JSONB map: `QueryDeepPartialEntity` treats a bare
+          // `Record<string, unknown>` as a possible nested-entity patch, so say
+          // plainly that this value is the column's whole contents.
+          patch.viewDefaults = {
+            ...(before?.viewDefaults ?? {}),
+            ...dto.viewDefaults,
+          } as UserPreference["viewDefaults"];
+        }
+        if (dto.hiddenTableColumns !== undefined) {
+          // A JSONB map, cast for the same reason as viewDefaults above.
+          patch.hiddenTableColumns = {
+            ...(before?.hiddenTableColumns ?? {}),
+            ...dto.hiddenTableColumns,
+          } as UserPreference["hiddenTableColumns"];
+        }
         // Copy the value out now, not after the write: reading it from `before`
         // later would depend on that object not having been touched by the
         // update in between.
         const previousDefaultCurrency = before?.defaultCurrency;
+        // The chosen currency's row must exist before the preference that points
+        // at it is written (a foreign key), so it is ensured here, in this
+        // transaction, and for this user only: a fresh instance holds just USD.
+        // No catch -- a failure fails the request, as the foreign key would.
+        if (
+          dto.defaultCurrency != null &&
+          dto.defaultCurrency !== previousDefaultCurrency
+        ) {
+          // Decision 11 of the crypto spec: a coin is never the reporting
+          // currency. Refused here, before the currency is ensured or the
+          // preference written, in the same transaction.
+          await assertReportingCurrencyIsFiatIn(manager, dto.defaultCurrency);
+          const currenciesService = this.moduleRef.get(CurrenciesService, {
+            strict: false,
+          });
+          await currenciesService.ensureCurrencyForUser(
+            userId,
+            dto.defaultCurrency,
+          );
+        }
         // The update is written out rather than delegated to
         // `patchUserPreferences`, which looks like duplication and is not: that
         // helper materializes the row itself, and this method has to read
@@ -294,7 +426,10 @@ export class UsersService {
             .execute();
         }
         const after = await repo.findOne({ where: { userId } });
-        return { saved: after!, previousDefaultCurrency };
+        return {
+          saved: await this.asReported(manager, userId, after!),
+          previousDefaultCurrency,
+        };
       },
     );
 
@@ -307,19 +442,6 @@ export class UsersService {
       dto.defaultCurrency !== undefined &&
       dto.defaultCurrency !== previousDefaultCurrency
     ) {
-      // Currencies are created on demand rather than seeded up front, so make
-      // sure the newly chosen default currency exists (with a proper symbol)
-      // before anything tries to display or convert it.
-      try {
-        const currenciesService = this.moduleRef.get(CurrenciesService, {
-          strict: false,
-        });
-        await currenciesService.ensureSystemCurrency(dto.defaultCurrency);
-      } catch (err) {
-        this.logger.warn(
-          `Could not ensure default currency ${dto.defaultCurrency} exists: ${err.message}`,
-        );
-      }
       try {
         const exchangeRateService = this.moduleRef.get(ExchangeRateService, {
           strict: false,
@@ -349,7 +471,11 @@ export class UsersService {
       );
     }
 
-    if (!user.passwordHash) {
+    // `!user.passwordHash` narrows the type; the helper is the policy.
+    if (
+      !user.passwordHash ||
+      !localPasswordUsable(user, oidcPasswordLoginAllowed(this.configService))
+    ) {
       throw new BadRequestException(
         tr("errors.users.noPasswordSet", "No password set for this account"),
       );
@@ -382,39 +508,50 @@ export class UsersService {
       );
     }
 
-    // Hash and save new password
+    // Hash and save new password. Every credential the old password stood
+    // behind goes in the same transaction: web sessions, API tokens (PATs) and
+    // trusted devices (a stolen trusted-device cookie must not bypass 2FA after
+    // the user rotates their password). `credential-revocation.ts`.
     const saltRounds = 12;
     user.passwordHash = await bcrypt.hash(dto.newPassword, saltRounds);
     user.mustChangePassword = false;
-    await this.scoped(User, (repo) => repo.save(user));
+    await withScopedDb(this.dataSource, async (manager) => {
+      await manager.getRepository(User).save(user);
+      await manager
+        .getRepository(RefreshToken)
+        .update({ userId, isRevoked: false }, { isRevoked: true });
+      await revokeStandingCredentials(manager, userId);
+    });
+    // The blanket UPDATE above is a first pass: blocked on a row a concurrent
+    // rotation holds, it resumes with its old snapshot and misses the successor
+    // that rotation inserted. Converge after the commit, under the family locks.
+    await revokeRefreshSessionsAfterCommit(
+      this.dataSource,
+      userId,
+      this.logger,
+    );
 
-    // Re-sync the encrypted-backup password so the auto-backup cron keeps
-    // working with the new login password. Best-effort; failures here log
+    // Re-wrap the backup key under the new login password so automatic
+    // backups written from now on open with it (earlier ones keep opening with
+    // the password they were written under). Best-effort; failures here log
     // but don't fail the password change.
     try {
       const backupEncryption = this.moduleRef.get(BackupEncryptionService, {
         strict: false,
       });
-      await backupEncryption.rememberLoginPassword(userId, dto.newPassword);
+      await backupEncryption.rewrapBackupKey(
+        userId,
+        dto.newPassword,
+        user.passwordHash,
+      );
     } catch (err) {
       this.logger.warn(
-        `Could not sync backup password after change: ${err.message}`,
+        `Could not re-wrap the backup key after change: ${err.message}`,
       );
     }
 
-    // SECURITY: Revoke all refresh tokens to force re-login on all devices
-    await this.scoped(RefreshToken, (repo) =>
-      repo.update({ userId, isRevoked: false }, { isRevoked: true }),
-    );
-
-    // SECURITY: Revoke all PATs — credential change invalidates API access
-    await this.scoped(PersonalAccessToken, (repo) =>
-      repo.update({ userId, isRevoked: false }, { isRevoked: true }),
-    );
-
-    // SECURITY: Revoke trusted devices so a stolen trusted-device cookie
-    // cannot bypass 2FA after the user rotates their password.
-    await this.scoped(TrustedDevice, (repo) => repo.delete({ userId }));
+    // SECURITY: and the OAuth grants an MCP client holds, after the commit.
+    await revokeOAuthGrantsAfterCommit(this.moduleRef, userId, this.logger);
   }
 
   /**
@@ -550,7 +687,19 @@ export class UsersService {
       await refreshTokens.delete({ actingAsUserId: userId });
       await manager.getRepository(PersonalAccessToken).delete({ userId });
       await manager.getRepository(UserPreference).delete({ userId });
+      // The user's custom currencies lose their creator when the row goes
+      // (ON DELETE SET NULL, and a trigger deactivates them): lock them first,
+      // then drop the ones nothing references, so none lingers as a system
+      // currency nobody can edit or delete.
+      const currencies = this.moduleRef.get(CurrenciesService, {
+        strict: false,
+      });
+      const createdCodes = await currencies.lockCurrenciesCreatedBy(
+        manager,
+        userId,
+      );
       await manager.getRepository(User).remove(user);
+      await currencies.removeUnreferencedCurrencies(manager, createdCodes);
     });
     return { downgraded: false };
   }
@@ -624,6 +773,7 @@ export class UsersService {
     },
     manager: EntityManager,
   ): Promise<Record<string, number>> {
+    await detachSharedLedgerForErasure(manager, userId);
     const deleted: Record<string, number> = {};
 
     // Always deleted: financial transaction data, investments, summaries, budgets
@@ -650,13 +800,13 @@ export class UsersService {
     deleted.securityPrices = result[1] ?? 0;
 
     // Scheduled transactions (before securities: they reference investment_security_id)
-    result = await manager.query(
+    await manager.query(
       `DELETE FROM scheduled_transaction_overrides WHERE scheduled_transaction_id IN
          (SELECT id FROM scheduled_transactions WHERE user_id = $1)`,
       [userId],
     );
 
-    result = await manager.query(
+    await manager.query(
       `DELETE FROM scheduled_transaction_splits WHERE scheduled_transaction_id IN
          (SELECT id FROM scheduled_transactions WHERE user_id = $1)`,
       [userId],
@@ -673,12 +823,46 @@ export class UsersService {
     ]);
     deleted.securities = result[1] ?? 0;
 
-    // Budget data
+    // Reminders first, while their source link still says whose nag each one
+    // is. A reminder is a TEMPLATE the cron re-emits, so one left behind would
+    // go on writing fresh notifications -- and pushing and emailing them --
+    // after the user asked for their data to be gone. The account survives
+    // this flow, so the users(id) CASCADE never fires, and deleting the
+    // notifications below would only SET NULL the link, not stop the nag.
+    // (`notification_preferences` is deliberately kept: it is a setting, like
+    // `user_preferences`, not data about the user's money.)
     result = await manager.query(
-      `DELETE FROM budget_alerts WHERE user_id = $1`,
+      `DELETE FROM notification_reminders WHERE user_id = $1`,
       [userId],
     );
-    deleted.budgetAlerts = result[1] ?? 0;
+    deleted.notificationReminders = result[1] ?? 0;
+
+    result = await manager.query(
+      `DELETE FROM notifications WHERE user_id = $1`,
+      [userId],
+    );
+    deleted.notifications = result[1] ?? 0;
+
+    // The devices this account registered for push. Left behind, "delete my
+    // data" kept the endpoint and both encryption keys for every device, they
+    // went on counting against the per-account device cap, and anything a
+    // producer sent still arrived on the user's phone -- after they had asked
+    // for their data to be gone. The account survives this flow, so nothing
+    // cascades: it has to be deleted here.
+    result = await manager.query(
+      `DELETE FROM push_subscriptions WHERE user_id = $1`,
+      [userId],
+    );
+    deleted.pushDevices = result[1] ?? 0;
+
+    result = await manager.query(
+      `DELETE FROM budget_period_buckets WHERE budget_period_id IN
+         (SELECT bp.id FROM budget_periods bp
+          JOIN budgets b ON bp.budget_id = b.id
+          WHERE b.user_id = $1)`,
+      [userId],
+    );
+    deleted.budgetPeriodBuckets = result[1] ?? 0;
 
     result = await manager.query(
       `DELETE FROM budget_period_categories WHERE budget_period_id IN
@@ -703,13 +887,20 @@ export class UsersService {
     );
     deleted.budgetCategories = result[1] ?? 0;
 
+    result = await manager.query(
+      `DELETE FROM budget_buckets WHERE budget_id IN
+         (SELECT id FROM budgets WHERE user_id = $1)`,
+      [userId],
+    );
+    deleted.budgetBuckets = result[1] ?? 0;
+
     result = await manager.query("DELETE FROM budgets WHERE user_id = $1", [
       userId,
     ]);
     deleted.budgets = result[1] ?? 0;
 
     // Transaction tags
-    result = await manager.query(
+    await manager.query(
       `DELETE FROM transaction_split_tags WHERE transaction_split_id IN
          (SELECT ts.id FROM transaction_splits ts
           JOIN transactions t ON ts.transaction_id = t.id
@@ -717,7 +908,7 @@ export class UsersService {
       [userId],
     );
 
-    result = await manager.query(
+    await manager.query(
       `DELETE FROM transaction_tags WHERE transaction_id IN
          (SELECT id FROM transactions WHERE user_id = $1)`,
       [userId],
@@ -730,6 +921,22 @@ export class UsersService {
       [userId],
     );
     deleted.transactionSplits = result[1] ?? 0;
+
+    // Warranties and their claims. The transaction link is ON DELETE SET NULL
+    // and the account survives this flow, so neither the transactions delete
+    // below nor a users(id) CASCADE reaches them: left here, every warranty the
+    // user recorded would outlive "delete my data". Claims first, for order's
+    // sake (they would cascade from the warranty anyway).
+    result = await manager.query(
+      "DELETE FROM warranty_claims WHERE user_id = $1",
+      [userId],
+    );
+    deleted.warrantyClaims = result[1] ?? 0;
+
+    result = await manager.query("DELETE FROM warranties WHERE user_id = $1", [
+      userId,
+    ]);
+    deleted.warranties = result[1] ?? 0;
 
     // Transactions
     result = await manager.query(
@@ -771,18 +978,36 @@ export class UsersService {
     ]);
     deleted.aiInsights = result[1] ?? 0;
 
+    await manager.query("DELETE FROM dashboard_trivia WHERE user_id = $1", [
+      userId,
+    ]);
+
+    await manager.query("DELETE FROM ai_usage_logs WHERE user_id = $1", [
+      userId,
+    ]);
+
+    // Transaction rules (the application trace cascades from the rule)
     result = await manager.query(
-      "DELETE FROM ai_usage_logs WHERE user_id = $1",
+      "DELETE FROM transaction_rules WHERE user_id = $1",
       [userId],
     );
+    deleted.transactionRules = result[1] ?? 0;
+
+    // Financial institutions. accounts.institution_id is ON DELETE SET NULL,
+    // so this is safe whether or not opts.deleteAccounts also removes the
+    // accounts that referenced them.
+    result = await manager.query(
+      "DELETE FROM institutions WHERE user_id = $1",
+      [userId],
+    );
+    deleted.institutions = result[1] ?? 0;
 
     // Optional: delete payees (before accounts, since payee default_category_id
     // references categories, and accounts may reference payee-related data)
     if (opts.deletePayees) {
-      result = await manager.query(
-        "DELETE FROM payee_aliases WHERE user_id = $1",
-        [userId],
-      );
+      await manager.query("DELETE FROM payee_aliases WHERE user_id = $1", [
+        userId,
+      ]);
       result = await manager.query("DELETE FROM payees WHERE user_id = $1", [
         userId,
       ]);
@@ -864,6 +1089,7 @@ export class UsersService {
    */
   async purgeForDowngrade(userId: string): Promise<void> {
     await withScopedDb(this.dataSource, async (manager) => {
+      await eraseSharedUser(manager, userId);
       await this.runOwnedDataDeletes(
         userId,
         {

@@ -13,20 +13,25 @@ import { AccountExportService } from "./account-export.service";
 import { LoanMortgageAccountService } from "./loan-mortgage-account.service";
 import { LoanPaymentDetectorService } from "./loan-payment-detector.service";
 import { LoanPaymentSetupService } from "./loan-payment-setup.service";
+import { LoanPaymentMatchingService } from "./loan-payment-matching.service";
 import { AccountsController } from "./accounts.controller";
 import { MortgageReminderService } from "./mortgage-reminder.service";
 import { StatementCycleService } from "./statement-cycle.service";
 import { BalanceForecastService } from "./balance-forecast.service";
+import { DailyBalanceTotalsService } from "./daily-balance-totals.service";
 import { AccountBalancesReportService } from "./account-balances-report.service";
 import { CategoriesModule } from "../categories/categories.module";
 import { ScheduledTransactionsModule } from "../scheduled-transactions/scheduled-transactions.module";
 import { NetWorthModule } from "../net-worth/net-worth.module";
 import { SecuritiesModule } from "../securities/securities.module";
+import { BondsModule } from "../bonds/bonds.module";
 import { ActionHistoryModule } from "../action-history/action-history.module";
 import { NotificationsModule } from "../notifications/notifications.module";
 import { DelegationModule } from "../delegation/delegation.module";
 import { LoanRateChangesModule } from "../loan-rate-changes/loan-rate-changes.module";
 import { CurrenciesModule } from "../currencies/currencies.module";
+import { NotificationCenterModule } from "../notification-center/notification-center.module";
+import { TransactionRulesModule } from "../transaction-rules/transaction-rules.module";
 
 @Module({
   imports: [
@@ -44,6 +49,9 @@ import { CurrenciesModule } from "../currencies/currencies.module";
     forwardRef(() => ScheduledTransactionsModule),
     forwardRef(() => NetWorthModule),
     forwardRef(() => SecuritiesModule),
+    // The account-balances report values a bond-linked holding from its own
+    // lots; BondsModule reaches this module back through NetWorthModule.
+    forwardRef(() => BondsModule),
     ActionHistoryModule,
     // forwardRef: NotificationsModule now reaches back here through
     // ScheduledTransactionsModule (issue #1247), so this edge closes a
@@ -54,6 +62,14 @@ import { CurrenciesModule } from "../currencies/currencies.module";
     forwardRef(() => DelegationModule),
     forwardRef(() => LoanRateChangesModule),
     forwardRef(() => CurrenciesModule),
+    // For NotificationPreferenceService: the mortgage renewal reminder gates
+    // its email on the PAYMENTS channel matrix. No forwardRef --
+    // NotificationCenterModule depends on nothing but the connection.
+    NotificationCenterModule,
+    // The loan's "Payment matching" rule is created through
+    // TransactionRulesService. forwardRef: TransactionRulesModule imports this
+    // module back (name resolution for the rule tools).
+    forwardRef(() => TransactionRulesModule),
   ],
   providers: [
     AccountsService,
@@ -61,9 +77,11 @@ import { CurrenciesModule } from "../currencies/currencies.module";
     LoanMortgageAccountService,
     LoanPaymentDetectorService,
     LoanPaymentSetupService,
+    LoanPaymentMatchingService,
     MortgageReminderService,
     StatementCycleService,
     BalanceForecastService,
+    DailyBalanceTotalsService,
     AccountBalancesReportService,
   ],
   controllers: [AccountsController],
@@ -71,6 +89,7 @@ import { CurrenciesModule } from "../currencies/currencies.module";
     AccountsService,
     StatementCycleService,
     BalanceForecastService,
+    DailyBalanceTotalsService,
     AccountBalancesReportService,
   ],
 })

@@ -76,7 +76,10 @@
     "collapseAria": "隱藏科目資訊",
     "showAccountNumber": "顯示科目號碼",
     "hideAccountNumber": "隱藏科目號碼",
-    "show": "顯示科目資訊"
+    "show": "顯示科目資訊",
+    "nextInstallment": "下期還款",
+    "finalPayment": "最後一期還款",
+    "amountDueOn": "{amount}，到期日 {date}"
   },
   "page": {
     "title": "交易",
@@ -121,13 +124,19 @@
       "balance": "結餘",
       "attachments": "附件",
       "status": "狀態",
+      "statusHelp": "未對帳、已結清或已對帳是與銀行對帳單核對的幾個階段。作廢會取消一筆交易，但保留其記錄；它不再影響帳戶餘額。",
       "actions": "動作"
+    },
+    "sort": {
+      "balanceHiddenHint": "依日期排序即可查看餘額",
+      "stripLabel": "排序方式"
     },
     "dateDisplay": {
       "toggleLabel": "隱藏年份",
       "toggleTitle": "日期中不顯示年份，為收款人留出更多空間"
     },
     "attachmentsCount": "{count, plural, other {# 個附件}}",
+    "warrantiesCount": "{count, plural, other {# 項保固}}",
     "today": "今天",
     "export": {
       "button": "匯出",
@@ -165,7 +174,6 @@
     },
     "row": {
       "viewPayeeTitle": "檢視 {name} 的詳細資料",
-      "ref": "參考：{number}",
       "investmentLabel": "投資",
       "linkedInvestmentTitle": "在投資中查看",
       "filterByDate": "依日期「{date}」篩選",
@@ -212,13 +220,13 @@
       "title": "篩選",
       "clear": "清除",
       "hide": "隱藏",
-      "show": "顯示"
+      "show": "顯示篩選"
     },
     "accounts": {
-      "label": "顯示科目：",
-      "all": "全部",
-      "active": "活躍",
-      "closed": "已關閉"
+      "label": "顯示科目",
+      "allCount": "全部 ({count})",
+      "activeCount": "活躍 ({count})",
+      "closedCount": "已關閉 ({count})"
     },
     "fields": {
       "accounts": "科目",
@@ -251,7 +259,7 @@
       "statuses": "所有狀態",
       "amountMin": "最小",
       "amountMax": "最大",
-      "search": "搜尋收款人、類別、金額、標籤、描述、參考號碼...",
+      "search": "搜尋，或試試 #10 或 payee:costco",
       "tagKeyValue": "例如 usa"
     },
     "tagKeyNone": "任意（無鍵篩選）",
@@ -312,7 +320,7 @@
     },
     "modal": {
       "title": "批次更新交易",
-      "subtitle": "更新 {count, plural, one {# 筆選取的交易} other {# 筆選取的交易}}。切換您要更改的欄位。",
+      "help": "切換您要更改的欄位。",
       "submitLabel": "更新 {count, plural, one {# 筆交易} other {# 筆交易}}",
       "payee": "收款人",
       "category": "類別",
@@ -360,8 +368,9 @@
       "fromAccount": "來源科目",
       "toAccount": "目的科目",
       "transferAmount": "轉帳金額",
-      "transferAmountWithCurrency": "轉帳金額（{currency}）",
-      "amountReceived": "收到金額（{currency}）",
+      "amountReceivedLabel": "收到金額",
+      "transferAmountInCurrency": "轉帳金額 ({currency})",
+      "amountReceivedInCurrency": "收到金額 ({currency})",
       "payeeOptional": "收款人（選填）",
       "categoryOptional": "類別（選填）"
     },
@@ -391,10 +400,16 @@
     "submitCreateAndNewDescription": "儲存並開始下一筆，保留帳戶與日期。",
     "submitOptions": "選擇建立後的行為",
     "submitUpdate": "更新{mode}",
+    "submitConvert": "轉換為{mode}",
     "reconciledConfirm": {
       "title": "編輯已對帳的交易？",
       "message": "此交易已對帳。變更將影響已完成的對帳。仍要儲存變更嗎？",
       "confirm": "儲存變更"
+    },
+    "counterpartConfirm": {
+      "title": "轉換此轉帳？",
+      "message": "此轉帳的另一方已結清或已對帳。將其轉換為交易會從另一帳戶移除該項目，並變更已與對帳單核對的餘額。是否繼續？",
+      "confirm": "仍然轉換"
     },
     "modeLabel": {
       "transfer": "轉帳",
@@ -424,6 +439,8 @@
       "destinationRequired": "請選擇目的科目",
       "sameAccount": "來源科目與目的科目不能相同",
       "negativeTransfer": "轉帳金額不得為負數",
+      "convertedToTransfer": "已轉換為轉帳",
+      "convertedToTransaction": "已轉換為交易",
       "payeeCreated": "收款人「{name}」已建立",
       "payeeCreateFailed": "建立收款人失敗",
       "payeeReactivated": "收款人「{name}」已重新啟用",
@@ -458,10 +475,20 @@
       },
       "feeCaption": "包含 {percent}% 境外交易手續費（{fee}）。"
     },
-    "jointSplitDisabled": "共享帳戶中的分割交易只能由擁有者管理"
+    "jointSplitDisabled": "共享帳戶中的分割交易只能由擁有者管理",
+    "warranties": {
+      "title": "保固",
+      "add": "新增保固",
+      "expires": "{date} 到期",
+      "loading": "正在載入保固",
+      "loadError": "無法載入此交易的保固。",
+      "empty": "尚無保固"
+    },
+    "conversionLockedNote": "此轉帳屬於拆分交易或其他擁有者的帳戶，因此在此只能保留為轉帳。請從拆分中變更，或刪除後新建所需的項目。"
   },
   "splitEditor": {
     "header": "分割詳情",
+    "headerTooltip": "每一列可以是一個類別、轉到另一個帳戶的轉帳，或一筆投資。各列金額加總必須等於交易總額；平均分配和按比例分配會為您分配剩餘金額。",
     "distributeProportionally": "按比例分配",
     "distributeProportionallyTitle": "根據每筆分割的金額按比例分配剩餘金額",
     "distributeEvenly": "平均分配",
@@ -521,7 +548,7 @@
     "quantityPlaceholder": "數量",
     "pricePlaceholder": "價格",
     "commissionPlaceholder": "手續費",
-    "amountPlaceholder": "金額（{currency}）",
+    "amountOnlyPlaceholder": "金額",
     "ratePlaceholder": "每 1 {from} 兌 {to}",
     "ariaRate": "匯率（每 1 {from} 兌 {to}）",
     "rateHint": "數量、價格和佣金均以 {from} 計；此匯率將現金影響換算為 {to}。",
@@ -551,6 +578,7 @@
       "total": "總計",
       "transactions": "交易",
       "tooltip": "{count, plural, one {# 筆交易} other {# 筆交易}}",
+      "partialNote": "部分金額沒有匯率，未計入這些合計。",
       "quarterLabel": "{year}年Q{quarter}",
       "quarterTick": "{year}年Q{quarter}",
       "granularityLabel": "分組方式",
@@ -575,6 +603,11 @@
       "log": "對數",
       "autoTitle": "自動（{scale}）",
       "scaleTitle": "{label} 刻度"
+    },
+    "collapse": {
+      "hide": "隱藏圖表",
+      "show": "顯示圖表",
+      "hidden": "圖表已隱藏"
     }
   },
   "toasts": {
@@ -597,5 +630,71 @@
     "title": "依 {key} 的支出",
     "other": "其他",
     "noData": "沒有可依此鍵細分的已標記支出。"
+  },
+  "searchSyntax": {
+    "open": "搜尋語法",
+    "title": "搜尋語法",
+    "fields": "欄位：payee, memo, cat, tag, account, ref, amount, date, status, is, has。選擇一個範例即可放入搜尋框。",
+    "examples": {
+      "allWords": "每個詞都在某處相符",
+      "phrase": "完全相符此詞組",
+      "exclude": "排除所有符合 refund 的項目",
+      "fieldContains": "收款人包含 costco",
+      "fieldExact": "收款人恰好是 Costco",
+      "reference": "支票號碼或參考號碼恰好為 10",
+      "wildcard": "參考號碼以 10 開頭",
+      "amountOver": "金額大於 100",
+      "amountRange": "金額 50 至 100",
+      "datePeriod": "2026 年 3 月的任何一天",
+      "isSplit": "分割交易",
+      "hasAttachment": "有附件",
+      "hasWarranty": "有保固"
+    }
+  },
+  "searchInterpretation": {
+    "label": "搜尋條件：",
+    "negated": "非 {phrase}",
+    "malformed": "{raw}（無法辨識，已按文字搜尋）",
+    "empty": "{raw}（空白，已忽略）",
+    "status": "狀態為 {value}",
+    "any": "任何欄位包含「{value}」",
+    "fields": {
+      "payee": "收款人",
+      "memo": "備註",
+      "cat": "類別",
+      "tag": "標籤",
+      "account": "帳戶",
+      "ref": "參考號碼",
+      "amount": "金額",
+      "date": "日期",
+      "status": "狀態",
+      "is": "類型",
+      "has": "有"
+    },
+    "ops": {
+      "contains": "{field}包含「{value}」",
+      "exact": "{field}為「{value}」",
+      "glob": "{field}符合「{value}」",
+      "eq": "{field}為 {value}",
+      "gt": "{field}大於 {value}",
+      "gte": "{field}不低於 {value}",
+      "lt": "{field}小於 {value}",
+      "lte": "{field}不高於 {value}",
+      "between": "{field} {value} 至 {valueTo}"
+    },
+    "enum": {
+      "is": {
+        "transfer": "轉帳",
+        "split": "分割交易",
+        "uncategorized": "未分類"
+      },
+      "has": {
+        "attachment": "有附件",
+        "warranty": "有保固",
+        "ref": "有參考號碼",
+        "memo": "有備註",
+        "tag": "有標籤"
+      }
+    }
   }
 }

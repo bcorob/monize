@@ -41,6 +41,8 @@ function preview(overrides: Partial<MnyPreview> = {}): MnyPreview {
       payeesInFile: 500,
       categoriesToCreate: 30,
       categoriesInFile: 128,
+      tagsToCreate: 0,
+      tagsInFile: 0,
       transactionsToCreate: 120,
       transfersToLink: 12,
       transactionsSkipped: 0,
@@ -124,10 +126,27 @@ describe('MnyReviewStep', () => {
     expect(screen.getByText('$2,500.50')).toBeInTheDocument();
   });
 
+  it('shows the tags a file\'s classifications become, against the items in the file', () => {
+    render(
+      <MnyReviewStep
+        {...defaultProps}
+        preview={preview({
+          counts: { ...preview().counts, tagsToCreate: 1, tagsInFile: 2 },
+        })}
+      />,
+    );
+
+    const tile = screen.getByText('Tags from classifications').parentElement;
+    expect(tile?.textContent).toContain('1');
+    expect(tile?.textContent).toContain('of 2 in the file');
+  });
+
   it('shows referenced-versus-total counts rather than just totals', () => {
     render(<MnyReviewStep {...defaultProps} />);
 
     expect(screen.getByText('40')).toBeInTheDocument();
+    // A file with no classifications shows no tags tile at all.
+    expect(screen.queryByText('Tags from classifications')).toBeNull();
     expect(screen.getByText(/of 500 in the file/)).toBeInTheDocument();
   });
 

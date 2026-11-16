@@ -7,6 +7,7 @@
     "filterAll": "Tất cả ({count})",
     "filterExpenses": "Chi tiêu ({count})",
     "filterIncome": "Thu nhập ({count})",
+    "typeFilterLabel": "Loại",
     "modalTitleNew": "Danh mục mới",
     "modalTitleEdit": "Chỉnh sửa danh mục",
     "countSingle": "1 danh mục",
@@ -54,6 +55,12 @@
     "typeExpense": "Chi tiêu",
     "typeIncome": "Thu nhập",
     "typeInherited": "Loại kế thừa từ cha",
+    "autoSignLabel": "Dấu tự động",
+    "autoSignOn": "Bật",
+    "autoSignOff": "Tắt",
+    "autoSignInherit": "Kế thừa từ danh mục cha",
+    "autoSignInheritedFrom": "Kế thừa từ danh mục cha ({name}): hiện đang {state}",
+    "autoSignHelp": "Khi bật, số tiền bạn nhập sẽ được chuyển thành số âm với danh mục chi tiêu và số dương với danh mục thu nhập. Tắt để giữ nguyên dấu đúng như bạn nhập.",
     "colourLabel": "Màu sắc",
     "colourInherit": "Kế thừa từ cha",
     "colourNone": "Không có màu",
@@ -65,8 +72,8 @@
     "submitUpdate": "Cập nhật danh mục"
   },
   "list": {
-    "emptyHeading": "Không có danh mục",
-    "emptyDescription": "Bắt đầu bằng cách tạo danh mục mới.",
+    "emptyHeading": "Không tìm thấy danh mục",
+    "emptyDescription": "Không có danh mục nào khớp với tìm kiếm hoặc bộ lọc hiện tại.",
     "colName": "Tên",
     "colType": "Loại",
     "colCount": "Số lượng",
@@ -79,7 +86,7 @@
     "viewTransactionsTitle": "Xem giao dịch trong danh mục này"
   },
   "deleteDialog": {
-    "title": "Xóa \"{name}\"?",
+    "title": "Xóa \"{name}\"",
     "checkingUsage": "Đang kiểm tra mức độ sử dụng...",
     "usedBy": "Danh mục này được dùng bởi {count, plural, one {# mục} other {# mục}} (giao dịch và/hoặc hóa đơn & tiền gửi theo lịch).",
     "reassignLabel": "Phân công lại cho:",

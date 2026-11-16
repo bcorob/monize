@@ -4,6 +4,7 @@
     "subtitle": "Beheer valuta's die worden gebruikt in je rekeningen en waardepapieren",
     "refreshRates": "Koersen vernieuwen",
     "refreshing": "Vernieuwen...",
+    "statusFilterLabel": "Status",
     "newCurrency": "+ Nieuwe valuta",
     "searchPlaceholder": "Zoeken op code of naam...",
     "statusAll": "Alle ({count})",
@@ -13,6 +14,15 @@
     "modalTitleNew": "Nieuwe valuta",
     "loading": "Valuta's laden...",
     "count": "{count, plural, one {# valuta} other {# valuta's}}",
+    "providers": {
+      "line": "Koersen van {providers}",
+      "separator": ", daarna ",
+      "names": {
+        "frankfurter": "Frankfurter (ECB-referentiekoersen)",
+        "yahoo": "Yahoo Finance",
+        "crypto": "Cryptoparen (Yahoo)"
+      }
+    },
     "toasts": {
       "loadFailed": "Valuta's laden mislukt",
       "updated": "Valuta succesvol bijgewerkt",
@@ -24,6 +34,7 @@
       "statusFailed": "Status van valuta bijwerken mislukt",
       "ratesRefreshed": "Wisselkoersen vernieuwd: {updated} paren bijgewerkt",
       "ratesRefreshedWithFailed": "Wisselkoersen vernieuwd: {updated} bijgewerkt, {failed} mislukt",
+      "ratesAllFailed": "Er konden geen wisselkoersen worden opgehaald; de aanbieder antwoordde niet",
       "ratesFailed": "Wisselkoersen vernieuwen mislukt"
     },
     "summary": {
@@ -44,6 +55,8 @@
       "actions": "Acties"
     },
     "defaultBadge": "Standaard",
+    "cryptoBadge": "Crypto",
+    "noPriceSymbol": "Geen koerssymbool",
     "statusBadge": {
       "active": "Actief",
       "activeShort": "Act",
@@ -61,9 +74,10 @@
       "activate": "Activeren",
       "deleteCurrency": "Valuta verwijderen"
     },
-    "usageTooltip": "{accounts} rekening(en), {securities} waardepapier(en)",
     "usageAccounts": "{count, plural, one {# rek.} other {# rek.}}",
     "usageSecurities": "{count, plural, one {# wp.} other {# wp.'s}}",
+    "rateHelp": "Wat één eenheid van elke valuta waard is in {currency}.",
+    "rateMissing": "Geen opgeslagen wisselkoers voor {from} naar {to}.",
     "empty": {
       "title": "Geen valuta's",
       "subtitle": "Begin door een valuta toe te voegen."
@@ -88,6 +102,20 @@
     "symbolLabel": "Symbool",
     "symbolPlaceholder": "bijv. $, €, £, ¥",
     "decimalPlacesLabel": "Decimalen",
+    "kindLabel": "Soort",
+    "kindOptions": {
+      "fiat": "Fiatvaluta",
+      "crypto": "Cryptovaluta"
+    },
+    "kindLocked": "{code} is in gebruik, dus de soort kan niet worden gewijzigd.",
+    "quoteSymbolLabel": "Koerssymbool (optioneel)",
+    "quoteSymbolPlaceholder": "bijv. BTC-EUR",
+    "quoteSymbolHelp": "Het Yahoo Finance-symbool waarmee de koers van de coin wordt opgehaald: de ticker, een koppelteken en de valuta waarin de coin wordt genoteerd, zoals BTC-EUR. De wisselkoersen van de coin worden ermee opgehaald.",
+    "verifyButton": "Controleren",
+    "quoteSymbolPricedIn": "Genoteerd in {currency}",
+    "quoteSymbolMissing": "Zonder koerssymbool heeft de valuta geen wisselkoers.",
+    "quoteSymbolNotCrypto": "{symbol} is geen cryptovaluta. Voer het paar van een coin in, zoals BTC-EUR.",
+    "quoteSymbolNotFound": "Geen cryptovaluta gevonden voor {symbol}",
     "lookupButton": "Opzoeken",
     "lookingUp": "Opzoeken...",
     "clearButton": "Wissen",
@@ -99,9 +127,14 @@
       "found": "Gevonden: {details}",
       "notFound": "Geen valuta gevonden voor \"{query}\"",
       "lookupFailed": "Opzoeken mislukt - probeer het opnieuw",
-      "reactivateFailed": "Kan valuta niet opnieuw activeren"
+      "reactivateFailed": "Kan valuta niet opnieuw activeren",
+      "verifyEmpty": "Voer een koerssymbool in zoals BTC-EUR om te controleren",
+      "verifyFailed": "Het koerssymbool kon niet worden gecontroleerd"
     },
     "inactiveNotice": "{code} staat al in je lijst, maar is inactief.",
+    "nonIsoNotice": "{code} is geen standaard valutacode. Als het een cryptovaluta is, stel de soort dan in op Cryptovaluta. <guide>Lees meer over cryptovaluta's in de gebruikershandleiding</guide>.",
+    "switchToCrypto": "Cryptovaluta gebruiken",
+    "cryptoPrecisionNotice": "Bedragen in een cryptovaluta worden bewaard met ten hoogste acht decimalen, de precisie waarmee ze worden opgeslagen, dus kosten onder {smallest} kunnen niet worden ingevoerd. <guide>Bekijk hoe je walletkosten vastlegt</guide>.",
     "reactivateButton": "{code} opnieuw activeren",
     "reactivating": "Bezig met opnieuw activeren..."
   },
@@ -110,6 +143,53 @@
     "nameRequired": "Naam is verplicht",
     "nameMax": "Naam mag maximaal 100 tekens lang zijn",
     "symbolRequired": "Symbool is verplicht",
-    "symbolMax": "Symbool mag maximaal 10 tekens lang zijn"
+    "symbolMax": "Symbool mag maximaal 10 tekens lang zijn",
+    "quoteSymbolMax": "Koerssymbool mag maximaal 20 tekens lang zijn",
+    "quoteSymbolRequiresCrypto": "Alleen een cryptovaluta heeft een koerssymbool",
+    "quoteSymbolNotAPair": "Voer een paar in zoals BTC-EUR: de coin, een koppelteken en een valutacode van drie letters"
+  },
+  "rateHistory": {
+    "title": "Koersgeschiedenis",
+    "stored": "Opgeslagen geschiedenis: {start} tot {end} ({count} waarnemingen)",
+    "none": "Geen opgeslagen geschiedenis voor {pair}",
+    "loading": "Opgeslagen koersgeschiedenis wordt gecontroleerd...",
+    "loadFailed": "De opgeslagen koersgeschiedenis kon niet worden gelezen",
+    "fillGaps": "Gaten in koershistorie vullen",
+    "filling": "Ontbrekende koersen ophalen...",
+    "fillGapsTitle": "Haalt de dagkoersen op die uw rapporten missen, vanaf de eerste datum waarop uw gegevens {code} gebruiken tot vandaag.",
+    "hint": "Rapporten van vóór de eerste opgeslagen koers kunnen {pair} niet omrekenen.",
+    "list": {
+      "heading": "Opgeslagen koersen",
+      "invertedHelp": "Een koers gemarkeerd als (omgekeerd) is het omgekeerde van wat Monize daadwerkelijk voor dit paar heeft opgeslagen, geen andere waarneming.",
+      "direction": "Weergegeven als {to} per 1 {from}.",
+      "loading": "Opgeslagen koersen laden...",
+      "loadFailed": "Kon de opgeslagen koersen niet lezen",
+      "empty": "Geen opgeslagen koersen om te tonen",
+      "truncated": "De {count} meest recente opgeslagen koersen worden getoond; oudere staan er niet bij.",
+      "inverted": "omgekeerd",
+      "unknownRate": "Onbekend",
+      "columns": {
+        "date": "Datum",
+        "rate": "Koers",
+        "source": "Bron"
+      },
+      "sources": {
+        "yahooFinance": "Yahoo Finance",
+        "frankfurter": "Frankfurter (ECB)",
+        "mnyImport": "Money-import",
+        "yahooCrypto": "Cryptoparen (Yahoo)",
+        "unknown": "Onbekend"
+      }
+    },
+    "toasts": {
+      "filled": "{count} koersen toegevoegd; de geschiedenis begint nu op {start}",
+      "partial": "{count} koersen opgeslagen; de historie begint nu op {start}. Nog {windows} gaten te halen, druk nogmaals om door te gaan.",
+      "moreToFetch": "Er zijn deze keer geen koersen opgeslagen; nog {windows} gaten te halen, druk nogmaals om door te gaan.",
+      "noGaps": "{pair} heeft al een dagkoers voor elke datum die uw rapporten nodig hebben",
+      "noNewRates": "Er zijn geen nieuwe koersen opgeslagen voor {pair}",
+      "unused": "Geen van uw rekeningen, posities of transacties gebruikt {code}, dus er zijn geen koersen op te halen",
+      "providerFloor": "De aanbieder heeft geen koersen voor {pair} van vóór {date}",
+      "failed": "Kon de koershistorie niet vullen"
+    }
   }
 }

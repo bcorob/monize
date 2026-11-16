@@ -2,7 +2,13 @@ import { DataSource } from "typeorm";
 import { Test, TestingModule } from "@nestjs/testing";
 import { getRepositoryToken } from "@nestjs/typeorm";
 import { BudgetHealthReportsService } from "./budget-health-reports.service";
+import {
+  CategorySpending,
+  queryCategorySpending,
+  queryCategorySpendingBuckets,
+} from "./budget-spending.util";
 import { BudgetsService } from "./budgets.service";
+import { monthBuckets } from "../test-helpers/budget-spending-buckets";
 import { Budget, BudgetType, BudgetStrategy } from "./entities/budget.entity";
 import {
   BudgetCategory,
@@ -15,14 +21,52 @@ import { TransactionSplit } from "../transactions/entities/transaction-split.ent
 import {
   createScopedDbMocks,
   DataSourceMock,
+  ManagerMock,
 } from "../test-helpers/scoped-db-testing";
 
 jest.mock("../common/db/scoped-db", () =>
   jest.requireActual("../test-helpers/scoped-db-testing").scopedDbMockModule(),
 );
 
+jest.mock("./budget-spending.util", () => ({
+  ...jest.requireActual("./budget-spending.util"),
+  queryCategorySpendingBuckets: jest.fn(),
+  queryCategorySpending: jest.fn(),
+}));
+
+const mockedSpending = queryCategorySpendingBuckets as jest.MockedFunction<
+  typeof queryCategorySpendingBuckets
+>;
+const mockedPeriodSpending = queryCategorySpending as jest.MockedFunction<
+  typeof queryCategorySpending
+>;
+
+/** Every month of the requested range answers with `s`. */
+const mockSpending = (s: CategorySpending) =>
+  mockedSpending.mockImplementation(monthBuckets(() => s));
+
+/** One CategorySpending for the given net sums (expenses negative). */
+function spending(
+  categories: Record<string, number>,
+  incomplete: string[] = [],
+): CategorySpending {
+  return {
+    spendingMap: new Map(Object.entries(categories)),
+    transferSpendingMap: new Map(),
+    currency: "USD",
+    incompleteCategoryIds: new Set(incomplete),
+    incompleteTransferAccountIds: new Set(),
+    transferIncomeMap: new Map(),
+    incompleteTransferIncomeAccountIds: new Set(),
+    outsideTransferIncome: 0,
+    outsideTransferIncomeComplete: true,
+    missingRatePairs: incomplete.length > 0 ? ["JPY->USD"] : [],
+  };
+}
+
 describe("BudgetHealthReportsService", () => {
   let scopedDataSource: DataSourceMock;
+  let scopedManager: ManagerMock;
   let service: BudgetHealthReportsService;
   let periodsRepository: Record<string, jest.Mock>;
   let transactionsRepository: Record<string, jest.Mock>;
@@ -91,12 +135,18 @@ describe("BudgetHealthReportsService", () => {
     andWhere: jest.fn().mockReturnThis(),
     innerJoin: jest.fn().mockReturnThis(),
     groupBy: jest.fn().mockReturnThis(),
+    addGroupBy: jest.fn().mockReturnThis(),
+    setParameter: jest.fn().mockReturnThis(),
     getRawMany: jest.fn().mockResolvedValue([]),
     getRawOne: jest.fn().mockResolvedValue({ total: "0" }),
     ...overrides,
   });
 
   beforeEach(async () => {
+    mockedSpending.mockReset();
+    mockSpending(spending({}));
+    mockedPeriodSpending.mockReset();
+    mockedPeriodSpending.mockResolvedValue(spending({}));
     periodsRepository = {
       find: jest.fn().mockResolvedValue([]),
     };
@@ -111,11 +161,14 @@ describe("BudgetHealthReportsService", () => {
       getSummary: jest.fn(),
     };
 
-    ({ dataSource: scopedDataSource } = createScopedDbMocks([
-      [BudgetPeriod, periodsRepository as never],
-      [Transaction, transactionsRepository as never],
-      [TransactionSplit, splitsRepository as never],
-    ]));
+    ({ dataSource: scopedDataSource, manager: scopedManager } =
+      createScopedDbMocks([
+        [BudgetPeriod, periodsRepository as never],
+        [Transaction, transactionsRepository as never],
+        [TransactionSplit, splitsRepository as never],
+      ]));
+    // No exchange-rate history unless a case supplies it.
+    scopedManager.query.mockResolvedValue([]);
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -350,8 +403,12 @@ describe("BudgetHealthReportsService", () => {
       );
 
       expect(result).toHaveLength(2);
-      expect(result[0].month).toContain("Jan");
-      expect(result[1].month).toContain("Feb");
+      // Structure, not a label: a `Jan 2026` from the server was English on
+      // every locale and sorted alphabetically at the client. `YYYY-MM` also
+      // sorts chronologically as a string, which is what the two reports'
+      // month columns now order on.
+      expect(result[0].monthKey).toBe("2026-01");
+      expect(result[1].monthKey).toBe("2026-02");
       // First period was under, second was over -> first should be higher
       expect(result[0].score).toBeGreaterThan(result[1].score);
       expect(["Excellent", "Good", "Needs Attention", "Off Track"]).toContain(
@@ -359,15 +416,11 @@ describe("BudgetHealthReportsService", () => {
       );
     });
 
-    it("queries transactions for OPEN periods rather than using stored actuals", async () => {
-      const qb = createMockQueryBuilder({
-        getRawOne: jest.fn().mockResolvedValue({ total: "-1200" }),
-      });
-      transactionsRepository.createQueryBuilder.mockReturnValue(qb);
-      splitsRepository.createQueryBuilder.mockReturnValue(
-        createMockQueryBuilder({
-          getRawOne: jest.fn().mockResolvedValue({ total: "0" }),
-        }),
+    it("reads an OPEN period's actuals through the budget page's converted read", async () => {
+      // 1200 of the 1000 budgeted, net within the category and already in the
+      // budget's currency: what the budget page shows for the period.
+      mockedPeriodSpending.mockResolvedValue(
+        spending({ "cat-essential": -1200 }),
       );
 
       periodsRepository.find.mockResolvedValue([
@@ -398,9 +451,56 @@ describe("BudgetHealthReportsService", () => {
         1,
       );
 
-      expect(transactionsRepository.createQueryBuilder).toHaveBeenCalled();
+      expect(mockedPeriodSpending).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        "user-1",
+        mockBudget.categories,
+        "2026-05-01",
+        "2026-05-31",
+      );
+      // No raw, unconverted sum of its own (issue #2155).
+      expect(transactionsRepository.createQueryBuilder).not.toHaveBeenCalled();
       expect(result).toHaveLength(1);
       expect(result[0].score).toBeLessThan(100);
+    });
+
+    it("leaves an OPEN period's category with an unrated row out of the score (issue #2155)", async () => {
+      // The converted part alone is 1200 of 1000; with a row that had no rate
+      // the real figure is unknown, so the category is not scored on it.
+      mockedPeriodSpending.mockResolvedValue(
+        spending({ "cat-essential": -1200 }, ["cat-essential"]),
+      );
+      periodsRepository.find.mockResolvedValue([
+        {
+          id: "p-open",
+          budgetId: "budget-1",
+          status: PeriodStatus.OPEN,
+          periodStart: "2026-05-01",
+          periodEnd: "2026-05-31",
+          periodCategories: [
+            {
+              categoryId: "cat-essential",
+              budgetedAmount: 1000,
+              actualAmount: 0,
+              budgetCategory: {
+                id: "bc-essential",
+                isIncome: false,
+                categoryGroup: CategoryGroup.NEED,
+              },
+            },
+          ],
+        },
+      ]);
+
+      const result = await service.getHealthScoreHistory(
+        "user-1",
+        "budget-1",
+        1,
+      );
+
+      // No deduction for the unknown overspend, and no under-budget bonus.
+      expect(result[0].score).toBe(100);
     });
   });
 
@@ -408,6 +508,200 @@ describe("BudgetHealthReportsService", () => {
     it("returns one entry per month requested", async () => {
       const result = await service.getSavingsRate("user-1", "budget-1", 3);
       expect(result).toHaveLength(3);
+    });
+
+    it("counts transfer income lines and the toggle's figure as income (issue #2141)", async () => {
+      budgetsService.findOne.mockResolvedValueOnce({
+        ...mockBudget,
+        categories: [
+          {
+            id: "bc-hisa",
+            budgetId: "budget-1",
+            categoryId: null,
+            isTransfer: true,
+            isIncome: true,
+            transferAccountId: "acct-hisa",
+            amount: 2000,
+          },
+          {
+            id: "bc-food",
+            budgetId: "budget-1",
+            categoryId: "cat-food",
+            isTransfer: false,
+            isIncome: false,
+            transferAccountId: null,
+            amount: 500,
+          },
+        ],
+      });
+      mockSpending({
+        ...spending({ "cat-food": -1000 }),
+        transferIncomeMap: new Map([["acct-hisa", 2000]]),
+        outsideTransferIncome: 500,
+      });
+
+      const result = await service.getSavingsRate("user-1", "budget-1", 1);
+
+      // The transfer income line passes to the actuals read with the others.
+      expect(mockedSpending.mock.calls[0][3].map((bc) => bc.id)).toEqual([
+        "bc-hisa",
+        "bc-food",
+      ]);
+      // No income category, but the budget has an income line: the income
+      // side is 2,000 + 500, never the every-deposit fallback.
+      expect(transactionsRepository.createQueryBuilder).not.toHaveBeenCalled();
+      expect(result[0]).toMatchObject({
+        income: 2500,
+        expenses: 1000,
+        savings: 1500,
+        savingsRate: 60,
+        valuationComplete: true,
+      });
+    });
+
+    it("still reads the toggle's figure when the budget has only savings transfer lines", async () => {
+      budgetsService.findOne.mockResolvedValueOnce({
+        ...mockBudget,
+        config: {
+          excludedAccountIds: ["acct-hisa"],
+          transfersInAsIncome: true,
+        },
+        categories: [
+          {
+            id: "bc-tfsa",
+            budgetId: "budget-1",
+            categoryId: null,
+            isTransfer: true,
+            isIncome: false,
+            transferAccountId: "acct-tfsa",
+            amount: 300,
+          },
+        ],
+      });
+      transactionsRepository.createQueryBuilder.mockReturnValueOnce(
+        createMockQueryBuilder(),
+      );
+      mockSpending({ ...spending({}), outsideTransferIncome: 2000 });
+
+      const result = await service.getSavingsRate("user-1", "budget-1", 1);
+
+      expect(mockedSpending).toHaveBeenCalledTimes(1);
+      // The savings line names the budget; it is not an expense of the rate.
+      expect(result[0]).toMatchObject({ income: 2000, expenses: 0 });
+    });
+
+    it("leaves the budget's excluded accounts out of the no-income-category query", async () => {
+      budgetsService.findOne.mockResolvedValueOnce({
+        ...mockBudget,
+        config: { excludedAccountIds: ["acc-x"] },
+      });
+      const qb = createMockQueryBuilder();
+      transactionsRepository.createQueryBuilder.mockReturnValueOnce(qb);
+
+      await service.getSavingsRate("user-1", "budget-1", 1);
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        "t.account_id NOT IN (:...excludedAccountIds)",
+        { excludedAccountIds: ["acc-x"] },
+      );
+    });
+
+    it("converts foreign income into the budget's currency when no income category is set (issue #2155)", async () => {
+      const thisMonth = new Date();
+      const month = `${thisMonth.getFullYear()}-${String(thisMonth.getMonth() + 1).padStart(2, "0")}`;
+      const qb = createMockQueryBuilder({
+        getRawMany: jest.fn().mockResolvedValue([
+          { month, currencyCode: "USD", total: "3000" },
+          // EUR 1250 that settled into USD at its own 1.25 EUR per USD.
+          {
+            month,
+            currencyCode: "EUR",
+            total: "1250",
+            fx_day: `${month}-05`,
+            fx_original_currency: "USD",
+            fx_exchange_rate: "1.25000000",
+          },
+        ]),
+      });
+      transactionsRepository.createQueryBuilder.mockReturnValueOnce(qb);
+
+      const result = await service.getSavingsRate("user-1", "budget-1", 1);
+
+      // USD 4000, never the 4250 a sum across currencies gave.
+      expect(result[0].income).toBe(4000);
+      expect(result[0].valuationComplete).toBe(true);
+      expect(qb.setParameter).toHaveBeenCalledWith(
+        "fxReportingCurrency",
+        "USD",
+      );
+    });
+
+    it("flags a month whose foreign income had no rate, keeping what converted", async () => {
+      const thisMonth = new Date();
+      const month = `${thisMonth.getFullYear()}-${String(thisMonth.getMonth() + 1).padStart(2, "0")}`;
+      transactionsRepository.createQueryBuilder.mockReturnValueOnce(
+        createMockQueryBuilder({
+          getRawMany: jest.fn().mockResolvedValue([
+            { month, currencyCode: "USD", total: "3000" },
+            {
+              month,
+              currencyCode: "JPY",
+              total: "100000",
+              fx_day: `${month}-05`,
+            },
+          ]),
+        }),
+      );
+
+      const result = await service.getSavingsRate("user-1", "budget-1", 1);
+
+      expect(result[0].income).toBe(3000);
+      expect(result[0].valuationComplete).toBe(false);
+    });
+
+    it("reads income and expenses through the budget page's net, converted actuals", async () => {
+      budgetsService.findOne.mockResolvedValueOnce({
+        ...mockBudget,
+        categories: [
+          makeBudgetCategory({
+            id: "bc-income",
+            categoryId: "cat-income",
+            isIncome: true,
+          }),
+          makeBudgetCategory({ id: "bc-1", categoryId: "cat-1" }),
+        ],
+      });
+      // 5000 less a 400 correction; 2000 spent less 500 refunded.
+      mockSpending(spending({ "cat-income": 4600, "cat-1": -1500 }));
+
+      const result = await service.getSavingsRate("user-1", "budget-1", 1);
+
+      expect(mockedSpending).toHaveBeenCalledTimes(1);
+      expect(result[0]).toMatchObject({
+        income: 4600,
+        expenses: 1500,
+        savings: 3100,
+        valuationComplete: true,
+      });
+    });
+
+    it("flags a month whose category had a row with no rate", async () => {
+      budgetsService.findOne.mockResolvedValueOnce({
+        ...mockBudget,
+        categories: [
+          makeBudgetCategory({
+            id: "bc-income",
+            categoryId: "cat-income",
+            isIncome: true,
+          }),
+          makeBudgetCategory({ id: "bc-1", categoryId: "cat-1" }),
+        ],
+      });
+      mockSpending(spending({ "cat-income": 5000, "cat-1": -100 }, ["cat-1"]));
+
+      const result = await service.getSavingsRate("user-1", "budget-1", 1);
+
+      expect(result[0].valuationComplete).toBe(false);
     });
 
     it("computes savings rate as (income - expenses) / income * 100", async () => {
@@ -433,6 +727,41 @@ describe("BudgetHealthReportsService", () => {
         savings: 0,
         savingsRate: 0,
       });
+    });
+
+    /**
+     * The month was a server-rendered `Mmm YYYY` label and nothing in this
+     * suite looked at it, so shipping English months to 22 locales -- and a
+     * client-side sort that put Apr before Jan -- was invisible here. These
+     * assertions are deliberately clock-free: they check the SHAPE and the
+     * consecutiveness of the keys, both of which a label fails, rather than
+     * naming today's months.
+     */
+    it("keys each month structurally and in calendar order", async () => {
+      const result = await service.getSavingsRate("user-1", "budget-1", 6);
+
+      const keys = result.map((point) => point.monthKey);
+      for (const key of keys) {
+        expect(key).toMatch(/^\d{4}-(0[1-9]|1[0-2])$/);
+      }
+
+      // `YYYY-MM` sorts chronologically as a plain string, which is what the
+      // report's month column now orders on; `Apr 2026` does not.
+      expect([...keys].sort()).toEqual(keys);
+
+      // Oldest first, one calendar month apart -- so the series really is the
+      // requested window and not six renderings of one label.
+      const asMonthNumber = (key: string) => {
+        const [year, month] = key.split("-").map(Number);
+        return year * 12 + month;
+      };
+      for (let i = 1; i < keys.length; i++) {
+        expect(asMonthNumber(keys[i]) - asMonthNumber(keys[i - 1])).toBe(1);
+      }
+
+      // The old label field is gone rather than kept as an alias: two names for
+      // one value is how a consumer goes on reading the English one.
+      expect(result[0]).not.toHaveProperty("month");
     });
   });
 });

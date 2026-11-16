@@ -1,0 +1,113 @@
+{
+  "landing": {
+    "title": "Tasse",
+    "subtitle": "Strumenti per le trattenute e le tasse che determinano la tua paga",
+    "tools": {
+      "payrollDeductions": {
+        "title": "Trattenute sullo stipendio",
+        "description": "Imposta massimi annui per trattenute come pensione e assicurazione contro la disoccupazione, e lascia che la busta paga smetta di prelevarle una volta raggiunto il massimo."
+      }
+    }
+  },
+  "payroll": {
+    "title": "Trattenute sullo stipendio",
+    "subtitle": "Massimi annui sulle righe di trattenuta della tua fattura stipendio",
+    "backToTaxes": "Torna alle tasse",
+    "newButton": "+ Nuova regola",
+    "loading": "Caricamento delle trattenute...",
+    "emptyState": {
+      "title": "Ancora nessuna regola di trattenuta",
+      "body": "Scegli la transazione pianificata che è la tua busta paga, le sue categorie di trattenuta e un massimo annuo per ciascuna. La transazione smette di trattenere una voce una volta raggiunto il suo massimo e ricomincia alla data di azzeramento.",
+      "createButton": "Crea la tua prima regola"
+    },
+    "yearToDate": {
+      "show": "Mostra il progressivo annuo",
+      "hide": "Nascondi il progressivo annuo",
+      "title": "Pagato in questo periodo",
+      "help": "Quanto la categoria ha prelevato nel periodo che contiene oggi, su tutti i conti, nella valuta della fattura.",
+      "foreignRows": "{count, plural, one {# riga} other {# righe}} in un'altra valuta non conteggiate"
+    },
+    "previousPeriods": {
+      "show": "Mostra periodi precedenti",
+      "hide": "Nascondi periodi precedenti",
+      "title": "Periodi precedenti",
+      "help": "Quanto ogni categoria ha trattenuto nei suoi periodi passati, su tutti i conti, nella valuta della transazione. Il periodo corrente è nella tabella dell'anno in corso.",
+      "loading": "Caricamento dei periodi precedenti...",
+      "empty": "Nulla è ancora stato trattenuto in un periodo precedente.",
+      "loadFailed": "Impossibile caricare i periodi precedenti"
+    },
+    "list": {
+      "bill": "Fattura",
+      "category": "Categoria",
+      "yearlyMaximum": "Massimo annuo",
+      "nextMaximum": "Dal {date}: {amount}",
+      "resetsOn": "Si azzera il",
+      "perPaycheque": "Per busta paga",
+      "period": "Periodo",
+      "paid": "Pagato",
+      "remaining": "Rimanente",
+      "actions": "Azioni",
+      "fromLine": "Dalla riga della fattura",
+      "entered": "Inserito",
+      "expectedMissing": "Importo previsto necessario",
+      "periodRange": "Dal {start} al {end}"
+    },
+    "modal": {
+      "newTitle": "Nuova regola di trattenuta",
+      "editTitle": "Modifica regola di trattenuta"
+    },
+    "form": {
+      "billLabel": "Fattura stipendio pianificata",
+      "billPlaceholder": "Seleziona la fattura che è la tua busta paga",
+      "billHelp": "Il deposito pianificato le cui righe portano le trattenute. Sono offerte solo le transazioni che versano più di quanto trattengono, e solo le loro righe di trattenuta possono essere limitate.",
+      "categoryLabel": "Categoria di trattenuta {index}",
+      "categoryPlaceholder": "Seleziona una riga di trattenuta",
+      "yearlyMaximumLabel": "Massimo annuo",
+      "yearlyMaximumHelp": "Il massimo che questa categoria preleva in un periodo, nella valuta della fattura. La riga viene ridotta al margine rimanente, fino a zero.",
+      "yearlyMaximumSuggested": "Stimato da quanto questa categoria ha già trattenuto.",
+      "resetPeriodLabel": "Azzeramento",
+      "resetDateLabel": "Data di azzeramento",
+      "resetDateHelp": "Il conteggio riparte da questo giorno ogni anno. Di solito il primo giorno dell'anno.",
+      "expectedLabel": "Previsto per busta paga",
+      "expectedHelp": "La riga della transazione per questa categoria è zero, quindi la previsione ha bisogno dell'importo che ogni busta paga trattiene di solito.",
+      "expectedFromLine": "La riga della fattura trattiene {amount} per busta paga.",
+      "expectedSuggested": "Suggerito dall'importo che le tue transazioni in questa categoria mostrano più spesso nell'ultimo anno.",
+      "thisPeriod": "Questo periodo, dal {start} al {end}",
+      "nextPeriod": "Periodo successivo, dal {date}",
+      "setNextPeriod": "Imposta gli importi del periodo successivo, dal {date}",
+      "nextYearlyMaximumLabel": "Massimo del periodo successivo",
+      "nextYearlyMaximumHelp": "Il massimo dal prossimo azzeramento. Lascia vuoto per mantenere il massimo di questo periodo. Il margine e la percentuale di questo periodo non cambiano.",
+      "nextExpectedLabel": "Previsto per busta paga nel periodo successivo",
+      "nextExpectedHelp": "L'importo trattenuto da ogni busta paga dal prossimo azzeramento. Lascia vuoto per mantenere l'importo di questo periodo.",
+      "sameAsThisPeriod": "Come questo periodo",
+      "periods": {
+        "YEARLY": "Annuale"
+      },
+      "validation": {
+        "billRequired": "Scegli la fattura stipendio",
+        "categoryRequired": "Scegli una categoria",
+        "yearlyMaximumRequired": "Inserisci il massimo annuo",
+        "resetDateRequired": "Inserisci la data di azzeramento",
+        "expectedRequired": "Inserisci l'importo previsto per busta paga",
+        "categoryDuplicate": "Questa categoria è già nell'elenco"
+      },
+      "categoriesLegend": "Categorie di trattenuta",
+      "addCategory": "+ Aggiungi un'altra categoria",
+      "removeCategory": "Rimuovi la categoria {index}",
+      "noDeductionLines": "Questa transazione non ha righe di trattenuta. Aggiungi prima le trattenute come righe suddivise negative sulla transazione."
+    },
+    "delete": {
+      "title": "Elimina regola di trattenuta",
+      "message": "Eliminare la regola {category} su {bill}? Le transazioni registrate non cambiano; la prossima busta paga registra la riga completa."
+    },
+    "toasts": {
+      "created": "{count, plural, one {Regola di trattenuta creata} other {# regole di trattenuta create}}",
+      "updated": "Regola di trattenuta aggiornata",
+      "deleted": "Regola di trattenuta eliminata",
+      "loadFailed": "Impossibile caricare le trattenute",
+      "createFailed": "Impossibile creare la regola di trattenuta",
+      "updateFailed": "Impossibile aggiornare la regola di trattenuta",
+      "deleteFailed": "Impossibile eliminare la regola di trattenuta"
+    }
+  }
+}

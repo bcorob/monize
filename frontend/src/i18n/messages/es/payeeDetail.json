@@ -94,6 +94,9 @@
     "largestValue": "{amount} el {date}",
     "overpaymentFor": "Beneficiario de amortización anticipada de",
     "website": "Sitio web",
+    "address": "Dirección",
+    "phone": "Teléfono",
+    "email": "Correo electrónico",
     "notes": "Notas"
   },
   "tabs": {
@@ -127,5 +130,23 @@
     "needsMoreHistory": "Se necesitan al menos {years} años de historial para distinguir un patrón estacional del ruido.",
     "empty": "Aún no hay gastos para desglosar por mes",
     "monthTooltip": "{month}: {amount} de media en {years, plural, one {# año} other {# años}}"
+  },
+  "contactLookup": {
+    "button": "Buscar datos de contacto",
+    "inProgress": "Buscando...",
+    "nothingNew": "No se encontraron datos de contacto nuevos.",
+    "noProvider": "Configura una fuente en Ajustes de búsqueda de beneficiarios para encontrar datos de contacto.",
+    "failed": "No se pudo completar la búsqueda. Inténtelo de nuevo más tarde.",
+    "dialogTitle": "Confirmar los datos de contacto",
+    "dialogSubtitle": "No se guarda nada de {name} hasta que confirme.",
+    "pickMatch": "Ese nombre coincide con {count, plural, one {# empresa} other {# empresas}}. Elija a la que paga:",
+    "unlabelledMatch": "Coincidencia sin nombre",
+    "willAdd": "Añadir",
+    "willReplace": "Reemplazar",
+    "cancel": "Cancelar",
+    "confirm": "{count, plural, one {Guardar # cambio} other {Guardar # cambios}}",
+    "applied": "{count, plural, one {Se guardó # dato de contacto} other {Se guardaron # datos de contacto}}",
+    "applyFailed": "No se pudieron guardar los datos de contacto",
+    "quotaExceeded": "Se han agotado las consultas de Google Places de este mes. Aumenta el límite en Ajustes de búsqueda de beneficiarios o espera al mes que viene."
   }
 }

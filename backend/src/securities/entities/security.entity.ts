@@ -13,6 +13,14 @@ import {
 import { ApiProperty } from "@nestjs/swagger";
 import { User } from "../../users/entities/user.entity";
 import { Tag } from "../../tags/entities/tag.entity";
+import { BondProgram } from "../../bonds/entities/bond-program.entity";
+
+/** NUMERIC(9,4) comes back from pg as a string; keep it a number. */
+const numericTransformer = {
+  to: (value: number | null): number | null => value,
+  from: (value: string | null): number | null =>
+    value === null ? null : Number(value),
+};
 
 @Entity("securities")
 @Unique(["userId", "symbol"])
@@ -85,6 +93,25 @@ export class Security {
   skipPriceUpdates: boolean;
 
   @ApiProperty({
+    nullable: true,
+    description:
+      "Daily quoted-price movement threshold (%); null disables alerts",
+  })
+  @Column({
+    type: "numeric",
+    name: "price_alert_percent",
+    precision: 9,
+    scale: 4,
+    nullable: true,
+    transformer: numericTransformer,
+  })
+  priceAlertPercent: number | null;
+
+  @ApiProperty({ default: false })
+  @Column({ name: "price_chart_enabled", type: "boolean", default: false })
+  priceChartEnabled: boolean;
+
+  @ApiProperty({
     example: "Technology",
     description: "Stock sector from Yahoo Finance",
   })
@@ -146,7 +173,7 @@ export class Security {
   @ApiProperty({
     example: "yahoo",
     description:
-      "Per-security quote provider override ('yahoo' | 'msn'); NULL = use user default",
+      "Per-security quote provider override ('yahoo' | 'msn' | 'lse' | 'deutsche_boerse' | 'html_table'); NULL = use user default",
     nullable: true,
   })
   @Column({
@@ -155,7 +182,23 @@ export class Security {
     nullable: true,
     name: "quote_provider",
   })
-  quoteProvider: "yahoo" | "msn" | null;
+  // Written-out literals, not the QuoteProviderName alias: entity-varchar-capacity.spec.ts
+  // reads this annotation to check the longest value against the column width.
+  quoteProvider:
+    "yahoo" | "msn" | "lse" | "deutsche_boerse" | "html_table" | null;
+
+  /**
+   * The web page whose price table the `html_table` provider reads for this
+   * security. Ignored by every other provider.
+   */
+  @ApiProperty({
+    example:
+      "https://www.ariva.de/1-unze-kruegerrand-gold-kurs/kurse/historische-kurse",
+    nullable: true,
+    required: false,
+  })
+  @Column({ type: "varchar", length: 2048, nullable: true, name: "quote_url" })
+  quoteUrl: string | null;
 
   @ApiProperty({
     example: "a1u3p2",
@@ -208,6 +251,33 @@ export class Security {
   @ApiProperty({ required: false, nullable: true })
   @Column({ type: "time", nullable: true, name: "market_close_time" })
   marketCloseTime: string | null;
+
+  @ApiProperty({
+    nullable: true,
+    description:
+      "The bond program (the product, e.g. EDO; GET /bonds/programs) this security is linked to " +
+      "(global catalog row). A linked security is priced by the bond engine only, never by a quote provider.",
+  })
+  @Column({ type: "uuid", nullable: true, name: "bond_program_id" })
+  bondProgramId: string | null;
+
+  @ApiProperty({
+    description:
+      "Fetch every new series of the linked program automatically (the daily series job).",
+  })
+  @Column({ type: "boolean", default: false, name: "bond_auto_fetch" })
+  bondAutoFetch: boolean;
+
+  // Declared so the integration schema, which is built from the entities, carries
+  // the `fk_securities_bond_program ... ON DELETE RESTRICT` of the migration:
+  // a program is never deleted from under a security that points at it. Never
+  // loaded; `bondProgramId` is what the code reads and writes.
+  @ManyToOne(() => BondProgram, { onDelete: "RESTRICT", nullable: true })
+  @JoinColumn({
+    name: "bond_program_id",
+    foreignKeyConstraintName: "fk_securities_bond_program",
+  })
+  bondProgram?: BondProgram | null;
 
   @ApiProperty({ description: "User-defined tags classifying this security" })
   @ManyToMany(() => Tag)

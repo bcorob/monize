@@ -11,13 +11,16 @@ const configState = { current: { accountIds: [] as string[], view: 'region' as '
 vi.mock('@/hooks/useWidgetConfig', () => ({
   useWidgetConfig: () => ({ config: configState.current, updateConfig: vi.fn() }),
 }));
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (n: number) => `$${n}`,
-    formatCurrencyAxis: (n: number) => `$${n}`,
-  }),
-}));
-// A currency listed here converts to null (no rate), so its holdings are
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (n: number) => `$${n}`,
+      formatCurrencyAxis: (n: number) => `$${n}`,
+    }),
+  };
+});// A currency listed here converts to null (no rate), so its holdings are
 // dropped from the region/exchange aggregation the way the real hook does.
 const unconvertible = { current: new Set<string>() };
 vi.mock('@/hooks/useExchangeRates', () => ({
@@ -28,12 +31,12 @@ vi.mock('@/hooks/useExchangeRates', () => ({
   }),
 }));
 
-const getPortfolioSummary = vi.fn();
+const getPortfolioValuation = vi.fn();
 const getSecurities = vi.fn();
 const getCountryWeightings = vi.fn();
 vi.mock('@/lib/investments', () => ({
   investmentsApi: {
-    getPortfolioSummary: (...a: unknown[]) => getPortfolioSummary(...a),
+    getPortfolioValuation: (...a: unknown[]) => getPortfolioValuation(...a),
     getSecurities: (...a: unknown[]) => getSecurities(...a),
     getCountryWeightings: (...a: unknown[]) => getCountryWeightings(...a),
   },
@@ -59,7 +62,7 @@ async function renderWidget() {
 
 describe('GeographicAllocationWidget', () => {
   beforeEach(() => {
-    getPortfolioSummary.mockReset().mockResolvedValue({
+    getPortfolioValuation.mockReset().mockResolvedValue({
       holdings: [holding('s-nyse', 700), holding('s-lse', 300)],
       holdingsByAccount: [],
     });
@@ -102,7 +105,7 @@ describe('GeographicAllocationWidget', () => {
     // remaining bars are a share of the convertible subset, not of the whole
     // portfolio, so a note must say so rather than letting them read as 100%.
     unconvertible.current = new Set(['GBP']);
-    getPortfolioSummary.mockResolvedValue({
+    getPortfolioValuation.mockResolvedValue({
       holdings: [holding('s-nyse', 700), holding('s-lse', 300, 'GBP')],
       holdingsByAccount: [],
     });
@@ -118,7 +121,7 @@ describe('GeographicAllocationWidget', () => {
 
   it('explains the empty state as partial when every holding was dropped', async () => {
     unconvertible.current = new Set(['GBP']);
-    getPortfolioSummary.mockResolvedValue({
+    getPortfolioValuation.mockResolvedValue({
       holdings: [holding('s-lse', 300, 'GBP')],
       holdingsByAccount: [],
     });
@@ -132,12 +135,43 @@ describe('GeographicAllocationWidget', () => {
     // missing region rate must not paint a partial note over it.
     unconvertible.current = new Set(['GBP']);
     configState.current = { accountIds: [], view: 'country' };
-    getPortfolioSummary.mockResolvedValue({
+    getPortfolioValuation.mockResolvedValue({
       holdings: [holding('s-nyse', 700), holding('s-lse', 300, 'GBP')],
       holdingsByAccount: [],
     });
     await renderWidget();
     expect(screen.getByText('United States')).toBeInTheDocument();
     expect(screen.queryByText(/partial total/i)).not.toBeInTheDocument();
+  });
+
+  // Region and exchange classify a holding by where it is listed, so a globally
+  // diversified fund bought on the NYSE counts as North America. The chart says
+  // so rather than being left to read as economic exposure.
+  const LISTING_NOTE =
+    'Grouped by where each holding is listed. Switch to Country to see inside funds.';
+
+  const oneUsHolding = () => {
+    getPortfolioValuation.mockResolvedValue({ holdings: [holding('s1', 1000)] });
+    getSecurities.mockResolvedValue([security('s1', 'NYSE')]);
+    getCountryWeightings.mockResolvedValue({
+      items: [{ country: 'United States', totalValue: 1000, percentage: 100 }],
+      totalPortfolioValue: 1000,
+      totalDirectValue: 1000,
+      totalEtfValue: 0,
+      unclassifiedValue: 0,
+    });
+  };
+
+  it('says the region view groups by listing', async () => {
+    oneUsHolding();
+    await renderWidget();
+    expect(screen.getByText(LISTING_NOTE)).toBeInTheDocument();
+  });
+
+  it('leaves the caveat off the country view, which is the look-through', async () => {
+    oneUsHolding();
+    configState.current = { accountIds: [], view: 'country' };
+    await renderWidget();
+    expect(screen.queryByText(LISTING_NOTE)).toBeNull();
   });
 });

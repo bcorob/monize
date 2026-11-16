@@ -18,6 +18,8 @@ export const EMBEDDED_INVESTMENT_SPLIT_ACTIONS: ReadonlySet<InvestmentAction> =
     InvestmentAction.REINVEST_INTEREST,
     InvestmentAction.REINVEST_CAPITAL_GAIN_SHORT,
     InvestmentAction.REINVEST_CAPITAL_GAIN_LONG,
+    // Cash in like a dividend; the basis reduction is the replay's, not the split's.
+    InvestmentAction.RETURN_OF_CAPITAL,
   ]);
 
 export function isInvestmentActionAllowedInSplit(
@@ -32,7 +34,8 @@ export function isInvestmentActionAllowedInSplit(
  * embedded investment split's amount matches the implied cash side.
  *
  * Negative = cash leaves the brokerage cash account (BUY).
- * Positive = cash arrives in the brokerage cash account (SELL, DIVIDEND, etc).
+ * Positive = cash arrives in the brokerage cash account (SELL, DIVIDEND,
+ *            RETURN_OF_CAPITAL, etc).
  * Zero     = no cash side (REINVEST and the share-only actions).
  */
 export function computeInvestmentCashImpact(
@@ -42,20 +45,38 @@ export function computeInvestmentCashImpact(
   commission: number,
   /** Accrued interest paid out with a redemption; see `disposalCashAmount`. */
   accruedInterest: number = 0,
+  /**
+   * The row's executed total, when it has one. The total is the fact and the
+   * price is derived from it (`investment-amount.util.ts`), so a caller holding
+   * a stored row passes it rather than letting the cash leg be recomputed from
+   * a price that is only a rounded quotient. Omitted, the figure comes from
+   * `quantity * price` as it always did.
+   */
+  totalAmount?: number | null,
 ): number {
   const q = Number(quantity) || 0;
   const p = Number(price) || 0;
   const c = Number(commission) || 0;
+  const stated =
+    totalAmount === undefined ||
+    totalAmount === null ||
+    !Number.isFinite(Number(totalAmount))
+      ? null
+      : Math.abs(Number(totalAmount));
 
   switch (baseInvestmentAction(action)) {
     case InvestmentAction.BUY:
-      return -(q * p + c);
+      return stated === null ? -(q * p + c) : -stated;
     case InvestmentAction.SELL:
-      return disposalCashAmount(q * p - c, accruedInterest);
+      return disposalCashAmount(
+        stated === null ? q * p - c : stated,
+        accruedInterest,
+      );
     case InvestmentAction.DIVIDEND:
     case InvestmentAction.INTEREST:
     case InvestmentAction.CAPITAL_GAIN:
-      return (q || 1) * p;
+    case InvestmentAction.RETURN_OF_CAPITAL:
+      return stated === null ? (q || 1) * p : stated;
     case InvestmentAction.REINVEST:
       return 0;
     default:

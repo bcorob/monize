@@ -14,7 +14,7 @@ import { describe, it, expect } from 'vitest';
  * author reaches for `useState('normal')` because that is what the list beside
  * it looked like, and nothing fails. So the rule is a scan rather than a
  * paragraph -- none of those files was wrong on its own, which is exactly the
- * shape `frontend/CLAUDE.md` says only a source scan can hold.
+ * shape `docs/frontend/tables-and-registers.md` says only a source scan can hold.
  */
 
 const SRC = path.join(process.cwd(), 'src');

@@ -3,6 +3,8 @@ import { TypeOrmModule } from "@nestjs/typeorm";
 import { InvestmentReportsService } from "./investment-reports.service";
 import { InvestmentReportDataService } from "./investment-report-data.service";
 import { InvestmentReportsController } from "./investment-reports.controller";
+import { InvestmentTransactionSummaryService } from "./investment-transaction-summary.service";
+import { InvestmentTransactionSummaryController } from "./investment-transaction-summary.controller";
 import { InvestmentReport } from "./entities/investment-report.entity";
 import { InvestmentTransaction } from "../securities/entities/investment-transaction.entity";
 import { Holding } from "../securities/entities/holding.entity";
@@ -25,8 +27,15 @@ import { ActionHistoryModule } from "../action-history/action-history.module";
     CurrenciesModule,
     ActionHistoryModule,
   ],
-  providers: [InvestmentReportsService, InvestmentReportDataService],
-  controllers: [InvestmentReportsController],
+  providers: [
+    InvestmentReportsService,
+    InvestmentReportDataService,
+    InvestmentTransactionSummaryService,
+  ],
+  controllers: [
+    InvestmentReportsController,
+    InvestmentTransactionSummaryController,
+  ],
   exports: [InvestmentReportsService],
 })
 export class InvestmentReportsModule {}

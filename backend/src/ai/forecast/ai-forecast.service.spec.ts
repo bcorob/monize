@@ -11,6 +11,7 @@ import {
 } from "./forecast-aggregator.service";
 import { UserPreference } from "../../users/entities/user-preference.entity";
 import { createScopedDbMocks } from "../../test-helpers/scoped-db-testing";
+import { Currency } from "../../currencies/entities/currency.entity";
 
 jest.mock("../../common/db/scoped-db", () =>
   jest
@@ -23,6 +24,7 @@ describe("AiForecastService", () => {
 
   let mockUsageLogRepo: Record<string, any>;
   let mockPrefRepo: Record<string, jest.Mock>;
+  let mockCurrencyRepo: Record<string, jest.Mock>;
   let mockAiService: Partial<Record<keyof AiService, jest.Mock>>;
   let mockUsageService: Partial<Record<keyof AiUsageService, jest.Mock>>;
   let mockAggregatorService: Partial<
@@ -66,6 +68,8 @@ describe("AiForecastService", () => {
       ],
       accountBalances: {
         totalBalance: 15000,
+        knownBalanceSubtotal: 15000,
+        missingRatePairs: [],
         accounts: [
           {
             name: "Chequing",
@@ -86,6 +90,8 @@ describe("AiForecastService", () => {
           name: "Rent",
           amount: 1500,
           amountComplete: true,
+          amountEstimated: false,
+          estimateStatus: null,
           frequency: "MONTHLY",
           nextDueDate: "2026-03-01",
           categoryName: "Housing",
@@ -102,6 +108,8 @@ describe("AiForecastService", () => {
         incomeVariability: 0.05,
       },
       recurringCharges: [],
+      fxComplete: true,
+      missingRatePairs: [],
       ...overrides,
     };
   }
@@ -172,6 +180,11 @@ describe("AiForecastService", () => {
       findOne: jest.fn().mockResolvedValue({ defaultCurrency: "USD" }),
     };
 
+    // A BTC row at four places, the precision a coin is stored at.
+    mockCurrencyRepo = {
+      find: jest.fn().mockResolvedValue([{ code: "BTC", decimalPlaces: 4 }]),
+    };
+
     mockAiService = {
       complete: jest.fn().mockResolvedValue({
         content: makeValidAiResponse(),
@@ -197,6 +210,7 @@ describe("AiForecastService", () => {
           useValue: createScopedDbMocks([
             [UserPreference, mockPrefRepo],
             [AiUsageLog, mockUsageLogRepo],
+            [Currency, mockCurrencyRepo],
           ]).dataSource,
         },
         { provide: AiService, useValue: mockAiService },
@@ -425,6 +439,127 @@ describe("AiForecastService", () => {
       expect(result.narrativeSummary.length).toBe(5000);
     });
 
+    it("reports an unknown balance and names the missing pair instead of a mixed-currency sum", async () => {
+      mockAggregatorService.computeAggregates!.mockResolvedValue(
+        makeAggregates({
+          fxComplete: false,
+          missingRatePairs: ["EUR->USD"],
+          accountBalances: {
+            totalBalance: null,
+            knownBalanceSubtotal: 5000,
+            missingRatePairs: ["EUR->USD"],
+            accounts: [],
+          },
+        }),
+      );
+
+      const result = await service.generateForecast(userId);
+
+      expect(result.currentBalance).toBeNull();
+      expect(result.currentBalanceKnownSubtotal).toBe(5000);
+      expect(result.fxComplete).toBe(false);
+      expect(result.missingRatePairs).toEqual(["EUR->USD"]);
+      const prompt =
+        mockAiService.complete!.mock.calls[0][1].messages[0].content;
+      expect(prompt).toContain(
+        "Total balance: unknown (no exchange rate for EUR->USD)",
+      );
+      expect(prompt).toContain("EUR->USD) are left out");
+    });
+
+    it("states a detected recurring charge in the forecast's currency (issue #2155)", async () => {
+      const charge = (
+        payeeName: string,
+        currencyCode: string,
+        currentAmount: number,
+        convertedCurrent: number | null,
+      ) => ({
+        payeeName,
+        payeeId: null,
+        currencyCode,
+        amounts: [currentAmount, currentAmount, currentAmount],
+        dates: ["2026-01-01", "2026-02-01", "2026-03-01"],
+        frequency: "monthly",
+        currentAmount,
+        previousAmount: currentAmount,
+        categoryName: "Subscriptions",
+        categoryId: null,
+        converted: {
+          currency: "USD",
+          currentAmount: convertedCurrent,
+          previousAmount: convertedCurrent,
+        },
+      });
+      mockAggregatorService.computeAggregates!.mockResolvedValue(
+        makeAggregates({
+          recurringCharges: [
+            charge("Netflix", "USD", 15.99, 15.99),
+            charge("Spotify", "EUR", 10, 11.5),
+            charge("Hulu", "GBP", 8, null),
+          ],
+        }),
+      );
+
+      await service.generateForecast(userId);
+
+      const prompt =
+        mockAiService.complete!.mock.calls[0][1].messages[0].content;
+      expect(prompt).toContain("Netflix (monthly): latest=15.99,");
+      expect(prompt).toContain(
+        "Spotify (monthly): latest=11.50 (billed 10.00 EUR),",
+      );
+      expect(prompt).toContain(
+        "Hulu (monthly): latest=unknown (no GBP->USD exchange rate; billed 8.00 GBP),",
+      );
+    });
+
+    it("prints a coin balance at its currency row's places, not Intl's two", async () => {
+      mockAggregatorService.computeAggregates!.mockResolvedValue(
+        makeAggregates({
+          accountBalances: {
+            totalBalance: 1715.63,
+            knownBalanceSubtotal: 1715.63,
+            missingRatePairs: [],
+            accounts: [
+              {
+                name: "Wallet",
+                accountType: "CRYPTO",
+                balance: 0.0125,
+                currencyCode: "BTC",
+              },
+              {
+                name: "Chequing",
+                accountType: "CHEQUING",
+                balance: 5000,
+                currencyCode: "USD",
+              },
+            ],
+          },
+        }),
+      );
+
+      await service.generateForecast(userId);
+
+      const prompt =
+        mockAiService.complete!.mock.calls[0][1].messages[0].content;
+      expect(prompt).toContain("Wallet (CRYPTO): 0.0125 BTC");
+      expect(prompt).toContain("Chequing (CHEQUING): 5,000.00 USD");
+      // Only the non-ISO code is read.
+      expect(mockCurrencyRepo.find).toHaveBeenCalledTimes(1);
+      expect(
+        JSON.stringify(mockCurrencyRepo.find!.mock.calls[0][0].where.code),
+      ).toContain("BTC");
+      expect(
+        JSON.stringify(mockCurrencyRepo.find!.mock.calls[0][0].where.code),
+      ).not.toContain("USD");
+    });
+
+    it("reads no currency row when every account is in an ISO currency", async () => {
+      await service.generateForecast(userId);
+
+      expect(mockCurrencyRepo.find).not.toHaveBeenCalled();
+    });
+
     it("calls aiService.complete with correct feature name", async () => {
       await service.generateForecast(userId);
 
@@ -435,6 +570,56 @@ describe("AiForecastService", () => {
           maxTokens: 4096,
         }),
         "forecast",
+      );
+    });
+
+    it("labels an estimated bill, and an unknown estimate as no history rather than a missing rate (issue #2096)", async () => {
+      const aggregates = await mockAggregatorService.computeAggregates!(
+        userId,
+        "USD",
+      );
+      const bill = aggregates.scheduledTransactions[0];
+      mockAggregatorService.computeAggregates!.mockResolvedValue({
+        ...aggregates,
+        scheduledTransactions: [
+          {
+            ...bill,
+            name: "Heating",
+            amount: 212.5,
+            amountEstimated: true,
+            estimateStatus: "estimated",
+          },
+          {
+            ...bill,
+            name: "Water",
+            amount: null,
+            amountComplete: false,
+            amountEstimated: true,
+            estimateStatus: "no-history",
+          },
+          {
+            ...bill,
+            name: "Hydro",
+            amount: null,
+            amountComplete: false,
+            amountEstimated: true,
+            estimateStatus: "missing-rate",
+          },
+        ],
+      });
+
+      await service.generateForecast(userId);
+
+      const sent = JSON.stringify(mockAiService.complete!.mock.calls[0]);
+      expect(sent).toContain(
+        "Heating: 212.50 (estimated from payment history)",
+      );
+      expect(sent).toContain(
+        "Water: unknown (estimated from payment history, which has no usable payments yet)",
+      );
+      expect(sent).not.toContain("Water: unknown (no current exchange rate)");
+      expect(sent).toContain(
+        "Hydro: unknown (estimated from payment history, but a past payment's currency has no current exchange rate)",
       );
     });
 

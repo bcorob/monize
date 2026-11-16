@@ -2,12 +2,164 @@ import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import * as nodemailer from "nodemailer";
 import { Transporter } from "nodemailer";
+import { resolvePositiveInt } from "../common/env-number.util";
+
+/**
+ * What this replica's own SMTP transport has done lately: its sends, and its
+ * connection probes (`verifyConnection`). Purely in-process and forgotten on
+ * restart, so it is only ever a *reason to look*: the `SMTP_FAILURE` sweep
+ * probes the relay before it believes a failure recorded here, and the alert
+ * it raises dedupes across replicas at the database. Only about *configured*
+ * transport failures: an unconfigured deployment throws before the snapshot
+ * and is a setup state, not a failure.
+ *
+ * A **recipient rejection is not a transport failure** and is counted
+ * separately. `sendMail` rejects for both, but they are opposite facts: a
+ * `550 mailbox full` means the relay answered and refused this address, while
+ * `ECONNREFUSED` means nothing was delivered to anybody. Counting them
+ * together told every administrator that "email delivery is failing" and that
+ * "notifications are not being delivered" because one contact's mailbox was
+ * full -- re-raised every fifteen minutes for a day, on an outbox that was
+ * otherwise working. Same rule the provider breaker uses: an answer, however
+ * bad, proves the host answered.
+ */
+export interface EmailFailureSnapshot {
+  lastFailureAt: Date | null;
+  /** Bounded copy of the last transport error's message. */
+  lastFailureMessage: string | null;
+  lastSuccessAt: Date | null;
+  failuresSinceSuccess: number;
+  /** Addresses the relay answered about and refused. Never raises the alert. */
+  recipientRejections: number;
+  /**
+   * When `verifyConnection` last probed the relay, or `null` if it never has.
+   * The probe's own record, apart from the sends': a relay that accepts a
+   * connection and a login can still fail every message, so a passing probe
+   * must not read as a delivered one.
+   */
+  lastProbeAt: Date | null;
+  /** The last probe's error, bounded; `null` when it connected or never ran. */
+  lastProbeError: string | null;
+}
+
+/**
+ * One file carried by an email.
+ *
+ * Deliberately the narrow subset of nodemailer's attachment shape this codebase
+ * needs -- a name, the bytes, and what they are -- rather than nodemailer's own
+ * type: a caller must not be able to hand the transport a `path` or a `href`
+ * and make the SMTP layer read a file or fetch a URL on its behalf.
+ */
+export interface EmailAttachment {
+  filename: string;
+  content: Buffer;
+  contentType: string;
+}
+
+/** Everything about a send beyond the address, the subject and the body. */
+export interface SendMailOptions {
+  attachments?: EmailAttachment[];
+}
+
+const FAILURE_MESSAGE_MAX_LENGTH = 300;
+
+/**
+ * Codes nodemailer reports when the message never reached the relay, plus
+ * `EAUTH` -- credentials the server rejected outright, which is a deployment
+ * fault that stops every send rather than one address failing.
+ */
+const TRANSPORT_FAILURE_CODES = new Set([
+  "EAUTH",
+  "ECONNECTION",
+  "ECONNREFUSED",
+  "EDNS",
+  "ESOCKET",
+  "ETIMEDOUT",
+  "ETLS",
+]);
+
+/**
+ * Whether this rejection says the deployment cannot send mail at all, as
+ * opposed to this recipient or this message being refused.
+ *
+ * An SMTP `responseCode` means the relay answered: 4xx/5xx about a message is
+ * that message's problem (a full mailbox, a rejected sender, a spam verdict),
+ * not an outage -- except for an authentication failure, where the answer is
+ * "these credentials are wrong" and nothing will ever be delivered. Anything
+ * with no response at all is transport.
+ */
+export function isSmtpTransportFailure(error: unknown): boolean {
+  const code = (error as { code?: unknown } | null)?.code;
+  if (typeof code === "string" && TRANSPORT_FAILURE_CODES.has(code)) {
+    return true;
+  }
+  const responseCode = (error as { responseCode?: unknown } | null)
+    ?.responseCode;
+  return typeof responseCode !== "number";
+}
+
+const DEFAULT_SMTP_PORT = 587;
+/** The only port that speaks TLS from the first byte; everything else is STARTTLS. */
+const IMPLICIT_TLS_PORT = 465;
+const MAX_TCP_PORT = 65535;
+
+export interface ResolvedSmtpTransportSecurity {
+  port: number;
+  /** True for implicit TLS (TLS before the greeting), false for STARTTLS. */
+  secure: boolean;
+  /** A supplied port that was not a usable TCP port, so the default was used. */
+  portInvalid: boolean;
+}
+
+/**
+ * Decide the port and the TLS mode from the deployment's raw environment.
+ *
+ * `ConfigService` hands back `process.env` unchanged, so `SMTP_PORT` is the
+ * **string** `"465"` in every real deployment and a number only in a test that
+ * mocks the reader. `port === 465` is therefore false against Gmail's implicit
+ * TLS port, the transport opens in cleartext and sends `EHLO`, and the relay --
+ * which expects a TLS ClientHello -- hangs up without answering. Nodemailer
+ * reports that as `Error: Unexpected socket close`, whose stack points at a
+ * timer rather than at this decision. Coerce through `resolvePositiveInt`, the
+ * repository's rule for every numeric environment variable.
+ *
+ * `SMTP_SECURE` is documented in `README.md` and shipped by the Helm
+ * configmap, so it is read here: it can only turn implicit TLS *on*, for a
+ * relay offering it on a non-standard port. It cannot turn it off, because
+ * port 465 has no cleartext phase to fall back to and the chart's own default
+ * is the string `"false"` -- honouring that literally would break exactly the
+ * port-465 deployments this fix is for.
+ */
+export function resolveSmtpTransportSecurity(
+  rawPort: unknown,
+  rawSecure: unknown,
+): ResolvedSmtpTransportSecurity {
+  const resolved = resolvePositiveInt(rawPort, DEFAULT_SMTP_PORT);
+  const outOfRange = resolved.value > MAX_TCP_PORT;
+  const port = outOfRange ? DEFAULT_SMTP_PORT : resolved.value;
+  const secureRequested =
+    typeof rawSecure === "string"
+      ? rawSecure.trim().toLowerCase() === "true"
+      : rawSecure === true;
+  return {
+    port,
+    secure: port === IMPLICIT_TLS_PORT || secureRequested,
+    portInvalid: resolved.invalid || outOfRange,
+  };
+}
 
 @Injectable()
 export class EmailService implements OnModuleInit {
   private readonly logger = new Logger(EmailService.name);
   private transporter: Transporter | null = null;
   private configured = false;
+  private lastFailureAt: Date | null = null;
+  private lastFailureMessage: string | null = null;
+  private lastSuccessAt: Date | null = null;
+  private failuresSinceSuccess = 0;
+  private lastProbeAt: Date | null = null;
+  private lastProbeError: string | null = null;
+  private recipientRejections = 0;
 
   constructor(private configService: ConfigService) {}
 
@@ -21,9 +173,15 @@ export class EmailService implements OnModuleInit {
       return;
     }
 
-    const port = this.configService.get<number>("SMTP_PORT", 587);
-    // Port 465 uses implicit TLS; port 587 uses STARTTLS (secure must be false)
-    const secure = port === 465;
+    const { port, secure, portInvalid } = resolveSmtpTransportSecurity(
+      this.configService.get("SMTP_PORT"),
+      this.configService.get("SMTP_SECURE"),
+    );
+    if (portInvalid) {
+      this.logger.warn(
+        `SMTP_PORT must be an integer from 1 to ${MAX_TCP_PORT}; using ${DEFAULT_SMTP_PORT}`,
+      );
+    }
 
     const transportOptions: Record<string, unknown> = {
       host,
@@ -32,7 +190,8 @@ export class EmailService implements OnModuleInit {
       auth: { user, pass: password },
     };
 
-    // For port 587, require STARTTLS upgrade (don't fall back to plaintext)
+    // Without implicit TLS, require the STARTTLS upgrade rather than falling
+    // back to plaintext.
     if (!secure) {
       transportOptions.requireTLS = true;
     }
@@ -47,7 +206,34 @@ export class EmailService implements OnModuleInit {
     return { configured: this.configured };
   }
 
-  async sendMail(to: string, subject: string, html: string): Promise<void> {
+  /** Read by SystemAlertMonitorService's SMTP-health sweep. */
+  getFailureSnapshot(): EmailFailureSnapshot {
+    return {
+      lastFailureAt: this.lastFailureAt,
+      lastFailureMessage: this.lastFailureMessage,
+      lastSuccessAt: this.lastSuccessAt,
+      failuresSinceSuccess: this.failuresSinceSuccess,
+      recipientRejections: this.recipientRejections,
+      lastProbeAt: this.lastProbeAt,
+      lastProbeError: this.lastProbeError,
+    };
+  }
+
+  /**
+   * Send one message, optionally carrying files.
+   *
+   * `options` is absent for every notification email: the message then goes out
+   * with no `attachments` key at all, so nothing about the existing sends
+   * changes. The off-site backup destination
+   * (`src/backup/offsite/backup-offsite-email.sender.ts`) is what needs the
+   * other branch -- the encrypted artifact itself is the mail.
+   */
+  async sendMail(
+    to: string,
+    subject: string,
+    html: string,
+    options?: SendMailOptions,
+  ): Promise<void> {
     if (!this.transporter || !this.configured) {
       throw new Error("SMTP is not configured");
     }
@@ -56,17 +242,86 @@ export class EmailService implements OnModuleInit {
       "EMAIL_FROM",
       "noreply@monize.app",
     );
-    await this.transporter.sendMail({ from, to, subject, html });
+    const attachments = options?.attachments ?? [];
+    try {
+      await this.transporter.sendMail({
+        from,
+        to,
+        subject,
+        html,
+        ...(attachments.length > 0 ? { attachments } : {}),
+      });
+    } catch (error) {
+      // Record for the SMTP-health sweep, then rethrow unchanged -- callers
+      // already own their per-recipient isolation and their own logging.
+      if (isSmtpTransportFailure(error)) {
+        this.recordTransportFailure(error);
+      } else {
+        // The relay answered and refused this address or message. Counted so
+        // the state is visible, never as evidence that delivery is broken.
+        this.recipientRejections += 1;
+      }
+      throw error;
+    }
+    this.recordTransportSuccess();
     this.logger.log(`Email sent to ${to}: ${subject}`);
   }
 
+  /**
+   * Open a connection to the relay (greeting, STARTTLS or implicit TLS,
+   * authentication) without sending a message, and say whether it worked.
+   *
+   * This is also the health probe `SystemAlertMonitorService.sweepEmailHealth`
+   * runs before it raises `SMTP_FAILURE`. Its outcome goes in the probe's own
+   * fields (`lastProbeAt`, `lastProbeError`) and never in the send record: a
+   * relay can accept the greeting, TLS and login and still fail every message
+   * during DATA, so a passing probe recorded as a delivery would erase exactly
+   * the failures the alert exists to report. The sweep weighs the two records
+   * itself.
+   *
+   * Unconfigured returns `false` and records nothing -- a setup state, not a
+   * failure, the same rule `sendMail` follows.
+   */
   async verifyConnection(): Promise<boolean> {
     if (!this.transporter) return false;
     try {
       await this.transporter.verify();
-      return true;
-    } catch {
+    } catch (error) {
+      // Every `verify()` failure is a transport failure, recorded without
+      // consulting `isSmtpTransportFailure`. That helper separates "the relay
+      // refused this recipient or message" (an SMTP `responseCode`) from "the
+      // deployment cannot send", but a probe carries no recipient and no
+      // message: a coded answer here (a 421 greeting, a refused EHLO or
+      // STARTTLS, a 535 login) refused the connection itself, so nothing this
+      // replica sends can be delivered either. Asking the helper would file a
+      // 421 greeting as a recipient rejection.
+      this.lastProbeAt = new Date();
+      this.lastProbeError = boundedMessage(error);
       return false;
     }
+    this.lastProbeAt = new Date();
+    this.lastProbeError = null;
+    return true;
   }
+
+  /** The relay could not be used at all: nothing reached anybody. */
+  private recordTransportFailure(error: unknown): void {
+    this.lastFailureAt = new Date();
+    this.lastFailureMessage = boundedMessage(error);
+    this.failuresSinceSuccess += 1;
+  }
+
+  /** The relay accepted a message. */
+  private recordTransportSuccess(): void {
+    this.lastSuccessAt = new Date();
+    this.failuresSinceSuccess = 0;
+  }
+}
+
+/** An error's message, cut to what the snapshot keeps. */
+function boundedMessage(error: unknown): string {
+  return (error instanceof Error ? error.message : String(error)).slice(
+    0,
+    FAILURE_MESSAGE_MAX_LENGTH,
+  );
 }

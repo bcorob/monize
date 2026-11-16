@@ -8,6 +8,13 @@ import { captureAllChartsAsImages } from './pdf-export-charts';
 import { addSummaryCardsToPdf } from './pdf-export-cards';
 import { addTableToPdf, type CellValue } from './pdf-export-tables';
 import { PDF_FONT, registerPdfFonts } from './pdf-fonts';
+import { createLogger } from './logger';
+import { createTranslator } from 'next-intl';
+import { loadNamespaceMessages } from '@/i18n/messages';
+import { usePreferencesStore } from '@/store/preferencesStore';
+import { formatDate, formatTime, isoToDatetimeLocal, resolveTimezone } from './utils';
+
+const logger = createLogger('PdfExport');
 
 export type { PdfSummaryCard } from './pdf-export-cards';
 export type { CellValue } from './pdf-export-tables';
@@ -41,6 +48,45 @@ export interface PdfExportOptions {
   filename: string;
 }
 
+const ENGLISH_GENERATED_AT = 'Generated: {timestamp}';
+
+/**
+ * The "Generated: <date> <time>" header text in the reader's own preferences:
+ * date pattern, 12/24 hour clock, timezone and language. The 48 report callers
+ * pass nothing for it, so the lib reads the preferences store itself. Any
+ * failure to read the catalog leaves the English label; the PDF must still save.
+ */
+async function buildGeneratedLabel(now: Date): Promise<string> {
+  const prefs = usePreferencesStore.getState().preferences;
+  const language = prefs?.language;
+  const locale =
+    language && language !== 'xx' && language !== 'browser' ? language : undefined;
+
+  let timestamp: string;
+  try {
+    const local = isoToDatetimeLocal(now.toISOString(), resolveTimezone(prefs?.timezone));
+    const [datePart, timePart] = local.split('T');
+    timestamp = `${formatDate(datePart, prefs?.dateFormat || 'browser', locale)} ${formatTime(timePart, prefs?.timeFormat || '24h')}`;
+  } catch {
+    timestamp = formatDate(now, prefs?.dateFormat || 'browser', locale);
+  }
+
+  try {
+    const messages = await loadNamespaceMessages(locale ?? 'en', 'reports');
+    const t = createTranslator({
+      locale: locale ?? 'en',
+      messages: { reports: messages } as Parameters<typeof createTranslator>[0]['messages'],
+      namespace: 'reports.pdfExport',
+    });
+    if (t.has('generatedAt')) {
+      return t('generatedAt', { timestamp });
+    }
+  } catch (error) {
+    logger.warn('Could not load the PDF header label, using English', error);
+  }
+  return ENGLISH_GENERATED_AT.replace('{timestamp}', timestamp);
+}
+
 /**
  * Generates and downloads a PDF report.
  * Includes chart images (if container provided) and/or a data table.
@@ -66,7 +112,8 @@ export async function exportToPdf(options: PdfExportOptions): Promise<void> {
   const margin = 14;
 
   // Header
-  addHeader(doc, title, subtitle, pageWidth, margin);
+  const generatedLabel = await buildGeneratedLabel(new Date());
+  addHeader(doc, title, subtitle, pageWidth, margin, generatedLabel);
 
   let currentY = subtitle ? 32 : 26;
 
@@ -111,7 +158,7 @@ export async function exportToPdf(options: PdfExportOptions): Promise<void> {
             const estHeight = Math.min(maxHeight, colWidth / (rowCharts[0].width / rowCharts[0].height));
             if (currentY + estHeight > pageHeight - 20) {
               doc.addPage();
-              addHeader(doc, title, subtitle, pageWidth, margin);
+              addHeader(doc, title, subtitle, pageWidth, margin, generatedLabel);
               currentY = subtitle ? 32 : 26;
             }
 
@@ -147,7 +194,7 @@ export async function exportToPdf(options: PdfExportOptions): Promise<void> {
             // Page break if chart doesn't fit
             if (currentY + imgHeight > pageHeight - 20) {
               doc.addPage();
-              addHeader(doc, title, subtitle, pageWidth, margin);
+              addHeader(doc, title, subtitle, pageWidth, margin, generatedLabel);
               currentY = subtitle ? 32 : 26;
             }
 
@@ -159,7 +206,7 @@ export async function exportToPdf(options: PdfExportOptions): Promise<void> {
       }
     } catch (error) {
       // Chart capture failed; continue with table only
-      console.warn('PDF chart capture failed, generating table-only PDF:', error);
+      logger.warn('PDF chart capture failed, generating table-only PDF:', error);
     }
   }
 
@@ -173,7 +220,7 @@ export async function exportToPdf(options: PdfExportOptions): Promise<void> {
     // If charts took too much space, add a new page for the table
     if (hasChart && currentY > pageHeight - 60) {
       doc.addPage();
-      addHeader(doc, title, subtitle, pageWidth, margin);
+      addHeader(doc, title, subtitle, pageWidth, margin, generatedLabel);
       currentY = subtitle ? 32 : 26;
     }
     currentY = addTableToPdf(doc, tableData.headers, tableData.rows, {
@@ -191,7 +238,7 @@ export async function exportToPdf(options: PdfExportOptions): Promise<void> {
       // Page break if not enough space for title + a few rows
       if (currentY > pageHeight - 40) {
         doc.addPage();
-        addHeader(doc, title, subtitle, pageWidth, margin);
+        addHeader(doc, title, subtitle, pageWidth, margin, generatedLabel);
         currentY = subtitle ? 32 : 26;
       }
 
@@ -230,6 +277,7 @@ function addHeader(
   subtitle: string | undefined,
   pageWidth: number,
   margin: number,
+  generatedLabel: string,
 ): void {
   // Title
   doc.setFontSize(16);
@@ -246,18 +294,10 @@ function addHeader(
   }
 
   // Generation timestamp on the right
-  const now = new Date();
-  const timestamp = now.toLocaleDateString('en-US', {
-    year: 'numeric',
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
   doc.setFontSize(8);
   doc.setFont(PDF_FONT, 'normal');
   doc.setTextColor(156, 163, 175);
-  doc.text(`Generated: ${timestamp}`, pageWidth - margin, 14, { align: 'right' });
+  doc.text(generatedLabel, pageWidth - margin, 14, { align: 'right' });
 
   // Separator line
   const lineY = subtitle ? 27 : 19;

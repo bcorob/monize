@@ -1,4 +1,13 @@
+import type { ContactLookupSource } from './payee';
 import type { InvestmentAction } from './investment';
+import type { RuleAction, RuleConditionNode, RuleTrigger } from './transaction-rule';
+import type { RuleStructurePlan } from './transaction-rule-run';
+import type {
+  RuleRunFilters,
+  RuleRunMatchedRow,
+  RuleRunResult,
+  RuleRunSkippedRow,
+} from './transaction-rule-run';
 
 export type AiProviderType = 'anthropic' | 'openai' | 'ollama' | 'ollama-cloud' | 'openai-compatible' | 'mcp_relay';
 
@@ -92,12 +101,20 @@ export interface AiUsageSummary {
   totalInputTokens: number;
   totalOutputTokens: number;
   totalEstimatedCostByCurrency: EstimatedCostByCurrency;
+  /** The reporting currency every `*InReportingCurrency` figure is in. */
+  reportingCurrency?: string;
+  /**
+   * The costs converted by the server, each day's at that day's rate (issue
+   * #2106); null while a cost has no admissible rate.
+   */
+  totalEstimatedCostInReportingCurrency?: number | null;
   byProvider: Array<{
     provider: string;
     requests: number;
     inputTokens: number;
     outputTokens: number;
     estimatedCostByCurrency: EstimatedCostByCurrency;
+    estimatedCostInReportingCurrency?: number | null;
   }>;
   byFeature: Array<{
     feature: string;
@@ -105,6 +122,7 @@ export interface AiUsageSummary {
     inputTokens: number;
     outputTokens: number;
     estimatedCostByCurrency: EstimatedCostByCurrency;
+    estimatedCostInReportingCurrency?: number | null;
   }>;
   recentLogs: Array<{
     id: string;
@@ -116,6 +134,7 @@ export interface AiUsageSummary {
     durationMs: number;
     estimatedCost: number | null;
     costCurrency: string | null;
+    estimatedCostInReportingCurrency?: number | null;
     createdAt: string;
   }>;
 }
@@ -169,7 +188,7 @@ export const AI_PROVIDER_DEFAULT_MODELS: Record<AiProviderType, string[]> = {
   'ollama-cloud': [
     'gpt-oss:120b-cloud',
     'gpt-oss:20b-cloud',
-    'deepseek-v3.1:671b-cloud',
+    'gemma4:31b-cloud',
   ],
   'openai-compatible': [],
   mcp_relay: [],
@@ -227,28 +246,55 @@ export interface ChartPayload {
   data: Array<{ label: string; value: number }>;
 }
 
-export type AiActionType =
-  | 'create_transaction'
-  | 'categorize_transaction'
-  | 'create_payee'
-  | 'update_payee'
-  | 'delete_payee'
-  | 'create_security'
-  | 'update_security'
-  | 'delete_security'
-  | 'create_investment_transaction'
-  | 'create_transactions'
-  | 'create_investment_transactions'
-  | 'update_transaction'
-  | 'delete_transaction'
-  | 'update_investment_transaction'
-  | 'delete_investment_transaction'
-  | 'create_transfer'
-  | 'update_transfer'
+/**
+ * Every action type the backend signs (`AI_ACTION_TYPES` in
+ * `backend/src/ai/actions/ai-action.types.ts`). `ai-action-types.contract.test.ts`
+ * reads that list and fails when the two differ, and `AI_ACTION_CARD_KIND`
+ * (`lib/ai-action-card.ts`) is a total map over it, so a new type cannot be
+ * added on one side only.
+ */
+export const AI_ACTION_TYPES = [
+  'create_transaction',
+  'categorize_transaction',
+  'create_payee',
+  'update_payee',
+  'delete_payee',
+  'create_security',
+  'update_security',
+  'delete_security',
+  'create_investment_transaction',
+  'create_transactions',
+  'create_investment_transactions',
+  'update_transaction',
+  'delete_transaction',
+  'update_investment_transaction',
+  'delete_investment_transaction',
+  'create_transfer',
+  'update_transfer',
   // Generic bulk envelope for update/delete/transfer-create batches proposed by
   // the unified manage_transactions tool. The descriptor carries an `operation`
   // discriminator the bulk card reads to pick its title and row layout.
-  | 'batch_actions';
+  'batch_actions',
+  // Transaction rules: one card for the four of them (`RuleConfirmationCard`).
+  'create_transaction_rule',
+  'update_transaction_rule',
+  'delete_transaction_rule',
+  'run_transaction_rule',
+  // Tags (`manage_tags`): one card each on the single card, or a batch_actions
+  // envelope with a `*_tag` operation on the bulk card.
+  'create_tag',
+  'update_tag',
+  'delete_tag',
+] as const;
+
+export type AiActionType = (typeof AI_ACTION_TYPES)[number];
+
+/** The four transaction-rule action types. */
+export type RuleAiActionType =
+  | 'create_transaction_rule'
+  | 'update_transaction_rule'
+  | 'delete_transaction_rule'
+  | 'run_transaction_rule';
 
 export type PendingActionStatus =
   | 'pending'
@@ -263,6 +309,26 @@ export interface PendingActionSplit {
   categoryName?: string | null;
   amount: number;
   memo?: string | null;
+  /** `"ai"` when the AI chose this line's category (email-receipt proposals). */
+  categorySource?: 'ai';
+  /** Tags the line keeps from the line it replaces. */
+  tagNames?: string[];
+}
+
+/**
+ * The tag change an edit makes on one existing split line: the line, named by
+ * its category, amount and memo, and the tags it gains (new ones among them)
+ * and loses.
+ */
+export interface PendingActionSplitTagChange {
+  categoryName: string | null;
+  amount: number;
+  memo?: string | null;
+  /** A transfer line: the account whose counterpart transaction changes too. */
+  legAccountName?: string;
+  tagNames?: string[];
+  newTagNames?: string[];
+  removeTagNames?: string[];
 }
 
 /** One chat file a create/update card will save on the transaction on approval. */
@@ -272,7 +338,23 @@ export interface PendingActionAttachment {
   byteSize: number;
 }
 
-export interface PendingActionPreview {
+/** Where a foreign-currency entry's exchange rate came from (the card says which). */
+export type ForeignEntryRateSource = 'supplied' | 'derived' | 'market';
+
+/**
+ * A cash create or edit card's foreign-currency entry: present only when the
+ * row is entered in another currency, or when an edit changes that entry;
+ * `originalCurrencyCode: null` means the edit removes it. `amount` above stays
+ * what the account is charged, in its own currency.
+ */
+export interface PendingActionForeignEntry {
+  originalAmount?: number | null;
+  originalCurrencyCode?: string | null;
+  exchangeRate?: number;
+  exchangeRateSource?: ForeignEntryRateSource;
+}
+
+export interface PendingActionPreview extends PendingActionForeignEntry {
   accountName?: string;
   amount?: number;
   currencyCode?: string;
@@ -286,13 +368,43 @@ export interface PendingActionPreview {
   payeeName?: string | null;
   /** True when approving a create_transaction will also create a new payee. */
   payeeWillBeCreated?: boolean;
+  /**
+   * Set on a create_payee card whose contact fields were looked up rather than
+   * supplied, so the card can label them as suggestions.
+   */
+  contactLookupSource?: ContactLookupSource | null;
   categoryName?: string | null;
+  /** `"ai"` when the AI chose `categoryName`. */
+  categorySource?: 'ai';
   newCategoryName?: string | null;
   currentCategoryName?: string | null;
   description?: string | null;
+  /** update_transaction: tag names the approval adds (the transaction keeps its own). */
+  tagNames?: string[];
+  /** The subset of `tagNames` the approval creates because the user has no such tag yet. */
+  newTagNames?: string[];
+  /** update_transaction / update_transfer: tag names the approval removes (the others stay). */
+  removeTagNames?: string[];
+  /** update_transaction: the tag changes the approval makes on existing split lines. */
+  splitTagChanges?: PendingActionSplitTagChange[];
+  /** update_transaction: the reference number ("Ref #") the approval sets; absent when it is left as it is. */
+  referenceNumber?: string;
   name?: string | null;
+  // Tag display fields (create_tag / update_tag / delete_tag); `name` is the
+  // tag's name after the action.
+  /** update_tag: the tag's current name, when the edit renames it. */
+  previousName?: string;
+  /** The colour (#RRGGBB) and icon the action sets: null clears, absent leaves it. */
+  tagColor?: string | null;
+  tagIcon?: string | null;
+  /** delete_tag: how many transactions and split lines carry the tag. */
+  tagCarriedCount?: number;
   /** Payee website, as the commit would store it. */
   website?: string | null;
+  /** Payee contact details, as the commit would store them. */
+  address?: string | null;
+  email?: string | null;
+  phone?: string | null;
   /**
    * True when an update_transaction / delete_transaction targets a reconciled
    * transaction. The card shows a warning line so the user knows approving will
@@ -321,6 +433,16 @@ export interface PendingActionPreview {
   cashAccountName?: string | null;
   cashCurrency?: string | null;
   cashAmount?: number | null;
+  /** REDEEM: the accrued interest riding on the cash movement. */
+  accruedInterest?: number;
+  /** The bond series a program-linked security's row acts on (e.g. EDO1036). */
+  bondSeriesCode?: string | null;
+  /** create_investment_transaction: the scheduled bill or deposit that approving this marks paid. */
+  scheduledName?: string | null;
+  /** create_investment_transaction: the due day (YYYY-MM-DD) of the occurrence of `scheduledName` it marks paid. */
+  scheduledDueDate?: string | null;
+  /** REDEEM of a bond-linked security: what the redemption pays, split. */
+  bondRedemptionSplit?: PendingActionRedemptionSplit | null;
   // create_security display fields (symbol/securityName/securityCurrency above
   // are reused for the ticker, full name, and currency).
   securityType?: string | null;
@@ -332,16 +454,113 @@ export interface PendingActionPreview {
    * valid rows and the flagged ones the bulk card greys out.
    */
   rows?: PendingActionPreviewRow[];
+  /**
+   * What the user's transaction rules will also do to a created transaction or
+   * transfer on approval (display-only). Absent when no rule matches.
+   */
+  ruleEffects?: PendingActionRuleEffects;
+  /** create/update/delete/run_transaction_rule: the rule and its test. */
+  rule?: PendingActionRule;
+}
+
+/** Names for the ids a rule's effects mention; a missing id is a deleted item. */
+export interface PendingActionRuleEffectsLabels {
+  /** The accounts a transfer or a split part names; absent in a card built before they were sent. */
+  accounts?: Record<string, string>;
+  categories: Record<string, string>;
+  payees: Record<string, string>;
+  tags: Record<string, string>;
+  rules: Record<string, string>;
+}
+
+/** The net change the rules make to a created row (`RuleEffectsPreview`, without the trace). */
+export interface PendingActionRuleEffects {
+  changes: {
+    categoryId?: string | null;
+    payeeId?: string | null;
+    /** The name `set_payee_from_text` chose, when no payee id is known for it. */
+    payeeName?: string;
+    /** A payee that does not exist yet and is created when the row is saved. */
+    createPayee?: string;
+    /** The description `set_description` writes. */
+    description?: string | null;
+    addTagIds: string[];
+    removeTagIds: string[];
+    /** A structural action's plan: the row becomes a transfer leg or a split. */
+    structure?: RuleStructurePlan;
+  };
+  aiReviewRequests: Array<{ ruleId: string; instruction: string }>;
+  labels: PendingActionRuleEffectsLabels;
+}
+
+/** Names for the ids a rule definition mentions (`RuleDefinitionLabels`). */
+export interface PendingActionRuleLabels {
+  accounts: Record<string, string>;
+  payees: Record<string, string>;
+  categories: Record<string, string>;
+  tags: Record<string, string>;
+}
+
+/** A rule definition as a card shows it (`AiActionRuleState`). */
+export interface PendingActionRuleState {
+  name: string;
+  enabled: boolean;
+  triggers: RuleTrigger[];
+  condition: RuleConditionNode;
+  actions: RuleAction[];
+  stopProcessing: boolean;
+  /** The active window, `YYYY-MM-DD`; null or absent is open on that side. */
+  activeFrom?: string | null;
+  activeTo?: string | null;
+}
+
+/** What running a rule on existing transactions would do (`AiActionRuleTestPreview`). */
+export interface PendingActionRuleTest {
+  matchedCount: number;
+  /** Transactions whose condition matched, changed or not; only 0 means it matches nothing. */
+  conditionMatchedCount: number;
+  scanned: number;
+  truncated: boolean;
+  /** The first rows that would change; the counts cover all of them. */
+  rows: RuleRunMatchedRow[];
+  /** The first rows left alone, and why. */
+  skipped: RuleRunSkippedRow[];
+  skippedCount: number;
+  aiReviewRequests: number;
+  labels: PendingActionRuleEffectsLabels;
+}
+
+/** The rule a rule card shows (`AiActionRulePreview`). */
+export interface PendingActionRule extends PendingActionRuleState {
+  labels: PendingActionRuleLabels;
+  /** update: the rule as stored now. */
+  current?: PendingActionRuleState;
+  /** run: the filters, as ids (`labels.accounts` names the accounts). */
+  filters?: RuleRunFilters;
+  test?: PendingActionRuleTest;
 }
 
 /** One row in a bulk confirmation card; `status: 'error'` rows are flagged. */
-export interface PendingActionPreviewRow {
+export interface PendingActionPreviewRow extends PendingActionForeignEntry {
   status: 'ok' | 'error';
   error?: string;
   // Payee display field (batch_actions with a payee operation).
   name?: string | null;
+  // Tag display fields (create_tag / update_tag / delete_tag); `name` is the
+  // tag's name after the action.
+  /** update_tag: the tag's current name, when the edit renames it. */
+  previousName?: string;
+  /** The colour (#RRGGBB) and icon the action sets: null clears, absent leaves it. */
+  tagColor?: string | null;
+  tagIcon?: string | null;
+  /** delete_tag: how many transactions and split lines carry the tag. */
+  tagCarriedCount?: number;
   /** Payee website, as the commit would store it. */
   website?: string | null;
+  /** Payee contact details, as the commit would store them. */
+  address?: string | null;
+  email?: string | null;
+  phone?: string | null;
   accountName?: string;
   amount?: number;
   currencyCode?: string;
@@ -364,9 +583,21 @@ export interface PendingActionPreviewRow {
     categoryName: string | null;
     amount: number;
     memo?: string | null;
+    tagNames?: string[];
   }>;
+  /** Bulk update: tag names the row adds, the new ones among them, and those it removes. */
+  tagNames?: string[];
+  newTagNames?: string[];
+  removeTagNames?: string[];
+  /** Bulk update: the tag changes the row makes on existing split lines. */
+  splitTagChanges?: PendingActionSplitTagChange[];
   /** True when this bulk update/delete row targets a reconciled transaction. */
   isReconciled?: boolean;
+  /**
+   * What the user's rules will also do to this created row on approval, with a
+   * transfer or split they add (display-only; the single card's shape).
+   */
+  ruleEffects?: PendingActionRuleEffects;
   investmentAction?: InvestmentAction;
   symbol?: string | null;
   securityName?: string | null;
@@ -378,6 +609,23 @@ export interface PendingActionPreviewRow {
   cashAccountName?: string | null;
   cashCurrency?: string | null;
   cashAmount?: number | null;
+  accruedInterest?: number;
+  bondSeriesCode?: string | null;
+  bondRedemptionSplit?: PendingActionRedemptionSplit | null;
+}
+
+/**
+ * A bond redemption's payout split into returned principal and interest, in the
+ * security's currency. `outcome`: `filled` (the server set price and accrued
+ * interest from it), `matches`, or `differs` (the figures the card shows differ
+ * from it by more than rounding).
+ */
+export interface PendingActionRedemptionSplit {
+  principal: number;
+  interest: number;
+  deduction: number;
+  payout: number;
+  outcome: 'filled' | 'matches' | 'differs';
 }
 
 /**
@@ -398,6 +646,8 @@ export interface PendingAction {
   resultCount?: number;
   /** Rows the bulk confirm skipped, by input index (set on success). */
   resultSkipped?: Array<{ index: number; reason: string }>;
+  /** run_transaction_rule: what the run changed and left alone (set on success). */
+  resultRuleRun?: RuleRunResult;
   errorMessage?: string;
 }
 
@@ -410,6 +660,8 @@ export interface ConfirmActionResponse {
   count?: number;
   /** Bulk actions: rows skipped best-effort, by input index. */
   skipped?: Array<{ index: number; reason: string }>;
+  /** run_transaction_rule: rows changed, rows left alone and why, and the undo entry. */
+  ruleRun?: RuleRunResult;
 }
 
 export interface StreamEvent {

@@ -1,6 +1,7 @@
 /**
- * The two share-price conversions the scheduled-investment dialogs share: given
- * a price, derive the total from a quantity, or the quantity from a total. Kept
+ * The share-price conversions the scheduled-investment dialogs share: given a
+ * price, derive the total from a quantity or the quantity from a total; given a
+ * quantity and a total, derive the price. Kept
  * in one place so the post dialog and the override editor cannot drift on the
  * rounding scale or the signed commission -- only on *which* of the two they
  * choose to run, which is a per-surface decision (see each call site) and is
@@ -10,6 +11,8 @@
  * commission moves the cash total (a buy costs price + commission; a sell nets
  * price - commission).
  */
+
+import { roundMoney } from '@/lib/format';
 
 /**
  * The latest usable market close from a security-price response, or null. Only a
@@ -28,17 +31,6 @@ export function usableClose(
   const price = Number(latest.closePrice);
   if (!Number.isFinite(price) || price <= 0) return null;
   return { price, date: latest.priceDate ?? null };
-}
-
-/**
- * Round to money precision (4dp, `decimal(20,4)`) -- the scale a total and a
- * balance are stored at. Kept here beside the fold so the two conversions and
- * their call sites round money one way. (Plain `Math.round`, matching the fold;
- * `lib/format.ts`'s `roundToDecimals` applies an epsilon nudge and is a different
- * strategy on the boundary -- do not swap one for the other.)
- */
-export function roundMoney(value: number): number {
-  return Math.round(value * 10_000) / 10_000;
 }
 
 /** Round a share price to its stored/display precision (6dp). */
@@ -72,4 +64,20 @@ export function quantityFromTotal(
   const cost = total - sign * commission;
   const qty = Math.max(0, cost / price);
   return Math.round(qty * 100_000_000) / 100_000_000;
+}
+
+/**
+ * Per-share price that `quantity` shares cost for `total` once the commission is
+ * backed out, never negative, at price precision (6dp). A non-positive quantity
+ * yields 0 rather than a division blow-up; callers gate on `quantity > 0`.
+ */
+export function priceFromTotal(
+  total: number,
+  quantity: number,
+  sign: number,
+  commission: number,
+): number {
+  if (!(quantity > 0)) return 0;
+  const cost = total - sign * commission;
+  return roundPrice(Math.max(0, cost / quantity));
 }

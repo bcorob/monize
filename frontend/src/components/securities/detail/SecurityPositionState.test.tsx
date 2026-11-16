@@ -109,6 +109,23 @@ describe('SecurityPositionState', () => {
     expect(screen.getByText('Held from')).toBeInTheDocument();
   });
 
+  it('shows the known part of an unknown realized gain', () => {
+    render(
+      <SecurityPositionState
+        detail={detail({
+          activity: {
+            realizedGain: null,
+            realizedGainComplete: false,
+            realizedGainKnownSubtotal: 300,
+          },
+        })}
+      />,
+    );
+
+    expect(screen.getByText('Realized P/L')).toBeInTheDocument();
+    expect(screen.getByText(/Known part:.*300\.00/)).toBeInTheDocument();
+  });
+
   it('omits the held period when the dates are unknown', () => {
     render(
       <SecurityPositionState

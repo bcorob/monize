@@ -1,8 +1,87 @@
 {
   "page": {
-    "welcomePrefix": "Welkom",
-    "welcomeWithName": "Welkom, {name}!",
-    "subtitle": "Hier is je financieel overzicht"
+    "greeting": {
+      "morning": "Goedemorgen",
+      "morningWithName": "Goedemorgen, {name}",
+      "afternoon": "Goedemiddag",
+      "afternoonWithName": "Goedemiddag, {name}",
+      "evening": "Goedenavond",
+      "eveningWithName": "Goedenavond, {name}"
+    }
+  },
+  "hero": {
+    "label": "Overzicht nettovermogen",
+    "netWorth": "Nettovermogen",
+    "changeThisMonth": "<dir>{direction, select, up {Gestegen met} other {Gedaald met}}</dir> {amount} deze maand",
+    "changeThisMonthWithPercent": "<dir>{direction, select, up {Gestegen met} other {Gedaald met}}</dir> {amount} · {percent} deze maand",
+    "assets": "<strong><value></value></strong> bezittingen",
+    "liabilities": "<strong><value></value></strong> schulden",
+    "invested": "<strong><value></value></strong> belegd",
+    "investedUnpriced": "Geen actuele koers voor {symbols}, dus die posities zijn niet meegeteld. Ververs de koersen op de pagina Beleggingen, of voeg er een toe in de koershistorie van het effect.",
+    "portfolioLabel": "Portefeuilleoverzicht",
+    "portfolioValueFor": "Portefeuillewaarde <names>({accounts})</names>",
+    "portfolioEmpty": "Nog geen beleggingsrekeningen. Voeg er een toe om hier uw portefeuille te zien.",
+    "portfolioLoadFailed": "Uw portefeuille kon niet worden geladen. Herlaad het dashboard om het opnieuw te proberen.",
+    "portfolioChangeFailed": "De verandering over deze periode kon niet worden geladen. Herlaad het dashboard om het opnieuw te proberen.",
+    "changeOverWindow": "<dir>{direction, select, up {Gestegen met} other {Gedaald met}}</dir> {amount} · {window}",
+    "holdings": "<strong><value></value></strong> posities",
+    "cash": "<strong><value></value></strong> contanten",
+    "metricLine": "<strong><value></value></strong> {metric}",
+    "metricNames": {
+      "simpleReturn": "Eenvoudig rendement",
+      "twr": "TWR",
+      "mwr": "MWR",
+      "cagr": "CAGR"
+    },
+    "showSet": "{name} tonen",
+    "cycleControls": "Kies wat de hoofdsectie toont",
+    "cagrUnavailable": "CAGR vereist ten minste een jaar beleggingsgeschiedenis in deze rekeningen, met meer ingelegd dan opgenomen.",
+    "intradayUnavailable": "Voor sommige posities zijn geen intraday-koersen, dus er kan geen dagrafiek worden getekend. Kies een langere periode in Aanpassen."
+  },
+  "trivia": {
+    "title": "Weetjes",
+    "position": "{index} van {total}",
+    "previous": "Vorig weetje",
+    "next": "Volgend weetje",
+    "empty": "Weetjes verschijnen hier zodra er genoeg geschiedenis is: twee maanden nettovermogen, beleggingen met een koers, een paar maanden uitgaven en inkomsten, of garanties die je bijhoudt. De lijst wordt elke ochtend opnieuw opgebouwd.",
+    "off": "AI-weetjes staan uit. Zet ze aan in de <link>AI-instellingen</link>.",
+    "topics": {
+      "netWorth": "Nettovermogen",
+      "investments": "Beleggingen",
+      "spending": "Uitgaven",
+      "income": "Inkomsten",
+      "activity": "Je gegevens",
+      "warranties": "Garanties"
+    },
+    "aiGenerated": "Door AI geschreven op basis van je cijfers",
+    "facts": {
+      "netWorthSinceStart": "Je nettovermogen was {startAmount} in {startMonth}. Sindsdien is het {startGain} gestegen, dus het is ongeveer {startMultiple} keer zo groot.",
+      "netWorthBiggestJump": "{jumpMonth} was je grootste sprong in één maand. Het nettovermogen steeg met {jumpAmount}, van {jumpFrom} in {jumpPreviousMonth} naar {jumpTo}.",
+      "netWorthHighPoint": "Je hoogtepunt was {peakAmount} in {peakMonth}. Je zit nu {peakBelow} eronder.",
+      "netWorthAtHighPoint": "Je zit op je hoogtepunt: je nettovermogen is nooit hoger geweest dan {currentHigh}.",
+      "netWorthBiggestDip": "Je grootste dip bracht het nettovermogen van {dipFromAmount} in {dipFromMonth} naar {dipToAmount} in {dipToMonth}, een daling van {dipPercent}.",
+      "netWorthBiggestDipRecovered": "Je grootste dip bracht het nettovermogen van {dipFromAmount} in {dipFromMonth} naar {dipToAmount} in {dipToMonth}. In {dipRecoveredMonth} had je je hersteld.",
+      "netWorthLargestAsset": "{assetName} is {assetValue} waard, oftewel {assetPercent} van je bezittingen.",
+      "investmentsShareOfAssets": "Je beleggingen zijn {investmentsValue} waard, dat is {investmentsPercent} van je bezittingen.",
+      "investmentsGain": "Je beleggingen zijn {gainAmount} ({gainPercent}) gestegen ten opzichte van de kostprijs van {gainCostBasis}.",
+      "investmentsLoss": "Je beleggingen staan {gainAmount} ({gainPercent}) lager dan de kostprijs van {gainCostBasis}.",
+      "investmentsCagr": "Het geannualiseerde rendement van je beleggingen is ongeveer {cagrPercent} (CAGR).",
+      "investmentsBiggestHolding": "Je grootste positie is {holdingSymbol} met ongeveer {holdingPercent} van de portefeuille ({holdingValue} in {holdingAccounts}).",
+      "investmentsBestPerformer": "Je beste belegging is {bestSymbol}, met {bestPercent} winst. Hij kostte {bestCost} en is nu {bestValue} waard.",
+      "investmentsForeignAccount": "Je rekening {foreignName} staat in {foreignCurrency}. De posities van {foreignBalance} zijn bij een koers van ongeveer {foreignRate} gelijk aan {foreignConverted}.",
+      "investmentsLargestAccount": "Je grootste beleggingsrekening is {largestName} met {largestValue}.",
+      "spendingTopCategory": "In de afgelopen twaalf maanden ging het grootste deel van je uitgaven naar {topCategoryName}: {topCategoryAmount}, oftewel {topCategoryPercent}.",
+      "spendingTopPayee": "In de afgelopen twaalf maanden gaf je het meeste uit bij {topPayeeName}: {topPayeeAmount}.",
+      "spendingBiggestMonth": "{biggestSpendMonth} was je duurste maand van de afgelopen twaalf, met {biggestSpendAmount}.",
+      "incomeKeptShare": "In de afgelopen twaalf maanden hield je {keptAmount} over van wat er binnenkwam, dat is {keptPercent} van je inkomen.",
+      "incomeSurplusMonths": "Maanden van de afgelopen {windowMonths} waarin er meer binnenkwam dan eruit ging: {surplusMonths}.",
+      "incomeTopSource": "{topSourceName} leverde in de afgelopen twaalf maanden {topSourcePercent} van je inkomen op.",
+      "activityTransactions": "Transacties in je registers: {transactionCount}, teruggaand tot {firstTransactionMonth}.",
+      "activityPayees": "Begunstigden die je in Monize bewaart: {payeeCount}. Categorieën: {categoryCount}.",
+      "activityScheduled": "Geplande transacties die Monize voor je bijhoudt: {scheduledCount}.",
+      "warrantiesCovered": "Garanties die je bijhoudt en die nog lopen: {warrantyCount}.",
+      "warrantiesNextExpiry": "De eerstvolgende garantie die afloopt is {nextWarrantyName}, in {nextWarrantyMonth}."
+    }
   },
   "favouriteAccounts": {
     "title": "Favoriete rekeningen",
@@ -21,12 +100,10 @@
   "upcomingBills": {
     "title": "Aankomende facturen en stortingen",
     "empty": "Geen achterstallige of aankomende facturen, stortingen of overboekingen binnen de herinneringsvensters.",
-    "perReminderSettings": "Per herinneringsinstellingen",
     "postTransaction": "Deze transactie boeken",
     "manual": "Handmatig",
-    "manualTitle": "Vereist handmatige boeking",
     "negativeBalanceWarning": "Deze transactie zorgt ervoor dat het rekeningsaldo onder nul komt",
-    "viewAll": "Alle facturen en stortingen bekijken",
+    "negativeBalanceLegend": "Brengt de rekening onder nul",
     "moreItems": "+{count} meer",
     "overdue": "Achterstallig",
     "today": "Vandaag",
@@ -38,7 +115,23 @@
       "transfer": "Overboeking",
       "reminder": "Herinnering",
       "unknown": "Onbekend"
-    }
+    },
+    "scope": {
+      "dueSoon": "Binnenkort verschuldigd",
+      "all": "Alle aankomende"
+    },
+    "viewLabel": "Weergave",
+    "viewList": "Lijst",
+    "viewCalendar": "Kalender",
+    "previousMonth": "Vorige maand",
+    "nextMonth": "Volgende maand",
+    "emptyAll": "Geen actieve rekeningen, stortingen of overboekingen gepland.",
+    "estimated": "Geschat"
+  },
+  "cashFlowForecast": {
+    "title": "Kasstroomprognose",
+    "period": "Prognoseperiode",
+    "loadFailed": "De transacties die al na vandaag gedateerd zijn konden niet worden geladen, dus de prognose kan niet worden getoond. Laad het dashboard opnieuw om het nogmaals te proberen."
   },
   "gettingStarted": {
     "title": "Aan de slag",
@@ -76,8 +169,12 @@
     "title": "Uitgaveninzichten",
     "empty": "Geen inzichten beschikbaar. Ga naar de pagina Inzichten om je eerste analyse te genereren.",
     "goToInsights": "Naar inzichten",
-    "viewAll": "Alle inzichten bekijken",
     "activeCount": "{count} actief"
+  },
+  "warrantiesExpiring": {
+    "title": "Garanties die binnenkort verlopen",
+    "empty": "Er verloopt niets in de komende 30 dagen",
+    "loadFailed": "Je aflopende garanties konden niet worden geladen. Laad het dashboard opnieuw om het nog eens te proberen."
   },
   "topMovers": {
     "title": "Grootste verschuivingen",
@@ -88,13 +185,20 @@
       "noLosers": "Vandaag geen dalers."
     },
     "dailyChange": "Dagelijkse wijziging",
+    "dailyChangeOn": "Dagelijkse wijziging · {date}",
     "openPriceHistory": "Koersgeschiedenis van {symbol}",
     "refreshPrices": "Koersen vernieuwen",
     "viewPortfolio": "Portefeuille bekijken",
     "filter": {
-      "all": "Alle",
-      "gainers": "Stijgers",
-      "losers": "Dalers"
+      "all": "Alle ({count})",
+      "gainers": "Stijgers ({count})",
+      "losers": "Dalers ({count})",
+      "label": "Richting"
+    },
+    "metric": {
+      "label": "Weergeven",
+      "price": "Koers",
+      "holdings": "Posities"
     }
   },
   "favouriteSecurities": {
@@ -102,15 +206,17 @@
     "empty": "Nog geen favoriete waardepapieren. Ga naar de <securitiesLink>pagina Waardepapieren</securitiesLink> en markeer de waardepapieren die je hier wilt volgen.",
     "noPriceYet": "Nog geen koers",
     "dailyChange": "Dagelijkse wijziging",
+    "dailyChangeOn": "Dagelijkse wijziging · {date}",
     "openPriceHistory": "Koersgeschiedenis van {symbol}",
-    "refreshPrices": "Koersen vernieuwen",
-    "manage": "Waardepapieren beheren"
+    "refreshPrices": "Koersen vernieuwen"
   },
   "netWorth": {
     "title": "Nettowaarde",
     "empty": "Nog geen nettowaardegegevens beschikbaar.",
-    "past12Months": "Afgelopen 12 maanden",
-    "viewReport": "Volledig rapport bekijken"
+    "barStyle": "Staafstijl",
+    "barStyleNetWorth": "Nettowaarde",
+    "barStyleAccountType": "Per rekeningtype",
+    "loadFailed": "De geschiedenis van je nettowaarde kon niet worden geladen. Laad het dashboard opnieuw om het nogmaals te proberen."
   },
   "assetsVsLiabilities": {
     "title": "Activa versus passiva",
@@ -118,14 +224,22 @@
     "current": "Huidig",
     "netWorthLabel": "Nettowaarde",
     "assets": "Activa",
-    "liabilities": "Passiva"
+    "liabilities": "Passiva",
+    "partialName": "{name} (gedeeltelijk)",
+    "viewCallouts": "Labels",
+    "viewLegend": "Legenda"
   },
   "expensesPieChart": {
     "title": "Uitgaven per categorie",
     "empty": "Geen uitgavengegevens voor deze periode.",
     "total": "Totaal",
     "uncategorized": "Niet gecategoriseerd",
-    "other": "Overig"
+    "other": "Overig",
+    "insideOther": "{count, plural, one {# categorie in Overig} other {# categorieën in Overig}}",
+    "topLevelOnly": "Hoofdcategorieën",
+    "topLevelOnlyHint": "Subcategorieën bij hun hoofdcategorie tellen",
+    "viewCallouts": "Labels",
+    "viewLegend": "Legenda"
   },
   "incomeExpenses": {
     "title": "Inkomsten versus uitgaven",
@@ -135,18 +249,85 @@
   },
   "customize": {
     "button": "Aanpassen",
-    "title": "Dashboard aanpassen",
-    "description": "De indeling hieronder komt overeen met je dashboard: widgets lopen van links naar rechts, twee per rij op grote schermen.",
     "moveEarlier": "{name} naar voren verplaatsen",
     "moveLater": "{name} naar achteren verplaatsen",
-    "dragToReorder": "Sleep widgets om ze te herschikken, of gebruik de pijlknoppen.",
-    "hiddenWidgets": "Verborgen widgets",
-    "hide": "{name} verbergen",
-    "show": "{name} tonen",
     "atLeastOne": "Selecteer minstens één widget om op het dashboard te tonen.",
     "reset": "Standaardinstellingen herstellen",
     "toasts": {
       "saveFailed": "Dashboardindeling opslaan mislukt"
+    },
+    "hero": {
+      "title": "Dashboardkop",
+      "description": "De openingscijfers en de grafiek onder de begroeting: je nettovermogen, je portefeuille of Auto om elke minuut tussen beide af te wisselen.",
+      "show": "Dashboardkop tonen",
+      "range": "Grafiek",
+      "set": "Tonen",
+      "sets": {
+        "auto": "Auto",
+        "netWorth": "Nettovermogen",
+        "portfolio": "Portefeuillewaarde"
+      },
+      "metric": "Cijfer",
+      "metrics": {
+        "simpleReturn": "Eenvoudig rendement",
+        "twr": "TWR",
+        "mwr": "MWR",
+        "cagr": "CAGR"
+      }
+    }
+  },
+  "edit": {
+    "barLabel": "Dashboard indelen",
+    "addWidget": "Widget toevoegen",
+    "heroSettings": "Instellingen dashboardkop",
+    "done": "Klaar",
+    "phoneNote": "Widgetformaten gelden op bredere schermen.",
+    "remove": "{name} verwijderen",
+    "grip": "{name} verplaatsen",
+    "gripHint": "Sleep om {name} te verplaatsen, of gebruik de pijltjestoetsen",
+    "moved": "{name} verplaatst naar positie {position} van {count}",
+    "removed": "{name} verwijderd",
+    "added": "{name} toegevoegd",
+    "resized": "{name} is nu {size}",
+    "resizedBoth": "{name} is nu {width} en {height}",
+    "twoChanges": "{first}. {second}",
+    "placeholder": "Wordt op het dashboard getoond zodra er iets te tonen is.",
+    "addTitle": "Widget toevoegen",
+    "addDescription": "Een widget die u toevoegt komt aan het einde van het dashboard. Er wordt niets bewaard totdat u Klaar kiest.",
+    "addEmpty": "Alle widgets staan al op uw dashboard",
+    "addToSpace": "Widget toevoegen aan deze ruimte ({width})",
+    "addSlotDescription": "Alleen de widgets die in deze ruimte passen worden getoond, en de widget die u kiest vult de ruimte. Er wordt niets bewaard totdat u Klaar kiest.",
+    "addSlotEmpty": "Geen verborgen widget past in deze ruimte. Sleep een widget hierheen om het te verplaatsen.",
+    "resize": "Formaat van {name} wijzigen",
+    "resizeHint": "Sleep om het formaat van {name} te wijzigen, of gebruik de pijltjestoetsen",
+    "widthLabel": "Breedte",
+    "heightLabel": "Hoogte",
+    "presetName": "{short}, {name}",
+    "widthOf": "Breedte van {name}",
+    "heightOf": "Hoogte van {name}",
+    "widthShort": {
+      "third": "1/3",
+      "half": "1/2",
+      "twoThirds": "2/3",
+      "full": "Vol"
+    },
+    "widthName": {
+      "third": "Een derde breed",
+      "half": "Half breed",
+      "twoThirds": "Twee derde breed",
+      "full": "Volledige breedte"
+    },
+    "heightShort": {
+      "auto": "Auto",
+      "compact": "S",
+      "standard": "M",
+      "tall": "L"
+    },
+    "heightName": {
+      "auto": "Automatische hoogte",
+      "compact": "Compacte hoogte",
+      "standard": "Standaardhoogte",
+      "tall": "Grote hoogte"
     }
   },
   "favouriteReports": {
@@ -156,22 +337,28 @@
   },
   "widgets": {
     "configure": "{name} configureren",
+    "asOf": "per {date}",
     "done": "Klaar",
     "configSaveFailed": "Kon de widgetinstellingen niet opslaan. Probeer het opnieuw.",
     "timeframe": "Tijdsbestek",
     "accounts": "Rekeningen",
     "chartType": "Grafiektype",
     "view": "Weergave",
+    "viewCalloutsHint": "Labels hebben een breder scherm nodig. Waar ze niet passen, wordt de legenda getoond.",
     "displayName": "Weergavenaam",
     "description": "Beschrijving",
     "descriptionPlaceholder": "Voeg een optionele beschrijving toe",
     "rangeLabels": {
+      "1d": "1D",
+      "1w": "1W",
+      "mtd": "MTD",
       "1m": "1M",
       "3m": "3M",
       "6m": "6M",
       "1y": "1Y",
       "2y": "2Y",
       "5y": "5Y",
+      "10y": "10Y",
       "ytd": "YTD",
       "all": "Alle"
     }
@@ -179,7 +366,10 @@
   "portfolioValue": {
     "title": "Portefeuillewaarde",
     "empty": "Nog geen beleggingsgeschiedenis om te tonen.",
-    "refresh": "Huidige waarde vernieuwen"
+    "refresh": "Huidige waarde vernieuwen",
+    "investmentResult": "Beleggingsresultaat",
+    "periodBreakdownInvestedTooltip": "De waarde van de effecten veranderde in deze periode met {valueChange}. Daarvan werd {netInvested} ingelegd, na aftrek van verkopen, en ze keerden {income} uit aan dividenden en rente. Een uitkering die in aandelen is herbelegd, telt in beide mee. Het bedrag hierboven is wat de beleggingen zelf hebben opgebracht, zonder niet-belegd geld.",
+    "notAvailable": "N/A"
   },
   "spendingByPayee": {
     "title": "Uitgaven per begunstigde",
@@ -225,14 +415,19 @@
       "MUTUAL_FUND": "Beleggingsfondsen",
       "BOND": "Obligaties",
       "CASH": "Contanten"
-    }
+    },
+    "viewType": "Effectentype",
+    "viewAssetClass": "Beleggingscategorie",
+    "otherAssetClasses": "Overig",
+    "emptyAssetClass": "Nog geen uitsplitsing naar beleggingscategorie beschikbaar."
   },
   "geographicAllocation": {
     "title": "Geografische allocatie",
     "empty": "Geen posities om te tonen.",
     "viewRegion": "Regio",
     "viewExchange": "Beurs",
-    "viewCountry": "Land"
+    "viewCountry": "Land",
+    "listingBasisNote": "Gegroepeerd op de beurs waar elke positie genoteerd staat. Schakel over naar Land om in fondsen te kijken."
   },
   "recurringExpenses": {
     "title": "Grootste terugkerende uitgaven",
@@ -240,7 +435,9 @@
     "minOccurrences": "Minimaal aantal keer",
     "minOccurrencesOption": "{count} of meer",
     "occurrences": "{count} keer",
-    "monthlyEstimate": "Maandelijkse schatting"
+    "monthlyEstimate": "Maandelijkse schatting",
+    "viewCallouts": "Labels",
+    "viewLegend": "Legenda"
   },
   "weekendVsWeekday": {
     "title": "Weekend- vs. weekdaguitgaven",
@@ -249,5 +446,14 @@
     "weekdayLabel": "Weekdag",
     "viewOverview": "Overzicht",
     "viewByDay": "Per dag"
+  },
+  "cashFlowSankey": {
+    "title": "Kasstroom-Sankey",
+    "empty": "Geen inkomsten, uitgaven of overboekingen in deze periode.",
+    "depth": "Detail",
+    "depthCategories": "Categorieën",
+    "depthSubcategories": "Subcategorieën",
+    "viewDiagram": "Diagram",
+    "viewTable": "Tabel"
   }
 }

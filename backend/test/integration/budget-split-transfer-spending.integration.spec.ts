@@ -6,7 +6,9 @@ import {
   TransactionStatus,
 } from "@/transactions/entities/transaction.entity";
 import { TransactionSplit } from "@/transactions/entities/transaction-split.entity";
+import { SplitKind } from "@/transactions/entities/split-kind.enum";
 import { BudgetCategory } from "@/budgets/entities/budget-category.entity";
+import { Budget, BudgetType } from "@/budgets/entities/budget.entity";
 import { queryCategorySpending } from "@/budgets/budget-spending.util";
 import { withScopedDb } from "@/common/db/scoped-db";
 import { withUserContext } from "@/common/db/with-context";
@@ -36,6 +38,7 @@ describe("queryCategorySpending split transfers (integration)", () => {
   let chequingId: string;
   let savingsId: string;
   let groceriesId: string;
+  let budgetId: string;
 
   beforeAll(async () => {
     module = await createIntegrationModule([TransactionsModule]);
@@ -50,6 +53,7 @@ describe("queryCategorySpending split transfers (integration)", () => {
     await cleanTables(dataSource, [
       "transaction_splits",
       "transactions",
+      "budgets",
       "accounts",
       "categories",
       "payees",
@@ -65,6 +69,20 @@ describe("queryCategorySpending split transfers (integration)", () => {
     ).id;
     groceriesId = (
       await createTestCategory(dataSource, userId, { name: "Groceries" })
+    ).id;
+    // The actuals are converted into the budget's currency, which the query
+    // reads from the budget the lines belong to (all rows here are CAD).
+    budgetId = (
+      await dataSource.manager.save(
+        dataSource.manager.create(Budget, {
+          userId,
+          name: "July",
+          budgetType: BudgetType.MONTHLY,
+          periodStart: "2026-07-01",
+          currencyCode: "CAD",
+          config: {},
+        } as Partial<Budget>),
+      )
     ).id;
   });
 
@@ -134,6 +152,10 @@ describe("queryCategorySpending split transfers (integration)", () => {
     } as Partial<TransactionSplit>);
     const transferSplit = dataSource.manager.create(TransactionSplit, {
       transactionId: parent.id,
+      // What the production writer stores for a transfer line; the column's
+      // default is "category", which chk_split_kind_exclusive refuses beside a
+      // transfer account.
+      kind: SplitKind.TRANSFER,
       transferAccountId: savingsId,
       linkedTransactionId: counterpart.id,
       amount: transferAmount,
@@ -148,7 +170,10 @@ describe("queryCategorySpending split transfers (integration)", () => {
           m.getRepository(Transaction),
           m.getRepository(TransactionSplit),
           userId,
-          budgetCategories as BudgetCategory[],
+          budgetCategories.map((bc) => ({
+            ...bc,
+            budgetId,
+          })) as BudgetCategory[],
           "2026-07-01",
           "2026-07-31",
         ),

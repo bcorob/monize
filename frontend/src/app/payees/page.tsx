@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import toast from 'react-hot-toast';
 import { useOnUndoRedo } from '@/hooks/useOnUndoRedo';
@@ -14,6 +14,7 @@ import { CategoryAutoAssignDialog } from '@/components/payees/CategoryAutoAssign
 import { DeactivateUnusedPayeesDialog } from '@/components/payees/DeactivateUnusedPayeesDialog';
 import { AutoMergePayeesDialog } from '@/components/payees/AutoMergePayeesDialog';
 import { Modal } from '@/components/ui/Modal';
+import { PayeeLookupSection } from '@/components/settings/payee-lookup/PayeeLookupSection';
 import { UnsavedChangesDialog } from '@/components/ui/UnsavedChangesDialog';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { payeesApi } from '@/lib/payees';
@@ -28,12 +29,14 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { SummaryCard, SummaryIcons } from '@/components/ui/SummaryCard';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { CARD_CLASS } from '@/components/ui/Card';
+import { SEGMENTED_TOOLBAR_GROUP_CLASS, toolbarSegmentClass } from '@/components/ui/segmented-control';
 import { useFormModal } from '@/hooks/useFormModal';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { createLogger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errors';
 import { PAGE_SIZE } from '@/lib/constants';
 import { useHighlightParam } from '@/hooks/useHighlightTarget';
+import { useMobileAddAction } from '@/store/mobileAddActionStore';
 
 const logger = createLogger('Payees');
 
@@ -47,6 +50,9 @@ export default function PayeesPage() {
 
 function PayeesContent() {
   const t = useTranslations('payees');
+  // The dialog's title is the section's own name, so the two cannot drift.
+  const tLookup = useTranslations('settings.payeeLookup');
+  const tCommon = useTranslations('common');
   const [payees, setPayees] = useState<Payee[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -54,6 +60,7 @@ function PayeesContent() {
   const [showDeactivate, setShowDeactivate] = useState(false);
   const [showAutoMerge, setShowAutoMerge] = useState(false);
   const [showApplyDefaults, setShowApplyDefaults] = useState(false);
+  const [showLookupSettings, setShowLookupSettings] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<PayeeStatusFilter>('active');
   const [categoryFilter, setCategoryFilter] = useState<PayeeCategoryFilter>('all');
@@ -63,26 +70,35 @@ function PayeesContent() {
   const [mergePayee, setMergePayee] = useState<Payee | null>(null);
   const { showForm, editingItem, openCreate, openEdit, close, isEditing, modalProps, setFormDirty, unsavedChangesDialog, formSubmitRef } = useFormModal<Payee>();
 
-  const loadData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const [payeesData, categoriesData] = await Promise.all([
-        payeesApi.getAll('all'),
-        categoriesApi.getAll(),
-      ]);
-      setPayees(payeesData);
-      setCategories(categoriesData);
-    } catch (error) {
-      toast.error(getErrorMessage(error, t('page.toasts.loadFailed')));
-      logger.error(error);
-    } finally {
-      setIsLoading(false);
-    }
+  // The mount load: the state already says loading.
+  const fetchData = useCallback(() => {
+    // Writes live in `run` so they land after the request, not during the effect.
+    const run = async () => {
+      try {
+        const [payeesData, categoriesData] = await Promise.all([
+          payeesApi.getAll('all'),
+          categoriesApi.getAll(),
+        ]);
+        setPayees(payeesData);
+        setCategories(categoriesData);
+      } catch (error) {
+        toast.error(getErrorMessage(error, t('page.toasts.loadFailed')));
+        logger.error(error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    return run();
   }, [t]);
 
+  const loadData = useCallback(() => {
+    setIsLoading(true);
+    return fetchData();
+  }, [fetchData]);
+
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    fetchData();
+  }, [fetchData]);
 
   useOnUndoRedo(loadData);
   // Refresh after the AI assistant creates or edits a payee from the chat.
@@ -252,9 +268,21 @@ function PayeesContent() {
     setCurrentPage(1);
   }, [sortField, setSortField, setSortDirection]);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, statusFilter, categoryFilter]);
+  // A new search or filter starts again from the first page.
+  const handleSearchChange = (query: string) => {
+    if (query !== searchQuery) setCurrentPage(1);
+    setSearchQuery(query);
+  };
+
+  const handleStatusFilterChange = (status: PayeeStatusFilter) => {
+    if (status !== statusFilter) setCurrentPage(1);
+    setStatusFilter(status);
+  };
+
+  const handleCategoryFilterChange = (filter: PayeeCategoryFilter) => {
+    if (filter !== categoryFilter) setCurrentPage(1);
+    setCategoryFilter(filter);
+  };
 
   const goToPage = (page: number) => {
     if (page >= 1 && page <= totalPages) {
@@ -264,19 +292,17 @@ function PayeesContent() {
 
   // Deep link to a specific payee (e.g. the AI chat "View payees" link): once
   // the list has loaded, jump to the client-side page that contains it so the
-  // row can flash and scroll into view. Runs once per arrival.
+  // row can flash and scroll into view. Runs once per arrival, during render
+  // rather than in an effect.
   const highlightId = useHighlightParam();
-  const highlightJumpedRef = useRef(false);
-  useEffect(() => {
-    if (!highlightId || highlightJumpedRef.current || sortedPayees.length === 0) {
-      return;
-    }
+  const [highlightJumped, setHighlightJumped] = useState(false);
+  if (highlightId && !highlightJumped && sortedPayees.length > 0) {
     const index = sortedPayees.findIndex((p) => p.id === highlightId);
     if (index >= 0) {
-      highlightJumpedRef.current = true;
+      setHighlightJumped(true);
       setCurrentPage(Math.floor(index / PAGE_SIZE) + 1);
     }
-  }, [highlightId, sortedPayees]);
+  }
 
   // Summary counts
   const activeCount = payees.filter(p => p.isActive).length;
@@ -285,13 +311,15 @@ function PayeesContent() {
   const payeesWithoutCategory = payees.length - payeesWithCategory;
   const payeesWithUncategorizedTx = payees.filter((p) => (p.uncategorizedCount ?? 0) > 0).length;
 
+  useMobileAddAction(t('page.newPayee'), openCreate);
+
   return (
     <PageLayout>
       <main className="px-4 sm:px-6 lg:px-12 pt-6 pb-8">
         <PageHeader
           title={t('page.title')}
           subtitle={t('page.subtitle')}
-          helpUrl="https://github.com/kenlasko/monize/wiki/Categories-and-Payees"
+          help='payees'
           actions={
             <>
               {/* The four bulk operations live behind one trigger: they are
@@ -320,6 +348,14 @@ function PayeesContent() {
                     id: 'applyDefaultCategories',
                     label: t('page.applyDefaultCategories'),
                     onSelect: () => setShowApplyDefaults(true),
+                  },
+                  {
+                    // The same section Settings renders, reached from where
+                    // payees are actually worked on. One component, so the two
+                    // places cannot offer different controls.
+                    id: 'lookupSettings',
+                    label: t('page.lookupSettings'),
+                    onSelect: () => setShowLookupSettings(true),
                   },
                 ]}
               />
@@ -355,30 +391,23 @@ function PayeesContent() {
         </div>
 
         {/* Search and Status Filter */}
-        <div className="mb-6 flex flex-col sm:flex-row gap-4">
+        <div className="mb-6 flex flex-wrap items-center gap-4">
           <input
             type="text"
             placeholder={t('page.searchPlaceholder')}
+            aria-label={t('page.searchPlaceholder')}
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="block w-full sm:max-w-md rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400 dark:focus:border-blue-400 dark:focus:ring-blue-400"
+            onChange={(e) => handleSearchChange(e.target.value)}
+            className="block w-full sm:w-auto sm:flex-1 sm:max-w-md rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400 dark:focus:border-blue-400 dark:focus:ring-blue-400"
           />
-          <div className="flex rounded-md shadow-sm">
+          <div role="group" aria-label={t('page.statusFilterLabel')} className={SEGMENTED_TOOLBAR_GROUP_CLASS}>
             {(['all', 'active', 'inactive'] as PayeeStatusFilter[]).map((status) => (
               <button
                 key={status}
-                onClick={() => setStatusFilter(status)}
-                className={`px-4 py-2 text-sm font-medium border ${
-                  statusFilter === status
-                    ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-500 dark:border-blue-500'
-                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-                } ${
-                  status === 'all' ? 'rounded-l-md' : ''
-                } ${
-                  status === 'inactive' ? 'rounded-r-md' : ''
-                } ${
-                  status !== 'all' ? '-ml-px' : ''
-                }`}
+                type="button"
+                onClick={() => handleStatusFilterChange(status)}
+                aria-pressed={statusFilter === status}
+                className={toolbarSegmentClass(statusFilter === status)}
               >
                 {status === 'active' ? t('page.statusActive', { count: activeCount }) :
                  status === 'inactive' ? t('page.statusInactive', { count: inactiveCount }) :
@@ -386,22 +415,14 @@ function PayeesContent() {
               </button>
             ))}
           </div>
-          <div className="flex rounded-md shadow-sm">
+          <div role="group" aria-label={t('page.categoryFilterLabel')} className={SEGMENTED_TOOLBAR_GROUP_CLASS}>
             {(['all', 'noDefaultCategory', 'uncategorizedTransactions'] as PayeeCategoryFilter[]).map((filter) => (
               <button
                 key={filter}
-                onClick={() => setCategoryFilter(filter)}
-                className={`px-4 py-2 text-sm font-medium border ${
-                  categoryFilter === filter
-                    ? 'bg-blue-600 text-white border-blue-600 dark:bg-blue-500 dark:border-blue-500'
-                    : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700'
-                } ${
-                  filter === 'all' ? 'rounded-l-md' : ''
-                } ${
-                  filter === 'uncategorizedTransactions' ? 'rounded-r-md' : ''
-                } ${
-                  filter !== 'all' ? '-ml-px' : ''
-                }`}
+                type="button"
+                onClick={() => handleCategoryFilterChange(filter)}
+                aria-pressed={categoryFilter === filter}
+                className={toolbarSegmentClass(categoryFilter === filter)}
               >
                 {filter === 'noDefaultCategory' ? t('page.categoryFilterNoCategory', { count: payeesWithoutCategory }) :
                  filter === 'uncategorizedTransactions' ? t('page.categoryFilterUncategorized', { count: payeesWithUncategorizedTx }) :
@@ -410,6 +431,32 @@ function PayeesContent() {
             ))}
           </div>
         </div>
+
+        {/* The Payee Lookup settings, rendered from the one section the
+            Settings page uses. `padding="none"` lets the section's own Card be
+            the panel rather than nesting a card inside a padded dialog. */}
+        {/* Sized to the column the same section occupies on Settings, so the
+            two places render one card rather than a wide one and a cramped
+            one. That column is the settings page's max-w-6xl main less its
+            lg:px-12, its lg:w-52 nav and the lg:gap-10 between them: 72 - 6 -
+            13 - 2.5 = 50.5rem, and max-w-3xl (48rem) is the nearest size the
+            modal offers. The next one up overshoots by 5.5rem and, with the
+            backdrop's own padding, leaves a 1024px laptop almost no margin. */}
+        <Modal
+          isOpen={showLookupSettings}
+          onClose={() => setShowLookupSettings(false)}
+          title={tLookup('title')}
+          maxWidth="3xl"
+          padding="md"
+          pushHistory
+          footer={
+            <Button type="button" variant="outline" onClick={() => setShowLookupSettings(false)}>
+              {tCommon('close')}
+            </Button>
+          }
+        >
+          <PayeeLookupSection className="" />
+        </Modal>
 
         {/* Form Modal */}
         <Modal isOpen={showForm} onClose={close} {...modalProps} maxWidth="lg" className="p-6">

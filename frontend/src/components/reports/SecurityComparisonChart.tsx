@@ -1,6 +1,6 @@
 'use client';
 
-import { useImperativeHandle, useMemo, useRef, type Ref } from 'react';
+import { useEffect, useImperativeHandle, useMemo, useRef, type Ref } from 'react';
 import { useTranslations } from 'next-intl';
 import {
   LineChart,
@@ -13,19 +13,23 @@ import {
   Legend,
 } from 'recharts';
 import { useReportData } from '@/hooks/useReportData';
+import { ReportError } from './ReportError';
 import { investmentsApi } from '@/lib/investments';
 import {
   PerformanceComparison,
   PerformanceExclusionReason,
   PerformanceSeriesRef,
 } from '@/types/investment';
-import { CHART_SERIES, chartColors, chartSeriesColor } from '@/lib/chart-colors';
+import { CHART_SERIES, chartSeriesColor } from '@/lib/chart-colors';
 import { Skeleton } from '@/components/ui/LoadingSkeleton';
 import { parseLocalDate, type ChartDatePattern } from '@/lib/utils';
 import { useChartDateFormat } from '@/hooks/useChartDateFormat';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { buildTimeAxisTicks } from '@/lib/chart-time-axis';
 import { resolvePdfColor } from '@/components/reports/resolve-pdf-color';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { CHART_GRID_PROPS, CHART_TOOLTIP_CLASS } from '@/lib/chart-style';
+import { ChartActiveDot } from '@/components/ui/ChartActiveDot';
 
 /** A security plotted as one line, with its assigned palette colour. */
 export interface PerformanceSeries {
@@ -113,6 +117,14 @@ interface SecurityComparisonChartProps {
   /** Window start (`''` means all history, resolved server-side from the data). */
   startDate: string;
   endDate: string;
+  /**
+   * Overrides the subtitle shown above the chart and used as the PDF
+   * description. Defaults to the comparison-report copy, which names "each
+   * selected instrument" and "dashed index lines" -- both wrong for a caller
+   * plotting a whole portfolio with no benchmarks (`indexCodes={[]}`), so such
+   * a caller passes its own portfolio-appropriate string.
+   */
+  subtitle?: string;
   /** Bumped by the RefreshPricesButton so a manual price refresh re-fetches. */
   reloadKey?: number;
   /**
@@ -122,6 +134,14 @@ interface SecurityComparisonChartProps {
    * the chart DOM the capture needs.
    */
   exportRef?: Ref<SecurityComparisonChartHandle>;
+  /**
+   * Told whether the series on screen is the current request's answer: `false`
+   * while it is loading or has failed (the hook keeps the previous payload
+   * through both) and when this component unmounts. The parent's export button
+   * lives outside this component and reads it, so a document never carries the
+   * previous window's series.
+   */
+  onExportableChange?: (exportable: boolean) => void;
 }
 
 /**
@@ -139,18 +159,25 @@ export function SecurityComparisonChart({
   indexCodes,
   startDate,
   endDate,
+  subtitle,
   reloadKey = 0,
   exportRef,
+  onExportableChange,
 }: SecurityComparisonChartProps) {
   const t = useTranslations('reports');
   const ti = useTranslations('marketIndexes');
   const formatChartDate = useChartDateFormat();
   const { formatSignedPercent } = useNumberFormat();
   const chartRef = useRef<HTMLDivElement>(null);
+  // The comparison report's default copy speaks of "each selected instrument"
+  // and "dashed index lines"; a caller plotting a whole portfolio with no
+  // benchmarks passes its own subtitle instead. Used for both the on-screen
+  // subtitle and the PDF description so the two never disagree.
+  const resolvedSubtitle = subtitle ?? t('securityPerformance.comparisonSubtitle');
 
   // Everything that changes the *meaning* of the response is in the key, so a
   // payload can never be mistaken for the answer to a different selection
-  // (`frontend/CLAUDE.md`, asynchronous data).
+  // (`docs/frontend/api-and-cache.md`, asynchronous data).
   const requestKey = [
     [...securityIds].sort().join(','),
     [...indexCodes].sort().join(','),
@@ -158,7 +185,7 @@ export function SecurityComparisonChart({
     endDate,
   ].join('|');
 
-  const { data, isLoading, error } = useReportData(
+  const { data, isLoading, error, reload } = useReportData(
     () =>
       investmentsApi.getPerformanceComparison({
         securityIds,
@@ -169,6 +196,12 @@ export function SecurityComparisonChart({
     [requestKey, reloadKey],
     { requestKey },
   );
+
+  const exportable = !isLoading && !error;
+  useEffect(() => {
+    onExportableChange?.(exportable);
+    return () => onExportableChange?.(false);
+  }, [exportable, onExportableChange]);
 
   const { rows, series } = useMemo(
     () => (data ? buildPerformanceView(data) : { rows: [], series: [] }),
@@ -216,11 +249,12 @@ export function SecurityComparisonChart({
     exportRef,
     () => ({
       exportPdf: async () => {
+        if (!exportable) return;
         const { exportToPdf } = await import('@/lib/pdf-export');
         await exportToPdf({
           title: t('securityPerformance.comparisonTitle'),
           subtitle: series.map((s) => seriesName(s)).join(', ') || undefined,
-          description: t('securityPerformance.comparisonSubtitle'),
+          description: resolvedSubtitle,
           chartContainer: chartRef.current,
           chartLegend: series.map((s) => ({
             color: resolvePdfColor(s.color),
@@ -236,18 +270,8 @@ export function SecurityComparisonChart({
       },
     }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [series, t, ti],
+    [series, resolvedSubtitle, exportable, t, ti],
   );
-
-  if (error) {
-    return (
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-8 text-center">
-        <p className="text-gray-500 dark:text-gray-400">
-          {t('securityPerformance.comparisonError')}
-        </p>
-      </div>
-    );
-  }
 
   const excluded = data?.excluded ?? [];
 
@@ -260,20 +284,20 @@ export function SecurityComparisonChart({
         {t('securityPerformance.comparisonTitle')}
       </h3>
       <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-        {t('securityPerformance.comparisonSubtitle')}
+        {resolvedSubtitle}
       </p>
 
-      {isLoading ? (
+      {error ? (
+        <ReportError message={t('securityPerformance.comparisonError')} onRetry={reload} />
+      ) : isLoading ? (
         <Skeleton className="h-80 w-full" />
       ) : series.length === 0 ? (
-        <p className="text-gray-500 dark:text-gray-400 text-center py-8">
-          {t('securityPerformance.comparisonNoData')}
-        </p>
+        <EmptyState title={t('securityPerformance.comparisonNoData')} />
       ) : (
         <div className="h-96">
           <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <LineChart data={rows}>
-              <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+              <CartesianGrid {...CHART_GRID_PROPS} />
               <XAxis
                 dataKey="ts"
                 type="number"
@@ -304,7 +328,7 @@ export function SecurityComparisonChart({
                     }))
                     .sort((a, b) => b.value - a.value);
                   return (
-                    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 max-h-64 overflow-y-auto">
+                    <div className={`${CHART_TOOLTIP_CLASS} max-h-64 overflow-y-auto`}>
                       <p className="font-medium text-gray-900 dark:text-gray-100 mb-1">
                         {formatChartDate(new Date(ts), 'MMM d, yyyy')}
                       </p>
@@ -323,6 +347,7 @@ export function SecurityComparisonChart({
               <Legend />
               {series.map((s) => (
                 <Line
+                  activeDot={ChartActiveDot}
                   key={s.key}
                   type="monotone"
                   dataKey={s.key}

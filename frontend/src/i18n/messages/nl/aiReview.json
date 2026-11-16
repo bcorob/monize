@@ -1,0 +1,120 @@
+{
+  "page": {
+    "title": "AI-controlepostvak",
+    "subtitle": "Transacties die een regel door een AI wilde laten controleren, profiels die een assistent moest opstellen, en de wijzigingen die een assistent ter goedkeuring voorstelt."
+  },
+  "filter": {
+    "label": "Filteren op status",
+    "open": "Open",
+    "pending": "In afwachting",
+    "claimed": "In controle",
+    "proposed": "Voorgesteld",
+    "applied": "Toegepast",
+    "rejected": "Afgewezen",
+    "expired": "Verlopen"
+  },
+  "kindFilter": {
+    "label": "Filteren op soort",
+    "all": "Alle",
+    "email_receipt": "E-mailbonnen",
+    "transaction_review": "Regels",
+    "option": "{label} ({count})"
+  },
+  "status": {
+    "pending": "In afwachting",
+    "claimed": "In controle",
+    "proposed": "Voorgesteld",
+    "applied": "Toegepast",
+    "rejected": "Afgewezen",
+    "expired": "Verlopen"
+  },
+  "columns": {
+    "date": "Datum",
+    "request": "Verzoek",
+    "amount": "Bedrag",
+    "status": "Status"
+  },
+  "row": {
+    "noPayee": "Geen begunstigde",
+    "transactionMissing": "Deze transactie bestaat niet meer",
+    "rule": "Regel: {name}",
+    "manualRequest": "Handmatig aangevraagd",
+    "trade": "{action, select, BUY {Aankoop van {quantity} aandelen {symbol}} SELL {Verkoop van {quantity} aandelen {symbol}} DIVIDEND {Dividend van {symbol}} REINVEST {Herbelegging van een dividend in {quantity} aandelen {symbol}} other {Transactie in {symbol}}}",
+    "receiptInstruction": {
+      "automatic": "Vul deze transactie aan uit de bijgevoegde bestelmail: splits haar per artikel met elk een categorie, of stel de omschrijving in.",
+      "chat": "U hebt gevraagd de bijgevoegde bestelmail te herkennen: splits deze transactie per product met elk een categorie, of stel de omschrijving in.",
+      "categorize": "Wijs een categorie toe aan elk artikel van de bijgevoegde bestelmail dat geen regel heeft gecategoriseerd en stel daarna de splitsing van deze transactie voor of stel de omschrijving in.",
+      "parsed": "Een opgeslagen parser heeft de bestelmail gelezen en stelt deze categorieregels en deze omschrijving voor de transactie voor.",
+      "trade": "Een handelsbevestiging die door een opgeslagen profiel is gelezen, stelt deze beleggingstransactie voor. Controleer rekening, effect, aandelen en totaal bij je broker voordat je goedkeurt.",
+      "tradeChat": "Je vroeg om de bijgevoegde handelsbevestiging te herkennen: stel de beleggingstransactie voor die erin staat, een aankoop, een verkoop, een contant dividend of een herbelegd dividend."
+    },
+    "emailReceipt": "E-mailbon: {subject} van {sender}",
+    "emailReceiptForwarded": "E-mailbon: {subject} van {sender}, doorgestuurd door {forwarder}",
+    "emailReceiptMissing": "E-mailbon (de e-mail is verwijderd)",
+    "parserDraft": "Profielconcept uit {count, plural, one {# e-mail} other {# e-mails}} ({domain})",
+    "viewEmailReceipts": "E-mailbonnen bekijken",
+    "agentNote": "Opmerking van de assistent: {reason}",
+    "dates": "Aangemaakt op {created}, verloopt op {expires}",
+    "viewTransaction": "Transactie bekijken",
+    "waitingForAgent": "Wacht op een AI-agent. <link>Koppel een AI-provider in de Instellingen</link> of laat een MCP-client het verzoek oppakken.",
+    "parserDraftReady": "Profielconcept klaar. <link>Test en keur het goed in de profielinstellingen</link>.",
+    "tradePending": "Een transactie uit een e-mail, nog niet gelezen",
+    "tradeEmail": "E-mail met transactiebevestiging",
+    "parserDraftIds": "ID's van de profielconcepten: {ids}"
+  },
+  "actions": {
+    "dismiss": "Negeren"
+  },
+  "proposal": {
+    "errorTitle": "Dit voorstel kan niet meer worden toegepast"
+  },
+  "bulk": {
+    "selectRow": "{name} selecteren",
+    "selectAll": "Alle getoonde verzoeken selecteren die kunnen worden goedgekeurd of verzonden",
+    "approveSelected": "Geselecteerde goedkeuren ({count})",
+    "approveAllShown": "Alle getoonde goedkeuren ({count})",
+    "summary": "{approved, plural, one {# voorstel} other {# voorstellen}} toegepast, {failed, plural, one {# niet toegepast} other {# niet toegepast}}.",
+    "closeSummary": "Sluiten",
+    "failure": "{name}: {reason}",
+    "noReason": "Er is geen reden opgegeven",
+    "unknownRequest": "Een verzoek",
+    "failed": "De voorstellen konden niet worden toegepast",
+    "dialog": {
+      "title": "{count, plural, one {# voorstel toepassen?} other {# voorstellen toepassen?}}",
+      "message": "Elk voorstel wordt gecontroleerd tegen zijn transactie zoals die nu is en apart toegepast. Een voorstel dat niet meer past, wordt overgeslagen en gemeld, en de rest wordt gewoon toegepast. Bekijk de voorstellen voordat je ze goedkeurt.",
+      "confirm": "{count, plural, one {# voorstel toepassen} other {# voorstellen toepassen}}"
+    }
+  },
+  "sendToAssistant": {
+    "button": "{count, plural, one {# openstaand verzoek} other {# openstaande verzoeken}} naar de AI-assistent sturen",
+    "buttonSelected": "{count, plural, one {# geselecteerd verzoek} other {# geselecteerde verzoeken}} naar de AI-assistent sturen",
+    "prompt": "Werk mijn openstaande verzoeken voor AI-beoordeling af met de tool ai_review_requests: geef ze weer, neem elk verzoek in behandeling, volg de instructie en dien een voorstel in. Maak voor een verzoek om een profielconcept het profiel in plaats daarvan met de tool email_receipt_parsers. Er verandert niets totdat ik de voorstellen goedkeur in de inbox voor AI-beoordeling.",
+    "promptSelected": "Werk {count, plural, one {dit verzoek voor AI-beoordeling} other {deze # verzoeken voor AI-beoordeling}} af met de tool ai_review_requests: {ids}. Neem elk verzoek in behandeling via zijn id, volg de instructie en dien een voorstel in. Maak voor een verzoek om een profielconcept het profiel in plaats daarvan met de tool email_receipt_parsers. Laat de andere verzoeken ongemoeid. Er verandert niets totdat ik de voorstellen goedkeur in de inbox voor AI-beoordeling.",
+    "opened": "De chat is geopend met een voorbereid bericht. Lees het en druk op Verzenden.",
+    "unavailable": "De AI-assistent kan nu niet antwoorden. Koppel een AI-provider in Instellingen of verbind uw MCP-client. De verzoeken blijven hier wachten."
+  },
+  "dismissDialog": {
+    "title": "Dit verzoek negeren?",
+    "message": "Niemand wordt nog gevraagd aan dit verzoek te werken. Er wordt niets gewijzigd van waar het over ging.",
+    "confirm": "Verzoek negeren"
+  },
+  "loading": "Controleverzoeken laden...",
+  "error": {
+    "title": "Controleverzoeken konden niet worden geladen",
+    "body": "De lijst is niet geladen en is dus mogelijk niet leeg. Controleer je verbinding en probeer het opnieuw.",
+    "retry": "Opnieuw proberen"
+  },
+  "empty": {
+    "title": "Geen controleverzoeken",
+    "body": "Verzoeken verschijnen hier wanneer een regel met de actie ‘AI-controle aanvragen’ bij een transactie past. Een AI-assistent, of een MCP-client zoals de relay-agent, werkt de wachtrij af en stelt een wijziging voor die jij kunt goedkeuren.",
+    "filteredTitle": "Geen verzoeken met deze status",
+    "filteredBody": "Kies een andere status om andere verzoeken te zien."
+  },
+  "toasts": {
+    "approved": "Voorstel toegepast",
+    "dismissed": "Verzoek genegeerd",
+    "dismissFailed": "Het verzoek kon niet worden genegeerd",
+    "approveFailed": "Het voorstel kon niet worden toegepast",
+    "changed": "Dit verzoek is intussen gewijzigd. De lijst is opnieuw geladen."
+  }
+}

@@ -6,6 +6,7 @@ import type {
   SimulationResult,
   AccountHoldingStats,
 } from '@/lib/monte-carlo';
+import { MAX_CASH_FLOWS } from '@/lib/monte-carlo';
 
 // ────────────── Mocks ─────────────────────────────────────────────────────
 
@@ -23,7 +24,8 @@ const mockApi = vi.hoisted(() => ({
   holdingStats: vi.fn(),
 }));
 
-vi.mock('@/lib/monte-carlo', () => ({
+vi.mock('@/lib/monte-carlo', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/monte-carlo')>()),
   monteCarloApi: mockApi,
 }));
 
@@ -31,14 +33,17 @@ vi.mock('@/lib/pdf-export', () => ({
   exportToPdf: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (n: number) => `$${n.toFixed(2)}`,
-    formatCurrencyLabel: (n: number) => `$${n.toFixed(0)}`,
-    defaultCurrency: 'CAD',
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (n: number) => `$${n.toFixed(2)}`,
+      formatCurrencyLabel: (n: number) => `$${n.toFixed(0)}`,
+      defaultCurrency: 'CAD',
+    }),
+  };
+});
 vi.mock('@/lib/format', async () => {
   const actual = await vi.importActual<typeof import('@/lib/format')>(
     '@/lib/format',
@@ -430,6 +435,48 @@ describe('MonteCarloReport', () => {
         flowType: 'ONE_TIME',
         startYear: 1,
       });
+    });
+
+    it('stops adding rows at the server limit and says why', async () => {
+      // The server refuses a scenario with more than MAX_CASH_FLOWS rows, so
+      // the control must not let the form build one.
+      mockApi.list.mockResolvedValueOnce([
+        scenario({
+          cashFlows: Array.from({ length: MAX_CASH_FLOWS - 1 }, (_, i) => ({
+            name: `Flow ${i}`,
+            amount: 100,
+            flowType: 'ONE_TIME' as const,
+            startYear: 1,
+            endYear: null,
+            inflationAdjust: false,
+          })),
+        }),
+      ]);
+      await renderReport();
+      fireEvent.click(await screen.findByRole('button', { name: /Retirement/i }));
+      const add = screen.getByRole('button', { name: /Add cash flow/i });
+      expect(add).not.toBeDisabled();
+      expect(
+        screen.queryByText(/can have at most 100 cash flows/),
+      ).not.toBeInTheDocument();
+
+      await act(async () => {
+        fireEvent.click(add);
+      });
+      expect(screen.getAllByPlaceholderText('e.g. Pension')).toHaveLength(
+        MAX_CASH_FLOWS,
+      );
+      expect(add).toBeDisabled();
+      expect(
+        screen.getByText('A scenario can have at most 100 cash flows.'),
+      ).toBeInTheDocument();
+
+      await act(async () => {
+        fireEvent.click(add);
+      });
+      expect(screen.getAllByPlaceholderText('e.g. Pension')).toHaveLength(
+        MAX_CASH_FLOWS,
+      );
     });
 
     it('removes a row when the trash icon is clicked', async () => {

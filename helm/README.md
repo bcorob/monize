@@ -70,6 +70,52 @@ ingress:
 
 > **Note**: Both can technically be enabled simultaneously, but it is recommended to only enable one.
 
+### MCP sessions and more than one backend replica
+
+The MCP endpoint serves two protocol revisions. The 2026-07-28 one is stateless
+per request and runs on any number of replicas as it is. The 2025-era one -- what
+Claude Desktop's connector, `claude mcp add` and Codex negotiate today -- opens a
+session that lives in **one backend process**, and that session cannot be moved:
+the SDK offers no way to restore a session id into a new transport, and the live
+state of an exchange is the open response stream and the pending write
+confirmation held by the replica that answered `initialize`.
+
+With `backend.replicas: 1` (the default) there is nothing to configure. Raising
+it while 2025-era clients connect needs this:
+
+```yaml
+mcp:
+  stickySessions:
+    enabled: true
+```
+
+That renders a route for `/api/v1/mcp` straight to the backend Service, asking
+the edge to pin each session to one replica -- an `nginx.ingress.kubernetes.io/affinity`
+Ingress of its own when `ingress.enabled` is set, and an HTTPRoute rule carrying
+`sessionPersistence` when `httpRoute.enabled` is. The route bypasses the frontend
+on purpose: every other path is served by the frontend, which proxies to
+`monize-backend-service` with a server-side fetch, so affinity at the edge would
+pin the frontend pod while kube-proxy still spread that fetch across backend
+replicas.
+
+Three limits to know before relying on it:
+
+- **It pins by cookie, so it pins only clients that keep cookies.** A client that
+  discards them is spread across replicas as before.
+- **Gateway API `sessionPersistence` is an experimental-channel field.** Install
+  the experimental CRDs and confirm your implementation honours it; otherwise the
+  rule is admitted and does nothing.
+- **It covers the documented URL, `https://<host>/api/v1/mcp`.** A client pointed
+  at the bare origin is recognised by its headers inside the frontend proxy,
+  which no path-matching route can reproduce.
+
+Where none of that holds, the two configurations that work are one backend
+replica, or clients that speak 2026-07-28. Without stickiness a misrouted session
+id is answered `404`, which the spec requires a client to recover from by
+re-initializing: reads recover, but a write confirmation in flight does not --
+its answer never reaches the replica that asked, that replica's wait expires, and
+the write proceeds under the client's own approval prompt.
+
 ## Configuration
 
 ### Global Settings
@@ -79,8 +125,7 @@ ingress:
 | `global.namespace` | Namespace for all resources | `monize` |
 | `global.domain` | Application domain | `yourdomain.com` |
 | `global.hostname` | Full hostname override | `monize.<domain>` |
-| `global.timezone` | Container timezone | `America/Toronto` |
-| `global.priorityClassName` | Pod priority class | `low-priority` |
+| `global.timezone` | Container timezone | `""` |
 
 ### Namespace
 
@@ -94,17 +139,32 @@ ingress:
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | `backend.image.registry` | Image registry | `ghcr.io` |
-| `backend.image.repository` | Image repository | `kenlasko/monize/backend` |
+| `backend.image.repository` | Image repository | `kenlasko/monize-backend` |
 | `backend.image.tag` | Image tag | `latest` |
 | `backend.image.pullPolicy` | Image pull policy | `IfNotPresent` |
 | `backend.replicas` | Number of replicas | `1` |
+| `backend.podDisruptionBudget.enabled` | Create a PodDisruptionBudget | `false` |
+| `backend.podDisruptionBudget.minAvailable` | Pods that must stay available | `1` |
+| `backend.podDisruptionBudget.maxUnavailable` | Pods that may go; wins over minAvailable | `""` |
+| `backend.topologySpreadConstraints` | Scheduler spread across nodes | `[]` |
+| `backend.autoscaling.enabled` | Create a HorizontalPodAutoscaler | `false` |
+| `backend.autoscaling.minReplicas` | Lower bound when autoscaling | `2` |
+| `backend.autoscaling.maxReplicas` | Upper bound when autoscaling | `4` |
+| `backend.autoscaling.targetCPUUtilizationPercentage` | Target CPU, % of request | `75` |
 | `backend.service.port` | Service port | `3001` |
 | `backend.service.type` | Service type | `ClusterIP` |
 | `backend.resources` | CPU/memory requests and limits | See values.yaml |
 | `backend.securityContext` | Container security context | Restricted (non-root, read-only fs) |
 | `backend.livenessProbe` | Liveness probe config | `/api/v1/health/live` |
 | `backend.readinessProbe` | Readiness probe config | `/api/v1/health/ready` |
-| `backend.env.*` | Backend environment variables | See values.yaml |
+| `backend.app.*` | Backend application settings (`NODE_ENV`, `PUBLIC_APP_URL`) | See values.yaml |
+| `backend.database.*` | Database connection settings | See values.yaml |
+| `backend.rls.*` | Row-Level Security settings | See values.yaml |
+| `backend.auth.*` | Authentication settings | See values.yaml |
+| `backend.oidc.*` | OIDC settings | See values.yaml |
+| `backend.smtp.*` | SMTP / email settings | See values.yaml |
+| `backend.extraEnv` | Additional environment variables for the backend container | `[]` |
+| `backend.extraEnvFrom` | Additional envFrom references (secretRef, configMapRef) for the backend container | `[]` |
 | `backend.mnyImport.MNY_IMPORT_LIMIT_MB` | Largest Microsoft Money (.mny) file the import wizard accepts | `300` |
 | `backend.backupLimits.exportBuffer` | JSON a buffered export may accumulate | derived from the memory limit |
 | `backend.backupLimits.restoreExpanded` | Decompressed size a restore payload may reach | derived from the memory limit |
@@ -240,30 +300,75 @@ than refusing it. A disconnect *after* the slot is granted changes nothing: that
 restore is part-way through replacing the user's data and runs to completion. The
 startup log prints the slot count with both bounds beside it.
 
-**The frontend needs headroom too.** Every `/api/*` call is forwarded by the
-Next.js proxy, which buffers the request body before sending it on, so a `.mny`
-upload is held in the frontend container as well as the backend. Set
-`frontend.resources.limits.memory` to at least `MNY_IMPORT_LIMIT_MB` plus its
-`100Mi` baseline — so `400Mi` at the default 300.
+**The frontend does not need matching headroom.** Ordinary `/api/*` bodies are
+buffered by the Next.js proxy only up to 11MB, and anything larger is refused.
+The large-upload routes (`.mny` import, restore, attachments, AI queries) are
+served by route handlers that stream the body to the backend without holding
+it, so the frontend's default memory limit covers them.
 
 Set `MNY_IMPORT_LIMIT_MB` on **both** deployments if you change it. The frontend
-reads it to size the proxy's own body ceiling (Next caps proxied bodies at 10MB
-otherwise, and truncates rather than rejecting anything larger).
+reads it to bound the streamed `.mny` import and restore uploads, and refuses a
+larger body with 413.
 
 
 #### Storage for data kept outside Postgres
 
 The backend container runs with `readOnlyRootFilesystem: true`, so it can only
-write where a volume is mounted. Until this block existed the StatefulSet
+write where a volume is mounted. Until this block existed the workload
 rendered no volumes at all, which meant two features visible in the UI could not
 work in the canonical chart -- and both failed at the point of use rather than at
 install time, so the UI went on presenting them as configured:
 
-- **Automatic backups** write to `/data/backups`. Directory creation failed with
-  EROFS, so a user's schedule reported errors forever and produced no files.
+- **Automatic backups** write to `/data/backups` under the default `local`
+  store. Directory creation failed with EROFS, so a user's schedule reported
+  errors forever and produced no files. (`BACKUP_STORAGE_PROVIDER=s3` with the
+  `BACKUP_STORE_S3_*` variables keeps the artifacts in a bucket instead and
+  needs no claim; see "Horizontal scaling" for why `multi` cares.)
 - **`ATTACHMENT_STORAGE_PROVIDER=local`** writes to `/data/attachments`. Same
   failure, for receipts and documents. (The default `database` provider keeps
   bytes in Postgres and is unaffected; so is `s3`.)
+
+Changing that provider **relocates the attachments already stored**, so the
+switch is an upgrade rather than a line in the release notes:
+
+```yaml
+backend:
+  extraEnv:
+    - name: ATTACHMENT_STORAGE_PROVIDER
+      value: "s3"
+    - name: ATTACHMENT_S3_BUCKET
+      value: "my-monize-attachments"
+    # ...the other ATTACHMENT_S3_* variables from .env.example
+    # - name: ATTACHMENT_STORAGE_MIGRATE_ON_SWITCH
+    #   value: "false"          # leave them where they are instead
+  persistence:
+    attachments:
+      enabled: true             # keep this until the relocation has finished
+```
+
+The backend copies each attachment into the new backend, reads the copy back
+and checks it against the size and checksum recorded for it, then deletes the
+original -- starting on boot, then hourly at :50 until none are left, one
+attachment at a time. Two consequences for an operator:
+
+- **The backend being left has to stay configured and mounted until it
+  finishes**, because each attachment is read through the backend its own row
+  names. So keep `persistence.attachments.enabled: true` (or the S3
+  credentials, in the other direction) until the log stops reporting
+  `Attachment storage relocation`, and disable it after.
+- **Attachments stay readable throughout** -- before, during and after -- from
+  whichever backend currently holds each one. A backend the deployment can no
+  longer reach is the one exception: the API answers `503` naming it (not `404`),
+  and the in-app preview says the file is intact and cannot be served from here.
+  The browser's own download of such a file still just fails, so the preview is
+  where a user learns why.
+
+`ATTACHMENT_STORAGE_MIGRATE_ON_SWITCH=false` turns the relocation off, which
+is a decision to keep the old backend indefinitely; the backend says so in its
+log once per boot. There is no chart parameter for either variable, for the
+same reason `ATTACHMENT_STORAGE_PROVIDER` has none: the attachment settings
+are passed through `backend.extraEnv`, and `.env.example` is where they are
+documented in full.
 
 Both are off by default, because enabling them creates a PersistentVolumeClaim
 and a cluster with no default StorageClass would leave the pod `Pending`. Turning
@@ -317,29 +422,169 @@ Notes on sizing and behaviour:
 - `/tmp` always gets an `emptyDir`. Node and the `.mny` import both need
   somewhere to spill, and nothing there needs to survive a restart.
 
+### MCP Routing
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `mcp.stickySessions.enabled` | Pin 2025-era MCP sessions to one backend replica | `false` |
+| `mcp.stickySessions.path` | Path prefix routed straight to the backend | `/api/v1/mcp` |
+| `mcp.stickySessions.cookieName` | Name of the affinity cookie the edge sets | `monize-mcp-affinity` |
+
 ### Frontend
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
 | `frontend.image.registry` | Image registry | `ghcr.io` |
-| `frontend.image.repository` | Image repository | `kenlasko/monize/frontend` |
+| `frontend.image.repository` | Image repository | `kenlasko/monize-frontend` |
 | `frontend.image.tag` | Image tag | `latest` |
 | `frontend.image.pullPolicy` | Image pull policy | `IfNotPresent` |
 | `frontend.replicas` | Number of replicas | `1` |
+| `frontend.podDisruptionBudget.enabled` | Create a PodDisruptionBudget | `false` |
+| `frontend.podDisruptionBudget.minAvailable` | Pods that must stay available | `1` |
+| `frontend.podDisruptionBudget.maxUnavailable` | Pods that may go; wins over minAvailable | `""` |
+| `frontend.topologySpreadConstraints` | Scheduler spread across nodes | `[]` |
+| `frontend.autoscaling.enabled` | Create a HorizontalPodAutoscaler | `false` |
+| `frontend.autoscaling.minReplicas` | Lower bound when autoscaling | `2` |
+| `frontend.autoscaling.maxReplicas` | Upper bound when autoscaling | `4` |
+| `frontend.autoscaling.targetCPUUtilizationPercentage` | Target CPU, % of request | `75` |
 | `frontend.service.port` | Service port | `3000` |
 | `frontend.service.type` | Service type | `ClusterIP` |
 | `frontend.resources` | CPU/memory requests and limits | See values.yaml |
 | `frontend.securityContext` | Container security context | Restricted (non-root, read-only fs) |
 | `frontend.livenessProbe` | Liveness probe config | `/api/v1/health/live` |
 | `frontend.readinessProbe` | Readiness probe config | `/api/v1/health/ready` |
-| `frontend.env.*` | Frontend environment variables | See values.yaml |
+| `frontend.app.*` | Frontend application settings (`NODE_ENV`, `INTERNAL_API_URL`, `PUBLIC_APP_URL`) | See values.yaml |
+| `frontend.extraEnv` | Additional environment variables for the frontend container | `[]` |
+| `frontend.extraEnvFrom` | Additional envFrom references (secretRef, configMapRef) for the frontend container | `[]` |
+
+### Horizontal scaling
+
+| Parameter | Description | Default |
+|-----------|-------------|---------|
+| `cluster.mode` | `single` (one backend replica) or `multi` | `single` |
+| `cluster.attachmentSharedVolume` | Assert every replica mounts the attachment dir | `false` |
+| `cluster.backupSharedVolume` | Assert every replica mounts the backup dir (`local` store only) | `false` |
+
+`cluster.mode` becomes `CLUSTER_MODE` in the backend's configmap. At `single`
+the backend keeps rate-limit counters and cross-replica wake-ups in its own
+process, which is correct for one replica and wrong for two; at `multi` both
+live in PostgreSQL. Nothing else is added -- there is no second datastore to
+run, back up or secure. `docs/specs/horizontal-scaling.md` has the
+design.
+
+Two things the chart cannot verify, and the backend refuses to boot without:
+
+1. **`backend.database.DATABASE_HOST` must reach a PostgreSQL session.** Each
+   replica holds one `LISTEN` open, and a transaction-mode pooler (pgBouncer in
+   its default mode) accepts the connection and then drops the subscription --
+   so wake-ups never arrive and the application merely looks slow. A direct
+   service (CNPG's `-rw`, a plain Service, a session-mode pooler) is what this
+   needs. The boot check catches it and says so in one line.
+
+2. **The storage assertions must be true, not merely set.** No process can see
+   from inside its own mount namespace whether the directory under its mount
+   point is the one another pod sees, so the operator states it. Setting
+   `cluster.backupSharedVolume: true` while the claim is still `ReadWriteOnce`
+   is a deployment that boots and then loses backups, which is why `NOTES.txt`
+   prints the mismatch at install time.
+
+   Each assertion is only asked for by the storage that needs it. The backup one
+   applies to the default `local` store; setting
+   `BACKUP_STORAGE_PROVIDER=s3` in `backend.extraEnv`, with
+   `BACKUP_STORE_S3_BUCKET` and the rest, puts the artifacts in a bucket every
+   replica reaches by construction, and the refusal lifts. That bucket must not
+   be the off-machine destination's `BACKUP_S3_BUCKET`: the off-machine copy
+   exists to survive the loss of the store, so the backend refuses to start when
+   the two resolve to one location (INV-BACKUP-007). Switching stores is
+   forward-only -- nothing is migrated, and the previous recovery points stay on
+   the old claim -- so keep it until the new store has a full retention window.
+
+`helm/ci/multi-values.yaml` turns on every template the mode reaches --
+Deployments above one replica, both budgets, the spread constraints, the
+backend HPA, `CLUSTER_MODE` in the ConfigMap, both storage assertions -- and CI
+renders it on every push so none of them can silently stop working. Read it for
+the shape of each key, not as a recommendation: a real deployment picks among
+these rather than enabling all of them, and the file says so at the top.
+
+Three things the chart refuses to render, because Kubernetes accepts all three
+and none of them reports an error where it goes wrong:
+
+- more than one backend replica (or an autoscaler that could produce one) at
+  `cluster.mode: single`, where the second replica enforces every rate limit a
+  second time and hears none of the first one's wake-ups;
+- a `topologySpreadConstraints` entry whose `labelSelector` matches no pod --
+  which is not a weaker constraint but no constraint at all, satisfied by every
+  placement including all replicas on one node. Select `app: monize-backend` or
+  `app: monize-frontend`, the labels the pods actually carry;
+- a `podDisruptionBudget` that permits no eviction (`minAvailable` equal to the
+  replica count, or `maxUnavailable: 0`), which turns a brief interruption into
+  a node drain that blocks until somebody deletes the budget by hand.
+
+Two more things worth knowing before an upgrade:
+
+- **A `ReadWriteOnce` claim changes the rollout to `Recreate`.** Surging means
+  two pods at once and such a volume attaches to one node, so the new pod would
+  sit `Pending` on a Multi-Attach error while `maxUnavailable: 0` forbids
+  removing the old one. That is a stuck rollout ending in a manual pod delete;
+  `Recreate` takes the same seconds of downtime at the moment you chose. Set
+  `accessMode: ReadWriteMany` on every enabled `backend.persistence` store to
+  keep the surging rollout -- including when you mount your own claim with
+  `existingClaim`, since `accessMode` is how you tell the chart what that claim
+  is.
+- **Changing only a ConfigMap value still rolls the pods.** Both pod templates
+  carry a `checksum/config` annotation over their ConfigMap, because `envFrom`
+  is read once at container start: without it a `helm upgrade --set
+  cluster.mode=multi` would report success and change nothing.
+
+Raising `backend.replicas` while 2025-era MCP clients connect also needs
+`mcp.stickySessions`; see "MCP sessions and more than one backend replica"
+above.
+
+#### Upgrading from a chart version that used StatefulSets
+
+The backend and frontend workloads are `Deployment`s. They were `StatefulSet`s,
+and **a StatefulSet cannot be converted in place** -- `helm upgrade` fails with
+a message about an immutable field. Nothing about these pods was ever ordinal
+(no per-pod identity, no per-pod claim, no ordered start); what the StatefulSet
+cost was a slower rollout.
+
+The one-time step, before the upgrade:
+
+```bash
+kubectl delete statefulset monize-backend monize-frontend \
+  --namespace monize --cascade=orphan
+```
+
+`--cascade=orphan` leaves the running pods alone, so the service keeps
+answering while the upgrade runs. **They are never adopted.** A ReplicaSet
+adopts only pods matching its full selector, which includes the
+`pod-template-hash` label it generates; a StatefulSet's pods do not carry one
+and never will. So the orphans keep serving, keep their old image, and are
+counted by nothing -- the Deployment brings up its own replicas beside them,
+and `kubectl get pods` shows both generations.
+
+Delete the orphans by name once the new pods are `Ready`:
+
+```bash
+kubectl get pods --namespace monize
+kubectl delete pod monize-backend-0 monize-frontend-0 --namespace monize
+```
+
+The ordinal names are the giveaway: a Deployment's pods are
+`monize-backend-<replicaset>-<random>`, so anything still named
+`monize-backend-<n>` is an orphan. Leaving one running is not harmless at
+`cluster.mode: single` -- it is the second replica the mode is not built for.
+
+The PersistentVolumeClaims are untouched by any of this: they are ordinary
+claims the chart creates, not `volumeClaimTemplates`, and they carry
+`helm.sh/resource-policy: keep`.
 
 ### Row-Level Security (RLS)
 
 RLS is an optional defense-in-depth layer that enforces per-user data isolation
 in the database itself. It is **off by default**; the standard single-role setup
-needs no changes here. See `docs/future-plans/row-level-security.md` (design) and
-the runbook for the phased rollout.
+needs no changes here. See `docs/specs/row-level-security.md` (design) and
+`docs/rls-runbook.md` for the phased rollout.
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
@@ -401,7 +646,7 @@ applies the role's DML grants (idempotently, on every boot).
 ## Security
 
 All containers enforce the `restricted` Pod Security Standard:
-- Run as non-root user (UID 1000)
+- Run as non-root user (UID 1001)
 - Read-only root filesystem
 - All Linux capabilities dropped
 - RuntimeDefault seccomp profile

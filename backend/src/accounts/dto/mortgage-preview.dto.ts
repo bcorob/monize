@@ -1,24 +1,26 @@
 import {
   IsNumber,
   IsPositive,
-  IsBoolean,
   IsDateString,
   IsIn,
+  IsOptional,
   Min,
   Max,
 } from "class-validator";
-import { ApiProperty } from "@nestjs/swagger";
+import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import {
   MORTGAGE_PAYMENT_FREQUENCIES,
   MortgagePaymentFrequency,
 } from "./create-account.dto";
+import { MORTGAGE_TYPES, MortgageType } from "../mortgage-type.util";
+import { IsMoneyAmount } from "../../common/validators/is-money-amount.validator";
 
 export class MortgagePreviewDto {
   @ApiProperty({
     example: 400000,
     description: "Mortgage principal amount",
   })
-  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsMoneyAmount(2)
   @IsPositive()
   mortgageAmount: number;
 
@@ -54,21 +56,15 @@ export class MortgagePreviewDto {
   @IsDateString()
   paymentStartDate: string;
 
-  @ApiProperty({
-    example: true,
+  @ApiPropertyOptional({
+    example: "CANADIAN_FIXED",
     description:
-      "Whether this is a Canadian mortgage (semi-annual compounding for fixed rates)",
+      "Mortgage type: ANNUITY (nominal rate divided by the payments per year), CANADIAN_FIXED (semi-annual compounding), LINEAR (constant principal) or INTEREST_ONLY (no principal until the final payment). LINEAR and INTEREST_ONLY refuse an accelerated frequency. ANNUITY when absent.",
+    enum: MORTGAGE_TYPES,
   })
-  @IsBoolean()
-  isCanadian: boolean;
-
-  @ApiProperty({
-    example: false,
-    description:
-      "Whether this is a variable rate mortgage (monthly compounding)",
-  })
-  @IsBoolean()
-  isVariableRate: boolean;
+  @IsOptional()
+  @IsIn(MORTGAGE_TYPES)
+  mortgageType?: MortgageType;
 }
 
 export class MortgagePreviewResponseDto {

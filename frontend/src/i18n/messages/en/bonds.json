@@ -1,0 +1,100 @@
+{
+  "entry": {
+    "history": "History of {program} terms"
+  },
+  "offer": {
+    "loading": "Loading the bonds on sale...",
+    "loadFailed": "The bonds on sale could not be loaded.",
+    "retry": "Try again",
+    "empty": "No series is on sale today.",
+    "asOf": "On sale on {date}. Every figure is for one bond bought today and held to maturity.",
+    "comparisonNote": "The annualized return is a comparison figure for products of different lengths, not a promise of what you will earn.",
+    "couponsNote": "Coupons not reinvested: for a bond that pays coupons, the maturity value adds every coupon paid.",
+    "projected": "Projected",
+    "projectedTitle": "This figure rests on an assumed benchmark value, not on published rates only.",
+    "assumptions": {
+      "title": "Assumptions",
+      "intro": "Periods that have not started are valued at these benchmark values. Change one to see what it does to every row.",
+      "label": "{benchmark} (%)",
+      "latest": "Latest published value: {value} ({observation})",
+      "reset": "Use the latest published values",
+      "updating": "Updating the figures..."
+    },
+    "columns": {
+      "series": "Series",
+      "saleWindow": "On sale",
+      "length": "Length",
+      "firstPeriodRate": "First period",
+      "rule": "Rate",
+      "capitalization": "Interest",
+      "redemption": "Early redemption",
+      "maturityValue": "Maturity value",
+      "totalReturn": "Total return",
+      "annualizedReturn": "Annualized return",
+      "terms": "Terms"
+    },
+    "saleWindowValue": "{from} to {to}",
+    "lengthValue": "{months, plural, one {# month} other {# months}}",
+    "lengthDaysValue": "{days, plural, one {# day} other {# days}}",
+    "rule": {
+      "fixed": "Fixed {rate} a year",
+      "benchmark": "{benchmark} + {addend}",
+      "floor": "Benchmark floor {floor}",
+      "daily": "Daily: {benchmark} + {addend}",
+      "discount": "Discount to face value"
+    },
+    "capitalization": {
+      "NONE": "Paid out each period",
+      "COMPOUND_AT_PERIOD_END": "Compounded at each period end"
+    },
+    "redemption": {
+      "none": "At maturity only",
+      "onDemand": "On demand",
+      "fee": "Fee {amount} per bond",
+      "forfeit": "Interest accrued in the period is forfeited"
+    },
+    "couponsNotReinvested": "Coupons not reinvested"
+  },
+  "history": {
+    "loading": "Loading the history...",
+    "loadFailed": "The history could not be loaded.",
+    "retry": "Try again",
+    "empty": "No series of this product is stored yet.",
+    "coverage": "The catalog covers {from} to {to}.",
+    "rateChartTitle": "First-period rate and margin by sale month",
+    "feeChartTitle": "Early redemption fee by sale month",
+    "rate": "First-period rate",
+    "rateChartNote": "For fixed-rate bonds the line shows the annual rate.",
+    "addend": "Margin or spread",
+    "fee": "Early redemption fee",
+    "gapsNote": "A month with no stored series is a gap in the line, never a value drawn from its neighbours.",
+    "missingTitle": "Months missing from the catalog ({count})",
+    "noMissing": "No month is missing between the first and the last stored series.",
+    "tableTitle": "Every stored series",
+    "groupCount": "{count} series",
+    "unknownYear": "Sale date unknown",
+    "columns": {
+      "series": "Series",
+      "saleWindow": "On sale",
+      "rate": "First-period or annual rate",
+      "addend": "Margin or spread",
+      "fee": "Early redemption fee",
+      "floor": "Proceeds floor",
+      "version": "Terms version",
+      "source": "Source"
+    },
+    "floor": {
+      "ALL_PERIODS": "Every period",
+      "FIRST_PERIOD": "First period only"
+    },
+    "none": "None",
+    "held": "Held"
+  },
+  "refreshProgress": {
+    "label": "Refreshing bond data",
+    "offer": "Checking the current offer…",
+    "series": "Fetching series {done} of {total}: {seriesCode}",
+    "historyComplete": "History is complete",
+    "starting": "Starting…"
+  }
+}

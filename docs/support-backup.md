@@ -19,7 +19,15 @@ Starting from the same rows the normal export produces, the support backup:
   notes, memos, reference numbers, account numbers, institution logos/websites,
   the AI provider configs table (encrypted API keys), and the last-client
   timezone. Dropping descriptions also removes real figures banks paste into
-  them (e.g. `ODSETKI: 388,14`).
+  them (e.g. `ODSETKI: 388,14`). A security's bond link
+  (`securities.bond_program_id`) and its transactions' series
+  (`investment_transactions.bond_instrument_id`) are dropped too: their ids name
+  the exact program and series the masked symbol hides, and the copy's share quantities are scaled by a
+  non-integer `M`, which the bond engine refuses (a quantity must be a whole
+  number of bonds). The copy is therefore not valued by the engine; any
+  `bond_engine` price rows it carries stay as static prices. The auto-fetch flag
+  (`securities.bond_auto_fetch`) is kept: it is a boolean that re-identifies
+  nobody.
 - **Scales** every private amount by a single multiplier `M` (a non-integer > 1)
   while leaving **public reference values untouched** — exchange rates, security
   prices, per-unit costs and interest rates. Scaling a private amount but not a
@@ -44,6 +52,15 @@ Starting from the same rows the normal export produces, the support backup:
   rewritten. `decimal_places` is kept: it is the arithmetic, and changing it
   would alter what every amount means in a file whose purpose is reproducing a
   calculation.
+- **Replaces a NOT NULL column rather than dropping it**: `drop` writes NULL,
+  which on a NOT NULL column with no default is a row the restore's `INSERT`
+  cannot take -- and `ON CONFLICT DO NOTHING` does not absorb a constraint
+  violation, so one such row aborts the whole restore transaction. The
+  de-identified form of such a column is `konst(...)`, and the value has to
+  satisfy the column's own `CHECK` too (`calendar_day_notes.body` is
+  `konst("***")`, not `konst("")`, because its `CHECK` refuses an empty
+  string). `support-backup-rules.spec.ts` scans `schema.sql` and fails a `drop`
+  on any NOT NULL column that has no default.
 - **Keeps masked values unique** on every UNIQUE column: masking is not
   injective (short values collapse to all-asterisks, e.g. tickers `AAPL`/`MSFT`
   both become `****`, and any two values sharing their first/last two characters
@@ -68,8 +85,10 @@ Starting from the same rows the normal export produces, the support backup:
   so the trimmed file still reconciles to the true balance.
 - Runs a **referential-integrity scrub** after any trimming (account scope,
   date range, disabled sections): a declarative map of every FK between
-  exported tables nulls or drops each dangling reference, so a trimmed file
-  always restores. Id arrays outside FK constraints (Monte Carlo account lists,
+  exported tables nulls or drops each dangling reference. Shared journals remain
+  whole under personal account/date scoping: their reference checks include the
+  group/owner components of composite foreign keys and refuse a missing
+  participant, allocation target or refund source. Id arrays outside FK constraints (Monte Carlo account lists,
   report filters) are filtered to accounts present in the file, and the
   free-form dashboard widget config is reset under account scoping, so no
   excluded account's identifier survives un-remapped.
@@ -89,7 +108,7 @@ Backend, under `backend/src/backup/support-backup/`:
 - `support-backup-rules.ts` — the per-column rule registry. It is an
   **allowlist**: a column with no rule is dropped, and the golden test
   (`test/integration/support-backup.integration.spec.ts`) fails when the live
-  schema gains a column the registry does not classify, so a future migration
+  schema or actual export gains a column the registry does not classify, so a future migration
   cannot silently start leaking a field. JSONB blobs are classified per-key by
   handlers in `support-backup-jsonb.ts`, which are themselves allowlists.
 - `support-backup.service.ts` — the engine: section filtering, rule application,
@@ -102,10 +121,12 @@ Backend, under `backend/src/backup/support-backup/`:
   account's opening balance by the removed transactions so the file still
   reconciles.
 - `support-backup-integrity.ts` — the referential-integrity scrub run after any
-  trimming: a declarative FK map (`REFS`) nulls or drops every reference whose
-  target was removed, so a scoped/date-ranged/section-trimmed file always
-  restores. An integration test asserts `REFS` covers every foreign key between
-  exported tables (`information_schema`), the same completeness guard the golden
+  trimming: a declarative FK map (`REFS`) nulls or drops references whose
+  targets were removed; shared journal references use the refusal policy above.
+  `support-backup-shared-refs.ts` derives the shared targets from the restore
+  registry and adds the composite-key scope. An integration test compares each
+  complete FK tuple and its target with `pg_constraint` in both directions,
+  the same completeness guard the golden
   test gives the column rules — so a future migration can't add an FK the scrub
   silently ignores. The scrub is skipped for a full untrimmed export (nothing
   can dangle). The same file also holds `dedupeMaskedText`, which restores

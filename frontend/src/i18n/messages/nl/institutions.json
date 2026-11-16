@@ -30,11 +30,6 @@
       "actions": "Acties"
     },
     "accountCount": "{count, plural, =0 {Geen rekeningen} one {# rekening} other {# rekeningen}}",
-    "statusFilter": {
-      "all": "Alle",
-      "active": "Actief",
-      "closed": "Gesloten"
-    },
     "actions": {
       "manageAccounts": "Rekeningen"
     },

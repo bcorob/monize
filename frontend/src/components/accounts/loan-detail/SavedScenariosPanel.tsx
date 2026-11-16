@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
+import { CAPTION_CLASS, CellLabel, Th } from '@/components/ui/Table';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { OverpaymentPlan, ScenarioComparison, effectiveOverpaymentMode } from '@/lib/loan-schedule';
 import { loanScenariosApi, planToScenarioData, scenarioToPlan } from '@/lib/loan-scenarios';
@@ -127,7 +128,9 @@ export function SavedScenariosPanel({
     interestSavedLabel,
   } = createScenarioLabels({ t, formatCurrency, formatChartDate, currencyCode });
 
-  const headerCell = 'px-3 py-2 text-xs font-medium text-gray-500 dark:text-gray-400';
+  // A wrapped money cell: no padding on phones (the card's grid spaces the
+  // cells), the table cell's own padding and right alignment from `sm` up.
+  const moneyCell = 'p-0 text-right text-sm whitespace-nowrap sm:table-cell sm:px-3 sm:py-2';
 
   return (
     <div className="mt-6 pt-5 border-t border-gray-200 dark:border-gray-700">
@@ -159,27 +162,33 @@ export function SavedScenariosPanel({
           {t('loanDetail.scenarios.empty')}
         </p>
       ) : (
+        // Below `sm` the table becomes a block and each row wraps into a
+        // two-column grid card so the name, the four figures and the row actions
+        // fit a phone without a horizontal scroll; from `sm` up it is the
+        // ordinary table. The card is clickable in whole (it loads the
+        // scenario), the header is hidden and each figure names its column with
+        // a caption.
         <div className="overflow-x-auto">
-          <table className="min-w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-200 dark:border-gray-700 text-left">
-                <th className={headerCell}>{t('loanDetail.scenarios.nameLabel')}</th>
-                <th className={`${headerCell} text-right`}>
+          <table className="block min-w-full text-sm sm:table">
+            <thead className="block sm:table-header-group">
+              <tr className="hidden border-b border-gray-200 dark:border-gray-700 text-left sm:table-row">
+                <Th className="px-3 py-2">{t('loanDetail.scenarios.nameLabel')}</Th>
+                <Th align="right" className="px-3 py-2">
                   {t('loanDetail.scenarios.colOverpayment')}
-                </th>
-                <th className={`${headerCell} text-right`}>
+                </Th>
+                <Th align="right" className="px-3 py-2">
                   {t('loanDetail.comparison.newPayoff')}
-                </th>
-                <th className={`${headerCell} text-right`}>
+                </Th>
+                <Th align="right" className="px-3 py-2">
                   {t('loanDetail.comparison.timeSaved')}
-                </th>
-                <th className={`${headerCell} text-right`}>
+                </Th>
+                <Th align="right" className="px-3 py-2">
                   {t('loanDetail.comparison.interestSaved')}
-                </th>
-                <th className={headerCell} />
+                </Th>
+                <Th className="px-3 py-2" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+            <tbody className="block divide-y divide-gray-200 dark:divide-gray-700 sm:table-row-group">
               {scenarios.map((scenario) => {
                 const comparison = comparisons.get(scenario.id) ?? null;
                 const load = () => onLoad(scenarioToPlan(scenario), scenario);
@@ -196,9 +205,9 @@ export function SavedScenariosPanel({
                         load();
                       }
                     }}
-                    className="cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset"
+                    className="grid grid-cols-2 items-start gap-x-3 gap-y-1.5 px-3 py-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-inset sm:table-row sm:p-0"
                   >
-                    <td className="px-3 py-2 align-top">
+                    <td className="col-span-2 row-start-1 p-0 align-top sm:table-cell sm:px-3 sm:py-2">
                       <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
                         {scenario.name}
                       </p>
@@ -206,25 +215,30 @@ export function SavedScenariosPanel({
                         {describeScenario(scenario)}
                       </p>
                     </td>
-                    <td className="px-3 py-2 text-right whitespace-nowrap text-gray-900 dark:text-gray-100">
+                    <td className={`col-start-1 row-start-2 text-gray-900 dark:text-gray-100 ${moneyCell}`}>
+                      <CellLabel className={CAPTION_CLASS}>{t('loanDetail.scenarios.colOverpayment')}</CellLabel>
                       {overpaymentLabel(scenario)}
                     </td>
-                    <td className="px-3 py-2 text-right whitespace-nowrap text-purple-600 dark:text-purple-400">
+                    <td className={`col-start-2 row-start-2 text-purple-600 dark:text-purple-400 ${moneyCell}`}>
+                      <CellLabel className={CAPTION_CLASS}>{t('loanDetail.comparison.newPayoff')}</CellLabel>
                       {payoffLabel(comparison)}
                     </td>
-                    <td className="px-3 py-2 text-right whitespace-nowrap text-green-600 dark:text-green-400">
+                    <td className={`col-start-1 row-start-3 text-green-600 dark:text-green-400 ${moneyCell}`}>
+                      <CellLabel className={CAPTION_CLASS}>{t('loanDetail.comparison.timeSaved')}</CellLabel>
                       {/* The mode travels with the scenario, as it does in
                           comparisonTable's export -- inferring it from the
                           installment drop made the visible table and its own CSV
                           disagree for the same row. */}
                       {timeSavedLabel(comparison, effectiveOverpaymentMode(scenarioToPlan(scenario)))}
                     </td>
-                    <td className="px-3 py-2 text-right whitespace-nowrap text-green-600 dark:text-green-400">
+                    <td className={`col-start-2 row-start-3 text-green-600 dark:text-green-400 ${moneyCell}`}>
+                      <CellLabel className={CAPTION_CLASS}>{t('loanDetail.comparison.interestSaved')}</CellLabel>
                       {interestSavedLabel(comparison)}
                     </td>
-                    <td className="px-3 py-2 text-right whitespace-nowrap">
+                    <td className="col-span-2 row-start-4 p-0 whitespace-nowrap sm:table-cell sm:px-3 sm:py-2 sm:text-right">
                       {/* Row-level actions stop propagation so they don't also
-                          load the scenario (the row's own click does that). */}
+                          load the scenario (the row's own click, or its tap on a
+                          phone, does that). */}
                       <div className="flex items-center justify-end gap-1">
                         <Button
                           variant="ghost"
@@ -279,13 +293,18 @@ export function SavedScenariosPanel({
         </p>
       )}
 
-      <Modal isOpen={nameModal !== null} onClose={() => setNameModal(null)} maxWidth="sm">
-        <div className="p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-            {nameModal?.mode === 'rename'
-              ? t('loanDetail.scenarios.renameTitle')
-              : t('loanDetail.scenarios.saveTitle')}
-          </h3>
+      <Modal
+        isOpen={nameModal !== null}
+        onClose={() => setNameModal(null)}
+        maxWidth="sm"
+        className="p-6"
+        title={
+          nameModal?.mode === 'rename'
+            ? t('loanDetail.scenarios.renameTitle')
+            : t('loanDetail.scenarios.saveTitle')
+        }
+      >
+        <div>
           <Input
             label={t('loanDetail.scenarios.nameLabel')}
             value={nameInput}

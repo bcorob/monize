@@ -10,6 +10,8 @@
     "versionLabel": "Wersja {version}",
     "expandAll": "Rozwiń wszystko",
     "collapseAll": "Zwiń wszystko",
+    "changeCount": "{count, plural, one {# zmiana} few {# zmiany} many {# zmian} other {# zmiany}}",
+    "otherSections": "Poprawki i szczegóły",
     "viewFullNotes": "Zobacz pełne informacje o wydaniu",
     "dontShowAgain": "Nie pokazuj ponownie",
     "showNextLogin": "Pokaż przy następnym logowaniu",
@@ -38,6 +40,14 @@
     "scheduleRecurring": "Ustaw jako cykliczne",
     "more": "Więcej akcji"
   },
+  "columns": {
+    "button": "Kolumny",
+    "buttonWithHidden": "Kolumny, ukryte: {count}",
+    "menuLabel": "Pokaż lub ukryj kolumny",
+    "showAll": "Pokaż wszystkie",
+    "hideColumn": "Ukryj kolumnę",
+    "sheetSubtitle": "Przywrócisz ją z menu Kolumny."
+  },
   "loading": "Wczytywanie...",
   "pagination": {
     "showing": "Wyświetlanie",
@@ -60,6 +70,7 @@
   },
   "exportDropdown": {
     "export": "Eksportuj",
+    "exportCsv": "Eksportuj CSV",
     "exporting": "Eksportowanie...",
     "exportPdf": "Eksportuj PDF",
     "exportReport": "Eksportuj raport",
@@ -88,6 +99,7 @@
     "stackedChart": "Skumulowany wykres słupkowy 100%",
     "lineChart": "Wykres liniowy",
     "areaChart": "Wykres warstwowy",
+    "sankeyChart": "Diagram przepływów",
     "table": "Tabela"
   },
   "formActions": {
@@ -118,8 +130,15 @@
     "search": "Szukaj...",
     "selectAll": "Zaznacz wszystko",
     "clear": "Wyczyść",
+    "clearSearch": "Wyczyść wyszukiwanie",
     "noOptions": "Nie znaleziono opcji",
     "selectedCount": "Wybrano {count}"
+  },
+  "categoryFilter": {
+    "uncategorized": "Bez kategorii",
+    "transfers": "Przelewy",
+    "allIncome": "Wszystkie kategorie przychodów",
+    "allExpenses": "Wszystkie kategorie wydatków"
   },
   "combobox": {
     "createOption": "Utwórz \"{value}\"",
@@ -137,6 +156,7 @@
   },
   "dateInput": {
     "shortcutsTitle": "Skróty klawiszowe",
+    "openPicker": "Otwórz wybór daty",
     "today": "Dzisiaj",
     "firstDayOfYear": "Pierwszy dzień roku",
     "lastDayOfYear": "Ostatni dzień roku",
@@ -158,6 +178,7 @@
     "CASH": "Gotówka",
     "LINE_OF_CREDIT": "Linia kredytowa",
     "ASSET": "Aktywo",
+    "CRYPTO": "Portfel kryptowalutowy",
     "OTHER": "Inne"
   },
   "accountFilter": {
@@ -241,12 +262,20 @@
     "marker": "—",
     "srLabel": "Kwota niedostępna",
     "scheduledFx": "Nie można ustalić aktualnej kwoty: brak kursu wymiany dla pary walutowej rozliczenia tej zaplanowanej pozycji. Zapisana kwota została obliczona po starszym kursie, więc nie jest wyświetlana.",
-    "displayFx": "Tej kwoty nie można tu pokazać: sama kwota jest znana, ale brakuje kursu wymiany, aby przeliczyć ją na walutę tej sumy. Odśwież kursy na stronie Waluty."
+    "displayFx": "Tej kwoty nie można tu pokazać: sama kwota jest znana, ale brakuje kursu wymiany, aby przeliczyć ją na walutę tej sumy. Odśwież kursy na stronie Waluty.",
+    "noCashBalance": "Nie można obliczyć tej wartości: konto gotówkowe w tym widoku nie podało salda na ten dzień, więc jego stan jest nieznany, a nie zerowy. Załaduj raport ponownie; jeśli problem się powtarza, salda tego dnia nie dały się obliczyć i warto to zgłosić.",
+    "noPrice": "Nie można obliczyć tej wartości: liczba posiadanych udziałów jest znana, ale papier wartościowy nie ma ceny, według której można je wycenić. Odśwież ceny lub dodaj cenę ręcznie w historii cen papieru wartościowego.",
+    "noBaseline": "Tej wartości nie można obliczyć: jest to porównanie, a nie ma wcześniejszej wartości, z którą można je zestawić. Niczego nie brakuje, więc nie ma czego dodawać.",
+    "staleQuote": "Nie można obliczyć zmiany dziennej: najnowsza cena papieru wartościowego jest starsza niż ostatnia sesja, więc każda zmiana liczona z niej byłaby zmianą z wcześniejszego dnia. Odśwież ceny lub sprawdź dostawcę notowań tego papieru.",
+    "unknownCurrency": "Nie można pokazać tej kwoty: zapis nie wskazuje papieru wartościowego, więc waluta tej kwoty jest nieznana. Otwórz transakcję i przypisz jej papier wartościowy, aby jej kwoty mogły mieć oznaczenie waluty."
   },
   "density": {
     "title": "Przełącz gęstość wierszy",
     "normal": "Normalna",
     "compact": "Kompaktowa",
     "dense": "Gęsta"
+  },
+  "scheduledOverdue": {
+    "included": "Zawiera {count, plural, one {# zaległą zaplanowaną transakcję} few {# zaległe zaplanowane transakcje} many {# zaległych zaplanowanych transakcji} other {# zaległej zaplanowanej transakcji}}"
   }
 }

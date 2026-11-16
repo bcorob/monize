@@ -1,29 +1,4 @@
 {
-  "alerts": {
-    "title": "Waarschuwingen",
-    "unread": "{count} ongelezen",
-    "markAllRead": "Alles markeren als gelezen",
-    "loading": "Waarschuwingen laden...",
-    "empty": "Geen waarschuwingen",
-    "undo": "Ongedaan maken",
-    "buttonTitle": "Waarschuwingen",
-    "buttonAriaLabel": "Waarschuwingen",
-    "dismissAriaLabel": "Waarschuwing sluiten",
-    "severity": {
-      "critical": "Kritiek",
-      "warning": "Waarschuwing",
-      "success": "Goed nieuws",
-      "info": "Info"
-    },
-    "billDue": {
-      "titleOverdue": "{payee} achterstallig",
-      "titleToday": "{payee} vandaag verschuldigd",
-      "titleTomorrow": "{payee} morgen verschuldigd",
-      "titleInDays": "{payee} over {days} dagen verschuldigd",
-      "amountDue": "{amount} te betalen op {date}",
-      "amountUnavailable": "Bedrag niet beschikbaar (geen actuele wisselkoers), te betalen op {date}"
-    }
-  },
   "summary503020": {
     "title": "50/30/20-verdeling",
     "groups": {
@@ -38,6 +13,7 @@
     "editTitle": "Bewerken: {name}",
     "budgetAmount": "Budgetbedrag",
     "rolloverType": "Overdrachttype",
+    "rolloverTypeTooltip": "Niet-gebruikt budget van deze categorie wordt overgedragen naar de volgende periode in plaats van gereset. Overbesteding wordt nooit als schuld overgedragen, en een overdrachtsmaximum beperkt hoeveel er kan worden opgebouwd.",
     "rolloverCap": "Overdrachtsmaximum (optioneel)",
     "rolloverCapPlaceholder": "Geen maximum",
     "flexGroup": "Flexgroep (optioneel)",
@@ -59,7 +35,10 @@
       "WANT": "Wens",
       "SAVING": "Sparen"
     },
-    "saving": "Opslaan..."
+    "saving": "Opslaan...",
+    "remove": "Uit budget verwijderen",
+    "bucket": "Potje",
+    "bucketUnassigned": "Niet toegewezen"
   },
   "categoryList": {
     "title": "Categoriebudgetten",
@@ -108,7 +87,6 @@
     "baseIncomePlaceholder": "Verwacht maandinkomen",
     "active": "Actief",
     "saveChanges": "Wijzigingen opslaan",
-    "saving": "Opslaan...",
     "typeOptions": {
       "MONTHLY": "Maandelijks",
       "ANNUAL": "Jaarlijks",
@@ -118,7 +96,8 @@
       "FIXED": "Vast",
       "ROLLOVER": "Overdracht",
       "ZERO_BASED": "Op nul gebaseerd",
-      "FIFTY_THIRTY_TWENTY": "50/30/20"
+      "FIFTY_THIRTY_TWENTY": "50/30/20",
+      "BUCKET": "Potje"
     }
   },
   "healthGauge": {
@@ -134,7 +113,8 @@
     "title": "Uitgavenheatmap - {monthLabel}",
     "ariaLabel": "Uitgavenheatmap",
     "less": "Minder",
-    "more": "Meer"
+    "more": "Meer",
+    "readout": "{date}: {amount}"
   },
   "periodDetail": {
     "summaryCards": {
@@ -159,7 +139,8 @@
     "rolloverBadge": "+{amount} overdracht",
     "underBudgetLabel": "{amount} onder budget",
     "overBudgetLabel": "{amount} boven budget",
-    "carriedForward": "{amount} overgedragen"
+    "carriedForward": "{amount} overgedragen",
+    "dateRange": "{start} tot {end}"
   },
   "periodSelector": {
     "label": "Periode:",
@@ -208,6 +189,7 @@
   },
   "velocity": {
     "title": "Uitgavensnelheid",
+    "titleTooltip": "Je dagelijkse verbruikstarief en veilige bestedingstempo, geprojecteerd tot het einde van de periode. Werkelijk beschikbaar trekt je nog komende geplande rekeningen af, zodat een budget dat nog ruimte lijkt te hebben niet wordt uitgegeven aan geld dat al verschuldigd is.",
     "dailyBurnRate": "Dagelijks verbruiktarief",
     "safeToSpend": "Veilig te besteden",
     "projectedMonthEnd": "Verwacht maandeinde",
@@ -260,6 +242,10 @@
       "FIFTY_THIRTY_TWENTY": {
         "label": "50/30/20",
         "description": "50% behoeften, 30% wensen, 20% sparen. Categorieën worden per groep getagd."
+      },
+      "BUCKET": {
+        "label": "Potje",
+        "description": "Inkomsten worden verdeeld over een paar potjes met een naam. Houd elk potje in de gaten, niet elke categorie."
       }
     },
     "profiles": {
@@ -280,6 +266,23 @@
       "analyzeFailed": "Analyseren van uitgaven mislukt"
     }
   },
+  "lineNames": {
+    "transfersFrom": "Overboekingen van {name}",
+    "unknown": "Onbekend"
+  },
+  "transferIncomeForm": {
+    "hint": "Geld dat van deze rekening binnenkomt, telt als inkomen van het budget, min wat ernaar wordt teruggeboekt.",
+    "account": "Van rekening",
+    "accountPlaceholder": "Kies een rekening",
+    "accountRequired": "Kies de rekening waar de overboekingen vandaan komen",
+    "amount": "Gepland bedrag",
+    "submit": "Toevoegen"
+  },
+  "transfersInAsIncome": {
+    "label": "Inkomende overboekingen van uitgesloten rekeningen als inkomen tellen",
+    "hint": "Geld dat van een uitgesloten rekening naar de rekeningen van dit budget wordt overgeboekt, telt als inkomen, min wat ernaar wordt teruggeboekt. Een rekening met een eigen overboekingsregel wordt op die regel geteld.",
+    "noExcludedAccounts": "Dit budget sluit nog geen rekening uit, dus er wordt niets geteld."
+  },
   "wizardCategories": {
     "title": "Categorieën beoordelen",
     "noAnalysis": "Geen analysegegevens. Ga terug en voer eerst de analyse uit.",
@@ -287,6 +290,7 @@
       "income": "Inkomsten",
       "expenses": "Uitgaven",
       "transfers": "Overboekingen / Sparen",
+      "transfersIn": "Inkomende overboekingen (inkomen)",
       "trendMedian": "Trend / Mediaan",
       "amount": "Bedrag"
     },
@@ -296,6 +300,7 @@
       "transfers": "Overboekingen",
       "remaining": "Resterend"
     },
+    "transfersInHint": "Geld dat van een aangevinkte rekening binnenkomt, telt als inkomen, min wat ernaar wordt teruggeboekt. Vink alleen de rekeningen aan waaruit u inkomen haalt, zoals een spaarbuffer.",
     "allocation503020": "50/30/20-verdeling",
     "allocationTarget": "(doel {percent}%)",
     "nextButton": "Volgende: Configureren",
@@ -326,7 +331,8 @@
       "FIXED": "Stel bedragen per categorie in. Ongebruikt budget wordt elke periode gereset.",
       "ROLLOVER": "Ongebruikt budget wordt overgedragen op basis van overdrachtregels per categorie.",
       "ZERO_BASED": "Elke euro aan inkomsten wordt toegewezen. Inkomsten minus uitgaven moet nul zijn.",
-      "FIFTY_THIRTY_TWENTY": "Categorieën gegroepeerd als behoeften (50%), wensen (30%), sparen (20%)."
+      "FIFTY_THIRTY_TWENTY": "Categorieën gegroepeerd als behoeften (50%), wensen (30%), sparen (20%).",
+      "BUCKET": "Inkomsten verdeeld over potjes met een naam. Elke categorie hoort bij één potje."
     },
     "linkBudgetToIncome": "Budget koppelen aan inkomsten",
     "linkBudgetToIncomeHint": "Categoriebedragen worden percentages van jouw basisinkomen",
@@ -334,6 +340,7 @@
     "estimatedFromAnalysis": "Geraamd uit analyse: {amount}/mnd",
     "defaultRolloverType": "Standaard overdrachttype",
     "rolloverHint": "Dit stelt de standaard in voor alle categorieën. Je kunt individuele categorieën aanpassen nadat je het budget hebt aangemaakt.",
+    "rolloverTooltip": "Niet-gebruikt budget van een categorie wordt overgedragen naar de volgende periode in plaats van gereset. Overbesteding wordt nooit als schuld overgedragen, en een overdrachtsmaximum beperkt hoeveel een categorie kan opbouwen.",
     "rolloverOptions": {
       "NONE": "Geen -- Reset elke periode",
       "MONTHLY": "Maandelijks -- Elke maand overgedragen",
@@ -353,6 +360,7 @@
     },
     "flexGroupPlaceholder": "bijv. Vrij te besteden",
     "excludedAccountsHint": "Transacties van uitgesloten rekeningen tellen niet mee voor jouw budgettotalen.",
+    "excludedAccountsTooltip": "Het uitsluiten van een rekening verwijdert de bijbehorende transacties alleen uit de uitgaven, inkomsten, overdracht en gezondheidsscore van dit budget. Ze blijven normaal verschijnen in je transacties en rapporten, en in elk ander budget dat de rekening niet uitsluit.",
     "excludedCount": "{count} {count, plural, one {rekening} other {rekeningen}} uitgesloten",
     "categoriesAndTransfers": "{categories} categorieën en {transfers} overboekingen geselecteerd",
     "budgetTypeOptions": {
@@ -372,8 +380,10 @@
       "rollover": "Overdracht",
       "alerts": "Waarschuwingen",
       "incomeLinked": "Inkomen gekoppeld",
-      "excludedAccounts": "Uitgesloten rekeningen"
+      "excludedAccounts": "Uitgesloten rekeningen",
+      "transfersInAsIncome": "Inkomende overboekingen"
     },
+    "transfersInAsIncomeOn": "Die van uitgesloten rekeningen tellen als inkomen",
     "rolloverOff": "Uit",
     "alertsValue": "Waarschuwing {warn}% / Kritiek {critical}%",
     "accountCount": "{count} {count, plural, one {rekening} other {rekeningen}}",
@@ -392,7 +402,8 @@
     "categoryTypes": {
       "income": "Inkomsten",
       "expense": "Uitgaven",
-      "transfer": "Overboeking"
+      "transfer": "Overboeking",
+      "transferIn": "Inkomende overboeking"
     },
     "createButton": "Budget aanmaken",
     "categoryCount": "{count} categorieën",
@@ -400,6 +411,19 @@
     "toasts": {
       "created": "Budget succesvol aangemaakt",
       "failed": "Aanmaken van budget mislukt"
+    }
+  },
+  "wizardBuckets": {
+    "title": "Potjes",
+    "description": "Verdeel je inkomsten over potjes en kies hieronder een potje voor elke uitgave en overboeking.",
+    "selectLabel": "Potje voor {name}",
+    "unassigned": "Niet toegewezen",
+    "tallyTitle": "Regels per potje",
+    "tallyValue": "{count, plural, one {# regel} other {# regels}} · {amount}",
+    "review": {
+      "lineCount": "{count, plural, one {# regel} other {# regels}}",
+      "unassigned": "{count, plural, one {# uitgave- of overboekingsregel zit} other {# uitgave- of overboekingsregels zitten}} in geen enkel potje. Je kunt het budget toch aanmaken en ze later toewijzen op de bewerkpagina.",
+      "noBuckets": "Dit budget heeft nog geen potjes. Je kunt het toch aanmaken en later potjes toevoegen op de bewerkpagina."
     }
   },
   "zeroBasedBar": {
@@ -483,6 +507,23 @@
           "Vereist het categoriseren van elke uitgave per groep"
         ],
         "bestFor": "Mensen die een evenwichtige vuistregelbendering willen zonder elke categorie afzonderlijk bij te houden."
+      },
+      "BUCKET": {
+        "title": "Potjesbudget",
+        "description": "Inkomsten worden verdeeld over een paar potjes met een naam, elk met een doel als deel van de inkomsten of als vast bedrag. Elke categorie hoort bij één potje, dus je volgt het potje in plaats van elke categorie. Een potje kan wat er overblijft overdragen naar de volgende periode.",
+        "pros": [
+          "Minder cijfers om bij te houden",
+          "Flexibel binnen elk potje",
+          "Spaarpotjes kunnen na verloop van tijd groeien",
+          "Werkt bij onregelmatige uitgaven binnen een potje"
+        ],
+        "cons": [
+          "Minder detail per categorie",
+          "Categorieën moeten over potjes worden verdeeld",
+          "Procentdoelen vereisen bekende inkomsten",
+          "Overgedragen saldo's vragen af en toe een controle"
+        ],
+        "bestFor": "Mensen die budgetten per categorie te precies vinden, maar meer structuur willen dan 50/30/20."
       }
     }
   },
@@ -496,11 +537,18 @@
         "description": "Maak jouw eerste budget aan door jouw uitgavengeschiedenis te analyseren. De wizard stelt realistische bedragen voor op basis van jouw transacties.",
         "cta": "Maak jouw eerste budget aan"
       },
+      "loading": "Budgetten laden...",
+      "columns": {
+        "name": "Naam",
+        "strategy": "Strategie",
+        "type": "Type",
+        "categories": "Categorieën",
+        "started": "Startdatum",
+        "status": "Status"
+      },
       "card": {
         "active": "Actief",
-        "inactive": "Inactief",
-        "categories": "{count} categorieën",
-        "started": "Gestart {date}"
+        "inactive": "Inactief"
       }
     },
     "create": {
@@ -509,6 +557,9 @@
     },
     "detail": {
       "backToBudgets": "Terug naar budgetten",
+      "switchBudget": "Naar een ander budget gaan",
+      "switchPlaceholder": "Budgetten filteren...",
+      "switchNoMatches": "Geen budgetten gevonden",
       "notFound": "Budget niet gevonden",
       "delete": {
         "title": "Budget verwijderen",
@@ -526,22 +577,37 @@
     "edit": {
       "subtitlePrefix": "Bewerken: ",
       "subtitle": "Budgetinstellingen en categorieverdelingen bijwerken",
-      "backToDashboard": "Terug naar dashboard",
+      "backToBudget": "Terug naar {name}",
       "budgetSettings": "Budgetinstellingen",
       "categoryAllocations": "Categorieverdelingen",
       "income": "Inkomsten",
+      "addTransferIncome": "Overboekingsinkomen toevoegen",
+      "addTransferIncomeTitle": "Overboekingsinkomen toevoegen",
+      "outsideTransferIncome": "Overboekingen van rekeningen buiten dit budget",
+      "outsideTransferIncomeHint": "Deze periode geteld omdat het budget inkomende overboekingen van zijn uitgesloten rekeningen als inkomen telt.",
       "expensesWithCount": "Uitgaven ({count})",
       "resetsEachPeriod": "Reset elke periode",
       "percentUsed": "{percent}% gebruikt",
       "rolloverType": "Overdracht: {type}",
       "editCategoryTitle": "{name} bewerken",
+      "remove": {
+        "title": "Categorie verwijderen",
+        "message": "\"{name}\" uit dit budget verwijderen? De toewijzing van {amount} wordt niet langer gebudgetteerd en de geschiedenis in eerdere budgetperiodes wordt verwijderd. Je transacties worden niet beïnvloed. Deze actie kan niet ongedaan worden gemaakt.",
+        "confirm": "Verwijderen"
+      },
       "toasts": {
         "updated": "Budget bijgewerkt",
         "updateFailed": "Bijwerken van budget mislukt",
         "categoryUpdated": "Categorie bijgewerkt",
         "categoryFailed": "Bijwerken van categorie mislukt",
-        "loadFailed": "Laden van budget mislukt"
-      }
+        "loadFailed": "Laden van budget mislukt",
+        "categoryRemoved": "Categorie uit budget verwijderd",
+        "categoryRemoveFailed": "Categorie verwijderen mislukt",
+        "transferIncomeAdded": "Overboekingsinkomen toegevoegd",
+        "transferIncomeFailed": "Overboekingsinkomen kon niet worden toegevoegd"
+      },
+      "buckets": "Potjes",
+      "unassignedBucket": "Niet toegewezen"
     }
   },
   "validation": {
@@ -552,5 +618,140 @@
   "categoryValidation": {
     "amountMin": "Bedrag moet 0 of groter zijn",
     "mustBeNumber": "Moet een getal zijn"
+  },
+  "bucketEditor": {
+    "presetLabel": "Begin met een voorinstelling",
+    "presets": {
+      "THREE": "Drie potjes",
+      "FOUR": "Vier potjes (60/10/10/20)",
+      "SCRATCH": "Begin met een leeg budget"
+    },
+    "presetBucketNames": {
+      "fixedCosts": "Vaste lasten",
+      "everydaySpending": "Dagelijkse uitgaven",
+      "savings": "Sparen",
+      "dailyExpenses": "Dagelijkse kosten",
+      "splurge": "Extraatjes",
+      "longTermGoals": "Doelen voor de lange termijn",
+      "safetyAndDebt": "Zekerheid en schulden"
+    },
+    "listLabel": "Potjes",
+    "empty": {
+      "title": "Nog geen potjes",
+      "description": "Begin met een voorinstelling of voeg een potje toe en wijs er dan categorieën aan toe."
+    },
+    "add": "Potje toevoegen",
+    "limitReached": "Een budget kan maximaal {max} potjes hebben.",
+    "newTitle": "Nieuw potje",
+    "editTitle": "{name} bewerken",
+    "summary": "Procentdoelen tellen op tot {percent}. Bedragdoelen tellen op tot {amount}.",
+    "row": {
+      "percentTarget": "{percent} van de inkomsten",
+      "amountTarget": "{amount} per periode",
+      "noCarry": "Begint elke periode opnieuw",
+      "carries": "Wordt overgedragen",
+      "carriesUpTo": "Wordt overgedragen, tot {cap}",
+      "caption": "{target} · {carry}",
+      "edit": "Bewerken",
+      "delete": "Verwijderen",
+      "editLabel": "{name} bewerken",
+      "deleteLabel": "{name} verwijderen"
+    },
+    "targetTypes": {
+      "PERCENT": "Percentage van de inkomsten",
+      "AMOUNT": "Vast bedrag"
+    },
+    "form": {
+      "name": "Naam",
+      "namePlaceholder": "bijv. Sparen",
+      "targetType": "Doel",
+      "targetTypeTooltip": "Een procentdoel is een deel van de inkomsten van het budget: de in deze periode ontvangen inkomsten bij een aan inkomsten gekoppeld budget, anders de basisinkomsten, anders de bedragen van de inkomstencategorieën. Een vast bedrag is elke periode hetzelfde.",
+      "targetPercent": "Percentage van de inkomsten",
+      "targetAmount": "Bedrag per periode",
+      "carryOver": "Restant overdragen",
+      "carryOverTooltip": "Wat er aan het einde van een periode in het potje overblijft, wordt bij de volgende periode opgeteld. Een overbesteed potje draagt niets over.",
+      "carryCap": "Overdrachtsmaximum (optioneel)",
+      "carryCapPlaceholder": "Geen maximum",
+      "save": "Opslaan",
+      "saveChanges": "Wijzigingen opslaan"
+    },
+    "validation": {
+      "nameRequired": "Voer een naam in",
+      "nameMax": "Een naam mag maximaal {max} tekens bevatten",
+      "nameDuplicate": "Een ander potje heeft al deze naam",
+      "targetRequired": "Voer een doel in",
+      "percentRange": "Een procentdoel moet groter zijn dan 0 en maximaal 100",
+      "percentDecimals": "Een procentdoel mag maximaal twee decimalen hebben",
+      "amountPositive": "Een bedragdoel moet groter zijn dan 0",
+      "capNeedsCarryOver": "Een overdrachtsmaximum vereist dat overdracht aan staat",
+      "capPositive": "Een overdrachtsmaximum moet groter zijn dan 0"
+    },
+    "delete": {
+      "title": "Potje verwijderen",
+      "message": "Het potje \"{name}\" verwijderen? De categorieën ervan worden niet meer toegewezen.",
+      "confirm": "Verwijderen"
+    },
+    "replace": {
+      "title": "Potjes vervangen",
+      "message": "De huidige potjes vervangen door \"{preset}\"? De huidige potjes worden verwijderd en hun categorieën worden niet meer toegewezen.",
+      "clearMessage": "Alle potjes verwijderen en opnieuw beginnen? Hun categorieën worden niet meer toegewezen.",
+      "confirm": "Vervangen"
+    },
+    "toasts": {
+      "created": "Potje toegevoegd",
+      "updated": "Potje bijgewerkt",
+      "deleted": "Potje verwijderd",
+      "saveFailed": "Opslaan van potje mislukt",
+      "deleteFailed": "Verwijderen van potje mislukt",
+      "presetApplied": "Voorinstelling toegepast",
+      "presetFailed": "Toepassen van voorinstelling mislukt"
+    }
+  },
+  "bucketSummary": {
+    "title": "Potjesverdeling",
+    "loading": "Potjesverdeling laden",
+    "loadFailed": "De potjesverdeling kon niet worden geladen. Probeer het zo opnieuw.",
+    "emptyTitle": "Nog geen potjes",
+    "emptyDescription": "Voeg potjes toe om je inkomsten over potjes met een naam te verdelen.",
+    "emptyAction": "Potjes toevoegen",
+    "income": "Inkomsten voor potjes",
+    "incomeUnknown": "Onbekend",
+    "incomeSource": {
+      "ACTUAL": "Gebaseerd op de werkelijke inkomsten van deze periode",
+      "BASE_INCOME": "Gebaseerd op de basisinkomsten van het budget",
+      "INCOME_LINES": "Gebaseerd op geplande inkomstencategorieën",
+      "NONE": "Geen inkomsten gevonden"
+    },
+    "totalAllocated": "Totaal verdeeld",
+    "allocatedSoFar": "Tot nu toe verdeeld",
+    "allocatedSoFarHint": "Van sommige potjes is nog geen bedrag bekend, dus dit is een gedeeltelijk cijfer.",
+    "unallocated": "Niet verdeeld",
+    "unallocatedUnknown": "Onbekend",
+    "overAllocatedHint": "Te veel verdeeld: de potjes tellen op tot meer dan je inkomsten.",
+    "targetPercent": "{percent} van de inkomsten",
+    "targetAmount": "{amount} per periode",
+    "carriedIn": "{amount} overgedragen",
+    "spent": "Uitgegeven",
+    "available": "Beschikbaar",
+    "overspent": "Overbesteed",
+    "categories": "{count, plural, one {# categorie} other {# categorieën}}",
+    "allocationUnknown": "Stel basisinkomsten in voor het budget of voeg een inkomstencategorie toe.",
+    "allocationUnknownAction": "Budget bewerken",
+    "unassignedTitle": "Niet toegewezen",
+    "unassignedDescription": "{count, plural, one {# categorieregel zit} other {# categorieregels zitten}} in geen enkel potje.",
+    "unassignedPlanned": "Gepland",
+    "unassignedAction": "Toewijzen"
+  },
+  "periodBuckets": {
+    "title": "Potjes",
+    "name": "Potje",
+    "target": "Doel",
+    "allocated": "Verdeeld",
+    "allocatedUnknown": "Onbekend",
+    "carriedIn": "Overgenomen",
+    "spent": "Uitgegeven",
+    "carriedOut": "Overgedragen",
+    "targetPercent": "{percent} van de inkomsten",
+    "targetAmount": "{amount} per periode"
   }
 }

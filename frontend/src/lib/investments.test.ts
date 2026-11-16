@@ -2,8 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import apiClient from './api';
 import { investmentsApi } from './investments';
 import { scheduledTransactionsApi } from './scheduled-transactions';
-import { invalidateCache } from './apiCache';
+import { clearAllCache, invalidateCache, setCache, getCached } from './apiCache';
 import { API_MAX_PAGE_LIMIT } from './api-page-limits';
+import { PORTFOLIO_VALUATION_TIMEOUT_MS } from './constants';
 
 vi.mock('./api', () => ({
   default: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
@@ -21,7 +22,10 @@ describe('investmentsApi', () => {
   it('getPortfolioSummary fetches /portfolio/summary', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({ data: { totalValue: 1000 } });
     await investmentsApi.getPortfolioSummary();
-    expect(apiClient.get).toHaveBeenCalledWith('/portfolio/summary', { params: undefined });
+    expect(apiClient.get).toHaveBeenCalledWith('/portfolio/summary', {
+      params: undefined,
+      timeout: PORTFOLIO_VALUATION_TIMEOUT_MS,
+    });
   });
 
   it('getPortfolioSummary passes accountIds', async () => {
@@ -29,7 +33,25 @@ describe('investmentsApi', () => {
     await investmentsApi.getPortfolioSummary(['a1', 'a2']);
     expect(apiClient.get).toHaveBeenCalledWith('/portfolio/summary', {
       params: { accountIds: 'a1,a2' },
+      timeout: PORTFOLIO_VALUATION_TIMEOUT_MS,
     });
+  });
+
+  it('getPortfolioValuation fetches /portfolio/valuation with the long timeout', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: { totalPortfolioValue: 1000 } });
+    await investmentsApi.getPortfolioValuation(['a1', 'a2']);
+    expect(apiClient.get).toHaveBeenCalledWith('/portfolio/valuation', {
+      params: { accountIds: 'a1,a2' },
+      timeout: PORTFOLIO_VALUATION_TIMEOUT_MS,
+    });
+  });
+
+  it('getPortfolioValuation drops its cached answer when investments are invalidated', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: { totalPortfolioValue: 1000 } });
+    await investmentsApi.getPortfolioValuation();
+    expect(getCached('investments:valuation:all')).toBeDefined();
+    invalidateCache('investments:');
+    expect(getCached('investments:valuation:all')).toBeUndefined();
   });
 
   it('getAssetAllocation fetches /portfolio/allocation', async () => {
@@ -313,6 +335,43 @@ describe('investmentsApi', () => {
     );
   });
 
+  it('refreshSelectedPrices drops the investments cache when a price was written', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: { totalValue: 1000 } });
+    await investmentsApi.getPortfolioSummary();
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { updated: 1 } });
+
+    await investmentsApi.refreshSelectedPrices(['s-1']);
+
+    vi.mocked(apiClient.get).mockClear();
+    await investmentsApi.getPortfolioSummary();
+    expect(apiClient.get).toHaveBeenCalled();
+  });
+
+  it('refreshSelectedPrices keeps the cache when nothing was updated', async () => {
+    // Nothing was written, so every cached investments answer is still true;
+    // dropping them made the next page open pay for a valuation it already had.
+    vi.mocked(apiClient.get).mockResolvedValue({ data: { totalValue: 1000 } });
+    await investmentsApi.getPortfolioSummary();
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { updated: 0 } });
+
+    await investmentsApi.refreshSelectedPrices(['s-1']);
+
+    vi.mocked(apiClient.get).mockClear();
+    await investmentsApi.getPortfolioSummary();
+    expect(apiClient.get).not.toHaveBeenCalled();
+  });
+
+  it('getPortfolioTagSummary fetches /portfolio/tag-keys', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({
+      data: { keys: ['country'], hasTaggedHoldings: true },
+    });
+    const result = await investmentsApi.getPortfolioTagSummary(['a1']);
+    expect(apiClient.get).toHaveBeenCalledWith('/portfolio/tag-keys', {
+      params: { accountIds: 'a1' },
+    });
+    expect(result).toEqual({ keys: ['country'], hasTaggedHoldings: true });
+  });
+
   it('backfillSecurityPrices posts to the per-security backfill endpoint', async () => {
     vi.mocked(apiClient.post).mockResolvedValue({
       data: { symbol: 'AAPL', success: true, pricesLoaded: 100 },
@@ -462,6 +521,136 @@ describe('investmentsApi', () => {
     expect(result.msn.ready).toBe(false);
   });
 
+  describe('bond valuation API', () => {
+    it('getSecurityBondValuation sends no params without a day or an assumption', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({ data: {} });
+      await investmentsApi.getSecurityBondValuation('s-1');
+      expect(apiClient.get).toHaveBeenCalledWith('/bonds/securities/s-1/valuation', {
+        params: undefined,
+      });
+    });
+
+    it('getSecurityBondValuation sends asOf and the assumption as benchmark:value', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({ data: {} });
+      await investmentsApi.getSecurityBondValuation('s-1', '2027-04-15', {
+        benchmarkId: 'PL_CPI_GUS_YOY',
+        value: '0.05',
+      });
+      expect(apiClient.get).toHaveBeenCalledWith('/bonds/securities/s-1/valuation', {
+        params: { asOf: '2027-04-15', assume: 'PL_CPI_GUS_YOY:0.05' },
+      });
+    });
+
+    it('getSecurityBondScenarios sends the benchmark and the comma-joined values', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({ data: {} });
+      await investmentsApi.getSecurityBondScenarios('s-1', 'PL_CPI_GUS_YOY', ['0', '0.05']);
+      expect(apiClient.get).toHaveBeenCalledWith('/bonds/securities/s-1/scenarios', {
+        params: { benchmarkId: 'PL_CPI_GUS_YOY', values: '0,0.05' },
+      });
+    });
+
+    it('getSecurityBondScenarios sends the card date when given', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({ data: {} });
+      await investmentsApi.getSecurityBondScenarios('s-1', 'PL_CPI_GUS_YOY', ['0'], '2027-02-01');
+      expect(apiClient.get).toHaveBeenCalledWith('/bonds/securities/s-1/scenarios', {
+        params: { benchmarkId: 'PL_CPI_GUS_YOY', values: '0', asOf: '2027-02-01' },
+      });
+    });
+
+    it('listBondPrograms reads the catalog programs', async () => {
+      vi.mocked(apiClient.get).mockResolvedValue({ data: [{ id: 'p-1', programCode: 'EDO' }] });
+      await expect(investmentsApi.listBondPrograms()).resolves.toEqual([{ id: 'p-1', programCode: 'EDO' }]);
+      expect(apiClient.get).toHaveBeenCalledWith('/bonds/programs');
+    });
+
+    it('getBondRefreshProgress reads the program progress', async () => {
+      const progress = { startedAt: '2026-01-01T00:00:00Z', phase: 'series', done: 2, total: 8, seriesCode: 'EDO0136', finishedAt: null };
+      vi.mocked(apiClient.get).mockResolvedValue({ data: progress });
+      await expect(investmentsApi.getBondRefreshProgress('p-1')).resolves.toEqual(progress);
+      expect(apiClient.get).toHaveBeenCalledWith('/bonds/programs/p-1/refresh-progress');
+    });
+
+    describe('a link change drops the cached prices', () => {
+      const warm = async () => {
+        vi.mocked(apiClient.get).mockResolvedValue({ data: [{ id: 1 }] });
+        await investmentsApi.getSecurityPrices('s-1');
+        await investmentsApi.getSecurityPrices('s-1');
+        expect(apiClient.get).toHaveBeenCalledTimes(1);
+      };
+
+      it('updateSecurity with a bondProgramId (link or null) invalidates', async () => {
+        for (const bondProgramId of ['prog-1', null]) {
+          vi.clearAllMocks();
+          clearAllCache();
+          await warm();
+          vi.mocked(apiClient.patch).mockResolvedValue({ data: {} });
+          await investmentsApi.updateSecurity('s-1', { bondProgramId } as any);
+          await investmentsApi.getSecurityPrices('s-1');
+          expect(apiClient.get).toHaveBeenCalledTimes(2);
+        }
+      });
+
+      it('updateSecurity without a bondProgramId (the auto-fetch switch alone) also invalidates', async () => {
+        // A security's currency, type and tags feed every valuation, so any
+        // update drops the investments caches (INV-CACHE-001).
+        await warm();
+        vi.mocked(apiClient.patch).mockResolvedValue({ data: {} });
+        await investmentsApi.updateSecurity('s-1', { name: 'x', bondAutoFetch: true } as any);
+        await investmentsApi.getSecurityPrices('s-1');
+        expect(apiClient.get).toHaveBeenCalledTimes(2);
+      });
+
+      it('createSecurity with a link invalidates', async () => {
+        await warm();
+        vi.mocked(apiClient.post).mockResolvedValue({ data: {} });
+        await investmentsApi.createSecurity({ symbol: 'X', bondProgramId: 'prog-1' } as any);
+        await investmentsApi.getSecurityPrices('s-1');
+        expect(apiClient.get).toHaveBeenCalledTimes(2);
+      });
+    });
+
+    describe('recomputeSecurityBondPrices', () => {
+      const warmPrices = async () => {
+        vi.mocked(apiClient.get).mockResolvedValue({ data: [{ id: 1 }] });
+        await investmentsApi.getSecurityPrices('s-1');
+        await investmentsApi.getSecurityPrices('s-1');
+        // The second read came from the cache.
+        expect(apiClient.get).toHaveBeenCalledTimes(1);
+      };
+
+      it('posts to the recompute endpoint', async () => {
+        vi.mocked(apiClient.post).mockResolvedValue({ data: { written: 0, deleted: 0 } });
+        const result = await investmentsApi.recomputeSecurityBondPrices('s-1');
+        expect(apiClient.post).toHaveBeenCalledWith('/bonds/securities/s-1/recompute');
+        expect(result).toEqual({ written: 0, deleted: 0 });
+      });
+
+      it('drops the cached prices when rows were written', async () => {
+        await warmPrices();
+        vi.mocked(apiClient.post).mockResolvedValue({ data: { written: 3, deleted: 0 } });
+        await investmentsApi.recomputeSecurityBondPrices('s-1');
+        await investmentsApi.getSecurityPrices('s-1');
+        expect(apiClient.get).toHaveBeenCalledTimes(2);
+      });
+
+      it('drops the cached prices when rows were only deleted', async () => {
+        await warmPrices();
+        vi.mocked(apiClient.post).mockResolvedValue({ data: { written: 0, deleted: 2 } });
+        await investmentsApi.recomputeSecurityBondPrices('s-1');
+        await investmentsApi.getSecurityPrices('s-1');
+        expect(apiClient.get).toHaveBeenCalledTimes(2);
+      });
+
+      it('keeps the cache when the recompute changed nothing', async () => {
+        await warmPrices();
+        vi.mocked(apiClient.post).mockResolvedValue({ data: { written: 0, deleted: 0 } });
+        await investmentsApi.recomputeSecurityBondPrices('s-1');
+        await investmentsApi.getSecurityPrices('s-1');
+        expect(apiClient.get).toHaveBeenCalledTimes(1);
+      });
+    });
+  });
+
   it('getSecurityPrices sends no limit by default, so the server picks it', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({ data: [] });
     await investmentsApi.getSecurityPrices('s-1');
@@ -567,7 +756,10 @@ describe('investmentsApi', () => {
   it('getPortfolioSummary with empty accountIds passes undefined params', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({ data: { totalValue: 0 } });
     await investmentsApi.getPortfolioSummary([]);
-    expect(apiClient.get).toHaveBeenCalledWith('/portfolio/summary', { params: undefined });
+    expect(apiClient.get).toHaveBeenCalledWith('/portfolio/summary', {
+      params: undefined,
+      timeout: PORTFOLIO_VALUATION_TIMEOUT_MS,
+    });
   });
 
   it('getAssetAllocation with empty accountIds passes undefined params', async () => {
@@ -606,5 +798,68 @@ describe('investmentsApi', () => {
       '/investment-transactions/security/s1/history',
     );
     expect(result).toEqual({ transactions: [] });
+  });
+});
+
+describe('investmentsApi valuation-input writes (INV-CACHE-001)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearAllCache();
+    setCache('investments:summary:all', { totalPortfolioValue: 1 });
+    setCache('accounts:all:false', [{ id: 'a' }]);
+  });
+
+  const expectDropped = () => {
+    expect(getCached('investments:summary:all')).toBeUndefined();
+    expect(getCached('accounts:all:false')).toBeUndefined();
+  };
+
+  it('createSecurityPrice drops the valuation caches', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { id: 1 } });
+    await investmentsApi.createSecurityPrice('s1', { price: 1 } as any);
+    expectDropped();
+  });
+
+  it('updateSecurityPrice drops the valuation caches', async () => {
+    vi.mocked(apiClient.patch).mockResolvedValue({ data: { id: 1 } });
+    await investmentsApi.updateSecurityPrice('s1', 1, { price: 2 } as any);
+    expectDropped();
+  });
+
+  it('deleteSecurityPrice drops the valuation caches', async () => {
+    vi.mocked(apiClient.delete).mockResolvedValue({});
+    await investmentsApi.deleteSecurityPrice('s1', 1);
+    expectDropped();
+  });
+
+  it('updateSecurity drops the valuation caches for any field', async () => {
+    vi.mocked(apiClient.patch).mockResolvedValue({ data: { id: 's1' } });
+    await investmentsApi.updateSecurity('s1', { currencyCode: 'EUR' } as any);
+    expectDropped();
+  });
+
+  it('a read in flight across a trade does not repopulate the summary cache', async () => {
+    let resolveOld: (v: unknown) => void = () => {};
+    vi.mocked(apiClient.get).mockReset();
+    clearAllCache();
+    vi.mocked(apiClient.get).mockImplementationOnce(
+      () => new Promise((resolve) => { resolveOld = resolve; }),
+    );
+    const oldRead = investmentsApi.getPortfolioSummary();
+
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { id: 'tx' } });
+    await investmentsApi.createTransaction({ action: 'BUY' } as any);
+
+    vi.mocked(apiClient.get).mockResolvedValueOnce({ data: { totalPortfolioValue: 120 } });
+    const fresh = await investmentsApi.getPortfolioSummary();
+    expect(fresh).toEqual({ totalPortfolioValue: 120 });
+
+    resolveOld({ data: { totalPortfolioValue: 100 } });
+    await oldRead;
+
+    expect(getCached('investments:summary:all')).toEqual({ totalPortfolioValue: 120 });
+    const getCalls = vi.mocked(apiClient.get).mock.calls.length;
+    expect(await investmentsApi.getPortfolioSummary()).toEqual({ totalPortfolioValue: 120 });
+    expect(vi.mocked(apiClient.get).mock.calls.length).toBe(getCalls);
   });
 });

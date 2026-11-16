@@ -14,15 +14,18 @@ vi.mock('@/lib/budgets', () => ({
   },
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (n: number) => `$${n.toFixed(2)}`,
-    formatCurrencyCompact: (n: number) => `$${Math.round(n)}`,
-    formatCurrencyAxis: (n: number) => `$${n}`,
-    defaultCurrency: 'USD',
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (n: number) => `$${n.toFixed(2)}`,
+      formatCurrencyCompact: (n: number) => `$${Math.round(n)}`,
+      formatCurrencyAxis: (n: number) => `$${n}`,
+      defaultCurrency: 'USD',
+    }),
+  };
+});
 vi.mock('@/lib/logger', () => ({
   createLogger: () => ({ error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() }),
 }));
@@ -172,7 +175,7 @@ describe('BudgetSeasonalPatternsReport', () => {
     await waitFor(() => {
       expect(screen.getByText(/Failed to load report data/i)).toBeInTheDocument();
     });
-    expect(screen.getByRole('button', { name: /Try again/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Try Again/i })).toBeInTheDocument();
   });
 
   it('exports to PDF', async () => {

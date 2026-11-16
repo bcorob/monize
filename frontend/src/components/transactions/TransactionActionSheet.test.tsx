@@ -201,4 +201,21 @@ describe('TransactionActionSheet', () => {
     render(<TransactionActionSheet {...baseProps} transaction={null} />);
     expect(screen.getByText('Transaction')).toBeInTheDocument();
   });
+  it('offers no warranty action, with or without warranties', () => {
+    // A warranty is added from the transaction's form or the Warranties page;
+    // the row's shield says one exists.
+    for (const warrantyCount of [0, 2]) {
+      const view = render(
+        <TransactionActionSheet
+          {...baseProps}
+          onScheduleRecurring={vi.fn()}
+          transaction={{ ...tx, warrantyCount }}
+        />,
+      );
+      expect(screen.getByText('Schedule as Recurring')).toBeInTheDocument();
+      expect(screen.queryByText('Add warranty')).not.toBeInTheDocument();
+      expect(screen.queryByText('View warranties')).not.toBeInTheDocument();
+      view.unmount();
+    }
+  });
 });

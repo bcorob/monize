@@ -1,0 +1,535 @@
+{
+  "comment": "Shared truth table for payee phone normalization (E.164 with an RFC 3966 ;ext= suffix, displayed as INTERNATIONAL with a uniform \" x\" extension). Asserted by backend/src/common/phone-number.util.spec.ts and frontend/src/lib/phone-number.contract.test.ts, so the browser and the server can never disagree about which numbers are accepted or how one is written. Generated expectations come from libphonenumber-js/max; regenerate deliberately, never to make a failing test pass.",
+  "normalize": [
+    {
+      "name": "US national under en-US",
+      "input": "(206) 448-8762",
+      "prefs": {
+        "numberFormat": "en-US",
+        "language": "en"
+      },
+      "expect": {
+        "ok": true,
+        "stored": "+12064488762",
+        "display": "+1 206 448 8762"
+      }
+    },
+    {
+      "name": "US national, dashes",
+      "input": "206-448-8762",
+      "prefs": {
+        "numberFormat": "en-US",
+        "language": "en"
+      },
+      "expect": {
+        "ok": true,
+        "stored": "+12064488762",
+        "display": "+1 206 448 8762"
+      }
+    },
+    {
+      "name": "US international, region irrelevant",
+      "input": "+1 206 448 8762",
+      "prefs": {
+        "numberFormat": "browser",
+        "language": "en"
+      },
+      "expect": {
+        "ok": true,
+        "stored": "+12064488762",
+        "display": "+1 206 448 8762"
+      }
+    },
+    {
+      "name": "CA national under en-CA",
+      "input": "(416) 363-8221",
+      "prefs": {
+        "numberFormat": "en-CA",
+        "language": "en"
+      },
+      "expect": {
+        "ok": true,
+        "stored": "+14163638221",
+        "display": "+1 416 363 8221"
+      }
+    },
+    {
+      "name": "CA international under a US region",
+      "input": "+1 416 363 8221",
+      "prefs": {
+        "numberFormat": "en-US",
+        "language": "en"
+      },
+      "expect": {
+        "ok": true,
+        "stored": "+14163638221",
+        "display": "+1 416 363 8221"
+      }
+    },
+    {
+      "name": "GB national under en-GB",
+      "input": "020 7946 0958",
+      "prefs": {
+        "numberFormat": "en-GB",
+        "language": "en"
+      },
+      "expect": {
+        "ok": true,
+        "stored": "+442079460958",
+        "display": "+44 20 7946 0958"
+      }
+    },
+    {
+      "name": "GB with an \"ext.\" extension",
+      "input": "+44 20 7946 0958 ext. 12",
+      "prefs": {
+        "numberFormat": "browser",
+        "language": "en"
+      },
+      "expect": {
+        "ok": true,
+        "stored": "+442079460958;ext=12",
+        "display": "+44 20 7946 0958 x12"
+      }
+    },
+    {
+      "name": "GB with an \"x\" extension",
+      "input": "+44 20 7946 0958 x12",
+      "prefs": {
+        "numberFormat": "browser",
+        "language": "en"
+      },
+      "expect": {
+        "ok": true,
+        "stored": "+442079460958;ext=12",
+        "display": "+44 20 7946 0958 x12"
+      }
+    },
+    {
+      "name": "GB already in stored form, re-normalized",
+      "input": "+442079460958;ext=12",
+      "prefs": {
+        "numberFormat": "browser",
+        "language": "en"
+      },
+      "expect": {
+        "ok": true,
+        "stored": "+442079460958;ext=12",
+        "display": "+44 20 7946 0958 x12"
+      }
+    },
+    {
+      "name": "GB national plus extension under en-GB",
+      "input": "020 7946 0958 ext. 12",
+      "prefs": {
+        "numberFormat": "en-GB",
+        "language": "en"
+      },
+      "expect": {
+        "ok": true,
+        "stored": "+442079460958;ext=12",
+        "display": "+44 20 7946 0958 x12"
+      }
+    },
+    {
+      "name": "DE national under de-DE",
+      "input": "030 12345678",
+      "prefs": {
+        "numberFormat": "de-DE",
+        "language": "de"
+      },
+      "expect": {
+        "ok": true,
+        "stored": "+493012345678",
+        "display": "+49 30 12345678"
+      }
+    },
+    {
+      "name": "DE international",
+      "input": "+49 30 12345678",
+      "prefs": {
+        "numberFormat": "browser",
+        "language": "en"
+      },
+      "expect": {
+        "ok": true,
+        "stored": "+493012345678",
+        "display": "+49 30 12345678"
+      }
+    },
+    {
+      "name": "DE extension keeps the uniform x prefix",
+      "input": "+49 30 12345678 ext. 99",
+      "prefs": {
+        "numberFormat": "browser",
+        "language": "en"
+      },
+      "expect": {
+        "ok": true,
+        "stored": "+493012345678;ext=99",
+        "display": "+49 30 12345678 x99"
+      }
+    },
+    {
+      "name": "FR national under fr-FR",
+      "input": "01 42 68 53 00",
+      "prefs": {
+        "numberFormat": "fr-FR",
+        "language": "fr"
+      },
+      "expect": {
+        "ok": true,
+        "stored": "+33142685300",
+        "display": "+33 1 42 68 53 00"
+      }
+    },
+    {
+      "name": "FR international",
+      "input": "+33 1 42 68 53 00",
+      "prefs": {
+        "numberFormat": "browser",
+        "language": "en"
+      },
+      "expect": {
+        "ok": true,
+        "stored": "+33142685300",
+        "display": "+33 1 42 68 53 00"
+      }
+    },
+    {
+      "name": "BR national, region from language when numberFormat is browser",
+      "input": "11 91234-5678",
+      "prefs": {
+        "numberFormat": "browser",
+        "language": "pt-BR"
+      },
+      "expect": {
+        "ok": true,
+        "stored": "+5511912345678",
+        "display": "+55 11 91234 5678"
+      }
+    },
+    {
+      "name": "BR international",
+      "input": "+55 11 91234 5678",
+      "prefs": {
+        "numberFormat": "browser",
+        "language": "en"
+      },
+      "expect": {
+        "ok": true,
+        "stored": "+5511912345678",
+        "display": "+55 11 91234 5678"
+      }
+    },
+    {
+      "name": "IN national under en-IN",
+      "input": "098765 43210",
+      "prefs": {
+        "numberFormat": "en-IN",
+        "language": "hi"
+      },
+      "expect": {
+        "ok": true,
+        "stored": "+919876543210",
+        "display": "+91 98765 43210"
+      }
+    },
+    {
+      "name": "IN international",
+      "input": "+91 98765 43210",
+      "prefs": {
+        "numberFormat": "browser",
+        "language": "en"
+      },
+      "expect": {
+        "ok": true,
+        "stored": "+919876543210",
+        "display": "+91 98765 43210"
+      }
+    },
+    {
+      "name": "JP national under ja-JP",
+      "input": "03-3224-9999",
+      "prefs": {
+        "numberFormat": "ja-JP",
+        "language": "ja"
+      },
+      "expect": {
+        "ok": true,
+        "stored": "+81332249999",
+        "display": "+81 3 3224 9999"
+      }
+    },
+    {
+      "name": "JP international",
+      "input": "+81 3 3224 9999",
+      "prefs": {
+        "numberFormat": "browser",
+        "language": "en"
+      },
+      "expect": {
+        "ok": true,
+        "stored": "+81332249999",
+        "display": "+81 3 3224 9999"
+      }
+    },
+    {
+      "name": "AU national under en-AU",
+      "input": "02 9374 4000",
+      "prefs": {
+        "numberFormat": "en-AU",
+        "language": "en"
+      },
+      "expect": {
+        "ok": true,
+        "stored": "+61293744000",
+        "display": "+61 2 9374 4000"
+      }
+    },
+    {
+      "name": "AU international",
+      "input": "+61 2 9374 4000",
+      "prefs": {
+        "numberFormat": "browser",
+        "language": "en"
+      },
+      "expect": {
+        "ok": true,
+        "stored": "+61293744000",
+        "display": "+61 2 9374 4000"
+      }
+    },
+    {
+      "name": "surrounding whitespace is not part of the number",
+      "input": "  +1 206 448 8762  ",
+      "prefs": {
+        "numberFormat": "browser",
+        "language": "en"
+      },
+      "expect": {
+        "ok": true,
+        "stored": "+12064488762",
+        "display": "+1 206 448 8762"
+      }
+    },
+    {
+      "name": "a bare national number with no derivable region is unplaceable",
+      "input": "020 7946 0958",
+      "prefs": {
+        "numberFormat": "browser",
+        "language": "en"
+      },
+      "expect": {
+        "ok": false,
+        "reason": "needs-country-code"
+      }
+    },
+    {
+      "name": "an unplaceable number is not reported as invalid",
+      "input": "206 448 8762",
+      "prefs": {
+        "numberFormat": "browser",
+        "language": "en"
+      },
+      "expect": {
+        "ok": false,
+        "reason": "needs-country-code"
+      }
+    },
+    {
+      "name": "a fictional 555 range is not a real number",
+      "input": "+1 555 010 1234",
+      "prefs": {
+        "numberFormat": "browser",
+        "language": "en"
+      },
+      "expect": {
+        "ok": false,
+        "reason": "invalid"
+      }
+    },
+    {
+      "name": "a fictional 555 range under its own region",
+      "input": "555-0100",
+      "prefs": {
+        "numberFormat": "en-US",
+        "language": "en"
+      },
+      "expect": {
+        "ok": false,
+        "reason": "invalid"
+      }
+    },
+    {
+      "name": "too short",
+      "input": "12",
+      "prefs": {
+        "numberFormat": "en-US",
+        "language": "en"
+      },
+      "expect": {
+        "ok": false,
+        "reason": "invalid"
+      }
+    },
+    {
+      "name": "letters are not a number",
+      "input": "call the shop",
+      "prefs": {
+        "numberFormat": "en-US",
+        "language": "en"
+      },
+      "expect": {
+        "ok": false,
+        "reason": "invalid"
+      }
+    },
+    {
+      "name": "empty after trimming",
+      "input": "   ",
+      "prefs": {
+        "numberFormat": "en-US",
+        "language": "en"
+      },
+      "expect": {
+        "ok": false,
+        "reason": "invalid"
+      }
+    },
+    {
+      "name": "a real number in the wrong region is refused, not silently re-filed",
+      "input": "020 7946 0958",
+      "prefs": {
+        "numberFormat": "en-US",
+        "language": "en"
+      },
+      "expect": {
+        "ok": false,
+        "reason": "invalid"
+      }
+    }
+  ],
+  "display": [
+    {
+      "input": "+12064488762",
+      "expect": "+1 206 448 8762"
+    },
+    {
+      "input": "+442079460958;ext=12",
+      "expect": "+44 20 7946 0958 x12"
+    },
+    {
+      "input": "+493012345678;ext=99",
+      "expect": "+49 30 12345678 x99"
+    },
+    {
+      "input": "+5511912345678",
+      "expect": "+55 11 91234 5678"
+    },
+    {
+      "input": "+81332249999",
+      "expect": "+81 3 3224 9999"
+    },
+    {
+      "input": "call the shop",
+      "expect": "call the shop"
+    },
+    {
+      "input": "555-0100",
+      "expect": "555-0100"
+    },
+    {
+      "input": "(206) 448-8762",
+      "expect": "(206) 448-8762"
+    },
+    {
+      "input": "",
+      "expect": ""
+    }
+  ],
+  "region": [
+    {
+      "name": "a missing preferences row reads as the column defaults",
+      "prefs": null,
+      "expect": "US"
+    },
+    {
+      "name": "an empty row reads as the column defaults",
+      "prefs": {},
+      "expect": "US"
+    },
+    {
+      "name": "number format names the region",
+      "prefs": {
+        "numberFormat": "en-US",
+        "language": "en"
+      },
+      "expect": "US"
+    },
+    {
+      "name": "number format wins over language",
+      "prefs": {
+        "numberFormat": "en-GB",
+        "language": "en"
+      },
+      "expect": "GB"
+    },
+    {
+      "name": "language is not consulted when number format answers",
+      "prefs": {
+        "numberFormat": "en-GB",
+        "language": "fr"
+      },
+      "expect": "GB"
+    },
+    {
+      "name": "browser falls through to language",
+      "prefs": {
+        "numberFormat": "browser",
+        "language": "pt-BR"
+      },
+      "expect": "BR"
+    },
+    {
+      "name": "browser plus a region-less language names no region",
+      "prefs": {
+        "numberFormat": "browser",
+        "language": "en"
+      },
+      "expect": null
+    },
+    {
+      "name": "the pseudo-locale names no region",
+      "prefs": {
+        "numberFormat": "xx",
+        "language": "xx"
+      },
+      "expect": null
+    },
+    {
+      "name": "an empty number format falls back to the column default",
+      "prefs": {
+        "numberFormat": "",
+        "language": "pt-BR"
+      },
+      "expect": "US"
+    },
+    {
+      "name": "an unparseable tag falls through",
+      "prefs": {
+        "numberFormat": "not a locale tag!",
+        "language": "de-DE"
+      },
+      "expect": "DE"
+    },
+    {
+      "name": "a region libphonenumber has no metadata for falls through",
+      "prefs": {
+        "numberFormat": "en-ZZ",
+        "language": "en-GB"
+      },
+      "expect": "GB"
+    }
+  ]
+}

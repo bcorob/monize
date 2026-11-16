@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback, memo } from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
+import { TagIcon } from '@heroicons/react/24/outline';
 import { Category } from '@/types/category';
 import { CategoryGlyph } from '@/components/categories/CategoryGlyph';
 import { DeleteCategoryDialog } from './DeleteCategoryDialog';
@@ -20,6 +21,9 @@ import { RowActionSheet } from '@/components/ui/row-actions/RowActionSheet';
 import type { RowAction } from '@/components/ui/row-actions/rowAction';
 import { DensityToggleBar } from '@/components/ui/DensityToggle';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/Button';
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { CellLabel, SortableTh, Th } from '@/components/ui/Table';
 
 const logger = createLogger('CategoryList');
 
@@ -57,6 +61,45 @@ export type { DensityLevel } from '@/hooks/useTableDensity';
 export type SortField = 'name' | 'type' | 'count';
 export type SortDirection = 'asc' | 'desc';
 
+/**
+ * Every field this list sorts by, in the tier header's order. The phone's slim
+ * control header renders all of them: the chosen field is persisted
+ * (`monize-categories-sort-field`, on the Categories page) and Type and Count
+ * are hidden at phone width in the tier table, so a header offering fewer
+ * would strand a phone on a sort order it can neither see nor undo. A `Record`
+ * keyed by the union, so a fourth sort field is a type error until it is given
+ * a position here.
+ *
+ * Sorting orders SIBLINGS: the list is a parent/child tree, so each level is
+ * sorted within its parent and a subcategory never leaves the parent it
+ * belongs to.
+ */
+const SORT_FIELD_ORDER: Record<SortField, number> = {
+  name: 0,
+  type: 1,
+  count: 2,
+};
+
+const SORT_FIELDS: readonly SortField[] = (
+  Object.keys(SORT_FIELD_ORDER) as SortField[]
+).sort((a, b) => SORT_FIELD_ORDER[a] - SORT_FIELD_ORDER[b]);
+
+/** The Income/Expense pill, in both layouts. */
+function CategoryTypePill({ category, density }: { category: Category; density: DensityLevel }) {
+  const t = useTranslations('categories');
+  return (
+    <span
+      className={`inline-flex text-xs leading-5 font-semibold rounded-full ${
+        category.isIncome
+          ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
+          : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
+      } ${density === 'dense' ? 'px-1.5 py-0.5' : 'px-2 py-1'}`}
+    >
+      {category.isIncome ? t('list.badgeIncome') : t('list.badgeExpense')}
+    </span>
+  );
+}
+
 interface CategoryRowProps {
   category: Category & { _level?: number };
   density: DensityLevel;
@@ -67,6 +110,16 @@ interface CategoryRowProps {
   index: number;
   getRowHandlers: (category: Category) => LongPressRowHandlers;
   isHighlighted?: boolean;
+  /**
+   * Render the row as a wrapped card instead of the tier table's cells. The
+   * list sets it for phones at Normal density only (on a phone the density
+   * toggle picks the layout); every other width and density renders the tier
+   * row, unchanged. The card carries every value the tier row shows (name,
+   * system marker, type, count, description), indented by its tree level;
+   * only the Actions column is left out, because Edit and Delete are what the
+   * long-press (and right-click) sheet these same row handlers open carries.
+   */
+  wrapped?: boolean;
 }
 
 const CategoryRow = memo(function CategoryRow({
@@ -79,6 +132,7 @@ const CategoryRow = memo(function CategoryRow({
   index,
   getRowHandlers,
   isHighlighted,
+  wrapped = false,
 }: CategoryRowProps) {
   const t = useTranslations('categories');
   const tc = useTranslations('common');
@@ -98,6 +152,74 @@ const CategoryRow = memo(function CategoryRow({
   const glyphIcon =
     density === 'dense' ? null : (category.effectiveIcon ?? category.icon);
 
+  const nameCell = (
+    <>
+      <CategoryGlyph
+        icon={glyphIcon}
+        color={category.effectiveColor}
+        inherited={!category.color && !category.icon}
+        size={glyphIcon ? 16 : density === 'dense' ? 8 : 12}
+        title={
+          !category.color && category.effectiveColor
+            ? t('list.inheritedColorTitle')
+            : undefined
+        }
+        className="mr-2"
+      />
+      <button
+        onClick={(e) => { e.stopPropagation(); onViewTransactions(category); }}
+        className={`text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline text-left${wrapped ? ' min-w-0 break-words' : ''}`}
+        title={t('list.viewTransactionsTitle')}
+      >
+        {category.name}
+      </button>
+      {category.isSystem && density !== 'dense' && (
+        <span className="ml-2 text-xs text-gray-400 dark:text-gray-500">{t('list.systemBadge')}</span>
+      )}
+    </>
+  );
+
+  // Phone + Normal density: one wrapped card per row instead of the tier
+  // table's cells (see the `wrapped` prop). The glyph, name, pill and count
+  // are the same nodes the tier branch renders, so the two layouts cannot
+  // disagree about a category.
+  if (wrapped) {
+    return (
+      <tr
+        ref={rowRef}
+        className={`hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer select-none bg-white dark:bg-gray-900 ${isHighlighted ? HIGHLIGHT_FLASH : ''}`}
+        {...getRowHandlers(category)}
+      >
+        <td className="p-0">
+          <div className={cellPadding}>
+            {/* The tree level indents the whole card, so a subcategory still
+                reads as belonging to the parent above it. */}
+            <div
+              className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1.5 items-start"
+              style={{ paddingLeft: `${(category._level || 0) * 1}rem` }}
+            >
+              <div className="min-w-0 flex items-center">{nameCell}</div>
+              <div className="text-right whitespace-nowrap">
+                <CellLabel>{t('list.colCount')}</CellLabel>
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  {category.transactionCount ?? 0}
+                </div>
+              </div>
+              <div className="col-span-2 flex items-start gap-3 min-w-0">
+                <CategoryTypePill category={category} density={density} />
+                {category.description && (
+                  <div className="min-w-0 text-sm text-gray-500 dark:text-gray-400 break-words">
+                    {category.description}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </td>
+      </tr>
+    );
+  }
+
   return (
     <tr
       ref={rowRef}
@@ -109,40 +231,11 @@ const CategoryRow = memo(function CategoryRow({
           className="flex items-center"
           style={{ paddingLeft: `${(category._level || 0) * (density === 'dense' ? 0.75 : 1.5)}rem` }}
         >
-          <CategoryGlyph
-            icon={glyphIcon}
-            color={category.effectiveColor}
-            inherited={!category.color && !category.icon}
-            size={glyphIcon ? 16 : density === 'dense' ? 8 : 12}
-            title={
-              !category.color && category.effectiveColor
-                ? t('list.inheritedColorTitle')
-                : undefined
-            }
-            className="mr-2"
-          />
-          <button
-            onClick={(e) => { e.stopPropagation(); onViewTransactions(category); }}
-            className="text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline text-left"
-            title={t('list.viewTransactionsTitle')}
-          >
-            {category.name}
-          </button>
-          {category.isSystem && density !== 'dense' && (
-            <span className="ml-2 text-xs text-gray-400 dark:text-gray-500">{t('list.systemBadge')}</span>
-          )}
+          {nameCell}
         </div>
       </td>
       <td className={`${cellPadding} whitespace-nowrap hidden sm:table-cell`}>
-        <span
-          className={`inline-flex text-xs leading-5 font-semibold rounded-full ${
-            category.isIncome
-              ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200'
-              : 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200'
-          } ${density === 'dense' ? 'px-1.5 py-0.5' : 'px-2 py-1'}`}
-        >
-          {category.isIncome ? t('list.badgeIncome') : t('list.badgeExpense')}
-        </span>
+        <CategoryTypePill category={category} density={density} />
       </td>
       <td className={`${cellPadding} whitespace-nowrap text-right text-sm text-gray-600 dark:text-gray-400 hidden md:table-cell`}>
         {category.transactionCount ?? 0}
@@ -171,6 +264,18 @@ interface CategoryListProps {
   onSort?: (field: SortField) => void;
   /** Category id to flash/scroll to (e.g. arriving from a deep link). */
   highlightId?: string | null;
+  /**
+   * Why an empty list is empty: true when the user's search or type filter
+   * hides every category, false when there are no categories at all. The
+   * second is the first-run state, which offers the default set and a create.
+   */
+  isFiltered?: boolean;
+  /** Opens the create dialog from the first-run empty state. */
+  onCreate?: () => void;
+  /** Opens the import-defaults dialog from the first-run empty state. */
+  onImportDefaults?: () => void;
+  /** An import of the default set is running. */
+  isImporting?: boolean;
 }
 
 export function CategoryList({
@@ -182,6 +287,10 @@ export function CategoryList({
   sortDirection: propSortDirection,
   onSort,
   highlightId,
+  isFiltered = false,
+  onCreate,
+  onImportDefaults,
+  isImporting = false,
 }: CategoryListProps) {
   const t = useTranslations('categories');
   const tc = useTranslations('common');
@@ -198,6 +307,18 @@ export function CategoryList({
 
 
   const { cellPadding, headerPadding } = useTableDensity(density);
+  // On a phone, density picks the LAYOUT rather than only the row height: at
+  // Normal each category is a wrapped card carrying the type and count this
+  // table hides below `sm`/`md`; Compact and Dense keep the tier table.
+  const isMobile = useIsMobile();
+  const wrapped = isMobile && density === 'normal';
+
+  // One label per sortable column, read by both headers.
+  const sortFieldLabels: Record<SortField, string> = {
+    name: t('list.colName'),
+    type: t('list.colType'),
+    count: t('list.colCount'),
+  };
 
   const handleSort = useCallback((field: SortField) => {
     if (onSort) {
@@ -211,6 +332,7 @@ export function CategoryList({
       }
     }
   }, [onSort, localSortField]);
+  const sortProps = { sortField, sortDirection, onSort: handleSort };
 
   const handleViewTransactions = useCallback((category: Category) => {
     router.push(`/transactions?categoryId=${category.id}`);
@@ -287,15 +409,43 @@ export function CategoryList({
   }, [categories, sortCategories]);
 
   if (categories.length === 0) {
+    const icon = <TagIcon />;
+    if (isFiltered) {
+      return (
+        <EmptyState
+          icon={icon}
+          title={t('list.emptyHeading')}
+          description={t('list.emptyDescription')}
+        />
+      );
+    }
     return (
       <EmptyState
-        icon={
-          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-          </svg>
+        icon={icon}
+        title={t('empty.heading')}
+        description={
+          <>
+            <p className="max-w-md mx-auto">{t('empty.description')}</p>
+            <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">{t('empty.hint')}</p>
+          </>
         }
-        title={t('list.emptyHeading')}
-        description={t('list.emptyDescription')}
+        action={
+          (onImportDefaults || onCreate) && (
+            <div className="flex flex-col sm:flex-row justify-center gap-3">
+              {onImportDefaults && (
+                <Button onClick={onImportDefaults} isLoading={isImporting} disabled={isImporting}>
+                  {t('empty.importButton')}
+                </Button>
+              )}
+              {onCreate && (
+                <Button variant="outline" onClick={onCreate} disabled={isImporting}>
+                  {t('empty.createButton')}
+                </Button>
+              )}
+            </div>
+          )
+        }
+        help="categories"
       />
     );
   }
@@ -306,35 +456,53 @@ export function CategoryList({
       <DensityToggleBar view="categories" />
       <div className="overflow-x-auto">
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+          {/* On a phone the wrapped card labels its own values, so the column
+              header is dropped, but its sort controls are not: a slim header
+              carries every sort field as a button, and no column label of its
+              own, because the one card cell holds every column at once. */}
           <thead className="bg-gray-50 dark:bg-gray-800">
+            {wrapped ? (
             <tr>
+              {/* Always sorted by something, and the buttons name every member
+                  of `SortField`, so announcing the direction is honest. */}
               <th
-                className={`${headerPadding} text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200`}
-                onClick={() => handleSort('name')}
+                className={`${headerPadding} text-left`}
+                aria-sort={sortDirection === 'asc' ? 'ascending' : 'descending'}
               >
-                {t('list.colName')}<SortIcon field="name" sortField={sortField} sortDirection={sortDirection} />
-              </th>
-              <th
-                className={`${headerPadding} text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 hidden sm:table-cell`}
-                onClick={() => handleSort('type')}
-              >
-                {t('list.colType')}<SortIcon field="type" sortField={sortField} sortDirection={sortDirection} />
-              </th>
-              <th
-                className={`${headerPadding} text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200 hidden md:table-cell`}
-                onClick={() => handleSort('count')}
-              >
-                {t('list.colCount')}<SortIcon field="count" sortField={sortField} sortDirection={sortDirection} />
-              </th>
-              {density === 'normal' && (
-                <th className={`${headerPadding} text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider`}>
-                  {t('list.colDescription')}
-                </th>
-              )}
-              <th className={`${headerPadding} text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden min-[480px]:table-cell sticky right-0 bg-gray-50 dark:bg-gray-800`}>
-                {t('list.colActions')}
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+                  {SORT_FIELDS.map((field) => (
+                    <button
+                      key={field}
+                      type="button"
+                      onClick={() => handleSort(field)}
+                      className="flex items-center text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider rounded focus-visible:outline-2 focus-visible:outline-blue-500"
+                    >
+                      {sortFieldLabels[field]}
+                      <SortIcon field={field} sortField={sortField} sortDirection={sortDirection} />
+                    </button>
+                  ))}
+                </div>
               </th>
             </tr>
+            ) : (
+            <tr>
+              <SortableTh {...sortProps} field="name" className={headerPadding}>
+                {sortFieldLabels.name}
+              </SortableTh>
+              <SortableTh {...sortProps} field="type" className={`${headerPadding} hidden sm:table-cell`}>
+                {sortFieldLabels.type}
+              </SortableTh>
+              <SortableTh {...sortProps} field="count" align="right" className={`${headerPadding} hidden md:table-cell`}>
+                {sortFieldLabels.count}
+              </SortableTh>
+              {density === 'normal' && (
+                <Th className={headerPadding}>{t('list.colDescription')}</Th>
+              )}
+              <Th align="right" className={`${headerPadding} hidden min-[480px]:table-cell sticky right-0 bg-gray-50 dark:bg-gray-800`}>
+                {t('list.colActions')}
+              </Th>
+            </tr>
+            )}
           </thead>
           <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
             {treeCategories.map((category: Category & { _level?: number }, index) => (
@@ -349,6 +517,7 @@ export function CategoryList({
                 index={index}
                 getRowHandlers={getRowHandlers}
                 isHighlighted={!!highlightId && category.id === highlightId}
+                wrapped={wrapped}
               />
             ))}
           </tbody>

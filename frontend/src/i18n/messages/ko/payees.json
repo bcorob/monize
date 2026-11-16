@@ -8,9 +8,11 @@
     "autoMergePayees": "수취인 자동 병합",
     "newPayee": "+ 새 수취인",
     "searchPlaceholder": "수취인 검색...",
+    "statusFilterLabel": "상태",
     "statusAll": "전체 ({count})",
     "statusActive": "활성 ({count})",
     "statusInactive": "비활성 ({count})",
+    "categoryFilterLabel": "기본 카테고리",
     "categoryFilterAll": "전체 수취인 ({count})",
     "categoryFilterNoCategory": "기본 카테고리 없음 ({count})",
     "categoryFilterUncategorized": "미분류 거래 ({count})",
@@ -34,7 +36,8 @@
       "inactive": "비활성",
       "withoutCategory": "카테고리 없음"
     },
-    "applyDefaultCategories": "기본 카테고리 적용"
+    "applyDefaultCategories": "기본 카테고리 적용",
+    "lookupSettings": "거래처 조회 설정"
   },
   "list": {
     "columns": {
@@ -82,13 +85,27 @@
     "categoryLabel": "기본 카테고리",
     "notesLabel": "메모 (선택)",
     "websiteLabel": "웹사이트",
+    "addressLabel": "주소",
+    "emailLabel": "이메일",
+    "phoneLabel": "전화번호",
     "submitCreate": "수취인 만들기",
     "submitUpdate": "수취인 업데이트",
     "applyCategoryLabel": "기존 거래에 이 카테고리 적용",
     "applyCategoryNone": "기존 거래 변경 안 함",
     "applyCategoryUncategorized": "카테고리 없는 거래만 ({count}건)",
     "applyCategoryAll": "모든 거래 ({count}건)",
-    "applyCategoryHelp": "이체 및 분할 거래는 변경되지 않습니다."
+    "applyCategoryHelp": "이체 및 분할 거래는 변경되지 않습니다.",
+    "lookup": {
+      "button": "정보 조회",
+      "searching": "연락처 정보를 조회하는 중...",
+      "suggested": "조회로 제안됨:",
+      "replaced": "검색으로 대체됨:",
+      "clear": "검색 변경 사항 실행 취소",
+      "nothingFound": "이 이름에 대한 공개 연락처 정보를 찾지 못했습니다.",
+      "noProvider": "연락처를 찾으려면 <link>거래처 조회 설정</link>에서 조회 소스를 설정하세요.",
+      "failed": "조회를 완료할 수 없습니다. 나중에 다시 시도하세요.",
+      "quotaExceeded": "이번 달 Google Places 조회를 모두 사용했습니다. <link>거래처 조회 설정</link>에서 한도를 늘리거나 다음 달까지 기다리세요."
+    }
   },
   "merge": {
     "title": "수취인 병합",
@@ -112,7 +129,6 @@
   },
   "categoryAutoAssign": {
     "title": "기본 카테고리 자동 지정",
-    "howItWorksTitle": "작동 방식",
     "howItWorksBody": "이 기능은 거래 내역을 분석하여 수취인의 기본 카테고리를 제안합니다. 각 수취인에 가장 많이 사용된 카테고리를 확인하고 향후 거래의 기본 카테고리로 지정하도록 제안합니다. 필요한 경우 기본 카테고리를 언제든지 변경할 수 있습니다.",
     "minTransactionsLabel": "최소 거래 건수: {count}",
     "minTransactionsHelp": "이 건수 이상의 거래가 있는 수취인만 고려합니다",
@@ -133,6 +149,7 @@
       "line2": "위의 설정을 조정해 보세요."
     },
     "columns": {
+      "assign": "지정",
       "payee": "수취인",
       "suggestedCategory": "제안 카테고리",
       "match": "일치율"
@@ -150,7 +167,6 @@
   },
   "autoMerge": {
     "title": "수취인 자동 병합",
-    "howItWorksTitle": "작동 방식",
     "howItWorksBody": "이 기능은 수취인을 검색하여 한 이름이 다른 이름을 확장하는 변형들을 그룹화합니다. 예를 들어 \"Lidl\", \"LIDL sp. z o.o.\", \"LIDL WARSZAWA 0421\"은 모두 \"Lidl\"을 기반으로 합니다. 각 그룹은 단일 표준 수취인으로 병합되고 와일드카드 별칭(예: \"*LIDL*\")이 생성되어 향후 가져오기에서 자동 매칭됩니다. 단순히 공통 단어를 공유하는 수취인(예: \"Royal Electric\"과 \"Royal City Nursery\")은 별도로 유지됩니다. 적용 전에 각 그룹을 검토하고 조정하세요.",
     "backupRecommendation": "권장 사항: 변경하기 전에 <link>백업</link>을 만드세요.",
     "minGroupSizeLabel": "최소 그룹 크기: {count}",
@@ -210,7 +226,6 @@
   },
   "deactivateUnused": {
     "title": "미사용 수취인 비활성화",
-    "howItWorksTitle": "작동 방식",
     "howItWorksBody": "이 기능은 거의 사용되지 않는 수취인을 찾아 비활성화합니다. 비활성화된 수취인은 거래 생성 시 수취인 드롭다운에 표시되지 않지만 과거 거래는 보존됩니다. 수취인 목록에서 언제든지 수취인을 재활성화할 수 있습니다.",
     "maxTransactionsLabel": "{count, plural, one {거래 #건 이하} other {거래 #건 이하}}",
     "maxTransactionsHelp": "이 건수 이하의 거래가 있는 수취인만 포함합니다",
@@ -228,6 +243,7 @@
       "line2": "위의 설정을 조정해 보세요."
     },
     "columns": {
+      "deactivate": "비활성화",
       "payee": "수취인",
       "transactions": "거래",
       "lastUsed": "마지막 사용"
@@ -243,7 +259,7 @@
     }
   },
   "reactivate": {
-    "title": "수취인을 재활성화하시겠습니까?",
+    "title": "수취인 재활성화",
     "message": "수취인 \"{name}\"이(가) 이전에 비활성화되었습니다. 수취인 드롭다운에 다시 표시되도록 재활성화하시겠습니까?",
     "keepInactiveButton": "아니요, 비활성 유지",
     "reactivateButton": "재활성화",
@@ -252,7 +268,7 @@
   "aliases": {
     "heading": "별칭",
     "description": "별칭은 가져온 수취인 이름을 이 수취인에 매핑합니다. *를 와일드카드로 사용하세요 (예: \"STARBUCKS*\"). 대소문자를 구분하지 않습니다.",
-    "loading": "로드 중...",
+    "loading": "별칭 로드 중...",
     "noAliases": "설정된 별칭 없음",
     "removeTitle": "별칭 제거",
     "removeButton": "제거",
@@ -270,7 +286,10 @@
   },
   "selectCategoryPlaceholder": "카테고리 선택...",
   "validation": {
-    "nameRequired": "수취인 이름이 필요합니다"
+    "nameRequired": "수취인 이름이 필요합니다",
+    "emailInvalid": "유효한 이메일 주소를 입력하세요",
+    "phoneInvalid": "유효한 전화번호를 입력하세요",
+    "phoneNeedsCountryCode": "국가 번호를 추가하세요. 예: +1 206 448 8762"
   },
   "defaultCategoryBackfill": {
     "allConfirmTitle": "기본 카테고리를 적용하시겠습니까?",

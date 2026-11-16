@@ -58,11 +58,6 @@ const LOAN_CAST_ALLOWLIST = new Map([
     "src/accounts/loan-mortgage-account.service.ts",
     "CreateAccountDto.paymentFrequency, validated by @IsIn(PAYMENT_FREQUENCIES)",
   ],
-  [
-    "src/scheduled-transactions/scheduled-transaction-loan.service.ts",
-    "the loan account's cadence falling back to the schedule's own, used only " +
-      "for labels; the periodic rate goes through periodsPerYearForStoredFrequency",
-  ],
 ]);
 
 /**

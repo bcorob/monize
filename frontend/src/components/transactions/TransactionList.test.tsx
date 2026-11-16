@@ -4,7 +4,9 @@ import { TransactionList } from './TransactionList';
 import { Transaction, TransactionStatus } from '@/types/transaction';
 import { useDensityStore } from '@/store/densityStore';
 import { useDateDisplayStore } from '@/store/dateDisplayStore';
+import { REGISTER_PAYEE_CELL_FLOOR } from './register-columns';
 import { usePreferencesStore } from '@/store/preferencesStore';
+import { useHiddenColumnsStore } from '@/store/hiddenColumnsStore';
 import toast from 'react-hot-toast';
 
 vi.mock('@/lib/transactions', () => ({
@@ -24,10 +26,21 @@ vi.mock('@/hooks/useDateFormat', () => ({
   }),
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (n: number) => `$${n.toFixed(2)}`,
-  }),
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (n: number) => `$${n.toFixed(2)}`,
+    }),
+  };
+});
+// Whether a row is still to come is a financial decision, so the register asks
+// the user's own calendar rather than the browser's. Pinned here so these tests
+// do not drift with the machine's clock; one test drives it directly.
+const mockFinancialToday = vi.fn(() => '2026-01-01');
+vi.mock('@/hooks/useFinancialToday', () => ({
+  useFinancialToday: () => mockFinancialToday(),
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -37,6 +50,15 @@ vi.mock('@/lib/logger', () => ({
     info: vi.fn(),
     debug: vi.fn(),
   }),
+}));
+
+// The account preference write. Toggling a column saves to this browser only
+// (`useHiddenColumnsStore`), so the hidden-column tests assert it is never called.
+const mockUpdatePreferences = vi.fn();
+vi.mock('@/lib/user-settings', () => ({
+  userSettingsApi: {
+    updatePreferences: (...args: unknown[]) => mockUpdatePreferences(...args),
+  },
 }));
 
 function createTransaction(overrides: Partial<Transaction> = {}): Transaction {
@@ -918,6 +940,42 @@ describe('TransactionList', () => {
       });
     });
 
+    it('omits the Account column entirely in a single-account view', async () => {
+      // Structural, not responsive: on a single account's page every row
+      // would repeat the page's own title, so neither the header nor the
+      // cells exist at any width (register-columns.ts).
+      render(
+        <TransactionList
+          transactions={[createTransaction()]}
+          onEdit={mockOnEdit}
+          onRefresh={mockOnRefresh}
+          isSingleAccountView={true}
+          startingBalance={1000}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Grocery Store')).toBeInTheDocument();
+      });
+      expect(screen.queryByText('Account')).not.toBeInTheDocument();
+      expect(screen.queryByText('Chequing')).not.toBeInTheDocument();
+    });
+
+    it('renders the Account column for a multi-account view', async () => {
+      render(
+        <TransactionList
+          transactions={[createTransaction()]}
+          onEdit={mockOnEdit}
+          onRefresh={mockOnRefresh}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Account')).toBeInTheDocument();
+        expect(screen.getByText('Chequing')).toBeInTheDocument();
+      });
+    });
+
     it('renders Balance column header when isSingleAccountView is true', async () => {
       render(
         <TransactionList
@@ -1053,7 +1111,7 @@ describe('TransactionList', () => {
       });
     });
 
-    it('displays reference number when available in normal density', async () => {
+    it('displays the reference number once, in the Ref # column, not under the payee', async () => {
       const tx = createTransaction({ referenceNumber: 'CHQ-12345' });
 
       render(
@@ -1065,25 +1123,9 @@ describe('TransactionList', () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByText('Ref: CHQ-12345')).toBeInTheDocument();
+        expect(screen.getAllByText('CHQ-12345')).toHaveLength(1);
       });
-    });
-
-    it('does not display reference number in compact density', async () => {
-      const tx = createTransaction({ referenceNumber: 'CHQ-12345' });
-
-      useDensityStore.setState({ densities: { transactions: 'compact' } });
-      render(
-        <TransactionList
-          transactions={[tx]}
-          onEdit={mockOnEdit}
-          onRefresh={mockOnRefresh}
-        />
-      );
-
-      await waitFor(() => {
-        expect(screen.queryByText('Ref: CHQ-12345')).not.toBeInTheDocument();
-      });
+      expect(screen.queryByText('Ref: CHQ-12345')).not.toBeInTheDocument();
     });
   });
 
@@ -2304,9 +2346,8 @@ describe('TransactionList', () => {
         expect(screen.getByText('-$50.00')).toBeInTheDocument();
         // Should show the partial indicator asterisk
         expect(screen.getByText('*')).toBeInTheDocument();
-        // Should have tooltip with full amount
-        const indicator = screen.getByText('*').closest('span[title]');
-        expect(indicator?.getAttribute('title')).toContain('200');
+        // The full amount is written out beside the marker, not in a title
+        expect(screen.getByText(/^Filtered amount \(full transaction: .*200/)).toBeInTheDocument();
       });
     });
 
@@ -3120,94 +3161,6 @@ describe('TransactionList', () => {
       }
     });
   });
-
-  describe('stale reconciliation highlighting', () => {
-    const staleContext = {
-      lastReconciledByAccount: new Map([['acc-1', '2026-06-30']]),
-      overdueBefore: '2026-07-04',
-    };
-
-    it('marks a row the last reconciled statement left out', async () => {
-      const missed = createTransaction({
-        transactionDate: '2026-06-15',
-        status: TransactionStatus.CLEARED,
-      });
-
-      render(<TransactionList transactions={[missed]} staleContext={staleContext} />);
-
-      await waitFor(() => {
-        expect(screen.getByTestId('stale-reconciliation-chip')).toHaveAttribute(
-          'data-stale',
-          'missed',
-        );
-      });
-    });
-
-    // "Overdue" says nobody has reconciled the *account* recently, which is
-    // true of every row in it at once -- so the register marked page after page
-    // of ordinary transactions for a condition about none of them. The
-    // reconcile screen still shows it, and the header badge still counts it.
-    it('leaves a row older than the overdue boundary unmarked', async () => {
-      const overdue = createTransaction({
-        transactionDate: '2026-07-02',
-        status: TransactionStatus.UNRECONCILED,
-      });
-
-      render(<TransactionList transactions={[overdue]} staleContext={staleContext} />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Grocery Store')).toBeInTheDocument();
-      });
-      expect(screen.queryByTestId('stale-reconciliation-chip')).not.toBeInTheDocument();
-    });
-
-    it('marks nothing without the context, which is how a failed lookup reads', async () => {
-      // The register must not silently start claiming everything is fine, nor
-      // start claiming everything is overdue, because a request did not answer.
-      const old = createTransaction({ transactionDate: '2020-01-01' });
-
-      render(<TransactionList transactions={[old]} />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Grocery Store')).toBeInTheDocument();
-      });
-      expect(screen.queryByTestId('stale-reconciliation-chip')).not.toBeInTheDocument();
-    });
-
-    it('marks nothing in an account the user does not reconcile', async () => {
-      const other = createTransaction({
-        accountId: 'acc-99',
-        transactionDate: '2020-01-01',
-      });
-
-      render(<TransactionList transactions={[other]} staleContext={staleContext} />);
-
-      await waitFor(() => {
-        expect(screen.getByText('Grocery Store')).toBeInTheDocument();
-      });
-      expect(screen.queryByTestId('stale-reconciliation-chip')).not.toBeInTheDocument();
-    });
-
-    it('marks nothing on a reconciled or void row', async () => {
-      const done = createTransaction({
-        id: 'aaaaaaaa-e89b-12d3-a456-426614174000',
-        transactionDate: '2026-01-01',
-        status: TransactionStatus.RECONCILED,
-      });
-      const voided = createTransaction({
-        id: 'bbbbbbbb-e89b-12d3-a456-426614174000',
-        transactionDate: '2026-01-01',
-        status: TransactionStatus.VOID,
-      });
-
-      render(<TransactionList transactions={[done, voided]} staleContext={staleContext} />);
-
-      await waitFor(() => {
-        expect(screen.getAllByText('Grocery Store').length).toBe(2);
-      });
-      expect(screen.queryByTestId('stale-reconciliation-chip')).not.toBeInTheDocument();
-    });
-  });
 });
 
 describe('TransactionList compact mobile dates', () => {
@@ -3230,24 +3183,24 @@ describe('TransactionList compact mobile dates', () => {
     expect(screen.queryByText('01-15')).not.toBeInTheDocument();
   });
 
-  it('drops the year for phones and keeps the full date for wider screens', async () => {
+  it('drops the year at every width once the option is on', async () => {
     render(<TransactionList transactions={[createTransaction()]} />);
 
     const toggle = screen.getByRole('button', { name: 'Hide the year' });
+    // The toggle is offered at every width -- the day/month view began as a
+    // phone-only trade and is now a date view the user can pick anywhere.
+    expect(toggle.className).not.toContain('sm:hidden');
     fireEvent.click(toggle);
 
     await waitFor(() => {
       expect(toggle).toHaveAttribute('aria-pressed', 'true');
     });
 
-    // The day is kept -- the year is the part a register row can spare.
-    const compact = screen.getByText('01-15');
-    expect(compact.className).toContain('sm:hidden');
-
-    // The full date is still rendered, gated to sm and up.
-    const full = screen.getByText('2024-01-15');
-    expect(full.className).toContain('hidden');
-    expect(full.className).toContain('sm:inline');
+    // The day is kept -- the year is the part a register row can spare -- and
+    // there is one rendering, no phone/desktop CSS split: the chosen view is
+    // what every width shows.
+    expect(screen.getByText('01-15')).toBeInTheDocument();
+    expect(screen.queryByText('2024-01-15')).not.toBeInTheDocument();
   });
 
   it('closes the gap between the Date and Payee columns, header and cells alike', async () => {
@@ -3286,5 +3239,561 @@ describe('TransactionList compact mobile dates', () => {
     await waitFor(() => {
       expect(useDateDisplayStore.getState().compactMobileDates).toBe(true);
     });
+  });
+});
+
+describe('the payee column floor', () => {
+  // The register is filtered to one payee and every column beside it gets
+  // shorter at once -- one payee name, one category, no reference numbers,
+  // smaller amounts. Description carries `w-full`, which an auto-layout table
+  // settles against the content columns in proportion to their content, so
+  // that shrinkage became Description's: measured at a 1710px register, Payee
+  // 270px -> 212px and Description 386px -> 517px, cutting off the very payee
+  // the user had just filtered for. jsdom does no layout, so what is checkable
+  // here is that the floor reaches the DOM -- on the header AND the cells,
+  // because a column's minimum is the largest of its cells' and half a floor
+  // is no floor.
+  it('declares the floor on the payee header and its cells alike', () => {
+    const { container } = render(
+      <TransactionList transactions={[createTransaction()]} />,
+    );
+
+    const payeeHeader = container.querySelectorAll('thead th')[2];
+    const payeeCell = container.querySelectorAll('tbody td')[2];
+
+    expect(payeeHeader).toHaveTextContent('Payee');
+    expect(payeeHeader.className).toContain(REGISTER_PAYEE_CELL_FLOOR);
+    expect(payeeCell.className).toContain(REGISTER_PAYEE_CELL_FLOOR);
+  });
+
+  it('leaves the phone caps in charge below sm', () => {
+    // `min-width` beats `max-width`, so the floor is `sm:`-scoped: below it
+    // the payee cell's phone cap still decides, or a 240px floor would prise
+    // the phone layout open.
+    const { container } = render(
+      <TransactionList transactions={[createTransaction()]} />,
+    );
+    const payeeCell = container.querySelectorAll('tbody td')[2];
+
+    expect(REGISTER_PAYEE_CELL_FLOOR.startsWith('sm:')).toBe(true);
+    expect(payeeCell.className).toContain('max-w-[100px]');
+  });
+});
+
+describe('the Table / Calendar switch in the register toolbar', () => {
+  it('leads the bar, just left of the count, with export and density before the pager', () => {
+    // The switch stands at the left-hand end, where the calendar's toolbar has
+    // it, with the line saying what the reader is looking at beside it; the
+    // buttons that act on the list as drawn keep the right-hand end, in front
+    // of the page stepper.
+    render(
+      <TransactionList
+        transactions={[createTransaction()]}
+        currentPage={1}
+        totalPages={3}
+        totalItems={60}
+        pageSize={25}
+        onPageChange={vi.fn()}
+        onExport={vi.fn()}
+        viewToggle={<button type="button">Switch view</button>}
+      />,
+    );
+
+    const count = screen.getByText('60');
+    const toggle = screen.getByRole('button', { name: 'Switch view' });
+    const exportButton = screen.getByTitle('Export transactions to CSV');
+    const density = screen.getByTitle('Toggle row density');
+    const firstPage = screen.getByTitle('First page');
+
+    expect(toggle.compareDocumentPosition(count)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(count.compareDocumentPosition(exportButton)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(exportButton.compareDocumentPosition(density)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(density.compareDocumentPosition(firstPage)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it('survives an empty register, which is when a reader reaches for it', () => {
+    // A control that vanishes with the last row is one the reader cannot get
+    // back to without writing a transaction.
+    render(
+      <TransactionList
+        transactions={[]}
+        viewToggle={<button type="button">Switch view</button>}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Switch view' })).toBeInTheDocument();
+    // No pages of nothing to step through.
+    expect(screen.queryByTitle('First page')).not.toBeInTheDocument();
+  });
+});
+
+describe('TransactionList sorting', () => {
+  const mockOnEdit = vi.fn();
+  const mockOnRefresh = vi.fn();
+
+  const renderSortable = (
+    props: Partial<React.ComponentProps<typeof TransactionList>> = {},
+  ) => {
+    const onSortChange = vi.fn();
+    const utils = render(
+      <TransactionList
+        transactions={[createTransaction()]}
+        onEdit={mockOnEdit}
+        onRefresh={mockOnRefresh}
+        sort={{ field: 'date', direction: 'desc' }}
+        onSortChange={onSortChange}
+        {...props}
+      />,
+    );
+    return { ...utils, onSortChange };
+  };
+
+  afterEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('offers a sort control for every column the server can sort by', async () => {
+    renderSortable();
+
+    await waitFor(() => {
+      expect(screen.getByRole('columnheader', { name: /date/i })).toBeInTheDocument();
+    });
+    // A field with no control anywhere would strand a remembered sort: the
+    // register would stay ordered by it with no way to change it back.
+    for (const name of [/date/i, /account/i, /payee/i, /category/i, /description/i, /ref #/i, /amount/i, /status/i]) {
+      expect(screen.getByRole('columnheader', { name })).toHaveAttribute('aria-sort');
+    }
+  });
+
+  it('marks only the sorted column, and says which way it runs', async () => {
+    renderSortable({ sort: { field: 'payee', direction: 'asc' } });
+
+    await waitFor(() => {
+      expect(screen.getByRole('columnheader', { name: /payee/i })).toHaveAttribute(
+        'aria-sort',
+        'ascending',
+      );
+    });
+    expect(screen.getByRole('columnheader', { name: /date/i })).toHaveAttribute(
+      'aria-sort',
+      'none',
+    );
+  });
+
+  it('asks the page to re-sort when a header is used', async () => {
+    const { onSortChange } = renderSortable();
+
+    await waitFor(() => {
+      expect(screen.getByRole('columnheader', { name: /amount/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('columnheader', { name: /amount/i }));
+    expect(onSortChange).toHaveBeenCalledWith('amount');
+  });
+
+  it('keeps the year toggle in the Date header without sorting on it', async () => {
+    const { onSortChange } = renderSortable();
+
+    const toggle = await screen.findByRole('button', { name: /hide the year/i });
+    fireEvent.click(toggle);
+    expect(onSortChange).not.toHaveBeenCalled();
+  });
+
+  it('draws no Balance column while the register is sorted by something else', async () => {
+    renderSortable({
+      isSingleAccountView: true,
+      startingBalance: 1000,
+      sort: { field: 'amount', direction: 'desc' },
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('columnheader', { name: /amount/i })).toBeInTheDocument();
+    });
+    // A running balance is a figure about the row above it, so beside rows in
+    // amount order it would be arithmetic nobody can read.
+    expect(screen.queryByText('Balance')).not.toBeInTheDocument();
+  });
+
+  it('draws the Balance column in either date direction', async () => {
+    for (const direction of ['asc', 'desc'] as const) {
+      cleanup();
+      renderSortable({
+        isSingleAccountView: true,
+        startingBalance: 1000,
+        sort: { field: 'date', direction },
+      });
+      await waitFor(() => {
+        expect(screen.getByText('Balance')).toBeInTheDocument();
+      });
+    }
+  });
+
+  it('says why the balance is missing, but only where there was one to miss', async () => {
+    renderSortable({
+      isSingleAccountView: true,
+      sort: { field: 'payee', direction: 'asc' },
+      startingBalanceWithheld: 'sort',
+    });
+    await waitFor(() => {
+      expect(
+        screen.getByText('Sort by date to see the running balance'),
+      ).toBeInTheDocument();
+    });
+
+    cleanup();
+    // No flag: this register never had a Balance column, so promising one
+    // back would be a lie the reader cannot act on.
+    renderSortable({ sort: { field: 'payee', direction: 'asc' } });
+    await waitFor(() => {
+      expect(screen.getByRole('columnheader', { name: /payee/i })).toBeInTheDocument();
+    });
+    expect(
+      screen.queryByText('Sort by date to see the running balance'),
+    ).not.toBeInTheDocument();
+  });
+
+  it('walks an oldest-first page from the same seed', async () => {
+    // The seed is the balance after the page's NEWEST row whichever way the
+    // page arrived, so the oldest row on an ascending page is not the one
+    // carrying it.
+    const older = createTransaction({ id: 'older', transactionDate: '2024-01-14', amount: -10 });
+    const newer = createTransaction({ id: 'newer', transactionDate: '2024-01-15', amount: -40 });
+    renderSortable({
+      isSingleAccountView: true,
+      startingBalance: 100,
+      sort: { field: 'date', direction: 'asc' },
+      transactions: [older, newer],
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText('$100.00')).toBeInTheDocument();
+    });
+    // newer: 100; older: 100 - (-40) = 140.
+    expect(screen.getByText('$140.00')).toBeInTheDocument();
+  });
+
+  it('walks the page in the order the rows were fetched, not the order clicked', async () => {
+    // The moment a reader clicks Date the header says oldest-first, but the
+    // rows and the seed on screen are still the newest-first page from the
+    // previous request. Reading the direction from the header there reverses
+    // that page before walking it, and every figure in the Balance column
+    // comes out inverted -- numbers that were never true of any state of the
+    // ledger, drawn at full opacity with no spinner over them.
+    const older = createTransaction({ id: 'older', transactionDate: '2024-01-14', amount: -10 });
+    const newer = createTransaction({ id: 'newer', transactionDate: '2024-01-15', amount: -40 });
+    renderSortable({
+      isSingleAccountView: true,
+      startingBalance: 100,
+      sort: { field: 'date', direction: 'asc' },
+      rowsSort: { field: 'date', direction: 'desc' },
+      transactions: [newer, older],
+    });
+
+    // Walked newest-first as the rows arrived: newer 100, older 140. Walked
+    // under the header's ascending direction the page is reversed first, and
+    // the same two rows read 110 and 100.
+    await waitFor(() => {
+      expect(screen.getByText('$140.00')).toBeInTheDocument();
+    });
+    expect(screen.getByText('$100.00')).toBeInTheDocument();
+    expect(screen.queryByText('$110.00')).not.toBeInTheDocument();
+  });
+
+  it('keeps the Balance column hidden until the date-ordered rows arrive', async () => {
+    // Clicking Date while sorted by payee must not turn the column on over
+    // rows that carry no balance: the seed was withheld with them, so every
+    // cell would render as a dash under the line promising a balance.
+    renderSortable({
+      isSingleAccountView: true,
+      sort: { field: 'date', direction: 'desc' },
+      rowsSort: { field: 'payee', direction: 'asc' },
+      startingBalanceWithheld: 'sort',
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByText('Sort by date to see the running balance'),
+      ).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Balance')).not.toBeInTheDocument();
+  });
+
+  it('draws the plain header a surface that does not sort has always had', async () => {
+    render(
+      <TransactionList
+        transactions={[createTransaction()]}
+        onEdit={mockOnEdit}
+        onRefresh={mockOnRefresh}
+      />,
+    );
+
+    await waitFor(() => {
+      expect(screen.getByText('Date')).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('columnheader', { name: /payee/i })).not.toHaveAttribute(
+      'aria-sort',
+    );
+  });
+});
+
+describe('TransactionList today divider', () => {
+  const mockOnEdit = vi.fn();
+  const mockOnRefresh = vi.fn();
+
+  // `useFinancialToday` is mocked for this file, so the fixture is dated
+  // either side of that fixed day: one row plainly in the past, one plainly
+  // ahead of it.
+  const past = createTransaction({ id: 'past', transactionDate: '2020-01-01' });
+  const future = createTransaction({ id: 'future', transactionDate: '2099-01-01' });
+
+  const renderWith = (
+    transactions: Transaction[],
+    sort?: { field: 'date' | 'payee'; direction: 'asc' | 'desc' },
+  ) =>
+    render(
+      <TransactionList
+        transactions={transactions}
+        onEdit={mockOnEdit}
+        onRefresh={mockOnRefresh}
+        sort={sort as never}
+        onSortChange={sort ? vi.fn() : undefined}
+      />,
+    );
+
+  afterEach(() => cleanup());
+
+  it('marks where a newest-first page crosses today', async () => {
+    renderWith([future, past], { field: 'date', direction: 'desc' });
+    await waitFor(() => {
+      expect(screen.getByText('Today')).toBeInTheDocument();
+    });
+  });
+
+  it('marks where an oldest-first page crosses it, which is the other end', async () => {
+    // The future rows are at the BOTTOM here, so a divider placed by index
+    // rather than by date would sit above the past rows instead.
+    renderWith([past, future], { field: 'date', direction: 'asc' });
+    await waitFor(() => {
+      expect(screen.getByText('Today')).toBeInTheDocument();
+    });
+    // And it sits between the two rows rather than above both: the divider
+    // row comes after the past row in DOM order.
+    const body = screen.getByText('Today').closest('tbody');
+    const rows = Array.from(body!.children);
+    const dividerIndex = rows.findIndex((row) => row.textContent?.includes('Today'));
+    expect(dividerIndex).toBeGreaterThan(0);
+  });
+
+  it('draws none on a page that does not cross today', async () => {
+    renderWith([past, past], { field: 'date', direction: 'asc' });
+    await waitFor(() => {
+      expect(screen.getByText('Date')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Today')).not.toBeInTheDocument();
+  });
+
+  it("reads the user's calendar for 'today', not the browser's", async () => {
+    // A traveller's laptop is on the wrong day for this. The register takes
+    // the answer from the shared financial-today helper, which reads the
+    // user's configured timezone, so moving that answer moves the divider.
+    mockFinancialToday.mockReturnValue('2024-01-15');
+    const onThatDay = createTransaction({ id: 'today', transactionDate: '2024-01-15' });
+    const theDayAfter = createTransaction({ id: 'tomorrow', transactionDate: '2024-01-16' });
+
+    renderWith([theDayAfter, onThatDay], { field: 'date', direction: 'desc' });
+    await waitFor(() => {
+      expect(screen.getByText('Today')).toBeInTheDocument();
+    });
+
+    // Move the user's day past both rows and the crossing disappears.
+    cleanup();
+    mockFinancialToday.mockReturnValue('2024-02-01');
+    renderWith([theDayAfter, onThatDay], { field: 'date', direction: 'desc' });
+    await waitFor(() => {
+      expect(screen.getByText('Date')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Today')).not.toBeInTheDocument();
+    mockFinancialToday.mockReturnValue('2026-01-01');
+  });
+
+  it('draws none under an order where "future" is not a place on the page', async () => {
+    renderWith([future, past], { field: 'payee', direction: 'asc' });
+    await waitFor(() => {
+      expect(screen.getByRole('columnheader', { name: /payee/i })).toBeInTheDocument();
+    });
+    expect(screen.queryByText('Today')).not.toBeInTheDocument();
+  });
+});
+
+describe('TransactionList hidden columns', () => {
+  // The stored `hiddenTableColumns.transactions` set (one per table kind, read
+  // everywhere the register is mounted) removes a hideable column from the
+  // DOM at every width: no header, no cell, and the today divider spans one
+  // column less. Restoring is the toolbar's Columns menu alone.
+  const past = createTransaction({ id: 'past', transactionDate: '2020-01-01' });
+  const future = createTransaction({ id: 'future', transactionDate: '2099-01-01' });
+
+  const seed = (transactions: string[] | undefined) =>
+    usePreferencesStore.setState({
+      preferences: (transactions
+        ? { hiddenTableColumns: { transactions } }
+        : { hiddenTableColumns: {} }) as any,
+    });
+
+  const renderRegister = () =>
+    render(
+      <TransactionList
+        transactions={[future, past]}
+        onEdit={vi.fn()}
+        onRefresh={vi.fn()}
+        onExport={vi.fn()}
+        sort={{ field: 'date', direction: 'desc' }}
+        onSortChange={vi.fn()}
+      />,
+    );
+
+  const dividerSpan = () => Number(screen.getByText('Today').closest('td')!.getAttribute('colspan'));
+
+  beforeEach(() => {
+    mockUpdatePreferences.mockReset();
+    mockUpdatePreferences.mockImplementation(async (patch: Record<string, unknown>) => patch);
+  });
+
+  afterEach(() => {
+    cleanup();
+    usePreferencesStore.setState({ preferences: null });
+  });
+
+  it('renders every column with the default empty set, as before', async () => {
+    seed(undefined);
+    renderRegister();
+    await waitFor(() => {
+      expect(screen.getByRole('columnheader', { name: /status/i })).toBeInTheDocument();
+    });
+    expect(screen.getAllByTitle('Click to cycle status')).toHaveLength(2);
+    expect(screen.getByRole('button', { name: 'Columns' })).toBeInTheDocument();
+    // Ten unconditional columns plus Account on a multi-account register.
+    expect(dividerSpan()).toBe(11);
+  });
+
+  it('removes a hidden column from the header, the rows and the divider span', async () => {
+    seed(['status']);
+    renderRegister();
+    await waitFor(() => {
+      expect(screen.getByRole('columnheader', { name: /payee/i })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('columnheader', { name: /status/i })).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Click to cycle status')).not.toBeInTheDocument();
+    expect(dividerSpan()).toBe(10);
+    // The menu's trigger says where the column went.
+    expect(screen.getByRole('button', { name: 'Columns, 1 hidden' })).toBeInTheDocument();
+    // The structural columns and the other hideable ones are untouched.
+    for (const name of [/date/i, /payee/i, /category/i, /description/i, /ref #/i, /amount/i]) {
+      expect(screen.getByRole('columnheader', { name })).toBeInTheDocument();
+    }
+  });
+
+  it('hides every hideable column at once and keeps what a register is', async () => {
+    seed(['description', 'refNumber', 'tags', 'attachments', 'status']);
+    renderRegister();
+    await waitFor(() => {
+      expect(screen.getByRole('columnheader', { name: /payee/i })).toBeInTheDocument();
+    });
+    // The sort icon's glyph trails each sortable label; the labels are the point.
+    const headers = screen
+      .getAllByRole('columnheader')
+      .map((th) => th.textContent?.replace(/[^A-Za-z #]/g, '').trim());
+    expect(headers).toEqual(['Date', 'Account', 'Payee', 'Category', 'Amount', 'Actions']);
+    expect(dividerSpan()).toBe(6);
+    expect(screen.getByRole('button', { name: 'Columns, 5 hidden' })).toBeInTheDocument();
+  });
+
+  it('hides a column from the toolbar menu and shows it again from there', async () => {
+    seed(undefined);
+    renderRegister();
+    await waitFor(() => {
+      expect(screen.getByRole('columnheader', { name: /status/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Columns' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Status' }));
+    });
+    await waitFor(() => {
+      expect(useHiddenColumnsStore.getState().columns).toEqual({ transactions: ['status'] });
+    });
+    expect(screen.queryByRole('columnheader', { name: /status/i })).not.toBeInTheDocument();
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Status' })).toHaveAttribute('aria-checked', 'false');
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Status' }));
+    });
+    await waitFor(() => {
+      expect(useHiddenColumnsStore.getState().columns).toEqual({ transactions: [] });
+    });
+    expect(mockUpdatePreferences).not.toHaveBeenCalled();
+    expect(screen.getByRole('columnheader', { name: /status/i })).toBeInTheDocument();
+  });
+
+  it('hides a column from its header by right-click, through the sheet', async () => {
+    seed(undefined);
+    renderRegister();
+    await waitFor(() => {
+      expect(screen.getByRole('columnheader', { name: /status/i })).toBeInTheDocument();
+    });
+
+    fireEvent.contextMenu(screen.getByRole('columnheader', { name: /status/i }));
+    const hide = await screen.findByRole('button', { name: /hide column/i });
+    await act(async () => {
+      fireEvent.click(hide);
+    });
+    await waitFor(() => {
+      expect(useHiddenColumnsStore.getState().columns).toEqual({ transactions: ['status'] });
+    });
+    expect(screen.queryByRole('columnheader', { name: /status/i })).not.toBeInTheDocument();
+  });
+
+  it('still sorts from a plain click on a hideable header', async () => {
+    seed(undefined);
+    const onSortChange = vi.fn();
+    render(
+      <TransactionList
+        transactions={[past]}
+        onEdit={vi.fn()}
+        onRefresh={vi.fn()}
+        sort={{ field: 'date', direction: 'desc' }}
+        onSortChange={onSortChange}
+      />,
+    );
+    await waitFor(() => {
+      expect(screen.getByRole('columnheader', { name: /status/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('columnheader', { name: /status/i }));
+    expect(onSortChange).toHaveBeenCalledWith('status');
+    // Tags and Attachments sort nowhere, so their click sorts nothing.
+    fireEvent.click(screen.getByRole('columnheader', { name: /tags/i }));
+    expect(onSortChange).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('TransactionList warranties', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('shows the shield but offers no warranty action in the Copy menu or the action sheet', async () => {
+    render(
+      <TransactionList
+        transactions={[createTransaction({ warrantyCount: 2 })]}
+        onEdit={vi.fn()}
+        onDuplicate={vi.fn()}
+      />,
+    );
+    expect(screen.getByRole('img', { name: '2 warranties' })).toBeInTheDocument();
+    // Duplicate alone is the single button, not a menu.
+    expect(screen.getByTitle('Duplicate transaction')).toBeInTheDocument();
+    fireEvent.contextMenu(screen.getByText('Grocery Store').closest('tr')!);
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    expect(screen.queryByText('Add warranty')).not.toBeInTheDocument();
+    expect(screen.queryByText('View warranties')).not.toBeInTheDocument();
   });
 });

@@ -1,10 +1,12 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act, within } from '@/test/render';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, act, within, cleanup, waitFor } from '@/test/render';
 import { InvestmentTransactionList } from './InvestmentTransactionList';
 import { investmentsApi } from '@/lib/investments';
 import { TransactionStatus } from '@/types/transaction';
 import toast from 'react-hot-toast';
 import { useDensityStore } from '@/store/densityStore';
+import { usePreferencesStore } from '@/store/preferencesStore';
+import { useHiddenColumnsStore } from '@/store/hiddenColumnsStore';
 
 vi.mock('@/lib/investments', () => ({
   investmentsApi: {
@@ -12,23 +14,43 @@ vi.mock('@/lib/investments', () => ({
   },
 }));
 
+// The account preference write. Hiding a column saves to this browser only
+// (`useHiddenColumnsStore`), so the hidden-column tests assert it is never called.
+const mockUpdatePreferences = vi.fn();
+vi.mock('@/lib/user-settings', () => ({
+  userSettingsApi: {
+    updatePreferences: (...args: unknown[]) => mockUpdatePreferences(...args),
+  },
+}));
+
 vi.mock('@/hooks/useDateFormat', () => ({
   useDateFormat: () => ({ formatDate: (d: string) => d, dateFormat: 'browser', datePattern: 'YYYY-MM-DD' }),
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (n: number) => `$${n.toFixed(2)}`,
-    formatQuantity: (n: number) =>
-      new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 4 }).format(n),
-    numberFormat: 'en-US',
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (n: number) => `$${n.toFixed(2)}`,
+      formatQuantity: (n: number) =>
+        new Intl.NumberFormat('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 4 }).format(n),
+      numberFormat: 'en-US',
+    }),
+  };
+});
 vi.mock('@/hooks/useExchangeRates', () => ({
   useExchangeRates: () => ({
     defaultCurrency: 'CAD',
   }),
+}));
+
+// The user's own calendar, which is what decides whether a row is still to
+// come. Mocked per test so the divider can be driven without touching the
+// machine's clock.
+const mockFinancialToday = vi.fn(() => '2024-01-15');
+vi.mock('@/hooks/useFinancialToday', () => ({
+  useFinancialToday: () => mockFinancialToday(),
 }));
 
 describe('InvestmentTransactionList', () => {
@@ -235,6 +257,22 @@ describe('InvestmentTransactionList', () => {
     expect(screen.getByText('To')).toBeInTheDocument();
   });
 
+  it('folds its filter bar from a button with aria-expanded, and offers Clear while folded', () => {
+    const onFiltersChange = vi.fn();
+    render(
+      <InvestmentTransactionList
+        transactions={[makeTx()] as any[]}
+        isLoading={false}
+        filters={{ symbol: 'AAPL' }}
+        onFiltersChange={onFiltersChange}
+      />
+    );
+    const toggle = screen.getByRole('button', { name: /^Filter/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(screen.getByRole('button', { name: 'Clear Filters' }));
+    expect(onFiltersChange).toHaveBeenCalled();
+  });
+
   it('shows "(filtered)" and active filter count when filters are active', () => {
     const transactions = [makeTx()] as any[];
     render(
@@ -281,6 +319,45 @@ describe('InvestmentTransactionList', () => {
     const transactions = [makeTx({ security: null })] as any[];
     render(<InvestmentTransactionList transactions={transactions} isLoading={false} />);
     expect(screen.getAllByText('-').length).toBeGreaterThanOrEqual(1);
+  });
+
+  describe('a price that is not a figure', () => {
+    it('draws an unpriced row as unknown rather than as a zero price', () => {
+      // `price ?? 0` printed "$0.00", which reads as a measured free trade.
+      const transactions = [makeTx({ id: 'no-price', price: null })] as any[];
+      render(<InvestmentTransactionList transactions={transactions} isLoading={false} />);
+      expect(screen.getByTestId('unknown-amount')).toBeInTheDocument();
+      expect(screen.queryByText('$0.00')).not.toBeInTheDocument();
+    });
+
+    it('draws a row with no security as unknown rather than in the reader’s currency', () => {
+      // The amount is in the SECURITY's currency; with no security there is no
+      // unit for it, and the reader's CAD is one nobody priced this in.
+      const transactions = [makeTx({ id: 'no-security', security: null, price: 150 })] as any[];
+      render(<InvestmentTransactionList transactions={transactions} isLoading={false} />);
+      expect(screen.getByTestId('unknown-amount')).toBeInTheDocument();
+      expect(screen.queryByText('$150.00')).not.toBeInTheDocument();
+    });
+
+    it('prints a security-less row in the currency the server stamped on it', () => {
+      // A cash INTEREST posting is denominated in its investment account's
+      // currency by the write path, and the server states that on the row.
+      // Reading only `security.currencyCode` drew it as unknown instead.
+      const transactions = [
+        makeTx({
+          id: 'interest',
+          action: 'INTEREST',
+          security: null,
+          price: 100,
+          totalAmount: 100,
+          amountCurrencyCode: 'USD',
+          priceCurrencyCode: 'USD',
+        }),
+      ] as any[];
+      render(<InvestmentTransactionList transactions={transactions} isLoading={false} />);
+      expect(screen.queryByTestId('unknown-amount')).not.toBeInTheDocument();
+      expect(screen.getAllByText('USD').length).toBeGreaterThan(0);
+    });
   });
 
   it('shows foreign currency indicator for non-default currencies', () => {
@@ -1132,5 +1209,188 @@ describe('InvestmentTransactionList', () => {
       const dateCell = screen.getByText('2024-01-15').closest('td')!;
       expect(dateCell.className).not.toContain('line-through');
     });
+  });
+
+  describe('the TODAY divider', () => {
+    // This list and the cash register are drawn on one screen, so they have to
+    // read one calendar: the user's configured timezone, not the browser's. A
+    // traveller whose laptop is a day ahead otherwise reads two TODAY dividers
+    // falling on different rows of the same account.
+    const rows = [
+      makeTx({ id: 'future', transactionDate: '2024-01-16' }),
+      makeTx({ id: 'today', transactionDate: '2024-01-15' }),
+    ];
+
+    it('puts the boundary where the user\'s own calendar puts it', () => {
+      mockFinancialToday.mockReturnValue('2024-01-15');
+      render(
+        <InvestmentTransactionList transactions={rows as any[]} isLoading={false} />,
+      );
+      // The 16th is still to come, so the divider sits above the 15th.
+      const divider = screen.getByText('Today').closest('tr')!;
+      const rowsRendered = Array.from(
+        divider.parentElement!.querySelectorAll('tr'),
+      );
+      expect(rowsRendered.indexOf(divider)).toBe(1);
+    });
+
+    it('moves with the user\'s timezone, not the browser\'s', () => {
+      // A day ahead in the reader's own timezone: nothing on the page is in
+      // the future any more, so there is no boundary to draw.
+      mockFinancialToday.mockReturnValue('2024-01-17');
+      render(
+        <InvestmentTransactionList transactions={rows as any[]} isLoading={false} />,
+      );
+      expect(screen.queryByText('Today')).not.toBeInTheDocument();
+    });
+  });
+});
+
+describe('InvestmentTransactionList hidden columns', () => {
+  // The stored `hiddenTableColumns.investmentRegister` set (one per table
+  // kind, read on the Investments page and the account register panel alike)
+  // removes Shares, Price or Status from the DOM at every width: no header, no
+  // cell, and both spanning rows span one column less. Restoring is the
+  // Columns menu alone.
+  const makeTx = (overrides: any = {}) => ({
+    id: 't1', action: 'BUY', transactionDate: '2024-01-15', accountId: 'a1',
+    security: { symbol: 'AAPL', name: 'Apple Inc.', currencyCode: 'CAD' },
+    quantity: 10, price: 150, totalAmount: 1500,
+    status: TransactionStatus.UNRECONCILED,
+    ...overrides,
+  });
+
+  const seed = (investmentRegister: string[] | undefined) =>
+    usePreferencesStore.setState({
+      preferences: (investmentRegister
+        ? { hiddenTableColumns: { investmentRegister } }
+        : { hiddenTableColumns: {} }) as any,
+    });
+
+  const renderList = (props: Record<string, unknown> = {}) =>
+    render(
+      <InvestmentTransactionList
+        transactions={[
+          makeTx({ id: 'future', transactionDate: '2099-01-01' }),
+          makeTx({ id: 'past', transactionDate: '2020-01-01' }),
+        ] as any[]}
+        isLoading={false}
+        onEdit={vi.fn()}
+        onDelete={vi.fn()}
+        {...props}
+      />,
+    );
+
+  const headerLabels = () =>
+    screen.getAllByRole('columnheader').map((th) => th.textContent?.trim());
+  const dividerSpan = () => Number(screen.getByText('Today').closest('td')!.getAttribute('colspan'));
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useDensityStore.setState({ densities: {} });
+    mockUpdatePreferences.mockReset();
+    mockUpdatePreferences.mockImplementation(async (patch: Record<string, unknown>) => patch);
+  });
+
+  afterEach(() => {
+    // Unmount first, so resetting the store re-renders nothing outside act().
+    cleanup();
+    usePreferencesStore.setState({ preferences: null });
+  });
+
+  it('renders every column with the default empty set, as before', () => {
+    seed(undefined);
+    renderList();
+    expect(headerLabels()).toEqual([
+      'Date', 'Account', 'Action', 'Symbol', 'Shares', 'Price', 'Total', 'Status', 'Actions',
+    ]);
+    expect(screen.getAllByTitle('Click to cycle status')).toHaveLength(2);
+    expect(dividerSpan()).toBe(9);
+    expect(screen.getByRole('button', { name: 'Columns' })).toBeInTheDocument();
+  });
+
+  it('removes a hidden status from the header and the rows', () => {
+    seed(['status']);
+    renderList();
+    expect(screen.queryByRole('columnheader', { name: 'Status' })).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Click to cycle status')).not.toBeInTheDocument();
+    expect(dividerSpan()).toBe(8);
+    expect(screen.getByRole('button', { name: 'Columns, 1 hidden' })).toBeInTheDocument();
+  });
+
+  it('hides all three and keeps the structural columns', () => {
+    seed(['shares', 'price', 'status']);
+    const { container } = renderList();
+    expect(headerLabels()).toEqual(['Date', 'Account', 'Action', 'Symbol', 'Total', 'Actions']);
+    const pastRow = Array.from(container.querySelectorAll('tbody tr')).find((row) =>
+      row.textContent?.includes('2020-01-01'),
+    )!;
+    expect(pastRow.querySelectorAll('td')).toHaveLength(6);
+    expect(dividerSpan()).toBe(6);
+  });
+
+  it('spans the empty filtered row over the visible columns', () => {
+    seed(['shares', 'price']);
+    renderList({ transactions: [], filters: { symbol: 'AAPL' }, onFiltersChange: vi.fn() });
+    const empty = screen.getByText('No transactions match your filters.').closest('td')!;
+    expect(empty.getAttribute('colspan')).toBe('7');
+  });
+
+  it('spans the empty filtered row over every column with nothing hidden', () => {
+    seed(undefined);
+    renderList({ transactions: [], filters: { symbol: 'AAPL' }, onFiltersChange: vi.fn() });
+    const empty = screen.getByText('No transactions match your filters.').closest('td')!;
+    expect(empty.getAttribute('colspan')).toBe('9');
+  });
+
+  it('hides a column from the menu and shows it again from there', async () => {
+    seed(undefined);
+    renderList();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Columns' }));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Price' }));
+    });
+    await waitFor(() => {
+      expect(useHiddenColumnsStore.getState().columns).toEqual({ investmentRegister: ['price'] });
+    });
+    expect(screen.queryByRole('columnheader', { name: 'Price' })).not.toBeInTheDocument();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('menuitemcheckbox', { name: 'Price' }));
+    });
+    await waitFor(() => {
+      expect(useHiddenColumnsStore.getState().columns).toEqual({ investmentRegister: [] });
+    });
+    expect(mockUpdatePreferences).not.toHaveBeenCalled();
+    expect(screen.getByRole('columnheader', { name: 'Price' })).toBeInTheDocument();
+  });
+
+  it('hides a column from its header by right-click, through the sheet', async () => {
+    seed(undefined);
+    renderList();
+
+    fireEvent.contextMenu(screen.getByRole('columnheader', { name: 'Shares' }));
+    const hide = await screen.findByRole('button', { name: /hide column/i });
+    await act(async () => {
+      fireEvent.click(hide);
+    });
+    await waitFor(() => {
+      expect(useHiddenColumnsStore.getState().columns).toEqual({ investmentRegister: ['shares'] });
+    });
+    expect(screen.queryByRole('columnheader', { name: 'Shares' })).not.toBeInTheDocument();
+  });
+
+  it('opens no sheet from a structural header', () => {
+    seed(undefined);
+    renderList();
+    fireEvent.contextMenu(screen.getByRole('columnheader', { name: 'Symbol' }));
+    expect(screen.queryByRole('button', { name: /hide column/i })).not.toBeInTheDocument();
+  });
+
+  it('draws the menu in the strip when the list owns its paging', () => {
+    seed(['status']);
+    renderList({ currentPage: 1, totalPages: 1, totalItems: 2, pageSize: 50, onPageChange: vi.fn() });
+    expect(screen.getByRole('button', { name: 'Columns, 1 hidden' })).toBeInTheDocument();
   });
 });

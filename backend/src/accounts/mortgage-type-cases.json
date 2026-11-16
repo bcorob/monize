@@ -1,0 +1,77 @@
+{
+  "comment": "Shared truth table for the mortgage types (docs/specs/mortgage-types.md, table 4.1). Read by backend/src/accounts/mortgage-type.contract.spec.ts and, from P1-F1, by frontend/src/lib/mortgage-type.contract.test.ts, because the two layers cannot import each other and must agree on each type's compounding, method and annualization (INV-LOAN-003, INV-LOAN-007). The numeric rows were derived independently of the implementation, in 50-digit decimal arithmetic with each money figure rounded half away from zero to 4dp: periodicRate per the compounding trait, firstInterest = principal * periodicRate, firstPrincipal per the method (ANNUITY: the level payment P * r(1+r)^N / ((1+r)^N - 1) at 4dp minus firstInterest; LINEAR: P / N; INTEREST_ONLY: 0), effectiveAnnualRate as a percentage at 2dp. The ANNUITY, LINEAR and INTEREST_ONLY rows are spec table 7.5's first payment.",
+  "types": [
+    {
+      "type": "ANNUITY",
+      "traits": {
+        "compounding": "NOMINAL",
+        "method": "ANNUITY",
+        "annualization": "DAY_COUNT"
+      },
+      "example": {
+        "principal": 300000,
+        "annualRate": 2,
+        "periodsPerYear": 12,
+        "totalPayments": 360,
+        "periodicRate": 0.0016666666666666667,
+        "firstPrincipal": 608.8584,
+        "firstInterest": 500,
+        "effectiveAnnualRate": 2.02
+      }
+    },
+    {
+      "type": "CANADIAN_FIXED",
+      "traits": {
+        "compounding": "SEMI_ANNUAL",
+        "method": "ANNUITY",
+        "annualization": "SEMI_ANNUAL"
+      },
+      "example": {
+        "principal": 400000,
+        "annualRate": 5,
+        "periodsPerYear": 26,
+        "totalPayments": 650,
+        "periodicRate": 0.0019012368008678363,
+        "firstPrincipal": 312.0479,
+        "firstInterest": 760.4947,
+        "effectiveAnnualRate": 5.06
+      }
+    },
+    {
+      "type": "LINEAR",
+      "traits": {
+        "compounding": "NOMINAL",
+        "method": "LINEAR",
+        "annualization": "DAY_COUNT"
+      },
+      "example": {
+        "principal": 300000,
+        "annualRate": 2,
+        "periodsPerYear": 12,
+        "totalPayments": 360,
+        "periodicRate": 0.0016666666666666667,
+        "firstPrincipal": 833.3333,
+        "firstInterest": 500,
+        "effectiveAnnualRate": 2.02
+      }
+    },
+    {
+      "type": "INTEREST_ONLY",
+      "traits": {
+        "compounding": "NOMINAL",
+        "method": "INTEREST_ONLY",
+        "annualization": "DAY_COUNT"
+      },
+      "example": {
+        "principal": 300000,
+        "annualRate": 2,
+        "periodsPerYear": 12,
+        "totalPayments": 360,
+        "periodicRate": 0.0016666666666666667,
+        "firstPrincipal": 0,
+        "firstInterest": 500,
+        "effectiveAnnualRate": 2.02
+      }
+    }
+  ]
+}

@@ -1,4 +1,10 @@
+import { Reflector } from "@nestjs/core";
 import { Test, TestingModule } from "@nestjs/testing";
+import {
+  ALLOW_DELEGATE_KEY,
+  DELEGATE_FULL_SCOPE_KEY,
+  DELEGATE_SECTION_KEY,
+} from "../../delegation/decorators/delegate-access.decorator";
 import { AiInsightsController } from "./ai-insights.controller";
 import { AiInsightsService } from "./ai-insights.service";
 
@@ -34,6 +40,23 @@ describe("AiInsightsController", () => {
     }).compile();
 
     controller = module.get<AiInsightsController>(AiInsightsController);
+  });
+
+  it("admits an acting delegate only with the ai section and a whole-ledger grant", () => {
+    const reflector = new Reflector();
+    const targets = [
+      AiInsightsController.prototype.getInsights,
+      AiInsightsController,
+    ];
+    expect(reflector.getAllAndOverride(ALLOW_DELEGATE_KEY, targets)).toBe(true);
+    expect(reflector.getAllAndOverride(DELEGATE_SECTION_KEY, targets)).toBe(
+      "ai",
+    );
+    // Insights are generated from every account; nothing narrows them to the
+    // delegate's grants, so the route needs all of them.
+    expect(reflector.getAllAndOverride(DELEGATE_FULL_SCOPE_KEY, targets)).toBe(
+      true,
+    );
   });
 
   describe("getInsights()", () => {

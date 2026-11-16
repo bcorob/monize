@@ -4,6 +4,7 @@
     "subtitle": "Hesaplarınızda ve menkul kıymetlerinizde kullanılan para birimlerini yönetin",
     "refreshRates": "Kurları Yenile",
     "refreshing": "Yenileniyor...",
+    "statusFilterLabel": "Durum",
     "newCurrency": "+ Yeni Para Birimi",
     "searchPlaceholder": "Kod veya ada göre ara...",
     "statusAll": "Tümü ({count})",
@@ -13,6 +14,15 @@
     "modalTitleNew": "Yeni Para Birimi",
     "loading": "Para birimleri yükleniyor...",
     "count": "{count, plural, one {# para birimi} other {# para birimi}}",
+    "providers": {
+      "line": "Kurlar: {providers}",
+      "separator": ", ardından ",
+      "names": {
+        "frankfurter": "Frankfurter (ECB referans kurları)",
+        "yahoo": "Yahoo Finance",
+        "crypto": "Kripto çiftleri (Yahoo)"
+      }
+    },
     "toasts": {
       "loadFailed": "Para birimleri yüklenemedi",
       "updated": "Para birimi başarıyla güncellendi",
@@ -24,6 +34,7 @@
       "statusFailed": "Para birimi durumu güncellenemedi",
       "ratesRefreshed": "Döviz kurları yenilendi: {updated} çift güncellendi",
       "ratesRefreshedWithFailed": "Döviz kurları yenilendi: {updated} güncellendi, {failed} başarısız",
+      "ratesAllFailed": "Hiçbir döviz kuru alınamadı; sağlayıcı yanıt vermedi",
       "ratesFailed": "Döviz kurları yenilenemedi"
     },
     "summary": {
@@ -44,6 +55,8 @@
       "actions": "İşlemler"
     },
     "defaultBadge": "Varsayılan",
+    "cryptoBadge": "Kripto",
+    "noPriceSymbol": "Fiyat sembolü yok",
     "statusBadge": {
       "active": "Aktif",
       "activeShort": "Akt",
@@ -61,9 +74,10 @@
       "activate": "Etkinleştir",
       "deleteCurrency": "Para Birimini Sil"
     },
-    "usageTooltip": "{accounts} hesap, {securities} menkul kıymet",
     "usageAccounts": "{count, plural, one {# hesap} other {# hesap}}",
-    "usageSecurities": "{count, plural, one {# menk.} other {# menk.}}",
+    "usageSecurities": "{count, plural, other {# menk.}}",
+    "rateHelp": "Her para biriminin bir biriminin {currency} cinsinden değeri.",
+    "rateMissing": "{from} için {to} karşılığında kayıtlı bir döviz kuru yok.",
     "empty": {
       "title": "Para birimi yok",
       "subtitle": "Bir para birimi ekleyerek başlayın."
@@ -88,6 +102,20 @@
     "symbolLabel": "Sembol",
     "symbolPlaceholder": "örn. $, €, £, ¥",
     "decimalPlacesLabel": "Ondalık Basamaklar",
+    "kindLabel": "Tür",
+    "kindOptions": {
+      "fiat": "Fiat Para Birimi",
+      "crypto": "Kripto Para"
+    },
+    "kindLocked": "{code} kullanımda olduğundan türü değiştirilemez.",
+    "quoteSymbolLabel": "Fiyat Sembolü (isteğe bağlı)",
+    "quoteSymbolPlaceholder": "ör. BTC-EUR",
+    "quoteSymbolHelp": "Coin'in fiyatının alındığı Yahoo Finance sembolü: coin'in kodu, bir tire ve fiyatının belirtildiği para birimi, örneğin BTC-EUR. Coin'in döviz kurları bu sembol üzerinden alınır.",
+    "verifyButton": "Doğrula",
+    "quoteSymbolPricedIn": "{currency} cinsinden fiyat",
+    "quoteSymbolMissing": "Fiyat sembolü olmadan para biriminin döviz kuru olmaz.",
+    "quoteSymbolNotCrypto": "{symbol} bir kripto para değil. BTC-EUR gibi bir coin çifti girin.",
+    "quoteSymbolNotFound": "{symbol} için kripto para bulunamadı",
     "lookupButton": "Ara",
     "lookingUp": "Aranıyor...",
     "clearButton": "Temizle",
@@ -99,9 +127,14 @@
       "found": "Bulundu: {details}",
       "notFound": "\"{query}\" için para birimi bulunamadı",
       "lookupFailed": "Arama başarısız - lütfen tekrar deneyin",
-      "reactivateFailed": "Para birimi yeniden etkinleştirilemedi"
+      "reactivateFailed": "Para birimi yeniden etkinleştirilemedi",
+      "verifyEmpty": "Doğrulamak için BTC-EUR gibi bir fiyat sembolü girin",
+      "verifyFailed": "Fiyat sembolü doğrulanamadı"
     },
     "inactiveNotice": "{code} zaten listenizde ama etkin değil.",
+    "nonIsoNotice": "{code} standart bir para birimi kodu değildir. Bir kripto paraysa türünü Kripto Para olarak ayarlayın. <guide>Kripto paralar hakkında kullanım kılavuzunda bilgi edinin</guide>.",
+    "switchToCrypto": "Kripto Para Kullan",
+    "cryptoPrecisionNotice": "Kripto paradaki tutarlar, saklandıkları hassasiyet olan en fazla sekiz ondalık basamakla tutulur; bu nedenle {smallest} altındaki bir ücret girilemez. <guide>Cüzdan ücretlerinin nasıl kaydedileceğine bakın</guide>.",
     "reactivateButton": "{code} birimini yeniden etkinleştir",
     "reactivating": "Yeniden etkinleştiriliyor..."
   },
@@ -110,6 +143,53 @@
     "nameRequired": "Ad zorunludur",
     "nameMax": "Ad en fazla 100 karakter olabilir",
     "symbolRequired": "Sembol zorunludur",
-    "symbolMax": "Sembol en fazla 10 karakter olabilir"
+    "symbolMax": "Sembol en fazla 10 karakter olabilir",
+    "quoteSymbolMax": "Fiyat sembolü en fazla 20 karakter olabilir",
+    "quoteSymbolRequiresCrypto": "Yalnızca bir kripto paranın fiyat sembolü olur",
+    "quoteSymbolNotAPair": "BTC-EUR gibi bir çift girin: coin, bir tire ve üç harfli bir para birimi kodu"
+  },
+  "rateHistory": {
+    "title": "Kur geçmişi",
+    "stored": "Saklanan geçmiş: {start} - {end} ({count} gözlem)",
+    "none": "{pair} için saklanan geçmiş yok",
+    "loading": "Saklanan kur geçmişi kontrol ediliyor...",
+    "loadFailed": "Saklanan kur geçmişi okunamadı",
+    "fillGaps": "Kur geçmişindeki boşlukları doldur",
+    "filling": "Eksik kurlar getiriliyor...",
+    "fillGapsTitle": "Raporlarınızda eksik olan günlük kurları, verilerinizin {code} kullandığı ilk tarihten bugüne kadar getirir.",
+    "hint": "İlk saklanan kurdan önceki tarihli raporlar {pair} çevirisi yapamaz.",
+    "list": {
+      "heading": "Kayıtlı kurlar",
+      "invertedHelp": "(ters çevrilmiş) olarak işaretlenen bir kur, Monize'ın bu çift için gerçekte kaydettiği değerin tersidir, farklı bir gözlem değildir.",
+      "direction": "1 {from} için {to} olarak gösterilir.",
+      "loading": "Kayıtlı kurlar yükleniyor...",
+      "loadFailed": "Kayıtlı kurlar okunamadı",
+      "empty": "Listelenecek kayıtlı kur yok",
+      "truncated": "En yeni {count} kayıtlı kur gösteriliyor; daha eskileri listelenmiyor.",
+      "inverted": "ters çevrilmiş",
+      "unknownRate": "Bilinmiyor",
+      "columns": {
+        "date": "Tarih",
+        "rate": "Kur",
+        "source": "Kaynak"
+      },
+      "sources": {
+        "yahooFinance": "Yahoo Finance",
+        "frankfurter": "Frankfurter (ECB)",
+        "mnyImport": "Money içe aktarımı",
+        "yahooCrypto": "Kripto çiftleri (Yahoo)",
+        "unknown": "Bilinmiyor"
+      }
+    },
+    "toasts": {
+      "filled": "{count} kur eklendi; geçmiş artık {start} tarihinden başlıyor",
+      "partial": "{count} kur kaydedildi; geçmiş artık {start} tarihinde başlıyor. Getirilecek {windows} boşluk kaldı, devam etmek için tekrar basın.",
+      "moreToFetch": "Bu sefer kur kaydedilmedi; getirilecek {windows} boşluk kaldı, devam etmek için tekrar basın.",
+      "noGaps": "{pair} için raporlarınızın ihtiyaç duyduğu her tarihe ait günlük kur zaten mevcut",
+      "noNewRates": "{pair} için yeni kur kaydedilmedi",
+      "unused": "Hesaplarınızın, varlıklarınızın veya işlemlerinizin hiçbiri {code} kullanmıyor, bu yüzden getirilecek kur yok",
+      "providerFloor": "Sağlayıcıda {pair} için {date} tarihinden önceye ait kur yok",
+      "failed": "Kur geçmişi doldurulamadı"
+    }
   }
 }

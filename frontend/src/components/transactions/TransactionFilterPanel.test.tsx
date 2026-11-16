@@ -1,9 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@/test/render';
+import { render, screen, fireEvent, within } from '@/test/render';
 import { TransactionFilterPanel } from './TransactionFilterPanel';
 import { Account } from '@/types/account';
 import { Category } from '@/types/category';
 import { Payee } from '@/types/payee';
+import { SEGMENTED_GROUP_CLASS } from '@/components/ui/segmented-control';
 
 function createAccount(overrides: Partial<Account> = {}): Account {
   return {
@@ -14,7 +15,8 @@ function createAccount(overrides: Partial<Account> = {}): Account {
     isFavourite: false, favouriteSortOrder: 0, excludeFromNetWorth: false, paymentAmount: null, paymentFrequency: null, paymentStartDate: null,
     sourceAccountId: null, principalCategoryId: null, interestCategoryId: null, overpaymentCategoryId: null, overpaymentMemo: null, overpaymentPayeeId: null, fxFeePercent: null,
     scheduledTransactionId: null, assetCategoryId: null, dateAcquired: null, linkedLoanAccountId: null,
-    isCanadianMortgage: false, isVariableRate: false, termMonths: null, termEndDate: null,
+    mortgageType: 'ANNUITY',
+    termMonths: null, termEndDate: null,
     amortizationMonths: null, originalPrincipal: null,
     statementDueDay: null, statementSettlementDay: null,
     createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',
@@ -35,6 +37,8 @@ function createCategory(overrides: Partial<Category> = {}): Category {
     color: null,
     effectiveColor: null,
     effectiveIcon: null,
+    autoSign: null,
+    effectiveAutoSign: true,
     isIncome: false,
     isSystem: false,
     createdAt: '2024-01-01T00:00:00Z',
@@ -53,6 +57,11 @@ function createPayee(overrides: Partial<Payee> = {}): Payee {
     website: null,
     hasLogo: false,
     logoFetchedAt: null,
+    contactLookupAt: null,
+    contactLookupSource: null,
+    address: null,
+    email: null,
+    phone: null,
     isActive: true,
     createdAt: '2024-01-01T00:00:00Z',
     ...overrides,
@@ -94,6 +103,7 @@ describe('TransactionFilterPanel', () => {
     setFiltersExpanded: vi.fn(),
     activeFilterCount: 0,
     filteredAccounts: [] as Account[],
+    accountStatusCounts: { all: 3, active: 2, closed: 1 },
     selectedAccounts: [] as Account[],
     selectedCategories: [] as Category[],
     selectedPayees: [] as Payee[],
@@ -132,7 +142,7 @@ describe('TransactionFilterPanel', () => {
     render(<TransactionFilterPanel {...defaultProps} />);
 
     expect(screen.getByText('Filters')).toBeInTheDocument();
-    expect(screen.getByText('Show')).toBeInTheDocument();
+    expect(screen.getByText('Show filters')).toBeInTheDocument();
   });
 
   it('displays Hide when filters are expanded', () => {
@@ -214,10 +224,10 @@ describe('TransactionFilterPanel', () => {
   it('shows account status segmented control when expanded', () => {
     render(<TransactionFilterPanel {...defaultProps} filtersExpanded={true} />);
 
-    expect(screen.getByText('Show accounts:')).toBeInTheDocument();
-    expect(screen.getByText('All')).toBeInTheDocument();
-    expect(screen.getByText('Active')).toBeInTheDocument();
-    expect(screen.getByText('Closed')).toBeInTheDocument();
+    expect(screen.getByText('Show Accounts')).toBeInTheDocument();
+    expect(screen.getByText('All (3)')).toBeInTheDocument();
+    expect(screen.getByText('Active (2)')).toBeInTheDocument();
+    expect(screen.getByText('Closed (1)')).toBeInTheDocument();
   });
 
   it('renders filter inputs when expanded', () => {
@@ -225,7 +235,23 @@ describe('TransactionFilterPanel', () => {
 
     expect(screen.getByText('Start Date')).toBeInTheDocument();
     expect(screen.getByText('End Date')).toBeInTheDocument();
-    expect(screen.getByText('Search')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Search' })).toBeInTheDocument();
+  });
+
+  it('places Search right of the Attachments filter, last on the second row', () => {
+    render(<TransactionFilterPanel {...defaultProps} filtersExpanded={true} />);
+
+    const attachments = screen.getByLabelText('Attachments');
+    const search = screen.getByRole('textbox', { name: 'Search' });
+    // Same grid row, and Search comes after Attachments in it.
+    const row = attachments.closest('.grid');
+    expect(row).not.toBeNull();
+    expect(row).toContainElement(search);
+    expect(
+      attachments.compareDocumentPosition(search) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // Nothing on the account-status line above the grids holds it.
+    expect(screen.getByRole('group', { name: 'Show Accounts' }).parentElement).not.toContainElement(search);
   });
 
   // ----------------------------------------------------------------
@@ -233,6 +259,25 @@ describe('TransactionFilterPanel', () => {
   // ----------------------------------------------------------------
 
   describe('expand/collapse toggle', () => {
+    it('folds from a real button with aria-expanded, which the keyboard reaches', () => {
+      render(<TransactionFilterPanel {...defaultProps} filtersExpanded={false} />);
+      const toggle = screen.getByRole('button', { name: /Show/ });
+      expect(toggle).toHaveAttribute('aria-expanded', 'false');
+      fireEvent.click(toggle);
+      expect(defaultProps.setFiltersExpanded).toHaveBeenCalledWith(true);
+    });
+
+    it('draws the account status filter as the shared segmented control with counts', () => {
+      render(<TransactionFilterPanel {...defaultProps} filtersExpanded={true} />);
+      const group = screen.getByRole('group', { name: 'Show Accounts' });
+      expect(group.className).toBe(SEGMENTED_GROUP_CLASS);
+      expect(within(group).getAllByRole('button').map((b) => b.textContent)).toEqual([
+        'All (3)',
+        'Active (2)',
+        'Closed (1)',
+      ]);
+    });
+
     it('calls setFiltersExpanded(false) when header is clicked while expanded', () => {
       render(<TransactionFilterPanel {...defaultProps} filtersExpanded={true} />);
 
@@ -259,13 +304,13 @@ describe('TransactionFilterPanel', () => {
     it('shows Show label when collapsed and Hide label when expanded', () => {
       const { rerender } = render(<TransactionFilterPanel {...defaultProps} filtersExpanded={false} />);
 
-      expect(screen.getByText('Show')).toBeInTheDocument();
+      expect(screen.getByText('Show filters')).toBeInTheDocument();
       expect(screen.queryByText('Hide')).not.toBeInTheDocument();
 
       rerender(<TransactionFilterPanel {...defaultProps} filtersExpanded={true} />);
 
       expect(screen.getByText('Hide')).toBeInTheDocument();
-      expect(screen.queryByText('Show')).not.toBeInTheDocument();
+      expect(screen.queryByText('Show filters')).not.toBeInTheDocument();
     });
   });
 
@@ -767,7 +812,7 @@ describe('TransactionFilterPanel', () => {
     it('shows the search placeholder text', () => {
       render(<TransactionFilterPanel {...defaultProps} filtersExpanded={true} />);
 
-      const searchInput = screen.getByPlaceholderText('Search payee, category, amount, tag, description, reference #...');
+      const searchInput = screen.getByPlaceholderText('Search, or try #10 or payee:costco');
       expect(searchInput).toBeInTheDocument();
     });
   });
@@ -780,14 +825,14 @@ describe('TransactionFilterPanel', () => {
     it('calls setFilterAccountStatus with "active" when Active button is clicked', () => {
       render(<TransactionFilterPanel {...defaultProps} filtersExpanded={true} />);
 
-      fireEvent.click(screen.getByText('Active'));
+      fireEvent.click(screen.getByText('Active (2)'));
       expect(defaultProps.setFilterAccountStatus).toHaveBeenCalledWith('active');
     });
 
     it('calls setFilterAccountStatus with "closed" when Closed button is clicked', () => {
       render(<TransactionFilterPanel {...defaultProps} filtersExpanded={true} />);
 
-      fireEvent.click(screen.getByText('Closed'));
+      fireEvent.click(screen.getByText('Closed (1)'));
       expect(defaultProps.setFilterAccountStatus).toHaveBeenCalledWith('closed');
     });
 
@@ -800,7 +845,7 @@ describe('TransactionFilterPanel', () => {
         />
       );
 
-      fireEvent.click(screen.getByText('All'));
+      fireEvent.click(screen.getByText('All (3)'));
       expect(defaultProps.setFilterAccountStatus).toHaveBeenCalledWith('');
     });
 
@@ -1340,8 +1385,8 @@ describe('TransactionFilterPanel', () => {
         />
       );
 
-      const allButton = screen.getByText('All');
-      expect(allButton.className).toContain('bg-blue-600');
+      const allButton = screen.getByText('All (3)');
+      expect(allButton).toHaveAttribute('aria-pressed', 'true');
     });
 
     it('applies selected styling to Active button when filterAccountStatus is active', () => {
@@ -1353,8 +1398,8 @@ describe('TransactionFilterPanel', () => {
         />
       );
 
-      const activeButton = screen.getByText('Active');
-      expect(activeButton.className).toContain('bg-blue-600');
+      const activeButton = screen.getByText('Active (2)');
+      expect(activeButton).toHaveAttribute('aria-pressed', 'true');
     });
 
     it('applies selected styling to Closed button when filterAccountStatus is closed', () => {
@@ -1366,8 +1411,8 @@ describe('TransactionFilterPanel', () => {
         />
       );
 
-      const closedButton = screen.getByText('Closed');
-      expect(closedButton.className).toContain('bg-blue-600');
+      const closedButton = screen.getByText('Closed (1)');
+      expect(closedButton).toHaveAttribute('aria-pressed', 'true');
     });
 
     it('applies unselected styling to non-active status buttons', () => {
@@ -1379,10 +1424,10 @@ describe('TransactionFilterPanel', () => {
         />
       );
 
-      const allButton = screen.getByText('All');
-      const closedButton = screen.getByText('Closed');
-      expect(allButton.className).not.toContain('bg-blue-600');
-      expect(closedButton.className).not.toContain('bg-blue-600');
+      const allButton = screen.getByText('All (3)');
+      const closedButton = screen.getByText('Closed (1)');
+      expect(allButton).toHaveAttribute('aria-pressed', 'false');
+      expect(closedButton).toHaveAttribute('aria-pressed', 'false');
     });
   });
 
@@ -1833,6 +1878,44 @@ describe('TransactionFilterPanel', () => {
         defaultProps.setFilterHasAttachments,
         '',
       );
+    });
+  });
+
+  describe('hideDateRange', () => {
+    it('offers the date fields by default', () => {
+      render(<TransactionFilterPanel {...defaultProps} filtersExpanded={true} />);
+
+      expect(screen.getByLabelText('Start Date')).toBeInTheDocument();
+      expect(screen.getByLabelText('End Date')).toBeInTheDocument();
+      expect(screen.getByLabelText('Time Period')).toBeInTheDocument();
+    });
+
+    it('withholds them, and the chip that summarises them, when the surface owns the dates', () => {
+      // Calendar mode's date filter is the month on screen; a second one could
+      // only disagree with it.
+      render(
+        <TransactionFilterPanel
+          {...defaultProps}
+          filtersExpanded={true}
+          filterStartDate="2026-06-01"
+          filterEndDate="2026-06-30"
+          hideDateRange
+        />,
+      );
+
+      expect(screen.queryByLabelText('Start Date')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('End Date')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Time Period')).not.toBeInTheDocument();
+      expect(screen.queryByText('2026-06-01 - 2026-06-30')).not.toBeInTheDocument();
+    });
+
+    it('keeps every other filter reachable', () => {
+      render(
+        <TransactionFilterPanel {...defaultProps} filtersExpanded={true} hideDateRange />,
+      );
+
+      expect(screen.getByLabelText('Amount From')).toBeInTheDocument();
+      expect(screen.getByLabelText('Amount To')).toBeInTheDocument();
     });
   });
 });

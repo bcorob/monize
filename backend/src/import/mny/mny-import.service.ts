@@ -17,6 +17,8 @@ import { CurrenciesService } from "../../currencies/currencies.service";
 import { roundMoney, roundToDecimals } from "../../common/round.util";
 import { tr } from "../../i18n/translate";
 import { ImportPostProcessingService } from "../import-post-processing.service";
+import { TransactionRulesApplierService } from "../../transaction-rules/transaction-rules-applier.service";
+import { TagsService } from "../../tags/tags.service";
 import { ImportJob } from "./entities/import-job.entity";
 import { MnyStagedFileMissingError } from "./mny-errors";
 import {
@@ -25,7 +27,8 @@ import {
   MnyImportJobService,
   importAlreadyRunningException,
 } from "./mny-import-job.service";
-import { MnyParsedFile, MnyParserService } from "./mny-parser.service";
+import { MnyParsedFile } from "./mny-parser.service";
+import { MnyMarketRateService } from "./mny-market-rates.service";
 import { MnyStagingService } from "./mny-staging.service";
 import {
   MnyAccountVerification,
@@ -54,9 +57,11 @@ import {
   writeTransactions,
 } from "./writers/write-transactions";
 import { writeInvestments, writeSecurities } from "./writers/write-investments";
+import { applyImportRules } from "./writers/apply-import-rules";
 import { writeBills } from "./writers/write-bills";
 import { throttleProgress } from "./writers/progress-throttle";
 import { writeLoans } from "./writers/write-loans";
+import { writeTags } from "./writers/write-tags";
 import { selectedBills } from "./map/map-bills";
 import {
   writeExchangeRates,
@@ -113,7 +118,7 @@ export class MnyImportService {
   constructor(
     private dataSource: DataSource,
     private staging: MnyStagingService,
-    private parser: MnyParserService,
+    private parser: MnyMarketRateService,
     private jobs: MnyImportJobService,
     private postProcessing: ImportPostProcessingService,
     @Inject(forwardRef(() => UsersService))
@@ -122,6 +127,8 @@ export class MnyImportService {
     private currencies: CurrenciesService,
     @Inject(forwardRef(() => HoldingsService))
     private holdings: HoldingsService,
+    private rulesApplier: TransactionRulesApplierService,
+    private tags: TagsService,
   ) {}
 
   /**
@@ -190,6 +197,10 @@ export class MnyImportService {
           // second claim on a slot this request already owns.
           "mny-import",
         );
+        // The wipe deleted every row an earlier import committed, so the keys
+        // that refuse a second import of those bytes go with them; held, they
+        // would make this import's own commit refuse the file (A26-H08).
+        await this.jobs.releaseCommittedContent(userId);
       } catch (error) {
         // The request is refused, so the slot it took must go back. The stale
         // reap in `create` would clear it on the next start anyway, but only
@@ -259,7 +270,7 @@ export class MnyImportService {
     const loadedAt = Date.now();
     sampleRss();
 
-    const parsed = this.parser.parse({
+    const parsed = await this.parser.parse({
       buffer: bytes,
       options,
       // Staged bytes are stored decrypted, so the password is spent on the
@@ -271,12 +282,13 @@ export class MnyImportService {
     const parsedAt = Date.now();
     sampleRss();
 
-    // Currencies are global reference data with their own idempotent creation
-    // path, so they are ensured before the import transaction opens. Securities
-    // and exchange rates reference currencies no account need touch, which is
-    // why this list is not just the accounts'.
+    // Ensured before the import transaction opens, for this user only: a known
+    // ISO code becomes an inactive reference row, any other code is this user's
+    // own currency, so an import never offers one to everybody. Securities and
+    // exchange rates reference currencies no account need touch, which is why
+    // this list is not just the accounts'.
     for (const code of parsed.currencyCodes) {
-      await this.currencies.ensureSystemCurrency(code);
+      await this.currencies.ensureCurrencyForUser(userId, code);
     }
 
     const written = await this.writeAll(userId, parsed, context);
@@ -292,6 +304,7 @@ export class MnyImportService {
       userId,
       parsed.investments.transactions.length > 0,
       new Set(written.affectedAccountIds),
+      written.settledScheduleIds,
     );
 
     await context.reportProgress({
@@ -313,7 +326,7 @@ export class MnyImportService {
 
     // Delete-on-complete: the bytes have done their job, and they are the
     // largest thing this feature stores.
-    await this.staging.remove(userId, stagedFileId);
+    await this.staging.removeConsumed(userId, stagedFileId);
     sampleRss();
 
     this.logTiming({
@@ -354,11 +367,16 @@ export class MnyImportService {
       accountsCreated: written.accountsCreated,
       payeesCreated: written.payeesCreated,
       categoriesCreated: written.categoriesCreated,
+      tagsCreated: written.tagsCreated,
+      tagLinksApplied: written.tagLinksApplied,
       transactionsCreated: written.transactionsCreated,
       splitsCreated: written.splitsCreated,
       transfersLinked: parsed.transactions.transfersLinked,
       securitiesCreated: written.securitiesCreated,
       investmentTransactionsCreated: written.investmentTransactionsCreated,
+      ...(written.bondRowsWithoutSeries > 0
+        ? { bondRowsWithoutSeries: written.bondRowsWithoutSeries }
+        : {}),
       pricesImported: written.pricesImported,
       exchangeRatesImported: written.exchangeRatesImported,
       billsCreated: written.billsCreated,
@@ -366,6 +384,7 @@ export class MnyImportService {
         accounts: parsed.accounts.skipped,
         payees: parsed.payees.skipped,
         categories: parsed.categories.skipped,
+        tags: parsed.tags.skipped,
         transactions: parsed.transactions.skipped + parsed.investments.skipped,
         bills: parsed.bills.skipped,
       },
@@ -428,14 +447,19 @@ export class MnyImportService {
     accountsCreated: number;
     categoriesCreated: number;
     payeesCreated: number;
+    tagsCreated: number;
+    tagLinksApplied: number;
     transactionsCreated: number;
     splitsCreated: number;
     securitiesCreated: number;
     investmentTransactionsCreated: number;
+    bondRowsWithoutSeries: number;
     billsCreated: number;
     pricesImported: number;
     exchangeRatesImported: number;
     affectedAccountIds: ReadonlySet<string>;
+    /** Schedules a settlement rule claimed on, repriced after the commit. */
+    settledScheduleIds: ReadonlySet<string>;
   }> {
     return withScopedDb(this.dataSource, async (manager) => {
       await context.reportProgress({
@@ -455,6 +479,14 @@ export class MnyImportService {
         parsed.categories.categories,
       );
       const payees = await writePayees(manager, userId, parsed.payees.payees);
+      // Money's classifications, as tags: find-or-create by name like the
+      // payees, so a second import merges rather than duplicates.
+      const tags = await writeTags(
+        manager,
+        this.tags,
+        userId,
+        parsed.tags.tags,
+      );
 
       await context.reportProgress({
         phase: "transactions",
@@ -477,9 +509,29 @@ export class MnyImportService {
         categoryIdByHandle,
         payeeIdByHandle,
         payeeNameByHandle: parsed.payees.nameByHandle,
+        tagIdByHandle: tags.idByHandle,
         onProgress: (processed, total) =>
           reportTransactions({ phase: "transactions", processed, total }),
       });
+
+      // Transaction rules (design 6.3): one bulk pass over the regular rows just
+      // inserted, in this transaction. Transfers and the cash rows a trade
+      // adopts are not evaluated.
+      const ruleResult = await applyImportRules(
+        manager,
+        this.rulesApplier,
+        userId,
+        {
+          transactions: parsed.transactions.transactions,
+          writtenTransactionIds: transactions.writtenTransactionIds,
+          payeeNameByHandle: parsed.payees.nameByHandle,
+          investmentCashTransactionIds: new Set(
+            [...parsed.transactions.investmentCashSources.values()]
+              .map((source) => source.transactionId)
+              .filter((id): id is string => id !== null),
+          ),
+        },
+      );
 
       await context.reportProgress({
         phase: "investments",
@@ -511,6 +563,7 @@ export class MnyImportService {
         // writer is told which ids actually landed.
         writtenTransactionIds: transactions.writtenTransactionIds,
         writtenSplitIds: transactions.writtenSplitIds,
+        tagIdByHandle: tags.idByHandle,
         onProgress: (processed, total) =>
           reportInvestments({ phase: "investments", processed, total }),
       });
@@ -551,6 +604,7 @@ export class MnyImportService {
             .filter((account) => account.linkedKey !== null)
             .map((account) => [account.key, account.linkedKey as string]),
         ),
+        tagIdByHandle: tags.idByHandle,
       });
 
       await context.reportProgress({
@@ -588,7 +642,9 @@ export class MnyImportService {
       });
 
       // One balance write from the file-computed totals; post-processing then
-      // recomputes the same numbers from the rows as a cross-check.
+      // recomputes the same numbers from the rows as a cross-check. A reused
+      // account is skipped: it holds rows the file knows nothing about, so its
+      // balance is the ledger's, recomputed after the commit.
       await writeAccountBalances(
         manager,
         new Map(
@@ -598,7 +654,8 @@ export class MnyImportService {
               balance,
             ])
             .filter(
-              (entry): entry is [string, number] => entry[0] !== undefined,
+              (entry): entry is [string, number] =>
+                entry[0] !== undefined && !accounts.reusedIds.has(entry[0]),
             ),
         ),
       );
@@ -617,18 +674,27 @@ export class MnyImportService {
         accountsCreated: accounts.created,
         categoriesCreated: categories.created,
         payeesCreated: payees.created,
+        tagsCreated: tags.created,
+        tagLinksApplied:
+          transactions.tagLinksApplied + investments.tagLinksApplied,
         transactionsCreated: transactions.transactionsCreated,
         splitsCreated: transactions.splitsCreated,
         securitiesCreated: securities.created,
         investmentTransactionsCreated:
           investments.investmentTransactionsCreated,
+        bondRowsWithoutSeries: investments.bondRowsWithoutSeries,
         billsCreated: bills.created,
         pricesImported,
         exchangeRatesImported,
         affectedAccountIds: new Set([
+          ...accounts.reusedIds,
           ...transactions.affectedAccountIds,
           ...investments.affectedAccountIds,
+          // Accounts a structural rule action credited: recomputed and
+          // refreshed with the rest after the commit.
+          ...ruleResult.affectedAccountIds,
         ]),
+        settledScheduleIds: ruleResult.settledScheduleIds,
       };
 
       // Last statement before commit, and both halves of the fence in one

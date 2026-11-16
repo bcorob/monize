@@ -5,7 +5,7 @@ import {
   CreateCategoryData,
   UpdateCategoryData,
 } from '@/types/category';
-import { dedupe, invalidateCache } from './apiCache';
+import { dedupe, invalidateBalanceCaches, invalidateCache } from './apiCache';
 
 export interface ImportDefaultsOptions {
   /** ISO 3166-1 alpha-2 code; omit for the country-neutral catalog. */
@@ -50,6 +50,8 @@ export const categoriesApi = {
   update: async (id: string, data: UpdateCategoryData): Promise<Category> => {
     const response = await apiClient.patch<Category>(`/categories/${id}`, data);
     invalidateCache('categories:');
+    // A parent or income-flag change moves budget roll-ups.
+    invalidateCache('budgets:');
     return response.data;
   },
 
@@ -57,6 +59,8 @@ export const categoriesApi = {
   delete: async (id: string): Promise<void> => {
     await apiClient.delete(`/categories/${id}`);
     invalidateCache('categories:');
+    // Removing a category moves budget roll-ups.
+    invalidateCache('budgets:');
   },
 
   // Get transaction count for a category
@@ -74,6 +78,10 @@ export const categoriesApi = {
       `/categories/${fromCategoryId}/reassign`,
       { toCategoryId },
     );
+    // The reassignment rewrites category_id on transaction rows, which moves
+    // every budget roll-up that reads them.
+    invalidateBalanceCaches();
+    invalidateCache('categories:');
     return response.data;
   },
 

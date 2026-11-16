@@ -85,6 +85,12 @@ describe('authApi', () => {
     expect(apiClient.post).toHaveBeenCalledWith('/auth/2fa/disable', { code: '123456' });
   });
 
+  it('reset2FA posts the password and the code', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { message: 'ok' } });
+    await authApi.reset2FA('pw', 'abcd-ef01');
+    expect(apiClient.post).toHaveBeenCalledWith('/auth/2fa/reset', { currentPassword: 'pw', code: 'abcd-ef01' });
+  });
+
   it('getTrustedDevices fetches devices list', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({ data: [{ id: 'd-1' }] });
     const result = await authApi.getTrustedDevices();
@@ -140,11 +146,21 @@ describe('authApi', () => {
 
   it('createToken posts new PAT', async () => {
     vi.mocked(apiClient.post).mockResolvedValue({ data: { id: 'pat-1', token: 'abc' } });
-    await authApi.createToken({ name: 'CI', expiresAt: null } as any);
+    await authApi.createToken({ name: 'CI', expiresAt: null });
     expect(apiClient.post).toHaveBeenCalledWith('/auth/tokens', {
       name: 'CI',
       expiresAt: null,
     });
+  });
+
+  it('createToken sends the step-up token as a header', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { id: 'pat-1', token: 'abc' } });
+    await authApi.createToken({ name: 'CI', expiresAt: null }, 'step-up-jwt');
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/auth/tokens',
+      { name: 'CI', expiresAt: null },
+      { headers: { 'X-Step-Up-Token': 'step-up-jwt' } },
+    );
   });
 
   it('revokeToken deletes a PAT', async () => {

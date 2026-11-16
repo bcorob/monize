@@ -70,10 +70,7 @@ export const RESTORE_TICKET_TTL_MS = 5 * 60_000;
 
 /** Why a ticket was rejected. Distinguished for the log, not for the client. */
 export type TicketRejection =
-  | "missing"
-  | "malformed"
-  | "bad-signature"
-  | "expired";
+  "missing" | "malformed" | "bad-signature" | "expired";
 
 export interface TicketPayload {
   userId: string;

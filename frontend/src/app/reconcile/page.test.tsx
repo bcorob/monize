@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { clearCurrencyDecimals, registerCurrencyDecimals } from '@/lib/currency-decimals';
 import { render, screen, waitFor, fireEvent, within, act } from '@/test/render';
 import ReconcilePage from './page';
 import { TransactionStatus } from '@/types/transaction';
@@ -64,6 +65,7 @@ vi.mock('@/lib/auth', () => ({
 }));
 
 const mockGetAll = vi.fn();
+const mockGetDailyBalances = vi.fn();
 const mockGetReconciliationData = vi.fn();
 const mockBulkReconcile = vi.fn();
 const mockScheduledGetAll = vi.fn();
@@ -74,6 +76,7 @@ const mockUpdateStatus = vi.fn();
 vi.mock('@/lib/accounts', () => ({
   accountsApi: {
     getAll: (...args: any[]) => mockGetAll(...args),
+    getDailyBalances: (...args: any[]) => mockGetDailyBalances(...args),
   },
 }));
 
@@ -110,7 +113,8 @@ vi.mock('next/dynamic', () => ({
   },
 }));
 
-vi.mock('@/lib/format', () => ({
+vi.mock('@/lib/format', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/format')>()),
   getCurrencySymbol: (code: string) => code === 'CAD' ? 'CA$' : '$',
   getDecimalPlacesForCurrency: () => 2,
 }));
@@ -119,14 +123,17 @@ vi.mock('@/lib/errors', () => ({
   getErrorMessage: (_error: any, fallback: string) => fallback,
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (val: number, _currency?: string) => `$${val.toFixed(2)}`,
-    formatNumber: (val: number) => val.toString(),
-    defaultCurrency: 'USD',
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (val: number, _currency?: string) => `$${val.toFixed(2)}`,
+      formatNumber: (val: number) => val.toString(),
+      defaultCurrency: 'USD',
+    }),
+  };
+});
 vi.mock('@/components/layout/PageLayout', () => ({
   PageLayout: ({ children }: { children: React.ReactNode }) => <div data-testid="page-layout">{children}</div>,
 }));
@@ -186,6 +193,7 @@ vi.mock('@/components/ui/Select', () => ({
 }));
 
 const mockRouterPush = vi.fn();
+let mockSearchParams = new URLSearchParams();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({
     push: mockRouterPush,
@@ -195,7 +203,7 @@ vi.mock('next/navigation', () => ({
     refresh: vi.fn(),
   }),
   usePathname: () => '/reconcile',
-  useSearchParams: () => new URLSearchParams(),
+  useSearchParams: () => mockSearchParams,
 }));
 
 const mockAccounts = [
@@ -222,7 +230,11 @@ const mockReconciliationData = {
 describe('ReconcilePage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockSearchParams = new URLSearchParams();
     mockGetAll.mockResolvedValue(mockAccounts);
+    // No ledger balance by default, so the statement balance stays what each
+    // test types.
+    mockGetDailyBalances.mockResolvedValue([]);
     mockGetReconciliationData.mockResolvedValue(mockReconciliationData);
     mockBulkReconcile.mockResolvedValue({ reconciled: 2 });
     mockScheduledGetAll.mockResolvedValue([]);
@@ -263,6 +275,171 @@ describe('ReconcilePage', () => {
       expect(screen.getByText(/Visa/)).toBeInTheDocument();
       expect(screen.queryByText(/Brokerage/)).not.toBeInTheDocument();
       expect(screen.queryByText(/Old Savings/)).not.toBeInTheDocument();
+    });
+
+    it("labels each account option in that account's own currency", async () => {
+      // The option labels once went through the selected account's currency, so
+      // choosing a CAD account relabelled every USD balance in the list as CAD.
+      mockGetAll.mockResolvedValue([
+        ...mockAccounts,
+        { id: 'acc-6', name: 'Loonie Chequing', accountType: 'CHEQUING', accountSubType: null, currencyCode: 'CAD', currentBalance: 250, isClosed: false },
+      ]);
+      render(<ReconcilePage />);
+      await waitFor(() => expect(screen.getByText(/Loonie Chequing/)).toBeInTheDocument());
+      fireEvent.change(screen.getByLabelText('Account'), { target: { value: 'acc-6' } });
+
+      expect(screen.getByRole('option', { name: 'Loonie Chequing ($250.00 CAD)' })).toBeInTheDocument();
+      expect(screen.getByRole('option', { name: 'Checking ($1500.00)' })).toBeInTheDocument();
+    });
+
+    it('lists favourites first, then every other account A-Z', async () => {
+      mockGetAll.mockResolvedValue([
+        { ...mockAccounts[0], id: 'z', name: 'Zeta', isFavourite: false, favouriteSortOrder: 0 },
+        { ...mockAccounts[0], id: 'a', name: 'Alpha', isFavourite: false, favouriteSortOrder: 0 },
+        { ...mockAccounts[0], id: 'f2', name: 'Fav Two', isFavourite: true, favouriteSortOrder: 2 },
+        { ...mockAccounts[0], id: 'f1', name: 'Fav One', isFavourite: true, favouriteSortOrder: 1 },
+      ]);
+      render(<ReconcilePage />);
+      await waitFor(() => expect(screen.getByText(/Zeta/)).toBeInTheDocument());
+      const values = Array.from(
+        (screen.getByLabelText('Account') as HTMLSelectElement).options,
+      ).map((o) => o.value);
+      expect(values).toEqual(['', 'f1', 'f2', '__separator__', 'a', 'z']);
+    });
+
+    describe('statement ending balance prefill', () => {
+      const dateInput = () => screen.getByLabelText('Statement Date') as HTMLInputElement;
+      const balanceInput = () =>
+        screen.getByLabelText('Statement Ending Balance') as HTMLInputElement;
+
+      it("fills in the account's ledger balance at the statement date", async () => {
+        mockGetDailyBalances.mockImplementation(async (params: any) => [
+          { date: params.startDate, balance: 1234.56, accountId: params.accountIds, currencyCode: 'USD' },
+        ]);
+        render(<ReconcilePage />);
+        await waitFor(() => expect(screen.getByText(/Checking/)).toBeInTheDocument());
+        expect(dateInput()).toBeInTheDocument();
+        await act(async () => {
+          fireEvent.change(screen.getByLabelText('Account'), { target: { value: 'acc-1' } });
+        });
+        expect(mockGetDailyBalances).toHaveBeenCalledWith({
+          startDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+          endDate: mockGetDailyBalances.mock.calls[0][0].startDate,
+          accountIds: 'acc-1',
+        });
+        expect(Number(balanceInput().value)).toBe(1234.56);
+
+        // Still the user's to change.
+        fireEvent.change(balanceInput(), { target: { value: '1200' } });
+        expect(Number(balanceInput().value)).toBe(1200);
+      });
+
+      it('fills in a liability balance as the ledger holds it, without re-signing it', async () => {
+        mockGetDailyBalances.mockImplementation(async (params: any) => [
+          { date: params.startDate, balance: 25, accountId: params.accountIds, currencyCode: 'USD' },
+        ]);
+        render(<ReconcilePage />);
+        await waitFor(() => expect(screen.getByText(/Visa/)).toBeInTheDocument());
+        await act(async () => {
+          fireEvent.change(screen.getByLabelText('Account'), { target: { value: 'acc-2' } });
+        });
+        // A card in credit: the auto-negation is for typed entries only.
+        expect(Number(balanceInput().value)).toBe(25);
+      });
+
+      it('fetches again for the new date when the statement date changes', async () => {
+        mockGetDailyBalances.mockImplementation(async (params: any) => [
+          { date: params.startDate, balance: params.startDate === '2026-09-30' ? 900 : 1000, accountId: params.accountIds, currencyCode: 'USD' },
+        ]);
+        render(<ReconcilePage />);
+        await waitFor(() => expect(screen.getByText(/Checking/)).toBeInTheDocument());
+        await act(async () => {
+          fireEvent.change(screen.getByLabelText('Account'), { target: { value: 'acc-1' } });
+        });
+        expect(Number(balanceInput().value)).toBe(1000);
+
+        await act(async () => {
+          fireEvent.change(dateInput(), { target: { value: '2026-09-30' } });
+          fireEvent.blur(dateInput());
+        });
+        expect(mockGetDailyBalances).toHaveBeenLastCalledWith({
+          startDate: '2026-09-30',
+          endDate: '2026-09-30',
+          accountIds: 'acc-1',
+        });
+        expect(Number(balanceInput().value)).toBe(900);
+      });
+
+      it('never overwrites a figure the user typed while the lookup was in flight', async () => {
+        let resolve: (value: unknown) => void = () => {};
+        mockGetDailyBalances.mockImplementation(
+          (params: any) =>
+            new Promise((r) => {
+              resolve = () => r([{ date: params.startDate, balance: 1000, accountId: params.accountIds, currencyCode: 'USD' }]);
+            }),
+        );
+        render(<ReconcilePage />);
+        await waitFor(() => expect(screen.getByText(/Checking/)).toBeInTheDocument());
+        fireEvent.change(screen.getByLabelText('Account'), { target: { value: 'acc-1' } });
+        fireEvent.change(balanceInput(), { target: { value: '1500' } });
+        await act(async () => {
+          resolve(undefined);
+        });
+        expect(Number(balanceInput().value)).toBe(1500);
+      });
+
+      it('fills in the balance for an account arriving from the accounts list', async () => {
+        mockSearchParams = new URLSearchParams('accountId=acc-1');
+        mockGetDailyBalances.mockImplementation(async (params: any) => [
+          { date: params.startDate, balance: 987.6543, accountId: params.accountIds, currencyCode: 'USD' },
+        ]);
+        await act(async () => {
+          render(<ReconcilePage />);
+        });
+        await waitFor(() => expect(Number(balanceInput().value)).toBe(987.65));
+        expect(mockGetDailyBalances).toHaveBeenCalledWith(
+          expect.objectContaining({ accountIds: 'acc-1' }),
+        );
+      });
+
+      it('fills in the balance again for the next account after a reconciliation', async () => {
+        mockGetDailyBalances.mockImplementation(async (params: any) => [
+          { date: params.startDate, balance: 500, accountId: params.accountIds, currencyCode: 'USD' },
+        ]);
+        mockGetReconciliationData.mockResolvedValue({
+          transactions: [{
+            id: 'tx-a', transactionDate: '2026-02-01', payee: { name: 'Test' },
+            payeeName: null, category: null, amount: 500, status: TransactionStatus.UNRECONCILED,
+          }],
+          reconciledBalance: 0, clearedBalance: 0, difference: 500,
+        });
+        render(<ReconcilePage />);
+        await waitFor(() => expect(screen.getByText(/Checking/)).toBeInTheDocument());
+        await act(async () => {
+          fireEvent.change(screen.getByLabelText('Account'), { target: { value: 'acc-1' } });
+        });
+        // The pre-filled balance and the pre-ticked row already agree.
+        await act(async () => {
+          fireEvent.click(screen.getAllByText('Start Reconciliation').find((el) => el.tagName === 'BUTTON')!);
+        });
+        await act(async () => {
+          fireEvent.click(screen.getByText('Finish Reconciliation'));
+        });
+        await act(async () => {
+          fireEvent.click(screen.getByText('Reconcile Another Account'));
+        });
+        expect(Number(balanceInput().value)).toBe(500);
+      });
+
+      it('leaves the field empty when the lookup fails', async () => {
+        mockGetDailyBalances.mockRejectedValue(new Error('down'));
+        render(<ReconcilePage />);
+        await waitFor(() => expect(screen.getByText(/Checking/)).toBeInTheDocument());
+        await act(async () => {
+          fireEvent.change(screen.getByLabelText('Account'), { target: { value: 'acc-1' } });
+        });
+        expect(balanceInput().value).toBe('');
+      });
     });
 
     it('navigates to accounts on cancel', async () => {
@@ -334,12 +511,33 @@ describe('ReconcilePage', () => {
       expect(screen.getByText('Difference')).toBeInTheDocument();
     });
 
-    it('pre-selects cleared transactions', async () => {
+    it('pre-selects every transaction up to the statement date, whatever its status', async () => {
       await advanceToReconcileStep();
       const checkboxes = screen.getAllByRole('checkbox');
       expect(checkboxes[0]).toBeChecked(); // tx-1 CLEARED
-      expect(checkboxes[1]).not.toBeChecked(); // tx-2 UNRECONCILED
+      expect(checkboxes[1]).toBeChecked(); // tx-2 UNRECONCILED
       expect(checkboxes[2]).toBeChecked(); // tx-3 CLEARED
+      expect(screen.getByText('Selected (3)')).toBeInTheDocument();
+    });
+
+    it('leaves a row dated after the statement date unticked', async () => {
+      mockGetReconciliationData.mockResolvedValue({
+        ...mockReconciliationData,
+        transactions: [
+          ...mockTransactions,
+          { id: 'tx-late', transactionDate: '2999-01-01', payee: null, payeeName: 'Later', category: null, amount: -5, status: TransactionStatus.CLEARED },
+        ],
+      });
+      await advanceToReconcileStep();
+      expect(within(screen.getByTestId('reconcile-row-tx-late')).getByRole('checkbox')).not.toBeChecked();
+      expect(screen.getByText('Selected (3)')).toBeInTheDocument();
+    });
+
+    it('keeps the summary bar pinned in view while the list scrolls', async () => {
+      await advanceToReconcileStep();
+      const summary = screen.getByTestId('reconcile-summary');
+      expect(summary).toHaveClass('sticky');
+      expect(summary).toContainElement(screen.getByText('Difference'));
     });
 
     it('renders transaction payee names', async () => {
@@ -367,6 +565,8 @@ describe('ReconcilePage', () => {
       await advanceToReconcileStep();
       const checkboxes = screen.getAllByRole('checkbox');
       fireEvent.click(screen.getByText('Salary').closest('tr')!);
+      expect(checkboxes[1]).not.toBeChecked();
+      fireEvent.click(screen.getByText('Salary').closest('tr')!);
       expect(checkboxes[1]).toBeChecked();
     });
 
@@ -388,16 +588,66 @@ describe('ReconcilePage', () => {
 
     it('calculates difference correctly', async () => {
       // statementBalance=1500, reconciledBalance=1000
-      // cleared: tx-1(-50.25) + tx-3(-120.50) = -170.75
-      // newBalance = 1000 + (-170.75) = 829.25
-      // difference = 1500 - 829.25 = 670.75
+      // selected: tx-1(-50.25) + tx-2(3000) + tx-3(-120.50) = 2829.25
+      // newBalance = 1000 + 2829.25 = 3829.25
+      // difference = 1500 - 3829.25 = -2329.25
       await advanceToReconcileStep();
+      expect(screen.getByText('$-2329.25')).toBeInTheDocument();
+      // Unticking tx-2: newBalance = 829.25, difference = 670.75
+      fireEvent.click(screen.getByText('Salary').closest('tr')!);
       expect(screen.getByText('$670.75')).toBeInTheDocument();
     });
 
     it('disables Finish button when difference exceeds tolerance', async () => {
       await advanceToReconcileStep();
       expect(screen.getByText('Finish Reconciliation')).toBeDisabled();
+    });
+
+    const coinReconcile = async (statementBalance: string) => {
+      mockGetAll.mockResolvedValue([
+        ...mockAccounts,
+        { id: 'acc-btc', name: 'Bitcoin Wallet', accountType: 'CRYPTO', accountSubType: null, currencyCode: 'BTC', currentBalance: 0.00747493, isClosed: false },
+      ]);
+      mockGetReconciliationData.mockResolvedValue({
+        transactions: [
+          { id: 'tx-buy', transactionDate: '2026-02-01', payee: null, payeeName: 'Exchange', category: null, amount: '0.01249993', status: TransactionStatus.CLEARED },
+          { id: 'tx-fee', transactionDate: '2026-02-03', payee: null, payeeName: 'Network fee', category: null, amount: '-0.00002500', status: TransactionStatus.CLEARED },
+          { id: 'tx-sale', transactionDate: '2026-02-03', payee: null, payeeName: 'Sale', category: null, amount: '-0.00500000', status: TransactionStatus.CLEARED },
+        ],
+        reconciledBalance: 0,
+        clearedBalance: 0.00747493,
+        difference: 0,
+      });
+      render(<ReconcilePage />);
+      await waitFor(() => expect(screen.getByText(/Bitcoin Wallet/)).toBeInTheDocument(), { timeout: 3000 });
+      fireEvent.change(screen.getByLabelText('Account'), { target: { value: 'acc-btc' } });
+      fireEvent.change(screen.getByLabelText('Statement Ending Balance'), { target: { value: statementBalance } });
+      fireEvent.click(screen.getAllByText('Start Reconciliation').find(el => el.tagName === 'BUTTON')!);
+      await waitFor(() => expect(screen.getByText('Statement Balance')).toBeInTheDocument(), { timeout: 3000 });
+    };
+
+    it('compares a coin wallet at its own eight places, so a fee-sized difference still blocks Finish', async () => {
+      registerCurrencyDecimals([{ code: 'BTC', decimalPlaces: 8 }]);
+      try {
+        // The statement omits the 2,500-satoshi fee: 0.00749993 against
+        // 0.00747493 cleared. At four places both read 0.0075, and at the old
+        // one-cent tolerance the reconciliation could finish unbalanced.
+        await coinReconcile('0.00749993');
+        expect(screen.getByText('Finish Reconciliation')).toBeDisabled();
+      } finally {
+        clearCurrencyDecimals();
+      }
+    });
+
+    it('lets a coin wallet that balances to the satoshi finish', async () => {
+      registerCurrencyDecimals([{ code: 'BTC', decimalPlaces: 8 }]);
+      try {
+        await coinReconcile('0.00747493');
+        // The tolerance is 10 ** -8, one satoshi: a difference of zero is within it.
+        expect(screen.getByText('Finish Reconciliation')).not.toBeDisabled();
+      } finally {
+        clearCurrencyDecimals();
+      }
     });
 
     it('cancel returns to setup step', async () => {
@@ -477,17 +727,39 @@ describe('ReconcilePage', () => {
       expect(screen.queryByTestId('reconcile-transaction-form')).not.toBeInTheDocument();
     });
 
-    it('keeps a ticked row ticked across the reload', async () => {
+    it('keeps an unticked row unticked across the reload, whatever its status', async () => {
       await advanceToReconcileStep();
-      // tx-2 arrives UNRECONCILED, so it is not selected by default.
-      fireEvent.click(rowFor('tx-2'));
-      expect(screen.getByText('Selected (3)')).toBeInTheDocument();
+      // tx-1 is CLEARED and ticked by default; the user takes it off.
+      fireEvent.click(rowFor('tx-1'));
+      expect(screen.getByText('Selected (2)')).toBeInTheDocument();
 
       fireEvent.click(screen.getByText('Add Transaction'));
       await act(async () => {
         fireEvent.click(screen.getByTestId('form-succeed'));
       });
+      await waitFor(() => expect(screen.getByText('Selected (2)')).toBeInTheDocument());
+      expect(within(rowFor('tx-1')).getByRole('checkbox')).not.toBeChecked();
+    });
+
+    it('ticks a row that newly appears on the statement after a save', async () => {
+      await advanceToReconcileStep();
+      fireEvent.click(rowFor('tx-2'));
+      expect(screen.getByText('Selected (2)')).toBeInTheDocument();
+
+      mockGetReconciliationData.mockResolvedValue({
+        ...mockReconciliationData,
+        transactions: [
+          ...mockTransactions,
+          { id: 'tx-new', transactionDate: '2026-02-12', payee: null, payeeName: 'Added', category: null, amount: -10, status: TransactionStatus.UNRECONCILED },
+        ],
+      });
+      fireEvent.click(screen.getByText('Add Transaction'));
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('form-succeed'));
+      });
       await waitFor(() => expect(screen.getByText('Selected (3)')).toBeInTheDocument());
+      expect(within(rowFor('tx-new')).getByRole('checkbox')).toBeChecked();
+      expect(within(rowFor('tx-2')).getByRole('checkbox')).not.toBeChecked();
     });
 
     it('drops a row that is no longer listed from the selection', async () => {
@@ -495,7 +767,7 @@ describe('ReconcilePage', () => {
       // selected total, so the difference would never reach zero and the user
       // could not finish.
       await advanceToReconcileStep();
-      expect(screen.getByText('Selected (2)')).toBeInTheDocument();
+      expect(screen.getByText('Selected (3)')).toBeInTheDocument();
 
       mockGetReconciliationData.mockResolvedValue({
         ...mockReconciliationData,
@@ -505,7 +777,7 @@ describe('ReconcilePage', () => {
       await act(async () => {
         fireEvent.click(screen.getByText('Delete'));
       });
-      await waitFor(() => expect(screen.getByText('Selected (1)')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText('Selected (2)')).toBeInTheDocument());
     });
 
     it('deletes a plain transaction through the plain delete', async () => {

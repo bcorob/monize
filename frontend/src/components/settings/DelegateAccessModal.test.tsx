@@ -356,6 +356,69 @@ describe('DelegateAccessModal', () => {
     expect(onSaved).toHaveBeenCalled();
   });
 
+  it('shows the Warranties section and saves its grant', async () => {
+    renderModal();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Sections' }));
+    expect(
+      screen.getByText(/their documents and claims/i),
+    ).toBeInTheDocument();
+    const toggle = screen.getByRole('switch', { name: /Warranties section/i });
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    await act(async () => {
+      fireEvent.click(toggle);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Save'));
+    });
+
+    await waitFor(() =>
+      expect(delegationApi.setSectionGrants).toHaveBeenCalledWith('g1', {
+        warrantiesCanRead: true,
+      }),
+    );
+  });
+
+  it('starts the Warranties toggle from the stored grant', async () => {
+    renderModal({
+      ...baseDelegate,
+      sections: {
+        bills: false,
+        investments: false,
+        budgets: false,
+        reports: false,
+        ai: false,
+        warranties: true,
+      },
+    });
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Sections' }));
+    const toggle = screen.getByRole('switch', { name: /Warranties section/i });
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+    await act(async () => {
+      fireEvent.click(toggle);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Save'));
+    });
+
+    await waitFor(() =>
+      expect(delegationApi.setSectionGrants).toHaveBeenCalledWith('g1', {
+        warrantiesCanRead: false,
+      }),
+    );
+  });
+
+  it('says the AI Assistant needs every account and section', () => {
+    renderModal();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Sections' }));
+
+    expect(
+      screen.getByText(/only answers for this delegate once they can read all of your accounts/i),
+    ).toBeInTheDocument();
+  });
+
   it('marks the form dirty when a toggle changes', async () => {
     const { setFormDirty } = renderModal();
     await act(async () => {

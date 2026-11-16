@@ -42,6 +42,13 @@ describe("UserMaintenanceService", () => {
     scoped.manager.query.mockResolvedValue([{ present: false }]);
   }
 
+  /** No import in flight; the lease-expiry read returns `expiryRows`. */
+  function leaseExpiryReads(expiryRows: Array<{ minutes: string }>) {
+    scoped.manager.query.mockImplementation(async (sql: string) =>
+      sql.includes("AS minutes") ? expiryRows : [{ present: false }],
+    );
+  }
+
   beforeEach(async () => {
     scoped = createScopedDbMocks([]);
     jobClaims = createJobClaimMock();
@@ -132,6 +139,46 @@ describe("UserMaintenanceService", () => {
       ).rejects.toThrow(ConflictException);
       // A refused command must not already have written.
       expect(body).not.toHaveBeenCalled();
+    });
+
+    it("tells the refused caller how long the lease has left", async () => {
+      // A lease stranded by a crash is released by nothing but its expiry, so
+      // the refusal is the only place the user can learn how long to wait.
+      jobClaims.claimLease.mockResolvedValue(null);
+      leaseExpiryReads([{ minutes: "7" }]);
+
+      await expect(
+        service.withMaintenanceLease(userId, "restore", jest.fn()),
+      ).rejects.toThrow("within 7 min");
+
+      const [sql, params] = scoped.manager.query.mock.calls.find(([q]) =>
+        String(q).includes("AS minutes"),
+      )!;
+      expect(sql).toContain("FROM job_claims");
+      expect(sql).toContain("expires_at > CURRENT_TIMESTAMP");
+      expect(params).toEqual([
+        JobClaimType.UserMaintenance,
+        userId,
+        USER_MAINTENANCE_CLAIM_KEY,
+      ]);
+    });
+
+    it("never reports less than a minute left", async () => {
+      jobClaims.claimLease.mockResolvedValue(null);
+      leaseExpiryReads([{ minutes: "0" }]);
+
+      await expect(
+        service.withMaintenanceLease(userId, "restore", jest.fn()),
+      ).rejects.toThrow("within 1 min");
+    });
+
+    it("falls back to the plain refusal when no live lease is left to time", async () => {
+      jobClaims.claimLease.mockResolvedValue(null);
+      leaseExpiryReads([]);
+
+      await expect(
+        service.withMaintenanceLease(userId, "restore", jest.fn()),
+      ).rejects.toThrow("Wait for it to finish and try again.");
     });
 
     it("refuses while an import is in flight, before taking a lease", async () => {

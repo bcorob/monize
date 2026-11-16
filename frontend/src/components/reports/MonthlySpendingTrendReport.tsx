@@ -15,9 +15,9 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
-import { format, parseISO, startOfMonth, endOfMonth } from "date-fns";
+import { parseISO } from "date-fns";
 import { builtInReportsApi } from "@/lib/built-in-reports";
-import { MonthlyIncomeExpenseItem } from "@/types/built-in-reports";
+import { IncomeExpensePeriodItem } from "@/types/built-in-reports";
 import { useNumberFormat } from "@/hooks/useNumberFormat";
 import { useChartDateFormat } from "@/hooks/useChartDateFormat";
 import { useDateRange } from "@/hooks/useDateRange";
@@ -25,13 +25,17 @@ import { useReportData } from "@/hooks/useReportData";
 import { useSortableTable, compareValues } from "@/hooks/useSortableTable";
 import { DateRangeSelector } from "@/components/ui/DateRangeSelector";
 import { ChartViewToggle } from "@/components/ui/ChartViewToggle";
-import { ExportDropdown } from '@/components/ui/ExportDropdown';
+import { ReportToolbarActions } from '@/components/reports/ReportToolbarActions';
 import { SortableHeader } from '@/components/ui/SortableHeader';
 import { ChartTooltip } from "@/components/reports/ChartTooltip";
 import { ReportError } from "@/components/reports/ReportError";
+import { PartialDataNotice } from '@/components/reports/PartialDataNotice';
 import { exportToCsv } from "@/lib/csv-export";
 import { chartColors } from "@/lib/chart-colors";
 import { resolvePdfColor } from '@/components/reports/resolve-pdf-color';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { CHART_GRID_PROPS } from '@/lib/chart-style';
+import { ChartActiveDot } from '@/components/ui/ChartActiveDot';
 
 type MonthlySpendingSortField = 'name' | 'income' | 'expenses' | 'net';
 
@@ -44,6 +48,29 @@ interface ChartDataItem {
   Net: number;
   monthStart: string;
   monthEnd: string;
+}
+
+interface SpendingTrendTooltipProps {
+  active?: boolean;
+  payload?: Array<{
+    name: string;
+    value: number;
+    color: string;
+    payload?: { fullName?: string };
+  }>;
+  label?: string;
+  formatCurrency: (value: number) => string;
+}
+
+function SpendingTrendTooltip({ active, payload, formatCurrency }: SpendingTrendTooltipProps) {
+  return (
+    <ChartTooltip
+      active={active}
+      label={payload?.[0]?.payload?.fullName}
+      payload={payload}
+      formatValue={(v) => formatCurrency(v)}
+    />
+  );
 }
 
 export function MonthlySpendingTrendReport() {
@@ -88,16 +115,16 @@ export function MonthlySpendingTrendReport() {
   // showing data from the wrong year on multi-year ranges.
   const chartData = useMemo<ChartDataItem[]>(
     () =>
-      (response?.data ?? []).map((item: MonthlyIncomeExpenseItem) => {
-        const monthDate = parseISO(item.month + "-01");
+      (response?.data ?? []).map((item: IncomeExpensePeriodItem) => {
         return {
-          name: item.month,
-          fullName: formatChartDate(monthDate, "MMM yyyy"),
+          name: item.period,
+          fullName: formatChartDate(parseISO(item.periodStart), "MMM yyyy"),
           Expenses: Math.round(item.expenses),
           Income: Math.round(item.income),
           Net: Math.round(item.net),
-          monthStart: format(startOfMonth(monthDate), "yyyy-MM-dd"),
-          monthEnd: format(endOfMonth(monthDate), "yyyy-MM-dd"),
+          // The dates the bucket covers come from the server that chose it.
+          monthStart: item.periodStart,
+          monthEnd: item.periodEnd,
         };
       }),
     [response, formatChartDate],
@@ -171,27 +198,6 @@ export function MonthlySpendingTrendReport() {
     }
   };
 
-  const CustomTooltip = ({
-    active,
-    payload,
-  }: {
-    active?: boolean;
-    payload?: Array<{
-      name: string;
-      value: number;
-      color: string;
-      payload?: { fullName?: string };
-    }>;
-    label?: string;
-  }) => (
-    <ChartTooltip
-      active={active}
-      label={payload?.[0]?.payload?.fullName}
-      payload={payload}
-      formatValue={(v) => formatCurrency(v)}
-    />
-  );
-
   return (
     <div className="space-y-6">
       {/* Controls -- always rendered so focus inside DateInput survives reloads */}
@@ -213,14 +219,20 @@ export function MonthlySpendingTrendReport() {
               onChange={(v) => setViewType(v as 'line' | 'table')}
               options={['line', 'table']}
             />
-            <ExportDropdown
-              onExportPdf={handleExportPdf}
-              onExportCsv={handleExportCsv}
-              disabled={chartData.length === 0}
-            />
           </div>
+          <ReportToolbarActions
+            onExportPdf={handleExportPdf}
+            onExportCsv={handleExportCsv}
+            disabled={isLoading || !!error || chartData.length === 0}
+          />
         </div>
       </div>
+
+      <PartialDataNotice
+        missingCurrencies={response?.missingCurrencies ?? []}
+        excludedCount={response?.excludedCount ?? 0}
+        displayCurrency={response?.currency ?? ''}
+      />
 
       {/* Chart */}
       <div ref={chartRef} className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 px-2 py-4 sm:p-6">
@@ -232,9 +244,7 @@ export function MonthlySpendingTrendReport() {
         ) : error ? (
           <ReportError onRetry={reload} />
         ) : chartData.length === 0 ? (
-          <p className="text-gray-500 dark:text-gray-400 text-center py-8">
-            {t('monthlySpendingTrend.noData')}
-          </p>
+          <EmptyState title={t('monthlySpendingTrend.noData')} />
         ) : viewType === 'table' ? (
           <>
             <div className="overflow-x-auto">
@@ -339,7 +349,7 @@ export function MonthlySpendingTrendReport() {
                   onClick={handleChartClick}
                   style={{ cursor: "pointer" }}
                 >
-                  <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+                  <CartesianGrid {...CHART_GRID_PROPS} />
                   <XAxis
                     dataKey="name"
                     tick={{ fontSize: 12 }}
@@ -351,7 +361,7 @@ export function MonthlySpendingTrendReport() {
                     tickFormatter={formatCurrencyAxis}
                     tick={{ fontSize: 12 }}
                   />
-                  <Tooltip content={<CustomTooltip />} />
+                  <Tooltip content={<SpendingTrendTooltip formatCurrency={formatCurrency} />} />
                   <Legend />
                   <Line
                     type="monotone"
@@ -359,7 +369,7 @@ export function MonthlySpendingTrendReport() {
                     stroke={chartColors.expense}
                     strokeWidth={2}
                     dot={{ fill: chartColors.expense, strokeWidth: 2, r: 4 }}
-                    activeDot={{ r: 6 }}
+                    activeDot={ChartActiveDot}
                   />
                   <Line
                     type="monotone"
@@ -367,7 +377,7 @@ export function MonthlySpendingTrendReport() {
                     stroke={chartColors.income}
                     strokeWidth={2}
                     dot={{ fill: chartColors.income, strokeWidth: 2, r: 4 }}
-                    activeDot={{ r: 6 }}
+                    activeDot={ChartActiveDot}
                   />
                 </LineChart>
               </ResponsiveContainer>

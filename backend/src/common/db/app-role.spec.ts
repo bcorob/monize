@@ -5,6 +5,7 @@ import {
   RUNTIME_READ_ONLY_TABLES,
   APP_ROLE_NAME_GUC,
   APP_ROLE_PASSWORD_GUC,
+  APP_ROLE_SETTINGS_SQL,
   APP_ROLE_UPSERT_SQL,
   applyAppRoleGrants,
   provisionAppRole,
@@ -29,7 +30,7 @@ function makeLogger() {
 }
 
 describe("provisionAppRole", () => {
-  it("sets the role name and password via parameterized set_config, then upserts and grants", async () => {
+  it("sets the role name and password via parameterized set_config, then upserts, sets defaults and grants", async () => {
     const { client, calls } = makeClient();
     const logger = makeLogger();
 
@@ -50,8 +51,9 @@ describe("provisionAppRole", () => {
       params: [APP_ROLE_PASSWORD_GUC, "s3cret"],
     });
     expect(calls[2].text).toBe(APP_ROLE_UPSERT_SQL);
-    expect(calls[3].text).toBe(APP_ROLE_GRANTS_SQL);
-    expect(calls).toHaveLength(4);
+    expect(calls[3].text).toBe(APP_ROLE_SETTINGS_SQL);
+    expect(calls[4].text).toBe(APP_ROLE_GRANTS_SQL);
+    expect(calls).toHaveLength(5);
     expect(logger.warn).not.toHaveBeenCalled();
   });
 
@@ -65,7 +67,7 @@ describe("provisionAppRole", () => {
     expect(calls[0].params).toEqual([APP_ROLE_NAME_GUC, DEFAULT_APP_USER]);
   });
 
-  it("skips role creation but still applies grants when the password is unset", async () => {
+  it("skips role creation but still applies defaults and grants when the password is unset", async () => {
     const { client, calls } = makeClient();
     const logger = makeLogger();
 
@@ -75,9 +77,11 @@ describe("provisionAppRole", () => {
       logger,
     });
 
-    // Only the role-name GUC + grants run; no password GUC, no upsert.
+    // Only the role-name GUC, defaults and grants run; no password GUC, no
+    // upsert. A role provisioned declaratively still gets its defaults.
     expect(calls.map((c) => c.text)).toEqual([
       "SELECT set_config($1, $2, false)",
+      APP_ROLE_SETTINGS_SQL,
       APP_ROLE_GRANTS_SQL,
     ]);
     expect(logger.warn).toHaveBeenCalledTimes(1);
@@ -230,6 +234,45 @@ describe("app-role SQL", () => {
     );
     expect(grantAt).toBeGreaterThan(-1);
     expect(revokeAt).toBeGreaterThan(grantAt);
+  });
+});
+
+/**
+ * Session defaults on the runtime role. `jit = off` because RLS subplans push
+ * register queries over the JIT cost thresholds, and on a server built with
+ * LLVM the compile took ~15 s per call for a query that runs in ~25 ms.
+ */
+describe("runtime role session defaults", () => {
+  it("turns JIT off on the role, quoted with %I", () => {
+    expect(APP_ROLE_SETTINGS_SQL).toContain(
+      "format('ALTER ROLE %I SET jit = off', role_name)",
+    );
+  });
+
+  it("only alters a role that exists", () => {
+    // Runs on every startup, including before a declaratively provisioned
+    // role has been created; ALTER on a missing role would raise.
+    expect(APP_ROLE_SETTINGS_SQL).toMatch(
+      /IF EXISTS \(SELECT FROM pg_roles WHERE rolname = role_name\)/,
+    );
+  });
+
+  it("degrades a privilege shortfall to a warning in its own block", () => {
+    // CNPG managed.roles leaves the owner without CREATEROLE. Inside the
+    // grants block, the failed ALTER would roll the grants back with it.
+    expect(APP_ROLE_SETTINGS_SQL).toContain(
+      "EXCEPTION WHEN insufficient_privilege THEN",
+    );
+    expect(APP_ROLE_SETTINGS_SQL).toContain("RAISE WARNING");
+    expect(APP_ROLE_GRANTS_SQL).not.toContain("jit");
+  });
+
+  it("is not part of the grants-only pass db-migrate runs", async () => {
+    const { client, calls } = makeClient();
+
+    await applyAppRoleGrants(client, { appUser: "monize_app" });
+
+    expect(calls.map((c) => c.text)).not.toContain(APP_ROLE_SETTINGS_SQL);
   });
 });
 

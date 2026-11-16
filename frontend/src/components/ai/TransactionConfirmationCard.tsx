@@ -3,21 +3,28 @@
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
-import { formatBytes } from '@/components/transactions/AttachmentsSection';
+import { useDateFormat } from '@/hooks/useDateFormat';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import type { PendingAction } from '@/types/ai';
+import { splitTagChangeText } from '@/components/ai/split-tag-change-text';
+import { foreignEntryText } from '@/components/ai/foreign-entry-text';
+import { FX_RATE_DISPLAY_DECIMALS } from '@/lib/format';
+import { formatPhoneForDisplay } from '@/lib/phone-number';
+import { RuleEffectsLines } from '@/components/ai/RuleEffectsLines';
 
 interface TransactionConfirmationCardProps {
   action: PendingAction;
   onConfirm: () => void;
   onCancel: () => void;
+  /** Replaces the footer's "Cancel" where the host's negative answer means something else (the review inbox's "Dismiss"). */
+  cancelLabel?: string;
 }
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-3 text-sm">
       <span className="text-gray-500 dark:text-gray-400">{label}</span>
-      <span className="text-gray-900 dark:text-gray-100 text-right break-words">
+      <span className="text-gray-900 dark:text-gray-100 text-right break-words whitespace-pre-line">
         {value}
       </span>
     </div>
@@ -28,11 +35,14 @@ export function TransactionConfirmationCard({
   action,
   onConfirm,
   onCancel,
+  cancelLabel,
 }: TransactionConfirmationCardProps) {
   const t = useTranslations('ai');
-  const { formatCurrency, formatCurrencyPrecise, formatQuantity } =
+  const { formatCurrency, formatCurrencyPrecise, formatQuantity, formatBytes, formatNumber } =
     useNumberFormat();
+  const { formatDate } = useDateFormat();
   const { preview, type, status } = action;
+  const redemptionSplit = preview.bondRedemptionSplit ?? null;
 
   // Create, update, and delete share the same field layout per domain (cash vs
   // investment); only the title and success copy differ.
@@ -69,11 +79,42 @@ export function TransactionConfirmationCard({
     delete_payee: t('confirmAction.deletePayeeTitle'),
     create_transfer: t('confirmAction.createTransferTitle'),
     update_transfer: t('confirmAction.updateTransferTitle'),
+    create_tag: t('confirmAction.createTagTitle'),
+    update_tag: t('confirmAction.updateTagTitle'),
+    delete_tag: t('confirmAction.deleteTagTitle'),
   };
-  const title = titleByType[type] ?? t('confirmAction.createPayeeTitle');
+  const title = titleByType[type] ?? t('confirmAction.unknownTitle');
 
   const none = t('confirmAction.none');
   const rows: Array<{ label: string; value: string }> = [];
+  // The tags an edit adds (a name the user has no tag for yet is marked new)
+  // and removes; the transaction keeps every other tag it carries.
+  const pushTagChange = () => {
+    if (preview.tagNames && preview.tagNames.length > 0)
+      rows.push({
+        label: t('confirmAction.addTags'),
+        value: preview.tagNames
+          .map((name) =>
+            preview.newTagNames?.includes(name) ? `${name} ${t('confirmAction.newTag')}` : name,
+          )
+          .join(', '),
+      });
+    if (preview.removeTagNames && preview.removeTagNames.length > 0)
+      rows.push({
+        label: t('confirmAction.removeTags'),
+        value: preview.removeTagNames.join(', '),
+      });
+    // The tags an edit changes on existing split lines, one row per line; the
+    // lines' amounts, categories and other tags stay.
+    preview.splitTagChanges?.forEach((line, i) => {
+      rows.push({
+        label: i === 0 ? t('confirmAction.splitLineTagChanges') : '',
+        value: splitTagChangeText(line, t, (amount) =>
+          formatCurrency(amount, preview.currencyCode),
+        ),
+      });
+    });
+  };
 
   if (isCashTxType) {
     if (preview.accountName)
@@ -83,6 +124,22 @@ export function TransactionConfirmationCard({
         label: t('confirmAction.amount'),
         value: formatCurrency(preview.amount, preview.currencyCode),
       });
+    // Entered in another currency: what was paid, and the rate the commit
+    // uses with where it came from.
+    const foreignEntry = foreignEntryText(preview, preview.currencyCode, t, {
+      currency: formatCurrency,
+      rate: (rate) => formatNumber(rate, FX_RATE_DISPLAY_DECIMALS),
+    });
+    if (foreignEntry && 'cleared' in foreignEntry)
+      rows.push({
+        label: t('confirmAction.fxPaid'),
+        value: t('confirmAction.fxCleared'),
+      });
+    else if (foreignEntry) {
+      rows.push({ label: t('confirmAction.fxPaid'), value: foreignEntry.paid });
+      if (foreignEntry.rate)
+        rows.push({ label: t('confirmAction.fxRate'), value: foreignEntry.rate });
+    }
     if (preview.transactionDate)
       rows.push({ label: t('confirmAction.date'), value: preview.transactionDate });
     rows.push({
@@ -99,18 +156,27 @@ export function TransactionConfirmationCard({
       preview.splits.forEach((split, i) => {
         const label =
           i === 0 ? t('confirmAction.splits') : '';
-        const category = split.categoryName || none;
+        // A category the AI chose is said beside it, so it is read as a suggestion.
+        const category =
+          (split.categoryName || none) +
+          (split.categorySource === 'ai' ? ` (${t('confirmAction.aiCategory')})` : '');
+        const line = split.memo
+          ? `${category}: ${formatCurrency(split.amount, preview.currencyCode)} (${split.memo})`
+          : `${category}: ${formatCurrency(split.amount, preview.currencyCode)}`;
         rows.push({
           label,
-          value: split.memo
-            ? `${category}: ${formatCurrency(split.amount, preview.currencyCode)} (${split.memo})`
-            : `${category}: ${formatCurrency(split.amount, preview.currencyCode)}`,
+          value:
+            split.tagNames && split.tagNames.length > 0
+              ? `${line} · ${t('confirmAction.splitLineTags', { tags: split.tagNames.join(', ') })}`
+              : line,
         });
       });
     } else {
       rows.push({
         label: t('confirmAction.category'),
-        value: preview.categoryName || none,
+        value:
+          (preview.categoryName || none) +
+          (preview.categoryName && preview.categorySource === 'ai' ? ` (${t('confirmAction.aiCategory')})` : ''),
       });
     }
     if (preview.description)
@@ -118,6 +184,13 @@ export function TransactionConfirmationCard({
         label: t('confirmAction.description'),
         value: preview.description,
       });
+    // The reference number the approval sets (an email receipt's order number).
+    if (preview.referenceNumber)
+      rows.push({
+        label: t('confirmAction.referenceNumber'),
+        value: preview.referenceNumber,
+      });
+    pushTagChange();
     // Files the approval will save as transaction attachments.
     if (preview.attachments && preview.attachments.length > 0) {
       preview.attachments.forEach((attachment, i) => {
@@ -166,6 +239,23 @@ export function TransactionConfirmationCard({
           ? `${preview.symbol} (${preview.securityName})`
           : preview.symbol,
       });
+    if (preview.bondSeriesCode)
+      rows.push({
+        label: t('confirmAction.bondSeries'),
+        value: preview.bondSeriesCode,
+      });
+    // The occurrence approving marks paid, named with its due day so a
+    // schedule with several open occurrences says which one.
+    if (preview.scheduledName)
+      rows.push({
+        label: t('confirmAction.marksPaid'),
+        value: preview.scheduledDueDate
+          ? t('confirmAction.marksPaidDue', {
+              name: preview.scheduledName,
+              date: formatDate(preview.scheduledDueDate),
+            })
+          : preview.scheduledName,
+      });
     if (preview.quantity !== undefined && preview.quantity !== null)
       rows.push({
         label: t('confirmAction.shares'),
@@ -180,6 +270,14 @@ export function TransactionConfirmationCard({
       rows.push({
         label: t('confirmAction.commission'),
         value: formatCurrency(preview.commission, preview.securityCurrency ?? undefined),
+      });
+    if (preview.accruedInterest)
+      rows.push({
+        label: t('confirmAction.accruedInterest'),
+        value: formatCurrency(
+          preview.accruedInterest,
+          preview.securityCurrency ?? undefined,
+        ),
       });
     // Share-only actions (transfers, splits, share adjustments) carry no cash
     // total, so only surface it when there is one.
@@ -197,6 +295,24 @@ export function TransactionConfirmationCard({
         label: t('confirmAction.cashImpact'),
         value: `${formatCurrency(preview.cashAmount, preview.cashCurrency ?? undefined)} (${preview.cashAccountName})`,
       });
+    // A bond redemption: what it pays, as returned principal and interest (a
+    // fee taken out of the interest is named when there is one).
+    if (redemptionSplit) {
+      const currency = preview.securityCurrency ?? undefined;
+      rows.push({
+        label: t('confirmAction.redemptionSplit'),
+        value: t('confirmAction.redemptionSplitValue', {
+          principal: formatCurrency(redemptionSplit.principal, currency),
+          interest: formatCurrency(redemptionSplit.interest, currency),
+          payout: formatCurrency(redemptionSplit.payout, currency),
+        }),
+      });
+      if (redemptionSplit.deduction > 0)
+        rows.push({
+          label: t('confirmAction.redemptionDeduction'),
+          value: formatCurrency(redemptionSplit.deduction, currency),
+        });
+    }
     if (preview.description)
       rows.push({
         label: t('confirmAction.description'),
@@ -252,6 +368,7 @@ export function TransactionConfirmationCard({
         label: t('confirmAction.description'),
         value: preview.description,
       });
+    pushTagChange();
   } else if (type === 'delete_security') {
     if (preview.symbol)
       rows.push({ label: t('confirmAction.symbol'), value: preview.symbol });
@@ -280,13 +397,48 @@ export function TransactionConfirmationCard({
         label: t('confirmAction.favourite'),
         value: t('confirmAction.favouriteYes'),
       });
+  } else if (
+    type === 'create_tag' ||
+    type === 'update_tag' ||
+    type === 'delete_tag'
+  ) {
+    // A rename shows the name the tag has now beside the one it gets.
+    if (preview.previousName)
+      rows.push({
+        label: t('confirmAction.tagCurrentName'),
+        value: preview.previousName,
+      });
+    rows.push({
+      label: preview.previousName
+        ? t('confirmAction.tagNewName')
+        : t('confirmAction.name'),
+      value: preview.name || none,
+    });
+    // Only what the action sets: a rename that leaves the colour alone must
+    // not read as clearing it.
+    if (preview.tagColor !== undefined)
+      rows.push({
+        label: t('confirmAction.tagColor'),
+        value: preview.tagColor || none,
+      });
+    if (preview.tagIcon !== undefined)
+      rows.push({
+        label: t('confirmAction.tagIcon'),
+        value: preview.tagIcon || none,
+      });
+    if (type === 'delete_tag')
+      rows.push({
+        label: t('confirmAction.tagRemovedFrom'),
+        value: t('confirmAction.tagCarriedCount', {
+          count: preview.tagCarriedCount ?? 0,
+        }),
+      });
   } else if (type === 'delete_payee') {
     rows.push({
       label: t('confirmAction.name'),
       value: preview.name || none,
     });
-  } else {
-    // create_payee | update_payee
+  } else if (type === 'create_payee' || type === 'update_payee') {
     rows.push({
       label: t('confirmAction.name'),
       value: preview.name || none,
@@ -303,17 +455,49 @@ export function TransactionConfirmationCard({
         value: preview.website || none,
       });
     }
+    // Same rule for each contact field: shown only when the action sets it, so
+    // a card never implies a change the commit is not making.
+    if (preview.address !== undefined) {
+      rows.push({
+        label: t('confirmAction.address'),
+        value: preview.address || none,
+      });
+    }
+    if (preview.email !== undefined) {
+      rows.push({
+        label: t('confirmAction.email'),
+        value: preview.email || none,
+      });
+    }
+    if (preview.phone !== undefined) {
+      rows.push({
+        label: t('confirmAction.phone'),
+        // Displayed, never the stored E.164: the person approving this card has
+        // to recognise the number.
+        value: formatPhoneForDisplay(preview.phone) || none,
+      });
+    }
+    // The contact details above came from a lookup, not from the user: say so,
+    // because approving stores them.
+    if (preview.contactLookupSource) {
+      rows.push({
+        label: t('confirmAction.contactLookup'),
+        value: t('confirmAction.contactLookupSuggested'),
+      });
+    }
   }
 
   const isSecurityResult =
     type === 'create_security' || type === 'update_security';
   const isPayeeWriteType = type === 'create_payee' || type === 'update_payee';
+  const isTagWriteType = type === 'create_tag' || type === 'update_tag';
   // A deletion removes the record, so there is nothing to navigate to.
   const isDeletion =
     type === 'delete_transaction' ||
     type === 'delete_investment_transaction' ||
     type === 'delete_payee' ||
-    type === 'delete_security';
+    type === 'delete_security' ||
+    type === 'delete_tag';
   // The affected record's home, surfaced as a "view" link on success. For
   // list-backed destinations we deep-link to the created/edited record
   // (?highlight=<id>) so the list flashes and scrolls to it; without a result
@@ -328,7 +512,9 @@ export function TransactionConfirmationCard({
         ? { href: highlightHref('/securities'), label: t('confirmAction.viewSecurities') }
         : isPayeeWriteType
           ? { href: highlightHref('/payees'), label: t('confirmAction.viewPayees') }
-          : isCashTxType || isTransferType || type === 'categorize_transaction'
+          : isTagWriteType
+            ? { href: '/tags', label: t('confirmAction.viewTags') }
+            : isCashTxType || isTransferType || type === 'categorize_transaction'
             ? {
                 // Deep-link to the affected transaction so the list jumps to and
                 // flashes that row; fall back to the unfiltered list if the id
@@ -361,9 +547,12 @@ export function TransactionConfirmationCard({
     delete_payee: t('confirmAction.deletedPayee'),
     create_transfer: t('confirmAction.createdTransfer'),
     update_transfer: t('confirmAction.updatedTransfer'),
+    create_tag: t('confirmAction.createdTag'),
+    update_tag: t('confirmAction.updatedTag'),
+    delete_tag: t('confirmAction.deletedTag'),
   };
   const successMessage =
-    successByType[type] ?? t('confirmAction.createdPayee');
+    successByType[type] ?? t('confirmAction.unknownDone');
 
   return (
     <div className="rounded-lg border border-blue-200 dark:border-blue-900/60 bg-blue-50/60 dark:bg-blue-900/20 overflow-hidden">
@@ -383,12 +572,18 @@ export function TransactionConfirmationCard({
               {t('confirmAction.reconciledWarning')}
             </p>
           )}
+        {redemptionSplit?.outcome === 'differs' && isInvestmentTxType && (
+          <p className="text-xs text-amber-700 dark:text-amber-400 pt-1">
+            {t('confirmAction.redemptionSplitDiffers')}
+          </p>
+        )}
+        <RuleEffectsLines effects={preview.ruleEffects} currencyCode={preview.currencyCode} />
       </div>
       <div className="px-3 py-2 border-t border-blue-200 dark:border-blue-900/60">
         {status === 'pending' && (
           <div className="flex gap-2 justify-end">
             <Button variant="outline" size="sm" onClick={onCancel}>
-              {t('confirmAction.cancel')}
+              {cancelLabel ?? t('confirmAction.cancel')}
             </Button>
             <Button variant="primary" size="sm" onClick={onConfirm}>
               {t('confirmAction.approve')}

@@ -72,11 +72,15 @@ export function PayeeInfoWidget({
   const router = useRouter();
   const { formatCurrency } = useNumberFormat();
   const { formatDate } = useDateFormat();
-  const { convertToDefault, defaultCurrency } = useExchangeRates();
+  const { defaultCurrency } = useExchangeRates();
 
   const [summary, setSummary] = useState<TransactionSummary | null>(null);
   const [topCategories, setTopCategories] = useState<GroupedTotal[]>([]);
-  const [recurring, setRecurring] = useState<{ cadence: string; amount: number } | null>(null);
+  const [recurring, setRecurring] = useState<{
+    cadence: string;
+    amount: number;
+    currencyCode: string;
+  } | null>(null);
   const [aliases, setAliases] = useState<PayeeAlias[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -127,7 +131,11 @@ export function PayeeInfoWidget({
       const best = [...recurringResult]
         .filter((r) => CADENCE_KEYS.has(r.frequency))
         .sort((a, b) => b.dates.length - a.dates.length)[0];
-      setRecurring(best ? { cadence: best.frequency, amount: best.currentAmount } : null);
+      setRecurring(
+        best
+          ? { cadence: best.frequency, amount: best.currentAmount, currencyCode: best.currencyCode }
+          : null,
+      );
       setAliases(aliasesResult);
       setIsLoading(false);
     };
@@ -147,8 +155,8 @@ export function PayeeInfoWidget({
   );
 
   const currencyStrategy = useMemo(
-    () => buildDisplayCurrencyStrategy(summary, defaultCurrency, convertToDefault),
-    [summary, defaultCurrency, convertToDefault],
+    () => buildDisplayCurrencyStrategy(summary, defaultCurrency),
+    [summary, defaultCurrency],
   );
 
   const totals = useMemo(
@@ -247,7 +255,8 @@ export function PayeeInfoWidget({
           <p className="mt-1 text-sm text-gray-500 dark:text-gray-400 flex items-center">
             {t('payeeWidget.recurring', {
               cadence: t(`payeeWidget.cadence.${recurring.cadence}`),
-              amount: formatCurrency(recurring.amount, currencyStrategy.displayCurrency),
+              // Billed in the charge's own currency, not converted.
+              amount: formatCurrency(recurring.amount, recurring.currencyCode),
             })}
             <InfoTooltip text={t('payeeWidget.recurringTooltip')} usePortal />
           </p>
@@ -338,7 +347,10 @@ export function PayeeInfoWidget({
             <dt className="text-gray-500 dark:text-gray-400">
               {t('payeeWidget.defaultCategory')}
             </dt>
-            <dd className="text-gray-900 dark:text-gray-100 text-right truncate">
+            <dd
+              className="min-w-0 break-words text-gray-900 dark:text-gray-100 text-right sm:truncate"
+              title={defaultCategoryName}
+            >
               {defaultCategoryName}
             </dd>
           </div>

@@ -39,7 +39,8 @@ vi.mock('@/lib/logger', () => ({
   }),
 }));
 
-vi.mock('@/lib/format', () => ({
+vi.mock('@/lib/format', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/format')>()),
   getCurrencySymbol: () => '$',
   getDecimalPlacesForCurrency: () => 2,
   roundToCents: (v: number) => Math.round(v * 100) / 100,
@@ -59,15 +60,18 @@ vi.mock('@/hooks/useDateFormat', () => ({
   useDateFormat: () => ({ formatDate: (d: string) => d, dateFormat: 'browser', datePattern: 'YYYY-MM-DD' }),
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (n: number, _c?: string) => `$${n.toFixed(2)}`,
-    formatNumber: (n: number, d: number = 2) => n.toFixed(d),
-    // Mirrors the real formatPrice: up to 6 decimals, trailing zeros trimmed.
-    formatPrice: (n: number) => n.toFixed(6).replace(/0+$/, '').replace(/\.$/, ''),
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (n: number, _c?: string) => `$${n.toFixed(2)}`,
+      formatNumber: (n: number, d: number = 2) => n.toFixed(d),
+      // Mirrors the real formatPrice: up to 6 decimals, trailing zeros trimmed.
+      formatPrice: (n: number) => n.toFixed(6).replace(/0+$/, '').replace(/\.$/, ''),
+    }),
+  };
+});
 vi.mock('@/lib/categoryUtils', () => ({
   buildCategoryTree: (cats: any[]) => (cats || []).map((c: any) => ({ category: c })),
 }));
@@ -232,17 +236,23 @@ describe('OverrideEditorDialog', () => {
     expect(onClose).toHaveBeenCalled();
   });
 
-  it('calls onClose when X button is clicked', () => {
-    const onClose = vi.fn();
-    render(<OverrideEditorDialog {...defaultProps} onClose={onClose} />);
-    // Find the close button (SVG X icon button)
-    const closeButtons = screen.getAllByRole('button');
-    // The X button is the first button in the dialog header
-    const xButton = closeButtons.find(b => b.querySelector('svg path[d*="M6 18L18 6"]'));
-    if (xButton) {
-      fireEvent.click(xButton);
-      expect(onClose).toHaveBeenCalled();
-    }
+  it('is named by its title through Modal and draws no corner X', () => {
+    render(<OverrideEditorDialog {...defaultProps} />);
+    expect(screen.getByRole('dialog', { name: 'Edit Occurrence' })).toBeInTheDocument();
+    // Cancel in the button row is what closes it: no icon-only button sits
+    // beside the title.
+    const iconOnly = screen
+      .getAllByRole('button')
+      .filter((b) => b.querySelector('svg') && !b.textContent?.trim() && !b.getAttribute('aria-label'));
+    expect(iconOnly).toHaveLength(0);
+  });
+
+  it('spaces the transfer icon from its text with the container gap, not a margin on the icon', () => {
+    render(<OverrideEditorDialog {...defaultProps} scheduledTransaction={transferTransaction} />);
+    const summary = screen.getByText(/Transfer:/);
+    const row = summary.parentElement!;
+    expect(row.className).toContain('gap-2');
+    expect(row.querySelector('svg')?.getAttribute('class') ?? '').not.toMatch(/\bmr-/);
   });
 
   // --- Override indicator ---
@@ -636,8 +646,8 @@ describe('OverrideEditorDialog', () => {
         />,
       );
       await settlePriceLookup();
-      expect(screen.getByLabelText('Quantity (shares)')).toBeInTheDocument();
-      expect(screen.getByLabelText('Price per share')).toBeInTheDocument();
+      expect(screen.getByLabelText('Quantity (Shares)')).toBeInTheDocument();
+      expect(screen.getByLabelText('Price per Share')).toBeInTheDocument();
       expect(screen.getByLabelText('Total Price')).toBeInTheDocument();
     });
 
@@ -664,7 +674,7 @@ describe('OverrideEditorDialog', () => {
       const totalInput = screen.getByLabelText('Total Price') as HTMLInputElement;
       fireEvent.change(totalInput, { target: { value: '250' } });
       fireEvent.blur(totalInput);
-      const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
+      const qtyInput = screen.getByLabelText('Quantity (Shares)') as HTMLInputElement;
       expect(Number(qtyInput.value)).toBeCloseTo(2.5, 6);
     });
 
@@ -685,7 +695,7 @@ describe('OverrideEditorDialog', () => {
       await waitFor(() => {
         expect(screen.getByText('Use latest close')).toBeInTheDocument();
       });
-      const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
+      const priceInput = screen.getByLabelText('Price per Share') as HTMLInputElement;
       expect(Number(priceInput.value)).toBe(100);
       const totalInput = screen.getByLabelText('Total Price') as HTMLInputElement;
       expect(totalInput.value).toBe('1,000');
@@ -715,7 +725,7 @@ describe('OverrideEditorDialog', () => {
         expect(screen.getByText('Use latest close')).toBeInTheDocument();
       });
       expect(
-        Number((screen.getByLabelText('Price per share') as HTMLInputElement).value),
+        Number((screen.getByLabelText('Price per Share') as HTMLInputElement).value),
       ).toBe(100);
     });
 
@@ -781,12 +791,12 @@ describe('OverrideEditorDialog', () => {
       });
       fireEvent.click(screen.getByText('Use latest close'));
 
-      const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
+      const priceInput = screen.getByLabelText('Price per Share') as HTMLInputElement;
       expect(Number(priceInput.value)).toBeCloseTo(123.45, 6);
       // The scheduled total stands; the quantity follows the applied price.
       const totalInput = screen.getByLabelText('Total Price') as HTMLInputElement;
       expect(totalInput.value.replace(/,/g, '')).toBe('1000');
-      const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
+      const qtyInput = screen.getByLabelText('Quantity (Shares)') as HTMLInputElement;
       // 1000 / 123.45 = 8.10044552 shares.
       expect(Number(qtyInput.value)).toBeCloseTo(8.100446, 5);
     });
@@ -799,7 +809,7 @@ describe('OverrideEditorDialog', () => {
     it('books the same quantity and total whether the price is typed or applied', async () => {
       const readFields = () => ({
         qty: Number(
-          (screen.getByLabelText('Quantity (shares)') as HTMLInputElement).value,
+          (screen.getByLabelText('Quantity (Shares)') as HTMLInputElement).value,
         ),
         total: (screen.getByLabelText('Total Price') as HTMLInputElement).value.replace(
           /,/g,
@@ -834,7 +844,7 @@ describe('OverrideEditorDialog', () => {
         />,
       );
       await settlePriceLookup();
-      fireEvent.change(screen.getByLabelText('Price per share'), {
+      fireEvent.change(screen.getByLabelText('Price per Share'), {
         target: { value: '123.45' },
       });
       const typedFields = readFields();
@@ -857,7 +867,7 @@ describe('OverrideEditorDialog', () => {
           scheduledTransaction={{ ...investmentTransaction, investmentPrice: null }}
         />,
       );
-      const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
+      const priceInput = screen.getByLabelText('Price per Share') as HTMLInputElement;
       await waitFor(() => {
         expect(Number(priceInput.value)).toBeCloseTo(123.45, 6);
       });
@@ -931,7 +941,7 @@ describe('OverrideEditorDialog', () => {
       );
       await settlePriceLookup();
       expect(screen.getByText('Using the price from the schedule.')).toBeInTheDocument();
-      const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
+      const priceInput = screen.getByLabelText('Price per Share') as HTMLInputElement;
       fireEvent.change(priceInput, { target: { value: '150' } });
       expect(
         screen.queryByText('Using the price from the schedule.'),
@@ -956,8 +966,8 @@ describe('OverrideEditorDialog', () => {
       await waitFor(() => {
         expect(screen.getByText('Use latest close')).toBeInTheDocument();
       });
-      const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
-      const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
+      const qtyInput = screen.getByLabelText('Quantity (Shares)') as HTMLInputElement;
+      const priceInput = screen.getByLabelText('Price per Share') as HTMLInputElement;
       const totalInput = screen.getByLabelText('Total Price') as HTMLInputElement;
       // Reduce to a Total only: clear the quantity and the stored price, then
       // enter a total. With no price the total does not back-derive a quantity,
@@ -1003,7 +1013,7 @@ describe('OverrideEditorDialog', () => {
           }}
         />,
       );
-      const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
+      const qtyInput = screen.getByLabelText('Quantity (Shares)') as HTMLInputElement;
       const totalInput = screen.getByLabelText('Total Price') as HTMLInputElement;
       await act(async () => {
         fireEvent.change(qtyInput, { target: { value: '10' } });
@@ -1046,8 +1056,8 @@ describe('OverrideEditorDialog', () => {
           }}
         />,
       );
-      const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
-      const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
+      const qtyInput = screen.getByLabelText('Quantity (Shares)') as HTMLInputElement;
+      const priceInput = screen.getByLabelText('Price per Share') as HTMLInputElement;
       const totalInput = screen.getByLabelText('Total Price') as HTMLInputElement;
       // Type only a quantity while the price fetch is still pending.
       await act(async () => {
@@ -1102,7 +1112,7 @@ describe('OverrideEditorDialog', () => {
         />,
       );
       // Change qty
-      const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
+      const qtyInput = screen.getByLabelText('Quantity (Shares)') as HTMLInputElement;
       fireEvent.change(qtyInput, { target: { value: '7' } });
 
       const saveButton = screen.getByText('Save Override');
@@ -1149,8 +1159,8 @@ describe('OverrideEditorDialog', () => {
         />,
       );
       await settlePriceLookup();
-      const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
-      const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
+      const qtyInput = screen.getByLabelText('Quantity (Shares)') as HTMLInputElement;
+      const priceInput = screen.getByLabelText('Price per Share') as HTMLInputElement;
       expect(Number(qtyInput.value)).toBe(3);
       expect(Number(priceInput.value)).toBe(250);
     });
@@ -1169,8 +1179,8 @@ describe('OverrideEditorDialog', () => {
           scheduledTransaction={dividendTx}
         />,
       );
-      expect(screen.queryByLabelText('Quantity (shares)')).not.toBeInTheDocument();
-      expect(screen.queryByLabelText('Price per share')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Quantity (Shares)')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Price per Share')).not.toBeInTheDocument();
       expect(screen.getByLabelText('Total Amount')).toBeInTheDocument();
     });
 
@@ -1268,8 +1278,8 @@ describe('OverrideEditorDialog', () => {
           scheduledTransaction={addSharesTx}
         />,
       );
-      expect(screen.getByLabelText('Quantity (shares)')).toBeInTheDocument();
-      expect(screen.queryByLabelText('Price per share')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('Quantity (Shares)')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Price per Share')).not.toBeInTheDocument();
       expect(screen.queryByLabelText('Total Price')).not.toBeInTheDocument();
     });
 
@@ -1286,7 +1296,7 @@ describe('OverrideEditorDialog', () => {
           scheduledTransaction={addSharesTx}
         />,
       );
-      const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
+      const qtyInput = screen.getByLabelText('Quantity (Shares)') as HTMLInputElement;
       fireEvent.change(qtyInput, { target: { value: '12' } });
       expect(Number(qtyInput.value)).toBe(12);
       fireEvent.change(qtyInput, { target: { value: '' } });
@@ -1321,7 +1331,7 @@ describe('OverrideEditorDialog', () => {
         />,
       );
       await waitFor(() => {
-        expect(screen.getByLabelText('Price per share')).toBeInTheDocument();
+        expect(screen.getByLabelText('Price per Share')).toBeInTheDocument();
       });
     });
 
@@ -1340,7 +1350,7 @@ describe('OverrideEditorDialog', () => {
         />,
       );
       await waitFor(() => {
-        expect(screen.getByLabelText('Price per share')).toBeInTheDocument();
+        expect(screen.getByLabelText('Price per Share')).toBeInTheDocument();
       });
       await act(async () => {});
       expect(screen.queryByText(/No price history yet/)).not.toBeInTheDocument();
@@ -1426,5 +1436,105 @@ describe('OverrideEditorDialog', () => {
         }));
       });
     });
+  });
+});
+
+// Issue #2096: an estimated schedule's occurrence opens at its month's estimate
+// and keeps following it when saved unchanged.
+describe('OverrideEditorDialog: an estimated schedule (issue #2096)', () => {
+  const heating = {
+    id: 's9', name: 'Heating', amount: -999, currencyCode: 'CAD',
+    accountId: 'a1', categoryId: 'c1', description: '',
+    isTransfer: false, isSplit: false,
+    account: { name: 'Checking' },
+    amountIsEstimated: true,
+    amountEstimate: {
+      status: 'estimated',
+      currencyCode: 'CAD',
+      months: { '2025-03': { amount: -180, basis: 'seasonal' } },
+      paymentCount: 8,
+      latestPaymentDate: '2025-02-10',
+      growthRate: null,
+      historyMonths: 24,
+      missingPair: null,
+    },
+  } as any;
+  const props = {
+    isOpen: true,
+    scheduledTransaction: heating,
+    overrideDate: '2025-03-01',
+    categories: [{ id: 'c1', name: 'Utilities', parentId: null }] as any[],
+    accounts: [{ id: 'a1', name: 'Checking', currentBalance: 5000 }] as any[],
+    onClose: vi.fn(),
+    onSave: vi.fn(),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("opens on the month's estimate, never the snapshot", () => {
+    render(<OverrideEditorDialog {...props} />);
+    const amountInput = screen.getByLabelText('Amount') as HTMLInputElement;
+    expect(Number(amountInput.value)).toBe(-180);
+    expect(screen.getByText(/keeps following the estimate/)).toBeInTheDocument();
+  });
+
+  it('saves an unchanged estimate as no amount, so it keeps following it', async () => {
+    render(<OverrideEditorDialog {...props} />);
+    fireEvent.click(screen.getByText('Save Override'));
+    await waitFor(() => {
+      expect(mockCreateOverride).toHaveBeenCalledWith(
+        's9',
+        expect.objectContaining({ amount: null, originalDate: '2025-03-01' }),
+      );
+    });
+  });
+
+  it('pins the estimate as a stated amount when asked to keep it', async () => {
+    render(<OverrideEditorDialog {...props} />);
+    fireEvent.click(
+      screen.getByRole('switch', { name: 'Keep this amount, even when new payments change the estimate' }),
+    );
+    fireEvent.click(screen.getByText('Save Override'));
+    await waitFor(() => {
+      expect(mockCreateOverride).toHaveBeenCalledWith(
+        's9',
+        expect.objectContaining({ amount: -180 }),
+      );
+    });
+  });
+
+  it('saves a changed amount as a stated one', async () => {
+    render(<OverrideEditorDialog {...props} />);
+    const amountInput = screen.getByLabelText('Amount') as HTMLInputElement;
+    fireEvent.change(amountInput, { target: { value: '-205' } });
+    fireEvent.blur(amountInput);
+    fireEvent.click(screen.getByText('Save Override'));
+    await waitFor(() => {
+      expect(mockCreateOverride).toHaveBeenCalledWith(
+        's9',
+        expect.objectContaining({ amount: -205 }),
+      );
+    });
+  });
+
+  it('saves an unknown estimate left empty as no amount, so it keeps following it', async () => {
+    render(
+      <OverrideEditorDialog
+        {...props}
+        scheduledTransaction={{ ...heating, amountEstimate: { ...heating.amountEstimate, status: 'no-history', months: {} } }}
+      />,
+    );
+    const amountInput = screen.getByLabelText('Amount') as HTMLInputElement;
+    expect(amountInput.value).toBe('');
+    fireEvent.click(screen.getByText('Save Override'));
+    await waitFor(() => {
+      expect(mockCreateOverride).toHaveBeenCalledWith(
+        's9',
+        expect.objectContaining({ amount: null }),
+      );
+    });
+    expect(toast.error).not.toHaveBeenCalled();
   });
 });

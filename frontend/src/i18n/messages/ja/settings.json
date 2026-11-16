@@ -19,10 +19,11 @@
     "passwordRequired": "メールアドレスを変更するには現在のパスワードが必要です",
     "noChanges": "保存する変更がありません",
     "passwordConfirmNote": "メールアドレスを変更する場合はパスワードの確認が必要です。",
+    "pendingEmailNotice": "確認リンクを {email} に送信しました。リンクを開くとメールアドレスが変更されます。",
     "saveButton": "プロフィールを保存",
-    "savingButton": "保存中...",
     "toasts": {
       "success": "プロフィールを更新しました",
+      "confirmationSent": "新しいメールアドレスを確認するためのリンクを {email} でご確認ください",
       "updateFailed": "プロフィールの更新に失敗しました"
     },
     "validation": {
@@ -36,7 +37,8 @@
   },
   "security": {
     "heading": "セキュリティ",
-    "ssoNotice": "お使いのアカウントは認証にシングルサインオン（SSO）を使用しています。以下のパスワードはログインには使用されませんが、SSOが無効になった場合のバックアップとして保持できます。",
+    "ssoPasswordFallbackNotice": "お使いのアカウントはシングルサインオン（SSO）を使用しています。SSOが利用できないときは、以下のパスワードでもサインインできます。このフォールバック用のサインインを保護するため、二要素認証を有効にしてください。",
+    "ssoNotice": "お使いのアカウントはシングルサインオン(SSO)を使用しています。このサーバーでは、SSOアカウントのパスワードによるサインインは無効です。",
     "currentPasswordLabel": "現在のパスワード",
     "currentPasswordPlaceholder": "現在のパスワードを入力してください",
     "newPasswordLabel": "新しいパスワード",
@@ -44,7 +46,6 @@
     "confirmPasswordLabel": "新しいパスワードを確認",
     "confirmPasswordPlaceholder": "新しいパスワードを確認してください",
     "changePasswordButton": "パスワードを変更",
-    "changingPasswordButton": "変更中...",
     "toasts": {
       "passwordChanged": "パスワードを変更しました",
       "passwordChangeFailed": "パスワードの変更に失敗しました"
@@ -58,14 +59,28 @@
       "addLayerDescription": "アカウントにセキュリティの追加レイヤーを追加します。",
       "enableButton": "2FAを有効化",
       "disableButton": "2FAを無効化",
+      "resetButton": "2FAをリセット",
       "disableModal": {
         "title": "二要素認証を無効化",
-        "description": "現在の6桁のコードを入力して2FAの無効化を確認してください。",
+        "description": "2FAの無効化を確認するには、認証アプリの6桁のコード、またはバックアップコード（xxxx-xxxx）のいずれかを入力してください。",
         "verificationCodeLabel": "確認コード",
         "disablingButton": "無効化中...",
         "toasts": {
           "disabled": "二要素認証を無効化しました",
           "disableFailed": "2FAの無効化に失敗しました"
+        }
+      },
+      "resetModal": {
+        "title": "二要素認証をリセット",
+        "description": "認証アプリやバックアップコードが漏えいした可能性がある場合、または認証コードが使えなくなった場合（例: サーバーのシークレット変更後）に使用してください。",
+        "effect": "現在の認証アプリ、バックアップコード、信頼済みデバイスは使えなくなり、他のすべてのデバイスからサインアウトされます。その後すぐに新しい認証アプリを設定します。",
+        "passwordLabel": "アカウントのパスワード",
+        "codeLabel": "認証コードまたはバックアップコード",
+        "codeHint": "認証アプリの6桁のコードを入力してください。認証アプリが使えない場合は、代わりにバックアップコード（xxxx-xxxx）のいずれかを入力してください。",
+        "resettingButton": "リセット中...",
+        "toasts": {
+          "reset": "二要素認証をリセットしました。今すぐ新しい認証アプリを設定してください。",
+          "resetFailed": "2FAのリセットに失敗しました"
         }
       }
     },
@@ -90,6 +105,8 @@
       "noDevices": "信頼済みデバイスはありません。2FAログイン時に「このブラウザでは再度確認しない」をチェックすると、デバイスがここに表示されます。",
       "currentBadge": "現在",
       "revokeButton": "取り消し",
+      "ipAddress": "IP: {ip}",
+      "dates": "追加 {added} · 最後に使用 {lastUsed} · 有効期限 {expires}",
       "revokeAllModal": {
         "title": "信頼済みデバイスをすべて取り消し",
         "description": "すべての信頼済みデバイスが削除されます。次回どのデバイスからログインしても2FAコードの入力が必要になります。"
@@ -110,8 +127,20 @@
   },
   "preferences": {
     "heading": "設定",
+    "groups": {
+      "languageRegion": "言語と地域",
+      "appearance": "外観",
+      "datesNumbers": "日付と数値",
+      "investments": "投資",
+      "transactions": "取引",
+      "application": "アプリケーション",
+      "defaultViews": "既定の表示",
+      "mobileNavigation": "モバイルナビゲーション"
+    },
     "themeLabel": "テーマ",
     "defaultCurrencyLabel": "デフォルト通貨",
+    "defaultCurrencyHelp": "アカウント、純資産、レポートを合計する際に使用され、通貨ページの「レート」列が変換先とする通貨です。",
+    "defaultCurrencyNoCrypto": "ここでは暗号資産は選択できません。合計とレポートは常に法定通貨で表示されます。",
     "preferredExchangesLabel": "優先取引所（証券検索用）",
     "preferredExchangesHelp": "優先順位を付けて最大3つの取引所を選択してください。証券を検索する際に優先されます。",
     "exchangePriorityPlaceholder": "優先度{n}",
@@ -131,10 +160,22 @@
     "lockReconciledLabel": "照合済み取引をロックする",
     "lockReconciledTooltip": "オフの間は、照合済み取引の日付や金額が変わる編集の前に Monize が警告し、そのうえで変更を許可します。オンの間は、照合済み取引を編集も削除も照合解除もできません。修正するには再びオフにしてください。",
     "timeFormatLabel": "時刻形式",
+    "timeFormatOptions": {
+      "h24": "24時間表示 (14:30)",
+      "h12": "12時間表示 (午後2:30)"
+    },
     "recentTransactionsLabel": "クイック入力の最近の取引数",
     "recentTransactionsHelp": "取引フォームの支払先フィールド横にある履歴ボタンのポップオーバーに表示されるエントリ数。",
-    "saveButton": "設定を保存",
-    "savingButton": "保存中...",
+    "mapProviderLabel": "住所の地図プロバイダー",
+    "mapProviderHelp": "デスクトップのブラウザーで住所をクリックしたときに開く地図サービス。スマートフォンとタブレットは、ここでの選択に関わらず常に端末自身の地図アプリを開きます。自動はデスクトップで OpenStreetMap を使用します。",
+    "mapProviderOptions": {
+      "device": "自動",
+      "apple": "Apple Maps",
+      "bing": "Bing Maps",
+      "google": "Google Maps",
+      "openstreetmap": "OpenStreetMap",
+      "waze": "Waze"
+    },
     "toasts": {
       "saved": "設定を保存しました",
       "saveFailed": "設定の保存に失敗しました",
@@ -182,10 +223,47 @@
       "highcontrast": "ハイコントラスト",
       "colorblind": "色覚対応"
     },
-    "timezoneBrowserOption": "ブラウザのタイムゾーンを使用（自動検出: {tz}）"
+    "timezoneBrowserOption": "ブラウザのタイムゾーンを使用（自動検出: {tz}）",
+    "defaultViews": {
+      "intro": "独自の設定がないブラウザ（新しいデバイスやプライベートウィンドウなど）で適用されます。ページ上で変更した設定はそのブラウザに記憶され、こちらより優先されます。",
+      "rowsLabel": "行の密度",
+      "hideRegisterYearLabel": "登録簿の日付で年を非表示にする",
+      "chartCollapsedLabel": "取引ページのグラフを折りたたんだ状態で開始する",
+      "widgetsCollapsedLabel": "口座・支払先・カテゴリの情報を折りたたんだ状態で開始する",
+      "accountOpenTargetLabel": "口座の既定の表示",
+      "accountOpenTargetOptions": {
+        "register": "取引を表示する",
+        "dashboard": "ダッシュボードを表示する"
+      },
+      "accountOpenTargetHelp": "口座ページまたはダッシュボードのお気に入りの勘定科目で口座をクリックしたときに適用されます。",
+      "columnsLabel": "表示する列",
+      "columnsHelp": "チェックを外すと、その列が既定で非表示になります。表の「列」メニューでの変更は、そのブラウザにのみ適用されます。",
+      "columnTables": {
+        "transactions": "取引",
+        "investmentHoldings": "投資の保有銘柄",
+        "investmentRegister": "投資取引"
+      },
+      "applyHere": "このブラウザでこれらの既定を使用する",
+      "applyHereHelp": "このブラウザに保存されている表示設定を消去し、上記の既定がここでも適用されるようにします。",
+      "appliedHere": "このブラウザで既定の表示を使用するようになりました"
+    },
+    "mobileTabs": {
+      "intro": "スマートフォンやタブレットの下部バーに表示するタブを3つまで選択します。追加ボタンと「その他」は常に表示されます。",
+      "slotLabel": "タブ {number}",
+      "none": "なし"
+    }
   },
   "notifications": {
     "heading": "通知",
+    "portfolioAlert": {
+      "title": "投資価値の変動",
+      "description": "投資口座がしきい値を超えて変動したときに、1日1回通知します。市場の変動と配当から測定されます(入出金は除きます)。",
+      "enableLabel": "投資変動アラートを有効にする",
+      "thresholdLabel": "1日の変動が次の値以上のときに通知",
+      "saveError": "しきい値を保存できませんでした",
+      "loadError": "投資アラートの設定を読み込めませんでした",
+      "retry": "再試行"
+    },
     "smtpNotConfigured": "メール通知は利用できません。管理者がSMTPを設定していません。",
     "emailNotificationsTitle": "メール通知",
     "emailNotificationsDescription": "今後の請求書と予算アラートのメールリマインダーを受信する",
@@ -212,6 +290,148 @@
       "digestUpdateFailed": "予算ダイジェスト設定の更新に失敗しました",
       "digestDayFailed": "ダイジェストの曜日の更新に失敗しました",
       "testEmailFailed": "テストメールの送信に失敗しました"
+    },
+    "push": {
+      "heading": "ブラウザープッシュ",
+      "collapsedDevices": "{count, plural, =0 {登録済みの端末なし} other {端末 # 台を登録済み}}",
+      "collapsedDevicesWithRetired": "{count, plural, =0 {登録済みの端末なし} other {端末 # 台を登録済み}}、{retired, plural, other {# 台は停止済み}}",
+      "collapsedDevicesUnavailable": "端末一覧を取得できません",
+      "diagnostics": {
+        "summary": "通知診断",
+        "intro": "このブラウザーとデバイスが通知について Monize に報告している内容です。設定を変更したら更新し、「レポートをコピー」で全文を送ってください。",
+        "refresh": "更新",
+        "copy": "レポートをコピー",
+        "copied": "診断をクリップボードにコピーしました"
+      },
+      "description": "この端末を登録すると、アプリを閉じていても Monize から通知を届けられます。今のところこの経路で届くのはテスト通知だけで、それ以外はこれまでどおりベルに届きます。",
+      "androidNotify": "Android では、許可を与えただけでは不十分で、システムが通知を非表示にすることがあります。ホーム画面の Monize アイコンを長押しし、アプリ情報、通知の順にタップして、オンになっていることを確認してください。",
+      "permissionHint": "オンにすると、ブラウザが通知を表示する許可を求めます。許可するまで何も送信されません。",
+      "enableButton": "この端末で有効にする",
+      "enablingButton": "有効化中...",
+      "sendTestButton": "テスト通知を送信",
+      "sendingTestButton": "送信中...",
+      "removeButton": "削除",
+      "removeDialog": {
+        "title": "デバイスを削除",
+        "message": "{device} を削除しますか？そのデバイスでプッシュを再び有効にするまで、プッシュ通知は届かなくなります。"
+      },
+      "thisDevice": "この端末",
+      "held": "この端末ではサインアウトしています。ここで再度サインインすると、プッシュ通知が再開されます。",
+      "unifiedpushBadge": "UnifiedPush",
+      "unnamedDevice": "名前のない端末",
+      "noLiveDevices": "まだ端末が登録されていません。テストを送信するには、この端末でプッシュを有効にしてください。",
+      "noDeliverableDevices": "すべての端末でサインアウトしているため、テストを送信できる先がありません。端末で再度サインインすると、その端末でプッシュ通知が再開されます。",
+      "notConfigured": "この Monize インスタンスではブラウザープッシュを利用できません。管理者が Admin エリアで有効にできます。",
+      "disabledByAdmin": "管理者がこの Monize インスタンスのブラウザープッシュを無効にしています。",
+      "keyUnreadable": "Monize はこのインスタンスのプッシュ鍵ペアを読み取れないため、何も配信されません。管理者が Admin エリアで鍵ペアを更新すれば回復します。",
+      "serverKeyMissing": "この Monize インスタンスには、プッシュ鍵ペアを開くための暗号鍵がないため、何も配信できません。管理者がデプロイに設定して再起動する必要があります。",
+      "statusUnavailable": "ブラウザープッシュが利用できるかどうかを確認できませんでした。ページを再読み込みしてやり直してください。",
+      "devicesUnavailable": "登録済みの端末を読み込めませんでした。このページのそれ以外は通常どおり使えます。再読み込みしてやり直してください。",
+      "unsupported": {
+        "unsupported": "このブラウザーはプッシュ通知を受信できません。",
+        "denied": "このブラウザーで Monize の通知がブロックされています。ブラウザーのサイト設定で許可し、このページを再読み込みしてください。",
+        "ios-browser": "iPhone と iPad では、Monize をホーム画面に追加した後でのみプッシュ通知が機能します。共有メニューから「ホーム画面に追加」を選び、そこから Monize を開いてください。",
+        "shell": {
+          "electron": "Monize のデスクトップウィンドウでは通知を利用できません。トレイメニューの「Open in browser」から Monize をブラウザーで開くと、そちらではプッシュ通知を引き続き利用できます。",
+          "capacitor": "Monize の Android アプリでは、プッシュ通知はまだ利用できません。受け取るには、ブラウザーで Monize を開いてください。"
+        }
+      },
+      "native": "Monize デスクトップアプリは、実行中であればウィンドウをトレイに閉じていても、この PC に通知を表示します。そのため、ここで有効にする必要はありません。表示方法は Windows の通知設定で決まります。",
+      "disabledReason": {
+        "GONE": "到達できなくなりました。その端末でプッシュを再度有効にしてください。",
+        "KEY_ROTATED": "このインスタンスがプッシュ鍵ペアを更新した際に停止されました。その端末でプッシュを再度有効にしてください。",
+        "FAILING": "配信の失敗が続いたため停止されました。その端末でプッシュを再度有効にしてください。"
+      },
+      "toasts": {
+        "enabled": "この端末でプッシュ通知を有効にしました",
+        "enableFailed": "プッシュ通知を有効にできませんでした",
+        "permissionDenied": "このブラウザーが Monize の通知をブロックしています。サイト設定で許可してからやり直してください。",
+        "permissionDeniedIos": "Monize の通知はブロックされています。iOS の「設定」→「通知」→ Monize を開いて許可してください。",
+        "permissionDismissed": "通知は有効になりませんでした。ブラウザーの確認で「許可」を選んでください。",
+        "permissionNoPrompt": "通知はオンになりませんでした。確認ダイアログも表示されていません。iOS の「設定」→「通知」→ Monize を開いて許可してください。Monize が一覧にない場合は、ホーム画面から削除し、もう一度追加して（「共有」→「ホーム画面に追加」）、再度お試しください。",
+        "removed": "端末を削除しました",
+        "removeFailed": "端末を削除できませんでした",
+        "testSent": "{count, plural, other {# 台の端末にテスト通知を送信しました}}",
+        "testPartial": "テスト通知は {attempted} 台中 {delivered} 台に届きました",
+        "testFailed": "テスト通知を配信できませんでした",
+        "pushServiceRefused": "ブラウザーのプッシュサービスが登録を拒否しました。しばらくしてからもう一度お試しください。失敗が続く場合は、ブラウザーのプッシュ設定を確認してください。",
+        "pushServiceRefusedBrave": "Brave は既定でプッシュサービスをブロックします。Brave の設定から「プライバシーとセキュリティ」を開き、「プッシュメッセージに Google のサービスを使用する」をオンにして、ブラウザーを再起動してからもう一度お試しください。"
+      },
+      "testResults": {
+        "heading": "前回のテスト（デバイス別）",
+        "status": {
+          "sent": "プッシュサービスに配信済み",
+          "expired": "サブスクリプションの期限切れ。そのデバイスでプッシュを再度有効にしてください",
+          "transient": "未配信（一時的なエラー）。もう一度お試しください",
+          "unconfigured": "このインスタンスは現在プッシュメッセージに署名できません"
+        }
+      },
+      "transport": {
+        "webpush": "ウェブプッシュ",
+        "unifiedpush": "UnifiedPush"
+      },
+      "facts": {
+        "endpoint": "エンドポイント",
+        "transport": "配信経路",
+        "registeredIp": "登録元",
+        "registered": "登録日時",
+        "lastSeen": "最終アクティビティ",
+        "lastDelivery": "最終配信",
+        "noDelivery": "まだ配信されていません",
+        "userAgent": "ブラウザー",
+        "unknownIp": "不明"
+      }
+    },
+    "preferences": {
+      "heading": "通知方法",
+      "description": "Monize がメールまたはプッシュで送る種類と、その頻度を選びます。",
+      "categoryHeader": "通知",
+      "channels": {
+        "emailReport": "メール（レポート）",
+        "emailNotification": "メール（アラート）",
+        "push": "プッシュ",
+        "unifiedpush": "UnifiedPush",
+        "unifiedpushHint": "通知は、ブラウザーベンダーのプッシュサービスではなく、ntfy などご自身で運用するディストリビューターアプリ経由で配信されます。このチャネルを使うには、そのアプリでエンドポイントを登録してください。"
+      },
+      "categories": {
+        "PAYMENTS": "請求と予定",
+        "BUDGETS": "予算",
+        "SYSTEM": "システムアラート",
+        "BALANCES": "口座残高",
+        "INVESTMENTS": "投資価値",
+        "STRATEGIES": "戦略シグナル",
+        "BANK_SYNC": "銀行接続",
+        "BANK_SYNC_ACTIVITY": "銀行同期の結果",
+        "EMAIL_RECEIPTS": "メール領収書",
+        "BONDS": "債券",
+        "AI_REVIEW": "AIレビュー提案",
+        "WARRANTIES": "保証のリマインダー",
+        "SECURITY": "セキュリティ",
+        "SHARED_EXPENSES": "共同支出"
+      },
+      "channelNotApplicable": "この通知タイプには適用されません",
+      "emailToggleLabel": "{category} のレポートメール",
+      "emailNotificationToggleLabel": "{category} のアラートメール",
+      "pushToggleLabel": "{category} のプッシュ",
+      "unifiedpushToggleLabel": "{category} の UnifiedPush",
+      "saveFailed": "設定を保存できませんでした",
+      "emailUnavailable": "これらをメールで送信するには、上のメール通知をオンにしてください。",
+      "pushUnavailable": "プッシュに登録されたデバイスがないため、このチャネルは配信できません。",
+      "throttle": {
+        "label": "間隔",
+        "ariaLabel": "{category} のクールダウン",
+        "hint": "同じグループの通知がこの時間内に送信済みの場合、アラートやプッシュをスキップします。",
+        "options": {
+          "0": "オフ",
+          "5": "5分",
+          "15": "15分",
+          "30": "30分",
+          "60": "1時間",
+          "360": "6時間",
+          "1440": "24時間"
+        }
+      },
+      "pushEnableHint": "このブラウザーはプッシュ通知に登録されていません。"
     }
   },
   "help": {
@@ -229,9 +449,10 @@
       "label": "ディスカッション",
       "description": "コミュニティと質問したりアイデアを共有したりできます。"
     },
-    "wiki": {
-      "label": "Wiki",
-      "description": "ガイドとドキュメントを参照できます。"
+    "docs": {
+      "label": "ドキュメント",
+      "description": "ユーザーガイドを参照できます。",
+      "openOnline": "monize.net で開く"
     },
     "supportBackup": {
       "label": "サポート用バックアップを作成",
@@ -280,7 +501,7 @@
   "supportBackup": {
     "title": "サポート用バックアップを作成",
     "howItWorks": "バックアップの匿名化コピーを作成します。名称はマスクされ(先頭と末尾の2文字のみ残ります)、メモ/説明/口座番号は削除され、各金額は単一の非公開係数で乗算されます。公開値(為替レート、価格、金利)はそのままです。ファイルは常に下のパスワードで暗号化され、通常のバックアップと同じ手順で復元できます。これは偶発的な露出への保護であり、あなたを既に知る相手への保護ではありません — バグを再現できるよう、日付・頻度・構造は保持されます。",
-    "sectionsLabel": "含める内容",
+    "sectionsLabel": "含めるセクション",
     "sections": {
       "investments": "投資(証券、保有、価格)",
       "scheduled": "定期取引",
@@ -325,6 +546,17 @@
       "description": "アカウントから財務データを削除します。この操作は元に戻せません。",
       "openButton": "データを削除...",
       "alwaysDeletedHeading": "以下は常に削除されます:",
+      "alwaysDeletedItems": {
+        "transactions": "すべての取引と分割",
+        "scheduled": "すべての予定/定期取引",
+        "securities": "すべての有価証券、価格、保有銘柄、投資取引",
+        "budgets": "すべての予算と予算アラート",
+        "monthlySummaries": "口座残高の月次サマリー",
+        "customReports": "カスタムレポート、タグ、インポートマッピング",
+        "actionHistory": "操作履歴（元に戻す/やり直す）",
+        "rules": "すべての取引ルール",
+        "institutions": "金融機関"
+      },
       "optionalHeading": "オプションで追加削除:",
       "accountsOption": "口座",
       "categoriesOption": "カテゴリ",
@@ -370,7 +602,8 @@
   },
   "apiAccess": {
     "heading": "APIアクセス",
-    "description": "個人用アクセストークンを作成して、Claude Desktop などの外部AIツールをMCPで接続します。",
+    "description": "個人用アクセストークンを作成して、Claude Desktop などの外部AIツールをMCPで接続したり、/api/v1 の REST API を呼び出したりできます。",
+    "restrictedNote": "読み取りトークンでは読み取りのみ可能です。サインイン、セキュリティ、管理、共有、バックアップのエンドポイントはトークンでは利用できません。",
     "createTokenButton": "トークンを作成",
     "mcpServerUrlLabel": "MCPサーバーURL",
     "mcpServerUrlHelp": "Claude CodeやClaude DesktopなどのMCPクライアントを設定する際にこのURLを使用してください。",
@@ -384,7 +617,7 @@
     "revokeButton": "取り消し",
     "revokeModal": {
       "title": "トークンを取り消し",
-      "message": "このトークンは即座に機能しなくなります。これを使用しているMCP接続はすべて切断されます。",
+      "message": "このトークンは即座に機能しなくなります。これを使用しているMCP接続やAPIクライアントはすべて切断されます。",
       "confirmLabel": "取り消し"
     },
     "createModal": {
@@ -430,26 +663,27 @@
       "copyUrlFailed": "URLのコピーに失敗しました",
       "loadFailed": "APIトークンの読み込みに失敗しました",
       "createFailed": "トークンの作成に失敗しました",
-      "revokeFailed": "トークンの取り消しに失敗しました"
+      "revokeFailed": "トークンの取り消しに失敗しました",
+      "reauthFailed": "再認証の確認に失敗しました"
+    },
+    "stepUp": {
+      "reason": "トークンを使うとサインインせずにアカウントにアクセスできるため、作成する前に本人確認を行ってください。"
     },
     "relative": {
-      "never": "なし",
-      "today": "今日",
-      "yesterday": "昨日",
-      "daysAgo": "{count}日前",
-      "monthsAgo": "{count}ヶ月前"
+      "never": "なし"
     }
   },
   "autoBackup": {
     "heading": "自動バックアップ",
-    "description": "スケジュールに従ってフォルダーにデータを自動でバックアップします。MonizeはDockerで動作しているため、ホストフォルダーをボリュームとしてコンテナにマップする必要があります（例: -v /host/backups:/data/backups）。",
-    "adminManagedNote": "これらの設定を変更できるのは管理者のみです。他のすべてのユーザーは、同じスケジュールと保持ポリシーで、それぞれ専用のフォルダーに自動的にバックアップされます。",
+    "description": "デプロイ全体で 1 つのスケジュールです。サーバーはすべてのアカウントのデータを下記のストレージにバックアップします。Monize は Docker で動作するため、ローカルフォルダーをボリュームとしてコンテナーにマウントする必要があります (例: -v /host/backups:/data/backups)。",
+    "adminManagedNote": "このポリシーを変更できるのは管理者のみで、このデプロイのすべてのアカウントに適用されます。各アカウントはそれぞれ専用のフォルダーに保存されます。",
+    "demoDisabledNote": "デモモードではこれらのコントロールは読み取り専用です。",
     "loadingText": "読み込み中...",
     "enableLabel": "自動バックアップを有効化",
     "backupFolderLabel": "バックアップフォルダー",
     "backupFolderPlaceholder": "/data/backups",
-    "perUserFolderHelp": "各ユーザーのバックアップは、このフォルダー内にあるユーザーIDを名前とする専用フォルダーに保存されます。",
-    "perUserFolderHelpWithPath": "各ユーザーのバックアップは、このフォルダー内にあるユーザーIDを名前とする専用フォルダーに保存されます。あなたのフォルダー: {path}",
+    "perUserFolderHelp": "各アカウントのバックアップは、このフォルダー内のアカウント ID 名の専用フォルダーに保存されます。",
+    "perUserFolderHelpWithPath": "各アカウントのバックアップは、このフォルダー内のアカウント ID 名の専用フォルダーに保存されます。例: {path}",
     "browseButton": "参照...",
     "validateButton": "検証",
     "validatingButton": "検証中...",
@@ -471,26 +705,26 @@
       "monthlyHelp": "月1回保持"
     },
     "status": {
-      "heading": "状態",
-      "lastBackup": "前回のバックアップ",
-      "nextBackup": "次回のバックアップ",
+      "heading": "デプロイの状態",
+      "lastBackup": "直近のバックアップ",
+      "nextBackup": "次回の予定バックアップ",
       "error": "エラー",
       "success": "成功",
-      "failed": "失敗",
-      "partial": "不完全"
+      "partial": "不完全",
+      "failed": "失敗"
     },
-    "saveButton": "設定を保存",
-    "savingButton": "保存中...",
-    "runNowButton": "今すぐバックアップを実行",
-    "runningButton": "バックアップを実行中...",
+    "saveButton": "ポリシーを保存",
+    "runNowButton": "今すぐ全アカウントをバックアップ",
+    "runningButton": "バックアップ中...",
     "toasts": {
-      "saved": "自動バックアップ設定を保存しました",
-      "backupCreated": "バックアップを作成しました: {filename}",
+      "saved": "バックアップポリシーを保存し、すべてのアカウントに適用しました",
       "folderValid": "フォルダーは有効で書き込み可能です",
       "loadFailed": "自動バックアップ設定の読み込みに失敗しました",
       "saveFailed": "設定の保存に失敗しました",
       "runFailed": "バックアップの実行に失敗しました",
-      "browseFailed": "フォルダーの参照に失敗しました"
+      "browseFailed": "フォルダーの参照に失敗しました",
+      "backupRunFinished": "{requested} 件中 {backedUp} 件のアカウントをバックアップしました",
+      "backupRunIncomplete": "{requested} 件中 {backedUp} 件をバックアップ: {partial} 件が不完全、{failed} 件が失敗。下の状態を確認してください。"
     },
     "folderErrors": {
       "required": "フォルダーパスは必須です",
@@ -505,9 +739,22 @@
     },
     "noStorage": {
       "title": "このデプロイにはバックアップ用ストレージがありません",
-      "body": "自動バックアップは {folderPath} に書き込まれますが、このデプロイからは書き込めません。スケジュールを実行する前に、管理者がそこにストレージをマウントする必要があります。"
+      "body": "自動バックアップは {folderPath} に書き込まれますが、このデプロイはそこに書き込めません。スケジュールを実行する前に、管理者がそのストレージを利用可能にする必要があります。"
     },
-    "never": "なし"
+    "never": "なし",
+    "coverage": {
+      "accounts": "このデプロイの有効なアカウント {total} 件のうち {scheduled} 件で予定されています。",
+      "unknown": "このポリシーがどこまで届いているかは取得できません。"
+    },
+    "storage": {
+      "heading": "バックアップの保存先",
+      "providerLocal": "ローカルフォルダー",
+      "providerS3": "S3 互換オブジェクトストレージ",
+      "providerUnknown": "保存先",
+      "localHelp": "BACKUP_STORAGE_PROVIDER で設定されます。各アカウントのバックアップは、このフォルダー内のアカウント ID 名の専用フォルダーに保存されます。",
+      "fixedHelp": "BACKUP_STORAGE_PROVIDER で設定されます。バケットとキープレフィックスはデプロイのものなので、ここで選べるフォルダーはありません。各アカウントのバックアップは専用のキープレフィックスの下に保存されます。",
+      "artifactCount": "このストレージには現在、あなたのアカウントのバックアップファイルが {count} 件あります。ストレージを切り替えても既存のバックアップは移動しません。"
+    }
   },
   "backupRestore": {
     "heading": "バックアップと復元",
@@ -557,8 +804,8 @@
       },
       "toasts": {
         "success": "バックアップを正常にダウンロードしました",
-        "incomplete": "バックアップをダウンロードしましたが、内容は不完全です: {total} 件のうち {unusable} 件の添付ファイルを完全な状態で保存できませんでした（{missing} 件が欠落、{inconsistent} 件が整合性チェックに失敗）。このファイルを完全なバックアップとして扱わないでください。添付ファイルのストレージを修復してから再度エクスポートしてください。",
-        "failed": "バックアップの作成に失敗しました"
+        "failed": "バックアップの作成に失敗しました",
+        "incomplete": "バックアップをダウンロードしましたが、内容は不完全です: {total} 件のうち {unusable} 件の添付ファイルを完全な状態で保存できませんでした（{missing} 件が欠落、{inconsistent} 件が整合性チェックに失敗）。このファイルを完全なバックアップとして扱わないでください。添付ファイルのストレージを修復してから再度エクスポートしてください。"
       }
     },
     "restore": {
@@ -580,16 +827,130 @@
         "pleaseEnterPassword": "確認のためにパスワードを入力してください",
         "encryptedNeedsPassword": "このバックアップは暗号化されています。「バックアップパスワード」フィールドに作成時のパスワードを入力してから再試行してください。",
         "failed": "バックアップの復元に失敗しました",
+        "interrupted": "サーバーが応答する前に復元が中断されました。復元はすべて適用されるか、まったく適用されないかのどちらかのため、データは完全に復元されているか、変更されていないかのいずれかです。再試行する前にページを再読み込みして確認してください。",
         "reauthRedirect": "本人確認のため、IDプロバイダーへ移動します。戻ったら、バックアップファイルをもう一度選択してください。"
-      }
+      },
+      "selectedFile": "選択中: {filename}"
     },
     "restoreResult": {
       "title": "復元完了",
-      "description": "データが正常に復元されました。復元された内容のサマリー:",
       "totalRecords": "総レコード数",
-      "doneButton": "完了",
       "skippedAttachments": "{count, plural, other {# 件の添付ファイルが復元されませんでした}}: バックアップに使用可能なバイト列が含まれていませんでした。エクスポート時に欠落していたかチェックサムに失敗したか、あるいはファイルが自己完結型バックアップより前のものです。添付ファイルのストレージが正常になってから新しいバックアップを取得してください。",
-      "unusableAiProviderKeys": "{count, plural, other {# 件の AI プロバイダーが使用可能な API キーなしで復元されました}}: このバックアップはプロバイダーのキーが含まれるようになる前に作成されたため、保存されているキーはファイルを作成したサーバーのものです。あるいは、このサーバーにはキーを保存するための暗号化キーが設定されていません。設定 → AIプロバイダー を開き、API キーを入力し直してください。"
+      "unusableAiProviderKeys": "{count, plural, other {# 件の AI プロバイダーが使用可能な API キーなしで復元されました}}: このバックアップはプロバイダーのキーが含まれるようになる前に作成されたため、保存されているキーはファイルを作成したサーバーのものです。あるいは、このサーバーにはキーを保存するための暗号化キーが設定されていません。設定 → AIプロバイダー を開き、API キーを入力し直してください。",
+      "unlinkedBondSecurities": "{count, plural, other {# 件の債券銘柄が債券商品とのリンクなしで復元されました}}: このサーバーの債券カタログにはそのシリーズがない（または別の通貨で登録されている）ため、債券エンジンはこれらを評価せず、計算済みの価格も復元されませんでした。各銘柄を開き、債券商品に再度リンクしてください。",
+      "unlinkedBondSeries": "{count, plural, other {債券取引 # 件がシリーズを失いました}}。公式ソースからシリーズを取得できなかったためです。シリーズなしで復元され、取得するまでそのままです。",
+      "unrecoveredBondSeries": "バックアップに記載されていたが取得できなかった債券シリーズ: {count} 件。",
+      "unrecoveredBondSeriesItem": "{series}（{country}）：{reason}",
+      "unrecoveredBondSeriesMore": "ほか {count} 件",
+      "unrecoveredBondSeriesAction": "復元するには、債券銘柄を開き、そのページでシリーズを取得（更新）して、シリーズのない取引でシリーズを選択してください。",
+      "unrecoveredBondSeriesReason": {
+        "not-published": "発行体がこのシリーズをまだ公表していません",
+        "source-unavailable": "公式ソースが応答しませんでした。しばらくしてからもう一度お試しください",
+        "no-adapter": "このサーバーには、この発行体の国のソースがありません",
+        "refused": "公式ソースの応答が受け入れられませんでした",
+        "rate-limited": "公式ソースから速度を落とすよう求められました。しばらくしてからもう一度お試しください",
+        "not-attempted": "1 回の復元でシリーズが多すぎるため、試行しませんでした",
+        "other": "原因不明"
+      },
+      "doneButton": "完了",
+      "unlinkedBondSecuritiesList": "対象の銘柄: {symbols}。",
+      "unlinkedBondSecuritiesMore": "ほか{count}件",
+      "currencyKindMismatchAccounts": "{count, plural, other {# 件の口座が、口座の種類と合わない種別の通貨で復元されました}}。暗号資産口座には暗号資産が、それ以外の口座には法定通貨が必要ですが、このサーバーではその通貨が逆の種別になっています。口座の通貨を変更するか、通貨ページで通貨の種別を変更してください。",
+      "currencyKindMismatchAccountsList": "対象の口座: {names}。",
+      "currencyKindMismatchSecurities": "{count, plural, other {# 件の銘柄}}がこのサーバーで暗号資産建てになっていますが、銘柄には法定通貨が必要です。銘柄の通貨を変更するか、通貨ページで通貨の種別を変更してください。",
+      "currencyKindMismatchSecuritiesList": "対象の銘柄: {symbols}。",
+      "currencyKindMismatchMore": "ほか{count}件",
+      "currencyKindMismatchDefaultCurrency": "デフォルト通貨の {code} はこのサーバーでは暗号資産ですが、合計とレポートは常に法定通貨で表示されます。設定で法定通貨をデフォルト通貨として選んでください。",
+      "counts": {
+        "sharedGroups": "共有支出グループ",
+        "sharedParticipants": "グループの参加者",
+        "sharedEntries": "グループの記録",
+        "sharedAllocations": "支出の配分",
+        "sharedActivity": "グループのアクティビティ",
+        "sharedPeople": "共有支出の連絡先",
+        "sharedPersonLinks": "リンクされた連絡先",
+        "sharedIntegrations": "個人の家計との連携",
+        "sharedPostings": "共有支出の個人記帳",
+        "sharedLedgerLinks": "リンクされた個人取引",
+        "budgetBuckets": "予算のバケット",
+        "budgetPeriodBuckets": "予算期間のバケット"
+      }
+    },
+    "storedBackups": {
+      "heading": "自動バックアップ",
+      "description": "このサーバーが独自のスケジュールで作成したバックアップです。手元に保管する場合はダウンロードし、復元する場合は下のフォームから行ってください。",
+      "adminScheduleNote": "自動バックアップの設定は<link>管理 → バックアップ</link>にあります。",
+      "loading": "バックアップを読み込んでいます...",
+      "loadFailed": "サーバーに保存されたバックアップを読み込めませんでした",
+      "retryButton": "再試行",
+      "empty": "このサーバーにはまだ自動バックアップがありません。",
+      "columns": {
+        "filename": "ファイル",
+        "modified": "更新日時",
+        "size": "サイズ",
+        "actions": "操作"
+      },
+      "downloadButton": "ダウンロード",
+      "restoreButton": "復元",
+      "workingButton": "処理中...",
+      "downloadFailed": "バックアップをダウンロードできませんでした",
+      "offsite": {
+        "disclosure": "オフサイトの送信先",
+        "disclosureDescription": "完全な自動バックアップが終わるたびに、暗号化されたコピーを S3 ストレージ、メール、またはその両方に送信できます。コピーは3つ、保管方法は2種類、うち1つはこのマシンの外です。送信されるのは暗号化されたバックアップのみです。",
+        "encryptionUnavailable": "このサーバーには暗号化キーが設定されていないため、ご自身のバケットの認証情報を保存できません。このサーバー自身のバケットとメールでのコピーは引き続き利用できます。",
+        "loading": "オフサイトの送信先を読み込んでいます...",
+        "loadFailed": "オフサイトのバックアップ送信先を読み込めませんでした",
+        "retryButton": "再試行",
+        "demoNote": "デモではオフサイトの送信先を変更できません。",
+        "saveButton": "送信先を保存",
+        "saved": "オフサイトの送信先を保存しました",
+        "saveFailed": "オフサイトのバックアップ送信先を保存できませんでした",
+        "s3": {
+          "heading": "S3 ストレージ",
+          "modeLabel": "コピーの送信先",
+          "modeOff": "オフ",
+          "modeDeployment": "このサーバーのバケット",
+          "modeOwn": "自分のバケット",
+          "deploymentUnavailable": "このサーバーには専用のオフサイトバケットがないため、管理者が用意する必要があります。代わりにご自身のバケットを使用できます。",
+          "bucketLabel": "バケット",
+          "regionLabel": "リージョン",
+          "regionHelp": "S3 互換サービスの多くはこれを無視します。",
+          "prefixLabel": "キープレフィックス",
+          "prefixHelp": "バケット内の任意のフォルダーです。他のデータと同じバケットを共有できます。",
+          "endpointLabel": "エンドポイント",
+          "endpointHelp": "MinIO、R2、B2 などの S3 互換サービス専用です。AWS の場合は空のままにします。",
+          "forcePathStyleLabel": "パス形式のアドレスを使用",
+          "forcePathStyleHelp": "MinIO や一部の S3 互換サービスで必要です。",
+          "accessKeyIdLabel": "アクセスキー ID",
+          "secretAccessKeyLabel": "シークレットアクセスキー",
+          "storedPlaceholder": "•••• 保存済み",
+          "credentialsHelp": "認証情報はこのサーバーに暗号化して保存され、再表示されることはありません。保存済みのものを残す場合は空欄のままにしてください。",
+          "clearCredentialsButton": "保存した認証情報を削除",
+          "clearConfirmTitle": "保存した認証情報を削除しますか？",
+          "clearConfirmMessage": "このサーバーはアクセスキー ID とシークレットアクセスキーを破棄します。再入力するまで、バケットへのコピーは送信されません。",
+          "credentialsCleared": "保存した認証情報を削除しました",
+          "clearFailed": "保存した認証情報を削除できませんでした"
+        },
+        "email": {
+          "heading": "メール",
+          "toggleLabel": "完了した自動バックアップのコピーをメールで受け取る",
+          "addressLabel": "コピーの送信先アドレス",
+          "addressPlaceholder": "user@example.com",
+          "sizeNote": "このサーバーのサイズ上限を超えるバックアップは添付されず、代わりにファイル名を知らせる通知が届きます。"
+        },
+        "rowStatus": {
+          "iconTitle": "{destination}: {status}",
+          "destinationS3": "S3",
+          "destinationEmail": "メール",
+          "statusPending": "保留中",
+          "statusUploading": "送信中",
+          "statusUploaded": "コピー済み",
+          "statusFailed": "失敗",
+          "statusConflict": "競合",
+          "statusSkippedUnencrypted": "スキップ: 未暗号化",
+          "statusSkippedTooLarge": "スキップ: サイズ超過"
+        }
+      }
     }
   },
   "sharedAccess": {
@@ -659,16 +1020,57 @@
       "sections": "セクション",
       "shared": "共有データ"
     },
+    "ops": {
+      "read": "閲覧",
+      "create": "作成",
+      "edit": "編集",
+      "delete": "削除",
+      "joint": "共同"
+    },
     "sections": {
-      "description": "アプリセクション全体への読み取り専用アクセスを付与します。口座スコープのデータには口座ごとのアクセスも必要です。"
+      "description": "アプリセクション全体への読み取り専用アクセスを付与します。口座スコープのデータには口座ごとのアクセスも必要です。",
+      "bills": {
+        "label": "請求書・入金",
+        "description": "付与した口座の予定取引"
+      },
+      "investments": {
+        "label": "投資",
+        "description": "付与した口座の保有資産と投資取引"
+      },
+      "budgets": {
+        "label": "予算",
+        "description": "予算の数値（閲覧のみ）"
+      },
+      "reports": {
+        "label": "レポート",
+        "description": "レポート（閲覧のみ）"
+      },
+      "ai": {
+        "label": "AI アシスタント",
+        "description": "所有者が設定した AI プロバイダーを使用します"
+      },
+      "aiRequiresFullAccess": "AI アシスタントはすべての口座とセクションを横断して読み取るため、このデリゲートがすべての口座と他のすべてのセクションを閲覧できる場合にのみ回答します。",
+      "warranties": {
+        "label": "保証",
+        "description": "保証とその書類、保証請求。リンクされた購入は、このデリゲートが閲覧できる口座のものだけが表示されます。"
+      },
+      "toggleLabel": "{section} セクション"
     },
     "accounts": {
       "noAccounts": "付与する口座がありません。",
       "grantAll": "すべて付与",
-      "jointRequiresFullAccount": "共同口座は、自分のMonizeアカウントを持つユーザーとのみ共有できます"
+      "jointRequiresFullAccount": "共同口座は、自分のMonizeアカウントを持つユーザーとのみ共有できます",
+      "grantAllLabel": "すべての{type}口座に{op}",
+      "grantLabel": "{account} への{op}アクセス"
     },
     "shared": {
-      "description": "支払先、カテゴリ、タグの読み取りは常に許可されています。これは作成/編集/削除を制御します。"
+      "description": "支払先、カテゴリ、タグの読み取りは常に許可されています。これは作成/編集/削除を制御します。",
+      "toggleLabel": "{op} {resource}",
+      "resources": {
+        "payees": "支払先",
+        "categories": "カテゴリ",
+        "tags": "タグ"
+      }
     },
     "saveButton": "保存",
     "toasts": {
@@ -687,11 +1089,13 @@
     "emergencyAccess": "緊急アクセス",
     "apiAccess": "APIアクセス",
     "aiSettings": "AI設定",
+    "emailReceipts": "メールレシート",
     "backupRestore": "バックアップと復元",
-    "autoBackup": "自動バックアップ",
     "help": "ヘルプ＆サポート",
     "dangerZone": "危険な操作",
-    "about": "このアプリについて"
+    "about": "このアプリについて",
+    "payeeLookup": "支払先検索",
+    "bankSync": "銀行同期"
   },
   "page": {
     "title": "設定",
@@ -715,6 +1119,14 @@
       "title": "AI設定",
       "description": "AIプロバイダーの設定、APIキーの管理、使用統計の確認をします。"
     },
+    "emailReceiptsCard": {
+      "title": "メールレシート",
+      "description": "注文確認メール用のメールボックスを接続し、それを読み取るプロファイルを管理します。"
+    },
+    "bankSyncCard": {
+      "title": "銀行同期",
+      "description": "オープンバンキングで銀行に接続し、計上済みの取引を口座にインポートします。"
+    },
     "delegateSecurityError": "セキュリティ設定を読み込めません。",
     "toasts": {
       "securityLoadFailed": "セキュリティ設定の読み込みに失敗しました",
@@ -732,6 +1144,14 @@
       "enabled": "フローティングチャットバブルを有効にしました",
       "disabled": "フローティングチャットバブルを無効にしました",
       "saveFailed": "チャットバブルの設定を更新できませんでした"
+    },
+    "trivia": {
+      "title": "AI トリビア",
+      "subtitle": "ダッシュボードのトリビアウィジェットに、純資産と投資に関する情報を表示します。毎朝再生成され、プロバイダーを設定している場合は AI が文章を作成します。ウィジェットはダッシュボードのカスタマイズから追加できます。オフにすると、ウィジェットには何も表示されず、プロバイダーにも問い合わせません。",
+      "toggleLabel": "ダッシュボードのトリビアウィジェットに AI トリビアを表示する",
+      "enabled": "AI トリビアを有効にしました",
+      "disabled": "AI トリビアを無効にしました",
+      "saveFailed": "AI トリビアの設定を更新できませんでした"
     },
     "demoRestricted": {
       "heading": "デモモードでは制限されています",
@@ -812,7 +1232,6 @@
       "editMessageButton": "編集",
       "messagePlaceholder": "メモ、指示、重要な書類の場所...",
       "maxCharsNote": "最大4000文字。暗号化して保存されます。",
-      "cancelButton": "キャンセル",
       "saveButton": "メッセージを保存",
       "toasts": {
         "saved": "メッセージを保存しました",
@@ -857,7 +1276,7 @@
       "grantStatus": "付与状態: ",
       "unknown": "不明",
       "never": "なし",
-      "daysAgo": "{count}日{plural}前",
+      "withRelative": "{timestamp}（{relative}）",
       "grantedOn": "{timestamp}に付与されました",
       "notYetGranted": "まだ付与されていません",
       "timerNote": "タイマーはアプリを使用するたびに自動的にリセットされます — サインイン、ページの閲覧、取引の記録など、認証されたすべての操作が対象です。"
@@ -874,6 +1293,17 @@
     },
     "stepUp": {
       "reason": "緊急アクセスメッセージを閲覧または編集するには身元を再確認してください。"
+    },
+    "validation": {
+      "wholeDays": "日数は整数で入力してください",
+      "minDays": "{min, plural, other {# 日以上にしてください}}",
+      "maxDays": "{max, plural, other {# 日以下にしてください}}",
+      "reminderBeforeGrant": "リマインダーの日数は付与までの日数より少なくしてください",
+      "messageMax": "メッセージは {max} 文字以内にしてください",
+      "firstNameRequired": "名は必須です",
+      "firstNameMax": "名は {max} 文字以内にしてください",
+      "emailInvalid": "有効なメールアドレスを入力してください",
+      "emailMax": "メールアドレスは {max} 文字以内にしてください"
     },
     "toasts": {
       "loadFailed": "緊急アクセスの読み込みに失敗しました",
@@ -908,6 +1338,10 @@
       "editButton": "編集",
       "deleteButton": "削除"
     },
+    "deleteDialog": {
+      "title": "AIプロバイダーを削除",
+      "message": "{name} を削除しますか？保存されている API キーも一緒に削除されます。この操作は元に戻せません。"
+    },
     "configForm": {
       "addTitle": "AIプロバイダーを追加",
       "editTitle": "プロバイダーを編集",
@@ -919,6 +1353,7 @@
       "ollamaCloudNote": "モデル名には -cloud サフィックスを含める必要があります（例: gpt-oss:20b-cloud）。",
       "apiKeyLabel": "APIキー",
       "baseUrlLabel": "ベースURL",
+      "baseUrlPrivateNote": "プライベートまたはローカルのアドレス（localhost、192.168.x.x、コンテナ名）は、管理者の場合、またはサーバー運用者がそのアドレスを許可している場合にのみ使用できます。それ以外の場合は、インターネットから到達可能なアドレスを使用してください。",
       "priorityLabel": "優先度",
       "priorityHelp": "数値が小さいほど優先度が高くなります。フォールバックの順序に使用されます。",
       "costRatesHeading": "コスト率（任意）",
@@ -1027,5 +1462,468 @@
       "all": "全期間"
     },
     "estCostTooltip": "各プロバイダーで設定したコスト率を使用して推定されています。対応する料金が設定されていないアクティビティは除外されます。"
+  },
+  "payeeLookup": {
+    "title": "支払先検索",
+    "subtitle": "支払先のウェブサイト、住所、メール、電話番号の取得元と、検索が自動的に実行されるタイミング。",
+    "saved": "支払先検索の設定を保存しました",
+    "saveFailed": "支払先検索の設定を保存できませんでした",
+    "loadFailed": "支払先検索の設定を読み込めませんでした。ページを再読み込みしてやり直してください。",
+    "googlePlaces": {
+      "toggleLabel": "支払先検索に Google Places を使う",
+      "notConfigured": "Google Places の API キーを追加すると、AI プロバイダーではなく Google のディレクトリから事業者を検索します。",
+      "operatorManaged": "このサーバーの管理者が設定しています。ご自身の支払先についてはオフにできます。",
+      "configure": "設定する",
+      "edit": "編集",
+      "removeKey": "キーを削除",
+      "usage": "今月の使用: {cap} 件中 {used} 件",
+      "usageNoCap": "今月の使用: {used} 件。月間上限なし。",
+      "keyUnreadable": "保存された API キーをこのサーバーが読み取れません。バックアップを別のインスタンスに復元した場合や、暗号化キーが変更された場合に起こります。キーを入力し直してください。",
+      "encryptionUnavailable": "このサーバーには暗号化キーが設定されていないため、API キーを安全に保存できません。管理者に設定を依頼してください。",
+      "modalTitle": "Google Places",
+      "modalSubtitle": "Monize は支払先の名前と、すでに登録済みの住所を Google に送信します。Google 側には何も保存しません。",
+      "apiKeyLabel": "API キー",
+      "apiKeyPlaceholder": "Google Places の API キーを貼り付け",
+      "apiKeyHelp": "Google Cloud コンソールで Places API (New) を有効にしたキーを作成してください。保存済みのキーをそのまま使う場合は空欄のままにします。",
+      "capToggleLabel": "毎月のリクエスト数を制限する",
+      "capHelp": "この検索に必要なフィールドについて、Google は毎月 {free} 件の Text Search リクエストを無料で提供します。上限を超えると、検索は AI プロバイダーに切り替わります。",
+      "capLabel": "月あたりのリクエスト数",
+      "capRange": "{min} から {max} までの数値を入力してください。",
+      "test": "テスト",
+      "testing": "テスト中...",
+      "testSuccess": "Google がキーを受け付けました。",
+      "save": "保存",
+      "cancel": "キャンセル",
+      "setupInstructions": "セットアップ手順"
+    },
+    "automatic": {
+      "title": "支払先の連絡先を自動で検索",
+      "subtitle": "新しい支払先のウェブサイト・住所・メールアドレス・電話番号を自動で検索します。支払先の名前に加えて、すでに登録されているメモ・ウェブサイト・住所・メールアドレス・電話番号も送信され、正しい事業者と店舗を区別できるようにします。",
+      "toggleLabel": "支払先の連絡先の自動検索を有効にする",
+      "enabled": "支払先の連絡先の自動検索を有効にしました",
+      "disabled": "支払先の連絡先の自動検索を無効にしました",
+      "saveFailed": "支払先の連絡先検索の設定を更新できませんでした",
+      "noSource": "支払先を自動的に検索するには、上のいずれかのソースをオンにしてください。両方オフの場合、検索に回答できるものはありません。"
+    },
+    "order": {
+      "title": "最初に問い合わせるソース",
+      "placesTitle": "Google Places",
+      "placesHelp": "ディレクトリの事実で、1 回あたりの費用が安価です。Google はメールアドレスを保持していません。",
+      "aiTitle": "既存の AI プロバイダー",
+      "aiHelp": "メールアドレスを見つけられますが、検索のたびにモデル呼び出しの費用がかかります。",
+      "aiToggleLabel": "支払先検索に AI プロバイダーを使用する",
+      "aiProviderLabel": "使用するプロバイダー",
+      "aiProviderAny": "任意のプロバイダー（優先順位順）",
+      "moveUp": "上へ移動",
+      "moveDown": "下へ移動"
+    }
+  },
+  "bankSync": {
+    "backLink": "設定に戻る",
+    "title": "銀行同期",
+    "subtitle": "オープンバンキングを通じて、銀行口座の計上済みの取引をインポートします",
+    "demoRestricted": {
+      "heading": "デモモードでは制限されています",
+      "body": "デモモードでは銀行同期は無効になっています。"
+    },
+    "loadFailed": {
+      "title": "銀行同期を読み込めませんでした",
+      "retry": "再試行"
+    },
+    "credentials": {
+      "title": "Enable Banking アプリケーション",
+      "subtitle": "Monize は、お客様ご自身の Enable Banking アプリケーションを通じて銀行口座を読み取ります。Enable Banking のコントロールパネルでアプリケーションを登録し、そのアプリケーション ID と秘密鍵をここに入力してください。",
+      "notConfigured": "アプリケーションはまだ設定されていません。",
+      "applicationId": "アプリケーション ID",
+      "keyStored": "秘密鍵が保存されています。",
+      "keyMissing": "秘密鍵が保存されていません。",
+      "configure": "認証情報を設定",
+      "edit": "認証情報を編集",
+      "remove": "認証情報を削除",
+      "test": "接続をテスト",
+      "testing": "テスト中...",
+      "encryptionUnavailable": "このサーバーには暗号化キーが設定されていないため、認証情報を保存できません。",
+      "redirectUrlLabel": "リダイレクト URL",
+      "redirectUrlHelp": "この URL をそのまま、Enable Banking のコントロールパネルにリダイレクト URL として登録してください。アクセスを承認すると、銀行からこの URL に戻ります。",
+      "redirectUrlNotPublic": "リダイレクト URL はインターネットから到達できる必要はありません。開くのはご自身のブラウザーだけです。",
+      "redirectUrlHttpWarning": "「Production」アプリケーションが受け付けるのは https のリダイレクト URL のみです。この URL は http を使用しているため、「Sandbox」アプリケーションでのみ動作します。PUBLIC_APP_URL を Monize の https アドレスに設定してください。",
+      "copy": "コピー",
+      "copied": "コピーしました",
+      "copyFailed": "コピーできませんでした",
+      "testSuccess": "アプリケーションは動作しています: {name}",
+      "testSuccessNoName": "アプリケーションは動作しています。",
+      "testRedirectMissing": "アプリケーションは動作していますが、上記のリダイレクト URL が登録されていません。Enable Banking のコントロールパネルで追加してください。",
+      "testFailed": "プロバイダーはこの認証情報を受け付けませんでした。",
+      "testError": "認証情報をテストできませんでした",
+      "saved": "認証情報を保存しました。「接続をテスト」で確認してください。",
+      "saveFailed": "認証情報を保存できませんでした",
+      "removed": "認証情報を削除しました",
+      "removeFailed": "認証情報を削除できませんでした",
+      "removeConfirm": {
+        "title": "認証情報を削除",
+        "message": "保存されているアプリケーション ID と秘密鍵が Monize から削除されます。銀行に接続したり同期したりするには、あらためて入力する必要があります。",
+        "confirm": "削除"
+      },
+      "help": {
+        "show": "セットアップのヘルプを表示",
+        "hide": "セットアップのヘルプを非表示",
+        "whatIsTitle": "Enable Banking とは？",
+        "whatIsBody": "Enable Banking は、PSD2 に基づき EU で口座情報サービス提供者 (AISP) として認可を受けた企業です。お客様に代わって銀行に接続し、Monize に口座、残高、取引への読み取り専用のアクセスを提供します。サインインはお客様ご自身の銀行で行います。Monize と Enable Banking が銀行のパスワードを見ることはありません。Enable Banking は欧州経済領域の銀行に対応しています。",
+        "dataFlow": "銀行を接続すると、Enable Banking はお客様の銀行データを読み取ることができます。口座データは、Monize に届く途中で Enable Banking のサービスを通過します。Enable Banking は、このデータを保存しないとしています。同社の規約が適用されます：<terms>Enable Banking API 利用規約</terms>。",
+        "whatIsFree": "個人で利用する場合は、制限付き本番モードの無料アプリケーションで十分です。コントロールパネルでリンクした口座だけを読み取ります。",
+        "setupTitle": "セットアップの手順",
+        "step1": "<link>Enable Banking</link> でアカウントを作成します (「Get Started」を選択し、確認メールが届くまで待ちます)。その後、コントロールパネルにサインインし、「API applications」を開きます。",
+        "step2": "「Production」を選択します。Monize は、Production アプリケーションを通してのみ実際の銀行口座を読み取ります。先に接続を試したい場合にのみ「Sandbox」を選択します。Sandbox にはテスト用の銀行のデモデータしか表示されません。",
+        "step3": "秘密鍵には「Generate in the browser」を選択したままにします。",
+        "step4": "下の値をフォームに入力します。「Production」の場合は、すべての項目が必須です。",
+        "registrationValuesTitle": "フォームに貼り付ける値",
+        "registrationValuesNote": "コントロールパネルが英語のため、ラベルと値は英語のままです。",
+        "registrationTemplatesNote": "2つの URL は Monize のテンプレートを指しています。制限付きモードでは、Enable Banking はこれらを確認しません。ほかの人も Monize のインスタンスを使う場合は、代わりにご自身の名前で独自のページを公開してください。",
+        "emailPlaceholder": "あなたのメールアドレス",
+        "copyField": "{field} をコピー",
+        "step5": "「Register」を選択します。ブラウザーが秘密鍵ファイル (.pem) を保存します。このファイルは他人に見せないでください。",
+        "step6": "「Production」の場合、新しいアプリケーションには「Inactive」と表示されます。「Activate by linking accounts」を選択し、国、ご利用の銀行、利用タイプ（個人口座は「personal」、法人口座は「business」）を選択して、「Link」を選択します。続いて銀行にサインインし、口座を承認します。「Request activation」は選択しないでください。これは一般提供を申請するもので、個人で使用する場合は必要ありません。口座をリンクしないと、銀行は口座を返しません。後で Monize で銀行を接続するときは、同じ利用タイプを選択します。",
+        "step7": "アプリケーション一覧にあるアプリケーション ID を入力し、秘密鍵ファイルをここに読み込みます。",
+        "sandboxNote": "Sandbox アプリケーションの取引はデモデータです。Sandbox の銀行口座は、Monize のテスト用口座にのみリンクし、実際の取引が入っている口座にはリンクしないでください。",
+        "networkTitle": "ネットワークアクセス",
+        "networkBody": "銀行からの戻り時には、お使いのブラウザがリダイレクト URL を開きます。Enable Banking のサーバーが Monize に接続することはありません。そのため、Monize にインターネットや Enable Banking の IP アドレスから到達できる必要はありません。リダイレクト URL は、アクセスの承認に使用するブラウザで開ける必要があります。",
+        "networkOutbound": "Monize サーバーは、HTTPS (ポート 443) で api.enablebanking.com に接続できる必要があります。"
+      },
+      "modalSource": "アプリケーション ID と秘密鍵は、<link>Enable Banking のコントロールパネル</link>で取得してください。"
+    },
+    "credentialsModal": {
+      "title": "Enable Banking の認証情報",
+      "subtitle": "このサーバーに暗号化して保存されます。秘密鍵が再び表示されることはありません。",
+      "applicationIdLabel": "アプリケーション ID",
+      "applicationIdPlaceholder": "Enable Banking アプリケーションの ID",
+      "applicationIdRequired": "アプリケーション ID を入力してください",
+      "applicationIdTooLong": "アプリケーション ID が長すぎます",
+      "privateKeyLabel": "秘密鍵 (PEM)",
+      "privateKeyPlaceholder": "アプリケーションの PEM 秘密鍵を貼り付けてください",
+      "privateKeyStoredPlaceholder": "キーが保存されています。そのまま使う場合は空欄のままにし、置き換える場合は新しいキーを貼り付けてください。",
+      "privateKeyHelp": "アプリケーションの登録時にダウンロードした PEM ファイルの内容をすべて貼り付けてください。",
+      "privateKeyRequired": "秘密鍵を入力してください",
+      "privateKeyInvalid": "PEM 形式の秘密鍵ではないようです。BEGIN で始まり PRIVATE KEY で終わるブロックである必要があります。",
+      "privateKeyTooLong": "秘密鍵が長すぎます",
+      "loadKeyFile": "鍵ファイルを読み込む",
+      "keyFileTooLarge": "ファイルが 16 KB を超えています。Enable Banking が保存した .pem ファイルを選択してください。",
+      "keyFileReadFailed": "ファイルを読み取れませんでした。",
+      "cancel": "キャンセル",
+      "save": "保存",
+      "saving": "保存中..."
+    },
+    "connections": {
+      "title": "接続済みの銀行",
+      "subtitle": "各銀行口座は Monize の 1 つの口座にリンクされ、計上済みの取引がその口座にインポートされます。",
+      "connect": "銀行に接続",
+      "credentialsFirst": "銀行に接続する前に、上で Enable Banking の認証情報を設定してください。",
+      "loadFailed": "銀行の接続を読み込めませんでした。",
+      "empty": {
+        "title": "接続済みの銀行はありません",
+        "description": "銀行に接続すると、計上済みの取引を Monize の口座にインポートできます。"
+      }
+    },
+    "connect": {
+      "title": "銀行に接続",
+      "subtitle": "読み取り専用のアクセスを承認するため、銀行のサイトに移動します。",
+      "whySecondAuthorization": "Enable Banking のコントロールパネルで同じ口座をすでにリンクしている場合でも、ここで銀行での認可をもう一度行います。コントロールパネルは、アプリケーションが読み取れる口座を一覧にするだけで、その同意は当日中に終了します。この手順で、Monize は残高と取引を読み取るための独自の同意を、最長 180 日間得ます。終了が近づくと、接続カードに「同意を更新」と表示されます。",
+      "countryLabel": "国",
+      "countryPlaceholder": "国を選択",
+      "institutionLabel": "銀行",
+      "institutionPlaceholder": "銀行を検索",
+      "institutionsLoading": "銀行を読み込み中...",
+      "institutionsFailed": "銀行の一覧を読み込めませんでした。",
+      "retry": "再試行",
+      "noInstitutions": "プロバイダーはこの国の銀行を提供していません。",
+      "psuTypeLabel": "口座名義人",
+      "psuPersonal": "個人",
+      "psuBusiness": "法人",
+      "consentDays": "{days, plural, other {この銀行のアクセスは最長 # 日間有効で、その後は更新が必要です。}}",
+      "continue": "銀行に進む",
+      "continuing": "接続中...",
+      "cancel": "キャンセル",
+      "unsafeUrl": "サーバーから返された銀行のアドレスは安全な https アドレスではないため、Monize は開きませんでした。",
+      "failed": "接続を開始できませんでした"
+    },
+    "connection": {
+      "status": {
+        "pending": "保留中",
+        "active": "有効",
+        "expired": "期限切れ",
+        "revoked": "取り消し済み",
+        "failed": "失敗"
+      },
+      "validUntil": "アクセスの有効期限: {date}",
+      "expiresSoon": "まもなく期限切れ",
+      "autoSync": "1 日 1 回自動で同期する",
+      "autoSyncOn": "自動同期をオンにしました",
+      "autoSyncOff": "自動同期をオフにしました",
+      "autoSyncFailed": "自動同期を変更できませんでした",
+      "renew": "同意を更新",
+      "renewFailed": "更新を開始できませんでした",
+      "syncAll": "すべて同期",
+      "syncingAll": "同期中...",
+      "syncAllFailed": "この銀行を同期できませんでした",
+      "disconnect": "接続を解除",
+      "disconnected": "銀行の接続を解除しました",
+      "disconnectFailed": "銀行の接続を解除できませんでした",
+      "disconnectConfirm": {
+        "title": "{bank} の接続を解除",
+        "message": "Monize はこの銀行の同期を停止し、銀行にアクセスの終了を依頼します。すでにインポートした取引はそのまま残り、銀行に再接続しても二重にインポートされることはありません。",
+        "confirm": "接続を解除"
+      },
+      "pendingHint": "銀行での承認が完了しませんでした。同意を更新してやり直してください。リンク済みの口座はそのまま残ります。",
+      "noAccounts": "この接続について、銀行から口座が報告されていません。",
+      "accountsHeading": "銀行口座",
+      "matchAccounts": "口座番号で照合",
+      "matching": "照合中...",
+      "matchLinked": "{count, plural, other {銀行口座 # 件を、同じ番号の口座にリンクしました}}",
+      "matchSuggested": "{count, plural, other {銀行口座 # 件が複数の口座に一致しました: 口座を自分で選んでください}}",
+      "matchBoth": "{linked}。{suggested}",
+      "matchNone": "リンクした銀行口座はありません: あなたの口座のどれとも口座番号が一致しませんでした。",
+      "matchFailed": "銀行口座を照合できませんでした",
+      "syncAllNeedsPreview": "新しくリンクした各口座の最初のインポートを確認するまで、「すべて同期」は使えません。その口座の「今すぐ同期」でプレビューを開いてください。",
+      "notifySuccess": "毎日の同期後に通知する",
+      "notifySuccessOptions": {
+        "always": "同期のたびに",
+        "when_imported": "取引をインポートしたときのみ",
+        "never": "通知しない"
+      },
+      "notifySuccessSaved": "通知設定を保存しました",
+      "notifySuccessFailed": "通知設定を変更できませんでした",
+      "tagOperationType": "取引に銀行の操作種別のタグを付ける",
+      "tagOperationTypeHelp": "インポートした各取引に、カード払いや受取振込など、銀行の操作種別の名前を持つタグが付き、ルールやレポートで利用できます。",
+      "tagOperationTypeOn": "操作種別タグをオンにしました",
+      "tagOperationTypeOff": "操作種別タグをオフにしました",
+      "tagOperationTypeFailed": "操作種別タグを変更できませんでした"
+    },
+    "profileNotes": {
+      "title": "この銀行のAPIの仕組み",
+      "show": "この銀行のAPIの仕組みを表示",
+      "hide": "この銀行のAPIの仕組みを非表示",
+      "severity": {
+        "warning": "警告:",
+        "info": "メモ:"
+      }
+    },
+    "account": {
+      "unnamed": "名称未設定の銀行口座",
+      "linkLabel": "Monize の口座",
+      "notLinked": "未リンク",
+      "noEligibleAccounts": "リンクできる、この通貨の有効な Monize 口座がありません。",
+      "linkFailed": "口座をリンクできませんでした",
+      "unlinked": "口座のリンクを解除しました",
+      "unlinkFailed": "口座のリンクを解除できませんでした",
+      "syncFrom": "{date} からインポート",
+      "changeCutoff": "開始日を変更",
+      "syncNow": "今すぐ同期",
+      "syncing": "同期中...",
+      "syncFailed": "この口座を同期できませんでした",
+      "neverSynced": "未同期",
+      "lastSynced": "最終同期: {time}",
+      "lastSyncOk": "成功",
+      "lastSyncFailed": "失敗",
+      "bankBalance": "銀行の残高",
+      "bankBalanceAsOf": "{amount} ({date} 時点)",
+      "balanceNotReported": "銀行から報告されていません",
+      "balanceNotSynced": "未同期",
+      "monizeBalance": "Monize の残高",
+      "difference": "差額",
+      "differenceHelp": "銀行の残高は、表示されている日付に銀行が報告した残高です。銀行がまだ計上していない取引や、その日付より後に計上された取引が含まれる場合があるため、同期の合間に少額の差が出るのは正常です。",
+      "differenceHidden": "銀行の残高は {bankCurrency}、Monize の口座は {monizeCurrency} のため、差額は表示されません。",
+      "deletedNote": "Monize で削除した取引は、その後の同期で再びインポートされることはなく、削除した行は削除されたままになります。",
+      "createNew": "新しい口座を作成",
+      "suggestedName": "{type} {number}",
+      "createdLinked": "口座を作成してリンクしました",
+      "createdLinkFailed": "口座は作成されましたが、リンクできませんでした",
+      "preview": "プレビュー",
+      "firstSyncPreview": "最初のインポートは、取引のプレビューで確認します。"
+    },
+    "link": {
+      "title": "{account} にリンク",
+      "editTitle": "{account} の開始日",
+      "syncFromLabel": "取引のインポート開始日",
+      "syncFromHelp": "Monize が既定で選ぶ日付が入力されています。欄を空にすると、Monize が自動で選びます。",
+      "beforeCutoff": "この日付より前に銀行が計上した取引はインポートされません。",
+      "duplicateWarning": "口座内の最新の取引より前の日付を指定すると、すでに入力済みの取引が重複してインポートされる可能性があります。",
+      "save": "口座をリンク",
+      "saveEdit": "保存",
+      "saving": "保存中...",
+      "cancel": "キャンセル",
+      "saved": "口座をリンクしました",
+      "editSaved": "開始日を保存しました",
+      "saveFailed": "リンクを保存できませんでした",
+      "loadingDefaults": "口座を読み取り中...",
+      "defaultsFailed": "この口座の最新の取引を読み取れなかったため、この開始日で重複が発生するかどうかを Monize は判断できません。",
+      "newestTransaction": "この口座の最新の取引: {date}",
+      "emptyAccount": "{days, plural, other {口座は空です: インポートは直近 # 日間が対象です}}"
+    },
+    "sync": {
+      "summary": "{imported, plural, =0 {インポートした取引はありません} other {# 件の取引をインポートしました}}、{skipped, plural, =0 {スキップはありません} other {# 件はインポート済みのためスキップしました}}、{refused, plural, =0 {拒否はありません} other {# 件を拒否しました}}",
+      "summaryWithReasons": "{summary}。拒否の内訳: {reasons}",
+      "outcomeUnknown": "同期の結果はまだ分かりません。ページを再読み込みして、何がインポートされたか確認してください。",
+      "failedAccountItem": "{account}（{message}）",
+      "allFailed": "同期できなかった口座: {accounts}",
+      "partialFailure": "{summary}。同期できなかった口座: {accounts}",
+      "reason": {
+        "missing_date": "{count, plural, other {日付なし # 件}}",
+        "future_date": "{count, plural, other {未来の日付 # 件}}",
+        "invalid_amount": "{count, plural, other {金額が無効 # 件}}",
+        "unknown_direction": "{count, plural, other {方向が不明 # 件}}",
+        "currency_mismatch": "{count, plural, other {別の通貨 # 件}}",
+        "other": "{count, plural, other {その他の理由 # 件}}",
+        "missing_identity": "銀行取引IDがありません: {count, number}"
+      },
+      "needsPreview": "{accounts} のプレビューを開いて、最初のインポートを確認してください",
+      "withNeedsPreview": "{message}。{needsPreview}"
+    },
+    "callback": {
+      "title": "銀行に接続しています",
+      "subtitle": "Monize が接続を完了するまでお待ちください",
+      "success": "銀行に接続しました",
+      "successNamed": "{bank} に接続しました",
+      "bankError": "銀行がアクセスを許可しませんでした: {message}",
+      "missingState": "銀行から有効な応答が返されませんでした。もう一度接続を開始してください。",
+      "notActive": "接続が完了しませんでした",
+      "failed": "接続を完了できませんでした",
+      "autoLinked": "{count, plural, other {銀行口座 # 件を、同じ番号の口座にリンクしました。最初のインポートの前に確認してください。}}",
+      "autoSuggested": "{count, plural, other {銀行口座 # 件が複数の口座に一致しました: 一覧で口座を選んでください。}}"
+    },
+    "accountType": {
+      "CACC": "普通預金",
+      "CARD": "カード",
+      "SVGS": "貯蓄預金",
+      "LOAN": "ローン",
+      "other": "口座の種類 {code}"
+    },
+    "mismatch": {
+      "bankCard": "銀行はこの口座をカードとして報告していますが、{account} の種類は {creditCard} ではなく {type} です。カードの取引が種類の異なる口座にインポートされます。",
+      "monizeCard": "{account} の種類は {creditCard} ですが、銀行はこの口座を次のように報告しています: {bankType}。正しい銀行口座か確認してください。",
+      "confirm": "理解しました。それでも口座をリンクする"
+    },
+    "preview": {
+      "title": "{account} へのインポートのプレビュー",
+      "description": "確認するまで何もインポートされません。銀行が報告した内容と、Monize が各取引に対して行う処理を示します。",
+      "loading": "銀行を読み取り中...",
+      "loadFailed": "この口座をプレビューできませんでした",
+      "retry": "再試行",
+      "close": "閉じる",
+      "import": "{count, plural, =0 {確認: インポートする新しい取引はありません} other {# 件の取引をインポート}}",
+      "importing": "インポート中...",
+      "importFailed": "取引をインポートできませんでした",
+      "planChanged": "このプレビューの後に銀行のデータが変わったため、何もインポートされませんでした。プレビューを読み込み直しました。内容を確認して、もう一度インポートしてください。",
+      "monizeBalance": "現在の Monize の残高",
+      "balanceAfter": "インポート後の Monize の残高",
+      "bankBalance": "銀行の残高",
+      "bankBalanceAsOf": "{date} 時点で {amount}",
+      "bankBalanceNotReported": "銀行から報告されていません",
+      "difference": "インポート後の差額",
+      "differenceHelp": "銀行の残高からインポート後の Monize の残高を引いた額です。ゼロなら両者は一致しています。銀行の残高には銀行がまだ計上していない取引が含まれることがあるため、少額の差は正常です。",
+      "differenceHidden": "銀行の残高は {bankCurrency}、Monize の口座は {monizeCurrency} のため、差額は表示されません。",
+      "filterLabel": "取引を表示",
+      "filter": {
+        "all": "すべて",
+        "new": "新規",
+        "duplicate": "インポート済み",
+        "refused": "拒否",
+        "pending": "保留中",
+        "before_cutoff": "開始日より前",
+        "withCount": "{label} ({count})",
+        "excluded": "例外"
+      },
+      "outcome": {
+        "new": "新規",
+        "duplicate": "インポート済み",
+        "refused": "拒否",
+        "pending": "保留中",
+        "before_cutoff": "開始日より前",
+        "excluded": "例外"
+      },
+      "refusal": {
+        "missing_date": "日付なし",
+        "future_date": "未来の日付",
+        "invalid_amount": "金額が無効",
+        "unknown_direction": "方向が不明",
+        "currency_mismatch": "別の通貨",
+        "other": "拒否",
+        "missing_identity": "銀行取引IDがありません"
+      },
+      "columns": {
+        "date": "日付",
+        "payee": "支払先",
+        "category": "カテゴリ",
+        "status": "状態",
+        "amount": "金額",
+        "select": "選択と詳細"
+      },
+      "noPayee": "支払先なし",
+      "dateUnknown": "日付なし",
+      "amountUnknown": "不明",
+      "empty": {
+        "all": "この期間の取引は銀行から返されませんでした。",
+        "filtered": "この一覧に取引はありません。"
+      },
+      "selectAllNew": "この一覧の新規取引をすべて選択",
+      "selectAllExceptions": "この一覧の例外をすべて選択",
+      "selectRow": "{payee} をインポート",
+      "selectException": "{payee} を例外から削除",
+      "summary": "インポート {import} 件、スキップ {skip} 件、例外に追加 {except} 件",
+      "importNothing": "インポートせずに確認",
+      "exceptions": {
+        "intro": "例外にある取引はインポートされません。再び新規として表示するには、例外から削除してください。",
+        "remove": "{count, plural, =0 {例外から削除} other {# 件を例外から削除}}",
+        "removing": "削除しています...",
+        "removed": "{count, plural, other {# 件の取引を例外から削除しました}}",
+        "removedNone": "例外から削除されたものはありません",
+        "removeFailed": "例外を削除できませんでした"
+      },
+      "details": {
+        "operation": {
+          "heading": "操作種別",
+          "none": "この取引には操作種別タグがありません。",
+          "tag": "銀行の操作種別によるタグ: {tag}"
+        }
+      },
+      "historyBatch": "履歴バッチ：{from}～{to}。",
+      "historyBatchRemaining": "履歴バッチ：{from}～{to}。 まだ履歴が残っています。このバッチのインポート後、次のバッチをプレビューしてください。"
+    },
+    "simplefin": {
+      "provider": "データプロバイダー",
+      "description": "<bridge>SimpleFIN Bridge</bridge> で銀行を接続し、ここに使い捨てのセットアップトークンを貼り付けてください。アクセスは読み取り専用です。",
+      "openBridge": "SimpleFIN Bridge を開く",
+      "setupToken": "セットアップトークン",
+      "connect": "SimpleFIN を接続",
+      "connected": "SimpleFIN は接続済みです。",
+      "savedDiscoveryFailed": "接続済みですが、口座の検出に対応が必要です。新しいトークンを使わずに検出を再試行してください。",
+      "refresh": "口座を更新",
+      "failed": "リクエストを完了できませんでした。新しいトークンを使う前に接続状態を確認してください。",
+      "loadFailed": "SimpleFIN の状態を読み込めませんでした。",
+      "encryptionRequired": "SimpleFIN に接続する前に、管理者に暗号化の設定を依頼してください。",
+      "remove": "Monize から SimpleFIN を削除",
+      "removeTitle": "すべての金融機関へのアクセスを削除しますか？",
+      "removeBody": "Monize の SimpleFIN 同期をすべて無効にし、履歴は保持します。リモートアクセスを終了するには、Bridge でアプリトークンを取り消してください。",
+      "replaceTitle": "SimpleFIN アクセスを置き換えますか？",
+      "replaceBody": "すべての金融機関へのアクセスを置き換えます。既存の口座の対応付けは保持されます。識別情報の変更は確認が必要です。",
+      "quota": "残り {remaining} リクエスト",
+      "nextEligible": "次回利用可能: {date}",
+      "stopTitle": "{bank} の同期を停止しますか？",
+      "stopBody": "既存の対応付けと取引は保持されます。",
+      "stop": "同期を停止",
+      "stopped": "同期停止中",
+      "title": "SimpleFIN",
+      "enableBanking": "Enable Banking",
+      "errors": {
+        "unauthorized": "新しいセットアップトークンで再接続してください。",
+        "payment_required": "SimpleFIN Bridge のサブスクリプションを確認してください。",
+        "rate_limited": "リクエスト上限に達しました。しばらく待ってから更新してください。",
+        "no_accounts": "共有された口座がありません。Bridge で口座のアクセスを確認してください。",
+        "partial_data": "一部の口座データが不完全です。Bridge を確認してから更新してください。",
+        "identity_review": "口座の識別情報が変わりました。同期を有効にする前に対応付けを確認してください。",
+        "invalid_response": "Bridge が未対応のデータを返しました。後で更新してください。",
+        "unavailable": "SimpleFIN が応答しませんでした。後で再試行してください。"
+      },
+      "resume": "同期を再開",
+      "lastKnownConnected": "前回の確認成功時にはSimpleFINに接続されていました。"
+    }
   }
 }

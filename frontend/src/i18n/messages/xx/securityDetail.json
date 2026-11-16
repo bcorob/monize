@@ -34,7 +34,6 @@
     "units": "[XX-Units-XX]",
     "avgCostPerUnit": "[XX-Avg. cost / unit-XX]",
     "heldInAccounts": "[XX-Held in accounts-XX]",
-    "openAccount": "[XX-Show {name} on the Investments page-XX]",
     "unitsShare": "[XX-{units} ({share})-XX]",
     "valueUnknown": "[XX-Not priced-XX]",
     "approx": "[XX-~ {amount}-XX]"
@@ -74,15 +73,20 @@
     "sector": "[XX-Sector-XX]",
     "industry": "[XX-Industry-XX]",
     "provider": "[XX-Provider-XX]",
-    "lastPrice": "[XX-Last price-XX]"
+    "lastPrice": "[XX-Last price-XX]",
+    "bondDescription": "[XX-Bond description-XX]"
   },
   "tabs": {
     "ariaLabel": "[XX-Security sections-XX]",
     "overview": "[XX-Overview-XX]",
     "transactions": "[XX-Transactions-XX]",
     "prices": "[XX-Price history-XX]",
+    "terms": "[XX-Terms history-XX]",
     "documents": "[XX-Documents-XX]",
     "news": "[XX-News-XX]"
+  },
+  "bondPrices": {
+    "title": "[XX-Price history-XX]"
   },
   "about": {
     "title": "[XX-About-XX]",
@@ -121,6 +125,8 @@
     "fees": "[XX-Fees-XX]",
     "realizedPl": "[XX-Realized P/L-XX]",
     "realizedMixed": "[XX-Realized in {currencies}, so not added up-XX]",
+    "realizedUnknownReason": "[XX-This gain cannot be worked out: the position holds shares that were added with no cost, so what the sold shares cost is unknown. Open the transaction that added them and enter their price.-XX]",
+    "realizedKnownPart": "[XX-Known part: {amount}-XX]",
     "totalReturn": "[XX-Total return-XX]",
     "totalReturnValue": "[XX-{amount} ({percent})-XX]",
     "totalReturnTitle": "[XX-Unrealized gain, plus what you realized on sales and received in income, less fees, over the capital you put in. A simple return on that capital: it is not annualized and does not weight tranches by how long you held them.-XX]",
@@ -147,6 +153,8 @@
     "title": "[XX-Position closed-XX]",
     "description": "[XX-You no longer hold this security. Its history stays available below.-XX]",
     "realizedPl": "[XX-Realized P/L-XX]",
+    "realizedUnknownReason": "[XX-This gain cannot be worked out: the position held shares that were added with no cost, so what the sold shares cost is unknown. Open the transaction that added them and enter their price.-XX]",
+    "realizedKnownPart": "[XX-Known part: {amount}-XX]",
     "heldFrom": "[XX-Held from-XX]",
     "heldRange": "[XX-{start} to {end}-XX]"
   },
@@ -165,7 +173,24 @@
     "sectorEmpty": "[XX-No sector breakdown is stored. Monize fills this in from the provider for funds and ETFs.-XX]",
     "countryEmpty": "[XX-No country breakdown is stored. You can enter one when editing the security.-XX]",
     "assetClassEmpty": "[XX-No asset class breakdown is stored yet.-XX]",
-    "remainder": "[XX-{percent} unclassified-XX]"
+    "remainder": "[XX-{percent} unclassified-XX]",
+    "bond": {
+      "seriesTab": "[XX-Series-XX]",
+      "maturityTab": "[XX-Maturity-XX]",
+      "empty": "[XX-You hold no series of this bond kind yet.-XX]",
+      "someUnknown": "[XX-Some values are unknown, so no shares are shown.-XX]",
+      "issuerCountry": "[XX-Issuer country-XX]",
+      "rate": "[XX-Interest rate-XX]",
+      "interest": "[XX-Interest-XX]",
+      "term": "[XX-Term to maturity-XX]",
+      "interestValue": "[XX-{capitalization}, period: {period}-XX]",
+      "rateType": {
+        "FIXED": "[XX-Fixed-XX]",
+        "BENCHMARK_PLUS_SPREAD": "[XX-Floating (benchmark + spread)-XX]",
+        "INFLATION_PLUS_MARGIN_AS_RATE": "[XX-Inflation-indexed (benchmark + margin)-XX]",
+        "ZERO_COUPON_DISCOUNT": "[XX-Zero-coupon (discount)-XX]"
+      }
+    }
   },
   "documents": {
     "title": "[XX-Documents-XX]",
@@ -225,6 +250,16 @@
       "deleted": "[XX-Document deleted-XX]",
       "saveFailed": "[XX-Could not save the document-XX]",
       "deleteFailed": "[XX-Could not delete the document-XX]"
+    },
+    "issueLetters": {
+      "title": "[XX-Issue letters-XX]",
+      "loadFailed": "[XX-The issue letters could not be loaded.-XX]",
+      "empty": "[XX-No issue letter is stored for this bond kind yet.-XX]",
+      "held": "[XX-Held-XX]",
+      "onSale": "[XX-On sale-XX]",
+      "noLetter": "[XX-No letter recorded for this series-XX]",
+      "open": "[XX-Official PDF-XX]",
+      "openNamed": "[XX-Open the issue letter for {series}-XX]"
     }
   },
   "news": {
@@ -237,6 +272,243 @@
     "empty": {
       "title": "[XX-No headlines right now-XX]",
       "description": "[XX-Nothing has been published against this symbol recently. The list refreshes when you come back to it.-XX]"
+    }
+  },
+  "bond": {
+    "loading": "[XX-Loading the bond valuation...-XX]",
+    "loadFailed": "[XX-The bond valuation could not be loaded.-XX]",
+    "unknown": "[XX-Unknown-XX]",
+    "asOf": "[XX-Valued on-XX]",
+    "termsSource": "[XX-Terms: {document}-XX]",
+    "termsManual": "[XX-Terms entered by hand by an administrator-XX]",
+    "noLots": "[XX-No lots are open on this date.-XX]",
+    "totals": {
+      "quantity": "[XX-Bonds held-XX]",
+      "grossValue": "[XX-Gross value-XX]",
+      "earlyRedemptionValue": "[XX-Early redemption value-XX]",
+      "accruedInterest": "[XX-Accrued interest-XX]",
+      "unknownLot": "[XX-At least one lot has no figure, so no total is given.-XX]",
+      "unknownRefusal": "[XX-The lots cannot be worked out, so no total is given.-XX]"
+    },
+    "lots": {
+      "purchaseDate": "[XX-Purchased-XX]",
+      "assumed": "[XX-Assumed-XX]",
+      "assumedTitle": "[XX-The real purchase date is unknown: this lot arrived by a transfer with no linked sending side.-XX]",
+      "quantity": "[XX-Quantity-XX]",
+      "maturity": "[XX-Maturity-XX]",
+      "period": "[XX-Current period-XX]",
+      "periodValue": "[XX-{index}: {start} to {end}-XX]",
+      "rate": "[XX-Rate-XX]",
+      "principal": "[XX-Principal per bond-XX]",
+      "principalIssuePrice": "[XX-No cost entered: the auction price is used-XX]",
+      "accruedInterest": "[XX-Accrued interest-XX]",
+      "grossValue": "[XX-Gross value-XX]",
+      "earlyRedemption": "[XX-Early redemption-XX]",
+      "nextCashFlow": "[XX-Next cash flow-XX]",
+      "cashFlowValue": "[XX-{type} {amount} on {date}-XX]",
+      "noCashFlow": "[XX-None-XX]",
+      "projected": "[XX-Projected-XX]",
+      "maturityValue": "[XX-Value at maturity-XX]",
+      "maturityKnown": "[XX-Known-XX]",
+      "maturityProjected": "[XX-Projected-XX]",
+      "matured": "[XX-Matured-XX]",
+      "refused": "[XX-Not valued-XX]",
+      "amountUnknown": "[XX-Amount unknown-XX]"
+    },
+    "rateSource": {
+      "TERMS": "[XX-Terms-XX]",
+      "ANNOUNCED": "[XX-Announced-XX]",
+      "DERIVED": "[XX-Derived-XX]",
+      "PROJECTED": "[XX-Projected-XX]"
+    },
+    "cashFlowType": {
+      "INTEREST": "[XX-Interest-XX]",
+      "PRINCIPAL": "[XX-Principal-XX]"
+    },
+    "earlyRefusal": {
+      "NOT_REDEEMABLE": "[XX-Not redeemable early-XX]",
+      "TOO_EARLY": "[XX-Too early to redeem-XX]",
+      "TOO_LATE": "[XX-Too late to redeem-XX]",
+      "RECORD_DAY": "[XX-Not redeemable on the record day-XX]",
+      "MATURED": "[XX-Matured-XX]",
+      "RATE_UNKNOWN": "[XX-Rate not known yet-XX]",
+      "TERMS_INCOMPLETE": "[XX-Terms incomplete-XX]"
+    },
+    "lotsRefusal": {
+      "SPLIT": "[XX-The lots cannot be derived: a bond does not split.-XX]",
+      "FRACTIONAL_QUANTITY": "[XX-The lots cannot be derived: a quantity is not a whole number of bonds.-XX]",
+      "OVER_REMOVAL": "[XX-The lots cannot be derived: more bonds were removed than were held.-XX]",
+      "INVALID_QUANTITY": "[XX-The lots cannot be derived: a quantity is missing, negative or too large.-XX]",
+      "REMOVAL_EXCEEDS_SERIES": "[XX-The lots cannot be derived: more bonds of one series were removed than were held.-XX]",
+      "SERIES_NOT_DETERMINED": "[XX-The lots cannot be derived: the series of a purchase is not known.-XX]"
+    },
+    "lotsRefusalDetail": {
+      "SPLIT": "[XX-A split ({action} on {date}) is recorded on this security; a bond does not split.-XX]",
+      "FRACTIONAL_QUANTITY": "[XX-{action} on {date} moves {quantity} bonds, which is not a whole number.-XX]",
+      "OVER_REMOVAL": "[XX-{action} on {date} removes {quantity} bonds, more than were held.-XX]",
+      "INVALID_QUANTITY": "[XX-The quantity of {action} on {date} is missing, negative or too large.-XX]",
+      "REMOVAL_EXCEEDS_SERIES": "[XX-{action} on {date} removes {quantity} bonds of its series, more than were held in that series.-XX]",
+      "SERIES_NOT_DETERMINED": "[XX-{action} on {date} names no series, and no stored series of the bond kind was on sale that day. Fetch the series and choose it in the transaction.-XX]"
+    },
+    "assumptions": {
+      "title": "[XX-Projection assumptions-XX]",
+      "latestObservation": "[XX-{benchmark} assumed at {value} for every later period, the latest published value ({observation})-XX]",
+      "supplied": "[XX-{benchmark} assumed at {value} for every later period-XX]",
+      "suppliedSimpleAnnual": "[XX-{benchmark} assumed to grow {value} a year (simple annual growth, not compounded) for every later month-XX]"
+    },
+    "missing": {
+      "title": "[XX-Data still needed-XX]",
+      "item": "[XX-{benchmark} {observation} — published by {publisher}-XX]",
+      "itemNoPublisher": "[XX-{benchmark} {observation} — publisher not known-XX]"
+    },
+    "recompute": {
+      "button": "[XX-Recalculate prices-XX]",
+      "done": "[XX-Prices recalculated: {written} written, {deleted} removed.-XX]",
+      "failed": "[XX-The prices could not be recalculated.-XX]"
+    },
+    "rate": {
+      "title": "[XX-Interest rate-XX]",
+      "rule": {
+        "fixed": "[XX-Fixed {rate} for the whole term-XX]",
+        "firstThen": "[XX-Period 1: {firstRate}. Then {benchmark} + {addend}-XX]",
+        "every": "[XX-Every period: {benchmark} + {addend}-XX]",
+        "floorZero": "[XX-A negative {benchmark} counts as 0-XX]",
+        "dailyFloor": "[XX-The daily rate (index plus spread) is never below {floor}-XX]",
+        "discount": "[XX-Discount to face value-XX]",
+        "daily": "[XX-Every day: {benchmark} + {addend}, added up per day-XX]",
+        "lockout": "[XX-An auction within {days, plural, one {# business day} other {# business days}} before a period end is not used for that period-XX]"
+      },
+      "daily": "[XX-Daily, {benchmark}-XX]",
+      "dailyNoIndex": "[XX-Daily, {benchmark}: no index stored yet-XX]",
+      "dailyRun": "[XX-From {from}: {rate}-XX]",
+      "dailyRunUnknown": "[XX-From {from}: no index stored-XX]",
+      "lotHeading": "[XX-Lot purchased {date}-XX]",
+      "range": "[XX-{start} to {end}-XX]",
+      "current": "[XX-Current-XX]",
+      "columns": {
+        "period": "[XX-Period-XX]",
+        "dates": "[XX-Dates-XX]",
+        "rate": "[XX-Rate-XX]",
+        "source": "[XX-Source-XX]",
+        "how": "[XX-How it is set-XX]"
+      },
+      "how": {
+        "stated": "[XX-Stated rate-XX]",
+        "observed": "[XX-{benchmark} {observation}: {value} + {addend}-XX]",
+        "floored": "[XX-(floored to {floor})-XX]",
+        "missing": "[XX-{benchmark} {observation}: not published yet-XX]"
+      },
+      "nextRateReset": "[XX-Next rate reset: {date}-XX]",
+      "nextCapitalization": "[XX-Next capitalization: {date}-XX]"
+    },
+    "indexation": {
+      "inflation": "[XX-Inflation-indexed: from {date} (period 2) the rate is {benchmark} + {addend}, recalculated every period-XX]",
+      "floating": "[XX-Floating rate: from {date} (period 2) the rate is {benchmark} + {addend}, recalculated every period-XX]"
+    },
+    "interestParts": {
+      "fixed": "[XX-Fixed interest (1st period)-XX]",
+      "margin": "[XX-Interest from margin-XX]",
+      "inflation": "[XX-Interest from inflation-XX]",
+      "benchmark": "[XX-Interest from the reference rate-XX]",
+      "announced": "[XX-Announced interest-XX]",
+      "fixedTerm": "[XX-Fixed-rate interest-XX]"
+    },
+    "chart": {
+      "title": "[XX-Cumulative interest at each period end-XX]",
+      "assumption": "[XX-Projection assuming {benchmark} = {value}-XX]",
+      "projectedNote": "[XX-Lighter bars are projected periods-XX]",
+      "stoppedAt": "[XX-Interest is not known from period {period}, so the chart stops before it.-XX]"
+    },
+    "scenarios": {
+      "title": "[XX-Inflation scenarios-XX]",
+      "titleBenchmark": "[XX-Interest rate scenarios-XX]",
+      "projection": "[XX-Projection-XX]",
+      "caption": "[XX-Projected maturity value and interest by assumed value-XX]",
+      "intro": "[XX-Projections, not certainties: every period that has not started is assumed to follow the {benchmark} value in the first column. Known and announced periods do not change. Select a row to see its rate table and chart.-XX]",
+      "custom": "[XX-Your own {benchmark} (%)-XX]",
+      "add": "[XX-Add scenario-XX]",
+      "useDefault": "[XX-Use the default assumption-XX]",
+      "selected": "[XX-Selected-XX]",
+      "loading": "[XX-Loading the scenarios...-XX]",
+      "loadFailed": "[XX-The scenarios could not be loaded.-XX]",
+      "columns": {
+        "assumed": "[XX-Assumed {benchmark}-XX]",
+        "maturityValue": "[XX-Maturity value (projection)-XX]",
+        "totalInterest": "[XX-Total interest (projection)-XX]"
+      },
+      "asOfNote": "[XX-Valued on {date}, the date chosen above: the figures cover the bonds held on that day.-XX]"
+    },
+    "benchmarks": {
+      "PL_CPI_GUS_YOY": "[XX-CPI, 12 months (GUS)-XX]",
+      "PL_NBP_REFERENCE": "[XX-NBP reference rate-XX]",
+      "US_CPI_U_NSA": "[XX-CPI-U, all items, not seasonally adjusted (BLS)-XX]",
+      "US_TBILL_13W_MMY": "[XX-13-week Treasury bill yield-XX]"
+    },
+    "valuationRefusal": {
+      "PURCHASE_OUTSIDE_SALE_WINDOW": "[XX-This series can only be bought from {from} to {to}. This lot was bought on {purchaseDate}, so it is not valued.-XX]",
+      "PURCHASE_AFTER_MATURITY": "[XX-This series matured on {maturityDate}. This lot was bought on {purchaseDate}, on or after that day, so it is not valued.-XX]"
+    },
+    "marketPriceRequired": "[XX-This security holds a series that trades on a market, so its price is not a function of its terms. Monize writes no price for it: enter the price yourself. The values of the lots below are worked out from the terms and are not market values.-XX]",
+    "partial": {
+      "title": "[XX-This valuation is incomplete, so read the figures as partial.-XX]",
+      "terms": "[XX-The terms of the bond are incomplete (for example a calendar is not installed).-XX]",
+      "reference": "[XX-Reference data is missing; see the list of data still needed below.-XX]",
+      "earlyRedemption": "[XX-The early redemption terms are incomplete, so early redemption values may be missing.-XX]",
+      "other": "[XX-At least one lot cannot be fully valued yet (for example a rate is not known).-XX]"
+    },
+    "projectionMissing": {
+      "title": "[XX-Later periods cannot be projected-XX]",
+      "item": "[XX-{benchmark}: no value is published and no assumption is set, so later periods cannot be projected (published by {publisher})-XX]",
+      "itemNoPublisher": "[XX-{benchmark}: no value is published and no assumption is set, so later periods cannot be projected (publisher not known)-XX]"
+    },
+    "coverage": {
+      "asOf": "[XX-{benchmark} data as of {date}-XX]",
+      "none": "[XX-No {benchmark} data is stored yet-XX]"
+    },
+    "issuers": {
+      "PL_MF": "[XX-Ministry of Finance (PL)-XX]",
+      "US_TREASURY": "[XX-U.S. Department of the Treasury (US)-XX]"
+    },
+    "redemption": {
+      "title": "[XX-Early redemption terms-XX]",
+      "fixedFee": "[XX-Early redemption fee: {amount} per bond.-XX]",
+      "forfeitAccrued": "[XX-On early redemption, the interest accrued in the current period is forfeited.-XX]",
+      "floorAllPeriods": "[XX-In every period, the fee never reduces the proceeds below the face value.-XX]",
+      "floorFirstPeriod": "[XX-In the first period only, the fee cannot reduce the proceeds below the face value; from the second period the full fee is deducted.-XX]"
+    },
+    "programs": {
+      "OTS": "[XX-OTS: 3-month fixed-rate savings bonds-XX]",
+      "ROR": "[XX-ROR: 1-year floating-rate savings bonds-XX]",
+      "DOR": "[XX-DOR: 2-year floating-rate savings bonds-XX]",
+      "TOS": "[XX-TOS: 3-year fixed-rate savings bonds-XX]",
+      "COI": "[XX-COI: 4-year inflation-indexed savings bonds-XX]",
+      "EDO": "[XX-EDO: 10-year inflation-indexed savings bonds-XX]",
+      "ROS": "[XX-ROS: 6-year inflation-indexed family savings bonds-XX]",
+      "ROD": "[XX-ROD: 12-year inflation-indexed family savings bonds-XX]",
+      "BILL": "[XX-BILL: Treasury bills, 4 to 52 weeks, sold at a discount-XX]",
+      "NOTE": "[XX-NOTE: Treasury notes, 2 to 10 years, fixed semiannual coupon-XX]",
+      "BOND": "[XX-BOND: Treasury bonds, 20 and 30 years, fixed semiannual coupon-XX]",
+      "TIPS": "[XX-TIPS: Treasury inflation-protected securities, principal indexed to CPI-U-XX]",
+      "FRN": "[XX-FRN: Treasury floating rate notes, 2 years, quarterly interest-XX]"
+    },
+    "series": {
+      "title": "[XX-Your series-XX]",
+      "column": "[XX-Series-XX]",
+      "nextRateChange": "[XX-Next rate change-XX]",
+      "total": "[XX-Bond kind total-XX]",
+      "purchasedRange": "[XX-{from} to {to}-XX]",
+      "expand": "[XX-Show details of {series}-XX]",
+      "collapse": "[XX-Hide details of {series}-XX]",
+      "partial": "[XX-Partial-XX]"
+    },
+    "program": {
+      "title": "[XX-The bond kind-XX]",
+      "newest": "[XX-Terms of the newest series, {series}.-XX]",
+      "noTerms": "[XX-The terms are not known yet: you hold no series of this bond kind and none is on sale.-XX]",
+      "autoFetchFailed": "[XX-The setting could not be saved.-XX]"
+    },
+    "onSale": {
+      "title": "[XX-On sale now-XX]"
     }
   }
 }

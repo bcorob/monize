@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from 'react';
 import { useTranslations } from 'next-intl';
+import { ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline';
 import { BudgetCategoryRow } from './BudgetCategoryRow';
 import type { CategoryBreakdown, BudgetCategory } from '@/types/budget';
 
@@ -121,14 +122,10 @@ export function BudgetCategoryList({
             title={sortDirection === 'asc' ? t('categoryList.sortDescTitle') : t('categoryList.sortAscTitle')}
           >
             {sortDirection === 'asc' ? (
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-              </svg>
+              <ChevronUpIcon className="h-4 w-4" aria-hidden="true" />
             ) : (
-              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-              </svg>
-            ) }
+              <ChevronDownIcon className="h-4 w-4" aria-hidden="true" />
+            )}
           </button>
         </div>
       </div>

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef } from 'react';
 
 // Read-only structural ref so refs of any element subtype (HTMLDivElement,
 // HTMLButtonElement, ...) are accepted -- RefObject<T>.current is mutable and
@@ -28,9 +28,15 @@ export function useClickOutside(
   const { enabled = true, onEscape } = options;
 
   const handlerRef = useRef(handler);
-  handlerRef.current = handler;
   const escapeRef = useRef(onEscape);
-  escapeRef.current = onEscape;
+
+  // Refreshed after every commit rather than during render. A layout effect
+  // runs before every passive effect, so the subscription below and any
+  // listener it fires see this commit's callbacks.
+  useLayoutEffect(() => {
+    handlerRef.current = handler;
+    escapeRef.current = onEscape;
+  });
 
   const refList = Array.isArray(refs) ? refs : [refs];
 

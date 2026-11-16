@@ -9,6 +9,7 @@ import {
   OneToMany,
   JoinColumn,
   JoinTable,
+  Index,
 } from "typeorm";
 import { Account } from "../../accounts/entities/account.entity";
 import { Payee } from "../../payees/entities/payee.entity";
@@ -18,10 +19,18 @@ import { TransactionSplit } from "./transaction-split.entity";
 import { User } from "../../users/entities/user.entity";
 
 import { TransactionStatus } from "./transaction-status.enum";
+import { EXTERNAL_ID_INDEX } from "../transaction-external-id";
 
 export { TransactionStatus };
 
 @Entity("transactions")
+// Declared here as well as in the migration, because the database-backed suites
+// build their schema from the entities: an idempotent create's race is a
+// property of this index, and a suite without it would prove nothing.
+@Index(EXTERNAL_ID_INDEX, ["accountId", "externalId"], {
+  unique: true,
+  where: "external_id IS NOT NULL",
+})
 export class Transaction {
   @PrimaryGeneratedColumn("uuid")
   id: string;
@@ -36,7 +45,11 @@ export class Transaction {
   @Column({ type: "uuid", name: "account_id" })
   accountId: string;
 
-  @ManyToOne(() => Account, (account) => account.transactions)
+  // `database/schema.sql` declares ON DELETE CASCADE; stated here so the
+  // entity-built integration schema deletes an account the way production does.
+  @ManyToOne(() => Account, (account) => account.transactions, {
+    onDelete: "CASCADE",
+  })
   @JoinColumn({ name: "account_id" })
   account: Account;
 
@@ -79,7 +92,7 @@ export class Transaction {
   @JoinColumn({ name: "category_id" })
   category: Category | null;
 
-  @Column({ type: "decimal", precision: 20, scale: 4 })
+  @Column({ type: "decimal", precision: 24, scale: 8 })
   amount: number;
 
   @Column({ type: "varchar", name: "currency_code", length: 3 })
@@ -100,8 +113,8 @@ export class Transaction {
   // unit of originalCurrencyCode and amount ~ round(originalAmount * exchangeRate).
   @Column({
     type: "decimal",
-    precision: 20,
-    scale: 4,
+    precision: 24,
+    scale: 8,
     name: "original_amount",
     nullable: true,
     transformer: {
@@ -187,6 +200,19 @@ export class Transaction {
   @ManyToOne(() => Transaction, { nullable: true, onDelete: "SET NULL" })
   @JoinColumn({ name: "linked_transaction_id" })
   linkedTransaction: Transaction | null;
+
+  /**
+   * The caller's own key for a row created through the API, or the bank's id
+   * for a row imported from an OFX file (`ofx:<FITID>`), unique per account
+   * (`idx_transactions_account_external_id`). A create that repeats a key
+   * returns the row that already holds it, and an import skips the row; see
+   * `transaction-external-id.ts`.
+   */
+  @Column({ type: "varchar", name: "external_id", length: 255, nullable: true })
+  externalId: string | null;
+
+  @Column({ type: "uuid", name: "shared_expense_posting_id", nullable: true })
+  sharedExpensePostingId: string | null;
 
   @OneToMany(() => TransactionSplit, (split) => split.transaction)
   splits: TransactionSplit[];

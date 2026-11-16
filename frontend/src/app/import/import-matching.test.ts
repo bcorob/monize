@@ -151,6 +151,21 @@ describe('getCategoryPath', () => {
     expect(getCategoryPath(child, [parent, child])).toBe('Food: Groceries');
   });
 
+  it('returns every level for a category nested more than once', () => {
+    const housing = makeCategory({ id: 'h', name: 'Housing' });
+    const mortgage = makeCategory({ id: 'm', name: 'Mortgage', parentId: 'h' });
+    const interest = makeCategory({ id: 'i', name: 'Interest', parentId: 'm' });
+    expect(getCategoryPath(interest, [housing, mortgage, interest])).toBe(
+      'Housing: Mortgage: Interest',
+    );
+  });
+
+  it('stops at a parent cycle instead of looping', () => {
+    const a = makeCategory({ id: 'a', name: 'A', parentId: 'b' });
+    const b = makeCategory({ id: 'b', name: 'B', parentId: 'a' });
+    expect(getCategoryPath(a, [a, b])).toBe('B: A');
+  });
+
   it('falls back to plain name when parent cannot be located', () => {
     const orphan = makeCategory({ id: 'c-1', name: 'Lost', parentId: 'missing' });
     expect(getCategoryPath(orphan, [orphan])).toBe('Lost');
@@ -189,6 +204,38 @@ describe('findMatchingCategory', () => {
     const cat = makeCategory({ id: 'c-1', name: 'Health/Medical' });
     // QIF replaces / with -, so 'Health-Medical' should match 'Health/Medical'
     expect(findMatchingCategory('Health-Medical', [cat])).toBe('c-1');
+  });
+
+  describe('multi-level paths', () => {
+    const housing = makeCategory({ id: 'h', name: 'Housing' });
+    const mortgage = makeCategory({ id: 'm', name: 'Mortgage', parentId: 'h' });
+    const interest = makeCategory({ id: 'i', name: 'Interest', parentId: 'm' });
+    const business = makeCategory({ id: 'b', name: 'Business' });
+    const bizMortgage = makeCategory({ id: 'bm', name: 'Mortgage', parentId: 'b' });
+    const bizInterest = makeCategory({ id: 'bi', name: 'Interest', parentId: 'bm' });
+
+    it('matches a three-level path exactly, case-insensitively', () => {
+      const all = [business, bizMortgage, bizInterest, housing, mortgage, interest];
+      expect(findMatchingCategory('housing:mortgage:interest', all)).toBe('i');
+      expect(findMatchingCategory('Business:Mortgage:Interest', all)).toBe('bi');
+    });
+
+    it('matches a deep QIF path to a shallower category with the same lower levels', () => {
+      const topMortgage = makeCategory({ id: 'tm', name: 'Mortgage' });
+      const topInterest = makeCategory({ id: 'ti', name: 'Interest', parentId: 'tm' });
+      expect(findMatchingCategory('Housing:Mortgage:Interest', [topMortgage, topInterest])).toBe('ti');
+    });
+
+    it('does not match a category on a different branch with the same lower levels', () => {
+      expect(
+        findMatchingCategory('Housing:Mortgage:Interest', [business, bizMortgage, bizInterest]),
+      ).toBeUndefined();
+    });
+
+    it('does not match a three-level path to a bare leaf name', () => {
+      const leaf = makeCategory({ id: 'l', name: 'Interest' });
+      expect(findMatchingCategory('Housing:Mortgage:Interest', [leaf])).toBeUndefined();
+    });
   });
 });
 
@@ -290,6 +337,53 @@ describe('buildCategoryMappings', () => {
     const result = buildCategoryMappings(new Set(['Fees:Bank Fee']), [], []);
     expect(result[0].createNew).toBe('Bank Fee');
     expect(result[0].createNewParentCategoryName).toBe('Fees');
+  });
+
+  it('suggests the leaf under an existing nested parent', () => {
+    const housing = makeCategory({ id: 'h', name: 'Housing' });
+    const mortgage = makeCategory({ id: 'm', name: 'Mortgage', parentId: 'h' });
+    const result = buildCategoryMappings(
+      new Set(['Housing:Mortgage:Interest']),
+      [housing, mortgage],
+      [],
+    );
+    expect(result[0]).toEqual({
+      originalName: 'Housing:Mortgage:Interest',
+      createNew: 'Interest',
+      parentCategoryId: 'm',
+    });
+  });
+
+  it('suggests a parent path for the levels that do not exist yet, spelling existing ones as stored', () => {
+    // Used to suggest a single top-level parent named "Housing:Mortgage".
+    const housing = makeCategory({ id: 'h', name: 'Housing' });
+    const result = buildCategoryMappings(
+      new Set(['housing:Mortgage:Interest', 'Auto:Fuel:Diesel']),
+      [housing],
+      [],
+    );
+    expect(result[0]).toEqual({
+      originalName: 'housing:Mortgage:Interest',
+      createNew: 'Interest',
+      createNewParentCategoryName: 'Housing:Mortgage',
+    });
+    expect(result[1]).toEqual({
+      originalName: 'Auto:Fuel:Diesel',
+      createNew: 'Diesel',
+      createNewParentCategoryName: 'Auto:Fuel',
+    });
+  });
+
+  it('does not take a same-named category on another branch as the parent', () => {
+    const business = makeCategory({ id: 'b', name: 'Business' });
+    const bizMortgage = makeCategory({ id: 'bm', name: 'Mortgage', parentId: 'b' });
+    const result = buildCategoryMappings(
+      new Set(['Housing:Mortgage:Interest']),
+      [business, bizMortgage],
+      [],
+    );
+    expect(result[0].parentCategoryId).toBeUndefined();
+    expect(result[0].createNewParentCategoryName).toBe('Housing:Mortgage');
   });
 
   it('falls back to undefined values when no matches and no colon', () => {

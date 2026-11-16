@@ -2,8 +2,16 @@ import { Injectable } from "@nestjs/common";
 import { DataSource } from "typeorm";
 import { withScopedDb } from "../common/db/scoped-db";
 import { Category } from "../categories/entities/category.entity";
-import { ReportCurrencyService } from "./report-currency.service";
-import { roundMoney, toMoneyNumber } from "../common/round.util";
+import {
+  ConversionGaps,
+  RATE_BASIS_GROUP_BY,
+  RawRateBasis,
+  ReportCurrencyService,
+  wholeGroups,
+  rateBasisColumnsSql,
+} from "./report-currency.service";
+import { ownTransferLegs } from "./transfer-rate-sql";
+import { MONEY_SCALE, roundMoney, toMoneyNumber } from "../common/round.util";
 import {
   MonthlyCategoryBreakdownResponse,
   MonthlyBreakdownCategoryRow,
@@ -29,10 +37,9 @@ const INVESTMENT_EXCLUSION = investmentExclusionSql({
  * summed separately so the frontend can classify a category as income vs
  * expense and render a signed net value per month.
  */
-interface RawBreakdownAggregate {
+interface RawBreakdownAggregate extends RawRateBasis {
   month: string;
   category_id: string | null;
-  currency_code: string;
   deposits: string;
   withdrawals: string;
 }
@@ -42,11 +49,10 @@ interface RawBreakdownAggregate {
  * are summed separately so each account can be split into a "from" row
  * (outflows, a source of funds) and a "to" row (inflows, a use of funds).
  */
-interface RawTransferAggregate {
+interface RawTransferAggregate extends RawRateBasis {
   month: string;
   account_id: string;
   account_name: string;
-  currency_code: string;
   outflow: string;
   inflow: string;
 }
@@ -75,10 +81,11 @@ export class MonthlyCategoryBreakdownService {
     userId: string,
     startDate: string | undefined,
     endDate: string,
+    options: { accountIds?: string[] } = {},
   ): Promise<MonthlyCategoryBreakdownResponse> {
+    const { accountIds } = options;
     const defaultCurrency =
       await this.currencyService.getDefaultCurrency(userId);
-    const rateMap = await this.currencyService.buildRateMap(defaultCurrency);
 
     // Aggregate deposits (amount > 0) and withdrawals (amount < 0) per
     // category, month and currency. Transfers, voided rows, child rows of a
@@ -91,6 +98,7 @@ export class MonthlyCategoryBreakdownService {
         TO_CHAR(t.transaction_date, 'YYYY-MM') as month,
         COALESCE(ts.category_id, t.category_id) as category_id,
         t.currency_code,
+        ${rateBasisColumnsSql("$3")},
         SUM(CASE WHEN COALESCE(ts.amount, t.amount) > 0
               THEN COALESCE(ts.amount, t.amount) ELSE 0 END) as deposits,
         SUM(CASE WHEN COALESCE(ts.amount, t.amount) < 0
@@ -100,26 +108,10 @@ export class MonthlyCategoryBreakdownService {
       LEFT JOIN accounts a ON a.id = t.account_id
       WHERE t.user_id = $1
         AND t.transaction_date <= $2
-        -- Non-transfer rows feed the breakdown as usual. A transfer is also
-        -- included when it carries a category, but only its outflow leg
-        -- (amount < 0) so the contribution shows as a single withdrawal under
-        -- its category and is not double-counted by the inflow leg. The
-        -- transfer is still excluded from every other report, so it never
-        -- counts as income/expense or affects net worth.
-        --
-        -- Note: the category is stored on BOTH legs of the transfer (so the
-        -- transfer rollup below can exclude the whole movement via
-        -- category_id IS NOT NULL). This aggregate is therefore the single
-        -- source of truth for the net figure (one outflow leg, e.g. -1000).
-        -- A transaction-level view filtered by the same category (a report
-        -- drill-down, or the transactions list filtered by category) lists
-        -- BOTH legs (-1000 and +1000) because both carry category_id, so they
-        -- visibly net to zero there. That is expected, not a double-count: the
-        -- net contribution lives in this aggregate, not in the per-leg list.
-        AND (
-          t.is_transfer = false
-          OR (t.is_transfer = true AND t.category_id IS NOT NULL AND t.amount < 0)
-        )
+        -- A transfer leg is never income or expense (INV-REPORT-003), even when
+        -- it carries a category: it is reported only as a named flow by the
+        -- transfer rollup below.
+        AND t.is_transfer = false
         AND (t.status IS NULL OR t.status != 'VOID')
         AND t.parent_transaction_id IS NULL
         AND ${INVESTMENT_EXCLUSION}
@@ -132,16 +124,27 @@ export class MonthlyCategoryBreakdownService {
         )
     `;
 
-    const params: (string | undefined)[] = [userId, endDate];
+    const params: (string | string[] | undefined)[] = [
+      userId,
+      endDate,
+      defaultCurrency,
+    ];
 
     if (startDate) {
-      query += ` AND t.transaction_date >= $3`;
+      query += ` AND t.transaction_date >= $4`;
       params.push(startDate);
+    }
+
+    // An empty selection is "every account", like every other report filter.
+    if (accountIds && accountIds.length > 0) {
+      query += ` AND t.account_id = ANY($${params.length + 1}::uuid[])`;
+      params.push(accountIds);
     }
 
     query += `
       GROUP BY TO_CHAR(t.transaction_date, 'YYYY-MM'),
-               COALESCE(ts.category_id, t.category_id), t.currency_code
+               COALESCE(ts.category_id, t.category_id), t.currency_code,
+               ${RATE_BASIS_GROUP_BY}
       ORDER BY month
     `;
 
@@ -156,26 +159,46 @@ export class MonthlyCategoryBreakdownService {
       }),
     );
     const categoryMap = new Map(categories.map((c) => [c.id, c]));
+    const convert = wholeGroups(
+      rawResults,
+      await this.currencyService.buildConverter(rawResults, defaultCurrency),
+      (row) => `${row.month}|${row.category_id ?? ""}|${row.currency_code}`,
+      (row) => [
+        toMoneyNumber(row.deposits, MONEY_SCALE),
+        toMoneyNumber(row.withdrawals, MONEY_SCALE),
+      ],
+    );
 
     const accumulators = new Map<string, CategoryAccumulator>();
     const monthSet = new Set<string>();
+    // A row with no rate into the reporting currency is unknown, never its
+    // unconverted figure (INV-FX-001): it is in no category value, no deposit or
+    // withdrawal total, no transfer row and no month, and its currency is named.
+    const gaps = new ConversionGaps();
 
     for (const row of rawResults) {
       const month = row.month;
-      monthSet.add(month);
 
-      const deposits = this.currencyService.convertAmount(
-        toMoneyNumber(row.deposits),
-        row.currency_code,
-        defaultCurrency,
-        rateMap,
+      const deposits = convert(
+        // An aggregate in the row's own currency, read before conversion: a coin's
+        // sum keeps its stored 8 places (MONEY_SCALE, lossless; a fiat figure reads
+        // the same), so a 2,500-sat total is not rounded to zero before it is
+        // converted (INV-MONEY-001).
+        toMoneyNumber(row.deposits, MONEY_SCALE),
+        row,
       );
-      const withdrawals = this.currencyService.convertAmount(
-        toMoneyNumber(row.withdrawals),
-        row.currency_code,
-        defaultCurrency,
-        rateMap,
+      const withdrawals = convert(
+        toMoneyNumber(row.withdrawals, MONEY_SCALE),
+        row,
       );
+      if (deposits === null || withdrawals === null) {
+        gaps.record(
+          row.currency_code,
+          `${month}|${row.category_id ?? ""}|${row.currency_code}`,
+        );
+        continue;
+      }
+      monthSet.add(month);
 
       // Treat an unknown category_id (e.g. the row references a category that
       // no longer exists) the same as no category at all.
@@ -214,8 +237,9 @@ export class MonthlyCategoryBreakdownService {
       startDate,
       endDate,
       defaultCurrency,
-      rateMap,
       monthSet,
+      gaps,
+      accountIds,
     );
 
     const months = Array.from(monthSet).sort();
@@ -224,7 +248,14 @@ export class MonthlyCategoryBreakdownService {
       accumulators.values(),
     ).map((acc) => this.buildRow(acc, categoryMap));
 
-    return { months, data, transfers, currency: defaultCurrency };
+    return {
+      months,
+      data,
+      transfers,
+      currency: defaultCurrency,
+      missingCurrencies: gaps.missingCurrencies,
+      excludedCount: gaps.excludedCount,
+    };
   }
 
   /**
@@ -241,8 +272,9 @@ export class MonthlyCategoryBreakdownService {
     startDate: string | undefined,
     endDate: string,
     defaultCurrency: string,
-    rateMap: Map<string, number>,
     monthSet: Set<string>,
+    gaps: ConversionGaps,
+    accountIds?: string[],
   ): Promise<MonthlyBreakdownTransferRow[]> {
     let query = `
       SELECT
@@ -250,6 +282,7 @@ export class MonthlyCategoryBreakdownService {
         t.account_id,
         a.name as account_name,
         t.currency_code,
+        ${rateBasisColumnsSql("$3", "t", ownTransferLegs(userId, "$1"))},
         SUM(CASE WHEN t.amount < 0 THEN ABS(t.amount) ELSE 0 END) as outflow,
         SUM(CASE WHEN t.amount > 0 THEN t.amount ELSE 0 END) as inflow
       FROM transactions t
@@ -257,29 +290,46 @@ export class MonthlyCategoryBreakdownService {
       WHERE t.user_id = $1
         AND t.transaction_date <= $2
         AND t.is_transfer = true
-        -- Categorized transfers are surfaced under their category above, so
-        -- exclude them here to avoid showing the same movement twice.
-        AND t.category_id IS NULL
         AND (t.status IS NULL OR t.status != 'VOID')
         AND t.parent_transaction_id IS NULL
     `;
 
-    const params: (string | undefined)[] = [userId, endDate];
+    const params: (string | string[] | undefined)[] = [
+      userId,
+      endDate,
+      defaultCurrency,
+    ];
 
     if (startDate) {
-      query += ` AND t.transaction_date >= $3`;
+      query += ` AND t.transaction_date >= $4`;
       params.push(startDate);
+    }
+
+    // The same scope as the category rows above: a transfer row is a row of
+    // one account, so it is kept or dropped with that account.
+    if (accountIds && accountIds.length > 0) {
+      query += ` AND t.account_id = ANY($${params.length + 1}::uuid[])`;
+      params.push(accountIds);
     }
 
     query += `
       GROUP BY TO_CHAR(t.transaction_date, 'YYYY-MM'),
-               t.account_id, a.name, t.currency_code
+               t.account_id, a.name, t.currency_code, ${RATE_BASIS_GROUP_BY}
       ORDER BY month
     `;
 
     const rawResults: RawTransferAggregate[] = await withScopedDb(
       this.dataSource,
       (m) => m.query(query, params),
+    );
+    const convert = wholeGroups(
+      rawResults,
+      await this.currencyService.buildConverter(rawResults, defaultCurrency),
+      (row) => `transfer|${row.month}|${row.account_id}|${row.currency_code}`,
+      (row) => [
+        toMoneyNumber(row.outflow, MONEY_SCALE),
+        toMoneyNumber(row.inflow, MONEY_SCALE),
+      ],
     );
 
     // Accumulate the signed flow per (account, direction) across currencies.
@@ -311,19 +361,16 @@ export class MonthlyCategoryBreakdownService {
     };
 
     for (const row of rawResults) {
+      const outflow = convert(toMoneyNumber(row.outflow, MONEY_SCALE), row);
+      const inflow = convert(toMoneyNumber(row.inflow, MONEY_SCALE), row);
+      if (outflow === null || inflow === null) {
+        gaps.record(
+          row.currency_code,
+          `transfer|${row.month}|${row.account_id}|${row.currency_code}`,
+        );
+        continue;
+      }
       monthSet.add(row.month);
-      const outflow = this.currencyService.convertAmount(
-        toMoneyNumber(row.outflow),
-        row.currency_code,
-        defaultCurrency,
-        rateMap,
-      );
-      const inflow = this.currencyService.convertAmount(
-        toMoneyNumber(row.inflow),
-        row.currency_code,
-        defaultCurrency,
-        rateMap,
-      );
       if (outflow !== 0) {
         addFlow(
           fromByAccount,

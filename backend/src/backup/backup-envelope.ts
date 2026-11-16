@@ -23,6 +23,15 @@ import { promisify } from "util";
  *   bytes  6..21  salt        16 bytes
  *   bytes 22..28  noncePrefix 7 bytes
  *   bytes 29..    frames      [uint32 BE length][ciphertext||tag] ...
+ *
+ * v3 (framed, key-wrapped)
+ *   bytes  0..3   magic       "MZBE"
+ *   byte   4      version     0x03
+ *   byte   5      kdf         0x01 = scrypt
+ *   bytes  6..81  wrappedKey  salt(16) iv(12) tag(16) wrappedDataKey(32)
+ *   bytes 82..97  keySalt     16 bytes
+ *   bytes 98..104 noncePrefix 7 bytes
+ *   bytes 105..   frames      [uint32 BE length][ciphertext||tag] ...
  * ```
  *
  * A v1 auth tag covers the whole payload, so it cannot be computed until the last
@@ -41,6 +50,12 @@ import { promisify } from "util";
  *
  * The header is additional authenticated data for every frame, so the salt and
  * the prefix cannot be swapped either.
+ *
+ * v3 is v2's frames under a random per-user data key instead of a key derived
+ * from the password, with that data key wrapped under the password in the
+ * header (`backup-key-wrap.ts`). It exists so the automatic backup can be
+ * encrypted by a cron that holds the data key and never the password, while the
+ * file still opens with the password alone (docs/specs/backup-envelope-key-wrapping.md).
  */
 
 /**
@@ -59,8 +74,10 @@ const scryptAsync = promisify(crypto.scrypt) as (
 export const MAGIC = Buffer.from("MZBE", "ascii");
 /** Monolithic AES-256-GCM over the whole payload. Still written by the support export. */
 export const VERSION_MONOLITHIC = 0x01;
-/** Framed AES-256-GCM, written by every streaming export. */
+/** Framed AES-256-GCM, written by every streaming export under a typed password. */
 export const VERSION_FRAMED = 0x02;
+/** Framed AES-256-GCM under a password-wrapped data key, written by the automatic backup. */
+export const VERSION_KEY_WRAPPED = 0x03;
 export const KDF_SCRYPT = 0x01;
 export const SALT_LENGTH = 16;
 export const IV_LENGTH = 12;
@@ -69,13 +86,22 @@ export const NONCE_PREFIX_LENGTH = 7;
 /** Frame counter (4) + final flag (1) fill the rest of the 12-byte GCM nonce. */
 export const FRAME_COUNTER_LENGTH = 4;
 export const FRAME_LENGTH_BYTES = 4;
+/** A data key, and the key a password derives to wrap it. */
+export const DATA_KEY_LENGTH = 32;
+/** salt || iv || tag || wrapped data key. */
+export const WRAPPED_KEY_LENGTH =
+  SALT_LENGTH + IV_LENGTH + TAG_LENGTH + DATA_KEY_LENGTH;
+/** HKDF salt deriving one file's frame key from the data key. */
+export const KEY_SALT_LENGTH = 16;
 
 export const MONOLITHIC_HEADER_LENGTH =
   MAGIC.length + 2 + SALT_LENGTH + IV_LENGTH + TAG_LENGTH;
 export const FRAMED_HEADER_LENGTH =
   MAGIC.length + 2 + SALT_LENGTH + NONCE_PREFIX_LENGTH;
+export const KEY_WRAPPED_HEADER_LENGTH =
+  MAGIC.length + 2 + WRAPPED_KEY_LENGTH + KEY_SALT_LENGTH + NONCE_PREFIX_LENGTH;
 
-const KEY_LENGTH = 32;
+const KEY_LENGTH = DATA_KEY_LENGTH;
 const SCRYPT_N = 1 << 15; // 32768; tuned for ~100ms on modern hardware
 const SCRYPT_R = 8;
 const SCRYPT_P = 1;
@@ -114,6 +140,9 @@ export function backupEnvelopeVersion(buf: Buffer): number | null {
   if (!buf.subarray(0, MAGIC.length).equals(MAGIC)) return null;
   const version = buf[MAGIC.length];
   if (version === VERSION_FRAMED) return VERSION_FRAMED;
+  if (version === VERSION_KEY_WRAPPED) {
+    return buf.length >= KEY_WRAPPED_HEADER_LENGTH ? VERSION_KEY_WRAPPED : null;
+  }
   if (version === VERSION_MONOLITHIC) {
     // A v1 envelope shorter than its own header is not a v1 envelope.
     return buf.length >= MONOLITHIC_HEADER_LENGTH ? VERSION_MONOLITHIC : null;

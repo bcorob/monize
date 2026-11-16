@@ -5,17 +5,20 @@ import {
   OnModuleInit,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { Cron } from "@nestjs/schedule";
 import { tr } from "../i18n/translate";
 import { InjectDataSource } from "@nestjs/typeorm";
 import { DataSource } from "typeorm";
 import type { default as ProviderType } from "oidc-provider";
-import { makeAdapterFactory } from "./postgres.adapter";
+import { makeAdapterFactory, sweepOAuthPayloads } from "./postgres.adapter";
 import { derivePurposeKey } from "../auth/crypto.util";
 import { AuthService } from "../auth/auth.service";
 import { checkUserAuthState } from "../auth/user-state.util";
 import { API_SCOPES, ApiScope, MCP_SCOPE_PREFIX } from "../auth/scopes";
 import { withUserContext } from "../common/db/with-context";
 import { OAuthPayload } from "./entities/oauth-payload.entity";
+import { OauthSigningKeysService } from "./oauth-signing-keys.service";
+import { OIDC_PROVIDER_ROUTES } from "./oidc-provider-paths";
 
 /**
  * The scopes an OAuth client may request, derived from the single vocabulary in
@@ -27,6 +30,13 @@ export const MCP_RESOURCE_SCOPES = API_SCOPES.map(
 );
 export type McpScope = `${typeof MCP_SCOPE_PREFIX}${ApiScope}`;
 
+/**
+ * Most redirect URIs one dynamically registered client may carry. A real MCP
+ * client registers one or two; the provider's own default is unbounded, which
+ * let one unauthenticated request store fifty (#2177).
+ */
+export const MAX_DCR_REDIRECT_URIS = 10;
+
 @Injectable()
 export class OAuthProviderService implements OnModuleInit {
   private readonly logger = new Logger(OAuthProviderService.name);
@@ -37,6 +47,7 @@ export class OAuthProviderService implements OnModuleInit {
     private readonly configService: ConfigService,
     @InjectDataSource() private readonly dataSource: DataSource,
     private readonly authService: AuthService,
+    private readonly signingKeys: OauthSigningKeysService,
   ) {}
 
   async onModuleInit() {
@@ -85,31 +96,32 @@ export class OAuthProviderService implements OnModuleInit {
     const cookieKey = derivePurposeKey(jwtSecret, "oauth-provider-cookies");
 
     // Dynamic import — oidc-provider is ESM-only and must be loaded at runtime.
-    const { default: Provider } = await import("oidc-provider");
+    const { default: Provider, errors } = await import("oidc-provider");
 
     const adapterFactory = makeAdapterFactory(this.dataSource);
 
+    // The deployment's signing identity, or null when it has none to store.
+    // rotation: see design doc WP4. Null keeps the previous behaviour exactly:
+    // oidc-provider mints a development key pair for this process, which is
+    // fine for one replica that never restarts and wrong for anything else.
+    const jwks = await this.signingKeys.ensureJwks();
+
     const provider = new Provider(issuer, {
       adapter: adapterFactory,
+      ...(jwks ? { jwks } : {}),
       // Pin every provider endpoint under /oauth/* (see issuer comment above).
       // Discovery (`/.well-known/openid-configuration` and
       // `/.well-known/oauth-authorization-server`) is NOT in this map — it is
       // served by the provider at the root because the issuer has no path.
       routes: {
-        authorization: "/oauth/auth",
-        token: "/oauth/token",
-        jwks: "/oauth/jwks",
-        registration: "/oauth/reg",
-        revocation: "/oauth/token/revocation",
-        userinfo: "/oauth/me",
-        end_session: "/oauth/session/end",
+        ...OIDC_PROVIDER_ROUTES,
         // PAR is enabled by default in oidc-provider v9. Its default route is
         // the bare `/request`, which sits outside the `/oauth/*` namespace that
         // both the root-mount gate (`isOidcProviderPath`) and the frontend
         // proxy (`isOAuthPath`) forward — so an advertised PAR endpoint at
         // `/request` is unreachable and 307s to /login, stalling clients that
-        // push their authorization request. Pin it under /oauth/* like the rest.
-        pushed_authorization_request: "/oauth/request",
+        // push their authorization request. OIDC_PROVIDER_ROUTES pins it under
+        // /oauth/* like the rest.
       },
       cookies: {
         keys: [cookieKey],
@@ -204,6 +216,30 @@ export class OAuthProviderService implements OnModuleInit {
         Grant: 60 * 60 * 24 * 14,
         Interaction: 60 * 10, // 10 minutes
         Session: 60 * 60 * 24, // 1 day
+      },
+      // Listing a recognized property here is how the provider lets a validator
+      // see it: the validator runs for each listed property before the
+      // built-in checks. Language-tagged names (`client_name#fr`) need no rule:
+      // the provider drops metadata it does not recognize before storing it.
+      // The message is an OAuth error_description, ASCII for the client
+      // developer (RFC 7591 section 3.2.2), so it is not translated.
+      extraClientMetadata: {
+        properties: ["redirect_uris"],
+        validator: (ctx: unknown, key: string, value: unknown) => {
+          // Only a registration has a request context. A stored client is
+          // rebuilt through the same schema on every lookup, with none, and is
+          // never refused here after the fact.
+          if (
+            ctx !== undefined &&
+            key === "redirect_uris" &&
+            Array.isArray(value) &&
+            value.length > MAX_DCR_REDIRECT_URIS
+          ) {
+            throw new errors.InvalidClientMetadata(
+              `redirect_uris must not contain more than ${MAX_DCR_REDIRECT_URIS} entries`,
+            );
+          }
+        },
       },
       clientDefaults: {
         grant_types: ["authorization_code", "refresh_token"],
@@ -412,8 +448,11 @@ export class OAuthProviderService implements OnModuleInit {
 
   /**
    * Revoke every OIDC artifact bound to a user — access tokens, refresh
-   * tokens, authorization codes, grants, sessions. Called from admin flows
-   * (deactivate, password reset) so revocation takes effect immediately
+   * tokens, authorization codes, grants, sessions. Called wherever the
+   * account's credentials are replaced (admin deactivate/delete/password reset,
+   * and via `revokeOAuthGrantsAfterCommit` in `auth/credential-revocation.ts`
+   * the emailed reset, a password change, a delegate reset, an emergency-access
+   * claim and an OIDC link confirmation) so revocation takes effect immediately
    * instead of waiting for the access-token TTL to expire.
    *
    * Implementation: a single SQL DELETE on the payload store, keyed on the
@@ -424,8 +463,9 @@ export class OAuthProviderService implements OnModuleInit {
    * `oauth_payloads`, and the only one keyed by an application user id -- the
    * exemption's original rationale claimed the table was "never queried per
    * end-user", which was untrue from the moment this method was written. It is
-   * a bounded exception, not a defect: the only caller is `AdminService` behind
-   * `@Roles("admin")`, `userId` is server-derived and never request-supplied,
+   * a bounded exception, not a defect: every caller derives `userId` on the
+   * server from something already verified (the admin's target, the session's
+   * subject, the row a single-use token matched) and never from the request,
    * and the predicate deletes only rows whose own payload already names that
    * subject.
    *
@@ -448,6 +488,40 @@ export class OAuthProviderService implements OnModuleInit {
       this.logger.log(`Revoked ${affected} OIDC payload(s) for user=${userId}`);
     }
     return affected;
+  }
+
+  /**
+   * Daily removal of expired provider artifacts: interactions, sessions, codes,
+   * tokens, grants and idle dynamically registered clients (#2177). Without it
+   * `oauth_payloads` only grew, at whatever rate unauthenticated callers chose.
+   *
+   * Clients stored before #2177 with no expiry are first given one, so the
+   * clients a flood already left are swept too.
+   *
+   * A third direct-`DataSource` path to the table, keyed by nothing but the
+   * stored expiry (`docs/row-level-security-contract.md` section 3), and not
+   * wrapped in `withSystemContext` for the reason `revokeAllForUser` is not.
+   * Idempotent by predicate: every replica fires it and the later ones delete
+   * nothing. Failure is logged and swallowed: rows a failed run left are
+   * already invisible to the provider and the next run takes them.
+   */
+  @Cron("30 4 * * *")
+  async sweepExpiredPayloads(): Promise<{ adopted: number; deleted: number }> {
+    try {
+      const result = await sweepOAuthPayloads(this.dataSource);
+      if (result.adopted > 0 || result.deleted > 0) {
+        this.logger.log(
+          `Swept ${result.deleted} expired OIDC payload(s); gave ` +
+            `${result.adopted} client(s) without an expiry the idle TTL`,
+        );
+      }
+      return result;
+    } catch (error) {
+      this.logger.warn(
+        `OIDC payload sweep failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      return { adopted: 0, deleted: 0 };
+    }
   }
 
   private requirePublicUrl(): string {

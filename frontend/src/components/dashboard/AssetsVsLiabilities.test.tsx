@@ -1,41 +1,80 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@/test/render';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { act, fireEvent, screen, within } from '@testing-library/react';
+import { render } from '@/test/render';
 import { AssetsVsLiabilities } from './AssetsVsLiabilities';
+import type { AssetsLiabilitiesConfig } from './widget-config';
 import { MonthlyNetWorth } from '@/types/net-worth';
 
-const mockPush = vi.fn();
-vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush }),
+vi.mock('recharts', async () => (await import('@/test/recharts-mock')).rechartsMock());
+
+const updateConfig = vi.fn();
+const configState: { current: AssetsLiabilitiesConfig } = { current: { view: 'legend' } };
+vi.mock('@/hooks/useWidgetConfig', () => ({
+  useWidgetConfig: () => ({ config: configState.current, updateConfig }),
 }));
 
-vi.mock('recharts', () => ({
-  ResponsiveContainer: ({ children }: any) => <div data-testid="responsive-container">{children}</div>,
-  PieChart: ({ children }: any) => <div data-testid="pie-chart">{children}</div>,
-  Pie: ({ children }: any) => <div data-testid="pie">{children}</div>,
-  Cell: () => <div data-testid="cell" />,
-  Tooltip: () => null,
-}));
-
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
-  }),
-}));
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
+      formatCurrencyTight: (n: number) => `$${(n / 1000).toFixed(1)}K`,
+      defaultCurrency: 'USD',
+    }),
+  };
+});
 
 const months: MonthlyNetWorth[] = [
   { month: '2026-04-01', assets: 90000, liabilities: 40000, netWorth: 50000 },
   { month: '2026-05-01', assets: 120000, liabilities: 30000, netWorth: 90000 },
 ];
 
+/** A ResizeObserver that reports the given content box as soon as it observes. */
+function observeAs(width: number, height: number) {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      constructor(private readonly callback: ResizeObserverCallback) {}
+      observe() {
+        this.callback(
+          [{ contentRect: { width, height } } as ResizeObserverEntry],
+          this as unknown as ResizeObserver,
+        );
+      }
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+}
+
 describe('AssetsVsLiabilities', () => {
   beforeEach(() => {
-    mockPush.mockClear();
+    updateConfig.mockReset();
+    configState.current = { view: 'legend' };
+  });
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
 
   it('renders loading skeleton with title', () => {
     render(<AssetsVsLiabilities data={[]} isLoading={true} />);
     expect(screen.getByText('Assets vs Liabilities')).toBeInTheDocument();
     expect(document.querySelector('.animate-pulse')).toBeInTheDocument();
+  });
+
+  it('says the load failed, not that there is no data, when the net worth request failed', () => {
+    render(<AssetsVsLiabilities data={[]} isLoading={false} error />);
+    expect(
+      screen.getByText("Couldn't load your net worth history. Reload the dashboard to try again."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('No net worth data available yet.')).not.toBeInTheDocument();
+  });
+
+  it('keeps the empty-state copy for a successful empty answer', () => {
+    render(<AssetsVsLiabilities data={[]} isLoading={false} error={false} />);
+    expect(screen.getByText('No net worth data available yet.')).toBeInTheDocument();
   });
 
   it('renders empty state when there is no data', () => {
@@ -46,13 +85,9 @@ describe('AssetsVsLiabilities', () => {
   it('uses the latest month for the assets/liabilities split and net worth', () => {
     render(<AssetsVsLiabilities data={months} isLoading={false} />);
     // Latest month (May): assets 120000, liabilities 30000, net 90000
-    expect(screen.getByText('$120000')).toBeInTheDocument();
-    expect(screen.getByText('$30000')).toBeInTheDocument();
-    expect(screen.getByText('$90000')).toBeInTheDocument();
-    expect(screen.getByText('Assets')).toBeInTheDocument();
-    expect(screen.getByText('Liabilities')).toBeInTheDocument();
-    // One Cell per non-zero slice.
-    expect(screen.getAllByTestId('cell')).toHaveLength(2);
+    expect(screen.getByRole('button', { name: /^Assets/ })).toHaveTextContent('$120000');
+    expect(screen.getByRole('button', { name: /^Liabilities/ })).toHaveTextContent('$30000');
+    expect(within(screen.getByTestId('donut-chart-area')).getByText('$90000')).toBeInTheDocument();
   });
 
   it('omits a zero-valued slice (no liabilities)', () => {
@@ -62,9 +97,23 @@ describe('AssetsVsLiabilities', () => {
         isLoading={false}
       />,
     );
-    expect(screen.getAllByTestId('cell')).toHaveLength(1);
-    expect(screen.getByText('Assets')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Assets/ })).toBeInTheDocument();
     expect(screen.queryByText('Liabilities')).not.toBeInTheDocument();
+  });
+
+  it('puts net worth inside the donut, compact in the callout view and in full in the legend', () => {
+    observeAs(520, 280);
+    for (const [view, figure] of [
+      ['callouts', '$90.0K'],
+      ['legend', '$90000'],
+    ] as const) {
+      configState.current = { view };
+      const { unmount } = render(<AssetsVsLiabilities data={months} isLoading={false} />);
+      const area = screen.getByTestId('donut-chart-area');
+      expect(within(area).getByText('Net Worth')).toBeInTheDocument();
+      expect(within(area).getByText(figure)).toBeInTheDocument();
+      unmount();
+    }
   });
 
   it('renders negative net worth in red', () => {
@@ -74,13 +123,90 @@ describe('AssetsVsLiabilities', () => {
         isLoading={false}
       />,
     );
-    const netEl = screen.getByText('$-15000');
+    const netEl = within(screen.getByTestId('donut-chart-area')).getByText('$-15000');
     expect(netEl.className).toContain('text-red');
   });
 
-  it('navigates to the net worth report on title click', () => {
+  it('links the title to the net worth report', () => {
     render(<AssetsVsLiabilities data={months} isLoading={false} />);
-    fireEvent.click(screen.getByText('Assets vs Liabilities'));
-    expect(mockPush).toHaveBeenCalledWith('/reports/net-worth');
+    expect(screen.getByRole('link', { name: 'Assets vs Liabilities' })).toHaveAttribute(
+      'href',
+      '/reports/net-worth',
+    );
+  });
+
+  describe('callout view', () => {
+    beforeEach(() => {
+      configState.current = { view: 'callouts' };
+    });
+
+    it('draws a box per slice beside the chart when they fit', () => {
+      observeAs(520, 280);
+      render(<AssetsVsLiabilities data={months} isLoading={false} />);
+      const callouts = screen.getByRole('list', { name: 'Assets vs Liabilities' });
+      expect(within(callouts).getAllByRole('listitem')).toHaveLength(2);
+      expect(within(callouts).getByText('Assets')).toBeInTheDocument();
+      expect(within(callouts).getByText('$120000')).toBeInTheDocument();
+      expect(within(callouts).getByText('$30000')).toBeInTheDocument();
+      // No legend beneath it.
+      expect(screen.queryByRole('button', { name: /^Assets/ })).not.toBeInTheDocument();
+    });
+
+    it('falls back to the legend where the boxes would not fit', () => {
+      observeAs(240, 240);
+      render(<AssetsVsLiabilities data={months} isLoading={false} />);
+      expect(screen.queryByRole('list', { name: 'Assets vs Liabilities' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Assets/ })).toHaveTextContent('$120000');
+    });
+  });
+
+  it('switches between labels and legend in its settings', async () => {
+    render(<AssetsVsLiabilities data={months} isLoading={false} />);
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Configure Assets vs Liabilities' }));
+    });
+    // Says where the labels will not appear, rather than leaving a phone
+    // user to wonder why choosing them changed nothing.
+    expect(screen.getByText("Labels need a wider screen. Where they don't fit, the legend is shown.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Labels' }));
+    expect(updateConfig).toHaveBeenCalledWith({ view: 'callouts' });
+  });
+
+  describe('a latest month the server could not fully convert', () => {
+    const partial = (over: Partial<MonthlyNetWorth>): MonthlyNetWorth[] => [
+      months[0],
+      { ...months[1], fxComplete: false, missingRatePairs: ['ZZZ->USD'], ...over },
+    ];
+
+    it('marks the net worth in the donut partial and names the currency', () => {
+      render(<AssetsVsLiabilities data={partial({})} isLoading={false} />);
+      const centre = within(screen.getByTestId('donut-chart-area'));
+      const marker = centre.getByTestId('partial-total');
+      expect(marker).toHaveTextContent('$90000');
+      expect(within(marker).getByRole('button').getAttribute('aria-label')).toContain('ZZZ');
+    });
+
+    it('labels the side whose flag is false as partial and not the other', () => {
+      render(
+        <AssetsVsLiabilities
+          data={partial({ assetsFxComplete: false, liabilitiesFxComplete: true })}
+          isLoading={false}
+        />,
+      );
+      expect(screen.getByRole('button', { name: /^Assets \(partial\)/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Liabilities/ })).not.toHaveTextContent('(partial)');
+    });
+
+    it('falls back to the month flag when the per-side flags are absent', () => {
+      render(<AssetsVsLiabilities data={partial({})} isLoading={false} />);
+      expect(screen.getByRole('button', { name: /^Assets \(partial\)/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Liabilities \(partial\)/ })).toBeInTheDocument();
+    });
+
+    it('marks nothing on a complete month', () => {
+      render(<AssetsVsLiabilities data={months} isLoading={false} />);
+      expect(screen.queryByTestId('partial-total')).not.toBeInTheDocument();
+      expect(screen.queryByText(/\(partial\)/)).not.toBeInTheDocument();
+    });
   });
 });

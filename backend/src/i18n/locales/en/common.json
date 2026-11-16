@@ -5,6 +5,13 @@
     "cash": "Cash",
     "brokerage": "Brokerage"
   },
+  "oauthConsent": {
+    "destinationLabel": "If you allow access, Monize will send the authorization to:",
+    "destinationUnknown": "Monize could not determine where this authorization would be sent. Do not allow access.",
+    "unverifiedNotice": "This application registered itself with this Monize server, and Monize has not verified who operates it; its name is whatever it chose to call itself. Only allow access if you started this connection yourself from that application and the address above belongs to it.",
+    "claimedWebsite": "Website stated by the application: {{ website }}",
+    "websiteMismatch": "The application says its website is {{ website }}, but the authorization will be sent to a different address."
+  },
   "import": {
     "voidedTransactionNote": "Voided in the source; the original amount was omitted from the export and imported as zero."
   },
@@ -17,5 +24,20 @@
       "stalled": "I kept saying I would keep working instead of finishing, so this answer is based on the data I gathered before stopping."
     },
     "synthesisFailed": "I gathered data for this question but couldn't complete the analysis, so I don't have a reliable answer. Try asking something narrower."
+  },
+  "bankSync": {
+    "operationTypes": {
+      "cardPayment": "Card payment",
+      "transferIn": "Incoming transfer",
+      "transferOut": "Outgoing transfer",
+      "mobilePayment": "Mobile payment",
+      "cashWithdrawal": "Cash withdrawal",
+      "cashWithdrawalBlik": "Cash withdrawal (BLIK)",
+      "mobilePaymentRefund": "Mobile payment refund",
+      "standingOrder": "Standing order",
+      "cashback": "Cashback",
+      "loanRepayment": "Loan repayment",
+      "creditCardRepayment": "Credit card repayment"
+    }
   }
 }

@@ -14,15 +14,18 @@ vi.mock('@/lib/budgets', () => ({
   },
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (n: number) => `$${n.toFixed(2)}`,
-    formatCurrencyCompact: (n: number) => `$${Math.round(n)}`,
-    formatCurrencyAxis: (n: number) => `$${n}`,
-    defaultCurrency: 'USD',
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (n: number) => `$${n.toFixed(2)}`,
+      formatCurrencyCompact: (n: number) => `$${Math.round(n)}`,
+      formatCurrencyAxis: (n: number) => `$${n}`,
+      defaultCurrency: 'USD',
+    }),
+  };
+});
 vi.mock('@/lib/logger', () => ({
   createLogger: () => ({
     error: vi.fn(),
@@ -34,6 +37,24 @@ vi.mock('@/lib/logger', () => ({
 
 vi.mock('@/lib/pdf-export', () => ({
   exportToPdf: (...args: any[]) => mockExportToPdf(...args),
+}));
+
+// The month column renders through the user's date preference and the chart
+// axis through the chart month formatter, so both are pinned here. The table
+// labels are deliberately anti-chronological in alphabetical order (Zulu,
+// Yankee, Xray for Jan, Feb, Mar): a sort that reads the LABEL instead of the
+// key shows up as a reversed table.
+vi.mock('@/hooks/useDateFormat', () => ({
+  useDateFormat: () => ({
+    formatMonth: (monthKey: string) =>
+      ({ '2025-01': 'Zulu month', '2025-02': 'Yankee month', '2025-03': 'Xray month' })[
+        monthKey as '2025-01' | '2025-02' | '2025-03'
+      ] ?? `localized:${monthKey}`,
+  }),
+}));
+
+vi.mock('@/hooks/useChartMonthFormat', () => ({
+  useChartMonthFormat: () => (monthKey: string) => `chart:${monthKey}`,
 }));
 
 vi.mock('recharts', () => ({
@@ -49,8 +70,8 @@ vi.mock('recharts', () => ({
     const C = content;
     if (!C) return null;
     const samples = [
-      { active: true, payload: [{ payload: { month: 'tip-x', income: 100, expenses: 50, savings: 50, savingsRate: 50 } }], label: 'tip-x' },
-      { active: true, payload: [{ payload: { month: 'tip-y', income: 100, expenses: 90, savings: 10, savingsRate: 10 } }], label: 'tip-y' },
+      { active: true, payload: [{ payload: { monthKey: '2025-01', income: 100, expenses: 50, savings: 50, savingsRate: 50 } }], label: '2025-01' },
+      { active: true, payload: [{ payload: { monthKey: '2025-02', income: 100, expenses: 90, savings: 10, savingsRate: 10 } }], label: '2025-02' },
       { active: false, payload: [], label: '' },
       { active: true, payload: [{ payload: undefined }], label: 'no payload' },
     ];
@@ -62,11 +83,11 @@ const makeBudget = (overrides: Partial<Budget> = {}): Budget =>
   ({ id: 'b-1', name: 'Default', isActive: true, ...overrides } as Budget);
 
 const makePoint = (
-  month: string,
+  monthKey: string,
   income: number,
   expenses: number,
 ): SavingsRatePoint => ({
-  month,
+  monthKey,
   income,
   expenses,
   savings: income - expenses,
@@ -139,9 +160,22 @@ describe('SavingsRateReport', () => {
     await waitFor(() => {
       expect(screen.getByText('Monthly Breakdown')).toBeInTheDocument();
     });
-    expect(screen.getByText('2025-01')).toBeInTheDocument();
-    expect(screen.getByText('2025-02')).toBeInTheDocument();
-    expect(screen.getByText('2025-03')).toBeInTheDocument();
+    // The user reads a localized month, never the structural key the server
+    // now sends.
+    expect(screen.getByText('Zulu month')).toBeInTheDocument();
+    expect(screen.getByText('Yankee month')).toBeInTheDocument();
+    expect(screen.getByText('Xray month')).toBeInTheDocument();
+    expect(screen.queryByText('2025-01')).not.toBeInTheDocument();
+
+    // Ascending is the default, and these labels sort alphabetically in the
+    // opposite order -- so January staying first proves the sort reads the key.
+    const renderedMonths = Array.from(document.querySelectorAll('tbody tr')).map(
+      (row) => row.querySelector('td')?.textContent,
+    );
+    expect(renderedMonths).toEqual(['Zulu month', 'Yankee month', 'Xray month']);
+
+    // The chart axis uses the chart formatter, not the table's.
+    expect(screen.getByText('chart:2025-01')).toBeInTheDocument();
   });
 
   it('reflects target selector affecting meets-target color', async () => {
@@ -217,6 +251,8 @@ describe('SavingsRateReport', () => {
     expect(arg.title).toBe('Savings Rate');
     expect(arg.summaryCards.length).toBe(4);
     expect(arg.additionalTables[0].title).toBe('Monthly Breakdown');
+    // The PDF is a reading surface, so its month column is localized too.
+    expect(arg.additionalTables[0].rows[0][0]).toBe('Zulu month');
   });
 
   it('exports to PDF with no additional tables when no data', async () => {

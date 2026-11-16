@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import toast from 'react-hot-toast';
@@ -11,6 +11,9 @@ import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { BudgetDashboard } from '@/components/budgets/BudgetDashboard';
 import { BudgetPeriodDetail } from '@/components/budgets/BudgetPeriodDetail';
 import { BudgetPeriodSelector } from '@/components/budgets/BudgetPeriodSelector';
+import type { BudgetBucketStatusState } from '@/components/budgets/BudgetBucketSummary';
+import { BudgetBackLink } from '@/components/budgets/BudgetBackLink';
+import { BudgetSwitcher } from '@/components/budgets/BudgetSwitcher';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { useOnUndoRedo } from '@/hooks/useOnUndoRedo';
 import { useOnAiAction } from '@/hooks/useOnAiAction';
@@ -21,9 +24,11 @@ import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { getErrorMessage } from '@/lib/errors';
 import { STRATEGY_LABELS } from '@/components/budgets/utils/budget-labels';
 import type {
+  Budget,
   BudgetSummary,
   BudgetVelocity,
   BudgetPeriod,
+  BudgetTrendPoint,
 } from '@/types/budget';
 import type { ScheduledTransaction } from '@/types/scheduled-transaction';
 
@@ -75,47 +80,105 @@ function BudgetDetailContent() {
     Array<{ date: string; amount: number }>
   >([]);
   const [trendData, setTrendData] = useState<
-    Array<{ month: string; budgeted: number; actual: number }>
+    BudgetTrendPoint[]
   >([]);
+  const [bucketStatus, setBucketStatus] = useState<BudgetBucketStatusState>({
+    state: 'loading',
+  });
+  // The newest bucket-status request; a slower, older one (another budget, or
+  // an earlier reload) must not land over it.
+  const bucketStatusRequest = useRef(0);
   const [selectedPeriodId, setSelectedPeriodId] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<BudgetPeriod | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isPeriodLoading, setIsPeriodLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [budgets, setBudgets] = useState<Budget[]>([]);
 
-  const loadData = useCallback(async () => {
+  // A different budget shows the spinner again; set during render rather than
+  // in the effect that loads it.
+  const [loadingBudgetId, setLoadingBudgetId] = useState(budgetId);
+  if (loadingBudgetId !== budgetId) {
+    setLoadingBudgetId(budgetId);
     setIsLoading(true);
     setError(null);
-    try {
-      const [summaryData, velocityData, periodsData, stData, dailyData, trend] =
-        await Promise.all([
-          budgetsApi.getSummary(budgetId),
-          budgetsApi.getVelocity(budgetId),
-          budgetsApi.getPeriods(budgetId),
-          scheduledTransactionsApi.getAll(),
-          budgetsApi.getDailySpending(budgetId).catch(() => []),
-          budgetsApi.getTrend(budgetId).catch(() => []),
-        ]);
+  }
 
-      setSummary(summaryData);
-      setVelocity(velocityData);
-      setPeriods(periodsData);
-      setScheduledTransactions(stData);
-      setDailySpending(dailyData);
-      setTrendData(trend);
-    } catch (err) {
-      const message = getErrorMessage(err, t('pages.detail.toasts.loadFailed'));
-      setError(message);
-      toast.error(message);
-    } finally {
-      setIsLoading(false);
-    }
+  // The mount / budget-switch load: the state already says loading.
+  const fetchData = useCallback(() => {
+    // Writes live in `run` so they land after the request, not during the effect.
+    const run = async () => {
+      try {
+        const [summaryData, velocityData, periodsData, stData, dailyData, trend] =
+          await Promise.all([
+            budgetsApi.getSummary(budgetId),
+            budgetsApi.getVelocity(budgetId),
+            budgetsApi.getPeriods(budgetId),
+            scheduledTransactionsApi.getAll(),
+            budgetsApi.getDailySpending(budgetId).catch(() => []),
+            budgetsApi.getTrend(budgetId).catch(() => []),
+          ]);
+
+        setSummary(summaryData);
+        setVelocity(velocityData);
+        setPeriods(periodsData);
+        setScheduledTransactions(stData);
+        setDailySpending(dailyData);
+        setTrendData(trend);
+
+        // Only a Bucket budget has a bucket status. It loads beside the rest
+        // but never fails the page: its own card says the request failed.
+        if (summaryData.budget.strategy === 'BUCKET') {
+          const request = ++bucketStatusRequest.current;
+          const isCurrent = () => bucketStatusRequest.current === request;
+          setBucketStatus({ state: 'loading' });
+          budgetsApi
+            .getBucketStatus(budgetId)
+            .then((data) => {
+              if (isCurrent()) setBucketStatus({ state: 'ready', data });
+            })
+            .catch(() => {
+              if (isCurrent()) setBucketStatus({ state: 'error' });
+            });
+        }
+      } catch (err) {
+        const message = getErrorMessage(err, t('pages.detail.toasts.loadFailed'));
+        setError(message);
+        toast.error(message);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    return run();
   }, [budgetId, t]);
 
+  const loadData = useCallback(() => {
+    setIsLoading(true);
+    setError(null);
+    return fetchData();
+  }, [fetchData]);
+
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    fetchData();
+  }, [fetchData]);
+
+  // The switcher's list. It simply does not render without one; the page is
+  // fine either way, so a failure here is not the page's error.
+  useEffect(() => {
+    let cancelled = false;
+    budgetsApi
+      .getAll()
+      .then((list) => {
+        if (!cancelled) setBudgets(list);
+      })
+      .catch(() => {
+        if (!cancelled) setBudgets([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useOnUndoRedo(loadData);
   // Refresh on AI chat-bubble writes (actual spending can change).
@@ -223,9 +286,18 @@ function BudgetDetailContent() {
   return (
     <PageLayout>
       <main className="px-4 sm:px-6 lg:px-12 pt-6 pb-8">
+        <BudgetBackLink href="/budgets" label={t('pages.detail.backToBudgets')} />
         <PageHeader
           title={summary.budget.name}
+          titleAdornment={
+            <BudgetSwitcher
+              currentId={budgetId}
+              budgets={budgets}
+              onSelect={(id) => router.push(`/budgets/${id}`)}
+            />
+          }
           subtitle={`${STRATEGY_LABELS[summary.budget.strategy] ?? summary.budget.strategy} budget - ${currencyCode}`}
+          help="budgets"
           actions={
             <div className="flex items-center gap-3">
               <BudgetPeriodSelector
@@ -245,9 +317,6 @@ function BudgetDetailContent() {
               >
                 {tc('delete')}
               </Button>
-              <Button variant="outline" onClick={() => router.push('/budgets')}>
-                {t('pages.detail.backToBudgets')}
-              </Button>
             </div>
           }
         />
@@ -266,6 +335,7 @@ function BudgetDetailContent() {
             dailySpending={dailySpending}
             trendData={trendData}
             healthScore={healthScore}
+            bucketStatus={bucketStatus}
             displayCurrency={currencyCode}
             // A bare amount is the budget's currency; a row that knows its own
             // currency says so, because an occurrence's amount is in the

@@ -1,0 +1,618 @@
+{
+  "page": {
+    "title": "Aturan",
+    "subtitle": "Isi tag, kategori, dan penerima secara otomatis saat transaksi dibuat atau diimpor",
+    "createButton": "Buat aturan",
+    "loading": "Memuat aturan...",
+    "totalCount": "{count, plural, other {# aturan}}"
+  },
+  "empty": {
+    "title": "Belum ada aturan",
+    "body": "Aturan memantau transaksi baru dan yang diimpor, lalu mengisi tag, kategori, atau penerima saat kondisinya terpenuhi. Buat aturan pertama Anda untuk memulai.",
+    "createButton": "Buat aturan pertama Anda"
+  },
+  "error": {
+    "title": "Aturan Anda tidak dapat dimuat",
+    "body": "Tidak ada yang ditampilkan karena permintaan gagal, bukan karena Anda tidak punya aturan. Periksa koneksi Anda dan coba lagi.",
+    "retry": "Coba lagi"
+  },
+  "list": {
+    "header": {
+      "order": "Urutan",
+      "enabled": "Aktif",
+      "name": "Aturan",
+      "summary": "Ringkasan",
+      "actions": "Tindakan"
+    },
+    "summary": "{trigger, select, create {Saat dibuat} import {Saat diimpor} both {Saat dibuat atau diimpor} other {Tanpa pemicu}} · {conditions, plural, =0 {Tanpa kondisi} other {# kondisi}} · {actions, plural, =0 {Tanpa tindakan} other {# tindakan}}",
+    "enabledLabel": "Aktifkan {name}"
+  },
+  "actions": {
+    "moveUp": "Pindah ke atas",
+    "moveDown": "Pindah ke bawah",
+    "run": "Jalankan pada transaksi yang ada",
+    "runInvalid": "Perbaiki aturan sebelum menjalankannya"
+  },
+  "invalid": {
+    "badge": "Tidak valid",
+    "tooltip": "Dilewati sampai diperbaiki: {reasons}.",
+    "reasons": {
+      "referenceMissing": "tag, penerima, kategori, atau akun yang digunakannya sudah tidak ada",
+      "noActions": "tidak memiliki tindakan",
+      "tooLarge": "kondisinya terlalu besar",
+      "duplicateAction": "mengulang tindakan yang hanya diizinkan sekali",
+      "unreadable": "definisi yang tersimpan tidak dapat dibaca",
+      "other": "definisinya tidak valid"
+    }
+  },
+  "duplicate": {
+    "name": "{name} (salinan)"
+  },
+  "delete": {
+    "title": "Hapus aturan",
+    "message": "Yakin ingin menghapus \"{name}\"? Tindakan ini tidak dapat dibatalkan."
+  },
+  "toasts": {
+    "enabled": "Aturan diaktifkan",
+    "disabled": "Aturan dinonaktifkan",
+    "toggleFailed": "Gagal mengubah aturan",
+    "deleted": "Aturan dihapus",
+    "deleteFailed": "Gagal menghapus aturan",
+    "duplicated": "Aturan diduplikasi. Salinan tetap nonaktif sampai Anda mengaktifkannya",
+    "duplicateFailed": "Gagal menduplikasi aturan",
+    "reorderFailed": "Gagal mengubah urutan aturan",
+    "listChanged": "Daftar aturan berubah di tempat lain dan telah dimuat ulang. Coba lagi",
+    "loadFailed": "Gagal memuat aturan"
+  },
+  "editor": {
+    "page": {
+      "newTitle": "Aturan baru",
+      "editTitle": "Ubah aturan",
+      "subtitle": "Pilih kapan aturan berjalan, transaksi mana yang dicakup, dan apa yang diubahnya",
+      "backToRules": "Kembali ke Aturan",
+      "loading": "Memuat aturan..."
+    },
+    "name": {
+      "label": "Nama",
+      "placeholder": "Contoh: Beri tag kafe"
+    },
+    "enabled": {
+      "label": "Aturan aktif"
+    },
+    "sections": {
+      "when": "Kapan",
+      "if": "Jika",
+      "then": "Maka"
+    },
+    "when": {
+      "description": "Pilih kapan aturan memeriksa sebuah transaksi",
+      "created": "Transaksi dibuat",
+      "imported": "Transaksi diimpor",
+      "atLeastOne": "Biarkan setidaknya satu opsi tetap dipilih",
+      "stopProcessing": "Hentikan pemrosesan aturan lain",
+      "stopProcessingHelp": "Jika aturan ini cocok dengan sebuah transaksi, aturan yang berada setelahnya dalam daftar dilewati untuk transaksi tersebut.",
+      "window": {
+        "title": "Aktif antara",
+        "help": "Aturan hanya berlaku untuk transaksi yang tanggalnya berada dalam rentang ini: saat dibuat atau diimpor, serta saat aturan diuji atau dijalankan. Kosongkan tanggal agar tanpa batas.",
+        "from": "Tanggal pertama",
+        "to": "Tanggal terakhir",
+        "backwards": "Tanggal terakhir tidak boleh sebelum tanggal pertama",
+        "noLimit": "tanpa batas",
+        "words": "Hanya untuk transaksi bertanggal {from} sampai {to}"
+      }
+    },
+    "if": {
+      "description": "Tindakan hanya dijalankan untuk transaksi yang cocok",
+      "everyTransaction": "Belum ada kondisi, jadi aturan ini berlaku untuk setiap transaksi."
+    },
+    "then": {
+      "description": "Tindakan dijalankan dalam urutan ini",
+      "empty": "Belum ada tindakan. Tambahkan setidaknya satu.",
+      "limit": "Satu aturan dapat memiliki paling banyak {max} tindakan."
+    },
+    "group": {
+      "matchAll": "Semua ini",
+      "matchAny": "Salah satu dari ini",
+      "matchLabel": "Kecocokan",
+      "not": "Balikkan grup",
+      "notHelp": "Grup yang dibalik cocok jika kondisinya tidak terpenuhi.",
+      "title": "Grup",
+      "addCondition": "+ Tambah kondisi",
+      "addGroup": "+ Tambah grup",
+      "depthLimit": "Grup dapat bersarang paling dalam {max} tingkat.",
+      "sizeLimit": "Batas kondisi telah tercapai.",
+      "empty": "Grup ini kosong."
+    },
+    "condition": {
+      "title": "Kondisi",
+      "field": "Bidang",
+      "operator": "Operator",
+      "value": "Nilai"
+    },
+    "fields": {
+      "accountId": "Akun",
+      "fromAccountId": "Dari akun (transfer)",
+      "toAccountId": "Ke akun (transfer)",
+      "type": "Jenis",
+      "payeeId": "Penerima",
+      "payeeText": "Teks penerima sebagaimana diterima",
+      "categoryId": "Kategori",
+      "description": "Deskripsi",
+      "amount": "Jumlah (dengan tanda)",
+      "absAmount": "Jumlah (tanpa tanda)",
+      "currencyCode": "Mata uang",
+      "tagIds": "Tag",
+      "hasSplits": "Memiliki pemisahan",
+      "referenceNumber": "Nomor Referensi",
+      "dayOfMonth": "Hari dalam bulan",
+      "weekday": "Hari dalam minggu",
+      "status": "Status",
+      "hasAttachment": "Memiliki lampiran",
+      "date": "Tanggal"
+    },
+    "operators": {
+      "eq": "adalah",
+      "neq": "bukan",
+      "in": "adalah salah satu dari",
+      "notIn": "bukan salah satu dari",
+      "isEmpty": "kosong",
+      "contains": "mengandung",
+      "startsWith": "diawali dengan",
+      "matches": "cocok dengan pola",
+      "lt": "kurang dari",
+      "lte": "paling banyak",
+      "gt": "lebih dari",
+      "gte": "paling sedikit",
+      "between": "berada di antara",
+      "hasAny": "memiliki salah satu dari",
+      "hasAll": "memiliki semua dari",
+      "hasNone": "tidak memiliki satu pun dari",
+      "inSubtree": "berada di dalam atau di bawah"
+    },
+    "types": {
+      "EXPENSE": "Pengeluaran",
+      "INCOME": "Pemasukan",
+      "TRANSFER": "Transfer"
+    },
+    "value": {
+      "account": "Pilih akun",
+      "accounts": "Pilih akun-akun",
+      "payee": "Pilih penerima",
+      "payees": "Pilih penerima-penerima",
+      "category": "Pilih kategori",
+      "categories": "Pilih kategori-kategori",
+      "tags": "Pilih tag",
+      "currency": "Pilih mata uang",
+      "currencies": "Pilih mata uang-mata uang",
+      "types": "Pilih jenis",
+      "matchesHint": "Gunakan * untuk teks apa pun, misalnya *kopi*. Pola tanpa * hanya cocok dengan seluruh teks. Gunakan {capture} untuk menyimpan teks di posisi itu bagi tindakan aturan ini, misalnya {example}. Nama terdiri dari huruf kecil dan angka, dan satu pola dapat menyimpan hingga {max} teks.",
+      "amount": "Jumlah",
+      "from": "Dari",
+      "to": "Sampai",
+      "yes": "Ya",
+      "no": "Tidak",
+      "days": "Pilih hari",
+      "weekdays": "Pilih hari dalam minggu",
+      "statuses": "Pilih status"
+    },
+    "action": {
+      "title": "Tindakan",
+      "type": "Jenis tindakan",
+      "tags": "Tag",
+      "category": "Kategori",
+      "payee": "Penerima",
+      "instruction": "Instruksi peninjauan",
+      "instructionPlaceholder": "Contoh: pisahkan pembelian ini sesuai struk",
+      "instructionHelp": "Aturan hanya meminta peninjauan. Seseorang menyetujui setiap perubahan sebelum dilakukan.",
+      "onlyIfEmpty": "Hanya jika kosong",
+      "onlyIfEmptyHelp": "Jika aktif, aturan mengisi kategori atau penerima hanya bila transaksi belum memilikinya. Aturan tidak menggantikan nilai yang diatur secara manual atau oleh kategori bawaan penerima. Nonaktifkan untuk menggantikannya.",
+      "add": "+ Tambah tindakan",
+      "reviewInbox": "Lihat kotak masuk peninjauan",
+      "payeeTemplate": "Nama penerima",
+      "descriptionTemplate": "Teks deskripsi",
+      "templateHelp": "Teks biasa. Setiap placeholder dalam kurung kurawal diganti dengan teks dari transaksi. Pilih placeholder di bawah untuk menyisipkannya.",
+      "joinHelp": "Teks digabungkan ke deskripsi saat ini persis seperti yang ditulis, jadi sertakan spasi atau pemisah yang Anda inginkan.",
+      "placeholders": "Placeholder",
+      "placeholdersHelp": "{payeeText} adalah teks penerima seperti yang diterima. {description} adalah deskripsi pada saat tindakan ini dijalankan. Placeholder lainnya adalah tangkapan yang dinamai dalam pola aturan ini.",
+      "insertPlaceholder": "Sisipkan {name}",
+      "unknownPlaceholders": "Tidak didefinisikan oleh aturan ini: {names}. Pilih placeholder dari daftar, atau tangkap di pola di atas.",
+      "invalidPlaceholders": "Bukan placeholder yang valid: {names}. Nama terdiri dari huruf kecil dan angka.",
+      "createIfMissing": "Buat penerima jika belum ada",
+      "createIfMissingHelp": "Jika aktif, dan tidak ada penerima yang cocok dengan nama tersebut (menurut nama, alias, atau kecocokan dekat), penerima baru dibuat. Penerima yang dibuat oleh aturan tetap ada jika Anda membatalkan proses.",
+      "onlyIfEmptyDescriptionHelp": "Jika aktif, aturan menulis deskripsi hanya jika transaksi belum memilikinya. Nonaktifkan untuk menulisnya setiap kali.",
+      "mode": "Mode deskripsi",
+      "modes": {
+        "replace": "Ganti deskripsi",
+        "append": "Tambahkan setelah deskripsi",
+        "prepend": "Tambahkan sebelum deskripsi"
+      },
+      "convertHelp": "Pemasukan atau pengeluaran yang cocok menjadi satu sisi transfer. Sisi lainnya dibuat di akun yang Anda pilih, yang harus memakai mata uang yang sama.",
+      "direction": "Arah",
+      "directionTo": "Pengeluaran: uang pergi ke akun lain",
+      "directionFrom": "Pemasukan: uang datang dari akun lain",
+      "clearCategory": "Hapus kategori",
+      "clearCategoryHelp": "Transfer tidak memiliki kategori. Matikan untuk mempertahankan kategori yang sudah dimiliki transaksi.",
+      "splitPayee": "Penerima transaksi (opsional)",
+      "splitHint": "Setiap bagian mengambil jumlahnya dari tangkapan pada pola di atas, atau mengambil sisanya. Bagian-bagian harus berjumlah sama dengan jumlah transaksi, jika tidak aturan tidak akan mengubahnya.",
+      "splitNoCaptures": "Belum ada tangkapan yang didefinisikan. Tulis nama dalam kurung kurawal pada pola di atas, misalnya PRINCIPAL: {example}, untuk memakainya di sini sebagai jumlah.",
+      "partAmountPlaceholder": "Pilih jumlah...",
+      "partRest": "Sisanya",
+      "partAccount": "Akun",
+      "partPayee": "Penerima sisi lainnya (opsional)",
+      "partsLimit": "Pemecahan dapat memiliki paling banyak {max} bagian.",
+      "guideTitle": "Cara menggunakan",
+      "splitGuideHow": "Di “Jika”, tambahkan kondisi pada teks penerima atau deskripsi dengan operator “cocok dengan pola”, lalu tulis nama dalam kurung kurawal di tempat jumlahnya berada, misalnya {first}. Setiap nama menjadi jumlah yang dapat Anda pilih untuk sebuah bagian, atau pilih “Sisanya”. Bagian-bagian harus berjumlah sama dengan jumlah transaksi, jika tidak, aturan membiarkan transaksi tanpa perubahan. Sebuah bagian dapat berupa kategori atau transfer ke akun lain (transfer mengubah saldo akun tersebut).",
+      "splitGuideExampleTitle": "Contoh: cicilan pinjaman",
+      "splitGuideBank": "Teks bank: POKOK: 1200,50 BUNGA: 300,25 DENDA: 0,00",
+      "splitGuidePattern": "Pola: *POKOK: {first} BUNGA: {second} DENDA*",
+      "splitGuidePart1": "Bagian 1: {first} sebagai transfer ke akun pinjaman",
+      "splitGuidePart2": "Bagian 2: {second} sebagai kategori “Pinjaman: Bunga”",
+      "splitGuideResult": "Hasil untuk -1500,75: -1200,50 ditransfer ke akun pinjaman dan -300,25 beban bunga.",
+      "splitGuideTip": "Tips: atur tanggal mulai di “Aktif antara” agar transaksi lama yang sudah direkonsiliasi tidak berubah, dan gunakan panel Uji sebelum menyimpan.",
+      "convertGuide": "Pengeluaran menjadi transfer ke akun yang dipilih, dan pemasukan menjadi transfer dari akun itu. Hanya saldo akun lainnya yang berubah. Tips: gunakan “Aktif antara” agar transaksi lama tidak berubah.",
+      "splitGuideName1": "pokok",
+      "splitGuideName2": "bunga",
+      "loanGuide": "Gunakan ini untuk debit bank yang membayar angsuran hipotek atau pinjaman sebagai satu jumlah. Di “Jika”, cocokkan debit berdasarkan akun, teks penerima, atau deskripsinya. Transaksi menjadi pemecahan: pokok ditransfer ke akun pinjaman dan bunga masuk ke kategori bunga, keduanya dihitung untuk angsuran yang dibayarnya. Tips: matikan posting otomatis pada pembayaran terjadwal pinjaman agar angsuran tidak dibayar dua kali, dan gunakan panel Uji sebelum menyimpan.",
+      "loan": {
+        "help": "Debit yang cocok membayar angsuran pinjaman berikutnya yang jatuh tempo dekat tanggalnya. Monize menghitung pokok dan bunga untuk angsuran itu; Anda tidak pernah mengetikkan jumlah.",
+        "account": "Akun pinjaman",
+        "accountPlaceholder": "Pilih hipotek atau pinjaman...",
+        "noLoans": "Anda tidak memiliki akun hipotek atau pinjaman terbuka untuk dilunasi.",
+        "window": "Jendela tanggal jatuh tempo",
+        "windowHelp": "Seberapa jauh dari tanggal jatuh tempo bank dapat mengambil pembayaran. Debit hingga sejumlah hari ini sebelum atau setelah tanggal jatuh tempo angsuran membayar angsuran itu; yang di luar jendela dibiarkan tanpa perubahan.",
+        "daysBefore": "Hari sebelum tanggal jatuh tempo",
+        "daysAfter": "Hari setelah tanggal jatuh tempo",
+        "excess": "Debit di atas angsuran",
+        "excessPolicies": {
+          "extra_principal": "Bayar selisihnya sebagai pokok tambahan",
+          "refuse": "Biarkan transaksi tanpa perubahan"
+        },
+        "shortfall": "Debit di bawah angsuran",
+        "shortfallPolicies": {
+          "refuse": "Biarkan transaksi tanpa perubahan",
+          "interest_first": "Bayar bunga dulu, sisanya sebagai pokok"
+        },
+        "policyNote": "Selisih beberapa sen diserap oleh baris bunga.",
+        "policyHelp": "Bank membulatkan setiap bagian secara terpisah, sehingga debit dalam 5 satuan terkecil mata uang (0,05 untuk sebagian besar mata uang) dianggap tepat dan baris bunga menyerap selisihnya. Selisih yang lebih besar mengikuti dua pilihan di atas.",
+        "interestCategory": "Kategori bunga (opsional)",
+        "interestCategoryPlaceholder": "Kategori bunga milik pinjaman itu sendiri",
+        "autoPostTitle": "Pembayaran terjadwal pinjaman memposting dirinya sendiri",
+        "autoPostBody": "Posting otomatis aktif untuk pembayaran terjadwal pinjaman ini, sehingga keduanya, pembayaran itu dan debit bank yang dilunasi aturan ini, akan membayar angsuran yang sama. Matikan posting otomatis pada pembayaran terjadwal."
+      }
+    },
+    "actionTypes": {
+      "add_tags": "Tambah tag",
+      "remove_tags": "Hapus tag",
+      "set_category": "Atur kategori",
+      "set_payee": "Atur penerima",
+      "request_ai_review": "Minta peninjauan AI",
+      "set_payee_from_text": "Atur penerima dari teks",
+      "set_description": "Atur deskripsi",
+      "convert_to_transfer": "Ubah menjadi transfer",
+      "split": "Pecah transaksi",
+      "settle_loan_installment": "Melunasi angsuran pinjaman"
+    },
+    "save": {
+      "button": "Simpan aturan",
+      "createdToast": "Aturan dibuat",
+      "savedToast": "Aturan disimpan",
+      "failedToast": "Gagal menyimpan aturan",
+      "summary": "Aturan tidak disimpan. Perbaiki item yang ditandai di bawah, lalu coba lagi."
+    },
+    "loadError": {
+      "title": "Aturan tidak dapat dimuat",
+      "body": "Tidak ada yang ditampilkan karena permintaan gagal, bukan karena aturannya kosong. Periksa koneksi Anda dan coba lagi.",
+      "lookupsBody": "Daftar akun, penerima, kategori, tag, dan mata uang tidak dapat dimuat, sehingga aturan tidak dapat ditampilkan dengan aman. Periksa koneksi Anda dan coba lagi.",
+      "notFound": "Aturan ini sudah tidak ada. Mungkin telah dihapus.",
+      "retry": "Coba lagi"
+    },
+    "invalid": {
+      "title": "Aturan ini tidak dapat berjalan",
+      "repaired": "Beberapa bagian dari definisi tersimpan tidak dapat dibaca dan dihapus atau diatur ulang di sini. Tinjau aturan sebelum menyimpan."
+    },
+    "conflict": {
+      "title": "Aturan ini diubah di tempat lain",
+      "body": "Muat ulang untuk melihat versi terbaru. Perubahan Anda yang belum disimpan akan hilang.",
+      "reload": "Muat ulang"
+    },
+    "errors": {
+      "codes": {
+        "INVALID_SHAPE": "Bagian ini tidak berbentuk sesuatu yang dipahami editor.",
+        "UNKNOWN_KEY": "Bagian ini memiliki pengaturan yang tidak ada.",
+        "UNKNOWN_FIELD": "Pilih bidang.",
+        "UNKNOWN_ACTION": "Pilih tindakan.",
+        "OPERATOR_NOT_ALLOWED": "Bidang ini tidak mengizinkan operator tersebut.",
+        "VALUE_REQUIRED": "Masukkan atau pilih nilai.",
+        "VALUE_NOT_ALLOWED": "Operator ini tidak menerima nilai.",
+        "VALUE_TYPE": "Nilai memiliki jenis yang salah untuk bidang ini.",
+        "VALUE_OUT_OF_RANGE": "Nilai berada di luar rentang.",
+        "VALUE_TOO_LONG": "Teks terlalu panjang.",
+        "VALUE_EMPTY": "Masukkan teks.",
+        "INVALID_UUID": "Pilih item dari daftar.",
+        "INVALID_ENUM": "Pilih salah satu nilai yang tersedia.",
+        "INVALID_CURRENCY": "Pilih mata uang.",
+        "ARRAY_EMPTY": "Pilih setidaknya satu item.",
+        "ARRAY_TOO_LARGE": "Terlalu banyak item yang dipilih.",
+        "RANGE_ORDER": "Nilai pertama tidak boleh lebih besar dari nilai kedua.",
+        "MAX_DEPTH": "Grup bersarang terlalu dalam. Batasnya {maxDepth} tingkat.",
+        "MAX_LEAVES": "Terlalu banyak kondisi. Batasnya {maxLeaves}.",
+        "MAX_NODES": "Terlalu banyak kondisi dan grup. Batasnya {maxNodes}.",
+        "NO_ACTIONS": "Tambahkan setidaknya satu tindakan.",
+        "TOO_MANY_ACTIONS": "Terlalu banyak tindakan. Batasnya {maxActions}.",
+        "DUPLICATE_ACTION": "Sebuah aturan hanya dapat memiliki satu tinjauan AI, satu transfer, pemecahan, atau pelunasan pinjaman, dan satu bagian pemecahan yang mengambil sisanya.",
+        "CONFLICTING_ACTIONS": "Tindakan transfer, pemecahan, atau pelunasan pinjaman tidak dapat digabungkan dengan “Atur kategori”, dan setiap bagian pemecahan memiliki kategori atau akun.",
+        "INVALID_CAPTURE": "Nama tangkapan memakai huruf kecil dan angka, diawali huruf, dan panjangnya paling banyak 20 karakter.",
+        "TOO_MANY_CAPTURES": "Satu pola dapat memuat paling banyak 5 tangkapan.",
+        "DUPLICATE_CAPTURE": "Setiap nama tangkapan hanya boleh dipakai satu kali dalam satu aturan.",
+        "UNKNOWN_CAPTURE": "Ini memakai tangkapan yang tidak didefinisikan oleh kondisi mana pun dalam aturan ini.",
+        "LOOKS_LIKE_REGEX": "Ekspresi reguler tidak didukung: | \\ dan kelas kurung pendek seperti [xy] dicocokkan sebagai karakter biasa, jadi pola yang ditulis sebagai regex tidak pernah cocok dengan yang dimaksud. Untuk mencocokkan salah satu dari beberapa teks, tambahkan grup “Salah satu dari ini” dan isi dengan satu kondisi untuk tiap teks.",
+        "PATTERN_WITHOUT_WILDCARD": "Tanpa * pola ini harus sama dengan seluruh teks. Gunakan operator “adalah” untuk seluruh teks, “mengandung” untuk sebagiannya, atau beri * di sekitar teks, misalnya *kopi*.",
+        "REFERENCE_NOT_FOUND": "Item yang dipilih di sini sudah tidak ada. Pilih yang lain.",
+        "NAME_REQUIRED": "Masukkan nama untuk aturan.",
+        "UNKNOWN": "Bagian ini tidak valid."
+      }
+    },
+    "run": {
+      "button": "Jalankan pada transaksi yang ada",
+      "saveFirst": "Simpan perubahan Anda untuk menjalankan aturan yang tersimpan."
+    },
+    "expression": {
+      "modeLabel": "Tampilan kondisi",
+      "visual": "Visual",
+      "expression": "Ekspresi",
+      "label": "Ekspresi kondisi",
+      "help": "Tulis kondisi sebagai teks. Gunakan && untuk semua, || untuk salah satu, dan !( ... ) untuk negasi. Sebut item dengan namanya: account(\"Nama\"), payee(\"Nama\"), category(\"Induk: Anak\") dan tag(\"Nama\"). Garis bawah _ berarti nilai yang belum dipilih. matchesGlob memakai * sebagai wildcard. Hanya sintaks yang ditawarkan pada saran yang didukung.",
+      "blocked": "Perbaiki ekspresi untuk kembali ke tampilan Visual atau untuk menyimpan.",
+      "errorAt": "Baris {line}, kolom {column}: {message}",
+      "suggestions": "Saran",
+      "errors": {
+        "tooLong": "Ekspresi terlalu panjang. Batasnya {max} karakter.",
+        "unexpectedChar": "Karakter {char} tidak didukung.",
+        "unterminatedString": "Teks ini tidak memiliki tanda kutip penutup.",
+        "invalidEscape": "Urutan escape ini tidak didukung.",
+        "badNumber": "Ini bukan angka yang valid.",
+        "expectedExpression": "Di sini diharapkan sebuah kondisi.",
+        "expectedField": "Di sini diharapkan nama bidang.",
+        "expectedOperator": "Setelah bidang diharapkan operator atau metode.",
+        "expectedValue": "Di sini diharapkan sebuah nilai.",
+        "expectedSymbol": "Di sini diharapkan {symbol}.",
+        "unexpectedToken": "Tidak diharapkan: {token}.",
+        "unsupported": "Bagian ini tidak didukung. Gunakan hanya sintaks yang ditawarkan pada saran.",
+        "unknownField": "Bidang tidak dikenal: {name}.",
+        "unknownFunction": "Fungsi atau metode tidak dikenal: {name}.",
+        "operatorNotAllowed": "Bidang {field} tidak dapat dipakai dengan {operator}.",
+        "wrongValueType": "{expected, select, text {Diharapkan teks dalam tanda kutip.} number {Diharapkan sebuah angka.} boolean {Diharapkan true atau false.} list {Diharapkan daftar dalam tanda kurung siku.} account {Diharapkan sebuah akun, misalnya account(\"Nama\").} payee {Diharapkan seorang penerima, misalnya payee(\"Nama\").} category {Diharapkan sebuah kategori, misalnya category(\"Induk: Anak\").} tag {Diharapkan sebuah tag, misalnya tag(\"Nama\").} other {Jenis nilai ini salah.}}",
+        "invalidEnum": "Gunakan salah satu dari: {values}.",
+        "invalidCurrency": "Gunakan kode mata uang tiga huruf dalam tanda kutip, misalnya \"CAD\".",
+        "valueTooLong": "Teks terlalu panjang. Batasnya {max} karakter.",
+        "listTooLong": "Daftar terlalu panjang. Batasnya {max} item.",
+        "unknownEntity": "{kind, select, account {Tidak ada akun bernama {name}.} payee {Tidak ada penerima bernama {name}.} category {Tidak ada kategori bernama {name}.} tag {Tidak ada tag bernama {name}.} other {Tidak ada item bernama {name}.}}",
+        "ambiguousEntity": "{count} item bernama {name}. Tambahkan nomor item yang dimaksud, misalnya {example}.",
+        "entityOrdinal": "Nomor untuk {name} harus antara 1 dan {count}.",
+        "maxDepth": "Grup bersarang terlalu dalam. Batasnya {max} tingkat.",
+        "maxLeaves": "Kondisi terlalu banyak. Batasnya {max}.",
+        "maxNodes": "Kondisi dan grup terlalu banyak. Batasnya {max}.",
+        "tooNested": "Terlalu banyak tanda kurung bersarang."
+      }
+    }
+  },
+  "test": {
+    "title": "Uji",
+    "description": "Coba aturan pada transaksi Anda yang ada. Tidak ada yang diubah.",
+    "button": "Uji aturan",
+    "again": "Uji lagi",
+    "incomplete": "Lengkapi kondisi dan tindakan di atas untuk menguji aturan.",
+    "idle": "Pilih transaksi untuk mencoba aturan, lalu pilih Uji aturan.",
+    "running": "Menguji aturan...",
+    "failed": "Pengujian tidak dapat diselesaikan. {message}",
+    "stale": "Aturan atau filter berubah sejak hasil ini. Uji lagi untuk melihat hasil terbaru."
+  },
+  "match": {
+    "button": "Uji aturan",
+    "buttonLabel": "Uji aturan: kondisi",
+    "incomplete": "Lengkapi kondisi di atas untuk melihat transaksi mana yang cocok.",
+    "windowBackwards": "Tanggal aktif berakhir sebelum dimulai, jadi tidak ada transaksi yang bisa cocok.",
+    "summary": "{count, plural, =0 {Tidak ada transaksi yang cocok} other {# transaksi yang cocok}}",
+    "summaryPending": "Transaksi yang cocok",
+    "running": "Mencari transaksi yang cocok...",
+    "failed": "Transaksi yang cocok tidak dapat dimuat. {message}",
+    "empty": "Tidak ada transaksi yang ada yang cocok dengan kondisi ini.",
+    "truncated": "Hanya {scanned, number} transaksi terbaru yang diperiksa.",
+    "stale": "Kondisi berubah sejak pengujian ini. Pilih Uji aturan lagi untuk melihat kecocokan saat ini."
+  },
+  "run": {
+    "title": "Jalankan “{name}” pada transaksi yang ada",
+    "description": "Pratinjau apa yang akan diubah aturan, lalu konfirmasi. Anda dapat membatalkan proses ini dari riwayat tindakan.",
+    "previewButton": "Pratinjau",
+    "confirmButton": "Konfirmasi dan jalankan",
+    "idle": "Pilih akun dan tanggal, lalu pilih Pratinjau. Tidak ada yang berubah sampai Anda mengonfirmasi.",
+    "loadingPreview": "Memuat pratinjau...",
+    "previewFailed": "Pratinjau tidak dapat dimuat, sehingga tidak ada yang dapat dijalankan. {message}",
+    "stale": "Filter berubah sejak pratinjau ini. Buat pratinjau lagi sebelum menjalankan.",
+    "accountsLoading": "Memuat akun...",
+    "accountsFailed": "Akun Anda tidak dapat dimuat, sehingga filter tidak tersedia.",
+    "retry": "Coba lagi",
+    "summary": "{matched, plural, other {# transaksi}} akan berubah dari {scanned, plural, other {# transaksi}} yang diperiksa.",
+    "matchesNone": "Aturan ini tidak cocok dengan satu pun transaksi yang diperiksa ({scanned}). Periksa kondisinya sebelum menyimpan. Pola tanpa * hanya cocok dengan seluruh teks.",
+    "noChange": "{matched} dari {scanned} transaksi yang diperiksa cocok dengan kondisi aturan, tetapi tidak ada yang akan berubah (misalnya, nilainya sudah ada dan «hanya jika kosong» aktif). Ini bukan kesalahan.",
+    "aiReview": "{count, plural, other {# transaksi akan dimasukkan ke antrean tinjauan AI}}. Permintaan dibuat saat Anda mengonfirmasi.",
+    "truncated": "Lebih banyak transaksi yang cocok daripada batas yang diizinkan. Hanya yang terbaru yang disertakan. Naikkan batas atau persempit tanggal untuk menyertakan sisanya.",
+    "truncatedOldest": "Lebih banyak transaksi cocok daripada yang diizinkan batas. Hanya yang paling lama yang disertakan, karena aturan ini melunasi angsuran pinjaman menurut urutan tanggal. Jalankan lagi setelah proses ini untuk menyertakan sisanya.",
+    "noMatches": {
+      "title": "Tidak ada transaksi yang akan berubah",
+      "body": "Tidak ada transaksi yang diperiksa yang cocok dengan aturan, atau aturan tidak akan mengubah apa pun pada transaksi tersebut."
+    },
+    "table": {
+      "date": "Tanggal",
+      "payee": "Penerima",
+      "amount": "Jumlah",
+      "change": "Perubahan yang direncanakan",
+      "noPayee": "Tanpa penerima"
+    },
+    "skipped": {
+      "title": "{count, plural, other {# transaksi}} dibiarkan apa adanya",
+      "line": "{count, plural, other {# transaksi}}: {reason}",
+      "missing": "Hilang pada pinjaman: {inputs}."
+    },
+    "skipReasons": {
+      "reconciled_locked": "sudah direkonsiliasi dan terkunci",
+      "transfer_leg_category": "merupakan transfer, yang tidak memiliki kategori",
+      "split_category": "dipecah, sehingga kategori milik pecahannya",
+      "cross_owner_transfer_payee": "merupakan transfer ke pemilik lain, yang penerimanya tidak boleh diubah aturan ini",
+      "empty_render": "teks sebuah tindakan menjadi kosong untuknya",
+      "payee_not_found": "tidak ada penerima dengan nama yang dibentuk aturan, dan aturan tidak membuatnya",
+      "other": "aturan tidak dapat mengubahnya",
+      "row_is_transfer_leg": "sudah berupa transfer",
+      "row_has_splits": "sudah dipecah",
+      "row_is_void": "sudah dibatalkan",
+      "zero_amount": "jumlahnya nol",
+      "transfer_direction_mismatch": "arah transfer tidak cocok: pengeluaran pergi ke akun, pemasukan datang dari akun",
+      "transfer_same_account": "akun transfer adalah akun transaksi itu sendiri",
+      "transfer_account_unavailable": "akun transfer tidak tersedia (sudah dihapus atau bukan milik Anda)",
+      "transfer_currency_mismatch": "akun transfer memakai mata uang lain",
+      "split_amount_unparseable": "jumlah dalam teksnya tidak dapat dibaca sebagai angka",
+      "split_sum_mismatch": "bagian-bagiannya tidak berjumlah sama dengan jumlahnya",
+      "split_too_few_parts": "kurang dari dua bagian tersisa setelah jumlah nol dibuang",
+      "row_from_scheduled_posting": "itu diposting dari pembayaran terjadwal pinjaman, yang sudah membayar angsuran itu",
+      "row_is_income": "itu adalah pemasukan, dan hanya debit yang membayar angsuran",
+      "loan_account_unavailable": "akun pinjaman tidak tersedia (sudah dihapus, ditutup, bukan milik Anda, atau bukan hipotek maupun pinjaman)",
+      "loan_interest_booked_separately": "pinjaman mencatat bunganya sebagai transaksi terpisah, sehingga satu pembayaran tidak bisa menanggungnya",
+      "loan_not_configured": "pinjaman kekurangan apa yang diperlukan untuk menghitung angsuran",
+      "no_installment_in_window": "tidak ada angsuran pinjaman yang jatuh tempo dalam jendela di sekitar tanggalnya",
+      "occurrence_already_posted": "angsuran yang jatuh tempo dalam jendela sudah dibayar",
+      "loan_debt_retired": "pinjaman sudah lunas",
+      "installment_amount_excess": "itu lebih besar dari angsuran, dan aturan membiarkan debit yang lebih besar tanpa perubahan",
+      "installment_amount_shortfall": "itu lebih kecil dari angsuran, dan aturan membiarkan debit yang lebih kecil tanpa perubahan"
+    },
+    "change": {
+      "category": "Kategori: {before} → {after}",
+      "payee": "Penerima: {before} → {after}",
+      "payeeNew": "Penerima: {before} → {name} (baru)",
+      "tagsAdded": "Tag ditambahkan: {tags}",
+      "tagsRemoved": "Tag dihapus: {tags}",
+      "none": "tidak ada",
+      "unknown": "item yang sudah dihapus",
+      "payeeCreated": "{done, select, yes {Penerima baru telah dibuat: {name}} other {Penerima baru akan dibuat: {name}}}",
+      "description": "Deskripsi: {before} → {after}",
+      "descriptionSet": "Atur deskripsi menjadi {value}",
+      "transfer": "{done, select, yes {Menjadi transfer dengan {account}} other {Akan menjadi transfer dengan {account}}}",
+      "split": "{done, select, yes {Dipecah menjadi {count, plural, other {# bagian}}} other {Akan dipecah menjadi {count, plural, other {# bagian}}}}",
+      "splitPart": "Bagian {number}: {amount} {target}",
+      "splitPartMemo": ", memo “{memo}”",
+      "splitToTransfer": "ke {account}",
+      "splitToTransferPayee": "ke {account}, penerima {payee}",
+      "splitToCategory": "sebagai {category}",
+      "splitUncategorised": "tanpa kategori",
+      "loanSettlement": "{done, select, yes {Dilunasi} other {Akan dilunasi}} angsuran {number} dari {account}, jatuh tempo {dueDate}: pokok {principal}, bunga {interest}{hasExtra, select, yes {, pokok tambahan {extra}} other {}}. Utang sebelumnya: {debtBefore}"
+    },
+    "filters": {
+      "accounts": "Akun",
+      "allAccounts": "Semua akun",
+      "startDate": "Dari",
+      "endDate": "Sampai",
+      "backwards": "Tanggal mulai tidak boleh setelah tanggal akhir.",
+      "limit": "Transaksi terbaru yang diperiksa",
+      "help": "Hanya transaksi terbaru dalam rentang yang diperiksa, hingga {max}."
+    },
+    "errors": {
+      "PREVIEW_CHANGED": "Transaksi atau aturan berubah sejak pratinjau. Tinjau pratinjau baru lalu jalankan lagi.",
+      "RUN_TOO_LARGE": "Proses ini mengubah terlalu banyak transaksi untuk dibatalkan dalam satu langkah. Persempit akun atau tanggal lalu coba lagi.",
+      "INVALID_RULE": "Aturan ini tidak valid, sehingga tidak dapat dijalankan. Buka dan perbaiki terlebih dahulu.",
+      "DATE_RANGE_INVALID": "Tanggal mulai tidak boleh setelah tanggal akhir.",
+      "draftInvalid": "Aturan belum lengkap atau tidak valid. Periksa kondisi dan tindakan di atas.",
+      "testFailed": "Terjadi kesalahan saat menguji aturan.",
+      "previewFailed": "Terjadi kesalahan saat memuat pratinjau.",
+      "runFailed": "Proses tidak dapat diselesaikan. Periksa riwayat tindakan sebelum mencoba lagi."
+    },
+    "toast": {
+      "done": "{count, plural, =0 {Tidak ada transaksi yang diubah} other {# transaksi diubah}}. Anda dapat membatalkannya dari riwayat tindakan.",
+      "changedNoUndo": "{count, plural, other {# transaksi diubah}}.",
+      "aiReviewsQueued": "{count, plural, other {# transaksi dimasukkan ke antrean tinjauan AI}}.",
+      "aiReviewsAlreadyQueued": "{count, plural, other {# transaksi sudah memiliki permintaan tinjauan AI yang terbuka, sehingga tidak ada yang baru dimasukkan ke antrean}}.",
+      "noChanges": "Tidak ada transaksi yang diubah."
+    },
+    "done": {
+      "summary": "{count, plural, =0 {Tidak ada transaksi yang diubah.} other {# transaksi diubah.}}",
+      "aiReviewsQueued": "{count, plural, other {# transaksi dimasukkan ke antrean tinjauan AI.}}",
+      "aiReviewsAlreadyQueued": "{count, plural, other {# transaksi sudah memiliki permintaan tinjauan AI yang terbuka, sehingga tidak dimasukkan ke antrean lagi.}}",
+      "undo": "Anda dapat membatalkan proses ini dari riwayat tindakan."
+    },
+    "missingInputs": {
+      "scheduledPayment": "pembayaran terjadwal",
+      "managedTemplate": "pembayaran yang dipecah menjadi pokok dan bunga",
+      "scheduleCalendar": "jadwal pembayaran",
+      "interestCategory": "kategori bunga",
+      "amortizationMonths": "periode amortisasi",
+      "paymentStartDate": "tanggal pembayaran pertama",
+      "paymentFrequency": "frekuensi pembayaran",
+      "originalPrincipal": "pokok awal pinjaman",
+      "rate": "suku bunga untuk tanggal tersebut",
+      "payment": "jumlah pembayaran",
+      "other": "pengaturan pinjaman"
+    }
+  },
+  "applications": {
+    "title": "Riwayat",
+    "description": "Transaksi terbaru yang diubah aturan ini, dari yang terbaru.",
+    "loading": "Memuat riwayat...",
+    "error": {
+      "title": "Riwayat tidak dapat dimuat",
+      "body": "Tidak ada yang ditampilkan karena permintaan gagal, bukan karena aturan belum berjalan. Periksa koneksi Anda lalu coba lagi.",
+      "retry": "Coba lagi"
+    },
+    "empty": {
+      "title": "Aturan ini belum mengubah apa pun",
+      "body": "Saat aturan mengubah transaksi, perubahannya dicantumkan di sini."
+    },
+    "source": {
+      "create": "Dibuat",
+      "import": "Diimpor",
+      "manual": "Dijalankan manual",
+      "other": "Lainnya"
+    },
+    "table": {
+      "date": "Tanggal",
+      "payee": "Penerima",
+      "amount": "Jumlah",
+      "source": "Sumber",
+      "change": "Perubahan",
+      "appliedAt": "Diterapkan",
+      "open": "Buka transaksi",
+      "noPayee": "Tanpa penerima",
+      "view": "Lihat"
+    }
+  },
+  "words": {
+    "everyTransaction": "Setiap transaksi",
+    "group": {
+      "all": "Semua ini:",
+      "any": "Salah satu dari ini:",
+      "notAll": "Tidak semua ini:",
+      "notAny": "Tidak satu pun dari ini:"
+    },
+    "leaf": "{field} {operator} {value}",
+    "leafNoValue": "{field} {operator}",
+    "range": "{from} dan {to}",
+    "text": "“{value}”",
+    "unknownCondition": "Kondisi yang tidak dapat ditampilkan versi ini",
+    "unknownAction": "Tindakan yang tidak dapat ditampilkan versi ini",
+    "action": {
+      "add_tags": "Tambah tag: {tags}",
+      "remove_tags": "Hapus tag: {tags}",
+      "set_category": "Atur kategori ke {name}{onlyIfEmpty, select, yes { (hanya jika kosong)} other {}}",
+      "set_payee": "Atur penerima ke {name}{onlyIfEmpty, select, yes { (hanya jika kosong)} other {}}",
+      "request_ai_review": "Minta peninjauan AI: {instruction}",
+      "set_payee_from_text": "Atur penerima dari teks: “{template}”{createIfMissing, select, yes { (dibuat jika belum ada)} other {}}{onlyIfEmpty, select, yes { (hanya jika kosong)} other {}}",
+      "set_description": "Atur deskripsi ({mode, select, append {tambahkan setelah} prepend {tambahkan sebelum} other {ganti}}): “{template}”{onlyIfEmpty, select, yes { (hanya jika kosong)} other {}}",
+      "convert_to_transfer": "Ubah menjadi transfer {direction, select, from {dari} other {ke}} {account}",
+      "split": "Pecah menjadi: {parts}",
+      "settle_loan_installment": "Melunasi angsuran {account} yang dibayar oleh debit hingga {before, plural, other {# hari}} sebelum atau {after, plural, other {# hari}} setelah tanggal jatuh temponya; debit yang lebih besar {excess, select, refuse {dibiarkan tanpa perubahan} other {membayar pokok tambahan}}, yang lebih kecil {shortfall, select, interest_first {membayar bunga dulu} other {dibiarkan tanpa perubahan}}"
+    },
+    "splitPart": {
+      "transfer": "{amount} ke {account}",
+      "category": "{amount} sebagai {category}",
+      "plain": "{amount}",
+      "rest": "sisanya"
+    }
+  }
+}

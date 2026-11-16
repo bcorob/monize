@@ -10,6 +10,8 @@
     "versionLabel": "Versie {version}",
     "expandAll": "Alles uitklappen",
     "collapseAll": "Alles inklappen",
+    "changeCount": "{count, plural, one {# wijziging} other {# wijzigingen}}",
+    "otherSections": "Oplossingen en details",
     "viewFullNotes": "Volledige release-opmerkingen bekijken",
     "dontShowAgain": "Niet meer weergeven",
     "showNextLogin": "Weergeven bij volgende aanmelding",
@@ -38,6 +40,14 @@
     "scheduleRecurring": "Terugkerend maken",
     "more": "Meer acties"
   },
+  "columns": {
+    "button": "Kolommen",
+    "buttonWithHidden": "Kolommen, {count} verborgen",
+    "menuLabel": "Kolommen tonen of verbergen",
+    "showAll": "Alles tonen",
+    "hideColumn": "Kolom verbergen",
+    "sheetSubtitle": "Zet hem terug via het menu Kolommen."
+  },
   "loading": "Laden...",
   "pagination": {
     "showing": "Weergeven",
@@ -60,6 +70,7 @@
   },
   "exportDropdown": {
     "export": "Exporteren",
+    "exportCsv": "CSV exporteren",
     "exporting": "Exporteren...",
     "exportPdf": "PDF exporteren",
     "exportReport": "Rapport exporteren",
@@ -88,6 +99,7 @@
     "stackedChart": "100% gestapeld staafdiagram",
     "lineChart": "Lijndiagram",
     "areaChart": "Vlakdiagram",
+    "sankeyChart": "Stroomdiagram",
     "table": "Tabel"
   },
   "formActions": {
@@ -118,8 +130,15 @@
     "search": "Zoeken...",
     "selectAll": "Alles selecteren",
     "clear": "Wissen",
+    "clearSearch": "Zoekopdracht wissen",
     "noOptions": "Geen opties gevonden",
     "selectedCount": "{count} geselecteerd"
+  },
+  "categoryFilter": {
+    "uncategorized": "Niet gecategoriseerd",
+    "transfers": "Overboekingen",
+    "allIncome": "Alle inkomstencategorieën",
+    "allExpenses": "Alle uitgavencategorieën"
   },
   "combobox": {
     "createOption": "Maak \"{value}\" aan",
@@ -137,6 +156,7 @@
   },
   "dateInput": {
     "shortcutsTitle": "Sneltoetsen",
+    "openPicker": "Datumkiezer openen",
     "today": "Vandaag",
     "firstDayOfYear": "Eerste dag van het jaar",
     "lastDayOfYear": "Laatste dag van het jaar",
@@ -158,6 +178,7 @@
     "CASH": "Contanten",
     "LINE_OF_CREDIT": "Kredietlijn",
     "ASSET": "Activa",
+    "CRYPTO": "Cryptowallet",
     "OTHER": "Overig"
   },
   "accountFilter": {
@@ -241,12 +262,20 @@
     "marker": "—",
     "srLabel": "Bedrag niet beschikbaar",
     "scheduledFx": "Het huidige bedrag kan niet worden bepaald: er is geen wisselkoers beschikbaar voor het afwikkelingsvalutapaar van dit geplande item. Het opgeslagen bedrag is met een oudere koers berekend en wordt daarom niet weergegeven.",
-    "displayFx": "Dit bedrag kan hier niet worden weergegeven: het bedrag is bekend, maar er is geen wisselkoers beschikbaar om het om te rekenen naar de valuta van dit totaal. Vernieuw de koersen op de pagina Valuta's."
+    "displayFx": "Dit bedrag kan hier niet worden weergegeven: het bedrag is bekend, maar er is geen wisselkoers beschikbaar om het om te rekenen naar de valuta van dit totaal. Vernieuw de koersen op de pagina Valuta's.",
+    "noCashBalance": "Deze waarde kan niet worden berekend: een geldrekening in deze weergave heeft voor deze dag geen saldo gemeld, dus wat erop stond is onbekend en niet nul. Laad het rapport opnieuw; blijft het zo, dan konden de saldi van die dag niet worden berekend en is dit het melden waard.",
+    "noPrice": "Deze waarde kan niet worden berekend: het aantal aandelen is bekend, maar het effect heeft geen koers om ze mee te waarderen. Vernieuw de koersen of voeg er handmatig een toe in de koershistorie van het effect.",
+    "noBaseline": "Dit cijfer kan niet worden berekend: het is een vergelijking en er is geen eerdere waarde om mee te vergelijken. Er ontbreekt niets, dus er valt niets toe te voegen.",
+    "staleQuote": "De dagwijziging kan niet worden berekend: de meest recente koers van het effect is ouder dan de laatste handelssessie, dus elke wijziging daaruit zou die van een eerdere dag zijn. Vernieuw de koersen of controleer de koersleverancier van het effect.",
+    "unknownCurrency": "Dit bedrag kan niet worden getoond: het record noemt geen effect, dus de valuta van het cijfer is onbekend. Open de transactie en geef er een effect aan, zodat de bedragen van een label kunnen worden voorzien."
   },
   "density": {
     "title": "Rijdichtheid wisselen",
     "normal": "Normaal",
     "compact": "Compact",
     "dense": "Dicht"
+  },
+  "scheduledOverdue": {
+    "included": "Inclusief {count, plural, one {# achterstallige geplande transactie} other {# achterstallige geplande transacties}}"
   }
 }

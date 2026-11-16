@@ -5,6 +5,7 @@ import { TransactionSplit } from "./entities/transaction-split.entity";
 import { isTransactionInFuture } from "../common/date-utils";
 import { tr } from "../i18n/translate";
 import { lockTransactionRow, LockedTransactionRow } from "../common/db/locks";
+import { assertReconciledRowsMutable } from "./reconciled-lock.util";
 
 /**
  * The two obligations every path that moves a single row across the VOID
@@ -33,6 +34,33 @@ export interface VoidTransitionBalanceWriter {
     userId: string,
     accountId: string,
   ): Promise<unknown>;
+}
+
+/**
+ * Whether an investment transaction owns this row as its cash leg. Raw EXISTS
+ * rather than the InvestmentTransaction repository: this util belongs to the
+ * transactions module and only asks whether an owner exists.
+ */
+export async function isInvestmentCashLeg(
+  m: EntityManager,
+  transactionId: string,
+): Promise<boolean> {
+  const rows: { id: string }[] = await m.query(
+    // includes VOID rows: records read -- ownership, not effect.
+    `SELECT id FROM investment_transactions WHERE transaction_id = $1 LIMIT 1`,
+    [transactionId],
+  );
+  return rows.length > 0;
+}
+
+/** Refuse an edit or delete of an investment cash leg; the trade owns it. */
+export function investmentCashLegLockedError(): BadRequestException {
+  return new BadRequestException(
+    tr(
+      "errors.transactions.investmentCashLegLocked",
+      "This transaction is the cash side of an investment transaction. Change or delete the investment transaction instead, so both sides change together.",
+    ),
+  );
 }
 
 /**
@@ -66,14 +94,7 @@ export async function assertVoidTransitionAllowedOnRow(
     );
   }
 
-  // Raw EXISTS rather than the InvestmentTransaction repository: this util
-  // belongs to the transactions module and only asks whether an owner exists.
-  const owningInvestmentRows: { id: string }[] = await m.query(
-    // includes VOID rows: records read -- ownership, not effect.
-    `SELECT id FROM investment_transactions WHERE transaction_id = $1 LIMIT 1`,
-    [transactionId],
-  );
-  if (owningInvestmentRows.length > 0) {
+  if (await isInvestmentCashLeg(m, transactionId)) {
     throw new BadRequestException(
       tr(
         "errors.transactions.investmentCashLegStatusLocked",
@@ -81,6 +102,36 @@ export async function assertVoidTransitionAllowedOnRow(
       ),
     );
   }
+}
+
+/**
+ * Refuse a VOID-boundary transition whose mirror leg is RECONCILED under the
+ * strict lock (INV-RECONCILE-001), before the caller's first write.
+ *
+ * The request names one leg, but the transition writes the counterpart's
+ * status and moves its account's balance, so the counterpart is asked the
+ * lock as well -- as the edit form's `updateTransfer`, the transfer delete and
+ * the bulk edit already ask both legs (issue #2072). Locks the counterpart the
+ * same way `applyVoidTransitionToMirrorLeg` does (re-entrant in this
+ * transaction) and skips exactly the rows that helper leaves alone. No undo
+ * window: a VOID is never an undo.
+ */
+export async function assertMirrorLegVoidTransitionMutable(
+  m: EntityManager,
+  userId: string,
+  row: Pick<LockedTransactionRow, "linkedTransactionId">,
+  newStatus: TransactionStatus,
+): Promise<void> {
+  if (!row.linkedTransactionId) return;
+  const counterpart = await lockTransactionRow(
+    m,
+    row.linkedTransactionId,
+    userId,
+  );
+  if (!counterpart || counterpart.isSplit) return;
+  const isVoid = newStatus === TransactionStatus.VOID;
+  if ((counterpart.status === TransactionStatus.VOID) === isVoid) return;
+  await assertReconciledRowsMutable(m, userId, [counterpart]);
 }
 
 /**
@@ -92,6 +143,19 @@ export async function assertVoidTransitionAllowedOnRow(
  * user (cross-owner: per-ledger inclusion), for a linked row that is a split
  * PARENT (that pairing is governed by the split propagation path), and for a
  * counterpart already on the target side of the boundary.
+ *
+ * Only VOID-ness is shared (INV-TRANSFER-001): entering VOID writes VOID onto
+ * the counterpart, but leaving it writes UNRECONCILED, never the status
+ * chosen for the leg the user opened -- CLEARED/RECONCILED are per-ledger and
+ * copying one across removed the counterpart's account from reconciliation
+ * candidates it was never checked against, with no reconciled date behind it.
+ *
+ * The counterpart is asked the strict reconciled lock (INV-RECONCILE-001)
+ * under its locked status before it is written, so a RECONCILED counterpart
+ * refuses the whole transition and the caller's transaction rolls back (issue
+ * #2072). A caller that writes before reaching here asks
+ * `assertMirrorLegVoidTransitionMutable` first, so the refusal precedes its
+ * own write too.
  */
 export async function applyVoidTransitionToMirrorLeg(
   m: EntityManager,
@@ -113,7 +177,15 @@ export async function applyVoidTransitionToMirrorLeg(
   const counterpartWasVoid = counterpart.status === TransactionStatus.VOID;
   if (counterpartWasVoid === isVoid) return [];
 
-  await m.update(Transaction, counterpart.id, { status: newStatus });
+  await assertReconciledRowsMutable(m, userId, [counterpart]);
+
+  await m.update(
+    Transaction,
+    counterpart.id,
+    isVoid
+      ? { status: TransactionStatus.VOID }
+      : { status: TransactionStatus.UNRECONCILED, reconciledDate: null },
+  );
   if (isTransactionInFuture(counterpart.transactionDate)) {
     await accounts.recalculateCurrentBalance(userId, counterpart.accountId);
   } else {

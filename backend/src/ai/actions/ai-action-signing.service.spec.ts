@@ -1,5 +1,8 @@
 import { ConfigService } from "@nestjs/config";
-import { AiActionSigningService } from "./ai-action-signing.service";
+import {
+  AiActionSigningService,
+  canonicalize,
+} from "./ai-action-signing.service";
 import {
   CreateInvestmentTransactionsDescriptor,
   CreateTransactionDescriptor,
@@ -89,8 +92,10 @@ describe("AiActionSigningService", () => {
       quantity: 10,
       price: 100,
       commission: 0,
+      accruedInterest: 0,
       exchangeRate: 1,
       description: null,
+      bondInstrumentId: null,
     });
     const bulk: CreateInvestmentTransactionsDescriptor = {
       type: "create_investment_transactions",
@@ -114,6 +119,15 @@ describe("AiActionSigningService", () => {
       expect(service.verify(tampered, sig)).toBe(false);
     });
 
+    it("rejects tampering with a row's accrued interest (the card's interest is signed)", () => {
+      const sig = service.sign(bulk);
+      const tampered: CreateInvestmentTransactionsDescriptor = {
+        ...bulk,
+        rows: [row("s1"), { ...row("s2"), accruedInterest: 470.5 }],
+      };
+      expect(service.verify(tampered, sig)).toBe(false);
+    });
+
     it("rejects reordering rows (row order is load-bearing)", () => {
       const sig = service.sign(bulk);
       const reordered: CreateInvestmentTransactionsDescriptor = {
@@ -121,6 +135,48 @@ describe("AiActionSigningService", () => {
         rows: [row("s2"), row("s1")],
       };
       expect(service.verify(reordered, sig)).toBe(false);
+    });
+  });
+
+  describe("undefined fields survive a JSON round-trip", () => {
+    const roundTrip = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+
+    it("verifies a descriptor with top-level undefined fields", () => {
+      const descriptor = {
+        type: "update_payee",
+        userId: "user-1",
+        actionId: "action-2",
+        expiresAt: 1_900_000_000_000,
+        payeeId: "p1",
+        name: "Acme",
+        website: undefined,
+        address: undefined,
+        email: undefined,
+        phone: undefined,
+      } as unknown as CreateTransactionDescriptor;
+      const sig = service.sign(descriptor);
+      expect(service.verify(roundTrip(descriptor), sig)).toBe(true);
+    });
+
+    it("verifies a batch_actions descriptor whose rows hold undefined fields", () => {
+      const descriptor = {
+        type: "batch_actions",
+        userId: "user-1",
+        actionId: "action-3",
+        expiresAt: 1_900_000_000_000,
+        operation: "update_payee",
+        rows: [
+          { payeeId: "p1", website: undefined, phone: undefined },
+          { payeeId: "p2", email: undefined, address: undefined },
+        ],
+      } as unknown as CreateTransactionDescriptor;
+      const sig = service.sign(descriptor);
+      expect(service.verify(roundTrip(descriptor), sig)).toBe(true);
+    });
+
+    it("omits undefined keys and renders array undefined as null", () => {
+      expect(canonicalize({ a: 1, b: undefined })).toBe(canonicalize({ a: 1 }));
+      expect(canonicalize([1, undefined, 2])).toBe("[1,null,2]");
     });
   });
 });

@@ -9,9 +9,16 @@ test.describe('Categories', () => {
     const name = `E2E Create ${uniqueId()}`;
 
     await page.goto('/categories');
-    await page.getByRole('button', { name: /new category/i }).first().click();
 
+    // The page is client-rendered, so a click that lands before the button's
+    // handler hydrates is a no-op -- retry the click until the dialog opens
+    // rather than clicking once into the void.
     const dialog = page.getByRole('dialog');
+    await expect(async () => {
+      await page.getByRole('button', { name: /new category/i }).first().click();
+      await expect(dialog).toBeVisible({ timeout: 2000 });
+    }).toPass({ timeout: 30000 });
+
     await dialog.getByLabel(/category name/i).fill(name);
     await dialog.getByRole('button', { name: /create category/i }).click();
 
@@ -57,17 +64,22 @@ test.describe('Categories', () => {
     const category = await createCategory(api, { name: `Delete Me ${uniqueId()}` });
 
     await page.goto('/categories');
-    await page
-      .locator('tr', { hasText: category.name })
-      .getByRole('button', { name: 'Delete', exact: true })
-      .click();
+
+    // The list is client-rendered, so a click that lands before the row's
+    // delete handler hydrates is a no-op -- retry the click until the confirm
+    // dialog opens rather than clicking once into the void.
+    const dialog = page.getByRole('dialog');
+    await expect(async () => {
+      await page
+        .locator('tr', { hasText: category.name })
+        .getByRole('button', { name: 'Delete', exact: true })
+        .click();
+      await expect(dialog).toBeVisible({ timeout: 2000 });
+    }).toPass({ timeout: 30000 });
 
     // The delete dialog checks usage async, then enables its Delete button
     // (click auto-waits for it to become enabled).
-    await page
-      .getByRole('dialog')
-      .getByRole('button', { name: 'Delete', exact: true })
-      .click();
+    await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
 
     await expect(page.locator('tr', { hasText: category.name })).toHaveCount(0);
     await page.reload();
@@ -76,9 +88,16 @@ test.describe('Categories', () => {
 
   test('rejects an empty category name', async ({ authedPage: page }) => {
     await page.goto('/categories');
-    await page.getByRole('button', { name: /new category/i }).first().click();
 
+    // The page is client-rendered, so a click that lands before the button's
+    // handler hydrates is a no-op -- retry the click until the dialog opens
+    // rather than clicking once into the void.
     const dialog = page.getByRole('dialog');
+    await expect(async () => {
+      await page.getByRole('button', { name: /new category/i }).first().click();
+      await expect(dialog).toBeVisible({ timeout: 2000 });
+    }).toPass({ timeout: 30000 });
+
     await dialog.getByRole('button', { name: /create category/i }).click();
 
     await expect(dialog.getByText(/category name is required/i)).toBeVisible();

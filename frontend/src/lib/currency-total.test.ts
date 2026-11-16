@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { sumConverted, combineTotals, isComplete } from './currency-total';
+import { sumConverted, combineTotals, isComplete, reportTotal } from './currency-total';
 
 interface Row {
   amount: number;
@@ -110,5 +110,18 @@ describe('combineTotals', () => {
     const net = combineTotals([assets, liabilities], ([a, l]) => a - l);
     expect(net.missingCurrencies.sort()).toEqual(['EUR', 'GBP']);
     expect(net.excludedCount).toBe(2);
+  });
+});
+
+describe('reportTotal', () => {
+  it('carries the response completeness beside the known value', () => {
+    const total = reportTotal(50, { missingCurrencies: ['JPY'], excludedCount: 2 });
+    expect(total).toEqual({ value: 50, missingCurrencies: ['JPY'], excludedCount: 2 });
+    expect(isComplete(total)).toBe(false);
+  });
+
+  it('reads a response without the fields as complete', () => {
+    expect(isComplete(reportTotal(50, {}))).toBe(true);
+    expect(isComplete(reportTotal(50, null))).toBe(true);
   });
 });

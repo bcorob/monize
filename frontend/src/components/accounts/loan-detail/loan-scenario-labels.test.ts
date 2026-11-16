@@ -121,4 +121,21 @@ describe('createScenarioLabels', () => {
       'loanDetail.comparison.installmentDrop:$400.00,$100.00',
     );
   });
+
+  it('reports time saved for a schedule without a level installment, whatever the mode', () => {
+    // A LINEAR or INTEREST_ONLY schedule has no "new installment": a
+    // lower-installment overpayment there holds the term end, so the honest
+    // outcome is that no time is saved.
+    const linear = {
+      scenario: { payoffDate: '2053-12-01', finalPaymentAmount: 700, levelInstallment: false },
+      paymentsSaved: 0,
+      monthsSaved: 0,
+      interestSaved: 4200,
+      installmentReduction: null,
+    } as unknown as ScenarioComparison;
+
+    expect(labels.timeSavedLabel(linear, 'LOWER_INSTALLMENT')).toBe(
+      'loanDetail.comparison.paymentsSaved:0',
+    );
+  });
 });

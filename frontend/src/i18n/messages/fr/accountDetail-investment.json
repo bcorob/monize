@@ -5,6 +5,8 @@
     "dividendsInterest": "Dividendes et intérêts",
     "realizedGains": "Gains réalisés",
     "ytd": "Depuis le début de l'année",
+    "realizedKnownPart": "Partie connue : {amount}",
+    "realizedUnknownReason": "Ce gain ne peut pas être calculé : la position contient des titres ajoutés sans coût, le coût de revient des titres vendus est donc inconnu. Ouvrez la transaction qui les a ajoutés et saisissez leur prix.",
     "empty": "Aucun revenu de placement cette année"
   },
   "register": {

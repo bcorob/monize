@@ -1,6 +1,7 @@
 import { Controller, Get } from "@nestjs/common";
 import { ApiExcludeController } from "@nestjs/swagger";
 import { SkipCsrf } from "../common/decorators/skip-csrf.decorator";
+import { PatIgnored } from "../auth/pat-access/pat-access.decorator";
 import {
   OAuthProviderService,
   MCP_RESOURCE_SCOPES,
@@ -17,6 +18,7 @@ import {
  */
 @ApiExcludeController()
 @SkipCsrf()
+@PatIgnored()
 @Controller(".well-known")
 export class OAuthMetadataController {
   constructor(private readonly providerService: OAuthProviderService) {}
@@ -29,7 +31,7 @@ export class OAuthMetadataController {
       scopes_supported: [...MCP_RESOURCE_SCOPES],
       bearer_methods_supported: ["header"],
       resource_documentation:
-        "https://modelcontextprotocol.io/specification/draft/basic/authorization",
+        "https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization",
     };
   }
 }

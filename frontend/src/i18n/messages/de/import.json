@@ -34,19 +34,22 @@
   },
   "page": {
     "title": "Buchungen importieren",
-    "subtitle": "Buchungen aus QIF-, OFX/QFX- oder CSV-Dateien importieren oder eine ganze Microsoft-Money-Datei (.mny) übernehmen"
+    "subtitle": "Buchungen aus QIF/QMTF-, OFX/QFX- oder CSV-Dateien importieren oder eine ganze Microsoft-Money-Datei (.mny) übernehmen"
   },
   "upload": {
     "heading": "Buchungsdateien hochladen",
-    "instructions": "Wählen Sie eine oder mehrere Dateien zum Importieren aus. Unterstützte Formate: QIF, OFX/QFX, CSV und Microsoft Money (.mny).\nSie können mehrere Dateien desselben Typs für den Massenimport auswählen. Microsoft-Money-Dateien werden einzeln importiert — eine .mny-Datei enthält ein komplettes Profil.",
+    "instructions": "Wählen Sie eine oder mehrere Dateien zum Importieren aus. Unterstützte Formate: QIF/QMTF, OFX/QFX, CSV und Microsoft Money (.mny).\nSie können mehrere Dateien desselben Typs für den Massenimport auswählen. Microsoft-Money-Dateien werden einzeln importiert — eine .mny-Datei enthält ein komplettes Profil.",
     "importingTo": "Importieren nach:",
     "clickToSelect": "Klicken, um Datei(en) auszuwählen",
+    "orDragAndDrop": "oder hierher ziehen und ablegen",
+    "dropToImport": "Zum Importieren ablegen",
+    "unsupportedDrop": "Diese Dateien können nicht importiert werden: {names}. Verwenden Sie QIF/QMTF-, OFX-, QFX-, CSV- oder Microsoft Money-Dateien (.mny).",
     "processing": "Wird verarbeitet...",
-    "acceptedFormats": "QIF, OFX, QFX, CSV oder Microsoft Money (.mny)",
+    "acceptedFormats": "QIF/QMTF, OFX, QFX, CSV oder Microsoft Money (.mny)",
     "mnyFailedHeading": "Diese Microsoft-Money-Datei konnte nicht geöffnet werden",
-    "wikiNotice": {
+    "docsNotice": {
       "title": "Bevor Sie importieren",
-      "body": "Lesen Sie den Abschnitt <money>Importing from Microsoft Money</money> oder <quicken>Importing from Quicken</quicken> im Wiki, bevor Sie irgendetwas importieren."
+      "body": "Lesen Sie den Abschnitt <money>Importing from Microsoft Money</money> oder <quicken>Importing from Quicken</quicken> in der Dokumentation, bevor Sie irgendetwas importieren. OFX/QFX- und QIF-Dateien haben jeweils ihre eigenen Besonderheiten — siehe <ofx>Importing OFX/QFX Files</ofx> und <qif>Importing Quicken QIF Files</qif>."
     }
   },
   "selectAccount": {
@@ -78,23 +81,25 @@
     "heading": "CSV-Spaltenzuordnung",
     "description": "Ordnen Sie Ihre CSV-Spalten den Buchungsfeldern zu. Prüfen Sie die Datenvorschau und konfigurieren Sie die Zuordnung.",
     "firstRowIsHeader": "Erste Zeile ist Kopfzeile",
-    "delimiterLabel": "Trennzeichen:",
-    "dateFormatLabel": "Datumsformat:",
+    "delimiterLabel": "Trennzeichen",
+    "dateFormatLabel": "Datumsformat",
     "customOption": "Benutzerdefiniert...",
     "customPlaceholder": "z. B. DD.MM.YYYY",
     "dataPreview": "Datenvorschau",
     "columnMappingTitle": "Spaltenzuordnung",
-    "dateField": "Datum *",
+    "columnMappingHelp": "Ordnen Sie jede CSV-Spalte einem Transaktionsfeld zu. Datum, Betragstyp und entweder Betrag oder Soll/Haben sind erforderlich; der Rest ist optional.",
+    "dateField": "Datum",
     "amountTypeField": "Betragstyp",
     "singleAmountOption": "Einzelne Betragsspalte",
     "splitAmountOption": "Getrennte Soll-/Habenspalten",
-    "amountField": "Betrag *",
+    "amountField": "Betrag",
     "signField": "Vorzeichen",
+    "signFieldHelp": "So wird das Vorzeichen des Betrags gelesen: „Wie angegeben“ behandelt eine positive Zahl als Einzahlung, „Umkehren“ behandelt sie als Abhebung (nützlich bei Kreditkartenabrechnungen, auf denen Belastungen positiv sind), und eine Transaktionstyp-Spalte bestimmt die Richtung anhand ihrer eigenen Werte statt des Vorzeichens.",
     "signNormal": "Wie angegeben (positiv = Einzahlung)",
     "signReverse": "Umgekehrt (positiv = Abhebung)",
     "signTypeColumn": "Buchungstypsp spalte verwenden",
-    "debitField": "Soll *",
-    "creditField": "Haben *",
+    "debitField": "Soll",
+    "creditField": "Haben",
     "typeColumnTitle": "Buchungstypspalte",
     "typeColumnDescription": "Wählen Sie die Spalte aus, die Einnahmen, Ausgaben oder Überweisung pro Zeile angibt.",
     "valuesFound": "Gefundene Werte: {values}",
@@ -137,8 +142,8 @@
     "kindBanking": "Bankbuchungen",
     "kindInvestment": "Investitionsbuchungen",
     "investmentModeHint": "Zeilen werden anhand der Aktionsspalte klassifiziert. Nicht zugeordnete Aktionswerte werden als Ein- oder Auszahlungen auf dem verknüpften Verrechnungskonto importiert.",
-    "actionField": "Aktion *",
-    "securityField": "Wertpapier (Symbol oder Name) *",
+    "actionField": "Aktion",
+    "securityField": "Wertpapier (Symbol oder Name)",
     "quantityField": "Stückzahl",
     "priceField": "Kurs",
     "commissionField": "Provision",
@@ -278,6 +283,15 @@
       "missingSplitRatio": "Split ohne Verhältnis"
     },
     "rejectedGoBack": "Gehen Sie zurück zum Schritt Spaltenzuordnung, um Spalten oder Aktions-Schlüsselwörter anzupassen.",
+    "unreadableDatesNotice": "{count, plural, one {# Zeile hat ein Datum, das} other {# Zeilen haben Daten, die}} nicht als {format} gelesen werden {count, plural, one {kann} other {können}} und nicht importiert {count, plural, one {wird} other {werden}}:",
+    "unreadableDateRow": "Zeile {line}: \"{rawDate}\"",
+    "missingDateRow": "Zeile {line}: kein Datum",
+    "unreadableDatesMore": "...und {count} weitere",
+    "unreadableDatesGoBack": "Wenn die Datei ihre Daten in einer anderen Reihenfolge schreibt, gehen Sie zurück zum Schritt Spaltenzuordnung und wählen Sie das Datumsformat der Datei.",
+    "unreadableAmountsNotice": "{count, plural, one {# Zeile hat einen Betrag, der} other {# Zeilen haben Beträge, die}} nicht gelesen werden {count, plural, one {kann} other {können}} und nicht importiert {count, plural, one {wird} other {werden}}:",
+    "unreadableAmountRow": "Zeile {line}: \"{rawAmount}\"",
+    "unreadableAmountsMore": "...und {count} weitere",
+    "unreadableAmountsGoBack": "Prüfen Sie, ob die Betragsspalten richtig zugeordnet sind, oder korrigieren Sie diese Zeilen in der Datei und importieren Sie sie erneut.",
     "importButton": "Buchungen importieren"
   },
   "complete": {
@@ -287,7 +301,7 @@
     "totalImported": "Insgesamt importiert:",
     "totalImportedSuffix": "Buchungen",
     "totalSkipped": "Insgesamt übersprungen:",
-    "totalSkippedSuffix": "doppelte Überweisungen",
+    "totalSkippedSuffix": "Buchungen",
     "totalErrors": "Gesamtfehler:",
     "categoriesCreated": "Erstellte Kategorien:",
     "accountsCreated": "Erstellte Konten:",
@@ -299,17 +313,36 @@
     "imported": "Importiert:",
     "importedSuffix": "Buchungen",
     "skipped": "Übersprungen:",
-    "skippedSuffix": "doppelte Überweisungen",
+    "skippedSuffix": "Buchungen",
     "errors": "Fehler:",
     "errorsLabel": "Fehler:",
     "andMoreErrors": "...und {count} weitere Fehler",
+    "skippedRowsHeading": "Übersprungene Zeilen:",
+    "skippedRow": "{date}: {amount}, {payee} ({reason})",
+    "skippedRowNoPayee": "{date}: {amount} ({reason})",
+    "skipReasonAlreadyImported": "bereits importiert",
+    "skipReasonDuplicateTransfer": "Überweisung bereits erfasst",
+    "skipReasonUnreadableDate": "Datum nicht lesbar",
+    "skipReasonNoDate": "kein Datum",
+    "skipReasonUnreadableAmount": "Betrag nicht lesbar",
+    "skippedRowRawAmount": "\"{rawAmount}\"",
+    "skipReasonMissingSecurity": "Wertpapier fehlt",
+    "skipReasonMissingQuantity": "Stückzahl fehlt",
+    "skipReasonMissingAmount": "Betrag fehlt",
+    "skipReasonMissingProceeds": "Verkauf ohne Kurs oder Erlös",
+    "skipReasonMissingSplitRatio": "Split ohne Verhältnis",
+    "skippedRowLineDate": "Zeile {line}, \"{rawDate}\"",
+    "skippedRowLine": "Zeile {line}",
+    "skippedRowLineAt": "Zeile {line}, {date}",
+    "andMoreSkipped": "...und {count} weitere übersprungene Zeilen",
     "loanSetupHeading": "Wiederkehrende Zahlungen einrichten",
     "loanSetupDescription": "Die folgenden Darlehens-/Hypothekenkonten wurden ohne terminierte Zahlungen importiert. Richten Sie wiederkehrende Zahlungen ein, um Ihre Darlehensrückzahlung weiter zu verfolgen.",
     "setUpPayments": "Zahlungen einrichten",
     "scheduledPaymentsConfigured": "Terminierte Zahlungen für {count} Konto{plural} konfiguriert.",
     "viewInvestments": "Investitionen anzeigen",
     "viewTransactions": "Buchungen anzeigen",
-    "importMoreFiles": "Weitere Dateien importieren"
+    "importMoreFiles": "Weitere Dateien importieren",
+    "bondRowsWithoutSeries": "{count, plural, one {# Anleihekauf wurde ohne Serie importiert. Wählen Sie die Serie in den Anleihe-Tranchen des Wertpapiers.} other {# Anleihekäufe wurden ohne Serie importiert. Wählen Sie die Serien in den Anleihe-Tranchen des Wertpapiers.}}"
   },
   "multiAccountReview": {
     "heading": "Multi-Konto-QIF-Import",
@@ -327,7 +360,10 @@
     "securitiesNotice": "Diese Datei enthält {count} Wertpapier{plural}, die vor dem Import zugeordnet werden müssen.",
     "nextMapSecurities": "Weiter: Wertpapiere zuordnen",
     "importAll": "Alle importieren",
-    "transactionCount": "{count} Buchung{plural}"
+    "transactionCount": "{count} Buchung{plural}",
+    "chooseAccountType": "Typ wählen",
+    "accountTypeFor": "Kontoart für {name}",
+    "accountTypesNeeded": "Die Datei gibt nicht an, welche Art {count, plural, one {# Konto ist} other {# Konten sind}}. Wählen Sie vor dem Import für jedes eine Art."
   },
   "navigation": {
     "back": "Zurück",
@@ -344,6 +380,7 @@
     "heading": "Microsoft-Money-Datei prüfen",
     "fileSummary": "{filename} -- {era}, Basiswährung {currency}. Die Salden unten werden aus der Datei selbst berechnet, sodass Sie sie vor dem Import mit Money vergleichen können.",
     "era": {
+      "money99": "Money-97-99-Format",
       "money2001": "Money-2001-Format",
       "money2002": "Money-2002-Format",
       "moneyPlus": "Money-Plus-/Sunset-Format",
@@ -355,6 +392,7 @@
       "transfersLinked": "{count} Umbuchungen verknüpft",
       "payees": "Zahlungsempfänger",
       "categories": "Kategorien",
+      "tags": "Tags aus Klassifizierungen",
       "accounts": "Konten",
       "securities": "Wertpapiere",
       "investments": "Investitionstransaktionen",
@@ -395,7 +433,7 @@
       "importPrices": "Kursverlauf importieren",
       "importPricesHint": "Moneys eigene Aufzeichnung, was jedes Wertpapier Tag für Tag wert war. Deaktivieren Sie dies, wenn Sie lieber mit aktuellen Kursen beginnen möchten.",
       "importExchangeRates": "Wechselkurse importieren",
-      "importExchangeRatesHint": "Historische Kurse zwischen den Währungen in Ihrer Datei, damit frühere Fremdwährungsbuchungen so umgerechnet werden wie in Money.",
+      "importExchangeRatesHint": "Historische Kurse zwischen den Währungen in Ihrer Datei, die nur für Tage verwendet werden, für die Monize keinen Kurs hat. Bereits gespeicherte Kurse werden nie ersetzt.",
       "wipeExistingData": "Neu beginnen: meine vorhandenen Monize-Daten zuerst entfernen",
       "wipeExistingDataHint": "Führt vor dem Import denselben Vorgang \"Meine Daten löschen\" aus wie in den Einstellungen. Sie werden um Bestätigung gebeten. Lassen Sie dies aus, um die Money-Datei zu Ihren vorhandenen Daten hinzuzufügen."
     },
@@ -424,7 +462,7 @@
     }
   },
   "mnyWipe": {
-    "heading": "Zuerst Ihre vorhandenen Daten entfernen?",
+    "heading": "Vorhandene Daten entfernen",
     "body": "Dies führt vor dem Import denselben Vorgang \"Meine Daten löschen\" aus wie unter Einstellungen -> Gefahrenzone. Entfernt wird:",
     "removes": {
       "transactions": "Jede Transaktion und Aufteilung",
@@ -434,8 +472,8 @@
       "budgets": "Jedes Budget, jeden benutzerdefinierten Bericht, jedes Tag und jede Importzuordnung"
     },
     "irreversible": "Dies kann nicht rückgängig gemacht werden. Wenn der Import anschließend fehlschlägt, kommen die entfernten Daten nicht zurück.",
-    "typeToConfirm": "Geben Sie zur Bestätigung {word} ein:",
-    "passwordLabel": "Geben Sie Ihr Passwort ein:",
+    "typeToConfirm": "Geben Sie zur Bestätigung {word} ein",
+    "passwordLabel": "Passwort",
     "oidcNote": "Ihr Identitätsanbieter hat diese Sitzung bereits bestätigt, daher ist kein Passwort erforderlich.",
     "confirm": "Meine Daten löschen und importieren"
   },
@@ -455,7 +493,8 @@
     },
     "failedHeading": "Der Import wurde nicht abgeschlossen",
     "retry": "Erneut versuchen",
-    "startOver": "Neu beginnen"
+    "startOver": "Neu beginnen",
+    "learnMore": "Mehr erfahren"
   },
   "mnyComplete": {
     "heading": "Import abgeschlossen",
@@ -469,6 +508,7 @@
       "splits": "Splitbuchungen",
       "payees": "Zahlungsempfänger",
       "categories": "Kategorien",
+      "taggedRows": "Aus Klassifizierungen getaggte Buchungen",
       "securities": "Wertpapiere",
       "investments": "Investitionstransaktionen",
       "prices": "Kurse",
@@ -492,7 +532,8 @@
     },
     "warningsHeading": "Hinweise zu diesem Import",
     "downloadReport": "Bericht herunterladen",
-    "done": "Fertig"
+    "done": "Fertig",
+    "bondRowsWithoutSeries": "{count, plural, one {# Anleihekauf wurde ohne Serie importiert. Wählen Sie die Serie in den Anleihe-Tranchen des Wertpapiers.} other {# Anleihekäufe wurden ohne Serie importiert. Wählen Sie die Serien in den Anleihe-Tranchen des Wertpapiers.}}"
   },
   "mnyWarnings": {
     "missingTable": "Diese Money-Version hat {count, plural, one {# Tabelle} other {# Tabellen}} nicht, die der Import verwendet.",
@@ -503,6 +544,7 @@
     "categoryFlattened": "{count, plural, one {# Kategorie war} other {# Kategorien waren}} tiefer als zwei Ebenen und wurden in die übergeordnete Kategorie zusammengeführt.",
     "categoryTypeInferred": "Bei {count, plural, one {# Kategorie} other {# Kategorien}} fehlte das Einnahmen-Kennzeichen von Money; Einnahme oder Ausgabe wurde aus dem Kategoriebaum abgeleitet.",
     "degeneratePayeeSkipped": "{count, plural, one {# Platzhalter-Zahlungsempfänger} other {# Platzhalter-Zahlungsempfänger}}, die Money intern führt, wurden übersprungen.",
+    "unknownClassificationItem": "{count, plural, one {# Buchung nannte ein Klassifizierungselement} other {# Buchungen nannten Klassifizierungselemente}}, das die Datei nicht definiert, und wurde ohne dieses Tag importiert.",
     "unusableTransaction": "{count, plural, one {# Transaktion hatte} other {# Transaktionen hatten}} kein Konto oder kein verwendbares Datum und wurden übersprungen.",
     "orphanedTransferSide": "Bei {count, plural, one {# Umbuchung} other {# Umbuchungen}} fehlte die Gegenseite in der Datei; sie wurden übersprungen.",
     "orphanedSplit": "{count, plural, one {# Splitbuchung hatte} other {# Splitbuchungen hatten}} keine übergeordnete Transaktion und wurden übersprungen.",
@@ -512,6 +554,7 @@
     "duplicateSecuritySymbol": "{count, plural, one {# Wertpapier teilt} other {# Wertpapiere teilen}} sich ein Symbol mit einem anderen; die späteren wurden umbenannt, damit sie getrennt bleiben.",
     "generatedSecuritySymbol": "{count, plural, one {# Wertpapier hat} other {# Wertpapiere haben}} in Money kein Symbol, daher wurde ein Platzhalter erzeugt und Kursaktualisierungen deaktiviert.",
     "unknownInvestmentAction": "{count, plural, one {# Investitionstransaktion verwendete} other {# Investitionstransaktionen verwendeten}} eine Aktion, die Monize nicht kennt, und wurden übersprungen.",
+    "stockOptionNotImported": "{count, plural, one {# Ereignis zu Mitarbeiteraktienoptionen} other {# Ereignisse zu Mitarbeiteraktienoptionen}} (Zuteilung, Unverfallbarkeit und Verfall) bewegten weder Geld noch Anteile und wurden nicht importiert.",
     "unconfirmedInvestmentAction": "{count, plural, one {# Investitionstransaktion verwendete} other {# Investitionstransaktionen verwendeten}} eine Money-Aktion, deren Bedeutung abgeleitet und nicht dokumentiert ist; prüfen Sie sie gegen Money.",
     "missingInvestmentDetail": "{count, plural, one {# Investitionstransaktion hatte} other {# Investitionstransaktionen hatten}} keine Anteilsangaben in der Datei und wurden nur mit ihrem Geldbetrag importiert.",
     "investmentAccountMismatch": "{count, plural, one {# Investitionstransaktion lag} other {# Investitionstransaktionen lagen}} in einem Konto, das kein Depotkonto ist, und wurden übersprungen.",
@@ -521,6 +564,9 @@
     "unusableBill": "{count, plural, one {# geplante Rechnung hatte} other {# geplante Rechnungen hatten}} kein Konto, kein brauchbares Datum oder eine unbekannte Wiederholung und wurden übersprungen.",
     "billFrequencyApproximated": "{count, plural, one {# geplante Rechnung verwendet} other {# geplante Rechnungen verwenden}} ein Wiederholungsintervall, das Monize nicht exakt abbilden kann; das nächstkürzere wurde verwendet.",
     "loanInterestCategoryUnclear": "{count, plural, one {# Kreditzahlung enthielt} other {# Kreditzahlungen enthielten}} mehrere Kategorien außer der Tilgung, daher wurde die Zinskategorie des Kredits nicht gesetzt. Prüfe, ob die Zahlung eine Treuhandkomponente (Escrow) enthält, und lege die Zinskategorie nach dem Import fest.",
+    "transferAmountMismatch": "{count, plural, one {# Überweisung auf ein Anlagekonto hat} other {# Überweisungen auf ein Anlagekonto haben}} auf der Anlageseite einen anderen Betrag als auf der Bankseite erfasst. Die Anlageseite wurde wie erfasst importiert.",
+    "crossCurrencyTradeUnconverted": "{count, plural, one {# Transaktion mit einem Wertpapier in anderer Währung wurde} other {# Transaktionen mit einem Wertpapier in anderer Währung wurden}} in der Kontowährung gespeichert, weil weder die Datei noch der Wechselkursanbieter für dieses Währungspaar um das Handelsdatum einen Wechselkurs hat. Füge den Wechselkurs hinzu und korrigiere den Preis jeder Transaktion.",
+    "crossCurrencyTradeMarketRate": "{count, plural, one {# Transaktion mit einem Wertpapier in anderer Währung wurde} other {# Transaktionen mit einem Wertpapier in anderer Währung wurden}} zum Marktwechselkurs des Handelsdatums umgerechnet, weil die Datei um dieses Datum keinen Wechselkurs enthält. Prüfe den Preis jeder Transaktion anhand deiner Unterlagen.",
     "showTransactions": "{count, plural, one {Die # Transaktion anzeigen} other {Die # Transaktionen anzeigen}}",
     "hideTransactions": "Transaktionen ausblenden",
     "reviewInMoney": "Öffnen Sie diese in Microsoft Money, um sie zu prüfen oder zu korrigieren, und exportieren und importieren Sie danach erneut.",
@@ -539,12 +585,89 @@
     "mnyImportFailed": "Beim Import ist etwas schiefgegangen. Es wurde nichts gespeichert -- Sie können es erneut versuchen.",
     "mnyJobStalled": "Der Import reagiert nicht mehr, höchstwahrscheinlich weil der Server neu gestartet wurde. Ihre hochgeladene Datei ist noch vorhanden, ein neuer Versuch ist also unbedenklich.",
     "mnyJobStalledAfterCommit": "Der Import reagiert nicht mehr, nachdem er Ihre Daten bereits gespeichert hatte, höchstwahrscheinlich weil der Server neu gestartet wurde. Die importierten Datensätze befinden sich in Ihrem Konto. Ein erneuter Import derselben Datei würde sie duplizieren. Prüfen Sie Ihre Konten, bevor Sie etwas anderes importieren.",
+    "mnyImportFailedAfterCommit": "Der Import hat Ihre Daten gespeichert, aber ein Schritt danach ist fehlgeschlagen. Die importierten Datensätze befinden sich in Ihrem Konto. Ein erneuter Import derselben Datei würde sie duplizieren. Prüfen Sie Ihre Konten, bevor Sie etwas anderes importieren.",
+    "mnyAlreadyImported": "Diese Datei wurde bereits in Ihr Konto importiert. Ein erneuter Import würde ihre Datensätze duplizieren. Um sie zu ersetzen, beginnen Sie von vorn und wählen Sie, Ihre vorhandenen Daten zu ersetzen.",
     "mnyStagedFileMissing": "Die hochgeladene Money-Datei ist nicht mehr verfügbar. Bitte laden Sie sie erneut hoch.",
     "mnyFileTruncated": "Diese Money-Datei scheint unvollständig zu sein. Der Upload wurde möglicherweise unterbrochen.",
     "mnyNotAMoneyFile": "Diese Datei ist keine Microsoft-Money-Datei (.mny).",
-    "mnyUnsupportedVersion": "Diese Datei wurde mit Money 97 oder 98 erstellt. Öffnen und speichern Sie sie einmal in der kostenlosen Money Plus Sunset Edition und importieren Sie dann das Ergebnis.",
+    "mnyUnsupportedVersion": "Diese Datei wurde mit einer Version von Microsoft Money erstellt, die Monize nicht lesen kann. Öffnen und speichern Sie sie einmal in der kostenlosen Money Plus Sunset Edition und importieren Sie dann das Ergebnis.",
     "mnyPasswordRequired": "Diese Money-Datei ist kennwortgeschützt.",
     "mnyPasswordIncorrect": "Mit diesem Kennwort lässt sich die Money-Datei nicht öffnen.",
     "mnyUnreadableDatabase": "Diese Money-Datei wurde entschlüsselt, ihr Inhalt konnte aber nicht gelesen werden. Sie ist möglicherweise beschädigt."
+  },
+  "preview": {
+    "choice": {
+      "legend": "Was mit {payee} geschehen soll, wenn es nicht importiert wird",
+      "skip": "Jetzt überspringen",
+      "except": "Zu den Ausnahmen hinzufügen"
+    },
+    "payeeTip": {
+      "name": "Von der Bank: {original}. Zugeordnet zu: {name}",
+      "alias": "Von der Bank: {original}. Zugeordnet zu: {name} (Alias \"{pattern}\")",
+      "aliasNoPattern": "Von der Bank: {original}. Zugeordnet zu: {name} (Alias)",
+      "new": "Von der Bank: {original}. Zugeordnet zu: {name} (neuer Zahlungsempfänger)",
+      "rule": "Von der Bank: {original}. Zugeordnet zu: {name} (durch eine Regel festgelegt)",
+      "ruleNone": "Von der Bank: {original}. Zugeordnet zu: kein Zahlungsempfänger (durch eine Regel festgelegt)"
+    },
+    "expand": {
+      "show": "Details zu {payee} anzeigen",
+      "hide": "Details zu {payee} ausblenden"
+    },
+    "rules": {
+      "heading": "Importregeln",
+      "none": "Keine Importregel hat auf diese Buchung gepasst.",
+      "skipped": "{action}: übersprungen ({reason})",
+      "stopped": "Beendet die Regelverarbeitung danach.",
+      "applied": "Angewendet: {actions}",
+      "openNewTab": "Regel {name} in einem neuen Tab öffnen"
+    },
+    "ruleTest": {
+      "loading": "Das Ergebnis des Regeltests wird geladen",
+      "error": "Das Ergebnis des Regeltests konnte nicht geladen werden.",
+      "retry": "Erneut versuchen",
+      "noRules": "Sie haben keine Importregeln, daher gab es nichts zu testen.",
+      "showNotMatched": "Regeln anzeigen, die nicht zugetroffen haben ({count})",
+      "hideNotMatched": "Regeln ausblenden, die nicht zugetroffen haben ({count})",
+      "noChanges": "Die Regel hat zugetroffen, ändert an dieser Transaktion aber nichts.",
+      "badge": {
+        "matched": "Zugetroffen",
+        "notMatched": "Nicht zugetroffen",
+        "notEvaluated": "Nicht geprüft"
+      },
+      "notEvaluated": {
+        "afterStop": "Nicht geprüft: Eine vorherige Regel hat die Regelverarbeitung beendet.",
+        "disabled": "Nicht geprüft: Die Regel ist ausgeschaltet.",
+        "invalid": "Nicht geprüft: Die Regel ist ungültig. Öffnen Sie sie, um sie zu reparieren.",
+        "outside_active_window": "Nicht geprüft: Das Datum der Zeile liegt außerhalb des Gültigkeitszeitraums der Regel."
+      },
+      "condition": {
+        "met": "Bedingung erfüllt",
+        "notMet": "Bedingung nicht erfüllt",
+        "actual": "Wert in dieser Transaktion: {value}",
+        "noValue": "keiner",
+        "noTags": "keine Tags",
+        "capture": "{name} = {value}",
+        "omitted": "Die Einzelheiten dieses Teils der Bedingung werden nicht angezeigt."
+      },
+      "skipReasons": {
+        "already_set": "sie hat bereits einen Wert und die Regel füllt nur leere Felder aus",
+        "no_change": "sie hat bereits, was die Regel setzen würde",
+        "payee_unresolved": "der von der Regel gebildete Zahlungsempfänger konnte nicht nachgeschlagen werden"
+      }
+    },
+    "payee": {
+      "heading": "Zahlungsempfänger",
+      "unknown": "Keine Angaben zum Zahlungsempfänger für diese Buchung.",
+      "original": "Text der Bank: {original}",
+      "name": "Entspricht Ihrem vorhandenen Zahlungsempfänger {name}.",
+      "alias": "Wird über den Alias \"{pattern}\" {name} zugeordnet.",
+      "aliasNoPattern": "Wird über einen Alias {name} zugeordnet.",
+      "new": "Noch kein Zahlungsempfänger hat diesen Namen, daher würde {name} angelegt.",
+      "rule": "Eine Importregel legt den Zahlungsempfänger fest: {name}.",
+      "ruleNone": "Eine Importregel entfernt den Zahlungsempfänger.",
+      "none": "Die Bank hat keine Gegenpartei angegeben, daher hat die Buchung keinen Zahlungsempfänger.",
+      "openAliases": "Aliase des Zahlungsempfängers öffnen",
+      "openAliasesNewTab": "Aliase des Zahlungsempfängers in einem neuen Tab öffnen"
+    }
   }
 }

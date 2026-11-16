@@ -94,6 +94,9 @@
     "largestValue": "{amount} am {date}",
     "overpaymentFor": "Sondertilgungs-Empfänger für",
     "website": "Website",
+    "address": "Adresse",
+    "phone": "Telefon",
+    "email": "E-Mail",
     "notes": "Notizen"
   },
   "tabs": {
@@ -127,5 +130,23 @@
     "needsMoreHistory": "Es sind mindestens {years} Jahre Historie nötig, um ein saisonales Muster von Zufall zu unterscheiden.",
     "empty": "Noch keine Ausgaben für eine Monatsaufteilung",
     "monthTooltip": "{month}: durchschnittlich {amount} über {years, plural, one {# Jahr} other {# Jahre}}"
+  },
+  "contactLookup": {
+    "button": "Kontaktangaben nachschlagen",
+    "inProgress": "Wird gesucht...",
+    "nothingNew": "Es wurden keine neuen Kontaktangaben gefunden.",
+    "noProvider": "Richte in den Einstellungen zur Zahlungsempfänger-Suche eine Quelle ein, um Kontaktdaten zu finden.",
+    "failed": "Die Suche konnte nicht abgeschlossen werden. Versuchen Sie es später erneut.",
+    "dialogTitle": "Kontaktangaben bestätigen",
+    "dialogSubtitle": "Für {name} wird nichts gespeichert, bevor Sie bestätigen.",
+    "pickMatch": "Dieser Name passt zu {count, plural, one {# Unternehmen} other {# Unternehmen}}. Wählen Sie das aus, an das Sie zahlen:",
+    "unlabelledMatch": "Treffer ohne Bezeichnung",
+    "willAdd": "Hinzufügen",
+    "willReplace": "Ersetzen",
+    "cancel": "Abbrechen",
+    "confirm": "{count, plural, one {# Änderung speichern} other {# Änderungen speichern}}",
+    "applied": "{count, plural, one {# Kontaktangabe gespeichert} other {# Kontaktangaben gespeichert}}",
+    "applyFailed": "Die Kontaktangaben konnten nicht gespeichert werden",
+    "quotaExceeded": "Die Google-Places-Abfragen dieses Monats sind aufgebraucht. Erhöhe das Limit in den Einstellungen zur Zahlungsempfänger-Suche oder warte bis zum nächsten Monat."
   }
 }

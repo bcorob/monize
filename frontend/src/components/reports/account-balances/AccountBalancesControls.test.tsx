@@ -167,9 +167,13 @@ describe('AccountBalancesControls layout', () => {
    * fields (the date, group-by, sort-by), and used to be a hand-rolled pair of
    * icon buttons centred against that row -- shorter than every field beside
    * them, because nothing reserved the label space above them the way `Select`
-   * does above its own input. `ChartViewToggle`/`ExportDropdown` now sit in a
+   * does above its own input. `ChartViewToggle` and the export now sit in a
    * column shaped exactly like the sort-direction toggle's: same spacer, same
    * `items-stretch` row, so what is left to stretch into is the field height.
+   *
+   * The spacer is the DESKTOP's alone (`hidden sm:block`): on a phone there is
+   * no field beside these controls, and the export is a row of its own through
+   * `ReportToolbarActions`.
    */
   it('gives the view toggle and export button the height of the fields beside them', () => {
     renderControls();
@@ -177,16 +181,21 @@ describe('AccountBalancesControls layout', () => {
     const exportButton = screen.getByTestId('export-dropdown');
 
     // Both controls share one stretched row, inside a column that reserves a
-    // label spacer above them -- the same shape the sort-direction toggle uses.
-    // `ChartViewToggle` wraps its own buttons in a `flex gap-2` div, so the
-    // shared row is one level up from the button itself.
+    // label spacer above them. `ChartViewToggle` wraps its own buttons in a
+    // `flex gap-2` div and the export sits in its actions row, so the shared
+    // row is one level up from each button.
     const row = tableButton.parentElement!.parentElement!;
-    expect(row).toBe(exportButton.parentElement);
+    expect(row).toBe(exportButton.parentElement!.parentElement);
     expect(row.className).toContain('items-stretch');
+    // It wraps, so the export takes a line of its own on a phone.
+    expect(row.className).toContain('flex-wrap');
 
     const column = row.parentElement!;
-    const spacer = column.firstElementChild!;
-    expect(spacer).not.toBe(row);
+    const spacerWrapper = column.firstElementChild!;
+    expect(spacerWrapper).not.toBe(row);
+    expect(spacerWrapper.className).toContain('hidden');
+    expect(spacerWrapper.className).toContain('sm:block');
+    const spacer = spacerWrapper.firstElementChild!;
     expect(spacer.getAttribute('aria-hidden')).toBe('true');
     expect(spacer.className).toContain('mb-1');
     expect(spacer.className).toContain('text-sm');

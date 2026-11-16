@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { DataSource } from "typeorm";
 
+import { compareMigrationFilenames } from "@/common/db/migration-filename";
 import { withUserContext } from "@/common/db/with-context";
 import { JobClaimService, JobClaimType } from "@/common/jobs/job-claim.service";
 
@@ -23,7 +24,8 @@ import {
  *
  * This suite builds exactly that database: the committed baseline fixture (main's
  * schema.sql at the SHA named in its header, max migration 148) plus the full
- * migrations directory in filename order, `synchronize: false` throughout.
+ * migrations directory in apply order (numeric prefix), `synchronize: false`
+ * throughout.
  * Replaying the whole directory matches db-migrate's behaviour on such an install
  * -- files <= 148 are no-ops there, 149+ do the real work. Then it runs the real
  * services against the result, because "the migrations apply" and "the migrated
@@ -96,7 +98,7 @@ describe("production migration path (baseline schema + migrations)", () => {
     const files = fs
       .readdirSync(MIGRATIONS_DIR)
       .filter((f) => f.endsWith(".sql"))
-      .sort();
+      .sort(compareMigrationFilenames);
     expect(files.length).toBeGreaterThan(0);
     for (const file of files) {
       try {
@@ -108,6 +110,7 @@ describe("production migration path (baseline schema + migrations)", () => {
           `migration ${file} failed against the baseline schema: ${
             error instanceof Error ? error.message : String(error)
           }`,
+          { cause: error },
         );
       }
     }
@@ -318,5 +321,114 @@ describe("production migration path (baseline schema + migrations)", () => {
       [contactId],
     );
     expect(after[0].claim_token_hash).toBeNull();
+  });
+
+  it("holds the loan settlement claim constraints on the migrated schema", async () => {
+    // docs/specs/loan-installment-settlement.md section 16, row B1, against the
+    // DDL the migration itself installs rather than the entity-derived schema.
+    await db.query(
+      `INSERT INTO currencies (code, name, symbol) VALUES ('USD', 'US Dollar', '$')
+       ON CONFLICT (code) DO NOTHING`,
+    );
+    const [account]: { id: string }[] = await db.query(
+      `INSERT INTO accounts (user_id, account_type, name, currency_code)
+       VALUES ($1, 'CHEQUING', 'Settlement source', 'USD') RETURNING id`,
+      [owner],
+    );
+    const [schedule]: { id: string }[] = await db.query(
+      `INSERT INTO scheduled_transactions (user_id, account_id, name, amount,
+         currency_code, frequency, next_due_date, start_date)
+       VALUES ($1, $2, 'Mortgage', -1333.33, 'USD', 'MONTHLY',
+               '2024-02-01', '2024-01-01')
+       RETURNING id`,
+      [owner, account.id],
+    );
+    const [rule]: { id: string }[] = await db.query(
+      `INSERT INTO transaction_rules (user_id, name, position)
+       VALUES ($1, 'Settle the mortgage', 0) RETURNING id`,
+      [owner],
+    );
+    await db.query(
+      `UPDATE accounts SET payment_matching_rule_id = $1 WHERE id = $2`,
+      [rule.id, account.id],
+    );
+    const insertTransaction = async (): Promise<string> => {
+      const [row]: { id: string }[] = await db.query(
+        `INSERT INTO transactions (user_id, account_id, transaction_date,
+           amount, currency_code)
+         VALUES ($1, $2, '2024-01-02', -1333.33, 'USD') RETURNING id`,
+        [owner, account.id],
+      );
+      return row.id;
+    };
+    const claim = (
+      dueDate: string,
+      transactionId: string | null,
+      source?: string,
+    ) =>
+      db.query(
+        source === undefined
+          ? `INSERT INTO scheduled_transaction_postings
+               (scheduled_transaction_id, original_due_date, posted_date,
+                transaction_id)
+             VALUES ($1, $2, $2, $3) RETURNING id, source`
+          : `INSERT INTO scheduled_transaction_postings
+               (scheduled_transaction_id, original_due_date, posted_date,
+                transaction_id, source, rule_id, pricing)
+             VALUES ($1, $2, $2, $3, $4, $5, '{"version":1}') RETURNING id, source`,
+        source === undefined
+          ? [schedule.id, dueDate, transactionId]
+          : [schedule.id, dueDate, transactionId, source, rule.id],
+      ) as Promise<{ id: string; source: string }[]>;
+
+    // A claim written as today's post() writes it takes the default source.
+    const postTx = await insertTransaction();
+    const [postClaim] = await claim("2024-01-01", postTx);
+    expect(postClaim.source).toBe("post");
+
+    const ruleTx = await insertTransaction();
+    const [ruleClaim] = await claim("2024-02-01", ruleTx, "rule");
+    expect(ruleClaim.source).toBe("rule");
+
+    // One claim per transaction, one source vocabulary, and a rule claim
+    // always names its transaction.
+    await expect(claim("2024-03-01", ruleTx, "rule")).rejects.toThrow(
+      /idx_stp_transaction/,
+    );
+    // A transaction of its own, so only the source can be what refuses it.
+    const unclaimedTx = await insertTransaction();
+    await expect(claim("2024-03-01", unclaimedTx, "manual")).rejects.toThrow(
+      /chk_stp_source/,
+    );
+    await expect(claim("2024-03-01", null, "rule")).rejects.toThrow(
+      /chk_stp_rule_claim_transaction/,
+    );
+    // Many post claims may name no transaction.
+    await claim("2024-03-01", null);
+    await claim("2024-04-01", null);
+
+    // Deleting the rule clears both pointers to it and keeps the claim.
+    await db.query(`DELETE FROM transaction_rules WHERE id = $1`, [rule.id]);
+    const [afterRule]: { rule_id: string | null }[] = await db.query(
+      `SELECT rule_id FROM scheduled_transaction_postings WHERE id = $1`,
+      [ruleClaim.id],
+    );
+    expect(afterRule.rule_id).toBeNull();
+    const [accountAfter]: { payment_matching_rule_id: string | null }[] =
+      await db.query(
+        `SELECT payment_matching_rule_id FROM accounts WHERE id = $1`,
+        [account.id],
+      );
+    expect(accountAfter.payment_matching_rule_id).toBeNull();
+
+    // Deleting the paying transaction releases the claim, for either source.
+    await db.query(`DELETE FROM transactions WHERE id = ANY($1)`, [
+      [postTx, ruleTx],
+    ]);
+    const remaining: { id: string }[] = await db.query(
+      `SELECT id FROM scheduled_transaction_postings WHERE id = ANY($1)`,
+      [[postClaim.id, ruleClaim.id]],
+    );
+    expect(remaining).toEqual([]);
   });
 });

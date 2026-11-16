@@ -1,0 +1,287 @@
+{
+  "title": "[XX-Notifications-XX]",
+  "unread": "[XX-{count} unread-XX]",
+  "markAllRead": "[XX-Mark all read-XX]",
+  "loading": "[XX-Loading notifications...-XX]",
+  "empty": "[XX-No notifications-XX]",
+  "undo": "[XX-Undo-XX]",
+  "buttonTitle": "[XX-Notifications-XX]",
+  "buttonAriaLabel": "[XX-Notifications-XX]",
+  "dismissAriaLabel": "[XX-Dismiss notification-XX]",
+  "closeAriaLabel": "[XX-Close notifications-XX]",
+  "emptyFiltered": "[XX-No notifications match the current filter-XX]",
+  "deleteAll": "[XX-Delete all-XX]",
+  "deleteAllConfirmTitle": "[XX-Delete notifications-XX]",
+  "deleteAllConfirmMessageAll": "[XX-Delete all notifications? This cannot be undone.-XX]",
+  "deleteAllConfirmMessageFiltered": "[XX-Delete every notification matching the current filter, including any not shown? This cannot be undone.-XX]",
+  "deleted": "[XX-{count, plural, one {# notification deleted} other {# notifications deleted}}-XX]",
+  "deleteFailed": "[XX-The notifications could not be deleted-XX]",
+  "filter": {
+    "financial": "[XX-Financial-XX]",
+    "system": "[XX-System-XX]"
+  },
+  "severity": {
+    "critical": "[XX-Critical-XX]",
+    "warning": "[XX-Warning-XX]",
+    "success": "[XX-Good News-XX]",
+    "info": "[XX-Info-XX]"
+  },
+  "reminder": {
+    "remindAriaLabel": "[XX-Remind me about this-XX]",
+    "stopAriaLabel": "[XX-Stop this reminder-XX]",
+    "stopped": "[XX-Reminder stopped-XX]",
+    "stopFailed": "[XX-The reminder could not be stopped-XX]",
+    "created": "[XX-Reminder set-XX]",
+    "createFailed": "[XX-The reminder could not be set-XX]",
+    "dialogTitle": "[XX-Remind me-XX]",
+    "dialogDescription": "[XX-Get this notification again later until you act on it.-XX]",
+    "modeLabel": "[XX-Frequency-XX]",
+    "modeRepeat": "[XX-Repeat until I stop it-XX]",
+    "modeOnce": "[XX-Just once more-XX]",
+    "intervalLabelRepeat": "[XX-Remind me every-XX]",
+    "intervalLabelOnce": "[XX-Remind me after-XX]",
+    "durationMinutes": "[XX-{minutes, plural, one {# minute} other {# minutes}}-XX]",
+    "durationHours": "[XX-{hours, plural, one {# hour} other {# hours}}-XX]",
+    "cancel": "[XX-Cancel-XX]",
+    "confirm": "[XX-Set reminder-XX]",
+    "pageTitle": "[XX-Active reminders-XX]",
+    "empty": "[XX-No active reminders-XX]",
+    "loadFailed": "[XX-Reminders could not be loaded-XX]",
+    "retry": "[XX-Try again-XX]",
+    "nextFire": "[XX-Next reminder: {date}-XX]",
+    "openTarget": "[XX-Open related page-XX]",
+    "delegateUnavailable": "[XX-Switch back to your own account to manage reminders.-XX]"
+  },
+  "billDue": {
+    "titleOverdue": "[XX-{payee} overdue-XX]",
+    "titleToday": "[XX-{payee} due today-XX]",
+    "titleTomorrow": "[XX-{payee} due tomorrow-XX]",
+    "titleInDays": "[XX-{payee} due in {days} days-XX]",
+    "amountDue": "[XX-{amount} due on {date}-XX]",
+    "amountUnavailable": "[XX-Amount unavailable (no current exchange rate), due on {date}-XX]"
+  },
+  "gemSignal": {
+    "riskTitle": "[XX-{strategy} switched to {state}-XX]",
+    "riskMessage": "[XX-Your GEM strategy \"{strategy}\" changed from {fromState} to {toState}. Open to review the recommendation.-XX]",
+    "allocationTitle": "[XX-{strategy} changed its target-XX]",
+    "allocationMessage": "[XX-Your GEM strategy \"{strategy}\" now targets {target}. Open to review the recommendation.-XX]",
+    "riskOn": "[XX-risk-on-XX]",
+    "riskOff": "[XX-risk-off-XX]"
+  },
+  "bond": {
+    "maturitySoonTitle": "[XX-{series} matures on {date}-XX]",
+    "maturitySoonMessage": "[XX-{quantity} x {series} mature on {date}. {payout}-XX]",
+    "interestTitle": "[XX-{series}: interest payment on {date}-XX]",
+    "interestMessage": "[XX-{quantity} x {series} pay {amount} of interest on {date}. Book it on the security page if it is not in your account yet.-XX]",
+    "interestMessageUnknown": "[XX-{quantity} x {series} pay interest on {date}. The amount is not known yet: a rate it depends on is not published.-XX]",
+    "rateResetTitle": "[XX-{series}: new interest period-XX]",
+    "rateResetMessage": "[XX-{series} entered period {period} on {date} at {rate} a year.-XX]",
+    "unbookedTitle": "[XX-{series}: matured, redemption not booked-XX]",
+    "unbookedMessage": "[XX-{quantity} x {series} matured on {date} and no redemption is booked. {payout} Book the redemption on the security page.-XX]",
+    "payoutKnown": "[XX-The payout is {payout}.-XX]",
+    "payoutUnknown": "[XX-The payout is not known yet: {reason}.-XX]",
+    "reason": {
+      "RATE_UNKNOWN": "[XX-a rate it depends on is not published yet-XX]",
+      "TERMS_INCOMPLETE": "[XX-the terms of the series are incomplete-XX]",
+      "PURCHASE_OUTSIDE_SALE_WINDOW": "[XX-a purchase date is outside the sale window of the series-XX]",
+      "PURCHASE_AFTER_MATURITY": "[XX-a purchase date is on or after the maturity of the series-XX]",
+      "other": "[XX-it cannot be worked out from the data stored-XX]"
+    },
+    "benchmarkTitle": "[XX-{benchmark}: new observation {observation}-XX]",
+    "benchmarkIntro": "[XX-{publisher} published {benchmark} for {observation}: {value}.-XX]",
+    "benchmarkSeries": "[XX-{series}: period from {date} at {rate} a year.-XX]",
+    "benchmarkSeriesProjected": "[XX-{series}: period from {date}, projected at {rate} a year.-XX]",
+    "benchmarkSeriesUnknown": "[XX-{series}: period from {date}, the rate is not known yet.-XX]",
+    "benchmarkMore": "[XX-And {more} more.-XX]",
+    "missingTitle": "[XX-Bond figures are not known yet-XX]",
+    "missingMessage": "[XX-Some bond figures cannot be worked out. {causes}-XX]",
+    "cause": {
+      "observation": "[XX-The {observation} observation of {benchmark} ({publisher}) is not stored: it is not published yet, or the feed has not been fetched since. Refresh on the bond page.-XX]",
+      "observationNoPublisher": "[XX-The {observation} observation of {benchmark} is not stored: it is not published yet, or the feed has not been fetched since. Refresh on the bond page.-XX]",
+      "terms": "[XX-The terms of {series} are incomplete. Refresh the series on the bond page.-XX]",
+      "purchase": "[XX-A purchase of {series} on {date} is outside its sale window ({from} to {to}). Correct the purchase date.-XX]",
+      "purchaseAfterMaturity": "[XX-A purchase of {series} on {date} is on or after its maturity ({maturity}). Correct the purchase date.-XX]",
+      "lots": "[XX-The lots cannot be derived from the ledger ({code}). Correct the ledger.-XX]",
+      "lotsRow": "[XX-{action} on {date} makes the lots impossible to derive ({code}). Correct the transaction.-XX]",
+      "lotsRowSeries": "[XX-{action} on {date} is not placed in a series ({code}). Choose the series on that transaction.-XX]",
+      "lotsRowRemoval": "[XX-{action} on {date} removes more than the account holds of that series ({code}). Correct the transaction.-XX]"
+    },
+    "action": {
+      "BUY": "[XX-Purchase-XX]",
+      "SELL": "[XX-Sale-XX]",
+      "REINVEST": "[XX-Reinvestment-XX]",
+      "ADD_SHARES": "[XX-Share addition-XX]",
+      "REMOVE_SHARES": "[XX-Share removal-XX]",
+      "SPLIT": "[XX-Split-XX]",
+      "TRANSFER_IN": "[XX-Incoming transfer-XX]",
+      "TRANSFER_OUT": "[XX-Outgoing transfer-XX]",
+      "other": "[XX-Transaction-XX]"
+    },
+    "benchmarks": {
+      "PL_CPI_GUS_YOY": "[XX-CPI, 12 months (GUS)-XX]",
+      "PL_NBP_REFERENCE": "[XX-NBP reference rate-XX]",
+      "US_CPI_U_NSA": "[XX-CPI-U, all items, not seasonally adjusted (BLS)-XX]",
+      "US_TBILL_13W_MMY": "[XX-13-week Treasury bill yield-XX]"
+    }
+  },
+  "emailReceiptsAttention": {
+    "title": "[XX-Email receipts need attention-XX]",
+    "message": "[XX-Your receipts inbox holds {noParser} without a profile and {parseFailed} that their profile did not recognize. Open to review.-XX]"
+  },
+  "portfolioMovement": {
+    "titleUp": "[XX-Investments up {percent}%-XX]",
+    "titleDown": "[XX-Investments down {percent}%-XX]",
+    "messageUp": "[XX-Your investments are up {percent}% from {from} to {to}, excluding deposits and withdrawals. Open to review.-XX]",
+    "messageDown": "[XX-Your investments are down {percent}% from {from} to {to}, excluding deposits and withdrawals. Open to review.-XX]"
+  },
+  "balanceThreshold": {
+    "titleLow": "[XX-{account} is below your threshold-XX]",
+    "titleHigh": "[XX-{account} is above your threshold-XX]",
+    "messageLow": "[XX-{account} dropped to {balance}, below your {threshold} threshold.-XX]",
+    "messageHigh": "[XX-{account} rose to {balance}, above your {threshold} threshold.-XX]"
+  },
+  "system": {
+    "backupFailed": {
+      "title": "[XX-Automatic backup failed-XX]",
+      "message": "[XX-The automatic backup for {user} failed: {error}-XX]"
+    },
+    "backupPartial": {
+      "title": "[XX-Automatic backup incomplete-XX]",
+      "messageAttachments": "[XX-The backup for {user} was written, but {missing} of {expected} attachments could not be included and {inconsistent} did not match their metadata. Complete backups were preserved.-XX]",
+      "messagePromotion": "[XX-The daily backup for {user} succeeded, but its weekly or monthly copy could not be written: {error}-XX]",
+      "messageRetention": "[XX-The backup for {user} succeeded, but old backup files could not be cleaned up: {error}-XX]"
+    },
+    "encryptionKeyMissing": {
+      "title": "[XX-Encryption key not configured-XX]",
+      "message": "[XX-ENCRYPTION_KEY is not set, so backups are written unencrypted and secrets cannot be stored. A future release will refuse to start without it.-XX]"
+    },
+    "jwtSecretWeak": {
+      "title": "[XX-JWT_SECRET is weak-XX]",
+      "message": "[XX-JWT_SECRET is a published placeholder or too predictable, so session tokens can be forged. Generate a strong one (openssl rand -base64 32). Changing it stops authenticator codes from working and forgets trusted devices: users sign in with a backup code and set up 2FA again, and you reset 2FA in User Management for anyone without one. See docs/backend/modules-and-runtime.md (Changing JWT_SECRET) first.-XX]"
+    },
+    "smtpFailure": {
+      "title": "[XX-Email delivery is failing-XX]",
+      "message": "[XX-Monize could not send email: {error}. Notifications and reminders are not being delivered.-XX]"
+    },
+    "providerOutage": {
+      "title": "[XX-{provider} is not responding-XX]",
+      "message": "[XX-Market data from {provider} is unavailable. Prices and index data may be out of date until it answers again.-XX]"
+    },
+    "providerRecovered": {
+      "title": "[XX-{provider} is answering again-XX]",
+      "message": "[XX-The outage is over and market data from {provider} is updating again.-XX]"
+    },
+    "scheduledPostFailed": {
+      "title": "[XX-{name} could not be posted-XX]",
+      "message": "[XX-Your scheduled transaction due {date} did not post automatically: {error}. You can post it manually from Bills.-XX]"
+    }
+  },
+  "priceMovement": {
+    "title": "[XX-Price change alert: {symbol} ({percent}%)-XX]",
+    "message": "[XX-{symbol}: {percent}% compared with the previous available session.-XX]"
+  },
+  "bankSync": {
+    "expiringTitleToday": "[XX-{institution}: bank access ends today-XX]",
+    "expiringTitleOneDay": "[XX-{institution}: bank access ends within 1 day-XX]",
+    "expiringTitleDays": "[XX-{institution}: bank access ends within {days} days-XX]",
+    "expiringMessage": "[XX-Your consent for Monize to read {institution} ends on {date}. Renew the connection in Monize to keep syncing.-XX]",
+    "expiredTitle": "[XX-{institution}: bank access has ended-XX]",
+    "expiredMessage": "[XX-Your consent for Monize to read {institution} has ended. Renew the connection in Monize to resume syncing.-XX]",
+    "failedTitle": "[XX-{institution}: sync failed-XX]",
+    "failedMessage": "[XX-The daily sync of {institution} failed for: {accounts}. Open bank sync settings to see why.-XX]",
+    "failedCredentialsMessage": "[XX-The daily sync of {institution} could not start because the bank sync credentials are missing or were rejected. Check them in bank sync settings.-XX]",
+    "unnamedAccount": "[XX-an account-XX]",
+    "importedTitle": "[XX-{institution}: new transactions imported-XX]",
+    "importedMessage": "[XX-Transactions imported from {institution} by the daily sync: {imported}.-XX]",
+    "importedNoneTitle": "[XX-{institution}: no new transactions-XX]",
+    "importedNoneMessage": "[XX-The daily sync of {institution} found no new transactions.-XX]"
+  },
+  "aiReview": {
+    "readyTitle": "[XX-AI proposals wait for your approval-XX]",
+    "readyMessage": "[XX-{count, plural, one {# AI proposal waits} other {# AI proposals wait}} for your approval ({added} new). Open the AI review inbox to approve or dismiss.-XX]",
+    "expiringTitle": "[XX-AI proposals expire soon-XX]",
+    "expiringMessage": "[XX-{count, plural, one {# AI proposal expires} other {# AI proposals expire}} soon. The first one expires on {date}. Open the AI review inbox to approve or dismiss.-XX]"
+  },
+  "warranty": {
+    "expiringTitle": "[XX-{name}: warranty expires within {days, plural, one {# day} other {# days}}-XX]",
+    "expiringMessage": "[XX-The warranty for {name} expires on {date}. Open to review its documents or record a claim.-XX]",
+    "todayTitle": "[XX-{name}: warranty expires today-XX]",
+    "todayMessage": "[XX-The warranty for {name} expires today, {date}. Open to review its documents or record a claim.-XX]"
+  },
+  "security": {
+    "oauthTitle": "[XX-New app connected: {clientName}-XX]",
+    "oauthMessage": "[XX-The application {clientName} was just granted access to your Monize account. If this wasn't you, change your password now: that revokes every connected application's access.-XX]",
+    "relayTitle": "[XX-A new connection answered your AI chat-XX]",
+    "relayMessage": "[XX-A connection that has not answered your Monize AI chat before just picked up a prompt. If you did not connect this assistant, change your password.-XX]"
+  },
+  "payrollDeduction": {
+    "resetTitle": "[XX-{category}: confirm next year's maximum-XX]",
+    "resetMessage": "[XX-The {category} deduction on {bill} resets on {date}. Update the yearly maximum if it changes; otherwise {amount} applies again.-XX]"
+  },
+  "shared": {
+    "title": "[XX-Shared expenses-XX]",
+    "message": "[XX-A shared group has an update. Open Monize to review it.-XX]"
+  },
+  "native": {
+    "payments": {
+      "title": "[XX-Payment reminder-XX]",
+      "body": "[XX-A bill or scheduled payment needs your attention. Open Monize for the details.-XX]"
+    },
+    "budgets": {
+      "title": "[XX-Budget alert-XX]",
+      "body": "[XX-One of your budgets needs your attention. Open Monize for the details.-XX]"
+    },
+    "system": {
+      "title": "[XX-System notice-XX]",
+      "body": "[XX-Monize has a system notice for you. Open the app for the details.-XX]"
+    },
+    "balances": {
+      "title": "[XX-Balance alert-XX]",
+      "body": "[XX-An account balance crossed a threshold you set. Open Monize for the details.-XX]"
+    },
+    "investments": {
+      "title": "[XX-Investment movement-XX]",
+      "body": "[XX-Your investments moved today. Open Monize for the details.-XX]"
+    },
+    "strategies": {
+      "title": "[XX-Strategy signal-XX]",
+      "body": "[XX-One of your strategies changed its recommendation. Open Monize for the details.-XX]"
+    },
+    "bank_sync": {
+      "title": "[XX-Bank connection-XX]",
+      "body": "[XX-A bank connection needs your attention. Open Monize for the details.-XX]"
+    },
+    "bank_sync_activity": {
+      "title": "[XX-Bank sync-XX]",
+      "body": "[XX-Your bank sync has news. Open Monize for the details.-XX]"
+    },
+    "email_receipts": {
+      "title": "[XX-Email receipts need attention-XX]",
+      "body": "[XX-Some emails in your receipts inbox need a profile or a fix. Open Monize for the details.-XX]"
+    },
+    "bonds": {
+      "title": "[XX-Bond notice-XX]",
+      "body": "[XX-One of your bonds has news. Open Monize for the details.-XX]"
+    },
+    "ai_review": {
+      "title": "[XX-AI review proposals-XX]",
+      "body": "[XX-Some AI review proposals wait for your decision. Open Monize for the details.-XX]"
+    },
+    "warranties": {
+      "title": "[XX-Warranty reminder-XX]",
+      "body": "[XX-One of your warranties expires soon. Open Monize for the details.-XX]"
+    },
+    "shared_expenses": {
+      "title": "[XX-Shared expenses-XX]",
+      "body": "[XX-A shared group has an update. Open Monize to review it.-XX]"
+    },
+    "security": {
+      "title": "[XX-Security notice-XX]",
+      "body": "[XX-Something changed in who can access your Monize account. Open Monize for the details.-XX]"
+    },
+    "fallback": {
+      "title": "[XX-Monize-XX]",
+      "body": "[XX-You have a new notification in Monize.-XX]"
+    }
+  }
+}

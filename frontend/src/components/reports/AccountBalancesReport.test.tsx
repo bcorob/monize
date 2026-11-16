@@ -63,14 +63,17 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
-vi.mock("@/hooks/useNumberFormat", () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (n: number, _currency?: string) => `$${n.toFixed(2)}`,
-    formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
-    defaultCurrency: "CAD",
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (n: number, _currency?: string) => `$${n.toFixed(2)}`,
+      formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
+      defaultCurrency: "CAD",
+    }),
+};
+});
 vi.mock("@/hooks/useDateFormat", () => ({
   useDateFormat: () => ({ formatDate: (d: string) => `date(${d})` }),
 }));
@@ -96,8 +99,8 @@ vi.mock("recharts", () => ({
       try {
         return (
           <div>
-            <C active={true} payload={[{ payload: { name: "Cat", value: 100 } }]} />
-            <C active={false} payload={[]} />
+            <C {...content.props} active={true} payload={[{ payload: { name: "Cat", value: 100 } }]} />
+            <C {...content.props} active={false} payload={[]} />
           </div>
         );
       } catch {
@@ -1019,6 +1022,18 @@ describe("AccountBalancesReport", () => {
       expect(screen.getByRole("heading", { name: "Other" })).toBeInTheDocument();
     });
     expect(screen.queryByRole("heading", { name: "Asset" })).not.toBeInTheDocument();
+  });
+
+  it("names a CRYPTO account by its own label", async () => {
+    mockGetAll.mockResolvedValue([
+      acc({ name: "Bitcoin Wallet", accountType: "CRYPTO", currencyCode: "BTC" }),
+    ]);
+    mockGetBalancesAsOf.mockResolvedValue(balancesFor([balance("acc-1", 0.0125)]));
+    render(<AccountBalancesReport />);
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Crypto Wallet" })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole("heading", { name: "CRYPTO" })).not.toBeInTheDocument();
   });
 
   it("falls back to the raw type for a type it has no label for", async () => {

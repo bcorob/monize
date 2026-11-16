@@ -1,0 +1,120 @@
+{
+  "view": {
+    "label": "[XX-View-XX]",
+    "table": "[XX-Table-XX]",
+    "calendar": "[XX-Calendar-XX]"
+  },
+  "grid": {
+    "label": "[XX-Month-XX]"
+  },
+  "toolbar": {
+    "layers": "[XX-Layers-XX]"
+  },
+  "layers": {
+    "transactions": "[XX-Transactions-XX]",
+    "balances": "[XX-Balances-XX]",
+    "values": "[XX-Values-XX]",
+    "dailyChange": "[XX-Daily change-XX]"
+  },
+  "legend": {
+    "label": "[XX-Legend-XX]",
+    "scheduled": "[XX-Scheduled-XX]"
+  },
+  "chip": {
+    "noPayee": "[XX-No payee-XX]",
+    "overdue": "[XX-Overdue-XX]",
+    "scheduled": "[XX-Scheduled-XX]",
+    "noSymbol": "[XX-No symbol-XX]"
+  },
+  "day": {
+    "itemCount": "[XX-{count, plural, one {# item} other {# items}}-XX]",
+    "moreChips": "[XX-+{count} more-XX]",
+    "newTransaction": "[XX-New transaction on this day-XX]",
+    "noItems": "[XX-Nothing on this day.-XX]",
+    "scheduledHint": "[XX-Scheduled. Open Bills & Deposits to change it.-XX]",
+    "newInvestmentTransaction": "[XX-New investment transaction on this day-XX]"
+  },
+  "banner": {
+    "title": "[XX-Some figures are not shown-XX]",
+    "rowCap": "[XX-This month holds {count} transactions, more than the {limit} a calendar can show. Narrow the filters to see them.-XX]",
+    "scheduledUnavailable": "[XX-Scheduled items could not be loaded for this month. The rows shown are complete; the scheduled ones are missing.-XX]",
+    "scheduledTruncated": "[XX-Some scheduled items are not shown this far ahead. Move closer to today to see them all.-XX]",
+    "balancesScopeEmpty": "[XX-No accounts are in scope, so there is no balance to show. Choose an account in the filters.-XX]",
+    "balancesMissingRates": "[XX-No exchange rate is available for {pairs} on some days this month, so those totals are not shown. Open Currencies and refresh the rates.-XX]",
+    "balancesForecastGaps": "[XX-The projected balance is withheld because these scheduled items cannot be priced yet: {schedules}.-XX]",
+    "balancesForecastWithheld": "[XX-The projected balance is withheld: at least one scheduled item cannot be priced yet, and the reason was not reported.-XX]",
+    "balancesUnforecastable": "[XX-{count, plural, one {# account in scope carries no projection of its own, so projected totals are withheld.} other {# accounts in scope carry no projection of their own, so projected totals are withheld.}}-XX]",
+    "valuesUnpriced": "[XX-No price is available for {securities} on some days this month, so those values are not shown. Add a price on the security's Price history, or refresh prices.-XX]",
+    "valuesMissingRates": "[XX-No exchange rate is available for {pairs} on some days this month, so those values are not shown. Open Currencies and refresh the rates.-XX]",
+    "notesUnavailable": "[XX-Your notes could not be loaded for this month. Any note you have written is still stored.-XX]"
+  },
+  "errors": {
+    "monthFailed": "[XX-This month could not be loaded.-XX]",
+    "balancesFailed": "[XX-Balances could not be loaded for this month.-XX]",
+    "valuesFailed": "[XX-Portfolio values could not be loaded for this month.-XX]",
+    "movementsFailed": "[XX-Daily changes could not be loaded for this month.-XX]",
+    "movementDetailFailed": "[XX-This day's breakdown could not be loaded.-XX]"
+  },
+  "balance": {
+    "actualTitle": "[XX-Balance at end of day-XX]",
+    "projectedTitle": "[XX-Projected balance-XX]",
+    "projected": "[XX-Projected-XX]",
+    "projectedHint": "[XX-Projected from the balance at the end of today and every scheduled item due up to this day.-XX]",
+    "projectedFromItems": "[XX-Projected from the balance at the end of today and every scheduled item due up to this day, including the ones listed below.-XX]",
+    "partial": "[XX-Partial: {amount} of the scope could be worked out; the rest could not, so no total is shown.-XX]",
+    "missingRates": "[XX-No exchange rate for {pairs} on the day this figure is priced at. Open Currencies and refresh the rates.-XX]",
+    "unforecastable": "[XX-{count, plural, one {# account in scope has no projection of its own, so the projected total is withheld.} other {# accounts in scope have no projection of their own, so the projected total is withheld.}}-XX]"
+  },
+  "value": {
+    "title": "[XX-Portfolio value-XX]",
+    "unpriced": "[XX-No price is available for {securities} on this day, so the value is not shown. Add a price on the security's Price history, or refresh prices.-XX]",
+    "missingRates": "[XX-No exchange rate for {pairs} on this day, so the value is not shown. Open Currencies and refresh the rates.-XX]"
+  },
+  "change": {
+    "openDetail": "[XX-Show what moved on this day-XX]",
+    "detailTitle": "[XX-What moved on {date}-XX]",
+    "headline": "[XX-Market movement-XX]",
+    "headlineValue": "[XX-{amount} ({percent})-XX]",
+    "gains": "[XX-Gains-XX]",
+    "losses": "[XX-Losses-XX]",
+    "unchanged": "[XX-{count, plural, one {# security closed unchanged.} other {# securities closed unchanged.}}-XX]",
+    "remainder": "[XX-Cash, distributions and trades-XX]",
+    "row": "[XX-{quantity} shares, {from} to {to} {currency}-XX]",
+    "reasons": {
+      "notTradingDay": "[XX-Nothing held was priced on this day, so there was no session to report.-XX]",
+      "unpricedHolding": "[XX-A holding had no price on this day or the one before it, so the movement is unknown.-XX]",
+      "missingRate": "[XX-An exchange rate was missing, so the movement could not be converted.-XX]",
+      "flowIncomplete": "[XX-A deposit or withdrawal on this day could not be converted, so the movement cannot be separated from it.-XX]",
+      "cashIncomplete": "[XX-A cash account reported no balance for this day, so the day's value is incomplete and the movement is unknown.-XX]",
+      "noPriorValue": "[XX-There is no earlier value to measure this day against.-XX]",
+      "zeroBaseline": "[XX-The portfolio was empty the day before, so there is no percentage to work out.-XX]"
+    }
+  },
+  "notes": {
+    "title": "[XX-Note-XX]",
+    "add": "[XX-Add a note-XX]",
+    "saveFailed": "[XX-The note could not be saved. Try again.-XX]",
+    "deleteFailed": "[XX-The note could not be deleted. Try again.-XX]",
+    "deleteTitle": "[XX-Delete this note?-XX]",
+    "deleteMessage": "[XX-The note on this day is removed. This cannot be undone.-XX]",
+    "discardTitle": "[XX-Discard this note?-XX]",
+    "discardMessage": "[XX-The note you are writing has not been saved. Leaving this day discards it.-XX]",
+    "discardConfirm": "[XX-Discard-XX]",
+    "startDate": "[XX-First day-XX]",
+    "endDate": "[XX-Last day-XX]",
+    "spanRange": "[XX-{start} to {end}-XX]",
+    "spanCount": "[XX-{count, plural, one {# day} other {# days}}-XX]",
+    "spanBackwards": "[XX-The last day cannot be before the first.-XX]",
+    "spanTooLong": "[XX-A note can cover at most {days} days.-XX]",
+    "spanMissesDay": "[XX-The days you chose do not include the day you are writing this note on.-XX]",
+    "deleteSpanMessage": "[XX-{count, plural, one {The note on this day is removed. This cannot be undone.} other {This note covers # days, and all of them are cleared. This cannot be undone.}}-XX]"
+  },
+  "monthPicker": {
+    "title": "[XX-Go to another month-XX]",
+    "typeLabel": "[XX-Type a month or a year-XX]",
+    "placeholder": "[XX-e.g. Mar 1998, 1998-03, 3/1998-XX]",
+    "unreadable": "[XX-That is not a month we can read. Try a year, a month name, or 1998-03.-XX]",
+    "previousYear": "[XX-Previous year-XX]",
+    "nextYear": "[XX-Next year-XX]"
+  }
+}

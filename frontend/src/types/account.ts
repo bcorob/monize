@@ -1,3 +1,11 @@
+import type { LoanFeeInput } from './loan-fee';
+import type { BalanceForecastGap } from './banking-detail';
+import type { PrepaymentMode } from '@/lib/mortgage-type';
+import type {
+  LoanSettlementExcessPolicy,
+  LoanSettlementShortfallPolicy,
+} from './transaction-rule';
+
 export type AccountType =
   | 'CHEQUING'
   | 'SAVINGS'
@@ -8,6 +16,7 @@ export type AccountType =
   | 'CASH'
   | 'LINE_OF_CREDIT'
   | 'ASSET'
+  | 'CRYPTO'
   | 'OTHER';
 
 export type AccountSubType = 'INVESTMENT_CASH' | 'INVESTMENT_BROKERAGE' | null;
@@ -32,6 +41,21 @@ export function isLiabilityAccountType(type: AccountType | undefined | null): bo
 /** How a loan/mortgage's interest is recorded, for rate detection. */
 export type InterestBookingMode = 'AUTO' | 'SPLIT' | 'SEPARATE';
 export const INTEREST_BOOKING_MODES: InterestBookingMode[] = ['AUTO', 'SPLIT', 'SEPARATE'];
+
+/**
+ * A mortgage's compounding convention and amortization method, stored in
+ * `accounts.mortgage_type` (docs/specs/mortgage-types.md, decision 1); the
+ * browser-side twin of the backend's `MORTGAGE_TYPES`. Behaviour per type is
+ * `MORTGAGE_TYPE_TRAITS` in `lib/mortgage-type.ts`, held to the backend's by
+ * `lib/mortgage-type.contract.test.ts`.
+ */
+export const MORTGAGE_TYPES = [
+  'ANNUITY',
+  'CANADIAN_FIXED',
+  'LINEAR',
+  'INTEREST_ONLY',
+] as const;
+export type MortgageType = (typeof MORTGAGE_TYPES)[number];
 
 /**
  * Payment frequencies a loan account can carry, mirroring the backend's
@@ -98,6 +122,8 @@ export function toMortgagePaymentFrequency(
 }
 
 export interface Account {
+  managedPurpose?: "SHARED_SETTLEMENT" | null;
+  sharedExpenseGroupId?: string | null;
   id: string;
   userId: string;
   accountType: AccountType;
@@ -113,6 +139,8 @@ export interface Account {
   currentBalance: number;
   creditLimit: number | null;
   interestRate: number | null;
+  lowBalanceThreshold?: number | null;
+  highBalanceThreshold?: number | null;
   isClosed: boolean;
   closedDate: string | null;
   isFavourite: boolean;
@@ -153,14 +181,36 @@ export interface Account {
   // Links an asset/other account to its financing loan/mortgage (equity view)
   linkedLoanAccountId: string | null;
   // Mortgage-specific fields
-  isCanadianMortgage: boolean;
-  isVariableRate: boolean;
+  // The stored type, read only on a mortgage; every other account carries the
+  // column default, `ANNUITY`, the engine a plain loan uses. Read it through
+  // `mortgageTypeOf` (`lib/mortgage-type.ts`).
+  mortgageType: MortgageType;
+  // What an extra repayment does to a LINEAR mortgage's principal; null on
+  // every other type. Read it through `prepaymentModeOf`, which reads a null
+  // on a LINEAR mortgage as `SHORTEN_TERM`.
+  prepaymentMode?: PrepaymentMode | null;
   termMonths: number | null;
   termEndDate: string | null;
   amortizationMonths: number | null;
   originalPrincipal: number | null;
+  // The "Payment matching" rule this loan/mortgage's bill is settled by
+  // (`docs/specs/loan-installment-settlement.md` decision 5); null when none
+  // was created. Optional so the many existing account fixtures that predate
+  // this field need not all name it; always present on a real API response.
+  paymentMatchingRuleId?: string | null;
+  // Present only on the response to a create that asked for a "Payment
+  // matching" rule: why the server could not build it; absent otherwise. The
+  // account itself is saved either way.
+  paymentMatchingError?: PaymentMatchingFailure | null;
   canDelete?: boolean;
   futureTransactionsSum?: number;
+  // The statement date the account was last reconciled to (YYYY-MM-DD), or
+  // null when nothing in it is reconciled. Absent means no information: a
+  // joint row shared to this user, or a backend that predates the field.
+  lastReconciledDate?: string | null;
+  // How many top-level rows are UNRECONCILED or CLEARED, whatever their date:
+  // what the reconcile screen lists. Absent means no information, as above.
+  unreconciledCount?: number;
   // ── Joint accounts ──
   // Present on rows shared TO the current user (grantee view): the account
   // belongs to another user but appears natively in this user's lists.
@@ -179,6 +229,53 @@ export interface Account {
   jointGranteeCount?: number;
   createdAt: string;
   updatedAt: string;
+}
+
+// GET /accounts/:id/can-delete: what stops the account's permanent delete.
+export interface AccountDeletability {
+  transactionCount: number;
+  investmentTransactionCount: number;
+  // The bills and deposits that name the account (paid from it, transferring
+  // or funding into it, or with a line that transfers into it).
+  scheduledTransactionCount: number;
+  canDelete: boolean;
+}
+
+/**
+ * The "Payment matching" section of the mortgage form and the loan-payment
+ * setup dialog (`docs/specs/loan-installment-settlement.md` decision 5): the
+ * rule to create against the loan/mortgage's own scheduled payment, which
+ * settles a matching bank debit against the next installment instead of
+ * posting the bill separately. `excess`/`shortfall` are never offered here --
+ * the server defaults them (`extra_principal` / `refuse`) and they are
+ * editable afterwards in Tools > Rules.
+ */
+export interface PaymentMatching {
+  payeePattern: string;
+  descriptionPattern?: string | null;
+  excess?: LoanSettlementExcessPolicy;
+  shortfall?: LoanSettlementShortfallPolicy;
+}
+
+/** Why a create or setup that saved the loan could not create its rule. */
+export interface PaymentMatchingFailure {
+  errorCode: string;
+  message: string;
+}
+
+/** One installment a payment-matching rule settled (a `rule` claim). */
+export interface LoanSettlementRow {
+  claimId: string;
+  dueDate: string;
+  postedDate: string;
+  transactionId: string;
+  transactionStatus: string;
+  principal: number | null;
+  interest: number | null;
+  extraPrincipal: number | null;
+  debtBefore: number | null;
+  installmentNumber: number | null;
+  ruleId: string | null;
 }
 
 export interface CreateAccountData {
@@ -215,12 +312,22 @@ export interface CreateAccountData {
   assetCategoryId?: string;
   dateAcquired?: string;
   linkedLoanAccountId?: string | null;
-  // Mortgage-specific fields
-  isCanadianMortgage?: boolean;
-  isVariableRate?: boolean;
+  // Mortgage-specific fields. `ANNUITY` when a mortgage is sent without one.
+  mortgageType?: MortgageType;
+  // LINEAR only; the server writes null for every other type.
+  prepaymentMode?: PrepaymentMode | null;
   termMonths?: number;
   amortizationMonths?: number;
   mortgagePaymentFrequency?: MortgagePaymentFrequency;
+  // The amount originally borrowed, apart from the opening balance (the debt
+  // where this ledger starts); absent stores the opening balance.
+  originalPrincipal?: number;
+  // Loans and mortgages created with their scheduled payment: create the
+  // "Payment matching" rule and turn the bill's auto-post off.
+  paymentMatching?: PaymentMatching;
+  // Mortgages created with their scheduled payment: fees collected with each
+  // payment (docs/specs/mortgage-fees.md). Create only.
+  loanFees?: LoanFeeInput[];
 }
 
 export interface InvestmentAccountPair {
@@ -230,12 +337,30 @@ export interface InvestmentAccountPair {
 
 export interface UpdateAccountData extends Partial<CreateAccountData> {}
 
+/**
+ * GET /accounts/summary. `totalAssets`, `totalLiabilities` and `netWorth` are
+ * `null` when a component could not be converted or priced; the `known*`
+ * siblings carry what did. The flags are optional because an older backend
+ * mid-deploy omits them -- read them as `=== false`, absent means no information.
+ */
 export interface AccountSummary {
   totalAccounts: number;
   totalBalance: number;
-  totalAssets: number;
-  totalLiabilities: number;
-  netWorth: number;
+  totalAssets: number | null;
+  totalLiabilities: number | null;
+  netWorth: number | null;
+  /** The part of `totalAssets` that converted and priced. */
+  knownAssetsSubtotal?: number;
+  knownLiabilitiesSubtotal?: number;
+  knownNetWorthSubtotal?: number;
+  fxComplete?: boolean;
+  pricesComplete?: boolean;
+  /** `fxComplete && pricesComplete`: gate the three totals on this. */
+  valuationComplete?: boolean;
+  /** `"ZZZ->USD"` for each pair with no rate. */
+  missingRatePairs?: string[];
+  unpricedSecurityIds?: string[];
+  unpricedSymbols?: string[];
 }
 
 /**
@@ -280,8 +405,8 @@ export interface MortgagePreviewData {
   amortizationMonths: number;
   paymentFrequency: MortgagePaymentFrequency;
   paymentStartDate: string;
-  isCanadian: boolean;
-  isVariableRate: boolean;
+  /** `ANNUITY` when absent. */
+  mortgageType?: MortgageType;
 }
 
 export interface MortgageAmortizationPreview {
@@ -320,6 +445,76 @@ export interface UpdateMortgageRateResponse {
   effectiveDate: string;
 }
 
+/**
+ * Why the mortgage-type detector answered as it did: the browser-side twin of
+ * the backend's `MORTGAGE_TYPE_DETECTION_REASONS`
+ * (`backend/src/accounts/mortgage-type-detection.util.ts`), each worded by
+ * `mortgageFields.detect.reason.<code>`. `mortgage-type-detection.contract.test.ts`
+ * holds the two lists and the catalog together.
+ */
+export const MORTGAGE_TYPE_DETECTION_REASONS = [
+  'TOO_FEW_SAMPLES',
+  'INVALID_SAMPLE',
+  'NO_PAYMENT',
+  'AMBIGUOUS_CONSTANT_PRINCIPAL_AND_INSTALLMENT',
+  'ACCELERATED_FREQUENCY',
+  'NO_RULE_FITS',
+  'ZERO_PRINCIPAL',
+  'ZERO_PRINCIPAL_RATE_MISMATCH',
+  'CONSTANT_PRINCIPAL',
+  'CONSTANT_PRINCIPAL_RATE_MISMATCH',
+  'CONSTANT_INSTALLMENT_SEMI_ANNUAL',
+  'CONSTANT_INSTALLMENT_NOMINAL',
+  'CONSTANT_INSTALLMENT_RATE_UNCHECKED',
+  'CONSTANT_INSTALLMENT_COMPOUNDING_AMBIGUOUS',
+  'CONSTANT_INSTALLMENT_RATE_MISMATCH',
+] as const;
+export type MortgageTypeDetectionReason =
+  (typeof MORTGAGE_TYPE_DETECTION_REASONS)[number];
+
+/** One installment as a statement shows it, positive amounts. */
+export interface MortgageTypeSample {
+  principal: number;
+  interest: number;
+  /** The debt the installment was charged on, when the statement shows it. */
+  balanceBefore?: number | null;
+}
+
+export interface DetectMortgageTypeData {
+  /** Consecutive installments, oldest first. */
+  samples: MortgageTypeSample[];
+  /** The quoted annual rate as a percentage; without it the compounding is unchecked. */
+  interestRate?: number | null;
+  paymentFrequency: MortgagePaymentFrequency;
+}
+
+/**
+ * A suggested type, never a saved one (docs/specs/mortgage-types.md, section
+ * 10): `type` is null when the installments do not decide one, and `reason`
+ * is always present so the reader learns why.
+ */
+export interface MortgageTypeDetection {
+  type: MortgageType | null;
+  confidence: 'high' | 'low';
+  reason: MortgageTypeDetectionReason;
+}
+
+/** A posted installment the history route read, with the debt before it. */
+export interface DatedMortgageTypeSample {
+  date: string;
+  principal: number;
+  interest: number;
+  balanceBefore: number | null;
+}
+
+export interface MortgageTypeHistoryDetection extends MortgageTypeDetection {
+  /** The annual rate in effect on the latest sample's date, when known. */
+  quotedAnnualRate: number | null;
+  paymentFrequency: MortgagePaymentFrequency | null;
+  /** The installments the suggestion was read from, oldest first. */
+  samples: DatedMortgageTypeSample[];
+}
+
 // Loan payment detection types
 export interface DetectedLoanPayment {
   paymentAmount: number;
@@ -349,16 +544,53 @@ export interface SetupLoanPaymentsData {
   sourceAccountId: string;
   nextDueDate: string;
   interestRate?: number;
-  interestCategoryId?: string;
+  interestCategoryId: string;
   payeeId?: string;
   payeeName?: string;
   autoPost?: boolean;
-  isCanadianMortgage?: boolean;
-  isVariableRate?: boolean;
+  /** The account's stored type when absent. */
+  mortgageType?: MortgageType;
+  /** LINEAR only; the server writes null for every other type. */
+  prepaymentMode?: PrepaymentMode | null;
   amortizationMonths?: number;
   termMonths?: number;
   extraPrincipal?: number;
   detectedInterestAmount?: number;
+  // The amount originally borrowed, apart from the opening balance; the
+  // account's own when absent.
+  originalPrincipal?: number;
+  // Create the "Payment matching" rule for this payment and leave the bill's
+  // auto-post off.
+  paymentMatching?: PaymentMatching;
+}
+
+/**
+ * The terms a LINEAR or INTEREST_ONLY mortgage's first installment is priced
+ * from before setup: the fields of `SetupLoanPaymentsData` the price depends on.
+ */
+export type PreviewLoanPaymentSetupData = Pick<
+  SetupLoanPaymentsData,
+  | 'paymentFrequency'
+  | 'nextDueDate'
+  | 'interestRate'
+  | 'mortgageType'
+  | 'prepaymentMode'
+  | 'amortizationMonths'
+  | 'extraPrincipal'
+  | 'originalPrincipal'
+>;
+
+export interface PreviewLoanPaymentSetupResponse {
+  /**
+   * True for a LINEAR or INTEREST_ONLY mortgage, whose installment the server
+   * derives; false for an annuity mortgage or a loan, whose payment the user
+   * states (the figures are then null).
+   */
+  derivesInstallment: boolean;
+  principalPayment: number | null;
+  interestPayment: number | null;
+  /** What the setup request must send: the first installment plus any extra. */
+  paymentAmount: number | null;
 }
 
 export interface SetupLoanPaymentsResponse {
@@ -369,6 +601,12 @@ export interface SetupLoanPaymentsResponse {
   firstInstallmentAmount: number;
   paymentFrequency: string;
   nextDueDate: string;
+  // The "Payment matching" rule the setup created; null when none was asked
+  // for or it could not be created.
+  paymentMatchingRuleId: string | null;
+  // Why the rule asked for could not be created; null otherwise. The
+  // schedule stays either way.
+  paymentMatchingError: PaymentMatchingFailure | null;
 }
 
 /**
@@ -441,4 +679,69 @@ export interface AccountBalancesAsOfResponse {
    */
   approximatedDisplayRates: Record<string, string>;
   accounts: AccountBalanceAsOf[];
+}
+
+/**
+ * One account's end-of-day balance (`GET /accounts/daily-balances`), in its own
+ * currency, with the server's conversion into the reader's reporting currency
+ * at that day's rate (today's for a future day) beside it. A reader totalling
+ * several currencies sums `convertedBalance`, never the balance converted at
+ * today's rate (issue #2106); `null` is a day with no admissible rate.
+ */
+export interface DailyAccountBalance {
+  date: string;
+  balance: number;
+  accountId: string;
+  currencyCode: string;
+  convertedCurrency?: string;
+  convertedBalance?: number | null;
+}
+
+/** One day of GET /accounts/daily-balance-totals. */
+export interface DailyBalanceTotal {
+  date: string;
+  /**
+   * The scope's end-of-day total in the response's `currencyCode`, or `null`
+   * when any component is unknown.
+   *
+   * `null` is not zero and zero is not `null`: a scope of emptied accounts
+   * totals a known 0.00. Print the unknown marker for `null` and name the cause
+   * from `missingRatePairs` or `forecast`; never print `knownSubtotal` in its
+   * place without a caption that says it is partial.
+   */
+  total: number | null;
+  /** The components that WERE known. Equal to `total` when the total is known. */
+  knownSubtotal: number;
+  /**
+   * `date > today` as the SERVER decided it. Read this, never the browser
+   * clock: a reader west of the server rolls over hours later, and a cell that
+   * consults its own clock calls a settled day a projection.
+   */
+  isProjected: boolean;
+  /** `"USD->CAD"` for each pair with no rate on the day this total is priced at. */
+  missingRatePairs: string[];
+}
+
+/** GET /accounts/daily-balance-totals: one total per calendar day. */
+export interface DailyBalanceTotalsResponse {
+  startDate: string;
+  endDate: string;
+  /** The server's financial today; `isProjected` was decided from it. */
+  today: string;
+  /** The one currency every scoped account shares, else the display currency. */
+  currencyCode: string;
+  days: DailyBalanceTotal[];
+  forecast: {
+    /** False means `total` is withheld on EVERY projected day. */
+    complete: boolean;
+    /** The schedules behind an incomplete projection, unioned over the scope. */
+    gaps: BalanceForecastGap[];
+    /**
+     * Accounts in scope that could not be projected at all, with no schedule to
+     * blame -- today, a joint account, whose forecast belongs to its owner.
+     */
+    unforecastableAccountIds: string[];
+  };
+  /** No account matched the scope: render the layer's notice, not an empty month. */
+  scopeEmpty: boolean;
 }

@@ -34,7 +34,6 @@
     "units": "Cotas",
     "avgCostPerUnit": "Custo médio / cota",
     "heldInAccounts": "Detido em contas",
-    "openAccount": "Mostrar {name} na página Investimentos",
     "unitsShare": "{units} ({share})",
     "valueUnknown": "Sem preço",
     "approx": "~ {amount}"
@@ -74,15 +73,20 @@
     "sector": "Setor",
     "industry": "Indústria",
     "provider": "Fornecedor",
-    "lastPrice": "Último preço"
+    "lastPrice": "Último preço",
+    "bondDescription": "Descrição do título"
   },
   "tabs": {
     "ariaLabel": "Seções do ativo",
     "overview": "Visão geral",
     "transactions": "Transações",
     "prices": "Histórico de preços",
+    "terms": "Histórico de condições",
     "documents": "Documentos",
     "news": "Notícias"
+  },
+  "bondPrices": {
+    "title": "Histórico de preços"
   },
   "about": {
     "title": "Sobre",
@@ -121,6 +125,8 @@
     "fees": "Taxas",
     "realizedPl": "G/P realizado",
     "realizedMixed": "Realizado em {currencies}, pelo que não é somado",
+    "realizedUnknownReason": "Este ganho não pode ser calculado: a posição contém ações adicionadas sem custo, então o custo das ações vendidas é desconhecido. Abra a transação que as adicionou e informe o preço delas.",
+    "realizedKnownPart": "Parte conhecida: {amount}",
     "totalReturn": "Retorno total",
     "totalReturnValue": "{amount} ({percent})",
     "totalReturnTitle": "O ganho não realizado, mais o que você realizou nas vendas e recebeu em rendimentos, menos as taxas, sobre o capital aplicado. Um retorno simples sobre esse capital: não é anualizado e não pondera os lotes pelo tempo em que você os manteve.",
@@ -147,6 +153,8 @@
     "title": "Posição fechada",
     "description": "Você não mantém mais este ativo. O histórico continua disponível abaixo.",
     "realizedPl": "G/P realizado",
+    "realizedUnknownReason": "Este ganho não pode ser calculado: a posição continha ações adicionadas sem custo, então o custo das ações vendidas é desconhecido. Abra a transação que as adicionou e informe o preço delas.",
+    "realizedKnownPart": "Parte conhecida: {amount}",
     "heldFrom": "Mantido desde",
     "heldRange": "{start} a {end}"
   },
@@ -165,7 +173,24 @@
     "sectorEmpty": "Nenhuma composição setorial armazenada. O Monize a preenche pelo fornecedor para fundos e ETFs.",
     "countryEmpty": "Nenhuma composição por país armazenada. Você pode informá-la ao editar o ativo.",
     "assetClassEmpty": "Nenhuma composição por classe de ativos armazenada ainda.",
-    "remainder": "{percent} não classificado"
+    "remainder": "{percent} não classificado",
+    "bond": {
+      "seriesTab": "Séries",
+      "maturityTab": "Vencimento",
+      "empty": "Você ainda não tem nenhuma série deste tipo de título.",
+      "someUnknown": "Alguns valores são desconhecidos, então as participações não são exibidas.",
+      "issuerCountry": "País do emissor",
+      "rate": "Taxa de juros",
+      "interest": "Juros",
+      "term": "Prazo até o vencimento",
+      "interestValue": "{capitalization}, período: {period}",
+      "rateType": {
+        "FIXED": "Fixa",
+        "BENCHMARK_PLUS_SPREAD": "Variável (referência + spread)",
+        "INFLATION_PLUS_MARGIN_AS_RATE": "Indexada à inflação (referência + margem)",
+        "ZERO_COUPON_DISCOUNT": "Cupom zero (desconto)"
+      }
+    }
   },
   "documents": {
     "title": "Documentos",
@@ -225,6 +250,16 @@
       "deleted": "Documento excluído",
       "saveFailed": "Não foi possível salvar o documento",
       "deleteFailed": "Não foi possível excluir o documento"
+    },
+    "issueLetters": {
+      "title": "Cartas de emissão",
+      "loadFailed": "Não foi possível carregar as cartas de emissão.",
+      "empty": "Ainda não há nenhuma carta de emissão salva para este tipo de título.",
+      "held": "Em carteira",
+      "onSale": "À venda",
+      "noLetter": "Nenhuma carta registrada para esta série",
+      "open": "PDF oficial",
+      "openNamed": "Abrir a carta de emissão da série {series}"
     }
   },
   "news": {
@@ -237,6 +272,243 @@
     "empty": {
       "title": "Sem manchetes neste momento",
       "description": "Nada foi publicado sobre este símbolo recentemente. A lista é atualizada quando você voltar."
+    }
+  },
+  "bond": {
+    "loading": "Carregando a avaliação do título...",
+    "loadFailed": "Não foi possível carregar a avaliação do título.",
+    "unknown": "Desconhecido",
+    "asOf": "Avaliado em",
+    "termsSource": "Condições: {document}",
+    "termsManual": "Condições inseridas manualmente por um administrador",
+    "noLots": "Não há lotes em aberto nesta data.",
+    "totals": {
+      "quantity": "Títulos em carteira",
+      "grossValue": "Valor bruto",
+      "earlyRedemptionValue": "Valor de resgate antecipado",
+      "accruedInterest": "Juros acumulados",
+      "unknownLot": "Pelo menos um lote não tem valor, por isso nenhum total é informado.",
+      "unknownRefusal": "Não é possível apurar os lotes, por isso nenhum total é informado."
+    },
+    "lots": {
+      "purchaseDate": "Comprado",
+      "assumed": "Presumida",
+      "assumedTitle": "A data real de compra é desconhecida: este lote chegou por uma transferência sem o lado remetente vinculado.",
+      "quantity": "Quantidade",
+      "maturity": "Vencimento",
+      "period": "Período atual",
+      "periodValue": "{index}: de {start} a {end}",
+      "rate": "Taxa",
+      "principal": "Principal por título",
+      "principalIssuePrice": "Nenhum custo informado: o preço do leilão é usado",
+      "accruedInterest": "Juros acumulados",
+      "grossValue": "Valor bruto",
+      "earlyRedemption": "Resgate antecipado",
+      "nextCashFlow": "Próximo fluxo de caixa",
+      "cashFlowValue": "{type} {amount} em {date}",
+      "noCashFlow": "Nenhum",
+      "projected": "Projetado",
+      "maturityValue": "Valor no vencimento",
+      "maturityKnown": "Conhecido",
+      "maturityProjected": "Projetado",
+      "matured": "Vencido",
+      "refused": "Sem avaliação",
+      "amountUnknown": "Valor desconhecido"
+    },
+    "rateSource": {
+      "TERMS": "Condições",
+      "ANNOUNCED": "Anunciada",
+      "DERIVED": "Derivada",
+      "PROJECTED": "Projetada"
+    },
+    "cashFlowType": {
+      "INTEREST": "Juros",
+      "PRINCIPAL": "Principal"
+    },
+    "earlyRefusal": {
+      "NOT_REDEEMABLE": "Não resgatável antecipadamente",
+      "TOO_EARLY": "Cedo demais para resgatar",
+      "TOO_LATE": "Tarde demais para resgatar",
+      "RECORD_DAY": "Não resgatável na data de corte",
+      "MATURED": "Vencido",
+      "RATE_UNKNOWN": "Taxa ainda desconhecida",
+      "TERMS_INCOMPLETE": "Condições incompletas"
+    },
+    "lotsRefusal": {
+      "SPLIT": "Não é possível apurar os lotes: um título não é desdobrado.",
+      "FRACTIONAL_QUANTITY": "Não é possível apurar os lotes: uma quantidade não é um número inteiro de títulos.",
+      "OVER_REMOVAL": "Não é possível apurar os lotes: foram removidos mais títulos do que os mantidos.",
+      "INVALID_QUANTITY": "Não é possível apurar os lotes: falta uma quantidade, ela é negativa ou grande demais.",
+      "REMOVAL_EXCEEDS_SERIES": "Não é possível determinar os lotes: foram retirados mais títulos de uma série do que os mantidos.",
+      "SERIES_NOT_DETERMINED": "Não é possível determinar os lotes: a série de uma compra é desconhecida."
+    },
+    "lotsRefusalDetail": {
+      "SPLIT": "Há um desdobramento registrado neste título ({action} em {date}); um título de renda fixa não se desdobra.",
+      "FRACTIONAL_QUANTITY": "{action} em {date} movimenta {quantity} títulos, o que não é um número inteiro.",
+      "OVER_REMOVAL": "{action} em {date} retira {quantity} títulos, mais do que os mantidos.",
+      "INVALID_QUANTITY": "A quantidade de {action} em {date} está ausente, é negativa ou grande demais.",
+      "REMOVAL_EXCEEDS_SERIES": "{action} em {date} retira {quantity} títulos da sua série, mais do que os mantidos nessa série.",
+      "SERIES_NOT_DETERMINED": "{action} em {date} não indica série e nesse dia nenhuma série salva do tipo de título estava à venda. Busque a série e escolha-a na transação."
+    },
+    "assumptions": {
+      "title": "Premissas da projeção",
+      "latestObservation": "{benchmark} assumido em {value} para todos os períodos seguintes, o último valor publicado ({observation})",
+      "supplied": "{benchmark} assumido em {value} para todos os períodos seguintes",
+      "suppliedSimpleAnnual": "Presume-se que {benchmark} cresça {value} ao ano (crescimento anual simples, sem capitalização) em cada mês seguinte"
+    },
+    "missing": {
+      "title": "Dados ainda necessários",
+      "item": "{benchmark} {observation} — publicado por {publisher}",
+      "itemNoPublisher": "{benchmark} {observation} — publicador desconhecido"
+    },
+    "recompute": {
+      "button": "Recalcular preços",
+      "done": "Preços recalculados: {written} gravados, {deleted} removidos.",
+      "failed": "Não foi possível recalcular os preços."
+    },
+    "rate": {
+      "title": "Taxa de juros",
+      "rule": {
+        "fixed": "{rate} fixa durante todo o prazo",
+        "firstThen": "Período 1: {firstRate}. Depois {benchmark} + {addend}",
+        "every": "Cada período: {benchmark} + {addend}",
+        "floorZero": "Um valor negativo de {benchmark} conta como 0",
+        "dailyFloor": "A taxa diária (índice mais spread) nunca fica abaixo de {floor}",
+        "discount": "Desconto sobre o valor de face",
+        "daily": "Todos os dias: {benchmark} + {addend}, somado dia a dia",
+        "lockout": "Um leilão a menos de {days, plural, one {# dia útil} other {# dias úteis}} do fim de um período não é usado nesse período"
+      },
+      "daily": "Diário, {benchmark}",
+      "dailyNoIndex": "Diário, {benchmark}: ainda não há índice salvo",
+      "dailyRun": "A partir de {from}: {rate}",
+      "dailyRunUnknown": "A partir de {from}: sem índice salvo",
+      "lotHeading": "Lote comprado em {date}",
+      "range": "{start} a {end}",
+      "current": "Atual",
+      "columns": {
+        "period": "Período",
+        "dates": "Datas",
+        "rate": "Taxa",
+        "source": "Origem",
+        "how": "Como é definida"
+      },
+      "how": {
+        "stated": "Taxa informada",
+        "observed": "{benchmark} {observation}: {value} + {addend}",
+        "floored": "(elevado a {floor})",
+        "missing": "{benchmark} {observation}: ainda não publicado"
+      },
+      "nextRateReset": "Próximo reajuste da taxa: {date}",
+      "nextCapitalization": "Próxima capitalização: {date}"
+    },
+    "indexation": {
+      "inflation": "Indexada à inflação: a partir de {date} (período 2) a taxa é {benchmark} + {addend}, recalculada a cada período",
+      "floating": "Taxa variável: a partir de {date} (período 2) a taxa é {benchmark} + {addend}, recalculada a cada período"
+    },
+    "interestParts": {
+      "fixed": "Juros fixos (1º período)",
+      "margin": "Juros da margem",
+      "inflation": "Juros da inflação",
+      "benchmark": "Juros da taxa de referência",
+      "announced": "Juros anunciados",
+      "fixedTerm": "Juros de taxa fixa"
+    },
+    "chart": {
+      "title": "Juros acumulados no fim de cada período",
+      "assumption": "Projeção assumindo {benchmark} = {value}",
+      "projectedNote": "As barras mais claras são períodos projetados",
+      "stoppedAt": "Os juros não são conhecidos a partir do período {period}, por isso o gráfico termina antes."
+    },
+    "scenarios": {
+      "title": "Cenários de inflação",
+      "titleBenchmark": "Cenários de taxa de juros",
+      "projection": "Projeção",
+      "caption": "Valor no vencimento projetado e juros por valor assumido",
+      "intro": "São projeções, não certezas: para cada período que ainda não começou, assume-se o valor de {benchmark} da primeira coluna. Os períodos conhecidos e anunciados não mudam. Selecione uma linha para ver sua tabela de taxas e o gráfico.",
+      "custom": "Seu próprio valor de {benchmark} (%)",
+      "add": "Adicionar cenário",
+      "useDefault": "Usar a premissa padrão",
+      "selected": "Selecionado",
+      "loading": "Carregando os cenários...",
+      "loadFailed": "Não foi possível carregar os cenários.",
+      "columns": {
+        "assumed": "Assumido: {benchmark}",
+        "maturityValue": "Valor no vencimento (projeção)",
+        "totalInterest": "Juros totais (projeção)"
+      },
+      "asOfNote": "Avaliado em {date}, a data escolhida acima: os valores se referem aos títulos mantidos nesse dia."
+    },
+    "benchmarks": {
+      "PL_CPI_GUS_YOY": "IPCA, 12 meses (GUS)",
+      "PL_NBP_REFERENCE": "Taxa de referência do NBP",
+      "US_CPI_U_NSA": "CPI-U, todos os itens, sem ajuste sazonal (BLS)",
+      "US_TBILL_13W_MMY": "Rendimento dos títulos do Tesouro de 13 semanas"
+    },
+    "valuationRefusal": {
+      "PURCHASE_OUTSIDE_SALE_WINDOW": "Esta série só pode ser comprada de {from} a {to}. Este lote foi comprado em {purchaseDate}, portanto não é avaliado.",
+      "PURCHASE_AFTER_MATURITY": "Esta série venceu em {maturityDate}. Este lote foi comprado em {purchaseDate}, nesse dia ou depois, por isso não é avaliado."
+    },
+    "marketPriceRequired": "Este ativo contém uma série negociada em mercado, então o preço dele não decorre das condições. O Monize não grava nenhum preço para ela: informe o preço você mesmo. Os valores dos lotes abaixo são calculados a partir das condições e não são valores de mercado.",
+    "partial": {
+      "title": "Esta avaliação está incompleta; leia os valores como parciais.",
+      "terms": "As condições do título estão incompletas (por exemplo, um calendário não está instalado).",
+      "reference": "Faltam dados de referência; veja abaixo a lista de dados ainda necessários.",
+      "earlyRedemption": "As condições de resgate antecipado estão incompletas, então os valores de resgate antecipado podem estar ausentes.",
+      "other": "Pelo menos um lote ainda não pode ser avaliado por completo (por exemplo, uma taxa não é conhecida)."
+    },
+    "projectionMissing": {
+      "title": "Não é possível projetar os períodos seguintes",
+      "item": "{benchmark}: não há nenhum valor publicado nem premissa definida, portanto não é possível projetar os períodos seguintes (publicado por {publisher})",
+      "itemNoPublisher": "{benchmark}: não há nenhum valor publicado nem premissa definida, portanto não é possível projetar os períodos seguintes (publicador desconhecido)"
+    },
+    "coverage": {
+      "asOf": "Dados de {benchmark} em {date}",
+      "none": "Ainda não há dados de {benchmark} salvos"
+    },
+    "issuers": {
+      "PL_MF": "Ministério das Finanças (PL)",
+      "US_TREASURY": "Departamento do Tesouro dos EUA (US)"
+    },
+    "redemption": {
+      "title": "Condições do resgate antecipado",
+      "fixedFee": "Taxa de resgate antecipado: {amount} por título.",
+      "forfeitAccrued": "No resgate antecipado, os juros acumulados no período atual são perdidos.",
+      "floorAllPeriods": "A taxa nunca reduz o valor recebido abaixo do valor de face, em nenhum período.",
+      "floorFirstPeriod": "Só no primeiro período a taxa não pode reduzir o valor recebido abaixo do valor de face; nos períodos seguintes não existe esse piso."
+    },
+    "programs": {
+      "OTS": "OTS: títulos de poupança de 3 meses com taxa fixa",
+      "ROR": "ROR: títulos de poupança de 1 ano com taxa variável",
+      "DOR": "DOR: títulos de poupança de 2 anos com taxa variável",
+      "TOS": "TOS: títulos de poupança de 3 anos com taxa fixa",
+      "COI": "COI: títulos de poupança de 4 anos indexados à inflação",
+      "EDO": "EDO: títulos de poupança de 10 anos indexados à inflação",
+      "ROS": "ROS: títulos de poupança familiares de 6 anos indexados à inflação",
+      "ROD": "ROD: títulos de poupança familiares de 12 anos indexados à inflação",
+      "BILL": "BILL: letras do Tesouro, de 4 a 52 semanas, vendidas com desconto",
+      "NOTE": "NOTE: notas do Tesouro, de 2 a 10 anos, cupom fixo semestral",
+      "BOND": "BOND: títulos do Tesouro, 20 e 30 anos, cupom fixo semestral",
+      "TIPS": "TIPS: títulos do Tesouro protegidos contra a inflação, principal indexado ao CPI-U",
+      "FRN": "FRN: notas do Tesouro de taxa flutuante, 2 anos, juros trimestrais"
+    },
+    "series": {
+      "title": "Suas séries",
+      "column": "Série",
+      "nextRateChange": "Próximo reajuste da taxa",
+      "total": "Total do tipo de título",
+      "purchasedRange": "de {from} a {to}",
+      "expand": "Mostrar os detalhes de {series}",
+      "collapse": "Ocultar os detalhes de {series}",
+      "partial": "Parcial"
+    },
+    "program": {
+      "title": "O tipo de título",
+      "newest": "Condições da série mais recente, {series}.",
+      "noTerms": "As condições ainda não são conhecidas: você não tem nenhuma série deste tipo de título e nenhuma está à venda.",
+      "autoFetchFailed": "Não foi possível salvar a configuração."
+    },
+    "onSale": {
+      "title": "À venda agora"
     }
   }
 }

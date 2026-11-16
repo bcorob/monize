@@ -157,6 +157,12 @@ describe("provider health against a real database", () => {
           translate: (_key: string, options?: { defaultValue?: string }) =>
             options?.defaultValue ?? _key,
         } as never,
+        // The in-app alert rows have their own integration spec
+        // (system-alert-dedupe.integration.spec.ts); this suite is about the
+        // provider_health claim and the emails it gates.
+        {
+          raiseAdminAlert: async () => ({ created: 0, emailed: 0 }),
+        } as never,
       );
 
     beforeEach(async () => {

@@ -89,7 +89,7 @@ describe("backup-crypto.util", () => {
      * This guard read `backup-crypto.util.ts` alone, and issue #1070 moved the
      * derivation into `backup-envelope.ts` so both container versions could
      * share it -- a scan pointed at the old file would have gone on passing with
-     * nothing left to find. `backend/CLAUDE.md` calls this out by name: a scan
+     * nothing left to find. `docs/backend/backup.md` calls this out by name: a scan
      * whose subject is "wherever this appears" walks the directory.
      */
     function moduleSources(): Array<{ file: string; code: string }> {

@@ -37,6 +37,7 @@ describe("RLS lint bans are documented where contributors read", () => {
   ].map((match) => match[1]);
 
   const instructionFiles = [
+    "AGENTS.md",
     "CLAUDE.md",
     "CONTRIBUTING.md",
     "backend/CLAUDE.md",
@@ -50,7 +51,8 @@ describe("RLS lint bans are documented where contributors read", () => {
     expect(config).toContain("InjectRepository");
   });
 
-  it.each(["CLAUDE.md", "CONTRIBUTING.md"])(
+  // AGENTS.md is the canonical instruction file; the root CLAUDE.md imports it.
+  it.each(["AGENTS.md", "CONTRIBUTING.md"])(
     "%s names every call the config bans",
     (relative) => {
       const doc = fs.readFileSync(path.join(REPO_ROOT, relative), "utf8");
@@ -127,16 +129,24 @@ describe("RLS lint bans are documented where contributors read", () => {
   });
 
   it("does not claim a counting ratchet that no longer exists", () => {
-    // `docs/future-plans/mny-import.md` described a CI script counting
+    // `docs/specs/mny-import.md` described a CI script counting
     // `@InjectRepository`/`createQueryRunner` sites and failing on any increase.
     // The script is gone -- the ratchet reached zero and became an outright ban
     // -- so a reader was being pointed at a gate that could not fail.
+    // Walk recursively and keep FILES. `readdirSync` lists directories too, so
+    // reading every entry threw EISDIR the first time a script directory grew a
+    // subdirectory (`scripts/lib/`) -- a spec unrelated to that change failing
+    // on it. Recursing is also the honest reading of the question: a ratchet
+    // script nested one level down would have been invisible to a flat scan.
     const scripts = [
       path.join(REPO_ROOT, "scripts"),
       path.join(REPO_ROOT, "backend/scripts"),
     ].flatMap((dir) =>
       fs.existsSync(dir)
-        ? fs.readdirSync(dir).map((name) => path.join(dir, name))
+        ? fs
+            .readdirSync(dir, { withFileTypes: true, recursive: true })
+            .filter((entry) => entry.isFile())
+            .map((entry) => path.join(entry.parentPath, entry.name))
         : [],
     );
     const ratchetExists = scripts.some((file) =>
@@ -144,10 +154,7 @@ describe("RLS lint bans are documented where contributors read", () => {
     );
 
     const claimsRatchet = fs
-      .readFileSync(
-        path.join(REPO_ROOT, "docs/future-plans/mny-import.md"),
-        "utf8",
-      )
+      .readFileSync(path.join(REPO_ROOT, "docs/specs/mny-import.md"), "utf8")
       .match(/the CI script counts/);
 
     expect(Boolean(claimsRatchet)).toBe(ratchetExists);

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render } from '@/test/render';
-import { fireEvent, screen } from '@testing-library/react';
+import { cleanup, fireEvent, screen } from '@testing-library/react';
+import { usePreferencesStore } from '@/store/preferencesStore';
 import { RefreshPricesButton } from './RefreshPricesButton';
 
 describe('RefreshPricesButton', () => {
@@ -10,6 +11,8 @@ describe('RefreshPricesButton', () => {
   });
 
   afterEach(() => {
+    cleanup();
+    usePreferencesStore.setState({ preferences: null });
     vi.useRealTimers();
   });
 
@@ -31,6 +34,7 @@ describe('RefreshPricesButton', () => {
   });
 
   it('shows the age of the last refresh inline and in the tooltip', () => {
+    usePreferencesStore.setState({ preferences: { language: 'en' } as any });
     render(
       <RefreshPricesButton
         onClick={vi.fn()}
@@ -38,11 +42,27 @@ describe('RefreshPricesButton', () => {
         lastPriceUpdate="2026-07-30T10:00:00.000Z"
       />,
     );
-    expect(screen.getByText('(2h ago)')).toBeInTheDocument();
+    const age = screen.getByText('(2 hours ago)');
+    // On its own line under the label, the way Refresh Rates draws it.
+    expect(age.parentElement).toBe(screen.getByText('Refresh').parentElement);
+    expect(age.parentElement!.className).toContain('flex-col');
     expect(screen.getByRole('button', { name: 'Refresh' })).toHaveAttribute(
       'title',
-      'Last updated: 2h ago',
+      'Last updated: 2 hours ago',
     );
+  });
+
+  it('words the age in the reader language, not in English', () => {
+    usePreferencesStore.setState({ preferences: { language: 'pl' } as any });
+    render(
+      <RefreshPricesButton
+        onClick={vi.fn()}
+        isRefreshing={false}
+        lastPriceUpdate="2026-07-30T10:00:00.000Z"
+      />,
+    );
+    expect(screen.getByText('(2 godziny temu)')).toBeInTheDocument();
+    expect(screen.queryByText(/ago/)).not.toBeInTheDocument();
   });
 
   it('says so when the caller tracks the last refresh and there has been none', () => {

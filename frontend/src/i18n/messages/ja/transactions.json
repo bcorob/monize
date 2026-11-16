@@ -76,7 +76,10 @@
     "collapseAria": "口座情報を非表示",
     "showAccountNumber": "口座番号を表示",
     "hideAccountNumber": "口座番号を非表示",
-    "show": "口座情報を表示"
+    "show": "口座情報を表示",
+    "nextInstallment": "次回の返済額",
+    "finalPayment": "最終返済額",
+    "amountDueOn": "{amount}（期日 {date}）"
   },
   "page": {
     "title": "取引",
@@ -121,13 +124,19 @@
       "balance": "残高",
       "attachments": "添付ファイル",
       "status": "状態",
+      "statusHelp": "未照合、決済済み、照合済みは銀行の取引明細書と一致させるための段階です。無効は取引を取り消しますが記録は残り、口座残高には影響しなくなります。",
       "actions": "操作"
+    },
+    "sort": {
+      "balanceHiddenHint": "残高を表示するには日付で並べ替えてください",
+      "stripLabel": "並べ替え"
     },
     "dateDisplay": {
       "toggleLabel": "年を非表示",
       "toggleTitle": "日付から年を省いて支払先の表示幅を広げます"
     },
     "attachmentsCount": "{count, plural, other {# 件の添付ファイル}}",
+    "warrantiesCount": "{count, plural, other {# 件の保証}}",
     "today": "今日",
     "export": {
       "button": "エクスポート",
@@ -165,7 +174,6 @@
     },
     "row": {
       "viewPayeeTitle": "{name} の詳細を表示",
-      "ref": "参照: {number}",
       "investmentLabel": "投資",
       "linkedInvestmentTitle": "投資で表示",
       "filterByDate": "日付「{date}」でフィルター",
@@ -212,13 +220,13 @@
       "title": "フィルター",
       "clear": "クリア",
       "hide": "非表示",
-      "show": "表示"
+      "show": "フィルターを表示"
     },
     "accounts": {
-      "label": "口座を表示:",
-      "all": "すべて",
-      "active": "アクティブ",
-      "closed": "閉鎖済み"
+      "label": "口座を表示",
+      "allCount": "すべて ({count})",
+      "activeCount": "アクティブ ({count})",
+      "closedCount": "閉鎖済み ({count})"
     },
     "fields": {
       "accounts": "口座",
@@ -251,7 +259,7 @@
       "statuses": "すべての状態",
       "amountMin": "最小",
       "amountMax": "最大",
-      "search": "支払先、カテゴリ、金額、タグ、説明、参照番号で検索...",
+      "search": "検索、または #10 や payee:costco を試す",
       "tagKeyValue": "例: usa"
     },
     "tagKeyNone": "すべて（キーフィルターなし）",
@@ -312,7 +320,7 @@
     },
     "modal": {
       "title": "取引を一括更新",
-      "subtitle": "{count, plural, one {# 件の選択された取引} other {# 件の選択された取引}}を更新します。変更するフィールドを切り替えてください。",
+      "help": "変更するフィールドを切り替えてください。",
       "submitLabel": "{count, plural, one {# 件の取引} other {# 件の取引}}を更新",
       "payee": "支払先",
       "category": "カテゴリ",
@@ -360,8 +368,9 @@
       "fromAccount": "振替元口座",
       "toAccount": "振替先口座",
       "transferAmount": "振替金額",
-      "transferAmountWithCurrency": "振替金額（{currency}）",
-      "amountReceived": "受取金額（{currency}）",
+      "amountReceivedLabel": "受取金額",
+      "transferAmountInCurrency": "振替金額 ({currency})",
+      "amountReceivedInCurrency": "受取金額 ({currency})",
       "payeeOptional": "支払先（任意）",
       "categoryOptional": "カテゴリ（任意）"
     },
@@ -391,10 +400,16 @@
     "submitCreateAndNewDescription": "保存して、同じ口座と日付で次の入力を始めます。",
     "submitOptions": "作成後の動作を選択",
     "submitUpdate": "{mode}を更新",
+    "submitConvert": "{mode}に変換",
     "reconciledConfirm": {
       "title": "照合済みの取引を編集しますか？",
       "message": "この取引は照合済みです。変更すると完了した照合に影響します。それでも変更を保存しますか？",
       "confirm": "変更を保存"
+    },
+    "counterpartConfirm": {
+      "title": "この振替を変換しますか？",
+      "message": "この振替の相手側はすでに確認済みまたは照合済みです。取引に変換すると、その項目が相手口座から削除され、明細と照合済みの残高が変わります。続行しますか？",
+      "confirm": "変換する"
     },
     "modeLabel": {
       "transfer": "振替",
@@ -424,6 +439,8 @@
       "destinationRequired": "振替先口座を選択してください",
       "sameAccount": "振替元と振替先の口座は異なる必要があります",
       "negativeTransfer": "振替金額はマイナスにできません",
+      "convertedToTransfer": "振替に変換しました",
+      "convertedToTransaction": "取引に変換しました",
       "payeeCreated": "支払先「{name}」を作成しました",
       "payeeCreateFailed": "支払先の作成に失敗しました",
       "payeeReactivated": "支払先「{name}」を再有効化しました",
@@ -458,10 +475,20 @@
       },
       "feeCaption": "{percent}% の外貨取引手数料（{fee}）が含まれます。"
     },
-    "jointSplitDisabled": "共有口座の分割取引を管理できるのは所有者のみです"
+    "jointSplitDisabled": "共有口座の分割取引を管理できるのは所有者のみです",
+    "warranties": {
+      "title": "保証",
+      "add": "保証を追加",
+      "expires": "{date} に期限切れ",
+      "loading": "保証を読み込み中",
+      "loadError": "この取引の保証を読み込めませんでした。",
+      "empty": "保証はまだありません"
+    },
+    "conversionLockedNote": "この振替は分割取引または他の所有者の口座に属しているため、ここでは振替のままにしかできません。分割から変更するか、削除して必要な項目を作成してください。"
   },
   "splitEditor": {
     "header": "分割の詳細",
+    "headerTooltip": "各行はカテゴリ、別口座への振替、または投資のいずれかです。各行の合計は取引の総額と一致する必要があります。均等配分と比例配分は残りの金額を自動的に振り分けます。",
     "distributeProportionally": "比例配分",
     "distributeProportionallyTitle": "各分割の金額に基づいて残額を比例配分します",
     "distributeEvenly": "均等配分",
@@ -521,7 +548,7 @@
     "quantityPlaceholder": "数量",
     "pricePlaceholder": "価格",
     "commissionPlaceholder": "手数料",
-    "amountPlaceholder": "金額（{currency}）",
+    "amountOnlyPlaceholder": "金額",
     "ratePlaceholder": "1 {from} あたりの {to}",
     "ariaRate": "為替レート（1 {from} あたりの {to}）",
     "rateHint": "数量・価格・手数料は {from} 建てです。このレートで現金への影響を {to} に換算します。",
@@ -551,6 +578,7 @@
       "total": "合計",
       "transactions": "取引",
       "tooltip": "{count, plural, one {# 件の取引} other {# 件の取引}}",
+      "partialNote": "為替レートのない金額があり、これらの合計には含まれていません。",
       "quarterLabel": "{year}年Q{quarter}",
       "quarterTick": "{year}年Q{quarter}",
       "granularityLabel": "グループ化",
@@ -575,6 +603,11 @@
       "log": "対数",
       "autoTitle": "自動（{scale}）",
       "scaleTitle": "{label}スケール"
+    },
+    "collapse": {
+      "hide": "グラフを非表示",
+      "show": "グラフを表示",
+      "hidden": "グラフは非表示です"
     }
   },
   "toasts": {
@@ -597,5 +630,71 @@
     "title": "{key}別の支出",
     "other": "その他",
     "noData": "このキーで内訳を表示できるタグ付き支出がありません。"
+  },
+  "searchSyntax": {
+    "open": "検索構文",
+    "title": "検索構文",
+    "fields": "フィールド: payee, memo, cat, tag, account, ref, amount, date, status, is, has。例を選ぶと検索ボックスに入力されます。",
+    "examples": {
+      "allWords": "すべての語がどこかに一致",
+      "phrase": "この語句に完全一致",
+      "exclude": "refund に一致するものを除外",
+      "fieldContains": "支払先に costco を含む",
+      "fieldExact": "支払先が Costco と完全一致",
+      "reference": "小切手番号または参照番号がちょうど 10",
+      "wildcard": "参照番号が 10 で始まる",
+      "amountOver": "金額が 100 を超える",
+      "amountRange": "金額が 50〜100",
+      "datePeriod": "2026年3月のいずれかの日",
+      "isSplit": "分割取引",
+      "hasAttachment": "添付ファイルあり",
+      "hasWarranty": "保証あり"
+    }
+  },
+  "searchInterpretation": {
+    "label": "検索条件:",
+    "negated": "{phrase} ではない",
+    "malformed": "{raw}(解釈できないためテキストとして検索)",
+    "empty": "{raw}(空のため無視)",
+    "status": "ステータスが {value}",
+    "any": "いずれかの項目に「{value}」",
+    "fields": {
+      "payee": "支払先",
+      "memo": "メモ",
+      "cat": "カテゴリ",
+      "tag": "タグ",
+      "account": "口座",
+      "ref": "参照番号",
+      "amount": "金額",
+      "date": "日付",
+      "status": "ステータス",
+      "is": "種類",
+      "has": "あり"
+    },
+    "ops": {
+      "contains": "{field}に「{value}」を含む",
+      "exact": "{field}が「{value}」",
+      "glob": "{field}が「{value}」に一致",
+      "eq": "{field}が {value}",
+      "gt": "{field}が {value} を超える",
+      "gte": "{field}が {value} 以上",
+      "lt": "{field}が {value} 未満",
+      "lte": "{field}が {value} 以下",
+      "between": "{field}が {value}〜{valueTo}"
+    },
+    "enum": {
+      "is": {
+        "transfer": "振替",
+        "split": "分割取引",
+        "uncategorized": "未分類"
+      },
+      "has": {
+        "attachment": "添付ファイルあり",
+        "warranty": "保証あり",
+        "ref": "参照番号あり",
+        "memo": "メモあり",
+        "tag": "タグあり"
+      }
+    }
   }
 }

@@ -5,6 +5,8 @@ import toast from 'react-hot-toast';
 import { useTranslations } from 'next-intl';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { SETTINGS_SECTION_IDS } from '@/lib/settings-sections';
+import { CARD_CLASS, HOVER_ROW_ON_CARD } from '@/components/ui/Card';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { ProfileSection } from '@/components/settings/ProfileSection';
 import { PreferencesSection } from '@/components/settings/PreferencesSection';
@@ -12,14 +14,14 @@ import { NotificationsSection } from '@/components/settings/NotificationsSection
 import { SecuritySection } from '@/components/settings/SecuritySection';
 import { DangerZoneSection } from '@/components/settings/DangerZoneSection';
 import { BackupRestoreSection } from '@/components/settings/BackupRestoreSection';
-import { AutoBackupSection } from '@/components/settings/AutoBackupSection';
 import { ApiAccessSection } from '@/components/settings/ApiAccessSection';
+import { PayeeLookupSection } from '@/components/settings/payee-lookup/PayeeLookupSection';
 import { HelpSection } from '@/components/settings/HelpSection';
 import { AboutSection } from '@/components/settings/AboutSection';
 import { SettingsNav, SettingsSection } from '@/components/settings/SettingsNav';
 import { useScrollSpy } from '@/hooks/useScrollSpy';
 import { userSettingsApi } from '@/lib/user-settings';
-import { authApi } from '@/lib/auth';
+import { authApi, type AuthMethods } from '@/lib/auth';
 import { User, UserPreferences } from '@/types/auth';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { useDemoStore } from '@/store/demoStore';
@@ -29,26 +31,6 @@ import { getErrorMessage } from '@/lib/errors';
 import Link from 'next/link';
 
 const logger = createLogger('Settings');
-
-const SETTINGS_SECTION_IDS = [
-  { id: 'profile', navKey: 'profile', demoVisible: false },
-  { id: 'preferences', navKey: 'preferences', demoVisible: true },
-  { id: 'tours', navKey: 'tours', href: '/settings/tours', demoVisible: true },
-  { id: 'notifications', navKey: 'notifications', demoVisible: true },
-  { id: 'security', navKey: 'security', demoVisible: false },
-  { id: 'shared-access', navKey: 'sharedAccess', href: '/settings/shared-access', demoVisible: false },
-  { id: 'emergency-access', navKey: 'emergencyAccess', href: '/settings/emergency-access', demoVisible: false },
-  { id: 'api-access', navKey: 'apiAccess', demoVisible: false },
-  { id: 'ai-settings', navKey: 'aiSettings', href: '/settings/ai', demoVisible: false },
-  { id: 'backup-restore', navKey: 'backupRestore', demoVisible: false },
-  // Automatic backups decide what the server writes to its own filesystem, so
-  // only an administrator configures them. Everyone else is enrolled on the
-  // deployment defaults by the backend and never sees the section.
-  { id: 'auto-backup', navKey: 'autoBackup', demoVisible: false, adminOnly: true },
-  { id: 'help', navKey: 'help', demoVisible: false },
-  { id: 'about', navKey: 'about', demoVisible: true },
-  { id: 'danger-zone', navKey: 'dangerZone', variant: 'danger' as const, demoVisible: false },
-] as const;
 
 export default function SettingsPage() {
   return (
@@ -72,6 +54,7 @@ function DelegateSecurityView() {
   const [user, setUser] = useState<User | null>(null);
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [force2fa, setForce2fa] = useState(false);
+  const [oidcPasswordLogin, setOidcPasswordLogin] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -80,13 +63,14 @@ function DelegateSecurityView() {
       authApi.get2FAStatus(),
       authApi
         .getAuthMethods()
-        .catch(() => ({ force2fa: false } as { force2fa: boolean })),
+        .catch(() => ({ force2fa: false } as { force2fa: boolean; oidcPasswordLogin?: boolean })),
     ])
       .then(([self, status, methods]) => {
         if (cancelled) return;
         setUser(self);
         setTwoFactorEnabled(!!status.enabled);
         setForce2fa(!!methods.force2fa);
+        setOidcPasswordLogin(methods.oidcPasswordLogin === true);
       })
       .catch((error) => {
         toast.error(getErrorMessage(error, t('toasts.securityLoadFailed')));
@@ -116,7 +100,7 @@ function DelegateSecurityView() {
     return (
       <PageLayout>
         <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-12 pt-6 pb-8">
-          <PageHeader title={t('title')} />
+          <PageHeader title={t('title')} help="settings" />
           <p className="text-sm text-gray-600 dark:text-gray-300">
             {t('delegateSecurityError')}
           </p>
@@ -135,12 +119,13 @@ function DelegateSecurityView() {
   return (
     <PageLayout>
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-12 pt-6 pb-8">
-        <PageHeader title={t('title')} />
+        <PageHeader title={t('title')} help="settings" />
         <div id="security">
           <SecuritySection
             user={user}
             preferences={preferencesStub}
             force2fa={force2fa}
+            oidcPasswordLogin={oidcPasswordLogin}
             onPreferencesUpdated={(next) => {
               if (typeof next.twoFactorEnabled === 'boolean') {
                 setTwoFactorEnabled(next.twoFactorEnabled);
@@ -166,11 +151,11 @@ function OwnerSettingsView() {
   const [preferences, setPreferences] = useState<UserPreferences | null>(null);
   const [smtpConfigured, setSmtpConfigured] = useState(false);
   const [force2fa, setForce2fa] = useState(false);
+  const [oidcPasswordLogin, setOidcPasswordLogin] = useState(false);
   const isDemoMode = useDemoStore((s) => s.isDemoMode);
-  const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
 
   const allSettingsSections = useMemo<
-    readonly (SettingsSection & { demoVisible: boolean; adminOnly: boolean })[]
+    readonly (SettingsSection & { demoVisible: boolean })[]
   >(
     () =>
       SETTINGS_SECTION_IDS.map((s) => ({
@@ -179,18 +164,16 @@ function OwnerSettingsView() {
         href: 'href' in s ? s.href : undefined,
         variant: 'variant' in s ? s.variant : undefined,
         demoVisible: s.demoVisible,
-        adminOnly: 'adminOnly' in s ? s.adminOnly : false,
       })),
     [tNav],
   );
 
   const visibleSections = useMemo<readonly SettingsSection[]>(() => {
-    const sections = allSettingsSections.filter((s) => !s.adminOnly || isAdmin);
     if (isDemoMode) {
-      return sections.filter((s) => s.demoVisible);
+      return allSettingsSections.filter((s) => s.demoVisible);
     }
-    return sections;
-  }, [isDemoMode, isAdmin, allSettingsSections]);
+    return allSettingsSections;
+  }, [isDemoMode, allSettingsSections]);
 
   const sectionIds = useMemo(
     () => visibleSections.map((s) => s.id),
@@ -199,26 +182,31 @@ function OwnerSettingsView() {
 
   const [activeSection, setActiveSection] = useScrollSpy(sectionIds, { enabled: !isLoading });
 
-  const loadData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const [userData, prefsData, smtpStatus, authMethods] = await Promise.all([
-        userSettingsApi.getProfile(),
-        userSettingsApi.getPreferences(),
-        userSettingsApi.getSmtpStatus().catch(() => ({ configured: false })),
-        authApi.getAuthMethods().catch(() => ({ local: true, oidc: false, registration: true, smtp: false, force2fa: false, demo: false })),
-      ]);
-      setUser(userData);
-      setPreferences(prefsData);
-      setSmtpConfigured(smtpStatus.configured);
-      setForce2fa(authMethods.force2fa);
-      useDemoStore.getState().setDemoMode(authMethods.demo ?? false);
-    } catch (error) {
-      toast.error(getErrorMessage(error, t('toasts.loadFailed')));
-      logger.error(error);
-    } finally {
-      setIsLoading(false);
-    }
+  // The only load is the mount one, and the state already says loading.
+  const loadData = useCallback(() => {
+    // Writes live in `run` so they land after the request, not during the effect.
+    const run = async () => {
+      try {
+        const [userData, prefsData, smtpStatus, authMethods] = await Promise.all([
+          userSettingsApi.getProfile(),
+          userSettingsApi.getPreferences(),
+          userSettingsApi.getSmtpStatus().catch(() => ({ configured: false })),
+          authApi.getAuthMethods().catch((): AuthMethods => ({ local: true, oidc: false, registration: true, smtp: false, force2fa: false, demo: false })),
+        ]);
+        setUser(userData);
+        setPreferences(prefsData);
+        setSmtpConfigured(smtpStatus.configured);
+        setForce2fa(authMethods.force2fa);
+        setOidcPasswordLogin(authMethods.oidcPasswordLogin === true);
+        useDemoStore.getState().setDemoMode(authMethods.demo ?? false);
+      } catch (error) {
+        toast.error(getErrorMessage(error, t('toasts.loadFailed')));
+        logger.error(error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    return run();
   }, [t]);
 
   useEffect(() => {
@@ -233,10 +221,18 @@ function OwnerSettingsView() {
     }
   }, [setActiveSection]);
 
+  // A `/settings#section` link (the command palette) lands before the sections
+  // exist, so the browser's own jump to the anchor finds nothing.
+  useEffect(() => {
+    if (isLoading) return;
+    const id = window.location.hash.slice(1);
+    if (id) document.getElementById(id)?.scrollIntoView({ block: 'start' });
+  }, [isLoading]);
+
   if (isLoading) {
     return (
       <PageLayout>
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-12 pt-6 pb-8">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-12 pt-6 pb-8">
           <div className="flex justify-center items-center h-64">
             <LoadingSpinner />
           </div>
@@ -248,7 +244,7 @@ function OwnerSettingsView() {
   return (
     <PageLayout>
       <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-12 pt-6 pb-8">
-        <PageHeader title={t('title')} helpUrl="https://github.com/kenlasko/monize/wiki/Settings-and-Security" />
+        <PageHeader title={t('title')} help='settings' />
 
         {isDemoMode && (
           <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg p-6 mb-6">
@@ -262,7 +258,7 @@ function OwnerSettingsView() {
         )}
 
         {/* Mobile section dropdown */}
-        <div className="lg:hidden sticky top-[calc(4rem-var(--app-header-offset,0px))] z-20 -mx-4 px-4 py-2 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 mb-6">
+        <div className="lg:hidden sticky top-[calc(4rem+env(safe-area-inset-top)-var(--app-header-offset,0px))] z-20 -mx-4 px-4 py-2 bg-gray-50 dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 mb-6">
           <SettingsNav
             sections={visibleSections}
             activeSection={activeSection}
@@ -274,7 +270,7 @@ function OwnerSettingsView() {
         <div className="lg:flex lg:gap-10">
           {/* Desktop sidebar */}
           <aside className="hidden lg:block lg:w-52 shrink-0">
-            <div className="sticky top-[calc(5.5rem-var(--app-header-offset,0px))]">
+            <div className="sticky top-[calc(5.5rem+env(safe-area-inset-top)-var(--app-header-offset,0px))]">
               <SettingsNav
                 sections={visibleSections}
                 activeSection={activeSection}
@@ -304,20 +300,6 @@ function OwnerSettingsView() {
               </div>
             )}
 
-            <div id="tours" className="scroll-mt-32 lg:scroll-mt-22">
-              <Link
-                href="/settings/tours"
-                className="block bg-white dark:bg-gray-800 shadow dark:shadow-gray-700/50 rounded-lg p-6 mb-6 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
-              >
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
-                  {t('toursCard.title')}
-                </h2>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {t('toursCard.description')}
-                </p>
-              </Link>
-            </div>
-
             {preferences && (
               <div id="notifications" className="scroll-mt-32 lg:scroll-mt-22">
                 <NotificationsSection
@@ -335,6 +317,7 @@ function OwnerSettingsView() {
                   user={user}
                   preferences={preferences}
                   force2fa={force2fa}
+                  oidcPasswordLogin={oidcPasswordLogin}
                   onPreferencesUpdated={setPreferences}
                 />
               </div>
@@ -394,20 +377,66 @@ function OwnerSettingsView() {
               </div>
             )}
 
+            {!isDemoMode && (
+              <div id="bank-sync" className="scroll-mt-32 lg:scroll-mt-22">
+                <Link
+                  href="/settings/bank-sync"
+                  className="block bg-white dark:bg-gray-800 shadow dark:shadow-gray-700/50 rounded-lg p-6 mb-6 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+                >
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                    {t('bankSyncCard.title')}
+                  </h2>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {t('bankSyncCard.description')}
+                  </p>
+                </Link>
+              </div>
+            )}
+
+            {!isDemoMode && (
+              <div id="email-receipts" className="scroll-mt-32 lg:scroll-mt-22">
+                <Link
+                  href="/email-receipts"
+                  className={`block ${CARD_CLASS} p-6 mb-6 ${HOVER_ROW_ON_CARD}`}
+                >
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                    {t('emailReceiptsCard.title')}
+                  </h2>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">
+                    {t('emailReceiptsCard.description')}
+                  </p>
+                </Link>
+              </div>
+            )}
+
+            {!isDemoMode && (
+              <div id="payee-lookup" className="scroll-mt-32 lg:scroll-mt-22">
+                <PayeeLookupSection />
+              </div>
+            )}
+
             {!isDemoMode && user && (
               <div id="backup-restore" className="scroll-mt-32 lg:scroll-mt-22">
                 <BackupRestoreSection user={user} />
               </div>
             )}
 
-            {!isDemoMode && isAdmin && (
-              <div id="auto-backup" className="scroll-mt-32 lg:scroll-mt-22">
-                <AutoBackupSection />
-              </div>
-            )}
-
             <div id="help" className="scroll-mt-32 lg:scroll-mt-22">
               <HelpSection />
+            </div>
+
+            <div id="tours" className="scroll-mt-32 lg:scroll-mt-22">
+              <Link
+                href="/settings/tours"
+                className="block bg-white dark:bg-gray-800 shadow dark:shadow-gray-700/50 rounded-lg p-6 mb-6 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+              >
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
+                  {t('toursCard.title')}
+                </h2>
+                <p className="text-sm text-gray-500 dark:text-gray-400">
+                  {t('toursCard.description')}
+                </p>
+              </Link>
             </div>
 
             <div id="about" className="scroll-mt-32 lg:scroll-mt-22">

@@ -7,6 +7,7 @@
     "filterAll": "Alle ({count})",
     "filterExpenses": "Ausgaben ({count})",
     "filterIncome": "Einnahmen ({count})",
+    "typeFilterLabel": "Typ",
     "modalTitleNew": "Neue Kategorie",
     "modalTitleEdit": "Kategorie bearbeiten",
     "countSingle": "1 Kategorie",
@@ -54,6 +55,12 @@
     "typeExpense": "Ausgabe",
     "typeIncome": "Einnahme",
     "typeInherited": "Typ wird von übergeordneter Kategorie übernommen",
+    "autoSignLabel": "Automatisches Vorzeichen",
+    "autoSignOn": "Ein",
+    "autoSignOff": "Aus",
+    "autoSignInherit": "Von übergeordneter Kategorie übernehmen",
+    "autoSignInheritedFrom": "Von übergeordneter Kategorie übernommen ({name}): derzeit {state}",
+    "autoSignHelp": "Wenn aktiviert, wird ein eingegebener Betrag bei einer Ausgabenkategorie negativ und bei einer Einnahmenkategorie positiv. Deaktivieren, um das Vorzeichen genau so beizubehalten, wie Sie es eingeben.",
     "colourLabel": "Farbe",
     "colourInherit": "Von übergeordneter Kategorie übernehmen",
     "colourNone": "Keine Farbe",
@@ -65,8 +72,8 @@
     "submitUpdate": "Kategorie aktualisieren"
   },
   "list": {
-    "emptyHeading": "Keine Kategorien",
-    "emptyDescription": "Erstellen Sie eine neue Kategorie, um zu beginnen.",
+    "emptyHeading": "Keine Kategorien gefunden",
+    "emptyDescription": "Keine Kategorien entsprechen Ihrer aktuellen Suche oder Ihrem Filter.",
     "colName": "Name",
     "colType": "Typ",
     "colCount": "Anzahl",
@@ -79,7 +86,7 @@
     "viewTransactionsTitle": "Buchungen in dieser Kategorie anzeigen"
   },
   "deleteDialog": {
-    "title": "\"{name}\" löschen?",
+    "title": "\"{name}\" löschen",
     "checkingUsage": "Verwendung wird geprüft...",
     "usedBy": "Diese Kategorie wird von {count, plural, one {# Eintrag} other {# Einträgen}} verwendet (Buchungen und/oder terminierte Rechnungen & Einzahlungen).",
     "reassignLabel": "Neu zuweisen an:",

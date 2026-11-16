@@ -259,6 +259,25 @@ describe('DateInput', () => {
       expect(document.querySelector('[role="tooltip"]')).not.toBeInTheDocument();
     });
 
+    it('keeps the shortcuts tooltip inside the viewport near the left edge', () => {
+      const { container } = renderDateInput();
+      const wrapper = container.querySelector('svg.cursor-help')!.parentElement!;
+      vi.spyOn(wrapper, 'getBoundingClientRect').mockReturnValue({
+        top: 100, bottom: 114, left: 2, right: 16, width: 14, height: 14, x: 2, y: 100,
+        toJSON: () => ({}),
+      } as DOMRect);
+      const originalWidth = window.innerWidth;
+      Object.defineProperty(window, 'innerWidth', { value: 1024, configurable: true });
+      try {
+        fireEvent.mouseEnter(wrapper);
+        const tooltip = document.querySelector('[role="tooltip"]') as HTMLElement;
+        expect(parseFloat(tooltip.style.left)).toBeGreaterThanOrEqual(8);
+        expect(tooltip.className).not.toContain('-translate-x-1/2');
+      } finally {
+        Object.defineProperty(window, 'innerWidth', { value: originalWidth, configurable: true });
+      }
+    });
+
     it('does not show tooltip icon when label is not provided', () => {
       const { container } = render(
         <DateInput
@@ -560,6 +579,40 @@ describe('DateInput', () => {
       fireEvent.click(getByText('25'));
 
       expect(onDateChange).toHaveBeenCalledWith('2025-06-25');
+    });
+
+    it('disables the calendar button with the field, so the popover cannot change it', () => {
+      const { getByLabelText, queryByText } = render(
+        <DateInput label="Date" value="2025-06-15" onDateChange={onDateChange} onChange={() => {}} disabled />,
+      );
+      expect(getByLabelText('Date')).toBeDisabled();
+      const calendarBtn = getByLabelText('Open date picker');
+      expect(calendarBtn).toBeDisabled();
+      fireEvent.click(calendarBtn);
+      expect(queryByText('Jun 2025')).not.toBeInTheDocument();
+      expect(onDateChange).not.toHaveBeenCalled();
+    });
+
+    it('disables the native picker with the field in touch mode', () => {
+      const originalMatchMedia = window.matchMedia;
+      window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+        matches: query === '(pointer: coarse)',
+        media: query,
+        onchange: null,
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }));
+      try {
+        const { getByLabelText } = render(
+          <DateInput label="Date" value="2025-06-15" onDateChange={onDateChange} onChange={() => {}} disabled />,
+        );
+        expect(getByLabelText('Date')).toBeDisabled();
+      } finally {
+        window.matchMedia = originalMatchMedia;
+      }
     });
 
     it('shows formatted date in display on touch devices', () => {

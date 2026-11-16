@@ -5,11 +5,15 @@ import { useTranslations } from 'next-intl';
 import toast from 'react-hot-toast';
 import { ChevronLeftIcon } from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/Button';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { InstitutionLogo, InstitutionLogoData } from '@/components/institutions/InstitutionLogo';
 import { formatAccountType } from '@/lib/account-utils';
 import type { Account } from '@/types/account';
 import { AccountSwitcher } from './AccountSwitcher';
 import { useMainAccountName } from '@/hooks/useMainAccountName';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('AccountDetailShell');
 
 export interface AccountDetailShellProps {
   account: Account;
@@ -79,7 +83,7 @@ export function AccountDetailShell({
     try {
       await onExport();
     } catch (error) {
-      console.error('PDF export failed:', error);
+      logger.error('PDF export failed:', error);
       toast.error(tc('exportDropdown.failedPdf'));
     } finally {
       if (mountedRef.current) setIsExporting(false);
@@ -172,12 +176,13 @@ export function AccountDetailShell({
                 {t('header.reconcile')}
               </Button>
             )}
+            {headerActions}
+            {/* Last, so Edit sits at the top right of the page. */}
             {onEdit && (
               <Button variant="outline" onClick={onEdit}>
                 {t('header.edit')}
               </Button>
             )}
-            {headerActions}
           </div>
         </div>
       </div>
@@ -200,8 +205,8 @@ export function AccountDetailShell({
           </div>
         </div>
       ) : isLoading ? (
-        <div className="py-12 text-center text-gray-500 dark:text-gray-400" aria-busy="true">
-          {t('loading')}
+        <div aria-busy="true">
+          <LoadingSpinner text={t('loading')} />
         </div>
       ) : (
         children

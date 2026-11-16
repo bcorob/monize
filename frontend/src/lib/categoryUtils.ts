@@ -228,23 +228,31 @@ export function rollupToDirectChildren(
 }
 
 /**
- * The special pseudo-category filter options. Selecting "Uncategorized"
- * matches records with no category (and that are neither transfers nor
- * splits); "Transfers" matches transfer records. Shared by the Transactions
- * and Bills & Deposits filter panels.
+ * The category-filter pseudo-ids. "uncategorized" matches records with no
+ * category (neither transfers nor splits); "transfer" matches transfer
+ * records; "income" and "expense" match every category of that type. The
+ * server resolves all four, so a type is never sent as an enumerated id list
+ * (a few hundred UUIDs overflow the request line and the page URL).
  */
-export const SPECIAL_CATEGORY_FILTER_OPTIONS: MultiSelectOption[] = [
-  { value: 'uncategorized', label: 'Uncategorized' },
-  { value: 'transfer', label: 'Transfers' },
-];
+export const SPECIAL_CATEGORY_FILTER_IDS = ['uncategorized', 'transfer', 'income', 'expense'] as const;
+export type SpecialCategoryFilterId = (typeof SPECIAL_CATEGORY_FILTER_IDS)[number];
+export type SpecialCategoryFilterLabels = Record<SpecialCategoryFilterId, string>;
+
+export function isSpecialCategoryFilterId(id: string): id is SpecialCategoryFilterId {
+  return (SPECIAL_CATEGORY_FILTER_IDS as readonly string[]).includes(id);
+}
 
 /**
- * Build the category filter options used by the filter panels: the special
- * pseudo-options followed by the category hierarchy (parents with their
- * children nested), sorted alphabetically at each level. Selecting a parent
- * selects all of its descendants (handled by MultiSelect).
+ * Build the category filter options used by the filter panels: the pseudo-ids
+ * (labelled by the caller, see `useCategoryFilterLabels`) followed by the
+ * category hierarchy (parents with their children nested), sorted
+ * alphabetically at each level. Selecting a parent selects all of its
+ * descendants (handled by MultiSelect).
  */
-export function buildCategoryFilterOptions(categories: Category[]): MultiSelectOption[] {
+export function buildCategoryFilterOptions(
+  categories: Category[],
+  labels: SpecialCategoryFilterLabels,
+): MultiSelectOption[] {
   const buildOptions = (parentId: string | null = null): MultiSelectOption[] =>
     categories
       .filter((c) => c.parentId === parentId)
@@ -260,23 +268,81 @@ export function buildCategoryFilterOptions(categories: Category[]): MultiSelectO
           },
         ];
       });
-  return [...SPECIAL_CATEGORY_FILTER_OPTIONS, ...buildOptions()];
+  // A group rule under the last pseudo-id: the four above it filter by what a
+  // record *is* (no category, a transfer, a whole type) and everything below
+  // is a category you can pick. Marked on the option rather than drawn by the
+  // caller so every panel using this list gets the same boundary; MultiSelect
+  // drops the rule when a search has flattened the list or when nothing
+  // follows it.
+  const special = SPECIAL_CATEGORY_FILTER_IDS.map((id, index) => ({
+    value: id,
+    label: labels[id],
+    separatorAfter: index === SPECIAL_CATEGORY_FILTER_IDS.length - 1,
+  }));
+  return [...special, ...buildOptions()];
 }
 
 /**
- * Resolve selected category filter IDs (including the special
- * "uncategorized"/"transfer" pseudo-IDs) to Category-like records for chip
- * display.
+ * Collapse a category selection that covers a whole type into that type's
+ * pseudo-id, and drop ids a present type pseudo-id already covers. Only a
+ * type with at least one category collapses. Order is otherwise preserved;
+ * a pseudo-id that was absent takes the place of the first id it replaces.
+ * This is what keeps "Select All" (and a whole type ticked by hand) off the
+ * wire as an id list.
+ */
+export function canonicalizeCategoryFilter(ids: string[], categories: Category[]): string[] {
+  let result = ids;
+  for (const [pseudoId, wantIncome] of [['income', true], ['expense', false]] as const) {
+    const typeIds = new Set(categories.filter((c) => c.isIncome === wantIncome).map((c) => c.id));
+    if (typeIds.size === 0) continue;
+    const selected = new Set(result);
+    const covered = selected.has(pseudoId) || [...typeIds].every((id) => selected.has(id));
+    if (!covered) continue;
+    let placed = selected.has(pseudoId);
+    result = result.flatMap((id) => {
+      if (id === pseudoId) return [id];
+      if (!typeIds.has(id)) return [id];
+      if (placed) return [];
+      placed = true;
+      return [pseudoId];
+    });
+  }
+  return result;
+}
+
+/**
+ * Resolve selected category filter IDs (including the pseudo-ids) to
+ * Category-like records for chip display.
  */
 export function resolveSelectedCategories(
   categoryIds: string[],
   categories: Category[],
+  labels: SpecialCategoryFilterLabels,
 ): Category[] {
   return categoryIds
     .map((id) => {
-      if (id === 'uncategorized') return { id, name: 'Uncategorized', color: null } as Category;
-      if (id === 'transfer') return { id, name: 'Transfers', color: null } as Category;
+      if (isSpecialCategoryFilterId(id)) return { id, name: labels[id], color: null } as Category;
       return categories.find((c) => c.id === id);
     })
     .filter((c): c is Category => c !== undefined);
+}
+
+/**
+ * Signs a typed amount by the category's income/expense type, unless the
+ * category has turned the automatic sign off (`effectiveAutoSign === false`)
+ * or the edit is only a sign flip of the same absolute value the caller
+ * already had (a manual override is respected). With no category the value
+ * is returned as-is. An absent `effectiveAutoSign` (a stale shape) reads as
+ * on, matching the behaviour before the per-category toggle existed.
+ */
+export function signAmountByCategory(
+  value: number,
+  reference: number | undefined,
+  category: Pick<Category, 'isIncome' | 'effectiveAutoSign'> | undefined,
+): number {
+  const referenceAbs = reference !== undefined ? Math.abs(reference) : 0;
+  const isJustSignChange = referenceAbs === Math.abs(value) && referenceAbs !== 0;
+  if (isJustSignChange || !category) return value;
+  if (category.effectiveAutoSign === false) return value;
+  return category.isIncome ? Math.abs(value) : -Math.abs(value);
 }

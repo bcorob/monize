@@ -1,0 +1,102 @@
+{
+  "id": "simplefin/default",
+  "version": 1,
+  "source": "simplefin",
+  "operation": {
+    "location": ["bank_transaction_code"]
+  },
+  "types": [],
+  "notes": [
+    {
+      "id": "descriptionPayees",
+      "severity": "info",
+      "text": {
+        "en": "SimpleFIN provides a description, but no separate payee or counterparty field. Use payee aliases and wildcard rules to recognize recurring descriptions.",
+        "en-US": "SimpleFIN provides a description, but no separate payee or counterparty field. Use payee aliases and wildcard rules to recognize recurring descriptions.",
+        "en-CA": "SimpleFIN provides a description, but no separate payee or counterparty field. Use payee aliases and wildcard rules to recognize recurring descriptions.",
+        "fr": "SimpleFIN fournit une description, mais aucun champ distinct pour le bénéficiaire ou la contrepartie. Utilisez les alias de bénéficiaires et les règles avec caractères génériques pour reconnaître les descriptions récurrentes.",
+        "fr-CA": "SimpleFIN fournit une description, mais aucun champ distinct pour le bénéficiaire ou la contrepartie. Utilisez les alias de bénéficiaires et les règles avec caractères génériques pour reconnaître les descriptions récurrentes.",
+        "es": "SimpleFIN proporciona una descripción, pero no un campo independiente para el beneficiario o la contraparte. Utilice alias de beneficiarios y reglas con comodines para reconocer descripciones recurrentes.",
+        "es-ES": "SimpleFIN proporciona una descripción, pero no un campo independiente para el beneficiario o la contraparte. Utilice alias de beneficiarios y reglas con comodines para reconocer descripciones recurrentes."
+      }
+    },
+    {
+      "id": "operationTypes",
+      "severity": "info",
+      "text": {
+        "en": "SimpleFIN provides no transaction code or operation type, so imports do not receive operation-type tags.",
+        "en-US": "SimpleFIN provides no transaction code or operation type, so imports do not receive operation-type tags.",
+        "en-CA": "SimpleFIN provides no transaction code or operation type, so imports do not receive operation-type tags.",
+        "fr": "SimpleFIN ne fournit aucun code de transaction ni type d’opération. Les transactions importées ne reçoivent donc pas d’étiquette de type d’opération.",
+        "fr-CA": "SimpleFIN ne fournit aucun code de transaction ni type d’opération. Les transactions importées ne reçoivent donc pas d’étiquette de type d’opération.",
+        "es": "SimpleFIN no proporciona un código de transacción ni un tipo de operación, por lo que las transacciones importadas no reciben etiquetas de tipo de operación.",
+        "es-ES": "SimpleFIN no proporciona un código de transacción ni un tipo de operación, por lo que las transacciones importadas no reciben etiquetas de tipo de operación."
+      }
+    },
+    {
+      "id": "pendingRows",
+      "severity": "info",
+      "text": {
+        "en": "Pending transactions wait until the bank posts them before they can be imported.",
+        "en-US": "Pending transactions wait until the bank posts them before they can be imported.",
+        "en-CA": "Pending transactions wait until the bank posts them before they can be imported.",
+        "fr": "Les transactions en attente peuvent être importées seulement après leur comptabilisation par la banque.",
+        "fr-CA": "Les transactions en attente peuvent être importées seulement après leur comptabilisation par la banque.",
+        "es": "Las transacciones pendientes solo pueden importarse cuando el banco las haya contabilizado.",
+        "es-ES": "Las transacciones pendientes solo pueden importarse cuando el banco las haya contabilizado."
+      }
+    },
+    {
+      "id": "historyDepth",
+      "severity": "info",
+      "text": {
+        "en": "Available history depends on the bank. Review history in batches of at most 45 days; an empty batch does not prove that older history is unavailable.",
+        "en-US": "Available history depends on the bank. Review history in batches of at most 45 days; an empty batch does not prove that older history is unavailable.",
+        "en-CA": "Available history depends on the bank. Review history in batches of at most 45 days; an empty batch does not prove that older history is unavailable.",
+        "fr": "L’historique disponible dépend de la banque. Examinez-le par lots d’au plus quarante-cinq jours; un lot vide ne prouve pas que l’historique plus ancien est indisponible.",
+        "fr-CA": "L’historique disponible dépend de la banque. Examinez-le par lots d’au plus quarante-cinq jours; un lot vide ne prouve pas que l’historique plus ancien est indisponible.",
+        "es": "El historial disponible depende del banco. Revíselo en lotes de un máximo de cuarenta y cinco días; un lote vacío no demuestra que no exista un historial anterior.",
+        "es-ES": "El historial disponible depende del banco. Revíselo en lotes de un máximo de cuarenta y cinco días; un lote vacío no demuestra que no exista un historial anterior."
+      }
+    },
+    {
+      "id": "requestBudget",
+      "severity": "info",
+      "text": {
+        "en": "Each access permits twenty-four requests in a rolling twenty-four-hour period. If the limit is reached, wait until a request becomes available and continue.",
+        "en-US": "Each access permits twenty-four requests in a rolling twenty-four-hour period. If the limit is reached, wait until a request becomes available and continue.",
+        "en-CA": "Each access permits twenty-four requests in a rolling twenty-four-hour period. If the limit is reached, wait until a request becomes available and continue.",
+        "fr": "Chaque accès permet vingt-quatre requêtes sur une période mobile de vingt-quatre heures. Si la limite est atteinte, attendez qu’une requête soit disponible, puis continuez.",
+        "fr-CA": "Chaque accès permet vingt-quatre requêtes sur une période mobile de vingt-quatre heures. Si la limite est atteinte, attendez qu’une requête soit disponible, puis continuez.",
+        "es": "Cada acceso permite veinticuatro solicitudes en un periodo móvil de veinticuatro horas. Si alcanza el límite, espere hasta que haya una solicitud disponible y continúe.",
+        "es-ES": "Cada acceso permite veinticuatro solicitudes en un periodo móvil de veinticuatro horas. Si alcanza el límite, espere hasta que haya una solicitud disponible y continúe."
+      }
+    },
+    {
+      "id": "recreatedConnection",
+      "severity": "info",
+      "text": {
+        "en": "Recreating a Bridge connection may change account and transaction identifiers. Review account mappings before importing again.",
+        "en-US": "Recreating a Bridge connection may change account and transaction identifiers. Review account mappings before importing again.",
+        "en-CA": "Recreating a Bridge connection may change account and transaction identifiers. Review account mappings before importing again.",
+        "fr": "La recréation d’une connexion Bridge peut modifier les identifiants des comptes et des transactions. Vérifiez les associations de comptes avant de reprendre l’importation.",
+        "fr-CA": "La recréation d’une connexion Bridge peut modifier les identifiants des comptes et des transactions. Vérifiez les associations de comptes avant de reprendre l’importation.",
+        "es": "Al volver a crear una conexión de Bridge, pueden cambiar los identificadores de las cuentas y las transacciones. Revise las vinculaciones de cuentas antes de volver a importar.",
+        "es-ES": "Al volver a crear una conexión de Bridge, pueden cambiar los identificadores de las cuentas y las transacciones. Revise las vinculaciones de cuentas antes de volver a importar."
+      }
+    },
+    {
+      "id": "manualAccountLinking",
+      "severity": "warning",
+      "text": {
+        "en": "This integration has no reliable account type or account number for automatic matching. Link accounts manually and verify their type. New accounts default to a chequing account; bank-account type mismatch warnings are unavailable. Currency checks still apply.",
+        "en-US": "This integration has no reliable account type or account number for automatic matching. Link accounts manually and verify their type. New accounts default to a checking account; bank-account type mismatch warnings are unavailable. Currency checks still apply.",
+        "en-CA": "This integration has no reliable account type or account number for automatic matching. Link accounts manually and verify their type. New accounts default to a chequing account; bank-account type mismatch warnings are unavailable. Currency checks still apply.",
+        "fr": "Cette intégration ne dispose pas d’un type de compte ni d’un numéro de compte fiables pour l’association automatique. Associez les comptes manuellement et vérifiez leur type. Les nouveaux comptes sont par défaut des comptes chèques; les avertissements de type incompatible sont indisponibles. Les vérifications de devise restent actives.",
+        "fr-CA": "Cette intégration ne dispose pas d’un type de compte ni d’un numéro de compte fiables pour l’association automatique. Associez les comptes manuellement et vérifiez leur type. Les nouveaux comptes sont par défaut des comptes chèques; les avertissements de type incompatible sont indisponibles. Les vérifications de devise restent actives.",
+        "es": "Esta integración no dispone de un tipo de cuenta ni de un número de cuenta fiables para la vinculación automática. Vincule las cuentas manualmente y compruebe su tipo. Las cuentas nuevas son cuentas corrientes de forma predeterminada; no hay avisos de incompatibilidad de tipo de cuenta. Las comprobaciones de divisa siguen activas.",
+        "es-ES": "Esta integración no dispone de un tipo de cuenta ni de un número de cuenta fiables para la vinculación automática. Vincule las cuentas manualmente y compruebe su tipo. Las cuentas nuevas son cuentas corrientes de forma predeterminada; no hay avisos de incompatibilidad de tipo de cuenta. Las comprobaciones de divisa siguen activas."
+      }
+    }
+  ]
+}

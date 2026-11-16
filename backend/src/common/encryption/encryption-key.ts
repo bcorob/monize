@@ -40,9 +40,8 @@ export function envReaderFromRecord(
  * only `ENCRYPTION_KEY` and never meet the question.
  *
  * A value shorter than the floor is not a key. It is returned as absent rather
- * than used, so "misconfigured" and "unset" reach the startup check as the same
- * refusal instead of one of them booting a server that cannot decrypt anything
- * it writes.
+ * than used, so "misconfigured" and "unset" reach the boot check
+ * (`checkClusterBoot`) as the same refusal.
  */
 export function resolveEncryptionKey(
   read: EnvReader,
@@ -59,47 +58,43 @@ export function resolveEncryptionKey(
 }
 
 /**
- * What an operator is told, line by line, when neither name supplies a usable key.
+ * The boot refusal for a missing or too-short key, as `checkClusterBoot`
+ * reports it. The first sentence is the fix, because it is the line an
+ * operator reads in a crash-looping container's log.
  *
- * One array rather than one multi-line string because every line in this
- * application's log carries the `[Nest] pid - date LEVEL [Context]` prefix, and
- * a message with embedded newlines only gets it on the first one. Exported so
- * the startup path and the test that pins it read the same words.
- *
- * The wording is doing a job. `ENCRYPTION_KEY` is not required *yet* -- this
- * release still starts without it, because refusing to boot would turn an
- * upgrade into an outage for every deployment that never set the variable under
- * its old name. But that is exactly the state issue #1269 was reported from, so
- * a quiet log line is not enough: the operator has to learn that their backups
- * are going out unencrypted today, and that a future release will refuse to
- * start.
+ * The reassurance for an existing keyless deployment is a claim about the
+ * code, checked when the key became required: every path that encrypts
+ * refuses, or skips storing, when no key is configured
+ * (`EncryptionService.requireKey`, and the `isConfigured()` gates in the AI,
+ * emergency-access, backup, payee-lookup, Web Push and OIDC signing-key
+ * services), so a deployment that never had a key holds no ciphertext a new
+ * key would fail to open. What it does hold is plaintext automatic backups,
+ * which stay readable, and local accounts with no backup key yet, which get
+ * one at their next sign-in.
  */
-export const MISSING_ENCRYPTION_KEY_WARNING_LINES: readonly string[] = [
-  `${ENCRYPTION_KEY_ENV} is not set. THIS WILL BECOME A HARD REQUIREMENT IN A ` +
-    "FUTURE RELEASE, and the server will then refuse to start without it.",
-  "Until it is set, this deployment cannot store any secret it is asked to " +
-    "keep: automatic backups are written UNENCRYPTED, AI provider API keys " +
-    "cannot be saved, and emergency access cannot be enabled.",
-  `Fix it now: generate a key with "openssl rand -hex 32" and set ` +
-    `${ENCRYPTION_KEY_ENV} (minimum ${MIN_ENCRYPTION_KEY_LENGTH} characters). ` +
-    "Nothing else changes, and existing data is unaffected.",
-  `Keep the value stable once set -- changing it re-encrypts nothing, it makes ` +
-    "every stored secret unreadable. Back it up with your other deployment " +
-    `secrets. (${LEGACY_ENCRYPTION_KEY_ENV} is the former name of this ` +
-    "variable and is still accepted.)",
-];
+export function missingEncryptionKeyRefusal(): string {
+  return (
+    `${ENCRYPTION_KEY_ENV} is not set (or is shorter than ` +
+    `${MIN_ENCRYPTION_KEY_LENGTH} characters). Generate one with ` +
+    `"openssl rand -hex 32", set ${ENCRYPTION_KEY_ENV} to it and restart. ` +
+    "It encrypts every secret the server stores (AI provider keys, " +
+    "emergency-access credentials, each user's backup key, the Web Push and " +
+    "OIDC signing keys). A deployment that has been running without one can " +
+    "set one safely: nothing was ever encrypted under a key it did not have. " +
+    "Automatic backups already written stay unencrypted, and a local " +
+    "account's backups are encrypted from that user's next sign-in. If this " +
+    "deployment ran with a key before, restore that exact value instead: a " +
+    "different one cannot read what the old one stored. " +
+    `(${LEGACY_ENCRYPTION_KEY_ENV}, the former name, is still accepted.)`
+  );
+}
 
 /**
- * Say, at startup, which of the three configuration states this deployment is
- * in: keyed by the current name (silent), keyed by the deprecated one (a rename
- * notice), or unkeyed (the deprecation warning above).
+ * Say, at startup, whether the key came from the deprecated name.
  *
- * Deliberately not a refusal. The requirement is announced in this release and
- * enforced in a later one, so a deployment that has been running for a year
- * without the variable takes the upgrade, keeps serving, and gets told -- on
- * every boot -- what it is losing and what to do. When the enforcement lands,
- * turn the unkeyed branch into a throw; every caller and test is already shaped
- * for it.
+ * A missing key never reaches here: `checkClusterBoot` refuses the boot
+ * first. So there are two states left, keyed by the current name (silent) and
+ * keyed by the deprecated one (a rename notice).
  *
  * A rename nobody is told about is a rename that never happens, which is why
  * the legacy branch warns rather than staying quiet: the old name keeps working
@@ -108,14 +103,7 @@ export const MISSING_ENCRYPTION_KEY_WARNING_LINES: readonly string[] = [
 export function logEncryptionKeyStatus(read: EnvReader, logger: Logger): void {
   const resolved = resolveEncryptionKey(read);
 
-  if (!resolved) {
-    for (const line of MISSING_ENCRYPTION_KEY_WARNING_LINES) {
-      logger.warn(line);
-    }
-    return;
-  }
-
-  if (resolved.source === LEGACY_ENCRYPTION_KEY_ENV) {
+  if (resolved?.source === LEGACY_ENCRYPTION_KEY_ENV) {
     logger.warn(
       `${LEGACY_ENCRYPTION_KEY_ENV} is deprecated and has been renamed to ` +
         `${ENCRYPTION_KEY_ENV} (it encrypts more than AI provider keys). It is ` +
@@ -128,9 +116,10 @@ export function logEncryptionKeyStatus(read: EnvReader, logger: Logger): void {
 }
 
 /**
- * The error a write path raises when it is asked to encrypt on a deployment
- * that has no key. Not a startup message: the server starts, and only the
- * operations that genuinely need a key fail, each saying why.
+ * The error a write path raises when it is asked to encrypt without a key.
+ * Unreachable in a booted server, which refuses to start without one; kept for
+ * the specs, scripts and future entry points that construct `EncryptionService`
+ * outside that path.
  */
 export function missingEncryptionKeyMessage(): string {
   return (

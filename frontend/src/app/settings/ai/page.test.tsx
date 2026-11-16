@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@/test/render';
 import AiSettingsPage from './page';
+import { TOUR_ANCHORS, tourAnchorSelector } from '@/lib/tours/anchors';
 
 vi.mock('@/components/auth/ProtectedRoute', () => ({
   ProtectedRoute: ({ children }: any) => <div>{children}</div>,
@@ -166,5 +167,17 @@ describe('AiSettingsPage', () => {
       expect(screen.getByTestId('provider-list')).toBeInTheDocument();
     });
     expect(screen.queryByTestId('usage-dashboard')).not.toBeInTheDocument();
+  });
+
+  it('marks the provider list as the email receipts tour anchor', async () => {
+    mockGetConfigs.mockResolvedValue([]);
+    mockGetUsage.mockResolvedValue({ totalCost: 0, requests: 0 });
+    mockGetStatus.mockResolvedValue({ encryptionAvailable: true, hasSystemDefault: false });
+    render(<AiSettingsPage />);
+    await waitFor(() => {
+      expect(screen.getByTestId('provider-list')).toBeInTheDocument();
+    });
+    const anchor = document.querySelector(tourAnchorSelector(TOUR_ANCHORS.aiProviderList));
+    expect(anchor).toContainElement(screen.getByTestId('provider-list'));
   });
 });

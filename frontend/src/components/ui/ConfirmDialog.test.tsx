@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@/test/render';
 import { ConfirmDialog } from './ConfirmDialog';
+import { buttonClassName } from './Button';
 import { __resetModalStateForTesting } from './Modal';
 
 const originalRAF = globalThis.requestAnimationFrame;
@@ -19,6 +20,17 @@ describe('ConfirmDialog', () => {
     render(<ConfirmDialog {...defaultProps} />);
     expect(screen.getByText('Delete Item')).toBeInTheDocument();
     expect(screen.getByText('Are you sure?')).toBeInTheDocument();
+  });
+
+  it('wraps a long unbroken word instead of widening the dialog', () => {
+    const longName = `${'scan-of-the-original-receipt-'.repeat(6)}2026.pdf`;
+    render(<ConfirmDialog {...defaultProps} message={`"${longName}" will be permanently deleted.`} />);
+    // The text column may shrink inside its flex row (min-w-0) and breaks a
+    // word with no spaces (break-words), so a long file name wraps rather than
+    // pushing the dialog into a horizontal scroll.
+    const column = screen.getByTestId('confirm-dialog-text');
+    expect(column).toHaveClass('min-w-0', 'flex-1', 'break-words');
+    expect(column).toHaveTextContent(longName);
   });
 
   it('renders default button labels', () => {
@@ -45,6 +57,25 @@ describe('ConfirmDialog', () => {
     render(<ConfirmDialog {...defaultProps} onCancel={onCancel} />);
     fireEvent.click(screen.getByText('Cancel'));
     expect(onCancel).toHaveBeenCalled();
+  });
+
+  it('confirms with the shared danger Button for a destructive action', () => {
+    render(<ConfirmDialog {...defaultProps} />);
+    expect(screen.getByRole('button', { name: 'Confirm' }).className).toContain(
+      buttonClassName('danger'),
+    );
+  });
+
+  it('confirms with the shared primary Button otherwise', () => {
+    // A warning is not a destructive action; hand-written yellow classes were
+    // a second colour for the same meaning.
+    for (const variant of ['warning', 'info'] as const) {
+      const { unmount } = render(<ConfirmDialog {...defaultProps} variant={variant} />);
+      expect(screen.getByRole('button', { name: 'Confirm' }).className).toContain(
+        buttonClassName('primary'),
+      );
+      unmount();
+    }
   });
 
   it('renders nothing when not open', () => {

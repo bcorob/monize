@@ -68,6 +68,7 @@ export class CategoriesService {
         icon: saved.icon,
         color: saved.color,
         isIncome: saved.isIncome,
+        autoSign: saved.autoSign,
         parentId: saved.parentId,
         isSystem: saved.isSystem,
       },
@@ -127,6 +128,42 @@ export class CategoriesService {
     }));
   }
 
+  /**
+   * Effective auto-sign per category: a category's own explicit value wins;
+   * otherwise the nearest ancestor's explicit value; a root with none behaves
+   * as on. Unlike isIncome, a category's own `autoSign` is never rewritten to
+   * match an ancestor -- only this computed value is inherited.
+   */
+  private resolveEffectiveAutoSign<
+    T extends { id: string; parentId: string | null; autoSign: boolean | null },
+  >(categories: T[]): (T & { effectiveAutoSign: boolean })[] {
+    const categoryMap = new Map(categories.map((c) => [c.id, c]));
+    const resolved = new Map<string, boolean>();
+
+    const resolve = (cat: T): boolean => {
+      if (resolved.has(cat.id)) return resolved.get(cat.id)!;
+      if (cat.autoSign !== null) {
+        resolved.set(cat.id, cat.autoSign);
+        return cat.autoSign;
+      }
+      if (cat.parentId) {
+        const parent = categoryMap.get(cat.parentId);
+        if (parent) {
+          const value = resolve(parent);
+          resolved.set(cat.id, value);
+          return value;
+        }
+      }
+      resolved.set(cat.id, true);
+      return true;
+    };
+
+    return categories.map((cat) => ({
+      ...cat,
+      effectiveAutoSign: resolve(cat),
+    }));
+  }
+
   async findAll(
     userId: string,
     includeSystem = false,
@@ -154,27 +191,25 @@ export class CategoriesService {
 
         const categoryIds = categories.map((c) => c.id);
 
-        const [directCounts, splitCounts] = await Promise.all([
-          m
-            .getRepository(Transaction)
-            .createQueryBuilder("t")
-            .select("t.category_id", "categoryId")
-            .addSelect("COUNT(t.id)", "count")
-            .where("t.user_id = :userId", { userId })
-            .andWhere("t.category_id IN (:...categoryIds)", { categoryIds })
-            .groupBy("t.category_id")
-            .getRawMany(),
-          m
-            .getRepository(TransactionSplit)
-            .createQueryBuilder("s")
-            .innerJoin("s.transaction", "t")
-            .select("s.category_id", "categoryId")
-            .addSelect("COUNT(s.id)", "count")
-            .where("t.user_id = :userId", { userId })
-            .andWhere("s.category_id IN (:...categoryIds)", { categoryIds })
-            .groupBy("s.category_id")
-            .getRawMany(),
-        ]);
+        const directCounts = await m
+          .getRepository(Transaction)
+          .createQueryBuilder("t")
+          .select("t.category_id", "categoryId")
+          .addSelect("COUNT(t.id)", "count")
+          .where("t.user_id = :userId", { userId })
+          .andWhere("t.category_id IN (:...categoryIds)", { categoryIds })
+          .groupBy("t.category_id")
+          .getRawMany();
+        const splitCounts = await m
+          .getRepository(TransactionSplit)
+          .createQueryBuilder("s")
+          .innerJoin("s.transaction", "t")
+          .select("s.category_id", "categoryId")
+          .addSelect("COUNT(s.id)", "count")
+          .where("t.user_id = :userId", { userId })
+          .andWhere("s.category_id IN (:...categoryIds)", { categoryIds })
+          .groupBy("s.category_id")
+          .getRawMany();
 
         const countMap = toCountMap(directCounts, { keyField: "categoryId" });
         toCountMap(splitCounts, { keyField: "categoryId", into: countMap });
@@ -186,7 +221,9 @@ export class CategoriesService {
       },
     );
 
-    return this.resolveInheritedAttributes(categoriesWithCounts);
+    return this.resolveEffectiveAutoSign(
+      this.resolveInheritedAttributes(categoriesWithCounts),
+    );
   }
 
   async getTree(
@@ -338,7 +375,11 @@ export class CategoriesService {
     userId: string,
     id: string,
   ): Promise<
-    Category & { effectiveColor: string | null; effectiveIcon: string | null }
+    Category & {
+      effectiveColor: string | null;
+      effectiveIcon: string | null;
+      effectiveAutoSign: boolean;
+    }
   > {
     return withScopedDb(this.dataSource, async (m) => {
       const repo = m.getRepository(Category);
@@ -360,24 +401,33 @@ export class CategoriesService {
       // it, and the walk ends once neither is still outstanding.
       let effectiveColor = category.color;
       let effectiveIcon = category.icon;
+      let effectiveAutoSign: boolean | null = category.autoSign;
       let currentParentId: string | null = category.parentId;
       while (
         currentParentId !== null &&
-        (effectiveColor === null || effectiveIcon === null)
+        (effectiveColor === null ||
+          effectiveIcon === null ||
+          effectiveAutoSign === null)
       ) {
         const parent: Category | null = await repo.findOne({
           where: { id: currentParentId, userId },
-          select: ["id", "color", "icon", "parentId"],
+          select: ["id", "color", "icon", "autoSign", "parentId"],
         });
         if (!parent) {
           break;
         }
         effectiveColor = effectiveColor ?? parent.color;
         effectiveIcon = effectiveIcon ?? parent.icon;
+        effectiveAutoSign = effectiveAutoSign ?? parent.autoSign;
         currentParentId = parent.parentId;
       }
 
-      return { ...category, effectiveColor, effectiveIcon };
+      return {
+        ...category,
+        effectiveColor,
+        effectiveIcon,
+        effectiveAutoSign: effectiveAutoSign ?? true,
+      };
     });
   }
 
@@ -393,6 +443,7 @@ export class CategoriesService {
       icon: category.icon,
       color: category.color,
       isIncome: category.isIncome,
+      autoSign: category.autoSign,
       parentId: category.parentId,
     };
 
@@ -450,6 +501,8 @@ export class CategoriesService {
       category.icon = updateCategoryDto.icon;
     if (updateCategoryDto.color !== undefined)
       category.color = updateCategoryDto.color;
+    if (updateCategoryDto.autoSign !== undefined)
+      category.autoSign = updateCategoryDto.autoSign;
     if (updateCategoryDto.parentId !== undefined)
       category.parentId = updateCategoryDto.parentId;
 
@@ -492,6 +545,7 @@ export class CategoriesService {
         icon: saved.icon,
         color: saved.color,
         isIncome: saved.isIncome,
+        autoSign: saved.autoSign,
         parentId: saved.parentId,
       },
       description: `Updated category "${saved.name}"`,
@@ -604,26 +658,25 @@ export class CategoriesService {
     await this.findOne(userId, categoryId);
 
     return withScopedDb(this.dataSource, async (m) => {
-      const [transactionCount, splitCount, scheduledCount, userScheduledTxIds] =
-        await Promise.all([
-          m.getRepository(Transaction).count({ where: { userId, categoryId } }),
-          m
-            .getRepository(TransactionSplit)
-            .createQueryBuilder("split")
-            .innerJoin("split.transaction", "transaction")
-            .where("split.categoryId = :categoryId", { categoryId })
-            .andWhere("transaction.userId = :userId", { userId })
-            .getCount(),
-          m.getRepository(ScheduledTransaction).count({
-            where: { userId, categoryId },
-          }),
-          m
-            .getRepository(ScheduledTransaction)
-            .createQueryBuilder("st")
-            .select("st.id")
-            .where("st.userId = :userId", { userId })
-            .getMany(),
-        ]);
+      const transactionCount = await m
+        .getRepository(Transaction)
+        .count({ where: { userId, categoryId } });
+      const splitCount = await m
+        .getRepository(TransactionSplit)
+        .createQueryBuilder("split")
+        .innerJoin("split.transaction", "transaction")
+        .where("split.categoryId = :categoryId", { categoryId })
+        .andWhere("transaction.userId = :userId", { userId })
+        .getCount();
+      const scheduledCount = await m.getRepository(ScheduledTransaction).count({
+        where: { userId, categoryId },
+      });
+      const userScheduledTxIds = await m
+        .getRepository(ScheduledTransaction)
+        .createQueryBuilder("st")
+        .select("st.id")
+        .where("st.userId = :userId", { userId })
+        .getMany();
 
       let scheduledSplitCount = 0;
       if (userScheduledTxIds.length > 0) {
@@ -765,36 +818,6 @@ export class CategoriesService {
       return repo.findOne({
         where: { userId, name },
       });
-    });
-  }
-
-  async findLoanCategories(userId: string): Promise<{
-    principalCategory: Category | null;
-    interestCategory: Category | null;
-  }> {
-    return withScopedDb(this.dataSource, async (m) => {
-      const repo = m.getRepository(Category);
-      const loanParent = await repo.findOne({
-        where: { userId, name: "Loan", parentId: IsNull() },
-      });
-
-      if (!loanParent) {
-        return {
-          principalCategory: null,
-          interestCategory: null,
-        };
-      }
-
-      const [principalCategory, interestCategory] = await Promise.all([
-        repo.findOne({
-          where: { userId, name: "Loan Principal", parentId: loanParent.id },
-        }),
-        repo.findOne({
-          where: { userId, name: "Loan Interest", parentId: loanParent.id },
-        }),
-      ]);
-
-      return { principalCategory, interestCategory };
     });
   }
 

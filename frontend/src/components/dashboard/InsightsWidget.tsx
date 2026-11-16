@@ -46,11 +46,11 @@ export function InsightsWidget({ isLoading: parentLoading }: InsightsWidgetProps
 
   if (isLoading || parentLoading) {
     return (
-      <div className={`${CARD_CLASS} p-3 sm:p-6 lg:min-h-[390px]`}>
-        <WidgetHeading id="insights" onClick={() => router.push('/insights')} className="mb-4">
+      <div className={`${CARD_CLASS} p-3 sm:p-6`}>
+        <WidgetHeading id="insights" href="/insights" className="mb-4">
           {sectionTitle}
         </WidgetHeading>
-        <div className="animate-pulse space-y-3">
+        <div className="animate-pulse skeleton-shimmer space-y-3">
           {[1, 2, 3].map((i) => (
             <div key={i} className="h-16 bg-gray-200 dark:bg-gray-700 rounded" />
           ))}
@@ -61,8 +61,8 @@ export function InsightsWidget({ isLoading: parentLoading }: InsightsWidgetProps
 
   if (insights.length === 0) {
     return (
-      <div className={`${CARD_CLASS} p-3 sm:p-6 lg:min-h-[390px]`}>
-        <WidgetHeading id="insights" onClick={() => router.push('/insights')} className="mb-4">
+      <div className={`${CARD_CLASS} p-3 sm:p-6`}>
+        <WidgetHeading id="insights" href="/insights" className="mb-4">
           {sectionTitle}
         </WidgetHeading>
         <p className="text-gray-500 dark:text-gray-400 text-sm">
@@ -79,9 +79,9 @@ export function InsightsWidget({ isLoading: parentLoading }: InsightsWidgetProps
   }
 
   return (
-    <div className={`${CARD_CLASS} p-3 sm:p-6 lg:min-h-[390px]`}>
+    <div className={`${CARD_CLASS} p-3 sm:p-6`}>
       <div className="flex items-center justify-between mb-4">
-        <WidgetHeading id="insights" onClick={() => router.push('/insights')}>
+        <WidgetHeading id="insights" href="/insights">
           {sectionTitle}
         </WidgetHeading>
         <span className="text-sm text-gray-500 dark:text-gray-400">
@@ -104,12 +104,6 @@ export function InsightsWidget({ isLoading: parentLoading }: InsightsWidgetProps
           );
         })}
       </div>
-      <button
-        onClick={() => router.push('/insights')}
-        className="mt-3 w-full text-center text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
-      >
-        {t('insights.viewAll')}
-      </button>
     </div>
   );
 }

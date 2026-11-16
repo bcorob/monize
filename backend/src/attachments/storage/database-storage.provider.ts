@@ -15,6 +15,9 @@ import { AttachmentStorageProvider } from "./attachment-storage.interface";
 export class DatabaseStorageProvider implements AttachmentStorageProvider {
   readonly name = "database";
 
+  /** Always: the bytes are in a connection this process already holds. */
+  readonly addressable = true;
+
   constructor(private readonly dataSource: DataSource) {}
 
   async save(key: string, data: Buffer): Promise<void> {

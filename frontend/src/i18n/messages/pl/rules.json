@@ -1,0 +1,618 @@
+{
+  "page": {
+    "title": "Reguły",
+    "subtitle": "Automatycznie uzupełniaj tagi, kategorie i odbiorców, gdy transakcja zostanie utworzona lub zaimportowana",
+    "createButton": "Utwórz regułę",
+    "loading": "Wczytywanie reguł...",
+    "totalCount": "{count, plural, one {# reguła} few {# reguły} many {# reguł} other {# reguły}}"
+  },
+  "empty": {
+    "title": "Brak reguł",
+    "body": "Reguła obserwuje nowe i zaimportowane transakcje i uzupełnia tagi, kategorie lub odbiorców, gdy spełnione są jej warunki. Utwórz pierwszą regułę, aby zacząć.",
+    "createButton": "Utwórz pierwszą regułę"
+  },
+  "error": {
+    "title": "Nie udało się wczytać reguł",
+    "body": "Nic nie jest wyświetlane, ponieważ żądanie nie powiodło się, a nie dlatego, że nie masz reguł. Sprawdź połączenie i spróbuj ponownie.",
+    "retry": "Spróbuj ponownie"
+  },
+  "list": {
+    "header": {
+      "order": "Kolejność",
+      "enabled": "Włączona",
+      "name": "Reguła",
+      "summary": "Podsumowanie",
+      "actions": "Akcje"
+    },
+    "summary": "{trigger, select, create {Po utworzeniu} import {Po imporcie} both {Po utworzeniu lub imporcie} other {Brak wyzwalacza}} · {conditions, plural, =0 {Brak warunków} one {# warunek} few {# warunki} many {# warunków} other {# warunku}} · {actions, plural, =0 {Brak akcji} one {# akcja} few {# akcje} many {# akcji} other {# akcji}}",
+    "enabledLabel": "Włącz regułę {name}"
+  },
+  "actions": {
+    "moveUp": "Przenieś w górę",
+    "moveDown": "Przenieś w dół",
+    "run": "Uruchom na istniejących transakcjach",
+    "runInvalid": "Napraw regułę przed jej uruchomieniem"
+  },
+  "invalid": {
+    "badge": "Nieprawidłowa",
+    "tooltip": "Pomijana do czasu naprawy: {reasons}.",
+    "reasons": {
+      "referenceMissing": "używany przez nią tag, odbiorca, kategoria lub konto już nie istnieje",
+      "noActions": "nie ma żadnych akcji",
+      "tooLarge": "jej warunki są zbyt rozbudowane",
+      "duplicateAction": "powtarza akcję dozwoloną tylko raz",
+      "unreadable": "jej zapisanej definicji nie można odczytać",
+      "other": "jej definicja jest nieprawidłowa"
+    }
+  },
+  "duplicate": {
+    "name": "{name} (kopia)"
+  },
+  "delete": {
+    "title": "Usuń regułę",
+    "message": "Czy na pewno chcesz usunąć regułę „{name}”? Tej czynności nie można cofnąć."
+  },
+  "toasts": {
+    "enabled": "Reguła włączona",
+    "disabled": "Reguła wyłączona",
+    "toggleFailed": "Nie udało się zmienić reguły",
+    "deleted": "Reguła usunięta",
+    "deleteFailed": "Nie udało się usunąć reguły",
+    "duplicated": "Reguła zduplikowana. Kopia jest wyłączona, dopóki jej nie włączysz",
+    "duplicateFailed": "Nie udało się zduplikować reguły",
+    "reorderFailed": "Nie udało się zmienić kolejności reguł",
+    "listChanged": "Lista reguł została zmieniona w innym miejscu i wczytana ponownie. Spróbuj jeszcze raz",
+    "loadFailed": "Nie udało się wczytać reguł"
+  },
+  "editor": {
+    "page": {
+      "newTitle": "Nowa reguła",
+      "editTitle": "Edycja reguły",
+      "subtitle": "Wybierz, kiedy reguła działa, które transakcje obejmuje i co zmienia",
+      "backToRules": "Wróć do reguł",
+      "loading": "Wczytywanie reguły..."
+    },
+    "name": {
+      "label": "Nazwa",
+      "placeholder": "Na przykład: Oznacz kawiarnie"
+    },
+    "enabled": {
+      "label": "Reguła włączona"
+    },
+    "sections": {
+      "when": "Kiedy",
+      "if": "Jeśli",
+      "then": "Wtedy"
+    },
+    "when": {
+      "description": "Wybierz, kiedy reguła sprawdza transakcję",
+      "created": "Transakcja zostaje utworzona",
+      "imported": "Transakcja zostaje zaimportowana",
+      "atLeastOne": "Zostaw zaznaczoną co najmniej jedną opcję",
+      "stopProcessing": "Zatrzymaj przetwarzanie kolejnych reguł",
+      "stopProcessingHelp": "Gdy ta reguła pasuje do transakcji, reguły znajdujące się po niej na liście są dla tej transakcji pomijane.",
+      "window": {
+        "title": "Aktywna w okresie",
+        "help": "Reguła dotyczy tylko transakcji z datą z tego okresu: przy ich tworzeniu lub imporcie oraz przy testowaniu i uruchamianiu reguły. Pozostaw datę pustą, aby nie ograniczać.",
+        "from": "Data początkowa",
+        "to": "Data końcowa",
+        "backwards": "Data końcowa nie może być wcześniejsza niż początkowa",
+        "noLimit": "bez ograniczenia",
+        "words": "Tylko dla transakcji z datą od {from} do {to}"
+      }
+    },
+    "if": {
+      "description": "Akcje wykonują się tylko dla transakcji, które pasują",
+      "everyTransaction": "Brak warunków, więc ta reguła dotyczy każdej transakcji."
+    },
+    "then": {
+      "description": "Akcje wykonują się w tej kolejności",
+      "empty": "Brak akcji. Dodaj co najmniej jedną.",
+      "limit": "Reguła może mieć najwyżej {max} akcji."
+    },
+    "group": {
+      "matchAll": "Wszystkie z poniższych",
+      "matchAny": "Dowolny z poniższych",
+      "matchLabel": "Dopasowanie",
+      "not": "Zaneguj grupę",
+      "notHelp": "Zanegowana grupa jest dopasowana, gdy jej warunki nie są spełnione.",
+      "title": "Grupa",
+      "addCondition": "+ Dodaj warunek",
+      "addGroup": "+ Dodaj grupę",
+      "depthLimit": "Grupy mogą być zagnieżdżone na najwyżej {max} poziomach.",
+      "sizeLimit": "Osiągnięto limit warunków.",
+      "empty": "Ta grupa jest pusta."
+    },
+    "condition": {
+      "title": "Warunek",
+      "field": "Pole",
+      "operator": "Operator",
+      "value": "Wartość"
+    },
+    "fields": {
+      "accountId": "Konto",
+      "fromAccountId": "Z konta (przelewy)",
+      "toAccountId": "Na konto (przelewy)",
+      "type": "Typ",
+      "payeeId": "Odbiorca",
+      "payeeText": "Tekst odbiorcy w otrzymanej postaci",
+      "categoryId": "Kategoria",
+      "description": "Opis",
+      "amount": "Kwota (ze znakiem)",
+      "absAmount": "Kwota (bez znaku)",
+      "currencyCode": "Waluta",
+      "tagIds": "Tagi",
+      "hasSplits": "Ma podziały",
+      "referenceNumber": "Numer referencyjny",
+      "dayOfMonth": "Dzień miesiąca",
+      "weekday": "Dzień tygodnia",
+      "status": "Status",
+      "hasAttachment": "Ma załącznik",
+      "date": "Data"
+    },
+    "operators": {
+      "eq": "jest",
+      "neq": "nie jest",
+      "in": "jest jednym z",
+      "notIn": "nie jest żadnym z",
+      "isEmpty": "jest puste",
+      "contains": "zawiera",
+      "startsWith": "zaczyna się od",
+      "matches": "pasuje do wzorca",
+      "lt": "jest mniejsza niż",
+      "lte": "wynosi najwyżej",
+      "gt": "jest większa niż",
+      "gte": "wynosi co najmniej",
+      "between": "jest między",
+      "hasAny": "ma dowolny z",
+      "hasAll": "ma wszystkie z",
+      "hasNone": "nie ma żadnego z",
+      "inSubtree": "jest w kategorii lub pod nią"
+    },
+    "types": {
+      "EXPENSE": "Wydatek",
+      "INCOME": "Przychód",
+      "TRANSFER": "Przelew"
+    },
+    "value": {
+      "account": "Wybierz konto",
+      "accounts": "Wybierz konta",
+      "payee": "Wybierz odbiorcę",
+      "payees": "Wybierz odbiorców",
+      "category": "Wybierz kategorię",
+      "categories": "Wybierz kategorie",
+      "tags": "Wybierz tagi",
+      "currency": "Wybierz walutę",
+      "currencies": "Wybierz waluty",
+      "types": "Wybierz typy",
+      "matchesHint": "Użyj *, aby dopasować dowolny tekst, na przykład *kawa*. Wzorzec bez * pasuje tylko do całego tekstu. Użyj {capture}, aby zachować tekst z tego miejsca dla akcji tej reguły, na przykład {example}. Nazwa składa się z małych liter i cyfr, a jeden wzorzec może zachować do {max} tekstów.",
+      "amount": "Kwota",
+      "from": "Od",
+      "to": "Do",
+      "yes": "Tak",
+      "no": "Nie",
+      "days": "Wybierz dni",
+      "weekdays": "Wybierz dni tygodnia",
+      "statuses": "Wybierz statusy"
+    },
+    "action": {
+      "title": "Akcja",
+      "type": "Typ akcji",
+      "tags": "Tagi",
+      "category": "Kategoria",
+      "payee": "Odbiorca",
+      "instruction": "Instrukcje przeglądu",
+      "instructionPlaceholder": "Na przykład: podziel ten zakup według paragonu",
+      "instructionHelp": "Reguła tylko prosi o sprawdzenie. Każdą zmianę zatwierdza człowiek, zanim zostanie wprowadzona.",
+      "onlyIfEmpty": "Tylko jeśli puste",
+      "onlyIfEmptyHelp": "Gdy włączone, reguła uzupełnia kategorię lub odbiorcę tylko wtedy, gdy transakcja ich nie ma. Nie zastępuje wartości ustawionej ręcznie ani domyślną kategorią odbiorcy. Wyłącz, aby zastępować.",
+      "add": "+ Dodaj akcję",
+      "reviewInbox": "Zobacz skrzynkę przeglądów",
+      "payeeTemplate": "Nazwa odbiorcy",
+      "descriptionTemplate": "Tekst opisu",
+      "templateHelp": "Zwykły tekst. Każdy symbol zastępczy w nawiasach klamrowych zostanie zastąpiony tekstem z transakcji. Wybierz poniżej symbol zastępczy, aby go wstawić.",
+      "joinHelp": "Tekst jest dołączany do bieżącego opisu dokładnie tak, jak został wpisany, więc dodaj spację lub separator, jeśli są potrzebne.",
+      "placeholders": "Symbole zastępcze",
+      "placeholdersHelp": "{payeeText} to tekst odbiorcy w postaci, w jakiej został otrzymany. {description} to opis w chwili uruchomienia tej akcji. Pozostałe symbole zastępcze to przechwytywania nazwane we wzorcach tej reguły.",
+      "insertPlaceholder": "Wstaw {name}",
+      "unknownPlaceholders": "Nie zdefiniowano w tej regule: {names}. Wybierz symbol zastępczy z listy lub przechwyć go we wzorcu powyżej.",
+      "invalidPlaceholders": "Nieprawidłowy symbol zastępczy: {names}. Nazwa składa się z małych liter i cyfr.",
+      "createIfMissing": "Utwórz odbiorcę, jeśli nie istnieje",
+      "createIfMissingHelp": "Gdy opcja jest włączona i żaden odbiorca nie pasuje do nazwy (według nazwy, aliasu lub zbliżonego dopasowania), tworzony jest nowy odbiorca. Odbiorca utworzony przez regułę zostaje, jeśli cofniesz uruchomienie.",
+      "onlyIfEmptyDescriptionHelp": "Gdy opcja jest włączona, reguła zapisuje opis tylko wtedy, gdy transakcja go nie ma. Wyłącz ją, aby zapisywać opis za każdym razem.",
+      "mode": "Tryb opisu",
+      "modes": {
+        "replace": "Zastąp opis",
+        "append": "Dodaj po opisie",
+        "prepend": "Dodaj przed opisem"
+      },
+      "convertHelp": "Dopasowany przychód lub wydatek staje się jedną stroną przelewu. Druga strona powstaje na wybranym koncie, które musi mieć tę samą walutę.",
+      "direction": "Kierunek",
+      "directionTo": "Wydatek: pieniądze trafiają na inne konto",
+      "directionFrom": "Przychód: pieniądze pochodzą z innego konta",
+      "clearCategory": "Usuń kategorię",
+      "clearCategoryHelp": "Przelew nie ma kategorii. Wyłącz, aby zachować kategorię, którą transakcja już ma.",
+      "splitPayee": "Odbiorca transakcji (opcjonalnie)",
+      "splitHint": "Kwota każdej części pochodzi z przechwyconej wartości we wzorcach powyżej albo jest resztą. Części muszą sumować się do kwoty transakcji, w przeciwnym razie reguła jej nie zmieni.",
+      "splitNoCaptures": "Nie zdefiniowano jeszcze żadnej przechwyconej wartości. Wpisz nazwę w nawiasach klamrowych we wzorcu powyżej, na przykład PRINCIPAL: {example}, aby użyć jej tutaj jako kwoty.",
+      "partAmountPlaceholder": "Wybierz kwotę...",
+      "partRest": "Reszta",
+      "partAccount": "Konto",
+      "partPayee": "Odbiorca drugiej strony (opcjonalnie)",
+      "partsLimit": "Podział może mieć co najwyżej {max} części.",
+      "guideTitle": "Jak tego używać",
+      "splitGuideHow": "W sekcji „Jeśli” dodaj warunek dotyczący tekstu odbiorcy lub opisu z operatorem „pasuje do wzorca” i wpisz nazwy w nawiasach klamrowych w miejscach, gdzie są kwoty, na przykład {first}. Każda nazwa staje się kwotą, którą możesz wybrać dla części, albo wybierz „Reszta”. Części muszą sumować się do kwoty transakcji, w przeciwnym razie reguła jej nie zmieni. Częścią może być kategoria lub przelew na inne konto (przelew zmienia saldo tego konta).",
+      "splitGuideExampleTitle": "Przykład: rata kredytu",
+      "splitGuideBank": "Tekst z banku: KAPITAŁ: 1200,50 ODSETKI: 300,25 KARNE: 0,00",
+      "splitGuidePattern": "Wzorzec: *KAPITAŁ: {first} ODSETKI: {second} KARNE*",
+      "splitGuidePart1": "Część 1: {first} jako przelew na konto kredytu",
+      "splitGuidePart2": "Część 2: {second} jako kategoria „Kredyty: Odsetki”",
+      "splitGuideResult": "Wynik dla -1500,75: -1200,50 przelane na konto kredytu i -300,25 wydatku na odsetki.",
+      "splitGuideTip": "Wskazówka: ustaw datę początkową w polu „Aktywna w okresie”, aby nie zmieniać starszych uzgodnionych transakcji, i użyj panelu Test przed zapisaniem.",
+      "convertGuide": "Wydatek staje się przelewem na wybrane konto, a przychód przelewem z tego konta. Zmienia się tylko saldo drugiego konta. Wskazówka: użyj pola „Aktywna w okresie”, aby nie zmieniać starszych transakcji.",
+      "splitGuideName1": "kapital",
+      "splitGuideName2": "odsetki",
+      "loanGuide": "Użyj tego dla obciążenia bankowego, które płaci ratę kredytu hipotecznego lub kredytu jako jedną kwotę. W „Jeśli” dopasuj obciążenie po koncie, tekście odbiorcy lub opisie. Transakcja staje się podziałem: kapitał jest przelewany na konto kredytu, a odsetki trafiają do kategorii odsetek, oba wyliczone dla raty, którą płacą. Wskazówka: wyłącz automatyczne księgowanie zaplanowanej płatności kredytu, aby rata nie została zapłacona dwa razy, i użyj panelu Test przed zapisaniem.",
+      "loan": {
+        "help": "Dopasowane obciążenie płaci najbliższą ratę kredytu z terminem w okolicy tej daty. Monize wylicza kapitał i odsetki tej raty; nigdy nie wpisujesz kwoty.",
+        "account": "Konto kredytu",
+        "accountPlaceholder": "Wybierz kredyt hipoteczny lub kredyt...",
+        "noLoans": "Nie masz otwartego konta kredytu hipotecznego lub kredytu do rozliczenia.",
+        "window": "Okno terminu płatności",
+        "windowHelp": "Jak daleko od terminu bank może pobrać płatność. Obciążenie do tej liczby dni przed lub po terminie raty płaci tę ratę; obciążenie poza oknem pozostaje bez zmian.",
+        "daysBefore": "Dni przed terminem",
+        "daysAfter": "Dni po terminie",
+        "excess": "Obciążenie wyższe niż rata",
+        "excessPolicies": {
+          "extra_principal": "Zapłać różnicę jako dodatkową spłatę kapitału",
+          "refuse": "Pozostaw transakcję bez zmian"
+        },
+        "shortfall": "Obciążenie niższe niż rata",
+        "shortfallPolicies": {
+          "refuse": "Pozostaw transakcję bez zmian",
+          "interest_first": "Zapłać najpierw odsetki, resztę jako kapitał"
+        },
+        "policyNote": "Różnica kilku centów jest wchłaniana przez pozycję odsetek.",
+        "policyHelp": "Banki zaokrąglają każdą część osobno, więc obciążenie w granicach 5 najmniejszych jednostek waluty (0,05 dla większości walut) jest traktowane jako dokładne, a różnicę przejmuje pozycja odsetek. Większa różnica podlega dwóm wyborom powyżej.",
+        "interestCategory": "Kategoria odsetek (opcjonalnie)",
+        "interestCategoryPlaceholder": "Własna kategoria odsetek kredytu",
+        "autoPostTitle": "Zaplanowana płatność kredytu księguje się sama",
+        "autoPostBody": "Automatyczne księgowanie jest włączone dla zaplanowanej płatności tego kredytu, więc ono i obciążenie bankowe rozliczane przez tę regułę zapłaciłyby tę samą ratę. Wyłącz automatyczne księgowanie zaplanowanej płatności."
+      }
+    },
+    "actionTypes": {
+      "add_tags": "Dodaj tagi",
+      "remove_tags": "Usuń tagi",
+      "set_category": "Ustaw kategorię",
+      "set_payee": "Ustaw odbiorcę",
+      "request_ai_review": "Poproś o przegląd AI",
+      "set_payee_from_text": "Ustaw odbiorcę z tekstu",
+      "set_description": "Ustaw opis",
+      "convert_to_transfer": "Zamień w przelew",
+      "split": "Podziel transakcję",
+      "settle_loan_installment": "Rozlicz ratę kredytu"
+    },
+    "save": {
+      "button": "Zapisz regułę",
+      "createdToast": "Reguła utworzona",
+      "savedToast": "Reguła zapisana",
+      "failedToast": "Nie udało się zapisać reguły",
+      "summary": "Reguła nie została zapisana. Popraw oznaczone poniżej elementy i spróbuj ponownie."
+    },
+    "loadError": {
+      "title": "Nie udało się wczytać reguły",
+      "body": "Nic nie jest wyświetlane, ponieważ żądanie nie powiodło się, a nie dlatego, że reguła jest pusta. Sprawdź połączenie i spróbuj ponownie.",
+      "lookupsBody": "Nie udało się wczytać list kont, odbiorców, kategorii, tagów i walut, więc nie można bezpiecznie wyświetlić reguły. Sprawdź połączenie i spróbuj ponownie.",
+      "notFound": "Ta reguła już nie istnieje. Mogła zostać usunięta.",
+      "retry": "Spróbuj ponownie"
+    },
+    "invalid": {
+      "title": "Ta reguła nie może działać",
+      "repaired": "Niektórych części zapisanej definicji nie udało się odczytać i zostały tu usunięte lub zresetowane. Sprawdź regułę przed zapisaniem."
+    },
+    "conflict": {
+      "title": "Ta reguła została zmieniona w innym miejscu",
+      "body": "Wczytaj ją ponownie, aby zobaczyć najnowszą wersję. Niezapisane zmiany zostaną utracone.",
+      "reload": "Wczytaj ponownie"
+    },
+    "errors": {
+      "codes": {
+        "INVALID_SHAPE": "Ta część ma postać, której edytor nie rozumie.",
+        "UNKNOWN_KEY": "Ta część zawiera ustawienie, które nie istnieje.",
+        "UNKNOWN_FIELD": "Wybierz pole.",
+        "UNKNOWN_ACTION": "Wybierz akcję.",
+        "OPERATOR_NOT_ALLOWED": "To pole nie dopuszcza tego operatora.",
+        "VALUE_REQUIRED": "Wpisz lub wybierz wartość.",
+        "VALUE_NOT_ALLOWED": "Ten operator nie przyjmuje wartości.",
+        "VALUE_TYPE": "Wartość jest nieodpowiedniego rodzaju dla tego pola.",
+        "VALUE_OUT_OF_RANGE": "Wartość jest poza zakresem.",
+        "VALUE_TOO_LONG": "Tekst jest zbyt długi.",
+        "VALUE_EMPTY": "Wpisz jakiś tekst.",
+        "INVALID_UUID": "Wybierz pozycję z listy.",
+        "INVALID_ENUM": "Wybierz jedną z wymienionych wartości.",
+        "INVALID_CURRENCY": "Wybierz walutę.",
+        "ARRAY_EMPTY": "Wybierz co najmniej jedną pozycję.",
+        "ARRAY_TOO_LARGE": "Wybrano zbyt wiele pozycji.",
+        "RANGE_ORDER": "Pierwsza wartość nie może być większa od drugiej.",
+        "MAX_DEPTH": "Grupy są zagnieżdżone zbyt głęboko. Limit to {maxDepth} poziomy.",
+        "MAX_LEAVES": "Warunków jest zbyt wiele. Limit to {maxLeaves}.",
+        "MAX_NODES": "Warunków i grup jest zbyt wiele. Limit to {maxNodes}.",
+        "NO_ACTIONS": "Dodaj co najmniej jedną akcję.",
+        "TOO_MANY_ACTIONS": "Akcji jest zbyt wiele. Limit to {maxActions}.",
+        "DUPLICATE_ACTION": "Reguła może mieć tylko jeden przegląd AI, jedną zamianę w przelew, podział lub rozliczenie raty kredytu, oraz jedną część podziału, która bierze resztę.",
+        "CONFLICTING_ACTIONS": "Akcji przelewu, podziału lub rozliczenia raty kredytu nie można łączyć z „Ustaw kategorię”, a każda część podziału ma kategorię albo konto.",
+        "INVALID_CAPTURE": "Nazwa przechwytywania składa się z małych liter i cyfr, zaczyna się od litery i ma najwyżej 20 znaków.",
+        "TOO_MANY_CAPTURES": "Wzorzec może zawierać najwyżej 5 przechwyceń.",
+        "DUPLICATE_CAPTURE": "Każdą nazwę przechwytywania można użyć w regule tylko raz.",
+        "UNKNOWN_CAPTURE": "Używa wartości przechwyconej, której nie definiuje żaden warunek tej reguły.",
+        "LOOKS_LIKE_REGEX": "Wyrażenia regularne nie są obsługiwane: | \\ oraz krótkie klasy w nawiasach, jak [xy], są traktowane jak zwykłe znaki, więc wzorzec zapisany jako regex nigdy nie dopasuje tego, o co chodziło. Aby dopasować jeden z kilku tekstów, dodaj grupę „Dowolny z poniższych” i umieść w niej po jednym warunku dla każdego tekstu.",
+        "PATTERN_WITHOUT_WILDCARD": "Bez * ten wzorzec musi być równy całemu tekstowi. Użyj operatora „jest” dla całego tekstu, „zawiera” dla jego części albo otocz tekst znakami *, na przykład *kawa*.",
+        "REFERENCE_NOT_FOUND": "Wybrana tu pozycja już nie istnieje. Wybierz inną.",
+        "NAME_REQUIRED": "Wpisz nazwę reguły.",
+        "UNKNOWN": "Ta część jest nieprawidłowa."
+      }
+    },
+    "run": {
+      "button": "Uruchom na istniejących transakcjach",
+      "saveFirst": "Zapisz zmiany, aby uruchomić zapisaną regułę."
+    },
+    "expression": {
+      "modeLabel": "Widok warunków",
+      "visual": "Wizualny",
+      "expression": "Wyrażenie",
+      "label": "Wyrażenie warunku",
+      "help": "Zapisz warunki jako tekst. Użyj &&, gdy wszystkie muszą być spełnione, || dla któregokolwiek i !( ... ) dla negacji. Elementy wskazuj nazwą: account(\"Nazwa\"), payee(\"Nazwa\"), category(\"Nadrzędna: Podrzędna\") i tag(\"Nazwa\"). Podkreślenie _ oznacza wartość, której jeszcze nie wybrano. matchesGlob używa * jako znaku wieloznacznego. Obsługiwana jest tylko składnia z podpowiedzi.",
+      "blocked": "Popraw wyrażenie, aby wrócić do widoku wizualnego lub zapisać.",
+      "errorAt": "Wiersz {line}, kolumna {column}: {message}",
+      "suggestions": "Podpowiedzi",
+      "errors": {
+        "tooLong": "Wyrażenie jest za długie. Limit to {max} znaków.",
+        "unexpectedChar": "Znak {char} nie jest obsługiwany.",
+        "unterminatedString": "Ten tekst nie ma zamykającego cudzysłowu.",
+        "invalidEscape": "Ta sekwencja specjalna nie jest obsługiwana.",
+        "badNumber": "To nie jest poprawna liczba.",
+        "expectedExpression": "W tym miejscu oczekiwany jest warunek.",
+        "expectedField": "W tym miejscu oczekiwana jest nazwa pola.",
+        "expectedOperator": "Po polu oczekiwany jest operator lub metoda.",
+        "expectedValue": "W tym miejscu oczekiwana jest wartość.",
+        "expectedSymbol": "W tym miejscu oczekiwany jest znak {symbol}.",
+        "unexpectedToken": "Nieoczekiwany element {token}.",
+        "unsupported": "Ta część nie jest obsługiwana. Użyj tylko składni z podpowiedzi.",
+        "unknownField": "Nieznane pole {name}.",
+        "unknownFunction": "Nieznana funkcja lub metoda {name}.",
+        "operatorNotAllowed": "Pola {field} nie można użyć z {operator}.",
+        "wrongValueType": "{expected, select, text {Oczekiwany jest tekst w cudzysłowie.} number {Oczekiwana jest liczba.} boolean {Oczekiwane jest true lub false.} list {Oczekiwana jest lista w nawiasach kwadratowych.} account {Oczekiwane jest konto, na przykład account(\"Nazwa\").} payee {Oczekiwany jest odbiorca, na przykład payee(\"Nazwa\").} category {Oczekiwana jest kategoria, na przykład category(\"Nadrzędna: Podrzędna\").} tag {Oczekiwany jest tag, na przykład tag(\"Nazwa\").} other {Wartość jest niewłaściwego rodzaju.}}",
+        "invalidEnum": "Użyj jednej z wartości: {values}.",
+        "invalidCurrency": "Użyj trzyliterowego kodu waluty w cudzysłowie, na przykład \"CAD\".",
+        "valueTooLong": "Tekst jest za długi. Limit to {max} znaków.",
+        "listTooLong": "Lista jest za długa. Limit to {max} pozycji.",
+        "unknownEntity": "{kind, select, account {Żadne konto nie nazywa się {name}.} payee {Żaden odbiorca nie nazywa się {name}.} category {Żadna kategoria nie nazywa się {name}.} tag {Żaden tag nie nazywa się {name}.} other {Żaden element nie nazywa się {name}.}}",
+        "ambiguousEntity": "Nazwę {name} nosi kilka elementów ({count}). Dodaj numer właściwego, na przykład {example}.",
+        "entityOrdinal": "Numer dla {name} musi mieścić się w zakresie od 1 do {count}.",
+        "maxDepth": "Grupy są zagnieżdżone zbyt głęboko. Limit to {max} poziomy.",
+        "maxLeaves": "Warunków jest za dużo. Limit to {max}.",
+        "maxNodes": "Warunków i grup jest za dużo. Limit to {max}.",
+        "tooNested": "Zbyt wiele zagnieżdżonych nawiasów."
+      }
+    }
+  },
+  "test": {
+    "title": "Test",
+    "description": "Wypróbuj regułę na istniejących transakcjach. Nic nie zostanie zmienione.",
+    "button": "Przetestuj regułę",
+    "again": "Testuj ponownie",
+    "incomplete": "Uzupełnij warunki i akcje powyżej, aby przetestować regułę.",
+    "idle": "Wybierz transakcje, na których chcesz wypróbować regułę, a następnie wybierz Przetestuj regułę.",
+    "running": "Testowanie reguły...",
+    "failed": "Nie udało się ukończyć testu. {message}",
+    "stale": "Reguła lub filtry zmieniły się od czasu tego wyniku. Przetestuj ponownie, aby zobaczyć aktualny wynik."
+  },
+  "match": {
+    "button": "Przetestuj regułę",
+    "buttonLabel": "Przetestuj regułę: warunki",
+    "incomplete": "Uzupełnij warunki powyżej, aby zobaczyć, do których transakcji pasują.",
+    "windowBackwards": "Daty aktywności kończą się przed rozpoczęciem, więc żadna transakcja nie może pasować.",
+    "summary": "{count, plural, =0 {Brak pasujących transakcji} one {# pasująca transakcja} few {# pasujące transakcje} many {# pasujących transakcji} other {# pasującej transakcji}}",
+    "summaryPending": "Pasujące transakcje",
+    "running": "Wyszukiwanie pasujących transakcji...",
+    "failed": "Nie udało się wczytać pasujących transakcji. {message}",
+    "empty": "Żadne istniejące transakcje nie spełniają tych warunków.",
+    "truncated": "Sprawdzono tylko {scanned, number} najnowszych transakcji.",
+    "stale": "Warunki zmieniły się od tego testu. Wybierz ponownie Przetestuj regułę, aby zobaczyć aktualne dopasowania."
+  },
+  "run": {
+    "title": "Uruchom „{name}” na istniejących transakcjach",
+    "description": "Zobacz podgląd zmian, które wprowadziłaby reguła, a następnie potwierdź. Uruchomienie można cofnąć w historii akcji.",
+    "previewButton": "Podgląd",
+    "confirmButton": "Potwierdź i uruchom",
+    "idle": "Wybierz konta i daty, a następnie wybierz Podgląd. Nic się nie zmieni, dopóki nie potwierdzisz.",
+    "loadingPreview": "Wczytywanie podglądu...",
+    "previewFailed": "Nie udało się wczytać podglądu, więc nic nie można uruchomić. {message}",
+    "stale": "Filtry zmieniły się od czasu tego podglądu. Wygeneruj podgląd ponownie przed uruchomieniem.",
+    "accountsLoading": "Wczytywanie kont...",
+    "accountsFailed": "Nie udało się wczytać Twoich kont, więc filtry są niedostępne.",
+    "retry": "Spróbuj ponownie",
+    "summary": "{matched, plural, one {# transakcja zostałaby zmieniona} few {# transakcje zostałyby zmienione} many {# transakcji zostałoby zmienionych} other {# transakcji zostałoby zmienionych}} spośród {scanned, plural, one {# sprawdzonej transakcji} few {# sprawdzonych transakcji} many {# sprawdzonych transakcji} other {# sprawdzonych transakcji}}.",
+    "matchesNone": "Ta reguła nie pasuje do żadnej ze sprawdzonych transakcji ({scanned}). Sprawdź warunki przed zapisem. Wzorzec bez * pasuje tylko do całego tekstu.",
+    "noChange": "{matched} z {scanned} sprawdzonych transakcji spełnia warunki reguły, ale nic by się nie zmieniło (na przykład mają już tę wartość, a „tylko jeśli puste” jest włączone). To nie jest błąd.",
+    "aiReview": "{count, plural, one {# transakcja zostanie dodana do kolejki przeglądu AI} few {# transakcje zostaną dodane do kolejki przeglądu AI} many {# transakcji zostanie dodanych do kolejki przeglądu AI} other {# transakcji zostanie dodanych do kolejki przeglądu AI}}. Żądanie zostanie utworzone po potwierdzeniu.",
+    "truncated": "Pasuje więcej transakcji, niż pozwala limit. Uwzględniono tylko najnowsze. Zwiększ limit lub zawęź daty, aby objąć resztę.",
+    "truncatedOldest": "Dopasowano więcej transakcji, niż pozwala limit. Uwzględniono tylko najstarsze, ponieważ ta reguła rozlicza raty kredytu w porządku dat. Uruchom ją ponownie po tym uruchomieniu, aby uwzględnić resztę.",
+    "noMatches": {
+      "title": "Żadna transakcja nie zostałaby zmieniona",
+      "body": "Żadna ze sprawdzonych transakcji nie pasuje do reguły albo reguła niczego by w nich nie zmieniła."
+    },
+    "table": {
+      "date": "Data",
+      "payee": "Odbiorca",
+      "amount": "Kwota",
+      "change": "Planowana zmiana",
+      "noPayee": "Brak odbiorcy"
+    },
+    "skipped": {
+      "title": "{count, plural, one {# transakcja pozostaje bez zmian} few {# transakcje pozostają bez zmian} many {# transakcji pozostaje bez zmian} other {# transakcji pozostaje bez zmian}}",
+      "line": "{count, plural, one {# transakcja} few {# transakcje} many {# transakcji} other {# transakcji}}: {reason}",
+      "missing": "Brakuje w kredycie: {inputs}."
+    },
+    "skipReasons": {
+      "reconciled_locked": "jest uzgodniona i zablokowana",
+      "transfer_leg_category": "jest przelewem, który nie ma kategorii",
+      "split_category": "jest podzielona, więc kategoria należy do podziałów",
+      "cross_owner_transfer_payee": "jest przelewem do innego właściciela, którego odbiorcy ta reguła nie może zmieniać",
+      "empty_render": "tekst akcji okazał się dla niej pusty",
+      "payee_not_found": "żaden odbiorca nie ma nazwy zbudowanej przez regułę, a reguła go nie tworzy",
+      "other": "reguła nie może jej zmienić",
+      "row_is_transfer_leg": "jest już przelewem",
+      "row_has_splits": "jest już podzielona",
+      "row_is_void": "jest unieważniona",
+      "zero_amount": "jej kwota wynosi zero",
+      "transfer_direction_mismatch": "kierunek przelewu nie pasuje: wydatek trafia na konto, przychód pochodzi z konta",
+      "transfer_same_account": "konto przelewu jest kontem samej transakcji",
+      "transfer_account_unavailable": "konto przelewu jest niedostępne (zostało usunięte lub nie należy do Ciebie)",
+      "transfer_currency_mismatch": "konto przelewu ma inną walutę",
+      "split_amount_unparseable": "kwoty z jej tekstu nie da się odczytać jako liczby",
+      "split_sum_mismatch": "części nie sumują się do jej kwoty",
+      "split_too_few_parts": "po pominięciu zerowych kwot zostaje mniej niż dwie części",
+      "row_from_scheduled_posting": "została zaksięgowana z zaplanowanej płatności kredytu, która już zapłaciła tę ratę",
+      "row_is_income": "jest przychodem, a ratę płaci tylko obciążenie",
+      "loan_account_unavailable": "konto kredytu jest niedostępne (zostało usunięte, jest zamknięte, nie jest Twoje albo nie jest kredytem hipotecznym lub kredytem)",
+      "loan_interest_booked_separately": "ten kredyt księguje odsetki jako osobne transakcje, więc płatność nie może ich nieść",
+      "loan_not_configured": "kredytowi brakuje danych potrzebnych do wyliczenia raty",
+      "no_installment_in_window": "żadna rata kredytu nie ma terminu w oknie wokół tej daty",
+      "occurrence_already_posted": "rata z terminem w oknie jest już zapłacona",
+      "loan_debt_retired": "kredyt jest już spłacony",
+      "installment_amount_excess": "jest większe niż rata, a reguła pozostawia większe obciążenia bez zmian",
+      "installment_amount_shortfall": "jest mniejsze niż rata, a reguła pozostawia mniejsze obciążenia bez zmian"
+    },
+    "change": {
+      "category": "Kategoria: {before} → {after}",
+      "payee": "Odbiorca: {before} → {after}",
+      "payeeNew": "Odbiorca: {before} → {name} (nowy)",
+      "tagsAdded": "Dodane tagi: {tags}",
+      "tagsRemoved": "Usunięte tagi: {tags}",
+      "none": "brak",
+      "unknown": "usunięty element",
+      "payeeCreated": "{done, select, yes {Utworzono nowego odbiorcę: {name}} other {Zostanie utworzony nowy odbiorca: {name}}}",
+      "description": "Opis: {before} → {after}",
+      "descriptionSet": "Ustaw opis na {value}",
+      "transfer": "{done, select, yes {Stała się przelewem z kontem {account}} other {Stanie się przelewem z kontem {account}}}",
+      "split": "{done, select, yes {Podzielono na {count, plural, one {# część} few {# części} many {# części} other {# części}}} other {Zostanie podzielona na {count, plural, one {# część} few {# części} many {# części} other {# części}}}}",
+      "splitPart": "Część {number}: {amount} {target}",
+      "splitPartMemo": ", notatka „{memo}”",
+      "splitToTransfer": "na konto {account}",
+      "splitToTransferPayee": "na konto {account}, odbiorca {payee}",
+      "splitToCategory": "jako {category}",
+      "splitUncategorised": "bez kategorii",
+      "loanSettlement": "{done, select, yes {Rozliczono ratę {number} kredytu {account}} other {Rozlicza ratę {number} kredytu {account}}}, termin {dueDate}: kapitał {principal}, odsetki {interest}{hasExtra, select, yes {, dodatkowa spłata kapitału {extra}} other {}}. Zadłużenie przed: {debtBefore}"
+    },
+    "filters": {
+      "accounts": "Konta",
+      "allAccounts": "Wszystkie konta",
+      "startDate": "Od",
+      "endDate": "Do",
+      "backwards": "Data początkowa nie może być późniejsza niż data końcowa.",
+      "limit": "Najnowsze transakcje do sprawdzenia",
+      "help": "Sprawdzane są tylko najnowsze transakcje z zakresu, maksymalnie {max}."
+    },
+    "errors": {
+      "PREVIEW_CHANGED": "Transakcje lub reguła zmieniły się od czasu podglądu. Sprawdź nowy podgląd i uruchom ponownie.",
+      "RUN_TOO_LARGE": "To uruchomienie zmienia zbyt wiele transakcji, aby można je było cofnąć w jednym kroku. Zawęź konta lub daty i spróbuj ponownie.",
+      "INVALID_RULE": "Ta reguła jest nieprawidłowa, więc nie można jej uruchomić. Otwórz ją i najpierw napraw.",
+      "DATE_RANGE_INVALID": "Data początkowa nie może być późniejsza niż data końcowa.",
+      "draftInvalid": "Reguła jest niekompletna lub nieprawidłowa. Sprawdź warunki i akcje powyżej.",
+      "testFailed": "Coś poszło nie tak podczas testowania reguły.",
+      "previewFailed": "Coś poszło nie tak podczas wczytywania podglądu.",
+      "runFailed": "Nie udało się ukończyć uruchomienia. Sprawdź historię akcji, zanim spróbujesz ponownie."
+    },
+    "toast": {
+      "done": "{count, plural, =0 {Nie zmieniono żadnych transakcji} one {Zmieniono # transakcję} few {Zmieniono # transakcje} many {Zmieniono # transakcji} other {Zmieniono # transakcji}}. Możesz to cofnąć w historii akcji.",
+      "changedNoUndo": "{count, plural, one {Zmieniono # transakcję} few {Zmieniono # transakcje} many {Zmieniono # transakcji} other {Zmieniono # transakcji}}.",
+      "aiReviewsQueued": "{count, plural, one {# transakcja dodana do kolejki przeglądu AI} few {# transakcje dodane do kolejki przeglądu AI} many {# transakcji dodanych do kolejki przeglądu AI} other {# transakcji dodanych do kolejki przeglądu AI}}.",
+      "aiReviewsAlreadyQueued": "{count, plural, one {# transakcja ma już otwartą prośbę o przegląd AI, więc nic nowego nie dodano do kolejki} few {# transakcje mają już otwartą prośbę o przegląd AI, więc nic nowego nie dodano do kolejki} many {# transakcji ma już otwartą prośbę o przegląd AI, więc nic nowego nie dodano do kolejki} other {# transakcji ma już otwartą prośbę o przegląd AI, więc nic nowego nie dodano do kolejki}}.",
+      "noChanges": "Nie zmieniono żadnej transakcji."
+    },
+    "done": {
+      "summary": "{count, plural, =0 {Nie zmieniono żadnych transakcji.} one {Zmieniono # transakcję.} few {Zmieniono # transakcje.} many {Zmieniono # transakcji.} other {Zmieniono # transakcji.}}",
+      "aiReviewsQueued": "{count, plural, one {# transakcja została dodana do kolejki przeglądu AI.} few {# transakcje zostały dodane do kolejki przeglądu AI.} many {# transakcji zostało dodanych do kolejki przeglądu AI.} other {# transakcji zostało dodanych do kolejki przeglądu AI.}}",
+      "aiReviewsAlreadyQueued": "{count, plural, one {# transakcja miała już otwarte żądanie przeglądu AI, więc nie została dodana ponownie.} few {# transakcje miały już otwarte żądanie przeglądu AI, więc nie zostały dodane ponownie.} many {# transakcji miało już otwarte żądanie przeglądu AI, więc nie zostały dodane ponownie.} other {# transakcji miało już otwarte żądanie przeglądu AI, więc nie zostały dodane ponownie.}}",
+      "undo": "Uruchomienie można cofnąć w historii akcji."
+    },
+    "missingInputs": {
+      "scheduledPayment": "zaplanowana płatność",
+      "managedTemplate": "płatność podzielona na kapitał i odsetki",
+      "scheduleCalendar": "harmonogram płatności",
+      "interestCategory": "kategoria odsetek",
+      "amortizationMonths": "okres amortyzacji",
+      "paymentStartDate": "data pierwszej płatności",
+      "paymentFrequency": "częstotliwość płatności",
+      "originalPrincipal": "kwota początkowa kredytu",
+      "rate": "stopa procentowa na tę datę",
+      "payment": "kwota płatności",
+      "other": "ustawienie kredytu"
+    }
+  },
+  "applications": {
+    "title": "Historia",
+    "description": "Ostatnie transakcje zmienione przez tę regułę, od najnowszych.",
+    "loading": "Wczytywanie historii...",
+    "error": {
+      "title": "Nie udało się wczytać historii",
+      "body": "Nic nie jest pokazane, ponieważ żądanie się nie powiodło, a nie dlatego, że reguła jeszcze nie działała. Sprawdź połączenie i spróbuj ponownie.",
+      "retry": "Spróbuj ponownie"
+    },
+    "empty": {
+      "title": "Ta reguła jeszcze niczego nie zmieniła",
+      "body": "Gdy zmieni transakcję, zmiana pojawi się tutaj."
+    },
+    "source": {
+      "create": "Utworzona",
+      "import": "Zaimportowana",
+      "manual": "Uruchomienie ręczne",
+      "other": "Inne"
+    },
+    "table": {
+      "date": "Data",
+      "payee": "Odbiorca",
+      "amount": "Kwota",
+      "source": "Źródło",
+      "change": "Zmiana",
+      "appliedAt": "Zastosowano",
+      "open": "Otwórz transakcję",
+      "noPayee": "Brak odbiorcy",
+      "view": "Zobacz"
+    }
+  },
+  "words": {
+    "everyTransaction": "Każda transakcja",
+    "group": {
+      "all": "Wszystkie z poniższych:",
+      "any": "Dowolny z poniższych:",
+      "notAll": "Nie wszystkie z poniższych:",
+      "notAny": "Żaden z poniższych:"
+    },
+    "leaf": "{field} {operator} {value}",
+    "leafNoValue": "{field} {operator}",
+    "range": "{from} i {to}",
+    "text": "„{value}”",
+    "unknownCondition": "Warunek, którego ta wersja nie potrafi pokazać",
+    "unknownAction": "Akcja, której ta wersja nie potrafi pokazać",
+    "action": {
+      "add_tags": "Dodaj tagi: {tags}",
+      "remove_tags": "Usuń tagi: {tags}",
+      "set_category": "Ustaw kategorię na {name}{onlyIfEmpty, select, yes { (tylko jeśli pusta)} other {}}",
+      "set_payee": "Ustaw odbiorcę na {name}{onlyIfEmpty, select, yes { (tylko jeśli pusty)} other {}}",
+      "request_ai_review": "Poproś o przegląd AI: {instruction}",
+      "set_payee_from_text": "Ustaw odbiorcę z tekstu: „{template}”{createIfMissing, select, yes { (utworzony, jeśli nie istnieje)} other {}}{onlyIfEmpty, select, yes { (tylko jeśli pusty)} other {}}",
+      "set_description": "Ustaw opis ({mode, select, append {dołącz na końcu} prepend {dołącz na początku} other {zastąp}}): „{template}”{onlyIfEmpty, select, yes { (tylko jeśli pusty)} other {}}",
+      "convert_to_transfer": "Zamień na przelew {direction, select, from {z konta} other {na konto}} {account}",
+      "split": "Podziel na: {parts}",
+      "settle_loan_installment": "Rozlicz ratę kredytu {account} płaconą obciążeniem do {before, plural, one {# dnia} few {# dni} many {# dni} other {# dnia}} przed terminem lub {after, plural, one {# dnia} few {# dni} many {# dni} other {# dnia}} po nim; większe obciążenie {excess, select, refuse {pozostaje bez zmian} other {płaci dodatkową spłatę kapitału}}, mniejsze {shortfall, select, interest_first {płaci najpierw odsetki} other {pozostaje bez zmian}}"
+    },
+    "splitPart": {
+      "transfer": "{amount} na konto {account}",
+      "category": "{amount} jako {category}",
+      "plain": "{amount}",
+      "rest": "reszta"
+    }
+  }
+}

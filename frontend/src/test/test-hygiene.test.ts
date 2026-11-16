@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
 /**
- * Guard tests for the testing conventions in `frontend/CLAUDE.md`.
+ * Guard tests for the testing conventions in `docs/frontend/testing.md`.
  *
  * Sibling of `ui-conventions.test.ts`, for mistakes in the *tests* rather than
  * in the components. Each one here produced act warnings that a green suite
@@ -77,7 +77,7 @@ describe('a mocked selector hook applies its selector', () => {
    * fallback since it was written; it only surfaced when the fallback's VALUE
    * changed, and then as four failures in a file nothing had touched.
    *
-   * `frontend/CLAUDE.md`: a mock must return what the real collaborator returns.
+   * `docs/frontend/testing.md`: a mock must return what the real collaborator returns.
    */
   const SELECTOR_STORES = [
     'usePreferencesStore',

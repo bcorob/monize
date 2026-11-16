@@ -1,7 +1,11 @@
 import { Injectable } from "@nestjs/common";
 import { describeSkippedRows } from "../../common/bulk-create.types";
 import { z } from "zod";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import type {
+  InputRequiredResult,
+  ServerContext,
+} from "@modelcontextprotocol/server";
 import { PortfolioService } from "../../securities/portfolio.service";
 import { SecuritiesService } from "../../securities/securities.service";
 import {
@@ -28,18 +32,24 @@ import { AiActionBuilderService } from "../../ai/actions/ai-action-builder.servi
 import {
   ApprovalMode,
   PendingAiAction,
-  MAX_BULK_ACTION_ROWS,
+  BondRedemptionSplitPreview,
   resolveApprovalMode,
 } from "../../ai/actions/ai-action.types";
 import { RELAY_PREVIEW_SHOWN, emitRelayCard } from "../mcp-relay-confirm";
 import {
-  UserContextResolver,
+  resolveUserContext,
   requireScope,
   toolResult,
   toolError,
   safeToolError,
-  confirmWrite,
 } from "../mcp-context";
+import {
+  cardKey,
+  confirmItemsForCards,
+  confirmWrite,
+  confirmWriteMany,
+  isAsk,
+} from "../mcp-confirm";
 import { McpWriteLimiter } from "../mcp-write-limiter";
 import {
   getPortfolioSummaryOutput,
@@ -50,9 +60,22 @@ import {
   manageInvestmentTransactionsOutput,
 } from "../tool-output-schemas";
 import { READ_ONLY, WRITE } from "../mcp-annotations";
+import {
+  uuidString,
+  manageOperation,
+  approvalMode,
+  dryRun,
+  itemsArray,
+} from "./schema-fragments";
+import {
+  numberArg,
+  booleanArg,
+  bondSeriesCodeSchema,
+} from "../../common/tool-schemas";
+import { TRANSACTION_NOTE_MAX_LENGTH } from "../../common/transaction-note";
 
 type ManageInvOperation = "create" | "update" | "delete";
-type ManageSecOperation = "create" | "update" | "delete";
+type ManageSecOperation = "create" | "update" | "delete" | "list";
 
 interface ManageInvItem {
   // create
@@ -67,6 +90,7 @@ interface ManageInvItem {
   accruedInterest?: number;
   exchangeRate?: number;
   description?: string;
+  bondSeriesCode?: string;
   // update / delete
   transactionId?: string;
 }
@@ -99,47 +123,47 @@ export class McpInvestmentsTools {
     private readonly writeLimiter: McpWriteLimiter,
   ) {}
 
-  register(server: McpServer, resolve: UserContextResolver) {
+  register(server: McpServer) {
     server.registerTool(
       "get_portfolio_summary",
       {
         title: "Portfolio summary",
         annotations: READ_ONLY,
         description:
-          "Get investment portfolio overview with holdings, gains/losses, and allocation. Returns the same compact, LLM-friendly shape as the AI Assistant's tool. Accepts account NAMES (resolved internally), so you do NOT need to call list_accounts first. " +
-          "Set includeLookThrough=true for exposure questions ('how much am I in the US?', 'what's my equity vs fixed income split?'): it adds lookThrough.byCountry and lookThrough.byAssetClass, each a list of { name, value, percentage } plus an unclassified 'Other' value. Funds are split by the breakdown the user maintains on the security; individual stocks are placed by listing exchange (country) and security type (asset class).",
-        inputSchema: {
+          "Portfolio overview: holdings, cost basis, gains and allocation, " +
+          "with a per-account breakdown in holdingsByAccount (use it for one " +
+          "account's holdings too). Check valuationComplete before quoting a " +
+          "total: false means a price or rate was missing and the figure is a " +
+          "subtotal. includeLookThrough adds country and asset-class exposure.",
+        inputSchema: z.object({
           accountNames: z
             .array(z.string().max(100))
             .max(50)
             .optional()
-            .describe(
-              "Optional investment account names to filter to (resolved internally). Omit to cover all investment accounts.",
-            ),
-          includeLookThrough: z
-            .boolean()
+            .describe("Investment account names. Omit for all of them."),
+          includeLookThrough: booleanArg()
             .optional()
             .describe(
-              "Set true to also return the country and asset-class look-through breakdowns. Default false; costs an extra pass over the holdings.",
+              "Adds country and asset-class exposure. Costs an extra pass.",
             ),
-        },
+        }),
         outputSchema: getPortfolioSummaryOutput,
       },
-      async (args, extra) => {
-        const ctx = resolve(extra.sessionId);
-        if (!ctx) return toolError("No user context");
-        const check = requireScope(ctx.scopes, "read");
+      async (args, ctx) => {
+        const user = resolveUserContext(ctx);
+        if (!user) return toolError("No user context");
+        const check = requireScope(user.scopes, "read");
         if (check.error) return check.result;
 
         try {
           const accountFilter = await this.accountsService.resolveAccountFilter(
-            ctx.userId,
+            user.userId,
             args.accountNames,
           );
           if (accountFilter.error) return toolError(accountFilter.error);
           const accountIds = accountFilter.accountIds;
           const summary = await this.portfolioService.getLlmSummary(
-            ctx.userId,
+            user.userId,
             accountIds,
             { includeLookThrough: args.includeLookThrough === true },
           );
@@ -156,62 +180,51 @@ export class McpInvestmentsTools {
         title: "List investment transactions",
         annotations: READ_ONLY,
         description:
-          "Query brokerage investment-account transactions (buys, sells, dividends, interest, capital gains, splits, transfers, reinvestments, share adjustments). Filter by account, security symbol, action, and date; optionally group by account, date, security, or action. Returns the same compact, LLM-friendly shape as the AI Assistant's tool. Accepts account NAMES (resolved internally), so you do NOT need to call list_accounts first.",
-        inputSchema: {
-          startDate: z
-            .string()
-            .max(10)
-            .optional()
-            .describe("Optional start date (YYYY-MM-DD)"),
-          endDate: z
-            .string()
-            .max(10)
-            .optional()
-            .describe("Optional end date (YYYY-MM-DD)"),
+          "Brokerage trades, income, splits, transfers and share adjustments " +
+          "by account, symbol, action and date, optionally grouped. A VOID " +
+          "row is listed but in no total. incomeByCurrency includes " +
+          "reinvested income.",
+        inputSchema: z.object({
+          startDate: z.string().max(10).optional().describe("Start date."),
+          endDate: z.string().max(10).optional().describe("End date."),
           accountNames: z
             .array(z.string().max(100))
             .max(50)
             .optional()
-            .describe(
-              "Optional investment account names (resolved internally).",
-            ),
+            .describe("Account names."),
           symbols: z
             .array(z.string().min(1).max(20))
             .max(50)
             .optional()
-            .describe("Optional security ticker symbols (case insensitive)."),
+            .describe("Tickers, case-insensitive."),
           actions: z
             .array(z.nativeEnum(InvestmentAction))
-            .max(17)
+            .max(18)
             .optional()
-            .describe(
-              "Optional transaction types (BUY, SELL, DIVIDEND, INTEREST, CAPITAL_GAIN, SPLIT, TRANSFER_IN, TRANSFER_OUT, REINVEST, ADD_SHARES, REMOVE_SHARES, REINVEST_INTEREST, REINVEST_CAPITAL_GAIN_SHORT, REINVEST_CAPITAL_GAIN_LONG, CAPITAL_GAIN_SHORT, CAPITAL_GAIN_LONG, REDEEM).",
-            ),
+            .describe("Narrow to these actions."),
           groupBy: z
             .enum(["account", "date", "security", "action"])
             .optional()
-            .describe(
-              "Grouping: by account name, transaction date, security symbol, or action type. Defaults to 'security' when omitted.",
-            ),
-        },
+            .describe("Defaults to 'security'."),
+        }),
         outputSchema: listInvestmentTransactionsOutput,
       },
-      async (args, extra) => {
-        const ctx = resolve(extra.sessionId);
-        if (!ctx) return toolError("No user context");
-        const check = requireScope(ctx.scopes, "read");
+      async (args, ctx) => {
+        const user = resolveUserContext(ctx);
+        if (!user) return toolError("No user context");
+        const check = requireScope(user.scopes, "read");
         if (check.error) return check.result;
 
         try {
           const accountFilter = await this.accountsService.resolveAccountFilter(
-            ctx.userId,
+            user.userId,
             args.accountNames,
           );
           if (accountFilter.error) return toolError(accountFilter.error);
           const accountIds = accountFilter.accountIds;
           const result =
             await this.investmentTransactionsService.getLlmInvestmentTransactions(
-              ctx.userId,
+              user.userId,
               {
                 startDate: args.startDate,
                 endDate: args.endDate,
@@ -236,16 +249,16 @@ export class McpInvestmentsTools {
         title: "Capital gains",
         annotations: READ_ONLY,
         description:
-          "Per-period capital gains (realized + unrealized) for the user's investment accounts. Replays transaction history and snapshots positions against historical close prices, so the output includes mark-to-market movement on currently-held positions in addition to realized SELL gains. Requires startDate and endDate. Returns the same compact, LLM-friendly shape as the AI Assistant's tool. Accepts account NAMES (resolved internally), so you do NOT need to call list_accounts first.",
-        inputSchema: {
+          "Realized and unrealized capital gains per period, at historical closes.",
+        inputSchema: z.object({
           startDate: z
             .string()
             .regex(/^\d{4}-\d{2}-\d{2}$/)
-            .describe("Start date of the window (YYYY-MM-DD)"),
+            .describe("Start of the window."),
           endDate: z
             .string()
             .regex(/^\d{4}-\d{2}-\d{2}$/)
-            .describe("End date of the window (YYYY-MM-DD)"),
+            .describe("End of the window."),
           accountNames: z
             .array(z.string().max(100))
             .max(50)
@@ -261,28 +274,26 @@ export class McpInvestmentsTools {
           groupBy: z
             .enum(["month", "security", "account"])
             .optional()
-            .describe(
-              "Bucket the breakdown by month, security, or account. Defaults to 'month' when omitted.",
-            ),
-        },
+            .describe("Defaults to 'month'."),
+        }),
         outputSchema: getCapitalGainsOutput,
       },
-      async (args, extra) => {
-        const ctx = resolve(extra.sessionId);
-        if (!ctx) return toolError("No user context");
-        const check = requireScope(ctx.scopes, "read");
+      async (args, ctx) => {
+        const user = resolveUserContext(ctx);
+        if (!user) return toolError("No user context");
+        const check = requireScope(user.scopes, "read");
         if (check.error) return check.result;
 
         try {
           const accountFilter = await this.accountsService.resolveAccountFilter(
-            ctx.userId,
+            user.userId,
             args.accountNames,
           );
           if (accountFilter.error) return toolError(accountFilter.error);
           const accountIds = accountFilter.accountIds;
           const result =
             await this.investmentTransactionsService.getLlmCapitalGains(
-              ctx.userId,
+              user.userId,
               {
                 startDate: args.startDate,
                 endDate: args.endDate,
@@ -306,41 +317,38 @@ export class McpInvestmentsTools {
         title: "Look up securities",
         annotations: READ_ONLY,
         description:
-          "Look up a ticker symbol or company name against the user's configured price provider (Yahoo/MSN) and return the matching securities WITHOUT adding anything. Read-only: use it to resolve an ambiguous reference or confirm the exact symbol/exchange before adding it with manage_securities. Each candidate is flagged with alreadyAdded=true when a security with that symbol is already in the user's list. Shares the lookup logic with the AI Assistant's lookup_securities tool.",
-        inputSchema: {
-          query: z
+          "Look up a ticker or company name with the user's price provider " +
+          "and return the matches WITHOUT adding anything. Use it to resolve " +
+          "an ambiguous reference before manage_securities; a candidate " +
+          "already in the user's list is flagged alreadyAdded.",
+        inputSchema: z.object({
+          search: z
             .string()
             .min(1)
             .max(100)
-            .describe(
-              "Ticker symbol (e.g. 'AAPL') or company/security name to search for.",
-            ),
+            .describe("Ticker symbol or company name to look up."),
           exchange: z
             .enum(SECURITY_EXCHANGES)
             .optional()
-            .describe(
-              "Optional exchange to narrow the search. Omit to search across exchanges.",
-            ),
+            .describe("Narrows the search. Omit to search everywhere."),
           provider: z
             .enum(["yahoo", "msn", "auto"])
             .optional()
-            .describe(
-              "Optional quote provider: 'yahoo', 'msn', or 'auto' (the user's default). Omit for 'auto'.",
-            ),
-        },
+            .describe("Defaults to the user's configured provider."),
+        }),
         outputSchema: lookupSecuritiesOutput,
       },
-      async (args, extra) => {
-        const ctx = resolve(extra.sessionId);
-        if (!ctx) return toolError("No user context");
-        const check = requireScope(ctx.scopes, "read");
+      async (args, ctx) => {
+        const user = resolveUserContext(ctx);
+        if (!user) return toolError("No user context");
+        const check = requireScope(user.scopes, "read");
         if (check.error) return check.result;
 
         try {
           const result = await this.securitiesService.lookupSecuritiesForLlm(
-            ctx.userId,
+            user.userId,
             {
-              query: args.query,
+              query: args.search,
               exchange: args.exchange,
               provider: args.provider,
             },
@@ -358,15 +366,22 @@ export class McpInvestmentsTools {
         title: "Manage securities",
         annotations: WRITE,
         description:
-          "Create, edit, or delete the user's securities (stocks, ETFs, funds). operation = 'create' | 'update' | 'delete' with an items array (1-25 rows). " +
-          "create: { query, exchange?, securityType?, isFavourite?, currencyCode? } -- the security is looked up and validated by ticker/name against the user's configured price provider, which fills the official symbol/name/exchange/type/currency (do not invent them); exchange/securityType MUST come from the enumerated lists; exchange disambiguates a symbol traded on several exchanges. " +
-          "update: { symbol, securityType?, exchange?, isFavourite?, currencyCode?, countryWeightings?, assetWeightings? } -- symbol identifies an existing security (ticker or name); provide the classification/display fields to change. countryWeightings sets a manual country allocation for an ETF/fund as { name, weight } with weight a PERCENTAGE (0-100); entries need not add to 100 (the rest is 'Other'). assetWeightings does the same for asset classes, with free-text names (e.g. 'Equity', 'Fixed Income', 'Cash') -- reuse the spelling already used on the user's other securities where one fits. " +
-          "delete: { symbol } -- removes the security (fails if it still has holdings or investment transactions). " +
-          "approvalMode = 'bulk' (default; one card for the whole batch) or 'individual' (one card per item); ignored for a single item. Set dryRun=true to preview every item without saving. The user is asked to confirm before anything is saved (web chat card via relay, or an MCP confirmation dialog).",
-        inputSchema: {
+          "List, create, edit or delete securities. list takes accountName " +
+          "(name or id), no items, and returns its holdings. A create is " +
+          "validated against the price provider, which supplies the official " +
+          "symbol, name, exchange, type and currency (never invent them); " +
+          "pass `exchange` only for a symbol listed in more than one place. " +
+          "An update identifies the security by symbol or name. A delete " +
+          "fails while it has holdings or transactions.",
+        inputSchema: z.object({
           operation: z
-            .enum(["create", "update", "delete"])
-            .describe("The operation to perform on every item."),
+            .enum(["list", "create", "update", "delete"])
+            .describe("list: accountName's holdings. Others: every item."),
+          accountName: z
+            .string()
+            .max(100)
+            .optional()
+            .describe("list: name or id."),
           items: z
             .array(
               z.object({
@@ -375,42 +390,26 @@ export class McpInvestmentsTools {
                   .min(1)
                   .max(100)
                   .optional()
-                  .describe(
-                    "create: ticker symbol or security name to look up and validate.",
-                  ),
+                  .describe("create: ticker or name."),
                 symbol: z
                   .string()
                   .min(1)
                   .max(100)
                   .optional()
-                  .describe(
-                    "update/delete: the existing security's ticker symbol (or name).",
-                  ),
+                  .describe("update/delete: ticker or name."),
                 exchange: z
                   .enum(SECURITY_EXCHANGES)
                   .optional()
-                  .describe(
-                    "create: exchange to disambiguate the lookup. update: new exchange. Must be one of the enumerated values.",
-                  ),
-                securityType: z
-                  .enum(SECURITY_TYPES)
+                  .describe("create: disambiguates. update: the new one."),
+                securityType: z.enum(SECURITY_TYPES).optional(),
+                isFavourite: booleanArg()
                   .optional()
-                  .describe(
-                    "create/update: security type. Must be one of the enumerated values.",
-                  ),
-                isFavourite: z
-                  .boolean()
-                  .optional()
-                  .describe(
-                    "create/update: pin the security to the dashboard Favourite Securities widget.",
-                  ),
+                  .describe("Pin to favourites."),
                 currencyCode: z
                   .string()
                   .regex(/^[A-Za-z]{3}$/)
                   .optional()
-                  .describe(
-                    "create/update: ISO 4217 currency code (e.g. 'USD').",
-                  ),
+                  .describe("ISO 4217."),
                 countryWeightings: z
                   .array(
                     z.object({
@@ -418,20 +417,16 @@ export class McpInvestmentsTools {
                         .string()
                         .min(1)
                         .max(100)
-                        .describe(
-                          "Country name; prefer a canonical name (e.g. 'United States').",
-                        ),
-                      weight: z
-                        .number()
-                        .min(0)
-                        .max(100)
-                        .describe("Percentage 0-100."),
+                        .describe("Country name, canonical where possible."),
+                      weight: numberArg(z.number().min(0).max(100)).describe(
+                        "Percent, 0-100.",
+                      ),
                     }),
                   )
                   .max(60)
                   .optional()
                   .describe(
-                    "update only: manual country (geographic) allocation for an ETF/fund. Weights are PERCENTAGES (0-100) and need not sum to 100 (the rest is 'Other').",
+                    "update: country allocation in percent; the rest is 'Other'.",
                   ),
                 assetWeightings: z
                   .array(
@@ -440,80 +435,82 @@ export class McpInvestmentsTools {
                         .string()
                         .min(1)
                         .max(100)
-                        .describe(
-                          "Asset class name, free text (e.g. 'Equity', 'Fixed Income', 'Cash').",
-                        ),
-                      weight: z
-                        .number()
-                        .min(0)
-                        .max(100)
-                        .describe("Percentage 0-100."),
+                        .describe("Asset class name, free text."),
+                      weight: numberArg(z.number().min(0).max(100)).describe(
+                        "Percent, 0-100.",
+                      ),
                     }),
                   )
                   .max(60)
                   .optional()
                   .describe(
-                    "update only: manual asset-class allocation for an ETF/fund. Free-text names (no canonical list); weights are PERCENTAGES (0-100) and need not sum to 100 (the rest is 'Other').",
+                    "update: asset-class allocation, same rule; reuse their spelling.",
                   ),
               }),
             )
-            .min(1)
-            .max(MAX_BULK_ACTION_ROWS)
+            .max(25)
+            .optional()
             .describe("The rows to act on (1-25)."),
-          approvalMode: z
-            .enum(["bulk", "individual"])
-            .optional()
-            .describe(
-              "How multi-item batches are approved: 'bulk' (default) one card for all; 'individual' one card per item. Ignored for a single item.",
-            ),
-          dryRun: z
-            .boolean()
-            .optional()
-            .default(false)
-            .describe(
-              "If true, validate and return a per-item preview without saving anything.",
-            ),
-        },
+          approvalMode: approvalMode(),
+          dryRun: dryRun(),
+        }),
         outputSchema: manageSecuritiesOutput,
       },
-      async (args, extra) => {
-        const ctx = resolve(extra.sessionId);
-        if (!ctx) return toolError("No user context");
-        const check = requireScope(ctx.scopes, "write");
+      async (args, ctx) => {
+        const user = resolveUserContext(ctx);
+        if (!user) return toolError("No user context");
+        const operation = args.operation as ManageSecOperation;
+        const check = requireScope(
+          user.scopes,
+          operation === "list" ? "read" : "write",
+        );
         if (check.error) return check.result;
 
-        const operation = args.operation as ManageSecOperation;
-        const items = args.items as ManageSecItem[];
+        if (operation === "list") {
+          try {
+            return await this.listSecuritiesInAccount(
+              user.userId,
+              args.accountName,
+            );
+          } catch (err: unknown) {
+            return safeToolError(err);
+          }
+        }
+
+        const items = args.items as ManageSecItem[] | undefined;
+        if (!items || items.length === 0) {
+          return toolError(`${operation} needs 1-25 items.`);
+        }
         const approvalMode = (args.approvalMode ?? "bulk") as ApprovalMode;
 
         try {
           if (args.dryRun) {
-            return this.manageSecDryRun(ctx.userId, operation, items);
+            return this.manageSecDryRun(user.userId, operation, items);
           }
           if (operation === "create") {
             return await this.manageSecCreate(
               server,
-              ctx.userId,
+              ctx,
+              user.userId,
               items,
               approvalMode,
-              extra.requestId,
             );
           }
           if (operation === "update") {
             return await this.manageSecUpdate(
               server,
-              ctx.userId,
+              ctx,
+              user.userId,
               items,
               approvalMode,
-              extra.requestId,
             );
           }
           return await this.manageSecDelete(
             server,
-            ctx.userId,
+            ctx,
+            user.userId,
             items,
             approvalMode,
-            extra.requestId,
           );
         } catch (err: unknown) {
           return safeToolError(err);
@@ -527,117 +524,87 @@ export class McpInvestmentsTools {
         title: "Manage investment transactions",
         annotations: WRITE,
         description:
-          "Create, update, or delete the user's brokerage/investment-account transactions (BUY, SELL, DIVIDEND, INTEREST, CAPITAL_GAIN, SPLIT, TRANSFER_IN, TRANSFER_OUT, REINVEST, ADD_SHARES, REMOVE_SHARES, REINVEST_INTEREST, REINVEST_CAPITAL_GAIN_SHORT, REINVEST_CAPITAL_GAIN_LONG, CAPITAL_GAIN_SHORT, CAPITAL_GAIN_LONG, REDEEM). Accepts NAMES for account, funding account, and security -- they are resolved internally, so you do NOT need to call get_accounts/lookup_securities first. operation = 'create' | 'update' | 'delete' with an items array (1-25 rows). " +
-          "create: { accountName, action, date, security?, quantity?, price?, commission?, fundingAccountName?, description? } -- security is required for BUY, SELL, REDEEM, SPLIT, REINVEST (and the REINVEST_*/CAPITAL_GAIN_* refinements), ADD_SHARES, REMOVE_SHARES (matched by ticker or name). Buys debit and sells/dividends/interest/capital gains credit the brokerage's linked cash account automatically -- do not also create a separate cash transaction; fundingAccountName overrides which cash account is used. " +
-          "update: { transactionId, action?, date?, security?, quantity?, price?, commission?, description? } -- provide only the fields to change (>=1); omitted fields keep their current value; the total and cash impact are recomputed. " +
-          "delete: { transactionId } -- deleting one leg of a security transfer removes the paired leg too and reverses any linked cash impact. " +
-          "approvalMode controls the confirmation: by default 6 or more items show one confirmation for the whole batch and 1-5 items show one confirmation per item; pass 'individual' to force one confirmation per item at any count; ignored for a single item. The user is asked to confirm before anything is saved (web chat card via relay, or an MCP confirmation dialog).",
-        inputSchema: {
-          operation: z
-            .enum(["create", "update", "delete"])
-            .describe("The operation to perform on every item."),
-          items: z
-            .array(
-              z.object({
-                accountName: z
-                  .string()
-                  .max(100)
-                  .optional()
-                  .describe(
-                    "create: investment/brokerage account name. The base pair name (e.g. 'RRSP') resolves to its brokerage account ('RRSP - Brokerage'); the exact name also works.",
-                  ),
-                fundingAccountName: z
-                  .string()
-                  .max(100)
-                  .optional()
-                  .describe(
-                    "create: optional cash account that funds a buy or receives a sell's proceeds. Omit to use the brokerage's own linked cash account.",
-                  ),
-                security: z
-                  .string()
-                  .min(1)
-                  .max(100)
-                  .optional()
-                  .describe(
-                    "create/update: security ticker symbol or name. Required (create) for BUY, SELL, REDEEM, SPLIT, REINVEST (and the REINVEST_*/CAPITAL_GAIN_* refinements), ADD_SHARES, REMOVE_SHARES. Matched to one of the user's securities.",
-                  ),
-                action: z
-                  .nativeEnum(InvestmentAction)
-                  .optional()
-                  .describe(
-                    "create: transaction type. update: new type (omit to keep).",
-                  ),
-                date: z
-                  .string()
-                  .max(10)
-                  .optional()
-                  .describe("Transaction date (YYYY-MM-DD)."),
-                quantity: z
-                  .number()
-                  .min(0)
-                  .max(999999999999)
-                  .optional()
-                  .describe(
-                    "Number of shares (8 dp). For SPLIT, the split ratio (>0).",
-                  ),
-                price: z
-                  .number()
-                  .min(0)
-                  .max(999999999999)
-                  .optional()
-                  .describe(
-                    "Price per share (6 dp). For DIVIDEND/INTEREST/CAPITAL_GAIN with no quantity, the total cash amount.",
-                  ),
-                commission: z
-                  .number()
-                  .min(0)
-                  .max(999999999999)
-                  .optional()
-                  .describe("Commission or fee (4 dp). Defaults to 0."),
-                accruedInterest: z
-                  .number()
-                  .min(0)
-                  .max(999999999999)
-                  .optional()
-                  .describe(
-                    "REDEEM only: accrued interest paid out with the redemption (4 dp). Recorded as a linked INTEREST transaction and included in the single cash movement, so do not record it separately. Defaults to 0.",
-                  ),
-                exchangeRate: z
-                  .number()
-                  .min(0)
-                  .max(999999999999)
-                  .optional()
-                  .describe(
-                    "create/update: FX rate converting the security's currency into the funding cash account's currency (e.g. for a EUR security funded from a PLN account, the EUR->PLN rate such as 4.2514). Supply this when the broker's settlement data gives the rate or the converted cash total, so the cash posting is exact. Omit for same-currency transactions, or to use the rate for the transaction date.",
-                  ),
-                description: z
-                  .string()
-                  .max(500)
-                  .optional()
-                  .describe("Optional description or memo."),
-                transactionId: z
-                  .string()
-                  .uuid()
-                  .optional()
-                  .describe("update/delete: investment transaction ID."),
-              }),
-            )
-            .min(1)
-            .max(MAX_BULK_ACTION_ROWS)
-            .describe("The rows to act on (1-25)."),
-          approvalMode: z
-            .enum(["bulk", "individual"])
-            .optional()
-            .describe(
-              "How multi-item batches are approved: by default 6 or more items show one card for the whole batch and 1-5 items show one card per item; 'individual' forces one card per item at any count. Ignored for a single item.",
-            ),
-        },
+          "Create, update or delete brokerage transactions. Account, funding " +
+          "account and security resolve by name. A buy debits, and a sale or " +
+          "a distribution credits, the brokerage's linked " +
+          "cash account automatically -- never record that cash movement " +
+          "yourself; fundingAccountName overrides which account settles. " +
+          "An update changes only the fields you send and recomputes the " +
+          "total and the cash impact. Deleting one leg of a security transfer " +
+          "removes its pair and reverses the linked cash movement.",
+        inputSchema: z.object({
+          operation: manageOperation(),
+          items: itemsArray(
+            z.object({
+              accountName: z
+                .string()
+                .max(100)
+                .optional()
+                .describe(
+                  "create: the brokerage account. A base pair name ('RRSP') resolves to its brokerage side.",
+                ),
+              fundingAccountName: z
+                .string()
+                .max(100)
+                .optional()
+                .describe(
+                  "create: the cash account that funds or receives. Omit for the brokerage's linked one.",
+                ),
+              security: z
+                .string()
+                .min(1)
+                .max(100)
+                .optional()
+                .describe(
+                  "Ticker or name. Required for anything that moves shares.",
+                ),
+              action: z
+                .nativeEnum(InvestmentAction)
+                .optional()
+                .describe("The transaction type."),
+              date: z.string().max(10).optional().describe("Transaction date."),
+              quantity: numberArg(z.number().min(0).max(999999999999))
+                .optional()
+                .describe("Number of shares, or the ratio for a SPLIT."),
+              price: numberArg(z.number().min(0).max(999999999999))
+                .optional()
+                .describe(
+                  "Price per share, or the total cash for an income row with no quantity.",
+                ),
+              commission: numberArg(z.number().min(0).max(999999999999))
+                .optional()
+                .describe("Commission or fee. Defaults to 0."),
+              accruedInterest: numberArg(z.number().min(0).max(999999999999))
+                .optional()
+                .describe(
+                  "REDEEM: accrued interest (linked INTEREST row). Bonds: omit; the redemption split fills it.",
+                ),
+              exchangeRate: numberArg(z.number().min(0).max(999999999999))
+                .optional()
+                .describe(
+                  "Security-to-settlement currency rate. Give the broker's own for an exact cash posting; omit to use the date's rate.",
+                ),
+              description: z
+                .string()
+                .max(TRANSACTION_NOTE_MAX_LENGTH)
+                .optional()
+                .describe("Description or memo."),
+              bondSeriesCode: bondSeriesCodeSchema
+                .optional()
+                .describe("e.g. EDO1036"),
+              transactionId: uuidString()
+                .optional()
+                .describe("update/delete: the row's id."),
+            }),
+          ),
+          approvalMode: approvalMode(),
+        }),
         outputSchema: manageInvestmentTransactionsOutput,
       },
-      async (args, extra) => {
-        const ctx = resolve(extra.sessionId);
-        if (!ctx) return toolError("No user context");
-        const check = requireScope(ctx.scopes, "write");
+      async (args, ctx) => {
+        const user = resolveUserContext(ctx);
+        if (!user) return toolError("No user context");
+        const check = requireScope(user.scopes, "write");
         if (check.error) return check.result;
 
         const operation = args.operation as ManageInvOperation;
@@ -651,27 +618,27 @@ export class McpInvestmentsTools {
           if (operation === "create") {
             return await this.manageInvCreate(
               server,
-              ctx.userId,
+              ctx,
+              user.userId,
               items,
               approvalMode,
-              extra.requestId,
             );
           }
           if (operation === "update") {
             return await this.manageInvUpdate(
               server,
-              ctx.userId,
+              ctx,
+              user.userId,
               items,
               approvalMode,
-              extra.requestId,
             );
           }
           return await this.manageInvDelete(
             server,
-            ctx.userId,
+            ctx,
+            user.userId,
             items,
             approvalMode,
-            extra.requestId,
           );
         } catch (err: unknown) {
           return safeToolError(err);
@@ -697,6 +664,7 @@ export class McpInvestmentsTools {
       fundingAccountName: item.fundingAccountName,
       exchangeRate: item.exchangeRate,
       description: item.description,
+      bondSeriesCode: item.bondSeriesCode,
     };
   }
 
@@ -712,15 +680,16 @@ export class McpInvestmentsTools {
       accruedInterest: item.accruedInterest,
       exchangeRate: item.exchangeRate,
       description: item.description,
+      bondSeriesCode: item.bondSeriesCode,
     };
   }
 
   private async manageInvCreate(
     server: McpServer,
+    ctx: ServerContext,
     userId: string,
     items: ManageInvItem[],
     approvalMode: ApprovalMode,
-    requestId: unknown,
   ) {
     const single = items.length === 1;
 
@@ -730,20 +699,25 @@ export class McpInvestmentsTools {
           userId,
           this.toInvCreateRow(items[0]),
         );
-      const budget = this.writeLimiter.reserve(userId, 1);
+      const budget = await this.writeLimiter.reserve(userId, 1);
       if (budget) return budget;
       const action = this.actionBuilder.buildCreateInvestmentTransaction(
         userId,
         preview,
       );
-      if (emitRelayCard(this.relayService, userId, action)) {
+      if (
+        !ctx.mcpReq.requestState() &&
+        (await emitRelayCard(this.relayService, userId, action))
+      ) {
         return toolResult(RELAY_PREVIEW_SHOWN);
       }
       const confirmation = await confirmWrite(
         server,
+        ctx,
         this.createConfirmLines(preview).join("\n"),
-        requestId as never,
+        action.descriptor,
       );
+      if (isAsk(confirmation)) return confirmation.ask;
       if (confirmation === "declined") {
         return toolError(
           "Cancelled: the confirmation was declined, so no investment transaction was created.",
@@ -758,10 +732,12 @@ export class McpInvestmentsTools {
         quantity: preview.quantity ?? undefined,
         price: preview.price ?? undefined,
         commission: preview.commission,
+        accruedInterest: preview.accruedInterest,
         exchangeRate: preview.exchangeRate,
         description: preview.description ?? undefined,
+        bondInstrumentId: preview.bondInstrumentId ?? undefined,
       });
-      this.writeLimiter.record(userId, "create_investment_transaction");
+      await this.writeLimiter.record(userId, "create_investment_transaction");
       return toolResult({ id: tx.id, date: tx.transactionDate, count: 1 });
     }
 
@@ -775,20 +751,17 @@ export class McpInvestmentsTools {
         `None of the investment transactions could be prepared.${describeSkippedRows(bulk.skipped, items.length)}`,
       );
     }
-    const budget = this.writeLimiter.reserve(userId, bulk.okPreviews.length);
+    const budget = await this.writeLimiter.reserve(
+      userId,
+      bulk.okPreviews.length,
+    );
     if (budget) return budget;
 
     if (approvalMode === "individual") {
       const cards = bulk.okPreviews.map((p) =>
         this.actionBuilder.buildCreateInvestmentTransaction(userId, p),
       );
-      return this.runInvIndividual(
-        server,
-        userId,
-        cards,
-        requestId,
-        bulk.skipped,
-      );
+      return this.runInvIndividual(server, ctx, userId, cards, bulk.skipped);
     }
 
     // bulk mode: one card carrying every row.
@@ -797,14 +770,19 @@ export class McpInvestmentsTools {
       bulk.okPreviews,
       bulk.previewRows,
     );
-    if (emitRelayCard(this.relayService, userId, action)) {
+    if (
+      !ctx.mcpReq.requestState() &&
+      (await emitRelayCard(this.relayService, userId, action))
+    ) {
       return toolResult(RELAY_PREVIEW_SHOWN);
     }
     const confirmation = await confirmWrite(
       server,
+      ctx,
       `Create ${bulk.okPreviews.length} investment transaction(s)?${bulk.skipped.length ? ` (${bulk.skipped.length} skipped)` : ""}`,
-      requestId as never,
+      action.descriptor,
     );
+    if (isAsk(confirmation)) return confirmation.ask;
     if (confirmation === "declined") {
       return toolError(
         "Cancelled: the confirmation was declined, so nothing was created.",
@@ -821,8 +799,10 @@ export class McpInvestmentsTools {
         quantity: preview.quantity ?? undefined,
         price: preview.price ?? undefined,
         commission: preview.commission,
+        accruedInterest: preview.accruedInterest,
         exchangeRate: preview.exchangeRate,
         description: preview.description ?? undefined,
+        bondInstrumentId: preview.bondInstrumentId ?? undefined,
       })),
     );
     const skipped = [...bulk.skipped];
@@ -830,7 +810,7 @@ export class McpInvestmentsTools {
       skipped.push({ index: bulk.okIndex[s.index], reason: s.reason });
     }
     for (let i = 0; i < result.created.length; i++) {
-      this.writeLimiter.record(userId, "create_investment_transaction");
+      await this.writeLimiter.record(userId, "create_investment_transaction");
     }
     return toolResult({
       ids: result.created.map((t) => t.id),
@@ -841,10 +821,10 @@ export class McpInvestmentsTools {
 
   private async manageInvUpdate(
     server: McpServer,
+    ctx: ServerContext,
     userId: string,
     items: ManageInvItem[],
     approvalMode: ApprovalMode,
-    requestId: unknown,
   ) {
     const single = items.length === 1;
 
@@ -855,23 +835,28 @@ export class McpInvestmentsTools {
           items[0].transactionId as string,
           this.toInvUpdateRow(items[0]),
         );
-      const budget = this.writeLimiter.reserve(userId, 1);
+      const budget = await this.writeLimiter.reserve(userId, 1);
       if (budget) return budget;
       const action = this.actionBuilder.buildUpdateInvestmentTransaction(
         userId,
         preview,
       );
-      if (emitRelayCard(this.relayService, userId, action)) {
+      if (
+        !ctx.mcpReq.requestState() &&
+        (await emitRelayCard(this.relayService, userId, action))
+      ) {
         return toolResult(RELAY_PREVIEW_SHOWN);
       }
       const confirmation = await confirmWrite(
         server,
+        ctx,
         [
           "Apply this investment transaction edit?",
           ...this.editLines(preview),
         ].join("\n"),
-        requestId as never,
+        action.descriptor,
       );
+      if (isAsk(confirmation)) return confirmation.ask;
       if (confirmation === "declined") {
         return toolError(
           "Cancelled: the confirmation was declined, so the investment transaction was not changed.",
@@ -888,11 +873,13 @@ export class McpInvestmentsTools {
           quantity: preview.quantity ?? undefined,
           price: preview.price ?? undefined,
           commission: preview.commission,
+          accruedInterest: preview.accruedInterest,
           exchangeRate: preview.exchangeRate,
           description: preview.description ?? undefined,
+          bondInstrumentId: preview.bondInstrumentId ?? undefined,
         },
       );
-      this.writeLimiter.record(userId, "update_investment_transaction");
+      await this.writeLimiter.record(userId, "update_investment_transaction");
       return toolResult({ id: tx.id, count: 1 });
     }
 
@@ -921,9 +908,9 @@ export class McpInvestmentsTools {
         return toolError(
           `None of the investment transaction edits could be prepared.${describeSkippedRows(skipped, items.length)}`,
         );
-      const budget = this.writeLimiter.reserve(userId, cards.length);
+      const budget = await this.writeLimiter.reserve(userId, cards.length);
       if (budget) return budget;
-      return this.runInvIndividual(server, userId, cards, requestId, skipped);
+      return this.runInvIndividual(server, ctx, userId, cards, skipped);
     }
 
     const bulk =
@@ -935,21 +922,26 @@ export class McpInvestmentsTools {
       return toolError(
         `None of the investment transaction edits could be prepared.${describeSkippedRows(bulk.skipped, items.length)}`,
       );
-    const budget = this.writeLimiter.reserve(userId, bulk.okRows.length);
+    const budget = await this.writeLimiter.reserve(userId, bulk.okRows.length);
     if (budget) return budget;
     const action = this.actionBuilder.buildBatchUpdateInvestmentTransactions(
       userId,
       bulk.okRows,
       bulk.previewRows,
     );
-    if (emitRelayCard(this.relayService, userId, action)) {
+    if (
+      !ctx.mcpReq.requestState() &&
+      (await emitRelayCard(this.relayService, userId, action))
+    ) {
       return toolResult(RELAY_PREVIEW_SHOWN);
     }
     const confirmation = await confirmWrite(
       server,
+      ctx,
       `Apply ${bulk.okRows.length} investment transaction edit(s)?${bulk.skipped.length ? ` (${bulk.skipped.length} skipped)` : ""}`,
-      requestId as never,
+      action.descriptor,
     );
+    if (isAsk(confirmation)) return confirmation.ask;
     if (confirmation === "declined")
       return toolError(
         "Cancelled: the confirmation was declined, so nothing was changed.",
@@ -967,22 +959,24 @@ export class McpInvestmentsTools {
           quantity: row.quantity ?? undefined,
           price: row.price ?? undefined,
           commission: row.commission,
+          accruedInterest: row.accruedInterest,
           exchangeRate: row.exchangeRate,
           description: row.description ?? undefined,
+          bondInstrumentId: row.bondInstrumentId ?? undefined,
         },
       );
       ids.push(tx.id);
-      this.writeLimiter.record(userId, "update_investment_transaction");
+      await this.writeLimiter.record(userId, "update_investment_transaction");
     }
     return toolResult({ ids, count: ids.length, skipped: bulk.skipped });
   }
 
   private async manageInvDelete(
     server: McpServer,
+    ctx: ServerContext,
     userId: string,
     items: ManageInvItem[],
     approvalMode: ApprovalMode,
-    requestId: unknown,
   ) {
     const single = items.length === 1;
 
@@ -992,25 +986,30 @@ export class McpInvestmentsTools {
           userId,
           items[0].transactionId as string,
         );
-      const budget = this.writeLimiter.reserve(userId, 1);
+      const budget = await this.writeLimiter.reserve(userId, 1);
       if (budget) return budget;
       const action = this.actionBuilder.buildDeleteInvestmentTransaction(
         userId,
         preview,
       );
-      if (emitRelayCard(this.relayService, userId, action)) {
+      if (
+        !ctx.mcpReq.requestState() &&
+        (await emitRelayCard(this.relayService, userId, action))
+      ) {
         return toolResult(RELAY_PREVIEW_SHOWN);
       }
       const confirmation = await confirmWrite(
         server,
+        ctx,
         [
           "Delete this investment transaction?",
           `Account: ${preview.accountName}`,
           `Type: ${preview.action}`,
           `Date: ${preview.transactionDate}`,
         ].join("\n"),
-        requestId as never,
+        action.descriptor,
       );
+      if (isAsk(confirmation)) return confirmation.ask;
       if (confirmation === "declined") {
         return toolError(
           "Cancelled: the confirmation was declined, so the investment transaction was not deleted.",
@@ -1020,7 +1019,7 @@ export class McpInvestmentsTools {
         userId,
         preview.transactionId,
       );
-      this.writeLimiter.record(userId, "delete_investment_transaction");
+      await this.writeLimiter.record(userId, "delete_investment_transaction");
       return toolResult({ id: preview.transactionId, deleted: true, count: 1 });
     }
 
@@ -1048,9 +1047,9 @@ export class McpInvestmentsTools {
         return toolError(
           `None of the investment transactions could be prepared.${describeSkippedRows(skipped, items.length)}`,
         );
-      const budget = this.writeLimiter.reserve(userId, cards.length);
+      const budget = await this.writeLimiter.reserve(userId, cards.length);
       if (budget) return budget;
-      return this.runInvIndividual(server, userId, cards, requestId, skipped);
+      return this.runInvIndividual(server, ctx, userId, cards, skipped);
     }
 
     const bulk =
@@ -1062,21 +1061,26 @@ export class McpInvestmentsTools {
       return toolError(
         `None of the investment transactions could be prepared.${describeSkippedRows(bulk.skipped, items.length)}`,
       );
-    const budget = this.writeLimiter.reserve(userId, bulk.okRows.length);
+    const budget = await this.writeLimiter.reserve(userId, bulk.okRows.length);
     if (budget) return budget;
     const action = this.actionBuilder.buildBatchDeleteInvestmentTransactions(
       userId,
       bulk.okRows,
       bulk.previewRows,
     );
-    if (emitRelayCard(this.relayService, userId, action)) {
+    if (
+      !ctx.mcpReq.requestState() &&
+      (await emitRelayCard(this.relayService, userId, action))
+    ) {
       return toolResult(RELAY_PREVIEW_SHOWN);
     }
     const confirmation = await confirmWrite(
       server,
+      ctx,
       `Delete ${bulk.okRows.length} investment transaction(s)?${bulk.skipped.length ? ` (${bulk.skipped.length} skipped)` : ""}`,
-      requestId as never,
+      action.descriptor,
     );
+    if (isAsk(confirmation)) return confirmation.ask;
     if (confirmation === "declined")
       return toolError(
         "Cancelled: the confirmation was declined, so nothing was deleted.",
@@ -1088,7 +1092,7 @@ export class McpInvestmentsTools {
         row.transactionId,
       );
       ids.push(row.transactionId);
-      this.writeLimiter.record(userId, "delete_investment_transaction");
+      await this.writeLimiter.record(userId, "delete_investment_transaction");
     }
     return toolResult({ ids, count: ids.length, skipped: bulk.skipped });
   }
@@ -1099,25 +1103,33 @@ export class McpInvestmentsTools {
    */
   private async runInvIndividual(
     server: McpServer,
+    ctx: ServerContext,
     userId: string,
     cards: PendingAiAction[],
-    requestId: unknown,
     skipped: { index: number; reason: string }[],
   ) {
-    if (emitRelayCard(this.relayService, userId, cards[0])) {
+    // Only the round that asks may hand the cards to the web chat; on a retry
+    // the human has already answered in their own client.
+    if (
+      !ctx.mcpReq.requestState() &&
+      (await emitRelayCard(this.relayService, userId, cards[0]))
+    ) {
       for (let i = 1; i < cards.length; i++) {
-        emitRelayCard(this.relayService, userId, cards[i]);
+        await emitRelayCard(this.relayService, userId, cards[i]);
       }
       return toolResult(RELAY_PREVIEW_SHOWN);
     }
+    // Every card is asked in ONE round: a round per card would be 25 rounds on
+    // a full batch, and a multi-round-trip flow is two.
+    const answers = await confirmWriteMany(
+      server,
+      ctx,
+      confirmItemsForCards(cards, (card) => this.confirmLineFor(card)),
+    );
+    if (!(answers instanceof Map)) return answers.ask;
     const ids: string[] = [];
-    for (const card of cards) {
-      const confirmation = await confirmWrite(
-        server,
-        this.confirmLineFor(card),
-        requestId as never,
-      );
-      if (confirmation === "declined") continue;
+    for (const [index, card] of cards.entries()) {
+      if (answers.get(cardKey(index)) === "declined") continue;
       const id = await this.commitCard(userId, card);
       if (id) ids.push(id);
     }
@@ -1141,10 +1153,12 @@ export class McpInvestmentsTools {
           quantity: d.quantity ?? undefined,
           price: d.price ?? undefined,
           commission: d.commission,
+          accruedInterest: d.accruedInterest,
           exchangeRate: d.exchangeRate,
           description: d.description ?? undefined,
+          bondInstrumentId: d.bondInstrumentId ?? undefined,
         });
-        this.writeLimiter.record(userId, "create_investment_transaction");
+        await this.writeLimiter.record(userId, "create_investment_transaction");
         return tx.id;
       }
       case "update_investment_transaction": {
@@ -1159,11 +1173,13 @@ export class McpInvestmentsTools {
             quantity: d.quantity ?? undefined,
             price: d.price ?? undefined,
             commission: d.commission,
+            accruedInterest: d.accruedInterest,
             exchangeRate: d.exchangeRate,
             description: d.description ?? undefined,
+            bondInstrumentId: d.bondInstrumentId ?? undefined,
           },
         );
-        this.writeLimiter.record(userId, "update_investment_transaction");
+        await this.writeLimiter.record(userId, "update_investment_transaction");
         return tx.id;
       }
       case "delete_investment_transaction": {
@@ -1171,7 +1187,7 @@ export class McpInvestmentsTools {
           userId,
           d.transactionId,
         );
-        this.writeLimiter.record(userId, "delete_investment_transaction");
+        await this.writeLimiter.record(userId, "delete_investment_transaction");
         return d.transactionId;
       }
       default:
@@ -1181,7 +1197,9 @@ export class McpInvestmentsTools {
 
   private confirmLineFor(card: PendingAiAction): string {
     const p = card.preview;
-    const sec = p.symbol ? `\nSecurity: ${p.symbol}` : "";
+    const sec =
+      (p.symbol ? `\nSecurity: ${p.symbol}` : "") +
+      (p.bondSeriesCode ? `\nSeries: ${p.bondSeriesCode}` : "");
     switch (card.type) {
       case "delete_investment_transaction":
         return `Delete this investment transaction?\nAccount: ${p.accountName}\nType: ${p.investmentAction}\nDate: ${p.transactionDate}${sec}`;
@@ -1204,6 +1222,9 @@ export class McpInvestmentsTools {
     cashAccountName: string | null;
     cashCurrency: string | null;
     cashAmount: number | null;
+    accruedInterest?: number;
+    bondSeriesCode?: string | null;
+    redemptionSplit?: BondRedemptionSplitPreview | null;
   }): string[] {
     return ["Create this investment transaction?", ...this.editLines(preview)];
   }
@@ -1221,6 +1242,9 @@ export class McpInvestmentsTools {
     cashAccountName: string | null;
     cashCurrency: string | null;
     cashAmount: number | null;
+    accruedInterest?: number;
+    bondSeriesCode?: string | null;
+    redemptionSplit?: BondRedemptionSplitPreview | null;
   }): string[] {
     const lines: string[] = [
       `Account: ${preview.accountName}`,
@@ -1232,9 +1256,26 @@ export class McpInvestmentsTools {
         `Security: ${preview.symbol}${preview.securityName ? ` (${preview.securityName})` : ""}`,
       );
     }
+    if (preview.bondSeriesCode) {
+      lines.push(`Series: ${preview.bondSeriesCode}`);
+    }
     if (preview.quantity !== null) lines.push(`Quantity: ${preview.quantity}`);
     if (preview.price !== null) lines.push(`Price: ${preview.price}`);
     if (preview.commission) lines.push(`Commission: ${preview.commission}`);
+    if (preview.accruedInterest) {
+      lines.push(`Accrued interest: ${preview.accruedInterest}`);
+    }
+    const split = preview.redemptionSplit;
+    if (split) {
+      lines.push(
+        `Redemption split: principal ${split.principal}, interest ${split.interest}, deduction ${split.deduction}, payout ${split.payout}`,
+      );
+      if (split.outcome === "differs") {
+        lines.push(
+          "Warning: the price and accrued interest differ from the redemption split.",
+        );
+      }
+    }
     if (preview.cashAccountName && preview.cashAmount !== null) {
       lines.push(
         `Cash: ${preview.cashAmount} ${preview.cashCurrency} in ${preview.cashAccountName}`,
@@ -1258,6 +1299,37 @@ export class McpInvestmentsTools {
   // -------------------------------------------------------------------------
   // manage_securities helpers
   // -------------------------------------------------------------------------
+
+  private async listSecuritiesInAccount(
+    userId: string,
+    accountName: string | undefined,
+  ) {
+    if (!accountName?.trim()) {
+      return toolError("list needs accountName.");
+    }
+    const { match, candidates } =
+      await this.accountsService.resolveBrokerageByNameOrId(
+        userId,
+        accountName,
+      );
+    if (!match) {
+      return toolError(
+        candidates.length > 0
+          ? `"${accountName}" is ambiguous: ${candidates.map((c) => c.name).join(", ")}.`
+          : `Unknown account: ${accountName}. Call list_accounts to look up valid names.`,
+      );
+    }
+    const securities = await this.securitiesService.listSecuritiesInAccount(
+      userId,
+      match.id,
+    );
+    return toolResult({
+      operation: "list",
+      account: match.name,
+      count: securities.length,
+      securities,
+    });
+  }
 
   private toSecCreateRow(item: ManageSecItem): ManageCreateSecurityRow {
     return {
@@ -1317,28 +1389,36 @@ export class McpInvestmentsTools {
 
   private async emitOrConfirmSec(
     server: McpServer,
+    ctx: ServerContext,
     userId: string,
     pendingAction: PendingAiAction,
     confirmMessage: string,
-    requestId: unknown,
-  ): Promise<"relay" | "accepted" | "declined"> {
-    if (emitRelayCard(this.relayService, userId, pendingAction)) {
+  ): Promise<"relay" | "accepted" | "declined" | { ask: InputRequiredResult }> {
+    // Only the round that ASKS may hand the confirmation to the web chat. On a
+    // retry the human has already answered in their own client, and a relay
+    // turn that began in between would swallow that answer.
+    if (
+      !ctx.mcpReq.requestState() &&
+      (await emitRelayCard(this.relayService, userId, pendingAction))
+    ) {
       return "relay";
     }
     const confirmation = await confirmWrite(
       server,
+      ctx,
       confirmMessage,
-      requestId as never,
+      pendingAction.descriptor,
     );
+    if (isAsk(confirmation)) return confirmation;
     return confirmation === "declined" ? "declined" : "accepted";
   }
 
   private async manageSecCreate(
     server: McpServer,
+    ctx: ServerContext,
     userId: string,
     items: ManageSecItem[],
     approvalMode: ApprovalMode,
-    requestId: unknown,
   ) {
     if (items.length === 1) {
       const preview =
@@ -1346,15 +1426,15 @@ export class McpInvestmentsTools {
           userId,
           this.toSecCreateRow(items[0]),
         );
-      const budget = this.writeLimiter.reserve(userId, 1);
+      const budget = await this.writeLimiter.reserve(userId, 1);
       if (budget) return budget;
       const action = this.actionBuilder.buildCreateSecurity(userId, preview);
       const outcome = await this.emitOrConfirmSec(
         server,
+        ctx,
         userId,
         action,
         `Create this security?\nSymbol: ${preview.symbol}\nName: ${preview.name}\nCurrency: ${preview.currencyCode}`,
-        requestId,
       );
       if (outcome === "relay") return toolResult(RELAY_PREVIEW_SHOWN);
       if (outcome === "declined")
@@ -1379,20 +1459,17 @@ export class McpInvestmentsTools {
         `None of the securities could be prepared.${describeSkippedRows(prep.skipped, items.length)}`,
       );
     }
-    const budget = this.writeLimiter.reserve(userId, prep.okPreviews.length);
+    const budget = await this.writeLimiter.reserve(
+      userId,
+      prep.okPreviews.length,
+    );
     if (budget) return budget;
 
     if (approvalMode === "individual") {
       const cards = prep.okPreviews.map((p) =>
         this.actionBuilder.buildCreateSecurity(userId, p),
       );
-      return this.runSecIndividual(
-        server,
-        userId,
-        cards,
-        requestId,
-        prep.skipped,
-      );
+      return this.runSecIndividual(server, ctx, userId, cards, prep.skipped);
     }
 
     const action = this.actionBuilder.buildBatchActions(
@@ -1401,14 +1478,19 @@ export class McpInvestmentsTools {
       prep.okRows,
       prep.previewRows,
     );
-    if (emitRelayCard(this.relayService, userId, action)) {
+    if (
+      !ctx.mcpReq.requestState() &&
+      (await emitRelayCard(this.relayService, userId, action))
+    ) {
       return toolResult(RELAY_PREVIEW_SHOWN);
     }
     const confirmation = await confirmWrite(
       server,
+      ctx,
       `Create ${prep.okPreviews.length} security/securities?${prep.skipped.length ? ` (${prep.skipped.length} skipped)` : ""}`,
-      requestId as never,
+      action.descriptor,
     );
+    if (isAsk(confirmation)) return confirmation.ask;
     if (confirmation === "declined")
       return toolError(
         "Cancelled: the confirmation was declined, so nothing was created.",
@@ -1423,10 +1505,10 @@ export class McpInvestmentsTools {
 
   private async manageSecUpdate(
     server: McpServer,
+    ctx: ServerContext,
     userId: string,
     items: ManageSecItem[],
     approvalMode: ApprovalMode,
-    requestId: unknown,
   ) {
     if (items.length === 1) {
       const preview =
@@ -1434,15 +1516,15 @@ export class McpInvestmentsTools {
           userId,
           this.toSecUpdateRow(items[0]),
         );
-      const budget = this.writeLimiter.reserve(userId, 1);
+      const budget = await this.writeLimiter.reserve(userId, 1);
       if (budget) return budget;
       const action = this.actionBuilder.buildUpdateSecurity(userId, preview);
       const outcome = await this.emitOrConfirmSec(
         server,
+        ctx,
         userId,
         action,
         `Apply this security edit?\nSymbol: ${preview.symbol}\nType: ${preview.securityType ?? "(none)"}\nExchange: ${preview.exchange ?? "(none)"}\nCurrency: ${preview.currencyCode}`,
-        requestId,
       );
       if (outcome === "relay") return toolResult(RELAY_PREVIEW_SHOWN);
       if (outcome === "declined")
@@ -1467,20 +1549,17 @@ export class McpInvestmentsTools {
         `None of the security edits could be prepared.${describeSkippedRows(prep.skipped, items.length)}`,
       );
     }
-    const budget = this.writeLimiter.reserve(userId, prep.okPreviews.length);
+    const budget = await this.writeLimiter.reserve(
+      userId,
+      prep.okPreviews.length,
+    );
     if (budget) return budget;
 
     if (approvalMode === "individual") {
       const cards = prep.okPreviews.map((p) =>
         this.actionBuilder.buildUpdateSecurity(userId, p),
       );
-      return this.runSecIndividual(
-        server,
-        userId,
-        cards,
-        requestId,
-        prep.skipped,
-      );
+      return this.runSecIndividual(server, ctx, userId, cards, prep.skipped);
     }
 
     const action = this.actionBuilder.buildBatchActions(
@@ -1489,14 +1568,19 @@ export class McpInvestmentsTools {
       prep.okRows,
       prep.previewRows,
     );
-    if (emitRelayCard(this.relayService, userId, action)) {
+    if (
+      !ctx.mcpReq.requestState() &&
+      (await emitRelayCard(this.relayService, userId, action))
+    ) {
       return toolResult(RELAY_PREVIEW_SHOWN);
     }
     const confirmation = await confirmWrite(
       server,
+      ctx,
       `Apply ${prep.okPreviews.length} security edit(s)?${prep.skipped.length ? ` (${prep.skipped.length} skipped)` : ""}`,
-      requestId as never,
+      action.descriptor,
     );
+    if (isAsk(confirmation)) return confirmation.ask;
     if (confirmation === "declined")
       return toolError(
         "Cancelled: the confirmation was declined, so nothing was changed.",
@@ -1511,10 +1595,10 @@ export class McpInvestmentsTools {
 
   private async manageSecDelete(
     server: McpServer,
+    ctx: ServerContext,
     userId: string,
     items: ManageSecItem[],
     approvalMode: ApprovalMode,
-    requestId: unknown,
   ) {
     if (items.length === 1) {
       const preview =
@@ -1522,15 +1606,15 @@ export class McpInvestmentsTools {
           userId,
           this.toSecDeleteRow(items[0]),
         );
-      const budget = this.writeLimiter.reserve(userId, 1);
+      const budget = await this.writeLimiter.reserve(userId, 1);
       if (budget) return budget;
       const action = this.actionBuilder.buildDeleteSecurity(userId, preview);
       const outcome = await this.emitOrConfirmSec(
         server,
+        ctx,
         userId,
         action,
         `Delete this security?\nSymbol: ${preview.symbol}\nName: ${preview.name}`,
-        requestId,
       );
       if (outcome === "relay") return toolResult(RELAY_PREVIEW_SHOWN);
       if (outcome === "declined")
@@ -1538,7 +1622,7 @@ export class McpInvestmentsTools {
           "Cancelled: the confirmation was declined, so the security was not deleted.",
         );
       await this.securitiesService.remove(userId, preview.securityId);
-      this.writeLimiter.record(userId, "delete_security");
+      await this.writeLimiter.record(userId, "delete_security");
       return toolResult({ id: preview.securityId, deleted: true, count: 1 });
     }
 
@@ -1551,20 +1635,17 @@ export class McpInvestmentsTools {
         `None of the securities could be prepared.${describeSkippedRows(prep.skipped, items.length)}`,
       );
     }
-    const budget = this.writeLimiter.reserve(userId, prep.okPreviews.length);
+    const budget = await this.writeLimiter.reserve(
+      userId,
+      prep.okPreviews.length,
+    );
     if (budget) return budget;
 
     if (approvalMode === "individual") {
       const cards = prep.okPreviews.map((p) =>
         this.actionBuilder.buildDeleteSecurity(userId, p),
       );
-      return this.runSecIndividual(
-        server,
-        userId,
-        cards,
-        requestId,
-        prep.skipped,
-      );
+      return this.runSecIndividual(server, ctx, userId, cards, prep.skipped);
     }
 
     const action = this.actionBuilder.buildBatchActions(
@@ -1573,14 +1654,19 @@ export class McpInvestmentsTools {
       prep.okRows,
       prep.previewRows,
     );
-    if (emitRelayCard(this.relayService, userId, action)) {
+    if (
+      !ctx.mcpReq.requestState() &&
+      (await emitRelayCard(this.relayService, userId, action))
+    ) {
       return toolResult(RELAY_PREVIEW_SHOWN);
     }
     const confirmation = await confirmWrite(
       server,
+      ctx,
       `Delete ${prep.okPreviews.length} security/securities?${prep.skipped.length ? ` (${prep.skipped.length} skipped)` : ""}`,
-      requestId as never,
+      action.descriptor,
     );
+    if (isAsk(confirmation)) return confirmation.ask;
     if (confirmation === "declined")
       return toolError(
         "Cancelled: the confirmation was declined, so nothing was deleted.",
@@ -1589,7 +1675,7 @@ export class McpInvestmentsTools {
     for (const preview of prep.okPreviews) {
       await this.securitiesService.remove(userId, preview.securityId);
       ids.push(preview.securityId);
-      this.writeLimiter.record(userId, "delete_security");
+      await this.writeLimiter.record(userId, "delete_security");
     }
     return toolResult({ ids, count: ids.length, skipped: prep.skipped });
   }
@@ -1603,7 +1689,7 @@ export class McpInvestmentsTools {
       exchange: string | null;
       currencyCode: string;
       isFavourite: boolean;
-      quoteProvider: "yahoo" | "msn" | null;
+      quoteProvider: "yahoo" | "msn" | "lse" | "deutsche_boerse" | null;
       msnInstrumentId: string | null;
     },
   ) {
@@ -1617,7 +1703,7 @@ export class McpInvestmentsTools {
       quoteProvider: preview.quoteProvider ?? undefined,
       msnInstrumentId: preview.msnInstrumentId ?? undefined,
     });
-    this.writeLimiter.record(userId, "create_security");
+    await this.writeLimiter.record(userId, "create_security");
     return security;
   }
 
@@ -1645,7 +1731,7 @@ export class McpInvestmentsTools {
         assetWeightings: preview.assetWeightings ?? [],
       },
     );
-    this.writeLimiter.record(userId, "update_security");
+    await this.writeLimiter.record(userId, "update_security");
     return security;
   }
 
@@ -1655,25 +1741,31 @@ export class McpInvestmentsTools {
    */
   private async runSecIndividual(
     server: McpServer,
+    ctx: ServerContext,
     userId: string,
     cards: PendingAiAction[],
-    requestId: unknown,
     skipped: { index: number; reason: string }[],
   ) {
-    if (emitRelayCard(this.relayService, userId, cards[0])) {
+    if (
+      !ctx.mcpReq.requestState() &&
+      (await emitRelayCard(this.relayService, userId, cards[0]))
+    ) {
       for (let i = 1; i < cards.length; i++) {
-        emitRelayCard(this.relayService, userId, cards[i]);
+        await emitRelayCard(this.relayService, userId, cards[i]);
       }
       return toolResult(RELAY_PREVIEW_SHOWN);
     }
+    // Every card is asked in ONE round: a round per card would be 25 rounds on
+    // a full batch, and a multi-round-trip flow is two.
+    const answers = await confirmWriteMany(
+      server,
+      ctx,
+      confirmItemsForCards(cards, (card) => this.secConfirmLineFor(card)),
+    );
+    if (!(answers instanceof Map)) return answers.ask;
     const ids: string[] = [];
-    for (const card of cards) {
-      const confirmation = await confirmWrite(
-        server,
-        this.secConfirmLineFor(card),
-        requestId as never,
-      );
-      if (confirmation === "declined") continue;
+    for (const [index, card] of cards.entries()) {
+      if (answers.get(cardKey(index)) === "declined") continue;
       const id = await this.commitSecCard(userId, card);
       if (id) ids.push(id);
     }
@@ -1709,7 +1801,7 @@ export class McpInvestmentsTools {
       }
       case "delete_security": {
         await this.securitiesService.remove(userId, d.securityId);
-        this.writeLimiter.record(userId, "delete_security");
+        await this.writeLimiter.record(userId, "delete_security");
         return d.securityId;
       }
       default:

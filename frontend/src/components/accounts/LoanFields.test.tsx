@@ -64,7 +64,8 @@ const mockAccounts: Account[] = [
     isFavourite: false, favouriteSortOrder: 0, excludeFromNetWorth: false, paymentAmount: null, paymentFrequency: null, paymentStartDate: null,
     sourceAccountId: null, principalCategoryId: null, interestCategoryId: null, overpaymentCategoryId: null, overpaymentMemo: null, overpaymentPayeeId: null, fxFeePercent: null,
     scheduledTransactionId: null, assetCategoryId: null, dateAcquired: null, linkedLoanAccountId: null,
-    isCanadianMortgage: false, isVariableRate: false, termMonths: null, termEndDate: null,
+    mortgageType: 'ANNUITY',
+    termMonths: null, termEndDate: null,
     amortizationMonths: null, originalPrincipal: null,
     statementDueDay: null, statementSettlementDay: null,
     createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',
@@ -74,7 +75,7 @@ const mockAccounts: Account[] = [
 const mockCategories: Category[] = [
   {
     id: 'cat-1', userId: 'user-1', parentId: null, parent: null, children: [],
-    name: 'Interest Expenses', description: null, icon: null, color: null, effectiveColor: null, effectiveIcon: null,
+    name: 'Interest Expenses', description: null, icon: null, color: null, effectiveColor: null, effectiveIcon: null, autoSign: null, effectiveAutoSign: true,
     isIncome: false, isSystem: false, createdAt: '2024-01-01T00:00:00Z',
   },
 ];
@@ -122,10 +123,10 @@ describe('LoanFields', () => {
   it('renders the heading and all form fields', () => {
     render(<LoanFields {...defaultProps} />);
     expect(screen.getByText('Loan Payment Details')).toBeInTheDocument();
-    expect(screen.getByText('Payment Amount (required)')).toBeInTheDocument();
-    expect(screen.getByText('Payment Frequency (required)')).toBeInTheDocument();
-    expect(screen.getByText('First Payment Date (required)')).toBeInTheDocument();
-    expect(screen.getByText('Payment From Account (required)')).toBeInTheDocument();
+    expect(screen.getByText('Payment Amount')).toBeInTheDocument();
+    expect(screen.getByText('Payment Frequency')).toBeInTheDocument();
+    expect(screen.getByText('First Payment Date')).toBeInTheDocument();
+    expect(screen.getByText('Payment From Account')).toBeInTheDocument();
     expect(screen.getByText('Interest Category')).toBeInTheDocument();
   });
 
@@ -140,7 +141,7 @@ describe('LoanFields', () => {
 
   it('renders accounts in the source account select', () => {
     render(<LoanFields {...defaultProps} />);
-    const sourceAccountSelect = screen.getByLabelText('Payment From Account (required)');
+    const sourceAccountSelect = screen.getByLabelText('Payment From Account');
     const options = sourceAccountSelect.querySelectorAll('option');
     expect(options[0].textContent).toBe('Select account...');
     expect(options[1].textContent).toBe('Main Chequing (CAD)');
@@ -281,7 +282,7 @@ describe('LoanFields', () => {
     ] as any[];
 
     render(<LoanFields {...defaultProps} accounts={multipleAccounts} />);
-    const sourceSelect = screen.getByLabelText('Payment From Account (required)');
+    const sourceSelect = screen.getByLabelText('Payment From Account');
     const options = sourceSelect.querySelectorAll('option');
     // First option is placeholder
     expect(options[0].textContent).toBe('Select account...');

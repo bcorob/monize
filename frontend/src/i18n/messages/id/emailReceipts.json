@@ -1,0 +1,1457 @@
+{
+  "settingsPage": {
+    "redirecting": "Membuka halaman Struk Surel...",
+    "redirectLink": "Buka pengaturan kotak surel"
+  },
+  "page": {
+    "title": "Struk Surel",
+    "subtitle": "Baca konfirmasi pesanan dari kotak surel dan ubah menjadi transaksi dengan rincian item: apa yang terhubung, apa yang terjadi pada setiap surel, dan apa yang menunggu Anda"
+  },
+  "mailbox": {
+    "heading": "Kotak surel",
+    "description": "Konfirmasi pesanan dibaca dari kotak surel khusus melalui IMAP. Monize hanya membacanya: tidak pernah mengubah, memindahkan, atau menghapus pesan apa pun.",
+    "loading": "Memuat kotak surel",
+    "dedicatedWarning": "Gunakan kotak surel khusus. Setiap pesan di folder akan dibaca, jadi folder itu sebaiknya hanya berisi konfirmasi pesanan.",
+    "encryptionUnavailable": "Server ini tidak dapat mengenkripsi rahasia, sehingga kata sandi atau koneksi kotak surel tidak dapat disimpan. Minta administrator untuk menyiapkan enkripsi.",
+    "error": {
+      "title": "Kotak surel tidak dapat dimuat",
+      "body": "Permintaan gagal, jadi belum ada yang diketahui tentang kotak surel Anda. Coba lagi.",
+      "retry": "Coba lagi"
+    },
+    "oauth": {
+      "heading": "Hubungkan akun",
+      "explanation": "Google dan Microsoft 365 biasanya menolak kata sandi biasa. Masuklah melalui penyedia: Anda memberi Monize akses ke kotak surel tanpa perlu mengetik kata sandinya di sini.",
+      "connect": {
+        "google": "Hubungkan dengan Google",
+        "microsoft": "Hubungkan dengan Microsoft"
+      },
+      "providerNames": {
+        "google": "Google",
+        "microsoft": "Microsoft 365"
+      },
+      "providersUnavailable": "Tidak dapat memeriksa apakah masuk dengan Google atau Microsoft tersedia. Formulir manual di bawah tetap dapat digunakan.",
+      "startFailed": "Tidak dapat memulai proses masuk",
+      "badAuthorizationUrl": "Server mengembalikan alamat masuk yang bukan halaman web aman, sehingga tidak dibuka.",
+      "connectedAs": "Terhubung ke {provider} sebagai {username}.",
+      "notConnected": "Koneksi ke {provider} tidak aktif, sehingga kotak surel tidak dibaca. Hubungkan kembali untuk melanjutkan.",
+      "reconnect": "Hubungkan kembali",
+      "disconnect": "Putuskan",
+      "disconnectDialog": {
+        "title": "Putuskan kotak surel?",
+        "message": "Monize akan menghapus akses tersimpan ke {provider} dan berhenti membaca kotak surel. Surel yang sudah tersimpan tetap disimpan."
+      },
+      "disconnected": "Kotak surel diputuskan",
+      "disconnectFailed": "Kotak surel tidak dapat diputuskan",
+      "revokeNote": "Memutuskan koneksi tidak mencabut izin yang telah Anda berikan. Untuk mencabutnya, hapus Monize di halaman izin {provider}.",
+      "revokeLink": {
+        "google": "Buka izin akun Google",
+        "microsoft": "Buka izin aplikasi Microsoft"
+      },
+      "saveButton": "Simpan pengaturan",
+      "saved": "Pengaturan kotak surel disimpan",
+      "saveFailed": "Pengaturan kotak surel tidak dapat disimpan"
+    },
+    "form": {
+      "intro": "Atau masukkan detail kotak surel IMAP apa pun. Sebagian besar penyedia memerlukan kata sandi aplikasi, bukan kata sandi akun Anda.",
+      "hostLabel": "Server IMAP",
+      "portLabel": "Port",
+      "securityLabel": "Keamanan koneksi",
+      "securityOptions": {
+        "tls": "TLS (biasanya port 993)",
+        "starttls": "STARTTLS (biasanya port 143)"
+      },
+      "usernameLabel": "Nama pengguna",
+      "passwordLabel": "Kata sandi",
+      "passwordStoredPlaceholder": "Kata sandi sudah tersimpan. Ketik untuk menggantinya.",
+      "passwordRequiredHelp": "Wajib untuk kotak surel baru, atau saat server atau nama pengguna berubah.",
+      "passwordKeepHelp": "Kosongkan untuk mempertahankan kata sandi yang tersimpan. Kata sandi tidak akan ditampilkan lagi.",
+      "saveButton": "Simpan kotak surel",
+      "saved": "Kotak surel disimpan",
+      "saveFailed": "Kotak surel tidak dapat disimpan",
+      "test": {
+        "button": "Uji koneksi",
+        "ok": "{count, plural, one {Koneksi berfungsi. Folder berisi # pesan.} other {Koneksi berfungsi. Folder berisi # pesan.}}",
+        "error": "Koneksi gagal: {error}",
+        "failed": "Koneksi tidak dapat diuji"
+      }
+    },
+    "settings": {
+      "folderLabel": "Folder",
+      "folderHelp": "Folder yang dibaca. Folder dibuka dalam mode hanya baca.",
+      "enabledLabel": "Baca kotak surel secara otomatis",
+      "enabledHelp": "Hanya mengatur pembacaan otomatis: saat aktif, Monize membaca kotak surel setiap 15 menit. Menonaktifkannya tidak memutus koneksi kotak surel, dan Periksa sekarang membaca kotak surel baik pengaturan ini aktif maupun tidak.",
+      "aiModeLabel": "Mode AI",
+      "aiModeHelp": "Apakah pemeriksaan boleh memakai penyedia AI yang Anda atur untuk struk. Kenali dengan AI dan Siapkan profil dengan AI meminta asisten di obrolan apa pun modenya, dan jawaban AI selalu berupa usulan atau draf yang Anda setujui.",
+      "aiModes": {
+        "off": "Nonaktif",
+        "on_demand": "Sesuai permintaan",
+        "automatic": "Otomatis"
+      },
+      "aiModeDescriptions": {
+        "off": "Pemeriksaan tidak pernah memanggil AI untuk struk.",
+        "on_demand": "Pemeriksaan tidak pernah memanggil AI. Anda sendiri yang meminta asisten dengan Kenali dengan AI atau Siapkan profil dengan AI.",
+        "automatic": "Pemeriksaan meminta AI menangani struk yang cocok yang tidak dapat dibaca lengkap oleh profil yang disetujui mana pun, dan membuat draf profil untuk pengirim yang belum memilikinya."
+      },
+      "autoApplyLabel": "Terapkan usulan secara otomatis",
+      "autoApplyHelp": "Nonaktif secara default. Usulan diterapkan tanpa bertanya hanya jika semua hal berikut terpenuhi: profil yang disetujui membaca seluruh surel, transaksi ditemukan lewat nomor pesanan atau referensi, atau lewat jumlah dan penerima yang persis sama, dengan satu kandidat saja, dan usulan itu pas sampai ke sen. Konfirmasi perdagangan dicatat tanpa bertanya hanya jika profil perdagangannya sudah disetujui, profil itu membaca seluruh perdagangan, harganya cocok dengan jumlah saham dan total (dividen tunai yang hanya menyebut jumlahnya tidak memiliki apa pun untuk diperiksa), dan akun Anda belum memuat perdagangan yang sama. Semua yang lain menunggu persetujuan Anda.",
+      "profileLimitLabel": "Hitung usulan profil dalam batas harian AI",
+      "profileLimitHelp": "Aktif secara default: perubahan yang diusulkan profil dari sebuah surel dihitung dalam batas harian perubahan yang diusulkan AI, seperti usulan AI lainnya. Nonaktifkan bila satu kelompok besar surel tersimpan akan menghabiskan batas. Hanya usulan dari profil yang dikecualikan; setiap usulan tetap menunggu persetujuan Anda."
+    },
+    "status": {
+      "lastPolled": "Pemeriksaan terakhir",
+      "lastSuccess": "Pemeriksaan berhasil terakhir",
+      "never": "Belum pernah",
+      "lastError": "Kesalahan terakhir: {error}",
+      "lastErrorAt": "Kesalahan terakhir ({at}): {error}",
+      "pollNow": "Periksa sekarang",
+      "pollResult": "Pemeriksaan selesai: {fetched, plural, one {# surel disimpan} other {# surel disimpan}}, {skipped} dilewati, {processed} diproses.",
+      "pollResultLink": "Lihat surel yang disimpan",
+      "pollFailed": "Pemeriksaan gagal",
+      "deleteButton": "Hapus kotak surel",
+      "deleteDialog": {
+        "title": "Hapus kotak surel?",
+        "message": "Pengaturan kotak surel dan semua surel yang tersimpan akan dihapus, dan permintaan peninjauan terbuka dari surel tersebut diabaikan. Surel di kotak surel itu sendiri tidak disentuh."
+      },
+      "deleted": "Kotak surel dihapus",
+      "deleteFailed": "Kotak surel tidak dapat dihapus"
+    },
+    "import": {
+      "title": "Impor email yang diarsipkan",
+      "description": "File menyimpan pengirim dan tanggal pembelian dari toko, tidak seperti email yang diteruskan. Unggah email yang diekspor untuk membaca konfirmasi pesanan lama.",
+      "fileLabel": "File email (.eml, .mbox, .msg, atau .zip)",
+      "chooseFiles": "Pilih file",
+      "noFileChosen": "Belum ada file yang dipilih",
+      "selected": "Dipilih: {count}",
+      "button": "Impor",
+      "preparing": "Menyiapkan file...",
+      "sending": "Mengirim bagian {current} dari {total}",
+      "processing": "Memproses email: {done} dari {total}",
+      "cancel": "Batal",
+      "tooLargeTotal": "File yang dipilih bersama-sama lebih besar dari {max}. Impor dalam kelompok yang lebih kecil.",
+      "failed": "Impor gagal",
+      "result": {
+        "heading": "Hasil impor",
+        "file": "{name}: {stored} disimpan, {duplicates} duplikat, {skipped} dilewati",
+        "summary": "{processed, plural, other {# email yang menunggu telah diproses.}}",
+        "pendingLeft": "{count, plural, other {# email masih menunggu untuk diproses. Monize memprosesnya saat kotak surat dibaca berikutnya.}}",
+        "processFailed": "{count, plural, other {# email tidak dapat diproses.}}",
+        "processingStopped": "Pemrosesan email yang diimpor berhenti. Email tetap tersimpan. Monize memprosesnya saat kotak surat dibaca berikutnya.",
+        "truncated": "{count} pesan tidak dibaca karena satu impor memiliki batas. Impor lagi dalam proses kedua.",
+        "oversized": "{name}: {count} pesan yang lebih besar dari {max} tidak dikirim.",
+        "stopped": "Impor berhenti setelah {done} dari {total} bagian. Email yang sudah diimpor tetap tersimpan. Impor file yang sama lagi untuk melanjutkan. Email yang sudah diimpor tidak disimpan dua kali.",
+        "cancelled": "Impor dibatalkan setelah {done} dari {total} bagian. Email yang sudah diimpor tetap tersimpan.",
+        "errors": {
+          "unsupported_format": "{name}: format ini tidak didukung. Format yang didukung adalah .eml, .mbox, .msg, dan .zip.",
+          "invalid_archive": "{name}: file ZIP rusak atau tidak dapat dibaca.",
+          "archive_too_large": "{name}: file ZIP melebihi batas impor setelah diekstrak. Ekstrak file tersebut dan unggah file .mbox di dalamnya.",
+          "empty": "{name}: file tidak berisi email."
+        },
+        "ignored": "{name}: {count} file lain di arsip dilewati."
+      },
+      "guide": {
+        "toggle": "Cara mengekspor email dari penyedia Anda",
+        "gmailLabel": {
+          "title": "Gmail: semua email dengan label",
+          "step1": "Buka takeout.google.com dan pilih \"Deselect all\".",
+          "step2": "Pilih \"Mail\" dan pilih \"All Mail data included\".",
+          "step3": "Pilih hanya label Anda dan buat ekspor.",
+          "step4": "Unggah file .zip yang diunduh apa adanya, seberapa pun besarnya. Anda tidak perlu mengekstraknya."
+        },
+        "gmailOne": {
+          "title": "Gmail: satu email",
+          "step1": "Buka email.",
+          "step2": "Pilih \"Lainnya\", lalu \"Download pesan\".",
+          "step3": "Unggah file .eml."
+        },
+        "imap": {
+          "title": "Penyedia lain: Outlook.com, Yahoo, Onet, WP, Interia, o2, iCloud, Zoho",
+          "step1": "Tambahkan kotak surat ke Thunderbird melalui IMAP dan pasang add-on ImportExportTools NG.",
+          "step2": "Pilih email atau folder, lalu klik kanan.",
+          "step3": "Pilih ImportExportTools NG, lalu ekspor sebagai EML atau mbox.",
+          "step4": "Unggah file."
+        },
+        "outlook": {
+          "title": "Outlook desktop",
+          "body": "Pilih email dan seret ke folder di disk Anda. Outlook menulis file .msg. Unggah beberapa sekaligus atau dikemas dalam satu file .zip."
+        },
+        "apple": {
+          "title": "Apple Mail",
+          "step1": "Pilih \"Mailbox\", lalu \"Export Mailbox\". Apple Mail menulis sebuah folder.",
+          "step2": "Unggah file bernama mbox di dalam folder, atau seret email ke Finder untuk mendapatkan file .eml."
+        },
+        "tip": "Tips: meneruskan email dengan skrip menghilangkan pengirim dan tanggal toko. Mengimpor file mempertahankannya."
+      }
+    }
+  },
+  "parsers": {
+    "heading": "Profil",
+    "description": "Profil membaca konfirmasi pesanan dari satu pengirim dengan pola yang Anda tulis atau tinjau, dan menentukan cara transaksi bank ditemukan. Setelah disetujui, profil berjalan tanpa AI.",
+    "newButton": "Buat profil baru secara manual",
+    "loading": "Memuat profil",
+    "error": {
+      "title": "Profil tidak dapat dimuat",
+      "body": "Permintaan gagal. Coba lagi.",
+      "retry": "Coba lagi"
+    },
+    "empty": {
+      "title": "Belum ada profil",
+      "body": "Buat satu untuk pengirim konfirmasi pesanan, atau buat drafnya dari surel tersimpan di halaman Struk Surel."
+    },
+    "columns": {
+      "name": "Profil",
+      "status": "Status",
+      "payee": "Penerima",
+      "actions": "Tindakan"
+    },
+    "status": {
+      "draft": "Draf",
+      "approved": "Disetujui"
+    },
+    "source": {
+      "manual": "Ditulis oleh Anda",
+      "ai": "Dibuat drafnya oleh AI"
+    },
+    "invalid": "Tidak valid",
+    "noPayee": "Tanpa penerima",
+    "payeeUnknown": "Penerima tidak ditemukan",
+    "payeeUnavailable": "Daftar penerima tidak tersedia",
+    "actions": {
+      "approve": "Setujui",
+      "viewJson": "Lihat JSON"
+    },
+    "toasts": {
+      "approved": "Profil disetujui",
+      "approveFailed": "Profil tidak dapat disetujui",
+      "changedElsewhere": "Profil ini diubah di tempat lain. Daftar telah dimuat ulang.",
+      "deleted": "Profil dihapus",
+      "deleteFailed": "Profil tidak dapat dihapus",
+      "emailsIgnored": "{count, plural, other {# surel diabaikan}}",
+      "emailsDeleted": "{count, plural, other {# surel dihapus}}",
+      "bulkFailed": "Tidak dapat menyelesaikan surel profil ini. Surel yang sudah ditangani tetap seperti itu."
+    },
+    "bulk": {
+      "ignoreTitle": "Abaikan surel profil ini?",
+      "ignoreMessage": "{count, plural, other {# surel}} yang dibaca {name} akan diabaikan: surel tersebut tidak mengusulkan apa pun, dan usulan terbukanya ditutup.{kept, plural, =0 {} other { # surel yang sudah diterapkan atau tidak dapat dibaca tetap seperti semula.}}",
+      "ignoreConfirm": "Abaikan surel",
+      "deleteTitle": "Hapus surel profil ini?",
+      "deleteMessage": "{count, plural, other {# surel}} yang dibaca {name} akan dihapus beserta usulan terbukanya. Tindakan ini tidak dapat dibatalkan.{kept, plural, =0 {} other { # surel yang usulannya sudah diterapkan tetap ada.}}",
+      "deleteConfirm": "Hapus surel"
+    },
+    "deleteDialog": {
+      "title": "Hapus profil?",
+      "message": "Profil {name} akan dihapus. Surel yang sudah dibacanya tetap mempertahankan hasilnya."
+    },
+    "jsonDialog": {
+      "title": "Definisi {name}",
+      "help": "Definisi profil sebagaimana tersimpan. Bagian pencocokan menampilkan pengaturan yang berlaku, termasuk nilai default. Di sini hanya bisa dibaca; gunakan Edit untuk mengubahnya.",
+      "contentLabel": "JSON definisi",
+      "copy": "Salin",
+      "copied": "JSON disalin",
+      "copyFailed": "Tidak dapat menyalin JSON"
+    },
+    "processOffer": {
+      "title": "Proses surel tersimpan sekarang?",
+      "message": "Proses {count, plural, one {# surel tersimpan} other {# surel tersimpan}} dari {domains} sekarang? Setiap surel dibaca ulang dengan profil ini; usulannya menunggu di kotak masuk peninjauan kecuali terapkan otomatis aktif.",
+      "confirm": "Proses sekarang",
+      "later": "Nanti saja"
+    },
+    "reparse": "Urai ulang surel ({count})",
+    "kindTrade": "Transaksi pialang",
+    "discardIgnore": "Mengabaikan surelnya",
+    "discardDelete": "Menghapus surelnya"
+  },
+  "editor": {
+    "createTitle": "Profil baru",
+    "editTitle": "Edit profil",
+    "loading": "Memuat penerima, kategori, akun, dan mata uang",
+    "lookupsError": {
+      "title": "Penerima, kategori, akun, atau mata uang tidak dapat dimuat",
+      "body": "Pemilih memerlukannya, sehingga editor belum dapat dibuka. Coba lagi.",
+      "retry": "Coba lagi"
+    },
+    "draftNote": "Profil ini adalah draf. Profil ini tidak membaca apa pun sampai Anda menyetujuinya.",
+    "draftAiNote": "AI membuat draf profil ini dari surel contoh Anda. Uji terhadap masing-masing surel dan periksa setiap pola, lalu setujui dari daftar. Profil ini tidak membaca apa pun sampai Anda melakukannya.",
+    "identityHeading": "Surel yang dibacanya",
+    "nameLabel": "Nama",
+    "payeeLabel": "Penerima",
+    "payeePlaceholder": "Tanpa penerima",
+    "domainsLabel": "Domain pengirim",
+    "domainsHelp": "Satu per baris, hingga {max}. Subdomain dari domain yang tercantum juga cocok.",
+    "subjectLabel": "Subjek mengandung",
+    "subjectHelp": "Opsional, satu per baris, hingga {max}. Subjek harus mengandung setidaknya salah satunya, tanpa membedakan huruf besar dan kecil.",
+    "saveButton": "Simpan profil",
+    "created": "Profil dibuat",
+    "updated": "Profil disimpan",
+    "saveFailed": "Profil tidak dapat disimpan",
+    "conflict": "Profil ini diubah di tempat lain sejak Anda membukanya. Muat ulang untuk melihat versi saat ini. Perubahan Anda di sini tidak tersimpan.",
+    "conflictReload": "Muat ulang profil",
+    "required": {
+      "heading": "Profil belum dapat disimpan. Perbaiki ini terlebih dahulu:",
+      "item": "{field}: {problem}",
+      "nameMissing": "Masukkan nama untuk profil.",
+      "domainsMissing": "Masukkan setidaknya satu domain pengirim, misalnya shop.example.com.",
+      "domainsInvalid": "Bukan nama domain: {values}. Masukkan domain seperti shop.example.com, satu per baris.",
+      "domainsTooMany": "Masukkan paling banyak {max} domain pengirim.",
+      "subjectTooMany": "Masukkan paling banyak {max} kata subjek.",
+      "subjectTooLong": "Setiap kata subjek paling panjang {max} karakter.",
+      "server": "Server menolak kolom ini. Alasannya ada di bawah formulir."
+    },
+    "patterns": {
+      "sourceLabel": "Sumber baris",
+      "sourceHint": "Tampilan surel mana yang dicocokkan dengan pola di bawah. Teks adalah bagian teks surel, satu baris untuk setiap pergantian baris. HTML membaca bagian HTML: setiap blok dan setiap sel tabel menjadi barisnya sendiri, sehingga nama produk yang dipecah teks menjadi beberapa baris tetap utuh. Tampilan Baris pada surel menunjukkan persis apa yang dihasilkan tiap sumber.",
+      "sourceOptions": {
+        "text": "Teks",
+        "html": "HTML"
+      },
+      "globHelp": "Setiap pola dicocokkan dengan satu baris penuh pada surel, tanpa membedakan huruf besar dan kecil. Gunakan {star} untuk teks apa pun dan sebuah nama dalam kurung kurawal, seperti {capture}, untuk menangkap nilai. Setiap bidang menerima hingga {max} pola, satu per baris. Untuk mencocokkan baris yang berurutan, gabungkan satu pola per baris dengan {lineBreak}, misalnya {example}.",
+      "orderIdLabel": "Pola nomor pesanan",
+      "orderIdHint": "Harus menangkap {capture}. Contoh: Nomor pesanan: {capture}",
+      "totalLabel": "Pola total",
+      "amountHint": "Harus menangkap {capture}. Contoh: Total pesanan {capture}",
+      "shippingLabel": "Pola ongkos kirim",
+      "discountLabel": "Pola diskon",
+      "feesLabel": "Pola biaya",
+      "itemsHeading": "Baris item",
+      "startAfterLabel": "Item dimulai setelah",
+      "startAfterHint": "Opsional. Item dibaca dari baris setelah baris pertama yang mengandung teks ini.",
+      "stopAtLabel": "Item berhenti di",
+      "stopAtHint": "Opsional. Item berakhir sebelum baris pertama yang mengandung teks ini.",
+      "itemPatternsLabel": "Pola item",
+      "itemPatternsHint": "Harus menangkap {name} dan salah satu dari {amount} (total baris) atau {price} (harga satuan, boleh disertai {qty}), tidak boleh keduanya. Contoh: {name} x {qty} {price}"
+    },
+    "categories": {
+      "heading": "Kategori",
+      "help": "Ketik nama kategori dan pilih dari daftar. Nama disimpan di profil, dan kategori harus sudah ada saat profil disimpan.",
+      "categoryPlaceholder": "Tanpa kategori",
+      "defaultLabel": "Kategori default",
+      "defaultHelp": "Digunakan untuk item yang tidak cocok dengan aturan mana pun.",
+      "shippingLabel": "Kategori ongkos kirim",
+      "shippingHelp": "Kategori untuk baris ongkos kirim.",
+      "feesLabel": "Kategori biaya",
+      "feesHelp": "Kategori untuk baris biaya.",
+      "unknownCategory": "Tidak ada kategori bernama {name}. Pilih satu dari daftar, atau buat terlebih dahulu.",
+      "rulesInJson": "Aturan kategori berdasarkan nama item adalah opsi lanjutan: tambahkan ke definisi profil dalam mode JSON."
+    },
+    "mode": {
+      "label": "Mode pengeditan",
+      "form": "Formulir",
+      "json": "JSON",
+      "formUnavailable": "Definisi ini menggunakan sesuatu yang tidak dapat ditampilkan formulir: entri berlabel, item multibaris, atau kunci yang tidak punya bidang. Edit sebagai JSON.",
+      "jsonInvalid": "JSON belum valid, jadi formulir tidak dapat ditampilkan. Perbaiki dahulu."
+    },
+    "json": {
+      "label": "Definisi profil (JSON)",
+      "help": "Definisi yang sama dengan yang dibuat formulir. Server memeriksanya saat Anda menyimpan, dan pengujian di bawah membacanya sebagaimana adanya sekarang.",
+      "parseError": "Ini bukan JSON yang valid, atau bukan objek JSON. Perbaiki agar profil dapat disimpan atau diuji."
+    },
+    "matching": {
+      "heading": "Pencocokan",
+      "help": "Cara menemukan transaksi bank yang dibayar oleh sebuah surel. Strategi dicoba berurutan; strategi pertama yang menyisakan tepat satu transaksi menentukan, jika beberapa tersisa maka ambigu, dan jika tidak ada yang tersisa maka lanjut ke strategi berikutnya.",
+      "instruction": "Yang terbaik adalah nomor referensi yang diambil dari deskripsi transaksi bank. Jika tidak ada, tanggal dan jumlah yang dipakai. Secara default strategi dicoba dengan urutan ini: referensi (jika profil memiliki pola referensi), nomor pesanan, jumlah dan penerima, jumlah dan tanggal.",
+      "referenceLabel": "Pola referensi",
+      "referenceHint": "Pengenal yang dimasukkan toko atau gerbang pembayaran ke dalam operasi bank, seperti teks rekening koran atau judul transfer. Harus menangkap {capture}.",
+      "strategiesLabel": "Strategi, menurut urutan dicoba",
+      "strategiesHelp": "Nomor pesanan dan referensi mencari nilainya di deskripsi, penerima, atau nomor referensi transaksi. Jumlah dan penerima membutuhkan jumlah ditambah petunjuk penerima. Jumlah dan tanggal hanya membutuhkan jumlah, dalam rentang waktu. Setidaknya satu harus tetap aktif.",
+      "strategyPosition": "{position}. {name}",
+      "moveUp": "Pindahkan {name} lebih awal",
+      "moveDown": "Pindahkan {name} lebih akhir",
+      "strategies": {
+        "reference": "Referensi",
+        "orderId": "Nomor pesanan",
+        "amount_payee": "Jumlah dan penerima",
+        "amount_date": "Jumlah dan tanggal"
+      },
+      "referenceNeeded": "Strategi referensi aktif tetapi tidak ada pola referensi, sehingga tidak akan menemukan apa pun.",
+      "referenceInLabel": "Cari referensi dan nomor pesanan di",
+      "referenceInHint": "Nilai yang lebih pendek dari 4 karakter tidak pernah dicari.",
+      "referenceIn": {
+        "description": "Deskripsi",
+        "payee": "Nama penerima",
+        "referenceNumber": "Nomor referensi"
+      },
+      "daysBeforeLabel": "Jumlah hari sebelum pembelian",
+      "daysAfterLabel": "Jumlah hari setelah pembelian",
+      "daysHint": "Rentang waktu di sekitar tanggal pembelian. Default {default}, maksimal {max}.",
+      "toleranceLabel": "Toleransi jumlah",
+      "toleranceHint": "Seberapa jauh jumlah di bank boleh berbeda dari total surel. Default 0, maksimal {max}."
+    },
+    "proposal": {
+      "heading": "Usulan",
+      "tagLabel": "Tambahkan tag ke transaksi yang dikategorikan profil ini",
+      "tagHelp": "Tag dibuat jika Anda belum memiliki tag dengan nama itu. Tag ditampilkan pada usulan, dan tidak ada yang ditulis sampai Anda menyetujuinya.",
+      "tagNameLabel": "Nama tag",
+      "aiCategoriesLabel": "Biarkan AI memilih kategori item yang tidak cocok dengan aturan apa pun",
+      "aiCategoriesHelp": "Jika sebuah item tidak cocok dengan aturan kategori mana pun dan tidak ada kategori default, AI diminta memilih kategorinya dari daftar kategori Anda. Pilihan itu ditandai sebagai pilihan AI pada usulan. Jika ini dimatikan, AI tidak pernah ditanya."
+    },
+    "kind": {
+      "label": "Jenis profil",
+      "receipt": "Tanda terima pesanan",
+      "trade": "Transaksi pialang",
+      "receiptHelp": "Membaca konfirmasi pesanan dan menemukan transaksi bank yang membayarnya.",
+      "tradeHelp": "Membaca konfirmasi transaksi dari pialang dan mengusulkan transaksi investasi yang dilaporkannya: pembelian, penjualan, dividen tunai, atau dividen yang diinvestasikan kembali."
+    },
+    "trade": {
+      "guardsHeading": "Surel pengirim mana yang dibacanya",
+      "guardsHelp": "Opsional. Setiap pola dicocokkan dengan satu baris utuh surel, satu pola per baris.",
+      "guards": {
+        "requireLine": "Baris wajib",
+        "requireLineHint": "Profil membaca surel hanya jika salah satu baris ini ada di dalamnya; jika tidak, profil berikutnya untuk pengirim dicoba.",
+        "skipIfLine": "Baris yang membuat surel dilewati",
+        "skipIfLineHint": "Surel dengan salah satu baris ini disisihkan, misalnya pesanan yang dibatalkan.",
+        "waitIfLine": "Baris yang menahan surel",
+        "waitIfLineHint": "Surel dengan salah satu baris ini ditahan dan dibaca lagi nanti, misalnya eksekusi sebagian."
+      },
+      "fieldsHeading": "Transaksinya",
+      "fieldsHelp": "Jenis transaksi, kode saham, dan total atau harga wajib ada, begitu juga jumlah saham kecuali untuk dividen tunai. Jenisnya dibaca dari teksnya: Dividend atau Distribution adalah dividen tunai, Reinvest atau DRIP dividen yang diinvestasikan kembali, selain itu Buy atau Sell. Setiap kolom menerima pola, satu per baris, dicoba berurutan.",
+      "fields": {
+        "tradeAction": "Pola jenis transaksi",
+        "tradeSymbol": "Pola kode saham",
+        "tradeQuantity": "Pola jumlah saham",
+        "tradeTotal": "Pola total transaksi",
+        "tradePrice": "Pola harga per saham",
+        "tradeCommission": "Pola komisi",
+        "tradeDate": "Pola tanggal transaksi",
+        "tradeAccount": "Pola akun"
+      },
+      "fieldHint": "Harus menangkap {capture}. Contoh: {example}",
+      "amountsHelp": "Total adalah jumlah yang dieksekusi, termasuk komisi untuk pembelian atau dividen yang diinvestasikan kembali; untuk dividen tunai, total adalah jumlah yang dibayarkan. Harga (untuk dividen, jumlah per saham) adalah pemeriksaan silang, dan bersama jumlah saham memberi total jika surel tidak menyebutkannya. Jumlah yang menyebut mata uangnya (US$, C$, USD, €) juga menetapkan mata uang transaksi.",
+      "rulesHeading": "Aturan akun",
+      "rulesHelp": "Ke akun mana transaksi dicatat. Aturan dicoba berurutan terhadap teks akun yang dibaca pola akun, dan aturan pertama yang berlaku menang; {star} adalah teks apa pun. Aturan dengan mata uang hanya berlaku untuk transaksi dalam mata uang itu, jadi dua akun yang ditulis pialang dengan cara sama, seperti RRSP CAD dan RRSP USD yang sama-sama tampil sebagai RRSP, adalah dua aturan dengan teks sama dan mata uang berbeda. Jika surel tidak mencantumkan teks akun, hanya aturan dengan teks {star} yang bisa berlaku. Akun bawaan menangani sisanya.",
+      "currencyOrder": "Mata uang transaksi diambil, berurutan: dari jumlahnya sendiri jika menyebut satu (US$, C$, USD, €), lalu dari penanda mata uang pertama di bawah yang cocok dengan baris surel, lalu dari mata uang sekuritas Anda untuk kode saham itu. Aturan dengan mata uang tidak pernah menebak: jika tidak satu pun dari ketiganya menyebut mata uang, surel menunggu Anda alih-alih dicatat ke salah satu akun.",
+      "ruleMatchLabel": "Teks akun aturan {rule}",
+      "ruleMatchPlaceholder": "Teks akun, misalnya RRSP",
+      "ruleCurrencyLabel": "Mata uang aturan {rule}",
+      "ruleAccountLabel": "Akun aturan {rule}",
+      "ruleMoveUp": "Naikkan aturan {rule}",
+      "ruleMoveDown": "Turunkan aturan {rule}",
+      "ruleRemove": "Hapus aturan {rule}",
+      "ruleAdd": "Tambah aturan akun",
+      "rulesMax": "Paling banyak {max} aturan.",
+      "rulesWithoutAccountText": "Tidak ada pola akun, jadi aturan dicoba terhadap teks kosong: hanya aturan dengan teks {star} yang bisa berlaku.",
+      "anyCurrency": "Mata uang apa pun",
+      "baseCurrency": "{code} (mata uang dasar Anda)",
+      "currencyPlaceholder": "Pilih mata uang",
+      "accountPlaceholder": "Pilih akun",
+      "accountOption": "{name} ({currency})",
+      "accountNotTradableOption": "{name} (bukan akun pialang yang terbuka)",
+      "accountUnknownOption": "Akun yang tidak ada di daftar Anda",
+      "accountNotTradable": "Transaksi tidak dapat dicatat ke akun ini: akun ini ditutup, akun kas, atau bukan akun investasi.",
+      "accountUnknown": "Akun ini tidak ada di daftar Anda: mungkin sudah dihapus. Pilih akun lain.",
+      "defaultAccountLabel": "Akun bawaan",
+      "defaultAccountNone": "Tanpa akun bawaan",
+      "defaultAccountHint": "Akun ketika tidak ada aturan yang berlaku. Tanpanya, surel yang tidak terkena aturan apa pun menunggu Anda.",
+      "markersHeading": "Penanda mata uang",
+      "markersHelp": "Teks yang menyebut mata uang transaksi ketika jumlahnya tidak menyebutkannya, misalnya baris yang menyatakan jumlah dalam dolar AS di samping $ saja. Setiap penanda dicocokkan dengan setiap baris surel ({star} adalah teks apa pun), dan penanda pertama, berurutan, yang cocok menyebut mata uangnya. Penanda hanya dipakai jika jumlah tidak menyebut mata uang.",
+      "markerMatchLabel": "Teks penanda {marker}",
+      "markerMatchPlaceholder": "Misalnya *U.S. dollars*",
+      "markerCurrencyLabel": "Mata uang penanda {marker}",
+      "markerMoveUp": "Naikkan penanda {marker}",
+      "markerMoveDown": "Turunkan penanda {marker}",
+      "markerRemove": "Hapus penanda {marker}",
+      "markerAdd": "Tambah penanda mata uang",
+      "markersMax": "Paling banyak {max} penanda."
+    },
+    "discard": {
+      "label": "Surel yang cocok",
+      "read": "Baca",
+      "ignore": "Abaikan",
+      "delete": "Hapus",
+      "readHelp": "Profil membaca setiap surel yang cocok dengan pola di bawah.",
+      "ignoreHelp": "Setiap surel yang cocok dengan profil ini diabaikan saat tiba: surel tersebut tidak mengusulkan apa pun. Untuk pengirim yang surelnya tidak pernah ingin Anda urus.",
+      "deleteHelp": "Setiap surel yang cocok dengan profil ini dihapus dari Monize saat tiba (tetap ada di kotak surel Anda). Surel yang dihapus tidak dapat dikembalikan.",
+      "noReading": "Profil ini tidak membaca apa pun, jadi tidak memerlukan pola, kategori, atau pencocokan. Domain pengirim dan kata subjek di atas menentukan surel mana yang diambilnya."
+    }
+  },
+  "problems": {
+    "heading": "Definisi profil tidak valid:",
+    "item": "{where}: {problem}",
+    "paths": {
+      "definition": "Definisi",
+      "line": "{field}, baris {line}",
+      "rule": "Aturan kategori {rule}, {part}",
+      "entryPart": "{field}, entri {line}, {part}",
+      "skipLine": "Baris yang dilewati {line}",
+      "recordStep": "Langkah rekaman {step}",
+      "recordStepPart": "Langkah rekaman {step}, {part}",
+      "recordAlternative": "Langkah rekaman {step}, alternatif {alternative}",
+      "accountRule": "Aturan akun {rule}",
+      "accountRulePart": "Aturan akun {rule}, {part}",
+      "currencyMarker": "Penanda mata uang {marker}",
+      "currencyMarkerPart": "Penanda mata uang {marker}, {part}"
+    },
+    "fields": {
+      "orderId": "Pola nomor pesanan",
+      "total": "Pola total",
+      "shipping": "Pola ongkos kirim",
+      "discount": "Pola diskon",
+      "itemPatterns": "Pola item",
+      "startAfter": "Item dimulai setelah",
+      "stopAt": "Item berhenti di",
+      "items": "Baris item",
+      "categoryRules": "Aturan kategori",
+      "rulePattern": "pola",
+      "ruleCategory": "kategori",
+      "defaultCategory": "Kategori default",
+      "shippingCategory": "Kategori ongkos kirim",
+      "feesCategory": "Kategori biaya",
+      "balanceTolerance": "Toleransi saldo",
+      "fees": "Pola biaya",
+      "skipLines": "Baris yang dilewati",
+      "record": "Rekaman",
+      "label": "label",
+      "value": "nilai",
+      "within": "dalam",
+      "line": "baris",
+      "optional": "opsional",
+      "paid": "Pola jumlah dibayar",
+      "payee": "Pola penjual",
+      "requireLine": "Baris wajib",
+      "skipIfLine": "Baris yang membuat surel dilewati",
+      "waitIfLine": "Baris yang menahan surel",
+      "source": "Sumber baris",
+      "single": "Item tunggal",
+      "singleName": "Nama item tunggal",
+      "joinWrapped": "Gabungkan baris yang terpotong",
+      "ruleField": "bidang",
+      "reference": "Pola referensi",
+      "match": "Bagian pencocokan",
+      "matchBy": "Strategi pencocokan",
+      "matchReferenceIn": "Bidang tempat referensi dicari",
+      "matchDaysBefore": "Jumlah hari sebelum pembelian",
+      "matchDaysAfter": "Jumlah hari setelah pembelian",
+      "matchTolerance": "Toleransi jumlah",
+      "tag": "Tag",
+      "aiCategories": "Kategori AI",
+      "trade": "Bagian transaksi",
+      "tradeAction": "Pola jenis transaksi",
+      "tradeSymbol": "Pola kode saham",
+      "tradeQuantity": "Pola jumlah saham",
+      "tradeTotal": "Pola total transaksi",
+      "tradePrice": "Pola harga per saham",
+      "tradeCommission": "Pola komisi",
+      "tradeDate": "Pola tanggal transaksi",
+      "tradeAccount": "Pola akun",
+      "accountRules": "Aturan akun",
+      "currencyMarkers": "Penanda mata uang",
+      "defaultAccount": "Akun bawaan",
+      "ruleAccount": "akun",
+      "ruleCurrency": "mata uang",
+      "role": "Peran profil",
+      "link": "Bagian link",
+      "linkDaysBefore": "Jumlah hari sebelum pembayaran",
+      "linkFromDomains": "Domain pengirim email pembelian",
+      "linkKey": "Pola kunci tautan"
+    },
+    "codes": {
+      "not_object": "bukan definisi yang valid",
+      "unknown_key": "bukan sesuatu yang boleh dimiliki profil",
+      "unsupported_version": "memiliki versi yang tidak dibaca server ini (gunakan versi 2)",
+      "invalid_type": "memiliki jenis nilai yang salah",
+      "empty": "tidak boleh kosong",
+      "too_many": "memiliki terlalu banyak entri (maksimal {max})",
+      "too_long": "terlalu panjang (maksimal {max} karakter)",
+      "control_character": "mengandung karakter kontrol",
+      "malformed_capture": "memiliki tangkapan dalam kurung kurawal yang tidak valid",
+      "too_many_captures": "memiliki terlalu banyak tangkapan",
+      "duplicate_capture": "memakai nama tangkapan yang sama dua kali",
+      "capture_not_allowed": "memakai nama tangkapan yang tidak diterima bidang ini",
+      "capture_missing": "kekurangan tangkapan yang dibutuhkan bidang ini",
+      "capture_conflict": "menangkap total baris sekaligus harga satuan. Gunakan salah satunya saja.",
+      "invalid_uuid": "bukan kategori yang valid",
+      "out_of_range": "harus berupa bilangan bulat dari 1 sampai {max}",
+      "items_patterns_and_record": "memiliki pola sekaligus rekaman. Gunakan salah satunya saja.",
+      "items_shape_missing": "membutuhkan pola atau rekaman",
+      "skip_lines_need_record": "hanya dapat digunakan bersama rekaman",
+      "record_name_missing": "harus menangkap {capture} di salah satu langkahnya",
+      "items_single_conflict": "memiliki item tunggal di samping pola atau rekaman. Gunakan salah satunya saja.",
+      "join_wrapped_needs_patterns": "hanya berfungsi dengan pola item",
+      "invalid_value": "memiliki nilai yang tidak diterima bidang ini",
+      "duplicate_entry": "mencantumkan entri yang sama dua kali",
+      "reference_field_missing": "membutuhkan pola referensi (strategi referensi aktif)",
+      "out_of_range_days": "harus berupa bilangan bulat dari 0 sampai {max}",
+      "out_of_range_tolerance": "harus berupa jumlah dari 0.00 sampai {max}",
+      "trade_conflict": "tidak boleh ada di profil transaksi pialang, yang hanya membaca transaksinya",
+      "trade_amount_missing": "memerlukan pola total atau harga (setidaknya salah satunya)",
+      "trade_account_missing": "memerlukan akun bawaan atau aturan akun",
+      "invalid_currency": "bukan kode mata uang 3 huruf, seperti USD",
+      "too_many_lines": "mencakup terlalu banyak baris (maksimal {max})",
+      "line_break_not_allowed": "dicocokkan dengan satu teks (nama item, pedagang, atau akun), jadi tidak dapat mencakup beberapa baris",
+      "invalid_uuid_account": "bukan akun yang valid",
+      "role_invalid": "harus standalone, component, atau settlement",
+      "link_key_requires_component": "hanya dapat digunakan jika perannya component",
+      "link_key_missing": "diperlukan jika perannya component",
+      "link_capture_requires_settlement": "menggunakan tangkapan link atau instalment, yang hanya diterima profil settlement",
+      "link_requires_settlement": "hanya dapat digunakan jika perannya settlement",
+      "link_domain_invalid": "bukan domain pengirim yang valid (paling banyak {max} domain)",
+      "link_days_invalid": "harus berupa bilangan bulat dari 0 sampai {max}",
+      "role_trade_conflict": "tidak boleh component atau settlement dalam profil transaksi bursa, yang hanya membaca transaksinya"
+    }
+  },
+  "test": {
+    "heading": "Uji dengan surel tersimpan",
+    "help": "Membaca surel tersimpan dengan pola di atas, baik sudah disimpan maupun belum, dan menampilkan apa yang akan ditemukan serta transaksi mana yang akan cocok. Tidak ada yang ditulis.",
+    "loadFailed": "Surel tersimpan tidak dapat dimuat, jadi belum ada yang dapat diuji.",
+    "noReceipts": "Belum ada surel yang tersimpan. Periksa kotak surel terlebih dahulu.",
+    "receiptLabel": "Surel",
+    "choosePlaceholder": "Pilih surel",
+    "receiptOption": "{subject} dari {sender} ({date})",
+    "button": "Uji",
+    "failed": "Pengujian gagal",
+    "matchHeading": "Kecocokan transaksi",
+    "matched": "Akan menautkan transaksi tanggal {date} senilai {amount} ({payee}), ditemukan lewat {how}.",
+    "matchKinds": {
+      "order_id": "nomor pesanan",
+      "amount_payee": "jumlah dan penerima",
+      "amount_only": "jumlah",
+      "manual": "pilihan Anda",
+      "reference": "referensi",
+      "amount_date": "jumlah dan tanggal"
+    },
+    "noPayee": "tanpa penerima",
+    "ambiguous": "{count, plural, one {# transaksi} other {# transaksi}} sama-sama cocok, jadi tidak ada yang akan ditautkan sampai Anda memilih.",
+    "unmatched": "Tidak ada transaksi yang cocok, dari {count, plural, one {# kandidat} other {# kandidat}}.",
+    "jsonInvalid": "JSON tidak valid, jadi belum ada yang dapat diuji.",
+    "component": {
+      "heading": "Email pembelian (component): kunci tautan {linkKey}",
+      "noLinkKey": "Email pembelian (component): tidak ada kunci tautan yang terbaca, sehingga tidak ada email pembayaran yang dapat menemukannya.",
+      "noneWaiting": "Tidak ada email pembayaran yang menunggu kunci tautan ini.",
+      "waiting": "{count, plural, one {# email pembayaran menunggu} other {# email pembayaran menunggu}} kunci tautan ini:",
+      "settlement": "{subject} ({date})"
+    },
+    "outcome": {
+      "not_applicable": "Profil ini tidak akan membaca surel ini: tidak ada baris wajibnya yang ada di dalamnya, sehingga profil berikutnya untuk pengirim akan dicoba.",
+      "skip_line": "Profil ini akan menyisihkan surel ini: di dalamnya ada baris yang membuatnya dilewati.",
+      "wait_line": "Profil ini akan menahan surel ini: sebuah baris menyatakan pesanan belum final, sehingga surel dibaca ulang nanti.",
+      "discard_ignore": "Profil ini akan mengabaikan surel ini: profil ini mengabaikan setiap surel yang cocok.",
+      "discard_delete": "Profil ini akan menghapus surel ini: profil ini menghapus setiap surel yang cocok.",
+      "no_html": "Profil ini membaca bagian HTML surel, dan surel ini tidak memilikinya, sehingga akan ditandai tidak dapat dibaca (tanpa HTML)."
+    },
+    "matchedBy": {
+      "heading": "Dicocokkan oleh",
+      "none": "Tidak ada nilai yang dibaca dari surel ini.",
+      "fields": {
+        "orderId": "Nomor pesanan",
+        "total": "Total",
+        "paid": "Dibayar",
+        "shipping": "Pengiriman",
+        "discount": "Diskon",
+        "payee": "Penjual",
+        "requireLine": "Baris wajib",
+        "skipIfLine": "Baris lewati",
+        "waitIfLine": "Baris tunggu",
+        "reference": "Referensi",
+        "linkKey": "Kunci tautan",
+        "action": "Jenis transaksi",
+        "symbol": "Kode",
+        "quantity": "Saham",
+        "price": "Harga",
+        "commission": "Komisi",
+        "date": "Tanggal",
+        "account": "Akun",
+        "currency": "Penanda mata uang"
+      },
+      "entryLine": "entri {entry} ({pattern}), baris {line}: {text}",
+      "entrySubject": "entri {entry} ({pattern}), subjek: {text}",
+      "entryLines": "entri {entry} ({pattern}), baris {first} sampai {last}:",
+      "blockLine": "baris {line}: {text}",
+      "labelled": "entri {entry}, label {label} di baris {labelLine} ({labelText}), nilai {pattern} di baris {line}: {text}",
+      "item": "Item {number}",
+      "itemLine": "{pattern}, baris {line}: {text}"
+    },
+    "trace": {
+      "heading": "Yang diperiksa pencocok",
+      "window": "Transaksi dari {from} sampai {to} ({before} hari sebelum dan {after} hari setelah pembelian): {considered, plural, one {# dipertimbangkan} other {# dipertimbangkan}}.",
+      "tolerance": "Jumlah boleh berbeda hingga {amount}.",
+      "attempt": "{position}. {name}",
+      "kept": "{count, plural, =0 {tidak menyisakan satu pun} one {menyisakan # transaksi} other {menyisakan # transaksi}}",
+      "decided": "Menentukan",
+      "transaction": "{date}, {amount}, {payee}",
+      "noPayee": "tanpa penerima",
+      "strategies": {
+        "reference": "Referensi",
+        "orderId": "Nomor pesanan",
+        "amount_payee": "Jumlah dan penerima",
+        "amount_date": "Jumlah dan tanggal"
+      }
+    }
+  },
+  "parsed": {
+    "notFound": "Tidak ditemukan",
+    "noCategory": "Tanpa kategori",
+    "unknownCategory": "Kategori tidak dikenal",
+    "categoryUnavailable": "Kategori tidak dimuat",
+    "noItems": "Tidak ada baris item yang terbaca.",
+    "orderId": "Nomor pesanan",
+    "total": "Total",
+    "shipping": "Ongkos kirim",
+    "discount": "Diskon",
+    "columns": {
+      "item": "Item",
+      "qty": "Jml",
+      "amount": "Jumlah",
+      "category": "Kategori"
+    },
+    "complete": "Terbaca lengkap",
+    "incomplete": "Tidak terbaca lengkap",
+    "reasons": {
+      "no_total": "Surel tidak mencantumkan total.",
+      "no_items": "Tidak ada baris item yang ditemukan.",
+      "items_unbalanced": "Baris item tidak berjumlah sama dengan total.",
+      "items_uncategorized": "Beberapa baris item belum memiliki kategori.",
+      "shipping_uncategorized": "Baris ongkos kirim belum memiliki kategori.",
+      "item_amount_missing": "Sebuah item tidak memiliki jumlah, dan surel tidak memiliki total tunggal untuk diberikan kepadanya."
+    },
+    "readByAi": "Dibaca oleh AI",
+    "readFromStructuredData": "Dibaca dari data terstruktur",
+    "paid": "Dibayar",
+    "payee": "Penjual",
+    "reference": "Referensi",
+    "categoryByAi": "AI",
+    "linkKey": "Kunci tautan",
+    "kinds": {
+      "shipping": "Pengiriman",
+      "fee": "Biaya",
+      "discount": "Diskon"
+    },
+    "parts": {
+      "heading": "Bagian",
+      "part": "Bagian",
+      "link": "Tautan",
+      "outcome": "Hasil",
+      "noLink": "Tanpa tautan",
+      "component": "Email pembelian: {subject} ({date}).",
+      "componentProfile": "Profil: {name}.",
+      "componentNet": "Total pembelian: {amount}.",
+      "taken": "Sudah digunakan: {amount}."
+    },
+    "linkOutcomes": {
+      "no_link": "Bagian ini tidak memiliki tautan, jadi tetap satu baris.",
+      "not_found": "Tidak ditemukan email pembelian untuk tautan ini, jadi bagian ini tetap satu baris.",
+      "component_incomplete": "Email pembelian tidak terbaca seluruhnya, jadi bagian ini tetap satu baris.",
+      "component_used": "Pembayaran lain sudah menggunakan seluruh pembelian, jadi bagian ini tetap satu baris.",
+      "joined": "Diganti dengan baris-baris email pembelian.",
+      "scaled": "Diganti dengan baris-baris email pembelian, disesuaikan dengan bagian ini.",
+      "amount_exceeds": "Bagian ini melebihi sisa pembelian, jadi tetap satu baris."
+    }
+  },
+  "state": {
+    "pending": "Menunggu dibaca",
+    "skipped": "Dilewati",
+    "no_parser": "No profil",
+    "parse_failed": "Tidak dapat dibaca",
+    "unmatched": "Transaksi tidak ditemukan",
+    "ambiguous": "Beberapa transaksi cocok",
+    "review_conflict": "Permintaan lain masih terbuka",
+    "ignored": "Dikecualikan",
+    "proposed": "Menunggu persetujuan",
+    "applied": "Diterapkan",
+    "dismissed": "Diabaikan",
+    "expired": "Kedaluwarsa",
+    "pending_ai": "Menunggu AI",
+    "request_missing": "Permintaan hilang",
+    "component": "Menunggu pembayarannya"
+  },
+  "receipts": {
+    "loading": "Memuat surel",
+    "links": {
+      "reviewInbox": "Buka kotak masuk peninjauan AI",
+      "settings": "Pengaturan kotak surel"
+    },
+    "filter": {
+      "label": "Filter menurut status",
+      "option": "{label} ({count})",
+      "all": "Semua",
+      "pending": "Menunggu dibaca",
+      "skipped": "Dilewati",
+      "no_parser": "No profil",
+      "parse_failed": "Tidak dapat dibaca",
+      "unmatched": "Transaksi tidak ditemukan",
+      "ambiguous": "Beberapa transaksi cocok",
+      "review_conflict": "Permintaan lain masih terbuka",
+      "review": "Sedang ditinjau",
+      "ignored": "Dikecualikan",
+      "component": "Menunggu pembayaran"
+    },
+    "search": {
+      "label": "Cari email",
+      "placeholder": "Cari menurut subjek, pengirim, atau isi...",
+      "in": "Cari di",
+      "fields": {
+        "all": "Semua bidang",
+        "subject": "Subjek",
+        "sender": "Pengirim",
+        "body": "Isi"
+      },
+      "from": "Dari tanggal",
+      "to": "Sampai tanggal",
+      "rangeBackwards": "Tanggal akhir sebelum tanggal awal. Rentang tanggal tidak diterapkan.",
+      "clear": "Hapus pencarian"
+    },
+    "domainFilter": {
+      "label": "Domain pengirim",
+      "all": "Semua pengirim",
+      "option": "{domain} ({count})",
+      "unknown": "Jumlah per pengirim tidak dapat dimuat.",
+      "help": "Menampilkan surel dari {domain} dan subdomainnya. Pilih beberapa untuk membuat draf satu profil bagi pengirim.",
+      "waitingForAi": "Menunggu AI"
+    },
+    "columns": {
+      "select": "Pilih",
+      "date": "Tanggal",
+      "email": "Surel",
+      "transaction": "Transaksi",
+      "state": "Status",
+      "actions": "Tindakan"
+    },
+    "transactionSummary": "{date}, {amount}, {payee}",
+    "noPayee": "tanpa penerima",
+    "noTransaction": "Belum ada",
+    "error": {
+      "title": "Surel tidak dapat dimuat",
+      "body": "Permintaan gagal, jadi belum ada yang diketahui tentang surel Anda. Coba lagi.",
+      "retry": "Coba lagi"
+    },
+    "empty": {
+      "title": "Tidak ada surel",
+      "body": "Konfirmasi pesanan muncul di sini setelah kotak surel dibaca.",
+      "filteredTitle": "Tidak ada surel dengan status ini",
+      "filteredBody": "Pilih status lain untuk melihat sisanya.",
+      "searchTitle": "Tidak ada email yang cocok dengan pencarian",
+      "searchBody": "Ubah kata atau tanggal, atau hapus pencarian untuk melihat semua email.",
+      "noMailboxBody": "Belum ada kotak surel yang terhubung. Hubungkan satu untuk mulai membaca konfirmasi pesanan.",
+      "connectButton": "Hubungkan kotak surel"
+    },
+    "actions": {
+      "view": "Lihat",
+      "reprocess": "Proses ulang",
+      "link": "Pilih transaksi",
+      "recognizeAi": "Kenali dengan AI",
+      "recognizeTradeAi": "Kenali sebagai perdagangan dengan AI",
+      "approve": "Setujui",
+      "draftParser": "Siapkan profil dengan AI",
+      "createParser": "Buat profil",
+      "ignore": "Kecualikan",
+      "reviewTrade": "Tinjau di kotak masuk"
+    },
+    "toasts": {
+      "approved": "Usulan disetujui",
+      "approveFailed": "Usulan tidak dapat disetujui",
+      "reprocessed": "Surel diproses ulang",
+      "reprocessFailed": "Surel tidak dapat diproses ulang",
+      "ignored": "Surel dikecualikan",
+      "ignoreFailed": "Surel tidak dapat dikecualikan",
+      "deleted": "Surel dihapus",
+      "deleteFailed": "Surel tidak dapat dihapus"
+    },
+    "ignoreDialog": {
+      "title": "Kecualikan surel ini?",
+      "message": "Surel {subject} tidak akan mengusulkan apa pun, dan permintaan peninjauannya yang terbuka akan diabaikan.",
+      "confirm": "Kecualikan"
+    },
+    "deleteDialog": {
+      "title": "Hapus surel ini?",
+      "message": "Surel tersimpan {subject} akan dihapus dan permintaan peninjauannya yang terbuka diabaikan. Pesan di kotak surel tidak disentuh, dan pemeriksaan berikutnya tidak akan mengambilnya lagi."
+    },
+    "selection": {
+      "label": "Surel yang dipilih",
+      "select": "Pilih {subject}",
+      "selectAll": "Pilih semua surel dalam daftar ini",
+      "count": "{count, plural, one {# surel dipilih} other {# surel dipilih}}",
+      "draftButton": "Siapkan profil dengan AI ({count})",
+      "clear": "Hapus pilihan",
+      "deleteButton": "Hapus ({count})",
+      "ignoreButton": "Kecualikan ({count})",
+      "pageSelected": "Semua {count} surel di halaman ini dipilih.",
+      "selectAllMatching": "Pilih semua {total} surel yang cocok dengan filter ini.",
+      "allMatchingSelected": "Semua {total} surel yang cocok dengan filter ini dipilih.",
+      "hiddenSelected": "{hidden, plural, other {# surel yang dipilih tidak tampil di daftar ini.}}",
+      "reprocessButton": "Proses ulang ({count})",
+      "restoreButton": "Pulihkan yang diabaikan ({count})",
+      "restoreButtonAll": "Pulihkan yang diabaikan",
+      "approveButton": "Setujui usulan ({count})",
+      "approveButtonAll": "Setujui usulan",
+      "progress": "Diproses: {processed}, tersisa: {remaining}",
+      "progressStarting": "Memulai",
+      "stop": "Berhenti",
+      "narrowedSelected": "{total} email dipilih: semua email yang cocok dengan filter ini, kecuali yang dikeluarkan di bawah.",
+      "deselect": {
+        "label": "Batalkan pilihan menurut",
+        "state": "Status: {state}",
+        "sender": "Pengirim: {domain}",
+        "before": "Diterima sebelum suatu hari",
+        "after": "Diterima setelah suatu hari",
+        "beforeLabel": "Batalkan pilihan email yang diterima sebelum",
+        "afterLabel": "Batalkan pilihan email yang diterima setelah",
+        "apply": "Batalkan pilihan",
+        "cancel": "Batal"
+      },
+      "exclusion": {
+        "label": "Dikeluarkan dari pilihan",
+        "state": "Bukan berstatus {state}",
+        "sender": "Bukan dari {domain}",
+        "from": "Diterima pada {date} atau sesudahnya",
+        "to": "Diterima pada {date} atau sebelumnya",
+        "remove": "Masukkan kembali: {label}"
+      },
+      "draftBlocked": {
+        "skipped": "Surel yang tidak dapat dibaca tidak punya teks untuk menyiapkan profil. Hapus dari pilihan.",
+        "allMatching": "Profil disiapkan dari surel yang Anda pilih sendiri, paling banyak {max}. Hapus pilihan ini lalu pilih paling banyak {max} surel.",
+        "mixedKinds": "Surel yang dipilih mencampur konfirmasi perdagangan dan surel pesanan. Satu profil membaca satu jenis, jadi pilih hanya konfirmasi perdagangan atau hanya surel pesanan.",
+        "tooManyPerDomain": "Paling banyak {perDomain} surel dari satu pengirim dapat dipakai. Pilih {perDomain} surel atau kurang dari setiap pengirim ({domains}).",
+        "tooManyDomains": "Paling banyak {maxDomains} pengirim dapat dipakai bersamaan ({domains}). Pilih surel dari {maxDomains} pengirim atau kurang.",
+        "tradeOneDomain": "Profil transaksi efek membaca surel dari satu pengirim ({domains}). Pilih konfirmasi transaksi dari satu pengirim."
+      }
+    },
+    "pager": {
+      "itemName": "email",
+      "total": "{count, plural, other {# email}}",
+      "page": "Halaman {page}"
+    },
+    "draft": {
+      "failed": "Tidak dapat memulai pembuatan draf profil",
+      "queued": "Diantrekan: permintaan menunggu di kotak masuk peninjauan AI untuk sebuah agen. Saat ini tidak ada asisten yang dapat menjawab.",
+      "handoffFailed": "Permintaan sudah diantrekan, tetapi surel tidak dapat dibuka di obrolan. Permintaan menunggu di kotak masuk peninjauan AI untuk sebuah agen.",
+      "inboxLink": "Buka kotak masuk peninjauan AI",
+      "opened": "Obrolan dibuka dengan surel terlampir. Baca pesannya lalu tekan Kirim.",
+      "chatPrompt": "Buat profil struk surel untuk {count, plural, one {surel pesanan ini} other {# surel pesanan ini}} dari {domain}. Ambil permintaan peninjauan AI {requestId}, uji profil Anda pada setiap surel terlampir dengan alat email_receipt_profiles, perbaiki sampai setiap surel terbaca lengkap, lalu simpan sebagai draf untuk permintaan {requestId}.",
+      "mixedKinds": "Surel yang dipilih mencampur konfirmasi perdagangan dan surel pesanan. Satu profil membaca satu jenis, jadi pilih hanya konfirmasi perdagangan atau hanya surel pesanan.",
+      "chatPromptTrade": "Buat profil perdagangan untuk {count, plural, one {surel konfirmasi perdagangan ini} other {# surel konfirmasi perdagangan ini}} dari {domain}. Ambil permintaan peninjauan AI {requestId}, uji profil Anda pada setiap surel terlampir dengan alat email_receipt_parsers, perbaiki sampai setiap surel terbaca sebagai perdagangan lengkap, lalu simpan sebagai draf untuk permintaan {requestId}."
+    },
+    "tradeBadge": "Perdagangan",
+    "bulkDialog": {
+      "delete": {
+        "title": "Hapus surel?",
+        "message": "Hapus {count, plural, one {# surel} other {# surel}}{scope, select, both { dari {domain} dengan status {status}} domain { dari {domain}} status { dengan status {status}} other {}}? Tindakan ini tidak dapat dibatalkan. Untuk menyimpan surel dan mencegahnya mengusulkan apa pun, pilih “Kecualikan”. Surel yang terhubung ke transaksi tetap disimpan."
+      },
+      "ignore": {
+        "title": "Kecualikan surel?",
+        "message": "Kecualikan {count, plural, one {# surel} other {# surel}}{scope, select, both { dari {domain} dengan status {status}} domain { dari {domain}} status { dengan status {status}} other {}}? Surel tidak akan mengusulkan apa pun, dan permintaan tinjauan yang terbuka akan ditutup. Surel yang terhubung ke transaksi tidak diubah.",
+        "confirm": "Kecualikan"
+      },
+      "countChanged": "Jumlah surel yang cocok sekarang {count}. Tidak ada yang diubah. Periksa jumlahnya dan konfirmasi lagi.",
+      "approve": {
+        "title": "Setujui usulan?",
+        "message": "{count, plural, one {Setujui # usulan} other {Setujui # usulan}}? Setiap usulan diterapkan seperti tombol Konfirmasi di kotak masuk tinjauan AI.",
+        "trades": "{count, plural, one {# email transaksi dilewati. Setujui di kartunya di kotak masuk tinjauan AI.} other {# email transaksi dilewati. Setujui di kartunya di kotak masuk tinjauan AI.}}",
+        "confirm": "Setujui"
+      },
+      "searchNote": "Hanya email yang cocok dengan pencarian yang disertakan.",
+      "narrowedNote": "Email yang dikeluarkan dari pilihan tidak diubah."
+    },
+    "bulk": {
+      "result": {
+        "deleted": "{count, plural, one {# surel dihapus.} other {# surel dihapus.}}",
+        "ignored": "{count, plural, one {# surel dikecualikan.} other {# surel dikecualikan.}}",
+        "unchanged": "{count, plural, one {# surel sudah dikecualikan sebelumnya.} other {# surel sudah dikecualikan sebelumnya.}}",
+        "notIgnorable": "{count, plural, one {# surel tidak dapat dikecualikan: tidak dapat dibaca, atau usulannya sudah diterapkan.} other {# surel tidak dapat dikecualikan: tidak dapat dibaca, atau usulannya sudah diterapkan.}}",
+        "skippedLinked": "{count, plural, one {# surel yang terhubung ke transaksi tetap disimpan.} other {# surel yang terhubung ke transaksi tetap disimpan.}}",
+        "reprocessed": "{count, plural, one {# email diproses ulang.} other {# email diproses ulang.}}",
+        "restored": "{count, plural, one {# email yang diabaikan dibaca ulang.} other {# email yang diabaikan dibaca ulang.}}",
+        "reprocessFailed": "{count, plural, one {# email gagal.} other {# email gagal.}}",
+        "stopped": "{count, plural, one {Dihentikan. # email belum diproses.} other {Dihentikan. # email belum diproses.}}",
+        "approved": "{count, plural, one {# usulan disetujui.} other {# usulan disetujui.}}",
+        "approveFailed": "{count, plural, one {# usulan tidak dapat disetujui.} other {# usulan tidak dapat disetujui.}}"
+      },
+      "deleteFailed": "Surel tidak dapat dihapus",
+      "ignoreFailed": "Surel tidak dapat dikecualikan",
+      "noneLeft": "Tidak ada lagi surel yang cocok. Tidak ada yang diubah.",
+      "reprocessFailed": "Email tidak dapat diproses ulang",
+      "approveFailed": "Usulan tidak dapat disetujui",
+      "noApprovable": "Tidak ada usulan dalam pilihan ini yang dapat disetujui.",
+      "narrowFailed": "Email tidak dapat dihitung. Perubahan tidak diterapkan."
+    },
+    "linkedDraftDialog": {
+      "title": "Siapkan profil yang saling terkait?",
+      "message": "Anda memilih surel dari beberapa pengirim: {domains}. Gunakan ini hanya jika data satu transaksi bank tersebar di surel dari beberapa pengirim, misalnya toko dan penyedia pembayaran tertunda, atau toko dan gerbang pembayaran. Untuk toko yang tidak berkaitan, batalkan dan siapkan satu domain setiap kali. Satu permintaan menerima paling banyak {perDomain} surel per pengirim dan {maxDomains} pengirim.",
+      "domainEntry": "{domain} ({count, plural, one {# surel} other {# surel}})",
+      "confirm": "Siapkan profil terkait"
+    }
+  },
+  "detail": {
+    "title": "Struk surel",
+    "loading": "Memuat surel",
+    "error": {
+      "title": "Surel tidak dapat dimuat",
+      "body": "Permintaan gagal. Coba lagi.",
+      "retry": "Coba lagi"
+    },
+    "from": "Dari",
+    "received": "Diterima",
+    "forwardedBy": "Diteruskan oleh",
+    "originalSent": "Dikirim oleh toko",
+    "subject": "Subjek",
+    "state": "Status",
+    "parser": "Profil",
+    "noParser": "Tidak ada",
+    "structuredSource": "Data terstruktur",
+    "matchedBy": "Dicocokkan lewat",
+    "matchKinds": {
+      "order_id": "Nomor pesanan",
+      "amount_payee": "Jumlah dan penerima",
+      "amount_only": "Jumlah",
+      "manual": "Pilihan Anda",
+      "reference": "Referensi",
+      "amount_date": "Jumlah dan tanggal"
+    },
+    "transaction": "Transaksi",
+    "transactionSummary": "{date}, {amount}, {payee}",
+    "noPayee": "tanpa penerima",
+    "viewTransaction": "Lihat transaksi",
+    "noTransaction": "Belum ada",
+    "reasons": {
+      "too_large": "Surel melebihi batas ukuran, sehingga disimpan tanpa dibaca.",
+      "undecodable": "Surel tidak dapat didekode, sehingga disimpan tanpa dibaca.",
+      "draft_failed": "AI tidak dapat membuat draf profil untuk pengirim ini.",
+      "parser_invalid": "Profil untuk pengirim ini tidak valid. Edit di pengaturan profil.",
+      "no_total": "Profil tidak menemukan total di surel ini.",
+      "no_items": "Profil tidak menemukan baris item.",
+      "items_unbalanced": "Baris item tidak berjumlah sama dengan total.",
+      "items_uncategorized": "Beberapa baris item belum memiliki kategori.",
+      "shipping_uncategorized": "Baris ongkos kirim belum memiliki kategori.",
+      "amount_differs": "Total yang terbaca berbeda dari jumlah transaksi, jadi hanya deskripsi yang diusulkan.",
+      "proposal_fallback": "Usulan dengan rincian item ditolak, jadi hanya deskripsi yang diusulkan.",
+      "nothing_to_propose": "Surel ini tidak menambahkan apa pun pada transaksi ini.",
+      "proposal_refused": "Usulan ditolak, jadi tidak ada yang diusulkan.",
+      "skip_line": "Ditemukan baris yang membuat profil ini melewati surel, sehingga surel diabaikan.",
+      "wait_line": "Sebuah baris menyatakan pesanan belum final, jadi surel akan dibaca lagi nanti.",
+      "profile_ignore": "Profil surel ini mengabaikan setiap surel yang cocok.",
+      "no_html": "Profil ini membaca bagian HTML surel, dan surel ini tidak memilikinya.",
+      "schema_org": "Tidak perlu profil: pesanan dibaca dari data terstruktur (schema.org) di surel.",
+      "item_amount_missing": "Sebuah item tidak memiliki jumlah, dan surel tidak memiliki total tunggal untuk diberikan kepadanya.",
+      "trade_no_action": "Profil tidak menemukan pembelian, penjualan, dividen, atau reinvestasi di surel ini.",
+      "trade_no_symbol": "Profil tidak menemukan simbol ticker di surel ini.",
+      "trade_no_quantity": "Profil tidak menemukan jumlah saham di surel ini, yang diperlukan untuk pembelian, penjualan, atau dividen yang diinvestasikan kembali.",
+      "trade_no_amount": "Profil tidak menemukan total maupun harga di surel ini.",
+      "trade_no_account": "Profil tidak dapat menentukan akun mana yang dimaksud perdagangan ini.",
+      "trade_exists": "Akun Anda sudah memuat perdagangan ini, jadi tidak ada yang diusulkan.",
+      "trade_linked": "Ditautkan ke transaksi yang dilaporkannya, jadi tidak ada yang diusulkan.",
+      "trade_no_currency": "Profil tidak dapat mengetahui mata uang perdagangan ini, sehingga tidak dapat memilih akunnya.",
+      "awaiting_settlement": "Email pembelian disimpan. Email ini menunggu email pembayaran yang melunasinya.",
+      "settled": "Email pembelian disimpan. Email pembayaran yang digabungkan dengannya melunasi seluruh jumlahnya.",
+      "instalment": "Email pembelian disimpan. Pembayaran telah melunasi sebagian; sisanya masih harus dibayar.",
+      "partially_linked": "Beberapa bagian pembayaran ini belum memiliki email pembelian. Masing-masing ditampilkan sebagai satu baris.",
+      "enriched_by_other": "Transaksi yang cocok sudah dilengkapi oleh email lain. Buka transaksi itu dan gunakan Tautkan untuk mengganti pelengkap tersebut, atau abaikan email ini.",
+      "no_link_key": "Email pembelian ini tidak memuat kunci tautan, sehingga tidak ada pembayaran yang dapat menemukannya."
+    },
+    "reasonUnknown": "Alasan: {reason}",
+    "requestNote": "Permintaan peninjauan ({state}): {note}",
+    "parsedHeading": "Apa yang dibaca profil",
+    "tradeHeading": "Perdagangan yang dibaca dari surel",
+    "tradeCandidatesHeading": "Transaksi yang ada dan mungkin perdagangan ini",
+    "tradeCandidatesHelp": "Transaksi investasi ini mungkin perdagangan yang dilaporkan surel ini. Tautkan yang tepat: tidak ada transaksi baru dibuat, dan tagihan atau setoran terjadwal yang dibayarnya ditandai lunas.",
+    "notParsed": "Belum ada yang dibaca dari surel ini.",
+    "candidatesHeading": "Transaksi yang cocok",
+    "candidatesHelp": "Beberapa transaksi sama-sama cocok dengan surel ini. Pilih transaksi yang dibayarnya.",
+    "linkButton": "Tautkan ke transaksi ini",
+    "linked": "Surel ditautkan ke transaksi",
+    "linkFailed": "Surel tidak dapat ditautkan",
+    "bodyHeading": "Surel",
+    "textLabel": "Isi surel",
+    "noText": "Surel ini tidak memiliki isi teks.",
+    "bodyView": {
+      "label": "Tampilkan surel sebagai",
+      "html": "HTML",
+      "text": "Teks",
+      "lines": "Baris"
+    },
+    "remoteImagesNote": "Gambar jarak jauh tidak dimuat.",
+    "htmlFrameTitle": "Surel seperti yang diformat pengirimnya",
+    "structured": {
+      "heading": "Data terstruktur (schema.org)",
+      "help": "Pesanan atau faktur yang disertakan surel sebagai markup untuk klien surel. Ini hanya dibaca jika tidak ada profil yang berlaku atau profil tidak menemukan total.",
+      "found": "Ditemukan",
+      "notFound": "Tidak ditemukan",
+      "notFoundHelp": "Surel tidak membawa markup pesanan, atau markup itu tidak mencantumkan total maupun item.",
+      "seller": "Penjual",
+      "currency": "Mata uang",
+      "orderDate": "Tanggal pesanan",
+      "unitPrice": "Harga satuan"
+    },
+    "lines": {
+      "help": "Baris-baris yang dicocokkan dengan pola profil, bernomor seperti daftar “Dicocokkan oleh” pada pengujian.",
+      "sourceLabel": "Sumber baris",
+      "sources": {
+        "text": "Teks",
+        "html": "HTML"
+      },
+      "noHtml": "Surel ini tidak memiliki bagian HTML, sehingga profil yang membaca HTML tidak dapat membacanya.",
+      "capped": "Hanya {max} baris pertama yang dibaca.",
+      "empty": "Tidak ada baris.",
+      "listLabel": "Baris surel yang bernomor"
+    },
+    "linkedReceipts": {
+      "componentsHeading": "Email pembelian yang ditautkan",
+      "component": "Bagian {part}: {subject} ({date})",
+      "settlementsHeading": "Dibayar oleh",
+      "settlement": "{subject} ({date}), bagian {amount}",
+      "enrichedBy": "Sudah dilengkapi oleh: {subject}",
+      "openButton": "Buka",
+      "open": "Buka email {subject}"
+    },
+    "tradeTransactionSummary": "{action, select, BUY {Membeli {quantity} {symbol} seharga {total} pada {date}.} SELL {Menjual {quantity} {symbol} seharga {total} pada {date}.} DIVIDEND {Dividen dari {symbol} sebesar {total} pada {date}.} REINVEST {Menginvestasikan kembali dividen ke {quantity} {symbol} seharga {total} pada {date}.} other {{quantity} {symbol} seharga {total} pada {date}.}}",
+    "noTradeTransaction": "Belum ada: transaksi dicatat saat Anda menyetujui usulannya, atau ditautkan ke transaksi yang sudah ada di buku besar Anda.",
+    "candidateShares": "{quantity} saham",
+    "tradeNoCandidates": "Tidak ada transaksi investasi dengan akun, jenis transaksi, dan kode ini dalam seminggu dari hari transaksi yang bebas untuk ditautkan. Jika Anda mencatatnya sendiri, periksa akun dan tanggalnya; jika tidak, setujui usulannya di kotak tinjauan.",
+    "aiTradeHeading": "Transaksi yang diusulkan agen AI",
+    "aiTradeReader": "Tidak ada: agen AI membacanya sebagai transaksi",
+    "noAiTradeTransaction": "Belum ada: transaksi dicatat saat Anda menyetujui usulan agen AI.",
+    "tradeProposalHeading": "Yang akan dicatat oleh usulannya"
+  },
+  "picker": {
+    "heading": "Pilih transaksi",
+    "help": "Tidak ada transaksi yang cocok secara otomatis. Berikut transaksi Anda dalam rentang tanggal di bawah, yang semula berupa hari-hari di sekitar pembelian. Pilih transaksi yang dibayarnya, atau ubah tanggal untuk mencari lebih jauh.",
+    "fromLabel": "Dari tanggal",
+    "toLabel": "Sampai tanggal",
+    "searchPlaceholder": "Cari menurut penerima, deskripsi, atau jumlah...",
+    "loading": "Memuat transaksi",
+    "error": "Transaksi tidak dapat dimuat.",
+    "retry": "Coba lagi",
+    "empty": "Anda tidak memiliki transaksi pada periode ini yang dapat ditautkan. Anda dapat memperlebar tanggal di atas untuk mencari lebih jauh.",
+    "emptySearch": "Tidak ada transaksi pada periode ini yang cocok dengan pencarian. Anda dapat memperlebar tanggal di atas.",
+    "rangeReversed": "Tanggal mulai berada setelah tanggal akhir.",
+    "rangeIncomplete": "Masukkan kedua tanggal untuk menampilkan daftar transaksi.",
+    "row": "{date}, {amount}, {payee}",
+    "noPayee": "tanpa penerima",
+    "linkButton": "Tautkan",
+    "hasMore": "Hanya {count} pertama yang ditampilkan. Gunakan pencarian untuk mempersempit daftar.",
+    "ai": {
+      "heading": "Pilih transaksi untuk AI",
+      "help": "Berikut transaksi Anda dalam rentang tanggal di bawah, yang semula berupa hari-hari di sekitar pembelian. Pilih transaksi yang harus dirinci AI per produk dalam surel, atau ubah tanggal untuk mencari lebih jauh.",
+      "linkButton": "Gunakan transaksi ini"
+    },
+    "sample": {
+      "heading": "Pilih transaksi yang dibayar oleh surel ini",
+      "help": "Berikut transaksi Anda dalam rentang tanggal di bawah, yang awalnya mencakup hari-hari di sekitar pembelian. Pilihan ini disimpan di panduan dan dipakai untuk memeriksa profil; tidak ada yang ditautkan ke surel. Ubah tanggal untuk mencari lebih jauh.",
+      "linkButton": "Gunakan transaksi ini"
+    }
+  },
+  "callback": {
+    "title": "Menghubungkan kotak surel",
+    "connecting": "Menyelesaikan koneksi",
+    "toasts": {
+      "connected": "Kotak surel terhubung"
+    },
+    "success": {
+      "title": "Kotak surel terhubung",
+      "body": "Terhubung sebagai {username}. Kembali ke pengaturan."
+    },
+    "providerError": {
+      "title": "Proses masuk tidak selesai",
+      "withDescription": "Penyedia melaporkan: {error}. {description}",
+      "withoutDescription": "Penyedia melaporkan: {error}."
+    },
+    "missingParameters": {
+      "title": "Halaman ini dibuka tanpa hasil proses masuk",
+      "body": "Mulai lagi dari pengaturan struk surel dan gunakan salah satu tombol Hubungkan."
+    },
+    "failed": {
+      "title": "Kotak surel tidak dapat dihubungkan",
+      "fallback": "Server menolak koneksi. Mulai lagi dari pengaturan struk surel."
+    },
+    "backLink": "Kembali ke pengaturan struk surel"
+  },
+  "recognize": {
+    "title": "Kenali dengan AI",
+    "tradeTitle": "Kenali sebagai perdagangan dengan AI",
+    "tradeMessage": "AI akan membaca surel ini sebagai konfirmasi perdagangan pialang dan mengusulkan transaksi investasi yang dilaporkannya (akun, beli, jual, dividen tunai, atau dividen yang diinvestasikan kembali, ticker, saham, dan total). Tidak ada yang disimpan sampai Anda menyetujuinya.",
+    "tradeConfirm": "Kenali sebagai perdagangan",
+    "transactionSummary": "{date}, {amount}, {payee}",
+    "noPayee": "tanpa penerima",
+    "confirmMessage": "Surel ini ditautkan ke transaksi {summary}. AI akan membaca surel dan mengusulkan cara membagi transaksi ini per produk. Lanjutkan dengan transaksi ini?",
+    "confirm": "Kenali dengan AI",
+    "chooseOther": "Pilih transaksi lain",
+    "candidatesHeading": "Transaksi mana yang dibayar oleh surel ini?",
+    "candidatesHelp": "Beberapa transaksi cocok dengan surel ini. Pilih yang harus digunakan AI, atau cari yang lain.",
+    "candidatesLoading": "Memuat transaksi yang cocok",
+    "candidatesError": "Transaksi yang cocok tidak dapat dimuat.",
+    "retry": "Coba lagi",
+    "useButton": "Gunakan transaksi ini",
+    "searchOther": "Cari transaksi lain",
+    "back": "Kembali",
+    "failed": "Tidak dapat memulai pengenalan",
+    "queued": "Diantrekan: saat ini tidak ada asisten AI yang dapat menjawab, sehingga permintaan menunggu di kotak masuk peninjauan AI untuk sebuah agen (misalnya lewat MCP).",
+    "handoffFailed": "Permintaan sudah diantrekan, tetapi surel tidak dapat dibuka di obrolan. Permintaan menunggu di kotak masuk peninjauan AI untuk sebuah agen (misalnya lewat MCP).",
+    "inboxLink": "Buka kotak masuk peninjauan AI",
+    "opened": "Obrolan dibuka dengan surel terlampir. Baca pesannya lalu tekan Kirim.",
+    "chatPrompt": "Kenali produk, jumlah, dan harga dalam surel pesanan terlampir, lalu bagi transaksi saya tanggal {date} ({payee}, {amount}) per produk dengan satu kategori untuk masing-masing. Ambil permintaan peninjauan AI {requestId} dan kirimkan usulan Anda untuk permintaan itu.",
+    "tradeChatPrompt": "Kenali perdagangan di surel konfirmasi pialang terlampir: akun, apakah beli, jual, dividen tunai, atau dividen yang diinvestasikan kembali, ticker, saham (dividen tunai mungkin tidak menyebutkannya), total yang dieksekusi, dan tanggal. Ambil permintaan tinjauan AI {requestId} dan ajukan perdagangan untuknya.",
+    "tradeDetachesTransaction": "Jika dibaca sebagai transaksi, email ini tidak lagi mewakili {summary}: transaksi itu membuat transaksi investasinya sendiri."
+  },
+  "hub": {
+    "tabs": {
+      "ariaLabel": "Bagian struk surel",
+      "overview": "Ringkasan",
+      "emails": "Surel",
+      "profiles": "Profil",
+      "mailbox": "Kotak surel"
+    },
+    "demoRestricted": {
+      "heading": "Dibatasi di Mode Demo",
+      "body": "Menghubungkan kotak surel dan menulis profil dinonaktifkan di mode demo."
+    }
+  },
+  "process": {
+    "retryFailed": "Coba lagi surel yang gagal ({count})",
+    "starting": "Memulai...",
+    "progress": "{processed, plural, one {# surel diproses} other {# surel diproses}}, sisa {remaining}.",
+    "cancel": "Batal",
+    "cancelling": "Membatalkan...",
+    "summary": "{count, plural, one {# surel diproses.} other {# surel diproses.}}",
+    "cancelledSummary": "Dibatalkan setelah {count, plural, one {# surel.} other {# surel.}}",
+    "outcomes": "Hasil akhirnya: {outcomes}.",
+    "passedOver": "{count, plural, one {# surel mengalami galat dan dilewati.} other {# surel mengalami galat dan dilewati.}}",
+    "failed": "Pemrosesan berhenti karena sebuah permintaan gagal.",
+    "failedWithReason": "Pemrosesan berhenti: {reason}",
+    "outcome": "{count} {state}",
+    "deletedOutcome": "{count} dihapus",
+    "close": "Tutup"
+  },
+  "overview": {
+    "loading": "Memuat ringkasan...",
+    "error": {
+      "title": "Ringkasan tidak dapat dimuat",
+      "body": "Permintaan gagal, jadi apa pun yang tidak tampil di sini jangan dianggap kosong. Coba lagi.",
+      "retry": "Coba lagi"
+    },
+    "mailbox": {
+      "title": "Kotak surel",
+      "none": "Belum ada kotak surel yang terhubung.",
+      "connect": "Hubungkan kotak surel",
+      "manage": "Buka pengaturan kotak surel",
+      "state": {
+        "notConnected": "Tidak terhubung",
+        "failing": "Pemeriksaan terakhir gagal",
+        "off": "Pemeriksaan nonaktif",
+        "polling": "Memeriksa"
+      },
+      "auth": {
+        "password": "Login dengan kata sandi",
+        "oauth2": "Masuk dengan penyedia"
+      },
+      "lastSuccess": "Pemeriksaan berhasil terakhir: {when}",
+      "neverPolled": "Belum pernah diperiksa dengan berhasil.",
+      "lastError": "Galat terakhir: {error}"
+    },
+    "emails": {
+      "title": "Surel",
+      "stored": "tersimpan",
+      "processable": "{count, plural, one {# surel dapat diproses ulang} other {# surel dapat diproses ulang}}.",
+      "open": "Buka surel"
+    },
+    "proposals": {
+      "title": "Usulan",
+      "waiting": "menunggu persetujuan Anda",
+      "review": "Tinjau usulan",
+      "open": "Buka kotak masuk peninjauan"
+    },
+    "profiles": {
+      "title": "Profil",
+      "approved": "disetujui",
+      "drafts": "{count, plural, one {# draf menunggu persetujuan Anda} other {# draf menunggu persetujuan Anda}}.",
+      "manage": "Buka profil"
+    },
+    "uncovered": {
+      "title": "Pengirim tanpa profil",
+      "help": "Surel dari pengirim ini tidak dibaca oleh profil mana pun. Buat profil untuk salah satunya: panduan di tab Profil akan memandu Anda.",
+      "none": "Setiap pengirim surel tersimpan sudah tercakup oleh sebuah profil.",
+      "row": "{domain} ({count, plural, one {# surel} other {# surel}})",
+      "create": "Buat profil"
+    }
+  },
+  "wizard": {
+    "heading": "Mulai menggunakan struk surel",
+    "intro": "Empat langkah dari nol hingga usulan pertama Anda.",
+    "done": "(selesai)",
+    "steps": {
+      "mailbox": {
+        "title": "Hubungkan kotak surel",
+        "body": "Gunakan kotak surel khusus yang menerima konfirmasi pesanan Anda. Monize hanya membacanya.",
+        "action": "Hubungkan kotak surel"
+      },
+      "emails": {
+        "title": "Ambil surel",
+        "body": "Surel dibaca saat kotak surel diperiksa. Periksa dari pengaturan kotak surel untuk melihat surel pertama.",
+        "action": "Buka surel"
+      },
+      "profile": {
+        "title": "Buat profil untuk pengirim",
+        "body": "Profil memberi tahu Monize cara membaca konfirmasi pesanan dari satu pengirim. Tulis sendiri, atau buat drafnya dari surel tersimpan.",
+        "action": "Buka profil"
+      },
+      "review": {
+        "title": "Tinjau usulan",
+        "body": "Setiap surel menjadi usulan pada sebuah transaksi. Tidak ada yang berubah sampai Anda menyetujuinya.",
+        "action": "Buka kotak masuk peninjauan"
+      }
+    }
+  },
+  "profileWizard": {
+    "heading": "Buat profil untuk {domain}",
+    "stepsLabel": "Langkah panduan",
+    "stepName": "{number}. {name}",
+    "steps": {
+      "samples": "Contoh",
+      "generate": "Hasilkan",
+      "preview": "Pratinjau dan terima"
+    },
+    "cancel": "Batal",
+    "existingDraft": "Domain ini sudah memiliki profil draf.",
+    "useExistingDraft": "Mulai dari pratinjau dengan draf",
+    "uncovered": {
+      "heading": "Buat profil untuk sebuah domain",
+      "help": "Domain pengirim yang memiliki surel tersimpan dan belum memiliki profil yang disetujui. Pilih satu untuk memulai panduan.",
+      "loading": "Memuat domain pengirim",
+      "error": "Domain pengirim tidak dapat dimuat.",
+      "retry": "Coba lagi",
+      "none": "Setiap pengirim surel tersimpan sudah tercakup oleh sebuah profil."
+    },
+    "samples": {
+      "loading": "Memuat surel",
+      "error": "Surel tidak dapat dimuat.",
+      "retry": "Coba lagi",
+      "empty": {
+        "title": "Tidak ada surel dari domain ini",
+        "body": "Tidak ada surel tersimpan yang pengirimnya berada di {domain}."
+      },
+      "help": "Klik sebuah surel untuk membacanya, lalu pilih transaksi yang dibayarnya. Setelah itu centang hingga {max} surel untuk dijadikan dasar penulisan profil; surel hanya dapat dicentang setelah memiliki transaksi.",
+      "tradeToggle": "Surel ini adalah konfirmasi perdagangan pialang (membuat transaksi investasi, jadi tidak ada transaksi bank yang dipasangkan)",
+      "tradeHelp": "Klik surel untuk membacanya, lalu centang hingga {max} konfirmasi perdagangan untuk menulis profil. Tidak perlu memilih transaksi.",
+      "columns": {
+        "select": "Gunakan",
+        "date": "Tanggal",
+        "email": "Surel",
+        "transaction": "Transaksi"
+      },
+      "select": "Gunakan surel {subject} sebagai contoh",
+      "needsTransaction": "Pilih transaksi untuk surel ini terlebih dahulu.",
+      "limitReached": "Paling banyak {max} contoh. Hapus centang satu contoh untuk memilih yang lain.",
+      "noTransaction": "Belum dipilih",
+      "tradeNoTransaction": "Tidak diperlukan untuk konfirmasi perdagangan",
+      "selectedCount": "{count} dari {max} contoh dicentang",
+      "continue": "Lanjut ke asisten",
+      "emailLoading": "Memuat surel",
+      "emailError": "Surel tidak dapat dimuat.",
+      "dialogTitle": "Surel dan transaksi: {subject}",
+      "emailHeading": "Surel"
+    },
+    "generate": {
+      "help": "Asisten membaca surel-surel ini beserta transaksi yang dibayarnya, lalu menulis draf profil untuk {domain}. Belum ada yang disetujui.",
+      "reviseHelp": "Beri tahu asisten apa yang perlu diubah. Asisten akan memperbarui draf yang sama dari surel dan transaksi ini.",
+      "tradeHelp": "Asisten membaca konfirmasi perdagangan ini dan menulis draf profil untuk {domain} yang mengusulkan transaksi investasi yang dilaporkan masing-masing. Belum ada yang disetujui.",
+      "tradeSample": "Konfirmasi perdagangan",
+      "feedbackLabel": "Perubahan yang diminta",
+      "feedbackPlaceholder": "Contoh: total adalah baris yang bertuliskan Jumlah dibayar, bukan subtotal.",
+      "send": "Kirim ke AI",
+      "sendFeedback": "Kirim catatan ke AI",
+      "retry": "Kirim ke AI lagi",
+      "back": "Kembali",
+      "running": "Asisten sedang menulis profil...",
+      "runningHint": "Ini bisa memakan waktu satu menit. Biarkan halaman ini tetap terbuka.",
+      "noDraft": "Asisten tidak menyimpan draf.",
+      "tryAgain": "Anda bisa mengirimnya lagi, atau kembali dan mengubah contoh.",
+      "failed": "Asisten tidak dapat dihubungi.",
+      "sendFailed": "Permintaan tidak dapat dikirim."
+    },
+    "waiting": {
+      "heading": "Menunggu agen AI Anda",
+      "body": "Dikirim ke kotak masuk AI. Agen Anda akan menyiapkan profil saat terhubung; Anda dapat menutup ini dan kembali nanti.",
+      "working": "Agen Anda sudah mengambil permintaan ini dan sedang mengerjakannya.",
+      "polling": "Selama halaman ini terbuka, halaman memeriksa setiap {seconds} detik.",
+      "checkFailed": "Permintaan tidak dapat diperiksa. Akan dicoba lagi sebentar lagi.",
+      "ended": "Permintaan ditutup tanpa draf baru (ditolak atau kedaluwarsa). Anda dapat memulai ulang.",
+      "inboxLink": "Buka kotak masuk AI",
+      "checkNow": "Periksa sekarang",
+      "startOver": "Mulai ulang"
+    },
+    "preview": {
+      "loading": "Membaca surel dengan draf...",
+      "error": "Pratinjau tidak dapat dijalankan.",
+      "retry": "Coba lagi",
+      "assistantSaid": "Kata asisten",
+      "help": "Inilah yang akan dilakukan draf terhadap surel domain ini. Belum ada yang disimpan atau ditautkan.",
+      "selectedHeading": "Surel terpilih",
+      "othersHeading": "Surel lain dari domain ini",
+      "othersCapped": "Menampilkan {shown} terbaru dari {total} surel lainnya.",
+      "columns": {
+        "email": "Surel",
+        "expected": "Transaksi yang diharapkan",
+        "parsed": "Dibaca oleh draf",
+        "agrees": "Cocok",
+        "outcome": "Hasil",
+        "matched": "Transaksi yang cocok"
+      },
+      "nothingRead": "Tidak ada yang dapat dibaca",
+      "notStated": "tidak disebutkan",
+      "parsedDate": "Tanggal: {date}",
+      "parsedTotal": "Total: {total}",
+      "parsedLines": "{count, plural, one {# baris} other {# baris}}",
+      "parsedTrade": "{action, select, BUY {Membeli {quantity} saham {symbol}} SELL {Menjual {quantity} saham {symbol}} DIVIDEND {Membayar dividen dari {symbol}} REINVEST {Menginvestasikan kembali dividen ke {quantity} saham {symbol}} other {Memperdagangkan {symbol}}}",
+      "tradeInconsistent": "Harga tidak cocok dengan total, jadi tidak akan diterapkan otomatis",
+      "noExpectation": "Tidak ada",
+      "noMatch": "Tidak ada transaksi",
+      "agreesYes": "Ya",
+      "agreesNo": "Tidak",
+      "agreesUnknown": "Belum diperiksa",
+      "nothingToShow": "Draf tidak memiliki surel untuk ditampilkan.",
+      "backToSamples": "Kembali ke contoh",
+      "backToAi": "Kembali ke AI",
+      "accept": "Terima dan proses",
+      "approved": "Profil disetujui",
+      "changedElsewhere": "Profil diubah di tempat lain. Muat ulang pratinjau.",
+      "approveFailed": "Profil tidak dapat disetujui.",
+      "approvedProcessing": "Profil disetujui. Surel tersimpan dari {domain} sedang dibaca dengan profil ini.",
+      "done": "Selesai",
+      "outcomes": {
+        "matched": "Cocok dengan satu transaksi",
+        "ambiguous": "Beberapa transaksi cocok",
+        "unmatched": "Tidak ada transaksi yang cocok",
+        "parse_failed": "Tidak dapat dibaca",
+        "not_applicable": "Tidak dibaca oleh profil ini",
+        "skip_line": "Dilewati (baris lewati ditemukan)",
+        "wait_line": "Ditahan (pesanan belum final)",
+        "discard_ignore": "Diabaikan oleh profil ini",
+        "discard_delete": "Dihapus oleh profil ini",
+        "no_html": "Tidak ada bagian HTML",
+        "trade": "Mengusulkan perdagangan",
+        "trade_exists": "Sudah ada di buku besar",
+        "component": "Email pembelian (menunggu pembayaran)"
+      },
+      "parsedTradeAccount": "Akun: {account}",
+      "accountWithCurrency": "{name} ({currency})",
+      "accountUnknown": "tidak diketahui",
+      "parsedTradeNoAccount": "Tidak ada akun yang ditemukan untuk perdagangan ini",
+      "parsedTradeCurrency": "Mata uang: {currency}"
+    }
+  },
+  "trade": {
+    "summary": "{action, select, BUY {Pembelian: {quantity} saham {symbol} senilai {total}, bertanggal {date}.} SELL {Penjualan: {quantity} saham {symbol} senilai {total}, bertanggal {date}.} DIVIDEND {Dividen dari {symbol} sebesar {total}, bertanggal {date}.} REINVEST {Reinvestasi dividen ke {quantity} saham {symbol} senilai {total}, bertanggal {date}.} other {{symbol} senilai {total}, bertanggal {date}.}}",
+    "account": "Akun yang disebut di surel: {account}",
+    "priceMismatch": "Harga rata-rata tidak cocok dengan jumlah saham dan total, sehingga perdagangan ini tidak akan diterapkan otomatis.",
+    "dividendMismatch": "Jumlah per saham tidak cocok dengan jumlah saham dan total, sehingga dividen ini tidak akan diterapkan otomatis.",
+    "dividendShares": "Dibayar atas {quantity} saham",
+    "dividendPerShare": "Jumlah per saham di surel: {price}",
+    "incomplete": "Profil tidak dapat membaca perdagangan yang lengkap dari surel ini.",
+    "totalFromPrice": "total yang tersirat dari harga",
+    "dateUnknown": "hari surel diterima",
+    "price": "Harga rata-rata di email: {price} per saham",
+    "proposalSecurity": "Efek: {name}",
+    "proposalAccount": "Akun: {account}",
+    "proposalPrice": "Harga: {price} per saham",
+    "proposalDividendPerShare": "Jumlah per saham: {price}",
+    "proposalCommission": "Komisi: {commission}",
+    "proposalReview": "Tidak ada yang dicatat sebelum Anda menyetujuinya.",
+    "proposalReviewLink": "Tinjau di kotak masuk",
+    "aiWaiting": "Agen AI belum mengusulkan transaksi ini. Usulannya akan muncul di sini dan di kotak masuk tinjauan.",
+    "aiBooked": "Dicatat dari usulan agen AI: lihat transaksi di atas.",
+    "aiNoProposal": "Tidak ada usulan agen AI yang menunggu untuk email ini.",
+    "currencyFrom": "Mata uang: {currency}, {source, select, amount {disebut oleh jumlahnya} marker {dari penanda mata uang profil} other {dari sekuritas Anda untuk kode saham itu}}",
+    "bookTo": "Dicatat ke: {account}",
+    "bookToNotTradable": "Dicatat ke {account}, yang bukan akun pialang yang terbuka, jadi transaksi tidak dapat dicatat di sana.",
+    "bookToUnknown": "Dicatat ke akun yang tidak ada di daftar Anda, jadi transaksi tidak dapat dicatat di sana."
+  },
+  "linkedHint": {
+    "emails": "Satu transaksi bank dijelaskan dalam surel dari beberapa pengirim (misalnya toko dan penyedia pembayaran tertunda)? Pilih bersamaan hingga {max} surel dari setiap pengirim itu dan siapkan profil yang saling terkait.",
+    "profiles": "Panduan di bawah menyiapkan profil untuk satu pengirim. Satu transaksi bank dijelaskan dalam surel dari beberapa pengirim (misalnya toko dan penyedia pembayaran tertunda)? Pilih di tab Surel hingga {max} surel dari setiap pengirim itu dan siapkan profil yang saling terkait.",
+    "openEmails": "Buka tab Surel"
+  }
+}

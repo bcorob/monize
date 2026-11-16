@@ -17,6 +17,8 @@ function category(overrides: Partial<Category> = {}): Category {
     color: null,
     effectiveColor: null,
     effectiveIcon: null,
+    autoSign: null,
+    effectiveAutoSign: true,
     isIncome: false,
     isSystem: false,
     createdAt: '2024-01-15T00:00:00.000Z',

@@ -134,10 +134,10 @@ export function GemStrategyHeader({
           <Button
             variant="outline"
             onClick={onEditSettings}
-            className="shrink-0"
+            className="shrink-0 gap-2"
             {...tourAnchor(TOUR_ANCHORS.gemStrategyEditSettings)}
           >
-            <PencilSquareIcon className="mr-2 h-4 w-4" aria-hidden="true" />
+            <PencilSquareIcon className="h-4 w-4" aria-hidden="true" />
             {t("gem.header.editSettings")}
           </Button>
         </div>

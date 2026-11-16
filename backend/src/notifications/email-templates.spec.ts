@@ -16,6 +16,7 @@ import {
   providerOutageTemplate,
   providerRecoveryTemplate,
 } from "./email-templates";
+import { numberFormatterFor } from "../common/number-locale.util";
 
 describe("Email Templates", () => {
   describe("testEmailTemplate()", () => {
@@ -78,6 +79,81 @@ describe("Email Templates", () => {
       expect(html).toContain("Internet Provider");
       expect(html).toContain("2024-02-20");
       expect(html).toContain("$79.99");
+    });
+
+    it("labels an estimated amount, and says an unknown estimate is entered on posting (issue #2096)", () => {
+      const html = billReminderTemplate(
+        "Alice",
+        [
+          { ...sampleBills[0], amount: 212.5, estimated: true },
+          { ...sampleBills[1], amount: null, estimated: true },
+        ],
+        "https://monize.app",
+      );
+
+      expect(html).toContain("$212.50");
+      expect(html).toContain("Estimated");
+      expect(html).toContain(
+        "Estimate unknown: enter the amount when you post it",
+      );
+      expect(html).not.toContain("Amount unavailable");
+    });
+
+    /**
+     * Issue #1316: the template already took the recipient's localized
+     * translator and then rendered the amount through the deterministic `en-US`
+     * helper, so Polish copy carried `zl18,812.71`. The figure follows the
+     * recipient's number preference now.
+     */
+    describe("recipient number locale", () => {
+      const polishBill = [
+        {
+          payee: "Dostawca energii",
+          amount: 18812.71,
+          dueDate: "2024-02-15",
+          currencyCode: "PLN",
+          isIncome: false,
+        },
+      ];
+
+      it("renders the amount in the recipient's convention", () => {
+        const html = billReminderTemplate(
+          "Ala",
+          polishBill,
+          "https://monize.app",
+          undefined,
+          numberFormatterFor("pl-PL", "pl"),
+        );
+
+        expect(html).toContain("812,71");
+        expect(html).toContain("z\u0142");
+        expect(html).not.toContain("18,812.71");
+      });
+
+      it("keeps the dot-decimal convention for a recipient who chose it", () => {
+        // Proves the change is a locale seam, not a hardcoded Polish one.
+        const html = billReminderTemplate(
+          "Alice",
+          polishBill,
+          "https://monize.app",
+          undefined,
+          numberFormatterFor("en-US", "pl"),
+        );
+
+        expect(html).toContain("18,812.71");
+      });
+
+      it("follows the recipient's UI language when numberFormat is 'browser'", () => {
+        const html = billReminderTemplate(
+          "Ala",
+          polishBill,
+          "https://monize.app",
+          undefined,
+          numberFormatterFor("browser", "pl"),
+        );
+
+        expect(html).toContain("812,71");
+      });
     });
 
     it("includes the appUrl link to the bills page", () => {
@@ -792,14 +868,14 @@ describe("Email Templates", () => {
       expect(html).toContain("15 days");
     });
 
-    it("includes the Mortgage Renewal Reminder heading", () => {
+    it("includes the Mortgage Rate Term Reminder heading", () => {
       const html = mortgageReminderTemplate(
         "Alice",
         sampleMortgages,
         "https://monize.app",
       );
 
-      expect(html).toContain("Mortgage Renewal Reminder");
+      expect(html).toContain("Mortgage Rate Term Reminder");
     });
 
     it("uses plural grammar for multiple mortgages", () => {
@@ -819,7 +895,7 @@ describe("Email Templates", () => {
         "https://monize.app",
       );
 
-      expect(html).toContain("1 mortgage with an upcoming term renewal");
+      expect(html).toContain("1 mortgage whose current rate term ends soon");
     });
 
     it("uses singular day for 1 day remaining", () => {

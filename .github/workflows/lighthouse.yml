@@ -39,8 +39,15 @@ jobs:
         with:
           node-version: 24
 
+      # No Docker Hub login: the images come from mirror.gcr.io, Google's mirror
+      # of the official images (Dockerfiles, docker-compose.e2e.yml).
       - name: Build application images
         run: docker compose -f docker-compose.e2e.yml build
+
+      - name: Pull third-party images
+        # One image at a time with a back-off: compose pulls in parallel and fails
+        # the job on the first 429 (scripts/pull-ci-images.sh).
+        run: scripts/pull-ci-images.sh -f docker-compose.e2e.yml
 
       - name: Start application stack
         run: docker compose -f docker-compose.e2e.yml up -d --wait --wait-timeout 600

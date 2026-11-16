@@ -10,6 +10,8 @@
     "versionLabel": "Version {version}",
     "expandAll": "Alle ausklappen",
     "collapseAll": "Alle einklappen",
+    "changeCount": "{count, plural, one {# Änderung} other {# Änderungen}}",
+    "otherSections": "Korrekturen und Details",
     "viewFullNotes": "Vollständige Versionshinweise anzeigen",
     "dontShowAgain": "Nicht mehr anzeigen",
     "showNextLogin": "Bei der nächsten Anmeldung anzeigen",
@@ -38,6 +40,14 @@
     "scheduleRecurring": "Wiederkehrend machen",
     "more": "Weitere Aktionen"
   },
+  "columns": {
+    "button": "Spalten",
+    "buttonWithHidden": "Spalten, {count} ausgeblendet",
+    "menuLabel": "Spalten ein- oder ausblenden",
+    "showAll": "Alle einblenden",
+    "hideColumn": "Spalte ausblenden",
+    "sheetSubtitle": "Über das Spaltenmenü wieder einblenden."
+  },
   "loading": "Wird geladen...",
   "pagination": {
     "showing": "Angezeigt",
@@ -60,6 +70,7 @@
   },
   "exportDropdown": {
     "export": "Exportieren",
+    "exportCsv": "CSV exportieren",
     "exporting": "Wird exportiert...",
     "exportPdf": "PDF exportieren",
     "exportReport": "Bericht exportieren",
@@ -88,6 +99,7 @@
     "stackedChart": "100 % gestapeltes Balkendiagramm",
     "lineChart": "Liniendiagramm",
     "areaChart": "Flächendiagramm",
+    "sankeyChart": "Flussdiagramm",
     "table": "Tabelle"
   },
   "formActions": {
@@ -118,8 +130,15 @@
     "search": "Suchen...",
     "selectAll": "Alle auswählen",
     "clear": "Löschen",
+    "clearSearch": "Suche löschen",
     "noOptions": "Keine Optionen gefunden",
     "selectedCount": "{count} ausgewählt"
+  },
+  "categoryFilter": {
+    "uncategorized": "Nicht kategorisiert",
+    "transfers": "Überweisungen",
+    "allIncome": "Alle Einnahmenkategorien",
+    "allExpenses": "Alle Ausgabenkategorien"
   },
   "combobox": {
     "createOption": "\"{value}\" erstellen",
@@ -137,6 +156,7 @@
   },
   "dateInput": {
     "shortcutsTitle": "Tastaturkürzel",
+    "openPicker": "Datumsauswahl öffnen",
     "today": "Heute",
     "firstDayOfYear": "Erster Tag des Jahres",
     "lastDayOfYear": "Letzter Tag des Jahres",
@@ -158,6 +178,7 @@
     "CASH": "Bargeld",
     "LINE_OF_CREDIT": "Kreditlinie",
     "ASSET": "Aktiva",
+    "CRYPTO": "Krypto-Wallet",
     "OTHER": "Sonstiges"
   },
   "accountFilter": {
@@ -241,12 +262,20 @@
     "marker": "—",
     "srLabel": "Betrag nicht verfügbar",
     "scheduledFx": "Der aktuelle Betrag lässt sich nicht ermitteln: Für das Abrechnungs-Währungspaar dieses geplanten Eintrags ist kein Wechselkurs verfügbar. Der gespeicherte Betrag wurde mit einem älteren Kurs berechnet und wird daher nicht angezeigt.",
-    "displayFx": "Dieser Wert kann hier nicht angezeigt werden: der Betrag ist bekannt, aber es ist kein Wechselkurs verfügbar, um ihn in die Währung dieser Summe umzurechnen. Aktualisieren Sie die Kurse auf der Seite Währungen."
+    "displayFx": "Dieser Wert kann hier nicht angezeigt werden: der Betrag ist bekannt, aber es ist kein Wechselkurs verfügbar, um ihn in die Währung dieser Summe umzurechnen. Aktualisieren Sie die Kurse auf der Seite Währungen.",
+    "noCashBalance": "Dieser Wert lässt sich nicht ermitteln: Ein Geldkonto in dieser Ansicht hat für diesen Tag keinen Saldo gemeldet, sein Bestand ist also unbekannt und nicht null. Laden Sie den Bericht neu; bleibt es dabei, konnten die Salden des Tages nicht ermittelt werden, und das ist meldenswert.",
+    "noPrice": "Dieser Wert lässt sich nicht ermitteln: Die gehaltenen Anteile sind bekannt, aber für das Wertpapier liegt kein Kurs vor, mit dem sie bewertet werden könnten. Aktualisieren Sie die Kurse oder tragen Sie einen Kurs manuell im Kursverlauf des Wertpapiers ein.",
+    "noBaseline": "Dieser Wert kann nicht ermittelt werden: Er ist ein Vergleich, und es gibt keinen früheren Wert, mit dem er verglichen werden kann. Es fehlt nichts, also ist nichts hinzuzufügen.",
+    "staleQuote": "Die Tagesveränderung lässt sich nicht ermitteln: Der jüngste Kurs des Wertpapiers ist älter als die letzte Handelssitzung, jede Veränderung daraus wäre also die eines früheren Tages. Aktualisieren Sie die Kurse oder prüfen Sie den Kursanbieter des Wertpapiers.",
+    "unknownCurrency": "Dieser Betrag kann nicht angezeigt werden: Der Datensatz nennt kein Wertpapier, daher ist die Währung des Betrags unbekannt. Öffnen Sie die Transaktion und weisen Sie ihr ein Wertpapier zu, damit ihre Beträge beschriftet werden können."
   },
   "density": {
     "title": "Zeilendichte umschalten",
     "normal": "Normal",
     "compact": "Kompakt",
     "dense": "Dicht"
+  },
+  "scheduledOverdue": {
+    "included": "Enthält {count, plural, one {# überfällige terminierte Buchung} other {# überfällige terminierte Buchungen}}"
   }
 }

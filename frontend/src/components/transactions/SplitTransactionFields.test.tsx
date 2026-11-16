@@ -4,7 +4,8 @@ import { SplitTransactionFields } from './SplitTransactionFields';
 import { Account } from '@/types/account';
 import { Payee } from '@/types/payee';
 
-vi.mock('@/lib/format', () => ({
+vi.mock('@/lib/format', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/format')>()),
   getCurrencySymbol: (code: string) => (code === 'USD' ? 'US$' : '$'),
   getDecimalPlacesForCurrency: () => 2,
 }));
@@ -42,7 +43,7 @@ vi.mock('@/components/ui/Combobox', () => ({
 }));
 
 vi.mock('@/components/ui/CurrencyInput', () => ({
-  CurrencyInput: ({ label, value, onChange, error, prefix }: any) => (
+  CurrencyInput: ({ label, value, onChange, error, prefix, allowSignToggle }: any) => (
     <div data-testid={`currency-input-${label}`}>
       <label>{label}</label>
       {prefix && <span data-testid={`currency-prefix-${label}`}>{prefix}</span>}
@@ -52,6 +53,11 @@ vi.mock('@/components/ui/CurrencyInput', () => ({
         value={value ?? ''}
         onChange={(e) => onChange(e.target.value ? Number(e.target.value) : undefined)}
       />
+      {allowSignToggle && (
+        <button type="button" aria-label={`Change sign of ${label}`} onClick={() => onChange(-(value ?? 0))}>
+          +/-
+        </button>
+      )}
       {error && <span data-testid={`currency-error-${label}`}>{error}</span>}
     </div>
   ),
@@ -90,8 +96,7 @@ function createAccount(overrides: Partial<Account> = {}): Account {
     assetCategoryId: null,
     dateAcquired: null,
     linkedLoanAccountId: null,
-    isCanadianMortgage: false,
-    isVariableRate: false,
+    mortgageType: 'ANNUITY',
     termMonths: null,
     termEndDate: null,
     amortizationMonths: null,
@@ -115,6 +120,11 @@ function createPayee(overrides: Partial<Payee> = {}): Payee {
     website: null,
     hasLogo: false,
     logoFetchedAt: null,
+    contactLookupAt: null,
+    contactLookupSource: null,
+    address: null,
+    email: null,
+    phone: null,
     isActive: true,
     createdAt: '2024-01-01T00:00:00Z',
     ...overrides,
@@ -360,6 +370,14 @@ describe('SplitTransactionFields', () => {
     fireEvent.change(amountInput, { target: { value: '150.00' } });
 
     expect(defaultProps.handleAmountChange).toHaveBeenCalledWith(150);
+  });
+
+  it('offers the +/- sign toggle on Total Amount, as the Amount field does', () => {
+    render(<SplitTransactionFields {...defaultProps} watchedAmount={-100} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Change sign of Total Amount' }));
+
+    expect(defaultProps.handleAmountChange).toHaveBeenCalledWith(100);
   });
 
   it('calls handleAmountChange with undefined when Total Amount is cleared', () => {

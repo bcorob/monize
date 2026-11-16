@@ -16,6 +16,12 @@ export interface PdfSummaryCard {
    * card takes 3/6 of the row, each of the others 1/6.
    */
   widthRatio?: number;
+  /**
+   * A caveat printed under the value, e.g. that the figure is a partial total.
+   * When any card in the row has one, every card in the row grows by the same
+   * strip so the row stays level; a row with no notes is laid out as before.
+   */
+  note?: string;
 }
 
 interface CardLayoutOptions {
@@ -28,6 +34,9 @@ const CARD_HEIGHT = 18;
 const CARD_GAP = 4;
 const CARD_PADDING = 4;
 const CARD_RADIUS = 2;
+const NOTE_STRIP_HEIGHT = 7;
+const NOTE_FONT_SIZE = 6.5;
+const NOTE_COLOR: [number, number, number] = [180, 83, 9]; // amber-700
 const LABEL_FONT_SIZE = 8;
 const VALUE_FONT_SIZE = 12;
 const DEFAULT_VALUE_COLOR = '#111827';
@@ -66,6 +75,7 @@ export function addSummaryCardsToPdf(
   const ratios = cards.map((c) => Math.max(0.1, c.widthRatio ?? 1));
   const totalRatio = ratios.reduce((a, b) => a + b, 0);
   const widthPerRatio = (availableWidth - totalGap) / totalRatio;
+  const cardHeight = cards.some((c) => c.note) ? CARD_HEIGHT + NOTE_STRIP_HEIGHT : CARD_HEIGHT;
 
   let x = margin;
   for (let i = 0; i < cards.length; i++) {
@@ -76,7 +86,7 @@ export function addSummaryCardsToPdf(
     doc.setFillColor(...FILL_COLOR);
     doc.setDrawColor(...BORDER_COLOR);
     doc.setLineWidth(0.25);
-    doc.roundedRect(x, startY, cardWidth, CARD_HEIGHT, CARD_RADIUS, CARD_RADIUS, 'FD');
+    doc.roundedRect(x, startY, cardWidth, cardHeight, CARD_RADIUS, CARD_RADIUS, 'FD');
 
     // Label
     doc.setFontSize(LABEL_FONT_SIZE);
@@ -91,8 +101,16 @@ export function addSummaryCardsToPdf(
     doc.setTextColor(...valueColor);
     doc.text(card.value, x + CARD_PADDING, startY + 14);
 
+    if (card.note) {
+      doc.setFontSize(NOTE_FONT_SIZE);
+      doc.setFont(PDF_FONT, 'normal');
+      doc.setTextColor(...NOTE_COLOR);
+      const lines = doc.splitTextToSize(card.note, cardWidth - CARD_PADDING * 2) as string[];
+      doc.text(lines.slice(0, 2), x + CARD_PADDING, startY + 18.5);
+    }
+
     x += cardWidth + CARD_GAP;
   }
 
-  return startY + CARD_HEIGHT + CARD_GAP;
+  return startY + cardHeight + CARD_GAP;
 }

@@ -1,0 +1,63 @@
+{{- if .Values.frontend.podDisruptionBudget.enabled }}
+{{- /*
+  What keeps a voluntary disruption -- a node drain, a cluster upgrade, a
+  descheduler -- from taking every replica at once. Kubernetes will not evict
+  past this, so the rollout the operator did not schedule is held to the same
+  availability the rollout they did schedule already has.
+
+  Deliberately not enabled by default: at replicas: 1 a PDB with
+  minAvailable: 1 makes a node drain block forever rather than briefly
+  interrupt the service, which is a worse surprise than the interruption. It is
+  turned on with the replica count, and helm/README.md says so.
+*/}}
+{{- $budget := .Values.frontend.podDisruptionBudget }}
+{{- $replicas := int .Values.frontend.replicas }}
+{{- if .Values.frontend.autoscaling.enabled }}
+{{- $replicas = int .Values.frontend.autoscaling.minReplicas }}
+{{- end }}
+{{- /*
+  `maxUnavailable` is read by kind and exact value rather than by truthiness,
+  because 0 is falsy in a template and `""` is the unset default. Read the
+  other way, `maxUnavailable: 0` would silently fall through to `minAvailable`
+  -- neither honoured nor refused, and the operator would be given a budget
+  they did not write.
+*/}}
+{{- $usesMaxUnavailable := and
+      (ne (kindOf $budget.maxUnavailable) "invalid")
+      (ne (toString $budget.maxUnavailable) "") }}
+{{- /*
+  A budget that admits no eviction at all is the one shape to refuse. Not
+  "strict": a node drain waits forever rather than for a moment, and a cluster
+  upgrade stalls on it until somebody deletes the budget by hand. Kubernetes
+  accepts it without complaint, and the symptom appears months later on
+  somebody else's maintenance window.
+
+  Two spellings reach it -- `minAvailable` equal to the replica count, and
+  `maxUnavailable: 0` -- so both are named here.
+*/}}
+{{- if $usesMaxUnavailable }}
+{{- if le (int $budget.maxUnavailable) 0 }}
+{{- fail "frontend.podDisruptionBudget.maxUnavailable is 0: no pod could ever be evicted, so a node drain or cluster upgrade blocks indefinitely instead of interrupting the service briefly. Use 1, or set minAvailable below the replica count." }}
+{{- end }}
+{{- else }}
+{{- if ge (int $budget.minAvailable) $replicas }}
+{{- fail (printf "frontend.podDisruptionBudget.minAvailable is %d with %d replica(s): no pod could ever be evicted, so a node drain or cluster upgrade blocks indefinitely instead of interrupting the service briefly. Raise the replica count, lower minAvailable, or use maxUnavailable." (int $budget.minAvailable) $replicas) }}
+{{- end }}
+{{- end }}
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: monize-frontend
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "monize.frontend.labels" . | nindent 4 }}
+spec:
+  {{- if $usesMaxUnavailable }}
+  maxUnavailable: {{ $budget.maxUnavailable }}
+  {{- else }}
+  minAvailable: {{ $budget.minAvailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "monize.frontend.selectorLabels" . | nindent 6 }}
+{{- end }}

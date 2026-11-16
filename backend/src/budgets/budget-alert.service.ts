@@ -1,26 +1,37 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { Cron } from "@nestjs/schedule";
-import { LessThan, IsNull, DataSource } from "typeorm";
+import { DataSource, In } from "typeorm";
 import { withScopedDb } from "../common/db/scoped-db";
-import { returnedRows } from "../common/db/query-result";
 import { ConfigService } from "@nestjs/config";
 import { I18nService } from "nestjs-i18n";
 import { emailTranslator } from "../i18n/email-translator";
 import { DEFAULT_LOCALE } from "../i18n/config";
-import { getMonthEndYMD } from "../common/date-utils";
 import { withSystemContext, withUserContext } from "../common/db/with-context";
-import { Budget } from "./entities/budget.entity";
+import { getUsersByEffectiveTimezone } from "../common/users-by-timezone.util";
 import {
-  BudgetAlert,
-  AlertType,
-  AlertSeverity,
-} from "./entities/budget-alert.entity";
+  JobClaimService,
+  JobClaimType,
+} from "../common/jobs/job-claim.service";
+import { Budget } from "./entities/budget.entity";
+import { BudgetCategory } from "./entities/budget-category.entity";
+import { queryMonthlyCategorySpent } from "./budget-monthly-spending.util";
+import {
+  Notification,
+  NotificationType,
+  NotificationSeverity,
+  NotificationCategory,
+  typesForCategory,
+} from "../notification-center/entities/notification.entity";
+import { NotificationService } from "../notification-center/notification.service";
+import { NotificationPreferenceService } from "../notification-center/notification-preference.service";
 import { Transaction } from "../transactions/entities/transaction.entity";
 import { TransactionSplit } from "../transactions/entities/transaction-split.entity";
 import { User } from "../users/entities/user.entity";
 import { UserPreference } from "../users/entities/user-preference.entity";
 import { ScheduledTransaction } from "../scheduled-transactions/entities/scheduled-transaction.entity";
 import { EmailService } from "../notifications/email.service";
+import { NotificationDispatchService } from "../notifications/notification-dispatch.service";
+import { notificationEmailCopy } from "../notifications/notification-email-copy";
 import {
   budgetAlertImmediateTemplate,
   budgetWeeklyDigestTemplate,
@@ -33,8 +44,14 @@ import {
   queryCategorySpending,
   resolveCategoryName,
   resolveCategorySpent,
+  resolveOutsideTransferIncome,
 } from "./budget-spending.util";
-import { formatCurrency } from "../common/format-currency.util";
+import { FALLBACK_DEFAULT_CURRENCY } from "../common/default-currency.util";
+import {
+  NumberT,
+  defaultNumberT,
+  numberFormatterFor,
+} from "../common/number-locale.util";
 import { roundMoney, sumMoney } from "../common/round.util";
 
 interface SeasonalProfile {
@@ -63,11 +80,36 @@ interface CategoryActual {
 interface AlertCandidate {
   budgetId: string;
   budgetCategoryId: string | null;
-  alertType: AlertType;
-  severity: AlertSeverity;
+  type: NotificationType;
+  severity: NotificationSeverity;
   title: string;
   message: string;
   data: Record<string, unknown>;
+}
+
+/**
+ * What the weekly budget digest is about: the budget types and the bill
+ * reminders, and nothing else that happens to share the table and a
+ * `period_start`. A reminder's re-emitted nag of one of these is dropped after
+ * the read (`isReminderReEmit`): it is the user's own repeat of a row already in
+ * the digest, not news.
+ */
+export const DIGEST_TYPES: readonly NotificationType[] = [
+  ...typesForCategory(NotificationCategory.BUDGETS),
+  NotificationType.BILL_DUE,
+];
+
+/**
+ * How long one replica holds a user's weekly digest: one SMTP round trip with
+ * room to spare, and short enough that a replica killed mid-send hands the user
+ * back to the next run rather than locking them out.
+ */
+export const DIGEST_LEASE_MS = 10 * 60 * 1000;
+
+function isReminderReEmit(row: Notification): boolean {
+  const value = (row.data as Record<string, unknown> | null | undefined)
+    ?.reminderId;
+  return typeof value === "string" && value.length > 0;
 }
 
 @Injectable()
@@ -79,6 +121,19 @@ export class BudgetAlertService {
     private emailService: EmailService,
     private configService: ConfigService,
     private readonly i18n: I18nService,
+    // Every notification this service produces goes through the one write door.
+    // `markEmailSent` is called directly; new alerts are written through the
+    // dispatch below so they also fan out to push and immediate email.
+    private notifications: NotificationService,
+    // Email for budget alerts is gated by the BUDGETS channel matrix.
+    private readonly notificationPreferences: NotificationPreferenceService,
+    // The Phase 5 fan-out seam: writing a budget alert through `notify` adds the
+    // notification-mode push and immediate email (matrix- and throttle-gated) on
+    // top of the in-app row, without changing the batched critical email below,
+    // which is report-mode and stays as it is.
+    private readonly dispatch: NotificationDispatchService,
+    // The weekly digest's lease and delivery record, so N replicas send one.
+    private readonly jobClaims: JobClaimService,
   ) {}
 
   @Cron("0 7 * * *")
@@ -106,14 +161,21 @@ export class BudgetAlertService {
         return;
       }
 
+      // The user's own day, so "current period" is October at 18:00 PDT on
+      // the 31st, not November (issue #2073) -- same bucket-once pattern as
+      // `getUsersByEffectiveTimezone`'s other callers.
+      const timezoneByUserId = await this.buildTimezoneLookup();
+
       let alertsCreated = 0;
       let emailsSent = 0;
 
       for (const budget of activeBudgets) {
         try {
           // RLS: per-user body keeps the user's RLS net.
-          const result = await withUserContext(budget.userId, () =>
-            this.processAlerts(budget),
+          const result = await withUserContext(
+            budget.userId,
+            () => this.processAlerts(budget),
+            timezoneByUserId.get(budget.userId),
           );
           alertsCreated += result.alertsCreated;
           emailsSent += result.emailsSent;
@@ -173,14 +235,31 @@ export class BudgetAlertService {
         budgetsByUser.set(budget.userId, existing);
       }
 
+      // The user's own day, so the digest's "current period" matches what the
+      // app itself shows them (issue #2073), distinct from `runDate` below.
+      const timezoneByUserId = await this.buildTimezoneLookup();
+
+      // The run's date, read ONCE for every user. It is the digest's claim
+      // key, and a run that spans midnight while reading the date per user
+      // claims the early users under one key and the rest under another --
+      // which is how the bill reminder's two passes came to disagree.
+      //
+      // The UTC day, not `todayYMD()`: outside a request that is the server's
+      // local date, so two replicas with different TZ settings would key the
+      // same Monday's digest differently and both send it. UTC is the same
+      // string on every replica, as the demo reset's key is.
+      const runDate = new Date().toISOString().slice(0, 10);
+
       let sentCount = 0;
       let skipCount = 0;
 
       for (const [userId, userBudgets] of budgetsByUser) {
         try {
           // RLS: per-user body keeps the user's RLS net.
-          const sent = await withUserContext(userId, () =>
-            this.sendDigestForUser(userId, userBudgets),
+          const sent = await withUserContext(
+            userId,
+            () => this.sendDigestForUser(userId, userBudgets, runDate),
+            timezoneByUserId.get(userId),
           );
           if (sent) {
             sentCount++;
@@ -216,19 +295,32 @@ export class BudgetAlertService {
       return { alertsCreated: 0, emailsSent: 0 };
     }
 
-    const actuals = await this.computeCategoryActuals(
-      budget.userId,
-      budget,
-      periodStart,
-      periodEnd,
+    const { lines: actuals, outsideTransferIncome } =
+      await this.computeCategoryActuals(
+        budget.userId,
+        budget,
+        periodStart,
+        periodEnd,
+      );
+
+    // Every figure below is read by this budget's owner, so it is rendered in
+    // their number locale rather than the server's (issue #1316). Resolved once
+    // per budget: the `check*` methods are pure and take it as an argument.
+    const prefs = await withScopedDb(this.dataSource, (m) =>
+      m.getRepository(UserPreference).findOne({
+        where: { userId: budget.userId },
+      }),
     );
+    const n = numberFormatterFor(prefs?.numberFormat, prefs?.language);
 
     const today = new Date();
     const startDate = new Date(periodStart);
     const endDate = new Date(periodEnd);
-    const totalDays = Math.ceil(
-      (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
-    );
+    // periodEnd is the inclusive last day, so the period spans one more day.
+    const totalDays =
+      Math.ceil(
+        (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
+      ) + 1;
     const daysElapsed = Math.max(
       1,
       Math.ceil(
@@ -247,7 +339,7 @@ export class BudgetAlertService {
     for (const cat of expenseActuals) {
       if (cat.budgeted <= 0) continue;
 
-      const alerts = this.checkThresholdAlerts(cat);
+      const alerts = this.checkThresholdAlerts(cat, n);
       candidates.push(...alerts.map((a) => ({ ...a, budgetId: budget.id })));
     }
 
@@ -259,6 +351,7 @@ export class BudgetAlertService {
         cat,
         daysElapsed,
         totalDays,
+        n,
       );
       if (velocityAlert) {
         candidates.push({ ...velocityAlert, budgetId: budget.id });
@@ -266,7 +359,7 @@ export class BudgetAlertService {
     }
 
     // 3. Flex group alerts
-    const flexAlerts = this.checkFlexGroupAlerts(expenseActuals);
+    const flexAlerts = this.checkFlexGroupAlerts(expenseActuals, n);
     candidates.push(...flexAlerts.map((a) => ({ ...a, budgetId: budget.id })));
 
     // 4. Income shortfall (income-linked budgets)
@@ -275,6 +368,8 @@ export class BudgetAlertService {
         incomeActuals,
         budget.baseIncome,
         periodProgress,
+        n,
+        { outsideTransferIncome, currencyCode: budget.currencyCode },
       );
       if (incomeAlert) {
         candidates.push({ ...incomeAlert, budgetId: budget.id });
@@ -286,6 +381,7 @@ export class BudgetAlertService {
       expenseActuals,
       periodProgress,
       daysRemaining,
+      n,
     );
     candidates.push(
       ...milestoneAlerts.map((a) => ({ ...a, budgetId: budget.id })),
@@ -296,6 +392,7 @@ export class BudgetAlertService {
       const seasonalAlerts = await this.checkSeasonalSpikes(
         budget.userId,
         budget,
+        n,
       );
       candidates.push(
         ...seasonalAlerts.map((a) => ({ ...a, budgetId: budget.id })),
@@ -309,7 +406,7 @@ export class BudgetAlertService {
 
     // De-duplicate against existing alerts for same period
     const existingAlerts = await withScopedDb(this.dataSource, (m) =>
-      m.getRepository(BudgetAlert).find({
+      m.getRepository(Notification).find({
         where: {
           budgetId: budget.id,
           periodStart,
@@ -332,38 +429,25 @@ export class BudgetAlertService {
     // (audit P4-015). The unique fingerprint from migration 140 arbitrates
     // instead, and `ON CONFLICT DO NOTHING RETURNING` reports the outcome
     // honestly: the loser gets no row and therefore sends nothing.
-    const savedAlerts: BudgetAlert[] = [];
+    const savedAlerts: Notification[] = [];
     for (const candidate of newCandidates) {
-      const inserted = await withScopedDb(this.dataSource, (m) =>
-        m.query(
-          `INSERT INTO budget_alerts
-             (user_id, budget_id, budget_category_id, alert_type, severity,
-              title, message, data, period_start)
-           VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9)
-           ON CONFLICT (budget_id, period_start, alert_type,
-                        COALESCE(budget_category_id, '00000000-0000-0000-0000-000000000000'::uuid),
-                        severity)
-             DO NOTHING
-           RETURNING id`,
-          [
-            budget.userId,
-            candidate.budgetId,
-            candidate.budgetCategoryId,
-            candidate.alertType,
-            candidate.severity,
-            candidate.title,
-            candidate.message,
-            JSON.stringify(candidate.data ?? {}),
-            periodStart,
-          ],
-        ),
-      );
-      const rows = returnedRows<{ id: string }>(inserted);
-      if (rows.length === 0) continue;
-
-      const saved = await withScopedDb(this.dataSource, (m) =>
-        m.getRepository(BudgetAlert).findOne({ where: { id: rows[0].id } }),
-      );
+      // `null` from the door means the fingerprint index refused the row --
+      // another replica holds this alert -- so this processor sends nothing for
+      // it. That is the whole arbitration; there is no second check.
+      const saved = await this.dispatch.notify(budget.userId, {
+        type: candidate.type,
+        severity: candidate.severity,
+        title: candidate.title,
+        message: candidate.message,
+        // The amounts were computed in this budget's currency. Carry the
+        // code with the snapshot so later emails never guess from preferences.
+        data: { ...candidate.data, currencyCode: budget.currencyCode },
+        budgetId: candidate.budgetId,
+        budgetCategoryId: candidate.budgetCategoryId,
+        // Where the bell sends the reader: the budget the alert is about.
+        target: `/budgets/${candidate.budgetId}`,
+        periodStart,
+      });
       if (saved) savedAlerts.push(saved);
     }
 
@@ -375,10 +459,10 @@ export class BudgetAlertService {
     let emailsSent = 0;
     const criticalAlerts = savedAlerts.filter(
       (a) =>
-        a.severity === AlertSeverity.CRITICAL &&
-        (a.alertType === AlertType.THRESHOLD_CRITICAL ||
-          a.alertType === AlertType.OVER_BUDGET ||
-          a.alertType === AlertType.INCOME_SHORTFALL),
+        a.severity === NotificationSeverity.CRITICAL &&
+        (a.type === NotificationType.THRESHOLD_CRITICAL ||
+          a.type === NotificationType.OVER_BUDGET ||
+          a.type === NotificationType.INCOME_SHORTFALL),
     );
 
     if (criticalAlerts.length > 0) {
@@ -389,10 +473,10 @@ export class BudgetAlertService {
       if (sent) {
         emailsSent = 1;
         for (const alert of criticalAlerts) {
-          alert.isEmailSent = true;
-          await withScopedDb(this.dataSource, (m) =>
-            m.getRepository(BudgetAlert).save(alert),
-          );
+          // The flag is set through the door, on that row alone. Mutating the
+          // loaded entity as well would read as if the local copy mattered --
+          // it is never saved, and a full-row save is what this replaced.
+          await this.notifications.markEmailSent(alert.userId, alert.id);
         }
       }
     }
@@ -400,17 +484,29 @@ export class BudgetAlertService {
     return { alertsCreated: savedAlerts.length, emailsSent };
   }
 
-  checkThresholdAlerts(cat: CategoryActual): AlertCandidate[] {
+  /**
+   * The `title`/`message` pair is the English fallback a reader without a
+   * localizing client sees (the digest email, an API consumer); the UI composes
+   * its own copy from `type` + `data`. The FIGURES inside it still follow the
+   * recipient's number locale, because a Polish reader misreads `zl18,812.71`
+   * whatever language the sentence around it is in (issue #1316). `n` defaults
+   * to the default-locale formatter so a caller with no preferences to hand
+   * (a unit test) is unchanged.
+   */
+  checkThresholdAlerts(
+    cat: CategoryActual,
+    n: NumberT = defaultNumberT,
+  ): AlertCandidate[] {
     const alerts: AlertCandidate[] = [];
 
     if (cat.percentUsed > 100) {
       alerts.push({
         budgetId: "",
         budgetCategoryId: cat.budgetCategoryId,
-        alertType: AlertType.OVER_BUDGET,
-        severity: AlertSeverity.CRITICAL,
+        type: NotificationType.OVER_BUDGET,
+        severity: NotificationSeverity.CRITICAL,
         title: `${cat.categoryName} is over budget`,
-        message: `You have spent ${formatCurrency(cat.spent, cat.currencyCode)} of your ${formatCurrency(cat.budgeted, cat.currencyCode)} budget for ${cat.categoryName} (${cat.percentUsed.toFixed(1)}%).`,
+        message: `You have spent ${n.formatCurrency(cat.spent, cat.currencyCode)} of your ${n.formatCurrency(cat.budgeted, cat.currencyCode)} budget for ${cat.categoryName} (${n.formatPercent(cat.percentUsed, 1)}).`,
         data: {
           categoryName: cat.categoryName,
           percent: cat.percentUsed,
@@ -422,10 +518,10 @@ export class BudgetAlertService {
       alerts.push({
         budgetId: "",
         budgetCategoryId: cat.budgetCategoryId,
-        alertType: AlertType.THRESHOLD_CRITICAL,
-        severity: AlertSeverity.WARNING,
+        type: NotificationType.THRESHOLD_CRITICAL,
+        severity: NotificationSeverity.WARNING,
         title: `${cat.categoryName} approaching limit`,
-        message: `You have used ${cat.percentUsed.toFixed(1)}% of your ${cat.categoryName} budget (${formatCurrency(cat.spent, cat.currencyCode)} of ${formatCurrency(cat.budgeted, cat.currencyCode)}).`,
+        message: `You have used ${n.formatPercent(cat.percentUsed, 1)} of your ${cat.categoryName} budget (${n.formatCurrency(cat.spent, cat.currencyCode)} of ${n.formatCurrency(cat.budgeted, cat.currencyCode)}).`,
         data: {
           categoryName: cat.categoryName,
           percent: cat.percentUsed,
@@ -438,10 +534,10 @@ export class BudgetAlertService {
       alerts.push({
         budgetId: "",
         budgetCategoryId: cat.budgetCategoryId,
-        alertType: AlertType.THRESHOLD_WARNING,
-        severity: AlertSeverity.WARNING,
+        type: NotificationType.THRESHOLD_WARNING,
+        severity: NotificationSeverity.WARNING,
         title: `${cat.categoryName} reaching budget limit`,
-        message: `You have used ${cat.percentUsed.toFixed(1)}% of your ${cat.categoryName} budget (${formatCurrency(cat.spent, cat.currencyCode)} of ${formatCurrency(cat.budgeted, cat.currencyCode)}).`,
+        message: `You have used ${n.formatPercent(cat.percentUsed, 1)} of your ${cat.categoryName} budget (${n.formatCurrency(cat.spent, cat.currencyCode)} of ${n.formatCurrency(cat.budgeted, cat.currencyCode)}).`,
         data: {
           categoryName: cat.categoryName,
           percent: cat.percentUsed,
@@ -459,6 +555,7 @@ export class BudgetAlertService {
     cat: CategoryActual,
     daysElapsed: number,
     totalDays: number,
+    n: NumberT = defaultNumberT,
   ): AlertCandidate | null {
     const dailyRate = cat.spent / daysElapsed;
     const projectedTotal = dailyRate * totalDays;
@@ -468,10 +565,10 @@ export class BudgetAlertService {
       return {
         budgetId: "",
         budgetCategoryId: cat.budgetCategoryId,
-        alertType: AlertType.PROJECTED_OVERSPEND,
-        severity: AlertSeverity.WARNING,
+        type: NotificationType.PROJECTED_OVERSPEND,
+        severity: NotificationSeverity.WARNING,
         title: `${cat.categoryName} projected to overspend`,
-        message: `At your current pace, ${cat.categoryName} is projected to reach ${formatCurrency(projectedTotal, cat.currencyCode)} by the end of the period (budget: ${formatCurrency(cat.budgeted, cat.currencyCode)}).`,
+        message: `At your current pace, ${cat.categoryName} is projected to reach ${n.formatCurrency(projectedTotal, cat.currencyCode)} by the end of the period (budget: ${n.formatCurrency(cat.budgeted, cat.currencyCode)}).`,
         data: {
           categoryName: cat.categoryName,
           projectedTotal: roundMoney(projectedTotal),
@@ -485,7 +582,10 @@ export class BudgetAlertService {
     return null;
   }
 
-  checkFlexGroupAlerts(actuals: CategoryActual[]): AlertCandidate[] {
+  checkFlexGroupAlerts(
+    actuals: CategoryActual[],
+    n: NumberT = defaultNumberT,
+  ): AlertCandidate[] {
     const alerts: AlertCandidate[] = [];
     const flexGroups = new Map<
       string,
@@ -513,10 +613,10 @@ export class BudgetAlertService {
         alerts.push({
           budgetId: "",
           budgetCategoryId: null,
-          alertType: AlertType.FLEX_GROUP_WARNING,
-          severity: AlertSeverity.WARNING,
-          title: `Flex group "${groupName}" at ${groupPercent.toFixed(0)}%`,
-          message: `The "${groupName}" flex group has used ${formatCurrency(group.totalSpent, group.currencyCode)} of its combined ${formatCurrency(group.totalBudgeted, group.currencyCode)} budget (${groupPercent.toFixed(1)}%).`,
+          type: NotificationType.FLEX_GROUP_WARNING,
+          severity: NotificationSeverity.WARNING,
+          title: `Flex group "${groupName}" at ${n.formatPercent(groupPercent, 0)}`,
+          message: `The "${groupName}" flex group has used ${n.formatCurrency(group.totalSpent, group.currencyCode)} of its combined ${n.formatCurrency(group.totalBudgeted, group.currencyCode)} budget (${n.formatPercent(groupPercent, 1)}).`,
           data: {
             flexGroup: groupName,
             totalBudgeted: group.totalBudgeted,
@@ -534,21 +634,43 @@ export class BudgetAlertService {
     incomeActuals: CategoryActual[],
     expectedIncome: number,
     periodProgress: number,
+    n: NumberT = defaultNumberT,
+    /**
+     * The income no line carries (`config.transfersInAsIncome`, issue #2141)
+     * and the budget's currency, which names the figure when no line does.
+     */
+    budgetIncome: { outsideTransferIncome: number; currencyCode: string } = {
+      outsideTransferIncome: 0,
+      currencyCode: "",
+    },
   ): AlertCandidate | null {
     if (periodProgress < 0.5) return null;
 
-    const totalActualIncome = sumMoney(incomeActuals.map((cat) => cat.spent));
+    const totalActualIncome = sumMoney([
+      ...incomeActuals.map((cat) => cat.spent),
+      budgetIncome.outsideTransferIncome,
+    ]);
     const expectedSoFar = expectedIncome * periodProgress;
     const incomeRatio = totalActualIncome / expectedSoFar;
+    const currencyCode =
+      budgetIncome.currencyCode ||
+      incomeActuals[0]?.currencyCode ||
+      FALLBACK_DEFAULT_CURRENCY;
 
     if (incomeRatio < 0.8) {
       return {
         budgetId: "",
         budgetCategoryId: null,
-        alertType: AlertType.INCOME_SHORTFALL,
-        severity: AlertSeverity.CRITICAL,
+        type: NotificationType.INCOME_SHORTFALL,
+        severity: NotificationSeverity.CRITICAL,
         title: "Income below expected",
-        message: `Your actual income (${formatCurrency(totalActualIncome, incomeActuals[0]?.currencyCode || "USD")}) is below ${Math.round(incomeRatio * 100)}% of expected income (${formatCurrency(expectedSoFar, incomeActuals[0]?.currencyCode || "USD")}) at this point in the period.`,
+        message: `Your actual income (${n.formatCurrency(
+          totalActualIncome,
+          currencyCode,
+        )}) is below ${n.formatPercent(Math.round(incomeRatio * 100), 0)} of expected income (${n.formatCurrency(
+          expectedSoFar,
+          currencyCode,
+        )}) at this point in the period.`,
         data: {
           actualIncome: totalActualIncome,
           expectedIncome: expectedSoFar,
@@ -565,6 +687,7 @@ export class BudgetAlertService {
     actuals: CategoryActual[],
     periodProgress: number,
     daysRemaining: number,
+    n: NumberT = defaultNumberT,
   ): AlertCandidate[] {
     if (periodProgress < 0.5 || daysRemaining <= 0) return [];
 
@@ -580,10 +703,10 @@ export class BudgetAlertService {
         {
           budgetId: "",
           budgetCategoryId: null,
-          alertType: AlertType.POSITIVE_MILESTONE,
-          severity: AlertSeverity.SUCCESS,
+          type: NotificationType.POSITIVE_MILESTONE,
+          severity: NotificationSeverity.SUCCESS,
           title: "Budget on track",
-          message: `You are ${Math.round(periodProgress * 100)}% through the period and have only used ${overallPercent.toFixed(1)}% of your total budget. Keep it up!`,
+          message: `You are ${n.formatPercent(Math.round(periodProgress * 100), 0)} through the period and have only used ${n.formatPercent(overallPercent, 1)} of your total budget. Keep it up!`,
           data: {
             periodProgress: Math.round(periodProgress * 100),
             percentUsed: Math.round(overallPercent * 10) / 10,
@@ -600,7 +723,7 @@ export class BudgetAlertService {
 
   deduplicateAlerts(
     candidates: AlertCandidate[],
-    existing: BudgetAlert[],
+    existing: Notification[],
   ): AlertCandidate[] {
     // M25: Allow severity escalation (e.g., WARNING -> CRITICAL)
     const severityRank: Record<string, number> = {
@@ -610,11 +733,17 @@ export class BudgetAlertService {
       critical: 2,
     };
 
+    // The same key as `idx_notifications_fingerprint`: a flex-group warning is
+    // budget-wide (no category), so the group in `data` is what tells two of
+    // them apart (audit A26-L39).
+    const flexGroupOf = (data: Record<string, unknown> | null | undefined) =>
+      typeof data?.flexGroup === "string" ? data.flexGroup : "";
     return candidates.filter((candidate) => {
       const match = existing.find(
         (e) =>
-          e.alertType === candidate.alertType &&
-          e.budgetCategoryId === candidate.budgetCategoryId,
+          e.type === candidate.type &&
+          e.budgetCategoryId === candidate.budgetCategoryId &&
+          flexGroupOf(e.data) === flexGroupOf(candidate.data),
       );
       if (!match) return true;
       // Allow if candidate severity is higher than existing
@@ -627,17 +756,26 @@ export class BudgetAlertService {
 
   private async sendImmediateAlertEmail(
     userId: string,
-    alerts: BudgetAlert[],
+    alerts: Notification[],
   ): Promise<boolean> {
     if (!this.emailService.getStatus().configured) return false;
 
     try {
+      // A budget alert is the BUDGETS category; email is gated by that channel
+      // matrix and the global email master switch together (the resolver reads
+      // both). Runs under the user's own withUserContext.
+      const emailEnabled = await this.notificationPreferences.resolveEmail(
+        userId,
+        NotificationCategory.BUDGETS,
+      );
+      if (!emailEnabled) return false;
+
+      // The user's stored locale for the alert copy, composed off-request.
       const prefs = await withScopedDb(this.dataSource, (m) =>
         m.getRepository(UserPreference).findOne({
           where: { userId },
         }),
       );
-      if (prefs && !prefs.notificationEmail) return false;
 
       const user = await withScopedDb(this.dataSource, (m) =>
         m.getRepository(User).findOne({
@@ -651,15 +789,18 @@ export class BudgetAlertService {
         "http://localhost:3000",
       );
 
+      const lang = prefs?.language || DEFAULT_LOCALE;
+      const t = emailTranslator(this.i18n, lang);
       const alertData = alerts.map((a) => ({
-        title: a.title,
-        message: a.message,
+        // The figures follow the recipient's own `numberFormat`, which is
+        // independent of `lang` (issue #1316); `prefs` is the row `lang` came
+        // from, so this costs no extra read.
+        ...notificationEmailCopy(a, t, lang, {
+          numberFormat: prefs?.numberFormat,
+        }),
         severity: a.severity,
         categoryName: (a.data?.categoryName as string) || "",
       }));
-
-      const lang = prefs?.language || DEFAULT_LOCALE;
-      const t = emailTranslator(this.i18n, lang);
 
       const html = budgetAlertImmediateTemplate(
         user.firstName || "",
@@ -672,8 +813,8 @@ export class BudgetAlertService {
         alerts.length === 1
           ? t(
               "emails.budgetAlertImmediate.subject",
-              `Monize: Alert - ${alerts[0].title}`,
-              { title: alerts[0].title },
+              `Monize: Alert - ${alertData[0].title}`,
+              { title: alertData[0].title },
             )
           : t(
               "emails.budgetAlertImmediate.subjectPlural",
@@ -695,13 +836,19 @@ export class BudgetAlertService {
   private async sendDigestForUser(
     userId: string,
     budgets: Budget[],
+    runDate: string,
   ): Promise<boolean> {
     const prefs = await withScopedDb(this.dataSource, (m) =>
       m.getRepository(UserPreference).findOne({
         where: { userId },
       }),
     );
-    if (prefs && !prefs.notificationEmail) return false;
+    const emailEnabled = await this.notificationPreferences.resolveEmail(
+      userId,
+      NotificationCategory.BUDGETS,
+    );
+    if (!emailEnabled) return false;
+    // The digest has its own toggle beyond the channel matrix.
     if (prefs && prefs.budgetDigestEnabled === false) return false;
 
     const user = await withScopedDb(this.dataSource, (m) =>
@@ -714,21 +861,33 @@ export class BudgetAlertService {
     const { periodStart } = this.getCurrentPeriodDates();
 
     const allRecentAlerts = await withScopedDb(this.dataSource, (m) =>
-      m.getRepository(BudgetAlert).find({
+      m.getRepository(Notification).find({
         where: {
           userId,
           periodStart,
+          // Budget news, selected POSITIVELY: the budget types plus BILL_DUE.
+          // Two exclusions came before this and both leaked. `dedupe_key IS
+          // NULL` assumed only a system alert carries a key, and stopped
+          // holding the day BILL_DUE rows gained an occurrence key -- every
+          // bill-due row silently left the digest. `type NOT IN the system
+          // set` let SCHEDULED_POST_FAILED (a PAYMENTS type, deliberately not
+          // system) raised on the FIRST of a month -- whose `period_start` is
+          // that day, also the budget period start -- render inside the budget
+          // digest for the rest of the month. Naming what belongs cannot leak
+          // a type nobody thought of.
+          type: In(DIGEST_TYPES),
         },
         order: { createdAt: "DESC" },
         take: 20,
       }),
     );
 
-    if (allRecentAlerts.length === 0) return false;
+    const budgetNews = allRecentAlerts.filter((a) => !isReminderReEmit(a));
+    if (budgetNews.length === 0) return false;
 
     // Filter out BILL_DUE alerts for bills already paid ahead of time
-    const billAlerts = allRecentAlerts.filter(
-      (a) => a.alertType === AlertType.BILL_DUE,
+    const billAlerts = budgetNews.filter(
+      (a) => a.type === NotificationType.BILL_DUE,
     );
     const paidBillIds = new Set<string>();
     if (billAlerts.length > 0) {
@@ -770,8 +929,8 @@ export class BudgetAlertService {
       }
     }
 
-    const recentAlerts = allRecentAlerts.filter((a) => {
-      if (a.alertType !== AlertType.BILL_DUE) return true;
+    const recentAlerts = budgetNews.filter((a) => {
+      if (a.type !== NotificationType.BILL_DUE) return true;
       const billId = (a.data as Record<string, unknown>)?.billId as string;
       return !paidBillIds.has(billId);
     });
@@ -783,17 +942,17 @@ export class BudgetAlertService {
       "http://localhost:3000",
     );
 
+    const lang = prefs?.language || DEFAULT_LOCALE;
+    const t = emailTranslator(this.i18n, lang);
     const alertData = recentAlerts.map((a) => ({
-      title: a.title,
-      message: a.message,
+      ...notificationEmailCopy(a, t, lang, {
+        numberFormat: prefs?.numberFormat,
+      }),
       severity: a.severity,
       categoryName: (a.data?.categoryName as string) || "",
     }));
 
     const budgetNames = budgets.map((b) => b.name);
-
-    const lang = prefs?.language || DEFAULT_LOCALE;
-    const t = emailTranslator(this.i18n, lang);
 
     const html = budgetWeeklyDigestTemplate(
       user.firstName || "",
@@ -807,13 +966,83 @@ export class BudgetAlertService {
       "emails.budgetWeeklyDigest.subject",
       "Monize: Your weekly budget summary",
     );
-    await this.emailService.sendMail(user.email, subject, html);
-    return true;
+
+    // Claim this user's digest for the run date before anything leaves the
+    // process.
+    //
+    // Every backend replica fires this cron (docs/cron-jobs.md), and nothing
+    // here claimed or recorded the send -- so with N replicas each user got N
+    // copies of the Monday digest. Not a rare race: the normal outcome of
+    // running more than one replica.
+    //
+    // A **lease** plus a durable **delivery record**, not `claimOnce`. A
+    // permanent claim taken before the send is the only record that the send
+    // was owed, so a replica killed in between would leave a row every later
+    // run reads as "already handled" and the digest would silently never go
+    // out. The lease is the exclusion for one send; `delivered_at`, written
+    // after the send and re-read here, is what says it was done.
+    //
+    // The contract is at-least-once: a process killed after the SMTP server
+    // accepted but before the record committed re-sends next run. For a weekly
+    // summary that is the right trade.
+    const leaseToken = await this.jobClaims.claimLease(
+      JobClaimType.BudgetWeeklyDigest,
+      userId,
+      runDate,
+      DIGEST_LEASE_MS,
+    );
+    if (!leaseToken) {
+      // Another replica holds this user's digest for today.
+      return false;
+    }
+    if (
+      await this.jobClaims.wasDelivered(
+        JobClaimType.BudgetWeeklyDigest,
+        userId,
+        runDate,
+      )
+    ) {
+      // Already sent, durably. Hand the lease back rather than holding it for
+      // its whole TTL.
+      await this.jobClaims.releaseLease(
+        JobClaimType.BudgetWeeklyDigest,
+        userId,
+        runDate,
+        leaseToken,
+      );
+      return false;
+    }
+
+    try {
+      await this.emailService.sendMail(user.email, subject, html);
+      // The delivery record, after the side effect and never before it.
+      await this.jobClaims.markDelivered(
+        JobClaimType.BudgetWeeklyDigest,
+        userId,
+        runDate,
+        leaseToken,
+      );
+      return true;
+    } catch (error) {
+      // Hand the lease back so a transient SMTP outage costs a retry rather
+      // than the user's week. A failed release must not mask the send error,
+      // which the caller logs per user; the lease then simply expires.
+      await this.jobClaims
+        .releaseLease(
+          JobClaimType.BudgetWeeklyDigest,
+          userId,
+          runDate,
+          leaseToken,
+        )
+        .catch(() => undefined);
+      throw error;
+    }
   }
 
   async checkSeasonalSpikes(
     userId: string,
     budget: Budget,
+    n: NumberT = defaultNumberT,
   ): Promise<AlertCandidate[]> {
     const categories = (budget.categories || []).filter(
       (bc) => !bc.isIncome && bc.categoryId !== null && !bc.isTransfer,
@@ -821,13 +1050,7 @@ export class BudgetAlertService {
 
     if (categories.length === 0) return [];
 
-    const categoryIds = categories.map((bc) => bc.categoryId as string);
-
-    const profiles = await this.buildSeasonalProfiles(
-      userId,
-      categories,
-      categoryIds,
-    );
+    const profiles = await this.buildSeasonalProfiles(userId, categories);
 
     if (profiles.length === 0) return [];
 
@@ -846,10 +1069,10 @@ export class BudgetAlertService {
         alerts.push({
           budgetId: "",
           budgetCategoryId: profile.budgetCategoryId,
-          alertType: AlertType.SEASONAL_SPIKE,
-          severity: AlertSeverity.INFO,
+          type: NotificationType.SEASONAL_SPIKE,
+          severity: NotificationSeverity.INFO,
           title: `Seasonal spike expected for ${profile.categoryName}`,
-          message: `Last ${monthName} you spent ${profile.typicalIncrease.toFixed(1)}x your usual on ${profile.categoryName}. Consider adjusting your budget.`,
+          message: `Last ${monthName} you spent ${n.formatNumber(profile.typicalIncrease, 1)}x your usual on ${profile.categoryName}. Consider adjusting your budget.`,
           data: {
             categoryName: profile.categoryName,
             highMonth: nextMonthNum,
@@ -869,71 +1092,13 @@ export class BudgetAlertService {
 
   private async buildSeasonalProfiles(
     userId: string,
-    categories: Array<{
-      id: string;
-      categoryId: string | null;
-      category: any;
-    }>,
-    categoryIds: string[],
+    categories: BudgetCategory[],
   ): Promise<SeasonalProfile[]> {
-    const endDate = new Date();
-    const startDate = new Date();
-    startDate.setMonth(startDate.getMonth() - 12);
-    const startStr = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, "0")}-01`;
-    const endStr = getMonthEndYMD(
-      endDate.getFullYear(),
-      endDate.getMonth() + 1,
-    );
-
-    const directSpending = await withScopedDb(this.dataSource, (m) =>
-      m
-        .getRepository(Transaction)
-        .createQueryBuilder("t")
-        .select("t.category_id", "categoryId")
-        .addSelect("EXTRACT(MONTH FROM t.transaction_date)::int", "month")
-        .addSelect("COALESCE(ABS(SUM(t.amount)), 0)", "total")
-        .where("t.user_id = :userId", { userId })
-        .andWhere("t.category_id IN (:...categoryIds)", { categoryIds })
-        .andWhere("t.transaction_date >= :startStr", { startStr })
-        .andWhere("t.transaction_date <= :endStr", { endStr })
-        .andWhere("t.status != :void", { void: "VOID" })
-        .andWhere("t.is_split = false")
-        .groupBy("t.category_id")
-        .addGroupBy("EXTRACT(MONTH FROM t.transaction_date)")
-        .getRawMany(),
-    );
-
-    const splitSpending = await withScopedDb(this.dataSource, (m) =>
-      m
-        .getRepository(TransactionSplit)
-        .createQueryBuilder("s")
-        .innerJoin("s.transaction", "t")
-        .select("s.category_id", "categoryId")
-        .addSelect("EXTRACT(MONTH FROM t.transaction_date)::int", "month")
-        .addSelect("COALESCE(ABS(SUM(s.amount)), 0)", "total")
-        .where("t.user_id = :userId", { userId })
-        .andWhere("s.category_id IN (:...categoryIds)", { categoryIds })
-        .andWhere("t.transaction_date >= :startStr", { startStr })
-        .andWhere("t.transaction_date <= :endStr", { endStr })
-        .andWhere("t.status != :void", { void: "VOID" })
-        .groupBy("s.category_id")
-        .addGroupBy("EXTRACT(MONTH FROM t.transaction_date)")
-        .getRawMany(),
-    );
-
-    const spendingMap = new Map<string, Map<number, number>>();
-
-    for (const row of [...directSpending, ...splitSpending]) {
-      const catId = row.categoryId as string;
-      const month = Number(row.month);
-      const total = parseFloat(row.total || "0");
-
-      if (!spendingMap.has(catId)) {
-        spendingMap.set(catId, new Map());
-      }
-      const monthMap = spendingMap.get(catId)!;
-      monthMap.set(month, (monthMap.get(month) || 0) + total);
-    }
+    // Net, converted and account-filtered like the budget page (not gross ABS).
+    const { byCategory: spendingMap, incompleteCategoryIds } =
+      await withScopedDb(this.dataSource, (m) =>
+        queryMonthlyCategorySpent(m, userId, categories),
+      );
 
     const categoryNameMap = new Map<string, { name: string; bcId: string }>();
     for (const bc of categories) {
@@ -951,6 +1116,9 @@ export class BudgetAlertService {
     const profiles: SeasonalProfile[] = [];
 
     for (const [catId, monthMap] of spendingMap.entries()) {
+      // A month with an unconvertible row is unknown, not a quiet month: no
+      // spike claim is made from a partial profile.
+      if (incompleteCategoryIds.has(catId)) continue;
       const amounts: number[] = [];
       for (let m = 1; m <= 12; m++) {
         amounts.push(monthMap.get(m) || 0);
@@ -1022,36 +1190,58 @@ export class BudgetAlertService {
     return getCurrentMonthPeriodDates();
   }
 
+  /**
+   * Inverts `getUsersByEffectiveTimezone`'s bucketing into a per-user lookup,
+   * so each `withUserContext` call below carries the zone `todayYMD()` (and
+   * so `getCurrentPeriodDates()`) needs to name the user's own current period
+   * rather than falling back to the server's local date (issue #2073).
+   */
+  private async buildTimezoneLookup(): Promise<Map<string, string>> {
+    const usersByTz = await withSystemContext(() =>
+      getUsersByEffectiveTimezone(this.dataSource),
+    );
+    const timezoneByUserId = new Map<string, string>();
+    for (const [tz, userIds] of usersByTz) {
+      for (const userId of userIds) {
+        timezoneByUserId.set(userId, tz);
+      }
+    }
+    return timezoneByUserId;
+  }
+
   private async computeCategoryActuals(
     userId: string,
     budget: Budget,
     periodStart: string,
     periodEnd: string,
-  ): Promise<CategoryActual[]> {
+  ): Promise<{ lines: CategoryActual[]; outsideTransferIncome: number }> {
     const budgetCategories = budget.categories || [];
 
     if (budgetCategories.length === 0) {
-      return [];
+      return { lines: [], outsideTransferIncome: 0 };
     }
 
     // The two spending queries share one scoped transaction so the direct and
     // split halves of a category's total come from the same snapshot.
-    const { spendingMap, transferSpendingMap } = await withScopedDb(
-      this.dataSource,
-      (m) =>
-        queryCategorySpending(
-          m.getRepository(Transaction),
-          m.getRepository(TransactionSplit),
-          userId,
-          budgetCategories,
-          periodStart,
-          periodEnd,
-        ),
+    const spending = await withScopedDb(this.dataSource, (m) =>
+      queryCategorySpending(
+        m.getRepository(Transaction),
+        m.getRepository(TransactionSplit),
+        userId,
+        budgetCategories,
+        periodStart,
+        periodEnd,
+      ),
     );
 
-    return budgetCategories.map((bc) => {
+    const lines = budgetCategories.map((bc) => {
       const budgeted = Number(bc.amount);
-      const spent = resolveCategorySpent(bc, spendingMap, transferSpendingMap);
+      const spent = resolveCategorySpent(
+        bc,
+        spending.spendingMap,
+        spending.transferSpendingMap,
+        spending.transferIncomeMap,
+      );
       const categoryName = resolveCategoryName(bc);
       const percentUsed =
         budgeted > 0 ? Math.round((spent / budgeted) * 10000) / 100 : 0;
@@ -1070,45 +1260,9 @@ export class BudgetAlertService {
         flexGroup: bc.flexGroup,
       };
     });
-  }
-
-  @Cron("0 3 * * *")
-  async purgeOldAlerts(): Promise<void> {
-    this.logger.log("Purging old alerts...");
-    try {
-      const cutoff = new Date();
-      cutoff.setDate(cutoff.getDate() - 30);
-
-      // RLS (task C2): cross-user bulk purge -- runs under a system context.
-      const { dismissed, read } = await withSystemContext(async () => {
-        const result = await withScopedDb(this.dataSource, (m) =>
-          m.getRepository(BudgetAlert).delete({
-            dismissedAt: LessThan(cutoff),
-          }),
-        );
-        const readResult = await withScopedDb(this.dataSource, (m) =>
-          m.getRepository(BudgetAlert).delete({
-            isRead: true,
-            dismissedAt: IsNull(),
-            createdAt: LessThan(cutoff),
-          }),
-        );
-        return {
-          dismissed: result.affected || 0,
-          read: readResult.affected || 0,
-        };
-      });
-
-      if (dismissed + read > 0) {
-        this.logger.log(
-          `Purged ${dismissed} dismissed and ${read} old read alerts`,
-        );
-      }
-    } catch (error) {
-      this.logger.error(
-        "Failed to purge old alerts",
-        error instanceof Error ? error.stack : error,
-      );
-    }
+    return {
+      lines,
+      outsideTransferIncome: resolveOutsideTransferIncome(spending),
+    };
   }
 }

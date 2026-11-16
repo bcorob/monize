@@ -1,0 +1,120 @@
+{
+  "page": {
+    "title": "Kotak masuk peninjauan AI",
+    "subtitle": "Transaksi yang diminta aturan untuk ditinjau AI, profil yang diminta untuk dibuatkan drafnya oleh asisten, dan perubahan yang diusulkan asisten untuk Anda setujui."
+  },
+  "filter": {
+    "label": "Filter menurut status",
+    "open": "Terbuka",
+    "pending": "Menunggu",
+    "claimed": "Sedang ditinjau",
+    "proposed": "Diusulkan",
+    "applied": "Diterapkan",
+    "rejected": "Ditolak",
+    "expired": "Kedaluwarsa"
+  },
+  "kindFilter": {
+    "label": "Filter menurut jenis",
+    "all": "Semua",
+    "email_receipt": "Struk surel",
+    "transaction_review": "Aturan",
+    "option": "{label} ({count})"
+  },
+  "status": {
+    "pending": "Menunggu",
+    "claimed": "Sedang ditinjau",
+    "proposed": "Diusulkan",
+    "applied": "Diterapkan",
+    "rejected": "Ditolak",
+    "expired": "Kedaluwarsa"
+  },
+  "columns": {
+    "date": "Tanggal",
+    "request": "Permintaan",
+    "amount": "Jumlah",
+    "status": "Status"
+  },
+  "row": {
+    "noPayee": "Tanpa penerima",
+    "transactionMissing": "Transaksi ini sudah tidak ada",
+    "rule": "Aturan: {name}",
+    "manualRequest": "Diminta secara manual",
+    "trade": "{action, select, BUY {Pembelian {quantity} saham {symbol}} SELL {Penjualan {quantity} saham {symbol}} DIVIDEND {Dividen dari {symbol}} REINVEST {Reinvestasi dividen ke {quantity} saham {symbol}} other {Perdagangan {symbol}}}",
+    "receiptInstruction": {
+      "automatic": "Lengkapi transaksi ini dari email pesanan terlampir: pisahkan per item dengan kategori masing-masing, atau atur deskripsinya.",
+      "chat": "Anda meminta email pesanan terlampir dikenali: pisahkan transaksi ini per produk dengan kategori masing-masing, atau atur deskripsinya.",
+      "categorize": "Tetapkan kategori untuk setiap item email pesanan terlampir yang tidak dikategorikan aturan mana pun, lalu usulkan pemisahan transaksi ini atau atur deskripsinya.",
+      "parsed": "Parser tersimpan membaca email pesanan dan mengusulkan baris kategori dan deskripsi ini untuk transaksi.",
+      "trade": "Email konfirmasi perdagangan yang dibaca oleh profil tersimpan mengusulkan transaksi investasi ini. Periksa akun, sekuritas, jumlah saham, dan total pada pialang Anda sebelum menyetujui.",
+      "tradeChat": "Anda meminta konfirmasi perdagangan terlampir dikenali: usulkan transaksi investasi yang dilaporkannya, berupa pembelian, penjualan, dividen tunai, atau dividen yang diinvestasikan kembali."
+    },
+    "emailReceipt": "Struk surel: {subject} dari {sender}",
+    "emailReceiptForwarded": "Struk surel: {subject} dari {sender}, diteruskan oleh {forwarder}",
+    "emailReceiptMissing": "Struk surel (surel telah dihapus)",
+    "parserDraft": "Draf profil dari {count, plural, one {# surel} other {# surel}} ({domain})",
+    "viewEmailReceipts": "Lihat struk surel",
+    "agentNote": "Catatan dari asisten: {reason}",
+    "dates": "Dibuat {created}, kedaluwarsa {expires}",
+    "viewTransaction": "Lihat transaksi",
+    "waitingForAgent": "Menunggu agen AI. <link>Hubungkan penyedia AI di Pengaturan</link>, atau biarkan klien MCP mengambilnya.",
+    "parserDraftReady": "Draf profil siap. <link>Uji dan setujui di pengaturan profil</link>.",
+    "tradePending": "Transaksi dari email, belum dibaca",
+    "tradeEmail": "Surel konfirmasi perdagangan",
+    "parserDraftIds": "ID draf profil: {ids}"
+  },
+  "actions": {
+    "dismiss": "Abaikan"
+  },
+  "proposal": {
+    "errorTitle": "Usulan ini tidak dapat diterapkan lagi"
+  },
+  "bulk": {
+    "selectRow": "Pilih {name}",
+    "selectAll": "Pilih semua permintaan yang ditampilkan yang dapat disetujui atau dikirim",
+    "approveSelected": "Setujui yang dipilih ({count})",
+    "approveAllShown": "Setujui semua yang ditampilkan ({count})",
+    "summary": "{approved, plural, one {# usulan} other {# usulan}} diterapkan, {failed, plural, one {# tidak diterapkan} other {# tidak diterapkan}}.",
+    "closeSummary": "Tutup",
+    "failure": "{name}: {reason}",
+    "noReason": "Tidak ada alasan yang diberikan",
+    "unknownRequest": "Sebuah permintaan",
+    "failed": "Usulan tidak dapat diterapkan",
+    "dialog": {
+      "title": "{count, plural, one {Terapkan # usulan?} other {Terapkan # usulan?}}",
+      "message": "Setiap usulan diperiksa terhadap transaksinya sebagaimana kondisinya saat ini dan diterapkan sendiri-sendiri. Usulan yang tidak lagi cocok dilewati dan dilaporkan, sedangkan sisanya tetap diterapkan. Tinjau usulan sebelum menyetujuinya.",
+      "confirm": "{count, plural, one {Terapkan # usulan} other {Terapkan # usulan}}"
+    }
+  },
+  "sendToAssistant": {
+    "button": "Kirim {count, plural, other {# permintaan tertunda}} ke asisten AI",
+    "buttonSelected": "Kirim {count, plural, other {# permintaan terpilih}} ke asisten AI",
+    "prompt": "Kerjakan permintaan tinjauan AI saya yang tertunda dengan alat ai_review_requests: daftarkan, klaim masing-masing, ikuti instruksinya, dan kirim usulan. Untuk permintaan draf profil, buat profil dengan alat email_receipt_parsers. Tidak ada yang diubah sampai saya menyetujui usulan di kotak masuk tinjauan AI.",
+    "promptSelected": "Kerjakan {count, plural, other {# permintaan tinjauan AI ini}} dengan alat ai_review_requests: {ids}. Klaim masing-masing berdasarkan id-nya, ikuti instruksinya, dan kirim usulan. Untuk permintaan draf profil, buat profil dengan alat email_receipt_parsers. Jangan sentuh permintaan lainnya. Tidak ada yang diubah sampai saya menyetujui usulan di kotak masuk tinjauan AI.",
+    "opened": "Obrolan dibuka dengan pesan yang sudah disiapkan. Baca lalu tekan Kirim.",
+    "unavailable": "Asisten AI tidak dapat menjawab sekarang. Hubungkan penyedia AI di Pengaturan, atau hubungkan klien MCP Anda. Permintaan tetap menunggu di sini."
+  },
+  "dismissDialog": {
+    "title": "Abaikan permintaan ini?",
+    "message": "Tidak ada lagi yang akan diminta menangani permintaan ini. Hal yang menjadi pokok permintaan tidak berubah.",
+    "confirm": "Abaikan permintaan"
+  },
+  "loading": "Memuat permintaan peninjauan...",
+  "error": {
+    "title": "Permintaan peninjauan tidak dapat dimuat",
+    "body": "Daftar tidak termuat, jadi mungkin tidak kosong. Periksa koneksi Anda dan coba lagi.",
+    "retry": "Coba lagi"
+  },
+  "empty": {
+    "title": "Tidak ada permintaan peninjauan",
+    "body": "Permintaan muncul di sini saat aturan dengan tindakan “Minta peninjauan AI” cocok dengan sebuah transaksi. Asisten AI, atau klien MCP seperti agen relai, memproses antrean dan mengusulkan perubahan untuk Anda setujui.",
+    "filteredTitle": "Tidak ada permintaan dengan status ini",
+    "filteredBody": "Pilih status lain untuk melihat permintaan lainnya."
+  },
+  "toasts": {
+    "approved": "Usulan diterapkan",
+    "dismissed": "Permintaan diabaikan",
+    "dismissFailed": "Permintaan tidak dapat diabaikan",
+    "approveFailed": "Usulan tidak dapat diterapkan",
+    "changed": "Permintaan ini berubah sementara itu. Daftar dimuat ulang."
+  }
+}

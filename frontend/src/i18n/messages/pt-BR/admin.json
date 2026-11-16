@@ -46,6 +46,8 @@
     "colProvider": "Fornecedor",
     "colStatus": "Status",
     "colLastLogin": "Último Login",
+    "colBackups": "Backups",
+    "colAttachments": "Anexos",
     "colActions": "Ações",
     "youSuffix": "(você)",
     "noEmail": "Sem e-mail",
@@ -60,7 +62,22 @@
     "clickToDisable": "Clique para desativar",
     "clickToEnable": "Clique para ativar",
     "resetPassword": "Redefinir Senha",
-    "noUsers": "Nenhum usuário encontrado."
+    "resetTwoFactor": "Redefinir 2FA",
+    "unlinkSso": "Desvincular SSO",
+    "noUsers": "Nenhum usuário encontrado.",
+    "storageLoading": "Carregando…",
+    "storageUnavailable": "Indisponível",
+    "storageUnavailableHint": "Não foi possível carregar o uso de armazenamento. Recarregue a página para tentar novamente.",
+    "storageUnknown": "Desconhecido",
+    "storageUnknownStore": "Não foi possível ler o armazenamento de backups deste usuário, portanto o tamanho é desconhecido. Verifique o local dos backups na página Backups.",
+    "storageNotReported": "Sem registro",
+    "storageNotReportedHint": "Esta conta não constava da última leitura de armazenamento. Recarregue a página para incluí-la.",
+    "backupsOff": "Desativado",
+    "backupsOffHint": "Os backups automáticos não estão ativados para este usuário e nenhum está armazenado.",
+    "backupScheduleOff": "Agendamento desativado",
+    "backupScheduleOffHint": "Os backups automáticos estão desativados; estes arquivos são os que a retenção ainda não removeu.",
+    "backupCount": "{count, plural, =0 {Sem backups} one {# backup} other {# backups}}",
+    "attachmentCount": "{count, plural, =0 {Sem arquivos} one {# arquivo} other {# arquivos}}"
   },
   "usersPage": {
     "title": "Gerenciamento de Usuários",
@@ -81,7 +98,10 @@
       "loadFailed": "Falha ao carregar usuários",
       "deleteFailed": "Falha ao excluir usuário",
       "disableFailed": "Falha ao desativar usuário",
-      "resetFailed": "Falha ao redefinir senha"
+      "resetFailed": "Falha ao redefinir senha",
+      "twoFactorReset": "A autenticação de dois fatores de {name} foi redefinida. As sessões foram encerradas.",
+      "resetTwoFactorFailed": "Falha ao redefinir a autenticação de dois fatores",
+      "unlinkSsoFailed": "Falha ao desvincular o SSO"
     },
     "dialogs": {
       "promoteTitle": "Promover Usuário?",
@@ -96,6 +116,14 @@
       "resetTitle": "Redefinir Senha?",
       "resetMessage": "Isto irá gerar uma nova senha temporária para {name}. O usuário será obrigado a alterá-la no próximo login.",
       "resetConfirm": "Redefinir Senha",
+      "unlinkSsoTitle": "Desvincular SSO?",
+      "unlinkSsoMessage": "Isto converte a conta de {name} em uma conta local. Um login SSO posterior com o mesmo endereço de e-mail pode vinculá-la novamente. O sistema gera uma senha temporária e o usuário {name} será obrigado a alterá-la no próximo login.",
+      "unlinkSsoConfirm": "Desvincular SSO",
+      "unlinkSsoResultTitle": "SSO desvinculado",
+      "unlinkSsoResultDesc": "A conta de {name} agora é uma conta local. Compartilhe esta senha temporária com o usuário para que ele possa fazer login.",
+      "resetTwoFactorTitle": "Redefinir a Autenticação de Dois Fatores?",
+      "resetTwoFactorMessage": "Isto desativa a autenticação de dois fatores de {name}, exclui os códigos de recuperação e os dispositivos confiáveis e encerra todas as sessões. Depois, o usuário poderá entrar com a senha e configurar o 2FA de novo. Use quando o usuário tiver perdido o aplicativo autenticador e os códigos de recuperação, ou depois de alterar o JWT_SECRET.",
+      "resetTwoFactorConfirm": "Redefinir 2FA",
       "deleteTitle": "Excluir Usuário?",
       "deleteMessage": "Tem certeza de que deseja excluir {name}? Isto irá remover permanentemente a sua conta e todos os dados associados. Esta ação não pode ser desfeita. Se for delegado de outra conta, os seus próprios dados são removidos mas o seu login é mantido para que a delegação continue a funcionar — passa a ser um usuário apenas delegado.",
       "deleteConfirm": "Excluir Usuário",
@@ -103,6 +131,84 @@
       "tempPasswordTitleUpgraded": "Conta Promovida",
       "tempPasswordDescCreated": "Foi gerada uma senha temporária para {name}. Compartilhe-a para que possa fazer login.",
       "tempPasswordDescUpgraded": "Um usuário compartilhado existente foi promovido a conta completa. Compartilhe esta senha temporária com {name}."
+    }
+  },
+  "notificationsPage": {
+    "title": "Notificações",
+    "subtitle": "Canais de entrega oferecidos por esta instância do Monize e a identidade push por trás deles.",
+    "loading": "Carregando configurações de notificações...",
+    "loadUnavailable": "O Monize não conseguiu ler as configurações de notificações do servidor. Recarregue a página para tentar novamente.",
+    "channelsHeading": "Canais de entrega",
+    "identityHeading": "Identidade Web Push",
+    "perAccountNote": "Dispositivos, notificações de teste e preferências pertencem a cada conta e são gerenciados nas Configurações. Um administrador configura a instância e nunca envia nem vê as notificações de outra pessoa.",
+    "channelState": {
+      "on": "Ativo",
+      "off": "Inativo",
+      "unconfigured": "Indisponível",
+      "unknown": "Desconhecido"
+    },
+    "channels": {
+      "inApp": {
+        "name": "Notificações no app",
+        "description": "O sino no cabeçalho. Sempre disponível e não pode ser desligado: é onde a notificação permanece mesmo que todos os outros canais falhem."
+      },
+      "webPush": {
+        "name": "Push do navegador",
+        "description": "Notificações entregues no celular ou no computador mesmo com o Monize fechado. Não exige Firebase nem conta do Google Play ou Apple Developer.",
+        "toggleLabel": "Ativar o push do navegador nesta instância",
+        "missingKeys": "Esta instância não tem par de chaves push. Defina ENCRYPTION_KEY e reinicie: o Monize gera o par na próxima inicialização.",
+        "keyUnreadable": "Esta instância não consegue descriptografar o par de chaves push armazenado, então nada é entregue. Gire o par de chaves abaixo para recuperar.",
+        "serverKeyMissing": "Esta instância não tem ENCRYPTION_KEY, por isso não consegue abrir o par de chaves push que salvou. Defina ENCRYPTION_KEY no deployment e reinicie — rotacionar não ajuda enquanto a chave estiver ausente."
+      },
+      "email": {
+        "name": "E-mail",
+        "description": "Lembretes de contas, resumos de orçamento e alertas do sistema enviados ao endereço de cada conta.",
+        "missingSmtp": "Nenhum servidor de e-mail configurado. Defina as variáveis de ambiente SMTP para ativar o e-mail.",
+        "statusUnavailable": "O Monize não conseguiu ler o status do servidor de e-mail."
+      },
+      "ntfy": {
+        "name": "ntfy e UnifiedPush",
+        "description": "As mesmas notificações push criptografadas, entregues a um distribuidor UnifiedPush auto-hospedado (ntfy, NextPush) em vez da infraestrutura do Google ou da Apple. Compartilha o par de chaves push e o interruptor desta instância; cada pessoa registra seu endpoint no aplicativo UnifiedPush e ativa o canal em Configurações.",
+        "followsWebPush": "Indisponível enquanto o push do navegador estiver desligado ou seu par de chaves não puder ser usado — este canal é entregue com o mesmo par de chaves."
+      }
+    },
+    "identity": {
+      "fingerprintLabel": "Impressão digital da chave",
+      "generatedLabel": "Gerada",
+      "devicesLabel": "Dispositivos registrados",
+      "deviceCounts": "{live} ativos, {disabled} desativados",
+      "rotateDescription": "A rotação substitui o par de chaves desta instância. Todos os dispositivos registrados deixam de ser alcançáveis e precisarão ativar o push de novo, então gire apenas se a chave puder ter sido exposta.",
+      "rotateButton": "Girar par de chaves",
+      "rotatingButton": "Girando...",
+      "missingEncryptionKey": "Esta instância não tem par de chaves push porque ENCRYPTION_KEY não está definida e a chave privada teria de ser armazenada sem criptografia. Defina-a e reinicie: o Monize gera o par sozinho.",
+      "keyUnreadable": "Esta instância tem um par de chaves push que não consegue mais descriptografar, então nada é entregue. Acontece quando ENCRYPTION_KEY muda com o banco de dados em funcionamento, ou quando um backup é restaurado em outra instância. Gire o par de chaves para recuperar; todos os dispositivos se registrarão novamente.",
+      "serverKeyMissing": "Esta instância não tem ENCRYPTION_KEY definida, por isso não consegue abrir o par de chaves push que salvou. Rotacionar não ajuda enquanto a chave estiver ausente: defina ENCRYPTION_KEY no deployment e reinicie, e as notificações push voltam a funcionar com os dispositivos existentes."
+    },
+    "dialogs": {
+      "rotateTitle": "Girar o par de chaves push?",
+      "rotateMessage": "{count, plural, =0 {Nenhum dispositivo registrado ainda, então nada se perde.} one {Um dispositivo registrado deixará de receber notificações até alguém ativar o push novamente naquele navegador.} other {# dispositivos registrados deixarão de receber notificações até o push ser ativado novamente em cada navegador.}}",
+      "rotateConfirm": "Girar"
+    },
+    "toasts": {
+      "loadFailed": "Não foi possível carregar as configurações de notificações",
+      "pushEnabled": "Push do navegador ativado nesta instância",
+      "pushDisabled": "Push do navegador desativado nesta instância",
+      "pushToggleFailed": "Não foi possível alterar a configuração de push do navegador",
+      "rotated": "{count, plural, =0 {Par de chaves girado} one {Par de chaves girado; 1 dispositivo precisa se registrar novamente} other {Par de chaves girado; # dispositivos precisam se registrar novamente}}",
+      "rotateFailed": "Não foi possível girar o par de chaves"
+    }
+  },
+  "backupsPage": {
+    "title": "Backups",
+    "subtitle": "Arquivos de backup compactados e agendados dos registros financeiros de cada conta.",
+    "scope": {
+      "heading": "Não é um backup completo do banco de dados",
+      "perUser": "Conforme a programação abaixo, o servidor grava um arquivo de backup compactado dos registros financeiros de cada conta e remove os mais antigos conforme a política de retenção. Todas as contas ativas estão cobertas.",
+      "notFullDatabase": "Não é um dump do PostgreSQL: não captura o esquema, a configuração do servidor nem nada fora dos registros financeiros de uma conta. Para a recuperação de desastre de toda a instância, faça backup do banco de dados e do armazenamento de anexos com suas próprias ferramentas."
+    },
+    "demoRestricted": {
+      "heading": "Restrito no modo de demonstração",
+      "body": "A configuração do backup automático está desativada no modo de demonstração."
     }
   }
 }

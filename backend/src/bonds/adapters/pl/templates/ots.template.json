@@ -1,0 +1,54 @@
+{
+  "product": "OTS",
+  "validFrom": "2024-01",
+  "addend": null,
+  "hasFee": false,
+  "structure": {
+    "instrument": {
+      "issuerCountryCode": "PL",
+      "issuerCode": "PL_MF",
+      "programCode": "OTS",
+      "currency": "PLN",
+      "marketability": "RETAIL_REDEEMABLE",
+      "faceValue": "100.00"
+    },
+    "rateRule": {
+      "type": "FIXED"
+    },
+    "redemption": {
+      "type": "ON_DEMAND",
+      "earliestDaysAfterPurchase": 7,
+      "latestDaysBeforeMaturity": 20,
+      "blackouts": [],
+      "penalties": [
+        {
+          "type": "FORFEIT_ACCRUED_SINCE_LAST_PAYMENT"
+        }
+      ],
+      "proceedsFloor": null
+    },
+    "rest": {
+      "schemaVersion": 1,
+      "schedule": {
+        "anchor": "LOT_PURCHASE_DATE",
+        "periodMonths": 3,
+        "periodCount": 1,
+        "rollDay": "ANCHOR_DAY_CLAMPED",
+        "calendarId": "PL"
+      },
+      "accrual": {
+        "type": "ACTUAL_DAYS_IN_PERIOD"
+      },
+      "principalRule": {
+        "type": "FIXED_NOMINAL"
+      },
+      "capitalization": {
+        "type": "NONE"
+      },
+      "rounding": {
+        "moneyDecimals": 2,
+        "mode": "HALF_UP"
+      }
+    }
+  }
+}

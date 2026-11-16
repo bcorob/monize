@@ -3,6 +3,8 @@ import { fireEvent, screen } from '@testing-library/react';
 import { render } from '@/test/render';
 import { TransactionRow, type TransactionRowProps } from './TransactionRow';
 import { TransactionStatus, type Transaction } from '@/types/transaction';
+import { REGISTER_PAYEE_PRIORITY_SHARE } from './register-columns';
+import { clearCurrencyDecimals, registerCurrencyDecimals } from '@/lib/currency-decimals';
 
 function makeTx(overrides: Partial<Transaction> = {}): Transaction {
   return {
@@ -273,7 +275,10 @@ describe('TransactionRow', () => {
 
   it('renders Investment badge when linkedInvestmentTransactionId', () => {
     renderRow({}, { linkedInvestmentTransactionId: 'inv1' });
-    expect(screen.getByText('Investment')).toBeInTheDocument();
+    const badge = screen.getByText('Investment');
+    expect(badge).toBeInTheDocument();
+    // A hover-only title is not an information channel; the pill is Badge.
+    expect(badge).not.toHaveAttribute('title');
   });
 
   it('renders split badge with summary', () => {
@@ -357,9 +362,17 @@ describe('TransactionRow', () => {
     expect(screen.getAllByText('-').length).toBeGreaterThan(0);
   });
 
-  it('shows displayAmount with marker when provided', () => {
+  it('shows displayAmount with marker when provided, and says what the marker means', () => {
     renderRow({ displayAmount: 5 });
     expect(screen.getByText('*')).toBeInTheDocument();
+    expect(screen.getByText(/^Filtered amount \(full transaction: /)).toBeInTheDocument();
+    expect(document.querySelector('[title^="Filtered amount"]')).toBeNull();
+  });
+
+  it('names the attachment count for assistive tech instead of in a title', () => {
+    renderRow({}, { attachmentCount: 3 });
+    const badge = screen.getByRole('img', { name: '3 attachments' });
+    expect(badge).not.toHaveAttribute('title');
   });
 
   it('renders single Copy button when only onDuplicate provided', () => {
@@ -482,18 +495,9 @@ describe('TransactionRow', () => {
     expect(tr.className).not.toContain('cursor-pointer');
   });
 
-  it('renders reference number in normal density', () => {
+  it('renders the reference number once, in the Ref # column, not under the payee', () => {
     renderRow({ density: 'normal' }, { referenceNumber: 'REF-12345' });
-    expect(screen.getByText('Ref: REF-12345')).toBeInTheDocument();
-  });
-
-  it('does not render reference number in dense density', () => {
-    renderRow({ density: 'dense' }, { referenceNumber: 'REF-12345' });
-    expect(screen.queryByText('Ref: REF-12345')).not.toBeInTheDocument();
-  });
-
-  it('does not render reference number in compact density', () => {
-    renderRow({ density: 'compact' }, { referenceNumber: 'REF-12345' });
+    expect(screen.getAllByText('REF-12345')).toHaveLength(1);
     expect(screen.queryByText('Ref: REF-12345')).not.toBeInTheDocument();
   });
 
@@ -507,13 +511,21 @@ describe('TransactionRow', () => {
     expect(screen.getAllByText('-').length).toBeGreaterThan(0);
   });
 
-  it('renders account name in row', () => {
-    renderRow();
+  it('renders account name in a multi-account view', () => {
+    renderRow({ isSingleAccountView: false });
     expect(screen.getByText('Checking')).toBeInTheDocument();
   });
 
+  it('omits the Account cell entirely in a single-account view', () => {
+    // Structural, not responsive: on a single account's page every row would
+    // repeat the page's own title, so the cell must not exist at any width
+    // (register-columns.ts). The default renderRow props are single-account.
+    renderRow();
+    expect(screen.queryByText('Checking')).not.toBeInTheDocument();
+  });
+
   it('shows dash when account is null', () => {
-    renderRow({}, { account: null as any });
+    renderRow({ isSingleAccountView: false }, { account: null as any });
     expect(screen.getAllByText('-').length).toBeGreaterThan(0);
   });
 
@@ -903,6 +915,46 @@ describe('TransactionRow', () => {
     expect(screen.getByText(/Gas/)).toBeInTheDocument();
   });
 
+  it('renders each split line amount with the currency symbol the Amount column shows', () => {
+    renderRow(
+      { density: 'normal' },
+      {
+        isSplit: true,
+        currencyCode: 'USD',
+        splits: [
+          { id: 's1', amount: -650, category: { id: 'c1', name: 'Rent' }, transferAccount: null } as any,
+          { id: 's2', amount: -20, category: null, transferAccount: { id: 'acc3', name: 'Wallet' } } as any,
+        ],
+      },
+    );
+    expect(screen.getByText(/Rent: \$650\.00/)).toBeInTheDocument();
+    expect(screen.getByText(/Wallet.*: \$20\.00/)).toBeInTheDocument();
+  });
+
+  it('renders a coin wallet split summary at the coin places with its registered symbol', () => {
+    registerCurrencyDecimals([{ code: 'BTC', decimalPlaces: 4, symbol: '\u20BF' }]);
+    let unmount = () => {};
+    try {
+      ({ unmount } = renderRow(
+        { density: 'normal' },
+        {
+          isSplit: true,
+          currencyCode: 'BTC',
+          splits: [
+            { id: 's1', amount: -0.005, category: null, transferAccount: { id: 'acc3', name: 'Primary Chequing' } } as any,
+            { id: 's2', amount: -0.0001, category: { id: 'c2', name: 'Network fee' }, transferAccount: null } as any,
+          ],
+        },
+      ));
+      expect(screen.getByText(/Primary Chequing.*: \u20BF0\.0050/)).toBeInTheDocument();
+      expect(screen.getByText(/Network fee: \u20BF0\.0001/)).toBeInTheDocument();
+    } finally {
+      // Unmount first: clearing a registry a mounted row subscribes to redraws it outside act().
+      unmount();
+      clearCurrencyDecimals();
+    }
+  });
+
   it('renders positive-amount split transfer arrows', () => {
     renderRow(
       { density: 'normal' },
@@ -952,6 +1004,44 @@ describe('TransactionRow', () => {
     );
     expect(screen.getByText(/Salary:/)).toBeInTheDocument();
     expect(screen.getByText(/Buy: AAPL:/)).toBeInTheDocument();
+  });
+
+  it('names a return of capital split line rather than printing the raw action (#1800)', () => {
+    renderRow(
+      { density: 'normal' },
+      {
+        isSplit: true,
+        splits: [
+          {
+            id: 's1',
+            amount: 2500,
+            kind: 'category',
+            category: { id: 'cat-salary', name: 'Salary' },
+            transferAccount: null,
+            investmentTransaction: null,
+          } as any,
+          {
+            id: 's2',
+            amount: 40,
+            kind: 'investment',
+            category: null,
+            transferAccount: null,
+            investmentTransaction: {
+              id: 'inv1',
+              action: 'RETURN_OF_CAPITAL',
+              securityId: 'sec1',
+              security: { id: 'sec1', symbol: 'XYZ', name: 'XYZ Fund' },
+              quantity: null,
+              price: 40,
+              commission: 0,
+              exchangeRate: 1,
+            },
+          } as any,
+        ],
+      },
+    );
+    expect(screen.getByText(/Return of Capital: XYZ:/)).toBeInTheDocument();
+    expect(screen.queryByText(/RETURN_OF_CAPITAL/)).not.toBeInTheDocument();
   });
 
   it('falls back to raw action when investment split lacks a security', () => {
@@ -1074,11 +1164,50 @@ describe('TransactionRow payee brand icon', () => {
   });
 });
 
-describe('TransactionRow compact mobile dates', () => {
-  // The regression this pins: on a phone the register shows only Date, Payee
-  // and Amount, the full date takes all the width it asks for, and the payee
-  // is capped at 100px and truncates. The compact option drops the year below
-  // `sm` and hands the payee the freed width.
+describe('TransactionRow long payee names', () => {
+  // A nowrap `truncate` name counts its full width in the column's
+  // min-content, so with the Account column showing it pushed Amount and
+  // Balance behind the sticky Actions column (issue #1470). Normal now wraps
+  // the name; Compact and Dense ellipsize it inside a grid that does not hold
+  // the column open. jsdom does no layout, so what is checkable here is that
+  // each density's classes reach both payee renderings (the filter button and
+  // the plain name).
+  const renderings = [
+    ['the payee button', { onPayeeClick: vi.fn() }],
+    ['the plain payee name', {}],
+  ] as const;
+
+  it.each(renderings)('wraps %s onto more lines at normal density', (_label, props) => {
+    renderRow({ ...props, density: 'normal' });
+    const name = screen.getByText('Coffee Co');
+    expect(name.className).toContain('sm:wrap-anywhere');
+    // Phones keep the original single-line payee.
+    expect(name.className.split(' ')).not.toContain('truncate');
+    expect(name.className).toContain('max-sm:truncate');
+  });
+
+  it.each(
+    (['compact', 'dense'] as const).flatMap((density) =>
+      renderings.map(([label, props]) => [density, label, props] as const),
+    ),
+  )('ellipsizes at %s density on %s without holding the column open', (density, _label, props) => {
+    renderRow({ ...props, density });
+    const name = screen.getByText('Coffee Co');
+    expect(name.className).toContain('truncate');
+    expect(name.className).not.toContain('wrap-anywhere');
+    expect(name.parentElement!.className).toContain('auto-cols-[minmax(0,max-content)]');
+    // ...except from the tier where Description appears, where the payee
+    // holds its width before Description takes the rest.
+    expect(name.className).toContain(REGISTER_PAYEE_PRIORITY_SHARE);
+    expect(name.parentElement!.className).toContain('@min-[1536px]:flex');
+  });
+});
+
+describe('TransactionRow compact dates (the day/month view)', () => {
+  // Born as a phone-only trade -- the payee is what runs out of room there,
+  // and the year is the part a register row can spare -- and now the user's
+  // date view at every width, so the cell renders ONE format rather than a
+  // phone/desktop CSS split.
   const formatCompactDate = (d: string) => d.slice(5);
 
   it('renders the full date alone when the option is off', () => {
@@ -1088,17 +1217,16 @@ describe('TransactionRow compact mobile dates', () => {
     expect(dateCell.querySelector('.sm\\:hidden')).toBeNull();
   });
 
-  it('renders the year-less date for phones and the full one for wider screens', () => {
+  it('renders the year-less date at every width when the option is on', () => {
     const { container } = renderRow({ compactDates: true, formatCompactDate });
     const dateCell = container.querySelector('td')!;
 
     // The day survives -- it is the year that goes, so a register row still
-    // says which day it happened on.
-    const compact = dateCell.querySelector('span.sm\\:hidden')!;
-    expect(compact.textContent).toBe('06-15');
-
-    const full = dateCell.querySelector('span.hidden.sm\\:inline')!;
-    expect(full.textContent).toBe('2025-06-15');
+    // says which day it happened on. One rendering, no breakpoint split: the
+    // chosen view holds on desktop as well as on phones.
+    expect(dateCell.textContent).toBe('06-15');
+    expect(dateCell.querySelector('.sm\\:hidden')).toBeNull();
+    expect(dateCell.querySelector('.sm\\:inline')).toBeNull();
   });
 
   it('widens the phone-width payee cap when compact dates are on', () => {
@@ -1121,5 +1249,180 @@ describe('TransactionRow compact mobile dates', () => {
     const { container } = renderRow({ compactDates: true });
     const dateCell = container.querySelector('td')!;
     expect(dateCell.textContent).toBe('2025-06-15');
+  });
+
+  describe('a web address in the description', () => {
+    const WITH_LINK = 'Concert tickets https://tix.test/a8Fq2';
+
+    it('is clickable, and opens away from the register', () => {
+      renderRow({}, { description: WITH_LINK });
+      const link = screen.getByRole('link', { name: 'https://tix.test/a8Fq2' });
+      expect(link.getAttribute('href')).toBe('https://tix.test/a8Fq2');
+      expect(link.getAttribute('target')).toBe('_blank');
+      expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+    });
+
+    it('does not open the transaction as well', () => {
+      // The row is clickable, so without stopping the event a tap on the link
+      // opened the ticket page and the edit modal behind it.
+      const { props } = renderRow({}, { description: WITH_LINK });
+      fireEvent.click(screen.getByRole('link'));
+      expect(props.onRowClick).not.toHaveBeenCalled();
+    });
+
+    it('does not start the row long-press', () => {
+      const { props } = renderRow({}, { description: WITH_LINK });
+      fireEvent.mouseDown(screen.getByRole('link'));
+      fireEvent.touchStart(screen.getByRole('link'));
+      expect(props.onLongPressStart).not.toHaveBeenCalled();
+      expect(props.onLongPressStartTouch).not.toHaveBeenCalled();
+    });
+
+    it('leaves the rest of the description cell opening the transaction', () => {
+      const { props } = renderRow({}, { description: WITH_LINK });
+      fireEvent.click(screen.getByText(/Concert tickets/));
+      expect(props.onRowClick).toHaveBeenCalled();
+    });
+
+    it('shows the description unchanged, link and all', () => {
+      renderRow({}, { description: WITH_LINK });
+      const cell = screen.getByText(/Concert tickets/).closest('td')!;
+      expect(cell.textContent).toBe(WITH_LINK);
+    });
+
+    it('leaves a description with no address as plain text', () => {
+      const { container } = renderRow({}, { description: 'Latte' });
+      expect(screen.getByText('Latte')).toBeInTheDocument();
+      expect(container.querySelector('a[target="_blank"]')).toBeNull();
+    });
+
+    it('still shows a dash when there is no description', () => {
+      renderRow({}, { description: null });
+      expect(screen.getAllByText('-').length).toBeGreaterThan(0);
+    });
+  });
+});
+
+describe('TransactionRow hidden columns', () => {
+  // The register's hidden set reaches the row as a prop; a hidden column's
+  // cell is absent from the DOM at every width, in the tier row and the phone
+  // card alike (lib/hidden-columns.ts, decision 4 of the plan).
+  const tags = [{ id: 'tag1', name: 'work', color: null, icon: null }] as Transaction['tags'];
+
+  it('renders every column with nothing hidden, as before', () => {
+    const { container } = renderRow({ hidden: new Set() }, { referenceNumber: 'CHK-1', tags, attachmentCount: 2 });
+    expect(screen.getByText('Latte')).toBeInTheDocument();
+    expect(screen.getByText('CHK-1')).toBeInTheDocument();
+    expect(screen.getByText('work')).toBeInTheDocument();
+    expect(screen.getByTestId('attachment-badge')).toBeInTheDocument();
+    expect(screen.getByTitle('Click to cycle status')).toBeInTheDocument();
+    // Date, payee, category, the five hideable, amount, balance, actions.
+    expect(container.querySelectorAll('td')).toHaveLength(11);
+  });
+
+  it('omits a hidden tier cell from the DOM', () => {
+    const { container } = renderRow(
+      { hidden: new Set(['description', 'refNumber', 'tags', 'attachments', 'status']) },
+      { referenceNumber: 'CHK-1', tags, attachmentCount: 2 },
+    );
+    expect(screen.queryByText('Latte')).not.toBeInTheDocument();
+    expect(screen.queryByText('CHK-1')).not.toBeInTheDocument();
+    expect(screen.queryByText('work')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('attachment-badge')).not.toBeInTheDocument();
+    expect(screen.queryByTitle('Click to cycle status')).not.toBeInTheDocument();
+    // Date, payee, category, amount, balance (single-account view), actions.
+    expect(container.querySelectorAll('td')).toHaveLength(4 + 1 + 1);
+    // The structural columns are untouched.
+    expect(screen.getByText('Coffee Co')).toBeInTheDocument();
+    expect(screen.getByText('Food')).toBeInTheDocument();
+  });
+
+  it('hides one column without moving the others', () => {
+    const { container } = renderRow({ hidden: new Set(['status']) }, { referenceNumber: 'CHK-1' });
+    expect(screen.queryByTitle('Click to cycle status')).not.toBeInTheDocument();
+    expect(screen.getByText('Latte')).toBeInTheDocument();
+    expect(screen.getByText('CHK-1')).toBeInTheDocument();
+    expect(container.querySelectorAll('td')).toHaveLength(10);
+  });
+
+  it('gates the phone card: the status pill', () => {
+    renderRow({ wrapped: true, hidden: new Set(['status']) });
+    expect(screen.queryByTitle('Click to cycle status')).not.toBeInTheDocument();
+    expect(screen.getByText('Coffee Co')).toBeInTheDocument();
+  });
+
+  it('gates the phone card: the attachment badge', () => {
+    renderRow({ wrapped: true, hidden: new Set(['attachments']) }, { attachmentCount: 2 });
+    expect(screen.queryByTestId('attachment-badge')).not.toBeInTheDocument();
+    expect(screen.getByTitle('Click to cycle status')).toBeInTheDocument();
+  });
+
+  it('gates the phone card: the tags line', () => {
+    const { container } = renderRow({ wrapped: true, hidden: new Set(['tags']) }, { tags });
+    expect(screen.queryByText('work')).not.toBeInTheDocument();
+    // The card is back to two lines: no third `col-span-3` block after line 2.
+    const grid = container.querySelector('td > div')!;
+    expect(grid.querySelectorAll(':scope > .col-span-3')).toHaveLength(1);
+  });
+
+  it('keeps the card as it was with nothing hidden', () => {
+    const { container } = renderRow({ wrapped: true, hidden: new Set() }, { tags, attachmentCount: 2 });
+    expect(screen.getByText('work')).toBeInTheDocument();
+    expect(screen.getByTestId('attachment-badge')).toBeInTheDocument();
+    expect(screen.getByTitle('Click to cycle status')).toBeInTheDocument();
+    const grid = container.querySelector('td > div')!;
+    expect(grid.querySelectorAll(':scope > .col-span-3')).toHaveLength(2);
+  });
+});
+
+describe('TransactionRow warranties', () => {
+  it('renders exactly as before on a row without warranties', () => {
+    const first = renderRow({}, { warrantyCount: 0, attachmentCount: 2 });
+    const before = first.container.innerHTML;
+    first.unmount();
+    const { container: without } = renderRow({}, { attachmentCount: 2 });
+    expect(without.innerHTML).toBe(before);
+    expect(screen.queryByTestId('warranty-badge')).not.toBeInTheDocument();
+  });
+
+  it('shows the shield and count beside the paperclip in the attachments cell', () => {
+    renderRow({}, { warrantyCount: 2, attachmentCount: 1 });
+    const badge = screen.getByRole('img', { name: '2 warranties' });
+    expect(badge).toHaveTextContent('2');
+    const attachment = screen.getByTestId('attachment-badge');
+    expect(badge.closest('td')).toBe(attachment.closest('td'));
+  });
+
+  it('shows the shield alone, without the dash, on a row with no attachments', () => {
+    renderRow({}, { warrantyCount: 1 });
+    const badge = screen.getByRole('img', { name: '1 warranty' });
+    expect(badge.closest('td')).not.toHaveTextContent('-');
+    expect(screen.queryByTestId('attachment-badge')).not.toBeInTheDocument();
+  });
+
+  it('shows the shield on the phone card, and gates it with the attachments column', () => {
+    const first = renderRow({ wrapped: true }, { warrantyCount: 3 });
+    expect(screen.getByRole('img', { name: '3 warranties' })).toBeInTheDocument();
+    first.unmount();
+    renderRow({ wrapped: true, hidden: new Set(['attachments']) }, { warrantyCount: 3 });
+    expect(screen.queryByTestId('warranty-badge')).not.toBeInTheDocument();
+  });
+
+  it('offers no warranty action in the Copy menu, with or without warranties', () => {
+    // A warranty is not a copy: it is added from the transaction's form or the
+    // Warranties page, and the row's shield says one exists.
+    for (const warrantyCount of [0, 1]) {
+      const view = renderRow({ onDuplicate: vi.fn(), onScheduleRecurring: vi.fn() }, { warrantyCount });
+      fireEvent.click(screen.getByText('Copy'));
+      expect(screen.getByText('Duplicate')).toBeInTheDocument();
+      expect(screen.queryByText('Add warranty')).not.toBeInTheDocument();
+      expect(screen.queryByText('View warranties')).not.toBeInTheDocument();
+      view.unmount();
+    }
+  });
+
+  it('keeps the single Duplicate button on a row with warranties', () => {
+    renderRow({ onDuplicate: vi.fn() }, { warrantyCount: 2 });
+    expect(screen.getByTitle('Duplicate transaction')).toBeInTheDocument();
   });
 });

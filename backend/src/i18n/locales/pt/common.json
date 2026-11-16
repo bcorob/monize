@@ -5,6 +5,13 @@
     "cash": "Dinheiro",
     "brokerage": "Corretagem"
   },
+  "oauthConsent": {
+    "destinationLabel": "Se permitir o acesso, o Monize enviará a autorização para:",
+    "destinationUnknown": "O Monize não conseguiu determinar para onde esta autorização seria enviada. Não permita o acesso.",
+    "unverifiedNotice": "Esta aplicação registou-se a si própria neste servidor Monize, e o Monize não verificou quem a opera; o nome dela é aquele que ela própria escolheu. Só permita o acesso se tiver sido você a iniciar esta ligação a partir dessa aplicação e o endereço acima lhe pertencer.",
+    "claimedWebsite": "Website indicado pela aplicação: {{ website }}",
+    "websiteMismatch": "A aplicação afirma que o seu website é {{ website }}, mas a autorização será enviada para um endereço diferente."
+  },
   "import": {
     "voidedTransactionNote": "Anulada na origem; o valor original foi omitido da exportação e importado como zero."
   },
@@ -17,5 +24,20 @@
       "stalled": "Continuei a dizer que iria prosseguir em vez de concluir, por isso esta resposta baseia-se nos dados que recolhi antes de parar."
     },
     "synthesisFailed": "Recolhi dados para esta pergunta, mas não consegui concluir a análise, por isso não tenho uma resposta fiável. Experimente perguntar algo mais específico."
+  },
+  "bankSync": {
+    "operationTypes": {
+      "cardPayment": "Pagamento com cartão",
+      "transferIn": "Transferência recebida",
+      "transferOut": "Transferência enviada",
+      "mobilePayment": "Pagamento móvel",
+      "cashWithdrawal": "Levantamento de dinheiro",
+      "cashWithdrawalBlik": "Levantamento de dinheiro (BLIK)",
+      "mobilePaymentRefund": "Reembolso de pagamento móvel",
+      "standingOrder": "Ordem permanente",
+      "cashback": "Cashback",
+      "loanRepayment": "Amortização de empréstimo",
+      "creditCardRepayment": "Pagamento de cartão de crédito"
+    }
   }
 }

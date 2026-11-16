@@ -10,6 +10,8 @@
     "versionLabel": "Versione {version}",
     "expandAll": "Espandi tutto",
     "collapseAll": "Comprimi tutto",
+    "changeCount": "{count, plural, one {# modifica} other {# modifiche}}",
+    "otherSections": "Correzioni e dettagli",
     "viewFullNotes": "Visualizza le note di rilascio complete",
     "dontShowAgain": "Non mostrare più",
     "showNextLogin": "Mostra al prossimo accesso",
@@ -38,6 +40,14 @@
     "scheduleRecurring": "Rendi ricorrente",
     "more": "Altre azioni"
   },
+  "columns": {
+    "button": "Colonne",
+    "buttonWithHidden": "Colonne, nascoste: {count}",
+    "menuLabel": "Mostra o nascondi colonne",
+    "showAll": "Mostra tutte",
+    "hideColumn": "Nascondi colonna",
+    "sheetSubtitle": "Puoi ripristinarla dal menu Colonne."
+  },
   "loading": "Caricamento...",
   "pagination": {
     "showing": "Visualizzazione",
@@ -60,6 +70,7 @@
   },
   "exportDropdown": {
     "export": "Esporta",
+    "exportCsv": "Esporta CSV",
     "exporting": "Esportazione...",
     "exportPdf": "Esporta PDF",
     "exportReport": "Esporta report",
@@ -88,6 +99,7 @@
     "stackedChart": "Grafico a barre impilate 100%",
     "lineChart": "Grafico a linee",
     "areaChart": "Grafico ad area",
+    "sankeyChart": "Diagramma di flusso",
     "table": "Tabella"
   },
   "formActions": {
@@ -118,8 +130,15 @@
     "search": "Cerca...",
     "selectAll": "Seleziona tutto",
     "clear": "Cancella",
+    "clearSearch": "Cancella ricerca",
     "noOptions": "Nessuna opzione trovata",
     "selectedCount": "{count} selezionati"
+  },
+  "categoryFilter": {
+    "uncategorized": "Senza categoria",
+    "transfers": "Trasferimenti",
+    "allIncome": "Tutte le categorie di entrate",
+    "allExpenses": "Tutte le categorie di uscite"
   },
   "combobox": {
     "createOption": "Crea \"{value}\"",
@@ -137,6 +156,7 @@
   },
   "dateInput": {
     "shortcutsTitle": "Scorciatoie da tastiera",
+    "openPicker": "Apri selettore data",
     "today": "Oggi",
     "firstDayOfYear": "Primo giorno dell'anno",
     "lastDayOfYear": "Ultimo giorno dell'anno",
@@ -158,6 +178,7 @@
     "CASH": "Contanti",
     "LINE_OF_CREDIT": "Linea di credito",
     "ASSET": "Attività",
+    "CRYPTO": "Portafoglio cripto",
     "OTHER": "Altro"
   },
   "accountFilter": {
@@ -241,12 +262,20 @@
     "marker": "—",
     "srLabel": "Importo non disponibile",
     "scheduledFx": "Non è possibile determinare l'importo attuale: non è disponibile alcun tasso di cambio per la coppia di valute di regolamento di questa voce pianificata. L'importo salvato è stato calcolato con un tasso precedente, quindi non viene mostrato.",
-    "displayFx": "Questo importo non può essere mostrato qui: il valore è noto, ma non è disponibile alcun tasso di cambio per convertirlo nella valuta di questo totale. Aggiorna i tassi nella pagina Valute."
+    "displayFx": "Questo importo non può essere mostrato qui: il valore è noto, ma non è disponibile alcun tasso di cambio per convertirlo nella valuta di questo totale. Aggiorna i tassi nella pagina Valute.",
+    "noCashBalance": "Questo valore non può essere calcolato: un conto di liquidità in questa vista non ha riportato alcun saldo per questo giorno, quindi ciò che conteneva è sconosciuto, non zero. Ricarica il report; se il problema persiste, i saldi del giorno non sono stati calcolati e vale la pena segnalarlo.",
+    "noPrice": "Questo valore non può essere calcolato: le quote detenute sono note, ma il titolo non ha alcun prezzo con cui valorizzarle. Aggiorna i prezzi o inseriscine uno a mano nello storico prezzi del titolo.",
+    "noBaseline": "Questa cifra non può essere calcolata: è un confronto e non esiste un valore precedente con cui confrontarla. Non manca nulla, quindi non c'è nulla da aggiungere.",
+    "staleQuote": "La variazione del giorno non può essere calcolata: il prezzo più recente del titolo è anteriore all'ultima seduta, quindi qualsiasi variazione calcolata da esso sarebbe quella di un giorno precedente. Aggiorna i prezzi o controlla il fornitore di quotazioni del titolo.",
+    "unknownCurrency": "Questo importo non può essere mostrato: il record non indica alcun titolo, quindi la valuta della cifra è sconosciuta. Apri la transazione e assegnale un titolo in modo che i suoi importi possano essere etichettati."
   },
   "density": {
     "title": "Cambia densità righe",
     "normal": "Normale",
     "compact": "Compatto",
     "dense": "Denso"
+  },
+  "scheduledOverdue": {
+    "included": "Include {count, plural, one {# transazione pianificata scaduta} other {# transazioni pianificate scadute}}"
   }
 }

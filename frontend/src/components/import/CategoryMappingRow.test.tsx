@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@/test/render';
 import { CategoryMappingRow } from './CategoryMappingRow';
 import type { CategoryMapping } from '@/lib/import';
+import { usePreferencesStore } from '@/store/preferencesStore';
 
 describe('CategoryMappingRow', () => {
   const defaultMapping = {
@@ -36,6 +37,7 @@ describe('CategoryMappingRow', () => {
   const formatCategoryPath = (path: string) => path.replace(':', ' > ');
 
   beforeEach(() => {
+    usePreferencesStore.setState({ preferences: null });
     onMappingChange = vi.fn();
   });
 
@@ -396,6 +398,28 @@ describe('CategoryMappingRow', () => {
     );
     const amountInput = screen.getByPlaceholderText('e.g., 25000');
     fireEvent.change(amountInput, { target: { value: '$25,000' } });
+    fireEvent.blur(amountInput);
+    expect(onMappingChange).toHaveBeenCalledWith(
+      expect.objectContaining({ newLoanAmount: 25000 })
+    );
+  });
+
+  it('reads the new loan amount in the user number format (de-DE)', () => {
+    usePreferencesStore.setState({ preferences: { numberFormat: 'de-DE' } as never });
+    const loanMapping = { ...defaultMapping, isLoanCategory: true };
+    render(
+      <CategoryMappingRow
+        mapping={loanMapping}
+        categoryOptions={categoryOptions}
+        parentCategoryOptions={parentCategoryOptions}
+        loanAccounts={loanAccounts}
+        onMappingChange={onMappingChange}
+        formatCategoryPath={formatCategoryPath}
+        isHighlighted={true}
+      />
+    );
+    const amountInput = screen.getByPlaceholderText('e.g., 25000');
+    fireEvent.change(amountInput, { target: { value: '25.000,00' } });
     fireEvent.blur(amountInput);
     expect(onMappingChange).toHaveBeenCalledWith(
       expect.objectContaining({ newLoanAmount: 25000 })

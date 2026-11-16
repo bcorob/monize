@@ -1,11 +1,11 @@
 import { McpScheduledTools } from "./scheduled.tool";
-import { UserContextResolver } from "../mcp-context";
+import { mcpTestCtx, McpTestContext } from "../testing/mcp-test-context";
 
 describe("McpScheduledTools", () => {
   let tool: McpScheduledTools;
   let scheduledService: Record<string, jest.Mock>;
   let server: { registerTool: jest.Mock };
-  let resolve: jest.MockedFunction<UserContextResolver>;
+  let ctx: McpTestContext;
   const handlers: Record<string, (...args: any[]) => any> = {};
 
   beforeEach(() => {
@@ -21,8 +21,8 @@ describe("McpScheduledTools", () => {
       }),
     };
 
-    resolve = jest.fn();
-    tool.register(server as any, resolve);
+    ctx = mcpTestCtx();
+    tool.register(server as any);
   });
 
   it("should register 1 tool", () => {
@@ -31,16 +31,13 @@ describe("McpScheduledTools", () => {
 
   describe("list_upcoming_bills", () => {
     it("returns error when no user context", async () => {
-      resolve.mockReturnValue(undefined);
-      const result = await handlers["list_upcoming_bills"](
-        {},
-        { sessionId: "s1" },
-      );
+      ctx.setUser(undefined);
+      const result = await handlers["list_upcoming_bills"]({}, ctx);
       expect(result.isError).toBe(true);
     });
 
     it("calls the shared LLM helper with default days=30", async () => {
-      resolve.mockReturnValue({ userId: "u1", scopes: "read" });
+      ctx.setUser({ userId: "u1", scopes: "read" });
       scheduledService.getLlmUpcomingBillsAndDeposits.mockResolvedValue({
         daysWindow: 30,
         itemCount: 1,
@@ -70,10 +67,7 @@ describe("McpScheduledTools", () => {
         ],
       });
 
-      const result = await handlers["list_upcoming_bills"](
-        {},
-        { sessionId: "s1" },
-      );
+      const result = await handlers["list_upcoming_bills"]({}, ctx);
 
       expect(
         scheduledService.getLlmUpcomingBillsAndDeposits,
@@ -82,13 +76,13 @@ describe("McpScheduledTools", () => {
         kind: undefined,
         accountIds: undefined,
       });
-      const parsed = JSON.parse(result.content[0].text);
+      const parsed = result.structuredContent as any;
       expect(parsed.itemCount).toBe(1);
       expect(parsed.items[0].kind).toBe("bill");
     });
 
     it("passes through days, kind, and accountIds", async () => {
-      resolve.mockReturnValue({ userId: "u1", scopes: "read" });
+      ctx.setUser({ userId: "u1", scopes: "read" });
       scheduledService.getLlmUpcomingBillsAndDeposits.mockResolvedValue({
         daysWindow: 7,
         itemCount: 0,
@@ -102,7 +96,7 @@ describe("McpScheduledTools", () => {
 
       await handlers["list_upcoming_bills"](
         { days: 7, kind: "deposit", accountIds: ["acc-1"] },
-        { sessionId: "s1" },
+        ctx,
       );
       expect(
         scheduledService.getLlmUpcomingBillsAndDeposits,
@@ -114,14 +108,11 @@ describe("McpScheduledTools", () => {
     });
 
     it("returns error when service throws", async () => {
-      resolve.mockReturnValue({ userId: "u1", scopes: "read" });
+      ctx.setUser({ userId: "u1", scopes: "read" });
       scheduledService.getLlmUpcomingBillsAndDeposits.mockRejectedValue(
         new Error("DB error"),
       );
-      const result = await handlers["list_upcoming_bills"](
-        {},
-        { sessionId: "s1" },
-      );
+      const result = await handlers["list_upcoming_bills"]({}, ctx);
       expect(result.isError).toBe(true);
     });
   });

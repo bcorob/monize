@@ -1,0 +1,321 @@
+{
+  "page": {
+    "title": "Гарантии",
+    "subtitle": "Что вы купили, когда заканчивается гарантия и кто продавец",
+    "newButton": "Добавить гарантию",
+    "exportButton": "Экспорт в CSV",
+    "importButton": "Импорт из CSV",
+    "loading": "Загрузка гарантий...",
+    "loadFailed": "Не удалось загрузить ваши гарантии.",
+    "retry": "Повторить",
+    "summary": {
+      "active": "Действующие",
+      "expiring": "Скоро истекают",
+      "expired": "Истёкшие",
+      "lifetime": "Пожизненные",
+      "unavailable": "Не загружено",
+      "expiringHint": "В течение {days} дн."
+    },
+    "filters": {
+      "label": "Фильтр по статусу",
+      "all": "Все",
+      "expiring": "Истекающие",
+      "active": "Действующие",
+      "expired": "Истёкшие",
+      "lifetime": "Пожизненные",
+      "counted": {
+        "all": "Все ({count})",
+        "expiring": "Истекающие ({count})",
+        "active": "Действующие ({count})",
+        "expired": "Истёкшие ({count})",
+        "lifetime": "Пожизненные ({count})"
+      }
+    },
+    "search": {
+      "label": "Поиск гарантий",
+      "placeholder": "Поиск по названию, продавцу, модели или серийному номеру"
+    },
+    "archivedToggle": "Показать архивные",
+    "transactionChip": {
+      "label": "Гарантии одной проводки",
+      "clear": "Показать все гарантии"
+    },
+    "pager": {
+      "itemName": "гарантий",
+      "total": "{count, plural, one {{total} гарантия} few {{total} гарантии} many {{total} гарантий} other {{total} гарантии}}"
+    },
+    "empty": {
+      "title": "Гарантий пока нет",
+      "description": "Добавьте гарантию, чтобы знать, когда она заканчивается.",
+      "filteredTitle": "Нет подходящих гарантий",
+      "filteredDescription": "Выберите другой статус или очистите поиск.",
+      "archivedTitle": "Нет архивных гарантий"
+    },
+    "modal": {
+      "newTitle": "Новая гарантия",
+      "editTitle": "Изменить гарантию"
+    },
+    "delete": {
+      "title": "Удалить гарантию",
+      "message": "Удалить «{name}»? Её обращения и документы будут удалены вместе с ней. Это действие нельзя отменить."
+    },
+    "toasts": {
+      "created": "Гарантия добавлена",
+      "updated": "Гарантия обновлена",
+      "deleted": "Гарантия удалена",
+      "archived": "Гарантия перемещена в архив",
+      "unarchived": "Гарантия восстановлена",
+      "createFailed": "Не удалось добавить гарантию",
+      "updateFailed": "Не удалось обновить гарантию",
+      "deleteFailed": "Не удалось удалить гарантию",
+      "archiveFailed": "Не удалось переместить гарантию в архив",
+      "unarchiveFailed": "Не удалось восстановить гарантию",
+      "prefillFailed": "Не удалось загрузить эту проводку, поэтому форма гарантии пуста",
+      "exported": "{count, plural, one {Экспортирована {shown} гарантия} few {Экспортировано {shown} гарантии} many {Экспортировано {shown} гарантий} other {Экспортировано {shown} гарантии}}",
+      "exportFailed": "Не удалось экспортировать гарантии"
+    }
+  },
+  "status": {
+    "lifetime": "Пожизненная",
+    "active": "Действует",
+    "expiring": "Скоро истекает",
+    "expired": "Истекла"
+  },
+  "daysLeft": {
+    "left": "{count, plural, one {Остался {days} день} few {Осталось {days} дня} many {Осталось {days} дней} other {Осталось {days} дня}}",
+    "today": "Истекает сегодня",
+    "ago": "{count, plural, one {Истекла {days} день назад} few {Истекла {days} дня назад} many {Истекла {days} дней назад} other {Истекла {days} дня назад}}",
+    "leftYears": "Осталось: {yearsCount, plural, one {{years} год} few {{years} года} many {{years} лет} other {{years} года}}, {daysCount, plural, one {{days} день} few {{days} дня} many {{days} дней} other {{days} дня}}",
+    "agoYears": "Истекла: {yearsCount, plural, one {{years} год} few {{years} года} many {{years} лет} other {{years} года}}, {daysCount, plural, one {{days} день} few {{days} дня} many {{days} дней} other {{days} дня}} назад"
+  },
+  "kind": {
+    "manufacturer": "От производителя",
+    "extended": "Расширенная",
+    "store": "От магазина",
+    "other": "Другая"
+  },
+  "list": {
+    "columns": {
+      "name": "Название",
+      "status": "Статус",
+      "expiresOn": "Истекает",
+      "purchaseDate": "Куплено",
+      "price": "Цена",
+      "documents": "Документы",
+      "claims": "Открытые обращения",
+      "actions": "Действия"
+    },
+    "sortLabel": "Сортировать по",
+    "lifetime": "Пожизненная",
+    "noPrice": "Нет",
+    "actions": {
+      "archive": "В архив",
+      "unarchive": "Из архива"
+    }
+  },
+  "form": {
+    "nameLabel": "Название",
+    "namePlaceholder": "Что вы купили",
+    "vendorLabel": "Продавец",
+    "vendorPlaceholder": "Выберите или введите продавца",
+    "modelLabel": "Номер модели",
+    "serialsLabel": "Серийные номера",
+    "serialLabel": "Серийный номер {index}",
+    "addSerial": "Добавить серийный номер",
+    "removeSerial": "Удалить серийный номер {index}",
+    "serialsLimit": "Не более {max} серийных номеров",
+    "kindLabel": "Тип гарантии",
+    "purchaseDateLabel": "Дата покупки",
+    "expiry": {
+      "label": "Окончание гарантии",
+      "date": "В определённую дату",
+      "duration": "Через срок",
+      "lifetime": "Никогда",
+      "expiresOnLabel": "Истекает",
+      "years": "Лет",
+      "months": "Месяцев",
+      "days": "Дней",
+      "computed": "Истекает {date}",
+      "needsPurchaseDate": "Введите дату покупки, чтобы рассчитать дату окончания",
+      "lifetimeHint": "У пожизненной гарантии нет даты окончания и напоминания"
+    },
+    "priceLabel": "Цена покупки",
+    "productUrlLabel": "Страница товара",
+    "productUrlPlaceholder": "https://",
+    "notesLabel": "Заметки",
+    "submitCreate": "Добавить гарантию",
+    "submitUpdate": "Сохранить изменения"
+  },
+  "validation": {
+    "nameRequired": "Введите название",
+    "nameTooLong": "Не более 200 символов",
+    "vendorTooLong": "Не более 200 символов",
+    "modelTooLong": "Не более 100 символов",
+    "serialTooLong": "Не более 100 символов в каждом серийном номере",
+    "serialsTooMany": "Не более 10 серийных номеров",
+    "purchaseDateRequired": "Введите дату покупки",
+    "expiresOnRequired": "Введите дату окончания гарантии",
+    "expiresBeforePurchase": "Гарантия не может закончиться раньше даты покупки",
+    "durationRequired": "Введите срок больше нуля",
+    "priceNegative": "Цена не может быть отрицательной",
+    "priceNeedsCurrency": "Выберите валюту цены",
+    "urlInvalid": "Введите веб-адрес, начинающийся с http:// или https://",
+    "urlTooLong": "Не более 500 символов",
+    "notesTooLong": "Не более 2000 символов"
+  },
+  "detail": {
+    "back": "Назад к гарантиям",
+    "loading": "Загрузка гарантии...",
+    "loadFailed": "Не удалось загрузить эту гарантию.",
+    "notFound": "Эта гарантия не найдена.",
+    "retry": "Повторить",
+    "archivedBadge": "В архиве",
+    "switcher": {
+      "trigger": "Переключить гарантию",
+      "placeholder": "Фильтр гарантий...",
+      "noMatches": "Нет подходящих гарантий"
+    },
+    "summary": {
+      "expires": "Истекает",
+      "purchased": "Куплено",
+      "price": "Цена покупки",
+      "openClaims": "Открытые обращения"
+    },
+    "card": {
+      "title": "Сведения",
+      "kind": "Тип гарантии",
+      "vendor": "Продавец",
+      "serialNumbers": "Серийные номера",
+      "model": "Номер модели",
+      "productUrl": "Страница товара",
+      "notes": "Заметки",
+      "none": "Нет",
+      "lifetime": "Пожизненная"
+    },
+    "transaction": {
+      "title": "Покупка",
+      "edit": "Изменить покупку от {date}: {payee}, {amount}",
+      "viewInRegister": "Посмотреть в журнале",
+      "loadFailed": "Не удалось загрузить покупку",
+      "dateInAccount": "{date} · {account}",
+      "none": "Нет связанной проводки",
+      "unreadable": "Покупка находится на счёте, к которому у вас нет доступа на чтение.",
+      "noPayee": "Без получателя"
+    }
+  },
+  "documents": {
+    "title": "Документы",
+    "empty": "Документов пока нет",
+    "pendingHint": "Документы будут загружены при сохранении гарантии.",
+    "tooMany": "Не более {max} документов на гарантию",
+    "uploadFailedAfterCreate": "Гарантия добавлена, но не удалось загрузить {count, plural, one {этот документ} few {эти документы} many {эти документы} other {эти документы}}: {names}. Добавьте {count, plural, one {его} few {их} many {их} other {их}} в разделе «Документы» гарантии.",
+    "kindFor": "Тип документа для {name}",
+    "kindUpdateFailed": "Не удалось изменить тип документа",
+    "addExisting": "Добавить существующий",
+    "addExistingTitle": "Добавить существующий документ",
+    "addExistingHelp": "Выберите файл, который вы уже загрузили к транзакции или к другой гарантии. К этой гарантии будет добавлена копия; оригинал останется на месте.",
+    "addExistingFrom": "Где документ находится сейчас",
+    "fromTransaction": "Транзакция",
+    "fromWarranty": "Другая гарантия",
+    "addExistingDocument": "Документ",
+    "addExistingKind": "Тип документа для этой гарантии",
+    "addExistingNone": "Здесь нет документов для добавления.",
+    "addExistingLoadFailed": "Не удалось загрузить документы. Попробуйте ещё раз.",
+    "addExistingFailed": "Не удалось добавить документ",
+    "addExistingSubmit": "Добавить документ",
+    "choose": "Выбрать…",
+    "preview": "Просмотр",
+    "kinds": {
+      "receipt": "Чек",
+      "manual": "Инструкция",
+      "photo": "Фото",
+      "warranty": "Гарантия",
+      "other": "Другое"
+    }
+  },
+  "claims": {
+    "title": "Гарантийные обращения",
+    "add": "Добавить обращение",
+    "empty": "Обращений пока нет",
+    "loading": "Загрузка обращений...",
+    "loadFailed": "Не удалось загрузить обращения.",
+    "retry": "Повторить",
+    "statuses": {
+      "open": "Открыто",
+      "approved": "Одобрено",
+      "denied": "Отклонено",
+      "resolved": "Решено"
+    },
+    "claimedOn": "Подано {date}",
+    "resolvedOnLine": "Закрыто {date}",
+    "resolutionLine": "Итог: {text}",
+    "modal": {
+      "newTitle": "Новое обращение",
+      "editTitle": "Изменить обращение"
+    },
+    "form": {
+      "claimDateLabel": "Дата обращения",
+      "statusLabel": "Статус",
+      "descriptionLabel": "Описание",
+      "resolutionLabel": "Итог",
+      "resolvedOnLabel": "Дата закрытия",
+      "resolvedOnHint": "Только для решённого или отклонённого обращения",
+      "submitCreate": "Добавить обращение",
+      "submitUpdate": "Сохранить изменения"
+    },
+    "validation": {
+      "claimDateRequired": "Введите дату обращения",
+      "resolvedOnBeforeClaim": "Обращение не может быть закрыто раньше, чем подано",
+      "textTooLong": "Не более 2000 символов"
+    },
+    "delete": {
+      "title": "Удалить обращение",
+      "message": "Удалить обращение от {date}? Это действие нельзя отменить."
+    },
+    "toasts": {
+      "created": "Обращение добавлено",
+      "updated": "Обращение обновлено",
+      "deleted": "Обращение удалено",
+      "createFailed": "Не удалось добавить обращение",
+      "updateFailed": "Не удалось обновить обращение",
+      "deleteFailed": "Не удалось удалить обращение"
+    }
+  },
+  "import": {
+    "title": "Импорт гарантий из CSV",
+    "description": "CSV-файл со столбцами Warracker, например экспорт из Warracker или с этой страницы. Вы увидите каждую строку до того, как что-либо будет сохранено.",
+    "fileLabel": "CSV-файл",
+    "chooseFile": "Выбрать файл",
+    "noFileChosen": "Файл не выбран",
+    "checking": "Проверка файла...",
+    "previewFailed": "Не удалось проверить файл",
+    "summary": "{count, plural, one {Можно импортировать {valid} из {total} строки.} few {Можно импортировать {valid} из {total} строк.} many {Можно импортировать {valid} из {total} строк.} other {Можно импортировать {valid} из {total} строки.}}",
+    "invalidSummary": "{count, plural, one {{shown} строка недействительна и не может быть импортирована в таком виде.} few {{shown} строки недействительны и не могут быть импортированы в таком виде.} many {{shown} строк недействительны и не могут быть импортированы в таком виде.} other {{shown} строки недействительны и не могут быть импортированы в таком виде.}}",
+    "skipInvalid": "Пропустить недействительные строки и импортировать остальные",
+    "nothingToImport": "Исправьте файл и выберите его снова.",
+    "skippedColumns": "Неимпортированные столбцы:",
+    "columns": {
+      "line": "Строка",
+      "name": "Название",
+      "expires": "Истекает",
+      "outcome": "Результат",
+      "problems": "Проблемы"
+    },
+    "outcome": {
+      "valid": "Готово",
+      "invalid": "Недействительно",
+      "created": "Импортировано"
+    },
+    "unnamed": "(без названия)",
+    "noExpiry": "Не задано",
+    "lifetime": "Пожизненная",
+    "errorItem": "Ошибка: {message}",
+    "warningItem": "Примечание: {message}",
+    "submit": "Импортировать",
+    "submitCount": "{count, plural, one {Импортировать {shown} гарантию} few {Импортировать {shown} гарантии} many {Импортировать {shown} гарантий} other {Импортировать {shown} гарантии}}",
+    "toasts": {
+      "imported": "{count, plural, one {Импортирована {shown} гарантия} few {Импортировано {shown} гарантии} many {Импортировано {shown} гарантий} other {Импортировано {shown} гарантии}}",
+      "failed": "Не удалось импортировать гарантии"
+    }
+  }
+}

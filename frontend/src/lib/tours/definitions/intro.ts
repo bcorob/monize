@@ -4,9 +4,11 @@ import type { TourDefinition } from '../types';
 /**
  * Evergreen "New User Introduction" tour. Walks a first-time user from the
  * dashboard through the core areas: customizing the dashboard, the Tools menu,
- * Accounts, and the transaction register, with an interactive detour that opens
- * the New Transaction form to explain payees/categories/amounts, splits, and
- * foreign currencies before asking the user to close the form again. It then
+ * Accounts (including an interactive detour that opens an account's own
+ * type-specific detail page), and the transaction register, with a second
+ * interactive detour that opens the New Transaction form to explain
+ * payees/categories/amounts, splits, and foreign currencies before asking the
+ * user to close the form again. It then
  * visits Bills & Deposits, Investments, Budgets, and Reports. Offered from the
  * Getting Started card and from Settings.
  *
@@ -23,14 +25,17 @@ import type { TourDefinition } from '../types';
  * the user has closed it, Back has to walk past them, or it would land on a
  * step whose anchor can never mount again and strand the tour.
  *
- * The record-a-transaction detour `requires` an account, payee and category:
- * for a user who has none of those yet, walking through the form teaches
- * nothing, so the engine omits those five steps entirely.
+ * The record-a-transaction detour `requires` an account to record against: for
+ * a user who has none yet, walking through the form teaches nothing, so the
+ * engine omits those five steps entirely. The account-detail pair `requires` an
+ * account with a dedicated detail page for the same reason -- there is nothing
+ * for a zero-account user to open, and the tour continues without them.
  */
 export const INTRO_TOUR: TourDefinition = {
   id: 'intro/basics',
   area: 'intro',
   i18nPrefix: 'intro.basics',
+  docs: 'dashboard',
   steps: [
     {
       // Route-agnostic: shows wherever the user launched the tour, so the first
@@ -61,6 +66,38 @@ export const INTRO_TOUR: TourDefinition = {
       route: '/accounts',
       anchorId: TOUR_ANCHORS.accountsAddButton,
       placement: 'bottom',
+      unobtrusive: true,
+    },
+    {
+      // Asks the user to open any account's Details page, and advances when
+      // they land on one. Deliberately unanchored: the eye icon repeats on
+      // every row, and one shared anchor across rows would break the tour's
+      // anchor-uniqueness rule and move under filtering and sorting. The copy
+      // names the **Details** action (the durable concept) and mentions both
+      // ways to reach it, so a mobile user completing it by long-press is not
+      // chasing a desktop-only icon.
+      id: 'openAccountDetail',
+      requires: 'accountsExist',
+      route: '/accounts',
+      anchorId: null,
+      unobtrusive: true,
+      // Bottom-LEFT: row actions are right-aligned and sticky, so the default
+      // corner parks the card on top of the Details button this step asks the
+      // user to click (CI proved it, at a 720px-tall viewport with one row).
+      placement: 'left',
+      advance: { type: 'route', route: '/accounts/' },
+    },
+    {
+      // The per-type page they just opened. `routeMatch` keeps it on whichever
+      // account was chosen; unobtrusive and anchorless so the tailored page the
+      // copy is about stays visible behind the card. The engine cannot navigate
+      // here itself, so `isStepReachable` skips it rather than hanging if the
+      // user skipped the step above.
+      id: 'accountDetailView',
+      requires: 'accountsExist',
+      route: '/accounts',
+      routeMatch: '/accounts/',
+      anchorId: null,
       unobtrusive: true,
     },
     {

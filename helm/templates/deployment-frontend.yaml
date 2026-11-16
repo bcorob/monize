@@ -1,0 +1,135 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: monize-frontend
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "monize.frontend.labels" . | nindent 4 }}
+    {{- with .Values.frontend.extraLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.frontend.extraAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- /*
+    A Deployment, not a StatefulSet. Nothing about these pods is ordinal: no
+    per-pod identity, no per-pod claim, no ordered start. What a StatefulSet
+    added was a slower rollout -- one pod at a time, the next waiting on the
+    last -- and an upgrade that cannot be performed in place (see helm/README.md
+    for the one-time recreate step).
+
+    maxUnavailable: 0 with maxSurge: 1 is what makes a rollout zero-downtime at
+    replicas: 1, which is still the default: the new pod must pass its readiness
+    probe before the old one is taken away. Reversing those two is the ordinary
+    way a "rolling" update drops every request for a few seconds.
+  */}}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  {{- if not .Values.frontend.autoscaling.enabled }}
+  {{- /*
+    Omitted entirely when an HPA owns the count. A Deployment that keeps
+    `replicas` in its spec fights the autoscaler on every `helm upgrade`,
+    scaling back to the chart's number until the HPA scales it out again.
+  */}}
+  replicas: {{ .Values.frontend.replicas }}
+  {{- end }}
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      {{- include "monize.frontend.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- /*
+        The pods are rolled when the ConfigMap changes. Kubernetes does not do
+        this for envFrom: an edited ConfigMap leaves the running containers with
+        the environment they started with, so a `helm upgrade` that changes only
+        a value in it would report success and change nothing until something
+        else happened to restart the pods. The hash makes the pod template
+        differ, which is the only thing a Deployment rolls on.
+      */}}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap-frontend.yaml") . | sha256sum }}
+      labels:
+        {{- include "monize.frontend.labels" . | nindent 8 }}
+        {{- with .Values.frontend.extraLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.frontend.topologySpreadConstraints }}
+      {{- /*
+        Without this, the scheduler is free to put every replica on one node,
+        which makes the replica count look like availability while a single
+        node drain still takes the whole service down.
+
+        The selector is checked against this pod template's own labels, because
+        a constraint that selects nothing is satisfied by every placement and
+        reports no error at any layer.
+      */}}
+      {{- include "monize.assertSpreadSelectors" (dict
+            "constraints" .
+            "podLabels" (merge
+              (deepCopy ($.Values.frontend.extraLabels | default dict))
+              (include "monize.frontend.labels" $ | fromYaml))
+            "path" "frontend") }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      dnsPolicy: ClusterFirstWithHostNet
+      hostNetwork: false
+      restartPolicy: Always
+      automountServiceAccountToken: false
+      affinity: null
+      containers:
+        - name: monize-frontend
+          image: "{{ .Values.frontend.image.registry }}/{{ .Values.frontend.image.repository }}:{{ .Values.frontend.image.tag }}"
+          imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+          {{- with .Values.frontend.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "100"
+            - name: TZ
+              value: {{ .Values.global.timezone | quote }}
+            {{- with .Values.frontend.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          envFrom:
+            - configMapRef:
+                name: env-vars-frontend
+            {{- with .Values.frontend.extraEnvFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          resizePolicy:
+            - resourceName: cpu
+              restartPolicy: NotRequired
+            - resourceName: memory
+              restartPolicy: NotRequired
+          {{- with .Values.frontend.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - containerPort: {{ .Values.frontend.service.port }}
+              name: http
+              protocol: TCP
+          {{- with .Values.frontend.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.frontend.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "1"

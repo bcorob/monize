@@ -1,15 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@/test/render';
+import { act, fireEvent, render, screen, waitFor } from '@/test/render';
 import { DuplicateTransactionReport } from './DuplicateTransactionReport';
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (n: number) => `$${n.toFixed(2)}`,
-    formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
-    defaultCurrency: 'CAD',
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (n: number) => `$${n.toFixed(2)}`,
+      formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
+      defaultCurrency: 'CAD',
+    }),
+  };
+});
 vi.mock('@/hooks/useDateRange', () => ({
   useDateRange: () => ({
     dateRange: '3m',
@@ -19,14 +22,20 @@ vi.mock('@/hooks/useDateRange', () => ({
   }),
 }));
 
-vi.mock('@/lib/utils', () => ({
+vi.mock('@/lib/utils', async (importOriginal) => ({
+  // The real module for the rest: `useDateFormat` formats the row dates through
+  // its `formatDate`, and ExportDropdown merges classes with its `cn`.
+  ...(await importOriginal<typeof import('@/lib/utils')>()),
   parseLocalDate: (d: string) => new Date(d + 'T00:00:00'),
-  // ExportDropdown (rendered by this report) imports `cn` for className merging.
-  cn: (...inputs: any[]) => inputs.flat(Infinity).filter(Boolean).join(' '),
 }));
 
 vi.mock('@/components/ui/DateRangeSelector', () => ({
   DateRangeSelector: () => <div data-testid="date-range-selector" />,
+}));
+
+const mockPush = vi.fn();
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: mockPush }),
 }));
 
 const mockGetDuplicateTransactions = vi.fn();
@@ -89,6 +98,31 @@ describe('DuplicateTransactionReport', () => {
     });
     expect(screen.getByText('Potential Duplicates')).toBeInTheDocument();
     expect(screen.getByText('High Confidence')).toBeInTheDocument();
+  });
+
+  it('opens the register on that exact payee, as one quoted term', async () => {
+    mockGetDuplicateTransactions.mockResolvedValue({
+      groups: [
+        {
+          key: 'group-1',
+          confidence: 'high',
+          reason: 'Same date, amount, and payee',
+          transactions: [
+            { id: 'tx-1', transactionDate: '2025-02-01', payeeName: 'Costco Gas', amount: -50, accountName: 'Chequing' },
+            { id: 'tx-2', transactionDate: '2025-02-01', payeeName: 'Costco Gas', amount: -50, accountName: 'Chequing' },
+          ],
+        },
+      ],
+      summary: { totalGroups: 1, highCount: 1, mediumCount: 0, lowCount: 0, potentialSavings: 50 },
+    });
+    render(<DuplicateTransactionReport />);
+    await waitFor(() => {
+      expect(screen.getAllByText('Costco Gas').length).toBeGreaterThan(0);
+    });
+    fireEvent.click(screen.getAllByText('Costco Gas')[0]);
+    expect(mockPush).toHaveBeenCalledWith(
+      '/transactions?search=payee%3A%3D%22Costco%20Gas%22',
+    );
   });
 
   it('renders summary cards', async () => {
@@ -200,4 +234,29 @@ describe('DuplicateTransactionReport', () => {
     });
     expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
   });
+
+  // The toolbar holds the date controls, so it stays mounted while the report
+  // reloads and after a failed load: an early return for either state would
+  // unmount it, and the focus of whoever is using it.
+  it('keeps the toolbar mounted while loading and after a failed load', async () => {
+    let fail!: (error: Error) => void;
+    mockGetDuplicateTransactions.mockReturnValue(
+      new Promise((_resolve, reject) => {
+        fail = reject;
+      }),
+    );
+    render(<DuplicateTransactionReport />);
+    const toolbar = screen.getByTestId('date-range-selector');
+    expect(document.querySelector('.animate-pulse')).toBeTruthy();
+
+    await act(async () => {
+      fail(new Error('boom'));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Try Again' })).toBeInTheDocument();
+    });
+    expect(screen.getByTestId('date-range-selector')).toBe(toolbar);
+  });
+
 });

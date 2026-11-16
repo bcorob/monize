@@ -27,6 +27,24 @@ describe('WidgetCard', () => {
     expect(screen.getByText('body content')).toBeInTheDocument();
   });
 
+  it('links the title to the fuller view when given one', () => {
+    render(
+      <WidgetCard title="My Widget" titleHref="/reports/my-widget">
+        body
+      </WidgetCard>,
+    );
+    expect(screen.getByRole('link', { name: 'My Widget' })).toHaveAttribute(
+      'href',
+      '/reports/my-widget',
+    );
+  });
+
+  it('leaves the title a plain heading without a destination', () => {
+    render(<WidgetCard title="My Widget">body</WidgetCard>);
+    expect(screen.queryByRole('link')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'My Widget' })).toBeInTheDocument();
+  });
+
   it('omits the settings gear when there are no config controls or widget id', () => {
     render(<WidgetCard title="My Widget">body</WidgetCard>);
     expect(screen.queryByLabelText(/Configure/)).not.toBeInTheDocument();
@@ -86,6 +104,8 @@ describe('WidgetCard', () => {
       fireEvent.click(screen.getByLabelText('Configure My Widget'));
     });
     expect(screen.getByText('config body')).toBeInTheDocument();
+    // Titled through Modal, so the settings dialog is named by the widget.
+    expect(screen.getByRole('dialog', { name: 'My Widget' })).toBeInTheDocument();
 
     await act(async () => {
       fireEvent.click(screen.getByText('Done'));
@@ -100,6 +120,20 @@ describe('WidgetCard', () => {
       </WidgetCard>,
     );
     expect(screen.getByText('3M')).toBeInTheDocument();
+  });
+
+  it('wraps the header rather than squeezing the title out of it', () => {
+    // A header-right carrying a figure, a range and a button needs more width
+    // than a phone has beside a title, and a title truncated to nothing names no
+    // widget. Wrapped, the header-right keeps its right-hand edge.
+    render(
+      <WidgetCard title="My Widget" headerRight={<span>3M</span>}>
+        body
+      </WidgetCard>,
+    );
+    const right = screen.getByText('3M').parentElement!;
+    expect(right.className).toContain('ml-auto');
+    expect(right.parentElement!.className).toContain('flex-wrap');
   });
 });
 

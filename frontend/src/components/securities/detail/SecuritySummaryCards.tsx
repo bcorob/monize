@@ -14,8 +14,7 @@ import {
 } from '@/components/accounts/shared/SummaryCardGrid';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
-import { gainLossColor } from '@/lib/format';
-import { withCurrencyCode } from '@/lib/security-detail';
+import { gainLossColor, withCurrencyCode } from '@/lib/format';
 import type { SecurityDetail } from '@/types/investment';
 
 interface SecuritySummaryCardsProps {
@@ -208,10 +207,14 @@ export function SecuritySummaryCards({
                         <button
                           type="button"
                           onClick={() => onSelectAccount(account.accountId)}
-                          title={t('cards.openAccount', { name })}
                           className="flex w-full items-baseline justify-between gap-3 rounded text-left text-sm hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:hover:bg-gray-700/50"
                         >
-                          <span className="truncate text-gray-900 hover:text-blue-600 dark:text-gray-100 dark:hover:text-blue-400">
+                          {/* A phone wraps the name; from `sm` it is cut to one
+                              line and carries its full text in `title`. */}
+                          <span
+                            className="min-w-0 break-words text-gray-900 hover:text-blue-600 sm:truncate dark:text-gray-100 dark:hover:text-blue-400"
+                            title={name}
+                          >
                             {name}
                           </span>
                           <span className="shrink-0 tabular-nums text-gray-900 dark:text-gray-100">
@@ -221,7 +224,8 @@ export function SecuritySummaryCards({
                       ) : (
                         <div className="flex items-baseline justify-between gap-3 text-sm">
                           <span
-                            className={`truncate ${
+                            title={name}
+                            className={`min-w-0 break-words sm:truncate ${
                               account.isClosed
                                 ? 'text-gray-500 dark:text-gray-400'
                                 : 'text-gray-900 dark:text-gray-100'

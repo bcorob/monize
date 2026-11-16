@@ -2,20 +2,38 @@ import { EntityManager } from "typeorm";
 import { roundToDecimals } from "../../../common/round.util";
 import { MnyExchangeRate, MnySecurityPrice } from "../model/mny-rows";
 import { chunk } from "./chunk";
+import {
+  IsCoin,
+  NO_COINS,
+  canonicalRateRow,
+} from "../../../currencies/canonical-rate.util";
+import { loadCoinLookup } from "../../../currencies/coin-lookup";
+import { returnedRows } from "../../../common/db/query-result";
 
 /**
  * Bulk writers for `SP` price history and `CRNC_EXCHG` exchange rates.
  *
- * Both are additive upserts on the natural key the table is already unique on,
+ * Both are additive inserts on the natural key the table is already unique on,
  * so importing the same file twice, or importing on top of prices a quote
- * provider fetched, converges rather than failing or duplicating. The Money file
- * wins on a conflict: the user asked to import it, and its history is the one
- * their transactions were entered against.
+ * provider fetched, converges rather than failing or duplicating. They differ on
+ * a conflict, because the two tables have different owners:
+ *
+ * - `security_prices` hangs off the importing user's own securities, so the
+ *   Money file wins: the user asked to import it, and its history is the one
+ *   their transactions were entered against.
+ * - `exchange_rates` is global reference data every user on the deployment
+ *   converts through, so an existing observation wins and the Money row only
+ *   fills a date nothing else holds (INV-FX-004). One user's file must not
+ *   rewrite the rate another user's history is valued at.
  *
  * These are the two biggest tables in a real file -- the maintainer's Money Plus
  * file has 68,000 price rows -- so they go in as multi-row `INSERT ... ON
  * CONFLICT` statements with a smaller chunk than the transaction writer uses,
  * because each row binds more parameters.
+ *
+ * A rate row is oriented by `canonicalRateRow` before it is written, because
+ * `exchange_rates` stores each pair once and Money records whichever direction
+ * the user entered (INV-FX-003).
  */
 
 /** 500 rows x 5 columns stays well inside Postgres's 65,535-parameter ceiling. */
@@ -123,15 +141,30 @@ export interface ExchangeRateRow {
 }
 
 /**
- * Resolves `CRNC_EXCHG` handles into ISO codes, dropping what cannot be used.
+ * Resolves `CRNC_EXCHG` handles into ISO codes, dropping what cannot be used and
+ * orienting what survives.
  *
  * A rate needs both currencies, a date and a positive rate; a row missing any of
  * those describes nothing. Self-rates (`USD -> USD`) are dropped too: they are
  * always 1 and only get in the way of the rate lookup.
+ *
+ * Money records whichever orientation the user happened to enter, and
+ * `exchange_rates` stores one orientation per pair, so each row is put through
+ * `canonicalRateRow` before it is keyed (INV-FX-003). Two recordings of one pair
+ * and date -- `USD -> GBP` and `GBP -> USD` -- therefore collapse onto one key
+ * rather than becoming two rows that disagree, and the same dedupe that keeps
+ * the multi-row `INSERT` free of "cannot affect row a second time" now also
+ * keeps the pair from contradicting itself.
+ *
+ * `isCoin` is `currencies.kind` read once for the import: a pair with one coin
+ * side is stored coin -> fiat whichever code sorts first. A rate the column
+ * cannot hold (at or above 1e10 as stored, or nothing at ten decimals) is
+ * dropped like any other unusable row rather than failing the whole insert.
  */
 export function resolveExchangeRates(
   rates: readonly MnyExchangeRate[],
   currencyByHandle: ReadonlyMap<number, string>,
+  isCoin: IsCoin = NO_COINS,
 ): ExchangeRateRow[] {
   const byKey = new Map<string, ExchangeRateRow>();
 
@@ -146,19 +179,23 @@ export function resolveExchangeRates(
     if (
       fromCurrency === undefined ||
       toCurrency === undefined ||
-      fromCurrency === toCurrency ||
-      rate.date === null ||
-      !Number.isFinite(value) ||
-      value <= 0
+      rate.date === null
     ) {
       continue;
     }
 
+    // Refuses a self-pair and a non-positive or non-finite rate, so the checks
+    // this replaces stay in one place.
+    const row = canonicalRateRow(fromCurrency, toCurrency, value, isCoin);
+    if (row === null) {
+      continue;
+    }
+
     // Later rows win, matching the price rule and Money's own write order.
-    byKey.set(`${fromCurrency}|${toCurrency}|${rate.date}`, {
-      fromCurrency,
-      toCurrency,
-      rate: value,
+    byKey.set(`${row.from}|${row.to}|${rate.date}`, {
+      fromCurrency: row.from,
+      toCurrency: row.to,
+      rate: row.rate,
       rateDate: rate.date,
     });
   }
@@ -166,12 +203,32 @@ export function resolveExchangeRates(
   return [...byKey.values()];
 }
 
+/**
+ * Inserts the file's rates for the dates `exchange_rates` holds nothing for, and
+ * returns how many it actually added.
+ *
+ * `DO NOTHING`, never `DO UPDATE` (INV-FX-004): the table is shared by every
+ * user, so a rate already there -- a provider's observation, or another user's
+ * earlier import -- is left as it is. What a Money file records may be what one
+ * user's bank charged rather than the market, and overwriting would revalue
+ * every other user's history at it. Filling a gap is the point of importing
+ * rates at all: a Money file can hold history from before any provider covers
+ * the pair. The reverse holds too: a provider refresh that later replaces a
+ * gap this import filled loses nothing of the user's, because what their own
+ * transactions actually exchanged at is carried on the transactions themselves
+ * (INV-FX-002), not in this table.
+ */
 export async function writeExchangeRates(
   manager: EntityManager,
   rates: readonly MnyExchangeRate[],
   currencyByHandle: ReadonlyMap<number, string>,
 ): Promise<number> {
-  const rows = resolveExchangeRates(rates, currencyByHandle);
+  const rows = resolveExchangeRates(
+    rates,
+    currencyByHandle,
+    await loadCoinLookup(manager),
+  );
+  let inserted = 0;
 
   for (const batch of chunk(rows, UPSERT_CHUNK_SIZE)) {
     const values = batch
@@ -180,12 +237,11 @@ export async function writeExchangeRates(
           `($${index * 5 + 1}, $${index * 5 + 2}, $${index * 5 + 3}::numeric, $${index * 5 + 4}::date, $${index * 5 + 5})`,
       )
       .join(", ");
-    await manager.query(
+    const result: unknown = await manager.query(
       `INSERT INTO exchange_rates (from_currency, to_currency, rate, rate_date, source)
             VALUES ${values}
-       ON CONFLICT (from_currency, to_currency, rate_date)
-       DO UPDATE SET rate = EXCLUDED.rate,
-                     source = EXCLUDED.source`,
+       ON CONFLICT (from_currency, to_currency, rate_date) DO NOTHING
+       RETURNING id`,
       batch.flatMap((row) => [
         row.fromCurrency,
         row.toCurrency,
@@ -194,7 +250,10 @@ export async function writeExchangeRates(
         MNY_PRICE_SOURCE,
       ]),
     );
+    // A skipped conflict returns no row, so this counts what was added rather
+    // than what the file offered.
+    inserted += returnedRows<{ id: number }>(result).length;
   }
 
-  return rows.length;
+  return inserted;
 }

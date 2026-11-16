@@ -7,7 +7,7 @@ import { useTranslations } from 'next-intl';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Button } from '@/components/ui/Button';
+import { buttonClassName } from '@/components/ui/Button';
 import { CustomReportForm } from '@/components/reports/CustomReportForm';
 import { customReportsApi } from '@/lib/custom-reports';
 import { getErrorMessage } from '@/lib/errors';
@@ -43,9 +43,10 @@ function NewCustomReportContent() {
         <PageHeader
           title={t('customPages.createTitle')}
           subtitle={t('customPages.createSubtitle')}
+          help="reports"
           actions={
-            <Link href="/reports">
-              <Button variant="outline">{t('detailHeader.backToReports')}</Button>
+            <Link href="/reports" className={buttonClassName('outline')}>
+              {t('detailHeader.backToReports')}
             </Link>
           }
         />

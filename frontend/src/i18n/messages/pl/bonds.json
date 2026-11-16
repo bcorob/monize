@@ -1,0 +1,100 @@
+{
+  "entry": {
+    "history": "Historia warunków {program}"
+  },
+  "offer": {
+    "loading": "Wczytywanie obligacji w sprzedaży...",
+    "loadFailed": "Nie udało się wczytać obligacji w sprzedaży.",
+    "retry": "Spróbuj ponownie",
+    "empty": "Dziś żadna seria nie jest w sprzedaży.",
+    "asOf": "W sprzedaży na dzień {date}. Każda wartość dotyczy jednej obligacji kupionej dziś i trzymanej do wykupu.",
+    "comparisonNote": "Zannualizowana stopa zwrotu służy do porównania produktów o różnej długości. Nie jest obietnicą zysku.",
+    "couponsNote": "Kupony bez reinwestycji: w obligacji z kuponami wartość w terminie wykupu obejmuje wszystkie wypłacone kupony.",
+    "projected": "Prognoza",
+    "projectedTitle": "Ta wartość opiera się na założonej wartości wskaźnika, a nie wyłącznie na opublikowanych stopach.",
+    "assumptions": {
+      "title": "Założenia",
+      "intro": "Okresy, które jeszcze się nie rozpoczęły, są wyceniane według tych wartości wskaźników. Zmień jedną, aby zobaczyć jej wpływ na każdy wiersz.",
+      "label": "{benchmark} (%)",
+      "latest": "Ostatnia opublikowana wartość: {value} ({observation})",
+      "reset": "Użyj ostatnich opublikowanych wartości",
+      "updating": "Aktualizowanie wartości..."
+    },
+    "columns": {
+      "series": "Seria",
+      "saleWindow": "W sprzedaży",
+      "length": "Długość",
+      "firstPeriodRate": "Pierwszy okres",
+      "rule": "Oprocentowanie",
+      "capitalization": "Odsetki",
+      "redemption": "Wcześniejszy wykup",
+      "maturityValue": "Wartość w terminie wykupu",
+      "totalReturn": "Zwrot łączny",
+      "annualizedReturn": "Zwrot w skali roku",
+      "terms": "Warunki"
+    },
+    "saleWindowValue": "{from} do {to}",
+    "lengthValue": "{months, plural, one {# miesiąc} few {# miesiące} many {# miesięcy} other {# miesiąca}}",
+    "lengthDaysValue": "{days, plural, one {# dzień} few {# dni} many {# dni} other {# dnia}}",
+    "rule": {
+      "fixed": "Stałe {rate} rocznie",
+      "benchmark": "{benchmark} + {addend}",
+      "floor": "Dolna granica wskaźnika {floor}",
+      "daily": "Codziennie: {benchmark} + {addend}",
+      "discount": "Dyskonto względem wartości nominalnej"
+    },
+    "capitalization": {
+      "NONE": "Wypłacane w każdym okresie",
+      "COMPOUND_AT_PERIOD_END": "Kapitalizowane na koniec każdego okresu"
+    },
+    "redemption": {
+      "none": "Tylko w terminie wykupu",
+      "onDemand": "Na żądanie",
+      "fee": "Opłata {amount} za obligację",
+      "forfeit": "Odsetki naliczone w okresie przepadają"
+    },
+    "couponsNotReinvested": "Kupony bez reinwestycji"
+  },
+  "history": {
+    "loading": "Wczytywanie historii...",
+    "loadFailed": "Nie udało się wczytać historii.",
+    "retry": "Spróbuj ponownie",
+    "empty": "Żadna seria tego produktu nie jest jeszcze zapisana.",
+    "coverage": "Katalog obejmuje okres od {from} do {to}.",
+    "rateChartTitle": "Oprocentowanie pierwszego okresu i marża według miesiąca sprzedaży",
+    "feeChartTitle": "Opłata za wcześniejszy wykup według miesiąca sprzedaży",
+    "rate": "Oprocentowanie pierwszego okresu",
+    "rateChartNote": "Dla obligacji stałoprocentowych linia pokazuje oprocentowanie roczne.",
+    "addend": "Marża lub spread",
+    "fee": "Opłata za wcześniejszy wykup",
+    "gapsNote": "Miesiąc bez zapisanej serii to przerwa w linii, a nie wartość wyprowadzona z sąsiednich miesięcy.",
+    "missingTitle": "Miesiące, których brakuje w katalogu ({count})",
+    "noMissing": "Między pierwszą a ostatnią zapisaną serią nie brakuje żadnego miesiąca.",
+    "tableTitle": "Wszystkie zapisane serie",
+    "groupCount": "serie: {count}",
+    "unknownYear": "Data sprzedaży nieznana",
+    "columns": {
+      "series": "Seria",
+      "saleWindow": "W sprzedaży",
+      "rate": "Oprocentowanie pierwszego okresu lub roczne",
+      "addend": "Marża lub spread",
+      "fee": "Opłata za wcześniejszy wykup",
+      "floor": "Dolna granica wypłaty",
+      "version": "Wersja warunków",
+      "source": "Źródło"
+    },
+    "floor": {
+      "ALL_PERIODS": "W każdym okresie",
+      "FIRST_PERIOD": "Tylko w pierwszym okresie"
+    },
+    "none": "Brak",
+    "held": "Posiadana"
+  },
+  "refreshProgress": {
+    "label": "Odświeżanie danych obligacji",
+    "offer": "Sprawdzanie bieżącej oferty…",
+    "series": "Pobieranie serii {done} z {total}: {seriesCode}",
+    "historyComplete": "Historia jest kompletna",
+    "starting": "Rozpoczynanie…"
+  }
+}

@@ -22,7 +22,49 @@ Access via Ingress:
 
 Public URL: {{ include "monize.publicAppUrl" . }}
 
+{{- if eq (include "monize.clusterMulti" .) "true" }}
+
+CLUSTER_MODE=multi: two things this chart cannot check for you.
+
+  1. backend.database.DATABASE_HOST must reach a PostgreSQL *session*.
+     Every replica holds one LISTEN open for cross-replica wake-ups, and a
+     transaction-mode pooler (pgBouncer in its default mode) drops it: the
+     connection succeeds and the notifications never arrive. A direct service
+     -- CNPG's "-rw", a plain postgres Service, a session-mode pooler -- is
+     what this needs. The backend refuses to boot if it cannot hold the LISTEN,
+     so a misconfiguration is a log line rather than a slow application.
+
+  2. The storage assertions must be true, not merely set.
+{{- if .Values.backend.persistence.attachments.enabled }}
+{{- if ne .Values.backend.persistence.attachments.accessMode "ReadWriteMany" }}
+     backend.persistence.attachments.accessMode is
+     {{ .Values.backend.persistence.attachments.accessMode }}, which a second pod
+     on another node cannot attach. Set ReadWriteMany, or use the "database" or
+     "s3" attachment provider.
+{{- end }}
+{{- end }}
+{{- if eq (include "monize.backupStore" .) "local" }}
+{{- if .Values.backend.persistence.backups.enabled }}
+{{- if ne .Values.backend.persistence.backups.accessMode "ReadWriteMany" }}
+     backend.persistence.backups.accessMode is
+     {{ .Values.backend.persistence.backups.accessMode }}. Automatic backups are
+     written by whichever replica runs the hourly job, and restored by whichever
+     replica serves the request, so ReadWriteMany is what makes those the same
+     files.
+{{- end }}
+{{- end }}
+{{- if ne (include "monize.isTrue" .Values.cluster.backupSharedVolume) "true" }}
+     cluster.backupSharedVolume is not true, and multi refuses to boot without
+     it while the backup store is "local". Note that the ConfigMap tests it for
+     exactly "true", so a quoted "false" is false here and there alike. The
+     other way out is BACKUP_STORAGE_PROVIDER=s3 in backend.extraEnv, which
+     every replica reaches by construction and needs no assertion.
+{{- end }}
+{{- end }}
+{{- end }}
+
 {{- if not .Values.backend.persistence.backups.enabled }}
+{{- if eq (include "monize.backupStore" .) "local" }}
 
 NOTE: automatic backups have nowhere durable to write.
 
@@ -32,7 +74,10 @@ NOTE: automatic backups have nowhere durable to write.
   files. The UI does not know that, so it will look configured.
 
   To fix:  --set backend.persistence.backups.enabled=true
-  Or mount your own claim with backend.persistence.backups.existingClaim.
+  Or mount your own claim with backend.persistence.backups.existingClaim, or put
+  the store in a bucket with BACKUP_STORAGE_PROVIDER=s3 and BACKUP_STORE_S3_*
+  in backend.extraEnv.
+{{- end }}
 {{- end }}
 {{- if not .Values.backend.persistence.attachments.enabled }}
 {{- if eq (include "monize.attachmentProvider" .) "local" }}

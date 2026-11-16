@@ -7,6 +7,7 @@ import {
   looksLikeInvestmentCsv,
   classifyCsvActionValue,
 } from './import';
+import { setCache, getCached, clearAllCache } from './apiCache';
 
 vi.mock('./api', () => ({
   default: { get: vi.fn(), post: vi.fn(), put: vi.fn(), delete: vi.fn() },
@@ -133,54 +134,6 @@ describe('importApi column mappings', () => {
   });
 });
 
-describe('detectCsvDateFormat', () => {
-  it('detects YYYY-MM-DD', async () => {
-    const { detectCsvDateFormat } = await import('./import');
-    expect(detectCsvDateFormat(['2025-01-15'])).toBe('YYYY-MM-DD');
-  });
-
-  it('detects YYYY-DD-MM when middle part is greater than 12', async () => {
-    const { detectCsvDateFormat } = await import('./import');
-    expect(detectCsvDateFormat(['2025-15-01'])).toBe('YYYY-DD-MM');
-  });
-
-  it('defaults YYYY-prefixed to YYYY-MM-DD when ambiguous', async () => {
-    const { detectCsvDateFormat } = await import('./import');
-    expect(detectCsvDateFormat(['2025-05-06'])).toBe('YYYY-MM-DD');
-  });
-
-  it('detects MM/DD/YYYY when first part is <= 12', async () => {
-    const { detectCsvDateFormat } = await import('./import');
-    expect(detectCsvDateFormat(['12/31/2025'])).toBe('MM/DD/YYYY');
-  });
-
-  it('detects DD/MM/YYYY when first part > 12', async () => {
-    const { detectCsvDateFormat } = await import('./import');
-    expect(detectCsvDateFormat(['31/12/2025'])).toBe('DD/MM/YYYY');
-  });
-
-  it('returns null for empty input', async () => {
-    const { detectCsvDateFormat } = await import('./import');
-    expect(detectCsvDateFormat([])).toBeNull();
-    expect(detectCsvDateFormat([''])).toBeNull();
-  });
-
-  it('returns null for unrecognized date pattern', async () => {
-    const { detectCsvDateFormat } = await import('./import');
-    expect(detectCsvDateFormat(['Q1 2025'])).toBeNull();
-  });
-
-  it('strips ISO time components', async () => {
-    const { detectCsvDateFormat } = await import('./import');
-    expect(detectCsvDateFormat(['2025-01-15T12:00:00Z'])).toBe('YYYY-MM-DD');
-  });
-
-  it('strips space-separated time components', async () => {
-    const { detectCsvDateFormat } = await import('./import');
-    expect(detectCsvDateFormat(['01/15/2025 14:30'])).toBe('MM/DD/YYYY');
-  });
-});
-
 describe('autoMatchCsvColumns', () => {
   it('matches common header names to fields', () => {
     const result = autoMatchCsvColumns(['Date', 'Amount', 'Payee', 'Category', 'Memo']);
@@ -212,6 +165,16 @@ describe('autoMatchCsvColumns', () => {
     expect(result.credit).toBe(2);
     expect(result.amount).toBeUndefined();
     expect(result.payee).toBe(3);
+  });
+
+  it('clears a default amount column when spread over it in split mode', () => {
+    // The wizard spreads the result over a default mapping with amount: 1;
+    // a leftover amount wins over debit/credit and imports every row as 0.
+    const result = autoMatchCsvColumns(['Date', 'Description', 'Debit', 'Credit', 'Balance']);
+    const merged = { date: 0, amount: 1, ...result };
+    expect(merged.amount).toBeUndefined();
+    expect(merged.debit).toBe(2);
+    expect(merged.credit).toBe(3);
   });
 
   it('prefers amount over debit/credit when amount is present', () => {
@@ -376,5 +339,21 @@ describe('classifyCsvActionValue', () => {
     expect(classifyCsvActionValue('Journal')).toBeNull();
     expect(classifyCsvActionValue('')).toBeNull();
     expect(classifyCsvActionValue('   ')).toBeNull();
+  });
+});
+
+describe('importApi creates reference data (INV-CACHE-001)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearAllCache();
+    setCache('categories:all', [{ id: 'c' }]);
+    setCache('payees:all', [{ id: 'p' }]);
+  });
+
+  it.each(['importQif', 'importQifMultiAccount', 'importOfx', 'importCsv'] as const)('%s drops the category and payee caches', async (method) => {
+    vi.mocked(api.post).mockResolvedValue({ data: { imported: 1 } });
+    await (importApi[method] as (d: any) => Promise<unknown>)({} as any);
+    expect(getCached('categories:all')).toBeUndefined();
+    expect(getCached('payees:all')).toBeUndefined();
   });
 });

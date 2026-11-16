@@ -30,18 +30,20 @@ async function getAccountOptionLabels(): Promise<string[]> {
   return labels;
 }
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (n: number, _currency?: string) => `$${n.toFixed(2)}`,
-    formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
-    formatCurrencyAxis: (n: number) => `$${n}`,
-    defaultCurrency: 'CAD',
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (n: number, _currency?: string) => `$${n.toFixed(2)}`,
+      formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
+      formatCurrencyAxis: (n: number) => `$${n}`,
+      defaultCurrency: 'CAD',
+    }),
+  };
+});
 vi.mock('@/hooks/useExchangeRates', () => ({
   useExchangeRates: () => ({
-    convertToDefault: (amount: number, _currency: string) => amount,
     defaultCurrency: 'CAD',
   }),
 }));
@@ -99,13 +101,19 @@ const mockGetTransactions = vi.fn();
 const mockGetInvestmentAccounts = vi.fn();
 const mockGetCapitalGains = vi.fn();
 
-vi.mock('@/lib/investments', () => ({
-  investmentsApi: {
-    getTransactions: (...args: any[]) => mockGetTransactions(...args),
-    getInvestmentAccounts: (...args: any[]) => mockGetInvestmentAccounts(...args),
-    getCapitalGains: (...args: any[]) => mockGetCapitalGains(...args),
-  },
-}));
+// The server's per-row conversion figures, defaulted to a CAD reader of CAD
+// rows where a fixture states none (issue #2106).
+vi.mock('@/lib/investments', async () => {
+  const { withRowFactors, withCapitalGainReporting } = await import('@/test/investment-fx-fixtures');
+  return {
+    investmentsApi: {
+      getTransactions: async (...args: any[]) => withRowFactors(await mockGetTransactions(...args)),
+      getInvestmentAccounts: (...args: any[]) => mockGetInvestmentAccounts(...args),
+      getCapitalGains: async (...args: any[]) =>
+        withCapitalGainReporting(await mockGetCapitalGains(...args)),
+    },
+  };
+});
 
 const mockExportToCsv = vi.fn();
 vi.mock('@/lib/csv-export', () => ({
@@ -269,6 +277,7 @@ describe('DividendIncomeReport', () => {
           transactionDate: '2024-06-15',
           action: 'DIVIDEND',
           totalAmount: 100,
+          amountCurrencyCode: 'CAD',
           accountId: 'acc-1',
           security: { symbol: 'VFV', name: 'Vanguard S&P 500' },
         },
@@ -277,6 +286,7 @@ describe('DividendIncomeReport', () => {
           transactionDate: '2024-07-15',
           action: 'INTEREST',
           totalAmount: 25,
+          amountCurrencyCode: 'CAD',
           accountId: 'acc-1',
           security: { symbol: 'CASH', name: 'Cash Interest' },
         },
@@ -296,6 +306,193 @@ describe('DividendIncomeReport', () => {
     expect(screen.getByText('Total Income')).toBeInTheDocument();
   });
 
+  it('counts a reinvested distribution as income of its kind, at its shares\' cost', async () => {
+    // Discussion #1670. A reinvest created in the app stores no total, so the
+    // report values it at quantity x price + commission.
+    mockGetTransactions.mockResolvedValue({
+      data: [
+        {
+          id: 'tx-1',
+          transactionDate: '2024-06-15',
+          action: 'DIVIDEND',
+          totalAmount: 100,
+          amountCurrencyCode: 'CAD',
+          accountId: 'acc-1',
+          security: { symbol: 'VFV', name: 'Vanguard S&P 500' },
+        },
+        {
+          id: 'tx-2',
+          transactionDate: '2024-07-15',
+          action: 'REINVEST',
+          quantity: 2,
+          price: 25,
+          commission: 0,
+          totalAmount: 0,
+          amountCurrencyCode: 'CAD',
+          accountId: 'acc-1',
+          security: { symbol: 'VFV', name: 'Vanguard S&P 500' },
+        },
+        {
+          id: 'tx-3',
+          transactionDate: '2024-08-15',
+          action: 'REINVEST_INTEREST',
+          quantity: 1,
+          price: 7,
+          commission: 0,
+          totalAmount: 0,
+          amountCurrencyCode: 'CAD',
+          accountId: 'acc-1',
+          security: { symbol: 'VFV', name: 'Vanguard S&P 500' },
+        },
+        {
+          id: 'tx-4',
+          transactionDate: '2024-08-15',
+          action: 'BUY',
+          quantity: 1,
+          price: 1000,
+          commission: 0,
+          totalAmount: 1000,
+          amountCurrencyCode: 'CAD',
+          accountId: 'acc-1',
+          security: { symbol: 'VFV', name: 'Vanguard S&P 500' },
+        },
+      ],
+      pagination: { hasMore: false },
+    });
+    mockGetInvestmentAccounts.mockResolvedValue([
+      { id: 'acc-1', name: 'TFSA', currencyCode: 'CAD', accountSubType: 'INVESTMENT_CASH' },
+    ]);
+    mockGetCapitalGains.mockResolvedValue([]);
+    render(<DividendIncomeReport />);
+    await waitFor(() => {
+      expect(screen.getByText('Total Income')).toBeInTheDocument();
+    });
+    // Dividends: 100 in cash + 50 reinvested. Interest: 7 reinvested. The BUY
+    // is not income.
+    await waitFor(() => {
+      expect(screen.getAllByText('$150.00').length).toBeGreaterThan(0);
+    });
+    expect(screen.getAllByText('$7.00').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('$157.00').length).toBeGreaterThan(0);
+  });
+
+  it("converts a foreign security's dividend at the row's own rate, not as if it were in the account's currency", async () => {
+    // A USD dividend booked into a CAD account at 1.35. Read as CAD it was
+    // 100; it is 135 CAD.
+    mockGetTransactions.mockResolvedValue({
+      data: [
+        {
+          id: 'tx-1',
+          transactionDate: '2024-06-15',
+          action: 'DIVIDEND',
+          totalAmount: 100,
+          amountCurrencyCode: 'USD',
+          exchangeRate: 1.35,
+          // The server's factors: the row's own rate reaches CAD.
+          reportingCurrencyCode: 'CAD',
+          reportingRate: 1.35,
+          accountRate: 1.35,
+          accountId: 'acc-1',
+          security: { symbol: 'SPY', name: 'S&P 500 ETF' },
+        },
+      ],
+      pagination: { hasMore: false },
+    });
+    mockGetInvestmentAccounts.mockResolvedValue([
+      { id: 'acc-1', name: 'TFSA', currencyCode: 'CAD', accountSubType: 'INVESTMENT_CASH' },
+    ]);
+    mockGetCapitalGains.mockResolvedValue([]);
+    render(<DividendIncomeReport />);
+    await waitFor(() => {
+      expect(screen.getAllByText('$135.00').length).toBeGreaterThan(0);
+    });
+    expect(screen.queryByText('$100.00')).not.toBeInTheDocument();
+  });
+
+  it("converts a past dividend at the server's factor for its own date, not today's rate (issue #2106)", async () => {
+    // Two USD dividends of 100 in a USD account, read in CAD: January's at
+    // 1.25 and June's at 1.40 -- 265 CAD, whatever the rate is today.
+    mockGetTransactions.mockResolvedValue({
+      data: [
+        {
+          id: 'tx-1',
+          transactionDate: '2024-01-15',
+          action: 'DIVIDEND',
+          totalAmount: 100,
+          amountCurrencyCode: 'USD',
+          exchangeRate: 1,
+          reportingCurrencyCode: 'CAD',
+          reportingRate: 1.25,
+          accountRate: 1,
+          accountId: 'acc-us',
+          security: { symbol: 'SPY', name: 'S&P 500 ETF' },
+        },
+        {
+          id: 'tx-2',
+          transactionDate: '2024-06-15',
+          action: 'DIVIDEND',
+          totalAmount: 100,
+          amountCurrencyCode: 'USD',
+          exchangeRate: 1,
+          reportingCurrencyCode: 'CAD',
+          reportingRate: 1.4,
+          accountRate: 1,
+          accountId: 'acc-us',
+          security: { symbol: 'SPY', name: 'S&P 500 ETF' },
+        },
+      ],
+      pagination: { hasMore: false },
+    });
+    mockGetInvestmentAccounts.mockResolvedValue([
+      { id: 'acc-us', name: 'US Margin', currencyCode: 'USD', accountSubType: 'INVESTMENT_CASH' },
+      { id: 'acc-ca', name: 'TFSA', currencyCode: 'CAD', accountSubType: 'INVESTMENT_CASH' },
+    ]);
+    mockGetCapitalGains.mockResolvedValue([]);
+    render(<DividendIncomeReport />);
+    await waitFor(() => {
+      expect(screen.getAllByText('$265.00').length).toBeGreaterThan(0);
+    });
+  });
+
+  it('leaves a VOID distribution out: it paid nothing', async () => {
+    mockGetTransactions.mockResolvedValue({
+      data: [
+        {
+          id: 'tx-1',
+          transactionDate: '2024-06-15',
+          action: 'DIVIDEND',
+          totalAmount: 100,
+          amountCurrencyCode: 'CAD',
+          accountId: 'acc-1',
+          security: { symbol: 'VFV', name: 'Vanguard S&P 500' },
+        },
+        {
+          id: 'tx-2',
+          transactionDate: '2024-07-15',
+          action: 'REINVEST',
+          status: 'VOID',
+          quantity: 2,
+          price: 25,
+          commission: 0,
+          totalAmount: 0,
+          amountCurrencyCode: 'CAD',
+          accountId: 'acc-1',
+          security: { symbol: 'VFV', name: 'Vanguard S&P 500' },
+        },
+      ],
+      pagination: { hasMore: false },
+    });
+    mockGetInvestmentAccounts.mockResolvedValue([
+      { id: 'acc-1', name: 'TFSA', currencyCode: 'CAD', accountSubType: 'INVESTMENT_CASH' },
+    ]);
+    mockGetCapitalGains.mockResolvedValue([]);
+    render(<DividendIncomeReport />);
+    await waitFor(() => {
+      expect(screen.getAllByText('$100.00').length).toBeGreaterThan(0);
+    });
+    expect(screen.queryByText('$150.00')).not.toBeInTheDocument();
+  });
+
   it('renders view type buttons', async () => {
     mockGetTransactions.mockResolvedValue({ data: [], pagination: { hasMore: false } });
     mockGetInvestmentAccounts.mockResolvedValue([]);
@@ -307,6 +504,18 @@ describe('DividendIncomeReport', () => {
     expect(screen.getByText('By Security')).toBeInTheDocument();
   });
 
+  it('labels the chart/table display switch for the monthly view', async () => {
+    mockGetTransactions.mockResolvedValue({ data: [], pagination: { hasMore: false } });
+    mockGetInvestmentAccounts.mockResolvedValue([]);
+    mockGetCapitalGains.mockResolvedValue([]);
+    render(<DividendIncomeReport />);
+    await waitFor(() => {
+      expect(
+        screen.getByRole('group', { name: 'Monthly display mode' }),
+      ).toBeInTheDocument();
+    });
+  });
+
   it('populates the security filter from loaded data and narrows results when one is picked', async () => {
     mockGetTransactions.mockResolvedValue({
       data: [
@@ -315,6 +524,7 @@ describe('DividendIncomeReport', () => {
           transactionDate: '2024-06-15',
           action: 'DIVIDEND',
           totalAmount: 100,
+          amountCurrencyCode: 'CAD',
           accountId: 'acc-1',
           securityId: 'sec-a',
           security: { symbol: 'AAA', name: 'Alpha' },
@@ -324,6 +534,7 @@ describe('DividendIncomeReport', () => {
           transactionDate: '2024-07-15',
           action: 'DIVIDEND',
           totalAmount: 30,
+          amountCurrencyCode: 'CAD',
           accountId: 'acc-1',
           securityId: 'sec-b',
           security: { symbol: 'BBB', name: 'Beta' },
@@ -361,6 +572,7 @@ describe('DividendIncomeReport', () => {
           transactionDate: '2024-06-15',
           action: 'DIVIDEND',
           totalAmount: 100,
+          amountCurrencyCode: 'CAD',
           accountId: 'acc-1',
           securityId: 'sec-a',
           security: { symbol: 'AAA', name: 'Alpha' },
@@ -454,6 +666,95 @@ describe('DividendIncomeReport', () => {
     expect(screen.getByText('$1650.00')).toBeInTheDocument();
   });
 
+  // A measured zero and an unknown are different facts, and this report's whole
+  // subject is which of the two a period holds. Both directions get a case: the
+  // tables asked `startValue !== 0 ? fmtValue(...) : '-'`, so a month that
+  // genuinely opened at nothing rendered the unknown marker, and no assertion
+  // anywhere would have noticed. `row.startValue` is `number | null`, so the
+  // only correct test is against `null`.
+  // The table lists every month in the range, so the row has to be addressed by
+  // its label -- reading `tbody tr:first-child` picks up an empty month, whose
+  // zeros are real and would make either assertion below pass for the wrong
+  // reason.
+  async function monthlyTableCells(monthLabel: string): Promise<HTMLElement[]> {
+    render(<DividendIncomeReport />);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Table' })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Table' }));
+    await screen.findByText('Monthly Gains, Dividends & Interest');
+    const row = [
+      ...screen.getAllByRole('table')[0].querySelectorAll('tbody tr'),
+    ].find((tr) => tr.querySelector('td')?.textContent?.trim() === monthLabel);
+    if (!row) throw new Error(`The monthly table has no ${monthLabel} row`);
+    return [...row.querySelectorAll('td')] as HTMLElement[];
+  }
+
+  const capitalGainEntry = (overrides: Record<string, unknown>) => ({
+    month: '2024-06',
+    accountId: 'acc-1',
+    accountName: 'TFSA',
+    accountCurrencyCode: 'CAD',
+    securityId: 'sec-a',
+    symbol: 'AAA',
+    securityName: 'Alpha',
+    securityCurrencyCode: 'CAD',
+    startQuantity: 0,
+    endQuantity: 10,
+    startValue: 0,
+    endValue: 0,
+    buys: 0,
+    sells: 0,
+    realizedGain: 0,
+    unrealizedGain: 0,
+    totalCapitalGain: 0,
+    ...overrides,
+  });
+
+  it('renders a start value of zero as a formatted zero, not as the unknown marker', async () => {
+    // Bought during the month: the position was worth exactly nothing at the
+    // start, which is a figure, and 0 is what it should read.
+    mockGetTransactions.mockResolvedValue({ data: [], pagination: { hasMore: false } });
+    mockGetInvestmentAccounts.mockResolvedValue([
+      { id: 'acc-1', name: 'TFSA', currencyCode: 'CAD', accountSubType: 'INVESTMENT_CASH' },
+    ]);
+    mockGetCapitalGains.mockResolvedValue([
+      capitalGainEntry({ startValue: 0, endValue: 1200, unrealizedGain: 200, totalCapitalGain: 200 }),
+    ]);
+
+    const cells = await monthlyTableCells('Jun 2024');
+
+    // [month, start, end, dividends, interest, capital gains, total]
+    expect(cells[1]).toHaveTextContent('$0.00');
+    expect(cells[1].textContent).not.toContain('-');
+    expect(cells[1].textContent).not.toContain('—');
+    expect(cells[2]).toHaveTextContent('$1200.00');
+  });
+
+  it('renders an unknown start value as the unknown marker, not as a zero', async () => {
+    // No rate between the security's currency and the account's, so the server
+    // could not value the position at all.
+    mockGetTransactions.mockResolvedValue({ data: [], pagination: { hasMore: false } });
+    mockGetInvestmentAccounts.mockResolvedValue([
+      { id: 'acc-1', name: 'TFSA', currencyCode: 'CAD', accountSubType: 'INVESTMENT_CASH' },
+    ]);
+    mockGetCapitalGains.mockResolvedValue([
+      capitalGainEntry({
+        securityCurrencyCode: 'EUR',
+        startValue: null,
+        endValue: null,
+        unrealizedGain: null,
+        totalCapitalGain: null,
+      }),
+    ]);
+
+    const cells = await monthlyTableCells('Jun 2024');
+
+    expect(cells[1].textContent).toBe('—');
+    expect(cells[2].textContent).toBe('—');
+    expect(cells[1].textContent).not.toContain('$');
+  });
+
   it('switches the monthly view from chart to table on demand', async () => {
     mockGetTransactions.mockResolvedValue({
       data: [
@@ -462,6 +763,7 @@ describe('DividendIncomeReport', () => {
           transactionDate: '2024-06-15',
           action: 'DIVIDEND',
           totalAmount: 100,
+          amountCurrencyCode: 'CAD',
           accountId: 'acc-1',
           securityId: 'sec-a',
           security: { symbol: 'AAA', name: 'Alpha' },
@@ -497,6 +799,7 @@ describe('DividendIncomeReport', () => {
           transactionDate: '2024-06-15',
           action: 'DIVIDEND',
           totalAmount: 100,
+          amountCurrencyCode: 'CAD',
           accountId: 'acc-1',
           securityId: 'sec-a',
           security: { symbol: 'AAA', name: 'Alpha' },
@@ -557,6 +860,7 @@ describe('DividendIncomeReport', () => {
           transactionDate: '2024-06-15',
           action: 'DIVIDEND',
           totalAmount: 100,
+          amountCurrencyCode: 'CAD',
           accountId: 'acc-1',
           securityId: 'sec-a',
           security: { symbol: 'AAA', name: 'Alpha' },
@@ -601,6 +905,7 @@ describe('DividendIncomeReport', () => {
           transactionDate: '2024-06-15',
           action: 'DIVIDEND',
           totalAmount: 100,
+          amountCurrencyCode: 'CAD',
           accountId: 'acc-1',
           securityId: 'sec-a',
           security: { symbol: 'AAA', name: 'Alpha' },
@@ -654,6 +959,7 @@ describe('DividendIncomeReport', () => {
           transactionDate: '2024-06-15',
           action: 'DIVIDEND',
           totalAmount: 100,
+          amountCurrencyCode: 'CAD',
           accountId: 'acc-1',
           securityId: 'sec-a',
           security: { symbol: 'AAA', name: 'Alpha' },
@@ -688,6 +994,7 @@ describe('DividendIncomeReport', () => {
           transactionDate: '2024-06-15',
           action: 'DIVIDEND',
           totalAmount: 100,
+          amountCurrencyCode: 'CAD',
           accountId: 'acc-1',
           securityId: 'sec-a',
           security: { symbol: 'AAA', name: 'Alpha' },
@@ -745,6 +1052,7 @@ describe('DividendIncomeReport', () => {
             transactionDate: '2024-06-15',
             action: 'DIVIDEND',
             totalAmount: 50,
+            amountCurrencyCode: 'CAD',
             accountId: 'acc-1',
             securityId: 'sec-a',
             security: { symbol: 'AAA', name: 'Alpha' },
@@ -779,6 +1087,7 @@ describe('DividendIncomeReport', () => {
             transactionDate: '2024-06-15',
             action: 'DIVIDEND',
             totalAmount: 75,
+            amountCurrencyCode: 'CAD',
             accountId: 'acc-1',
             securityId: 'sec-a',
             security: { symbol: 'AAA', name: 'Alpha' },
@@ -788,6 +1097,7 @@ describe('DividendIncomeReport', () => {
             transactionDate: '2024-06-15',
             action: 'INTEREST',
             totalAmount: 10,
+            amountCurrencyCode: 'CAD',
             accountId: 'acc-1',
             securityId: null,
             security: null,
@@ -797,6 +1107,7 @@ describe('DividendIncomeReport', () => {
             transactionDate: '2024-07-01',
             action: 'DIVIDEND',
             totalAmount: 25,
+            amountCurrencyCode: 'CAD',
             accountId: 'acc-1',
             securityId: 'sec-a',
             security: { symbol: 'AAA', name: 'Alpha' },
@@ -883,6 +1194,7 @@ describe('DividendIncomeReport', () => {
             transactionDate: '2024-06-15',
             action: 'DIVIDEND',
             totalAmount: 50,
+            amountCurrencyCode: 'CAD',
             accountId: 'acc-1',
             securityId: 'sec-a',
             security: { symbol: 'AAA', name: 'Alpha' },
@@ -892,6 +1204,7 @@ describe('DividendIncomeReport', () => {
             transactionDate: '2024-07-10',
             action: 'INTEREST',
             totalAmount: 20,
+            amountCurrencyCode: 'CAD',
             accountId: 'acc-1',
             securityId: null,
             security: null,
@@ -955,6 +1268,7 @@ describe('DividendIncomeReport', () => {
             transactionDate: '2024-06-15',
             action: 'DIVIDEND',
             totalAmount: 50,
+            amountCurrencyCode: 'CAD',
             accountId: 'acc-1',
             securityId: 'sec-a',
             security: { symbol: 'AAA', name: 'Alpha' },
@@ -1080,6 +1394,7 @@ describe('DividendIncomeReport', () => {
             transactionDate: '2024-06-17',
             action: 'DIVIDEND',
             totalAmount: 50,
+            amountCurrencyCode: 'CAD',
             accountId: 'acc-1',
             securityId: 'sec-a',
             security: { symbol: 'AAA', name: 'Alpha' },
@@ -1178,6 +1493,7 @@ describe('DividendIncomeReport', () => {
             transactionDate: '2024-06-15',
             action: 'DIVIDEND',
             totalAmount: 50,
+            amountCurrencyCode: 'CAD',
             accountId: 'acc-1',
             securityId: 'sec-a',
             security: { symbol: 'AAA', name: 'Alpha' },
@@ -1218,6 +1534,7 @@ describe('DividendIncomeReport', () => {
           transactionDate: '2024-06-15',
           action: 'DIVIDEND',
           totalAmount: 100,
+          amountCurrencyCode: 'CAD',
           accountId: 'acc-1',
           security: { symbol: 'VFV', name: 'Vanguard S&P 500' },
         },
@@ -1260,6 +1577,7 @@ describe('DividendIncomeReport', () => {
           transactionDate: '2024-06-15',
           action: 'DIVIDEND',
           totalAmount: 200,
+          amountCurrencyCode: 'CAD',
           accountId: 'acc-1',
           securityId: 'sec-a',
           security: { symbol: 'AAA', name: 'Alpha Corp' },
@@ -1309,6 +1627,7 @@ describe('DividendIncomeReport', () => {
           transactionDate: '2024-06-15',
           action: 'INTEREST',
           totalAmount: 50,
+          amountCurrencyCode: 'CAD',
           accountId: 'acc-1',
           securityId: 'sec-a',
           security: { symbol: 'CASH', name: 'Cash Interest' },
@@ -1356,6 +1675,7 @@ describe('DividendIncomeReport', () => {
             transactionDate: '2024-03-15',
             action: 'DIVIDEND',
             totalAmount: 50,
+            amountCurrencyCode: 'CAD',
             accountId: 'acc-1',
             securityId: 'sec-a',
             security: { symbol: 'AAA', name: 'Alpha' },
@@ -1370,6 +1690,7 @@ describe('DividendIncomeReport', () => {
             transactionDate: '2024-04-15',
             action: 'DIVIDEND',
             totalAmount: 75,
+            amountCurrencyCode: 'CAD',
             accountId: 'acc-1',
             securityId: 'sec-a',
             security: { symbol: 'AAA', name: 'Alpha' },
@@ -1406,7 +1727,7 @@ describe('DividendIncomeReport', () => {
     });
     // A visible, retryable error replaces the empty state on a failed fetch.
     expect(screen.getByText(/Failed to load report data/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Try again/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Try Again/ })).toBeInTheDocument();
   });
 
   it('converts amounts to default currency in the all-accounts view', async () => {
@@ -1417,6 +1738,7 @@ describe('DividendIncomeReport', () => {
           transactionDate: '2024-06-15',
           action: 'DIVIDEND',
           totalAmount: 100,
+          amountCurrencyCode: 'USD',
           accountId: 'acc-1',
           securityId: 'sec-a',
           security: { symbol: 'AAA', name: 'Alpha' },
@@ -1446,6 +1768,7 @@ describe('DividendIncomeReport', () => {
           transactionDate: '2024-06-15',
           action: 'DIVIDEND',
           totalAmount: 80,
+          amountCurrencyCode: 'USD',
           accountId: 'acc-1',
           securityId: 'sec-a',
           security: { symbol: 'AAA', name: 'Alpha' },
@@ -1516,6 +1839,7 @@ describe('DividendIncomeReport', () => {
           transactionDate: '2024-06-15',
           action: 'DIVIDEND',
           totalAmount: 100,
+          amountCurrencyCode: 'CAD',
           accountId: 'acc-1',
           securityId: 'sec-a',
           security: { symbol: 'AAA', name: 'Alpha' },
@@ -1557,6 +1881,7 @@ describe('DividendIncomeReport', () => {
           transactionDate: '2024-06-15',
           action: 'CAPITAL_GAIN',
           totalAmount: 150,
+          amountCurrencyCode: 'CAD',
           accountId: 'acc-1',
           securityId: 'sec-a',
           security: { symbol: 'AAA', name: 'Alpha' },
@@ -1587,6 +1912,7 @@ describe('DividendIncomeReport', () => {
           transactionDate: '2024-06-15',
           action: 'DIVIDEND',
           totalAmount: 30,
+          amountCurrencyCode: 'CAD',
           accountId: 'acc-1',
           // security and securityId intentionally absent
         },
@@ -1611,7 +1937,11 @@ describe('DividendIncomeReport', () => {
     });
   });
 
-  it('shows dash for zero values in monthly table rows', async () => {
+  // Was 'shows dash for zero values in monthly table rows', and it asserted the
+  // defect: a month with no activity holds zeros the server computed, and they
+  // are figures. (Its second assertion was `dashCells.some(() => true)`, which
+  // is true of any non-empty array, so it added nothing either way.)
+  it('renders an inactive month as zeros, with no cell reading as unknown', async () => {
     mockGetTransactions.mockResolvedValue({
       data: [
         {
@@ -1619,6 +1949,7 @@ describe('DividendIncomeReport', () => {
           transactionDate: '2024-06-15',
           action: 'DIVIDEND',
           totalAmount: 100,
+          amountCurrencyCode: 'CAD',
           accountId: 'acc-1',
           securityId: 'sec-a',
           security: { symbol: 'AAA', name: 'Alpha' },
@@ -1641,11 +1972,20 @@ describe('DividendIncomeReport', () => {
     await waitFor(() => {
       expect(screen.getByText('Month')).toBeInTheDocument();
     });
-    // Rows with zero Interest and Capital Gains should show '-'
-    const dashCells = screen.getAllByText('-');
-    expect(dashCells.length).toBeGreaterThan(0);
-    // Start Value and End Value are zero (no capital gain entries) so also '-'
-    expect(dashCells.some(() => true)).toBe(true);
+    // May 2024 held nothing and earned nothing: every figure in the row is a
+    // known zero, and none of them is unknown.
+    const quiet = [
+      ...screen.getAllByRole('table')[0].querySelectorAll('tbody tr'),
+    ].find((tr) => tr.querySelector('td')?.textContent?.trim() === 'May 2024');
+    expect(quiet).toBeDefined();
+    const figures = [...quiet!.querySelectorAll('td')].slice(1);
+    expect(figures.length).toBeGreaterThan(0);
+    for (const cell of figures) {
+      expect(cell.textContent).toBe('$0.00');
+    }
+    // And no cell anywhere in the table claims a figure is unknown.
+    expect(screen.queryAllByText('-')).toHaveLength(0);
+    expect(screen.queryAllByText('—')).toHaveLength(0);
   });
 
   it('shows negative monthly total with red styling', async () => {
@@ -1824,6 +2164,7 @@ describe('DividendIncomeReport', () => {
           transactionDate: '2024-06-15',
           action: 'DIVIDEND',
           totalAmount: 100,
+          amountCurrencyCode: 'CAD',
           accountId: 'acc-1',
           securityId: 'sec-a',
           security: { symbol: 'AAA', name: 'Alpha' },
@@ -1879,6 +2220,7 @@ describe('DividendIncomeReport', () => {
           transactionDate: '2024-06-15',
           action: 'DIVIDEND',
           totalAmount: 100,
+          amountCurrencyCode: 'CAD',
           accountId: 'acc-1',
           securityId: 'sec-a',
           security: { symbol: 'AAA', name: 'Alpha' },
@@ -1920,6 +2262,7 @@ describe('DividendIncomeReport', () => {
           transactionDate: '2024-06-15',
           action: 'INTEREST',
           totalAmount: 40,
+          amountCurrencyCode: 'CAD',
           accountId: 'acc-1',
           security: { symbol: 'CASH', name: 'Cash' },
         },
@@ -2008,6 +2351,7 @@ describe('DividendIncomeReport', () => {
           transactionDate: '2024-06-15',
           action: 'DIVIDEND',
           totalAmount: 60,
+          amountCurrencyCode: 'CAD',
           accountId: 'acc-1',
           securityId: 'sec-a',
           security: { symbol: 'AAA', name: 'Alpha' },
@@ -2032,20 +2376,19 @@ describe('DividendIncomeReport', () => {
     });
 
     // Switch back to Chart
-    fireEvent.click(screen.getByRole('button', { name: 'Chart' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Bar Chart' }));
     await waitFor(() => {
       expect(screen.getByTestId('bar-chart')).toBeInTheDocument();
     });
     expect(screen.queryByText('Month')).not.toBeInTheDocument();
   });
 
-  it('capital gains account-currency conversion in the all-accounts view', async () => {
+  it("reads a USD account's capital gains in the server's reporting currency for their month (issue #2106)", async () => {
     mockGetTransactions.mockResolvedValue({ data: [], pagination: { hasMore: false } });
     mockGetInvestmentAccounts.mockResolvedValue([
       { id: 'acc-1', name: 'USD TFSA', currencyCode: 'USD', accountSubType: 'INVESTMENT_CASH' },
     ]);
-    // The convertToDefault mock is an identity function, but we verify the
-    // conversion path is exercised for capital gains entries.
+    // The server converted June's USD figures at June's rate, 1.40.
     mockGetCapitalGains.mockResolvedValue([
       {
         month: '2024-06',
@@ -2065,14 +2408,23 @@ describe('DividendIncomeReport', () => {
         realizedGain: 0,
         unrealizedGain: 200,
         totalCapitalGain: 200,
+        inReportingCurrency: {
+          currency: 'CAD',
+          startValue: 3500,
+          endValue: 3780,
+          realizedGain: 0,
+          realizedGainKnownSubtotal: null,
+          unrealizedGain: 280,
+          totalCapitalGain: 280,
+        },
       },
     ]);
 
     render(<DividendIncomeReport />);
 
     await waitFor(() => {
-      // $200 capital gain shows in summary card
-      expect(screen.getAllByText('$200.00').length).toBeGreaterThan(0);
+      // 280 CAD in the summary card, not the account's 200 USD.
+      expect(screen.getAllByText('$280.00').length).toBeGreaterThan(0);
     });
   });
 
@@ -2089,6 +2441,7 @@ describe('DividendIncomeReport', () => {
           security: { symbol: 'AAA', name: 'Alpha' },
           transactionDate: '2024-03-10',
           totalAmount: 50,
+          amountCurrencyCode: 'CAD',
           action: 'DIVIDEND',
         },
         {
@@ -2098,6 +2451,7 @@ describe('DividendIncomeReport', () => {
           security: { symbol: 'BBB', name: 'Bravo' },
           transactionDate: '2024-04-12',
           totalAmount: 30,
+          amountCurrencyCode: 'CAD',
           action: 'INTEREST',
         },
       ],
@@ -2123,8 +2477,8 @@ describe('DividendIncomeReport', () => {
     const { container } = render(<DividendIncomeReport />);
     await waitFor(() => expect(screen.getByTestId('bar-chart')).toBeInTheDocument());
     // Switch to monthly table view by clicking the "Table" button in the
-    // monthly/daily display group (text "Table" is unique among controls).
-    const tableBtn = screen.getByText('Table');
+    // monthly/daily display group (the only control named "Table").
+    const tableBtn = screen.getByRole('button', { name: 'Table' });
     await act(async () => { fireEvent.click(tableBtn); });
     await waitFor(() => expect(container.querySelector('table')).toBeInTheDocument());
     // Click each column header in sequence, re-querying between each click

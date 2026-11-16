@@ -1,0 +1,120 @@
+{
+  "view": {
+    "label": "Widok",
+    "table": "Tabela",
+    "calendar": "Kalendarz"
+  },
+  "grid": {
+    "label": "Miesiąc"
+  },
+  "toolbar": {
+    "layers": "Warstwy"
+  },
+  "layers": {
+    "transactions": "Transakcje",
+    "balances": "Salda",
+    "values": "Wartości",
+    "dailyChange": "Zmiana dzienna"
+  },
+  "legend": {
+    "label": "Legenda",
+    "scheduled": "Zaplanowane"
+  },
+  "chip": {
+    "noPayee": "Brak odbiorcy",
+    "overdue": "Zaległe",
+    "scheduled": "Zaplanowane",
+    "noSymbol": "Brak symbolu"
+  },
+  "day": {
+    "itemCount": "{count, plural, one {# pozycja} few {# pozycje} many {# pozycji} other {# pozycji}}",
+    "moreChips": "+{count} więcej",
+    "newTransaction": "Nowa transakcja w tym dniu",
+    "noItems": "Nic w tym dniu.",
+    "scheduledHint": "Zaplanowane. Otwórz Rachunki i wpłaty, aby to zmienić.",
+    "newInvestmentTransaction": "Nowa transakcja inwestycyjna w tym dniu"
+  },
+  "banner": {
+    "title": "Niektóre kwoty nie są pokazane",
+    "rowCap": "Ten miesiąc zawiera {count} transakcji, więcej niż {limit}, które kalendarz może pokazać. Zawęź filtry, aby je zobaczyć.",
+    "scheduledUnavailable": "Nie udalo sie zaladowac zaplanowanych pozycji na ten miesiac. Pokazane wiersze sa kompletne; brakuje zaplanowanych.",
+    "scheduledTruncated": "Niektore zaplanowane pozycje nie sa pokazywane tak daleko w przod. Przejdz blizej dzisiaj, aby zobaczyc wszystkie.",
+    "balancesScopeEmpty": "Nie wybrano żadnych kont, więc nie ma salda do pokazania. Wybierz konto w filtrach.",
+    "balancesMissingRates": "Dla {pairs} w niektórych dniach tego miesiąca nie ma kursu wymiany, więc te sumy nie są pokazywane. Otwórz Waluty i odśwież kursy.",
+    "balancesForecastGaps": "Prognozowane saldo zostało wstrzymane, ponieważ tych zaplanowanych pozycji nie można jeszcze wycenić: {schedules}.",
+    "balancesForecastWithheld": "Prognozowane saldo zostało wstrzymane: co najmniej jednej zaplanowanej pozycji nie można jeszcze wycenić, a powód nie został podany.",
+    "balancesUnforecastable": "{count, plural, one {# wybrane konto nie ma własnej prognozy, więc prognozowane sumy są wstrzymane.} few {# wybrane konta nie mają własnej prognozy, więc prognozowane sumy są wstrzymane.} many {# wybranych kont nie ma własnej prognozy, więc prognozowane sumy są wstrzymane.} other {# wybranych kont nie ma własnej prognozy, więc prognozowane sumy są wstrzymane.}}",
+    "valuesUnpriced": "Dla {securities} w niektórych dniach tego miesiąca nie ma ceny, więc te wartości nie są pokazywane. Dodaj cenę w historii cen papieru lub odśwież ceny.",
+    "valuesMissingRates": "Dla {pairs} w niektórych dniach tego miesiąca nie ma kursu wymiany, więc te wartości nie są pokazywane. Otwórz Waluty i odśwież kursy.",
+    "notesUnavailable": "Nie udało się wczytać notatek na ten miesiąc. Zapisane wcześniej notatki nadal są przechowywane."
+  },
+  "errors": {
+    "monthFailed": "Nie udało się wczytać tego miesiąca.",
+    "balancesFailed": "Nie udało się wczytać sald na ten miesiąc.",
+    "valuesFailed": "Nie udało się wczytać wartości portfela na ten miesiąc.",
+    "movementsFailed": "Nie udało się wczytać dziennych zmian na ten miesiąc.",
+    "movementDetailFailed": "Nie udało się wczytać szczegółów tego dnia."
+  },
+  "balance": {
+    "actualTitle": "Saldo na koniec dnia",
+    "projectedTitle": "Prognozowane saldo",
+    "projected": "Prognoza",
+    "projectedHint": "Prognoza na podstawie salda na koniec dzisiejszego dnia i wszystkich zaplanowanych pozycji z terminem do tego dnia.",
+    "projectedFromItems": "Prognoza na podstawie salda na koniec dzisiejszego dnia i wszystkich zaplanowanych pozycji z terminem do tego dnia, w tym wymienionych poniżej.",
+    "partial": "Częściowo: udało się ustalić {amount} z zakresu, reszty nie, więc suma nie jest pokazywana.",
+    "missingRates": "Brak kursu wymiany dla {pairs} w dniu, którego dotyczy ta kwota. Otwórz Waluty i odśwież kursy.",
+    "unforecastable": "{count, plural, one {# wybrane konto nie ma własnej prognozy, więc prognozowana suma jest wstrzymana.} few {# wybrane konta nie mają własnej prognozy, więc prognozowana suma jest wstrzymana.} many {# wybranych kont nie ma własnej prognozy, więc prognozowana suma jest wstrzymana.} other {# wybranych kont nie ma własnej prognozy, więc prognozowana suma jest wstrzymana.}}"
+  },
+  "value": {
+    "title": "Wartość portfela",
+    "unpriced": "Dla {securities} w tym dniu nie ma ceny, więc wartość nie jest pokazywana. Dodaj cenę w historii cen papieru lub odśwież ceny.",
+    "missingRates": "Brak kursu wymiany dla {pairs} w tym dniu, więc wartość nie jest pokazywana. Otwórz Waluty i odśwież kursy."
+  },
+  "change": {
+    "openDetail": "Pokaż, co zmieniło się w tym dniu",
+    "detailTitle": "Zmiany w dniu {date}",
+    "headline": "Ruch rynku",
+    "headlineValue": "{amount} ({percent})",
+    "gains": "Zyski",
+    "losses": "Straty",
+    "unchanged": "{count, plural, one {# papier zamknął się bez zmiany.} few {# papiery zamknęły się bez zmiany.} many {# papierów zamknęło się bez zmiany.} other {# papierów zamknęło się bez zmiany.}}",
+    "remainder": "Gotówka, wypłaty z papierów i transakcje",
+    "row": "{quantity} jednostek, z {from} na {to} {currency}",
+    "reasons": {
+      "notTradingDay": "Żaden posiadany papier nie miał ceny w tym dniu, więc nie było sesji do pokazania.",
+      "unpricedHolding": "Pozycja nie miała ceny w tym dniu ani dzień wcześniej, więc zmiana jest nieznana.",
+      "missingRate": "Brakowało kursu wymiany, więc zmiany nie udało się przeliczyć.",
+      "flowIncomplete": "Wpłaty lub wypłaty z tego dnia nie udało się przeliczyć, więc zmiany nie można od niej oddzielić.",
+      "cashIncomplete": "Konto gotówkowe nie zgłosiło salda dla tego dnia, więc wartość dnia jest niepełna, a zmiana nieznana.",
+      "noPriorValue": "Nie ma wcześniejszej wartości, do której można odnieść ten dzień.",
+      "zeroBaseline": "Dzień wcześniej portfel był pusty, więc nie ma procentu do wyliczenia."
+    }
+  },
+  "notes": {
+    "title": "Notatka",
+    "add": "Dodaj notatkę",
+    "saveFailed": "Nie udało się zapisać notatki. Spróbuj ponownie.",
+    "deleteFailed": "Nie udało się usunąć notatki. Spróbuj ponownie.",
+    "deleteTitle": "Usunąć tę notatkę?",
+    "deleteMessage": "Notatka z tego dnia zostanie usunięta. Tej operacji nie można cofnąć.",
+    "discardTitle": "Odrzucić tę notatkę?",
+    "discardMessage": "Notatka, którą piszesz, nie została zapisana. Opuszczenie tego dnia ją odrzuca.",
+    "discardConfirm": "Odrzuć",
+    "startDate": "Pierwszy dzień",
+    "endDate": "Ostatni dzień",
+    "spanRange": "{start} do {end}",
+    "spanCount": "{count, plural, one {# dzień} few {# dni} many {# dni} other {# dnia}}",
+    "spanBackwards": "Ostatni dzień nie może być wcześniejszy niż pierwszy.",
+    "spanTooLong": "Notatka może obejmować najwyżej {days} dni.",
+    "spanMissesDay": "Wybrane dni nie obejmują dnia, dla którego piszesz tę notatkę.",
+    "deleteSpanMessage": "{count, plural, one {Notatka z tego dnia zostanie usunięta. Tej operacji nie można cofnąć.} few {Ta notatka obejmuje # dni i wszystkie zostaną wyczyszczone. Tej operacji nie można cofnąć.} many {Ta notatka obejmuje # dni i wszystkie zostaną wyczyszczone. Tej operacji nie można cofnąć.} other {Ta notatka obejmuje # dnia i wszystkie zostaną wyczyszczone. Tej operacji nie można cofnąć.}}"
+  },
+  "monthPicker": {
+    "title": "Przejdź do innego miesiąca",
+    "typeLabel": "Wpisz miesiąc lub rok",
+    "placeholder": "np. mar 1998, 1998-03, 3/1998",
+    "unreadable": "Nie potrafimy odczytać tego jako miesiąca. Spróbuj podać rok, nazwę miesiąca lub 1998-03.",
+    "previousYear": "Poprzedni rok",
+    "nextYear": "Następny rok"
+  }
+}

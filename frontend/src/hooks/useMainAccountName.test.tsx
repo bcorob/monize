@@ -1,17 +1,7 @@
 import { describe, it, expect } from 'vitest';
-import { renderHook } from '@testing-library/react';
-import { NextIntlClientProvider } from 'next-intl';
+import { renderHook } from '@/test/render';
 import { useMainAccountName, useAccountOptionLabel } from './useMainAccountName';
 import { Account } from '@/types/account';
-import messages from '@/i18n/messages/en/accounts.json';
-
-function wrapper({ children }: { children: React.ReactNode }) {
-  return (
-    <NextIntlClientProvider locale="en" messages={{ accounts: messages }}>
-      {children}
-    </NextIntlClientProvider>
-  );
-}
 
 const cashHalf = {
   id: 'cash',
@@ -22,7 +12,7 @@ const cashHalf = {
 
 describe('useMainAccountName', () => {
   it('strips the pair suffixes', () => {
-    const { result } = renderHook(() => useMainAccountName(), { wrapper });
+    const { result } = renderHook(() => useMainAccountName());
 
     expect(result.current('TFSA - Brokerage')).toBe('TFSA');
     expect(result.current('TFSA - Cash')).toBe('TFSA');
@@ -33,9 +23,7 @@ describe('useMainAccountName', () => {
   // the account surfaces. Keyed on `t` it changed identity every render, so
   // every memo built on it recomputed and every effect depending on one re-ran.
   it('keeps a stable identity across renders', () => {
-    const { result, rerender } = renderHook(() => useMainAccountName(), {
-      wrapper,
-    });
+    const { result, rerender } = renderHook(() => useMainAccountName());
     const first = result.current;
 
     rerender();
@@ -46,13 +34,13 @@ describe('useMainAccountName', () => {
 
 describe('useAccountOptionLabel', () => {
   it('labels an option with the entity name and currency, suffix stripped', () => {
-    const { result } = renderHook(() => useAccountOptionLabel(), { wrapper });
+    const { result } = renderHook(() => useAccountOptionLabel());
 
     expect(result.current(cashHalf)).toBe('TFSA (CAD)');
   });
 
   it('marks a closed account with the translated status word', () => {
-    const { result } = renderHook(() => useAccountOptionLabel(), { wrapper });
+    const { result } = renderHook(() => useAccountOptionLabel());
 
     expect(result.current({ ...cashHalf, isClosed: true })).toBe(
       'TFSA (CAD) (Closed)',
@@ -60,9 +48,7 @@ describe('useAccountOptionLabel', () => {
   });
 
   it('keeps a stable identity across renders', () => {
-    const { result, rerender } = renderHook(() => useAccountOptionLabel(), {
-      wrapper,
-    });
+    const { result, rerender } = renderHook(() => useAccountOptionLabel());
     const first = result.current;
 
     rerender();
@@ -73,7 +59,7 @@ describe('useAccountOptionLabel', () => {
   // lands -- so without stripping they offer "TFSA - Cash" while every other
   // surface calls the same account "TFSA".
   it('reads a linked cash half as the account the user knows', () => {
-    const { result } = renderHook(() => useAccountOptionLabel(), { wrapper });
+    const { result } = renderHook(() => useAccountOptionLabel());
 
     expect(result.current(cashHalf)).not.toContain(' - Cash');
     expect(result.current(cashHalf)).toContain('TFSA');
@@ -82,8 +68,7 @@ describe('useAccountOptionLabel', () => {
   it('drops the currency for narrow rows that ask for it', () => {
     const { result } = renderHook(
       () => useAccountOptionLabel({ withCurrency: false }),
-      { wrapper },
-    );
+          );
 
     expect(result.current(cashHalf)).toBe('TFSA');
   });

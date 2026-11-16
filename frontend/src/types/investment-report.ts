@@ -55,17 +55,17 @@ export const INVESTMENT_REPORT_COLUMNS: InvestmentColumnDef[] = [
   { key: 'todaysTotalChange', label: "Today's Total Change", type: 'currency', description: 'Your gain or loss today: the per-share change since the previous close multiplied by your shares.' },
   { key: 'volume', label: 'Volume', type: 'integer', description: 'The total units of an investment traded on the most recent trading day.' },
   { key: 'lastTransactionDate', label: 'Last Transaction Date', type: 'date', description: 'The last date the investment was traded.' },
-  { key: 'income', label: 'Income', type: 'currency', description: 'Interest, dividends and capital gains distributions you have received for an investment.' },
+  { key: 'income', label: 'Income', type: 'currency', description: 'Interest, dividends and capital gains distributions you have received for an investment, whether paid in cash or reinvested.' },
   { key: 'commissions', label: 'Commissions', type: 'currency', description: 'The total brokerage fees you paid to buy or sell an investment.' },
   { key: 'purchases', label: 'Purchases', type: 'currency', description: 'The cost of your total purchases (excluding reinvested income) of this investment.' },
   { key: 'sales', label: 'Sales', type: 'currency', description: 'The total sales you have made for this investment.' },
-  { key: 'reinvestments', label: 'Reinvestments', type: 'currency', description: 'The total reinvested income for this investment.' },
+  { key: 'reinvestments', label: 'Reinvestments', type: 'currency', description: 'The total reinvested income for this investment: the cost of the shares each reinvestment added. Also counted in Income.' },
   { key: 'realizedGains', label: 'Realized Gains', type: 'currency', description: 'The gain from shares actually sold. Does not include the change in value of shares you still hold.' },
   { key: 'exchangeRate', label: 'Exchange Rate', type: 'number', description: 'Exchange rate used to convert this investment to your base currency.' },
   { key: 'lastUpdated', label: 'Last Updated', type: 'date', description: 'The date of the most recent stored price for this security.' },
   { key: 'fiftyTwoWeekHigh', label: '52-Week High', type: 'currency', description: 'The highest price at which a security traded over the past 52 weeks (from stored price history).' },
   { key: 'fiftyTwoWeekLow', label: '52-Week Low', type: 'currency', description: 'The lowest price at which a security traded over the past 52 weeks (from stored price history).' },
-  { key: 'totalReturn1Week', label: 'Total Return - 1 Week', type: 'percent', description: 'One-week percentage return: current market value plus income, minus beginning market value, divided by beginning market value.' },
+  { key: 'totalReturn1Week', label: 'Total Return - 1 Week', type: 'percent', description: 'One-week percentage return (Modified Dietz): current market value plus income and sales, minus beginning market value and purchases, divided by beginning market value plus purchases and minus sales, each weighted by the days it was invested.' },
   { key: 'totalReturn4Weeks', label: 'Total Return - 4 Weeks', type: 'percent', description: 'Four-week percentage return on investment.' },
   { key: 'totalReturn3Month', label: 'Total Return - 3 Month', type: 'percent', description: 'Three-month percentage return on investment.' },
   { key: 'totalReturn1Year', label: 'Total Return - 1 Year', type: 'percent', description: 'One-year percentage return on investment.' },
@@ -164,4 +164,21 @@ export interface InvestmentReportResult {
   columns: string[];
   groups: InvestmentReportGroup[];
   rowCount: number;
+  /**
+   * False when a pair the rows needed had no admissible rate. Read as
+   * `=== false`: absent means the server said nothing, not that everything
+   * converted. Every base-currency figure and every row's `portfolioPercent`
+   * is then partial, and the caption over them says so.
+   */
+  fxComplete?: boolean;
+  /** `"SEK->USD"` for each pair the rate door could not resolve. */
+  missingPairs?: string[];
+  /**
+   * False when a held position had no price on or before the as-of date. Read
+   * as `=== false` for the same reason as `fxComplete`, and reported as its
+   * own cause: the repair is a price refresh, not a rate.
+   */
+  pricesComplete?: boolean;
+  /** The symbol of each unpriced position. */
+  unpricedSymbols?: string[];
 }

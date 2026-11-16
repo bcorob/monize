@@ -52,6 +52,7 @@ const delegate = {
     budgets: false,
     reports: false,
     ai: false,
+    warranties: false,
   },
 };
 

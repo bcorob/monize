@@ -1,0 +1,99 @@
+{
+  "id": "pl/pko-bp",
+  "version": 1,
+  "source": "enable_banking",
+  "institution": {
+    "country": "PL",
+    "names": ["PKO Bank Polski"]
+  },
+  "operation": {
+    "location": ["remittance_line"]
+  },
+  "types": [
+    {
+      "key": "CARD-PAYMENT",
+      "match": { "exact": "CARD-PAYMENT" },
+      "label": "cardPayment"
+    },
+    {
+      "key": "MOBILE-PAYMENT-RETURN",
+      "match": { "prefix": "MOBILE-PAYMENT-", "suffix": "-RETURN" },
+      "label": "mobilePaymentRefund"
+    },
+    {
+      "key": "MOBILE-PAYMENT-ATM",
+      "match": { "prefix": "MOBILE-PAYMENT-ATM-" },
+      "label": "cashWithdrawalBlik"
+    },
+    {
+      "key": "MOBILE-PAYMENT",
+      "match": { "prefix": "MOBILE-PAYMENT-" },
+      "label": "mobilePayment"
+    },
+    {
+      "key": "ATM",
+      "match": { "prefix": "ATM-" },
+      "label": "cashWithdrawal"
+    },
+    {
+      "key": "TRANSFER-IN",
+      "match": { "exact": "TRANSFER-IN" },
+      "label": "transferIn"
+    },
+    {
+      "key": "TRANSFER-OUT",
+      "match": { "exact": "TRANSFER-OUT" },
+      "label": "transferOut"
+    },
+    {
+      "match": { "exact": "TRANSFER" },
+      "byDirection": { "credit": "TRANSFER-IN", "debit": "TRANSFER-OUT" }
+    },
+    {
+      "key": "STANDING-ORDER",
+      "match": { "exact": "STANDING-ORDER" },
+      "label": "standingOrder"
+    },
+    {
+      "key": "CASHBACK",
+      "match": { "exact": "CASHBACK" },
+      "label": "cashback"
+    },
+    {
+      "key": "LOAN-PAYOFF",
+      "match": { "exact": "LOAN-PAYOFF" },
+      "label": "loanRepayment"
+    },
+    {
+      "key": "CREDIT-CARD-AUTO-REPAYMENT",
+      "match": { "exact": "CREDIT-CARD-AUTO-REPAYMENT" },
+      "label": "creditCardRepayment"
+    }
+  ],
+  "notes": [
+    {
+      "id": "gluedFields",
+      "severity": "warning",
+      "text": {
+        "en": "For card and BLIK payments the bank joins the town, the merchant name and the country in one line with no spaces between them, for example TOWNMERCHANTPL. This is how the bank sends the data. It is not a hidden character. Monize keeps the text as it is. To get a clean payee, add a payee alias with wildcards, for example *MERCHANT*.",
+        "pl": "Przy płatnościach kartą i BLIK bank łączy w jednej linii miejscowość, nazwę sprzedawcy i kraj, bez spacji, np. MIASTOSPRZEDAWCAPL. Tak bank wysyła dane; to nie jest ukryty znak. Monize zachowuje tekst bez zmian. Aby uzyskać czystego odbiorcę, dodaj alias odbiorcy z gwiazdkami, np. *SPRZEDAWCA*."
+      }
+    },
+    {
+      "id": "operationCodeLine",
+      "severity": "info",
+      "text": {
+        "en": "The bank sends no transaction code. The fields bank_transaction_code and the merchant category code are always empty. The operation type is the second line of the description, for example CARD-PAYMENT, TRANSFER or STANDING-ORDER. Monize reads it from there and adds it as a tag.",
+        "pl": "Bank nie wysyła kodu transakcji. Pola bank_transaction_code i kod kategorii sprzedawcy są zawsze puste. Typ operacji jest w drugiej linii opisu, np. CARD-PAYMENT, TRANSFER lub STANDING-ORDER. Monize odczytuje go stamtąd i dodaje jako tag."
+      }
+    },
+    {
+      "id": "counterpartyOnTransfers",
+      "severity": "info",
+      "text": {
+        "en": "The bank gives the counterparty name only for transfers. For card and BLIK payments there is no payee field. Monize uses the first line of the description as the payee.",
+        "pl": "Bank podaje nazwę kontrahenta tylko przy przelewach. Przy płatnościach kartą i BLIK nie ma pola odbiorcy. Monize używa pierwszej linii opisu jako odbiorcy."
+      }
+    }
+  ]
+}

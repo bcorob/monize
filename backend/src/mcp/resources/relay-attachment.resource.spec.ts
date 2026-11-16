@@ -1,9 +1,16 @@
 import { McpRelayAttachmentResource } from "./relay-attachment.resource";
 import { RelayAttachmentStore } from "../../ai/relay/relay-attachment.store";
-import { extractPdfText } from "../../ai/relay/pdf-text.util";
-import { UserContextResolver } from "../mcp-context";
+import { createRelayRowsHarness } from "../../ai/relay/relay-rows.harness";
+import { extractPdfText } from "../../common/pdf-text";
+import { mcpTestCtx, McpTestContext } from "../testing/mcp-test-context";
 
-jest.mock("../../ai/relay/pdf-text.util", () => ({
+jest.mock("../../common/db/scoped-db", () =>
+  jest
+    .requireActual("../../test-helpers/scoped-db-testing")
+    .scopedDbMockModule(),
+);
+
+jest.mock("../../common/pdf-text", () => ({
   extractPdfText: jest.fn(),
 }));
 const mockExtractPdfText = extractPdfText as jest.MockedFunction<
@@ -23,19 +30,19 @@ describe("McpRelayAttachmentResource", () => {
   let store: RelayAttachmentStore;
   let resource: McpRelayAttachmentResource;
   let server: { registerResource: jest.Mock };
-  let resolve: jest.MockedFunction<UserContextResolver>;
+  let ctx: McpTestContext;
   let handler: (...args: any[]) => any;
 
   beforeEach(() => {
-    store = new RelayAttachmentStore();
+    store = createRelayRowsHarness().attachmentStore;
     resource = new McpRelayAttachmentResource(store);
     server = {
       registerResource: jest.fn((_name, _template, _opts, h) => {
         handler = h;
       }),
     };
-    resolve = jest.fn();
-    resource.register(server as any, resolve);
+    ctx = mcpTestCtx();
+    resource.register(server as any);
   });
 
   it("registers a templated resource", () => {
@@ -48,29 +55,25 @@ describe("McpRelayAttachmentResource", () => {
   });
 
   it("returns an error when there is no user context", async () => {
-    resolve.mockReturnValue(undefined);
-    const result = await handler(uriFor("x"), { id: "x" }, { sessionId: "s1" });
+    ctx.setUser(undefined);
+    const result = await handler(uriFor("x"), { id: "x" }, ctx);
     expect(result.contents[0].text).toContain("Error");
   });
 
   it("returns an error when the read scope is missing", async () => {
-    resolve.mockReturnValue({ userId: "u1", scopes: "write" });
-    const result = await handler(uriFor("x"), { id: "x" }, { sessionId: "s1" });
+    ctx.setUser({ userId: "u1", scopes: "write" });
+    const result = await handler(uriFor("x"), { id: "x" }, ctx);
     expect(result.contents[0].text).toContain("Insufficient scope");
   });
 
   it("returns a not-found error for an unknown or expired id", async () => {
-    resolve.mockReturnValue({ userId: "u1", scopes: "read" });
-    const result = await handler(
-      uriFor("nope"),
-      { id: "nope" },
-      { sessionId: "s1" },
-    );
+    ctx.setUser({ userId: "u1", scopes: "read" });
+    const result = await handler(uriFor("nope"), { id: "nope" }, ctx);
     expect(result.contents[0].text).toContain("not found or expired");
   });
 
   it("returns a base64 blob for an image attachment", async () => {
-    const [ref] = store.store("u1", [
+    const [ref] = await store.store("u1", [
       {
         kind: "image",
         mediaType: "image/png",
@@ -78,20 +81,16 @@ describe("McpRelayAttachmentResource", () => {
         data: PNG_BASE64,
       },
     ]);
-    resolve.mockReturnValue({ userId: "u1", scopes: "read" });
+    ctx.setUser({ userId: "u1", scopes: "read" });
 
-    const result = await handler(
-      uriFor(ref.id),
-      { id: ref.id },
-      { sessionId: "s1" },
-    );
+    const result = await handler(uriFor(ref.id), { id: ref.id }, ctx);
     expect(result.contents[0].mimeType).toBe("image/png");
     expect(result.contents[0].blob).toBe(PNG_BASE64);
     expect(result.contents[0].text).toBeUndefined();
   });
 
   it("returns text for a text attachment", async () => {
-    const [ref] = store.store("u1", [
+    const [ref] = await store.store("u1", [
       {
         kind: "text",
         mediaType: "text/csv",
@@ -99,21 +98,17 @@ describe("McpRelayAttachmentResource", () => {
         data: CSV_BASE64,
       },
     ]);
-    resolve.mockReturnValue({ userId: "u1", scopes: "read" });
+    ctx.setUser({ userId: "u1", scopes: "read" });
 
-    const result = await handler(
-      uriFor(ref.id),
-      { id: ref.id },
-      { sessionId: "s1" },
-    );
+    const result = await handler(uriFor(ref.id), { id: ref.id }, ctx);
     expect(result.contents[0].mimeType).toBe("text/csv");
     expect(result.contents[0].text).toBe("a,b\n1,2\n");
     expect(result.contents[0].blob).toBeUndefined();
   });
 
   it("returns server-extracted text (not a blob) for a PDF attachment", async () => {
-    mockExtractPdfText.mockResolvedValue("Bank statement: balance $100");
-    const [ref] = store.store("u1", [
+    mockExtractPdfText.mockResolvedValue("  Bank statement: balance $100\n");
+    const [ref] = await store.store("u1", [
       {
         kind: "pdf",
         mediaType: "application/pdf",
@@ -121,13 +116,9 @@ describe("McpRelayAttachmentResource", () => {
         data: PDF_BASE64,
       },
     ]);
-    resolve.mockReturnValue({ userId: "u1", scopes: "read" });
+    ctx.setUser({ userId: "u1", scopes: "read" });
 
-    const result = await handler(
-      uriFor(ref.id),
-      { id: ref.id },
-      { sessionId: "s1" },
-    );
+    const result = await handler(uriFor(ref.id), { id: ref.id }, ctx);
     // Returned as text/plain so the agent's client never sees a PDF blob.
     expect(result.contents[0].mimeType).toBe("text/plain");
     expect(result.contents[0].text).toBe("Bank statement: balance $100");
@@ -136,7 +127,7 @@ describe("McpRelayAttachmentResource", () => {
 
   it("falls back to a base64 blob when a PDF has no extractable text", async () => {
     mockExtractPdfText.mockResolvedValue("");
-    const [ref] = store.store("u1", [
+    const [ref] = await store.store("u1", [
       {
         kind: "pdf",
         mediaType: "application/pdf",
@@ -144,13 +135,9 @@ describe("McpRelayAttachmentResource", () => {
         data: PDF_BASE64,
       },
     ]);
-    resolve.mockReturnValue({ userId: "u1", scopes: "read" });
+    ctx.setUser({ userId: "u1", scopes: "read" });
 
-    const result = await handler(
-      uriFor(ref.id),
-      { id: ref.id },
-      { sessionId: "s1" },
-    );
+    const result = await handler(uriFor(ref.id), { id: ref.id }, ctx);
     // A scanned/image-only PDF is served as raw bytes, like a picture, so a
     // vision-capable client/model can still read it.
     expect(result.contents[0].mimeType).toBe("application/pdf");
@@ -160,7 +147,7 @@ describe("McpRelayAttachmentResource", () => {
 
   it("falls back to a base64 blob when PDF extraction fails", async () => {
     mockExtractPdfText.mockRejectedValue(new Error("corrupt pdf"));
-    const [ref] = store.store("u1", [
+    const [ref] = await store.store("u1", [
       {
         kind: "pdf",
         mediaType: "application/pdf",
@@ -168,21 +155,17 @@ describe("McpRelayAttachmentResource", () => {
         data: PDF_BASE64,
       },
     ]);
-    resolve.mockReturnValue({ userId: "u1", scopes: "read" });
+    ctx.setUser({ userId: "u1", scopes: "read" });
 
-    const result = await handler(
-      uriFor(ref.id),
-      { id: ref.id },
-      { sessionId: "s1" },
-    );
-    // pdf-parse failing should not fail the read -- serve the raw bytes instead.
+    const result = await handler(uriFor(ref.id), { id: ref.id }, ctx);
+    // PDF extraction failing should not fail the read -- serve the raw bytes instead.
     expect(result.contents[0].mimeType).toBe("application/pdf");
     expect(result.contents[0].blob).toBe(PDF_BASE64);
     expect(result.contents[0].text).toBeUndefined();
   });
 
   it("does not let one user read another user's attachment", async () => {
-    const [ref] = store.store("u1", [
+    const [ref] = await store.store("u1", [
       {
         kind: "image",
         mediaType: "image/png",
@@ -190,14 +173,10 @@ describe("McpRelayAttachmentResource", () => {
         data: PNG_BASE64,
       },
     ]);
-    // A different user is resolved from the session; the id belongs to u1.
-    resolve.mockReturnValue({ userId: "u2", scopes: "read" });
+    // A different user is resolved from the request; the id belongs to u1.
+    ctx.setUser({ userId: "u2", scopes: "read" });
 
-    const result = await handler(
-      uriFor(ref.id),
-      { id: ref.id },
-      { sessionId: "s2" },
-    );
+    const result = await handler(uriFor(ref.id), { id: ref.id }, ctx);
     expect(result.contents[0].text).toContain("not found or expired");
     expect(result.contents[0].blob).toBeUndefined();
   });

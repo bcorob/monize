@@ -22,7 +22,7 @@ import { RLS_EXEMPT_TABLES, rlsExemptTableNames } from "./rls-exempt-tables";
  * constant the specs now import, in **both** directions -- a table added to the
  * constant without the schema fails, and so does the reverse.
  *
- * Per `backend/CLAUDE.md`: a scan that names a file is disarmed silently when
+ * Per `docs/backend/backup.md`: a scan that names a file is disarmed silently when
  * that file moves or its marker is edited away, so a missing block **throws**
  * rather than comparing against an empty set.
  */

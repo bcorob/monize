@@ -3,19 +3,20 @@ const packageJson = require('./package.json');
 
 const withNextIntl = createNextIntlPlugin('./src/i18n/request.ts');
 
-// Every /api/* call is forwarded by proxy.ts, and Next caps a proxied request
-// body at 10MB by default -- silently: it truncates the body, forwards the
-// stump, and the backend sees an aborted upload. That is far below what a
-// Microsoft Money (.mny) file needs (a Money Plus profile with decades of
-// history runs to hundreds of MB), so the ceiling has to match the backend's
-// own MNY_IMPORT_LIMIT_MB rather than sit under it. Same variable and default,
-// so lowering it lowers both ends together.
-//
-// The proxy buffers the body it forwards, so the frontend container needs
-// roughly this much memory available on top of its baseline. See helm/README.md.
-const IMPORT_LIMIT_MB = Number(process.env.MNY_IMPORT_LIMIT_MB) || 300;
-// Multipart framing (boundaries, part headers) rides along with the file.
-const PROXY_BODY_LIMIT_MB = IMPORT_LIMIT_MB + 8;
+// Next copies the body of EVERY request proxy.ts matches into memory before the
+// proxy runs, up to this size, whatever the path and before any authentication
+// -- so this is the most one unauthenticated request can make the frontend
+// hold (twice: one copy for the proxy, one kept to replace the request body).
+// It used to be the .mny import ceiling (308MB) for every path. It is now one
+// MB above the backend's own 10MB default body limit, and the uploads that
+// genuinely need more (the .mny import, the backup restore, the assistant's
+// attachments, transaction attachments) are excluded from the proxy's matcher
+// and streamed to the backend by route handlers instead, with their own
+// per-route ceilings. Past this size Next truncates silently; the proxy refuses
+// anything over 10MB with 413, so a truncated body is never forwarded.
+// `NEXT_PROXY_CLIENT_MAX_BODY_MB` in src/lib/proxy-body-limit.ts names this
+// value and `src/test/proxy-body-limit.test.ts` holds the two together.
+const PROXY_BODY_LIMIT_MB = 11;
 
 // Hostnames (not URLs) allowed to reach dev-only resources such as
 // /_next/webpack-hmr when the dev server is browsed from another machine.
@@ -35,6 +36,13 @@ const nextConfig = {
   allowedDevOrigins,
   experimental: {
     proxyClientMaxBodySize: `${PROXY_BODY_LIMIT_MB}mb`,
+    // Turbopack's on-disk dev cache makes a restarted dev server fast, but it
+    // writes and compacts in the background, and while it does a request for
+    // an already-compiled page can stall for tens of seconds. A throwaway
+    // container (the e2e stack) never restarts into that cache, so it sets
+    // NEXT_DEV_FILESYSTEM_CACHE=false and pays none of the cost.
+    turbopackFileSystemCacheForDev:
+      process.env.NEXT_DEV_FILESYSTEM_CACHE !== 'false',
   },
   // Pin the dev (Turbopack) workspace root to this app so it doesn't scan the
   // whole monorepo (the backend tree) on every compile. The repo has multiple
@@ -72,7 +80,19 @@ const nextConfig = {
         { key: 'Cross-Origin-Embedder-Policy', value: 'require-corp' },
       );
     }
-    return [{ source: '/(.*)', headers: securityHeaders }];
+    // robots.txt and sitemap.xml contain a dot, so the proxy matcher skips them
+    // and they never receive its nonce CSP. Neither is a document that loads
+    // anything, so they get a policy that allows nothing. Not widened to every
+    // dotted path: a CSP on sw.js would govern the service worker's own fetches.
+    const lockedDownCsp = {
+      key: 'Content-Security-Policy',
+      value: "default-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+    };
+    return [
+      { source: '/(.*)', headers: securityHeaders },
+      { source: '/robots.txt', headers: [lockedDownCsp] },
+      { source: '/sitemap.xml', headers: [lockedDownCsp] },
+    ];
   },
 };
 

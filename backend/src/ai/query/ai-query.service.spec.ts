@@ -201,6 +201,76 @@ describe("AiQueryService", () => {
     return calls[calls.length - 1];
   }
 
+  describe("tools allowed in a run (allowTools)", () => {
+    const offered = (): string[] =>
+      (
+        (mockProvider.completeWithTools as jest.Mock).mock
+          .calls[0][1] as Array<{
+          name: string;
+        }>
+      ).map((t) => t.name);
+
+    it("offers every tool by default, and only the allowed ones when told to", async () => {
+      await service.executeQuery(userId, "hello");
+      expect(offered()).toContain("fetch_bond_series");
+
+      (mockProvider.completeWithTools as jest.Mock).mockClear();
+      await service.executeQuery(userId, "hello", undefined, undefined, {
+        allowTools: ["list_transactions"],
+      });
+      expect(offered()).toEqual(["list_transactions"]);
+    });
+
+    it("offers no tool for an empty allow-list", async () => {
+      await service.executeQuery(userId, "hello", undefined, undefined, {
+        allowTools: [],
+      });
+      expect(offered()).toEqual([]);
+    });
+
+    it("refuses a call to a tool outside the allow-list the model makes anyway, without executing it", async () => {
+      (mockProvider.completeWithTools as jest.Mock)
+        .mockResolvedValueOnce({
+          content: "",
+          toolCalls: [
+            {
+              id: "tc-1",
+              name: "fetch_bond_series",
+              input: { countryCode: "PL", seriesCode: "EDO1036" },
+            },
+          ],
+          usage: { inputTokens: 10, outputTokens: 5 },
+          model: "m",
+          provider: "anthropic",
+          stopReason: "tool_use",
+        })
+        .mockResolvedValueOnce({
+          content: "Done.",
+          toolCalls: [],
+          usage: { inputTokens: 10, outputTokens: 5 },
+          model: "m",
+          provider: "anthropic",
+          stopReason: "end_turn",
+        });
+
+      const result = await service.executeQuery(
+        userId,
+        "hello",
+        undefined,
+        undefined,
+        { allowTools: ["list_transactions"] },
+      );
+
+      expect(mockToolExecutor.execute).not.toHaveBeenCalled();
+      expect(result.toolsUsed).toEqual([
+        {
+          name: "fetch_bond_series",
+          summary: "Tool not available: fetch_bond_series",
+        },
+      ]);
+    });
+  });
+
   describe("attachments", () => {
     const PNG_MAGIC = Buffer.from([
       0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,

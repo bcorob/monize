@@ -1,13 +1,13 @@
 import { describe, it, expect } from 'vitest';
 import { screen } from '@testing-library/react';
-import { render } from '@/test/render';
+import { render, fireEvent } from '@/test/render';
 import { SeasonalityPanel } from './SeasonalityPanel';
 import type { DisplayCurrencyStrategy } from '@/components/transactions/widget-shared';
 import type { MonthlyTotal } from '@/types/transaction';
 
 const strategy: DisplayCurrencyStrategy = {
   displayCurrency: 'CAD',
-  toDisplay: (amount) => amount,
+  converted: false,
 };
 
 function month(key: string, total: number): MonthlyTotal {
@@ -72,7 +72,7 @@ describe('SeasonalityPanel', () => {
       month('2025-12', -900),
       month('2026-12', -900),
     ]);
-    const bars = container.querySelectorAll('li > div > div[style]');
+    const bars = container.querySelectorAll('li > button > div > div[style]');
     expect(bars.length).toBe(12);
     for (const bar of bars) {
       expect(bar.getAttribute('style')).toContain('var(--chart-primary)');
@@ -89,7 +89,7 @@ describe('SeasonalityPanel', () => {
   it('keeps inflow months green so the sign survives', () => {
     // A category that refunds more than it costs in July.
     const { container } = renderPanel([...evenTwoYears(), month('2025-07', 900), month('2026-07', 900)]);
-    const bars = Array.from(container.querySelectorAll('li > div > div[style]'));
+    const bars = Array.from(container.querySelectorAll('li > button > div > div[style]'));
     expect(bars[6].getAttribute('style')).toContain('var(--chart-income)');
     expect(bars[0].getAttribute('style')).toContain('var(--chart-primary)');
   });
@@ -100,7 +100,7 @@ describe('SeasonalityPanel', () => {
       month('2025-12', -900),
       month('2026-12', -900),
     ]);
-    const bars = Array.from(container.querySelectorAll('li > div > div[style]'));
+    const bars = Array.from(container.querySelectorAll('li > button > div > div[style]'));
     // December is the peak: full strength, every other month washed back.
     expect(bars[11].getAttribute('style')).toContain('opacity: 1');
     expect(bars[0].getAttribute('style')).toContain('opacity: 0.6');
@@ -109,7 +109,7 @@ describe('SeasonalityPanel', () => {
   it('draws a month with no history as an empty slot, not a zero bar', () => {
     // Only May has history; the other eleven months get the hairline marker.
     const { container } = renderPanel([month('2025-05', -50), month('2026-05', -50)]);
-    const bars = container.querySelectorAll('li > div > div[style]');
+    const bars = container.querySelectorAll('li > button > div > div[style]');
     expect(bars.length).toBe(1);
     expect(container.querySelectorAll('li .h-px').length).toBe(11);
   });
@@ -117,5 +117,18 @@ describe('SeasonalityPanel', () => {
   it('shows a skeleton while loading', () => {
     renderPanel([], true);
     expect(screen.queryByText('No spending to break down by month yet')).toBeNull();
+  });
+
+  it("shows a month's figure in a visible readout, not a hover-only title", () => {
+    // A phone and a keyboard never reach a title; the bar is a button that
+    // names its figure under the chart, starting from the peak.
+    renderPanel([...evenTwoYears(), month('2025-12', -900), month('2026-12', -900)]);
+    const readout = screen.getByTestId('seasonality-readout');
+    expect(readout).toHaveTextContent(/^Dec: .*900\.00 on average across 2 years$/);
+    expect(document.querySelector('li [title]')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Mar' }));
+    expect(readout).toHaveTextContent(/^Mar: .*100\.00 on average across 2 years$/);
+    expect(screen.getByRole('button', { name: 'Mar' })).toHaveAttribute('aria-pressed', 'true');
   });
 });

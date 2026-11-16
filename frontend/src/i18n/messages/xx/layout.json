@@ -34,6 +34,12 @@
     "dismiss": "[XX-Dismiss-XX]",
     "dismissAriaLabel": "[XX-Dismiss update notification-XX]"
   },
+  "jwtSecretBanner": {
+    "label": "[XX-JWT_SECRET is weak.-XX]",
+    "detail": "[XX-It is a published placeholder or too predictable, so session tokens can be forged. Generate a strong one with <code>openssl rand -base64 32</code>. Changing it stops authenticator codes from working and forgets trusted devices: users sign in with a backup code and set up 2FA again, and you reset 2FA in <users>User Management</users> for anyone without one. Read <code>docs/backend/modules-and-runtime.md</code> (Changing JWT_SECRET) first.-XX]",
+    "dismiss": "[XX-Dismiss-XX]",
+    "dismissAriaLabel": "[XX-Dismiss JWT_SECRET warning-XX]"
+  },
   "actionHistory": {
     "title": "[XX-Action History-XX]",
     "buttonAriaLabel": "[XX-Action History-XX]",
@@ -58,6 +64,7 @@
       "tag": "[XX-Tag-XX]",
       "account": "[XX-Account-XX]",
       "scheduled_transaction": "[XX-Scheduled-XX]",
+      "scheduled_posting": "[XX-Scheduled-XX]",
       "security": "[XX-Security-XX]",
       "budget": "[XX-Budget-XX]",
       "custom_report": "[XX-Report-XX]"
@@ -79,7 +86,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "[XX-Reinvest Long-Term Cap Gain-XX]",
       "CAPITAL_GAIN_SHORT": "[XX-Short-Term Capital Gain-XX]",
       "CAPITAL_GAIN_LONG": "[XX-Long-Term Capital Gain-XX]",
-      "REDEEM": "[XX-Redeem CD/Bond-XX]"
+      "REDEEM": "[XX-Redeem CD/Bond-XX]",
+      "RETURN_OF_CAPITAL": "[XX-Return of Capital-XX]"
     },
     "descriptions": {
       "createdAccount": "[XX-Created account \"{name}\"-XX]",
@@ -99,6 +107,7 @@
       "deletedInvestmentReport": "[XX-Deleted investment report \"{name}\"-XX]",
       "createdPayee": "[XX-Created payee \"{name}\"-XX]",
       "updatedPayee": "[XX-Updated payee \"{name}\"-XX]",
+      "lookedUpPayeeContact": "[XX-Looked up contact details for payee \"{name}\"-XX]",
       "deletedPayee": "[XX-Deleted payee \"{name}\"-XX]",
       "createdReport": "[XX-Created report \"{name}\"-XX]",
       "updatedReport": "[XX-Updated report \"{name}\"-XX]",
@@ -106,6 +115,7 @@
       "createdScheduledTransaction": "[XX-Created scheduled transaction \"{name}\"-XX]",
       "updatedScheduledTransaction": "[XX-Updated scheduled transaction \"{name}\"-XX]",
       "deletedScheduledTransaction": "[XX-Deleted scheduled transaction \"{name}\"-XX]",
+      "postedScheduledTransaction": "[XX-Posted scheduled transaction \"{name}\"-XX]",
       "createdSecurity": "[XX-Created security \"{symbol}\"-XX]",
       "updatedSecurity": "[XX-Updated security \"{symbol}\"-XX]",
       "deletedSecurity": "[XX-Deleted security \"{symbol}\"-XX]",
@@ -115,26 +125,23 @@
       "createdTransaction": "[XX-Created transaction {payee} {amount}-XX]",
       "updatedTransaction": "[XX-Updated transaction {payee} {amount}-XX]",
       "deletedTransaction": "[XX-Deleted transaction {payee} {amount}-XX]",
+      "convertedToTransfer": "[XX-Converted transaction {payee} {amount} to a transfer-XX]",
+      "convertedToTransaction": "[XX-Converted transfer {payee} {amount} to a transaction-XX]",
       "bulkUpdatedTransactions": "[XX-Bulk updated {count, plural, one {# transaction} other {# transactions}}-XX]",
       "createdTransfer": "[XX-Created transfer {amount} from {from} to {to}-XX]",
       "createdInvestmentTransaction": "[XX-Created {action} transaction-XX]",
       "updatedInvestmentTransaction": "[XX-Updated {action} transaction-XX]",
       "deletedInvestmentTransaction": "[XX-Deleted {action} transaction-XX]",
       "transferredSecurity": "[XX-Transferred security between accounts-XX]",
-      "updatedSecurityTransfer": "[XX-Updated security transfer-XX]"
-    },
-    "timeAgo": {
-      "justNow": "[XX-just now-XX]",
-      "minutes": "[XX-{count}m ago-XX]",
-      "hours": "[XX-{count}h ago-XX]",
-      "days": "[XX-{count}d ago-XX]"
+      "updatedSecurityTransfer": "[XX-Updated security transfer-XX]",
+      "ranTransactionRule": "[XX-Ran rule \"{name}\" on {count, plural, one {# transaction} other {# transactions}}-XX]"
     },
     "undonePrefix": "[XX-Undone: {description}-XX]",
     "redonePrefix": "[XX-Redone: {description}-XX]"
   },
   "pageHeader": {
-    "helpAriaLabel": "[XX-Open the Monize wiki for help with this section-XX]",
-    "helpTooltip": "[XX-Open the Monize wiki for help with this section-XX]"
+    "helpAriaLabel": "[XX-Help for this page-XX]",
+    "helpTooltip": "[XX-Help for this page-XX]"
   },
   "bootSplash": {
     "loading": "[XX-Loading Monize-XX]",
@@ -145,5 +152,17 @@
     "title": "[XX-Unable to connect-XX]",
     "message": "[XX-Monize could not reach the server. Check your connection and try again.-XX]",
     "retry": "[XX-Try again-XX]"
+  },
+  "pushBanner": {
+    "enableTitle": "[XX-Turn on notifications?-XX]",
+    "enableBody": "[XX-Monize can remind you about bills and budget limits on this device, even when the app is closed. Your browser will ask you to allow it.-XX]",
+    "enableButton": "[XX-Turn on-XX]",
+    "enabling": "[XX-Turning on…-XX]",
+    "installIosTitle": "[XX-Add Monize to your Home Screen first.-XX]",
+    "installIosBody": "[XX-On iPhone and iPad, notifications only work from the installed app. Tap Share, then Add to Home Screen, and open Monize from there.-XX]",
+    "blockedTitle": "[XX-Notifications are blocked for Monize.-XX]",
+    "blockedBody": "[XX-Allow them in your browser's site settings for this page. Monize cannot ask again on its own.-XX]",
+    "blockedIosBody": "[XX-Open iOS Settings, then Notifications, then Monize, and allow them there. If Monize is not listed, remove it from the Home Screen and add it again.-XX]",
+    "dismiss": "[XX-Not now-XX]"
   }
 }

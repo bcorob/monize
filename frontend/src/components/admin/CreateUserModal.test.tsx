@@ -32,6 +32,14 @@ describe('CreateUserModal', () => {
     );
   }
 
+  it('is named by its title and keeps its explanation in a tooltip', () => {
+    renderModal(true);
+    const dialog = screen.getByRole('dialog', { name: 'Add User' });
+    expect(dialog).toHaveAccessibleDescription(/Create a new account/);
+    // No rule under the header or above the buttons.
+    expect(dialog.querySelector('.border-t, .border-b')).toBeNull();
+  });
+
   it('defaults to the invite method when SMTP is configured', () => {
     renderModal(true);
     const inviteRadio = screen.getByRole('radio', {

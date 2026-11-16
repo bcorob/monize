@@ -81,6 +81,22 @@ describe('AccountDetailShell', () => {
     expect(onBack).toHaveBeenCalledTimes(1);
   });
 
+  it('puts Edit last in the action row, after type-specific actions', () => {
+    render(
+      <AccountDetailShell
+        account={makeAccount()}
+        onViewTransactions={vi.fn()}
+        onEdit={vi.fn()}
+        headerActions={<button type="button">Refresh Prices</button>}
+      >
+        <div />
+      </AccountDetailShell>,
+    );
+
+    const edit = screen.getByRole('button', { name: 'Edit Account' });
+    expect(edit.parentElement?.lastElementChild).toBe(edit);
+  });
+
   it('puts going back above the name rather than in the action row', () => {
     render(
       <AccountDetailShell

@@ -3,6 +3,7 @@
     "noneToUpdate": "Keine Wertpapiere zu aktualisieren",
     "updated": "{count, plural, one {# Wertpapierkurs aktualisiert} other {# Wertpapierkurse aktualisiert}}",
     "partialFailure": "Kurse aktualisiert: {updated} erfolgreich, {failed} fehlgeschlagen{symbols}",
+    "partialFailureWithReasons": "Kurse aktualisiert: {updated} erfolgreich, {failed} fehlgeschlagen{symbols}\n{reasons}",
     "failed": "Kursaktualisierung fehlgeschlagen"
   },
   "page": {
@@ -10,6 +11,7 @@
     "subtitle": "Verwalten Sie Ihre Aktien, ETFs, Investmentfonds und sonstigen Wertpapiere",
     "newSecurity": "+ Neues Wertpapier",
     "searchPlaceholder": "Nach Symbol oder Name suchen...",
+    "statusFilterLabel": "Status",
     "statusAll": "Alle ({count})",
     "statusActive": "Aktiv ({count})",
     "statusInactive": "Inaktiv ({count})",
@@ -49,6 +51,7 @@
       "name": "Name",
       "type": "Typ",
       "shares": "Anteile",
+      "value": "Wert",
       "exchange": "Börse",
       "currency": "Währung",
       "provider": "Anbieter",
@@ -63,12 +66,10 @@
       "inactive": "Inaktiv",
       "inactiveShort": "Ina"
     },
-    "providerTitle": {
-      "override": "Wertpapierspezifische Anbieterüberschreibung",
-      "inherited": "Übernommen von Ihrer Standard-Kursanbieter-Einstellung"
-    },
+    "providerInherited": "{provider} (Standard)",
     "columnTitles": {
       "shares": "Aktuell gehaltene Anteile über alle Konten",
+      "value": "Über alle Konten gehaltene Anteile zum zuletzt abgerufenen Kurs, in der Währung des Wertpapiers",
       "source": "Quelle des zuletzt abgerufenen Kurses"
     },
     "actions": {
@@ -115,7 +116,11 @@
     "exchangeLabel": "Börse",
     "currencyLabel": "Währung",
     "currencyNotConfigured": "{code} — nicht in Ihren Währungen",
+    "currencyPlaceholder": "Währung auswählen...",
+    "currencyNotReported": "Der Anbieter hat die Währung dieser Kryptowährung nicht gemeldet. Wählen Sie die Fiat-Währung, in der sie notiert wird.",
     "quoteProviderLabel": "Kursanbieter",
+    "skipPriceUpdatesLabel": "Automatische Kursaktualisierungen deaktivieren",
+    "skipPriceUpdatesHelp": "Monize ruft für dieses Wertpapier keine Kurse ab. Verwenden Sie dies für ein Wertpapier, für das kein Anbieter Kurse liefert; selbst eingegebene Kurse zählen weiterhin. Die Wahl eines anderen Kursanbieters oder einer MSN-Instrument-ID schaltet die Aktualisierungen wieder ein.",
     "msnIdLabel": "MSN Instrument ID (erweitert)",
     "lookupProviderAriaLabel": "Anbieter suchen",
     "lookupButton": "Suchen",
@@ -139,7 +144,11 @@
     "providers": {
       "auto": "Auto",
       "yahoo": "Yahoo",
-      "msn": "MSN"
+      "msn": "MSN",
+      "lse": "LSE",
+      "deutsche_boerse": "Deutsche Börse",
+      "bond_engine": "Anleihen-Engine",
+      "html_table": "Tabelle auf Webseite"
     },
     "types": {
       "select": "Typ auswählen...",
@@ -189,16 +198,50 @@
       "deleteConfirm": "Löschen",
       "deleteSuccess": "Anlageklasse „{name}“ gelöscht",
       "deleteFailed": "Anlageklasse „{name}“ konnte nicht gelöscht werden"
+    },
+    "bondFetchAction": "{code} aus der offiziellen Quelle abrufen",
+    "bondFetching": "{code} wird beim Emittenten samt Referenzzinsen abgerufen. Das kann bis zu einer Minute dauern.",
+    "bondFetchFailed": "Die Serie konnte nicht abgerufen werden.",
+    "bondCurrencyLocked": "Dieses Wertpapier ist mit einer Anleiheart in {linkedCurrency} verknüpft. Setzen Sie die Währung wieder auf {linkedCurrency} oder lösen Sie zuerst die Verknüpfung der Anleiheart (dabei werden die berechneten Kurse entfernt).",
+    "bondProgramLabel": "Anleiheart",
+    "bondProgramNone": "Nicht verknüpft",
+    "bondProgramCurrent": "Verknüpfte Anleiheart",
+    "bondProgramLoading": "Anleihearten werden geladen...",
+    "bondProgramLoadFailed": "Die Anleihearten konnten nicht geladen werden, daher lässt sich noch keine Anleiheart verknüpfen.",
+    "bondProgramRetry": "Erneut versuchen",
+    "bondNoPrograms": "Der Anleihenkatalog enthält noch keine Anleiheart.",
+    "bondAutoFetchLabel": "Neue Serien dieser Anleiheart automatisch abrufen",
+    "bondAutoFetchHelp": "Wenn aktiviert, liest Monize jeden Tag neue Serien dieser Anleiheart aus der offiziellen Quelle, sodass Sie einen Kauf erfassen können, ohne die Serie zuvor abzurufen.",
+    "bondCountryLabel": "Land",
+    "bondCountryOther": "Andere",
+    "bondCountryOtherInfo": "Die Unterstützung für Anleihen anderer Länder kann auf dem <link>GitHub des Projekts</link> angefragt werden.",
+    "quoteTable": {
+      "urlLabel": "Webseite mit Kurstabelle",
+      "urlHelp": "Die Seite braucht eine Tabelle, deren Kopfzeile eine Datums- und eine Schlusskursspalte hat.",
+      "test": "Testen",
+      "previewFailed": "Die Seite konnte nicht gelesen werden.",
+      "summary": "{count, plural, one {# Tag} other {# Tage}} vom {first} bis {last}",
+      "columns": "Verwendete Spalten: {columns}",
+      "currency": "Auf der Seite angegebene Währung: {currency}",
+      "noCurrency": "Die Seite nennt keine Währung; Kurse werden in der Währung des Wertpapiers gespeichert.",
+      "skipped": "{count, plural, one {# Zeile konnte nicht gelesen werden und wurde übersprungen} other {# Zeilen konnten nicht gelesen werden und wurden übersprungen}}",
+      "headers": {
+        "date": "Datum",
+        "open": "Eröffnung",
+        "high": "Hoch",
+        "low": "Tief",
+        "close": "Schluss",
+        "volume": "Volumen"
+      }
     }
   },
   "priceForm": {
     "dateLabel": "Datum",
     "closePriceLabel": "Schlusskurs",
-    "openPriceLabel": "Eröffnungskurs",
-    "highPriceLabel": "Tageshoch",
-    "lowPriceLabel": "Tagestief",
-    "volumeLabel": "Volumen",
-    "optionalPlaceholder": "Optional",
+    "openPriceLabel": "Eröffnungskurs (optional)",
+    "highPriceLabel": "Tageshoch (optional)",
+    "lowPriceLabel": "Tagestief (optional)",
+    "volumeLabel": "Volumen (optional)",
     "submitCreate": "Kurs hinzufügen",
     "submitUpdate": "Kurs aktualisieren"
   },
@@ -246,7 +289,9 @@
     },
     "collapseAll": "Alle einklappen",
     "expandAll": "Alle ausklappen",
-    "groupCount": "{count} Kurs(e)"
+    "groupCount": "{count} Kurs(e)",
+    "addYearButton": "Ein weiteres Jahr Historie hinzufügen",
+    "addYearTitle": "Ein weiteres Jahr historischer Kurse vom Anbieter abrufen"
   },
   "transactionHistory": {
     "accountLabel": "Konto",
@@ -284,7 +329,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "Wiederanlage langfristiger Kapitalerträge",
       "CAPITAL_GAIN_SHORT": "Kurzfristiger Kapitalertrag",
       "CAPITAL_GAIN_LONG": "Langfristiger Kapitalertrag",
-      "REDEEM": "CD/Anleihe einlösen"
+      "REDEEM": "CD/Anleihe einlösen",
+      "RETURN_OF_CAPITAL": "Kapitalrückzahlung"
     },
     "toasts": {
       "loadHistoryFailed": "Verlauf konnte nicht geladen werden",
@@ -333,11 +379,20 @@
     "nameRequired": "Name ist erforderlich",
     "nameMax": "Name darf maximal 255 Zeichen lang sein",
     "currencyRequired": "Währung ist erforderlich",
-    "descriptionMax": "Die Beschreibung darf höchstens 5000 Zeichen lang sein"
+    "bondProgramRequired": "Anleiheart ist erforderlich",
+    "descriptionMax": "Die Beschreibung darf höchstens 5000 Zeichen lang sein",
+    "quoteUrlRequired": "Gib die Seite mit der Kurstabelle ein.",
+    "quoteUrlInvalid": "Gib eine vollständige Adresse ein, die mit http:// oder https:// beginnt."
   },
   "priceValidation": {
     "dateRequired": "Datum ist erforderlich",
     "priceRequired": "Kurs ist erforderlich",
     "priceNonNegative": "Kurs muss eine nicht-negative Zahl sein"
+  },
+  "priceAlert": {
+    "label": "Alarm bei Kursänderung (%)",
+    "help": "Leer lassen zum Deaktivieren. Meldet Anstieg oder Rückgang seit der letzten verfügbaren Sitzung, höchstens einmal pro Instrument und UTC-Tag.",
+    "range": "Prozentwert zwischen 0,1 und 1000 eingeben.",
+    "chartLabel": "Diagramm in Kursbenachrichtigungen anzeigen"
   }
 }

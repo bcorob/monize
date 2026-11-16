@@ -1,7 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@/test/render';
 import { ScheduledTransactionForm } from './ScheduledTransactionForm';
 import toast from 'react-hot-toast';
+import { useAuthStore } from '@/store/authStore';
+import { getLocalDateString } from '@/lib/utils';
 
 vi.mock('react-hot-toast', () => ({
   default: {
@@ -10,16 +12,19 @@ vi.mock('react-hot-toast', () => ({
   },
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    defaultCurrency: 'CAD',
-    formatCurrency: (v: number, code: string) => `${code} ${v.toFixed(2)}`,
-    formatNumber: (v: number, decimals = 2) => v.toFixed(decimals),
-    // Mirrors the real formatPrice: up to 6 decimals, trailing zeros trimmed.
-    formatPrice: (n: number) => n.toFixed(6).replace(/0+$/, '').replace(/\.$/, ''),
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      defaultCurrency: 'CAD',
+      formatCurrency: (v: number, code: string) => `${code} ${v.toFixed(2)}`,
+      formatNumber: (v: number, decimals = 2) => v.toFixed(decimals),
+      // Mirrors the real formatPrice: up to 6 decimals, trailing zeros trimmed.
+      formatPrice: (n: number) => n.toFixed(6).replace(/0+$/, '').replace(/\.$/, ''),
+    }),
+  };
+});
 vi.mock('@hookform/resolvers/zod', () => ({
   zodResolver: () => async (values: any) => {
     // Simple pass-through resolver that returns the raw form values
@@ -27,7 +32,8 @@ vi.mock('@hookform/resolvers/zod', () => ({
   },
 }));
 
-vi.mock('@/lib/format', () => ({
+vi.mock('@/lib/format', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/format')>()),
   FX_RATE_DISPLAY_DECIMALS: 6,
   getCurrencySymbol: () => '$',
   getDecimalPlacesForCurrency: () => 2,
@@ -52,8 +58,8 @@ vi.mock('@/lib/exchange-rates', () => ({
 // The picker itself is covered by CurrencyPickerButton.test.tsx; here it stands
 // in as a plain control so the form's conversion behaviour is what is under test.
 vi.mock('@/components/transactions/CurrencyPickerButton', () => ({
-  CurrencyPickerButton: ({ value, accountCurrencyCode, onChange }: any) => (
-    <div data-testid="currency-picker">
+  CurrencyPickerButton: ({ value, accountCurrencyCode, onChange, disabled }: any) => (
+    <div data-testid="currency-picker" data-disabled={disabled ? 'true' : 'false'}>
       <span data-testid="currency-picker-value">{value || accountCurrencyCode}</span>
       <button type="button" data-testid="pick-usd" onClick={() => onChange('USD')}>
         USD
@@ -104,18 +110,24 @@ vi.mock('@/lib/payees', () => ({
 }));
 
 const mockTagsCreate = vi.fn().mockResolvedValue({ id: 'new-tag', name: 'New Tag' });
+const mockTagsGetAll = vi.fn().mockResolvedValue([]);
+const mockTagsGetUsage = vi.fn().mockResolvedValue({});
 
 vi.mock('@/lib/tags', () => ({
   tagsApi: {
-    getAll: vi.fn().mockResolvedValue([]),
+    getAll: (...args: any[]) => mockTagsGetAll(...args),
+    getUsage: (...args: any[]) => mockTagsGetUsage(...args),
     create: (...args: any[]) => mockTagsCreate(...args),
   },
 }));
+
+const mockGetAmountEstimate = vi.fn();
 
 vi.mock('@/lib/scheduled-transactions', () => ({
   scheduledTransactionsApi: {
     create: (...args: any[]) => mockCreate(...args),
     update: (...args: any[]) => mockUpdate(...args),
+    getAmountEstimate: (...args: any[]) => mockGetAmountEstimate(...args),
   },
 }));
 
@@ -137,8 +149,13 @@ vi.mock('@/lib/categoryUtils', () => ({
   buildCategoryTree: (cats: any[]) => (cats || []).map((c: any) => ({ category: c })),
 }));
 
+const mockSplitEditorProps = vi.fn();
+
 vi.mock('@/components/transactions/SplitEditor', () => ({
-  SplitEditor: () => <div data-testid="split-editor">SplitEditor</div>,
+  SplitEditor: (props: Record<string, unknown>) => {
+    mockSplitEditorProps(props);
+    return <div data-testid="split-editor">SplitEditor</div>;
+  },
   createEmptySplits: (amount: number) => [
     { id: '1', categoryId: '', amount: amount / 2, memo: '', splitType: 'category' },
     { id: '2', categoryId: '', amount: amount / 2, memo: '', splitType: 'category' },
@@ -1034,6 +1051,38 @@ describe('ScheduledTransactionForm', () => {
     expect(optionTexts.some(t => t?.includes('House'))).toBe(false);
   });
 
+  it('offers a crypto wallet as the account and as a transfer destination', async () => {
+    mockAccountsGetAll.mockResolvedValue([
+      ...mockAccounts,
+      {
+        id: 'acc-btc',
+        name: 'Bitcoin Wallet',
+        currencyCode: 'BTC',
+        isClosed: false,
+        accountType: 'CRYPTO',
+        accountSubType: null,
+      },
+    ]);
+    render(<ScheduledTransactionForm />);
+
+    await waitFor(() => {
+      const accountSelect = screen.getByLabelText('Account') as HTMLSelectElement;
+      const texts = Array.from(accountSelect.querySelectorAll('option')).map(o => o.textContent);
+      expect(texts.some(t => t?.includes('Bitcoin Wallet'))).toBe(true);
+    });
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Account'), { target: { value: 'acc-1' } });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByText('Transfer'));
+    });
+
+    const toAccountSelect = await screen.findByLabelText('To Account') as HTMLSelectElement;
+    const toTexts = Array.from(toAccountSelect.querySelectorAll('option')).map(o => o.textContent);
+    expect(toTexts.some(t => t?.includes('Bitcoin Wallet'))).toBe(true);
+  });
+
   it('shows transfer destination accounts filtered correctly in transfer mode', async () => {
     render(<ScheduledTransactionForm />);
 
@@ -1866,6 +1915,51 @@ describe('ScheduledTransactionForm', () => {
     expect(screen.getByText('Transfer Amount')).toBeInTheDocument();
   });
 
+  it('defaults Next Due Date to one month after templateTransaction.transactionDate', async () => {
+    const template = {
+      id: 't1',
+      accountId: 'acc-1',
+      payeeId: 'payee-1',
+      payeeName: 'Landlord',
+      categoryId: 'cat-1',
+      amount: -1500,
+      currencyCode: 'CAD',
+      transactionDate: '2026-10-22',
+      isTransfer: false,
+      isSplit: false,
+      tags: [],
+    } as any;
+
+    render(<ScheduledTransactionForm templateTransaction={template} />);
+    await waitFor(() => {
+      expect(screen.getByLabelText('Next Due Date')).toBeInTheDocument();
+    });
+    const dateInput = screen.getByLabelText('Next Due Date') as HTMLInputElement;
+    expect(dateInput.value).toBe('2026-11-22');
+  });
+
+  it('defaults Next Due Date to today when templateTransaction has no transactionDate', async () => {
+    const template = {
+      id: 't1',
+      accountId: 'acc-1',
+      payeeId: 'payee-1',
+      payeeName: 'Landlord',
+      categoryId: 'cat-1',
+      amount: -1500,
+      currencyCode: 'CAD',
+      isTransfer: false,
+      isSplit: false,
+      tags: [],
+    } as any;
+
+    render(<ScheduledTransactionForm templateTransaction={template} />);
+    await waitFor(() => {
+      expect(screen.getByLabelText('Next Due Date')).toBeInTheDocument();
+    });
+    const dateInput = screen.getByLabelText('Next Due Date') as HTMLInputElement;
+    expect(dateInput.value).toBe(getLocalDateString());
+  });
+
   // ============================================================
   // NEW TESTS: Inactive payee fetching
   // ============================================================
@@ -2102,13 +2196,59 @@ describe('ScheduledTransactionForm', () => {
     expect(onSuccess).toHaveBeenCalled();
   });
 
+  // Issue #1979: a cleared description used to be dropped from the payload, so
+  // the stored one survived the save; the reference number was stripped.
+  it('sends null for a cleared description and reference number on update', async () => {
+    const existingSt = {
+      id: 's1', accountId: 'acc-1', name: 'Monthly Rent', amount: -1500,
+      currencyCode: 'CAD', frequency: 'MONTHLY' as const,
+      nextDueDate: '2024-03-01', isActive: true, autoPost: false,
+      reminderDaysBefore: 3, isTransfer: false, isSplit: false,
+      description: 'Old note', referenceNumber: 'ACCT-42',
+    } as any;
+
+    const { container } = render(<ScheduledTransactionForm scheduledTransaction={existingSt} />);
+    await waitFor(() => expect(mockAccountsGetAll).toHaveBeenCalled());
+
+    fireEvent.change(screen.getByDisplayValue('Old note'), { target: { value: '' } });
+    fireEvent.change(screen.getByDisplayValue('ACCT-42'), { target: { value: '' } });
+
+    await act(async () => { fireEvent.click(container.querySelector('button[type="submit"]')!); });
+
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+    const [, payload] = mockUpdate.mock.calls[0];
+    expect(payload.description).toBeNull();
+    expect(payload.referenceNumber).toBeNull();
+  });
+
+  it('sends an edited reference number on update', async () => {
+    const existingSt = {
+      id: 's1', accountId: 'acc-1', name: 'Monthly Rent', amount: -1500,
+      currencyCode: 'CAD', frequency: 'MONTHLY' as const,
+      nextDueDate: '2024-03-01', isActive: true, autoPost: false,
+      reminderDaysBefore: 3, isTransfer: false, isSplit: false,
+      referenceNumber: null,
+    } as any;
+
+    const { container } = render(<ScheduledTransactionForm scheduledTransaction={existingSt} />);
+    await waitFor(() => expect(mockAccountsGetAll).toHaveBeenCalled());
+
+    fireEvent.change(screen.getByPlaceholderText('Cheque #, confirmation #...'), { target: { value: 'ACCT-42' } });
+
+    await act(async () => { fireEvent.click(container.querySelector('button[type="submit"]')!); });
+
+    await waitFor(() => expect(mockUpdate).toHaveBeenCalled());
+    const [, payload] = mockUpdate.mock.calls[0];
+    expect(payload.referenceNumber).toBe('ACCT-42');
+  });
+
   it('shows the optional category field in transfer mode (#743)', async () => {
     render(<ScheduledTransactionForm />);
     await waitFor(() => expect(screen.getByText('Transfer')).toBeInTheDocument());
 
     await act(async () => { fireEvent.click(screen.getByText('Transfer')); });
 
-    expect(screen.getByText('Category (Optional)')).toBeInTheDocument();
+    expect(screen.getByText('Category (optional)')).toBeInTheDocument();
   });
 
   it('keeps the category when submitting an existing transfer schedule (#743)', async () => {
@@ -2507,6 +2647,25 @@ describe('ScheduledTransactionForm', () => {
       });
     }
 
+    it('does not offer a crypto wallet as the funding account', async () => {
+      mockAccountsGetAll.mockResolvedValue([
+        ...mockAccounts,
+        {
+          id: 'acc-btc',
+          name: 'Bitcoin Wallet',
+          currencyCode: 'BTC',
+          isClosed: false,
+          accountType: 'CRYPTO',
+          accountSubType: null,
+        },
+      ]);
+      await openInvestmentTab();
+      const funding = screen.getByLabelText('Funding Account (optional)') as HTMLSelectElement;
+      const texts = Array.from(funding.querySelectorAll('option')).map(o => o.textContent);
+      expect(texts.some(t => t?.includes('Chequing'))).toBe(true);
+      expect(texts.some(t => t?.includes('Bitcoin Wallet'))).toBe(false);
+    });
+
     it('renders the Investment tab and an Action selector', async () => {
       await openInvestmentTab();
       expect(screen.getByLabelText('Action')).toBeInTheDocument();
@@ -2515,8 +2674,8 @@ describe('ScheduledTransactionForm', () => {
 
     it('shows Quantity / Price / Commission inputs for BUY', async () => {
       await openInvestmentTab();
-      expect(screen.getByLabelText('Quantity (shares)')).toBeInTheDocument();
-      expect(screen.getByLabelText('Price per share')).toBeInTheDocument();
+      expect(screen.getByLabelText('Quantity (Shares)')).toBeInTheDocument();
+      expect(screen.getByLabelText('Price per Share')).toBeInTheDocument();
       expect(screen.getByLabelText('Commission')).toBeInTheDocument();
       expect(screen.getByLabelText('Total Value')).toBeInTheDocument();
     });
@@ -2525,7 +2684,7 @@ describe('ScheduledTransactionForm', () => {
       await openInvestmentTab();
       fireEvent.change(screen.getByLabelText('Action'), { target: { value: 'DIVIDEND' } });
       await waitFor(() => {
-        expect(screen.queryByLabelText('Quantity (shares)')).not.toBeInTheDocument();
+        expect(screen.queryByLabelText('Quantity (Shares)')).not.toBeInTheDocument();
       });
       expect(screen.getByLabelText('Total Amount')).toBeInTheDocument();
     });
@@ -2534,9 +2693,9 @@ describe('ScheduledTransactionForm', () => {
       await openInvestmentTab();
       fireEvent.change(screen.getByLabelText('Action'), { target: { value: 'ADD_SHARES' } });
       await waitFor(() => {
-        expect(screen.queryByLabelText('Price per share')).not.toBeInTheDocument();
+        expect(screen.queryByLabelText('Price per Share')).not.toBeInTheDocument();
       });
-      expect(screen.getByLabelText('Quantity (shares)')).toBeInTheDocument();
+      expect(screen.getByLabelText('Quantity (Shares)')).toBeInTheDocument();
     });
 
     it('shows Funding Account dropdown for BUY only', async () => {
@@ -2571,7 +2730,7 @@ describe('ScheduledTransactionForm', () => {
         });
       });
       await waitFor(() => {
-        const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
+        const priceInput = screen.getByLabelText('Price per Share') as HTMLInputElement;
         expect(priceInput.value).toBe('500.000000');
       });
     });
@@ -2586,14 +2745,14 @@ describe('ScheduledTransactionForm', () => {
       });
       // Wait for price to auto-populate
       await waitFor(() => {
-        const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
+        const priceInput = screen.getByLabelText('Price per Share') as HTMLInputElement;
         expect(priceInput.value).toBe('500.000000');
       });
       const totalInput = screen.getByLabelText('Total Value') as HTMLInputElement;
       // 1000 / 500 = 2 shares
       fireEvent.change(totalInput, { target: { value: '1000' } });
       await waitFor(() => {
-        const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
+        const qtyInput = screen.getByLabelText('Quantity (Shares)') as HTMLInputElement;
         expect(qtyInput.value).toBe('2.00000000');
       });
     });
@@ -2607,10 +2766,10 @@ describe('ScheduledTransactionForm', () => {
         target: { value: 'sec-voo' },
       });
       await waitFor(() => {
-        const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
+        const priceInput = screen.getByLabelText('Price per Share') as HTMLInputElement;
         expect(priceInput.value).toBe('500.000000');
       });
-      fireEvent.change(screen.getByLabelText('Quantity (shares)'), {
+      fireEvent.change(screen.getByLabelText('Quantity (Shares)'), {
         target: { value: '3' },
       });
       await waitFor(() => {
@@ -2642,7 +2801,7 @@ describe('ScheduledTransactionForm', () => {
         target: { value: 'sec-voo' },
       });
       // Enter quantity and total while the price fetch is still pending.
-      fireEvent.change(screen.getByLabelText('Quantity (shares)'), {
+      fireEvent.change(screen.getByLabelText('Quantity (Shares)'), {
         target: { value: '10' },
       });
       fireEvent.change(screen.getByLabelText('Total Value'), {
@@ -2654,7 +2813,7 @@ describe('ScheduledTransactionForm', () => {
       });
 
       const totalInput = screen.getByLabelText('Total Value') as HTMLInputElement;
-      const qtyInput = screen.getByLabelText('Quantity (shares)') as HTMLInputElement;
+      const qtyInput = screen.getByLabelText('Quantity (Shares)') as HTMLInputElement;
       // The typed budget stands; the quantity is re-derived from it, so the shown
       // total and the amount submit will persist agree.
       expect(Number(totalInput.value.replace(/,/g, ''))).toBe(950);
@@ -2671,10 +2830,10 @@ describe('ScheduledTransactionForm', () => {
       });
       await waitFor(() => {
         expect(
-          (screen.getByLabelText('Price per share') as HTMLInputElement).value,
+          (screen.getByLabelText('Price per Share') as HTMLInputElement).value,
         ).toBe('500.000000');
       });
-      fireEvent.change(screen.getByLabelText('Quantity (shares)'), {
+      fireEvent.change(screen.getByLabelText('Quantity (Shares)'), {
         target: { value: '10' },
       });
       await waitFor(() => {
@@ -2708,10 +2867,10 @@ describe('ScheduledTransactionForm', () => {
       });
       await waitFor(() => {
         expect(
-          (screen.getByLabelText('Price per share') as HTMLInputElement).value,
+          (screen.getByLabelText('Price per Share') as HTMLInputElement).value,
         ).toBe('500.000000');
       });
-      fireEvent.change(screen.getByLabelText('Quantity (shares)'), {
+      fireEvent.change(screen.getByLabelText('Quantity (Shares)'), {
         target: { value: '10' },
       });
       fireEvent.change(screen.getByLabelText('Commission'), {
@@ -2754,7 +2913,7 @@ describe('ScheduledTransactionForm', () => {
       });
       await waitFor(() => {
         expect(
-          (screen.getByLabelText('Price per share') as HTMLInputElement).value,
+          (screen.getByLabelText('Price per Share') as HTMLInputElement).value,
         ).toBe('100.000000');
       });
       // Switch securities: the old 100 must be cleared and B's 250 fill in, not
@@ -2764,7 +2923,7 @@ describe('ScheduledTransactionForm', () => {
       });
       await waitFor(() => {
         expect(
-          (screen.getByLabelText('Price per share') as HTMLInputElement).value,
+          (screen.getByLabelText('Price per Share') as HTMLInputElement).value,
         ).toBe('250.000000');
       });
     });
@@ -2791,11 +2950,11 @@ describe('ScheduledTransactionForm', () => {
       });
       await waitFor(() => {
         expect(
-          (screen.getByLabelText('Price per share') as HTMLInputElement).value,
+          (screen.getByLabelText('Price per Share') as HTMLInputElement).value,
         ).toBe('100.000000');
       });
       // Enter a share count; the total derives to 10 * 100 = 1000.
-      fireEvent.change(screen.getByLabelText('Quantity (shares)'), {
+      fireEvent.change(screen.getByLabelText('Quantity (Shares)'), {
         target: { value: '10' },
       });
       await waitFor(() => {
@@ -2812,11 +2971,11 @@ describe('ScheduledTransactionForm', () => {
       });
       await waitFor(() => {
         expect(
-          (screen.getByLabelText('Price per share') as HTMLInputElement).value,
+          (screen.getByLabelText('Price per Share') as HTMLInputElement).value,
         ).toBe('250.000000');
       });
       expect(
-        Number((screen.getByLabelText('Quantity (shares)') as HTMLInputElement).value),
+        Number((screen.getByLabelText('Quantity (Shares)') as HTMLInputElement).value),
       ).toBe(10);
       expect(
         Number(
@@ -2882,7 +3041,7 @@ describe('ScheduledTransactionForm', () => {
       // The price stays empty (no NaN written) and the "no price history" hint
       // shows because the field is genuinely empty.
       expect(
-        (screen.getByLabelText('Price per share') as HTMLInputElement).value,
+        (screen.getByLabelText('Price per Share') as HTMLInputElement).value,
       ).toBe('');
       expect(screen.getByText(/No price history yet/)).toBeInTheDocument();
     });
@@ -2905,7 +3064,7 @@ describe('ScheduledTransactionForm', () => {
         expect(mockGetSecurityPrices).toHaveBeenCalled();
       });
       expect(
-        (screen.getByLabelText('Price per share') as HTMLInputElement).value,
+        (screen.getByLabelText('Price per Share') as HTMLInputElement).value,
       ).toBe('');
       expect(screen.getByText(/No price history yet/)).toBeInTheDocument();
     });
@@ -3024,10 +3183,10 @@ describe('ScheduledTransactionForm', () => {
         target: { value: 'sec-voo' },
       });
       await waitFor(() => {
-        const priceInput = screen.getByLabelText('Price per share') as HTMLInputElement;
+        const priceInput = screen.getByLabelText('Price per Share') as HTMLInputElement;
         expect(priceInput.value).toBe('500.000000');
       });
-      fireEvent.change(screen.getByLabelText('Quantity (shares)'), {
+      fireEvent.change(screen.getByLabelText('Quantity (Shares)'), {
         target: { value: '1' },
       });
       const submitBtn = container.querySelector('button[type="submit"]')!;
@@ -3131,6 +3290,51 @@ describe('ScheduledTransactionForm - extra coverage', () => {
     expect(screen.getByText('Cancel Split')).toBeInTheDocument();
   });
 
+  describe('tag picker order', () => {
+    const tagFixture = (id: string, name: string) =>
+      ({ id, name, userId: 'user-1', color: null, icon: null, createdAt: '', updatedAt: '' });
+
+    afterEach(() => {
+      mockTagsGetAll.mockResolvedValue([]);
+      mockTagsGetUsage.mockResolvedValue({});
+    });
+
+    const precedes = (first: string, second: string) =>
+      Boolean(
+        screen.getByText(first).compareDocumentPosition(screen.getByText(second)) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+
+    const openPicker = async () => {
+      await renderForm();
+      await waitFor(() => expect(mockTagsGetUsage).toHaveBeenCalled());
+      fireEvent.click(screen.getByText('Select tags...'));
+      await waitFor(() => expect(screen.getByText('Holiday 2026')).toBeInTheDocument());
+    };
+
+    it('lists a recently used tag first and gives the split editor the same usage', async () => {
+      const usage = { 't-h26': { lastUsed: '2026-10-01', count: 2 } };
+      mockTagsGetAll.mockResolvedValue([tagFixture('t-art', 'Art'), tagFixture('t-h26', 'Holiday 2026')]);
+      mockTagsGetUsage.mockResolvedValue(usage);
+
+      await openPicker();
+      expect(precedes('Holiday 2026', 'Art')).toBe(true);
+
+      await act(async () => { fireEvent.click(screen.getByText('Split')); });
+      expect(mockSplitEditorProps).toHaveBeenLastCalledWith(expect.objectContaining({ tagUsage: usage }));
+    });
+
+    it('stays A-Z when the usage lookup fails', async () => {
+      mockTagsGetAll.mockResolvedValue([tagFixture('t-art', 'Art'), tagFixture('t-h26', 'Holiday 2026')]);
+      mockTagsGetUsage.mockRejectedValue(new Error('network'));
+
+      await openPicker();
+
+      expect(precedes('Art', 'Holiday 2026')).toBe(true);
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+  });
+
   it('cancels the split and returns to the transaction tab', async () => {
     await renderForm();
     await act(async () => { fireEvent.click(screen.getByText('Split')); });
@@ -3152,7 +3356,7 @@ describe('ScheduledTransactionForm - extra coverage', () => {
     await act(async () => {
       fireEvent.change(screen.getByLabelText('Action'), { target: { value: 'ADD_SHARES' } });
     });
-    expect(screen.getByLabelText('Quantity (shares)')).toBeInTheDocument();
+    expect(screen.getByLabelText('Quantity (Shares)')).toBeInTheDocument();
     expect(screen.queryByLabelText('Funding Account (optional)')).not.toBeInTheDocument();
   });
 
@@ -3164,10 +3368,10 @@ describe('ScheduledTransactionForm - extra coverage', () => {
     });
     await act(async () => {}); // market price arrives
     await act(async () => {
-      fireEvent.change(screen.getByLabelText('Price per share'), { target: { value: '10' } });
+      fireEvent.change(screen.getByLabelText('Price per Share'), { target: { value: '10' } });
     });
     await act(async () => {
-      fireEvent.change(screen.getByLabelText('Quantity (shares)'), { target: { value: '5' } });
+      fireEvent.change(screen.getByLabelText('Quantity (Shares)'), { target: { value: '5' } });
     });
     const total = screen.getByLabelText('Total Value') as HTMLInputElement;
     await waitFor(() =>
@@ -3298,10 +3502,10 @@ describe('ScheduledTransactionForm - extra coverage', () => {
     });
     await act(async () => {});
     await act(async () => {
-      fireEvent.change(screen.getByLabelText('Price per share'), { target: { value: '10' } });
+      fireEvent.change(screen.getByLabelText('Price per Share'), { target: { value: '10' } });
     });
     await act(async () => {
-      fireEvent.change(screen.getByLabelText('Quantity (shares)'), { target: { value: '5' } });
+      fireEvent.change(screen.getByLabelText('Quantity (Shares)'), { target: { value: '5' } });
     });
     await act(async () => { submit(container); });
     await act(async () => {});
@@ -3484,5 +3688,219 @@ describe('ScheduledTransactionForm - foreign currency', () => {
     expect(screen.getByTestId('currency-picker-value')).toHaveTextContent('USD');
     expect(screen.getByLabelText('Amount in USD')).toBeInTheDocument();
     expect((screen.getByLabelText('Amount in USD') as HTMLInputElement).value).toContain('40');
+  });
+});
+
+// Issue #2096: the Estimate toggle between Amount and Reference Number.
+describe('ScheduledTransactionForm: Estimate', () => {
+  const estimate = {
+    status: 'estimated',
+    currencyCode: 'CAD',
+    months: { '2024-03': { amount: -180, basis: 'seasonal' } },
+    paymentCount: 9,
+    latestPaymentDate: '2024-02-10',
+    growthRate: 0.05,
+    historyMonths: 24,
+    missingPair: null,
+  };
+  const estimatedSt = {
+    id: 's1', accountId: 'acc-1', name: 'Heating', amount: -999,
+    currencyCode: 'CAD', frequency: 'MONTHLY' as const,
+    nextDueDate: '2024-03-01', isActive: true, autoPost: false,
+    reminderDaysBefore: 3, isTransfer: false, isSplit: false,
+    payeeId: 'payee-1', categoryId: 'cat-1',
+    amountIsEstimated: true,
+    amountEstimate: estimate,
+  } as any;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAccountsGetAll.mockResolvedValue(mockAccounts);
+    mockCategoriesGetAll.mockResolvedValue(mockCategories);
+    mockPayeesGetAll.mockResolvedValue(mockPayees);
+    mockGetAmountEstimate.mockResolvedValue(estimate);
+  });
+
+  it('shows the next estimate in a disabled Amount field, and no auto-post', async () => {
+    render(<ScheduledTransactionForm scheduledTransaction={estimatedSt} />);
+    await waitFor(() =>
+      expect(mockGetAmountEstimate).toHaveBeenCalledWith(
+        'acc-1',
+        { payeeId: 'payee-1', categoryId: 'cat-1' },
+        '2024-03-01',
+      ),
+    );
+
+    const amount = screen.getByLabelText('Amount') as HTMLInputElement;
+    expect(amount).toBeDisabled();
+    expect(amount.value).toContain('180');
+    expectToggle(screen.getByRole('switch', { name: 'Estimate' }), true);
+    const autoPost = screen.getByRole('switch', { name: 'Auto-post on due date' });
+    expect(autoPost).toBeDisabled();
+    expect(screen.getByText(/Auto-calculated from payment history/)).toBeInTheDocument();
+  });
+
+  it('saves the flag with the estimate as the amount and auto-post off', async () => {
+    const { container } = render(
+      <ScheduledTransactionForm scheduledTransaction={{ ...estimatedSt, autoPost: true }} />,
+    );
+    await waitFor(() => expect(mockGetAmountEstimate).toHaveBeenCalled());
+
+    const submitBtn = container.querySelector('button[type="submit"]')!;
+    await act(async () => { fireEvent.click(submitBtn); });
+
+    await waitFor(() => {
+      expect(mockUpdate).toHaveBeenCalledWith(
+        's1',
+        expect.objectContaining({ amountIsEstimated: true, autoPost: false, amount: -180 }),
+      );
+    });
+  });
+
+  it('turns auto-post off when the estimate is switched on, and back to an editable amount when off', async () => {
+    render(
+      <ScheduledTransactionForm
+        scheduledTransaction={{ ...estimatedSt, amountIsEstimated: false, amountEstimate: null, autoPost: true }}
+      />,
+    );
+    await waitFor(() => expect(mockAccountsGetAll).toHaveBeenCalled());
+    expectToggle(screen.getByRole('switch', { name: 'Auto-post on due date' }), true);
+
+    await act(async () => { fireEvent.click(screen.getByRole('switch', { name: 'Estimate' })); });
+    expectToggle(screen.getByRole('switch', { name: 'Auto-post on due date' }), false);
+    expect(screen.getByLabelText('Amount')).toBeDisabled();
+
+    await act(async () => { fireEvent.click(screen.getByRole('switch', { name: 'Estimate' })); });
+    expect(screen.getByLabelText('Amount')).not.toBeDisabled();
+  });
+
+  it('disables the currency picker while estimating', async () => {
+    render(<ScheduledTransactionForm scheduledTransaction={estimatedSt} />);
+    await waitFor(() => expect(mockGetAmountEstimate).toHaveBeenCalled());
+    expect(screen.getByTestId('currency-picker')).toHaveAttribute('data-disabled', 'true');
+  });
+
+  it('does not let a delegate turn the estimate on, and asks for no preview', async () => {
+    useAuthStore.setState({ actingAsUserId: 'owner-1' } as never);
+    try {
+      render(
+        <ScheduledTransactionForm
+          scheduledTransaction={{ ...estimatedSt, amountIsEstimated: false, amountEstimate: null }}
+        />,
+      );
+      await waitFor(() => expect(mockAccountsGetAll).toHaveBeenCalled());
+      const toggle = screen.getByRole('switch', { name: 'Estimate' });
+      expect(toggle).toBeDisabled();
+      expect(
+        screen.getByRole('button', { name: /Only the owner can turn the estimate on or off/ }),
+      ).toBeInTheDocument();
+      expect(mockGetAmountEstimate).not.toHaveBeenCalled();
+    } finally {
+      act(() => {
+        useAuthStore.setState({ actingAsUserId: null } as never);
+      });
+    }
+  });
+
+  it('refuses to save an estimate without a category', async () => {
+    const { container } = render(
+      <ScheduledTransactionForm scheduledTransaction={{ ...estimatedSt, categoryId: null }} />,
+    );
+    await waitFor(() => expect(mockAccountsGetAll).toHaveBeenCalled());
+
+    const submitBtn = container.querySelector('button[type="submit"]')!;
+    await act(async () => { fireEvent.click(submitBtn); });
+
+    expect(toast.error).toHaveBeenCalledWith('Choose a payee and a category to estimate the amount from.');
+    expect(mockUpdate).not.toHaveBeenCalled();
+  });
+
+  describe('a transfer (issue #2164)', () => {
+    const estimatedTransfer = {
+      ...estimatedSt,
+      name: 'Card payment',
+      payeeId: null,
+      categoryId: null,
+      isTransfer: true,
+      transferAccountId: 'acc-2',
+      amount: -2000,
+      amountEstimate: {
+        ...estimate,
+        months: { '2024-03': { amount: -2000, basis: 'recent' } },
+        floors: [
+          {
+            after: '2024-02-05',
+            through: '2024-03-05',
+            months: { '2024-03': { amount: -2700, basis: 'balance' } },
+          },
+        ],
+      },
+    } as any;
+
+    beforeEach(() => {
+      mockGetAmountEstimate.mockResolvedValue(estimatedTransfer.amountEstimate);
+    });
+
+    it('previews on the destination and shows the raised estimate in a disabled Transfer Amount', async () => {
+      render(<ScheduledTransactionForm scheduledTransaction={estimatedTransfer} />);
+      await waitFor(() =>
+        expect(mockGetAmountEstimate).toHaveBeenCalledWith(
+          'acc-1',
+          { transferAccountId: 'acc-2', frequency: 'MONTHLY' },
+          '2024-03-01',
+        ),
+      );
+
+      const amount = screen.getByLabelText('Transfer Amount') as HTMLInputElement;
+      expect(amount).toBeDisabled();
+      expect(amount.value).toContain('2,700');
+      expectToggle(screen.getByRole('switch', { name: 'Estimate' }), true);
+      expect(screen.getByRole('switch', { name: 'Auto-post on due date' })).toBeDisabled();
+      expect(screen.getByText(/Raised to cover what Savings owes for this payment\./)).toBeInTheDocument();
+    });
+
+    it('saves the transfer estimated, with no payee or category asked for', async () => {
+      const { container } = render(
+        <ScheduledTransactionForm scheduledTransaction={estimatedTransfer} />,
+      );
+      await waitFor(() => expect(mockGetAmountEstimate).toHaveBeenCalled());
+
+      const submitBtn = container.querySelector('button[type="submit"]')!;
+      await act(async () => { fireEvent.click(submitBtn); });
+
+      await waitFor(() => {
+        expect(mockUpdate).toHaveBeenCalledWith(
+          's1',
+          expect.objectContaining({
+            amountIsEstimated: true,
+            autoPost: false,
+            isTransfer: true,
+            transferAccountId: 'acc-2',
+            amount: -2700,
+          }),
+        );
+      });
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('says what is missing when no transfer reached the destination', async () => {
+      mockGetAmountEstimate.mockResolvedValue({
+        ...estimate,
+        status: 'no-history',
+        months: {},
+        floors: [],
+      });
+      render(<ScheduledTransactionForm scheduledTransaction={estimatedTransfer} />);
+      await waitFor(() => expect(mockGetAmountEstimate).toHaveBeenCalled());
+
+      expect(
+        await screen.findByText(/No transfers to Savings from this account in the last 24 months/),
+      ).toBeInTheDocument();
+      // CurrencyInput copies its value into the field in an effect, which can
+      // run after the commit that shows the note.
+      await waitFor(() =>
+        expect((screen.getByLabelText('Transfer Amount') as HTMLInputElement).value).toBe(''),
+      );
+    });
   });
 });

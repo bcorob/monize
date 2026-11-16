@@ -3,6 +3,7 @@ import { render, screen, fireEvent } from '@/test/render';
 import { TransferTransactionFields } from './TransferTransactionFields';
 import { Account, TransferCandidate } from '@/types/account';
 import { Payee } from '@/types/payee';
+import { clearCurrencyDecimals, registerCurrencyDecimals } from '@/lib/currency-decimals';
 
 let mockActingAsUserId: string | null = null;
 vi.mock('@/store/authStore', () => ({
@@ -10,7 +11,8 @@ vi.mock('@/store/authStore', () => ({
     selector({ actingAsUserId: mockActingAsUserId }),
 }));
 
-vi.mock('@/lib/format', () => ({
+vi.mock('@/lib/format', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/format')>()),
   getCurrencySymbol: (code: string) => {
     const map: Record<string, string> = { CAD: '$', USD: 'US$', EUR: 'E' };
     return map[code] || '$';
@@ -42,8 +44,8 @@ vi.mock('@/components/ui/Combobox', () => ({
 }));
 
 vi.mock('@/components/ui/CurrencyInput', () => ({
-  CurrencyInput: ({ label, value, onChange, error, prefix, allowNegative: _allowNegative }: any) => (
-    <div data-testid={`currency-input-${label}`}>
+  CurrencyInput: ({ label, value, onChange, error, prefix, decimalPlaces, allowNegative: _allowNegative }: any) => (
+    <div data-testid={`currency-input-${label}`} data-decimal-places={decimalPlaces ?? ''}>
       <label>{label}</label>
       {prefix && <span data-testid={`currency-prefix-${label}`}>{prefix}</span>}
       <input
@@ -90,8 +92,7 @@ function createAccount(overrides: Partial<Account> = {}): Account {
     assetCategoryId: null,
     dateAcquired: null,
     linkedLoanAccountId: null,
-    isCanadianMortgage: false,
-    isVariableRate: false,
+    mortgageType: 'ANNUITY',
     termMonths: null,
     termEndDate: null,
     amortizationMonths: null,
@@ -115,6 +116,11 @@ function createPayee(overrides: Partial<Payee> = {}): Payee {
     website: null,
     hasLogo: false,
     logoFetchedAt: null,
+    contactLookupAt: null,
+    contactLookupSource: null,
+    address: null,
+    email: null,
+    phone: null,
     isActive: true,
     createdAt: '2024-01-01T00:00:00Z',
     ...overrides,
@@ -211,7 +217,7 @@ describe('TransferTransactionFields', () => {
       />,
     );
 
-    expect(screen.getByText('Category (Optional)')).toBeInTheDocument();
+    expect(screen.getByText('Category (optional)')).toBeInTheDocument();
     expect(
       screen.getByText(/won't count as income or expense/i),
     ).toBeInTheDocument();
@@ -271,11 +277,17 @@ describe('TransferTransactionFields', () => {
       name: 'Brokerage',
       accountSubType: 'INVESTMENT_BROKERAGE',
     });
+    const walletAccount = createAccount({
+      id: 'acc-btc',
+      name: 'Bitcoin Wallet',
+      accountType: 'CRYPTO',
+      currencyCode: 'BTC',
+    });
 
     render(
       <TransferTransactionFields
         {...defaultProps}
-        accounts={[savingsAccount, investmentAccount]}
+        accounts={[savingsAccount, investmentAccount, walletAccount]}
       />
     );
 
@@ -285,6 +297,8 @@ describe('TransferTransactionFields', () => {
 
     expect(labels).toContain('Savings (CAD)');
     expect(labels).not.toContain('Brokerage (CAD)');
+    // A crypto wallet is a transfer destination like any bank account.
+    expect(labels).toContain('Bitcoin Wallet (BTC)');
   });
 
   it('excludes the currently selected "From" account from To Account dropdown', () => {
@@ -386,6 +400,100 @@ describe('TransferTransactionFields', () => {
     expect(screen.getByText('Amount Received (USD)')).toBeInTheDocument();
   });
 
+  it('enters each leg of a coin transfer at its own places, and an ISO leg at the default', () => {
+    registerCurrencyDecimals([{ code: 'BTC', decimalPlaces: 4 }]);
+    try {
+      render(
+        <TransferTransactionFields
+          {...defaultProps}
+          watchedCurrencyCode="CAD"
+          crossCurrencyInfo={{
+            fromCurrency: 'CAD',
+            toCurrency: 'BTC',
+            fromAccountName: 'CAD Account',
+            toAccountName: 'Bitcoin Wallet',
+          }}
+        />
+      );
+      expect(screen.getByTestId('currency-input-Transfer Amount (CAD)')).toHaveAttribute(
+        'data-decimal-places',
+        '2',
+      );
+      expect(screen.getByTestId('currency-input-Amount Received (BTC)')).toHaveAttribute(
+        'data-decimal-places',
+        '4',
+      );
+    } finally {
+      clearCurrencyDecimals();
+    }
+  });
+
+  it('enters each coin leg at the column scale before the registry has loaded', () => {
+    render(
+      <TransferTransactionFields
+        {...defaultProps}
+        watchedCurrencyCode="BTC"
+        crossCurrencyInfo={{
+          fromCurrency: 'BTC',
+          toCurrency: 'ETH',
+          fromAccountName: 'Bitcoin Wallet',
+          toAccountName: 'Ether Wallet',
+        }}
+      />
+    );
+    expect(screen.getByTestId('currency-input-Transfer Amount (BTC)')).toHaveAttribute(
+      'data-decimal-places',
+      '8',
+    );
+    expect(screen.getByTestId('currency-input-Amount Received (ETH)')).toHaveAttribute(
+      'data-decimal-places',
+      '8',
+    );
+  });
+
+  it('enters a coin transfer amount at its own places', () => {
+    registerCurrencyDecimals([{ code: 'BTC', decimalPlaces: 4 }]);
+    try {
+      render(<TransferTransactionFields {...defaultProps} watchedCurrencyCode="BTC" />);
+      expect(screen.getByTestId('currency-input-Transfer Amount')).toHaveAttribute(
+        'data-decimal-places',
+        '4',
+      );
+    } finally {
+      clearCurrencyDecimals();
+    }
+  });
+
+  it('routes cross-currency amount edits through the supplied handlers', () => {
+    const onTransferAmountChange = vi.fn();
+    const onTransferTargetAmountChange = vi.fn();
+    render(
+      <TransferTransactionFields
+        {...defaultProps}
+        onTransferAmountChange={onTransferAmountChange}
+        onTransferTargetAmountChange={onTransferTargetAmountChange}
+        crossCurrencyInfo={{
+          fromCurrency: 'CAD',
+          toCurrency: 'USD',
+          fromAccountName: 'CAD Account',
+          toAccountName: 'USD Account',
+        }}
+      />
+    );
+
+    fireEvent.change(screen.getByTestId('currency-input-field-Transfer Amount (CAD)'), {
+      target: { value: '100' },
+    });
+    fireEvent.change(screen.getByTestId('currency-input-field-Amount Received (USD)'), {
+      target: { value: '73' },
+    });
+
+    expect(onTransferAmountChange).toHaveBeenCalledWith(100);
+    expect(onTransferTargetAmountChange).toHaveBeenCalledWith(73);
+    expect(defaultProps.setValue).not.toHaveBeenCalledWith('amount', expect.anything(), expect.anything());
+    expect(defaultProps.setTransferTargetAmount).not.toHaveBeenCalled();
+  });
+
   it('does not show "Amount must be positive" hint when in cross-currency mode', () => {
     render(
       <TransferTransactionFields
@@ -476,7 +584,7 @@ describe('TransferTransactionFields', () => {
       />
     );
 
-    const payeeSelect = screen.getByTestId('combobox-select-Payee (Optional)');
+    const payeeSelect = screen.getByTestId('combobox-select-Payee (optional)');
     const options = Array.from(payeeSelect.querySelectorAll('option'));
     const labels = options.map(o => o.textContent);
 
@@ -496,7 +604,7 @@ describe('TransferTransactionFields', () => {
       />
     );
 
-    const payeeSelect = screen.getByTestId('combobox-select-Payee (Optional)');
+    const payeeSelect = screen.getByTestId('combobox-select-Payee (optional)');
     fireEvent.change(payeeSelect, { target: { value: 'p1' } });
 
     expect(defaultProps.setTransferPayeeId).toHaveBeenCalledWith('p1');

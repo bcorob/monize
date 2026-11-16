@@ -29,7 +29,7 @@ export class BackfillPricesQueryDto {
    * available history reduced to fifteen months, with no way to ask for more.
    *
    * `@ValidateIf` rather than `@IsOptional` alone, so `?range=` behaves as
-   * absent instead of failing the whole request (`backend/CLAUDE.md`).
+   * absent instead of failing the whole request (`docs/backend/entities-and-dtos.md`).
    */
   @ApiPropertyOptional({
     enum: BACKFILL_RANGES,

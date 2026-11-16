@@ -1,0 +1,81 @@
+{
+  "learnMore": "Dowiedz się więcej",
+  "howThisWorks": "Jak to działa",
+  "menu": {
+    "helpForPage": "Pomoc dla tej strony",
+    "search": "Szukaj w pomocy",
+    "shortcuts": "Skróty klawiaturowe",
+    "takeTour": "Rozpocznij wycieczkę",
+    "whatsNew": "Co nowego",
+    "shellMenu": "Menu aplikacji komputerowej",
+    "reportIssue": "Zgłoś problem",
+    "discussions": "Dyskusje"
+  },
+  "shortcuts": {
+    "title": "Skróty klawiaturowe",
+    "palette": "Paleta poleceń",
+    "paletteKeys": "Ctrl/Cmd+K",
+    "search": "Szukaj w pomocy",
+    "searchKeys": "?",
+    "undo": "Cofnij ostatnią zmianę",
+    "undoKeys": "Ctrl/Cmd+Z",
+    "redo": "Ponów",
+    "redoKeys": "Ctrl/Cmd+Shift+Z lub Ctrl/Cmd+Y",
+    "closeDialog": "Zamknij otwarte okno dialogowe lub panel",
+    "closeDialogKeys": "Esc"
+  },
+  "panel": {
+    "title": "Pomoc",
+    "back": "Wstecz",
+    "forward": "Dalej",
+    "openOnline": "Otwórz na monize.net",
+    "pin": "Przypnij panel pomocy, aby pozostał otwarty podczas przechodzenia między stronami",
+    "unpin": "Odepnij panel pomocy",
+    "expand": "Powiększ panel pomocy",
+    "collapse": "Zmniejsz panel pomocy",
+    "resize": "Zmień szerokość panelu pomocy",
+    "resizeValue": "{width} pikseli",
+    "close": "Zamknij pomoc",
+    "englishOnly": "Ten przewodnik jest dostępny w języku angielskim.",
+    "loading": "Wczytywanie pomocy",
+    "toc": {
+      "toggle": "Na tej stronie",
+      "label": "Sekcje na tej stronie"
+    },
+    "error": {
+      "heading": "Nie udało się wczytać pomocy",
+      "body": "Przewodnik nie został wczytany. Spróbuj ponownie lub przeczytaj tę stronę na monize.net.",
+      "retry": "Spróbuj ponownie"
+    },
+    "search": "Przeszukaj przewodnik",
+    "tour": {
+      "prompt": "Ta strona ma wycieczkę z przewodnikiem."
+    },
+    "version": "Przewodnik dla Monize {version}",
+    "latestOnline": "Najnowszy przewodnik jest na monize.net"
+  },
+  "search": {
+    "title": "Przeszukaj przewodnik",
+    "placeholder": "Przeszukaj przewodnik",
+    "ariaLabel": "Przeszukaj przewodnik",
+    "contextHeading": "Pomoc dla tego ekranu",
+    "noResults": "Brak wyników dla „{query}”",
+    "error": "Wyszukiwanie nie powiodło się. Spróbuj ponownie.",
+    "hint": {
+      "navigate": "aby nawigować",
+      "select": "aby wybrać",
+      "close": "aby zamknąć"
+    }
+  },
+  "markdown": {
+    "screenshot": "Zrzut ekranu",
+    "viewScreenshot": "Zobacz zrzut ekranu na monize.net",
+    "callout": {
+      "note": "Uwaga",
+      "tip": "Wskazówka",
+      "important": "Ważne",
+      "warning": "Ostrzeżenie",
+      "caution": "Ostrożnie"
+    }
+  }
+}

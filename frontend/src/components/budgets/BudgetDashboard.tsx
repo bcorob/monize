@@ -10,9 +10,10 @@ import { BudgetHeatmap } from './BudgetHeatmap';
 import { BudgetTrendChart } from './BudgetTrendChart';
 import { BudgetZeroBasedBar } from './BudgetZeroBasedBar';
 import { Budget503020Summary } from './Budget503020Summary';
+import { BudgetBucketSummary, type BudgetBucketStatusState } from './BudgetBucketSummary';
 import { BudgetScenarioPlanner } from './BudgetScenarioPlanner';
 import { STRATEGY_LABELS, STRATEGY_DESCRIPTIONS } from './utils/budget-labels';
-import type { BudgetSummary, BudgetVelocity } from '@/types/budget';
+import type { BudgetSummary, BudgetTrendPoint, BudgetVelocity } from '@/types/budget';
 import type { ScheduledTransaction } from '@/types/scheduled-transaction';
 
 interface DailySpending {
@@ -20,19 +21,15 @@ interface DailySpending {
   amount: number;
 }
 
-interface TrendDataPoint {
-  month: string;
-  budgeted: number;
-  actual: number;
-}
-
 interface BudgetDashboardProps {
   summary: BudgetSummary;
   velocity: BudgetVelocity;
   scheduledTransactions: ScheduledTransaction[];
   dailySpending: DailySpending[];
-  trendData: TrendDataPoint[];
+  trendData: BudgetTrendPoint[];
   healthScore: number;
+  /** The bucket-status request's state; read only for a Bucket budget. */
+  bucketStatus?: BudgetBucketStatusState;
   /**
    * The budget's own currency: what `formatCurrency` labels a bare amount with,
    * and what the upcoming-bills panel converts each occurrence into.
@@ -49,6 +46,7 @@ export function BudgetDashboard({
   dailySpending,
   trendData,
   healthScore,
+  bucketStatus,
   displayCurrency,
   formatCurrency,
   onCategoryClick,
@@ -108,6 +106,14 @@ export function BudgetDashboard({
           budgetCategories={summary.budget.categories}
           categoryBreakdown={summary.categoryBreakdown}
           totalIncome={summary.totalIncome}
+          formatCurrency={formatCurrency}
+        />
+      )}
+
+      {strategy === 'BUCKET' && (
+        <BudgetBucketSummary
+          budgetId={summary.budget.id}
+          status={bucketStatus ?? { state: 'loading' }}
           formatCurrency={formatCurrency}
         />
       )}

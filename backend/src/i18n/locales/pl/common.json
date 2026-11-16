@@ -5,6 +5,13 @@
     "cash": "Gotówka",
     "brokerage": "Maklerskie"
   },
+  "oauthConsent": {
+    "destinationLabel": "Jeśli zezwolisz na dostęp, Monize wyśle autoryzację do:",
+    "destinationUnknown": "Monize nie może ustalić, dokąd zostałaby wysłana ta autoryzacja. Nie zezwalaj na dostęp.",
+    "unverifiedNotice": "Ta aplikacja sama zarejestrowała się na tym serwerze Monize, a Monize nie zweryfikował, kto ją obsługuje; jej nazwa jest taka, jaką sama sobie nadała. Zezwól na dostęp tylko wtedy, gdy to Ty rozpocząłeś to połączenie z tej aplikacji, a powyższy adres do niej należy.",
+    "claimedWebsite": "Witryna podana przez aplikację: {{ website }}",
+    "websiteMismatch": "Aplikacja podaje, że jej witryna to {{ website }}, ale autoryzacja zostanie wysłana na inny adres."
+  },
   "import": {
     "voidedTransactionNote": "Anulowano w źródle; pierwotna kwota została pominięta w eksporcie i zaimportowana jako zero."
   },
@@ -17,5 +24,20 @@
       "stalled": "Wciąż zapowiadałem dalszą pracę zamiast ją zakończyć, więc ta odpowiedź opiera się na danych zebranych przed zatrzymaniem."
     },
     "synthesisFailed": "Zebrałem dane do tego pytania, ale nie udało mi się ukończyć analizy, więc nie mam wiarygodnej odpowiedzi. Spróbuj zapytać o coś węższego."
+  },
+  "bankSync": {
+    "operationTypes": {
+      "cardPayment": "Płatność kartą",
+      "transferIn": "Przelew przychodzący",
+      "transferOut": "Przelew wychodzący",
+      "mobilePayment": "Płatność mobilna",
+      "cashWithdrawal": "Wypłata z bankomatu",
+      "cashWithdrawalBlik": "Wypłata z bankomatu BLIK",
+      "mobilePaymentRefund": "Zwrot płatności mobilnej",
+      "standingOrder": "Zlecenie stałe",
+      "cashback": "Cashback",
+      "loanRepayment": "Spłata kredytu",
+      "creditCardRepayment": "Spłata karty kredytowej"
+    }
   }
 }

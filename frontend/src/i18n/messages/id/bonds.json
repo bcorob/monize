@@ -1,0 +1,100 @@
+{
+  "entry": {
+    "history": "Riwayat ketentuan {program}"
+  },
+  "offer": {
+    "loading": "Memuat obligasi yang sedang dijual...",
+    "loadFailed": "Obligasi yang sedang dijual tidak dapat dimuat.",
+    "retry": "Coba lagi",
+    "empty": "Hari ini tidak ada seri yang dijual.",
+    "asOf": "Dijual pada {date}. Setiap angka berlaku untuk satu obligasi yang dibeli hari ini dan ditahan sampai jatuh tempo.",
+    "comparisonNote": "Imbal hasil tahunan adalah angka pembanding untuk produk dengan tenor berbeda, bukan janji penghasilan Anda.",
+    "couponsNote": "Kupon tidak diinvestasikan kembali: pada obligasi yang membayar kupon, nilai jatuh tempo menjumlahkan semua kupon yang dibayarkan.",
+    "projected": "Proyeksi",
+    "projectedTitle": "Angka ini bersandar pada nilai acuan yang diasumsikan, bukan hanya pada suku bunga yang dipublikasikan.",
+    "assumptions": {
+      "title": "Asumsi",
+      "intro": "Periode yang belum dimulai dinilai dengan nilai acuan ini. Ubah salah satunya untuk melihat dampaknya pada setiap baris.",
+      "label": "{benchmark} (%)",
+      "latest": "Nilai terakhir yang dipublikasikan: {value} ({observation})",
+      "reset": "Gunakan nilai terakhir yang dipublikasikan",
+      "updating": "Memperbarui angka..."
+    },
+    "columns": {
+      "series": "Seri",
+      "saleWindow": "Dijual",
+      "length": "Tenor",
+      "firstPeriodRate": "Periode pertama",
+      "rule": "Suku bunga",
+      "capitalization": "Bunga",
+      "redemption": "Pelunasan dipercepat",
+      "maturityValue": "Nilai jatuh tempo",
+      "totalReturn": "Total imbal hasil",
+      "annualizedReturn": "Imbal hasil tahunan",
+      "terms": "Ketentuan"
+    },
+    "saleWindowValue": "{from} sampai {to}",
+    "lengthValue": "{months, plural, other {# bulan}}",
+    "lengthDaysValue": "{days, plural, other {# hari}}",
+    "rule": {
+      "fixed": "Tetap {rate} per tahun",
+      "benchmark": "{benchmark} + {addend}",
+      "floor": "Batas bawah acuan {floor}",
+      "daily": "Harian: {benchmark} + {addend}",
+      "discount": "Diskon dari nilai nominal"
+    },
+    "capitalization": {
+      "NONE": "Dibayarkan setiap periode",
+      "COMPOUND_AT_PERIOD_END": "Dimajemukkan pada akhir setiap periode"
+    },
+    "redemption": {
+      "none": "Hanya saat jatuh tempo",
+      "onDemand": "Atas permintaan",
+      "fee": "Biaya {amount} per obligasi",
+      "forfeit": "Bunga yang berjalan dalam periode hangus"
+    },
+    "couponsNotReinvested": "Kupon tidak diinvestasikan kembali"
+  },
+  "history": {
+    "loading": "Memuat riwayat...",
+    "loadFailed": "Riwayat tidak dapat dimuat.",
+    "retry": "Coba lagi",
+    "empty": "Belum ada seri produk ini yang tersimpan.",
+    "coverage": "Katalog mencakup {from} sampai {to}.",
+    "rateChartTitle": "Suku bunga periode pertama dan margin menurut bulan penjualan",
+    "feeChartTitle": "Biaya pelunasan dipercepat menurut bulan penjualan",
+    "rate": "Suku bunga periode pertama",
+    "rateChartNote": "Untuk obligasi bunga tetap, garis menunjukkan suku bunga tahunan.",
+    "addend": "Margin atau spread",
+    "fee": "Biaya pelunasan dipercepat",
+    "gapsNote": "Bulan tanpa seri tersimpan adalah celah pada garis, bukan nilai yang diturunkan dari bulan di sekitarnya.",
+    "missingTitle": "Bulan yang tidak ada di katalog ({count})",
+    "noMissing": "Tidak ada bulan yang hilang antara seri tersimpan pertama dan terakhir.",
+    "tableTitle": "Semua seri yang tersimpan",
+    "groupCount": "{count} seri",
+    "unknownYear": "Tanggal penjualan tidak diketahui",
+    "columns": {
+      "series": "Seri",
+      "saleWindow": "Dijual",
+      "rate": "Suku bunga periode pertama atau suku bunga tahunan",
+      "addend": "Margin atau spread",
+      "fee": "Biaya pelunasan dipercepat",
+      "floor": "Batas bawah hasil pelunasan",
+      "version": "Versi ketentuan",
+      "source": "Sumber"
+    },
+    "floor": {
+      "ALL_PERIODS": "Setiap periode",
+      "FIRST_PERIOD": "Hanya periode pertama"
+    },
+    "none": "Tidak ada",
+    "held": "Dimiliki"
+  },
+  "refreshProgress": {
+    "label": "Memperbarui data obligasi",
+    "offer": "Memeriksa penawaran saat ini…",
+    "series": "Mengambil seri {done} dari {total}: {seriesCode}",
+    "historyComplete": "Riwayat sudah lengkap",
+    "starting": "Memulai…"
+  }
+}

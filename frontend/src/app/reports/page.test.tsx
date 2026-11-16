@@ -90,6 +90,14 @@ vi.mock('@/lib/custom-reports', () => ({
   },
 }));
 
+// Mock the mobile-breakpoint hook so a test can flip the catalogue between the
+// desktop density layouts and the compact mobile tile grid. Default false, so
+// every existing test keeps exercising the desktop branches.
+const mobileState = vi.hoisted(() => ({ isMobile: false }));
+vi.mock('@/hooks/useIsMobile', () => ({
+  useIsMobile: () => mobileState.isMobile,
+}));
+
 // Mock IconPicker
 const mockGetIconComponent = vi.fn().mockReturnValue(null);
 vi.mock('@/components/ui/IconPicker', () => ({
@@ -146,6 +154,7 @@ describe('ReportsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     currentSearchParams = new URLSearchParams();
+    mobileState.isMobile = false;
     useDensityStore.setState({ densities: { reports: 'normal' } });
     currentCategoryFilter = 'all';
     currentFavouriteReportIds = [];
@@ -181,7 +190,7 @@ describe('ReportsPage', () => {
   it('renders the All Reports filter button', async () => {
     render(<ReportsPage />);
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'All Reports' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^All Reports \(\d+\)$/ })).toBeInTheDocument();
     });
   });
 
@@ -240,8 +249,8 @@ describe('ReportsPage', () => {
 
       await waitFor(() => {
         expect(
-          screen.getByRole('button', { name: 'Insights' }),
-        ).toHaveClass('bg-blue-600');
+          screen.getByRole('button', { name: /^Insights \(\d+\)$/ }),
+        ).toHaveAttribute('aria-pressed', 'true');
       });
       // The linked category's report is on screen; the remembered one is not.
       expect(
@@ -257,8 +266,8 @@ describe('ReportsPage', () => {
 
       await waitFor(() => {
         expect(
-          screen.getByRole('button', { name: 'All Reports' }),
-        ).toHaveClass('bg-blue-600');
+          screen.getByRole('button', { name: /^All Reports \(\d+\)$/ }),
+        ).toHaveAttribute('aria-pressed', 'true');
       });
     });
 
@@ -266,13 +275,13 @@ describe('ReportsPage', () => {
       currentSearchParams = new URLSearchParams('category=insights');
       render(<ReportsPage />);
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: 'Insights' })).toHaveClass('bg-blue-600');
+        expect(screen.getByRole('button', { name: /^Insights \(\d+\)$/ })).toHaveAttribute('aria-pressed', 'true');
       });
 
-      fireEvent.click(screen.getByRole('button', { name: 'All Reports' }));
+      fireEvent.click(screen.getByRole('button', { name: /^All Reports \(\d+\)$/ }));
 
       await waitFor(() => {
-        expect(screen.getByRole('button', { name: 'All Reports' })).toHaveClass('bg-blue-600');
+        expect(screen.getByRole('button', { name: /^All Reports \(\d+\)$/ })).toHaveAttribute('aria-pressed', 'true');
       });
     });
   });
@@ -287,15 +296,15 @@ describe('ReportsPage', () => {
   it('renders category filter buttons', async () => {
     render(<ReportsPage />);
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: 'Spending' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Income' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Net Worth' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Tax' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Debt & Loans' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Investment' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Insights' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Maintenance' })).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: 'Bills' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Spending \(\d+\)$/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Income \(\d+\)$/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Net Worth \(\d+\)$/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Tax \(\d+\)$/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Debt & Loans \(\d+\)$/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Investment \(\d+\)$/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Insights \(\d+\)$/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Maintenance \(\d+\)$/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Bills \(\d+\)$/ })).toBeInTheDocument();
     });
   });
 
@@ -471,6 +480,22 @@ describe('ReportsPage', () => {
     });
     expect(screen.getByText('Tax Summary')).toBeInTheDocument();
     expect(screen.queryByText('Income vs Expenses')).not.toBeInTheDocument();
+  });
+
+  it('counts each category segment over the reports the search admits', async () => {
+    render(<ReportsPage />);
+    await waitFor(() => {
+      expect(screen.getByText('Spending by Category')).toBeInTheDocument();
+    });
+    fireEvent.change(screen.getByPlaceholderText(/search reports/i), {
+      target: { value: 'Tax Summary' },
+    });
+    // One report matches: the All and Tax segments say so, the rest say none.
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'All Reports (1)' })).toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: 'Tax (1)' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Spending (0)' })).toBeInTheDocument();
   });
 
   it('filters reports by description when searching', async () => {
@@ -1084,7 +1109,7 @@ describe('ReportsPage', () => {
   it('activates category filter button visually when clicked', async () => {
     render(<ReportsPage />);
     await waitFor(() => expect(screen.getByText('Spending by Category')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: 'Tax' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Tax \(\d+\)$/ }));
     expect(mockSetCategoryFilter).toHaveBeenCalledWith('tax');
   });
 
@@ -1092,7 +1117,7 @@ describe('ReportsPage', () => {
     currentCategoryFilter = 'tax';
     render(<ReportsPage />);
     await waitFor(() => expect(screen.getByText('Tax Summary')).toBeInTheDocument());
-    fireEvent.click(screen.getByRole('button', { name: 'All Reports' }));
+    fireEvent.click(screen.getByRole('button', { name: /^All Reports \(\d+\)$/ }));
     expect(mockSetCategoryFilter).toHaveBeenCalledWith('all');
   });
 
@@ -1150,7 +1175,14 @@ describe('ReportsPage', () => {
     currentCategoryFilter = 'tax';
     render(<ReportsPage />);
     await waitFor(() => {
-      // Tax category has exactly 1 report: Tax Summary
+      expect(screen.getByText('Tax Summary')).toBeInTheDocument();
+    });
+    // The Tax section holds Tax Summary and Payroll Deductions; the search
+    // leaves one of them.
+    fireEvent.change(screen.getByPlaceholderText(/search reports/i), {
+      target: { value: 'Tax Summary' },
+    });
+    await waitFor(() => {
       expect(screen.getByText('1 report available')).toBeInTheDocument();
     });
   });
@@ -1349,5 +1381,132 @@ describe('ReportsPage', () => {
       expect(screen.getByText('Spending by Category')).toBeInTheDocument();
     });
     expect(screen.queryByText('Tax Summary')).not.toBeInTheDocument();
+  });
+
+  describe('mobile compact tile grid', () => {
+    // Below the mobile breakpoint the catalogue is a compact 2-column tile grid
+    // instead of any of the three desktop density layouts. A layout change with a
+    // green suite is a finding, so these cover both directions: the mobile tiles,
+    // and proof the desktop layout is untouched when the hook reports desktop.
+
+    it('renders the catalogue as a compact 2-column tile grid on mobile', async () => {
+      mobileState.isMobile = true;
+      render(<ReportsPage />);
+      await waitFor(() => {
+        expect(screen.getByText('Spending by Category')).toBeInTheDocument();
+      });
+      // The tile lives in a 2-column grid, not one of the desktop card grids.
+      const tileButton = screen.getByText('Spending by Category').closest('button')!;
+      const grid = tileButton.parentElement!.parentElement!;
+      expect(grid).toHaveClass('grid-cols-2');
+    });
+
+    it('drops the long description on mobile', async () => {
+      mobileState.isMobile = true;
+      render(<ReportsPage />);
+      await waitFor(() => {
+        expect(screen.getByText('Spending by Category')).toBeInTheDocument();
+      });
+      // The description paragraph the desktop cards render is absent here.
+      expect(screen.queryByText(/See where your money goes/i)).not.toBeInTheDocument();
+    });
+
+    it('still shows the report name and category chip on each tile', async () => {
+      mobileState.isMobile = true;
+      render(<ReportsPage />);
+      await waitFor(() => {
+        expect(screen.getByText('Spending by Category')).toBeInTheDocument();
+      });
+      // The category chip text is present (a filter button carries it too, so
+      // getAllByText -- the tile chip is one of them).
+      expect(screen.getAllByText('Spending').length).toBeGreaterThan(1);
+    });
+
+    it('opens the report when a tile is clicked on mobile', async () => {
+      mobileState.isMobile = true;
+      render(<ReportsPage />);
+      await waitFor(() => {
+        expect(screen.getByText('Spending by Category')).toBeInTheDocument();
+      });
+      const tile = screen.getByText('Spending by Category').closest('button')!;
+      fireEvent.click(tile);
+      expect(mockPush).toHaveBeenCalledWith('/reports/spending-by-category');
+    });
+
+    it('keeps the favourite toggle working, as a sibling of the tile button', async () => {
+      mobileState.isMobile = true;
+      render(<ReportsPage />);
+      await waitFor(() => {
+        expect(screen.getByText('Spending by Category')).toBeInTheDocument();
+      });
+      const stars = screen.getAllByTitle('Add to favourites');
+      expect(stars.length).toBeGreaterThan(0);
+      // The toggle is a sibling of the tile <button>, never nested inside it.
+      expect(stars[0].closest('button')).toBeNull();
+      fireEvent.click(stars[0]);
+      // Toggling favourites must not navigate to the report.
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(mockUpdatePreferences).toHaveBeenCalledWith({
+        favouriteReportIds: ['spending-by-category'],
+      });
+    });
+
+    it('gives the mobile tile favourite button a comfortable tap target (p-2)', async () => {
+      // The tile is the phone surface, so its star must be easy to tap: p-2, not
+      // the p-1 (~24px) target it shipped with.
+      mobileState.isMobile = true;
+      render(<ReportsPage />);
+      await waitFor(() => {
+        expect(screen.getByText('Spending by Category')).toBeInTheDocument();
+      });
+      const stars = screen.getAllByTitle('Add to favourites');
+      expect(stars.length).toBeGreaterThan(0);
+      for (const star of stars) {
+        expect(star).toHaveClass('p-2');
+        expect(star).not.toHaveClass('p-1');
+      }
+    });
+
+    it('hides the density toggle on mobile', async () => {
+      // The mobile tile grid ignores density, so a toggle here would do nothing
+      // on screen while silently mutating the persisted desktop density.
+      mobileState.isMobile = true;
+      render(<ReportsPage />);
+      await waitFor(() => {
+        expect(screen.getByText('Spending by Category')).toBeInTheDocument();
+      });
+      expect(screen.queryByTitle('Toggle row density')).not.toBeInTheDocument();
+    });
+
+    it('renders the density toggle on desktop', async () => {
+      mobileState.isMobile = false;
+      render(<ReportsPage />);
+      await waitFor(() => {
+        expect(screen.getByText('Spending by Category')).toBeInTheDocument();
+      });
+      expect(screen.getByTitle('Toggle row density')).toBeInTheDocument();
+    });
+
+    it('keeps the guided-tour anchor on exactly one tile on mobile', async () => {
+      mobileState.isMobile = true;
+      render(<ReportsPage />);
+      await waitFor(() => {
+        expect(screen.getByText('GEM Strategy')).toBeInTheDocument();
+      });
+      expect(
+        document.querySelectorAll('[data-tour-id="report-gem-strategy"]'),
+      ).toHaveLength(1);
+    });
+
+    it('renders the desktop card layout (with description) when not mobile', async () => {
+      // Desktop path is untouched: the normal-density card still shows the
+      // description block the mobile tile drops.
+      mobileState.isMobile = false;
+      render(<ReportsPage />);
+      await waitFor(() => {
+        expect(screen.getByText('Spending by Category')).toBeInTheDocument();
+      });
+      expect(screen.getByText(/See where your money goes/i)).toBeInTheDocument();
+    });
   });
 });

@@ -47,6 +47,15 @@ export class CreateCategoryDto {
   isIncome?: boolean;
 
   @ApiPropertyOptional({
+    description:
+      "Automatic amount sign for this category: true/false is an explicit choice, omitted or null inherits from the nearest ancestor that has one (a root with no value behaves as on)",
+    nullable: true,
+  })
+  @IsOptional()
+  @IsBoolean()
+  autoSign?: boolean | null;
+
+  @ApiPropertyOptional({
     description: "Parent category ID for creating subcategories",
   })
   @IsOptional()

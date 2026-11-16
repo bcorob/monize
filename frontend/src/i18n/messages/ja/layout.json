@@ -34,6 +34,12 @@
     "dismiss": "閉じる",
     "dismissAriaLabel": "更新通知を閉じる"
   },
+  "jwtSecretBanner": {
+    "label": "JWT_SECRET が脆弱です。",
+    "detail": "公開済みのプレースホルダーであるか推測されやすいため、セッショントークンを偽造される可能性があります。<code>openssl rand -base64 32</code> で強力な値を生成してください。変更すると認証アプリのコードが使えなくなり、信頼済みデバイスも解除されます。ユーザーはバックアップコードでサインインして 2FA を設定し直し、バックアップコードのないユーザーは<users>ユーザー管理</users>で 2FA をリセットしてください。事前に <code>docs/backend/modules-and-runtime.md</code>（Changing JWT_SECRET）をお読みください。",
+    "dismiss": "閉じる",
+    "dismissAriaLabel": "JWT_SECRET の警告を閉じる"
+  },
   "actionHistory": {
     "title": "操作履歴",
     "buttonAriaLabel": "操作履歴",
@@ -58,6 +64,7 @@
       "tag": "タグ",
       "account": "勘定科目",
       "scheduled_transaction": "スケジュール",
+      "scheduled_posting": "スケジュール",
       "security": "有価証券",
       "budget": "予算",
       "custom_report": "レポート"
@@ -79,7 +86,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "長期キャピタルゲインの再投資",
       "CAPITAL_GAIN_SHORT": "短期キャピタルゲイン",
       "CAPITAL_GAIN_LONG": "長期キャピタルゲイン",
-      "REDEEM": "CD・債券の償還"
+      "REDEEM": "CD・債券の償還",
+      "RETURN_OF_CAPITAL": "資本の払い戻し"
     },
     "descriptions": {
       "createdAccount": "勘定科目「{name}」を作成しました",
@@ -99,6 +107,7 @@
       "deletedInvestmentReport": "投資レポート「{name}」を削除しました",
       "createdPayee": "支払先「{name}」を作成しました",
       "updatedPayee": "支払先「{name}」を更新しました",
+      "lookedUpPayeeContact": "支払先「{name}」の連絡先情報を検索しました",
       "deletedPayee": "支払先「{name}」を削除しました",
       "createdReport": "レポート「{name}」を作成しました",
       "updatedReport": "レポート「{name}」を更新しました",
@@ -106,6 +115,7 @@
       "createdScheduledTransaction": "スケジュール取引「{name}」を作成しました",
       "updatedScheduledTransaction": "スケジュール取引「{name}」を更新しました",
       "deletedScheduledTransaction": "スケジュール取引「{name}」を削除しました",
+      "postedScheduledTransaction": "スケジュール取引「{name}」を転記しました",
       "createdSecurity": "有価証券「{symbol}」を作成しました",
       "updatedSecurity": "有価証券「{symbol}」を更新しました",
       "deletedSecurity": "有価証券「{symbol}」を削除しました",
@@ -115,26 +125,23 @@
       "createdTransaction": "取引 {payee} {amount} を作成しました",
       "updatedTransaction": "取引 {payee} {amount} を更新しました",
       "deletedTransaction": "取引 {payee} {amount} を削除しました",
+      "convertedToTransfer": "取引 {payee} {amount} を振替に変換",
+      "convertedToTransaction": "振替 {payee} {amount} を取引に変換",
       "bulkUpdatedTransactions": "{count, plural, one {# 件の取引} other {# 件の取引}}を一括更新しました",
       "createdTransfer": "{from} から {to} への {amount} の振替を作成しました",
       "createdInvestmentTransaction": "{action} 取引を作成しました",
       "updatedInvestmentTransaction": "{action} 取引を更新しました",
       "deletedInvestmentTransaction": "{action} 取引を削除しました",
       "transferredSecurity": "勘定科目間で有価証券を振替しました",
-      "updatedSecurityTransfer": "有価証券の振替を更新しました"
-    },
-    "timeAgo": {
-      "justNow": "たった今",
-      "minutes": "{count}分前",
-      "hours": "{count}時間前",
-      "days": "{count}日前"
+      "updatedSecurityTransfer": "有価証券の振替を更新しました",
+      "ranTransactionRule": "ルール「{name}」を {count, plural, other {# 件}}の取引に対して実行しました"
     },
     "undonePrefix": "元に戻しました: {description}",
     "redonePrefix": "やり直しました: {description}"
   },
   "pageHeader": {
-    "helpAriaLabel": "このセクションのヘルプは Monize Wiki を開いてください",
-    "helpTooltip": "このセクションのヘルプは Monize Wiki を開いてください"
+    "helpAriaLabel": "このページのヘルプ",
+    "helpTooltip": "このページのヘルプ"
   },
   "bootSplash": {
     "loading": "Monize を読み込んでいます",
@@ -145,5 +152,17 @@
     "title": "接続できません",
     "message": "Monize はサーバーに到達できませんでした。接続を確認して、もう一度お試しください。",
     "retry": "再試行"
+  },
+  "pushBanner": {
+    "enableTitle": "通知をオンにしますか？",
+    "enableBody": "Monize はこの端末で、アプリを閉じているときも請求や予算上限をお知らせできます。ブラウザが許可を求めます。",
+    "enableButton": "オンにする",
+    "enabling": "設定中…",
+    "installIosTitle": "まず Monize をホーム画面に追加してください。",
+    "installIosBody": "iPhone と iPad では、通知はインストール済みのアプリからのみ動作します。「共有」→「ホーム画面に追加」を選び、そこから Monize を開いてください。",
+    "blockedTitle": "Monize の通知はブロックされています。",
+    "blockedBody": "このページについて、ブラウザのサイト設定で許可してください。Monize から再度お尋ねすることはできません。",
+    "blockedIosBody": "iOS の「設定」→「通知」→ Monize を開いて許可してください。Monize が一覧にない場合は、ホーム画面から削除して再度追加してください。",
+    "dismiss": "後で"
   }
 }

@@ -3,6 +3,7 @@
     "noneToUpdate": "Không có giấy chứng khoán nào để cập nhật",
     "updated": "{count, plural, one {Đã cập nhật giá # giấy chứng khoán} other {Đã cập nhật giá # giấy chứng khoán}}",
     "partialFailure": "Đã cập nhật giá: {updated} thành công, {failed} thất bại{symbols}",
+    "partialFailureWithReasons": "Đã cập nhật giá: {updated} thành công, {failed} thất bại{symbols}\n{reasons}",
     "failed": "Không thể làm mới giá"
   },
   "page": {
@@ -10,6 +11,7 @@
     "subtitle": "Quản lý cổ phiếu, ETF, quỹ lẫn nhau và các giấy chứng khoán khác của bạn",
     "newSecurity": "+ Giấy chứng khoán mới",
     "searchPlaceholder": "Tìm kiếm theo ký hiệu hoặc tên...",
+    "statusFilterLabel": "Trạng thái",
     "statusAll": "Tất cả ({count})",
     "statusActive": "Hoạt động ({count})",
     "statusInactive": "Không hoạt động ({count})",
@@ -49,6 +51,7 @@
       "name": "Tên",
       "type": "Loại",
       "shares": "Cổ phiếu",
+      "value": "Giá trị",
       "exchange": "Sàn giao dịch",
       "currency": "Tiền tệ",
       "provider": "Nhà cung cấp",
@@ -63,12 +66,10 @@
       "inactive": "Không hoạt động",
       "inactiveShort": "KHĐ"
     },
-    "providerTitle": {
-      "override": "Ghi đè nhà cung cấp theo giấy chứng khoán",
-      "inherited": "Kế thừa từ tùy chọn Nhà cung cấp báo giá mặc định của bạn"
-    },
+    "providerInherited": "{provider} (mặc định)",
     "columnTitles": {
       "shares": "Cổ phiếu hiện đang nắm giữ trên tất cả tài khoản",
+      "value": "Số cổ phần nắm giữ trên tất cả tài khoản theo giá gần nhất, tính bằng đồng tiền của chính chứng khoán",
       "source": "Nguồn của giá gần nhất"
     },
     "actions": {
@@ -115,7 +116,11 @@
     "exchangeLabel": "Sàn giao dịch",
     "currencyLabel": "Tiền tệ",
     "currencyNotConfigured": "{code} — không có trong tiền tệ của bạn",
+    "currencyPlaceholder": "Chọn tiền tệ...",
+    "currencyNotReported": "Nhà cung cấp không báo cáo tiền tệ của đồng coin này. Hãy chọn loại tiền pháp định mà nó được niêm yết.",
     "quoteProviderLabel": "Nhà cung cấp báo giá",
+    "skipPriceUpdatesLabel": "Tắt cập nhật giá tự động",
+    "skipPriceUpdatesHelp": "Monize sẽ không lấy giá cho chứng khoán này. Dùng tùy chọn này cho chứng khoán mà không nhà cung cấp nào định giá được; giá bạn tự nhập vẫn được tính. Chọn một nhà cung cấp báo giá hoặc ID công cụ MSN khác sẽ bật lại cập nhật.",
     "msnIdLabel": "ID công cụ MSN (nâng cao)",
     "lookupProviderAriaLabel": "Tra cứu nhà cung cấp",
     "lookupButton": "Tra cứu",
@@ -139,7 +144,11 @@
     "providers": {
       "auto": "Tự động",
       "yahoo": "Yahoo",
-      "msn": "MSN"
+      "msn": "MSN",
+      "lse": "LSE",
+      "deutsche_boerse": "Deutsche Börse",
+      "bond_engine": "Bộ máy trái phiếu",
+      "html_table": "Bảng trên trang web"
     },
     "types": {
       "select": "Chọn loại...",
@@ -189,16 +198,50 @@
       "deleteConfirm": "Xóa",
       "deleteSuccess": "Đã xóa loại tài sản \"{name}\"",
       "deleteFailed": "Không thể xóa loại tài sản \"{name}\""
+    },
+    "bondFetchAction": "Lấy {code} từ nguồn chính thức",
+    "bondFetching": "Đang lấy {code} từ tổ chức phát hành cùng các lãi suất tham chiếu. Việc này có thể mất tới một phút.",
+    "bondFetchFailed": "Không thể lấy chuỗi này.",
+    "bondCurrencyLocked": "Chứng khoán này được liên kết với một loại trái phiếu bằng {linkedCurrency}. Hãy đặt lại tiền tệ là {linkedCurrency} hoặc hủy liên kết loại trái phiếu trước (hủy liên kết sẽ xóa giá đã tính).",
+    "bondProgramLabel": "Loại trái phiếu",
+    "bondProgramNone": "Chưa liên kết",
+    "bondProgramCurrent": "Loại trái phiếu đã liên kết",
+    "bondProgramLoading": "Đang tải các loại trái phiếu...",
+    "bondProgramLoadFailed": "Không thể tải các loại trái phiếu nên chưa thể liên kết loại trái phiếu.",
+    "bondProgramRetry": "Thử lại",
+    "bondNoPrograms": "Danh mục trái phiếu chưa có loại trái phiếu nào.",
+    "bondAutoFetchLabel": "Tự động lấy các đợt phát hành mới của loại trái phiếu này",
+    "bondAutoFetchHelp": "Khi bật, Monize đọc các đợt phát hành mới của loại trái phiếu này từ nguồn chính thức mỗi ngày, nên bạn có thể ghi nhận giao dịch mua mà không cần lấy đợt phát hành trước.",
+    "bondCountryLabel": "Quốc gia",
+    "bondCountryOther": "Khác",
+    "bondCountryOtherInfo": "Có thể yêu cầu hỗ trợ trái phiếu của các quốc gia khác trên <link>GitHub của dự án</link>.",
+    "quoteTable": {
+      "urlLabel": "Trang web bảng giá",
+      "urlHelp": "Trang cần có một bảng với hàng tiêu đề gồm cột ngày và cột giá đóng cửa.",
+      "test": "Thử",
+      "previewFailed": "Không thể đọc trang.",
+      "summary": "{count, plural, other {# ngày}} từ {first} đến {last}",
+      "columns": "Cột được dùng: {columns}",
+      "currency": "Tiền tệ trên trang: {currency}",
+      "noCurrency": "Trang không ghi tiền tệ; giá được lưu theo tiền tệ của chứng khoán.",
+      "skipped": "{count, plural, other {Đã bỏ qua # hàng không đọc được}}",
+      "headers": {
+        "date": "Ngày",
+        "open": "Mở cửa",
+        "high": "Cao",
+        "low": "Thấp",
+        "close": "Đóng cửa",
+        "volume": "Khối lượng"
+      }
     }
   },
   "priceForm": {
     "dateLabel": "Ngày",
     "closePriceLabel": "Giá đóng cửa",
-    "openPriceLabel": "Giá mở cửa",
-    "highPriceLabel": "Giá cao nhất",
-    "lowPriceLabel": "Giá thấp nhất",
-    "volumeLabel": "Khối lượng",
-    "optionalPlaceholder": "Tùy chọn",
+    "openPriceLabel": "Giá mở cửa (tùy chọn)",
+    "highPriceLabel": "Giá cao nhất (tùy chọn)",
+    "lowPriceLabel": "Giá thấp nhất (tùy chọn)",
+    "volumeLabel": "Khối lượng (tùy chọn)",
     "submitCreate": "Thêm giá",
     "submitUpdate": "Cập nhật giá"
   },
@@ -246,7 +289,9 @@
     },
     "collapseAll": "Thu gọn tất cả",
     "expandAll": "Mở rộng tất cả",
-    "groupCount": "{count} giá"
+    "groupCount": "{count} giá",
+    "addYearButton": "Thêm một năm lịch sử",
+    "addYearTitle": "Tải thêm một năm giá lịch sử từ nhà cung cấp"
   },
   "transactionHistory": {
     "accountLabel": "Tài khoản",
@@ -284,7 +329,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "Tái đầu tư lãi vốn dài hạn",
       "CAPITAL_GAIN_SHORT": "Lãi vốn ngắn hạn",
       "CAPITAL_GAIN_LONG": "Lãi vốn dài hạn",
-      "REDEEM": "Đáo hạn CD/trái phiếu"
+      "REDEEM": "Đáo hạn CD/trái phiếu",
+      "RETURN_OF_CAPITAL": "Hoàn vốn"
     },
     "toasts": {
       "loadHistoryFailed": "Không thể tải lịch sử",
@@ -333,11 +379,20 @@
     "nameRequired": "Tên là bắt buộc",
     "nameMax": "Tên phải có tối đa 255 ký tự",
     "currencyRequired": "Tiền tệ là bắt buộc",
-    "descriptionMax": "Mô tả không được vượt quá 5000 ký tự"
+    "bondProgramRequired": "Loại trái phiếu là bắt buộc",
+    "descriptionMax": "Mô tả không được vượt quá 5000 ký tự",
+    "quoteUrlRequired": "Nhập trang có bảng giá.",
+    "quoteUrlInvalid": "Nhập địa chỉ đầy đủ bắt đầu bằng http:// hoặc https://."
   },
   "priceValidation": {
     "dateRequired": "Ngày là bắt buộc",
     "priceRequired": "Giá là bắt buộc",
     "priceNonNegative": "Giá phải là số không âm"
+  },
+  "priceAlert": {
+    "label": "Cảnh báo biến động giá (%)",
+    "help": "Để trống để tắt. Thông báo tăng hoặc giảm so với phiên có dữ liệu trước đó, tối đa một lần mỗi mã trong một ngày UTC.",
+    "range": "Nhập tỷ lệ phần trăm từ 0,1 đến 1000.",
+    "chartLabel": "Thêm biểu đồ vào cảnh báo giá"
   }
 }

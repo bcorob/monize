@@ -6,12 +6,15 @@ vi.mock('@/hooks/useDateFormat', () => ({
   useDateFormat: () => ({ formatDate: (d: string) => d, dateFormat: 'browser', datePattern: 'YYYY-MM-DD' }),
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (amount: number, currency: string) => `${currency} ${amount.toFixed(2)}`,
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (amount: number, currency: string) => `${currency} ${amount.toFixed(2)}`,
+    }),
+  };
+});
 vi.mock('@/lib/utils', () => ({
   parseLocalDate: (d: string) => {
     const dateStr = d.includes('T') ? d.split('T')[0] : d;
@@ -75,6 +78,35 @@ describe('OccurrenceDatePicker', () => {
     expect(screen.getByText('2025-07-01')).toBeInTheDocument();
   });
 
+  // Issue #2096: each occurrence of an estimated schedule shows its month's estimate.
+  it("shows each month's estimate, and an unknown month as unknown", () => {
+    const estimated = {
+      ...scheduledTransaction,
+      amountIsEstimated: true,
+      amountEstimate: {
+        status: 'estimated',
+        currencyCode: 'USD',
+        months: {
+          '2025-03': { amount: -210, basis: 'seasonal' },
+          '2025-04': { amount: -160.5, basis: 'seasonal' },
+        },
+        paymentCount: 10,
+        latestPaymentDate: '2025-02-01',
+        growthRate: null,
+        historyMonths: 24,
+        missingPair: null,
+      },
+    };
+    render(
+      <OccurrenceDatePicker isOpen={true} scheduledTransaction={estimated} onSelect={onSelect} onClose={onClose} />
+    );
+    expect(screen.getByText('Estimated: USD -210.00')).toBeInTheDocument();
+    expect(screen.getByText('Estimated: USD -160.50')).toBeInTheDocument();
+    // May onward is past what the estimate holds here: unknown, not -1200.
+    expect(screen.getAllByText('Estimate unknown').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/-1200/)).not.toBeInTheDocument();
+  });
+
   it('renders dates for weekly frequency', () => {
     const weeklyTransaction = {
       ...scheduledTransaction,
@@ -88,6 +120,36 @@ describe('OccurrenceDatePicker', () => {
     expect(screen.getByText('2025-03-15')).toBeInTheDocument();
     expect(screen.getByText('2025-03-22')).toBeInTheDocument();
     expect(screen.getByText('2025-03-29')).toBeInTheDocument();
+  });
+
+  it('renders the rule dates of a Custom schedule', () => {
+    // The 1st and the last day of each month; 1 March 2025 is the start.
+    const custom = {
+      ...scheduledTransaction,
+      frequency: 'CUSTOM' as const,
+      startDate: '2025-03-01',
+      customRecurrence: { unit: 'MONTH', interval: 1, monthDays: [1, -1] },
+    };
+    render(
+      <OccurrenceDatePicker isOpen={true} scheduledTransaction={custom} onSelect={onSelect} onClose={onClose} />
+    );
+    for (const date of ['2025-03-01', '2025-03-31', '2025-04-01', '2025-04-30', '2025-05-01']) {
+      expect(screen.getByText(date)).toBeInTheDocument();
+    }
+    expect(screen.queryByText('2025-05-31')).not.toBeInTheDocument();
+  });
+
+  it('lists only the due date of a Custom schedule whose rule is missing, instead of throwing', () => {
+    const broken = {
+      ...scheduledTransaction,
+      frequency: 'CUSTOM' as const,
+      startDate: '2025-03-01',
+      customRecurrence: null,
+    };
+    render(
+      <OccurrenceDatePicker isOpen={true} scheduledTransaction={broken} onSelect={onSelect} onClose={onClose} />
+    );
+    expect(screen.getByText(scheduledTransaction.nextDueDate)).toBeInTheDocument();
   });
 
   it('renders dates for biweekly frequency', () => {
@@ -266,17 +328,18 @@ describe('OccurrenceDatePicker', () => {
     expect(badges.length).toBe(1);
   });
 
-  // --- Close button (X) ---
-  it('calls onClose when X button is clicked', () => {
+  // --- Dialog chrome ---
+  it('is named by its title through Modal and draws no corner X', () => {
     render(
       <OccurrenceDatePicker isOpen={true} scheduledTransaction={scheduledTransaction} onSelect={onSelect} onClose={onClose} />
     );
-    const closeButtons = screen.getAllByRole('button');
-    const xButton = closeButtons.find(b => b.querySelector('svg path[d*="M6 18L18 6"]'));
-    if (xButton) {
-      fireEvent.click(xButton);
-      expect(onClose).toHaveBeenCalled();
-    }
+    expect(screen.getByRole('dialog', { name: 'Select Occurrence Date' })).toBeInTheDocument();
+    // Cancel is the one control that closes it: no icon-only button sits
+    // beside the title.
+    const iconOnly = screen
+      .getAllByRole('button')
+      .filter((b) => b.querySelector('svg') && !b.textContent?.trim());
+    expect(iconOnly).toHaveLength(0);
   });
 
   // --- Semimonthly frequency ---

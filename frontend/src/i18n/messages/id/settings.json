@@ -19,10 +19,11 @@
     "passwordRequired": "Kata sandi saat ini diperlukan untuk mengubah surel",
     "noChanges": "Tidak ada perubahan untuk disimpan",
     "passwordConfirmNote": "Konfirmasi kata sandi diperlukan saat mengubah alamat surel Anda.",
+    "pendingEmailNotice": "Tautan konfirmasi telah dikirim ke {email}. Alamat surel Anda akan berubah setelah Anda membukanya.",
     "saveButton": "Simpan Profil",
-    "savingButton": "Menyimpan...",
     "toasts": {
       "success": "Profil berhasil diperbarui",
+      "confirmationSent": "Periksa {email} untuk tautan konfirmasi alamat surel baru Anda",
       "updateFailed": "Gagal memperbarui profil"
     },
     "validation": {
@@ -36,7 +37,8 @@
   },
   "security": {
     "heading": "Keamanan",
-    "ssoNotice": "Akun Anda menggunakan Single Sign-On (SSO) untuk autentikasi. Kata sandi di bawah ini tidak digunakan untuk login tetapi dapat disimpan sebagai cadangan jika SSO dinonaktifkan.",
+    "ssoPasswordFallbackNotice": "Akun Anda menggunakan Single Sign-On (SSO). Anda juga dapat login dengan kata sandi di bawah ini saat SSO tidak tersedia. Aktifkan autentikasi dua faktor untuk melindungi login cadangan ini.",
+    "ssoNotice": "Akun Anda menggunakan Single Sign-On (SSO). Masuk dengan kata sandi dinonaktifkan untuk akun SSO di server ini.",
     "currentPasswordLabel": "Kata Sandi Saat Ini",
     "currentPasswordPlaceholder": "Masukkan kata sandi saat ini",
     "newPasswordLabel": "Kata Sandi Baru",
@@ -44,7 +46,6 @@
     "confirmPasswordLabel": "Konfirmasi Kata Sandi Baru",
     "confirmPasswordPlaceholder": "Konfirmasi kata sandi baru",
     "changePasswordButton": "Ganti Kata Sandi",
-    "changingPasswordButton": "Mengganti...",
     "toasts": {
       "passwordChanged": "Kata sandi berhasil diubah",
       "passwordChangeFailed": "Gagal mengubah kata sandi"
@@ -58,14 +59,28 @@
       "addLayerDescription": "Tambahkan lapisan keamanan ekstra ke akun Anda.",
       "enableButton": "Aktifkan 2FA",
       "disableButton": "Nonaktifkan 2FA",
+      "resetButton": "Setel Ulang 2FA",
       "disableModal": {
         "title": "Nonaktifkan Autentikasi Dua Faktor",
-        "description": "Masukkan kode 6 digit Anda saat ini untuk mengonfirmasi menonaktifkan 2FA.",
+        "description": "Masukkan kode 6 digit dari aplikasi autentikator Anda, atau salah satu kode cadangan Anda (xxxx-xxxx), untuk mengonfirmasi menonaktifkan 2FA.",
         "verificationCodeLabel": "Kode Verifikasi",
         "disablingButton": "Menonaktifkan...",
         "toasts": {
           "disabled": "Autentikasi dua faktor dinonaktifkan",
           "disableFailed": "Gagal menonaktifkan 2FA"
+        }
+      },
+      "resetModal": {
+        "title": "Setel Ulang Autentikasi Dua Faktor",
+        "description": "Gunakan ini jika aplikasi autentikator atau kode cadangan Anda mungkin telah terekspos, atau jika kode autentikator Anda berhenti berfungsi (misalnya setelah rahasia server diubah).",
+        "effect": "Autentikator, kode cadangan, dan perangkat tepercaya Anda saat ini akan berhenti berfungsi, dan Anda akan keluar dari semua perangkat lain. Setelah itu Anda langsung menyiapkan autentikator baru.",
+        "passwordLabel": "Kata Sandi Akun",
+        "codeLabel": "Kode Autentikator atau Cadangan",
+        "codeHint": "Masukkan kode 6 digit dari aplikasi autentikator Anda. Jika autentikator Anda tidak lagi berfungsi, masukkan salah satu kode cadangan Anda (xxxx-xxxx) sebagai gantinya.",
+        "resettingButton": "Menyetel ulang...",
+        "toasts": {
+          "reset": "Autentikasi dua faktor disetel ulang. Siapkan autentikator baru Anda sekarang.",
+          "resetFailed": "Gagal menyetel ulang 2FA"
         }
       }
     },
@@ -90,6 +105,8 @@
       "noDevices": "Tidak ada perangkat tepercaya. Saat Anda mencentang \"Jangan tanya lagi di browser ini\" selama login 2FA, perangkat akan muncul di sini.",
       "currentBadge": "Saat ini",
       "revokeButton": "Cabut",
+      "ipAddress": "IP: {ip}",
+      "dates": "Ditambahkan {added} · Terakhir digunakan {lastUsed} · Kedaluwarsa {expires}",
       "revokeAllModal": {
         "title": "Cabut Semua Perangkat Tepercaya",
         "description": "Ini akan menghapus semua perangkat tepercaya. Anda perlu memasukkan kode 2FA Anda pada login berikutnya dari perangkat mana pun."
@@ -110,8 +127,20 @@
   },
   "preferences": {
     "heading": "Preferensi",
+    "groups": {
+      "languageRegion": "Bahasa & Wilayah",
+      "appearance": "Tampilan",
+      "datesNumbers": "Tanggal & Angka",
+      "investments": "Investasi",
+      "transactions": "Transaksi",
+      "application": "Aplikasi",
+      "defaultViews": "Tampilan default",
+      "mobileNavigation": "Navigasi seluler"
+    },
     "themeLabel": "Tema",
     "defaultCurrencyLabel": "Mata Uang Bawaan",
+    "defaultCurrencyHelp": "Digunakan untuk menjumlahkan akun, kekayaan bersih, dan laporan Anda, dan merupakan mata uang yang menjadi tujuan konversi kolom Kurs di halaman Mata Uang.",
+    "defaultCurrencyNoCrypto": "Mata uang kripto tidak ditawarkan di sini: total dan laporan selalu ditampilkan dalam mata uang fiat.",
     "preferredExchangesLabel": "Bursa Pilihan (untuk pencarian keamanan dokumen)",
     "preferredExchangesHelp": "Pilih hingga 3 bursa dalam urutan prioritas. Ini akan diprioritaskan saat mencari keamanan dokumen.",
     "exchangePriorityPlaceholder": "Prioritas {n}",
@@ -131,10 +160,22 @@
     "lockReconciledLabel": "Kunci transaksi yang direkonsiliasi",
     "lockReconciledTooltip": "Saat ini nonaktif, Monize memperingatkan Anda sebelum perubahan yang akan menggeser tanggal atau jumlah transaksi yang direkonsiliasi, lalu mengizinkannya. Saat aktif, transaksi yang direkonsiliasi sama sekali tidak dapat diedit, dihapus, atau dibatalkan rekonsiliasinya. Nonaktifkan lagi untuk melakukan koreksi.",
     "timeFormatLabel": "Format Waktu",
+    "timeFormatOptions": {
+      "h24": "24 jam (14:30)",
+      "h12": "12 jam (2:30 PM)"
+    },
     "recentTransactionsLabel": "Transaksi terbaru dalam isi-cepat",
     "recentTransactionsHelp": "Jumlah entri yang ditampilkan di popover tombol riwayat di samping kolom Penerima pada formulir transaksi.",
-    "saveButton": "Simpan Preferensi",
-    "savingButton": "Menyimpan...",
+    "mapProviderLabel": "Penyedia peta untuk alamat",
+    "mapProviderHelp": "Layanan peta mana yang terbuka saat Anda mengeklik alamat di peramban desktop. Ponsel dan tablet selalu membuka aplikasi peta mereka sendiri, apa pun pilihan Anda di sini. Otomatis menggunakan OpenStreetMap di desktop.",
+    "mapProviderOptions": {
+      "device": "Otomatis",
+      "apple": "Apple Maps",
+      "bing": "Bing Maps",
+      "google": "Google Maps",
+      "openstreetmap": "OpenStreetMap",
+      "waze": "Waze"
+    },
     "toasts": {
       "saved": "Preferensi disimpan",
       "saveFailed": "Gagal menyimpan preferensi",
@@ -182,10 +223,47 @@
       "highcontrast": "Kontras tinggi",
       "colorblind": "Aman untuk buta warna"
     },
-    "timezoneBrowserOption": "Gunakan zona waktu browser (terdeteksi otomatis sebagai {tz})"
+    "timezoneBrowserOption": "Gunakan zona waktu browser (terdeteksi otomatis sebagai {tz})",
+    "defaultViews": {
+      "intro": "Ini berlaku di browser mana pun yang tidak memiliki pengaturan sendiri, seperti perangkat baru atau jendela pribadi. Perubahan yang Anda buat di suatu halaman diingat oleh browser tersebut dan diutamakan.",
+      "rowsLabel": "Kepadatan baris",
+      "hideRegisterYearLabel": "Sembunyikan tahun pada tanggal register",
+      "chartCollapsedLabel": "Mulai dengan grafik di halaman Transaksi diciutkan",
+      "widgetsCollapsedLabel": "Mulai dengan info akun, penerima, dan kategori diciutkan",
+      "accountOpenTargetLabel": "Tampilan Akun Default",
+      "accountOpenTargetOptions": {
+        "register": "Tampilkan transaksinya",
+        "dashboard": "Tampilkan dasbornya"
+      },
+      "accountOpenTargetHelp": "Berlaku saat Anda mengklik akun di halaman Akun atau di Akun Favorit pada dasbor.",
+      "columnsLabel": "Kolom yang ditampilkan",
+      "columnsHelp": "Hapus centang untuk menyembunyikan kolom itu secara default. Menu Kolom pada tabel hanya mengubahnya di browser tersebut.",
+      "columnTables": {
+        "transactions": "Transaksi",
+        "investmentHoldings": "Kepemilikan investasi",
+        "investmentRegister": "Transaksi investasi"
+      },
+      "applyHere": "Gunakan default ini di browser ini",
+      "applyHereHelp": "Menghapus pengaturan tampilan yang disimpan browser ini, sehingga default di atas juga berlaku di sini.",
+      "appliedHere": "Browser ini sekarang menggunakan tampilan default Anda"
+    },
+    "mobileTabs": {
+      "intro": "Pilih hingga tiga tab untuk bilah di bagian bawah ponsel atau tablet. Tombol tambah dan Lainnya selalu ada.",
+      "slotLabel": "Tab {number}",
+      "none": "Tidak ada"
+    }
   },
   "notifications": {
     "heading": "Notifikasi",
+    "portfolioAlert": {
+      "title": "Pergerakan nilai investasi",
+      "description": "Beri tahu saya sekali sehari saat akun investasi saya bergerak melewati ambang batas, diukur dari perubahan pasar dan dividen (setoran dan penarikan dikecualikan).",
+      "enableLabel": "Aktifkan peringatan pergerakan investasi",
+      "thresholdLabel": "Beri tahu saat pergerakan harian minimal",
+      "saveError": "Tidak dapat menyimpan ambang batas",
+      "loadError": "Tidak dapat memuat pengaturan peringatan investasi",
+      "retry": "Coba lagi"
+    },
     "smtpNotConfigured": "Notifikasi surel tidak tersedia. SMTP belum dikonfigurasi oleh administrator.",
     "emailNotificationsTitle": "Notifikasi Surel",
     "emailNotificationsDescription": "Terima pengingat surel untuk tagihan yang akan datang dan peringatan anggaran",
@@ -212,6 +290,148 @@
       "digestUpdateFailed": "Gagal memperbarui preferensi ringkasan anggaran",
       "digestDayFailed": "Gagal memperbarui hari ringkasan",
       "testEmailFailed": "Gagal mengirim surel uji"
+    },
+    "push": {
+      "heading": "Push peramban",
+      "collapsedDevices": "{count, plural, =0 {Belum ada perangkat terdaftar} other {# perangkat terdaftar}}",
+      "collapsedDevicesWithRetired": "{count, plural, =0 {Belum ada perangkat terdaftar} other {# perangkat terdaftar}}, {retired, plural, other {# dipensiunkan}}",
+      "collapsedDevicesUnavailable": "Daftar perangkat tidak tersedia",
+      "diagnostics": {
+        "summary": "Diagnostik notifikasi",
+        "intro": "Apa yang dilaporkan peramban dan perangkat ini ke Monize tentang notifikasi. Segarkan setelah mengubah pengaturan, lalu gunakan Salin untuk mengirim laporan lengkap.",
+        "refresh": "Segarkan",
+        "copy": "Salin laporan",
+        "copied": "Diagnostik disalin ke papan klip"
+      },
+      "description": "Daftarkan perangkat ini agar Monize dapat menghubunginya bahkan saat aplikasi ditutup. Untuk saat ini hanya notifikasi uji yang dikirim lewat jalur ini; sisanya tetap masuk ke bel.",
+      "androidNotify": "Di Android, izin yang diberikan saja tidak cukup: sistem masih dapat menyembunyikan notifikasi. Tekan dan tahan ikon Monize di layar utama, ketuk Info aplikasi, lalu Notifikasi, dan pastikan semuanya aktif.",
+      "permissionHint": "Saat Anda mengaktifkannya, peramban akan meminta izin untuk menampilkan notifikasi. Tidak ada yang dikirim sebelum Anda mengizinkan.",
+      "enableButton": "Aktifkan di perangkat ini",
+      "enablingButton": "Mengaktifkan...",
+      "sendTestButton": "Kirim notifikasi uji coba",
+      "sendingTestButton": "Mengirim...",
+      "removeButton": "Hapus",
+      "removeDialog": {
+        "title": "Hapus Perangkat",
+        "message": "Hapus {device}? Perangkat ini tidak lagi menerima notifikasi push sampai push diaktifkan kembali di sana."
+      },
+      "thisDevice": "Perangkat ini",
+      "held": "Keluar di perangkat ini. Notifikasi push dilanjutkan saat Anda masuk lagi di sini.",
+      "unifiedpushBadge": "UnifiedPush",
+      "unnamedDevice": "Perangkat tanpa nama",
+      "noLiveDevices": "Belum ada perangkat terdaftar. Aktifkan push di perangkat ini untuk mengirim uji coba.",
+      "noDeliverableDevices": "Semua perangkat sudah keluar, jadi pengujian tidak dapat dikirim ke mana pun. Notifikasi push dilanjutkan di perangkat saat Anda masuk lagi di sana.",
+      "notConfigured": "Push peramban tidak tersedia di instans Monize ini. Administrator dapat mengaktifkannya di area Admin.",
+      "disabledByAdmin": "Administrator telah mematikan push peramban untuk instans Monize ini.",
+      "keyUnreadable": "Monize tidak dapat membaca pasangan kunci push instans ini, sehingga tidak ada yang terkirim. Administrator dapat memulihkannya dengan merotasi pasangan kunci di area Admin.",
+      "serverKeyMissing": "Instance Monize ini tidak memiliki kunci enkripsi yang dibutuhkan untuk membuka pasangan kunci push-nya, sehingga tidak ada yang dapat dikirim. Administrator harus menyetelnya di deployment dan memulai ulang.",
+      "statusUnavailable": "Monize tidak dapat memeriksa apakah push peramban tersedia. Muat ulang halaman untuk mencoba lagi.",
+      "devicesUnavailable": "Monize tidak dapat memuat perangkat terdaftar Anda. Semua hal lain di halaman ini tetap berfungsi; muat ulang untuk mencoba lagi.",
+      "unsupported": {
+        "unsupported": "Peramban ini tidak dapat menerima notifikasi push.",
+        "denied": "Notifikasi diblokir untuk Monize di peramban ini. Izinkan di pengaturan situs peramban, lalu muat ulang halaman ini.",
+        "ios-browser": "Di iPhone dan iPad, notifikasi push hanya berfungsi setelah Monize dipasang ke Layar Utama. Gunakan Bagikan, lalu Tambahkan ke Layar Utama, dan buka Monize dari sana.",
+        "shell": {
+          "electron": "Notifikasi tidak tersedia di jendela desktop Monize. Buka Monize di browser dari menu baki (\"Open in browser\"), dan notifikasi push tetap berfungsi di sana.",
+          "capacitor": "Notifikasi push belum tersedia di aplikasi Monize untuk Android. Buka Monize di browser untuk menerimanya."
+        }
+      },
+      "native": "Aplikasi desktop Monize menampilkan notifikasi Anda di PC ini selama aplikasi berjalan, juga saat jendelanya ditutup ke baki, jadi tidak ada yang perlu diaktifkan di sini. Pengaturan notifikasi Windows menentukan cara notifikasi tersebut muncul.",
+      "disabledReason": {
+        "GONE": "Tidak dapat dijangkau lagi. Aktifkan kembali push di peramban tersebut.",
+        "KEY_ROTATED": "Dinonaktifkan saat instans ini merotasi pasangan kunci push. Aktifkan kembali push di peramban tersebut.",
+        "FAILING": "Dinonaktifkan setelah kegagalan pengiriman berulang. Aktifkan kembali push di peramban tersebut."
+      },
+      "toasts": {
+        "enabled": "Notifikasi push diaktifkan di perangkat ini",
+        "enableFailed": "Tidak dapat mengaktifkan notifikasi push",
+        "permissionDenied": "Peramban ini memblokir notifikasi Monize. Izinkan di pengaturan situs lalu coba lagi.",
+        "permissionDeniedIos": "Notifikasi diblokir untuk Monize. Buka Pengaturan iOS, lalu Notifikasi, lalu Monize, untuk mengizinkannya.",
+        "permissionDismissed": "Notifikasi tidak diaktifkan. Pilih Izinkan saat peramban bertanya.",
+        "permissionNoPrompt": "Notifikasi tidak diaktifkan dan tidak ada permintaan yang muncul. Buka Pengaturan iOS, lalu Notifikasi, lalu Monize, dan izinkan di sana. Jika Monize tidak ada dalam daftar, hapus dari Layar Utama, tambahkan kembali (Bagikan, lalu Tambah ke Layar Utama) lalu coba sekali lagi.",
+        "removed": "Perangkat dihapus",
+        "removeFailed": "Tidak dapat menghapus perangkat",
+        "testSent": "{count, plural, other {Notifikasi uji coba dikirim ke # perangkat}}",
+        "testPartial": "Notifikasi uji coba menjangkau {delivered} dari {attempted} perangkat",
+        "testFailed": "Tidak dapat mengirim notifikasi uji coba",
+        "pushServiceRefused": "Layanan push browser menolak pendaftaran. Coba lagi sebentar; jika terus gagal, periksa pengaturan push browser.",
+        "pushServiceRefusedBrave": "Brave memblokir layanan push secara bawaan. Di Brave, buka Setelan, lalu Privasi dan keamanan, aktifkan \"Gunakan layanan Google untuk pesan push\", mulai ulang browser, lalu coba lagi."
+      },
+      "testResults": {
+        "heading": "Pengujian terakhir, per perangkat",
+        "status": {
+          "sent": "terkirim ke layanan push",
+          "expired": "langganan kedaluwarsa; aktifkan push di perangkat itu lagi",
+          "transient": "tidak terkirim (kesalahan sementara); coba lagi",
+          "unconfigured": "instans ini tidak dapat menandatangani pesan push saat ini"
+        }
+      },
+      "transport": {
+        "webpush": "Push web",
+        "unifiedpush": "UnifiedPush"
+      },
+      "facts": {
+        "endpoint": "Endpoint",
+        "transport": "Dikirim melalui",
+        "registeredIp": "Didaftarkan dari",
+        "registered": "Terdaftar",
+        "lastSeen": "Terakhir aktif",
+        "lastDelivery": "Pengiriman terakhir",
+        "noDelivery": "Belum ada yang dikirim",
+        "userAgent": "Peramban",
+        "unknownIp": "Tidak diketahui"
+      }
+    },
+    "preferences": {
+      "heading": "Cara memberi tahu saya",
+      "description": "Pilih jenis mana yang dikirim Monize lewat email atau push, dan seberapa sering.",
+      "categoryHeader": "Notifikasi",
+      "channels": {
+        "emailReport": "Email (laporan)",
+        "emailNotification": "Email (peringatan)",
+        "push": "Push",
+        "unifiedpush": "UnifiedPush",
+        "unifiedpushHint": "Notifikasi dikirim melalui aplikasi distributor yang Anda jalankan sendiri, seperti ntfy, alih-alih layanan push vendor peramban. Daftarkan endpoint di aplikasi tersebut untuk memakai kanal ini."
+      },
+      "categories": {
+        "PAYMENTS": "Tagihan dan terjadwal",
+        "BUDGETS": "Anggaran",
+        "SYSTEM": "Peringatan sistem",
+        "BALANCES": "Saldo akun",
+        "INVESTMENTS": "Nilai investasi",
+        "STRATEGIES": "Sinyal strategi",
+        "BANK_SYNC": "Koneksi bank",
+        "BANK_SYNC_ACTIVITY": "Hasil sinkronisasi bank",
+        "EMAIL_RECEIPTS": "Tanda terima email",
+        "BONDS": "Obligasi",
+        "AI_REVIEW": "Usulan tinjauan AI",
+        "WARRANTIES": "Pengingat garansi",
+        "SECURITY": "Keamanan",
+        "SHARED_EXPENSES": "Pengeluaran bersama"
+      },
+      "channelNotApplicable": "Tidak berlaku untuk jenis notifikasi ini",
+      "emailToggleLabel": "Email laporan untuk {category}",
+      "emailNotificationToggleLabel": "Email peringatan untuk {category}",
+      "pushToggleLabel": "Push untuk {category}",
+      "unifiedpushToggleLabel": "UnifiedPush untuk {category}",
+      "saveFailed": "Tidak dapat menyimpan setelan itu",
+      "emailUnavailable": "Aktifkan notifikasi email di atas untuk mengirimnya melalui email.",
+      "pushUnavailable": "Tidak ada perangkat yang terdaftar untuk push, jadi kanal ini tidak dapat mengirim apa pun.",
+      "throttle": {
+        "label": "Jeda",
+        "ariaLabel": "Jeda untuk {category}",
+        "hint": "Lewati peringatan atau push jika satu dari grup yang sama sudah dikirim dalam jendela ini.",
+        "options": {
+          "0": "Nonaktif",
+          "5": "5 menit",
+          "15": "15 menit",
+          "30": "30 menit",
+          "60": "1 jam",
+          "360": "6 jam",
+          "1440": "24 jam"
+        }
+      },
+      "pushEnableHint": "Peramban ini belum terdaftar untuk notifikasi push."
     }
   },
   "help": {
@@ -229,9 +449,10 @@
       "label": "Diskusi",
       "description": "Ajukan pertanyaan dan bagikan ide dengan komunitas."
     },
-    "wiki": {
-      "label": "Wiki",
-      "description": "Jelajahi panduan dan dokumentasi."
+    "docs": {
+      "label": "Dokumentasi",
+      "description": "Jelajahi panduan pengguna.",
+      "openOnline": "Buka di monize.net"
     },
     "supportBackup": {
       "label": "Buat cadangan dukungan",
@@ -280,7 +501,7 @@
   "supportBackup": {
     "title": "Buat cadangan dukungan",
     "howItWorks": "Menghasilkan salinan cadangan yang dide-identifikasi: nama disamarkan (dua karakter pertama dan terakhir dipertahankan), catatan/deskripsi/nomor rekening dihapus, dan setiap jumlah dikalikan satu faktor tersembunyi, sementara nilai publik (kurs, harga, suku bunga) tetap utuh. Berkas selalu dienkripsi dengan kata sandi di bawah dan dipulihkan seperti cadangan biasa. Ini melindungi dari paparan tak sengaja, bukan dari orang yang sudah mengenal Anda — tanggal, frekuensi, dan struktur dipertahankan agar bug tetap dapat direproduksi.",
-    "sectionsLabel": "Apa yang disertakan",
+    "sectionsLabel": "Bagian yang Disertakan",
     "sections": {
       "investments": "Investasi (sekuritas, kepemilikan, harga)",
       "scheduled": "Transaksi terjadwal",
@@ -325,6 +546,17 @@
       "description": "Hapus data keuangan dari akun Anda. Ini tidak dapat dibatalkan.",
       "openButton": "Hapus Data...",
       "alwaysDeletedHeading": "Berikut ini akan selalu dihapus:",
+      "alwaysDeletedItems": {
+        "transactions": "Semua transaksi dan pemisahan",
+        "scheduled": "Semua transaksi terjadwal/berulang",
+        "securities": "Semua efek, harga, kepemilikan, dan transaksi investasi",
+        "budgets": "Semua anggaran dan peringatan anggaran",
+        "monthlySummaries": "Ringkasan saldo akun bulanan",
+        "customReports": "Laporan khusus, tag, dan pemetaan impor",
+        "actionHistory": "Riwayat tindakan (batalkan/ulangi)",
+        "rules": "Semua aturan transaksi",
+        "institutions": "Institusi keuangan"
+      },
       "optionalHeading": "Opsional juga hapus:",
       "accountsOption": "Akun",
       "categoriesOption": "Kategori",
@@ -370,7 +602,8 @@
   },
   "apiAccess": {
     "heading": "Akses API",
-    "description": "Buat token akses pribadi untuk menghubungkan alat AI eksternal seperti Claude Desktop melalui MCP.",
+    "description": "Buat token akses pribadi untuk menghubungkan alat AI eksternal seperti Claude Desktop melalui MCP, atau untuk memanggil REST API di /api/v1.",
+    "restrictedNote": "Token baca hanya dapat membaca. Endpoint masuk, keamanan, admin, berbagi, dan pencadangan tidak tersedia untuk token.",
     "createTokenButton": "Buat Token",
     "mcpServerUrlLabel": "URL Server MCP",
     "mcpServerUrlHelp": "Gunakan URL ini saat mengonfigurasi klien MCP seperti Claude Code atau Claude Desktop.",
@@ -384,7 +617,7 @@
     "revokeButton": "Cabut",
     "revokeModal": {
       "title": "Cabut Token",
-      "message": "Token ini akan segera berhenti berfungsi. Koneksi MCP mana pun yang menggunakannya akan terputus.",
+      "message": "Token ini akan segera berhenti berfungsi. Koneksi MCP atau klien API mana pun yang menggunakannya akan terputus.",
       "confirmLabel": "Cabut"
     },
     "createModal": {
@@ -430,26 +663,27 @@
       "copyUrlFailed": "Gagal menyalin URL",
       "loadFailed": "Gagal memuat token API",
       "createFailed": "Gagal membuat token",
-      "revokeFailed": "Gagal mencabut token"
+      "revokeFailed": "Gagal mencabut token",
+      "reauthFailed": "Gagal mengonfirmasi autentikasi ulang"
+    },
+    "stepUp": {
+      "reason": "Token dapat mengakses akun Anda tanpa masuk, jadi konfirmasikan bahwa ini memang Anda sebelum membuatnya."
     },
     "relative": {
-      "never": "Tidak pernah",
-      "today": "Hari ini",
-      "yesterday": "Kemarin",
-      "daysAgo": "{count} hari yang lalu",
-      "monthsAgo": "{count} bulan yang lalu"
+      "never": "Tidak pernah"
     }
   },
   "autoBackup": {
     "heading": "Pencadangan Otomatis",
-    "description": "Cadangkan data Anda secara otomatis ke folder sesuai jadwal. Karena Monize berjalan di Docker, Anda harus memetakan folder host ke dalam kontainer sebagai volume (misalnya, -v /host/backups:/data/backups).",
-    "adminManagedNote": "Hanya administrator yang dapat mengubah pengaturan ini. Semua pengguna lain dicadangkan secara otomatis dengan jadwal dan kebijakan retensi yang sama, masing-masing ke folder sendiri.",
+    "description": "Satu jadwal untuk seluruh deployment: server mencadangkan data setiap akun ke penyimpanan di bawah ini. Karena Monize berjalan di Docker, folder lokal harus dipetakan ke dalam kontainer sebagai volume (mis. -v /host/backups:/data/backups).",
+    "adminManagedNote": "Hanya administrator yang dapat mengubah kebijakan ini, dan kebijakan ini berlaku untuk setiap akun pada deployment ini, masing-masing ke folder tersendiri.",
+    "demoDisabledNote": "Kontrol ini hanya-baca dalam mode demo.",
     "loadingText": "Memuat...",
     "enableLabel": "Aktifkan pencadangan otomatis",
     "backupFolderLabel": "Folder Cadangan",
     "backupFolderPlaceholder": "/data/backups",
-    "perUserFolderHelp": "Cadangan setiap pengguna disimpan di folder mereka sendiri di dalam folder ini, dinamai sesuai ID pengguna.",
-    "perUserFolderHelpWithPath": "Cadangan setiap pengguna disimpan di folder mereka sendiri di dalam folder ini, dinamai sesuai ID pengguna. Milik Anda: {path}",
+    "perUserFolderHelp": "Cadangan setiap akun disimpan di folder tersendiri di dalam folder ini, dinamai menurut ID akunnya.",
+    "perUserFolderHelpWithPath": "Cadangan setiap akun disimpan di folder tersendiri di dalam folder ini, dinamai menurut ID akunnya. Contoh: {path}",
     "browseButton": "Jelajahi...",
     "validateButton": "Validasi",
     "validatingButton": "Memvalidasi...",
@@ -471,26 +705,26 @@
       "monthlyHelp": "Satu per bulan disimpan"
     },
     "status": {
-      "heading": "Status",
-      "lastBackup": "Pencadangan terakhir",
-      "nextBackup": "Pencadangan berikutnya",
+      "heading": "Status Deployment",
+      "lastBackup": "Cadangan terbaru",
+      "nextBackup": "Cadangan terjadwal berikutnya",
       "error": "Kesalahan",
       "success": "Berhasil",
-      "failed": "Gagal",
-      "partial": "Sebagian"
+      "partial": "Sebagian",
+      "failed": "Gagal"
     },
-    "saveButton": "Simpan Pengaturan",
-    "savingButton": "Menyimpan...",
-    "runNowButton": "Jalankan Pencadangan Sekarang",
-    "runningButton": "Menjalankan Pencadangan...",
+    "saveButton": "Simpan Kebijakan",
+    "runNowButton": "Cadangkan Semua Akun Sekarang",
+    "runningButton": "Mencadangkan...",
     "toasts": {
-      "saved": "Pengaturan pencadangan otomatis disimpan",
-      "backupCreated": "Cadangan dibuat: {filename}",
+      "saved": "Kebijakan cadangan disimpan dan diterapkan ke semua akun",
       "folderValid": "Folder valid dan dapat ditulis",
       "loadFailed": "Gagal memuat pengaturan pencadangan otomatis",
       "saveFailed": "Gagal menyimpan pengaturan",
       "runFailed": "Gagal menjalankan pencadangan",
-      "browseFailed": "Gagal menjelajahi folder"
+      "browseFailed": "Gagal menjelajahi folder",
+      "backupRunFinished": "Mencadangkan {backedUp} dari {requested} akun",
+      "backupRunIncomplete": "Mencadangkan {backedUp} dari {requested}: {partial} sebagian, {failed} gagal. Periksa status di bawah."
     },
     "folderErrors": {
       "required": "Jalur folder diperlukan",
@@ -505,9 +739,22 @@
     },
     "noStorage": {
       "title": "Deployment ini tidak memiliki penyimpanan backup",
-      "body": "Backup otomatis akan ditulis ke {folderPath}, yang tidak dapat ditulisi oleh deployment ini. Administrator perlu memasang penyimpanan di sana sebelum jadwal dapat berjalan."
+      "body": "Cadangan otomatis akan ditulis ke {folderPath}, yang tidak dapat ditulisi oleh deployment ini. Administrator perlu menyediakan penyimpanan di sana sebelum jadwal dapat berjalan."
     },
-    "never": "Tidak pernah"
+    "never": "Tidak pernah",
+    "coverage": {
+      "accounts": "Terjadwal pada {scheduled} dari {total} akun aktif pada deployment ini.",
+      "unknown": "Sejauh mana kebijakan ini menjangkau tidak tersedia."
+    },
+    "storage": {
+      "heading": "Penyimpanan Cadangan",
+      "providerLocal": "Folder lokal",
+      "providerS3": "Penyimpanan objek kompatibel S3",
+      "providerUnknown": "Penyimpanan",
+      "localHelp": "Ditentukan oleh BACKUP_STORAGE_PROVIDER. Cadangan setiap akun disimpan di folder tersendiri di dalam folder ini, dinamai menurut ID akunnya.",
+      "fixedHelp": "Ditentukan oleh BACKUP_STORAGE_PROVIDER. Bucket dan awalan kunci adalah milik deployment, jadi tidak ada folder untuk dipilih di sini; cadangan setiap akun berada di bawah awalan kunci tersendiri.",
+      "artifactCount": "Penyimpanan ini kini memuat {count} berkas cadangan untuk akun Anda. Mengganti penyimpanan tidak memindahkan cadangan yang sudah ada."
+    }
   },
   "backupRestore": {
     "heading": "Cadangkan & Pulihkan",
@@ -557,8 +804,8 @@
       },
       "toasts": {
         "success": "Cadangan berhasil diunduh",
-        "incomplete": "Backup terunduh, tetapi TIDAK LENGKAP: {unusable} dari {total} lampiran tidak dapat disimpan utuh ({missing} hilang, {inconsistent} gagal pemeriksaan integritas). Jangan perlakukan berkas ini sebagai backup lengkap — perbaiki penyimpanan lampiran dan ekspor ulang.",
-        "failed": "Gagal membuat cadangan"
+        "failed": "Gagal membuat cadangan",
+        "incomplete": "Backup terunduh, tetapi TIDAK LENGKAP: {unusable} dari {total} lampiran tidak dapat disimpan utuh ({missing} hilang, {inconsistent} gagal pemeriksaan integritas). Jangan perlakukan berkas ini sebagai backup lengkap — perbaiki penyimpanan lampiran dan ekspor ulang."
       }
     },
     "restore": {
@@ -580,16 +827,130 @@
         "pleaseEnterPassword": "Silakan masukkan kata sandi Anda untuk mengonfirmasi",
         "encryptedNeedsPassword": "Cadangan ini dienkripsi. Masukkan kata sandi yang digunakan saat membuatnya di kolom \"Kata sandi cadangan\", lalu coba lagi.",
         "failed": "Gagal memulihkan cadangan",
+        "interrupted": "Pemulihan terputus sebelum server merespons. Pemulihan berlaku seluruhnya atau tidak sama sekali, jadi data Anda sudah dipulihkan sepenuhnya atau tidak berubah. Muat ulang halaman untuk memeriksanya sebelum mencoba lagi.",
         "reauthRedirect": "Anda akan diarahkan ke penyedia identitas untuk memastikan ini benar Anda. Pilih kembali berkas cadangan setelah Anda kembali."
-      }
+      },
+      "selectedFile": "Dipilih: {filename}"
     },
     "restoreResult": {
       "title": "Pemulihan Selesai",
-      "description": "Data Anda telah berhasil dipulihkan. Berikut ringkasan apa yang dipulihkan:",
       "totalRecords": "Total rekaman",
-      "doneButton": "Selesai",
       "skippedAttachments": "{count, plural, other {# lampiran tidak dipulihkan}}: backup tidak memuat byte yang dapat digunakan untuk lampiran tersebut — saat diekspor lampiran hilang atau gagal checksum, atau berkas dibuat sebelum backup mandiri. Ekspor backup baru setelah penyimpanan lampiran sehat.",
-      "unusableAiProviderKeys": "{count, plural, other {# penyedia AI dipulihkan tanpa kunci API yang dapat digunakan}}: cadangan ini dibuat sebelum kunci penyedia ikut disertakan, jadi kunci yang tersimpan milik server yang membuat berkasnya, atau server ini tidak punya kunci enkripsi untuk menyimpannya. Buka Pengaturan → Penyedia AI lalu masukkan kembali kunci API."
+      "unusableAiProviderKeys": "{count, plural, other {# penyedia AI dipulihkan tanpa kunci API yang dapat digunakan}}: cadangan ini dibuat sebelum kunci penyedia ikut disertakan, jadi kunci yang tersimpan milik server yang membuat berkasnya, atau server ini tidak punya kunci enkripsi untuk menyimpannya. Buka Pengaturan → Penyedia AI lalu masukkan kembali kunci API.",
+      "unlinkedBondSecurities": "{count, plural, other {# sekuritas obligasi dipulihkan tanpa tertaut ke instrumen obligasinya}}: katalog obligasi di server ini tidak memuat seri tersebut (atau memuatnya dalam mata uang lain), sehingga mesin obligasi tidak lagi menilainya dan harga hasil perhitungannya tidak dipulihkan. Buka setiap sekuritas dan tautkan lagi ke instrumen obligasi.",
+      "unlinkedBondSeries": "{count, plural, other {# transaksi obligasi kehilangan serinya}} karena seri tidak dapat diperoleh dari sumber resmi. Transaksi dipulihkan tanpa seri dan tetap tanpa seri sampai Anda mengambilnya.",
+      "unrecoveredBondSeries": "Seri obligasi yang disebut dalam cadangan dan tidak dapat diambil: {count}.",
+      "unrecoveredBondSeriesItem": "{series} ({country}): {reason}",
+      "unrecoveredBondSeriesMore": "dan {count} lainnya",
+      "unrecoveredBondSeriesAction": "Untuk memulihkannya, buka sekuritas obligasi, ambil seri di halamannya (Segarkan), lalu pilih seri pada transaksi yang belum memilikinya.",
+      "unrecoveredBondSeriesReason": {
+        "not-published": "penerbit belum menerbitkan seri ini",
+        "source-unavailable": "sumber resmi tidak menjawab; coba lagi nanti",
+        "no-adapter": "server ini tidak memiliki sumber untuk negara penerbit ini",
+        "refused": "jawaban sumber resmi tidak diterima",
+        "rate-limited": "sumber resmi meminta untuk memperlambat; coba lagi nanti",
+        "not-attempted": "terlalu banyak seri dalam satu pemulihan; tidak dicoba",
+        "other": "alasan tidak diketahui"
+      },
+      "doneButton": "Selesai",
+      "unlinkedBondSecuritiesList": "Sekuritas terdampak: {symbols}.",
+      "unlinkedBondSecuritiesMore": "dan {count} lagi",
+      "currencyKindMismatchAccounts": "{count, plural, other {# akun dipulihkan dengan mata uang yang jenisnya tidak cocok dengan tipe akunnya}}: akun kripto memerlukan mata uang kripto, dan akun lainnya memerlukan mata uang fiat. Di server ini mata uang tersebut berjenis sebaliknya. Ubah mata uang akun, atau jenis mata uang di halaman Mata Uang.",
+      "currencyKindMismatchAccountsList": "Akun terdampak: {names}.",
+      "currencyKindMismatchSecurities": "{count, plural, other {# sekuritas dihargai dalam mata uang kripto}} di server ini, padahal sekuritas memerlukan mata uang fiat. Ubah mata uang sekuritas, atau jenis mata uang di halaman Mata Uang.",
+      "currencyKindMismatchSecuritiesList": "Sekuritas terdampak: {symbols}.",
+      "currencyKindMismatchMore": "dan {count} lagi",
+      "currencyKindMismatchDefaultCurrency": "Mata uang bawaan Anda, {code}, adalah mata uang kripto di server ini, padahal total dan laporan selalu ditampilkan dalam mata uang fiat. Pilih Mata Uang Bawaan fiat di Pengaturan → Preferensi.",
+      "counts": {
+        "sharedGroups": "Grup pengeluaran bersama",
+        "sharedParticipants": "Peserta grup",
+        "sharedEntries": "Entri grup",
+        "sharedAllocations": "Pembagian pengeluaran",
+        "sharedActivity": "Aktivitas grup",
+        "sharedPeople": "Kontak pengeluaran bersama",
+        "sharedPersonLinks": "Kontak tertaut",
+        "sharedIntegrations": "Koneksi ke keuangan pribadi",
+        "sharedPostings": "Pencatatan pribadi pengeluaran bersama",
+        "sharedLedgerLinks": "Transaksi pribadi tertaut",
+        "budgetBuckets": "Kantong anggaran",
+        "budgetPeriodBuckets": "Kantong periode anggaran"
+      }
+    },
+    "storedBackups": {
+      "heading": "Cadangan Otomatis",
+      "description": "Cadangan yang dibuat server ini untuk Anda sesuai jadwalnya sendiri. Unduh salah satu untuk menyimpan salinan Anda sendiri, atau pulihkan darinya melalui formulir di bawah.",
+      "adminScheduleNote": "Pengaturan cadangan otomatis ada di <link>Admin → Cadangan</link>.",
+      "loading": "Memuat cadangan...",
+      "loadFailed": "Gagal memuat cadangan yang tersimpan di server",
+      "retryButton": "Coba Lagi",
+      "empty": "Server ini belum menyimpan cadangan otomatis apa pun untuk Anda.",
+      "columns": {
+        "filename": "Berkas",
+        "modified": "Tanggal Diubah",
+        "size": "Ukuran",
+        "actions": "Tindakan"
+      },
+      "downloadButton": "Unduh",
+      "restoreButton": "Pulihkan",
+      "workingButton": "Memproses...",
+      "downloadFailed": "Gagal mengunduh cadangan",
+      "offsite": {
+        "disclosure": "Tujuan luar lokasi",
+        "disclosureDescription": "Setelah setiap pencadangan otomatis yang lengkap, salinan terenkripsi dapat dikirim ke penyimpanan S3, melalui email, atau keduanya: tiga salinan, dua jenis penyimpanan, salah satunya di luar mesin ini. Hanya cadangan terenkripsi yang dikirim.",
+        "encryptionUnavailable": "Server ini tidak memiliki kunci enkripsi, sehingga kredensial untuk bucket milik Anda sendiri tidak dapat disimpan. Bucket milik server ini dan salinan lewat email tetap berfungsi.",
+        "loading": "Memuat tujuan luar lokasi Anda...",
+        "loadFailed": "Gagal memuat tujuan cadangan luar lokasi Anda",
+        "retryButton": "Coba Lagi",
+        "demoNote": "Tujuan luar lokasi tidak dapat diubah dalam mode demo.",
+        "saveButton": "Simpan Tujuan",
+        "saved": "Tujuan luar lokasi disimpan",
+        "saveFailed": "Gagal menyimpan tujuan cadangan luar lokasi Anda",
+        "s3": {
+          "heading": "Penyimpanan S3",
+          "modeLabel": "Tujuan Salinan",
+          "modeOff": "Nonaktif",
+          "modeDeployment": "Bucket server ini",
+          "modeOwn": "Bucket saya sendiri",
+          "deploymentUnavailable": "Server ini tidak memiliki bucket luar lokasi sendiri, jadi administrator harus menyiapkannya. Anda dapat memakai bucket milik Anda sendiri sebagai gantinya.",
+          "bucketLabel": "Bucket",
+          "regionLabel": "Wilayah",
+          "regionHelp": "Banyak layanan yang kompatibel dengan S3 mengabaikan ini.",
+          "prefixLabel": "Awalan kunci",
+          "prefixHelp": "Folder opsional di dalam bucket, agar cadangan Anda dapat berbagi bucket dengan data lain.",
+          "endpointLabel": "Endpoint",
+          "endpointHelp": "Hanya untuk layanan yang kompatibel dengan S3 seperti MinIO, R2, atau B2. Biarkan kosong untuk AWS.",
+          "forcePathStyleLabel": "Gunakan pengalamatan gaya path",
+          "forcePathStyleHelp": "Dibutuhkan oleh MinIO dan beberapa layanan lain yang kompatibel dengan S3.",
+          "accessKeyIdLabel": "ID kunci akses",
+          "secretAccessKeyLabel": "Kunci akses rahasia",
+          "storedPlaceholder": "•••• tersimpan",
+          "credentialsHelp": "Kredensial disimpan terenkripsi di server ini dan tidak pernah ditampilkan lagi. Biarkan kotak ini kosong untuk mempertahankan yang sudah tersimpan.",
+          "clearCredentialsButton": "Hapus Kredensial Tersimpan",
+          "clearConfirmTitle": "Hapus kredensial tersimpan?",
+          "clearConfirmMessage": "Server ini akan melupakan ID kunci akses dan kunci akses rahasia Anda. Tidak ada salinan lagi yang dikirim ke bucket Anda sampai Anda memasukkannya kembali.",
+          "credentialsCleared": "Kredensial tersimpan dihapus",
+          "clearFailed": "Gagal menghapus kredensial tersimpan"
+        },
+        "email": {
+          "heading": "Email",
+          "toggleLabel": "Kirimi saya email berisi salinan setiap cadangan otomatis yang selesai",
+          "addressLabel": "Kirim salinan ke",
+          "addressPlaceholder": "pengguna@contoh.com",
+          "sizeNote": "Cadangan yang melebihi batas ukuran server ini tidak dilampirkan; Anda menerima pemberitahuan yang menyebutkan nama berkasnya."
+        },
+        "rowStatus": {
+          "iconTitle": "{destination}: {status}",
+          "destinationS3": "S3",
+          "destinationEmail": "Email",
+          "statusPending": "Menunggu",
+          "statusUploading": "Mengirim",
+          "statusUploaded": "Tersalin",
+          "statusFailed": "Gagal",
+          "statusConflict": "Konflik",
+          "statusSkippedUnencrypted": "Dilewati: tidak terenkripsi",
+          "statusSkippedTooLarge": "Dilewati: terlalu besar"
+        }
+      }
     }
   },
   "sharedAccess": {
@@ -659,16 +1020,57 @@
       "sections": "Bagian",
       "shared": "Data bersama"
     },
+    "ops": {
+      "read": "Baca",
+      "create": "Buat",
+      "edit": "Ubah",
+      "delete": "Hapus",
+      "joint": "Bersama"
+    },
     "sections": {
-      "description": "Berikan akses hanya-baca ke seluruh bagian aplikasi. Data yang dicakup akun juga masih memerlukan akses per-akun."
+      "description": "Berikan akses hanya-baca ke seluruh bagian aplikasi. Data yang dicakup akun juga masih memerlukan akses per-akun.",
+      "bills": {
+        "label": "Tagihan & Setoran",
+        "description": "Transaksi terjadwal untuk akun yang diberikan"
+      },
+      "investments": {
+        "label": "Investasi",
+        "description": "Kepemilikan dan transaksi investasi untuk akun yang diberikan"
+      },
+      "budgets": {
+        "label": "Anggaran",
+        "description": "Angka anggaran hanya-baca"
+      },
+      "reports": {
+        "label": "Laporan",
+        "description": "Laporan hanya-baca"
+      },
+      "ai": {
+        "label": "Asisten AI",
+        "description": "Menggunakan penyedia AI yang dikonfigurasi pemilik"
+      },
+      "aiRequiresFullAccess": "Asisten AI membaca seluruh akun dan bagian, sehingga hanya menjawab untuk delegasi ini setelah ia dapat membaca semua akun Anda dan setiap bagian lainnya.",
+      "warranties": {
+        "label": "Garansi",
+        "description": "Garansi beserta dokumen dan klaimnya. Pembelian yang ditautkan hanya ditampilkan untuk akun yang dapat dibaca oleh delegasi."
+      },
+      "toggleLabel": "Bagian {section}"
     },
     "accounts": {
       "noAccounts": "Tidak ada akun untuk diberikan.",
       "grantAll": "Berikan semua",
-      "jointRequiresFullAccount": "Akun bersama hanya dapat dibagikan dengan pengguna yang memiliki akun Monize sendiri"
+      "jointRequiresFullAccount": "Akun bersama hanya dapat dibagikan dengan pengguna yang memiliki akun Monize sendiri",
+      "grantAllLabel": "{op} semua akun {type}",
+      "grantLabel": "Akses {op} ke {account}"
     },
     "shared": {
-      "description": "BACA penerima, kategori dan tag selalu diizinkan. Ini mengendalikan buat/edit/hapus."
+      "description": "BACA penerima, kategori dan tag selalu diizinkan. Ini mengendalikan buat/edit/hapus.",
+      "toggleLabel": "{op} {resource}",
+      "resources": {
+        "payees": "Penerima",
+        "categories": "Kategori",
+        "tags": "Tag"
+      }
     },
     "saveButton": "Simpan",
     "toasts": {
@@ -687,11 +1089,13 @@
     "emergencyAccess": "Akses Darurat",
     "apiAccess": "Akses API",
     "aiSettings": "Pengaturan AI",
+    "emailReceipts": "Struk Surel",
     "backupRestore": "Cadangkan & Pulihkan",
-    "autoBackup": "Pencadangan Otomatis",
     "help": "Bantuan & Dukungan",
     "dangerZone": "Zona Berbahaya",
-    "about": "Tentang"
+    "about": "Tentang",
+    "payeeLookup": "Pencarian penerima",
+    "bankSync": "Sinkronisasi Bank"
   },
   "page": {
     "title": "Pengaturan",
@@ -715,6 +1119,14 @@
       "title": "Pengaturan AI",
       "description": "Konfigurasikan penyedia AI, kelola kunci API, dan lihat statistik penggunaan."
     },
+    "emailReceiptsCard": {
+      "title": "Struk Surel",
+      "description": "Hubungkan kotak surel untuk konfirmasi pesanan dan kelola profil yang membacanya."
+    },
+    "bankSyncCard": {
+      "title": "Sinkronisasi Bank",
+      "description": "Hubungkan bank Anda melalui Open Banking dan impor transaksi yang sudah dibukukan ke akun Anda."
+    },
     "delegateSecurityError": "Tidak dapat memuat pengaturan keamanan Anda.",
     "toasts": {
       "securityLoadFailed": "Gagal memuat pengaturan keamanan",
@@ -732,6 +1144,14 @@
       "enabled": "Gelembung obrolan mengambang diaktifkan",
       "disabled": "Gelembung obrolan mengambang dinonaktifkan",
       "saveFailed": "Tidak dapat memperbarui pengaturan gelembung obrolan"
+    },
+    "trivia": {
+      "title": "Trivia AI",
+      "subtitle": "Mengisi widget Trivia di dasbor Anda dengan fakta tentang kekayaan bersih dan investasi Anda, dibuat ulang setiap pagi dan dirangkai oleh AI jika Anda telah menyiapkan penyedia. Tambahkan widget lewat Sesuaikan di dasbor. Jika dimatikan, widget tidak menampilkan fakta dan tidak ada penyedia yang dihubungi.",
+      "toggleLabel": "Isi widget Trivia di dasbor dengan trivia AI",
+      "enabled": "Trivia AI diaktifkan",
+      "disabled": "Trivia AI dinonaktifkan",
+      "saveFailed": "Tidak dapat memperbarui pengaturan trivia AI"
     },
     "demoRestricted": {
       "heading": "Dibatasi dalam Mode Demo",
@@ -812,7 +1232,6 @@
       "editMessageButton": "Edit",
       "messagePlaceholder": "Catatan, instruksi, lokasi dokumen penting...",
       "maxCharsNote": "Maksimum 4000 karakter. Disimpan terenkripsi saat istirahat.",
-      "cancelButton": "Batal",
       "saveButton": "Simpan pesan",
       "toasts": {
         "saved": "Pesan disimpan",
@@ -857,7 +1276,7 @@
       "grantStatus": "Status pemberian: ",
       "unknown": "tidak diketahui",
       "never": "tidak pernah",
-      "daysAgo": "{count} hari yang lalu",
+      "withRelative": "{timestamp} ({relative})",
       "grantedOn": "diberikan pada {timestamp}",
       "notYetGranted": "belum diberikan",
       "timerNote": "Timer direset secara otomatis setiap kali Anda menggunakan aplikasi -- masuk, melihat halaman, mencatat transaksi, apa pun yang diautentikasi."
@@ -874,6 +1293,17 @@
     },
     "stepUp": {
       "reason": "Verifikasi ulang identitas Anda untuk melihat atau mengedit pesan akses darurat Anda."
+    },
+    "validation": {
+      "wholeDays": "Hanya hari penuh",
+      "minDays": "{min, plural, other {Minimal # hari}}",
+      "maxDays": "{max, plural, other {Maksimal # hari}}",
+      "reminderBeforeGrant": "Hari pengingat harus kurang dari hari pemberian akses",
+      "messageMax": "Pesan maksimal {max} karakter",
+      "firstNameRequired": "Nama depan wajib diisi",
+      "firstNameMax": "Nama depan maksimal {max} karakter",
+      "emailInvalid": "Masukkan alamat email yang valid",
+      "emailMax": "Email maksimal {max} karakter"
     },
     "toasts": {
       "loadFailed": "Gagal memuat akses darurat",
@@ -908,6 +1338,10 @@
       "editButton": "Edit",
       "deleteButton": "Hapus"
     },
+    "deleteDialog": {
+      "title": "Hapus Penyedia AI",
+      "message": "Hapus {name}? Kunci API yang tersimpan ikut dihapus. Tindakan ini tidak dapat dibatalkan."
+    },
     "configForm": {
       "addTitle": "Tambah Penyedia AI",
       "editTitle": "Edit Penyedia",
@@ -919,6 +1353,7 @@
       "ollamaCloudNote": "Nama model harus menyertakan akhiran -cloud (misalnya gpt-oss:20b-cloud).",
       "apiKeyLabel": "Kunci API",
       "baseUrlLabel": "URL Dasar",
+      "baseUrlPrivateNote": "Alamat pribadi atau lokal (localhost, 192.168.x.x, atau nama kontainer) hanya berfungsi untuk administrator, atau jika operator server mengizinkan alamat tersebut. Jika tidak, gunakan alamat yang dapat dijangkau dari internet.",
       "priorityLabel": "Prioritas",
       "priorityHelp": "Angka lebih kecil = prioritas lebih tinggi. Digunakan untuk urutan cadangan.",
       "costRatesHeading": "Tarif biaya (opsional)",
@@ -1027,5 +1462,468 @@
       "all": "Sepanjang waktu"
     },
     "estCostTooltip": "Diperkirakan menggunakan tarif biaya yang Anda konfigurasikan pada setiap penyedia. Tidak termasuk aktivitas apa pun di mana tidak ada tarif yang cocok."
+  },
+  "payeeLookup": {
+    "title": "Pencarian penerima",
+    "subtitle": "Dari mana situs web, alamat, email, dan nomor telepon penerima berasal, dan kapan pencarian berjalan sendiri.",
+    "saved": "Pengaturan pencarian penerima disimpan",
+    "saveFailed": "Tidak dapat menyimpan pengaturan pencarian penerima",
+    "loadFailed": "Tidak dapat memuat pengaturan pencarian penerima. Muat ulang halaman untuk mencoba lagi.",
+    "googlePlaces": {
+      "toggleLabel": "Gunakan Google Places untuk pencarian penerima",
+      "notConfigured": "Tambahkan kunci API Google Places untuk mencari bisnis di direktori Google, bukan lewat penyedia AI Anda.",
+      "operatorManaged": "Dikonfigurasi oleh administrator server ini. Anda dapat menonaktifkannya untuk penerima Anda sendiri.",
+      "configure": "Siapkan",
+      "edit": "Ubah",
+      "removeKey": "Hapus kunci",
+      "usage": "Terpakai bulan ini: {used} dari {cap}",
+      "usageNoCap": "Terpakai bulan ini: {used}. Tanpa batas bulanan.",
+      "keyUnreadable": "Server ini tidak dapat membaca kunci API yang tersimpan. Ini terjadi saat cadangan dipulihkan ke instance lain, atau setelah kunci enkripsi berubah. Masukkan kembali kuncinya untuk memperbaikinya.",
+      "encryptionUnavailable": "Server ini tidak memiliki kunci enkripsi, jadi kunci API tidak dapat disimpan dengan aman. Minta administrator Anda menyiapkannya.",
+      "modalTitle": "Google Places",
+      "modalSubtitle": "Monize mengirim nama penerima dan alamat yang sudah Anda miliki ke Google, dan tidak menyimpan apa pun di sana.",
+      "apiKeyLabel": "Kunci API",
+      "apiKeyPlaceholder": "Tempel kunci API Google Places Anda",
+      "apiKeyHelp": "Buat kunci di konsol Google Cloud dengan Places API (New) diaktifkan. Biarkan kosong untuk mempertahankan kunci yang sudah disimpan.",
+      "capToggleLabel": "Batasi permintaan tiap bulan",
+      "capHelp": "Google memberikan {free} permintaan Text Search gratis per bulan untuk bidang yang dibutuhkan pencarian ini. Setelah batas, pencarian kembali ke penyedia AI Anda.",
+      "capLabel": "Permintaan per bulan",
+      "capRange": "Masukkan angka antara {min} dan {max}.",
+      "test": "Uji",
+      "testing": "Menguji...",
+      "testSuccess": "Google menerima kuncinya.",
+      "save": "Simpan",
+      "cancel": "Batal",
+      "setupInstructions": "Petunjuk penyiapan"
+    },
+    "automatic": {
+      "title": "Pencarian kontak penerima otomatis",
+      "subtitle": "Cari otomatis situs web, alamat, email, dan nomor telepon penerima baru. Nama penerima dikirim, bersama catatan, situs web, alamat, email, dan telepon yang sudah dimilikinya, agar pencarian dapat membedakan bisnis dan lokasi yang tepat.",
+      "toggleLabel": "Aktifkan pencarian kontak penerima otomatis",
+      "enabled": "Pencarian kontak penerima otomatis diaktifkan",
+      "disabled": "Pencarian kontak penerima otomatis dinonaktifkan",
+      "saveFailed": "Tidak dapat memperbarui pengaturan pencarian kontak penerima",
+      "noSource": "Aktifkan sebuah sumber di atas untuk mencari penerima secara otomatis. Jika keduanya nonaktif, tidak ada yang dapat menjawab pencarian."
+    },
+    "order": {
+      "title": "Sumber mana yang menjawab lebih dulu",
+      "placesTitle": "Google Places",
+      "placesHelp": "Fakta direktori, lebih murah per pencarian. Google tidak menyimpan alamat email.",
+      "aiTitle": "Penyedia AI yang ada",
+      "aiHelp": "Dapat menemukan alamat email, dan memakan satu panggilan model untuk setiap pencarian.",
+      "aiToggleLabel": "Gunakan penyedia AI untuk pencarian penerima",
+      "aiProviderLabel": "Penyedia yang digunakan",
+      "aiProviderAny": "Penyedia mana pun, sesuai prioritas",
+      "moveUp": "Naik",
+      "moveDown": "Turun"
+    }
+  },
+  "bankSync": {
+    "backLink": "Kembali ke Pengaturan",
+    "title": "Sinkronisasi Bank",
+    "subtitle": "Impor transaksi yang sudah dibukukan dari rekening bank Anda melalui Open Banking",
+    "demoRestricted": {
+      "heading": "Dibatasi dalam Mode Demo",
+      "body": "Sinkronisasi bank dinonaktifkan dalam mode demo."
+    },
+    "loadFailed": {
+      "title": "Tidak dapat memuat sinkronisasi bank",
+      "retry": "Coba lagi"
+    },
+    "credentials": {
+      "title": "Aplikasi Enable Banking",
+      "subtitle": "Monize membaca rekening bank Anda melalui aplikasi Enable Banking milik Anda sendiri. Daftarkan satu di panel kontrol Enable Banking, lalu masukkan ID aplikasi dan kunci privatnya di sini.",
+      "notConfigured": "Belum ada aplikasi yang disiapkan.",
+      "applicationId": "ID Aplikasi",
+      "keyStored": "Kunci privat tersimpan.",
+      "keyMissing": "Tidak ada kunci privat yang tersimpan.",
+      "configure": "Siapkan kredensial",
+      "edit": "Edit kredensial",
+      "remove": "Hapus kredensial",
+      "test": "Uji koneksi",
+      "testing": "Menguji...",
+      "encryptionUnavailable": "Server ini tidak memiliki kunci enkripsi yang dikonfigurasi, sehingga kredensial tidak dapat disimpan.",
+      "redirectUrlLabel": "URL Pengalihan",
+      "redirectUrlHelp": "Daftarkan URL persis ini sebagai URL pengalihan di panel kontrol Enable Banking. Bank Anda mengembalikan Anda ke URL ini setelah Anda memberi otorisasi akses.",
+      "redirectUrlNotPublic": "URL pengalihan tidak harus dapat diakses dari internet. Hanya browser Anda yang membukanya.",
+      "redirectUrlHttpWarning": "Aplikasi “Production” hanya menerima URL pengalihan https. URL ini memakai http, jadi hanya berfungsi dengan aplikasi “Sandbox”. Atur PUBLIC_APP_URL ke alamat https Monize.",
+      "copy": "Salin",
+      "copied": "Disalin",
+      "copyFailed": "Tidak dapat menyalin",
+      "testSuccess": "Aplikasi berfungsi: {name}",
+      "testSuccessNoName": "Aplikasi berfungsi.",
+      "testRedirectMissing": "Aplikasi berfungsi, tetapi URL pengalihan di atas belum terdaftar untuknya. Tambahkan di panel kontrol Enable Banking.",
+      "testFailed": "Penyedia tidak menerima kredensial ini.",
+      "testError": "Tidak dapat menguji kredensial",
+      "saved": "Kredensial disimpan. Gunakan Uji koneksi untuk memeriksanya.",
+      "saveFailed": "Tidak dapat menyimpan kredensial",
+      "removed": "Kredensial dihapus",
+      "removeFailed": "Tidak dapat menghapus kredensial",
+      "removeConfirm": {
+        "title": "Hapus kredensial",
+        "message": "ID aplikasi dan kunci privat yang tersimpan dihapus dari Monize. Anda perlu memasukkannya lagi sebelum dapat menghubungkan bank atau menyinkronkan.",
+        "confirm": "Hapus"
+      },
+      "help": {
+        "show": "Tampilkan bantuan penyiapan",
+        "hide": "Sembunyikan bantuan penyiapan",
+        "whatIsTitle": "Apa itu Enable Banking?",
+        "whatIsBody": "Enable Banking adalah perusahaan berlisensi di UE sebagai penyedia layanan informasi rekening (AISP) berdasarkan PSD2. Perusahaan ini terhubung ke bank Anda atas nama Anda dan memberi Monize akses hanya-baca ke rekening, saldo, dan transaksi Anda. Anda masuk di bank Anda sendiri. Monize dan Enable Banking tidak pernah melihat kata sandi bank Anda. Enable Banking bekerja dengan bank di Wilayah Ekonomi Eropa.",
+        "dataFlow": "Setelah Anda menghubungkan bank, Enable Banking dapat membaca data bank Anda: data rekening Anda melewati layanannya dalam perjalanan ke Monize. Enable Banking menyatakan bahwa mereka tidak menyimpan data ini. Ketentuan mereka berlaku: <terms>ketentuan API Enable Banking</terms>.",
+        "whatIsFree": "Untuk penggunaan pribadi, aplikasi gratis dalam mode produksi terbatas sudah cukup. Aplikasi ini hanya membaca rekening yang Anda tautkan kepadanya di panel kontrol.",
+        "setupTitle": "Cara menyiapkannya",
+        "step1": "Buat akun di <link>Enable Banking</link> (pilih “Get Started” dan tunggu email konfirmasi). Lalu masuk ke panel kontrol dan buka “API applications”.",
+        "step2": "Pilih “Production”. Monize membaca rekening bank asli Anda hanya melalui aplikasi Production. Pilih “Sandbox” hanya jika Anda ingin mencoba koneksi terlebih dahulu: Sandbox hanya menampilkan data demo dari bank uji coba.",
+        "step3": "Biarkan “Generate in the browser” terpilih untuk kunci privat.",
+        "step4": "Masukkan nilai di bawah ini ke dalam formulir. Untuk “Production”, semua kolom wajib diisi.",
+        "registrationValuesTitle": "Nilai yang ditempel ke formulir",
+        "registrationValuesNote": "Label dan nilai tetap dalam bahasa Inggris karena panel kontrol berbahasa Inggris.",
+        "registrationTemplatesNote": "Kedua URL mengarah ke templat Monize. Dalam mode terbatas, Enable Banking tidak memeriksanya. Jika orang lain menggunakan instans Monize Anda, terbitkan halaman Anda sendiri dengan nama Anda.",
+        "emailPlaceholder": "Alamat email Anda",
+        "copyField": "Salin {field}",
+        "step5": "Pilih “Register”. Browser Anda menyimpan file kunci privat (.pem). Jaga kerahasiaan file ini.",
+        "step6": "Untuk “Production”, aplikasi baru menampilkan “Inactive”. Pilih “Activate by linking accounts”, pilih negara, bank Anda, dan jenis penggunaan (“personal” untuk rekening pribadi, “business” untuk rekening perusahaan), lalu pilih “Link”. Kemudian masuk ke bank Anda dan otorisasi rekening Anda. Jangan pilih “Request activation”: itu meminta ketersediaan umum, yang tidak diperlukan untuk penggunaan pribadi. Tanpa rekening yang ditautkan, bank tidak mengembalikan rekening apa pun. Nanti, saat Anda menghubungkan bank di Monize, pilih jenis penggunaan yang sama.",
+        "step7": "Masukkan ID aplikasi dari daftar aplikasi, lalu muat file kunci privat di sini.",
+        "sandboxNote": "Transaksi dari aplikasi Sandbox adalah data demo. Tautkan rekening bank Sandbox hanya ke akun uji di Monize, bukan ke akun yang berisi transaksi asli Anda.",
+        "networkTitle": "Akses jaringan",
+        "networkBody": "Saat bank mengembalikan Anda, browser Anda membuka URL pengalihan. Server Enable Banking tidak terhubung ke Monize. Jadi, Monize tidak perlu dapat dijangkau dari internet atau dari alamat IP Enable Banking. URL pengalihan harus terbuka di browser yang Anda gunakan untuk memberi otorisasi akses.",
+        "networkOutbound": "Server Monize harus dapat terhubung ke api.enablebanking.com melalui HTTPS (port 443)."
+      },
+      "modalSource": "Dapatkan ID aplikasi dan kunci privat dari <link>panel kontrol Enable Banking</link>."
+    },
+    "credentialsModal": {
+      "title": "Kredensial Enable Banking",
+      "subtitle": "Disimpan terenkripsi di server ini. Kunci privat tidak akan ditampilkan lagi.",
+      "applicationIdLabel": "ID Aplikasi",
+      "applicationIdPlaceholder": "ID aplikasi Enable Banking Anda",
+      "applicationIdRequired": "Masukkan ID aplikasi",
+      "applicationIdTooLong": "ID aplikasi terlalu panjang",
+      "privateKeyLabel": "Kunci privat (PEM)",
+      "privateKeyPlaceholder": "Tempel kunci privat PEM aplikasi Anda",
+      "privateKeyStoredPlaceholder": "Sebuah kunci tersimpan. Biarkan kosong untuk mempertahankannya, atau tempel kunci baru untuk menggantinya.",
+      "privateKeyHelp": "Tempel seluruh file PEM yang Anda unduh saat mendaftarkan aplikasi.",
+      "privateKeyRequired": "Masukkan kunci privat",
+      "privateKeyInvalid": "Ini tidak tampak seperti kunci privat PEM. Seharusnya berupa blok yang diawali dengan BEGIN dan diakhiri dengan PRIVATE KEY.",
+      "privateKeyTooLong": "Kunci privat terlalu panjang",
+      "loadKeyFile": "Muat file kunci",
+      "keyFileTooLarge": "Ukuran file lebih dari 16 KB. Pilih file .pem yang disimpan Enable Banking.",
+      "keyFileReadFailed": "Tidak dapat membaca file.",
+      "cancel": "Batal",
+      "save": "Simpan",
+      "saving": "Menyimpan..."
+    },
+    "connections": {
+      "title": "Bank yang terhubung",
+      "subtitle": "Setiap rekening bank ditautkan ke satu akun Monize, dan transaksinya yang sudah dibukukan diimpor ke dalamnya.",
+      "connect": "Hubungkan bank",
+      "credentialsFirst": "Siapkan kredensial Enable Banking Anda di atas sebelum menghubungkan bank.",
+      "loadFailed": "Tidak dapat memuat koneksi bank Anda.",
+      "empty": {
+        "title": "Belum ada bank yang terhubung",
+        "description": "Hubungkan bank untuk mengimpor transaksinya yang sudah dibukukan ke akun Monize Anda."
+      }
+    },
+    "connect": {
+      "title": "Hubungkan bank",
+      "subtitle": "Anda akan dialihkan ke bank untuk memberi otorisasi akses hanya-baca.",
+      "whySecondAuthorization": "Di sini Anda memberi otorisasi lagi di bank Anda, meskipun Anda sudah menautkan rekening yang sama di panel kontrol Enable Banking. Panel kontrol hanya mencantumkan rekening mana yang boleh dibaca aplikasi, dan persetujuannya berakhir pada hari yang sama. Langkah ini memberi Monize persetujuannya sendiri untuk membaca saldo dan transaksi, hingga 180 hari. Saat persetujuan hampir berakhir, kartu koneksi menampilkan “Perbarui persetujuan”.",
+      "countryLabel": "Negara",
+      "countryPlaceholder": "Pilih negara",
+      "institutionLabel": "Bank",
+      "institutionPlaceholder": "Cari bank Anda",
+      "institutionsLoading": "Memuat bank...",
+      "institutionsFailed": "Tidak dapat memuat daftar bank.",
+      "retry": "Coba lagi",
+      "noInstitutions": "Penyedia tidak mencantumkan bank untuk negara ini.",
+      "psuTypeLabel": "Pemegang rekening",
+      "psuPersonal": "Pribadi",
+      "psuBusiness": "Bisnis",
+      "consentDays": "{days, plural, other {Bank ini mengizinkan akses hingga # hari sebelum Anda harus memperbaruinya.}}",
+      "continue": "Lanjutkan ke bank",
+      "continuing": "Menghubungkan...",
+      "cancel": "Batal",
+      "unsafeUrl": "Alamat bank yang dikembalikan server bukan alamat https yang aman, sehingga Monize tidak membukanya.",
+      "failed": "Tidak dapat memulai koneksi"
+    },
+    "connection": {
+      "status": {
+        "pending": "Tertunda",
+        "active": "Aktif",
+        "expired": "Kedaluwarsa",
+        "revoked": "Dicabut",
+        "failed": "Gagal"
+      },
+      "validUntil": "Akses berlaku hingga {date}",
+      "expiresSoon": "Segera kedaluwarsa",
+      "autoSync": "Sinkronkan otomatis sekali sehari",
+      "autoSyncOn": "Sinkronisasi otomatis diaktifkan",
+      "autoSyncOff": "Sinkronisasi otomatis dinonaktifkan",
+      "autoSyncFailed": "Tidak dapat mengubah sinkronisasi otomatis",
+      "renew": "Perbarui persetujuan",
+      "renewFailed": "Tidak dapat memulai pembaruan",
+      "syncAll": "Sinkronkan semua",
+      "syncingAll": "Menyinkronkan...",
+      "syncAllFailed": "Tidak dapat menyinkronkan bank ini",
+      "disconnect": "Putuskan",
+      "disconnected": "Bank diputuskan",
+      "disconnectFailed": "Tidak dapat memutuskan bank",
+      "disconnectConfirm": {
+        "title": "Putuskan {bank}",
+        "message": "Monize berhenti menyinkronkan bank ini dan meminta bank mengakhiri akses. Transaksi yang sudah diimpor tetap ada, dan menghubungkan bank lagi tidak mengimpornya untuk kedua kalinya.",
+        "confirm": "Putuskan"
+      },
+      "pendingHint": "Otorisasi di bank belum diselesaikan. Perbarui persetujuan untuk mencoba kembali; akun yang sudah ditautkan tetap tersimpan.",
+      "noAccounts": "Bank belum melaporkan rekening apa pun untuk koneksi ini.",
+      "accountsHeading": "Rekening bank",
+      "matchAccounts": "Cocokkan menurut nomor akun",
+      "matching": "Mencocokkan...",
+      "matchLinked": "{count, plural, other {# rekening bank ditautkan ke akun dengan nomor yang sama}}",
+      "matchSuggested": "{count, plural, other {# rekening bank cocok dengan lebih dari satu akun Anda: pilih akunnya sendiri}}",
+      "matchBoth": "{linked}. {suggested}",
+      "matchNone": "Tidak ada rekening bank yang ditautkan: tidak ada yang nomornya cocok dengan salah satu akun Anda.",
+      "matchFailed": "Rekening bank tidak dapat dicocokkan",
+      "syncAllNeedsPreview": "Sinkronkan semua menunggu sampai impor pertama setiap akun yang baru ditautkan dikonfirmasi. Gunakan Sinkronkan sekarang pada akun itu untuk melihat pratinjau.",
+      "notifySuccess": "Beri tahu setelah sinkronisasi harian",
+      "notifySuccessOptions": {
+        "always": "Setelah setiap sinkronisasi",
+        "when_imported": "Hanya jika ada transaksi yang diimpor",
+        "never": "Tidak pernah"
+      },
+      "notifySuccessSaved": "Pengaturan notifikasi disimpan",
+      "notifySuccessFailed": "Tidak dapat mengubah pengaturan notifikasi",
+      "tagOperationType": "Beri tag pada transaksi dengan jenis operasi dari bank",
+      "tagOperationTypeHelp": "Setiap transaksi yang diimpor mendapat tag bernama jenis operasi dari bank, seperti Pembayaran kartu atau Transfer masuk, agar aturan dan laporan dapat memakainya.",
+      "tagOperationTypeOn": "Tag jenis operasi diaktifkan",
+      "tagOperationTypeOff": "Tag jenis operasi dinonaktifkan",
+      "tagOperationTypeFailed": "Tidak dapat mengubah tag jenis operasi"
+    },
+    "profileNotes": {
+      "title": "Cara kerja API bank ini",
+      "show": "Tampilkan cara kerja API bank ini",
+      "hide": "Sembunyikan cara kerja API bank ini",
+      "severity": {
+        "warning": "Peringatan:",
+        "info": "Catatan:"
+      }
+    },
+    "account": {
+      "unnamed": "Rekening bank tanpa nama",
+      "linkLabel": "Akun Monize",
+      "notLinked": "Belum ditautkan",
+      "noEligibleAccounts": "Tidak ada akun Monize terbuka dengan mata uang ini yang tersedia untuk ditautkan.",
+      "linkFailed": "Tidak dapat menautkan akun",
+      "unlinked": "Tautan akun dilepas",
+      "unlinkFailed": "Tidak dapat melepas tautan akun",
+      "syncFrom": "Mengimpor mulai {date}",
+      "changeCutoff": "Ubah tanggal mulai",
+      "syncNow": "Sinkronkan sekarang",
+      "syncing": "Menyinkronkan...",
+      "syncFailed": "Tidak dapat menyinkronkan akun ini",
+      "neverSynced": "Belum disinkronkan",
+      "lastSynced": "Terakhir disinkronkan {time}",
+      "lastSyncOk": "Berhasil",
+      "lastSyncFailed": "Gagal",
+      "bankBalance": "Saldo bank",
+      "bankBalanceAsOf": "{amount} per {date}",
+      "balanceNotReported": "Tidak dilaporkan oleh bank",
+      "balanceNotSynced": "Belum disinkronkan",
+      "monizeBalance": "Saldo Monize",
+      "difference": "Selisih",
+      "differenceHelp": "Saldo bank adalah saldo yang dilaporkan bank pada tanggal yang ditampilkan. Saldo ini dapat mencakup transaksi yang belum dibukukan bank, atau dibukukan setelah tanggal tersebut, sehingga selisih kecil di antara sinkronisasi adalah hal yang wajar.",
+      "differenceHidden": "Saldo bank dalam {bankCurrency} dan akun Monize dalam {monizeCurrency}, sehingga selisih tidak ditampilkan.",
+      "deletedNote": "Transaksi yang Anda hapus di Monize tidak diimpor lagi oleh sinkronisasi berikutnya, sehingga baris yang dihapus tetap terhapus.",
+      "createNew": "Buat akun baru",
+      "suggestedName": "{type} {number}",
+      "createdLinked": "Akun dibuat dan ditautkan",
+      "createdLinkFailed": "Akun dibuat, tetapi tidak dapat ditautkan",
+      "preview": "Pratinjau",
+      "firstSyncPreview": "Impor pertama dikonfirmasi dari pratinjau transaksi."
+    },
+    "link": {
+      "title": "Tautkan ke {account}",
+      "editTitle": "Tanggal mulai untuk {account}",
+      "syncFromLabel": "Impor transaksi mulai",
+      "syncFromHelp": "Diisi dengan tanggal yang dipilih Monize secara default. Kosongkan kolom dan Monize akan memilihnya untuk Anda.",
+      "beforeCutoff": "Transaksi yang dibukukan bank sebelum tanggal ini tidak pernah diimpor.",
+      "duplicateWarning": "Tanggal yang lebih awal dari transaksi terbaru di akun dapat membuat duplikat transaksi yang sudah Anda masukkan.",
+      "save": "Tautkan akun",
+      "saveEdit": "Simpan",
+      "saving": "Menyimpan...",
+      "cancel": "Batal",
+      "saved": "Akun ditautkan",
+      "editSaved": "Tanggal mulai disimpan",
+      "saveFailed": "Tidak dapat menyimpan tautan",
+      "loadingDefaults": "Membaca akun...",
+      "defaultsFailed": "Transaksi terbaru di akun ini tidak dapat dibaca, sehingga Monize tidak dapat mengatakan apakah tanggal mulai ini dapat membuat duplikat.",
+      "newestTransaction": "Transaksi terbaru di akun ini: {date}",
+      "emptyAccount": "{days, plural, other {Akun kosong: impor mencakup # hari terakhir}}"
+    },
+    "sync": {
+      "summary": "{imported, plural, =0 {Tidak ada transaksi yang diimpor} other {# transaksi diimpor}}, {skipped, plural, =0 {tidak ada yang dilewati} other {# dilewati karena sudah diimpor}}, {refused, plural, =0 {tidak ada yang ditolak} other {# ditolak}}",
+      "summaryWithReasons": "{summary}. Ditolak: {reasons}",
+      "outcomeUnknown": "Hasil sinkronisasi belum diketahui. Muat ulang halaman untuk melihat apa yang diimpor.",
+      "failedAccountItem": "{account} ({message})",
+      "allFailed": "Tidak dapat disinkronkan: {accounts}",
+      "partialFailure": "{summary}. Tidak dapat disinkronkan: {accounts}",
+      "reason": {
+        "missing_date": "{count, plural, other {# tanpa tanggal}}",
+        "future_date": "{count, plural, other {# bertanggal di masa depan}}",
+        "invalid_amount": "{count, plural, other {# dengan jumlah tidak valid}}",
+        "unknown_direction": "{count, plural, other {# dengan arah tidak diketahui}}",
+        "currency_mismatch": "{count, plural, other {# dalam mata uang lain}}",
+        "other": "{count, plural, other {# karena alasan lain}}",
+        "missing_identity": "ID transaksi bank tidak ada: {count, number}"
+      },
+      "needsPreview": "Buka pratinjau untuk {accounts} dan konfirmasikan impor pertama",
+      "withNeedsPreview": "{message}. {needsPreview}"
+    },
+    "callback": {
+      "title": "Menghubungkan bank Anda",
+      "subtitle": "Harap tunggu sementara Monize menyelesaikan koneksi",
+      "success": "Bank terhubung",
+      "successNamed": "Terhubung ke {bank}",
+      "bankError": "Bank Anda tidak memberikan akses: {message}",
+      "missingState": "Bank tidak mengembalikan respons yang valid. Mulai koneksi lagi.",
+      "notActive": "Koneksi tidak dapat diselesaikan",
+      "failed": "Tidak dapat menyelesaikan koneksi",
+      "autoLinked": "{count, plural, other {# rekening bank ditautkan ke akun dengan nomor yang sama. Periksa sebelum impor pertama.}}",
+      "autoSuggested": "{count, plural, other {# rekening bank cocok dengan lebih dari satu akun Anda: pilih akunnya di daftar.}}"
+    },
+    "accountType": {
+      "CACC": "Rekening giro",
+      "CARD": "Kartu",
+      "SVGS": "Tabungan",
+      "LOAN": "Pinjaman",
+      "other": "Jenis akun {code}"
+    },
+    "mismatch": {
+      "bankCard": "Bank melaporkan akun ini sebagai kartu, tetapi jenis {account} adalah {type}, bukan {creditCard}. Transaksi kartu akan diimpor ke jenis akun yang salah.",
+      "monizeCard": "Jenis {account} adalah {creditCard}, tetapi bank melaporkan akun ini sebagai: {bankType}. Pastikan ini rekening bank yang benar.",
+      "confirm": "Saya mengerti, tautkan akun ini tetap"
+    },
+    "preview": {
+      "title": "Pratinjau impor ke {account}",
+      "description": "Tidak ada yang diimpor sampai Anda mengonfirmasi. Ini yang dilaporkan bank dan yang akan dilakukan Monize pada setiap transaksi.",
+      "loading": "Membaca bank...",
+      "loadFailed": "Pratinjau akun ini tidak dapat dibuat",
+      "retry": "Coba lagi",
+      "close": "Tutup",
+      "import": "{count, plural, =0 {Konfirmasi: tidak ada yang baru untuk diimpor} other {Impor # transaksi}}",
+      "importing": "Mengimpor...",
+      "importFailed": "Transaksi tidak dapat diimpor",
+      "planChanged": "Data bank berubah sejak pratinjau ini, sehingga tidak ada yang diimpor. Pratinjau dibaca ulang: periksa dan impor sekali lagi.",
+      "monizeBalance": "Saldo Monize sekarang",
+      "balanceAfter": "Saldo Monize setelah impor",
+      "bankBalance": "Saldo bank",
+      "bankBalanceAsOf": "{amount} per {date}",
+      "bankBalanceNotReported": "Tidak dilaporkan oleh bank",
+      "difference": "Selisih setelah impor",
+      "differenceHelp": "Saldo bank dikurangi saldo Monize setelah impor. Nol berarti keduanya sama. Saldo bank dapat mencakup transaksi yang belum dibukukan bank, jadi selisih kecil itu normal.",
+      "differenceHidden": "Saldo bank dalam {bankCurrency} dan akun Monize dalam {monizeCurrency}, sehingga selisih tidak ditampilkan.",
+      "filterLabel": "Tampilkan transaksi",
+      "filter": {
+        "all": "Semua",
+        "new": "Baru",
+        "duplicate": "Sudah diimpor",
+        "refused": "Ditolak",
+        "pending": "Tertunda",
+        "before_cutoff": "Sebelum tanggal mulai",
+        "withCount": "{label} ({count})",
+        "excluded": "Pengecualian"
+      },
+      "outcome": {
+        "new": "Baru",
+        "duplicate": "Sudah diimpor",
+        "refused": "Ditolak",
+        "pending": "Tertunda",
+        "before_cutoff": "Sebelum tanggal mulai",
+        "excluded": "Pengecualian"
+      },
+      "refusal": {
+        "missing_date": "Tanpa tanggal",
+        "future_date": "Bertanggal di masa depan",
+        "invalid_amount": "Jumlah tidak valid",
+        "unknown_direction": "Arah tidak diketahui",
+        "currency_mismatch": "Mata uang lain",
+        "other": "Ditolak",
+        "missing_identity": "ID transaksi bank tidak ada"
+      },
+      "columns": {
+        "date": "Tanggal",
+        "payee": "Penerima",
+        "category": "Kategori",
+        "status": "Status",
+        "amount": "Jumlah",
+        "select": "Pilihan dan rincian"
+      },
+      "noPayee": "Tanpa penerima",
+      "dateUnknown": "Tanpa tanggal",
+      "amountUnknown": "Tidak diketahui",
+      "empty": {
+        "all": "Bank tidak mengembalikan transaksi untuk periode ini.",
+        "filtered": "Tidak ada transaksi di daftar ini."
+      },
+      "selectAllNew": "Pilih semua transaksi baru dalam daftar ini",
+      "selectAllExceptions": "Pilih semua pengecualian dalam daftar ini",
+      "selectRow": "Impor {payee}",
+      "selectException": "Hapus {payee} dari pengecualian",
+      "summary": "Impor {import}, lewati {skip}, tambahkan {except} ke pengecualian",
+      "importNothing": "Konfirmasi tanpa mengimpor",
+      "exceptions": {
+        "intro": "Transaksi dalam pengecualian tidak pernah diimpor. Hapus satu dari pengecualian untuk melihatnya sebagai baru lagi.",
+        "remove": "{count, plural, =0 {Hapus dari pengecualian} other {Hapus # dari pengecualian}}",
+        "removing": "Menghapus...",
+        "removed": "{count, plural, other {# transaksi dihapus dari pengecualian}}",
+        "removedNone": "Tidak ada yang dihapus dari pengecualian",
+        "removeFailed": "Tidak dapat menghapus pengecualian"
+      },
+      "details": {
+        "operation": {
+          "heading": "Jenis operasi",
+          "none": "Tidak ada tag jenis operasi untuk transaksi ini.",
+          "tag": "Tag dari jenis operasi bank: {tag}"
+        }
+      },
+      "historyBatch": "Kelompok riwayat: {from} hingga {to}.",
+      "historyBatchRemaining": "Kelompok riwayat: {from} hingga {to}. Masih ada riwayat lainnya. Setelah impor ini, buka pratinjau kelompok berikutnya."
+    },
+    "simplefin": {
+      "provider": "Penyedia data",
+      "description": "Hubungkan bank di <bridge>SimpleFIN Bridge</bridge>, lalu tempel token penyiapan sekali pakai di sini. Akses hanya untuk membaca.",
+      "openBridge": "Buka SimpleFIN Bridge",
+      "setupToken": "Token penyiapan",
+      "connect": "Hubungkan SimpleFIN",
+      "connected": "SimpleFIN terhubung.",
+      "savedDiscoveryFailed": "Terhubung, tetapi penemuan akun memerlukan perhatian. Ulangi tanpa token baru.",
+      "refresh": "Segarkan akun",
+      "failed": "Permintaan tidak dapat diselesaikan. Periksa status koneksi sebelum memakai token baru.",
+      "loadFailed": "Status SimpleFIN tidak dapat dimuat.",
+      "encryptionRequired": "Minta administrator mengonfigurasi enkripsi sebelum menghubungkan SimpleFIN.",
+      "remove": "Hapus SimpleFIN dari Monize",
+      "removeTitle": "Hapus akses untuk semua institusi?",
+      "removeBody": "Ini menonaktifkan semua sinkronisasi SimpleFIN di Monize dan mempertahankan riwayat. Cabut token aplikasi di Bridge untuk mengakhiri akses jarak jauh.",
+      "replaceTitle": "Ganti akses SimpleFIN?",
+      "replaceBody": "Ini mengganti akses semua institusi. Pemetaan akun yang ada tetap dipertahankan; identitas yang berubah perlu ditinjau.",
+      "quota": "{remaining} permintaan tersisa",
+      "nextEligible": "Tersedia berikutnya: {date}",
+      "stopTitle": "Hentikan sinkronisasi {bank}?",
+      "stopBody": "Pemetaan dan transaksi yang ada tetap disimpan.",
+      "stop": "Hentikan sinkronisasi",
+      "stopped": "Sinkronisasi dihentikan",
+      "title": "SimpleFIN",
+      "enableBanking": "Enable Banking",
+      "errors": {
+        "unauthorized": "Hubungkan kembali dengan token penyiapan baru.",
+        "payment_required": "Periksa langganan SimpleFIN Bridge Anda.",
+        "rate_limited": "Batas permintaan tercapai. Tunggu sebelum menyegarkan.",
+        "no_accounts": "Tidak ada akun yang dibagikan. Periksa akses akun di Bridge.",
+        "partial_data": "Sebagian data akun tidak lengkap. Periksa Bridge lalu segarkan.",
+        "identity_review": "Identitas akun berubah. Tinjau pemetaan sebelum mengaktifkan sinkronisasi.",
+        "invalid_response": "Bridge mengembalikan data yang tidak didukung. Segarkan nanti.",
+        "unavailable": "SimpleFIN tidak menjawab. Coba lagi nanti."
+      },
+      "resume": "Lanjutkan sinkronisasi",
+      "lastKnownConnected": "SimpleFIN terhubung saat pemeriksaan terakhir yang berhasil."
+    }
   }
 }

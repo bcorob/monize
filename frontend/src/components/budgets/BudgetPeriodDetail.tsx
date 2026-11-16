@@ -1,17 +1,28 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
-import { format, parseISO } from 'date-fns';
-import { gainLossColor } from '@/lib/format';
+import { gainLossColor, roundMoney, sumMoney } from '@/lib/format';
+import { useDateFormat } from '@/hooks/useDateFormat';
+import { useChartDateFormat } from '@/hooks/useChartDateFormat';
 import { BudgetProgressBar } from './BudgetProgressBar';
+import { budgetLineName } from './utils/budget-line-name';
+import { Card } from '@/components/ui/Card';
+import { TABLE_CLASS, TABLE_BODY_CLASS, Th, Td } from '@/components/ui/Table';
 import type { BudgetPeriod, BudgetPeriodCategory } from '@/types/budget';
 
+import { useNumberFormat } from '@/hooks/useNumberFormat';
 interface BudgetPeriodDetailProps {
   period: BudgetPeriod;
   formatCurrency: (amount: number) => string;
 }
 
-function getCategoryName(pc: BudgetPeriodCategory): string {
+function getCategoryName(
+  pc: BudgetPeriodCategory,
+  labels: { transfersFrom: (name: string) => string; unknown: string },
+): string {
+  if (pc.budgetCategory?.isTransfer && pc.budgetCategory.transferAccount) {
+    return budgetLineName(pc.budgetCategory, labels);
+  }
   if (pc.category?.name) return pc.category.name;
   if (pc.budgetCategory?.category?.name) return pc.budgetCategory.category.name;
   return 'Uncategorized';
@@ -28,6 +39,10 @@ export function BudgetPeriodDetail({
   formatCurrency,
 }: BudgetPeriodDetailProps) {
   const t = useTranslations('budgets');
+  const { formatPercentTrimmed } = useNumberFormat();
+  const periodBuckets = period.periodBuckets ?? [];
+  const { formatDate } = useDateFormat();
+  const formatChartDate = useChartDateFormat();
   const categories = period.periodCategories ?? [];
   const expenseCategories = categories.filter((pc) => !isIncomeCategory(pc));
   const incomeCategories = categories.filter((pc) => isIncomeCategory(pc));
@@ -40,10 +55,19 @@ export function BudgetPeriodDetail({
     (sum, pc) => sum + Number(pc.actualAmount),
     0,
   );
-  const totalIncome = incomeCategories.reduce(
-    (sum, pc) => sum + Number(pc.actualAmount),
-    0,
+  const lineIncome = sumMoney(
+    incomeCategories.map((pc) => Number(pc.actualAmount)),
   );
+  // A closed period's income is the figure the close froze, which includes
+  // transfers in no line carries (`transfersInAsIncome`, issue #2141). That
+  // part is shown as its own row so the income rows add up to the card. An
+  // open period has no frozen figure: its rows are the lines' alone, and the
+  // live total, toggle included, is on the budget's dashboard.
+  const isClosed = period.status === 'CLOSED';
+  const totalIncome = isClosed ? Number(period.actualIncome) : lineIncome;
+  const outsideTransferIncome = isClosed
+    ? Math.max(0, roundMoney(totalIncome - lineIncome))
+    : 0;
   const remaining = totalBudgeted - totalSpent;
   const percentUsed = totalBudgeted > 0
     ? Math.round((totalSpent / totalBudgeted) * 10000) / 100
@@ -57,7 +81,9 @@ export function BudgetPeriodDetail({
     0,
   );
 
-  const periodLabel = `${format(parseISO(period.periodStart), 'MMMM yyyy')}`;
+  // The month heading in the reader's language and the range in their own
+  // date format, never a fixed English pattern.
+  const periodLabel = formatChartDate(period.periodStart, 'MMMM yyyy');
 
   return (
     <div className="space-y-6">
@@ -72,8 +98,10 @@ export function BudgetPeriodDetail({
           </span>
         </div>
         <p className="text-sm text-gray-500 dark:text-gray-400">
-          {format(parseISO(period.periodStart), 'MMM d')} &ndash;{' '}
-          {format(parseISO(period.periodEnd), 'MMM d, yyyy')}
+          {t('periodDetail.dateRange', {
+            start: formatDate(period.periodStart),
+            end: formatDate(period.periodEnd),
+          })}
         </p>
       </div>
 
@@ -87,7 +115,7 @@ export function BudgetPeriodDetail({
         <SummaryCard
           label={t('periodDetail.summaryCards.totalSpent')}
           value={formatCurrency(totalSpent)}
-          sublabel={`${percentUsed}%`}
+          sublabel={formatPercentTrimmed(percentUsed)}
           valueColor={percentUsed > 100 ? 'text-red-600 dark:text-red-400' : undefined}
         />
         <SummaryCard
@@ -141,6 +169,61 @@ export function BudgetPeriodDetail({
         <BudgetProgressBar percentUsed={percentUsed} />
       </div>
 
+      {/* Buckets: the figures frozen when the period closed */}
+      {period.status === 'CLOSED' && periodBuckets.length > 0 && (
+        <Card className="overflow-hidden">
+          <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+            <h3 className="text-base font-medium text-gray-900 dark:text-gray-100">
+              {t('periodBuckets.title')}
+            </h3>
+          </div>
+          <div className="overflow-x-auto">
+            <table className={TABLE_CLASS}>
+              <thead>
+                <tr>
+                  <Th>{t('periodBuckets.name')}</Th>
+                  <Th>{t('periodBuckets.target')}</Th>
+                  <Th align="right">{t('periodBuckets.allocated')}</Th>
+                  <Th align="right">{t('periodBuckets.carriedIn')}</Th>
+                  <Th align="right">{t('periodBuckets.spent')}</Th>
+                  <Th align="right">{t('periodBuckets.carriedOut')}</Th>
+                </tr>
+              </thead>
+              <tbody className={TABLE_BODY_CLASS}>
+                {periodBuckets.map((pb) => (
+                  <tr key={pb.id}>
+                    <Td>{pb.bucketName}</Td>
+                    <Td>
+                      {pb.targetType === 'PERCENT'
+                        ? t('periodBuckets.targetPercent', {
+                            percent: formatPercentTrimmed(Number(pb.targetValue)),
+                          })
+                        : t('periodBuckets.targetAmount', {
+                            amount: formatCurrency(Number(pb.targetValue)),
+                          })}
+                    </Td>
+                    <Td align="right" className="whitespace-nowrap">
+                      {pb.allocatedAmount === null
+                        ? t('periodBuckets.allocatedUnknown')
+                        : formatCurrency(Number(pb.allocatedAmount))}
+                    </Td>
+                    <Td align="right" className="whitespace-nowrap">
+                      {formatCurrency(Number(pb.carryIn))}
+                    </Td>
+                    <Td align="right" className="whitespace-nowrap">
+                      {formatCurrency(Number(pb.actualAmount))}
+                    </Td>
+                    <Td align="right" className="whitespace-nowrap">
+                      {formatCurrency(Number(pb.carryOut))}
+                    </Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Card>
+      )}
+
       {/* Expense Categories */}
       {expenseCategories.length > 0 && (
         <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
@@ -172,7 +255,7 @@ export function BudgetPeriodDetail({
       )}
 
       {/* Income Categories */}
-      {incomeCategories.length > 0 && (
+      {(incomeCategories.length > 0 || outsideTransferIncome > 0) && (
         <div className="bg-white dark:bg-gray-800 shadow rounded-lg overflow-hidden">
           <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
             <h3 className="text-base font-medium text-gray-900 dark:text-gray-100">
@@ -188,6 +271,16 @@ export function BudgetPeriodDetail({
                 isIncome
               />
             ))}
+            {outsideTransferIncome > 0 && (
+              <div className="px-6 py-4 flex items-center justify-between">
+                <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {t('pages.edit.outsideTransferIncome')}
+                </span>
+                <span className="text-sm text-gray-500 dark:text-gray-400">
+                  {formatCurrency(outsideTransferIncome)}
+                </span>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -231,7 +324,11 @@ function PeriodCategoryRow({
   isIncome?: boolean;
 }) {
   const t = useTranslations('budgets');
-  const name = getCategoryName(periodCategory);
+  const { formatPercentTrimmed } = useNumberFormat();
+  const name = getCategoryName(periodCategory, {
+    transfersFrom: (account) => t('lineNames.transfersFrom', { name: account }),
+    unknown: t('lineNames.unknown'),
+  });
   const budgeted = Number(periodCategory.effectiveBudget);
   const spent = Number(periodCategory.actualAmount);
   const rolloverIn = Number(periodCategory.rolloverIn);
@@ -268,7 +365,7 @@ function PeriodCategoryRow({
                     : 'text-green-600 dark:text-green-400'
               }`}
             >
-              {percentUsed}%
+              {formatPercentTrimmed(percentUsed)}
             </span>
           )}
         </div>

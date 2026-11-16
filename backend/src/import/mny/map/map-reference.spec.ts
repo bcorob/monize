@@ -719,6 +719,37 @@ describe("mapCategories", () => {
     });
   });
 
+  it("leaves a classification's items to the tag mapper, whatever the filter says", () => {
+    // Items share the CAT table (`hct` != 0). The maintainer's file has one at
+    // level 0 with no parent; a nested item at level 1 would otherwise map to
+    // a top-level category named after it.
+    const result = mapCategories(
+      tree([
+        mnyCategory({ handle: 200, name: "Utilities", level: 1, parent: 131 }),
+        mnyCategory({
+          handle: 552,
+          name: "20 Spring Apartment",
+          level: 0,
+          parent: null,
+          classification: 1,
+          categoryType: -1,
+        }),
+        mnyCategory({
+          handle: 553,
+          name: "Kitchen",
+          level: 1,
+          parent: 552,
+          classification: 1,
+          categoryType: -1,
+        }),
+      ]),
+      null,
+    );
+
+    expect(result.categories.map((c) => c.fullName)).toEqual(["Utilities"]);
+    expect(result.warnings).toEqual([]);
+  });
+
   it("orders parents before children so the writer can create in order", () => {
     const result = mapCategories(
       tree([

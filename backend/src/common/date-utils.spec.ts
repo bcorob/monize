@@ -7,6 +7,7 @@ import {
   isTransactionInFuture,
   isValidIanaTimezone,
   todayInTimezone,
+  todayInTimezoneOrUtc,
   todayYMD,
 } from "./date-utils";
 import { requestContextStorage } from "./request-context";
@@ -67,6 +68,14 @@ describe("isValidIanaTimezone", () => {
   });
 });
 
+describe("todayInTimezoneOrUtc", () => {
+  it("dates by the zone when it resolves and by UTC when it does not", () => {
+    const at = new Date("2027-03-30T23:30:00.000Z");
+    expect(todayInTimezoneOrUtc("Pacific/Auckland", at)).toBe("2027-03-31");
+    expect(todayInTimezoneOrUtc("Not/A_Real_Zone", at)).toBe("2027-03-30");
+  });
+});
+
 describe("todayInTimezone", () => {
   it("returns YYYY-MM-DD for a valid IANA timezone", () => {
     const result = todayInTimezone("America/Toronto");
@@ -75,6 +84,14 @@ describe("todayInTimezone", () => {
 
   it("returns null for an invalid timezone", () => {
     expect(todayInTimezone("Not/A_Real_Zone")).toBeNull();
+  });
+
+  it("names the calendar date an instant falls on in that zone", () => {
+    const at = new Date("2027-03-30T23:30:00.000Z");
+    expect(todayInTimezone("UTC", at)).toBe("2027-03-30");
+    // Warsaw is UTC+2 on this date, so the same instant is already the 31st.
+    expect(todayInTimezone("Europe/Warsaw", at)).toBe("2027-03-31");
+    expect(todayInTimezone("America/Los_Angeles", at)).toBe("2027-03-30");
   });
 });
 

@@ -1,6 +1,8 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { DataSource } from "typeorm";
 import { createScopedDbMocks } from "../test-helpers/scoped-db-testing";
+import { Currency } from "../currencies/entities/currency.entity";
+import { currencyPlacesRepoMock } from "../test-helpers/currency-places-testing";
 
 jest.mock("../common/db/scoped-db", () =>
   jest.requireActual("../test-helpers/scoped-db-testing").scopedDbMockModule(),
@@ -8,6 +10,7 @@ jest.mock("../common/db/scoped-db", () =>
 import {
   AccountExportService,
   CSV_SPLIT_CATEGORY_LABEL,
+  exportAmount,
 } from "./account-export.service";
 import { AccountsService } from "./accounts.service";
 import { Transaction } from "../transactions/entities/transaction.entity";
@@ -131,15 +134,27 @@ describe("AccountExportService", () => {
     };
   }
 
-  // Mock query builder chain
+  // Mock query builder chain. `getMany` hands back a fixed array, so the order
+  // the export asked for is never observable in its output -- it is recorded
+  // here instead, and asserted on its own below.
   function createMockQueryBuilder(transactions: any[]) {
+    const orderCalls: [string, string, string | undefined][] = [];
     const qb = {
       leftJoinAndSelect: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
-      orderBy: jest.fn().mockReturnThis(),
-      addOrderBy: jest.fn().mockReturnThis(),
+      orderBy: jest.fn((column: string, direction: string, nulls?: string) => {
+        orderCalls.push([column, direction, nulls]);
+        return qb;
+      }),
+      addOrderBy: jest.fn(
+        (column: string, direction: string, nulls?: string) => {
+          orderCalls.push([column, direction, nulls]);
+          return qb;
+        },
+      ),
       getMany: jest.fn().mockResolvedValue(transactions),
+      orderCalls,
     };
     return qb;
   }
@@ -156,6 +171,7 @@ describe("AccountExportService", () => {
     };
 
     const { dataSource } = createScopedDbMocks([
+      [Currency, currencyPlacesRepoMock({ BTC: 8 })],
       [Transaction, mockTransactionRepo],
       [Category, mockCategoryRepo],
     ]);
@@ -208,6 +224,33 @@ describe("AccountExportService", () => {
       expect(lines[2]).toContain("Loblaws");
       // Running balance: 1500 - 75.5 = 1424.5
       expect(lines[2]).toContain("1424.5");
+    });
+
+    it("reads the rows in the register's own order, oldest first", async () => {
+      // The export walks a balance FORWARD from the opening balance, so the
+      // order it reads in is the order the Running Balance column is computed
+      // in -- and it used to spell that order out for itself, without the
+      // amount leg. `created_at` is transaction start time, so an import
+      // writes a day's rows with one value; within such a tie the order fell
+      // through to a random UUID, and a purchase funded by a same-day
+      // transfer came out before the transfer about half the time. The
+      // exported column then showed the account overdrawn on a day it was
+      // never short.
+      //
+      // The amount leg runs opposite to the list, which is what puts the
+      // credit first in an oldest-first read: money has to arrive before it
+      // can be spent, and no file we import carries a time of day.
+      const qb = createMockQueryBuilder(buildMockTransactions());
+      mockTransactionRepo.createQueryBuilder.mockReturnValue(qb);
+
+      await service.exportCsv(userId, accountId);
+
+      expect(qb.orderCalls).toEqual([
+        ["transaction.transactionDate", "ASC", undefined],
+        ["transaction.createdAt", "ASC", undefined],
+        ["transaction.amount", "DESC", undefined],
+        ["transaction.id", "ASC", undefined],
+      ]);
     });
 
     it("handles transfer transactions with account name", async () => {
@@ -513,6 +556,83 @@ describe("AccountExportService", () => {
     });
   });
 
+  describe("a BTC wallet (INV-MONEY-001)", () => {
+    const wallet = {
+      id: accountId,
+      name: "Bitcoin Wallet",
+      accountType: "CRYPTO",
+      currencyCode: "BTC",
+      openingBalance: 0,
+      currentBalance: 0.01247468,
+    };
+    const walletRows = () => [
+      {
+        ...buildMockTransactions()[0],
+        id: "tx-buy",
+        amount: 0.01249993,
+        payeeName: "Exchange",
+      },
+      {
+        ...buildMockTransactions()[1],
+        id: "tx-fee",
+        amount: -0.000025,
+        payeeName: "Network fee",
+      },
+      {
+        ...buildMockTransactions()[1],
+        id: "tx-dust",
+        amount: -0.00000025,
+        payeeName: "Dust",
+      },
+    ];
+
+    it("runs the CSV balance at eight places and never prints an exponent", async () => {
+      mockAccountsService.findOne!.mockResolvedValue(wallet);
+      mockTransactionRepo.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder(walletRows()),
+      );
+
+      const lines = (await service.exportCsv(userId, accountId)).split("\n");
+      const cells = lines.slice(1).map((line) => line.split(","));
+
+      // Amount, then Running Balance: at four places the fee moved nothing and
+      // the balance read 0.0125; a bare toString printed the dust as 2.5e-7.
+      expect(cells.map((c) => [c[5], c[7]])).toEqual([
+        ["0.01249993", "0.01249993"],
+        ["-0.000025", "0.01247493"],
+        ["-0.00000025", "0.01247468"],
+      ]);
+    });
+
+    it("prints QIF amounts at eight places, plainly", async () => {
+      mockAccountsService.findOne!.mockResolvedValue(wallet);
+      mockTransactionRepo.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder(walletRows()),
+      );
+
+      const lines = (await service.exportQif(userId, accountId)).split("\n");
+
+      expect(lines).toContain("T0.01249993");
+      expect(lines).toContain("T-0.000025");
+      expect(lines).toContain("T-0.00000025");
+    });
+  });
+
+  describe("exportAmount", () => {
+    it.each([
+      [-67.99, 4, "-67.99"],
+      [12.345, 4, "12.345"],
+      [1500, 4, "1500"],
+      [0, 4, "0"],
+      [-0, 8, "0"],
+      [0.1 + 0.2, 4, "0.3"],
+      [-0.00000025, 8, "-0.00000025"],
+      [21000000, 8, "21000000"],
+    ])("writes %p at %p places as %p", (value, decimals, expected) => {
+      expect(exportAmount(value, decimals)).toBe(expected);
+    });
+  });
+
   describe("exportQif", () => {
     it("generates QIF with proper header and transaction records", async () => {
       const transactions = buildMockTransactions();
@@ -579,6 +699,7 @@ describe("AccountExportService", () => {
         { accountType: "CREDIT_CARD", expected: "CCard" },
         { accountType: "INVESTMENT", expected: "Invst" },
         { accountType: "ASSET", expected: "Oth A" },
+        { accountType: "CRYPTO", expected: "Oth A" },
         { accountType: "LOAN", expected: "Oth L" },
         { accountType: "MORTGAGE", expected: "Oth L" },
         { accountType: "LINE_OF_CREDIT", expected: "Oth L" },

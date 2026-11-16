@@ -1,16 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@/test/render';
+import type { ComponentProps } from 'react';
+import { render, screen, fireEvent, act, waitFor, cleanup } from '@/test/render';
 import { LoanPaymentSetupDialog } from './LoanPaymentSetupDialog';
 import { accountsApi } from '@/lib/accounts';
 import { categoriesApi } from '@/lib/categories';
 import { payeesApi } from '@/lib/payees';
 import { Account, DetectedLoanPayment } from '@/types/account';
 import toast from 'react-hot-toast';
+import { usePreferencesStore } from '@/store/preferencesStore';
 
 vi.mock('@/lib/accounts', () => ({
   accountsApi: {
     detectLoanPayments: vi.fn().mockResolvedValue(null),
     setupLoanPayments: vi.fn().mockResolvedValue({}),
+    previewLoanPaymentSetup: vi.fn(),
   },
 }));
 
@@ -63,6 +66,7 @@ vi.mock('@/lib/logger', () => ({
 
 const mockDetectLoanPayments = vi.mocked(accountsApi.detectLoanPayments);
 const mockSetupLoanPayments = vi.mocked(accountsApi.setupLoanPayments);
+const mockPreviewLoanPaymentSetup = vi.mocked(accountsApi.previewLoanPaymentSetup);
 const mockGetCategories = vi.mocked(categoriesApi.getAll);
 const mockCreatePayee = vi.mocked(payeesApi.create);
 
@@ -75,7 +79,8 @@ function createAccount(overrides: Partial<Account> = {}): Account {
     isFavourite: false, favouriteSortOrder: 0, excludeFromNetWorth: false, paymentAmount: null, paymentFrequency: null, paymentStartDate: null,
     sourceAccountId: null, principalCategoryId: null, interestCategoryId: null, overpaymentCategoryId: null, overpaymentMemo: null, overpaymentPayeeId: null, fxFeePercent: null,
     scheduledTransactionId: null, assetCategoryId: null, dateAcquired: null, linkedLoanAccountId: null,
-    isCanadianMortgage: false, isVariableRate: false, termMonths: null, termEndDate: null,
+    mortgageType: 'ANNUITY',
+    termMonths: null, termEndDate: null,
     amortizationMonths: null, originalPrincipal: null,
     statementDueDay: null, statementSettlementDay: null,
     createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',
@@ -89,8 +94,8 @@ const defaultDetected: DetectedLoanPayment = {
   confidence: 0.85,
   sourceAccountId: 'acc-1',
   sourceAccountName: 'My Chequing',
-  interestCategoryId: null,
-  interestCategoryName: null,
+  interestCategoryId: 'cat-int',
+  interestCategoryName: 'Loan Interest',
   principalCategoryId: null,
   estimatedInterestRate: 5.5,
   suggestedNextDueDate: '2026-04-01',
@@ -115,7 +120,7 @@ const defaultProps = {
   onSetupComplete: vi.fn(),
 };
 
-async function renderDialog(props = defaultProps) {
+async function renderDialog(props: ComponentProps<typeof LoanPaymentSetupDialog> = defaultProps) {
   let result: ReturnType<typeof render>;
   await act(async () => {
     result = render(<LoanPaymentSetupDialog {...props} />);
@@ -171,6 +176,7 @@ describe('LoanPaymentSetupDialog', () => {
       paymentFrequency: 'MONTHLY',
       sourceAccountId: 'acc-1',
       nextDueDate: '2026-04-01',
+      interestCategoryId: 'cat-int',
     }));
     expect(toast.success).toHaveBeenCalled();
     expect(defaultProps.onSetupComplete).toHaveBeenCalled();
@@ -187,8 +193,16 @@ describe('LoanPaymentSetupDialog', () => {
 
     expect(screen.getByText('Mortgage Details')).toBeInTheDocument();
     expect(screen.getByText('Set Up Mortgage Payments')).toBeInTheDocument();
-    expect(screen.getByText(/Canadian Mortgage/)).toBeInTheDocument();
-    expect(screen.getByText(/Variable Rate/)).toBeInTheDocument();
+    const type = screen.getByLabelText('Mortgage Type') as HTMLSelectElement;
+    expect(Array.from(type.options).map((o) => [o.value, o.textContent])).toEqual([
+      ['ANNUITY', 'Annuity (Level Payment)'],
+      ['CANADIAN_FIXED', 'Canadian Fixed Rate'],
+      ['LINEAR', 'Linear (Constant Principal)'],
+      ['INTEREST_ONLY', 'Interest Only'],
+    ]);
+    expect(screen.queryByRole('checkbox', { name: /Canadian Mortgage/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /Variable Rate/ })).not.toBeInTheDocument();
+    expect(screen.getByText('Rate-Fixed Term (months)')).toBeInTheDocument();
   });
 
   it('does not show mortgage section for LOAN type', async () => {
@@ -276,7 +290,7 @@ describe('LoanPaymentSetupDialog', () => {
     expect(toast.error).toHaveBeenCalled();
   });
 
-  it('toggles canadian mortgage and variable rate checkboxes (mortgage only)', async () => {
+  it('changes the mortgage type and its help line (mortgage only)', async () => {
     mockDetectLoanPayments.mockResolvedValue(defaultDetected);
     const mortgageProps = {
       ...defaultProps,
@@ -284,13 +298,215 @@ describe('LoanPaymentSetupDialog', () => {
     };
     await renderDialog(mortgageProps);
 
-    const canadianCb = screen.getByLabelText(/Canadian Mortgage/i);
-    await act(async () => fireEvent.click(canadianCb));
-    expect(canadianCb).toBeChecked();
+    const type = screen.getByLabelText('Mortgage Type') as HTMLSelectElement;
+    expect(type.value).toBe('ANNUITY');
+    expect(
+      screen.getByText('Your total payment is the same every month. Choose this for a variable-rate mortgage too.'),
+    ).toBeInTheDocument();
 
-    const variableCb = screen.getByLabelText(/Variable Rate/i);
-    await act(async () => fireEvent.click(variableCb));
-    expect(variableCb).toBeChecked();
+    await act(async () => fireEvent.change(type, { target: { value: 'CANADIAN_FIXED' } }));
+    expect(type.value).toBe('CANADIAN_FIXED');
+    expect(
+      screen.getByText('A Canadian fixed-rate contract; interest compounds twice a year.'),
+    ).toBeInTheDocument();
+  });
+
+  it('seeds the select from the type the account carries', async () => {
+    mockDetectLoanPayments.mockResolvedValue(defaultDetected);
+    mockSetupLoanPayments.mockResolvedValue({} as any);
+    await renderDialog({
+      ...defaultProps,
+      loanAccount: {
+        accountId: 'm-1', accountName: 'M', accountType: 'MORTGAGE', currencyCode: 'USD',
+        mortgageType: 'CANADIAN_FIXED',
+      },
+    });
+
+    expect((screen.getByLabelText('Mortgage Type') as HTMLSelectElement).value).toBe('CANADIAN_FIXED');
+    const buttons = screen.getAllByRole('button', { name: /Set Up Payments/i });
+    await act(async () => fireEvent.click(buttons[buttons.length - 1]));
+    expect(mockSetupLoanPayments).toHaveBeenCalledWith('m-1', expect.objectContaining({
+      mortgageType: 'CANADIAN_FIXED',
+    }));
+  });
+
+  describe('a mortgage without a constant payment', () => {
+    const linearProps = (mortgageType: 'LINEAR' | 'INTEREST_ONLY' = 'LINEAR') => ({
+      ...defaultProps,
+      loanAccount: {
+        accountId: 'm-1', accountName: 'M', accountType: 'MORTGAGE', currencyCode: 'USD',
+        mortgageType,
+        prepaymentMode: 'LOWER_INSTALLMENT' as const,
+      },
+    });
+    const priced = {
+      derivesInstallment: true,
+      principalPayment: 833.3333,
+      interestPayment: 500,
+      paymentAmount: 1333.3333,
+    };
+
+    it('shows the first installment the server prices and submits it', async () => {
+      mockDetectLoanPayments.mockResolvedValue({
+        ...defaultDetected,
+        lastPrincipalAmount: 800,
+        lastInterestAmount: 700,
+      });
+      mockPreviewLoanPaymentSetup.mockResolvedValue(priced);
+      mockSetupLoanPayments.mockResolvedValue({} as any);
+      await renderDialog(linearProps());
+
+      // No stated payment and no detected split to choose: the method decides both.
+      expect(screen.queryByText(/Regular Payment Amount/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Use principal\/interest split/)).not.toBeInTheDocument();
+      await waitFor(() => expect(screen.getByText('First Installment')).toBeInTheDocument());
+      await waitFor(() => expect(mockPreviewLoanPaymentSetup).toHaveBeenCalled());
+      expect(mockPreviewLoanPaymentSetup).toHaveBeenLastCalledWith(
+        'm-1',
+        expect.objectContaining({
+          nextDueDate: '2026-04-01',
+          paymentFrequency: 'MONTHLY',
+          mortgageType: 'LINEAR',
+          prepaymentMode: 'LOWER_INSTALLMENT',
+        }),
+      );
+      await screen.findByText(/This is the one due/);
+
+      const buttons = screen.getAllByRole('button', { name: /Set Up Payments/i });
+      await act(async () => fireEvent.click(buttons[buttons.length - 1]));
+      const data = mockSetupLoanPayments.mock.calls[0][1];
+      expect(data).toMatchObject({
+        paymentAmount: 1333.3333,
+        mortgageType: 'LINEAR',
+        prepaymentMode: 'LOWER_INSTALLMENT',
+      });
+      expect(data).not.toHaveProperty('detectedInterestAmount');
+    });
+
+    it('offers the prepayment mode for LINEAR only', async () => {
+      mockDetectLoanPayments.mockResolvedValue(defaultDetected);
+      mockPreviewLoanPaymentSetup.mockResolvedValue(priced);
+      await renderDialog(linearProps('INTEREST_ONLY'));
+      expect(screen.queryByLabelText('What an Extra Repayment Does')).not.toBeInTheDocument();
+
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Mortgage Type'), { target: { value: 'LINEAR' } });
+      });
+      const mode = screen.getByLabelText('What an Extra Repayment Does') as HTMLSelectElement;
+      expect(mode.value).toBe('LOWER_INSTALLMENT');
+      await act(async () => {
+        fireEvent.change(mode, { target: { value: 'SHORTEN_TERM' } });
+      });
+      await waitFor(() =>
+        expect(mockPreviewLoanPaymentSetup).toHaveBeenLastCalledWith(
+          'm-1',
+          expect.objectContaining({ mortgageType: 'LINEAR', prepaymentMode: 'SHORTEN_TERM' }),
+        ),
+      );
+    });
+
+    it('names why the installment could not be priced, and does not submit', async () => {
+      mockDetectLoanPayments.mockResolvedValue(defaultDetected);
+      mockPreviewLoanPaymentSetup.mockRejectedValue({
+        response: { data: { message: 'A LINEAR mortgage requires amortizationMonths' } },
+      });
+      await renderDialog(linearProps());
+
+      await screen.findByText('A LINEAR mortgage requires amortizationMonths');
+      const buttons = screen.getAllByRole('button', { name: /Set Up Payments/i });
+      expect(buttons[buttons.length - 1]).toBeDisabled();
+    });
+
+    it('falls back to a generic reason for a list of validation messages', async () => {
+      mockDetectLoanPayments.mockResolvedValue(defaultDetected);
+      mockPreviewLoanPaymentSetup.mockRejectedValue({
+        response: { data: { message: ['interestRate must not be greater than 100', 'other'] } },
+      });
+      await renderDialog(linearProps());
+      await screen.findByText(/The first installment could not be worked out/);
+      expect(screen.queryByText(/interestRate must not be greater/)).not.toBeInTheDocument();
+    });
+
+    it('neither shows nor submits an answer for terms the user has since changed', async () => {
+      mockDetectLoanPayments.mockResolvedValue(defaultDetected);
+      mockSetupLoanPayments.mockResolvedValue({} as any);
+      let answerFirst!: (value: typeof priced) => void;
+      let answerSecond!: (value: typeof priced) => void;
+      let answerThird!: (value: typeof priced) => void;
+      mockPreviewLoanPaymentSetup
+        .mockImplementationOnce(() => new Promise((resolve) => { answerFirst = resolve; }))
+        .mockImplementationOnce(() => new Promise((resolve) => { answerSecond = resolve; }))
+        .mockImplementationOnce(() => new Promise((resolve) => { answerThird = resolve; }));
+      await renderDialog(linearProps());
+      await waitFor(() => expect(mockPreviewLoanPaymentSetup).toHaveBeenCalledTimes(1));
+      await act(async () => {
+        answerFirst({ ...priced, paymentAmount: 1216.52 });
+      });
+      await screen.findByText(/This is the one due/);
+      const mode = screen.getByLabelText('What an Extra Repayment Does');
+      const submit = () => {
+        const buttons = screen.getAllByRole('button', { name: /Set Up Payments/i });
+        return buttons[buttons.length - 1];
+      };
+
+      // The terms change: the figure answered for the old ones is neither
+      // shown nor submittable while the new answer is pending.
+      await act(async () => {
+        fireEvent.change(mode, { target: { value: 'SHORTEN_TERM' } });
+      });
+      expect(screen.queryByText(/This is the one due/)).not.toBeInTheDocument();
+      expect(submit()).toBeDisabled();
+      await waitFor(() => expect(mockPreviewLoanPaymentSetup).toHaveBeenCalledTimes(2));
+
+      // A late answer for terms changed again before it arrived is dropped.
+      await act(async () => {
+        fireEvent.change(mode, { target: { value: 'LOWER_INSTALLMENT' } });
+      });
+      await waitFor(() => expect(mockPreviewLoanPaymentSetup).toHaveBeenCalledTimes(3));
+      await act(async () => {
+        answerSecond({ ...priced, paymentAmount: 9999.99 });
+      });
+      expect(submit()).toBeDisabled();
+
+      await act(async () => {
+        answerThird(priced);
+      });
+      await screen.findByText(/This is the one due/);
+      await act(async () => fireEvent.click(submit()));
+      expect(mockSetupLoanPayments.mock.calls[0][1]).toMatchObject({
+        paymentAmount: 1333.3333,
+        prepaymentMode: 'LOWER_INSTALLMENT',
+      });
+    });
+
+    it('falls back to a generic reason when the server gives none', async () => {
+      mockDetectLoanPayments.mockResolvedValue(defaultDetected);
+      mockPreviewLoanPaymentSetup.mockRejectedValue(new Error('network'));
+      await renderDialog(linearProps());
+      await screen.findByText(/The first installment could not be worked out/);
+    });
+
+    it('asks for the next payment date before pricing anything', async () => {
+      mockDetectLoanPayments.mockResolvedValue(null);
+      await renderDialog(linearProps());
+      expect(
+        screen.getByText('Enter the next payment date to work out the first installment.'),
+      ).toBeInTheDocument();
+      expect(mockPreviewLoanPaymentSetup).not.toHaveBeenCalled();
+    });
+
+    it('never asks for an annuity mortgage', async () => {
+      mockDetectLoanPayments.mockResolvedValue(defaultDetected);
+      await renderDialog({
+        ...defaultProps,
+        loanAccount: { accountId: 'm-1', accountName: 'M', accountType: 'MORTGAGE', currencyCode: 'USD' },
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 350));
+      });
+      expect(mockPreviewLoanPaymentSetup).not.toHaveBeenCalled();
+      expect(screen.getByText(/Regular Payment Amount/)).toBeInTheDocument();
+    });
   });
 
   it('submits mortgage with mortgage-specific fields', async () => {
@@ -305,12 +521,22 @@ describe('LoanPaymentSetupDialog', () => {
     const buttons = screen.getAllByRole('button', { name: /Set Up Payments/i });
     await act(async () => fireEvent.click(buttons[buttons.length - 1]));
     expect(mockSetupLoanPayments).toHaveBeenCalledWith('m-1', expect.objectContaining({
-      isCanadianMortgage: false,
-      isVariableRate: false,
+      mortgageType: 'ANNUITY',
     }));
   });
 
-  it('stops offering quarterly and yearly once the mortgage is Canadian', async () => {
+  it('sends no mortgage type for an ordinary loan', async () => {
+    mockDetectLoanPayments.mockResolvedValue(defaultDetected);
+    mockSetupLoanPayments.mockResolvedValue({} as any);
+    await renderDialog();
+
+    const buttons = screen.getAllByRole('button', { name: /Set Up Payments/i });
+    await act(async () => fireEvent.click(buttons[buttons.length - 1]));
+    const data = mockSetupLoanPayments.mock.calls[0][1];
+    expect(data).not.toHaveProperty('mortgageType');
+  });
+
+  it('stops offering quarterly and yearly once the mortgage compounds semi-annually', async () => {
     // The mortgage helpers have no quarterly or yearly cadence, so the server
     // answers 400 rather than split the payment at a monthly rate. Offering the
     // choice made a working flow fail with nothing on the form to explain it.
@@ -325,7 +551,9 @@ describe('LoanPaymentSetupDialog', () => {
     expect(optionsOf()).toContain('QUARTERLY');
     expect(optionsOf()).toContain('YEARLY');
 
-    await act(async () => fireEvent.click(screen.getByLabelText(/Canadian Mortgage/i)));
+    await act(async () =>
+      fireEvent.change(screen.getByLabelText('Mortgage Type'), { target: { value: 'CANADIAN_FIXED' } }),
+    );
     expect(optionsOf()).not.toContain('QUARTERLY');
     expect(optionsOf()).not.toContain('YEARLY');
     // The cadences a Canadian mortgage genuinely has stay.
@@ -334,10 +562,11 @@ describe('LoanPaymentSetupDialog', () => {
     );
   });
 
-  it('does not submit a cadence the Canadian restriction removed', async () => {
-    // Selecting quarterly first and ticking the box after is the order that
+  it('does not submit a cadence the semi-annual restriction removed', async () => {
+    // Selecting quarterly first and choosing the type after is the order that
     // matters: the value has to be corrected, not merely hidden from the list.
-    // And unticking restores the choice rather than silently keeping monthly.
+    // And choosing ANNUITY again restores the choice rather than silently
+    // keeping monthly.
     mockDetectLoanPayments.mockResolvedValue(defaultDetected);
     mockSetupLoanPayments.mockResolvedValue({} as any);
     await renderDialog({
@@ -349,8 +578,8 @@ describe('LoanPaymentSetupDialog', () => {
     await act(async () => fireEvent.change(frequency, { target: { value: 'QUARTERLY' } }));
     expect(frequency.value).toBe('QUARTERLY');
 
-    const canadian = screen.getByLabelText(/Canadian Mortgage/i);
-    await act(async () => fireEvent.click(canadian));
+    const type = screen.getByLabelText('Mortgage Type');
+    await act(async () => fireEvent.change(type, { target: { value: 'CANADIAN_FIXED' } }));
     expect(frequency.value).toBe('MONTHLY');
 
     const submit = screen.getAllByRole('button', { name: /Set Up Payments/i });
@@ -360,14 +589,14 @@ describe('LoanPaymentSetupDialog', () => {
       expect.objectContaining({ paymentFrequency: 'MONTHLY' }),
     );
 
-    await act(async () => fireEvent.click(canadian));
+    await act(async () => fireEvent.change(type, { target: { value: 'ANNUITY' } }));
     expect(frequency.value).toBe('QUARTERLY');
   });
 
-  it('keeps every cadence for an ordinary loan and a non-Canadian mortgage', () => {
-    // The restriction is the Canadian branch's, not the mortgage type's: a
-    // non-Canadian mortgage is split by calculatePaymentSplit, which handles
-    // quarterly and yearly perfectly well.
+  it('keeps every cadence for an ordinary loan and a nominally compounded mortgage', () => {
+    // The restriction is the semi-annual convention's, not the account type's:
+    // a nominally compounded mortgage is split by calculatePaymentSplit, which
+    // handles quarterly and yearly perfectly well.
     return (async () => {
       mockDetectLoanPayments.mockResolvedValue(defaultDetected);
       for (const accountType of ['LOAN', 'MORTGAGE']) {
@@ -396,6 +625,108 @@ describe('LoanPaymentSetupDialog', () => {
     const cb = screen.getByLabelText(/Automatically post transactions when due/i);
     await act(async () => fireEvent.click(cb));
     expect(cb).toBeChecked();
+  });
+
+  describe('payment matching', () => {
+    it('forces auto-post off and disables the checkbox while it is on', async () => {
+      mockDetectLoanPayments.mockResolvedValue(defaultDetected);
+      await renderDialog();
+
+      const autoPost = screen.getByLabelText(/Automatically post transactions when due/i);
+      await act(async () => fireEvent.click(autoPost));
+      expect(autoPost).toBeChecked();
+
+      await act(async () =>
+        fireEvent.click(screen.getByRole('switch', { name: 'Match imported bank payments to this loan' })),
+      );
+
+      expect(autoPost).not.toBeChecked();
+      expect(autoPost).toBeDisabled();
+    });
+
+    it('submits paymentMatching and keeps autoPost off even though it was checked first', async () => {
+      mockDetectLoanPayments.mockResolvedValue(defaultDetected);
+      mockSetupLoanPayments.mockResolvedValue({} as any);
+      await renderDialog();
+
+      await act(async () =>
+        fireEvent.click(screen.getByLabelText(/Automatically post transactions when due/i)),
+      );
+      await act(async () =>
+        fireEvent.click(screen.getByRole('switch', { name: 'Match imported bank payments to this loan' })),
+      );
+      await act(async () =>
+        fireEvent.change(screen.getByLabelText('Payee pattern'), {
+          target: { value: '*ING HYPOTHEKEN*' },
+        }),
+      );
+
+      const submitButton = screen.getByRole('button', { name: /Set Up Payments/i });
+      await act(async () => fireEvent.click(submitButton));
+
+      expect(mockSetupLoanPayments).toHaveBeenCalledWith('loan-1', expect.objectContaining({
+        autoPost: false,
+        paymentMatching: { payeePattern: '*ING HYPOTHEKEN*', descriptionPattern: undefined },
+      }));
+    });
+
+    it('warns when the server could not create the rule, but still reports the schedule as saved', async () => {
+      mockDetectLoanPayments.mockResolvedValue(defaultDetected);
+      mockSetupLoanPayments.mockResolvedValue({
+        paymentMatchingRuleId: null,
+        paymentMatchingError: { errorCode: 'RULE_LIMIT_REACHED', message: 'Too many rules already exist.' },
+      } as any);
+      await renderDialog();
+
+      await act(async () =>
+        fireEvent.click(screen.getByRole('switch', { name: 'Match imported bank payments to this loan' })),
+      );
+      await act(async () =>
+        fireEvent.change(screen.getByLabelText('Payee pattern'), {
+          target: { value: '*ING HYPOTHEKEN*' },
+        }),
+      );
+
+      const submitButton = screen.getByRole('button', { name: /Set Up Payments/i });
+      await act(async () => fireEvent.click(submitButton));
+
+      // The schedule is saved either way (docs/specs/loan-installment-settlement.md
+      // decision 5): the setup-complete toast still fires, and the rule
+      // failure is reported as a second, separate warning.
+      expect(toast.success).toHaveBeenCalled();
+      expect(toast.error).toHaveBeenCalledWith('Too many rules already exist.');
+    });
+
+    it('refuses to submit a payee pattern without a wildcard', async () => {
+      mockDetectLoanPayments.mockResolvedValue(defaultDetected);
+      await renderDialog();
+
+      await act(async () =>
+        fireEvent.click(screen.getByRole('switch', { name: 'Match imported bank payments to this loan' })),
+      );
+      await act(async () =>
+        fireEvent.change(screen.getByLabelText('Payee pattern'), {
+          target: { value: 'ING HYPOTHEKEN' },
+        }),
+      );
+
+      const submitButton = screen.getByRole('button', { name: /Set Up Payments/i });
+      await act(async () => fireEvent.click(submitButton));
+
+      expect(toast.error).toHaveBeenCalledWith('Enter a payee pattern that includes a * wildcard');
+      expect(mockSetupLoanPayments).not.toHaveBeenCalled();
+    });
+
+    it('shows the source account the debit will be matched against', async () => {
+      mockDetectLoanPayments.mockResolvedValue(defaultDetected);
+      await renderDialog();
+
+      await act(async () =>
+        fireEvent.click(screen.getByRole('switch', { name: 'Match imported bank payments to this loan' })),
+      );
+
+      expect(screen.getByText(/Matched against debits from My Chequing\./)).toBeInTheDocument();
+    });
   });
 
   it('updates payment amount via CurrencyInput', async () => {
@@ -482,6 +813,35 @@ describe('LoanPaymentSetupDialog', () => {
     expect(mockDetectLoanPayments).not.toHaveBeenCalled();
   });
 
+  it('refuses to submit without an interest category, and only a chosen one is sent', async () => {
+    mockDetectLoanPayments.mockResolvedValue({
+      ...defaultDetected,
+      interestCategoryId: null,
+      interestCategoryName: null,
+    });
+    mockSetupLoanPayments.mockResolvedValue({} as any);
+    await renderDialog();
+
+    expect(screen.getByText('Interest Expense Category')).toBeInTheDocument();
+    const submitButton = screen.getByRole('button', { name: /Set Up Payments/i });
+    await act(async () => {
+      fireEvent.click(submitButton);
+    });
+    expect(toast.error).toHaveBeenCalledWith('Please fill in all required fields');
+    expect(mockSetupLoanPayments).not.toHaveBeenCalled();
+
+    await act(async () => {
+      fireEvent.change(screen.getByTestId('combobox-input-category'), { target: { value: 'cat-chosen' } });
+    });
+    await act(async () => {
+      fireEvent.click(submitButton);
+    });
+    expect(mockSetupLoanPayments).toHaveBeenCalledWith(
+      'loan-1',
+      expect.objectContaining({ interestCategoryId: 'cat-chosen' }),
+    );
+  });
+
   it('shows validation error toast when required fields are missing', async () => {
     // No detection result -> paymentAmount 0, nextDueDate '' -> submit blocked
     mockDetectLoanPayments.mockResolvedValue(null);
@@ -503,7 +863,7 @@ describe('LoanPaymentSetupDialog', () => {
     await act(async () => fireEvent.click(checkbox));
 
     // Enter an extra principal value
-    const extraInput = screen.getByLabelText(/Extra Principal Per Payment/i) as HTMLInputElement;
+    const extraInput = screen.getByLabelText(/Extra Principal per Payment/i) as HTMLInputElement;
     await act(async () => fireEvent.change(extraInput, { target: { value: '200' } }));
     await act(async () => fireEvent.blur(extraInput));
 
@@ -523,7 +883,7 @@ describe('LoanPaymentSetupDialog', () => {
 
     const checkbox = screen.getByLabelText(/Include extra payment to principal/i);
     await act(async () => fireEvent.click(checkbox));
-    const extraInput = screen.getByLabelText(/Extra Principal Per Payment/i) as HTMLInputElement;
+    const extraInput = screen.getByLabelText(/Extra Principal per Payment/i) as HTMLInputElement;
     await act(async () => fireEvent.change(extraInput, { target: { value: '100' } }));
 
     expect(screen.getByText(/Total payment:/)).toBeInTheDocument();
@@ -558,6 +918,34 @@ describe('LoanPaymentSetupDialog', () => {
     });
     await renderDialog();
     expect(screen.getByText(/Last payment split:/)).toBeInTheDocument();
+  });
+
+  it('writes the detected amounts in the reader number locale, with the currency once', async () => {
+    usePreferencesStore.setState({
+      preferences: { numberFormat: 'pl-PL', language: 'en' } as any,
+    });
+    try {
+      mockDetectLoanPayments.mockResolvedValue({
+        ...defaultDetected,
+        lastPrincipalAmount: 1200.5,
+        lastInterestAmount: 300.25,
+        extraPrincipalCount: 2,
+        averageExtraPrincipal: 99.5,
+      });
+      await renderDialog();
+
+      const split = screen.getByText(/Last payment split:/).textContent ?? '';
+      expect(split).toMatch(/300,25/);
+      expect(split).toMatch(/1\s?200,50/);
+      expect(split).not.toMatch(/\d\.\d\d/);
+      // The currency comes from the formatter alone, not from a `{currency}`
+      // placeholder beside it.
+      expect(split.match(/USD|\$/g) ?? []).toHaveLength(2);
+      expect(screen.getByText(/avg [^)]*99,50/)).toBeInTheDocument();
+    } finally {
+      cleanup();
+      usePreferencesStore.setState({ preferences: null });
+    }
   });
 
   it('enables detected split by default for mortgages when split data is available', async () => {
@@ -601,7 +989,7 @@ describe('LoanPaymentSetupDialog', () => {
     // Checkbox should be checked (pre-filled) so the extra input shows
     const checkbox = screen.getByLabelText(/Include extra payment to principal/i) as HTMLInputElement;
     expect(checkbox.checked).toBe(true);
-    expect(screen.getByLabelText(/Extra Principal Per Payment/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/Extra Principal per Payment/i)).toBeInTheDocument();
   });
 
   it('selects first source account when no detection result is returned', async () => {

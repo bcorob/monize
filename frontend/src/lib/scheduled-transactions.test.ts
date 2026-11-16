@@ -7,6 +7,8 @@ vi.mock('./api', () => ({
   default: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
 }));
 
+const PIN = { expectedOccurrenceDate: '2025-01-15', expectedOverrideId: null };
+
 describe('scheduledTransactionsApi', () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -66,20 +68,20 @@ describe('scheduledTransactionsApi', () => {
 
   it('post posts to /scheduled-transactions/:id/post', async () => {
     vi.mocked(apiClient.post).mockResolvedValue({ data: { id: 'st-1' } });
-    await scheduledTransactionsApi.post('st-1', { date: '2025-01-15' } as any);
-    expect(apiClient.post).toHaveBeenCalledWith('/scheduled-transactions/st-1/post', { date: '2025-01-15' });
-  });
-
-  it('post sends empty object when no data', async () => {
-    vi.mocked(apiClient.post).mockResolvedValue({ data: { id: 'st-1' } });
-    await scheduledTransactionsApi.post('st-1');
-    expect(apiClient.post).toHaveBeenCalledWith('/scheduled-transactions/st-1/post', {});
+    const data = {
+      expectedOccurrenceDate: '2025-01-15',
+      expectedOverrideId: null,
+      transactionDate: '2025-01-15',
+    };
+    await scheduledTransactionsApi.post('st-1', data);
+    expect(apiClient.post).toHaveBeenCalledWith('/scheduled-transactions/st-1/post', data);
   });
 
   it('skip posts to /scheduled-transactions/:id/skip', async () => {
     vi.mocked(apiClient.post).mockResolvedValue({ data: { id: 'st-1' } });
-    await scheduledTransactionsApi.skip('st-1');
-    expect(apiClient.post).toHaveBeenCalledWith('/scheduled-transactions/st-1/skip');
+    const pin = { expectedOccurrenceDate: '2025-01-15', expectedOverrideId: 'ovr-1' };
+    await scheduledTransactionsApi.skip('st-1', pin);
+    expect(apiClient.post).toHaveBeenCalledWith('/scheduled-transactions/st-1/skip', pin);
   });
 
   it('getOverrides fetches overrides list', async () => {
@@ -144,7 +146,7 @@ describe('scheduledTransactionsApi', () => {
     setCache('investments:portfolioSummary', { total: 1 }, 120_000);
 
     vi.mocked(apiClient.post).mockResolvedValue({ data: { id: 'st-1' } });
-    await scheduledTransactionsApi.post('st-1');
+    await scheduledTransactionsApi.post('st-1', PIN);
 
     expect(getCached('accounts:all:true')).toBeUndefined();
     expect(getCached('investments:portfolioSummary')).toBeUndefined();
@@ -155,7 +157,7 @@ describe('scheduledTransactionsApi', () => {
     setCache('accounts:all:true', [{ id: 'a-1' }], 120_000);
 
     vi.mocked(apiClient.post).mockResolvedValue({ data: { id: 'st-1' } });
-    await scheduledTransactionsApi.skip('st-1');
+    await scheduledTransactionsApi.skip('st-1', PIN);
 
     expect(getCached('accounts:all:true')).toEqual([{ id: 'a-1' }]);
   });

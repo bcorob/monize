@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useMainAccountName } from '@/hooks/useMainAccountName';
-import { MultiSelect } from '@/components/ui/MultiSelect';
+import { MultiSelect, type MultiSelectOption } from '@/components/ui/MultiSelect';
+import { orderForPicker } from '@/lib/account-utils';
 import { Account } from '@/types/account';
 import { buildLogicalAccounts } from '@/lib/logical-accounts';
 
@@ -54,7 +55,7 @@ export function ReportAccountMultiSelect({
   // An entity with no ledger for this mode -- an orphan brokerage has no cash
   // register, an orphan cash half holds no securities -- is not offered,
   // because there is no id to submit for it.
-  const options = buildLogicalAccounts(accounts, mainAccountName)
+  const offered = buildLogicalAccounts(accounts, mainAccountName)
     .filter((logical) =>
       filter ? logical.memberIds.some((id) => {
         const member = accounts.find((a) => a.id === id);
@@ -67,12 +68,22 @@ export function ReportAccountMultiSelect({
     }))
     .filter((entry): entry is { logical: typeof entry.logical; id: string } =>
       entry.id !== null,
-    )
-    .sort((a, b) => a.logical.displayName.localeCompare(b.logical.displayName))
-    .map((entry) => ({
-      value: entry.id,
-      label: entry.logical.displayName,
-    }));
+    );
+  // Favourites first, in the user's own arrangement, then the rest
+  // alphabetically -- the order every account picker uses
+  // (`orderForPicker`). A pair's star lives on its primary row, as in the
+  // account switcher, and the name sorted on is the one shown.
+  const { favourites, rest } = orderForPicker(offered, (entry) => ({
+    isFavourite: entry.logical.primary.isFavourite === true,
+    favouriteSortOrder: entry.logical.primary.favouriteSortOrder ?? 0,
+    name: entry.logical.displayName,
+  }));
+  const options: MultiSelectOption[] = [...favourites, ...rest].map((entry, index) => ({
+    value: entry.id,
+    label: entry.logical.displayName,
+    // A rule between the favourites and the rest, when there are both.
+    ...(index === favourites.length - 1 && rest.length > 0 ? { separatorAfter: true } : {}),
+  }));
 
   // Local draft so checkbox toggles render instantly and the dropdown stays
   // open while selecting. The host report (which reloads its data from this

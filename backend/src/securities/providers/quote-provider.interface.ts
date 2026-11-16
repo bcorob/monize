@@ -1,4 +1,36 @@
-export type QuoteProviderName = "yahoo" | "msn";
+/**
+ * The quote providers a security can be priced by, as one list.
+ *
+ * This array is the single source of truth: the `QuoteProviderName` union is
+ * derived from it, and the DTO validators (`@IsIn(QUOTE_PROVIDER_NAMES)` on the
+ * per-security override and the user default) and the database CHECK on
+ * `quote_provider` / `default_quote_provider` all read the same set. Adding a
+ * provider means one entry here plus the paired migration -- never a second
+ * hand-written list of the same names that can drift out of step.
+ */
+export const QUOTE_PROVIDER_NAMES = [
+  "yahoo",
+  "msn",
+  "lse",
+  "deutsche_boerse",
+  "html_table",
+] as const;
+
+export type QuoteProviderName = (typeof QUOTE_PROVIDER_NAMES)[number];
+
+/**
+ * Providers that read a page the security itself names, so they cannot be a
+ * user's default: a security without that address would have nothing to read.
+ */
+export const PER_SECURITY_ONLY_PROVIDERS = ["html_table"] as const;
+
+/** The providers a user may choose as the default for every security. */
+export const DEFAULT_QUOTE_PROVIDER_NAMES = QUOTE_PROVIDER_NAMES.filter(
+  (name) => !(PER_SECURITY_ONLY_PROVIDERS as readonly string[]).includes(name),
+) as Exclude<QuoteProviderName, (typeof PER_SECURITY_ONLY_PROVIDERS)[number]>[];
+
+export type DefaultQuoteProviderName =
+  (typeof DEFAULT_QUOTE_PROVIDER_NAMES)[number];
 
 export interface QuoteResult {
   symbol: string;
@@ -40,13 +72,7 @@ export interface QuoteResult {
 }
 
 export type IntradayInterval =
-  | "1m"
-  | "2m"
-  | "5m"
-  | "15m"
-  | "30m"
-  | "60m"
-  | "90m";
+  "1m" | "2m" | "5m" | "15m" | "30m" | "60m" | "90m";
 export type IntradayRange = "1d" | "5d" | "1mo";
 
 export interface IntradayPoint {
@@ -78,14 +104,38 @@ export interface HistoricalPrice {
   volume: number | null;
 }
 
+/**
+ * A daily series together with what the provider said it is a series *of*.
+ *
+ * The bars themselves carry no currency, so a payload handed over as a bare
+ * array can only be stored on trust: the same ticker listed on two exchanges
+ * answers with two different sets of numbers and nothing distinguishes them.
+ * The metadata is bundle-level because it describes the answer, not a bar --
+ * a provider quotes one instrument in one currency for the whole window.
+ */
+export interface HistoricalSeries {
+  prices: HistoricalPrice[];
+  /**
+   * The instrument's trading currency as the provider reports it for this
+   * series, GBX/GBp normalized to GBP (the bars are converted to pounds with
+   * it). `null` when the provider does not report one, which is a different
+   * fact from a currency that disagrees: see `quote-currency.util.ts`.
+   */
+  currencyCode: string | null;
+  /** The provider's own symbol for the series it answered with, when it names one. */
+  symbol?: string | null;
+  /** The exchange the provider says the series belongs to, when it names one. */
+  exchange?: string | null;
+}
+
 export interface SecurityLookupResult {
   symbol: string;
   name: string;
   exchange: string | null;
   securityType: string | null;
   currencyCode: string | null;
-  /** Provider that produced this result, if known. */
-  provider?: QuoteProviderName;
+  /** Provider that produced this result, if known. Never a page-reading provider: those do not search. */
+  provider?: DefaultQuoteProviderName;
   /** MSN Financial Instrument ID, when the result came from MSN. */
   msnInstrumentId?: string | null;
 }
@@ -105,6 +155,8 @@ export interface QuoteProviderOptions {
   currencyCode?: string | null;
   /** User's top-N preferred exchanges, in priority order. Used for ambiguous lookups. */
   preferredExchanges?: string[];
+  /** The page whose price table `html_table` reads (`securities.quote_url`). */
+  quoteUrl?: string;
 }
 
 export interface QuoteProvider {
@@ -116,12 +168,21 @@ export interface QuoteProvider {
     opts?: QuoteProviderOptions,
   ): Promise<QuoteResult | null>;
 
-  fetchHistorical(
+  /**
+   * Daily bars for a named range, with the metadata that says which listing
+   * they belong to.
+   *
+   * The series rather than a bare array because a price acceptance point has to
+   * be able to refuse a payload whose currency is not the security's, and an
+   * array cannot carry that. `null` means no answer; a series with an empty
+   * `prices` means the provider answered with no bars in the window.
+   */
+  fetchHistoricalSeries(
     symbol: string,
     exchange: string | null,
     range?: string,
     opts?: QuoteProviderOptions,
-  ): Promise<HistoricalPrice[] | null>;
+  ): Promise<HistoricalSeries | null>;
 
   /**
    * Optional: fetch daily bars for an explicit date window rather than one of
@@ -135,13 +196,13 @@ export interface QuoteProvider {
    * omit this, and callers fall back to the narrowest range that reaches the
    * date.
    */
-  fetchHistoricalWindow?(
+  fetchHistoricalWindowSeries?(
     symbol: string,
     exchange: string | null,
     fromDate: Date,
     toDate: Date,
     opts?: QuoteProviderOptions,
-  ): Promise<HistoricalPrice[] | null>;
+  ): Promise<HistoricalSeries | null>;
 
   /**
    * Optional: fetch intraday price bars for a symbol. Used by the

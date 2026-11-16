@@ -1,0 +1,287 @@
+{
+  "title": "通知",
+  "unread": "{count} 則未讀",
+  "markAllRead": "全部標為已讀",
+  "loading": "正在載入通知...",
+  "empty": "沒有通知",
+  "undo": "復原",
+  "buttonTitle": "通知",
+  "buttonAriaLabel": "通知",
+  "dismissAriaLabel": "忽略通知",
+  "closeAriaLabel": "關閉通知",
+  "emptyFiltered": "沒有通知符合目前的篩選條件",
+  "deleteAll": "全部刪除",
+  "deleteAllConfirmTitle": "刪除通知",
+  "deleteAllConfirmMessageAll": "刪除所有通知？此操作無法復原。",
+  "deleteAllConfirmMessageFiltered": "刪除符合目前篩選條件的所有通知，包括未顯示的？此操作無法復原。",
+  "deleted": "{count, plural, other {已刪除 # 則通知}}",
+  "deleteFailed": "無法刪除通知",
+  "filter": {
+    "financial": "財務",
+    "system": "系統"
+  },
+  "severity": {
+    "critical": "緊急",
+    "warning": "警告",
+    "success": "好消息",
+    "info": "資訊"
+  },
+  "reminder": {
+    "remindAriaLabel": "提醒我此事",
+    "stopAriaLabel": "停止此提醒",
+    "stopped": "提醒已停止",
+    "stopFailed": "無法停止提醒",
+    "created": "提醒已設定",
+    "createFailed": "無法設定提醒",
+    "dialogTitle": "提醒我",
+    "dialogDescription": "稍後再次收到此通知，直到你處理為止。",
+    "modeLabel": "頻率",
+    "modeRepeat": "重複直到我停止",
+    "modeOnce": "只再一次",
+    "intervalLabelRepeat": "提醒我，每隔",
+    "intervalLabelOnce": "在此之後提醒我",
+    "durationMinutes": "{minutes, plural, other {# 分鐘}}",
+    "durationHours": "{hours, plural, other {# 小時}}",
+    "cancel": "取消",
+    "confirm": "設定提醒",
+    "pageTitle": "有效提醒",
+    "empty": "沒有有效提醒",
+    "loadFailed": "無法載入提醒",
+    "retry": "重試",
+    "nextFire": "下次提醒：{date}",
+    "openTarget": "開啟相關頁面",
+    "delegateUnavailable": "請切換回您自己的帳戶以管理提醒。"
+  },
+  "billDue": {
+    "titleOverdue": "{payee} 已逾期",
+    "titleToday": "{payee} 今天到期",
+    "titleTomorrow": "{payee} 明天到期",
+    "titleInDays": "{payee} 將在 {days} 天後到期",
+    "amountDue": "{date} 應付 {amount}",
+    "amountUnavailable": "金額無法取得（無目前匯率），到期日 {date}"
+  },
+  "gemSignal": {
+    "riskTitle": "{strategy} 已切換為{state}",
+    "riskMessage": "您的 GEM 策略「{strategy}」已從{fromState}變為{toState}。開啟以查看建議。",
+    "allocationTitle": "{strategy} 變更了目標",
+    "allocationMessage": "您的 GEM 策略「{strategy}」現在的目標是 {target}。開啟以查看建議。",
+    "riskOn": "風險偏好",
+    "riskOff": "避險"
+  },
+  "bond": {
+    "maturitySoonTitle": "{series} 將於 {date} 到期",
+    "maturitySoonMessage": "{quantity} × {series} 將於 {date} 到期。{payout}",
+    "interestTitle": "{series}：{date} 支付利息",
+    "interestMessage": "{quantity} × {series} 將於 {date} 支付利息 {amount}。若帳戶中尚未入帳，請在證券頁面記錄。",
+    "interestMessageUnknown": "{quantity} × {series} 將於 {date} 付息。金額尚未確定：所依據的利率尚未公布。",
+    "rateResetTitle": "{series}：新的計息期",
+    "rateResetMessage": "{series} 已於 {date} 進入第 {period} 期，年利率 {rate}。",
+    "unbookedTitle": "{series}：已到期，兌付未記錄",
+    "unbookedMessage": "{quantity} × {series} 已於 {date} 到期，但尚未記錄兌付。{payout}請在證券頁面記錄兌付。",
+    "payoutKnown": "兌付金額為 {payout}。",
+    "payoutUnknown": "兌付金額尚未確定：{reason}。",
+    "reason": {
+      "RATE_UNKNOWN": "所依據的利率尚未公布",
+      "TERMS_INCOMPLETE": "該系列的條款不完整",
+      "PURCHASE_OUTSIDE_SALE_WINDOW": "購買日期不在該系列的發售期內",
+      "PURCHASE_AFTER_MATURITY": "買入日期在該系列到期日當天或之後",
+      "other": "無法根據已儲存的資料計算"
+    },
+    "benchmarkTitle": "{benchmark}：新數據 {observation}",
+    "benchmarkIntro": "{publisher} 已公布 {observation} 的 {benchmark}：{value}。",
+    "benchmarkSeries": "{series}：自 {date} 起的計息期，年利率 {rate}。",
+    "benchmarkSeriesProjected": "{series}：自 {date} 起的計息期，預計年利率 {rate}。",
+    "benchmarkSeriesUnknown": "{series}：自 {date} 起的計息期，利率尚未確定。",
+    "benchmarkMore": "另有 {more} 個。",
+    "missingTitle": "債券數據尚未確定",
+    "missingMessage": "部分債券數據無法計算。{causes}",
+    "cause": {
+      "observation": "{benchmark}（{publisher}）{observation} 的數據未儲存：尚未公布，或此後未擷取資料來源。請在債券頁面重新整理。",
+      "observationNoPublisher": "{benchmark} {observation} 的數據未儲存：尚未公布，或此後未擷取資料來源。請在債券頁面重新整理。",
+      "terms": "{series} 的條款不完整。請在債券頁面重新整理該系列。",
+      "purchase": "{series} 於 {date} 的購買不在其發售期（{from} 至 {to}）內。請更正購買日期。",
+      "purchaseAfterMaturity": "{series} 於 {date} 的買入在其到期日（{maturity}）當天或之後。請更正買入日期。",
+      "lots": "無法從帳本推導出持有批次（{code}）。請更正帳本。",
+      "lotsRow": "{date} 的{action}：無法推導出持有批次（{code}）。請更正該交易。",
+      "lotsRowSeries": "{date} 的{action}：未歸入任何系列（{code}）。請在該交易中選擇系列。",
+      "lotsRowRemoval": "{date} 的{action}：減少的數量超過帳戶持有的該系列數量（{code}）。請更正該交易。"
+    },
+    "action": {
+      "BUY": "買入",
+      "SELL": "賣出",
+      "REINVEST": "再投資",
+      "ADD_SHARES": "增加份額",
+      "REMOVE_SHARES": "減少份額",
+      "SPLIT": "分割",
+      "TRANSFER_IN": "轉入",
+      "TRANSFER_OUT": "轉出",
+      "other": "交易"
+    },
+    "benchmarks": {
+      "PL_CPI_GUS_YOY": "消費者物價指數，12 個月 (GUS)",
+      "PL_NBP_REFERENCE": "NBP 基準利率",
+      "US_CPI_U_NSA": "CPI-U，所有項目，未經季節性調整 (BLS)",
+      "US_TBILL_13W_MMY": "13 週美國國庫券殖利率"
+    }
+  },
+  "portfolioMovement": {
+    "titleUp": "投資上漲 {percent}%",
+    "titleDown": "投資下跌 {percent}%",
+    "messageUp": "從 {from} 到 {to}，您的投資上漲了 {percent}%（不含存入與提出）。開啟以查看。",
+    "messageDown": "從 {from} 到 {to}，您的投資下跌了 {percent}%（不含存入與提出）。開啟以查看。"
+  },
+  "balanceThreshold": {
+    "titleLow": "{account} 低於您的閾值",
+    "titleHigh": "{account} 高於您的閾值",
+    "messageLow": "{account} 降至 {balance}，低於您的閾值 {threshold}。",
+    "messageHigh": "{account} 升至 {balance}，高於您的閾值 {threshold}。"
+  },
+  "system": {
+    "backupFailed": {
+      "title": "自動備份失敗",
+      "message": "{user} 的自動備份失敗：{error}"
+    },
+    "backupPartial": {
+      "title": "自動備份不完整",
+      "messageAttachments": "{user} 的備份已寫入，但 {expected} 個附件中有 {missing} 個無法納入，另有 {inconsistent} 個與其中繼資料不符。完整備份已保留。",
+      "messagePromotion": "{user} 的每日備份成功，但其每週或每月副本無法寫入：{error}",
+      "messageRetention": "{user} 的備份成功，但舊的備份檔案無法清理：{error}"
+    },
+    "encryptionKeyMissing": {
+      "title": "尚未設定加密金鑰",
+      "message": "未設定 ENCRYPTION_KEY，備份將以未加密方式寫入，且無法儲存機密資訊。未來版本將在缺少該金鑰時拒絕啟動。"
+    },
+    "jwtSecretWeak": {
+      "title": "JWT_SECRET 強度不足",
+      "message": "JWT_SECRET 是公開的範例值或過於容易猜測，工作階段權杖可能遭到偽造。請產生一個強金鑰（openssl rand -base64 32）。變更後，驗證器 App 的驗證碼將失效，受信任的裝置也會被清除：使用者以備份驗證碼登入後重新設定 2FA，對於沒有備份驗證碼的使用者，請在使用者管理中重設其 2FA。請先閱讀 docs/backend/modules-and-runtime.md（Changing JWT_SECRET）。"
+    },
+    "smtpFailure": {
+      "title": "郵件傳送失敗",
+      "message": "Monize 無法傳送郵件：{error}。通知與提醒未能送達。"
+    },
+    "providerOutage": {
+      "title": "{provider} 沒有回應",
+      "message": "無法取得 {provider} 的市場資料。在其恢復回應之前，價格與指數資料可能已過時。"
+    },
+    "providerRecovered": {
+      "title": "{provider} 已恢復回應",
+      "message": "故障已結束，{provider} 的市場資料正在重新更新。"
+    },
+    "scheduledPostFailed": {
+      "title": "無法登錄 {name}",
+      "message": "您到期日為 {date} 的定期交易未能自動登錄：{error}。您可以在「帳單與存款」中手動登錄。"
+    }
+  },
+  "priceMovement": {
+    "title": "價格變動提醒: {symbol} ({percent}%)",
+    "message": "{symbol}：相對於上一個有資料的交易日變動 {percent}%。"
+  },
+  "bankSync": {
+    "expiringTitleToday": "{institution}：銀行存取權限今天到期",
+    "expiringTitleOneDay": "{institution}：銀行存取權限將在 1 天內到期",
+    "expiringTitleDays": "{institution}：銀行存取權限將在 {days} 天內到期",
+    "expiringMessage": "您授權 Monize 讀取 {institution} 的有效期至 {date} 結束。請在 Monize 中續期連線以繼續同步。",
+    "expiredTitle": "{institution}：銀行存取權限已到期",
+    "expiredMessage": "您授權 Monize 讀取 {institution} 的有效期已結束。請在 Monize 中續期連線以恢復同步。",
+    "failedTitle": "{institution}：同步失敗",
+    "failedMessage": "{institution} 的每日同步在以下科目失敗：{accounts}。請開啟銀行同步設定查看原因。",
+    "failedCredentialsMessage": "由於銀行同步憑證遺失或被拒絕，{institution} 的每日同步無法啟動。請在銀行同步設定中檢查憑證。",
+    "unnamedAccount": "一個科目",
+    "importedTitle": "{institution}：已匯入新交易",
+    "importedMessage": "每日同步從 {institution} 匯入的交易：{imported} 筆。",
+    "importedNoneTitle": "{institution}：沒有新交易",
+    "importedNoneMessage": "{institution} 的每日同步沒有發現新交易。"
+  },
+  "emailReceiptsAttention": {
+    "title": "電子郵件收據需要關注",
+    "message": "您的收據收件箱包含 {noParser} 個沒有個人檔案的郵件和 {parseFailed} 個其個人檔案未識別的郵件。打開以查閱。"
+  },
+  "aiReview": {
+    "readyTitle": "AI 提案正在等待您的核准",
+    "readyMessage": "{count, plural, other {#則}} AI 提案正在等待您的核准，其中 {added} 則為新提案。開啟 AI 審核收件匣以核准或忽略。",
+    "expiringTitle": "AI 提案即將到期",
+    "expiringMessage": "{count, plural, other {#則}} AI 提案即將到期。最早的一則將於 {date} 到期。開啟 AI 審核收件匣以核准或忽略。"
+  },
+  "warranty": {
+    "expiringTitle": "{name}：保固將在 {days, plural, other {# 天}}內到期",
+    "expiringMessage": "{name} 的保固將於 {date} 到期。開啟即可檢視其文件或記錄保固申請。",
+    "todayTitle": "{name}：保固今天到期",
+    "todayMessage": "{name} 的保固於今天（{date}）到期。開啟即可檢視其文件或記錄保固申請。"
+  },
+  "security": {
+    "oauthTitle": "新應用程式已連線：{clientName}",
+    "oauthMessage": "應用程式 {clientName} 剛剛獲得存取您 Monize 帳戶的權限。如果不是您本人操作，請立即變更密碼：這會撤銷所有已連線應用程式的存取權限。",
+    "relayTitle": "新連線已回應您的 AI 聊天",
+    "relayMessage": "一個先前從未回應過您 Monize AI 聊天的連線剛剛取得了一則提示。如果您沒有連線此助理，請變更密碼。"
+  },
+  "payrollDeduction": {
+    "resetTitle": "{category}：請確認明年的上限",
+    "resetMessage": "{bill} 上的 {category} 扣款將於 {date} 重設。若年度上限有變請更新；否則 {amount} 將再次適用。"
+  },
+  "shared": {
+    "title": "共同支出",
+    "message": "共享群組有更新。開啟 Monize 查看。"
+  },
+  "native": {
+    "payments": {
+      "title": "付款提醒",
+      "body": "有一筆帳單或排定付款需要您留意。開啟 Monize 查看詳細資訊。"
+    },
+    "budgets": {
+      "title": "預算提醒",
+      "body": "您的某個預算需要留意。開啟 Monize 查看詳細資訊。"
+    },
+    "system": {
+      "title": "系統通知",
+      "body": "Monize 有一則系統通知給您。開啟應用程式查看詳細資訊。"
+    },
+    "balances": {
+      "title": "餘額提醒",
+      "body": "某個帳戶餘額超過了您設定的閾值。開啟 Monize 查看詳細資訊。"
+    },
+    "investments": {
+      "title": "投資變動",
+      "body": "您的投資今天發生了變動。開啟 Monize 查看詳細資訊。"
+    },
+    "strategies": {
+      "title": "策略訊號",
+      "body": "您的某個策略變更了建議。開啟 Monize 查看詳細資訊。"
+    },
+    "bank_sync": {
+      "title": "銀行連線",
+      "body": "有銀行連線需要您留意。開啟 Monize 查看詳細資訊。"
+    },
+    "bank_sync_activity": {
+      "title": "銀行同步",
+      "body": "您的銀行同步有新消息。開啟 Monize 查看詳細資訊。"
+    },
+    "email_receipts": {
+      "title": "電子郵件收據需要關注",
+      "body": "您的收據收件箱中的一些電子郵件需要個人檔案或修正。打開 Monize 以瞭解詳情。"
+    },
+    "bonds": {
+      "title": "債券通知",
+      "body": "您的某檔債券有新消息。開啟 Monize 查看詳細資料。"
+    },
+    "ai_review": {
+      "title": "AI 審核提案",
+      "body": "部分 AI 審核提案正在等待您的決定。開啟 Monize 查看詳細資料。"
+    },
+    "warranties": {
+      "title": "保固提醒",
+      "body": "您有一項保固即將到期。開啟 Monize 查看詳細資料。"
+    },
+    "shared_expenses": {
+      "title": "共同支出",
+      "body": "共享群組有更新。開啟 Monize 查看。"
+    },
+    "security": {
+      "title": "安全通知",
+      "body": "有權存取您 Monize 帳戶的人員發生了變化。開啟 Monize 查看詳細資料。"
+    },
+    "fallback": {
+      "title": "Monize",
+      "body": "您在 Monize 中有一則新通知。"
+    }
+  }
+}

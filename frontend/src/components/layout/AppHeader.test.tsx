@@ -1,12 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@/test/render';
+import { act, render, screen, fireEvent, waitFor } from '@/test/render';
 import { AppHeader } from './AppHeader';
+import { useMobileChromeStore } from '@/store/mobileChromeStore';
 import toast from 'react-hot-toast';
+import { endSignOut, isSigningOut } from '@/lib/logout-state';
 
 // Mock next/image
 vi.mock('next/image', () => ({
   default: ({ priority, fill, ...props }: any) => <img {...props} />,
 }));
+
+function openDrawer() {
+  act(() => useMobileChromeStore.getState().setDrawerOpen(true));
+}
 
 // Track router.push calls
 const mockPush = vi.fn();
@@ -30,6 +36,20 @@ vi.mock('@/lib/auth', () => ({
   authApi: {
     logout: (...args: any[]) => mockApiLogout(...args),
   },
+}));
+
+// The sign-out's push step, recorded in the same sequence as the session end.
+const signOutOrder: string[] = [];
+const mockHoldPush = vi.fn(async () => {
+  signOutOrder.push('holdPush');
+});
+const mockReleasePush = vi.fn(async () => {
+  signOutOrder.push('releasePush');
+});
+vi.mock('@/lib/push', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/push')>()),
+  holdPushForSignOut: () => mockHoldPush(),
+  releasePushForSignOut: () => mockReleasePush(),
 }));
 
 // Mock logger
@@ -64,13 +84,14 @@ vi.mock('@/store/authStore', () => ({
   },
 }));
 
-// Mock BudgetAlertBadge to avoid async act() warnings (tested in its own file)
-vi.mock('@/components/budgets/BudgetAlertBadge', () => ({
-  BudgetAlertBadge: () => <div data-testid="budget-alert-badge" />,
+// Mock NotificationBell to avoid async act() warnings (tested in its own file)
+vi.mock('@/components/notifications/NotificationBell', () => ({
+  NotificationBell: () => <div data-testid="budget-alert-badge" />,
 }));
 
 describe('AppHeader', () => {
   beforeEach(() => {
+    useMobileChromeStore.setState({ drawerOpen: false, collapsedTitle: null });
     vi.clearAllMocks();
     window.sessionStorage.clear();
     mockPathname = '/dashboard';
@@ -136,6 +157,21 @@ describe('AppHeader', () => {
     });
   });
 
+  // Holding the row needs the session that is ending, so it runs first; and a
+  // sign-out holds, while only account deletion releases in full.
+  it('holds push before ending the session, and does not release it', async () => {
+    signOutOrder.length = 0;
+    mockApiLogout.mockImplementationOnce(async () => {
+      signOutOrder.push('authLogout');
+    });
+    render(<AppHeader />);
+    fireEvent.click(screen.getByRole('button', { name: /logout/i }));
+
+    await waitFor(() => expect(mockLogout).toHaveBeenCalled());
+    expect(signOutOrder).toEqual(['holdPush', 'authLogout']);
+    expect(mockReleasePush).not.toHaveBeenCalled();
+  });
+
   it('clears the incomplete-logout flag on a confirmed logout', async () => {
     window.sessionStorage.setItem('monize:logout-incomplete', '1');
     render(<AppHeader />);
@@ -147,6 +183,25 @@ describe('AppHeader', () => {
     expect(window.sessionStorage.getItem('monize:logout-incomplete')).toBeNull();
     expect(toast.success).toHaveBeenCalled();
     expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  // The page still mounted here keeps polling after the session is revoked.
+  // Without the flag those 401s drive the interceptor's own hard redirect to
+  // /login, which aborts this router.push mid-flight.
+  it('marks the sign-out before revoking the session', async () => {
+    endSignOut();
+    let signingOutAtRevoke: boolean | undefined;
+    mockApiLogout.mockImplementationOnce(async () => {
+      signingOutAtRevoke = isSigningOut();
+    });
+    render(<AppHeader />);
+    fireEvent.click(screen.getByRole('button', { name: /logout/i }));
+
+    await waitFor(() => {
+      expect(mockPush).toHaveBeenCalledWith('/login');
+    });
+    expect(signingOutAtRevoke).toBe(true);
+    endSignOut();
   });
 
   // Only the server can clear the HttpOnly refresh cookie, so a failed request
@@ -311,15 +366,14 @@ describe('AppHeader', () => {
   });
 
   // Mobile menu
-  it('toggles mobile menu when hamburger button is clicked', () => {
+  it('opens the drawer when the tab bar asks for it', () => {
     render(<AppHeader />);
-    const menuToggle = screen.getByLabelText('Toggle menu');
 
     // Mobile menu should not be visible initially
     expect(screen.queryByText('Dashboard')).not.toBeInTheDocument();
 
     // Click to open
-    fireEvent.click(menuToggle);
+    openDrawer();
 
     // Now Dashboard should appear in the mobile menu
     expect(screen.getByText('Dashboard')).toBeInTheDocument();
@@ -328,8 +382,7 @@ describe('AppHeader', () => {
 
   it('shows all nav links in mobile menu when open', () => {
     render(<AppHeader />);
-    const menuToggle = screen.getByLabelText('Toggle menu');
-    fireEvent.click(menuToggle);
+    openDrawer();
 
     // Check for main nav links
     expect(screen.getByText('Dashboard')).toBeInTheDocument();
@@ -340,8 +393,7 @@ describe('AppHeader', () => {
 
   it('navigates to dashboard from mobile menu', () => {
     render(<AppHeader />);
-    const menuToggle = screen.getByLabelText('Toggle menu');
-    fireEvent.click(menuToggle);
+    openDrawer();
 
     const dashboardButton = screen.getByText('Dashboard');
     fireEvent.click(dashboardButton);
@@ -350,8 +402,7 @@ describe('AppHeader', () => {
 
   it('navigates to settings from mobile menu', () => {
     render(<AppHeader />);
-    const menuToggle = screen.getByLabelText('Toggle menu');
-    fireEvent.click(menuToggle);
+    openDrawer();
 
     const settingsButton = screen.getByText('Settings');
     fireEvent.click(settingsButton);
@@ -367,16 +418,14 @@ describe('AppHeader', () => {
       role: 'admin',
     };
     render(<AppHeader />);
-    const menuToggle = screen.getByLabelText('Toggle menu');
-    fireEvent.click(menuToggle);
+    openDrawer();
 
     expect(screen.getByText('User Management')).toBeInTheDocument();
   });
 
   it('does not show Admin section in mobile menu for regular users', () => {
     render(<AppHeader />);
-    const menuToggle = screen.getByLabelText('Toggle menu');
-    fireEvent.click(menuToggle);
+    openDrawer();
 
     expect(screen.queryByText('User Management')).not.toBeInTheDocument();
   });
@@ -390,8 +439,7 @@ describe('AppHeader', () => {
       role: 'admin',
     };
     render(<AppHeader />);
-    const menuToggle = screen.getByLabelText('Toggle menu');
-    fireEvent.click(menuToggle);
+    openDrawer();
 
     fireEvent.click(screen.getByText('User Management'));
     expect(mockPush).toHaveBeenCalledWith('/admin/users');
@@ -400,8 +448,7 @@ describe('AppHeader', () => {
   it('highlights active link in mobile menu', () => {
     mockPathname = '/transactions';
     render(<AppHeader />);
-    const menuToggle = screen.getByLabelText('Toggle menu');
-    fireEvent.click(menuToggle);
+    openDrawer();
 
     // Find the Transactions button in the mobile menu that has active style
     const transactionsButtons = screen.getAllByText('Transactions');
@@ -414,8 +461,7 @@ describe('AppHeader', () => {
   it('highlights dashboard in mobile menu when pathname is /dashboard', () => {
     mockPathname = '/dashboard';
     render(<AppHeader />);
-    const menuToggle = screen.getByLabelText('Toggle menu');
-    fireEvent.click(menuToggle);
+    openDrawer();
 
     const dashboardButton = screen.getByText('Dashboard');
     expect(dashboardButton.closest('button')?.className).toContain('bg-blue-50');
@@ -423,8 +469,7 @@ describe('AppHeader', () => {
 
   it('closes mobile menu when the backdrop is clicked', () => {
     render(<AppHeader />);
-    const menuToggle = screen.getByLabelText('Toggle menu');
-    fireEvent.click(menuToggle);
+    openDrawer();
 
     expect(screen.getByText('Dashboard')).toBeInTheDocument();
 
@@ -438,7 +483,7 @@ describe('AppHeader', () => {
 
   it('closes mobile menu when the close button is clicked', () => {
     render(<AppHeader />);
-    fireEvent.click(screen.getByLabelText('Toggle menu'));
+    openDrawer();
     expect(screen.getByText('Dashboard')).toBeInTheDocument();
 
     fireEvent.click(screen.getByLabelText('Close menu'));
@@ -447,7 +492,7 @@ describe('AppHeader', () => {
 
   it('closes mobile menu on Escape', () => {
     render(<AppHeader />);
-    fireEvent.click(screen.getByLabelText('Toggle menu'));
+    openDrawer();
     expect(screen.getByText('Dashboard')).toBeInTheDocument();
 
     fireEvent.keyDown(document, { key: 'Escape' });
@@ -459,7 +504,7 @@ describe('AppHeader', () => {
     // even when the destination equals the current route, where the
     // route-change effect never fires.
     render(<AppHeader />);
-    fireEvent.click(screen.getByLabelText('Toggle menu'));
+    openDrawer();
     expect(screen.getByText('Settings')).toBeInTheDocument();
 
     fireEvent.click(screen.getByText('Settings'));
@@ -474,7 +519,7 @@ describe('AppHeader', () => {
     // router.push that closes the drawer and leave the user on the old page.
     render(<AppHeader />);
     const lengthBeforeOpen = window.history.length;
-    fireEvent.click(screen.getByLabelText('Toggle menu'));
+    openDrawer();
     expect(screen.getByText('Dashboard')).toBeInTheDocument();
     expect(window.history.length).toBe(lengthBeforeOpen);
   });
@@ -498,8 +543,7 @@ describe('AppHeader', () => {
 
   it('shows mobile tools links and navigates', () => {
     render(<AppHeader />);
-    const menuToggle = screen.getByLabelText('Toggle menu');
-    fireEvent.click(menuToggle);
+    openDrawer();
 
     // Click a tools link in the mobile menu
     const categoriesButtons = screen.getAllByText('Categories');

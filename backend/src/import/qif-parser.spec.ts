@@ -1,4 +1,37 @@
-import { parseQif, validateQifContent } from "./qif-parser";
+import { parseQif, QifTransaction, validateQifContent } from "./qif-parser";
+
+// The three records of discussion #2184, as Microsoft Money exports them.
+const MONEY_INVESTMENT_ACTIVITIES = `!Type:Invst
+^
+D02-11-1994
+MRs. 126.08
+T130.00
+LInvestment Income:Dividends|[Cash Rs]
+$130.00
+NDivX
+YxStocks - Welspun India
+I
+Q
+^
+D03-03'2005
+T3.00
+LInvestment Income:Interest|[ICICI - Sharmi 3675]
+$3.00
+NMiscInc
+YStocks - TCS
+I
+Q
+^
+D21-10'2010
+T91,111.51
+LInvestment Income:Capital Gains|[ICICI - Sharmi 3675]
+$91,111.51
+NSellX
+YStocks - TCS
+I1,000
+Q92
+O888.49
+^`;
 
 describe("QIF Parser", () => {
   describe("validateQifContent", () => {
@@ -525,6 +558,15 @@ T-1,234.56
       expect(result.transactions[0].amount).toBe(-1234.56);
     });
 
+    it("keeps a coin ledger's 8-place amount whole", () => {
+      const qif = `!Type:Bank
+D01/15/2026
+T-0.00002500
+^`;
+      const result = parseQif(qif);
+      expect(result.transactions[0].amount).toBe(-0.000025);
+    });
+
     it("handles amounts with currency symbols", () => {
       const qif = `!Type:Bank
 D01/15/2026
@@ -542,6 +584,24 @@ T0.00
       const result = parseQif(qif);
       expect(result.transactions[0].amount).toBe(0);
     });
+
+    it("handles a European decimal comma (-18,36 -> -18.36)", () => {
+      const qif = `!Type:Bank
+D01/15/2026
+T-18,36
+^`;
+      const result = parseQif(qif);
+      expect(result.transactions[0].amount).toBe(-18.36);
+    });
+
+    it("handles European thousands-dot with decimal comma (1.234,56 -> 1234.56)", () => {
+      const qif = `!Type:Bank
+D01/15/2026
+T1.234,56
+^`;
+      const result = parseQif(qif);
+      expect(result.transactions[0].amount).toBe(1234.56);
+    });
   });
 
   describe("parseQif - edge cases", () => {
@@ -558,6 +618,20 @@ PGrocery Store`;
       const qif = "!Type:Bank\r\nD01/15/2026\r\nT-50.00\r\n^\r\n";
       const result = parseQif(qif);
       expect(result.transactions).toHaveLength(1);
+    });
+
+    it("handles classic Mac line endings (bare CR), as a .qmtf can carry", () => {
+      const qif =
+        "!Type:Bank\rD01/15/26\rT-50.00\rPGrocery\rLHousing:Mortgage:Interest\r^\r";
+      const result = parseQif(qif);
+      expect(result.transactions).toHaveLength(1);
+      expect(result.transactions[0]).toMatchObject({
+        date: "2026-01-15",
+        amount: -50,
+        payee: "Grocery",
+        category: "Housing:Mortgage:Interest",
+      });
+      expect(result.categories).toEqual(["Housing:Mortgage:Interest"]);
     });
 
     it("skips empty lines", () => {
@@ -1720,6 +1794,149 @@ Pvoid where prohibited
       expect(tx.voidedByExport).toBeFalsy();
     });
   });
+  // Microsoft Money writes an investment activity's category and the account
+  // its cash moved through as one field (discussion #2184, issue #2209).
+  describe("parseQif - Microsoft Money Category|[Account] field", () => {
+    it("offers neither the piped category nor an account no row will use", () => {
+      const result = parseQif(MONEY_INVESTMENT_ACTIVITIES);
+      expect(result.accountType).toBe("INVESTMENT");
+      expect(result.categories).toEqual([]);
+      // DivX, MiscInc and SellX keep their cash in the investment account, so
+      // listing Cash Rs or the ICICI account would only have the wizard
+      // create an account nothing books to.
+      expect(result.transferAccounts).toEqual([]);
+      expect(result.securities).toEqual([
+        "Stocks - TCS",
+        "xStocks - Welspun India",
+      ]);
+      expect(result.detectedDateFormat).toBe("DD/MM/YYYY");
+
+      const [div, misc, sell] = result.transactions;
+      expect(div).toMatchObject({
+        date: "1994-11-02",
+        amount: 130,
+        action: "DivX",
+        security: "xStocks - Welspun India",
+        category: "",
+        isTransfer: false,
+        transferAccount: "",
+        splits: [],
+      });
+      expect(misc).toMatchObject({
+        date: "2005-03-03",
+        amount: 3,
+        action: "MiscInc",
+        security: "Stocks - TCS",
+        category: "",
+        isTransfer: false,
+        transferAccount: "",
+      });
+      expect(sell).toMatchObject({
+        date: "2010-10-21",
+        amount: 91111.51,
+        action: "SellX",
+        security: "Stocks - TCS",
+        price: 1000,
+        quantity: 92,
+        commission: 888.49,
+        category: "",
+        isTransfer: false,
+        transferAccount: "",
+      });
+    });
+
+    it.each(["XOut", "XIn", "Cash", "WithdrwX", "ContribX"])(
+      "keeps the account as the transfer of a %s row, whose cash the import moves",
+      (action) => {
+        // The L line precedes N, as Money writes it: the account is settled
+        // only once the record's action is known.
+        const qif = `!Type:Invst
+D01/15/2026
+T500.00
+LTransfers:Out|[ICICI Bank]
+N${action}
+^`;
+        const result = parseQif(qif);
+        expect(result.categories).toEqual([]);
+        expect(result.transferAccounts).toEqual(["ICICI Bank"]);
+        expect(result.transactions[0]).toMatchObject({
+          category: "",
+          isTransfer: true,
+          transferAccount: "ICICI Bank",
+        });
+      },
+    );
+
+    it("settles the account of a last record that has no terminator", () => {
+      const qif = `!Type:Invst
+D01/15/2026
+T500.00
+NXOut
+LTransfers:Out|[ICICI Bank]`;
+      const result = parseQif(qif);
+      expect(result.transferAccounts).toEqual(["ICICI Bank"]);
+      expect(result.transactions[0].transferAccount).toBe("ICICI Bank");
+    });
+
+    it("keeps tags written on either side of the account", () => {
+      const qif = `!Type:Invst
+D01/15/2026
+NMiscExp
+T12.00
+LTaxes:TDS/Withheld|[ICICI Bank]/FY2026
+^`;
+      const result = parseQif(qif);
+      const tx = result.transactions[0];
+      expect(tx.category).toBe("");
+      expect(tx.isTransfer).toBe(false);
+      expect(tx.tagNames).toEqual(["Withheld", "FY2026"]);
+      expect(result.categories).toEqual([]);
+      expect(result.transferAccounts).toEqual([]);
+    });
+
+    it("does not carry a piped account into the next record", () => {
+      const qif = `!Type:Invst
+D01/15/2026
+T12.00
+LInvestment Income:Dividends|[ICICI Bank]
+NDivX
+^
+D01/16/2026
+T50.00
+NXOut
+^`;
+      const result = parseQif(qif);
+      expect(result.transferAccounts).toEqual([]);
+      expect(result.transactions[1].isTransfer).toBe(false);
+    });
+
+    it("reads the form only in an investment section", () => {
+      // No exporter is known to write it on a bank row, where turning a
+      // category into a linked transfer would move money; it stays a category.
+      const qif = `!Type:Bank
+D01/15/2026
+T-12.00
+LFood|[Checking]
+^`;
+      const result = parseQif(qif);
+      expect(result.transactions[0].category).toBe("Food|[Checking]");
+      expect(result.transactions[0].isTransfer).toBe(false);
+      expect(result.categories).toEqual(["Food|[Checking]"]);
+      expect(result.transferAccounts).toEqual([]);
+    });
+
+    it("leaves a pipe that is not followed by a bracketed account alone", () => {
+      const qif = `!Type:Invst
+D01/15/2026
+T12.00
+NMiscExp
+LFees|Broker
+^`;
+      const result = parseQif(qif);
+      expect(result.transactions[0].category).toBe("Fees|Broker");
+      expect(result.categories).toEqual(["Fees|Broker"]);
+    });
+  });
 });
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -2219,6 +2436,39 @@ T-50.00
       expect(result.categoryDefs[0].name).toBe("Food");
       expect(result.categoryDefs[1].name).toBe("Utilities");
     });
+    it("reads a Microsoft Money Category|[Account] field by the row's action", () => {
+      const qif = `!Account\nNShares\nTInvst\n^\n${MONEY_INVESTMENT_ACTIVITIES}\nD01/11/2010\nT500.00\nLTransfers:Out|[ICICI Bank]\nNXOut\n^\n!Account\nNICICI Bank\nTBank\n^\n!Type:Bank\nD01/11/2010\nT-12.00\nLFood|[Checking]\n^\n`;
+      const result = parseQifFull(qif);
+      const [shares, bank] = result.accountBlocks;
+      expect(shares.categories).toEqual([]);
+      expect(shares.transferAccounts).toEqual(["ICICI Bank"]);
+      expect(
+        shares.transactions.map((tx: QifTransaction) => [
+          tx.date,
+          tx.action,
+          tx.category,
+          tx.isTransfer,
+          tx.transferAccount,
+        ]),
+      ).toEqual([
+        ["1994-11-02", "DivX", "", false, ""],
+        ["2005-03-03", "MiscInc", "", false, ""],
+        ["2010-10-21", "SellX", "", false, ""],
+        ["2010-11-01", "XOut", "", true, "ICICI Bank"],
+      ]);
+      // A bank section keeps the field as a category.
+      expect(bank.categories).toEqual(["Food|[Checking]"]);
+      expect(bank.transferAccounts).toEqual([]);
+    });
+
+    it("settles a piped account on a block's last record without a terminator", () => {
+      const qif = `!Account\nNShares\nTInvst\n^\n!Type:Invst\nD01/15/2026\nT500.00\nNXOut\nLTransfers:Out|[ICICI Bank]\n!Account\nNICICI Bank\nTBank\n^\n!Type:Bank\nD01/16/2026\nT-5.00\n^\n`;
+      const result = parseQifFull(qif, "MM/DD/YYYY");
+      expect(result.accountBlocks[0].transferAccounts).toEqual(["ICICI Bank"]);
+      expect(result.accountBlocks[0].transactions[0].transferAccount).toBe(
+        "ICICI Bank",
+      );
+    });
   });
 
   describe("tag definitions", () => {
@@ -2367,7 +2617,9 @@ PStore
     expect(block.creditLimit).toBe(5000);
   });
 
-  it("uppercases an unknown !Account T type as the pending type", () => {
+  it("leaves the type unknown when neither header nor !Account names a QIF type", () => {
+    // "GIZMO" is no Monize account type; creating an account under it, or
+    // under an assumed CHEQUING, would be a guess the user never made.
     const qif = `!Account
 NMystery
 TGizmo
@@ -2378,7 +2630,7 @@ T-50.00
 ^
 `;
     const result = parseQifFull(qif, "MM/DD/YYYY");
-    expect(result.accountBlocks[0].accountType).toBe("GIZMO");
+    expect(result.accountBlocks[0].accountType).toBeNull();
   });
 
   it("skips !Type:Security/Prices/Budget sections", () => {
@@ -2460,5 +2712,42 @@ PStore
     const qif = `!Type:Tag\nNVacation\nDTravel\nNBusiness\n^\n!Account\nNChecking\nTBank\n^\n!Type:Bank\nD01/15/2026\nT-50.00\n^\n`;
     const result = parseQifFull(qif, "MM/DD/YYYY");
     expect(result.tagDefs.map((t) => t.name)).toEqual(["Vacation", "Business"]);
+  });
+});
+
+describe("parseQifFull - Quicken for Mac transfer files (.qmtf)", () => {
+  it("reads a bare-CR multi-account export and keeps every category level", () => {
+    const qif = [
+      "!Type:Cat",
+      "NHousing:Mortgage:Interest",
+      "E",
+      "^",
+      "!Account",
+      "NChecking",
+      "TBank",
+      "^",
+      "!Type:Bank",
+      "D3/ 1'26",
+      "T-812.40",
+      "PFirst Bank",
+      "LHousing:Mortgage:Interest",
+      "^",
+      "",
+    ].join("\r");
+
+    expect(isMultiAccountQif(qif)).toBe(true);
+    const result = parseQifFull(qif);
+    expect(result.categoryDefs.map((d: { name: string }) => d.name)).toEqual([
+      "Housing:Mortgage:Interest",
+    ]);
+    expect(result.accountBlocks).toHaveLength(1);
+    expect(result.accountBlocks[0].accountName).toBe("Checking");
+    expect(result.accountBlocks[0].categories).toEqual([
+      "Housing:Mortgage:Interest",
+    ]);
+    expect(result.accountBlocks[0].transactions[0]).toMatchObject({
+      date: "2026-03-01",
+      amount: -812.4,
+    });
   });
 });

@@ -1,7 +1,12 @@
 import { BadRequestException } from "@nestjs/common";
 import { Response } from "express";
 import { AiRelayController } from "./ai-relay.controller";
-import { AiRelayService, RelayTimeoutError } from "./ai-relay.service";
+import {
+  AiRelayService,
+  RelayStreamClosedError,
+  RelayTimeoutError,
+} from "./ai-relay.service";
+import { RelayStreamOptions } from "./ai-relay.types";
 
 function makeRes() {
   const events: Array<Record<string, unknown>> = [];
@@ -38,10 +43,9 @@ describe("AiRelayController", () => {
             _userId: string,
             _query: string,
             _history: unknown,
-            _emit: unknown,
-            onEnqueued?: (id: string) => void,
+            options: RelayStreamOptions,
           ) => {
-            onEnqueued?.("prompt-123");
+            options.onEnqueued?.("prompt-123");
             return Promise.resolve({ text: "buy index funds" });
           },
         ),
@@ -108,8 +112,9 @@ describe("AiRelayController", () => {
       res,
     );
 
-    // attachments are the 6th positional argument of enqueuePrompt.
-    expect(enqueuePrompt.mock.calls[0][5]).toEqual(attachments);
+    expect(
+      (enqueuePrompt.mock.calls[0][3] as RelayStreamOptions).attachments,
+    ).toEqual(attachments);
   });
 
   it("emits the attachment-rejected error when an upload fails validation", async () => {
@@ -174,50 +179,94 @@ describe("AiRelayController", () => {
     expect(events[0].message).toContain("went quiet");
   });
 
-  it("picks up a buffered late answer by promptId", () => {
+  it("picks up a late answer by promptId", async () => {
     const takeBufferedResponse = jest
       .fn()
-      .mockReturnValue({ text: "the late answer" });
-    const takeBufferedActions = jest.fn().mockReturnValue([]);
+      .mockResolvedValue({ text: "the late answer" });
+    const takeBufferedActions = jest.fn().mockResolvedValue([]);
     const controller = build({ takeBufferedResponse, takeBufferedActions });
 
-    expect(controller.pickupResponse(req, "prompt-123")).toEqual({
-      text: "the late answer",
-      pendingActions: [],
-    });
+    await expect(controller.pickupResponse(req, "prompt-123")).resolves.toEqual(
+      {
+        text: "the late answer",
+        pendingActions: [],
+      },
+    );
     expect(takeBufferedResponse).toHaveBeenCalledWith("user-1", "prompt-123");
   });
 
-  it("returns null text when nothing is buffered for the prompt", () => {
-    const takeBufferedResponse = jest.fn().mockReturnValue(null);
-    const takeBufferedActions = jest.fn().mockReturnValue([]);
+  it("returns null text when nothing is waiting for the prompt", async () => {
+    const takeBufferedResponse = jest.fn().mockResolvedValue(null);
+    const takeBufferedActions = jest.fn().mockResolvedValue([]);
     const controller = build({ takeBufferedResponse, takeBufferedActions });
 
-    expect(controller.pickupResponse(req, "prompt-123")).toEqual({
-      text: null,
-      pendingActions: [],
-    });
+    await expect(controller.pickupResponse(req, "prompt-123")).resolves.toEqual(
+      {
+        text: null,
+        pendingActions: [],
+      },
+    );
   });
 
-  it("drains buffered confirmation cards on pickup, even without an answer", () => {
+  it("drains buffered confirmation cards on pickup, even without an answer", async () => {
     const cards = [{ actionId: "act-1" }, { actionId: "act-2" }];
-    const takeBufferedResponse = jest.fn().mockReturnValue(null);
-    const takeBufferedActions = jest.fn().mockReturnValue(cards);
+    const takeBufferedResponse = jest.fn().mockResolvedValue(null);
+    const takeBufferedActions = jest.fn().mockResolvedValue(cards);
     const controller = build({ takeBufferedResponse, takeBufferedActions });
 
-    expect(controller.pickupResponse(req, "prompt-123")).toEqual({
-      text: null,
-      pendingActions: cards,
-    });
+    await expect(controller.pickupResponse(req, "prompt-123")).resolves.toEqual(
+      {
+        text: null,
+        pendingActions: cards,
+      },
+    );
     expect(takeBufferedActions).toHaveBeenCalledWith("user-1");
   });
 
-  it("returns the relay tunnel status", () => {
+  it("returns the relay tunnel status", async () => {
     const getStatus = jest
       .fn()
-      .mockReturnValue({ state: "listening", queued: 0 });
+      .mockResolvedValue({ state: "listening", queued: 0 });
     const controller = build({ getStatus });
-    expect(controller.status(req)).toEqual({ state: "listening", queued: 0 });
+    await expect(controller.status(req)).resolves.toEqual({
+      state: "listening",
+      queued: 0,
+    });
     expect(getStatus).toHaveBeenCalledWith("user-1");
+  });
+
+  it("aborts the waiter when the browser's socket closes", async () => {
+    let signal: AbortSignal | undefined;
+    const controller = build({
+      enqueuePrompt: jest
+        .fn()
+        .mockImplementation(
+          (
+            _userId: string,
+            _query: string,
+            _history: unknown,
+            options: RelayStreamOptions,
+          ) => {
+            signal = options.signal;
+            return Promise.reject(new RelayStreamClosedError("p1"));
+          },
+        ),
+    });
+    const { res, events } = makeRes();
+    const close = jest.fn();
+    (res.on as unknown as jest.Mock).mockImplementation(
+      (event: string, handler: () => void) => {
+        if (event === "close") close.mockImplementation(handler);
+      },
+    );
+
+    await controller.streamQuery(req, { query: "hi" }, res);
+    close();
+
+    expect(signal).toBeInstanceOf(AbortSignal);
+    expect(signal!.aborted).toBe(true);
+    // Nothing to say and nowhere to say it: the answer, if one comes, waits on
+    // the row for the pickup endpoint.
+    expect(events).toEqual([]);
   });
 });

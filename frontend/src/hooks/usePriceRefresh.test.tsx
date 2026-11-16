@@ -1,22 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { renderHook, act } from '@testing-library/react';
-import { ReactNode } from 'react';
-import { NextIntlClientProvider } from 'next-intl';
-import securitiesEn from '@/i18n/messages/en/securities.json';
+import { renderHook, act } from '@/test/render';
 import {
   isMarketHours,
   getRefreshInProgress,
   setRefreshInProgress,
   usePriceRefresh,
 } from './usePriceRefresh';
-
-// usePriceRefresh emits its toasts through next-intl; resolve them against the
-// real English catalog so assertions on visible text stay accurate.
-const wrapper = ({ children }: { children: ReactNode }) => (
-  <NextIntlClientProvider locale="en" messages={{ securities: securitiesEn }}>
-    {children}
-  </NextIntlClientProvider>
-);
 
 vi.mock('@/lib/investments', () => ({
   investmentsApi: {
@@ -90,7 +79,7 @@ describe('usePriceRefresh', () => {
   });
 
   it('returns isRefreshing and trigger functions', () => {
-    const { result } = renderHook(() => usePriceRefresh(), { wrapper });
+    const { result } = renderHook(() => usePriceRefresh());
     expect(result.current.isRefreshing).toBe(false);
     expect(typeof result.current.triggerManualRefresh).toBe('function');
     expect(typeof result.current.triggerAutoRefresh).toBe('function');
@@ -102,7 +91,7 @@ describe('usePriceRefresh', () => {
       updated: 1, failed: 0, totalSecurities: 1, skipped: 0, results: [], lastUpdated: '',
     });
 
-    const { result } = renderHook(() => usePriceRefresh(), { wrapper });
+    const { result } = renderHook(() => usePriceRefresh());
     await act(async () => {
       await result.current.triggerManualRefresh();
     });
@@ -121,7 +110,7 @@ describe('usePriceRefresh', () => {
       updated: 2, failed: 0, totalSecurities: 2, skipped: 0, results: [], lastUpdated: '',
     });
 
-    const { result } = renderHook(() => usePriceRefresh(), { wrapper });
+    const { result } = renderHook(() => usePriceRefresh());
     await act(async () => {
       await result.current.triggerManualRefresh(['s-1', 's-3']);
     });
@@ -131,7 +120,7 @@ describe('usePriceRefresh', () => {
   it('shows the no-securities toast when scope filters out everything', async () => {
     vi.mocked(investmentsApi.getSecurities).mockResolvedValue([sec('s-1')] as any);
 
-    const { result } = renderHook(() => usePriceRefresh(), { wrapper });
+    const { result } = renderHook(() => usePriceRefresh());
     await act(async () => {
       await result.current.triggerManualRefresh(['s-99']);
     });
@@ -149,7 +138,7 @@ describe('usePriceRefresh', () => {
       updated: 1, failed: 0, totalSecurities: 1, skipped: 0, results: [], lastUpdated: '',
     });
 
-    const { result } = renderHook(() => usePriceRefresh(), { wrapper });
+    const { result } = renderHook(() => usePriceRefresh());
     await act(async () => {
       await result.current.triggerManualRefresh();
     });
@@ -166,18 +155,18 @@ describe('usePriceRefresh', () => {
       updated: 1, failed: 0, totalSecurities: 1, skipped: 0, results: [], lastUpdated: '',
     });
 
-    const { result } = renderHook(() => usePriceRefresh(), { wrapper });
+    const { result } = renderHook(() => usePriceRefresh());
     await act(async () => {
       await result.current.triggerManualRefresh();
     });
     expect(investmentsApi.refreshSelectedPrices).toHaveBeenCalledWith(['s-1']);
   });
 
-  it('includes QIF-imported securities once the user assigns a provider override', async () => {
-    // QIF/OFX import flags new securities with skipPriceUpdates=true. After
-    // the user picks an MSN provider override or supplies an Instrument ID,
-    // refresh must include them despite the flag.
+  it('excludes a flagged security even with a provider override', async () => {
+    // The flag is the user's "disable price updates" switch, and the backend's
+    // isRefreshEligible() honours it alone; an override must not bypass it here.
     vi.mocked(investmentsApi.getSecurities).mockResolvedValue([
+      sec('s-1'),
       sec('s-msn-override', {
         skipPriceUpdates: true,
         quoteProvider: 'msn',
@@ -186,26 +175,22 @@ describe('usePriceRefresh', () => {
         skipPriceUpdates: true,
         msnInstrumentId: 'F18068004373',
       }),
-      sec('s-skip-no-provider', { skipPriceUpdates: true }),
     ] as any);
     vi.mocked(investmentsApi.refreshSelectedPrices).mockResolvedValue({
-      updated: 2, failed: 0, totalSecurities: 2, skipped: 0, results: [], lastUpdated: '',
+      updated: 1, failed: 0, totalSecurities: 1, skipped: 0, results: [], lastUpdated: '',
     });
 
-    const { result } = renderHook(() => usePriceRefresh(), { wrapper });
+    const { result } = renderHook(() => usePriceRefresh());
     await act(async () => {
       await result.current.triggerManualRefresh();
     });
-    expect(investmentsApi.refreshSelectedPrices).toHaveBeenCalledWith([
-      's-msn-override',
-      's-msn-id',
-    ]);
+    expect(investmentsApi.refreshSelectedPrices).toHaveBeenCalledWith(['s-1']);
   });
 
   it('shows error toast on failure', async () => {
     vi.mocked(investmentsApi.getSecurities).mockRejectedValue(new Error('fail'));
 
-    const { result } = renderHook(() => usePriceRefresh(), { wrapper });
+    const { result } = renderHook(() => usePriceRefresh());
     await act(async () => {
       await result.current.triggerManualRefresh();
     });
@@ -215,7 +200,7 @@ describe('usePriceRefresh', () => {
   it('shows toast when no securities', async () => {
     vi.mocked(investmentsApi.getSecurities).mockResolvedValue([] as any);
 
-    const { result } = renderHook(() => usePriceRefresh(), { wrapper });
+    const { result } = renderHook(() => usePriceRefresh());
     await act(async () => {
       await result.current.triggerManualRefresh();
     });
@@ -228,7 +213,7 @@ describe('usePriceRefresh', () => {
       updated: 1, failed: 1, totalSecurities: 2, skipped: 0, results: [], lastUpdated: '',
     });
 
-    const { result } = renderHook(() => usePriceRefresh(), { wrapper });
+    const { result } = renderHook(() => usePriceRefresh());
     await act(async () => {
       await result.current.triggerManualRefresh();
     });
@@ -254,7 +239,7 @@ describe('usePriceRefresh', () => {
       lastUpdated: '',
     });
 
-    const { result } = renderHook(() => usePriceRefresh(), { wrapper });
+    const { result } = renderHook(() => usePriceRefresh());
     await act(async () => {
       await result.current.triggerManualRefresh();
     });
@@ -262,6 +247,39 @@ describe('usePriceRefresh', () => {
       expect.stringContaining('BAD1, BAD2'),
       expect.objectContaining({ duration: expect.any(Number) }),
     );
+  });
+
+  /**
+   * A count of failures sends the reader nowhere: a currency mismatch is
+   * repaired by correcting the security, not by refreshing again. The server
+   * already says why, translated, so the toast carries it. INV-PRICE-001.
+   */
+  it('shows the server refusal reason in the error toast, once per distinct reason', async () => {
+    const refusal =
+      'Price update refused for AAPL: yahoo quotes it in GBP, but the security is recorded in USD.';
+    vi.mocked(investmentsApi.getSecurities).mockResolvedValue([
+      sec('s-bad-1'),
+      sec('s-bad-2'),
+    ] as any);
+    vi.mocked(investmentsApi.refreshSelectedPrices).mockResolvedValue({
+      updated: 0,
+      failed: 2,
+      totalSecurities: 2,
+      skipped: 0,
+      results: [
+        { symbol: 'AAPL', success: false, error: refusal },
+        { symbol: 'AAPL', success: false, error: refusal },
+      ],
+      lastUpdated: '',
+    });
+
+    const { result } = renderHook(() => usePriceRefresh());
+    await act(async () => {
+      await result.current.triggerManualRefresh();
+    });
+    const message = vi.mocked(toast.error).mock.calls[0][0] as string;
+    expect(message).toContain(refusal);
+    expect(message.split(refusal).length - 1).toBe(1);
   });
 
   it('calls onRefreshComplete callback with lastUpdated from the refresh result', async () => {
@@ -276,7 +294,53 @@ describe('usePriceRefresh', () => {
       lastUpdated: '2026-04-15T14:06:00Z',
     });
 
-    const { result } = renderHook(() => usePriceRefresh({ onRefreshComplete }), { wrapper });
+    const { result } = renderHook(() => usePriceRefresh({ onRefreshComplete }));
+    await act(async () => {
+      await result.current.triggerManualRefresh();
+    });
+    expect(onRefreshComplete).toHaveBeenCalledWith('2026-04-15T14:06:00Z');
+  });
+
+  it('does not reload the page when the refresh updated nothing', async () => {
+    // The callback reloads the portfolio summary and the register, seconds of
+    // server work. A refresh that wrote no price (market closed, every quote
+    // refused) leaves both answers exactly as they were, and the reader saw the
+    // page redraw for nothing.
+    const onRefreshComplete = vi.fn();
+    vi.mocked(investmentsApi.getSecurities).mockResolvedValue([sec('s-1')] as any);
+    vi.mocked(investmentsApi.refreshSelectedPrices).mockResolvedValue({
+      updated: 0,
+      failed: 0,
+      totalSecurities: 1,
+      skipped: 1,
+      results: [],
+      lastUpdated: '2026-04-15T14:06:00Z',
+    });
+
+    const { result } = renderHook(() => usePriceRefresh({ onRefreshComplete }));
+    await act(async () => {
+      await result.current.triggerManualRefresh();
+    });
+    expect(investmentsApi.refreshSelectedPrices).toHaveBeenCalled();
+    expect(onRefreshComplete).not.toHaveBeenCalled();
+  });
+
+  it('still reloads when only some symbols failed but one was written', async () => {
+    const onRefreshComplete = vi.fn();
+    vi.mocked(investmentsApi.getSecurities).mockResolvedValue([
+      sec('s-1'),
+      sec('s-2'),
+    ] as any);
+    vi.mocked(investmentsApi.refreshSelectedPrices).mockResolvedValue({
+      updated: 1,
+      failed: 1,
+      totalSecurities: 2,
+      skipped: 0,
+      results: [{ symbol: 'S-2', success: false, error: 'no quote' }],
+      lastUpdated: '2026-04-15T14:06:00Z',
+    });
+
+    const { result } = renderHook(() => usePriceRefresh({ onRefreshComplete }));
     await act(async () => {
       await result.current.triggerManualRefresh();
     });
@@ -285,7 +349,7 @@ describe('usePriceRefresh', () => {
 
   it('does nothing when refresh is already in progress', async () => {
     setRefreshInProgress(true);
-    const { result } = renderHook(() => usePriceRefresh(), { wrapper });
+    const { result } = renderHook(() => usePriceRefresh());
     await act(async () => {
       await result.current.triggerManualRefresh();
     });
@@ -295,7 +359,7 @@ describe('usePriceRefresh', () => {
   it('triggerAutoRefresh skips when outside market hours', async () => {
     // Real isMarketHours runs; check that when refreshInProgress is true it short-circuits
     setRefreshInProgress(true);
-    const { result } = renderHook(() => usePriceRefresh(), { wrapper });
+    const { result } = renderHook(() => usePriceRefresh());
     act(() => {
       result.current.triggerAutoRefresh();
     });
@@ -307,7 +371,7 @@ describe('usePriceRefresh', () => {
     vi.mocked(investmentsApi.refreshSelectedPrices).mockResolvedValue({
       updated: 1, failed: 0, totalSecurities: 1, skipped: 0, results: [], lastUpdated: '',
     });
-    const { result } = renderHook(() => usePriceRefresh(), { wrapper });
+    const { result } = renderHook(() => usePriceRefresh());
     await act(async () => {
       await result.current.triggerManualRefresh();
     });

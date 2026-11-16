@@ -10,6 +10,7 @@ const LABELS: TourTooltipLabels = {
   tryIt: 'Try it',
   skipStep: 'Skip this step',
   move: 'Move this card',
+  readGuide: 'Read the full guide',
 };
 
 const RECT = { top: 100, left: 100, width: 120, height: 40 };
@@ -67,6 +68,35 @@ afterEach(() => {
 });
 
 describe('TourTooltip', () => {
+  it('flips the phone sheet away from a low anchor, then returns below a high one', async () => {
+    window.innerWidth = 390;
+    window.innerHeight = 844;
+    vi.mocked(window.matchMedia).mockReturnValue({
+      ...window.matchMedia('(max-width: 639px)'),
+      matches: true,
+    });
+    const height = vi
+      .spyOn(HTMLElement.prototype, 'offsetHeight', 'get')
+      .mockReturnValue(200);
+    try {
+      const { rerender } = setup({
+        rect: { top: 530, left: 16, width: 358, height: 280 },
+        interactive: true,
+      });
+      await waitFor(() => expect(screen.getByRole('dialog')).toHaveClass('top-0'));
+      expect(screen.getByRole('dialog')).not.toHaveClass('bottom-0');
+
+      rerender({ rect: RECT, stepLabel: '3 of 5' });
+      await waitFor(() => expect(screen.getByRole('dialog')).toHaveClass('bottom-0'));
+      expect(screen.getByRole('dialog')).not.toHaveClass('top-0');
+
+      rerender({ rect: null, stepLabel: '4 of 5' });
+      expect(screen.getByRole('dialog')).toHaveClass('bottom-0');
+    } finally {
+      height.mockRestore();
+    }
+  });
+
   it('renders title, body, and step counter', () => {
     setup();
     expect(screen.getByText('Step title')).toBeInTheDocument();
@@ -172,6 +202,28 @@ describe('TourTooltip', () => {
       expect(parseFloat(after.top)).toBeLessThanOrEqual(400);
     });
 
+    it('parks a coach mark clear of right-aligned row actions on request', () => {
+      // The default corner is the right one, which is where every list puts its
+      // row actions -- so a step asking the user to click one had its own card
+      // intercepting the click. `placement: 'left'` is how such a step opts out.
+      setup({ rect: null, corner: true });
+      const right = parseFloat(cardPos().left);
+
+      cleanup();
+      setup({ rect: null, corner: true, placement: 'left' });
+      const left = parseFloat(cardPos().left);
+
+      expect(left).toBe(16);
+      expect(left).toBeLessThan(right);
+    });
+
+    it('ignores that opt-out for an anchored card, which has an anchor to sit against', () => {
+      // 'left' means "left of the anchor" there, and `computeTooltipPosition`
+      // already owns that decision.
+      setup({ rect: RECT, corner: true, placement: 'left' });
+      expect(parseFloat(cardPos().left)).not.toBe(16);
+    });
+
     it('keeps a corner-parked card against the resized viewport', () => {
       setup({ rect: null, corner: true });
       const before = cardPos();
@@ -208,6 +260,23 @@ describe('TourTooltip', () => {
     fireEvent.click(screen.getByText('Done'));
     expect(h.onDone).toHaveBeenCalled();
     expect(screen.queryByText('Next')).toBeNull();
+  });
+
+  it('omits Read the full guide when the tour has no onReadGuide', () => {
+    setup({ isLast: true });
+    expect(screen.queryByText('Read the full guide')).toBeNull();
+  });
+
+  it('shows Read the full guide on the final step when onReadGuide is given, and calls it', () => {
+    const onReadGuide = vi.fn();
+    setup({ isLast: true, onReadGuide });
+    fireEvent.click(screen.getByText('Read the full guide'));
+    expect(onReadGuide).toHaveBeenCalled();
+  });
+
+  it('never shows Read the full guide on a non-final step', () => {
+    setup({ isLast: false, onReadGuide: vi.fn() });
+    expect(screen.queryByText('Read the full guide')).toBeNull();
   });
 
   it('shows the Try it hint and Skip link on interactive steps (no Next)', () => {

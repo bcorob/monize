@@ -1,8 +1,87 @@
 {
   "page": {
-    "welcomePrefix": "Selamat datang",
-    "welcomeWithName": "Selamat datang, {name}!",
-    "subtitle": "Berikut ikhtisar keuangan Anda"
+    "greeting": {
+      "morning": "Selamat pagi",
+      "morningWithName": "Selamat pagi, {name}",
+      "afternoon": "Selamat siang",
+      "afternoonWithName": "Selamat siang, {name}",
+      "evening": "Selamat malam",
+      "eveningWithName": "Selamat malam, {name}"
+    }
+  },
+  "hero": {
+    "label": "Ringkasan kekayaan bersih",
+    "netWorth": "Kekayaan bersih",
+    "changeThisMonth": "<dir>{direction, select, up {Naik} other {Turun}}</dir> {amount} bulan ini",
+    "changeThisMonthWithPercent": "<dir>{direction, select, up {Naik} other {Turun}}</dir> {amount} · {percent} bulan ini",
+    "assets": "<strong><value></value></strong> aset",
+    "liabilities": "<strong><value></value></strong> liabilitas",
+    "invested": "<strong><value></value></strong> diinvestasikan",
+    "investedUnpriced": "Tidak ada harga terkini untuk {symbols}, jadi kepemilikan tersebut tidak disertakan. Segarkan harga di halaman Investasi, atau tambahkan satu di riwayat harga sekuritas.",
+    "portfolioLabel": "Ringkasan portofolio",
+    "portfolioValueFor": "Nilai portofolio <names>({accounts})</names>",
+    "portfolioEmpty": "Belum ada akun investasi. Tambahkan satu untuk melihat portofolio Anda di sini.",
+    "portfolioLoadFailed": "Tidak dapat memuat portofolio Anda. Muat ulang dasbor untuk mencoba lagi.",
+    "portfolioChangeFailed": "Tidak dapat memuat perubahan periode ini. Muat ulang dasbor untuk mencoba lagi.",
+    "changeOverWindow": "<dir>{direction, select, up {Naik} other {Turun}}</dir> {amount} · {window}",
+    "holdings": "<strong><value></value></strong> kepemilikan",
+    "cash": "<strong><value></value></strong> kas",
+    "metricLine": "<strong><value></value></strong> {metric}",
+    "metricNames": {
+      "simpleReturn": "Imbal Hasil Sederhana",
+      "twr": "TWR",
+      "mwr": "MWR",
+      "cagr": "CAGR"
+    },
+    "showSet": "Tampilkan {name}",
+    "cycleControls": "Pilih apa yang ditampilkan di bagian utama",
+    "cagrUnavailable": "CAGR memerlukan setidaknya satu tahun riwayat investasi di akun-akun ini, dengan setoran lebih besar dari penarikan.",
+    "intradayUnavailable": "Beberapa kepemilikan ini tidak memiliki harga intrahari, jadi grafik satu hari tidak dapat dibuat. Pilih jangka waktu lebih panjang di Sesuaikan."
+  },
+  "trivia": {
+    "title": "Trivia",
+    "position": "{index} dari {total}",
+    "previous": "Fakta sebelumnya",
+    "next": "Fakta berikutnya",
+    "empty": "Fakta akan muncul di sini setelah riwayat cukup: kekayaan bersih dua bulan, investasi yang sudah berharga, beberapa bulan pengeluaran dan pemasukan, atau garansi yang Anda catat. Daftar dibuat ulang setiap pagi.",
+    "off": "Trivia AI dimatikan. Aktifkan di <link>Pengaturan AI</link>.",
+    "topics": {
+      "netWorth": "Kekayaan bersih",
+      "investments": "Investasi",
+      "spending": "Pengeluaran",
+      "income": "Pemasukan",
+      "activity": "Catatan Anda",
+      "warranties": "Garansi"
+    },
+    "aiGenerated": "Ditulis oleh AI dari angka Anda",
+    "facts": {
+      "netWorthSinceStart": "Kekayaan bersih Anda adalah {startAmount} pada {startMonth}. Sejak itu bertambah {startGain}, sehingga kini sekitar {startMultiple} kali lebih besar.",
+      "netWorthBiggestJump": "{jumpMonth} adalah lonjakan satu bulan terbesar Anda. Kekayaan bersih naik {jumpAmount}, dari {jumpFrom} pada {jumpPreviousMonth} menjadi {jumpTo}.",
+      "netWorthHighPoint": "Titik tertinggi Anda adalah {peakAmount} pada {peakMonth}. Saat ini Anda {peakBelow} di bawahnya.",
+      "netWorthAtHighPoint": "Anda berada di titik tertinggi: kekayaan bersih belum pernah melampaui {currentHigh}.",
+      "netWorthBiggestDip": "Penurunan terbesar Anda membuat kekayaan bersih turun dari {dipFromAmount} pada {dipFromMonth} menjadi {dipToAmount} pada {dipToMonth}, penurunan sebesar {dipPercent}.",
+      "netWorthBiggestDipRecovered": "Penurunan terbesar Anda membuat kekayaan bersih turun dari {dipFromAmount} pada {dipFromMonth} menjadi {dipToAmount} pada {dipToMonth}. Anda sudah pulih pada {dipRecoveredMonth}.",
+      "netWorthLargestAsset": "{assetName} bernilai {assetValue}, atau {assetPercent} dari aset Anda.",
+      "investmentsShareOfAssets": "Investasi Anda bernilai {investmentsValue}, yaitu {investmentsPercent} dari aset Anda.",
+      "investmentsGain": "Investasi Anda telah naik {gainAmount} ({gainPercent}) dari biaya dasarnya sebesar {gainCostBasis}.",
+      "investmentsLoss": "Investasi Anda turun {gainAmount} ({gainPercent}) dari biaya dasarnya sebesar {gainCostBasis}.",
+      "investmentsCagr": "Imbal hasil tahunan investasi Anda sekitar {cagrPercent} (CAGR).",
+      "investmentsBiggestHolding": "Kepemilikan terbesar Anda adalah {holdingSymbol}, sekitar {holdingPercent} dari portofolio ({holdingValue} di {holdingAccounts}).",
+      "investmentsBestPerformer": "Performa terbaik Anda adalah {bestSymbol}, naik {bestPercent}. Biayanya {bestCost} dan kini bernilai {bestValue}.",
+      "investmentsForeignAccount": "Akun {foreignName} Anda disimpan dalam {foreignCurrency}. Kepemilikan senilai {foreignBalance} setara dengan {foreignConverted} pada kurs sekitar {foreignRate}.",
+      "investmentsLargestAccount": "Akun investasi terbesar Anda adalah {largestName} sebesar {largestValue}.",
+      "spendingTopCategory": "Dalam dua belas bulan terakhir, {topCategoryName} menyerap pengeluaran terbesar Anda: {topCategoryAmount}, atau {topCategoryPercent} dari total.",
+      "spendingTopPayee": "Dalam dua belas bulan terakhir, Anda paling banyak berbelanja di {topPayeeName}: {topPayeeAmount}.",
+      "spendingBiggestMonth": "{biggestSpendMonth} adalah bulan dengan pengeluaran terbesar Anda dalam dua belas bulan terakhir, sebesar {biggestSpendAmount}.",
+      "incomeKeptShare": "Dalam dua belas bulan terakhir Anda menyimpan {keptAmount} dari uang yang masuk, yaitu {keptPercent} dari pemasukan Anda.",
+      "incomeSurplusMonths": "Bulan dalam {windowMonths} bulan terakhir ketika uang yang masuk lebih banyak daripada yang keluar: {surplusMonths}.",
+      "incomeTopSource": "{topSourceName} menyumbang {topSourcePercent} dari pemasukan Anda dalam dua belas bulan terakhir.",
+      "activityTransactions": "Transaksi di register Anda: {transactionCount}, sejak {firstTransactionMonth}.",
+      "activityPayees": "Penerima yang Anda simpan di Monize: {payeeCount}. Kategori: {categoryCount}.",
+      "activityScheduled": "Transaksi terjadwal yang dipantau Monize untuk Anda: {scheduledCount}.",
+      "warrantiesCovered": "Garansi yang Anda catat dan masih berlaku: {warrantyCount}.",
+      "warrantiesNextExpiry": "Garansi berikutnya yang akan berakhir adalah {nextWarrantyName}, pada {nextWarrantyMonth}."
+    }
   },
   "favouriteAccounts": {
     "title": "Akun Favorit",
@@ -21,12 +100,10 @@
   "upcomingBills": {
     "title": "Tagihan & Setoran Mendatang",
     "empty": "Tidak ada tagihan, setoran, atau transfer yang lewat jatuh tempo atau mendatang dalam jendela pengingat mereka.",
-    "perReminderSettings": "Per pengaturan pengingat",
     "postTransaction": "Posting transaksi ini",
     "manual": "Manual",
-    "manualTitle": "Membutuhkan posting manual",
     "negativeBalanceWarning": "Transaksi ini akan menyebabkan saldo akun menjadi di bawah nol",
-    "viewAll": "Lihat semua tagihan & setoran",
+    "negativeBalanceLegend": "Membuat saldo akunnya di bawah nol",
     "moreItems": "+{count} lagi",
     "overdue": "Lewat jatuh tempo",
     "today": "Hari ini",
@@ -38,7 +115,23 @@
       "transfer": "Transfer",
       "reminder": "Pengingat",
       "unknown": "Tidak diketahui"
-    }
+    },
+    "scope": {
+      "dueSoon": "Segera jatuh tempo",
+      "all": "Semua mendatang"
+    },
+    "viewLabel": "Tampilan",
+    "viewList": "Daftar",
+    "viewCalendar": "Kalender",
+    "previousMonth": "Bulan sebelumnya",
+    "nextMonth": "Bulan berikutnya",
+    "emptyAll": "Tidak ada tagihan, setoran, atau transfer aktif yang dijadwalkan.",
+    "estimated": "Perkiraan"
+  },
+  "cashFlowForecast": {
+    "title": "Prakiraan Arus Kas",
+    "period": "Periode prakiraan",
+    "loadFailed": "Tidak dapat memuat transaksi yang sudah bertanggal setelah hari ini, sehingga prakiraan tidak dapat ditampilkan. Muat ulang dasbor untuk mencoba lagi."
   },
   "gettingStarted": {
     "title": "Memulai",
@@ -76,8 +169,12 @@
     "title": "Wawasan Pengeluaran",
     "empty": "Tidak ada wawasan tersedia. Kunjungi halaman Wawasan untuk menghasilkan analisis pertama Anda.",
     "goToInsights": "Pergi ke Wawasan",
-    "viewAll": "Lihat semua wawasan",
     "activeCount": "{count} aktif"
+  },
+  "warrantiesExpiring": {
+    "title": "Garansi yang segera berakhir",
+    "empty": "Tidak ada yang berakhir dalam 30 hari ke depan",
+    "loadFailed": "Garansi Anda yang akan berakhir tidak dapat dimuat. Muat ulang dasbor untuk mencoba lagi."
   },
   "topMovers": {
     "title": "Penggerak Teratas",
@@ -88,13 +185,20 @@
       "noLosers": "Tidak ada yang turun hari ini."
     },
     "dailyChange": "Perubahan harian",
+    "dailyChangeOn": "Perubahan harian · {date}",
     "openPriceHistory": "Riwayat harga {symbol}",
     "refreshPrices": "Perbarui harga",
     "viewPortfolio": "Lihat portofolio",
     "filter": {
-      "all": "Semua",
-      "gainers": "Naik",
-      "losers": "Turun"
+      "all": "Semua ({count})",
+      "gainers": "Naik ({count})",
+      "losers": "Turun ({count})",
+      "label": "Arah"
+    },
+    "metric": {
+      "label": "Tampilkan",
+      "price": "Harga",
+      "holdings": "Kepemilikan"
     }
   },
   "favouriteSecurities": {
@@ -102,15 +206,17 @@
     "empty": "Belum ada sekuritas favorit. Kunjungi <securitiesLink>halaman Sekuritas</securitiesLink> dan bintangi sekuritas yang ingin Anda lacak di sini.",
     "noPriceYet": "Belum ada harga",
     "dailyChange": "Perubahan harian",
+    "dailyChangeOn": "Perubahan harian · {date}",
     "openPriceHistory": "Riwayat harga {symbol}",
-    "refreshPrices": "Perbarui harga",
-    "manage": "Kelola sekuritas"
+    "refreshPrices": "Perbarui harga"
   },
   "netWorth": {
     "title": "Nilai Bersih",
     "empty": "Belum ada data nilai bersih yang tersedia.",
-    "past12Months": "12 bulan terakhir",
-    "viewReport": "Lihat laporan lengkap"
+    "barStyle": "Gaya batang",
+    "barStyleNetWorth": "Nilai bersih",
+    "barStyleAccountType": "Menurut jenis akun",
+    "loadFailed": "Tidak dapat memuat riwayat nilai bersih Anda. Muat ulang dasbor untuk mencoba lagi."
   },
   "assetsVsLiabilities": {
     "title": "Aset vs Liabilitas",
@@ -118,14 +224,22 @@
     "current": "Saat ini",
     "netWorthLabel": "Nilai Bersih",
     "assets": "Aset",
-    "liabilities": "Liabilitas"
+    "liabilities": "Liabilitas",
+    "partialName": "{name} (parsial)",
+    "viewCallouts": "Label",
+    "viewLegend": "Keterangan"
   },
   "expensesPieChart": {
     "title": "Pengeluaran per Kategori",
     "empty": "Tidak ada data pengeluaran untuk periode ini.",
     "total": "Total",
     "uncategorized": "Tidak berkategori",
-    "other": "Lainnya"
+    "other": "Lainnya",
+    "insideOther": "{count, plural, other {# kategori dalam Lainnya}}",
+    "topLevelOnly": "Kategori tingkat atas",
+    "topLevelOnlyHint": "Hitung subkategori pada induknya",
+    "viewCallouts": "Label",
+    "viewLegend": "Keterangan"
   },
   "incomeExpenses": {
     "title": "Pendapatan vs Pengeluaran",
@@ -135,18 +249,85 @@
   },
   "customize": {
     "button": "Sesuaikan",
-    "title": "Sesuaikan dasbor",
-    "description": "Tata letak di bawah mencerminkan dasbor Anda: widget mengalir dari kiri ke kanan, dua per baris di layar besar.",
     "moveEarlier": "Pindahkan {name} lebih awal",
     "moveLater": "Pindahkan {name} lebih akhir",
-    "dragToReorder": "Seret widget untuk menata ulang, atau gunakan tombol panah.",
-    "hiddenWidgets": "Widget tersembunyi",
-    "hide": "Sembunyikan {name}",
-    "show": "Tampilkan {name}",
     "atLeastOne": "Pilih setidaknya satu widget untuk ditampilkan di dasbor.",
     "reset": "Atur ulang ke bawaan",
     "toasts": {
       "saveFailed": "Gagal menyimpan tata letak dasbor"
+    },
+    "hero": {
+      "title": "Hero dasbor",
+      "description": "Angka pembuka dan grafik di bawah sapaan: kekayaan bersih Anda, portofolio Anda, atau Otomatis untuk bergantian di antara keduanya setiap menit.",
+      "show": "Tampilkan hero dasbor",
+      "range": "Grafik",
+      "set": "Tampilkan",
+      "sets": {
+        "auto": "Otomatis",
+        "netWorth": "Kekayaan bersih",
+        "portfolio": "Nilai portofolio"
+      },
+      "metric": "Angka",
+      "metrics": {
+        "simpleReturn": "Imbal Hasil Sederhana",
+        "twr": "TWR",
+        "mwr": "MWR",
+        "cagr": "CAGR"
+      }
+    }
+  },
+  "edit": {
+    "barLabel": "Atur dasbor",
+    "addWidget": "Tambah widget",
+    "heroSettings": "Pengaturan hero",
+    "done": "Selesai",
+    "phoneNote": "Ukuran widget berlaku di layar yang lebih lebar.",
+    "remove": "Hapus {name}",
+    "grip": "Pindahkan {name}",
+    "gripHint": "Seret untuk memindahkan {name}, atau tekan tombol panah",
+    "moved": "{name} dipindahkan ke posisi {position} dari {count}",
+    "removed": "{name} dihapus",
+    "added": "{name} ditambahkan",
+    "resized": "{name} sekarang {size}",
+    "resizedBoth": "{name} sekarang {width} dan {height}",
+    "twoChanges": "{first}. {second}",
+    "placeholder": "Ditampilkan di dasbor setelah ada yang bisa ditampilkan.",
+    "addTitle": "Tambah widget",
+    "addDescription": "Widget yang Anda tambahkan ditempatkan di akhir dasbor. Tidak ada yang disimpan sampai Anda memilih Selesai.",
+    "addEmpty": "Semua widget sudah ada di dasbor Anda",
+    "addToSpace": "Tambah widget ke ruang ini ({width})",
+    "addSlotDescription": "Hanya widget yang muat di ruang ini yang tercantum, dan widget yang Anda pilih akan mengisinya. Tidak ada yang disimpan sampai Anda memilih Selesai.",
+    "addSlotEmpty": "Tidak ada widget tersembunyi yang muat di ruang ini. Seret widget ke sini untuk memindahkannya.",
+    "resize": "Ubah ukuran {name}",
+    "resizeHint": "Seret untuk mengubah ukuran {name}, atau tekan tombol panah",
+    "widthLabel": "Lebar",
+    "heightLabel": "Tinggi",
+    "presetName": "{short}, {name}",
+    "widthOf": "Lebar {name}",
+    "heightOf": "Tinggi {name}",
+    "widthShort": {
+      "third": "1/3",
+      "half": "1/2",
+      "twoThirds": "2/3",
+      "full": "Penuh"
+    },
+    "widthName": {
+      "third": "Lebar sepertiga",
+      "half": "Lebar setengah",
+      "twoThirds": "Lebar dua pertiga",
+      "full": "Lebar penuh"
+    },
+    "heightShort": {
+      "auto": "Auto",
+      "compact": "S",
+      "standard": "M",
+      "tall": "L"
+    },
+    "heightName": {
+      "auto": "Tinggi otomatis",
+      "compact": "Tinggi ringkas",
+      "standard": "Tinggi standar",
+      "tall": "Tinggi besar"
     }
   },
   "favouriteReports": {
@@ -156,22 +337,28 @@
   },
   "widgets": {
     "configure": "Konfigurasikan {name}",
+    "asOf": "per {date}",
     "done": "Selesai",
     "configSaveFailed": "Tidak dapat menyimpan pengaturan widget. Silakan coba lagi.",
     "timeframe": "Kerangka Waktu",
     "accounts": "Akun",
     "chartType": "Tipe Grafik",
     "view": "Tampilan",
+    "viewCalloutsHint": "Label memerlukan layar yang lebih lebar. Jika tidak muat, keterangan yang ditampilkan.",
     "displayName": "Nama tampilan",
     "description": "Deskripsi",
     "descriptionPlaceholder": "Tambahkan deskripsi opsional",
     "rangeLabels": {
+      "1d": "1D",
+      "1w": "1M",
+      "mtd": "MTD",
       "1m": "1M",
       "3m": "3M",
       "6m": "6M",
       "1y": "1Y",
       "2y": "2Y",
       "5y": "5Y",
+      "10y": "10Y",
       "ytd": "YTD",
       "all": "Semua"
     }
@@ -179,7 +366,10 @@
   "portfolioValue": {
     "title": "Nilai Portofolio",
     "empty": "Belum ada riwayat investasi untuk ditampilkan.",
-    "refresh": "Segarkan nilai saat ini"
+    "refresh": "Segarkan nilai saat ini",
+    "investmentResult": "Hasil Investasi",
+    "periodBreakdownInvestedTooltip": "Nilai sekuritas berubah {valueChange} selama periode ini. Dari jumlah itu, {netInvested} adalah dana yang dimasukkan, setelah dikurangi penjualan, dan sekuritas membayar {income} berupa dividen dan bunga. Distribusi yang diinvestasikan kembali dalam saham dihitung di keduanya. Angka di atas adalah hasil investasi itu sendiri, tanpa kas yang tidak diinvestasikan.",
+    "notAvailable": "N/A"
   },
   "spendingByPayee": {
     "title": "Pengeluaran per Penerima",
@@ -225,14 +415,19 @@
       "MUTUAL_FUND": "Reksadana",
       "BOND": "Obligasi",
       "CASH": "Tunai"
-    }
+    },
+    "viewType": "Jenis efek",
+    "viewAssetClass": "Kelas aset",
+    "otherAssetClasses": "Lainnya",
+    "emptyAssetClass": "Belum ada rincian kelas aset yang tersedia."
   },
   "geographicAllocation": {
     "title": "Alokasi Geografis",
     "empty": "Tidak ada kepemilikan untuk ditampilkan.",
     "viewRegion": "Wilayah",
     "viewExchange": "Bursa",
-    "viewCountry": "Negara"
+    "viewCountry": "Negara",
+    "listingBasisNote": "Dikelompokkan menurut bursa tempat setiap kepemilikan tercatat. Beralih ke Negara untuk melihat isi dana."
   },
   "recurringExpenses": {
     "title": "Pengeluaran Berulang Teratas",
@@ -240,7 +435,9 @@
     "minOccurrences": "Kejadian minimum",
     "minOccurrencesOption": "{count} atau lebih",
     "occurrences": "{count} kejadian",
-    "monthlyEstimate": "Perkiraan Bulanan"
+    "monthlyEstimate": "Perkiraan Bulanan",
+    "viewCallouts": "Label",
+    "viewLegend": "Keterangan"
   },
   "weekendVsWeekday": {
     "title": "Pengeluaran Akhir Pekan vs Hari Kerja",
@@ -249,5 +446,14 @@
     "weekdayLabel": "Hari Kerja",
     "viewOverview": "Ikhtisar",
     "viewByDay": "Per Hari"
+  },
+  "cashFlowSankey": {
+    "title": "Sankey Arus Kas",
+    "empty": "Tidak ada pemasukan, pengeluaran, atau transfer pada periode ini.",
+    "depth": "Rincian",
+    "depthCategories": "Kategori",
+    "depthSubcategories": "Subkategori",
+    "viewDiagram": "Diagram",
+    "viewTable": "Tabel"
   }
 }

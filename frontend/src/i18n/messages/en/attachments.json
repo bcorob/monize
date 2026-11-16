@@ -11,9 +11,76 @@
   "uploaded": "Attachment added",
   "deleted": "Attachment deleted",
   "loadFailed": "Failed to load attachments",
+  "retry": "Try again",
   "uploadFailed": "Failed to upload attachment",
   "deleteFailed": "Failed to delete attachment",
   "tooLarge": "File is too large (maximum {max})",
   "unsupported": "Unsupported file type. Allowed: images or PDF",
-  "tooMany": "Maximum {max} attachments per transaction"
+  "tooMany": "Maximum {max} attachments per transaction",
+  "fromWarranty": "From warranty: {name}",
+  "fromLinkedWarranty": "From a linked warranty",
+  "scan": {
+    "button": "Scan document",
+    "title": "Scan document",
+    "description": "Straighten and clean up a photo of a document before attaching it.",
+    "analysing": "Looking for a document in the photo…",
+    "failed": "The document could not be scanned. You can still attach the photo as it is.",
+    "viewEnhanced": "Enhanced",
+    "viewOriginal": "Original",
+    "rotate": "Rotate",
+    "styleLabel": "Finish",
+    "styles": {
+      "colour": "Colour",
+      "grayscale": "Greyscale",
+      "blackAndWhite": "Black and white",
+      "none": "No enhancement"
+    },
+    "styleHints": {
+      "colour": "Evens out the lighting, lifts the contrast and sharpens the text.",
+      "grayscale": "The same clean-up without the colour. Smaller, and free of the tint paper picks up under artificial light.",
+      "blackAndWhite": "Ink and paper only. Best for printed text; it will flatten photos and logos.",
+      "none": "Straightened and cropped, otherwise exactly as photographed. Use this when the clean-up spoils the subject."
+    },
+    "adjustments": {
+      "brightness": "Brightness ({value})",
+      "contrast": "Contrast ({value})"
+    },
+    "resetAdjustments": "Reset brightness and contrast",
+    "adjustHint": "Switch to Original to drag the corners if the edges are wrong.",
+    "updating": "Updating the preview…",
+    "noDocumentFound": "No document edges were found, so the whole photo was used. Switch to Original and drag the corners to set them yourself.",
+    "previewEnhancedAlt": "Enhanced scan preview",
+    "previewOriginalAlt": "Original photo preview",
+    "useEnhanced": "Use enhanced",
+    "keepOriginal": "Keep original only",
+    "retake": "Retake",
+    "cancel": "Cancel",
+    "originalTooLarge": "The original photo is larger than {max}, so only the enhanced scan will be attached.",
+    "warnings": {
+      "blurry": "The photo looks blurred. Retaking it will give a sharper scan.",
+      "edgesOutsideFrame": "The document reaches the edge of the photo, so a side may be cut off. Retake it with a margin around the whole page, with no side touching the border.",
+      "lowResolution": "The scan is quite small, so fine print may be hard to read."
+    },
+    "corners": {
+      "label": "Document corners",
+      "topLeft": "Top-left corner",
+      "topRight": "Top-right corner",
+      "bottomRight": "Bottom-right corner",
+      "bottomLeft": "Bottom-left corner"
+    },
+    "originalKept": "original kept"
+  },
+  "preview": {
+    "loading": "Loading preview…",
+    "failed": "The preview could not be loaded. You can still download the file.",
+    "storeUnavailable": "This file is stored in a storage backend this server cannot currently reach, so it cannot be previewed or downloaded. Nothing is lost: ask your administrator to restore the attachment storage settings.",
+    "unsupported": "This file type cannot be previewed. You can still download it.",
+    "fit": "Fit to screen",
+    "actualSize": "Actual size",
+    "versionLabel": "Version",
+    "zoomLabel": "Zoom",
+    "pageCount": "{count, plural, one {# page} other {# pages}}",
+    "page": "Page {page} of {total}",
+    "open": "Preview {name}"
+  }
 }

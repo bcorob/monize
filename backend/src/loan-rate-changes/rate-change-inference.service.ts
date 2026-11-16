@@ -3,14 +3,21 @@ import { DataSource } from "typeorm";
 import { tr } from "../i18n/translate";
 import { withScopedDb } from "../common/db/scoped-db";
 import { LoanRateChange } from "./entities/loan-rate-change.entity";
-import { Account } from "../accounts/entities/account.entity";
+import { Account, AccountType } from "../accounts/entities/account.entity";
 import { Transaction } from "../transactions/entities/transaction.entity";
 import {
   LoanPaymentDetectorService,
   PaymentRecord,
 } from "../accounts/loan-payment-detector.service";
-import { LoanRateChangesService } from "./loan-rate-changes.service";
+import {
+  LoanRateChangesService,
+  derivedInstallmentType,
+} from "./loan-rate-changes.service";
 import { roundMoney } from "../common/round.util";
+import {
+  annualizationFor,
+  mortgageTypeOf,
+} from "../accounts/mortgage-type.util";
 import {
   DEFAULT_PERIODS_PER_YEAR,
   periodsPerYearForStoredFrequency,
@@ -89,35 +96,16 @@ export class RateChangeInferenceService {
       }),
     );
 
-    const rawPayments = await this.detector.buildPaymentRecords(
-      userId,
-      accountId,
-      transactions,
-    );
-    const consolidated = this.detector.consolidatePaymentsByDate(rawPayments);
-    const hadSplitInterest = consolidated.some((p) => p.interestAmount != null);
-    // Recover interest booked as a separate categorized expense (not a split
-    // leg) so those payments yield a rate observation instead of being dropped
-    // as "no interest details". Skipped in SPLIT mode, where interest is only
-    // ever a split leg and pairing a separate expense would double-count.
-    const payments =
-      account.interestBookingMode === "SPLIT"
-        ? consolidated
-        : await this.detector.pairSeparateInterest(
-            userId,
-            account,
-            consolidated,
-          );
+    // The payments read through the pairing mortgage-type detection shares.
     // When interest is a separate expense, the payment amounts are principal
     // only (not the full installment), so they must not be recorded as the
     // rate rows' payment.
-    const interestBookedSeparately =
-      account.interestBookingMode === "SEPARATE" ||
-      (!hadSplitInterest && payments.some((p) => p.interestAmount != null));
-    const balanceMap = this.detector.buildRunningBalanceMap(
-      account,
-      transactions,
-    );
+    const { payments, balanceMap, interestBookedSeparately } =
+      await this.detector.buildInstallmentHistory(
+        userId,
+        account,
+        transactions,
+      );
 
     const warnings: string[] = [];
     const periodsPerYear = this.resolvePeriodsPerYear(
@@ -220,15 +208,23 @@ export class RateChangeInferenceService {
   }
 
   /**
-   * Annualize an observed periodic rate. This mirrors the frontend's
-   * reconstruction (`assignObservedRates`) so a detected rate matches what the
-   * schedule shows:
-   *  - Canadian mortgage: annualize by the nominal periods per year (the
-   *    lender's convention), inverting the semi-annual compounding for a
-   *    fixed-rate loan;
-   *  - everything else: annualize over the actual accrual window (`x 365 /
-   *    days`), which self-corrects for month-length and payment-gap variation
-   *    rather than overshooting a fixed `x periodsPerYear`.
+   * Annualize an observed periodic rate by the type's annualization trait
+   * (`annualizationFor`, docs/specs/mortgage-types.md table 4.1). This mirrors
+   * the frontend's reconstruction (`assignObservedRates`) so a detected rate
+   * matches what the schedule shows:
+   *  - `SEMI_ANNUAL` (Canadian fixed-rate): invert the semi-annual
+   *    compounding over the nominal periods per year (the lender's
+   *    convention);
+   *  - `DAY_COUNT` (every other type): annualize over the actual accrual
+   *    window (`x 365 / days`), which self-corrects for month-length and
+   *    payment-gap variation rather than overshooting a fixed
+   *    `x periodsPerYear`. A Canadian variable-rate account is `ANNUITY` and
+   *    annualizes here too (table 4.2, last row); it used `x periodsPerYear`
+   *    before the type existed.
+   *
+   * A mortgage's type is read through `mortgageTypeOf`; any other account
+   * annualizes as `ANNUITY`, the engine a plain loan uses, whatever its column
+   * holds.
    */
   private annualizeRate(
     account: Account,
@@ -236,13 +232,14 @@ export class RateChangeInferenceService {
     periodsPerYear: number,
     days: number,
   ): number {
-    const isCanadian = account.isCanadianMortgage || false;
-    if (!isCanadian) {
-      return periodicRate * (365 / days) * 100;
+    const type =
+      account.accountType === AccountType.MORTGAGE
+        ? mortgageTypeOf(account)
+        : "ANNUITY";
+    if (annualizationFor(type) === "SEMI_ANNUAL") {
+      return (Math.pow(1 + periodicRate, periodsPerYear / 2) - 1) * 2 * 100;
     }
-    return account.isVariableRate || false
-      ? periodicRate * periodsPerYear * 100
-      : (Math.pow(1 + periodicRate, periodsPerYear / 2) - 1) * 2 * 100;
+    return periodicRate * (365 / days) * 100;
   }
 
   /**
@@ -401,6 +398,12 @@ export class RateChangeInferenceService {
   ): Promise<DetectRateChangesResult> {
     const created: LoanRateChange[] = [];
     let replacedCount = 0;
+    // A LINEAR or INTEREST_ONLY mortgage records no payment on a rate row: its
+    // method prices every installment, so an observed payment would be a
+    // second, conflicting answer (spec section 5.3). Segments are still cut on
+    // the rate alone.
+    const recordsPayment =
+      !interestBookedSeparately && derivedInstallmentType(account) === null;
     await withScopedDb(this.dataSource, async (m) => {
       const deleted = await m.delete(LoanRateChange, {
         accountId: account.id,
@@ -435,7 +438,7 @@ export class RateChangeInferenceService {
           accountId: account.id,
           effectiveDate,
           annualRate: segment.medianRate,
-          newPaymentAmount: interestBookedSeparately
+          newPaymentAmount: !recordsPayment
             ? null
             : isFirst
               ? segment.paymentAmount != null

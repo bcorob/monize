@@ -2,9 +2,15 @@
 
 import Image from 'next/image';
 import { isNavSectionActive } from '@/lib/nav-section';
-import { NAV_ICONS } from '@/lib/nav-links';
+import { ADMIN_LINKS, NAV_ICONS } from '@/lib/nav-links';
 import { useTranslations } from 'next-intl';
 import { Modal } from '@/components/ui/Modal';
+import {
+  ArrowRightOnRectangleIcon,
+  ArrowTopRightOnSquareIcon,
+  XMarkIcon,
+} from '@heroicons/react/24/outline';
+import type { HelpMenuEntries } from '@/hooks/useHelpMenuEntries';
 
 interface NavLink {
   href: string;
@@ -19,6 +25,8 @@ interface MobileNavDrawerProps {
   pathname: string;
   /** Navigate to a route. The caller closes the drawer on route change. */
   onNavigate: (href: string) => void;
+  /** Sign out; the header's button is hidden on the phones this drawer serves. */
+  onLogout: () => void;
   /** Main section links the current user is allowed to see. */
   navLinks: NavLink[];
   /** AI links; only rendered when `showAiMenu` is true. */
@@ -28,6 +36,9 @@ interface MobileNavDrawerProps {
   toolsLinks: NavLink[];
   /** Whether to render the Admin section. */
   showAdmin: boolean;
+  /** The header Help menu's entries (`useHelpMenuEntries`), rendered as their
+   *  own section instead of behind a hover the drawer has no room for. */
+  helpEntries: HelpMenuEntries;
 }
 
 const SECTION_HEADER_CLASS =
@@ -51,11 +62,13 @@ export function MobileNavDrawer({
   onClose,
   pathname,
   onNavigate,
+  onLogout,
   navLinks,
   aiLinks,
   showAiMenu,
   toolsLinks,
   showAdmin,
+  helpEntries,
 }: MobileNavDrawerProps) {
   const t = useTranslations('navigation');
   const itemClass = (active: boolean) =>
@@ -117,9 +130,7 @@ export function MobileNavDrawer({
             aria-label={t('closeMenu')}
             className="p-2 -mr-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
           >
-            <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <XMarkIcon className="w-6 h-6" aria-hidden="true" />
           </button>
         </div>
 
@@ -153,15 +164,79 @@ export function MobileNavDrawer({
             <>
               <div className="border-t border-gray-200 dark:border-gray-700 mt-2" />
               <div className={SECTION_HEADER_CLASS}>{t('admin')}</div>
-              {renderLink(
-                { href: '/admin/users', label: t('userManagement') },
-                pathname.startsWith('/admin'),
+              {ADMIN_LINKS.map((link) =>
+                renderLink(
+                  { href: link.href, label: t(link.labelKey) },
+                  isNavSectionActive(pathname, link.href),
+                ),
               )}
             </>
           )}
 
           <div className="border-t border-gray-200 dark:border-gray-700 mt-2" />
+          <div className={SECTION_HEADER_CLASS}>{t('help')}</div>
+          {helpEntries.helpForPage && (
+            <button
+              key={helpEntries.helpForPage.key}
+              onClick={() => {
+                helpEntries.helpForPage?.onClick();
+                onClose();
+              }}
+              className={itemClass(false)}
+            >
+              <helpEntries.helpForPage.Icon
+                aria-hidden
+                className="mr-4 h-5 w-5 flex-shrink-0 text-gray-400 dark:text-gray-500"
+              />
+              {helpEntries.helpForPage.label}
+            </button>
+          )}
+          {helpEntries.actions.map((entry) => (
+            <button
+              key={entry.key}
+              onClick={() => {
+                entry.onClick();
+                onClose();
+              }}
+              className={itemClass(false)}
+            >
+              <entry.Icon
+                aria-hidden
+                className="mr-4 h-5 w-5 flex-shrink-0 text-gray-400 dark:text-gray-500"
+              />
+              {entry.label}
+            </button>
+          ))}
+          {helpEntries.links.map((link) => (
+            <a
+              key={link.key}
+              href={link.href}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={onClose}
+              className={`${itemClass(false)} gap-1.5`}
+            >
+              <link.Icon
+                aria-hidden
+                className="mr-4 h-5 w-5 flex-shrink-0 text-gray-400 dark:text-gray-500"
+              />
+              <span className="flex-1">{link.label}</span>
+              <ArrowTopRightOnSquareIcon
+                aria-hidden
+                className="h-4 w-4 flex-shrink-0 text-gray-400 dark:text-gray-500"
+              />
+            </a>
+          ))}
+
+          <div className="border-t border-gray-200 dark:border-gray-700 mt-2" />
           {renderLink({ href: '/settings', label: t('settings') }, pathname === '/settings')}
+          <button type="button" onClick={onLogout} className={itemClass(false)}>
+            <ArrowRightOnRectangleIcon
+              aria-hidden
+              className="mr-4 h-5 w-5 flex-shrink-0 text-gray-400 dark:text-gray-500"
+            />
+            {t('logout')}
+          </button>
         </div>
       </nav>
     </Modal>

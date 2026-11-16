@@ -1,5 +1,14 @@
+import {
+  SharedReviewService,
+  SHARED_LEDGER_TOOLS,
+} from "../../shared-expenses/shared-review.service";
+import { sharedReviewProvider } from "../../shared-expenses/__fixtures__/shared-review";
 import { Test, TestingModule } from "@nestjs/testing";
-import { BadRequestException } from "@nestjs/common";
+import {
+  BadRequestException,
+  HttpException,
+  NotFoundException,
+} from "@nestjs/common";
 import { ToolExecutorService } from "./tool-executor.service";
 import { AccountsService } from "../../accounts/accounts.service";
 import { CategoriesService } from "../../categories/categories.service";
@@ -9,6 +18,7 @@ import { BudgetReportsService } from "../../budgets/budget-reports.service";
 import { PortfolioService } from "../../securities/portfolio.service";
 import { SecuritiesService } from "../../securities/securities.service";
 import { BuiltInReportsService } from "../../built-in-reports/built-in-reports.service";
+import { ExchangeRateService } from "../../currencies/exchange-rate.service";
 import { InvestmentTransactionsService } from "../../securities/investment-transactions.service";
 import { ScheduledTransactionsService } from "../../scheduled-transactions/scheduled-transactions.service";
 import { TransactionsService } from "../../transactions/transactions.service";
@@ -23,9 +33,20 @@ import { TransactionSplitService } from "../../transactions/transaction-split.se
 import { AttachmentToolPrepService } from "../../attachments/attachment-tool-prep.service";
 import { RelayAttachmentStore } from "../relay/relay-attachment.store";
 import { AttachmentDto } from "./dto/ai-query.dto";
+import { AiReviewWorkService } from "../../ai-review/ai-review-work.service";
+import { EmailReceiptParserToolsService } from "../../email-receipts/parsers/email-receipt-parser-tools.service";
+import { SeriesFetchError } from "../../bonds/bond-adapter";
+import { BondSeriesService } from "../../bonds/bond-series.service";
+import { WarrantiesService } from "../../warranties/warranties.service";
+import { HelpService } from "../../help/help.service";
+import { TagsService } from "../../tags/tags.service";
+import { TagToolPrepService } from "../../tags/tag-tool-prep.service";
+import { LlmWarrantyList } from "../../warranties/warranty-llm-shape";
+import { TransactionRuleToolPrepService } from "../../transaction-rules/rule-tool-prep.service";
 
 describe("ToolExecutorService", () => {
   let service: ToolExecutorService;
+  let sharedReview: jest.Mocked<Pick<SharedReviewService, "annotate">>;
   let analytics: Record<string, jest.Mock>;
   let accounts: Record<string, jest.Mock>;
   let netWorth: Record<string, jest.Mock>;
@@ -41,6 +62,18 @@ describe("ToolExecutorService", () => {
   let transfer: Record<string, jest.Mock>;
   let splitService: Record<string, jest.Mock>;
   let builtInReports: Record<string, jest.Mock>;
+  let exchangeRates: {
+    convertOnDate: jest.Mock;
+    getCurrencyDecimalPlaces: jest.Mock;
+  };
+  let bondSeries: { fetchSeries: jest.Mock };
+  let warranties: {
+    getLlmWarranties: jest.MockedFunction<
+      WarrantiesService["getLlmWarranties"]
+    >;
+  };
+  let tagsService: { getLlmTags: jest.Mock };
+  let tagPrep: Record<string, jest.Mock>;
   let attachmentPrep: Record<string, jest.Mock>;
   let attachmentStore: Record<string, jest.Mock>;
 
@@ -116,6 +149,11 @@ describe("ToolExecutorService", () => {
         totalIncome: 5000,
         totalExpenses: 3000,
         netCashFlow: 2000,
+        knownIncomeSubtotal: 5000,
+        knownExpensesSubtotal: 3000,
+        totalsCurrency: "USD",
+        fxComplete: true,
+        missingRatePairs: [],
         transactionCount: 45,
         groupedBy: "none",
         groups: null,
@@ -123,10 +161,23 @@ describe("ToolExecutorService", () => {
         perCurrency: [],
       }),
       getLlmPeriodComparison: jest.fn().mockResolvedValue({
-        period1: { start: "2025-12-01", end: "2025-12-31", total: 3000 },
-        period2: { start: "2026-01-01", end: "2026-01-31", total: 3500 },
+        period1: {
+          start: "2025-12-01",
+          end: "2025-12-31",
+          total: 3000,
+          knownSubtotal: 3000,
+        },
+        period2: {
+          start: "2026-01-01",
+          end: "2026-01-31",
+          total: 3500,
+          knownSubtotal: 3500,
+        },
         totalChange: 500,
         totalChangePercent: 16.67,
+        totalsCurrency: "USD",
+        fxComplete: true,
+        missingRatePairs: [],
         comparison: [],
       }),
       resolveLlmCategoryIds: jest
@@ -205,11 +256,46 @@ describe("ToolExecutorService", () => {
             balance: 5000,
             currentBalance: 5000,
             currency: "USD",
+            balanceInDefaultCurrency: 5000,
+            currentBalanceInDefaultCurrency: 5000,
+            exchangeRate: 1,
+          },
+          {
+            id: "acc-2",
+            name: "Euro Savings",
+            type: "SAVINGS",
+            balance: 1000,
+            currentBalance: 1000,
+            currency: "EUR",
+            balanceInDefaultCurrency: 1085.5,
+            currentBalanceInDefaultCurrency: 1085.5,
+            exchangeRate: 1.0855,
+          },
+          {
+            id: "acc-3",
+            name: "Yen Cash",
+            type: "CASH",
+            balance: 20000,
+            currentBalance: 20000,
+            currency: "JPY",
+            balanceInDefaultCurrency: null,
+            currentBalanceInDefaultCurrency: null,
+            exchangeRate: null,
           },
         ],
         totalAssets: 20000,
         totalLiabilities: 1200,
         netWorth: 18800,
+        knownAssetsSubtotal: 20000,
+        knownLiabilitiesSubtotal: 1200,
+        knownNetWorthSubtotal: 18800,
+        fxComplete: true,
+        pricesComplete: true,
+        valuationComplete: true,
+        unpricedSecurityIds: [],
+        unpricedSymbols: [],
+        defaultCurrency: "USD",
+        missingRatePairs: ["JPY->USD"],
         totalAccounts: 3,
       }),
     };
@@ -287,6 +373,7 @@ describe("ToolExecutorService", () => {
         transactionCount: 3,
         totalAmount: 2325,
         totalCommission: 19.98,
+        incomeByCurrency: {},
         totalQuantity: 15,
         actionCounts: { BUY: 1, SELL: 1, DIVIDEND: 1 },
         groupedBy: null,
@@ -299,6 +386,11 @@ describe("ToolExecutorService", () => {
         endDate: "2024-12-31",
         totals: {
           realizedGain: 120,
+          realizedGainComplete: true,
+          realizedGainKnownSubtotal: null,
+          currency: "CAD",
+          fxComplete: true,
+          missingRatePairs: [],
           unrealizedGain: 80,
           totalCapitalGain: 200,
         },
@@ -313,6 +405,8 @@ describe("ToolExecutorService", () => {
             startValue: 1000,
             endValue: 1200,
             realizedGain: 0,
+            realizedGainComplete: true,
+            realizedGainKnownSubtotal: null,
             unrealizedGain: 200,
             totalCapitalGain: 200,
           },
@@ -401,6 +495,12 @@ describe("ToolExecutorService", () => {
         categoryId: "cat-1",
         newCategoryName: "Dining",
       }),
+      previewTransferTagChange: jest.fn().mockResolvedValue({
+        tagNames: [],
+        newTagNames: [],
+        removeTagIds: [],
+        removeTagNames: [],
+      }),
       previewUpdate: jest.fn().mockResolvedValue({
         transactionId: "tx-1",
         accountId: "acc-1",
@@ -447,6 +547,14 @@ describe("ToolExecutorService", () => {
         { id: "payee-2", name: "Starbucks" },
       ]),
       search: jest.fn().mockResolvedValue([{ id: "payee-1", name: "Walmart" }]),
+      getLlmPayees: jest.fn().mockResolvedValue({
+        payees: [
+          { id: "payee-1", name: "Walmart" },
+          { id: "payee-2", name: "Starbucks" },
+        ],
+        totalCount: 2,
+        truncated: false,
+      }),
       previewCreate: jest.fn().mockResolvedValue({
         name: "Acme",
         defaultCategoryId: "cat-1",
@@ -527,7 +635,9 @@ describe("ToolExecutorService", () => {
     // Category-split validation is a no-op by default; tests that exercise an
     // invalid sum override it to throw.
     splitService = {
-      validateSplits: jest.fn(),
+      // The tool preparation validates in the account's currency, which reads
+      // that currency's places itself (`validateSplitsInCurrency`).
+      validateSplitsInCurrency: jest.fn().mockResolvedValue(undefined),
     };
 
     transfer = {
@@ -563,6 +673,66 @@ describe("ToolExecutorService", () => {
       }),
     };
 
+    warranties = {
+      getLlmWarranties: jest.fn().mockResolvedValue(warrantyList()),
+    };
+    tagsService = {
+      getLlmTags: jest.fn().mockResolvedValue({
+        tags: [
+          {
+            id: "tag-1",
+            name: "Trip",
+            color: null,
+            icon: null,
+            useCount: 3,
+            lastUsed: "2026-10-01",
+          },
+        ],
+        total: 4,
+        truncated: true,
+      }),
+    };
+    tagPrep = {
+      prepareOne: jest.fn().mockResolvedValue({
+        tagId: "tag-1",
+        currentName: "Trip",
+        name: "Travel",
+      }),
+      prepareMany: jest.fn(async (_u: string, _op: string, rows: any[]) => ({
+        okPreviews: rows.map((r) => ({
+          tagId: `id-${r.name}`,
+          name: r.name,
+          carriedCount: 1,
+        })),
+        okRows: rows.map((r) => ({ tagId: `id-${r.name}` })),
+        previewRows: rows.map((r) => ({ status: "ok", name: r.name })),
+        okIndex: rows.map((_r, i) => i),
+        skipped: [],
+      })),
+    };
+
+    bondSeries = {
+      fetchSeries: jest.fn().mockResolvedValue({
+        id: "i1",
+        seriesCode: "EDO1036",
+        termsProvider: "obligacjeskarbowe.pl",
+        created: true,
+      }),
+    };
+    exchangeRates = {
+      // A BTC row at four places, the precision a coin is stored at.
+      getCurrencyDecimalPlaces: jest
+        .fn()
+        .mockResolvedValue(new Map([["BTC", 4]])),
+      convertOnDate: jest.fn().mockResolvedValue({
+        amount: 1500,
+        fromCurrency: "CAD",
+        toCurrency: "USD",
+        date: "2026-09-01",
+        rate: 0.7325,
+        convertedAmount: 1098.75,
+      }),
+    };
     builtInReports = {
       getSpendingByCategory: jest
         .fn()
@@ -584,6 +754,17 @@ describe("ToolExecutorService", () => {
         currentMonthLabel: "April 2026",
         previousMonthLabel: "March 2026",
         currency: "USD",
+        netWorth: {
+          monthlyHistory: [],
+          currentNetWorth: 52000,
+          previousNetWorth: 50000,
+          knownCurrentNetWorth: 52000,
+          knownPreviousNetWorth: 50000,
+          netWorthChange: 2000,
+          netWorthChangePercent: 4,
+          fxComplete: true,
+          missingRatePairs: [],
+        },
       }),
     };
 
@@ -598,13 +779,14 @@ describe("ToolExecutorService", () => {
       ]),
     };
     attachmentStore = {
-      store: jest.fn().mockReturnValue([{ id: "fresh-1" }]),
+      store: jest.fn().mockResolvedValue([{ id: "fresh-1" }]),
       get: jest.fn(),
       releaseForPrompt: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
+        sharedReviewProvider(),
         ToolExecutorService,
         { provide: AttachmentToolPrepService, useValue: attachmentPrep },
         { provide: RelayAttachmentStore, useValue: attachmentStore },
@@ -629,6 +811,16 @@ describe("ToolExecutorService", () => {
         { provide: TransactionSplitService, useValue: splitService },
         { provide: AiActionSigningService, useValue: signing },
         { provide: BuiltInReportsService, useValue: builtInReports },
+        { provide: ExchangeRateService, useValue: exchangeRates },
+        // Exercised in tool-executor.transaction-rules.spec.ts.
+        { provide: AiReviewWorkService, useValue: {} },
+        { provide: EmailReceiptParserToolsService, useValue: {} },
+        { provide: BondSeriesService, useValue: bondSeries },
+        { provide: WarrantiesService, useValue: warranties },
+        { provide: HelpService, useValue: {} },
+        { provide: TagsService, useValue: tagsService },
+        { provide: TagToolPrepService, useValue: tagPrep },
+        { provide: TransactionRuleToolPrepService, useValue: {} },
         // Real prep + builder wrapping the mocked services, so the executor's
         // name resolution, preview building, and pending-action construction
         // (and signing.sign assertions) still run end-to-end.
@@ -640,7 +832,32 @@ describe("ToolExecutorService", () => {
     }).compile();
 
     service = module.get<ToolExecutorService>(ToolExecutorService);
+    sharedReview = module.get(SharedReviewService);
   });
+
+  it.each(SHARED_LEDGER_TOOLS)(
+    "%s carries the common personal-review context",
+    async (name) => {
+      const context = {
+        pendingCount: 2,
+        unavailableGroupCount: 0,
+        status: "REVIEW_REQUIRED",
+      };
+      sharedReview.annotate.mockImplementation(async (_user, data) => ({
+        ...(Array.isArray(data) ? { items: data } : (data as object)),
+        sharedExpenses: context,
+      }));
+      const input =
+        name === "generate_report" ? { type: "income_vs_expenses" } : {};
+      const result = await service.execute(userId, name, input);
+      expect(result.isError).toBeUndefined();
+      expect(sharedReview.annotate).toHaveBeenCalledWith(
+        userId,
+        expect.anything(),
+      );
+      expect(result.data).toMatchObject({ sharedExpenses: context });
+    },
+  );
 
   describe("tool routing", () => {
     it("list_transactions delegates to analytics.getLlmListTransactions", async () => {
@@ -690,6 +907,11 @@ describe("ToolExecutorService", () => {
         totalIncome: 0,
         totalExpenses: 0,
         netCashFlow: 0,
+        knownIncomeSubtotal: 0,
+        knownExpensesSubtotal: 0,
+        totalsCurrency: "USD",
+        fxComplete: true,
+        missingRatePairs: [],
         transactionCount: 2,
         groupedBy: "none",
         groups: null,
@@ -805,6 +1027,100 @@ describe("ToolExecutorService", () => {
       expect(result.summary).toContain("Net worth");
     });
 
+    it("list_accounts names the currency of every figure and quotes a foreign account in both", async () => {
+      const result = await service.execute(userId, "list_accounts", {});
+
+      expect(result.summary).toContain("Net worth: 18800.00 USD");
+      expect(result.summary).toContain("Assets: 20000.00 USD");
+      expect(result.summary).toContain(
+        "Euro Savings: 1000.00 EUR = 1085.50 USD",
+      );
+      expect(result.summary).toContain(
+        "Yen Cash: 20000.00 JPY = unknown (no rate)",
+      );
+      expect(result.summary).toContain("No exchange rate for: JPY->USD");
+      // The USD account is not listed as foreign.
+      expect(result.summary).not.toContain("Checking:");
+    });
+
+    it("list_accounts states a coin wallet at its currency row's places, not two", async () => {
+      const complete = await accounts.getLlmAccounts();
+      accounts.getLlmAccounts.mockResolvedValueOnce({
+        ...complete,
+        accounts: [
+          {
+            ...complete.accounts[0],
+            id: "acc-5",
+            name: "Wallet",
+            type: "CRYPTO",
+            currency: "BTC",
+            balance: 0.0125,
+            currentBalance: 0.0125,
+            balanceInDefaultCurrency: 1715.63,
+          },
+          complete.accounts[1],
+        ],
+      });
+
+      const result = await service.execute(userId, "list_accounts", {});
+
+      expect(result.summary).toContain("Wallet: 0.0125 BTC = 1715.63 USD");
+      expect(result.summary).toContain(
+        "Euro Savings: 1000.00 EUR = 1085.50 USD",
+      );
+      expect(exchangeRates.getCurrencyDecimalPlaces).toHaveBeenCalledWith([
+        "BTC",
+        "EUR",
+      ]);
+    });
+
+    it("list_accounts withholds a net worth that is a subtotal and says why and where to fix it", async () => {
+      const complete = await accounts.getLlmAccounts();
+      accounts.getLlmAccounts.mockResolvedValueOnce({
+        ...complete,
+        totalAssets: null,
+        netWorth: null,
+        knownAssetsSubtotal: 1000,
+        knownNetWorthSubtotal: 1000,
+        fxComplete: false,
+        pricesComplete: false,
+        valuationComplete: false,
+        missingRatePairs: ["ZZZ->USD"],
+        unpricedSecurityIds: ["sec-abc"],
+        unpricedSymbols: ["ABC"],
+        accounts: [
+          {
+            ...complete.accounts[0],
+            id: "acc-4",
+            name: "Broker",
+            type: "INVESTMENT",
+            currency: "CAD",
+            balance: null,
+            knownBalanceSubtotal: 50,
+            valuationComplete: false,
+            balanceInDefaultCurrency: null,
+          },
+        ],
+      });
+
+      const result = await service.execute(userId, "list_accounts", {});
+
+      expect(result.isError).toBeFalsy();
+      expect(result.summary).toContain(
+        "Net worth: withheld (incomplete: no exchange rate for ZZZ->USD; no price for ABC); known subtotal 1000.00 USD",
+      );
+      expect(result.summary).toContain(
+        "Assets: withheld (incomplete: no exchange rate for ZZZ->USD; no price for ABC); known subtotal 1000.00 USD",
+      );
+      // Liabilities converted completely, so they stay a total.
+      expect(result.summary).toContain("Liabilities: 1200.00 USD");
+      expect(result.summary).toContain("Currencies page");
+      expect(result.summary).toContain("price history");
+      expect(result.summary).toContain(
+        "Broker: unknown (holdings not priced); known subtotal 50.00 CAD",
+      );
+    });
+
     it("list_accounts passes status, accountTypes, accountIds, and nameQuery through", async () => {
       await service.execute(userId, "list_accounts", {
         status: "closed",
@@ -896,6 +1212,110 @@ describe("ToolExecutorService", () => {
       expect(result.sources[0].type).toBe("comparison");
     });
 
+    it("list_transactions names the currency of its totals", async () => {
+      analytics.getLlmListTransactions.mockResolvedValueOnce({
+        totalIncome: 0,
+        totalExpenses: 7650,
+        netCashFlow: -7650,
+        knownIncomeSubtotal: 0,
+        knownExpensesSubtotal: 7650,
+        totalsCurrency: "PLN",
+        fxComplete: true,
+        missingRatePairs: [],
+        transactionCount: 2,
+        groupedBy: "none",
+      });
+
+      const result = await service.execute(userId, "list_transactions", {});
+
+      expect(result.summary).toContain("Expenses: 7650.00 PLN");
+      expect(result.summary).not.toContain("withheld");
+    });
+
+    it("list_transactions says the totals are withheld, naming the pair and the fix", async () => {
+      analytics.getLlmListTransactions.mockResolvedValueOnce({
+        totalIncome: null,
+        totalExpenses: null,
+        netCashFlow: null,
+        knownIncomeSubtotal: 0,
+        knownExpensesSubtotal: 4000,
+        totalsCurrency: "PLN",
+        fxComplete: false,
+        missingRatePairs: ["USD->PLN"],
+        transactionCount: 2,
+        groupedBy: "none",
+      });
+
+      const result = await service.execute(userId, "list_transactions", {});
+
+      expect(result.summary).toContain(
+        "Totals withheld: no exchange rate for USD->PLN; add it under Currencies.",
+      );
+      expect(result.summary).toContain("expenses 4000.00 PLN");
+      expect(result.summary).not.toContain("Expenses: ");
+    });
+
+    it("compare_periods names the currency of its totals", async () => {
+      analytics.getLlmPeriodComparison.mockResolvedValueOnce({
+        period1: {
+          start: "2026-08-01",
+          end: "2026-08-31",
+          total: 400,
+          knownSubtotal: 400,
+        },
+        period2: {
+          start: "2026-09-01",
+          end: "2026-09-30",
+          total: 7650,
+          knownSubtotal: 7650,
+        },
+        totalChange: 7250,
+        totalChangePercent: 1812.5,
+        totalsCurrency: "PLN",
+        fxComplete: true,
+        missingRatePairs: [],
+        comparison: [],
+      });
+
+      const result = await service.execute(userId, "compare_periods", {});
+
+      expect(result.summary).toContain("400.00 PLN");
+      expect(result.summary).toContain("7650.00 PLN");
+      expect(result.summary).toContain("Change: +7250.00 PLN (+1812.5%)");
+    });
+
+    it("compare_periods says the totals are withheld, naming the pair and the fix", async () => {
+      analytics.getLlmPeriodComparison.mockResolvedValueOnce({
+        period1: {
+          start: "2026-08-01",
+          end: "2026-08-31",
+          total: 400,
+          knownSubtotal: 400,
+        },
+        period2: {
+          start: "2026-09-01",
+          end: "2026-09-30",
+          total: null,
+          knownSubtotal: 4000,
+        },
+        totalChange: null,
+        totalChangePercent: null,
+        totalsCurrency: "PLN",
+        fxComplete: false,
+        missingRatePairs: ["USD->PLN"],
+        comparison: [],
+      });
+
+      const result = await service.execute(userId, "compare_periods", {});
+
+      expect(result.summary).toContain(
+        "Totals withheld: no exchange rate for USD->PLN; add it under Currencies.",
+      );
+      expect(result.summary).toContain("4000.00 PLN");
+      expect(result.summary).not.toContain("Change:");
+      expect(result.summary).not.toContain("null");
+    });
+
     it("compare_periods fills in all four dates when omitted", async () => {
       await service.execute(userId, "compare_periods", {});
 
@@ -978,6 +1398,8 @@ describe("ToolExecutorService", () => {
         totalPortfolioValue: 100,
         totalGainLoss: 0,
         totalGainLossPercent: 0,
+        gainCostBasis: 0,
+        unpricedCostBasis: 0,
         timeWeightedReturn: null,
         cagr: null,
         holdings: [],
@@ -992,12 +1414,43 @@ describe("ToolExecutorService", () => {
       expect((result.data as { fxComplete: boolean }).fxComplete).toBe(false);
     });
 
+    it("get_portfolio_summary says the gain is over the priced holdings only, naming the symbol and the excluded cost (A26-M38)", async () => {
+      portfolio.getLlmSummary.mockResolvedValueOnce({
+        holdingCount: 2,
+        fxComplete: true,
+        missingRatePairs: [],
+        pricesComplete: false,
+        unpricedSymbols: ["XYZ"],
+        valuationComplete: false,
+        totalCashValue: 0,
+        totalHoldingsValue: 100000,
+        totalCostBasis: 130000,
+        gainCostBasis: 80000,
+        unpricedCostBasis: 50000,
+        totalPortfolioValue: 100000,
+        totalGainLoss: 20000,
+        totalGainLossPercent: 25,
+        timeWeightedReturn: null,
+        cagr: null,
+        holdings: [],
+        holdingsByAccount: [],
+        allocation: [],
+      });
+
+      const result = await service.execute(userId, "get_portfolio_summary", {});
+
+      expect(result.summary).toContain("priced holdings only");
+      expect(result.summary).toContain("XYZ");
+      expect(result.summary).toContain("50000.00");
+    });
+
     it("list_investment_transactions delegates to investmentTransactions.getLlmInvestmentTransactions", async () => {
       investmentTransactions.getLlmInvestmentTransactions.mockResolvedValueOnce(
         {
           transactionCount: 3,
           totalAmount: 2325,
           totalCommission: 19.98,
+          incomeByCurrency: {},
           totalQuantity: 15,
           actionCounts: { BUY: 1, SELL: 1 },
           groupedBy: "security",
@@ -1008,6 +1461,7 @@ describe("ToolExecutorService", () => {
               totalQuantity: 15,
               totalAmount: 2325,
               totalCommission: 19.98,
+              incomeByCurrency: {},
             },
           ],
           transactions: [],
@@ -1103,6 +1557,38 @@ describe("ToolExecutorService", () => {
       expect(result.summary).toContain("realized 120.00");
       expect(result.summary).toContain("unrealized 80.00");
       expect(result.summary).toContain("grouped by month");
+    });
+
+    it("list_capital_gains says the realized gain is unknown and gives the known part", async () => {
+      (
+        investmentTransactions.getLlmCapitalGains as jest.Mock
+      ).mockResolvedValueOnce({
+        startDate: "2024-01-01",
+        endDate: "2024-12-31",
+        totals: {
+          realizedGain: null,
+          realizedGainComplete: false,
+          realizedGainKnownSubtotal: 15,
+          currency: "CAD",
+          fxComplete: false,
+          missingRatePairs: ["USD->CAD"],
+          unrealizedGain: null,
+          totalCapitalGain: null,
+        },
+        groupedBy: "month",
+        entries: [],
+        entryCount: 0,
+        truncatedEntryList: false,
+      });
+
+      const result = await service.execute(userId, "list_capital_gains", {
+        startDate: "2024-01-01",
+        endDate: "2024-12-31",
+      });
+
+      expect(result.summary).toContain("realized unknown (known part 15.00");
+      expect(result.summary).toContain("capital gains unknown CAD");
+      expect(result.summary).toContain("no exchange rate for USD->CAD");
     });
 
     it("list_capital_gains resolves account names and defaults groupBy to 'month'", async () => {
@@ -1202,22 +1688,80 @@ describe("ToolExecutorService", () => {
       });
     });
 
-    it("list_payees returns all payees when no search is given", async () => {
+    it("list_payees reads the shared payee query", async () => {
       const result = await service.execute(userId, "list_payees", {});
 
-      expect(payees.findAll).toHaveBeenCalledWith(userId);
-      expect(payees.search).not.toHaveBeenCalled();
+      expect(payees.getLlmPayees).toHaveBeenCalledWith(userId, {});
       expect(result.sources[0].type).toBe("payees");
       expect(result.summary).toContain("2 payees");
     });
 
-    it("list_payees uses the search index when a query is given", async () => {
-      const result = await service.execute(userId, "list_payees", {
+    it("list_payees passes the search, sort, limit and presence filters down", async () => {
+      // Same method the MCP tool calls, so both surfaces answer alike.
+      const input = {
         search: "wal",
+        sortBy: "transactionCount",
+        limit: 5,
+        hasEmail: false,
+      };
+      const result = await service.execute(userId, "list_payees", input);
+
+      expect(payees.getLlmPayees).toHaveBeenCalledWith(userId, input);
+      expect(result.summary).toContain('matching "wal"');
+    });
+
+    it("list_payees says a truncated list is only part of the matches", async () => {
+      payees.getLlmPayees.mockResolvedValueOnce({
+        payees: [{ id: "p1", name: "Walmart" }],
+        totalCount: 9,
+        truncated: true,
       });
 
-      expect(payees.search).toHaveBeenCalledWith(userId, "wal", 50);
-      expect(result.summary).toContain('matching "wal"');
+      const result = await service.execute(userId, "list_payees", { limit: 1 });
+
+      expect(result.summary).toContain("1 payee");
+      expect(result.summary).toContain("of 9 matching");
+    });
+
+    it("list_warranties reads the shared warranty method, unnarrowed", async () => {
+      // Same method the MCP tool calls, so both surfaces answer alike; no
+      // account scope, because a delegate reaches the assistant only with
+      // READ on every account (DelegateRequiresFullScope).
+      const result = await service.execute(userId, "list_warranties", {});
+
+      expect(warranties.getLlmWarranties).toHaveBeenCalledWith(userId, {});
+      expect(result.data).toEqual(warrantyList());
+      expect(result.sources[0].type).toBe("warranties");
+      expect(result.summary).toBe("2 warranties as of 2026-10-21.");
+    });
+
+    it("list_warranties passes the filters down and says a capped list is part of the matches", async () => {
+      warranties.getLlmWarranties.mockResolvedValueOnce({
+        ...warrantyList(),
+        warranties: warrantyList().warranties.slice(0, 1),
+        total: 5,
+      });
+      const input = { status: "expiring", q: "laptop", limit: "1" };
+
+      const result = await service.execute(userId, "list_warranties", input);
+
+      expect(warranties.getLlmWarranties).toHaveBeenCalledWith(userId, {
+        status: "expiring",
+        q: "laptop",
+        limit: 1,
+      });
+      expect(result.summary).toBe(
+        '1 warranty expiring matching "laptop" (of 5) as of 2026-10-21.',
+      );
+    });
+
+    it("list_warranties refuses a limit above the cap before reading", async () => {
+      const result = await service.execute(userId, "list_warranties", {
+        limit: 51,
+      });
+
+      expect(warranties.getLlmWarranties).not.toHaveBeenCalled();
+      expect(result.summary).toContain("Invalid input for list_warranties");
     });
 
     it("generate_report delegates to the matching built-in report", async () => {
@@ -1236,14 +1780,90 @@ describe("ToolExecutorService", () => {
       expect(result.summary).toContain("spending_by_category");
     });
 
+    it("generate_report names the missing rate and where to fix it in the summary (INV-FX-001)", async () => {
+      builtInReports.getSpendingByCategory.mockResolvedValueOnce({
+        data: [],
+        totalSpending: null,
+        knownSpending: 50,
+        currency: "USD",
+        missingCurrencies: ["JPY", "CHF"],
+        excludedCount: 2,
+      });
+
+      const result = await service.execute(userId, "generate_report", {
+        type: "spending_by_category",
+        startDate: "2026-01-01",
+        endDate: "2026-01-31",
+      });
+
+      expect(result.summary).toContain(
+        "Total withheld: no exchange rate for JPY->USD, CHF->USD; add it under Currencies.",
+      );
+      // The payload is the report's own, untouched (MCP parity).
+      expect(
+        (result.data as { totalSpending: unknown }).totalSpending,
+      ).toBeNull();
+    });
+
+    it("generate_report adds no withheld clause when every row converted", async () => {
+      builtInReports.getSpendingByCategory.mockResolvedValueOnce({
+        data: [],
+        totalSpending: 0,
+        currency: "USD",
+        missingCurrencies: [],
+        excludedCount: 0,
+      });
+
+      const result = await service.execute(userId, "generate_report", {
+        type: "spending_by_category",
+      });
+
+      expect(result.summary).not.toContain("withheld");
+    });
+
+    it("generate_report spending_anomalies names the currencies it left out", async () => {
+      builtInReports.getSpendingAnomalies.mockResolvedValueOnce({
+        statistics: {},
+        anomalies: [],
+        counts: {},
+        currency: "USD",
+        missingCurrencies: ["JPY"],
+        excludedCount: 3,
+      });
+
+      const result = await service.execute(userId, "generate_report", {
+        type: "spending_anomalies",
+      });
+
+      expect(result.summary).toContain(
+        "Transactions in those currencies were left out of the analysis: no exchange rate for JPY->USD; add it under Currencies.",
+      );
+    });
+
+    it("generate_report spending_anomalies defaults to the report's own window and threshold", async () => {
+      const result = await service.execute(userId, "generate_report", {
+        type: "spending_anomalies",
+      });
+
+      expect(builtInReports.getSpendingAnomalies).toHaveBeenCalledWith(
+        userId,
+        2,
+        6,
+      );
+      expect(result.summary).toContain("over the last 6 months");
+    });
+
     it("generate_report type spending_anomalies delegates to getSpendingAnomalies", async () => {
       const result = await service.execute(userId, "generate_report", {
         type: "spending_anomalies",
         months: 6,
       });
 
+      // Months are the window, never the z-score threshold (A26-M34): the
+      // threshold is the Reports page's own default.
       expect(builtInReports.getSpendingAnomalies).toHaveBeenCalledWith(
         userId,
+        2,
         6,
       );
       expect(result.sources[0].type).toBe("anomalies");
@@ -1262,6 +1882,32 @@ describe("ToolExecutorService", () => {
       );
       expect(result.sources[0].type).toBe("monthly_comparison");
       expect(result.summary).toContain("April 2026 vs March 2026");
+      expect(result.summary).not.toContain("withheld");
+    });
+
+    it("month_comparison says net worth is withheld for an incomplete month and names the pairs", async () => {
+      const complete = await builtInReports.getMonthlyComparison();
+      builtInReports.getMonthlyComparison.mockResolvedValueOnce({
+        ...complete,
+        netWorth: {
+          ...complete.netWorth,
+          currentNetWorth: null,
+          netWorthChange: null,
+          netWorthChangePercent: null,
+          fxComplete: false,
+          missingRatePairs: ["ZZZ->USD"],
+        },
+      });
+
+      const result = await service.execute(userId, "generate_report", {
+        type: "month_comparison",
+        month: "2026-04",
+      });
+
+      expect(result.summary).toContain("April 2026 vs March 2026");
+      expect(result.summary).toContain(
+        "Net worth is withheld for an incomplete month: no exchange rate for ZZZ->USD",
+      );
     });
 
     it("calculate runs locally without hitting any service", async () => {
@@ -1272,7 +1918,68 @@ describe("ToolExecutorService", () => {
 
       expect(analytics.getLlmListTransactions).not.toHaveBeenCalled();
       expect(accounts.getLlmAccounts).not.toHaveBeenCalled();
+      expect(exchangeRates.convertOnDate).not.toHaveBeenCalled();
       expect(result.sources[0].type).toBe("calculation");
+    });
+
+    it("calculate convert prices the amount through ExchangeRateService", async () => {
+      const result = await service.execute(userId, "calculate", {
+        operation: "convert",
+        values: [1500],
+        fromCurrency: "CAD",
+        toCurrency: "USD",
+        date: "2026-09-01",
+      });
+
+      expect(exchangeRates.convertOnDate).toHaveBeenCalledWith(
+        1500,
+        "CAD",
+        "USD",
+        "2026-09-01",
+      );
+      expect(result.isError).toBeUndefined();
+      expect(result.data).toEqual({
+        result: 1098.75,
+        formattedResult: "1098.75 USD",
+        operation: "convert",
+        amount: 1500,
+        fromCurrency: "CAD",
+        toCurrency: "USD",
+        date: "2026-09-01",
+        rate: 0.7325,
+      });
+      // The line a model quotes carries both sides, the rate and its date.
+      expect(result.summary).toBe(
+        "Calculated convert: 1500.00 CAD = 1098.75 USD at 0.7325 (CAD->USD, rate as of 2026-09-01)",
+      );
+      expect(result.sources[0].type).toBe("calculation");
+    });
+
+    it("calculate convert is an error when no rate exists", async () => {
+      exchangeRates.convertOnDate.mockResolvedValue(null);
+
+      const result = await service.execute(userId, "calculate", {
+        operation: "convert",
+        values: [100],
+        fromCurrency: "CAD",
+        toCurrency: "XXX",
+        date: "2026-09-01",
+      });
+
+      expect(result.isError).toBe(true);
+      expect(result.summary).toContain(
+        "No exchange rate is available for CAD->XXX",
+      );
+    });
+
+    it("calculate convert without a currency pair is refused before any lookup", async () => {
+      const result = await service.execute(userId, "calculate", {
+        operation: "convert",
+        values: [100],
+      });
+
+      expect(result.isError).toBe(true);
+      expect(exchangeRates.convertOnDate).not.toHaveBeenCalled();
     });
 
     it("render_chart echoes input as sanitized chart data", async () => {
@@ -1385,6 +2092,32 @@ describe("ToolExecutorService", () => {
       });
     });
 
+    it("single create hands a foreign-currency entry to the shared preview", async () => {
+      await service.execute(userId, "manage_transactions", {
+        operation: "create",
+        items: [
+          {
+            accountName: "Checking",
+            amount: -110,
+            date: "2026-01-15",
+            originalAmount: -100,
+            originalCurrencyCode: "EUR",
+          },
+        ],
+      });
+      expect(transactions.previewCreate).toHaveBeenCalledWith(
+        userId,
+        expect.objectContaining({
+          amount: -110,
+          foreignEntry: expect.objectContaining({
+            originalAmount: -100,
+            originalCurrencyCode: "EUR",
+            exchangeRate: undefined,
+          }),
+        }),
+      );
+    });
+
     it("single create errors on an unknown account", async () => {
       const result = await service.execute(userId, "manage_transactions", {
         operation: "create",
@@ -1411,6 +2144,24 @@ describe("ToolExecutorService", () => {
     });
 
     it("single create with splits builds a create_transaction card carrying resolved splits", async () => {
+      // previewCreate returns the amount it was given (or the one a foreign
+      // entry worked out); the lines are validated against that.
+      transactions.previewCreate.mockImplementationOnce(
+        async (_u: string, input: { amount: number }) => ({
+          accountId: "acc-1",
+          accountName: "Checking",
+          amount: input.amount,
+          transactionDate: "2026-01-15",
+          payeeId: null,
+          payeeName: null,
+          payeeMatched: false,
+          payeeWillBeCreated: false,
+          categoryId: null,
+          categoryName: null,
+          description: null,
+          currencyCode: "USD",
+        }),
+      );
       const result = await service.execute(userId, "manage_transactions", {
         operation: "create",
         items: [
@@ -1426,9 +2177,10 @@ describe("ToolExecutorService", () => {
         ],
       });
 
-      expect(splitService.validateSplits).toHaveBeenCalledWith(
+      expect(splitService.validateSplitsInCurrency).toHaveBeenCalledWith(
         expect.any(Array),
         -100,
+        "USD",
       );
       expect(transactions.create).toBeUndefined();
       expect(result.pendingAction?.type).toBe("create_transaction");
@@ -1463,7 +2215,7 @@ describe("ToolExecutorService", () => {
         ],
       });
 
-      expect(splitService.validateSplits).toHaveBeenCalled();
+      expect(splitService.validateSplitsInCurrency).toHaveBeenCalled();
       // The accompanying splits are what permit this edit on an existing
       // split transaction (Truth table B) -- previewUpdate must know.
       expect(transactions.previewUpdate).toHaveBeenCalledWith(
@@ -1481,9 +2233,9 @@ describe("ToolExecutorService", () => {
     });
 
     it("rejects an invalid split sum surfaced by validateSplits", async () => {
-      splitService.validateSplits.mockImplementationOnce(() => {
-        throw new Error("Split amounts must sum to the transaction amount");
-      });
+      splitService.validateSplitsInCurrency.mockRejectedValueOnce(
+        new Error("Split amounts must sum to the transaction amount"),
+      );
       const result = await service.execute(userId, "manage_transactions", {
         operation: "create",
         items: [
@@ -1921,6 +2673,47 @@ describe("ToolExecutorService", () => {
       );
       expect(result.pendingAction?.type).toBe("update_transaction");
       expect(JSON.stringify(result.data)).not.toContain("signature-abc");
+    });
+
+    it("hands the tags to add and remove to the shared preview", async () => {
+      await service.execute(userId, "manage_transactions", {
+        operation: "update",
+        items: [
+          {
+            transactionId: TXID,
+            addTagNames: ["Trip"],
+            removeTagNames: ["Old"],
+          },
+        ],
+      });
+      expect(transactions.previewUpdate).toHaveBeenCalledWith(
+        userId,
+        TXID,
+        expect.objectContaining({
+          tagNames: ["Trip"],
+          removeTagNames: ["Old"],
+        }),
+      );
+    });
+
+    it("hands the split lines' tag changes to the shared preview", async () => {
+      const splitId = "22222222-2222-4222-8222-222222222222";
+      await service.execute(userId, "manage_transactions", {
+        operation: "update",
+        items: [
+          {
+            transactionId: TXID,
+            splitTags: [{ splitId, addTagNames: ["Trip"] }],
+          },
+        ],
+      });
+      expect(transactions.previewUpdate).toHaveBeenCalledWith(
+        userId,
+        TXID,
+        expect.objectContaining({
+          splitTags: [{ splitId, addNames: ["Trip"], removeNames: undefined }],
+        }),
+      );
     });
 
     it("auto-detects a transfer and builds an update_transfer card", async () => {
@@ -2573,9 +3366,10 @@ describe("ToolExecutorService", () => {
   describe("lookup_securities (read-only)", () => {
     it("returns the candidate list and a source, with no pending action", async () => {
       const result = await service.execute(userId, "lookup_securities", {
-        query: "apple",
+        search: "apple",
       });
 
+      // The tool's input field is `search`; the service contract keeps `query`.
       expect(securities.lookupSecuritiesForLlm).toHaveBeenCalledWith(userId, {
         query: "apple",
         exchange: undefined,
@@ -2593,9 +3387,176 @@ describe("ToolExecutorService", () => {
         new BadRequestException("Provide a ticker symbol or security name."),
       );
       const result = await service.execute(userId, "lookup_securities", {
-        query: "x",
+        search: "x",
       });
       expect(result.isError).toBe(true);
+    });
+  });
+
+  describe("fetch_bond_series (reference data, no card)", () => {
+    it("fetches through the service for the country and series code, with no pending action", async () => {
+      const result = await service.execute(userId, "fetch_bond_series", {
+        countryCode: "PL",
+        seriesCode: "EDO1036",
+      });
+
+      expect(bondSeries.fetchSeries).toHaveBeenCalledWith(
+        userId,
+        "PL",
+        "EDO1036",
+      );
+      expect(result.pendingAction).toBeUndefined();
+      expect(result.isError).toBeFalsy();
+      expect(result.data).toMatchObject({ created: true });
+      expect(result.summary).toMatch(/Stored bond series EDO1036/);
+      expect(result.sources[0].type).toBe("bond_series");
+    });
+
+    it("says nothing was fetched for a series that was already stored", async () => {
+      bondSeries.fetchSeries.mockResolvedValueOnce({
+        id: "i1",
+        seriesCode: "EDO1036",
+        termsProvider: "PL_MF",
+        created: false,
+      });
+      const result = await service.execute(userId, "fetch_bond_series", {
+        countryCode: "PL",
+        seriesCode: "EDO1036",
+      });
+      expect(result.summary).toMatch(/already in the catalog/);
+    });
+
+    it("refuses a value the model was never to supply, before any fetch", async () => {
+      const result = await service.execute(userId, "fetch_bond_series", {
+        countryCode: "PL",
+        seriesCode: "EDO1036/../x",
+      });
+      expect(result.isError).toBe(true);
+      expect(bondSeries.fetchSeries).not.toHaveBeenCalled();
+    });
+
+    it("relays a refusal in its translated words, as a tool error", async () => {
+      bondSeries.fetchSeries.mockRejectedValueOnce(
+        new SeriesFetchError("SOURCE_UNAVAILABLE", {
+          series: "EDO1036",
+          country: "PL",
+        }),
+      );
+      const result = await service.execute(userId, "fetch_bond_series", {
+        countryCode: "PL",
+        seriesCode: "EDO1036",
+      });
+      expect(result.isError).toBe(true);
+      expect(result.summary).toBe(
+        "The official source for series EDO1036 could not be read right now; try again later",
+      );
+    });
+
+    it("relays the per-user rate limit (429) in its translated words", async () => {
+      bondSeries.fetchSeries.mockRejectedValueOnce(
+        new HttpException(
+          {
+            message: "At most 10 bond series can be fetched per minute.",
+            errorCode: "SERIES_FETCH_RATE_LIMITED",
+          },
+          429,
+        ),
+      );
+      const result = await service.execute(userId, "fetch_bond_series", {
+        countryCode: "PL",
+        seriesCode: "EDO1036",
+      });
+      expect(result.isError).toBe(true);
+      expect(result.summary).toBe(
+        "At most 10 bond series can be fetched per minute.",
+      );
+    });
+
+    it("gives a generic error for anything that is not a refusal", async () => {
+      bondSeries.fetchSeries.mockRejectedValueOnce(new Error("db down"));
+      const result = await service.execute(userId, "fetch_bond_series", {
+        countryCode: "PL",
+        seriesCode: "EDO1036",
+      });
+      expect(result.isError).toBe(true);
+      expect(result.summary).toBe("Could not fetch the bond series.");
+    });
+  });
+
+  describe("list_tags", () => {
+    it("answers TagsService.getLlmTags and says the list was cut", async () => {
+      const result = await service.execute(userId, "list_tags", {
+        search: "tr",
+        limit: "1",
+      });
+      expect(tagsService.getLlmTags).toHaveBeenCalledWith(userId, {
+        search: "tr",
+        limit: 1,
+      });
+      expect(result.summary).toBe('1 tag matching "tr" (of 4).');
+      expect((result.data as any).tags[0].name).toBe("Trip");
+    });
+  });
+
+  describe("manage_tags (human-in-the-loop)", () => {
+    it("proposes one signed card for one item, writing nothing", async () => {
+      const result = await service.execute(userId, "manage_tags", {
+        operation: "update",
+        items: [{ name: "Trip", newName: "Travel" }],
+      });
+      expect(tagPrep.prepareOne).toHaveBeenCalledWith(userId, "update", {
+        name: "Trip",
+        newName: "Travel",
+      });
+      expect(result.pendingAction?.type).toBe("update_tag");
+      expect(result.pendingAction?.descriptor).toMatchObject({
+        tagId: "tag-1",
+        name: "Travel",
+      });
+      expect(result.summary).toContain('"Trip" (renaming it to "Travel")');
+      expect(JSON.stringify(result.data)).not.toContain("signature");
+    });
+
+    it("relays a refusal from the shared prep", async () => {
+      tagPrep.prepareOne.mockRejectedValueOnce(
+        new NotFoundException("Unknown tag: Trp. Did you mean: Trip?"),
+      );
+      const result = await service.execute(userId, "manage_tags", {
+        operation: "delete",
+        items: [{ name: "Trp" }],
+      });
+      expect(result.isError).toBe(true);
+      expect(result.summary).toContain("Did you mean: Trip?");
+    });
+
+    it("proposes one batch card for six items and one card each below that", async () => {
+      const six = ["A", "B", "C", "D", "E", "F"].map((name) => ({ name }));
+      const batch = await service.execute(userId, "manage_tags", {
+        operation: "delete",
+        items: six,
+      });
+      expect(batch.pendingAction?.type).toBe("batch_actions");
+      expect(batch.pendingAction?.descriptor).toMatchObject({
+        operation: "delete_tag",
+      });
+
+      const two = await service.execute(userId, "manage_tags", {
+        operation: "delete",
+        items: six.slice(0, 2),
+      });
+      expect(two.pendingActions?.map((a) => a.type)).toEqual([
+        "delete_tag",
+        "delete_tag",
+      ]);
+    });
+
+    it("refuses an update with nothing to change before preparing", async () => {
+      const result = await service.execute(userId, "manage_tags", {
+        operation: "update",
+        items: [{ name: "Trip" }],
+      });
+      expect(result.isError).toBe(true);
+      expect(tagPrep.prepareOne).not.toHaveBeenCalled();
     });
   });
 
@@ -2606,10 +3567,12 @@ describe("ToolExecutorService", () => {
         items: [{ name: "Acme", categoryName: "Dining" }],
       });
 
-      expect(payees.previewCreatePayee).toHaveBeenCalledWith(userId, {
-        name: "Acme",
-        categoryName: "Dining",
-      });
+      expect(payees.previewCreatePayee).toHaveBeenCalledWith(
+        userId,
+        { name: "Acme", categoryName: "Dining" },
+        // A single new payee is looked up before its card, when enabled.
+        { lookupContact: true },
+      );
       expect(result.pendingAction?.type).toBe("create_payee");
       expect(result.pendingAction?.preview).toMatchObject({
         name: "Acme",
@@ -2633,6 +3596,7 @@ describe("ToolExecutorService", () => {
       expect(payees.previewCreatePayee).toHaveBeenCalledWith(
         userId,
         expect.objectContaining({ website: "acme.com" }),
+        { lookupContact: true },
       );
       // The card shows the normalised address, and the signed descriptor
       // carries it so approving actually writes it.
@@ -2744,6 +3708,60 @@ describe("ToolExecutorService", () => {
       const result = await service.execute(userId, "manage_payees", {
         operation: "create",
         items: [{ name: "A" }, { name: "B" }],
+      });
+      expect(result.isError).toBe(true);
+    });
+  });
+
+  describe("manage_securities list", () => {
+    it("lists the securities held in the resolved account", async () => {
+      accounts.resolveBrokerageByNameOrId = jest.fn().mockResolvedValue({
+        match: { id: "acc-3", name: "Brokerage", currencyCode: "USD" },
+        candidates: [],
+      });
+      const held = { symbol: "AAPL", quantity: 5 };
+      securities.listSecuritiesInAccount = jest.fn().mockResolvedValue([held]);
+
+      const result = await service.execute(userId, "manage_securities", {
+        operation: "list",
+        accountName: "Brokerage",
+      });
+
+      expect(securities.listSecuritiesInAccount).toHaveBeenCalledWith(
+        userId,
+        "acc-3",
+      );
+      expect(result.isError).toBeUndefined();
+      expect(result.pendingAction).toBeUndefined();
+      expect(result.data).toMatchObject({
+        operation: "list",
+        account: "Brokerage",
+        count: 1,
+        securities: [held],
+      });
+    });
+
+    it("errors without an accountName", async () => {
+      const result = await service.execute(userId, "manage_securities", {
+        operation: "list",
+      });
+      expect(result.isError).toBe(true);
+    });
+
+    it("errors on an unknown account", async () => {
+      accounts.resolveBrokerageByNameOrId = jest
+        .fn()
+        .mockResolvedValue({ match: undefined, candidates: [] });
+      const result = await service.execute(userId, "manage_securities", {
+        operation: "list",
+        accountName: "Nope",
+      });
+      expect(result.isError).toBe(true);
+    });
+
+    it("rejects a write operation with no items", async () => {
+      const result = await service.execute(userId, "manage_securities", {
+        operation: "create",
       });
       expect(result.isError).toBe(true);
     });
@@ -2946,3 +3964,43 @@ describe("ToolExecutorService", () => {
     });
   });
 });
+
+/** What `WarrantiesService.getLlmWarranties` answers: a dated and a lifetime row. */
+function warrantyList(): LlmWarrantyList {
+  const row = {
+    id: "w-1",
+    name: "Laptop",
+    vendorName: "Best Buy",
+    warrantyKind: "manufacturer" as const,
+    purchaseDate: "2026-10-01",
+    expiresOn: "2026-11-01",
+    isLifetime: false,
+    status: "expiring" as const,
+    daysLeft: 11,
+    purchasePrice: 1499.99,
+    currencyCode: "CAD",
+    serialNumbers: ["SN-1"],
+    linkedTransactionId: "tx-1",
+    openClaimCount: 0,
+    documentCount: 1,
+    archived: false as const,
+  };
+  return {
+    today: "2026-10-21",
+    windowDays: 30,
+    warranties: [
+      row,
+      {
+        ...row,
+        id: "w-2",
+        name: "Cast iron pan",
+        expiresOn: null,
+        isLifetime: true,
+        status: "lifetime",
+        daysLeft: null,
+        linkedTransactionId: null,
+      },
+    ],
+    total: 2,
+  };
+}

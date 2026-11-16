@@ -37,12 +37,17 @@ import {
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useReportData } from '@/hooks/useReportData';
 import { usePersistedAccountId } from '@/hooks/usePersistedAccountFilter';
-import { ExportDropdown } from '@/components/ui/ExportDropdown';
+import { ReportToolbarActions } from '@/components/reports/ReportToolbarActions';
 import { ReportError } from '@/components/reports/ReportError';
 import { chartColors } from '@/lib/chart-colors';
 import { useChartDateFormat } from '@/hooks/useChartDateFormat';
 import { useFinancialToday } from '@/hooks/useFinancialToday';
 import { useTranslations } from 'next-intl';
+import { useDateFormat } from '@/hooks/useDateFormat';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { SEGMENTED_GROUP_CLASS, segmentClass } from '@/components/ui/segmented-control';
+import { CHART_GRID_PROPS, CHART_TOOLTIP_CLASS } from '@/lib/chart-style';
+import { ChartActiveDot } from '@/components/ui/ChartActiveDot';
 
 interface PayoffScheduleItem {
   date: string;
@@ -76,12 +81,54 @@ interface PayoffScheduleItem {
  */
 type SchedulePoint = Omit<PayoffScheduleItem, 'axisKey'>;
 
+interface DebtPayoffTooltipProps {
+  active?: boolean;
+  payload?: Array<{ name: string; value: number; color: string; dataKey: string }>;
+  label?: string;
+  payoffSchedule: PayoffScheduleItem[];
+  formatCurrency: (value: number) => string;
+  t: ReturnType<typeof useTranslations<'reports'>>;
+}
+
+function DebtPayoffTooltip({ active, payload, label, payoffSchedule, formatCurrency, t }: DebtPayoffTooltipProps) {
+  if (active && payload && payload.length) {
+    // Check if this point is projected. `label` is the axis KEY recharts was
+    // given, so the lookup is on that; the heading prints the month back.
+    const chartData = payoffSchedule.find((item) => item.axisKey === label);
+    const isProjected = chartData?.isProjected ?? false;
+    // Deduplicate entries that overlap at the transition point
+    const seen = new Set<string>();
+    const deduped = payload.filter((entry) => {
+      if (entry.value === undefined || entry.value === null) return false;
+      const key = entry.name;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return (
+      <div className={CHART_TOOLTIP_CLASS}>
+        <p className="font-medium text-gray-900 dark:text-gray-100 mb-1">
+          {label === undefined ? '' : axisTickLabel(label)}{' '}
+          {isProjected && <span className="text-xs text-blue-500 dark:text-blue-400">{t('debtPayoff.projected')}</span>}
+        </p>
+        {deduped.map((entry, index) => (
+          <p key={index} className="text-sm" style={{ color: entry.color }}>
+            {entry.name}: {formatCurrency(entry.value)}
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return null;
+}
+
 const ACCOUNT_STORAGE_KEY = 'monize-reports-debt-payoff-timeline-account';
 
 export function DebtPayoffTimelineReport() {
   const t = useTranslations('reports');
+  const { formatDate } = useDateFormat();
   const formatChartDate = useChartDateFormat();
-  const { formatCurrencyCompact: formatCurrency, formatCurrencyAxis } = useNumberFormat();
+  const { formatCurrencyCompact: formatCurrency, formatCurrencyAxis, formatPercent, formatPercentTrimmed } = useNumberFormat();
   const chartRef = useRef<HTMLDivElement>(null);
   // Today-anchored (see `loan-projection-anchor.guard.test.ts`), but still the
   // USER's today: the payoff date this report draws per account is the one the
@@ -225,9 +272,10 @@ export function DebtPayoffTimelineReport() {
             transactions,
             rateChanges,
             interestTransactions,
+            todayYmd,
           )
         : null,
-    [selectedAccount, transactions, rateChanges, interestTransactions],
+    [selectedAccount, transactions, rateChanges, interestTransactions, todayYmd],
   );
 
   // The count of payments the borrower actually made. Derived from the payment
@@ -418,7 +466,9 @@ export function DebtPayoffTimelineReport() {
 
   // The terms in effect, from the same history the curve is projected from.
   const currentTerms = useMemo(() => {
-    if (!selectedAccount || !history) return { annualRate: null, payment: null };
+    if (!selectedAccount || !history) {
+      return { annualRate: null, payment: null, paymentDate: null, finalPayment: null };
+    }
     return resolveCurrentLoanTerms(
       selectedAccount,
       history,
@@ -529,38 +579,6 @@ export function DebtPayoffTimelineReport() {
     [distributionData],
   );
 
-  const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string; dataKey: string }>; label?: string }) => {
-    if (active && payload && payload.length) {
-      // Check if this point is projected. `label` is the axis KEY recharts was
-      // given, so the lookup is on that; the heading prints the month back.
-      const chartData = payoffSchedule.find((item) => item.axisKey === label);
-      const isProjected = chartData?.isProjected ?? false;
-      // Deduplicate entries that overlap at the transition point
-      const seen = new Set<string>();
-      const deduped = payload.filter((entry) => {
-        if (entry.value === undefined || entry.value === null) return false;
-        const key = entry.name;
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-      return (
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3">
-          <p className="font-medium text-gray-900 dark:text-gray-100 mb-1">
-            {label === undefined ? '' : axisTickLabel(label)}{' '}
-            {isProjected && <span className="text-xs text-blue-500 dark:text-blue-400">{t('debtPayoff.projected')}</span>}
-          </p>
-          {deduped.map((entry, index) => (
-            <p key={index} className="text-sm" style={{ color: entry.color }}>
-              {entry.name}: {formatCurrency(entry.value)}
-            </p>
-          ))}
-        </div>
-      );
-    }
-    return null;
-  };
-
   const handleExportPdf = async () => {
     const { exportToPdf } = await import('@/lib/pdf-export');
     // The table's fifth column held the installment amount under a "Payments
@@ -581,9 +599,29 @@ export function DebtPayoffTimelineReport() {
         : selectedAccount.accountType.charAt(0) + selectedAccount.accountType.slice(1).toLowerCase(),
       formatCurrency(Math.abs(selectedAccount.currentBalance)),
       currentTerms.annualRate != null
-        ? `${currentTerms.annualRate}%`
+        ? `${formatPercentTrimmed(currentTerms.annualRate)}`
         : t('debtPayoff.notSet'),
-      currentTerms.payment ? formatCurrency(currentTerms.payment) : t('debtPayoff.notSet'),
+      // A LINEAR or INTEREST_ONLY installment is dated: it is the next one,
+      // and an interest-only mortgage's bullet travels with it.
+      currentTerms.payment && currentTerms.paymentDate
+        ? currentTerms.finalPayment
+          ? t('debtPayoff.installmentAndFinal', {
+              installment: t('loanAmortization.amountDueOn', {
+                amount: formatCurrency(currentTerms.payment),
+                date: formatDate(currentTerms.paymentDate),
+              }),
+              final: t('loanAmortization.amountDueOn', {
+                amount: formatCurrency(currentTerms.finalPayment.amount),
+                date: formatDate(currentTerms.finalPayment.date),
+              }),
+            })
+          : t('loanAmortization.amountDueOn', {
+              amount: formatCurrency(currentTerms.payment),
+              date: formatDate(currentTerms.paymentDate),
+            })
+        : currentTerms.payment
+          ? formatCurrency(currentTerms.payment)
+          : t('debtPayoff.notSet'),
       String(paymentsMade),
     ]] : [];
     await exportToPdf({
@@ -592,7 +630,7 @@ export function DebtPayoffTimelineReport() {
         { label: t('debtPayoff.currentBalance'), value: formatCurrency(summary.currentBalance), color: '#dc2626' },
         { label: t('debtPayoff.principalPaid'), value: formatCurrency(summary.totalPrincipalPaid), color: '#16a34a' },
         { label: interestLabel(summary), value: formatCurrency(summary.totalInterest), color: '#ea580c' },
-        { label: t('debtPayoff.progress'), value: `${summary.percentPaid.toFixed(1)}%`, color: '#2563eb' },
+        { label: t('debtPayoff.progress'), value: formatPercent(summary.percentPaid, 1), color: '#2563eb' },
       ] : undefined,
       chartContainer: chartRef.current,
       tableData: { headers, rows },
@@ -618,9 +656,7 @@ export function DebtPayoffTimelineReport() {
   if (accounts.length === 0) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6">
-        <p className="text-gray-500 dark:text-gray-400 text-center py-8">
-          {t('debtPayoff.empty')}
-        </p>
+        <EmptyState title={t('debtPayoff.empty')} />
       </div>
     );
   }
@@ -649,39 +685,37 @@ export function DebtPayoffTimelineReport() {
                 ))}
             </select>
           </div>
-          <div className="flex flex-wrap gap-2 items-center">
+          <div
+            className={`${SEGMENTED_GROUP_CLASS} flex-wrap`}
+            role="group"
+            aria-label={t('reportPage.viewLabel')}
+          >
             <button
+              type="button"
               onClick={() => setViewType('balance')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                viewType === 'balance'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-              }`}
+              aria-pressed={viewType === 'balance'}
+              className={segmentClass(viewType === 'balance')}
             >
               {t('debtPayoff.balanceOverTime')}
             </button>
             <button
+              type="button"
               onClick={() => setViewType('breakdown')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                viewType === 'breakdown'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-              }`}
+              aria-pressed={viewType === 'breakdown'}
+              className={segmentClass(viewType === 'breakdown')}
             >
               {t('debtPayoff.paymentBreakdown')}
             </button>
             <button
+              type="button"
               onClick={() => setViewType('distribution')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                viewType === 'distribution'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-              }`}
+              aria-pressed={viewType === 'distribution'}
+              className={segmentClass(viewType === 'distribution')}
             >
               {t('debtPayoff.viewPrincipalVsInterest')}
             </button>
-            <ExportDropdown onExportPdf={handleExportPdf} />
           </div>
+          <ReportToolbarActions onExportPdf={handleExportPdf} />
         </div>
       </div>
 
@@ -718,7 +752,7 @@ export function DebtPayoffTimelineReport() {
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4">
             <div className="text-sm text-gray-500 dark:text-gray-400">{t('debtPayoff.progress')}</div>
             <div className="text-xl font-bold text-blue-600 dark:text-blue-400">
-              {summary.percentPaid.toFixed(1)}%
+              {formatPercent(summary.percentPaid, 1)}
             </div>
           </div>
           {summary.projectedPayoffDate && (
@@ -735,16 +769,14 @@ export function DebtPayoffTimelineReport() {
       {/* Chart */}
       <div ref={chartRef} className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 px-2 py-4 sm:p-6">
         {payoffSchedule.length === 0 ? (
-          <p className="text-gray-500 dark:text-gray-400 text-center py-8">
-            {t('debtPayoff.noPaymentHistory')}
-          </p>
+          <EmptyState title={t('debtPayoff.noPaymentHistory')} />
         ) : (
           <>
             {viewType === 'balance' && (
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                   <AreaChart data={chartSchedule}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+                    <CartesianGrid {...CHART_GRID_PROPS} />
                     <XAxis
                       dataKey="axisKey"
                       tickFormatter={axisTickLabel}
@@ -755,8 +787,17 @@ export function DebtPayoffTimelineReport() {
                       tickFormatter={formatCurrencyAxis}
                       tick={{ fontSize: 12 }}
                     />
-                    <Tooltip content={<CustomTooltip />} />
+                    <Tooltip
+                      content={
+                        <DebtPayoffTooltip
+                          payoffSchedule={payoffSchedule}
+                          formatCurrency={formatCurrency}
+                          t={t}
+                        />
+                      }
+                    />
                     <Area
+                      activeDot={ChartActiveDot}
                       type="monotone"
                       dataKey="historicalBalance"
                       stroke={chartColors.expense}
@@ -768,6 +809,7 @@ export function DebtPayoffTimelineReport() {
                     />
                     {projectionStartAxisKey && (
                       <Area
+                        activeDot={ChartActiveDot}
                         type="monotone"
                         dataKey="projectedBalance"
                         stroke={chartColors.primary}
@@ -802,7 +844,7 @@ export function DebtPayoffTimelineReport() {
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                   <BarChart data={chartSchedule}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+                    <CartesianGrid {...CHART_GRID_PROPS} />
                     <XAxis
                       dataKey="axisKey"
                       tickFormatter={axisTickLabel}
@@ -813,7 +855,15 @@ export function DebtPayoffTimelineReport() {
                       tickFormatter={formatCurrencyAxis}
                       tick={{ fontSize: 12 }}
                     />
-                    <Tooltip content={<CustomTooltip />} />
+                    <Tooltip
+                      content={
+                        <DebtPayoffTooltip
+                          payoffSchedule={payoffSchedule}
+                          formatCurrency={formatCurrency}
+                          t={t}
+                        />
+                      }
+                    />
                     <Legend />
                     <Bar
                       dataKey="cumulativePrincipal"
@@ -850,7 +900,7 @@ export function DebtPayoffTimelineReport() {
               <div className="h-80">
                 <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                   <BarChart data={distributionData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+                    <CartesianGrid {...CHART_GRID_PROPS} />
                     <XAxis
                       dataKey="axisKey"
                       tickFormatter={axisTickLabel}
@@ -858,7 +908,7 @@ export function DebtPayoffTimelineReport() {
                       interval="preserveStartEnd"
                     />
                     <YAxis
-                      tickFormatter={(value: number) => `${value}%`}
+                      tickFormatter={(value: number) => `${formatPercentTrimmed(value)}`}
                       tick={{ fontSize: 12 }}
                       domain={[0, 100]}
                     />
@@ -867,7 +917,7 @@ export function DebtPayoffTimelineReport() {
                         if (active && payload && payload.length) {
                           const data = distributionData.find((d) => d.axisKey === tooltipLabel);
                           return (
-                            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3">
+                            <div className={CHART_TOOLTIP_CLASS}>
                               <p className="font-medium text-gray-900 dark:text-gray-100 mb-1">
                                 {data?.label ?? tooltipLabel}{' '}
                                 {data?.isProjected && (
@@ -875,10 +925,10 @@ export function DebtPayoffTimelineReport() {
                                 )}
                               </p>
                               <p className="text-sm text-green-600 dark:text-green-400">
-                                {t('debtPayoff.seriesPrincipal')}: {data?.principalPercent.toFixed(1)}% ({formatCurrency(data?.principalPaid ?? 0)})
+                                {t('debtPayoff.seriesPrincipal')}: {data ? formatPercent(data.principalPercent, 1) : '—'} ({formatCurrency(data?.principalPaid ?? 0)})
                               </p>
                               <p className="text-sm text-orange-500 dark:text-orange-400">
-                                {t('debtPayoff.seriesInterest')}: {data?.interestPercent.toFixed(1)}% ({formatCurrency(data?.interestPaid ?? 0)})
+                                {t('debtPayoff.seriesInterest')}: {data ? formatPercent(data.interestPercent, 1) : '—'} ({formatCurrency(data?.interestPaid ?? 0)})
                               </p>
                             </div>
                           );
@@ -952,7 +1002,7 @@ export function DebtPayoffTimelineReport() {
               <span className="text-gray-500 dark:text-gray-400">{t('debtPayoff.colInterestRate')}</span>
               <p className="font-medium text-gray-900 dark:text-gray-100">
                 {currentTerms.annualRate != null
-                  ? `${currentTerms.annualRate}%`
+                  ? `${formatPercentTrimmed(currentTerms.annualRate)}`
                   : t('debtPayoff.notSet')}
               </p>
             </div>

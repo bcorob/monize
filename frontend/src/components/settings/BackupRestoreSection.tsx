@@ -1,12 +1,16 @@
 'use client';
 
+import { RESTORE_LABELS } from '@/lib/restore-labels';
 import { useEffect, useState, useRef } from 'react';
 import toast from 'react-hot-toast';
 import { useTranslations } from 'next-intl';
 import { isAxiosError } from 'axios';
 import { Button } from '@/components/ui/Button';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Input } from '@/components/ui/Input';
 import { Modal } from '@/components/ui/Modal';
+import { InfoTooltip } from '@/components/ui/InfoTooltip';
+import { HelpLink } from '@/components/help/HelpLink';
 import {
   backupApi,
   BackupEncryptionStatus,
@@ -17,46 +21,12 @@ import {
 import { getErrorMessage } from '@/lib/errors';
 import { getDateStringInTimezone, resolveTimezone } from '@/lib/utils';
 import { usePreferencesStore } from '@/store/preferencesStore';
+import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { downloadBlob } from '@/lib/download';
 import { User } from '@/types/auth';
 import { takeOidcReauthArtifact } from '@/lib/stepUpToken';
+import { StoredBackupsSubsection } from './StoredBackupsSubsection';
 
-const RESTORE_LABELS: Record<string, string> = {
-  userPreferences: 'User Preferences',
-  userCurrencyPreferences: 'Currency Preferences',
-  categories: 'Categories',
-  payees: 'Payees',
-  payeeAliases: 'Payee Aliases',
-  accounts: 'Accounts',
-  tags: 'Tags',
-  scheduledTransactions: 'Scheduled Transactions',
-  scheduledTransactionSplits: 'Scheduled Transaction Splits',
-  scheduledTransactionOverrides: 'Scheduled Transaction Overrides',
-  scheduledTransactionSplitTags: 'Scheduled Transaction Split Tags',
-  securities: 'Securities',
-  securityPrices: 'Security Prices',
-  securityTags: 'Security Tags',
-  holdings: 'Holdings',
-  transactions: 'Transactions',
-  transactionSplits: 'Transaction Splits',
-  transactionTags: 'Transaction Tags',
-  transactionSplitTags: 'Transaction Split Tags',
-  investmentTransactions: 'Investment Transactions',
-  loanRateChanges: 'Loan Rate Changes',
-  loanScenarios: 'Loan Scenarios',
-  budgets: 'Budgets',
-  budgetCategories: 'Budget Categories',
-  budgetPeriods: 'Budget Periods',
-  budgetPeriodCategories: 'Budget Period Categories',
-  budgetAlerts: 'Budget Alerts',
-  customReports: 'Custom Reports',
-  importColumnMappings: 'Import Column Mappings',
-  monthlyAccountBalances: 'Monthly Account Balances',
-  autoBackupSettings: 'Auto-Backup Settings',
-  aiProviderConfigs: 'AI Provider Configurations',
-  monteCarloScenarios: 'Monte Carlo Scenarios',
-  monteCarloCashFlows: 'Monte Carlo Cash Flows',
-};
 
 function isBackupPasswordRequired(error: unknown): boolean {
   if (!isAxiosError(error)) return false;
@@ -64,12 +34,104 @@ function isBackupPasswordRequired(error: unknown): boolean {
   return data?.code === BACKUP_PASSWORD_REQUIRED_CODE;
 }
 
+/**
+ * True when the restore request ended without the backend answering it: the
+ * connection dropped, the client timed out, or a proxy found the backend gone
+ * (a restart mid-restore). Unlike a refusal, nothing here says whether the
+ * restore committed, so the message has to say how to find out. A gateway
+ * status that carries the backend's own `message` is an answer -- the restore
+ * queue refuses with a 503 -- and keeps its message.
+ */
+function isRestoreInterrupted(error: unknown): boolean {
+  if (!isAxiosError(error)) return false;
+  if (!error.response) return true;
+  const { status, data } = error.response;
+  const answered = typeof (data as { message?: unknown } | undefined)?.message === 'string';
+  return !answered && (status === 502 || status === 503 || status === 504);
+}
+
 interface BackupRestoreSectionProps {
   user: User;
 }
 
+/** The reasons the server names for a bond series the restore could not fetch. */
+const UNRECOVERED_SERIES_REASONS: ReadonlySet<string> = new Set([
+  'not-published',
+  'source-unavailable',
+  'no-adapter',
+  'refused',
+  'rate-limited',
+  'not-attempted',
+]);
+
+/**
+ * The restore wrote rows whose currency's kind on this server disagrees with
+ * them; name each kind of row, list what the server named, and say how to
+ * repair it. Shaped like the unlinked-bond notices: a capped list plus "and N
+ * more".
+ */
+function CurrencyKindMismatchNotice({
+  mismatches,
+}: {
+  mismatches: NonNullable<RestoreResult['currencyKindMismatches']>;
+}) {
+  const t = useTranslations('settings.backupRestore');
+  const { accounts, accountCount, securities, securityCount, defaultCurrency } =
+    mismatches;
+  return (
+    <div className="mt-4 space-y-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-800 dark:text-amber-200">
+      {accountCount > 0 && (
+        <p>{t('restoreResult.currencyKindMismatchAccounts', { count: accountCount })}</p>
+      )}
+      {accountCount > 0 && accounts.length > 0 && (
+        <p>
+          {t('restoreResult.currencyKindMismatchAccountsList', {
+            names: accounts.join(', '),
+          })}
+          {accountCount > accounts.length && (
+            <>
+              {' '}
+              {t('restoreResult.currencyKindMismatchMore', {
+                count: accountCount - accounts.length,
+              })}
+            </>
+          )}
+        </p>
+      )}
+      {securityCount > 0 && (
+        <p>{t('restoreResult.currencyKindMismatchSecurities', { count: securityCount })}</p>
+      )}
+      {securityCount > 0 && securities.length > 0 && (
+        <p>
+          {t('restoreResult.currencyKindMismatchSecuritiesList', {
+            symbols: securities.join(', '),
+          })}
+          {securityCount > securities.length && (
+            <>
+              {' '}
+              {t('restoreResult.currencyKindMismatchMore', {
+                count: securityCount - securities.length,
+              })}
+            </>
+          )}
+        </p>
+      )}
+      {defaultCurrency !== null && (
+        <p>
+          {t('restoreResult.currencyKindMismatchDefaultCurrency', {
+            code: defaultCurrency,
+          })}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export function BackupRestoreSection({ user }: BackupRestoreSectionProps) {
   const t = useTranslations('settings.backupRestore');
+  const tc = useTranslations('common');
+  const th = useTranslations('help');
+  const { formatNumber } = useNumberFormat();
   const isOidc = user.authProvider === 'oidc';
   const timezonePref = usePreferencesStore((s) => s.preferences?.timezone);
 
@@ -93,6 +155,7 @@ export function BackupRestoreSection({ user }: BackupRestoreSectionProps) {
   const [restoreBackupPassword, setRestoreBackupPassword] = useState('');
   const [restoreResult, setRestoreResult] = useState<RestoreResult | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const restoreSectionRef = useRef<HTMLDivElement>(null);
 
   // The password modal, shared by both accounts: an OIDC account chooses a
   // dedicated backup password here, a local account confirms the login password
@@ -256,6 +319,30 @@ export function BackupRestoreSection({ user }: BackupRestoreSectionProps) {
     setRestoreFileEncrypted(file ? await isEncryptedBackupFile(file) : false);
   };
 
+  /**
+   * A backup taken from the server's own list, handed to the restore form as if
+   * the user had picked it from disk.
+   *
+   * The point is that nothing downstream can tell the difference: the same
+   * encryption sniff, the same warning, the same account-password or OIDC
+   * confirmation, the same upload and the same summary dialogue. A second
+   * restore path beside this one would be a second place for the refusals that
+   * make a restore safe to go missing from.
+   */
+  const handleStoredBackupSelected = async (file: File) => {
+    setRestoreFile(file);
+    setRestorePassword('');
+    setRestoreBackupPassword('');
+    setRestoreFileEncrypted(await isEncryptedBackupFile(file));
+    // The picker and the server list are two doors onto one field. Clearing the
+    // input stops the form from naming a file it is no longer going to send.
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    setShowRestore(true);
+    restoreSectionRef.current?.scrollIntoView({ block: 'nearest' });
+  };
+
   const runRestore = async () => {
     if (!restoreFile) {
       toast.error(t('restore.toasts.pleaseSelectFile'));
@@ -299,6 +386,8 @@ export function BackupRestoreSection({ user }: BackupRestoreSectionProps) {
     } catch (error) {
       if (isBackupPasswordRequired(error)) {
         toast.error(t('restore.toasts.encryptedNeedsPassword'));
+      } else if (isRestoreInterrupted(error)) {
+        toast.error(t('restore.toasts.interrupted'), { duration: 12000 });
       } else {
         toast.error(getErrorMessage(error, t('restore.toasts.failed')));
       }
@@ -324,8 +413,13 @@ export function BackupRestoreSection({ user }: BackupRestoreSectionProps) {
           <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">
             {t('encryption.heading')}
           </h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
             {t('encryption.descriptionLocal')}
+          </p>
+          <p className="mb-4 mt-1 text-sm">
+            <HelpLink link="backupEncryption" className="text-blue-600 hover:underline dark:text-blue-400">
+              {th('learnMore')}
+            </HelpLink>
           </p>
 
           {!encryption.available ? (
@@ -366,8 +460,13 @@ export function BackupRestoreSection({ user }: BackupRestoreSectionProps) {
           <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">
             {t('encryption.heading')}
           </h3>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          <p className="text-sm text-gray-600 dark:text-gray-400">
             {t('encryption.descriptionOidc')}
+          </p>
+          <p className="mb-4 mt-1 text-sm">
+            <HelpLink link="backupEncryption" className="text-blue-600 hover:underline dark:text-blue-400">
+              {th('learnMore')}
+            </HelpLink>
           </p>
 
           {encryption.enabled ? (
@@ -394,9 +493,9 @@ export function BackupRestoreSection({ user }: BackupRestoreSectionProps) {
       )}
 
       {encryptionLoading && (
-        <p className="mb-6 text-sm text-gray-500 dark:text-gray-400">
-          {t('encryption.loading')}
-        </p>
+        <div className="mb-6 text-sm">
+          <LoadingSpinner size="sm" fullContainer={false} text={t('encryption.loading')} />
+        </div>
       )}
 
       {/* Export Section */}
@@ -415,13 +514,23 @@ export function BackupRestoreSection({ user }: BackupRestoreSectionProps) {
         </Button>
       </div>
 
+      {/* The automatic backups the server holds for this user, with each
+          artifact's off-site copy status and the off-site destination settings
+          folded in as a collapsible block of their own. */}
+      <StoredBackupsSubsection onRestore={handleStoredBackupSelected} />
+
       {/* Restore Section */}
-      <div>
+      <div ref={restoreSectionRef}>
         <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">
           {t('restore.heading')}
         </h3>
-        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+        <p className="text-sm text-gray-600 dark:text-gray-400">
           {t('restore.description')}
+        </p>
+        <p className="mb-4 mt-1 text-sm">
+          <HelpLink link="backupRestore" className="text-blue-600 hover:underline dark:text-blue-400">
+            {th('learnMore')}
+          </HelpLink>
         </p>
 
         {!showRestore ? (
@@ -469,6 +578,14 @@ export function BackupRestoreSection({ user }: BackupRestoreSectionProps) {
                   hover:file:bg-blue-100 dark:hover:file:bg-blue-900/50
                   file:cursor-pointer cursor-pointer"
               />
+              {/* The input names only a file the picker put there, so a backup
+                  taken from the server's list would otherwise be about to be
+                  restored with nothing on screen saying which one. */}
+              {restoreFile && (
+                <p className="mt-2 text-sm text-gray-700 dark:text-gray-300 break-all">
+                  {t('restore.selectedFile', { filename: restoreFile.name })}
+                </p>
+              )}
             </div>
 
             {restoreFileEncrypted && (
@@ -511,7 +628,7 @@ export function BackupRestoreSection({ user }: BackupRestoreSectionProps) {
                     {isRestoring ? t('restore.restoringButton') : t('restore.oidcRestoreButton')}
                   </Button>
                   <Button variant="outline" onClick={closeRestoreForm}>
-                    Cancel
+                    {tc('cancel')}
                   </Button>
                 </div>
               ) : (
@@ -537,7 +654,7 @@ export function BackupRestoreSection({ user }: BackupRestoreSectionProps) {
                       {isRestoring ? t('restore.restoringButton') : t('restore.confirmRestoreButton')}
                     </Button>
                     <Button variant="outline" onClick={closeRestoreForm}>
-                      Cancel
+                      {tc('cancel')}
                     </Button>
                   </div>
                 </>
@@ -554,7 +671,7 @@ export function BackupRestoreSection({ user }: BackupRestoreSectionProps) {
         maxWidth="sm"
       >
         <div className="p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
             {usesLoginPassword
               ? t('encryption.setupModal.titleLocal')
               : t('encryption.setupModal.titleOidc')}
@@ -583,7 +700,7 @@ export function BackupRestoreSection({ user }: BackupRestoreSectionProps) {
               onClick={closeEncryptionSetup}
               disabled={setupSaving}
             >
-              Cancel
+              {tc('cancel')}
             </Button>
             <Button
               onClick={handleSetBackupPassword}
@@ -605,12 +722,12 @@ export function BackupRestoreSection({ user }: BackupRestoreSectionProps) {
         maxWidth="sm"
       >
         <div className="p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-            {t('export.exportPasswordModal.title')}
-          </h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-            {t('export.exportPasswordModal.description')}
-          </p>
+          <div className="mb-4 flex items-center gap-2">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+              {t('export.exportPasswordModal.title')}
+            </h2>
+            <InfoTooltip text={t('export.exportPasswordModal.description')} usePortal />
+          </div>
           <Input
             type="password"
             // Encrypts the file being produced; a manager filling this with the
@@ -634,7 +751,7 @@ export function BackupRestoreSection({ user }: BackupRestoreSectionProps) {
               }}
               disabled={isExporting}
             >
-              Cancel
+              {tc('cancel')}
             </Button>
             <Button
               onClick={() => runExport(exportPassword)}
@@ -659,36 +776,35 @@ export function BackupRestoreSection({ user }: BackupRestoreSectionProps) {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                 </svg>
               </div>
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+              <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
                 {t('restoreResult.title')}
               </h2>
             </div>
-
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              {t('restoreResult.description')}
-            </p>
 
             <div className="bg-gray-50 dark:bg-gray-700/50 rounded-lg p-4 max-h-64 overflow-y-auto">
               <dl className="space-y-1">
                 {Object.entries(restoreResult.restored)
                   .filter(([, count]) => count > 0)
-                  .map(([key, count]) => (
+                  .map(([key, count]) => {
+                    const label = RESTORE_LABELS[key] ?? key;
+                    return (
                     <div key={key} className="flex justify-between text-sm">
                       <dt className="text-gray-600 dark:text-gray-400">
-                        {RESTORE_LABELS[key] ?? key}
+                        {typeof label === 'string' ? label : t(label.translationKey)}
                       </dt>
                       <dd className="font-medium text-gray-900 dark:text-gray-100">
-                        {count.toLocaleString()}
+                        {formatNumber(count, 0)}
                       </dd>
                     </div>
-                  ))}
+                    );
+                  })}
               </dl>
             </div>
 
             <div className="mt-2 pt-2 border-t border-gray-200 dark:border-gray-600 flex justify-between text-sm font-medium">
               <span className="text-gray-900 dark:text-gray-100">{t('restoreResult.totalRecords')}</span>
               <span className="text-gray-900 dark:text-gray-100">
-                {Object.values(restoreResult.restored).reduce((sum, n) => sum + n, 0).toLocaleString()}
+                {formatNumber(Object.values(restoreResult.restored).reduce((sum, n) => sum + n, 0), 0)}
               </span>
             </div>
 
@@ -716,6 +832,99 @@ export function BackupRestoreSection({ user }: BackupRestoreSectionProps) {
                   count: restoreResult.unusableAiProviderKeys,
                 })}
               </p>
+            )}
+
+            {/* The securities came back, but unlinked from their bond
+                instrument: this server's catalog does not carry the series (or
+                carries it in another currency). The bond engine no longer prices
+                them, so say so and what to do. Outside the record total on
+                purpose: the rows were written. */}
+            {!!restoreResult.unlinkedBondSecurities?.count && (
+              <div className="mt-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-800 dark:text-amber-200">
+                <p>
+                  {t('restoreResult.unlinkedBondSecurities', {
+                    count: restoreResult.unlinkedBondSecurities.count,
+                  })}
+                </p>
+                {restoreResult.unlinkedBondSecurities.symbols.length > 0 && (
+                  <p className="mt-2">
+                    {t('restoreResult.unlinkedBondSecuritiesList', {
+                      symbols:
+                        restoreResult.unlinkedBondSecurities.symbols.join(', '),
+                    })}
+                    {restoreResult.unlinkedBondSecurities.count >
+                      restoreResult.unlinkedBondSecurities.symbols.length && (
+                      <>
+                        {' '}
+                        {t('restoreResult.unlinkedBondSecuritiesMore', {
+                          count:
+                            restoreResult.unlinkedBondSecurities.count -
+                            restoreResult.unlinkedBondSecurities.symbols.length,
+                        })}
+                      </>
+                    )}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Bond transactions that lost their series: the catalog lacks it. */}
+            {!!restoreResult.unlinkedBondSeries?.count && (
+              <div className="mt-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-800 dark:text-amber-200">
+                <p>
+                  {t('restoreResult.unlinkedBondSeries', {
+                    count: restoreResult.unlinkedBondSeries.count,
+                  })}
+                </p>
+              </div>
+            )}
+
+            {/* The series the backup names that the restore could not fetch: which, why, and what to do. */}
+            {!!restoreResult.unrecoveredBondSeries?.count && (
+              <div className="mt-4 rounded-lg bg-amber-50 dark:bg-amber-900/20 p-3 text-sm text-amber-800 dark:text-amber-200">
+                <p>
+                  {t('restoreResult.unrecoveredBondSeries', {
+                    count: restoreResult.unrecoveredBondSeries.count,
+                  })}
+                </p>
+                <ul className="mt-2 list-disc pl-5">
+                  {restoreResult.unrecoveredBondSeries.series.map((item) => (
+                    <li key={`${item.issuerCountryCode}-${item.seriesCode}`}>
+                      {t('restoreResult.unrecoveredBondSeriesItem', {
+                        series: item.seriesCode,
+                        country: item.issuerCountryCode,
+                        reason: t(
+                          UNRECOVERED_SERIES_REASONS.has(item.reason)
+                            ? `restoreResult.unrecoveredBondSeriesReason.${item.reason}`
+                            : 'restoreResult.unrecoveredBondSeriesReason.other',
+                        ),
+                      })}
+                    </li>
+                  ))}
+                </ul>
+                {restoreResult.unrecoveredBondSeries.count >
+                  restoreResult.unrecoveredBondSeries.series.length && (
+                  <p className="mt-2">
+                    {t('restoreResult.unrecoveredBondSeriesMore', {
+                      count:
+                        restoreResult.unrecoveredBondSeries.count -
+                        restoreResult.unrecoveredBondSeries.series.length,
+                    })}
+                  </p>
+                )}
+                <p className="mt-2">{t('restoreResult.unrecoveredBondSeriesAction')}</p>
+              </div>
+            )}
+
+            {/* Rows whose currency's kind on this server disagrees with them
+                (currencies are global, so a code's kind here can differ from
+                the file's): an account whose type and currency kind disagree, a
+                security priced in a cryptocurrency, a cryptocurrency reporting
+                currency. The rows were written; say which and how to repair. */}
+            {restoreResult.currencyKindMismatches && (
+              <CurrencyKindMismatchNotice
+                mismatches={restoreResult.currencyKindMismatches}
+              />
             )}
 
             <div className="mt-6 flex justify-end">

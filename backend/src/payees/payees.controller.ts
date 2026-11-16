@@ -24,6 +24,7 @@ import {
   ApiQuery,
 } from "@nestjs/swagger";
 import { AuthGuard } from "@nestjs/passport";
+import { Throttle } from "@nestjs/throttler";
 import { Response } from "express";
 import { assertStringParam } from "../common/query-param-utils";
 import { PayeesService } from "./payees.service";
@@ -40,22 +41,34 @@ import { MergePayeeDto } from "./dto/merge-payee.dto";
 import { ApplyAutoMergeDto } from "./dto/apply-auto-merge.dto";
 import { ApplyCategorySuggestionsDto } from "./dto/apply-category-suggestions.dto";
 import { DeactivatePayeesDto } from "./dto/deactivate-payees.dto";
+import { LookupPayeeContactDto } from "./dto/lookup-payee-contact.dto";
+import { PayeeContactLookupService } from "./lookup/payee-contact-lookup.service";
+import { buildLookupContext } from "./lookup/lookup-context";
+import { PayeeContactEnrichmentService } from "./lookup/payee-contact-enrichment.service";
+import { ContactLookupOutcome } from "./lookup/payee-contact-lookup.types";
 import { Payee } from "./entities/payee.entity";
 import { PayeeAlias } from "./entities/payee-alias.entity";
 import {
   AllowDelegate,
   DelegateRequiresCapability,
 } from "../delegation/decorators/delegate-access.decorator";
+import { DelegationService } from "../delegation/delegation.service";
+import { delegateReadableAccountScope } from "../delegation/delegate-account-scope.util";
+import { AllowPat, NoPat } from "../auth/pat-access/pat-access.decorator";
 
 @ApiTags("Payees")
 @ApiBearerAuth()
 @UseGuards(AuthGuard("jwt"))
+@AllowPat()
 @Controller("payees")
 export class PayeesController {
   constructor(
     private readonly payeesService: PayeesService,
     private readonly payeeDetailService: PayeeDetailService,
     private readonly payeeAutoMergeService: PayeeAutoMergeService,
+    private readonly contactLookupService: PayeeContactLookupService,
+    private readonly contactEnrichmentService: PayeeContactEnrichmentService,
+    private readonly delegationService: DelegationService,
   ) {}
 
   @Post()
@@ -72,7 +85,11 @@ export class PayeesController {
     @Request() req,
     @Body() createPayeeDto: CreatePayeeDto,
   ): Promise<Payee> {
-    return this.payeesService.create(req.user.id, createPayeeDto);
+    // `deferContactLookup` says what the caller will do, not what the payee
+    // is, so it travels as an option and never reaches the row: spreading it
+    // into the entity would put a non-column onto the insert.
+    const { deferContactLookup, ...dto } = createPayeeDto;
+    return this.payeesService.create(req.user.id, dto, { deferContactLookup });
   }
 
   @Get()
@@ -231,6 +248,47 @@ export class PayeesController {
   @ApiResponse({ status: 404, description: "Payee not found" })
   mergePayees(@Request() req, @Body() dto: MergePayeeDto) {
     return this.payeesService.mergePayees(req.user.id, dto);
+  }
+
+  /**
+   * Look a name up without persisting anything -- the New Payee form's
+   * prefill and the edit form's "Look up" button. Always 200: the feature
+   * being off, no provider being configured and a failed lookup are states
+   * the form has to explain differently, not errors, and a 4xx would reach
+   * the user as a toast about a request they did not knowingly make. The
+   * client must read `reason` and never show "nothing found" for a failure.
+   *
+   * Declared before the `:id` routes on purpose; a literal segment after a
+   * parameter route is shadowed by it.
+   */
+  @Post("lookup-contact")
+  @NoPat()
+  @AllowDelegate()
+  @DelegateRequiresCapability("payees", "create")
+  // Each call may be a paid model call on the user's provider.
+  @Throttle({ default: { ttl: 60000, limit: 10 } })
+  @ApiOperation({
+    summary:
+      "Look up a payee's website, address, email and phone by name, without saving",
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      "{ suggestion, reason } -- suggestion is null unless reason is 'ok'",
+  })
+  lookupContact(
+    @Request() req,
+    @Body() dto: LookupPayeeContactDto,
+  ): Promise<ContactLookupOutcome> {
+    return this.contactLookupService.lookup(
+      req.user.id,
+      // Whatever the form already holds goes in as context, so the answer is
+      // about this organisation in this place. None of it is stored here.
+      { name: dto.name, known: buildLookupContext(dto) },
+      // The button is the consent: this is a lookup the user asked for by
+      // name, whether or not they enabled the automatic one.
+      { ignorePreference: true },
+    );
   }
 
   @Get("auto-merge/preview")
@@ -468,11 +526,17 @@ export class PayeesController {
     description: "Payee detail for the payee detail page",
   })
   @ApiResponse({ status: 404, description: "Payee not found" })
-  getDetail(
+  async getDetail(
     @Request() req,
     @Param("id", ParseUUIDPipe) id: string,
   ): Promise<PayeeDetailDto> {
-    return this.payeeDetailService.getDetail(req.user.id, id);
+    // An acting delegate sees only the accounts they were granted READ on,
+    // exactly as the register and the analytics endpoints scope them.
+    const accountScope = await delegateReadableAccountScope(
+      req,
+      this.delegationService,
+    );
+    return this.payeeDetailService.getDetail(req.user.id, id, accountScope);
   }
 
   @Get(":id/logo")
@@ -509,6 +573,41 @@ export class PayeesController {
     @Param("id", ParseUUIDPipe) id: string,
   ): Promise<Payee> {
     return this.payeesService.refreshLogo(req.user.id, id);
+  }
+
+  /**
+   * Look an existing payee up and propose what could change, writing nothing.
+   *
+   * The detail screen shows the answer in a confirmation dialogue -- with a
+   * picker when the name means more than one organisation or branch -- and
+   * the user's confirmation goes through `PATCH /payees/:id`, as their own
+   * edit. That is what lets a confirmed value replace a stored one while the
+   * lookup itself never may (INV-PAYEE-001).
+   *
+   * Always 200 for a payee the caller owns: the feature being off, no
+   * provider and a failed lookup are states the dialogue explains
+   * differently, not errors.
+   */
+  @Post(":id/lookup-contact")
+  @NoPat()
+  @AllowDelegate()
+  @DelegateRequiresCapability("payees", "edit")
+  @Throttle({ default: { ttl: 60000, limit: 10 } })
+  @ApiOperation({
+    summary:
+      "Look up a payee's contact details and return the candidates, without saving",
+  })
+  @ApiResponse({
+    status: 200,
+    description:
+      "{ suggestions, reason } -- suggestions is empty unless reason is 'ok', and carries more than one entry only when the name matches more than one organisation or branch",
+  })
+  @ApiResponse({ status: 404, description: "Payee not found" })
+  lookupContactForPayee(
+    @Request() req,
+    @Param("id", ParseUUIDPipe) id: string,
+  ): Promise<ContactLookupOutcome> {
+    return this.payeesService.lookupContactForPayee(req.user.id, id);
   }
 
   @Get("inactive/match")

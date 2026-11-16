@@ -94,6 +94,9 @@
     "largestValue": "{amount} il {date}",
     "overpaymentFor": "Beneficiario dei versamenti extra per",
     "website": "Sito web",
+    "address": "Indirizzo",
+    "phone": "Telefono",
+    "email": "E-mail",
     "notes": "Note"
   },
   "tabs": {
@@ -127,5 +130,23 @@
     "needsMoreHistory": "Servono almeno {years} anni di cronologia per distinguere uno schema stagionale dal caso.",
     "empty": "Nessuna spesa da suddividere per mese",
     "monthTooltip": "{month}: {amount} in media su {years, plural, one {# anno} other {# anni}}"
+  },
+  "contactLookup": {
+    "button": "Cerca recapiti",
+    "inProgress": "Ricerca in corso...",
+    "nothingNew": "Nessun nuovo recapito trovato.",
+    "noProvider": "Configura una fonte nelle impostazioni di ricerca beneficiari per trovare i contatti.",
+    "failed": "Non è stato possibile completare la ricerca. Riprova più tardi.",
+    "dialogTitle": "Conferma i dati di contatto",
+    "dialogSubtitle": "Nulla viene salvato per {name} finché non confermi.",
+    "pickMatch": "Quel nome corrisponde a {count, plural, one {# attività} other {# attività}}. Scegli quella a cui paghi:",
+    "unlabelledMatch": "Corrispondenza senza nome",
+    "willAdd": "Aggiungi",
+    "willReplace": "Sostituisci",
+    "cancel": "Annulla",
+    "confirm": "{count, plural, one {Salva # modifica} other {Salva # modifiche}}",
+    "applied": "{count, plural, one {# dato di contatto salvato} other {# dati di contatto salvati}}",
+    "applyFailed": "Impossibile salvare i dati di contatto",
+    "quotaExceeded": "Le ricerche Google Places di questo mese sono esaurite. Aumenta il limite nelle impostazioni di ricerca beneficiari oppure attendi il mese prossimo."
   }
 }

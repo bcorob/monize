@@ -15,6 +15,11 @@ function payee(id: string, name: string): Payee {
     website: null,
     hasLogo: false,
     logoFetchedAt: null,
+    contactLookupAt: null,
+    contactLookupSource: null,
+    address: null,
+    email: null,
+    phone: null,
     isActive: true,
     createdAt: '2024-01-01T00:00:00.000Z',
   };

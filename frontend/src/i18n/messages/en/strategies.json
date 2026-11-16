@@ -330,14 +330,13 @@
       "fillMissingDone": "{count, plural, one {# instrument added} other {# instruments added}}. Save the configuration to load their prices and evaluate the first signal.",
       "fillMissingError": "Could not add the suggested instruments.",
       "lookbackMonths": "Momentum window (months)",
-      "taxRatePercent": "Tax rate (%)",
-      "commissionAmount": "Commission per trade",
+      "taxRatePercent": "Tax Rate (optional)",
+      "commissionAmount": "Commission per Trade (optional)",
       "rulesSourceUrl": "Link to the rules you follow",
       "rulesSourceUrlPlaceholder": "https://example.com/dual-momentum",
       "rulesSourceLabel": "Text to show for that link",
       "rulesSourceLabelPlaceholder": "example.com",
       "rulesSourceHint": "Both optional, and neither affects any calculation. They put a link in the report footer to wherever the rules this strategy follows are written down — an article, a book page, your own notes — so you can check later which version you set it up against.",
-      "optional": "Optional",
       "save": "Save configuration",
       "saved": "Strategy configuration saved.",
       "saveError": "Could not save the strategy configuration.",
@@ -358,7 +357,9 @@
       "NO_POSITION": "The strategy accounts hold no instruments.",
       "FIRST_RUN": "This strategy has not been evaluated yet — the first signal appears after the next scheduled evaluation.",
       "STALE_PRICES": "Some of the prices behind this report are not current, so the signal may change once they are refreshed. The oldest, or missing entirely, are for:",
-      "CALCULATION_FAILED": "The signal could not be calculated from the available data."
+      "CALCULATION_FAILED": "The signal could not be calculated from the available data.",
+      "SHORT_HISTORY": "Not enough price history to evaluate the current period. These roles need prices back to {from}:",
+      "shortHistoryFix": "Open each of these instruments and use “Add another year of price history”, then reopen this report."
     },
     "footer": {
       "pastResults": "Past results do not guarantee future returns.",

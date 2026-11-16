@@ -1,10 +1,17 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import { Button } from '@/components/ui/Button';
 import { KeyValueList, type KeyValueRow } from '@/components/ui/KeyValueList';
 import { useDateFormat } from '@/hooks/useDateFormat';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { externalUrlLabel, toSafeExternalUrl } from '@/lib/external-url';
+import { mailtoHref, mapsUrl, telHref } from '@/lib/contact-links';
+import { formatPhoneForDisplay } from '@/lib/phone-number';
+import { useMapProvider } from '@/hooks/useMapProvider';
+import { useContactLookupAvailable } from '@/hooks/useContactLookupAvailable';
+import { usePayeeContactLookup } from '@/hooks/usePayeeContactLookup';
+import { ContactLookupDialog } from '../ContactLookupDialog';
 import type { PayeeDetail } from '@/types/payee';
 
 interface PayeeKeyInfoCardProps {
@@ -19,6 +26,11 @@ interface PayeeKeyInfoCardProps {
   onSelectDate: (date: string) => void;
   /** Open an account's detail page (for the overpayment designation). */
   onSelectAccount: (accountId: string) => void;
+  /**
+   * Called after an on-demand contact lookup wrote to the payee, so the page
+   * reloads the detail it is rendering from.
+   */
+  onContactLookedUp?: () => void | Promise<void>;
 }
 
 /**
@@ -31,13 +43,31 @@ export function PayeeKeyInfoCard({
   categoryLabelMap,
   onSelectDate,
   onSelectAccount,
+  onContactLookedUp,
 }: PayeeKeyInfoCardProps) {
   const t = useTranslations('payeeDetail');
   const { formatDate } = useDateFormat();
-  const { formatCurrency } = useNumberFormat();
+  const { formatCurrency, formatNumber } = useNumberFormat();
+  const mapProvider = useMapProvider();
+  // The lookup runs on the user's AI provider, so without one there is nothing
+  // behind the button: it is not offered rather than offered and refused.
+  const { available: lookupAvailable } = useContactLookupAvailable();
+  const lookup = usePayeeContactLookup({ onApplied: () => onContactLookedUp?.() });
 
   const { payee, stats, largestTransaction, overpaymentForAccounts } = detail;
+
   const websiteUrl = toSafeExternalUrl(payee.website);
+  // Each contact value is turned into a link by its own guard, and a value the
+  // guard rejects still renders as text rather than disappearing -- a stored
+  // "call the shop" is worth showing even though it cannot be dialled.
+  const addressLink = payee.address
+    ? mapsUrl({ address: payee.address, provider: mapProvider })
+    : null;
+  const phoneLink = telHref(payee.phone);
+  // Stored as E.164; shown the way a person reads a number. A legacy value that
+  // predates normalization comes back unchanged rather than blanked.
+  const phoneDisplay = formatPhoneForDisplay(payee.phone);
+  const emailLink = mailtoHref(payee.email);
 
   const rows: KeyValueRow[] = [
     {
@@ -74,7 +104,7 @@ export function PayeeKeyInfoCard({
     {
       key: 'aliases',
       label: t('keyInfo.aliases'),
-      value: stats.aliasCount > 0 ? stats.aliasCount.toLocaleString() : null,
+      value: stats.aliasCount > 0 ? formatNumber(stats.aliasCount, 0) : null,
     },
     {
       key: 'largestTransaction',
@@ -130,6 +160,56 @@ export function PayeeKeyInfoCard({
       ) : null,
     },
     {
+      key: 'address',
+      label: t('keyInfo.address'),
+      value: payee.address ? (
+        addressLink ? (
+          <a
+            href={addressLink}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="whitespace-pre-line text-blue-600 hover:underline dark:text-blue-400"
+          >
+            {payee.address}
+          </a>
+        ) : (
+          <span className="whitespace-pre-line">{payee.address}</span>
+        )
+      ) : null,
+    },
+    {
+      key: 'phone',
+      label: t('keyInfo.phone'),
+      value: payee.phone ? (
+        phoneLink ? (
+          <a
+            href={phoneLink}
+            className="text-blue-600 hover:underline dark:text-blue-400"
+          >
+            {phoneDisplay}
+          </a>
+        ) : (
+          phoneDisplay
+        )
+      ) : null,
+    },
+    {
+      key: 'email',
+      label: t('keyInfo.email'),
+      value: payee.email ? (
+        emailLink ? (
+          <a
+            href={emailLink}
+            className="break-all text-blue-600 hover:underline dark:text-blue-400"
+          >
+            {payee.email}
+          </a>
+        ) : (
+          payee.email
+        )
+      ) : null,
+    },
+    {
       key: 'notes',
       label: t('keyInfo.notes'),
       value: payee.notes || null,
@@ -138,10 +218,35 @@ export function PayeeKeyInfoCard({
 
   return (
     <div className="rounded-lg bg-white p-4 shadow dark:bg-gray-800 dark:shadow-gray-700/50">
-      <h3 className="mb-3 text-lg font-semibold text-gray-900 dark:text-gray-100">
-        {t('keyInfo.title')}
-      </h3>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+          {t('keyInfo.title')}
+        </h3>
+        {lookupAvailable && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => void lookup.lookUp(payee)}
+            disabled={lookup.lookingUp}
+          >
+            {lookup.lookingUp
+              ? t('contactLookup.inProgress')
+              : t('contactLookup.button')}
+          </Button>
+        )}
+      </div>
       <KeyValueList rows={rows} />
+      {lookup.target && (
+        <ContactLookupDialog
+          isOpen
+          payee={lookup.target}
+          suggestions={lookup.candidates}
+          saving={lookup.saving}
+          onCancel={lookup.dismiss}
+          onConfirm={lookup.apply}
+        />
+      )}
     </div>
   );
 }

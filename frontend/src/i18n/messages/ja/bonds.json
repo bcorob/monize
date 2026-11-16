@@ -1,0 +1,100 @@
+{
+  "entry": {
+    "history": "{program}の条件の履歴"
+  },
+  "offer": {
+    "loading": "販売中の債券を読み込み中...",
+    "loadFailed": "販売中の債券を読み込めませんでした。",
+    "retry": "再試行",
+    "empty": "本日販売中のシリーズはありません。",
+    "asOf": "{date}時点の販売内容です。すべての数値は、本日購入し満期まで保有する債券1枚についてのものです。",
+    "comparisonNote": "年換算利回りは、期間の異なる商品を比べるための参考値であり、収益を約束するものではありません。",
+    "couponsNote": "クーポン再投資なし：クーポンを支払う債券では、満期時の価値に支払われたすべてのクーポンが含まれます。",
+    "projected": "予測",
+    "projectedTitle": "この数値は、公表された金利だけでなく、仮定した指標の値にも基づいています。",
+    "assumptions": {
+      "title": "前提",
+      "intro": "まだ始まっていない期間は、これらの指標の値で評価されます。1つ変更すると、すべての行への影響を確認できます。",
+      "label": "{benchmark}（%）",
+      "latest": "最新の公表値：{value}（{observation}）",
+      "reset": "最新の公表値を使う",
+      "updating": "数値を更新中..."
+    },
+    "columns": {
+      "series": "シリーズ",
+      "saleWindow": "販売中",
+      "length": "期間",
+      "firstPeriodRate": "最初の期間",
+      "rule": "金利",
+      "capitalization": "利息",
+      "redemption": "期限前償還",
+      "maturityValue": "満期時の価値",
+      "totalReturn": "総リターン",
+      "annualizedReturn": "年換算リターン",
+      "terms": "条件"
+    },
+    "saleWindowValue": "{from}から{to}まで",
+    "lengthValue": "{months, plural, other {#か月}}",
+    "lengthDaysValue": "{days, plural, other {#日}}",
+    "rule": {
+      "fixed": "年{rate}の固定",
+      "benchmark": "{benchmark} + {addend}",
+      "floor": "指標の下限 {floor}",
+      "daily": "毎日: {benchmark} + {addend}",
+      "discount": "額面からの割引"
+    },
+    "capitalization": {
+      "NONE": "各期間に支払い",
+      "COMPOUND_AT_PERIOD_END": "各期間の終了時に元本に組み入れ"
+    },
+    "redemption": {
+      "none": "満期時のみ",
+      "onDemand": "請求により",
+      "fee": "1枚あたり手数料 {amount}",
+      "forfeit": "期間中に発生した利息は失われます"
+    },
+    "couponsNotReinvested": "クーポン再投資なし"
+  },
+  "history": {
+    "loading": "履歴を読み込み中...",
+    "loadFailed": "履歴を読み込めませんでした。",
+    "retry": "再試行",
+    "empty": "この商品のシリーズはまだ保存されていません。",
+    "coverage": "カタログの対象期間は{from}から{to}までです。",
+    "rateChartTitle": "販売月ごとの最初の期間の金利とマージン",
+    "feeChartTitle": "販売月ごとの期限前償還手数料",
+    "rate": "最初の期間の金利",
+    "rateChartNote": "固定金利債では、線は年利を示します。",
+    "addend": "マージンまたはスプレッド",
+    "fee": "期限前償還手数料",
+    "gapsNote": "保存されたシリーズがない月は線の途切れとして表示し、前後の月から補った値は使いません。",
+    "missingTitle": "カタログにない月（{count}）",
+    "noMissing": "保存された最初と最後のシリーズの間に欠けている月はありません。",
+    "tableTitle": "保存されたすべてのシリーズ",
+    "groupCount": "シリーズ {count} 件",
+    "unknownYear": "販売日不明",
+    "columns": {
+      "series": "シリーズ",
+      "saleWindow": "販売中",
+      "rate": "最初の期間の金利または年利",
+      "addend": "マージンまたはスプレッド",
+      "fee": "期限前償還手数料",
+      "floor": "償還額の下限",
+      "version": "条件のバージョン",
+      "source": "出典"
+    },
+    "floor": {
+      "ALL_PERIODS": "すべての期間",
+      "FIRST_PERIOD": "最初の期間のみ"
+    },
+    "none": "なし",
+    "held": "保有中"
+  },
+  "refreshProgress": {
+    "label": "債券データを更新中",
+    "offer": "現在のオファーを確認しています…",
+    "series": "シリーズを取得中 {done}/{total}: {seriesCode}",
+    "historyComplete": "履歴は完全です",
+    "starting": "開始しています…"
+  }
+}

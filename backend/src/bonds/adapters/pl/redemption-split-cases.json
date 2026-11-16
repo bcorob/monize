@@ -1,0 +1,201 @@
+{
+  "notes": "Redemption splits (spec bond-redemption-interest.md section 2) of Polish series. Expected figures are never taken from the engine: EDO0423 reproduces the Ministry's stated maturity value 147.05 (edo0423-cases.json); the early redemptions are worked by hand from the stored terms (letter para 26: the fee is taken out of the accrued interest, EDO1036 3.00 with the face value as a floor in every period, COI1030 2.00 with the floor in the first period only) with accrued interest = face x rate x days elapsed / days of the period, rounded per bond to 2 decimals half-up.",
+  "cases": [
+    {
+      "id": "EDO0423-SPLIT-MATURITY",
+      "description": "EDO0423 on its maturity day: 147.05 paid per bond (Ministry), of which 47.05 is capitalised interest and 100.00 the face value",
+      "source": "https://www.obligacjeskarbowe.pl/oferta-obligacji/obligacje-10-letnie-edo/edo1036/",
+      "terms": "edo0423",
+      "benchmarksFrom": "EDO0423-OFF-M",
+      "lot": { "purchaseDate": "2013-04-15", "quantity": 1 },
+      "date": "2023-04-15",
+      "perBond": {
+        "principal": "100.00",
+        "grossInterest": "47.05",
+        "deduction": "0.00",
+        "interest": "47.05",
+        "principalReturned": "100.00",
+        "payout": "147.05"
+      },
+      "expect": {
+        "refusal": null,
+        "principal": "100.00",
+        "grossInterest": "47.05",
+        "deduction": "0.00",
+        "interest": "47.05",
+        "principalReturned": "100.00",
+        "payout": "147.05"
+      }
+    },
+    {
+      "id": "EDO0423-SPLIT-MATURITY-Q3",
+      "description": "three EDO0423 bonds on the maturity day: the per-bond figures times 3",
+      "source": "https://www.obligacjeskarbowe.pl/oferta-obligacji/obligacje-10-letnie-edo/edo1036/",
+      "terms": "edo0423",
+      "benchmarksFrom": "EDO0423-OFF-M",
+      "lot": { "purchaseDate": "2013-04-15", "quantity": 3 },
+      "date": "2023-04-15",
+      "perBond": {
+        "principal": "100.00",
+        "grossInterest": "47.05",
+        "deduction": "0.00",
+        "interest": "47.05",
+        "principalReturned": "100.00",
+        "payout": "147.05"
+      },
+      "expect": {
+        "refusal": null,
+        "principal": "300.00",
+        "grossInterest": "141.15",
+        "deduction": "0.00",
+        "interest": "141.15",
+        "principalReturned": "300.00",
+        "payout": "441.15"
+      }
+    },
+    {
+      "id": "EDO0423-SPLIT-AFTER-MATURITY",
+      "description": "EDO0423 redeemed later than its maturity day: the maturity split",
+      "source": "https://www.obligacjeskarbowe.pl/oferta-obligacji/obligacje-10-letnie-edo/edo1036/",
+      "terms": "edo0423",
+      "benchmarksFrom": "EDO0423-OFF-M",
+      "lot": { "purchaseDate": "2013-04-15", "quantity": 1 },
+      "date": "2023-05-02",
+      "expect": {
+        "refusal": null,
+        "interest": "47.05",
+        "principalReturned": "100.00",
+        "payout": "147.05"
+      }
+    },
+    {
+      "id": "EDO1036-SPLIT-EARLY-ABOVE-FEE",
+      "description": "EDO1036 bought 2026-10-15 and redeemed on day 292 of period 1 (2027-08-03): accrued 100 x 0.0535 x 292/365 = 4.28, fee 3.00 out of it",
+      "hypothetical": true,
+      "manifest": "edo1036",
+      "lot": { "purchaseDate": "2026-10-15", "quantity": 1 },
+      "date": "2027-08-03",
+      "perBond": {
+        "principal": "100.00",
+        "grossInterest": "4.28",
+        "deduction": "3.00",
+        "interest": "1.28",
+        "principalReturned": "100.00",
+        "payout": "101.28"
+      },
+      "expect": {
+        "refusal": null,
+        "principal": "100.00",
+        "grossInterest": "4.28",
+        "deduction": "3.00",
+        "interest": "1.28",
+        "principalReturned": "100.00",
+        "payout": "101.28"
+      }
+    },
+    {
+      "id": "EDO1036-SPLIT-EARLY-BELOW-FEE",
+      "description": "EDO1036 redeemed on day 146 of period 1 (2027-03-10): accrued 2.14 is below the fee 3.00, the face value floor pays 100.00 and the whole accrued interest is the deduction",
+      "hypothetical": true,
+      "manifest": "edo1036",
+      "lot": { "purchaseDate": "2026-10-15", "quantity": 1 },
+      "date": "2027-03-10",
+      "expect": {
+        "refusal": null,
+        "principal": "100.00",
+        "grossInterest": "2.14",
+        "deduction": "2.14",
+        "interest": "0.00",
+        "principalReturned": "100.00",
+        "payout": "100.00"
+      }
+    },
+    {
+      "id": "COI1030-SPLIT-EARLY-FIRST-PERIOD",
+      "description": "COI1030 redeemed on day 292 of period 1 (2027-08-03): accrued 100 x 0.0475 x 292/365 = 3.80, fee 2.00 out of it",
+      "hypothetical": true,
+      "manifest": "coi1030",
+      "lot": { "purchaseDate": "2026-10-15", "quantity": 1 },
+      "date": "2027-08-03",
+      "expect": {
+        "refusal": null,
+        "principal": "100.00",
+        "grossInterest": "3.80",
+        "deduction": "2.00",
+        "interest": "1.80",
+        "principalReturned": "100.00",
+        "payout": "101.80"
+      }
+    },
+    {
+      "id": "COI1030-SPLIT-EARLY-FIRST-PERIOD-BELOW-FEE",
+      "description": "COI1030 redeemed on day 73 of period 1 (2026-12-27): accrued 0.95 is below the fee 2.00, the first-period floor pays 100.00",
+      "hypothetical": true,
+      "manifest": "coi1030",
+      "lot": { "purchaseDate": "2026-10-15", "quantity": 1 },
+      "date": "2026-12-27",
+      "expect": {
+        "refusal": null,
+        "principal": "100.00",
+        "grossInterest": "0.95",
+        "deduction": "0.95",
+        "interest": "0.00",
+        "principalReturned": "100.00",
+        "payout": "100.00"
+      }
+    },
+    {
+      "id": "COI1030-SPLIT-EARLY-SECOND-PERIOD",
+      "description": "COI1030 redeemed on day 60 of period 2 (2027-12-14, a 366-day period) at an announced 7.32 %: accrued 100 x 0.0732 x 60/366 = 1.20, flat fee 2.00 with no floor: 99.20 is paid, no interest, 0.80 of the principal lost",
+      "hypothetical": true,
+      "manifest": "coi1030",
+      "announcedRates": { "2": "0.0732" },
+      "lot": { "purchaseDate": "2026-10-15", "quantity": 1 },
+      "date": "2027-12-14",
+      "expect": {
+        "refusal": null,
+        "principal": "100.00",
+        "grossInterest": "1.20",
+        "deduction": "2.00",
+        "interest": "0.00",
+        "principalReturned": "99.20",
+        "payout": "99.20"
+      }
+    },
+    {
+      "id": "COI1030-SPLIT-SECOND-PERIOD-RATE-UNKNOWN",
+      "description": "the same redemption with no announced rate and no CPI stored for period 2: the rate is unknown, so are the figures; the principal is known",
+      "hypothetical": true,
+      "manifest": "coi1030",
+      "lot": { "purchaseDate": "2026-10-15", "quantity": 2 },
+      "date": "2027-12-14",
+      "expect": {
+        "refusal": "RATE_UNKNOWN",
+        "principal": "200.00",
+        "grossInterest": null,
+        "deduction": null,
+        "interest": null,
+        "principalReturned": null,
+        "payout": null
+      }
+    },
+    {
+      "id": "COI1030-SPLIT-COUPON-AT-MATURITY",
+      "description": "COI1030 on its maturity day with the last period's rate announced at 6.00 %: the final coupon 6.00 on top of the face value (a coupon bond pays interest each year, the split holds the last coupon only)",
+      "hypothetical": true,
+      "manifest": "coi1030",
+      "announcedRates": { "4": "0.0600" },
+      "lot": { "purchaseDate": "2026-10-15", "quantity": 1 },
+      "date": "2030-10-15",
+      "expect": {
+        "refusal": null,
+        "principal": "100.00",
+        "grossInterest": "6.00",
+        "deduction": "0.00",
+        "interest": "6.00",
+        "principalReturned": "100.00",
+        "payout": "106.00"
+      }
+    }
+  ]
+}

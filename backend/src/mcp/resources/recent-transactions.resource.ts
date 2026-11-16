@@ -1,28 +1,32 @@
+import { SharedReviewService } from "../../shared-expenses/shared-review.service";
 import { Injectable } from "@nestjs/common";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 import { TransactionsService } from "../../transactions/transactions.service";
 import { TransactionAnalyticsService } from "../../transactions/transaction-analytics.service";
-import { UserContextResolver, hasScope } from "../mcp-context";
+import { resolveUserContext, hasScope } from "../mcp-context";
 import { formatDateYMD, todayYMD } from "../../common/date-utils";
 
 @Injectable()
 export class McpRecentTransactionsResource {
   constructor(
+    private readonly sharedReview: SharedReviewService,
     private readonly transactionsService: TransactionsService,
     private readonly analyticsService: TransactionAnalyticsService,
   ) {}
 
-  register(server: McpServer, resolve: UserContextResolver) {
+  register(server: McpServer) {
     server.registerResource(
       "recent-transactions",
       "monize://recent-transactions",
       {
+        // Live data: a cached answer here is a stale figure, not a stale name.
+        cacheHint: { ttlMs: 0, cacheScope: "private" },
         title: "Recent transactions",
         description: "Last 30 days of transactions (summarized)",
       },
-      async (_uri, extra) => {
-        const ctx = resolve(extra.sessionId);
-        if (!ctx) {
+      async (_uri, ctx) => {
+        const user = resolveUserContext(ctx);
+        if (!user) {
           return {
             contents: [
               {
@@ -32,7 +36,7 @@ export class McpRecentTransactionsResource {
             ],
           };
         }
-        if (!hasScope(ctx.scopes, "read")) {
+        if (!hasScope(user.scopes, "read")) {
           return {
             contents: [
               {
@@ -49,9 +53,9 @@ export class McpRecentTransactionsResource {
           startDate.setDate(startDate.getDate() - 30);
           const startDateStr = formatDateYMD(startDate);
 
-          const [result, summary] = await Promise.all([
+          const [result, summary, totals] = await Promise.all([
             this.transactionsService.findAll(
-              ctx.userId,
+              user.userId,
               undefined,
               startDateStr,
               endDate,
@@ -64,7 +68,7 @@ export class McpRecentTransactionsResource {
             // DIVIDEND side-effects don't skew the MCP "recent activity"
             // summary with uncategorised spending/income.
             this.analyticsService.getSummary(
-              ctx.userId,
+              user.userId,
               undefined,
               startDateStr,
               endDate,
@@ -75,6 +79,14 @@ export class McpRecentTransactionsResource {
               undefined,
               true,
             ),
+            // The summary's totals add each currency's numbers as they stand;
+            // these are converted into the default currency at each row's own
+            // date, withheld (null) while a pair has no rate.
+            this.analyticsService.getLlmFlowTotals(user.userId, {
+              startDate: startDateStr,
+              endDate,
+              excludeTransfers: false,
+            }),
           ]);
 
           return {
@@ -83,9 +95,9 @@ export class McpRecentTransactionsResource {
                 uri: "monize://recent-transactions",
                 mimeType: "application/json",
                 text: JSON.stringify(
-                  {
+                  await this.sharedReview.annotate(user.userId, {
                     period: { startDate: startDateStr, endDate },
-                    summary,
+                    summary: { ...summary, ...totals },
                     // Expand split transactions so each split appears as its
                     // own row with its real category. Split parents have
                     // categoryId NULL by design; returning the parent would
@@ -115,7 +127,7 @@ export class McpRecentTransactionsResource {
                             ],
                       ),
                     total: result.pagination.total,
-                  },
+                  }),
                   null,
                   2,
                 ),

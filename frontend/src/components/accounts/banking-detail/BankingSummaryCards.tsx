@@ -8,7 +8,9 @@ import {
   summaryGridClass,
 } from '@/components/accounts/shared/SummaryCardGrid';
 import { UnknownAmount } from '@/components/ui/UnknownAmount';
+import { balanceColor } from '@/lib/format';
 import type { Account } from '@/types/account';
+import type { BalanceForecastOverdue } from '@/types/banking-detail';
 
 interface BankingSummaryCardsProps {
   account: Account;
@@ -18,6 +20,12 @@ interface BankingSummaryCardsProps {
    * that equals today's is a measurement the reader did not get.
    */
   projectedBalance: number | null;
+  /**
+   * The overdue occurrences the projection applied (discussion #1784), named under
+   * the projected figure they move, since nothing on the schedule ahead
+   * explains that part of it.
+   */
+  overdue?: BalanceForecastOverdue | null;
   moneyIn: number;
   moneyOut: number;
   interestEarnedYtd: number;
@@ -27,14 +35,11 @@ interface BankingSummaryCardsProps {
   onInterestClick?: () => void;
 }
 
-function signClass(value: number): string {
-  return value < 0 ? 'text-red-600 dark:text-red-400' : 'text-gray-900 dark:text-gray-100';
-}
-
 /** Key figures for a chequing/savings/cash account. */
 export function BankingSummaryCards({
   account,
   projectedBalance,
+  overdue = null,
   moneyIn,
   moneyOut,
   interestEarnedYtd,
@@ -44,7 +49,8 @@ export function BankingSummaryCards({
   onInterestClick,
 }: BankingSummaryCardsProps) {
   const t = useTranslations('accountDetail-banking');
-  const { formatCurrency } = useNumberFormat();
+  const tc = useTranslations('common');
+  const { formatCurrency, formatPercentTrimmed } = useNumberFormat();
   const currency = account.currencyCode;
   const currentBalance = Number(account.currentBalance) || 0;
 
@@ -52,7 +58,7 @@ export function BankingSummaryCards({
     {
       label: t('summary.currentBalance'),
       value: formatCurrency(currentBalance, currency),
-      valueClass: signClass(currentBalance),
+      valueClass: balanceColor(currentBalance),
     },
     {
       label: t('summary.projectedBalance'),
@@ -62,8 +68,18 @@ export function BankingSummaryCards({
         ) : (
           formatCurrency(projectedBalance, currency)
         ),
-      valueClass: projectedBalance === null ? undefined : signClass(projectedBalance),
-      note: t('summary.projectedNote'),
+      valueClass: projectedBalance === null ? undefined : balanceColor(projectedBalance),
+      note:
+        projectedBalance !== null && overdue !== null ? (
+          <>
+            {t('summary.projectedNote')}
+            <span className="block">
+              {tc('scheduledOverdue.included', { count: overdue.count })}
+            </span>
+          </>
+        ) : (
+          t('summary.projectedNote')
+        ),
     },
     {
       label: t('summary.moneyIn'),
@@ -89,7 +105,7 @@ export function BankingSummaryCards({
   if (account.interestRate != null) {
     cards.push({
       label: t('summary.interestRate'),
-      value: `${account.interestRate}%`,
+      value: `${formatPercentTrimmed(account.interestRate)}`,
     });
   }
 

@@ -76,7 +76,10 @@
     "collapseAria": "Sembunyikan info akun",
     "showAccountNumber": "Tampilkan nomor akun",
     "hideAccountNumber": "Sembunyikan nomor akun",
-    "show": "Tampilkan info akun"
+    "show": "Tampilkan info akun",
+    "nextInstallment": "Angsuran Berikutnya",
+    "finalPayment": "Pembayaran Akhir",
+    "amountDueOn": "{amount}, jatuh tempo {date}"
   },
   "page": {
     "title": "Transaksi",
@@ -121,13 +124,19 @@
       "balance": "Saldo",
       "attachments": "Lampiran",
       "status": "Status",
+      "statusHelp": "Belum Direkonsiliasi, Kliring, atau Rekonsiliasi adalah langkah menuju pencocokan dengan laporan bank. Batal membatalkan transaksi tetapi menyimpan catatannya; transaksi tidak lagi memengaruhi saldo akun.",
       "actions": "Aksi"
+    },
+    "sort": {
+      "balanceHiddenHint": "Urutkan berdasarkan tanggal untuk melihat saldo berjalan",
+      "stripLabel": "Urutkan menurut"
     },
     "dateDisplay": {
       "toggleLabel": "Sembunyikan tahun",
       "toggleTitle": "Hilangkan tahun dari tanggal agar nama penerima lebih terlihat"
     },
     "attachmentsCount": "{count, plural, other {# lampiran}}",
+    "warrantiesCount": "{count, plural, other {# garansi}}",
     "today": "Hari ini",
     "export": {
       "button": "Ekspor",
@@ -165,7 +174,6 @@
     },
     "row": {
       "viewPayeeTitle": "Lihat detail {name}",
-      "ref": "Ref: {number}",
       "investmentLabel": "Investasi",
       "linkedInvestmentTitle": "Lihat di Investasi",
       "filterByDate": "Filter berdasarkan tanggal \"{date}\"",
@@ -212,13 +220,13 @@
       "title": "Filter",
       "clear": "Hapus",
       "hide": "Sembunyikan",
-      "show": "Tampilkan"
+      "show": "Tampilkan filter"
     },
     "accounts": {
-      "label": "Tampilkan akun:",
-      "all": "Semua",
-      "active": "Aktif",
-      "closed": "Ditutup"
+      "label": "Tampilkan akun",
+      "allCount": "Semua ({count})",
+      "activeCount": "Aktif ({count})",
+      "closedCount": "Ditutup ({count})"
     },
     "fields": {
       "accounts": "Akun",
@@ -251,7 +259,7 @@
       "statuses": "Semua status",
       "amountMin": "Min",
       "amountMax": "Maks",
-      "search": "Cari penerima, kategori, jumlah, tag, keterangan, referensi #...",
+      "search": "Cari, atau coba #10 atau payee:costco",
       "tagKeyValue": "mis. usa"
     },
     "tagKeyNone": "Semua (tanpa filter kunci)",
@@ -312,7 +320,7 @@
     },
     "modal": {
       "title": "Perbarui Transaksi Massal",
-      "subtitle": "Perbarui {count, plural, one {# transaksi yang dipilih} other {# transaksi yang dipilih}}. Aktifkan kolom yang ingin Anda ubah.",
+      "help": "Aktifkan kolom yang ingin Anda ubah.",
       "submitLabel": "Perbarui {count, plural, one {# Transaksi} other {# Transaksi}}",
       "payee": "Penerima",
       "category": "Kategori",
@@ -360,8 +368,9 @@
       "fromAccount": "Dari Akun",
       "toAccount": "Ke Akun",
       "transferAmount": "Jumlah Transfer",
-      "transferAmountWithCurrency": "Jumlah Transfer ({currency})",
-      "amountReceived": "Jumlah Diterima ({currency})",
+      "amountReceivedLabel": "Jumlah Diterima",
+      "transferAmountInCurrency": "Jumlah Transfer ({currency})",
+      "amountReceivedInCurrency": "Jumlah Diterima ({currency})",
       "payeeOptional": "Penerima (Opsional)",
       "categoryOptional": "Kategori (Opsional)"
     },
@@ -391,10 +400,16 @@
     "submitCreateAndNewDescription": "Simpan dan mulai yang baru, dengan akun dan tanggal yang sama.",
     "submitOptions": "Pilih apa yang terjadi setelah membuat",
     "submitUpdate": "Perbarui {mode}",
+    "submitConvert": "Konversi ke {mode}",
     "reconciledConfirm": {
       "title": "Edit transaksi yang telah direkonsiliasi?",
       "message": "Transaksi ini telah direkonsiliasi. Mengubahnya akan memengaruhi rekonsiliasi yang telah selesai. Apakah Anda tetap ingin menyimpan perubahan?",
       "confirm": "Simpan perubahan"
+    },
+    "counterpartConfirm": {
+      "title": "Konversi transfer ini?",
+      "message": "Sisi lain transfer ini sudah dibersihkan atau direkonsiliasi. Mengonversinya menjadi transaksi akan menghapus entri tersebut dari akun lain dan mengubah saldo yang telah dicocokkan dengan laporan. Lanjutkan?",
+      "confirm": "Tetap konversi"
     },
     "modeLabel": {
       "transfer": "Transfer",
@@ -424,6 +439,8 @@
       "destinationRequired": "Silakan pilih akun tujuan",
       "sameAccount": "Akun sumber dan tujuan harus berbeda",
       "negativeTransfer": "Jumlah transfer tidak boleh negatif",
+      "convertedToTransfer": "Dikonversi menjadi transfer",
+      "convertedToTransaction": "Dikonversi menjadi transaksi",
       "payeeCreated": "Penerima \"{name}\" dibuat",
       "payeeCreateFailed": "Gagal membuat penerima",
       "payeeReactivated": "Penerima \"{name}\" diaktifkan kembali",
@@ -458,10 +475,20 @@
       },
       "feeCaption": "Termasuk biaya transaksi luar negeri {percent}% ({fee})."
     },
-    "jointSplitDisabled": "Transaksi split di akun bersama hanya dapat dikelola oleh pemilik"
+    "jointSplitDisabled": "Transaksi split di akun bersama hanya dapat dikelola oleh pemilik",
+    "warranties": {
+      "title": "Garansi",
+      "add": "Tambah garansi",
+      "expires": "Berakhir {date}",
+      "loading": "Memuat garansi",
+      "loadError": "Garansi untuk transaksi ini tidak dapat dimuat.",
+      "empty": "Belum ada garansi"
+    },
+    "conversionLockedNote": "Transfer ini milik transaksi terpisah atau akun pemilik lain, sehingga di sini hanya dapat tetap menjadi transfer. Ubah dari pemisahan atau hapus dan buat entri yang Anda inginkan."
   },
   "splitEditor": {
     "header": "Detail Pembagian",
+    "headerTooltip": "Setiap baris dapat berupa kategori, transfer ke akun lain, atau investasi. Baris-baris harus berjumlah sama dengan total transaksi; Distribusikan Secara Merata dan Distribusikan Secara Proporsional membagikan sisanya untuk Anda.",
     "distributeProportionally": "Distribusikan Secara Proporsional",
     "distributeProportionallyTitle": "Distribusikan jumlah yang tersisa secara proporsional berdasarkan jumlah setiap pembagian",
     "distributeEvenly": "Distribusikan Secara Merata",
@@ -521,7 +548,7 @@
     "quantityPlaceholder": "Kuantitas",
     "pricePlaceholder": "Harga",
     "commissionPlaceholder": "Komisi",
-    "amountPlaceholder": "Jumlah ({currency})",
+    "amountOnlyPlaceholder": "Jumlah",
     "ratePlaceholder": "{to} per 1 {from}",
     "ariaRate": "Nilai tukar ({to} per 1 {from})",
     "rateHint": "Jumlah, harga, dan komisi dalam {from}; kurs ini mengonversi dampak kas ke {to}.",
@@ -551,6 +578,7 @@
       "total": "Total",
       "transactions": "Transaksi",
       "tooltip": "{count, plural, one {# transaksi} other {# transaksi}}",
+      "partialNote": "Beberapa jumlah tidak memiliki kurs dan tidak termasuk dalam total ini.",
       "quarterLabel": "K{quarter} {year}",
       "quarterTick": "K{quarter} {year}",
       "granularityLabel": "Pengelompokan",
@@ -575,6 +603,11 @@
       "log": "Log",
       "autoTitle": "Otomatis ({scale})",
       "scaleTitle": "Skala {label}"
+    },
+    "collapse": {
+      "hide": "Sembunyikan grafik",
+      "show": "Tampilkan grafik",
+      "hidden": "Grafik disembunyikan"
     }
   },
   "toasts": {
@@ -597,5 +630,71 @@
     "title": "Pengeluaran menurut {key}",
     "other": "Lainnya",
     "noData": "Tidak ada pengeluaran bertag untuk dirinci pada kunci ini."
+  },
+  "searchSyntax": {
+    "open": "Sintaks pencarian",
+    "title": "Sintaks pencarian",
+    "fields": "Kolom: payee, memo, cat, tag, account, ref, amount, date, status, is, has. Pilih contoh untuk memasukkannya ke kotak pencarian.",
+    "examples": {
+      "allWords": "Setiap kata cocok di suatu tempat",
+      "phrase": "Frasa persis ini",
+      "exclude": "Kecualikan apa pun yang cocok dengan refund",
+      "fieldContains": "Penerima mengandung costco",
+      "fieldExact": "Penerima persis Costco",
+      "reference": "Nomor cek atau referensi persis 10",
+      "wildcard": "Referensi diawali 10",
+      "amountOver": "Jumlah di atas 100",
+      "amountRange": "Jumlah dari 50 sampai 100",
+      "datePeriod": "Hari apa pun di Maret 2026",
+      "isSplit": "Transaksi terpisah",
+      "hasAttachment": "Memiliki lampiran",
+      "hasWarranty": "Memiliki garansi"
+    }
+  },
+  "searchInterpretation": {
+    "label": "Mencari:",
+    "negated": "bukan {phrase}",
+    "malformed": "{raw} (tidak dipahami, dicari sebagai teks)",
+    "empty": "{raw} (kosong, diabaikan)",
+    "status": "Status adalah {value}",
+    "any": "“{value}” di mana saja",
+    "fields": {
+      "payee": "Penerima",
+      "memo": "Catatan",
+      "cat": "Kategori",
+      "tag": "Tag",
+      "account": "Akun",
+      "ref": "Referensi",
+      "amount": "Jumlah",
+      "date": "Tanggal",
+      "status": "Status",
+      "is": "Jenis",
+      "has": "Memiliki"
+    },
+    "ops": {
+      "contains": "{field} mengandung “{value}”",
+      "exact": "{field} adalah “{value}”",
+      "glob": "{field} cocok dengan “{value}”",
+      "eq": "{field} adalah {value}",
+      "gt": "{field} di atas {value}",
+      "gte": "{field} {value} atau lebih",
+      "lt": "{field} di bawah {value}",
+      "lte": "{field} {value} atau kurang",
+      "between": "{field} dari {value} sampai {valueTo}"
+    },
+    "enum": {
+      "is": {
+        "transfer": "Transfer",
+        "split": "Transaksi terpisah",
+        "uncategorized": "Tanpa kategori"
+      },
+      "has": {
+        "attachment": "Memiliki lampiran",
+        "warranty": "Memiliki garansi",
+        "ref": "Memiliki nomor referensi",
+        "memo": "Memiliki catatan",
+        "tag": "Memiliki tag"
+      }
+    }
   }
 }

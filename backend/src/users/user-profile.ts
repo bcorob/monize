@@ -33,6 +33,9 @@ export const PROFILE_FIELDS = [
   "lastLogin",
   "lastActivityAt",
   "emailVerified",
+  // The address an email change is waiting to confirm. Not a secret -- it is
+  // the one the holder typed -- but the token that confirms it is excluded.
+  "pendingEmail",
   "role",
   "mustChangePassword",
   "isDelegateOnly",
@@ -65,6 +68,7 @@ export type PartialUserProfile = Partial<Pick<User, ProfileField>> & {
  */
 export const SELF_ONLY_PROFILE_FIELDS = [
   "hasPassword",
+  "pendingEmail",
   "mustChangePassword",
   "isDelegateOnly",
   "backupEncryptionEnabled",

@@ -94,6 +94,20 @@ export class MonteCarloSimulationService {
     // value already saturates at 0 so this only affects derived statistics.
     const EPS = 1e-12;
 
+    // The user-defined cash flows depend only on the year, never on the
+    // simulated path, so sum them once per year here rather than once per
+    // (simulation, year): the cost is years x flows instead of
+    // simulations x years x flows, with the same values in the same order.
+    const extraCashFlowByYear = new Float64Array(totalYears);
+    for (let t = 1; t <= totalYears; t++) {
+      extraCashFlowByYear[t - 1] = sumExtraCashFlows(
+        t,
+        totalYears,
+        inflation,
+        params.cashFlows,
+      );
+    }
+
     for (let s = 0; s < sims; s++) {
       let value = params.startingValue;
       let valueExclCF = params.startingValue;
@@ -115,26 +129,18 @@ export class MonteCarloSimulationService {
 
       for (let t = 1; t <= totalYears; t++) {
         const inAccumulation = t <= params.yearsToRetirement;
-        // Withdrawals inflate each year to keep real purchasing power flat:
-        // a user who enters $50k/yr at 2.5% inflation withdraws $50k year 1,
-        // ~$51.25k year 2, and so on. Contributions inflate at the
-        // user-supplied contribution-growth rate (often a salary raise rate,
-        // not strictly inflation).
-        const yearsSinceDrawdownStart = t - params.yearsToRetirement - 1;
+        // The withdrawal is entered in today's value, so it inflates from year
+        // 1 (not from retirement): $50k/yr at 2.5% over 30 years of
+        // accumulation first withdraws ~$104.9k nominal. Contributions inflate
+        // at the user-supplied contribution-growth rate (often a salary raise
+        // rate, not strictly inflation).
         const baseCashFlow = inAccumulation
           ? params.annualContribution *
             Math.pow(1 + params.contributionGrowthRate, t - 1)
-          : -params.annualWithdrawal *
-            Math.pow(1 + inflation, yearsSinceDrawdownStart);
+          : -params.annualWithdrawal * Math.pow(1 + inflation, t - 1);
 
         // Layer in any user-defined one-time / recurring cash flows.
-        const extraCashFlow = sumExtraCashFlows(
-          t,
-          totalYears,
-          inflation,
-          params.cashFlows,
-        );
-        const desiredCashFlow = baseCashFlow + extraCashFlow;
+        const desiredCashFlow = baseCashFlow + extraCashFlowByYear[t - 1];
 
         // Clamp withdrawals to the available balance so a depleted path stays
         // at zero rather than silently going negative for the rest of the run.

@@ -11,13 +11,16 @@ import { tr } from "../../i18n/translate";
 import {
   ALLOW_DELEGATE_KEY,
   DELEGATED_ACCOUNT_PARAM_KEY,
+  DELEGATED_BODY_ACCOUNTS_KEY,
   DELEGATED_TRANSACTION_PARAM_KEY,
   DELEGATED_TRANSFER_BODY_KEY,
   DELEGATED_TRANSFER_PARAM_KEY,
   DELEGATED_SCHEDULED_PARAM_KEY,
+  DELEGATED_SCHEDULED_READS_EVERY_ACCOUNT_KEY,
   DELEGATE_OPERATION_KEY,
   DELEGATE_CAPABILITY_KEY,
   DELEGATE_SECTION_KEY,
+  DELEGATE_FULL_SCOPE_KEY,
   DelegateOperation,
   DelegateCapabilityReq,
   DelegateSection,
@@ -25,6 +28,7 @@ import {
 import { DelegationService } from "../delegation.service";
 import { CrossOwnerAccessService } from "../cross-owner-access.service";
 import { withDelegateContext } from "../../common/db/with-context";
+import { isAccessTokenPayload } from "../../auth/access-token";
 
 const SECTION_LABELS: Record<DelegateSection, string> = {
   bills: "Bills & Deposits",
@@ -32,6 +36,7 @@ const SECTION_LABELS: Record<DelegateSection, string> = {
   budgets: "Budgets",
   reports: "Reports",
   ai: "AI Assistant",
+  warranties: "Warranties",
 };
 
 const RESOURCE_LABELS: Record<DelegateCapabilityReq["resource"], string> = {
@@ -39,6 +44,31 @@ const RESOURCE_LABELS: Record<DelegateCapabilityReq["resource"], string> = {
   categories: "categories",
   tags: "tags",
 };
+
+/**
+ * Every string a body path names. A segment ending in `[]` walks an array; a
+ * value of any other shape is skipped here and rejected by the route's DTO
+ * validation (which runs after this guard) before the handler sees it.
+ */
+function collectBodyStrings(body: unknown, path: string): string[] {
+  let nodes: unknown[] = [body];
+  for (const segment of path.split(".")) {
+    const walksArray = segment.endsWith("[]");
+    const key = walksArray ? segment.slice(0, -2) : segment;
+    const next: unknown[] = [];
+    for (const node of nodes) {
+      if (!node || typeof node !== "object" || Array.isArray(node)) continue;
+      const value = (node as Record<string, unknown>)[key];
+      if (!walksArray) {
+        next.push(value);
+      } else if (Array.isArray(value)) {
+        for (const item of value) next.push(item);
+      }
+    }
+    nodes = next;
+  }
+  return nodes.filter((value): value is string => typeof value === "string");
+}
 
 /**
  * Fail-closed enforcement for delegate ("acting as owner") requests.
@@ -79,7 +109,9 @@ export class AccountDelegateGuard implements CanActivate {
       return true; // AuthGuard('jwt') will reject it
     }
 
-    if (payload?.type === "2fa_pending") return true;
+    // Only an access token is checked here; JwtStrategy refuses every other
+    // type (`access-token.ts`), so AuthGuard('jwt') rejects it after this.
+    if (!isAccessTokenPayload(payload)) return true;
     if (!payload?.actingAsUserId || !payload?.delegationId) {
       return true; // acting as self / normal user
     }
@@ -165,6 +197,24 @@ export class AccountDelegateGuard implements CanActivate {
       }
     }
 
+    const bodyAccountPaths = this.reflector.getAllAndOverride<string[]>(
+      DELEGATED_BODY_ACCOUNTS_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+    if (bodyAccountPaths) {
+      // Every other account the body names (a split's transfer target, a
+      // re-pointed account on an edit): the write lands there too, as the
+      // owner, so it needs the grant exactly like the primary account. An id
+      // that is not granted throws, so the distinct ids checked are bounded
+      // by the delegation's grants however long a request's arrays are.
+      const accountIds = new Set(
+        bodyAccountPaths.flatMap((path) => collectBodyStrings(req.body, path)),
+      );
+      for (const accountId of accountIds) {
+        await this.assertPermission(payload.delegationId, accountId, operation);
+      }
+    }
+
     const transferParamKey = this.reflector.getAllAndOverride<string>(
       DELEGATED_TRANSFER_PARAM_KEY,
       [context.getHandler(), context.getClass()],
@@ -193,9 +243,20 @@ export class AccountDelegateGuard implements CanActivate {
         // Unknown scheduled txn: let the owner-scoped service return 404.
         // READ only needs the primary account (accountIds[0]); the transfer
         // counterpart is masked by the interceptor, not blocked. WRITES must
-        // hold the op on BOTH legs (no moving money via a hidden account).
+        // hold the op on EVERY account the schedule posts into -- transfer
+        // leg, funding account, split and override-split transfer accounts
+        // (no moving money via a hidden account). So must a read that
+        // answers a counterpart's own figures, which no mask hides
+        // (@DelegateReadsEveryScheduledAccount).
+        const readsEveryAccount =
+          this.reflector.getAllAndOverride<boolean>(
+            DELEGATED_SCHEDULED_READS_EVERY_ACCOUNT_KEY,
+            [context.getHandler(), context.getClass()],
+          ) === true;
         const gated =
-          operation === "read" ? accountIds.slice(0, 1) : accountIds;
+          operation === "read" && !readsEveryAccount
+            ? accountIds.slice(0, 1)
+            : accountIds;
         for (const accountId of gated) {
           // Reads keep the strict check (the primary account is always the
           // owner's); scheduled WRITES get the cross-owner relaxation so a
@@ -252,6 +313,24 @@ export class AccountDelegateGuard implements CanActivate {
             "errors.delegation.sectionNotGranted",
             `The account owner has not shared the ${sectionLabel} section with you.`,
             { sectionLabel },
+          ),
+        );
+      }
+    }
+
+    const fullScope = this.reflector.getAllAndOverride<boolean>(
+      DELEGATE_FULL_SCOPE_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+    if (fullScope) {
+      const ok = await this.delegationService.grantsWholeLedger(
+        payload.delegationId,
+      );
+      if (!ok) {
+        throw new ForbiddenException(
+          tr(
+            "errors.delegation.fullScopeRequired",
+            "The AI Assistant reads across all of the account owner's accounts and sections, so it is only available to a delegate who can read every account and every section. Ask the owner to share the rest with you, or use the pages you already have access to.",
           ),
         );
       }

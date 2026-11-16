@@ -1,0 +1,100 @@
+{
+  "entry": {
+    "history": "Histórico das condições de {program}"
+  },
+  "offer": {
+    "loading": "Carregando os títulos à venda...",
+    "loadFailed": "Não foi possível carregar os títulos à venda.",
+    "retry": "Tentar novamente",
+    "empty": "Hoje nenhuma série está à venda.",
+    "asOf": "À venda em {date}. Cada valor se refere a um título comprado hoje e mantido até o vencimento.",
+    "comparisonNote": "A rentabilidade anualizada é um valor de comparação entre produtos de prazos diferentes, não uma promessa do quanto você vai ganhar.",
+    "couponsNote": "Cupons não reinvestidos: em um título que paga cupons, o valor no vencimento soma todos os cupons pagos.",
+    "projected": "Projetado",
+    "projectedTitle": "Este valor se baseia em um valor de referência presumido, e não apenas em taxas divulgadas.",
+    "assumptions": {
+      "title": "Premissas",
+      "intro": "Os períodos que ainda não começaram são avaliados com estes valores de referência. Altere um para ver o efeito em cada linha.",
+      "label": "{benchmark} (%)",
+      "latest": "Último valor divulgado: {value} ({observation})",
+      "reset": "Usar os últimos valores divulgados",
+      "updating": "Atualizando os valores..."
+    },
+    "columns": {
+      "series": "Série",
+      "saleWindow": "À venda",
+      "length": "Prazo",
+      "firstPeriodRate": "Primeiro período",
+      "rule": "Taxa",
+      "capitalization": "Juros",
+      "redemption": "Resgate antecipado",
+      "maturityValue": "Valor no vencimento",
+      "totalReturn": "Rentabilidade total",
+      "annualizedReturn": "Rentabilidade anualizada",
+      "terms": "Condições"
+    },
+    "saleWindowValue": "De {from} a {to}",
+    "lengthValue": "{months, plural, one {# mês} other {# meses}}",
+    "lengthDaysValue": "{days, plural, one {# dia} other {# dias}}",
+    "rule": {
+      "fixed": "Fixa de {rate} ao ano",
+      "benchmark": "{benchmark} + {addend}",
+      "floor": "Piso da referência {floor}",
+      "daily": "Diário: {benchmark} + {addend}",
+      "discount": "Desconto sobre o valor de face"
+    },
+    "capitalization": {
+      "NONE": "Pagos a cada período",
+      "COMPOUND_AT_PERIOD_END": "Capitalizados no fim de cada período"
+    },
+    "redemption": {
+      "none": "Somente no vencimento",
+      "onDemand": "Sob demanda",
+      "fee": "Taxa de {amount} por título",
+      "forfeit": "Os juros acumulados no período são perdidos"
+    },
+    "couponsNotReinvested": "Cupons não reinvestidos"
+  },
+  "history": {
+    "loading": "Carregando o histórico...",
+    "loadFailed": "Não foi possível carregar o histórico.",
+    "retry": "Tentar novamente",
+    "empty": "Ainda não há nenhuma série deste produto salva.",
+    "coverage": "O catálogo abrange de {from} a {to}.",
+    "rateChartTitle": "Taxa do primeiro período e margem por mês de venda",
+    "feeChartTitle": "Taxa de resgate antecipado por mês de venda",
+    "rate": "Taxa do primeiro período",
+    "rateChartNote": "Para títulos prefixados, a linha mostra a taxa anual.",
+    "addend": "Margem ou spread",
+    "fee": "Taxa de resgate antecipado",
+    "gapsNote": "Um mês sem série salva é uma interrupção na linha, nunca um valor deduzido dos meses vizinhos.",
+    "missingTitle": "Meses ausentes do catálogo ({count})",
+    "noMissing": "Não falta nenhum mês entre a primeira e a última série salva.",
+    "tableTitle": "Todas as séries salvas",
+    "groupCount": "{count} série(s)",
+    "unknownYear": "Data de venda desconhecida",
+    "columns": {
+      "series": "Série",
+      "saleWindow": "À venda",
+      "rate": "Taxa do primeiro período ou taxa anual",
+      "addend": "Margem ou spread",
+      "fee": "Taxa de resgate antecipado",
+      "floor": "Piso do valor resgatado",
+      "version": "Versão das condições",
+      "source": "Fonte"
+    },
+    "floor": {
+      "ALL_PERIODS": "Todos os períodos",
+      "FIRST_PERIOD": "Somente o primeiro período"
+    },
+    "none": "Nenhum",
+    "held": "Em carteira"
+  },
+  "refreshProgress": {
+    "label": "Atualizando os dados do título",
+    "offer": "Verificando a oferta atual…",
+    "series": "Buscando a série {done} de {total}: {seriesCode}",
+    "historyComplete": "O histórico está completo",
+    "starting": "Iniciando…"
+  }
+}

@@ -13,7 +13,9 @@ import {
   transactionData,
 } from "../__fixtures__/mny-row-builders";
 import { MappedAccounts, MappedSecurities } from "../model/mny-import-model";
-import { MNY_ACTION, MNY_TRANSACTION_FLAG } from "../model/mny-model";
+import { MNY_ACTION } from "../model/mny-actions";
+import { MONEY99_ACTION } from "../model/mny-money99";
+import { MNY_TRANSACTION_FLAG } from "../model/mny-model";
 import { mapSecurities } from "./map-securities";
 import { MapInvestmentsInput, mapInvestments } from "./map-investments";
 
@@ -97,6 +99,7 @@ function input(
     accounts: accountsFixture(),
     securities: securitiesFixture(),
     bills: [],
+    exchangeRates: [],
     ...overrides,
   };
 }
@@ -692,6 +695,169 @@ describe("mapInvestments", () => {
       });
     });
 
+    describe("a Money 97-99 file", () => {
+      const money99 = (row: Parameters<typeof invRow>[0]) =>
+        mapInvestments(
+          input({
+            transactions: transactionData({
+              format: "jet3",
+              transactions: [invRow({ handle: 1, ...row })],
+            }),
+          }),
+        );
+
+      it("reads act 1 as a sale, where Money Plus reads it as a buy", () => {
+        const result = money99({ action: MONEY99_ACTION.SELL, amount: -251 });
+
+        expect(result.transactions[0]).toMatchObject({
+          action: InvestmentAction.SELL,
+          cashAmount: 251,
+        });
+      });
+
+      it("reads act 4 as a dividend, where Money Plus reads it as interest", () => {
+        const result = money99({ action: MONEY99_ACTION.DIVIDEND, amount: -2 });
+
+        expect(result.transactions[0].action).toBe(InvestmentAction.DIVIDEND);
+        expect(result.warnings).toEqual([]);
+      });
+
+      it("reads act 2 as interest paid to the cash account, where Money Plus reads it as a sale", () => {
+        const result = money99({
+          action: MONEY99_ACTION.INTEREST,
+          amount: -10,
+        });
+
+        expect(result.transactions[0]).toMatchObject({
+          action: InvestmentAction.INTEREST,
+          quantity: null,
+          totalAmount: 10,
+          cashAmount: 10,
+        });
+        expect(result.warnings).toEqual([]);
+      });
+
+      describe("a purchase recorded by amount (a CD)", () => {
+        const buyByAmount = (
+          investmentDetails: ReturnType<typeof mnyInvestmentDetail>[],
+        ) =>
+          mapInvestments(
+            input({
+              transactions: transactionData({
+                format: "jet3",
+                transactions: [
+                  invRow({
+                    handle: 1,
+                    action: MONEY99_ACTION.BUY,
+                    amount: 100,
+                  }),
+                ],
+              }),
+              investments: investmentData({ investmentDetails }),
+            }),
+          );
+
+        it("holds its principal as units of 1 when TRN_INV records no units", () => {
+          const result = buyByAmount([
+            mnyInvestmentDetail({ transaction: 1, commission: 1 }),
+          ]);
+
+          expect(result.transactions[0]).toMatchObject({
+            action: InvestmentAction.BUY,
+            quantity: 99,
+            price: 1,
+            commission: 1,
+            totalAmount: 100,
+            cashAmount: -100,
+          });
+          expect(result.warnings).toEqual([]);
+        });
+
+        it("does the same with no TRN_INV row, and reports nothing missing", () => {
+          const result = buyByAmount([]);
+
+          expect(result.transactions[0]).toMatchObject({
+            quantity: 100,
+            price: 1,
+            totalAmount: 100,
+          });
+          expect(result.warnings).toEqual([]);
+        });
+
+        it("keeps the recorded units of a share purchase", () => {
+          const result = buyByAmount([
+            mnyInvestmentDetail({ transaction: 1, quantity: 4, price: 25 }),
+          ]);
+
+          expect(result.transactions[0]).toMatchObject({
+            quantity: 4,
+            price: 25,
+          });
+        });
+
+        it("leaves a Money Plus purchase with no units cash only", () => {
+          const result = mapInvestments(
+            input({
+              transactions: transactionData({
+                transactions: [
+                  invRow({ handle: 1, action: MNY_ACTION.BUY, amount: 100 }),
+                ],
+              }),
+              investments: investmentData({
+                investmentDetails: [mnyInvestmentDetail({ transaction: 1 })],
+              }),
+            }),
+          );
+
+          expect(result.transactions[0]).toMatchObject({
+            quantity: null,
+            price: null,
+          });
+        });
+      });
+
+      it("maps act 14 as a measured capital gain, with no unconfirmed warning", () => {
+        const result = money99({
+          action: MONEY99_ACTION.CAPITAL_GAIN,
+          amount: -10,
+        });
+
+        expect(result.transactions[0].action).toBe(
+          InvestmentAction.CAPITAL_GAIN,
+        );
+        expect(result.warnings).toEqual([]);
+      });
+
+      it("skips an employee stock option event with its own warning", () => {
+        const result = money99({ action: MONEY99_ACTION.OPTION_VEST });
+
+        expect(result.transactions).toHaveLength(0);
+        expect(result.skipped).toBe(1);
+        expect(result.warnings).toEqual([
+          {
+            code: "stockOptionNotImported",
+            subject: "htrn=1",
+            detail: `act=${MONEY99_ACTION.OPTION_VEST}`,
+            row: expect.objectContaining({ handle: 1 }),
+          },
+        ]);
+      });
+
+      it("reads a Money Plus stock option code as an unknown action", () => {
+        const result = mapInvestments(
+          input({
+            transactions: transactionData({
+              transactions: [
+                invRow({ handle: 1, action: MONEY99_ACTION.OPTION_GRANT }),
+              ],
+            }),
+          }),
+        );
+
+        expect(result.warnings[0].code).toBe("unknownInvestmentAction");
+      });
+    });
+
     it("keeps a row whose TRN_INV detail is missing, cash only", () => {
       const result = mapInvestments(
         input({
@@ -1070,6 +1236,22 @@ describe("mapInvestments", () => {
       expect(result.warnings).toEqual([]);
     });
 
+    // Money 99 rewrites every trade before a split when the split is recorded,
+    // so the quantities read are already split-adjusted.
+    it("says nothing about a Money 97-99 split, which the trades already include", () => {
+      const result = mapInvestments(
+        input({
+          transactions: transactionData({ format: "jet3" }),
+          investments: investmentData({
+            securitySplits: [mnySecuritySplit({ handle: 5, sharesAfter: 2 })],
+            prices: [mnySecurityPrice({ security: 1, split: 5 })],
+          }),
+        }),
+      );
+
+      expect(result.warnings).toEqual([]);
+    });
+
     it("says nothing when no price row resolves the split to a security", () => {
       const result = mapInvestments(
         input({
@@ -1120,6 +1302,274 @@ describe("mapInvestments", () => {
       expect([...result.referencedSecurities].sort()).toEqual([1, 2]);
       expect([...result.referencedPayees]).toEqual([4]);
       expect([...result.referencedCategories]).toEqual([9]);
+    });
+  });
+
+  describe("a security quoted in another currency than its account", () => {
+    // A CAD account holding a USD security: TRN.amt is CAD, while the app reads
+    // an investment row's price and total as the security's currency and its
+    // exchange rate as security -> cash account.
+    const cadAccounts = (): MappedAccounts => ({
+      ...accountsFixture(),
+      currencyByHandle: new Map([
+        [10, "CAD"],
+        [11, "CAD"],
+      ]),
+    });
+    const usdSecurity = (): MappedSecurities =>
+      mapSecurities({
+        securities: [mnySecurity({ handle: 1, symbol: "SEC1", currency: 7 })],
+        currencyByHandle: new Map([[7, "USD"]]),
+        baseCurrency: "CAD",
+        activeHandles: new Set([1]),
+      });
+    const buyInput = (
+      overrides: Partial<MapInvestmentsInput> = {},
+    ): MapInvestmentsInput =>
+      input({
+        accounts: cadAccounts(),
+        securities: usdSecurity(),
+        transactions: transactionData({
+          transactions: [
+            invRow({
+              handle: 1,
+              action: MNY_ACTION.BUY,
+              amount: -1250,
+              date: "2026-03-02",
+            }),
+          ],
+        }),
+        investments: investmentData({
+          investmentDetails: [
+            mnyInvestmentDetail({
+              transaction: 1,
+              quantity: 10,
+              price: 125,
+              commission: 0,
+            }),
+          ],
+        }),
+        ...overrides,
+      });
+
+    it("converts the trade into the security's currency at the file's rate", () => {
+      const result = mapInvestments(
+        buyInput({
+          exchangeRates: [
+            {
+              fromCurrency: "USD",
+              toCurrency: "CAD",
+              rate: 1.25,
+              rateDate: "2026-03-02",
+            },
+          ],
+        }),
+      );
+
+      expect(result.warnings).toEqual([]);
+      expect(result.transactions[0]).toMatchObject({
+        totalAmount: 1000,
+        price: 100,
+        exchangeRate: 1.25,
+        cashAmount: -1250,
+        currencyCode: "CAD",
+        securityCurrencyCode: "USD",
+      });
+    });
+
+    it("uses the inverse when the file stores the pair the other way", () => {
+      const result = mapInvestments(
+        buyInput({
+          exchangeRates: [
+            {
+              fromCurrency: "CAD",
+              toCurrency: "USD",
+              rate: 0.8,
+              rateDate: "2026-03-02",
+            },
+          ],
+        }),
+      );
+
+      expect(result.transactions[0]).toMatchObject({
+        totalAmount: 1000,
+        price: 100,
+        exchangeRate: 1.25,
+        cashAmount: -1250,
+        securityCurrencyCode: "USD",
+      });
+    });
+
+    it("leaves the figures and warns when the file has no rate", () => {
+      const result = mapInvestments(buyInput());
+
+      expect(result.transactions[0]).toMatchObject({
+        totalAmount: 1250,
+        exchangeRate: 1,
+        cashAmount: -1250,
+        currencyCode: "CAD",
+        securityCurrencyCode: "CAD",
+      });
+      expect(result.warnings).toEqual([
+        {
+          code: "crossCurrencyTradeUnconverted",
+          subject: "SEC1",
+          detail: "USD->CAD on 2026-03-02: no_observation",
+          row: expect.objectContaining({ handle: 1 }),
+        },
+      ]);
+    });
+
+    it("reports the pair and date it could not convert", () => {
+      expect(mapInvestments(buyInput()).rateGaps).toEqual([
+        { from: "USD", to: "CAD", date: "2026-03-02" },
+      ]);
+    });
+
+    describe("with a market rate looked up for the gap", () => {
+      const marketRates = {
+        rates: [{ from: "USD", to: "CAD", date: "2026-03-02", rate: 1.25 }],
+        unanswered: new Set<string>(),
+      };
+
+      it("converts at the market rate and says so", () => {
+        const result = mapInvestments(buyInput({ marketRates }));
+
+        expect(result.transactions[0]).toMatchObject({
+          totalAmount: 1000,
+          price: 100,
+          exchangeRate: 1.25,
+          cashAmount: -1250,
+          securityCurrencyCode: "USD",
+        });
+        expect(result.rateGaps).toEqual([]);
+        expect(result.warnings).toEqual([
+          {
+            code: "crossCurrencyTradeMarketRate",
+            subject: "SEC1",
+            detail: "USD->CAD on 2026-03-02: 1.25",
+            row: expect.objectContaining({ handle: 1 }),
+          },
+        ]);
+      });
+
+      it("keeps the file's own rate where it has one", () => {
+        const result = mapInvestments(
+          buyInput({
+            marketRates,
+            exchangeRates: [
+              {
+                fromCurrency: "USD",
+                toCurrency: "CAD",
+                rate: 1.3,
+                rateDate: "2026-03-01",
+              },
+            ],
+          }),
+        );
+
+        expect(result.transactions[0].exchangeRate).toBe(1.3);
+        expect(result.warnings).toEqual([]);
+      });
+
+      it("uses no market rate struck for another date", () => {
+        const result = mapInvestments(
+          buyInput({
+            marketRates: {
+              rates: [
+                { from: "USD", to: "CAD", date: "2026-03-01", rate: 1.25 },
+              ],
+              unanswered: new Set<string>(),
+            },
+          }),
+        );
+
+        expect(result.transactions[0].exchangeRate).toBe(1);
+        expect(result.rateGaps).toHaveLength(1);
+      });
+
+      it("says when the rate provider did not answer", () => {
+        const result = mapInvestments(
+          buyInput({
+            marketRates: { rates: [], unanswered: new Set(["USD->CAD"]) },
+          }),
+        );
+
+        expect(result.warnings[0]).toMatchObject({
+          code: "crossCurrencyTradeUnconverted",
+          detail: "USD->CAD on 2026-03-02: no_observation; provider_unanswered",
+        });
+      });
+    });
+
+    it("converts the accrued-interest companion at the same rate", () => {
+      const result = mapInvestments(
+        buyInput({
+          transactions: transactionData({
+            transactions: [
+              invRow({
+                handle: 1,
+                action: MNY_ACTION.SELL,
+                amount: 1250,
+                date: "2026-03-02",
+              }),
+            ],
+          }),
+          investments: investmentData({
+            investmentDetails: [
+              mnyInvestmentDetail({
+                transaction: 1,
+                quantity: 10,
+                price: 120,
+                commission: 0,
+                interest: 50,
+              }),
+            ],
+          }),
+          exchangeRates: [
+            {
+              fromCurrency: "USD",
+              toCurrency: "CAD",
+              rate: 1.25,
+              rateDate: "2026-03-02",
+            },
+          ],
+        }),
+      );
+
+      const companion = result.transactions.find(
+        (t) => t.action === InvestmentAction.INTEREST,
+      );
+      expect(companion).toMatchObject({
+        totalAmount: 40,
+        price: 40,
+        exchangeRate: 1.25,
+      });
+    });
+
+    it("keeps a same-currency trade at rate 1 with no warning", () => {
+      const result = mapInvestments(
+        buyInput({
+          accounts: accountsFixture(),
+          securities: securitiesFixture(),
+          exchangeRates: [
+            {
+              fromCurrency: "USD",
+              toCurrency: "CAD",
+              rate: 1.25,
+              rateDate: "2026-03-02",
+            },
+          ],
+        }),
+      );
+
+      expect(result.warnings).toEqual([]);
+      expect(result.transactions[0]).toMatchObject({
+        totalAmount: 1250,
+        exchangeRate: 1,
+        currencyCode: "USD",
+        securityCurrencyCode: "USD",
+      });
     });
   });
 });

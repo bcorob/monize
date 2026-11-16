@@ -8,6 +8,7 @@ import {
 import { ConfigService } from "@nestjs/config";
 import { DataSource } from "typeorm";
 import { withScopedDb } from "../common/db/scoped-db";
+import { resolvePositiveInt } from "../common/env-number.util";
 import { AiProviderConfig } from "./entities/ai-provider-config.entity";
 import { EncryptionService } from "../common/encryption/encryption.service";
 import { AiProviderFactory } from "./ai-provider.factory";
@@ -26,6 +27,8 @@ import {
 import {
   AiCompletionRequest,
   AiCompletionResponse,
+  AiWebSearchOptions,
+  AiWebSearchResponse,
   AiProvider,
   AiTextBlock,
 } from "./providers/ai-provider.interface";
@@ -39,6 +42,13 @@ import {
   SELF_HOSTED_PROVIDERS,
   AiProviderType,
 } from "./entities/ai-provider-config.entity";
+import { User } from "../users/entities/user.entity";
+import { privateBaseUrlAllowlist } from "./validators/private-base-url-allowlist";
+import {
+  AiBaseUrlRefusedError,
+  assertBaseUrlAllowed,
+  egressPolicyForConfig,
+} from "./ai-base-url-policy";
 
 const DEFAULT_MAX_AI_PROVIDERS_PER_USER = 10;
 
@@ -48,6 +58,20 @@ const DEFAULT_MAX_AI_PROVIDERS_PER_USER = 10;
  * and never learns which model the agent runs.
  */
 const RELAY_MODEL_LABEL = "relay-agent";
+
+/**
+ * The relay agent is a chat-style assistant with tools of its own. A
+ * web-search completion cannot switch its search on, so it is asked to.
+ */
+function withRelaySearchInstruction(
+  systemPrompt: string,
+  search: AiWebSearchOptions,
+): string {
+  const instruction =
+    `If you have a web search tool, use it (at most ${search.maxUses} ` +
+    "searches) to verify your answer rather than answering from memory.";
+  return systemPrompt ? `${systemPrompt}\n\n${instruction}` : instruction;
+}
 
 @Injectable()
 export class AiService {
@@ -66,11 +90,26 @@ export class AiService {
     private readonly configService: ConfigService,
     private readonly relayService: AiRelayService,
   ) {
-    const envVal = this.configService.get<number>("AI_MAX_PROVIDERS_PER_USER");
-    this.maxProvidersPerUser =
-      envVal && Number.isInteger(envVal) && envVal > 0
-        ? envVal
-        : DEFAULT_MAX_AI_PROVIDERS_PER_USER;
+    // `ConfigService` returns the raw string, so `Number.isInteger` on it is
+    // always false and every configured cap silently became the default.
+    const maxProviders = resolvePositiveInt(
+      this.configService.get("AI_MAX_PROVIDERS_PER_USER"),
+      DEFAULT_MAX_AI_PROVIDERS_PER_USER,
+    );
+    if (maxProviders.invalid) {
+      this.logger.warn(
+        `AI_MAX_PROVIDERS_PER_USER must be a positive integer; using ${DEFAULT_MAX_AI_PROVIDERS_PER_USER}`,
+      );
+    }
+    this.maxProvidersPerUser = maxProviders.value;
+
+    // An entry that cannot be read allows nothing; say so once, at boot.
+    const allowlist = privateBaseUrlAllowlist();
+    if (allowlist.invalid.length > 0) {
+      this.logger.warn(
+        `AI_PRIVATE_BASE_URL_ALLOWLIST: ignoring ${allowlist.invalid.length} unreadable entr${allowlist.invalid.length === 1 ? "y" : "ies"}; expected comma-separated host or host:port values`,
+      );
+    }
 
     // SECURITY: Validate AI_DEFAULT_BASE_URL at startup.
     // Self-hosted providers (ollama, openai-compatible) only need basic URL
@@ -146,11 +185,10 @@ export class AiService {
     userId: string,
     dto: CreateAiConfigDto,
   ): Promise<AiProviderConfigResponse> {
-    // Validate baseUrl: self-hosted providers allow private URLs,
-    // cloud providers require full SSRF validation
-    if (dto.baseUrl) {
-      await this.validateBaseUrl(dto.baseUrl, dto.provider);
-    }
+    // Validate the URL the provider will call: a public host for every cloud
+    // provider, and for a self-hosted one unless its owner is an admin or the
+    // operator allowlisted the address. An Ollama with no baseUrl is loopback.
+    await this.validateBaseUrl(userId, dto.provider, dto.baseUrl);
 
     // One transaction, and the owner's row locked inside it. The per-user cap is
     // a read-modify-write, and the transaction alone is not the fix: two
@@ -220,10 +258,11 @@ export class AiService {
   ): Promise<AiProviderConfigResponse> {
     const config = await this.getConfig(userId, configId);
 
-    // Validate baseUrl: self-hosted providers allow private URLs,
-    // cloud providers require full SSRF validation
-    if (dto.baseUrl) {
-      await this.validateBaseUrl(dto.baseUrl, config.provider);
+    // Same policy as createConfig, for a baseUrl the request changes (a
+    // cleared one included: an Ollama without a baseUrl is loopback). An
+    // unchanged stored URL is checked where it is used.
+    if (dto.baseUrl !== undefined) {
+      await this.validateBaseUrl(userId, config.provider, dto.baseUrl);
     }
 
     if (dto.displayName !== undefined)
@@ -303,9 +342,7 @@ export class AiService {
     userId: string,
     dto: TestAiConfigDto,
   ): Promise<AiConnectionTestResponse> {
-    if (dto.baseUrl) {
-      await this.validateBaseUrl(dto.baseUrl, dto.provider);
-    }
+    await this.validateBaseUrl(userId, dto.provider, dto.baseUrl);
 
     // Build a transient, non-persisted config from the draft values.
     const transient = new AiProviderConfig();
@@ -372,8 +409,14 @@ export class AiService {
 
     let provider;
     try {
-      provider = this.providerFactory.createProvider(config);
+      provider = await this.buildProvider(config);
     } catch (error) {
+      if (error instanceof AiBaseUrlRefusedError) {
+        this.logger.warn(
+          `Test connection refused for ${logLabel}: base URL outside the owner's egress policy`,
+        );
+        return { available: false, error: error.message };
+      }
       const rawMessage =
         error instanceof Error ? error.message : "Unknown error";
       this.logger.warn(`Test connection failed for ${logLabel}: ${rawMessage}`);
@@ -441,8 +484,107 @@ export class AiService {
     userId: string,
     request: AiCompletionRequest,
     feature: string,
+    /**
+     * `skipRelay` leaves the MCP relay out of the fall-through, for a background
+     * job that must not put a prompt in front of the user's own agent when the
+     * providers ahead of it fail.
+     */
+    options: { skipRelay?: boolean } = {},
   ): Promise<AiCompletionResponse> {
-    const configs = await this.getActiveConfigs(userId);
+    return this.completeAcrossProviders(
+      userId,
+      feature,
+      async (config, isRelay) =>
+        isRelay
+          ? this.completeViaRelay(userId, request)
+          : (await this.buildProvider(config)).complete(request),
+      undefined,
+      options.skipRelay,
+    );
+  }
+
+  /**
+   * A single tool-free completion that may consult the web, served by every
+   * provider the user has configured, in priority order with fallthrough --
+   * the same loop as `complete()`:
+   *
+   * - a provider with its own server-side search (Anthropic, OpenAI) runs it
+   *   through `completeWithWebSearch`;
+   * - the MCP relay hands the prompt to the user's own agent, told to use its
+   *   web search if it has one, and the answer is marked `viaRelay` because
+   *   the agent cannot report whether it searched;
+   * - any other provider answers from model knowledge through `complete()`
+   *   in JSON mode, with `searched: false`.
+   *
+   * The caller decides how much to trust each of those three answers.
+   */
+  async completeWithWebSearch(
+    userId: string,
+    request: AiCompletionRequest,
+    search: AiWebSearchOptions,
+    feature: string,
+    /**
+     * Restrict the attempt to ONE of the user's providers, by config id.
+     *
+     * The payee contact lookup passes it: the fall-through across providers is
+     * right for a chat turn and wrong for a lookup the user pays per call for,
+     * where "whichever answers" can silently be the expensive one. Omitted
+     * everywhere else, which keeps the priority-order behaviour untouched.
+     */
+    onlyConfigId?: string,
+  ): Promise<AiWebSearchResponse> {
+    const jsonRequest: AiCompletionRequest = {
+      ...request,
+      responseFormat: "json",
+    };
+    return this.completeAcrossProviders(
+      userId,
+      feature,
+      async (config, isRelay): Promise<AiWebSearchResponse> => {
+        if (isRelay) {
+          const relayed = await this.completeViaRelay(userId, {
+            ...jsonRequest,
+            systemPrompt: withRelaySearchInstruction(
+              jsonRequest.systemPrompt,
+              search,
+            ),
+          });
+          return {
+            ...relayed,
+            searched: false,
+            searchCount: 0,
+            viaRelay: true,
+          };
+        }
+        const provider = await this.buildProvider(config);
+        if (provider.supportsWebSearch && provider.completeWithWebSearch) {
+          return provider.completeWithWebSearch(jsonRequest, search);
+        }
+        const plain = await provider.complete(jsonRequest);
+        return { ...plain, searched: false, searchCount: 0 };
+      },
+      onlyConfigId,
+    );
+  }
+
+  /**
+   * The one provider loop: try each active config in priority order, log
+   * usage for every attempt (success or failure), fall through on failure,
+   * and surface the relay's own error when the relay was the only option.
+   * `complete()` and `completeWithWebSearch()` differ only in what one
+   * attempt does, so that is the parameter.
+   */
+  private async completeAcrossProviders<T extends AiCompletionResponse>(
+    userId: string,
+    feature: string,
+    attempt: (config: AiProviderConfig, isRelay: boolean) => Promise<T>,
+    onlyConfigId?: string,
+    skipRelay = false,
+  ): Promise<T> {
+    const active = await this.getActiveConfigs(userId, onlyConfigId);
+    const configs = skipRelay
+      ? active.filter((c) => c.provider !== "mcp_relay")
+      : active;
 
     if (configs.length === 0) {
       throw new BadRequestException(
@@ -455,6 +597,7 @@ export class AiService {
 
     const errors: string[] = [];
     let relayError: BadRequestException | null = null;
+    let baseUrlRefusal: AiBaseUrlRefusedError | null = null;
 
     for (const config of configs) {
       const isRelay = config.provider === "mcp_relay";
@@ -464,9 +607,7 @@ export class AiService {
         // through the user's own agent, the same prompt/response round-trip
         // the chat uses. Failures (agent offline, timed out) fall through to
         // the next provider like any other provider failure.
-        const response = isRelay
-          ? await this.completeViaRelay(userId, request)
-          : await this.providerFactory.createProvider(config).complete(request);
+        const response = await attempt(config, isRelay);
         const durationMs = Date.now() - startTime;
 
         await this.usageService.logUsage({
@@ -488,6 +629,9 @@ export class AiService {
 
         if (isRelay && error instanceof BadRequestException && !relayError) {
           relayError = error;
+        }
+        if (error instanceof AiBaseUrlRefusedError && !baseUrlRefusal) {
+          baseUrlRefusal = error;
         }
 
         this.logger.warn(`AI provider ${config.provider} failed: ${message}`);
@@ -514,6 +658,13 @@ export class AiService {
       throw relayError;
     }
 
+    // A provider refused for the address its base URL points at names its own
+    // repair (an admin, or the operator's allowlist); the generic message
+    // below would send the user looking at settings that are not the problem.
+    if (baseUrlRefusal) {
+      throw baseUrlRefusal;
+    }
+
     throw new BadRequestException(
       tr(
         "errors.ai.allProvidersFailed",
@@ -535,7 +686,7 @@ export class AiService {
     userId: string,
     request: AiCompletionRequest,
   ): Promise<AiCompletionResponse> {
-    const tunnel = this.relayService.getStatus(userId);
+    const tunnel = await this.relayService.getStatus(userId);
     if (tunnel.state === "offline") {
       throw new BadRequestException(
         tr(
@@ -635,6 +786,32 @@ export class AiService {
     };
   }
 
+  /**
+   * Whether an in-app completion can be answered RIGHT NOW: a provider is
+   * configured and, when the user's top provider is the MCP relay (their own
+   * agent), that agent is connected (`listening` or `busy`, not `offline`). The
+   * server-side twin of the frontend's `assistantCanAnswerNow`
+   * (`lib/assistant-ready.ts`), so a background job decides as the page does. A
+   * read that fails is "no", never "yes": the caller then takes its
+   * "wait for an agent" path.
+   */
+  async canAnswerNow(userId: string): Promise<boolean> {
+    let status: AiStatusResponse;
+    try {
+      status = await this.getStatus(userId);
+    } catch {
+      return false;
+    }
+    if (!status.configured) return false;
+    if (!status.relayActive) return true;
+    try {
+      const tunnel = await this.relayService.getStatus(userId);
+      return tunnel.state === "listening" || tunnel.state === "busy";
+    } catch {
+      return false;
+    }
+  }
+
   async getToolUseProvider(userId: string): Promise<AiProvider> {
     return (await this.resolveToolUseProvider(userId)).provider;
   }
@@ -652,17 +829,32 @@ export class AiService {
     userId: string,
   ): Promise<{ provider: AiProvider; config: AiProviderConfig }> {
     const configs = await this.getActiveConfigs(userId);
+    let refusal: AiBaseUrlRefusedError | undefined;
 
     for (const config of configs) {
       // Relay is not an LLM; never instantiate it as one.
       if (config.provider === "mcp_relay") {
         continue;
       }
-      const provider = this.providerFactory.createProvider(config);
+      let provider: AiProvider;
+      try {
+        provider = await this.buildProvider(config);
+      } catch (error) {
+        // A provider whose base URL its owner may not use is skipped like one
+        // without tool support -- and named if nothing else answers, because
+        // "configure a provider" is not the fix for it.
+        if (error instanceof AiBaseUrlRefusedError) {
+          refusal ??= error;
+          continue;
+        }
+        throw error;
+      }
       if (provider.supportsToolUse) {
         return { provider, config };
       }
     }
+
+    if (refusal) throw refusal;
 
     throw new BadRequestException(
       tr(
@@ -672,7 +864,18 @@ export class AiService {
     );
   }
 
-  private async getActiveConfigs(userId: string): Promise<AiProviderConfig[]> {
+  async getActiveConfigs(
+    userId: string,
+    /**
+     * Narrow the answer to one of the user's own providers.
+     *
+     * An id that matches nothing active yields an EMPTY list rather than the
+     * full one: the caller pinned a provider, and quietly answering from a
+     * different one is the outcome a pin exists to prevent. Callers surface
+     * that as "no provider", which names a repair the user can act on.
+     */
+    onlyConfigId?: string,
+  ): Promise<AiProviderConfig[]> {
     const userConfigs = await withScopedDb(this.dataSource, (manager) =>
       manager.getRepository(AiProviderConfig).find({
         where: { userId, isActive: true },
@@ -681,9 +884,15 @@ export class AiService {
     );
 
     if (userConfigs.length > 0) {
-      return userConfigs;
+      return onlyConfigId
+        ? userConfigs.filter((config) => config.id === onlyConfigId)
+        : userConfigs;
     }
 
+    // The centrally managed provider is the deployment's, not one of the
+    // user's rows, so it can carry no pin -- and a pin naming a row that no
+    // longer exists must not resolve to it.
+    if (onlyConfigId) return [];
     const defaultConfig = this.buildDefaultConfig(userId);
     return defaultConfig ? [defaultConfig] : [];
   }
@@ -724,30 +933,44 @@ export class AiService {
     return config;
   }
 
-  private async validateBaseUrl(
-    baseUrl: string,
+  /** The save-time (and draft-test) check; see `assertBaseUrlAllowed`. */
+  private validateBaseUrl(
+    userId: string,
     provider: AiProviderType,
+    baseUrl: string | null | undefined,
   ): Promise<void> {
-    if (SELF_HOSTED_PROVIDERS.has(provider)) {
-      if (!validateUrlBasicSafety(baseUrl)) {
-        throw new BadRequestException(
-          tr(
-            "errors.ai.baseUrlInvalidBasic",
-            "baseUrl must be a valid HTTP or HTTPS URL",
-          ),
-        );
-      }
-    } else {
-      const isSafe = await validateUrlIsSafe(baseUrl);
-      if (!isSafe) {
-        throw new BadRequestException(
-          tr(
-            "errors.ai.baseUrlInvalidExternal",
-            "baseUrl must be a valid HTTP/HTTPS URL pointing to an external host",
-          ),
-        );
-      }
-    }
+    return assertBaseUrlAllowed(provider, baseUrl, () =>
+      this.ownerIsAdmin(userId),
+    );
+  }
+
+  /**
+   * Whether the owner of a provider config is an admin, read from their row
+   * rather than from a request: the same answer serves the save, a test, and a
+   * completion a background job runs with no request at all.
+   */
+  private async ownerIsAdmin(userId: string): Promise<boolean> {
+    const owner = await withScopedDb(this.dataSource, (manager) =>
+      manager.getRepository(User).findOne({
+        where: { id: userId },
+        select: { id: true, role: true },
+      }),
+    );
+    return owner?.role === "admin";
+  }
+
+  /**
+   * The one way this service builds a provider from a config: the stored base
+   * URL is checked against its owner's policy at USE time -- a row saved before
+   * the policy existed, or by an admin since demoted, is refused here with a
+   * message that names the fix -- and the provider is built with that policy,
+   * which its fetch enforces again on the connection it makes.
+   */
+  private async buildProvider(config: AiProviderConfig): Promise<AiProvider> {
+    const policy = await egressPolicyForConfig(config, () =>
+      this.ownerIsAdmin(config.userId),
+    );
+    return this.providerFactory.createProvider(config, policy);
   }
 
   private toResponseDto(config: AiProviderConfig): AiProviderConfigResponse {

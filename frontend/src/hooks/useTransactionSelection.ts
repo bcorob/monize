@@ -42,7 +42,6 @@ export function useTransactionSelection(
   // clearing on it silently dropped a selection made while the page was still
   // loading.
   const filterKeyRef = useRef(userFilterKey);
-  /* eslint-disable react-hooks/set-state-in-effect -- clearing selection when filters change */
   useEffect(() => {
     if (filterKeyRef.current === userFilterKey) return;
     filterKeyRef.current = userFilterKey;
@@ -50,13 +49,11 @@ export function useTransactionSelection(
     setExcludedIds(new Set());
     setSelectAllMatching(false);
   }, [userFilterKey]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   // Clear individual selections on page change (but not selectAllMatching/excludedIds,
   // which span all pages).
   const transactionIdsKey = transactions.map(t => t.id).join(',');
   const prevTransactionIdsKey = useRef(transactionIdsKey);
-  /* eslint-disable react-hooks/set-state-in-effect -- clearing selection on page change */
   useEffect(() => {
     const prev = prevTransactionIdsKey.current;
     prevTransactionIdsKey.current = transactionIdsKey;
@@ -69,7 +66,6 @@ export function useTransactionSelection(
       setSelectedIds(new Set());
     }
   }, [transactionIdsKey, selectAllMatching]);
-  /* eslint-enable react-hooks/set-state-in-effect */
 
   const isTransactionSelected = useCallback((id: string): boolean => {
     if (selectAllMatching) return !excludedIds.has(id);

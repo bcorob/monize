@@ -8,6 +8,14 @@ const mockLongRunningFetch = jest.fn(
 );
 jest.mock("./long-running-fetch", () => ({
   longRunningAgent: { __mock: "agent" },
+  providerFetch: jest.fn(
+    () =>
+      (
+        input: Parameters<typeof fetch>[0],
+        init?: Parameters<typeof fetch>[1],
+      ) =>
+        mockLongRunningFetch(input, init),
+  ),
   longRunningFetch: (
     input: Parameters<typeof fetch>[0],
     init?: Parameters<typeof fetch>[1],
@@ -281,7 +289,8 @@ describe("OllamaCloudProvider", () => {
       const result = await provider.verifyModel();
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.reason).toContain("ECONNREFUSED");
+        expect(result.reason).not.toContain("ECONNREFUSED");
+        expect(result.reason).toMatch(/could not verify the configured model/i);
       }
     });
 
@@ -310,6 +319,7 @@ describe("OllamaCloudProvider", () => {
       expect(r.ok).toBe(false);
       if (!r.ok) {
         expect(r.reason).toContain("500");
+        expect(r.reason).not.toContain("server boom");
       }
     });
 
@@ -323,7 +333,8 @@ describe("OllamaCloudProvider", () => {
       const r = await provider.verifyModel();
       expect(r.ok).toBe(false);
       if (!r.ok) {
-        expect(r.reason).toContain("Bad Gateway");
+        expect(r.reason).not.toContain("Bad Gateway");
+        expect(r.reason).toContain("502");
       }
     });
 
@@ -332,7 +343,8 @@ describe("OllamaCloudProvider", () => {
       const r = await provider.verifyModel();
       expect(r.ok).toBe(false);
       if (!r.ok) {
-        expect(r.reason).toContain("string-network-fail");
+        expect(r.reason).not.toContain("string-network-fail");
+        expect(r.reason).toMatch(/could not verify the configured model/i);
       }
     });
   });

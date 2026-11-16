@@ -3,6 +3,7 @@
     "noneToUpdate": "Sem títulos para atualizar",
     "updated": "{count, plural, one {# cotação de título atualizada} other {# cotações de títulos atualizadas}}",
     "partialFailure": "Cotações atualizadas: {updated} com sucesso, {failed} com falha{symbols}",
+    "partialFailureWithReasons": "Cotações atualizadas: {updated} com sucesso, {failed} com falha{symbols}\n{reasons}",
     "failed": "Falha ao atualizar cotações"
   },
   "page": {
@@ -10,6 +11,7 @@
     "subtitle": "Gerir as suas ações, ETFs, fundos de investimento e outros títulos",
     "newSecurity": "+ Novo Título",
     "searchPlaceholder": "Pesquisar por símbolo ou nome...",
+    "statusFilterLabel": "Estado",
     "statusAll": "Todos ({count})",
     "statusActive": "Ativos ({count})",
     "statusInactive": "Inativos ({count})",
@@ -49,6 +51,7 @@
       "name": "Nome",
       "type": "Tipo",
       "shares": "Ações",
+      "value": "Valor",
       "exchange": "Bolsa",
       "currency": "Moeda",
       "provider": "Fornecedor",
@@ -63,12 +66,10 @@
       "inactive": "Inativo",
       "inactiveShort": "Ina"
     },
-    "providerTitle": {
-      "override": "Substituição de fornecedor por título",
-      "inherited": "Herdado da preferência de Fornecedor de Cotações predefinido"
-    },
+    "providerInherited": "{provider} (predefinido)",
     "columnTitles": {
       "shares": "Ações atuais detidas em todas as contas",
+      "value": "Ações detidas em todas as contas ao preço mais recente, na moeda do próprio título",
       "source": "Fonte da cotação mais recente"
     },
     "actions": {
@@ -115,7 +116,11 @@
     "exchangeLabel": "Bolsa",
     "currencyLabel": "Moeda",
     "currencyNotConfigured": "{code} — não está nas suas moedas",
+    "currencyPlaceholder": "Selecionar moeda...",
+    "currencyNotReported": "O fornecedor não indicou a moeda desta criptomoeda. Escolha a moeda fiduciária em que é cotada.",
     "quoteProviderLabel": "Fornecedor de Cotações",
+    "skipPriceUpdatesLabel": "Desativar as atualizações automáticas de preços",
+    "skipPriceUpdatesHelp": "O Monize não irá obter preços para este título. Utilize esta opção para um título que nenhum fornecedor consiga cotar; os preços que introduzir continuam a contar. Escolher outro fornecedor de cotações ou outro ID de instrumento MSN volta a ativar as atualizações.",
     "msnIdLabel": "ID de Instrumento MSN (avançado)",
     "lookupProviderAriaLabel": "Pesquisar fornecedor",
     "lookupButton": "Pesquisar",
@@ -139,7 +144,11 @@
     "providers": {
       "auto": "Auto",
       "yahoo": "Yahoo",
-      "msn": "MSN"
+      "msn": "MSN",
+      "lse": "LSE",
+      "deutsche_boerse": "Deutsche Börse",
+      "bond_engine": "Motor de obrigações",
+      "html_table": "Tabela numa página web"
     },
     "types": {
       "select": "Selecionar tipo...",
@@ -189,16 +198,50 @@
       "deleteConfirm": "Eliminar",
       "deleteSuccess": "Classe de ativos «{name}» eliminada",
       "deleteFailed": "Não foi possível eliminar a classe de ativos «{name}»"
+    },
+    "bondFetchAction": "Obter {code} da fonte oficial",
+    "bondFetching": "A obter {code} junto do emitente e as respetivas taxas de referência. Isto pode demorar até um minuto.",
+    "bondFetchFailed": "Não foi possível obter a série.",
+    "bondCurrencyLocked": "Este título está associado a um tipo de obrigação em {linkedCurrency}. Volte a definir a moeda como {linkedCurrency} ou desassocie primeiro o tipo de obrigação (desassociar remove os seus preços calculados).",
+    "bondProgramLabel": "Tipo de obrigação",
+    "bondProgramNone": "Sem ligação",
+    "bondProgramCurrent": "Tipo de obrigação associado",
+    "bondProgramLoading": "A carregar os tipos de obrigações...",
+    "bondProgramLoadFailed": "Não foi possível carregar os tipos de obrigações, por isso ainda não é possível associar um tipo de obrigação.",
+    "bondProgramRetry": "Tentar novamente",
+    "bondNoPrograms": "O catálogo de obrigações ainda não tem nenhum tipo de obrigação.",
+    "bondAutoFetchLabel": "Obter automaticamente as novas séries deste tipo de obrigação",
+    "bondAutoFetchHelp": "Quando ativado, o Monize lê todos os dias as novas séries deste tipo de obrigação a partir da fonte oficial, para que possa registar uma compra sem obter primeiro a série.",
+    "bondCountryLabel": "País",
+    "bondCountryOther": "Outro",
+    "bondCountryOtherInfo": "O suporte para obrigações de outros países pode ser pedido no <link>GitHub do projeto</link>.",
+    "quoteTable": {
+      "urlLabel": "Página web da tabela de preços",
+      "urlHelp": "A página precisa de uma tabela cujo cabeçalho tenha uma coluna de data e outra de preço de fecho.",
+      "test": "Testar",
+      "previewFailed": "Não foi possível ler a página.",
+      "summary": "{count, plural, one {# dia} other {# dias}} de {first} a {last}",
+      "columns": "Colunas usadas: {columns}",
+      "currency": "Moeda indicada na página: {currency}",
+      "noCurrency": "A página não indica moeda; os preços são guardados na moeda do título.",
+      "skipped": "{count, plural, one {# linha ilegível ignorada} other {# linhas ilegíveis ignoradas}}",
+      "headers": {
+        "date": "Data",
+        "open": "Abertura",
+        "high": "Máximo",
+        "low": "Mínimo",
+        "close": "Fecho",
+        "volume": "Volume"
+      }
     }
   },
   "priceForm": {
     "dateLabel": "Data",
     "closePriceLabel": "Preço de Fecho",
-    "openPriceLabel": "Preço de Abertura",
-    "highPriceLabel": "Preço Máximo",
-    "lowPriceLabel": "Preço Mínimo",
-    "volumeLabel": "Volume",
-    "optionalPlaceholder": "Opcional",
+    "openPriceLabel": "Preço de Abertura (opcional)",
+    "highPriceLabel": "Preço Máximo (opcional)",
+    "lowPriceLabel": "Preço Mínimo (opcional)",
+    "volumeLabel": "Volume (opcional)",
     "submitCreate": "Adicionar Cotação",
     "submitUpdate": "Atualizar Cotação"
   },
@@ -246,7 +289,9 @@
     },
     "collapseAll": "Recolher tudo",
     "expandAll": "Expandir tudo",
-    "groupCount": "{count} cotação(ões)"
+    "groupCount": "{count} cotação(ões)",
+    "addYearButton": "Adicionar mais um ano de histórico",
+    "addYearTitle": "Obter mais um ano de preços históricos do fornecedor"
   },
   "transactionHistory": {
     "accountLabel": "Conta",
@@ -284,7 +329,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "Reinvestimento de rendimento de longo prazo",
       "CAPITAL_GAIN_SHORT": "Rendimento de capital de curto prazo",
       "CAPITAL_GAIN_LONG": "Rendimento de capital de longo prazo",
-      "REDEEM": "Resgate de CD/obrigação"
+      "REDEEM": "Resgate de CD/obrigação",
+      "RETURN_OF_CAPITAL": "Devolução de capital"
     },
     "toasts": {
       "loadHistoryFailed": "Falha ao carregar histórico",
@@ -333,11 +379,20 @@
     "nameRequired": "O nome é obrigatório",
     "nameMax": "O nome não pode ter mais de 255 caracteres",
     "currencyRequired": "A moeda é obrigatória",
-    "descriptionMax": "A descrição não pode exceder 5000 caracteres"
+    "bondProgramRequired": "O tipo de obrigação é obrigatório",
+    "descriptionMax": "A descrição não pode exceder 5000 caracteres",
+    "quoteUrlRequired": "Introduza a página com a tabela de preços.",
+    "quoteUrlInvalid": "Introduza um endereço completo começado por http:// ou https://."
   },
   "priceValidation": {
     "dateRequired": "A data é obrigatória",
     "priceRequired": "O preço é obrigatório",
     "priceNonNegative": "O preço deve ser um número não negativo"
+  },
+  "priceAlert": {
+    "label": "Alerta de variação do preço (%)",
+    "help": "Deixe vazio para desativar. Avisa de subidas ou descidas face à sessão anterior disponível, no máximo uma vez por instrumento e dia UTC.",
+    "range": "Introduza uma percentagem entre 0,1 e 1000.",
+    "chartLabel": "Incluir um gráfico nos alertas de preços"
   }
 }

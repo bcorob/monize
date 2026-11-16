@@ -27,6 +27,8 @@ import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useChartDateFormat } from '@/hooks/useChartDateFormat';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { ChartDownloadButton } from '@/components/ui/ChartDownloadButton';
+import { ChartCollapseButton } from '@/components/transactions/ChartCollapseControls';
+import { CHART_GRID_PROPS, CHART_TOOLTIP_CLASS } from '@/lib/chart-style';
 
 // Desktop switches the bar-top value labels to vertical (and widens the top
 // margin) once there are more than this many bars, before wide horizontal
@@ -64,6 +66,8 @@ interface CategoryPayeeBarChartProps {
   onMonthClick?: (startDate: string, endDate: string) => void;
   /** Category/payee/tag/search descriptor appended to the download filename. */
   filterLabel?: string;
+  /** Offer the header button that folds the chart away (the Transactions page). */
+  onCollapse?: () => void;
 }
 
 interface ChartDataPoint extends BucketedPoint {
@@ -84,7 +88,7 @@ function MonthlyTotalTooltip({
   if (active && payload?.[0]) {
     const data = payload[0].payload;
     return (
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3">
+      <div className={CHART_TOOLTIP_CLASS}>
         <p className="font-medium text-gray-900 dark:text-gray-100 mb-1">
           {data.label}
         </p>
@@ -94,6 +98,7 @@ function MonthlyTotalTooltip({
           }`}
         >
           {formatCurrency(data.total)}
+          {data.partial && ' *'}
         </p>
         <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
           {t('charts.monthlyTotals.tooltip', { count: data.count })}
@@ -117,10 +122,21 @@ export const CategoryPayeeBarChart = memo(function CategoryPayeeBarChart({
   isLoading,
   onMonthClick,
   filterLabel,
+  onCollapse,
 }: CategoryPayeeBarChartProps) {
   const t = useTranslations('transactions');
   const chartTitle = t('charts.monthlyTotals.title');
-  const { formatCurrency, formatCurrencyAxis } = useNumberFormat();
+  const { formatCurrency, formatCurrencyAxis, formatNumber } = useNumberFormat();
+  // The server names the currency its totals are in; the user default otherwise.
+  const currency = data.find((d) => d.currency)?.currency;
+  const formatMoney = useCallback(
+    (v: number) => formatCurrency(v, currency),
+    [formatCurrency, currency],
+  );
+  const formatMoneyAxis = useCallback(
+    (v: number) => formatCurrencyAxis(v, currency),
+    [formatCurrencyAxis, currency],
+  );
   const formatChartDate = useChartDateFormat();
   const chartRef = useRef<HTMLDivElement>(null);
   const downloadFilename = filterLabel ? `${chartTitle} - ${filterLabel}` : chartTitle;
@@ -200,7 +216,8 @@ export const CategoryPayeeBarChart = memo(function CategoryPayeeBarChart({
     const totalCount = chartData.reduce((sum, d) => sum + d.count, 0);
     const periodsElapsed = chartData.length;
     const periodAvg = periodsElapsed > 0 ? total / periodsElapsed : 0;
-    return { total, totalCount, periodAvg };
+    const partial = chartData.some((d) => d.partial);
+    return { total, totalCount, periodAvg, partial };
   }, [chartData]);
 
   // The three figures under the chart, repeated into the exported PNG. Without
@@ -211,12 +228,15 @@ export const CategoryPayeeBarChart = memo(function CategoryPayeeBarChart({
     ? [
         {
           label: t(`charts.monthlyTotals.${AVG_LABEL_KEY[granularity]}`),
-          value: formatCurrency(summary.periodAvg),
+          value: formatMoney(summary.periodAvg) + (summary.partial ? ' *' : ''),
         },
-        { label: t('charts.monthlyTotals.total'), value: formatCurrency(summary.total) },
+        {
+          label: t('charts.monthlyTotals.total'),
+          value: formatMoney(summary.total) + (summary.partial ? ' *' : ''),
+        },
         {
           label: t('charts.monthlyTotals.transactions'),
-          value: summary.totalCount.toLocaleString(),
+          value: formatNumber(summary.totalCount, 0),
         },
       ]
     : [];
@@ -224,9 +244,12 @@ export const CategoryPayeeBarChart = memo(function CategoryPayeeBarChart({
   if (isLoading) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 mb-6 min-h-[420px]">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-          {chartTitle}
-        </h3>
+        <div className="flex items-center justify-between mb-4 gap-2">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            {chartTitle}
+          </h3>
+          {onCollapse && <ChartCollapseButton onCollapse={onCollapse} />}
+        </div>
         <div className="h-72 flex items-center justify-center">
           <Skeleton className="w-full h-full" />
         </div>
@@ -237,9 +260,12 @@ export const CategoryPayeeBarChart = memo(function CategoryPayeeBarChart({
   if (chartData.length === 0) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 mb-6 min-h-[420px]">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-          {chartTitle}
-        </h3>
+        <div className="flex items-center justify-between mb-4 gap-2">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            {chartTitle}
+          </h3>
+          {onCollapse && <ChartCollapseButton onCollapse={onCollapse} />}
+        </div>
         <div className="h-72 flex items-center justify-center text-gray-500 dark:text-gray-400">
           <p>{t('charts.monthlyTotals.noData')}</p>
         </div>
@@ -293,6 +319,7 @@ export const CategoryPayeeBarChart = memo(function CategoryPayeeBarChart({
             filename={downloadFilename}
             summary={exportSummary}
           />
+          {onCollapse && <ChartCollapseButton onCollapse={onCollapse} />}
         </div>
       </div>
 
@@ -317,7 +344,7 @@ export const CategoryPayeeBarChart = memo(function CategoryPayeeBarChart({
           >
             {/* The token carries its own dark override, so the dark-variant
                 stroke class this used to need alongside it is gone. */}
-            <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+            <CartesianGrid {...CHART_GRID_PROPS} />
             <XAxis
               dataKey="periodStart"
               tick={{ fill: chartColors.axis, fontSize: isMobile ? 10 : 12 }}
@@ -334,10 +361,10 @@ export const CategoryPayeeBarChart = memo(function CategoryPayeeBarChart({
               tick={{ fill: chartColors.axis, fontSize: 11 }}
               tickLine={false}
               axisLine={false}
-              tickFormatter={formatCurrencyAxis}
+              tickFormatter={formatMoneyAxis}
               width="auto"
             />
-            <Tooltip content={<MonthlyTotalTooltip formatCurrency={formatCurrency} />} />
+            <Tooltip content={<MonthlyTotalTooltip formatCurrency={formatMoney} />} />
             <Bar
               dataKey="absTotal"
               radius={[4, 4, 0, 0]}
@@ -362,8 +389,8 @@ export const CategoryPayeeBarChart = memo(function CategoryPayeeBarChart({
                   textAnchor={verticalLabels ? 'start' : 'middle'}
                   formatter={(value: unknown) =>
                     isMobile
-                      ? formatCurrencyAxis(Number(value))
-                      : formatCurrency(Number(value))
+                      ? formatMoneyAxis(Number(value))
+                      : formatMoney(Number(value))
                   }
                   style={{
                     fill: chartColors.axis,
@@ -388,7 +415,8 @@ export const CategoryPayeeBarChart = memo(function CategoryPayeeBarChart({
                 gainLossColor(summary.periodAvg)
               }`}
             >
-              {formatCurrency(summary.periodAvg)}
+              {formatMoney(summary.periodAvg)}
+              {summary.partial && ' *'}
             </div>
           </div>
           <div>
@@ -398,15 +426,21 @@ export const CategoryPayeeBarChart = memo(function CategoryPayeeBarChart({
                 gainLossColor(summary.total)
               }`}
             >
-              {formatCurrency(summary.total)}
+              {formatMoney(summary.total)}
+              {summary.partial && ' *'}
             </div>
           </div>
           <div>
             <div className="text-sm text-gray-500 dark:text-gray-400">{t('charts.monthlyTotals.transactions')}</div>
             <div className="font-semibold text-gray-900 dark:text-gray-100">
-              {summary.totalCount.toLocaleString()}
+              {formatNumber(summary.totalCount, 0)}
             </div>
           </div>
+          {summary.partial && (
+            <p className="col-span-3 text-xs text-gray-500 dark:text-gray-400">
+              * {t('charts.monthlyTotals.partialNote')}
+            </p>
+          )}
         </div>
       )}
     </div>

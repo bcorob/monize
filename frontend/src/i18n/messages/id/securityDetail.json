@@ -34,7 +34,6 @@
     "units": "Unit",
     "avgCostPerUnit": "Biaya rata-rata / unit",
     "heldInAccounts": "Dipegang di rekening",
-    "openAccount": "Tampilkan {name} di halaman Investasi",
     "unitsShare": "{units} ({share})",
     "valueUnknown": "Belum dinilai",
     "approx": "~ {amount}"
@@ -74,15 +73,20 @@
     "sector": "Sektor",
     "industry": "Industri",
     "provider": "Penyedia",
-    "lastPrice": "Harga terakhir"
+    "lastPrice": "Harga terakhir",
+    "bondDescription": "Deskripsi obligasi"
   },
   "tabs": {
     "ariaLabel": "Bagian efek",
     "overview": "Ringkasan",
     "transactions": "Transaksi",
     "prices": "Riwayat harga",
+    "terms": "Riwayat ketentuan",
     "documents": "Dokumen",
     "news": "Berita"
+  },
+  "bondPrices": {
+    "title": "Riwayat harga"
   },
   "about": {
     "title": "Tentang",
@@ -121,6 +125,8 @@
     "fees": "Biaya",
     "realizedPl": "L/R terealisasi",
     "realizedMixed": "Terealisasi dalam {currencies}, jadi tidak dijumlahkan",
+    "realizedUnknownReason": "Keuntungan ini tidak dapat dihitung: posisi memiliki saham yang ditambahkan tanpa biaya, sehingga biaya saham yang dijual tidak diketahui. Buka transaksi yang menambahkannya dan masukkan harganya.",
+    "realizedKnownPart": "Bagian yang diketahui: {amount}",
     "totalReturn": "Hasil total",
     "totalReturnValue": "{amount} ({percent})",
     "totalReturnTitle": "Keuntungan yang belum terealisasi, ditambah yang Anda realisasikan dari penjualan dan terima sebagai pendapatan, dikurangi biaya, dibandingkan modal yang Anda tanamkan. Hasil sederhana atas modal itu: tidak disetahunkan dan tidak menimbang setiap pembelian menurut lama Anda memegangnya.",
@@ -147,6 +153,8 @@
     "title": "Posisi ditutup",
     "description": "Anda tidak lagi memegang efek ini. Riwayatnya tetap tersedia di bawah.",
     "realizedPl": "L/R terealisasi",
+    "realizedUnknownReason": "Keuntungan ini tidak dapat dihitung: posisi memiliki saham yang ditambahkan tanpa biaya, sehingga biaya saham yang dijual tidak diketahui. Buka transaksi yang menambahkannya dan masukkan harganya.",
+    "realizedKnownPart": "Bagian yang diketahui: {amount}",
     "heldFrom": "Dipegang sejak",
     "heldRange": "{start} sampai {end}"
   },
@@ -165,7 +173,24 @@
     "sectorEmpty": "Rincian sektor tidak tersimpan. Monize mengisinya dari penyedia untuk reksa dana dan ETF.",
     "countryEmpty": "Rincian negara tidak tersimpan. Anda dapat memasukkannya saat mengubah efek.",
     "assetClassEmpty": "Rincian kelas aset belum tersimpan.",
-    "remainder": "{percent} tidak terklasifikasi"
+    "remainder": "{percent} tidak terklasifikasi",
+    "bond": {
+      "seriesTab": "Seri",
+      "maturityTab": "Jatuh tempo",
+      "empty": "Anda belum memiliki seri obligasi jenis ini.",
+      "someUnknown": "Beberapa nilai tidak diketahui, sehingga persentase tidak ditampilkan.",
+      "issuerCountry": "Negara penerbit",
+      "rate": "Suku bunga",
+      "interest": "Bunga",
+      "term": "Jangka waktu hingga jatuh tempo",
+      "interestValue": "{capitalization}, periode: {period}",
+      "rateType": {
+        "FIXED": "Tetap",
+        "BENCHMARK_PLUS_SPREAD": "Mengambang (acuan + selisih)",
+        "INFLATION_PLUS_MARGIN_AS_RATE": "Terindeks inflasi (acuan + margin)",
+        "ZERO_COUPON_DISCOUNT": "Kupon nol (diskon)"
+      }
+    }
   },
   "documents": {
     "title": "Dokumen",
@@ -225,6 +250,16 @@
       "deleted": "Dokumen dihapus",
       "saveFailed": "Dokumen tidak dapat disimpan",
       "deleteFailed": "Dokumen tidak dapat dihapus"
+    },
+    "issueLetters": {
+      "title": "Surat penerbitan",
+      "loadFailed": "Surat penerbitan tidak dapat dimuat.",
+      "empty": "Belum ada surat penerbitan yang tersimpan untuk jenis obligasi ini.",
+      "held": "Dimiliki",
+      "onSale": "Dijual",
+      "noLetter": "Tidak ada surat yang tercatat untuk seri ini",
+      "open": "PDF resmi",
+      "openNamed": "Buka surat penerbitan seri {series}"
     }
   },
   "news": {
@@ -237,6 +272,243 @@
     "empty": {
       "title": "Belum ada judul berita saat ini",
       "description": "Belum ada yang dipublikasikan untuk simbol ini baru-baru ini. Daftar akan disegarkan saat Anda kembali ke sini."
+    }
+  },
+  "bond": {
+    "loading": "Memuat valuasi obligasi...",
+    "loadFailed": "Valuasi obligasi tidak dapat dimuat.",
+    "unknown": "Tidak diketahui",
+    "asOf": "Dinilai pada",
+    "termsSource": "Ketentuan: {document}",
+    "termsManual": "Ketentuan dimasukkan secara manual oleh administrator",
+    "noLots": "Tidak ada lot yang terbuka pada tanggal ini.",
+    "totals": {
+      "quantity": "Obligasi yang dimiliki",
+      "grossValue": "Nilai kotor",
+      "earlyRedemptionValue": "Nilai pelunasan dini",
+      "accruedInterest": "Bunga berjalan",
+      "unknownLot": "Setidaknya satu lot tidak memiliki angka, sehingga total tidak ditampilkan.",
+      "unknownRefusal": "Lot tidak dapat dihitung, sehingga total tidak ditampilkan."
+    },
+    "lots": {
+      "purchaseDate": "Dibeli",
+      "assumed": "Diasumsikan",
+      "assumedTitle": "Tanggal pembelian sebenarnya tidak diketahui: lot ini masuk melalui transfer tanpa sisi pengirim yang ditautkan.",
+      "quantity": "Jumlah",
+      "maturity": "Jatuh tempo",
+      "period": "Periode saat ini",
+      "periodValue": "{index}: {start} sampai {end}",
+      "rate": "Suku bunga",
+      "principal": "Pokok per obligasi",
+      "principalIssuePrice": "Biaya belum diisi: harga lelang digunakan",
+      "accruedInterest": "Bunga berjalan",
+      "grossValue": "Nilai kotor",
+      "earlyRedemption": "Pelunasan dini",
+      "nextCashFlow": "Arus kas berikutnya",
+      "cashFlowValue": "{type} {amount} pada {date}",
+      "noCashFlow": "Tidak ada",
+      "projected": "Proyeksi",
+      "maturityValue": "Nilai saat jatuh tempo",
+      "maturityKnown": "Diketahui",
+      "maturityProjected": "Proyeksi",
+      "matured": "Jatuh tempo",
+      "refused": "Belum dinilai",
+      "amountUnknown": "Jumlah tidak diketahui"
+    },
+    "rateSource": {
+      "TERMS": "Ketentuan",
+      "ANNOUNCED": "Diumumkan",
+      "DERIVED": "Diturunkan",
+      "PROJECTED": "Proyeksi"
+    },
+    "cashFlowType": {
+      "INTEREST": "Bunga",
+      "PRINCIPAL": "Pokok"
+    },
+    "earlyRefusal": {
+      "NOT_REDEEMABLE": "Tidak dapat dilunasi dini",
+      "TOO_EARLY": "Terlalu dini untuk dilunasi",
+      "TOO_LATE": "Terlalu terlambat untuk dilunasi",
+      "RECORD_DAY": "Tidak dapat dilunasi pada tanggal pencatatan",
+      "MATURED": "Jatuh tempo",
+      "RATE_UNKNOWN": "Suku bunga belum diketahui",
+      "TERMS_INCOMPLETE": "Ketentuan tidak lengkap"
+    },
+    "lotsRefusal": {
+      "SPLIT": "Lot tidak dapat diturunkan: obligasi tidak dapat dipecah.",
+      "FRACTIONAL_QUANTITY": "Lot tidak dapat diturunkan: jumlah bukan bilangan bulat obligasi.",
+      "OVER_REMOVAL": "Lot tidak dapat diturunkan: lebih banyak obligasi yang dikurangi daripada yang dimiliki.",
+      "INVALID_QUANTITY": "Lot tidak dapat diturunkan: jumlah hilang, negatif, atau terlalu besar.",
+      "REMOVAL_EXCEEDS_SERIES": "Lot tidak dapat ditentukan: obligasi dari satu seri yang dikeluarkan lebih banyak daripada yang dimiliki.",
+      "SERIES_NOT_DETERMINED": "Lot tidak dapat ditentukan: seri pembelian tidak diketahui."
+    },
+    "lotsRefusalDetail": {
+      "SPLIT": "Sebuah pemecahan ({action} pada {date}) tercatat pada sekuritas ini; obligasi tidak dipecah.",
+      "FRACTIONAL_QUANTITY": "{action} pada {date} memindahkan {quantity} obligasi, yang bukan bilangan bulat.",
+      "OVER_REMOVAL": "{action} pada {date} mengurangi {quantity} obligasi, lebih banyak dari yang dimiliki.",
+      "INVALID_QUANTITY": "Jumlah pada {action} tanggal {date} kosong, negatif, atau terlalu besar.",
+      "REMOVAL_EXCEEDS_SERIES": "{action} pada {date} mengeluarkan {quantity} obligasi dari serinya, lebih banyak dari yang dimiliki di seri itu.",
+      "SERIES_NOT_DETERMINED": "{action} pada {date} tidak menyebut seri, dan pada hari itu tidak ada seri jenis obligasi tersimpan yang dijual. Ambil seri tersebut dan pilih dalam transaksi."
+    },
+    "assumptions": {
+      "title": "Asumsi proyeksi",
+      "latestObservation": "{benchmark} diasumsikan sebesar {value} untuk semua periode berikutnya, yaitu nilai terbaru yang dipublikasikan ({observation})",
+      "supplied": "{benchmark} diasumsikan sebesar {value} untuk semua periode berikutnya",
+      "suppliedSimpleAnnual": "{benchmark} diasumsikan tumbuh {value} per tahun (pertumbuhan tahunan sederhana, tanpa pemajemukan) untuk setiap bulan berikutnya"
+    },
+    "missing": {
+      "title": "Data yang masih diperlukan",
+      "item": "{benchmark} {observation} — diterbitkan oleh {publisher}",
+      "itemNoPublisher": "{benchmark} {observation} — penerbit tidak diketahui"
+    },
+    "recompute": {
+      "button": "Hitung ulang harga",
+      "done": "Harga dihitung ulang: {written} ditulis, {deleted} dihapus.",
+      "failed": "Harga tidak dapat dihitung ulang."
+    },
+    "rate": {
+      "title": "Suku bunga",
+      "rule": {
+        "fixed": "Tetap {rate} selama seluruh masa berlaku",
+        "firstThen": "Periode 1: {firstRate}. Setelah itu {benchmark} + {addend}",
+        "every": "Setiap periode: {benchmark} + {addend}",
+        "floorZero": "Nilai {benchmark} yang negatif dihitung sebagai 0",
+        "dailyFloor": "Suku bunga harian (indeks ditambah spread) tidak pernah di bawah {floor}",
+        "discount": "Diskon dari nilai nominal",
+        "daily": "Setiap hari: {benchmark} + {addend}, dijumlahkan per hari",
+        "lockout": "Lelang dalam {days, plural, one {# hari kerja} other {# hari kerja}} sebelum akhir periode tidak digunakan untuk periode tersebut"
+      },
+      "daily": "Harian, {benchmark}",
+      "dailyNoIndex": "Harian, {benchmark}: belum ada indeks tersimpan",
+      "dailyRun": "Mulai {from}: {rate}",
+      "dailyRunUnknown": "Mulai {from}: tidak ada indeks tersimpan",
+      "lotHeading": "Lot dibeli pada {date}",
+      "range": "{start} sampai {end}",
+      "current": "Saat ini",
+      "columns": {
+        "period": "Periode",
+        "dates": "Tanggal",
+        "rate": "Suku bunga",
+        "source": "Sumber",
+        "how": "Cara penetapan"
+      },
+      "how": {
+        "stated": "Suku bunga yang ditetapkan",
+        "observed": "{benchmark} {observation}: {value} + {addend}",
+        "floored": "(dinaikkan ke {floor})",
+        "missing": "{benchmark} {observation}: belum dipublikasikan"
+      },
+      "nextRateReset": "Penyesuaian suku bunga berikutnya: {date}",
+      "nextCapitalization": "Kapitalisasi berikutnya: {date}"
+    },
+    "indexation": {
+      "inflation": "Terindeks inflasi: mulai {date} (periode 2) suku bunganya adalah {benchmark} + {addend}, dihitung ulang setiap periode",
+      "floating": "Suku bunga mengambang: mulai {date} (periode 2) suku bunganya adalah {benchmark} + {addend}, dihitung ulang setiap periode"
+    },
+    "interestParts": {
+      "fixed": "Bunga tetap (periode 1)",
+      "margin": "Bunga dari margin",
+      "inflation": "Bunga dari inflasi",
+      "benchmark": "Bunga dari suku bunga acuan",
+      "announced": "Bunga yang diumumkan",
+      "fixedTerm": "Bunga dengan suku bunga tetap"
+    },
+    "chart": {
+      "title": "Bunga kumulatif pada akhir setiap periode",
+      "assumption": "Proyeksi dengan asumsi {benchmark} = {value}",
+      "projectedNote": "Batang yang lebih terang adalah periode proyeksi",
+      "stoppedAt": "Bunga tidak diketahui sejak periode {period}, sehingga grafik berhenti sebelumnya."
+    },
+    "scenarios": {
+      "title": "Skenario inflasi",
+      "titleBenchmark": "Skenario suku bunga",
+      "projection": "Proyeksi",
+      "caption": "Nilai jatuh tempo proyeksi dan bunga menurut nilai asumsi",
+      "intro": "Ini proyeksi, bukan kepastian: untuk setiap periode yang belum dimulai diasumsikan nilai {benchmark} pada kolom pertama. Periode yang sudah diketahui dan diumumkan tidak berubah. Pilih satu baris untuk melihat tabel suku bunga dan grafiknya.",
+      "custom": "Nilai {benchmark} Anda sendiri (%)",
+      "add": "Tambah skenario",
+      "useDefault": "Gunakan asumsi default",
+      "selected": "Dipilih",
+      "loading": "Memuat skenario...",
+      "loadFailed": "Skenario tidak dapat dimuat.",
+      "columns": {
+        "assumed": "Asumsi: {benchmark}",
+        "maturityValue": "Nilai jatuh tempo (proyeksi)",
+        "totalInterest": "Total bunga (proyeksi)"
+      },
+      "asOfNote": "Dinilai pada {date}, tanggal yang dipilih di atas: angka mencakup obligasi yang dimiliki pada hari itu."
+    },
+    "benchmarks": {
+      "PL_CPI_GUS_YOY": "IHK, 12 bulan (GUS)",
+      "PL_NBP_REFERENCE": "Suku bunga acuan NBP",
+      "US_CPI_U_NSA": "CPI-U, semua item, tanpa penyesuaian musiman (BLS)",
+      "US_TBILL_13W_MMY": "Imbal hasil surat utang Treasury 13 minggu"
+    },
+    "valuationRefusal": {
+      "PURCHASE_OUTSIDE_SALE_WINDOW": "Seri ini hanya dapat dibeli dari {from} sampai {to}. Lot ini dibeli pada {purchaseDate}, sehingga tidak dinilai.",
+      "PURCHASE_AFTER_MATURITY": "Seri ini jatuh tempo pada {maturityDate}. Lot ini dibeli pada {purchaseDate}, pada hari itu atau sesudahnya, sehingga tidak dinilai."
+    },
+    "marketPriceRequired": "Sekuritas ini memuat seri yang diperdagangkan di pasar, sehingga harganya tidak ditentukan oleh ketentuannya. Monize tidak menulis harga untuknya: masukkan harga sendiri. Nilai lot di bawah dihitung dari ketentuan dan bukan nilai pasar.",
+    "partial": {
+      "title": "Penilaian ini belum lengkap, jadi baca angkanya sebagai angka sebagian.",
+      "terms": "Ketentuan obligasi belum lengkap (misalnya kalender belum terpasang).",
+      "reference": "Data referensi belum ada; lihat daftar data yang masih diperlukan di bawah.",
+      "earlyRedemption": "Ketentuan pelunasan dini belum lengkap, sehingga nilai pelunasan dini mungkin tidak tersedia.",
+      "other": "Setidaknya satu lot belum dapat dinilai sepenuhnya (misalnya suku bunga belum diketahui)."
+    },
+    "projectionMissing": {
+      "title": "Periode berikutnya tidak dapat diproyeksikan",
+      "item": "{benchmark}: belum ada nilai yang dipublikasikan dan belum ada asumsi yang ditetapkan, sehingga periode berikutnya tidak dapat diproyeksikan (dipublikasikan oleh {publisher})",
+      "itemNoPublisher": "{benchmark}: belum ada nilai yang dipublikasikan dan belum ada asumsi yang ditetapkan, sehingga periode berikutnya tidak dapat diproyeksikan (penerbit tidak diketahui)"
+    },
+    "coverage": {
+      "asOf": "Data {benchmark} per {date}",
+      "none": "Belum ada data {benchmark} yang tersimpan"
+    },
+    "issuers": {
+      "PL_MF": "Kementerian Keuangan (PL)",
+      "US_TREASURY": "Departemen Keuangan AS (US)"
+    },
+    "redemption": {
+      "title": "Ketentuan penebusan lebih awal",
+      "fixedFee": "Biaya penebusan lebih awal: {amount} per obligasi.",
+      "forfeitAccrued": "Pada penebusan lebih awal, bunga yang berjalan pada periode saat ini hangus.",
+      "floorAllPeriods": "Biaya tidak pernah menurunkan hasil penebusan di bawah nilai nominal, pada periode mana pun.",
+      "floorFirstPeriod": "Hanya pada periode pertama biaya tidak dapat menurunkan hasil penebusan di bawah nilai nominal; periode berikutnya tidak memiliki batas bawah tersebut."
+    },
+    "programs": {
+      "OTS": "OTS: obligasi tabungan 3 bulan dengan suku bunga tetap",
+      "ROR": "ROR: obligasi tabungan 1 tahun dengan suku bunga mengambang",
+      "DOR": "DOR: obligasi tabungan 2 tahun dengan suku bunga mengambang",
+      "TOS": "TOS: obligasi tabungan 3 tahun dengan suku bunga tetap",
+      "COI": "COI: obligasi tabungan 4 tahun yang terindeks inflasi",
+      "EDO": "EDO: obligasi tabungan 10 tahun yang terindeks inflasi",
+      "ROS": "ROS: obligasi tabungan keluarga 6 tahun yang terindeks inflasi",
+      "ROD": "ROD: obligasi tabungan keluarga 12 tahun yang terindeks inflasi",
+      "BILL": "BILL: surat utang Treasury, 4 hingga 52 minggu, dijual dengan diskon",
+      "NOTE": "NOTE: Treasury note, 2 hingga 10 tahun, kupon tetap semesteran",
+      "BOND": "BOND: Treasury bond, 20 dan 30 tahun, kupon tetap semesteran",
+      "TIPS": "TIPS: surat berharga Treasury yang dilindungi inflasi, pokok diindeks ke CPI-U",
+      "FRN": "FRN: Treasury note suku bunga mengambang, 2 tahun, bunga triwulanan"
+    },
+    "series": {
+      "title": "Seri Anda",
+      "column": "Seri",
+      "nextRateChange": "Perubahan suku bunga berikutnya",
+      "total": "Total jenis obligasi",
+      "purchasedRange": "{from} sampai {to}",
+      "expand": "Tampilkan detail {series}",
+      "collapse": "Sembunyikan detail {series}",
+      "partial": "Sebagian"
+    },
+    "program": {
+      "title": "Jenis obligasi",
+      "newest": "Ketentuan seri terbaru, {series}.",
+      "noTerms": "Ketentuan belum diketahui: Anda tidak memiliki seri jenis obligasi ini dan tidak ada yang sedang dijual.",
+      "autoFetchFailed": "Pengaturan tidak dapat disimpan."
+    },
+    "onSale": {
+      "title": "Sedang dijual sekarang"
     }
   }
 }

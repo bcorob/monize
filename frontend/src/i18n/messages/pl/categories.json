@@ -7,6 +7,7 @@
     "filterAll": "Wszystkie ({count})",
     "filterExpenses": "Wydatki ({count})",
     "filterIncome": "Przychody ({count})",
+    "typeFilterLabel": "Typ",
     "modalTitleNew": "Nowa kategoria",
     "modalTitleEdit": "Edytuj kategorie",
     "countSingle": "1 kategoria",
@@ -54,6 +55,12 @@
     "typeExpense": "Wydatek",
     "typeIncome": "Przychody",
     "typeInherited": "Typ dziedziczony z kategorii nadrzednej",
+    "autoSignLabel": "Automatyczny znak",
+    "autoSignOn": "Włączony",
+    "autoSignOff": "Wyłączony",
+    "autoSignInherit": "Dziedzicz z kategorii nadrzędnej",
+    "autoSignInheritedFrom": "Dziedziczone z kategorii nadrzędnej ({name}): obecnie {state}",
+    "autoSignHelp": "Gdy włączone, wpisana kwota staje się ujemna dla kategorii wydatków i dodatnia dla kategorii przychodów. Wyłącz, aby zachować znak dokładnie tak, jak go wpisujesz.",
     "colourLabel": "Kolor",
     "colourInherit": "Dziedzicz z kategorii nadrzednej",
     "colourNone": "Brak koloru",
@@ -65,8 +72,8 @@
     "submitUpdate": "Zaktualizuj kategorie"
   },
   "list": {
-    "emptyHeading": "Brak kategorii",
-    "emptyDescription": "Zacznij od utworzenia nowej kategorii.",
+    "emptyHeading": "Nie znaleziono kategorii",
+    "emptyDescription": "Żadna kategoria nie pasuje do bieżącego wyszukiwania lub filtra.",
     "colName": "Nazwa",
     "colType": "Typ",
     "colCount": "Liczba",
@@ -79,7 +86,7 @@
     "viewTransactionsTitle": "Wyswietl transakcje w tej kategorii"
   },
   "deleteDialog": {
-    "title": "Usunąć \"{name}\"?",
+    "title": "Usuń \"{name}\"",
     "checkingUsage": "Sprawdzanie uzycia...",
     "usedBy": "Ta kategoria jest używana przez {count, plural, one {# element} few {# elementy} many {# elementów} other {# elementu}} (transakcje i/lub zaplanowane rachunki oraz wpłaty).",
     "reassignLabel": "Przypisz ponownie do:",

@@ -63,8 +63,7 @@ function makeAccount(overrides: Partial<Account> = {}): Account {
     interestRate: 6,
     paymentAmount: 500,
     paymentFrequency: 'MONTHLY',
-    isCanadianMortgage: false,
-    isVariableRate: false,
+    mortgageType: 'ANNUITY',
     ...overrides,
   } as Account;
 }
@@ -167,7 +166,7 @@ describe('LoanOverpaymentSimulatorReport', () => {
     await renderReport();
     await act(async () => {});
 
-    expect(screen.getByText('Try again')).toBeInTheDocument();
+    expect(screen.getByText('Try Again')).toBeInTheDocument();
   });
 
   it('shows the retryable error state when the scenarios request fails, instead of silently rendering none', async () => {
@@ -176,7 +175,7 @@ describe('LoanOverpaymentSimulatorReport', () => {
     await renderReport();
     await act(async () => {});
 
-    expect(screen.getByText('Try again')).toBeInTheDocument();
+    expect(screen.getByText('Try Again')).toBeInTheDocument();
     expect(screen.queryByTestId('loan-detail-view')).not.toBeInTheDocument();
   });
 

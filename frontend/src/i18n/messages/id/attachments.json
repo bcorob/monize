@@ -11,9 +11,76 @@
   "uploaded": "Lampiran ditambahkan",
   "deleted": "Lampiran dihapus",
   "loadFailed": "Gagal memuat lampiran",
+  "retry": "Coba lagi",
   "uploadFailed": "Gagal mengunggah lampiran",
   "deleteFailed": "Gagal menghapus lampiran",
   "tooLarge": "File terlalu besar (maksimum {max})",
   "unsupported": "Jenis file tidak didukung. Diizinkan: gambar atau PDF",
-  "tooMany": "Maksimum {max} lampiran per transaksi"
+  "tooMany": "Maksimum {max} lampiran per transaksi",
+  "fromWarranty": "Dari garansi: {name}",
+  "fromLinkedWarranty": "Dari garansi yang ditautkan",
+  "scan": {
+    "button": "Pindai dokumen",
+    "title": "Pindai dokumen",
+    "description": "Luruskan dan bersihkan foto dokumen sebelum melampirkannya.",
+    "analysing": "Mencari dokumen dalam foto…",
+    "failed": "Dokumen tidak dapat dipindai. Anda tetap dapat melampirkan fotonya apa adanya.",
+    "viewEnhanced": "Ditingkatkan",
+    "viewOriginal": "Asli",
+    "rotate": "Putar",
+    "styleLabel": "Hasil akhir",
+    "styles": {
+      "colour": "Berwarna",
+      "grayscale": "Skala abu-abu",
+      "blackAndWhite": "Hitam putih",
+      "none": "Tanpa penyempurnaan"
+    },
+    "styleHints": {
+      "colour": "Meratakan pencahayaan, menaikkan kontras, dan mempertajam teks.",
+      "grayscale": "Pembersihan yang sama tanpa warna. Lebih kecil dan bebas dari rona yang muncul pada kertas di bawah cahaya buatan.",
+      "blackAndWhite": "Hanya tinta dan kertas. Terbaik untuk teks cetak; foto dan logo akan menjadi datar.",
+      "none": "Diluruskan dan dipangkas, selebihnya persis seperti difoto. Gunakan ini bila penyempurnaan merusak subjeknya."
+    },
+    "adjustments": {
+      "brightness": "Kecerahan ({value})",
+      "contrast": "Kontras ({value})"
+    },
+    "resetAdjustments": "Atur ulang kecerahan dan kontras",
+    "adjustHint": "Beralih ke “Asli” untuk menggeser sudut jika tepinya salah.",
+    "updating": "Memperbarui pratinjau…",
+    "noDocumentFound": "Tepi dokumen tidak ditemukan, jadi seluruh foto digunakan. Beralih ke “Asli” dan tentukan sudutnya sendiri.",
+    "previewEnhancedAlt": "Pratinjau pindaian yang ditingkatkan",
+    "previewOriginalAlt": "Pratinjau foto asli",
+    "useEnhanced": "Gunakan yang ditingkatkan",
+    "keepOriginal": "Simpan yang asli saja",
+    "retake": "Ambil ulang",
+    "cancel": "Batal",
+    "originalTooLarge": "Foto asli lebih besar dari {max}, jadi hanya pindaian yang ditingkatkan yang akan dilampirkan.",
+    "warnings": {
+      "blurry": "Foto tampak buram. Mengambil ulang akan menghasilkan pindaian yang lebih tajam.",
+      "edgesOutsideFrame": "Dokumen mencapai tepi foto, sehingga salah satu sisinya bisa terpotong. Foto ulang dengan menyisakan margin di sekeliling seluruh halaman, tanpa ada sisi yang menyentuh tepi.",
+      "lowResolution": "Pindaian cukup kecil, tulisan halus mungkin sulit dibaca."
+    },
+    "corners": {
+      "label": "Sudut dokumen",
+      "topLeft": "Sudut kiri atas",
+      "topRight": "Sudut kanan atas",
+      "bottomRight": "Sudut kanan bawah",
+      "bottomLeft": "Sudut kiri bawah"
+    },
+    "originalKept": "foto asli disimpan"
+  },
+  "preview": {
+    "loading": "Memuat pratinjau…",
+    "failed": "Pratinjau tidak dapat dimuat. Anda tetap dapat mengunduh berkasnya.",
+    "storeUnavailable": "Berkas ini berada di penyimpanan yang saat ini tidak dapat dijangkau server, jadi tidak bisa dipratinjau atau diunduh. Tidak ada yang hilang: minta administrator memulihkan pengaturan penyimpanan lampiran.",
+    "unsupported": "Jenis berkas ini tidak dapat dipratinjau. Anda tetap dapat mengunduhnya.",
+    "fit": "Sesuaikan dengan layar",
+    "actualSize": "Ukuran sebenarnya",
+    "versionLabel": "Versi",
+    "zoomLabel": "Zoom",
+    "pageCount": "{count, plural, other {# halaman}}",
+    "page": "Halaman {page} dari {total}",
+    "open": "Pratinjau {name}"
+  }
 }

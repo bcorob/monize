@@ -79,7 +79,10 @@ describe('act-guard', () => {
       // In `afterEach`, after `cleanup()`: an update React commits while
       // unmounting belongs to the test that mounted the tree.
       expect(setup).toMatch(/cleanup\(\);[\s\S]*?failOnActWarnings\(\);[\s\S]*?\}\);/);
-      expect(setup).toMatch(/afterAll\(failOnActWarnings\)/);
+      // `afterAll` gained a second guard (intl), so it is a block rather than a
+      // bare reference. Match the call inside it, not the old exact spelling --
+      // otherwise this asserts the formatting rather than the wiring.
+      expect(setup).toMatch(/afterAll\(\(\) => \{[\s\S]*?failOnActWarnings\(\);[\s\S]*?\}\)/);
     });
 
     it('does not suppress act warnings anywhere else', () => {

@@ -1,0 +1,81 @@
+{
+  "learnMore": "자세히 알아보기",
+  "howThisWorks": "작동 방식",
+  "menu": {
+    "helpForPage": "이 페이지 도움말",
+    "search": "도움말 검색",
+    "shortcuts": "키보드 단축키",
+    "takeTour": "둘러보기 시작",
+    "whatsNew": "새로운 기능",
+    "shellMenu": "데스크톱 앱 메뉴",
+    "reportIssue": "문제 신고",
+    "discussions": "토론"
+  },
+  "shortcuts": {
+    "title": "키보드 단축키",
+    "palette": "명령 팔레트",
+    "paletteKeys": "Ctrl/Cmd+K",
+    "search": "도움말 검색",
+    "searchKeys": "?",
+    "undo": "마지막 변경 취소",
+    "undoKeys": "Ctrl/Cmd+Z",
+    "redo": "다시 실행",
+    "redoKeys": "Ctrl/Cmd+Shift+Z 또는 Ctrl/Cmd+Y",
+    "closeDialog": "열려 있는 대화상자 또는 패널 닫기",
+    "closeDialogKeys": "Esc"
+  },
+  "panel": {
+    "title": "도움말",
+    "back": "뒤로",
+    "forward": "앞으로",
+    "openOnline": "monize.net에서 열기",
+    "pin": "도움말 패널을 고정하여 페이지를 이동해도 열려 있게 합니다",
+    "unpin": "도움말 패널 고정 해제",
+    "expand": "도움말 패널 확대",
+    "collapse": "도움말 패널 축소",
+    "resize": "도움말 패널 크기 조절",
+    "resizeValue": "{width}픽셀",
+    "close": "도움말 닫기",
+    "englishOnly": "이 가이드는 영어로 제공됩니다.",
+    "loading": "도움말 로딩 중",
+    "toc": {
+      "toggle": "이 페이지의 내용",
+      "label": "이 페이지의 섹션"
+    },
+    "error": {
+      "heading": "도움말을 불러올 수 없습니다",
+      "body": "가이드를 불러오지 못했습니다. 다시 시도하거나 monize.net에서 이 페이지를 읽어 보세요.",
+      "retry": "다시 시도"
+    },
+    "search": "가이드 검색",
+    "tour": {
+      "prompt": "이 페이지에는 가이드 투어가 있습니다."
+    },
+    "version": "Monize {version} 가이드",
+    "latestOnline": "최신 가이드는 monize.net에 있습니다"
+  },
+  "search": {
+    "title": "가이드 검색",
+    "placeholder": "가이드 검색",
+    "ariaLabel": "가이드 검색",
+    "contextHeading": "이 화면에 대한 도움말",
+    "noResults": "\"{query}\"에 대한 결과가 없습니다",
+    "error": "검색에 실패했습니다. 다시 시도하세요.",
+    "hint": {
+      "navigate": "탐색",
+      "select": "선택",
+      "close": "닫기"
+    }
+  },
+  "markdown": {
+    "screenshot": "스크린샷",
+    "viewScreenshot": "monize.net에서 스크린샷 보기",
+    "callout": {
+      "note": "참고",
+      "tip": "팁",
+      "important": "중요",
+      "warning": "경고",
+      "caution": "주의"
+    }
+  }
+}

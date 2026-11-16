@@ -56,6 +56,248 @@ function isStaticAsset(url) {
   return STATIC_EXTENSIONS.some(function (ext) { return pathname.endsWith(ext); });
 }
 
+// ---------------------------------------------------------------------------
+// Web Share Target
+//
+// The OS delivers a share as a browser-initiated multipart POST navigation to
+// the manifest's share_target action. No page is running and no script of ours
+// has been reached, so this worker is the only code that can see the files: it
+// stashes them in its own cache and answers 303 to the review page, which reads
+// them back once the user is authenticated.
+//
+// Every value below mirrors src/lib/share-target.ts, which the app imports and
+// this classic script cannot. src/test/sw-share-target.test.ts asserts the two
+// agree, the same way sw-offline.test.ts pins the boot palette.
+// ---------------------------------------------------------------------------
+
+var SHARE_CACHE_NAME = 'monize-share-v1';
+var SHARE_TARGET_PATH = '/share-target';
+var SHARE_PAGE_PATH = '/share';
+var SHARE_KEY_PREFIX = '/__monize/share/';
+var SHARE_NAME_HEADER = 'X-Monize-Share-Name';
+var SHARE_TARGET_FILES_FIELD = 'files';
+
+var SHARE_MAX_FILE_BYTES = 10 * 1024 * 1024;
+var SHARE_MAX_FILES = 10;
+var SHARE_MAX_TOTAL_BYTES = 50 * 1024 * 1024;
+var SHARE_STASH_TTL_MS = 60 * 60 * 1000;
+
+var SHARE_ATTACHMENT_MIME_TYPES = [
+  'image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf',
+];
+var SHARE_ATTACHMENT_EXTENSIONS = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'];
+var SHARE_STATEMENT_EXTENSIONS = ['csv', 'ofx', 'qfx', 'qif'];
+var SHARE_STATEMENT_MIME_TYPES = [
+  'text/csv', 'application/csv', 'application/x-ofx',
+  'application/vnd.intu.qfx', 'application/qif', 'application/x-qif',
+];
+
+function shareExtensionOf(filename) {
+  var dot = String(filename).lastIndexOf('.');
+  return dot < 0 ? '' : String(filename).slice(dot + 1).toLowerCase();
+}
+
+// Mirrors classifySharedFile: MIME first for attachments (that list is exact,
+// and the server sniffs the magic bytes anyway), then extension for statements
+// (a bank export is routinely application/octet-stream), then MIME for a
+// statement with no extension at all. Anything else is refused with a reason --
+// never handed to the QIF parser on the strength of having no better guess.
+function classifySharedFile(name, type) {
+  var mime = String(type || '').toLowerCase().split(';')[0].trim();
+  if (SHARE_ATTACHMENT_MIME_TYPES.indexOf(mime) !== -1) return 'attachment';
+  var extension = shareExtensionOf(name);
+  if (SHARE_STATEMENT_EXTENSIONS.indexOf(extension) !== -1) return 'statement';
+  if (SHARE_STATEMENT_MIME_TYPES.indexOf(mime) !== -1) return 'statement';
+  if (SHARE_ATTACHMENT_EXTENSIONS.indexOf(extension) !== -1) return 'attachment';
+  return null;
+}
+
+function shareIndexKey(id) {
+  return SHARE_KEY_PREFIX + id + '/index';
+}
+
+function shareFileKey(id, position) {
+  return SHARE_KEY_PREFIX + id + '/file/' + position;
+}
+
+function shareBundleIdOf(url) {
+  var pathname;
+  try {
+    pathname = new URL(url).pathname;
+  } catch (_error) {
+    return null;
+  }
+  if (pathname.indexOf(SHARE_KEY_PREFIX) !== 0) return null;
+  var id = pathname.slice(SHARE_KEY_PREFIX.length).split('/')[0];
+  return /^[A-Za-z0-9-]{1,64}$/.test(id) ? id : null;
+}
+
+/** Same-origin POSTs to the manifest's share_target action, and nothing else. */
+function isShareTargetRequest(request) {
+  var url;
+  try {
+    url = new URL(request.url);
+  } catch (_error) {
+    return false;
+  }
+  return (
+    url.origin === self.location.origin && url.pathname === SHARE_TARGET_PATH
+  );
+}
+
+function shareRedirect(target) {
+  return Response.redirect(new URL(target, self.location.origin).href, 303);
+}
+
+/**
+ * Drop every bundle past the stash lifetime, and any file bytes whose index is
+ * gone. Runs on activate and before each new share, so the bound holds even if
+ * no page of ours ever runs again.
+ */
+function purgeShareStash(now) {
+  var at = typeof now === 'number' ? now : Date.now();
+  return caches.open(SHARE_CACHE_NAME).then(function (cache) {
+    return cache.keys().then(function (requests) {
+      var byBundle = {};
+      requests.forEach(function (request) {
+        var id = shareBundleIdOf(request.url);
+        if (!id) return;
+        if (!byBundle[id]) byBundle[id] = [];
+        byBundle[id].push(request);
+      });
+
+      return Promise.all(
+        Object.keys(byBundle).map(function (id) {
+          return cache
+            .match(shareIndexKey(id))
+            .then(function (response) {
+              return response ? response.json() : null;
+            })
+            .catch(function () {
+              return null;
+            })
+            .then(function (index) {
+              var live =
+                index &&
+                typeof index.createdAt === 'number' &&
+                at - index.createdAt < SHARE_STASH_TTL_MS;
+              if (live) return null;
+              return Promise.all(
+                byBundle[id].map(function (request) {
+                  return cache.delete(request).catch(function () {});
+                })
+              );
+            });
+        })
+      );
+    });
+  }).catch(function () {
+    // A stash that cannot be opened cannot be purged; nothing else depends on
+    // this resolving with anything in particular.
+  });
+}
+
+/**
+ * Read the shared files, store the ones within the limits, and record every one
+ * of them -- accepted or refused -- in the bundle index. A refused file's BYTES
+ * are never stored; its reason is, so the review screen can explain rather than
+ * leave the user wondering what happened to a file they shared.
+ */
+function stashShare(request) {
+  var id = self.crypto.randomUUID();
+  var createdAt = Date.now();
+
+  return purgeShareStash(createdAt)
+    .then(function () {
+      return request.formData();
+    })
+    .then(function (formData) {
+      var shared = formData.getAll(SHARE_TARGET_FILES_FIELD).filter(
+        function (value) {
+          return value && typeof value === 'object' && 'arrayBuffer' in value;
+        }
+      );
+
+      return caches.open(SHARE_CACHE_NAME).then(function (cache) {
+        var entries = [];
+        var accepted = 0;
+        var totalBytes = 0;
+
+        // Sequential rather than parallel: the running count and byte total are
+        // what decide each file, so they have to be decided in order.
+        var chain = Promise.resolve();
+        shared.forEach(function (file, position) {
+          chain = chain.then(function () {
+            var name = String(file.name || 'shared-file');
+            var type = String(file.type || '');
+            var size = Number(file.size) || 0;
+            var kind = classifySharedFile(name, type);
+            var entry = { name: name, type: type, size: size, kind: kind };
+
+            // An unsupported file is refused before it can spend a slot in the
+            // count or the byte budget -- it was never going to be stored.
+            var reason = null;
+            if (kind === null) reason = 'unsupported';
+            else if (size > SHARE_MAX_FILE_BYTES) reason = 'tooLarge';
+            else if (accepted >= SHARE_MAX_FILES) reason = 'tooMany';
+            else if (totalBytes + size > SHARE_MAX_TOTAL_BYTES) {
+              reason = 'shareTooLarge';
+            }
+
+            if (reason) {
+              entry.reason = reason;
+              entries.push(entry);
+              return null;
+            }
+
+            var key = shareFileKey(id, position);
+            return file.arrayBuffer().then(function (bytes) {
+              var headers = { 'Content-Type': type || 'application/octet-stream' };
+              headers[SHARE_NAME_HEADER] = encodeURIComponent(name);
+              return cache
+                .put(key, new Response(bytes, { headers: headers }))
+                .then(function () {
+                  entry.key = key;
+                  entries.push(entry);
+                  accepted += 1;
+                  totalBytes += size;
+                });
+            });
+          });
+        });
+
+        return chain.then(function () {
+          // The index is written last: it is what makes a bundle visible, so a
+          // failure part-way leaves unreferenced bytes the purge sweeps, never
+          // an index promising bytes that were never stored.
+          return cache
+            .put(
+              shareIndexKey(id),
+              new Response(
+                JSON.stringify({ id: id, createdAt: createdAt, files: entries }),
+                { headers: { 'Content-Type': 'application/json' } }
+              )
+            )
+            .then(function () {
+              return id;
+            });
+        });
+      });
+    });
+}
+
+function handleShareTarget(request) {
+  return stashShare(request)
+    .then(function (id) {
+      return shareRedirect(SHARE_PAGE_PATH + '?id=' + encodeURIComponent(id));
+    })
+    .catch(function () {
+      // A malformed body, a storage refusal, a quota error: the user still
+      // lands on a Monize page that explains, never on a browser error page.
+      return shareRedirect(SHARE_PAGE_PATH + '?error=stash');
+    });
+}
+
 // Install: activate immediately
 self.addEventListener('install', function () {
   self.skipWaiting();
@@ -67,11 +309,24 @@ self.addEventListener('activate', function (event) {
     caches.keys().then(function (cacheNames) {
       return Promise.all(
         cacheNames
-          .filter(function (name) { return name !== CACHE_NAME; })
+          // The share stash is kept as deliberately as the static cache: a
+          // worker update landing between a share and the user reading it must
+          // not be what empties their inbox.
+          .filter(function (name) {
+            return name !== CACHE_NAME && name !== SHARE_CACHE_NAME;
+          })
           .map(function (name) { return caches.delete(name); })
       );
     }).then(function () {
+      // Claim first: taking control of open pages is what the offline fallback
+      // and the share target both depend on, and it must not wait behind
+      // housekeeping. The purge still runs inside this waitUntil, so the worker
+      // stays alive for it.
       return self.clients.claim();
+    }).then(function () {
+      // Expiry is enforced by the worker, not only by the app: a bundle nobody
+      // opened still ages out while no page of ours is running.
+      return purgeShareStash();
     })
   );
 });
@@ -98,6 +353,377 @@ self.addEventListener('message', function (event) {
     );
   });
   if (event.waitUntil) event.waitUntil(write);
+});
+
+// ---------------------------------------------------------------------------
+// Web Push
+//
+// The payload is composed by the server and travels through Mozilla's, Google's
+// or Apple's infrastructure, so it deliberately carries no amount, account or
+// payee -- the detail loads once the app is open. What arrives here is
+// { type, title, body, target } and nothing about it is trusted: a worker is the
+// last place a forged value can be caught before it becomes a navigation.
+// ---------------------------------------------------------------------------
+
+var PUSH_ICON = '/icons/icon-192x192.png';
+// The badge is a MASK, not a picture: Chrome on Android keeps only the alpha
+// channel and tints what is left, so the alpha has to BE the glyph. Every other
+// icon this project ships fails that -- a maskable icon is opaque edge to edge
+// by definition of its purpose, which is why the toolbar drew a filled square.
+// `badge-monochrome.png` is white-on-transparent, built by
+// frontend/scripts/build-notification-badge.mjs and held to that shape by
+// src/test/notification-badge.test.ts.
+var PUSH_BADGE = '/icons/badge-monochrome.png';
+var PUSH_FALLBACK_TITLE = 'Monize';
+var PUSH_FALLBACK_BODY = 'You have a new notification in Monize.';
+
+// A push target is a path inside this app, never a URL. Anything else -- an
+// absolute URL, a protocol-relative '//host', a backslash Chrome normalises to
+// a slash, a 'javascript:' string -- is discarded rather than repaired, because
+// a repaired hostile value is still a value somebody chose.
+//
+// The parser is the authority here, not the shape of the raw string. WHATWG URL
+// strips ASCII tab, CR and LF *before* parsing, so '/\t/evil.test/steal' begins
+// with a slash, has no second slash, contains no backslash -- and resolves to
+// https://evil.test/steal. Any guard written against the characters alone loses
+// to that, so the check is: resolve it, then require the result to be this
+// origin, and hand back the parser's own normalised path.
+function safeNotificationPath(value) {
+  if (typeof value !== 'string') return '/';
+  if (value.length === 0 || value.length > 512) return '/';
+  // Still required, so a target is an absolute path rather than something whose
+  // meaning depends on what it is resolved against.
+  if (value.charAt(0) !== '/') return '/';
+
+  var resolved;
+  try {
+    resolved = new URL(value, self.location.origin);
+  } catch (_error) {
+    return '/';
+  }
+  if (resolved.origin !== self.location.origin) return '/';
+  return resolved.pathname + resolved.search + resolved.hash;
+}
+
+/**
+ * The key two notifications must share to replace each other.
+ *
+ * The browser replaces a shown notification whose `tag` matches, so the tag is
+ * a claim about what the notification is ABOUT. Two bills due on the same day
+ * are both `BILL_DUE`, so grouping by type alone showed the reader one of them
+ * and threw the other away.
+ *
+ * The subject comes from the payload's own `collapseKey`, not from `target`: a
+ * route is not a subject, and the bill producer proves it -- every reminder
+ * points at `/bills`, because no per-bill page exists, so a tag built from the
+ * target collapsed exactly the case it was meant to separate.
+ *
+ * A payload with no usable key groups by type, which is right where the type
+ * really does describe one subject: one "email delivery is failing", not four.
+ * The key is bounded and read as text like every other field here, so a hostile
+ * payload can neither mint unbounded buckets nor put anything but a short string
+ * in the tag.
+ */
+function collapseTag(payload) {
+  var type = pushText(payload.type, 'monize');
+  var key = pushText(payload.collapseKey, '');
+  return key === '' ? type : type + '|' + key;
+}
+
+function readPushPayload(event) {
+  if (!event.data) return {};
+  try {
+    var parsed = event.data.json();
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch (_error) {
+    return {};
+  }
+}
+
+function pushText(value, fallback) {
+  return typeof value === 'string' && value.length > 0 && value.length <= 300
+    ? value
+    : fallback;
+}
+
+// The actions the worker knows how to handle. Anything else in the payload is
+// dropped: an action id is what `notificationclick` branches on, so an unknown
+// one would be a button that does nothing.
+var KNOWN_PUSH_ACTIONS = ['stop-reminder'];
+
+function pushActions(value) {
+  if (!Array.isArray(value)) return [];
+  var actions = [];
+  for (var i = 0; i < value.length && actions.length < 2; i += 1) {
+    var item = value[i];
+    if (!item || typeof item !== 'object') continue;
+    if (KNOWN_PUSH_ACTIONS.indexOf(item.action) === -1) continue;
+    var title = pushText(item.title, '');
+    if (title === '') continue;
+    actions.push({ action: item.action, title: title });
+  }
+  return actions;
+}
+
+// Only our opaque same-origin chart route may trigger an image download.
+function safeNotificationImage(value) {
+  return typeof value === 'string' && /^\/api\/v1\/push\/chart\/[a-f0-9]{64}\.[0-9]{13}\.[a-f0-9]{64}\.png$/.test(value)
+    ? value : undefined;
+}
+
+function pushReminderId(value) {
+  return typeof value === 'string' && value.length > 0 && value.length <= 64
+    ? value
+    : undefined;
+}
+
+self.addEventListener('push', function (event) {
+  var payload = readPushPayload(event);
+  var target = safeNotificationPath(payload.target);
+
+  event.waitUntil(
+    self.registration.showNotification(
+      pushText(payload.title, PUSH_FALLBACK_TITLE),
+      {
+        body: pushText(payload.body, PUSH_FALLBACK_BODY),
+        image: safeNotificationImage(payload.image),
+        icon: PUSH_ICON,
+        badge: PUSH_BADGE,
+        // Collapse repeats of ONE subject onto one notification rather than
+        // stacking four of them, and let two different subjects stack. See
+        // `collapseTag`: the subject is the payload's `collapseKey`, and a
+        // payload without one is saying its type IS the subject.
+        tag: collapseTag(payload),
+        // The reminder id rides along so the Stop action below can name what
+        // to stop; `actions` is the server's list, filtered to the ids this
+        // worker handles.
+        data: { target: target, reminderId: pushReminderId(payload.reminderId) },
+        actions: pushActions(payload.actions),
+        // A test push exists to be looked at: keep it until dismissed rather
+        // than letting a desktop banner auto-hide it in seconds. Real alerts
+        // keep the platform's default so they do not pile up.
+        requireInteraction: payload.type === 'TEST',
+      }
+    )
+  );
+});
+
+// A browser may rotate a push subscription on its own -- a key refresh, a long
+// idle period, storage pressure. The old endpoint stops working and the stored
+// row keeps naming it: delivery just stops, and nothing retires the row until
+// something tries to send to it.
+//
+// The worker resubscribes with the key the old subscription carried (the server
+// checks it is still current, and refuses if a rotation is what caused this),
+// but it cannot register the result itself: the API is CSRF-protected by a
+// double-submit cookie the worker has no portable way to read. So it tells the
+// page, which has the session and the token. With no page open, the settings
+// panel already reads this browser's endpoint on load and offers to enable
+// again -- the message is the fast path, not the only one.
+function applicationServerKeyOf(subscription) {
+  return (
+    subscription && subscription.options && subscription.options.applicationServerKey
+  );
+}
+
+/** Tell every open window, so the settings panel reconciles even if we cannot. */
+function announceSubscriptionChange() {
+  return self.clients
+    .matchAll({ type: 'window', includeUncontrolled: true })
+    .then(function (clientList) {
+      for (var i = 0; i < clientList.length; i++) {
+        clientList[i].postMessage({ type: 'monize-push-subscription-changed' });
+      }
+    });
+}
+
+self.addEventListener('pushsubscriptionchange', function (event) {
+  // Firefox -- where Web Push is most used -- fires this with NO oldSubscription,
+  // and so did Chrome before the event's properties shipped. Returning early
+  // there meant the browsers that need this handler most got nothing from it:
+  // no resubscribe, and no message, so even a window with the settings panel
+  // open learned nothing and delivery stayed dead until somebody happened to
+  // open Settings again.
+  var key =
+    applicationServerKeyOf(event.oldSubscription) ||
+    applicationServerKeyOf(event.newSubscription);
+
+  // No key to subscribe with is not a reason to stay silent: the page holds the
+  // session and the CSRF token this worker cannot read, so it can do the whole
+  // thing itself. Announcing is the part that must always happen.
+  if (!key) {
+    event.waitUntil(announceSubscriptionChange().catch(function () {}));
+    return;
+  }
+
+  event.waitUntil(
+    self.registration.pushManager
+      .subscribe({ userVisibleOnly: true, applicationServerKey: key })
+      .then(announceSubscriptionChange)
+      .catch(function () {
+        // The resubscribe failed -- a rotation, a revoked permission. The panel
+        // is still the durable path, so it is told either way.
+        return announceSubscriptionChange().catch(function () {});
+      })
+  );
+});
+
+// Cookie Store avoids a round trip where available. Other workers obtain the
+// token from the authenticated, non-cacheable same-origin JSON endpoint.
+function readCsrfTokenFromStore() {
+  if (self.cookieStore && typeof self.cookieStore.get === 'function') {
+    return self.cookieStore
+      .get('csrf_token')
+      .then(function (cookie) {
+        return cookie ? cookie.value : null;
+      })
+      .catch(function () {
+        return null;
+      });
+  }
+  return Promise.resolve(null);
+}
+
+// The Stop endpoint retains JWT authentication, ownership checks and the CSRF
+// double-submit guard. Failure still opens the reminders page.
+function postStop(reminderId, headers) {
+  return fetch(
+    '/api/v1/notifications/reminders/' +
+      encodeURIComponent(reminderId) +
+      '/stop',
+    { method: 'POST', credentials: 'include', headers: headers }
+  );
+}
+
+function refreshSession() {
+  return fetch('/api/v1/auth/refresh', {
+    method: 'POST',
+    credentials: 'include',
+  })
+    .then(function (response) {
+      return !!response && response.ok;
+    })
+    .catch(function () {
+      return false;
+    });
+}
+
+function postStopWithCsrf(reminderId) {
+  return readCsrfTokenFromStore().then(function (token) {
+    if (token) return postStop(reminderId, { 'X-CSRF-Token': token });
+    return fetch('/api/v1/auth/csrf-refresh', {
+      method: 'GET',
+      credentials: 'include',
+      mode: 'same-origin',
+      cache: 'no-store',
+      redirect: 'error',
+    }).then(function (response) {
+      // Propagate a 401 to the bounded session-refresh path below. Never send
+      // a state-changing request when token retrieval failed.
+      if (!response.ok) return response;
+      return response.json().then(function (data) {
+        if (!data || typeof data.csrfToken !== 'string' ||
+            data.csrfToken.length === 0 || data.csrfToken.length > 512) {
+          return { ok: false, status: 403 };
+        }
+        return postStop(reminderId, { 'X-CSRF-Token': data.csrfToken });
+      });
+    });
+  });
+}
+
+function stopReminderFromAction(reminderId) {
+  return postStopWithCsrf(reminderId)
+    .then(function (response) {
+      if (response && response.status === 401) {
+        return refreshSession().then(function (refreshed) {
+          // Refresh rotates CSRF cookies too: acquire the new token instead
+          // of retrying with the header from the expired session.
+          return refreshed ? postStopWithCsrf(reminderId) : response;
+        });
+      }
+      return response;
+    })
+    .then(function (response) {
+      return !!response && response.ok;
+    })
+    .catch(function () {
+      return false;
+    });
+}
+
+// Focusing is a courtesy the browser may refuse: WindowClient.focus() needs
+// transient activation, and without it Chromium rejects with InvalidAccessError
+// (headless has none at all). By then the navigation below has already put the
+// user's window on the page they asked for, which is the outcome -- so a refused
+// focus resolves quietly rather than rejecting the waitUntil the click handler
+// is holding.
+function focusQuietly(client) {
+  try {
+    return Promise.resolve(client.focus()).catch(function () {});
+  } catch (_error) {
+    return Promise.resolve();
+  }
+}
+
+// Focus an open same-origin window and navigate it, or open one. Shared by the
+// ordinary body click and the Stop-action fallback.
+function focusOrOpen(url) {
+  return self.clients
+    .matchAll({ type: 'window', includeUncontrolled: true })
+    .then(function (clientList) {
+      for (var i = 0; i < clientList.length; i++) {
+        var client = clientList[i];
+        if (new URL(client.url).origin !== self.location.origin) continue;
+        if (typeof client.navigate === 'function') {
+          // The catch belongs to the NAVIGATE: a client that cannot be
+          // navigated is still worth focusing. Written around the focus as
+          // well, it answered a refused focus by calling the identical focus
+          // again -- a retry that changes nothing, so it failed twice and the
+          // second rejection escaped.
+          return client
+            .navigate(url)
+            .catch(function () {
+              return client;
+            })
+            .then(function (navigated) {
+              return focusQuietly(navigated || client);
+            });
+        }
+        return focusQuietly(client);
+      }
+      return self.clients.openWindow(url);
+    });
+}
+
+self.addEventListener('notificationclick', function (event) {
+  event.notification.close();
+
+  var data = event.notification.data || {};
+  // Re-validated rather than trusted: the stored data IS the payload, so it is
+  // no more trustworthy here than it was on arrival.
+  var url = new URL(safeNotificationPath(data.target), self.location.origin)
+    .href;
+
+  // A Stop action on a reminder push: the dispatch puts `actions` and
+  // `reminderId` on a re-emitted nag's payload, and the push handler above
+  // carries the id in `data`. Silence the reminder
+  // without opening a window -- unless the stop did not take, in which case open
+  // the active reminders page so the user can finish stopping it
+  // there rather than being left with a nag that keeps firing.
+  if (event.action === 'stop-reminder') {
+    var reminderId = data.reminderId;
+    if (typeof reminderId === 'string' && reminderId) {
+      event.waitUntil(
+        stopReminderFromAction(reminderId).then(function (stopped) {
+          if (!stopped) return focusOrOpen(self.location.origin + '/reminders');
+        })
+      );
+    }
+    return;
+  }
+
+  event.waitUntil(focusOrOpen(url));
 });
 
 function escapeHtml(value) {
@@ -220,6 +846,16 @@ function handleNavigation(request) {
 // Fetch: Network-with-fallback for navigations, Cache-First for static
 // assets, Network-Only for everything else
 self.addEventListener('fetch', function (event) {
+  // The share target, before the GET-only gate below: this is the one POST the
+  // worker answers itself. The OS sends it as a navigation; a same-origin
+  // script posting here could only stash into the user's own inbox, so the
+  // check is the method and the path rather than the request mode, which is
+  // the part browsers report least consistently.
+  if (event.request.method === 'POST' && isShareTargetRequest(event.request)) {
+    event.respondWith(handleShareTarget(event.request));
+    return;
+  }
+
   if (event.request.method !== 'GET') return;
 
   if (event.request.mode === 'navigate') {

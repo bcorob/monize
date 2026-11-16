@@ -26,6 +26,8 @@ import { CreateInvestmentTransactionDto } from "./dto/create-investment-transact
 import { UpdateInvestmentTransactionDto } from "./dto/update-investment-transaction.dto";
 import { UpdateTransactionStatusDto } from "../transactions/dto/update-transaction-status.dto";
 import { TransferSecurityDto } from "./dto/transfer-security.dto";
+import { LinkTransferPairDto } from "./dto/link-transfer-pair.dto";
+import { TransferPairLinkService } from "./transfer-pair-link.service";
 import {
   InvestmentTransaction,
   InvestmentAction,
@@ -35,6 +37,7 @@ import {
   DelegateRequiresSection,
 } from "../delegation/decorators/delegate-access.decorator";
 import { DelegationService } from "../delegation/delegation.service";
+import { AllowPat, NoPat } from "../auth/pat-access/pat-access.decorator";
 
 // A UUID that cannot match any real account: forces a naturally-empty,
 // correctly-shaped result for an acting delegate with no readable accounts
@@ -44,12 +47,86 @@ const NO_READABLE_ACCOUNT = "00000000-0000-0000-0000-000000000000";
 @ApiTags("Investment Transactions")
 @ApiBearerAuth()
 @UseGuards(AuthGuard("jwt"))
+@AllowPat()
 @Controller("investment-transactions")
 export class InvestmentTransactionsController {
   constructor(
     private readonly investmentTransactionsService: InvestmentTransactionsService,
     private readonly delegationService: DelegationService,
+    private readonly transferPairLinks: TransferPairLinkService,
   ) {}
+
+  /**
+   * The share transfers whose two legs the ledger never paired.
+   *
+   * A suggestion, not a finding: an unpaired `TRANSFER_IN` cannot take the
+   * basis its source released, so the destination reports its cost -- and the
+   * gain over it -- as unknown, and pairing the legs is the repair. Which two
+   * rows are one transfer is still a person's call, so nothing is linked here
+   * and no measure reads this.
+   */
+  @Get("unlinked-transfer-pairs")
+  @AllowDelegate()
+  @DelegateRequiresSection("investments")
+  @ApiOperation({
+    summary: "Share transfers whose two legs were never linked to each other",
+  })
+  @ApiQuery({
+    name: "accountIds",
+    required: false,
+    description:
+      "Comma-separated account IDs to look within (linked pairs included); the whole portfolio when omitted",
+  })
+  @ApiResponse({ status: 200, description: "The candidate pairs" })
+  async getUnlinkedTransferPairs(
+    @Request() req,
+    @Query("accountIds") accountIds?: string,
+  ) {
+    const ids =
+      typeof accountIds === "string" && accountIds.length > 0
+        ? accountIds.split(",").filter(Boolean)
+        : undefined;
+    const uuidRegex =
+      /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    for (const id of ids ?? []) {
+      if (!uuidRegex.test(id))
+        throw new BadRequestException(
+          tr(
+            "errors.params.mustBeCsvUuids",
+            'The value of "accountIds" must be a comma-separated list of UUIDs',
+            { param: "accountIds" },
+          ),
+        );
+    }
+    return this.transferPairLinks.findCandidates(
+      req.user.id,
+      await this.scopeIds(req, ids),
+    );
+  }
+
+  /**
+   * Pair two legs a person confirmed are one transfer, and rebuild the basis
+   * the pairing lets the destination carry.
+   *
+   * Not `@AllowDelegate`: this writes, and a delegate's investment grant is a
+   * read of the section.
+   */
+  @Post("link-transfer-pair")
+  @ApiOperation({
+    summary: "Link the two legs of one share transfer to each other",
+  })
+  @ApiResponse({ status: 200, description: "The legs are linked" })
+  @ApiResponse({
+    status: 400,
+    description: "The two rows are not the legs of one transfer",
+  })
+  async linkTransferPair(@Request() req, @Body() dto: LinkTransferPairDto) {
+    return this.transferPairLinks.linkPair(
+      req.user.id,
+      dto.outTransactionId,
+      dto.inTransactionId,
+    );
+  }
 
   /**
    * For an acting delegate, restrict the account-id filter to the accounts
@@ -184,16 +261,18 @@ export class InvestmentTransactionsController {
     if (startDate !== undefined && !dateRegex.test(startDate)) {
       throw new BadRequestException(
         tr(
-          "errors.securities.startDateFormat",
-          "startDate must be in YYYY-MM-DD format",
+          "errors.params.mustBeCalendarDate",
+          'The value of "startDate" must be a date in YYYY-MM-DD format',
+          { param: "startDate" },
         ),
       );
     }
     if (endDate !== undefined && !dateRegex.test(endDate)) {
       throw new BadRequestException(
         tr(
-          "errors.securities.endDateFormat",
-          "endDate must be in YYYY-MM-DD format",
+          "errors.params.mustBeCalendarDate",
+          'The value of "endDate" must be a date in YYYY-MM-DD format',
+          { param: "endDate" },
         ),
       );
     }
@@ -347,16 +426,18 @@ export class InvestmentTransactionsController {
     if (startDate !== undefined && !dateRegex.test(startDate)) {
       throw new BadRequestException(
         tr(
-          "errors.securities.startDateFormat",
-          "startDate must be in YYYY-MM-DD format",
+          "errors.params.mustBeCalendarDate",
+          'The value of "startDate" must be a date in YYYY-MM-DD format',
+          { param: "startDate" },
         ),
       );
     }
     if (endDate !== undefined && !dateRegex.test(endDate)) {
       throw new BadRequestException(
         tr(
-          "errors.securities.endDateFormat",
-          "endDate must be in YYYY-MM-DD format",
+          "errors.params.mustBeCalendarDate",
+          'The value of "endDate" must be a date in YYYY-MM-DD format',
+          { param: "endDate" },
         ),
       );
     }
@@ -399,32 +480,36 @@ export class InvestmentTransactionsController {
     if (!startDate || !dateRegex.test(startDate)) {
       throw new BadRequestException(
         tr(
-          "errors.securities.startDateRequired",
-          "startDate is required and must be in YYYY-MM-DD format",
+          "errors.params.requiredCalendarDate",
+          'A value for "startDate" is required, as a date in YYYY-MM-DD format',
+          { param: "startDate" },
         ),
       );
     }
     if (!endDate || !dateRegex.test(endDate)) {
       throw new BadRequestException(
         tr(
-          "errors.securities.endDateRequired",
-          "endDate is required and must be in YYYY-MM-DD format",
+          "errors.params.requiredCalendarDate",
+          'A value for "endDate" is required, as a date in YYYY-MM-DD format',
+          { param: "endDate" },
         ),
       );
     }
     if (startDate > endDate) {
       throw new BadRequestException(
         tr(
-          "errors.securities.startDateBeforeEndDate",
-          "startDate must be on or before endDate",
+          "errors.params.onOrBefore",
+          'The value of "startDate" must be on or before "endDate"',
+          { param: "startDate", other: "endDate" },
         ),
       );
     }
     if (granularity && granularity !== "month" && granularity !== "day") {
       throw new BadRequestException(
         tr(
-          "errors.securities.invalidGranularity",
-          "granularity must be 'month' or 'day' if provided",
+          "errors.params.mustBeOneOf",
+          'The value of "granularity" must be one of: month, day',
+          { param: "granularity", options: "month, day" },
         ),
       );
     }
@@ -554,6 +639,7 @@ export class InvestmentTransactionsController {
   }
 
   @Delete()
+  @NoPat()
   @ApiOperation({
     summary: "Delete ALL investment transactions and holdings",
     description:

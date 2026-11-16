@@ -39,6 +39,7 @@ export interface TourTooltipLabels {
   tryIt: string;
   skipStep: string;
   move: string;
+  readGuide: string;
 }
 
 /** Minimum gap kept between the card and the viewport edges. */
@@ -54,10 +55,11 @@ interface TourTooltipProps {
   stepLabel: string;
   /** Interactive steps show a "Try it" hint + "Skip this step" instead of Next. */
   interactive: boolean;
-  /** Park an anchorless card in the bottom-right corner instead of centering
-   *  it, so the page behind stays readable and usable. Ignored when `rect` is
-   *  set (anchored cards position against the anchor) and on mobile (where the
-   *  card is a bottom sheet already). */
+  /** Park an anchorless card in a bottom corner instead of centering it, so the
+   *  page behind stays readable and usable. The corner is the right one unless
+   *  `placement` is 'left'. Ignored when `rect` is set (anchored cards position
+   *  against the anchor) and on mobile (where the card is an edge sheet
+   *  already). */
   corner?: boolean;
   /** Last step (or the skipped outro): the primary button is Done, not Next. */
   isLast: boolean;
@@ -71,6 +73,11 @@ interface TourTooltipProps {
   onBack: () => void;
   onSkip: () => void;
   onEnd: () => void;
+  /**
+   * The tour has a guide page (`TourDefinition.docs`): shown alongside Done on
+   * the last step, opens the help panel there and ends the tour.
+   */
+  onReadGuide?: () => void;
   labels: TourTooltipLabels;
 }
 
@@ -120,7 +127,8 @@ function useIsMobile(): boolean {
  * a walkthrough): on desktop it moves focus to itself on each passive step so
  * the controls are keyboard-reachable and `Modal` yields Esc/Tab to it; the
  * only exception is in-form steps, where focus stays with the form. On mobile
- * it renders as a fixed bottom sheet.
+ * it renders as a fixed sheet, flipped above a low anchor by the same placement
+ * resolver so a short page's last control does not sit behind it.
  */
 export function TourTooltip({
   rect,
@@ -139,6 +147,7 @@ export function TourTooltip({
   onBack,
   onSkip,
   onEnd,
+  onReadGuide,
   labels,
 }: TourTooltipProps) {
   const cardRef = useRef<HTMLDivElement>(null);
@@ -206,6 +215,11 @@ export function TourTooltip({
             {labels.back}
           </Button>
         )}
+        {isLast && onReadGuide && (
+          <button type="button" onClick={onReadGuide} className={linkClass}>
+            {labels.readGuide}
+          </button>
+        )}
         {interactive ? (
           <button type="button" onClick={onSkip} className={linkClass}>
             {labels.skipStep}
@@ -243,22 +257,27 @@ export function TourTooltip({
     </>
   );
 
+  const tooltipSize = size ?? { width: 320, height: 160 };
+
   if (isMobile) {
+    const atTop =
+      rect !== null &&
+      computeTooltipPosition(rect, tooltipSize, viewport).placement === 'top';
     return createPortal(
       <div
         ref={cardRef}
         role="dialog"
         aria-live="polite"
         tabIndex={-1}
-        className="fixed inset-x-0 bottom-0 z-[70] rounded-t-2xl border-t border-gray-200 bg-white p-4 shadow-xl outline-none dark:border-gray-700 dark:bg-gray-800"
+        className={`fixed inset-x-0 z-[70] border-gray-200 bg-white p-4 shadow-xl outline-none dark:border-gray-700 dark:bg-gray-800 ${
+          atTop ? 'top-0 rounded-b-2xl border-b' : 'bottom-0 rounded-t-2xl border-t'
+        }`}
       >
         {cardBody}
       </div>,
       document.body,
     );
   }
-
-  const tooltipSize = size ?? { width: 320, height: 160 };
 
   let top: number;
   let left: number;
@@ -267,9 +286,17 @@ export function TourTooltip({
     top = pos.top;
     left = pos.left;
   } else if (corner) {
-    // Parked bottom-right so the page stays readable and usable behind it.
+    // Parked in a bottom corner so the page stays readable and usable behind
+    // it. Right by default; `placement: 'left'` moves it to the other side for
+    // a step that asks the user to use a control the right of the page holds --
+    // row actions are right-aligned and sticky, so a right-parked card lands on
+    // the very button such a step names (CI caught the account-detail step's
+    // card intercepting the click on Details at a 720px-tall viewport).
     top = Math.max(8, viewport.height - tooltipSize.height - 16);
-    left = Math.max(8, viewport.width - tooltipSize.width - 16);
+    left =
+      placement === 'left'
+        ? 16
+        : Math.max(8, viewport.width - tooltipSize.width - 16);
   } else {
     top = Math.max(8, viewport.height / 2 - tooltipSize.height / 2);
     left = Math.max(8, viewport.width / 2 - tooltipSize.width / 2);

@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { ConflictException } from "@nestjs/common";
 import { DataSource, EntityManager } from "typeorm";
 import { withScopedDb } from "../../common/db/scoped-db";
 import { ImportStagedFile } from "./entities/import-staged-file.entity";
@@ -34,7 +35,12 @@ function queryBuilder(overrides: Record<string, unknown> = {}) {
 describe("MnyStagingService", () => {
   let repo: Record<string, jest.Mock>;
   let builder: Record<string, unknown>;
+  let query: jest.Mock;
   let service: MnyStagingService;
+
+  /** The SQL text of every raw statement, in order. */
+  const statements = (): string[] =>
+    query.mock.calls.map((call) => String(call[0]).replace(/\s+/g, " "));
 
   beforeEach(() => {
     builder = queryBuilder();
@@ -46,8 +52,10 @@ describe("MnyStagingService", () => {
       createQueryBuilder: jest.fn(() => builder),
     };
 
+    query = jest.fn().mockResolvedValue([]);
     const manager = {
       getRepository: jest.fn(() => repo),
+      query,
     } as unknown as EntityManager;
 
     mockedScopedDb.mockImplementation((_dataSource, fn) => fn(manager));
@@ -102,14 +110,26 @@ describe("MnyStagingService", () => {
     });
 
     it("drops the user's superseded files, but not one a live job still needs", async () => {
+      query.mockResolvedValueOnce([{ id: "old-1" }]);
+
       await service.stage("user-1", { filename: "finances.mny", data });
 
-      expect(builder.delete).toHaveBeenCalled();
-      const conditions = (builder.andWhere as jest.Mock).mock.calls.map(
-        (call) => String(call[0]),
-      );
-      expect(conditions.join(" ")).toContain("NOT EXISTS");
-      expect(conditions.join(" ")).toContain("'pending', 'running'");
+      // Lock first (A26-L14), skipping a row a job INSERT is holding...
+      const [lock, remove] = statements();
+      expect(lock).toContain("user_id = $1 AND source_format = $2");
+      expect(lock).toContain("FOR UPDATE SKIP LOCKED");
+      expect(query.mock.calls[0][1]).toEqual(["user-1", "mny"]);
+      // ...then decide on a fresh snapshot, in a second statement.
+      expect(remove).toContain("DELETE FROM import_staged_files");
+      expect(remove).toContain("NOT EXISTS");
+      expect(remove).toContain("'pending', 'running'");
+      expect(query.mock.calls[1][1]).toEqual([["old-1"]]);
+    });
+
+    it("issues no delete when nothing could be locked", async () => {
+      await service.stage("user-1", { filename: "finances.mny", data });
+
+      expect(statements()).toHaveLength(1);
     });
 
     it("honours an explicit source format", async () => {
@@ -175,15 +195,44 @@ describe("MnyStagingService", () => {
   });
 
   describe("remove", () => {
-    it("reports whether a row was deleted", async () => {
-      expect(await service.remove("user-1", "staged-1")).toBe(true);
-
-      repo.delete.mockResolvedValue({ affected: 0 });
+    it("reports false when the caller has no such file", async () => {
       expect(await service.remove("user-1", "staged-1")).toBe(false);
+
+      const [lock] = statements();
+      expect(lock).toContain("WHERE id = $1 AND user_id = $2");
+      expect(lock).toContain("FOR UPDATE");
+      expect(query.mock.calls[0][1]).toEqual(["staged-1", "user-1"]);
+      expect(statements()).toHaveLength(1);
     });
 
-    it("cannot delete another user's file", async () => {
-      await service.remove("user-1", "staged-1");
+    it("refuses while a pending or running job needs the bytes, and deletes nothing", async () => {
+      query
+        .mockResolvedValueOnce([{ id: "staged-1" }])
+        .mockResolvedValueOnce([{ needed: true }]);
+
+      await expect(service.remove("user-1", "staged-1")).rejects.toThrow(
+        ConflictException,
+      );
+      expect(statements()[1]).toContain("'pending', 'running'");
+      expect(statements().some((sql) => sql.startsWith("DELETE"))).toBe(false);
+    });
+
+    it("deletes the caller's file once no job needs it", async () => {
+      query
+        .mockResolvedValueOnce([{ id: "staged-1" }])
+        .mockResolvedValueOnce([{ needed: false }]);
+
+      expect(await service.remove("user-1", "staged-1")).toBe(true);
+      expect(statements()[2]).toContain(
+        "DELETE FROM import_staged_files WHERE id = $1 AND user_id = $2",
+      );
+      expect(query.mock.calls[2][1]).toEqual(["staged-1", "user-1"]);
+    });
+  });
+
+  describe("removeConsumed", () => {
+    it("deletes the caller's file unconditionally", async () => {
+      await service.removeConsumed("user-1", "staged-1");
 
       expect(repo.delete).toHaveBeenCalledWith({
         id: "staged-1",
@@ -193,42 +242,34 @@ describe("MnyStagingService", () => {
   });
 
   describe("sweepExpiredFiles", () => {
-    it("deletes only rows already past their expiry", async () => {
-      builder = queryBuilder({
-        execute: jest.fn().mockResolvedValue({ affected: 3 }),
-      });
-      repo.createQueryBuilder.mockReturnValue(builder);
-
+    it("locks only rows already past their expiry", async () => {
       await service.sweepExpiredFiles();
 
-      expect(builder.where).toHaveBeenCalledWith(
-        "expires_at < CURRENT_TIMESTAMP",
-      );
+      const [lock] = statements();
+      expect(lock).toContain("expires_at < CURRENT_TIMESTAMP");
+      expect(lock).toContain("FOR UPDATE SKIP LOCKED");
     });
 
-    it("excludes staged files an active job still needs", async () => {
-      repo.createQueryBuilder.mockReturnValue(builder);
+    it("excludes staged files an active job still needs, after the lock", async () => {
+      query
+        .mockResolvedValueOnce([{ id: "a" }, { id: "b" }])
+        .mockResolvedValueOnce([{ id: "a" }]);
 
       await service.sweepExpiredFiles();
 
-      const conditions = [
-        ...(builder.where as jest.Mock).mock.calls,
-        ...(builder.andWhere as jest.Mock).mock.calls,
-      ].map((call) => String(call[0]));
-      expect(conditions.join(" ")).toContain("expires_at < CURRENT_TIMESTAMP");
       // With soft-TTL reads (MR-002), the sweep is the only TTL gate -- so it
       // must not delete the bytes out from under a pending or running import.
       // The FK is ON DELETE SET NULL, so without this the job survives and
-      // fails partway through with a missing-file error (audit P4-016).
-      expect(conditions.join(" ")).toContain("NOT EXISTS");
-      expect(conditions.join(" ")).toContain("'pending', 'running'");
+      // fails partway through with a missing-file error (audit P4-016). The
+      // exclusion is its own statement, after the lock (A26-L14).
+      const [, remove] = statements();
+      expect(remove).toContain("NOT EXISTS");
+      expect(remove).toContain("'pending', 'running'");
+      expect(query.mock.calls[1][1]).toEqual([["a", "b"]]);
     });
 
     it("never throws, so one bad sweep cannot kill the scheduler", async () => {
-      builder = queryBuilder({
-        execute: jest.fn().mockRejectedValue(new Error("connection reset")),
-      });
-      repo.createQueryBuilder.mockReturnValue(builder);
+      query.mockRejectedValue(new Error("connection reset"));
 
       await expect(service.sweepExpiredFiles()).resolves.toBeUndefined();
     });

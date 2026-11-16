@@ -3,14 +3,20 @@ import { render, screen, act, waitFor } from '@/test/render';
 import { CreditCardDetailView } from './CreditCardDetailView';
 import type { Account } from '@/types/account';
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({ formatCurrency: (a: number) => `$${a.toFixed(2)}` }),
-}));
-vi.mock('@/hooks/useDateFormat', () => ({
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({ ...numberFormatMockDefaults(), formatCurrency: (a: number) => `$${a.toFixed(2)}` }),
+  };
+});vi.mock('@/hooks/useDateFormat', () => ({
   useDateFormat: () => ({ dateFormat: 'browser', datePattern: 'YYYY-MM-DD', formatDate: (d: Date) => `date:${d.getFullYear()}` }),
 }));
 vi.mock('@/components/transactions/BalanceHistoryChart', () => ({
-  BalanceHistoryChart: () => <div data-testid="balance-history-chart" />,
+  // The markers are serialised so a test can read what the view asked the
+  // chart to mark (the overdue marker, discussion #1784).
+  BalanceHistoryChart: ({ markers }: { markers?: unknown[] }) => (
+    <div data-testid="balance-history-chart" data-markers={JSON.stringify(markers ?? [])} />
+  ),
 }));
 
 const mockGetStatementCycle = vi.fn();
@@ -212,5 +218,27 @@ describe('CreditCardDetailView', () => {
     );
     // Spending still loads for the current month.
     expect(mockGetGroupedTotals).toHaveBeenCalled();
+  });
+
+  // Discussion #1784: the same marker as the banking view.
+  it('marks the overdue occurrences on the balance chart', async () => {
+    mockGetBalanceForecast.mockResolvedValue({
+      points: [
+        { date: '2026-06-01', balance: -1000 },
+        { date: '2026-06-02', balance: -1080 },
+      ],
+      complete: true,
+      gaps: [],
+      overdue: { date: '2026-06-02', count: 1, amount: -80 },
+    });
+    await renderView();
+    await waitFor(() => {
+      const markers = JSON.parse(
+        screen.getByTestId('balance-history-chart').getAttribute('data-markers') as string,
+      );
+      expect(markers).toEqual([
+        { date: '2026-06-02', direction: 'out', label: 'Includes 1 overdue scheduled transaction' },
+      ]);
+    });
   });
 });

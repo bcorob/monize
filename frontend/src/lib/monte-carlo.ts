@@ -2,6 +2,13 @@ import apiClient from './api';
 
 export type CashFlowType = 'ONE_TIME' | 'RECURRING';
 
+/**
+ * Most cash flows one scenario may carry. Equal to the server's
+ * `MAX_SCENARIO_CASH_FLOWS` (backend/src/monte-carlo/dto/cash-flow.dto.ts),
+ * which refuses a longer list.
+ */
+export const MAX_CASH_FLOWS = 100;
+
 export interface CashFlow {
   /** Display name (e.g. "Pension", "Roof renovation"). */
   name: string;
@@ -139,6 +146,12 @@ export interface HistoricalStats {
   unpricedSecurityIds?: string[];
   unweightableSecurityIds?: string[];
   /**
+   * True when the current portfolio value could not be determined, so the
+   * idle-cash weight is unknown and the statistics are withheld for that
+   * reason (a missing currency pair, if any, is in `missingRatePairs`).
+   */
+  portfolioValueUnknown?: boolean;
+  /**
    * Aggregate current market value of the selected accounts, or `null` when the
    * server could not determine it (a missing price or exchange rate, or a failed
    * portfolio valuation).
@@ -153,7 +166,8 @@ export interface HistoricalStats {
 export interface HoldingStat {
   symbol: string;
   name: string;
-  currencyCode: string;
+  /** `null` when the security carries no currency (unknown, not a default). */
+  currencyCode: string | null;
   quantity: number;
   /**
    * Current market value, or `null` when the security has no current price.

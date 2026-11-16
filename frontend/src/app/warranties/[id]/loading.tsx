@@ -1,0 +1,13 @@
+import { PageHeaderSkeleton, CardSkeleton } from '@/components/ui/LoadingSkeleton';
+
+export default function WarrantyDetailLoading() {
+  return (
+    <div className="page-ambient-glow min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="px-4 sm:px-6 lg:px-12 pt-6 pb-8 space-y-6">
+        <PageHeaderSkeleton />
+        <CardSkeleton />
+        <CardSkeleton />
+      </div>
+    </div>
+  );
+}

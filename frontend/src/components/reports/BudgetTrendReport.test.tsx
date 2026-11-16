@@ -14,15 +14,27 @@ vi.mock('@/lib/budgets', () => ({
   },
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (n: number) => `$${n.toFixed(2)}`,
-    formatCurrencyCompact: (n: number) => `$${Math.round(n)}`,
-    formatCurrencyAxis: (n: number) => `$${n}`,
-    defaultCurrency: 'USD',
-  }),
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (n: number) => `$${n.toFixed(2)}`,
+      formatCurrencyCompact: (n: number) => `$${Math.round(n)}`,
+      formatCurrencyAxis: (n: number) => `$${n}`,
+      defaultCurrency: 'USD',
+    }),
+  };
+});
+// Two month surfaces, two formatters: the PDF's month column follows the
+// user's date-format preference, the chart's axis localizes the month name.
+vi.mock('@/hooks/useDateFormat', () => ({
+  useDateFormat: () => ({ formatMonth: (monthKey: string) => `localized:${monthKey}` }),
 }));
 
+vi.mock('@/hooks/useChartMonthFormat', () => ({
+  useChartMonthFormat: () => (monthKey: string) => `chartMonth:${monthKey}`,
+}));
 vi.mock('@/lib/logger', () => ({
   createLogger: () => ({ error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() }),
 }));
@@ -35,7 +47,9 @@ vi.mock('recharts', () => ({
   ResponsiveContainer: ({ children }: any) => <div>{children}</div>,
   LineChart: ({ children }: any) => <div data-testid="line-chart">{children}</div>,
   Line: () => null,
-  XAxis: () => null,
+  XAxis: ({ dataKey, tickFormatter }: any) => (
+    <div data-testid={`x-axis-${dataKey}`}>{tickFormatter?.('2025-02')}</div>
+  ),
   YAxis: () => null,
   CartesianGrid: () => null,
   Legend: () => null,
@@ -43,7 +57,7 @@ vi.mock('recharts', () => ({
     const C = content;
     if (!C) return null;
     const samples = [
-      { active: true, payload: [{ dataKey: 'budgeted', name: 'Budgeted', color: 'var(--chart-primary)', value: 1000 }, { dataKey: 'actual', name: 'Actual', color: 'var(--chart-income)', value: 900 }], label: 'tip-x' },
+      { active: true, payload: [{ dataKey: 'budgeted', name: 'Budgeted', color: 'var(--chart-primary)', value: 1000 }, { dataKey: 'actual', name: 'Actual', color: 'var(--chart-income)', value: 900 }], label: '2025-02' },
       { active: false, payload: [], label: '' },
       { active: true, payload: [], label: 'empty' },
     ];
@@ -55,11 +69,11 @@ const makeBudget = (overrides: Partial<Budget> = {}): Budget =>
   ({ id: 'b-1', name: 'Default', isActive: true, ...overrides } as Budget);
 
 const makePoint = (
-  month: string,
+  monthKey: string,
   budgeted: number,
   actual: number,
 ): BudgetTrendPoint => ({
-  month,
+  monthKey,
   budgeted,
   actual,
   variance: actual - budgeted,
@@ -128,6 +142,9 @@ describe('BudgetTrendReport', () => {
     await waitFor(() => {
       expect(screen.getByText('Improving')).toBeInTheDocument();
     });
+    // The AXIS uses the chart formatter, while the PDF table below still uses
+    // the date preference -- two surfaces, deliberately not one formatter.
+    expect(screen.getByTestId('x-axis-monthKey')).toHaveTextContent('chartMonth:2025-02');
     expect(screen.getByText('Avg Budgeted')).toBeInTheDocument();
   });
 
@@ -165,7 +182,7 @@ describe('BudgetTrendReport', () => {
     await waitFor(() => {
       expect(screen.getByText(/Failed to load report data/i)).toBeInTheDocument();
     });
-    expect(screen.getByRole('button', { name: /Try again/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Try Again/i })).toBeInTheDocument();
   });
 
   it('exports to PDF', async () => {
@@ -178,5 +195,6 @@ describe('BudgetTrendReport', () => {
     const arg = mockExportToPdf.mock.calls[0][0];
     expect(arg.title).toBe('Budget Trend');
     expect(arg.tableData.headers).toContain('Month');
+    expect(arg.tableData.rows[0][0]).toBe('localized:2025-01');
   });
 });

@@ -10,7 +10,7 @@ import { usePreferencesStore } from '@/store/preferencesStore';
 export default function Setup2FAPage() {
   const t = useTranslations('auth.register.twoFactor');
   const router = useRouter();
-  const { preferences } = usePreferencesStore();
+  const { preferences, updatePreferences } = usePreferencesStore();
 
   // If 2FA is already enabled, redirect to dashboard
   useEffect(() => {
@@ -27,7 +27,14 @@ export default function Setup2FAPage() {
     <AuthShell title={t('title')} subtitle={t('requiredSubtitle')}>
       <TwoFactorSetup
         isForced
-        onComplete={() => router.push('/dashboard')}
+        onComplete={() => {
+          // Record the enrolment in the store before leaving: ProtectedRoute
+          // reads `preferences.twoFactorEnabled` to decide whether FORCE_2FA
+          // still owes a setup, and a stale `false` sends the user straight
+          // back here to enrol again.
+          updatePreferences({ twoFactorEnabled: true });
+          router.push('/dashboard');
+        }}
       />
     </AuthShell>
   );

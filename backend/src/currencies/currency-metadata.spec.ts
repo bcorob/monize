@@ -2,9 +2,28 @@ import {
   CURRENCY_METADATA,
   resolveCurrencyMetadata,
   getCurrencyCatalog,
+  isKnownIsoCurrency,
 } from "./currency-metadata";
 
 describe("currency-metadata", () => {
+  describe("isKnownIsoCurrency()", () => {
+    it("accepts a curated code in either case", () => {
+      expect(isKnownIsoCurrency("PLN")).toBe(true);
+      expect(isKnownIsoCurrency("pln")).toBe(true);
+    });
+
+    it("accepts an ISO code that only Intl lists", () => {
+      expect(CURRENCY_METADATA["AFN"]).toBeUndefined();
+      expect(isKnownIsoCurrency("AFN")).toBe(true);
+    });
+
+    it("refuses codes that are not ISO 4217", () => {
+      expect(isKnownIsoCurrency("ZZZ")).toBe(false);
+      expect(isKnownIsoCurrency("q#!")).toBe(false);
+      expect(isKnownIsoCurrency("")).toBe(false);
+    });
+  });
+
   describe("resolveCurrencyMetadata()", () => {
     it("returns curated metadata for a known code (case-insensitive)", () => {
       expect(resolveCurrencyMetadata("usd")).toEqual({

@@ -1,0 +1,113 @@
+{
+  "landing": {
+    "title": "Impuestos",
+    "subtitle": "Herramientas para las deducciones e impuestos que determinan su salario",
+    "tools": {
+      "payrollDeductions": {
+        "title": "Deducciones de nómina",
+        "description": "Defina máximos anuales para deducciones como pensión y seguro de desempleo, y deje que la nómina deje de cobrarlas cuando se alcance el máximo."
+      }
+    }
+  },
+  "payroll": {
+    "title": "Deducciones de nómina",
+    "subtitle": "Máximos anuales en las líneas de deducción de su factura de nómina",
+    "backToTaxes": "Volver a Impuestos",
+    "newButton": "+ Nueva regla",
+    "loading": "Cargando deducciones de nómina...",
+    "emptyState": {
+      "title": "Aún no hay reglas de deducción",
+      "body": "Elija la transacción programada que es su nómina, sus categorías de deducción y un máximo anual para cada una. La transacción deja de cobrar una deducción cuando alcanza su máximo y vuelve a empezar en la fecha de reinicio.",
+      "createButton": "Crear su primera regla"
+    },
+    "yearToDate": {
+      "show": "Mostrar acumulado del año",
+      "hide": "Ocultar acumulado del año",
+      "title": "Pagado en este período",
+      "help": "Lo que la categoría ha cobrado en el período que contiene hoy, en todas las cuentas, en la moneda de la factura.",
+      "foreignRows": "{count, plural, one {# fila} other {# filas}} en otra moneda sin contar"
+    },
+    "previousPeriods": {
+      "show": "Mostrar periodos anteriores",
+      "hide": "Ocultar periodos anteriores",
+      "title": "Periodos anteriores",
+      "help": "Lo que cada categoría cobró en sus periodos pasados, en todas las cuentas, en la moneda de la transacción. El periodo actual está en la tabla del año en curso.",
+      "loading": "Cargando periodos anteriores...",
+      "empty": "Todavía no se cobró nada en un periodo anterior.",
+      "loadFailed": "No se pudieron cargar los periodos anteriores"
+    },
+    "list": {
+      "bill": "Factura",
+      "category": "Categoría",
+      "yearlyMaximum": "Máximo anual",
+      "nextMaximum": "Desde el {date}: {amount}",
+      "resetsOn": "Se reinicia el",
+      "perPaycheque": "Por nómina",
+      "period": "Período",
+      "paid": "Pagado",
+      "remaining": "Restante",
+      "actions": "Acciones",
+      "fromLine": "De la línea de la factura",
+      "entered": "Introducido",
+      "expectedMissing": "Falta el importe previsto",
+      "periodRange": "{start} a {end}"
+    },
+    "modal": {
+      "newTitle": "Nueva regla de deducción",
+      "editTitle": "Editar regla de deducción"
+    },
+    "form": {
+      "billLabel": "Factura programada de nómina",
+      "billPlaceholder": "Seleccione la factura que es su nómina",
+      "billHelp": "El depósito programado cuyas líneas llevan las deducciones. Solo se ofrecen las transacciones que ingresan más de lo que retiran, y solo sus líneas de deducción pueden limitarse.",
+      "categoryLabel": "Categoría de deducción {index}",
+      "categoryPlaceholder": "Seleccione una línea de deducción",
+      "yearlyMaximumLabel": "Máximo anual",
+      "yearlyMaximumHelp": "Lo máximo que esta categoría cobra en un período, en la moneda de la factura. La línea se reduce al margen restante, hasta cero.",
+      "yearlyMaximumSuggested": "Estimado a partir de lo que esta categoría ya ha cobrado.",
+      "resetPeriodLabel": "Se reinicia",
+      "resetDateLabel": "Fecha de reinicio",
+      "resetDateHelp": "El cómputo vuelve a empezar este día cada año. Normalmente el primer día del año.",
+      "expectedLabel": "Previsto por nómina",
+      "expectedHelp": "La línea de la transacción para esta categoría es cero, así que la previsión necesita el importe que cada nómina suele deducir.",
+      "expectedFromLine": "La línea de la factura deduce {amount} por nómina.",
+      "expectedSuggested": "Sugerido a partir del importe que sus transacciones de esta categoría muestran con más frecuencia en el último año.",
+      "thisPeriod": "Este periodo, {start} a {end}",
+      "nextPeriod": "Próximo periodo, desde el {date}",
+      "setNextPeriod": "Definir los importes del próximo periodo, desde el {date}",
+      "nextYearlyMaximumLabel": "Máximo del próximo periodo",
+      "nextYearlyMaximumHelp": "El máximo a partir del próximo reinicio. Déjalo vacío para mantener el máximo de este periodo. El margen y el porcentaje de este periodo no cambian.",
+      "nextExpectedLabel": "Previsto por nómina en el próximo periodo",
+      "nextExpectedHelp": "El importe que cada nómina deduce a partir del próximo reinicio. Déjalo vacío para mantener el importe de este periodo.",
+      "sameAsThisPeriod": "Igual que este periodo",
+      "periods": {
+        "YEARLY": "Anual"
+      },
+      "validation": {
+        "billRequired": "Elija la factura de nómina",
+        "categoryRequired": "Elija una categoría",
+        "yearlyMaximumRequired": "Introduzca el máximo anual",
+        "resetDateRequired": "Introduzca la fecha de reinicio",
+        "expectedRequired": "Introduzca el importe previsto por nómina",
+        "categoryDuplicate": "Esta categoría ya está en la lista"
+      },
+      "categoriesLegend": "Categorías de deducción",
+      "addCategory": "+ Añadir otra categoría",
+      "removeCategory": "Quitar la categoría {index}",
+      "noDeductionLines": "Esta transacción no tiene líneas de deducción. Añada primero las deducciones como líneas divididas negativas en la transacción."
+    },
+    "delete": {
+      "title": "Eliminar regla de deducción",
+      "message": "¿Eliminar la regla {category} en {bill}? Las transacciones registradas no cambian; la próxima nómina registra su línea completa."
+    },
+    "toasts": {
+      "created": "{count, plural, one {Regla de deducción creada} other {# reglas de deducción creadas}}",
+      "updated": "Regla de deducción actualizada",
+      "deleted": "Regla de deducción eliminada",
+      "loadFailed": "No se pudieron cargar las deducciones de nómina",
+      "createFailed": "No se pudo crear la regla de deducción",
+      "updateFailed": "No se pudo actualizar la regla de deducción",
+      "deleteFailed": "No se pudo eliminar la regla de deducción"
+    }
+  }
+}

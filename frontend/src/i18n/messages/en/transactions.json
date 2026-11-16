@@ -76,7 +76,10 @@
     "collapseAria": "Hide account info",
     "showAccountNumber": "Show account number",
     "hideAccountNumber": "Hide account number",
-    "show": "Show account info"
+    "show": "Show account info",
+    "nextInstallment": "Next Installment",
+    "finalPayment": "Final Payment",
+    "amountDueOn": "{amount}, due {date}"
   },
   "page": {
     "title": "Transactions",
@@ -121,13 +124,19 @@
       "balance": "Balance",
       "attachments": "Attachments",
       "status": "Status",
+      "statusHelp": "Unreconciled, Cleared or Reconciled are steps toward matching a bank statement. Void cancels a transaction but keeps its record; it no longer moves the account balance.",
       "actions": "Actions"
+    },
+    "sort": {
+      "balanceHiddenHint": "Sort by date to see the running balance",
+      "stripLabel": "Sort by"
     },
     "dateDisplay": {
       "toggleLabel": "Hide the year",
       "toggleTitle": "Drop the year from dates so more of the payee fits"
     },
     "attachmentsCount": "{count, plural, one {# attachment} other {# attachments}}",
+    "warrantiesCount": "{count, plural, one {# warranty} other {# warranties}}",
     "today": "Today",
     "export": {
       "button": "Export",
@@ -165,7 +174,6 @@
     },
     "row": {
       "viewPayeeTitle": "View {name} details",
-      "ref": "Ref: {number}",
       "investmentLabel": "Investment",
       "linkedInvestmentTitle": "View in Investments",
       "filterByDate": "Filter by date \"{date}\"",
@@ -212,13 +220,13 @@
       "title": "Filters",
       "clear": "Clear",
       "hide": "Hide",
-      "show": "Show"
+      "show": "Show filters"
     },
     "accounts": {
-      "label": "Show accounts:",
-      "all": "All",
-      "active": "Active",
-      "closed": "Closed"
+      "label": "Show Accounts",
+      "allCount": "All ({count})",
+      "activeCount": "Active ({count})",
+      "closedCount": "Closed ({count})"
     },
     "fields": {
       "accounts": "Accounts",
@@ -251,7 +259,7 @@
       "statuses": "All statuses",
       "amountMin": "Min",
       "amountMax": "Max",
-      "search": "Search payee, category, amount, tag, description, reference #...",
+      "search": "Search, or try #10 or payee:costco",
       "tagKeyValue": "e.g. usa"
     },
     "tagKeyNone": "Any (no key filter)",
@@ -312,7 +320,7 @@
     },
     "modal": {
       "title": "Bulk Update Transactions",
-      "subtitle": "Update {count, plural, one {# selected transaction} other {# selected transactions}}. Toggle the fields you want to change.",
+      "help": "Toggle the fields you want to change.",
       "submitLabel": "Update {count, plural, one {# Transaction} other {# Transactions}}",
       "payee": "Payee",
       "category": "Category",
@@ -360,10 +368,11 @@
       "fromAccount": "From Account",
       "toAccount": "To Account",
       "transferAmount": "Transfer Amount",
-      "transferAmountWithCurrency": "Transfer Amount ({currency})",
-      "amountReceived": "Amount Received ({currency})",
-      "payeeOptional": "Payee (Optional)",
-      "categoryOptional": "Category (Optional)"
+      "amountReceivedLabel": "Amount Received",
+      "transferAmountInCurrency": "Transfer Amount ({currency})",
+      "amountReceivedInCurrency": "Amount Received ({currency})",
+      "payeeOptional": "Payee (optional)",
+      "categoryOptional": "Category (optional)"
     },
     "placeholders": {
       "selectAccount": "Select account...",
@@ -391,10 +400,16 @@
     "submitCreateAndNewDescription": "Save it and start another, keeping the account and date.",
     "submitOptions": "Choose what happens after creating",
     "submitUpdate": "Update {mode}",
+    "submitConvert": "Convert to {mode}",
     "reconciledConfirm": {
       "title": "Edit reconciled transaction?",
       "message": "This transaction is reconciled. Changing its date or amount will affect a completed reconciliation. Do you want to save your changes anyway?",
       "confirm": "Save changes"
+    },
+    "counterpartConfirm": {
+      "title": "Convert this transfer?",
+      "message": "The other side of this transfer has already been cleared or reconciled. Converting it to a transaction removes that entry from the other account and changes a balance that was checked against a statement. Do you want to continue?",
+      "confirm": "Convert anyway"
     },
     "modeLabel": {
       "transfer": "Transfer",
@@ -424,6 +439,8 @@
       "destinationRequired": "Please select a destination account",
       "sameAccount": "Source and destination accounts must be different",
       "negativeTransfer": "Transfer amount must not be negative",
+      "convertedToTransfer": "Converted to a transfer",
+      "convertedToTransaction": "Converted to a transaction",
       "payeeCreated": "Payee \"{name}\" created",
       "payeeCreateFailed": "Failed to create payee",
       "payeeReactivated": "Payee \"{name}\" reactivated",
@@ -458,10 +475,20 @@
       },
       "feeCaption": "Includes a {percent}% foreign transaction fee ({fee})."
     },
-    "jointSplitDisabled": "Split transactions in a shared account can only be managed by the owner"
+    "jointSplitDisabled": "Split transactions in a shared account can only be managed by the owner",
+    "warranties": {
+      "title": "Warranties",
+      "add": "Add warranty",
+      "expires": "Expires {date}",
+      "loading": "Loading warranties",
+      "loadError": "The warranties for this transaction could not be loaded.",
+      "empty": "No warranties yet"
+    },
+    "conversionLockedNote": "This transfer belongs to a split transaction or to another owner's account, so it can only stay a transfer here. Change it from the split or delete it and create the entry you want."
   },
   "splitEditor": {
     "header": "Split Details",
+    "headerTooltip": "Each row can be a category, a transfer to another account, or an investment. The rows must add up to the transaction's total; Distribute Evenly and Distribute Proportionally spread what remains for you.",
     "distributeProportionally": "Distribute Proportionally",
     "distributeProportionallyTitle": "Distribute the remaining amount proportionally based on each split's amount",
     "distributeEvenly": "Distribute Evenly",
@@ -521,7 +548,7 @@
     "quantityPlaceholder": "Quantity",
     "pricePlaceholder": "Price",
     "commissionPlaceholder": "Commission",
-    "amountPlaceholder": "Amount ({currency})",
+    "amountOnlyPlaceholder": "Amount",
     "ratePlaceholder": "{to} per 1 {from}",
     "ariaRate": "Exchange rate ({to} per 1 {from})",
     "rateHint": "Quantity, price and commission are in {from}; this rate converts the cash impact into {to}.",
@@ -551,6 +578,7 @@
       "total": "Total",
       "transactions": "Transactions",
       "tooltip": "{count, plural, one {# transaction} other {# transactions}}",
+      "partialNote": "Some amounts have no exchange rate and are not included in these totals.",
       "quarterLabel": "Q{quarter} {year}",
       "quarterTick": "Q{quarter} {year}",
       "granularityLabel": "Bucket size",
@@ -575,6 +603,11 @@
       "log": "Log",
       "autoTitle": "Auto ({scale})",
       "scaleTitle": "{label} scale"
+    },
+    "collapse": {
+      "hide": "Hide chart",
+      "show": "Show chart",
+      "hidden": "Chart hidden"
     }
   },
   "toasts": {
@@ -597,5 +630,71 @@
     "title": "Spending by {key}",
     "other": "Other",
     "noData": "No tagged spending to break down for this key."
+  },
+  "searchSyntax": {
+    "open": "Search syntax",
+    "title": "Search syntax",
+    "fields": "Fields: payee, memo, cat, tag, account, ref, amount, date, status, is and has. Choose an example to put it in the search box.",
+    "examples": {
+      "allWords": "Every word matches somewhere",
+      "phrase": "This exact phrase",
+      "exclude": "Leave out anything matching refund",
+      "fieldContains": "Payee contains costco",
+      "fieldExact": "Payee is exactly Costco",
+      "reference": "Cheque or reference number 10 exactly",
+      "wildcard": "Reference starts with 10",
+      "amountOver": "Amount over 100",
+      "amountRange": "Amount from 50 to 100",
+      "datePeriod": "Any day in March 2026",
+      "isSplit": "Split transactions",
+      "hasAttachment": "Has an attachment",
+      "hasWarranty": "Has a warranty"
+    }
+  },
+  "searchInterpretation": {
+    "label": "Searching:",
+    "negated": "not {phrase}",
+    "malformed": "{raw} (not understood, searched as text)",
+    "empty": "{raw} (empty, ignored)",
+    "status": "Status is {value}",
+    "any": "“{value}” anywhere",
+    "fields": {
+      "payee": "Payee",
+      "memo": "Memo",
+      "cat": "Category",
+      "tag": "Tag",
+      "account": "Account",
+      "ref": "Reference",
+      "amount": "Amount",
+      "date": "Date",
+      "status": "Status",
+      "is": "Type",
+      "has": "Has"
+    },
+    "ops": {
+      "contains": "{field} contains “{value}”",
+      "exact": "{field} is “{value}”",
+      "glob": "{field} matches “{value}”",
+      "eq": "{field} is {value}",
+      "gt": "{field} over {value}",
+      "gte": "{field} {value} or more",
+      "lt": "{field} under {value}",
+      "lte": "{field} {value} or less",
+      "between": "{field} from {value} to {valueTo}"
+    },
+    "enum": {
+      "is": {
+        "transfer": "Transfers",
+        "split": "Split transactions",
+        "uncategorized": "Uncategorized"
+      },
+      "has": {
+        "attachment": "Has an attachment",
+        "warranty": "Has a warranty",
+        "ref": "Has a reference number",
+        "memo": "Has a memo",
+        "tag": "Has a tag"
+      }
+    }
   }
 }

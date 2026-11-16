@@ -26,6 +26,13 @@ import { MnyImportOptions } from "../model/mny-import-options";
 export const ONE_ACTIVE_JOB_INDEX = "idx_import_jobs_one_active_per_user";
 
 /**
+ * The partial unique index holding one committed import per user and file
+ * content (audit A26-H08). Named for the same reason as the index above: the
+ * commit checkpoint translates exactly this constraint's 23505.
+ */
+export const COMMITTED_CONTENT_INDEX = "idx_import_jobs_committed_content";
+
+/**
  * One background import attempt (design ADR-3).
  *
  * The row is the coordination point: `POST /import/mny/start` inserts it
@@ -45,6 +52,10 @@ export const ONE_ACTIVE_JOB_INDEX = "idx_import_jobs_one_active_per_user";
 @Index(ONE_ACTIVE_JOB_INDEX, ["userId"], {
   unique: true,
   where: "status IN ('pending', 'running')",
+})
+@Index(COMMITTED_CONTENT_INDEX, ["userId", "contentSha256"], {
+  unique: true,
+  where: "content_sha256 IS NOT NULL",
 })
 @Entity("import_jobs")
 export class ImportJob {
@@ -124,6 +135,17 @@ export class ImportJob {
    */
   @Column({ type: "uuid", name: "attempt_token", nullable: true })
   attemptToken: string | null;
+
+  /**
+   * The digest of the bytes this job committed (migration 20261022061534).
+   *
+   * Written by the commit checkpoint inside the import transaction, so it is
+   * set exactly when the rows are; held by `COMMITTED_CONTENT_INDEX`, so the
+   * same file cannot be committed into this user's ledger a second time.
+   * Cleared when a "start fresh" import's wipe removed the rows it vouched for.
+   */
+  @Column({ type: "char", length: 64, name: "content_sha256", nullable: true })
+  contentSha256: string | null;
 
   /** Bumped by the running job; the reaper's liveness signal. */
   @Column({ type: "timestamp", name: "heartbeat_at", nullable: true })

@@ -6,13 +6,14 @@ import { Button } from '@/components/ui/Button';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ExportIconButton } from '@/components/ui/ExportIconButton';
 import { LoanRateChange } from '@/types/loan-rate-change';
-import { Account } from '@/types/account';
+import { Account, MortgageType } from '@/types/account';
 import { exportToCsv } from '@/lib/csv-export';
 import { sanitizeFilename } from '@/lib/export-filename';
 import { useDateFormat } from '@/hooks/useDateFormat';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { LoanRateControls } from './LoanRateControls';
 import { LoanRateEditing } from './useLoanRateEditing';
+import { MortgageTypeHistoryDetector } from './MortgageTypeHistoryDetector';
 
 interface RateHistorySidebarProps {
   account: Account;
@@ -20,18 +21,26 @@ interface RateHistorySidebarProps {
   rateChanges: LoanRateChange[];
   /** Shared rate-timeline editing (add / edit / delete / detect). */
   editing: LoanRateEditing;
+  /**
+   * Opens the account edit form with a detected mortgage type preselected.
+   * When absent (a surface with no edit form), the type detector is not offered.
+   */
+  onUseMortgageType?: (type: MortgageType) => void;
 }
 
 /**
  * The Rate History panel, full-width below the overpayment simulator. The
  * recorded rate changes -- effective date, rate, source badge, payment in
  * effect -- are listed, each editable, with "Detect from history" and
- * "Add rate change". The header bar collapses the panel when clicked.
+ * "Add rate change". A mortgage also offers "Detect mortgage type", which
+ * suggests a type from the same posted installments. The header bar collapses
+ * the panel when clicked.
  */
 export function RateHistorySidebar({
   account,
   rateChanges,
   editing,
+  onUseMortgageType,
 }: RateHistorySidebarProps) {
   const t = useTranslations('accounts');
   const tc = useTranslations('common');
@@ -133,6 +142,12 @@ export function RateHistorySidebar({
             >
               {t('loanDetail.rateHistory.detect')}
             </Button>
+            {account.accountType === 'MORTGAGE' && onUseMortgageType && (
+              <MortgageTypeHistoryDetector
+                account={account}
+                onUseMortgageType={onUseMortgageType}
+              />
+            )}
             {/* Add button + the add/edit/delete/scheduled-payment modals. */}
             <LoanRateControls editing={editing} />
           </div>

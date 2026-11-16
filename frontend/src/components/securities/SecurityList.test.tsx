@@ -2,6 +2,44 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@/test/render';
 import { SecurityList } from './SecurityList';
 import { useDensityStore } from '@/store/densityStore';
+import { FALLBACK_DEFAULT_CURRENCY } from '@/lib/default-currency';
+import { usePreferencesStore } from '@/store/preferencesStore';
+
+// The reader states no currency preference in these tests, so their own currency
+// is the fallback -- derived, never spelled, so the cases keep meaning what their
+// names say if that constant moves. A foreign currency has to be a code the
+// fallback can never be.
+const READER_CURRENCY = FALLBACK_DEFAULT_CURRENCY;
+const FOREIGN_CURRENCY = 'JPY';
+
+// Every case below pins the number locale, so a figure on screen is asserted
+// against a stated convention rather than against whatever the runner's default
+// happens to be.
+const TEST_LOCALE = 'en-US';
+
+/**
+ * The expected rendering of a money value, built from a NAMED locale.
+ *
+ * Deliberately not `formatCurrency` from `@/lib/format`: that is the very helper
+ * the component used to call, so a test using it as its oracle proved the
+ * component agreed with a hardcoded `en-US` formatter -- which is what let issue
+ * #1316 ship. Building the expectation from the locale the test SET is what
+ * makes the locale cases below able to fail.
+ */
+const money = (value: number, currencyCode: string, locale = TEST_LOCALE) =>
+  new Intl.NumberFormat(locale, {
+    style: 'currency',
+    currency: currencyCode,
+    currencyDisplay: 'narrowSymbol',
+  }).format(value);
+
+/** Put a real preference row in the store, as a signed-in reader has. */
+const setNumberPreferences = (numberFormat: string, language?: string) => {
+  usePreferencesStore.setState({
+    preferences: { numberFormat, language } as never,
+    isLoaded: true,
+  });
+};
 
 describe('SecurityList', () => {
   const onEdit = vi.fn();
@@ -25,6 +63,7 @@ describe('SecurityList', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    setNumberPreferences(TEST_LOCALE, 'en');
   });
 
   it('renders empty state', () => {
@@ -175,6 +214,72 @@ describe('SecurityList', () => {
 
     render(<SecurityList securities={securities} onEdit={onEdit} onToggleActive={onToggleActive} onOpen={onOpen} />);
     expect(screen.getByText('0')).toBeInTheDocument();
+  });
+
+  describe('value column', () => {
+    it('shows shares times the latest price, in the security\'s own currency', () => {
+      const securities = [makeSecurity({ currencyCode: READER_CURRENCY, lastPrice: 150.25 })];
+
+      render(<SecurityList securities={securities} holdings={{ s1: 10 }} onEdit={onEdit} onToggleActive={onToggleActive} onOpen={onOpen} />);
+      expect(screen.getByText('Value')).toBeInTheDocument();
+      // Quoted in the reader's own currency, so the code is not repeated after
+      // it -- an exact text match would fail if it were.
+      expect(screen.getByText(money(1502.5, READER_CURRENCY))).toBeInTheDocument();
+    });
+
+    it('names the currency when the security is not quoted in the reader\'s own', () => {
+      const securities = [makeSecurity({ currencyCode: FOREIGN_CURRENCY, lastPrice: 150 })];
+
+      render(<SecurityList securities={securities} holdings={{ s1: 10 }} onEdit={onEdit} onToggleActive={onToggleActive} onOpen={onOpen} />);
+      expect(
+        screen.getByText(`${money(1500, FOREIGN_CURRENCY)} ${FOREIGN_CURRENCY}`),
+      ).toBeInTheDocument();
+    });
+
+    it('renders a held position with no price as unknown, never as zero', () => {
+      const securities = [makeSecurity({ currencyCode: READER_CURRENCY, lastPrice: null })];
+
+      render(<SecurityList securities={securities} holdings={{ s1: 10 }} onEdit={onEdit} onToggleActive={onToggleActive} onOpen={onOpen} />);
+      expect(screen.getByTestId('unknown-amount')).toBeInTheDocument();
+      expect(screen.queryByText(money(0, READER_CURRENCY))).not.toBeInTheDocument();
+    });
+
+    it('treats an absent price field (an older backend) as unknown too', () => {
+      const securities = [makeSecurity({ currencyCode: READER_CURRENCY })];
+
+      render(<SecurityList securities={securities} holdings={{ s1: 10 }} onEdit={onEdit} onToggleActive={onToggleActive} onOpen={onOpen} />);
+      expect(screen.getByTestId('unknown-amount')).toBeInTheDocument();
+    });
+
+    it('shows a measured zero for a security nobody holds, price or no price', () => {
+      const securities = [makeSecurity({ currencyCode: READER_CURRENCY, lastPrice: null })];
+
+      render(<SecurityList securities={securities} onEdit={onEdit} onToggleActive={onToggleActive} onOpen={onOpen} />);
+      expect(screen.getByText(money(0, READER_CURRENCY))).toBeInTheDocument();
+      expect(screen.queryByTestId('unknown-amount')).not.toBeInTheDocument();
+    });
+
+    it('leaves the row alone when the unknown-value help icon is clicked', () => {
+      // `InfoTooltip` acts on itself, so explaining the gap must not navigate
+      // away from the row being explained.
+      const securities = [makeSecurity({ currencyCode: READER_CURRENCY, lastPrice: null })];
+
+      render(<SecurityList securities={securities} holdings={{ s1: 10 }} onEdit={onEdit} onToggleActive={onToggleActive} onOpen={onOpen} />);
+      fireEvent.click(screen.getByTestId('unknown-amount').querySelector('button')!);
+      expect(onOpen).not.toHaveBeenCalled();
+    });
+
+    it('keeps the value column at every density, beside Shares', () => {
+      const securities = [makeSecurity({ currencyCode: READER_CURRENCY, lastPrice: 2 })];
+
+      useDensityStore.setState({ densities: { securities: 'dense' } });
+      render(<SecurityList securities={securities} holdings={{ s1: 3 }} onEdit={onEdit} onToggleActive={onToggleActive} onOpen={onOpen} />);
+      const headers = screen.getAllByRole('columnheader').map((th) => th.textContent);
+      expect(headers.findIndex((h) => h?.startsWith('Value'))).toBe(
+        headers.findIndex((h) => h?.startsWith('Shares')) + 1,
+      );
+      expect(screen.getByText(money(6, READER_CURRENCY))).toBeInTheDocument();
+    });
   });
 
   it('opens the detail page from a click anywhere on the row', () => {
@@ -448,11 +553,19 @@ describe('SecurityList', () => {
     useDensityStore.setState({ densities: { securities: 'normal' } });
     render(<SecurityList securities={securities} onEdit={onEdit} onToggleActive={onToggleActive} onOpen={onOpen} />);
     // Default in tests is "yahoo" (preferences store mock returns undefined → '?? yahoo').
-    const yahooBadge = screen.getByText('Yahoo');
-    expect(yahooBadge).toBeInTheDocument();
-    // Italic class indicates the value is inherited from the default rather than an override.
+    // The badge says the provider is the default in words, not in a hover-only
+    // title a phone never shows; the italic face still marks it.
+    const yahooBadge = screen.getByText('Yahoo (default)');
     expect(yahooBadge.className).toContain('italic');
-    expect(yahooBadge.title).toMatch(/default/i);
+    expect(yahooBadge).not.toHaveAttribute('title');
+  });
+
+  it('names the bond engine, not the inherited provider, for a bond-linked security', () => {
+    const securities = [makeSecurity({ quoteProvider: null, bondProgramId: 'p-edo' })];
+    useDensityStore.setState({ densities: { securities: 'normal' } });
+    render(<SecurityList securities={securities} onEdit={onEdit} onToggleActive={onToggleActive} onOpen={onOpen} />);
+    expect(screen.getByText('Bond engine')).toBeInTheDocument();
+    expect(screen.queryByText('Yahoo')).not.toBeInTheDocument();
   });
 
   it('hides exchange and currency headers in compact density', () => {
@@ -618,6 +731,15 @@ describe('SecurityList', () => {
       fireEvent.click(screen.getByText('Shares'));
       expect(onSort).toHaveBeenCalledWith('shares');
     });
+
+    it('calls onSort with "value" when the Value header is clicked', () => {
+      const onSort = vi.fn();
+      const securities = [makeSecurity()];
+
+      render(<SecurityList securities={securities} onEdit={onEdit} onToggleActive={onToggleActive} onOpen={onOpen} onSort={onSort} sortField="symbol" sortDirection="asc" />);
+      fireEvent.click(screen.getByText('Value'));
+      expect(onSort).toHaveBeenCalledWith('value');
+    });
   });
 
   describe('long-press with touch events', () => {
@@ -782,6 +904,14 @@ describe('SecurityList', () => {
       // Yahoo appears as Provider badge (from quoteProvider=null→default yahoo) AND as lastPriceSource badge
       const yahooEls = screen.getAllByText('Yahoo');
       expect(yahooEls.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('renders a translated label, not the raw id, for the bond engine source', () => {
+      const securities = [makeSecurity({ lastPriceSource: 'bond_engine', quoteProvider: 'yahoo' })];
+      useDensityStore.setState({ densities: { securities: 'normal' } });
+      render(<SecurityList securities={securities} onEdit={onEdit} onToggleActive={onToggleActive} onOpen={onOpen} />);
+      expect(screen.getByText('Bond engine')).toBeInTheDocument();
+      expect(screen.queryByText('bond_engine')).not.toBeInTheDocument();
     });
 
     it('renders MSN price source badge', () => {
@@ -1171,4 +1301,134 @@ describe('SecurityList', () => {
       expect(onToggleActive).not.toHaveBeenCalled();
     });
   });
+
+  /**
+   * Issue #1316: the Securities list rendered through the pure `@/lib/format`
+   * helpers, so a reader on Polish number formatting saw `zl18,812.71` and
+   * `755.8342` while the rest of the app used their own convention.
+   *
+   * Each case sets a real preference row and asserts the rendered string, so a
+   * regression back to a fixed formatter fails here and not only in the source
+   * scan.
+   */
+  describe('number locale', () => {
+    const polishSecurities = [
+      makeSecurity({ id: 'p1', symbol: 'PKO', currencyCode: 'PLN', lastPrice: 18812.71 }),
+    ];
+
+    // The column header carries the same title attribute as the cell, so the
+    // cell is the SPAN among the matches.
+    const VALUE_TITLE =
+      "Shares held across all accounts at the most recent price, in the security's own currency";
+    const valueCellText = (): string =>
+      screen
+        .getAllByTitle(VALUE_TITLE)
+        .find((el) => el.tagName === 'SPAN')!.textContent ?? '';
+
+    /** A group separator, whichever space or comma the locale uses. */
+    const grouped = (text: string) => /\d[\s\u00a0\u202f,.]\d/.test(text);
+
+    it('renders money in the configured locale, not a fixed en-US', () => {
+      setNumberPreferences('pl-PL', 'pl');
+      render(
+        <SecurityList
+          securities={polishSecurities}
+          holdings={{ p1: 1 }}
+          onEdit={onEdit}
+          onToggleActive={onToggleActive}
+          onOpen={onOpen}
+        />,
+      );
+      // The reader's own currency here is the fallback, so the ISO suffix is
+      // appended -- the disambiguation `withCurrencyCode` adds is deliberate and
+      // is not what this issue is about.
+      const cell = valueCellText();
+      expect(cell).toContain('812,71');
+      expect(cell).toContain('zł');
+      expect(cell).not.toContain('18,812.71');
+    });
+
+    it('renders share quantities in the configured locale', () => {
+      setNumberPreferences('pl-PL', 'pl');
+      render(
+        <SecurityList
+          securities={[makeSecurity({ currencyCode: 'PLN' })]}
+          holdings={{ s1: 755.8342 }}
+          onEdit={onEdit}
+          onToggleActive={onToggleActive}
+          onOpen={onOpen}
+        />,
+      );
+      expect(screen.getByText('755,8342')).toBeInTheDocument();
+    });
+
+    it('keeps a tiny residual position visible under a comma-decimal locale', () => {
+      // The migration must not cost precision: `formatQuantity`'s four decimals
+      // would round this to "0".
+      setNumberPreferences('pl-PL', 'pl');
+      render(
+        <SecurityList
+          securities={[makeSecurity({ currencyCode: 'PLN' })]}
+          holdings={{ s1: 0.0003 }}
+          onEdit={onEdit}
+          onToggleActive={onToggleActive}
+          onOpen={onOpen}
+        />,
+      );
+      expect(screen.getByText('0,0003')).toBeInTheDocument();
+    });
+
+    it('renders the dot-decimal convention when the user explicitly chose it', () => {
+      // Proves the fix is a locale seam and not a hardcoded Polish one. The UI
+      // language is Polish and the NUMBER preference is en-US: the explicit
+      // preference wins.
+      setNumberPreferences('en-US', 'pl');
+      render(
+        <SecurityList
+          securities={polishSecurities}
+          holdings={{ p1: 1 }}
+          onEdit={onEdit}
+          onToggleActive={onToggleActive}
+          onOpen={onOpen}
+        />,
+      );
+      expect(valueCellText()).toContain('18,812.71');
+    });
+
+    it('follows the UI language when numberFormat is "browser"', () => {
+      setNumberPreferences('browser', 'pl');
+      render(
+        <SecurityList
+          securities={polishSecurities}
+          holdings={{ p1: 1 }}
+          onEdit={onEdit}
+          onToggleActive={onToggleActive}
+          onOpen={onOpen}
+        />,
+      );
+      const text = valueCellText();
+      expect(text).toContain('812,71');
+      expect(grouped(text)).toBe(true);
+    });
+
+    it('lets an explicit preference beat the host locale', () => {
+      // The runner's own locale is en-US. A bare `toLocaleString()` would follow
+      // it and look correct by accident, which is why this case exists: the
+      // preference below deliberately disagrees with the host.
+      expect(new Intl.NumberFormat().resolvedOptions().locale).toMatch(/^en/);
+      setNumberPreferences('de-DE', 'en');
+      render(
+        <SecurityList
+          securities={polishSecurities}
+          holdings={{ p1: 1 }}
+          onEdit={onEdit}
+          onToggleActive={onToggleActive}
+          onOpen={onOpen}
+        />,
+      );
+      // German: dot groups, comma decimal -- neither of which the host produces.
+      expect(valueCellText()).toContain('18.812,71');
+    });
+  });
+
 });

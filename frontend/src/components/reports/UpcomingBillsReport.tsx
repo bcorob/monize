@@ -24,7 +24,9 @@ import {
   occurrenceKind,
 } from '@/lib/scheduled-kind';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
-import { ExportDropdown } from '@/components/ui/ExportDropdown';
+import { useDateFormat } from '@/hooks/useDateFormat';
+import { useChartDateFormat } from '@/hooks/useChartDateFormat';
+import { ReportToolbarActions } from '@/components/reports/ReportToolbarActions';
 import { exportToCsv } from '@/lib/csv-export';
 import { useReportData } from '@/hooks/useReportData';
 import { ReportError } from '@/components/reports/ReportError';
@@ -32,6 +34,8 @@ import { UnknownAmount } from '@/components/ui/UnknownAmount';
 import { sumEffectiveOccurrences } from '@/lib/scheduled-effective-amount';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { isComplete, type ConvertedTotal } from '@/lib/currency-total';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { SEGMENTED_GROUP_CLASS, segmentClass } from '@/components/ui/segmented-control';
 
 /** How far ahead the report projects, matching the three months it always has. */
 const HORIZON_MONTHS = 3;
@@ -74,6 +78,8 @@ interface UpcomingBill {
    * falling back to the schedule's snapshot sign.
    */
   directionAmount: number | null;
+  /** The amount is the schedule's history estimate (issue #2096). */
+  estimated: boolean;
   isOverdue: boolean;
 }
 
@@ -81,6 +87,8 @@ export function UpcomingBillsReport() {
   const t = useTranslations('reports');
   const router = useRouter();
   const { formatCurrencyCompact: formatCurrency } = useNumberFormat();
+  const { formatDate } = useDateFormat();
+  const formatChartDate = useChartDateFormat();
   // Every occurrence is priced in its own currency, so a single total needs a
   // conversion rather than an addition (issue #1247).
   const { convertToDefault, defaultCurrency } = useExchangeRates();
@@ -148,6 +156,7 @@ export function UpcomingBillsReport() {
           amount: occurrence.amount,
           currencyCode: occurrence.currencyCode,
           directionAmount: occurrence.directionAmount,
+          estimated: occurrence.estimated === true,
           isOverdue: dueDate < today,
         },
       ];
@@ -285,7 +294,7 @@ export function UpcomingBillsReport() {
     ];
     await exportToPdf({
       title: t('upcomingBills.pdfTitle'),
-      subtitle: t('upcomingBills.pdfSubtitle', { month: format(currentMonth, 'MMMM yyyy'), count: scheduledTransactions.length }),
+      subtitle: t('upcomingBills.pdfSubtitle', { month: formatChartDate(currentMonth, 'MMMM yyyy'), count: scheduledTransactions.length }),
       summaryCards: pdfCards,
       tableData: { headers, rows },
       filename: 'upcoming-bills',
@@ -367,7 +376,10 @@ export function UpcomingBillsReport() {
 
       {/* Controls */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4">
-        <div className="flex items-center justify-between">
+        {/* The month stepper alone fills a phone, so the view switch and the
+            export take a line of their own below it rather than being pushed
+            off the right of the card. One row from `sm` up. */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             <button
               onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}
@@ -378,7 +390,7 @@ export function UpcomingBillsReport() {
               </svg>
             </button>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 min-w-[160px] text-center">
-              {format(currentMonth, 'MMMM yyyy')}
+              {formatChartDate(currentMonth, 'MMMM yyyy')}
             </h3>
             <button
               onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}
@@ -395,39 +407,37 @@ export function UpcomingBillsReport() {
               {t('upcomingBills.todayButton')}
             </button>
           </div>
-          <div className="flex items-center gap-3">
-            <div className="flex gap-2">
+          <div className="flex w-full flex-wrap items-center gap-3 sm:w-auto">
+            <div className={SEGMENTED_GROUP_CLASS} role="group" aria-label={t('reportPage.viewLabel')}>
               <button
+                type="button"
                 onClick={() => setViewType('calendar')}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                  viewType === 'calendar'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                }`}
+                aria-pressed={viewType === 'calendar'}
+                className={segmentClass(viewType === 'calendar')}
               >
                 {t('upcomingBills.calendarView')}
               </button>
               <button
+                type="button"
                 onClick={() => setViewType('list')}
-                className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                  viewType === 'list'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                }`}
+                aria-pressed={viewType === 'list'}
+                className={segmentClass(viewType === 'list')}
               >
                 {t('upcomingBills.listView')}
               </button>
             </div>
-            <ExportDropdown onExportCsv={handleExportCsv} onExportPdf={handleExportPdf} disabled={upcomingBills.length === 0} />
           </div>
+          <ReportToolbarActions
+            onExportCsv={handleExportCsv}
+            onExportPdf={handleExportPdf}
+            disabled={upcomingBills.length === 0}
+          />
         </div>
       </div>
 
       {scheduledTransactions.length === 0 ? (
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6">
-          <p className="text-gray-500 dark:text-gray-400 text-center py-8">
-            {t('upcomingBills.noBills')}
-          </p>
+          <EmptyState title={t('upcomingBills.noBills')} />
         </div>
       ) : viewType === 'calendar' ? (
         /* Calendar View */
@@ -521,11 +531,11 @@ export function UpcomingBillsReport() {
                       </span>
                     )}
                     {bill.scheduledTransaction.autoPost ? (
-                      <span className="px-1.5 py-0.5 bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400 text-xs rounded" title={t('upcomingBills.autoPostsTitle')}>
+                      <span className="px-1.5 py-0.5 bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-400 text-xs rounded">
                         {t('upcomingBills.autoLabel')}
                       </span>
                     ) : (
-                      <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-400 text-xs rounded font-medium" title={t('upcomingBills.manualPostTitle')}>
+                      <span className="px-1.5 py-0.5 bg-amber-100 text-amber-700 dark:bg-amber-900/50 dark:text-amber-400 text-xs rounded font-medium">
                         {t('upcomingBills.manualLabel')}
                       </span>
                     )}
@@ -550,8 +560,13 @@ export function UpcomingBillsReport() {
                       formatCurrency(Math.abs(bill.amount), bill.currencyCode)
                     )}
                   </div>
+                  {bill.estimated && (
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {t('upcomingBills.estimated')}
+                    </div>
+                  )}
                   <div className="text-sm text-gray-500 dark:text-gray-400">
-                    {format(bill.dueDate, 'MMM d, yyyy')}
+                    {formatDate(bill.dueDate)}
                   </div>
                 </div>
               </div>

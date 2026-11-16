@@ -5,6 +5,8 @@
     "dividendsInterest": "[XX-Dividends & Interest-XX]",
     "realizedGains": "[XX-Realized Gains-XX]",
     "ytd": "[XX-Year to date-XX]",
+    "realizedKnownPart": "[XX-Known part: {amount}-XX]",
+    "realizedUnknownReason": "[XX-This gain cannot be worked out: the position holds shares that were added with no cost, so what the sold shares cost is unknown. Open the transaction that added them and enter their price.-XX]",
     "empty": "[XX-No investment income this year-XX]"
   },
   "register": {

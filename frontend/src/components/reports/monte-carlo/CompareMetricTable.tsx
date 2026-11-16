@@ -1,5 +1,6 @@
 'use client';
 
+import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import {
   MonteCarloScenario,
@@ -9,6 +10,7 @@ import {
   ROW_GROUPS,
   ScenarioContext,
   formatCellValue,
+  type CompareCellFormatters,
 } from './compareMetricRows';
 
 export type ColumnStatus = 'loading' | 'ok' | 'error' | 'missing';
@@ -24,7 +26,7 @@ export type CompareColumn = {
 
 export interface CompareMetricTableProps {
   columns: CompareColumn[];
-  formatCurrency: (value: number) => string;
+  formatters: CompareCellFormatters;
   onRetry: (id: string) => void;
   onRemove: (id: string) => void;
   onRerun: (id: string) => void;
@@ -32,7 +34,7 @@ export interface CompareMetricTableProps {
 
 export function CompareMetricTable({
   columns,
-  formatCurrency,
+  formatters,
   onRetry,
   onRemove,
   onRerun,
@@ -69,7 +71,7 @@ export function CompareMetricTable({
               key={group.key}
               group={group}
               columns={columns}
-              formatCurrency={formatCurrency}
+              formatters={formatters}
               onRetry={onRetry}
             />
           ))}
@@ -88,7 +90,8 @@ function ColumnHeader({
   onRemove: () => void;
   onRerun: () => void;
 }) {
-  const title = column.scenario?.name ?? 'Scenario';
+  const t = useTranslations('reports');
+  const title = column.scenario?.name ?? t('monteCarloComparePage.scenarioFallback');
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between gap-2">
@@ -98,9 +101,9 @@ function ColumnHeader({
         <button
           type="button"
           onClick={onRemove}
-          aria-label={`Remove ${title} from comparison`}
+          aria-label={t('monteCarloComparePage.removeAriaLabel', { title })}
           className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-          title="Remove from comparison"
+          title={t('monteCarloComparePage.removeTitle')}
         >
           <svg
             className="w-4 h-4"
@@ -144,14 +147,15 @@ function ColumnHeader({
 function GroupBlock({
   group,
   columns,
-  formatCurrency,
+  formatters,
   onRetry,
 }: {
   group: (typeof ROW_GROUPS)[number];
   columns: CompareColumn[];
-  formatCurrency: (n: number) => string;
+  formatters: CompareCellFormatters;
   onRetry: (id: string) => void;
 }) {
+  const t = useTranslations('reports');
   return (
     <>
       <tr className="bg-gray-100 dark:bg-gray-900/60">
@@ -186,7 +190,7 @@ function GroupBlock({
                   key={col.id}
                   className="px-3 py-1.5 text-gray-400 dark:text-gray-500"
                 >
-                  <span className="inline-block w-16 h-3 bg-gray-200 dark:bg-gray-700 rounded animate-pulse" />
+                  <span className="inline-block w-16 h-3 bg-gray-200 dark:bg-gray-700 rounded animate-pulse skeleton-shimmer" />
                 </td>
               );
             }
@@ -205,7 +209,7 @@ function GroupBlock({
                 <td key={col.id} className="px-3 py-1.5">
                   <div className="flex flex-col gap-1">
                     <span className="text-xs text-red-600 dark:text-red-400">
-                      {col.error ?? 'Run failed'}
+                      {col.error ?? t('monteCarloComparePage.runFailed')}
                     </span>
                     <Button
                       size="sm"
@@ -228,7 +232,7 @@ function GroupBlock({
                 key={col.id}
                 className="px-3 py-1.5 text-gray-900 dark:text-gray-100"
               >
-                {formatCellValue(value, row.format, formatCurrency)}
+                {formatCellValue(value, row.format, formatters)}
               </td>
             );
           })}

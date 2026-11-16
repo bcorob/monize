@@ -3,6 +3,7 @@
     "noneToUpdate": "Tidak ada sekuritas untuk diperbarui",
     "updated": "{count, plural, one {# harga sekuritas diperbarui} other {# harga sekuritas diperbarui}}",
     "partialFailure": "Harga diperbarui: {updated} berhasil, {failed} gagal{symbols}",
+    "partialFailureWithReasons": "Harga diperbarui: {updated} berhasil, {failed} gagal{symbols}\n{reasons}",
     "failed": "Gagal menyegarkan harga"
   },
   "page": {
@@ -10,6 +11,7 @@
     "subtitle": "Kelola saham, ETF, reksa dana, dan sekuritas lainnya",
     "newSecurity": "+ Sekuritas Baru",
     "searchPlaceholder": "Cari berdasarkan simbol atau nama...",
+    "statusFilterLabel": "Status",
     "statusAll": "Semua ({count})",
     "statusActive": "Aktif ({count})",
     "statusInactive": "Tidak Aktif ({count})",
@@ -49,6 +51,7 @@
       "name": "Nama",
       "type": "Jenis",
       "shares": "Lembar",
+      "value": "Nilai",
       "exchange": "Bursa",
       "currency": "Mata Uang",
       "provider": "Penyedia",
@@ -63,12 +66,10 @@
       "inactive": "Tidak Aktif",
       "inactiveShort": "Tdk"
     },
-    "providerTitle": {
-      "override": "Penggantian penyedia per sekuritas",
-      "inherited": "Diwarisi dari preferensi Penyedia Kutipan default Anda"
-    },
+    "providerInherited": "{provider} (bawaan)",
     "columnTitles": {
       "shares": "Lembar saham saat ini yang dimiliki di semua akun",
+      "value": "Saham yang dimiliki di semua akun pada harga terbaru, dalam mata uang efek itu sendiri",
       "source": "Sumber harga terbaru"
     },
     "actions": {
@@ -115,7 +116,11 @@
     "exchangeLabel": "Bursa",
     "currencyLabel": "Mata Uang",
     "currencyNotConfigured": "{code} — tidak ada di mata uang Anda",
+    "currencyPlaceholder": "Pilih mata uang...",
+    "currencyNotReported": "Penyedia tidak melaporkan mata uang koin ini. Pilih mata uang fiat tempat koin ini dikutip.",
     "quoteProviderLabel": "Penyedia Kutipan",
+    "skipPriceUpdatesLabel": "Nonaktifkan pembaruan harga otomatis",
+    "skipPriceUpdatesHelp": "Monize tidak akan mengambil harga untuk sekuritas ini. Gunakan ini untuk sekuritas yang tidak dapat diberi harga oleh penyedia mana pun; harga yang Anda masukkan sendiri tetap dihitung. Memilih penyedia kuotasi atau ID Instrumen MSN yang berbeda akan mengaktifkan kembali pembaruan.",
     "msnIdLabel": "ID Instrumen MSN (lanjutan)",
     "lookupProviderAriaLabel": "Cari penyedia",
     "lookupButton": "Cari",
@@ -139,7 +144,11 @@
     "providers": {
       "auto": "Otomatis",
       "yahoo": "Yahoo",
-      "msn": "MSN"
+      "msn": "MSN",
+      "lse": "LSE",
+      "deutsche_boerse": "Deutsche Börse",
+      "bond_engine": "Mesin obligasi",
+      "html_table": "Tabel di halaman web"
     },
     "types": {
       "select": "Pilih jenis...",
@@ -189,16 +198,50 @@
       "deleteConfirm": "Hapus",
       "deleteSuccess": "Kelas aset \"{name}\" dihapus",
       "deleteFailed": "Tidak dapat menghapus kelas aset \"{name}\""
+    },
+    "bondFetchAction": "Ambil {code} dari sumber resmi",
+    "bondFetching": "Mengambil {code} dari penerbit beserta suku bunga acuannya. Ini bisa memakan waktu hingga satu menit.",
+    "bondFetchFailed": "Seri tidak dapat diambil.",
+    "bondCurrencyLocked": "Sekuritas ini ditautkan ke jenis obligasi dalam {linkedCurrency}. Kembalikan mata uang ke {linkedCurrency} atau lepas tautan jenis obligasi terlebih dahulu (melepas tautan menghapus harga yang dihitung).",
+    "bondProgramLabel": "Jenis obligasi",
+    "bondProgramNone": "Tidak ditautkan",
+    "bondProgramCurrent": "Jenis obligasi tertaut",
+    "bondProgramLoading": "Memuat jenis obligasi...",
+    "bondProgramLoadFailed": "Jenis obligasi tidak dapat dimuat, sehingga jenis obligasi belum dapat ditautkan.",
+    "bondProgramRetry": "Coba lagi",
+    "bondNoPrograms": "Katalog obligasi belum memiliki jenis obligasi.",
+    "bondAutoFetchLabel": "Ambil seri baru jenis obligasi ini secara otomatis",
+    "bondAutoFetchHelp": "Jika aktif, Monize membaca setiap seri baru jenis obligasi ini dari sumber resmi setiap hari, sehingga Anda dapat mencatat pembelian tanpa mengambil seri terlebih dahulu.",
+    "bondCountryLabel": "Negara",
+    "bondCountryOther": "Lainnya",
+    "bondCountryOtherInfo": "Dukungan untuk obligasi negara lain dapat diminta di <link>GitHub proyek</link>.",
+    "quoteTable": {
+      "urlLabel": "Halaman web tabel harga",
+      "urlHelp": "Halaman harus memiliki tabel yang judulnya berisi kolom tanggal dan kolom harga penutupan.",
+      "test": "Uji",
+      "previewFailed": "Halaman tidak dapat dibaca.",
+      "summary": "{count, plural, other {# hari}} dari {first} sampai {last}",
+      "columns": "Kolom yang dipakai: {columns}",
+      "currency": "Mata uang di halaman: {currency}",
+      "noCurrency": "Halaman tidak mencantumkan mata uang; harga disimpan dalam mata uang efek.",
+      "skipped": "{count, plural, other {# baris tak terbaca dilewati}}",
+      "headers": {
+        "date": "Tanggal",
+        "open": "Buka",
+        "high": "Tertinggi",
+        "low": "Terendah",
+        "close": "Tutup",
+        "volume": "Volume"
+      }
     }
   },
   "priceForm": {
     "dateLabel": "Tanggal",
     "closePriceLabel": "Harga Penutupan",
-    "openPriceLabel": "Harga Pembukaan",
-    "highPriceLabel": "Harga Tertinggi",
-    "lowPriceLabel": "Harga Terendah",
-    "volumeLabel": "Volume",
-    "optionalPlaceholder": "Opsional",
+    "openPriceLabel": "Harga Pembukaan (opsional)",
+    "highPriceLabel": "Harga Tertinggi (opsional)",
+    "lowPriceLabel": "Harga Terendah (opsional)",
+    "volumeLabel": "Volume (opsional)",
     "submitCreate": "Tambah Harga",
     "submitUpdate": "Perbarui Harga"
   },
@@ -246,7 +289,9 @@
     },
     "collapseAll": "Tutup semua",
     "expandAll": "Buka semua",
-    "groupCount": "{count} harga"
+    "groupCount": "{count} harga",
+    "addYearButton": "Tambah Satu Tahun Riwayat Lagi",
+    "addYearTitle": "Ambil satu tahun harga historis lagi dari penyedia"
   },
   "transactionHistory": {
     "accountLabel": "Akun",
@@ -284,7 +329,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "Reinvestasi Keuntungan Modal Jangka Panjang",
       "CAPITAL_GAIN_SHORT": "Keuntungan Modal Jangka Pendek",
       "CAPITAL_GAIN_LONG": "Keuntungan Modal Jangka Panjang",
-      "REDEEM": "Pencairan CD/Obligasi"
+      "REDEEM": "Pencairan CD/Obligasi",
+      "RETURN_OF_CAPITAL": "Pengembalian Modal"
     },
     "toasts": {
       "loadHistoryFailed": "Gagal memuat riwayat",
@@ -333,11 +379,20 @@
     "nameRequired": "Nama wajib diisi",
     "nameMax": "Nama harus 255 karakter atau kurang",
     "currencyRequired": "Mata uang wajib diisi",
-    "descriptionMax": "Keterangan tidak boleh lebih dari 5000 karakter"
+    "bondProgramRequired": "Jenis obligasi wajib diisi",
+    "descriptionMax": "Keterangan tidak boleh lebih dari 5000 karakter",
+    "quoteUrlRequired": "Masukkan halaman yang berisi tabel harga.",
+    "quoteUrlInvalid": "Masukkan alamat lengkap yang diawali http:// atau https://."
   },
   "priceValidation": {
     "dateRequired": "Tanggal wajib diisi",
     "priceRequired": "Harga wajib diisi",
     "priceNonNegative": "Harga harus berupa angka non-negatif"
+  },
+  "priceAlert": {
+    "label": "Peringatan perubahan harga (%)",
+    "help": "Kosongkan untuk menonaktifkan. Memberi tahu kenaikan atau penurunan dari sesi sebelumnya yang tersedia, maksimal sekali per instrumen per hari UTC.",
+    "range": "Masukkan persentase antara 0,1 dan 1000.",
+    "chartLabel": "Sertakan grafik dalam peringatan harga"
   }
 }

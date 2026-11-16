@@ -1,0 +1,100 @@
+{
+  "entry": {
+    "history": "Geschiedenis van de voorwaarden van {program}"
+  },
+  "offer": {
+    "loading": "De obligaties die te koop zijn worden geladen...",
+    "loadFailed": "De obligaties die te koop zijn konden niet worden geladen.",
+    "retry": "Opnieuw proberen",
+    "empty": "Vandaag is geen enkele serie te koop.",
+    "asOf": "Te koop op {date}. Elk bedrag geldt voor één obligatie die vandaag wordt gekocht en tot de einddatum wordt aangehouden.",
+    "comparisonNote": "Het geannualiseerde rendement is een vergelijkingscijfer voor producten met een verschillende looptijd, geen belofte van wat u verdient.",
+    "couponsNote": "Coupons niet herbelegd: bij een obligatie met coupons telt de waarde bij einddatum alle uitgekeerde coupons mee.",
+    "projected": "Geprojecteerd",
+    "projectedTitle": "Dit cijfer berust op een aangenomen referentiewaarde en niet alleen op gepubliceerde rentes.",
+    "assumptions": {
+      "title": "Aannames",
+      "intro": "Perioden die nog niet zijn begonnen worden gewaardeerd tegen deze referentiewaarden. Pas er een aan om het effect op elke rij te zien.",
+      "label": "{benchmark} (%)",
+      "latest": "Laatst gepubliceerde waarde: {value} ({observation})",
+      "reset": "Laatst gepubliceerde waarden gebruiken",
+      "updating": "Cijfers worden bijgewerkt..."
+    },
+    "columns": {
+      "series": "Serie",
+      "saleWindow": "Te koop",
+      "length": "Looptijd",
+      "firstPeriodRate": "Eerste periode",
+      "rule": "Rente",
+      "capitalization": "Rente-uitkering",
+      "redemption": "Vervroegde aflossing",
+      "maturityValue": "Waarde bij einddatum",
+      "totalReturn": "Totaal rendement",
+      "annualizedReturn": "Geannualiseerd rendement",
+      "terms": "Voorwaarden"
+    },
+    "saleWindowValue": "{from} tot {to}",
+    "lengthValue": "{months, plural, one {# maand} other {# maanden}}",
+    "lengthDaysValue": "{days, plural, one {# dag} other {# dagen}}",
+    "rule": {
+      "fixed": "Vast {rate} per jaar",
+      "benchmark": "{benchmark} + {addend}",
+      "floor": "Ondergrens van de referentie {floor}",
+      "daily": "Dagelijks: {benchmark} + {addend}",
+      "discount": "Korting op de nominale waarde"
+    },
+    "capitalization": {
+      "NONE": "Elke periode uitgekeerd",
+      "COMPOUND_AT_PERIOD_END": "Aan het einde van elke periode samengevoegd"
+    },
+    "redemption": {
+      "none": "Alleen bij einddatum",
+      "onDemand": "Op verzoek",
+      "fee": "Kosten van {amount} per obligatie",
+      "forfeit": "In de periode opgebouwde rente vervalt"
+    },
+    "couponsNotReinvested": "Coupons niet herbelegd"
+  },
+  "history": {
+    "loading": "De geschiedenis wordt geladen...",
+    "loadFailed": "De geschiedenis kon niet worden geladen.",
+    "retry": "Opnieuw proberen",
+    "empty": "Van dit product is nog geen serie opgeslagen.",
+    "coverage": "De catalogus omvat {from} tot {to}.",
+    "rateChartTitle": "Rente van de eerste periode en marge per verkoopmaand",
+    "feeChartTitle": "Kosten van vervroegde aflossing per verkoopmaand",
+    "rate": "Rente van de eerste periode",
+    "rateChartNote": "Bij obligaties met vaste rente toont de lijn de jaarrente.",
+    "addend": "Marge of spread",
+    "fee": "Kosten van vervroegde aflossing",
+    "gapsNote": "Een maand zonder opgeslagen serie is een onderbreking in de lijn, nooit een waarde afgeleid van de buurmaanden.",
+    "missingTitle": "Ontbrekende maanden in de catalogus ({count})",
+    "noMissing": "Tussen de eerste en de laatste opgeslagen serie ontbreekt geen enkele maand.",
+    "tableTitle": "Alle opgeslagen series",
+    "groupCount": "{count} serie(s)",
+    "unknownYear": "Verkoopdatum onbekend",
+    "columns": {
+      "series": "Serie",
+      "saleWindow": "Te koop",
+      "rate": "Rente van de eerste periode of jaarrente",
+      "addend": "Marge of spread",
+      "fee": "Kosten van vervroegde aflossing",
+      "floor": "Ondergrens van de opbrengst",
+      "version": "Versie van de voorwaarden",
+      "source": "Bron"
+    },
+    "floor": {
+      "ALL_PERIODS": "Elke periode",
+      "FIRST_PERIOD": "Alleen de eerste periode"
+    },
+    "none": "Geen",
+    "held": "In bezit"
+  },
+  "refreshProgress": {
+    "label": "Obligatiegegevens worden vernieuwd",
+    "offer": "Het huidige aanbod wordt gecontroleerd…",
+    "series": "Reeks {done} van {total} wordt opgehaald: {seriesCode}",
+    "historyComplete": "De historie is compleet",
+    "starting": "Starten…"
+  }
+}

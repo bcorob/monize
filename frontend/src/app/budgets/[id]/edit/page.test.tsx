@@ -1,11 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@/test/render';
+import { render, screen, waitFor, fireEvent, act } from '@/test/render';
 import BudgetEditPage from './page';
 
 // Mock next/navigation
 const mockPush = vi.fn();
+// One router object, as Next gives: a fresh one per render would re-run the
+// page's load effect on every render.
+const mockRouter = { push: (...args: any[]) => mockPush(...args) };
 vi.mock('next/navigation', () => ({
-  useRouter: () => ({ push: mockPush }),
+  useRouter: () => mockRouter,
   usePathname: () => '/budgets/budget-1/edit',
   useParams: () => ({ id: 'budget-1' }),
 }));
@@ -76,18 +79,27 @@ vi.mock('@/lib/errors', () => ({
 }));
 
 // Mock number format
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
-    formatNumber: (amount: number) => amount.toFixed(2),
-    formatPercent: (amount: number) => `${amount}%`,
-    defaultCurrency: 'USD',
-  }),
-}));
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
+      formatNumber: (amount: number) => amount.toFixed(2),
+      formatPercent: (amount: number) => `${amount}%`,
+      defaultCurrency: 'USD',
+    }),
+  };
+});
 
 // Mock budgets API
 const mockGetById = vi.fn();
 const mockGetSummary = vi.fn();
+const mockRemoveCategory = vi.fn();
+const mockAddTransferIncomeLine = vi.fn();
+const mockCreateBucket = vi.fn();
+const mockUpdateBucket = vi.fn();
+const mockDeleteBucket = vi.fn();
 
 vi.mock('@/lib/budgets', () => ({
   budgetsApi: {
@@ -95,7 +107,31 @@ vi.mock('@/lib/budgets', () => ({
     getSummary: (...args: any[]) => mockGetSummary(...args),
     update: vi.fn(),
     updateCategory: vi.fn(),
+    removeCategory: (...args: any[]) => mockRemoveCategory(...args),
+    addTransferIncomeLine: (...args: any[]) => mockAddTransferIncomeLine(...args),
+    createBucket: (...args: any[]) => mockCreateBucket(...args),
+    updateBucket: (...args: any[]) => mockUpdateBucket(...args),
+    deleteBucket: (...args: any[]) => mockDeleteBucket(...args),
   },
+}));
+
+const mockGetAccounts = vi.fn();
+vi.mock('@/lib/accounts', () => ({
+  accountsApi: {
+    getAll: (...args: any[]) => mockGetAccounts(...args),
+  },
+}));
+
+vi.mock('@/components/budgets/TransferIncomeLineForm', () => ({
+  TransferIncomeLineForm: ({ accounts, onSave }: any) => (
+    <div data-testid="transfer-income-form">
+      {accounts.map((a: any) => (
+        <button key={a.id} onClick={() => onSave({ transferAccountId: a.id, amount: 2000 })}>
+          {`Pick ${a.name}`}
+        </button>
+      ))}
+    </div>
+  ),
 }));
 
 // Mock components
@@ -107,8 +143,34 @@ vi.mock('@/components/budgets/BudgetForm', () => ({
   ),
 }));
 
+const categoryFormProps: { current: any } = { current: null };
 vi.mock('@/components/budgets/BudgetCategoryForm', () => ({
-  BudgetCategoryForm: () => <div data-testid="category-form" />,
+  BudgetCategoryForm: (props: any) => {
+    categoryFormProps.current = props;
+    return (
+      <div data-testid="category-form">
+        <button data-testid="category-remove" onClick={props.onRemove}>Remove from budget</button>
+      </div>
+    );
+  },
+}));
+
+// The editor has its own suite; here only its wiring to the page matters.
+const bucketEditorProps: { current: any } = { current: null };
+vi.mock('@/components/budgets/BudgetBucketEditor', () => ({
+  BudgetBucketEditor: (props: any) => {
+    bucketEditorProps.current = props;
+    return <div data-testid="bucket-editor" />;
+  },
+}));
+
+const mockToastSuccess = vi.fn();
+const mockToastError = vi.fn();
+vi.mock('react-hot-toast', () => ({
+  default: {
+    success: (...args: any[]) => mockToastSuccess(...args),
+    error: (...args: any[]) => mockToastError(...args),
+  },
 }));
 
 vi.mock('@/components/budgets/BudgetProgressBar', () => ({
@@ -135,6 +197,18 @@ vi.mock('@/components/ui/LoadingSpinner', () => ({
 vi.mock('@/components/ui/Modal', () => ({
   Modal: ({ children, isOpen }: { children: React.ReactNode; isOpen: boolean }) =>
     isOpen ? <div data-testid="modal">{children}</div> : null,
+}));
+
+vi.mock('@/components/ui/ConfirmDialog', () => ({
+  ConfirmDialog: ({ isOpen, title, message, confirmLabel, onConfirm, onCancel }: any) =>
+    isOpen ? (
+      <div data-testid="confirm-dialog">
+        <h3>{title}</h3>
+        <p>{message}</p>
+        <button onClick={onConfirm}>{confirmLabel}</button>
+        <button onClick={onCancel}>Keep</button>
+      </div>
+    ) : null,
 }));
 
 const mockBudget = {
@@ -198,6 +272,10 @@ describe('BudgetEditPage', () => {
     vi.clearAllMocks();
     mockGetById.mockResolvedValue(mockBudget);
     mockGetSummary.mockResolvedValue(mockSummary);
+    mockRemoveCategory.mockResolvedValue(undefined);
+    mockGetAccounts.mockResolvedValue([]);
+    categoryFormProps.current = null;
+    bucketEditorProps.current = null;
   });
 
   it('shows loading spinner initially', async () => {
@@ -243,12 +321,18 @@ describe('BudgetEditPage', () => {
     });
   });
 
-  it('renders back to dashboard button', async () => {
+  it('returns to the budget through a chevron link above the title', async () => {
     render(<BudgetEditPage />);
 
-    await waitFor(() => {
-      expect(screen.getByText('Back to Dashboard')).toBeInTheDocument();
-    });
+    // The way back names the budget and sits on the line above the title,
+    // not among the header actions.
+    const back = await screen.findByRole('link', { name: 'Back to February 2026' });
+    expect(back).toHaveAttribute('href', '/budgets/budget-1');
+    expect(back.querySelector('svg')).not.toBeNull();
+    const header = screen.getByTestId('page-header');
+    expect(header.contains(back)).toBe(false);
+    expect(back.compareDocumentPosition(header) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByText('Back to Dashboard')).toBeNull();
   });
 
   it('redirects to budgets list on error', async () => {
@@ -347,5 +431,297 @@ describe('BudgetEditPage', () => {
     // Also check rollover text and flex group badge
     expect(screen.getByText('Rollover: rollover')).toBeInTheDocument();
     expect(screen.getByText('flex-group-1')).toBeInTheDocument();
+  });
+
+  describe('removing a category', () => {
+    async function openRemoveConfirm() {
+      render(<BudgetEditPage />);
+      await waitFor(() => expect(screen.getByText('Groceries')).toBeInTheDocument());
+      fireEvent.click(screen.getByText('Groceries'));
+      fireEvent.click(await screen.findByTestId('category-remove'));
+      return screen.findByTestId('confirm-dialog');
+    }
+
+    it('asks for confirmation, naming the line and its allocation, before removing', async () => {
+      const dialog = await openRemoveConfirm();
+
+      expect(dialog).toHaveTextContent('Remove Category');
+      expect(dialog).toHaveTextContent('Remove "Groceries" from this budget? Its $600.00 allocation');
+      // The edit modal closes so the confirmation is the only dialog open.
+      expect(screen.queryByTestId('category-form')).not.toBeInTheDocument();
+      expect(mockRemoveCategory).not.toHaveBeenCalled();
+    });
+
+    it('removes the budget line and reloads the budget on confirm', async () => {
+      await openRemoveConfirm();
+      mockGetById.mockClear();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+
+      await waitFor(() => {
+        expect(mockRemoveCategory).toHaveBeenCalledWith('budget-1', 'bc-1');
+      });
+      await waitFor(() => expect(mockGetById).toHaveBeenCalledWith('budget-1'));
+      // The reload settles back to the page, not the spinner.
+      await screen.findByTestId('budget-form');
+      expect(mockToastSuccess).toHaveBeenCalledWith('Category removed from budget');
+      expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument();
+    });
+
+    it('does not remove anything when the confirmation is cancelled', async () => {
+      await openRemoveConfirm();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Keep' }));
+
+      await waitFor(() => {
+        expect(screen.queryByTestId('confirm-dialog')).not.toBeInTheDocument();
+      });
+      expect(mockRemoveCategory).not.toHaveBeenCalled();
+    });
+
+    it('reports a failed removal', async () => {
+      mockRemoveCategory.mockRejectedValue(new Error('boom'));
+      await openRemoveConfirm();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+
+      await waitFor(() => {
+        expect(mockToastError).toHaveBeenCalledWith('Failed to remove category');
+      });
+      expect(mockToastSuccess).not.toHaveBeenCalled();
+    });
+  });
+  describe('transfer income (issue #2141)', () => {
+    const account = (id: string, name: string, extra: Record<string, unknown> = {}) => ({
+      id,
+      name,
+      userId: 'user-1',
+      isClosed: false,
+      ...extra,
+    });
+
+    it('offers only the user\'s open accounts no transfer line names, and adds the line', async () => {
+      mockGetById.mockResolvedValue({
+        ...mockBudget,
+        categories: [
+          ...mockBudget.categories,
+          {
+            ...mockBudget.categories[0],
+            id: 'bc-save',
+            categoryId: null,
+            category: null,
+            isTransfer: true,
+            transferAccountId: 'acc-tfsa',
+            transferAccount: { id: 'acc-tfsa', name: 'TFSA', accountType: 'SAVINGS' },
+          },
+        ],
+      });
+      mockGetAccounts.mockResolvedValue([
+        account('acc-hisa', 'HISA'),
+        account('acc-tfsa', 'TFSA'),
+        account('acc-old', 'Old', { isClosed: true }),
+        account('acc-joint', 'Partner', { userId: 'user-2' }),
+      ]);
+      mockAddTransferIncomeLine.mockResolvedValue({ id: 'bc-new' });
+      render(<BudgetEditPage />);
+
+      fireEvent.click(await screen.findByText('Add Transfer Income'));
+      expect(screen.getByText('Pick HISA')).toBeInTheDocument();
+      expect(screen.queryByText('Pick TFSA')).not.toBeInTheDocument();
+      expect(screen.queryByText('Pick Old')).not.toBeInTheDocument();
+      expect(screen.queryByText('Pick Partner')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByText('Pick HISA'));
+
+      await waitFor(() => {
+        expect(mockAddTransferIncomeLine).toHaveBeenCalledWith('budget-1', {
+          transferAccountId: 'acc-hisa',
+          amount: 2000,
+        });
+      });
+      expect(mockToastSuccess).toHaveBeenCalledWith('Transfer income added');
+    });
+
+    it('reports a refused add', async () => {
+      mockGetAccounts.mockResolvedValue([account('acc-hisa', 'HISA')]);
+      mockAddTransferIncomeLine.mockRejectedValue(new Error('refused'));
+      render(<BudgetEditPage />);
+
+      fireEvent.click(await screen.findByText('Add Transfer Income'));
+      fireEvent.click(screen.getByText('Pick HISA'));
+
+      await waitFor(() => {
+        expect(mockToastError).toHaveBeenCalledWith('Failed to add transfer income');
+      });
+    });
+
+    it('offers no add when the accounts did not load', async () => {
+      mockGetAccounts.mockRejectedValue(new Error('down'));
+      render(<BudgetEditPage />);
+
+      await screen.findByText('Groceries');
+      expect(screen.queryByText('Add Transfer Income')).not.toBeInTheDocument();
+    });
+
+    it('names a transfer income line after its source and shows the toggle\'s figure', async () => {
+      mockGetById.mockResolvedValue({
+        ...mockBudget,
+        config: { excludedAccountIds: ['acc-rrsp'], transfersInAsIncome: true },
+        categories: [
+          ...mockBudget.categories,
+          {
+            ...mockBudget.categories[0],
+            id: 'bc-hisa',
+            categoryId: null,
+            category: null,
+            isIncome: true,
+            isTransfer: true,
+            transferAccountId: 'acc-hisa',
+            transferAccount: { id: 'acc-hisa', name: 'HISA', accountType: 'SAVINGS' },
+            amount: 2000,
+          },
+        ],
+      });
+      mockGetSummary.mockResolvedValue({ ...mockSummary, outsideTransferIncome: 300 });
+      render(<BudgetEditPage />);
+
+      expect(await screen.findByText('Transfers from HISA')).toBeInTheDocument();
+      expect(screen.getByText('Transfers from accounts outside this budget')).toBeInTheDocument();
+      expect(screen.getByText('$300.00')).toBeInTheDocument();
+    });
+  });
+
+  describe('buckets', () => {
+    const buckets = [
+      {
+        id: 'bk-1',
+        budgetId: 'budget-1',
+        name: 'Fixed costs',
+        targetType: 'PERCENT',
+        targetValue: 50,
+        carryOver: false,
+        carryCap: null,
+        sortOrder: 0,
+        createdAt: '2026-11-01',
+        updatedAt: '2026-11-01',
+      },
+    ];
+    const bucketBudget = {
+      ...mockBudget,
+      strategy: 'BUCKET',
+      buckets,
+      categories: [
+        { ...mockBudget.categories[0], bucketId: 'bk-1' },
+        {
+          ...mockBudget.categories[0],
+          id: 'bc-2',
+          categoryId: 'cat-2',
+          category: { id: 'cat-2', name: 'Dining', isIncome: false },
+          bucketId: null,
+        },
+      ],
+    };
+
+    it('has no Buckets section for a budget of another strategy, even one holding buckets', async () => {
+      mockGetById.mockResolvedValue({ ...bucketBudget, strategy: 'FIFTY_THIRTY_TWENTY' });
+      render(<BudgetEditPage />);
+
+      await screen.findByTestId('budget-form');
+      expect(screen.queryByRole('heading', { name: 'Buckets' })).not.toBeInTheDocument();
+      expect(screen.queryByTestId('bucket-editor')).not.toBeInTheDocument();
+      expect(screen.queryByText('Fixed costs')).not.toBeInTheDocument();
+      expect(screen.queryByText('Unassigned')).not.toBeInTheDocument();
+    });
+
+    it('shows the Buckets section with the persisted editor for a Bucket budget', async () => {
+      mockGetById.mockResolvedValue(bucketBudget);
+      render(<BudgetEditPage />);
+
+      expect(await screen.findByRole('region', { name: 'Buckets' })).toBeInTheDocument();
+      expect(screen.getByTestId('bucket-editor')).toBeInTheDocument();
+      expect(bucketEditorProps.current).toMatchObject({
+        mode: 'persisted',
+        currencyCode: 'USD',
+        buckets,
+      });
+    });
+
+    it('badges each expense line with its bucket, or Unassigned', async () => {
+      mockGetById.mockResolvedValue(bucketBudget);
+      render(<BudgetEditPage />);
+
+      await screen.findByTestId('bucket-editor');
+      expect(screen.getByRole('button', { name: /Groceries/ })).toHaveTextContent('Fixed costs');
+      expect(screen.getByRole('button', { name: /Dining/ })).toHaveTextContent('Unassigned');
+    });
+
+    it('hands the line form the strategy and the buckets', async () => {
+      mockGetById.mockResolvedValue(bucketBudget);
+      render(<BudgetEditPage />);
+
+      fireEvent.click(await screen.findByRole('button', { name: /Groceries/ }));
+      await screen.findByTestId('category-form');
+      expect(categoryFormProps.current).toMatchObject({ strategy: 'BUCKET', buckets });
+    });
+
+    it('sends each editor callback to the bucket routes of this budget', async () => {
+      mockGetById.mockResolvedValue(bucketBudget);
+      mockCreateBucket.mockResolvedValue(buckets[0]);
+      mockUpdateBucket.mockResolvedValue(buckets[0]);
+      mockDeleteBucket.mockResolvedValue(undefined);
+      render(<BudgetEditPage />);
+      await screen.findByTestId('bucket-editor');
+
+      const data = { name: 'Savings', targetType: 'PERCENT', targetValue: 20 };
+      await act(async () => {
+        await bucketEditorProps.current.onCreate(data);
+        await bucketEditorProps.current.onUpdate('bk-1', { name: 'Needs' });
+        await bucketEditorProps.current.onDelete('bk-1');
+      });
+
+      expect(mockCreateBucket).toHaveBeenCalledWith('budget-1', data);
+      expect(mockUpdateBucket).toHaveBeenCalledWith('budget-1', 'bk-1', { name: 'Needs' });
+      expect(mockDeleteBucket).toHaveBeenCalledWith('budget-1', 'bk-1');
+    });
+
+    it('re-reads the budget in place after a bucket write, so the list sees the new bucket', async () => {
+      mockGetById.mockResolvedValue(bucketBudget);
+      render(<BudgetEditPage />);
+      await screen.findByTestId('bucket-editor');
+      expect(screen.getByRole('button', { name: /Dining/ })).toHaveTextContent('Unassigned');
+
+      const savings = { ...buckets[0], id: 'bk-2', name: 'Savings', sortOrder: 1 };
+      mockGetById.mockResolvedValue({
+        ...bucketBudget,
+        buckets: [...buckets, savings],
+        categories: [bucketBudget.categories[0], { ...bucketBudget.categories[1], bucketId: 'bk-2' }],
+      });
+      mockGetById.mockClear();
+      await act(async () => {
+        await bucketEditorProps.current.onWritten();
+      });
+
+      expect(mockGetById).toHaveBeenCalledTimes(1);
+      expect(mockGetSummary).toHaveBeenCalled();
+      // In place: the editor stayed mounted and never gave way to the spinner.
+      expect(screen.queryByTestId('loading-spinner')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Dining/ })).toHaveTextContent('Savings');
+      expect(bucketEditorProps.current.buckets).toEqual([...buckets, savings]);
+    });
+
+    it('reports a failed re-read without leaving the page', async () => {
+      mockGetById.mockResolvedValue(bucketBudget);
+      render(<BudgetEditPage />);
+      await screen.findByTestId('bucket-editor');
+
+      mockGetById.mockRejectedValue(new Error('boom'));
+      await act(async () => {
+        await bucketEditorProps.current.onWritten();
+      });
+
+      expect(mockToastError).toHaveBeenCalledWith('Failed to load budget');
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(screen.getByTestId('bucket-editor')).toBeInTheDocument();
+    });
   });
 });

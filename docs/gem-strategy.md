@@ -193,7 +193,15 @@ explicit unknown marker for it -- never a zero.
 
 Warnings the report can carry: `UNMAPPED_ROLE`, `INCOMPLETE_HISTORY`,
 `LEGACY_PERIODS`, `NO_ACCOUNT`, `NO_POSITION`, `FIRST_RUN`, `STALE_PRICES`,
-`CALCULATION_FAILED`.
+`SHORT_HISTORY`, `CALCULATION_FAILED`. `SHORT_HISTORY` is the specific,
+actionable form of a missing signal: when a required leg (the US equity leg,
+the benchmark, or any assigned equity market while RISK-ON) has no close at or
+before the current period's momentum-window start, it carries the `roles` and a
+`requiredFrom` date so the report can name which instrument to extend and from
+when. It is emitted in place of the generic `CALCULATION_FAILED`/`FIRST_RUN`
+whenever the cause can be pinned to named instruments; the fix is to fetch more
+price history for them (the security page's "add another year" control) or to
+assign an instrument with a longer history.
 
 ### No AI-assistant or MCP tool, on purpose
 
@@ -418,9 +426,8 @@ compared against the units actually held **in each account separately** -- a
 surplus in one account cancels a shortfall in another if the totals are
 compared, and both wrong bases then pass. A history containing an `ADD_SHARES`
 or a `REMOVE_SHARES` leaves the basis unknown outright: those rows move units
-and carry no price, and the application itself keeps two answers for what they
-cost (`HoldingsService.adjustQuantity` holds the per-share average fixed, the
-full rebuild holds the total fixed). A `SPLIT` is not in that class -- it
+and carry no price, so the rebuild carries them as quantity-only and the basis
+it computes covers fewer shares than the position holds. A `SPLIT` is not in that class -- it
 scales units and preserves total cost, which is what both paths do.
 
 **An acquisition with no price is unknown, not free.** `price` is nullable, and
@@ -541,6 +548,20 @@ answer both ends of a period with the same number: a flat period rather than an
 unpriced one for the backtest, and for momentum a trailing return of exactly
 zero, computed from one observation, that decides a signal the user is invited
 to trade on.
+
+The roles of one evaluation are priced at **one session** (A26-M27). The lag
+window tolerates a market shut on the boundary, but it also tolerated a feed gap:
+an ex-US series with no closes from the 19th to the 30th was priced off its 18th
+while the US leg used the 30th, and the ranking compared two sessions.
+`momentumSnapshot` takes the newest exit close any role holds on or before the
+boundary as the boundary's session and leaves a role whose own exit trails it by
+more than `BOUNDARY_HOLIDAY_DAYS` (four days, `price-boundary.util.ts`) unpriced,
+so the period defers through `evaluate` as it does for any unpriced mapped role.
+Algorithm version 3. Version 4 converts every close into the user's reporting
+currency at that close's own date before returns are compared (`GemPriceService.loadSeries`);
+a close with no admissible rate is dropped, so a span ending on it is unpriced. The backtest's per-role spans and the configuration save's
+backfill check (`coversBoundaries`) still use the fortnight window alone; a gap
+already materialized under version 2 is history-of-record.
 
 The lag window has a second half: **a boundary is priceable only once the series
 holds a close dated at or after it.** Inside the window alone, "the market was

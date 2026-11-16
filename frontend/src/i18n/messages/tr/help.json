@@ -1,0 +1,81 @@
+{
+  "learnMore": "Daha fazla bilgi",
+  "howThisWorks": "Bu nasıl çalışır",
+  "menu": {
+    "helpForPage": "Bu sayfa için yardım",
+    "search": "Yardımda ara",
+    "shortcuts": "Klavye kısayolları",
+    "takeTour": "Turu başlat",
+    "whatsNew": "Yenilikler",
+    "shellMenu": "Masaüstü uygulaması menüsü",
+    "reportIssue": "Sorun bildir",
+    "discussions": "Tartışmalar"
+  },
+  "shortcuts": {
+    "title": "Klavye kısayolları",
+    "palette": "Komut paleti",
+    "paletteKeys": "Ctrl/Cmd+K",
+    "search": "Yardımda ara",
+    "searchKeys": "?",
+    "undo": "Son değişikliği geri al",
+    "undoKeys": "Ctrl/Cmd+Z",
+    "redo": "Yinele",
+    "redoKeys": "Ctrl/Cmd+Shift+Z veya Ctrl/Cmd+Y",
+    "closeDialog": "Açık iletişim kutusunu veya paneli kapat",
+    "closeDialogKeys": "Esc"
+  },
+  "panel": {
+    "title": "Yardım",
+    "back": "Geri",
+    "forward": "İleri",
+    "openOnline": "monize.net adresinde aç",
+    "pin": "Sayfalar arasında geçiş yaparken açık kalması için yardım panelini sabitleyin",
+    "unpin": "Yardım panelinin sabitlemesini kaldır",
+    "expand": "Yardım panelini genişlet",
+    "collapse": "Yardım panelini daralt",
+    "resize": "Yardım panelini yeniden boyutlandır",
+    "resizeValue": "{width} piksel",
+    "close": "Yardımı kapat",
+    "englishOnly": "Bu kılavuz İngilizcedir.",
+    "loading": "Yardım yükleniyor",
+    "toc": {
+      "toggle": "Bu sayfada",
+      "label": "Bu sayfadaki bölümler"
+    },
+    "error": {
+      "heading": "Yardım yüklenemedi",
+      "body": "Kılavuz yüklenmedi. Yeniden deneyin veya bu sayfayı monize.net adresinde okuyun.",
+      "retry": "Yeniden dene"
+    },
+    "search": "Kılavuzda ara",
+    "tour": {
+      "prompt": "Bu sayfada rehberli bir tur var."
+    },
+    "version": "Monize {version} kılavuzu",
+    "latestOnline": "En güncel kılavuz monize.net adresinde"
+  },
+  "search": {
+    "title": "Kılavuzda ara",
+    "placeholder": "Kılavuzda ara",
+    "ariaLabel": "Kılavuzda ara",
+    "contextHeading": "Bu ekran için yardım",
+    "noResults": "\"{query}\" için sonuç bulunamadı",
+    "error": "Arama başarısız oldu. Yeniden deneyin.",
+    "hint": {
+      "navigate": "gezinmek için",
+      "select": "seçmek için",
+      "close": "kapatmak için"
+    }
+  },
+  "markdown": {
+    "screenshot": "Ekran görüntüsü",
+    "viewScreenshot": "Ekran görüntüsünü monize.net adresinde görüntüle",
+    "callout": {
+      "note": "Not",
+      "tip": "İpucu",
+      "important": "Önemli",
+      "warning": "Uyarı",
+      "caution": "Dikkat"
+    }
+  }
+}

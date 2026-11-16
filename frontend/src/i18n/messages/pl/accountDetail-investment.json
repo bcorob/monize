@@ -5,6 +5,8 @@
     "dividendsInterest": "Dywidendy i odsetki",
     "realizedGains": "Zrealizowane zyski",
     "ytd": "Od początku roku",
+    "realizedKnownPart": "Znana część: {amount}",
+    "realizedUnknownReason": "Nie można obliczyć tego zysku: pozycja zawiera akcje dodane bez kosztu, więc koszt sprzedanych akcji jest nieznany. Otwórz transakcję, która je dodała, i wpisz ich cenę.",
     "empty": "Brak dochodu z inwestycji w tym roku"
   },
   "register": {

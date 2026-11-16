@@ -167,6 +167,56 @@ describe('MnyImportProgress', () => {
       expect(screen.getByText(/Nothing was saved/)).toBeInTheDocument();
     });
 
+    it('does not say nothing was saved once the rows committed', () => {
+      // A26-H08: a job that failed after its import transaction committed. The
+      // generic copy invited a second import of the file, which doubled every
+      // balance.
+      render(
+        <MnyImportProgress
+          {...defaultProps}
+          job={job({
+            status: 'failed',
+            errorKey: 'mnyImportFailed',
+            dataCommitted: true,
+          })}
+        />,
+      );
+
+      expect(screen.queryByText(/Nothing was saved/)).not.toBeInTheDocument();
+      expect(
+        screen.getByText(/importing the same file again would duplicate them/),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: 'Try again' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('keeps the committed stall copy for a reaped committed job', () => {
+      render(
+        <MnyImportProgress
+          {...defaultProps}
+          job={job({
+            status: 'failed',
+            errorKey: 'mnyJobStalledAfterCommit',
+            dataCommitted: true,
+          })}
+        />,
+      );
+
+      expect(screen.getByText(/stopped responding after it had already saved/)).toBeInTheDocument();
+    });
+
+    it('explains a commit refused because the file was already imported', () => {
+      render(
+        <MnyImportProgress
+          {...defaultProps}
+          job={job({ status: 'failed', errorKey: 'mnyAlreadyImported' })}
+        />,
+      );
+
+      expect(screen.getByText(/already imported into your account/)).toBeInTheDocument();
+    });
+
     it('starts over on request', () => {
       render(
         <MnyImportProgress

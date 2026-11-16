@@ -19,10 +19,11 @@
     "passwordRequired": "Current password is required to change email",
     "noChanges": "No changes to save",
     "passwordConfirmNote": "Password confirmation is required when changing your email address.",
+    "pendingEmailNotice": "A confirmation link was sent to {email}. Your email address changes once you follow it.",
     "saveButton": "Save Profile",
-    "savingButton": "Saving...",
     "toasts": {
       "success": "Profile updated successfully",
+      "confirmationSent": "Check {email} for a link to confirm your new email address",
       "updateFailed": "Failed to update profile"
     },
     "validation": {
@@ -36,7 +37,8 @@
   },
   "security": {
     "heading": "Security",
-    "ssoNotice": "Your account uses Single Sign-On (SSO) for authentication. The password below is not used for login but can be kept as a backup if SSO is disabled.",
+    "ssoPasswordFallbackNotice": "Your account uses Single Sign-On (SSO). You can also sign in with the password below when SSO is unavailable. Enable two-factor authentication to protect this fallback sign-in.",
+    "ssoNotice": "Your account uses Single Sign-On (SSO). Password sign-in is turned off for SSO accounts on this server.",
     "currentPasswordLabel": "Current Password",
     "currentPasswordPlaceholder": "Enter current password",
     "newPasswordLabel": "New Password",
@@ -44,7 +46,6 @@
     "confirmPasswordLabel": "Confirm New Password",
     "confirmPasswordPlaceholder": "Confirm new password",
     "changePasswordButton": "Change Password",
-    "changingPasswordButton": "Changing...",
     "toasts": {
       "passwordChanged": "Password changed successfully",
       "passwordChangeFailed": "Failed to change password"
@@ -58,14 +59,28 @@
       "addLayerDescription": "Add an extra layer of security to your account.",
       "enableButton": "Enable 2FA",
       "disableButton": "Disable 2FA",
+      "resetButton": "Reset 2FA",
       "disableModal": {
         "title": "Disable Two-Factor Authentication",
-        "description": "Enter your current 6-digit code to confirm disabling 2FA.",
+        "description": "Enter the 6-digit code from your authenticator app, or one of your backup codes (xxxx-xxxx), to confirm disabling 2FA.",
         "verificationCodeLabel": "Verification Code",
         "disablingButton": "Disabling...",
         "toasts": {
           "disabled": "Two-factor authentication disabled",
           "disableFailed": "Failed to disable 2FA"
+        }
+      },
+      "resetModal": {
+        "title": "Reset Two-Factor Authentication",
+        "description": "Use this if your authenticator app or backup codes may have been exposed, or if your authenticator codes stopped working (for example after a server secret change).",
+        "effect": "Your current authenticator, backup codes and trusted devices stop working, and you are signed out on every other device. You then set up a new authenticator straight away.",
+        "passwordLabel": "Account Password",
+        "codeLabel": "Authenticator or Backup Code",
+        "codeHint": "Enter the 6-digit code from your authenticator app. If your authenticator no longer works, enter one of your backup codes (xxxx-xxxx) instead.",
+        "resettingButton": "Resetting...",
+        "toasts": {
+          "reset": "Two-factor authentication reset. Set up your new authenticator now.",
+          "resetFailed": "Failed to reset 2FA"
         }
       }
     },
@@ -90,6 +105,8 @@
       "noDevices": "No trusted devices. When you check \"Don't ask again on this browser\" during 2FA login, the device will appear here.",
       "currentBadge": "Current",
       "revokeButton": "Revoke",
+      "ipAddress": "IP: {ip}",
+      "dates": "Added {added} · Last used {lastUsed} · Expires {expires}",
       "revokeAllModal": {
         "title": "Revoke All Trusted Devices",
         "description": "This will remove all trusted devices. You will need to enter your 2FA code on your next login from any device."
@@ -110,8 +127,20 @@
   },
   "preferences": {
     "heading": "Preferences",
+    "groups": {
+      "languageRegion": "Language & Region",
+      "appearance": "Appearance",
+      "datesNumbers": "Dates & Numbers",
+      "investments": "Investments",
+      "transactions": "Transactions",
+      "application": "Application",
+      "defaultViews": "Default Views",
+      "mobileNavigation": "Mobile Navigation"
+    },
     "themeLabel": "Theme",
     "defaultCurrencyLabel": "Default Currency",
+    "defaultCurrencyHelp": "Used to total your accounts, net worth and reports, and is the currency the Currencies page's Rate column converts to.",
+    "defaultCurrencyNoCrypto": "Cryptocurrencies are not offered here: totals and reports are always shown in a fiat currency.",
     "preferredExchangesLabel": "Preferred Exchanges (for security lookups)",
     "preferredExchangesHelp": "Select up to 3 exchanges in priority order. These will be preferred when looking up securities.",
     "exchangePriorityPlaceholder": "Priority {n}",
@@ -131,10 +160,22 @@
     "lockReconciledLabel": "Lock reconciled transactions",
     "lockReconciledTooltip": "While this is off, Monize warns you before an edit that would change a reconciled transaction's date or amount and then lets it through. While it is on, reconciled transactions cannot be edited, deleted or unreconciled at all. Turn it off again to make a correction.",
     "timeFormatLabel": "Time Format",
+    "timeFormatOptions": {
+      "h24": "24-hour (14:30)",
+      "h12": "12-hour (2:30 PM)"
+    },
     "recentTransactionsLabel": "Recent transactions in quick-fill",
     "recentTransactionsHelp": "Number of entries shown in the history button popover next to the Payee field on transaction forms.",
-    "saveButton": "Save Preferences",
-    "savingButton": "Saving...",
+    "mapProviderLabel": "Map provider for addresses",
+    "mapProviderHelp": "Which map service opens when you click an address in a desktop browser. Phones and tablets always open their own map app, whatever you choose here. Automatic uses OpenStreetMap on desktop.",
+    "mapProviderOptions": {
+      "device": "Automatic",
+      "apple": "Apple Maps",
+      "bing": "Bing Maps",
+      "google": "Google Maps",
+      "openstreetmap": "OpenStreetMap",
+      "waze": "Waze"
+    },
     "toasts": {
       "saved": "Preferences saved",
       "saveFailed": "Failed to save preferences",
@@ -182,10 +223,47 @@
       "highcontrast": "High contrast",
       "colorblind": "Colour-blind safe"
     },
-    "timezoneBrowserOption": "Use browser timezone (auto-detected as {tz})"
+    "timezoneBrowserOption": "Use browser timezone (auto-detected as {tz})",
+    "defaultViews": {
+      "intro": "These apply in any browser that has no setting of its own, such as a new device or a private window. A change you make on a page is remembered by that browser and takes priority.",
+      "rowsLabel": "Row density",
+      "hideRegisterYearLabel": "Hide the year in register dates",
+      "chartCollapsedLabel": "Start with the chart on the Transactions page collapsed",
+      "widgetsCollapsedLabel": "Start with the account, payee and category info collapsed",
+      "accountOpenTargetLabel": "Default Account View",
+      "accountOpenTargetOptions": {
+        "register": "Show its transactions",
+        "dashboard": "Show its dashboard"
+      },
+      "accountOpenTargetHelp": "Applies when you click an account on the Accounts page or in Favourite Accounts on the dashboard.",
+      "columnsLabel": "Columns shown",
+      "columnsHelp": "Clear a box to hide that column by default. A table's Columns menu changes it in that browser only.",
+      "columnTables": {
+        "transactions": "Transactions",
+        "investmentHoldings": "Investment holdings",
+        "investmentRegister": "Investment transactions"
+      },
+      "applyHere": "Use these defaults in this browser",
+      "applyHereHelp": "Clears the view settings this browser has saved, so the defaults above take effect here too.",
+      "appliedHere": "This browser now uses your default views"
+    },
+    "mobileTabs": {
+      "intro": "Choose up to three tabs for the bar at the bottom of a phone or tablet. The add button and More are always there.",
+      "slotLabel": "Tab {number}",
+      "none": "None"
+    }
   },
   "notifications": {
     "heading": "Notifications",
+    "portfolioAlert": {
+      "title": "Investment value movement",
+      "description": "Notify me once a day when my investment accounts move beyond a threshold, measured from market changes and dividends (deposits and withdrawals are excluded).",
+      "enableLabel": "Enable investment movement alerts",
+      "thresholdLabel": "Notify when the daily move is at least",
+      "saveError": "Could not save the threshold",
+      "loadError": "Could not load the investment alert setting",
+      "retry": "Retry"
+    },
     "smtpNotConfigured": "Email notifications are not available. SMTP has not been configured by the administrator.",
     "emailNotificationsTitle": "Email Notifications",
     "emailNotificationsDescription": "Receive email reminders for upcoming bills and budget alerts",
@@ -212,6 +290,148 @@
       "digestUpdateFailed": "Failed to update budget digest preference",
       "digestDayFailed": "Failed to update digest day",
       "testEmailFailed": "Failed to send test email"
+    },
+    "push": {
+      "heading": "Browser push",
+      "collapsedDevices": "{count, plural, =0 {No devices registered} one {# device registered} other {# devices registered}}",
+      "collapsedDevicesWithRetired": "{count, plural, =0 {No devices registered} one {# device registered} other {# devices registered}}, {retired, plural, one {# retired} other {# retired}}",
+      "collapsedDevicesUnavailable": "Device list unavailable",
+      "diagnostics": {
+        "summary": "Notification diagnostics",
+        "intro": "What this browser and device report to Monize about notifications. Refresh after changing a setting, then Copy to send the full report.",
+        "refresh": "Refresh",
+        "copy": "Copy report",
+        "copied": "Diagnostics copied to clipboard"
+      },
+      "description": "Register this device so Monize can reach it even when the app is closed. Only the test notification is delivered this way so far; everything else still arrives in the bell.",
+      "androidNotify": "On Android, a granted permission is not enough: the system can still hide notifications. Press and hold the Monize icon on your home screen, tap App info, then Notifications, and make sure they are turned on.",
+      "permissionHint": "When you turn this on, your browser asks for permission to show notifications. Nothing is sent until you allow it.",
+      "enableButton": "Enable on this device",
+      "enablingButton": "Enabling...",
+      "sendTestButton": "Send test notification",
+      "sendingTestButton": "Sending...",
+      "removeButton": "Remove",
+      "removeDialog": {
+        "title": "Remove Device",
+        "message": "Remove {device}? It stops receiving push notifications until push is turned on there again."
+      },
+      "thisDevice": "This device",
+      "held": "Signed out on this device. Push resumes when you sign in here again.",
+      "unifiedpushBadge": "UnifiedPush",
+      "unnamedDevice": "Unnamed device",
+      "noLiveDevices": "No device is registered yet. Enable push on this device to send a test.",
+      "noDeliverableDevices": "Every device is signed out, so a test has nowhere to go. Push resumes on a device when you sign in there again.",
+      "notConfigured": "Browser push is not available on this Monize instance. An administrator can enable it in the Admin area.",
+      "disabledByAdmin": "An administrator has switched browser push off for this Monize instance.",
+      "keyUnreadable": "Monize cannot read this instance's push key pair, so nothing can be delivered. An administrator can recover it by rotating the key pair in the Admin area.",
+      "serverKeyMissing": "This Monize instance is missing the encryption key it needs to open its push key pair, so nothing can be delivered. An administrator has to set it in the deployment and restart.",
+      "statusUnavailable": "Monize could not check whether browser push is available. Reload the page to try again.",
+      "devicesUnavailable": "Monize could not load your registered devices. Everything else on this page still works; reload to try again.",
+      "unsupported": {
+        "unsupported": "This browser cannot receive push notifications.",
+        "denied": "Notifications are blocked for Monize in this browser. Allow them in the browser’s site settings, then reload this page.",
+        "ios-browser": "On iPhone and iPad, push notifications work only once Monize is installed to the Home Screen. Use Share, then Add to Home Screen, and open Monize from there.",
+        "shell": {
+          "electron": "Notifications are not available in the Monize desktop window. Open Monize in your browser from the tray menu (Open in browser) and push notifications keep working there.",
+          "capacitor": "Push notifications are not available in the Monize Android app yet. Open Monize in your browser to receive them."
+        }
+      },
+      "native": "The Monize desktop app shows your notifications on this PC while it is running, also with its window closed to the tray, so there is nothing to enable here. Windows’ notification settings decide how they appear.",
+      "disabledReason": {
+        "GONE": "No longer reachable. Enable push again in that browser.",
+        "KEY_ROTATED": "Retired when this instance rotated its push key pair. Enable push again in that browser.",
+        "FAILING": "Retired after repeated delivery failures. Enable push again in that browser."
+      },
+      "toasts": {
+        "enabled": "Push notifications enabled on this device",
+        "enableFailed": "Could not enable push notifications",
+        "permissionDenied": "This browser is blocking notifications for Monize. Allow them in the browser’s site settings, then try again.",
+        "permissionDeniedIos": "Notifications are blocked for Monize. Open iOS Settings, then Notifications, then Monize to allow them.",
+        "permissionDismissed": "Notifications were not enabled. Choose Allow when the browser asks.",
+        "permissionNoPrompt": "Notifications were not enabled, and no prompt appeared. Open iOS Settings, then Notifications, then Monize, and allow them there. If Monize is not listed, remove it from the Home Screen, add it again (Share, then Add to Home Screen) and try once more.",
+        "removed": "Device removed",
+        "removeFailed": "Could not remove the device",
+        "testSent": "{count, plural, one {Test notification sent to 1 device} other {Test notification sent to # devices}}",
+        "testPartial": "Test notification reached {delivered} of {attempted} devices",
+        "testFailed": "Could not deliver the test notification",
+        "pushServiceRefused": "The browser's push service refused the registration. Try again in a moment; if it keeps failing, check the browser's push settings.",
+        "pushServiceRefusedBrave": "Brave blocks the push service by default. In Brave, open Settings, then Privacy and security, turn on \"Use Google services for push messaging\", restart the browser and try again."
+      },
+      "testResults": {
+        "heading": "Last test, per device",
+        "status": {
+          "sent": "delivered to the push service",
+          "expired": "subscription expired; enable push on that device again",
+          "transient": "not delivered (temporary error); try again",
+          "unconfigured": "this instance cannot sign push messages right now"
+        }
+      },
+      "transport": {
+        "webpush": "Web push",
+        "unifiedpush": "UnifiedPush"
+      },
+      "facts": {
+        "endpoint": "Endpoint",
+        "transport": "Delivered by",
+        "registeredIp": "Registered from",
+        "registered": "Registered",
+        "lastSeen": "Last active",
+        "lastDelivery": "Last delivery",
+        "noDelivery": "Nothing delivered yet",
+        "userAgent": "Browser",
+        "unknownIp": "Unknown"
+      }
+    },
+    "preferences": {
+      "heading": "How to notify me",
+      "description": "Choose which kinds Monize sends by email or push, and how often.",
+      "categoryHeader": "Notification",
+      "channels": {
+        "emailReport": "Email (report)",
+        "emailNotification": "Email (alert)",
+        "push": "Push",
+        "unifiedpush": "UnifiedPush",
+        "unifiedpushHint": "Notifications are delivered through a distributor app you run yourself, such as ntfy, instead of a browser vendor's push service. Register an endpoint in that app to use this channel."
+      },
+      "categories": {
+        "PAYMENTS": "Bills and scheduled",
+        "BUDGETS": "Budgets",
+        "SYSTEM": "System alerts",
+        "BALANCES": "Account balances",
+        "INVESTMENTS": "Investment value",
+        "STRATEGIES": "Strategy signals",
+        "BANK_SYNC": "Bank connections",
+        "BANK_SYNC_ACTIVITY": "Bank sync results",
+        "EMAIL_RECEIPTS": "Email receipts",
+        "BONDS": "Bonds",
+        "AI_REVIEW": "AI review proposals",
+        "WARRANTIES": "Warranty reminders",
+        "SECURITY": "Security",
+        "SHARED_EXPENSES": "Shared expenses"
+      },
+      "channelNotApplicable": "Not applicable for this notification type",
+      "emailToggleLabel": "Report email for {category}",
+      "emailNotificationToggleLabel": "Alert email for {category}",
+      "pushToggleLabel": "Push for {category}",
+      "unifiedpushToggleLabel": "UnifiedPush for {category}",
+      "saveFailed": "Could not save that setting",
+      "emailUnavailable": "Turn on email notifications above to send these by email.",
+      "pushUnavailable": "No device is registered for push, so this channel cannot deliver.",
+      "throttle": {
+        "label": "Cooldown",
+        "ariaLabel": "Cooldown for {category}",
+        "hint": "Skip an alert or push when one from the same group fired within this window.",
+        "options": {
+          "0": "Off",
+          "5": "5 minutes",
+          "15": "15 minutes",
+          "30": "30 minutes",
+          "60": "1 hour",
+          "360": "6 hours",
+          "1440": "24 hours"
+        }
+      },
+      "pushEnableHint": "This browser is not registered for push notifications."
     }
   },
   "help": {
@@ -229,9 +449,10 @@
       "label": "Discussions",
       "description": "Ask questions and share ideas with the community."
     },
-    "wiki": {
-      "label": "Wiki",
-      "description": "Browse guides and documentation."
+    "docs": {
+      "label": "Documentation",
+      "description": "Browse the user guide.",
+      "openOnline": "Open on monize.net"
     },
     "supportBackup": {
       "label": "Create a support backup",
@@ -280,7 +501,7 @@
   "supportBackup": {
     "title": "Create support backup",
     "howItWorks": "This produces a de-identified copy of your backup: names are masked (first and last two characters kept), notes/descriptions/account numbers are removed, and every amount is multiplied by a single hidden factor while public values (exchange rates, prices, interest rates) are left intact. The file is always encrypted with the password below and restores like a normal backup. This protects against casual exposure, not against someone who already knows you -- dates, frequencies and structure are preserved so bugs still reproduce.",
-    "sectionsLabel": "What to include",
+    "sectionsLabel": "Sections to Include",
     "sections": {
       "investments": "Investments (securities, holdings, prices)",
       "scheduled": "Scheduled transactions",
@@ -325,6 +546,17 @@
       "description": "Remove financial data from your account. This cannot be undone.",
       "openButton": "Delete Data...",
       "alwaysDeletedHeading": "The following will always be deleted:",
+      "alwaysDeletedItems": {
+        "transactions": "All transactions and splits",
+        "scheduled": "All scheduled/recurring transactions",
+        "securities": "All securities, prices, holdings, and investment transactions",
+        "budgets": "All budgets and budget alerts",
+        "monthlySummaries": "Monthly account balance summaries",
+        "customReports": "Custom reports, tags, and import mappings",
+        "actionHistory": "Action history (undo/redo)",
+        "rules": "All transaction rules",
+        "institutions": "Financial institutions"
+      },
       "optionalHeading": "Optionally also delete:",
       "accountsOption": "Accounts",
       "categoriesOption": "Categories",
@@ -370,7 +602,8 @@
   },
   "apiAccess": {
     "heading": "API Access",
-    "description": "Create personal access tokens to connect external AI tools like Claude Desktop via MCP.",
+    "description": "Create personal access tokens to connect external AI tools like Claude Desktop via MCP, or to call the REST API at /api/v1.",
+    "restrictedNote": "Read tokens can only read. Sign-in, security, admin, sharing, and backup endpoints are not available to tokens.",
     "createTokenButton": "Create Token",
     "mcpServerUrlLabel": "MCP Server URL",
     "mcpServerUrlHelp": "Use this URL when configuring MCP clients such as Claude Code or Claude Desktop.",
@@ -384,7 +617,7 @@
     "revokeButton": "Revoke",
     "revokeModal": {
       "title": "Revoke Token",
-      "message": "This token will immediately stop working. Any MCP connections using it will be disconnected.",
+      "message": "This token will immediately stop working. Any MCP connections or API clients using it will be disconnected.",
       "confirmLabel": "Revoke"
     },
     "createModal": {
@@ -430,26 +663,27 @@
       "copyUrlFailed": "Failed to copy URL",
       "loadFailed": "Failed to load API tokens",
       "createFailed": "Failed to create token",
-      "revokeFailed": "Failed to revoke token"
+      "revokeFailed": "Failed to revoke token",
+      "reauthFailed": "Failed to confirm re-authentication"
+    },
+    "stepUp": {
+      "reason": "A token can reach your account without signing in, so confirm it is you before creating one."
     },
     "relative": {
-      "never": "Never",
-      "today": "Today",
-      "yesterday": "Yesterday",
-      "daysAgo": "{count} days ago",
-      "monthsAgo": "{count} months ago"
+      "never": "Never"
     }
   },
   "autoBackup": {
     "heading": "Automatic Backup",
-    "description": "Automatically back up your data to a folder on a schedule. Since Monize runs in Docker, you must map a host folder into the container as a volume (e.g., -v /host/backups:/data/backups).",
-    "adminManagedNote": "Only administrators can change these settings. Every other user is backed up automatically on the same schedule and retention policy, into a folder of their own.",
+    "description": "One schedule for the whole deployment: the server backs up every account's data to the storage below. Since Monize runs in Docker, a local folder must be mapped into the container as a volume (e.g., -v /host/backups:/data/backups).",
+    "adminManagedNote": "Only administrators can change this policy, and it governs every account on this deployment, each into a folder of their own.",
+    "demoDisabledNote": "These controls are read-only in demo mode.",
     "loadingText": "Loading...",
     "enableLabel": "Enable automatic backups",
     "backupFolderLabel": "Backup Folder",
     "backupFolderPlaceholder": "/data/backups",
-    "perUserFolderHelp": "Each user's backups go in their own folder inside this one, named for their user ID.",
-    "perUserFolderHelpWithPath": "Each user's backups go in their own folder inside this one, named for their user ID. Yours: {path}",
+    "perUserFolderHelp": "Each account's backups go in their own folder inside this one, named for their account ID.",
+    "perUserFolderHelpWithPath": "Each account's backups go in their own folder inside this one, named for their account ID. Example: {path}",
     "browseButton": "Browse...",
     "validateButton": "Validate",
     "validatingButton": "Validating...",
@@ -471,26 +705,26 @@
       "monthlyHelp": "One per month retained"
     },
     "status": {
-      "heading": "Status",
-      "lastBackup": "Last backup",
-      "nextBackup": "Next backup",
+      "heading": "Deployment Status",
+      "lastBackup": "Most recent backup",
+      "nextBackup": "Next scheduled backup",
       "error": "Error",
       "success": "Success",
       "partial": "Partial",
       "failed": "Failed"
     },
-    "saveButton": "Save Settings",
-    "savingButton": "Saving...",
-    "runNowButton": "Run Backup Now",
-    "runningButton": "Running Backup...",
+    "saveButton": "Save Policy",
+    "runNowButton": "Back Up Every Account Now",
+    "runningButton": "Backing Up...",
     "toasts": {
-      "saved": "Auto-backup settings saved",
-      "backupCreated": "Backup created: {filename}",
+      "saved": "Backup policy saved and applied to every account",
       "folderValid": "Folder is valid and writable",
       "loadFailed": "Failed to load auto-backup settings",
       "saveFailed": "Failed to save settings",
       "runFailed": "Failed to run backup",
-      "browseFailed": "Failed to browse folders"
+      "browseFailed": "Failed to browse folders",
+      "backupRunFinished": "Backed up {backedUp} of {requested} {requested, plural, one {account} other {accounts}}",
+      "backupRunIncomplete": "Backed up {backedUp} of {requested}: {partial} partial, {failed} failed. Check the status below."
     },
     "folderErrors": {
       "required": "Folder path is required",
@@ -505,9 +739,22 @@
     },
     "noStorage": {
       "title": "This deployment has no backup storage",
-      "body": "Automatic backups would be written to {folderPath}, which this deployment cannot write to. An administrator needs to mount storage there before a schedule can run."
+      "body": "Automatic backups would be written to {folderPath}, which this deployment cannot write to. An administrator needs to make that storage available before a schedule can run."
     },
-    "never": "Never"
+    "never": "Never",
+    "coverage": {
+      "accounts": "Scheduled on {scheduled} of {total} active {total, plural, one {account} other {accounts}} on this deployment.",
+      "unknown": "How far this policy reaches is not available."
+    },
+    "storage": {
+      "heading": "Backup Storage",
+      "providerLocal": "Local folder",
+      "providerS3": "S3-compatible object storage",
+      "providerUnknown": "Storage",
+      "localHelp": "Set by BACKUP_STORAGE_PROVIDER. Each account's backups go in their own folder inside this one, named for their account ID.",
+      "fixedHelp": "Set by BACKUP_STORAGE_PROVIDER. The bucket and key prefix are the deployment's, so there is no folder to choose here; each account's backups go under their own key prefix.",
+      "artifactCount": "This store currently holds {count} backup {count, plural, one {file} other {files}} for your account. Switching storage does not move existing backups."
+    }
   },
   "backupRestore": {
     "heading": "Backup & Restore",
@@ -580,16 +827,130 @@
         "pleaseEnterPassword": "Please enter your password to confirm",
         "encryptedNeedsPassword": "This backup is encrypted. Enter the password it was created with in the \"Backup password\" field, then try again.",
         "failed": "Failed to restore backup",
+        "interrupted": "The restore was interrupted before the server replied. A restore is all-or-nothing, so your data is either fully restored or unchanged. Reload the page to see which before trying again.",
         "reauthRedirect": "Taking you to your identity provider to confirm it is you. Choose the backup file again when you return."
-      }
+      },
+      "selectedFile": "Selected: {filename}"
     },
     "restoreResult": {
       "title": "Restore Complete",
-      "description": "Your data has been restored successfully. Here is a summary of what was restored:",
       "totalRecords": "Total records",
       "skippedAttachments": "{count, plural, one {# attachment was not restored} other {# attachments were not restored}}: the backup did not carry usable bytes for them — they were missing or failed their checksum when it was exported, or the file predates self-contained backups. Export a fresh backup once attachment storage is healthy to capture them.",
       "unusableAiProviderKeys": "{count, plural, one {# AI provider was restored without a usable API key} other {# AI providers were restored without usable API keys}}: the backup was written before provider keys were included in it, so the stored key belongs to the server that made the file, or this server has no encryption key configured to store one. Open Settings → AI Providers and enter the API key again.",
-      "doneButton": "Done"
+      "unlinkedBondSecurities": "{count, plural, one {# bond security was restored unlinked from its bond instrument} other {# bond securities were restored unlinked from their bond instruments}}: this server's bond catalog does not carry the series (or carries it in another currency), so the bond engine no longer prices them and their calculated prices were not restored. Open each security and link it to a bond instrument again.",
+      "unlinkedBondSeries": "{count, plural, one {# bond transaction lost its series} other {# bond transactions lost their series}} because their series could not be obtained from the official source. They were restored without a series and keep none until you fetch it.",
+      "unrecoveredBondSeries": "{count} bond series named in the backup could not be fetched.",
+      "unrecoveredBondSeriesItem": "{series} ({country}): {reason}",
+      "unrecoveredBondSeriesMore": "and {count} more",
+      "unrecoveredBondSeriesAction": "To restore them, open the bond security, fetch the series on its page (Refresh) and choose the series on the transactions that lack it.",
+      "unrecoveredBondSeriesReason": {
+        "not-published": "the issuer has not published this series (yet)",
+        "source-unavailable": "the official source did not answer; try again later",
+        "no-adapter": "this server has no source for this issuer's country",
+        "refused": "the official source's answer was not accepted",
+        "rate-limited": "the official source asked to slow down; try again later",
+        "not-attempted": "too many series in one restore; not attempted",
+        "other": "unknown reason"
+      },
+      "doneButton": "Done",
+      "unlinkedBondSecuritiesList": "Affected securities: {symbols}.",
+      "unlinkedBondSecuritiesMore": "and {count} more",
+      "currencyKindMismatchAccounts": "{count, plural, one {# account came back with a currency whose kind does not match its type} other {# accounts came back with a currency whose kind does not match their type}}: a cryptocurrency account needs a cryptocurrency, and every other account needs a fiat currency. On this server the currency is of the other kind. Edit the account's currency, or the currency's kind on the Currencies page.",
+      "currencyKindMismatchAccountsList": "Affected accounts: {names}.",
+      "currencyKindMismatchSecurities": "{count, plural, one {# security is priced in a cryptocurrency} other {# securities are priced in a cryptocurrency}} on this server, and a security needs a fiat currency. Edit the security's currency, or the currency's kind on the Currencies page.",
+      "currencyKindMismatchSecuritiesList": "Affected securities: {symbols}.",
+      "currencyKindMismatchMore": "and {count} more",
+      "currencyKindMismatchDefaultCurrency": "Your default currency, {code}, is a cryptocurrency on this server, but totals and reports are always shown in a fiat currency. Choose a fiat Default Currency in Settings → Preferences.",
+      "counts": {
+        "sharedGroups": "Shared groups",
+        "sharedParticipants": "Group participants",
+        "sharedEntries": "Group entries",
+        "sharedAllocations": "Expense allocations",
+        "sharedActivity": "Group activity",
+        "sharedPeople": "Shared-expense contacts",
+        "sharedPersonLinks": "Linked contacts",
+        "sharedIntegrations": "Personal finance connections",
+        "sharedPostings": "Personal shared-expense bookings",
+        "sharedLedgerLinks": "Linked personal transactions",
+        "budgetBuckets": "Budget buckets",
+        "budgetPeriodBuckets": "Budget period buckets"
+      }
+    },
+    "storedBackups": {
+      "heading": "Automatic Backups",
+      "description": "Backups this server created for you on its own schedule. Download one to keep your own copy, or restore from one using the form below.",
+      "adminScheduleNote": "Automatic backup settings are in <link>Admin → Backups</link>.",
+      "loading": "Loading backups...",
+      "loadFailed": "Failed to load the backups stored on the server",
+      "retryButton": "Try Again",
+      "empty": "This server is not holding any automatic backups for you yet.",
+      "columns": {
+        "filename": "File",
+        "modified": "Date Modified",
+        "size": "Size",
+        "actions": "Actions"
+      },
+      "downloadButton": "Download",
+      "restoreButton": "Restore",
+      "workingButton": "Working...",
+      "downloadFailed": "Failed to download the backup",
+      "offsite": {
+        "disclosure": "Off-site destinations",
+        "disclosureDescription": "After each complete automatic backup, an encrypted copy can be sent to S3 storage, by email, or both: three copies, two kinds of storage, one of them off this machine. Only an encrypted backup is ever sent.",
+        "encryptionUnavailable": "This server has no encryption key set, so credentials for a bucket of your own cannot be stored. This server's own bucket and emailed copies still work.",
+        "loading": "Loading your off-site destinations...",
+        "loadFailed": "Failed to load your off-site backup destinations",
+        "retryButton": "Try Again",
+        "demoNote": "Off-site destinations cannot be changed in the demo.",
+        "saveButton": "Save Destinations",
+        "saved": "Off-site destinations saved",
+        "saveFailed": "Failed to save your off-site backup destinations",
+        "s3": {
+          "heading": "S3 storage",
+          "modeLabel": "Copy Destination",
+          "modeOff": "Off",
+          "modeDeployment": "This server's bucket",
+          "modeOwn": "My own bucket",
+          "deploymentUnavailable": "This server has no off-site bucket of its own, so an administrator would have to set one up. You can use a bucket of your own instead.",
+          "bucketLabel": "Bucket",
+          "regionLabel": "Region",
+          "regionHelp": "Many S3-compatible services ignore this.",
+          "prefixLabel": "Key prefix",
+          "prefixHelp": "Optional folder inside the bucket, so your backups can share it with other data.",
+          "endpointLabel": "Endpoint",
+          "endpointHelp": "Only for an S3-compatible service such as MinIO, R2 or B2. Leave this empty for AWS.",
+          "forcePathStyleLabel": "Use path-style addressing",
+          "forcePathStyleHelp": "Required by MinIO and some other S3-compatible services.",
+          "accessKeyIdLabel": "Access key ID",
+          "secretAccessKeyLabel": "Secret access key",
+          "storedPlaceholder": "•••• stored",
+          "credentialsHelp": "Credentials are stored encrypted on this server and are never shown again. Leave these boxes empty to keep the ones already stored.",
+          "clearCredentialsButton": "Remove Stored Credentials",
+          "clearConfirmTitle": "Remove stored credentials?",
+          "clearConfirmMessage": "This server will forget your access key ID and secret access key. No further copies will be sent to your bucket until you enter them again.",
+          "credentialsCleared": "Stored credentials removed",
+          "clearFailed": "Failed to remove the stored credentials"
+        },
+        "email": {
+          "heading": "Email",
+          "toggleLabel": "Email me a copy of each completed automatic backup",
+          "addressLabel": "Send copies to",
+          "addressPlaceholder": "you@example.com",
+          "sizeNote": "A backup above this server's size limit is not attached; you receive a notice naming the file instead."
+        },
+        "rowStatus": {
+          "iconTitle": "{destination}: {status}",
+          "destinationS3": "S3",
+          "destinationEmail": "Email",
+          "statusPending": "Pending",
+          "statusUploading": "Sending",
+          "statusUploaded": "Copied",
+          "statusFailed": "Failed",
+          "statusConflict": "Conflict",
+          "statusSkippedUnencrypted": "Skipped: not encrypted",
+          "statusSkippedTooLarge": "Skipped: too large"
+        }
+      }
     }
   },
   "sharedAccess": {
@@ -659,16 +1020,57 @@
       "sections": "Sections",
       "shared": "Shared data"
     },
+    "ops": {
+      "read": "Read",
+      "create": "Create",
+      "edit": "Edit",
+      "delete": "Delete",
+      "joint": "Joint"
+    },
     "sections": {
-      "description": "Grant read-only access to whole app sections. Account-scoped data still also needs per-account access."
+      "description": "Grant read-only access to whole app sections. Account-scoped data still also needs per-account access.",
+      "bills": {
+        "label": "Bills & Deposits",
+        "description": "Scheduled transactions for granted accounts"
+      },
+      "investments": {
+        "label": "Investments",
+        "description": "Holdings and investment transactions for granted accounts"
+      },
+      "budgets": {
+        "label": "Budgets",
+        "description": "Read-only budget figures"
+      },
+      "reports": {
+        "label": "Reports",
+        "description": "Read-only reports"
+      },
+      "ai": {
+        "label": "AI Assistant",
+        "description": "Uses the owner's configured AI provider"
+      },
+      "aiRequiresFullAccess": "The AI Assistant reads across every account and section, so it only answers for this delegate once they can read all of your accounts and every other section.",
+      "warranties": {
+        "label": "Warranties",
+        "description": "Warranties, their documents and claims. A linked purchase shows only for an account they can read."
+      },
+      "toggleLabel": "{section} section"
     },
     "accounts": {
       "noAccounts": "No accounts to grant.",
       "grantAll": "Grant all",
-      "jointRequiresFullAccount": "Joint accounts can only be shared with users who have their own Monize account"
+      "jointRequiresFullAccount": "Joint accounts can only be shared with users who have their own Monize account",
+      "grantAllLabel": "{op} all {type} accounts",
+      "grantLabel": "{op} access to {account}"
     },
     "shared": {
-      "description": "READ of payees, categories and tags is always allowed. These control create/edit/delete."
+      "description": "READ of payees, categories and tags is always allowed. These control create/edit/delete.",
+      "toggleLabel": "{op} {resource}",
+      "resources": {
+        "payees": "Payees",
+        "categories": "Categories",
+        "tags": "Tags"
+      }
     },
     "saveButton": "Save",
     "toasts": {
@@ -687,11 +1089,13 @@
     "emergencyAccess": "Emergency Access",
     "apiAccess": "API Access",
     "aiSettings": "AI Settings",
+    "emailReceipts": "Email Receipts",
     "backupRestore": "Backup & Restore",
-    "autoBackup": "Automatic Backup",
     "help": "Help & Support",
     "dangerZone": "Danger Zone",
-    "about": "About"
+    "about": "About",
+    "payeeLookup": "Payee Lookup",
+    "bankSync": "Bank Sync"
   },
   "page": {
     "title": "Settings",
@@ -715,6 +1119,14 @@
       "title": "AI Settings",
       "description": "Configure AI providers, manage API keys, and view usage statistics."
     },
+    "emailReceiptsCard": {
+      "title": "Email Receipts",
+      "description": "Connect a mailbox for order confirmations and manage the profiles that read them."
+    },
+    "bankSyncCard": {
+      "title": "Bank Sync",
+      "description": "Connect your bank through Open Banking and import its booked transactions into your accounts."
+    },
     "delegateSecurityError": "Unable to load your security settings.",
     "toasts": {
       "securityLoadFailed": "Failed to load security settings",
@@ -732,6 +1144,14 @@
       "enabled": "Floating chat bubble enabled",
       "disabled": "Floating chat bubble disabled",
       "saveFailed": "Could not update the chat bubble setting"
+    },
+    "trivia": {
+      "title": "AI trivia",
+      "subtitle": "Fills the Trivia widget on your dashboard with facts about your net worth and investments, rebuilt each morning and worded by AI when you have a provider set up. Add the widget with Customize on the dashboard. Turned off, the widget shows no facts and no provider is asked.",
+      "toggleLabel": "Fill the dashboard's Trivia widget with AI trivia",
+      "enabled": "AI trivia enabled",
+      "disabled": "AI trivia disabled",
+      "saveFailed": "Could not update the AI trivia setting"
     },
     "demoRestricted": {
       "heading": "Restricted in Demo Mode",
@@ -812,7 +1232,6 @@
       "editMessageButton": "Edit",
       "messagePlaceholder": "Notes, instructions, locations of important documents...",
       "maxCharsNote": "Maximum 4000 characters. Stored encrypted at rest.",
-      "cancelButton": "Cancel",
       "saveButton": "Save message",
       "toasts": {
         "saved": "Message saved",
@@ -857,7 +1276,7 @@
       "grantStatus": "Grant status: ",
       "unknown": "unknown",
       "never": "never",
-      "daysAgo": "{count} day{plural} ago",
+      "withRelative": "{timestamp} ({relative})",
       "grantedOn": "granted on {timestamp}",
       "notYetGranted": "not yet granted",
       "timerNote": "The timer resets automatically any time you use the app -- signing in, viewing a page, recording a transaction, anything authenticated."
@@ -874,6 +1293,17 @@
     },
     "stepUp": {
       "reason": "Re-verify your identity to view or edit your emergency-access message."
+    },
+    "validation": {
+      "wholeDays": "Whole days only",
+      "minDays": "{min, plural, one {Must be at least # day} other {Must be at least # days}}",
+      "maxDays": "{max, plural, one {Must be # day or fewer} other {Must be # days or fewer}}",
+      "reminderBeforeGrant": "Reminder days must be less than grant days",
+      "messageMax": "Message must be {max} characters or less",
+      "firstNameRequired": "First name is required",
+      "firstNameMax": "First name must be {max} characters or less",
+      "emailInvalid": "Enter a valid email address",
+      "emailMax": "Email must be {max} characters or less"
     },
     "toasts": {
       "loadFailed": "Failed to load emergency access",
@@ -908,6 +1338,10 @@
       "editButton": "Edit",
       "deleteButton": "Delete"
     },
+    "deleteDialog": {
+      "title": "Delete AI Provider",
+      "message": "Delete {name}? Its saved API key is removed with it. This cannot be undone."
+    },
     "configForm": {
       "addTitle": "Add AI Provider",
       "editTitle": "Edit Provider",
@@ -919,6 +1353,7 @@
       "ollamaCloudNote": "Model names must include the -cloud suffix (e.g. gpt-oss:20b-cloud).",
       "apiKeyLabel": "API Key",
       "baseUrlLabel": "Base URL",
+      "baseUrlPrivateNote": "A private or local address (localhost, 192.168.x.x or a container name) works only for an administrator, or when the server operator allows that address. Otherwise use an address reachable from the internet.",
       "priorityLabel": "Priority",
       "priorityHelp": "Lower number = higher priority. Used for fallback ordering.",
       "costRatesHeading": "Cost rates (optional)",
@@ -1027,5 +1462,468 @@
       "all": "All time"
     },
     "estCostTooltip": "Estimated using the cost rates you configured on each provider. Excludes any activity where no matching rate is set."
+  },
+  "payeeLookup": {
+    "title": "Payee Lookup",
+    "subtitle": "Where a payee's website, address, email and phone number come from, and when a lookup runs by itself.",
+    "saved": "Payee lookup settings saved",
+    "saveFailed": "Could not save the payee lookup settings",
+    "loadFailed": "Could not load the payee lookup settings. Reload the page to try again.",
+    "googlePlaces": {
+      "toggleLabel": "Use Google Places for payee lookups",
+      "notConfigured": "Add a Google Places API key to look up businesses in Google's directory instead of using your AI provider.",
+      "operatorManaged": "Configured by this server's administrator. You can turn it off for your own payees.",
+      "configure": "Set up",
+      "edit": "Edit",
+      "removeKey": "Remove key",
+      "usage": "Used this month: {used} of {cap}",
+      "usageNoCap": "Used this month: {used}. No monthly limit.",
+      "keyUnreadable": "The stored API key cannot be read by this server. This happens when a backup is restored onto a different instance, or after the encryption key changes. Enter the key again to fix it.",
+      "encryptionUnavailable": "This server has no encryption key configured, so an API key cannot be stored securely. Ask your administrator to set one.",
+      "modalTitle": "Google Places",
+      "modalSubtitle": "Monize sends the payee's name, and the address you already have, to Google and stores nothing with them.",
+      "apiKeyLabel": "API key",
+      "apiKeyPlaceholder": "Paste your Google Places API key",
+      "apiKeyHelp": "Create a key in the Google Cloud console with the Places API (New) enabled. Leave this blank to keep the key you already saved.",
+      "capToggleLabel": "Limit requests each month",
+      "capHelp": "Google gives {free} free Text Search requests a month for the fields this lookup needs. Past the limit, lookups fall back to your AI provider.",
+      "capLabel": "Requests per month",
+      "capRange": "Enter a number between {min} and {max}.",
+      "test": "Test",
+      "testing": "Testing...",
+      "testSuccess": "Google accepted the key.",
+      "save": "Save",
+      "cancel": "Cancel",
+      "setupInstructions": "Setup instructions"
+    },
+    "automatic": {
+      "title": "Automatic payee contact lookup",
+      "subtitle": "Automatically look up a new payee's website, address, email and phone number. The payee's name is sent, along with any notes, website, address, email and phone it already has, so the lookup can tell the right business and the right location apart.",
+      "toggleLabel": "Enable automatic payee contact lookup",
+      "enabled": "Automatic payee contact lookup enabled",
+      "disabled": "Automatic payee contact lookup disabled",
+      "saveFailed": "Could not update the payee contact lookup setting",
+      "noSource": "Switch on a source above to look payees up automatically. With both off, nothing can answer a lookup."
+    },
+    "order": {
+      "title": "Which source answers first",
+      "placesTitle": "Google Places",
+      "placesHelp": "Directory facts, cheaper per lookup. Google holds no email address.",
+      "aiTitle": "Existing AI Provider",
+      "aiHelp": "Can find an email address, and costs a model call for every lookup.",
+      "aiToggleLabel": "Use an AI provider for payee lookups",
+      "aiProviderLabel": "Provider to use",
+      "aiProviderAny": "Any provider, in priority order",
+      "moveUp": "Move up",
+      "moveDown": "Move down"
+    }
+  },
+  "bankSync": {
+    "backLink": "Back to Settings",
+    "title": "Bank Sync",
+    "subtitle": "Import the booked transactions of your bank accounts through Open Banking",
+    "demoRestricted": {
+      "heading": "Restricted in Demo Mode",
+      "body": "Bank sync is disabled in demo mode."
+    },
+    "loadFailed": {
+      "title": "Could not load bank sync",
+      "retry": "Try again"
+    },
+    "credentials": {
+      "title": "Enable Banking application",
+      "subtitle": "Monize reads your bank accounts through your own Enable Banking application. Register one in the Enable Banking control panel, then enter its application ID and private key here.",
+      "notConfigured": "No application is set up yet.",
+      "applicationId": "Application ID",
+      "keyStored": "A private key is stored.",
+      "keyMissing": "No private key is stored.",
+      "configure": "Set up credentials",
+      "edit": "Edit credentials",
+      "remove": "Remove credentials",
+      "test": "Test connection",
+      "testing": "Testing...",
+      "encryptionUnavailable": "This server has no encryption key configured, so credentials cannot be stored.",
+      "redirectUrlLabel": "Redirect URL",
+      "redirectUrlHelp": "Register this exact URL as a redirect URL in the Enable Banking control panel. Your bank sends you back to it after you authorize access.",
+      "redirectUrlNotPublic": "The redirect URL does not have to be reachable from the internet. Only your browser opens it.",
+      "redirectUrlHttpWarning": "A \"Production\" application accepts only an https redirect URL. This one uses http, so it works only with a \"Sandbox\" application. Set PUBLIC_APP_URL to the https address of Monize.",
+      "copy": "Copy",
+      "copied": "Copied",
+      "copyFailed": "Could not copy",
+      "testSuccess": "The application works: {name}",
+      "testSuccessNoName": "The application works.",
+      "testRedirectMissing": "The application works, but the redirect URL above is not registered for it. Add it in the Enable Banking control panel.",
+      "testFailed": "The provider did not accept these credentials.",
+      "testError": "Could not test the credentials",
+      "saved": "Credentials saved. Use Test connection to check them.",
+      "saveFailed": "Could not save the credentials",
+      "removed": "Credentials removed",
+      "removeFailed": "Could not remove the credentials",
+      "removeConfirm": {
+        "title": "Remove credentials",
+        "message": "The stored application ID and private key are deleted from Monize. You will need to enter them again before you can connect a bank or sync.",
+        "confirm": "Remove"
+      },
+      "help": {
+        "show": "Show setup help",
+        "hide": "Hide setup help",
+        "whatIsTitle": "What is Enable Banking?",
+        "whatIsBody": "Enable Banking is a company that is licensed in the EU as an account information service provider (AISP) under PSD2. It connects to your bank for you and gives Monize read-only access to your accounts, balances and transactions. You sign in at your own bank. Monize and Enable Banking never see your bank password. Enable Banking works with banks in the European Economic Area.",
+        "dataFlow": "After you connect your bank, Enable Banking can read your bank data: your account data passes through its service on the way to Monize. Enable Banking states that it does not store this data. Its terms apply: <terms>Enable Banking API terms</terms>.",
+        "whatIsFree": "For personal use, a free application in restricted production mode is enough. It reads only the accounts that you link to it in the control panel.",
+        "setupTitle": "How to set it up",
+        "step1": "Create an account at <link>Enable Banking</link> (select \"Get Started\" and wait for the confirmation email). Then sign in to the control panel and open \"API applications\".",
+        "step2": "Select \"Production\". Monize reads your real bank accounts only through a Production application. Select \"Sandbox\" only if you want to try the connection first: it shows only demo data from test banks.",
+        "step3": "Keep \"Generate in the browser\" for the private key.",
+        "step4": "Enter the values below in the form. For \"Production\", every field is required.",
+        "registrationValuesTitle": "Values to paste into the form",
+        "registrationValuesNote": "The labels and values stay in English because the control panel is in English.",
+        "registrationTemplatesNote": "The two URLs point to the Monize templates. In restricted mode Enable Banking does not check them. If other people use your Monize instance, publish your own pages with your name instead.",
+        "emailPlaceholder": "Your email address",
+        "copyField": "Copy {field}",
+        "step5": "Select \"Register\". Your browser saves the private key file (.pem). Keep this file secret.",
+        "step6": "For \"Production\", the new application shows \"Inactive\". Select \"Activate by linking accounts\", select the country, your bank and the usage type (\"personal\" for a personal account, \"business\" for a company account), and select \"Link\". Then sign in at your bank and authorize your accounts. Do not select \"Request activation\": it asks for general availability, which personal use does not need. Without linked accounts the bank returns no accounts. Later, when you connect the bank in Monize, select the same usage type.",
+        "step7": "Enter the application ID from the application list, and load the private key file here.",
+        "sandboxNote": "Transactions from a Sandbox application are demo data. Link a Sandbox bank account only to a test account in Monize, not to an account that holds your real transactions.",
+        "networkTitle": "Network access",
+        "networkBody": "When the bank sends you back, your browser opens the redirect URL. Enable Banking servers do not connect to Monize. Thus Monize does not have to be reachable from the internet or from Enable Banking IP addresses. The redirect URL must open in the browser that you use to authorize access.",
+        "networkOutbound": "The Monize server must be able to connect to api.enablebanking.com over HTTPS (port 443)."
+      },
+      "modalSource": "Get the application ID and the private key from the <link>Enable Banking control panel</link>."
+    },
+    "credentialsModal": {
+      "title": "Enable Banking credentials",
+      "subtitle": "Stored encrypted on this server. The private key is never shown again.",
+      "applicationIdLabel": "Application ID",
+      "applicationIdPlaceholder": "The ID of your Enable Banking application",
+      "applicationIdRequired": "Enter the application ID",
+      "applicationIdTooLong": "The application ID is too long",
+      "privateKeyLabel": "Private key (PEM)",
+      "privateKeyPlaceholder": "Paste the PEM private key of your application",
+      "privateKeyStoredPlaceholder": "A key is stored. Leave this empty to keep it, or paste a new one to replace it.",
+      "privateKeyHelp": "Paste the whole PEM file you downloaded when you registered the application.",
+      "privateKeyRequired": "Enter the private key",
+      "privateKeyInvalid": "This does not look like a PEM private key. It should be a block that starts with BEGIN and ends with PRIVATE KEY.",
+      "privateKeyTooLong": "The private key is too long",
+      "loadKeyFile": "Load key file",
+      "keyFileTooLarge": "The file is larger than 16 KB. Select the .pem file that Enable Banking saved.",
+      "keyFileReadFailed": "Could not read the file.",
+      "cancel": "Cancel",
+      "save": "Save",
+      "saving": "Saving..."
+    },
+    "connections": {
+      "title": "Connected banks",
+      "subtitle": "Each bank account is linked to one Monize account, and its booked transactions are imported into it.",
+      "connect": "Connect a bank",
+      "credentialsFirst": "Set up your Enable Banking credentials above before you connect a bank.",
+      "loadFailed": "Could not load your bank connections.",
+      "empty": {
+        "title": "No banks connected",
+        "description": "Connect a bank to import its booked transactions into your Monize accounts."
+      }
+    },
+    "connect": {
+      "title": "Connect a bank",
+      "subtitle": "You will be sent to your bank to authorize read-only access.",
+      "whySecondAuthorization": "You authorize at your bank again here, even if you already linked the same accounts in the Enable Banking control panel. The control panel only lists which accounts the application may read, and its consent ends the same day. This step gives Monize its own consent to read balances and transactions, for up to 180 days. When it is about to end, the connection card shows \"Renew consent\".",
+      "countryLabel": "Country",
+      "countryPlaceholder": "Select a country",
+      "institutionLabel": "Bank",
+      "institutionPlaceholder": "Search for your bank",
+      "institutionsLoading": "Loading banks...",
+      "institutionsFailed": "Could not load the list of banks.",
+      "retry": "Try again",
+      "noInstitutions": "The provider lists no banks for this country.",
+      "psuTypeLabel": "Account holder",
+      "psuPersonal": "Personal",
+      "psuBusiness": "Business",
+      "consentDays": "{days, plural, one {This bank allows access for up to # day before you must renew it.} other {This bank allows access for up to # days before you must renew it.}}",
+      "continue": "Continue to bank",
+      "continuing": "Connecting...",
+      "cancel": "Cancel",
+      "unsafeUrl": "The bank address returned by the server is not a secure https address, so Monize did not open it.",
+      "failed": "Could not start the connection"
+    },
+    "connection": {
+      "status": {
+        "pending": "Pending",
+        "active": "Active",
+        "expired": "Expired",
+        "revoked": "Revoked",
+        "failed": "Failed"
+      },
+      "validUntil": "Access valid until {date}",
+      "expiresSoon": "Expires soon",
+      "autoSync": "Sync automatically once a day",
+      "autoSyncOn": "Automatic sync turned on",
+      "autoSyncOff": "Automatic sync turned off",
+      "autoSyncFailed": "Could not change automatic sync",
+      "renew": "Renew consent",
+      "renewFailed": "Could not start the renewal",
+      "syncAll": "Sync all",
+      "syncingAll": "Syncing...",
+      "syncAllFailed": "Could not sync this bank",
+      "disconnect": "Disconnect",
+      "disconnected": "Bank disconnected",
+      "disconnectFailed": "Could not disconnect the bank",
+      "disconnectConfirm": {
+        "title": "Disconnect {bank}",
+        "message": "Monize stops syncing this bank and asks it to end the access. Transactions already imported stay, and connecting the bank again does not import them a second time.",
+        "confirm": "Disconnect"
+      },
+      "pendingHint": "The authorization at the bank was not completed. Renew consent to try again; the accounts you linked are kept.",
+      "noAccounts": "The bank has not reported any accounts for this connection.",
+      "accountsHeading": "Bank accounts",
+      "matchAccounts": "Match by account number",
+      "matching": "Matching...",
+      "matchLinked": "{count, plural, one {# bank account was linked to the account with the same number} other {# bank accounts were linked to the accounts with the same numbers}}",
+      "matchSuggested": "{count, plural, one {# bank account matches more than one of your accounts: choose its account yourself} other {# bank accounts match more than one of your accounts: choose their accounts yourself}}",
+      "matchBoth": "{linked}. {suggested}",
+      "matchNone": "No bank account was linked: none has an account number that matches one of your accounts.",
+      "matchFailed": "Could not match the bank accounts",
+      "syncAllNeedsPreview": "Sync all waits until the first import of each newly linked account is confirmed. Use Sync now on that account to preview it.",
+      "notifySuccess": "Notify after the daily sync",
+      "notifySuccessOptions": {
+        "always": "After every sync",
+        "when_imported": "Only when transactions were imported",
+        "never": "Never"
+      },
+      "notifySuccessSaved": "Notification setting saved",
+      "notifySuccessFailed": "Could not change the notification setting",
+      "tagOperationType": "Tag transactions with the bank's operation type",
+      "tagOperationTypeHelp": "Each imported transaction gets a tag named after the bank's operation type, such as Card payment or Incoming transfer, so rules and reports can use it.",
+      "tagOperationTypeOn": "Operation type tags turned on",
+      "tagOperationTypeOff": "Operation type tags turned off",
+      "tagOperationTypeFailed": "Could not change the operation type tags"
+    },
+    "profileNotes": {
+      "title": "How this bank's API works",
+      "show": "Show how this bank's API works",
+      "hide": "Hide how this bank's API works",
+      "severity": {
+        "warning": "Warning:",
+        "info": "Note:"
+      }
+    },
+    "account": {
+      "unnamed": "Unnamed bank account",
+      "linkLabel": "Monize account",
+      "notLinked": "Not linked",
+      "noEligibleAccounts": "No open Monize account of this currency is available to link.",
+      "linkFailed": "Could not link the account",
+      "unlinked": "Account unlinked",
+      "unlinkFailed": "Could not unlink the account",
+      "syncFrom": "Importing from {date}",
+      "changeCutoff": "Change start date",
+      "syncNow": "Sync now",
+      "syncing": "Syncing...",
+      "syncFailed": "Could not sync this account",
+      "neverSynced": "Not synced yet",
+      "lastSynced": "Last synced {time}",
+      "lastSyncOk": "Succeeded",
+      "lastSyncFailed": "Failed",
+      "bankBalance": "Bank balance",
+      "bankBalanceAsOf": "{amount} as of {date}",
+      "balanceNotReported": "Not reported by the bank",
+      "balanceNotSynced": "Not synced yet",
+      "monizeBalance": "Monize balance",
+      "difference": "Difference",
+      "differenceHelp": "The bank balance is what the bank reported on the date shown. It can include transactions the bank has not booked yet, or booked after that date, so a small difference is normal between syncs.",
+      "differenceHidden": "The bank balance is in {bankCurrency} and the Monize account is in {monizeCurrency}, so no difference is shown.",
+      "deletedNote": "A transaction you delete in Monize is not imported again by a later sync, so a deleted row stays deleted.",
+      "createNew": "Create a new account",
+      "suggestedName": "{type} {number}",
+      "createdLinked": "Account created and linked",
+      "createdLinkFailed": "The account was created but could not be linked",
+      "preview": "Preview",
+      "firstSyncPreview": "The first import is confirmed from a preview of the transactions."
+    },
+    "link": {
+      "title": "Link to {account}",
+      "editTitle": "Start date for {account}",
+      "syncFromLabel": "Import transactions from",
+      "syncFromHelp": "Filled in with the date Monize chooses by default. Clear the field and Monize chooses it for you.",
+      "beforeCutoff": "Transactions the bank booked before this date are never imported.",
+      "duplicateWarning": "A date earlier than the newest transaction in the account may create duplicates of transactions you already entered.",
+      "save": "Link account",
+      "saveEdit": "Save",
+      "saving": "Saving...",
+      "cancel": "Cancel",
+      "saved": "Account linked",
+      "editSaved": "Start date saved",
+      "saveFailed": "Could not save the link",
+      "loadingDefaults": "Reading the account...",
+      "defaultsFailed": "Could not read the newest transaction in this account, so Monize cannot say whether this start date may create duplicates.",
+      "newestTransaction": "Newest transaction in this account: {date}",
+      "emptyAccount": "{days, plural, one {The account is empty: the import covers the last day} other {The account is empty: the import covers the last # days}}"
+    },
+    "sync": {
+      "summary": "{imported, plural, =0 {No transactions imported} one {# transaction imported} other {# transactions imported}}, {skipped, plural, =0 {none skipped} one {# skipped as already imported} other {# skipped as already imported}}, {refused, plural, =0 {none refused} one {# refused} other {# refused}}",
+      "summaryWithReasons": "{summary}. Refused: {reasons}",
+      "outcomeUnknown": "The result of the sync is not known yet. Reload the page to see what was imported.",
+      "failedAccountItem": "{account} ({message})",
+      "allFailed": "Could not sync: {accounts}",
+      "partialFailure": "{summary}. Could not sync: {accounts}",
+      "reason": {
+        "missing_date": "{count, plural, one {# without a date} other {# without a date}}",
+        "future_date": "{count, plural, one {# dated in the future} other {# dated in the future}}",
+        "invalid_amount": "{count, plural, one {# with an invalid amount} other {# with an invalid amount}}",
+        "unknown_direction": "{count, plural, one {# with an unknown direction} other {# with an unknown direction}}",
+        "currency_mismatch": "{count, plural, one {# in another currency} other {# in another currency}}",
+        "other": "{count, plural, one {# for another reason} other {# for another reason}}",
+        "missing_identity": "{count, plural, one {# without a bank transaction ID} other {# without a bank transaction ID}}"
+      },
+      "needsPreview": "Open the preview for {accounts} and confirm the first import",
+      "withNeedsPreview": "{message}. {needsPreview}"
+    },
+    "callback": {
+      "title": "Connecting your bank",
+      "subtitle": "Please wait while Monize completes the connection",
+      "success": "Bank connected",
+      "successNamed": "Connected to {bank}",
+      "bankError": "Your bank did not grant access: {message}",
+      "missingState": "The bank did not return a valid response. Start the connection again.",
+      "notActive": "The connection could not be completed",
+      "failed": "Could not complete the connection",
+      "autoLinked": "{count, plural, one {# bank account was linked to the account with the same number. Review it before the first import.} other {# bank accounts were linked to the accounts with the same numbers. Review them before the first import.}}",
+      "autoSuggested": "{count, plural, one {# bank account matches more than one of your accounts: choose its account in the list.} other {# bank accounts match more than one of your accounts: choose their accounts in the list.}}"
+    },
+    "accountType": {
+      "CACC": "Current account",
+      "CARD": "Card",
+      "SVGS": "Savings",
+      "LOAN": "Loan",
+      "other": "Account type {code}"
+    },
+    "mismatch": {
+      "bankCard": "The bank reports this account as a card, but the type of {account} is {type}, not {creditCard}. A card's transactions would be imported into the wrong kind of account.",
+      "monizeCard": "The type of {account} is {creditCard}, but the bank reports this account as: {bankType}. Check that this is the right bank account.",
+      "confirm": "I understand, link these accounts anyway"
+    },
+    "preview": {
+      "title": "Preview import into {account}",
+      "description": "Nothing is imported until you confirm. This is what the bank reports and what Monize would do with each transaction.",
+      "loading": "Reading the bank...",
+      "loadFailed": "Could not preview this account",
+      "retry": "Try again",
+      "close": "Close",
+      "import": "{count, plural, =0 {Confirm: nothing new to import} one {Import # transaction} other {Import # transactions}}",
+      "importing": "Importing...",
+      "importFailed": "Could not import the transactions",
+      "planChanged": "The bank's data changed since this preview, so nothing was imported. The preview was read again: check it and import once more.",
+      "monizeBalance": "Monize balance now",
+      "balanceAfter": "Monize balance after the import",
+      "bankBalance": "Bank balance",
+      "bankBalanceAsOf": "{amount} as of {date}",
+      "bankBalanceNotReported": "Not reported by the bank",
+      "difference": "Difference after the import",
+      "differenceHelp": "The bank balance minus the Monize balance after the import. Zero means the two agree. The bank balance can include transactions the bank has not booked yet, so a small difference is normal.",
+      "differenceHidden": "The bank balance is in {bankCurrency} and the Monize account is in {monizeCurrency}, so no difference is shown.",
+      "filterLabel": "Show transactions",
+      "filter": {
+        "all": "All",
+        "new": "New",
+        "duplicate": "Already imported",
+        "refused": "Refused",
+        "pending": "Pending",
+        "before_cutoff": "Before the start date",
+        "withCount": "{label} ({count})",
+        "excluded": "Exceptions"
+      },
+      "outcome": {
+        "new": "New",
+        "duplicate": "Already imported",
+        "refused": "Refused",
+        "pending": "Pending",
+        "before_cutoff": "Before the start date",
+        "excluded": "Exception"
+      },
+      "refusal": {
+        "missing_date": "No date",
+        "future_date": "Dated in the future",
+        "invalid_amount": "Invalid amount",
+        "unknown_direction": "Unknown direction",
+        "currency_mismatch": "Other currency",
+        "other": "Refused",
+        "missing_identity": "Missing bank transaction ID"
+      },
+      "columns": {
+        "date": "Date",
+        "payee": "Payee",
+        "category": "Category",
+        "status": "Status",
+        "amount": "Amount",
+        "select": "Select and details"
+      },
+      "noPayee": "No payee",
+      "dateUnknown": "No date",
+      "amountUnknown": "Unknown",
+      "empty": {
+        "all": "The bank returned no transactions for this period.",
+        "filtered": "No transactions in this list."
+      },
+      "selectAllNew": "Select all new transactions in this list",
+      "selectAllExceptions": "Select all exceptions in this list",
+      "selectRow": "Import {payee}",
+      "selectException": "Remove {payee} from the exceptions",
+      "summary": "Import {import}, skip {skip}, add {except} to exceptions",
+      "importNothing": "Confirm without importing",
+      "exceptions": {
+        "intro": "Transactions in the exceptions are never imported. Remove one from the exceptions to see it as new again.",
+        "remove": "{count, plural, =0 {Remove from exceptions} other {Remove # from exceptions}}",
+        "removing": "Removing...",
+        "removed": "{count, plural, one {# transaction was removed from the exceptions} other {# transactions were removed from the exceptions}}",
+        "removedNone": "Nothing was removed from the exceptions",
+        "removeFailed": "Could not remove the exceptions"
+      },
+      "details": {
+        "operation": {
+          "heading": "Operation type",
+          "none": "No operation type tag for this transaction.",
+          "tag": "Tag from the bank's operation type: {tag}"
+        }
+      },
+      "historyBatch": "History batch: {from} to {to}.",
+      "historyBatchRemaining": "History batch: {from} to {to}. More history remains; preview the next batch after importing this one."
+    },
+    "simplefin": {
+      "title": "SimpleFIN",
+      "provider": "Data provider",
+      "description": "Connect banks in <bridge>SimpleFIN Bridge</bridge>, then paste a one-time setup token here. Access is read-only.",
+      "openBridge": "Open SimpleFIN Bridge",
+      "setupToken": "Setup token",
+      "connect": "Connect SimpleFIN",
+      "connected": "SimpleFIN is connected.",
+      "savedDiscoveryFailed": "Connected, but account discovery needs attention. Retry discovery without a new token.",
+      "refresh": "Refresh accounts",
+      "failed": "Could not complete the request. Check connection status before using a new token.",
+      "loadFailed": "Could not load SimpleFIN status.",
+      "encryptionRequired": "Ask an administrator to configure encryption before connecting SimpleFIN.",
+      "remove": "Remove SimpleFIN from Monize",
+      "removeTitle": "Remove access for all institutions?",
+      "removeBody": "This disables all SimpleFIN syncing in Monize and preserves your history. Revoke the app token in Bridge to end remote access.",
+      "replaceTitle": "Replace SimpleFIN access?",
+      "replaceBody": "This replaces access for all institutions. Existing account mappings stay; changed identities need review.",
+      "quota": "{remaining} requests remaining",
+      "nextEligible": "Next available: {date}",
+      "stopTitle": "Stop syncing {bank}?",
+      "stopBody": "Existing mappings and transactions stay. Use Resume syncing to reconnect this institution.",
+      "stop": "Stop syncing",
+      "errors": {
+        "unauthorized": "Reconnect using a new setup token.",
+        "payment_required": "Check your SimpleFIN Bridge subscription.",
+        "rate_limited": "Request limit reached. Wait before refreshing.",
+        "no_accounts": "No accounts were shared. Check account access in Bridge.",
+        "partial_data": "Some account data is incomplete. Review Bridge, then refresh.",
+        "identity_review": "Account identities changed. Review mappings before enabling sync.",
+        "invalid_response": "Bridge returned unsupported data. Refresh later.",
+        "unavailable": "SimpleFIN did not answer. Try later."
+      },
+      "enableBanking": "Enable Banking",
+      "stopped": "Syncing stopped",
+      "resume": "Resume syncing",
+      "lastKnownConnected": "SimpleFIN was connected at the last successful check."
+    }
   }
 }

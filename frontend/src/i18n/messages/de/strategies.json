@@ -330,14 +330,13 @@
       "fillMissingDone": "{count, plural, one {# Instrument hinzugefügt} other {# Instrumente hinzugefügt}}. Speichern Sie die Konfiguration, um die Kurse zu laden und das erste Signal zu berechnen.",
       "fillMissingError": "Die vorgeschlagenen Instrumente konnten nicht hinzugefügt werden.",
       "lookbackMonths": "Momentum-Zeitraum (Monate)",
-      "taxRatePercent": "Steuersatz (%)",
-      "commissionAmount": "Gebühr je Order",
+      "taxRatePercent": "Steuersatz (optional)",
+      "commissionAmount": "Gebühr je Order (optional)",
       "rulesSourceUrl": "Link zu den Regeln, denen Sie folgen",
       "rulesSourceUrlPlaceholder": "https://example.com/dual-momentum",
       "rulesSourceLabel": "Anzuzeigender Text für den Link",
       "rulesSourceLabelPlaceholder": "example.com",
       "rulesSourceHint": "Beides optional und ohne Einfluss auf irgendeine Berechnung. Sie setzen in die Fußzeile des Berichts einen Link auf die Stelle, an der die Regeln dieser Strategie beschrieben sind — ein Artikel, eine Buchseite, Ihre eigenen Notizen — damit Sie später nachsehen können, gegen welche Fassung Sie sie eingerichtet haben.",
-      "optional": "Optional",
       "save": "Konfiguration speichern",
       "saved": "Strategiekonfiguration gespeichert.",
       "saveError": "Die Strategiekonfiguration konnte nicht gespeichert werden.",
@@ -358,7 +357,9 @@
       "NO_POSITION": "Die Strategiekonten halten keine Instrumente.",
       "FIRST_RUN": "Diese Strategie wurde noch nicht ausgewertet – das erste Signal erscheint nach der nächsten geplanten Auswertung.",
       "STALE_PRICES": "Einige der Kurse hinter diesem Bericht sind nicht aktuell, das Signal kann sich nach einer Aktualisierung ändern. Am ältesten oder ganz fehlend sind:",
-      "CALCULATION_FAILED": "Das Signal konnte aus den verfügbaren Daten nicht berechnet werden."
+      "CALCULATION_FAILED": "Das Signal konnte aus den verfügbaren Daten nicht berechnet werden.",
+      "SHORT_HISTORY": "Nicht genug Kurshistorie, um die aktuelle Periode zu berechnen. Diese Rollen benötigen Kurse zurück bis {from}:",
+      "shortHistoryFix": "Öffnen Sie jedes dieser Instrumente und verwenden Sie „Ein weiteres Jahr Kurshistorie hinzufügen“, und öffnen Sie diesen Bericht dann erneut."
     },
     "footer": {
       "pastResults": "Vergangene Ergebnisse sind keine Garantie für künftige Renditen.",

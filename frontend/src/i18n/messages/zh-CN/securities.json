@@ -3,6 +3,7 @@
     "noneToUpdate": "无证券需要更新",
     "updated": "{count, plural, one {# 个证券价格已更新} other {# 个证券价格已更新}}",
     "partialFailure": "价格已更新：{updated} 个成功，{failed} 个失败{symbols}",
+    "partialFailureWithReasons": "价格已更新：{updated} 个成功，{failed} 个失败{symbols}\n{reasons}",
     "failed": "刷新价格失败"
   },
   "page": {
@@ -10,6 +11,7 @@
     "subtitle": "管理您的股票、ETF、共同基金及其他证券",
     "newSecurity": "+ 新建证券",
     "searchPlaceholder": "按代码或名称搜索...",
+    "statusFilterLabel": "状态",
     "statusAll": "全部（{count}）",
     "statusActive": "活跃（{count}）",
     "statusInactive": "非活跃（{count}）",
@@ -49,6 +51,7 @@
       "name": "名称",
       "type": "类型",
       "shares": "股数",
+      "value": "市值",
       "exchange": "交易所",
       "currency": "货币",
       "provider": "提供商",
@@ -63,12 +66,10 @@
       "inactive": "非活跃",
       "inactiveShort": "停"
     },
-    "providerTitle": {
-      "override": "单证券提供商覆盖",
-      "inherited": "继承自您的默认行情提供商偏好"
-    },
+    "providerInherited": "{provider}（默认）",
     "columnTitles": {
       "shares": "所有账户中当前持有的股数",
+      "value": "所有账户中持有的股数按最新价格计算，以证券自身的货币计价",
       "source": "最新价格的来源"
     },
     "actions": {
@@ -115,7 +116,11 @@
     "exchangeLabel": "交易所",
     "currencyLabel": "货币",
     "currencyNotConfigured": "{code} — 不在你的货币列表中",
+    "currencyPlaceholder": "选择货币...",
+    "currencyNotReported": "数据提供方没有给出该加密货币的计价货币。请选择它所用的法定货币。",
     "quoteProviderLabel": "行情提供商",
+    "skipPriceUpdatesLabel": "停用自动价格更新",
+    "skipPriceUpdatesHelp": "Monize 将不会为此证券获取价格。适用于没有提供商能够报价的证券；您自行输入的价格仍然有效。选择其他报价提供商或 MSN 金融工具 ID 会重新启用更新。",
     "msnIdLabel": "MSN 工具 ID（高级）",
     "lookupProviderAriaLabel": "查询提供商",
     "lookupButton": "查询",
@@ -139,7 +144,11 @@
     "providers": {
       "auto": "自动",
       "yahoo": "Yahoo",
-      "msn": "MSN"
+      "msn": "MSN",
+      "lse": "LSE",
+      "deutsche_boerse": "Deutsche Börse",
+      "bond_engine": "债券引擎",
+      "html_table": "网页表格"
     },
     "types": {
       "select": "选择类型...",
@@ -189,16 +198,50 @@
       "deleteConfirm": "删除",
       "deleteSuccess": "已删除资产类别“{name}”",
       "deleteFailed": "无法删除资产类别“{name}”"
+    },
+    "bondFetchAction": "从官方来源获取 {code}",
+    "bondFetching": "正在从发行方获取 {code} 及其参考利率。这最多可能需要一分钟。",
+    "bondFetchFailed": "无法获取该系列。",
+    "bondCurrencyLocked": "此证券已关联到 {linkedCurrency} 的债券种类。请将币种改回 {linkedCurrency},或先取消关联该债券种类(取消关联会删除其计算价格)。",
+    "bondProgramLabel": "债券种类",
+    "bondProgramNone": "未关联",
+    "bondProgramCurrent": "已关联的债券种类",
+    "bondProgramLoading": "正在加载债券种类...",
+    "bondProgramLoadFailed": "无法加载债券种类,因此暂时不能关联债券种类。",
+    "bondProgramRetry": "重试",
+    "bondNoPrograms": "债券目录中还没有任何债券种类。",
+    "bondAutoFetchLabel": "自动获取此债券种类的新系列",
+    "bondAutoFetchHelp": "开启后,Monize 每天都会从官方来源读取此债券种类的新系列,这样您无需先获取系列即可记录买入。",
+    "bondCountryLabel": "国家",
+    "bondCountryOther": "其他",
+    "bondCountryOtherInfo": "如需支持其他国家的债券，可在项目的 <link>GitHub</link> 上提出请求。",
+    "quoteTable": {
+      "urlLabel": "价格表网页",
+      "urlHelp": "页面需要一个表格，其标题行包含日期列和收盘价列。",
+      "test": "测试",
+      "previewFailed": "无法读取该页面。",
+      "summary": "{first} 至 {last}，共 {count, plural, other {# 天}}",
+      "columns": "使用的列：{columns}",
+      "currency": "页面上的货币：{currency}",
+      "noCurrency": "页面未注明货币；价格按该证券的货币保存。",
+      "skipped": "{count, plural, other {已跳过 # 行无法读取的数据}}",
+      "headers": {
+        "date": "日期",
+        "open": "开盘",
+        "high": "最高",
+        "low": "最低",
+        "close": "收盘",
+        "volume": "成交量"
+      }
     }
   },
   "priceForm": {
     "dateLabel": "日期",
     "closePriceLabel": "收盘价",
-    "openPriceLabel": "开盘价",
-    "highPriceLabel": "最高价",
-    "lowPriceLabel": "最低价",
-    "volumeLabel": "成交量",
-    "optionalPlaceholder": "可选",
+    "openPriceLabel": "开盘价（可选）",
+    "highPriceLabel": "最高价（可选）",
+    "lowPriceLabel": "最低价（可选）",
+    "volumeLabel": "成交量（可选）",
     "submitCreate": "添加价格",
     "submitUpdate": "更新价格"
   },
@@ -246,7 +289,9 @@
     },
     "collapseAll": "全部折叠",
     "expandAll": "全部展开",
-    "groupCount": "{count} 条价格"
+    "groupCount": "{count} 条价格",
+    "addYearButton": "再添加一年历史",
+    "addYearTitle": "从数据提供方再获取一年历史价格"
   },
   "transactionHistory": {
     "accountLabel": "账户",
@@ -284,7 +329,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "长期资本收益再投资",
       "CAPITAL_GAIN_SHORT": "短期资本收益",
       "CAPITAL_GAIN_LONG": "长期资本收益",
-      "REDEEM": "赎回存单/债券"
+      "REDEEM": "赎回存单/债券",
+      "RETURN_OF_CAPITAL": "资本返还"
     },
     "toasts": {
       "loadHistoryFailed": "加载历史失败",
@@ -333,11 +379,20 @@
     "nameRequired": "名称为必填项",
     "nameMax": "名称不能超过 255 个字符",
     "currencyRequired": "货币为必填项",
-    "descriptionMax": "描述不能超过5000个字符"
+    "bondProgramRequired": "债券种类为必填项",
+    "descriptionMax": "描述不能超过5000个字符",
+    "quoteUrlRequired": "请输入包含价格表的页面。",
+    "quoteUrlInvalid": "请输入以 http:// 或 https:// 开头的完整地址。"
   },
   "priceValidation": {
     "dateRequired": "日期为必填项",
     "priceRequired": "价格为必填项",
     "priceNonNegative": "价格必须为非负数"
+  },
+  "priceAlert": {
+    "label": "价格变动提醒 (%)",
+    "help": "留空以关闭。相对于上一个有数据的交易日，价格上涨或下跌时提醒，每个证券每个 UTC 日最多一次。",
+    "range": "请输入 0.1 至 1000 之间的百分比。",
+    "chartLabel": "在价格提醒中附加图表"
   }
 }

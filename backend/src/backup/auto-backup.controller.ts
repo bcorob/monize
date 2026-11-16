@@ -26,14 +26,17 @@ import {
 import { DemoRestricted } from "../common/decorators/demo-restricted.decorator";
 
 /**
- * Automatic backup configuration -- administrators only.
+ * The deployment's automatic backup policy -- administrators only.
  *
- * The settings decide where files are written on the server's filesystem and
- * how much disk they take, which is an operator's decision rather than an
- * account preference; every non-admin user is enrolled on the deployment
- * defaults by `AutoBackupService.enrollManagedUsers` instead, and never sees
- * this section. The guards are on the class rather than on each handler so an
- * endpoint added here is admin-only by default.
+ * What these endpoints read and write is one policy for the whole instance, not
+ * the caller's own preference: it decides where files are written on the
+ * server's filesystem and how much disk they take, and every active account is
+ * reconciled onto it by `AutoBackupService.reconcileManagedUsers`. It has its
+ * own singleton row (`auto_backup_policy`), so the handlers pass the acting
+ * administrator's id only as the identity of the caller -- to probe a namespace
+ * and to name an example folder, never to decide whose policy this is. The
+ * guards are on the class rather than on each handler so an endpoint added here
+ * is admin-only by default.
  *
  * Manual export/restore, which touches only the caller's own data, stays open
  * to everyone on `BackupController`.
@@ -47,7 +50,9 @@ export class AutoBackupController {
   constructor(private readonly autoBackupService: AutoBackupService) {}
 
   @Get("auto-backup-settings")
-  @ApiOperation({ summary: "Get automatic backup settings (admin only)" })
+  @ApiOperation({
+    summary: "Get the deployment's automatic backup policy (admin only)",
+  })
   @ApiResponse({ status: 200, description: "Auto-backup settings returned" })
   async getAutoBackupSettings(@Request() req) {
     return this.autoBackupService.getSettings(req.user.id);
@@ -55,8 +60,11 @@ export class AutoBackupController {
 
   @Patch("auto-backup-settings")
   @DemoRestricted()
-  @ApiOperation({ summary: "Update automatic backup settings (admin only)" })
-  @ApiResponse({ status: 200, description: "Settings updated" })
+  @ApiOperation({
+    summary:
+      "Update the deployment's automatic backup policy, and apply it to every account (admin only)",
+  })
+  @ApiResponse({ status: 200, description: "Policy updated and applied" })
   async updateAutoBackupSettings(
     @Request() req,
     @Body() dto: UpdateAutoBackupSettingsDto,
@@ -105,9 +113,9 @@ export class AutoBackupController {
   @DemoRestricted()
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
-    summary: "Trigger an immediate automatic backup (admin only)",
+    summary: "Back up every account on this deployment now (admin only)",
   })
-  @ApiResponse({ status: 200, description: "Backup completed" })
+  @ApiResponse({ status: 200, description: "Run finished; counts returned" })
   async runAutoBackup(@Request() req) {
     return this.autoBackupService.runManualBackup(req.user.id);
   }

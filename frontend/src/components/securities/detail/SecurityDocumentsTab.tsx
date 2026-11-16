@@ -18,6 +18,8 @@ import { investmentsApi } from '@/lib/investments';
 import { getErrorMessage } from '@/lib/errors';
 import { documentHost } from '@/lib/security-detail';
 import { SecurityDocumentForm } from './SecurityDocumentForm';
+import { SecurityIssueLetters } from './SecurityIssueLetters';
+import { Th } from '@/components/ui/Table';
 import type {
   CreateSecurityDocumentData,
   Security,
@@ -26,10 +28,13 @@ import type {
 
 interface SecurityDocumentsTabProps {
   security: Security;
+  /**
+   * Bumped by the page each time a price refresh completes (whatever its
+   * outcome): the bond data the refresh fetched is re-read once, in place.
+   */
+  refreshVersion?: number;
 }
 
-const TH =
-  'px-3 py-2 text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400';
 const TD = 'px-3 py-2 text-sm';
 
 /**
@@ -45,7 +50,7 @@ const TD = 'px-3 py-2 text-sm';
  * Links only for now. Uploading a file needs the attachments module widened
  * beyond transactions, which is its own change.
  */
-export function SecurityDocumentsTab({ security }: SecurityDocumentsTabProps) {
+export function SecurityDocumentsTab({ security, refreshVersion = 0 }: SecurityDocumentsTabProps) {
   const t = useTranslations('securityDetail');
   const { formatDate } = useDateFormat();
 
@@ -56,21 +61,42 @@ export function SecurityDocumentsTab({ security }: SecurityDocumentsTabProps) {
   const [editing, setEditing] = useState<SecurityDocument | undefined>();
   const [deleting, setDeleting] = useState<SecurityDocument | undefined>();
 
-  const load = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      setDocuments(await investmentsApi.getSecurityDocuments(security.id));
-    } catch (err) {
-      setError(getErrorMessage(err, t('documents.loadFailed')));
-    } finally {
-      setIsLoading(false);
-    }
+  const fetchDocuments = useCallback(() => {
+    // The writes live in the inner function so they run after the request,
+    // not during the effect that starts it.
+    const run = async () => {
+      try {
+        const loaded = await investmentsApi.getSecurityDocuments(security.id);
+        setDocuments(loaded);
+      } catch (err) {
+        setError(getErrorMessage(err, t('documents.loadFailed')));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    return run();
   }, [security.id, t]);
 
+  // Every reload after a change shows the spinner again.
+  const load = useCallback(() => {
+    setIsLoading(true);
+    setError(null);
+    return fetchDocuments();
+  }, [fetchDocuments]);
+
+  // A different security is a new request: it shows as loading from the
+  // render that asks for it (the "info from previous render" pattern). The
+  // first load needs nothing here, `isLoading` starts true and `error` null.
+  const [loadingFor, setLoadingFor] = useState(security.id);
+  if (loadingFor !== security.id) {
+    setLoadingFor(security.id);
+    setIsLoading(true);
+    setError(null);
+  }
+
   useEffect(() => {
-    load();
-  }, [load]);
+    fetchDocuments();
+  }, [fetchDocuments]);
 
   const openCreate = () => {
     setEditing(undefined);
@@ -164,6 +190,15 @@ export function SecurityDocumentsTab({ security }: SecurityDocumentsTabProps) {
   }
 
   return (
+    <>
+      {/* Above the reader's own documents; a plain security has no such section. */}
+      {security.bondProgramId && (
+        <SecurityIssueLetters
+          security={security}
+          className="mb-6"
+          refreshVersion={refreshVersion}
+        />
+      )}
     <div className="rounded-lg bg-white p-4 shadow dark:bg-gray-800 dark:shadow-gray-700/50">
       <div className="mb-4 flex items-center justify-between gap-3">
         <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
@@ -204,27 +239,21 @@ export function SecurityDocumentsTab({ security }: SecurityDocumentsTabProps) {
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-50 dark:bg-gray-900">
               <tr>
-                <th scope="col" className={`${TH} text-left`}>
+                <Th scope="col" className="px-3 py-2">
                   {t('documents.columns.type')}
-                </th>
-                <th scope="col" className={`${TH} text-left`}>
+                </Th>
+                <Th scope="col" className="px-3 py-2">
                   {t('documents.columns.name')}
-                </th>
-                <th
-                  scope="col"
-                  className={`${TH} hidden text-left sm:table-cell`}
-                >
+                </Th>
+                <Th scope="col" className="px-3 py-2 hidden sm:table-cell">
                   {t('documents.columns.date')}
-                </th>
-                <th
-                  scope="col"
-                  className={`${TH} hidden text-left md:table-cell`}
-                >
+                </Th>
+                <Th scope="col" className="px-3 py-2 hidden md:table-cell">
                   {t('documents.columns.address')}
-                </th>
-                <th scope="col" className={`${TH} text-right`}>
+                </Th>
+                <Th scope="col" align="right" className="px-3 py-2">
                   {t('documents.columns.actions')}
-                </th>
+                </Th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
@@ -299,20 +328,14 @@ export function SecurityDocumentsTab({ security }: SecurityDocumentsTabProps) {
         maxWidth="lg"
         className="p-6"
         pushHistory
+        title={editing ? t('documents.form.editTitle') : t('documents.form.addTitle')}
       >
         {isFormOpen && (
-          <>
-            <h2 className="mb-4 text-xl font-bold text-gray-900 dark:text-gray-100">
-              {editing
-                ? t('documents.form.editTitle')
-                : t('documents.form.addTitle')}
-            </h2>
-            <SecurityDocumentForm
-              document={editing}
-              onSubmit={handleSubmit}
-              onCancel={closeForm}
-            />
-          </>
+          <SecurityDocumentForm
+            document={editing}
+            onSubmit={handleSubmit}
+            onCancel={closeForm}
+          />
         )}
       </Modal>
 
@@ -326,5 +349,6 @@ export function SecurityDocumentsTab({ security }: SecurityDocumentsTabProps) {
         onCancel={() => setDeleting(undefined)}
       />
     </div>
+    </>
   );
 }

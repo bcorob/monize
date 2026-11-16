@@ -5,6 +5,8 @@
     "dividendsInterest": "股息與利息",
     "realizedGains": "已實現收益",
     "ytd": "年初至今",
+    "realizedKnownPart": "已知部分：{amount}",
+    "realizedUnknownReason": "無法計算此收益：該持倉包含未記錄成本而新增的股份，因此已賣出股份的成本未知。請開啟新增這些股份的交易並輸入其價格。",
     "empty": "本年度無投資收益"
   },
   "register": {

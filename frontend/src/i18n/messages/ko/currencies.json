@@ -4,6 +4,7 @@
     "subtitle": "계정 및 유가증권 전반에서 사용되는 통화를 관리하세요",
     "refreshRates": "환율 갱신",
     "refreshing": "갱신 중...",
+    "statusFilterLabel": "상태",
     "newCurrency": "+ 새 통화",
     "searchPlaceholder": "코드 또는 이름으로 검색...",
     "statusAll": "전체 ({count})",
@@ -13,6 +14,15 @@
     "modalTitleNew": "새 통화",
     "loading": "통화를 불러오는 중...",
     "count": "{count, plural, one {# 통화} other {# 통화}}",
+    "providers": {
+      "line": "환율 제공: {providers}",
+      "separator": ", 그다음 ",
+      "names": {
+        "frankfurter": "Frankfurter(ECB 기준 환율)",
+        "yahoo": "Yahoo Finance",
+        "crypto": "암호화폐 쌍 (Yahoo)"
+      }
+    },
     "toasts": {
       "loadFailed": "통화를 불러오지 못했습니다",
       "updated": "통화가 성공적으로 업데이트되었습니다",
@@ -24,6 +34,7 @@
       "statusFailed": "통화 상태를 업데이트하지 못했습니다",
       "ratesRefreshed": "환율 갱신 완료: {updated}쌍 업데이트됨",
       "ratesRefreshedWithFailed": "환율 갱신 완료: {updated}개 업데이트됨, {failed}개 실패",
+      "ratesAllFailed": "환율을 가져올 수 없습니다. 제공업체가 응답하지 않았습니다",
       "ratesFailed": "환율을 갱신하지 못했습니다"
     },
     "summary": {
@@ -44,6 +55,8 @@
       "actions": "작업"
     },
     "defaultBadge": "기본",
+    "cryptoBadge": "암호화폐",
+    "noPriceSymbol": "가격 기호 없음",
     "statusBadge": {
       "active": "활성",
       "activeShort": "활성",
@@ -61,9 +74,10 @@
       "activate": "활성화",
       "deleteCurrency": "통화 삭제"
     },
-    "usageTooltip": "{accounts}개 계정, {securities}개 유가증권",
-    "usageAccounts": "{count, plural, one {# 계정} other {# 계정}}",
-    "usageSecurities": "{count, plural, one {# 유가증권} other {# 유가증권}}",
+    "usageAccounts": "{count, plural, other {# 계정}}",
+    "usageSecurities": "{count, plural, other {# 종목}}",
+    "rateHelp": "각 통화 1단위가 {currency}로 얼마인지 나타냅니다.",
+    "rateMissing": "{from}에서 {to}로의 저장된 환율이 없습니다.",
     "empty": {
       "title": "통화 없음",
       "subtitle": "통화를 추가하여 시작하세요."
@@ -88,6 +102,20 @@
     "symbolLabel": "기호",
     "symbolPlaceholder": "예: $, €, £, ¥",
     "decimalPlacesLabel": "소수점 자리",
+    "kindLabel": "유형",
+    "kindOptions": {
+      "fiat": "법정 통화",
+      "crypto": "암호화폐"
+    },
+    "kindLocked": "{code}은(는) 사용 중이므로 유형을 변경할 수 없습니다.",
+    "quoteSymbolLabel": "가격 기호 (선택)",
+    "quoteSymbolPlaceholder": "예: BTC-EUR",
+    "quoteSymbolHelp": "코인 가격을 가져오는 Yahoo Finance 기호입니다. 티커, 하이픈, 시세 기준 통화 순서로 입력합니다(예: BTC-EUR). 코인의 환율은 이 기호를 통해 가져옵니다.",
+    "verifyButton": "확인",
+    "quoteSymbolPricedIn": "{currency} 기준 가격",
+    "quoteSymbolMissing": "가격 기호가 없으면 이 통화에는 환율이 없습니다.",
+    "quoteSymbolNotCrypto": "{symbol}은(는) 암호화폐가 아닙니다. BTC-EUR처럼 코인의 쌍을 입력하세요.",
+    "quoteSymbolNotFound": "{symbol}에 해당하는 암호화폐를 찾을 수 없습니다",
     "lookupButton": "조회",
     "lookingUp": "조회 중...",
     "clearButton": "지우기",
@@ -99,9 +127,14 @@
       "found": "찾음: {details}",
       "notFound": "\"{query}\"에 해당하는 통화를 찾을 수 없습니다",
       "lookupFailed": "조회에 실패했습니다 - 다시 시도해 주세요",
-      "reactivateFailed": "통화를 다시 활성화하지 못했습니다"
+      "reactivateFailed": "통화를 다시 활성화하지 못했습니다",
+      "verifyEmpty": "확인할 가격 기호를 입력하세요(예: BTC-EUR)",
+      "verifyFailed": "가격 기호를 확인하지 못했습니다"
     },
     "inactiveNotice": "{code}은(는) 이미 목록에 있지만 비활성 상태입니다.",
+    "nonIsoNotice": "{code}은(는) 표준 통화 코드가 아닙니다. 암호화폐라면 유형을 암호화폐로 설정하세요. <guide>암호화폐에 대해서는 사용자 가이드를 참고하세요</guide>.",
+    "switchToCrypto": "암호화폐 사용",
+    "cryptoPrecisionNotice": "암호화폐 금액은 저장 정밀도인 소수점 이하 최대 여덟 자리까지 유지되므로 {smallest} 미만의 수수료는 입력할 수 없습니다. <guide>지갑 수수료를 기록하는 방법 보기</guide>.",
     "reactivateButton": "{code} 다시 활성화",
     "reactivating": "다시 활성화하는 중..."
   },
@@ -110,6 +143,53 @@
     "nameRequired": "이름은 필수입니다",
     "nameMax": "이름은 100자 이하여야 합니다",
     "symbolRequired": "기호는 필수입니다",
-    "symbolMax": "기호는 10자 이하여야 합니다"
+    "symbolMax": "기호는 10자 이하여야 합니다",
+    "quoteSymbolMax": "가격 기호는 20자 이하여야 합니다",
+    "quoteSymbolRequiresCrypto": "암호화폐에만 가격 기호가 있습니다",
+    "quoteSymbolNotAPair": "BTC-EUR처럼 쌍을 입력하세요: 코인, 하이픈, 세 글자 통화 코드"
+  },
+  "rateHistory": {
+    "title": "환율 이력",
+    "stored": "저장된 이력: {start} ~ {end} ({count}개 관측치)",
+    "none": "{pair}에 대해 저장된 이력이 없습니다",
+    "loading": "저장된 환율 이력을 확인하는 중...",
+    "loadFailed": "저장된 환율 이력을 불러올 수 없습니다",
+    "fillGaps": "환율 이력의 빈 구간 채우기",
+    "filling": "누락된 환율을 가져오는 중...",
+    "fillGapsTitle": "보고서에 누락된 일별 환율을, 데이터가 {code}를 처음 사용한 날부터 오늘까지 가져옵니다.",
+    "hint": "최초 저장된 환율보다 이전 날짜의 리포트에서는 {pair}을(를) 환산할 수 없습니다.",
+    "list": {
+      "heading": "저장된 환율",
+      "invertedHelp": "(역산)으로 표시된 환율은 Monize가 이 페어에 대해 실제로 저장한 값의 역수이며, 별도의 관측값이 아닙니다.",
+      "direction": "1 {from}당 {to}로 표시합니다.",
+      "loading": "저장된 환율을 불러오는 중...",
+      "loadFailed": "저장된 환율을 읽지 못했습니다",
+      "empty": "표시할 저장된 환율이 없습니다",
+      "truncated": "최근 {count}개의 저장된 환율을 표시합니다. 그보다 오래된 것은 목록에 없습니다.",
+      "inverted": "역산",
+      "unknownRate": "알 수 없음",
+      "columns": {
+        "date": "날짜",
+        "rate": "환율",
+        "source": "출처"
+      },
+      "sources": {
+        "yahooFinance": "Yahoo Finance",
+        "frankfurter": "Frankfurter(ECB)",
+        "mnyImport": "Money 가져오기",
+        "yahooCrypto": "암호화폐 쌍 (Yahoo)",
+        "unknown": "알 수 없음"
+      }
+    },
+    "toasts": {
+      "filled": "{count}개의 환율을 추가했습니다. 이력이 이제 {start}부터 시작합니다",
+      "partial": "{count}개의 환율을 저장했습니다. 이력은 이제 {start}부터 시작합니다. 가져올 빈 구간이 {windows}개 남았습니다. 계속하려면 다시 누르세요.",
+      "moreToFetch": "이번에는 저장된 환율이 없습니다. 가져올 빈 구간이 {windows}개 남았습니다. 계속하려면 다시 누르세요.",
+      "noGaps": "{pair}에는 보고서에 필요한 모든 날짜의 일별 환율이 이미 있습니다",
+      "noNewRates": "{pair}에 대해 저장된 새 환율이 없습니다",
+      "unused": "{code}를 사용하는 계좌, 보유 종목, 거래가 없으므로 가져올 환율이 없습니다",
+      "providerFloor": "공급자에 {date} 이전의 {pair} 환율이 없습니다",
+      "failed": "환율 이력을 채우지 못했습니다"
+    }
   }
 }

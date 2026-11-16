@@ -1,4 +1,8 @@
-import type { BalanceForecast, BalanceForecastGap } from '@/types/banking-detail';
+import type {
+  BalanceForecast,
+  BalanceForecastGap,
+  BalanceForecastOverdue,
+} from '@/types/banking-detail';
 
 /**
  * What an account detail view holds after asking for a balance forecast.
@@ -39,10 +43,16 @@ export interface BalanceForecastState {
    * `withheld: false`, a 500 on `GET /accounts/:id/balance-forecast` made
    * `projectedBalanceFrom` fall back to the account's CURRENT balance and print
    * it under "Projected" with no notice -- an outage rendered as a measured
-   * answer. `frontend/CLAUDE.md`: five states stay distinguishable, and failed is
+   * answer. `docs/frontend/api-and-cache.md`: five states stay distinguishable, and failed is
    * one of them.
    */
   unavailable: boolean;
+  /**
+   * The overdue occurrences the drawn points apply on their first projected day
+   * (discussion #1784), so the views can say why that day drops. `null` when
+   * there is nothing to say, including whenever no points are drawn.
+   */
+  overdue: BalanceForecastOverdue | null;
 }
 
 export const EMPTY_BALANCE_FORECAST_STATE: BalanceForecastState = {
@@ -50,6 +60,7 @@ export const EMPTY_BALANCE_FORECAST_STATE: BalanceForecastState = {
   withheld: false,
   gaps: [],
   unavailable: true,
+  overdue: null,
 };
 
 /**
@@ -70,6 +81,7 @@ export function readBalanceForecast(
     withheld,
     gaps: withheld ? (forecast.gaps ?? []) : [],
     unavailable: false,
+    overdue: withheld ? null : (forecast.overdue ?? null),
   };
 }
 

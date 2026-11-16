@@ -39,7 +39,7 @@ export function CategorySubcategoriesTab({
   onSelectChild,
 }: CategorySubcategoriesTabProps) {
   const t = useTranslations('categoryDetail');
-  const { formatCurrency } = useNumberFormat();
+  const { formatCurrency, formatNumber } = useNumberFormat();
 
   const { getRowHandlers } = useLongPress<Category>({
     onClick: (child) => onSelectChild(child.id),
@@ -116,7 +116,7 @@ export function CategorySubcategoriesTab({
                   {share ? formatCurrency(Math.abs(share.total), currencyCode) : '—'}
                 </td>
                 <td className="whitespace-nowrap px-4 py-3 text-right text-sm text-gray-900 dark:text-gray-100">
-                  {share ? share.count.toLocaleString() : '—'}
+                  {share ? formatNumber(share.count, 0) : '—'}
                 </td>
                 <td className="px-4 py-3 text-right">
                   <ChevronRightIcon

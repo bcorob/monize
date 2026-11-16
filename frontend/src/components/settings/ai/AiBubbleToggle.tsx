@@ -10,6 +10,13 @@ import { getErrorMessage } from '@/lib/errors';
 
 interface AiBubbleToggleProps {
   disabled?: boolean;
+  /**
+   * Whether this user has an AI provider at all. The bubble has nothing to
+   * answer with without one, and hides itself on the same fact, so the setting
+   * is not offered rather than offered and silently ineffective -- the provider
+   * list below is where that is fixed.
+   */
+  aiConfigured?: boolean;
 }
 
 /**
@@ -17,7 +24,10 @@ interface AiBubbleToggleProps {
  * same `aiBubbleEnabled` preference from the store, so flipping this switch
  * shows/hides it everywhere immediately (optimistic), reverting on save error.
  */
-export function AiBubbleToggle({ disabled = false }: AiBubbleToggleProps) {
+export function AiBubbleToggle({
+  disabled = false,
+  aiConfigured = false,
+}: AiBubbleToggleProps) {
   const t = useTranslations('settings.aiSettings.bubble');
   const preferences = usePreferencesStore((s) => s.preferences);
   const updatePreferencesStore = usePreferencesStore((s) => s.updatePreferences);
@@ -43,6 +53,8 @@ export function AiBubbleToggle({ disabled = false }: AiBubbleToggleProps) {
       setSaving(false);
     }
   };
+
+  if (!aiConfigured) return null;
 
   return (
     <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-700/50 rounded-lg p-6 mb-6">

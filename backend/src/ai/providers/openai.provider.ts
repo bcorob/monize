@@ -9,6 +9,8 @@ import {
   AiToolStreamChunk,
   AiMessage,
   AiContentBlock,
+  AiWebSearchOptions,
+  AiWebSearchResponse,
   ModelVerificationResult,
 } from "./ai-provider.interface";
 import {
@@ -16,24 +18,38 @@ import {
   isContentBlocks,
   unsupportedAttachmentNote,
 } from "./content-blocks.util";
-import { longRunningFetch } from "./long-running-fetch";
+import { providerFetch } from "./long-running-fetch";
+import { unverifiedModelReason } from "./model-verification.util";
 import { toolsField } from "./tools-field.util";
+import { serverToolsField } from "./web-search-tool.util";
 
 export class OpenAiProvider implements AiProvider {
   readonly name: string = "openai";
   readonly supportsStreaming = true;
   readonly supportsToolUse = true;
+  readonly supportsWebSearch: boolean = true;
 
   protected readonly client: OpenAI;
   protected readonly modelId: string;
 
-  constructor(apiKey: string, model?: string, baseUrl?: string) {
+  constructor(
+    apiKey: string,
+    model?: string,
+    baseUrl?: string,
+    /**
+     * The fetch the SDK sends through. It carries the egress policy (which
+     * addresses the request may reach) and never follows a redirect; the
+     * factory passes the one the config's owner is entitled to, and the
+     * default is the strictest.
+     */
+    fetchImpl: typeof fetch = providerFetch("public-only"),
+  ) {
     this.client = new OpenAI({
       apiKey,
       ...(baseUrl && { baseURL: baseUrl }),
       // Inject our long-running fetch wrapper so SDK calls inherit the
       // disabled bodyTimeout/headersTimeout. See long-running-fetch.ts.
-      fetch: longRunningFetch,
+      fetch: fetchImpl,
     });
     this.modelId = model || "gpt-4o";
   }
@@ -156,6 +172,100 @@ export class OpenAiProvider implements AiProvider {
     };
   }
 
+  /**
+   * One tool-free completion with OpenAI's hosted web search, through the
+   * Responses API (chat.completions has no server-side search). The tool type
+   * has moved once already (`web_search_preview` -> `web_search`), so a 400
+   * rejecting the current type is retried with the older one; if the model
+   * takes neither, the request degrades to a plain JSON completion with
+   * `searched: false` rather than failing the caller.
+   *
+   * OpenAI has no `max_uses`; `search.maxUses` is passed as an instruction.
+   */
+  async completeWithWebSearch(
+    request: AiCompletionRequest,
+    search: AiWebSearchOptions,
+  ): Promise<AiWebSearchResponse> {
+    const input: OpenAI.Responses.ResponseInput = request.messages
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .map((m) => ({
+        role: m.role as "user" | "assistant",
+        content: contentToPlainText(m.content),
+      }));
+    const instructions = [
+      request.systemPrompt,
+      `Use the web search tool at most ${search.maxUses} times.`,
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+
+    const send = (toolType: "web_search" | "web_search_preview") =>
+      this.client.responses.create({
+        model: this.modelId,
+        instructions,
+        input,
+        max_output_tokens: request.maxTokens || 1024,
+        ...serverToolsField<OpenAI.Responses.Tool>(
+          toolType === "web_search"
+            ? {
+                type: "web_search",
+                ...(search.allowedDomains && search.allowedDomains.length > 0
+                  ? { filters: { allowed_domains: search.allowedDomains } }
+                  : {}),
+              }
+            : { type: "web_search_preview" },
+        ),
+        ...(request.temperature !== undefined && {
+          temperature: request.temperature,
+        }),
+        ...(request.responseFormat === "json" && {
+          text: { format: { type: "json_object" as const } },
+        }),
+      });
+
+    let response: OpenAI.Responses.Response;
+    try {
+      response = await send("web_search");
+    } catch (error) {
+      if (!isToolTypeRejection(error)) {
+        throw error;
+      }
+      try {
+        response = await send("web_search_preview");
+      } catch (retryError) {
+        if (!isToolTypeRejection(retryError)) {
+          throw retryError;
+        }
+        const plain = await this.complete({
+          ...request,
+          responseFormat: "json",
+        });
+        return { ...plain, searched: false, searchCount: 0 };
+      }
+    }
+
+    // Same rule as AnthropicProvider.hasWebSearchResults: a search that ran
+    // and failed is not a search that answered. Counting it would report
+    // `searched: true` for an answer that came from model memory, and the
+    // payee lookup reads that as `ai-web-search` -- the one source it trusts
+    // with an address and a phone number at any confidence.
+    const searchCount = response.output.filter(
+      (item) => item.type === "web_search_call" && item.status === "completed",
+    ).length;
+
+    return {
+      content: response.output_text || "",
+      usage: {
+        inputTokens: response.usage?.input_tokens || 0,
+        outputTokens: response.usage?.output_tokens || 0,
+      },
+      model: response.model,
+      provider: this.name,
+      searched: searchCount > 0,
+      searchCount,
+    };
+  }
+
   async *stream(request: AiCompletionRequest): AsyncIterable<AiStreamChunk> {
     const messages = this.toSimpleMessages(
       request.messages,
@@ -220,7 +330,7 @@ export class OpenAiProvider implements AiProvider {
           tc.type === "function",
       )
       .map((tc) => {
-        let input: Record<string, unknown> = {};
+        let input: Record<string, unknown>;
         try {
           input = JSON.parse(tc.function.arguments) as Record<string, unknown>;
         } catch {
@@ -327,7 +437,7 @@ export class OpenAiProvider implements AiProvider {
     }
 
     const toolCalls = Array.from(toolBuffers.values()).map((buf) => {
-      let input: Record<string, unknown> = {};
+      let input: Record<string, unknown>;
       try {
         input = buf.argsBuffer
           ? (JSON.parse(buf.argsBuffer) as Record<string, unknown>)
@@ -380,7 +490,6 @@ export class OpenAiProvider implements AiProvider {
       return { ok: true, model: this.modelId };
     } catch (error) {
       const status = (error as { status?: number })?.status;
-      const raw = error instanceof Error ? error.message : String(error);
       if (status === 404) {
         return {
           ok: false,
@@ -398,10 +507,22 @@ export class OpenAiProvider implements AiProvider {
       return {
         ok: false,
         model: this.modelId,
-        reason: `Could not verify model: ${raw}`,
+        reason: unverifiedModelReason(this.name, this.modelId, error, status),
       };
     } finally {
       clearTimeout(timeout);
     }
   }
+}
+
+/**
+ * A 400 whose message names the search tool type is the model declining the
+ * tool, not the request; anything else (auth, rate limit, a bad model id) is
+ * rethrown as-is.
+ */
+function isToolTypeRejection(error: unknown): boolean {
+  const status = (error as { status?: unknown })?.status;
+  if (status !== 400) return false;
+  const message = error instanceof Error ? error.message : String(error);
+  return /web_search/.test(message);
 }

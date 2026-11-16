@@ -55,12 +55,15 @@ vi.mock('@/lib/pdf-export', () => ({
 vi.mock('@/hooks/useChartDateFormat', () => ({
   useChartDateFormat: () => (d: Date) => d.toISOString().slice(0, 10),
 }));
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatSignedPercent: (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`,
-  }),
-}));
-vi.mock('@/lib/utils', async (importActual) => ({
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatSignedPercent: (n: number) => `${n >= 0 ? '+' : ''}${n.toFixed(1)}%`,
+    }),
+  };
+});vi.mock('@/lib/utils', async (importActual) => ({
   ...(await importActual<typeof import('@/lib/utils')>()),
   parseLocalDate: (d: string) => new Date(d + 'T00:00:00'),
 }));
@@ -289,7 +292,7 @@ describe('SecurityComparisonChart', () => {
   /**
    * `connectNulls` draws a straight segment through the gap, indistinguishable
    * from measured data -- and a tooltip saying "unknown" under the cursor does
-   * not undo it (`frontend/CLAUDE.md`, `docs/time-series-contract.md` rule 3).
+   * not undo it (`docs/frontend/financial-figures.md`, `docs/time-series-contract.md` rule 3).
    */
   it('never bridges a gap in a line', async () => {
     mockGetPerformanceComparison.mockResolvedValue(
@@ -469,5 +472,55 @@ describe('SecurityComparisonChart', () => {
       { color: expect.stringMatching(/^#/), label: 'AAA - AAA Inc' },
       { color: expect.stringMatching(/^#/), label: 'S&P 500 (index)' },
     ]);
+  });
+
+  it('renders the default comparison subtitle when none is supplied', async () => {
+    mockGetPerformanceComparison.mockResolvedValue(
+      comparison({
+        series: [securityRef('s1', 'AAA')],
+        points: [{ date: '2024-01-01', values: { 'sec:s1': 0 } }],
+      }),
+    );
+    await renderChart();
+    await waitFor(() =>
+      expect(screen.getByText(/each selected instrument/i)).toBeInTheDocument(),
+    );
+  });
+
+  it('renders a supplied subtitle and uses it as the PDF description', async () => {
+    mockExportToPdf.mockResolvedValue(undefined);
+    mockGetPerformanceComparison.mockResolvedValue(
+      comparison({
+        series: [securityRef('s1', 'AAA')],
+        points: [{ date: '2024-01-01', values: { 'sec:s1': 0 } }],
+      }),
+    );
+    const ref: { current: SecurityComparisonChartHandle | null } = { current: null };
+    await act(async () => {
+      render(
+        <SecurityComparisonChart
+          securityIds={['s1']}
+          indexCodes={[]}
+          startDate="2024-01-01"
+          endDate="2024-12-31"
+          subtitle="Whole portfolio over the selected period."
+          exportRef={ref}
+        />,
+      );
+    });
+    await waitFor(() => expect(screen.getAllByTestId('line')).toHaveLength(1));
+
+    // Shown above the chart, and it replaces the "selected instrument" copy.
+    expect(
+      screen.getByText('Whole portfolio over the selected period.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/each selected instrument/i)).not.toBeInTheDocument();
+
+    await act(async () => {
+      await ref.current!.exportPdf();
+    });
+    expect(mockExportToPdf.mock.calls[0][0].description).toBe(
+      'Whole portfolio over the selected period.',
+    );
   });
 });

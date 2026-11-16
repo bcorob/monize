@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@/test/render';
+import { render, screen, fireEvent, within } from '@/test/render';
 import { TagList } from './TagList';
 import { Tag } from '@/types/tag';
 import { useDensityStore } from '@/store/densityStore';
@@ -44,13 +44,26 @@ describe('TagList', () => {
     expect(screen.getByText('Actions')).toBeInTheDocument();
   });
 
-  it('shows empty state when no tags', () => {
+  it('shows the first-run empty state, with its create action, when there are no tags', () => {
+    const onCreate = vi.fn();
     render(
-      <TagList tags={[]} onEdit={onEdit} onDelete={onDelete} />,
+      <TagList tags={[]} onEdit={onEdit} onDelete={onDelete} onCreate={onCreate} />,
+    );
+
+    expect(screen.getByRole('heading', { name: 'No tags yet' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Create Your First Tag' }));
+    expect(onCreate).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  });
+
+  it('shows the no-match empty state when the search hides every tag', () => {
+    render(
+      <TagList tags={[]} onEdit={onEdit} onDelete={onDelete} isFiltered onCreate={vi.fn()} />,
     );
 
     expect(screen.getByText('No tags found')).toBeInTheDocument();
     expect(screen.getByText('No tags match your current search.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create Your First Tag' })).not.toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
   });
 
@@ -85,6 +98,23 @@ describe('TagList', () => {
     expect(screen.getByText('15')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
     expect(screen.getByText('42')).toBeInTheDocument();
+  });
+
+  it('keeps the Transactions column on every width, phones included', () => {
+    // The tags list has no phone card: the maintainer asked for the count
+    // column at every width instead of a wrapped row. So neither the header
+    // nor the cell may carry a responsive `hidden`, where Icon still does.
+    const { container } = render(
+      <TagList tags={mockTags} transactionCounts={{ 'tag-1': 5 }} onEdit={vi.fn()} onDelete={vi.fn()} />,
+    );
+    const headers = Array.from(container.querySelectorAll('thead th'));
+    const countHeader = headers.find((th) => th.textContent === 'Transactions')!;
+    const iconHeader = headers.find((th) => th.textContent === 'Icon')!;
+    expect(countHeader.className).not.toMatch(/\bhidden\b/);
+    expect(iconHeader.className).toMatch(/\bhidden\b/);
+
+    const countCell = Array.from(container.querySelectorAll('tbody td')).find((td) => td.textContent === '5')!;
+    expect(countCell.className).not.toMatch(/\bhidden\b/);
   });
 
   it('shows 0 transaction count when transactionCounts not provided', () => {
@@ -227,6 +257,62 @@ describe('TagList', () => {
 
     fireEvent.click(screen.getByTitle('Toggle row density'));
     expect(useDensityStore.getState().densities.tags).toBe('compact');
+  });
+
+  it('announces the sort on a th aria-sort holding a keyboard button, Transactions included', () => {
+    const onSort = vi.fn();
+    render(
+      <TagList
+        tags={mockTags}
+        transactionCounts={{ 'tag-1': 3 }}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        sortField="count"
+        sortDirection="desc"
+        onSort={onSort}
+      />,
+    );
+
+    const countHeader = screen.getByRole('columnheader', { name: /Transactions/ });
+    expect(countHeader).toHaveAttribute('aria-sort', 'descending');
+    expect(screen.getByRole('columnheader', { name: /Name/ })).toHaveAttribute('aria-sort', 'none');
+    expect(screen.getByRole('columnheader', { name: 'Icon' })).not.toHaveAttribute('aria-sort');
+    fireEvent.click(within(countHeader).getByRole('button'));
+    expect(onSort).toHaveBeenCalledWith('count');
+  });
+
+  it('sorts by transaction count', () => {
+    render(
+      <TagList
+        tags={mockTags}
+        transactionCounts={{ 'tag-1': 3, 'tag-2': 40, 'tag-3': 1 }}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        sortField="count"
+        sortDirection="desc"
+      />,
+    );
+
+    const rows = screen.getAllByRole('row');
+    expect(rows[1]).toHaveTextContent('Urgent');
+    expect(rows[2]).toHaveTextContent('Groceries');
+    expect(rows[3]).toHaveTextContent('Bills');
+  });
+
+  it('falls back to the name order for a remembered sort field no header offers', () => {
+    render(
+      <TagList
+        tags={mockTags}
+        onEdit={onEdit}
+        onDelete={onDelete}
+        sortField={'createdAt' as never}
+        sortDirection="asc"
+      />,
+    );
+
+    expect(screen.getByRole('columnheader', { name: /Name/ })).toHaveAttribute('aria-sort', 'ascending');
+    const rows = screen.getAllByRole('row');
+    expect(rows[1]).toHaveTextContent('Bills');
   });
 
   it('calls onSort when sort is controlled', () => {

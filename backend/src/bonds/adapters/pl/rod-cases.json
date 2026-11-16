@@ -1,0 +1,157 @@
+{
+  "manifest": "rod1038",
+  "cases": [
+    {
+      "id": "ROD-N1",
+      "description": "ROD1038 N1 = 100 (1 + r1) = 105.60 (base of period 2)",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2027-10-20",
+      "announcedRates": {
+        "2": "0.0450",
+        "3": "0.0460",
+        "4": "0.0440",
+        "5": "0.0420",
+        "6": "0.0400",
+        "7": "0.0390",
+        "8": "0.0410",
+        "9": "0.0430",
+        "10": "0.0450",
+        "11": "0.0470",
+        "12": "0.0480"
+      },
+      "expect": {
+        "principal": "105.60"
+      }
+    },
+    {
+      "id": "ROD-E1",
+      "description": "ROD1038 early, period 1, a = 364, ACT = 365: 102.5847 (above floor, fee 3.00)",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2027-10-14",
+      "expect": {
+        "earlyRedemptionValue": "102.58"
+      }
+    },
+    {
+      "id": "ROD-E2",
+      "description": "ROD1038 early, period 1, a = 10, ACT = 365: 97.1534 -> floor 100.00 (below floor -> 100.00)",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2026-10-25",
+      "expect": {
+        "earlyRedemptionValue": "100.00"
+      }
+    },
+    {
+      "id": "ROD-E3",
+      "description": "ROD1038 early, period 3, a = 151, ACT = 365: 109.4520 (r2, r3 hypothetical)",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2029-03-15",
+      "announcedRates": {
+        "2": "0.0450",
+        "3": "0.0460",
+        "4": "0.0440",
+        "5": "0.0420",
+        "6": "0.0400",
+        "7": "0.0390",
+        "8": "0.0410",
+        "9": "0.0430",
+        "10": "0.0450",
+        "11": "0.0470",
+        "12": "0.0480"
+      },
+      "expect": {
+        "earlyRedemptionValue": "109.45"
+      }
+    },
+    {
+      "id": "ROD-Q",
+      "description": "ROD1038 early, period 1, a = 364, ACT = 365: 102.5847 lot of 7",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 7
+      },
+      "asOf": "2027-10-14",
+      "expect": {
+        "earlyRedemptionValue": "718.06",
+        "quantity": 7
+      }
+    },
+    {
+      "id": "ROD-W",
+      "description": "ROD1038 maturity value, r2..r12 hypothetical: 168.92",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2026-10-20",
+      "announcedRates": {
+        "2": "0.0450",
+        "3": "0.0460",
+        "4": "0.0440",
+        "5": "0.0420",
+        "6": "0.0400",
+        "7": "0.0390",
+        "8": "0.0410",
+        "9": "0.0430",
+        "10": "0.0450",
+        "11": "0.0470",
+        "12": "0.0480"
+      },
+      "expect": {
+        "maturityValueKnown": "168.92"
+      }
+    },
+    {
+      "id": "ROD-A1",
+      "description": "ROD1038 period 1, a = 364, ACT = 365: accrued 5.58, rate 5.60% from the terms",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2027-10-14",
+      "expect": {
+        "accruedInterest": "5.58",
+        "grossValue": "105.58",
+        "currentPeriod": {
+          "index": 1,
+          "annualRate": "0.0560",
+          "rateSource": "TERMS"
+        }
+      }
+    },
+    {
+      "id": "ROD-A3",
+      "description": "ROD1038 period 3, a = 151, ACT = 365 on the base 109.4520 (r2, r3 hypothetical): accrued 12.45",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2029-03-15",
+      "announcedRates": {
+        "2": "0.0450",
+        "3": "0.0460"
+      },
+      "expect": {
+        "accruedInterest": "12.45",
+        "grossValue": "112.45",
+        "currentPeriod": {
+          "index": 3,
+          "annualRate": "0.0460",
+          "rateSource": "ANNOUNCED"
+        }
+      }
+    }
+  ]
+}

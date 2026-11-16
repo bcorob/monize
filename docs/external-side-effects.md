@@ -61,6 +61,36 @@ the other two.
 Three providers behind one interface (`save`/`load`/`delete`), selected by
 deployment.
 
+**An attachment has one transaction, warranty, shared-group or shared-entry
+parent** (INV-WTY-003, SE-011): `chk_attachment_one_parent` requires exactly one
+non-null `transaction_id`, `warranty_id`, `shared_group_id` or `shared_entry_id`, and `AttachmentsService.create`
+and `findAllFor` take an `AttachmentParent` (`backend/src/attachments/attachment-parent.ts`)
+rather than an id. Private parents use the owner's `user_id`; shared parents
+require current group access, including when the reader uploaded the file.
+Everything below -- the upload intent, the tombstone trigger, the orphan
+sweep, the provider relocation -- is keyed by attachment id and knows nothing
+about the parent. The per-parent cap is counted under the parent's row lock
+(`lockTransactionRow` or `lockWarrantyRow`), or the shared group's advisory
+transaction lock (`lockSharedGroup`), and both halves of a
+scan pair carry the same parent and `document_kind` (a kind change,
+`AttachmentsService.updateDocumentKind`, writes both in one statement). One
+parent is not one reader: a transaction's attachments are its own rows plus the
+documents of every warranty linked to it, reached through
+`warranties.transaction_id` by the fragment in `attachment-parent.ts`
+(INV-WTY-003); nothing below depends on it, because none of it reads the parent.
+
+**One upload can write two objects.** A scanned document is stored as a pair --
+the enhanced image the user sees and the original photo it came from
+(`docs/specs/document-scanner.md`) -- written by one `create` call in one
+transaction. That changes the quantity below, not the mechanism: each object
+gets its own upload intent committed before any byte is written, each intent is
+cleared inside the metadata transaction, and the compensation path deletes
+whichever objects were actually written rather than assuming both were. The
+failure windows described in this section are per object and are otherwise
+unchanged. Deletion is likewise per object: the metadata `DELETE` names the
+original as well as the visible row, so both storage keys come back and both are
+swept after the commit.
+
 **Database provider.** `save` opens `withScopedDb`, which joins the ambient
 transaction, so bytes and metadata are one PostgreSQL transaction. Genuinely
 atomic, genuinely rollback-safe. The FK cascade removes the blob when the
@@ -102,57 +132,170 @@ without bytes. The second is the more visible failure, because a user sees the
 attachment and cannot open it, and INV-ATTACHMENT-001's "no metadata without
 bytes" half is what it breaches.
 
+### Changing the provider is a migration, not a rebind
+
+`ATTACHMENT_STORAGE_PROVIDER` says where the NEXT object goes.
+`transaction_attachments.storage_provider` says where an existing one already is.
+Those two were assumed to be the same value, and the download asked the bound
+provider for the row's key -- so the boot after an operator changed the setting
+answered 404 for every attachment uploaded before it, with the row, the filename
+and the size all still listed. Nothing was lost; nothing said so either, and
+nothing moved the bytes.
+
+Two mechanisms, both in `backend/src/attachments/storage/`:
+
+- **Reads resolve per row.** `AttachmentStorageRegistry.require(row.storage_provider)`
+  answers with the backend that row names, and refuses with a
+  `ServiceUnavailableException` **naming the provider** when this deployment
+  cannot address it. That refusal is deliberately not the `NotFoundException` a
+  missing object gets: nothing is lost, one setting is absent, and the repairs
+  differ. `null` from `resolve` therefore means "unconfigured backend", never "no
+  bytes". The distinction reaches the reader: `isStoreUnreachable` in
+  `frontend/src/lib/attachments.ts` recognises the 503 and the preview says the
+  file is intact rather than offering a download that fails identically
+  (`docs/frontend/ui-conventions.md`).
+- **`AttachmentStorageMigrator` moves them**, on `onApplicationBootstrap` (not
+  awaited -- Nest runs the hook inside `app.listen()`) and hourly at :50 until
+  nothing is outside the active backend. Any pair of backends, either direction,
+  no operator action. It assumes both are configured at once, because the source
+  is read through its own provider.
+
+Per attachment, one transaction, in this order: `SELECT ... FOR UPDATE` and
+re-read what the row says (gone, or already moved, ends here -- before any byte is
+written); read the source bytes; check them against the row's own `byte_size` and
+`sha256`; `save` to the destination; **read the copy back** and check it the same
+way; flip `storage_provider`; record the source object as unreferenced; commit.
+The source object is deleted only after that commit, through
+`AttachmentOrphanSweeper.sweepKey(key, provider)`.
+
+Four things make that safe to interrupt, and each is a mechanism rather than an
+assurance:
+
+- The destination write takes an **upload intent** first, exactly as `create`
+  does, so a crash before the commit leaves bytes the sweep can enumerate and a
+  row still naming the copy that is intact. The intent is cleared inside the flip,
+  fenced on `swept_at`, so a committed row naming swept bytes stays unreachable
+  (audit RV4-002).
+- The source is retired **inside** the flip: a tombstone for `local`/`s3`, or the
+  blob `DELETE` itself for `database`, which is transactional. The post-commit
+  sweep is promptness; the tombstone is the guarantee.
+- The read-back is what the source deletion rests on. A resolved `save` is not
+  evidence the bytes are readable -- a `PutObject` 200 from a proxy, a cached
+  filesystem write -- and this is a move, so the claim has to be checked.
+- The sweeper's claim now also refuses any key a live `transaction_attachments`
+  row still points at (`NOT_REFERENCED_SQL`). Without it, an intent left behind by
+  a crashed relocation would have the sweep delete a migrated attachment's only
+  copy once the lease expired, and nothing else in the claim could tell the
+  difference -- by shape there is none.
+
+One replica per batch holds `FetchSyncService.withLease("attachment-relocation")`,
+which is a cost control only: correctness is the per-row lock, so an expired lease
+costs duplicated reads and writes of identical bytes and never a row in the wrong
+state. `ATTACHMENT_STORAGE_MIGRATE_ON_SWITCH=false` leaves everything where it
+is, and says so in the log once rather than silently.
+
+**Relay attachments are deliberately not in this section.** A file uploaded
+with a reverse-relay chat prompt goes to `ai_relay_attachments` and its
+cascading `ai_relay_attachment_blobs` row, not through
+`ATTACHMENT_STORAGE_PROVIDER` -- the provider's `database` implementation writes
+`attachment_blobs`, whose primary key is a foreign key to
+`transaction_attachments` and whose policy reads the owner from that row, so a
+relay attachment (which has no parent) cannot be stored there at all, and
+branching on the bound provider's name would put a deployment-shaped decision
+inside the relay. The consequence is that this one path has no external side
+effect: bytes and metadata commit or roll back together on every provider, and
+the five-minute relay sweep reclaims both with one `DELETE` -- none of the
+commit-failure windows above apply. The cost is that a deployment which keeps
+attachment bytes out of PostgreSQL still holds a few megabytes of chat scratch
+there for up to twenty minutes.
+
 ## 3. Backups
 
-`AutoBackupService` builds the whole payload in memory and writes it in one call
-straight to the final filename:
+`AutoBackupService` performs no storage operation itself. Every one goes through
+the store selected by `BACKUP_STORAGE_PROVIDER`
+(`backend/src/backup/storage/backup-storage.interface.ts`): `local`, a container
+directory, or `s3`, an S3-compatible bucket. The seam offers `publish` and no
+`write`, because the name is the invariant -- **an artifact is published whole or
+not at all** (INV-BACKUP-006) -- and a caller cannot ask for a non-atomic write
+when no operation offers one.
 
-```typescript
-await fs.writeFile(filepath, payload);
-```
+Each target satisfies it by its own mechanism, and both are named rather than
+asserted. `local` writes through `writeFileAtomic`
+(`backend/src/backup/atomic-file.ts`): a temp name, `fsync`, a size check, the
+`rename`, then an `fsync` of the directory. `rename` within a filesystem is
+atomic, so a process killed mid-write or an `ENOSPC` leaves a temp file that the
+next run's `sweepIncomplete` removes, never a truncated file under the final
+name. `s3` sends one `PutObject` with a known `Content-Length` and a declared
+`ChecksumSHA256`, which S3 applies to the key only on a complete,
+checksum-matching upload -- so the destination rather than this process is what
+verifies the bytes arrived, and an interrupted upload leaves no object to sweep.
+Promotion to the weekly and monthly tiers is `copyFileAtomic` with the same size
+check, or a server-side `CopyObject`, likewise all-or-nothing at the destination
+key.
 
-There is no temp file, no `fsync`, no rename, no read-back, and no checksum
-computed or stored anywhere. `lastBackupStatus` is set to `"success"`
-immediately afterwards, with nothing between the write and that claim.
+`lastBackupStatus` records what the export found -- `success` or `partial` --
+and the same verdict travels inside the document (`completeness` in the
+envelope, `backup-format.ts`), so restore refuses an artifact whose
+`completeness.complete` is false. That is INV-BACKUP-001, and it closes the
+direct-write breach of EXT-002 this section used to describe.
 
-Three consequences follow, and they are separate problems:
+What remains is narrower, and it splits by encryption. An encrypted `.mzbe`
+artifact is authenticated frame by frame (`backup-envelope.ts`): truncation,
+reordering and tampering are rejected on open. A plaintext `.json.gz` carries no
+content hash of its own; truncation and random corruption are caught by the gzip
+trailer and `JSON.parse` on restore, a deliberate alteration is not. That gap is
+recorded in section 8, and it is one more reason a plaintext artifact never
+leaves the machine (INV-BACKUP-002).
 
-- A process killed mid-write, or an `ENOSPC`, leaves a **truncated file under the
-  final, expected name**. Nothing distinguishes it from a complete one, because
-  nothing recorded what complete looks like. This breaches EXT-002.
-- Retention promotes the daily file to weekly and monthly with `copyFileSync`,
-  so a truncated daily becomes a truncated weekly and monthly.
-- Restore cannot detect it either: `validateBackupFormat` checks only that
-  `data` is an object, that `version` equals the hardcoded `BACKUP_VERSION`, and
-  that `exportedAt` is present. There is no content hash to compare against,
-  because none was ever written.
+**Per-user namespacing is settled, and is the same tree on both targets:**
+`shardedSegments(userId)` builds `<base>/<ab>/<cd>/<userId>/` as a directory on
+`local` and as a key prefix on `s3`, because automatic backup filenames carry
+only a tier and a date. A flat folder gave every user the same name for the same
+day, so whoever's cron ran last overwrote the rest and one user's retention pass
+deleted another's files. Files written to the old flat layout before the fix are
+listed as `legacy` -- a `local`-only concept, since the `s3` store has never had a
+layout without an owner in the key -- and are never served, never counted against
+a user's retention and never deleted by any user's pass: a flat name carries no
+owner, so sweeping it could take another user's only pre-upgrade recovery point
+(A26-M07). `enforceRetention` skips them and logs how many remain;
+`LocalBackupStorageTarget.remove` refuses one. They are the operator's to remove. The folder browse and
+validate endpoints are admin-gated at the controller, and under an `s3` store
+they answer a typed refusal rather than walking a filesystem that has nothing to
+do with where the bytes are.
 
-The atomic-write fix is small and standard -- write to a temp name, verify the
-byte count, `fsync`, `rename` -- and `rename` within a filesystem is atomic, so
-a crash leaves either the old file or the new one.
+**The store and the off-machine destination must be two places**
+(INV-BACKUP-007). The store's variables are `BACKUP_STORE_S3_*` and the
+off-machine destination's are `BACKUP_S3_*`; a deployment whose two resolve to
+one bucket and overlapping prefix is refused at the boot. This is the one place
+in this document where two external side effects have to be told apart rather
+than ordered: the off-machine copy exists to survive the loss of the store, so
+one bucket holding both is a 3-2-1 arrangement that is actually a 1, and every
+ordering rule below would still hold while the arrangement protected nothing.
 
-**Per-user namespacing is already correct on `main`,** and worth recording as
-settled: `userFolderPath` uses `shardedSegments(userId)` to build
-`<base>/<ab>/<cd>/<userId>/`, because automatic backup filenames carry only a
-tier and a date. A flat folder gave every user the same name for the same day,
-so whoever's cron ran last overwrote the rest and one user's retention pass
-deleted another's files. `enforceRetention` still sweeps the old flat layout for
-files written before the fix. The folder browse and validate endpoints are
-admin-gated at the controller.
+**Switching stores is forward-only.** Nothing is migrated; the previous recovery
+points stay where they were, invisible to the new store's listing. The
+capability report carries the count of artifacts the current store holds so the
+gap is visible rather than inferred, and the operator keeps the old volume or
+bucket until the new store has a full retention window.
 
 **Encryption.** A support backup is unconditionally encrypted -- the DTO's
 `password` is required, and there is no code path returning an unencrypted
 support buffer, because a support backup exists in order to leave the user's
-machine. An automatic backup is encrypted when a usable password exists; when a
-stored password cannot be decrypted (a rotated key) the backup is **refused**
-rather than silently written in clear. Refusing is the right failure: it is
+machine. An automatic backup is encrypted when a usable backup key exists (a
+data key the server holds, wrapped under the user's password, never the password
+itself; `docs/specs/backup-envelope-key-wrapping.md`); when a stored key cannot
+be decrypted (a rotated `ENCRYPTION_KEY`) the backup is **refused** rather than
+silently written in clear. Refusing is the right failure: it is
 visible, and it does not downgrade.
 
-**The writability probe** names its file with `Date.now()`, so two users or two
-replicas probing the same folder in the same millisecond collide, and the
-`unlink` sits inside the `try` that decides the verdict -- so "I could write but
-could not clean up" is reported as "not writable". The probe's answer is whether
-the write succeeded; a failed cleanup is a log line.
+**The writability probe** on the `local` store names its file with
+`randomUUID()`, so two users or two replicas probing the same folder in the same
+millisecond cannot collide on the name, and the `unlink` sits outside the `try`
+that decides the verdict: the write is the answer, and a probe file that could
+not be removed is a warning in the log, not a "not writable" that would
+contradict the write that just succeeded. The `s3` store probes with a
+`HeadBucket` instead -- it says the bucket exists and this credential reaches it
+without writing an object into somebody's recovery points to find out.
 
 **Restore** is the strongest workflow here. The whole thing -- delete existing
 data, insert backup data, fix deferred FKs -- runs inside
@@ -164,25 +307,150 @@ into a different account cannot collide with that account's rows, and every tabl
 and column is checked against an allowlist. What it lacks is integrity
 verification of the payload, per EXT-002 above.
 
+Restore is also the **third writer of the object-intent protocol**, beside
+`AttachmentsService.create` and the storage migrator. For `local` and `s3`, staging
+writes the carried bytes before the restore transaction, so each staged key takes
+an upload intent first (`recordObjectIntent`, lease
+`RESTORE_STAGING_INTENT_LEASE_MS`), the transaction clears them all with the
+fenced `clearObjectIntent`, and a discard drops an intent only after its delete
+succeeded. A process death between staging and commit therefore leaves
+tombstones the orphan sweeper reclaims once the leases expire, where it used to
+leave bytes nothing could enumerate (A26-S06-03).
+`docs/backup-restore-contract.md` section 4 has the protocol.
+
+### Off-machine copies
+
+A completed automatic backup is also copied to the user's off-machine
+destinations -- an S3 bucket, an emailed attachment, or both
+(`docs/specs/backup-off-machine.md`, INV-BACKUP-002..005). It is the first backup
+egress path in the codebase, and every rule this document argues for is visible
+in it:
+
+- **The local artifact is durable and recorded first, and the copy happens
+  after, outside the transaction.** `AutoBackupService.dispatchOffsiteCopy` runs
+  on the tail of a run, after `applyBackupOutcome`, and only for an artifact
+  whose report is complete -- the push-after-commit shape of section 4a. The copy
+  never fails the backup: `dispatchAfterBackup` does not throw and the call site
+  catches anyway.
+- **Each (user, destination, key) copy is claimed before it is attempted.**
+  Every replica fires the backup cron and the hourly retry sweep, so the durable
+  row is moved `pending`/`failed` -> `uploading` by one conditional
+  `UPDATE ... RETURNING`; exactly one caller gets the row back. The claim, the
+  external call and the outcome are three separate short steps, with no
+  transaction open across the call.
+- **Verified, then recorded.** An S3 put declares the artifact's SHA-256 so the
+  destination validates it, and the row becomes `uploaded` only when the echoed
+  checksum matches (EXT-002). For email, `sendMail` resolving is the whole of the
+  verification the medium offers, and the row says `uploaded` only after it.
+- **A claim is a lease.** A replica killed mid-upload used to leave the row
+  `uploading` with nothing able to reclaim it -- an effect nobody could verify
+  and nobody would find, which EXT-003 forbids. Each sweep now expires claims
+  older than `OFFSITE_CLAIM_LEASE_MINUTES` (one hour, comfortably above the S3
+  deadline times its attempts) back to `failed` before selecting candidates. The
+  trade is deliberate and asymmetric: a re-attempted S3 put is a
+  digest-reconciled no-op because the key carries the digest, while a re-attempted
+  email can deliver the same encrypted artifact twice. A duplicate copy is the
+  survivable direction against no copy at all.
+- **The application never deletes off-machine.** The uploader constructs no
+  delete and no read command and every completing write is conditional, so
+  retention of the copies is the operator's bucket lifecycle or object-lock
+  policy (INV-BACKUP-004). Nothing here can un-write what it wrote, which is why
+  a taken key holding a different digest is recorded as `conflict` and alerted
+  rather than resolved.
+
 ## 4. Email
 
 `EmailService` is a thin `nodemailer` wrapper. It writes nothing to the
 database. There is no outbox, no queue table, no "sent" ledger anywhere.
 
-Every caller is a cron, and each has a different amount of protection:
+Most callers are crons, and each has a different amount of protection:
 
 | Sender | Duplicate protection |
 | --- | --- |
-| `BillReminderService` | None. It recomputes the window from `nextDueDate`/`reminderDaysBefore` daily; there is no "already reminded for this due date" flag. Sending every day the bill is inside the window is intentional, but a crash-restart or a second replica sends the same reminder twice with nothing able to notice. |
-| `MortgageReminderService` | None -- same shape, no dedup state at all. |
-| `BudgetAlertService` | Partial. It creates the `BudgetAlert` row before sending and dedups candidates against existing rows by `(budgetId, alertType, budgetCategoryId, periodStart)`, so a sequential re-run does not re-notify. But the dedup read and the insert are not one atomic unit and no unique constraint backs them, so two replicas can both pass the check and both insert and send. `isEmailSent` is set after the send, so a crash in between leaves it `false` forever without causing a duplicate. |
+| `BillReminderService` | Full, and the opposite trade from `ProviderOutageAlertService`. A `claimLease(JobClaimType.BillReminder, ...)` excludes the other replicas for the length of an SMTP round trip, and `markDelivered` writes the durable record **after** the send; the next run re-reads it and skips. The key is `buildReminderClaimKey` -- the run's date plus a sha256 digest of which bills the reminder covers -- so a second bill falling due later the same day is still a reminder to send, and the same set is not re-sent tomorrow. The run's date is passed in rather than read per user, because a run spanning local midnight otherwise claims the early users under one key and the rest under another. The contract is **at-least-once**: a process killed after SMTP accepted but before the record committed re-sends next run, which is the right way round for a reminder. |
+| `MortgageReminderService` | The same lease plus delivery record, under `JobClaimType.MortgageReminder`, checked with `wasDelivered` before the send and written with `markDelivered` after it; a lease the send does not use is handed straight back rather than held for its TTL. Its key is fingerprinted on the mortgages and their term-end dates, but the date half is read from the clock inside the key builder rather than passed in from the run, so the midnight split the bill reminder pinned is still reachable here. |
+| `BudgetAlertService`, daily alerts (`0 7 * * *`) | Full, by insert-winner, since migration 140. The in-memory dedup against existing rows by `(budgetId, type, budgetCategoryId, periodStart)` is a check-then-act and never was the arbiter; the unique fingerprint index is, through `NotificationService.create`, which answers `null` for the replica that loses the race so only the winner emails. `isEmailSent` is set after the send, so a crash in between leaves it `false` forever without causing a duplicate. |
+| `BudgetAlertService`, weekly digest (`0 7 * * 1`) | Full, by lease plus delivery record, the bill reminder's shape. The digest is composed from rows the daily alerts already wrote, so nothing is inserted and the fingerprint index has nothing to arbitrate; before this it sent unconditionally, so N replicas sent N copies. `JobClaimService.claimLease` under `JobClaimType.BudgetWeeklyDigest`, keyed by user and the run date read once per run, excludes the other replicas for the length of one SMTP round trip; `wasDelivered` is re-read under the lease and `markDelivered` is written after the send. A failed send releases the lease so the next run retries. **At-least-once**: a crash between SMTP accepting and the record committing re-sends once. |
 | Emergency-access grant | The one deliberate design. See section 5. |
+| `SystemAlertService` | Full, by insert-winner. Each admin's alert row goes through `NotificationService.create`, whose `INSERT ... ON CONFLICT DO NOTHING RETURNING id` is arbitrated for these rows by the partial unique index from migration 170, and the email goes only to rows the INSERT returned -- with the same at-most-once trade as `ProviderOutageAlertService`: a crash between the commit and SMTP loses that email, and the in-app row survives as the durable notice (`docs/specs/system-alerts.md`, INV-ALERT-001). |
+| Self-service email change (`EmailChangeService`) | Request-driven, not a cron, and none needed: nothing is claimed by the send. The pending address and the sha256 of a single-use token commit first, then the link goes to the new address and a notice to the current one, so a link never names a token the database does not hold. A failed send is logged and the request still succeeds; the pending change expires after 24 hours or is replaced (token and all) by the next request. The confirmation (`AuthEmailService.confirmEmailChange`) sends nothing: one conditional `UPDATE ... WHERE email_change_token = $hash AND email_change_token_expiry > now()` applies it, the unique index on `users.email` refuses a lost race as a 409, and refresh tokens are revoked after the commit. Without SMTP the change applies on the password check alone, as registration creates verified accounts when it cannot send. |
 | `ProviderOutageAlertService` | Full, and the opposite trade from the reminders. The notice is claimed with a single conditional `UPDATE ... WHERE state = 'down' AND outage_notified_at IS NULL AND outage_started_at <= now() - 15min AND (last_notified_at IS NULL OR last_notified_at <= now() - 6h) RETURNING ...`, so one replica sends per episode and a flapping provider cannot mail its way around the floor. The claim is taken *before* the send, which makes it **at most once**: a process killed in between loses that alert. Deliberate -- a duplicated monitoring email is the failure mode being designed against, the outage is still in the log and in `provider_health`, and a provider still down when the 6-hour floor elapses becomes notifiable again. |
 
-`BudgetAlertService` is a useful illustration of EXT-001: it accidentally has
-most of what the rule asks for -- durable state written before the effect -- and
-still fails, because the state is not *claimed* atomically. Durable-before-effect
-and atomically-claimed are two requirements, not one.
+`BudgetAlertService` is a useful illustration of EXT-001 both before and after
+its repair: it always had most of what the rule asks for -- durable state written
+before the effect -- and still sent duplicates, because the state was not
+*claimed* atomically. Durable-before-effect and atomically-claimed are two
+requirements, not one, and the unique index is what turned the first into the
+second.
+
+## 4a. Web Push
+
+`WebPushSender` is the only file in `src/` that imports `web-push`, and the one
+place a payload crosses an external push service. It is an external effect in
+the narrowest sense: once Mozilla, Google or Apple has accepted a message, no
+transaction can recall it.
+
+Three rules follow, and all three are the ordering rule rather than new
+mechanism:
+
+1. **The send happens after the commit, and never inside a transaction.**
+   `PushSubscriptionService.sendTest` loads its targets in one short
+   transaction, sends outside any, then records each outcome in its own short
+   transaction. A notification is about something that already happened; it must
+   not be able to roll that thing back.
+2. **The sender never throws.** Every failure is returned as an outcome
+   (`sent` / `unconfigured` / `expired` / `transient`), because the caller of a
+   future producer is a budget recalculation or a backup sweep, and a delivery
+   failure is not that operation's failure. This is the same trade as
+   `SystemAlertService`: the durable notice is the in-app row, and the push is
+   the best-effort copy.
+3. **A dead subscription stops being attempted.** 404 and 410 are the push
+   service saying the subscription is gone, and retire the device immediately
+   (`disabled_reason = GONE`). Everything else -- 401 and 403 included -- is
+   transient, deliberately: an authorization failure usually means this
+   instance's key or clock is wrong rather than that the device went away, and
+   retiring on it would empty every device list in the deployment over one bad
+   configuration. `MAX_CONSECUTIVE_FAILURES` bounds the retry either way
+   (`disabled_reason = FAILING`), so nothing is attempted forever.
+
+There is no outbox and no delivery ledger, which is the same gap email has: a
+crash between the send and the outcome write loses the bookkeeping for that one
+attempt, not the notification. `notification_deliveries` from discussion #1291
+is where that would be closed, and the open question recorded there is whether
+`job_claims` already does the job -- a third idempotency mechanism beside the
+two the codebase has would be a regression, not a feature.
+
+The subscription itself is instance-bound state, not portable user data: see
+`INTENTIONALLY_EXCLUDED_TABLES` and INV-PUSH-005.
+
+## 4b. The web-share stash is the device's, not the server's
+
+The Web Share Target stores the files the OS hands over in a Cache API store on
+the device (`docs/frontend/pwa-push-share.md`). It is in this document
+because it looks like an external side effect and is worth being explicit about
+*not* being one:
+
+- **Nothing on the server is written when a share arrives.** The service worker
+  answers the manifest's POST itself, so on the ordinary path the request never
+  leaves the device. When no worker is controlling, the proxy answers the same
+  POST with a redirect *before* its auth check and without reading the body, so
+  the bytes are not read into the frontend process either, let alone forwarded.
+- **So there is no ordering problem to get right.** The rule this document
+  exists for -- write bytes before the commit, delete them after it -- has
+  nothing to order here: there is no row, no transaction, and no server-side
+  object. The only thing the stash can leak is device storage, and the failure
+  mode is bytes nobody references, which is the survivable side by construction
+  (the bundle index is written last).
+- **What bounds it is expiry and logout, not a reconciliation job.** Bundles are
+  swept by the worker on `activate` and before each new share, and by the app on
+  mount; `authStore.logout` drops the whole store, because a share is one
+  account's document and a browser profile can be shared. INV-SHARE-003 is the
+  invariant; there is no server-side sweeper because there is nothing on the
+  server to sweep.
+
+A share only becomes a side effect this document governs at the moment the user
+presses a destination, and then it is an ordinary attachment upload or an
+ordinary import -- section 2 above, unchanged.
 
 ## 5. Emergency access
 
@@ -199,14 +467,26 @@ That is a compensating decision expressed as a state transition: the durable
 "the grant happened" marker is withheld until an external effect is confirmed,
 and withholding it *is* the retry. Copy this shape.
 
-The reminder path is weaker: `lastReminderSentAt` is written after the send, and
-the once-per-day gate reads it, so a crash between send and save re-permits a
-send later the same day. Combined with every replica firing every cron, a
-duplicate reminder is reachable.
+Step 1 also takes the same `EmergencyAccessGrantNotify` delivery lease as the
+step-1b resume path before it claims the grant, and releases it by token once
+delivery ends, so a replica whose sweep sees the freshly claimed grant cannot
+resume, and re-send, a delivery that is still in progress on the winner.
+
+The reminder path keeps exclusion and the delivery record apart. It takes
+`claimLease(JobClaimType.EmergencyAccessReminder, owner, <server-local day>)` so two
+replicas cannot send at the same moment, then re-reads `last_reminder_sent_at`
+under that lease and skips if today's reminder is already recorded; the record
+is written only after the send succeeds, and a failed send hands the lease back
+without writing it. What remains is the window between the SMTP accept and that
+`UPDATE`: a process killed there leaves no record, so a replica whose sweep
+reaches that owner after the ten-minute lease has expired sends the reminder
+again the same day. A duplicate reminder is the survivable direction against a
+missing one.
 
 Claim consumption itself sends no email, so there is no external-effect question
-there -- but the consumption is a check-then-act with no lock and no conditional
-`WHERE`, which `docs/concurrency-and-idempotency.md` covers.
+there; it is a single conditional `UPDATE ... WHERE claim_token_used_at IS NULL`
+(INV-CLAIM-001), which `docs/concurrency-and-idempotency.md` lists among the
+conditional claims that exist.
 
 ## 6. Providers: AI, prices, FX
 
@@ -218,6 +498,31 @@ refresh converges rather than duplicating. This is EXT-001's second clause
 satisfied exactly, and it is the cheapest form of idempotency available: the
 uniqueness is a property of the data, so no key has to be invented or
 remembered.
+
+**Which provider an FX row came from is part of the row.** Every provider
+question `ExchangeRateService` asks goes through `FxProviderChain`
+(`backend/src/currencies/providers/fx-provider-chain.ts`), which asks the
+adapters in `FX_PROVIDERS` order and hands back each observation with its
+provider's `source` slug; the upserts above write that slug, dated by the
+observation, so a repeated refresh converges on the row the first-configured
+provider answered and a reader can tell one provider's rate from another's.
+Nothing is undone at a provider -- the calls are reads -- and what a failure
+leaves is decided by the chain's two outcomes: a window the carrying providers
+answered with nothing may be remembered as empty for thirty minutes, a window
+a carrying provider never answered never is, because the provider that fell
+silent may hold what the others do not (INV-FX-005).
+
+**No FX provider call inside someone else's transaction.** A rate fetch is an
+HTTP round trip, and inside a caller's open transaction it holds that
+transaction's row locks and pooled connection for the provider's response time,
+while the window it persists commits or rolls back with work it has nothing to
+do with. `InvestmentTransactionsService.previewCreateInvestmentTransaction`
+therefore reads only stored rates (`getRateForDate(..., { fetchMissing: false })`)
+when it runs under an ambient scoped manager (`getActiveScopedManager()`), which
+is how the email-receipt pipeline builds a trade card while it holds the
+receipt's row lock: a missing rate is refused by name and the card waits for the
+rate cron. A request-scoped preview (the assistant, MCP) still fetches
+(A26-L18).
 
 Failures propagate as `null`, deliberately. `getRateForDate`'s own comment says
 it "returns null when no rate can be determined (so the caller can reject or flag
@@ -239,22 +544,195 @@ outage is not part of whatever request happened to discover it, so a rollback
 must not erase it. The write is fire-and-forget and swallows its own failures --
 availability bookkeeping must never turn a provider outage into a failed request.
 
-**AI insights are the weak case.** The reentrancy guard is a `Set<userId>` in
-process memory, which coordinates one replica with itself and nothing across
-replicas. The 12-hour cooldown is a plain read of the most recent
-`generatedAt` -- a check-then-act. Rows are inserted with no idempotency key, so
-a manual regenerate racing the daily cron, or two replicas both past the cooldown
-read, produces duplicate insight rows. Ordering is at least correct on failure:
-the provider is called and the response parsed before anything is saved, so a
-failed call leaves no partial rows, and a total provider failure throws rather
-than fabricating a result.
+**AI insights.** Exclusion is a durable lease:
+`generateInsights` (`backend/src/ai/insights/ai-insights.service.ts`) takes
+`claimLease(JobClaimType.AiInsightGeneration, userId, ...)` and releases it by
+token in its `finally`, so two replicas, or a manual regenerate and the daily
+cron, cannot generate for one user at the same time. The in-process
+`generatingUsers` `Set` remains only as a local short-circuit. The 12-hour
+cooldown (a read of the most recent `generatedAt`) is taken twice: before the
+lease as the cheap early out, and again under it, which is the read that
+decides. The winner saves before its `finally` releases the lease, so a replica
+that read "nothing recent" while the winner was still generating, and claims the
+lease the moment it is released, finds the winner's rows and stands down instead
+of saving a second set; the inserts carry no idempotency key, so this re-read is
+what keeps the rows single. What remains is cost: only saved rows set the
+cooldown, so a generation that saves nothing (a provider failure, a response
+that parses to no insights -- `saveInsights` returns early on an empty list)
+is retried by the next holder, which is the reason the lease is released rather
+than kept. Ordering is at
+least correct on failure: the provider is called and the response parsed before
+anything is saved, so a failed call leaves no partial rows, and a total provider
+failure throws rather than fabricating a result.
+
+### Bond reference data (NBP, GUS, BLS, TreasuryDirect)
+
+`BenchmarkRefreshService` reads the NBP reference rate, the GUS year-on-year
+CPI, the BLS CPI-U levels (`api.bls.gov`, provider `bls`, one GET of
+`publicAPI/v2/timeseries/data/CUUR0000SA0` for ten years, no key) and the
+13-week Treasury bill auctions (`www.treasurydirect.gov`, provider
+`treasurydirect`, `TA_WS/securities/auctioned`) and writes them to `benchmark_values`; it has no effect at the publisher to
+undo. Each outbound call is gated by the `nbp`, `gus`, `bls` or `treasurydirect` circuit breaker
+(`ProviderHealthService`) through `SeriesHttp.gated`, limited to the https hosts
+the adapter declares (no other host, no redirect off them), with a 30 s timeout
+and a 5 MB streaming cap, and the whole body is read before the breaker records
+a success. The fetch and parse finish before anything is written, so a failed or
+unparseable document leaves no partial rows, and one series failing does not
+stop the other. The write is one transaction per series: the observations
+(`ON CONFLICT (benchmark_code, observation_date) DO UPDATE ... WHERE value IS
+DISTINCT FROM EXCLUDED.value`, so a revision corrects a row and a repeat
+converges) then `covered_through = GREATEST(...)`, which only moves forward. The
+lease `bond-benchmarks` stops N replicas fetching at once and is not what keeps
+the data correct. `BondCatalogService` seeds the adapters' programs with
+`ON CONFLICT DO NOTHING` and stores a fetched or entered series the same way; a
+stored terms version is never rewritten (INV-BOND-001), so an entry whose
+content differs from the stored one is refused as a conflict, and a correction
+is a new `termsVersion`. The refresh fetches only benchmarks a stored series
+reads, and once after a series is stored for a benchmark never fetched.
+
+A series read from its issuer (`BondSeriesService`, through `SeriesHttp.gated`:
+the `obligacjeskarbowe` breaker, no redirect followed, a 30 s timeout, a 5 MB
+cap) is fetched, cross-checked and parsed before the one write transaction that
+stores it, so a refused or failed read leaves no row, and there is nothing at the
+issuer to undo. A US Treasury security is read the same way (provider id
+`treasurydirect`, host `www.treasurydirect.gov` only): the auction record
+(`TA_WS/securities/search`) and, when it names one, the auction's results XML
+(`/xml/<file>.xml`), two GETs through one breaker, cross-checked against each
+other before the one write; a redirect, a non-200, an oversized body or a
+disagreement leaves no row.
+
+### Bank sync
+
+A bank sync reads from the provider and writes only to PostgreSQL, so the
+external call has no effect to undo; what it has to get right is the order
+(`docs/specs/bank-sync.md` section 7). Every provider call runs outside any
+transaction: the fetch first, then one `withScopedDb` write that inserts the
+ledger row (`ON CONFLICT DO NOTHING RETURNING`, INV-BANKSYNC-001) before each
+transaction row. A process that dies between the fetch and the write has
+written nothing, and the next sync fetches again. The per-account lease
+(`JobClaimType.BankSyncAccount`) is released in a `finally`; it saves the
+bank's unattended-read allowance, and the ledger, not the lease, is what keeps
+a race correct.
+
+Two calls do have an effect at the provider. Starting an authorization is
+preceded by durable state (the connection row with the state hash, EXT-001),
+so an authorization that the user never completes is a `pending` row, not an
+orphan. Disconnecting asks the provider to delete the session before the
+local delete, and does not block on the answer: a session the provider kept
+expires with its consent. The previous session after a re-authorization is
+revoked the same way.
+
+### Payee contact enrichment
+
+`backend/src/payees/lookup/` looks a new payee's website, address, email and
+phone up through the user's AI provider (opt-in) and writes the answer to the
+row. The provider call runs outside any transaction, on the tail of the
+request that created the payee (`PayeeContactEnrichmentService.dispatchAfterCreate`,
+dispatched by `PayeesService.create` only once its own `withScopedDb` has
+resolved and no ambient transaction exists). The effect is one conditional
+statement, `ENRICHMENT_UPDATE_SQL`: every contact column is `COALESCE(column,
+$n)` so nothing already stored is touched (INV-PAYEE-001), and the automatic
+path adds `WHERE contact_lookup_at IS NULL`, which is the idempotency key --
+a second replica, a retried request or a re-dispatch affects zero rows
+(EXT-001 by predicate rather than by unique index). `contact_lookup_at` stamps
+the *attempt* (found something, or found nothing); a failure -- provider
+offline, no provider, feature off, or an answer that could not be read --
+stamps nothing, so a later attempt can run (EXT-003). The favicon fetch that follows a looked-up website is keyed on
+that website (`UPDATE ... WHERE id AND user_id AND website = $resolved`), so
+a concurrent edit to the address cannot end up under a stale icon.
+
+What is process-local: the in-flight map and the admission queue
+(`LookupQueue`, two concurrent lookups, fifty waiting) bound what one replica
+does; two replicas can both pay for one lookup, and the second UPDATE then
+matches no row. The AI/MCP confirmation flow avoids the question by looking
+up in the *preview* and carrying the stamp down the signed descriptor to the
+commit, so the card and the row agree and nothing looks up twice.
+
+### Google Places, and the quota claimed before the call
+
+The same lookup can be answered by Google Places instead of an AI provider
+(`backend/src/payees/lookup/google-places/`), and the ordering rule there is the
+opposite of the usual one. Google bills a Text Search request whatever comes
+back, so the **quota claim commits before the request goes out**
+(`PayeeLookupQuotaService.claim`, INV-PAYEE-002): a slot released because the
+request then failed would under-count what the user is paying for, and an
+under-count is the direction that spends money. The claim therefore runs through
+`runOutsideActiveScopedManager`, so the count of what has been spent cannot be
+rolled back by whatever operation discovered it -- exactly as `provider_health`
+records an outage outside the request that found it.
+
+What that costs, stated rather than hidden: a crash between the claim and the
+call, or a transport failure after it, spends a slot for an answer nobody
+received. That is the survivable direction.
+
+The one **compensation** is `PayeeLookupQuotaService.release`, and only the Test
+button uses it. A request Google *answered with a refusal* was never served and
+never billed, so charging for it would make every check of a broken key cost a
+request. A transport failure is deliberately not released: nobody answered, so
+whether Google served it is unknown, and under-counting is the direction that
+spends money. `ContactLookupUnavailableError.httpStatus` is what tells an
+answered refusal from a stall. The release is `GREATEST(x - 1, 0)`, because a
+release that crossed a month boundary must return quota rather than mint it.
+
+Whose key is spent, and which source is asked first, are decided together in one
+read by `PayeeLookupSettingsService.resolveRouting`: the operator's
+`GOOGLE_PLACES_API_KEY` where the deployment set one (counted in
+`google_places_instance_usage`, deployment-wide, because one key is one bill),
+otherwise the user's own encrypted key (counted per user). The month those
+counters roll over on is **Pacific**, not UTC, because that is when Google's free
+allowance resets; a counter that rolled over first would hand back a cap the
+allowance behind it had not released.
+
+Availability goes through the same `ProviderHealthService` breaker as the
+market-data clients, with one asymmetry worth naming: a 400 or 403 from a
+rejected key is recorded as a **success**, because the host plainly answered --
+counting it as a failure would let one user's bad key open a deployment-wide
+breaker and page the operator.
+
+The client sends `PUBLIC_APP_URL`'s origin as `Referer`, which is what makes an
+HTTP-referrer key restriction satisfiable at all: a server sends none of its own,
+so such a key rejected every lookup. It buys availability rather than security --
+a referrer restriction protects a key that is public, shipped in browser
+JavaScript where the browser sets the header, and this key never leaves the
+server -- so an IP restriction is the one that actually constrains it. The header
+is sent because a deployment with no stable egress address cannot use an IP
+restriction at all.
+
+### Mailbox OAuth token endpoints (Google, Microsoft 365)
+
+The email receipts mailbox can sign in with OAuth2 instead of a password
+(`docs/future-plans/email-receipts.md` section 3a). Two calls leave the process,
+both from `backend/src/email-receipts/oauth/oauth-token.client.ts` and nowhere
+else: the code exchange that connects a mailbox and the refresh that obtains an
+access token for each IMAP connection. Neither writes anything the provider must
+later undo; what a failure leaves is decided by the caller:
+
+- **The secrets travel in the form body, never in a header**, so the platform
+  cannot quote one in a `TypeError` for an unsendable header value (the failure
+  `isSendableApiKey` exists for in `docs/backend/ai-and-payees.md`). The request
+  uses `redirect: "error"` and a 15 second `AbortSignal.timeout`.
+- **An error message is the code and the HTTP status** (`invalid_grant`,
+  `invalid_client`, `rejected`, `unavailable`, `invalid_response`) plus
+  `describeFetchFailure`'s socket line with every request-body value redacted:
+  never the authorization code, a token, the client secret or the provider's
+  `error_description`.
+- **A refusal of the grant (`invalid_grant`) deletes the stored refresh token**
+  with a conditional `UPDATE ... WHERE oauth_refresh_token_enc = <ciphertext read>`;
+  the mailbox keeps its row and receipts, the poll skips it, and its `last_error`
+  says to connect again. A rotated refresh token is stored the same way, before
+  the access token is used. Any other failure keeps the token and is an ordinary
+  poll failure: the next poll asks again.
+- **The call runs outside any database transaction**; `withScopedDb` is entered
+  only to write the rotated or deleted token. The one-time `state` nonce is
+  claimed in its own transaction before the exchange, so a failed exchange leaves
+  it spent and the user starts the flow again (INV-RECEIPT-007).
 
 ## 7. There is no shared lifecycle, and one workflow shows what it would look like
 
 No generic `pending -> externally_created -> verified -> available` state machine
 exists. Attachments have no state column; backups have a post-hoc
 success/failed string; emergency access has an ad hoc set of timestamp columns;
-AI insights and reminder emails have no state beyond a time-window read.
+AI insights have no state beyond a time-window read; the bill and mortgage reminders have a lease and a delivery record but no state column tying them together.
 
 The nearest thing to a lifecycle belongs to the `.mny` import job. It wraps a
 local parse rather than a provider call, and it is incomplete in one instructive
@@ -294,16 +772,27 @@ added rather than as it stands.
 | Attachment create, local and S3 | Bytes durable before commit; no orphan detection, no reconciliation sweep, no compensation | EXT-001, EXT-003 |
 | Attachment delete, local and S3 | Bytes deleted before commit; a failed commit leaves a metadata row resolving to nothing | EXT-001 |
 | Attachment provider comment | Claims joint commit for all providers; true only of the database provider | EXT-004 |
-| Automatic backup write | Direct write to the final name -- no temp file, fsync, rename, size check or checksum; a truncated file is indistinguishable from a complete one and is promoted to weekly and monthly by `copyFileSync` | EXT-002 |
-| Backup restore validation | Version and `exportedAt` only; no payload integrity check, because nothing was recorded at write time | EXT-002 |
-| Backup folder probe | `Date.now()` in the probe filename; unlink failure reported as "not writable" | EXT-003 |
-| Bill and mortgage reminders | No dedup state of any kind; duplicate sends unbounded across replicas and restarts | EXT-001 |
-| Budget alerts | Durable state written before the send, but the dedup read and insert are not atomic and no unique constraint backs them | EXT-001 |
-| Emergency-access reminder | `lastReminderSentAt` written after the send, and it is the gate | EXT-001 |
-| AI insight generation | Process-local `Set` as the reentrancy guard; cooldown is a check-then-act; inserts carry no idempotency key | EXT-001 |
+| Backup restore validation, plaintext `.json.gz` | No content hash of its own: truncation and random corruption are caught by the gzip trailer and `JSON.parse`, a deliberate alteration is not. An encrypted `.mzbe` is authenticated frame by frame and has no such gap | EXT-002 |
+| Mortgage reminder delivery key | The lease and the delivery record are in place; what is not is the run date. `buildMortgageReminderClaimKey` reads `new Date()` per user, so a run crossing local midnight claims some users under D and the rest under D+1 while the windows are measured from D -- the duplicate the bill reminder closed by taking the date as a parameter | EXT-001 |
+| Emergency-access reminder | The lease and the delivery record are in place, and `last_reminder_sent_at` is re-read under the lease. What remains: a process killed between the SMTP accept and the record's `UPDATE` leaves no record, so a replica whose sweep reaches the owner after the lease expires sends again the same day -- the survivable direction | EXT-001 |
+| AI insight generation | Duplicate rows are closed: the lease excludes concurrent generation and the cooldown is re-read under it. What remains is cost: only saved rows set the cooldown, so a generation that saved nothing is repeated by the next holder, a replica or a manual regenerate (a provider call, no rows) | EXT-001 |
+| Payee contact enrichment | In-flight guard and admission queue are process-local; two replicas can both pay for one lookup (the second UPDATE affects zero rows, so the data is right and only the cost is duplicated) | EXT-001 |
+| Off-machine backup copy (email) | An accepted trade, not an omission: a claim expired by the lease is re-attempted, and SMTP offers no way to tell a message already delivered from one never sent, so the same artifact can arrive twice. Delivering a duplicate copy is the survivable direction against never delivering it | EXT-003 |
+| Off-machine backup copy (S3) | A stuck `uploading` row is reclaimed after the lease and re-attempted, reconciled by digest. What remains: nothing reconciles a bucket object against the ledger, so an object written by an attempt whose row never reached `uploaded` is referenced by nothing -- bytes nobody references, the survivable side, and the operator's lifecycle policy is what ages them out | EXT-003 |
 
-Two rows are absent from this table on purpose, and both are settled: per-user
-backup sharding with admin-gated folder endpoints, and the FX/price natural-key
-upserts. Section 5's grant-commit-after-delivery belongs in the same category.
-Those three are the patterns the rest of this table should be closed by
-imitating.
+Six workflows are absent from this table on purpose, and all six are settled:
+per-user backup sharding with admin-gated folder endpoints, the FX/price
+natural-key upserts, the atomic backup write with its in-document completeness
+verdict (INV-BACKUP-001), the UUID-named writability probe whose failed cleanup
+is a log line rather than a verdict, the budget alerts (migration 140's unique
+fingerprint, arbitrated through `NotificationService.create`, so only the
+replica whose INSERT returned a row emails), and the bill reminder (a lease plus
+a delivery record written after the send, keyed on the run's date and the set of
+bills). Section 5's grant-commit-after-delivery belongs in the same category.
+Those are the patterns the rest of this table should be closed by imitating.
+
+## SimpleFIN setup tokens (EXT-001 / EXT-003)
+
+SimplefinSetupService serializes setup/removal with a two-minute per-user JobClaimService lease. Before POSTing a one-time setup token, it commits a SHA-256 attempt marker. This marker means attempted, not connected: ambiguous timeout/crash outcomes are never automatically replayed. Existing job-claim retention applies; a person starts recovery using a fresh Bridge token. The claimed Access URL is encrypted and committed before a separate discovery read. If saving cannot be confirmed after claim, the response instructs the owner to check status and revoke the remote app token if needed. Discovery retries do not consume another setup token, and all reads spend a committed rolling-budget reservation before HTTP.
+
+The persistence transaction locks and verifies the current unexpired lease token before credential writes. Discovery locks the owned credential after HTTP and compares it with the credential used for the request; replacement/removal makes a stale response ineligible to reconcile. Local removal disables sync and preserves history, and makes no claim of remote revocation.

@@ -1,25 +1,39 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { act, render, screen, fireEvent, waitFor } from '@/test/render';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { act, render, screen, fireEvent, waitFor, within } from '@/test/render';
 import { ExpensesPieChart } from './ExpensesPieChart';
+import type { SpendingByCategoryResponse } from '@/types/built-in-reports';
 
 const mockPush = vi.fn();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
-const mockGetAllPages = vi.fn();
-vi.mock('@/lib/transactions', () => ({
-  transactionsApi: {
-    getAllPages: (...args: any[]) => mockGetAllPages(...args),
+// The breakdown is the Spending by Category report's answer. What counts as
+// spending -- VOID rows, transfers, investment linkage, refunds netted against
+// their category -- is the report's to decide and is tested against the query
+// in `spending-reports.service.spec.ts`; this suite covers what the widget does
+// with the answer.
+const mockGetSpendingByCategory = vi.fn();
+vi.mock('@/lib/built-in-reports', () => ({
+  builtInReportsApi: {
+    getSpendingByCategory: (...args: any[]) => mockGetSpendingByCategory(...args),
   },
 }));
 
-// Fixed config so the widget renders deterministically; WidgetCard reads the
-// same hook for its identity overrides (none here).
-const mockUpdateConfig = vi.fn();
+const { widgetConfig, mockUpdateConfig } = vi.hoisted(() => ({
+  widgetConfig: {
+    current: {
+      range: '1m',
+      accountIds: [] as string[],
+      topLevelOnly: false,
+      view: 'legend' as 'legend' | 'callouts',
+    },
+  },
+  mockUpdateConfig: vi.fn(),
+}));
 vi.mock('@/hooks/useWidgetConfig', () => ({
   useWidgetConfig: () => ({
-    config: { range: '1m', accountIds: [] },
+    config: widgetConfig.current,
     updateConfig: mockUpdateConfig,
   }),
 }));
@@ -30,7 +44,7 @@ vi.mock('recharts', () => ({
   Pie: ({ data, onClick }: any) => (
     <div data-testid="pie" style={{ display: 'none' }}>
       {data?.map((d: any, i: number) => (
-        <button key={i} data-testid={`pie-slice-${d.name}`} onClick={() => onClick?.(d)} />
+        <button key={i} data-testid={`pie-slice-${d.name}`} onClick={() => onClick?.(d, i)} />
       ))}
     </div>
   ),
@@ -38,32 +52,52 @@ vi.mock('recharts', () => ({
   Tooltip: () => null,
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrencyCompact: (n: number) => `$${n.toFixed(2)}`,
-  }),
-}));
-
-vi.mock('@/hooks/useExchangeRates', () => ({
-  useExchangeRates: () => ({
-    // 1:1 for every currency except the sentinel ZZZ, which has no rate.
-    convertToDefault: (n: number, currency?: string) =>
-      currency === 'ZZZ' ? null : n,
-    defaultCurrency: 'CAD',
-  }),
-}));
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrencyCompact: (n: number) => `$${n.toFixed(2)}`,
+    }),
+  };
+});
 
 vi.mock('@/lib/chart-colours', () => ({
   CHART_COLOURS: ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6'],
 }));
 
-async function renderChart(transactions: any[], categories: any[] = [], isLoading = false) {
-  mockGetAllPages.mockResolvedValue(transactions);
+const category = (
+  categoryId: string | null,
+  categoryName: string,
+  total: number,
+  color: string | null = null,
+) => ({ categoryId, categoryName, color, total });
+
+/** A complete report answer: nothing excluded, so the total is a total. */
+const report = (
+  data: SpendingByCategoryResponse['data'],
+  over: Partial<SpendingByCategoryResponse> = {},
+): SpendingByCategoryResponse => {
+  const knownSpending = data.reduce((sum, item) => sum + item.total, 0);
+  return {
+    data,
+    totalSpending: knownSpending,
+    knownSpending,
+    currency: 'CAD',
+    missingCurrencies: [],
+    excludedCount: 0,
+    ...over,
+  };
+};
+
+async function renderChart(
+  response: SpendingByCategoryResponse | null,
+  isLoading = false,
+) {
+  if (response) mockGetSpendingByCategory.mockResolvedValue(response);
   let result: ReturnType<typeof render>;
   await act(async () => {
-    result = render(
-      <ExpensesPieChart accounts={[]} categories={categories} isLoading={isLoading} />,
-    );
+    result = render(<ExpensesPieChart accounts={[]} isLoading={isLoading} />);
   });
   return result!;
 }
@@ -71,290 +105,302 @@ async function renderChart(transactions: any[], categories: any[] = [], isLoadin
 describe('ExpensesPieChart', () => {
   beforeEach(() => {
     mockPush.mockClear();
-    mockGetAllPages.mockReset();
+    mockGetSpendingByCategory.mockReset();
+    mockUpdateConfig.mockClear();
+    widgetConfig.current = { range: '1m', accountIds: [], topLevelOnly: false, view: 'legend' };
   });
 
   it('renders loading state with title and pulse animation', async () => {
-    await renderChart([], [], true);
+    await renderChart(report([]), true);
     expect(screen.getByText('Expenses by Category')).toBeInTheDocument();
     expect(document.querySelector('.animate-pulse')).toBeInTheDocument();
     expect(screen.queryByTestId('pie-chart')).not.toBeInTheDocument();
   });
 
   it('renders the selected timeframe label', async () => {
-    await renderChart([]);
+    await renderChart(report([]));
     expect(screen.getByText('1M')).toBeInTheDocument();
   });
 
-  it('renders empty state when no expenses', async () => {
-    await renderChart([]);
+  it('renders empty state when the report finds no spending', async () => {
+    await renderChart(report([]));
     await waitFor(() => {
       expect(screen.getByText('No expense data for this period.')).toBeInTheDocument();
     });
     expect(screen.queryByTestId('pie-chart')).not.toBeInTheDocument();
   });
 
-  it('renders chart with expense data and category legend', async () => {
-    const transactions = [
-      {
-        id: '1', amount: -50, categoryId: 'cat1',
-        category: { id: 'cat1', name: 'Food', color: '#ef4444' },
-        currencyCode: 'CAD', isTransfer: false, isSplit: false, transactionDate: '2024-01-15',
-      },
-      {
-        id: '2', amount: -30, categoryId: 'cat2',
-        category: { id: 'cat2', name: 'Transport', color: '#3b82f6' },
-        currencyCode: 'CAD', isTransfer: false, isSplit: false, transactionDate: '2024-01-16',
-      },
-    ];
-    const categories = [
-      { id: 'cat1', name: 'Food', color: '#ef4444' },
-      { id: 'cat2', name: 'Transport', color: '#3b82f6' },
-    ];
+  it('draws the report rows as slices, in the order it returned them', async () => {
+    await renderChart(
+      report([
+        category('cat1', 'Food', 50, '#ef4444'),
+        category('cat2', 'Transport', 30, '#3b82f6'),
+      ]),
+    );
 
-    await renderChart(transactions, categories);
-    await waitFor(() => expect(screen.getByTestId('pie-chart')).toBeInTheDocument());
-    const legendButtons = screen.getAllByRole('button');
-    expect(legendButtons.some((b) => b.textContent?.includes('Food'))).toBe(true);
-    expect(legendButtons.some((b) => b.textContent?.includes('Transport'))).toBe(true);
+    expect(screen.getByTestId('pie-slice-Food')).toBeInTheDocument();
+    expect(screen.getByTestId('pie-slice-Transport')).toBeInTheDocument();
+    expect(screen.getByText('Food')).toBeInTheDocument();
+    expect(screen.getByText('Transport')).toBeInTheDocument();
   });
 
-  it('shows total expenses amount', async () => {
-    const transactions = [
-      {
-        id: '1', amount: -100, categoryId: 'cat1',
-        category: { id: 'cat1', name: 'Food', color: '#ef4444' },
-        currencyCode: 'CAD', isTransfer: false, isSplit: false, transactionDate: '2024-01-15',
-      },
-    ];
-    await renderChart(transactions, [{ id: 'cat1', name: 'Food', color: '#ef4444' }]);
-    await waitFor(() => expect(screen.getByText('Total')).toBeInTheDocument());
-    expect(screen.getByText('$100.00')).toBeInTheDocument();
+  it('shows each category total beside its legend row', async () => {
+    await renderChart(
+      report([
+        category('cat1', 'Food', 50, '#ef4444'),
+        category('cat2', 'Transport', 30, '#3b82f6'),
+      ]),
+    );
+
+    expect(screen.getByRole('button', { name: /Food/ })).toHaveTextContent('$50.00');
+    expect(screen.getByRole('button', { name: /Transport/ })).toHaveTextContent('$30.00');
   });
 
-  it('marks the total partial and excludes an unconvertible transaction', async () => {
-    // Two CAD expenses convert; one ZZZ expense has no rate and must not size a
-    // slice. The total is the CAD sum, marked as a subtotal.
-    const transactions = [
-      {
-        id: '1', amount: -100, categoryId: 'cat1',
-        category: { id: 'cat1', name: 'Food', color: '#ef4444' },
-        currencyCode: 'CAD', isTransfer: false, isSplit: false, transactionDate: '2024-01-15',
-      },
-      {
-        id: '2', amount: -40, categoryId: 'cat1',
-        category: { id: 'cat1', name: 'Food', color: '#ef4444' },
-        currencyCode: 'ZZZ', isTransfer: false, isSplit: false, transactionDate: '2024-01-16',
-      },
-    ];
-    await renderChart(transactions, [{ id: 'cat1', name: 'Food', color: '#ef4444' }]);
-    await waitFor(() => expect(screen.getByText('Total')).toBeInTheDocument());
-    // The ZZZ amount is excluded, so the total is the CAD 100 only, marked partial.
-    expect(screen.getByText('$100.00')).toBeInTheDocument();
-    expect(screen.getByText('(partial total)')).toBeInTheDocument();
+  it('shows the report total, not a sum it worked out itself', async () => {
+    await renderChart(
+      report([category('cat1', 'Food', 50), category('cat2', 'Transport', 30)]),
+    );
+    expect(screen.getByText('$80.00')).toBeInTheDocument();
   });
 
-  it('skips transfer transactions', async () => {
-    const transactions = [
-      {
-        id: '1', amount: -50, categoryId: 'cat1',
-        category: { id: 'cat1', name: 'Food', color: '#ef4444' },
-        currencyCode: 'CAD', isTransfer: true, isSplit: false, transactionDate: '2024-01-15',
-      },
-    ];
-    await renderChart(transactions, [{ id: 'cat1', name: 'Food', color: '#ef4444' }]);
-    await waitFor(() => expect(screen.getByText('No expense data for this period.')).toBeInTheDocument());
+  it('gives a category with no colour one from the palette', async () => {
+    await renderChart(report([category('cat1', 'Food', 50)]));
+    // Rendered at all, rather than as an uncoloured slice.
+    expect(screen.getByTestId('pie-slice-Food')).toBeInTheDocument();
   });
 
-  // Issue #1125: credits were skipped row by row, so a refund never reached
-  // the category it belonged to. They are read and netted now; a category that
-  // ends up net-credit is what drops out.
-  it('nets a refund against the category it was filed under', async () => {
-    const transactions = [
-      {
-        id: '1', amount: -100, categoryId: 'cat1',
-        category: { id: 'cat1', name: 'Travel', color: '#ef4444' },
-        currencyCode: 'CAD', isTransfer: false, isSplit: false, transactionDate: '2024-01-15',
-      },
-      {
-        id: '2', amount: 25, categoryId: 'cat1',
-        category: { id: 'cat1', name: 'Travel', color: '#ef4444' },
-        currencyCode: 'CAD', isTransfer: false, isSplit: false, transactionDate: '2024-01-20',
-      },
-    ];
-    await renderChart(transactions, [{ id: 'cat1', name: 'Travel', color: '#ef4444' }]);
-    await waitFor(() => expect(screen.getByText('Total')).toBeInTheDocument());
-    expect(screen.getByText('$75.00')).toBeInTheDocument();
-    expect(screen.queryByText('$100.00')).not.toBeInTheDocument();
+  it('names the uncategorized bucket the report returned', async () => {
+    await renderChart(report([category(null, 'Uncategorized', 40)]));
+    expect(screen.getByTestId('pie-slice-Uncategorized')).toBeInTheDocument();
   });
 
-  it('nets a refund carried on a split line', async () => {
-    const transactions = [
-      {
-        id: '1', amount: -100, categoryId: null, category: null,
-        currencyCode: 'CAD', isTransfer: false, isSplit: true, transactionDate: '2024-01-15',
-        splits: [
-          { id: 's1', amount: -100, categoryId: 'cat1', category: { id: 'cat1', name: 'Travel' } },
-        ],
-      },
-      {
-        id: '2', amount: 40, categoryId: null, category: null,
-        currencyCode: 'CAD', isTransfer: false, isSplit: true, transactionDate: '2024-01-20',
-        splits: [
-          { id: 's2', amount: 40, categoryId: 'cat1', category: { id: 'cat1', name: 'Travel' } },
-        ],
-      },
-    ];
-    await renderChart(transactions, [{ id: 'cat1', name: 'Travel', color: '#ef4444' }]);
-    await waitFor(() => expect(screen.getByText('Total')).toBeInTheDocument());
-    expect(screen.getByText('$60.00')).toBeInTheDocument();
-  });
+  // --- what the widget asks the report for -------------------------------
 
-  it('drops a category whose refunds outweigh its spending', async () => {
-    const transactions = [
-      {
-        id: '1', amount: -30, categoryId: 'cat1',
-        category: { id: 'cat1', name: 'Travel', color: '#ef4444' },
-        currencyCode: 'CAD', isTransfer: false, isSplit: false, transactionDate: '2024-01-15',
-      },
-      {
-        id: '2', amount: 50, categoryId: 'cat1',
-        category: { id: 'cat1', name: 'Travel', color: '#ef4444' },
-        currencyCode: 'CAD', isTransfer: false, isSplit: false, transactionDate: '2024-01-20',
-      },
-    ];
-    await renderChart(transactions, [{ id: 'cat1', name: 'Travel', color: '#ef4444' }]);
-    await waitFor(() =>
-      expect(screen.getByText('No expense data for this period.')).toBeInTheDocument(),
+  it('asks for the configured window, accounts and rollup', async () => {
+    widgetConfig.current = {
+      range: '1m',
+      accountIds: ['acct-1', 'acct-2'],
+      topLevelOnly: true,
+      view: 'legend',
+    };
+    await renderChart(report([]));
+
+    expect(mockGetSpendingByCategory).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accountIds: ['acct-1', 'acct-2'],
+        rollupToParent: true,
+      }),
     );
   });
 
-  it('skips positive amounts (income)', async () => {
-    const transactions = [
-      {
-        id: '1', amount: 100, categoryId: 'cat1',
-        category: { id: 'cat1', name: 'Salary', color: '#22c55e' },
-        currencyCode: 'CAD', isTransfer: false, isSplit: false, transactionDate: '2024-01-15',
-      },
-    ];
-    await renderChart(transactions, [{ id: 'cat1', name: 'Salary', color: '#22c55e' }]);
-    await waitFor(() => expect(screen.getByText('No expense data for this period.')).toBeInTheDocument());
+  it('asks for leaf categories when the rollup is off', async () => {
+    await renderChart(report([]));
+    expect(mockGetSpendingByCategory).toHaveBeenCalledWith(
+      expect.objectContaining({ rollupToParent: false }),
+    );
   });
 
-  it('skips investment account transactions', async () => {
-    const transactions = [
-      {
-        id: '1', amount: -50, categoryId: 'cat1',
-        category: { id: 'cat1', name: 'Food', color: '#ef4444' },
-        account: { accountType: 'INVESTMENT' },
-        currencyCode: 'CAD', isTransfer: false, isSplit: false, transactionDate: '2024-01-15',
-      },
-    ];
-    await renderChart(transactions, [{ id: 'cat1', name: 'Food', color: '#ef4444' }]);
-    await waitFor(() => expect(screen.getByText('No expense data for this period.')).toBeInTheDocument());
+  it('sends no account filter for an empty selection', async () => {
+    await renderChart(report([]));
+    expect(mockGetSpendingByCategory).toHaveBeenCalledWith(
+      expect.objectContaining({ accountIds: undefined }),
+    );
   });
 
-  it('groups uncategorized expenses', async () => {
-    const transactions = [
-      {
-        id: '1', amount: -75, categoryId: null, category: null,
-        currencyCode: 'CAD', isTransfer: false, isSplit: false, transactionDate: '2024-01-15',
-      },
-    ];
-    await renderChart(transactions);
-    await waitFor(() => {
-      const legendButtons = screen.getAllByRole('button');
-      expect(legendButtons.some((b) => b.textContent?.includes('Uncategorized'))).toBe(true);
+  // --- partial totals ----------------------------------------------------
+
+  it('marks the total a subtotal when the report excluded a row', async () => {
+    await renderChart(
+      report([category('cat1', 'Food', 50)], {
+        totalSpending: null,
+        knownSpending: 50,
+        missingCurrencies: ['JPY'],
+        excludedCount: 1,
+      }),
+    );
+
+    // The figure shown is the part that converted, marked rather than presented
+    // as the whole.
+    const partialTotal = screen.getByTestId('partial-total');
+    expect(within(partialTotal).getByText('$50.00')).toBeInTheDocument();
+  });
+
+  it('leaves a complete total unmarked', async () => {
+    await renderChart(report([category('cat1', 'Food', 50)]));
+    expect(screen.queryByTestId('partial-total')).toBeNull();
+  });
+
+  // --- Other, and its disclosure -----------------------------------------
+
+  const overflowReport = (count: number) =>
+    report(
+      Array.from({ length: count }, (_, i) =>
+        // Descending so the ordering is unambiguous: the largest keep a slice.
+        category(`c${i}`, `Cat ${i}`, (count - i) * 10),
+      ),
+    );
+
+  it('opens Other into the categories it merged, and closes it again', async () => {
+    await renderChart(overflowReport(14));
+
+    expect(screen.getByText('Other')).toBeInTheDocument();
+    expect(screen.queryByText('Cat 13')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('pie-slice-Other'));
+
+    expect(screen.getByText('3 categories in Other')).toBeInTheDocument();
+    expect(screen.getByText('Cat 11')).toBeInTheDocument();
+    expect(screen.getByText('Cat 12')).toBeInTheDocument();
+    expect(screen.getByText('Cat 13')).toBeInTheDocument();
+    // The chart still shows eleven categories plus Other; opening the tail does
+    // not turn it into twenty slivers.
+    expect(screen.getByTestId('pie-slice-Cat 0')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByTestId('pie-slice-Other'));
+    expect(screen.queryByText('Cat 13')).not.toBeInTheDocument();
+  });
+
+  it('keeps the total over every category, including the ones inside Other', async () => {
+    // 14 categories at 140 down to 10: the donut's total is all of them, which
+    // is also what the slices plus Other add up to.
+    await renderChart(overflowReport(14));
+    expect(screen.getByText('$1050.00')).toBeInTheDocument();
+  });
+
+  it('opens the transactions for a category listed inside Other', async () => {
+    await renderChart(overflowReport(14));
+    fireEvent.click(screen.getByTestId('pie-slice-Other'));
+    fireEvent.click(screen.getByText('Cat 12'));
+
+    expect(mockPush).toHaveBeenCalledWith(
+      expect.stringContaining('categoryIds=c12'),
+    );
+  });
+
+  it('closes Other when the categories inside it change', async () => {
+    const { rerender } = await renderChart(overflowReport(14));
+    fireEvent.click(screen.getByTestId('pie-slice-Other'));
+    expect(screen.getByText('Cat 13')).toBeInTheDocument();
+
+    widgetConfig.current = { range: '3m', accountIds: [], topLevelOnly: false, view: 'legend' };
+    mockGetSpendingByCategory.mockResolvedValue(overflowReport(13));
+    await act(async () => {
+      rerender(<ExpensesPieChart accounts={[]} isLoading={false} />);
     });
-  });
-
-  it('handles split transactions', async () => {
-    const transactions = [
-      {
-        id: '1', amount: -100, categoryId: null, category: null,
-        currencyCode: 'CAD', isTransfer: false, isSplit: true,
-        splits: [
-          { amount: -60, categoryId: 'cat1', category: { id: 'cat1', name: 'Food', color: '#ef4444' } },
-          { amount: -40, categoryId: 'cat2', category: { id: 'cat2', name: 'Drinks', color: '#3b82f6' } },
-        ],
-        transactionDate: '2024-01-15',
-      },
-    ];
-    const categories = [
-      { id: 'cat1', name: 'Food', color: '#ef4444' },
-      { id: 'cat2', name: 'Drinks', color: '#3b82f6' },
-    ];
-    await renderChart(transactions, categories);
     await waitFor(() => {
-      const legendButtons = screen.getAllByRole('button');
-      expect(legendButtons.some((b) => b.textContent?.includes('Food'))).toBe(true);
-      expect(legendButtons.some((b) => b.textContent?.includes('Drinks'))).toBe(true);
+      expect(screen.queryByText('Cat 12')).not.toBeInTheDocument();
     });
+    expect(screen.getByText('Other')).toBeInTheDocument();
   });
 
-  it('navigates to category transactions on pie click', async () => {
-    const transactions = [
-      {
-        id: '1', amount: -50, categoryId: 'cat1',
-        category: { id: 'cat1', name: 'Food', color: '#ef4444' },
-        currencyCode: 'CAD', isTransfer: false, isSplit: false, transactionDate: '2024-01-15',
-      },
-    ];
-    await renderChart(transactions, [{ id: 'cat1', name: 'Food', color: '#ef4444' }]);
-    await waitFor(() => expect(screen.getByTestId('pie-slice-Food')).toBeInTheDocument());
+  // --- drill-down --------------------------------------------------------
+
+  it('opens the transactions for a clicked slice, scoped to the window', async () => {
+    await renderChart(report([category('cat1', 'Food', 50)]));
     fireEvent.click(screen.getByTestId('pie-slice-Food'));
-    expect(mockPush).toHaveBeenCalledWith(expect.stringContaining('/transactions?categoryIds=cat1&startDate='));
+
+    expect(mockPush).toHaveBeenCalledWith(
+      expect.stringContaining('categoryIds=cat1'),
+    );
     expect(mockPush).toHaveBeenCalledWith(expect.stringContaining('endDate='));
   });
 
-  it('aggregates multiple transactions in the same category', async () => {
-    const transactions = [
-      {
-        id: '1', amount: -50, categoryId: 'cat1',
-        category: { id: 'cat1', name: 'Food', color: '#ef4444' },
-        currencyCode: 'CAD', isTransfer: false, isSplit: false, transactionDate: '2024-01-15',
-      },
-      {
-        id: '2', amount: -25, categoryId: 'cat1',
-        category: { id: 'cat1', name: 'Food', color: '#ef4444' },
-        currencyCode: 'CAD', isTransfer: false, isSplit: false, transactionDate: '2024-01-16',
-      },
-    ];
-    await renderChart(transactions, [{ id: 'cat1', name: 'Food', color: '#ef4444' }]);
-    await waitFor(() => expect(screen.getByText('$75.00')).toBeInTheDocument());
+  it('does nothing for a slice with no category to open', async () => {
+    await renderChart(report([category(null, 'Uncategorized', 40)]));
+    fireEvent.click(screen.getByTestId('pie-slice-Uncategorized'));
+    expect(mockPush).not.toHaveBeenCalled();
   });
 
-  it('assigns chart colours to categories without a colour', async () => {
-    const transactions = [
-      {
-        id: '1', amount: -50, categoryId: 'cat1',
-        category: { id: 'cat1', name: 'Food', color: null },
-        currencyCode: 'CAD', isTransfer: false, isSplit: false, transactionDate: '2024-01-15',
-      },
-    ];
-    await renderChart(transactions, [{ id: 'cat1', name: 'Food', color: null }]);
-    await waitFor(() => expect(screen.getByTestId('pie-chart')).toBeInTheDocument());
-    const legendButtons = screen.getAllByRole('button');
-    expect(legendButtons.some((b) => b.textContent?.includes('Food'))).toBe(true);
+  it('leaves Uncategorized inert even while Other has categories in it', async () => {
+    await renderChart(
+      report([
+        category(null, 'Uncategorized', 500),
+        ...Array.from({ length: 12 }, (_, i) => category(`c${i}`, `Cat ${i}`, 200 - i)),
+      ]),
+    );
+    expect(screen.getByRole('button', { name: /Uncategorized/ })).toBeDisabled();
+    fireEvent.click(screen.getByTestId('pie-slice-Uncategorized'));
+    expect(screen.queryByText(/categories in Other/)).not.toBeInTheDocument();
   });
 
-  it('handles split transaction with uncategorized split (no transferAccountId)', async () => {
-    const transactions = [
-      {
-        id: '1', amount: -100, categoryId: null, category: null,
-        currencyCode: 'CAD', isTransfer: false, isSplit: true,
-        splits: [
-          { amount: -60, categoryId: 'cat1', category: { id: 'cat1', name: 'Food', color: '#ef4444' } },
-          { amount: -40, categoryId: null, category: null, transferAccountId: undefined },
-        ],
-        transactionDate: '2024-01-15',
-      },
-    ];
-    await renderChart(transactions, [{ id: 'cat1', name: 'Food', color: '#ef4444' }]);
-    await waitFor(() => {
-      const legendButtons = screen.getAllByRole('button');
-      expect(legendButtons.some((b) => b.textContent?.includes('Food'))).toBe(true);
-      expect(legendButtons.some((b) => b.textContent?.includes('Uncategorized'))).toBe(true);
+  // --- views -------------------------------------------------------------
+
+  describe('callout view', () => {
+    /** A ResizeObserver that reports the given content box as soon as it observes. */
+    function observeAs(width: number, height: number) {
+      vi.stubGlobal(
+        'ResizeObserver',
+        class {
+          constructor(private readonly callback: ResizeObserverCallback) {}
+          observe() {
+            this.callback(
+              [{ contentRect: { width, height } } as ResizeObserverEntry],
+              this as unknown as ResizeObserver,
+            );
+          }
+          unobserve() {}
+          disconnect() {}
+        },
+      );
+    }
+
+    beforeEach(() => {
+      widgetConfig.current = { range: '1m', accountIds: [], topLevelOnly: false, view: 'callouts' };
     });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('boxes the top ten categories and Other inside the chart area', async () => {
+      observeAs(560, 300);
+      await renderChart(overflowReport(14));
+
+      const callouts = screen.getByRole('list', { name: 'Expenses by Category' });
+      const boxes = within(callouts).getAllByRole('listitem');
+      expect(boxes).toHaveLength(11);
+      expect(within(callouts).getByText('Cat 9')).toBeInTheDocument();
+      expect(within(callouts).queryByText('Cat 10')).not.toBeInTheDocument();
+      expect(within(callouts).getByText('Other')).toBeInTheDocument();
+      for (const box of boxes) {
+        expect(parseFloat(box.style.left)).toBeGreaterThanOrEqual(0);
+        expect(parseFloat(box.style.top)).toBeGreaterThanOrEqual(0);
+        expect(parseFloat(box.style.left) + parseFloat(box.style.width)).toBeLessThanOrEqual(560);
+        expect(parseFloat(box.style.top) + parseFloat(box.style.height)).toBeLessThanOrEqual(300);
+      }
+      // The total stays in the hole, compact so it fits the callout view's
+      // smaller one.
+      expect(screen.getByText('$1.1K')).toBeInTheDocument();
+      expect(screen.queryByText('$1050.00')).not.toBeInTheDocument();
+    });
+
+    it('opens a category from its box, and Other into the four it merged', async () => {
+      observeAs(560, 300);
+      await renderChart(overflowReport(14));
+      const callouts = screen.getByRole('list', { name: 'Expenses by Category' });
+
+      fireEvent.click(within(callouts).getByRole('button', { name: /Cat 3/ }));
+      expect(mockPush).toHaveBeenCalledWith(expect.stringContaining('categoryIds=c3'));
+
+      fireEvent.click(within(callouts).getByRole('button', { name: /Other/ }));
+      expect(screen.getByText('4 categories in Other')).toBeInTheDocument();
+    });
+
+    it('falls back to the legend where the boxes would not fit', async () => {
+      observeAs(300, 300);
+      await renderChart(overflowReport(14));
+      expect(screen.queryByRole('list', { name: 'Expenses by Category' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Cat 0/ })).toHaveTextContent('$140.00');
+    });
+  });
+
+  it('stores the view chosen in the settings', async () => {
+    await renderChart(report([category('cat1', 'Food', 50)]));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Configure Expenses by Category' }));
+    });
+    expect(screen.getByText("Labels need a wider screen. Where they don't fit, the legend is shown.")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Labels' }));
+    expect(mockUpdateConfig).toHaveBeenCalledWith({ view: 'callouts' });
   });
 });

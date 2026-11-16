@@ -3,6 +3,7 @@
     "noneToUpdate": "अपडेट करने के लिए कोई प्रतिभूति नहीं",
     "updated": "{count, plural, one {# प्रतिभूति मूल्य अपडेट हुआ} other {# प्रतिभूति मूल्य अपडेट हुए}}",
     "partialFailure": "मूल्य अपडेट: {updated} सफल, {failed} विफल{symbols}",
+    "partialFailureWithReasons": "मूल्य अपडेट: {updated} सफल, {failed} विफल{symbols}\n{reasons}",
     "failed": "मूल्य ताज़ा करने में विफल"
   },
   "page": {
@@ -10,6 +11,7 @@
     "subtitle": "अपने स्टॉक, ETF, म्यूचुअल फंड और अन्य प्रतिभूतियां प्रबंधित करें",
     "newSecurity": "+ नई प्रतिभूति",
     "searchPlaceholder": "प्रतीक या नाम से खोजें...",
+    "statusFilterLabel": "स्थिति",
     "statusAll": "सभी ({count})",
     "statusActive": "सक्रिय ({count})",
     "statusInactive": "निष्क्रिय ({count})",
@@ -49,6 +51,7 @@
       "name": "नाम",
       "type": "प्रकार",
       "shares": "शेयर",
+      "value": "मूल्य",
       "exchange": "एक्सचेंज",
       "currency": "मुद्रा",
       "provider": "प्रदाता",
@@ -63,12 +66,10 @@
       "inactive": "निष्क्रिय",
       "inactiveShort": "नि."
     },
-    "providerTitle": {
-      "override": "प्रति-प्रतिभूति प्रदाता ओवरराइड",
-      "inherited": "आपकी डिफ़ॉल्ट उद्धरण प्रदाता प्राथमिकता से विरासत में मिला"
-    },
+    "providerInherited": "{provider} (डिफ़ॉल्ट)",
     "columnTitles": {
       "shares": "सभी खातों में वर्तमान शेयर",
+      "value": "सभी खातों में रखे गए शेयर, नवीनतम मूल्य पर, प्रतिभूति की अपनी मुद्रा में",
       "source": "सबसे हाल के मूल्य का स्रोत"
     },
     "actions": {
@@ -115,7 +116,11 @@
     "exchangeLabel": "एक्सचेंज",
     "currencyLabel": "मुद्रा",
     "currencyNotConfigured": "{code} — आपकी मुद्राओं में नहीं",
+    "currencyPlaceholder": "मुद्रा चुनें...",
+    "currencyNotReported": "प्रदाता ने इस क्रिप्टोकरेंसी की मुद्रा नहीं बताई। वह फिएट मुद्रा चुनें जिसमें इसका भाव दिया जाता है।",
     "quoteProviderLabel": "उद्धरण प्रदाता",
+    "skipPriceUpdatesLabel": "स्वचालित मूल्य अपडेट बंद करें",
+    "skipPriceUpdatesHelp": "Monize इस सिक्योरिटी के लिए मूल्य प्राप्त नहीं करेगा। इसका उपयोग उस सिक्योरिटी के लिए करें जिसका मूल्य कोई प्रदाता नहीं दे सकता; आपके द्वारा स्वयं दर्ज किए गए मूल्य फिर भी गिने जाते हैं। कोई अलग कोट प्रदाता या MSN इंस्ट्रूमेंट ID चुनने से अपडेट फिर से चालू हो जाते हैं।",
     "msnIdLabel": "MSN इंस्ट्रूमेंट ID (उन्नत)",
     "lookupProviderAriaLabel": "प्रदाता खोजें",
     "lookupButton": "खोजें",
@@ -139,7 +144,11 @@
     "providers": {
       "auto": "स्वत:",
       "yahoo": "Yahoo",
-      "msn": "MSN"
+      "msn": "MSN",
+      "lse": "LSE",
+      "deutsche_boerse": "Deutsche Börse",
+      "bond_engine": "बॉन्ड इंजन",
+      "html_table": "वेब पेज तालिका"
     },
     "types": {
       "select": "प्रकार चुनें...",
@@ -189,16 +198,50 @@
       "deleteConfirm": "हटाएँ",
       "deleteSuccess": "एसेट क्लास \"{name}\" हटाई गई",
       "deleteFailed": "एसेट क्लास \"{name}\" हटाई नहीं जा सकी"
+    },
+    "bondFetchAction": "आधिकारिक स्रोत से {code} प्राप्त करें",
+    "bondFetching": "जारीकर्ता से {code} और उसकी संदर्भ दरें प्राप्त की जा रही हैं। इसमें एक मिनट तक लग सकता है।",
+    "bondFetchFailed": "सीरीज़ प्राप्त नहीं की जा सकी।",
+    "bondCurrencyLocked": "यह प्रतिभूति {linkedCurrency} में एक बॉन्ड प्रकार से जुड़ी है। मुद्रा को वापस {linkedCurrency} करें, या पहले बॉन्ड प्रकार का लिंक हटाएँ (लिंक हटाने पर उसकी गणना की गई कीमतें हट जाती हैं)।",
+    "bondProgramLabel": "बॉन्ड प्रकार",
+    "bondProgramNone": "लिंक नहीं है",
+    "bondProgramCurrent": "लिंक किया गया बॉन्ड प्रकार",
+    "bondProgramLoading": "बॉन्ड प्रकार लोड हो रहे हैं...",
+    "bondProgramLoadFailed": "बॉन्ड प्रकार लोड नहीं हो सके, इसलिए अभी कोई बॉन्ड प्रकार लिंक नहीं किया जा सकता।",
+    "bondProgramRetry": "पुनः प्रयास करें",
+    "bondNoPrograms": "बॉन्ड कैटलॉग में अभी कोई बॉन्ड प्रकार नहीं है।",
+    "bondAutoFetchLabel": "इस बॉन्ड प्रकार की नई सीरीज़ अपने-आप प्राप्त करें",
+    "bondAutoFetchHelp": "चालू होने पर Monize हर दिन आधिकारिक स्रोत से इस बॉन्ड प्रकार की नई सीरीज़ पढ़ता है, ताकि आप सीरीज़ पहले प्राप्त किए बिना खरीद दर्ज कर सकें।",
+    "bondCountryLabel": "देश",
+    "bondCountryOther": "अन्य",
+    "bondCountryOtherInfo": "अन्य देशों के बॉन्ड के लिए सहायता का अनुरोध प्रोजेक्ट के <link>GitHub</link> पर किया जा सकता है।",
+    "quoteTable": {
+      "urlLabel": "मूल्य तालिका वेबपेज",
+      "urlHelp": "पेज पर ऐसी तालिका होनी चाहिए जिसकी हेडर पंक्ति में तारीख कॉलम और समापन मूल्य कॉलम हो।",
+      "test": "जाँचें",
+      "previewFailed": "पेज पढ़ा नहीं जा सका।",
+      "summary": "{first} से {last} तक {count, plural, one {# दिन} other {# दिन}}",
+      "columns": "उपयोग किए गए कॉलम: {columns}",
+      "currency": "पेज पर दिखाई गई मुद्रा: {currency}",
+      "noCurrency": "पेज पर कोई मुद्रा नहीं दी गई है; मूल्य प्रतिभूति की मुद्रा में सहेजे जाते हैं।",
+      "skipped": "{count, plural, one {न पढ़ी जा सकने वाली # पंक्ति छोड़ी गई} other {न पढ़ी जा सकने वाली # पंक्तियाँ छोड़ी गईं}}",
+      "headers": {
+        "date": "तारीख",
+        "open": "खुलना",
+        "high": "उच्च",
+        "low": "निम्न",
+        "close": "समापन",
+        "volume": "वॉल्यूम"
+      }
     }
   },
   "priceForm": {
     "dateLabel": "तिथि",
     "closePriceLabel": "बंद मूल्य",
-    "openPriceLabel": "खुला मूल्य",
-    "highPriceLabel": "उच्च मूल्य",
-    "lowPriceLabel": "निम्न मूल्य",
-    "volumeLabel": "वॉल्यूम",
-    "optionalPlaceholder": "वैकल्पिक",
+    "openPriceLabel": "खुला मूल्य (वैकल्पिक)",
+    "highPriceLabel": "उच्च मूल्य (वैकल्पिक)",
+    "lowPriceLabel": "निम्न मूल्य (वैकल्पिक)",
+    "volumeLabel": "वॉल्यूम (वैकल्पिक)",
     "submitCreate": "मूल्य जोड़ें",
     "submitUpdate": "मूल्य अपडेट करें"
   },
@@ -246,7 +289,9 @@
     },
     "collapseAll": "सब समेटें",
     "expandAll": "सब खोलें",
-    "groupCount": "{count} भाव"
+    "groupCount": "{count} भाव",
+    "addYearButton": "एक और वर्ष का इतिहास जोड़ें",
+    "addYearTitle": "प्रदाता से एक और वर्ष का ऐतिहासिक मूल्य प्राप्त करें"
   },
   "transactionHistory": {
     "accountLabel": "खाता",
@@ -284,7 +329,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "दीर्घकालिक पूंजी लाभ का पुनर्निवेश",
       "CAPITAL_GAIN_SHORT": "अल्पकालिक पूंजी लाभ",
       "CAPITAL_GAIN_LONG": "दीर्घकालिक पूंजी लाभ",
-      "REDEEM": "सीडी/बॉन्ड रिडीम करें"
+      "REDEEM": "सीडी/बॉन्ड रिडीम करें",
+      "RETURN_OF_CAPITAL": "पूंजी की वापसी"
     },
     "toasts": {
       "loadHistoryFailed": "इतिहास लोड करने में विफल",
@@ -333,11 +379,20 @@
     "nameRequired": "नाम आवश्यक है",
     "nameMax": "नाम 255 अक्षरों या उससे कम होना चाहिए",
     "currencyRequired": "मुद्रा आवश्यक है",
-    "descriptionMax": "विवरण 5000 अक्षरों से अधिक नहीं होना चाहिए"
+    "bondProgramRequired": "बॉन्ड प्रकार आवश्यक है",
+    "descriptionMax": "विवरण 5000 अक्षरों से अधिक नहीं होना चाहिए",
+    "quoteUrlRequired": "मूल्य तालिका वाला पेज दर्ज करें।",
+    "quoteUrlInvalid": "http:// या https:// से शुरू होने वाला पूरा पता दर्ज करें।"
   },
   "priceValidation": {
     "dateRequired": "तिथि आवश्यक है",
     "priceRequired": "मूल्य आवश्यक है",
     "priceNonNegative": "मूल्य एक गैर-ऋणात्मक संख्या होनी चाहिए"
+  },
+  "priceAlert": {
+    "label": "कीमत में बदलाव का अलर्ट (%)",
+    "help": "बंद करने के लिए खाली छोड़ें। पिछले उपलब्ध कारोबारी सत्र से बढ़ोतरी या गिरावट की सूचना, हर साधन के लिए प्रति UTC दिन अधिकतम एक बार।",
+    "range": "0.1 से 1000 के बीच प्रतिशत दर्ज करें।",
+    "chartLabel": "मूल्य अलर्ट में चार्ट शामिल करें"
   }
 }

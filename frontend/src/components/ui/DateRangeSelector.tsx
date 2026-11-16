@@ -34,6 +34,14 @@ interface DateRangeSelectorProps {
   size?: 'sm' | 'md';
   /** Additional className for the root container. */
   className?: string;
+  /**
+   * Sit in a toolbar row as its own flex items, so the preset buttons take the
+   * row's height -- the height of the tallest control beside them, an account
+   * picker's trigger -- rather than their own. The custom date fields drop to
+   * a line of their own. The row must be `flex-wrap items-stretch`; `className`
+   * is not applied, since the root renders as `display: contents`.
+   */
+  fillRowHeight?: boolean;
 }
 
 const formatLabel = (range: string): string => {
@@ -55,6 +63,7 @@ export function DateRangeSelector({
   activeColour = 'bg-blue-600',
   size = 'md',
   className,
+  fillRowHeight = false,
 }: DateRangeSelectorProps) {
   const t = useTranslations('common');
   const sizeClasses = size === 'sm'
@@ -64,8 +73,8 @@ export function DateRangeSelector({
   const inactiveClasses = 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600';
 
   return (
-    <div className={className}>
-      <div className="flex flex-wrap gap-2">
+    <div className={fillRowHeight ? 'contents' : className}>
+      <div className="flex flex-wrap gap-2" data-testid="date-range-presets">
         {ranges.map((range) => (
           <button
             key={range}
@@ -97,7 +106,7 @@ export function DateRangeSelector({
         )}
       </div>
       {showCustom && value === 'custom' && (
-        <div className="flex gap-4 mt-4">
+        <div className={cn('flex gap-4', fillRowHeight ? 'w-full' : 'mt-4')}>
           {/* `onDateChange` is the whole contract: it fires with a canonical
               YYYY-MM-DD however the user entered the date. The raw `onChange`
               beside it only ever fired from the native input a touch device

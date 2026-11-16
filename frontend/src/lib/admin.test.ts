@@ -16,6 +16,42 @@ describe('adminApi', () => {
     expect(result).toHaveLength(1);
   });
 
+  it('getUserStorage fetches /admin/users/storage', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({
+      data: [
+        {
+          userId: 'u-1',
+          backups: { enabled: true, artifacts: 3, bytes: 300 },
+          attachments: { files: 2, bytes: 200 },
+        },
+      ],
+    });
+
+    const result = await adminApi.getUserStorage();
+
+    expect(apiClient.get).toHaveBeenCalledWith('/admin/users/storage');
+    // The unknown store's null travels as null rather than being coerced on
+    // the way in -- the table needs to tell it apart from a stored zero.
+    expect(result[0].backups.bytes).toBe(300);
+  });
+
+  it('carries an unreadable store through as null', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({
+      data: [
+        {
+          userId: 'u-1',
+          backups: { enabled: true, artifacts: null, bytes: null },
+          attachments: { files: 0, bytes: 0 },
+        },
+      ],
+    });
+
+    const [row] = await adminApi.getUserStorage();
+
+    expect(row.backups.bytes).toBeNull();
+    expect(row.attachments.bytes).toBe(0);
+  });
+
   it('updateUserRole patches role', async () => {
     vi.mocked(apiClient.patch).mockResolvedValue({ data: { id: 'u-1', role: 'admin' } });
     const result = await adminApi.updateUserRole('u-1', 'admin');
@@ -40,6 +76,27 @@ describe('adminApi', () => {
     const result = await adminApi.resetUserPassword('u-1');
     expect(apiClient.post).toHaveBeenCalledWith('/admin/users/u-1/reset-password');
     expect(result.temporaryPassword).toBe('abc123');
+  });
+
+  it('getDeploymentStatus reads the admin deployment status', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: { jwtSecretWeakness: 'placeholder' } });
+    const result = await adminApi.getDeploymentStatus();
+    expect(apiClient.get).toHaveBeenCalledWith('/admin/deployment-status');
+    expect(result).toEqual({ jwtSecretWeakness: 'placeholder' });
+  });
+
+  it('resetUserTwoFactor posts to the reset-2fa endpoint', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { reset: true } });
+    const result = await adminApi.resetUserTwoFactor('u-1');
+    expect(apiClient.post).toHaveBeenCalledWith('/admin/users/u-1/reset-2fa');
+    expect(result).toEqual({ reset: true });
+  });
+
+  it('unlinkSso posts to the unlink-sso endpoint and returns the temporary password', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { temporaryPassword: 'Tmp-pass-1' } });
+    const result = await adminApi.unlinkSso('u-1');
+    expect(apiClient.post).toHaveBeenCalledWith('/admin/users/u-1/unlink-sso');
+    expect(result).toEqual({ temporaryPassword: 'Tmp-pass-1' });
   });
 
   it('createUser posts the payload to /admin/users', async () => {

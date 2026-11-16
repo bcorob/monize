@@ -5,6 +5,8 @@
     "dividendsInterest": "Dividenden & rente",
     "realizedGains": "Gerealiseerde winsten",
     "ytd": "Jaar tot nu",
+    "realizedKnownPart": "Bekend deel: {amount}",
+    "realizedUnknownReason": "Deze winst kan niet worden berekend: de positie bevat aandelen die zonder kosten zijn toegevoegd, dus de kostprijs van de verkochte aandelen is onbekend. Open de transactie die ze heeft toegevoegd en voer hun prijs in.",
     "empty": "Dit jaar geen beleggingsinkomsten"
   },
   "register": {

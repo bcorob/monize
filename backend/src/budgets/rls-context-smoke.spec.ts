@@ -1,7 +1,7 @@
 import { BudgetAlertService } from "./budget-alert.service";
 import { BudgetPeriodCronService } from "./budget-period-cron.service";
 import { Budget } from "./entities/budget.entity";
-import { BudgetAlert } from "./entities/budget-alert.entity";
+import { Notification } from "../notification-center/entities/notification.entity";
 import { BudgetPeriod } from "./entities/budget-period.entity";
 import { Transaction } from "../transactions/entities/transaction.entity";
 import { TransactionSplit } from "../transactions/entities/transaction-split.entity";
@@ -9,6 +9,7 @@ import { ScheduledTransaction } from "../scheduled-transactions/entities/schedul
 import { User } from "../users/entities/user.entity";
 import { UserPreference } from "../users/entities/user-preference.entity";
 import { createScopedDbMocks } from "../test-helpers/scoped-db-testing";
+import { createJobClaimMock } from "../test-helpers/job-claim-testing";
 
 /**
  * RLS smoke for the budgets module's cron entry points (task R4).
@@ -50,21 +51,29 @@ describe("budgets module RLS context smoke (real withScopedDb)", () => {
       ]),
       findOne: jest.fn().mockResolvedValue(null),
     };
-    const { dataSource } = createScopedDbMocks([
+    const { manager, dataSource } = createScopedDbMocks([
       [Budget, budgetsRepo],
-      [BudgetAlert, { find: jest.fn().mockResolvedValue([]) }],
+      [Notification, { find: jest.fn().mockResolvedValue([]) }],
       [Transaction, { createQueryBuilder: jest.fn() }],
       [TransactionSplit, { createQueryBuilder: jest.fn() }],
       [ScheduledTransaction, { createQueryBuilder: jest.fn() }],
       [User, { findOne: jest.fn() }],
       [UserPreference, { findOne: jest.fn() }],
     ]);
+    // `buildTimezoneLookup`'s raw `getUsersByEffectiveTimezone` query, routed
+    // through the real `withScopedDb` this suite exercises; no rows is a user
+    // table this smoke test never populated.
+    manager.query.mockResolvedValue([]);
 
     const service = new BudgetAlertService(
       dataSource as never,
       emailService as never,
       configService as never,
       i18n as never,
+      { create: jest.fn(), markEmailSent: jest.fn() } as never,
+      { resolveEmail: jest.fn().mockResolvedValue(true) } as never,
+      { notify: jest.fn().mockResolvedValue(null) } as never,
+      createJobClaimMock() as never,
     );
     const errorSpy = jest
       .spyOn(service["logger"], "error")
@@ -94,6 +103,8 @@ describe("budgets module RLS context smoke (real withScopedDb)", () => {
       emailService as never,
       configService as never,
       i18n as never,
+      { resolveEmail: jest.fn().mockResolvedValue(true) } as never,
+      createJobClaimMock() as never,
     );
     const errorSpy = jest
       .spyOn(service["logger"], "error")
@@ -115,6 +126,10 @@ describe("budgets module RLS context smoke (real withScopedDb)", () => {
       emailService as never,
       configService as never,
       i18n as never,
+      { create: jest.fn(), markEmailSent: jest.fn() } as never,
+      { resolveEmail: jest.fn().mockResolvedValue(true) } as never,
+      { notify: jest.fn().mockResolvedValue(null) } as never,
+      createJobClaimMock() as never,
     );
 
     // Called with no ambient scope at all (no interceptor, no wrapper): the

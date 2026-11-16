@@ -1,6 +1,11 @@
 import { ImportRegularProcessorService } from "./import-regular-processor.service";
+import { ExchangeRateService } from "../currencies/exchange-rate.service";
+import { TransactionRulesApplierService } from "../transaction-rules/transaction-rules-applier.service";
 import { ImportContext } from "./import-context";
-import { TransactionStatus } from "../transactions/entities/transaction.entity";
+import {
+  Transaction,
+  TransactionStatus,
+} from "../transactions/entities/transaction.entity";
 import { AccountType } from "../accounts/entities/account.entity";
 import { Payee } from "../payees/entities/payee.entity";
 import { SplitKind } from "../transactions/entities/split-kind.enum";
@@ -8,6 +13,10 @@ import { ImportResultDto } from "./dto/import.dto";
 
 describe("ImportRegularProcessorService", () => {
   let service: ImportRegularProcessorService;
+  let exchangeRateService: {
+    getRateForDate: jest.Mock;
+    getLatestRate: jest.Mock;
+  };
 
   const userId = "user-1";
   const accountId = "acc-1";
@@ -15,6 +24,7 @@ describe("ImportRegularProcessorService", () => {
   const makeImportResult = (): ImportResultDto => ({
     imported: 0,
     skipped: 0,
+    skippedRows: [],
     errors: 0,
     errorMessages: [],
     categoriesCreated: 0,
@@ -33,6 +43,12 @@ describe("ImportRegularProcessorService", () => {
       select: jest.fn().mockReturnThis(),
       addSelect: jest.fn().mockReturnThis(),
       groupBy: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      update: jest.fn().mockReturnThis(),
+      set: jest.fn().mockReturnThis(),
+      execute: jest.fn().mockResolvedValue({ affected: 1 }),
+      getRawOne: jest.fn().mockResolvedValue(result ?? undefined),
       getOne: jest.fn().mockResolvedValue(result),
       getMany: jest.fn().mockResolvedValue(result ? [result] : []),
       getRawMany: jest.fn().mockResolvedValue([]),
@@ -56,12 +72,21 @@ describe("ImportRegularProcessorService", () => {
     find: jest.fn().mockResolvedValue([]),
     findOne: jest.fn().mockResolvedValue(null),
     update: jest.fn().mockResolvedValue({ affected: 1 }),
+    // `updateAccountBalance` moves a balance with one atomic
+    // `current_balance = current_balance + $1` statement.
+    query: jest.fn().mockResolvedValue([[], 1]),
     delete: jest.fn().mockResolvedValue({ affected: 1 }),
     create: jest.fn().mockImplementation((_cls: any, data: any) => ({
       ...data,
       id: `gen-${Date.now()}-${Math.random()}`,
     })),
     createQueryBuilder: jest.fn().mockReturnValue(makeMockQueryBuilder()),
+    // `currencyMoneyDecimals` reads a transfer target's decimal places; no
+    // row reads as the fiat default.
+    getRepository: jest.fn().mockReturnValue({
+      find: jest.fn().mockResolvedValue([]),
+      query: jest.fn().mockResolvedValue([]),
+    }),
   });
 
   const makeContext = (
@@ -85,14 +110,120 @@ describe("ImportRegularProcessorService", () => {
       importStartTime: new Date(),
       dateCounters: new Map(),
       affectedAccountIds: new Set(),
+      settledScheduleIds: new Set(),
       importResult: makeImportResult(),
       transferDupCounts: new Map(),
+      heldExternalIds: new Map(),
       ...overrides,
     };
   };
 
   beforeEach(() => {
-    service = new ImportRegularProcessorService();
+    exchangeRateService = {
+      getRateForDate: jest.fn().mockResolvedValue(null),
+      getLatestRate: jest.fn().mockResolvedValue(null),
+    };
+    service = new ImportRegularProcessorService(
+      {
+        applyToNew: jest.fn().mockResolvedValue([]),
+      } as unknown as TransactionRulesApplierService,
+      exchangeRateService as unknown as ExchangeRateService,
+    );
+  });
+
+  describe("processTransaction: money precision", () => {
+    const btcContext = () =>
+      makeContext({
+        moneyDecimals: 8,
+        account: {
+          id: accountId,
+          currencyCode: "BTC",
+          accountType: AccountType.CRYPTO,
+          name: "Wallet",
+        } as any,
+      });
+    const balanceDeltas = (ctx: ImportContext) =>
+      (managerOf(ctx).query.mock.calls as unknown[][])
+        .filter(([sql]) => String(sql).includes("SET current_balance"))
+        .map(([, params]) => (params as unknown[])[0]);
+
+    it("imports an 8-place coin amount whole into a BTC account and moves the balance by it", async () => {
+      const ctx = btcContext();
+
+      await service.processTransaction(ctx, {
+        date: "2025-01-15",
+        amount: -0.000025,
+        payee: "Network fee",
+      });
+
+      expect(ctx.importResult.imported).toBe(1);
+      const created = (managerOf(ctx).create.mock.calls as unknown[][]).find(
+        ([entity]) => entity === Transaction,
+      );
+      expect((created?.[1] as { amount: number }).amount).toBe(-0.000025);
+      expect(balanceDeltas(ctx)).toEqual([-0.000025]);
+    });
+
+    it("refuses an amount with more places than a fiat account carries", async () => {
+      const ctx = makeContext();
+
+      await expect(
+        service.processTransaction(ctx, {
+          date: "2025-01-15",
+          amount: -0.000025,
+        }),
+      ).rejects.toThrow(/more decimal places than CAD carries \(4\)/);
+      expect(managerOf(ctx).save).not.toHaveBeenCalled();
+      expect(ctx.importResult.imported).toBe(0);
+    });
+
+    it("refuses an over-precise OFX amount (-12.34567) on a CAD account with the places-exceeded error", async () => {
+      const ctx = makeContext();
+
+      await expect(
+        service.processTransaction(ctx, {
+          date: "2025-01-15",
+          amount: -12.34567,
+          fitId: "FIT-1",
+        }),
+      ).rejects.toThrow(/more decimal places than CAD carries \(4\)/);
+      expect(ctx.importResult.imported).toBe(0);
+    });
+
+    it("refuses a coin amount with more places than the coin carries", async () => {
+      const ctx = btcContext();
+
+      await expect(
+        service.processTransaction(ctx, {
+          date: "2025-01-15",
+          amount: -0.000000025,
+        }),
+      ).rejects.toThrow(/more decimal places than BTC carries \(8\)/);
+    });
+
+    it("refuses a split line with more places than the account carries", async () => {
+      const ctx = makeContext();
+
+      await expect(
+        service.processTransaction(ctx, {
+          date: "2025-01-15",
+          amount: -10,
+          splits: [{ amount: -9.99999, category: "A" }],
+        }),
+      ).rejects.toThrow(/"split amount"/);
+    });
+
+    it("keeps a fiat amount at four places exactly as before", async () => {
+      const ctx = makeContext();
+
+      await service.processTransaction(ctx, {
+        date: "2025-01-15",
+        amount: -50.1235,
+      });
+
+      expect(managerOf(ctx).create.mock.calls[0][1].amount).toBe(-50.1235);
+      expect(balanceDeltas(ctx)).toEqual([-50.1235]);
+    });
   });
 
   describe("processTransaction", () => {
@@ -421,6 +552,255 @@ describe("ImportRegularProcessorService", () => {
     });
   });
 
+  describe("OFX bank id (FITID)", () => {
+    const holdsKey = (
+      ctx: ImportContext,
+      key: string,
+      holder = { transactionDate: "2026-01-15", amount: -50 },
+    ) => ctx.heldExternalIds.set(key, holder);
+
+    const keyLookupsOf = (ctx: ImportContext) =>
+      managerOf(ctx).findOne.mock.calls.filter(
+        ([, options]) => options?.where?.externalId !== undefined,
+      );
+
+    it("skips a row whose bank id the account already holds, writes nothing and lists it with its date and amount", async () => {
+      const ctx = makeContext();
+      holdsKey(ctx, "ofx:A1");
+
+      await service.processTransaction(ctx, {
+        date: "2026-01-15",
+        amount: -50,
+        payee: "Store",
+        fitId: "A1",
+      });
+
+      expect(ctx.importResult.imported).toBe(0);
+      expect(ctx.importResult.skipped).toBe(1);
+      expect(ctx.importResult.skippedRows).toEqual([
+        {
+          date: "2026-01-15",
+          amount: -50,
+          currencyCode: "CAD",
+          payee: "Store",
+          reason: "alreadyImported",
+        },
+      ]);
+      expect(managerOf(ctx).create).not.toHaveBeenCalled();
+      expect(managerOf(ctx).save).not.toHaveBeenCalled();
+      expect(managerOf(ctx).query).not.toHaveBeenCalled();
+      // The held keys were read once for the whole file, not per row.
+      expect(keyLookupsOf(ctx)).toEqual([]);
+    });
+
+    it("matches the held row's amount as the database returns it, a 4dp decimal string", async () => {
+      const ctx = makeContext();
+      holdsKey(ctx, "ofx:A1", {
+        transactionDate: "2026-01-15",
+        amount: "-50.0000" as unknown as number,
+      });
+
+      await service.processTransaction(ctx, {
+        date: "2026-01-15",
+        amount: -50,
+        payee: "Store",
+        fitId: "A1",
+      });
+
+      expect(ctx.importResult.skipped).toBe(1);
+      expect(managerOf(ctx).create).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["another date", { transactionDate: "2025-12-15", amount: -50 }],
+      ["another amount", { transactionDate: "2026-01-15", amount: -75 }],
+    ])(
+      "imports a row whose bank id a row of %s holds, without the key, since the bank reused it",
+      async (_label, holder) => {
+        const ctx = makeContext();
+        holdsKey(ctx, "ofx:A1", holder);
+
+        await service.processTransaction(ctx, {
+          date: "2026-01-15",
+          amount: -50,
+          payee: "Store",
+          fitId: "A1",
+        });
+
+        expect(ctx.importResult.skipped).toBe(0);
+        expect(ctx.importResult.imported).toBe(1);
+        expect(managerOf(ctx).create).toHaveBeenCalledWith(
+          Transaction,
+          expect.objectContaining({ externalId: null }),
+        );
+      },
+    );
+
+    it("stores the bank id as the new row's externalId", async () => {
+      const ctx = makeContext();
+
+      await service.processTransaction(ctx, {
+        date: "2026-01-15",
+        amount: -50,
+        payee: "Store",
+        fitId: "A1",
+      });
+
+      expect(ctx.importResult.imported).toBe(1);
+      expect(managerOf(ctx).create).toHaveBeenCalledWith(
+        Transaction,
+        expect.objectContaining({ externalId: "ofx:A1" }),
+      );
+    });
+
+    it("imports a row without a bank id as before, with no key and no lookup", async () => {
+      const ctx = makeContext();
+
+      await service.processTransaction(ctx, {
+        date: "2026-01-15",
+        amount: -50,
+        payee: "Store",
+      });
+
+      expect(ctx.importResult.imported).toBe(1);
+      expect(managerOf(ctx).create).toHaveBeenCalledWith(
+        Transaction,
+        expect.objectContaining({ externalId: null }),
+      );
+      expect(keyLookupsOf(ctx)).toEqual([]);
+    });
+
+    it("records the key it wrote, so the rest of the file sees the account holding it", async () => {
+      const ctx = makeContext();
+
+      await service.processTransaction(ctx, {
+        date: "2026-01-15",
+        amount: -50,
+        payee: "Store",
+        fitId: "A1",
+      });
+
+      expect(ctx.heldExternalIds.get("ofx:A1")).toEqual({
+        transactionDate: "2026-01-15",
+        amount: -50,
+      });
+    });
+
+    it("answers a held bank id before the transfer check, so a transfer line is named as already imported", async () => {
+      const accountMap = new Map<string, string | null>();
+      accountMap.set("Savings", "acc-savings");
+      const ctx = makeContext({ accountMap });
+      holdsKey(ctx, "ofx:T-7", { transactionDate: "2026-01-15", amount: -200 });
+
+      await service.processTransaction(ctx, {
+        date: "2026-01-15",
+        amount: -200,
+        isTransfer: true,
+        transferAccount: "Savings",
+        fitId: "T-7",
+      });
+
+      expect(ctx.importResult.skippedRows.map((r) => r.reason)).toEqual([
+        "alreadyImported",
+      ]);
+      // It still takes its turn in the per-signature transfer count, so a new
+      // identical transfer later in the file is not matched against it, and it
+      // takes that turn without running the counted queries.
+      expect(
+        ctx.transferDupCounts.get("linked|2026-01-15|-200|acc-savings"),
+      ).toBe(1);
+      expect(ctx.transferDupCounts.get("split|2026-01-15|-200")).toBe(1);
+      expect(managerOf(ctx).createQueryBuilder).not.toHaveBeenCalled();
+    });
+
+    describe("a transfer line whose bank id the account does not hold", () => {
+      const savingsContext = () => {
+        const accountMap = new Map<string, string | null>();
+        accountMap.set("Savings", "acc-savings");
+        return makeContext({ accountMap });
+      };
+      const line = {
+        date: "2026-01-15",
+        amount: -100,
+        isTransfer: true,
+        transferAccount: "Savings",
+        fitId: "X3",
+      };
+
+      it("takes over the bank id on a recorded transfer that has none and is skipped as that transfer", async () => {
+        const ctx = savingsContext();
+        const adoptQb = makeMockQueryBuilder({ id: "tx-leg" });
+        managerOf(ctx).createQueryBuilder.mockImplementation(() => adoptQb);
+
+        await service.processTransaction(ctx, line);
+
+        expect(ctx.importResult.imported).toBe(0);
+        expect(ctx.importResult.skippedRows.map((r) => r.reason)).toEqual([
+          "duplicateTransfer",
+        ]);
+        expect(adoptQb.andWhere).toHaveBeenCalledWith("t.external_id IS NULL");
+        expect(adoptQb.andWhere).toHaveBeenCalledWith(
+          "t.created_at < :importStartTime",
+          { importStartTime: ctx.importStartTime },
+        );
+        expect(adoptQb.set).toHaveBeenCalledWith({ externalId: "ofx:X3" });
+        expect(adoptQb.where).toHaveBeenCalledWith("id = :id", {
+          id: "tx-leg",
+        });
+        expect(ctx.heldExternalIds.get("ofx:X3")).toEqual({
+          transactionDate: "2026-01-15",
+          amount: -100,
+        });
+        expect(managerOf(ctx).create).not.toHaveBeenCalled();
+      });
+
+      it("imports as a new transfer when no recorded one is free, whatever the counted check would find", async () => {
+        const ctx = savingsContext();
+        // Two recorded transfers of the signature, both already holding a
+        // bank id: the counted check would call this line a duplicate.
+        const qb = makeMockQueryBuilder(null);
+        qb.getCount.mockResolvedValue(2);
+        managerOf(ctx).createQueryBuilder.mockImplementation(() => qb);
+
+        await service.processTransaction(ctx, line);
+
+        // A split-linked row is this transfer only when its split is in the
+        // account the line names.
+        expect(qb.andWhere).toHaveBeenCalledWith(
+          "parent.account_id = :transferAccountId",
+          { transferAccountId: "acc-savings" },
+        );
+        expect(qb.getCount).not.toHaveBeenCalled();
+        expect(ctx.importResult.skipped).toBe(0);
+        expect(ctx.importResult.imported).toBe(1);
+        expect(managerOf(ctx).create).toHaveBeenCalledWith(
+          Transaction,
+          expect.objectContaining({ externalId: "ofx:X3" }),
+        );
+        expect(
+          ctx.transferDupCounts.get("linked|2026-01-15|-100|acc-savings"),
+        ).toBe(1);
+      });
+
+      it("imports as a new transfer when another import claimed the recorded one first", async () => {
+        const ctx = savingsContext();
+        const qb = makeMockQueryBuilder({ id: "tx-leg" });
+        qb.execute.mockResolvedValue({ affected: 0 });
+        qb.getRawMany.mockResolvedValue([]);
+        qb.getOne.mockResolvedValue(null);
+        managerOf(ctx).createQueryBuilder.mockImplementation(() => qb);
+
+        await service.processTransaction(ctx, line);
+
+        expect(ctx.importResult.imported).toBe(1);
+        expect(ctx.heldExternalIds.get("ofx:X3")).toEqual({
+          transactionDate: "2026-01-15",
+          amount: -100,
+        });
+      });
+    });
+  });
+
   describe("isDuplicateTransfer (via processTransaction)", () => {
     it("should skip duplicate linked transfers", async () => {
       const accountMap = new Map<string, string | null>();
@@ -444,6 +824,15 @@ describe("ImportRegularProcessorService", () => {
 
       expect(ctx.importResult.skipped).toBe(1);
       expect(ctx.importResult.imported).toBe(0);
+      expect(ctx.importResult.skippedRows).toEqual([
+        {
+          date: "2025-01-15",
+          amount: -200,
+          currencyCode: "CAD",
+          payee: "",
+          reason: "duplicateTransfer",
+        },
+      ]);
     });
 
     it("should skip split-linked transfers", async () => {
@@ -975,6 +1364,71 @@ describe("ImportRegularProcessorService", () => {
       expect(managerOf(ctx).update).toHaveBeenCalled();
     });
 
+    it("gives the matched pending row the line's bank id, so the next download of it is skipped", async () => {
+      const accountMap = new Map<string, string | null>();
+      accountMap.set("USD Account", "acc-usd");
+      const ctx = makeContext({ accountMap });
+      const pendingTransfer = {
+        id: "tx-pending",
+        amount: 95,
+        payeeName: "Transfer",
+        referenceNumber: null,
+        externalId: null,
+        linkedTransaction: { accountId: "acc-usd" },
+      };
+      let qbCallCount = 0;
+      managerOf(ctx).createQueryBuilder.mockImplementation(() => {
+        qbCallCount++;
+        return makeMockQueryBuilder(qbCallCount <= 2 ? null : pendingTransfer);
+      });
+
+      await service.processTransaction(ctx, {
+        date: "2025-01-15",
+        amount: 100,
+        isTransfer: true,
+        transferAccount: "USD Account",
+        fitId: "X-9",
+      });
+
+      expect(managerOf(ctx).update).toHaveBeenCalledWith(
+        Transaction,
+        "tx-pending",
+        expect.objectContaining({ externalId: "ofx:X-9" }),
+      );
+    });
+
+    it("keeps a key the matched pending row already holds", async () => {
+      const accountMap = new Map<string, string | null>();
+      accountMap.set("USD Account", "acc-usd");
+      const ctx = makeContext({ accountMap });
+      const pendingTransfer = {
+        id: "tx-pending",
+        amount: 95,
+        payeeName: "Transfer",
+        referenceNumber: null,
+        externalId: "client-key",
+        linkedTransaction: { accountId: "acc-usd" },
+      };
+      let qbCallCount = 0;
+      managerOf(ctx).createQueryBuilder.mockImplementation(() => {
+        qbCallCount++;
+        return makeMockQueryBuilder(qbCallCount <= 2 ? null : pendingTransfer);
+      });
+
+      await service.processTransaction(ctx, {
+        date: "2025-01-15",
+        amount: 100,
+        isTransfer: true,
+        transferAccount: "USD Account",
+        fitId: "X-9",
+      });
+
+      expect(managerOf(ctx).update).toHaveBeenCalledTimes(1);
+      expect(managerOf(ctx).update.mock.calls[0][2]).not.toHaveProperty(
+        "externalId",
+      );
+    });
+
     it("should not match pending transfer for non-transfer transactions", async () => {
       const ctx = makeContext();
       const qifTx = {
@@ -1333,6 +1787,66 @@ describe("ImportRegularProcessorService", () => {
 
       expect(ctx.importResult.imported).toBe(1);
       expect(ctx.affectedAccountIds.has("acc-savings")).toBe(true);
+    });
+
+    describe("a split transfer into an account in another currency (A26-M18)", () => {
+      const splitInto = () => {
+        const accountMap = new Map<string, string | null>();
+        accountMap.set("Savings USD", "acc-usd");
+        const ctx = makeContext({ accountMap });
+        managerOf(ctx).createQueryBuilder.mockReturnValue(
+          makeMockQueryBuilder(null),
+        );
+        managerOf(ctx).findOne.mockImplementation((_entity: any, opts: any) =>
+          Promise.resolve(
+            opts?.where?.id === "acc-usd"
+              ? { id: "acc-usd", currencyCode: "USD" }
+              : null,
+          ),
+        );
+        const qifTx = {
+          date: "2025-01-15",
+          amount: -100,
+          splits: [
+            { amount: -40, category: "Food" },
+            { amount: -60, isTransfer: true, transferAccount: "Savings USD" },
+          ],
+        };
+        return { ctx, qifTx };
+      };
+      const createdLeg = (ctx: ImportContext) =>
+        managerOf(ctx)
+          .create.mock.calls.map((call: any[]) => call[1])
+          .find((row: any) => row.accountId === "acc-usd");
+
+      it("converts the leg at the date's rate and writes it in the target's currency", async () => {
+        const { ctx, qifTx } = splitInto();
+        exchangeRateService.getRateForDate.mockResolvedValue(0.74);
+
+        await service.processTransaction(ctx, qifTx);
+
+        expect(exchangeRateService.getRateForDate).toHaveBeenCalledWith(
+          "CAD",
+          "USD",
+          "2025-01-15",
+        );
+        expect(createdLeg(ctx)).toMatchObject({
+          amount: 44.4,
+          currencyCode: "USD",
+          exchangeRate: 0.74,
+        });
+        expect(createdLeg(ctx).description).toContain("PENDING IMPORT");
+      });
+
+      it("refuses the row, naming the pair, when no rate covers the date", async () => {
+        const { ctx, qifTx } = splitInto();
+        exchangeRateService.getRateForDate.mockResolvedValue(null);
+
+        await expect(service.processTransaction(ctx, qifTx)).rejects.toThrow(
+          "CAD -> USD",
+        );
+        expect(createdLeg(ctx)).toBeUndefined();
+      });
     });
 
     it("should handle loan categories within splits", async () => {

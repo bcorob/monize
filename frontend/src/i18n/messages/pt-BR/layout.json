@@ -34,6 +34,12 @@
     "dismiss": "Dispensar",
     "dismissAriaLabel": "Dispensar notificação de atualização"
   },
+  "jwtSecretBanner": {
+    "label": "O JWT_SECRET é fraco.",
+    "detail": "É um valor de exemplo publicado ou previsível demais, então tokens de sessão podem ser falsificados. Gere um valor forte com <code>openssl rand -base64 32</code>. Alterá-lo faz os códigos dos aplicativos autenticadores pararem de funcionar e esquece os dispositivos confiáveis: os usuários entram com um código de recuperação e configuram o 2FA de novo, e você redefine o 2FA em <users>Gerenciamento de Usuários</users> para quem não tiver um. Leia antes <code>docs/backend/modules-and-runtime.md</code> (Changing JWT_SECRET).",
+    "dismiss": "Dispensar",
+    "dismissAriaLabel": "Dispensar aviso do JWT_SECRET"
+  },
   "actionHistory": {
     "title": "Histórico de ações",
     "buttonAriaLabel": "Histórico de ações",
@@ -58,6 +64,7 @@
       "tag": "Etiqueta",
       "account": "Conta",
       "scheduled_transaction": "Agendada",
+      "scheduled_posting": "Agendada",
       "security": "Título",
       "budget": "Orçamento",
       "custom_report": "Relatório"
@@ -79,7 +86,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "Reinvestimento de rendimento de longo prazo",
       "CAPITAL_GAIN_SHORT": "Rendimento de capital de curto prazo",
       "CAPITAL_GAIN_LONG": "Rendimento de capital de longo prazo",
-      "REDEEM": "Resgate de CD/título"
+      "REDEEM": "Resgate de CD/título",
+      "RETURN_OF_CAPITAL": "Devolução de capital"
     },
     "descriptions": {
       "createdAccount": "Conta \"{name}\" criada",
@@ -99,6 +107,7 @@
       "deletedInvestmentReport": "Relatório de investimentos \"{name}\" excluído",
       "createdPayee": "Beneficiário \"{name}\" criado",
       "updatedPayee": "Beneficiário \"{name}\" atualizado",
+      "lookedUpPayeeContact": "Dados de contato do beneficiário \"{name}\" buscados",
       "deletedPayee": "Beneficiário \"{name}\" excluído",
       "createdReport": "Relatório \"{name}\" criado",
       "updatedReport": "Relatório \"{name}\" atualizado",
@@ -106,6 +115,7 @@
       "createdScheduledTransaction": "Transação agendada \"{name}\" criada",
       "updatedScheduledTransaction": "Transação agendada \"{name}\" atualizada",
       "deletedScheduledTransaction": "Transação agendada \"{name}\" excluída",
+      "postedScheduledTransaction": "Transação agendada \"{name}\" lançada",
       "createdSecurity": "Título \"{symbol}\" criado",
       "updatedSecurity": "Título \"{symbol}\" atualizado",
       "deletedSecurity": "Título \"{symbol}\" excluído",
@@ -115,26 +125,23 @@
       "createdTransaction": "Transação {payee} {amount} criada",
       "updatedTransaction": "Transação {payee} {amount} atualizada",
       "deletedTransaction": "Transação {payee} {amount} excluída",
+      "convertedToTransfer": "Transação {payee} {amount} convertida em transferência",
+      "convertedToTransaction": "Transferência {payee} {amount} convertida em transação",
       "bulkUpdatedTransactions": "Atualização em massa de {count, plural, one {# transação} other {# transações}}",
       "createdTransfer": "Transferência {amount} de {from} para {to} criada",
       "createdInvestmentTransaction": "Transação {action} criada",
       "updatedInvestmentTransaction": "Transação {action} atualizada",
       "deletedInvestmentTransaction": "Transação {action} excluída",
       "transferredSecurity": "Título transferido entre contas",
-      "updatedSecurityTransfer": "Transferência de títulos atualizada"
-    },
-    "timeAgo": {
-      "justNow": "agora mesmo",
-      "minutes": "há {count} min",
-      "hours": "há {count} h",
-      "days": "há {count} d"
+      "updatedSecurityTransfer": "Transferência de títulos atualizada",
+      "ranTransactionRule": "Regra “{name}” executada em {count, plural, one {# transação} other {# transações}}"
     },
     "undonePrefix": "Desfeito: {description}",
     "redonePrefix": "Refeito: {description}"
   },
   "pageHeader": {
-    "helpAriaLabel": "Abrir a wiki do Monize para obter ajuda com esta seção",
-    "helpTooltip": "Abrir a wiki do Monize para obter ajuda com esta seção"
+    "helpAriaLabel": "Ajuda para esta página",
+    "helpTooltip": "Ajuda para esta página"
   },
   "bootSplash": {
     "loading": "Carregando o Monize",
@@ -145,5 +152,17 @@
     "title": "Não foi possível conectar",
     "message": "O Monize não conseguiu contatar o servidor. Verifique sua conexão e tente novamente.",
     "retry": "Tentar novamente"
+  },
+  "pushBanner": {
+    "enableTitle": "Ativar as notificações?",
+    "enableBody": "O Monize pode lembrar você de contas e limites de orçamento neste dispositivo, mesmo com o aplicativo fechado. Seu navegador vai pedir permissão.",
+    "enableButton": "Ativar",
+    "enabling": "Ativando…",
+    "installIosTitle": "Adicione o Monize à tela de início primeiro.",
+    "installIosBody": "No iPhone e no iPad as notificações só funcionam pelo aplicativo instalado. Toque em Compartilhar, depois em Adicionar à Tela de Início, e abra o Monize por ali.",
+    "blockedTitle": "As notificações estão bloqueadas para o Monize.",
+    "blockedBody": "Permita-as nas configurações do site do seu navegador para esta página. O Monize não pode pedir de novo por conta própria.",
+    "blockedIosBody": "Abra Ajustes do iOS, depois Notificações, depois Monize, e permita ali. Se o Monize não aparecer na lista, remova-o da tela de início e adicione novamente.",
+    "dismiss": "Agora não"
   }
 }

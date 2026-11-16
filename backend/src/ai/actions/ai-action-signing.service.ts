@@ -13,15 +13,27 @@ export const AI_ACTION_TTL_MS = 10 * 60 * 1000; // 10 minutes
 /**
  * Deterministically serialize a value with object keys sorted so the HMAC is
  * stable regardless of property insertion order. Arrays preserve order.
+ *
+ * It follows `JSON.stringify` for `undefined` (an object key is omitted, an
+ * array element becomes `null`) so it equals the canonical form of the
+ * descriptor after a JSON round-trip, because the browser echoes the
+ * descriptor back as JSON.
+ *
+ * Exported because the MCP write confirmation fingerprints the action a user
+ * approved with the same rule (`mcp-confirm.ts`): two serializations of "the
+ * same action" that disagree would let a retry commit something else.
  */
-function canonicalize(value: unknown): string {
+export function canonicalize(value: unknown): string {
   if (value === null || typeof value !== "object") {
     return JSON.stringify(value);
   }
   if (Array.isArray(value)) {
-    return `[${value.map(canonicalize).join(",")}]`;
+    return `[${value
+      .map((item) => (item === undefined ? "null" : canonicalize(item)))
+      .join(",")}]`;
   }
   const entries = Object.keys(value as Record<string, unknown>)
+    .filter((key) => (value as Record<string, unknown>)[key] !== undefined)
     .sort()
     .map(
       (key) =>

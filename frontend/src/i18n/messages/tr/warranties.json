@@ -1,0 +1,321 @@
+{
+  "page": {
+    "title": "Garantiler",
+    "subtitle": "Ne satın aldığınız, garantinin ne zaman bittiği ve kimden aldığınız",
+    "newButton": "Garanti ekle",
+    "exportButton": "CSV dışa aktar",
+    "importButton": "CSV içe aktar",
+    "loading": "Garantiler yükleniyor...",
+    "loadFailed": "Garantileriniz yüklenemedi.",
+    "retry": "Yeniden dene",
+    "summary": {
+      "active": "Geçerli",
+      "expiring": "Süresi yakında doluyor",
+      "expired": "Süresi dolmuş",
+      "lifetime": "Ömür boyu",
+      "unavailable": "Yüklenmedi",
+      "expiringHint": "{days} gün içinde"
+    },
+    "filters": {
+      "label": "Duruma göre filtrele",
+      "all": "Tümü",
+      "expiring": "Süresi doluyor",
+      "active": "Geçerli",
+      "expired": "Süresi dolmuş",
+      "lifetime": "Ömür boyu",
+      "counted": {
+        "all": "Tümü ({count})",
+        "expiring": "Süresi doluyor ({count})",
+        "active": "Geçerli ({count})",
+        "expired": "Süresi dolmuş ({count})",
+        "lifetime": "Ömür boyu ({count})"
+      }
+    },
+    "search": {
+      "label": "Garantilerde ara",
+      "placeholder": "Ad, satıcı, model veya seri numarası ara"
+    },
+    "archivedToggle": "Arşivlenenleri göster",
+    "transactionChip": {
+      "label": "Tek bir işlemin garantileri",
+      "clear": "Tüm garantileri göster"
+    },
+    "pager": {
+      "itemName": "garanti",
+      "total": "{count, plural, other {{total} garanti}}"
+    },
+    "empty": {
+      "title": "Henüz garanti yok",
+      "description": "Ne zaman biteceğini takip etmek için bir garanti ekleyin.",
+      "filteredTitle": "Eşleşen garanti yok",
+      "filteredDescription": "Başka bir durum deneyin veya aramayı temizleyin.",
+      "archivedTitle": "Arşivlenmiş garanti yok"
+    },
+    "modal": {
+      "newTitle": "Yeni garanti",
+      "editTitle": "Garantiyi düzenle"
+    },
+    "delete": {
+      "title": "Garantiyi sil",
+      "message": "\"{name}\" silinsin mi? Talepleri ve belgeleri de onunla birlikte silinir ve bu işlem geri alınamaz."
+    },
+    "toasts": {
+      "created": "Garanti eklendi",
+      "updated": "Garanti güncellendi",
+      "deleted": "Garanti silindi",
+      "archived": "Garanti arşivlendi",
+      "unarchived": "Garanti geri yüklendi",
+      "createFailed": "Garanti eklenemedi",
+      "updateFailed": "Garanti güncellenemedi",
+      "deleteFailed": "Garanti silinemedi",
+      "archiveFailed": "Garanti arşivlenemedi",
+      "unarchiveFailed": "Garanti geri yüklenemedi",
+      "prefillFailed": "Bu işlem yüklenemedi, bu yüzden garanti boş başlıyor",
+      "exported": "{count, plural, other {{shown} garanti dışa aktarıldı}}",
+      "exportFailed": "Garantiler dışa aktarılamadı"
+    }
+  },
+  "status": {
+    "lifetime": "Ömür boyu",
+    "active": "Geçerli",
+    "expiring": "Süresi yakında doluyor",
+    "expired": "Süresi doldu"
+  },
+  "daysLeft": {
+    "left": "{count, plural, other {{days} gün kaldı}}",
+    "today": "Süresi bugün doluyor",
+    "ago": "{count, plural, other {Süresi {days} gün önce doldu}}",
+    "leftYears": "{yearsCount, plural, other {{years} yıl}}, {daysCount, plural, other {{days} gün}} kaldı",
+    "agoYears": "Süresi {yearsCount, plural, other {{years} yıl}}, {daysCount, plural, other {{days} gün}} önce doldu"
+  },
+  "kind": {
+    "manufacturer": "Üretici",
+    "extended": "Uzatılmış",
+    "store": "Mağaza",
+    "other": "Diğer"
+  },
+  "list": {
+    "columns": {
+      "name": "Ad",
+      "status": "Durum",
+      "expiresOn": "Bitiş",
+      "purchaseDate": "Satın alma",
+      "price": "Fiyat",
+      "documents": "Belgeler",
+      "claims": "Açık talepler",
+      "actions": "İşlemler"
+    },
+    "sortLabel": "Sırala",
+    "lifetime": "Ömür boyu",
+    "noPrice": "Yok",
+    "actions": {
+      "archive": "Arşivle",
+      "unarchive": "Arşivden çıkar"
+    }
+  },
+  "form": {
+    "nameLabel": "Ad",
+    "namePlaceholder": "Ne satın aldınız",
+    "vendorLabel": "Satıcı",
+    "vendorPlaceholder": "Bir satıcı seçin veya yazın",
+    "modelLabel": "Model numarası",
+    "serialsLabel": "Seri numaraları",
+    "serialLabel": "Seri numarası {index}",
+    "addSerial": "Seri numarası ekle",
+    "removeSerial": "{index}. seri numarasını kaldır",
+    "serialsLimit": "En fazla {max} seri numarası",
+    "kindLabel": "Garanti türü",
+    "purchaseDateLabel": "Satın alma tarihi",
+    "expiry": {
+      "label": "Garanti bitişi",
+      "date": "Belirli bir tarihte",
+      "duration": "Belirli bir süre sonra",
+      "lifetime": "Hiçbir zaman",
+      "expiresOnLabel": "Bitiş tarihi",
+      "years": "Yıl",
+      "months": "Ay",
+      "days": "Gün",
+      "computed": "Bitiş: {date}",
+      "needsPurchaseDate": "Ne zaman biteceğini hesaplamak için satın alma tarihini girin",
+      "lifetimeHint": "Ömür boyu garantinin bitiş tarihi ve hatırlatıcısı yoktur"
+    },
+    "priceLabel": "Satın alma fiyatı",
+    "productUrlLabel": "Ürün sayfası",
+    "productUrlPlaceholder": "https://",
+    "notesLabel": "Notlar",
+    "submitCreate": "Garanti ekle",
+    "submitUpdate": "Değişiklikleri kaydet"
+  },
+  "validation": {
+    "nameRequired": "Bir ad girin",
+    "nameTooLong": "En fazla 200 karakter kullanın",
+    "vendorTooLong": "En fazla 200 karakter kullanın",
+    "modelTooLong": "En fazla 100 karakter kullanın",
+    "serialTooLong": "Her seri numarası için en fazla 100 karakter kullanın",
+    "serialsTooMany": "En fazla 10 seri numarası",
+    "purchaseDateRequired": "Satın alma tarihini girin",
+    "expiresOnRequired": "Garantinin bittiği tarihi girin",
+    "expiresBeforePurchase": "Garanti, satın alma tarihinden önce bitemez",
+    "durationRequired": "Sıfırdan uzun bir süre girin",
+    "priceNegative": "Fiyat negatif olamaz",
+    "priceNeedsCurrency": "Fiyatın para birimini seçin",
+    "urlInvalid": "http:// veya https:// ile başlayan bir web adresi girin",
+    "urlTooLong": "En fazla 500 karakter kullanın",
+    "notesTooLong": "En fazla 2000 karakter kullanın"
+  },
+  "detail": {
+    "back": "Garantilere dön",
+    "loading": "Garanti yükleniyor...",
+    "loadFailed": "Bu garanti yüklenemedi.",
+    "notFound": "Bu garanti bulunamadı.",
+    "retry": "Yeniden dene",
+    "archivedBadge": "Arşivlendi",
+    "switcher": {
+      "trigger": "Garantiyi değiştir",
+      "placeholder": "Garantileri filtrele...",
+      "noMatches": "Eşleşen garanti yok"
+    },
+    "summary": {
+      "expires": "Bitiş",
+      "purchased": "Satın alma",
+      "price": "Satın alma fiyatı",
+      "openClaims": "Açık talepler"
+    },
+    "card": {
+      "title": "Ayrıntılar",
+      "kind": "Garanti türü",
+      "vendor": "Satıcı",
+      "serialNumbers": "Seri numaraları",
+      "model": "Model numarası",
+      "productUrl": "Ürün sayfası",
+      "notes": "Notlar",
+      "none": "Yok",
+      "lifetime": "Ömür boyu"
+    },
+    "transaction": {
+      "title": "Satın alma",
+      "edit": "{date} tarihli satın almayı düzenle: {payee}, {amount}",
+      "viewInRegister": "Kayıt defterinde görüntüle",
+      "loadFailed": "Satın alma yüklenemedi",
+      "dateInAccount": "{date} · {account}",
+      "none": "Bağlı işlem yok",
+      "unreadable": "Satın alma, okuma izniniz olmayan bir hesapta.",
+      "noPayee": "Alacaklı yok"
+    }
+  },
+  "documents": {
+    "title": "Belgeler",
+    "empty": "Henüz belge yok",
+    "pendingHint": "Belgeler, garantiyi kaydettiğinizde yüklenecek.",
+    "tooMany": "Garanti başına en fazla {max} belge",
+    "uploadFailedAfterCreate": "Garanti eklendi ancak {count, plural, one {bu belge} other {bu belgeler}} yüklenemedi: {names}. Garantinin Belgeler bölümünden ekleyin.",
+    "kindFor": "{name} için belge türü",
+    "kindUpdateFailed": "Belge türü değiştirilemedi",
+    "addExisting": "Mevcut Olanı Ekle",
+    "addExistingTitle": "Mevcut Bir Belge Ekle",
+    "addExistingHelp": "Bir işleme ya da başka bir garantiye daha önce yüklediğiniz bir dosya seçin. Bu garantiye bir kopyası eklenir; orijinali olduğu yerde kalır.",
+    "addExistingFrom": "Belgenin şu an bulunduğu yer",
+    "fromTransaction": "Bir işlem",
+    "fromWarranty": "Başka bir garanti",
+    "addExistingDocument": "Belge",
+    "addExistingKind": "Bu garantideki belge türü",
+    "addExistingNone": "Burada eklenecek belge yok.",
+    "addExistingLoadFailed": "Belgeler yüklenemedi. Lütfen tekrar deneyin.",
+    "addExistingFailed": "Belge eklenemedi",
+    "addExistingSubmit": "Belge Ekle",
+    "choose": "Seçin…",
+    "preview": "Önizleme",
+    "kinds": {
+      "receipt": "Fiş",
+      "manual": "Kılavuz",
+      "photo": "Fotoğraf",
+      "warranty": "Garanti",
+      "other": "Diğer"
+    }
+  },
+  "claims": {
+    "title": "Garanti talepleri",
+    "add": "Talep ekle",
+    "empty": "Henüz talep yok",
+    "loading": "Talepler yükleniyor...",
+    "loadFailed": "Talepler yüklenemedi.",
+    "retry": "Yeniden dene",
+    "statuses": {
+      "open": "Açık",
+      "approved": "Onaylandı",
+      "denied": "Reddedildi",
+      "resolved": "Çözüldü"
+    },
+    "claimedOn": "Talep tarihi: {date}",
+    "resolvedOnLine": "Kapanış: {date}",
+    "resolutionLine": "Sonuç: {text}",
+    "modal": {
+      "newTitle": "Yeni talep",
+      "editTitle": "Talebi düzenle"
+    },
+    "form": {
+      "claimDateLabel": "Talep tarihi",
+      "statusLabel": "Durum",
+      "descriptionLabel": "Açıklama",
+      "resolutionLabel": "Sonuç",
+      "resolvedOnLabel": "Kapanış tarihi",
+      "resolvedOnHint": "Yalnızca çözülmüş veya reddedilmiş bir talep için",
+      "submitCreate": "Talep ekle",
+      "submitUpdate": "Değişiklikleri kaydet"
+    },
+    "validation": {
+      "claimDateRequired": "Talep tarihini girin",
+      "resolvedOnBeforeClaim": "Bir talep, yapıldığı tarihten önce kapanamaz",
+      "textTooLong": "En fazla 2000 karakter kullanın"
+    },
+    "delete": {
+      "title": "Talebi sil",
+      "message": "{date} tarihli talep silinsin mi? Bu işlem geri alınamaz."
+    },
+    "toasts": {
+      "created": "Talep eklendi",
+      "updated": "Talep güncellendi",
+      "deleted": "Talep silindi",
+      "createFailed": "Talep eklenemedi",
+      "updateFailed": "Talep güncellenemedi",
+      "deleteFailed": "Talep silinemedi"
+    }
+  },
+  "import": {
+    "title": "Garantileri CSV'den içe aktar",
+    "description": "Warracker sütunlarını kullanan bir CSV dosyası; örneğin Warracker'dan veya bu sayfadan dışa aktarılmış bir dosya. Hiçbir şey kaydedilmeden önce her satırı görürsünüz.",
+    "fileLabel": "CSV dosyası",
+    "chooseFile": "Dosya seç",
+    "noFileChosen": "Dosya seçilmedi",
+    "checking": "Dosya denetleniyor...",
+    "previewFailed": "Dosya denetlenemedi",
+    "summary": "{count, plural, other {{total} satırdan {valid} tanesi içe aktarılabilir.}}",
+    "invalidSummary": "{count, plural, other {{shown} satır geçersiz ve bu hâliyle içe aktarılamaz.}}",
+    "skipInvalid": "Geçersiz satırları atla ve kalanları içe aktar",
+    "nothingToImport": "Dosyayı düzeltip yeniden seçin.",
+    "skippedColumns": "İçe aktarılmayan sütunlar:",
+    "columns": {
+      "line": "Satır",
+      "name": "Ad",
+      "expires": "Bitiş",
+      "outcome": "Sonuç",
+      "problems": "Sorunlar"
+    },
+    "outcome": {
+      "valid": "Hazır",
+      "invalid": "Geçersiz",
+      "created": "İçe aktarıldı"
+    },
+    "unnamed": "(adsız)",
+    "noExpiry": "Ayarlanmadı",
+    "lifetime": "Ömür boyu",
+    "errorItem": "Hata: {message}",
+    "warningItem": "Not: {message}",
+    "submit": "İçe aktar",
+    "submitCount": "{count, plural, other {{shown} garantiyi içe aktar}}",
+    "toasts": {
+      "imported": "{count, plural, other {{shown} garanti içe aktarıldı}}",
+      "failed": "Garantiler içe aktarılamadı"
+    }
+  }
+}

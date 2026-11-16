@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useState } from 'react';
-import { render, screen, waitFor, fireEvent } from '@/test/render';
+import { render, screen, waitFor, fireEvent, within, act } from '@/test/render';
+import { clearCurrencyDecimals, decimalPlacesForCurrency } from '@/lib/currency-decimals';
 import CurrenciesPage from './page';
+import { SEGMENTED_TOOLBAR_GROUP_CLASS, toolbarSegmentClass } from '@/components/ui/segmented-control';
 import toast from 'react-hot-toast';
 
 // Mock next/image
@@ -82,22 +84,27 @@ const mockGetCurrencyUsage = vi.fn().mockResolvedValue({
 });
 
 const mockRefreshRates = vi.fn().mockResolvedValue({ updated: 5, failed: 0 });
+const mockGetRateStatus = vi.fn();
 const mockDeactivateCurrency = vi.fn();
 const mockActivateCurrency = vi.fn();
+const mockCreateCurrency = vi.fn();
+const mockUpdateCurrency = vi.fn();
 
 vi.mock('@/lib/exchange-rates', () => ({
   exchangeRatesApi: {
     getCurrencies: (...args: any[]) => mockGetCurrencies(...args),
     getCurrencyUsage: (...args: any[]) => mockGetCurrencyUsage(...args),
     refreshRates: (...args: any[]) => mockRefreshRates(...args),
+    getRateStatus: (...args: any[]) => mockGetRateStatus(...args),
     getLatestRates: vi.fn().mockResolvedValue([]),
-    createCurrency: vi.fn(),
-    updateCurrency: vi.fn(),
+    createCurrency: (...args: any[]) => mockCreateCurrency(...args),
+    updateCurrency: (...args: any[]) => mockUpdateCurrency(...args),
     deactivateCurrency: (...args: any[]) => mockDeactivateCurrency(...args),
     activateCurrency: (...args: any[]) => mockActivateCurrency(...args),
     deleteCurrency: vi.fn(),
     lookupCurrency: vi.fn(),
   },
+  isRateProviderName: (name: string) => ['frankfurter', 'yahoo', 'crypto'].includes(name),
 }));
 
 // Mock useExchangeRates
@@ -121,17 +128,16 @@ vi.mock('@/hooks/useExchangeRates', () => ({
 // Mock child components. The form mock exposes a submit button so tests can
 // drive handleFormSubmit (create + edit paths). The list mock adds decimals
 // and code sort triggers so every sort comparator branch can be exercised.
+// What the mocked form submits; a test about a coin replaces it.
+let formPayload: Record<string, unknown> = { code: 'JPY', name: 'Yen', symbol: 'JPY', decimalPlaces: 0 };
+
 vi.mock('@/components/currencies/CurrencyForm', () => ({
-  CurrencyForm: ({ onSubmit }: any) => (
-    <div data-testid="currency-form">
+  CurrencyForm: ({ onSubmit, inUse }: any) => (
+    <div data-testid="currency-form" data-in-use={String(!!inUse)}>
       CurrencyForm
       <button
         data-testid="currency-form-submit"
-        onClick={() =>
-          onSubmit?.({ code: 'JPY', name: 'Yen', symbol: 'JPY', decimalPlaces: 0 }).catch(
-            () => {},
-          )
-        }
+        onClick={() => onSubmit?.(formPayload).catch(() => {})}
       >
         Submit
       </button>
@@ -140,7 +146,7 @@ vi.mock('@/components/currencies/CurrencyForm', () => ({
 }));
 
 vi.mock('@/components/currencies/CurrencyList', () => ({
-  CurrencyList: ({ currencies, onToggleActive, onEdit, sortField, sortDirection, onSort }: any) => (
+  CurrencyList: ({ currencies, onToggleActive, onEdit, onRateHistory, sortField, sortDirection, onSort }: any) => (
     <div data-testid="currency-list">
       {sortField && <span data-testid="sort-field">{sortField}</span>}
       {sortDirection && <span data-testid="sort-direction">{sortDirection}</span>}
@@ -154,6 +160,7 @@ vi.mock('@/components/currencies/CurrencyList', () => ({
           {c.name}
           <button data-testid={`toggle-${c.code}`} onClick={() => onToggleActive(c)}>Toggle</button>
           <button data-testid={`edit-${c.code}`} onClick={() => onEdit(c)}>Edit</button>
+          <button data-testid={`rate-history-${c.code}`} onClick={() => onRateHistory(c)}>Rate history</button>
         </div>
       ))}
     </div>
@@ -161,8 +168,23 @@ vi.mock('@/components/currencies/CurrencyList', () => ({
   DensityLevel: {},
 }));
 
+vi.mock('@/components/currencies/RateHistoryCoverage', () => ({
+  RateHistoryCoverage: ({ code, showStoredRates }: { code: string; showStoredRates?: boolean }) => (
+    <div data-testid="rate-history-coverage" data-shows-rates={String(!!showStoredRates)}>
+      {code}
+    </div>
+  ),
+}));
+
 vi.mock('@/components/ui/Modal', () => ({
-  Modal: ({ children, isOpen }: any) => isOpen ? <div data-testid="modal">{children}</div> : null,
+  Modal: ({ children, isOpen, title, footer }: any) =>
+    isOpen ? (
+      <div data-testid="modal">
+        {title && <h2>{title}</h2>}
+        {children}
+        {footer}
+      </div>
+    ) : null,
 }));
 
 vi.mock('@/components/ui/UnsavedChangesDialog', () => ({
@@ -212,6 +234,10 @@ describe('CurrenciesPage', () => {
       CAD: { accounts: 2, securities: 1 },
       USD: { accounts: 1, securities: 3 },
       EUR: { accounts: 0, securities: 0 },
+    });
+    mockGetRateStatus.mockResolvedValue({
+      lastUpdated: '2026-10-12T00:00:00.000Z',
+      providers: [{ name: 'yahoo', source: 'yahoo_finance' }],
     });
   });
 
@@ -383,6 +409,32 @@ describe('CurrenciesPage', () => {
     });
   });
 
+  it('shows the age of the stored rates on Refresh Rates, with an icon', async () => {
+    mockGetRateStatus.mockResolvedValue({
+      lastUpdated: new Date(Date.now() - 3 * 3_600_000).toISOString(),
+      providers: [],
+    });
+    render(<CurrenciesPage />);
+    const button = await screen.findByRole('button', { name: /Refresh Rates/ });
+    await waitFor(() => expect(button).toHaveTextContent(/\(3 hours ago\)/));
+    expect(button.querySelector('svg')).not.toBeNull();
+    // The age is a line of its own under the label, so it does not widen the
+    // button until the subtitle and New Currency wrap.
+    const age = within(button).getByText('(3 hours ago)');
+    expect(age.parentElement).toBe(within(button).getByText('Refresh Rates').parentElement);
+    expect(age.parentElement!.className).toContain('flex-col');
+  });
+
+  it('draws the status filter as the shared segmented control in a wrapping toolbar', async () => {
+    render(<CurrenciesPage />);
+    const group = await screen.findByRole('group', { name: 'Status' });
+    expect(group.className).toBe(SEGMENTED_TOOLBAR_GROUP_CLASS);
+    const active = within(group).getByRole('button', { name: /^Active/ });
+    expect(active).toHaveAttribute('aria-pressed', 'true');
+    expect(active.className).toBe(toolbarSegmentClass(true));
+    expect(group.parentElement!.className).toContain('flex-wrap');
+  });
+
   it('calls refreshRates when Refresh Rates button is clicked', async () => {
     render(<CurrenciesPage />);
     await waitFor(() => {
@@ -414,6 +466,77 @@ describe('CurrenciesPage', () => {
     fireEvent.click(screen.getByText('Refresh Rates'));
     await waitFor(() => {
       expect(toast.success).toHaveBeenCalledWith('Exchange rates refreshed: 3 updated, 2 failed');
+    });
+  });
+
+  it('shows an error toast, not a success, when every pair failed', async () => {
+    mockRefreshRates.mockResolvedValueOnce({ updated: 0, failed: 4 });
+    render(<CurrenciesPage />);
+    await waitFor(() => {
+      expect(screen.getByText('Refresh Rates')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText('Refresh Rates'));
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith(
+        'No exchange rates could be fetched; the provider did not answer',
+      );
+    });
+    expect(toast.success).not.toHaveBeenCalled();
+  });
+
+  describe('the provider line', () => {
+    it('names the configured providers in the order they are asked', async () => {
+      mockGetRateStatus.mockResolvedValue({
+        lastUpdated: null,
+        providers: [
+          { name: 'frankfurter', source: 'frankfurter' },
+          { name: 'yahoo', source: 'yahoo_finance' },
+        ],
+      });
+      render(<CurrenciesPage />);
+      expect(await screen.findByTestId('fx-provider-line')).toHaveTextContent(
+        'Rates from Frankfurter (ECB reference rates), then Yahoo Finance',
+      );
+    });
+
+    it('names the always-present crypto pair provider after the configured ones', async () => {
+      mockGetRateStatus.mockResolvedValue({
+        lastUpdated: null,
+        providers: [
+          { name: 'frankfurter', source: 'frankfurter' },
+          { name: 'crypto', source: 'yahoo_crypto' },
+        ],
+      });
+      render(<CurrenciesPage />);
+      expect(await screen.findByTestId('fx-provider-line')).toHaveTextContent(
+        'Rates from Frankfurter (ECB reference rates), then Crypto pairs (Yahoo)',
+      );
+    });
+
+    it('names a Yahoo-only deployment as Yahoo Finance', async () => {
+      render(<CurrenciesPage />);
+      expect(await screen.findByTestId('fx-provider-line')).toHaveTextContent(
+        'Rates from Yahoo Finance',
+      );
+    });
+
+    it('shows a provider it has no label for by its name', async () => {
+      mockGetRateStatus.mockResolvedValue({
+        lastUpdated: null,
+        providers: [{ name: 'newprovider', source: 'new_provider' }],
+      });
+      render(<CurrenciesPage />);
+      expect(await screen.findByTestId('fx-provider-line')).toHaveTextContent(
+        'Rates from newprovider',
+      );
+    });
+
+    it('omits the line when the status cannot be read', async () => {
+      mockGetRateStatus.mockRejectedValue(new Error('down'));
+      render(<CurrenciesPage />);
+      await waitFor(() => expect(mockGetRateStatus).toHaveBeenCalled());
+      await waitFor(() => expect(screen.getByTestId('currency-row-CAD')).toBeInTheDocument());
+      expect(screen.queryByTestId('fx-provider-line')).not.toBeInTheDocument();
     });
   });
 
@@ -636,6 +759,102 @@ describe('CurrenciesPage', () => {
     fireEvent.click(screen.getByTestId('sort-trigger-rate'));
     await waitFor(() => {
       expect(screen.getByTestId('sort-field')).toHaveTextContent('rate');
+    });
+  });
+
+  it('opens the rate history dialog for the chosen currency', async () => {
+    render(<CurrenciesPage />);
+    await waitFor(() => expect(screen.getByTestId('currency-row-CAD')).toBeInTheDocument());
+    fireEvent.click(screen.getByTestId('rate-history-CAD'));
+    await waitFor(() => {
+      expect(screen.getByTestId('modal')).toBeInTheDocument();
+      expect(screen.getByTestId('rate-history-coverage')).toHaveTextContent('CAD');
+    });
+    // The dialog a reader opened to see the rates lists them; the currency
+    // form embeds the same panel without the list.
+    expect(screen.getByTestId('rate-history-coverage')).toHaveAttribute(
+      'data-shows-rates',
+      'true',
+    );
+  });
+
+  describe('saving a currency', () => {
+    const btcPayload = {
+      code: 'BTC',
+      name: 'Bitcoin',
+      symbol: 'B',
+      decimalPlaces: 4,
+      kind: 'CRYPTO',
+      quoteSymbol: 'BTC-EUR',
+    };
+    const btcRow = {
+      ...btcPayload,
+      isActive: true,
+      isSystem: false,
+      createdAt: '2026-11-05T00:00:00Z',
+    };
+
+    beforeEach(() => {
+      clearCurrencyDecimals();
+      formPayload = btcPayload;
+      mockCreateCurrency.mockResolvedValue(btcRow);
+      mockUpdateCurrency.mockResolvedValue(btcRow);
+    });
+
+    it('creates with the kind and price symbol and registers the decimal places', async () => {
+      render(<CurrenciesPage />);
+      await waitFor(() => expect(screen.getByTestId('currency-row-CAD')).toBeInTheDocument());
+      fireEvent.click(screen.getByText('+ New Currency'));
+      await waitFor(() => expect(screen.getByTestId('currency-form')).toBeInTheDocument());
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('currency-form-submit'));
+      });
+      expect(mockCreateCurrency).toHaveBeenCalledWith(btcPayload);
+      expect(decimalPlacesForCurrency('BTC')).toBe(4);
+    });
+
+    it('updates with the kind and price symbol, never the code', async () => {
+      render(<CurrenciesPage />);
+      await waitFor(() => expect(screen.getByTestId('currency-row-CAD')).toBeInTheDocument());
+      fireEvent.click(screen.getByText('All (3)'));
+      fireEvent.click(screen.getByTestId('edit-EUR'));
+      await waitFor(() => expect(screen.getByTestId('currency-form')).toBeInTheDocument());
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('currency-form-submit'));
+      });
+      expect(mockUpdateCurrency).toHaveBeenCalledWith('EUR', {
+        name: 'Bitcoin',
+        symbol: 'B',
+        decimalPlaces: 4,
+        kind: 'CRYPTO',
+        quoteSymbol: 'BTC-EUR',
+      });
+    });
+
+    it('registers the decimal places of every currency it loads', async () => {
+      mockGetCurrencies.mockResolvedValue([btcRow]);
+      render(<CurrenciesPage />);
+      await waitFor(() => expect(decimalPlacesForCurrency('BTC')).toBe(4));
+    });
+
+    it('tells the form a currency is in use only when something references it', async () => {
+      render(<CurrenciesPage />);
+      await waitFor(() => expect(screen.getByTestId('currency-row-CAD')).toBeInTheDocument());
+      fireEvent.click(screen.getByTestId('edit-CAD'));
+      await waitFor(() =>
+        expect(screen.getByTestId('currency-form')).toHaveAttribute('data-in-use', 'true'),
+      );
+    });
+
+    it('leaves an unreferenced currency\'s kind editable', async () => {
+      // EUR is inactive, so it is listed under All.
+      render(<CurrenciesPage />);
+      await waitFor(() => expect(screen.getByTestId('currency-row-CAD')).toBeInTheDocument());
+      fireEvent.click(screen.getByText('All (3)'));
+      fireEvent.click(screen.getByTestId('edit-EUR'));
+      await waitFor(() =>
+        expect(screen.getByTestId('currency-form')).toHaveAttribute('data-in-use', 'false'),
+      );
     });
   });
 

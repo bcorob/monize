@@ -6,26 +6,36 @@ import {
   InvestmentTransaction,
   InvestmentAction,
 } from "../securities/entities/investment-transaction.entity";
-import { Holding } from "../securities/entities/holding.entity";
 import {
   Transaction,
   TransactionStatus,
 } from "../transactions/entities/transaction.entity";
-import { ImportContext, updateAccountBalance } from "./import-context";
-import { roundMoney, roundToDecimals } from "../common/round.util";
+import {
+  ImportContext,
+  bondStateOf,
+  currencyMoneyDecimals,
+  recordSkippedRow,
+  resolveImportedSeriesMemo,
+  updateAccountBalance,
+} from "./import-context";
+import { assertAmountPrecision } from "../common/amount-precision.util";
+import {
+  FIAT_MONEY_DECIMALS,
+  roundMoney,
+  roundToDecimals,
+} from "../common/round.util";
 import { resolveFxRateOrNull } from "../common/fx-entry.util";
 import { ExchangeRateService } from "../currencies/exchange-rate.service";
+import { baseInvestmentAction } from "../securities/investment-replay.util";
 import {
-  applyActionToQuantity,
-  acquisitionUnitCost,
-  baseInvestmentAction,
-  isQuantityOnlyAction,
-  SHARE_MOVING_ACTIONS,
-} from "../securities/investment-replay.util";
+  deriveInvestmentTotal,
+  derivePriceFromTotal,
+} from "../securities/investment-amount.util";
 import {
   formatInvestmentActionLabel,
   formatInvestmentCashPayeeName,
 } from "../securities/investment-cash-payee.util";
+import { isQifCashTransfer } from "./qif-cash-transfer-action";
 
 @Injectable()
 export class ImportInvestmentProcessorService {
@@ -50,16 +60,20 @@ export class ImportInvestmentProcessorService {
    * because it silently moves a real balance by the wrong number.
    */
   private async resolveCashAmountInAccountCurrency(
+    ctx: ImportContext,
     amount: number,
     securityCurrencyCode: string | null,
     cashAccountCurrencyCode: string,
     transactionDate: string | Date,
   ): Promise<{ amount: number; exchangeRate: number } | null> {
+    // The result is in the cash account's currency, so it rounds at that
+    // currency's money precision.
+    const decimals = await currencyMoneyDecimals(ctx, cashAccountCurrencyCode);
     if (
       !securityCurrencyCode ||
       securityCurrencyCode === cashAccountCurrencyCode
     ) {
-      return { amount: roundMoney(amount), exchangeRate: 1 };
+      return { amount: roundMoney(amount, decimals), exchangeRate: 1 };
     }
 
     const dateStr =
@@ -76,7 +90,10 @@ export class ImportInvestmentProcessorService {
     if (rate === null) return null;
 
     const exchangeRate = rate;
-    return { amount: roundMoney(amount * exchangeRate), exchangeRate };
+    return {
+      amount: roundMoney(amount * exchangeRate, decimals),
+      exchangeRate,
+    };
   }
 
   async processTransaction(ctx: ImportContext, qifTx: any): Promise<void> {
@@ -91,12 +108,10 @@ export class ImportInvestmentProcessorService {
     // they must be routed through the cash transfer path as well.
     const qifActionRaw = (qifTx.action || "").toLowerCase();
     if (
-      qifActionRaw === "xin" ||
-      qifActionRaw === "xout" ||
-      (qifActionRaw === "cash" && qifTx.isTransfer && qifTx.transferAccount) ||
-      ((qifActionRaw === "withdrwx" || qifActionRaw === "contribx") &&
-        qifTx.isTransfer &&
-        qifTx.transferAccount)
+      isQifCashTransfer(
+        qifActionRaw,
+        qifTx.isTransfer ? qifTx.transferAccount : null,
+      )
     ) {
       // WithdrwX means money leaving the account (like XOut)
       if (qifActionRaw === "withdrwx") {
@@ -134,7 +149,8 @@ export class ImportInvestmentProcessorService {
       margint: InvestmentAction.INTEREST,
       miscexp: InvestmentAction.INTEREST,
       miscinc: InvestmentAction.INTEREST,
-      rtrncap: InvestmentAction.DIVIDEND,
+      // Return of capital is not a dividend: it comes off the basis (#1800).
+      rtrncap: InvestmentAction.RETURN_OF_CAPITAL,
       shtsell: InvestmentAction.SELL,
       cvrshrt: InvestmentAction.BUY,
       xin: InvestmentAction.TRANSFER_IN,
@@ -166,18 +182,42 @@ export class ImportInvestmentProcessorService {
 
     // Calculate amounts
     const quantity = qifTx.quantity || 0;
-    const price = qifTx.price || 0;
+    let price = qifTx.price || 0;
     const commission = qifTx.commission || 0;
-    let totalAmount = qifTx.amount
-      ? roundToDecimals(qifTx.amount, 2)
-      : roundToDecimals(quantity * price + commission, 2);
+    // A QIF `T`/`$` amount is what the trade actually came to.
+    // The trade total is in the security's currency, fiat by construction
+    // (INV-CRYPTO-001), so it rounds at the fiat precision.
+    const sourceTotal = qifTx.amount
+      ? roundMoney(Math.abs(qifTx.amount), FIAT_MONEY_DECIMALS)
+      : null;
+    let totalAmount =
+      sourceTotal ?? roundToDecimals(quantity * price + commission, 2);
 
     const base = baseInvestmentAction(action);
-    if (base === InvestmentAction.BUY) {
-      totalAmount = roundToDecimals(quantity * price + commission, 2);
-    } else if (base === InvestmentAction.SELL) {
+    if (base === InvestmentAction.BUY || base === InvestmentAction.SELL) {
       // REDEEM included: a redemption's proceeds are a sale's.
-      totalAmount = roundToDecimals(quantity * price - commission, 2);
+      //
+      // The file's amount is kept and the per-share price is derived from it.
+      // Recomputing the total from the file's two-decimal `I` price threw the
+      // difference away on every fill that did not divide evenly: 141 shares
+      // for 820.91 came back as 141 x 5.82 = 820.62.
+      if (sourceTotal !== null) {
+        price =
+          derivePriceFromTotal({
+            action,
+            totalAmount: sourceTotal,
+            quantity,
+            commission,
+          }) ?? price;
+        totalAmount = sourceTotal;
+      } else {
+        totalAmount = deriveInvestmentTotal({
+          action,
+          quantity,
+          price,
+          commission,
+        });
+      }
     } else if (
       base === InvestmentAction.SPLIT ||
       base === InvestmentAction.ADD_SHARES ||
@@ -197,6 +237,22 @@ export class ImportInvestmentProcessorService {
     investmentTx.userId = ctx.userId;
     investmentTx.accountId = ctx.accountId;
     investmentTx.securityId = securityId;
+    // INV-BOND-007: a program-linked security's BUY or REINVEST takes the series
+    // on sale on its date (a file carries none); any other acquisition, or one
+    // with no series on sale that day, is stored with NULL and counted, and the
+    // lots report it (SERIES_NOT_DETERMINED) instead of the row failing. The
+    // program is looked up once per security per run, and the guard refuses the
+    // file after which a removal is not covered by the lots (checked once at the
+    // end of the block, because a file is not in date order).
+    const bond = bondStateOf(ctx);
+    if (securityId) await bond.guard.track([securityId]);
+    const series = await resolveImportedSeriesMemo(
+      ctx.manager,
+      ctx.userId,
+      { securityId, action, transactionDate: qifTx.date },
+      bond,
+    );
+    investmentTx.bondInstrumentId = series.id;
     investmentTx.action = action;
     investmentTx.transactionDate = qifTx.date;
     investmentTx.quantity = quantity || null;
@@ -219,19 +275,20 @@ export class ImportInvestmentProcessorService {
       securityId,
     );
 
-    // Update holdings. A VOID trade moved no shares: the row is imported so
-    // the record survives, but its effect is excluded exactly as the holdings
-    // rebuild excludes it.
-    if (status !== TransactionStatus.VOID) {
-      await this.processHoldings(
-        ctx,
-        action,
-        securityId,
-        quantity,
-        price,
-        commission,
-      );
+    // Counted only now, once nothing after the row's write can throw: the
+    // caller rolls the whole row back to its savepoint on a failure, and a
+    // count taken before the cash leg stayed behind for a row that is gone.
+    if (series.unresolved) {
+      ctx.importResult.bondRowsWithoutSeries =
+        (ctx.importResult.bondRowsWithoutSeries ?? 0) + 1;
     }
+
+    // Holdings are NOT written per row. An import arrives in file order, which
+    // is not date order, and an incremental average cost blended in file order
+    // disagrees with the ledger replay (issue #1388). `ImportService` rebuilds
+    // the imported account's positions from the ledger once the block is
+    // written, in the same transaction. A VOID row is excluded there by the
+    // same filter every other rebuild uses.
 
     ctx.importResult.imported++;
   }
@@ -334,6 +391,15 @@ export class ImportInvestmentProcessorService {
     // source-flagged void, so a cancelled transfer never lands live.
     const status = statusFromQifFlags(qifTx);
 
+    // The cash leg is an amount in the cash account's currency: refused, not
+    // rounded, when the file carries more places than that currency does.
+    const cashDecimals = await currencyMoneyDecimals(ctx, cashCurrencyCode);
+    assertAmountPrecision(
+      cashAmount,
+      { code: cashCurrencyCode, decimalPlaces: cashDecimals },
+      "amount",
+    );
+
     let transferAccountId: string | null =
       qifTx.isTransfer && qifTx.transferAccount
         ? (ctx.accountMap.get(qifTx.transferAccount) ?? null)
@@ -385,7 +451,12 @@ export class ImportInvestmentProcessorService {
       const seenSoFar = ctx.transferDupCounts.get(sigKey) || 0;
       ctx.transferDupCounts.set(sigKey, seenSoFar + 1);
       if (existingCount > 0 && seenSoFar + 1 <= existingCount) {
-        ctx.importResult.skipped++;
+        recordSkippedRow(
+          ctx.importResult,
+          qifTx,
+          "duplicateTransfer",
+          ctx.account.currencyCode,
+        );
         return;
       }
     }
@@ -402,7 +473,12 @@ export class ImportInvestmentProcessorService {
       isTransfer: !!transferAccountId,
     });
     const savedCashTx = await ctx.manager.save(cashTx);
-    await updateAccountBalance(ctx.manager, cashAccountId, cashAmount);
+    await updateAccountBalance(
+      ctx.manager,
+      cashAccountId,
+      cashAmount,
+      cashDecimals,
+    );
 
     if (transferAccountId) {
       ctx.affectedAccountIds.add(transferAccountId);
@@ -417,6 +493,7 @@ export class ImportInvestmentProcessorService {
       // P5-003 shape); convert it, or leave the cash leg standing alone
       // rather than moving the target's balance by a mislabelled number.
       const counterpart = await this.resolveCashAmountInAccountCurrency(
+        ctx,
         -cashAmount,
         cashCurrencyCode,
         targetCurrency,
@@ -458,6 +535,7 @@ export class ImportInvestmentProcessorService {
           ctx.manager,
           transferAccountId,
           counterpart.amount,
+          await currencyMoneyDecimals(ctx, targetCurrency),
         );
       }
     }
@@ -497,6 +575,7 @@ export class ImportInvestmentProcessorService {
       InvestmentAction.DIVIDEND,
       InvestmentAction.INTEREST,
       InvestmentAction.CAPITAL_GAIN,
+      InvestmentAction.RETURN_OF_CAPITAL,
     ];
 
     // Base-normalized: REDEEM and the term'd gain distributions move cash as
@@ -541,6 +620,7 @@ export class ImportInvestmentProcessorService {
 
     // The cash leg lives in the cash account, so it is denominated there.
     const converted = await this.resolveCashAmountInAccountCurrency(
+      ctx,
       cashAmountInSecurityCurrency,
       securityCurrency,
       cashAccountCurrency,
@@ -588,6 +668,7 @@ export class ImportInvestmentProcessorService {
       // avoids) -- convert it, or leave the cash leg standing alone rather
       // than posting a mislabelled amount.
       const counterpart = await this.resolveCashAmountInAccountCurrency(
+        ctx,
         -cashAmount,
         cashAccountCurrency,
         ctx.account.currencyCode,
@@ -633,87 +714,11 @@ export class ImportInvestmentProcessorService {
 
     await ctx.manager.save(investmentTx);
 
-    await updateAccountBalance(ctx.manager, cashAccountId, cashAmount);
-  }
-
-  private async processHoldings(
-    ctx: ImportContext,
-    action: InvestmentAction,
-    securityId: string | null,
-    quantity: number,
-    price: number,
-    commission: number,
-  ): Promise<void> {
-    // ADD_SHARES and REMOVE_SHARES were missing from this list, so importing
-    // either left holdings untouched: shares booked without a purchase never
-    // reached the position at all. Same omission the three net-worth reducers
-    // had, in a path the audit could not execute. The shared list is used so a
-    // new action cannot be dropped from one surface again.
-    if (!SHARE_MOVING_ACTIONS.includes(action) || !securityId || !quantity) {
-      return;
-    }
-
-    const holding = await ctx.manager.findOne(Holding, {
-      where: { accountId: ctx.accountId, securityId },
-    });
-
-    if (action === InvestmentAction.SPLIT) {
-      // Stock split: scale quantity by the ratio and divide averageCost by
-      // the same ratio so total cost basis is preserved. No-op when no
-      // existing position; the imported QIF should not introduce a holding
-      // out of thin air on a split.
-      if (!holding || quantity <= 0) return;
-      const currentQuantity = Number(holding.quantity);
-      const currentAvgCost = Number(holding.averageCost || 0);
-      holding.quantity = applyActionToQuantity(
-        currentQuantity,
-        action,
-        quantity,
-      );
-      holding.averageCost = currentAvgCost / quantity;
-      await ctx.manager.save(holding);
-      return;
-    }
-
-    // Direction from the shared reducer rather than a second hand-written list,
-    // which is how REMOVE_SHARES came to be treated as an acquisition here.
-    const quantityChange =
-      applyActionToQuantity(0, action, quantity) < 0 ? -quantity : quantity;
-
-    // ADD_SHARES / REMOVE_SHARES move shares without supplying a cost -- every
-    // other surface (isQuantityOnlyAction, adjustQuantity, computeHoldingsMap)
-    // treats them as basis-free, so blending an imported ShrsIn price into
-    // averageCost here wrote a basis the first rebuild silently erased.
-    // Per-unit acquisition cost comes through the shared helper so the
-    // commission lands in the basis exactly as a rebuild computes it -- the
-    // bare price here was the FR-008 live-vs-rebuild drift on the import
-    // surface.
-    const unitCost = isQuantityOnlyAction(action)
-      ? 0
-      : acquisitionUnitCost({ quantity: quantityChange, price, commission });
-
-    if (!holding) {
-      const newHolding = new Holding();
-      newHolding.accountId = ctx.accountId;
-      newHolding.securityId = securityId;
-      newHolding.quantity = quantityChange;
-      newHolding.averageCost = quantityChange > 0 ? unitCost : 0;
-      await ctx.manager.save(newHolding);
-      return;
-    }
-
-    const currentQuantity = Number(holding.quantity);
-    const currentAvgCost = Number(holding.averageCost || 0);
-    const newQuantity = currentQuantity + quantityChange;
-
-    if (quantityChange > 0 && unitCost > 0) {
-      const totalCostBefore = currentQuantity * currentAvgCost;
-      const totalCostAdded = quantityChange * unitCost;
-      holding.averageCost =
-        newQuantity > 0 ? (totalCostBefore + totalCostAdded) / newQuantity : 0;
-    }
-
-    holding.quantity = newQuantity;
-    await ctx.manager.save(holding);
+    await updateAccountBalance(
+      ctx.manager,
+      cashAccountId,
+      cashAmount,
+      await currencyMoneyDecimals(ctx, cashAccountCurrency),
+    );
   }
 }

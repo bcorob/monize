@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { InfoTooltip } from '@/components/ui/InfoTooltip';
 import { chartColors } from '@/lib/chart-colors';
@@ -53,7 +53,15 @@ export function SeasonalityPanel({
   const formatChartDate = useChartDateFormat();
   const { formatCurrency } = useNumberFormat();
 
+  // The server names the currency its totals are in.
+  const displayCurrency =
+    monthly.find((r) => r.currency)?.currency ?? currencyStrategy.displayCurrency;
+
   const seasonality = useMemo(() => computeSeasonality(monthly), [monthly]);
+  // The month whose figure the readout under the bars shows. A bar's figure
+  // used to live in a hover-only `title`, which a phone and a keyboard never
+  // reach; now pointing at, focusing or tapping a bar names it here.
+  const [chosenMonth, setChosenMonth] = useState<number | null>(null);
 
   const byMonth = useMemo(
     () => new Map(seasonality.months.map((entry) => [entry.month, entry])),
@@ -73,6 +81,11 @@ export function SeasonalityPanel({
   // only the month is read off it.
   const monthName = (month: number) =>
     formatChartDate(`2001-${String(month).padStart(2, '0')}-01`, 'MMM');
+
+  // The chosen month, or the peak until one is chosen; nothing while neither
+  // has history to state.
+  const readoutMonth = chosenMonth ?? seasonality.peakMonth;
+  const readoutEntry = readoutMonth === null ? undefined : byMonth.get(readoutMonth);
 
   const headline = (() => {
     if (seasonality.yearsCovered < MIN_YEARS_FOR_SEASONALITY) {
@@ -96,7 +109,7 @@ export function SeasonalityPanel({
       </div>
       <div className="rounded-lg bg-white p-4 shadow dark:bg-gray-800 dark:shadow-gray-700/50">
         {isLoading ? (
-          <div className="h-40 animate-pulse rounded bg-gray-100 dark:bg-gray-700" />
+          <div className="h-40 animate-pulse skeleton-shimmer rounded bg-gray-100 dark:bg-gray-700" />
         ) : max === 0 ? (
           <p className="py-4 text-center text-sm text-gray-500 dark:text-gray-400">
             {t('seasonality.empty')}
@@ -112,22 +125,24 @@ export function SeasonalityPanel({
                 const average = entry?.average ?? 0;
                 const height = max > 0 ? (Math.abs(average) / max) * 100 : 0;
                 const isPeak = seasonality.peakMonth === month;
-                const amount = formatCurrency(
-                  Math.abs(average),
-                  currencyStrategy.displayCurrency,
-                );
+                const isChosen = (chosenMonth ?? seasonality.peakMonth) === month;
                 return (
                   <li key={month} className="flex min-w-0 flex-1 flex-col items-center">
+                    {/* Twelve inline amounts would not fit and the bar alone is
+                        a shape, so each column is a button that puts its
+                        figure in the readout below. */}
+                    <button
+                      type="button"
+                      disabled={!entry}
+                      aria-pressed={entry ? isChosen : undefined}
+                      onClick={() => setChosenMonth(month)}
+                      onFocus={() => setChosenMonth(month)}
+                      onMouseEnter={() => entry && setChosenMonth(month)}
+                      className="flex w-full flex-col items-center rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:cursor-default"
+                    >
                     <div className="flex h-24 w-full items-end justify-center">
                       {entry ? (
                         <div
-                          // The title carries the figure: twelve inline amounts
-                          // would not fit, and the bar alone is a shape.
-                          title={t('seasonality.monthTooltip', {
-                            month: monthName(month),
-                            amount,
-                            years: entry.years,
-                          })}
                           // The theme accent, matching TopGroupsPanel: a
                           // twelve-month shape is a magnitude comparison, not a
                           // warning, and red here would both fight the palette
@@ -161,10 +176,27 @@ export function SeasonalityPanel({
                     >
                       {monthName(month)}
                     </span>
+                    </button>
                   </li>
                 );
               })}
             </ul>
+            {readoutEntry && (
+              <p
+                aria-live="polite"
+                data-testid="seasonality-readout"
+                className="mt-3 text-sm text-gray-700 dark:text-gray-300"
+              >
+                {t('seasonality.monthTooltip', {
+                  month: monthName(readoutEntry.month),
+                  amount: formatCurrency(
+                    Math.abs(readoutEntry.average),
+                    displayCurrency,
+                  ),
+                  years: readoutEntry.years,
+                })}
+              </p>
+            )}
           </>
         )}
       </div>

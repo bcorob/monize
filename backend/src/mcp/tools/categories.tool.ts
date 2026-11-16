@@ -1,9 +1,9 @@
 import { Injectable } from "@nestjs/common";
 import { z } from "zod";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 import { CategoriesService } from "../../categories/categories.service";
 import {
-  UserContextResolver,
+  resolveUserContext,
   requireScope,
   toolResult,
   toolError,
@@ -16,40 +16,41 @@ import { READ_ONLY } from "../mcp-annotations";
 export class McpCategoriesTools {
   constructor(private readonly categoriesService: CategoriesService) {}
 
-  register(server: McpServer, resolve: UserContextResolver) {
+  register(server: McpServer) {
     server.registerTool(
       "list_categories",
       {
         title: "List categories",
         annotations: READ_ONLY,
         description:
-          "List the user's categories with their hierarchy (parent names) and transaction counts. Optionally filter by type or search by name. Returns the same shape as the AI Assistant's list_categories tool.",
-        inputSchema: {
+          "The user's categories with their hierarchy and transaction counts. " +
+          'Pass a row\'s `qualifiedName` ("Parent: Child") back to any other ' +
+          "tool -- a bare child name shared by two parents is rejected, not " +
+          "guessed.",
+        inputSchema: z.object({
           type: z
             .enum(["expense", "income", "all"])
             .optional()
-            .describe(
-              "Filter by category type. Defaults to 'all' when omitted.",
-            ),
+            .describe("Defaults to 'all'."),
           search: z
             .string()
             .max(100)
             .optional()
             .describe(
-              "Optional case-insensitive substring match on category name. Matched subcategories' parents are included so hierarchy stays visible.",
+              "Case-insensitive substring of the name. A match's parents come too, so the hierarchy stays readable.",
             ),
-        },
+        }),
         outputSchema: getCategoriesOutput,
       },
-      async (args, extra) => {
-        const ctx = resolve(extra.sessionId);
-        if (!ctx) return toolError("No user context");
-        const check = requireScope(ctx.scopes, "read");
+      async (args, ctx) => {
+        const user = resolveUserContext(ctx);
+        if (!user) return toolError("No user context");
+        const check = requireScope(user.scopes, "read");
         if (check.error) return check.result;
 
         try {
           const data = await this.categoriesService.getLlmCategories(
-            ctx.userId,
+            user.userId,
             { type: args.type, search: args.search },
           );
           return toolResult(data);

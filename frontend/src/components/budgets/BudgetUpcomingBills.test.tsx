@@ -23,6 +23,7 @@ function createBill(overrides: Partial<ScheduledTransaction> = {}): ScheduledTra
     originalCurrencyCode: null,
     exchangeRate: 1,
     description: null,
+    referenceNumber: null,
     frequency: 'MONTHLY',
     nextDueDate: '2026-02-25',
     startDate: '2026-01-01',
@@ -154,6 +155,29 @@ describe('BudgetUpcomingBills', () => {
       />,
     );
 
+    expect(screen.getByText('$2120.00')).toBeInTheDocument();
+  });
+
+  // Discussion #1784: today is 2026-02-19, so the window opens on 2026-01-19.
+  it('counts a recent overdue bill and leaves a forgotten one out', () => {
+    const bills = [
+      createBill({ id: 'st-1', name: 'Internet', amount: -80, nextDueDate: '2026-02-10' }),
+      createBill({ id: 'st-2', name: 'Insurance', amount: -150, nextDueDate: '2026-01-18' }),
+    ];
+
+    render(
+      <BudgetUpcomingBills
+        scheduledTransactions={bills}
+        currentSpent={3000}
+        totalBudgeted={5200}
+        periodEnd="2026-02-28"
+        displayCurrency="USD"
+      formatCurrency={mockFormat}
+      />,
+    );
+
+    expect(screen.getByText('Internet')).toBeInTheDocument();
+    expect(screen.queryByText('Insurance')).not.toBeInTheDocument();
     expect(screen.getByText('$2120.00')).toBeInTheDocument();
   });
 

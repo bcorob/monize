@@ -10,6 +10,7 @@ import {
 import { Budget } from "./budget.entity";
 import { Category } from "../../categories/entities/category.entity";
 import { Account } from "../../accounts/entities/account.entity";
+import { BudgetBucket } from "./budget-bucket.entity";
 
 const decimalTransformer = {
   from: (value: string | null): number | null => {
@@ -71,8 +72,8 @@ export class BudgetCategory {
 
   @Column({
     type: "decimal",
-    precision: 20,
-    scale: 4,
+    precision: 24,
+    scale: 8,
     transformer: decimalTransformer,
   })
   amount: number;
@@ -90,8 +91,8 @@ export class BudgetCategory {
 
   @Column({
     type: "decimal",
-    precision: 20,
-    scale: 4,
+    precision: 24,
+    scale: 8,
     name: "rollover_cap",
     nullable: true,
     transformer: decimalTransformer,
@@ -120,6 +121,18 @@ export class BudgetCategory {
 
   @Column({ type: "integer", name: "sort_order", default: 0 })
   sortOrder: number;
+
+  /**
+   * The bucket of this budget the line belongs to (a non-income line only;
+   * the service holds both rules, INV-BUDGET-002). Deleting the bucket
+   * unassigns the line.
+   */
+  @Column({ type: "uuid", name: "bucket_id", nullable: true })
+  bucketId: string | null;
+
+  @ManyToOne(() => BudgetBucket, { nullable: true, onDelete: "SET NULL" })
+  @JoinColumn({ name: "bucket_id" })
+  bucket?: BudgetBucket | null;
 
   @CreateDateColumn({ name: "created_at" })
   createdAt: Date;

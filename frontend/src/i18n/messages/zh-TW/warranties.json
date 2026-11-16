@@ -1,0 +1,321 @@
+{
+  "page": {
+    "title": "保固",
+    "subtitle": "您買了什麼、保固何時結束、向誰購買",
+    "newButton": "新增保固",
+    "exportButton": "匯出 CSV",
+    "importButton": "匯入 CSV",
+    "loading": "正在載入保固...",
+    "loadFailed": "無法載入您的保固。",
+    "retry": "重試",
+    "summary": {
+      "active": "有效",
+      "expiring": "即將到期",
+      "expired": "已到期",
+      "lifetime": "終身",
+      "unavailable": "未載入",
+      "expiringHint": "{days} 天內"
+    },
+    "filters": {
+      "label": "依狀態篩選",
+      "all": "全部",
+      "expiring": "即將到期",
+      "active": "有效",
+      "expired": "已到期",
+      "lifetime": "終身",
+      "counted": {
+        "all": "全部（{count}）",
+        "expiring": "即將到期（{count}）",
+        "active": "有效（{count}）",
+        "expired": "已到期（{count}）",
+        "lifetime": "終身（{count}）"
+      }
+    },
+    "search": {
+      "label": "搜尋保固",
+      "placeholder": "搜尋名稱、商家、型號或序號"
+    },
+    "archivedToggle": "顯示已封存",
+    "transactionChip": {
+      "label": "單筆交易的保固",
+      "clear": "顯示所有保固"
+    },
+    "pager": {
+      "itemName": "項保固",
+      "total": "{count, plural, other {{total} 項保固}}"
+    },
+    "empty": {
+      "title": "尚無保固",
+      "description": "新增保固，隨時掌握保固何時結束。",
+      "filteredTitle": "沒有符合的保固",
+      "filteredDescription": "請嘗試其他狀態，或清除搜尋。",
+      "archivedTitle": "沒有已封存的保固"
+    },
+    "modal": {
+      "newTitle": "新增保固",
+      "editTitle": "編輯保固"
+    },
+    "delete": {
+      "title": "刪除保固",
+      "message": "要刪除「{name}」嗎？其保固申請與文件將一併刪除，且無法復原。"
+    },
+    "toasts": {
+      "created": "已新增保固",
+      "updated": "已更新保固",
+      "deleted": "已刪除保固",
+      "archived": "已封存保固",
+      "unarchived": "已還原保固",
+      "createFailed": "無法新增保固",
+      "updateFailed": "無法更新保固",
+      "deleteFailed": "無法刪除保固",
+      "archiveFailed": "無法封存保固",
+      "unarchiveFailed": "無法還原保固",
+      "prefillFailed": "無法載入該筆交易，因此保固將從空白開始",
+      "exported": "{count, plural, other {已匯出 {shown} 項保固}}",
+      "exportFailed": "無法匯出保固"
+    }
+  },
+  "status": {
+    "lifetime": "終身",
+    "active": "有效",
+    "expiring": "即將到期",
+    "expired": "已到期"
+  },
+  "daysLeft": {
+    "left": "{count, plural, other {剩餘 {days} 天}}",
+    "today": "今天到期",
+    "ago": "{count, plural, other {已於 {days} 天前到期}}",
+    "leftYears": "剩餘 {yearsCount, plural, other {{years} 年}} {daysCount, plural, other {{days} 天}}",
+    "agoYears": "{yearsCount, plural, other {{years} 年}} {daysCount, plural, other {{days} 天}}前已過期"
+  },
+  "kind": {
+    "manufacturer": "原廠保固",
+    "extended": "延長保固",
+    "store": "商家保固",
+    "other": "其他"
+  },
+  "list": {
+    "columns": {
+      "name": "名稱",
+      "status": "狀態",
+      "expiresOn": "到期日",
+      "purchaseDate": "購買日期",
+      "price": "價格",
+      "documents": "文件",
+      "claims": "處理中的申請",
+      "actions": "動作"
+    },
+    "sortLabel": "排序方式",
+    "lifetime": "終身",
+    "noPrice": "無",
+    "actions": {
+      "archive": "封存",
+      "unarchive": "取消封存"
+    }
+  },
+  "form": {
+    "nameLabel": "名稱",
+    "namePlaceholder": "您購買的物品",
+    "vendorLabel": "商家",
+    "vendorPlaceholder": "選擇或輸入商家",
+    "modelLabel": "型號",
+    "serialsLabel": "序號",
+    "serialLabel": "序號 {index}",
+    "addSerial": "新增序號",
+    "removeSerial": "移除序號 {index}",
+    "serialsLimit": "最多 {max} 個序號",
+    "kindLabel": "保固類型",
+    "purchaseDateLabel": "購買日期",
+    "expiry": {
+      "label": "保固結束",
+      "date": "指定日期",
+      "duration": "指定期間",
+      "lifetime": "永不",
+      "expiresOnLabel": "到期日",
+      "years": "年",
+      "months": "月",
+      "days": "天",
+      "computed": "{date} 到期",
+      "needsPurchaseDate": "請輸入購買日期以計算結束時間",
+      "lifetimeHint": "終身保固沒有結束日期，也不會提醒"
+    },
+    "priceLabel": "購買價格",
+    "productUrlLabel": "產品頁面",
+    "productUrlPlaceholder": "https://",
+    "notesLabel": "備註",
+    "submitCreate": "新增保固",
+    "submitUpdate": "儲存變更"
+  },
+  "validation": {
+    "nameRequired": "請輸入名稱",
+    "nameTooLong": "最多 200 個字元",
+    "vendorTooLong": "最多 200 個字元",
+    "modelTooLong": "最多 100 個字元",
+    "serialTooLong": "每個序號最多 100 個字元",
+    "serialsTooMany": "最多 10 個序號",
+    "purchaseDateRequired": "請輸入購買日期",
+    "expiresOnRequired": "請輸入保固結束日期",
+    "expiresBeforePurchase": "保固結束日期不能早於購買日期",
+    "durationRequired": "請輸入大於零的期間",
+    "priceNegative": "價格不能是負數",
+    "priceNeedsCurrency": "請選擇價格的貨幣",
+    "urlInvalid": "請輸入以 http:// 或 https:// 開頭的網址",
+    "urlTooLong": "最多 500 個字元",
+    "notesTooLong": "最多 2000 個字元"
+  },
+  "detail": {
+    "back": "返回保固",
+    "loading": "正在載入保固...",
+    "loadFailed": "無法載入此保固。",
+    "notFound": "找不到此保固。",
+    "retry": "重試",
+    "archivedBadge": "已封存",
+    "switcher": {
+      "trigger": "切換保固",
+      "placeholder": "篩選保固...",
+      "noMatches": "沒有符合的保固"
+    },
+    "summary": {
+      "expires": "到期日",
+      "purchased": "購買日期",
+      "price": "購買價格",
+      "openClaims": "處理中的申請"
+    },
+    "card": {
+      "title": "詳細資料",
+      "kind": "保固類型",
+      "vendor": "商家",
+      "serialNumbers": "序號",
+      "model": "型號",
+      "productUrl": "產品頁面",
+      "notes": "備註",
+      "none": "無",
+      "lifetime": "終身"
+    },
+    "transaction": {
+      "title": "購買紀錄",
+      "edit": "編輯 {date} 的購買：{payee}，{amount}",
+      "viewInRegister": "在交易列表中檢視",
+      "loadFailed": "無法載入購買記錄",
+      "dateInAccount": "{date} · {account}",
+      "none": "沒有連結的交易",
+      "unreadable": "此購買紀錄位於您無權讀取的帳戶中。",
+      "noPayee": "無收款人"
+    }
+  },
+  "documents": {
+    "title": "文件",
+    "empty": "尚無文件",
+    "pendingHint": "儲存保固後將上傳文件。",
+    "tooMany": "每個保固最多 {max} 個文件",
+    "uploadFailedAfterCreate": "已新增保固，但{count, plural, one {此文件} other {這些文件}}無法上傳：{names}。請從保固的「文件」區段新增。",
+    "kindFor": "{name} 的文件類型",
+    "kindUpdateFailed": "變更文件類型失敗",
+    "addExisting": "新增現有文件",
+    "addExistingTitle": "新增現有文件",
+    "addExistingHelp": "選擇您已上傳到某筆交易或另一份保固的檔案。此保固會新增一份副本，原檔案保持原位。",
+    "addExistingFrom": "文件目前所在位置",
+    "fromTransaction": "一筆交易",
+    "fromWarranty": "另一份保固",
+    "addExistingDocument": "文件",
+    "addExistingKind": "此保固中的文件類型",
+    "addExistingNone": "這裡沒有可新增的文件。",
+    "addExistingLoadFailed": "無法載入文件。請再試一次。",
+    "addExistingFailed": "新增文件失敗",
+    "addExistingSubmit": "新增文件",
+    "choose": "選擇…",
+    "preview": "預覽",
+    "kinds": {
+      "receipt": "收據",
+      "manual": "使用手冊",
+      "photo": "相片",
+      "warranty": "保固",
+      "other": "其他"
+    }
+  },
+  "claims": {
+    "title": "保固申請",
+    "add": "新增申請",
+    "empty": "尚無保固申請",
+    "loading": "正在載入保固申請...",
+    "loadFailed": "無法載入保固申請。",
+    "retry": "重試",
+    "statuses": {
+      "open": "處理中",
+      "approved": "已核准",
+      "denied": "已拒絕",
+      "resolved": "已解決"
+    },
+    "claimedOn": "{date} 申請",
+    "resolvedOnLine": "{date} 結案",
+    "resolutionLine": "處理結果：{text}",
+    "modal": {
+      "newTitle": "新增保固申請",
+      "editTitle": "編輯保固申請"
+    },
+    "form": {
+      "claimDateLabel": "申請日期",
+      "statusLabel": "狀態",
+      "descriptionLabel": "說明",
+      "resolutionLabel": "處理結果",
+      "resolvedOnLabel": "結案日期",
+      "resolvedOnHint": "僅適用於已解決或已拒絕的申請",
+      "submitCreate": "新增申請",
+      "submitUpdate": "儲存變更"
+    },
+    "validation": {
+      "claimDateRequired": "請輸入申請日期",
+      "resolvedOnBeforeClaim": "申請的結案日期不能早於申請日期",
+      "textTooLong": "最多 2000 個字元"
+    },
+    "delete": {
+      "title": "刪除保固申請",
+      "message": "要刪除 {date} 提出的保固申請嗎？此動作無法復原。"
+    },
+    "toasts": {
+      "created": "已新增保固申請",
+      "updated": "已更新保固申請",
+      "deleted": "已刪除保固申請",
+      "createFailed": "無法新增保固申請",
+      "updateFailed": "無法更新保固申請",
+      "deleteFailed": "無法刪除保固申請"
+    }
+  },
+  "import": {
+    "title": "從 CSV 匯入保固",
+    "description": "採用 Warracker 欄位格式的 CSV 檔案，例如從 Warracker 或本頁面匯出的檔案。在儲存任何內容之前，您會先看到每一列。",
+    "fileLabel": "CSV 檔案",
+    "chooseFile": "選擇檔案",
+    "noFileChosen": "未選擇檔案",
+    "checking": "正在檢查檔案...",
+    "previewFailed": "無法檢查此檔案",
+    "summary": "{count, plural, other {{total} 列中有 {valid} 列可以匯入。}}",
+    "invalidSummary": "{count, plural, other {{shown} 列無效，無法照原樣匯入。}}",
+    "skipInvalid": "略過無效的列並匯入其餘的列",
+    "nothingToImport": "請修正檔案後重新選擇。",
+    "skippedColumns": "未匯入的欄位：",
+    "columns": {
+      "line": "列",
+      "name": "名稱",
+      "expires": "到期日",
+      "outcome": "結果",
+      "problems": "問題"
+    },
+    "outcome": {
+      "valid": "就緒",
+      "invalid": "無效",
+      "created": "已匯入"
+    },
+    "unnamed": "（無名稱）",
+    "noExpiry": "未設定",
+    "lifetime": "終身",
+    "errorItem": "錯誤：{message}",
+    "warningItem": "注意：{message}",
+    "submit": "匯入",
+    "submitCount": "{count, plural, other {匯入 {shown} 項保固}}",
+    "toasts": {
+      "imported": "{count, plural, other {已匯入 {shown} 項保固}}",
+      "failed": "無法匯入保固"
+    }
+  }
+}

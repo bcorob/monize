@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import '@/lib/zodConfig';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { authApi } from '@/lib/auth';
 import { getErrorMessage } from '@/lib/errors';
 import { buildTotpCodeSchema } from '@/lib/zod-helpers';
-import { User } from '@/types/auth';
+import { TwoFactorSignInDetails, User } from '@/types/auth';
 
 const buildTotpSchema = (tc: (key: string) => string) => z.object({
   code: buildTotpCodeSchema(tc),
@@ -28,7 +28,7 @@ type VerifyFormData = z.infer<ReturnType<typeof buildTotpSchema>>;
 
 interface TwoFactorVerifyProps {
   tempToken: string;
-  onVerified: (user: User) => void;
+  onVerified: (user: User, details: TwoFactorSignInDetails) => void;
   onCancel: () => void;
 }
 
@@ -42,7 +42,7 @@ export function TwoFactorVerify({ tempToken, onVerified, onCancel }: TwoFactorVe
     register,
     handleSubmit,
     setValue,
-    watch,
+    control,
     reset,
   } = useForm<VerifyFormData>({
     resolver: zodResolver(useBackupCode ? buildBackupCodeSchema(t) : buildTotpSchema(tc)),
@@ -52,7 +52,7 @@ export function TwoFactorVerify({ tempToken, onVerified, onCancel }: TwoFactorVe
     },
   });
 
-  const codeValue = watch('code');
+  const codeValue = useWatch({ control, name: 'code' });
   const codeRef = register('code');
 
   const handleToggleMode = () => {
@@ -72,7 +72,10 @@ export function TwoFactorVerify({ tempToken, onVerified, onCancel }: TwoFactorVe
     try {
       const response = await authApi.verify2FA(tempToken, formData.code, formData.rememberDevice);
       if (response.user) {
-        onVerified(response.user);
+        onVerified(response.user, {
+          usedBackupCode: response.usedBackupCode === true,
+          backupCodesRemaining: typeof response.backupCodesRemaining === 'number' ? response.backupCodesRemaining : null,
+        });
       }
     } catch (error) {
       toast.error(getErrorMessage(error, t('invalidCode')));

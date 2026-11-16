@@ -1,0 +1,120 @@
+{
+  "page": {
+    "title": "Posta di revisione IA",
+    "subtitle": "Le transazioni che una regola ha chiesto a un'IA di rivedere, i parser che è stato chiesto a un assistente di preparare e le modifiche che un assistente propone per la tua approvazione."
+  },
+  "filter": {
+    "label": "Filtra per stato",
+    "open": "Aperte",
+    "pending": "In attesa",
+    "claimed": "In revisione",
+    "proposed": "Proposta",
+    "applied": "Applicata",
+    "rejected": "Rifiutata",
+    "expired": "Scaduta"
+  },
+  "kindFilter": {
+    "label": "Filtra per tipo",
+    "all": "Tutte",
+    "email_receipt": "Ricevute via email",
+    "transaction_review": "Regole",
+    "option": "{label} ({count})"
+  },
+  "status": {
+    "pending": "In attesa",
+    "claimed": "In revisione",
+    "proposed": "Proposta",
+    "applied": "Applicata",
+    "rejected": "Rifiutata",
+    "expired": "Scaduta"
+  },
+  "columns": {
+    "date": "Data",
+    "request": "Richiesta",
+    "amount": "Importo",
+    "status": "Stato"
+  },
+  "row": {
+    "noPayee": "Nessun beneficiario",
+    "transactionMissing": "Questa transazione non esiste più",
+    "rule": "Regola: {name}",
+    "manualRequest": "Richiesta manualmente",
+    "trade": "{action, select, BUY {Acquisto di {quantity} quote di {symbol}} SELL {Vendita di {quantity} quote di {symbol}} DIVIDEND {Dividendo da {symbol}} REINVEST {Reinvestimento di un dividendo in {quantity} quote di {symbol}} other {Operazione su {symbol}}}",
+    "receiptInstruction": {
+      "automatic": "Completa questa transazione dall'email dell'ordine allegata: suddividila per articolo con una categoria ciascuno, oppure imposta la descrizione.",
+      "chat": "Hai chiesto di riconoscere l'email dell'ordine allegata: suddividi questa transazione per prodotto con una categoria ciascuno, oppure imposta la descrizione.",
+      "categorize": "Assegna una categoria a ogni articolo dell'email dell'ordine allegata che nessuna regola ha categorizzato, poi proponi la suddivisione di questa transazione o imposta la descrizione.",
+      "parsed": "Un parser salvato ha letto l'email dell'ordine e propone queste righe di categoria e questa descrizione per la transazione.",
+      "trade": "Un'email di conferma di un'operazione letta da un profilo salvato propone questa transazione di investimento. Prima di approvare, controlla conto, titolo, quote e totale presso il tuo broker.",
+      "tradeChat": "Hai chiesto di riconoscere la conferma di operazione allegata: proponi la transazione di investimento che riporta, un acquisto, una vendita, un dividendo in contanti o un dividendo reinvestito."
+    },
+    "emailReceipt": "Ricevuta via email: {subject} da {sender}",
+    "emailReceiptForwarded": "Ricevuta via email: {subject} da {sender}, inoltrata da {forwarder}",
+    "emailReceiptMissing": "Ricevuta via email (l'email è stata eliminata)",
+    "parserDraft": "Bozza di parser da {count, plural, one {# email} other {# email}} ({domain})",
+    "viewEmailReceipts": "Vedi ricevute via email",
+    "agentNote": "Nota dell'assistente: {reason}",
+    "dates": "Creata il {created}, scade il {expires}",
+    "viewTransaction": "Vedi transazione",
+    "waitingForAgent": "In attesa di un agente IA. <link>Collega un provider IA nelle Impostazioni</link> oppure lascia che la prenda in carico un client MCP.",
+    "parserDraftReady": "Bozza di parser pronta. <link>Provala e approvala nelle impostazioni dei parser</link>.",
+    "tradePending": "Un'operazione da un'email, non ancora letta",
+    "tradeEmail": "Email di conferma di operazione",
+    "parserDraftIds": "ID delle bozze di profilo: {ids}"
+  },
+  "actions": {
+    "dismiss": "Ignora"
+  },
+  "proposal": {
+    "errorTitle": "Questa proposta non può più essere applicata"
+  },
+  "bulk": {
+    "selectRow": "Seleziona {name}",
+    "selectAll": "Seleziona tutte le richieste mostrate che possono essere approvate o inviate",
+    "approveSelected": "Approva le selezionate ({count})",
+    "approveAllShown": "Approva tutte quelle mostrate ({count})",
+    "summary": "{approved, plural, one {# proposta applicata} other {# proposte applicate}}, {failed, plural, one {# non applicata} other {# non applicate}}.",
+    "closeSummary": "Chiudi",
+    "failure": "{name}: {reason}",
+    "noReason": "Non è stato indicato alcun motivo",
+    "unknownRequest": "Una richiesta",
+    "failed": "Impossibile applicare le proposte",
+    "dialog": {
+      "title": "{count, plural, one {Applicare # proposta?} other {Applicare # proposte?}}",
+      "message": "Ogni proposta viene verificata rispetto alla sua transazione così com'è ora e applicata separatamente. Quella che non è più adatta viene saltata e segnalata, mentre le altre vengono comunque applicate. Controlla le proposte prima di approvarle.",
+      "confirm": "{count, plural, one {Applica # proposta} other {Applica # proposte}}"
+    }
+  },
+  "sendToAssistant": {
+    "button": "Invia {count, plural, one {# richiesta in attesa} other {# richieste in attesa}} all'assistente IA",
+    "buttonSelected": "Invia {count, plural, one {# richiesta selezionata} other {# richieste selezionate}} all'assistente IA",
+    "prompt": "Lavora sulle mie richieste di revisione IA in attesa con lo strumento ai_review_requests: elencale, prendi in carico ciascuna, segui la sua istruzione e invia una proposta. Per una richiesta di bozza di profilo, crea invece il profilo con lo strumento email_receipt_parsers. Nulla cambia finché non approvo le proposte nella casella di revisione IA.",
+    "promptSelected": "Lavora su {count, plural, one {questa richiesta di revisione IA} other {queste # richieste di revisione IA}} con lo strumento ai_review_requests: {ids}. Prendi in carico ciascuna tramite il suo id, segui la sua istruzione e invia una proposta. Per una richiesta di bozza di profilo, crea invece il profilo con lo strumento email_receipt_parsers. Non toccare le altre richieste. Nulla cambia finché non approvo le proposte nella casella di revisione IA.",
+    "opened": "Chat aperta con un messaggio preparato. Leggilo e premi Invia.",
+    "unavailable": "L'assistente IA non può rispondere ora. Collega un fornitore IA nelle Impostazioni o collega il tuo client MCP. Le richieste restano in attesa qui."
+  },
+  "dismissDialog": {
+    "title": "Ignorare questa richiesta?",
+    "message": "A nessuno verrà più chiesto di lavorare a questa richiesta. Nulla di ciò di cui trattava viene modificato.",
+    "confirm": "Ignora richiesta"
+  },
+  "loading": "Caricamento delle richieste di revisione...",
+  "error": {
+    "title": "Impossibile caricare le richieste di revisione",
+    "body": "L'elenco non è stato caricato, quindi potrebbe non essere vuoto. Controlla la connessione e riprova.",
+    "retry": "Riprova"
+  },
+  "empty": {
+    "title": "Nessuna richiesta di revisione",
+    "body": "Le richieste compaiono qui quando una regola con l'azione «Richiedi una revisione dell'IA» corrisponde a una transazione. Un assistente IA, o un client MCP come l'agente relay, elabora la coda e propone una modifica da approvare.",
+    "filteredTitle": "Nessuna richiesta con questo stato",
+    "filteredBody": "Scegli un altro stato per vedere altre richieste."
+  },
+  "toasts": {
+    "approved": "Proposta applicata",
+    "dismissed": "Richiesta ignorata",
+    "dismissFailed": "Impossibile ignorare la richiesta",
+    "approveFailed": "Impossibile applicare la proposta",
+    "changed": "Questa richiesta è cambiata nel frattempo. L'elenco è stato ricaricato."
+  }
+}

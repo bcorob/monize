@@ -1,0 +1,1457 @@
+{
+  "settingsPage": {
+    "redirecting": "Otwieranie strony Paragony z e-maili...",
+    "redirectLink": "Przejdź do ustawień skrzynki pocztowej"
+  },
+  "page": {
+    "title": "Paragony z e-maili",
+    "subtitle": "Odczytuj potwierdzenia zamówień ze skrzynki pocztowej i zamieniaj je na transakcje ze szczegółami pozycji: co jest połączone, co się stało z każdą wiadomością i co czeka na Ciebie"
+  },
+  "mailbox": {
+    "heading": "Skrzynka pocztowa",
+    "description": "Potwierdzenia zamówień są odczytywane przez IMAP z osobnej skrzynki pocztowej. Monize tylko ją odczytuje: nigdy nie zmienia, nie przenosi ani nie usuwa żadnej wiadomości.",
+    "loading": "Wczytywanie skrzynki pocztowej",
+    "dedicatedWarning": "Użyj osobnej skrzynki pocztowej. Odczytywana jest każda wiadomość w folderze, więc powinny w nim być wyłącznie potwierdzenia zamówień.",
+    "encryptionUnavailable": "Ten serwer nie potrafi szyfrować sekretów, więc hasło ani połączenie ze skrzynką nie mogą zostać zapisane. Poproś administratora o skonfigurowanie szyfrowania.",
+    "error": {
+      "title": "Nie udało się wczytać skrzynki pocztowej",
+      "body": "Żądanie nie powiodło się, więc nic jeszcze nie wiadomo o Twojej skrzynce. Spróbuj ponownie.",
+      "retry": "Spróbuj ponownie"
+    },
+    "oauth": {
+      "heading": "Połącz konto",
+      "explanation": "Google i Microsoft 365 zwykle odrzucają zwykłe hasło. Zaloguj się zamiast tego u dostawcy: dajesz Monize dostęp do skrzynki i nigdy nie wpisujesz tu jej hasła.",
+      "connect": {
+        "google": "Połącz z Google",
+        "microsoft": "Połącz z Microsoft"
+      },
+      "providerNames": {
+        "google": "Google",
+        "microsoft": "Microsoft 365"
+      },
+      "providersUnavailable": "Nie udało się sprawdzić, czy logowanie przez Google lub Microsoft jest dostępne. Ręczny formularz poniżej nadal działa.",
+      "startFailed": "Nie udało się rozpocząć logowania",
+      "badAuthorizationUrl": "Serwer zwrócił adres logowania, który nie jest bezpieczną stroną internetową, więc nie został otwarty.",
+      "connectedAs": "Połączono z {provider} jako {username}.",
+      "notConnected": "Połączenie z {provider} nie jest aktywne, więc skrzynka nie jest odczytywana. Połącz ponownie, aby wznowić.",
+      "reconnect": "Połącz ponownie",
+      "disconnect": "Rozłącz",
+      "disconnectDialog": {
+        "title": "Rozłączyć skrzynkę pocztową?",
+        "message": "Monize usunie zapisany dostęp do {provider} i przestanie odczytywać skrzynkę. Zapisane już wiadomości zostaną zachowane."
+      },
+      "disconnected": "Skrzynka pocztowa rozłączona",
+      "disconnectFailed": "Nie udało się rozłączyć skrzynki pocztowej",
+      "revokeNote": "Rozłączenie nie cofa udzielonego uprawnienia. Aby je wycofać, usuń Monize na stronie uprawnień {provider}.",
+      "revokeLink": {
+        "google": "Otwórz uprawnienia konta Google",
+        "microsoft": "Otwórz uprawnienia aplikacji Microsoft"
+      },
+      "saveButton": "Zapisz ustawienia",
+      "saved": "Ustawienia skrzynki pocztowej zapisane",
+      "saveFailed": "Nie udało się zapisać ustawień skrzynki pocztowej"
+    },
+    "form": {
+      "intro": "Albo wpisz dane dowolnej skrzynki IMAP. Większość dostawców wymaga hasła aplikacji zamiast hasła do konta.",
+      "hostLabel": "Serwer IMAP",
+      "portLabel": "Port",
+      "securityLabel": "Zabezpieczenie połączenia",
+      "securityOptions": {
+        "tls": "TLS (zwykle port 993)",
+        "starttls": "STARTTLS (zwykle port 143)"
+      },
+      "usernameLabel": "Nazwa użytkownika",
+      "passwordLabel": "Hasło",
+      "passwordStoredPlaceholder": "Hasło jest zapisane. Wpisz nowe, aby je zastąpić.",
+      "passwordRequiredHelp": "Wymagane dla nowej skrzynki lub gdy zmieni się serwer albo nazwa użytkownika.",
+      "passwordKeepHelp": "Zostaw puste, aby zachować zapisane hasło. Nigdy nie jest ponownie wyświetlane.",
+      "saveButton": "Zapisz skrzynkę",
+      "saved": "Skrzynka pocztowa zapisana",
+      "saveFailed": "Nie udało się zapisać skrzynki pocztowej",
+      "test": {
+        "button": "Testuj połączenie",
+        "ok": "{count, plural, one {Połączenie działa. Folder zawiera # wiadomość.} few {Połączenie działa. Folder zawiera # wiadomości.} many {Połączenie działa. Folder zawiera # wiadomości.} other {Połączenie działa. Folder zawiera # wiadomości.}}",
+        "error": "Połączenie nie powiodło się: {error}",
+        "failed": "Nie udało się przetestować połączenia"
+      }
+    },
+    "settings": {
+      "folderLabel": "Folder",
+      "folderHelp": "Folder do odczytu. Jest otwierany tylko do odczytu.",
+      "enabledLabel": "Odczytuj skrzynkę automatycznie",
+      "enabledHelp": "Steruje tylko automatycznym odczytem: gdy włączone, Monize sprawdza skrzynkę co 15 minut. Wyłączenie nie rozłącza skrzynki, a Sprawdź teraz sprawdza ją niezależnie od tego, czy ta opcja jest włączona.",
+      "aiModeLabel": "Tryb AI",
+      "aiModeHelp": "Czy sprawdzanie skrzynki może używać skonfigurowanego przez Ciebie dostawcy AI przy paragonach. Rozpoznaj z AI i Przygotuj parser z AI proszą asystenta w czacie o pomoc w każdym trybie, a odpowiedź AI to zawsze propozycja lub szkic, który akceptujesz Ty.",
+      "aiModes": {
+        "off": "Wyłączony",
+        "on_demand": "Na żądanie",
+        "automatic": "Automatyczny"
+      },
+      "aiModeDescriptions": {
+        "off": "Sprawdzanie skrzynki nigdy nie wywołuje AI dla paragonów.",
+        "on_demand": "Sprawdzanie skrzynki nigdy nie wywołuje AI. Sam prosisz asystenta, używając Rozpoznaj z AI lub Przygotuj parser z AI.",
+        "automatic": "Podczas sprawdzania skrzynki AI jest pytane o dopasowany paragon, którego żaden zatwierdzony parser nie odczytał w całości, i przygotowuje parser dla nadawcy, który go nie ma."
+      },
+      "autoApplyLabel": "Stosuj propozycje automatycznie",
+      "autoApplyHelp": "Domyślnie wyłączone. Propozycja jest stosowana bez pytania tylko wtedy, gdy spełnione jest wszystko naraz: zatwierdzony profil odczytał całą wiadomość, transakcję znaleziono po numerze zamówienia, po referencji albo po dokładnej kwocie i odbiorcy przy jednym kandydacie, a propozycja zgadza się co do grosza. Potwierdzenie transakcji jest księgowane bez pytania tylko wtedy, gdy jego profil transakcji jest zatwierdzony, odczytał całą transakcję, cena zgadza się z liczbą jednostek i sumą (dywidenda pieniężna, która podaje tylko swoją kwotę, nie ma czego sprawdzać), a Twoje konta nie zawierają jeszcze takiej samej transakcji. Wszystko inne czeka na Twoją akceptację.",
+      "profileLimitLabel": "Wliczaj propozycje profili do dziennego limitu AI",
+      "profileLimitHelp": "Domyślnie włączone: zmiana, którą profil proponuje na podstawie wiadomości, jest wliczana do dziennego limitu zmian proponowanych przez AI, jak każda inna propozycja AI. Wyłącz tę opcję, gdy duża partia zapisanych wiadomości w innym razie wyczerpałaby limit. Zwolnione są tylko propozycje z profili; każda propozycja nadal czeka na Twoją akceptację."
+    },
+    "status": {
+      "lastPolled": "Ostatnie sprawdzenie",
+      "lastSuccess": "Ostatnie udane sprawdzenie",
+      "never": "Nigdy",
+      "lastError": "Ostatni błąd: {error}",
+      "lastErrorAt": "Ostatni błąd ({at}): {error}",
+      "pollNow": "Sprawdź teraz",
+      "pollResult": "Sprawdzanie zakończone: {fetched, plural, one {zapisano # wiadomość} few {zapisano # wiadomości} many {zapisano # wiadomości} other {zapisano # wiadomości}}, pominięto {skipped}, przetworzono {processed}.",
+      "pollResultLink": "Zobacz zapisane wiadomości",
+      "pollFailed": "Sprawdzanie nie powiodło się",
+      "deleteButton": "Usuń skrzynkę",
+      "deleteDialog": {
+        "title": "Usunąć skrzynkę pocztową?",
+        "message": "Ustawienia skrzynki i wszystkie zapisane wiadomości zostaną usunięte, a otwarte prośby o przegląd z nich pochodzące odrzucone. Wiadomości w samej skrzynce nie zostaną naruszone."
+      },
+      "deleted": "Skrzynka pocztowa usunięta",
+      "deleteFailed": "Nie udało się usunąć skrzynki pocztowej"
+    },
+    "import": {
+      "title": "Importuj zarchiwizowane wiadomości",
+      "description": "Plik zachowuje nadawcę i datę zakupu w sklepie, inaczej niż przekazana wiadomość. Wyślij wyeksportowane wiadomości, aby odczytać stare potwierdzenia zamówień.",
+      "fileLabel": "Pliki wiadomości (.eml, .mbox, .msg lub .zip)",
+      "chooseFiles": "Wybierz pliki",
+      "noFileChosen": "Nie wybrano plików",
+      "selected": "Wybrano: {count}",
+      "button": "Importuj",
+      "preparing": "Przygotowanie plików...",
+      "sending": "Wysyłanie części {current} z {total}",
+      "processing": "Przetwarzanie wiadomości: {done} z {total}",
+      "cancel": "Anuluj",
+      "tooLargeTotal": "Wybrane pliki razem są większe niż {max}. Importuj je w mniejszych grupach.",
+      "failed": "Import nie powiódł się",
+      "result": {
+        "heading": "Wynik importu",
+        "file": "{name}: zapisano {stored}, duplikaty {duplicates}, pominięto {skipped}",
+        "summary": "{processed, plural, one {Przetworzono # oczekującą wiadomość.} few {Przetworzono # oczekujące wiadomości.} many {Przetworzono # oczekujących wiadomości.} other {Przetworzono # oczekującej wiadomości.}}",
+        "pendingLeft": "{count, plural, one {# wiadomość nadal czeka na przetworzenie. Monize przetworzy ją przy następnym odczycie skrzynki.} few {# wiadomości nadal czekają na przetworzenie. Monize przetworzy je przy następnym odczycie skrzynki.} many {# wiadomości nadal czeka na przetworzenie. Monize przetworzy je przy następnym odczycie skrzynki.} other {# wiadomości nadal czeka na przetworzenie. Monize przetworzy je przy następnym odczycie skrzynki.}}",
+        "processFailed": "{count, plural, one {Nie udało się przetworzyć # wiadomości.} few {Nie udało się przetworzyć # wiadomości.} many {Nie udało się przetworzyć # wiadomości.} other {Nie udało się przetworzyć # wiadomości.}}",
+        "processingStopped": "Przetwarzanie zaimportowanych wiadomości zostało zatrzymane. Wiadomości zostały zachowane. Monize przetworzy je przy następnym odczycie skrzynki.",
+        "truncated": "Nie odczytano wiadomości: {count}, ponieważ jeden import ma limit. Importuj je ponownie w drugim przebiegu.",
+        "oversized": "{name}: nie wysłano wiadomości większych niż {max}: {count}.",
+        "stopped": "Import zatrzymał się po {done} z {total} części. Zaimportowane już e-maile zostają zachowane. Aby kontynuować, zaimportuj te same pliki jeszcze raz. E-maile zaimportowane wcześniej nie są zapisywane drugi raz.",
+        "cancelled": "Import został anulowany po {done} z {total} części. Zaimportowane już e-maile zostają zachowane.",
+        "errors": {
+          "unsupported_format": "{name}: ten format nie jest obsługiwany. Obsługiwane formaty to .eml, .mbox, .msg i .zip.",
+          "invalid_archive": "{name}: plik ZIP jest uszkodzony lub nie można go odczytać.",
+          "archive_too_large": "{name}: plik ZIP po rozpakowaniu przekracza limit importu. Rozpakuj go i prześlij plik .mbox ze środka.",
+          "empty": "{name}: plik nie zawiera wiadomości."
+        },
+        "ignored": "{name}: pominięto inne pliki w archiwum: {count}."
+      },
+      "guide": {
+        "toggle": "Jak wyeksportować wiadomości od dostawcy poczty",
+        "gmailLabel": {
+          "title": "Gmail: wszystkie wiadomości z etykietą",
+          "step1": "Otwórz takeout.google.com i wybierz „Deselect all”.",
+          "step2": "Zaznacz „Mail” i wybierz „All Mail data included”.",
+          "step3": "Wybierz tylko swoją etykietę i utwórz eksport.",
+          "step4": "Wyślij pobrany plik .zip bez zmian, niezależnie od jego rozmiaru. Nie musisz go rozpakowywać."
+        },
+        "gmailOne": {
+          "title": "Gmail: jedna wiadomość",
+          "step1": "Otwórz wiadomość.",
+          "step2": "Wybierz „Więcej”, a następnie „Pobierz wiadomość”.",
+          "step3": "Wyślij plik .eml."
+        },
+        "imap": {
+          "title": "Inni dostawcy: Outlook.com, Yahoo, Onet, WP, Interia, o2, iCloud, Zoho",
+          "step1": "Dodaj skrzynkę do programu Thunderbird przez IMAP i zainstaluj dodatek ImportExportTools NG.",
+          "step2": "Zaznacz wiadomości lub folder i kliknij prawym przyciskiem myszy.",
+          "step3": "Wybierz ImportExportTools NG, a następnie wyeksportuj jako EML lub jako mbox.",
+          "step4": "Wyślij pliki."
+        },
+        "outlook": {
+          "title": "Outlook na komputerze",
+          "body": "Zaznacz wiadomości i przeciągnij je do folderu na dysku. Outlook zapisuje pliki .msg. Wyślij je razem lub spakowane w jeden plik .zip."
+        },
+        "apple": {
+          "title": "Apple Mail",
+          "step1": "Wybierz „Skrzynka pocztowa”, a następnie „Eksportuj skrzynkę pocztową”. Apple Mail zapisuje folder.",
+          "step2": "Wyślij plik o nazwie mbox z wnętrza folderu lub przeciągnij wiadomości do programu Finder, aby uzyskać pliki .eml."
+        },
+        "tip": "Wskazówka: przekazywanie wiadomości skryptem gubi nadawcę i datę sklepu. Import plików je zachowuje."
+      }
+    }
+  },
+  "parsers": {
+    "heading": "Profile",
+    "description": "Profil odczytuje potwierdzenia zamówień jednego nadawcy za pomocą wzorców, które piszesz lub sprawdzasz, i określa, jak znaleźć transakcję w banku. Po zatwierdzeniu działa bez AI.",
+    "newButton": "Utwórz nowy profil ręcznie",
+    "loading": "Wczytywanie parserów",
+    "error": {
+      "title": "Nie udało się wczytać parserów",
+      "body": "Żądanie nie powiodło się. Spróbuj ponownie.",
+      "retry": "Spróbuj ponownie"
+    },
+    "empty": {
+      "title": "Brak parserów",
+      "body": "Utwórz parser dla nadawcy potwierdzeń zamówień albo przygotuj go z zapisanej wiadomości na stronie Paragony z e-maili."
+    },
+    "columns": {
+      "name": "Parser",
+      "status": "Status",
+      "payee": "Odbiorca",
+      "actions": "Akcje"
+    },
+    "status": {
+      "draft": "Szkic",
+      "approved": "Zatwierdzony"
+    },
+    "source": {
+      "manual": "Napisany przez Ciebie",
+      "ai": "Przygotowany przez AI"
+    },
+    "invalid": "Nieprawidłowy",
+    "noPayee": "Brak odbiorcy",
+    "payeeUnknown": "Nie znaleziono odbiorcy",
+    "payeeUnavailable": "Lista odbiorców niedostępna",
+    "actions": {
+      "approve": "Zatwierdź",
+      "viewJson": "Pokaż JSON"
+    },
+    "toasts": {
+      "approved": "Parser zatwierdzony",
+      "approveFailed": "Nie udało się zatwierdzić parsera",
+      "changedElsewhere": "Ten parser został zmieniony w innym miejscu. Lista została wczytana ponownie.",
+      "deleted": "Parser usunięty",
+      "deleteFailed": "Nie udało się usunąć parsera",
+      "emailsIgnored": "{count, plural, one {Zignorowano # wiadomość} few {Zignorowano # wiadomości} many {Zignorowano # wiadomości} other {Zignorowano # wiadomości}}",
+      "emailsDeleted": "{count, plural, one {Usunięto # wiadomość} few {Usunięto # wiadomości} many {Usunięto # wiadomości} other {Usunięto # wiadomości}}",
+      "bulkFailed": "Nie udało się dokończyć pracy z wiadomościami tego parsera. Te już obsłużone pozostają bez zmian."
+    },
+    "bulk": {
+      "ignoreTitle": "Zignorować wiadomości tego parsera?",
+      "ignoreMessage": "{count, plural, one {# wiadomość odczytywana przez {name} zostanie zignorowana} few {# wiadomości odczytywane przez {name} zostaną zignorowane} many {# wiadomości odczytywanych przez {name} zostanie zignorowanych} other {# wiadomości odczytywanych przez {name} zostanie zignorowanych}}: nic nie zaproponują, a ich otwarte propozycje zostaną zamknięte.{kept, plural, =0 {} one { # wiadomość, która została już zastosowana lub nie dała się odczytać, pozostaje bez zmian.} few { # wiadomości, które zostały już zastosowane lub nie dały się odczytać, pozostają bez zmian.} many { # wiadomości, które zostały już zastosowane lub nie dały się odczytać, pozostaje bez zmian.} other { # wiadomości, które zostały już zastosowane lub nie dały się odczytać, pozostaje bez zmian.}}",
+      "ignoreConfirm": "Ignoruj wiadomości",
+      "deleteTitle": "Usunąć wiadomości tego parsera?",
+      "deleteMessage": "{count, plural, one {# wiadomość odczytywana przez {name} zostanie usunięta} few {# wiadomości odczytywane przez {name} zostaną usunięte} many {# wiadomości odczytywanych przez {name} zostanie usuniętych} other {# wiadomości odczytywanych przez {name} zostanie usuniętych}} razem z otwartymi propozycjami. Tej operacji nie można cofnąć.{kept, plural, =0 {} one { # wiadomość, której propozycja została już zastosowana, pozostaje.} few { # wiadomości, których propozycje zostały już zastosowane, pozostają.} many { # wiadomości, których propozycje zostały już zastosowane, pozostaje.} other { # wiadomości, których propozycje zostały już zastosowane, pozostaje.}}",
+      "deleteConfirm": "Usuń wiadomości"
+    },
+    "deleteDialog": {
+      "title": "Usunąć parser?",
+      "message": "Parser {name} zostanie usunięty. Wiadomości, które już odczytał, zachowają swoje wyniki."
+    },
+    "jsonDialog": {
+      "title": "Definicja parsera {name}",
+      "help": "Definicja parsera w postaci, w jakiej jest zapisana. Tutaj jest tylko do odczytu; aby ją zmienić, użyj przycisku Edytuj.",
+      "contentLabel": "JSON definicji",
+      "copy": "Kopiuj",
+      "copied": "Skopiowano JSON",
+      "copyFailed": "Nie udało się skopiować JSON"
+    },
+    "processOffer": {
+      "title": "Przetworzyć teraz zapisane wiadomości?",
+      "message": "{count, plural, one {Przetworzyć teraz # zapisaną wiadomość} few {Przetworzyć teraz # zapisane wiadomości} many {Przetworzyć teraz # zapisanych wiadomości} other {Przetworzyć teraz # zapisanej wiadomości}} od {domains}? Każda zostanie odczytana ponownie za pomocą tego profilu; to, co zaproponuje, czeka w skrzynce przeglądów, chyba że włączono automatyczne stosowanie.",
+      "confirm": "Przetwórz teraz",
+      "later": "Nie teraz"
+    },
+    "reparse": "Przeanalizuj ponownie wiadomości ({count})",
+    "kindTrade": "Transakcje maklerskie",
+    "discardIgnore": "Ignoruje swoje wiadomości",
+    "discardDelete": "Usuwa swoje wiadomości"
+  },
+  "editor": {
+    "createTitle": "Nowy parser",
+    "editTitle": "Edytuj parser",
+    "loading": "Wczytywanie odbiorców, kategorii, kont i walut",
+    "lookupsError": {
+      "title": "Nie udało się wczytać odbiorców, kategorii, kont lub walut",
+      "body": "Listy wyboru ich potrzebują, więc edytor nie może jeszcze się otworzyć. Spróbuj ponownie.",
+      "retry": "Spróbuj ponownie"
+    },
+    "draftNote": "Ten parser jest szkicem. Nic nie odczytuje, dopóki go nie zatwierdzisz.",
+    "draftAiNote": "AI przygotowało ten parser na podstawie Twoich przykładowych wiadomości. Przetestuj go na każdej z nich i sprawdź każdy wzorzec, a potem zatwierdź parser z listy. Nic nie odczytuje, dopóki tego nie zrobisz.",
+    "identityHeading": "Jakie wiadomości odczytuje",
+    "nameLabel": "Nazwa",
+    "payeeLabel": "Odbiorca",
+    "payeePlaceholder": "Brak odbiorcy",
+    "domainsLabel": "Domeny nadawcy",
+    "domainsHelp": "Po jednej w wierszu, maksymalnie {max}. Poddomena wymienionej domeny też pasuje.",
+    "subjectLabel": "Temat zawiera",
+    "subjectHelp": "Opcjonalne, po jednym w wierszu, maksymalnie {max}. Temat musi zawierać co najmniej jedno z nich, bez rozróżniania wielkości liter.",
+    "saveButton": "Zapisz parser",
+    "created": "Parser utworzony",
+    "updated": "Parser zapisany",
+    "saveFailed": "Nie udało się zapisać parsera",
+    "conflict": "Ten parser został zmieniony w innym miejscu od chwili jego otwarcia. Wczytaj go ponownie, aby zobaczyć aktualną wersję. Twoje zmiany tutaj nie są zapisane.",
+    "conflictReload": "Wczytaj parser ponownie",
+    "required": {
+      "heading": "Profilu nie można jeszcze zapisać. Najpierw popraw:",
+      "item": "{field}: {problem}",
+      "nameMissing": "Wpisz nazwę profilu.",
+      "domainsMissing": "Wpisz co najmniej jedną domenę nadawcy, np. shop.example.com.",
+      "domainsInvalid": "To nie jest nazwa domeny: {values}. Wpisz domeny takie jak shop.example.com, po jednej w wierszu.",
+      "domainsTooMany": "Wpisz najwyżej {max} domen nadawcy.",
+      "subjectTooMany": "Wpisz najwyżej {max} słów tematu.",
+      "subjectTooLong": "Każde słowo tematu może mieć najwyżej {max} znaków.",
+      "server": "Serwer odrzucił to pole. Powód jest pod formularzem."
+    },
+    "patterns": {
+      "sourceLabel": "Źródło wierszy",
+      "sourceHint": "Z którą postacią wiadomości porównywane są poniższe wzorce. Tekst to część tekstowa wiadomości, jeden wiersz na każde złamanie wiersza. HTML odczytuje część HTML: każdy blok i każda komórka tabeli staje się osobnym wierszem, dzięki czemu nazwa produktu, którą tekst rozbija na kilka wierszy, pozostaje w całości. Widok Wiersze wiadomości pokazuje dokładnie, co daje każde źródło.",
+      "sourceOptions": {
+        "text": "Tekst",
+        "html": "HTML"
+      },
+      "globHelp": "Każdy wzorzec jest porównywany z całym wierszem wiadomości, bez rozróżniania wielkości liter. Użyj {star} dla dowolnego tekstu oraz nazwy w nawiasach klamrowych, na przykład {capture}, aby przechwycić wartość. Każde pole przyjmuje do {max} wzorców, po jednym w wierszu. Aby dopasować kolejne wiersze, połącz po jednym wzorcu na wiersz za pomocą {lineBreak}, na przykład {example}.",
+      "orderIdLabel": "Wzorce numeru zamówienia",
+      "orderIdHint": "Musi przechwytywać {capture}. Przykład: Numer zamówienia: {capture}",
+      "totalLabel": "Wzorce sumy",
+      "amountHint": "Musi przechwytywać {capture}. Przykład: Suma zamówienia {capture}",
+      "shippingLabel": "Wzorce kosztów wysyłki",
+      "discountLabel": "Wzorce rabatu",
+      "feesLabel": "Wzorce opłat",
+      "itemsHeading": "Pozycje zamówienia",
+      "startAfterLabel": "Pozycje zaczynają się po",
+      "startAfterHint": "Opcjonalne. Pozycje są odczytywane od wiersza po pierwszym wierszu zawierającym ten tekst.",
+      "stopAtLabel": "Pozycje kończą się na",
+      "stopAtHint": "Opcjonalne. Pozycje kończą się przed pierwszym wierszem zawierającym ten tekst.",
+      "itemPatternsLabel": "Wzorce pozycji",
+      "itemPatternsHint": "Musi przechwytywać {name} oraz albo {amount} (sumę wiersza), albo {price} (cenę jednostkową, opcjonalnie z {qty}), nigdy obu naraz. Przykład: {name} x {qty} {price}"
+    },
+    "categories": {
+      "heading": "Kategorie",
+      "help": "Wpisz nazwę kategorii i wybierz ją z listy. Nazwa jest zapisywana w profilu, a kategoria musi istnieć, gdy profil jest zapisywany.",
+      "categoryPlaceholder": "Brak kategorii",
+      "defaultLabel": "Kategoria domyślna",
+      "defaultHelp": "Używana dla pozycji, do których nie pasuje żadna reguła.",
+      "shippingLabel": "Kategoria wysyłki",
+      "shippingHelp": "Kategoria wiersza z kosztami wysyłki.",
+      "feesLabel": "Kategoria opłat",
+      "feesHelp": "Kategoria linii opłat.",
+      "unknownCategory": "Nie ma kategorii o nazwie {name}. Wybierz jedną z listy lub najpierw ją utwórz.",
+      "rulesInJson": "Reguły kategorii według nazwy pozycji to opcja zaawansowana: dodaj je do definicji profilu w trybie JSON."
+    },
+    "mode": {
+      "label": "Tryb edycji",
+      "form": "Formularz",
+      "json": "JSON",
+      "formUnavailable": "Ta definicja używa czegoś, czego formularz nie potrafi pokazać: wpisów z etykietami, pozycji wielowierszowych lub kluczy, dla których nie ma pola. Edytuj ją jako JSON.",
+      "jsonInvalid": "JSON nie jest jeszcze prawidłowy, więc nie można pokazać formularza. Najpierw go popraw."
+    },
+    "json": {
+      "label": "Definicja parsera (JSON)",
+      "help": "Ta sama definicja, którą buduje formularz. Serwer sprawdza ją przy zapisie, a poniższy test odczytuje ją w obecnym stanie.",
+      "parseError": "To nie jest prawidłowy JSON albo nie jest to obiekt JSON. Popraw go, aby zapisać lub przetestować parser."
+    },
+    "matching": {
+      "heading": "Dopasowanie",
+      "help": "Jak znajdowana jest transakcja bankowa, którą opłacono na podstawie wiadomości. Strategie są sprawdzane po kolei: pierwsza, która zostawia dokładnie jedną transakcję, rozstrzyga, kilka transakcji oznacza niejednoznaczność, a brak przechodzi do następnej strategii.",
+      "instruction": "Najlepiej to numer referencyjny pobrany z opisu operacji bankowej. Jeśli go nie ma, używane są data i kwota. Domyślnie strategie są wypróbowywane w tej kolejności: referencja (gdy profil ma wzorce referencji), numer zamówienia, kwota i odbiorca, kwota i data.",
+      "referenceLabel": "Wzorce referencji",
+      "referenceHint": "Identyfikator, który sklep lub bramka płatnicza umieszcza w operacji bankowej, na przykład tekst na wyciągu lub tytuł przelewu. Musi przechwytywać {capture}.",
+      "strategiesLabel": "Strategie, w kolejności sprawdzania",
+      "strategiesHelp": "Numer zamówienia i referencja szukają wartości w opisie transakcji, nazwie odbiorcy lub numerze referencyjnym. Kwota i odbiorca wymagają kwoty oraz wskazówki co do odbiorcy. Kwota i data wymagają samej kwoty, w obrębie okna. Co najmniej jedna strategia musi pozostać włączona.",
+      "strategyPosition": "{position}. {name}",
+      "moveUp": "Przesuń „{name}” wcześniej",
+      "moveDown": "Przesuń „{name}” później",
+      "strategies": {
+        "reference": "Referencja",
+        "orderId": "Numer zamówienia",
+        "amount_payee": "Kwota i odbiorca",
+        "amount_date": "Kwota i data"
+      },
+      "referenceNeeded": "Strategia referencji jest włączona, ale nie ma wzorców referencji, więc niczego nie znajdzie.",
+      "referenceInLabel": "Szukaj referencji i numeru zamówienia w",
+      "referenceInHint": "Wartości krótsze niż 4 znaki nigdy nie są wyszukiwane.",
+      "referenceIn": {
+        "description": "Opis",
+        "payee": "Nazwa odbiorcy",
+        "referenceNumber": "Numer referencyjny"
+      },
+      "daysBeforeLabel": "Dni przed zakupem",
+      "daysAfterLabel": "Dni po zakupie",
+      "daysHint": "Okno wokół daty zakupu. Domyślnie {default}, najwyżej {max}.",
+      "toleranceLabel": "Tolerancja kwoty",
+      "toleranceHint": "O ile kwota z banku może różnić się od sumy z wiadomości. Domyślnie 0, najwyżej {max}."
+    },
+    "proposal": {
+      "heading": "Propozycja",
+      "tagLabel": "Dodaj tag do transakcji, które ten profil kategoryzuje",
+      "tagHelp": "Tag jest tworzony, jeśli nie masz tagu o tej nazwie. Jest widoczny w propozycji, a nic nie zostanie zapisane, dopóki jej nie zatwierdzisz.",
+      "tagNameLabel": "Nazwa tagu",
+      "aiCategoriesLabel": "Pozwól AI wybrać kategorię pozycji, do których nie pasuje żadna reguła",
+      "aiCategoriesHelp": "Gdy pozycja nie pasuje do żadnej reguły kategorii i nie ma kategorii domyślnej, AI jest pytane o jej kategorię z Twojej listy kategorii. Wybór jest oznaczony w propozycji jako wybór AI. Przy wyłączonej opcji AI nigdy nie jest pytane."
+    },
+    "kind": {
+      "label": "Rodzaj profilu",
+      "receipt": "Paragon zamówienia",
+      "trade": "Transakcja maklerska",
+      "receiptHelp": "Odczytuje potwierdzenie zamówienia i znajduje transakcję bankową, którą je opłacono.",
+      "tradeHelp": "Odczytuje potwierdzenie transakcji od maklera i proponuje transakcję inwestycyjną, którą zgłasza: kupno, sprzedaż, dywidendę pieniężną lub reinwestowaną dywidendę."
+    },
+    "trade": {
+      "guardsHeading": "Które wiadomości nadawcy odczytuje",
+      "guardsHelp": "Opcjonalne. Każdy wzorzec jest porównywany z całym wierszem wiadomości, jeden wzorzec w wierszu.",
+      "guards": {
+        "requireLine": "Wymagane wiersze",
+        "requireLineHint": "Profil odczytuje wiadomość tylko wtedy, gdy zawiera jeden z tych wierszy; w przeciwnym razie próbowany jest następny profil nadawcy.",
+        "skipIfLine": "Wiersze pomijające wiadomość",
+        "skipIfLineHint": "Wiadomość z jednym z tych wierszy jest odkładana, na przykład anulowane zlecenie.",
+        "waitIfLine": "Wiersze wstrzymujące wiadomość",
+        "waitIfLineHint": "Wiadomość z jednym z tych wierszy jest wstrzymywana i odczytywana ponownie później, na przykład częściowa realizacja."
+      },
+      "fieldsHeading": "Transakcja",
+      "fieldsHelp": "Rodzaj transakcji, symbol oraz suma lub cena są wymagane, a także liczba akcji, z wyjątkiem dywidendy pieniężnej. Rodzaj jest odczytywany z tekstu: Dividend lub Distribution to dywidenda pieniężna, Reinvest lub DRIP to reinwestowana dywidenda, w przeciwnym razie Buy lub Sell. Każde pole przyjmuje wzorce, po jednym w wierszu, próbowane po kolei.",
+      "fields": {
+        "tradeAction": "Wzorce rodzaju transakcji",
+        "tradeSymbol": "Wzorce symbolu",
+        "tradeQuantity": "Wzorce liczby akcji",
+        "tradeTotal": "Wzorce sumy transakcji",
+        "tradePrice": "Wzorce ceny za akcję",
+        "tradeCommission": "Wzorce prowizji",
+        "tradeDate": "Wzorce daty transakcji",
+        "tradeAccount": "Wzorce konta"
+      },
+      "fieldHint": "Musi przechwytywać {capture}. Przykład: {example}",
+      "amountsHelp": "Suma to wykonana kwota, przy kupnie lub reinwestowanej dywidendzie z prowizją; przy dywidendzie pieniężnej to wypłacona kwota. Cena (przy dywidendzie kwota na akcję) służy do kontroli i razem z liczbą akcji daje sumę, gdy wiadomość jej nie podaje. Kwota, która podaje swoją walutę (US$, C$, USD, €), ustala też walutę transakcji.",
+      "rulesHeading": "Reguły konta",
+      "rulesHelp": "Na które konto księgowana jest transakcja. Reguły są próbowane po kolei na tekście konta odczytanym przez wzorce konta, a wygrywa pierwsza pasująca; {star} oznacza dowolny tekst. Reguła z walutą dotyczy tylko transakcji w tej walucie, więc dwa konta zapisywane przez maklera tak samo, na przykład RRSP w CAD i RRSP w USD, oba pokazywane jako RRSP, to dwie reguły z tym samym tekstem i różnymi walutami. Gdy wiadomość nie podaje tekstu konta, może zadziałać tylko reguła z tekstem {star}. Resztę przejmuje konto domyślne.",
+      "currencyOrder": "Waluta transakcji jest brana po kolei: z samej kwoty, gdy ją podaje (US$, C$, USD, €), potem z pierwszego znacznika waluty poniżej, który pasuje do wiersza wiadomości, potem z waluty Twojego papieru wartościowego dla tego symbolu. Reguła z walutą nigdy nie zgaduje: gdy żadne z trzech nie wskazuje waluty, wiadomość czeka na Ciebie, zamiast trafić na któreś z kont.",
+      "ruleMatchLabel": "Tekst konta reguły {rule}",
+      "ruleMatchPlaceholder": "Tekst konta, na przykład RRSP",
+      "ruleCurrencyLabel": "Waluta reguły {rule}",
+      "ruleAccountLabel": "Konto reguły {rule}",
+      "ruleMoveUp": "Przesuń regułę {rule} w górę",
+      "ruleMoveDown": "Przesuń regułę {rule} w dół",
+      "ruleRemove": "Usuń regułę {rule}",
+      "ruleAdd": "Dodaj regułę konta",
+      "rulesMax": "Najwyżej {max} reguł.",
+      "rulesWithoutAccountText": "Nie ma wzorców konta, więc reguły są próbowane na pustym tekście: zadziałać może tylko reguła z tekstem {star}.",
+      "anyCurrency": "Dowolna waluta",
+      "baseCurrency": "{code} (Twoja waluta bazowa)",
+      "currencyPlaceholder": "Wybierz walutę",
+      "accountPlaceholder": "Wybierz konto",
+      "accountOption": "{name} ({currency})",
+      "accountNotTradableOption": "{name} (nie jest otwartym kontem maklerskim)",
+      "accountUnknownOption": "Konto spoza Twojej listy",
+      "accountNotTradable": "Na tym koncie nie można zaksięgować transakcji: jest zamknięte, jest kontem gotówkowym albo nie jest kontem inwestycyjnym.",
+      "accountUnknown": "Tego konta nie ma na Twojej liście: mogło zostać usunięte. Wybierz inne.",
+      "defaultAccountLabel": "Konto domyślne",
+      "defaultAccountNone": "Bez konta domyślnego",
+      "defaultAccountHint": "Konto, gdy żadna reguła nie pasuje. Bez niego wiadomość, do której nie pasuje żadna reguła, czeka na Ciebie.",
+      "markersHeading": "Znaczniki waluty",
+      "markersHelp": "Tekst, który podaje walutę transakcji, gdy kwoty jej nie podają, na przykład wiersz mówiący, że kwoty są w dolarach amerykańskich, obok samego $. Każdy znacznik jest porównywany z każdym wierszem wiadomości ({star} oznacza dowolny tekst), a pierwszy pasujący znacznik, w kolejności, wskazuje walutę. Znaczniki są używane tylko wtedy, gdy kwota nie podaje waluty.",
+      "markerMatchLabel": "Tekst znacznika {marker}",
+      "markerMatchPlaceholder": "Na przykład *U.S. dollars*",
+      "markerCurrencyLabel": "Waluta znacznika {marker}",
+      "markerMoveUp": "Przesuń znacznik {marker} w górę",
+      "markerMoveDown": "Przesuń znacznik {marker} w dół",
+      "markerRemove": "Usuń znacznik {marker}",
+      "markerAdd": "Dodaj znacznik waluty",
+      "markersMax": "Najwyżej {max} znaczników."
+    },
+    "discard": {
+      "label": "Pasujące wiadomości",
+      "read": "Odczytuj",
+      "ignore": "Ignoruj",
+      "delete": "Usuwaj",
+      "readHelp": "Parser odczytuje każdą pasującą wiadomość za pomocą wzorców poniżej.",
+      "ignoreHelp": "Każda wiadomość pasująca do tego parsera jest ignorowana po nadejściu: niczego nie proponuje. Dla nadawców, których poczty nigdy nie chcesz obsługiwać.",
+      "deleteHelp": "Każda wiadomość pasująca do tego parsera jest usuwana z Monize po nadejściu (zostaje w Twojej skrzynce). Usuniętej wiadomości nie można przywrócić.",
+      "noReading": "Ten parser niczego nie odczytuje, więc nie potrzebuje wzorców, kategorii ani dopasowania. O tym, które wiadomości przejmuje, decydują domeny nadawców i słowa z tematu powyżej."
+    }
+  },
+  "problems": {
+    "heading": "Definicja parsera jest nieprawidłowa:",
+    "item": "{where}: {problem}",
+    "paths": {
+      "definition": "Definicja",
+      "line": "{field}, wiersz {line}",
+      "rule": "Reguła kategorii {rule}, {part}",
+      "entryPart": "{field}, wpis {line}, {part}",
+      "skipLine": "Wiersz do pominięcia {line}",
+      "recordStep": "Krok rekordu {step}",
+      "recordStepPart": "Krok rekordu {step}, {part}",
+      "recordAlternative": "Krok rekordu {step}, wariant {alternative}",
+      "accountRule": "Reguła konta {rule}",
+      "accountRulePart": "Reguła konta {rule}, {part}",
+      "currencyMarker": "Znacznik waluty {marker}",
+      "currencyMarkerPart": "Znacznik waluty {marker}, {part}"
+    },
+    "fields": {
+      "orderId": "Wzorce numeru zamówienia",
+      "total": "Wzorce sumy",
+      "shipping": "Wzorce kosztów wysyłki",
+      "discount": "Wzorce rabatu",
+      "itemPatterns": "Wzorce pozycji",
+      "startAfter": "Pozycje zaczynają się po",
+      "stopAt": "Pozycje kończą się na",
+      "items": "Pozycje zamówienia",
+      "categoryRules": "Reguły kategorii",
+      "rulePattern": "wzorzec",
+      "ruleCategory": "kategoria",
+      "defaultCategory": "Kategoria domyślna",
+      "shippingCategory": "Kategoria wysyłki",
+      "feesCategory": "Kategoria opłat",
+      "balanceTolerance": "Tolerancja salda",
+      "fees": "Wzorce opłat",
+      "skipLines": "Wiersze do pominięcia",
+      "record": "Rekord",
+      "label": "etykieta",
+      "value": "wartość",
+      "within": "w obrębie",
+      "line": "wiersz",
+      "optional": "opcjonalne",
+      "paid": "Wzorce zapłaconej kwoty",
+      "payee": "Wzorce sprzedawcy",
+      "requireLine": "Wymagane wiersze",
+      "skipIfLine": "Wiersze pomijające wiadomość",
+      "waitIfLine": "Wiersze wstrzymujące wiadomość",
+      "source": "Źródło wierszy",
+      "single": "Pojedyncza pozycja",
+      "singleName": "Nazwa pojedynczej pozycji",
+      "joinWrapped": "Łączenie zawiniętych wierszy",
+      "ruleField": "pole",
+      "reference": "Wzorce referencji",
+      "match": "Sekcja dopasowania",
+      "matchBy": "Strategie dopasowania",
+      "matchReferenceIn": "Pola, w których szukana jest referencja",
+      "matchDaysBefore": "Dni przed zakupem",
+      "matchDaysAfter": "Dni po zakupie",
+      "matchTolerance": "Tolerancja kwoty",
+      "tag": "Tag",
+      "aiCategories": "Kategorie AI",
+      "trade": "Sekcja transakcji",
+      "tradeAction": "Wzorce rodzaju transakcji",
+      "tradeSymbol": "Wzorce symbolu",
+      "tradeQuantity": "Wzorce liczby akcji",
+      "tradeTotal": "Wzorce sumy transakcji",
+      "tradePrice": "Wzorce ceny za akcję",
+      "tradeCommission": "Wzorce prowizji",
+      "tradeDate": "Wzorce daty transakcji",
+      "tradeAccount": "Wzorce konta",
+      "accountRules": "Reguły konta",
+      "currencyMarkers": "Znaczniki waluty",
+      "defaultAccount": "Konto domyślne",
+      "ruleAccount": "konto",
+      "ruleCurrency": "waluta",
+      "role": "Rola profilu",
+      "link": "Sekcja „link”",
+      "linkDaysBefore": "Dni przed spłatą",
+      "linkFromDomains": "Domeny nadawców e-maili zakupu",
+      "linkKey": "Wzorce klucza powiązania"
+    },
+    "codes": {
+      "not_object": "nie jest prawidłową definicją",
+      "unknown_key": "nie jest czymś, co parser może mieć",
+      "unsupported_version": "to wersja, której ten serwer nie odczytuje (użyj wersji 2)",
+      "invalid_type": "ma wartość niewłaściwego rodzaju",
+      "empty": "nie może być puste",
+      "too_many": "ma zbyt wiele wpisów (najwyżej {max})",
+      "too_long": "jest zbyt długie (najwyżej {max} znaków)",
+      "control_character": "zawiera znak sterujący",
+      "malformed_capture": "ma przechwytywanie w nawiasach klamrowych, które jest nieprawidłowe",
+      "too_many_captures": "ma zbyt wiele przechwyceń",
+      "duplicate_capture": "używa dwa razy tej samej nazwy przechwytywania",
+      "capture_not_allowed": "używa nazwy przechwytywania, której to pole nie przyjmuje",
+      "capture_missing": "brakuje przechwytywania, którego to pole potrzebuje",
+      "capture_conflict": "przechwytuje jednocześnie sumę wiersza i cenę jednostkową. Użyj jednego z nich.",
+      "invalid_uuid": "nie jest prawidłową kategorią",
+      "out_of_range": "musi być liczbą całkowitą od 1 do {max}",
+      "items_patterns_and_record": "ma jednocześnie wzorce i rekord. Użyj jednego z nich.",
+      "items_shape_missing": "wymaga wzorców albo rekordu",
+      "skip_lines_need_record": "można używać tylko razem z rekordem",
+      "record_name_missing": "musi przechwytywać {capture} w jednym ze swoich kroków",
+      "items_single_conflict": "ma pojedynczą pozycję obok wzorców lub rekordu. Użyj jednego z nich.",
+      "join_wrapped_needs_patterns": "działa tylko ze wzorcami pozycji",
+      "invalid_value": "ma wartość, której to pole nie przyjmuje",
+      "duplicate_entry": "wymienia ten sam wpis dwa razy",
+      "reference_field_missing": "wymaga wzorców referencji (strategia referencji jest włączona)",
+      "out_of_range_days": "musi być liczbą całkowitą od 0 do {max}",
+      "out_of_range_tolerance": "musi być kwotą od 0,00 do {max}",
+      "trade_conflict": "nie może być w profilu transakcji maklerskich, który odczytuje tylko transakcję",
+      "trade_amount_missing": "wymaga wzorców sumy lub ceny (co najmniej jednego z nich)",
+      "trade_account_missing": "wymaga konta domyślnego lub reguł konta",
+      "invalid_currency": "nie jest 3-literowym kodem waluty, takim jak USD",
+      "too_many_lines": "obejmuje zbyt wiele wierszy (najwyżej {max})",
+      "line_break_not_allowed": "jest porównywany z jednym tekstem (nazwą pozycji, sprzedawcą lub kontem), więc nie może obejmować kilku wierszy",
+      "invalid_uuid_account": "nie jest prawidłowym kontem",
+      "role_invalid": "musi mieć wartość standalone, component lub settlement",
+      "link_key_requires_component": "można użyć tylko wtedy, gdy rola to component",
+      "link_key_missing": "są wymagane, gdy rola to component",
+      "link_capture_requires_settlement": "używa przechwycenia link lub instalment, które akceptuje tylko profil settlement",
+      "link_requires_settlement": "można użyć tylko wtedy, gdy rola to settlement",
+      "link_domain_invalid": "nie jest prawidłową domeną nadawcy (najwyżej {max} domen)",
+      "link_days_invalid": "musi być liczbą całkowitą od 0 do {max}",
+      "role_trade_conflict": "nie może mieć roli component ani settlement w profilu transakcji giełdowej, który odczytuje tylko transakcję"
+    }
+  },
+  "test": {
+    "heading": "Testuj na zapisanej wiadomości",
+    "help": "Odczytuje zapisaną wiadomość za pomocą powyższych wzorców, zapisanych lub nie, i pokazuje, co zostałoby znalezione i z którą transakcją by się powiązało. Nic nie jest zapisywane.",
+    "loadFailed": "Nie udało się wczytać zapisanych wiadomości, więc nie ma jeszcze na czym testować.",
+    "noReceipts": "Nie zapisano jeszcze żadnych wiadomości. Najpierw sprawdź skrzynkę pocztową.",
+    "receiptLabel": "Wiadomość",
+    "choosePlaceholder": "Wybierz wiadomość",
+    "receiptOption": "{subject} od {sender} ({date})",
+    "button": "Testuj",
+    "failed": "Test nie powiódł się",
+    "matchHeading": "Dopasowanie transakcji",
+    "matched": "Powiąże transakcję z dnia {date} na kwotę {amount} ({payee}), znalezioną według: {how}.",
+    "matchKinds": {
+      "order_id": "numeru zamówienia",
+      "amount_payee": "kwoty i odbiorcy",
+      "amount_only": "kwoty",
+      "manual": "Twojego wyboru",
+      "reference": "referencji",
+      "amount_date": "kwoty i daty"
+    },
+    "noPayee": "brak odbiorcy",
+    "ambiguous": "{count, plural, one {Pasuje # transakcja} few {Pasują # transakcje} many {Pasuje # transakcji} other {Pasuje # transakcji}} jednakowo dobrze, więc żadna nie zostanie powiązana, dopóki jednej nie wybierzesz.",
+    "unmatched": "Żadna transakcja nie pasuje (sprawdzono {count, plural, one {# kandydata} few {# kandydatów} many {# kandydatów} other {# kandydatów}}).",
+    "jsonInvalid": "JSON jest nieprawidłowy, więc nie ma jeszcze czego testować.",
+    "component": {
+      "heading": "E-mail zakupu (component): klucz powiązania {linkKey}",
+      "noLinkKey": "E-mail zakupu (component): nie odczytano klucza powiązania, więc żaden e-mail spłaty nie może go znaleźć.",
+      "noneWaiting": "Żaden e-mail spłaty nie czeka na ten klucz powiązania.",
+      "waiting": "{count, plural, one {# e-mail spłaty czeka} few {# e-maile spłaty czekają} many {# e-maili spłaty czeka} other {# e-maila spłaty czeka}} na ten klucz powiązania:",
+      "settlement": "{subject} ({date})"
+    },
+    "outcome": {
+      "not_applicable": "Ten parser nie odczytałby tej wiadomości: nie ma w niej żadnego z jego wymaganych wierszy, więc zostałby wypróbowany kolejny parser dla tego nadawcy.",
+      "skip_line": "Ten parser odłożyłby tę wiadomość na bok: znajduje się w niej wiersz, po którym ją pomija.",
+      "wait_line": "Ten parser wstrzymałby tę wiadomość: jeden z wierszy mówi, że zamówienie nie jest jeszcze ostateczne, więc zostanie odczytana ponownie później.",
+      "discard_ignore": "Ten parser zignorowałby tę wiadomość: ignoruje każdą pasującą wiadomość.",
+      "discard_delete": "Ten parser usunąłby tę wiadomość: usuwa każdą pasującą wiadomość.",
+      "no_html": "Ten parser odczytuje część HTML wiadomości, a ta wiadomość jej nie ma, więc zostałaby oznaczona jako nieczytelna (brak HTML)."
+    },
+    "matchedBy": {
+      "heading": "Dopasowano przez",
+      "none": "Z tej wiadomości nie odczytano żadnej wartości.",
+      "fields": {
+        "orderId": "Numer zamówienia",
+        "total": "Suma",
+        "paid": "Zapłacono",
+        "shipping": "Wysyłka",
+        "discount": "Rabat",
+        "payee": "Sprzedawca",
+        "requireLine": "Wymagany wiersz",
+        "skipIfLine": "Wiersz pomijający",
+        "waitIfLine": "Wiersz wstrzymujący",
+        "reference": "Referencja",
+        "linkKey": "Klucz powiązania",
+        "action": "Rodzaj transakcji",
+        "symbol": "Symbol",
+        "quantity": "Akcje",
+        "price": "Cena",
+        "commission": "Prowizja",
+        "date": "Data",
+        "account": "Konto",
+        "currency": "Znacznik waluty"
+      },
+      "entryLine": "wpis {entry} ({pattern}), wiersz {line}: {text}",
+      "entrySubject": "wpis {entry} ({pattern}), temat: {text}",
+      "entryLines": "wpis {entry} ({pattern}), wiersze od {first} do {last}:",
+      "blockLine": "wiersz {line}: {text}",
+      "labelled": "wpis {entry}, etykieta {label} w wierszu {labelLine} ({labelText}), wartość {pattern} w wierszu {line}: {text}",
+      "item": "Pozycja {number}",
+      "itemLine": "{pattern}, wiersz {line}: {text}"
+    },
+    "trace": {
+      "heading": "Co sprawdził mechanizm dopasowania",
+      "window": "Transakcje od {from} do {to} (dni przed zakupem: {before}, dni po zakupie: {after}), rozważono: {considered}.",
+      "tolerance": "Kwota może się różnić o {amount}.",
+      "attempt": "{position}. {name}",
+      "kept": "{count, plural, =0 {nie zostawiła żadnej} one {zostawiła # transakcję} few {zostawiła # transakcje} many {zostawiła # transakcji} other {zostawiła # transakcji}}",
+      "decided": "Rozstrzygnęła",
+      "transaction": "{date}, {amount}, {payee}",
+      "noPayee": "brak odbiorcy",
+      "strategies": {
+        "reference": "Referencja",
+        "orderId": "Numer zamówienia",
+        "amount_payee": "Kwota i odbiorca",
+        "amount_date": "Kwota i data"
+      }
+    }
+  },
+  "parsed": {
+    "notFound": "Nie znaleziono",
+    "noCategory": "Brak kategorii",
+    "unknownCategory": "Nieznana kategoria",
+    "categoryUnavailable": "Kategorie nie zostały wczytane",
+    "noItems": "Nie odczytano żadnych pozycji.",
+    "orderId": "Numer zamówienia",
+    "total": "Suma",
+    "shipping": "Wysyłka",
+    "discount": "Rabat",
+    "columns": {
+      "item": "Pozycja",
+      "qty": "Ilość",
+      "amount": "Kwota",
+      "category": "Kategoria"
+    },
+    "complete": "Odczytano w całości",
+    "incomplete": "Nie odczytano w całości",
+    "reasons": {
+      "no_total": "Wiadomość nie podaje sumy.",
+      "no_items": "Nie znaleziono żadnych pozycji.",
+      "items_unbalanced": "Pozycje nie sumują się do łącznej kwoty.",
+      "items_uncategorized": "Niektóre pozycje nie mają kategorii.",
+      "shipping_uncategorized": "Wiersz z kosztami wysyłki nie ma kategorii.",
+      "item_amount_missing": "Pozycja nie ma kwoty, a wiadomość nie podaje jednej sumy, którą można by jej przypisać."
+    },
+    "readByAi": "Odczytano przez AI",
+    "readFromStructuredData": "Odczytano z danych ustrukturyzowanych",
+    "paid": "Zapłacono",
+    "payee": "Sprzedawca",
+    "reference": "Referencja",
+    "categoryByAi": "AI",
+    "linkKey": "Klucz powiązania",
+    "kinds": {
+      "shipping": "Dostawa",
+      "fee": "Opłata",
+      "discount": "Rabat"
+    },
+    "parts": {
+      "heading": "Części",
+      "part": "Część",
+      "link": "Powiązanie",
+      "outcome": "Wynik",
+      "noLink": "Brak powiązania",
+      "component": "E-mail zakupu: {subject} ({date}).",
+      "componentProfile": "Profil: {name}.",
+      "componentNet": "Suma zakupu: {amount}.",
+      "taken": "Już wykorzystano: {amount}."
+    },
+    "linkOutcomes": {
+      "no_link": "Część nie ma powiązania, więc pozostaje jednym wierszem.",
+      "not_found": "Dla tego powiązania nie znaleziono e-maila zakupu, więc część pozostaje jednym wierszem.",
+      "component_incomplete": "E-mail zakupu nie został odczytany w całości, więc część pozostaje jednym wierszem.",
+      "component_used": "Inne spłaty wykorzystały już cały zakup, więc część pozostaje jednym wierszem.",
+      "joined": "Zastąpiono wierszami z e-maila zakupu.",
+      "scaled": "Zastąpiono wierszami z e-maila zakupu, przeskalowanymi do tej części.",
+      "amount_exceeds": "Część jest większa niż reszta zakupu, więc pozostaje jednym wierszem."
+    }
+  },
+  "state": {
+    "pending": "Czeka na odczyt",
+    "skipped": "Pominięta",
+    "no_parser": "Brak parsera",
+    "parse_failed": "Nie udało się odczytać",
+    "unmatched": "Nie znaleziono transakcji",
+    "ambiguous": "Pasuje kilka transakcji",
+    "review_conflict": "Otwarta jest inna prośba",
+    "ignored": "Zignorowana",
+    "proposed": "Czeka na akceptację",
+    "applied": "Zastosowana",
+    "dismissed": "Odrzucona",
+    "expired": "Wygasła",
+    "pending_ai": "Czeka na AI",
+    "request_missing": "Brak prośby",
+    "component": "Czeka na swoją spłatę"
+  },
+  "receipts": {
+    "loading": "Wczytywanie wiadomości",
+    "links": {
+      "reviewInbox": "Otwórz skrzynkę przeglądów AI",
+      "settings": "Ustawienia skrzynki pocztowej"
+    },
+    "filter": {
+      "label": "Filtruj według statusu",
+      "option": "{label} ({count})",
+      "all": "Wszystkie",
+      "pending": "Czeka na odczyt",
+      "skipped": "Pominięta",
+      "no_parser": "Brak parsera",
+      "parse_failed": "Nie udało się odczytać",
+      "unmatched": "Nie znaleziono transakcji",
+      "ambiguous": "Pasuje kilka transakcji",
+      "review_conflict": "Otwarta jest inna prośba",
+      "review": "W trakcie przeglądu",
+      "ignored": "Zignorowana",
+      "component": "Czeka na spłatę"
+    },
+    "search": {
+      "label": "Szukaj e-maili",
+      "placeholder": "Szukaj po temacie, nadawcy lub treści...",
+      "in": "Szukaj w",
+      "fields": {
+        "all": "Wszystkie pola",
+        "subject": "Temat",
+        "sender": "Nadawca",
+        "body": "Treść"
+      },
+      "from": "Data od",
+      "to": "Data do",
+      "rangeBackwards": "Data końcowa jest przed datą początkową. Zakres dat nie jest zastosowany.",
+      "clear": "Wyczyść wyszukiwanie"
+    },
+    "domainFilter": {
+      "label": "Domena nadawcy",
+      "all": "Wszyscy nadawcy",
+      "option": "{domain} ({count})",
+      "unknown": "Nie można było załadować liczby nadawców.",
+      "help": "Wyświetlane są wiadomości z domeny {domain} i jej poddomen. Zaznacz kilka z nich, aby przygotować jeden parser dla nadawcy.",
+      "waitingForAi": "Czeka na AI"
+    },
+    "columns": {
+      "select": "Zaznacz",
+      "date": "Data",
+      "email": "Wiadomość",
+      "transaction": "Transakcja",
+      "state": "Status",
+      "actions": "Akcje"
+    },
+    "transactionSummary": "{date}, {amount}, {payee}",
+    "noPayee": "brak odbiorcy",
+    "noTransaction": "Jeszcze brak",
+    "error": {
+      "title": "Nie udało się wczytać wiadomości",
+      "body": "Żądanie nie powiodło się, więc nic jeszcze nie wiadomo o Twoich wiadomościach. Spróbuj ponownie.",
+      "retry": "Spróbuj ponownie"
+    },
+    "empty": {
+      "title": "Brak wiadomości",
+      "body": "Potwierdzenia zamówień pojawią się tutaj po odczytaniu skrzynki pocztowej.",
+      "filteredTitle": "Brak wiadomości o tym statusie",
+      "filteredBody": "Wybierz inny status, aby zobaczyć pozostałe.",
+      "searchTitle": "Żaden e-mail nie pasuje do wyszukiwania",
+      "searchBody": "Zmień słowa lub daty albo wyczyść wyszukiwanie, aby zobaczyć wszystkie e-maile.",
+      "noMailboxBody": "Nie połączono jeszcze żadnej skrzynki pocztowej. Połącz ją, aby zacząć odczytywać potwierdzenia zamówień.",
+      "connectButton": "Połącz skrzynkę pocztową"
+    },
+    "actions": {
+      "view": "Zobacz",
+      "reprocess": "Przetwórz ponownie",
+      "link": "Wybierz transakcję",
+      "recognizeAi": "Rozpoznaj z AI",
+      "recognizeTradeAi": "Rozpoznaj jako transakcję z AI",
+      "approve": "Zatwierdź",
+      "draftParser": "Przygotuj profil za pomocą AI",
+      "createParser": "Utwórz profil",
+      "ignore": "Zignoruj",
+      "reviewTrade": "Przejrzyj w skrzynce"
+    },
+    "toasts": {
+      "approved": "Propozycja zatwierdzona",
+      "approveFailed": "Nie udało się zatwierdzić propozycji",
+      "reprocessed": "Wiadomość przetworzona ponownie",
+      "reprocessFailed": "Nie udało się ponownie przetworzyć wiadomości",
+      "ignored": "Wiadomość zignorowana",
+      "ignoreFailed": "Nie udało się zignorować wiadomości",
+      "deleted": "Wiadomość usunięta",
+      "deleteFailed": "Nie udało się usunąć wiadomości"
+    },
+    "ignoreDialog": {
+      "title": "Zignorować tę wiadomość?",
+      "message": "Wiadomość {subject} niczego nie zaproponuje, a jej otwarta prośba o przegląd zostanie odrzucona.",
+      "confirm": "Zignoruj"
+    },
+    "deleteDialog": {
+      "title": "Usunąć tę wiadomość?",
+      "message": "Zapisana wiadomość {subject} zostanie usunięta, a jej otwarta prośba o przegląd odrzucona. Wiadomość w skrzynce nie zostanie naruszona, a kolejne sprawdzanie nie pobierze jej ponownie."
+    },
+    "selection": {
+      "label": "Zaznaczone wiadomości",
+      "select": "Zaznacz: {subject}",
+      "selectAll": "Zaznacz wszystkie wiadomości na tej liście",
+      "count": "{count, plural, one {Zaznaczono # wiadomość} few {Zaznaczono # wiadomości} many {Zaznaczono # wiadomości} other {Zaznaczono # wiadomości}}",
+      "draftButton": "Przygotuj parser z AI ({count})",
+      "clear": "Wyczyść zaznaczenie",
+      "deleteButton": "Usuń ({count})",
+      "ignoreButton": "Zignoruj ({count})",
+      "pageSelected": "Zaznaczono wszystkie wiadomości na tej stronie: {count}.",
+      "selectAllMatching": "Zaznacz wszystkie wiadomości pasujące do filtra: {total}.",
+      "allMatchingSelected": "Zaznaczono wszystkie wiadomości pasujące do filtra: {total}.",
+      "hiddenSelected": "{hidden, plural, one {# z zaznaczonych wiadomości nie jest widoczna na tej liście.} few {# z zaznaczonych wiadomości nie jest widoczne na tej liście.} many {# z zaznaczonych wiadomości nie jest widocznych na tej liście.} other {# z zaznaczonych wiadomości nie jest widocznych na tej liście.}}",
+      "reprocessButton": "Przetwórz ponownie ({count})",
+      "restoreButton": "Przywróć zignorowane ({count})",
+      "restoreButtonAll": "Przywróć zignorowane",
+      "approveButton": "Zatwierdź propozycje ({count})",
+      "approveButtonAll": "Zatwierdź propozycje",
+      "progress": "Przetworzono: {processed}, zostało: {remaining}",
+      "progressStarting": "Start",
+      "stop": "Zatrzymaj",
+      "narrowedSelected": "Zaznaczono {total} wiadomości: wszystkie pasujące do tego filtra, oprócz wyłączonych poniżej.",
+      "deselect": {
+        "label": "Odznacz według",
+        "state": "Stan: {state}",
+        "sender": "Nadawca: {domain}",
+        "before": "Odebrane przed dniem",
+        "after": "Odebrane po dniu",
+        "beforeLabel": "Odznacz wiadomości odebrane przed dniem",
+        "afterLabel": "Odznacz wiadomości odebrane po dniu",
+        "apply": "Odznacz",
+        "cancel": "Anuluj"
+      },
+      "exclusion": {
+        "label": "Wyłączone z zaznaczenia",
+        "state": "Nie w stanie {state}",
+        "sender": "Nie od {domain}",
+        "from": "Odebrane {date} lub później",
+        "to": "Odebrane {date} lub wcześniej",
+        "remove": "Przywróć: {label}"
+      },
+      "draftBlocked": {
+        "skipped": "Nie można odczytać tej wiadomości, więc nie ma tekstu do przygotowania parsera. Usuń ją z zaznaczenia.",
+        "allMatching": "Parser przygotowuje się z wiadomości, które zaznaczasz sam. Maksymalnie {max}. Wyczyść to zaznaczenie i zaznacz do {max} wiadomości.",
+        "mixedKinds": "Wybrane wiadomości łączą potwierdzenia transakcji i wiadomości z zamówieniami. Profil odczytuje jeden rodzaj, więc wybierz tylko potwierdzenia transakcji albo tylko wiadomości z zamówieniami.",
+        "tooManyPerDomain": "Można użyć najwyżej {perDomain} wiadomości od jednego nadawcy. Zaznacz od każdego nadawcy ({domains}) {perDomain} wiadomości lub mniej.",
+        "tooManyDomains": "Można użyć razem najwyżej {maxDomains} nadawców ({domains}). Zaznacz wiadomości od {maxDomains} nadawców lub mniej.",
+        "tradeOneDomain": "Profil transakcji giełdowej odczytuje wiadomości jednego nadawcy ({domains}). Zaznacz potwierdzenia transakcji od jednego nadawcy."
+      }
+    },
+    "pager": {
+      "itemName": "e-maili",
+      "total": "{count, plural, one {# e-mail} few {# e-maile} many {# e-maili} other {# e-maila}}",
+      "page": "Strona {page}"
+    },
+    "draft": {
+      "failed": "Nie udało się rozpocząć przygotowywania parsera",
+      "queued": "W kolejce: prośba czeka na agenta w skrzynce przeglądów AI. Żaden asystent nie może teraz odpowiedzieć.",
+      "handoffFailed": "Prośba jest w kolejce, ale nie udało się otworzyć wiadomości w czacie. Czeka na agenta w skrzynce przeglądów AI.",
+      "inboxLink": "Otwórz skrzynkę przeglądów AI",
+      "opened": "Otwarto czat z dołączonymi wiadomościami. Przeczytaj treść i naciśnij Wyślij.",
+      "chatPrompt": "Zbuduj parser paragonów z e-maili dla {count, plural, one {tej wiadomości z zamówieniem} few {tych # wiadomości z zamówieniami} many {tych # wiadomości z zamówieniami} other {tych # wiadomości z zamówieniami}} od {domain}. Przejmij prośbę o przegląd AI {requestId}, przetestuj parser na każdej dołączonej wiadomości za pomocą narzędzia email_receipt_parsers, poprawiaj go, aż każda wiadomość zostanie odczytana w całości, a następnie zapisz go jako szkic dla prośby {requestId}.",
+      "mixedKinds": "Wybrane wiadomości łączą potwierdzenia transakcji i wiadomości z zamówieniami. Profil odczytuje jeden rodzaj, więc wybierz tylko potwierdzenia transakcji albo tylko wiadomości z zamówieniami.",
+      "chatPromptTrade": "Zbuduj profil transakcji dla {count, plural, one {tego potwierdzenia transakcji} few {tych # potwierdzeń transakcji} many {tych # potwierdzeń transakcji} other {tych # potwierdzeń transakcji}} od {domain}. Przejmij prośbę o przegląd AI {requestId}, przetestuj profil na każdej dołączonej wiadomości za pomocą narzędzia email_receipt_parsers, poprawiaj go, aż z każdej wiadomości zostanie odczytana pełna transakcja, a następnie zapisz go jako szkic dla prośby {requestId}."
+    },
+    "tradeBadge": "Transakcja",
+    "bulkDialog": {
+      "delete": {
+        "title": "Usunąć wiadomości?",
+        "message": "{count, plural, one {Usunąć # wiadomość} few {Usunąć # wiadomości} many {Usunąć # wiadomości} other {Usunąć # wiadomości}}{scope, select, both { od {domain} ze statusem {status}} domain { od {domain}} status { ze statusem {status}} other {}}? Tej operacji nie można cofnąć. Aby zachować wiadomości i zabronić im proponowania zmian, wybierz zamiast tego „Zignoruj”. Wiadomości powiązane z transakcją zostają zachowane."
+      },
+      "ignore": {
+        "title": "Zignorować wiadomości?",
+        "message": "{count, plural, one {Zignorować # wiadomość} few {Zignorować # wiadomości} many {Zignorować # wiadomości} other {Zignorować # wiadomości}}{scope, select, both { od {domain} ze statusem {status}} domain { od {domain}} status { ze statusem {status}} other {}}? Wiadomości nie będą niczego proponować. Ich otwarte żądania przeglądu zostaną odrzucone. Wiadomości powiązane z transakcją pozostają bez zmian.",
+        "confirm": "Zignoruj"
+      },
+      "countChanged": "Liczba pasujących wiadomości wynosi teraz {count}. Nic nie zmieniono. Sprawdź liczbę i potwierdź ponownie.",
+      "approve": {
+        "title": "Zatwierdzić propozycje?",
+        "message": "{count, plural, one {Zatwierdzić # propozycję} few {Zatwierdzić # propozycje} many {Zatwierdzić # propozycji} other {Zatwierdzić # propozycji}}? Każdą zastosuje się tak, jak robi to przycisk Potwierdź w skrzynce przeglądu AI.",
+        "trades": "{count, plural, one {# wiadomość o transakcji giełdowej jest pominięta. Zatwierdź ją na jej karcie w skrzynce przeglądu AI.} few {# wiadomości o transakcjach giełdowych są pominięte. Zatwierdź je na ich kartach w skrzynce przeglądu AI.} many {# wiadomości o transakcjach giełdowych jest pominięte. Zatwierdź je na ich kartach w skrzynce przeglądu AI.} other {# wiadomości o transakcjach giełdowych jest pominięte. Zatwierdź je na ich kartach w skrzynce przeglądu AI.}}",
+        "confirm": "Zatwierdź"
+      },
+      "searchNote": "Uwzględnione są tylko e-maile, które pasują do wyszukiwania.",
+      "narrowedNote": "Wiadomości wyłączone z zaznaczenia pozostają bez zmian."
+    },
+    "bulk": {
+      "result": {
+        "deleted": "{count, plural, one {Usunięto # wiadomość.} few {Usunięto # wiadomości.} many {Usunięto # wiadomości.} other {Usunięto # wiadomości.}}",
+        "ignored": "{count, plural, one {Zignorowano # wiadomość.} few {Zignorowano # wiadomości.} many {Zignorowano # wiadomości.} other {Zignorowano # wiadomości.}}",
+        "unchanged": "{count, plural, one {# wiadomość była już zignorowana.} few {# wiadomości były już zignorowane.} many {# wiadomości było już zignorowanych.} other {# wiadomości było już zignorowanych.}}",
+        "notIgnorable": "{count, plural, one {Nie można zignorować # wiadomości: nie można jej odczytać albo jej propozycja jest już zastosowana.} few {Nie można zignorować # wiadomości: nie można ich odczytać albo ich propozycje są już zastosowane.} many {Nie można zignorować # wiadomości: nie można ich odczytać albo ich propozycje są już zastosowane.} other {Nie można zignorować # wiadomości: nie można ich odczytać albo ich propozycje są już zastosowane.}}",
+        "skippedLinked": "{count, plural, one {Zachowano # wiadomość powiązaną z transakcją.} few {Zachowano # wiadomości powiązane z transakcją.} many {Zachowano # wiadomości powiązanych z transakcją.} other {Zachowano # wiadomości powiązanych z transakcją.}}",
+        "reprocessed": "{count, plural, one {Ponownie przetworzono # wiadomość.} few {Ponownie przetworzono # wiadomości.} many {Ponownie przetworzono # wiadomości.} other {Ponownie przetworzono # wiadomości.}}",
+        "restored": "{count, plural, one {Ponownie odczytano # zignorowaną wiadomość.} few {Ponownie odczytano # zignorowane wiadomości.} many {Ponownie odczytano # zignorowanych wiadomości.} other {Ponownie odczytano # zignorowanych wiadomości.}}",
+        "reprocessFailed": "{count, plural, one {# wiadomość nie powiodła się.} few {# wiadomości nie powiodły się.} many {# wiadomości nie powiodło się.} other {# wiadomości nie powiodło się.}}",
+        "stopped": "{count, plural, one {Zatrzymano. # wiadomość czeka na przetworzenie.} few {Zatrzymano. # wiadomości czekają na przetworzenie.} many {Zatrzymano. # wiadomości czeka na przetworzenie.} other {Zatrzymano. # wiadomości czeka na przetworzenie.}}",
+        "approved": "{count, plural, one {Zatwierdzono # propozycję.} few {Zatwierdzono # propozycje.} many {Zatwierdzono # propozycji.} other {Zatwierdzono # propozycji.}}",
+        "approveFailed": "{count, plural, one {# propozycji nie udało się zatwierdzić.} few {# propozycji nie udało się zatwierdzić.} many {# propozycji nie udało się zatwierdzić.} other {# propozycji nie udało się zatwierdzić.}}"
+      },
+      "deleteFailed": "Nie można usunąć wiadomości",
+      "ignoreFailed": "Nie można zignorować wiadomości",
+      "noneLeft": "Żadna wiadomość już nie pasuje. Nic nie zmieniono.",
+      "reprocessFailed": "Nie udało się ponownie przetworzyć wiadomości",
+      "approveFailed": "Nie udało się zatwierdzić propozycji",
+      "noApprovable": "W tym zaznaczeniu nie ma propozycji do zatwierdzenia.",
+      "narrowFailed": "Nie udało się policzyć wiadomości. Zmiana nie została zastosowana."
+    },
+    "linkedDraftDialog": {
+      "title": "Przygotować powiązane profile?",
+      "message": "Zaznaczono e-maile od kilku nadawców: {domains}. Użyj tego tylko wtedy, gdy dane jednej transakcji bankowej są rozproszone w e-mailach kilku nadawców, na przykład sklepu i dostawcy płatności odroczonych albo sklepu i bramki płatności. Aby przygotować profile dla niezwiązanych sklepów, anuluj i przygotuj jedną domenę naraz. Jedno zgłoszenie obejmuje najwyżej {perDomain} e-maili od jednego nadawcy i najwyżej {maxDomains} nadawców.",
+      "domainEntry": "{domain} ({count, plural, one {# wiadomość} few {# wiadomości} many {# wiadomości} other {# wiadomości}})",
+      "confirm": "Przygotuj powiązane profile"
+    }
+  },
+  "detail": {
+    "title": "Paragon z e-maila",
+    "loading": "Wczytywanie wiadomości",
+    "error": {
+      "title": "Nie udało się wczytać wiadomości",
+      "body": "Żądanie nie powiodło się. Spróbuj ponownie.",
+      "retry": "Spróbuj ponownie"
+    },
+    "from": "Od",
+    "received": "Odebrano",
+    "forwardedBy": "Przekazane przez",
+    "originalSent": "Wysłane przez sklep",
+    "subject": "Temat",
+    "state": "Status",
+    "parser": "Parser",
+    "noParser": "Brak",
+    "structuredSource": "Dane ustrukturyzowane",
+    "matchedBy": "Dopasowano według",
+    "matchKinds": {
+      "order_id": "Numer zamówienia",
+      "amount_payee": "Kwota i odbiorca",
+      "amount_only": "Kwota",
+      "manual": "Twój wybór",
+      "reference": "Referencja",
+      "amount_date": "Kwota i data"
+    },
+    "transaction": "Transakcja",
+    "transactionSummary": "{date}, {amount}, {payee}",
+    "noPayee": "brak odbiorcy",
+    "viewTransaction": "Zobacz transakcję",
+    "noTransaction": "Jeszcze brak",
+    "reasons": {
+      "too_large": "Wiadomość przekracza limit rozmiaru, więc została zapisana bez odczytu.",
+      "undecodable": "Nie udało się zdekodować wiadomości, więc została zapisana bez odczytu.",
+      "draft_failed": "AI nie zdołało przygotować parsera dla tego nadawcy.",
+      "parser_invalid": "Parser dla tego nadawcy jest nieprawidłowy. Edytuj go w ustawieniach parserów.",
+      "no_total": "Parser nie znalazł w tej wiadomości sumy.",
+      "no_items": "Parser nie znalazł żadnych pozycji.",
+      "items_unbalanced": "Pozycje nie sumują się do łącznej kwoty.",
+      "items_uncategorized": "Niektóre pozycje nie mają kategorii.",
+      "shipping_uncategorized": "Wiersz z kosztami wysyłki nie ma kategorii.",
+      "amount_differs": "Odczytana suma różni się od kwoty transakcji, więc proponowany jest tylko opis.",
+      "proposal_fallback": "Propozycja ze szczegółami pozycji została odrzucona, więc proponowany jest tylko opis.",
+      "nothing_to_propose": "Wiadomość niczego nie wnosi do tej transakcji.",
+      "proposal_refused": "Propozycja została odrzucona, więc nic nie zaproponowano.",
+      "skip_line": "Znaleziono wiersz, po którym ten parser pomija wiadomość, więc została zignorowana.",
+      "wait_line": "Jeden z wierszy mówi, że zamówienie nie jest jeszcze ostateczne, więc wiadomość zostanie odczytana ponownie później.",
+      "profile_ignore": "Parser tej wiadomości ignoruje każdą pasującą wiadomość.",
+      "no_html": "Ten parser odczytuje część HTML wiadomości, a ta wiadomość jej nie ma.",
+      "schema_org": "Parser nie był potrzebny: zamówienie odczytano z danych ustrukturyzowanych (schema.org) zawartych w wiadomości.",
+      "item_amount_missing": "Pozycja nie ma kwoty, a wiadomość nie podaje jednej sumy, którą można by jej przypisać.",
+      "trade_no_action": "Parser nie znalazł w tej wiadomości ani zakupu, ani sprzedaży, ani dywidendy, ani reinwestycji.",
+      "trade_no_symbol": "Parser nie znalazł w tej wiadomości symbolu giełdowego.",
+      "trade_no_quantity": "Parser nie znalazł w tej wiadomości liczby jednostek, której wymaga kupno, sprzedaż lub reinwestowana dywidenda.",
+      "trade_no_amount": "Parser nie znalazł w tej wiadomości ani sumy, ani ceny.",
+      "trade_no_account": "Parser nie ustalił, którego konta dotyczy ta transakcja.",
+      "trade_exists": "Twoje konta zawierają już tę transakcję, więc nic nie zaproponowano.",
+      "trade_linked": "Powiązano z transakcją, którą zgłasza, więc nic nie zaproponowano.",
+      "trade_no_currency": "Profil nie rozpoznał waluty tej transakcji, więc nie mógł wybrać jej konta.",
+      "awaiting_settlement": "E-mail zakupu zapisano. Czeka na e-mail spłaty, który go opłaca.",
+      "settled": "E-mail zakupu zapisano. Połączone z nim e-maile spłaty opłacają całą jego kwotę.",
+      "instalment": "E-mail zakupu zapisano. Spłaty opłaciły jego część; reszta czeka na opłacenie.",
+      "partially_linked": "Niektóre części tej spłaty nie mają jeszcze e-maila zakupu. Każda z nich jest pokazana jako jeden wiersz.",
+      "enriched_by_other": "Dopasowana transakcja została już uzupełniona przez inny e-mail. Otwórz ją i użyj akcji Powiąż, aby zastąpić to uzupełnienie, albo zignoruj ten e-mail.",
+      "no_link_key": "Ten e-mail zakupu nie zawiera klucza powiązania, więc żadna spłata nie może go znaleźć."
+    },
+    "reasonUnknown": "Powód: {reason}",
+    "requestNote": "Prośba o przegląd ({state}): {note}",
+    "parsedHeading": "Co odczytał parser",
+    "tradeHeading": "Transakcja odczytana z wiadomości",
+    "tradeCandidatesHeading": "Istniejące transakcje, które mogą być tą transakcją",
+    "tradeCandidatesHelp": "Te transakcje inwestycyjne mogą być transakcją zgłaszaną w tej wiadomości. Powiąż właściwą: nie powstaje nowa transakcja, a zaplanowany rachunek lub wpłata, które ona reguluje, zostaje oznaczona jako zapłacona.",
+    "notParsed": "Z tej wiadomości nic jeszcze nie odczytano.",
+    "candidatesHeading": "Pasujące transakcje",
+    "candidatesHelp": "Kilka transakcji pasuje do tej wiadomości jednakowo dobrze. Wybierz tę, którą opłacono.",
+    "linkButton": "Powiąż z tą transakcją",
+    "linked": "Wiadomość powiązana z transakcją",
+    "linkFailed": "Nie udało się powiązać wiadomości",
+    "bodyHeading": "Wiadomość",
+    "textLabel": "Treść wiadomości",
+    "noText": "Wiadomość nie ma treści.",
+    "bodyView": {
+      "label": "Pokaż wiadomość jako",
+      "html": "HTML",
+      "text": "Tekst",
+      "lines": "Wiersze"
+    },
+    "remoteImagesNote": "Zewnętrzne obrazy nie są wczytywane.",
+    "htmlFrameTitle": "Wiadomość w postaci sformatowanej przez nadawcę",
+    "structured": {
+      "heading": "Dane ustrukturyzowane (schema.org)",
+      "help": "Zamówienie lub faktura, które wiadomość zawiera jako znaczniki dla programów pocztowych. Są odczytywane tylko wtedy, gdy nie pasuje żaden parser albo parser nie znajduje kwoty łącznej.",
+      "found": "Znaleziono",
+      "notFound": "Nie znaleziono",
+      "notFoundHelp": "Wiadomość nie zawiera znaczników zamówienia albo nie podają one kwoty łącznej ani pozycji.",
+      "seller": "Sprzedawca",
+      "currency": "Waluta",
+      "orderDate": "Data zamówienia",
+      "unitPrice": "Cena jednostkowa"
+    },
+    "lines": {
+      "help": "Wiersze, z którymi porównywane są wzorce parsera, ponumerowane tak, jak numeruje je lista „Dopasowano przez” w teście.",
+      "sourceLabel": "Źródło wierszy",
+      "sources": {
+        "text": "Tekst",
+        "html": "HTML"
+      },
+      "noHtml": "Ta wiadomość nie ma części HTML, więc parser odczytujący HTML nie może jej odczytać.",
+      "capped": "Odczytywane jest tylko pierwszych {max} wierszy.",
+      "empty": "Brak wierszy.",
+      "listLabel": "Ponumerowane wiersze wiadomości"
+    },
+    "linkedReceipts": {
+      "componentsHeading": "Powiązane e-maile zakupu",
+      "component": "Część {part}: {subject} ({date})",
+      "settlementsHeading": "Opłacono przez",
+      "settlement": "{subject} ({date}), część {amount}",
+      "enrichedBy": "Już uzupełniono przez: {subject}",
+      "openButton": "Otwórz",
+      "open": "Otwórz e-mail {subject}"
+    },
+    "tradeTransactionSummary": "{action, select, BUY {Kupiono {quantity} {symbol} za {total} dnia {date}.} SELL {Sprzedano {quantity} {symbol} za {total} dnia {date}.} DIVIDEND {Dywidenda z {symbol} w kwocie {total} dnia {date}.} REINVEST {Reinwestowano dywidendę w {quantity} {symbol} za {total} dnia {date}.} other {{quantity} {symbol} za {total} dnia {date}.}}",
+    "noTradeTransaction": "Jeszcze brak: transakcja zostanie zaksięgowana po zatwierdzeniu propozycji albo połączona z już istniejącą w księdze.",
+    "candidateShares": "{quantity} akcji",
+    "tradeNoCandidates": "Żadna transakcja inwestycyjna z tego konta, tego rodzaju i z tym symbolem, w ciągu tygodnia od dnia transakcji, nie jest wolna do połączenia. Jeśli wprowadziłeś ją sam, sprawdź konto i datę; w przeciwnym razie zatwierdź propozycję w skrzynce przeglądu.",
+    "aiTradeHeading": "Transakcja proponowana przez agenta AI",
+    "aiTradeReader": "Brak: agent AI odczytuje ją jako transakcję",
+    "noAiTradeTransaction": "Jeszcze brak: transakcja zostanie zaksięgowana po zatwierdzeniu propozycji agenta AI.",
+    "tradeProposalHeading": "Co zaksięgowałaby jego propozycja"
+  },
+  "picker": {
+    "heading": "Wybierz transakcję",
+    "help": "Żadna transakcja nie została dopasowana automatycznie. To Twoje transakcje z zakresu dat poniżej, który początkowo obejmuje dni wokół zakupu. Wybierz tę, którą opłacono, albo zmień daty, aby szukać dalej.",
+    "fromLabel": "Od",
+    "toLabel": "Do",
+    "searchPlaceholder": "Szukaj po odbiorcy, opisie lub kwocie...",
+    "loading": "Wczytywanie transakcji",
+    "error": "Nie udało się wczytać transakcji.",
+    "retry": "Spróbuj ponownie",
+    "empty": "W tym okresie nie masz transakcji, które można powiązać. Możesz poszerzyć daty powyżej, aby szukać dalej.",
+    "emptySearch": "Żadna transakcja z tego okresu nie pasuje do wyszukiwania. Możesz poszerzyć daty powyżej.",
+    "rangeReversed": "Data Od jest późniejsza niż data Do.",
+    "rangeIncomplete": "Wpisz obie daty, aby wyświetlić transakcje.",
+    "row": "{date}, {amount}, {payee}",
+    "noPayee": "brak odbiorcy",
+    "linkButton": "Powiąż",
+    "hasMore": "Pokazano tylko pierwsze {count}. Zawęź listę za pomocą wyszukiwania.",
+    "ai": {
+      "heading": "Wybierz transakcję dla AI",
+      "help": "To Twoje transakcje z zakresu dat poniżej, który początkowo obejmuje dni wokół zakupu. Wybierz tę, którą AI ma podzielić według produktów z wiadomości, albo zmień daty, aby szukać dalej.",
+      "linkButton": "Użyj tej transakcji"
+    },
+    "sample": {
+      "heading": "Wybierz transakcję, którą opłacono tą wiadomością",
+      "help": "To Twoje transakcje z zakresu dat poniżej, który początkowo obejmuje dni wokół zakupu. Wybór jest zapamiętany w kreatorze i służy do sprawdzenia profilu; nic nie jest powiązane z wiadomością. Zmień daty, aby szukać dalej.",
+      "linkButton": "Użyj tej transakcji"
+    }
+  },
+  "callback": {
+    "title": "Łączenie skrzynki pocztowej",
+    "connecting": "Kończenie łączenia",
+    "toasts": {
+      "connected": "Skrzynka pocztowa połączona"
+    },
+    "success": {
+      "title": "Skrzynka pocztowa połączona",
+      "body": "Połączono jako {username}. Powrót do ustawień."
+    },
+    "providerError": {
+      "title": "Logowanie nie zostało ukończone",
+      "withDescription": "Dostawca zgłosił: {error}. {description}",
+      "withoutDescription": "Dostawca zgłosił: {error}."
+    },
+    "missingParameters": {
+      "title": "Ta strona została otwarta bez wyniku logowania",
+      "body": "Zacznij od nowa w ustawieniach paragonów z e-maili i użyj jednego z przycisków Połącz."
+    },
+    "failed": {
+      "title": "Nie udało się połączyć skrzynki pocztowej",
+      "fallback": "Serwer odrzucił połączenie. Zacznij od nowa w ustawieniach paragonów z e-maili."
+    },
+    "backLink": "Powrót do ustawień paragonów z e-maili"
+  },
+  "recognize": {
+    "title": "Rozpoznaj z AI",
+    "tradeTitle": "Rozpoznaj jako transakcję z AI",
+    "tradeMessage": "AI przeczyta tę wiadomość jako potwierdzenie transakcji z domu maklerskiego i zaproponuje zgłaszaną w niej transakcję inwestycyjną (konto, kupno, sprzedaż, dywidenda pieniężna lub reinwestowana dywidenda, symbol, jednostki i suma). Nic nie jest zapisywane, dopóki jej nie zatwierdzisz.",
+    "tradeConfirm": "Rozpoznaj jako transakcję",
+    "transactionSummary": "{date}, {amount}, {payee}",
+    "noPayee": "brak odbiorcy",
+    "confirmMessage": "Ta wiadomość jest powiązana z transakcją {summary}. AI odczyta wiadomość i zaproponuje podział tej transakcji według produktów. Kontynuować z tą transakcją?",
+    "confirm": "Rozpoznaj z AI",
+    "chooseOther": "Wybierz inną transakcję",
+    "candidatesHeading": "Którą transakcję opłacono tą wiadomością?",
+    "candidatesHelp": "Do tej wiadomości pasuje kilka transakcji. Wybierz tę, której ma użyć AI, lub wyszukaj inną.",
+    "candidatesLoading": "Wczytywanie pasujących transakcji",
+    "candidatesError": "Nie udało się wczytać pasujących transakcji.",
+    "retry": "Spróbuj ponownie",
+    "useButton": "Użyj tej transakcji",
+    "searchOther": "Szukaj innych transakcji",
+    "back": "Wstecz",
+    "failed": "Nie udało się rozpocząć rozpoznawania",
+    "queued": "W kolejce: żaden asystent AI nie może teraz odpowiedzieć, więc prośba czeka w skrzynce przeglądów AI na agenta (na przykład przez MCP).",
+    "handoffFailed": "Prośba jest w kolejce, ale nie udało się otworzyć wiadomości w czacie. Czeka w skrzynce przeglądów AI na agenta (na przykład przez MCP).",
+    "inboxLink": "Otwórz skrzynkę przeglądów AI",
+    "opened": "Otwarto czat z dołączoną wiadomością. Przeczytaj treść i naciśnij Wyślij.",
+    "chatPrompt": "Rozpoznaj produkty, ilości i ceny w załączonej wiadomości z zamówieniem i podziel moją transakcję z {date} ({payee}, {amount}) według produktów, przypisując każdemu kategorię. Przejmij prośbę o przegląd AI {requestId} i prześlij do niej swoją propozycję.",
+    "tradeChatPrompt": "Rozpoznaj transakcję w załączonej wiadomości z potwierdzeniem od brokera: konto, czy to kupno, sprzedaż, dywidenda pieniężna czy reinwestowana dywidenda, symbol, jednostki (dywidenda pieniężna może ich nie podawać), wykonaną sumę i datę. Przejmij żądanie przeglądu AI {requestId} i złóż dla niego transakcję.",
+    "tradeDetachesTransaction": "Odczytany jako transakcja, ten e-mail przestaje odpowiadać {summary}: transakcja tworzy własną transakcję inwestycyjną."
+  },
+  "hub": {
+    "tabs": {
+      "ariaLabel": "Sekcje paragonów z e-maili",
+      "overview": "Przegląd",
+      "emails": "Wiadomości",
+      "profiles": "Profile",
+      "mailbox": "Skrzynka pocztowa"
+    },
+    "demoRestricted": {
+      "heading": "Ograniczone w trybie demo",
+      "body": "Łączenie skrzynki pocztowej i pisanie profili są wyłączone w trybie demo."
+    }
+  },
+  "process": {
+    "retryFailed": "Ponów nieudane wiadomości ({count})",
+    "starting": "Uruchamianie...",
+    "progress": "{processed, plural, one {Przetworzono # wiadomość} few {Przetworzono # wiadomości} many {Przetworzono # wiadomości} other {Przetworzono # wiadomości}}, zostało: {remaining}.",
+    "cancel": "Anuluj",
+    "cancelling": "Anulowanie...",
+    "summary": "{count, plural, one {Przetworzono # wiadomość.} few {Przetworzono # wiadomości.} many {Przetworzono # wiadomości.} other {Przetworzono # wiadomości.}}",
+    "cancelledSummary": "Anulowano po {count, plural, one {# wiadomości.} few {# wiadomościach.} many {# wiadomościach.} other {# wiadomości.}}",
+    "outcomes": "Zakończyły się jako: {outcomes}.",
+    "passedOver": "{count, plural, one {# wiadomość zgłosiła błąd i została pominięta.} few {# wiadomości zgłosiły błąd i zostały pominięte.} many {# wiadomości zgłosiło błąd i zostało pominiętych.} other {# wiadomości zgłosiło błąd i zostało pominiętych.}}",
+    "failed": "Przetwarzanie zostało zatrzymane, bo żądanie się nie powiodło.",
+    "failedWithReason": "Przetwarzanie zostało zatrzymane: {reason}",
+    "outcome": "{count} {state}",
+    "deletedOutcome": "usunięte: {count}",
+    "close": "Zamknij"
+  },
+  "overview": {
+    "loading": "Wczytywanie przeglądu...",
+    "error": {
+      "title": "Nie udało się wczytać przeglądu",
+      "body": "Żądanie się nie powiodło, więc niczego tutaj nie należy uznawać za puste. Spróbuj ponownie.",
+      "retry": "Spróbuj ponownie"
+    },
+    "mailbox": {
+      "title": "Skrzynka pocztowa",
+      "none": "Nie połączono jeszcze żadnej skrzynki pocztowej.",
+      "connect": "Połącz skrzynkę pocztową",
+      "manage": "Otwórz ustawienia skrzynki pocztowej",
+      "state": {
+        "notConnected": "Niepołączona",
+        "failing": "Ostatnie sprawdzenie nie powiodło się",
+        "off": "Sprawdzanie jest wyłączone",
+        "polling": "Sprawdzanie włączone"
+      },
+      "auth": {
+        "password": "Logowanie hasłem",
+        "oauth2": "Logowanie przez dostawcę"
+      },
+      "lastSuccess": "Ostatnie udane sprawdzenie: {when}",
+      "neverPolled": "Nie sprawdzono jeszcze skutecznie.",
+      "lastError": "Ostatni błąd: {error}"
+    },
+    "emails": {
+      "title": "Wiadomości",
+      "stored": "zapisanych",
+      "processable": "{count, plural, one {# wiadomość można przetworzyć ponownie} few {# wiadomości można przetworzyć ponownie} many {# wiadomości można przetworzyć ponownie} other {# wiadomości można przetworzyć ponownie}}.",
+      "open": "Otwórz wiadomości"
+    },
+    "proposals": {
+      "title": "Propozycje",
+      "waiting": "czeka na Twoją akceptację",
+      "review": "Przejrzyj propozycje",
+      "open": "Otwórz skrzynkę przeglądów AI"
+    },
+    "profiles": {
+      "title": "Profile",
+      "approved": "zatwierdzonych",
+      "drafts": "{count, plural, one {# szkic czeka na Twoją akceptację} few {# szkice czekają na Twoją akceptację} many {# szkiców czeka na Twoją akceptację} other {# szkicu czeka na Twoją akceptację}}.",
+      "manage": "Otwórz profile"
+    },
+    "uncovered": {
+      "title": "Nadawcy bez profilu",
+      "help": "Ci nadawcy przysłali wiadomości, których nie odczytuje żaden profil. Utwórz profil dla jednego z nich: kreator na karcie Profile przeprowadzi Cię przez ten proces.",
+      "none": "Każdy nadawca zapisanych wiadomości ma profil.",
+      "row": "{domain} ({count, plural, one {# wiadomość} few {# wiadomości} many {# wiadomości} other {# wiadomości}})",
+      "create": "Utwórz profil"
+    }
+  },
+  "wizard": {
+    "heading": "Zacznij korzystać z paragonów z e-maili",
+    "intro": "Cztery kroki od zera do pierwszej propozycji.",
+    "done": "(gotowe)",
+    "steps": {
+      "mailbox": {
+        "title": "Połącz skrzynkę pocztową",
+        "body": "Użyj dedykowanej skrzynki, na którą trafiają potwierdzenia zamówień. Monize tylko ją czyta.",
+        "action": "Połącz skrzynkę pocztową"
+      },
+      "emails": {
+        "title": "Pobierz wiadomości",
+        "body": "Wiadomości są odczytywane podczas sprawdzania skrzynki. Uruchom sprawdzanie w ustawieniach skrzynki pocztowej, aby zobaczyć pierwsze z nich.",
+        "action": "Otwórz wiadomości"
+      },
+      "profile": {
+        "title": "Utwórz profil dla nadawcy",
+        "body": "Profil mówi Monize, jak odczytywać potwierdzenia zamówień jednego nadawcy. Napisz go albo przygotuj szkic na podstawie zapisanej wiadomości.",
+        "action": "Otwórz profile"
+      },
+      "review": {
+        "title": "Przejrzyj propozycje",
+        "body": "Każda wiadomość staje się propozycją dotyczącą transakcji. Nic nie zostanie zmienione, dopóki jej nie zatwierdzisz.",
+        "action": "Otwórz skrzynkę przeglądów AI"
+      }
+    }
+  },
+  "profileWizard": {
+    "heading": "Utwórz profil dla {domain}",
+    "stepsLabel": "Kroki kreatora",
+    "stepName": "{number}. {name}",
+    "steps": {
+      "samples": "Próbki",
+      "generate": "Generowanie",
+      "preview": "Podgląd i akceptacja"
+    },
+    "cancel": "Anuluj",
+    "existingDraft": "Ta domena ma już szkic profilu.",
+    "useExistingDraft": "Zacznij od podglądu ze szkicem",
+    "uncovered": {
+      "heading": "Utwórz profil dla domeny",
+      "help": "Domeny nadawców z zapisanymi wiadomościami i bez zatwierdzonego profilu. Wybierz jedną, aby uruchomić kreator.",
+      "loading": "Wczytywanie domen nadawców",
+      "error": "Nie udało się wczytać domen nadawców.",
+      "retry": "Spróbuj ponownie",
+      "none": "Każdy nadawca zapisanych wiadomości ma profil."
+    },
+    "samples": {
+      "loading": "Wczytywanie wiadomości",
+      "error": "Nie udało się wczytać wiadomości.",
+      "retry": "Spróbuj ponownie",
+      "empty": {
+        "title": "Brak wiadomości z tej domeny",
+        "body": "Żadna zapisana wiadomość nie ma nadawcy w domenie {domain}."
+      },
+      "help": "Kliknij wiadomość, aby ją przeczytać, i wybierz transakcję, którą opłacono. Następnie zaznacz do {max} wiadomości, z których powstanie profil; wiadomość można zaznaczyć dopiero, gdy ma transakcję.",
+      "tradeToggle": "Te wiadomości to potwierdzenia transakcji z domu maklerskiego (tworzą transakcję inwestycyjną, więc nie łączy się ich z transakcją bankową)",
+      "tradeHelp": "Kliknij wiadomość, aby ją przeczytać, a następnie zaznacz do {max} potwierdzeń, z których powstanie parser. Nie trzeba wybierać transakcji.",
+      "columns": {
+        "select": "Użyj",
+        "date": "Data",
+        "email": "Wiadomość",
+        "transaction": "Transakcja"
+      },
+      "select": "Użyj wiadomości {subject} jako próbki",
+      "needsTransaction": "Najpierw wybierz transakcję dla tej wiadomości.",
+      "limitReached": "Najwyżej {max} próbek. Odznacz jedną, aby wybrać inną.",
+      "noTransaction": "Nie wybrano",
+      "tradeNoTransaction": "Niepotrzebne przy potwierdzeniu transakcji",
+      "selectedCount": "Zaznaczono {count} z {max} próbek",
+      "continue": "Przejdź do asystenta",
+      "emailLoading": "Wczytywanie wiadomości",
+      "emailError": "Nie udało się wczytać wiadomości.",
+      "dialogTitle": "Wiadomość i transakcja: {subject}",
+      "emailHeading": "Wiadomość"
+    },
+    "generate": {
+      "help": "Asystent czyta te wiadomości oraz transakcje, którymi je opłacono, i pisze szkic profilu dla {domain}. Nic nie jest jeszcze zatwierdzone.",
+      "reviseHelp": "Powiedz asystentowi, co zmienić. Zaktualizuje ten sam szkic na podstawie tych wiadomości i transakcji.",
+      "tradeHelp": "Asystent czyta te potwierdzenia i pisze wersję roboczą parsera dla {domain}, który proponuje transakcję inwestycyjną zgłaszaną w każdym z nich. Nic jeszcze nie jest zatwierdzone.",
+      "tradeSample": "Potwierdzenie transakcji",
+      "feedbackLabel": "Oczekiwane zmiany",
+      "feedbackPlaceholder": "Na przykład: suma to wiersz z napisem Kwota zapłacona, a nie suma częściowa.",
+      "send": "Wyślij do AI",
+      "sendFeedback": "Wyślij uwagę do AI",
+      "retry": "Wyślij do AI ponownie",
+      "back": "Wstecz",
+      "running": "Asystent pisze profil...",
+      "runningHint": "To może potrwać minutę. Nie zamykaj tej strony.",
+      "noDraft": "Asystent nie zapisał szkicu.",
+      "tryAgain": "Możesz wysłać go ponownie albo wrócić i zmienić próbki.",
+      "failed": "Nie udało się połączyć z asystentem.",
+      "sendFailed": "Nie udało się wysłać prośby."
+    },
+    "waiting": {
+      "heading": "Oczekiwanie na agenta AI",
+      "body": "Wysłano do skrzynki AI. Agent przygotuje profil po połączeniu; możesz zamknąć to okno i wrócić później.",
+      "working": "Agent podjął prośbę i nad nią pracuje.",
+      "polling": "Gdy ta strona jest otwarta, sprawdza stan co {seconds} s.",
+      "checkFailed": "Nie udało się sprawdzić prośby. Zaraz spróbujemy ponownie.",
+      "ended": "Prośba została zamknięta bez nowego szkicu (odrzucona lub wygasła). Możesz zacząć od nowa.",
+      "inboxLink": "Otwórz skrzynkę AI",
+      "checkNow": "Sprawdź teraz",
+      "startOver": "Zacznij od nowa"
+    },
+    "preview": {
+      "loading": "Odczytywanie wiadomości za pomocą szkicu...",
+      "error": "Nie udało się uruchomić podglądu.",
+      "retry": "Spróbuj ponownie",
+      "assistantSaid": "Asystent mówi",
+      "help": "Tak szkic potraktowałby wiadomości z tej domeny. Nic nie zostało zapisane ani powiązane.",
+      "selectedHeading": "Wybrane wiadomości",
+      "othersHeading": "Pozostałe wiadomości z tej domeny",
+      "othersCapped": "Pokazano {shown} najnowszych spośród {total} pozostałych wiadomości.",
+      "columns": {
+        "email": "Wiadomość",
+        "expected": "Oczekiwana transakcja",
+        "parsed": "Odczytane przez szkic",
+        "agrees": "Zgodność",
+        "outcome": "Wynik",
+        "matched": "Dopasowana transakcja"
+      },
+      "nothingRead": "Nic nie udało się odczytać",
+      "notStated": "nie podano",
+      "parsedDate": "Data: {date}",
+      "parsedTotal": "Suma: {total}",
+      "parsedLines": "{count, plural, one {# wiersz} few {# wiersze} many {# wierszy} other {# wierszy}}",
+      "parsedTrade": "{action, select, BUY {Kupuje {quantity} jedn. {symbol}} SELL {Sprzedaje {quantity} jedn. {symbol}} DIVIDEND {Wypłaca dywidendę z {symbol}} REINVEST {Reinwestuje dywidendę w {quantity} jedn. {symbol}} other {Transakcja na {symbol}}}",
+      "tradeInconsistent": "Cena nie zgadza się z sumą, więc nie zostanie zastosowana automatycznie",
+      "noExpectation": "Brak",
+      "noMatch": "Brak transakcji",
+      "agreesYes": "Tak",
+      "agreesNo": "Nie",
+      "agreesUnknown": "Nie sprawdzono",
+      "nothingToShow": "Szkic nie ma wiadomości do pokazania.",
+      "backToSamples": "Wróć do próbek",
+      "backToAi": "Wróć do AI",
+      "accept": "Zaakceptuj i przetwórz",
+      "approved": "Profil zatwierdzony",
+      "changedElsewhere": "Profil został zmieniony gdzie indziej. Wczytaj podgląd ponownie.",
+      "approveFailed": "Nie udało się zatwierdzić profilu.",
+      "approvedProcessing": "Profil jest zatwierdzony. Zapisane wiadomości z {domain} są właśnie przez niego odczytywane.",
+      "done": "Gotowe",
+      "outcomes": {
+        "matched": "Dopasowano transakcję",
+        "ambiguous": "Pasuje kilka transakcji",
+        "unmatched": "Żadna transakcja nie pasuje",
+        "parse_failed": "Nie udało się odczytać",
+        "not_applicable": "Nie odczytane przez ten profil",
+        "skip_line": "Pominięto (znaleziono wiersz do pominięcia)",
+        "wait_line": "Wstrzymano (zamówienie niefinalne)",
+        "discard_ignore": "Zignorowana przez ten parser",
+        "discard_delete": "Usunięta przez ten parser",
+        "no_html": "Brak części HTML",
+        "trade": "Proponuje transakcję",
+        "trade_exists": "Już jest w księdze",
+        "component": "E-mail zakupu (czeka na spłatę)"
+      },
+      "parsedTradeAccount": "Konto: {account}",
+      "accountWithCurrency": "{name} ({currency})",
+      "accountUnknown": "nieznane",
+      "parsedTradeNoAccount": "Nie znaleziono konta dla tej transakcji",
+      "parsedTradeCurrency": "Waluta: {currency}"
+    }
+  },
+  "trade": {
+    "summary": "{action, select, BUY {Zakup: {quantity} jedn. {symbol} za {total}, z datą {date}.} SELL {Sprzedaż: {quantity} jedn. {symbol} za {total}, z datą {date}.} DIVIDEND {Dywidenda z {symbol} w kwocie {total}, z datą {date}.} REINVEST {Reinwestycja dywidendy w {quantity} jedn. {symbol} za {total}, z datą {date}.} other {{symbol} za {total}, z datą {date}.}}",
+    "account": "Konto podane w wiadomości: {account}",
+    "priceMismatch": "Średnia cena nie zgadza się z liczbą jednostek i sumą, więc ta transakcja nie zostanie zastosowana automatycznie.",
+    "dividendMismatch": "Kwota na akcję nie zgadza się z liczbą jednostek i sumą, więc ta dywidenda nie zostanie zastosowana automatycznie.",
+    "dividendShares": "Wypłacona od {quantity} jedn.",
+    "dividendPerShare": "Kwota na akcję w wiadomości: {price}",
+    "incomplete": "Parser nie odczytał z tej wiadomości kompletnej transakcji.",
+    "totalFromPrice": "suma wynikająca z ceny",
+    "dateUnknown": "dzień otrzymania wiadomości",
+    "price": "Średnia cena w e-mailu: {price} za akcję",
+    "proposalSecurity": "Papier wartościowy: {name}",
+    "proposalAccount": "Konto: {account}",
+    "proposalPrice": "Cena: {price} za akcję",
+    "proposalDividendPerShare": "Kwota na akcję: {price}",
+    "proposalCommission": "Prowizja: {commission}",
+    "proposalReview": "Nic nie zostanie zaksięgowane, dopóki tego nie zatwierdzisz.",
+    "proposalReviewLink": "Sprawdź w skrzynce",
+    "aiWaiting": "Agent AI nie zaproponował jeszcze transakcji. Propozycja pojawi się tutaj i w skrzynce do przeglądu.",
+    "aiBooked": "Zaksięgowano na podstawie propozycji agenta AI: zobacz transakcję powyżej.",
+    "aiNoProposal": "Dla tej wiadomości nie czeka żadna propozycja agenta AI.",
+    "currencyFrom": "Waluta: {currency}, {source, select, amount {podana w kwocie} marker {ze znacznika waluty profilu} other {z Twojego papieru wartościowego dla symbolu}}",
+    "bookTo": "Księgowane na: {account}",
+    "bookToNotTradable": "Księgowane na {account}, które nie jest otwartym kontem maklerskim, więc transakcji nie można tam zaksięgować.",
+    "bookToUnknown": "Księgowane na konto spoza Twojej listy, więc transakcji nie można tam zaksięgować."
+  },
+  "linkedHint": {
+    "emails": "Jedna transakcja bankowa opisana w e-mailach od kilku nadawców (na przykład sklepu i dostawcy płatności odroczonych)? Zaznacz razem do {max} e-maili od każdego z tych nadawców i przygotuj powiązane profile.",
+    "profiles": "Kreator poniżej przygotowuje profil dla jednego nadawcy. Jedna transakcja bankowa opisana w e-mailach od kilku nadawców (na przykład sklepu i dostawcy płatności odroczonych)? Zaznacz na karcie Wiadomości do {max} e-maili od każdego z tych nadawców i przygotuj powiązane profile.",
+    "openEmails": "Otwórz kartę Wiadomości"
+  }
+}

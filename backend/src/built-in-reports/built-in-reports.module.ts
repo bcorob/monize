@@ -20,6 +20,7 @@ import { NetWorthModule } from "../net-worth/net-worth.module";
 import { SecuritiesModule } from "../securities/securities.module";
 import { MonthlyComparisonService } from "./monthly-comparison.service";
 import { MonthlyCategoryBreakdownService } from "./monthly-category-breakdown.service";
+import { CashFlowSankeyService } from "./cash-flow-sankey.service";
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { MonthlyCategoryBreakdownService } from "./monthly-category-breakdown.se
     DataQualityReportsService,
     MonthlyComparisonService,
     MonthlyCategoryBreakdownService,
+    CashFlowSankeyService,
   ],
   exports: [BuiltInReportsService, MonthlyComparisonService],
 })

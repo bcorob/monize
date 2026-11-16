@@ -1,6 +1,7 @@
 'use client';
 
 import { useTranslations } from 'next-intl';
+import { SEGMENTED_GROUP_CLASS, segmentClass } from '@/components/ui/segmented-control';
 
 /**
  * Which of an investment account's two ledgers a register is showing: the
@@ -12,13 +13,6 @@ interface InvestmentViewToggleProps {
   value: InvestmentTransactionView;
   onChange: (view: InvestmentTransactionView) => void;
 }
-
-const BUTTON_BASE =
-  'px-3 py-1 text-sm font-medium rounded transition-colors';
-const BUTTON_ACTIVE =
-  'bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100 shadow-sm';
-const BUTTON_INACTIVE =
-  'text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200';
 
 /**
  * The segmented control that switches an investment register between the
@@ -37,18 +31,18 @@ export function InvestmentViewToggle({
   const t = useTranslations('investments');
 
   return (
-    <div className="inline-flex rounded-md bg-gray-100 dark:bg-gray-700 p-0.5">
+    <div className={SEGMENTED_GROUP_CLASS}>
       <button
         onClick={() => onChange('brokerage')}
         aria-pressed={value === 'brokerage'}
-        className={`${BUTTON_BASE} ${value === 'brokerage' ? BUTTON_ACTIVE : BUTTON_INACTIVE}`}
+        className={segmentClass(value === 'brokerage')}
       >
         {t('page.brokerageTab')}
       </button>
       <button
         onClick={() => onChange('cash')}
         aria-pressed={value === 'cash'}
-        className={`${BUTTON_BASE} ${value === 'cash' ? BUTTON_ACTIVE : BUTTON_INACTIVE}`}
+        className={segmentClass(value === 'cash')}
       >
         {t('page.cashTab')}
       </button>

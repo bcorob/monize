@@ -36,11 +36,16 @@ export const USER_MAINTENANCE_CLAIM_KEY = "maintenance";
 /**
  * How long a maintenance lease survives without its holder.
  *
- * Long enough for a large restore, short enough that a replica killed mid-restore
- * does not lock the user out of their own backups for a working day. The happy
- * path releases explicitly, so this only matters after a crash.
+ * The happy path releases explicitly, so this only matters after a crash: a
+ * process killed mid-restore (a pod eviction, an OOM kill, a dev-server reload)
+ * leaves the lease behind and locks the user out of restore and delete-my-data
+ * until it expires. Fifteen minutes keeps that lockout short while staying well
+ * above a large restore's runtime. A holder that does outlive it is still safe:
+ * restore and delete-my-data are each one transaction, so the derived readers
+ * that consult `isUnderMaintenance` see the before or the after, and the
+ * token-scoped release cannot remove a lease a later operation took.
  */
-export const USER_MAINTENANCE_LEASE_MS = 60 * 60 * 1000;
+export const USER_MAINTENANCE_LEASE_MS = 15 * 60 * 1000;
 
 @Injectable()
 export class UserMaintenanceService {
@@ -87,7 +92,7 @@ export class UserMaintenanceService {
    * well-formed and is being declined because of the account's current state,
    * and retrying once the other operation finishes will work. It happens before
    * `fn` does anything, so a refused maintenance operation has written nothing --
-   * the rule in the root `CLAUDE.md`.
+   * the rule in `AGENTS.md`.
    */
   async withMaintenanceLease<T>(
     userId: string,
@@ -119,16 +124,19 @@ export class UserMaintenanceService {
         throw this.busy();
       }
       // Joins this transaction, so the claim lands under the same lock.
-      return this.jobClaims.claimLease(
+      const token = await this.jobClaims.claimLease(
         JobClaimType.UserMaintenance,
         userId,
         USER_MAINTENANCE_CLAIM_KEY,
         USER_MAINTENANCE_LEASE_MS,
       );
+      if (!token) {
+        // Read under the same lock, so the time reported is the lease that
+        // refused this request.
+        throw this.busy(await this.minutesUntilLeaseExpires(userId));
+      }
+      return token;
     });
-    if (!leased) {
-      throw this.busy();
-    }
 
     this.logger.log(`Maintenance lease taken for user ${userId}: ${operation}`);
     try {
@@ -172,7 +180,47 @@ export class UserMaintenanceService {
     });
   }
 
-  private busy(): ConflictException {
+  /**
+   * Whole minutes, rounded up, until this user's maintenance lease expires, or
+   * null when there is no live lease to report.
+   *
+   * The lease is the upper bound on the wait: the operation holding it either
+   * finishes and releases it sooner, or died and leaves it to expire. Telling
+   * the user so is what turns a lease stranded by a crash from an indefinite
+   * "try again later" into a known wait.
+   */
+  private async minutesUntilLeaseExpires(
+    userId: string,
+  ): Promise<number | null> {
+    return withScopedDb(this.dataSource, async (manager) => {
+      const rows = returnedRows<{ minutes: number | string | null }>(
+        await manager.query(
+          `SELECT CEIL(EXTRACT(EPOCH FROM (expires_at - CURRENT_TIMESTAMP)) / 60)
+                    AS minutes
+             FROM job_claims
+            WHERE claim_type = $1 AND user_id = $2 AND claim_key = $3
+              AND expires_at IS NOT NULL
+              AND expires_at > CURRENT_TIMESTAMP`,
+          [JobClaimType.UserMaintenance, userId, USER_MAINTENANCE_CLAIM_KEY],
+        ),
+      );
+      const minutes = rows[0]?.minutes;
+      return minutes === null || minutes === undefined
+        ? null
+        : Math.max(1, Number(minutes));
+    });
+  }
+
+  private busy(minutesUntilExpiry: number | null = null): ConflictException {
+    if (minutesUntilExpiry !== null) {
+      return new ConflictException(
+        tr(
+          "errors.maintenance.inProgressRetryAfter",
+          `Another operation is currently replacing this account's data. It will finish or time out within ${minutesUntilExpiry} min; try again then.`,
+          { minutes: minutesUntilExpiry },
+        ),
+      );
+    }
     return new ConflictException(
       tr(
         "errors.maintenance.inProgress",

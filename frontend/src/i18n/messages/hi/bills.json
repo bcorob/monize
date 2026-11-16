@@ -16,12 +16,13 @@
     "chartUnavailable": "चार्ट अस्थायी रूप से अनुपलब्ध"
   },
   "viewTabs": {
-    "list": "सूची",
-    "calendar": "कैलेंडर",
+    "filterLabel": "शेड्यूल प्रकार",
     "filterAll": "सभी ({count})",
     "filterBills": "बिल ({count})",
     "filterDeposits": "जमा ({count})",
-    "todayButton": "आज"
+    "chipBills": "बिल",
+    "chipDeposits": "जमा",
+    "clearType": "सभी शेड्यूल प्रकार दिखाएँ"
   },
   "form": {
     "titleNew": "नया निर्धारित लेनदेन",
@@ -53,7 +54,11 @@
     "totalOfAccounts": "खातों का कुल",
     "legendAriaLabel": "पूर्वानुमान रेखाएँ",
     "tooltipTransactionForAccount": "{name} ({account})",
-    "unavailableMissingRates": "यह पूर्वानुमान {displayCurrency} में नहीं दिखाया जा सकता: {currencies} के लिए कोई विनिमय दर उपलब्ध नहीं है, और अनुमानित शेष उससे पहले के हर दिन पर आधारित होता है। एक दर जोड़ें, या एकल-मुद्रा खाता चुनें।"
+    "unavailableMissingRates": "यह पूर्वानुमान {displayCurrency} में नहीं दिखाया जा सकता: {currencies} के लिए कोई विनिमय दर उपलब्ध नहीं है, और अनुमानित शेष उससे पहले के हर दिन पर आधारित होता है। एक दर जोड़ें, या एकल-मुद्रा खाता चुनें।",
+    "untitledTransaction": "लेन-देन",
+    "tooltipEstimated": "(अनुमानित)",
+    "unavailableUnknownEstimates": "यह पूर्वानुमान अभी नहीं दिखाया जा सकता: इसमें एक बिल की अनुमानित राशि अज्ञात है, और अनुमानित शेष हर पिछले दिन पर आधारित होता है। उस घटना की राशि दर्ज करें, या बिल पर अनुमान बंद करें।",
+    "unknownEstimateItem": "{name}: {reason}"
   },
   "calendar": {
     "days": {
@@ -72,5 +77,11 @@
     "notFound": "निर्धारित भुगतान नहीं मिला",
     "loadFailed": "निर्धारित लेनदेन लोड करने में विफल",
     "overridesDeleteFailed": "ओवरराइड हटाने में विफल"
+  },
+  "toolbar": {
+    "showing": "<b>{total}</b> में से <b>{shown}</b> बिल और जमा दिखाए जा रहे हैं",
+    "exportButton": "निर्यात",
+    "exportTitle": "बिल और जमा को CSV में निर्यात करें",
+    "exported": "{count, plural, one {# शेड्यूल निर्यात किया गया} other {# शेड्यूल निर्यात किए गए}}"
   }
 }

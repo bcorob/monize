@@ -1,13 +1,21 @@
 import { InvestmentAction } from "./entities/investment-transaction.entity";
 import {
   acquisitionCost,
-  acquisitionUnitCost,
   applyActionToQuantity,
+  applyReturnOfCapital,
   baseInvestmentAction,
   CASH_INCOME_ACTIONS,
   FUNDING_ACCOUNT_ACTIONS,
+  incomeKind,
+  investmentIncomeAmount,
+  INVESTED_FLOW_KIND_BY_BASE_ACTION,
+  investedFlowKind,
   isQuantityOnlyAction,
   MARKET_PRICED_TRADE_ACTIONS,
+  orderTransferOutBeforeIn,
+  reinvestedIncomeAmount,
+  REINVESTED_INCOME_ACTIONS,
+  returnOfCapitalAmount,
   SHARE_MOVING_ACTIONS,
 } from "./investment-replay.util";
 
@@ -268,7 +276,7 @@ describe("acquisitionCost", () => {
   });
 
   it("treats a stored zero or negative rate as absent, not applicable", () => {
-    // Rate 1 means same currency, never "no rate found" (root CLAUDE.md).
+    // Rate 1 means same currency, never "no rate found" (`AGENTS.md`).
     // `|| 1` coerced a stored 0 to par and applied a negative rate as-is --
     // a negative basis with inverted gains -- in the one door every basis
     // calculation now goes through.
@@ -316,58 +324,321 @@ describe("acquisitionCost", () => {
   });
 });
 
-describe("acquisitionUnitCost", () => {
-  it("is the commission-inclusive cost per share (FR-008)", () => {
-    // The live incremental holding update blends a per-share figure in, while a
-    // rebuild sums total cost. Both must describe the same acquisition: 10
-    // shares at 100 with 10 commission is 101.00 per share.
-    expect(
-      acquisitionUnitCost({ quantity: 10, price: 100, commission: 10 }),
-    ).toBe(101);
-  });
-
-  it("agrees with acquisitionCost for every priced shape", () => {
-    // The invariant that keeps the incremental path and the rebuild from
-    // drifting: unit cost times quantity is the cost the rebuild would fold in.
-    const shapes = [
-      { quantity: 10, price: 100, commission: 10 },
-      { quantity: 3, price: 150, commission: 9.99 },
-      { quantity: 20, price: 100, commission: 0 },
-      { quantity: 0.5, price: 1234.5678, commission: 1.25 },
-      // No zero-price shape here: a stored 0 means "unpriced", not "free",
-      // so it is not a priced shape either function can cost.
-      { quantity: -5, price: 100, commission: 10 },
-    ];
-
-    for (const shape of shapes) {
-      const total = acquisitionCost(shape);
-      expect(total).not.toBeNull();
-      expect(acquisitionUnitCost(shape) * shape.quantity).toBeCloseTo(
-        total as number,
-        8,
-      );
-    }
-  });
-
-  it("falls back to the price when the cost cannot be worked out", () => {
-    // An unpriced TRANSFER_IN carries no cost, and the incremental holding
-    // update needs a number rather than a null -- the same 0 the pre-FR-008
-    // `Number(price)` produced, so an unpriced transfer behaves as before.
-    expect(acquisitionUnitCost({ quantity: 10, price: null })).toBe(0);
-    expect(acquisitionUnitCost({ quantity: 10, price: undefined })).toBe(0);
-  });
-
-  it("returns the price when no shares moved", () => {
-    // Dividing by a zero quantity would give Infinity, which would be written
-    // into averageCost.
-    expect(acquisitionUnitCost({ quantity: 0, price: 42, commission: 5 })).toBe(
-      42,
+/**
+ * A list that means something is written once, in the place that can check it:
+ * every member of the action enum resolves to exactly one effect on the
+ * invested part, and a new action is a failing test here rather than a silent
+ * zero in a capital flow (`docs/specs/portfolio-period-result.md` section 10.2).
+ */
+describe("INVESTED_FLOW_KIND_BY_BASE_ACTION", () => {
+  it("classifies every InvestmentAction member", () => {
+    const unclassified = Object.values(InvestmentAction).filter(
+      (action) =>
+        !INVESTED_FLOW_KIND_BY_BASE_ACTION.has(
+          baseInvestmentAction(action) as InvestmentAction,
+        ),
     );
+
+    expect(unclassified).toEqual([]);
   });
 
-  it("accepts the string numerics a raw select returns", () => {
+  it("puts each action on the side the measure needs it", () => {
+    const kinds = Object.fromEntries(
+      Object.values(InvestmentAction).map((action) => [
+        action,
+        investedFlowKind(action),
+      ]),
+    );
+
+    expect(kinds).toEqual({
+      // Buying is not earning: it funds the day and cancels out of the P&L.
+      BUY: "capitalIn",
+      TRANSFER_IN: "capitalIn",
+      ADD_SHARES: "capitalIn",
+      // Selling is not losing: the proceeds are what the position came to.
+      SELL: "capitalOut",
+      REDEEM: "capitalOut",
+      TRANSFER_OUT: "capitalOut",
+      REMOVE_SHARES: "capitalOut",
+      // A return of capital pays back what was invested: the price falls by
+      // what was paid, so it leaves the invested part without being earned.
+      RETURN_OF_CAPITAL: "capitalOut",
+      // Distributions are what the invested part EARNED, cash though they are.
+      DIVIDEND: "income",
+      INTEREST: "income",
+      CAPITAL_GAIN: "income",
+      CAPITAL_GAIN_SHORT: "income",
+      CAPITAL_GAIN_LONG: "income",
+      // A reinvestment is a distribution earned and put straight back into
+      // shares: income AND capital, so the result they add up to is unchanged.
+      REINVEST: "reinvestedIncome",
+      REINVEST_INTEREST: "reinvestedIncome",
+      REINVEST_CAPITAL_GAIN_SHORT: "reinvestedIncome",
+      REINVEST_CAPITAL_GAIN_LONG: "reinvestedIncome",
+      // A split is a ratio: no value crosses anything.
+      SPLIT: "none",
+    });
+  });
+});
+
+describe("incomeKind", () => {
+  it("records every distribution, in cash or in shares, as the cash kind it equals", () => {
+    const kinds = Object.fromEntries(
+      Object.values(InvestmentAction).map((action) => [
+        action,
+        incomeKind(action),
+      ]),
+    );
+
+    expect(kinds).toEqual({
+      DIVIDEND: "DIVIDEND",
+      INTEREST: "INTEREST",
+      CAPITAL_GAIN: "CAPITAL_GAIN",
+      CAPITAL_GAIN_SHORT: "CAPITAL_GAIN_SHORT",
+      CAPITAL_GAIN_LONG: "CAPITAL_GAIN_LONG",
+      // A reinvested distribution is income of the same kind as its cash twin.
+      REINVEST: "DIVIDEND",
+      REINVEST_INTEREST: "INTEREST",
+      REINVEST_CAPITAL_GAIN_SHORT: "CAPITAL_GAIN_SHORT",
+      REINVEST_CAPITAL_GAIN_LONG: "CAPITAL_GAIN_LONG",
+      BUY: null,
+      SELL: null,
+      REDEEM: null,
+      TRANSFER_IN: null,
+      TRANSFER_OUT: null,
+      ADD_SHARES: null,
+      REMOVE_SHARES: null,
+      SPLIT: null,
+      // A return of capital pays back cost; it is not income of any kind.
+      RETURN_OF_CAPITAL: null,
+    });
+  });
+
+  it("keeps the reinvestments out of the cash-income list", () => {
+    // A period return or net invested reads the cash list; a reinvestment's
+    // shares are already in the value those formulas compare.
+    for (const action of REINVESTED_INCOME_ACTIONS) {
+      expect(CASH_INCOME_ACTIONS).not.toContain(action);
+    }
+    expect(REINVESTED_INCOME_ACTIONS).toHaveLength(4);
+  });
+});
+
+describe("reinvestedIncomeAmount", () => {
+  it("is the stored total when the row carries one", () => {
     expect(
-      acquisitionUnitCost({ quantity: "10", price: "100", commission: "10" }),
-    ).toBe(101);
+      reinvestedIncomeAmount({
+        quantity: 2,
+        price: 50,
+        commission: 0,
+        totalAmount: 100.25,
+      }),
+    ).toBe(100.25);
+  });
+
+  it("is quantity times price plus commission for a row created in the app, which stores no total", () => {
+    expect(
+      reinvestedIncomeAmount({
+        quantity: 2,
+        price: 50,
+        commission: 1.5,
+        totalAmount: 0,
+      }),
+    ).toBe(101.5);
+  });
+
+  it("is the stored total of an imported row that carries no price", () => {
+    // A QIF ReinvDiv with a quantity and a total but no price line.
+    expect(
+      reinvestedIncomeAmount({
+        quantity: 10,
+        price: null,
+        commission: 0,
+        totalAmount: 500,
+      }),
+    ).toBe(500);
+  });
+
+  it("is unknown, not zero, for a row with neither a total nor a price", () => {
+    expect(
+      reinvestedIncomeAmount({
+        quantity: 2,
+        price: 0,
+        commission: 0,
+        totalAmount: 0,
+      }),
+    ).toBeNull();
+  });
+});
+
+describe("investmentIncomeAmount", () => {
+  it("is a cash distribution's total", () => {
+    expect(
+      investmentIncomeAmount({
+        action: InvestmentAction.DIVIDEND,
+        totalAmount: 12.34,
+      }),
+    ).toBe(12.34);
+  });
+
+  it("is a reinvested distribution's value, though the row stores no total", () => {
+    expect(
+      investmentIncomeAmount({
+        action: InvestmentAction.REINVEST_CAPITAL_GAIN_LONG,
+        quantity: 3,
+        price: 20,
+        totalAmount: 0,
+      }),
+    ).toBe(60);
+  });
+
+  it("leaves out a reinvest the cost basis leaves out", () => {
+    const row = {
+      action: InvestmentAction.REINVEST,
+      quantity: 3,
+      price: 0,
+      totalAmount: 0,
+    };
+    expect(acquisitionCost(row)).toBeNull();
+    expect(investmentIncomeAmount(row)).toBe(0);
+  });
+
+  it("is zero for a row that records no income", () => {
+    expect(
+      investmentIncomeAmount({
+        action: InvestmentAction.BUY,
+        quantity: 1,
+        price: 10,
+        totalAmount: 10,
+      }),
+    ).toBe(0);
+  });
+});
+
+describe("orderTransferOutBeforeIn", () => {
+  const at = new Date("2025-02-10T12:00:00Z");
+  const row = (
+    id: string,
+    action: InvestmentAction,
+    transactionDate = "2025-02-10",
+    createdAt = at,
+  ) => ({ id, action, transactionDate, createdAt });
+
+  it("puts the OUT leg ahead of its IN leg at the same instant and moves nothing else", () => {
+    const input = [
+      row("in", InvestmentAction.TRANSFER_IN),
+      row("out", InvestmentAction.TRANSFER_OUT),
+    ];
+    expect(orderTransferOutBeforeIn(input).map((r) => r.id)).toEqual([
+      "out",
+      "in",
+    ]);
+    // The input is not modified.
+    expect(input.map((r) => r.id)).toEqual(["in", "out"]);
+  });
+
+  it("keeps date and created_at order ahead of the leg rank", () => {
+    const rows = [
+      row("in-early", InvestmentAction.TRANSFER_IN, "2025-02-09"),
+      row("out-late", InvestmentAction.TRANSFER_OUT, "2025-02-11"),
+      row(
+        "in-later-instant",
+        InvestmentAction.TRANSFER_IN,
+        "2025-02-10",
+        new Date("2025-02-10T12:00:01Z"),
+      ),
+      row("out-instant", InvestmentAction.TRANSFER_OUT),
+    ];
+    expect(orderTransferOutBeforeIn(rows).map((r) => r.id)).toEqual([
+      "in-early",
+      "out-instant",
+      "in-later-instant",
+      "out-late",
+    ]);
+  });
+
+  it("is stable for rows that are not transfer legs", () => {
+    const rows = [
+      row("b", InvestmentAction.BUY),
+      row("a", InvestmentAction.BUY),
+    ];
+    expect(orderTransferOutBeforeIn(rows).map((r) => r.id)).toEqual(["b", "a"]);
+  });
+});
+
+/**
+ * A return of capital (issue #1800) is not income: it pays back part of what
+ * the shares cost, so it comes off the basis, never below zero, and only the
+ * excess is a gain. `docs/specs/return-of-capital.md` section 3.
+ */
+describe("return of capital", () => {
+  it("moves no shares and records no income", () => {
+    expect(
+      applyActionToQuantity(10, InvestmentAction.RETURN_OF_CAPITAL, 4),
+    ).toBe(10);
+    expect(SHARE_MOVING_ACTIONS).not.toContain(
+      InvestmentAction.RETURN_OF_CAPITAL,
+    );
+    expect(CASH_INCOME_ACTIONS).not.toContain(
+      InvestmentAction.RETURN_OF_CAPITAL,
+    );
+    expect(
+      investmentIncomeAmount({
+        action: InvestmentAction.RETURN_OF_CAPITAL,
+        totalAmount: 50,
+      }),
+    ).toBe(0);
+  });
+
+  it("is a base action of its own, not a dividend refinement", () => {
+    expect(baseInvestmentAction(InvestmentAction.RETURN_OF_CAPITAL)).toBe(
+      InvestmentAction.RETURN_OF_CAPITAL,
+    );
+    // Its cash settles against the brokerage's cash sleeve, as a dividend's.
+    expect(
+      FUNDING_ACCOUNT_ACTIONS.has(InvestmentAction.RETURN_OF_CAPITAL),
+    ).toBe(false);
+  });
+
+  it("reduces the basis by what it paid back", () => {
+    // 100 shares that cost 1,000; a 150 return of capital leaves 850.
+    expect(applyReturnOfCapital(1000, 150)).toEqual({
+      costBasis: 850,
+      basisReturned: 150,
+      realizedGain: 0,
+    });
+  });
+
+  it("stops at zero and realizes the excess as a gain", () => {
+    // The basis cannot go below nothing; the 50 it could not absorb is a gain.
+    expect(applyReturnOfCapital(100, 150)).toEqual({
+      costBasis: 0,
+      basisReturned: 100,
+      realizedGain: 50,
+    });
+  });
+
+  it("realizes all of it when there is no basis left to return", () => {
+    expect(applyReturnOfCapital(0, 40)).toEqual({
+      costBasis: 0,
+      basisReturned: 0,
+      realizedGain: 40,
+    });
+  });
+
+  it("reads the stored total unsigned, converted at the row's rate", () => {
+    expect(returnOfCapitalAmount({ totalAmount: -25 })).toBe(25);
+    expect(
+      returnOfCapitalAmount({ totalAmount: "25", exchangeRate: 1.5 }),
+    ).toBe(37.5);
+  });
+
+  it("is unknown when the rate cannot convert it, never taken at par", () => {
+    expect(
+      returnOfCapitalAmount({ totalAmount: 25, exchangeRate: 0 }),
+    ).toBeNull();
+    expect(
+      returnOfCapitalAmount({ totalAmount: "abc", exchangeRate: 1 }),
+    ).toBeNull();
   });
 });

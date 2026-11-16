@@ -7,6 +7,7 @@
     "filterAll": "Semua ({count})",
     "filterExpenses": "Pengeluaran ({count})",
     "filterIncome": "Pendapatan ({count})",
+    "typeFilterLabel": "Jenis",
     "modalTitleNew": "Kategori Baru",
     "modalTitleEdit": "Edit Kategori",
     "countSingle": "1 kategori",
@@ -54,6 +55,12 @@
     "typeExpense": "Pengeluaran",
     "typeIncome": "Pendapatan",
     "typeInherited": "Jenis diwarisi dari induk",
+    "autoSignLabel": "Tanda otomatis",
+    "autoSignOn": "Aktif",
+    "autoSignOff": "Nonaktif",
+    "autoSignInherit": "Warisi dari induk",
+    "autoSignInheritedFrom": "Diwarisi dari induk ({name}): saat ini {state}",
+    "autoSignHelp": "Jika aktif, jumlah yang Anda ketik dibuat negatif untuk kategori pengeluaran dan positif untuk kategori pemasukan. Nonaktifkan untuk mempertahankan tanda persis seperti yang Anda masukkan.",
     "colourLabel": "Warna",
     "colourInherit": "Warisi dari induk",
     "colourNone": "Tanpa warna",
@@ -65,8 +72,8 @@
     "submitUpdate": "Perbarui Kategori"
   },
   "list": {
-    "emptyHeading": "Tidak ada kategori",
-    "emptyDescription": "Mulailah dengan membuat kategori baru.",
+    "emptyHeading": "Tidak ada kategori ditemukan",
+    "emptyDescription": "Tidak ada kategori yang cocok dengan pencarian atau filter saat ini.",
     "colName": "Nama",
     "colType": "Jenis",
     "colCount": "Jumlah",
@@ -79,7 +86,7 @@
     "viewTransactionsTitle": "Lihat transaksi dalam kategori ini"
   },
   "deleteDialog": {
-    "title": "Hapus \"{name}\"?",
+    "title": "Hapus \"{name}\"",
     "checkingUsage": "Memeriksa penggunaan...",
     "usedBy": "Kategori ini digunakan oleh {count, plural, one {# item} other {# item}} (transaksi dan/atau tagihan & setoran terjadwal).",
     "reassignLabel": "Tetapkan ulang ke:",

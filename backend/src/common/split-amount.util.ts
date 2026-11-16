@@ -1,12 +1,17 @@
 import { BadRequestException } from "@nestjs/common";
 import { tr } from "../i18n/translate";
-import { roundMoney, sumMoney } from "./round.util";
+import { FIAT_MONEY_DECIMALS, roundMoney, sumMoney } from "./round.util";
 
 /**
  * Shared validation for transaction/scheduled-transaction split amount totals.
  *
- * Confirms that the rounded sum (4dp) of the split amounts equals the rounded
- * parent transaction amount, and that the minimum split count is met.
+ * Confirms that the sum of the split amounts equals the parent transaction
+ * amount at the parent currency's money precision (`options.decimals`,
+ * `moneyDecimalsFor(currency.decimalPlaces)`: four for fiat, a coin's own
+ * places up to eight), and that the minimum split count is met. Comparing at
+ * fewer places than the currency carries would let lines that do not sum to
+ * the parent appear to: `-0.00004 - 0.00004` against `-0.00008` BTC is
+ * `0 !== -0.0001` at four places, and `-0.005` against `-0.005025` is equal.
  *
  * - The default minimum split count is 2.
  * - When {@link options.allowSinglePassthrough} is `true` (the default for
@@ -22,8 +27,15 @@ export function validateSplitAmountSum(
   options: {
     allowSinglePassthrough?: boolean;
     isPassthrough?: (split: unknown) => boolean;
+    /**
+     * The parent currency's money precision. Defaults to the fiat four; a
+     * caller on an account-currency path passes `moneyDecimalsFor(...)` of the
+     * parent account's currency.
+     */
+    decimals?: number;
   } = {},
 ): void {
+  const decimals = options.decimals ?? FIAT_MONEY_DECIMALS;
   const allowSinglePassthrough = options.allowSinglePassthrough ?? false;
 
   const isPassthrough =
@@ -40,8 +52,11 @@ export function validateSplitAmountSum(
     );
   }
 
-  const roundedSum = sumMoney(splits.map((split) => Number(split.amount)));
-  const roundedAmount = roundMoney(Number(transactionAmount));
+  const roundedSum = sumMoney(
+    splits.map((split) => Number(split.amount)),
+    decimals,
+  );
+  const roundedAmount = roundMoney(Number(transactionAmount), decimals);
 
   if (roundedSum !== roundedAmount) {
     throw new BadRequestException(
@@ -69,7 +84,7 @@ export function validateSplitAmountSum(
   //
   // - The reporting distortion P5-004 described ("income that never arrived")
   //   is resolved where it belongs: category surfaces read the children
-  //   *signed* and net within the category (root CLAUDE.md, "What a category
+  //   *signed* and net within the category (docs/backend/transactions-and-money.md, "What a category
   //   cost is its debits NET OF its credits" -- issue #1125), so a credit
   //   child reduces the category it is filed under instead of fabricating
   //   income beside it.

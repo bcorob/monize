@@ -46,6 +46,8 @@
     "colProvider": "プロバイダー",
     "colStatus": "ステータス",
     "colLastLogin": "最終ログイン",
+    "colBackups": "バックアップ",
+    "colAttachments": "添付ファイル",
     "colActions": "操作",
     "youSuffix": "（あなた）",
     "noEmail": "メールなし",
@@ -60,7 +62,22 @@
     "clickToDisable": "クリックして無効化",
     "clickToEnable": "クリックして有効化",
     "resetPassword": "パスワードをリセット",
-    "noUsers": "ユーザーが見つかりません。"
+    "resetTwoFactor": "2FA をリセット",
+    "unlinkSso": "SSOを解除",
+    "noUsers": "ユーザーが見つかりません。",
+    "storageLoading": "読み込み中…",
+    "storageUnavailable": "取得できません",
+    "storageUnavailableHint": "ストレージ使用量を読み込めませんでした。ページを再読み込みして再試行してください。",
+    "storageUnknown": "不明",
+    "storageUnknownStore": "このユーザーのバックアップ保存先を読み取れなかったため、容量は不明です。バックアップページで保存先を確認してください。",
+    "storageNotReported": "未取得",
+    "storageNotReportedHint": "このアカウントは直近のストレージ集計に含まれていません。ページを再読み込みすると含まれます。",
+    "backupsOff": "オフ",
+    "backupsOffHint": "このユーザーの自動バックアップは有効ではなく、保存されているものもありません。",
+    "backupScheduleOff": "スケジュール停止",
+    "backupScheduleOffHint": "自動バックアップはオフです。これらのファイルは保持期間によってまだ削除されていないものです。",
+    "backupCount": "{count, plural, =0 {バックアップなし} one {# 件のバックアップ} other {# 件のバックアップ}}",
+    "attachmentCount": "{count, plural, =0 {ファイルなし} one {# 件のファイル} other {# 件のファイル}}"
   },
   "usersPage": {
     "title": "ユーザー管理",
@@ -81,7 +98,10 @@
       "loadFailed": "ユーザーの読み込みに失敗しました",
       "deleteFailed": "ユーザーの削除に失敗しました",
       "disableFailed": "ユーザーの無効化に失敗しました",
-      "resetFailed": "パスワードのリセットに失敗しました"
+      "resetFailed": "パスワードのリセットに失敗しました",
+      "twoFactorReset": "{name} の二要素認証をリセットしました。ユーザーはサインアウトされました。",
+      "resetTwoFactorFailed": "二要素認証のリセットに失敗しました",
+      "unlinkSsoFailed": "SSOの解除に失敗しました"
     },
     "dialogs": {
       "promoteTitle": "ユーザーを昇格しますか？",
@@ -96,6 +116,14 @@
       "resetTitle": "パスワードをリセットしますか？",
       "resetMessage": "{name} の新しい一時パスワードが生成されます。ユーザーは次回ログイン時にパスワードの変更が求められます。",
       "resetConfirm": "パスワードをリセット",
+      "unlinkSsoTitle": "SSOを解除しますか？",
+      "unlinkSsoMessage": "{name} のアカウントがローカルアカウントに変換されます。同じメールアドレスで後からSSOサインインすると、再びリンクされる場合があります。システムが一時パスワードを生成し、{name} は次回ログイン時にパスワードの変更が求められます。",
+      "unlinkSsoConfirm": "SSOを解除",
+      "unlinkSsoResultTitle": "SSOを解除しました",
+      "unlinkSsoResultDesc": "{name} のアカウントはローカルアカウントになりました。サインインできるように、この一時パスワードをユーザーに伝えてください。",
+      "resetTwoFactorTitle": "二要素認証をリセットしますか？",
+      "resetTwoFactorMessage": "{name} の二要素認証を無効にし、バックアップコードと信頼済みデバイスを削除して、すべてのセッションからサインアウトさせます。その後、ユーザーはパスワードでサインインして 2FA を設定し直せます。認証アプリとバックアップコードを失った場合や、JWT_SECRET を変更した後に使用してください。",
+      "resetTwoFactorConfirm": "2FA をリセット",
       "deleteTitle": "ユーザーを削除しますか？",
       "deleteMessage": "{name} を削除してよろしいですか？アカウントと関連するすべてのデータが完全に削除されます。この操作は取り消せません。別のアカウントの代理ユーザーである場合、そのユーザーのデータは削除されますが、委任が引き続き機能するようにログイン情報は保持されます（代理専用ユーザーになります）。",
       "deleteConfirm": "ユーザーを削除",
@@ -103,6 +131,84 @@
       "tempPasswordTitleUpgraded": "アカウントがアップグレードされました",
       "tempPasswordDescCreated": "{name} の一時パスワードが生成されました。サインインするために共有してください。",
       "tempPasswordDescUpgraded": "既存の共有ユーザーが正式アカウントにアップグレードされました。{name} にこの一時パスワードを共有してください。"
+    }
+  },
+  "notificationsPage": {
+    "title": "通知",
+    "subtitle": "この Monize インスタンスが提供する配信チャネルと、その背後にあるプッシュ ID。",
+    "loading": "通知設定を読み込んでいます...",
+    "loadUnavailable": "Monize はサーバーから通知設定を読み取れませんでした。ページを再読み込みしてやり直してください。",
+    "channelsHeading": "配信チャネル",
+    "identityHeading": "Web Push ID",
+    "perAccountNote": "端末、テスト通知、通知の設定は各アカウントのものであり、設定画面で管理します。管理者はインスタンスを構成するだけで、他の人の通知を送ることも見ることもありません。",
+    "channelState": {
+      "on": "オン",
+      "off": "オフ",
+      "unconfigured": "利用不可",
+      "unknown": "不明"
+    },
+    "channels": {
+      "inApp": {
+        "name": "アプリ内通知",
+        "description": "ヘッダーのベル。常に利用でき、無効にできません。他のすべてのチャネルが失敗しても、通知はここに残ります。"
+      },
+      "webPush": {
+        "name": "ブラウザープッシュ",
+        "description": "Monize を閉じていても、スマートフォンやデスクトップに届く通知。Firebase も Google Play や Apple Developer のアカウントも不要です。",
+        "toggleLabel": "このインスタンスでブラウザープッシュを有効にする",
+        "missingKeys": "このインスタンスにはプッシュ鍵ペアがありません。ENCRYPTION_KEY を設定して再起動してください。次回起動時に Monize が鍵ペアを自動生成します。",
+        "keyUnreadable": "このインスタンスは保存されたプッシュ鍵ペアを復号できないため、何も配信されません。下の鍵ペア更新で回復できます。",
+        "serverKeyMissing": "このインスタンスには ENCRYPTION_KEY がないため、保存済みのプッシュ鍵ペアを開けません。デプロイに ENCRYPTION_KEY を設定して再起動してください。鍵がない間はローテーションでは解決できません。"
+      },
+      "email": {
+        "name": "メール",
+        "description": "請求リマインダー、予算ダイジェスト、システム警告を各アカウントのメールアドレスへ送信します。",
+        "missingSmtp": "メールサーバーが設定されていません。メールを有効にするには SMTP の環境変数を設定してください。",
+        "statusUnavailable": "Monize はメールサーバーの状態を読み取れませんでした。"
+      },
+      "ntfy": {
+        "name": "ntfy と UnifiedPush",
+        "description": "同じ暗号化プッシュを、Google や Apple のインフラではなくセルフホストの UnifiedPush ディストリビューター（ntfy、NextPush）に配信します。このインスタンスのプッシュ鍵ペアとスイッチを共有し、各ユーザーは自分の UnifiedPush アプリからエンドポイントを登録し、設定でチャネルを有効にします。",
+        "followsWebPush": "ブラウザプッシュがオフ、または鍵ペアが使用できない間は利用できません — このチャネルは同じ鍵ペアで配信されます。"
+      }
+    },
+    "identity": {
+      "fingerprintLabel": "鍵のフィンガープリント",
+      "generatedLabel": "生成日時",
+      "devicesLabel": "登録済み端末",
+      "deviceCounts": "有効 {live} 台、停止 {disabled} 台",
+      "rotateDescription": "更新するとこのインスタンスの鍵ペアが置き換わります。登録済みの端末はすべて到達できなくなり、再度プッシュを有効にする必要があるため、鍵が漏えいした可能性がある場合にのみ更新してください。",
+      "rotateButton": "鍵ペアを更新",
+      "rotatingButton": "更新中...",
+      "missingEncryptionKey": "ENCRYPTION_KEY が設定されておらず、秘密鍵を暗号化せずに保存することになるため、このインスタンスにはプッシュ鍵ペアがありません。設定して再起動すれば、Monize が鍵ペアを自動生成します。",
+      "keyUnreadable": "このインスタンスは復号できないプッシュ鍵ペアを保持しているため、何も配信されません。稼働中のデータベースで ENCRYPTION_KEY が変わったとき、またはバックアップを別のインスタンスへ復元したときに起こります。鍵ペアを更新すれば回復し、各端末は再登録されます。",
+      "serverKeyMissing": "このインスタンスには ENCRYPTION_KEY が設定されていないため、保存済みのプッシュ鍵ペアを開けません。鍵がない状態でローテーションしても解決しません。デプロイに ENCRYPTION_KEY を設定して再起動すれば、既存のデバイスでプッシュが再び動作します。"
+    },
+    "dialogs": {
+      "rotateTitle": "プッシュ鍵ペアを更新しますか？",
+      "rotateMessage": "{count, plural, =0 {まだ端末が登録されていないため、失われるものはありません。} other {登録済みの # 台の端末は、それぞれのブラウザーでプッシュを再度有効にするまで通知を受け取れなくなります。}}",
+      "rotateConfirm": "更新"
+    },
+    "toasts": {
+      "loadFailed": "通知設定を読み込めませんでした",
+      "pushEnabled": "このインスタンスでブラウザープッシュを有効にしました",
+      "pushDisabled": "このインスタンスでブラウザープッシュを無効にしました",
+      "pushToggleFailed": "ブラウザープッシュの設定を変更できませんでした",
+      "rotated": "{count, plural, =0 {鍵ペアを更新しました} other {鍵ペアを更新しました。# 台の端末は再登録が必要です}}",
+      "rotateFailed": "鍵ペアを更新できませんでした"
+    }
+  },
+  "backupsPage": {
+    "title": "バックアップ",
+    "subtitle": "各アカウント自身の財務記録を、スケジュールに従って圧縮したバックアップファイル。",
+    "scope": {
+      "heading": "完全なデータベースバックアップではありません",
+      "perUser": "以下のスケジュールに従い、サーバーは各アカウント自身の財務記録を圧縮したバックアップファイルを書き出し、保持ポリシーに従って古いものを削除します。有効なすべてのアカウントが対象です。",
+      "notFullDatabase": "これは PostgreSQL のダンプではありません。スキーマ、サーバー設定、アカウントの財務記録以外のものは含まれません。インスタンス全体の災害復旧には、データベースと添付ファイルのストレージを独自のツールでバックアップしてください。"
+    },
+    "demoRestricted": {
+      "heading": "デモモードでは制限されています",
+      "body": "デモモードでは自動バックアップの設定は無効です。"
     }
   }
 }

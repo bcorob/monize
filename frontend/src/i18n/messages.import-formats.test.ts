@@ -45,12 +45,14 @@ const ACCEPTED_EXTENSIONS = (() => {
 
 /**
  * The strings a user reads to learn what they can upload: the page subtitle,
- * the instructions above the drop zone, and the drop zone's own caption.
+ * the instructions above the drop zone, the drop zone's own caption, and the
+ * toast that refuses a dropped file of another type.
  */
 const FORMAT_STRINGS: readonly [section: string, key: string][] = [
   ['page', 'subtitle'],
   ['upload', 'instructions'],
   ['upload', 'acceptedFormats'],
+  ['upload', 'unsupportedDrop'],
 ];
 
 const LOCALES = readdirSync(messagesDir, { withFileTypes: true })

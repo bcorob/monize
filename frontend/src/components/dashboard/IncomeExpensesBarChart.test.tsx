@@ -1,30 +1,44 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { act, render, screen, fireEvent, waitFor } from '@/test/render';
 import { IncomeExpensesBarChart } from './IncomeExpensesBarChart';
+import type { IncomeVsExpensesResponse } from '@/types/built-in-reports';
 
 const mockPush = vi.fn();
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
-const mockGetAllPages = vi.fn();
-vi.mock('@/lib/transactions', () => ({
-  transactionsApi: {
-    getAllPages: (...args: any[]) => mockGetAllPages(...args),
+// The bars are the Income vs Expenses report's answer. Which rows count and
+// which side of the line they fall on -- VOID, transfers, investment linkage,
+// a category's isIncome, the sign fallback for an uncategorized amount -- is
+// the report's to decide and is tested against a real database in
+// `report-investment-cash.integration.spec.ts`. This suite covers what the
+// widget does with the answer.
+const mockGetIncomeVsExpenses = vi.fn();
+vi.mock('@/lib/built-in-reports', () => ({
+  builtInReportsApi: {
+    getIncomeVsExpenses: (...args: any[]) => mockGetIncomeVsExpenses(...args),
   },
 }));
 
-const mockUpdateConfig = vi.fn();
+const { widgetConfig, mockUpdateConfig } = vi.hoisted(() => ({
+  widgetConfig: { current: { range: '1m', accountIds: [] as string[] } },
+  mockUpdateConfig: vi.fn(),
+}));
 vi.mock('@/hooks/useWidgetConfig', () => ({
   useWidgetConfig: () => ({
-    config: { range: '1m', accountIds: [] },
+    config: widgetConfig.current,
     updateConfig: mockUpdateConfig,
   }),
 }));
 
 vi.mock('recharts', () => ({
   ResponsiveContainer: ({ children }: any) => <div data-testid="responsive-container">{children}</div>,
-  BarChart: ({ children }: any) => <div data-testid="bar-chart">{children}</div>,
+  BarChart: ({ children, data }: any) => (
+    <div data-testid="bar-chart" data-names={(data ?? []).map((d: any) => d.name).join('|')}>
+      {children}
+    </div>
+  ),
   Bar: ({ dataKey, onClick }: any) => (
     <button data-testid={`bar-${dataKey}`} onClick={() => onClick?.({ payload: { startDate: '2026-02-17', endDate: '2026-02-23' } })} />
   ),
@@ -43,35 +57,66 @@ vi.mock('@/hooks/useChartDateFormat', () => ({
   useChartDateFormat: () => (d: any) => typeof d === 'string' ? d : d.toISOString().slice(0, 7),
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
-    formatCurrencyAxis: (n: number) => `$${n}`,
-  }),
-}));
-
-vi.mock('@/hooks/useExchangeRates', () => ({
-  useExchangeRates: () => ({
-    convertToDefault: (n: number) => n,
-  }),
-}));
-
-vi.mock('@/lib/utils', () => ({
-  parseLocalDate: (d: string) => new Date(d + 'T00:00:00'),
-  cn: (...args: any[]) => args.filter(Boolean).join(' '),
-}));
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
+      formatCurrencyAxis: (n: number) => `$${n}`,
+    }),
+  };
+});
 
 vi.mock('@/store/preferencesStore', () => ({
   usePreferencesStore: vi.fn((selector: any) => selector({ preferences: { weekStartsOn: 1 } })),
 }));
 
-const todayStr = () => {
-  const today = new Date();
-  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+const period = (
+  periodStart: string,
+  periodEnd: string,
+  income: number,
+  expenses: number,
+  key?: string,
+) => ({
+  period: key ?? periodStart,
+  periodStart,
+  periodEnd,
+  income,
+  expenses,
+  net: income - expenses,
+});
+
+/** A report answer with nothing left out, so every total is a total. */
+const report = (
+  data: IncomeVsExpensesResponse['data'],
+  over: Partial<IncomeVsExpensesResponse> = {},
+): IncomeVsExpensesResponse => {
+  const knownIncome = data.reduce((sum, d) => sum + d.income, 0);
+  const knownExpenses = data.reduce((sum, d) => sum + d.expenses, 0);
+  const knownNet = knownIncome - knownExpenses;
+  return {
+    data,
+    totals: {
+      income: knownIncome,
+      expenses: knownExpenses,
+      net: knownNet,
+      knownIncome,
+      knownExpenses,
+      knownNet,
+    },
+    currency: 'CAD',
+    missingCurrencies: [],
+    excludedCount: 0,
+    ...over,
+  };
 };
 
-async function renderChart(transactions: any[], isLoading = false) {
-  mockGetAllPages.mockResolvedValue(transactions);
+async function renderChart(
+  response: IncomeVsExpensesResponse,
+  isLoading = false,
+) {
+  mockGetIncomeVsExpenses.mockResolvedValue(response);
   let result: ReturnType<typeof render>;
   await act(async () => {
     result = render(<IncomeExpensesBarChart accounts={[]} isLoading={isLoading} />);
@@ -82,156 +127,148 @@ async function renderChart(transactions: any[], isLoading = false) {
 describe('IncomeExpensesBarChart', () => {
   beforeEach(() => {
     mockPush.mockClear();
-    mockGetAllPages.mockReset();
+    mockGetIncomeVsExpenses.mockReset();
+    mockUpdateConfig.mockClear();
+    widgetConfig.current = { range: '1m', accountIds: [] };
   });
 
   it('renders loading state with title and pulse animation', async () => {
-    await renderChart([], true);
+    await renderChart(report([]), true);
     expect(screen.getByText('Income vs Expenses')).toBeInTheDocument();
     expect(document.querySelector('.animate-pulse')).toBeInTheDocument();
     expect(screen.queryByTestId('bar-chart')).not.toBeInTheDocument();
   });
 
   it('renders chart title and timeframe label when not loading', async () => {
-    await renderChart([]);
+    await renderChart(report([]));
     await waitFor(() => expect(screen.getByTestId('bar-chart')).toBeInTheDocument());
     expect(screen.getByText('Income vs Expenses')).toBeInTheDocument();
     expect(screen.getByText('1M')).toBeInTheDocument();
   });
 
-  it('shows income, expenses, and net totals in footer', async () => {
-    await renderChart([]);
+  it('shows the report totals in the footer', async () => {
+    await renderChart(
+      report([period('2026-02-16', '2026-02-22', 1000, 400)]),
+    );
     await waitFor(() => expect(screen.getByTestId('bar-chart')).toBeInTheDocument());
+
     expect(screen.getByText('Income')).toBeInTheDocument();
-    expect(screen.getByText('Expenses')).toBeInTheDocument();
-    expect(screen.getByText('Net')).toBeInTheDocument();
+    expect(screen.getByText('$1000')).toBeInTheDocument();
+    expect(screen.getByText('$400')).toBeInTheDocument();
+    // Net is the server's own subtraction, not two rounded bars re-subtracted.
+    expect(screen.getByText('$600')).toBeInTheDocument();
   });
 
-  it('calculates income and expenses from transactions', async () => {
-    const dateStr = todayStr();
-    const transactions = [
-      { id: '1', amount: 500, currencyCode: 'CAD', isTransfer: false, transactionDate: dateStr },
-      { id: '2', amount: -200, currencyCode: 'CAD', isTransfer: false, transactionDate: dateStr },
-    ];
-    await renderChart(transactions);
-    await waitFor(() => expect(screen.getByText('$500')).toBeInTheDocument());
-    expect(screen.getByText('$200')).toBeInTheDocument();
-    expect(screen.getByText('$300')).toBeInTheDocument();
+  // --- what the widget asks the report for -------------------------------
+
+  it('asks for weekly buckets on the recent-weeks range, with the user week start', async () => {
+    await renderChart(report([]));
+    expect(mockGetIncomeVsExpenses).toHaveBeenCalledWith(
+      expect.objectContaining({ bucket: 'week', weekStartsOn: 1 }),
+    );
   });
 
-  it('skips transfer transactions', async () => {
-    const transactions = [
-      { id: '1', amount: -100, currencyCode: 'CAD', isTransfer: true, transactionDate: todayStr() },
-    ];
-    await renderChart(transactions);
-    await waitFor(() => expect(screen.getByTestId('bar-chart')).toBeInTheDocument());
-    expect(screen.getAllByText('$0').length).toBe(3);
+  it('asks for monthly buckets on a longer range', async () => {
+    widgetConfig.current = { range: '1y', accountIds: [] };
+    await renderChart(report([]));
+    expect(mockGetIncomeVsExpenses).toHaveBeenCalledWith(
+      expect.objectContaining({ bucket: 'month' }),
+    );
   });
 
-  it('skips investment account transactions', async () => {
-    const dateStr = todayStr();
-    const transactions = [
-      { id: '1', amount: -500, currencyCode: 'CAD', isTransfer: false, transactionDate: dateStr, account: { accountType: 'INVESTMENT' } },
-      { id: '2', amount: 1000, currencyCode: 'CAD', isTransfer: false, transactionDate: dateStr, account: { accountType: 'INVESTMENT' } },
-    ];
-    await renderChart(transactions);
-    await waitFor(() => expect(screen.getByTestId('bar-chart')).toBeInTheDocument());
-    expect(screen.getAllByText('$0').length).toBe(3);
+  it('passes the configured accounts, and none for an empty selection', async () => {
+    widgetConfig.current = { range: '1m', accountIds: ['acct-1'] };
+    await renderChart(report([]));
+    expect(mockGetIncomeVsExpenses).toHaveBeenCalledWith(
+      expect.objectContaining({ accountIds: ['acct-1'] }),
+    );
+
+    mockGetIncomeVsExpenses.mockClear();
+    widgetConfig.current = { range: '1m', accountIds: [] };
+    await renderChart(report([]));
+    expect(mockGetIncomeVsExpenses).toHaveBeenCalledWith(
+      expect.objectContaining({ accountIds: undefined }),
+    );
   });
 
-  it('includes non-investment account transactions', async () => {
-    const dateStr = todayStr();
-    const transactions = [
-      { id: '1', amount: -300, currencyCode: 'CAD', isTransfer: false, transactionDate: dateStr, account: { accountType: 'CHECKING' } },
-      { id: '2', amount: -200, currencyCode: 'CAD', isTransfer: false, transactionDate: dateStr, account: { accountType: 'INVESTMENT' } },
-    ];
-    await renderChart(transactions);
-    await waitFor(() => expect(screen.getByText('$300')).toBeInTheDocument());
+  // --- how it labels and draws what came back ----------------------------
+
+  it('names a weekly bar by the day it opens and a monthly bar by its month', async () => {
+    const { unmount } = await renderChart(
+      report([period('2026-02-16', '2026-02-22', 10, 5)]),
+    );
+    expect(screen.getByTestId('bar-chart')).toHaveAttribute(
+      'data-names',
+      '2026-02-16',
+    );
+    unmount();
+
+    widgetConfig.current = { range: '1y', accountIds: [] };
+    await renderChart(
+      report([period('2026-02-01', '2026-02-28', 10, 5, '2026-02')]),
+    );
+    expect(screen.getByTestId('bar-chart')).toHaveAttribute(
+      'data-names',
+      '2026-02',
+    );
   });
 
-  it('applies green color class for positive net', async () => {
-    const transactions = [
-      { id: '1', amount: 1000, currencyCode: 'CAD', isTransfer: false, transactionDate: todayStr() },
-    ];
-    await renderChart(transactions);
-    await waitFor(() => expect(screen.getAllByText('$1000').length).toBe(2));
-    screen.getAllByText('$1000').forEach((el) => {
-      expect(el.className).toContain('text-green');
-    });
+  it('draws the empty buckets the report returned rather than closing the gap', async () => {
+    // A week nothing happened in earned and spent zero: a bar of height zero.
+    await renderChart(
+      report([
+        period('2026-02-02', '2026-02-08', 500, 100),
+        period('2026-02-09', '2026-02-15', 0, 0),
+        period('2026-02-16', '2026-02-22', 300, 50),
+      ]),
+    );
+    expect(screen.getByTestId('bar-chart')).toHaveAttribute(
+      'data-names',
+      '2026-02-02|2026-02-09|2026-02-16',
+    );
   });
 
-  it('classifies by category isIncome instead of amount sign', async () => {
-    const dateStr = todayStr();
-    const transactions = [
-      { id: '1', amount: 5000, currencyCode: 'CAD', isTransfer: false, transactionDate: dateStr, category: { isIncome: true } },
-      { id: '2', amount: -500, currencyCode: 'CAD', isTransfer: false, transactionDate: dateStr, category: { isIncome: false } },
-    ];
-    await renderChart(transactions);
-    await waitFor(() => expect(screen.getByText('$5000')).toBeInTheDocument());
-    expect(screen.getByText('$500')).toBeInTheDocument();
-    expect(screen.getByText('$4500')).toBeInTheDocument();
+  // --- partial totals ----------------------------------------------------
+
+  it('marks the totals as subtotals when the report excluded a row', async () => {
+    await renderChart(
+      report([period('2026-02-16', '2026-02-22', 1000, 400)], {
+        totals: {
+          income: null,
+          expenses: null,
+          net: null,
+          knownIncome: 1000,
+          knownExpenses: 400,
+          knownNet: 600,
+        },
+        missingCurrencies: ['JPY'],
+        excludedCount: 1,
+      }),
+    );
+
+    expect(screen.getByText('$1000')).toBeInTheDocument();
+    // Income, expenses and net each carry the marker.
+    expect(screen.getAllByTestId('partial-total')).toHaveLength(3);
   });
 
-  it('counts expense refunds as reducing expenses', async () => {
-    const dateStr = todayStr();
-    const transactions = [
-      { id: '1', amount: -500, currencyCode: 'CAD', isTransfer: false, transactionDate: dateStr, category: { isIncome: false } },
-      { id: '2', amount: 400, currencyCode: 'CAD', isTransfer: false, transactionDate: dateStr, category: { isIncome: false } },
-    ];
-    await renderChart(transactions);
-    await waitFor(() => expect(screen.getByText('$100')).toBeInTheDocument());
+  it('leaves complete totals unmarked', async () => {
+    await renderChart(
+      report([period('2026-02-16', '2026-02-22', 1000, 400)]),
+    );
+    expect(screen.queryByTestId('partial-total')).toBeNull();
   });
 
-  it('classifies split transactions by split category', async () => {
-    const transactions = [
-      {
-        id: '1', amount: 1000, currencyCode: 'CAD', isTransfer: false, transactionDate: todayStr(), category: null,
-        splits: [
-          { id: 's1', amount: 700, category: { isIncome: true }, transferAccountId: null },
-          { id: 's2', amount: 300, category: { isIncome: false }, transferAccountId: null },
-        ],
-      },
-    ];
-    await renderChart(transactions);
-    await waitFor(() => expect(screen.getByText('$700')).toBeInTheDocument());
-  });
-
-  it('skips transfer splits in split transactions', async () => {
-    const transactions = [
-      {
-        id: '1', amount: 1000, currencyCode: 'CAD', isTransfer: false, transactionDate: todayStr(), category: null,
-        splits: [
-          { id: 's1', amount: 600, category: { isIncome: true }, transferAccountId: null },
-          { id: 's2', amount: 400, category: { isIncome: true }, transferAccountId: 'acc-123' },
-        ],
-      },
-    ];
-    await renderChart(transactions);
-    await waitFor(() => expect(screen.getAllByText('$600').length).toBe(2));
-    expect(screen.getByText('$0')).toBeInTheDocument();
-  });
-
-  it('falls back to sign-based for uncategorized transactions', async () => {
-    const dateStr = todayStr();
-    const transactions = [
-      { id: '1', amount: 300, currencyCode: 'CAD', isTransfer: false, transactionDate: dateStr, category: null },
-      { id: '2', amount: -100, currencyCode: 'CAD', isTransfer: false, transactionDate: dateStr, category: null },
-    ];
-    await renderChart(transactions);
-    await waitFor(() => expect(screen.getByText('$300')).toBeInTheDocument());
-    expect(screen.getByText('$100')).toBeInTheDocument();
-    expect(screen.getByText('$200')).toBeInTheDocument();
-  });
+  // --- drill-down --------------------------------------------------------
 
   it('navigates to transactions page with income filter on Income bar click', async () => {
-    await renderChart([]);
+    await renderChart(report([]));
     await waitFor(() => expect(screen.getByTestId('bar-Income')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('bar-Income'));
     expect(mockPush).toHaveBeenCalledWith('/transactions?startDate=2026-02-17&endDate=2026-02-23&categoryType=income');
   });
 
   it('navigates to transactions page with expense filter on Expenses bar click', async () => {
-    await renderChart([]);
+    await renderChart(report([]));
     await waitFor(() => expect(screen.getByTestId('bar-Expenses')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('bar-Expenses'));
     expect(mockPush).toHaveBeenCalledWith('/transactions?startDate=2026-02-17&endDate=2026-02-23&categoryType=expense');

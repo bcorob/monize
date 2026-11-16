@@ -19,7 +19,7 @@ const MAX_TOUR_ENTRIES = 200;
  * Per-user guided-tour progress. Stored in the `tour_progress` jsonb column on
  * user_preferences and written exclusively through the RLS-compliant `withScopedDb`
  * door (no injected repository / QueryRunner -- see the RLS ratchet note in the
- * root CLAUDE.md). These methods run from authenticated controllers, so the
+ * `AGENTS.md`). These methods run from authenticated controllers, so the
  * request context already supplies the identity `withScopedDb` needs.
  *
  * Saves are fire-and-forget from potentially several browser tabs at once, so

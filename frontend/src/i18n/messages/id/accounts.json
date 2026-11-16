@@ -1,4 +1,13 @@
 {
+  "paymentMatching": {
+    "toggleLabel": "{kind, select, mortgage {Cocokkan pembayaran bank yang diimpor dengan KPR ini} other {Cocokkan pembayaran bank yang diimpor dengan pinjaman ini}}",
+    "toggleHelp": "Saat transaksi bank yang diimpor cocok dengan pola penerima, Monize menggunakannya untuk melunasi pembayaran terjadwal dan memisahkannya menjadi pokok dan bunga, bukan mencatat transaksi tagihan terpisah.",
+    "payeePattern": "Pola penerima pembayaran",
+    "payeePatternPlaceholder": "mis. *BANK SAYA*",
+    "descriptionPattern": "Pola deskripsi (opsional)",
+    "descriptionPatternPlaceholder": "mis. *Angsuran pinjaman*",
+    "fromAccount": "Dicocokkan dengan debit dari {account}."
+  },
   "nameSuffix": {
     "cash": "Tunai",
     "brokerage": "Pialang"
@@ -22,9 +31,7 @@
     "noMatch": "Tidak ada akun yang sesuai dengan filter Anda.",
     "clearFilters": "Hapus Filter",
     "filter": {
-      "all": "Semua",
-      "active": "Aktif",
-      "closed": "Ditutup",
+      "allCount": "Semua ({count})",
       "netWorthAll": "Nilai Bersih: Semua",
       "inNetWorth": "Dalam Nilai Bersih",
       "excludedFromNetWorth": "Dikecualikan dari Nilai Bersih",
@@ -32,7 +39,10 @@
       "typeAriaLabel": "Filter menurut jenis akun",
       "searchPlaceholder": "Cari akun...",
       "searchAriaLabel": "Cari akun berdasarkan nama",
-      "searchClear": "Hapus pencarian"
+      "searchClear": "Hapus pencarian",
+      "activeCount": "Aktif ({count})",
+      "closedCount": "Ditutup ({count})",
+      "statusLabel": "Status"
     },
     "accountCount": "{filtered} dari {total} akun",
     "groupCount": "{count, plural, one {# akun} other {# akun}}",
@@ -40,6 +50,8 @@
       "accountName": "Nama Akun",
       "type": "Jenis",
       "status": "Status",
+      "lastReconciled": "Terakhir Direkonsiliasi",
+      "unreconciled": "Belum Direkonsiliasi",
       "balance": "Saldo",
       "actions": "Tindakan"
     },
@@ -50,8 +62,11 @@
     "statusClosed": "Ditutup",
     "marketValue": "Nilai pasar",
     "combinedBreakdown": "Investasi {investments} · Kas {cash}",
+    "combinedInvestments": "Investasi {amount}",
+    "combinedCash": "Kas {amount}",
     "combinedUnknown": "Total tidak tersedia",
     "combinedUnknownTooltip": "{count, plural, other {# kepemilikan tidak memiliki harga, sehingga total akun ini tidak dapat dihitung}}",
+    "combinedUnknownValuation": "Sebagian kepemilikan di akun ini tidak dapat dikonversi ke mata uang pelaporan Anda, sehingga totalnya tidak dapat dihitung. Tambahkan kurs yang belum ada di halaman Mata Uang.",
     "combinedUnknownNoPortfolio": "Kepemilikan tidak dapat dimuat, sehingga total akun ini tidak dapat dihitung",
     "limit": "Batas: {amount}",
     "pairedWith": "Dipasangkan dengan {name}",
@@ -81,7 +96,11 @@
     "jointSharedBy": "Dibagikan oleh {owner}",
     "jointSharedWith": "Dibagikan dengan {count, plural, other {# orang}}",
     "includeInNetWorth": "Sertakan dalam kekayaan bersih saya",
-    "excludeFromNetWorth": "Kecualikan dari kekayaan bersih saya"
+    "excludeFromNetWorth": "Kecualikan dari kekayaan bersih saya",
+    "neverReconciled": "Belum pernah",
+    "lastReconciledOn": "Direkonsiliasi {date}",
+    "neverReconciledCard": "Belum pernah direkonsiliasi",
+    "unreconciledCard": "{count, plural, other {{formatted} belum direkonsiliasi}}"
   },
   "contextMenu": {
     "subtypeBrokerage": "Perantara",
@@ -117,17 +136,23 @@
     "accountType": "Jenis Akun",
     "currency": "Mata Uang",
     "currencyLocked": "Mata uang dikunci karena akun ini sudah memiliki transaksi. Mengubahnya akan mengubah denominasi saldo yang ada tanpa pemberitahuan.",
+    "accountTypeKindLocked": "Mata uang dikunci oleh transaksi akun ini, sehingga akun tidak dapat beralih antara Dompet Kripto dan jenis akun fiat.",
+    "currencyPlaceholder": "Pilih mata uang...",
+    "noCryptoCurrencies": "Dompet kripto menyimpan satu mata uang kripto, dan belum ada yang disiapkan. Tambahkan satu di <currencies>halaman Mata Uang</currencies>, lalu pilih di sini. <guide>Cara menambahkan mata uang kripto</guide>",
     "openingBalance": "Saldo Awal",
     "loanAmount": "Jumlah Pinjaman",
     "mortgageAmount": "Jumlah Hipotek",
     "accountNumber": "Nomor Akun (opsional)",
     "institution": "Lembaga (opsional)",
-    "institutionRequired": "Pemberi Pinjaman/Lembaga (wajib)",
+    "institutionRequired": "Pemberi Pinjaman/Lembaga",
     "institutionPlaceholder": "Pilih atau buat lembaga...",
     "newInstitutionTitle": "Lembaga Baru",
     "creditLimit": "Batas Kredit (opsional)",
+    "balanceAlertsHeading": "Peringatan saldo",
+    "lowBalanceThreshold": "Beri tahu di bawah (opsional)",
+    "highBalanceThreshold": "Beri tahu di atas (opsional)",
     "interestRateOptional": "Tingkat Bunga % (opsional)",
-    "interestRateRequired": "Tingkat Bunga % (wajib)",
+    "interestRateRequired": "Tingkat Bunga %",
     "description": "Deskripsi (opsional)",
     "excludeFromNetWorth": "Kecualikan dari Nilai Bersih",
     "favourite": "Favorit",
@@ -157,13 +182,12 @@
       "mortgage": "Hipotek",
       "asset": "Aset",
       "cash": "Tunai",
+      "crypto": "Dompet Kripto",
       "other": "Lainnya"
     },
     "statementDueDayPlaceholder": "mis. 15",
     "statementSettlementDayPlaceholder": "mis. 25",
     "fxFeeTitle": "Biaya konversi mata uang asing (opsional)",
-    "fxFeePercent": "Persentase biaya",
-    "fxFeePercentPlaceholder": "mis. 2,5",
     "jointSharedWith": "Akun bersama dibagikan dengan {count, plural, other {# orang}}",
     "jointManage": "Kelola berbagi",
     "cashSection": {
@@ -192,10 +216,10 @@
   },
   "loanFields": {
     "title": "Detail Pembayaran Pinjaman",
-    "paymentAmount": "Jumlah Pembayaran (wajib)",
-    "paymentFrequency": "Frekuensi Pembayaran (wajib)",
-    "firstPaymentDate": "Tanggal Pembayaran Pertama (wajib)",
-    "paymentFromAccount": "Pembayaran Dari Akun (wajib)",
+    "paymentAmount": "Jumlah Pembayaran",
+    "paymentFrequency": "Frekuensi Pembayaran",
+    "firstPaymentDate": "Tanggal Pembayaran Pertama",
+    "paymentFromAccount": "Pembayaran Dari Akun",
     "interestCategory": "Kategori Bunga",
     "selectFrequency": "Pilih frekuensi...",
     "selectAccount": "Pilih akun...",
@@ -222,33 +246,32 @@
     "analyzingHistory": "Menganalisis riwayat transaksi...",
     "detectedPayments": "Terdeteksi {count} pembayaran dari {from} hingga {to}.",
     "confidence": "Kepercayaan:",
-    "lastSplit": "Pemisahan pembayaran terakhir: {currency}{principal} pokok / {currency}{interest} bunga",
-    "extraPayments": "{count, plural, one {# pembayaran pokok tambahan} other {# pembayaran pokok tambahan}} terdeteksi (rata-rata {currency}{avg}/periode)",
+    "lastSplit": "Pemisahan pembayaran terakhir: {principal} pokok / {interest} bunga",
+    "extraPayments": "{count, plural, one {# pembayaran pokok tambahan} other {# pembayaran pokok tambahan}} terdeteksi (rata-rata {avg}/periode)",
     "reviewValues": "Tinjau dan sesuaikan nilai di bawah ini sebelum menyimpan.",
-    "regularPaymentAmount": "Jumlah Pembayaran Reguler *",
+    "regularPaymentAmount": "Jumlah Pembayaran Reguler",
     "includeExtraPrincipal": "Sertakan pembayaran tambahan ke pokok",
     "extraPrincipalPerPayment": "Pokok Tambahan Per Pembayaran",
-    "totalPayment": "Total pembayaran: {currency}{amount}",
+    "totalPayment": "Total pembayaran: {amount}",
     "useDetectedSplit": "Gunakan pemisahan pokok/bunga dari transaksi yang diimpor",
-    "useDetectedSplitDesc": "Akan menggunakan {currency}{interest} untuk bunga, sisanya untuk pokok",
+    "useDetectedSplitDesc": "Akan menggunakan {interest} untuk bunga, sisanya untuk pokok",
     "calculateFromRate": "Akan menghitung pemisahan dari tingkat bunga dan saldo saat ini",
-    "paymentFrequency": "Frekuensi Pembayaran *",
-    "paymentFromAccount": "Pembayaran Dari Akun *",
+    "paymentFrequency": "Frekuensi Pembayaran",
+    "paymentFromAccount": "Pembayaran Dari Akun",
     "selectAccount": "Pilih akun...",
-    "nextPaymentDate": "Tanggal Pembayaran Berikutnya *",
+    "nextPaymentDate": "Tanggal Pembayaran Berikutnya",
     "annualInterestRate": "Tingkat Bunga Tahunan (%)",
     "interestRatePlaceholder": "mis. 5,5",
     "estimatedFromHistory": "Diperkirakan dari riwayat transaksi: {rate}%",
     "interestExpenseCategory": "Kategori Pengeluaran Bunga",
+    "interestExpenseCategoryRequired": "Kategori Pengeluaran Bunga",
     "detectedCategory": "Terdeteksi: {name}",
     "selectCategory": "Pilih kategori...",
     "payeeLender": "Penerima / Pemberi Pinjaman",
     "selectOrCreatePayee": "Pilih atau buat penerima pembayaran...",
     "mortgageDetails": "Detail Hipotek",
-    "canadianMortgage": "Hipotek Kanada (bunga majemuk semi-tahunan)",
-    "variableRate": "Tarif Variabel",
     "amortizationMonths": "Amortisasi (bulan)",
-    "termMonths": "Jangka Waktu (bulan)",
+    "termMonths": "Jangka Waktu Bunga Tetap (bulan)",
     "autoPost": "Posting transaksi secara otomatis saat jatuh tempo",
     "skip": "Lewati",
     "setUpPayments": "Atur Pembayaran",
@@ -264,26 +287,46 @@
     },
     "toasts": {
       "setupComplete": "Pembayaran terjadwal telah diatur untuk {account}"
+    },
+    "firstInstallment": "Angsuran Pertama",
+    "firstInstallmentHelp": "KPR ini tidak memiliki pembayaran tetap: setiap angsuran dihitung dari saldo, suku bunga, dan periode amortisasi. Ini adalah angsuran yang jatuh tempo {date}, termasuk pokok tambahan.",
+    "firstInstallmentPending": "Masukkan tanggal pembayaran berikutnya untuk menghitung angsuran pertama.",
+    "firstInstallmentCalculating": "Menghitung angsuran pertama...",
+    "firstInstallmentFailed": "Angsuran pertama tidak dapat dihitung. Periksa nilai di bawah dan coba lagi.",
+    "paymentMatching": {
+      "autoPostDisabled": "Dimatikan secara otomatis: pencocokan pembayaran melunasi tagihan ini dari debit bank itu sendiri, jadi tagihan ini tidak boleh ikut memposting dirinya sendiri.",
+      "payeePatternRequired": "Masukkan pola penerima pembayaran yang menyertakan karakter pengganti *"
     }
   },
   "mortgageFields": {
     "title": "Detail Hipotek",
-    "canadianMortgage": "Hipotek Kanada",
-    "canadianMortgageDesc": "Menggunakan bunga majemuk semi-tahunan untuk tarif tetap (diwajibkan oleh hukum di Kanada)",
-    "variableRate": "Tarif Variabel",
-    "variableRateDesc": "Tarif dapat berubah selama jangka waktu (menggunakan bunga majemuk bulanan)",
-    "variableRateLoanDetailsLink": "Catat perubahan tarif di <link>Detail Pinjaman</link>.",
-    "termLength": "Panjang Jangka Waktu",
-    "termLengthNoTerm": "Biarkan di 0 tahun dan 0 bulan jika tidak ada jangka waktu.",
-    "amortizationPeriod": "Periode Amortisasi (wajib)",
+    "type": {
+      "label": "Jenis Hipotek",
+      "ANNUITY": "Anuitas (Angsuran Tetap)",
+      "CANADIAN_FIXED": "Suku Bunga Tetap Kanada",
+      "LINEAR": "Linear (Pokok Tetap)",
+      "INTEREST_ONLY": "Hanya Bunga",
+      "help": {
+        "ANNUITY": "Total pembayaran Anda sama setiap bulan. Pilih ini juga untuk hipotek dengan suku bunga variabel.",
+        "CANADIAN_FIXED": "Kontrak suku bunga tetap Kanada; bunga dimajemukkan dua kali setahun.",
+        "LINEAR": "Bagian pokok sama setiap bulan dan totalnya menurun.",
+        "INTEREST_ONLY": "Anda hanya membayar bunga dan saldo tidak berubah."
+      }
+    },
+    "rateChangesLoanDetailsLink": "Catat perubahan tarif di <link>Detail Pinjaman</link>.",
+    "termLength": "Jangka Waktu Bunga Tetap",
+    "termLengthHelp": "Berapa lama suku bunga atau jangka waktu kontrak Anda berlaku, misalnya bunga tetap 5 tahun. Monize dapat mengingatkan Anda sebelum berakhir. Biarkan di 0 tahun dan 0 bulan jika tidak ada jangka waktu.",
+    "amortizationPeriod": "Periode Amortisasi",
     "years": "Tahun",
     "months": "Bulan",
-    "paymentFrequency": "Frekuensi Pembayaran (wajib)",
-    "firstPaymentDate": "Tanggal Pembayaran Pertama (wajib)",
-    "paymentFromAccount": "Pembayaran Dari Akun (wajib)",
-    "interestCategory": "Kategori Bunga",
+    "paymentFrequency": "Frekuensi Pembayaran",
+    "firstPaymentDate": "Tanggal Pembayaran Pertama",
+    "paymentFromAccount": "Pembayaran Dari Akun",
+    "paymentFromAccountEditHelp": "Mengubahnya memindahkan pembayaran terjadwal mendatang dan aturan pencocokan pembayaran ke akun baru. Pembayaran yang sudah dicatat tidak berubah.",
+    "interestCategory": "Kategori Bunga (opsional)",
+    "interestCategoryRequired": "Kategori Bunga",
     "interestBookingMode": {
-      "label": "Bagaimana bunga dicatat?",
+      "label": "Pencatatan Bunga",
       "help": "Agar deteksi suku bunga membacanya dengan benar. Otomatis cocok untuk kebanyakan.",
       "AUTO": "Otomatis (disarankan)",
       "SPLIT": "Bagian split dari pembayaran",
@@ -330,6 +373,72 @@
       "memoLabel": "Teks memo pembayaran berlebih",
       "memoPlaceholder": "mis. pembayaran berlebih",
       "memoHelp": "Pencocokan substring tanpa memperhatikan huruf besar/kecil terhadap memo pembayaran, memo transaksi sumbernya, atau memo split."
+    },
+    "prepaymentMode": {
+      "label": "Efek Pelunasan Sebagian",
+      "SHORTEN_TERM": "Memperpendek jangka waktu (pokok sama setiap bulan)",
+      "LOWER_INSTALLMENT": "Menurunkan angsuran (tanggal akhir sama)",
+      "help": "Tanyakan kepada pemberi pinjaman Anda. Jika setelah pelunasan sebagian bagian pokok di rekening koran tidak berubah, jangka waktunya diperpendek."
+    },
+    "previewFirstInstallment": "Angsuran Pertama:",
+    "detect": {
+      "toggle": "Tidak yakin? Masukkan beberapa angsuran",
+      "title": "Temukan Jenis Hipotek Anda",
+      "intro": "Salin dua atau tiga angsuran berturut-turut dari rekening koran, mulai dari yang terlama. Saldo bersifat opsional: dengan saldo dan suku bunga, Monize dapat mengetahui apakah bunga dimajemukkan dua kali setahun.",
+      "installment": "Angsuran {number}",
+      "principal": "Pokok",
+      "interest": "Bunga",
+      "balance": "Saldo sebelumnya (opsional)",
+      "rowIncomplete": "Masukkan pokok dan bunga, atau biarkan baris ini kosong.",
+      "rate": "Diperiksa terhadap suku bunga yang dimasukkan di atas, {rate}.",
+      "noRate": "Tidak ada suku bunga yang dimasukkan di atas, sehingga pemajemukan tidak dapat diperiksa.",
+      "needsFrequency": "Pilih frekuensi pembayaran di bawah terlebih dahulu: angsuran dibaca sesuai interval tersebut.",
+      "submit": "Sarankan Jenis",
+      "close": "Tutup",
+      "suggested": "Jenis yang disarankan: {type}",
+      "noSuggestion": "Tidak ada jenis yang disarankan.",
+      "lowConfidence": "Keyakinan rendah: periksa dengan kontrak Anda atau tanyakan kepada pemberi pinjaman Anda sebelum menggunakannya.",
+      "use": "Gunakan Jenis Ini",
+      "failed": "Angsuran tidak dapat diperiksa karena permintaan gagal. Coba lagi.",
+      "reason": {
+        "TOO_FEW_SAMPLES": "Diperlukan setidaknya dua angsuran berturut-turut untuk dibandingkan.",
+        "INVALID_SAMPLE": "Sebuah angsuran memiliki jumlah negatif atau tidak terbaca.",
+        "NO_PAYMENT": "Angsuran ini tidak membayar pokok dan tidak mengenakan bunga.",
+        "AMBIGUOUS_CONSTANT_PRINCIPAL_AND_INSTALLMENT": "Pokok dan total sama pada setiap angsuran, yang cocok untuk hipotek linear maupun anuitas. Coba angsuran yang lebih berjauhan, atau periksa kontrak Anda.",
+        "ACCELERATED_FREQUENCY": "Angsuran ini tampak linear atau hanya bunga, yang tidak mungkin pada frekuensi pembayaran dipercepat. Periksa frekuensi pembayaran.",
+        "NO_RULE_FITS": "Baik pokok maupun total tidak tetap sama di seluruh angsuran ini. Jika suku bunga berubah di antaranya, gunakan angsuran dari satu periode suku bunga.",
+        "ZERO_PRINCIPAL": "Tidak ada pokok yang dibayar, sehingga saldo tidak berubah.",
+        "ZERO_PRINCIPAL_RATE_MISMATCH": "Tidak ada pokok yang dibayar, tetapi bunganya tidak sesuai dengan suku bunga yang disebutkan atas saldo. Periksa suku bunga.",
+        "CONSTANT_PRINCIPAL": "Bagian pokok sama setiap kali dan totalnya menurun.",
+        "CONSTANT_PRINCIPAL_RATE_MISMATCH": "Bagian pokok sama setiap kali, tetapi bunganya tidak sesuai dengan suku bunga yang disebutkan atas saldo. Periksa suku bunga.",
+        "CONSTANT_INSTALLMENT_SEMI_ANNUAL": "Totalnya sama setiap kali, dan bunganya sesuai dengan suku bunga yang disebutkan yang dimajemukkan dua kali setahun.",
+        "CONSTANT_INSTALLMENT_NOMINAL": "Totalnya sama setiap kali, dan bunganya sesuai dengan suku bunga yang disebutkan tanpa pemajemukan dua kali setahun.",
+        "CONSTANT_INSTALLMENT_RATE_UNCHECKED": "Totalnya sama setiap kali. Tanpa saldo sebelum setiap angsuran dan suku bunga, pemajemukan dua kali setahun tidak dapat diperiksa.",
+        "CONSTANT_INSTALLMENT_COMPOUNDING_AMBIGUOUS": "Totalnya sama setiap kali, tetapi saldonya terlalu kecil untuk membedakan pemajemukan dua kali setahun. Kontrak suku bunga tetap Kanada menyebutkannya dalam ketentuannya.",
+        "CONSTANT_INSTALLMENT_RATE_MISMATCH": "Totalnya sama setiap kali, tetapi bunganya tidak sesuai dengan konvensi mana pun pada suku bunga yang disebutkan. Bunga mungkin dihitung harian; periksa suku bunga."
+      },
+      "history": {
+        "action": "Deteksi Jenis Hipotek",
+        "title": "Jenis Hipotek dari Pembayaran Anda",
+        "intro": "Dibaca dari angsuran terbaru yang tercatat pada satu suku bunga. Tidak ada yang berubah sampai Anda menyimpan akun.",
+        "current": "Jenis saat ini: {type}",
+        "alreadySet": "Hipotek ini sudah memiliki jenis yang disarankan.",
+        "rate": "Suku bunga yang berlaku: {rate}",
+        "noRate": "Tidak ada suku bunga yang tercatat untuk tanggal-tanggal ini, sehingga pemajemukan tidak diperiksa.",
+        "noSamples": "Tidak ditemukan angsuran tercatat yang memiliki bagian pokok dan bagian bunga. Catat pembayaran Anda sebagai split pokok dan bunga untuk menggunakan fitur ini.",
+        "colDate": "Tanggal",
+        "colPrincipal": "Pokok",
+        "colInterest": "Bunga",
+        "colBalance": "Saldo sebelumnya",
+        "balanceUnknown": "Tidak diketahui",
+        "failed": "Riwayat pembayaran tidak dapat dibaca karena permintaan gagal. Coba lagi.",
+        "cancel": "Batal",
+        "use": "Edit Akun dengan Jenis Ini"
+      }
+    },
+    "originalPrincipal": {
+      "label": "Pokok Pinjaman Awal",
+      "help": "Jumlah yang awalnya Anda pinjam. Untuk akun yang riwayat tercatatnya dimulai setelah pinjaman dimulai, ini adalah jumlah yang dipinjam, bukan saldo awal — yaitu utang pada awal riwayat Anda."
     }
   },
   "assetFields": {
@@ -352,13 +461,19 @@
   "validation": {
     "nameRequired": "Nama akun wajib diisi",
     "currencyCodeLength": "Kode mata uang harus 3 karakter",
+    "currencyRequired": "Pilih mata uang",
     "institutionRequired": "Silakan pilih atau buat lembaga",
     "interestRateRequired": "Tingkat bunga wajib diisi",
     "paymentAmountRequired": "Jumlah pembayaran wajib diisi",
     "paymentFrequencyRequired": "Frekuensi pembayaran wajib dipilih",
     "paymentStartDateRequired": "Tanggal pembayaran pertama wajib diisi",
     "paymentAccountRequired": "Akun pembayaran wajib dipilih",
-    "amortizationRequired": "Periode amortisasi wajib diisi"
+    "amortizationRequired": "Periode amortisasi wajib diisi",
+    "interestCategoryRequired": "Pilih kategori tempat bunga pinjaman ini dicatat",
+    "acceleratedNeedsAnnuity": "KPR ini dibayar dengan jadwal dipercepat, yang hanya dimiliki KPR anuitas. KPR linear atau hanya bunga memerlukan frekuensi pembayaran biasa, jadi tetap gunakan jenis anuitas.",
+    "paymentMatchingPayeePatternRequired": "Masukkan pola penerima pembayaran untuk mencocokkan debit bank",
+    "paymentMatchingPayeePatternWildcard": "Pola penerima pembayaran harus menyertakan karakter pengganti *",
+    "paymentMatchingDescriptionPatternWildcard": "Pola deskripsi harus menyertakan karakter pengganti *"
   },
   "loanDetail": {
     "backToAccounts": "Kembali ke Akun",
@@ -386,7 +501,12 @@
       "estRemainingInterest": "Perkiraan Sisa Bunga",
       "notSet": "Belum diatur",
       "notAvailable": "T/A",
-      "paidOff": "Lunas"
+      "paidOff": "Lunas",
+      "nextInstallment": "Angsuran Berikutnya",
+      "dueOn": "Jatuh tempo {date}",
+      "finalPayment": "Pembayaran Akhir",
+      "nextInstallmentDue": "Angsuran Berikutnya (jatuh tempo {date})",
+      "finalPaymentDue": "Pembayaran Akhir (jatuh tempo {date})"
     },
     "schedule": {
       "title": "Jadwal Angsuran",
@@ -455,7 +575,19 @@
       "budgetLabel": "Total pembayaran bulanan",
       "budgetHint": "Keluarkan total tetap untuk pinjaman tiap bulan; pembayaran ekstra adalah sisa setelah angsuran. Saat angsuran turun, pembayaran ekstra naik agar totalnya tetap.",
       "budgetBelowInstallment": "Ini di bawah angsuran saat ini ({amount}); naikkan agar bisa membayar lebih.",
-      "windowInverted": "Tanggal mulai berada setelah tanggal akhir, sehingga rencana ini tidak akan pernah berlaku."
+      "windowInverted": "Tanggal mulai berada setelah tanggal akhir, sehingga rencana ini tidak akan pernah berlaku.",
+      "unavailable": {
+        "title": "Simulasi pelunasan dipercepat belum dapat dihitung untuk pinjaman ini.",
+        "reasonPaidOff": "Pinjaman ini tidak memiliki saldo terutang, jadi tidak ada yang perlu diamortisasi.",
+        "reasonNoFrequency": "Pinjaman ini belum memiliki frekuensi pembayaran. Tambahkan di pengaturan akun.",
+        "reasonNoRate": "Pinjaman ini belum memiliki suku bunga tersimpan. Setel suku bunga di pengaturan akun, atau catat perubahan suku bunga bertanggal hari ini atau lebih awal. Suku bunga yang ditampilkan per baris pada jadwal di bawah direkonstruksi dari bunga yang ditagihkan dan bukan suku bunga tersimpan.",
+        "reasonNoPayment": "Jumlah angsuran tidak dapat ditentukan. Catat angsuran reguler sebagai transfer ke akun pinjaman (pokok, dengan bunga sebagai baris pembagian atau sebagai pengeluaran berkategori terpisah), atau setel jumlah pembayaran di pengaturan akun. Pembayaran yang dicatat sebagai pengeluaran biasa di akun sumber tidak pernah sampai ke akun pinjaman, sehingga jadwal tidak dapat melihatnya.",
+        "reasonNoAmortization": "KPR ini tidak memiliki periode amortisasi, sehingga angsuran dan akhir jangka waktunya tidak dapat dihitung. Atur periode amortisasi di pengaturan akun.",
+        "reasonNoPaymentStart": "KPR ini tidak memiliki tanggal pembayaran pertama, sehingga sisa pembayaran hingga akhir jangka waktunya tidak dapat dihitung. Siapkan pembayaran terjadwalnya dari pengaturan akun; tanggal jatuh tempo pertama yang Anda masukkan menjadi pembayaran 1.",
+        "reasonNoPrincipal": "KPR ini tidak memiliki jumlah awal, sehingga pokok tetapnya tidak dapat dihitung. Atur jumlah KPR di pengaturan akun."
+      },
+      "budgetBelowNextInstallment": "Itu di bawah angsuran berikutnya ({amount}, jatuh tempo {date}); naikkan di atasnya untuk melakukan pelunasan sebagian.",
+      "shortenTermNeedsPrincipal": "KPR ini tidak memiliki jumlah awal, sehingga jangka waktu yang lebih pendek tidak dapat disimulasikan. Pilih untuk menurunkan angsuran, atau atur jumlah KPR di pengaturan akun."
     },
     "comparison": {
       "newPayoff": "Tanggal Lunas Baru",
@@ -471,7 +603,8 @@
       "newInstallment": "Angsuran Baru",
       "installmentDrop": "{payment} (−{reduction})",
       "monthlyPayment": "Pembayaran bulanan",
-      "overpaymentAtFrequency": "{frequency}: +{amount}"
+      "overpaymentAtFrequency": "{frequency}: +{amount}",
+      "firstPayment": "Pembayaran Pertama"
     },
     "chart": {
       "title": "Linimasa Pelunasan",
@@ -538,6 +671,71 @@
       "seriesActual": "Saldo Aktual",
       "unknown": "Tidak diketahui"
     },
+    "paymentMatching": {
+      "title": "Pencocokan pembayaran",
+      "description": "Mengenali debit bank itu sendiri untuk setiap angsuran dan melunasinya terhadap jadwal pinjaman sebagai pokok dan bunga, alih-alih memposting tagihan secara terpisah.",
+      "noSchedule": "Pencocokan pembayaran melunasi debit bank terhadap pembayaran terjadwal pinjaman. Atur pembayaran pinjaman ini terlebih dahulu.",
+      "noRule": "Tidak ada aturan pencocokan pembayaran yang ditautkan ke pinjaman ini.",
+      "createOne": "Buat satu",
+      "ruleLabel": "Aturan:",
+      "ruleLoading": "Memuat aturan",
+      "ruleFailed": "Aturan pencocokan pembayaran tidak dapat dimuat.",
+      "scheduleLoading": "Memuat pembayaran terjadwal",
+      "scheduleFailed": "Pembayaran terjadwal pinjaman tidak dapat dimuat.",
+      "retry": "Coba lagi",
+      "autoPost": {
+        "title": "Pembayaran terjadwal masih memposting dirinya sendiri",
+        "body": "Posting otomatis aktif untuk tagihan pinjaman ini, sehingga angsuran yang dilunasi aturan dari debit bank juga akan diposting oleh tagihan. Matikan posting otomatis pada tagihan di Tagihan & Setoran."
+      },
+      "preconditions": {
+        "openingBalance": "Saldo awal pinjaman harus berupa utang pada awal riwayat yang diproses; bunga setiap angsuran dihitung berdasarkan saldo tersebut.",
+        "originalPrincipal": "Pokok awal harus berupa jumlah yang semula dipinjam, bukan saldo awal.",
+        "scheduleStart": "Debit bertanggal sebelum {date}, saat pembayaran terjadwal dimulai, tidak memiliki angsuran untuk dicocokkan."
+      },
+      "process": {
+        "button": "Proses riwayat",
+        "scope": "Menjalankan aturan pada debit di {account}, mulai dari yang terlama.",
+        "running": "Memproses riwayat: {count, plural, one {# angsuran} other {# angsuran}} telah dilunasi sejauh ini.",
+        "done": "{count, plural, =0 {Tidak ada angsuran yang dilunasi.} one {# angsuran telah dilunasi.} other {# angsuran telah dilunasi.}}",
+        "undo": "Setiap halaman proses dapat dibatalkan dari riwayat tindakan.",
+        "failed": "Pemrosesan riwayat berhenti",
+        "stuckTitle": "Pemrosesan riwayat tidak dapat dilanjutkan",
+        "stuck": "Lebih dari {limit, number} transaksi bertanggal {date}, sehingga proses tidak dapat melewati hari itu. Lunasi sisanya dari Alat > Aturan dengan filter yang lebih sempit.",
+        "stuckUnknown": "Server tidak menyebutkan sejauh mana proses berjalan, sehingga tidak dapat dilanjutkan. Muat ulang halaman dan coba lagi."
+      },
+      "create": {
+        "title": "Buat aturan pencocokan pembayaran",
+        "description": "Aturan ini melunasi debit yang cocok dari akun pembayaran terjadwal pinjaman, dan posting otomatis tagihan dimatikan.",
+        "descriptionWithAccount": "Aturan ini melunasi debit yang cocok dari {account}, dan posting otomatis tagihan dimatikan.",
+        "submit": "Buat aturan",
+        "payeePatternRequired": "Masukkan pola penerima pembayaran yang menyertakan karakter pengganti *",
+        "descriptionPatternWildcard": "Pola deskripsi harus menyertakan karakter pengganti *",
+        "failed": "Aturan pencocokan pembayaran tidak dapat dibuat.",
+        "done": "Aturan \"{name}\" dibuat"
+      },
+      "settled": {
+        "title": "Angsuran yang dilunasi",
+        "titleWithCount": "Angsuran yang dilunasi ({count})",
+        "colDueDate": "Jatuh tempo",
+        "colTransaction": "Transaksi",
+        "colPrincipal": "Pokok",
+        "colInterest": "Bunga",
+        "colExtra": "Pokok tambahan",
+        "colDebtBefore": "Utang sebelumnya",
+        "openTransaction": "Buka transaksi",
+        "void": "Dibatalkan",
+        "notRecorded": "Tidak tercatat",
+        "empty": {
+          "title": "Belum ada angsuran yang dilunasi",
+          "body": "Proses riwayat, atau impor debit bank, untuk melunasi angsuran."
+        },
+        "error": {
+          "title": "Angsuran yang dilunasi tidak dapat dimuat",
+          "body": "Ini bukan daftar kosong. Coba lagi untuk melihat angsuran mana yang telah dilunasi.",
+          "retry": "Coba lagi"
+        }
+      }
+    },
     "lineOfCredit": {
       "currentBalance": "Saldo Saat Ini",
       "creditLimit": "Batas Kredit",
@@ -549,7 +747,10 @@
     },
     "rateHistory": {
       "scheduledUpdateTitle": "Perbarui pembayaran terjadwal?",
-      "scheduledUpdateMessage": "Pembayaran tagihan terjadwal \"{name}\" dapat diperbarui sesuai suku bunga baru: total {payment}, terbagi menjadi {principal} pokok dan {interest} bunga. Perbarui sekarang?",
+      "scheduledUpdateNextPaymentUnchanged": "Pembayaran tagihan terjadwal \"{name}\" sudah sesuai dengan riwayat suku bunga. Pembayaran berikutnya pada {date}: tidak berubah ({payment}).",
+      "scheduledUpdateNextPaymentChanged": "Pembayaran tagihan terjadwal \"{name}\" dapat diperbarui sesuai riwayat suku bunga. Pembayaran berikutnya pada {date}: {before} → {after}, terbagi menjadi {principal} pokok dan {interest} bunga.",
+      "scheduledUpdateNextPaymentNew": "Pembayaran tagihan terjadwal \"{name}\" dapat diperbarui sesuai riwayat suku bunga. Pembayaran berikutnya pada {date}: {payment}, terbagi menjadi {principal} pokok dan {interest} bunga.",
+      "scheduledUpdateUpcomingChange": "Mulai {date} pembayaran menjadi {amount}.",
       "scheduledUpdateDefaultName": "hipotek ini",
       "scheduledUpdateConfirm": "Perbarui pembayaran",
       "scheduledUpdateSkip": "Biarkan apa adanya",
@@ -616,6 +817,54 @@
       "memoLabel": "Memo pembayaran ekstra",
       "memoPlaceholder": "mis. Pokok tambahan",
       "memoHelp": "Pembayaran yang memonya berisi teks ini dihitung sebagai pembayaran ekstra (tidak membedakan huruf besar/kecil)."
+    },
+    "notAmortizing": {
+      "title": "Pinjaman ini tidak lunas, sehingga perkiraan tanggal pelunasan dan sisa bunga tidak diketahui.",
+      "paymentBelowInterest": "Angsuran ({payment}) lebih kecil dari bunga bulanan (sekitar {interest}) pada {rate}%, sehingga saldo tidak pernah turun. Catat angsuran yang sebenarnya (entri riwayat suku bunga atau jumlah pembayaran akun) agar menutupi bunga.",
+      "beyondHorizon": "Angsuran menutupi bunga, tetapi jangka waktunya melampaui horizon proyeksi, sehingga tanggal pelunasan dan sisa bunga tidak ditampilkan."
+    }
+  },
+  "loanFees": {
+    "title": "Biaya hipotek",
+    "help": "Asuransi, pajak, atau biaya lain yang ditagih bersama setiap pembayaran hipotek. Setiap biaya menjadi baris tersendiri pada pembayaran terjadwal dan dicatat ke kategori yang Anda pilih. Biaya dapat berupa jumlah tetap, persentase dari saldo saat ini (dihitung ulang pada setiap pembayaran), atau persentase dari saldo awal, dikenakan per pembayaran atau per tahun.",
+    "panelDescription": "Biaya yang ditagih bersama setiap pembayaran hipotek terjadwal. Menyimpan akan memperbarui baris pembayaran berikutnya.",
+    "none": "Tidak ada biaya yang ditagih bersama pembayaran hipotek ini.",
+    "name": "Nama biaya",
+    "category": "Kategori",
+    "calculation": "Dihitung sebagai",
+    "basis": "Nilai berlaku",
+    "amount": "Jumlah",
+    "rate": "Tarif",
+    "add": "Tambah biaya",
+    "remove": "Hapus biaya",
+    "edit": "Edit biaya",
+    "editTitle": "Biaya hipotek",
+    "save": "Simpan biaya",
+    "cancel": "Batal",
+    "saved": "Biaya hipotek telah disimpan.",
+    "saveFailed": "Biaya hipotek tidak dapat disimpan.",
+    "loading": "Memuat biaya...",
+    "loadFailed": "Biaya hipotek tidak dapat dimuat.",
+    "retry": "Coba lagi",
+    "unknownCategory": "Kategori tidak diketahui",
+    "unknownValue": "tidak diketahui",
+    "summaryPerPayment": "{value} per pembayaran, {calculation}",
+    "summaryAnnual": "{value} per tahun, {calculation}",
+    "paymentMatchingConflict": "Pencocokan pembayaran belum dapat melunasi pembayaran yang mencakup biaya. Matikan pencocokan pembayaran atau hapus biayanya.",
+    "paymentMatchingNote": "Hipotek ini memiliki aturan pencocokan pembayaran. Pencocokan pembayaran belum dapat menyelesaikan pembayaran yang mencakup biaya, jadi biaya tidak dapat ditambahkan selama aturan itu ada.",
+    "calculations": {
+      "fixed": "Jumlah tetap",
+      "percentCurrentBalance": "Persentase dari saldo saat ini",
+      "percentOriginalBalance": "Persentase dari saldo awal"
+    },
+    "bases": {
+      "perPayment": "Per pembayaran",
+      "annual": "Per tahun"
+    },
+    "errors": {
+      "required": "Wajib diisi",
+      "duplicate": "Setiap biaya memerlukan kategorinya sendiri, selain kategori bunga",
+      "range": "Masukkan tarif paling tinggi 100%"
     }
   }
 }

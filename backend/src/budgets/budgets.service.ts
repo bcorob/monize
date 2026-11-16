@@ -4,15 +4,24 @@ import {
   BadRequestException,
 } from "@nestjs/common";
 import { tr } from "../i18n/translate";
-import { DataSource, In, IsNull } from "typeorm";
+import { DataSource, In } from "typeorm";
 import { withScopedDb } from "../common/db/scoped-db";
 import { Budget } from "./entities/budget.entity";
-import { BudgetCategory } from "./entities/budget-category.entity";
 import {
-  BudgetAlert,
-  AlertType,
-  AlertSeverity,
-} from "./entities/budget-alert.entity";
+  BudgetCategory,
+  RolloverType,
+} from "./entities/budget-category.entity";
+import { CreateTransferIncomeLineDto } from "./dto/create-transfer-income-line.dto";
+import { BudgetPeriod, PeriodStatus } from "./entities/budget-period.entity";
+import { BudgetPeriodCategory } from "./entities/budget-period-category.entity";
+import { assertTransferAccountsOwned } from "./budget-transfer-lines.util";
+import { assertBucketAssignable } from "./budget-bucket-membership.util";
+import {
+  Notification,
+  NotificationType,
+  NotificationSeverity,
+} from "../notification-center/entities/notification.entity";
+import { NotificationDispatchService } from "../notifications/notification-dispatch.service";
 import { Transaction } from "../transactions/entities/transaction.entity";
 import { TransactionSplit } from "../transactions/entities/transaction-split.entity";
 import { Category } from "../categories/entities/category.entity";
@@ -27,12 +36,16 @@ import {
   PeriodDateRange,
 } from "./budget-date.utils";
 import {
+  budgetTransfersInAsIncome,
   queryCategorySpending,
+  resolveBudgetIncome,
+  resolveBudgetLineBudgeted,
   resolveCategoryName,
   resolveCategorySpent,
+  resolveOutsideTransferIncome,
 } from "./budget-spending.util";
 import { formatDateYMD, todayYMD } from "../common/date-utils";
-import { formatCurrency } from "../common/format-currency.util";
+import { overdueCarryFrom } from "../common/scheduled-occurrences";
 import { roundMoney, sumMoney } from "../common/round.util";
 import {
   convertingTotal,
@@ -40,6 +53,8 @@ import {
 } from "../common/converting-total";
 import { ExchangeRateService } from "../currencies/exchange-rate.service";
 import { ActionHistoryService } from "../action-history/action-history.service";
+import { UserPreference } from "../users/entities/user-preference.entity";
+import { numberFormatterFor } from "../common/number-locale.util";
 
 export interface UpcomingBill {
   id: string;
@@ -69,6 +84,31 @@ export interface UpcomingBill {
   categoryId: string | null;
 }
 
+/** One budget line's figures for the current period. */
+export interface CategoryActualRow {
+  budgetCategoryId: string;
+  categoryId: string | null;
+  categoryName: string;
+  budgeted: number;
+  spent: number;
+  remaining: number;
+  percentUsed: number;
+  isIncome: boolean;
+  /** A transfer line: outgoing savings, or transfer income when `isIncome`. */
+  isTransfer: boolean;
+  percentage: number | null;
+}
+
+/** The current period's line figures and the income no line carries. */
+interface CategoryActuals {
+  lines: CategoryActualRow[];
+  /**
+   * `config.transfersInAsIncome`'s income, clamped at zero like a line's
+   * (`resolveOutsideTransferIncome`); `0` with the toggle off (issue #2141).
+   */
+  outsideTransferIncome: number;
+}
+
 @Injectable()
 export class BudgetsService {
   // Short-lived cache to dedup concurrent computeCategoryActuals calls
@@ -76,19 +116,7 @@ export class BudgetsService {
   private categoryActualsCache = new Map<
     string,
     {
-      data: Promise<
-        Array<{
-          budgetCategoryId: string;
-          categoryId: string | null;
-          categoryName: string;
-          budgeted: number;
-          spent: number;
-          remaining: number;
-          percentUsed: number;
-          isIncome: boolean;
-          percentage: number | null;
-        }>
-      >;
+      data: Promise<CategoryActuals>;
       timestamp: number;
     }
   >();
@@ -105,6 +133,16 @@ export class BudgetsService {
     // budget's figures are in the budget's: the two are reconciled here rather
     // than by dropping the currency and hoping they match (issue #1247).
     private exchangeRates: ExchangeRateService,
+    // The bill-due producer fans out through the dispatch seam (still the one
+    // write door beneath it, so the column bounds, conflict handling and period
+    // default are not re-decided here) -- so a materialized BILL_DUE reaches the
+    // user's push / notification-email per the PAYMENTS matrix, not only the
+    // bell. Runs on the notification-list READ, so the fan-out is DETACHED from
+    // the response (`fanOut: "detached"`): the row is awaited because the list
+    // about to be served must hold it, the delivery is not, because one stalled
+    // push endpoint would otherwise hold the bell past the client's timeout.
+    // Dedup makes most reads create nothing at all.
+    private dispatch: NotificationDispatchService,
   ) {}
 
   async create(
@@ -148,7 +186,9 @@ export class BudgetsService {
           "categories.category",
           "categories.category.parent",
           "categories.transferAccount",
+          "buckets",
         ],
+        order: { buckets: { sortOrder: "ASC", name: "ASC" } },
       }),
     );
 
@@ -192,6 +232,8 @@ export class BudgetsService {
     const saved = await withScopedDb(this.dataSource, (m) =>
       m.getRepository(Budget).save(budget),
     );
+    // `config.transfersInAsIncome` changes what the summary counts.
+    this.invalidateCategoryActuals(id);
 
     this.actionHistoryService.record(userId, {
       entityType: "budget",
@@ -263,10 +305,103 @@ export class BudgetsService {
       );
     }
 
-    return withScopedDb(this.dataSource, (m) => {
+    return withScopedDb(this.dataSource, async (m) => {
+      // INV-BUDGET-002: the membership check shares the write's transaction.
+      await assertBucketAssignable(
+        m,
+        budget.id,
+        dto.bucketId ?? null,
+        dto.isIncome ?? false,
+      );
       const repo = m.getRepository(BudgetCategory);
-      return repo.save(repo.create({ ...dto, budgetId: budget.id }));
+      return repo.save(
+        repo.create({
+          ...dto,
+          bucketId: dto.bucketId ?? null,
+          budgetId: budget.id,
+        }),
+      );
     });
+  }
+
+  /**
+   * Adds a transfer income line (issue #2141). The budget, the account and
+   * the one-line-per-account rule are checked in the write's own transaction,
+   * under the budget row's lock, so two concurrent adds of one account cannot
+   * both pass the duplicate check.
+   */
+  async addTransferIncomeLine(
+    userId: string,
+    budgetId: string,
+    dto: CreateTransferIncomeLineDto,
+  ): Promise<BudgetCategory> {
+    const saved = await withScopedDb(this.dataSource, async (m) => {
+      const budget = await m.getRepository(Budget).findOne({
+        where: { id: budgetId, userId },
+        lock: { mode: "pessimistic_write" },
+      });
+      if (!budget) {
+        throw new NotFoundException(
+          tr(
+            "errors.budgets.notFound",
+            `Budget with ID ${budgetId} not found`,
+            {
+              id: budgetId,
+            },
+          ),
+        );
+      }
+      await assertTransferAccountsOwned(m, userId, [dto.transferAccountId]);
+      const repo = m.getRepository(BudgetCategory);
+      const existing = await repo.findOne({
+        where: { budgetId, transferAccountId: dto.transferAccountId },
+      });
+      if (existing) {
+        throw new BadRequestException(
+          tr(
+            "errors.budgets.transferAccountAlreadyInBudget",
+            "This account already has a transfer line in the budget",
+          ),
+        );
+      }
+      const line = await repo.save(
+        repo.create({
+          budgetId,
+          categoryId: null,
+          transferAccountId: dto.transferAccountId,
+          isTransfer: true,
+          isIncome: true,
+          amount: dto.amount,
+          rolloverType: dto.rolloverType ?? RolloverType.NONE,
+          notes: dto.notes ?? null,
+        }),
+      );
+      // The open period's close freezes only the lines it has a row for, so a
+      // line added mid-period gets its row here, or this period's income from
+      // it would be left out of `actual_income`.
+      const openPeriod = await m.getRepository(BudgetPeriod).findOne({
+        where: { budgetId, status: PeriodStatus.OPEN },
+      });
+      if (openPeriod) {
+        const periodCats = m.getRepository(BudgetPeriodCategory);
+        await periodCats.save(
+          periodCats.create({
+            budgetPeriodId: openPeriod.id,
+            budgetCategoryId: line.id,
+            categoryId: null,
+            budgetedAmount: dto.amount,
+            rolloverIn: 0,
+            effectiveBudget: dto.amount,
+            actualAmount: 0,
+            rolloverOut: 0,
+          }),
+        );
+      }
+      return line;
+    });
+    // After the commit: the page re-reads the summary straight after the add.
+    this.invalidateCategoryActuals(budgetId);
+    return saved;
   }
 
   async updateCategory(
@@ -275,24 +410,58 @@ export class BudgetsService {
     categoryId: string,
     dto: UpdateBudgetCategoryDto,
   ): Promise<BudgetCategory> {
-    await this.findOne(userId, budgetId);
+    // The lookups, the refusal and the save share one transaction, so a
+    // refused PATCH has written nothing.
+    return withScopedDb(this.dataSource, async (m) => {
+      await this.findOne(userId, budgetId);
 
-    const budgetCategory = await withScopedDb(this.dataSource, (m) =>
-      m.getRepository(BudgetCategory).findOne({
+      const repo = m.getRepository(BudgetCategory);
+      const budgetCategory = await repo.findOne({
         where: { id: categoryId, budgetId },
-      }),
-    );
+      });
 
-    if (!budgetCategory) {
-      throw new NotFoundException(
-        tr(
-          "errors.budgets.budgetCategoryNotFound",
-          `Budget category with ID ${categoryId} not found`,
-          { id: categoryId },
-        ),
+      if (!budgetCategory) {
+        throw new NotFoundException(
+          tr(
+            "errors.budgets.budgetCategoryNotFound",
+            `Budget category with ID ${categoryId} not found`,
+            { id: categoryId },
+          ),
+        );
+      }
+
+      // A transfer line's direction is what it is: flipping `isIncome` would
+      // turn "Transfer to HISA" (outgoing, counted as savings) into "Transfers
+      // from HISA" (the net coming in, clamped at zero) under the same
+      // account. Resending the value it already has is not a change.
+      if (
+        budgetCategory.isTransfer &&
+        dto.isIncome !== undefined &&
+        dto.isIncome !== budgetCategory.isIncome
+      ) {
+        throw new BadRequestException(
+          tr(
+            "errors.budgets.transferLineDirectionFixed",
+            "A transfer line's direction cannot be changed. Remove it and add a new line instead.",
+          ),
+        );
+      }
+
+      this.applyCategoryUpdate(budgetCategory, dto);
+      await assertBucketAssignable(
+        m,
+        budgetId,
+        budgetCategory.bucketId ?? null,
+        budgetCategory.isIncome,
       );
-    }
+      return repo.save(budgetCategory);
+    });
+  }
 
+  private applyCategoryUpdate(
+    budgetCategory: BudgetCategory,
+    dto: UpdateBudgetCategoryDto,
+  ): void {
     if (dto.categoryGroup !== undefined)
       budgetCategory.categoryGroup = dto.categoryGroup;
     if (dto.amount !== undefined) budgetCategory.amount = dto.amount;
@@ -309,9 +478,11 @@ export class BudgetsService {
     if (dto.notes !== undefined) budgetCategory.notes = dto.notes;
     if (dto.sortOrder !== undefined) budgetCategory.sortOrder = dto.sortOrder;
 
-    return withScopedDb(this.dataSource, (m) =>
-      m.getRepository(BudgetCategory).save(budgetCategory),
-    );
+    // Truth table D: absent = unchanged, null = cleared, a bucket id = set. The
+    // check runs on the row as it would become (`updateCategory`), so flipping
+    // a bucketed line to income is refused (unless the same request clears the
+    // bucket).
+    if (dto.bucketId !== undefined) budgetCategory.bucketId = dto.bucketId;
   }
 
   async removeCategory(
@@ -374,10 +545,25 @@ export class BudgetsService {
     // Apply all amount changes atomically so a partial failure cannot leave
     // some categories updated and others not.
     return withScopedDb(this.dataSource, async (m) => {
+      // Membership (truth table D) is checked for every item before the first
+      // write, in this same transaction; a refusal leaves nothing written.
+      for (const item of categories) {
+        const line = byId.get(item.id)!;
+        const bucketId =
+          item.bucketId !== undefined ? item.bucketId : line.bucketId;
+        await assertBucketAssignable(
+          m,
+          budgetId,
+          bucketId ?? null,
+          line.isIncome,
+        );
+      }
       const results: BudgetCategory[] = [];
       for (const item of categories) {
         const budgetCategory = byId.get(item.id)!;
         budgetCategory.amount = item.amount;
+        if (item.bucketId !== undefined)
+          budgetCategory.bucketId = item.bucketId;
         results.push(await m.save(budgetCategory));
       }
       return results;
@@ -389,6 +575,9 @@ export class BudgetsService {
     budgetId: string,
   ): Promise<{
     budget: Budget;
+    /** The period the figures were read for (`getCurrentPeriodDates`). */
+    periodStart: string;
+    periodEnd: string;
     totalBudgeted: number;
     totalSpent: number;
     totalIncome: number;
@@ -396,35 +585,31 @@ export class BudgetsService {
     percentUsed: number;
     incomeLinked: boolean;
     actualIncome: number | null;
-    categoryBreakdown: Array<{
-      budgetCategoryId: string;
-      categoryId: string | null;
-      categoryName: string;
-      budgeted: number;
-      spent: number;
-      remaining: number;
-      percentUsed: number;
-      isIncome: boolean;
-      percentage: number | null;
-    }>;
+    /** Included in `totalIncome`; `0` unless `config.transfersInAsIncome`. */
+    outsideTransferIncome: number;
+    categoryBreakdown: CategoryActualRow[];
   }> {
     const budget = await this.findOne(userId, budgetId);
 
     const { periodStart, periodEnd } = this.getCurrentPeriodDates(budget);
 
-    const categoryBreakdown = await this.getCachedCategoryActuals(
-      userId,
-      budget,
-      periodStart,
-      periodEnd,
-    );
+    const { lines: categoryBreakdown, outsideTransferIncome } =
+      await this.getCachedCategoryActuals(
+        userId,
+        budget,
+        periodStart,
+        periodEnd,
+      );
 
     const expenseCategories = categoryBreakdown.filter((c) => !c.isIncome);
     const incomeCategories = categoryBreakdown.filter((c) => c.isIncome);
 
     const totalBudgeted = sumMoney(expenseCategories.map((c) => c.budgeted));
     const totalSpent = sumMoney(expenseCategories.map((c) => c.spent));
-    const totalIncome = sumMoney(incomeCategories.map((c) => c.spent));
+    const totalIncome = sumMoney([
+      ...incomeCategories.map((c) => c.spent),
+      outsideTransferIncome,
+    ]);
     const remaining = roundMoney(totalBudgeted - totalSpent);
     const percentUsed =
       totalBudgeted > 0
@@ -438,6 +623,8 @@ export class BudgetsService {
 
     return {
       budget,
+      periodStart,
+      periodEnd,
       totalBudgeted,
       totalSpent,
       totalIncome,
@@ -445,13 +632,18 @@ export class BudgetsService {
       percentUsed,
       incomeLinked: budget.incomeLinked,
       actualIncome,
+      outsideTransferIncome,
       categoryBreakdown,
     };
   }
 
   /**
-   * The next occurrence of every outflow schedule due between today and
-   * `periodEnd`, priced at what it would actually cost today.
+   * The next occurrence of every outflow schedule due by `periodEnd`, priced at
+   * what it would actually cost today. An occurrence that fell due in the last
+   * `OVERDUE_CARRY_DAYS` and was neither posted nor skipped is still owed, so it
+   * is the schedule's next one, listed on the date it was due: the balance
+   * forecasts apply it too (discussion #1784), and safe-to-spend must not count
+   * money a late bill will take.
    *
    * Both halves come from the one occurrence contract (issue #1247). The
    * occurrence matters as much as the amount: reading the schedule template meant
@@ -463,11 +655,10 @@ export class BudgetsService {
     userId: string,
     periodEnd: string,
   ): Promise<UpcomingBill[]> {
-    const todayStr = todayYMD();
     const occurrences = await this.occurrences.findOccurrences(
       userId,
       {
-        from: todayStr,
+        from: overdueCarryFrom(todayYMD()),
         through: periodEnd,
         // One row per schedule, which is the shape this list has always had.
         maxOccurrences: 1,
@@ -527,9 +718,11 @@ export class BudgetsService {
     const startDate = new Date(periodStart);
     const endDate = new Date(periodEnd);
 
-    const totalDays = Math.ceil(
-      (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
-    );
+    // periodEnd is the inclusive last day, so the period spans one more day.
+    const totalDays =
+      Math.ceil(
+        (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
+      ) + 1;
     const daysElapsed = Math.max(
       1,
       Math.ceil(
@@ -538,7 +731,7 @@ export class BudgetsService {
     );
     const daysRemaining = Math.max(0, totalDays - daysElapsed);
 
-    const categoryBreakdown = await this.getCachedCategoryActuals(
+    const { lines: categoryBreakdown } = await this.getCachedCategoryActuals(
       userId,
       budget,
       periodStart,
@@ -626,29 +819,23 @@ export class BudgetsService {
     };
   }
 
-  async getAlerts(userId: string, unreadOnly = false): Promise<BudgetAlert[]> {
-    // Ensure upcoming bill alerts are persisted before querying
-    if (!unreadOnly) {
-      await this.ensureBillAlerts(userId);
-    }
-
-    const where: Record<string, unknown> = { userId, dismissedAt: IsNull() };
-    if (unreadOnly) {
-      where.isRead = false;
-    }
-
-    const alerts = await withScopedDb(this.dataSource, (m) =>
-      m.getRepository(BudgetAlert).find({
-        where,
-        order: { createdAt: "DESC" },
-        take: 50,
-      }),
+  /**
+   * Materialize a BILL_DUE notification for every upcoming bill that does not
+   * have one yet.
+   *
+   * Called from the notification list endpoint rather than a cron, which is how
+   * it has always worked: a reminder that appears the moment the user looks is
+   * better than one that waits for 07:00, and the dedup below makes the read
+   * idempotent. Public because the notification centre owns the endpoint and
+   * budgets owns the producer.
+   */
+  async ensureBillDueNotifications(userId: string): Promise<void> {
+    // Every figure below is read by this user -- on the bell, and in the email
+    // `notificationImmediateTemplate` composes from the same string.
+    const prefs = await withScopedDb(this.dataSource, (m) =>
+      m.getRepository(UserPreference).findOne({ where: { userId } }),
     );
-
-    return alerts;
-  }
-
-  private async ensureBillAlerts(userId: string): Promise<void> {
+    const n = numberFormatterFor(prefs?.numberFormat, prefs?.language);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const todayStr = todayYMD();
@@ -703,11 +890,11 @@ export class BudgetsService {
     // Fetch ALL existing BILL_DUE alerts (including dismissed) to prevent re-creation
     const existingAlerts = await withScopedDb(this.dataSource, (m) =>
       m
-        .getRepository(BudgetAlert)
+        .getRepository(Notification)
         .createQueryBuilder("ba")
         .where("ba.user_id = :userId", { userId })
-        .andWhere("ba.alert_type = :alertType", {
-          alertType: AlertType.BILL_DUE,
+        .andWhere("ba.alert_type = :type", {
+          type: NotificationType.BILL_DUE,
         })
         .getMany(),
     );
@@ -750,106 +937,74 @@ export class BudgetsService {
         (new Date(dueDate).getTime() - today.getTime()) / (1000 * 60 * 60 * 24),
       );
       const severity =
-        daysUntilDue <= 1 ? AlertSeverity.WARNING : AlertSeverity.INFO;
+        daysUntilDue <= 1
+          ? NotificationSeverity.WARNING
+          : NotificationSeverity.INFO;
 
-      const alert = new BudgetAlert();
-      alert.userId = userId;
-      alert.budgetId = null;
-      alert.budgetCategoryId = null;
-      alert.alertType = AlertType.BILL_DUE;
-      alert.severity = severity;
-      // `title`/`message` are the English fallbacks for a reader with no client
-      // to render them (the email digest, an API consumer). The UI composes both
-      // from `alertType` and `data` in the reader's own language -- a stored
-      // sentence cannot be translated after the fact, and the missing-rate case
-      // is exactly the one a non-English reader hits.
-      alert.title = `${payeeName} due${daysUntilDue === 0 ? " today" : daysUntilDue === 1 ? " tomorrow" : ` in ${daysUntilDue} days`}`;
-      alert.message =
-        amount === null
-          ? `Amount unavailable (no current exchange rate), due on ${dueDate}`
-          : `${formatCurrency(amount, occurrence.currencyCode)} due on ${dueDate}`;
-      // Structured, so the UI can compose the copy in the reader's language --
-      // and deliberately without `daysUntilDue`: "due in 3 days" was true when
-      // this row was written and stops being true the next morning, while the
-      // row lives until it is dismissed. The client counts from `dueDate`
-      // against its own clock.
-      alert.data = {
-        billId: bill.id,
-        payeeName,
-        amount,
-        amountComplete: amount !== null,
-        dueDate,
-        originalDate: occurrence.originalDate,
-        currencyCode: occurrence.currencyCode,
-      };
-      alert.isRead = false;
-      alert.isEmailSent = false;
-      alert.periodStart = dueDate;
-      alert.dismissedAt = null;
-
-      await withScopedDb(this.dataSource, (m) =>
-        m.getRepository(BudgetAlert).save(alert),
+      // The ROW is awaited -- the list the caller is about to read must hold it.
+      // The fan-out is detached: this runs on `GET /notifications`, and a push
+      // delivery is bounded by PUSH_REQUEST_DEADLINE_MS per device, so awaiting
+      // it here let one stalled endpoint hold the bell read past the client's
+      // own timeout (a cron may wait for its pushes; a reader may not).
+      await this.dispatch.notify(
+        userId,
+        {
+          type: NotificationType.BILL_DUE,
+          severity,
+          // `title`/`message` are the English fallbacks for a reader with no
+          // client to render them (an API consumer). The UI and the email
+          // composer render `type` and `data` in the recipient's own language --
+          // a stored sentence cannot be translated after the fact, and the
+          // missing-rate case is exactly the one a non-English reader hits.
+          //
+          // The FIGURE in that fallback is still the recipient's to read, and
+          // this one is not hypothetical: PAYMENTS supports `emailNotification`,
+          // and `composeLocalizedNotificationCopy` falls back WHOLE to this
+          // stored pair for a row it cannot rebuild (a legacy or restored
+          // BILL_DUE carrying no `payeeName`, `dueDate` or `currencyCode`), so
+          // `notificationImmediateTemplate` renders this very string into an
+          // email built with the recipient's translator. Formatting it en-US put
+          // `zl18,812.71` inside Polish copy -- issue #1316 on the one path whose
+          // English prose is not a machine format.
+          title: `${payeeName} due${daysUntilDue === 0 ? " today" : daysUntilDue === 1 ? " tomorrow" : ` in ${daysUntilDue} days`}`,
+          message:
+            amount === null
+              ? `Amount unavailable (no current exchange rate), due on ${dueDate}`
+              : `${n.formatCurrency(amount, occurrence.currencyCode)} due on ${dueDate}`,
+          // Structured, so the UI can compose the copy in the reader's language
+          // -- and deliberately without `daysUntilDue`: "due in 3 days" was true
+          // when this row was written and stops being true the next morning,
+          // while the row lives until it is dismissed. The client counts from
+          // `dueDate` against its own clock.
+          data: {
+            billId: bill.id,
+            payeeName,
+            amount,
+            amountComplete: amount !== null,
+            dueDate,
+            originalDate: occurrence.originalDate,
+            currencyCode: occurrence.currencyCode,
+          },
+          // Where the bell sends the reader. `/bills` and not
+          // `/scheduled-transactions/<id>`, which is not a route: the app router
+          // has no such segment, and because a stored target WINS over the
+          // client's type table, inventing one replaced a working destination
+          // with the not-found page. There is no per-bill route to deep-link to;
+          // `notification-target.contract.test.ts` checks every target a producer
+          // writes against the router tree.
+          target: "/bills",
+          periodStart: dueDate,
+          // The occurrence's identity, so the database arbitrates what the read
+          // above only observes: two overlapping bell reads (a second tab, an
+          // owner beside a delegate) both miss the row and both write; with
+          // budget_id NULL the fingerprint index cannot refuse the second, and
+          // each duplicate also pushed and emailed. The write door's ON CONFLICT
+          // DO NOTHING hands the loser null, and null fans out nothing.
+          dedupeKey: `BILL_DUE:${bill.id}:${occurrence.originalDate}`,
+        },
+        { fanOut: "detached" },
       );
     }
-  }
-
-  async markAlertRead(userId: string, alertId: string): Promise<BudgetAlert> {
-    const alert = await withScopedDb(this.dataSource, (m) =>
-      m.getRepository(BudgetAlert).findOne({
-        where: { id: alertId, userId, dismissedAt: IsNull() },
-      }),
-    );
-
-    if (!alert) {
-      throw new NotFoundException(
-        tr(
-          "errors.budgets.alertNotFound",
-          `Alert with ID ${alertId} not found`,
-          { id: alertId },
-        ),
-      );
-    }
-
-    alert.isRead = true;
-    return withScopedDb(this.dataSource, (m) =>
-      m.getRepository(BudgetAlert).save(alert),
-    );
-  }
-
-  async deleteAlert(userId: string, alertId: string): Promise<void> {
-    const alert = await withScopedDb(this.dataSource, (m) =>
-      m.getRepository(BudgetAlert).findOne({
-        where: { id: alertId, userId, dismissedAt: IsNull() },
-      }),
-    );
-
-    if (!alert) {
-      throw new NotFoundException(
-        tr(
-          "errors.budgets.alertNotFound",
-          `Alert with ID ${alertId} not found`,
-          { id: alertId },
-        ),
-      );
-    }
-
-    alert.dismissedAt = new Date();
-    await withScopedDb(this.dataSource, (m) =>
-      m.getRepository(BudgetAlert).save(alert),
-    );
-  }
-
-  async markAllAlertsRead(userId: string): Promise<{ updated: number }> {
-    const result = await withScopedDb(this.dataSource, (m) =>
-      m
-        .getRepository(BudgetAlert)
-        .update(
-          { userId, isRead: false, dismissedAt: IsNull() },
-          { isRead: true },
-        ),
-    );
-
-    return { updated: result.affected || 0 };
   }
 
   async getDashboardSummary(userId: string): Promise<{
@@ -889,7 +1044,7 @@ export class BudgetsService {
     const budget = budgets[0];
     const { periodStart, periodEnd } = this.getCurrentPeriodDates(budget);
 
-    const categoryBreakdown = await this.getCachedCategoryActuals(
+    const { lines: categoryBreakdown } = await this.getCachedCategoryActuals(
       userId,
       budget,
       periodStart,
@@ -909,9 +1064,11 @@ export class BudgetsService {
     const today = new Date();
     const startDate = new Date(periodStart);
     const endDate = new Date(periodEnd);
-    const totalDays = Math.ceil(
-      (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
-    );
+    // periodEnd is the inclusive last day, so the period spans one more day.
+    const totalDays =
+      Math.ceil(
+        (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24),
+      ) + 1;
     const daysElapsed = Math.max(
       1,
       Math.ceil(
@@ -988,7 +1145,7 @@ export class BudgetsService {
     const budget = budgets[0];
     const { periodStart, periodEnd } = this.getCurrentPeriodDates(budget);
 
-    const categoryBreakdown = await this.getCachedCategoryActuals(
+    const { lines: categoryBreakdown } = await this.getCachedCategoryActuals(
       userId,
       budget,
       periodStart,
@@ -1015,6 +1172,13 @@ export class BudgetsService {
 
   private getCurrentPeriodDates(_budget: Budget): PeriodDateRange {
     return getCurrentMonthPeriodDates();
+  }
+
+  /** Drops a budget's cached actuals once its lines or config changed. */
+  private invalidateCategoryActuals(budgetId: string): void {
+    for (const key of this.categoryActualsCache.keys()) {
+      if (key.startsWith(`${budgetId}:`)) this.categoryActualsCache.delete(key);
+    }
   }
 
   private getCachedCategoryActuals(
@@ -1050,125 +1214,59 @@ export class BudgetsService {
     return promise;
   }
 
-  async computeActualIncome(
-    userId: string,
-    budget: Budget,
-    periodStart: string,
-    periodEnd: string,
-  ): Promise<number> {
-    const incomeCategories = (budget.categories || []).filter(
-      (bc) => bc.isIncome && bc.categoryId !== null,
-    );
-
-    if (incomeCategories.length === 0) return 0;
-
-    const incomeCategoryIds = incomeCategories.map(
-      (bc) => bc.categoryId as string,
-    );
-
-    const [directResult, splitResult] = await Promise.all([
-      withScopedDb(this.dataSource, (m) =>
-        m
-          .getRepository(Transaction)
-          .createQueryBuilder("t")
-          .select("COALESCE(SUM(t.amount), 0)", "total")
-          .where("t.user_id = :userId", { userId })
-          .andWhere("t.category_id IN (:...incomeCategoryIds)", {
-            incomeCategoryIds,
-          })
-          .andWhere("t.transaction_date >= :periodStart", { periodStart })
-          .andWhere("t.transaction_date <= :periodEnd", { periodEnd })
-          .andWhere("t.status != :void", { void: "VOID" })
-          .andWhere("t.is_split = false")
-          .getRawOne(),
-      ),
-      withScopedDb(this.dataSource, (m) =>
-        m
-          .getRepository(TransactionSplit)
-          .createQueryBuilder("s")
-          .innerJoin("s.transaction", "t")
-          .select("COALESCE(SUM(s.amount), 0)", "total")
-          .where("t.user_id = :userId", { userId })
-          .andWhere("s.category_id IN (:...incomeCategoryIds)", {
-            incomeCategoryIds,
-          })
-          .andWhere("t.transaction_date >= :periodStart", { periodStart })
-          .andWhere("t.transaction_date <= :periodEnd", { periodEnd })
-          .andWhere("t.status != :void", { void: "VOID" })
-          .getRawOne(),
-      ),
-    ]);
-
-    return Math.max(
-      parseFloat(directResult?.total || "0") +
-        parseFloat(splitResult?.total || "0"),
-      0,
-    );
-  }
-
   private async computeCategoryActuals(
     userId: string,
     budget: Budget,
     periodStart: string,
     periodEnd: string,
-  ): Promise<
-    Array<{
-      budgetCategoryId: string;
-      categoryId: string | null;
-      categoryName: string;
-      budgeted: number;
-      spent: number;
-      remaining: number;
-      percentUsed: number;
-      isIncome: boolean;
-      percentage: number | null;
-    }>
-  > {
+  ): Promise<CategoryActuals> {
     const budgetCategories = budget.categories || [];
 
-    if (budgetCategories.length === 0) {
-      return [];
-    }
-
-    // If income-linked, compute actual income to derive effective budgets
-    let actualIncome = 0;
-    if (budget.incomeLinked) {
-      actualIncome = await this.computeActualIncome(
-        userId,
-        budget,
-        periodStart,
-        periodEnd,
-      );
+    // A budget with no line still counts transfers in from its excluded
+    // accounts when the toggle is on (issue #2141).
+    if (
+      budgetCategories.length === 0 &&
+      !budgetTransfersInAsIncome(budget.config)
+    ) {
+      return { lines: [], outsideTransferIncome: 0 };
     }
 
     // The two spending queries share one scoped transaction so the direct and
     // split halves of a category's total come from the same snapshot.
-    const { spendingMap, transferSpendingMap } = await withScopedDb(
-      this.dataSource,
-      (m) =>
-        queryCategorySpending(
-          m.getRepository(Transaction),
-          m.getRepository(TransactionSplit),
-          userId,
-          budgetCategories,
-          periodStart,
-          periodEnd,
-        ),
+    const spending = await withScopedDb(this.dataSource, (m) =>
+      queryCategorySpending(
+        m.getRepository(Transaction),
+        m.getRepository(TransactionSplit),
+        userId,
+        budgetCategories,
+        periodStart,
+        periodEnd,
+        budget.id,
+      ),
     );
 
-    return budgetCategories.map((bc) => {
-      const rawAmount = Number(bc.amount);
-      let budgeted: number;
-      let percentage: number | null = null;
+    // An income-linked budget derives its lines from the income the same
+    // read converted into the budget's currency (issue #2155), transfers in
+    // included (issue #2141).
+    const actualIncome = budget.incomeLinked
+      ? resolveBudgetIncome(budgetCategories, spending)
+      : 0;
 
-      if (budget.incomeLinked && !bc.isIncome) {
-        percentage = rawAmount;
-        budgeted = roundMoney((actualIncome * rawAmount) / 100);
-      } else {
-        budgeted = rawAmount;
-      }
+    const lines = budgetCategories.map((bc) => {
+      const percentage =
+        budget.incomeLinked && !bc.isIncome ? Number(bc.amount) : null;
+      const budgeted = resolveBudgetLineBudgeted(
+        bc,
+        budget.incomeLinked,
+        actualIncome,
+      );
 
-      const spent = resolveCategorySpent(bc, spendingMap, transferSpendingMap);
+      const spent = resolveCategorySpent(
+        bc,
+        spending.spendingMap,
+        spending.transferSpendingMap,
+        spending.transferIncomeMap,
+      );
       const categoryName = resolveCategoryName(bc);
       const remaining = roundMoney(budgeted - spent);
       const percentUsed =
@@ -1183,8 +1281,14 @@ export class BudgetsService {
         remaining,
         percentUsed,
         isIncome: bc.isIncome,
+        isTransfer: bc.isTransfer,
         percentage,
       };
     });
+
+    return {
+      lines,
+      outsideTransferIncome: resolveOutsideTransferIncome(spending),
+    };
   }
 }

@@ -47,8 +47,7 @@ export function scopedDbMockModule() {
         dataSource: {
           transaction: (
             ...args:
-              | [(m: unknown) => unknown]
-              | [string, (m: unknown) => unknown]
+              [(m: unknown) => unknown] | [string, (m: unknown) => unknown]
           ) => unknown;
         },
         fn: (m: unknown) => unknown,
@@ -71,6 +70,12 @@ export function scopedDbMockModule() {
      * covers that.
      */
     runOutsideActiveScopedManager: jest.fn((fn: () => unknown) => fn()),
+    /**
+     * No ambient transaction by default, which is what "after the create's
+     * withScopedDb resolved" looks like from a service under test. A spec
+     * that models a caller inside a transaction overrides this.
+     */
+    getActiveScopedManager: jest.fn(() => undefined),
   };
 }
 

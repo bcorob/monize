@@ -20,6 +20,8 @@ import {
 import { captureSvgAsImage } from '@/lib/pdf-export-charts';
 import { chartColors, chartSeriesColor } from '@/lib/chart-colors';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
+import { CHART_GRID_PROPS, CHART_TOOLTIP_CLASS } from '@/lib/chart-style';
+import { ChartActiveDot } from '@/components/ui/ChartActiveDot';
 
 interface ChartData {
   label: string;
@@ -45,7 +47,7 @@ function ChartTooltip({
   if (!active || !payload || payload.length === 0) return null;
   const heading = label ?? payload[0]?.payload?.label ?? payload[0]?.name;
   return (
-    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3">
+    <div className={CHART_TOOLTIP_CLASS}>
       {heading && (
         <p className="font-medium text-gray-900 dark:text-gray-100">{heading}</p>
       )}
@@ -68,6 +70,7 @@ function sanitizeFilename(name: string): string {
 
 export function ResultChart({ type, title, data }: ResultChartProps) {
   const t = useTranslations('ai');
+  const { formatPercent } = useNumberFormat();
   const chartRef = useRef<HTMLDivElement>(null);
   const [isDownloading, setIsDownloading] = useState(false);
 
@@ -136,7 +139,7 @@ export function ResultChart({ type, title, data }: ResultChartProps) {
                 cy="50%"
                 outerRadius={80}
                 label={({ name, percent }: { name?: string; percent?: number }) =>
-                  `${name ?? ''} (${((percent ?? 0) * 100).toFixed(0)}%)`
+                  `${name ?? ''} (${formatPercent(((percent ?? 0) * 100), 0)})`
                 }
               >
                 {data.map((_, index) => (
@@ -150,11 +153,12 @@ export function ResultChart({ type, title, data }: ResultChartProps) {
             </PieChart>
           ) : type === 'area' || type === 'line' ? (
             <AreaChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" />
+              <CartesianGrid {...CHART_GRID_PROPS} />
               <XAxis dataKey="label" tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 12 }} />
               <Tooltip content={<ChartTooltip />} />
               <Area
+                activeDot={ChartActiveDot}
                 type="monotone"
                 dataKey="value"
                 stroke={chartColors.primary}
@@ -164,7 +168,7 @@ export function ResultChart({ type, title, data }: ResultChartProps) {
             </AreaChart>
           ) : (
             <BarChart data={data} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" />
+              <CartesianGrid {...CHART_GRID_PROPS} />
               <XAxis dataKey="label" tick={{ fontSize: 12 }} />
               <YAxis tick={{ fontSize: 12 }} />
               <Tooltip content={<ChartTooltip />} />

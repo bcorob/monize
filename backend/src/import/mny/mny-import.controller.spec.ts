@@ -14,6 +14,14 @@ import {
   MnyImportController,
 } from "./mny-import.controller";
 import { MnyParserService } from "./mny-parser.service";
+import { MnyMarketRateService } from "./mny-market-rates.service";
+import { ExchangeRateService } from "../../currencies/exchange-rate.service";
+
+/** No stored rate history and nothing from the provider. */
+const noMarketRates = {
+  resolveStoredRate: async () => ({ rate: null }),
+  fillRateWindow: async () => ({ stored: 0, answered: true }),
+};
 import { MnyStagingService } from "./mny-staging.service";
 import { MnyUploadErrorInterceptor } from "./mny-upload-error.interceptor";
 import { DEFAULT_MNY_IMPORT_OPTIONS } from "./model/mny-import-options";
@@ -51,7 +59,10 @@ describe("MnyImportController", () => {
 
     controller = new MnyImportController(
       staging as unknown as MnyStagingService,
-      new MnyParserService(),
+      new MnyMarketRateService(
+        new MnyParserService(),
+        noMarketRates as unknown as ExchangeRateService,
+      ),
       jobs as unknown as MnyImportJobService,
       importService as unknown as MnyImportService,
     );
@@ -238,6 +249,35 @@ describe("MnyImportController", () => {
   });
 
   describe("findJob", () => {
+    it("says when a failed job's rows already reached the ledger", async () => {
+      // A26-H08: without the flag the wizard could only show the generic
+      // failure copy, "Nothing was saved", over a committed import.
+      jobs.findOne.mockResolvedValue({
+        id: "job-1",
+        userId: "user-1",
+        stagedFileId: "staged-1",
+        status: "failed",
+        progress: null,
+        result: null,
+        errorKey: "mnyImportFailedAfterCommit",
+        errorDetail: "verify failed",
+        retryable: false,
+        dataCommitted: true,
+        startedAt: null,
+        completedAt: null,
+        options: DEFAULT_MNY_IMPORT_OPTIONS,
+      } as ImportJob);
+
+      const job = await controller.findJob(USER, "job-1");
+
+      expect(job).toMatchObject({
+        status: "failed",
+        errorKey: "mnyImportFailedAfterCommit",
+        retryable: false,
+        dataCommitted: true,
+      });
+    });
+
     it("returns only the fields the wizard needs, not the staged file id", async () => {
       jobs.findOne.mockResolvedValue({
         id: "job-1",

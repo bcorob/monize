@@ -11,9 +11,76 @@
   "uploaded": "Ek eklendi",
   "deleted": "Ek silindi",
   "loadFailed": "Ekler yüklenemedi",
+  "retry": "Tekrar dene",
   "uploadFailed": "Ek yüklenemedi",
   "deleteFailed": "Ek silinemedi",
   "tooLarge": "Dosya çok büyük (en fazla {max})",
   "unsupported": "Desteklenmeyen dosya türü. İzin verilenler: görseller veya PDF",
-  "tooMany": "İşlem başına en fazla {max} ek"
+  "tooMany": "İşlem başına en fazla {max} ek",
+  "fromWarranty": "Garantiden: {name}",
+  "fromLinkedWarranty": "Bağlı bir garantiden",
+  "scan": {
+    "button": "Belgeyi tara",
+    "title": "Belgeyi tara",
+    "description": "Bir belge fotoğrafını eklemeden önce düzeltip temizleyin.",
+    "analysing": "Fotoğrafta belge aranıyor…",
+    "failed": "Belge taranamadı. Fotoğrafı yine de olduğu gibi ekleyebilirsiniz.",
+    "viewEnhanced": "İyileştirilmiş",
+    "viewOriginal": "Orijinal",
+    "rotate": "Döndür",
+    "styleLabel": "Son işlem",
+    "styles": {
+      "colour": "Renkli",
+      "grayscale": "Gri tonlama",
+      "blackAndWhite": "Siyah beyaz",
+      "none": "İyileştirme yok"
+    },
+    "styleHints": {
+      "colour": "Işığı eşitler, kontrastı yükseltir ve metni keskinleştirir.",
+      "grayscale": "Renksiz hâliyle aynı temizleme. Daha küçük ve kâğıdın yapay ışıkta aldığı renk tonundan arınmış.",
+      "blackAndWhite": "Yalnızca mürekkep ve kâğıt. Basılı metin için en iyisi; fotoğrafları ve logoları düzleştirir.",
+      "none": "Düzeltilmiş ve kırpılmış, gerisi tam olarak çekildiği gibi. İyileştirme konuyu bozduğunda bunu kullanın."
+    },
+    "adjustments": {
+      "brightness": "Parlaklık ({value})",
+      "contrast": "Kontrast ({value})"
+    },
+    "resetAdjustments": "Parlaklık ve kontrastı sıfırla",
+    "adjustHint": "Kenarlar yanlışsa köşeleri sürüklemek için “Orijinal”e geçin.",
+    "updating": "Önizleme güncelleniyor…",
+    "noDocumentFound": "Belge kenarları bulunamadı, bu yüzden fotoğrafın tamamı kullanıldı. “Orijinal”e geçip köşeleri kendiniz yerleştirin.",
+    "previewEnhancedAlt": "İyileştirilmiş tarama önizlemesi",
+    "previewOriginalAlt": "Orijinal fotoğraf önizlemesi",
+    "useEnhanced": "İyileştirilmişi kullan",
+    "keepOriginal": "Yalnızca orijinali sakla",
+    "retake": "Yeniden çek",
+    "cancel": "İptal",
+    "originalTooLarge": "Orijinal fotoğraf {max} sınırını aşıyor, bu nedenle yalnızca iyileştirilmiş tarama eklenecek.",
+    "warnings": {
+      "blurry": "Fotoğraf bulanık görünüyor. Yeniden çekmek daha net bir tarama verir.",
+      "edgesOutsideFrame": "Belge fotoğrafın kenarına ulaşıyor, bu yüzden bir kenarı kesilmiş olabilir. Sayfanın tamamının çevresinde boşluk bırakarak, hiçbir kenar sınıra değmeyecek şekilde tekrar çekin.",
+      "lowResolution": "Tarama oldukça küçük, küçük yazıları okumak zor olabilir."
+    },
+    "corners": {
+      "label": "Belge köşeleri",
+      "topLeft": "Sol üst köşe",
+      "topRight": "Sağ üst köşe",
+      "bottomRight": "Sağ alt köşe",
+      "bottomLeft": "Sol alt köşe"
+    },
+    "originalKept": "orijinal saklandı"
+  },
+  "preview": {
+    "loading": "Önizleme yükleniyor…",
+    "failed": "Önizleme yüklenemedi. Dosyayı yine de indirebilirsiniz.",
+    "storeUnavailable": "Bu dosya, sunucunun şu anda erişemediği bir depolama alanında tutuluyor; bu yüzden ne önizlenebilir ne de indirilebilir. Hiçbir şey kaybolmadı: yöneticinizden ek depolama ayarlarını geri getirmesini isteyin.",
+    "unsupported": "Bu dosya türü önizlenemiyor. Yine de indirebilirsiniz.",
+    "fit": "Ekrana sığdır",
+    "actualSize": "Gerçek boyut",
+    "versionLabel": "Sürüm",
+    "zoomLabel": "Yakınlaştırma",
+    "pageCount": "{count, plural, one {# sayfa} other {# sayfa}}",
+    "page": "Sayfa {page} / {total}",
+    "open": "{name} önizlemesi"
+  }
 }

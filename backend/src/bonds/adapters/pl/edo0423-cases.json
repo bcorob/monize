@@ -1,0 +1,185 @@
+{
+  "terms": "edo0423",
+  "notes": "EDO0423 (letter 16/2013: first period 5.00%, margin 1.50% from period 2, fee 2.00) rebuilt from the EDO1036 structure; it is not in the catalog. The letter allows an early request from one month after the sale to one month before maturity; fixture states 30 and 30 days (not exercised).",
+  "cases": [
+    {
+      "id": "EDO0423-OFF-W",
+      "description": "official example: one EDO0423 bought 2013-04-15 is redeemed on 2023-04-15 for 100 + 47.05 interest before tax (138.11 after 8.94 tax); every rate derived from the GUS CPI of February (M-2) + 1.50% margin, first period 5.00%",
+      "source": "https://www.obligacjeskarbowe.pl/oferta-obligacji/obligacje-10-letnie-edo/edo1036/",
+      "lot": {
+        "purchaseDate": "2013-04-15",
+        "quantity": 1
+      },
+      "asOf": "2022-10-01",
+      "benchmarks": {
+        "PL_CPI_GUS_YOY": {
+          "kind": "MONTHLY",
+          "publisher": "GUS",
+          "source": "stat.gov.pl, Miesieczne wskazniki cen towarow i uslug konsumpcyjnych od 1982 roku (CSV), 'Analogiczny miesiac poprzedniego roku = 100', Polska; downloaded 2026-10-11 from https://stat.gov.pl/download/gfx/portalinformacyjny/pl/defaultstronaopisowa/4741/1/1/miesiecznewskaznikicentowarowiuslugkonsumpcyjnychod1982roku_8.csv",
+          "values": {
+            "2014-02": "0.0070",
+            "2015-02": "-0.0160",
+            "2016-02": "-0.0080",
+            "2017-02": "0.0220",
+            "2018-02": "0.0140",
+            "2019-02": "0.0120",
+            "2020-02": "0.0470",
+            "2021-02": "0.0240",
+            "2022-02": "0.0850"
+          }
+        }
+      },
+      "expect": {
+        "maturityValueKnown": "147.05",
+        "maturityDate": "2023-04-15",
+        "status": "OPEN",
+        "valuationComplete": true,
+        "currentPeriod": {
+          "index": 10,
+          "annualRate": "0.1000",
+          "rateSource": "DERIVED"
+        },
+        "accruedInterest": "39.87"
+      },
+      "expectedRates": {
+        "1": {
+          "annualRate": "0.0500",
+          "rateSource": "TERMS"
+        },
+        "2": {
+          "annualRate": "0.0220",
+          "rateSource": "DERIVED",
+          "addend": "0.0150",
+          "benchmark": {
+            "benchmarkId": "PL_CPI_GUS_YOY",
+            "observation": "2014-02",
+            "value": "0.0070",
+            "flooredValue": "0.0070"
+          }
+        },
+        "3": {
+          "annualRate": "0.0150",
+          "rateSource": "DERIVED",
+          "addend": "0.0150",
+          "benchmark": {
+            "benchmarkId": "PL_CPI_GUS_YOY",
+            "observation": "2015-02",
+            "value": "-0.0160",
+            "flooredValue": "0.0000"
+          }
+        },
+        "4": {
+          "annualRate": "0.0150",
+          "rateSource": "DERIVED",
+          "addend": "0.0150",
+          "benchmark": {
+            "benchmarkId": "PL_CPI_GUS_YOY",
+            "observation": "2016-02",
+            "value": "-0.0080",
+            "flooredValue": "0.0000"
+          }
+        },
+        "5": {
+          "annualRate": "0.0370",
+          "rateSource": "DERIVED",
+          "addend": "0.0150",
+          "benchmark": {
+            "benchmarkId": "PL_CPI_GUS_YOY",
+            "observation": "2017-02",
+            "value": "0.0220",
+            "flooredValue": "0.0220"
+          }
+        },
+        "6": {
+          "annualRate": "0.0290",
+          "rateSource": "DERIVED",
+          "addend": "0.0150",
+          "benchmark": {
+            "benchmarkId": "PL_CPI_GUS_YOY",
+            "observation": "2018-02",
+            "value": "0.0140",
+            "flooredValue": "0.0140"
+          }
+        },
+        "7": {
+          "annualRate": "0.0270",
+          "rateSource": "DERIVED",
+          "addend": "0.0150",
+          "benchmark": {
+            "benchmarkId": "PL_CPI_GUS_YOY",
+            "observation": "2019-02",
+            "value": "0.0120",
+            "flooredValue": "0.0120"
+          }
+        },
+        "8": {
+          "annualRate": "0.0620",
+          "rateSource": "DERIVED",
+          "addend": "0.0150",
+          "benchmark": {
+            "benchmarkId": "PL_CPI_GUS_YOY",
+            "observation": "2020-02",
+            "value": "0.0470",
+            "flooredValue": "0.0470"
+          }
+        },
+        "9": {
+          "annualRate": "0.0390",
+          "rateSource": "DERIVED",
+          "addend": "0.0150",
+          "benchmark": {
+            "benchmarkId": "PL_CPI_GUS_YOY",
+            "observation": "2021-02",
+            "value": "0.0240",
+            "flooredValue": "0.0240"
+          }
+        },
+        "10": {
+          "annualRate": "0.1000",
+          "rateSource": "DERIVED",
+          "addend": "0.0150",
+          "benchmark": {
+            "benchmarkId": "PL_CPI_GUS_YOY",
+            "observation": "2022-02",
+            "value": "0.0850",
+            "flooredValue": "0.0850"
+          }
+        }
+      }
+    },
+    {
+      "id": "EDO0423-OFF-M",
+      "description": "the same lot on its maturity day: matured, gross value 147.05",
+      "source": "https://www.obligacjeskarbowe.pl/oferta-obligacji/obligacje-10-letnie-edo/edo1036/",
+      "lot": {
+        "purchaseDate": "2013-04-15",
+        "quantity": 1
+      },
+      "asOf": "2023-04-15",
+      "benchmarks": {
+        "PL_CPI_GUS_YOY": {
+          "kind": "MONTHLY",
+          "publisher": "GUS",
+          "source": "stat.gov.pl, Miesieczne wskazniki cen towarow i uslug konsumpcyjnych od 1982 roku (CSV), 'Analogiczny miesiac poprzedniego roku = 100', Polska; downloaded 2026-10-11 from https://stat.gov.pl/download/gfx/portalinformacyjny/pl/defaultstronaopisowa/4741/1/1/miesiecznewskaznikicentowarowiuslugkonsumpcyjnychod1982roku_8.csv",
+          "values": {
+            "2014-02": "0.0070",
+            "2015-02": "-0.0160",
+            "2016-02": "-0.0080",
+            "2017-02": "0.0220",
+            "2018-02": "0.0140",
+            "2019-02": "0.0120",
+            "2020-02": "0.0470",
+            "2021-02": "0.0240",
+            "2022-02": "0.0850"
+          }
+        }
+      },
+      "expect": {
+        "status": "MATURED",
+        "grossValue": "147.05",
+        "accruedInterest": "47.05",
+        "valuationComplete": true
+      }
+    }
+  ]
+}

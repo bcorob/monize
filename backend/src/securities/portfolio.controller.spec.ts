@@ -4,12 +4,14 @@ import { PortfolioController } from "./portfolio.controller";
 import { PortfolioService } from "./portfolio.service";
 import { SectorWeightingService } from "./sector-weighting.service";
 import { DelegationService } from "../delegation/delegation.service";
+import { DailyMovementService } from "./daily-movement.service";
 
 describe("PortfolioController", () => {
   let controller: PortfolioController;
   let portfolioService: Record<string, jest.Mock>;
   let sectorWeightingService: Record<string, jest.Mock>;
   let delegationService: Record<string, jest.Mock>;
+  let dailyMovementService: Record<string, jest.Mock>;
 
   const req = { user: { id: "user-1" } };
   const UUID1 = "00000000-0000-0000-0000-000000000001";
@@ -19,6 +21,7 @@ describe("PortfolioController", () => {
   beforeEach(async () => {
     portfolioService = {
       getPortfolioSummary: jest.fn(),
+      getPortfolioValuation: jest.fn(),
       getAssetAllocation: jest.fn(),
       getAllocationByTag: jest.fn(),
       getTopMovers: jest.fn(),
@@ -44,6 +47,11 @@ describe("PortfolioController", () => {
       readableAccountIds: jest.fn().mockResolvedValue([]),
     };
 
+    dailyMovementService = {
+      getDailyMovements: jest.fn(),
+      getDailyMovementDetail: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [PortfolioController],
       providers: [
@@ -53,6 +61,7 @@ describe("PortfolioController", () => {
           useValue: sectorWeightingService,
         },
         { provide: DelegationService, useValue: delegationService },
+        { provide: DailyMovementService, useValue: dailyMovementService },
       ],
     }).compile();
 
@@ -61,6 +70,43 @@ describe("PortfolioController", () => {
 
   it("should be defined", () => {
     expect(controller).toBeDefined();
+  });
+
+  describe("getValuation", () => {
+    it("returns the valuation for the requested accounts", async () => {
+      const valuation = { totalPortfolioValue: 50000, holdings: [] };
+      portfolioService.getPortfolioValuation.mockResolvedValue(valuation);
+
+      const result = await controller.getValuation(req, `${UUID1},${UUID2}`);
+
+      expect(portfolioService.getPortfolioValuation).toHaveBeenCalledWith(
+        "user-1",
+        [UUID1, UUID2],
+      );
+      expect(result).toEqual(valuation);
+      expect(portfolioService.getPortfolioSummary).not.toHaveBeenCalled();
+    });
+
+    it("rejects invalid UUIDs in accountIds", async () => {
+      await expect(controller.getValuation(req, "not-a-uuid")).rejects.toThrow(
+        BadRequestException,
+      );
+    });
+
+    it("scopes accountIds to readable accounts for an acting delegate", async () => {
+      portfolioService.getPortfolioValuation.mockResolvedValue({});
+      delegationService.readableAccountIds.mockResolvedValue([UUID1]);
+      const actReq = {
+        user: { id: "owner-1", isActing: true, delegationId: "d-1" },
+      };
+
+      await controller.getValuation(actReq, `${UUID1},${UUID2}`);
+
+      expect(portfolioService.getPortfolioValuation).toHaveBeenCalledWith(
+        "owner-1",
+        [UUID1],
+      );
+    });
   });
 
   describe("getSummary", () => {
@@ -410,6 +456,82 @@ describe("PortfolioController", () => {
       await expect(
         controller.getSectorWeightings(req, undefined, "not-a-uuid"),
       ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe("daily movements", () => {
+    const range = {
+      startDate: "2026-09-01",
+      endDate: "2026-09-30",
+    };
+
+    it("passes an owner's scope and currency straight through", async () => {
+      dailyMovementService.getDailyMovements.mockResolvedValue("movements");
+
+      const result = await controller.getDailyMovements(req, {
+        ...range,
+        accountIds: [UUID1],
+        displayCurrency: "CAD",
+      });
+
+      expect(result).toBe("movements");
+      expect(dailyMovementService.getDailyMovements).toHaveBeenCalledWith(
+        "user-1",
+        "2026-09-01",
+        "2026-09-30",
+        [UUID1],
+        "CAD",
+      );
+    });
+
+    it("narrows an acting delegate to their readable accounts", async () => {
+      delegationService.readableAccountIds.mockResolvedValue([UUID1]);
+      dailyMovementService.getDailyMovements.mockResolvedValue("movements");
+
+      await controller.getDailyMovements(
+        { user: { id: "owner-1", isActing: true, delegationId: "d-1" } },
+        { ...range, accountIds: [UUID1, UUID2] },
+      );
+
+      expect(dailyMovementService.getDailyMovements).toHaveBeenCalledWith(
+        "owner-1",
+        "2026-09-01",
+        "2026-09-30",
+        [UUID1],
+        undefined,
+      );
+    });
+
+    it("gives a delegate with no readable accounts an empty scope", async () => {
+      delegationService.readableAccountIds.mockResolvedValue([]);
+      dailyMovementService.getDailyMovements.mockResolvedValue("movements");
+
+      await controller.getDailyMovements(
+        { user: { id: "owner-1", isActing: true, delegationId: "d-1" } },
+        range,
+      );
+
+      expect(dailyMovementService.getDailyMovements.mock.calls[0][3]).toEqual([
+        NO_READABLE,
+      ]);
+    });
+
+    it("scopes the detail route the same way", async () => {
+      delegationService.readableAccountIds.mockResolvedValue([UUID2]);
+      dailyMovementService.getDailyMovementDetail.mockResolvedValue("detail");
+
+      const result = await controller.getDailyMovementDetail(
+        { user: { id: "owner-1", isActing: true, delegationId: "d-1" } },
+        { date: "2026-09-11", accountIds: [UUID1, UUID2] },
+      );
+
+      expect(result).toBe("detail");
+      expect(dailyMovementService.getDailyMovementDetail).toHaveBeenCalledWith(
+        "owner-1",
+        "2026-09-11",
+        [UUID2],
+        undefined,
+      );
     });
   });
 });

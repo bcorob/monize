@@ -104,12 +104,14 @@ vi.mock('@/lib/auth', () => ({
 
 // Mock accounts API
 const mockGetAll = vi.fn().mockResolvedValue([]);
+const mockGetAllFresh = vi.fn().mockResolvedValue([]);
 const mockCreate = vi.fn();
 const mockUpdate = vi.fn();
 
 vi.mock('@/lib/accounts', () => ({
   accountsApi: {
     getAll: (...args: any[]) => mockGetAll(...args),
+    getAllFresh: (...args: any[]) => mockGetAllFresh(...args),
     create: (...args: any[]) => mockCreate(...args),
     update: (...args: any[]) => mockUpdate(...args),
   },
@@ -126,8 +128,8 @@ vi.mock('@/lib/investments', () => ({
 
 // Mock child components
 vi.mock('@/components/accounts/AccountList', () => ({
-  AccountList: ({ accounts, onEdit }: any) => (
-    <div data-testid="account-list">
+  AccountList: ({ accounts, onEdit, incompleteHoldingAccountIds }: any) => (
+    <div data-testid="account-list" data-incomplete={[...(incompleteHoldingAccountIds ?? [])].join(',')}>
       {accounts.map((a: any) => (
         <div key={a.id} data-testid={`account-${a.id}`}>
           {a.name}
@@ -198,13 +200,16 @@ vi.mock('@/hooks/useExchangeRates', () => ({
   }),
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (val: number) => `$${val.toFixed(2)}`,
-    formatNumber: (val: number) => val.toString(),
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (val: number) => `$${val.toFixed(2)}`,
+      formatNumber: (val: number) => val.toString(),
+    }),
+  };
+});
 const mockAccounts = [
   { id: 'acc-1', name: 'Checking', accountType: 'CHECKING', accountSubType: null, currencyCode: 'USD', currentBalance: 5000, isClosed: false, canDelete: true },
   { id: 'acc-2', name: 'Savings', accountType: 'SAVINGS', accountSubType: null, currencyCode: 'USD', currentBalance: 10000, isClosed: false, canDelete: true },
@@ -284,6 +289,56 @@ describe('AccountsPage', () => {
       expect(screen.getByText('Checking')).toBeInTheDocument();
       expect(screen.getByText('Savings')).toBeInTheDocument();
       expect(screen.getByText('Credit Card')).toBeInTheDocument();
+    });
+  });
+
+  describe('live refresh', () => {
+    // Reconcile figures and balances move on writes this tab never saw, so the
+    // list is re-read past its cache when the page is shown again.
+    const withCount = (count: number) => [{ ...mockAccounts[0], unreconciledCount: count }];
+
+    it('re-reads the list, past its cache, when the page regains focus', async () => {
+      mockGetAll.mockResolvedValue(withCount(5));
+      render(<AccountsPage />);
+      await waitFor(() => expect(screen.getByText('Checking')).toBeInTheDocument());
+
+      mockGetAllFresh.mockResolvedValue([{ ...mockAccounts[0], name: 'Checking (fresh)' }]);
+      await act(async () => {
+        window.dispatchEvent(new Event('focus'));
+      });
+
+      await waitFor(() => expect(screen.getByText('Checking (fresh)')).toBeInTheDocument());
+      expect(mockGetAllFresh).toHaveBeenCalledWith(true);
+      expect(mockGetAllFresh).toHaveBeenCalledTimes(1);
+    });
+
+    it('collapses the focus and visibility events of one return into one re-read', async () => {
+      render(<AccountsPage />);
+      await waitFor(() => expect(mockGetAll).toHaveBeenCalled());
+
+      let resolve: (value: unknown[]) => void = () => {};
+      mockGetAllFresh.mockReturnValue(new Promise((r) => { resolve = r; }));
+      act(() => {
+        document.dispatchEvent(new Event('visibilitychange'));
+        window.dispatchEvent(new Event('focus'));
+      });
+      expect(mockGetAllFresh).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        resolve([]);
+      });
+    });
+
+    it('keeps the list on screen when a re-read fails', async () => {
+      mockGetAll.mockResolvedValue(mockAccounts);
+      render(<AccountsPage />);
+      await waitFor(() => expect(screen.getByText('Checking')).toBeInTheDocument());
+
+      mockGetAllFresh.mockRejectedValue(new Error('offline'));
+      await act(async () => {
+        window.dispatchEvent(new Event('focus'));
+      });
+
+      expect(screen.getByText('Checking')).toBeInTheDocument();
     });
   });
 
@@ -501,6 +556,61 @@ describe('AccountsPage', () => {
       });
       expect(screen.getByTestId('summary-Total Assets')).toHaveTextContent('partial total');
       expect(screen.getByTestId('summary-Net Worth')).toHaveTextContent('partial total');
+    });
+
+    // valuationComplete covers a missing rate with every price present, which
+    // unpricedHoldingsCount (zero here) cannot see.
+    it('marks the totals partial when a brokerage is FX-incomplete with every price present', async () => {
+      mockGetAll.mockResolvedValue([
+        { id: 'acc-5', name: 'Brokerage', accountType: 'INVESTMENT', accountSubType: 'INVESTMENT_BROKERAGE', currencyCode: 'USD', currentBalance: 0, isClosed: false, canDelete: false },
+      ]);
+      mockGetPortfolioSummary.mockResolvedValue({
+        holdingsByAccount: [{
+          accountId: 'acc-5', totalMarketValue: 50000, cashBalance: 0,
+          unpricedHoldingsCount: 0, fxComplete: false, missingRatePairs: ['USD->CAD'],
+          pricesComplete: true, valuationComplete: false,
+        }],
+      });
+      render(<AccountsPage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('summary-Total Assets')).toHaveTextContent('partial total');
+      });
+      expect(screen.getByTestId('summary-Net Worth')).toHaveTextContent('partial total');
+      // The brokerage is left out of the subtotal rather than added as if complete.
+      expect(screen.getByTestId('summary-Total Assets')).not.toHaveTextContent('$50000.00');
+    });
+
+    it('hands the list the accounts whose valuation is incomplete', async () => {
+      mockGetAll.mockResolvedValue([
+        { id: 'acc-5', name: 'Brokerage', accountType: 'INVESTMENT', accountSubType: 'INVESTMENT_BROKERAGE', currencyCode: 'USD', currentBalance: 0, isClosed: false, canDelete: false },
+      ]);
+      mockGetPortfolioSummary.mockResolvedValue({
+        holdingsByAccount: [{
+          accountId: 'acc-5', totalMarketValue: 50000, cashBalance: 0,
+          unpricedHoldingsCount: 0, valuationComplete: false,
+        }],
+      });
+      render(<AccountsPage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('account-list')).toHaveAttribute('data-incomplete', 'acc-5');
+      });
+    });
+
+    it('reads an absent valuationComplete as no information', async () => {
+      mockGetAll.mockResolvedValue([
+        { id: 'acc-5', name: 'Brokerage', accountType: 'INVESTMENT', accountSubType: 'INVESTMENT_BROKERAGE', currencyCode: 'USD', currentBalance: 0, isClosed: false, canDelete: false },
+      ]);
+      mockGetPortfolioSummary.mockResolvedValue({
+        holdingsByAccount: [{ accountId: 'acc-5', totalMarketValue: 50000, cashBalance: 0, unpricedHoldingsCount: 0 }],
+      });
+      render(<AccountsPage />);
+
+      await waitFor(() => {
+        expect(screen.getByTestId('summary-Total Assets')).toHaveTextContent('$50000.00');
+      });
+      expect(screen.getByTestId('summary-Total Assets')).not.toHaveTextContent('partial total');
     });
 
     it('leaves the totals complete when the portfolio request succeeds', async () => {

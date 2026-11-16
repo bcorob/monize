@@ -15,7 +15,7 @@
 -- hold the same id, so every real-arm below is redundant then and load-bearing
 -- only while a delegate acts.
 --
--- See docs/future-plans/row-level-security.md (Phase 3).
+-- See docs/specs/row-level-security.md (Phase 3).
 
 -- ---------------------------------------------------------------------------
 -- users -- self-access through EITHER identity.

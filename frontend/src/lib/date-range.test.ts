@@ -32,6 +32,12 @@ describe('resolveRangePreset', () => {
     expect(resolveRangePreset('6m', { now: NOW, alignment: 'day' }).start).toBe('2026-01-07');
   });
 
+  it('resolves 10y to ten years, the 120th month back under month alignment', () => {
+    expect(resolveRangePreset('10y', { now: NOW }).start).toBe('2016-07-07');
+    // Ten years of months including the current one.
+    expect(resolveRangePreset('10y', { now: NOW, alignment: 'month' }).start).toBe('2016-08-01');
+  });
+
   it('passes through custom start/end', () => {
     const r = resolveRangePreset('custom', {
       now: NOW,

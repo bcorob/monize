@@ -1,0 +1,618 @@
+{
+  "page": {
+    "title": "Regels",
+    "subtitle": "Vul tags, categorieën en begunstigden automatisch in wanneer een transactie wordt aangemaakt of geïmporteerd",
+    "createButton": "Regel maken",
+    "loading": "Regels laden...",
+    "totalCount": "{count, plural, one {# regel} other {# regels}}"
+  },
+  "empty": {
+    "title": "Nog geen regels",
+    "body": "Een regel let op nieuwe en geïmporteerde transacties en vult tags, categorieën of begunstigden in wanneer aan de voorwaarden is voldaan. Maak je eerste regel om te beginnen.",
+    "createButton": "Maak je eerste regel"
+  },
+  "error": {
+    "title": "Je regels konden niet worden geladen",
+    "body": "Er wordt niets getoond omdat het verzoek mislukte, niet omdat je geen regels hebt. Controleer je verbinding en probeer het opnieuw.",
+    "retry": "Opnieuw proberen"
+  },
+  "list": {
+    "header": {
+      "order": "Volgorde",
+      "enabled": "Actief",
+      "name": "Regel",
+      "summary": "Samenvatting",
+      "actions": "Acties"
+    },
+    "summary": "{trigger, select, create {Bij aanmaken} import {Bij importeren} both {Bij aanmaken of importeren} other {Geen trigger}} · {conditions, plural, =0 {Geen voorwaarden} one {# voorwaarde} other {# voorwaarden}} · {actions, plural, =0 {Geen acties} one {# actie} other {# acties}}",
+    "enabledLabel": "{name} inschakelen"
+  },
+  "actions": {
+    "moveUp": "Omhoog",
+    "moveDown": "Omlaag",
+    "run": "Uitvoeren op bestaande transacties",
+    "runInvalid": "Herstel de regel voordat je hem uitvoert"
+  },
+  "invalid": {
+    "badge": "Ongeldig",
+    "tooltip": "Wordt overgeslagen tot het is opgelost: {reasons}.",
+    "reasons": {
+      "referenceMissing": "een tag, begunstigde, categorie of rekening die ze gebruikt bestaat niet meer",
+      "noActions": "ze heeft geen acties",
+      "tooLarge": "de voorwaarden zijn te uitgebreid",
+      "duplicateAction": "ze herhaalt een actie die maar één keer is toegestaan",
+      "unreadable": "de opgeslagen definitie kan niet worden gelezen",
+      "other": "de definitie is niet geldig"
+    }
+  },
+  "duplicate": {
+    "name": "{name} (kopie)"
+  },
+  "delete": {
+    "title": "Regel verwijderen",
+    "message": "Weet je zeker dat je \"{name}\" wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt."
+  },
+  "toasts": {
+    "enabled": "Regel ingeschakeld",
+    "disabled": "Regel uitgeschakeld",
+    "toggleFailed": "De regel kon niet worden gewijzigd",
+    "deleted": "Regel verwijderd",
+    "deleteFailed": "De regel kon niet worden verwijderd",
+    "duplicated": "Regel gedupliceerd. De kopie staat uit tot je haar inschakelt",
+    "duplicateFailed": "De regel kon niet worden gedupliceerd",
+    "reorderFailed": "De volgorde van de regels kon niet worden gewijzigd",
+    "listChanged": "De lijst met regels is elders gewijzigd en opnieuw geladen. Probeer het opnieuw",
+    "loadFailed": "Regels konden niet worden geladen"
+  },
+  "editor": {
+    "page": {
+      "newTitle": "Nieuwe regel",
+      "editTitle": "Regel bewerken",
+      "subtitle": "Kies wanneer de regel wordt uitgevoerd, welke transacties ze omvat en wat ze wijzigt",
+      "backToRules": "Terug naar regels",
+      "loading": "Regel laden..."
+    },
+    "name": {
+      "label": "Naam",
+      "placeholder": "Bijvoorbeeld: Cafés taggen"
+    },
+    "enabled": {
+      "label": "Regel ingeschakeld"
+    },
+    "sections": {
+      "when": "Wanneer",
+      "if": "Als",
+      "then": "Dan"
+    },
+    "when": {
+      "description": "Kies wanneer de regel een transactie bekijkt",
+      "created": "Een transactie wordt aangemaakt",
+      "imported": "Een transactie wordt geïmporteerd",
+      "atLeastOne": "Houd minstens één optie aangevinkt",
+      "stopProcessing": "Verwerking van andere regels stoppen",
+      "stopProcessingHelp": "Als deze regel bij een transactie past, worden de regels die in de lijst na haar komen voor die transactie overgeslagen.",
+      "window": {
+        "title": "Actief tussen",
+        "help": "De regel geldt alleen voor transacties met een datum binnen deze periode: bij het aanmaken of importeren en bij het testen of uitvoeren van de regel. Laat een datum leeg voor geen limiet.",
+        "from": "Eerste datum",
+        "to": "Laatste datum",
+        "backwards": "De laatste datum mag niet vóór de eerste datum liggen",
+        "noLimit": "geen limiet",
+        "words": "Alleen voor transacties van {from} tot {to}"
+      }
+    },
+    "if": {
+      "description": "De acties worden alleen uitgevoerd voor transacties die passen",
+      "everyTransaction": "Nog geen voorwaarden, dus deze regel geldt voor elke transactie."
+    },
+    "then": {
+      "description": "De acties worden in deze volgorde uitgevoerd",
+      "empty": "Nog geen acties. Voeg er minstens één toe.",
+      "limit": "Een regel kan maximaal {max} acties hebben."
+    },
+    "group": {
+      "matchAll": "Al deze",
+      "matchAny": "Een van deze",
+      "matchLabel": "Overeenkomst",
+      "not": "Groep omkeren",
+      "notHelp": "Een omgekeerde groep komt overeen wanneer de voorwaarden niet overeenkomen.",
+      "title": "Groep",
+      "addCondition": "+ Voorwaarde toevoegen",
+      "addGroup": "+ Groep toevoegen",
+      "depthLimit": "Groepen kunnen maximaal {max} niveaus diep genest worden.",
+      "sizeLimit": "De limiet voor voorwaarden is bereikt.",
+      "empty": "Deze groep is leeg."
+    },
+    "condition": {
+      "title": "Voorwaarde",
+      "field": "Veld",
+      "operator": "Operator",
+      "value": "Waarde"
+    },
+    "fields": {
+      "accountId": "Rekening",
+      "fromAccountId": "Van rekening (overboekingen)",
+      "toAccountId": "Naar rekening (overboekingen)",
+      "type": "Type",
+      "payeeId": "Begunstigde",
+      "payeeText": "Tekst van de begunstigde zoals ontvangen",
+      "categoryId": "Categorie",
+      "description": "Omschrijving",
+      "amount": "Bedrag (met teken)",
+      "absAmount": "Bedrag (zonder teken)",
+      "currencyCode": "Valuta",
+      "tagIds": "Tags",
+      "hasSplits": "Heeft splitsingen",
+      "referenceNumber": "Referentienummer",
+      "dayOfMonth": "Dag van de maand",
+      "weekday": "Dag van de week",
+      "status": "Status",
+      "hasAttachment": "Heeft een bijlage",
+      "date": "Datum"
+    },
+    "operators": {
+      "eq": "is",
+      "neq": "is niet",
+      "in": "is een van",
+      "notIn": "is geen van",
+      "isEmpty": "is leeg",
+      "contains": "bevat",
+      "startsWith": "begint met",
+      "matches": "komt overeen met het patroon",
+      "lt": "is kleiner dan",
+      "lte": "is hooguit",
+      "gt": "is groter dan",
+      "gte": "is minstens",
+      "between": "ligt tussen",
+      "hasAny": "heeft een van",
+      "hasAll": "heeft alle van",
+      "hasNone": "heeft geen van",
+      "inSubtree": "valt in of onder"
+    },
+    "types": {
+      "EXPENSE": "Uitgave",
+      "INCOME": "Inkomsten",
+      "TRANSFER": "Overboeking"
+    },
+    "value": {
+      "account": "Kies een rekening",
+      "accounts": "Kies rekeningen",
+      "payee": "Kies een begunstigde",
+      "payees": "Kies begunstigden",
+      "category": "Kies een categorie",
+      "categories": "Kies categorieën",
+      "tags": "Kies tags",
+      "currency": "Kies een valuta",
+      "currencies": "Kies valuta's",
+      "types": "Kies typen",
+      "matchesHint": "Gebruik * voor willekeurige tekst, bijvoorbeeld *koffie*. Een patroon zonder * komt alleen overeen met de hele tekst. Gebruik {capture} om de tekst op die plek te bewaren voor de acties van deze regel, bijvoorbeeld {example}. Een naam bestaat uit kleine letters en cijfers, en een patroon kan maximaal {max} teksten bewaren.",
+      "amount": "Bedrag",
+      "from": "Van",
+      "to": "Tot",
+      "yes": "Ja",
+      "no": "Nee",
+      "days": "Kies dagen",
+      "weekdays": "Kies dagen van de week",
+      "statuses": "Kies statussen"
+    },
+    "action": {
+      "title": "Actie",
+      "type": "Actietype",
+      "tags": "Tags",
+      "category": "Categorie",
+      "payee": "Begunstigde",
+      "instruction": "Controle-instructies",
+      "instructionPlaceholder": "Bijvoorbeeld: splits deze aankoop volgens de bon",
+      "instructionHelp": "De regel vraagt alleen om een controle. Een persoon keurt elke wijziging goed voordat ze wordt doorgevoerd.",
+      "onlyIfEmpty": "Alleen als leeg",
+      "onlyIfEmptyHelp": "Indien ingeschakeld vult de regel de categorie of begunstigde alleen in als de transactie er geen heeft. Een met de hand of via de standaardcategorie van de begunstigde ingestelde waarde wordt niet vervangen. Schakel uit om te vervangen.",
+      "add": "+ Actie toevoegen",
+      "reviewInbox": "Naar het controlepostvak",
+      "payeeTemplate": "Naam van de begunstigde",
+      "descriptionTemplate": "Tekst van de omschrijving",
+      "templateHelp": "Platte tekst. Elke tijdelijke aanduiding tussen accolades wordt vervangen door tekst uit de transactie. Selecteer hieronder een tijdelijke aanduiding om die in te voegen.",
+      "joinHelp": "De tekst wordt precies zoals geschreven aan de huidige omschrijving gekoppeld, dus neem de gewenste spatie of het gewenste scheidingsteken zelf op.",
+      "placeholders": "Tijdelijke aanduidingen",
+      "placeholdersHelp": "{payeeText} is de tekst van de begunstigde zoals ontvangen. {description} is de omschrijving zoals die is wanneer deze actie wordt uitgevoerd. De andere tijdelijke aanduidingen zijn de opnamen die in de patronen van deze regel een naam hebben.",
+      "insertPlaceholder": "{name} invoegen",
+      "unknownPlaceholders": "Niet gedefinieerd door deze regel: {names}. Kies een tijdelijke aanduiding uit de lijst of leg deze vast in een patroon hierboven.",
+      "invalidPlaceholders": "Geen geldige tijdelijke aanduiding: {names}. Een naam bestaat uit kleine letters en cijfers.",
+      "createIfMissing": "Begunstigde aanmaken als die niet bestaat",
+      "createIfMissingHelp": "Als dit aan staat en geen begunstigde overeenkomt met de naam (op naam, alias of een dichte overeenkomst), wordt een nieuwe begunstigde aangemaakt. Een door een regel aangemaakte begunstigde blijft bestaan als u de uitvoering ongedaan maakt.",
+      "onlyIfEmptyDescriptionHelp": "Als dit aan staat, schrijft de regel de omschrijving alleen als de transactie er geen heeft. Zet het uit om de omschrijving elke keer te schrijven.",
+      "mode": "Omschrijvingsmodus",
+      "modes": {
+        "replace": "Omschrijving vervangen",
+        "append": "Toevoegen na de omschrijving",
+        "prepend": "Toevoegen vóór de omschrijving"
+      },
+      "convertHelp": "De overeenkomende inkomsten of uitgave wordt één kant van een overboeking. De andere kant wordt aangemaakt op de gekozen rekening, die dezelfde valuta moet hebben.",
+      "direction": "Richting",
+      "directionTo": "Uitgave: het geld gaat naar een andere rekening",
+      "directionFrom": "Inkomsten: het geld komt van een andere rekening",
+      "clearCategory": "Categorie wissen",
+      "clearCategoryHelp": "Een overboeking heeft geen categorie. Schakel uit om de categorie te behouden die de transactie al heeft.",
+      "splitPayee": "Begunstigde van de transactie (optioneel)",
+      "splitHint": "Elk onderdeel neemt zijn bedrag uit een opgevangen waarde in de patronen hierboven, of neemt de rest. De onderdelen moeten samen het bedrag van de transactie vormen, anders laat de regel haar ongemoeid.",
+      "splitNoCaptures": "Er is nog geen opgevangen waarde gedefinieerd. Zet in een patroon hierboven een naam tussen accolades, bijvoorbeeld PRINCIPAL: {example}, om die hier als bedrag te gebruiken.",
+      "partAmountPlaceholder": "Kies het bedrag...",
+      "partRest": "De rest",
+      "partAccount": "Rekening",
+      "partPayee": "Begunstigde van de andere kant (optioneel)",
+      "partsLimit": "Een splitsing kan hooguit {max} onderdelen hebben.",
+      "guideTitle": "Zo gebruik je het",
+      "splitGuideHow": "Voeg onder “Als” een voorwaarde toe op de tekst van de begunstigde of de omschrijving met de operator “komt overeen met het patroon” en zet namen tussen accolades op de plek van de bedragen, bijvoorbeeld {first}. Elke naam wordt een bedrag dat je voor een deel kunt kiezen, of kies “De rest”. De delen moeten samen het bedrag van de transactie vormen, anders laat de regel de transactie ongewijzigd. Een deel kan een categorie zijn of een overboeking naar een andere rekening (een overboeking wijzigt het saldo van die rekening).",
+      "splitGuideExampleTitle": "Voorbeeld: een leningtermijn",
+      "splitGuideBank": "Banktekst: AFLOSSING: 1200,50 RENTE: 300,25 BOETE: 0,00",
+      "splitGuidePattern": "Patroon: *AFLOSSING: {first} RENTE: {second} BOETE*",
+      "splitGuidePart1": "Deel 1: {first} als overboeking naar de leningrekening",
+      "splitGuidePart2": "Deel 2: {second} als categorie “Leningen: Rente”",
+      "splitGuideResult": "Resultaat voor -1500,75: -1200,50 overgeboekt naar de leningrekening en -300,25 aan rentekosten.",
+      "splitGuideTip": "Tip: stel een begindatum in bij “Actief tussen” zodat oudere afgestemde transacties niet worden gewijzigd, en gebruik het paneel Test voordat je opslaat.",
+      "convertGuide": "Een uitgave wordt een overboeking naar de gekozen rekening en een inkomen een overboeking vanaf die rekening. Alleen het saldo van de andere rekening wijzigt. Tip: gebruik “Actief tussen” zodat oudere transacties niet worden gewijzigd.",
+      "splitGuideName1": "aflossing",
+      "splitGuideName2": "rente",
+      "loanGuide": "Gebruik dit voor een bankafschrijving die een hypotheek- of leningtermijn in één bedrag betaalt. Match de afschrijving in “Als” op rekening, begunstigdetekst of omschrijving. De transactie wordt een splitsing: de aflossing wordt overgeboekt naar de leningrekening en de rente gaat naar de rentecategorie, beide geprijsd voor de termijn die ze betalen. Tip: schakel automatisch boeken uit voor de geplande betaling van de lening zodat de termijn niet dubbel wordt betaald, en gebruik het paneel Test voordat je opslaat.",
+      "loan": {
+        "help": "De gematchte afschrijving betaalt de volgende termijn van de lening die rond die datum vervalt. Monize berekent de aflossing en rente voor die termijn; je typt nooit een bedrag.",
+        "account": "Leningrekening",
+        "accountPlaceholder": "Selecteer een hypotheek of lening...",
+        "noLoans": "Je hebt geen openstaande hypotheek- of leningrekening om af te lossen.",
+        "window": "Marge rond de vervaldatum",
+        "windowHelp": "Hoe ver van de vervaldatum de bank de betaling mag innen. Een afschrijving tot dit aantal dagen voor of na de vervaldatum van een termijn betaalt die termijn; een afschrijving buiten de marge wordt ongewijzigd gelaten.",
+        "daysBefore": "Dagen voor de vervaldatum",
+        "daysAfter": "Dagen na de vervaldatum",
+        "excess": "Afschrijving hoger dan de termijn",
+        "excessPolicies": {
+          "extra_principal": "Het verschil als extra aflossing betalen",
+          "refuse": "De transactie ongewijzigd laten"
+        },
+        "shortfall": "Afschrijving lager dan de termijn",
+        "shortfallPolicies": {
+          "refuse": "De transactie ongewijzigd laten",
+          "interest_first": "Eerst de rente betalen, de rest als aflossing"
+        },
+        "policyNote": "Een verschil van een paar cent wordt opgevangen door de renteregel.",
+        "policyHelp": "Banken ronden elk deel apart af, dus een afschrijving binnen 5 keer de kleinste eenheid van de munteenheid (0,05 voor de meeste munteenheden) wordt als exact behandeld en de renteregel neemt het verschil op. Een groter verschil volgt de twee keuzes hierboven.",
+        "interestCategory": "Rentecategorie (optioneel)",
+        "interestCategoryPlaceholder": "De eigen rentecategorie van de lening",
+        "autoPostTitle": "De geplande betaling van de lening boekt zichzelf",
+        "autoPostBody": "Automatisch boeken staat aan voor de geplande betaling van deze lening, waardoor die en de bankafschrijving die deze regel afhandelt beide dezelfde termijn zouden betalen. Schakel automatisch boeken uit voor de geplande betaling."
+      }
+    },
+    "actionTypes": {
+      "add_tags": "Tags toevoegen",
+      "remove_tags": "Tags verwijderen",
+      "set_category": "Categorie instellen",
+      "set_payee": "Begunstigde instellen",
+      "request_ai_review": "AI-controle aanvragen",
+      "set_payee_from_text": "Begunstigde instellen vanuit tekst",
+      "set_description": "Omschrijving instellen",
+      "convert_to_transfer": "Omzetten naar een overboeking",
+      "split": "Transactie splitsen",
+      "settle_loan_installment": "Een leningtermijn aflossen"
+    },
+    "save": {
+      "button": "Regel opslaan",
+      "createdToast": "Regel aangemaakt",
+      "savedToast": "Regel opgeslagen",
+      "failedToast": "De regel kon niet worden opgeslagen",
+      "summary": "De regel is niet opgeslagen. Corrigeer de hieronder gemarkeerde onderdelen en probeer het opnieuw."
+    },
+    "loadError": {
+      "title": "De regel kon niet worden geladen",
+      "body": "Er wordt niets getoond omdat het verzoek is mislukt, niet omdat de regel leeg is. Controleer je verbinding en probeer het opnieuw.",
+      "lookupsBody": "De lijsten met rekeningen, begunstigden, categorieën, tags en valuta's konden niet worden geladen, dus de regel kan niet veilig worden getoond. Controleer je verbinding en probeer het opnieuw.",
+      "notFound": "Deze regel bestaat niet meer. Mogelijk is ze verwijderd.",
+      "retry": "Opnieuw proberen"
+    },
+    "invalid": {
+      "title": "Deze regel kan niet worden uitgevoerd",
+      "repaired": "Sommige delen van de opgeslagen definitie konden niet worden gelezen en zijn hier verwijderd of teruggezet. Controleer de regel voordat je opslaat."
+    },
+    "conflict": {
+      "title": "Deze regel is elders gewijzigd",
+      "body": "Laad haar opnieuw om de nieuwste versie te zien. Je niet-opgeslagen wijzigingen gaan verloren.",
+      "reload": "Opnieuw laden"
+    },
+    "errors": {
+      "codes": {
+        "INVALID_SHAPE": "Dit onderdeel heeft een vorm die de editor niet begrijpt.",
+        "UNKNOWN_KEY": "Dit onderdeel bevat een instelling die niet bestaat.",
+        "UNKNOWN_FIELD": "Kies een veld.",
+        "UNKNOWN_ACTION": "Kies een actie.",
+        "OPERATOR_NOT_ALLOWED": "Dit veld staat die operator niet toe.",
+        "VALUE_REQUIRED": "Voer een waarde in of kies er een.",
+        "VALUE_NOT_ALLOWED": "Deze operator neemt geen waarde aan.",
+        "VALUE_TYPE": "De waarde is van het verkeerde soort voor dit veld.",
+        "VALUE_OUT_OF_RANGE": "De waarde valt buiten het bereik.",
+        "VALUE_TOO_LONG": "De tekst is te lang.",
+        "VALUE_EMPTY": "Voer wat tekst in.",
+        "INVALID_UUID": "Kies een item uit de lijst.",
+        "INVALID_ENUM": "Kies een van de vermelde waarden.",
+        "INVALID_CURRENCY": "Kies een valuta.",
+        "ARRAY_EMPTY": "Kies minstens één item.",
+        "ARRAY_TOO_LARGE": "Er zijn te veel items gekozen.",
+        "RANGE_ORDER": "De eerste waarde mag niet groter zijn dan de tweede.",
+        "MAX_DEPTH": "De groepen zijn te diep genest. De limiet is {maxDepth} niveaus.",
+        "MAX_LEAVES": "Er zijn te veel voorwaarden. De limiet is {maxLeaves}.",
+        "MAX_NODES": "Er zijn te veel voorwaarden en groepen. De limiet is {maxNodes}.",
+        "NO_ACTIONS": "Voeg minstens één actie toe.",
+        "TOO_MANY_ACTIONS": "Er zijn te veel acties. De limiet is {maxActions}.",
+        "DUPLICATE_ACTION": "Een regel kan maar één AI-beoordeling hebben, één overboeking, splitsing of leningaflossing, en één onderdeel van een splitsing dat de rest neemt.",
+        "CONFLICTING_ACTIONS": "Een overboeking-, splits- of leningaflossingsactie kan niet worden gecombineerd met ‘Categorie instellen’, en elk onderdeel van een splitsing heeft een categorie of een rekening.",
+        "INVALID_CAPTURE": "Een opnamenaam bestaat uit kleine letters en cijfers, begint met een letter en is hooguit 20 tekens lang.",
+        "TOO_MANY_CAPTURES": "Een patroon mag hooguit 5 opnamen bevatten.",
+        "DUPLICATE_CAPTURE": "Elke opnamenaam mag in een regel maar één keer voorkomen.",
+        "UNKNOWN_CAPTURE": "Dit gebruikt een opgevangen waarde die geen enkele voorwaarde van deze regel definieert.",
+        "LOOKS_LIKE_REGEX": "Reguliere expressies worden niet ondersteund: | \\ en korte haakjesklassen zoals [xy] worden als gewone tekens behandeld, dus een patroon dat als regex is geschreven komt nooit overeen met wat bedoeld was. Om met een van meerdere teksten overeen te komen, voeg je een groep “Een van deze” toe met voor elke tekst één voorwaarde.",
+        "PATTERN_WITHOUT_WILDCARD": "Zonder * moet dit patroon gelijk zijn aan de hele tekst. Gebruik “is” voor de hele tekst, “bevat” voor een deel ervan, of zet * om de tekst, bijvoorbeeld *koffie*.",
+        "REFERENCE_NOT_FOUND": "Een hier gekozen item bestaat niet meer. Kies een ander.",
+        "NAME_REQUIRED": "Voer een naam voor de regel in.",
+        "UNKNOWN": "Dit onderdeel is ongeldig."
+      }
+    },
+    "run": {
+      "button": "Uitvoeren op bestaande transacties",
+      "saveFirst": "Sla je wijzigingen op om de opgeslagen regel uit te voeren."
+    },
+    "expression": {
+      "modeLabel": "Weergave van voorwaarden",
+      "visual": "Visueel",
+      "expression": "Expressie",
+      "label": "Expressie van de voorwaarde",
+      "help": "Schrijf de voorwaarden als tekst. Gebruik && voor alle, || voor een van deze en !( ... ) voor niet. Verwijs naar items met hun naam: account(\"Naam\"), payee(\"Naam\"), category(\"Hoofd: Sub\") en tag(\"Naam\"). Een underscore _ staat voor een waarde die nog niet is gekozen. matchesGlob gebruikt * als jokerteken. Alleen de syntaxis uit de suggesties wordt ondersteund.",
+      "blocked": "Herstel de expressie om terug te gaan naar Visueel of om op te slaan.",
+      "errorAt": "Regel {line}, kolom {column}: {message}",
+      "suggestions": "Suggesties",
+      "errors": {
+        "tooLong": "De expressie is te lang. De limiet is {max} tekens.",
+        "unexpectedChar": "Het teken {char} wordt niet ondersteund.",
+        "unterminatedString": "Deze tekst mist een afsluitend aanhalingsteken.",
+        "invalidEscape": "Deze escapereeks wordt niet ondersteund.",
+        "badNumber": "Dit is geen geldig getal.",
+        "expectedExpression": "Hier wordt een voorwaarde verwacht.",
+        "expectedField": "Hier wordt een veldnaam verwacht.",
+        "expectedOperator": "Na het veld wordt een operator of methode verwacht.",
+        "expectedValue": "Hier wordt een waarde verwacht.",
+        "expectedSymbol": "Hier wordt {symbol} verwacht.",
+        "unexpectedToken": "Onverwacht: {token}.",
+        "unsupported": "Dit onderdeel wordt niet ondersteund. Gebruik alleen de syntaxis uit de suggesties.",
+        "unknownField": "Onbekend veld {name}.",
+        "unknownFunction": "Onbekende functie of methode {name}.",
+        "operatorNotAllowed": "Het veld {field} kan niet worden gebruikt met {operator}.",
+        "wrongValueType": "{expected, select, text {Verwacht wordt tekst tussen aanhalingstekens.} number {Verwacht wordt een getal.} boolean {Verwacht wordt true of false.} list {Verwacht wordt een lijst tussen blokhaken.} account {Verwacht wordt een rekening, bijvoorbeeld account(\"Naam\").} payee {Verwacht wordt een begunstigde, bijvoorbeeld payee(\"Naam\").} category {Verwacht wordt een categorie, bijvoorbeeld category(\"Hoofd: Sub\").} tag {Verwacht wordt een tag, bijvoorbeeld tag(\"Naam\").} other {Deze waarde is van het verkeerde soort.}}",
+        "invalidEnum": "Gebruik een van deze waarden: {values}.",
+        "invalidCurrency": "Gebruik een valutacode van drie letters tussen aanhalingstekens, bijvoorbeeld \"CAD\".",
+        "valueTooLong": "De tekst is te lang. De limiet is {max} tekens.",
+        "listTooLong": "De lijst is te lang. De limiet is {max} items.",
+        "unknownEntity": "{kind, select, account {Geen rekening heet {name}.} payee {Geen begunstigde heet {name}.} category {Geen categorie heet {name}.} tag {Geen tag heet {name}.} other {Geen item heet {name}.}}",
+        "ambiguousEntity": "{count} items heten {name}. Voeg het nummer van het bedoelde item toe, bijvoorbeeld {example}.",
+        "entityOrdinal": "Het nummer voor {name} moet tussen 1 en {count} liggen.",
+        "maxDepth": "Groepen zijn te diep genest. De limiet is {max} niveaus.",
+        "maxLeaves": "Er zijn te veel voorwaarden. De limiet is {max}.",
+        "maxNodes": "Er zijn te veel voorwaarden en groepen. De limiet is {max}.",
+        "tooNested": "Te veel geneste haakjes."
+      }
+    }
+  },
+  "test": {
+    "title": "Test",
+    "description": "Probeer de regel uit op je bestaande transacties. Er wordt niets gewijzigd.",
+    "button": "Regel testen",
+    "again": "Opnieuw testen",
+    "incomplete": "Vul de voorwaarden en acties hierboven aan om de regel te testen.",
+    "idle": "Kies op welke transacties je de regel wilt proberen en selecteer Regel testen.",
+    "running": "Regel wordt getest...",
+    "failed": "De test kon niet worden voltooid. {message}",
+    "stale": "De regel of de filters zijn gewijzigd sinds dit resultaat. Test opnieuw voor het huidige resultaat."
+  },
+  "match": {
+    "button": "Regel testen",
+    "buttonLabel": "Regel testen: voorwaarden",
+    "incomplete": "Vul de voorwaarden hierboven aan om te zien met welke transacties ze overeenkomen.",
+    "windowBackwards": "De actieve datums eindigen voordat ze beginnen, dus geen enkele transactie kan overeenkomen.",
+    "summary": "{count, plural, =0 {Geen overeenkomende transacties} one {# overeenkomende transactie} other {# overeenkomende transacties}}",
+    "summaryPending": "Overeenkomende transacties",
+    "running": "Overeenkomende transacties zoeken...",
+    "failed": "De overeenkomende transacties konden niet worden geladen. {message}",
+    "empty": "Geen bestaande transacties komen overeen met deze voorwaarden.",
+    "truncated": "Alleen de nieuwste {scanned, number} transacties zijn gecontroleerd.",
+    "stale": "De voorwaarden zijn sinds deze test gewijzigd. Selecteer opnieuw Regel testen om de huidige overeenkomsten te zien."
+  },
+  "run": {
+    "title": "“{name}” uitvoeren op bestaande transacties",
+    "description": "Bekijk vooraf wat de regel zou wijzigen en bevestig dan. Je kunt de uitvoering ongedaan maken via de actiegeschiedenis.",
+    "previewButton": "Voorbeeld",
+    "confirmButton": "Bevestigen en uitvoeren",
+    "idle": "Kies rekeningen en datums en selecteer Voorbeeld. Er verandert niets totdat je bevestigt.",
+    "loadingPreview": "Voorbeeld wordt geladen...",
+    "previewFailed": "Het voorbeeld kon niet worden geladen, dus er kan niets worden uitgevoerd. {message}",
+    "stale": "De filters zijn gewijzigd sinds dit voorbeeld. Vraag het voorbeeld opnieuw op voordat je uitvoert.",
+    "accountsLoading": "Rekeningen worden geladen...",
+    "accountsFailed": "Je rekeningen konden niet worden geladen, dus de filters zijn niet beschikbaar.",
+    "retry": "Opnieuw proberen",
+    "summary": "{matched, plural, one {# transactie zou wijzigen} other {# transacties zouden wijzigen}} van {scanned, plural, one {# gecontroleerde transactie} other {# gecontroleerde transacties}}.",
+    "matchesNone": "Deze regel komt met geen van de onderzochte transacties overeen ({scanned}). Controleer de voorwaarden voordat je opslaat. Een patroon zonder * komt alleen overeen met de hele tekst.",
+    "noChange": "{matched} van de {scanned} onderzochte transacties voldoen aan de voorwaarden van de regel, maar er zou niets veranderen (bijvoorbeeld omdat ze de waarde al hebben en 'alleen als leeg' aanstaat). Dit is geen fout.",
+    "aiReview": "{count, plural, one {# transactie zou in de wachtrij voor AI-beoordeling worden gezet} other {# transacties zouden in de wachtrij voor AI-beoordeling worden gezet}}. Het verzoek wordt gemaakt wanneer u bevestigt.",
+    "truncated": "Er komen meer transacties overeen dan de limiet toestaat. Alleen de nieuwste zijn opgenomen. Verhoog de limiet of beperk de datums om de rest mee te nemen.",
+    "truncatedOldest": "Er zijn meer transacties gematcht dan de limiet toestaat. Alleen de oudste zijn opgenomen, omdat deze regel leningtermijnen op datumvolgorde aflost. Voer de regel na deze uitvoering opnieuw uit om de rest op te nemen.",
+    "noMatches": {
+      "title": "Geen transacties zouden wijzigen",
+      "body": "Geen van de gecontroleerde transacties komt overeen met de regel, of de regel zou er niets aan wijzigen."
+    },
+    "table": {
+      "date": "Datum",
+      "payee": "Begunstigde",
+      "amount": "Bedrag",
+      "change": "Geplande wijziging",
+      "noPayee": "Geen begunstigde"
+    },
+    "skipped": {
+      "title": "{count, plural, one {# transactie blijft ongemoeid} other {# transacties blijven ongemoeid}}",
+      "line": "{count, plural, one {# transactie} other {# transacties}}: {reason}",
+      "missing": "Ontbreekt bij de lening: {inputs}."
+    },
+    "skipReasons": {
+      "reconciled_locked": "ze is afgestemd en vergrendeld",
+      "transfer_leg_category": "ze is een overboeking, die geen categorie heeft",
+      "split_category": "ze is gesplitst, dus de categorie hoort bij de splitsingen",
+      "cross_owner_transfer_payee": "ze is een overboeking naar een andere eigenaar, van wie deze regel de begunstigde niet mag wijzigen",
+      "empty_render": "de tekst van een actie is hiervoor leeg uitgekomen",
+      "payee_not_found": "geen begunstigde heeft de naam die de regel heeft gemaakt, en de regel maakt er geen aan",
+      "other": "de regel kan haar niet wijzigen",
+      "row_is_transfer_leg": "ze is al een overboeking",
+      "row_has_splits": "ze is al gesplitst",
+      "row_is_void": "ze is ongeldig gemaakt",
+      "zero_amount": "het bedrag is nul",
+      "transfer_direction_mismatch": "de overboeking gaat de verkeerde kant op: een uitgave gaat naar een rekening, inkomsten komen van een rekening",
+      "transfer_same_account": "de overboekingsrekening is de rekening van de transactie zelf",
+      "transfer_account_unavailable": "de overboekingsrekening is niet beschikbaar (verwijderd of niet van jou)",
+      "transfer_currency_mismatch": "de overboekingsrekening heeft een andere valuta",
+      "split_amount_unparseable": "een bedrag in de tekst kon niet als getal worden gelezen",
+      "split_sum_mismatch": "de onderdelen vormen samen niet het bedrag",
+      "split_too_few_parts": "er blijven minder dan twee onderdelen over nadat nulbedragen zijn weggelaten",
+      "row_from_scheduled_posting": "ze is geboekt vanuit de geplande betaling van de lening, die de termijn al heeft betaald",
+      "row_is_income": "ze is een inkomst, en alleen een afschrijving betaalt een termijn",
+      "loan_account_unavailable": "de leningrekening is niet beschikbaar (verwijderd, gesloten, niet van jou, of geen hypotheek of lening)",
+      "loan_interest_booked_separately": "de lening boekt haar rente als afzonderlijke transacties, dus een betaling kan die niet meedragen",
+      "loan_not_configured": "de lening mist wat nodig is om een termijn te berekenen",
+      "no_installment_in_window": "geen termijn van de lening vervalt binnen de marge rond deze datum",
+      "occurrence_already_posted": "de termijn die binnen de marge vervalt, is al betaald",
+      "loan_debt_retired": "de lening is al volledig afgelost",
+      "installment_amount_excess": "ze is hoger dan de termijn en de regel laat grotere afschrijvingen ongewijzigd",
+      "installment_amount_shortfall": "ze is lager dan de termijn en de regel laat kleinere afschrijvingen ongewijzigd"
+    },
+    "change": {
+      "category": "Categorie: {before} → {after}",
+      "payee": "Begunstigde: {before} → {after}",
+      "payeeNew": "Begunstigde: {before} → {name} (nieuw)",
+      "tagsAdded": "Tags toegevoegd: {tags}",
+      "tagsRemoved": "Tags verwijderd: {tags}",
+      "none": "geen",
+      "unknown": "een verwijderd item",
+      "payeeCreated": "{done, select, yes {Er is een nieuwe begunstigde aangemaakt: {name}} other {Er wordt een nieuwe begunstigde aangemaakt: {name}}}",
+      "description": "Omschrijving: {before} → {after}",
+      "descriptionSet": "Omschrijving instellen op {value}",
+      "transfer": "{done, select, yes {Is een overboeking met {account} geworden} other {Wordt een overboeking met {account}}}",
+      "split": "{done, select, yes {Is gesplitst in {count, plural, one {# onderdeel} other {# onderdelen}}} other {Wordt gesplitst in {count, plural, one {# onderdeel} other {# onderdelen}}}}",
+      "splitPart": "Onderdeel {number}: {amount} {target}",
+      "splitPartMemo": ", notitie “{memo}”",
+      "splitToTransfer": "naar {account}",
+      "splitToTransferPayee": "naar {account}, begunstigde {payee}",
+      "splitToCategory": "als {category}",
+      "splitUncategorised": "zonder categorie",
+      "loanSettlement": "{done, select, yes {Termijn {number} van {account} afgelost} other {Lost termijn {number} van {account} af}}, vervalt {dueDate}: aflossing {principal}, rente {interest}{hasExtra, select, yes {, extra aflossing {extra}} other {}}. Schuld voor: {debtBefore}"
+    },
+    "filters": {
+      "accounts": "Rekeningen",
+      "allAccounts": "Alle rekeningen",
+      "startDate": "Van",
+      "endDate": "Tot",
+      "backwards": "De begindatum mag niet na de einddatum liggen.",
+      "limit": "Nieuwste transacties om te controleren",
+      "help": "Alleen de nieuwste transacties in het bereik worden gecontroleerd, maximaal {max}."
+    },
+    "errors": {
+      "PREVIEW_CHANGED": "De transacties of de regel zijn gewijzigd sinds het voorbeeld. Bekijk het nieuwe voorbeeld en voer opnieuw uit.",
+      "RUN_TOO_LARGE": "Deze uitvoering wijzigt te veel transacties om in één stap ongedaan te maken. Beperk de rekeningen of datums en probeer het opnieuw.",
+      "INVALID_RULE": "Deze regel is niet geldig en kan dus niet worden uitgevoerd. Open hem en herstel hem eerst.",
+      "DATE_RANGE_INVALID": "De begindatum mag niet na de einddatum liggen.",
+      "draftInvalid": "De regel is onvolledig of ongeldig. Controleer de voorwaarden en acties hierboven.",
+      "testFailed": "Er ging iets mis bij het testen van de regel.",
+      "previewFailed": "Er ging iets mis bij het laden van het voorbeeld.",
+      "runFailed": "De uitvoering kon niet worden voltooid. Controleer de actiegeschiedenis voordat je het opnieuw probeert."
+    },
+    "toast": {
+      "done": "{count, plural, =0 {Er zijn geen transacties gewijzigd} one {# transactie gewijzigd} other {# transacties gewijzigd}}. Je kunt dit ongedaan maken via de actiegeschiedenis.",
+      "changedNoUndo": "{count, plural, one {# transactie gewijzigd} other {# transacties gewijzigd}}.",
+      "aiReviewsQueued": "{count, plural, one {# transactie in de wachtrij voor AI-beoordeling gezet} other {# transacties in de wachtrij voor AI-beoordeling gezet}}.",
+      "aiReviewsAlreadyQueued": "{count, plural, one {# transactie had al een openstaand verzoek voor AI-beoordeling, dus er is niets nieuws in de wachtrij gezet} other {# transacties hadden al een openstaand verzoek voor AI-beoordeling, dus er is niets nieuws in de wachtrij gezet}}.",
+      "noChanges": "Er zijn geen transacties gewijzigd."
+    },
+    "done": {
+      "summary": "{count, plural, =0 {Er zijn geen transacties gewijzigd.} one {# transactie is gewijzigd.} other {# transacties zijn gewijzigd.}}",
+      "aiReviewsQueued": "{count, plural, one {# transactie is in de wachtrij voor AI-beoordeling gezet.} other {# transacties zijn in de wachtrij voor AI-beoordeling gezet.}}",
+      "aiReviewsAlreadyQueued": "{count, plural, one {# transactie had al een open verzoek voor AI-beoordeling en is daarom niet opnieuw in de wachtrij gezet.} other {# transacties hadden al een open verzoek voor AI-beoordeling en zijn daarom niet opnieuw in de wachtrij gezet.}}",
+      "undo": "Je kunt de uitvoering ongedaan maken via de actiegeschiedenis."
+    },
+    "missingInputs": {
+      "scheduledPayment": "een geplande betaling",
+      "managedTemplate": "een betaling gesplitst in aflossing en rente",
+      "scheduleCalendar": "een betalingsschema",
+      "interestCategory": "een rentecategorie",
+      "amortizationMonths": "de aflossingsperiode",
+      "paymentStartDate": "de eerste betaaldatum",
+      "paymentFrequency": "de betalingsfrequentie",
+      "originalPrincipal": "het oorspronkelijke bedrag",
+      "rate": "een rentevoet voor die datum",
+      "payment": "het betalingsbedrag",
+      "other": "een leninginstelling"
+    }
+  },
+  "applications": {
+    "title": "Geschiedenis",
+    "description": "De laatste transacties die deze regel heeft gewijzigd, de nieuwste eerst.",
+    "loading": "Geschiedenis wordt geladen...",
+    "error": {
+      "title": "De geschiedenis kon niet worden geladen",
+      "body": "Er wordt niets getoond omdat het verzoek mislukte, niet omdat de regel nog niet is uitgevoerd. Controleer je verbinding en probeer het opnieuw.",
+      "retry": "Opnieuw proberen"
+    },
+    "empty": {
+      "title": "Deze regel heeft nog niets gewijzigd",
+      "body": "Zodra ze een transactie wijzigt, staat de wijziging hier."
+    },
+    "source": {
+      "create": "Aangemaakt",
+      "import": "Geïmporteerd",
+      "manual": "Handmatige uitvoering",
+      "other": "Overig"
+    },
+    "table": {
+      "date": "Datum",
+      "payee": "Begunstigde",
+      "amount": "Bedrag",
+      "source": "Bron",
+      "change": "Wijziging",
+      "appliedAt": "Toegepast",
+      "open": "Transactie openen",
+      "noPayee": "Geen begunstigde",
+      "view": "Bekijken"
+    }
+  },
+  "words": {
+    "everyTransaction": "Elke transactie",
+    "group": {
+      "all": "Al deze:",
+      "any": "Een van deze:",
+      "notAll": "Niet al deze:",
+      "notAny": "Geen van deze:"
+    },
+    "leaf": "{field} {operator} {value}",
+    "leafNoValue": "{field} {operator}",
+    "range": "{from} en {to}",
+    "text": "‘{value}’",
+    "unknownCondition": "Een voorwaarde die deze versie niet kan tonen",
+    "unknownAction": "Een actie die deze versie niet kan tonen",
+    "action": {
+      "add_tags": "Tags toevoegen: {tags}",
+      "remove_tags": "Tags verwijderen: {tags}",
+      "set_category": "Categorie instellen op {name}{onlyIfEmpty, select, yes { (alleen als leeg)} other {}}",
+      "set_payee": "Begunstigde instellen op {name}{onlyIfEmpty, select, yes { (alleen als leeg)} other {}}",
+      "request_ai_review": "AI-controle aanvragen: {instruction}",
+      "set_payee_from_text": "Begunstigde instellen vanuit tekst: “{template}”{createIfMissing, select, yes { (aangemaakt als die ontbreekt)} other {}}{onlyIfEmpty, select, yes { (alleen als leeg)} other {}}",
+      "set_description": "Omschrijving instellen ({mode, select, append {toevoegen na} prepend {toevoegen vóór} other {vervangen}}): “{template}”{onlyIfEmpty, select, yes { (alleen als leeg)} other {}}",
+      "convert_to_transfer": "Omzetten naar een overboeking {direction, select, from {van} other {naar}} {account}",
+      "split": "Splitsen in: {parts}",
+      "settle_loan_installment": "De termijn van {account} aflossen die wordt betaald door een afschrijving tot {before, plural, one {# dag} other {# dagen}} voor of {after, plural, one {# dag} other {# dagen}} na de vervaldatum; een hogere afschrijving {excess, select, refuse {wordt ongewijzigd gelaten} other {betaalt extra aflossing}}, een lagere {shortfall, select, interest_first {betaalt eerst de rente} other {wordt ongewijzigd gelaten}}"
+    },
+    "splitPart": {
+      "transfer": "{amount} naar {account}",
+      "category": "{amount} als {category}",
+      "plain": "{amount}",
+      "rest": "de rest"
+    }
+  }
+}

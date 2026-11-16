@@ -1,7 +1,10 @@
 'use client';
 
-import { useState, useEffect, forwardRef, InputHTMLAttributes, FocusEvent } from 'react';
+import { useState, useEffect, useCallback, forwardRef, InputHTMLAttributes, FocusEvent } from 'react';
 import { cn, inputBaseClasses, inputErrorClasses } from '@/lib/utils';
+import { useNumberFormat } from '@/hooks/useNumberFormat';
+import { filterNumberTyping, formatNumberForEdit, parseLocaleNumber } from '@/lib/number-parse';
+import { roundToDecimals } from '@/lib/format';
 
 interface NumericInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'onChange' | 'value' | 'type'> {
   label?: string;
@@ -55,45 +58,50 @@ export const NumericInput = forwardRef<HTMLInputElement, NumericInputProps>(
     },
     ref
   ) => {
-    // Format value to specified decimal places
-    function formatValue(val: number | undefined | null, decimals: number): string {
-      if (val === undefined || val === null || isNaN(val)) {
-        return '';
-      }
-      return val.toFixed(decimals);
-    }
+    // Defensive default: a partial mock (or an older build mid rolling deploy)
+    // may not carry the separators; en-US keeps the previous behaviour. Read the
+    // primitive fields so `formatValue`/`parseValue` are stable across renders
+    // (the object identity from `?? {}` is not).
+    const nfSeparators = useNumberFormat().numberSeparators;
+    const sepDecimal = nfSeparators?.decimal ?? '.';
+    const sepGroup = nfSeparators?.group ?? ',';
+    const numberSeparators = {
+      decimal: sepDecimal,
+      group: sepGroup,
+      ...(nfSeparators?.nativeDecimal ? { nativeDecimal: nfSeparators.nativeDecimal } : {}),
+      ...(nfSeparators?.nativeGroup ? { nativeGroup: nfSeparators.nativeGroup } : {}),
+    };
+
+    // Format value to specified decimal places, in the user's decimal separator
+    // (no grouping) so the field round-trips a value they can read. Memoized on
+    // the separators so the sync effect below re-runs when the number locale
+    // changes -- the same fix CurrencyInput's formatDisplay carries.
+    const formatValue = useCallback(
+      (val: number | undefined | null, decimals: number): string =>
+        formatNumberForEdit(val, decimals, { decimal: sepDecimal, group: sepGroup }),
+      [sepDecimal, sepGroup],
+    );
 
     // Local display state - allows free typing
     const [displayValue, setDisplayValue] = useState(() => formatValue(value, decimalPlaces));
     const [isFocused, setIsFocused] = useState(false);
 
-    // Round to specified decimal places
-    function roundToDecimals(val: number, decimals: number): number {
-      const multiplier = Math.pow(10, decimals);
-      return Math.round(val * multiplier) / multiplier;
-    }
-
-    // Parse input string to number
+    // Parse input string to number, in the user's number convention.
     function parseValue(input: string): number | undefined {
-      const filtered = input.replace(/[^0-9.-]/g, '');
-      if (filtered === '' || filtered === '-' || filtered === '.') {
-        return undefined;
-      }
-      const parsed = parseFloat(filtered);
-      if (isNaN(parsed)) {
+      const parsed = parseLocaleNumber(input, numberSeparators);
+      if (parsed === undefined) {
         return undefined;
       }
       return roundToDecimals(parsed, decimalPlaces);
     }
 
-    // Sync from parent when value changes externally (e.g., form reset)
-    /* eslint-disable react-hooks/set-state-in-effect -- syncing display from prop changes */
+    // Sync from parent when value changes externally (e.g., form reset), and
+    // reformat if the number locale changes (formatValue is keyed on it).
     useEffect(() => {
       if (!isFocused) {
         setDisplayValue(formatValue(value, decimalPlaces));
       }
-    }, [value, isFocused, decimalPlaces]);
-    /* eslint-enable react-hooks/set-state-in-effect */
+    }, [value, isFocused, decimalPlaces, formatValue]);
 
     const inputId = id || `input-${label?.toLowerCase().replace(/\s+/g, '-')}`;
 
@@ -104,18 +112,19 @@ export const NumericInput = forwardRef<HTMLInputElement, NumericInputProps>(
     }
 
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      // Filter to only valid characters
-      let filtered = e.target.value.replace(/[^0-9.-]/g, '');
+      // Filter to valid characters, keeping both decimal candidates so parse can
+      // disambiguate them (parseLocaleNumber's job, not the filter's).
+      let filtered = filterNumberTyping(e.target.value, {
+        allowNegative,
+        separators: numberSeparators,
+      });
 
-      // Remove minus sign if negative not allowed
-      if (!allowNegative) {
-        filtered = filtered.replace(/-/g, '');
-      }
-
-      // Limit decimal places while typing
-      const parts = filtered.split('.');
-      if (parts.length > 1 && parts[1].length > decimalPlaces) {
-        filtered = parts[0] + '.' + parts[1].slice(0, decimalPlaces);
+      // Limit decimal places while typing, measured from the locale decimal
+      // separator (the grouping separator, if any, is disambiguated on parse).
+      const dec = numberSeparators.decimal;
+      const idx = filtered.indexOf(dec);
+      if (idx !== -1 && filtered.length - idx - dec.length > decimalPlaces) {
+        filtered = filtered.slice(0, idx + dec.length + decimalPlaces);
       }
 
       setDisplayValue(filtered);
@@ -185,7 +194,7 @@ export const NumericInput = forwardRef<HTMLInputElement, NumericInputProps>(
             id={inputId}
             type="text"
             inputMode="decimal"
-            placeholder={decimalPlaces > 0 ? `0.${'0'.repeat(decimalPlaces)}` : '0'}
+            placeholder={formatNumberForEdit(0, decimalPlaces, numberSeparators)}
             value={displayValue}
             onChange={handleChange}
             onBlur={handleBlur}

@@ -7,11 +7,98 @@
 #   - exposes healthchecks on every service so `docker compose up --wait`
 #     blocks until the app is actually ready to serve traffic
 #
+# Two shapes, one file. By default it is exactly what it has always been: one
+# backend, one frontend, `CLUSTER_MODE=single`. With the `cluster` profile it
+# becomes the two-replica stack the CI shard uses:
+#
+#   E2E_CLUSTER_MODE=multi E2E_INTERNAL_API_URL=http://api-lb \
+#     docker compose --profile cluster -f docker-compose.e2e.yml up -d --wait
+#
+# The profile is what keeps the default path untouched -- the Lighthouse job
+# reuses this file and its budgets must not move.
+#
 # The values below are non-secret, test-only defaults. Never reuse them
 # outside throwaway E2E runs.
+
+# One environment for both backend replicas. Split out as an anchor rather than
+# copied, because a difference between the two replicas would silently turn the
+# cluster shard into a test of two different applications.
+x-backend-env: &backend-env
+  NODE_ENV: development
+  PORT: 3000
+  DATABASE_HOST: postgres
+  DATABASE_PORT: 5432
+  DATABASE_NAME: monize
+  DATABASE_USER: monize_user
+  DATABASE_PASSWORD: monize_password
+  # RLS stays off for E2E (behavior identical to pre-RLS). Keys present so
+  # the compose files stay uniform; see docs/specs/row-level-security.md.
+  RLS_MODE: "off"
+  DATABASE_APP_USER: monize_app
+  DATABASE_APP_PASSWORD: ""
+  JWT_SECRET: test-jwt-secret-for-ci-minimum-32-characters-long
+  JWT_EXPIRATION: 15m
+  PUBLIC_APP_URL: http://localhost:3001
+  CORS_ORIGIN: http://localhost:3001
+  LOCAL_AUTH_ENABLED: "true"
+  REGISTRATION_ENABLED: "true"
+  FORCE_2FA: "false"
+  DEMO_MODE: "false"
+  # A real key, so the suite exercises the configuration every deployment
+  # should have: an E2E run that could not store a backup password would be
+  # testing the unencrypted fallback instead of the default path.
+  ENCRYPTION_KEY: test-encryption-key-for-ci-minimum-32-characters
+  # Raise rate limits so a full suite of registrations/logins from one IP
+  # doesn't trip the brute-force throttles. E2E-only; prod keeps defaults.
+  RATE_LIMIT_MAX: "100000"
+  # `single` unless the run asks for the two-replica stack. Unset is `single`
+  # too, so the default path is the behaviour this file has always had.
+  CLUSTER_MODE: ${E2E_CLUSTER_MODE:-single}
+  # Read only under CLUSTER_MODE=multi, where the boot refuses to start without
+  # it. True here rather than asserted blindly: both replicas mount the
+  # `backup-data` volume below, and a single-host compose volume is shared by
+  # definition -- which is the case the refusal's own message names.
+  BACKUP_SHARED_VOLUME: "true"
+
+# Everything the two backend replicas share but their ports. `image` is pinned
+# so the second service reuses the first's build rather than producing a second
+# copy of the same layers under a generated name.
+x-backend: &backend
+  build:
+    context: .
+    dockerfile: backend/Dockerfile
+    target: development
+  image: monize-e2e-backend:local
+  depends_on:
+    postgres:
+      condition: service_healthy
+  networks:
+    - e2e-network
+  volumes:
+    # Automatic backups. One volume for both replicas: this is what makes
+    # BACKUP_SHARED_VOLUME=true above a fact rather than a claim.
+    - backup-data:/data/backups
+  # Build once, then run the compiled output directly. `start:dev` (nest
+  # --watch) would recompile the whole app a second time, roughly doubling
+  # boot time on a 2-core CI runner -- and E2E needs no file watching.
+  #
+  # Both replicas run db-init and db-migrate. That is deliberate: they take the
+  # lifecycle advisory lock and re-read their state after acquiring it
+  # (backend/src/common/db/advisory-locks.ts), so two containers starting
+  # together against one database is itself part of what the cluster shard
+  # proves.
+  command: sh -c "npm run build && node dist/db-init.js && node dist/db-migrate.js && node dist/main.js"
+  healthcheck:
+    test:
+      ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3000/api/v1/health || exit 1"]
+    interval: 10s
+    timeout: 10s
+    retries: 50
+    start_period: 120s
+
 services:
   postgres:
-    image: postgres:16-alpine
+    image: mirror.gcr.io/library/postgres:18-alpine@sha256:b6972e1115a4ff8eba5d7f7d19184926d1e16d7d1136ae1e1a7ebf286da0f015
     environment:
       POSTGRES_DB: monize
       POSTGRES_USER: monize_user
@@ -26,56 +113,52 @@ services:
       retries: 10
 
   backend:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
-      target: development
-    depends_on:
-      postgres:
-        condition: service_healthy
-    environment:
-      NODE_ENV: development
-      PORT: 3000
-      DATABASE_HOST: postgres
-      DATABASE_PORT: 5432
-      DATABASE_NAME: monize
-      DATABASE_USER: monize_user
-      DATABASE_PASSWORD: monize_password
-      # RLS stays off for E2E (behavior identical to pre-RLS). Keys present so
-      # the compose files stay uniform; see docs/future-plans/row-level-security.md.
-      RLS_MODE: "off"
-      DATABASE_APP_USER: monize_app
-      DATABASE_APP_PASSWORD: ""
-      JWT_SECRET: test-jwt-secret-for-ci-minimum-32-characters-long
-      JWT_EXPIRATION: 15m
-      PUBLIC_APP_URL: http://localhost:3001
-      CORS_ORIGIN: http://localhost:3001
-      LOCAL_AUTH_ENABLED: "true"
-      REGISTRATION_ENABLED: "true"
-      FORCE_2FA: "false"
-      DEMO_MODE: "false"
-      # A real key, so the suite exercises the configuration every deployment
-      # should have: an E2E run that could not store a backup password would be
-      # testing the unencrypted fallback instead of the default path.
-      ENCRYPTION_KEY: test-encryption-key-for-ci-minimum-32-characters
-      # Raise rate limits so a full suite of registrations/logins from one IP
-      # doesn't trip the brute-force throttles. E2E-only; prod keeps defaults.
-      RATE_LIMIT_MAX: "100000"
+    <<: *backend
+    environment: *backend-env
     ports:
       - "3000:3000"
+
+  # The second replica. Same image, same environment, no host port: traffic
+  # reaches it only through `api-lb`, exactly as a pod behind a Service does.
+  backend-2:
+    <<: *backend
+    environment: *backend-env
+    profiles:
+      - cluster
+
+  # Round-robin over the two replicas, with no affinity of any kind. The
+  # frontend's INTERNAL_API_URL points here in the cluster shard, so every API
+  # call the browser makes alternates replicas.
+  api-lb:
+    image: mirror.gcr.io/library/nginx:1.29-alpine@sha256:5616878291a2eed594aee8db4dade5878cf7edcb475e59193904b198d9b830de
+    profiles:
+      - cluster
+    depends_on:
+      backend:
+        condition: service_healthy
+      backend-2:
+        condition: service_healthy
+    volumes:
+      - ./e2e/cluster/api-lb.conf:/etc/nginx/conf.d/default.conf:ro
+    # Published so a spec can read `X-E2E-Upstream` one hop before the frontend
+    # proxy: when the app path shows only one replica, this says whether the
+    # fixture or the proxy's header forwarding is at fault.
+    ports:
+      - "3002:80"
     networks:
       - e2e-network
-    # Build once, then run the compiled output directly. `start:dev` (nest
-    # --watch) would recompile the whole app a second time, roughly doubling
-    # boot time on a 2-core CI runner -- and E2E needs no file watching.
-    command: sh -c "npm run build && node dist/db-init.js && node dist/db-migrate.js && node dist/main.js"
+    # 127.0.0.1, not localhost, and that is the whole of a CI cycle's lesson.
+    # The official image's entrypoint rewrites `listen 80` into `listen [::]:80`
+    # at start-up; the read-only mount above stops it, so nginx binds IPv4 only
+    # while `localhost` resolves to ::1 first in the container. The backends get
+    # away with `localhost` because Node binds dual-stack. A literal address
+    # depends on no resolution order at all.
     healthcheck:
       test:
-        ["CMD-SHELL", "wget -q -O /dev/null http://localhost:3000/api/v1/health || exit 1"]
-      interval: 10s
-      timeout: 10s
-      retries: 50
-      start_period: 120s
+        ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1/api/v1/health || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
 
   frontend:
     build:
@@ -87,8 +170,19 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: development
-      INTERNAL_API_URL: http://backend:3000
+      # The single backend by default; the load balancer in the cluster shard.
+      # Not a `depends_on` on api-lb: that service lives in a profile, and a
+      # dependency across a profile boundary is a startup-order hazard for the
+      # default path. `up --wait` holds the run until every started service is
+      # healthy, which covers it.
+      INTERNAL_API_URL: ${E2E_INTERNAL_API_URL:-http://backend:3000}
       PUBLIC_APP_URL: http://localhost:3001
+      # Turbopack's on-disk dev cache (frontend/next.config.js) stalls requests
+      # for 10-50s while it writes and compacts, and a throwaway container
+      # never restarts into it. Off, a cold run of the specs that used to fail
+      # their first attempt went from 6 of 18 failing in 8.9 min to all 18
+      # passing in 4.5 min.
+      NEXT_DEV_FILESYSTEM_CACHE: "false"
     ports:
       - "3001:3000"
     networks:
@@ -100,6 +194,9 @@ services:
       timeout: 10s
       retries: 50
       start_period: 60s
+
+volumes:
+  backup-data:
 
 networks:
   e2e-network:

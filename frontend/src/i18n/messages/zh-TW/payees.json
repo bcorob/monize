@@ -8,9 +8,11 @@
     "autoMergePayees": "自動合併收款人",
     "newPayee": "+ 新增收款人",
     "searchPlaceholder": "搜尋收款人...",
+    "statusFilterLabel": "狀態",
     "statusAll": "全部（{count}）",
     "statusActive": "啟用中（{count}）",
     "statusInactive": "未啟用（{count}）",
+    "categoryFilterLabel": "預設類別",
     "categoryFilterAll": "全部收款人（{count}）",
     "categoryFilterNoCategory": "無預設類別（{count}）",
     "categoryFilterUncategorized": "未分類交易（{count}）",
@@ -34,7 +36,8 @@
       "inactive": "未啟用",
       "withoutCategory": "無類別"
     },
-    "applyDefaultCategories": "套用預設類別"
+    "applyDefaultCategories": "套用預設類別",
+    "lookupSettings": "收款人查詢設定"
   },
   "list": {
     "columns": {
@@ -82,13 +85,27 @@
     "categoryLabel": "預設類別",
     "notesLabel": "備註（選填）",
     "websiteLabel": "網站",
+    "addressLabel": "地址",
+    "emailLabel": "電子郵件",
+    "phoneLabel": "電話",
     "submitCreate": "建立收款人",
     "submitUpdate": "更新收款人",
     "applyCategoryLabel": "將此類別套用至現有交易",
     "applyCategoryNone": "不更改現有交易",
     "applyCategoryUncategorized": "僅限無類別的交易（{count}）",
     "applyCategoryAll": "所有交易（{count}）",
-    "applyCategoryHelp": "轉帳與分帳交易不會被更改。"
+    "applyCategoryHelp": "轉帳與分帳交易不會被更改。",
+    "lookup": {
+      "button": "查詢資訊",
+      "searching": "正在查詢聯絡資訊...",
+      "suggested": "來自查詢的建議：",
+      "replaced": "已由查詢取代：",
+      "clear": "復原查詢所做的變更",
+      "nothingFound": "找不到此名稱的公開聯絡資訊。",
+      "noProvider": "請在<link>收款人查詢設定</link>中設定查詢來源，以尋找聯絡資訊。",
+      "failed": "查詢無法完成，請稍後再試。",
+      "quotaExceeded": "本月的 Google Places 查詢次數已用完。請在<link>收款人查詢設定</link>中提高上限，或等到下個月。"
+    }
   },
   "merge": {
     "title": "合併收款人",
@@ -112,7 +129,6 @@
   },
   "categoryAutoAssign": {
     "title": "自動指定預設類別",
-    "howItWorksTitle": "運作方式",
     "howItWorksBody": "此功能分析您的交易歷史，為收款人建議預設類別。它會查看每個收款人最常使用的類別，並建議將其設為未來交易的預設類別。您可以隨時覆蓋預設類別。",
     "minTransactionsLabel": "最少交易數：{count}",
     "minTransactionsHelp": "僅考慮至少有此筆數交易的收款人",
@@ -133,6 +149,7 @@
       "line2": "請嘗試調整上方設定。"
     },
     "columns": {
+      "assign": "指定",
       "payee": "收款人",
       "suggestedCategory": "建議類別",
       "match": "符合度"
@@ -150,7 +167,6 @@
   },
   "autoMerge": {
     "title": "自動合併收款人",
-    "howItWorksTitle": "運作方式",
     "howItWorksBody": "此功能掃描您的收款人，並將名稱有包含關係的變體分組——例如「Lidl」、「LIDL sp. z o.o.」和「LIDL WARSZAWA 0421」都以「Lidl」為基礎。每個群組會合併為單一標準收款人，並建立萬用字元別名（例如「*LIDL*」），以便未來匯入時自動比對。僅共用常見詞彙的收款人（如「Royal Electric」和「Royal City Nursery」）將保持獨立。請在套用前審查並調整每個群組。",
     "backupRecommendation": "建議：在進行變更前先建立 <link>備份</link>。",
     "minGroupSizeLabel": "最小群組大小：{count}",
@@ -210,7 +226,6 @@
   },
   "deactivateUnused": {
     "title": "停用未使用的收款人",
-    "howItWorksTitle": "運作方式",
     "howItWorksBody": "此功能找出鮮少使用的收款人並停用它們。停用的收款人不會出現在建立交易時的收款人下拉選單中，但其歷史交易將被保留。您可以隨時從收款人列表重新啟用收款人。",
     "maxTransactionsLabel": "{count, plural, one {# 筆或更少的交易} other {# 筆或更少的交易}}",
     "maxTransactionsHelp": "僅包含此筆數或更少交易的收款人",
@@ -228,6 +243,7 @@
       "line2": "請嘗試調整上方設定。"
     },
     "columns": {
+      "deactivate": "停用",
       "payee": "收款人",
       "transactions": "交易",
       "lastUsed": "最後使用"
@@ -243,7 +259,7 @@
     }
   },
   "reactivate": {
-    "title": "重新啟用收款人？",
+    "title": "重新啟用收款人",
     "message": "收款人「{name}」先前已被停用。是否要重新啟用，使其再次出現在收款人下拉選單中？",
     "keepInactiveButton": "否，保持停用",
     "reactivateButton": "重新啟用",
@@ -252,7 +268,7 @@
   "aliases": {
     "heading": "別名",
     "description": "別名將匯入的收款人名稱對應至此收款人。使用 * 作為萬用字元（例如：「STARBUCKS*」）。不區分大小寫。",
-    "loading": "載入中...",
+    "loading": "正在載入別名...",
     "noAliases": "尚未設定別名",
     "removeTitle": "移除別名",
     "removeButton": "移除",
@@ -270,7 +286,10 @@
   },
   "selectCategoryPlaceholder": "選擇類別...",
   "validation": {
-    "nameRequired": "收款人名稱為必填"
+    "nameRequired": "收款人名稱為必填",
+    "emailInvalid": "請輸入有效的電子郵件地址",
+    "phoneInvalid": "請輸入有效的電話號碼",
+    "phoneNeedsCountryCode": "請加上國碼，例如 +1 206 448 8762"
   },
   "defaultCategoryBackfill": {
     "allConfirmTitle": "套用預設類別？",

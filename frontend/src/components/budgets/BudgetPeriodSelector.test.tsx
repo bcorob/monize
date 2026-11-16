@@ -1,7 +1,9 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@/test/render';
 import { BudgetPeriodSelector } from './BudgetPeriodSelector';
 import type { BudgetPeriod } from '@/types/budget';
+import type { UserPreferences } from '@/types/auth';
+import { usePreferencesStore } from '@/store/preferencesStore';
 
 const mockPeriods: BudgetPeriod[] = [
   {
@@ -122,5 +124,33 @@ describe('BudgetPeriodSelector', () => {
     fireEvent.change(select, { target: { value: '' } });
 
     expect(handleChange).toHaveBeenCalledWith(null);
+  });
+
+  describe('in the reader\'s language', () => {
+    // Reset before each test, while nothing is mounted: a store write under a
+    // mounted tree re-renders it outside act().
+    beforeEach(() => {
+      usePreferencesStore.setState({ preferences: null });
+    });
+
+    it('names the month through useChartDateFormat, not a fixed English pattern', () => {
+      usePreferencesStore.setState({
+        preferences: { language: 'fr' } as UserPreferences,
+      });
+      render(
+        <BudgetPeriodSelector
+          periods={mockPeriods}
+          selectedPeriodId={null}
+          onPeriodChange={vi.fn()}
+        />,
+      );
+
+      const expected = new Intl.DateTimeFormat('fr', { month: 'short', year: 'numeric' }).format(
+        new Date(2026, 0, 1),
+      );
+      expect(expected).not.toBe('Jan 2026');
+      expect(screen.getByText(expected)).toBeInTheDocument();
+      expect(screen.queryByText('Jan 2026')).toBeNull();
+    });
   });
 });

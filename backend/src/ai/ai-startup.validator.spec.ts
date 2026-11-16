@@ -77,6 +77,7 @@ describe("AiStartupValidator", () => {
           model: "claude-sonnet-4-20250514",
           apiKeyEnc: "encrypted-default",
         }),
+        "any",
       );
       expect(isAvailable).toHaveBeenCalled();
 
@@ -161,6 +162,7 @@ describe("AiStartupValidator", () => {
       expect(mockEncryptionService.encrypt).not.toHaveBeenCalled();
       expect(mockProviderFactory.createProvider).toHaveBeenCalledWith(
         expect.objectContaining({ apiKeyEnc: null }),
+        "any",
       );
     });
 

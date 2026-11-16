@@ -16,12 +16,13 @@
     "chartUnavailable": "Chart temporarily unavailable"
   },
   "viewTabs": {
-    "list": "List",
-    "calendar": "Calendar",
+    "filterLabel": "Schedule type",
     "filterAll": "All ({count})",
     "filterBills": "Bills ({count})",
     "filterDeposits": "Deposits ({count})",
-    "todayButton": "Today"
+    "chipBills": "Bills",
+    "chipDeposits": "Deposits",
+    "clearType": "Show all schedule types"
   },
   "form": {
     "titleNew": "New Scheduled Transaction",
@@ -53,7 +54,11 @@
     "totalOfAccounts": "Total of Accounts",
     "legendAriaLabel": "Forecast lines",
     "tooltipTransactionForAccount": "{name} ({account})",
-    "unavailableMissingRates": "This forecast cannot be shown in {displayCurrency}: no exchange rate is available for {currencies}, and a projected balance builds on every day before it. Add a rate, or pick a single-currency account."
+    "unavailableMissingRates": "This forecast cannot be shown in {displayCurrency}: no exchange rate is available for {currencies}, and a projected balance builds on every day before it. Add a rate, or pick a single-currency account.",
+    "untitledTransaction": "Transaction",
+    "tooltipEstimated": "(estimated)",
+    "unavailableUnknownEstimates": "This forecast cannot be shown yet: the estimated amount of a bill in it is unknown, and a projected balance builds on every day before it. Enter that occurrence's amount, or turn off Estimate on the bill.",
+    "unknownEstimateItem": "{name}: {reason}"
   },
   "calendar": {
     "days": {
@@ -72,5 +77,11 @@
     "notFound": "Scheduled payment not found",
     "loadFailed": "Failed to load scheduled transactions",
     "overridesDeleteFailed": "Failed to delete overrides"
+  },
+  "toolbar": {
+    "showing": "Showing <b>{shown}</b> of <b>{total}</b> bills and deposits",
+    "exportButton": "Export",
+    "exportTitle": "Export bills and deposits to CSV",
+    "exported": "{count, plural, one {Exported # schedule} other {Exported # schedules}}"
   }
 }

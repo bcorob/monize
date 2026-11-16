@@ -38,20 +38,23 @@ vi.mock('@/hooks/useDateFormat', () => ({
   useDateFormat: () => ({ formatDate: (d: string) => d, dateFormat: 'YYYY-MM-DD', datePattern: 'YYYY-MM-DD' }),
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (n: number) => `$${n.toFixed(2)}`,
-    formatCurrencyPrecise: (n: number) => {
-      const abs = Math.abs(n);
-      let digits = 2;
-      if (n !== 0 && abs < 0.005) {
-        digits = Math.min(6, Math.max(2, -Math.floor(Math.log10(abs)) + 2));
-      }
-      return `$${n.toFixed(digits)}`;
-    },
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (n: number) => `$${n.toFixed(2)}`,
+      formatCurrencyPrecise: (n: number) => {
+        const abs = Math.abs(n);
+        let digits = 2;
+        if (n !== 0 && abs < 0.005) {
+          digits = Math.min(6, Math.max(2, -Math.floor(Math.log10(abs)) + 2));
+        }
+        return `$${n.toFixed(digits)}`;
+      },
+    }),
+  };
+});
 vi.mock('react-hot-toast', () => ({
   default: { success: vi.fn(), error: vi.fn() },
 }));
@@ -207,6 +210,74 @@ describe('SecurityTransactionHistory', () => {
       expect(investmentsApi.getSecurityTransactionHistory).toHaveBeenCalledTimes(2);
     });
     expect(onChanged).toHaveBeenCalled();
+  });
+
+  it('wraps each row into a labelled grid card below the mobile breakpoint', async () => {
+    // One tree restyled by CSS: below `sm` the row is a `grid` card and every
+    // bare figure names its column with a caption; from `sm` up it is the
+    // ordinary table. jsdom applies no breakpoint, so assert the classes and
+    // the captions that ride in the markup at every width.
+    await renderHistory();
+    await waitFor(() => {
+      expect(screen.getByLabelText('Account')).toBeInTheDocument();
+    });
+
+    // Every data row carries the wrapped-card grid and restores the table row
+    // at `sm`, so a phone needs no horizontal scroll.
+    const dataRows = screen
+      .getAllByRole('row')
+      .filter((row) => row.className.includes('grid grid-cols-4'));
+    expect(dataRows).toHaveLength(historyData.transactions.length);
+    for (const row of dataRows) {
+      expect(row.className).toContain('sm:table-row');
+    }
+
+    // The per-row captions name each column a phone reader can no longer see in
+    // a header: one caption per data row, plus the desktop header cell that
+    // stays in the DOM (hidden below `sm`).
+    for (const caption of ['Quantity', 'Running Total', 'Price', 'Amount']) {
+      expect(screen.getAllByText(caption).length).toBe(historyData.transactions.length + 1);
+    }
+  });
+
+  it('keeps the Amount cell in the base desktop colour and shrinks figures to text-xs on a phone', async () => {
+    // The `sm`+ resolved output must stay byte-identical to the pre-card table:
+    // the Amount cell wears the muted `text-gray-700` the base table used (it
+    // was briefly bumped to `text-gray-900`), and every figure cell renders
+    // `text-xs` on the phone but `sm:text-sm` from `sm` up, so a quarter-width
+    // card row cannot reopen horizontal scroll while the desktop size is unchanged.
+    await renderHistory();
+    await waitFor(() => {
+      expect(screen.getByLabelText('Account')).toBeInTheDocument();
+    });
+
+    const cells = screen.getAllByRole('cell');
+
+    // The Amount cell is the only one at col-start-3 / col-span-2 / row-start-1.
+    const amountCells = cells.filter(
+      (c) =>
+        c.className.includes('col-start-3') &&
+        c.className.includes('col-span-2') &&
+        c.className.includes('row-start-1'),
+    );
+    expect(amountCells).toHaveLength(historyData.transactions.length);
+    for (const cell of amountCells) {
+      const classes = cell.className.split(/\s+/);
+      expect(classes).toContain('text-gray-700');
+      expect(classes).toContain('dark:text-gray-300');
+      expect(classes).not.toContain('text-gray-900');
+    }
+
+    // Every figure cell (MONEY_CELL) shrinks on the phone and restores at `sm`.
+    const figureCells = cells.filter((c) => c.className.includes('sm:text-sm'));
+    expect(figureCells.length).toBeGreaterThan(0);
+    for (const cell of figureCells) {
+      const classes = cell.className.split(/\s+/);
+      expect(classes).toContain('text-xs');
+      expect(classes).toContain('sm:text-sm');
+      // Desktop size is unchanged: no bare `text-sm`, only the `sm:` variant.
+      expect(classes).not.toContain('text-sm');
+    }
   });
 
   it('shows an empty state when there are no transactions', async () => {

@@ -15,6 +15,7 @@ import { CustomReport } from '@/types/custom-report';
 import { investmentReportsApi } from '@/lib/investment-reports';
 import { InvestmentReport } from '@/types/investment-report';
 import { getIconComponent } from '@/components/ui/IconPicker';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { TOUR_ANCHORS, tourAnchor } from '@/lib/tours/anchors';
 import { createLogger } from '@/lib/logger';
@@ -28,6 +29,8 @@ import {
 
 import { useDensityPreference } from '@/store/densityStore';
 import { DensityToggle } from '@/components/ui/DensityToggle';
+import { SEGMENTED_GROUP_CLASS, segmentClass } from '@/components/ui/segmented-control';
+import { useMobileAddAction } from '@/store/mobileAddActionStore';
 
 const logger = createLogger('Reports');
 
@@ -43,6 +46,14 @@ function ReportsContent() {
   const t = useTranslations('reports');
   const router = useRouter();
   const { density } = useDensityPreference('reports');
+  // Below the mobile breakpoint the catalogue is a compact tile grid rather than
+  // one of the three desktop density layouts: the big-card, medium-card and
+  // list variants all waste a phone's width. This is a presentation switch (the
+  // same figures, tap-to-open, favourite and tour anchors all still work), which
+  // is exactly what `useIsMobile` is for -- the same call the register makes for
+  // its `wrapped` card rows. Only one branch mounts, so each tour anchor still
+  // lives in exactly one element.
+  const isMobile = useIsMobile();
   const [categoryFilter, setCategoryFilter] = useLocalStorage<ReportCategory | 'all'>('monize-reports-category', 'all');
   // `?category=` overrides the remembered filter for this visit, so a link can
   // guarantee a given report is on screen whatever the user last filtered by
@@ -268,24 +279,33 @@ function ReportsContent() {
   const getReportDescription = (report: Report): string =>
     report.description ?? t(`page.descriptions.${report.id}` as Parameters<typeof t>[0]);
 
+  // The reports the search admits, before the category filter: what each
+  // category segment counts, so a count says what pressing it would show.
+  const searchMatches = useMemo(() => {
+    if (!debouncedSearchQuery) return allReports;
+    const q = debouncedSearchQuery.toLowerCase();
+    return allReports.filter(r => {
+      const name = r.name ?? t(`page.names.${r.id}` as Parameters<typeof t>[0]);
+      const desc = r.description ?? t(`page.descriptions.${r.id}` as Parameters<typeof t>[0]);
+      return name.toLowerCase().includes(q) || desc.toLowerCase().includes(q);
+    });
+  }, [allReports, debouncedSearchQuery, t]);
+
+  const categoryCounts = useMemo(() => {
+    const counts = new Map<ReportCategory, number>();
+    for (const r of searchMatches) counts.set(r.category, (counts.get(r.category) ?? 0) + 1);
+    return counts;
+  }, [searchMatches]);
+
   const filteredReports = useMemo(() => {
     const isFavourite = (report: Report): boolean =>
       report.isCustom || report.isInvestment
         ? report.isFavourite ?? false
         : favouriteReportIds.includes(report.id);
-    const q = debouncedSearchQuery.toLowerCase();
-    return allReports
-      .filter(r => {
-        if (effectiveCategory !== 'all' && r.category !== effectiveCategory) return false;
-        if (debouncedSearchQuery) {
-          const name = r.name ?? t(`page.names.${r.id}` as Parameters<typeof t>[0]);
-          const desc = r.description ?? t(`page.descriptions.${r.id}` as Parameters<typeof t>[0]);
-          return name.toLowerCase().includes(q) || desc.toLowerCase().includes(q);
-        }
-        return true;
-      })
+    return searchMatches
+      .filter(r => effectiveCategory === 'all' || r.category === effectiveCategory)
       .sort((a, b) => Number(isFavourite(b)) - Number(isFavourite(a)));
-  }, [allReports, effectiveCategory, debouncedSearchQuery, favouriteReportIds, t]);
+  }, [searchMatches, effectiveCategory, favouriteReportIds]);
 
   const handleReportClick = (reportId: string) => {
     router.push(`/reports/${reportId}`);
@@ -307,6 +327,8 @@ function ReportsContent() {
     return {};
   };
 
+  useMobileAddAction(t('page.newReport'), () => router.push('/reports/custom/new'));
+
   return (
     <PageLayout>
 
@@ -314,7 +336,7 @@ function ReportsContent() {
         <PageHeader
           title={t('page.title')}
           subtitle={t('page.subtitle')}
-          helpUrl="https://github.com/kenlasko/monize/wiki/Reports"
+          help='reports'
           actions={
             <NewReportButton
               onNewStandard={() => router.push('/reports/custom/new')}
@@ -335,34 +357,106 @@ function ReportsContent() {
 
         {/* Category Filter */}
         <div className="mb-6 flex flex-wrap items-center gap-2">
-          <button
-            onClick={() => selectCategory('all')}
-            className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              effectiveCategory === 'all'
-                ? 'bg-blue-600 text-white'
-                : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-600'
-            }`}
+          <div
+            className={`${SEGMENTED_GROUP_CLASS} flex-wrap`}
+            role="group"
+            aria-label={t('page.tableCategory')}
           >
-            {t('page.allReports')}
-          </button>
-          {REPORT_CATEGORIES.map((cat) => (
             <button
-              key={cat}
-              onClick={() => selectCategory(cat)}
-              className={`px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                effectiveCategory === cat
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-600'
-              }`}
+              type="button"
+              aria-pressed={effectiveCategory === 'all'}
+              onClick={() => selectCategory('all')}
+              className={segmentClass(effectiveCategory === 'all')}
             >
-              {t(`page.categories.${cat}` as Parameters<typeof t>[0])}
+              {t('page.categoryWithCount', {
+                label: t('page.allReports'),
+                count: searchMatches.length,
+              })}
             </button>
-          ))}
-          <DensityToggle view="reports" size="chip" className="ml-auto justify-center" />
+            {REPORT_CATEGORIES.map((cat) => (
+              <button
+                key={cat}
+                type="button"
+                aria-pressed={effectiveCategory === cat}
+                onClick={() => selectCategory(cat)}
+                className={segmentClass(effectiveCategory === cat)}
+              >
+                {t('page.categoryWithCount', {
+                  label: t(`page.categories.${cat}` as Parameters<typeof t>[0]),
+                  count: categoryCounts.get(cat) ?? 0,
+                })}
+              </button>
+            ))}
+          </div>
+          {/* Density is a desktop-only concern: the mobile tile grid ignores it
+              entirely, so the toggle is hidden there rather than silently
+              mutating the persisted desktop density from a control that does
+              nothing on screen. Gated the same way the tile grid is. */}
+          {!isMobile && (
+            <DensityToggle view="reports" size="chip" className="ml-auto justify-center" />
+          )}
         </div>
 
         {/* Reports Grid */}
-        {density === 'normal' && (
+        {/* Mobile: a compact 2-column tile grid (icon, name, category chip). The
+            long description is dropped so several reports fit a phone screen at
+            once. The favourite toggle is a SIBLING of the tile button, never a
+            descendant, so no interactive element nests inside a <button>. */}
+        {isMobile && (
+          <div className="grid grid-cols-2 gap-3">
+            {filteredReports.map((report) => {
+              const bgColor = managedBackgroundColor(report);
+              const colorClass = report.color || 'bg-purple-500';
+
+              return (
+                <div
+                  key={report.id}
+                  {...reportTourAnchor(report)}
+                  className="relative group"
+                >
+                  <button
+                    onClick={() => handleReportClick(report.id)}
+                    className="w-full h-full bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 border border-gray-200 dark:border-gray-700 p-3 text-left flex flex-col gap-2 hover:shadow-md dark:hover:shadow-gray-700/70 transition-shadow motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  >
+                    <div
+                      className={`${!bgColor ? `${colorClass} bg-opacity-20 dark:bg-opacity-30` : ''} rounded-lg p-2 w-fit flex-shrink-0`}
+                      style={bgColor ? { backgroundColor: `${bgColor}40` } : undefined}
+                    >
+                      <div className="text-gray-700 dark:text-gray-200 [&>svg]:h-6 [&>svg]:w-6">
+                        {report.icon}
+                      </div>
+                    </div>
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors motion-reduce:transition-none line-clamp-2">
+                      {getReportName(report)}
+                    </h3>
+                    <span className={`w-fit px-2 py-0.5 text-xs font-medium rounded ${categoryColors[report.category]}`}>
+                      {t(`page.categories.${report.category}` as Parameters<typeof t>[0])}
+                    </span>
+                  </button>
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={(e) => handleToggleFavourite(e, report)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleToggleFavourite(e as unknown as React.MouseEvent, report); } }}
+                    className="absolute top-2 right-2 p-2 rounded-full bg-white/70 dark:bg-gray-800/70 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    title={isReportFavourite(report) ? t('page.removeFavourite') : t('page.addFavourite')}
+                  >
+                    <svg
+                      className={`w-4 h-4 ${isReportFavourite(report) ? 'text-yellow-500' : 'text-gray-300 dark:text-gray-500'}`}
+                      fill={isReportFavourite(report) ? 'currentColor' : 'none'}
+                      stroke="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                    </svg>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {!isMobile && density === 'normal' && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filteredReports.map((report) => {
               const bgColor = managedBackgroundColor(report);
@@ -424,7 +518,7 @@ function ReportsContent() {
           </div>
         )}
 
-        {density === 'compact' && (
+        {!isMobile && density === 'compact' && (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {filteredReports.map((report) => {
               const bgColor = managedBackgroundColor(report);
@@ -481,7 +575,7 @@ function ReportsContent() {
           </div>
         )}
 
-        {density === 'dense' && (
+        {!isMobile && density === 'dense' && (
           <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 overflow-hidden">
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-900/50">

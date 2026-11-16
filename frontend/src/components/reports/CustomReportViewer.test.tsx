@@ -7,14 +7,17 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
-vi.mock("@/hooks/useNumberFormat", () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (n: number) => `$${n.toFixed(2)}`,
-    formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
-    defaultCurrency: "CAD",
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (n: number) => `$${n.toFixed(2)}`,
+      formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
+      defaultCurrency: "CAD",
+    }),
+};
+});
 vi.mock("@/hooks/useDateFormat", () => ({
   useDateFormat: () => ({
     formatDate: (d: string) => d,
@@ -43,7 +46,35 @@ vi.mock("@/components/ui/Select", () => ({
 }));
 
 vi.mock("@/components/reports/ReportChart", () => ({
-  ReportChart: () => <div data-testid="report-chart" />,
+  ReportChart: ({
+    data,
+    onDataPointClick,
+    partialTotal,
+    totalLabel,
+    signed,
+  }: {
+    data?: Array<{ id?: string }>;
+    onDataPointClick?: (id: string) => void;
+    partialTotal?: { excludedCount: number } | null;
+    totalLabel?: string;
+    signed?: boolean;
+  }) => (
+    <div
+      data-testid="report-chart"
+      data-partial={partialTotal ? String(partialTotal.excludedCount) : ""}
+      data-total-label={totalLabel ?? ""}
+      data-signed={signed ? "true" : "false"}
+    >
+      {(data ?? []).map((item) => (
+        <button
+          key={item.id}
+          type="button"
+          data-testid={`chart-point-${item.id}`}
+          onClick={() => item.id && onDataPointClick?.(item.id)}
+        />
+      ))}
+    </div>
+  ),
 }));
 
 vi.mock("@/components/ui/IconPicker", () => ({
@@ -263,7 +294,7 @@ describe("CustomReportViewer", () => {
       viewType: "BAR_CHART",
       groupBy: "PAYEE",
       data: [
-        { label: "Amazon", value: 300, count: 5, id: "p-1", color: "#3b82f6" },
+        { label: "Amazon", value: 300, count: 5, id: "22222222-2222-4222-8222-222222222222", color: "#3b82f6" },
       ],
       summary: { total: 300, count: 5 },
       timeframe: {
@@ -330,7 +361,7 @@ describe("CustomReportViewer", () => {
           label: "Groceries",
           value: 500,
           count: 20,
-          id: "cat-1",
+          id: "11111111-1111-4111-8111-111111111111",
           color: "#ff0000",
         },
       ],
@@ -347,7 +378,7 @@ describe("CustomReportViewer", () => {
     });
     fireEvent.click(screen.getByText("Groceries"));
     expect(mockPush).toHaveBeenCalledWith(
-      "/transactions?startDate=2024-10-01&endDate=2025-01-01&categoryId=cat-1",
+      "/transactions?categoryIds=11111111-1111-4111-8111-111111111111&startDate=2024-10-01&endDate=2025-01-01",
     );
   });
 
@@ -369,7 +400,7 @@ describe("CustomReportViewer", () => {
       viewType: "BAR_CHART",
       groupBy: "PAYEE",
       data: [
-        { label: "Amazon", value: 300, count: 5, id: "p-1", color: "#3b82f6" },
+        { label: "Amazon", value: 300, count: 5, id: "22222222-2222-4222-8222-222222222222", color: "#3b82f6" },
       ],
       summary: { total: 300, count: 5 },
       timeframe: {
@@ -384,7 +415,49 @@ describe("CustomReportViewer", () => {
     });
     fireEvent.click(screen.getByText("Amazon"));
     expect(mockPush).toHaveBeenCalledWith(
-      "/transactions?startDate=2024-10-01&endDate=2025-01-01&payeeId=p-1",
+      "/transactions?payeeIds=22222222-2222-4222-8222-222222222222&startDate=2024-10-01&endDate=2025-01-01",
+    );
+  });
+
+  it("opens a listed transaction under the report's own filters and flashes it", async () => {
+    const account = "33333333-3333-4333-8333-333333333333";
+    const category = "44444444-4444-4444-8444-444444444444";
+    const tx = "55555555-5555-4555-8555-555555555555";
+    mockGetById.mockResolvedValue({
+      id: "rpt-1",
+      name: "Christmas",
+      viewType: "TABLE",
+      timeframeType: "YEAR_TO_DATE",
+      groupBy: "NONE",
+      config: {
+        metric: "NONE",
+        direction: "EXPENSES_ONLY",
+        includeTransfers: false,
+      },
+      filters: {
+        filterGroups: [
+          { conditions: [{ field: "account", value: [account] }] },
+          { conditions: [{ field: "category", value: [category] }] },
+        ],
+      },
+    });
+    mockExecute.mockResolvedValue({
+      viewType: "TABLE",
+      groupBy: "NONE",
+      data: [
+        { label: "Toy Store", value: 80, count: 1, id: tx, date: "2025-12-10", payee: "Toy Store" },
+      ],
+      summary: { total: 80, knownTotal: 80, count: 1, average: 80 },
+      timeframe: { label: "Year to date", startDate: "2025-01-01", endDate: "2025-12-31" },
+    });
+    render(<CustomReportViewer reportId="rpt-1" />);
+    await waitFor(() => {
+      expect(screen.getByTestId(`chart-point-${tx}`)).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId(`chart-point-${tx}`));
+    expect(mockPush).toHaveBeenCalledWith(
+      `/transactions?categoryIds=${category}&accountIds=${account}&accountStatus=all` +
+        `&startDate=2025-01-01&endDate=2025-12-31&targetTransactionId=${tx}`,
     );
   });
 
@@ -449,6 +522,174 @@ describe("CustomReportViewer", () => {
     render(<CustomReportViewer reportId="rpt-1" />);
     await waitFor(() => {
       expect(screen.getByText("Error Report")).toBeInTheDocument();
+    });
+  });
+  describe("partial conversion", () => {
+    const savedReport = {
+      id: "rpt-1",
+      name: "Partial Report",
+      viewType: "BAR_CHART",
+      timeframeType: "LAST_3_MONTHS",
+      groupBy: "CATEGORY",
+      config: {
+        metric: "TOTAL_AMOUNT",
+        direction: "EXPENSES_ONLY",
+        includeTransfers: false,
+      },
+      filters: {},
+    };
+    const executed = {
+      viewType: "BAR_CHART",
+      groupBy: "CATEGORY",
+      data: [{ label: "Groceries", value: 200, count: 1, id: "cat-1" }],
+      timeframe: { label: "Last 3 months" },
+      currency: "CAD",
+    };
+
+    it("marks a withheld total as partial and shows the known part, never zero", async () => {
+      mockGetById.mockResolvedValue(savedReport);
+      mockExecute.mockResolvedValue({
+        ...executed,
+        summary: { total: null, knownTotal: 200, count: 1, average: null },
+        missingCurrencies: ["JPY"],
+        excludedCount: 1,
+      });
+      render(<CustomReportViewer reportId="rpt-1" />);
+
+      const marker = await screen.findByTestId("partial-total");
+      expect(marker).toHaveTextContent("$200.00");
+      expect(screen.queryByText("$0.00")).not.toBeInTheDocument();
+      expect(screen.getByTestId("partial-data-notice")).toHaveTextContent(
+        "JPY",
+      );
+    });
+
+    it("shows no marker or notice when nothing was excluded", async () => {
+      mockGetById.mockResolvedValue(savedReport);
+      mockExecute.mockResolvedValue({
+        ...executed,
+        summary: { total: 200, knownTotal: 200, count: 1, average: 200 },
+        missingCurrencies: [],
+        excludedCount: 0,
+      });
+      render(<CustomReportViewer reportId="rpt-1" />);
+
+      await screen.findByText("$200.00");
+      expect(screen.queryByTestId("partial-total")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("partial-data-notice")).not.toBeInTheDocument();
+    });
+
+    it("formats the count metric's headline as a number, not money", async () => {
+      mockGetById.mockResolvedValue({
+        ...savedReport,
+        config: { ...savedReport.config, metric: "COUNT" },
+      });
+      mockExecute.mockResolvedValue({
+        ...executed,
+        summary: { total: 42, knownTotal: 42, count: 42, average: 1 },
+        missingCurrencies: [],
+        excludedCount: 0,
+      });
+      render(<CustomReportViewer reportId="rpt-1" />);
+
+      await screen.findByText("42");
+      expect(screen.queryByText("$42.00")).not.toBeInTheDocument();
+    });
+
+    it("marks a total withheld by truncation as truncated, not as an excluded transaction", async () => {
+      mockGetById.mockResolvedValue(savedReport);
+      mockExecute.mockResolvedValue({
+        ...executed,
+        summary: { total: null, knownTotal: 200, count: 1, average: null },
+        missingCurrencies: [],
+        excludedCount: 0,
+        truncated: true,
+      });
+      render(<CustomReportViewer reportId="rpt-1" />);
+
+      expect(await screen.findByTestId("truncated-notice")).toBeInTheDocument();
+      // The shared marker, explained by the row limit, not by a missing rate.
+      expect(screen.getByTestId("partial-total")).toHaveTextContent("$200.00");
+      // The chart's Total row (table and PDF) is still marked partial.
+      expect(screen.getByTestId("report-chart")).toHaveAttribute("data-partial", "1");
+    });
+  });
+
+  // Discussion #1978: a both-direction figure says what it measures.
+  describe("measure caption", () => {
+    const report = (config: Record<string, unknown>) => ({
+      id: "rpt-1",
+      name: "Both Ways",
+      viewType: "TABLE",
+      timeframeType: "LAST_3_MONTHS",
+      groupBy: "NONE",
+      config: { metric: "NONE", direction: "BOTH", includeTransfers: false, ...config },
+      filters: {},
+    });
+    const executed = {
+      viewType: "TABLE",
+      groupBy: "NONE",
+      data: [
+        { label: "Salary", value: 1000, count: 1, id: "tx-1" },
+        { label: "Rent", value: -300, count: 1, id: "tx-2" },
+      ],
+      summary: { total: 700, knownTotal: 700, count: 2, average: 350 },
+      timeframe: { label: "Last 3 months" },
+      currency: "CAD",
+    };
+
+    it("names a both-direction list's headline a net amount and signs its rows", async () => {
+      mockGetById.mockResolvedValue(report({}));
+      mockExecute.mockResolvedValue(executed);
+      render(<CustomReportViewer reportId="rpt-1" />);
+
+      expect(await screen.findByTestId("report-measure")).toHaveTextContent("Net amount");
+      expect(screen.getByText("$700.00")).toBeInTheDocument();
+      const chart = screen.getByTestId("report-chart");
+      expect(chart).toHaveAttribute("data-total-label", "Net amount");
+      expect(chart).toHaveAttribute("data-signed", "true");
+    });
+
+    it("names it net cash movement when transfers are included", async () => {
+      mockGetById.mockResolvedValue(report({ includeTransfers: true }));
+      mockExecute.mockResolvedValue(executed);
+      render(<CustomReportViewer reportId="rpt-1" />);
+
+      expect(await screen.findByTestId("report-measure")).toHaveTextContent("Net cash movement");
+    });
+
+    it("names a both-direction aggregate as unsigned category amounts, unsigned rows", async () => {
+      mockGetById.mockResolvedValue({ ...report({ metric: "TOTAL_AMOUNT" }), groupBy: "CATEGORY" });
+      mockExecute.mockResolvedValue({ ...executed, groupBy: "CATEGORY" });
+      render(<CustomReportViewer reportId="rpt-1" />);
+
+      expect(await screen.findByTestId("report-measure")).toHaveTextContent(
+        "Total of unsigned category amounts",
+      );
+      expect(screen.getByTestId("report-chart")).toHaveAttribute("data-signed", "false");
+    });
+
+    // Grouped, No Aggregation sums each group's unsigned cells on the server,
+    // so it is not a signed list and its headline is no net.
+    it("names a grouped both-direction No Aggregation report an unsigned total, unsigned rows", async () => {
+      mockGetById.mockResolvedValue({ ...report({}), groupBy: "CATEGORY" });
+      mockExecute.mockResolvedValue({ ...executed, groupBy: "CATEGORY" });
+      render(<CustomReportViewer reportId="rpt-1" />);
+
+      expect(await screen.findByTestId("report-measure")).toHaveTextContent(
+        "Total of unsigned category amounts",
+      );
+      expect(screen.getByTestId("report-chart")).toHaveAttribute("data-signed", "false");
+    });
+
+    it("adds no caption to a one-direction report", async () => {
+      mockGetById.mockResolvedValue(report({ direction: "EXPENSES_ONLY" }));
+      mockExecute.mockResolvedValue(executed);
+      render(<CustomReportViewer reportId="rpt-1" />);
+
+      await screen.findByText("$700.00");
+      expect(screen.queryByTestId("report-measure")).not.toBeInTheDocument();
+      expect(screen.getByTestId("report-chart")).toHaveAttribute("data-total-label", "");
     });
   });
 });

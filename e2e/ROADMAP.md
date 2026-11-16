@@ -9,6 +9,8 @@ stays fast, stable, and honest.
 
 ## Where Phase 1 landed (status snapshot)
 
+> Dated snapshot. `e2e/tests/` is authoritative for what exists today; several Phase 2 and 3 areas listed below have since landed.
+
 Phase 1 turned a shallow ~34-test smoke suite into a **full CRUD-matrix suite**
 for the core money flows and reference data, built on **API/hybrid seeding**.
 
@@ -53,36 +55,9 @@ each with regression coverage.
 
 ---
 
-## Guiding principles (carry these forward)
+## Guiding principles and lessons
 
-1. **API/hybrid seeding is the default.** Seed every precondition via the
-   backend API (fast, deterministic, shares the page's cookie jar); reserve UI
-   interaction for the exact behavior under test. New areas need new factories —
-   add them to `factories.ts`, don't click through setup.
-2. **Prove persistence.** After acting in the UI, **reload and re-assert**.
-   Optimistic UI lies; a reload proves the write reached the database.
-3. **One fresh user per test.** Isolation makes destructive tests safe and the
-   suite parallelizable. Never share mutable state across tests.
-4. **Selector discipline** (hard-won — see Lessons): prefer
-   `getByRole('heading'|'button', { name, exact })` and `getByLabel`; scope list
-   rows by a unique seeded name; use `{ exact: true }` for short labels; never
-   guard with `isVisible()` (it doesn't auto-wait and silently skips).
-5. **Global vs per-user data.** Currencies (and any future global catalog) are
-   shared across users — generate unique codes/names so chromium and firefox
-   runs can't collide.
-
-### Lessons from Phase 1 (don't relearn these)
-- **CSRF cookie encoding:** Express URL-encodes cookie values (`:` → `%3A`); the
-  header must be `decodeURIComponent`'d to byte-match the cookie.
-- **Auth store rehydration:** `authStore` persists only `isAuthenticated` to
-  localStorage and re-fetches the profile on load — so an API-only login does
-  **not** make the *page* authenticated. `authedPage` registers via the UI.
-- **Secure randomness:** use `crypto.randomInt(n)` for test data. `bytes % n` is
-  biased (CodeQL `js/biased-cryptographic-random`) and `Math.random()` is flagged
-  by Bearer (CWE-330). Both scanners run on this repo.
-- **Custom comboboxes** (e.g. the transaction payee field) swallow `fill()` via a
-  `justOpenedRef`; identify rows by a distinctive amount instead, and click a
-  cell that doesn't `stopPropagation` to open the edit modal.
+The suite's standing conventions (API seeding, one user per test, reload-and-re-assert, selector discipline, the CSRF, auth-store, randomness and combobox lessons) live in `e2e/CLAUDE.md`, which every spec follows; this roadmap holds only what is still to build.
 
 ---
 
@@ -279,7 +254,8 @@ infra-heavy item — schedule last.
 
 ## Scaling the runner
 
-Per-test unique users make parallelism safe. As the suite grows, raise
-`workers` in `playwright.config.ts` (currently 1 in CI) and consider sharding
-across CI runners. Keep `fullyParallel` honest — verify no test depends on the
-seeded global catalog ordering before flipping it on.
+Per-test unique users make most of the suite parallel-safe, but not all of it:
+`tests/zz-danger-zone.spec.ts` deletes the shared account and relies on running
+last, so the suite runs with one worker (`e2e/CLAUDE.md`). Raising `workers` or
+enabling `fullyParallel` first needs that spec isolated onto its own account and
+a check that no test depends on the seeded global catalog ordering.

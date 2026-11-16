@@ -7,6 +7,7 @@ import {
   Max,
 } from "class-validator";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
+import { IsMoneyAmount } from "../../common/validators/is-money-amount.validator";
 
 export class UpdateMortgageRateDto {
   @ApiProperty({
@@ -22,10 +23,10 @@ export class UpdateMortgageRateDto {
   @ApiPropertyOptional({
     example: 2500.0,
     description:
-      "Optional new payment amount. If omitted, payment will be recalculated based on current balance and remaining amortization.",
+      "Optional new payment amount. If omitted, payment will be recalculated based on current balance and remaining amortization. Refused for LINEAR and INTEREST_ONLY mortgages, whose installment is priced from the debt and rate on each due date.",
   })
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsMoneyAmount(2)
   @IsPositive()
   newPaymentAmount?: number;
 

@@ -1,16 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@/test/render';
-import { NextIntlClientProvider } from 'next-intl';
 import { ListTopToolbar } from './ListTopToolbar';
 import { useDensityStore } from '@/store/densityStore';
-import commonNs from '@/i18n/messages/en/common.json';
 
 function renderToolbar(ui: React.ReactElement) {
-  return render(
-    <NextIntlClientProvider locale="en" messages={{ common: commonNs }}>
-      {ui}
-    </NextIntlClientProvider>,
-  );
+  return render(ui);
 }
 
 const PAGING = {
@@ -97,5 +91,124 @@ describe('ListTopToolbar', () => {
     );
 
     expect(screen.getByText('Export')).toBeInTheDocument();
+  });
+
+  it('reads switch, count, then the list buttons and the pager', () => {
+    // Order is the assertion, not merely "somewhere in the bar": the switch
+    // leads, the line saying what the reader is looking at sits just right of
+    // it, and export and density sit at the right-hand end in front of the
+    // page stepper.
+    render(
+      <ListTopToolbar
+        densityView="transactions"
+        {...PAGING}
+        onPageChange={vi.fn()}
+        actions={<button type="button">Export</button>}
+        viewToggle={<button type="button">Switch view</button>}
+      />,
+    );
+
+    const count = screen.getByText('90');
+    const toggle = screen.getByRole('button', { name: 'Switch view' });
+    const exportButton = screen.getByRole('button', { name: 'Export' });
+    const density = screen.getByTitle('Toggle row density');
+    const firstPage = screen.getByTitle('First page');
+
+    expect(toggle.compareDocumentPosition(count)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(count.compareDocumentPosition(exportButton)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(exportButton.compareDocumentPosition(density)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(density.compareDocumentPosition(firstPage)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  it('keeps the list buttons and the pager in one wrapping row', () => {
+    // They were a column that stacked below a fixed width, which put export and
+    // density on a line of their own while there was still room for both.
+    render(
+      <ListTopToolbar
+        densityView="transactions"
+        {...PAGING}
+        onPageChange={vi.fn()}
+        actions={<button type="button">Export</button>}
+      />,
+    );
+
+    const row = screen.getByTitle('Last page').parentElement!.parentElement!;
+
+    expect(row.className).toContain('flex-wrap');
+    expect(row.className).not.toContain('flex-col');
+    expect(row).toContainElement(screen.getByRole('button', { name: 'Export' }));
+  });
+
+  it('keeps the switch at the left-hand end when there is no pager to sit beside', () => {
+    // The empty register draws the bar without paging props, so there is no
+    // count line beside the switch: it still leads the bar, where it stands
+    // when there are rows, rather than disappearing or moving.
+    render(
+      <ListTopToolbar
+        densityView="transactions"
+        viewToggle={<button type="button">Switch view</button>}
+      />,
+    );
+
+    const density = screen.getByTitle('Toggle row density');
+    const toggle = screen.getByRole('button', { name: 'Switch view' });
+
+    expect(toggle.compareDocumentPosition(density)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(toggle.parentElement!.className).toContain('justify-between');
+  });
+
+  it('leaves the bar as it was on a list whose screen offers no calendar', () => {
+    render(<ListTopToolbar densityView="transactions" {...PAGING} onPageChange={vi.fn()} />);
+
+    expect(screen.queryByRole('button', { name: 'Switch view' })).not.toBeInTheDocument();
+    expect(screen.getByTitle('Toggle row density')).toBeInTheDocument();
+  });
+  it('reads switch, summary, then the list buttons on an unpaged list', () => {
+    // A list drawn whole still says how much of it the filters left, just
+    // right of the switch as the pager's count is; export and density keep the
+    // right-hand end.
+    render(
+      <ListTopToolbar
+        densityView="transactions"
+        summary="Showing 5 of 12 bills and deposits"
+        actions={<button type="button">Export</button>}
+        viewToggle={<button type="button">Switch view</button>}
+      />,
+    );
+
+    const summary = screen.getByText('Showing 5 of 12 bills and deposits');
+    const toggle = screen.getByRole('button', { name: 'Switch view' });
+    const exportButton = screen.getByRole('button', { name: 'Export' });
+    const density = screen.getByTitle('Toggle row density');
+
+    expect(toggle.compareDocumentPosition(summary)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(summary.compareDocumentPosition(exportButton)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(exportButton.compareDocumentPosition(density)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(screen.queryByTitle('Next page')).not.toBeInTheDocument();
+    // Left group and buttons are pushed to opposite ends of one row, which
+    // wraps only from `sm` up.
+    const row = toggle.parentElement!.parentElement!;
+    expect(row.className).toContain('justify-between');
+    expect(row.className.split(' ')).toContain('sm:flex-wrap');
+    expect(row.className.split(' ')).not.toContain('flex-wrap');
+  });
+
+  it('hides the count line on a phone, so the switch and the buttons share one row', () => {
+    render(
+      <ListTopToolbar
+        densityView="transactions"
+        summary="Showing 5 of 12 bills and deposits"
+        viewToggle={<button type="button">Switch view</button>}
+      />,
+    );
+
+    const line = screen.getByText('Showing 5 of 12 bills and deposits');
+    expect(line.className.split(' ')).toEqual(expect.arrayContaining(['hidden', 'sm:block']));
+  });
+
+  it("supports list actions without inventing a density preference", () => {
+    renderToolbar(<ListTopToolbar actions={<button>Export</button>} />);
+    expect(screen.getByRole("button", { name: "Export" })).toBeInTheDocument();
+    expect(screen.queryByTitle("Toggle row density")).not.toBeInTheDocument();
   });
 });

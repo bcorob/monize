@@ -20,6 +20,12 @@ export const chartColors = {
   expense: 'var(--chart-expense)',
   /** Warnings, projections, secondary highlights. */
   warning: 'var(--chart-warning)',
+  /**
+   * Tagged transfer flows (the funding series on Income vs Expenses). An indigo
+   * pair, never the income green or expense red: a transfer is not income.
+   */
+  inflow: 'var(--chart-inflow)',
+  outflow: 'var(--chart-outflow)',
   /** CartesianGrid stroke and axis lines. */
   grid: 'var(--chart-grid)',
   /** Axis tick label fill. */

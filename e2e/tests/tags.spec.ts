@@ -10,9 +10,16 @@ test.describe('Tags', () => {
     const name = `E2E Create ${uniqueId()}`;
 
     await page.goto('/tags');
-    await page.getByRole('button', { name: /new tag/i }).first().click();
 
+    // The page is client-rendered, so a click that lands before the button's
+    // handler hydrates is a no-op -- retry the click until the dialog opens
+    // rather than clicking once into the void.
     const dialog = page.getByRole('dialog');
+    await expect(async () => {
+      await page.getByRole('button', { name: /new tag/i }).first().click();
+      await expect(dialog).toBeVisible({ timeout: 2000 });
+    }).toPass({ timeout: 30000 });
+
     await dialog.getByLabel(/tag name/i).fill(name);
     await dialog.getByRole('button', { name: /create tag/i }).click();
 
@@ -74,9 +81,16 @@ test.describe('Tags', () => {
 
   test('rejects an empty tag name', async ({ authedPage: page }) => {
     await page.goto('/tags');
-    await page.getByRole('button', { name: /new tag/i }).first().click();
 
+    // The page is client-rendered, so a click that lands before the button's
+    // handler hydrates is a no-op -- retry the click until the dialog opens
+    // rather than clicking once into the void.
     const dialog = page.getByRole('dialog');
+    await expect(async () => {
+      await page.getByRole('button', { name: /new tag/i }).first().click();
+      await expect(dialog).toBeVisible({ timeout: 2000 });
+    }).toPass({ timeout: 30000 });
+
     await dialog.getByRole('button', { name: /create tag/i }).click();
 
     await expect(dialog.getByText(/tag name is required/i)).toBeVisible();

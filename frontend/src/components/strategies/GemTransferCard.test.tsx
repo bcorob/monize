@@ -47,7 +47,7 @@ describe("GemTransferCard", () => {
     const action = report.action!;
 
     expect(strategiesMessages.gem.settingsForm.commissionAmount).toBe(
-      "Commission per trade",
+      "Commission per Trade (optional)",
     );
 
     render(<GemTransferCard action={action} />);

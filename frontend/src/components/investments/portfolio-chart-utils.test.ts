@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   buildIntradayCacheKey,
@@ -7,157 +9,112 @@ import {
   computeTightYAxisDomain,
   INTRADAY_CACHE_PREFIX,
   INTRADAY_RANGES,
-  intradayRangeParam,
+  isIntradayRange,
+  monthEndAxisTicks,
   niceAxisStep,
-  trimIntradayPoints,
   readIntradayCache,
   renderChartFlagDot,
   renderMinMaxFlagDots,
+  sampledPointLabel,
+  sampledTickLabel,
   writeIntradayCache,
 } from './portfolio-chart-utils';
+import { formatChartDate, type ChartDatePattern } from '@/lib/utils';
+import { useAuthStore } from '@/store/authStore';
 
-describe('intradayRangeParam', () => {
-  it('serves mtd from the rolling 1m series', () => {
-    expect(intradayRangeParam('mtd')).toBe('1m');
+describe('INTRADAY_RANGES', () => {
+  it('is the set the intraday endpoint accepts', () => {
+    // The backend's IntradayValueQueryDto enum, read from its source: a range
+    // in one set and not the other is a 400 at runtime.
+    const dto = readFileSync(
+      join(__dirname, '..', '..', '..', '..', 'backend/src/securities/dto/intraday-value.dto.ts'),
+      'utf8',
+    );
+    const match = dto.match(/export const INTRADAY_RANGES = \[([^\]]+)\] as const;/);
+    expect(match, 'backend INTRADAY_RANGES not found').toBeTruthy();
+    const accepted = match![1].match(/"([^"]+)"/g)!.map((q) => q.slice(1, -1));
+    expect([...INTRADAY_RANGES].sort()).toEqual([...accepted].sort());
   });
 
-  it('passes every other intraday range through unchanged', () => {
-    for (const range of ['1d', '1w', '1m']) {
-      expect(intradayRangeParam(range)).toBe(range);
-    }
-  });
-
-  it('maps every intraday range onto one the endpoint accepts', () => {
-    // The backend's IntradayValueQueryDto enum. A range added to
-    // INTRADAY_RANGES without a mapping here is a 400 at runtime.
-    const accepted = new Set(['1d', '1w', '1m']);
-    for (const range of INTRADAY_RANGES) {
-      expect(accepted.has(intradayRangeParam(range))).toBe(true);
-    }
-  });
-});
-
-describe('trimIntradayPoints', () => {
-  const points = [
-    { timestamp: '2026-07-28T13:30:00.000Z', value: 1 },
-    { timestamp: '2026-08-01T13:30:00.000Z', value: 2 },
-    { timestamp: '2026-08-12T13:30:00.000Z', value: 3 },
-  ];
-
-  it('drops the bars the rolling month reached back into', () => {
-    expect(trimIntradayPoints(points, 'mtd', '2026-08-01')).toEqual([
-      points[1],
-      points[2],
-    ]);
-  });
-
-  it('keeps a bar that starts exactly on the window boundary', () => {
-    expect(
-      trimIntradayPoints(points, 'mtd', '2026-08-01').map((p) => p.timestamp),
-    ).toContain('2026-08-01T13:30:00.000Z');
-  });
-
-  it('leaves the other ranges alone -- their series is already the window', () => {
-    for (const range of ['1d', '1w']) {
-      expect(trimIntradayPoints(points, range, '2026-08-01')).toBe(points);
-    }
-  });
-
-  it('does not trim without a window start', () => {
-    expect(trimIntradayPoints(points, 'mtd', '')).toBe(points);
+  it('narrows a range string to one the endpoint accepts', () => {
+    expect(isIntradayRange('mtd')).toBe(true);
+    expect(isIntradayRange('3m')).toBe(false);
   });
 });
 
-/**
- * A 1D chart opens at the day's open, which is what every quote source shows.
- * A 1M chart is a different claim: the month is measured from a close, so
- * opening partway through the session a month ago mixes a mid-session price
- * into a series of closes and reports a change covering part of a session
- * nobody asked about.
- */
-describe('trimIntradayToFirstDayClose (via trimIntradayPoints)', () => {
-  const session = (day: string, times: string[], from = 0) =>
-    times.map((t, i) => ({
-      timestamp: `${day}T${t}:00.000Z`,
-      value: from + i,
-    }));
-
-  it('drops every bar of the first day except its last', () => {
-    const points = [
-      ...session('2026-07-13', ['13:30', '15:00', '19:59'], 10),
-      ...session('2026-07-14', ['13:30', '19:59'], 20),
-    ];
-
-    expect(trimIntradayPoints(points, '1m', '')).toEqual([
-      points[2],
-      points[3],
-      points[4],
-    ]);
+function signInAs(userId: string | null, actingAsUserId: string | null = null) {
+  useAuthStore.setState({
+    user: userId ? ({ id: userId } as never) : null,
+    actingAsUserId,
   });
-
-  it('leaves later days untouched, however many bars they have', () => {
-    const points = [
-      ...session('2026-07-13', ['13:30', '19:59'], 10),
-      ...session('2026-07-14', ['13:30', '15:00', '19:59'], 20),
-    ];
-
-    expect(trimIntradayPoints(points, '1m', '').length).toBe(4);
-  });
-
-  /**
-   * Collapsing a single-day series would leave one point and no chart, so the
-   * series is kept whole. It cannot be wrong in the way this guards against:
-   * with one day there is no earlier close to measure from either way.
-   */
-  it('leaves a one-day series alone', () => {
-    const points = session('2026-07-13', ['13:30', '15:00', '19:59']);
-    expect(trimIntradayPoints(points, '1m', '')).toBe(points);
-  });
-
-  it('is a no-op when the first day already has one bar', () => {
-    const points = [
-      ...session('2026-07-13', ['19:59']),
-      ...session('2026-07-14', ['13:30', '19:59'], 20),
-    ];
-    expect(trimIntradayPoints(points, '1m', '')).toBe(points);
-  });
-
-  it('handles an empty series', () => {
-    expect(trimIntradayPoints([], '1m', '')).toEqual([]);
-  });
-
-  /**
-   * 1W and MTD are measured from the prior close already
-   * (`PRIOR_CLOSE_BASELINE_RANGES`), so their first bar is not the baseline and
-   * collapsing it would only throw away detail.
-   */
-  it('does not touch 1D, 1W or MTD', () => {
-    const points = [
-      ...session('2026-07-13', ['13:30', '15:00', '19:59'], 10),
-      ...session('2026-07-14', ['13:30', '19:59'], 20),
-    ];
-    for (const range of ['1d', '1w']) {
-      expect(trimIntradayPoints(points, range, '')).toBe(points);
-    }
-    // MTD still gets its own window trim, and nothing else.
-    expect(trimIntradayPoints(points, 'mtd', '2026-07-13').length).toBe(5);
-  });
-});
+}
 
 describe('buildIntradayCacheKey', () => {
+  beforeEach(() => {
+    signInAs('u1');
+  });
+
+  afterEach(() => {
+    signInAs(null);
+  });
+
   it('builds key with defined account ids (sorted)', () => {
     const key = buildIntradayCacheKey('1d', ['z', 'a', 'm'], 'USD');
-    expect(key).toBe(`${INTRADAY_CACHE_PREFIX}1d|a,m,z|USD`);
+    expect(key).toBe(`${INTRADAY_CACHE_PREFIX}u:u1|a:self|1d|a,m,z|USD`);
   });
 
   it('builds key with undefined account ids (null coalescing)', () => {
     const key = buildIntradayCacheKey('1w', undefined, 'EUR');
-    expect(key).toBe(`${INTRADAY_CACHE_PREFIX}1w||EUR`);
+    expect(key).toBe(`${INTRADAY_CACHE_PREFIX}u:u1|a:self|1w||EUR`);
   });
 
   it('builds key with empty account ids array', () => {
     const key = buildIntradayCacheKey('1m', [], 'GBP');
-    expect(key).toBe(`${INTRADAY_CACHE_PREFIX}1m||GBP`);
+    expect(key).toBe(`${INTRADAY_CACHE_PREFIX}u:u1|a:self|1m||GBP`);
+  });
+
+  // INV-SHARE-003: two identities never share a key.
+  it('gives two users different keys for the same range, accounts and currency', () => {
+    signInAs('user-a');
+    const a = buildIntradayCacheKey('1d', ['x'], 'USD');
+    signInAs('user-b');
+    const b = buildIntradayCacheKey('1d', ['x'], 'USD');
+    expect(a).not.toBe(b);
+  });
+
+  it('gives one user a different key acting as an owner than as self', () => {
+    signInAs('user-a');
+    const self = buildIntradayCacheKey('1d', ['x'], 'USD');
+    signInAs('user-a', 'owner-1');
+    const owner = buildIntradayCacheKey('1d', ['x'], 'USD');
+    signInAs('user-a', 'owner-2');
+    const other = buildIntradayCacheKey('1d', ['x'], 'USD');
+    expect(new Set([self, owner, other]).size).toBe(3);
+  });
+
+  it('never gives a signed-out reader the key of a signed-in user', () => {
+    signInAs('u1');
+    const signedIn = buildIntradayCacheKey('1d', [], 'USD');
+    signInAs(null);
+    const anonymous = buildIntradayCacheKey('1d', [], 'USD');
+    expect(anonymous).not.toBe(signedIn);
+  });
+
+  it('refuses to write or read an entry keyed without an identity', () => {
+    signInAs(null);
+    const key = buildIntradayCacheKey('1d', [], 'USD');
+    writeIntradayCache(key, {
+      fetchedAt: 1,
+      points: [],
+      interval: '5m',
+      currency: 'USD',
+      fallbackToDaily: false,
+      skippedSymbols: [],
+      failedSymbols: [],
+    });
+    expect(window.sessionStorage.getItem(key)).toBeNull();
+    window.sessionStorage.setItem(key, '{"fetchedAt":1}');
+    expect(readIntradayCache(key)).toBeNull();
   });
 });
 
@@ -519,5 +476,40 @@ describe('renderMinMaxFlagDots', () => {
     expect(closeButton).toBeTruthy();
     closeButton.props.onClick({ stopPropagation: () => {} });
     expect(onDismissHigh).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('month-end-sampled labels and ticks', () => {
+  const fmt = (iso: string, pattern: ChartDatePattern) =>
+    formatChartDate(iso, pattern, 'en-US');
+
+  it('names the two ends by their day and the month-ends between by their month', () => {
+    const dates = ['2024-09-29', '2024-09-30', '2024-10-31', '2024-11-15'];
+    expect(
+      dates.map((iso, i) => sampledPointLabel(iso, i, dates.length, fmt)),
+    ).toEqual(['Sep 29, 2024', 'Sep 2024', 'Oct 2024', 'Nov 15, 2024']);
+  });
+
+  it('shortens the month ticks as the series grows, keeping the ends dated', () => {
+    expect(sampledTickLabel('2026-03-28', 0, 8, fmt)).toBe('Mar 28');
+    expect(sampledTickLabel('2026-04-30', 2, 8, fmt)).toBe('Apr');
+    expect(sampledTickLabel('2025-04-30', 5, 25, fmt)).toBe('Apr 25');
+    expect(sampledTickLabel('2024-01-31', 5, 62, fmt)).toBe('2024');
+  });
+
+  it('ticks a long series on each January, read from the date and not the label', () => {
+    // 2021-01-05 opens the window: a boundary is never a January tick, even
+    // though its label starts with the same month as the month-end beside it.
+    const points = Array.from({ length: 40 }, (_, i) => {
+      const month = i % 12;
+      const year = 2021 + Math.floor(i / 12);
+      const iso =
+        i === 0
+          ? '2021-01-05'
+          : `${year}-${String(month + 1).padStart(2, '0')}-28`;
+      return { iso, name: `label-${i}` };
+    });
+    expect(monthEndAxisTicks(points)).toEqual(['label-12', 'label-24', 'label-36']);
+    expect(monthEndAxisTicks(points.slice(0, 20))).toBeUndefined();
   });
 });

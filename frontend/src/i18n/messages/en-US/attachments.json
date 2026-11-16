@@ -1,0 +1,11 @@
+{
+  "scan": {
+    "styles": {
+      "colour": "Color",
+      "grayscale": "Grayscale"
+    },
+    "styleHints": {
+      "grayscale": "The same clean-up without the color. Smaller, and free of the tint paper picks up under artificial light."
+    }
+  }
+}

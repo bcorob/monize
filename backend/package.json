@@ -1,6 +1,6 @@
 {
   "name": "monize-backend",
-  "version": "1.15.1",
+  "version": "1.21.0",
   "description": "Personal Finance Management System - Backend API",
   "author": "",
   "private": true,
@@ -21,8 +21,9 @@
     "typecheck": "tsc --noEmit -p tsconfig.test.json",
     "test": "node scripts/test-chain.mjs",
     "test:unit": "jest",
+    "test:changed": "node scripts/test-changed.mjs",
     "pretest:integration": "node -e \"const{Client}=require('pg');const c=new Client({host:process.env.DATABASE_HOST||'localhost',port:+(process.env.DATABASE_PORT||5432),user:process.env.DATABASE_USER||'monize_user',password:process.env.DATABASE_PASSWORD||'monize_password',database:'postgres'});c.connect().then(()=>c.query(\\\"SELECT 1 FROM pg_database WHERE datname='monize_test'\\\").then(r=>r.rowCount?0:c.query('CREATE DATABASE monize_test')).then(()=>c.end())).catch(e=>{console.error(e.message);process.exit(1)})\"",
-    "test:integration": "jest --config ./test/jest-e2e.json --testPathPatterns=\"test/integration/.*\\.spec\\.ts$\" --runInBand",
+    "test:integration": "jest --config ./test/jest-integration.json --runInBand",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
@@ -33,107 +34,113 @@
     "migration:revert": "npm run typeorm -- migration:revert",
     "seed": "ts-node -r tsconfig-paths/register src/database/seed.ts",
     "mny:inspect": "ts-node -r tsconfig-paths/register src/import/mny/mny-inspect.ts",
-    "backup:peak-rss": "ts-node -r tsconfig-paths/register src/backup/restore-peak-rss.harness.ts"
+    "backup:peak-rss": "ts-node -r tsconfig-paths/register src/backup/restore-peak-rss.harness.ts",
+    "push:client": "node scripts/unifiedpush-client/cli.cjs",
+    "push:client:test": "node --test scripts/unifiedpush-client/*.test.cjs",
+    "push:tls:test": "node --test scripts/push-private-tls.test.cjs"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.75.0",
-    "@aws-sdk/client-s3": "^3.1095.0",
-    "@modelcontextprotocol/sdk": "^1.27.1",
-    "@nestjs/common": "^11.1.12",
-    "@nestjs/config": "^4.0.2",
-    "@nestjs/core": "^11.1.12",
-    "@nestjs/jwt": "^11.0.2",
-    "@nestjs/passport": "^11.0.5",
-    "@nestjs/platform-express": "^11.1.12",
-    "@nestjs/schedule": "^6.1.0",
-    "@nestjs/swagger": "^11.2.5",
-    "@nestjs/throttler": "^6.5.0",
-    "@nestjs/typeorm": "^11.0.0",
+    "@anthropic-ai/sdk": "^1.6.0",
+    "@aws-sdk/client-s3": "^3.1164.0",
+    "@kenjiuno/msgreader": "1.29.0",
+    "@modelcontextprotocol/node": "^2.1.2",
+    "@modelcontextprotocol/server": "^2.0.0",
+    "@nestjs/common": "^12.4.0",
+    "@nestjs/config": "^12.1.1",
+    "@nestjs/core": "^12.4.0",
+    "@nestjs/jwt": "^12.0.4",
+    "@nestjs/passport": "^12.0.1",
+    "@nestjs/platform-express": "^12.4.0",
+    "@nestjs/schedule": "^12.0.3",
+    "@nestjs/swagger": "^12.1.1",
+    "@nestjs/throttler": "^6.7.1",
+    "@nestjs/typeorm": "^12.0.3",
     "bcryptjs": "^3.0.3",
     "class-transformer": "^0.5.1",
-    "class-validator": "^0.14.3",
+    "class-validator": "^0.15.1",
     "cookie-parser": "^1.4.7",
-    "date-fns": "^4.1.0",
-    "he": "^1.2.0",
-    "helmet": "^8.1.0",
+    "date-fns": "^4.4.0",
+    "fflate": "0.8.3",
+    "he": "^2.0.0",
+    "helmet": "^8.3.0",
+    "htmlparser2": "^12.0.0",
+    "http_ece": "1.2.1",
+    "imapflow": "^2.11.0",
+    "libphonenumber-js": "^1.13.15",
+    "mailparser": "^3.14.2",
     "mdb-reader": "^3.2.0",
-    "nestjs-i18n": "^10.8.4",
-    "nodemailer": "^9.0.1",
-    "oidc-provider": "^9.8.3",
-    "openai": "^6.22.0",
-    "openid-client": "^6.8.2",
-    "otplib": "^13.2.1",
+    "nestjs-i18n": "^10.8.5",
+    "nodemailer": "^10.4.0",
+    "oidc-provider": "^9.13.3",
+    "openai": "^7.53.0",
+    "openid-client": "^6.8.9",
+    "otplib": "^13.6.0",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
-    "passport-local": "^1.0.0",
-    "pdf-parse": "^1.1.4",
-    "pg": "^8.18.0",
+    "pdfjs-dist": "6.5.438",
+    "pg": "^8.23.1",
     "qrcode": "^1.5.4",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.2",
     "typeorm": "^0.3.31",
     "ua-parser-js": "^2.0.10",
-    "undici": "^8.5.0",
-    "zod": "^4.3.6"
+    "undici": "^8.12.4",
+    "web-push": "^4.0.0",
+    "zod": "^4.6.7"
   },
   "devDependencies": {
-    "@eslint/js": "^9.39.2",
-    "@nestjs/cli": "^11.0.16",
-    "@nestjs/schematics": "^11.0.9",
-    "@nestjs/testing": "^11.1.12",
+    "@eslint/js": "^10.0.1",
+    "@modelcontextprotocol/client": "^2.4.0",
+    "@nestjs/cli": "^12.0.12",
+    "@nestjs/schematics": "^12.0.12",
+    "@nestjs/testing": "^12.4.0",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.6",
     "@types/he": "^1.2.3",
     "@types/jest": "^30.0.0",
-    "@types/multer": "^2.0.0",
-    "@types/node": "^25.2.0",
-    "@types/nodemailer": "^7.0.9",
-    "@types/oidc-provider": "^9.5.0",
+    "@types/mailparser": "^3.9.0",
+    "@types/multer": "^2.3.0",
+    "@types/node": "^26.6.6",
+    "@types/nodemailer": "^8.0.2",
+    "@types/oidc-provider": "^9.13.1",
     "@types/passport-jwt": "^4.0.1",
-    "@types/passport-local": "^1.0.38",
-    "@types/pdf-parse": "^1.1.5",
     "@types/qrcode": "^1.5.6",
     "@types/ua-parser-js": "^0.7.39",
-    "@typescript-eslint/eslint-plugin": "^8.54.0",
-    "@typescript-eslint/parser": "^8.54.0",
-    "eslint": "^9.39.2",
+    "@types/web-push": "^3.6.4",
+    "@typescript-eslint/eslint-plugin": "^8.72.1",
+    "@typescript-eslint/parser": "^8.72.1",
+    "eslint": "^10.14.0",
     "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-prettier": "^5.5.5",
-    "jest": "^30.2.0",
-    "prettier": "^3.8.1",
-    "supertest": "^7.2.2",
-    "ts-jest": "^29.4.6",
-    "ts-loader": "^9.5.4",
+    "eslint-plugin-prettier": "^5.5.7",
+    "jest": "^30.5.2",
+    "prettier": "^3.9.10",
+    "supertest": "^7.3.2",
+    "ts-jest": "^29.4.15",
+    "ts-loader": "^9.6.2",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "typescript": "~6.0.3",
-    "typescript-eslint": "^8.63.0"
+    "typescript-eslint": "^8.72.1"
   },
   "overrides": {
     "@hono/node-server": "^2.0.5",
     "lodash": "4.18.1",
     "ajv@>=7": "8.18.0",
-    "js-yaml": ">=5.2.2",
+    "js-yaml": ">=5.4.2",
     "picomatch": "4.0.4",
     "path-to-regexp": "8.4.0",
     "uuid": "^14.0.0",
     "fast-uri": "^3.1.5",
     "multer": "^2.2.0",
-    "brace-expansion@>=3": "5.0.9",
-    "typeorm": {
-      "glob": "13.0.0"
+    "brace-expansion@>=3": "5.0.12",
+    "nestjs-i18n": {
+      "chokidar": "^4.0.3"
     },
-    "jest-config": {
-      "glob": "13.0.0"
-    },
-    "jest-runtime": {
-      "glob": "13.0.0"
-    },
-    "@jest/reporters": {
-      "glob": "13.0.0"
-    }
+    "glob": "^14.0.2",
+    "minimatch": "^11.0.1"
   },
   "jest": {
+    "workerIdleMemoryLimit": "1GB",
     "moduleFileExtensions": [
       "js",
       "json",
@@ -144,10 +151,19 @@
       "<rootDir>/src"
     ],
     "testRegex": ".*\\.spec\\.ts$",
+    "setupFiles": [
+      "<rootDir>/src/test-helpers/silence-nest-logger.setup.ts",
+      "<rootDir>/src/test-helpers/fast-password-hashing.setup.ts"
+    ],
     "transform": {
-      "^.+\\.(t|j)s$": [
-        "ts-jest",
+      "^.+\\.(t|j|mj)s$": [
+        "<rootDir>/scripts/esm-interop-transformer.cjs",
         {
+          "tsconfig": {
+            "isolatedModules": true,
+            "module": "commonjs",
+            "moduleResolution": "bundler"
+          },
           "diagnostics": {
             "ignoreCodes": [
               151002
@@ -174,7 +190,7 @@
     ],
     "coverageDirectory": "./coverage",
     "transformIgnorePatterns": [
-      "node_modules/(?!(@scure|@otplib|otplib|@noble|openid-client|oauth4webapi|jose|uuid|mdb-reader)/)"
+      "node_modules/(?!(@scure|@otplib|otplib|@noble|openid-client|oauth4webapi|jose|uuid|mdb-reader|@nestjs|he|htmlparser2|domhandler|domutils|dom-serializer|domelementtype|entities|web-push|https-proxy-agent|agent-base|proxy-agent-negotiate)/)"
     ],
     "coverageThreshold": {
       "global": {

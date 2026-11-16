@@ -330,14 +330,13 @@
       "fillMissingDone": "{count, plural, one {# instrumento adicionado} other {# instrumentos adicionados}}. Guarde a configuração para carregar os preços e calcular o primeiro sinal.",
       "fillMissingError": "Não foi possível adicionar os instrumentos sugeridos.",
       "lookbackMonths": "Janela de momentum (meses)",
-      "taxRatePercent": "Taxa de imposto (%)",
-      "commissionAmount": "Comissão por transação",
+      "taxRatePercent": "Taxa de imposto (opcional)",
+      "commissionAmount": "Comissão por transação (opcional)",
       "rulesSourceUrl": "Ligação para as regras que segue",
       "rulesSourceUrlPlaceholder": "https://example.com/dual-momentum",
       "rulesSourceLabel": "Texto a mostrar para essa ligação",
       "rulesSourceLabelPlaceholder": "example.com",
       "rulesSourceHint": "Ambos opcionais e sem qualquer efeito nos cálculos. Colocam no rodapé do relatório uma ligação para o sítio onde estão escritas as regras que esta estratégia segue — um artigo, uma página de um livro, as suas próprias notas — para poder verificar mais tarde com que versão a configurou.",
-      "optional": "Opcional",
       "save": "Guardar configuração",
       "saved": "Configuração da estratégia guardada.",
       "saveError": "Não foi possível guardar a configuração da estratégia.",
@@ -358,7 +357,9 @@
       "NO_POSITION": "As contas da estratégia não detêm nenhum instrumento.",
       "FIRST_RUN": "Esta estratégia ainda não foi avaliada – o primeiro sinal aparece após a próxima avaliação agendada.",
       "STALE_PRICES": "Alguns dos preços por trás deste relatório não estão atualizados, pelo que o sinal pode mudar depois de os atualizar. Os mais antigos, ou totalmente em falta, são para:",
-      "CALCULATION_FAILED": "Não foi possível calcular o sinal com os dados disponíveis."
+      "CALCULATION_FAILED": "Não foi possível calcular o sinal com os dados disponíveis.",
+      "SHORT_HISTORY": "Histórico de preços insuficiente para avaliar o período atual. Estas funções precisam de preços desde {from}:",
+      "shortHistoryFix": "Abra cada um destes instrumentos e utilize «Adicionar mais um ano de histórico de preços» e, em seguida, reabra este relatório."
     },
     "footer": {
       "pastResults": "Os resultados passados não garantem retornos futuros.",

@@ -6,6 +6,7 @@ import Cookies from 'js-cookie';
 import { Select } from '@/components/ui/Select';
 import { LOCALE_COOKIE, SUPPORTED_LOCALES } from '@/i18n/config';
 import { rememberPreLoginLocale } from '@/lib/pre-login-locale';
+import { preferenceCookieAttributes } from '@/lib/preference-cookie';
 
 /**
  * Explicit language picker for unauthenticated screens (login/register): a
@@ -28,7 +29,7 @@ export function AuthLanguagePicker({ className }: { className?: string }) {
 
   const selectLocale = (next: string) => {
     if (next === locale) return;
-    Cookies.set(LOCALE_COOKIE, next, { sameSite: 'lax', expires: 365 });
+    Cookies.set(LOCALE_COOKIE, next, preferenceCookieAttributes());
     // Marks the choice as deliberate so the post-login preference sync
     // saves it to the user's preferences instead of reverting to them.
     rememberPreLoginLocale(next);

@@ -2,6 +2,8 @@ import { describe, it, expect, vi } from 'vitest';
 import { fireEvent } from '@testing-library/react';
 import { render, screen } from '@/test/render';
 import { ChatMessage } from './ChatMessage';
+import { makeRule, makeRuleAction } from './rule-card-fixtures';
+import { AI_ACTION_TYPES } from '@/types/ai';
 
 // Mock recharts so the ResultChart rendered indirectly by ChatMessage does
 // not attempt to lay out SVG in jsdom. Matches the mocks in ResultChart.test.
@@ -239,7 +241,7 @@ describe('ChatMessage', () => {
           ]}
         />,
       );
-      expect(screen.getByLabelText('Tool failed')).toBeInTheDocument();
+      expect(screen.getByRole('img', { name: 'Tool failed' })).toBeInTheDocument();
       expect(screen.queryByLabelText('Tool succeeded')).not.toBeInTheDocument();
       // The surrounding container uses the red theme.
       const errored = container.querySelector('.border-red-200');
@@ -568,6 +570,41 @@ describe('ChatMessage', () => {
       expect(
         screen.getByRole('button', { name: 'Approve all' }),
       ).toBeInTheDocument();
+    });
+  });
+  describe('every action type gets a card', () => {
+    it.each([...AI_ACTION_TYPES])('renders a titled card with Approve for %s', (type) => {
+      render(
+        <ChatMessage
+          id="m-all"
+          role="assistant"
+          content="Review the card."
+          pendingActions={[
+            makeRuleAction(type, type.endsWith('_rule') ? makeRule() : undefined, {
+              descriptor: { type, operation: 'update' },
+            }),
+          ]}
+        />,
+      );
+      const approve = screen.getByRole('button', {
+        name: /^Approve( all)?$/,
+      });
+      expect(approve).toBeInTheDocument();
+      // The card's title is a question, never empty and never another type's.
+      const title = approve.closest('div')?.parentElement?.parentElement?.querySelector('span.font-semibold');
+      expect(title?.textContent).toMatch(/\?$/);
+    });
+
+    it('routes the rule types to the rule card', () => {
+      render(
+        <ChatMessage
+          id="m-rule"
+          role="assistant"
+          content="Review the card."
+          pendingActions={[makeRuleAction('run_transaction_rule', makeRule())]}
+        />,
+      );
+      expect(screen.getByText('Run this rule on existing transactions?')).toBeInTheDocument();
     });
   });
 });

@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ProviderTestButton } from './ProviderTestButton';
 import { ProviderConfigForm } from './ProviderConfigForm';
 import { useRelayStatus } from '@/components/ai/useRelayStatus';
@@ -49,6 +50,7 @@ export function ProviderList({ configs, encryptionAvailable, onConfigsChanged, h
   const [showForm, setShowForm] = useState(false);
   const [editingConfig, setEditingConfig] = useState<AiProviderConfig | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<AiProviderConfig | null>(null);
 
   const runPostSaveTest = async (configId: string) => {
     // Fire-and-forget background check so the form can close immediately
@@ -88,6 +90,7 @@ export function ProviderList({ configs, encryptionAvailable, onConfigsChanged, h
   };
 
   const handleDelete = async (id: string) => {
+    setPendingDelete(null);
     setDeletingId(id);
     try {
       await aiApi.deleteConfig(id);
@@ -225,7 +228,7 @@ export function ProviderList({ configs, encryptionAvailable, onConfigsChanged, h
                   <Button
                     variant="danger"
                     size="sm"
-                    onClick={() => handleDelete(config.id)}
+                    onClick={() => setPendingDelete(config)}
                     isLoading={deletingId === config.id}
                     disabled={disabled}
                   >
@@ -237,6 +240,22 @@ export function ProviderList({ configs, encryptionAvailable, onConfigsChanged, h
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={pendingDelete !== null}
+        title={t('deleteDialog.title')}
+        message={t('deleteDialog.message', {
+          name: pendingDelete
+            ? pendingDelete.displayName || AI_PROVIDER_LABELS[pendingDelete.provider as AiProviderType] || pendingDelete.provider
+            : '',
+        })}
+        confirmLabel={t('providerCard.deleteButton')}
+        variant="danger"
+        onConfirm={() => {
+          if (pendingDelete) void handleDelete(pendingDelete.id);
+        }}
+        onCancel={() => setPendingDelete(null)}
+      />
 
       <ProviderConfigForm
         isOpen={showForm}

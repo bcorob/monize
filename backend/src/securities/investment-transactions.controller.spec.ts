@@ -3,6 +3,7 @@ import { BadRequestException } from "@nestjs/common";
 import { InvestmentTransactionsController } from "./investment-transactions.controller";
 import { InvestmentTransactionsService } from "./investment-transactions.service";
 import { DelegationService } from "../delegation/delegation.service";
+import { TransferPairLinkService } from "./transfer-pair-link.service";
 
 describe("InvestmentTransactionsController", () => {
   let controller: InvestmentTransactionsController;
@@ -55,6 +56,21 @@ describe("InvestmentTransactionsController", () => {
           useValue: (delegationMock = {
             readableAccountIds: jest.fn().mockResolvedValue([]),
           }),
+        },
+        {
+          provide: TransferPairLinkService,
+          // Only here so the container can construct the controller: no case
+          // in this file drives the two endpoints that reach it, so nothing
+          // needs to hold on to the mock.
+          useValue: {
+            findCandidates: jest.fn().mockResolvedValue([]),
+            linkPair: jest.fn().mockResolvedValue({
+              outTransactionId: "tx-out",
+              inTransactionId: "tx-in",
+              securityId: "sec-1",
+              rebuiltAccountIds: [],
+            }),
+          },
         },
       ],
     }).compile();

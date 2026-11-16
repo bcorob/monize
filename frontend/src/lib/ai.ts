@@ -1,5 +1,6 @@
 import Cookies from 'js-cookie';
 import apiClient, { attemptTokenRefresh } from './api';
+import { dedupe, invalidateCache } from './apiCache';
 import type {
   AiProviderConfig,
   CreateAiProviderConfig,
@@ -19,10 +20,16 @@ import type {
 } from '@/types/ai';
 
 export const aiApi = {
-  getStatus: async (): Promise<AiStatus> => {
-    const response = await apiClient.get<AiStatus>('/ai/status');
-    return response.data;
-  },
+  // Read by every surface that has to know whether an AI provider can answer
+  // at all -- the payee lookup buttons, the settings toggle, the chat. Cached
+  // briefly and deduped so those reads cost one request; every provider
+  // mutation below drops it, so adding the first provider takes effect at once.
+  getStatus: async (): Promise<AiStatus> =>
+    dedupe(
+      'ai:status',
+      async () => (await apiClient.get<AiStatus>('/ai/status')).data,
+      60_000,
+    ),
 
   getConfigs: async (): Promise<AiProviderConfig[]> => {
     const response = await apiClient.get<AiProviderConfig[]>('/ai/configs');
@@ -31,16 +38,31 @@ export const aiApi = {
 
   createConfig: async (data: CreateAiProviderConfig): Promise<AiProviderConfig> => {
     const response = await apiClient.post<AiProviderConfig>('/ai/configs', data);
+    // Also the payee lookup status: it answers "can a lookup run", which is
+    // true of an AI provider as well as of Google Places, so adding or
+    // removing one changes it.
+    invalidateCache('ai:');
+    invalidateCache('payee-lookup:');
     return response.data;
   },
 
   updateConfig: async (id: string, data: UpdateAiProviderConfig): Promise<AiProviderConfig> => {
     const response = await apiClient.patch<AiProviderConfig>(`/ai/configs/${id}`, data);
+    // Also the payee lookup status: it answers "can a lookup run", which is
+    // true of an AI provider as well as of Google Places, so adding or
+    // removing one changes it.
+    invalidateCache('ai:');
+    invalidateCache('payee-lookup:');
     return response.data;
   },
 
   deleteConfig: async (id: string): Promise<void> => {
     await apiClient.delete(`/ai/configs/${id}`);
+    // Also the payee lookup status: it answers "can a lookup run", which is
+    // true of an AI provider as well as of Google Places, so adding or
+    // removing one changes it.
+    invalidateCache('ai:');
+    invalidateCache('payee-lookup:');
   },
 
   testConnection: async (id: string): Promise<AiConnectionTestResult> => {

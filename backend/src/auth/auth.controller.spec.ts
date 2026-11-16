@@ -1,3 +1,4 @@
+import { verifyCsrfToken } from "../common/csrf.util";
 import { Test, TestingModule } from "@nestjs/testing";
 import { DataSource } from "typeorm";
 import {
@@ -22,6 +23,9 @@ import { SELF_ONLY_PROFILE_FIELDS } from "../users/user-profile";
 import { fullyPopulatedUser } from "../users/user-profile.test-util";
 import { UsersController } from "../users/users.controller";
 import { UsersService } from "../users/users.service";
+import { DEMO_RESTRICTED_KEY } from "../common/guards/demo-mode.guard";
+import { SKIP_CSRF_KEY } from "../common/decorators/skip-csrf.decorator";
+import { ALLOW_DELEGATE_KEY } from "../delegation/decorators/delegate-access.decorator";
 
 jest.mock("../common/db/scoped-db", () =>
   jest.requireActual("../test-helpers/scoped-db-testing").scopedDbMockModule(),
@@ -71,6 +75,7 @@ describe("AuthController", () => {
   };
 
   const mockRes = () => ({
+    setHeader: jest.fn(),
     json: jest.fn(),
     cookie: jest.fn(),
     clearCookie: jest.fn(),
@@ -85,6 +90,7 @@ describe("AuthController", () => {
       generateResetToken: jest.fn(),
       resetPassword: jest.fn(),
       verifyEmail: jest.fn(),
+      confirmEmailChange: jest.fn(),
       generateVerificationToken: jest.fn(),
       checkVerificationEmailLimit: jest.fn().mockReturnValue(true),
       revokeRefreshToken: jest.fn(),
@@ -92,6 +98,7 @@ describe("AuthController", () => {
       setup2FA: jest.fn(),
       confirmSetup2FA: jest.fn(),
       disable2FA: jest.fn(),
+      reset2FA: jest.fn(),
       verify2FA: jest.fn(),
       generateTokenPair: jest.fn(),
       findOrCreateOidcUser: jest.fn(),
@@ -103,6 +110,9 @@ describe("AuthController", () => {
       generateBackupCodes: jest.fn(),
       confirmOidcLink: jest.fn(),
       getCsrfKey: jest.fn().mockReturnValue("test-csrf-key"),
+      issueLoginDeviceCookie: jest
+        .fn()
+        .mockResolvedValue({ name: "login_device_x", value: "iat.nonce.mac" }),
       // No sanitizeUser mock: the profile endpoints call the real
       // toUserProfile/toDelegatedUserProfile allowlist directly, so these
       // tests exercise the actual serializer rather than a re-implementation.
@@ -368,7 +378,7 @@ describe("AuthController", () => {
         firstName: "Vee",
       };
 
-      await controller.register(dto as any, res as any);
+      const returned = await controller.register(dto as any, res as any);
 
       expect(emailService.sendMail).toHaveBeenCalledWith(
         "verify@example.com",
@@ -377,6 +387,7 @@ describe("AuthController", () => {
       );
       expect(res.cookie).not.toHaveBeenCalled();
       expect(res.json).toHaveBeenCalledWith({ verificationRequired: true });
+      expect(returned).toBeUndefined();
     });
   });
 
@@ -458,12 +469,20 @@ describe("AuthController", () => {
       } as any;
       const dto = { email: "test@example.com", password: "password" };
 
-      await controller.login(dto as any, expressReq, res as any);
+      const returned = await controller.login(
+        dto as any,
+        expressReq,
+        res as any,
+      );
 
       expect(res.json).toHaveBeenCalledWith({
         requires2FA: true,
         tempToken: "temp-2fa-token",
       });
+      // A @Res() handler's return value still travels through the global
+      // ClassSerializerInterceptor; returning the live Express response killed
+      // the process with ERR_INTERNAL_ASSERTION once the reply had been sent.
+      expect(returned).toBeUndefined();
       expect(res.cookie).not.toHaveBeenCalledWith(
         "auth_token",
         expect.anything(),
@@ -537,9 +556,14 @@ describe("AuthController", () => {
       } as any;
       const dto = { email: "test@example.com", password: "password" };
 
-      await controller.login(dto as any, expressReq, res as any);
+      const returned = await controller.login(
+        dto as any,
+        expressReq,
+        res as any,
+      );
 
       expect(res.json).toHaveBeenCalledWith({ emailNotVerified: true });
+      expect(returned).toBeUndefined();
       expect(res.cookie).not.toHaveBeenCalled();
     });
   });
@@ -551,11 +575,51 @@ describe("AuthController", () => {
       expect(result).toEqual({
         local: true,
         oidc: false,
+        oidcPasswordLogin: false,
         registration: true,
         smtp: true,
         force2fa: false,
         demo: false,
+        brandPanel: true,
       });
+    });
+
+    it("turns the brand panel off only for a literal false, any case", async () => {
+      const get = configService.get.getMockImplementation()!;
+      for (const [value, expected] of [
+        ["FALSE", false],
+        ["false", false],
+        ["0", true],
+        ["", true],
+      ] as const) {
+        configService.get.mockImplementation((key: string, d?: string) =>
+          key === "AUTH_BRAND_PANEL" ? value : get(key, d),
+        );
+        const c = new AuthController(
+          authService as never,
+          oidcService as never,
+          undefined as never,
+          configService as never,
+          emailService as never,
+          demoModeService as never,
+          undefined as never,
+          undefined as never,
+          undefined as never,
+          undefined as never,
+        );
+        expect((await c.getAuthMethods()).brandPanel).toBe(expected);
+      }
+    });
+
+    it("reports oidcPasswordLogin only when the flag is true", async () => {
+      const get = configService.get.getMockImplementation()!;
+      configService.get.mockImplementation((key: string, d?: string) =>
+        key === "OIDC_ALLOW_PASSWORD_LOGIN" ? "true" : get(key, d),
+      );
+
+      const result = await controller.getAuthMethods();
+
+      expect(result.oidcPasswordLogin).toBe(true);
     });
 
     it("reflects oidc enabled status", async () => {
@@ -691,7 +755,7 @@ describe("AuthController", () => {
     // The P2-003 blocker existed because /auth/profile and /users/me answered
     // the same acting-context question with different field sets. This is not
     // an HTTP-level test (the repo's e2e infrastructure is documented broken
-    // in backend/CLAUDE.md and nothing in CI runs it); it drives both real
+    // in docs/backend/testing.md and nothing in CI runs it); it drives both real
     // controller methods with the same request shape and the same owner row,
     // which pins the parity the two routes' serialization can drift on.
     it("removes the same fields from /auth/profile and /users/me while acting", async () => {
@@ -863,6 +927,31 @@ describe("AuthController", () => {
 
       await expect(
         controller.verifyEmail({ token: "bad" } as any),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe("confirmEmailChange", () => {
+    it("delegates to authService.confirmEmailChange and asks for a new sign-in", async () => {
+      authService.confirmEmailChange.mockResolvedValue(undefined);
+
+      const result = await controller.confirmEmailChange({
+        token: "change-token",
+      });
+
+      expect(authService.confirmEmailChange).toHaveBeenCalledWith(
+        "change-token",
+      );
+      expect(result.message).toContain("Email address changed");
+    });
+
+    it("propagates the refusal of an invalid or expired link", async () => {
+      authService.confirmEmailChange.mockRejectedValue(
+        new BadRequestException("Invalid or expired email change link"),
+      );
+
+      await expect(
+        controller.confirmEmailChange({ token: "bad" }),
       ).rejects.toThrow(BadRequestException);
     });
   });
@@ -1300,7 +1389,7 @@ describe("AuthController", () => {
   });
 
   describe("csrfRefresh", () => {
-    it("sets csrf_token cookie and returns success message", async () => {
+    it("returns the same session-bound token in a non-cacheable JSON response", async () => {
       const res = mockRes();
       const req = { user: { id: "user-1", realUserId: "user-1" } };
 
@@ -1315,8 +1404,13 @@ describe("AuthController", () => {
           path: "/",
         }),
       );
+      const token = res.cookie.mock.calls[0][1];
+      expect(verifyCsrfToken(token, "user-1", "test-csrf-key")).toBe(true);
+      expect(verifyCsrfToken(token, "other-user", "test-csrf-key")).toBe(false);
+      expect(res.setHeader).toHaveBeenCalledWith("Cache-Control", "no-store");
       expect(res.json).toHaveBeenCalledWith({
         message: "CSRF token refreshed",
+        csrfToken: token,
       });
     });
   });
@@ -1362,6 +1456,37 @@ describe("AuthController", () => {
         expect.any(Object),
       );
       expect(res.json).toHaveBeenCalledWith({ user: verifyResult.user });
+    });
+
+    it("tells the client a backup code was used, and how many are left", async () => {
+      authService.verify2FA.mockResolvedValue({
+        accessToken: "2fa-access",
+        refreshToken: "2fa-refresh",
+        user: { id: "user-1", email: "test@example.com" },
+        trustedDeviceRef: undefined,
+        rememberMe: false,
+        usedBackupCode: true,
+        backupCodesRemaining: 3,
+      });
+      const res = mockRes();
+
+      await controller.verify2FA(
+        { tempToken: "temp-token", code: "abcd-ef01" } as any,
+        { headers: {}, socket: {} } as any,
+        res as any,
+      );
+
+      // Cookies as for any sign-in; only the body gains the two fields.
+      expect(res.cookie).toHaveBeenCalledWith(
+        "auth_token",
+        "2fa-access",
+        expect.any(Object),
+      );
+      expect(res.json).toHaveBeenCalledWith({
+        user: { id: "user-1", email: "test@example.com" },
+        usedBackupCode: true,
+        backupCodesRemaining: 3,
+      });
     });
 
     it("sets trusted_device cookie when rememberDevice is true", async () => {
@@ -1535,6 +1660,93 @@ describe("AuthController", () => {
         "delegate-1",
         "123456",
       );
+    });
+  });
+
+  describe("reset2FA", () => {
+    const body = { currentPassword: "pw", code: "abcd-ef01" };
+
+    it("resets the caller's 2FA, keeping the session that asked", async () => {
+      authService.reset2FA.mockResolvedValue({ message: "reset" });
+      const res = mockRes();
+      const req = {
+        user: { id: "user-1", realUserId: "user-1", isActing: false },
+        cookies: { refresh_token: "current-refresh" },
+      };
+
+      await controller.reset2FA(req as any, body as any, res as any);
+
+      expect(authService.reset2FA).toHaveBeenCalledWith(
+        "user-1",
+        "pw",
+        "abcd-ef01",
+        "current-refresh",
+      );
+      // The trusted devices are gone, this browser's included.
+      expect(res.clearCookie).toHaveBeenCalledWith("trusted_device");
+      expect(res.json).toHaveBeenCalledWith({ message: "reset" });
+    });
+
+    it("never resets the owner's 2FA for an acting delegate: the target is the delegate's own account", async () => {
+      authService.reset2FA.mockResolvedValue({ message: "reset" });
+      const actingReq = {
+        user: { id: "owner-1", realUserId: "delegate-1", isActing: true },
+        cookies: {},
+      };
+
+      await controller.reset2FA(
+        actingReq as any,
+        body as any,
+        mockRes() as any,
+      );
+
+      expect(authService.reset2FA).toHaveBeenCalledWith(
+        "delegate-1",
+        "pw",
+        "abcd-ef01",
+        undefined,
+      );
+      expect(authService.reset2FA).not.toHaveBeenCalledWith(
+        "owner-1",
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+
+    it("sends no reply and clears no cookie when the reset is refused", async () => {
+      authService.reset2FA.mockRejectedValue(
+        new BadRequestException("Invalid verification code"),
+      );
+      const res = mockRes();
+
+      await expect(
+        controller.reset2FA(
+          { user: { id: "user-1", realUserId: "user-1" }, cookies: {} } as any,
+          body as any,
+          res as any,
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(res.clearCookie).not.toHaveBeenCalled();
+      expect(res.json).not.toHaveBeenCalled();
+    });
+
+    it("carries the guards and limits of the neighbouring 2FA management routes", () => {
+      const handler = AuthController.prototype.reset2FA;
+      const disable = AuthController.prototype.disable2FA;
+      const meta = (key: string, fn: object) => Reflect.getMetadata(key, fn);
+
+      // Authenticated, CSRF-checked (no SkipCsrf), demo-restricted, throttled
+      // like disable2FA, and reachable by a delegate only for their own account.
+      expect(meta("__guards__", handler)).toEqual(meta("__guards__", disable));
+      expect(meta(DEMO_RESTRICTED_KEY, handler)).toBe(true);
+      expect(meta(ALLOW_DELEGATE_KEY, handler)).toBe(true);
+      expect(meta(SKIP_CSRF_KEY, handler)).toBeUndefined();
+      expect(meta("THROTTLER:LIMITdefault", handler)).toBe(
+        meta("THROTTLER:LIMITdefault", disable),
+      );
+      expect(meta("THROTTLER:TTLdefault", handler)).toBe(900000);
+      expect(meta("path", handler)).toBe("2fa/reset");
     });
   });
 
@@ -1801,6 +2013,39 @@ describe("AuthController", () => {
       expect(res.json).toHaveBeenCalledWith({ message: "Token refreshed" });
     });
 
+    it("keeps the refresh cookie when the refresh was answered inside the rotation grace", async () => {
+      // A second tab presented the predecessor: the server answers with an
+      // access token only, and the refresh cookie the first tab's response set
+      // is the live one (A26-M03).
+      authService.refreshTokens.mockResolvedValue({
+        accessToken: "new-access",
+        refreshToken: null,
+        userId: "user-1",
+      });
+      const res = mockRes();
+      const expressReq = { cookies: { refresh_token: "predecessor" } } as any;
+
+      await controller.refresh(expressReq, res as any);
+
+      expect(res.cookie).toHaveBeenCalledWith(
+        "auth_token",
+        "new-access",
+        expect.any(Object),
+      );
+      expect(res.cookie).not.toHaveBeenCalledWith(
+        "refresh_token",
+        expect.anything(),
+        expect.anything(),
+      );
+      expect(res.cookie).toHaveBeenCalledWith(
+        "csrf_token",
+        expect.any(String),
+        expect.any(Object),
+      );
+      expect(res.clearCookie).not.toHaveBeenCalled();
+      expect(res.json).toHaveBeenCalledWith({ message: "Token refreshed" });
+    });
+
     it("clears all auth cookies and re-throws when refreshTokens fails", async () => {
       const error = new UnauthorizedException("Token revoked");
       authService.refreshTokens.mockRejectedValue(error);
@@ -1851,6 +2096,7 @@ describe("AuthController", () => {
         dto,
         "my-trusted-token",
         "TestBrowser/1.0",
+        expressReq.cookies,
       );
     });
 
@@ -1874,6 +2120,7 @@ describe("AuthController", () => {
         dto,
         undefined,
         "TestBrowser/1.0",
+        expressReq.cookies,
       );
     });
 
@@ -1897,7 +2144,121 @@ describe("AuthController", () => {
         dto,
         undefined,
         "TestBrowser/1.0",
+        expressReq.cookies,
       );
+    });
+  });
+
+  describe("login_device cookie (#2181)", () => {
+    const cookieNames = (res: any) =>
+      res.cookie.mock.calls.map((c: unknown[]) => c[0]);
+    const signedIn = {
+      accessToken: "access-token",
+      refreshToken: "refresh-token",
+      user: { id: "user-1", realUserId: "user-1", email: "test@example.com" },
+    };
+
+    it("hands the request's cookies to authService.login", async () => {
+      authService.login.mockResolvedValue(signedIn);
+      const expressReq = {
+        cookies: { login_device_x: "iat.nonce.mac" },
+        headers: { "user-agent": "TestBrowser/1.0" },
+      } as any;
+      const dto = { email: "test@example.com", password: "password" };
+
+      await controller.login(dto as any, expressReq, mockRes() as any);
+
+      expect(authService.login).toHaveBeenCalledWith(
+        dto,
+        undefined,
+        "TestBrowser/1.0",
+        { login_device_x: "iat.nonce.mac" },
+      );
+    });
+
+    it("marks the browser as known after a completed sign-in", async () => {
+      authService.login.mockResolvedValue(signedIn);
+      const res = mockRes();
+
+      await controller.login(
+        { email: "test@example.com", password: "password" } as any,
+        { cookies: {}, headers: {} } as any,
+        res as any,
+      );
+
+      expect(authService.issueLoginDeviceCookie).toHaveBeenCalledWith("user-1");
+      expect(res.cookie).toHaveBeenCalledWith(
+        "login_device_x",
+        "iat.nonce.mac",
+        expect.objectContaining({
+          httpOnly: true,
+          sameSite: "strict",
+          path: "/api/v1/auth",
+        }),
+      );
+      expect(res.json).toHaveBeenCalledWith({ user: signedIn.user });
+    });
+
+    it("sets nothing for an account without a password", async () => {
+      authService.login.mockResolvedValue(signedIn);
+      authService.issueLoginDeviceCookie.mockResolvedValueOnce(null);
+      const res = mockRes();
+
+      await controller.login(
+        { email: "test@example.com", password: "password" } as any,
+        { cookies: {}, headers: {} } as any,
+        res as any,
+      );
+
+      expect(cookieNames(res)).not.toContain("login_device_x");
+    });
+
+    it("still completes the sign-in when the cookie cannot be issued", async () => {
+      authService.login.mockResolvedValue(signedIn);
+      authService.issueLoginDeviceCookie.mockRejectedValueOnce(
+        new Error("db down"),
+      );
+      const res = mockRes();
+
+      await controller.login(
+        { email: "test@example.com", password: "password" } as any,
+        { cookies: {}, headers: {} } as any,
+        res as any,
+      );
+
+      expect(res.json).toHaveBeenCalledWith({ user: signedIn.user });
+      expect(cookieNames(res)).not.toContain("login_device_x");
+    });
+
+    it("does not mark the browser while the second factor is still owed", async () => {
+      authService.login.mockResolvedValue({
+        requires2FA: true,
+        tempToken: "temp",
+      });
+      const res = mockRes();
+
+      await controller.login(
+        { email: "test@example.com", password: "password" } as any,
+        { cookies: {}, headers: {} } as any,
+        res as any,
+      );
+
+      expect(authService.issueLoginDeviceCookie).not.toHaveBeenCalled();
+      expect(cookieNames(res)).not.toContain("login_device_x");
+    });
+
+    it("marks the browser once the second factor completes the sign-in", async () => {
+      authService.verify2FA.mockResolvedValue(signedIn);
+      const res = mockRes();
+
+      await controller.verify2FA(
+        { tempToken: "temp", code: "123456" } as any,
+        { headers: {}, cookies: {} } as any,
+        res as any,
+      );
+
+      expect(authService.issueLoginDeviceCookie).toHaveBeenCalledWith("user-1");
+      expect(cookieNames(res)).toContain("login_device_x");
     });
   });
 

@@ -1,0 +1,120 @@
+{
+  "page": {
+    "title": "Yapay zekâ inceleme kutusu",
+    "subtitle": "Bir kuralın bir YZ'ye gözden geçirmesini istediği işlemler, bir yardımcının taslak oluşturması istenen profiller ve bir yardımcının sizin onaylamanız için önerdiği düzenlemeler."
+  },
+  "filter": {
+    "label": "Duruma göre filtrele",
+    "open": "Açık",
+    "pending": "Beklemede",
+    "claimed": "İncelemede",
+    "proposed": "Önerildi",
+    "applied": "Uygulandı",
+    "rejected": "Reddedildi",
+    "expired": "Süresi doldu"
+  },
+  "kindFilter": {
+    "label": "Türe göre filtrele",
+    "all": "Tümü",
+    "email_receipt": "E-posta makbuzları",
+    "transaction_review": "Kurallar",
+    "option": "{label} ({count})"
+  },
+  "status": {
+    "pending": "Beklemede",
+    "claimed": "İncelemede",
+    "proposed": "Önerildi",
+    "applied": "Uygulandı",
+    "rejected": "Reddedildi",
+    "expired": "Süresi doldu"
+  },
+  "columns": {
+    "date": "Tarih",
+    "request": "İstek",
+    "amount": "Tutar",
+    "status": "Durum"
+  },
+  "row": {
+    "noPayee": "Alıcı yok",
+    "transactionMissing": "Bu işlem artık yok",
+    "rule": "Kural: {name}",
+    "manualRequest": "Elle istendi",
+    "trade": "{action, select, BUY {{symbol} için {quantity} adet alım} SELL {{symbol} için {quantity} adet satım} DIVIDEND {{symbol} temettüsü} REINVEST {{symbol} için {quantity} adet temettü yeniden yatırımı} other {{symbol} işlemi}}",
+    "receiptInstruction": {
+      "automatic": "Bu işlemi ekteki sipariş e-postasından tamamlayın: her biri bir kategoriyle kalemlere bölün ya da açıklamayı ayarlayın.",
+      "chat": "Ekteki sipariş e-postasının tanınmasını istediniz: bu işlemi her biri bir kategoriyle ürünlere bölün ya da açıklamayı ayarlayın.",
+      "categorize": "Ekteki sipariş e-postasında hiçbir kuralın kategorilendirmediği her kaleme bir kategori atayın, ardından bu işlemin bölünmesini önerin ya da açıklamayı ayarlayın.",
+      "parsed": "Kayıtlı bir ayrıştırıcı sipariş e-postasını okudu ve işlem için bu kategori satırlarını ve bu açıklamayı öneriyor.",
+      "trade": "Kayıtlı bir ayrıştırıcının okuduğu işlem onayı e-postası bu yatırım işlemini öneriyor. Onaylamadan önce hesabı, menkul kıymeti, adedi ve toplamı aracı kurumunuzdaki kayıtlarla karşılaştırın.",
+      "tradeChat": "Ekteki işlem onayının tanınmasını istediniz: bildirdiği yatırım işlemini, yani bir alım, satım, nakit temettü veya yeniden yatırılan temettüyü önerin."
+    },
+    "emailReceipt": "E-posta makbuzu: {subject}, gönderen: {sender}",
+    "emailReceiptForwarded": "E-posta makbuzu: {subject}, gönderen: {sender}, ileten: {forwarder}",
+    "emailReceiptMissing": "E-posta makbuzu (e-posta silindi)",
+    "parserDraft": "{count, plural, one {# e-postadan} other {# e-postadan}} profil taslağı ({domain})",
+    "viewEmailReceipts": "E-posta makbuzlarını görüntüle",
+    "agentNote": "Asistanın notu: {reason}",
+    "dates": "Oluşturulma {created}, bitiş {expires}",
+    "viewTransaction": "İşlemi görüntüle",
+    "waitingForAgent": "Bir yapay zekâ ajanı bekleniyor. <link>Ayarlar'dan bir yapay zekâ sağlayıcısı bağlayın</link> veya bir MCP istemcisinin üstlenmesine izin verin.",
+    "parserDraftReady": "Profil taslağı hazır. <link>Profil ayarlarında test edin ve onaylayın</link>.",
+    "tradePending": "E-postadan bir işlem, henüz okunmadı",
+    "tradeEmail": "İşlem onayı e-postası",
+    "parserDraftIds": "Profil taslağı kimlikleri: {ids}"
+  },
+  "actions": {
+    "dismiss": "Yoksay"
+  },
+  "proposal": {
+    "errorTitle": "Bu öneri artık uygulanamaz"
+  },
+  "bulk": {
+    "selectRow": "{name} öğesini seç",
+    "selectAll": "Gösterilen ve onaylanabilen ya da gönderilebilen tüm istekleri seç",
+    "approveSelected": "Seçilenleri onayla ({count})",
+    "approveAllShown": "Gösterilenlerin tümünü onayla ({count})",
+    "summary": "{approved, plural, one {# öneri} other {# öneri}} uygulandı, {failed, plural, one {# uygulanmadı} other {# uygulanmadı}}.",
+    "closeSummary": "Kapat",
+    "failure": "{name}: {reason}",
+    "noReason": "Hiçbir neden belirtilmedi",
+    "unknownRequest": "Bir istek",
+    "failed": "Öneriler uygulanamadı",
+    "dialog": {
+      "title": "{count, plural, one {# öneri uygulansın mı?} other {# öneri uygulansın mı?}}",
+      "message": "Her öneri, işlemin şu anki haline göre denetlenir ve tek tek uygulanır. Artık uymayan öneri atlanır ve bildirilir, diğerleri yine uygulanır. Önerileri onaylamadan önce inceleyin.",
+      "confirm": "{count, plural, one {# öneriyi uygula} other {# öneriyi uygula}}"
+    }
+  },
+  "sendToAssistant": {
+    "button": "{count, plural, other {# bekleyen isteği}} yapay zeka asistanına gönder",
+    "buttonSelected": "{count, plural, other {# seçili isteği}} yapay zeka asistanına gönder",
+    "prompt": "Bekleyen yapay zeka inceleme isteklerimi ai_review_requests aracıyla işle: listele, her birini üstlen, talimatını uygula ve bir öneri gönder. Profil taslağı isteği için profili bunun yerine email_receipt_parsers aracıyla oluştur. Ben önerileri yapay zeka inceleme kutusunda onaylayana kadar hiçbir şey değişmez.",
+    "promptSelected": "ai_review_requests aracıyla {count, plural, other {şu # yapay zeka inceleme isteğini}} işle: {ids}. Her birini kimliğiyle üstlen, talimatını uygula ve bir öneri gönder. Profil taslağı isteği için profili bunun yerine email_receipt_parsers aracıyla oluştur. Diğer isteklere dokunma. Ben önerileri yapay zeka inceleme kutusunda onaylayana kadar hiçbir şey değişmez.",
+    "opened": "Sohbet hazırlanmış bir mesajla açıldı. Okuyun ve Gönder'e basın.",
+    "unavailable": "Yapay zeka asistanı şu anda yanıt veremiyor. Ayarlar'dan bir yapay zeka sağlayıcısı bağlayın veya MCP istemcinizi bağlayın. İstekler burada beklemeye devam ediyor."
+  },
+  "dismissDialog": {
+    "title": "Bu istek yoksayılsın mı?",
+    "message": "Bu istek üzerinde çalışması için artık kimseden istekte bulunulmayacak. İsteğin konusu olan hiçbir şey değişmez.",
+    "confirm": "İsteği yoksay"
+  },
+  "loading": "İnceleme istekleri yükleniyor...",
+  "error": {
+    "title": "İnceleme istekleri yüklenemedi",
+    "body": "Liste yüklenmedi, bu yüzden boş olmayabilir. Bağlantınızı kontrol edip yeniden deneyin.",
+    "retry": "Yeniden dene"
+  },
+  "empty": {
+    "title": "İnceleme isteği yok",
+    "body": "İstekler, “Yapay zekâ incelemesi iste” eylemine sahip bir kural bir işlemle eşleştiğinde burada görünür. Bir yapay zekâ asistanı ya da aktarıcı ajan gibi bir MCP istemcisi kuyruğu işler ve onayınız için bir değişiklik önerir.",
+    "filteredTitle": "Bu durumda istek yok",
+    "filteredBody": "Diğer istekleri görmek için başka bir durum seçin."
+  },
+  "toasts": {
+    "approved": "Öneri uygulandı",
+    "dismissed": "İstek yoksayıldı",
+    "dismissFailed": "İstek yoksayılamadı",
+    "approveFailed": "Öneri uygulanamadı",
+    "changed": "Bu istek bu arada değişti. Liste yeniden yüklendi."
+  }
+}

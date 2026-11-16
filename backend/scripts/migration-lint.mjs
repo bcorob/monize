@@ -24,11 +24,14 @@
  * the rules cannot see -- the reason is mandatory:
  *   -- migration-lint-disable-next-line insert-without-on-conflict: reason
  *
- * See docs/database-migrations.md and docs/future-plans/mny-import.md (B1).
+ * See docs/database-migrations.md and docs/specs/mny-import.md (B1).
  */
 import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, dirname, basename } from "node:path";
 import { fileURLToPath } from "node:url";
+// The loader reaches the backend's own TypeScript definition, so the lint
+// orders files exactly as db-migrate applies them.
+import { compareMigrationFilenames } from "../../scripts/lib/migration-filename.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const defaultDir = join(here, "..", "..", "database", "migrations");
@@ -73,7 +76,19 @@ export function stripComments(sql) {
     }
     const tag = dollarTagAt(sql, i);
     if (tag) {
-      const end = sql.indexOf(tag, i + tag.length);
+      // A dollar-quoted body is plpgsql, so `--` inside it starts a comment
+      // there too -- and the rules run over the body's statements, reading that
+      // text as code. Left unstripped, an apostrophe in prose opens a string
+      // literal that swallows the statement separators after it, and a rule's
+      // own name written out in an explanation is matched as the statement it
+      // describes. Both have happened, in the same comment.
+      const bodyStart = i + tag.length;
+      const end = sql.indexOf(tag, bodyStart);
+      const bodyEnd = end === -1 ? sql.length : end;
+      const strippedBody = stripComments(sql.slice(bodyStart, bodyEnd));
+      for (let k = 0; k < strippedBody.length; k++) {
+        out[bodyStart + k] = strippedBody[k];
+      }
       i = end === -1 ? sql.length : end + tag.length;
       continue;
     }
@@ -290,6 +305,50 @@ function namesARole(grantees) {
   return grantees.length === 0 || grantees.some((name) => name !== "public");
 }
 
+/**
+ * Blank the contents of single-quoted literals (offsets and length preserved),
+ * so a rule matching statement keywords cannot trip over prose or data inside a
+ * string. Comments are already gone by the time a rule runs.
+ */
+export function blankLiterals(text) {
+  const out = Array.from(text);
+  let i = 0;
+  while (i < text.length) {
+    if (text[i] === "'") {
+      const end = skipSingleQuoted(text, i);
+      for (let k = i + 1; k < end - 1; k++) if (out[k] !== "\n") out[k] = " ";
+      i = end;
+      continue;
+    }
+    i++;
+  }
+  return out.join("");
+}
+
+const CONTRACT_MARKER = "contract-after";
+const SEMVER = /^\d+\.\d+\.\d+$/;
+
+/**
+ * Contracting statements: each removes or changes a shape the previous release
+ * still reads or writes (the table in docs/database-migrations.md). `DROP
+ * TABLE`, `DROP INDEX`, `DROP CONSTRAINT` and `ADD ... CHECK` are not in it.
+ */
+const CONTRACT_STATEMENTS = [
+  { regex: /\bDROP\s+COLUMN\b/i, label: "DROP COLUMN" },
+  { regex: /\bRENAME\s+COLUMN\b/i, label: "RENAME COLUMN" },
+  {
+    // `ALTER TABLE t RENAME TO u` and the COLUMN-less `RENAME c TO d`;
+    // `RENAME CONSTRAINT` renames a name nobody selects.
+    regex: /^\s*ALTER\s+TABLE\b[^]*?\bRENAME\s+(?!CONSTRAINT\b|COLUMN\b)/i,
+    label: "ALTER TABLE ... RENAME",
+  },
+  { regex: /\bSET\s+NOT\s+NULL\b/i, label: "SET NOT NULL" },
+  {
+    regex: /\bALTER\s+(?:COLUMN\s+)?[A-Za-z0-9_"]+\s+(?:SET\s+DATA\s+)?TYPE\b/i,
+    label: "ALTER COLUMN ... TYPE",
+  },
+];
+
 export const RULES = [
   {
     id: "create-table-without-if-not-exists",
@@ -479,6 +538,26 @@ export const RULES = [
     },
   },
   /**
+   * Not idempotency -- rolling-update safety. During a rollout the previous
+   * release serves requests against the new schema, so a statement that drops
+   * or reshapes what it reads breaks it. The file must carry
+   * `-- contract-after: X.Y.Z`, the release whose code no longer touches the old
+   * shape. The marker is a claim, not a proof. The disable pragma is refused for
+   * this rule (`unsuppressible`): the marker is the structured form of the claim.
+   */
+  {
+    id: "contract-without-expand",
+    unsuppressible: true,
+    check(text, ctx) {
+      if (ctx.contractAfter) return [];
+      const code = blankLiterals(text);
+      return CONTRACT_STATEMENTS.filter(({ regex }) => regex.test(code)).map(
+        ({ label }) =>
+          `${label} contracts the schema while the previous release may still use it -- add "-- ${CONTRACT_MARKER}: X.Y.Z" naming the release whose code no longer reads or writes it (docs/database-migrations.md)`,
+      );
+    },
+  },
+  /**
    * Not idempotency -- deployability. A migration runs unconditionally at
    * startup on every installation, including ones where the runtime role does
    * not exist (it is provisioned by db-init, or by the CNPG Cluster manifest, or
@@ -595,6 +674,13 @@ export function collectPragmas(sql) {
       });
       return;
     }
+    if (RULES.find((r) => r.id === ruleId).unsuppressible) {
+      problems.push({
+        line: index + 1,
+        message: `rule "${ruleId}" cannot be disabled by a pragma; use "-- ${CONTRACT_MARKER}: X.Y.Z"`,
+      });
+      return;
+    }
     if (!reason) {
       problems.push({
         line: index + 1,
@@ -613,9 +699,36 @@ export function collectPragmas(sql) {
   return { suppressed, problems };
 }
 
+/**
+ * The `-- contract-after: X.Y.Z` markers of a file. `valid` is true when at
+ * least one marker names a semver release; a malformed one is a problem.
+ */
+export function collectContractMarkers(sql) {
+  const problems = [];
+  let valid = false;
+  sql.split("\n").forEach((line, index) => {
+    const match = new RegExp(`^\\s*--\\s*${CONTRACT_MARKER}:(.*)$`, "i").exec(
+      line,
+    );
+    if (!match) return;
+    const value = match[1].trim();
+    if (SEMVER.test(value)) {
+      valid = true;
+      return;
+    }
+    problems.push({
+      line: index + 1,
+      message: `${CONTRACT_MARKER} marker "${value}" is not a release of the form X.Y.Z`,
+    });
+  });
+  return { valid, problems };
+}
+
 /** Lint one migration's SQL. Returns `{ findings }`, each with line + rule. */
 export function lintSql(sql, filename = "<sql>") {
-  const { suppressed, problems } = collectPragmas(sql);
+  const { suppressed, problems: pragmaProblems } = collectPragmas(sql);
+  const markers = collectContractMarkers(sql);
+  const problems = [...pragmaProblems, ...markers.problems];
   const findings = problems.map((p) => ({
     file: filename,
     line: p.line,
@@ -630,11 +743,12 @@ export function lintSql(sql, filename = "<sql>") {
     const ctx = {
       blockGuarded: isBlockGuarded(statement.blockText),
       drops: collectDrops(statements, index),
+      contractAfter: markers.valid,
     };
     const line = lineOf(stripped, statement.start);
     for (const rule of RULES) {
       const suppressions = suppressed.get(line);
-      if (suppressions?.has(rule.id)) continue;
+      if (!rule.unsuppressible && suppressions?.has(rule.id)) continue;
       for (const message of rule.check(statement.text, ctx)) {
         findings.push({ file: filename, line, rule: rule.id, message });
       }
@@ -681,15 +795,75 @@ export function missingOneShotMigrations(files) {
   );
 }
 
-/** Lint every `.sql` file in `dir`, sorted by filename. */
-export function lintDirectory(dir) {
+/**
+ * Contract statements that shipped before `contract-without-expand` existed,
+ * excused by name with a one-line note. SHRINK-ONLY: never add an entry; a new
+ * contract carries `-- contract-after: X.Y.Z` instead. An entry is a claim
+ * about a file, so the lint fails when the file is gone.
+ */
+export const GRANDFATHERED_CONTRACT_MIGRATIONS = Object.freeze({
+  "029_share_price_6_decimals.sql":
+    "Widens price columns with ALTER COLUMN TYPE; a widening the old release reads unchanged.",
+  "062_investment_splits.sql":
+    "SET NOT NULL on a column the same migration backfills.",
+  "063_scheduled_investment_splits.sql":
+    "SET NOT NULL on a column the same migration backfills.",
+  "070_account_delegate_granular_capabilities.sql":
+    "Drops the coarse can_manage_payees/categories/tags columns after copying them into granular ones.",
+  "102_transaction_splits_drop_is_fx_fee.sql":
+    "Drops transaction_splits.is_fx_fee, a flag the release no longer wrote.",
+  "104_loan_scenarios_widen_mode_columns.sql":
+    "Widens two VARCHAR(16) columns to VARCHAR(64); the old release reads them unchanged.",
+  "105_loan_scenarios_widen_recurring_extra_mode.sql":
+    "Widens a VARCHAR column; the old release reads it unchanged.",
+  "110_transactions_drop_legacy_cleared_flags.sql":
+    "Drops the legacy cleared flag columns from transactions.",
+  "116_unit_prices_precision.sql":
+    "Widens unit price precision with ALTER COLUMN TYPE; the old release reads it unchanged.",
+  "119_scheduled_investment_price_precision.sql":
+    "Widens price precision with ALTER COLUMN TYPE; the old release reads it unchanged.",
+  "125_gem_strategy_accounts.sql":
+    "Drops gem_strategies.account_id after copying it to a join table.",
+  "153_drop_portfolio_change_baseline_preference.sql":
+    "Drops the portfolio change baseline preference column.",
+  "157_investment_transaction_status.sql":
+    "SET NOT NULL on a status column the same migration backfills.",
+  "179_notifications_rename.sql":
+    "Renames budget_alerts to notifications (ALTER TABLE ... RENAME TO).",
+  "20260908120000_remove_notification_browser.sql":
+    "The one that shipped too early (A26-L09): it dropped user_preferences.notification_browser in the same release that removed the writer, so an upgrade from 1.15.x or earlier fails UserPreference reads on the old pod for the length of the rollout.",
+  "20260908130000_price_alert_percent_numeric.sql":
+    "Changes price_alert_percent to NUMERIC(9, 4) with ALTER COLUMN TYPE, on a column created in the same release (A26-S05-02), so no earlier release reads it.",
+  "20260912200152_calendar_day_note_spans.sql":
+    "SET NOT NULL on end_date, which the same migration backfills.",
+  "20260920163144_exchange_rate_coverage.sql":
+    "Drops two columns of a withdrawn earlier version of the same migration; no-ops on a fresh install.",
+});
+
+/** Registered grandfathered contract migrations that are no longer on disk. */
+export function missingGrandfatheredContracts(files) {
+  return Object.keys(GRANDFATHERED_CONTRACT_MIGRATIONS).filter(
+    (name) => !files.includes(name),
+  );
+}
+
+/** Lint every `.sql` file in `dir`, in apply order (numeric prefix). */
+export function lintDirectory(
+  dir,
+  grandfathered = GRANDFATHERED_CONTRACT_MIGRATIONS,
+) {
   const files = readdirSync(dir)
     .filter((f) => f.endsWith(".sql"))
-    .sort();
+    .sort(compareMigrationFilenames);
   const findings = [];
   for (const file of files) {
     const sql = readFileSync(join(dir, file), "utf8");
-    findings.push(...lintSql(sql, basename(file)).findings);
+    const excused = Object.hasOwn(grandfathered, file);
+    findings.push(
+      ...lintSql(sql, basename(file)).findings.filter(
+        (f) => !(excused && f.rule === "contract-without-expand"),
+      ),
+    );
   }
   return { files, findings };
 }
@@ -705,6 +879,18 @@ function main() {
 
   const { files, findings } = lintDirectory(dir);
   console.log(`Migration idempotency lint: ${files.length} file(s) in ${dir}`);
+
+  const staleContracts = missingGrandfatheredContracts(files);
+  if (staleContracts.length > 0) {
+    console.error("");
+    for (const name of staleContracts) {
+      console.error(
+        `FAIL: ${name} is registered as a grandfathered contract migration but no longer exists -- ` +
+          "remove its entry from GRANDFATHERED_CONTRACT_MIGRATIONS.",
+      );
+    }
+    process.exit(1);
+  }
 
   const missing = missingOneShotMigrations(files);
   if (missing.length > 0) {
@@ -746,10 +932,23 @@ function main() {
   const hasRoleFinding = findings.some(
     (f) => f.rule === "role-or-grant-statement",
   );
+  const hasContractFinding = findings.some(
+    (f) => f.rule === "contract-without-expand",
+  );
   const hasIdempotencyFinding = findings.some(
-    (f) => f.rule !== "role-or-grant-statement",
+    (f) =>
+      f.rule !== "role-or-grant-statement" &&
+      f.rule !== "contract-without-expand",
   );
   const remedies = [];
+  if (hasContractFinding) {
+    remedies.push(
+      "A migration that drops, renames or tightens an existing column must say when\n" +
+        "it is safe: add `-- contract-after: X.Y.Z` (the release whose code no longer\n" +
+        "reads or writes the old shape), and ship it in a later release than the\n" +
+        "release that stopped using it. The disable pragma is not accepted here.",
+    );
+  }
   if (hasIdempotencyFinding) {
     remedies.push(
       "Migrations must be no-ops when re-run: a half-applied migration otherwise\n" +

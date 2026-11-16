@@ -10,8 +10,19 @@ import {
   brokerageExclusionForEntity,
   investmentLinkedTransactionExclusion,
   ordinarySplitLines,
-  reportableTransactionAmount,
 } from "../common/investment-filter.util";
+import {
+  applyParsedSearch,
+  applyTransactionSearch,
+  resolveTransactionSearch,
+  searchNarrows,
+} from "../transactions/apply-transaction-search";
+import { ParsedSearch } from "../transactions/transaction-search-query.util";
+import { createNetCells, netLinesOf } from "./report-net-cells";
+import {
+  convertAtTransferAmounts,
+  transferCounterpartOf,
+} from "./transfer-counterpart";
 import {
   CustomReport,
   TimeframeType,
@@ -36,8 +47,16 @@ import {
   ReportSummary,
 } from "./dto/execute-report.dto";
 import { roundMoney, sumMoney } from "../common/round.util";
+import {
+  ConversionGaps,
+  ReportCurrencyService,
+  transactionRateBasis,
+} from "../built-in-reports/report-currency.service";
 import { transferPayeeLabel } from "../transactions/transfer-payee-label.util";
+import { applyRegisterOrder } from "../transactions/register-order";
 import { BudgetsService } from "../budgets/budgets.service";
+import { BudgetType } from "../budgets/entities/budget.entity";
+import { LOAN_PERIODS_PER_YEAR } from "../accounts/payment-frequency.util";
 import { ActionHistoryService } from "../action-history/action-history.service";
 import {
   subDays,
@@ -53,13 +72,136 @@ import {
   parseISO,
 } from "date-fns";
 
+/** Rows one execution reads; past it the report is truncated, never complete. */
+const REPORT_ROW_LIMIT = 50000;
+
+/**
+ * The one conversion door of a single report execution: the reporting currency
+ * and the rate history the rows need are resolved once, and every row is
+ * converted through {@link RowConverter.convert} at its own rate, or the market
+ * rate on its own date (issue #2106), which records a row it cannot convert
+ * instead of letting it join a sum in its own units (INV-FX-001). A transfer
+ * leg whose other side posted in the reporting currency converts at the two
+ * amounts the transfer moved (`transfer-counterpart.ts`, discussion #2139).
+ */
+interface RowConverter {
+  readonly currency: string;
+  readonly gaps: ConversionGaps;
+  /**
+   * `amount` of `row`, or of its `split` line when given, in the reporting
+   * currency; `null` when it has no rate into it on its date.
+   */
+  convert(
+    amount: number,
+    row: Transaction,
+    split?: TransactionSplit,
+  ): number | null;
+}
+
+/**
+ * The window as a fraction of calendar months: for each month it touches, the
+ * days inside the window over that month's days (1-10 of a 30-day month is
+ * 1/3). A rounded month count compared ten days of actuals to a full month's
+ * budget and 45 days to one month.
+ */
+export function windowMonthFraction(
+  startDate: string,
+  endDate: string,
+): number {
+  const [startYear, startMonth, startDay] = startDate.split("-").map(Number);
+  const [endYear, endMonth, endDay] = endDate.split("-").map(Number);
+  let fraction = 0;
+  for (
+    let year = startYear, month = startMonth;
+    year < endYear || (year === endYear && month <= endMonth);
+    month === 12 ? ((month = 1), year++) : month++
+  ) {
+    const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    const first = year === startYear && month === startMonth ? startDay : 1;
+    const last = year === endYear && month === endMonth ? endDay : daysInMonth;
+    fraction += (last - first + 1) / daysInMonth;
+  }
+  return fraction;
+}
+
 @Injectable()
 export class ReportsService {
   constructor(
     private dataSource: DataSource,
     private budgetsService: BudgetsService,
     private actionHistoryService: ActionHistoryService,
+    private currencyService: ReportCurrencyService,
   ) {}
+
+  private async createConverter(
+    userId: string,
+    transactions: readonly Transaction[],
+  ): Promise<RowConverter> {
+    const currency = await this.currencyService.getDefaultCurrency(userId);
+    const atTransferAmounts = (
+      amount: number,
+      row: Transaction,
+      split?: TransactionSplit,
+    ): number | null =>
+      convertAtTransferAmounts(
+        amount,
+        {
+          amount: Number(split ? split.amount : row.amount),
+          currencyCode: row.currencyCode,
+        },
+        transferCounterpartOf(row, split),
+        currency,
+      );
+    // A row whose every line converts at its transfer's own amounts needs no
+    // rate history, so it does not widen the span the index loads.
+    const needsMarketRate = (tx: Transaction): boolean =>
+      tx.isSplit && tx.splits && tx.splits.length > 0
+        ? tx.splits.some(
+            (split) =>
+              atTransferAmounts(Number(split.amount), tx, split) === null,
+          )
+        : atTransferAmounts(Number(tx.amount), tx) === null;
+    const convertRow = await this.currencyService.buildConverter(
+      transactions
+        .filter(needsMarketRate)
+        .map((tx) => transactionRateBasis(tx, currency)),
+      currency,
+    );
+    const gaps = new ConversionGaps();
+    return {
+      currency,
+      gaps,
+      convert: (amount, row, split) => {
+        // Zero converts to zero at any rate, so an empty row records no gap.
+        if (amount === 0) return 0;
+        const converted =
+          atTransferAmounts(amount, row, split) ??
+          convertRow(amount, transactionRateBasis(row, currency));
+        if (converted === null) gaps.record(row.currencyCode);
+        return converted;
+      },
+    };
+  }
+
+  /**
+   * Whether a row that could not be converted still belongs in a group. A count
+   * needs no rate, so the count metric keeps every row; every money figure
+   * leaves the row out of the group's sum and its row count alike.
+   */
+  private keepsUnconverted(metric: MetricType): boolean {
+    return metric === MetricType.COUNT;
+  }
+
+  /**
+   * Counts a row (or split line) that converted but was left out with a part
+   * that holds one with no rate (issue #2130), once however many groups it
+   * sits in, so `excludedCount` is every row the figures leave out.
+   */
+  private leftOutWithItsPart(
+    conv: RowConverter,
+  ): (currency: string, unit: string) => void {
+    return (currency, unit) => conv.gaps.record(currency, `left-out:${unit}`);
+  }
 
   async create(
     userId: string,
@@ -224,13 +366,14 @@ export class ReportsService {
     );
 
     // Query transactions with filters
-    const selected = await this.getFilteredTransactions(
-      userId,
-      startDate,
-      endDate,
-      report.filters,
-      report.config,
-    );
+    const { transactions: selected, truncated } =
+      await this.getFilteredTransactions(
+        userId,
+        startDate,
+        endDate,
+        report.filters,
+        report.config,
+      );
     // A split parent reached the aggregators whatever its own sign, so its lines
     // are narrowed here, where each line's own amount and kind are readable.
     const transactions = this.narrowSplitLines(selected, report.config);
@@ -253,13 +396,16 @@ export class ReportsService {
       for (const p of payees) payeeMap.set(p.id, p);
     }
 
+    const converter = await this.createConverter(userId, transactions);
+
     // Aggregate data based on groupBy type
     let data = this.aggregateData(
       transactions,
       report.groupBy,
-      report.config.metric,
+      report.config,
       categoryMap,
       payeeMap,
+      converter,
     );
 
     // For BUDGET_VARIANCE metric with CATEGORY grouping, enrich with budget data
@@ -267,7 +413,15 @@ export class ReportsService {
       report.config.metric === MetricType.BUDGET_VARIANCE &&
       report.groupBy === GroupByType.CATEGORY
     ) {
-      data = await this.enrichWithBudgetVariance(userId, data);
+      data = await this.enrichWithBudgetVariance(
+        userId,
+        data,
+        startDate,
+        endDate,
+        categoryMap,
+        converter,
+        report.filters,
+      );
     }
 
     // Apply custom sorting if configured
@@ -280,7 +434,12 @@ export class ReportsService {
     }
 
     // Calculate summary
-    const summary = this.calculateSummary(data);
+    const summary = this.calculateSummary(
+      data,
+      converter.gaps,
+      report.config.metric,
+      truncated,
+    );
 
     return {
       reportId: report.id,
@@ -294,6 +453,10 @@ export class ReportsService {
       },
       data,
       summary,
+      currency: converter.currency,
+      missingCurrencies: converter.gaps.missingCurrencies,
+      excludedCount: converter.gaps.excludedCount,
+      truncated,
       tableColumns: report.config.tableColumns,
     };
   }
@@ -391,9 +554,11 @@ export class ReportsService {
    * Two decisions the SQL could only make about the PARENT, and a split parent
    * is not its lines:
    *
-   * - **Direction.** `transaction.amount` is the sum of every line, so its sign
-   *   is nobody's direction: a -60 expense beside a +500 embedded SELL is a +440
-   *   parent (audit F-CUSTOM-DIR-001).
+   * - **Direction** (the NONE metric's list of transactions only; every other
+   *   metric nets both signs, see `report-net-cells.ts`). `transaction.amount`
+   *   is the sum of every line, so its sign is nobody's direction: a -60
+   *   expense beside a +500 embedded SELL is a +440 parent (audit
+   *   F-CUSTOM-DIR-001).
    * - **Transfers.** `transaction.isTransfer` is false on a split parent that
    *   carries a transfer LINE, so `includeTransfers: false` counted a -200
    *   transfer inside a -260 parent as 260 of spending.
@@ -408,7 +573,11 @@ export class ReportsService {
     transactions: Transaction[],
     config: ReportConfig,
   ): Transaction[] {
-    const narrowsDirection = config.direction !== DirectionFilter.BOTH;
+    // Only the list of single transactions judges a line by its own sign; every
+    // other metric nets a category's lines of both signs (audit A26-M33).
+    const narrowsDirection =
+      config.metric === MetricType.NONE &&
+      config.direction !== DirectionFilter.BOTH;
     if (!narrowsDirection && config.includeTransfers) return transactions;
 
     const wanted = (split: TransactionSplit): boolean => {
@@ -476,8 +645,8 @@ export class ReportsService {
     endDate: string,
     filters: CustomReport["filters"],
     config: ReportConfig,
-  ): Promise<Transaction[]> {
-    return withScopedDb(this.dataSource, (m) => {
+  ): Promise<{ transactions: Transaction[]; truncated: boolean }> {
+    return withScopedDb(this.dataSource, async (m) => {
       const queryBuilder = m
         .getRepository(Transaction)
         .createQueryBuilder("transaction")
@@ -505,6 +674,22 @@ export class ReportsService {
           "linkedTransaction.userId = transaction.userId",
         )
         .leftJoinAndSelect("linkedTransaction.account", "linkedAccount")
+        // A transfer leg in a foreign currency converts at the amounts its
+        // transfer moved (discussion #2139), read off the other side whether
+        // or not the filters keep it: the parent's line that links back to a
+        // split transfer's counterpart, and a split line's own counterpart,
+        // both restricted to the reader's ledger like the join above. Context
+        // for the conversion only, never a row of the report.
+        .leftJoinAndSelect(
+          "linkedTransaction.splits",
+          "linkedSplits",
+          "linkedSplits.linkedTransactionId = transaction.id",
+        )
+        .leftJoinAndSelect(
+          "splits.linkedTransaction",
+          "splitLinkedTransaction",
+          "splitLinkedTransaction.userId = transaction.userId",
+        )
         .where("transaction.userId = :userId", { userId })
         .andWhere("transaction.transactionDate >= :startDate", { startDate })
         .andWhere("transaction.transactionDate <= :endDate", { endDate })
@@ -547,7 +732,26 @@ export class ReportsService {
 
       // Advanced filter groups take precedence over legacy filters
       if (filters.filterGroups && filters.filterGroups.length > 0) {
-        this.applyFilterGroups(queryBuilder, filters.filterGroups);
+        // Resolved once per text condition, in the user's number and date
+        // formats, so the Brackets below stay synchronous.
+        const textSearches = new Map<string, ParsedSearch | undefined>();
+        for (const [gi, group] of filters.filterGroups.entries()) {
+          for (const [ci, condition] of (group.conditions ?? []).entries()) {
+            if (condition.field !== "text") continue;
+            const raw = Array.isArray(condition.value)
+              ? condition.value[0] || ""
+              : condition.value;
+            textSearches.set(
+              `${gi}:${ci}`,
+              await resolveTransactionSearch(m, userId, raw),
+            );
+          }
+        }
+        this.applyFilterGroups(
+          queryBuilder,
+          filters.filterGroups,
+          textSearches,
+        );
       } else {
         // Legacy simple filters (backward compat)
         if (filters.accountIds && filters.accountIds.length > 0) {
@@ -569,29 +773,35 @@ export class ReportsService {
           });
         }
 
-        if (filters.searchText && filters.searchText.trim()) {
-          const searchTerm = `%${filters.searchText.trim().toLowerCase()}%`;
-          queryBuilder.andWhere(
-            "(LOWER(transaction.payeeName) LIKE :searchTerm OR LOWER(transaction.description) LIKE :searchTerm)",
-            { searchTerm },
-          );
-        }
+        // INV-SEARCH-001 (audit A26-L12): the one search door, so `%` and `_`
+        // are literals and the report reads the string as the register does.
+        await applyTransactionSearch(m, queryBuilder, filters.searchText, {
+          userId,
+          transaction: "transaction",
+          splits: "splits",
+          grain: "split",
+          paramPrefix: "rsrch",
+        });
       }
 
-      // Filter by direction. A split parent's own amount is the SUM of its
-      // lines, so its sign is not the direction of any particular line: a -60
-      // expense beside a +500 embedded SELL is a +440 parent, and rejecting it
-      // here threw away the expense before provenance ever ran (audit
-      // F-CUSTOM-DIR-001). Split parents therefore pass this gate and are
-      // narrowed per line in `applyDirectionToSplitLines`.
-      if (config.direction === DirectionFilter.INCOME_ONLY) {
-        queryBuilder.andWhere(
-          "(transaction.isSplit = true OR transaction.amount > 0)",
-        );
-      } else if (config.direction === DirectionFilter.EXPENSES_ONLY) {
-        queryBuilder.andWhere(
-          "(transaction.isSplit = true OR transaction.amount < 0)",
-        );
+      // Filter by direction, for the list of single transactions only: every
+      // other metric nets a category's rows of both signs, so a refund must
+      // reach the aggregators (audit A26-M33). A split parent's own amount is
+      // the SUM of its lines, so its sign is not the direction of any
+      // particular line: a -60 expense beside a +500 embedded SELL is a +440
+      // parent, and rejecting it here threw away the expense before provenance
+      // ever ran (audit F-CUSTOM-DIR-001). Split parents therefore pass this
+      // gate and are narrowed per line in `narrowSplitLines`.
+      if (config.metric === MetricType.NONE) {
+        if (config.direction === DirectionFilter.INCOME_ONLY) {
+          queryBuilder.andWhere(
+            "(transaction.isSplit = true OR transaction.amount > 0)",
+          );
+        } else if (config.direction === DirectionFilter.EXPENSES_ONLY) {
+          queryBuilder.andWhere(
+            "(transaction.isSplit = true OR transaction.amount < 0)",
+          );
+        }
       }
 
       // Filter transfers
@@ -599,11 +809,18 @@ export class ReportsService {
         queryBuilder.andWhere("transaction.isTransfer = false");
       }
 
-      // M29: Limit result set to prevent unbounded memory consumption
-      return queryBuilder
-        .orderBy("transaction.transactionDate", "ASC")
-        .take(50000)
+      // M29: Limit result set to prevent unbounded memory consumption. One row
+      // past the limit proves rows were dropped (the newest, by the order), so
+      // the report says it is truncated instead of presenting a short total.
+      // The register's order, so same-day rows of a list read as they do in
+      // the register and the cut at the limit is the same on every run.
+      const rows = await applyRegisterOrder(queryBuilder, "transaction", "ASC")
+        .take(REPORT_ROW_LIMIT + 1)
         .getMany();
+      return {
+        transactions: rows.slice(0, REPORT_ROW_LIMIT),
+        truncated: rows.length > REPORT_ROW_LIMIT,
+      };
     });
   }
 
@@ -612,6 +829,7 @@ export class ReportsService {
     filterGroups: Array<{
       conditions: Array<{ field: string; value: string | string[] }>;
     }>,
+    textSearches: Map<string, ParsedSearch | undefined>,
   ): void {
     for (let gi = 0; gi < filterGroups.length; gi++) {
       const group = filterGroups[gi];
@@ -718,23 +936,20 @@ export class ReportsService {
                 break;
               }
               case "text": {
-                const textValue = Array.isArray(condition.value)
-                  ? condition.value[0] || ""
-                  : condition.value;
-                const textParam = `%${textValue.trim().toLowerCase()}%`;
+                // Through the search door (audit A26-L12). A blank value, or one
+                // holding only empty terms, adds no condition: an empty
+                // Brackets would render `()`.
+                const parsed = textSearches.get(`${gi}:${ci}`);
+                if (!searchNarrows(parsed)) break;
                 qb[method](
-                  new Brackets((inner) => {
-                    inner
-                      .where(`LOWER(transaction.payeeName) LIKE :${param}`, {
-                        [param]: textParam,
-                      })
-                      .orWhere(
-                        `LOWER(transaction.description) LIKE :${param}`,
-                        {
-                          [param]: textParam,
-                        },
-                      );
-                  }),
+                  new Brackets((inner) =>
+                    applyParsedSearch(inner, parsed, {
+                      transaction: "transaction",
+                      splits: "splits",
+                      grain: "split",
+                      paramPrefix: `rsrch_g${gi}_c${ci}_`,
+                    }),
+                  ),
                 );
                 break;
               }
@@ -748,29 +963,49 @@ export class ReportsService {
   private aggregateData(
     transactions: Transaction[],
     groupBy: GroupByType,
-    metric: MetricType,
+    config: ReportConfig,
     categoryMap: Map<string, Category>,
     payeeMap: Map<string, Payee>,
+    conv: RowConverter,
   ): AggregatedDataPoint[] {
+    const metric = config.metric;
     switch (groupBy) {
       case GroupByType.NONE:
-        return this.aggregateNoGrouping(transactions, metric);
+        return this.aggregateNoGrouping(transactions, metric, config, conv);
       case GroupByType.CATEGORY:
-        return this.aggregateByCategory(transactions, metric, categoryMap);
+        return this.aggregateByCategory(
+          transactions,
+          metric,
+          config,
+          categoryMap,
+          conv,
+        );
       case GroupByType.PAYEE:
-        return this.aggregateByPayee(transactions, metric, payeeMap);
+        return this.aggregateByPayee(
+          transactions,
+          metric,
+          config,
+          payeeMap,
+          conv,
+        );
       case GroupByType.YEAR:
-        return this.aggregateByTime(transactions, metric, "year");
+        return this.aggregateByTime(transactions, metric, config, "year", conv);
       case GroupByType.MONTH:
-        return this.aggregateByTime(transactions, metric, "month");
+        return this.aggregateByTime(
+          transactions,
+          metric,
+          config,
+          "month",
+          conv,
+        );
       case GroupByType.WEEK:
-        return this.aggregateByTime(transactions, metric, "week");
+        return this.aggregateByTime(transactions, metric, config, "week", conv);
       case GroupByType.DAY:
-        return this.aggregateByTime(transactions, metric, "day");
+        return this.aggregateByTime(transactions, metric, config, "day", conv);
       case GroupByType.TAG:
-        return this.aggregateByTag(transactions, metric);
+        return this.aggregateByTag(transactions, metric, config, conv);
       default:
-        return this.aggregateNoGrouping(transactions, metric);
+        return this.aggregateNoGrouping(transactions, metric, config, conv);
     }
   }
 
@@ -785,10 +1020,25 @@ export class ReportsService {
   private aggregateNoGrouping(
     transactions: Transaction[],
     metric: MetricType,
+    config: ReportConfig,
+    conv: RowConverter,
   ): AggregatedDataPoint[] {
     // For NONE metric, return individual transactions as data points
     if (metric === MetricType.NONE) {
       const result: AggregatedDataPoint[] = [];
+      // A one-direction list holds rows of one sign and shows their magnitude.
+      // BOTH lists rows of either sign, so each keeps its own: money in is
+      // positive, money out negative, and the headline is the signed net of
+      // the listed rows (discussion #1978). A transfer leg keeps its sign too,
+      // so both legs of an in-scope same-currency transfer net to zero, and
+      // so do a cross-currency pair's when one leg is in the reporting
+      // currency: the other converts at the amounts the transfer moved. A pair
+      // in two other currencies converts each leg at the market rate on its
+      // date and can leave a residual.
+      const lineAmount = (amount: string | number): number =>
+        config.direction === DirectionFilter.BOTH
+          ? Number(amount)
+          : Math.abs(Number(amount));
 
       for (const tx of transactions) {
         // A blank-payee transfer leg reads "Transfer to/from <account>"
@@ -806,6 +1056,9 @@ export class ReportsService {
           // Only the lines that are ordinary cash: an embedded investment line
           // is the trade's own cash side, not a row of this report.
           for (const split of ordinarySplitLines(tx)) {
+            const accountAmount = lineAmount(split.amount);
+            const value = conv.convert(accountAmount, tx, split);
+            if (value === null) continue;
             result.push({
               id: tx.id,
               label:
@@ -814,7 +1067,7 @@ export class ReportsService {
                 transferLabel ||
                 tx.description ||
                 "Transaction",
-              value: Math.abs(Number(split.amount)),
+              value,
               count: 1,
               // Transaction-specific fields
               date: tx.transactionDate,
@@ -823,14 +1076,19 @@ export class ReportsService {
               memo: split.memo || undefined,
               category: this.formatCategoryLabel(split.category),
               account: tx.account?.name || undefined,
+              accountAmount,
+              accountCurrency: tx.currencyCode,
             });
           }
         } else {
+          const accountAmount = lineAmount(tx.amount);
+          const value = conv.convert(accountAmount, tx);
+          if (value === null) continue;
           result.push({
             id: tx.id,
             label:
               tx.payeeName || transferLabel || tx.description || "Transaction",
-            value: Math.abs(Number(tx.amount)),
+            value,
             count: 1,
             // Transaction-specific fields
             date: tx.transactionDate,
@@ -839,6 +1097,19 @@ export class ReportsService {
             memo: undefined, // Transactions don't have memo, only splits do
             category: this.formatCategoryLabel(tx.category),
             account: tx.account?.name || undefined,
+            accountAmount,
+            accountCurrency: tx.currencyCode,
+            // Only a row entered in a foreign currency has one; it is stored
+            // with the amount's sign, so it is signed as the amount is. A split
+            // line has none: only the whole transaction was entered in it.
+            ...(tx.originalAmount !== null &&
+            tx.originalAmount !== undefined &&
+            tx.originalCurrencyCode
+              ? {
+                  originalAmount: lineAmount(tx.originalAmount),
+                  originalCurrency: tx.originalCurrencyCode,
+                }
+              : {}),
           });
         }
       }
@@ -847,32 +1118,31 @@ export class ReportsService {
     }
 
     // For other metrics, aggregate into a single total
-    const amounts: number[] = [];
-
+    const cells = createNetCells(
+      config.direction,
+      this.keepsUnconverted(metric),
+      this.leftOutWithItsPart(conv),
+    );
     for (const tx of transactions) {
-      if (tx.isSplit && tx.splits && tx.splits.length > 0) {
-        for (const split of ordinarySplitLines(tx)) {
-          amounts.push(Math.abs(Number(split.amount)));
-        }
-      } else {
-        amounts.push(Math.abs(Number(tx.amount)));
+      for (const line of netLinesOf(tx, false)) {
+        cells.add("total", line, conv.convert(line.amount, tx, line.split));
       }
     }
 
-    const count = amounts.length;
-    const sum = sumMoney(amounts);
-
-    if (count === 0) {
-      return [];
-    }
+    const bucket = cells.settle().get("total");
+    if (!bucket || bucket.count === 0) return [];
 
     return [
       {
         id: "total",
         label: "Total",
-        value: this.calculateMetricValue(sum, count, metric),
+        value: this.calculateMetricValue(
+          bucket.agg.knownSubtotal,
+          bucket.count,
+          metric,
+        ),
         percentage: 100,
-        count,
+        count: bucket.count,
       },
     ];
   }
@@ -880,35 +1150,34 @@ export class ReportsService {
   private aggregateByCategory(
     transactions: Transaction[],
     metric: MetricType,
+    config: ReportConfig,
     categoryMap: Map<string, Category>,
+    conv: RowConverter,
   ): AggregatedDataPoint[] {
-    const dataMap = new Map<string, { sum: number; count: number }>();
-
+    const cells = createNetCells(
+      config.direction,
+      this.keepsUnconverted(metric),
+      this.leftOutWithItsPart(conv),
+    );
+    // An embedded investment line carries no category by definition, so
+    // `netLinesOf` leaves it out: counting it here filed a securities purchase
+    // under "Uncategorized" spending (re-audit F-CUSTOM-001).
     for (const tx of transactions) {
-      if (tx.isSplit && tx.splits && tx.splits.length > 0) {
-        // Handle split transactions. An embedded investment line carries no
-        // category by definition, so counting it here filed a securities
-        // purchase under "Uncategorized" spending (re-audit F-CUSTOM-001).
-        for (const split of ordinarySplitLines(tx)) {
-          const categoryId = split.categoryId || "uncategorized";
-          const existing = dataMap.get(categoryId) || { sum: 0, count: 0 };
-          existing.sum = roundMoney(
-            existing.sum + Math.abs(Number(split.amount)),
-          );
-          existing.count += 1;
-          dataMap.set(categoryId, existing);
-        }
-      } else {
-        // Regular transaction
-        const categoryId = tx.categoryId || "uncategorized";
-        const existing = dataMap.get(categoryId) || { sum: 0, count: 0 };
-        existing.sum = roundMoney(existing.sum + Math.abs(Number(tx.amount)));
-        existing.count += 1;
-        dataMap.set(categoryId, existing);
+      for (const line of netLinesOf(tx, true)) {
+        cells.add(
+          line.category,
+          line,
+          conv.convert(line.amount, tx, line.split),
+        );
       }
     }
+    const dataMap = cells.settle();
 
-    const totalSum = sumMoney(Array.from(dataMap.values()).map((v) => v.sum));
+    // Shares of what converted: an excluded row is in no group's sum and in no
+    // percentage, the same rule Spending by Category follows.
+    const totalSum = sumMoney(
+      Array.from(dataMap.values()).map((v) => v.agg.knownSubtotal),
+    );
 
     const result: AggregatedDataPoint[] = [];
     for (const [categoryId, data] of dataMap) {
@@ -924,9 +1193,14 @@ export class ReportsService {
       result.push({
         id: categoryId,
         label,
-        value: this.calculateMetricValue(data.sum, data.count, metric),
+        value: this.calculateMetricValue(
+          data.agg.knownSubtotal,
+          data.count,
+          metric,
+        ),
         color: category?.color || undefined,
-        percentage: totalSum > 0 ? (data.sum / totalSum) * 100 : 0,
+        percentage:
+          totalSum > 0 ? (data.agg.knownSubtotal / totalSum) * 100 : 0,
         count: data.count,
       });
     }
@@ -937,43 +1211,51 @@ export class ReportsService {
   private aggregateByPayee(
     transactions: Transaction[],
     metric: MetricType,
+    config: ReportConfig,
     payeeMap: Map<string, Payee>,
+    conv: RowConverter,
   ): AggregatedDataPoint[] {
-    const dataMap = new Map<
-      string,
-      { sum: number; count: number; payeeName?: string }
-    >();
+    const cells = createNetCells(
+      config.direction,
+      this.keepsUnconverted(metric),
+      this.leftOutWithItsPart(conv),
+    );
+    const payeeNames = new Map<string, string>();
 
     for (const tx of transactions) {
-      // `tx.amount` on a split parent is the sum of EVERY line, so a payee total
-      // has to ask for the ordinary part; `null` means this row represents no
-      // ordinary cash at all.
-      const reportable = reportableTransactionAmount(tx);
-      if (reportable === null) continue;
+      // `tx.amount` on a split parent is the sum of EVERY line, so a payee's
+      // cells are read per ordinary line; a parent with none adds nothing.
+      const lines = netLinesOf(tx, false);
+      if (lines.length === 0) continue;
       const payeeId = tx.payeeId || "unknown";
-      const existing = dataMap.get(payeeId) || {
-        sum: 0,
-        count: 0,
-        payeeName: tx.payeeName ?? undefined,
-      };
-      existing.sum = roundMoney(existing.sum + Math.abs(reportable));
-      existing.count += 1;
-      if (!existing.payeeName && tx.payeeName) {
-        existing.payeeName = tx.payeeName;
+      for (const line of lines) {
+        cells.add(payeeId, line, conv.convert(line.amount, tx, line.split));
       }
-      dataMap.set(payeeId, existing);
+      if (!payeeNames.has(payeeId) && tx.payeeName) {
+        payeeNames.set(payeeId, tx.payeeName);
+      }
     }
+    const dataMap = cells.settle();
 
-    const totalSum = sumMoney(Array.from(dataMap.values()).map((v) => v.sum));
+    // Shares of what converted: an excluded row is in no group's sum and in no
+    // percentage, the same rule Spending by Category follows.
+    const totalSum = sumMoney(
+      Array.from(dataMap.values()).map((v) => v.agg.knownSubtotal),
+    );
 
     const result: AggregatedDataPoint[] = [];
     for (const [payeeId, data] of dataMap) {
       const payee = payeeMap.get(payeeId);
       result.push({
         id: payeeId,
-        label: payee?.name || data.payeeName || "Unknown",
-        value: this.calculateMetricValue(data.sum, data.count, metric),
-        percentage: totalSum > 0 ? (data.sum / totalSum) * 100 : 0,
+        label: payee?.name || payeeNames.get(payeeId) || "Unknown",
+        value: this.calculateMetricValue(
+          data.agg.knownSubtotal,
+          data.count,
+          metric,
+        ),
+        percentage:
+          totalSum > 0 ? (data.agg.knownSubtotal / totalSum) * 100 : 0,
         count: data.count,
       });
     }
@@ -984,66 +1266,71 @@ export class ReportsService {
   private aggregateByTag(
     transactions: Transaction[],
     metric: MetricType,
+    config: ReportConfig,
+    conv: RowConverter,
   ): AggregatedDataPoint[] {
-    const dataMap = new Map<
-      string,
-      { sum: number; count: number; tagName: string; color?: string }
-    >();
+    const cells = createNetCells(
+      config.direction,
+      this.keepsUnconverted(metric),
+      this.leftOutWithItsPart(conv),
+    );
+    const tagInfo = new Map<string, { tagName: string; color?: string }>();
 
     for (const tx of transactions) {
-      const reportable = reportableTransactionAmount(tx);
-      if (reportable === null) continue;
-      // Collect all tags: transaction-level + split-level. A tag on an embedded
-      // investment line describes the trade, not ordinary cash, so the lines
-      // that are not reportable do not open a bucket either.
-      const allTags = [...(tx.tags || [])];
-      if (tx.splits) {
-        for (const split of ordinarySplitLines(tx)) {
-          if (split.tags) {
-            for (const tag of split.tags) {
-              if (!allTags.some((t) => t.id === tag.id)) {
-                allTags.push(tag);
-              }
-            }
-          }
+      const lines = netLinesOf(tx, false);
+      if (lines.length === 0) continue;
+      // Converted once per line, so a row under several tags records one gap.
+      const converted = lines.map((line) => ({
+        line,
+        value: conv.convert(line.amount, tx, line.split),
+      }));
+      // A line sits under its own tags plus the parent's, never under a tag
+      // that only a sibling line carries. `netLinesOf` maps `ordinarySplitLines`
+      // in order for a split parent, so the index pairs a line with its split.
+      const splitLines =
+        tx.isSplit && tx.splits ? ordinarySplitLines(tx) : undefined;
+      for (const [index, { line, value }] of converted.entries()) {
+        const lineTags = [...(tx.tags || [])];
+        for (const tag of splitLines?.[index]?.tags ?? []) {
+          if (!lineTags.some((t) => t.id === tag.id)) lineTags.push(tag);
         }
-      }
-
-      if (allTags.length === 0) {
-        // Untagged transactions
-        const existing = dataMap.get("untagged") || {
-          sum: 0,
-          count: 0,
-          tagName: "Untagged",
-        };
-        existing.sum = roundMoney(existing.sum + Math.abs(reportable));
-        existing.count += 1;
-        dataMap.set("untagged", existing);
-      } else {
-        for (const tag of allTags) {
-          const existing = dataMap.get(tag.id) || {
-            sum: 0,
-            count: 0,
-            tagName: tag.name,
-            color: tag.color ?? undefined,
-          };
-          existing.sum = roundMoney(existing.sum + Math.abs(reportable));
-          existing.count += 1;
-          dataMap.set(tag.id, existing);
-        }
+        const groups =
+          lineTags.length === 0
+            ? ["untagged"]
+            : lineTags.map((tag) => {
+                if (!tagInfo.has(tag.id)) {
+                  tagInfo.set(tag.id, {
+                    tagName: tag.name,
+                    color: tag.color ?? undefined,
+                  });
+                }
+                return tag.id;
+              });
+        for (const group of groups) cells.add(group, line, value);
       }
     }
+    const dataMap = cells.settle();
 
-    const totalSum = sumMoney(Array.from(dataMap.values()).map((v) => v.sum));
+    // Shares of what converted: an excluded row is in no group's sum and in no
+    // percentage, the same rule Spending by Category follows.
+    const totalSum = sumMoney(
+      Array.from(dataMap.values()).map((v) => v.agg.knownSubtotal),
+    );
 
     const result: AggregatedDataPoint[] = [];
     for (const [tagId, data] of dataMap) {
+      const info = tagInfo.get(tagId);
       result.push({
         id: tagId,
-        label: data.tagName,
-        value: this.calculateMetricValue(data.sum, data.count, metric),
-        color: data.color,
-        percentage: totalSum > 0 ? (data.sum / totalSum) * 100 : 0,
+        label: info?.tagName ?? "Untagged",
+        value: this.calculateMetricValue(
+          data.agg.knownSubtotal,
+          data.count,
+          metric,
+        ),
+        color: info?.color,
+        percentage:
+          totalSum > 0 ? (data.agg.knownSubtotal / totalSum) * 100 : 0,
         count: data.count,
       });
     }
@@ -1054,16 +1341,20 @@ export class ReportsService {
   private aggregateByTime(
     transactions: Transaction[],
     metric: MetricType,
+    config: ReportConfig,
     period: "year" | "month" | "week" | "day",
+    conv: RowConverter,
   ): AggregatedDataPoint[] {
-    const dataMap = new Map<
-      string,
-      { sum: number; count: number; label: string }
-    >();
+    const cells = createNetCells(
+      config.direction,
+      this.keepsUnconverted(metric),
+      this.leftOutWithItsPart(conv),
+    );
+    const labels = new Map<string, string>();
 
     for (const tx of transactions) {
-      const reportable = reportableTransactionAmount(tx);
-      if (reportable === null) continue;
+      const lines = netLinesOf(tx, false);
+      if (lines.length === 0) continue;
       const date = parseISO(tx.transactionDate);
       let key: string;
       let label: string;
@@ -1087,18 +1378,23 @@ export class ReportsService {
           break;
       }
 
-      const existing = dataMap.get(key) || { sum: 0, count: 0, label };
-      existing.sum = roundMoney(existing.sum + Math.abs(reportable));
-      existing.count += 1;
-      dataMap.set(key, existing);
+      labels.set(key, label);
+      for (const line of lines) {
+        cells.add(key, line, conv.convert(line.amount, tx, line.split));
+      }
     }
+    const dataMap = cells.settle();
 
     const result: AggregatedDataPoint[] = [];
     for (const [key, data] of dataMap) {
       result.push({
         id: key,
-        label: data.label,
-        value: this.calculateMetricValue(data.sum, data.count, metric),
+        label: labels.get(key) ?? key,
+        value: this.calculateMetricValue(
+          data.agg.knownSubtotal,
+          data.count,
+          metric,
+        ),
         count: data.count,
       });
     }
@@ -1132,6 +1428,11 @@ export class ReportsService {
   private async enrichWithBudgetVariance(
     userId: string,
     data: AggregatedDataPoint[],
+    startDate: string,
+    endDate: string,
+    categoryMap: Map<string, Category>,
+    conv: RowConverter,
+    filters: CustomReport["filters"],
   ): Promise<AggregatedDataPoint[]> {
     try {
       const budgets = await this.budgetsService.findAll(userId);
@@ -1139,37 +1440,134 @@ export class ReportsService {
       if (!activeBudget) return data;
 
       const budget = await this.budgetsService.findOne(userId, activeBudget.id);
+      // A budget amount is one month's; the actuals span the whole window, so
+      // the budget is scaled by the exact months of the window (see below).
+      const months = windowMonthFraction(startDate, endDate);
+      // Budget amounts are per budget period: a month, a year, or a pay period
+      // (cadence from the budget's `payFrequency`, monthly when unset).
+      const periodsInWindow =
+        budget.budgetType === BudgetType.ANNUAL
+          ? months / 12
+          : budget.budgetType === BudgetType.PAY_PERIOD
+            ? (LOAN_PERIODS_PER_YEAR[budget.config?.payFrequency ?? "MONTHLY"] *
+                months) /
+              12
+            : months;
+      // In the reporting currency at the rate on the window's last day: a plan
+      // has no date of its own, and the actuals it is set against are each
+      // converted at theirs. A budget currency with no rate leaves its
+      // categories unenriched and records the gap in the report's own gaps.
+      const budgetBasis = transactionRateBasis(
+        { currencyCode: budget.currencyCode, transactionDate: endDate },
+        conv.currency,
+      );
+      const convertBudget = await this.currencyService.buildConverter(
+        [budgetBasis],
+        conv.currency,
+      );
       const budgetMap = new Map<string, number>();
+      const unconvertible = new Set<string>();
       for (const bc of budget.categories || []) {
         if (bc.categoryId && !bc.isIncome) {
-          budgetMap.set(bc.categoryId, Number(bc.amount) || 0);
+          const amount = (Number(bc.amount) || 0) * periodsInWindow;
+          // Zero converts to zero at any rate, so it records no gap.
+          const converted =
+            amount === 0 ? 0 : convertBudget(amount, budgetBasis);
+          if (converted === null) {
+            conv.gaps.record(budget.currencyCode);
+            unconvertible.add(bc.categoryId);
+          } else budgetMap.set(bc.categoryId, converted);
         }
       }
 
-      return data.map((point) => {
-        const budgeted = budgetMap.get(point.id || "") || 0;
-        const variance = point.value - budgeted;
+      const enriched = data.map((point) => {
+        const id = point.id || "";
+        if (unconvertible.has(id)) return point;
+        const budgeted = budgetMap.get(id) ?? 0;
         return {
           ...point,
-          value: roundMoney(variance),
+          value: roundMoney(point.value - budgeted),
           budgeted: roundMoney(budgeted),
           actual: roundMoney(point.value),
         };
       });
+
+      // A budgeted category with no spending is a full under-spend, not absent.
+      // Only where nothing but the category filter narrowed the rows: under an
+      // account, payee, search or advanced-group filter a zero means "filtered
+      // out", not "unspent", and would enter the headline as an invented gap.
+      const narrowed =
+        (filters?.accountIds?.length ?? 0) > 0 ||
+        (filters?.payeeIds?.length ?? 0) > 0 ||
+        !!filters?.searchText ||
+        (filters?.filterGroups?.length ?? 0) > 0;
+      const inScope = new Set(filters?.categoryIds ?? []);
+      const seen = new Set(data.map((point) => point.id));
+      for (const [categoryId, budgeted] of narrowed ? [] : budgetMap) {
+        const category = categoryMap.get(categoryId);
+        if (seen.has(categoryId) || !category) continue;
+        if (inScope.size > 0 && !inScope.has(categoryId)) continue;
+        enriched.push({
+          id: categoryId,
+          label: this.formatCategoryLabel(
+            category.parentId
+              ? {
+                  ...category,
+                  parent: categoryMap.get(category.parentId) ?? null,
+                }
+              : category,
+          ) as string,
+          value: roundMoney(-budgeted),
+          color: category.color || undefined,
+          percentage: 0,
+          count: 0,
+          budgeted: roundMoney(budgeted),
+          actual: 0,
+        });
+      }
+      return enriched;
     } catch {
       return data;
     }
   }
 
-  private calculateSummary(data: AggregatedDataPoint[]): ReportSummary {
-    const total = sumMoney(data.map((d) => d.value));
-    const count = data.reduce((acc, d) => acc + (d.count || 1), 0);
-    const average = count > 0 ? total / count : 0;
+  /**
+   * The headline figures. A money total is withheld (`null`) while any row was
+   * left out for want of a rate or by the row limit, and `knownTotal` carries
+   * the part that did convert. The count metric sums counts, which need no
+   * rate, but a truncated read counts only what it read. The average metric's
+   * headline is the mean over every row (each group's mean weighted by its
+   * row count), never the sum of the groups' means.
+   */
+  private calculateSummary(
+    data: AggregatedDataPoint[],
+    gaps: ConversionGaps,
+    metric: MetricType,
+    truncated: boolean,
+  ): ReportSummary {
+    const count = data.reduce((acc, d) => acc + (d.count ?? 1), 0);
+    const knownTotal =
+      metric === MetricType.AVERAGE
+        ? roundMoney(
+            count > 0
+              ? sumMoney(data.map((d) => d.value * (d.count ?? 1))) / count
+              : 0,
+          )
+        : roundMoney(sumMoney(data.map((d) => d.value)));
+    const average =
+      metric === MetricType.AVERAGE
+        ? knownTotal
+        : count > 0
+          ? knownTotal / count
+          : 0;
+    const complete =
+      !truncated && (this.keepsUnconverted(metric) || gaps.isComplete);
 
     return {
-      total: roundMoney(total),
+      total: complete ? knownTotal : null,
+      knownTotal,
       count,
-      average: roundMoney(average),
+      average: complete ? roundMoney(average) : null,
     };
   }
 
@@ -1208,6 +1606,21 @@ export class ReportsService {
           );
         case TableColumn.ACCOUNT:
           return multiplier * (a.account || "").localeCompare(b.account || "");
+        // Amounts in different currencies do not compare: rows are ordered by
+        // currency first and by amount within one.
+        case TableColumn.ACCOUNT_AMOUNT:
+          return (
+            multiplier *
+            ((a.accountCurrency || "").localeCompare(b.accountCurrency || "") ||
+              (a.accountAmount || 0) - (b.accountAmount || 0))
+          );
+        case TableColumn.ORIGINAL_AMOUNT:
+          return (
+            multiplier *
+            ((a.originalCurrency || "").localeCompare(
+              b.originalCurrency || "",
+            ) || (a.originalAmount || 0) - (b.originalAmount || 0))
+          );
         default:
           return 0;
       }

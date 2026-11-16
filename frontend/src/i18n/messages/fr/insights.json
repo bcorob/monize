@@ -4,19 +4,29 @@
     "subtitle": "Analyse de vos habitudes de dépenses et anomalies par IA"
   },
   "list": {
-    "lastUpdated": "Dernière mise à jour : {date} {time}",
     "refreshButton": "Actualiser les analyses",
-    "generating": "Génération en cours...",
+    "refreshAge": "({time})",
+    "summary": {
+      "active": "Analyses actives",
+      "alerts": "Alertes",
+      "warnings": "Avertissements"
+    },
     "allTypes": "Tous les types",
-    "allSeverities": "Toutes les sévérités",
+    "typeFilterLabel": "Type",
+    "severityFilterLabel": "Gravité",
+    "severityFilter": {
+      "all": "Toutes ({count})",
+      "alert": "Alertes ({count})",
+      "warning": "Avertissements ({count})",
+      "info": "Info ({count})"
+    },
     "showDismissed": "Afficher les éléments ignorés",
     "emptyNoInsights": "Aucune analyse générée. Cliquez sur « Actualiser les analyses » pour analyser vos habitudes de dépenses.",
     "emptyFiltered": "Aucune analyse ne correspond à vos filtres.",
     "generateButton": "Générer des analyses",
-    "alertCount": "{count, plural, one {# alerte} other {# alertes}}",
-    "warningCount": "{count, plural, one {# avertissement} other {# avertissements}}",
     "errorLoadFailed": "Échec du chargement des analyses. Veuillez réessayer.",
     "errorGenerateFailed": "Échec de la génération des analyses. Assurez-vous qu'un fournisseur IA est configuré.",
+    "errorDismissFailed": "Impossible d'ignorer l'analyse. Veuillez réessayer.",
     "errorTimeout": "La génération des analyses prend plus de temps que prévu. Veuillez patienter ou actualiser la page."
   },
   "card": {

@@ -22,7 +22,7 @@ describe('ResetPasswordModal', () => {
     render(
       <ResetPasswordModal isOpen={true} temporaryPassword="abc123" userName="John Doe" onClose={onClose} />
     );
-    expect(screen.getByText('Password Reset Successful')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Password Reset Successful' })).toBeInTheDocument();
     expect(screen.getByText(/John Doe/)).toBeInTheDocument();
   });
 

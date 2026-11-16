@@ -16,12 +16,13 @@
     "chartUnavailable": "Grafik geçici olarak kullanılamıyor"
   },
   "viewTabs": {
-    "list": "Liste",
-    "calendar": "Takvim",
+    "filterLabel": "Program türü",
     "filterAll": "Tümü ({count})",
     "filterBills": "Faturalar ({count})",
     "filterDeposits": "Mevduatlar ({count})",
-    "todayButton": "Bugün"
+    "chipBills": "Faturalar",
+    "chipDeposits": "Mevduatlar",
+    "clearType": "Tüm program türlerini göster"
   },
   "form": {
     "titleNew": "Yeni Zamanlanmış İşlem",
@@ -53,7 +54,11 @@
     "totalOfAccounts": "Hesapların toplamı",
     "legendAriaLabel": "Tahmin çizgileri",
     "tooltipTransactionForAccount": "{name} ({account})",
-    "unavailableMissingRates": "Bu tahmin {displayCurrency} cinsinden gösterilemiyor: {currencies} için döviz kuru yok ve öngörülen bakiye önceki her güne dayanır. Bir kur ekleyin veya tek para birimli bir hesap seçin."
+    "unavailableMissingRates": "Bu tahmin {displayCurrency} cinsinden gösterilemiyor: {currencies} için döviz kuru yok ve öngörülen bakiye önceki her güne dayanır. Bir kur ekleyin veya tek para birimli bir hesap seçin.",
+    "untitledTransaction": "İşlem",
+    "tooltipEstimated": "(tahmini)",
+    "unavailableUnknownEstimates": "Bu tahmin henüz gösterilemiyor: içindeki bir faturanın tahmini tutarı bilinmiyor ve öngörülen bakiye önceki her günün üzerine kurulur. O tekrarın tutarını girin veya faturada Tahmin et seçeneğini kapatın.",
+    "unknownEstimateItem": "{name}: {reason}"
   },
   "calendar": {
     "days": {
@@ -72,5 +77,11 @@
     "notFound": "Zamanlanmış ödeme bulunamadı",
     "loadFailed": "Zamanlanmış işlemler yüklenemedi",
     "overridesDeleteFailed": "Geçersiz kılmalar silinemedi"
+  },
+  "toolbar": {
+    "showing": "<b>{total}</b> fatura ve mevduattan <b>{shown}</b> tanesi gösteriliyor",
+    "exportButton": "Dışa Aktar",
+    "exportTitle": "Faturaları ve mevduatları CSV'ye aktar",
+    "exported": "{count, plural, one {# program dışa aktarıldı} other {# program dışa aktarıldı}}"
   }
 }

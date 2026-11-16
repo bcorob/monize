@@ -33,6 +33,15 @@ describe("source files contain no raw control bytes", () => {
     "test-results",
     "playwright-report",
     ".turbo",
+    // Third-party build artefacts copied in at build time, not repository
+    // content: `frontend/scripts/copy-vendor.mjs` vendors a 13 MB OpenCV
+    // WebAssembly build (and the pdf.js worker) into the frontend's public
+    // tree, and the OpenCV payload is legitimately full of control bytes. Its destination is gitignored, so
+    // it is described rather than named -- a comment spelling a path is a
+    // claim the file is in the tree (`source-comment-paths.spec.ts`), and this
+    // one is not. Same situation as `.claude` above, inverted: a contributor
+    // who has built the frontend has it, a fresh checkout does not.
+    "vendor",
   ]);
 
   const SCANNED_EXTENSIONS = [

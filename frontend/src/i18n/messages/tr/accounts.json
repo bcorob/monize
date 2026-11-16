@@ -1,4 +1,13 @@
 {
+  "paymentMatching": {
+    "toggleLabel": "{kind, select, mortgage {İçe aktarılan banka ödemelerini bu konut kredisiyle eşleştir} other {İçe aktarılan banka ödemelerini bu krediyle eşleştir}}",
+    "toggleHelp": "İçe aktarılan bir banka işlemi alıcı kalıbıyla eşleştiğinde Monize onu planlanan ödemeye mahsup eder ve ayrı bir fatura işlemi kaydetmek yerine anapara ve faize böler.",
+    "payeePattern": "Alacaklı deseni",
+    "payeePatternPlaceholder": "ör. *BANKAM*",
+    "descriptionPattern": "Açıklama deseni (isteğe bağlı)",
+    "descriptionPatternPlaceholder": "ör. *Kredi taksiti*",
+    "fromAccount": "{account} hesabındaki çekimlerle eşleştirildi."
+  },
   "nameSuffix": {
     "cash": "Nakit",
     "brokerage": "Aracılık"
@@ -22,9 +31,7 @@
     "noMatch": "Filtrelerinizle eşleşen hesap yok.",
     "clearFilters": "Filtreleri Temizle",
     "filter": {
-      "all": "Tümü",
-      "active": "Aktif",
-      "closed": "Kapalı",
+      "allCount": "Tümü ({count})",
       "netWorthAll": "Net Değer: Tümü",
       "inNetWorth": "Net Değerde",
       "excludedFromNetWorth": "Net Değerden Hariç",
@@ -32,7 +39,10 @@
       "typeAriaLabel": "Hesap türüne göre filtrele",
       "searchPlaceholder": "Hesap ara...",
       "searchAriaLabel": "Hesapları ada göre ara",
-      "searchClear": "Aramayı temizle"
+      "searchClear": "Aramayı temizle",
+      "activeCount": "Aktif ({count})",
+      "closedCount": "Kapalı ({count})",
+      "statusLabel": "Durum"
     },
     "accountCount": "{total} hesaptan {filtered} tanesi",
     "groupCount": "{count, plural, one {# hesap} other {# hesap}}",
@@ -40,6 +50,8 @@
       "accountName": "Hesap Adı",
       "type": "Tür",
       "status": "Durum",
+      "lastReconciled": "Son Mutabakat",
+      "unreconciled": "Mutabakatsız",
       "balance": "Bakiye",
       "actions": "İşlemler"
     },
@@ -50,8 +62,11 @@
     "statusClosed": "Kapalı",
     "marketValue": "Piyasa değeri",
     "combinedBreakdown": "Yatırımlar {investments} · Nakit {cash}",
+    "combinedInvestments": "Yatırımlar {amount}",
+    "combinedCash": "Nakit {amount}",
     "combinedUnknown": "Toplam kullanılamıyor",
     "combinedUnknownTooltip": "{count, plural, one {# varlığın fiyatı yok, bu nedenle bu hesabın toplamı hesaplanamıyor} other {# varlığın fiyatı yok, bu nedenle bu hesabın toplamı hesaplanamıyor}}",
+    "combinedUnknownValuation": "Bu hesaptaki bazı varlıklar raporlama para biriminize çevrilemedi, bu yüzden toplam hesaplanamıyor. Eksik döviz kurunu Para Birimleri sayfasından ekleyin.",
     "combinedUnknownNoPortfolio": "Varlıklar yüklenemedi, bu nedenle bu hesabın toplamı hesaplanamıyor",
     "limit": "Limit: {amount}",
     "pairedWith": "{name} ile eşleştirildi",
@@ -81,7 +96,11 @@
     "jointSharedBy": "{owner} tarafından paylaşıldı",
     "jointSharedWith": "{count, plural, other {# kişiyle}} paylaşıldı",
     "includeInNetWorth": "Net değerime dahil et",
-    "excludeFromNetWorth": "Net değerimden hariç tut"
+    "excludeFromNetWorth": "Net değerimden hariç tut",
+    "neverReconciled": "Hiç",
+    "lastReconciledOn": "{date} tarihinde mutabakat yapıldı",
+    "neverReconciledCard": "Hiç mutabakat yapılmadı",
+    "unreconciledCard": "{count, plural, other {{formatted} mutabakatsız}}"
   },
   "contextMenu": {
     "subtypeBrokerage": "Aracılık",
@@ -117,17 +136,23 @@
     "accountType": "Hesap Türü",
     "currency": "Para Birimi",
     "currencyLocked": "Bu hesapta zaten işlemler bulunduğundan para birimi kilitlidir. Değiştirmek mevcut bakiyeleri sessizce yeniden adlandırır.",
+    "accountTypeKindLocked": "Para birimi bu hesabın işlemleri nedeniyle kilitli olduğundan, hesap Kripto Cüzdan ile itibari para hesap türü arasında geçiş yapamaz.",
+    "currencyPlaceholder": "Para birimi seçin...",
+    "noCryptoCurrencies": "Bir kripto cüzdan tek bir kripto para tutar ve henüz hiçbiri ayarlanmamış. <currencies>Para Birimleri sayfasından</currencies> bir tane ekleyin, ardından burada seçin. <guide>Kripto para nasıl eklenir</guide>",
     "openingBalance": "Açılış Bakiyesi",
     "loanAmount": "Kredi Tutarı",
     "mortgageAmount": "İpotek Tutarı",
     "accountNumber": "Hesap Numarası (isteğe bağlı)",
     "institution": "Kurum (isteğe bağlı)",
-    "institutionRequired": "Borç Veren/Kurum (zorunlu)",
+    "institutionRequired": "Borç Veren/Kurum",
     "institutionPlaceholder": "Bir kurum seçin veya oluşturun...",
     "newInstitutionTitle": "Yeni Kurum",
     "creditLimit": "Kredi Limiti (isteğe bağlı)",
+    "balanceAlertsHeading": "Bakiye uyarıları",
+    "lowBalanceThreshold": "Şunun altında bildir (isteğe bağlı)",
+    "highBalanceThreshold": "Şunun üstünde bildir (isteğe bağlı)",
     "interestRateOptional": "Faiz Oranı % (isteğe bağlı)",
-    "interestRateRequired": "Faiz Oranı % (zorunlu)",
+    "interestRateRequired": "Faiz Oranı %",
     "description": "Açıklama (isteğe bağlı)",
     "excludeFromNetWorth": "Net Değerden Hariç Tut",
     "favourite": "Favori",
@@ -157,13 +182,12 @@
       "mortgage": "İpotek",
       "asset": "Varlık",
       "cash": "Nakit",
+      "crypto": "Kripto Cüzdan",
       "other": "Diğer"
     },
     "statementDueDayPlaceholder": "ör. 15",
     "statementSettlementDayPlaceholder": "ör. 25",
     "fxFeeTitle": "Yabancı para dönüştürme ücreti (isteğe bağlı)",
-    "fxFeePercent": "Ücret yüzdesi",
-    "fxFeePercentPlaceholder": "örn. 2,5",
     "jointSharedWith": "{count, plural, other {# kişiyle}} paylaşılan ortak hesap",
     "jointManage": "Paylaşımı yönet",
     "cashSection": {
@@ -192,10 +216,10 @@
   },
   "loanFields": {
     "title": "Kredi Ödeme Ayrıntıları",
-    "paymentAmount": "Ödeme Tutarı (zorunlu)",
-    "paymentFrequency": "Ödeme Sıklığı (zorunlu)",
-    "firstPaymentDate": "İlk Ödeme Tarihi (zorunlu)",
-    "paymentFromAccount": "Ödeme Hesabı (zorunlu)",
+    "paymentAmount": "Ödeme Tutarı",
+    "paymentFrequency": "Ödeme Sıklığı",
+    "firstPaymentDate": "İlk Ödeme Tarihi",
+    "paymentFromAccount": "Ödeme Hesabı",
     "interestCategory": "Faiz Kategorisi",
     "selectFrequency": "Sıklık seçin...",
     "selectAccount": "Hesap seçin...",
@@ -222,33 +246,32 @@
     "analyzingHistory": "İşlem geçmişi analiz ediliyor...",
     "detectedPayments": "{from} ile {to} arasında {count} ödeme tespit edildi.",
     "confidence": "Güven düzeyi:",
-    "lastSplit": "Son ödeme bölümü: {currency}{principal} anapara / {currency}{interest} faiz",
-    "extraPayments": "{count, plural, one {# ek anapara ödemesi} other {# ek anapara ödemesi}} tespit edildi (ort. {currency}{avg}/dönem)",
+    "lastSplit": "Son ödeme bölümü: {principal} anapara / {interest} faiz",
+    "extraPayments": "{count, plural, one {# ek anapara ödemesi} other {# ek anapara ödemesi}} tespit edildi (ort. {avg}/dönem)",
     "reviewValues": "Kaydetmeden önce aşağıdaki değerleri gözden geçirin ve düzeltin.",
-    "regularPaymentAmount": "Düzenli Ödeme Tutarı *",
+    "regularPaymentAmount": "Düzenli Ödeme Tutarı",
     "includeExtraPrincipal": "Anaparaya ek ödeme ekle",
     "extraPrincipalPerPayment": "Ödeme Başına Ek Anapara",
-    "totalPayment": "Toplam ödeme: {currency}{amount}",
+    "totalPayment": "Toplam ödeme: {amount}",
     "useDetectedSplit": "İçe aktarılan işlemlerdeki anapara/faiz bölümünü kullan",
-    "useDetectedSplitDesc": "Faiz için {currency}{interest} kullanılacak, kalan anapara olarak uygulanacak",
+    "useDetectedSplitDesc": "Faiz için {interest} kullanılacak, kalan anapara olarak uygulanacak",
     "calculateFromRate": "Bölüm, faiz oranından ve mevcut bakiyeden hesaplanacak",
-    "paymentFrequency": "Ödeme Sıklığı *",
-    "paymentFromAccount": "Ödeme Hesabı *",
+    "paymentFrequency": "Ödeme Sıklığı",
+    "paymentFromAccount": "Ödeme Hesabı",
     "selectAccount": "Hesap seçin...",
-    "nextPaymentDate": "Sonraki Ödeme Tarihi *",
+    "nextPaymentDate": "Sonraki Ödeme Tarihi",
     "annualInterestRate": "Yıllık Faiz Oranı (%)",
     "interestRatePlaceholder": "ör. 5,5",
     "estimatedFromHistory": "İşlem geçmişinden tahmini: {rate}%",
     "interestExpenseCategory": "Faiz Gider Kategorisi",
+    "interestExpenseCategoryRequired": "Faiz Gider Kategorisi",
     "detectedCategory": "Tespit edildi: {name}",
     "selectCategory": "Kategori seçin...",
     "payeeLender": "Alacaklı / Borç Veren",
     "selectOrCreatePayee": "Alacaklı seçin veya oluşturun...",
     "mortgageDetails": "İpotek Ayrıntıları",
-    "canadianMortgage": "Kanada İpoteği (yarı yıllık bileşik faiz)",
-    "variableRate": "Değişken Faiz",
     "amortizationMonths": "Amortisman (ay)",
-    "termMonths": "Vade (ay)",
+    "termMonths": "Sabit Faiz Vadesi (ay)",
     "autoPost": "Vade geldiğinde işlemleri otomatik olarak kaydet",
     "skip": "Atla",
     "setUpPayments": "Ödemeleri Ayarla",
@@ -264,26 +287,46 @@
     },
     "toasts": {
       "setupComplete": "{account} için zamanlanmış ödemeler ayarlandı"
+    },
+    "firstInstallment": "İlk Taksit",
+    "firstInstallmentHelp": "Bu konut kredisinin sabit bir ödemesi yok: her taksit bakiye, faiz oranı ve amortisman süresinden hesaplanır. Bu, ek anapara dahil {date} vadeli taksittir.",
+    "firstInstallmentPending": "İlk taksiti hesaplamak için sonraki ödeme tarihini girin.",
+    "firstInstallmentCalculating": "İlk taksit hesaplanıyor...",
+    "firstInstallmentFailed": "İlk taksit hesaplanamadı. Aşağıdaki değerleri kontrol edip tekrar deneyin.",
+    "paymentMatching": {
+      "autoPostDisabled": "Otomatik olarak kapatıldı: ödeme eşleştirme bu faturayı bankanın kendi çekimiyle kapatır, bu nedenle faturanın kendisi de ayrıca işlenmemelidir.",
+      "payeePatternRequired": "* joker karakteri içeren bir alacaklı deseni girin"
     }
   },
   "mortgageFields": {
     "title": "İpotek Ayrıntıları",
-    "canadianMortgage": "Kanada İpoteği",
-    "canadianMortgageDesc": "Sabit faiz oranları için yarı yıllık bileşik faiz kullanır (Kanada'da yasal zorunluluk)",
-    "variableRate": "Değişken Faiz",
-    "variableRateDesc": "Faiz oranı vade süresince değişebilir (aylık bileşik faiz kullanır)",
-    "variableRateLoanDetailsLink": "Oran değişikliklerini <link>Kredi Ayrıntıları</link>'nda kaydedin.",
-    "termLength": "Vade Süresi",
-    "termLengthNoTerm": "Vade yoksa 0 yıl ve 0 ay bırakın.",
-    "amortizationPeriod": "Amortisman Süresi (zorunlu)",
+    "type": {
+      "label": "İpotek Türü",
+      "ANNUITY": "Eşit Taksitli (Anüite)",
+      "CANADIAN_FIXED": "Kanada Sabit Faiz",
+      "LINEAR": "Eşit Anaparalı (Doğrusal)",
+      "INTEREST_ONLY": "Yalnızca Faiz",
+      "help": {
+        "ANNUITY": "Toplam ödemeniz her ay aynıdır. Değişken faizli bir ipotek için de bunu seçin.",
+        "CANADIAN_FIXED": "Kanada sabit faizli sözleşmesi; faiz yılda iki kez bileşik hesaplanır.",
+        "LINEAR": "Anapara kısmı her ay aynıdır ve toplam ödeme azalır.",
+        "INTEREST_ONLY": "Yalnızca faiz ödersiniz ve bakiye değişmez."
+      }
+    },
+    "rateChangesLoanDetailsLink": "Oran değişikliklerini <link>Kredi Ayrıntıları</link>'nda kaydedin.",
+    "termLength": "Sabit Faiz Vadesi",
+    "termLengthHelp": "Faiz oranınızın veya sözleşme vadenizin ne kadar sürdüğü, örneğin 5 yıllık sabit faiz. Monize bitmeden önce size hatırlatabilir. Vade yoksa 0 yıl ve 0 ay bırakın.",
+    "amortizationPeriod": "Amortisman Süresi",
     "years": "Yıl",
     "months": "Ay",
-    "paymentFrequency": "Ödeme Sıklığı (zorunlu)",
-    "firstPaymentDate": "İlk Ödeme Tarihi (zorunlu)",
-    "paymentFromAccount": "Ödeme Hesabı (zorunlu)",
-    "interestCategory": "Faiz Kategorisi",
+    "paymentFrequency": "Ödeme Sıklığı",
+    "firstPaymentDate": "İlk Ödeme Tarihi",
+    "paymentFromAccount": "Ödeme Hesabı",
+    "paymentFromAccountEditHelp": "Değiştirmek, yaklaşan planlı ödemeleri ve ödeme eşleştirme kuralını yeni hesaba taşır. Zaten kaydedilmiş ödemeler değişmez.",
+    "interestCategory": "Faiz Kategorisi (isteğe bağlı)",
+    "interestCategoryRequired": "Faiz Kategorisi",
     "interestBookingMode": {
-      "label": "Faiz nasıl kaydedilir?",
+      "label": "Faiz Kaydı",
       "help": "Oran algılaması doğru okusun diye. Otomatik çoğu durumda uyar.",
       "AUTO": "Otomatik (önerilir)",
       "SPLIT": "Ödemenin bölünmüş kalemi",
@@ -330,6 +373,72 @@
       "memoLabel": "Fazla ödeme not metni",
       "memoPlaceholder": "örn. fazla ödeme",
       "memoHelp": "Ödemenin notu, kaynak işleminin notu veya bir bölme notu ile büyük/küçük harfe duyarsız alt dize eşleşmesi."
+    },
+    "prepaymentMode": {
+      "label": "Ara Ödemenin Etkisi",
+      "SHORTEN_TERM": "Vadeyi kısaltır (her ay aynı anapara)",
+      "LOWER_INSTALLMENT": "Taksiti düşürür (aynı bitiş tarihi)",
+      "help": "Kredi veren kurumunuza danışın. Ara ödemeden sonra ekstredeki anapara kısmı değişmediyse vade kısaltılmıştır."
+    },
+    "previewFirstInstallment": "İlk Taksit:",
+    "detect": {
+      "toggle": "Emin değil misiniz? Birkaç taksit girin",
+      "title": "İpotek türünüzü bulun",
+      "intro": "Bir ekstreden art arda gelen iki veya üç taksiti, en eskisinden başlayarak kopyalayın. Bakiye isteğe bağlıdır: bakiye ve faiz oranıyla Monize, faizin yılda iki kez bileşik hesaplanıp hesaplanmadığını anlayabilir.",
+      "installment": "Taksit {number}",
+      "principal": "Anapara",
+      "interest": "Faiz",
+      "balance": "Önceki bakiye (isteğe bağlı)",
+      "rowIncomplete": "Hem anaparayı hem faizi girin ya da satırı boş bırakın.",
+      "rate": "Yukarıda girilen faiz oranıyla karşılaştırıldı: {rate}.",
+      "noRate": "Yukarıda faiz oranı girilmediği için bileşik faiz kontrol edilemiyor.",
+      "needsFrequency": "Önce aşağıdan ödeme sıklığını seçin: taksitler bu sıklıkla okunur.",
+      "submit": "Tür Öner",
+      "close": "Kapat",
+      "suggested": "Önerilen tür: {type}",
+      "noSuggestion": "Tür önerilmedi.",
+      "lowConfidence": "Düşük güven: kullanmadan önce bunu sözleşmenizle karşılaştırın veya kredi veren kurumunuza danışın.",
+      "use": "Bu Türü Kullan",
+      "failed": "İstek başarısız olduğu için taksitler kontrol edilemedi. Tekrar deneyin.",
+      "reason": {
+        "TOO_FEW_SAMPLES": "Karşılaştırma için art arda en az iki taksit gerekir.",
+        "INVALID_SAMPLE": "Bir taksitte negatif veya okunamayan bir tutar var.",
+        "NO_PAYMENT": "Bu taksitler anapara ödemiyor ve faiz içermiyor.",
+        "AMBIGUOUS_CONSTANT_PRINCIPAL_AND_INSTALLMENT": "Anapara ve toplam her taksitte aynı; bu hem eşit anaparalı hem de eşit taksitli ipoteğe uyar. Birbirinden daha uzak taksitleri deneyin veya sözleşmenizi kontrol edin.",
+        "ACCELERATED_FREQUENCY": "Bu taksitler eşit anaparalı veya yalnızca faizli görünüyor; hızlandırılmış bir ödeme sıklığında bu mümkün değildir. Ödeme sıklığını kontrol edin.",
+        "NO_RULE_FITS": "Bu taksitlerde ne anapara ne de toplam sabit kalıyor. Faiz oranı aralarında değiştiyse tek bir faiz dönemine ait taksitleri kullanın.",
+        "ZERO_PRINCIPAL": "Anapara ödenmediği için bakiye değişmiyor.",
+        "ZERO_PRINCIPAL_RATE_MISMATCH": "Anapara ödenmiyor, ancak faiz, belirtilen oranın bakiyeye uygulanmasıyla uyuşmuyor. Oranı kontrol edin.",
+        "CONSTANT_PRINCIPAL": "Anapara kısmı her seferinde aynı ve toplam azalıyor.",
+        "CONSTANT_PRINCIPAL_RATE_MISMATCH": "Anapara kısmı her seferinde aynı, ancak faiz, belirtilen oranın bakiyeye uygulanmasıyla uyuşmuyor. Oranı kontrol edin.",
+        "CONSTANT_INSTALLMENT_SEMI_ANNUAL": "Toplam her seferinde aynı ve faiz, yılda iki kez bileşik hesaplanan belirtilen oranla uyuşuyor.",
+        "CONSTANT_INSTALLMENT_NOMINAL": "Toplam her seferinde aynı ve faiz, yılda iki kez bileşik hesaplama olmadan belirtilen oranla uyuşuyor.",
+        "CONSTANT_INSTALLMENT_RATE_UNCHECKED": "Toplam her seferinde aynı. Her taksitten önceki bakiye ve faiz oranı olmadan yılda iki kez bileşik hesaplama kontrol edilemedi.",
+        "CONSTANT_INSTALLMENT_COMPOUNDING_AMBIGUOUS": "Toplam her seferinde aynı, ancak bakiye yılda iki kez bileşik hesaplamayı ayırt etmek için çok küçük. Kanada sabit faizli bir sözleşme bunu koşullarında belirtir.",
+        "CONSTANT_INSTALLMENT_RATE_MISMATCH": "Toplam her seferinde aynı, ancak faiz belirtilen oranda iki yöntemden hiçbiriyle uyuşmuyor. Faiz günlük işletiliyor olabilir; oranı kontrol edin."
+      },
+      "history": {
+        "action": "İpotek Türünü Algıla",
+        "title": "Ödemelerinizden ipotek türü",
+        "intro": "Tek bir faiz oranındaki en son kaydedilmiş taksitlerden okunur. Hesabı kaydedene kadar hiçbir şey değişmez.",
+        "current": "Mevcut tür: {type}",
+        "alreadySet": "Bu ipotek zaten önerilen türe sahip.",
+        "rate": "Geçerli faiz oranı: {rate}",
+        "noRate": "Bu tarihler için kayıtlı faiz oranı yok, bu nedenle bileşik faiz kontrol edilmedi.",
+        "noSamples": "Hem anapara hem faiz kısmı olan kaydedilmiş bir taksit bulunamadı. Bunu kullanmak için ödemelerinizi anapara ve faiz olarak bölünmüş şekilde kaydedin.",
+        "colDate": "Tarih",
+        "colPrincipal": "Anapara",
+        "colInterest": "Faiz",
+        "colBalance": "Önceki bakiye",
+        "balanceUnknown": "Bilinmiyor",
+        "failed": "İstek başarısız olduğu için ödeme geçmişi okunamadı. Tekrar deneyin.",
+        "cancel": "İptal",
+        "use": "Hesabı Bu Türle Düzenle"
+      }
+    },
+    "originalPrincipal": {
+      "label": "Orijinal Anapara",
+      "help": "Başlangıçta borç aldığınız tutar. Kaydedilen geçmişi kredinin başlangıcından sonra başlayan bir hesap için bu, borç alınan tutardır, açılış bakiyesi değildir — açılış bakiyesi geçmişinizin başındaki borçtur."
     }
   },
   "assetFields": {
@@ -352,13 +461,19 @@
   "validation": {
     "nameRequired": "Hesap adı zorunludur",
     "currencyCodeLength": "Para birimi kodu 3 karakter olmalıdır",
+    "currencyRequired": "Bir para birimi seçin",
     "institutionRequired": "Lütfen bir kurum seçin veya oluşturun",
     "interestRateRequired": "Faiz oranı zorunludur",
     "paymentAmountRequired": "Ödeme tutarı zorunludur",
     "paymentFrequencyRequired": "Ödeme sıklığı zorunludur",
     "paymentStartDateRequired": "İlk ödeme tarihi zorunludur",
     "paymentAccountRequired": "Ödeme hesabı zorunludur",
-    "amortizationRequired": "Amortisman süresi zorunludur"
+    "amortizationRequired": "Amortisman süresi zorunludur",
+    "interestCategoryRequired": "Bu kredinin faizinin kaydedileceği kategoriyi seçin",
+    "acceleratedNeedsAnnuity": "Bu konut kredisi hızlandırılmış bir planla ödeniyor ve bu yalnızca anüiteli kredilerde bulunur. Doğrusal veya yalnızca faizli bir kredi normal bir ödeme sıklığı gerektirir, bu nedenle anüite türünü koruyun.",
+    "paymentMatchingPayeePatternRequired": "Bankanın çekimini tanımak için bir alacaklı deseni girin",
+    "paymentMatchingPayeePatternWildcard": "Alacaklı deseni bir * joker karakteri içermelidir",
+    "paymentMatchingDescriptionPatternWildcard": "Açıklama deseni bir * joker karakteri içermelidir"
   },
   "loanDetail": {
     "backToAccounts": "Hesaplara Dön",
@@ -386,7 +501,12 @@
       "estRemainingInterest": "Tah. Kalan Faiz",
       "notSet": "Ayarlanmadı",
       "notAvailable": "Yok",
-      "paidOff": "Kapandı"
+      "paidOff": "Kapandı",
+      "nextInstallment": "Sonraki Taksit",
+      "dueOn": "Vade {date}",
+      "finalPayment": "Son Ödeme",
+      "nextInstallmentDue": "Sonraki Taksit (vade {date})",
+      "finalPaymentDue": "Son Ödeme (vade {date})"
     },
     "schedule": {
       "title": "Ödeme Planı",
@@ -455,7 +575,19 @@
       "budgetLabel": "Toplam aylık ödeme",
       "budgetHint": "Her ay krediye sabit bir toplam ayırın; fazladan ödeme, taksitten sonra kalan tutardır. Taksit düştükçe toplam aynı kalsın diye fazladan ödeme artar.",
       "budgetBelowInstallment": "Bu, mevcut taksitin ({amount}) altında; fazladan ödeme için artırın.",
-      "windowInverted": "Başlangıç tarihi bitiş tarihinden sonra olduğundan bu plan hiçbir zaman uygulanmaz."
+      "windowInverted": "Başlangıç tarihi bitiş tarihinden sonra olduğundan bu plan hiçbir zaman uygulanmaz.",
+      "unavailable": {
+        "title": "Bu kredi için erken ödeme simülasyonu henüz hesaplanamıyor.",
+        "reasonPaidOff": "Bu kredinin ödenmemiş bakiyesi yok, bu yüzden amorti edilecek bir şey kalmadı.",
+        "reasonNoFrequency": "Bu kredi için ödeme sıklığı ayarlanmamış. Hesap ayarlarından ekleyin.",
+        "reasonNoRate": "Bu kredi için kayıtlı bir faiz oranı yok. Faiz oranını hesap ayarlarından belirleyin veya bugün ya da daha önceki tarihli bir oran değişikliği kaydedin. Aşağıdaki planda satır başına gösterilen oran, tahsil edilen faizden yeniden oluşturulur ve kayıtlı bir oran değildir.",
+        "reasonNoPayment": "Taksit tutarı belirlenemiyor. Düzenli taksitleri kredi hesabına transfer olarak kaydedin (anapara, faiz ise bölünmüş satır veya ayrı kategorili bir gider olarak) ya da ödeme tutarını hesap ayarlarından belirleyin. Kaynak hesapta sıradan gider olarak kaydedilen ödemeler kredi hesabına asla ulaşmaz, bu yüzden plan onları göremez.",
+        "reasonNoAmortization": "Bu konut kredisinin amortisman süresi yok, bu nedenle taksitleri ve vade sonu hesaplanamıyor. Amortisman süresini hesap ayarlarından belirleyin.",
+        "reasonNoPaymentStart": "Bu konut kredisinin ilk ödeme tarihi yok, bu nedenle vade sonuna kadar kalan ödemeler sayılamıyor. Planlı ödemesini hesap ayarlarından kurun; girdiğiniz ilk vade tarihi 1. ödeme olur.",
+        "reasonNoPrincipal": "Bu konut kredisinin ilk tutarı yok, bu nedenle sabit anapara tutarı hesaplanamıyor. Kredi tutarını hesap ayarlarından belirleyin."
+      },
+      "budgetBelowNextInstallment": "Bu, sonraki taksitin ({amount}, vade {date}) altında; ek ödeme yapmak için tutarı bunun üzerine çıkarın.",
+      "shortenTermNeedsPrincipal": "Bu konut kredisinin ilk tutarı yok, bu nedenle vadenin kısaltılması simüle edilemiyor. Taksiti düşürmeyi seçin veya kredi tutarını hesap ayarlarından belirleyin."
     },
     "comparison": {
       "newPayoff": "Yeni Kapanış Tarihi",
@@ -471,7 +603,8 @@
       "newInstallment": "Yeni Taksit",
       "installmentDrop": "{payment} (−{reduction})",
       "monthlyPayment": "Aylık ödeme",
-      "overpaymentAtFrequency": "{frequency}: +{amount}"
+      "overpaymentAtFrequency": "{frequency}: +{amount}",
+      "firstPayment": "İlk Ödeme"
     },
     "chart": {
       "title": "Kapanış Zaman Çizelgesi",
@@ -538,6 +671,71 @@
       "seriesActual": "Gerçek Bakiye",
       "unknown": "Bilinmiyor"
     },
+    "paymentMatching": {
+      "title": "Ödeme eşleştirme",
+      "description": "Her taksit için bankanın kendi hesaptan çekimini tanır ve faturayı ayrıca kaydetmek yerine bunu kredinin ödeme planına anapara ve faiz olarak işler.",
+      "noSchedule": "Ödeme eşleştirme, bankanın çekimlerini kredinin zamanlanmış ödemesine karşı kapatır. Önce bu kredinin ödemelerini ayarlayın.",
+      "noRule": "Bu krediye bağlı bir ödeme eşleştirme kuralı yok.",
+      "createOne": "Oluştur",
+      "ruleLabel": "Kural:",
+      "ruleLoading": "Kural yükleniyor",
+      "ruleFailed": "Ödeme eşleştirme kuralı yüklenemedi.",
+      "scheduleLoading": "Zamanlanmış ödeme yükleniyor",
+      "scheduleFailed": "Kredinin zamanlanmış ödemesi yüklenemedi.",
+      "retry": "Tekrar dene",
+      "autoPost": {
+        "title": "Zamanlanmış ödeme hâlâ kendini kaydediyor",
+        "body": "Bu kredinin faturası için otomatik kayıt açık, bu nedenle kuralın bankanın çekiminden kapattığı bir taksit fatura tarafından da kaydedilir. Faturalar ve Mevduatlar bölümünde faturanın otomatik kaydını kapatın."
+      },
+      "preconditions": {
+        "openingBalance": "Kredinin açılış bakiyesi, işlenen geçmişin başındaki borç olmalıdır; her taksidin faizi bunun üzerinden hesaplanır.",
+        "originalPrincipal": "Başlangıç anaparası, açılış bakiyesi değil, başlangıçta borç alınan tutar olmalıdır.",
+        "scheduleStart": "Zamanlanmış ödemenin başladığı {date} tarihinden önceki çekimlerin eşleşecek bir taksidi yoktur."
+      },
+      "process": {
+        "button": "Geçmişi işle",
+        "scope": "Kuralı {account} hesabındaki çekimler üzerinde en eskiden başlayarak çalıştırır.",
+        "running": "Geçmiş işleniyor: şu ana kadar {count, plural, one {# taksit} other {# taksit}} kapatıldı.",
+        "done": "{count, plural, =0 {Hiçbir taksit kapatılmadı.} one {# taksit kapatıldı.} other {# taksit kapatıldı.}}",
+        "undo": "Çalıştırmanın her sayfası işlem geçmişinden geri alınabilir.",
+        "failed": "Geçmişin işlenmesi durdu",
+        "stuckTitle": "Geçmişin işlenmesine devam edilemedi",
+        "stuck": "{date} tarihli {limit, number} işlemden fazlası var, bu nedenle çalıştırma o günün ötesine geçemiyor. Kalanları daha dar bir filtreyle Araçlar > Kurallar bölümünden kapatın.",
+        "stuckUnknown": "Sunucu çalıştırmanın nereye kadar ulaştığını bildirmedi, bu nedenle devam edilemiyor. Sayfayı yeniden yükleyip tekrar deneyin."
+      },
+      "create": {
+        "title": "Ödeme eşleştirme kuralı oluştur",
+        "description": "Kural, kredinin zamanlanmış ödeme hesabından eşleşen çekimleri kapatır ve faturanın otomatik kaydı kapatılır.",
+        "descriptionWithAccount": "Kural, {account} hesabından eşleşen çekimleri kapatır ve faturanın otomatik kaydı kapatılır.",
+        "submit": "Kural oluştur",
+        "payeePatternRequired": "Bir * joker karakteri içeren bir alacaklı deseni girin",
+        "descriptionPatternWildcard": "Açıklama deseni bir * joker karakteri içermelidir",
+        "failed": "Ödeme eşleştirme kuralı oluşturulamadı.",
+        "done": "\"{name}\" kuralı oluşturuldu"
+      },
+      "settled": {
+        "title": "Kapatılan taksitler",
+        "titleWithCount": "Kapatılan taksitler ({count})",
+        "colDueDate": "Vade tarihi",
+        "colTransaction": "İşlem",
+        "colPrincipal": "Anapara",
+        "colInterest": "Faiz",
+        "colExtra": "Ek anapara",
+        "colDebtBefore": "Önceki borç",
+        "openTransaction": "İşlemi aç",
+        "void": "Geçersiz",
+        "notRecorded": "Kaydedilmedi",
+        "empty": {
+          "title": "Henüz kapatılan taksit yok",
+          "body": "Taksitleri kapatmak için geçmişi işleyin veya bankanın çekimlerini içe aktarın."
+        },
+        "error": {
+          "title": "Kapatılan taksitler yüklenemedi",
+          "body": "Bu boş bir liste değil. Hangi taksitlerin kapatıldığını görmek için tekrar deneyin.",
+          "retry": "Tekrar dene"
+        }
+      }
+    },
     "lineOfCredit": {
       "currentBalance": "Güncel Bakiye",
       "creditLimit": "Kredi Limiti",
@@ -549,7 +747,10 @@
     },
     "rateHistory": {
       "scheduledUpdateTitle": "Planlanan ödeme güncellensin mi?",
-      "scheduledUpdateMessage": "Planlanan fatura ödemesi \"{name}\" yeni orana göre güncellenebilir: toplam {payment}, {principal} anapara ve {interest} faiz. Şimdi güncellensin mi?",
+      "scheduledUpdateNextPaymentUnchanged": "Planlanan fatura ödemesi \"{name}\" oran geçmişiyle eşleşiyor. Sonraki ödeme {date}: değişmedi ({payment}).",
+      "scheduledUpdateNextPaymentChanged": "Planlanan fatura ödemesi \"{name}\" oran geçmişine göre güncellenebilir. Sonraki ödeme {date}: {before} → {after}, {principal} anapara ve {interest} faiz olarak bölünmüş.",
+      "scheduledUpdateNextPaymentNew": "Planlanan fatura ödemesi \"{name}\" oran geçmişine göre güncellenebilir. Sonraki ödeme {date}: {payment}, {principal} anapara ve {interest} faiz olarak bölünmüş.",
+      "scheduledUpdateUpcomingChange": "{date} itibarıyla ödeme {amount} olacak.",
       "scheduledUpdateDefaultName": "bu konut kredisi",
       "scheduledUpdateConfirm": "Ödemeyi güncelle",
       "scheduledUpdateSkip": "Olduğu gibi bırak",
@@ -616,6 +817,54 @@
       "memoLabel": "Ek ödeme notu",
       "memoPlaceholder": "örn. Ek anapara",
       "memoHelp": "Notu bu metni içeren ödemeler ek ödeme olarak sayılır (büyük/küçük harfe duyarlı değildir)."
+    },
+    "notAmortizing": {
+      "title": "Bu kredi kapanmıyor, bu yüzden tahmini kapanış tarihi ve kalan faiz bilinmiyor.",
+      "paymentBelowInterest": "Taksit ({payment}), {rate}% oranında aylık faizin (yaklaşık {interest}) altında, bu yüzden bakiye hiç düşmüyor. Faizi karşılaması için gerçek taksiti kaydedin (faiz geçmişi kaydı veya hesabın ödeme tutarı).",
+      "beyondHorizon": "Taksit faizi karşılıyor ancak vade projeksiyon ufkunu aşıyor, bu yüzden kapanış tarihi ve kalan faiz gösterilmiyor."
+    }
+  },
+  "loanFees": {
+    "title": "İpotek ücretleri",
+    "help": "Her ipotek ödemesiyle birlikte tahsil edilen sigorta, vergi veya diğer ücretler. Her ücret, zamanlanmış ödemenin ayrı bir satırı olur ve seçtiğiniz kategoriye kaydedilir. Bir ücret sabit bir tutar, güncel bakiyenin yüzdesi (her ödemede yeniden hesaplanır) veya orijinal bakiyenin yüzdesi olabilir ve ödeme başına ya da yıllık olarak alınır.",
+    "panelDescription": "Her zamanlanmış ipotek ödemesiyle birlikte tahsil edilen ücretler. Kaydetmek bir sonraki ödemenin satırlarını günceller.",
+    "none": "Bu ipoteğin ödemesiyle hiçbir ücret tahsil edilmiyor.",
+    "name": "Ücret adı",
+    "category": "Kategori",
+    "calculation": "Hesaplama şekli",
+    "basis": "Değerin uygulanışı",
+    "amount": "Tutar",
+    "rate": "Oran",
+    "add": "Ücret ekle",
+    "remove": "Ücreti kaldır",
+    "edit": "Ücretleri düzenle",
+    "editTitle": "İpotek ücretleri",
+    "save": "Ücretleri kaydet",
+    "cancel": "İptal",
+    "saved": "İpotek ücretleri kaydedildi.",
+    "saveFailed": "İpotek ücretleri kaydedilemedi.",
+    "loading": "Ücretler yükleniyor...",
+    "loadFailed": "İpotek ücretleri yüklenemedi.",
+    "retry": "Tekrar dene",
+    "unknownCategory": "Bilinmeyen kategori",
+    "unknownValue": "bilinmiyor",
+    "summaryPerPayment": "Ödeme başına {value}, {calculation}",
+    "summaryAnnual": "Yıllık {value}, {calculation}",
+    "paymentMatchingConflict": "Ödeme eşleştirme, ücret içeren bir ödemeyi henüz kapatamaz. Ödeme eşleştirmeyi kapatın veya ücretleri kaldırın.",
+    "paymentMatchingNote": "Bu ipoteğin bir ödeme eşleştirme kuralı var. Ödeme eşleştirme, ücret içeren bir ödemeyi henüz kapatamaz; bu yüzden kural varken ücret eklenemez.",
+    "calculations": {
+      "fixed": "Sabit tutar",
+      "percentCurrentBalance": "Güncel bakiyenin yüzdesi",
+      "percentOriginalBalance": "Orijinal bakiyenin yüzdesi"
+    },
+    "bases": {
+      "perPayment": "Ödeme başına",
+      "annual": "Yıllık"
+    },
+    "errors": {
+      "required": "Zorunlu",
+      "duplicate": "Her ücretin faiz kategorisinden farklı, kendine ait bir kategorisi olmalıdır",
+      "range": "En fazla %100 olan bir oran girin"
     }
   }
 }

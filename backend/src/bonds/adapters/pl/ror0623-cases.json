@@ -1,0 +1,237 @@
+{
+  "terms": "ror0623",
+  "notes": "ROR0623 (letter 64/2022, first period 5.25%, spread 0, fee 0.50) rebuilt from the same structure as the ROR1027 manifest; it is not in the catalog. The page example states 5.25% for period 2; the letter rule on the NBP data gives 6.00% (case ROR0623-DER-1), so the example's period-2 rate is illustrative.",
+  "cases": [
+    {
+      "id": "ROR0623-OFF-1",
+      "description": "official example 1: bought 2022-06-01 at 5.25%, early redemption requested 2022-06-22, interest accrued to 2022-06-29 is 0.41 before tax, fee 0.50 capped at the accrued 0.41, payout 100.00; first coupon 0.44 before tax",
+      "source": "https://www.obligacjeskarbowe.pl/oferta-obligacji/obligacje-roczne-ror/ror1027/",
+      "lot": {
+        "purchaseDate": "2022-06-01",
+        "quantity": 1
+      },
+      "asOf": "2022-06-29",
+      "expect": {
+        "accruedInterest": "0.41",
+        "earlyRedemptionValue": "100.00",
+        "currentPeriod": {
+          "index": 1,
+          "annualRate": "0.0525",
+          "rateSource": "TERMS"
+        }
+      },
+      "knownCashflows": [
+        {
+          "date": "2022-07-01",
+          "type": "INTEREST",
+          "amount": "0.44",
+          "status": "KNOWN",
+          "period": 1
+        }
+      ]
+    },
+    {
+      "id": "ROR0623-OFF-2",
+      "description": "official example 2: first coupon 0.44 before tax paid 2022-07-01, early redemption in period 2 at the 5.25% the page states, interest accrued to 2022-07-14 is 0.18, fee 0.50 in full, payout 99.68",
+      "source": "https://www.obligacjeskarbowe.pl/oferta-obligacji/obligacje-roczne-ror/ror1027/",
+      "lot": {
+        "purchaseDate": "2022-06-01",
+        "quantity": 1
+      },
+      "asOf": "2022-07-14",
+      "announcedRates": {
+        "2": "0.0525"
+      },
+      "expect": {
+        "accruedInterest": "0.18",
+        "earlyRedemptionValue": "99.68",
+        "currentPeriod": {
+          "index": 2,
+          "annualRate": "0.0525",
+          "rateSource": "ANNOUNCED"
+        }
+      }
+    },
+    {
+      "id": "ROR0623-DER-1",
+      "description": "same lot and day as example 2 with the rate derived by the letter rule: NBP reference rate in force on 2022-06-17 (10th business day before 2022-07-01; 2022-06-16 is Corpus Christi) is 6.00%, not the 5.25% the page example states",
+      "source": "https://www.obligacjeskarbowe.pl/oferta-obligacji/obligacje-roczne-ror/ror1027/ and letter 64/2022 annex 1; benchmark data: see benchmarks",
+      "lot": {
+        "purchaseDate": "2022-06-01",
+        "quantity": 1
+      },
+      "asOf": "2022-07-14",
+      "benchmarks": {
+        "PL_NBP_REFERENCE": {
+          "kind": "STEP",
+          "publisher": "NBP",
+          "coveredThrough": "2023-06-30",
+          "source": "NBP reference rate changes, https://static.nbp.pl/dane/stopy/stopy_procentowe_archiwum.xml (id=ref, obowiazuje_od), downloaded 2026-10-11; no change was published between 2022-09-08 and 2023-09-07",
+          "changes": [
+            {
+              "effectiveFrom": "2022-01-05",
+              "value": "0.0225"
+            },
+            {
+              "effectiveFrom": "2022-02-09",
+              "value": "0.0275"
+            },
+            {
+              "effectiveFrom": "2022-03-09",
+              "value": "0.0350"
+            },
+            {
+              "effectiveFrom": "2022-04-07",
+              "value": "0.0450"
+            },
+            {
+              "effectiveFrom": "2022-05-06",
+              "value": "0.0525"
+            },
+            {
+              "effectiveFrom": "2022-06-09",
+              "value": "0.0600"
+            },
+            {
+              "effectiveFrom": "2022-07-08",
+              "value": "0.0650"
+            },
+            {
+              "effectiveFrom": "2022-09-08",
+              "value": "0.0675"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "accruedInterest": "0.21",
+        "earlyRedemptionValue": "99.71",
+        "currentPeriod": {
+          "index": 2,
+          "annualRate": "0.0600",
+          "rateSource": "DERIVED"
+        }
+      },
+      "expectedRates": {
+        "2": {
+          "annualRate": "0.0600",
+          "rateSource": "DERIVED",
+          "addend": "0.0000",
+          "benchmark": {
+            "benchmarkId": "PL_NBP_REFERENCE",
+            "observation": "2022-06-17",
+            "value": "0.0600",
+            "flooredValue": "0.0600"
+          }
+        },
+        "3": {
+          "annualRate": "0.0650",
+          "rateSource": "DERIVED",
+          "addend": "0.0000",
+          "benchmark": {
+            "benchmarkId": "PL_NBP_REFERENCE",
+            "observation": "2022-07-18",
+            "value": "0.0650",
+            "flooredValue": "0.0650"
+          }
+        }
+      }
+    },
+    {
+      "id": "ROR0623-DER-2",
+      "description": "period 5 (2022-10-01 to 2022-11-01), a = 20, D = 31: NBP rate in force on 2022-09-19 is 6.75% (changed 2022-09-08; the 6.50% of the older observation days would give 0.35), accrued 0.36, early 99.86; all twelve rates derivable, maturity 100 + 0.56",
+      "source": "letter 64/2022 annex 1 and 2; benchmark data: see benchmarks",
+      "lot": {
+        "purchaseDate": "2022-06-01",
+        "quantity": 1
+      },
+      "asOf": "2022-10-21",
+      "benchmarks": {
+        "PL_NBP_REFERENCE": {
+          "kind": "STEP",
+          "publisher": "NBP",
+          "coveredThrough": "2023-06-30",
+          "source": "NBP reference rate changes, https://static.nbp.pl/dane/stopy/stopy_procentowe_archiwum.xml (id=ref, obowiazuje_od), downloaded 2026-10-11; no change was published between 2022-09-08 and 2023-09-07",
+          "changes": [
+            {
+              "effectiveFrom": "2022-01-05",
+              "value": "0.0225"
+            },
+            {
+              "effectiveFrom": "2022-02-09",
+              "value": "0.0275"
+            },
+            {
+              "effectiveFrom": "2022-03-09",
+              "value": "0.0350"
+            },
+            {
+              "effectiveFrom": "2022-04-07",
+              "value": "0.0450"
+            },
+            {
+              "effectiveFrom": "2022-05-06",
+              "value": "0.0525"
+            },
+            {
+              "effectiveFrom": "2022-06-09",
+              "value": "0.0600"
+            },
+            {
+              "effectiveFrom": "2022-07-08",
+              "value": "0.0650"
+            },
+            {
+              "effectiveFrom": "2022-09-08",
+              "value": "0.0675"
+            }
+          ]
+        }
+      },
+      "expect": {
+        "accruedInterest": "0.36",
+        "earlyRedemptionValue": "99.86",
+        "currentPeriod": {
+          "index": 5,
+          "annualRate": "0.0675",
+          "rateSource": "DERIVED"
+        },
+        "maturityValueKnown": "100.56",
+        "valuationComplete": true
+      },
+      "expectedRates": {
+        "4": {
+          "annualRate": "0.0650",
+          "rateSource": "DERIVED",
+          "addend": "0.0000",
+          "benchmark": {
+            "benchmarkId": "PL_NBP_REFERENCE",
+            "observation": "2022-08-18",
+            "value": "0.0650",
+            "flooredValue": "0.0650"
+          }
+        },
+        "5": {
+          "annualRate": "0.0675",
+          "rateSource": "DERIVED",
+          "addend": "0.0000",
+          "benchmark": {
+            "benchmarkId": "PL_NBP_REFERENCE",
+            "observation": "2022-09-19",
+            "value": "0.0675",
+            "flooredValue": "0.0675"
+          }
+        }
+      },
+      "knownCashflows": [
+        {
+          "date": "2022-11-01",
+          "type": "INTEREST",
+          "amount": "0.56",
+          "status": "KNOWN",
+          "period": 5
+        }
+      ]
+    }
+  ]
+}

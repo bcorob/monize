@@ -46,3 +46,9 @@
 # pre-login footprint and fails when a store widens it or a new one appears --
 # this line cannot outlive what it was written for.
 120000	IGNORE	(Information in Browser localStorage - non-identifying zustand persist envelopes, pinned by persisted-storage.guard.test.ts)
+# Keyword match on public documentation and dependency comments. The hand-written
+# sw.js remains checked for TODO/FIXME/XXX/HACK/BUG notes. OpenCV.js and the pdf.js
+# worker are the two reviewed vendor assets: public-scripts.guard.test.ts checks
+# their SHA-256 digests against the installed dependency files and rejects any
+# other executable/markup asset. The rule level remains unchanged.
+10027	IGNORE	(Information Disclosure - Suspicious Comments - reviewed service-worker and exact vendor-copy comments, pinned by public-scripts.guard.test.ts)

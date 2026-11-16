@@ -1,4 +1,13 @@
 {
+  "paymentMatching": {
+    "toggleLabel": "{kind, select, mortgage {將匯入的銀行付款與此房貸比對} other {將匯入的銀行付款與此貸款比對}}",
+    "toggleHelp": "當匯入的銀行交易符合收款人模式時，Monize 會用它結清排定的付款，並將其拆分為本金和利息，而不是記錄單獨的帳單交易。",
+    "payeePattern": "收款人模式",
+    "payeePatternPlaceholder": "例如 *我的銀行*",
+    "descriptionPattern": "描述模式（選用）",
+    "descriptionPatternPlaceholder": "例如 *貸款還款*",
+    "fromAccount": "與來自 {account} 的扣款進行比對。"
+  },
   "nameSuffix": {
     "cash": "現金",
     "brokerage": "證券"
@@ -22,9 +31,7 @@
     "noMatch": "沒有符合篩選條件的科目。",
     "clearFilters": "清除篩選",
     "filter": {
-      "all": "全部",
-      "active": "有效",
-      "closed": "已關閉",
+      "allCount": "全部 ({count})",
       "netWorthAll": "資產淨值：全部",
       "inNetWorth": "計入資產淨值",
       "excludedFromNetWorth": "排除於資產淨值外",
@@ -32,7 +39,10 @@
       "typeAriaLabel": "依帳戶類型篩選",
       "searchPlaceholder": "搜尋帳戶...",
       "searchAriaLabel": "依名稱搜尋帳戶",
-      "searchClear": "清除搜尋"
+      "searchClear": "清除搜尋",
+      "activeCount": "有效 ({count})",
+      "closedCount": "已關閉 ({count})",
+      "statusLabel": "狀態"
     },
     "accountCount": "{filtered} / {total} 個科目",
     "groupCount": "{count, plural, one {# 個科目} other {# 個科目}}",
@@ -40,6 +50,8 @@
       "accountName": "科目名稱",
       "type": "類型",
       "status": "狀態",
+      "lastReconciled": "上次對帳",
+      "unreconciled": "未對帳",
       "balance": "結餘",
       "actions": "操作"
     },
@@ -50,8 +62,11 @@
     "statusClosed": "已關閉",
     "marketValue": "市場價值",
     "combinedBreakdown": "投資 {investments} · 現金 {cash}",
+    "combinedInvestments": "投資 {amount}",
+    "combinedCash": "現金 {amount}",
     "combinedUnknown": "無法顯示總額",
     "combinedUnknownTooltip": "{count, plural, other {有 # 項持股沒有價格，因此無法計算此帳戶的總額}}",
+    "combinedUnknownValuation": "此帳戶中的部分持倉無法換算為您的報告貨幣，因此無法計算其總額。請在貨幣頁面新增缺少的匯率。",
     "combinedUnknownNoPortfolio": "無法載入持股，因此無法計算此帳戶的總額",
     "limit": "限額：{amount}",
     "pairedWith": "與 {name} 配對",
@@ -81,7 +96,11 @@
     "jointSharedBy": "由 {owner} 共享",
     "jointSharedWith": "已與 {count, plural, other {# 人}}共享",
     "includeInNetWorth": "計入我的淨資產",
-    "excludeFromNetWorth": "從我的淨資產中排除"
+    "excludeFromNetWorth": "從我的淨資產中排除",
+    "neverReconciled": "從未",
+    "lastReconciledOn": "已對帳至 {date}",
+    "neverReconciledCard": "從未對帳",
+    "unreconciledCard": "{count, plural, other {{formatted} 筆未對帳}}"
   },
   "contextMenu": {
     "subtypeBrokerage": "券商",
@@ -117,17 +136,23 @@
     "accountType": "科目類型",
     "currency": "貨幣",
     "currencyLocked": "貨幣已鎖定，因為此科目已有交易記錄。變更貨幣將會靜默重新計算現有結餘的幣值。",
+    "accountTypeKindLocked": "此科目的交易已鎖定貨幣，因此無法在加密錢包與法定貨幣科目類型之間切換。",
+    "currencyPlaceholder": "選擇貨幣...",
+    "noCryptoCurrencies": "加密錢包持有一種加密貨幣，目前尚未設定任何加密貨幣。請在<currencies>貨幣頁面</currencies>新增一種，然後在此選擇。<guide>如何新增加密貨幣</guide>",
     "openingBalance": "初始餘額",
     "loanAmount": "貸款金額",
     "mortgageAmount": "抵押貸款金額",
     "accountNumber": "科目號碼（選填）",
     "institution": "機構（選填）",
-    "institutionRequired": "貸款機構（必填）",
+    "institutionRequired": "貸款機構",
     "institutionPlaceholder": "選擇或建立機構...",
     "newInstitutionTitle": "新增機構",
     "creditLimit": "信用額度（選填）",
+    "balanceAlertsHeading": "餘額提醒",
+    "lowBalanceThreshold": "低於時通知（選填）",
+    "highBalanceThreshold": "高於時通知（選填）",
     "interestRateOptional": "利率 %（選填）",
-    "interestRateRequired": "利率 %（必填）",
+    "interestRateRequired": "利率 %",
     "description": "說明（選填）",
     "excludeFromNetWorth": "排除於資產淨值外",
     "favourite": "我的最愛",
@@ -157,13 +182,12 @@
       "mortgage": "抵押貸款",
       "asset": "資產",
       "cash": "現金",
+      "crypto": "加密錢包",
       "other": "其他"
     },
     "statementDueDayPlaceholder": "例如 15",
     "statementSettlementDayPlaceholder": "例如 25",
     "fxFeeTitle": "外幣兌換手續費 （選填）",
-    "fxFeePercent": "手續費百分比",
-    "fxFeePercentPlaceholder": "例如 2.5",
     "jointSharedWith": "聯名帳戶，已與 {count, plural, other {# 人}}共享",
     "jointManage": "管理共享",
     "cashSection": {
@@ -192,10 +216,10 @@
   },
   "loanFields": {
     "title": "貸款還款詳情",
-    "paymentAmount": "還款金額（必填）",
-    "paymentFrequency": "還款頻率（必填）",
-    "firstPaymentDate": "首次還款日期（必填）",
-    "paymentFromAccount": "從科目付款（必填）",
+    "paymentAmount": "還款金額",
+    "paymentFrequency": "還款頻率",
+    "firstPaymentDate": "首次還款日期",
+    "paymentFromAccount": "從科目付款",
     "interestCategory": "利息類別",
     "selectFrequency": "選擇頻率...",
     "selectAccount": "選擇科目...",
@@ -222,33 +246,32 @@
     "analyzingHistory": "分析交易記錄中...",
     "detectedPayments": "偵測到 {count} 筆付款，從 {from} 至 {to}。",
     "confidence": "可信度：",
-    "lastSplit": "上次付款拆分：{currency}{principal} 本金 / {currency}{interest} 利息",
-    "extraPayments": "{count, plural, one {# 筆額外本金付款} other {# 筆額外本金付款}}已偵測（平均每期 {currency}{avg}）",
+    "lastSplit": "上次付款拆分：{principal} 本金 / {interest} 利息",
+    "extraPayments": "{count, plural, one {# 筆額外本金付款} other {# 筆額外本金付款}}已偵測（平均每期 {avg}）",
     "reviewValues": "請在儲存前檢閱並調整以下數值。",
-    "regularPaymentAmount": "定期還款金額 *",
+    "regularPaymentAmount": "定期還款金額",
     "includeExtraPrincipal": "包含額外本金還款",
     "extraPrincipalPerPayment": "每次額外本金還款",
-    "totalPayment": "總還款金額：{currency}{amount}",
+    "totalPayment": "總還款金額：{amount}",
     "useDetectedSplit": "使用匯入交易中的本金／利息拆分",
-    "useDetectedSplitDesc": "將使用 {currency}{interest} 作為利息，其餘計入本金",
+    "useDetectedSplitDesc": "將使用 {interest} 作為利息，其餘計入本金",
     "calculateFromRate": "將依利率及目前結餘計算拆分",
-    "paymentFrequency": "還款頻率 *",
-    "paymentFromAccount": "從科目付款 *",
+    "paymentFrequency": "還款頻率",
+    "paymentFromAccount": "從科目付款",
     "selectAccount": "選擇科目...",
-    "nextPaymentDate": "下次還款日期 *",
+    "nextPaymentDate": "下次還款日期",
     "annualInterestRate": "年利率 (%)",
     "interestRatePlaceholder": "例如 5.5",
     "estimatedFromHistory": "從交易記錄估算：{rate}%",
     "interestExpenseCategory": "利息支出類別",
+    "interestExpenseCategoryRequired": "利息支出類別",
     "detectedCategory": "偵測到：{name}",
     "selectCategory": "選擇類別...",
     "payeeLender": "收款人 / 貸款機構",
     "selectOrCreatePayee": "選擇或建立收款人...",
     "mortgageDetails": "抵押貸款詳情",
-    "canadianMortgage": "加拿大式抵押貸款（半年複利）",
-    "variableRate": "浮動利率",
     "amortizationMonths": "攤還期（月）",
-    "termMonths": "貸款期限（月）",
+    "termMonths": "固定利率期限（月）",
     "autoPost": "到期時自動過帳",
     "skip": "略過",
     "setUpPayments": "設定還款",
@@ -264,26 +287,46 @@
     },
     "toasts": {
       "setupComplete": "已為 {account} 設定排程付款"
+    },
+    "firstInstallment": "首期還款",
+    "firstInstallmentHelp": "此房貸沒有固定還款額：每期還款依餘額、利率與攤還期間計算。這是 {date} 到期的一期，包含任何額外本金。",
+    "firstInstallmentPending": "請輸入下次還款日期以計算首期還款。",
+    "firstInstallmentCalculating": "正在計算首期還款...",
+    "firstInstallmentFailed": "無法計算首期還款。請檢查下方的數值後再試一次。",
+    "paymentMatching": {
+      "autoPostDisabled": "已自動關閉：付款比對會根據銀行自身的扣款結清此帳單，因此該帳單不應再自行記帳。",
+      "payeePatternRequired": "請輸入包含 * 萬用字元的收款人模式"
     }
   },
   "mortgageFields": {
     "title": "抵押貸款詳情",
-    "canadianMortgage": "加拿大式抵押貸款",
-    "canadianMortgageDesc": "固定利率使用半年複利（加拿大法律規定）",
-    "variableRate": "浮動利率",
-    "variableRateDesc": "貸款期間利率可能變動（使用月複利）",
-    "variableRateLoanDetailsLink": "在<link>貸款詳情</link>中記錄利率變更。",
-    "termLength": "貸款期限",
-    "termLengthNoTerm": "年和月均設為 0 表示無期限。",
-    "amortizationPeriod": "攤還期（必填）",
+    "type": {
+      "label": "抵押貸款類型",
+      "ANNUITY": "本息平均攤還",
+      "CANADIAN_FIXED": "加拿大固定利率",
+      "LINEAR": "本金平均攤還",
+      "INTEREST_ONLY": "只付利息",
+      "help": {
+        "ANNUITY": "每月還款總額相同。浮動利率抵押貸款也選此項。",
+        "CANADIAN_FIXED": "加拿大固定利率合約；利息每年複利兩次。",
+        "LINEAR": "每月本金部分相同，還款總額逐月減少。",
+        "INTEREST_ONLY": "只支付利息，餘額不變。"
+      }
+    },
+    "rateChangesLoanDetailsLink": "在<link>貸款詳情</link>中記錄利率變更。",
+    "termLength": "固定利率期限",
+    "termLengthHelp": "利率或合約期限的持續時間，例如 5 年固定利率。Monize 可以在到期前提醒您。年和月均設為 0 表示無期限。",
+    "amortizationPeriod": "攤還期",
     "years": "年",
     "months": "月",
-    "paymentFrequency": "還款頻率（必填）",
-    "firstPaymentDate": "首次還款日期（必填）",
-    "paymentFromAccount": "從科目付款（必填）",
-    "interestCategory": "利息類別",
+    "paymentFrequency": "還款頻率",
+    "firstPaymentDate": "首次還款日期",
+    "paymentFromAccount": "從科目付款",
+    "paymentFromAccountEditHelp": "變更後，即將到來的排定付款和付款比對規則將移至新帳戶。已入帳的付款不會變更。",
+    "interestCategory": "利息類別（選填）",
+    "interestCategoryRequired": "利息類別",
     "interestBookingMode": {
-      "label": "利息如何記帳？",
+      "label": "利息記錄方式",
       "help": "讓利率偵測正確讀取。多數情況用自動即可。",
       "AUTO": "自動（建議）",
       "SPLIT": "付款的拆分項",
@@ -330,6 +373,72 @@
       "memoLabel": "超額還款備註文字",
       "memoPlaceholder": "例如 超額還款",
       "memoHelp": "對付款備註、其來源交易備註或拆分備註進行不區分大小寫的子字串比對。"
+    },
+    "prepaymentMode": {
+      "label": "提前還款的效果",
+      "SHORTEN_TERM": "縮短期限（每月本金相同）",
+      "LOWER_INSTALLMENT": "降低月付額（結束日期不變）",
+      "help": "請向貸款機構確認。提前還款後，若對帳單上的本金部分不變，即表示期限已縮短。"
+    },
+    "previewFirstInstallment": "首期還款：",
+    "detect": {
+      "toggle": "不確定？輸入幾期還款",
+      "title": "找出您的抵押貸款類型",
+      "intro": "從對帳單中複製連續兩到三期還款，從最早的一期開始。餘額為選填：有了餘額和利率，Monize 就能判斷利息是否每年複利兩次。",
+      "installment": "第 {number} 期",
+      "principal": "本金",
+      "interest": "利息",
+      "balance": "還款前餘額（選填）",
+      "rowIncomplete": "請同時輸入本金和利息，或將此列留空。",
+      "rate": "已與上方輸入的利率 {rate} 核對。",
+      "noRate": "上方未輸入利率，因此無法檢查複利方式。",
+      "needsFrequency": "請先在下方選擇還款頻率：將依該頻率讀取這些還款。",
+      "submit": "建議類型",
+      "close": "關閉",
+      "suggested": "建議類型：{type}",
+      "noSuggestion": "未建議類型。",
+      "lowConfidence": "可信度低：使用前請與合約核對，或洽詢貸款機構。",
+      "use": "使用此類型",
+      "failed": "請求失敗，無法檢查這些還款。請重試。",
+      "reason": {
+        "TOO_FEW_SAMPLES": "至少需要連續兩期還款才能比較。",
+        "INVALID_SAMPLE": "某期還款的金額為負數或無法讀取。",
+        "NO_PAYMENT": "這些還款既未償還本金，也未收取利息。",
+        "AMBIGUOUS_CONSTANT_PRINCIPAL_AND_INSTALLMENT": "每期的本金和還款總額都相同，這既符合本金平均攤還，也符合本息平均攤還抵押貸款。請嘗試間隔更遠的幾期，或查看您的合約。",
+        "ACCELERATED_FREQUENCY": "這些還款看起來是本金平均攤還或只付利息，而加速還款頻率不可能是這兩種。請檢查還款頻率。",
+        "NO_RULE_FITS": "這些還款中本金和還款總額都不固定。如果利率在期間發生變化，請使用同一利率期間內的還款。",
+        "ZERO_PRINCIPAL": "未償還本金，因此餘額不變。",
+        "ZERO_PRINCIPAL_RATE_MISMATCH": "未償還本金，但利息與依所報利率對餘額計算的結果不符。請檢查利率。",
+        "CONSTANT_PRINCIPAL": "每期本金部分相同，還款總額逐期減少。",
+        "CONSTANT_PRINCIPAL_RATE_MISMATCH": "每期本金部分相同，但利息與依所報利率對餘額計算的結果不符。請檢查利率。",
+        "CONSTANT_INSTALLMENT_SEMI_ANNUAL": "每期還款總額相同，且利息與所報利率依每年複利兩次計算的結果相符。",
+        "CONSTANT_INSTALLMENT_NOMINAL": "每期還款總額相同，且利息與所報利率在不依每年複利兩次計算時相符。",
+        "CONSTANT_INSTALLMENT_RATE_UNCHECKED": "每期還款總額相同。缺少每期還款前的餘額和利率，無法檢查是否每年複利兩次。",
+        "CONSTANT_INSTALLMENT_COMPOUNDING_AMBIGUOUS": "每期還款總額相同，但餘額太小，無法區分是否每年複利兩次。加拿大固定利率合約會在條款中註明這一點。",
+        "CONSTANT_INSTALLMENT_RATE_MISMATCH": "每期還款總額相同，但在所報利率下，利息與兩種計算方式都不符。利息可能按日計算；請檢查利率。"
+      },
+      "history": {
+        "action": "偵測抵押貸款類型",
+        "title": "根據還款判斷抵押貸款類型",
+        "intro": "根據同一利率下最近已入帳的還款讀取。儲存科目之前不會有任何變更。",
+        "current": "目前類型：{type}",
+        "alreadySet": "此抵押貸款已是建議的類型。",
+        "rate": "適用利率：{rate}",
+        "noRate": "這些日期沒有記錄利率，因此未檢查複利方式。",
+        "noSamples": "找不到同時包含本金和利息部分的已入帳還款。若要使用此功能，請將還款記錄為本金和利息的拆分。",
+        "colDate": "日期",
+        "colPrincipal": "本金",
+        "colInterest": "利息",
+        "colBalance": "還款前餘額",
+        "balanceUnknown": "未知",
+        "failed": "請求失敗，無法讀取還款紀錄。請重試。",
+        "cancel": "取消",
+        "use": "以此類型編輯科目"
+      }
+    },
+    "originalPrincipal": {
+      "label": "原始本金",
+      "help": "您最初借入的金額。對於記錄歷史晚於貸款開始日期的帳戶，這是借入的金額，而不是期初餘額——期初餘額是您歷史記錄開始時的債務。"
     }
   },
   "assetFields": {
@@ -352,13 +461,19 @@
   "validation": {
     "nameRequired": "科目名稱為必填",
     "currencyCodeLength": "貨幣代碼必須為 3 個字元",
+    "currencyRequired": "請選擇貨幣",
     "institutionRequired": "請選擇或建立機構",
     "interestRateRequired": "利率為必填",
     "paymentAmountRequired": "還款金額為必填",
     "paymentFrequencyRequired": "還款頻率為必填",
     "paymentStartDateRequired": "首次還款日期為必填",
     "paymentAccountRequired": "付款科目為必填",
-    "amortizationRequired": "攤還期為必填"
+    "amortizationRequired": "攤還期為必填",
+    "interestCategoryRequired": "請選擇記錄此貸款利息的類別",
+    "acceleratedNeedsAnnuity": "此房貸依加速還款計畫支付，只有本息平均攤還的房貸才有這種計畫。本金平均攤還或只付利息的房貸需要一般還款頻率，因此請保留本息平均攤還類型。",
+    "paymentMatchingPayeePatternRequired": "請輸入用於識別銀行扣款的收款人模式",
+    "paymentMatchingPayeePatternWildcard": "收款人模式必須包含 * 萬用字元",
+    "paymentMatchingDescriptionPatternWildcard": "描述模式必須包含 * 萬用字元"
   },
   "loanDetail": {
     "backToAccounts": "返回帳戶",
@@ -386,7 +501,12 @@
       "estRemainingInterest": "預計剩餘利息",
       "notSet": "未設定",
       "notAvailable": "無",
-      "paidOff": "已還清"
+      "paidOff": "已還清",
+      "nextInstallment": "下期還款",
+      "dueOn": "到期日 {date}",
+      "finalPayment": "最後一期還款",
+      "nextInstallmentDue": "下期還款（到期日 {date}）",
+      "finalPaymentDue": "最後一期還款（到期日 {date}）"
     },
     "schedule": {
       "title": "還款計畫",
@@ -455,7 +575,19 @@
       "budgetLabel": "每月總還款",
       "budgetHint": "每月為貸款支出固定總額；還款之外剩下的就是額外還款。還款額下降時，額外還款增加以保持總額不變。",
       "budgetBelowInstallment": "低於目前的還款額（{amount}）；提高金額才能額外還款。",
-      "windowInverted": "開始日期晚於結束日期，因此此計畫永遠不會生效。"
+      "windowInverted": "開始日期晚於結束日期，因此此計畫永遠不會生效。",
+      "unavailable": {
+        "title": "暫時無法為這筆貸款計算提前還款模擬。",
+        "reasonPaidOff": "這筆貸款沒有未償還餘額，因此沒有需要攤還的部分。",
+        "reasonNoFrequency": "這筆貸款未設定還款頻率。請在帳戶設定中新增。",
+        "reasonNoRate": "這筆貸款沒有已儲存的利率。請在帳戶設定中設定利率，或記錄一筆日期為今天或更早的利率變更。下方排程中依列顯示的利率是根據已計收的利息重建的，並非已儲存的利率。",
+        "reasonNoPayment": "無法確定分期金額。請將定期分期記為轉帳至貸款帳戶（本金，利息作為拆分列或單獨分類的支出），或在帳戶設定中設定還款金額。在來源帳戶記為一般支出的付款永遠不會到達貸款帳戶，因此排程無法看到它們。",
+        "reasonNoAmortization": "此房貸沒有設定攤還期間，因此無法計算其每期還款額與期限結束日期。請在帳戶設定中設定攤還期間。",
+        "reasonNoPaymentStart": "此房貸沒有設定首次還款日期，因此無法計算到期限結束前剩餘的還款期數。請在帳戶設定中設定其定期還款；您輸入的第一個到期日將成為第 1 期還款。",
+        "reasonNoPrincipal": "此房貸沒有設定原始金額，因此無法計算其本金平均攤還額。請在帳戶設定中設定房貸金額。"
+      },
+      "budgetBelowNextInstallment": "低於下期還款額（{amount}，到期日 {date}）；請調高到該金額以上才能提前還款。",
+      "shortenTermNeedsPrincipal": "此房貸沒有設定原始金額，因此無法模擬縮短期限。請選擇降低月付額，或在帳戶設定中設定房貸金額。"
     },
     "comparison": {
       "newPayoff": "新的還清日期",
@@ -471,7 +603,8 @@
       "newInstallment": "新還款額",
       "installmentDrop": "{payment} (−{reduction})",
       "monthlyPayment": "每月還款",
-      "overpaymentAtFrequency": "{frequency}: +{amount}"
+      "overpaymentAtFrequency": "{frequency}: +{amount}",
+      "firstPayment": "首次付款"
     },
     "chart": {
       "title": "還清時間軸",
@@ -538,6 +671,71 @@
       "seriesActual": "實際餘額",
       "unknown": "未知"
     },
+    "paymentMatching": {
+      "title": "付款比對",
+      "description": "識別銀行對每期還款的自身扣款，並依貸款還款排程將其結算為本金和利息，而不是另外記錄帳單。",
+      "noSchedule": "付款比對會依據貸款的排程還款結算銀行扣款。請先為此貸款設定還款。",
+      "noRule": "此貸款未連結付款比對規則。",
+      "createOne": "建立一條",
+      "ruleLabel": "規則：",
+      "ruleLoading": "正在載入規則",
+      "ruleFailed": "無法載入付款比對規則。",
+      "scheduleLoading": "正在載入排程還款",
+      "scheduleFailed": "無法載入貸款的排程還款。",
+      "retry": "重試",
+      "autoPost": {
+        "title": "排程還款仍會自動記帳",
+        "body": "此貸款的帳單已開啟自動過帳，因此規則依據銀行扣款結算的每期還款也會被帳單再次記帳。請在「帳單與存款」中關閉該帳單的自動過帳。"
+      },
+      "preconditions": {
+        "openingBalance": "貸款的初始餘額必須是所處理歷史開始時的欠款；每期還款的利息都以此計算。",
+        "originalPrincipal": "原始本金必須是最初借入的金額，而不是初始餘額。",
+        "scheduleStart": "日期早於排程還款開始日 {date} 的扣款沒有可比對的還款期。"
+      },
+      "process": {
+        "button": "處理歷史記錄",
+        "scope": "依從舊到新的順序，對 {account} 中的扣款執行規則。",
+        "running": "正在處理歷史記錄：目前已結算 {count, plural, one {# 期還款} other {# 期還款}}。",
+        "done": "{count, plural, =0 {未結算任何還款。} one {已結算 # 期還款。} other {已結算 # 期還款。}}",
+        "undo": "本次執行的每一頁都可以在操作歷史中復原。",
+        "failed": "歷史記錄處理已停止",
+        "stuckTitle": "無法繼續處理歷史記錄",
+        "stuck": "日期為 {date} 的交易超過 {limit, number} 筆，因此執行無法越過該日。請在「工具 > 規則」中使用更精確的篩選條件結算其餘交易。",
+        "stuckUnknown": "伺服器未告知執行進行到的位置，因此無法繼續。請重新載入頁面後再試一次。"
+      },
+      "create": {
+        "title": "建立付款比對規則",
+        "description": "此規則將結算來自貸款排程還款帳戶的相符扣款，並關閉帳單的自動過帳。",
+        "descriptionWithAccount": "此規則將結算來自 {account} 的相符扣款，並關閉帳單的自動過帳。",
+        "submit": "建立規則",
+        "payeePatternRequired": "請輸入包含 * 萬用字元的收款人模式",
+        "descriptionPatternWildcard": "描述模式必須包含 * 萬用字元",
+        "failed": "無法建立付款比對規則。",
+        "done": "已建立規則「{name}」"
+      },
+      "settled": {
+        "title": "已結算的還款",
+        "titleWithCount": "已結算的還款（{count}）",
+        "colDueDate": "到期日",
+        "colTransaction": "交易",
+        "colPrincipal": "本金",
+        "colInterest": "利息",
+        "colExtra": "額外本金",
+        "colDebtBefore": "還款前欠款",
+        "openTransaction": "開啟交易",
+        "void": "作廢",
+        "notRecorded": "未記錄",
+        "empty": {
+          "title": "尚無已結算的還款",
+          "body": "處理歷史記錄或匯入銀行扣款，以結算還款。"
+        },
+        "error": {
+          "title": "無法載入已結算的還款",
+          "body": "這並不是空白清單。請重試以查看哪些還款已結算。",
+          "retry": "重試"
+        }
+      }
+    },
     "lineOfCredit": {
       "currentBalance": "目前餘額",
       "creditLimit": "信用額度",
@@ -549,7 +747,10 @@
     },
     "rateHistory": {
       "scheduledUpdateTitle": "更新排定的付款？",
-      "scheduledUpdateMessage": "排定的帳單付款「{name}」可更新以符合新利率：共 {payment}，其中本金 {principal}、利息 {interest}。立即更新？",
+      "scheduledUpdateNextPaymentUnchanged": "排定的帳單付款「{name}」與利率時間表一致。下次付款日 {date}：不變（{payment}）。",
+      "scheduledUpdateNextPaymentChanged": "排定的帳單付款「{name}」可依利率時間表更新。下次付款日 {date}：{before} → {after}，其中本金 {principal}、利息 {interest}。",
+      "scheduledUpdateNextPaymentNew": "排定的帳單付款「{name}」可依利率時間表更新。下次付款日 {date}：{payment}，其中本金 {principal}、利息 {interest}。",
+      "scheduledUpdateUpcomingChange": "自 {date} 起，付款將變為 {amount}。",
       "scheduledUpdateDefaultName": "此抵押貸款",
       "scheduledUpdateConfirm": "更新付款",
       "scheduledUpdateSkip": "維持不變",
@@ -616,6 +817,54 @@
       "memoLabel": "提前還款備註",
       "memoPlaceholder": "例如：額外本金",
       "memoHelp": "備註包含此文字的付款將計為提前還款（不區分大小寫）。"
+    },
+    "notAmortizing": {
+      "title": "這筆貸款無法還清，因此預估還清日期與剩餘利息未知。",
+      "paymentBelowInterest": "分期（{payment}）低於 {rate}% 的每月利息（約 {interest}），因此餘額永遠不會減少。請記錄真實的分期（利率歷史項目或帳戶的還款金額），使其能涵蓋利息。",
+      "beyondHorizon": "分期可涵蓋利息，但期限超出預測範圍，因此不顯示還清日期與剩餘利息。"
+    }
+  },
+  "loanFees": {
+    "title": "抵押貸款費用",
+    "help": "隨每期抵押貸款還款一併收取的保險、稅金或其他費用。每項費用都會成為排程還款中獨立的一行，記入您選擇的類別。費用可以是固定金額、目前餘額的百分比（每次還款時重新計算）或原始餘額的百分比，按每期還款或按年收取。",
+    "panelDescription": "隨每期排程抵押貸款還款一併收取的費用。儲存後會更新下一期還款的各行。",
+    "none": "此抵押貸款的還款不收取任何費用。",
+    "name": "費用名稱",
+    "category": "類別",
+    "calculation": "計算方式",
+    "basis": "數值適用於",
+    "amount": "金額",
+    "rate": "費率",
+    "add": "新增費用",
+    "remove": "移除費用",
+    "edit": "編輯費用",
+    "editTitle": "抵押貸款費用",
+    "save": "儲存費用",
+    "cancel": "取消",
+    "saved": "抵押貸款費用已儲存。",
+    "saveFailed": "無法儲存抵押貸款費用。",
+    "loading": "載入費用中...",
+    "loadFailed": "無法載入抵押貸款費用。",
+    "retry": "重試",
+    "unknownCategory": "未知類別",
+    "unknownValue": "未知",
+    "summaryPerPayment": "每期還款 {value}，{calculation}",
+    "summaryAnnual": "每年 {value}，{calculation}",
+    "paymentMatchingConflict": "付款比對目前還無法結算包含費用的還款。請關閉付款比對或移除這些費用。",
+    "paymentMatchingNote": "此房貸有一條付款比對規則。付款比對尚無法結算包含費用的付款，因此在該規則存在期間無法新增費用。",
+    "calculations": {
+      "fixed": "固定金額",
+      "percentCurrentBalance": "目前餘額的百分比",
+      "percentOriginalBalance": "原始餘額的百分比"
+    },
+    "bases": {
+      "perPayment": "每期還款",
+      "annual": "每年"
+    },
+    "errors": {
+      "required": "必填",
+      "duplicate": "每項費用都需要獨立的類別，且不能是利息類別",
+      "range": "請輸入不超過 100% 的費率"
     }
   }
 }

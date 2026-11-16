@@ -9,8 +9,8 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
-import { Button } from '@/components/ui/Button';
-import { Modal } from '@/components/ui/Modal';
+import { Button, buttonClassName } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { CustomReportForm } from '@/components/reports/CustomReportForm';
 import { customReportsApi } from '@/lib/custom-reports';
 import { CustomReport, CreateCustomReportData } from '@/types/custom-report';
@@ -69,6 +69,9 @@ function EditCustomReportContent({ reportId }: { reportId: string }) {
   };
 
   const handleDelete = async () => {
+    // The confirmation stays open until the delete settles; a second press
+    // must not send a second request.
+    if (isDeleting) return;
     setIsDeleting(true);
     try {
       await customReportsApi.delete(reportId);
@@ -106,10 +109,14 @@ function EditCustomReportContent({ reportId }: { reportId: string }) {
         <PageHeader
           title={t('editReport.titleCustom')}
           subtitle={t('editReport.subtitleCustom')}
+          help="reports"
           actions={
             <div className="flex items-center gap-3 w-full justify-between sm:w-auto sm:justify-end">
-              <Link href="/reports" className="order-1 sm:order-2">
-                <Button variant="outline">{t('editReport.backToReports')}</Button>
+              <Link
+                href="/reports"
+                className={buttonClassName('outline', 'md', 'order-1 sm:order-2')}
+              >
+                {t('editReport.backToReports')}
               </Link>
               <Button
                 variant="outline"
@@ -129,31 +136,15 @@ function EditCustomReportContent({ reportId }: { reportId: string }) {
         />
       </main>
 
-      {/* Delete Confirmation Modal */}
-      <Modal isOpen={showDeleteConfirm} onClose={() => setShowDeleteConfirm(false)} maxWidth="md" className="p-6">
-        <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-          {t('editReport.deleteButton')}
-        </h3>
-        <p className="text-gray-500 dark:text-gray-400 mb-6">
-          {t('editReport.deleteConfirmMessage', { name: report?.name ?? '' })}
-        </p>
-        <div className="flex justify-end gap-3">
-          <Button
-            variant="outline"
-            onClick={() => setShowDeleteConfirm(false)}
-            disabled={isDeleting}
-          >
-            {tc('cancel')}
-          </Button>
-          <Button
-            onClick={handleDelete}
-            disabled={isDeleting}
-            className="bg-red-600 hover:bg-red-700 text-white"
-          >
-            {isDeleting ? t('editReport.deleting') : tc('delete')}
-          </Button>
-        </div>
-      </Modal>
+      <ConfirmDialog
+        isOpen={showDeleteConfirm}
+        title={t('editReport.deleteButton')}
+        message={t('editReport.deleteConfirmMessage', { name: report?.name ?? '' })}
+        confirmLabel={tc('delete')}
+        variant="danger"
+        onConfirm={handleDelete}
+        onCancel={() => setShowDeleteConfirm(false)}
+      />
     </PageLayout>
   );
 }

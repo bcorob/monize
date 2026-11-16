@@ -3,13 +3,25 @@
   "rootDir": "..",
   "testRegex": "test/.*[.-]spec\\.ts$",
   "transform": {
-    "^.+\\.(t|j)s$": "ts-jest"
+    "^.+\\.(t|j|mj)s$": [
+      "<rootDir>/scripts/esm-interop-transformer.cjs",
+      {
+        "tsconfig": {
+          "isolatedModules": true,
+          "module": "commonjs",
+          "moduleResolution": "bundler"
+        },
+        "diagnostics": {
+          "ignoreCodes": [151002]
+        }
+      }
+    ]
   },
   "moduleNameMapper": {
     "^@/(.*)$": "<rootDir>/src/$1"
   },
   "transformIgnorePatterns": [
-    "node_modules/(?!(@scure|@otplib|otplib|@noble|openid-client|oauth4webapi|jose|uuid|mdb-reader)/)"
+    "node_modules/(?!(@scure|@otplib|otplib|@noble|openid-client|oauth4webapi|jose|uuid|mdb-reader|@nestjs|he|htmlparser2|domhandler|domutils|dom-serializer|domelementtype|entities|web-push|https-proxy-agent|agent-base|proxy-agent-negotiate)/)"
   ],
   "testEnvironment": "node",
   "testTimeout": 30000,

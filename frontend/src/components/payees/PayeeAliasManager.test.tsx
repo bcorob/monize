@@ -46,6 +46,18 @@ describe('PayeeAliasManager', () => {
     expect(mockGetAliases).toHaveBeenCalledWith('p1');
   });
 
+  it('shows the shared spinner with its text while the aliases load', async () => {
+    mockGetAliases.mockReturnValue(new Promise(() => {}));
+
+    let container: HTMLElement;
+    await act(async () => {
+      ({ container } = render(<PayeeAliasManager payeeId="p1" />));
+    });
+
+    expect(screen.getByText('Loading aliases...')).toBeInTheDocument();
+    expect(container!.querySelector('.animate-spin')).not.toBeNull();
+  });
+
   it('shows empty state when no aliases exist', async () => {
     mockGetAliases.mockResolvedValue([]);
 

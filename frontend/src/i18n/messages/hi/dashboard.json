@@ -1,8 +1,87 @@
 {
   "page": {
-    "welcomePrefix": "स्वागत है",
-    "welcomeWithName": "स्वागत है, {name}!",
-    "subtitle": "यहाँ आपका वित्तीय सारांश है"
+    "greeting": {
+      "morning": "सुप्रभात",
+      "morningWithName": "सुप्रभात, {name}",
+      "afternoon": "नमस्कार",
+      "afternoonWithName": "नमस्कार, {name}",
+      "evening": "शुभ संध्या",
+      "eveningWithName": "शुभ संध्या, {name}"
+    }
+  },
+  "hero": {
+    "label": "कुल संपत्ति का सारांश",
+    "netWorth": "कुल संपत्ति",
+    "changeThisMonth": "इस महीने {amount} <dir>{direction, select, up {बढ़ी} other {घटी}}</dir>",
+    "changeThisMonthWithPercent": "इस महीने {amount} · {percent} <dir>{direction, select, up {बढ़ी} other {घटी}}</dir>",
+    "assets": "<strong><value></value></strong> परिसंपत्तियाँ",
+    "liabilities": "<strong><value></value></strong> देनदारियाँ",
+    "invested": "<strong><value></value></strong> निवेशित",
+    "investedUnpriced": "{symbols} का कोई मौजूदा मूल्य नहीं है, इसलिए वे होल्डिंग शामिल नहीं हैं। निवेश पेज पर मूल्य रीफ़्रेश करें, या सिक्योरिटी के मूल्य इतिहास में एक जोड़ें।",
+    "portfolioLabel": "पोर्टफ़ोलियो सारांश",
+    "portfolioValueFor": "पोर्टफ़ोलियो मूल्य <names>({accounts})</names>",
+    "portfolioEmpty": "अभी कोई निवेश खाता नहीं है। अपना पोर्टफ़ोलियो यहाँ देखने के लिए एक जोड़ें।",
+    "portfolioLoadFailed": "आपका पोर्टफ़ोलियो लोड नहीं हो सका। फिर से कोशिश करने के लिए डैशबोर्ड रीलोड करें।",
+    "portfolioChangeFailed": "इस अवधि का बदलाव लोड नहीं हो सका। फिर से कोशिश करने के लिए डैशबोर्ड रीलोड करें।",
+    "changeOverWindow": "{amount} · {window} <dir>{direction, select, up {बढ़ा} other {घटा}}</dir>",
+    "holdings": "<strong><value></value></strong> होल्डिंग",
+    "cash": "<strong><value></value></strong> नकद",
+    "metricLine": "<strong><value></value></strong> {metric}",
+    "metricNames": {
+      "simpleReturn": "सरल प्रतिफल",
+      "twr": "TWR",
+      "mwr": "MWR",
+      "cagr": "CAGR"
+    },
+    "showSet": "{name} दिखाएँ",
+    "cycleControls": "चुनें कि हीरो क्या दिखाए",
+    "cagrUnavailable": "CAGR के लिए इन खातों में कम से कम एक साल का निवेश इतिहास चाहिए, जिसमें निकाले गए से ज़्यादा जमा किया गया हो।",
+    "intradayUnavailable": "इनमें से कुछ होल्डिंग के इंट्राडे मूल्य नहीं हैं, इसलिए एक दिन का चार्ट नहीं बन सकता। कस्टमाइज़ में लंबी अवधि चुनें।"
+  },
+  "trivia": {
+    "title": "रोचक तथ्य",
+    "position": "{total} में से {index}",
+    "previous": "पिछला तथ्य",
+    "next": "अगला तथ्य",
+    "empty": "पर्याप्त इतिहास होने पर तथ्य यहाँ दिखेंगे: दो महीने की कुल संपत्ति, मूल्य वाले निवेश, कुछ महीनों के खर्च और आय, या आपकी ट्रैक की गई वारंटियाँ। सूची हर सुबह फिर से बनाई जाती है।",
+    "off": "AI रोचक तथ्य बंद हैं। इन्हें <link>AI सेटिंग</link> में चालू करें।",
+    "topics": {
+      "netWorth": "कुल संपत्ति",
+      "investments": "निवेश",
+      "spending": "खर्च",
+      "income": "आय",
+      "activity": "आपके रिकॉर्ड",
+      "warranties": "वारंटी"
+    },
+    "aiGenerated": "आपके आँकड़ों से AI द्वारा लिखा गया",
+    "facts": {
+      "netWorthSinceStart": "{startMonth} में आपकी कुल संपत्ति {startAmount} थी। तब से यह {startGain} बढ़ी है, यानी लगभग {startMultiple} गुना बड़ी हो गई है।",
+      "netWorthBiggestJump": "{jumpMonth} आपकी सबसे बड़ी एक-महीने की छलांग थी। कुल संपत्ति {jumpAmount} बढ़ी, {jumpPreviousMonth} में {jumpFrom} से {jumpTo} तक।",
+      "netWorthHighPoint": "आपका उच्चतम स्तर {peakMonth} में {peakAmount} था। अभी आप उससे {peakBelow} नीचे हैं।",
+      "netWorthAtHighPoint": "आप अपने उच्चतम स्तर पर हैं: कुल संपत्ति कभी {currentHigh} से ऊपर नहीं गई।",
+      "netWorthBiggestDip": "आपकी सबसे बड़ी गिरावट ने कुल संपत्ति को {dipFromMonth} में {dipFromAmount} से {dipToMonth} में {dipToAmount} तक पहुँचा दिया, यानी {dipPercent} की गिरावट।",
+      "netWorthBiggestDipRecovered": "आपकी सबसे बड़ी गिरावट ने कुल संपत्ति को {dipFromMonth} में {dipFromAmount} से {dipToMonth} में {dipToAmount} तक पहुँचा दिया। आप {dipRecoveredMonth} तक उबर चुके थे।",
+      "netWorthLargestAsset": "{assetName} का मूल्य {assetValue} है, यानी आपकी परिसंपत्तियों का {assetPercent}।",
+      "investmentsShareOfAssets": "आपके निवेश का मूल्य {investmentsValue} है, जो आपकी परिसंपत्तियों का {investmentsPercent} है।",
+      "investmentsGain": "आपके निवेश ने {gainCostBasis} की लागत से {gainAmount} ({gainPercent}) की बढ़त हासिल की है।",
+      "investmentsLoss": "आपके निवेश {gainCostBasis} की लागत से {gainAmount} ({gainPercent}) नीचे हैं।",
+      "investmentsCagr": "आपके निवेश का वार्षिकीकृत रिटर्न लगभग {cagrPercent} (CAGR) है।",
+      "investmentsBiggestHolding": "आपकी सबसे बड़ी होल्डिंग {holdingSymbol} है, जो पोर्टफ़ोलियो का लगभग {holdingPercent} है ({holdingAccounts} में {holdingValue})।",
+      "investmentsBestPerformer": "आपका सबसे अच्छा प्रदर्शन {bestSymbol} का है, जो {bestPercent} बढ़ा है। इसकी लागत {bestCost} थी और अब इसका मूल्य {bestValue} है।",
+      "investmentsForeignAccount": "आपका {foreignName} खाता {foreignCurrency} में है। इसकी {foreignBalance} की होल्डिंग लगभग {foreignRate} की दर पर {foreignConverted} के बराबर है।",
+      "investmentsLargestAccount": "आपका सबसे बड़ा निवेश खाता {largestName} है, जिसमें {largestValue} है।",
+      "spendingTopCategory": "पिछले बारह महीनों में आपके खर्च का सबसे बड़ा हिस्सा {topCategoryName} पर गया: {topCategoryAmount}, यानी {topCategoryPercent}।",
+      "spendingTopPayee": "पिछले बारह महीनों में आपने सबसे ज़्यादा {topPayeeName} पर खर्च किया: {topPayeeAmount}।",
+      "spendingBiggestMonth": "पिछले बारह महीनों में {biggestSpendMonth} आपका सबसे ज़्यादा खर्च वाला महीना था, जिसमें {biggestSpendAmount} खर्च हुए।",
+      "incomeKeptShare": "पिछले बारह महीनों में आपने आई हुई रकम में से {keptAmount} बचाए, जो आपकी आय का {keptPercent} है।",
+      "incomeSurplusMonths": "पिछले {windowMonths} महीनों में वे महीने जिनमें जाने से ज़्यादा आया: {surplusMonths}।",
+      "incomeTopSource": "पिछले बारह महीनों में आपकी आय का {topSourcePercent} {topSourceName} से आया।",
+      "activityTransactions": "आपके रजिस्टरों में लेन-देन: {transactionCount}, {firstTransactionMonth} तक पीछे।",
+      "activityPayees": "Monize में आपके रखे भुगतानकर्ता: {payeeCount}। श्रेणियाँ: {categoryCount}।",
+      "activityScheduled": "Monize आपके लिए जिन निर्धारित लेन-देन को ट्रैक कर रहा है: {scheduledCount}।",
+      "warrantiesCovered": "आपकी ट्रैक की गई वारंटियाँ जो अभी भी लागू हैं: {warrantyCount}।",
+      "warrantiesNextExpiry": "अगली वारंटी जो खत्म होगी, वह {nextWarrantyName} है, {nextWarrantyMonth} में।"
+    }
   },
   "favouriteAccounts": {
     "title": "पसंदीदा खाते",
@@ -21,12 +100,10 @@
   "upcomingBills": {
     "title": "आगामी बिल और जमा",
     "empty": "उनकी रिमाइंडर विंडो के भीतर कोई अतिदेय या आगामी बिल, जमा, या स्थानांतरण नहीं।",
-    "perReminderSettings": "रिमाइंडर सेटिंग्स के अनुसार",
     "postTransaction": "यह लेनदेन पोस्ट करें",
     "manual": "मैन्युअल",
-    "manualTitle": "मैन्युअल पोस्टिंग आवश्यक है",
     "negativeBalanceWarning": "इस लेनदेन से खाते का शेष शून्य से नीचे चला जाएगा",
-    "viewAll": "सभी बिल और जमा देखें",
+    "negativeBalanceLegend": "इसके खाते को शून्य से नीचे ले जाता है",
     "moreItems": "+{count} और",
     "overdue": "अतिदेय",
     "today": "आज",
@@ -38,7 +115,23 @@
       "transfer": "स्थानांतरण",
       "reminder": "अनुस्मारक",
       "unknown": "अज्ञात"
-    }
+    },
+    "scope": {
+      "dueSoon": "जल्द देय",
+      "all": "सभी आगामी"
+    },
+    "viewLabel": "दृश्य",
+    "viewList": "सूची",
+    "viewCalendar": "कैलेंडर",
+    "previousMonth": "पिछला महीना",
+    "nextMonth": "अगला महीना",
+    "emptyAll": "कोई सक्रिय बिल, जमा या स्थानांतरण निर्धारित नहीं है।",
+    "estimated": "अनुमानित"
+  },
+  "cashFlowForecast": {
+    "title": "नकदी प्रवाह पूर्वानुमान",
+    "period": "पूर्वानुमान अवधि",
+    "loadFailed": "आज के बाद की तारीख वाले लेन-देन लोड नहीं हो सके, इसलिए पूर्वानुमान नहीं दिखाया जा सकता। फिर से प्रयास करने के लिए डैशबोर्ड पुनः लोड करें।"
   },
   "gettingStarted": {
     "title": "शुरू करें",
@@ -76,8 +169,12 @@
     "title": "खर्च अंतर्दृष्टि",
     "empty": "कोई अंतर्दृष्टि उपलब्ध नहीं। अपना पहला विश्लेषण उत्पन्न करने के लिए अंतर्दृष्टि पृष्ठ पर जाएं।",
     "goToInsights": "अंतर्दृष्टि पर जाएं",
-    "viewAll": "सभी अंतर्दृष्टि देखें",
     "activeCount": "{count} सक्रिय"
+  },
+  "warrantiesExpiring": {
+    "title": "जल्द समाप्त होने वाली वारंटी",
+    "empty": "अगले 30 दिनों में कुछ भी समाप्त नहीं हो रहा है",
+    "loadFailed": "आपकी समाप्त होने वाली वारंटी लोड नहीं हो सकीं। फिर से कोशिश करने के लिए डैशबोर्ड रीलोड करें।"
   },
   "topMovers": {
     "title": "शीर्ष परिवर्तक",
@@ -88,13 +185,20 @@
       "noLosers": "आज कोई हानिकर्ता नहीं।"
     },
     "dailyChange": "दैनिक परिवर्तन",
+    "dailyChangeOn": "दैनिक परिवर्तन · {date}",
     "openPriceHistory": "{symbol} का मूल्य इतिहास",
     "refreshPrices": "मूल्य रीफ्रेश करें",
     "viewPortfolio": "पोर्टफोलियो देखें",
     "filter": {
-      "all": "सभी",
-      "gainers": "लाभार्थी",
-      "losers": "हानिकर्ता"
+      "all": "सभी ({count})",
+      "gainers": "लाभार्थी ({count})",
+      "losers": "हानिकर्ता ({count})",
+      "label": "दिशा"
+    },
+    "metric": {
+      "label": "दिखाएं",
+      "price": "मूल्य",
+      "holdings": "होल्डिंग्स"
     }
   },
   "favouriteSecurities": {
@@ -102,15 +206,17 @@
     "empty": "अभी कोई पसंदीदा प्रतिभूति नहीं। <securitiesLink>प्रतिभूति पृष्ठ</securitiesLink> पर जाएं और जिन प्रतिभूतियों को यहाँ ट्रैक करना चाहते हैं उन्हें स्टार करें।",
     "noPriceYet": "अभी कोई मूल्य नहीं",
     "dailyChange": "दैनिक परिवर्तन",
+    "dailyChangeOn": "दैनिक परिवर्तन · {date}",
     "openPriceHistory": "{symbol} का मूल्य इतिहास",
-    "refreshPrices": "मूल्य रीफ्रेश करें",
-    "manage": "प्रतिभूतियां प्रबंधित करें"
+    "refreshPrices": "मूल्य रीफ्रेश करें"
   },
   "netWorth": {
     "title": "शुद्ध संपत्ति",
     "empty": "अभी कोई शुद्ध संपत्ति डेटा उपलब्ध नहीं।",
-    "past12Months": "पिछले 12 महीने",
-    "viewReport": "पूरी रिपोर्ट देखें"
+    "barStyle": "बार शैली",
+    "barStyleNetWorth": "शुद्ध संपत्ति",
+    "barStyleAccountType": "खाता प्रकार के अनुसार",
+    "loadFailed": "आपकी शुद्ध संपत्ति का इतिहास लोड नहीं हो सका। फिर से प्रयास करने के लिए डैशबोर्ड पुनः लोड करें।"
   },
   "assetsVsLiabilities": {
     "title": "संपत्ति बनाम देनदारियां",
@@ -118,14 +224,22 @@
     "current": "वर्तमान",
     "netWorthLabel": "शुद्ध संपत्ति",
     "assets": "संपत्ति",
-    "liabilities": "देनदारियां"
+    "liabilities": "देनदारियां",
+    "partialName": "{name} (आंशिक)",
+    "viewCallouts": "लेबल",
+    "viewLegend": "संकेत"
   },
   "expensesPieChart": {
     "title": "श्रेणी के अनुसार व्यय",
     "empty": "इस अवधि के लिए कोई व्यय डेटा नहीं।",
     "total": "कुल",
     "uncategorized": "अवर्गीकृत",
-    "other": "अन्य"
+    "other": "अन्य",
+    "insideOther": "{count, plural, one {अन्य में # श्रेणी} other {अन्य में # श्रेणियाँ}}",
+    "topLevelOnly": "शीर्ष स्तर की श्रेणियाँ",
+    "topLevelOnlyHint": "उपश्रेणियों को उनकी मूल श्रेणी में गिनें",
+    "viewCallouts": "लेबल",
+    "viewLegend": "संकेत"
   },
   "incomeExpenses": {
     "title": "आय बनाम व्यय",
@@ -135,18 +249,85 @@
   },
   "customize": {
     "button": "अनुकूलित करें",
-    "title": "डैशबोर्ड अनुकूलित करें",
-    "description": "नीचे दिया गया लेआउट आपके डैशबोर्ड जैसा है: विजेट बाएँ से दाएँ क्रम में लगते हैं, बड़ी स्क्रीन पर प्रति पंक्ति दो।",
     "moveEarlier": "{name} को आगे ले जाएं",
     "moveLater": "{name} को पीछे ले जाएं",
-    "dragToReorder": "विजेट को खींचकर पुनर्व्यवस्थित करें, या तीर बटन का उपयोग करें।",
-    "hiddenWidgets": "छिपे हुए विजेट",
-    "hide": "{name} छिपाएं",
-    "show": "{name} दिखाएं",
     "atLeastOne": "डैशबोर्ड पर दिखाने के लिए कम से कम एक विजेट चुनें।",
     "reset": "डिफ़ॉल्ट पर रीसेट करें",
     "toasts": {
       "saveFailed": "डैशबोर्ड लेआउट सहेजने में विफल"
+    },
+    "hero": {
+      "title": "डैशबोर्ड हीरो",
+      "description": "अभिवादन के नीचे शुरुआती आँकड़े और चार्ट: आपकी कुल संपत्ति, आपका पोर्टफ़ोलियो, या ऑटो, जो हर मिनट दोनों के बीच बदलता रहता है।",
+      "show": "डैशबोर्ड हीरो दिखाएँ",
+      "range": "चार्ट",
+      "set": "दिखाएँ",
+      "sets": {
+        "auto": "ऑटो",
+        "netWorth": "कुल संपत्ति",
+        "portfolio": "पोर्टफ़ोलियो मूल्य"
+      },
+      "metric": "आँकड़ा",
+      "metrics": {
+        "simpleReturn": "सरल प्रतिफल",
+        "twr": "TWR",
+        "mwr": "MWR",
+        "cagr": "CAGR"
+      }
+    }
+  },
+  "edit": {
+    "barLabel": "डैशबोर्ड व्यवस्थित करें",
+    "addWidget": "विजेट जोड़ें",
+    "heroSettings": "हीरो सेटिंग्स",
+    "done": "हो गया",
+    "phoneNote": "विजेट के आकार चौड़ी स्क्रीन पर लागू होते हैं।",
+    "remove": "{name} हटाएं",
+    "grip": "{name} ले जाएं",
+    "gripHint": "{name} को ले जाने के लिए खींचें, या तीर कुंजियां दबाएं",
+    "moved": "{name} को {count} में से स्थान {position} पर ले जाया गया",
+    "removed": "{name} हटाया गया",
+    "added": "{name} जोड़ा गया",
+    "resized": "{name} अब {size} है",
+    "resizedBoth": "{name} अब {width} और {height} है",
+    "twoChanges": "{first}। {second}",
+    "placeholder": "जब दिखाने के लिए कुछ होगा, तब यह डैशबोर्ड पर दिखेगा।",
+    "addTitle": "विजेट जोड़ें",
+    "addDescription": "आपका जोड़ा गया विजेट डैशबोर्ड के अंत में जाता है। जब तक आप हो गया नहीं चुनते, कुछ भी सहेजा नहीं जाता।",
+    "addEmpty": "सभी विजेट पहले से आपके डैशबोर्ड पर हैं",
+    "addToSpace": "इस जगह में विजेट जोड़ें ({width})",
+    "addSlotDescription": "केवल वही विजेट सूचीबद्ध हैं जो इस जगह में फिट होते हैं, और आप जो चुनते हैं वह इसे भर देता है। जब तक आप हो गया नहीं चुनते, कुछ भी सहेजा नहीं जाता।",
+    "addSlotEmpty": "कोई छिपा हुआ विजेट इस जगह में फिट नहीं होता। किसी विजेट को यहां खींचकर लाएं।",
+    "resize": "{name} का आकार बदलें",
+    "resizeHint": "{name} का आकार बदलने के लिए खींचें, या तीर कुंजियां दबाएं",
+    "widthLabel": "चौड़ाई",
+    "heightLabel": "ऊंचाई",
+    "presetName": "{short}, {name}",
+    "widthOf": "{name} की चौड़ाई",
+    "heightOf": "{name} की ऊंचाई",
+    "widthShort": {
+      "third": "1/3",
+      "half": "1/2",
+      "twoThirds": "2/3",
+      "full": "पूरी"
+    },
+    "widthName": {
+      "third": "एक तिहाई चौड़ाई",
+      "half": "आधी चौड़ाई",
+      "twoThirds": "दो तिहाई चौड़ाई",
+      "full": "पूरी चौड़ाई"
+    },
+    "heightShort": {
+      "auto": "ऑटो",
+      "compact": "S",
+      "standard": "M",
+      "tall": "L"
+    },
+    "heightName": {
+      "auto": "स्वचालित ऊंचाई",
+      "compact": "संक्षिप्त ऊंचाई",
+      "standard": "मानक ऊंचाई",
+      "tall": "अधिक ऊंचाई"
     }
   },
   "favouriteReports": {
@@ -156,22 +337,28 @@
   },
   "widgets": {
     "configure": "{name} कॉन्फ़िगर करें",
+    "asOf": "{date} तक",
     "done": "हो गया",
     "configSaveFailed": "विजेट सेटिंग्स सहेजी नहीं जा सकीं। कृपया पुनः प्रयास करें।",
     "timeframe": "समय-सीमा",
     "accounts": "खाते",
     "chartType": "चार्ट प्रकार",
     "view": "दृश्य",
+    "viewCalloutsHint": "लेबल के लिए चौड़ी स्क्रीन चाहिए। जहाँ वे फ़िट नहीं होते, वहाँ संकेत दिखाया जाता है।",
     "displayName": "प्रदर्शन नाम",
     "description": "विवरण",
     "descriptionPlaceholder": "एक वैकल्पिक विवरण जोड़ें",
     "rangeLabels": {
+      "1d": "1D",
+      "1w": "1H",
+      "mtd": "MTD",
       "1m": "1M",
       "3m": "3M",
       "6m": "6M",
       "1y": "1Y",
       "2y": "2Y",
       "5y": "5Y",
+      "10y": "10Y",
       "ytd": "YTD",
       "all": "सभी"
     }
@@ -179,7 +366,10 @@
   "portfolioValue": {
     "title": "पोर्टफोलियो मूल्य",
     "empty": "अभी दिखाने के लिए कोई निवेश इतिहास नहीं।",
-    "refresh": "वर्तमान मूल्य ताज़ा करें"
+    "refresh": "वर्तमान मूल्य ताज़ा करें",
+    "investmentResult": "निवेश परिणाम",
+    "periodBreakdownInvestedTooltip": "इस अवधि में प्रतिभूतियों का मूल्य {valueChange} बदला। इसमें से {netInvested} बिक्री घटाकर लगाया गया, और उन्होंने {income} लाभांश और ब्याज के रूप में दिया। शेयरों में पुनर्निवेशित वितरण दोनों में गिना जाता है। ऊपर का आंकड़ा वह है जो निवेशों ने स्वयं कमाया, बिना निवेश की नकदी को छोड़कर।",
+    "notAvailable": "उपलब्ध नहीं"
   },
   "spendingByPayee": {
     "title": "भुगतानकर्ता के अनुसार व्यय",
@@ -225,14 +415,19 @@
       "MUTUAL_FUND": "म्यूचुअल फंड",
       "BOND": "बांड",
       "CASH": "नकद"
-    }
+    },
+    "viewType": "प्रतिभूति प्रकार",
+    "viewAssetClass": "परिसंपत्ति वर्ग",
+    "otherAssetClasses": "अन्य",
+    "emptyAssetClass": "अभी तक कोई परिसंपत्ति वर्ग विश्लेषण उपलब्ध नहीं है।"
   },
   "geographicAllocation": {
     "title": "भौगोलिक आवंटन",
     "empty": "दिखाने के लिए कोई होल्डिंग नहीं।",
     "viewRegion": "क्षेत्र",
     "viewExchange": "एक्सचेंज",
-    "viewCountry": "देश"
+    "viewCountry": "देश",
+    "listingBasisNote": "प्रत्येक होल्डिंग की सूचीबद्ध जगह के अनुसार समूहित। फंड के अंदर देखने के लिए देश पर जाएँ।"
   },
   "recurringExpenses": {
     "title": "शीर्ष आवर्ती व्यय",
@@ -240,7 +435,9 @@
     "minOccurrences": "न्यूनतम घटनाएँ",
     "minOccurrencesOption": "{count} या अधिक",
     "occurrences": "{count} घटनाएँ",
-    "monthlyEstimate": "मासिक अनुमान"
+    "monthlyEstimate": "मासिक अनुमान",
+    "viewCallouts": "लेबल",
+    "viewLegend": "संकेत"
   },
   "weekendVsWeekday": {
     "title": "सप्ताहांत बनाम कार्यदिवस व्यय",
@@ -249,5 +446,14 @@
     "weekdayLabel": "कार्यदिवस",
     "viewOverview": "अवलोकन",
     "viewByDay": "दिन के अनुसार"
+  },
+  "cashFlowSankey": {
+    "title": "कैश फ़्लो सैंकी",
+    "empty": "इस अवधि में कोई आय, खर्च या ट्रांसफ़र नहीं।",
+    "depth": "विवरण",
+    "depthCategories": "श्रेणियाँ",
+    "depthSubcategories": "उप-श्रेणियाँ",
+    "viewDiagram": "आरेख",
+    "viewTable": "तालिका"
   }
 }

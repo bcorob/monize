@@ -1,6 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import {
+  estimateAmountOn,
+  estimateEntryOn,
+  estimatedOccurrenceAmount,
   nextOccurrenceEffectiveAmount,
+  occurrenceFollowsEstimate,
+  occurrenceAccountIds,
+  occurrencePin,
+  occurrenceSettlementAccountId,
+  occurrenceTouchesAccounts,
   overrideEffectiveAmount,
   scheduleEffectiveAmount,
   sumEffectiveOccurrences,
@@ -202,6 +210,42 @@ describe('scheduled effective amounts', () => {
     });
   });
 
+  describe('occurrencePin', () => {
+    it('is the slot and no override when none governs the occurrence', () => {
+      expect(
+        occurrencePin(plain({ nextDueDate: '2026-09-01T00:00:00.000Z' })),
+      ).toEqual({ expectedOccurrenceDate: '2026-09-01', expectedOverrideId: null });
+    });
+
+    it('is the override date and the override id when an override moved the occurrence', () => {
+      expect(
+        occurrencePin(
+          plain({
+            nextDueDate: '2026-09-01',
+            nextOverride: override({ id: 'ovr-7', overrideDate: '2026-09-03' }),
+          }),
+        ),
+      ).toEqual({ expectedOccurrenceDate: '2026-09-03', expectedOverrideId: 'ovr-7' });
+    });
+
+    it('carries the override id when the override kept the slot date', () => {
+      expect(
+        occurrencePin(
+          plain({
+            nextDueDate: '2026-09-01',
+            nextOverride: override({ id: 'ovr-8', overrideDate: '2026-09-01' }),
+          }),
+        ),
+      ).toEqual({ expectedOccurrenceDate: '2026-09-01', expectedOverrideId: 'ovr-8' });
+    });
+
+    it('treats an absent nextOverride as no override', () => {
+      expect(
+        occurrencePin(plain({ nextDueDate: '2026-09-01', nextOverride: undefined })),
+      ).toEqual({ expectedOccurrenceDate: '2026-09-01', expectedOverrideId: null });
+    });
+  });
+
   describe('sumEffectiveOccurrences', () => {
     const at = (amount: number, currencyCode = 'CAD') => ({
       amount,
@@ -291,6 +335,290 @@ describe('scheduled effective amounts', () => {
       );
 
       expect(result.value).toBe(0.3);
+    });
+  });
+});
+
+describe('occurrenceSettlementAccountId', () => {
+  const accounts = new Map([
+    ['acc-brokerage', { linkedAccountId: 'acc-cash' }],
+    ['acc-lonely-brokerage', { linkedAccountId: null }],
+    ['acc-cash', { linkedAccountId: null }],
+    ['acc-chequing', { linkedAccountId: null }],
+  ]);
+
+  const schedule = (overrides: Partial<ScheduledTransaction>) =>
+    ({
+      id: 'st-1',
+      amount: -5000,
+      currencyCode: 'CAD',
+      accountId: 'acc-brokerage',
+      isInvestment: true,
+      ...overrides,
+    }) as unknown as ScheduledTransaction;
+
+  it('takes the server answer, which is the decision the posting makes', () => {
+    expect(
+      occurrenceSettlementAccountId(
+        schedule({
+          settlementAccountId: 'acc-chequing',
+          investmentFundingAccountId: 'acc-cash',
+        }),
+        accounts,
+      ),
+    ).toBe('acc-chequing');
+  });
+
+  it('never charges the brokerage a trade only files against it', () => {
+    // The defect in one line: `accountId` is where the schedule LIVES, not where
+    // its cash comes from.
+    const st = schedule({ settlementAccountId: 'acc-cash' });
+
+    expect(occurrenceSettlementAccountId(st, accounts)).not.toBe(st.accountId);
+    expect(occurrenceSettlementAccountId(st, accounts)).toBe('acc-cash');
+  });
+
+  it('falls back to the named funding account when the server did not say', () => {
+    expect(
+      occurrenceSettlementAccountId(
+        schedule({ investmentFundingAccountId: 'acc-chequing' }),
+        accounts,
+      ),
+    ).toBe('acc-chequing');
+  });
+
+  it("falls back to the brokerage's linked cash account after that", () => {
+    expect(occurrenceSettlementAccountId(schedule({}), accounts)).toBe(
+      'acc-cash',
+    );
+  });
+
+  it('answers undefined rather than naming the brokerage it cannot resolve', () => {
+    // Undefined means "not identifiable from what the client holds", and a
+    // caller projects nothing. Returning `accountId` here would be the defect
+    // wearing the helper's name.
+    expect(
+      occurrenceSettlementAccountId(
+        schedule({ accountId: 'acc-lonely-brokerage' }),
+        accounts,
+      ),
+    ).toBeUndefined();
+  });
+
+  it('leaves a non-investment schedule on its own account', () => {
+    expect(
+      occurrenceSettlementAccountId(
+        schedule({ accountId: 'acc-chequing', isInvestment: false }),
+        accounts,
+      ),
+    ).toBe('acc-chequing');
+  });
+});
+
+describe('the accounts an occurrence touches', () => {
+  const accountsById = new Map([
+    ['brokerage-1', { linkedAccountId: 'sleeve-1' }],
+    ['sleeve-1', { linkedAccountId: null }],
+    ['chequing-1', { linkedAccountId: null }],
+    ['savings-1', { linkedAccountId: null }],
+  ]);
+
+  const bill = (overrides: Partial<ScheduledTransaction> = {}) =>
+    ({
+      id: 'st-bill',
+      amount: -1200,
+      currencyCode: 'CAD',
+      accountId: 'chequing-1',
+      isInvestment: false,
+      isSplit: false,
+      isTransfer: false,
+      ...overrides,
+    }) as ScheduledTransaction;
+
+  const occurrence = (transferAccountId: string | null = null) => ({
+    transferAccountId,
+  });
+
+  it('names the account a plain bill settles in', () => {
+    expect(occurrenceAccountIds(occurrence(), bill(), accountsById)).toEqual([
+      'chequing-1',
+    ]);
+  });
+
+  it('names both legs of a transfer', () => {
+    expect(
+      occurrenceAccountIds(occurrence('savings-1'), bill({ isTransfer: true }), accountsById),
+    ).toEqual(['chequing-1', 'savings-1']);
+  });
+
+  it('names the settlement account of an investment schedule, never the brokerage', () => {
+    // INV-OCCURRENCE-003: the brokerage is where the security lands; the cash
+    // leaves the funding account. A calendar filtered to the funding account
+    // that read accountId would leave out a purchase draining it.
+    const schedule = bill({
+      accountId: 'brokerage-1',
+      isInvestment: true,
+      investmentFundingAccountId: 'chequing-1',
+    });
+
+    const ids = occurrenceAccountIds(occurrence(), schedule, accountsById);
+
+    expect(ids).toEqual(['chequing-1']);
+    expect(ids).not.toContain('brokerage-1');
+  });
+
+  it('falls to the brokerage linked cash sleeve when no funding account is named', () => {
+    const schedule = bill({ accountId: 'brokerage-1', isInvestment: true });
+    expect(occurrenceAccountIds(occurrence(), schedule, accountsById)).toEqual(['sleeve-1']);
+  });
+
+  it("prefers the server's settlement account over anything derived", () => {
+    const schedule = bill({
+      accountId: 'brokerage-1',
+      isInvestment: true,
+      investmentFundingAccountId: 'chequing-1',
+      settlementAccountId: 'savings-1',
+    });
+    expect(occurrenceAccountIds(occurrence(), schedule, accountsById)).toEqual(['savings-1']);
+  });
+
+  it('names no account when an investment settlement cannot be identified', () => {
+    // Naming the brokerage here would charge an account whose cash never moves.
+    const schedule = bill({ accountId: 'unknown-brokerage', isInvestment: true });
+    expect(occurrenceAccountIds(occurrence(), schedule, accountsById)).toEqual([]);
+  });
+
+  it('is in scope when any account it touches is', () => {
+    const transfer = bill({ isTransfer: true });
+
+    expect(
+      occurrenceTouchesAccounts(occurrence('savings-1'), transfer, accountsById, new Set(['savings-1'])),
+    ).toBe(true);
+    expect(
+      occurrenceTouchesAccounts(occurrence('savings-1'), transfer, accountsById, new Set(['chequing-1'])),
+    ).toBe(true);
+    expect(
+      occurrenceTouchesAccounts(occurrence('savings-1'), transfer, accountsById, new Set(['other-1'])),
+    ).toBe(false);
+  });
+
+  it('is in no scope when it touches no account this client can name', () => {
+    const schedule = bill({ accountId: 'unknown-brokerage', isInvestment: true });
+    expect(
+      occurrenceTouchesAccounts(occurrence(), schedule, accountsById, new Set(['chequing-1'])),
+    ).toBe(false);
+  });
+});
+
+describe('estimated amounts (issue #2096)', () => {
+  const estimated = (overrides: Partial<ScheduledTransaction> = {}) =>
+    ({
+      id: 'st-heat',
+      amount: -999,
+      currencyCode: 'CAD',
+      isInvestment: false,
+      isSplit: false,
+      isTransfer: false,
+      amountIsEstimated: true,
+      amountEstimate: {
+        status: 'estimated',
+        currencyCode: 'CAD',
+        months: { '2025-02': { amount: -220, basis: 'seasonal' } },
+        paymentCount: 3,
+        latestPaymentDate: '2025-01-10',
+        growthRate: null,
+        historyMonths: 24,
+        missingPair: null,
+      },
+      ...overrides,
+    }) as ScheduledTransaction;
+
+  it("reads the month's estimate, never the snapshot", () => {
+    expect(estimatedOccurrenceAmount(estimated(), '2025-02-10')).toBe(-220);
+    // A month the estimate does not hold is unknown, not -999.
+    expect(estimatedOccurrenceAmount(estimated(), '2025-09-10')).toBeNull();
+    expect(
+      estimatedOccurrenceAmount(estimated({ amountEstimate: null }), '2025-02-10'),
+    ).toBeNull();
+  });
+
+  it('is undefined for a schedule that does not estimate', () => {
+    expect(
+      estimatedOccurrenceAmount(estimated({ amountIsEstimated: false }), '2025-02-10'),
+    ).toBeUndefined();
+    expect(occurrenceFollowsEstimate(estimated({ amountIsEstimated: undefined }))).toBe(false);
+  });
+
+  it('lets an override that states an amount or lines govern its occurrence', () => {
+    const st = estimated();
+    expect(occurrenceFollowsEstimate(st)).toBe(true);
+    expect(occurrenceFollowsEstimate(st, { amount: null, isSplit: null })).toBe(true);
+    expect(occurrenceFollowsEstimate(st, { amount: -250, isSplit: null })).toBe(false);
+    expect(occurrenceFollowsEstimate(st, { amount: null, isSplit: true })).toBe(false);
+  });
+
+  it('reads a preview estimate by month', () => {
+    expect(estimateAmountOn(estimated().amountEstimate, '2025-02-28')).toBe(-220);
+    expect(estimateAmountOn(null, '2025-02-28')).toBeNull();
+  });
+
+  describe("a transfer's balance floors (issue #2164)", () => {
+    // The card's statement closed on Feb 5 owing 2700; the open cycle owes 300.
+    const transfer = () =>
+      estimated({
+        isTransfer: true,
+        amountEstimate: {
+          status: 'estimated',
+          currencyCode: 'CAD',
+          months: {
+            '2025-02': { amount: -2000, basis: 'recent' },
+            '2025-03': { amount: -2000, basis: 'recent' },
+            '2025-04': { amount: -2000, basis: 'recent' },
+          },
+          paymentCount: 3,
+          latestPaymentDate: '2025-01-26',
+          growthRate: null,
+          historyMonths: 24,
+          missingPair: null,
+          floors: [
+            {
+              after: '2025-02-05',
+              through: '2025-03-05',
+              months: {
+                '2025-02': { amount: -2700, basis: 'balance' },
+                '2025-03': { amount: -2700, basis: 'balance' },
+              },
+            },
+            {
+              after: '2025-03-05',
+              through: '2025-04-05',
+              months: {
+                '2025-03': { amount: -2000, basis: 'recent' },
+                '2025-04': { amount: -2000, basis: 'recent' },
+              },
+            },
+          ],
+        },
+      });
+
+    it('reads a date a floor governs from the floor, as the server prices it', () => {
+      expect(estimatedOccurrenceAmount(transfer(), '2025-02-26')).toBe(-2700);
+      expect(estimateEntryOn(transfer().amountEstimate, '2025-02-26')?.basis).toBe('balance');
+      // The floor's bounds: after Feb 5, through Mar 5.
+      expect(estimatedOccurrenceAmount(transfer(), '2025-02-05')).toBe(-2000);
+      expect(estimatedOccurrenceAmount(transfer(), '2025-03-05')).toBe(-2700);
+      expect(estimatedOccurrenceAmount(transfer(), '2025-03-26')).toBe(-2000);
+    });
+
+    it('reads the plain month past every floor', () => {
+      expect(estimatedOccurrenceAmount(transfer(), '2025-04-26')).toBe(-2000);
+      expect(estimateEntryOn(transfer().amountEstimate, '2025-04-26')?.basis).toBe('recent');
+    });
+
+    it('reads the months alone from a server that sends no floors', () => {
+      const st = transfer();
+      const { floors: _floors, ...older } = st.amountEstimate!;
+      expect(estimateAmountOn(older, '2025-02-26')).toBe(-2000);
     });
   });
 });

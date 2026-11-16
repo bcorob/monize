@@ -34,7 +34,6 @@
     "units": "單位數",
     "avgCostPerUnit": "平均成本 / 單位",
     "heldInAccounts": "持有帳戶",
-    "openAccount": "在「投資」頁面中查看 {name}",
     "unitsShare": "{units}（{share}）",
     "valueUnknown": "無法估值",
     "approx": "约 {amount}"
@@ -74,15 +73,20 @@
     "sector": "類股",
     "industry": "產業",
     "provider": "資料來源",
-    "lastPrice": "最新價格"
+    "lastPrice": "最新價格",
+    "bondDescription": "債券說明"
   },
   "tabs": {
     "ariaLabel": "證券各區塊",
     "overview": "總覽",
     "transactions": "交易",
     "prices": "價格歷史",
+    "terms": "條款歷史",
     "documents": "文件",
     "news": "新闻"
+  },
+  "bondPrices": {
+    "title": "價格記錄"
   },
   "about": {
     "title": "简介",
@@ -121,6 +125,8 @@
     "fees": "費用",
     "realizedPl": "已實現損益",
     "realizedMixed": "以 {currencies} 實現，因此不做合計",
+    "realizedUnknownReason": "無法計算此收益：該持倉包含未記錄成本而新增的股份，因此已賣出股份的成本未知。請開啟新增這些股份的交易並輸入其價格。",
+    "realizedKnownPart": "已知部分：{amount}",
     "totalReturn": "總報酬",
     "totalReturnValue": "{amount}（{percent}）",
     "totalReturnTitle": "未實現收益，加上賣出時已實現的金額和收到的收益，減去費用，相對於你投入的資本。這是該資本上的簡單報酬：沒有換算成年化，也沒有按各筆買進的持有時間加權。",
@@ -147,6 +153,8 @@
     "title": "部位已了結",
     "description": "你已不再持有該證券。它的歷史仍保留在下方。",
     "realizedPl": "已實現損益",
+    "realizedUnknownReason": "無法計算此收益：該持倉曾包含未記錄成本而新增的股份，因此已賣出股份的成本未知。請開啟新增這些股份的交易並輸入其價格。",
+    "realizedKnownPart": "已知部分：{amount}",
     "heldFrom": "持有起始",
     "heldRange": "{start} 至 {end}"
   },
@@ -165,7 +173,24 @@
     "sectorEmpty": "未儲存類股組成。對於基金與 ETF，Monize 會從資料來源補齊。",
     "countryEmpty": "未儲存國家組成。你可以在編輯該證券時輸入。",
     "assetClassEmpty": "尚未儲存資產類別組成。",
-    "remainder": "{percent} 未分类"
+    "remainder": "{percent} 未分类",
+    "bond": {
+      "seriesTab": "系列",
+      "maturityTab": "到期",
+      "empty": "您尚未持有此類債券的任何系列。",
+      "someUnknown": "部分數值未知,因此不顯示占比。",
+      "issuerCountry": "發行國家",
+      "rate": "利率",
+      "interest": "利息",
+      "term": "距到期期間",
+      "interestValue": "{capitalization},期間:{period}",
+      "rateType": {
+        "FIXED": "固定",
+        "BENCHMARK_PLUS_SPREAD": "浮動(基準 + 利差)",
+        "INFLATION_PLUS_MARGIN_AS_RATE": "通膨連動(基準 + 加碼)",
+        "ZERO_COUPON_DISCOUNT": "零息（折價）"
+      }
+    }
   },
   "documents": {
     "title": "文件",
@@ -225,6 +250,16 @@
       "deleted": "已刪除文件",
       "saveFailed": "無法儲存該文件",
       "deleteFailed": "無法刪除該文件"
+    },
+    "issueLetters": {
+      "title": "發行函",
+      "loadFailed": "無法載入發行函。",
+      "empty": "此債券種類尚未儲存任何發行函。",
+      "held": "持有中",
+      "onSale": "發售中",
+      "noLetter": "此系列未記錄發行函",
+      "open": "官方PDF",
+      "openNamed": "開啟系列 {series} 的發行函"
     }
   },
   "news": {
@@ -237,6 +272,243 @@
     "empty": {
       "title": "目前沒有標題",
       "description": "最近沒有關於該代碼的內容發布。你再回到這裡時清單會重新整理。"
+    }
+  },
+  "bond": {
+    "loading": "正在載入債券估值...",
+    "loadFailed": "無法載入債券估值。",
+    "unknown": "未知",
+    "asOf": "估值日期",
+    "termsSource": "條款：{document}",
+    "termsManual": "由管理員手動輸入的條款",
+    "noLots": "此日期沒有未結批次。",
+    "totals": {
+      "quantity": "持有債券數量",
+      "grossValue": "總價值",
+      "earlyRedemptionValue": "提前贖回價值",
+      "accruedInterest": "應計利息",
+      "unknownLot": "至少有一個批次沒有數據，因此不提供合計。",
+      "unknownRefusal": "無法確定各批次，因此不提供合計。"
+    },
+    "lots": {
+      "purchaseDate": "購買日期",
+      "assumed": "假設",
+      "assumedTitle": "實際購買日期未知：此批次是透過轉帳而來，且沒有連結的轉出方。",
+      "quantity": "數量",
+      "maturity": "到期日",
+      "period": "目前計息期",
+      "periodValue": "{index}：{start} 至 {end}",
+      "rate": "利率",
+      "principal": "每張債券本金",
+      "principalIssuePrice": "未輸入成本：使用標售價格",
+      "accruedInterest": "應計利息",
+      "grossValue": "總價值",
+      "earlyRedemption": "提前贖回",
+      "nextCashFlow": "下一筆現金流",
+      "cashFlowValue": "{date} {type} {amount}",
+      "noCashFlow": "無",
+      "projected": "預測",
+      "maturityValue": "到期價值",
+      "maturityKnown": "已知",
+      "maturityProjected": "預測",
+      "matured": "已到期",
+      "refused": "未估值",
+      "amountUnknown": "金額未知"
+    },
+    "rateSource": {
+      "TERMS": "條款",
+      "ANNOUNCED": "已公布",
+      "DERIVED": "推算",
+      "PROJECTED": "預測"
+    },
+    "cashFlowType": {
+      "INTEREST": "利息",
+      "PRINCIPAL": "本金"
+    },
+    "earlyRefusal": {
+      "NOT_REDEEMABLE": "不可提前贖回",
+      "TOO_EARLY": "贖回為時過早",
+      "TOO_LATE": "贖回為時已晚",
+      "RECORD_DAY": "登記日不可贖回",
+      "MATURED": "已到期",
+      "RATE_UNKNOWN": "利率尚未確定",
+      "TERMS_INCOMPLETE": "條款不完整"
+    },
+    "lotsRefusal": {
+      "SPLIT": "無法推導批次：債券不可拆分。",
+      "FRACTIONAL_QUANTITY": "無法推導批次：某個數量不是整數張債券。",
+      "OVER_REMOVAL": "無法推導批次：移除的債券多於持有的債券。",
+      "INVALID_QUANTITY": "無法推導批次：某個數量缺漏、為負數或過大。",
+      "REMOVAL_EXCEEDS_SERIES": "無法確定批次:某一系列取出的債券多於持有數量。",
+      "SERIES_NOT_DETERMINED": "無法確定批次:某筆購買的系列未知。"
+    },
+    "lotsRefusalDetail": {
+      "SPLIT": "此證券記錄了一次分割（{date} 的 {action}）；債券不可分割。",
+      "FRACTIONAL_QUANTITY": "{date} 的 {action} 涉及 {quantity} 張債券，不是整數。",
+      "OVER_REMOVAL": "{date} 的 {action} 減少 {quantity} 張債券，超過持有數量。",
+      "INVALID_QUANTITY": "{date} 的 {action} 數量缺漏、為負數或過大。",
+      "REMOVAL_EXCEEDS_SERIES": "{date} 的 {action} 取出其系列的 {quantity} 份債券,超過該系列的持有數量。",
+      "SERIES_NOT_DETERMINED": "{date} 的 {action} 未指定系列,且當天沒有該債券種類的已存系列在售。請取得該系列並在交易中選擇。"
+    },
+    "assumptions": {
+      "title": "預測假設",
+      "latestObservation": "所有後續期間均假設 {benchmark} 為 {value}(最新公布值:{observation})",
+      "supplied": "所有後續期間均假設 {benchmark} 為 {value}",
+      "suppliedSimpleAnnual": "假設 {benchmark} 此後每個月按每年 {value} 成長（簡單年成長，不複利）"
+    },
+    "missing": {
+      "title": "仍需的資料",
+      "item": "{benchmark} {observation} — 發布單位：{publisher}",
+      "itemNoPublisher": "{benchmark} {observation} — 發布單位未知"
+    },
+    "recompute": {
+      "button": "重新計算價格",
+      "done": "價格已重新計算：寫入 {written} 筆，刪除 {deleted} 筆。",
+      "failed": "無法重新計算價格。"
+    },
+    "rate": {
+      "title": "利率",
+      "rule": {
+        "fixed": "整個期間固定 {rate}",
+        "firstThen": "第 1 期：{firstRate}。之後為 {benchmark} + {addend}",
+        "every": "每期：{benchmark} + {addend}",
+        "floorZero": "{benchmark} 為負數時以 0 計算",
+        "dailyFloor": "每日利率（指數加利差）不會低於 {floor}",
+        "discount": "相對面值的折價",
+        "daily": "每天：{benchmark} + {addend}，按日累加",
+        "lockout": "計息期結束前 {days, plural, one {# 個營業日} other {# 個營業日}} 內的標售不用於該計息期"
+      },
+      "daily": "每日，{benchmark}",
+      "dailyNoIndex": "每日，{benchmark}：尚未儲存指數",
+      "dailyRun": "自 {from} 起：{rate}",
+      "dailyRunUnknown": "自 {from} 起：未儲存指數",
+      "lotHeading": "{date} 購入的部位",
+      "range": "{start} 至 {end}",
+      "current": "目前",
+      "columns": {
+        "period": "期別",
+        "dates": "日期",
+        "rate": "利率",
+        "source": "來源",
+        "how": "決定方式"
+      },
+      "how": {
+        "stated": "約定利率",
+        "observed": "{benchmark} {observation}：{value} + {addend}",
+        "floored": "（調高至 {floor}）",
+        "missing": "{benchmark} {observation}：尚未公布"
+      },
+      "nextRateReset": "下次利率重設日:{date}",
+      "nextCapitalization": "下次利息資本化日:{date}"
+    },
+    "indexation": {
+      "inflation": "與通膨連動：自 {date}（第 2 期）起，利率為 {benchmark} + {addend}，每期重新計算",
+      "floating": "浮動利率：自 {date}（第 2 期）起，利率為 {benchmark} + {addend}，每期重新計算"
+    },
+    "interestParts": {
+      "fixed": "固定利息（第 1 期）",
+      "margin": "來自利差的利息",
+      "inflation": "來自通膨的利息",
+      "benchmark": "來自參考利率的利息",
+      "announced": "已公布的利息",
+      "fixedTerm": "固定利率利息"
+    },
+    "chart": {
+      "title": "各期末累計利息",
+      "assumption": "假設 {benchmark} = {value} 的預測",
+      "projectedNote": "較淺的長條表示預測期間",
+      "stoppedAt": "自第 {period} 期起利息未知，因此圖表在此之前結束。"
+    },
+    "scenarios": {
+      "title": "通膨情境",
+      "titleBenchmark": "利率情境",
+      "projection": "預測",
+      "caption": "依假設值計算的預測到期價值與利息",
+      "intro": "這些是預測而非確定結果：對每個尚未開始的期間，均假設為第一欄的 {benchmark} 值。已知與已公布的期間不會改變。選擇一列即可查看其利率表與圖表。",
+      "custom": "自訂 {benchmark}（%）",
+      "add": "新增情境",
+      "useDefault": "使用預設假設",
+      "selected": "已選取",
+      "loading": "正在載入情境...",
+      "loadFailed": "無法載入情境。",
+      "columns": {
+        "assumed": "假設：{benchmark}",
+        "maturityValue": "到期價值（預測）",
+        "totalInterest": "利息合計（預測）"
+      },
+      "asOfNote": "依上方所選日期 {date} 估值:數字涵蓋當天持有的債券。"
+    },
+    "benchmarks": {
+      "PL_CPI_GUS_YOY": "消費者物價指數，12 個月 (GUS)",
+      "PL_NBP_REFERENCE": "NBP 基準利率",
+      "US_CPI_U_NSA": "CPI-U，所有項目，未經季節性調整 (BLS)",
+      "US_TBILL_13W_MMY": "13 週美國國庫券殖利率"
+    },
+    "valuationRefusal": {
+      "PURCHASE_OUTSIDE_SALE_WINDOW": "此系列只能在 {from} 至 {to} 之間購買。此批次購於 {purchaseDate},因此不予估值。",
+      "PURCHASE_AFTER_MATURITY": "此系列已於 {maturityDate} 到期。此批次於 {purchaseDate} 買入，即在到期日當天或之後，因此不予估值。"
+    },
+    "marketPriceRequired": "此證券包含一個在市場上交易的系列，因此其價格不由條款決定。Monize 不會為其寫入價格：請自行輸入價格。下方各批次的價值根據條款計算，不是市場價值。",
+    "partial": {
+      "title": "此估值不完整,請將這些數字視為部分資料。",
+      "terms": "債券條款不完整(例如未安裝日曆)。",
+      "reference": "缺少參考資料;請參閱下方仍需要的資料清單。",
+      "earlyRedemption": "提前贖回條款不完整,因此可能缺少提前贖回價值。",
+      "other": "至少有一個批次尚無法完整估值(例如利率未知)。"
+    },
+    "projectionMissing": {
+      "title": "無法預測之後的期間",
+      "item": "{benchmark}:沒有已發布的數值,也未設定假設,因此無法預測之後的期間(發布單位:{publisher})",
+      "itemNoPublisher": "{benchmark}:沒有已發布的數值,也未設定假設,因此無法預測之後的期間(發布單位未知)"
+    },
+    "coverage": {
+      "asOf": "{benchmark} 資料截至 {date}",
+      "none": "尚未儲存 {benchmark} 資料"
+    },
+    "issuers": {
+      "PL_MF": "財政部(PL)",
+      "US_TREASURY": "美國財政部(US)"
+    },
+    "redemption": {
+      "title": "提前贖回條款",
+      "fixedFee": "提前贖回費用:每張債券 {amount}。",
+      "forfeitAccrued": "提前贖回時,當期已累計的利息將被沒收。",
+      "floorAllPeriods": "在任何期間,該費用都不會使贖回所得低於面值。",
+      "floorFirstPeriod": "僅在第一個期間,該費用不會使贖回所得低於面值;之後的期間沒有這項下限。"
+    },
+    "programs": {
+      "OTS": "OTS: 3 個月固定利率儲蓄債券",
+      "ROR": "ROR: 1 年期浮動利率儲蓄債券",
+      "DOR": "DOR: 2 年期浮動利率儲蓄債券",
+      "TOS": "TOS: 3 年期固定利率儲蓄債券",
+      "COI": "COI: 4 年期通膨指數儲蓄債券",
+      "EDO": "EDO: 10 年期通膨指數儲蓄債券",
+      "ROS": "ROS: 6 年期通膨指數家庭儲蓄債券",
+      "ROD": "ROD: 12 年期通膨指數家庭儲蓄債券",
+      "BILL": "BILL：國庫券，4 至 52 週，折價發行",
+      "NOTE": "NOTE：中期公債，2 至 10 年，固定半年付息",
+      "BOND": "BOND：長期公債，20 年和 30 年，固定半年付息",
+      "TIPS": "TIPS：通膨連動公債，本金與 CPI-U 連動",
+      "FRN": "FRN：浮動利率公債，2 年，按季付息"
+    },
+    "series": {
+      "title": "您的系列",
+      "column": "系列",
+      "nextRateChange": "下次利率變更",
+      "total": "債券種類合計",
+      "purchasedRange": "{from} 至 {to}",
+      "expand": "顯示 {series} 的詳情",
+      "collapse": "隱藏 {series} 的詳情",
+      "partial": "部分"
+    },
+    "program": {
+      "title": "債券種類",
+      "newest": "最新系列 {series} 的條款。",
+      "noTerms": "條款尚不明確:您沒有此債券種類的任何系列,也沒有在售的系列。",
+      "autoFetchFailed": "無法儲存該設定。"
+    },
+    "onSale": {
+      "title": "目前在售"
     }
   }
 }

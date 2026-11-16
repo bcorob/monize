@@ -7,7 +7,7 @@ import { InvestmentTransactionsService } from "../securities/investment-transact
  * Typed as `jest.Mocked<Pick<...>>` rather than `Record<string, jest.Mock>` on
  * purpose: this is one of our own services, so `tsc` should reject a return
  * shape the real method cannot produce (see the mock rule in
- * `backend/CLAUDE.md`).
+ * `docs/backend/testing.md`).
  *
  * It exists because five specs now provide the real
  * `ScheduledEffectiveAmountService` over a stubbed FX source (the amounts they

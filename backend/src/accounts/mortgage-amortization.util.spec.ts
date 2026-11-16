@@ -8,9 +8,13 @@ import {
   calculateMortgageAmortization,
   calculateMortgageEndDate,
   calculateResidualPayoff,
+  getPeriodicRate,
   MortgagePaymentFrequency,
   MortgageAmortizationInput,
+  calculateMortgagePaymentSplit,
+  recalculateMortgageAfterRateChange,
 } from "./mortgage-amortization.util";
+import { MortgageType } from "./mortgage-type.util";
 
 describe("Mortgage Amortization Utility", () => {
   describe("getMortgagePeriodsPerYear", () => {
@@ -130,8 +134,7 @@ describe("Mortgage Amortization Utility", () => {
       annualRate: 5,
       amortizationMonths: 300,
       paymentFrequency: "MONTHLY",
-      isCanadian: false,
-      isVariableRate: false,
+      mortgageType: "ANNUITY",
       startDate: new Date(2026, 0, 1),
     };
 
@@ -183,17 +186,15 @@ describe("Mortgage Amortization Utility", () => {
       expect(biweeklyPayment).toBeLessThan(1000);
     });
 
-    it("uses Canadian semi-annual compounding when isCanadian and not variable", () => {
+    it("uses Canadian semi-annual compounding for CANADIAN_FIXED", () => {
       const canadianPayment = calculateMortgagePayment({
         ...baseInput,
-        isCanadian: true,
-        isVariableRate: false,
+        mortgageType: "CANADIAN_FIXED",
       });
 
       const standardPayment = calculateMortgagePayment({
         ...baseInput,
-        isCanadian: false,
-        isVariableRate: false,
+        mortgageType: "ANNUITY",
       });
 
       // Canadian compounding produces a slightly different payment
@@ -204,13 +205,13 @@ describe("Mortgage Amortization Utility", () => {
   describe("calculateEffectiveAnnualRate", () => {
     it("calculates EAR for Canadian fixed (semi-annual compounding)", () => {
       // EAR = (1 + 0.05/2)^2 - 1 = 0.050625 = 5.06%
-      const ear = calculateEffectiveAnnualRate(5, true, false, 12);
+      const ear = calculateEffectiveAnnualRate(5, 12, "CANADIAN_FIXED");
       expect(ear).toBeCloseTo(5.06, 1);
     });
 
     it("calculates EAR for a monthly mortgage on the nominal convention", () => {
       // EAR = (1 + 0.05/12)^12 - 1 = ~0.05116 = 5.12%
-      const ear = calculateEffectiveAnnualRate(5, false, false, 12);
+      const ear = calculateEffectiveAnnualRate(5, 12, "ANNUITY");
       expect(ear).toBeCloseTo(5.12, 1);
     });
 
@@ -219,12 +220,12 @@ describe("Mortgage Amortization Utility", () => {
       // twenty-six times, so the EAR it costs over a year is
       // (1 + 0.05/26)^26 - 1 = 5.1245%, not the monthly figure. Independently
       // computed here, not read back from the implementation.
-      const biweekly = calculateEffectiveAnnualRate(5, false, false, 26);
+      const biweekly = calculateEffectiveAnnualRate(5, 26, "ANNUITY");
       expect(biweekly).toBeCloseTo(
         Math.round((Math.pow(1 + 0.05 / 26, 26) - 1) * 10000) / 100,
         2,
       );
-      const weekly = calculateEffectiveAnnualRate(5, false, false, 52);
+      const weekly = calculateEffectiveAnnualRate(5, 52, "ANNUITY");
       expect(weekly).toBeCloseTo(
         Math.round((Math.pow(1 + 0.05 / 52, 52) - 1) * 10000) / 100,
         2,
@@ -234,34 +235,28 @@ describe("Mortgage Amortization Utility", () => {
     it("orders the frequencies: more compounding periods cost more", () => {
       // At 5% the three EARs all round to 5.12%, so the ordering is asserted at
       // a rate where two display decimals can separate them.
-      expect(calculateEffectiveAnnualRate(12, false, false, 12)).toBeLessThan(
-        calculateEffectiveAnnualRate(12, false, false, 26),
+      expect(calculateEffectiveAnnualRate(12, 12, "ANNUITY")).toBeLessThan(
+        calculateEffectiveAnnualRate(12, 26, "ANNUITY"),
       );
-      expect(calculateEffectiveAnnualRate(12, false, false, 26)).toBeLessThan(
-        calculateEffectiveAnnualRate(12, false, false, 52),
+      expect(calculateEffectiveAnnualRate(12, 26, "ANNUITY")).toBeLessThan(
+        calculateEffectiveAnnualRate(12, 52, "ANNUITY"),
       );
-    });
-
-    it("Canadian variable uses the nominal convention (same as non-Canadian)", () => {
-      const canadianVariable = calculateEffectiveAnnualRate(5, true, true, 26);
-      const standard = calculateEffectiveAnnualRate(5, false, false, 26);
-      expect(canadianVariable).toBe(standard);
     });
 
     it("Canadian fixed ignores the payment frequency (semi-annual by law)", () => {
-      expect(calculateEffectiveAnnualRate(5, true, false, 26)).toBe(
-        calculateEffectiveAnnualRate(5, true, false, 12),
+      expect(calculateEffectiveAnnualRate(5, 26, "CANADIAN_FIXED")).toBe(
+        calculateEffectiveAnnualRate(5, 12, "CANADIAN_FIXED"),
       );
     });
 
     it("returns 0 for 0% rate", () => {
-      expect(calculateEffectiveAnnualRate(0, true, false, 12)).toBe(0);
-      expect(calculateEffectiveAnnualRate(0, false, false, 12)).toBe(0);
+      expect(calculateEffectiveAnnualRate(0, 12, "CANADIAN_FIXED")).toBe(0);
+      expect(calculateEffectiveAnnualRate(0, 12, "ANNUITY")).toBe(0);
     });
 
     it("semi-annual compounding EAR is lower than the nominal-monthly EAR", () => {
-      const semiAnnual = calculateEffectiveAnnualRate(6, true, false, 12);
-      const monthly = calculateEffectiveAnnualRate(6, false, false, 12);
+      const semiAnnual = calculateEffectiveAnnualRate(6, 12, "CANADIAN_FIXED");
+      const monthly = calculateEffectiveAnnualRate(6, 12, "ANNUITY");
       expect(semiAnnual).toBeLessThan(monthly);
     });
   });
@@ -296,10 +291,58 @@ describe("Mortgage Amortization Utility", () => {
         const periodic = calculateStandardPeriodicRate(6, periodsPerYear);
         const compounded = Math.pow(1 + periodic, periodsPerYear) - 1;
         expect(
-          calculateEffectiveAnnualRate(6, false, false, periodsPerYear),
+          calculateEffectiveAnnualRate(6, periodsPerYear, "ANNUITY"),
         ).toBeCloseTo(Math.round(compounded * 10000) / 100, 2);
       }
     });
+
+    // Spec table 4.1: the periodic rate and EAR each type compounds to,
+    // derived here from the formulas rather than read back from the
+    // implementation.
+    const semiAnnualPeriodic = (rate: number, n: number) =>
+      Math.pow(1 + rate / 200, 2 / n) - 1;
+    const nominalPeriodic = (rate: number, n: number) => rate / 100 / n;
+    const TYPE_CONVENTIONS: [
+      MortgageType,
+      (rate: number, n: number) => number,
+      (rate: number, n: number) => number,
+    ][] = [
+      [
+        "ANNUITY",
+        nominalPeriodic,
+        (rate, n) => Math.pow(1 + rate / 100 / n, n) - 1,
+      ],
+      [
+        "CANADIAN_FIXED",
+        semiAnnualPeriodic,
+        (rate) => Math.pow(1 + rate / 200, 2) - 1,
+      ],
+      [
+        "LINEAR",
+        nominalPeriodic,
+        (rate, n) => Math.pow(1 + rate / 100 / n, n) - 1,
+      ],
+      [
+        "INTEREST_ONLY",
+        nominalPeriodic,
+        (rate, n) => Math.pow(1 + rate / 100 / n, n) - 1,
+      ],
+    ];
+
+    it.each(TYPE_CONVENTIONS)(
+      "%s: periodic rate and EAR follow its compounding trait",
+      (type, periodic, ear) => {
+        for (const periodsPerYear of [12, 24, 26, 52]) {
+          expect(getPeriodicRate(6, periodsPerYear, type)).toBeCloseTo(
+            periodic(6, periodsPerYear),
+            15,
+          );
+          expect(
+            calculateEffectiveAnnualRate(6, periodsPerYear, type),
+          ).toBeCloseTo(Math.round(ear(6, periodsPerYear) * 10000) / 100, 2);
+        }
+      },
+    );
   });
 
   describe("calculateMortgageAmortization (integration)", () => {
@@ -309,8 +352,7 @@ describe("Mortgage Amortization Utility", () => {
         annualRate: 5,
         amortizationMonths: 300,
         paymentFrequency: "MONTHLY",
-        isCanadian: false,
-        isVariableRate: false,
+        mortgageType: "ANNUITY",
         startDate: new Date(2026, 0, 1),
       };
 
@@ -331,8 +373,7 @@ describe("Mortgage Amortization Utility", () => {
         annualRate: 5,
         amortizationMonths: 300,
         paymentFrequency: "MONTHLY",
-        isCanadian: false,
-        isVariableRate: false,
+        mortgageType: "ANNUITY",
         startDate: new Date(2026, 0, 1),
       };
 
@@ -349,8 +390,7 @@ describe("Mortgage Amortization Utility", () => {
         annualRate: 5,
         amortizationMonths: 300,
         paymentFrequency: "MONTHLY",
-        isCanadian: false,
-        isVariableRate: false,
+        mortgageType: "ANNUITY",
         startDate: new Date(2026, 0, 1),
       };
 
@@ -364,8 +404,7 @@ describe("Mortgage Amortization Utility", () => {
         annualRate: 5,
         amortizationMonths: 300,
         paymentFrequency: "MONTHLY",
-        isCanadian: false,
-        isVariableRate: false,
+        mortgageType: "ANNUITY",
         startDate: new Date(2026, 0, 1),
       };
 
@@ -379,8 +418,7 @@ describe("Mortgage Amortization Utility", () => {
         annualRate: 5,
         amortizationMonths: 300,
         paymentFrequency: "MONTHLY",
-        isCanadian: false,
-        isVariableRate: false,
+        mortgageType: "ANNUITY",
         startDate: new Date(2026, 0, 1),
       };
 
@@ -402,8 +440,7 @@ describe("Mortgage Amortization Utility", () => {
         annualRate: 0,
         amortizationMonths: 120,
         paymentFrequency: "MONTHLY",
-        isCanadian: false,
-        isVariableRate: false,
+        mortgageType: "ANNUITY",
         startDate: new Date(2026, 0, 1),
       };
 
@@ -420,8 +457,7 @@ describe("Mortgage Amortization Utility", () => {
         annualRate: 5,
         amortizationMonths: 300,
         paymentFrequency: "MONTHLY",
-        isCanadian: false,
-        isVariableRate: false,
+        mortgageType: "ANNUITY",
         startDate,
       };
 
@@ -435,8 +471,7 @@ describe("Mortgage Amortization Utility", () => {
         annualRate: 5.5,
         amortizationMonths: 300,
         paymentFrequency: "MONTHLY",
-        isCanadian: true,
-        isVariableRate: false,
+        mortgageType: "CANADIAN_FIXED",
         startDate: new Date(2026, 0, 1),
       };
 
@@ -485,8 +520,7 @@ describe("Mortgage Amortization Utility", () => {
         annualRate: 5,
         amortizationMonths: 300,
         paymentFrequency: "ACCELERATED_BIWEEKLY",
-        isCanadian: false,
-        isVariableRate: false,
+        mortgageType: "ANNUITY",
         startDate: new Date(2026, 0, 1),
       };
       const result = calculateMortgageAmortization(input);
@@ -520,8 +554,7 @@ describe("Mortgage Amortization Utility", () => {
         annualRate: 5,
         amortizationMonths: 300,
         paymentFrequency: "MONTHLY",
-        isCanadian: false,
-        isVariableRate: false,
+        mortgageType: "ANNUITY",
         startDate: new Date(2026, 0, 1),
       };
       const result = calculateMortgageAmortization(input);
@@ -538,8 +571,7 @@ describe("Mortgage Amortization Utility", () => {
         annualRate: 0,
         amortizationMonths: 120,
         paymentFrequency: "MONTHLY",
-        isCanadian: false,
-        isVariableRate: false,
+        mortgageType: "ANNUITY",
         startDate: new Date(2026, 0, 1),
       };
       const result = calculateMortgageAmortization(input);
@@ -607,8 +639,7 @@ describe("Mortgage Amortization Utility", () => {
         annualRate: 5,
         amortizationMonths: 300,
         paymentFrequency: "MONTHLY",
-        isCanadian: false,
-        isVariableRate: false,
+        mortgageType: "ANNUITY",
         startDate: new Date(2026, 0, 1),
       });
       expect(result.totalPayments).toBe(300);
@@ -631,8 +662,7 @@ describe("Mortgage Amortization Utility", () => {
         annualRate: 5,
         amortizationMonths: 300,
         paymentFrequency: "MONTHLY",
-        isCanadian: false,
-        isVariableRate: false,
+        mortgageType: "ANNUITY",
         startDate,
       });
       const expectedEnd = new Date(2026, 0, 1);
@@ -728,5 +758,104 @@ describe("Mortgage Amortization Utility", () => {
       const endDate = calculateMortgageEndDate(startDate, "MONTHLY", 20000);
       expect(endDate.getFullYear()).toBeGreaterThanOrEqual(2126);
     });
+  });
+});
+
+describe("calculateMortgageAmortization: LINEAR and INTEREST_ONLY (spec 5.1, table 7.5)", () => {
+  // EUR 300,000 over 30 years, monthly from 2024-01-01, 2.00% throughout.
+  const input = (
+    mortgageType: MortgageType,
+    overrides: Partial<MortgageAmortizationInput> = {},
+  ): MortgageAmortizationInput => ({
+    principal: 300000,
+    annualRate: 2,
+    amortizationMonths: 360,
+    paymentFrequency: "MONTHLY",
+    mortgageType,
+    startDate: new Date("2024-01-01"),
+    ...overrides,
+  });
+
+  it("ANNUITY (the reference row) is unchanged", () => {
+    const result = calculateMortgageAmortization(input("ANNUITY"));
+    expect(result.paymentAmount).toBe(1108.8584);
+    expect(result.principalPayment).toBe(608.8584);
+    expect(result.interestPayment).toBe(500);
+    expect(result.totalPayments).toBe(360);
+    expect(Math.round(result.totalInterest * 100) / 100).toBe(99189.03);
+    expect(result.residualPayoffAmount).toBe(1108.8673);
+    expect(result.endDate.toISOString().slice(0, 10)).toBe("2053-12-01");
+  });
+
+  it("LINEAR: first installment 1,333.33 of 360, lifetime interest 90,250.00", () => {
+    const result = calculateMortgageAmortization(input("LINEAR"));
+    expect(result.paymentAmount).toBe(1333.3333);
+    expect(result.principalPayment).toBe(833.3333);
+    expect(result.interestPayment).toBe(500);
+    expect(result.totalPayments).toBe(360);
+    expect(result.totalInterest).toBe(90250);
+    // c plus the 0.0120 leftover the last payment absorbs, with its interest.
+    expect(result.residualPayoffAmount).toBe(834.7342);
+    expect(result.endDate.toISOString().slice(0, 10)).toBe("2053-12-01");
+    expect(result.effectiveAnnualRate).toBe(2.02);
+  });
+
+  it("INTEREST_ONLY: every installment 500.00, lifetime interest 180,000.00, bullet 300,500.00", () => {
+    const result = calculateMortgageAmortization(input("INTEREST_ONLY"));
+    expect(result.paymentAmount).toBe(500);
+    expect(result.principalPayment).toBe(0);
+    expect(result.interestPayment).toBe(500);
+    expect(result.totalPayments).toBe(360);
+    expect(result.totalInterest).toBe(180000);
+    expect(result.residualPayoffAmount).toBe(300500);
+    expect(result.endDate.toISOString().slice(0, 10)).toBe("2053-12-01");
+  });
+
+  it.each([
+    ["LINEAR", "ACCELERATED_BIWEEKLY"],
+    ["LINEAR", "ACCELERATED_WEEKLY"],
+    ["INTEREST_ONLY", "ACCELERATED_BIWEEKLY"],
+    ["INTEREST_ONLY", "ACCELERATED_WEEKLY"],
+  ] as const)("%s refuses %s with a 400", (type, frequency) => {
+    expect(() =>
+      calculateMortgageAmortization(
+        input(type, { paymentFrequency: frequency }),
+      ),
+    ).toThrow(/Accelerated payment frequencies apply only to annuity/);
+  });
+
+  it.each(["LINEAR", "INTEREST_ONLY"] as const)(
+    "%s refuses a missing amortization with a 400 naming it",
+    (type) => {
+      expect(() =>
+        calculateMortgageAmortization(input(type, { amortizationMonths: 0 })),
+      ).toThrow(/requires amortizationMonths/);
+    },
+  );
+
+  it("LINEAR refuses a zero principal: c would be 0", () => {
+    expect(() =>
+      calculateMortgageAmortization(input("LINEAR", { principal: 0 })),
+    ).toThrow(/requires originalPrincipal/);
+  });
+});
+
+describe("the annuity-only helpers refuse the other methods", () => {
+  it.each(["LINEAR", "INTEREST_ONLY"] as const)(
+    "%s is not routed through the annuity re-levelling or split",
+    (type) => {
+      expect(() =>
+        recalculateMortgageAfterRateChange(300000, 4, 324, "MONTHLY", type),
+      ).toThrow(/nonAnnuityInstallment/);
+      expect(() =>
+        calculateMortgagePaymentSplit(300000, 2, 1333.33, 12, type),
+      ).toThrow(/nonAnnuityInstallment/);
+    },
+  );
+
+  it("still prices the annuity types", () => {
+    expect(
+      calculateMortgagePaymentSplit(300000, 2, 1108.8584, 12, "ANNUITY"),
+    ).toEqual({ principal: 608.8584, interest: 500 });
   });
 });

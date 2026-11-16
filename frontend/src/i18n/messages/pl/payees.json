@@ -8,9 +8,11 @@
     "autoMergePayees": "Automatycznie scal odbiorców",
     "newPayee": "+ Nowy odbiorca",
     "searchPlaceholder": "Szukaj odbiorców...",
+    "statusFilterLabel": "Status",
     "statusAll": "Wszystkie ({count})",
     "statusActive": "Aktywne ({count})",
     "statusInactive": "Nieaktywne ({count})",
+    "categoryFilterLabel": "Domyślna kategoria",
     "categoryFilterAll": "Wszyscy odbiorcy ({count})",
     "categoryFilterNoCategory": "Bez domyślnej kategorii ({count})",
     "categoryFilterUncategorized": "Nieskat. transakcje ({count})",
@@ -34,7 +36,8 @@
       "inactive": "Nieaktywny",
       "withoutCategory": "Bez kategorii"
     },
-    "applyDefaultCategories": "Przypisz domyślne kategorie"
+    "applyDefaultCategories": "Przypisz domyślne kategorie",
+    "lookupSettings": "Ustawienia wyszukiwania odbiorców"
   },
   "list": {
     "columns": {
@@ -82,13 +85,27 @@
     "categoryLabel": "Domyślna kategoria",
     "notesLabel": "Notatki (opcjonalnie)",
     "websiteLabel": "Strona internetowa",
+    "addressLabel": "Adres",
+    "emailLabel": "E-mail",
+    "phoneLabel": "Telefon",
     "submitCreate": "Utwórz odbiorcę",
     "submitUpdate": "Zapisz odbiorcę",
     "applyCategoryLabel": "Zastosuj tę kategorię do istniejących transakcji",
     "applyCategoryNone": "Nie zmieniaj istniejących transakcji",
     "applyCategoryUncategorized": "Tylko transakcje bez kategorii ({count})",
     "applyCategoryAll": "Wszystkie transakcje ({count})",
-    "applyCategoryHelp": "Przelewy i transakcje podzielone nigdy nie są zmieniane."
+    "applyCategoryHelp": "Przelewy i transakcje podzielone nigdy nie są zmieniane.",
+    "lookup": {
+      "button": "Wyszukaj dane",
+      "searching": "Wyszukiwanie danych kontaktowych...",
+      "suggested": "Zaproponowane przez wyszukiwanie:",
+      "replaced": "Zastąpione przez wyszukiwanie:",
+      "clear": "Cofnij zmiany wyszukiwania",
+      "nothingFound": "Nie znaleziono publicznych danych kontaktowych dla tej nazwy.",
+      "noProvider": "Skonfiguruj źródło w <link>ustawieniach wyszukiwania odbiorców</link>, aby znaleźć dane kontaktowe.",
+      "failed": "Nie udało się ukończyć wyszukiwania. Spróbuj ponownie później.",
+      "quotaExceeded": "Wyczerpano tegomiesięczne zapytania Google Places. Zwiększ limit w <link>ustawieniach wyszukiwania odbiorców</link> lub poczekaj do przyszłego miesiąca."
+    }
   },
   "merge": {
     "title": "Scal odbiorcę",
@@ -112,7 +129,6 @@
   },
   "categoryAutoAssign": {
     "title": "Automatycznie przypisz domyślne kategorie",
-    "howItWorksTitle": "Jak to działa",
     "howItWorksBody": "Ta funkcja analizuje historię Twoich transakcji, aby zaproponować domyślne kategorie dla odbiorców. Sprawdza, która kategoria jest najczęściej używana dla każdego odbiorcy, i sugeruje przypisanie jej jako kategorii domyślnej dla przyszłych transakcji. Domyślną kategorię zawsze możesz zmienić w razie potrzeby.",
     "minTransactionsLabel": "Minimalna liczba transakcji: {count}",
     "minTransactionsHelp": "Uwzględniaj tylko odbiorców z co najmniej taką liczbą transakcji",
@@ -133,6 +149,7 @@
       "line2": "Spróbuj dostosować ustawienia powyżej."
     },
     "columns": {
+      "assign": "Przypisz",
       "payee": "Odbiorca",
       "suggestedCategory": "Sugerowana kategoria",
       "match": "Dopasowanie"
@@ -150,7 +167,6 @@
   },
   "autoMerge": {
     "title": "Automatycznie scal odbiorców",
-    "howItWorksTitle": "Jak to działa",
     "howItWorksBody": "Ta funkcja przeszukuje odbiorców i grupuje warianty, w których jedna nazwa rozszerza drugą - na przykład \"Lidl\", \"LIDL sp. z o.o.\" i \"LIDL WARSZAWA 0421\" opierają się na \"Lidl\". Każda grupa jest scalana w jednego głównego odbiorcę, a alias z symbolem wieloznacznym (np. \"*LIDL*\") jest tworzony, aby przyszłe importy były dopasowywane automatycznie. Odbiorcy, których łączy tylko wspólne słowo (jak \"Royal Electric\" i \"Royal City Nursery\"), pozostają osobno. Sprawdź i dostosuj każdą grupę przed zastosowaniem.",
     "backupRecommendation": "Zalecane: utwórz <link>kopię zapasową</link> przed wprowadzeniem zmian.",
     "minGroupSizeLabel": "Minimalny rozmiar grupy: {count}",
@@ -210,7 +226,6 @@
   },
   "deactivateUnused": {
     "title": "Dezaktywuj nieużywanych odbiorców",
-    "howItWorksTitle": "Jak to działa",
     "howItWorksBody": "Ta funkcja znajduje rzadko używanych odbiorców i dezaktywuje ich. Dezaktywowani odbiorcy nie będą pojawiać się na listach wyboru odbiorcy podczas tworzenia transakcji, ale ich dotychczasowe transakcje zostaną zachowane. Odbiorcę możesz w dowolnej chwili przywrócić z listy odbiorców.",
     "maxTransactionsLabel": "{count, plural, one {# lub mniej transakcji} few {# lub mniej transakcji} many {# lub mniej transakcji} other {# lub mniej transakcji}}",
     "maxTransactionsHelp": "Uwzględniaj tylko odbiorców z taką liczbą transakcji lub mniejszą",
@@ -228,6 +243,7 @@
       "line2": "Spróbuj dostosować ustawienia powyżej."
     },
     "columns": {
+      "deactivate": "Dezaktywuj",
       "payee": "Odbiorca",
       "transactions": "Transakcje",
       "lastUsed": "Ostatnio użyto"
@@ -243,7 +259,7 @@
     }
   },
   "reactivate": {
-    "title": "Przywrócić odbiorcę?",
+    "title": "Przywróć odbiorcę",
     "message": "Odbiorca \"{name}\" został wcześniej dezaktywowany. Czy chcesz go przywrócić, aby ponownie pojawiał się na listach wyboru odbiorcy?",
     "keepInactiveButton": "Nie, pozostaw nieaktywnego",
     "reactivateButton": "Przywróć",
@@ -252,7 +268,7 @@
   "aliases": {
     "heading": "Aliasy",
     "description": "Aliasy mapują importowane nazwy odbiorców na tego odbiorcę. Użyj * jako symbolu wieloznacznego (np. \"STARBUCKS*\"). Bez rozróżniania wielkości liter.",
-    "loading": "Wczytywanie...",
+    "loading": "Wczytywanie aliasów...",
     "noAliases": "Brak skonfigurowanych aliasów",
     "removeTitle": "Usuń alias",
     "removeButton": "Usuń",
@@ -270,7 +286,10 @@
   },
   "selectCategoryPlaceholder": "Wybierz kategorię...",
   "validation": {
-    "nameRequired": "Nazwa odbiorcy jest wymagana"
+    "nameRequired": "Nazwa odbiorcy jest wymagana",
+    "emailInvalid": "Wprowadź prawidłowy adres e-mail",
+    "phoneInvalid": "Wprowadź prawidłowy numer telefonu",
+    "phoneNeedsCountryCode": "Dodaj numer kierunkowy kraju, na przykład +1 206 448 8762"
   },
   "defaultCategoryBackfill": {
     "allConfirmTitle": "Przypisać domyślne kategorie?",

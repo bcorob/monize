@@ -1,0 +1,321 @@
+{
+  "page": {
+    "title": "保修",
+    "subtitle": "您买了什么、保修何时结束、从哪里购买",
+    "newButton": "添加保修",
+    "exportButton": "导出 CSV",
+    "importButton": "导入 CSV",
+    "loading": "正在加载保修...",
+    "loadFailed": "无法加载您的保修。",
+    "retry": "重试",
+    "summary": {
+      "active": "有效",
+      "expiring": "即将到期",
+      "expired": "已到期",
+      "lifetime": "终身",
+      "unavailable": "未加载",
+      "expiringHint": "{days} 天内"
+    },
+    "filters": {
+      "label": "按状态筛选",
+      "all": "全部",
+      "expiring": "即将到期",
+      "active": "有效",
+      "expired": "已到期",
+      "lifetime": "终身",
+      "counted": {
+        "all": "全部（{count}）",
+        "expiring": "即将到期（{count}）",
+        "active": "有效（{count}）",
+        "expired": "已到期（{count}）",
+        "lifetime": "终身（{count}）"
+      }
+    },
+    "search": {
+      "label": "搜索保修",
+      "placeholder": "搜索名称、商家、型号或序列号"
+    },
+    "archivedToggle": "显示已归档",
+    "transactionChip": {
+      "label": "单笔交易的保修",
+      "clear": "显示所有保修"
+    },
+    "pager": {
+      "itemName": "项保修",
+      "total": "{count, plural, other {{total} 项保修}}"
+    },
+    "empty": {
+      "title": "还没有保修",
+      "description": "添加保修，随时了解保修何时结束。",
+      "filteredTitle": "没有匹配的保修",
+      "filteredDescription": "请尝试其他状态，或清除搜索。",
+      "archivedTitle": "没有已归档的保修"
+    },
+    "modal": {
+      "newTitle": "新建保修",
+      "editTitle": "编辑保修"
+    },
+    "delete": {
+      "title": "删除保修",
+      "message": "删除“{name}”？其保修申请和文档将一并删除，且无法撤销。"
+    },
+    "toasts": {
+      "created": "已添加保修",
+      "updated": "已更新保修",
+      "deleted": "已删除保修",
+      "archived": "已归档保修",
+      "unarchived": "已恢复保修",
+      "createFailed": "无法添加保修",
+      "updateFailed": "无法更新保修",
+      "deleteFailed": "无法删除保修",
+      "archiveFailed": "无法归档保修",
+      "unarchiveFailed": "无法恢复保修",
+      "prefillFailed": "无法加载该交易，因此保修将从空白开始",
+      "exported": "{count, plural, other {已导出 {shown} 项保修}}",
+      "exportFailed": "无法导出保修"
+    }
+  },
+  "status": {
+    "lifetime": "终身",
+    "active": "有效",
+    "expiring": "即将到期",
+    "expired": "已到期"
+  },
+  "daysLeft": {
+    "left": "{count, plural, other {剩余 {days} 天}}",
+    "today": "今天到期",
+    "ago": "{count, plural, other {已于 {days} 天前到期}}",
+    "leftYears": "剩余 {yearsCount, plural, other {{years} 年}} {daysCount, plural, other {{days} 天}}",
+    "agoYears": "{yearsCount, plural, other {{years} 年}} {daysCount, plural, other {{days} 天}}前已过期"
+  },
+  "kind": {
+    "manufacturer": "厂商保修",
+    "extended": "延长保修",
+    "store": "商家保修",
+    "other": "其他"
+  },
+  "list": {
+    "columns": {
+      "name": "名称",
+      "status": "状态",
+      "expiresOn": "到期日",
+      "purchaseDate": "购买日期",
+      "price": "价格",
+      "documents": "文档",
+      "claims": "未结申请",
+      "actions": "操作"
+    },
+    "sortLabel": "排序方式",
+    "lifetime": "终身",
+    "noPrice": "无",
+    "actions": {
+      "archive": "归档",
+      "unarchive": "取消归档"
+    }
+  },
+  "form": {
+    "nameLabel": "名称",
+    "namePlaceholder": "您购买的物品",
+    "vendorLabel": "商家",
+    "vendorPlaceholder": "选择或输入商家",
+    "modelLabel": "型号",
+    "serialsLabel": "序列号",
+    "serialLabel": "序列号 {index}",
+    "addSerial": "添加序列号",
+    "removeSerial": "移除序列号 {index}",
+    "serialsLimit": "最多 {max} 个序列号",
+    "kindLabel": "保修类型",
+    "purchaseDateLabel": "购买日期",
+    "expiry": {
+      "label": "保修结束",
+      "date": "指定日期",
+      "duration": "指定时长",
+      "lifetime": "永不",
+      "expiresOnLabel": "到期日",
+      "years": "年",
+      "months": "月",
+      "days": "天",
+      "computed": "{date} 到期",
+      "needsPurchaseDate": "请输入购买日期以计算结束时间",
+      "lifetimeHint": "终身保修没有结束日期，也不会提醒"
+    },
+    "priceLabel": "购买价格",
+    "productUrlLabel": "产品页面",
+    "productUrlPlaceholder": "https://",
+    "notesLabel": "备注",
+    "submitCreate": "添加保修",
+    "submitUpdate": "保存更改"
+  },
+  "validation": {
+    "nameRequired": "请输入名称",
+    "nameTooLong": "最多 200 个字符",
+    "vendorTooLong": "最多 200 个字符",
+    "modelTooLong": "最多 100 个字符",
+    "serialTooLong": "每个序列号最多 100 个字符",
+    "serialsTooMany": "最多 10 个序列号",
+    "purchaseDateRequired": "请输入购买日期",
+    "expiresOnRequired": "请输入保修结束日期",
+    "expiresBeforePurchase": "保修结束日期不能早于购买日期",
+    "durationRequired": "请输入大于零的时长",
+    "priceNegative": "价格不能为负数",
+    "priceNeedsCurrency": "请选择价格的货币",
+    "urlInvalid": "请输入以 http:// 或 https:// 开头的网址",
+    "urlTooLong": "最多 500 个字符",
+    "notesTooLong": "最多 2000 个字符"
+  },
+  "detail": {
+    "back": "返回保修",
+    "loading": "正在加载保修...",
+    "loadFailed": "无法加载此保修。",
+    "notFound": "未找到此保修。",
+    "retry": "重试",
+    "archivedBadge": "已归档",
+    "switcher": {
+      "trigger": "切换保修",
+      "placeholder": "筛选保修...",
+      "noMatches": "没有匹配的保修"
+    },
+    "summary": {
+      "expires": "到期日",
+      "purchased": "购买日期",
+      "price": "购买价格",
+      "openClaims": "未结申请"
+    },
+    "card": {
+      "title": "详细信息",
+      "kind": "保修类型",
+      "vendor": "商家",
+      "serialNumbers": "序列号",
+      "model": "型号",
+      "productUrl": "产品页面",
+      "notes": "备注",
+      "none": "无",
+      "lifetime": "终身"
+    },
+    "transaction": {
+      "title": "购买记录",
+      "edit": "编辑 {date} 的购买：{payee}，{amount}",
+      "viewInRegister": "在交易列表中查看",
+      "loadFailed": "无法加载购买记录",
+      "dateInAccount": "{date} · {account}",
+      "none": "没有关联的交易",
+      "unreadable": "此购买记录位于您无权读取的账户中。",
+      "noPayee": "无收款人"
+    }
+  },
+  "documents": {
+    "title": "文档",
+    "empty": "还没有文档",
+    "pendingHint": "保存保修后将上传文档。",
+    "tooMany": "每个保修最多 {max} 个文档",
+    "uploadFailedAfterCreate": "已添加保修，但{count, plural, one {此文档} other {这些文档}}无法上传：{names}。请从保修的“文档”部分添加。",
+    "kindFor": "{name} 的文档类型",
+    "kindUpdateFailed": "更改文档类型失败",
+    "addExisting": "添加现有文档",
+    "addExistingTitle": "添加现有文档",
+    "addExistingHelp": "选择您已上传到某笔交易或另一份保修的文件。此保修会添加一份副本，原文件保持原位。",
+    "addExistingFrom": "文档当前所在位置",
+    "fromTransaction": "一笔交易",
+    "fromWarranty": "另一份保修",
+    "addExistingDocument": "文档",
+    "addExistingKind": "此保修中的文档类型",
+    "addExistingNone": "这里没有可添加的文档。",
+    "addExistingLoadFailed": "无法加载文档。请重试。",
+    "addExistingFailed": "添加文档失败",
+    "addExistingSubmit": "添加文档",
+    "choose": "选择……",
+    "preview": "预览",
+    "kinds": {
+      "receipt": "收据",
+      "manual": "说明书",
+      "photo": "照片",
+      "warranty": "保修",
+      "other": "其他"
+    }
+  },
+  "claims": {
+    "title": "保修申请",
+    "add": "添加申请",
+    "empty": "还没有保修申请",
+    "loading": "正在加载保修申请...",
+    "loadFailed": "无法加载保修申请。",
+    "retry": "重试",
+    "statuses": {
+      "open": "处理中",
+      "approved": "已批准",
+      "denied": "已拒绝",
+      "resolved": "已解决"
+    },
+    "claimedOn": "{date} 申请",
+    "resolvedOnLine": "{date} 结案",
+    "resolutionLine": "处理结果：{text}",
+    "modal": {
+      "newTitle": "新建保修申请",
+      "editTitle": "编辑保修申请"
+    },
+    "form": {
+      "claimDateLabel": "申请日期",
+      "statusLabel": "状态",
+      "descriptionLabel": "说明",
+      "resolutionLabel": "处理结果",
+      "resolvedOnLabel": "结案日期",
+      "resolvedOnHint": "仅适用于已解决或已拒绝的申请",
+      "submitCreate": "添加申请",
+      "submitUpdate": "保存更改"
+    },
+    "validation": {
+      "claimDateRequired": "请输入申请日期",
+      "resolvedOnBeforeClaim": "申请的结案日期不能早于申请日期",
+      "textTooLong": "最多 2000 个字符"
+    },
+    "delete": {
+      "title": "删除保修申请",
+      "message": "删除 {date} 提交的保修申请？此操作无法撤销。"
+    },
+    "toasts": {
+      "created": "已添加保修申请",
+      "updated": "已更新保修申请",
+      "deleted": "已删除保修申请",
+      "createFailed": "无法添加保修申请",
+      "updateFailed": "无法更新保修申请",
+      "deleteFailed": "无法删除保修申请"
+    }
+  },
+  "import": {
+    "title": "从 CSV 导入保修",
+    "description": "使用 Warracker 列格式的 CSV 文件，例如从 Warracker 或本页面导出的文件。在保存任何内容之前，您会看到每一行。",
+    "fileLabel": "CSV 文件",
+    "chooseFile": "选择文件",
+    "noFileChosen": "未选择文件",
+    "checking": "正在检查文件...",
+    "previewFailed": "无法检查该文件",
+    "summary": "{count, plural, other {{total} 行中有 {valid} 行可以导入。}}",
+    "invalidSummary": "{count, plural, other {{shown} 行无效，无法按原样导入。}}",
+    "skipInvalid": "跳过无效行并导入其余行",
+    "nothingToImport": "请修正文件后重新选择。",
+    "skippedColumns": "未导入的列：",
+    "columns": {
+      "line": "行",
+      "name": "名称",
+      "expires": "到期日",
+      "outcome": "结果",
+      "problems": "问题"
+    },
+    "outcome": {
+      "valid": "就绪",
+      "invalid": "无效",
+      "created": "已导入"
+    },
+    "unnamed": "（无名称）",
+    "noExpiry": "未设置",
+    "lifetime": "终身",
+    "errorItem": "错误：{message}",
+    "warningItem": "注意：{message}",
+    "submit": "导入",
+    "submitCount": "{count, plural, other {导入 {shown} 项保修}}",
+    "toasts": {
+      "imported": "{count, plural, other {已导入 {shown} 项保修}}",
+      "failed": "无法导入保修"
+    }
+  }
+}

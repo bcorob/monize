@@ -3,6 +3,7 @@
     "noneToUpdate": "Güncellenecek menkul kıymet yok",
     "updated": "{count, plural, one {# menkul kıymet fiyatı güncellendi} other {# menkul kıymet fiyatı güncellendi}}",
     "partialFailure": "Fiyatlar güncellendi: {updated} başarılı, {failed} başarısız{symbols}",
+    "partialFailureWithReasons": "Fiyatlar güncellendi: {updated} başarılı, {failed} başarısız{symbols}\n{reasons}",
     "failed": "Fiyatlar yenilenemedi"
   },
   "page": {
@@ -10,6 +11,7 @@
     "subtitle": "Hisselerinizi, ETF'lerinizi, yatırım fonlarınızı ve diğer menkul kıymetlerinizi yönetin",
     "newSecurity": "+ Yeni Menkul Kıymet",
     "searchPlaceholder": "Sembol veya ada göre ara...",
+    "statusFilterLabel": "Durum",
     "statusAll": "Tümü ({count})",
     "statusActive": "Aktif ({count})",
     "statusInactive": "Pasif ({count})",
@@ -49,6 +51,7 @@
       "name": "Ad",
       "type": "Tür",
       "shares": "Hisse",
+      "value": "Değer",
       "exchange": "Borsa",
       "currency": "Para Birimi",
       "provider": "Sağlayıcı",
@@ -63,12 +66,10 @@
       "inactive": "Pasif",
       "inactiveShort": "Pas"
     },
-    "providerTitle": {
-      "override": "Menkul kıymet bazında sağlayıcı geçersiz kılma",
-      "inherited": "Varsayılan Fiyat Teklifi Sağlayıcısı tercihinizden devralındı"
-    },
+    "providerInherited": "{provider} (varsayılan)",
     "columnTitles": {
       "shares": "Tüm hesaplarda tutulan güncel hisse sayısı",
+      "value": "Tüm hesaplardaki paylar, en güncel fiyatla ve menkul kıymetin kendi para biriminde",
       "source": "En güncel fiyatın kaynağı"
     },
     "actions": {
@@ -115,7 +116,11 @@
     "exchangeLabel": "Borsa",
     "currencyLabel": "Para Birimi",
     "currencyNotConfigured": "{code} — para birimlerinizde yok",
+    "currencyPlaceholder": "Para birimi seçin...",
+    "currencyNotReported": "Sağlayıcı bu kripto paranın para birimini bildirmedi. Kotasyonunun yapıldığı fiat para birimini seçin.",
     "quoteProviderLabel": "Fiyat Teklifi Sağlayıcısı",
+    "skipPriceUpdatesLabel": "Otomatik fiyat güncellemelerini devre dışı bırak",
+    "skipPriceUpdatesHelp": "Monize bu menkul kıymet için fiyat almayacak. Hiçbir sağlayıcının fiyatlayamadığı bir menkul kıymet için bunu kullanın; kendi girdiğiniz fiyatlar yine de sayılır. Farklı bir fiyat sağlayıcısı veya MSN Enstrüman Kimliği seçmek güncellemeleri yeniden açar.",
     "msnIdLabel": "MSN Araç ID'si (gelişmiş)",
     "lookupProviderAriaLabel": "Sağlayıcıyı ara",
     "lookupButton": "Ara",
@@ -139,7 +144,11 @@
     "providers": {
       "auto": "Otomatik",
       "yahoo": "Yahoo",
-      "msn": "MSN"
+      "msn": "MSN",
+      "lse": "LSE",
+      "deutsche_boerse": "Deutsche Börse",
+      "bond_engine": "Tahvil motoru",
+      "html_table": "Web sayfasındaki tablo"
     },
     "types": {
       "select": "Tür seçin...",
@@ -189,16 +198,50 @@
       "deleteConfirm": "Sil",
       "deleteSuccess": "\"{name}\" varlık sınıfı silindi",
       "deleteFailed": "\"{name}\" varlık sınıfı silinemedi"
+    },
+    "bondFetchAction": "{code} serisini resmi kaynaktan getir",
+    "bondFetching": "{code} ihraççıdan ve referans oranlarıyla birlikte getiriliyor. Bu işlem bir dakikaya kadar sürebilir.",
+    "bondFetchFailed": "Seri getirilemedi.",
+    "bondCurrencyLocked": "Bu menkul kıymet {linkedCurrency} cinsinden bir tahvil türüne bağlı. Para birimini tekrar {linkedCurrency} yapın veya önce tahvil türünün bağlantısını kaldırın (bağlantıyı kaldırmak hesaplanan fiyatları siler).",
+    "bondProgramLabel": "Tahvil türü",
+    "bondProgramNone": "Bağlı değil",
+    "bondProgramCurrent": "Bağlı tahvil türü",
+    "bondProgramLoading": "Tahvil türleri yükleniyor...",
+    "bondProgramLoadFailed": "Tahvil türleri yüklenemedi, bu yüzden henüz bir tahvil türü bağlanamıyor.",
+    "bondProgramRetry": "Yeniden dene",
+    "bondNoPrograms": "Tahvil kataloğunda henüz hiç tahvil türü yok.",
+    "bondAutoFetchLabel": "Bu tahvil türünün yeni serilerini otomatik getir",
+    "bondAutoFetchHelp": "Açıkken Monize her gün bu tahvil türünün yeni serilerini resmi kaynaktan okur; böylece seriyi önceden getirmeden bir alımı kaydedebilirsiniz.",
+    "bondCountryLabel": "Ülke",
+    "bondCountryOther": "Diğer",
+    "bondCountryOtherInfo": "Diğer ülkelerin tahvilleri için destek, projenin <link>GitHub</link> sayfasından talep edilebilir.",
+    "quoteTable": {
+      "urlLabel": "Fiyat tablosu web sayfası",
+      "urlHelp": "Sayfada, başlığında bir tarih sütunu ve bir kapanış fiyatı sütunu bulunan bir tablo olmalı.",
+      "test": "Test et",
+      "previewFailed": "Sayfa okunamadı.",
+      "summary": "{first} ile {last} arasında {count, plural, one {# gün} other {# gün}}",
+      "columns": "Kullanılan sütunlar: {columns}",
+      "currency": "Sayfada belirtilen para birimi: {currency}",
+      "noCurrency": "Sayfada para birimi yok; fiyatlar menkul kıymetin para biriminde saklanır.",
+      "skipped": "{count, plural, one {Okunamayan # satır atlandı} other {Okunamayan # satır atlandı}}",
+      "headers": {
+        "date": "Tarih",
+        "open": "Açılış",
+        "high": "Yüksek",
+        "low": "Düşük",
+        "close": "Kapanış",
+        "volume": "Hacim"
+      }
     }
   },
   "priceForm": {
     "dateLabel": "Tarih",
     "closePriceLabel": "Kapanış Fiyatı",
-    "openPriceLabel": "Açılış Fiyatı",
-    "highPriceLabel": "En Yüksek Fiyat",
-    "lowPriceLabel": "En Düşük Fiyat",
-    "volumeLabel": "Hacim",
-    "optionalPlaceholder": "İsteğe bağlı",
+    "openPriceLabel": "Açılış Fiyatı (isteğe bağlı)",
+    "highPriceLabel": "En Yüksek Fiyat (isteğe bağlı)",
+    "lowPriceLabel": "En Düşük Fiyat (isteğe bağlı)",
+    "volumeLabel": "Hacim (isteğe bağlı)",
     "submitCreate": "Fiyat Ekle",
     "submitUpdate": "Fiyatı Güncelle"
   },
@@ -246,7 +289,9 @@
     },
     "collapseAll": "Tümünü daralt",
     "expandAll": "Tümünü genişlet",
-    "groupCount": "{count} fiyat"
+    "groupCount": "{count} fiyat",
+    "addYearButton": "Bir Yıl Daha Geçmiş Ekle",
+    "addYearTitle": "Sağlayıcıdan bir yıl daha geçmiş fiyat verisi al"
   },
   "transactionHistory": {
     "accountLabel": "Hesap",
@@ -284,7 +329,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "Uzun Vadeli Kazancı Yeniden Yatır",
       "CAPITAL_GAIN_SHORT": "Kısa Vadeli Sermaye Kazancı",
       "CAPITAL_GAIN_LONG": "Uzun Vadeli Sermaye Kazancı",
-      "REDEEM": "CD/Tahvil İtfası"
+      "REDEEM": "CD/Tahvil İtfası",
+      "RETURN_OF_CAPITAL": "Sermaye İadesi"
     },
     "toasts": {
       "loadHistoryFailed": "Geçmiş yüklenemedi",
@@ -333,11 +379,20 @@
     "nameRequired": "Ad zorunludur",
     "nameMax": "Ad 255 karakter veya daha az olmalıdır",
     "currencyRequired": "Para birimi zorunludur",
-    "descriptionMax": "Açıklama en fazla 5000 karakter olabilir"
+    "bondProgramRequired": "Tahvil türü zorunludur",
+    "descriptionMax": "Açıklama en fazla 5000 karakter olabilir",
+    "quoteUrlRequired": "Fiyat tablosunun bulunduğu sayfayı girin.",
+    "quoteUrlInvalid": "http:// veya https:// ile başlayan tam bir adres girin."
   },
   "priceValidation": {
     "dateRequired": "Tarih zorunludur",
     "priceRequired": "Fiyat zorunludur",
     "priceNonNegative": "Fiyat negatif olmayan bir sayı olmalıdır"
+  },
+  "priceAlert": {
+    "label": "Fiyat değişimi uyarısı (%)",
+    "help": "Devre dışı bırakmak için boş bırakın. Önceki mevcut seansa göre yükseliş veya düşüşü, araç başına UTC gününde en fazla bir kez bildirir.",
+    "range": "0,1 ile 1000 arasında bir yüzde girin.",
+    "chartLabel": "Fiyat uyarılarına grafik ekle"
   }
 }

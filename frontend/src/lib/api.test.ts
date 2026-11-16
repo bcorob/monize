@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // Capture the interceptor handlers registered when api.ts is imported. The
 // axios mock makes `axios.create` return a callable stub (the client itself is
@@ -169,6 +169,15 @@ describe('apiClient interceptors', () => {
       expect(responseHandlers.onFulfilled!(response)).toBe(response);
     });
 
+    it('clears a refused Undo after a successful write but not after a read', async () => {
+      const signal = await import('./undoRedoSignal');
+      signal.markUndoRefused('refused');
+      responseHandlers.onFulfilled!({ data: 1, config: { method: 'get' } });
+      expect(signal.getUndoRefusal()).toBe('refused');
+      responseHandlers.onFulfilled!({ data: 1, config: { method: 'post' } });
+      expect(signal.getUndoRefusal()).toBeNull();
+    });
+
     it('marks backend down on 502', async () => {
       const error = makeError({ response: { status: 502 } });
       await expect(responseHandlers.onRejected!(error)).rejects.toBe(error);
@@ -270,6 +279,79 @@ describe('apiClient interceptors', () => {
       expect(retried.headers['X-CSRF-Token']).toBe('csrf-after-refresh');
     });
 
+    describe('cross-tab refresh lock', () => {
+      const originalLocks = Object.getOwnPropertyDescriptor(
+        navigator,
+        'locks',
+      );
+
+      function installLocks(request: ReturnType<typeof vi.fn>) {
+        Object.defineProperty(navigator, 'locks', {
+          value: { request },
+          configurable: true,
+        });
+      }
+
+      afterEach(() => {
+        if (originalLocks) {
+          Object.defineProperty(navigator, 'locks', originalLocks);
+        } else {
+          delete (navigator as { locks?: unknown }).locks;
+        }
+      });
+
+      it('runs the refresh inside one browser-wide lock', async () => {
+        // Two tabs refreshing with the same cookie read as token theft on the
+        // server; the lock makes the second tab wait and send the rotated one.
+        const order: string[] = [];
+        const request = vi.fn(
+          async (name: string, callback: () => Promise<boolean>) => {
+            order.push(`acquire:${name}`);
+            const result = await callback();
+            order.push('release');
+            return result;
+          },
+        );
+        installLocks(request);
+        mockAxiosPost.mockImplementation(async () => {
+          order.push('refresh');
+          return {};
+        });
+        mockCookieGet.mockReturnValue('csrf');
+
+        const { attemptTokenRefresh } = await import('./api');
+        await expect(attemptTokenRefresh()).resolves.toBe(true);
+
+        expect(order).toEqual([
+          'acquire:monize-token-refresh',
+          'refresh',
+          'release',
+        ]);
+      });
+
+      it('reports a failed refresh through the lock', async () => {
+        installLocks(
+          vi.fn((_name: string, callback: () => Promise<boolean>) =>
+            callback(),
+          ),
+        );
+        mockAxiosPost.mockRejectedValue(new Error('401'));
+
+        const { attemptTokenRefresh } = await import('./api');
+        await expect(attemptTokenRefresh()).resolves.toBe(false);
+        expect(mockAxiosPost).toHaveBeenCalledTimes(1);
+      });
+
+      it('refreshes unlocked when the lock is refused', async () => {
+        installLocks(vi.fn().mockRejectedValue(new Error('SecurityError')));
+        mockAxiosPost.mockResolvedValue({});
+
+        const { attemptTokenRefresh } = await import('./api');
+        await expect(attemptTokenRefresh()).resolves.toBe(true);
+        expect(mockAxiosPost).toHaveBeenCalledTimes(1);
+      });
+    });
+
     it('queues concurrent 401 requests during a refresh', async () => {
       let resolveRefresh: (value: unknown) => void = () => {};
       mockAxiosPost.mockReturnValue(
@@ -352,6 +434,23 @@ describe('apiClient interceptors', () => {
       await expect(responseHandlers.onRejected!(error)).rejects.toBe(error);
       expect(logoutSpy).toHaveBeenCalled();
       expect(replaceSpy).toHaveBeenCalledWith('/login');
+    });
+
+    it('leaves a 401 alone while a sign-out is under way', async () => {
+      const { beginSignOut, endSignOut } = await import('./logout-state');
+      beginSignOut();
+      try {
+        const error = makeError({
+          config: { url: '/protected', headers: {} },
+          response: { status: 401 },
+        });
+        await expect(responseHandlers.onRejected!(error)).rejects.toBe(error);
+        expect(mockAxiosPost).not.toHaveBeenCalled();
+        expect(logoutSpy).not.toHaveBeenCalled();
+        expect(window.location.replace).not.toHaveBeenCalled();
+      } finally {
+        endSignOut();
+      }
     });
 
     it('does not refresh on 401 for an unauth (business) endpoint', async () => {

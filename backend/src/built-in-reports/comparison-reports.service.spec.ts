@@ -2,7 +2,7 @@ import { DataSource } from "typeorm";
 import { Test, TestingModule } from "@nestjs/testing";
 import { getRepositoryToken } from "@nestjs/typeorm";
 import { ComparisonReportsService } from "./comparison-reports.service";
-import { ReportCurrencyService } from "./report-currency.service";
+import { RawRateBasis, ReportCurrencyService } from "./report-currency.service";
 import { Transaction } from "../transactions/entities/transaction.entity";
 import { Category } from "../categories/entities/category.entity";
 import {
@@ -36,6 +36,7 @@ describe("ComparisonReportsService", () => {
     icon: null,
     color: "#FF5733",
     isIncome: false,
+    autoSign: null,
     isSystem: false,
     createdAt: new Date("2025-01-01"),
   };
@@ -51,6 +52,7 @@ describe("ComparisonReportsService", () => {
     icon: null,
     color: "#33FF57",
     isIncome: false,
+    autoSign: null,
     isSystem: false,
     createdAt: new Date("2025-01-02"),
   };
@@ -66,6 +68,7 @@ describe("ComparisonReportsService", () => {
     icon: null,
     color: "#3357FF",
     isIncome: false,
+    autoSign: null,
     isSystem: false,
     createdAt: new Date("2025-01-03"),
   };
@@ -81,9 +84,14 @@ describe("ComparisonReportsService", () => {
 
     currencyService = {
       getDefaultCurrency: jest.fn().mockResolvedValue("USD"),
-      buildRateMap: jest.fn().mockResolvedValue(new Map()),
-      convertAmount: jest.fn().mockImplementation((amount) => amount),
+      // The converter a report builds, per row; a test swaps its body.
+      convertRow: jest.fn().mockImplementation((amount: number) => amount),
+      buildConverter: jest.fn(),
     };
+    currencyService.buildConverter.mockImplementation(
+      async () => (amount: number, row: RawRateBasis) =>
+        currencyService.convertRow(amount, row),
+    );
 
     ({ manager: scopedManager, dataSource: scopedDataSource } =
       createScopedDbMocks([
@@ -117,6 +125,58 @@ describe("ComparisonReportsService", () => {
   // getYearOverYear
   // ---------------------------------------------------------------------------
   describe("getYearOverYear", () => {
+    it("leaves a month's foreign group out whole when one of its days has no rate (issue #2106)", async () => {
+      currencyService.convertRow.mockImplementation(
+        (amount: number, row: RawRateBasis) =>
+          row.tx_date === "2024-01-05" ? null : amount,
+      );
+      const year = new Date().getFullYear();
+      scopedManager.query.mockResolvedValue([
+        {
+          year,
+          month: 1,
+          currency_code: "EUR",
+          tx_date: `${year}-01-10`,
+          own_rate: null,
+          income: "0",
+          expenses: "100",
+        },
+        {
+          year,
+          month: 1,
+          currency_code: "EUR",
+          tx_date: "2024-01-05",
+          own_rate: null,
+          income: "0",
+          expenses: "-40",
+        },
+      ]);
+
+      const result = await service.getYearOverYear(mockUserId, 1);
+
+      expect(result.data[0].months[0].expenses).toBe(0);
+      expect(result.data[0].totals.expenses).toBeNull();
+      expect(result.excludedCount).toBe(1);
+      // Each foreign row is selected with its day and own rate.
+      expect(scopedManager.query.mock.calls[0][0]).toContain("AS tx_date");
+    });
+
+    it("classifies income and expenses by category, like Income vs Expenses", async () => {
+      scopedManager.query.mockResolvedValue([]);
+      await service.getYearOverYear(mockUserId, 1);
+
+      const sql = scopedManager.query.mock.calls[0][0];
+      expect(sql).toContain(
+        "LEFT JOIN categories c ON c.id = COALESCE(ts.category_id, t.category_id)",
+      );
+      expect(sql).toContain(
+        "WHEN c.is_income = true THEN COALESCE(ts.amount, t.amount)",
+      );
+      expect(sql).toContain(
+        "WHEN c.is_income = false THEN -1 * COALESCE(ts.amount, t.amount)",
+      );
+    });
+
     it("returns empty year structures when no transactions exist", async () => {
       scopedManager.query.mockResolvedValue([]);
 
@@ -125,7 +185,14 @@ describe("ComparisonReportsService", () => {
       expect(result.data).toHaveLength(3);
       result.data.forEach((yearData) => {
         expect(yearData.months).toHaveLength(12);
-        expect(yearData.totals).toEqual({ income: 0, expenses: 0, savings: 0 });
+        expect(yearData.totals).toEqual({
+          income: 0,
+          expenses: 0,
+          savings: 0,
+          knownIncome: 0,
+          knownExpenses: 0,
+          knownSavings: 0,
+        });
         yearData.months.forEach((m) => {
           expect(m.income).toBe(0);
           expect(m.expenses).toBe(0);
@@ -205,8 +272,8 @@ describe("ComparisonReportsService", () => {
 
     it("merges multiple currency rows for the same month into one entry", async () => {
       const currentYear = new Date().getFullYear();
-      currencyService.convertAmount.mockImplementation(
-        (amount: number, fromCurrency: string) => {
+      currencyService.convertRow.mockImplementation(
+        (amount: number, { currency_code: fromCurrency }: RawRateBasis) => {
           if (fromCurrency === "EUR") return amount * 1.1;
           return amount;
         },
@@ -272,7 +339,12 @@ describe("ComparisonReportsService", () => {
       await service.getYearOverYear(mockUserId, 3);
 
       const queryCall = scopedManager.query.mock.calls[0];
-      expect(queryCall[1]).toEqual([mockUserId, currentYear - 2, currentYear]);
+      expect(queryCall[1]).toEqual([
+        mockUserId,
+        currentYear - 2,
+        currentYear,
+        "USD",
+      ]);
     });
 
     it("rounds monetary values to 2 decimal places", async () => {
@@ -361,7 +433,10 @@ describe("ComparisonReportsService", () => {
       expect(currencyService.getDefaultCurrency).toHaveBeenCalledWith(
         mockUserId,
       );
-      expect(currencyService.buildRateMap).toHaveBeenCalledWith("USD");
+      expect(currencyService.buildConverter).toHaveBeenCalledWith(
+        expect.any(Array),
+        "USD",
+      );
     });
   });
 
@@ -388,6 +463,142 @@ describe("ComparisonReportsService", () => {
         expect(d.total).toBe(0);
         expect(d.count).toBe(0);
       });
+    });
+
+    it("folds a foreign group's days back together before judging it (issue #2106)", async () => {
+      // A foreign aggregate arrives once per day so each part converts at that
+      // day's rate; the refund on the second Saturday still nets the first.
+      currencyService.convertRow.mockImplementation(
+        (amount: number, row: RawRateBasis) =>
+          row.tx_date === "2025-06-07" ? amount * 1.1 : amount * 1.2,
+      );
+      scopedManager.query.mockResolvedValue([
+        {
+          day_of_week: 6,
+          category_id: null,
+          currency_code: "EUR",
+          tx_date: "2025-06-07",
+          own_rate: null,
+          tx_count: 1,
+          total: "100.00",
+        },
+        {
+          day_of_week: 6,
+          category_id: null,
+          currency_code: "EUR",
+          tx_date: "2025-06-14",
+          own_rate: null,
+          tx_count: 1,
+          total: "-25.00",
+        },
+        // Netted, this group is a credit: it was not spent in.
+        {
+          day_of_week: 2,
+          category_id: null,
+          currency_code: "EUR",
+          tx_date: "2025-06-03",
+          own_rate: null,
+          tx_count: 1,
+          total: "20.00",
+        },
+        {
+          day_of_week: 2,
+          category_id: null,
+          currency_code: "EUR",
+          tx_date: "2025-06-10",
+          own_rate: null,
+          tx_count: 1,
+          total: "-30.00",
+        },
+      ]);
+      categoriesRepository.find.mockResolvedValue([]);
+
+      const result = await service.getWeekendVsWeekday(
+        mockUserId,
+        "2025-06-01",
+        "2025-06-30",
+      );
+
+      // 100 x 1.1 - 25 x 1.2 = 80, over both Saturday rows.
+      expect(result.byDay[6]).toEqual({ dayOfWeek: 6, total: 80, count: 2 });
+      expect(result.byDay[2]).toEqual({ dayOfWeek: 2, total: 0, count: 0 });
+      expect(result.summary.weekendTotal).toBe(80);
+      expect(result.summary.weekdayTotal).toBe(0);
+    });
+
+    it("leaves a group out whole when one of its days has no rate (issue #2106)", async () => {
+      // The debit converts; its refund, on a day with no rate, does not.
+      currencyService.convertRow.mockImplementation(
+        (amount: number, row: RawRateBasis) =>
+          row.tx_date === "2025-06-07" ? amount : null,
+      );
+      scopedManager.query.mockResolvedValue([
+        {
+          day_of_week: 6,
+          category_id: null,
+          currency_code: "EUR",
+          tx_date: "2025-06-07",
+          own_rate: null,
+          tx_count: 1,
+          total: "100.00",
+        },
+        {
+          day_of_week: 6,
+          category_id: null,
+          currency_code: "EUR",
+          tx_date: "2025-06-14",
+          own_rate: null,
+          tx_count: 1,
+          total: "-100.00",
+        },
+      ]);
+      categoriesRepository.find.mockResolvedValue([]);
+
+      const result = await service.getWeekendVsWeekday(
+        mockUserId,
+        "2025-06-01",
+        "2025-06-30",
+      );
+
+      expect(result.byDay[6]).toEqual({ dayOfWeek: 6, total: 0, count: 0 });
+      expect(result.summary.weekendTotal).toBeNull();
+      expect(result.excludedCount).toBe(1);
+      expect(result.missingCurrencies).toEqual(["EUR"]);
+    });
+
+    it("nets refunds within a category instead of dropping credit rows", async () => {
+      scopedManager.query.mockResolvedValue([
+        // Dining on Saturday: 100 spent, 30 refunded -> 70 net.
+        {
+          day_of_week: 6,
+          category_id: null,
+          currency_code: "USD",
+          tx_count: 2,
+          total: "70.00",
+        },
+        // A day whose credits exceed its debits was not spent in.
+        {
+          day_of_week: 2,
+          category_id: null,
+          currency_code: "USD",
+          tx_count: 1,
+          total: "-25.00",
+        },
+      ]);
+
+      const result = await service.getWeekendVsWeekday(
+        mockUserId,
+        "2025-01-01",
+        "2025-12-31",
+      );
+
+      const sql = scopedManager.query.mock.calls[0][0];
+      expect(sql).toContain("SUM(-COALESCE(ts.amount, t.amount))");
+      expect(sql).not.toContain("COALESCE(ts.amount, t.amount) < 0");
+      expect(sql).not.toContain("ABS(");
+      expect(result.summary.weekendTotal).toBe(70);
+      expect(result.summary.weekdayTotal).toBe(0);
+      expect(result.summary.weekdayCount).toBe(0);
     });
 
     it("separates weekend and weekday spending correctly", async () => {
@@ -577,6 +788,7 @@ describe("ComparisonReportsService", () => {
         icon: null,
         color: null,
         isIncome: false,
+        autoSign: null,
         isSystem: false,
         createdAt: new Date(),
       }));
@@ -599,8 +811,8 @@ describe("ComparisonReportsService", () => {
     });
 
     it("converts foreign currency amounts", async () => {
-      currencyService.convertAmount.mockImplementation(
-        (amount: number, fromCurrency: string) => {
+      currencyService.convertRow.mockImplementation(
+        (amount: number, { currency_code: fromCurrency }: RawRateBasis) => {
           if (fromCurrency === "EUR") return amount * 1.1;
           return amount;
         },
@@ -664,7 +876,12 @@ describe("ComparisonReportsService", () => {
       await service.getWeekendVsWeekday(mockUserId, "2025-06-01", "2025-12-31");
 
       const queryCall = scopedManager.query.mock.calls[0];
-      expect(queryCall[1]).toEqual([mockUserId, "2025-12-31", "2025-06-01"]);
+      expect(queryCall[1]).toEqual([
+        mockUserId,
+        "2025-12-31",
+        "USD",
+        "2025-06-01",
+      ]);
     });
 
     it("omits startDate filter when undefined", async () => {
@@ -674,8 +891,8 @@ describe("ComparisonReportsService", () => {
       await service.getWeekendVsWeekday(mockUserId, undefined, "2025-12-31");
 
       const queryCall = scopedManager.query.mock.calls[0];
-      expect(queryCall[1]).toEqual([mockUserId, "2025-12-31"]);
-      expect(queryCall[0]).not.toContain("$3");
+      expect(queryCall[1]).toEqual([mockUserId, "2025-12-31", "USD"]);
+      expect(queryCall[0]).not.toContain("transaction_date >= $");
     });
 
     it("handles a category appearing in both weekend and weekday by-category maps", async () => {
@@ -746,7 +963,133 @@ describe("ComparisonReportsService", () => {
       expect(currencyService.getDefaultCurrency).toHaveBeenCalledWith(
         mockUserId,
       );
-      expect(currencyService.buildRateMap).toHaveBeenCalledWith("USD");
+      expect(currencyService.buildConverter).toHaveBeenCalledWith(
+        expect.any(Array),
+        "USD",
+      );
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // A missing exchange rate is unknown, never 1:1 (INV-FX-001)
+  // ---------------------------------------------------------------------------
+  describe("a currency that has no rate", () => {
+    const noJpyRate = (
+      amount: number,
+      { currency_code: from }: RawRateBasis,
+    ) => (from === "JPY" ? null : amount);
+
+    it("getYearOverYear withholds the year's totals and keeps the converted part", async () => {
+      const currentYear = new Date().getFullYear();
+      currencyService.convertRow.mockImplementation(noJpyRate);
+      scopedManager.query.mockResolvedValue([
+        {
+          year: currentYear,
+          month: 1,
+          currency_code: "USD",
+          income: "0",
+          expenses: "50.00",
+        },
+        {
+          year: currentYear,
+          month: 1,
+          currency_code: "JPY",
+          income: "0",
+          expenses: "100000",
+        },
+      ]);
+
+      const result = await service.getYearOverYear(mockUserId, 1);
+      const year = result.data[0];
+
+      expect(year.totals.expenses).toBeNull();
+      expect(year.totals.income).toBeNull();
+      expect(year.totals.savings).toBeNull();
+      expect(year.totals.knownExpenses).toBe(50);
+      expect(year.totals.knownIncome).toBe(0);
+      expect(year.totals.knownSavings).toBe(-50);
+      expect(year.months[0].expenses).toBe(50);
+      expect(result.currency).toBe("USD");
+      expect(result.missingCurrencies).toEqual(["JPY"]);
+      expect(result.excludedCount).toBe(1);
+      expect(JSON.stringify(result)).not.toContain("100000");
+    });
+
+    it("getYearOverYear keeps a year without a gap complete", async () => {
+      const currentYear = new Date().getFullYear();
+      currencyService.convertRow.mockImplementation(noJpyRate);
+      scopedManager.query.mockResolvedValue([
+        {
+          year: currentYear - 1,
+          month: 1,
+          currency_code: "USD",
+          income: "10.00",
+          expenses: "5.00",
+        },
+        {
+          year: currentYear,
+          month: 1,
+          currency_code: "JPY",
+          income: "0",
+          expenses: "100000",
+        },
+      ]);
+
+      const result = await service.getYearOverYear(mockUserId, 2);
+
+      expect(result.data[0].totals.expenses).toBe(5);
+      expect(result.data[1].totals.expenses).toBeNull();
+    });
+
+    it("getWeekendVsWeekday withholds both totals and counts only what converted", async () => {
+      currencyService.convertRow.mockImplementation(noJpyRate);
+      scopedManager.query.mockResolvedValue([
+        {
+          day_of_week: 6,
+          category_id: null,
+          currency_code: "USD",
+          tx_count: 1,
+          total: "50.00",
+        },
+        {
+          day_of_week: 6,
+          category_id: null,
+          currency_code: "JPY",
+          tx_count: 1,
+          total: "100000",
+        },
+      ]);
+
+      const result = await service.getWeekendVsWeekday(
+        mockUserId,
+        "2025-01-01",
+        "2025-12-31",
+      );
+
+      expect(result.summary.weekendTotal).toBeNull();
+      expect(result.summary.weekdayTotal).toBeNull();
+      expect(result.summary.knownWeekendTotal).toBe(50);
+      expect(result.summary.knownWeekdayTotal).toBe(0);
+      expect(result.summary.weekendCount).toBe(1);
+      expect(result.currency).toBe("USD");
+      expect(result.missingCurrencies).toEqual(["JPY"]);
+      expect(result.excludedCount).toBe(1);
+      expect(JSON.stringify(result)).not.toContain("100000");
+    });
+
+    it("getWeekendVsWeekday answers zero, not null, for no rows", async () => {
+      scopedManager.query.mockResolvedValue([]);
+
+      const result = await service.getWeekendVsWeekday(
+        mockUserId,
+        "2025-01-01",
+        "2025-12-31",
+      );
+
+      expect(result.summary.weekendTotal).toBe(0);
+      expect(result.summary.weekdayTotal).toBe(0);
+      expect(result.missingCurrencies).toEqual([]);
+      expect(result.excludedCount).toBe(0);
     });
   });
 });

@@ -44,23 +44,42 @@ export function InstitutionAccountsManager({
   const [selectedAccountId, setSelectedAccountId] = useState('');
   const [filterStatus, setFilterStatus] = useState<'active' | 'closed' | ''>('');
 
-  const load = useCallback(async () => {
-    if (!institution) return;
-    setIsLoading(true);
-    try {
-      const [assignedData, all] = await Promise.all([
-        institutionsApi.getAccounts(institution.id),
-        accountsApi.getAll(true),
-      ]);
-      setAssigned(assignedData);
-      setAllAccounts(all);
-    } catch (error) {
-      toast.error(getErrorMessage(error, t('accountsManager.loadFailed')));
-      logger.error(error);
-    } finally {
-      setIsLoading(false);
-    }
+  // Opening the manager for an institution starts a read: show it as loading
+  // from this render on ("info from previous render"), not from the effect.
+  const requestFor = isOpen ? institution : null;
+  const [loadingFor, setLoadingFor] = useState<Institution | null>(null);
+  if (loadingFor !== requestFor) {
+    setLoadingFor(requestFor);
+    if (requestFor) setIsLoading(true);
+  }
+
+  // The writes live in the inner `run`, so they happen after the request, not during the effect.
+  const load = useCallback(() => {
+    const run = async () => {
+      if (!institution) return;
+      try {
+        const [assignedData, all] = await Promise.all([
+          institutionsApi.getAccounts(institution.id),
+          accountsApi.getAll(true),
+        ]);
+        setAssigned(assignedData);
+        setAllAccounts(all);
+      } catch (error) {
+        toast.error(getErrorMessage(error, t('accountsManager.loadFailed')));
+        logger.error(error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    return run();
   }, [institution, t]);
+
+  // Every read after a change shows the spinner, as the first one does.
+  const reload = useCallback(() => {
+    if (!institution) return Promise.resolve();
+    setIsLoading(true);
+    return load();
+  }, [institution, load]);
 
   useEffect(() => {
     if (isOpen && institution) {
@@ -116,7 +135,7 @@ export function InstitutionAccountsManager({
     try {
       await institutionsApi.assignAccount(institution.id, accountId);
       setSelectedAccountId('');
-      await load();
+      await reload();
       onChanged?.();
       toast.success(t('accountsManager.added'));
     } catch (error) {
@@ -131,7 +150,7 @@ export function InstitutionAccountsManager({
     setBusyId(accountId);
     try {
       await institutionsApi.unassignAccount(institution.id, accountId);
-      await load();
+      await reload();
       onChanged?.();
       toast.success(t('accountsManager.removed'));
     } catch (error) {
@@ -142,16 +161,26 @@ export function InstitutionAccountsManager({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} maxWidth="lg" className="p-6">
-      <div className="flex items-center gap-3 mb-4">
-        <InstitutionLogo institution={institution ?? undefined} size={32} fallbackGlyph="$" />
-        <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 truncate">
-          {institution
-            ? t('accountsManager.title', { name: institution.name })
-            : ''}
-        </h2>
-      </div>
-
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidth="lg"
+      className="p-6"
+      title={
+        institution ? (
+          <span className="flex items-center gap-3 min-w-0">
+            {/* The logo's alt text is the institution's name, which the
+                title already says: hidden so the dialog's name reads once. */}
+            <span aria-hidden="true" className="shrink-0 inline-flex">
+              <InstitutionLogo institution={institution} size={32} fallbackGlyph="$" />
+            </span>
+            <span className="truncate" title={t('accountsManager.title', { name: institution.name })}>
+              {t('accountsManager.title', { name: institution.name })}
+            </span>
+          </span>
+        ) : undefined
+      }
+    >
       {isLoading ? (
         <LoadingSpinner text={t('accountsManager.loading')} />
       ) : assignedMain.length === 0 ? (
@@ -231,7 +260,7 @@ export function InstitutionAccountsManager({
         </>
       )}
 
-      <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+      <div className="mt-6">
         <Combobox
           label={t('accountsManager.addLabel')}
           placeholder={t('accountsManager.addPlaceholder')}

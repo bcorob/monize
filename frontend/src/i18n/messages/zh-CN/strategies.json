@@ -330,14 +330,13 @@
       "fillMissingDone": "{count, plural, other {已添加 # 项标的}}。保存配置以载入价格并计算第一个信号。",
       "fillMissingError": "无法添加建议的标的。",
       "lookbackMonths": "动量窗口（月）",
-      "taxRatePercent": "税率（%）",
-      "commissionAmount": "每笔交易手续费",
+      "taxRatePercent": "税率（可选）",
+      "commissionAmount": "每笔交易手续费（可选）",
       "rulesSourceUrl": "你所遵循规则的链接",
       "rulesSourceUrlPlaceholder": "https://example.com/dual-momentum",
       "rulesSourceLabel": "该链接显示的文字",
       "rulesSourceLabelPlaceholder": "example.com",
       "rulesSourceHint": "两项均为选填，且不影响任何计算。它们会在报告页脚放一个链接，指向记录本策略所遵循规则的地方——一篇文章、书中的一页、你自己的笔记——方便日后核对你是按哪个版本设置的。",
-      "optional": "可选",
       "save": "保存配置",
       "saved": "策略配置已保存。",
       "saveError": "无法保存策略配置。",
@@ -358,7 +357,9 @@
       "NO_POSITION": "策略账户中没有任何标的。",
       "FIRST_RUN": "该策略尚未评估 — 第一个信号将在下次计划评估后出现。",
       "STALE_PRICES": "本报告依据的部分价格并非最新，刷新后信号可能改变。最旧的或完全缺失的是：",
-      "CALCULATION_FAILED": "无法根据现有数据计算信号。"
+      "CALCULATION_FAILED": "无法根据现有数据计算信号。",
+      "SHORT_HISTORY": "价格历史不足，无法计算当前周期。这些角色需要回溯到 {from} 的价格：",
+      "shortHistoryFix": "打开每个此类工具并使用“再添加一年价格历史”，然后重新打开此报告。"
     },
     "footer": {
       "pastResults": "过往表现不保证未来回报。",

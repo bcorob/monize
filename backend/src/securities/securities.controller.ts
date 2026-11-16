@@ -62,10 +62,12 @@ import { BackfillPricesQueryDto } from "./dto/backfill-prices-query.dto";
 import { UpdateSecurityPriceDto } from "./dto/update-security-price.dto";
 import { Security } from "./entities/security.entity";
 import { withSystemContext } from "../common/db/with-context";
+import { AllowPat, NoPat } from "../auth/pat-access/pat-access.decorator";
 
 @ApiTags("Securities")
 @ApiBearerAuth()
 @UseGuards(AuthGuard("jwt"))
+@AllowPat()
 @Controller("securities")
 export class SecuritiesController {
   private readonly logger = new Logger(SecuritiesController.name);
@@ -578,6 +580,7 @@ export class SecuritiesController {
   }
 
   @Post("prices/refresh")
+  @NoPat()
   @UseGuards(RolesGuard)
   @Roles("admin")
   @ApiOperation({
@@ -644,12 +647,44 @@ export class SecuritiesController {
     @Body() dto: RefreshSecurityPricesDto,
   ): Promise<PriceRefreshSummary> {
     // Verify all security IDs belong to the requesting user
+    const owned: Security[] = [];
     for (const id of dto.securityIds) {
-      await this.securitiesService.findOne(req.user.id, id);
+      owned.push(await this.securitiesService.findOne(req.user.id, id));
     }
-    const result = await this.securityPriceService.refreshPricesForSecurities(
-      dto.securityIds,
+    // A security linked to a bond instrument has no quote provider: its refresh
+    // is the engine's recompute, not "0 updated".
+    const linked = owned.filter((s) => s.bondProgramId);
+    const providerIds =
+      linked.length === 0
+        ? dto.securityIds
+        : owned.filter((s) => !s.bondProgramId).map((s) => s.id);
+    const providerResult =
+      providerIds.length > 0
+        ? await this.securityPriceService.refreshPricesForSecurities(
+            providerIds,
+          )
+        : {
+            totalSecurities: 0,
+            updated: 0,
+            failed: 0,
+            skipped: 0,
+            results: [],
+            lastUpdated: new Date(),
+          };
+    const recomputed = await this.securitiesService.recomputeLinkedPrices(
+      req.user.id,
+      linked,
     );
+    const result: PriceRefreshSummary =
+      linked.length === 0
+        ? providerResult
+        : {
+            ...providerResult,
+            totalSecurities: providerResult.totalSecurities + linked.length,
+            updated: providerResult.updated + recomputed.updated,
+            failed: providerResult.failed + recomputed.failed,
+            results: [...providerResult.results, ...recomputed.results],
+          };
     if (result.updated > 0) {
       // Fire-and-forget: recalculate this user's investment snapshots
       this.netWorthService
@@ -672,6 +707,7 @@ export class SecuritiesController {
   }
 
   @Post("prices/backfill")
+  @NoPat()
   @UseGuards(RolesGuard)
   @Roles("admin")
   @ApiOperation({
@@ -705,6 +741,7 @@ export class SecuritiesController {
   }
 
   @Post("prices/backfill-transactions")
+  @NoPat()
   @UseGuards(RolesGuard)
   @Roles("admin")
   @ApiOperation({

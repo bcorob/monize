@@ -76,7 +76,10 @@
     "collapseAria": "[XX-Hide account info-XX]",
     "showAccountNumber": "[XX-Show account number-XX]",
     "hideAccountNumber": "[XX-Hide account number-XX]",
-    "show": "[XX-Show account info-XX]"
+    "show": "[XX-Show account info-XX]",
+    "nextInstallment": "[XX-Next Installment-XX]",
+    "finalPayment": "[XX-Final Payment-XX]",
+    "amountDueOn": "[XX-{amount}, due {date}-XX]"
   },
   "page": {
     "title": "[XX-Transactions-XX]",
@@ -121,13 +124,19 @@
       "balance": "[XX-Balance-XX]",
       "attachments": "[XX-Attachments-XX]",
       "status": "[XX-Status-XX]",
+      "statusHelp": "[XX-Unreconciled, Cleared or Reconciled are steps toward matching a bank statement. Void cancels a transaction but keeps its record; it no longer moves the account balance.-XX]",
       "actions": "[XX-Actions-XX]"
+    },
+    "sort": {
+      "balanceHiddenHint": "[XX-Sort by date to see the running balance-XX]",
+      "stripLabel": "[XX-Sort by-XX]"
     },
     "dateDisplay": {
       "toggleLabel": "[XX-Hide the year-XX]",
       "toggleTitle": "[XX-Drop the year from dates so more of the payee fits-XX]"
     },
     "attachmentsCount": "[XX-{count, plural, one {# attachment} other {# attachments}}-XX]",
+    "warrantiesCount": "[XX-{count, plural, one {# warranty} other {# warranties}}-XX]",
     "today": "[XX-Today-XX]",
     "export": {
       "button": "[XX-Export-XX]",
@@ -165,7 +174,6 @@
     },
     "row": {
       "viewPayeeTitle": "[XX-View {name} details-XX]",
-      "ref": "[XX-Ref: {number}-XX]",
       "investmentLabel": "[XX-Investment-XX]",
       "linkedInvestmentTitle": "[XX-View in Investments-XX]",
       "filterByDate": "[XX-Filter by date \"{date}\"-XX]",
@@ -212,13 +220,13 @@
       "title": "[XX-Filters-XX]",
       "clear": "[XX-Clear-XX]",
       "hide": "[XX-Hide-XX]",
-      "show": "[XX-Show-XX]"
+      "show": "[XX-Show filters-XX]"
     },
     "accounts": {
-      "label": "[XX-Show accounts:-XX]",
-      "all": "[XX-All-XX]",
-      "active": "[XX-Active-XX]",
-      "closed": "[XX-Closed-XX]"
+      "label": "[XX-Show Accounts-XX]",
+      "allCount": "[XX-All ({count})-XX]",
+      "activeCount": "[XX-Active ({count})-XX]",
+      "closedCount": "[XX-Closed ({count})-XX]"
     },
     "fields": {
       "accounts": "[XX-Accounts-XX]",
@@ -251,7 +259,7 @@
       "statuses": "[XX-All statuses-XX]",
       "amountMin": "[XX-Min-XX]",
       "amountMax": "[XX-Max-XX]",
-      "search": "[XX-Search payee, category, amount, tag, description, reference #...-XX]",
+      "search": "[XX-Search, or try #10 or payee:costco-XX]",
       "tagKeyValue": "[XX-e.g. usa-XX]"
     },
     "tagKeyNone": "[XX-Any (no key filter)-XX]",
@@ -312,7 +320,7 @@
     },
     "modal": {
       "title": "[XX-Bulk Update Transactions-XX]",
-      "subtitle": "[XX-Update {count, plural, one {# selected transaction} other {# selected transactions}}. Toggle the fields you want to change.-XX]",
+      "help": "[XX-Toggle the fields you want to change.-XX]",
       "submitLabel": "[XX-Update {count, plural, one {# Transaction} other {# Transactions}}-XX]",
       "payee": "[XX-Payee-XX]",
       "category": "[XX-Category-XX]",
@@ -360,10 +368,11 @@
       "fromAccount": "[XX-From Account-XX]",
       "toAccount": "[XX-To Account-XX]",
       "transferAmount": "[XX-Transfer Amount-XX]",
-      "transferAmountWithCurrency": "[XX-Transfer Amount ({currency})-XX]",
-      "amountReceived": "[XX-Amount Received ({currency})-XX]",
-      "payeeOptional": "[XX-Payee (Optional)-XX]",
-      "categoryOptional": "[XX-Category (Optional)-XX]"
+      "amountReceivedLabel": "[XX-Amount Received-XX]",
+      "transferAmountInCurrency": "[XX-Transfer Amount ({currency})-XX]",
+      "amountReceivedInCurrency": "[XX-Amount Received ({currency})-XX]",
+      "payeeOptional": "[XX-Payee (optional)-XX]",
+      "categoryOptional": "[XX-Category (optional)-XX]"
     },
     "placeholders": {
       "selectAccount": "[XX-Select account...-XX]",
@@ -391,10 +400,16 @@
     "submitCreateAndNewDescription": "[XX-Save it and start another, keeping the account and date.-XX]",
     "submitOptions": "[XX-Choose what happens after creating-XX]",
     "submitUpdate": "[XX-Update {mode}-XX]",
+    "submitConvert": "[XX-Convert to {mode}-XX]",
     "reconciledConfirm": {
       "title": "[XX-Edit reconciled transaction?-XX]",
       "message": "[XX-This transaction is reconciled. Changing its date or amount will affect a completed reconciliation. Do you want to save your changes anyway?-XX]",
       "confirm": "[XX-Save changes-XX]"
+    },
+    "counterpartConfirm": {
+      "title": "[XX-Convert this transfer?-XX]",
+      "message": "[XX-The other side of this transfer has already been cleared or reconciled. Converting it to a transaction removes that entry from the other account and changes a balance that was checked against a statement. Do you want to continue?-XX]",
+      "confirm": "[XX-Convert anyway-XX]"
     },
     "modeLabel": {
       "transfer": "[XX-Transfer-XX]",
@@ -424,6 +439,8 @@
       "destinationRequired": "[XX-Please select a destination account-XX]",
       "sameAccount": "[XX-Source and destination accounts must be different-XX]",
       "negativeTransfer": "[XX-Transfer amount must not be negative-XX]",
+      "convertedToTransfer": "[XX-Converted to a transfer-XX]",
+      "convertedToTransaction": "[XX-Converted to a transaction-XX]",
       "payeeCreated": "[XX-Payee \"{name}\" created-XX]",
       "payeeCreateFailed": "[XX-Failed to create payee-XX]",
       "payeeReactivated": "[XX-Payee \"{name}\" reactivated-XX]",
@@ -458,10 +475,20 @@
       },
       "feeCaption": "[XX-Includes a {percent}% foreign transaction fee ({fee}).-XX]"
     },
-    "jointSplitDisabled": "[XX-Split transactions in a shared account can only be managed by the owner-XX]"
+    "jointSplitDisabled": "[XX-Split transactions in a shared account can only be managed by the owner-XX]",
+    "warranties": {
+      "title": "[XX-Warranties-XX]",
+      "add": "[XX-Add warranty-XX]",
+      "expires": "[XX-Expires {date}-XX]",
+      "loading": "[XX-Loading warranties-XX]",
+      "loadError": "[XX-The warranties for this transaction could not be loaded.-XX]",
+      "empty": "[XX-No warranties yet-XX]"
+    },
+    "conversionLockedNote": "[XX-This transfer belongs to a split transaction or to another owner's account, so it can only stay a transfer here. Change it from the split or delete it and create the entry you want.-XX]"
   },
   "splitEditor": {
     "header": "[XX-Split Details-XX]",
+    "headerTooltip": "[XX-Each row can be a category, a transfer to another account, or an investment. The rows must add up to the transaction's total; Distribute Evenly and Distribute Proportionally spread what remains for you.-XX]",
     "distributeProportionally": "[XX-Distribute Proportionally-XX]",
     "distributeProportionallyTitle": "[XX-Distribute the remaining amount proportionally based on each split's amount-XX]",
     "distributeEvenly": "[XX-Distribute Evenly-XX]",
@@ -521,7 +548,7 @@
     "quantityPlaceholder": "[XX-Quantity-XX]",
     "pricePlaceholder": "[XX-Price-XX]",
     "commissionPlaceholder": "[XX-Commission-XX]",
-    "amountPlaceholder": "[XX-Amount ({currency})-XX]",
+    "amountOnlyPlaceholder": "[XX-Amount-XX]",
     "ratePlaceholder": "[XX-{to} per 1 {from}-XX]",
     "ariaRate": "[XX-Exchange rate ({to} per 1 {from})-XX]",
     "rateHint": "[XX-Quantity, price and commission are in {from}; this rate converts the cash impact into {to}.-XX]",
@@ -551,6 +578,7 @@
       "total": "[XX-Total-XX]",
       "transactions": "[XX-Transactions-XX]",
       "tooltip": "[XX-{count, plural, one {# transaction} other {# transactions}}-XX]",
+      "partialNote": "[XX-Some amounts have no exchange rate and are not included in these totals.-XX]",
       "quarterLabel": "[XX-Q{quarter} {year}-XX]",
       "quarterTick": "[XX-Q{quarter} {year}-XX]",
       "granularityLabel": "[XX-Bucket size-XX]",
@@ -575,6 +603,11 @@
       "log": "[XX-Log-XX]",
       "autoTitle": "[XX-Auto ({scale})-XX]",
       "scaleTitle": "[XX-{label} scale-XX]"
+    },
+    "collapse": {
+      "hide": "[XX-Hide chart-XX]",
+      "show": "[XX-Show chart-XX]",
+      "hidden": "[XX-Chart hidden-XX]"
     }
   },
   "toasts": {
@@ -597,5 +630,71 @@
     "title": "[XX-Spending by {key}-XX]",
     "other": "[XX-Other-XX]",
     "noData": "[XX-No tagged spending to break down for this key.-XX]"
+  },
+  "searchSyntax": {
+    "open": "[XX-Search syntax-XX]",
+    "title": "[XX-Search syntax-XX]",
+    "fields": "[XX-Fields: payee, memo, cat, tag, account, ref, amount, date, status, is and has. Choose an example to put it in the search box.-XX]",
+    "examples": {
+      "allWords": "[XX-Every word matches somewhere-XX]",
+      "phrase": "[XX-This exact phrase-XX]",
+      "exclude": "[XX-Leave out anything matching refund-XX]",
+      "fieldContains": "[XX-Payee contains costco-XX]",
+      "fieldExact": "[XX-Payee is exactly Costco-XX]",
+      "reference": "[XX-Cheque or reference number 10 exactly-XX]",
+      "wildcard": "[XX-Reference starts with 10-XX]",
+      "amountOver": "[XX-Amount over 100-XX]",
+      "amountRange": "[XX-Amount from 50 to 100-XX]",
+      "datePeriod": "[XX-Any day in March 2026-XX]",
+      "isSplit": "[XX-Split transactions-XX]",
+      "hasAttachment": "[XX-Has an attachment-XX]",
+      "hasWarranty": "[XX-Has a warranty-XX]"
+    }
+  },
+  "searchInterpretation": {
+    "label": "[XX-Searching:-XX]",
+    "negated": "[XX-not {phrase}-XX]",
+    "malformed": "[XX-{raw} (not understood, searched as text)-XX]",
+    "empty": "[XX-{raw} (empty, ignored)-XX]",
+    "status": "[XX-Status is {value}-XX]",
+    "any": "[XX-“{value}” anywhere-XX]",
+    "fields": {
+      "payee": "[XX-Payee-XX]",
+      "memo": "[XX-Memo-XX]",
+      "cat": "[XX-Category-XX]",
+      "tag": "[XX-Tag-XX]",
+      "account": "[XX-Account-XX]",
+      "ref": "[XX-Reference-XX]",
+      "amount": "[XX-Amount-XX]",
+      "date": "[XX-Date-XX]",
+      "status": "[XX-Status-XX]",
+      "is": "[XX-Type-XX]",
+      "has": "[XX-Has-XX]"
+    },
+    "ops": {
+      "contains": "[XX-{field} contains “{value}”-XX]",
+      "exact": "[XX-{field} is “{value}”-XX]",
+      "glob": "[XX-{field} matches “{value}”-XX]",
+      "eq": "[XX-{field} is {value}-XX]",
+      "gt": "[XX-{field} over {value}-XX]",
+      "gte": "[XX-{field} {value} or more-XX]",
+      "lt": "[XX-{field} under {value}-XX]",
+      "lte": "[XX-{field} {value} or less-XX]",
+      "between": "[XX-{field} from {value} to {valueTo}-XX]"
+    },
+    "enum": {
+      "is": {
+        "transfer": "[XX-Transfers-XX]",
+        "split": "[XX-Split transactions-XX]",
+        "uncategorized": "[XX-Uncategorized-XX]"
+      },
+      "has": {
+        "attachment": "[XX-Has an attachment-XX]",
+        "warranty": "[XX-Has a warranty-XX]",
+        "ref": "[XX-Has a reference number-XX]",
+        "memo": "[XX-Has a memo-XX]",
+        "tag": "[XX-Has a tag-XX]"
+      }
+    }
   }
 }

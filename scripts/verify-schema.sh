@@ -19,12 +19,16 @@
 #
 # Usage: scripts/verify-schema.sh
 #
-# Requires: docker, diff. Uses an ephemeral postgres:16-alpine container.
+# Requires: docker, diff. Uses an ephemeral postgres:18-alpine container,
+# pulled from mirror.gcr.io, Google's mirror of the official image (the same digest the
+# integration job's service container uses in .github/workflows/ci.yml), so the
+# run needs no Docker Hub login and no Docker Hub rate limit applies. Override
+# with PG_IMAGE=... to use another source.
 
 set -euo pipefail
 
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PG_IMAGE="postgres:16-alpine"
+PG_IMAGE="${PG_IMAGE:-mirror.gcr.io/library/postgres:18-alpine@sha256:b6972e1115a4ff8eba5d7f7d19184926d1e16d7d1136ae1e1a7ebf286da0f015}"
 PG_PASSWORD="verify_schema_pw"
 CONTAINER="monize-verify-schema-$$"
 
@@ -83,10 +87,20 @@ psql_in -d db_migrations -f /tmp/schema.sql >/dev/null
 # and the schema_migrations INSERT, restore from a mid-deploy snapshot) and the
 # next boot re-runs the whole body. The static counterpart is
 # `backend/npm run migration:lint`; see docs/database-migrations.md.
+#
+# Apply order is NUMERIC on the filename prefix, then the full filename -- the
+# order `backend/src/common/db/migration-filename.ts` gives db-migrate. A shell
+# glob is a string sort, which agrees with that only while every historical
+# prefix begins with 0 or 1 and every timestamp with 2; `sort -n` reads the
+# leading digits as a number and breaks ties on the whole line, which is the
+# same rule. `migration-filename.spec.ts` runs this exact pipeline against the
+# TypeScript comparator to keep them agreeing.
+mapfile -t MIGRATION_FILES < <(ls "$REPO_ROOT/database/migrations" | grep '\.sql$' | sort -n)
+
 for pass in 1 2; do
   echo "Applying migrations on top of db_migrations (pass $pass of 2)..."
-  for f in "$REPO_ROOT"/database/migrations/*.sql; do
-    fname="$(basename "$f")"
+  for fname in "${MIGRATION_FILES[@]}"; do
+    f="$REPO_ROOT/database/migrations/$fname"
     docker cp "$f" "$CONTAINER:/tmp/migration.sql"
     if ! psql_in -d db_migrations -f /tmp/migration.sql >/dev/null 2>&1; then
       echo "FAIL: migration $fname errored when applied on top of schema.sql (pass $pass)"

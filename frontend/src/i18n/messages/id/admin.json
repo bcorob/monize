@@ -46,6 +46,8 @@
     "colProvider": "Penyedia",
     "colStatus": "Status",
     "colLastLogin": "Login Terakhir",
+    "colBackups": "Cadangan",
+    "colAttachments": "Lampiran",
     "colActions": "Tindakan",
     "youSuffix": "(Anda)",
     "noEmail": "Tidak ada email",
@@ -60,7 +62,22 @@
     "clickToDisable": "Klik untuk menonaktifkan",
     "clickToEnable": "Klik untuk mengaktifkan",
     "resetPassword": "Reset Kata Sandi",
-    "noUsers": "Tidak ada pengguna ditemukan."
+    "resetTwoFactor": "Reset 2FA",
+    "unlinkSso": "Putuskan SSO",
+    "noUsers": "Tidak ada pengguna ditemukan.",
+    "storageLoading": "Memuat…",
+    "storageUnavailable": "Tidak tersedia",
+    "storageUnavailableHint": "Penggunaan penyimpanan tidak dapat dimuat. Muat ulang halaman untuk mencoba lagi.",
+    "storageUnknown": "Tidak diketahui",
+    "storageUnknownStore": "Penyimpanan cadangan pengguna ini tidak dapat dibaca, sehingga ukurannya tidak diketahui. Periksa lokasi cadangan di halaman Cadangan.",
+    "storageNotReported": "Tidak dilaporkan",
+    "storageNotReportedHint": "Akun ini tidak termasuk dalam pembacaan penyimpanan terakhir. Muat ulang halaman untuk menyertakannya.",
+    "backupsOff": "Nonaktif",
+    "backupsOffHint": "Pencadangan otomatis tidak aktif untuk pengguna ini, dan tidak ada cadangan yang tersimpan.",
+    "backupScheduleOff": "Jadwal nonaktif",
+    "backupScheduleOffHint": "Pencadangan otomatis dimatikan; berkas ini adalah yang belum dihapus oleh kebijakan retensi.",
+    "backupCount": "{count, plural, =0 {Tidak ada cadangan} one {# cadangan} other {# cadangan}}",
+    "attachmentCount": "{count, plural, =0 {Tidak ada berkas} one {# berkas} other {# berkas}}"
   },
   "usersPage": {
     "title": "Manajemen Pengguna",
@@ -81,7 +98,10 @@
       "loadFailed": "Gagal memuat pengguna",
       "deleteFailed": "Gagal menghapus pengguna",
       "disableFailed": "Gagal menonaktifkan pengguna",
-      "resetFailed": "Gagal mereset kata sandi"
+      "resetFailed": "Gagal mereset kata sandi",
+      "twoFactorReset": "Autentikasi dua faktor untuk {name} telah direset. Mereka telah dikeluarkan dari semua sesi.",
+      "resetTwoFactorFailed": "Gagal mereset autentikasi dua faktor",
+      "unlinkSsoFailed": "Gagal memutuskan SSO"
     },
     "dialogs": {
       "promoteTitle": "Promosikan Pengguna?",
@@ -96,6 +116,14 @@
       "resetTitle": "Reset Kata Sandi?",
       "resetMessage": "Ini akan membuat kata sandi sementara baru untuk {name}. Mereka akan diminta untuk menggantinya saat login berikutnya.",
       "resetConfirm": "Reset Kata Sandi",
+      "unlinkSsoTitle": "Putuskan SSO?",
+      "unlinkSsoMessage": "Ini mengubah akun {name} menjadi akun lokal. Login SSO berikutnya dengan alamat email yang sama dapat menautkannya kembali. Sistem membuat kata sandi sementara, dan {name} harus menggantinya saat login berikutnya.",
+      "unlinkSsoConfirm": "Putuskan SSO",
+      "unlinkSsoResultTitle": "SSO Diputuskan",
+      "unlinkSsoResultDesc": "Akun {name} sekarang adalah akun lokal. Bagikan kata sandi sementara ini kepada mereka agar bisa login.",
+      "resetTwoFactorTitle": "Reset Autentikasi Dua Faktor?",
+      "resetTwoFactorMessage": "Ini akan menonaktifkan autentikasi dua faktor untuk {name}, menghapus kode cadangan dan perangkat tepercaya mereka, serta mengeluarkan mereka dari semua sesi. Setelah itu mereka dapat masuk dengan kata sandi dan menyiapkan ulang 2FA. Gunakan ini jika mereka kehilangan aplikasi autentikator dan kode cadangan, atau setelah JWT_SECRET diubah.",
+      "resetTwoFactorConfirm": "Reset 2FA",
       "deleteTitle": "Hapus Pengguna?",
       "deleteMessage": "Apakah Anda yakin ingin menghapus {name}? Ini akan menghapus akun dan semua data terkait mereka secara permanen. Tindakan ini tidak dapat dibatalkan. Jika mereka adalah delegasi akun lain, data mereka sendiri dihapus tetapi login mereka dipertahankan agar delegasi tetap berfungsi -- mereka menjadi pengguna delegasi saja.",
       "deleteConfirm": "Hapus Pengguna",
@@ -103,6 +131,84 @@
       "tempPasswordTitleUpgraded": "Akun Ditingkatkan",
       "tempPasswordDescCreated": "Kata sandi sementara dibuat untuk {name}. Bagikan kepada mereka untuk masuk.",
       "tempPasswordDescUpgraded": "Pengguna bersama yang sudah ada telah ditingkatkan ke akun penuh. Bagikan kata sandi sementara ini kepada {name}."
+    }
+  },
+  "notificationsPage": {
+    "title": "Notifikasi",
+    "subtitle": "Kanal pengiriman yang disediakan instans Monize ini, beserta identitas push di baliknya.",
+    "loading": "Memuat pengaturan notifikasi...",
+    "loadUnavailable": "Monize tidak dapat membaca pengaturan notifikasi dari server. Muat ulang halaman untuk mencoba lagi.",
+    "channelsHeading": "Kanal pengiriman",
+    "identityHeading": "Identitas Web Push",
+    "perAccountNote": "Perangkat, notifikasi uji coba, dan preferensi notifikasi adalah milik masing-masing akun dan dikelola di Pengaturan. Administrator mengonfigurasi instans dan tidak pernah mengirim ke, atau melihat, notifikasi orang lain.",
+    "channelState": {
+      "on": "Aktif",
+      "off": "Nonaktif",
+      "unconfigured": "Tidak tersedia",
+      "unknown": "Tidak diketahui"
+    },
+    "channels": {
+      "inApp": {
+        "name": "Notifikasi dalam aplikasi",
+        "description": "Lonceng di bagian atas. Selalu tersedia dan tidak dapat dimatikan: di sinilah notifikasi tetap ada meski kanal lain gagal."
+      },
+      "webPush": {
+        "name": "Push peramban",
+        "description": "Notifikasi terkirim ke ponsel atau desktop bahkan saat Monize tertutup. Tidak memerlukan Firebase, Google Play, atau akun Apple Developer.",
+        "toggleLabel": "Aktifkan push peramban untuk instans ini",
+        "missingKeys": "Instans ini tidak memiliki pasangan kunci push. Setel ENCRYPTION_KEY dan mulai ulang: Monize akan membuat pasangannya sendiri saat start berikutnya.",
+        "keyUnreadable": "Instans ini tidak dapat mendekripsi pasangan kunci push yang tersimpan, sehingga tidak ada yang terkirim. Rotasi pasangan kunci di bawah untuk memulihkan.",
+        "serverKeyMissing": "Instance ini tidak memiliki ENCRYPTION_KEY, sehingga tidak dapat membuka pasangan kunci push yang disimpannya. Setel ENCRYPTION_KEY di deployment lalu mulai ulang — merotasi tidak membantu selama kuncinya hilang."
+      },
+      "email": {
+        "name": "Email",
+        "description": "Pengingat tagihan, ringkasan anggaran, dan peringatan sistem dikirim ke alamat email tiap akun.",
+        "missingSmtp": "Belum ada server email yang dikonfigurasi. Setel variabel lingkungan SMTP untuk mengaktifkan email.",
+        "statusUnavailable": "Monize tidak dapat membaca status server email."
+      },
+      "ntfy": {
+        "name": "ntfy dan UnifiedPush",
+        "description": "Push terenkripsi yang sama, dikirim ke distributor UnifiedPush yang dihosting sendiri (ntfy, NextPush) alih-alih infrastruktur Google atau Apple. Kanal ini memakai pasangan kunci push dan sakelar instans ini; setiap orang mendaftarkan endpoint dari aplikasi UnifiedPush mereka dan mengaktifkan kanal di Pengaturan.",
+        "followsWebPush": "Tidak tersedia selama push browser dimatikan atau pasangan kuncinya tidak dapat digunakan — kanal ini dikirim dengan pasangan kunci yang sama."
+      }
+    },
+    "identity": {
+      "fingerprintLabel": "Sidik kunci",
+      "generatedLabel": "Dibuat",
+      "devicesLabel": "Perangkat terdaftar",
+      "deviceCounts": "{live} aktif, {disabled} dinonaktifkan",
+      "rotateDescription": "Rotasi mengganti pasangan kunci instans ini. Semua perangkat terdaftar tidak lagi dapat dijangkau dan harus mengaktifkan push kembali, jadi lakukan rotasi hanya jika kunci mungkin bocor.",
+      "rotateButton": "Rotasi pasangan kunci",
+      "rotatingButton": "Merotasi...",
+      "missingEncryptionKey": "Instans ini tidak memiliki pasangan kunci push karena ENCRYPTION_KEY belum disetel dan kunci privat harus disimpan tanpa enkripsi. Setel dan mulai ulang: Monize akan membuat pasangannya sendiri.",
+      "keyUnreadable": "Instans ini memiliki pasangan kunci push yang tidak lagi dapat didekripsi, sehingga tidak ada yang terkirim. Ini terjadi saat ENCRYPTION_KEY berubah pada basis data yang sedang berjalan, atau saat cadangan dipulihkan ke instans lain. Rotasi pasangan kunci untuk memulihkan; setiap perangkat akan mendaftar ulang.",
+      "serverKeyMissing": "Instance ini tidak memiliki ENCRYPTION_KEY, sehingga tidak dapat membuka pasangan kunci push yang disimpannya. Merotasi tidak membantu selama kuncinya hilang: setel ENCRYPTION_KEY di deployment dan mulai ulang, lalu push berfungsi lagi dengan perangkat yang ada."
+    },
+    "dialogs": {
+      "rotateTitle": "Rotasi pasangan kunci push?",
+      "rotateMessage": "{count, plural, =0 {Belum ada perangkat terdaftar, jadi tidak ada yang hilang.} other {# perangkat terdaftar akan berhenti menerima notifikasi sampai push diaktifkan kembali di tiap peramban.}}",
+      "rotateConfirm": "Rotasi"
+    },
+    "toasts": {
+      "loadFailed": "Tidak dapat memuat pengaturan notifikasi",
+      "pushEnabled": "Push peramban diaktifkan untuk instans ini",
+      "pushDisabled": "Push peramban dinonaktifkan untuk instans ini",
+      "pushToggleFailed": "Tidak dapat mengubah pengaturan push peramban",
+      "rotated": "{count, plural, =0 {Pasangan kunci dirotasi} other {Pasangan kunci dirotasi; # perangkat harus mendaftar ulang}}",
+      "rotateFailed": "Tidak dapat merotasi pasangan kunci"
+    }
+  },
+  "backupsPage": {
+    "title": "Cadangan",
+    "subtitle": "Berkas cadangan terjadwal dan terkompresi berisi catatan keuangan setiap akun.",
+    "scope": {
+      "heading": "Bukan cadangan basis data lengkap",
+      "perUser": "Sesuai jadwal di bawah, server menulis satu berkas cadangan terkompresi berisi catatan keuangan setiap akun dan menghapus yang lebih lama sesuai kebijakan retensi. Semua akun aktif tercakup.",
+      "notFullDatabase": "Ini bukan dump PostgreSQL: skema, konfigurasi server, dan apa pun di luar catatan keuangan sebuah akun tidak ikut tersimpan. Untuk pemulihan bencana seluruh instans, cadangkan basis data dan penyimpanan lampiran dengan perkakas Anda sendiri."
+    },
+    "demoRestricted": {
+      "heading": "Dibatasi dalam Mode Demo",
+      "body": "Konfigurasi pencadangan otomatis dinonaktifkan dalam mode demo."
     }
   }
 }

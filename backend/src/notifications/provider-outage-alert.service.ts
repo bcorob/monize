@@ -1,12 +1,25 @@
-import { Injectable, Logger } from "@nestjs/common";
+import { forwardRef, Inject, Injectable, Logger } from "@nestjs/common";
 import { Cron } from "@nestjs/schedule";
 import { DataSource } from "typeorm";
 import { I18nService } from "nestjs-i18n";
 import { withScopedDb } from "../common/db/scoped-db";
 import { returnedRows } from "../common/db/query-result";
 import { withSystemContext } from "../common/db/with-context";
-import { EmailT, emailTranslator } from "../i18n/email-translator";
+import {
+  EmailT,
+  emailTranslator,
+  englishEmailT,
+} from "../i18n/email-translator";
+import { SystemAlertService } from "../system-alerts/system-alert.service";
+import {
+  NotificationSeverity,
+  NotificationType,
+} from "../notification-center/entities/notification.entity";
 import { UserPreference } from "../users/entities/user-preference.entity";
+import {
+  AdminRecipient,
+  queryAdminRecipients,
+} from "../users/admin-recipients.util";
 import { resolveUserEmailLocale } from "../i18n/resolve-user-email-locale";
 import { providerLabel } from "../provider-health/providers";
 import { EmailService } from "./email.service";
@@ -126,19 +139,21 @@ export class ProviderOutageAlertService {
     private readonly dataSource: DataSource,
     private readonly emailService: EmailService,
     private readonly i18n: I18nService,
+    @Inject(forwardRef(() => SystemAlertService))
+    private readonly systemAlerts: SystemAlertService,
   ) {}
 
   /**
    * Cross-user work with no request behind it, so it seeds its own system
    * context. Every ten minutes: the gate is fifteen, so an outage is reported
    * between fifteen and twenty-five minutes in.
+   *
+   * Deliberately not gated on SMTP being configured: the claim also produces
+   * the in-app PROVIDER_OUTAGE/PROVIDER_RECOVERED alert rows, which are the
+   * delivery when email cannot be. The email leg skips inside `deliver`.
    */
   @Cron("*/10 * * * *")
   async sweepProviderHealth(): Promise<void> {
-    if (!this.emailService.getStatus().configured) {
-      this.logger.debug("SMTP not configured, skipping provider health alerts");
-      return;
-    }
     await withSystemContext(() => this.sweepWithinContext());
   }
 
@@ -190,15 +205,19 @@ export class ProviderOutageAlertService {
   private async notifyOutage(row: HealthRow): Promise<void> {
     // Recipients first, and the claim only if there are any: the claim is
     // consumed once and never retried, so taking it before knowing anybody can
-    // be told would destroy the episode's only notice. The `WHERE` below is
-    // still the authority on whether the notice is owed -- this is a local
-    // pre-filter, so a row that is merely already-notified costs no query.
+    // be told would destroy the episode's only notice. "Anybody" means any
+    // active administrator -- the in-app alert row reaches admins whose email
+    // is off, so only a deployment with no admins at all stands down here.
+    // The `WHERE` below is still the authority on whether the notice is owed
+    // -- this is a local pre-filter, so a row that is merely already-notified
+    // costs no query.
     if (!this.outageMightBeDue(row)) return;
-    const recipients = await this.administrators();
-    if (recipients.length === 0) {
+    const admins = await this.activeAdmins();
+    if (admins.length === 0) {
       this.reportNoRecipients(row.provider, "is down");
       return;
     }
+    const recipients = emailableRecipients(admins);
 
     // `returnedRows`, not `result[0]`: TypeORM's postgres driver returns the
     // tuple `[rows, rowCount]` for an UPDATE -- with or without RETURNING -- so
@@ -235,6 +254,31 @@ export class ProviderOutageAlertService {
       : new Date();
     const outageMs = Date.now() - startedAt.getTime();
     const label = providerLabel(won.provider);
+
+    // The in-app companion rows, before the emails: they are the delivery
+    // every admin gets (email off or SMTP unconfigured included). The claim
+    // above is the arbiter, so `email: false` -- the bespoke email below
+    // already carries this episode -- and the dedupe key names the episode so
+    // a re-notification after the quiet period lands as a fresh row.
+    await this.systemAlerts.raiseAdminAlert({
+      type: NotificationType.PROVIDER_OUTAGE,
+      severity: NotificationSeverity.WARNING,
+      title: `${label} is not responding`,
+      message:
+        `The market data provider ${label} has been unreachable since ` +
+        `${formatUtcMinute(startedAt)}. Prices and index data that depend on ` +
+        "it may be missing or out of date until it answers again.",
+      data: {
+        system: true,
+        provider: won.provider,
+        providerLabel: label,
+        since: startedAt.toISOString(),
+        recentFailures: Number(won.recent_failures) || 0,
+        lastFailureReason: won.last_failure_reason,
+      },
+      dedupeKey: `PROVIDER_OUTAGE:${won.provider}:${startedAt.toISOString()}`,
+      email: false,
+    });
 
     for (const recipient of recipients) {
       // The whole per-recipient body is isolated, not just the send: resolving
@@ -274,13 +318,14 @@ export class ProviderOutageAlertService {
   /** Clear the episode's notice and send the all-clear that pairs with it. */
   private async notifyRecovery(row: HealthRow): Promise<void> {
     // Same reason as the outage path, and it bit harder here: clearing
-    // `outage_notified_at` with nobody to email destroyed the all-clear *and*
+    // `outage_notified_at` with nobody to tell destroyed the all-clear *and*
     // the record that an outage notice was owed one, silently.
-    const recipients = await this.administrators();
-    if (recipients.length === 0) {
+    const admins = await this.activeAdmins();
+    if (admins.length === 0) {
       this.reportNoRecipients(row.provider, "is answering again");
       return;
     }
+    const recipients = emailableRecipients(admins);
 
     // The same driver-shape trap as the outage claim above: an UPDATE's rows
     // arrive inside `[rows, rowCount]`.
@@ -309,6 +354,33 @@ export class ProviderOutageAlertService {
       ? new Date(won.outage_started_at)
       : null;
     const label = providerLabel(won.provider);
+    const durationMs = startedAt
+      ? restoredAt.getTime() - startedAt.getTime()
+      : 0;
+
+    // The in-app all-clear that pairs with the outage row. Keyed on the same
+    // episode identity (its start) so the pair shares a suffix; `restoredAt`
+    // is the fallback for a row whose start the upsert lost.
+    await this.systemAlerts.raiseAdminAlert({
+      type: NotificationType.PROVIDER_RECOVERED,
+      severity: NotificationSeverity.SUCCESS,
+      title: `${label} is answering again`,
+      message:
+        `The market data provider ${label} answered again at ` +
+        `${formatUtcMinute(restoredAt)}. The outage lasted ` +
+        `${formatOutageDuration(durationMs, englishEmailT)}.`,
+      data: {
+        system: true,
+        provider: won.provider,
+        providerLabel: label,
+        restoredAt: restoredAt.toISOString(),
+        durationMs,
+      },
+      dedupeKey:
+        `PROVIDER_RECOVERED:${won.provider}:` +
+        (startedAt ?? restoredAt).toISOString(),
+      email: false,
+    });
 
     for (const recipient of recipients) {
       await this.deliver(recipient, async () => {
@@ -358,46 +430,24 @@ export class ProviderOutageAlertService {
     if (this.noRecipientsReported.has(provider)) return;
     this.noRecipientsReported.add(provider);
     this.logger.warn(
-      `${providerLabel(provider)} ${what}, and no administrator has an email ` +
-        "address with email notifications enabled; nobody was told. The alert " +
-        "stays owed, so it is sent once a recipient exists.",
+      `${providerLabel(provider)} ${what}, and this deployment has no active ` +
+        "administrator; nobody was told. The alert stays owed, so it is " +
+        "raised once an administrator exists.",
     );
   }
 
   /**
-   * The administrators who accept email.
-   *
-   * A provider outage is a deployment-wide operational fact, not one user's
-   * finance: it goes to whoever administers the install, which on a personal
-   * deployment is its single user. Delegate-only identities have no inbox of
-   * their own to speak of and are excluded, as they are from admin user
-   * management.
+   * Every active administrator -- the audience of the in-app alert rows. The
+   * predicate lives in `queryAdminRecipients` (`users/admin-recipients.util.ts`),
+   * shared with `SystemAlertService`; the email leg narrows this list through
+   * `emailableRecipients` below.
    */
-  private async administrators(): Promise<Recipient[]> {
-    const rows: Array<{
-      id: string;
-      email: string;
-      first_name: string | null;
-    }> = await withScopedDb(this.dataSource, (manager) =>
-      manager.query(
-        `SELECT u.id, u.email, u.first_name
-             FROM users u
-             LEFT JOIN user_preferences p ON p.user_id = u.id
-            WHERE u.role = 'admin'
-              AND u.is_active = true
-              AND u.is_delegate_only = false
-              AND u.email IS NOT NULL
-              AND u.email <> ''
-              AND COALESCE(p.notification_email, true) = true
-            ORDER BY u.created_at`,
-      ),
+  private async activeAdmins(): Promise<AdminRecipient[]> {
+    const admins = await withScopedDb(this.dataSource, (manager) =>
+      queryAdminRecipients(manager),
     );
-    if (rows.length > 0) this.noRecipientsReported.clear();
-    return rows.map((row) => ({
-      userId: row.id,
-      email: row.email,
-      firstName: row.first_name ?? "",
-    }));
+    if (admins.length > 0) this.noRecipientsReported.clear();
+    return admins;
   }
 
   /** The recipient's own locale, never the locale of whoever noticed. */
@@ -421,6 +471,15 @@ export class ProviderOutageAlertService {
     recipient: Recipient,
     build: () => Promise<{ subject: string; html: string }>,
   ): Promise<void> {
+    // The SMTP gate lives here, not at the top of the sweep: the claim must
+    // still be consumed on an email-less deployment because it also produces
+    // the in-app alert rows, which are the delivery in that case.
+    if (!this.emailService.getStatus().configured) {
+      this.logger.debug(
+        `SMTP not configured; provider health email to ${recipient.userId} skipped`,
+      );
+      return;
+    }
     try {
       const { subject, html } = await build();
       await this.emailService.sendMail(recipient.email, subject, html);
@@ -431,4 +490,19 @@ export class ProviderOutageAlertService {
       );
     }
   }
+}
+
+/** The subset of admins the email leg can reach, in `Recipient` shape. */
+function emailableRecipients(admins: AdminRecipient[]): Recipient[] {
+  return admins.flatMap((admin) =>
+    admin.emailEnabled && admin.email !== null
+      ? [
+          {
+            userId: admin.userId,
+            email: admin.email,
+            firstName: admin.firstName,
+          },
+        ]
+      : [],
+  );
 }

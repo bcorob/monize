@@ -77,17 +77,21 @@ export function isValidIanaTimezone(value: unknown): value is string {
 }
 
 /**
- * Compute today's date as YYYY-MM-DD in the given IANA timezone.
+ * Compute today's date as YYYY-MM-DD in the given IANA timezone, or, with `at`,
+ * the calendar date that instant falls on in that zone.
  * Returns null if the timezone is invalid.
  */
-export function todayInTimezone(timezone: string): string | null {
+export function todayInTimezone(
+  timezone: string,
+  at: Date = new Date(),
+): string | null {
   try {
     const parts = new Intl.DateTimeFormat("en-CA", {
       timeZone: timezone,
       year: "numeric",
       month: "2-digit",
       day: "2-digit",
-    }).formatToParts(new Date());
+    }).formatToParts(at);
     const y = parts.find((p) => p.type === "year")?.value;
     const m = parts.find((p) => p.type === "month")?.value;
     const d = parts.find((p) => p.type === "day")?.value;
@@ -96,6 +100,19 @@ export function todayInTimezone(timezone: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * Today in `timezone`, or in UTC when the zone does not resolve: what a cron
+ * dates a per-user decision by when the stored zone cannot be trusted.
+ */
+export function todayInTimezoneOrUtc(
+  timezone: string,
+  at: Date = new Date(),
+): string {
+  return (
+    todayInTimezone(timezone, at) ?? (todayInTimezone("UTC", at) as string)
+  );
 }
 
 /**

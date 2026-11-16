@@ -39,6 +39,11 @@ export const userSettingsApi = {
 
   updatePreferences: async (data: UpdatePreferencesData): Promise<UserPreferences> => {
     const response = await apiClient.patch<UserPreferences>('/users/preferences', data);
+    // Every cached figure is denominated in the reporting currency and dated by
+    // the reader's today, and no payload names which it was computed for.
+    if (data.defaultCurrency !== undefined || data.timezone !== undefined) {
+      clearAllCache();
+    }
     return response.data;
   },
 

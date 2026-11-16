@@ -21,6 +21,30 @@ codec tests; they contain no real personal financial data.
 | `money2008.mny` | Money Plus / Sunset | new (SHA-1 digest, `0x298` flag bit `0x20` set) | none |
 | `money2008-pwd.mny` | Money Plus / Sunset | new (SHA-1 digest) | `Test12345` |
 | `sample-cd-redemption.mny` | Money Plus / Sunset | new (SHA-1 digest) | none |
+| `sample-money99.mny` | Money 99 | none (plain Jet 3) | none |
+| `sample-money99-investments.mny` | Money 99 | none (plain Jet 3) | none |
+
+`sample-money99.mny` is a Money 99 (Spanish locale) file with fabricated data, built by
+the author of the community converter
+[catrucho/Money-import](https://github.com/catrucho/Money-import) and contributed
+to Monize with their permission. It is the only Jet 3 fixture: banking rows, a
+split, transfers, a loan with its payment history, scheduled bills, a voided row,
+one row of every investment action Money 99 offers short of interest and short
+sales, and employee stock option events. Money 99's own account list for it is
+the ground truth `mny-parser.service.spec.ts` asserts (Chase Bank 2,105.00, card
+-185.00, investment cash 22,658.00, savings 11,010.00, loan -4,209.39, 11 AMZN),
+along with its four monthly bills; its scheduled loan payment has no paying
+account and is skipped.
+Its EUR->USD rate of 112 is a typo in the source file, kept as found.
+
+`sample-money99-investments.mny` is the same author's later copy of that file,
+built to reproduce what their real Money 99 file raised on import: a bond and a
+CD bought and paying interest (`act` 2), more other income and expenses, extra
+and split loan payments from the bank account, and a second 1:2 AMZN split.
+Recording that split rewrote every earlier AMZN trade in place (quantities
+doubled, prices halved), which is why the two files' AMZN rows differ. The
+balances `mny-parser.service.spec.ts` asserts for it are the sums of Money's own
+register rows per account, not yet Money 99's account list.
 
 `sample-cd-redemption.mny` was purpose-built for Monize with synthetic data and
 contains no personal financial data. Its "Sample 3-month CD" activity is a
@@ -51,4 +75,6 @@ crashed the PR #192 proof of concept, and it is the fixture that guards
 The five `money20*.mny` files are Apache License 2.0, Copyright the
 jackcess-encrypt authors. See <https://www.apache.org/licenses/LICENSE-2.0>.
 They are retained here under that licence. `sample-cd-redemption.mny` is part of
-Monize and is licensed under the repository's AGPL-3.0-only licence.
+Monize and is licensed under the repository's AGPL-3.0-only licence, as is
+`sample-money99.mny` and `sample-money99-investments.mny`, contributed for that
+purpose.

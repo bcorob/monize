@@ -5,12 +5,20 @@ import { useTranslations } from 'next-intl';
 import { useClickOutside } from '@/hooks/useClickOutside';
 import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
+import { ChevronDownIcon, PlusIcon, XMarkIcon } from '@heroicons/react/24/outline';
 
 export interface MultiSelectOption {
   value: string;
   label: string;
   parentId?: string | null;  // For hierarchical options
   children?: MultiSelectOption[];  // Child options
+  /**
+   * Close a group after this option: the row that follows it is drawn with a
+   * rule above it. Suppressed while searching, because the list is flattened
+   * to matches and the boundary the rule marks no longer holds, and it draws
+   * nothing when this option is the last one left.
+   */
+  separatorAfter?: boolean;
 }
 
 interface MultiSelectProps {
@@ -309,20 +317,10 @@ export function MultiSelect({
           )}>
             {displayText}
           </span>
-          <svg
-            className={cn(
-              'h-5 w-5 text-gray-400 transition-transform',
-              isOpen && 'rotate-180'
-            )}
-            viewBox="0 0 20 20"
-            fill="currentColor"
-          >
-            <path
-              fillRule="evenodd"
-              d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"
-              clipRule="evenodd"
-            />
-          </svg>
+          <ChevronDownIcon
+            className={cn('h-5 w-5 text-gray-400 transition-transform', isOpen && 'rotate-180')}
+            aria-hidden="true"
+          />
         </div>
         {sizerLabels.length > 0 && (
           /* Invisible, zero-height copies of the widest labels: they give the
@@ -331,13 +329,26 @@ export function MultiSelect({
              browser still measures it in the real font, but it cannot be
              found by text queries, duplicate what screen readers announce, or
              be caught by the user's find-in-page. pr-7 stands in for the
-             chevron and its gap. */
+             chevron and its gap.
+
+             Each copy is capped at `100vw - 12rem`, which is the sizer's whole
+             safety net: the copies never wrap, so an unbounded one makes the
+             trigger's *minimum* width the longest label and no ancestor can
+             shrink it -- a security named beyond the width of a phone pushed
+             the control, and the toolbar around it, off the right of the
+             screen. The cap is a definite length, so it clamps that intrinsic
+             contribution; 12rem clears the widest page and card padding this
+             app puts around a toolbar (lg:px-12 plus p-4), so the trigger
+             stays inside the viewport at every breakpoint. Below the cap
+             nothing changes -- the control is still as wide as its longest
+             option -- and above it the trigger shrinks and the selected label
+             truncates, which is what the visible row is already built for. */
           <div aria-hidden="true" data-testid="multiselect-sizer" className="h-0 overflow-hidden">
             {sizerLabels.map(sizerLabel => (
               <div
                 key={sizerLabel}
                 data-sizer={sizerLabel}
-                className="invisible whitespace-nowrap pr-7 after:content-[attr(data-sizer)]"
+                className="invisible max-w-[calc(100vw-12rem)] whitespace-nowrap pr-7 after:content-[attr(data-sizer)]"
               />
             ))}
           </div>
@@ -380,11 +391,10 @@ export function MultiSelect({
                       setSearchText('');
                       searchInputRef.current?.focus();
                     }}
+                    aria-label={t('multiSelect.clearSearch')}
                     className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
                   >
-                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                    </svg>
+                    <XMarkIcon className="w-4 h-4" aria-hidden="true" />
                   </button>
                 )}
               </div>
@@ -422,7 +432,7 @@ export function MultiSelect({
                     {t('multiSelect.noOptions')}
                   </div>
                 )}
-                {filteredOptions.map((option) => {
+                {filteredOptions.map((option, index) => {
                   const selectionState = getSelectionState(option.value, option.hasChildren);
                   const isChecked = selectionState === 'all';
                   const isIndeterminate = selectionState === 'some';
@@ -431,13 +441,20 @@ export function MultiSelect({
                   const isSearching = searchText.length > 0;
                   const parentLabel = option.parentValue ? optionMap.get(option.parentValue)?.label : null;
 
+                  // The rule belongs to the row below the boundary rather than
+                  // to a divider element of its own, so it cannot outlive the
+                  // rows it separates when a search empties one side.
+                  const startsGroup =
+                    !isSearching && filteredOptions[index - 1]?.separatorAfter === true;
+
                   return (
                     <label
                       key={option.value}
                       className={cn(
                         'flex items-center px-3 py-2 cursor-pointer',
                         'transition-colors motion-reduce:transition-none hover:bg-gray-100 dark:hover:bg-gray-700',
-                        option.hasChildren && 'font-medium'
+                        option.hasChildren && 'font-medium',
+                        startsGroup && 'mt-1 border-t border-gray-200 dark:border-gray-700'
                       )}
                       style={{ paddingLeft: isSearching ? '0.75rem' : `${(option.level * 1.25) + 0.75}rem` }}
                     >
@@ -483,14 +500,12 @@ export function MultiSelect({
                   setSearchText('');
                 }}
                 className={cn(
-                  'flex items-center w-full px-3 py-2 text-sm',
+                  'flex items-center gap-2 w-full px-3 py-2 text-sm',
                   'text-green-700 dark:text-green-400',
                   'hover:bg-green-50 dark:hover:bg-green-900/30',
                 )}
               >
-                <svg className="w-4 h-4 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
+                <PlusIcon className="w-4 h-4" aria-hidden="true" />
                 {createNewLabel}
               </button>
             </div>

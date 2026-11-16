@@ -7,6 +7,7 @@
     "filterAll": "Todas ({count})",
     "filterExpenses": "Despesas ({count})",
     "filterIncome": "Receitas ({count})",
+    "typeFilterLabel": "Tipo",
     "modalTitleNew": "Nova categoria",
     "modalTitleEdit": "Editar categoria",
     "countSingle": "1 categoria",
@@ -54,6 +55,12 @@
     "typeExpense": "Despesa",
     "typeIncome": "Receita",
     "typeInherited": "Tipo herdado da categoria-mãe",
+    "autoSignLabel": "Sinal automático",
+    "autoSignOn": "Ativado",
+    "autoSignOff": "Desativado",
+    "autoSignInherit": "Herdar da categoria principal",
+    "autoSignInheritedFrom": "Herdado da categoria principal ({name}): atualmente {state}",
+    "autoSignHelp": "Quando ativado, o valor digitado fica negativo em uma categoria de despesa e positivo em uma categoria de receita. Desative para manter o sinal exatamente como você digitar.",
     "colourLabel": "Cor",
     "colourInherit": "Herdar da categoria-mãe",
     "colourNone": "Sem cor",
@@ -65,8 +72,8 @@
     "submitUpdate": "Atualizar categoria"
   },
   "list": {
-    "emptyHeading": "Sem categorias",
-    "emptyDescription": "Comece criando uma nova categoria.",
+    "emptyHeading": "Nenhuma categoria encontrada",
+    "emptyDescription": "Nenhuma categoria corresponde à pesquisa ou ao filtro atual.",
     "colName": "Nome",
     "colType": "Tipo",
     "colCount": "Contagem",
@@ -79,7 +86,7 @@
     "viewTransactionsTitle": "Ver transações nesta categoria"
   },
   "deleteDialog": {
-    "title": "Excluir \"{name}\"?",
+    "title": "Excluir \"{name}\"",
     "checkingUsage": "Verificando uso...",
     "usedBy": "Esta categoria é utilizada por {count, plural, one {# item} other {# itens}} (transações e/ou faturas e depósitos agendados).",
     "reassignLabel": "Reatribuir a:",

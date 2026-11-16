@@ -92,8 +92,11 @@ describe('CategoryAutoAssignDialog', () => {
 
   it('renders dialog when open', () => {
     render(<CategoryAutoAssignDialog isOpen={true} onClose={onClose} onSuccess={onSuccess} />);
-    expect(screen.getByText('Auto-Assign Default Categories')).toBeInTheDocument();
-    expect(screen.getByText('How it works')).toBeInTheDocument();
+    // Titled through Modal: named by its title, with how it works as the
+    // title's tooltip instead of a box under it.
+    const dialog = screen.getByRole('dialog', { name: 'Auto-Assign Default Categories' });
+    expect(dialog).toHaveAccessibleDescription(/analyzes your transaction history/);
+    expect(screen.queryByText('How it works')).not.toBeInTheDocument();
   });
 
   it('shows settings controls', () => {
@@ -339,6 +342,15 @@ describe('CategoryAutoAssignDialog', () => {
           expect(cb).toBeChecked();
         });
       });
+    });
+  });
+
+  it('names the column of selection switches in a visible header', async () => {
+    mockGetCategorySuggestions.mockResolvedValue(sampleSuggestions);
+    render(<CategoryAutoAssignDialog isOpen={true} onClose={onClose} onSuccess={onSuccess} />);
+    fireEvent.click(screen.getByText('Preview Suggestions'));
+    await waitFor(() => {
+      expect(screen.getByRole('columnheader', { name: 'Assign' })).toBeInTheDocument();
     });
   });
 

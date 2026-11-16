@@ -8,10 +8,14 @@
  *  - `crossCurrencyTransfer` -- a scheduled transfer arriving from an account in
  *    another currency. The amount that lands here is resolved when it posts, so
  *    the projection cannot state it in advance.
+ *  - `unknownEstimate` -- an estimated bill (issue #2096) whose estimate is
+ *    unknown: no payment to estimate from, or, with a pair, a payment in a
+ *    currency with no current rate.
  */
 export type BalanceForecastGapReason =
   | 'unresolvedSettlementRate'
-  | 'crossCurrencyTransfer';
+  | 'crossCurrencyTransfer'
+  | 'unknownEstimate';
 
 /** One schedule the projection could not price, and why. */
 export interface BalanceForecastGap {
@@ -20,6 +24,17 @@ export interface BalanceForecastGap {
   reason: BalanceForecastGapReason;
   fromCurrency: string | null;
   toCurrency: string | null;
+}
+
+/**
+ * The overdue occurrences a projection applied on its first day, tomorrow
+ * (discussion #1784): due before today, neither posted nor skipped.
+ */
+export interface BalanceForecastOverdue {
+  date: string;
+  count: number;
+  /** Their signed net effect on the account. */
+  amount: number;
 }
 
 /** A projected balance series from GET /accounts/:id/balance-forecast. */
@@ -37,4 +52,9 @@ export interface BalanceForecast {
   complete: boolean;
   /** The schedules behind an incomplete forecast, so the UI can say which. */
   gaps: BalanceForecastGap[];
+  /**
+   * `null` when nothing was overdue or the projection was withheld; absent from
+   * a backend that predates the field, which carried nothing overdue.
+   */
+  overdue?: BalanceForecastOverdue | null;
 }

@@ -1,14 +1,26 @@
 import { Test, TestingModule } from "@nestjs/testing";
-import { DataSource } from "typeorm";
-import { BadRequestException } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { DataSource, FindOperator, QueryFailedError } from "typeorm";
+import { BadRequestException, ConflictException } from "@nestjs/common";
 import * as bcrypt from "bcryptjs";
-import { AuthEmailService } from "./auth-email.service";
+import {
+  AuthEmailService,
+  FORGOT_PASSWORD_SCOPE,
+  VERIFICATION_EMAIL_SCOPE,
+} from "./auth-email.service";
 import { User } from "../users/entities/user.entity";
 import { TrustedDevice } from "../users/entities/trusted-device.entity";
+import { PersonalAccessToken } from "./entities/personal-access-token.entity";
+import { OAUTH_GRANT_REVOKER } from "./credential-revocation";
 import { PasswordBreachService } from "./password-breach.service";
 import { TokenService } from "./token.service";
 import { hashToken } from "./crypto.util";
 import { createScopedDbMocks } from "../test-helpers/scoped-db-testing";
+import {
+  authAttemptCounterProvider,
+  createAuthAttemptCounterMock,
+  type AuthAttemptCounterMock,
+} from "../test-helpers/auth-attempt-counter-testing";
 
 jest.mock("../common/db/scoped-db", () =>
   jest.requireActual("../test-helpers/scoped-db-testing").scopedDbMockModule(),
@@ -16,10 +28,15 @@ jest.mock("../common/db/scoped-db", () =>
 
 describe("AuthEmailService", () => {
   let service: AuthEmailService;
+  let attemptCounters: AuthAttemptCounterMock;
   let usersRepository: Record<string, jest.Mock>;
   let trustedDevicesRepository: Record<string, jest.Mock>;
+  let patRepository: Record<string, jest.Mock>;
+  let oauthProviderService: { revokeAllForUser: jest.Mock };
   let passwordBreachService: { isBreached: jest.Mock };
   let tokenService: { revokeAllUserRefreshTokens: jest.Mock };
+
+  let configValues: Record<string, string>;
 
   const mockUser = {
     id: "user-1",
@@ -32,6 +49,7 @@ describe("AuthEmailService", () => {
   };
 
   beforeEach(async () => {
+    configValues = {};
     usersRepository = {
       findOne: jest.fn(),
       save: jest.fn(),
@@ -42,6 +60,9 @@ describe("AuthEmailService", () => {
       delete: jest.fn(),
     };
 
+    patRepository = { update: jest.fn() };
+    oauthProviderService = { revokeAllForUser: jest.fn().mockResolvedValue(0) };
+
     passwordBreachService = {
       isBreached: jest.fn(),
     };
@@ -50,6 +71,8 @@ describe("AuthEmailService", () => {
       revokeAllUserRefreshTokens: jest.fn(),
     };
 
+    attemptCounters = createAuthAttemptCounterMock();
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         {
@@ -57,6 +80,7 @@ describe("AuthEmailService", () => {
           useValue: createScopedDbMocks([
             [User, usersRepository as never],
             [TrustedDevice, trustedDevicesRepository as never],
+            [PersonalAccessToken, patRepository as never],
           ]).dataSource,
         },
         AuthEmailService,
@@ -68,14 +92,20 @@ describe("AuthEmailService", () => {
           provide: TokenService,
           useValue: tokenService,
         },
+        authAttemptCounterProvider(attemptCounters),
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn((key: string, fallback?: string) =>
+              key in configValues ? configValues[key] : fallback,
+            ),
+          },
+        },
+        { provide: OAUTH_GRANT_REVOKER, useValue: oauthProviderService },
       ],
     }).compile();
 
     service = module.get<AuthEmailService>(AuthEmailService);
-  });
-
-  afterEach(() => {
-    service.onModuleDestroy();
   });
 
   describe("generateResetToken", () => {
@@ -129,6 +159,26 @@ describe("AuthEmailService", () => {
     });
   });
 
+  describe("generateResetToken for an SSO account with a password", () => {
+    const ssoUser = { ...mockUser, authProvider: "oidc" };
+
+    it("returns null while OIDC_ALLOW_PASSWORD_LOGIN is off", async () => {
+      usersRepository.findOne.mockResolvedValue({ ...ssoUser });
+
+      expect(await service.generateResetToken("test@example.com")).toBeNull();
+      expect(usersRepository.save).not.toHaveBeenCalled();
+    });
+
+    it("issues a token while OIDC_ALLOW_PASSWORD_LOGIN is on", async () => {
+      configValues.OIDC_ALLOW_PASSWORD_LOGIN = "true";
+      usersRepository.findOne.mockResolvedValue({ ...ssoUser });
+
+      expect(
+        await service.generateResetToken("test@example.com"),
+      ).not.toBeNull();
+    });
+  });
+
   describe("resetPassword", () => {
     let mockExecute: jest.Mock;
     let mockReturning: jest.Mock;
@@ -148,6 +198,28 @@ describe("AuthEmailService", () => {
       usersRepository.createQueryBuilder.mockReturnValue({
         update: mockUpdate,
       });
+    });
+
+    it("redeems a token on an SSO account only while OIDC_ALLOW_PASSWORD_LOGIN is on", async () => {
+      mockExecute.mockResolvedValue({ affected: 0, raw: [] });
+      passwordBreachService.isBreached.mockResolvedValue(false);
+
+      await expect(
+        service.resetPassword("t", "NewSecurePassword123!"),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockAndWhere).toHaveBeenLastCalledWith(
+        expect.stringContaining("authProvider <> 'oidc'"),
+        expect.objectContaining({ oidcAllowed: false }),
+      );
+
+      configValues.OIDC_ALLOW_PASSWORD_LOGIN = "true";
+      await expect(
+        service.resetPassword("t", "NewSecurePassword123!"),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockAndWhere).toHaveBeenLastCalledWith(
+        expect.stringContaining("authProvider <> 'oidc'"),
+        expect.objectContaining({ oidcAllowed: true }),
+      );
     });
 
     it("should hash password, update user, and revoke refresh tokens on success", async () => {
@@ -179,9 +251,10 @@ describe("AuthEmailService", () => {
       expect(mockWhere).toHaveBeenCalledWith("resetToken = :hashedToken", {
         hashedToken: hashToken("valid-token"),
       });
-      expect(mockAndWhere).toHaveBeenCalledWith("resetTokenExpiry > :now", {
-        now: expect.any(Date),
-      });
+      expect(mockAndWhere).toHaveBeenCalledWith(
+        expect.stringContaining("resetTokenExpiry > :now"),
+        { now: expect.any(Date), oidcAllowed: false },
+      );
       expect(mockReturning).toHaveBeenCalledWith("id");
 
       // Verify password was hashed with bcrypt
@@ -195,6 +268,71 @@ describe("AuthEmailService", () => {
       // Verify refresh tokens revoked
       expect(tokenService.revokeAllUserRefreshTokens).toHaveBeenCalledWith(
         userId,
+      );
+    });
+
+    it("revokes PATs, trusted devices, sessions and OAuth grants on success", async () => {
+      // A reset revoked the web sessions only: a personal access token or an
+      // MCP client's OAuth grant kept working for whoever held it.
+      mockExecute.mockResolvedValue({ affected: 1, raw: [{ id: "user-1" }] });
+      passwordBreachService.isBreached.mockResolvedValue(false);
+
+      await service.resetPassword("valid-token", "NewSecurePassword123!");
+
+      expect(patRepository.update).toHaveBeenCalledWith(
+        { userId: "user-1", isRevoked: false },
+        { isRevoked: true },
+      );
+      expect(trustedDevicesRepository.delete).toHaveBeenCalledWith({
+        userId: "user-1",
+      });
+      expect(tokenService.revokeAllUserRefreshTokens).toHaveBeenCalledWith(
+        "user-1",
+      );
+      expect(oauthProviderService.revokeAllForUser).toHaveBeenCalledWith(
+        "user-1",
+      );
+    });
+
+    it("revokes nothing when the token is invalid", async () => {
+      mockExecute.mockResolvedValue({ affected: 0, raw: [] });
+      passwordBreachService.isBreached.mockResolvedValue(false);
+
+      await expect(
+        service.resetPassword("invalid-token", "NewPassword123!"),
+      ).rejects.toThrow(BadRequestException);
+
+      expect(patRepository.update).not.toHaveBeenCalled();
+      expect(trustedDevicesRepository.delete).not.toHaveBeenCalled();
+      expect(oauthProviderService.revokeAllForUser).not.toHaveBeenCalled();
+    });
+
+    it("reports a failed OAuth sweep instead of a clean reset", async () => {
+      mockExecute.mockResolvedValue({ affected: 1, raw: [{ id: "user-1" }] });
+      passwordBreachService.isBreached.mockResolvedValue(false);
+      oauthProviderService.revokeAllForUser.mockRejectedValue(
+        new Error("db down"),
+      );
+
+      await expect(
+        service.resetPassword("valid-token", "NewPassword123!"),
+      ).rejects.toThrow("db down");
+    });
+
+    it("clears the login lockout in the same statement that sets the password", async () => {
+      // A reset is the owner's way out of a lockout somebody else can keep
+      // renewing by failing a password once per window. Before, the counter and
+      // the lock survived the reset, so the new password was refused too.
+      mockExecute.mockResolvedValue({ affected: 1, raw: [{ id: "user-1" }] });
+      passwordBreachService.isBreached.mockResolvedValue(false);
+
+      await service.resetPassword("valid-token", "NewSecurePassword123!");
+
+      expect(mockSet).toHaveBeenCalledWith(
+        expect.objectContaining({
+          failedLoginAttempts: 0,
+          lockedUntil: null,
+        }),
       );
     });
 
@@ -245,52 +383,68 @@ describe("AuthEmailService", () => {
   });
 
   describe("checkForgotPasswordEmailLimit", () => {
-    it("should allow first request and set count to 1", () => {
-      const result = service.checkForgotPasswordEmailLimit("test@example.com");
-
-      expect(result).toBe(true);
+    it("should allow first request and set count to 1", async () => {
+      await expect(
+        service.checkForgotPasswordEmailLimit("test@example.com"),
+      ).resolves.toBe(true);
     });
 
-    it("should allow subsequent requests within the limit", () => {
-      service.checkForgotPasswordEmailLimit("test@example.com");
-      const result = service.checkForgotPasswordEmailLimit("test@example.com");
+    it("should allow subsequent requests within the limit", async () => {
+      await service.checkForgotPasswordEmailLimit("test@example.com");
 
-      expect(result).toBe(true);
+      await expect(
+        service.checkForgotPasswordEmailLimit("test@example.com"),
+      ).resolves.toBe(true);
     });
 
-    it("should block at the limit (3rd request)", () => {
-      service.checkForgotPasswordEmailLimit("test@example.com");
-      service.checkForgotPasswordEmailLimit("test@example.com");
-      service.checkForgotPasswordEmailLimit("test@example.com");
+    it("should block at the limit (3rd request)", async () => {
+      for (let i = 0; i < 3; i++) {
+        await service.checkForgotPasswordEmailLimit("test@example.com");
+      }
 
-      const result = service.checkForgotPasswordEmailLimit("test@example.com");
-
-      expect(result).toBe(false);
+      await expect(
+        service.checkForgotPasswordEmailLimit("test@example.com"),
+      ).resolves.toBe(false);
     });
 
-    it("should normalize email case", () => {
-      service.checkForgotPasswordEmailLimit("Test@Example.COM");
-      service.checkForgotPasswordEmailLimit("test@example.com");
-      service.checkForgotPasswordEmailLimit("TEST@EXAMPLE.COM");
+    it("should normalize email case", async () => {
+      await service.checkForgotPasswordEmailLimit("Test@Example.COM");
+      await service.checkForgotPasswordEmailLimit("test@example.com");
+      await service.checkForgotPasswordEmailLimit("TEST@EXAMPLE.COM");
 
       // All three count as the same email, so the 4th should be blocked
-      const result = service.checkForgotPasswordEmailLimit("test@example.com");
-
-      expect(result).toBe(false);
+      await expect(
+        service.checkForgotPasswordEmailLimit("test@example.com"),
+      ).resolves.toBe(false);
     });
 
-    it("should reset and allow after window expires", () => {
-      // First, exhaust the limit
-      service.checkForgotPasswordEmailLimit("test@example.com");
-      service.checkForgotPasswordEmailLimit("test@example.com");
-      service.checkForgotPasswordEmailLimit("test@example.com");
+    // The scope and the key shape are the contract between replicas, and the
+    // key is hashed because this table has no owner column: a plaintext key
+    // would make it a list of who asked for a password reset.
+    it("counts under the documented scope, keyed by the hashed address", async () => {
+      await service.checkForgotPasswordEmailLimit("  Test@Example.COM ");
 
-      // Verify blocked
-      expect(service.checkForgotPasswordEmailLimit("test@example.com")).toBe(
-        false,
+      expect(attemptCounters.increment).toHaveBeenCalledWith(
+        FORGOT_PASSWORD_SCOPE,
+        hashToken("test@example.com"),
+        60 * 60 * 1000,
+        // "fixed" here, unlike the lockout counters: three sends an hour is
+        // three sends an hour, and a refused one must not extend the window.
+        "fixed",
       );
+      for (const [, key] of attemptCounters.increment.mock.calls) {
+        expect(key).not.toContain("@");
+      }
+    });
 
-      // Advance time past the 1-hour window
+    it("should reset and allow after window expires", async () => {
+      for (let i = 0; i < 3; i++) {
+        await service.checkForgotPasswordEmailLimit("test@example.com");
+      }
+      await expect(
+        service.checkForgotPasswordEmailLimit("test@example.com"),
+      ).resolves.toBe(false);
+
       const realDateNow = Date.now;
       const originalNow = Date.now();
       Date.now = jest.fn().mockReturnValue(
@@ -298,35 +452,42 @@ describe("AuthEmailService", () => {
       );
 
       try {
-        // Should reset and allow (covers lines 99-103)
-        const result =
-          service.checkForgotPasswordEmailLimit("test@example.com");
-
-        expect(result).toBe(true);
-
-        // Subsequent request should also be allowed (count reset to 1, now 2)
-        const result2 =
-          service.checkForgotPasswordEmailLimit("test@example.com");
-        expect(result2).toBe(true);
+        await expect(
+          service.checkForgotPasswordEmailLimit("test@example.com"),
+        ).resolves.toBe(true);
+        // Count restarted at 1, so the next one is allowed too.
+        await expect(
+          service.checkForgotPasswordEmailLimit("test@example.com"),
+        ).resolves.toBe(true);
       } finally {
         Date.now = realDateNow;
       }
     });
 
-    it("should track different emails independently", () => {
-      service.checkForgotPasswordEmailLimit("user1@example.com");
-      service.checkForgotPasswordEmailLimit("user1@example.com");
-      service.checkForgotPasswordEmailLimit("user1@example.com");
+    it("should track different emails independently", async () => {
+      for (let i = 0; i < 3; i++) {
+        await service.checkForgotPasswordEmailLimit("user1@example.com");
+      }
 
-      // user1 is at limit
-      expect(service.checkForgotPasswordEmailLimit("user1@example.com")).toBe(
-        false,
+      await expect(
+        service.checkForgotPasswordEmailLimit("user1@example.com"),
+      ).resolves.toBe(false);
+      await expect(
+        service.checkForgotPasswordEmailLimit("user2@example.com"),
+      ).resolves.toBe(true);
+    });
+
+    // The reason the counter moved onto a row: this process never saw the
+    // first three requests.
+    it("refuses on a count another replica wrote", async () => {
+      attemptCounters.rows.set(
+        `${FORGOT_PASSWORD_SCOPE}\u0000${hashToken("elsewhere@example.com")}`,
+        { count: 3, windowExpiresAt: new Date(Date.now() + 60 * 60 * 1000) },
       );
 
-      // user2 should still be allowed
-      expect(service.checkForgotPasswordEmailLimit("user2@example.com")).toBe(
-        true,
-      );
+      await expect(
+        service.checkForgotPasswordEmailLimit("elsewhere@example.com"),
+      ).resolves.toBe(false);
     });
   });
 
@@ -433,94 +594,245 @@ describe("AuthEmailService", () => {
   });
 
   describe("checkVerificationEmailLimit", () => {
-    it("allows the first 3 requests and blocks the 4th within the window", () => {
-      expect(service.checkVerificationEmailLimit("v@example.com")).toBe(true);
-      expect(service.checkVerificationEmailLimit("v@example.com")).toBe(true);
-      expect(service.checkVerificationEmailLimit("v@example.com")).toBe(true);
-      expect(service.checkVerificationEmailLimit("v@example.com")).toBe(false);
+    it("allows the first 3 requests and blocks the 4th within the window", async () => {
+      await expect(
+        service.checkVerificationEmailLimit("v@example.com"),
+      ).resolves.toBe(true);
+      await expect(
+        service.checkVerificationEmailLimit("v@example.com"),
+      ).resolves.toBe(true);
+      await expect(
+        service.checkVerificationEmailLimit("v@example.com"),
+      ).resolves.toBe(true);
+      await expect(
+        service.checkVerificationEmailLimit("v@example.com"),
+      ).resolves.toBe(false);
     });
 
-    it("resets and allows again after the window expires", () => {
-      service.checkVerificationEmailLimit("v2@example.com");
-      service.checkVerificationEmailLimit("v2@example.com");
-      service.checkVerificationEmailLimit("v2@example.com");
-      expect(service.checkVerificationEmailLimit("v2@example.com")).toBe(false);
+    it("resets and allows again after the window expires", async () => {
+      for (let i = 0; i < 3; i++) {
+        await service.checkVerificationEmailLimit("v2@example.com");
+      }
+      await expect(
+        service.checkVerificationEmailLimit("v2@example.com"),
+      ).resolves.toBe(false);
 
       const realDateNow = Date.now;
       Date.now = jest.fn().mockReturnValue(realDateNow() + 60 * 60 * 1000 + 1);
       try {
-        expect(service.checkVerificationEmailLimit("v2@example.com")).toBe(
-          true,
-        );
+        await expect(
+          service.checkVerificationEmailLimit("v2@example.com"),
+        ).resolves.toBe(true);
       } finally {
         Date.now = realDateNow;
       }
     });
 
-    it("tracks different emails independently and normalizes case", () => {
-      service.checkVerificationEmailLimit("A@Example.com");
-      service.checkVerificationEmailLimit("a@example.com");
-      service.checkVerificationEmailLimit("A@EXAMPLE.COM");
-      expect(service.checkVerificationEmailLimit("a@example.com")).toBe(false);
-      expect(service.checkVerificationEmailLimit("other@example.com")).toBe(
-        true,
+    it("tracks different emails independently and normalizes case", async () => {
+      await service.checkVerificationEmailLimit("A@Example.com");
+      await service.checkVerificationEmailLimit("a@example.com");
+      await service.checkVerificationEmailLimit("A@EXAMPLE.COM");
+
+      await expect(
+        service.checkVerificationEmailLimit("a@example.com"),
+      ).resolves.toBe(false);
+      await expect(
+        service.checkVerificationEmailLimit("other@example.com"),
+      ).resolves.toBe(true);
+    });
+
+    // A separate scope, so exhausting one endpoint's allowance never spends
+    // the other's for the same address.
+    it("counts under its own scope", async () => {
+      await service.checkVerificationEmailLimit("v3@example.com");
+
+      expect(attemptCounters.increment).toHaveBeenCalledWith(
+        VERIFICATION_EMAIL_SCOPE,
+        hashToken("v3@example.com"),
+        60 * 60 * 1000,
+        "fixed",
       );
+    });
+
+    it("does not share an allowance with forgot-password", async () => {
+      for (let i = 0; i < 3; i++) {
+        await service.checkVerificationEmailLimit("both@example.com");
+      }
+
+      await expect(
+        service.checkForgotPasswordEmailLimit("both@example.com"),
+      ).resolves.toBe(true);
     });
   });
 
-  describe("cleanup", () => {
-    it("should remove expired entries when cleanup runs", () => {
-      // Add entries
-      service.checkForgotPasswordEmailLimit("expired@example.com");
-      service.checkForgotPasswordEmailLimit("fresh@example.com");
+  /**
+   * An in-memory `users` table for the confirm path: `findOne` honours the
+   * token, expiry and email predicates the service passes, and the UPDATE only
+   * applies while the id, token hash and expiry still match -- the conditional
+   * write that makes the link single-use. A call-recording mock could not tell
+   * a second click from the first.
+   */
+  describe("confirmEmailChange", () => {
+    type Row = {
+      id: string;
+      email: string | null;
+      emailVerified: boolean;
+      pendingEmail: string | null;
+      emailChangeToken: string | null;
+      emailChangeTokenExpiry: Date | null;
+    };
+    let rows: Row[];
+    let failUpdateWith: unknown;
 
-      // Advance time so the first entry expires
-      const realDateNow = Date.now;
-      const originalNow = Date.now();
-      Date.now = jest.fn().mockReturnValue(originalNow + 60 * 60 * 1000 + 1);
-
-      try {
-        // Add a fresh entry at the new time
-        service.checkForgotPasswordEmailLimit("fresh@example.com");
-
-        // Trigger cleanup via the internal method
-        (service as any).cleanupExpiredAttempts();
-
-        // expired@example.com should be cleaned up, fresh should remain
-        // Verify by checking that expired@example.com starts fresh (allowed)
-        // and reaches limit normally
-        const result = service.checkForgotPasswordEmailLimit(
-          "expired@example.com",
-        );
-        expect(result).toBe(true);
-      } finally {
-        Date.now = realDateNow;
-      }
+    const pendingRow = (overrides: Partial<Row> = {}): Row => ({
+      id: "user-1",
+      email: "old@example.com",
+      emailVerified: false,
+      pendingEmail: "new@example.com",
+      emailChangeToken: hashToken("change-token"),
+      emailChangeTokenExpiry: new Date(Date.now() + 60_000),
+      ...overrides,
     });
 
-    it("should clear interval on module destroy", () => {
-      const clearIntervalSpy = jest.spyOn(global, "clearInterval");
-      service.onModuleDestroy();
-      expect(clearIntervalSpy).toHaveBeenCalled();
-      clearIntervalSpy.mockRestore();
+    const matches = (row: Row, where: Record<string, unknown>) =>
+      Object.entries(where).every(([key, value]) => {
+        const actual = row[key as keyof Row];
+        if (value instanceof FindOperator) {
+          // MoreThan(now) is the only operator the service uses.
+          return (
+            actual instanceof Date && actual > (value.value as unknown as Date)
+          );
+        }
+        return actual === value;
+      });
+
+    beforeEach(() => {
+      rows = [pendingRow()];
+      failUpdateWith = undefined;
+      usersRepository.findOne.mockImplementation(
+        async ({ where }: { where: Record<string, unknown> }) =>
+          rows.find((row) => matches(row, where)) ?? null,
+      );
+      usersRepository.createQueryBuilder.mockImplementation(() => {
+        let patch: Partial<Row> = {};
+        const params: Record<string, unknown> = {};
+        const chain = {
+          update: () => chain,
+          set: (values: Partial<Row>) => {
+            patch = values;
+            return chain;
+          },
+          where: (_sql: string, p: Record<string, unknown>) => {
+            Object.assign(params, p);
+            return chain;
+          },
+          andWhere: (_sql: string, p: Record<string, unknown>) => {
+            Object.assign(params, p);
+            return chain;
+          },
+          execute: async () => {
+            if (failUpdateWith) throw failUpdateWith;
+            const target = rows.find(
+              (row) =>
+                row.id === params.id &&
+                row.emailChangeToken === params.hashedToken &&
+                row.emailChangeTokenExpiry !== null &&
+                row.emailChangeTokenExpiry > (params.now as Date),
+            );
+            if (!target) return { affected: 0 };
+            Object.assign(target, patch);
+            return { affected: 1 };
+          },
+        };
+        return chain;
+      });
     });
 
-    it("prunes expired verification-email attempts too", () => {
-      service.checkVerificationEmailLimit("stale@example.com");
+    it("moves the pending address into email, verifies it and clears the token", async () => {
+      await service.confirmEmailChange("change-token");
 
-      const realDateNow = Date.now;
-      const originalNow = Date.now();
-      Date.now = jest.fn().mockReturnValue(originalNow + 60 * 60 * 1000 + 1);
-      try {
-        (service as any).cleanupExpiredAttempts();
+      expect(rows[0]).toEqual({
+        id: "user-1",
+        email: "new@example.com",
+        emailVerified: true,
+        pendingEmail: null,
+        emailChangeToken: null,
+        emailChangeTokenExpiry: null,
+      });
+      // Other sessions must sign in again with the new address.
+      expect(tokenService.revokeAllUserRefreshTokens).toHaveBeenCalledWith(
+        "user-1",
+      );
+    });
 
-        // The stale entry was pruned, so the limiter starts fresh again.
-        expect(service.checkVerificationEmailLimit("stale@example.com")).toBe(
-          true,
-        );
-      } finally {
-        Date.now = realDateNow;
-      }
+    it("is single-use: a second click changes nothing and is refused", async () => {
+      await service.confirmEmailChange("change-token");
+      tokenService.revokeAllUserRefreshTokens.mockClear();
+
+      await expect(service.confirmEmailChange("change-token")).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(tokenService.revokeAllUserRefreshTokens).not.toHaveBeenCalled();
+    });
+
+    it("refuses an expired link and leaves the live email alone", async () => {
+      rows = [pendingRow({ emailChangeTokenExpiry: new Date(Date.now() - 1) })];
+
+      await expect(service.confirmEmailChange("change-token")).rejects.toThrow(
+        "Invalid or expired email change link",
+      );
+      expect(rows[0].email).toBe("old@example.com");
+      expect(tokenService.revokeAllUserRefreshTokens).not.toHaveBeenCalled();
+    });
+
+    it("refuses a token that was replaced by a newer request", async () => {
+      rows = [pendingRow({ emailChangeToken: hashToken("newer-token") })];
+
+      await expect(service.confirmEmailChange("change-token")).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(rows[0].email).toBe("old@example.com");
+    });
+
+    it("re-checks uniqueness at confirmation time", async () => {
+      rows = [
+        pendingRow(),
+        pendingRow({
+          id: "user-2",
+          email: "new@example.com",
+          pendingEmail: null,
+          emailChangeToken: null,
+          emailChangeTokenExpiry: null,
+        }),
+      ];
+
+      await expect(service.confirmEmailChange("change-token")).rejects.toThrow(
+        ConflictException,
+      );
+      expect(rows[0].email).toBe("old@example.com");
+      expect(rows[0].pendingEmail).toBe("new@example.com");
+      expect(tokenService.revokeAllUserRefreshTokens).not.toHaveBeenCalled();
+    });
+
+    it("answers a lost race on the unique index with 409, not a 500", async () => {
+      failUpdateWith = new QueryFailedError("UPDATE users", [], {
+        code: "23505",
+      } as unknown as Error);
+
+      await expect(service.confirmEmailChange("change-token")).rejects.toThrow(
+        ConflictException,
+      );
+      expect(tokenService.revokeAllUserRefreshTokens).not.toHaveBeenCalled();
+    });
+
+    it("does not swallow an unrelated database error", async () => {
+      failUpdateWith = new QueryFailedError("UPDATE users", [], {
+        code: "57014",
+      } as unknown as Error);
+
+      await expect(
+        service.confirmEmailChange("change-token"),
+      ).rejects.toBeInstanceOf(QueryFailedError);
     });
   });
 });

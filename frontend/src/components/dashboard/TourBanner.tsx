@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { useTourStore } from '@/store/tourStore';
 import { useDemoMode } from '@/hooks/useDemoMode';
 import { INTRO_TOUR } from '@/lib/tours/registry';
+import { XMarkIcon } from '@heroicons/react/24/outline';
 
 /**
  * Prominent dashboard banner inviting the user to take the guided introduction
@@ -67,20 +68,7 @@ export function TourBanner() {
         title={tDash('gettingStarted.dismiss')}
         className="flex-shrink-0 rounded p-1 text-blue-400 hover:bg-blue-100 hover:text-blue-600 dark:hover:bg-blue-800/50 dark:hover:text-blue-200"
       >
-        <svg
-          className="h-5 w-5"
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          aria-hidden="true"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M6 18L18 6M6 6l12 12"
-          />
-        </svg>
+        <XMarkIcon className="h-5 w-5" aria-hidden="true" />
       </button>
     </div>
   );

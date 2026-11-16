@@ -121,7 +121,7 @@ describe("Cross-user data isolation (integration)", () => {
       "budget_period_categories",
       "budget_periods",
       "budget_categories",
-      "budget_alerts",
+      "notifications",
       "budgets",
       "custom_reports",
       "investment_reports",

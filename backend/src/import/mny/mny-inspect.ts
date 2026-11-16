@@ -23,10 +23,14 @@ import {
   mapAccounts,
 } from "./map/map-reference";
 import { mapTransactions } from "./map/map-transactions";
+import { mapClassificationTags } from "./map/map-classifications";
 import { mapSecurities, tradedSecurityHandles } from "./map/map-securities";
 import { mapInvestments } from "./map/map-investments";
+import { resolveExchangeRates } from "./writers/write-prices";
 import {
+  adoptCashLegTags,
   applyInvestmentCashSources,
+  referencedTradeTags,
   reconcileEmbeddedAccruedInterest,
   tradesByHandle,
 } from "./map/investment-cash";
@@ -35,6 +39,7 @@ import { mapLoans } from "./map/map-loans";
 import { crossCheckHoldings } from "./map/check-holdings";
 import { computeExpectedBalances, todayIsoDate } from "./mny-parser.service";
 import { DEFAULT_MNY_IMPORT_OPTIONS } from "./model/mny-import-options";
+import { isClassificationItem } from "./model/mny-model";
 import { summarizeWarnings } from "./model/mny-warnings";
 import { MnyDatabase, openMnyFile } from "./msisam/open-mny";
 import {
@@ -98,7 +103,8 @@ export function summarise(tables: MnyTables): string[] {
     `  base currency:   ${baseCurrency ? `${baseCurrency.isoCode} (${baseCurrency.name})` : "unknown"}`,
     `  accounts:        ${reference.accounts.length}`,
     `  payees:          ${reference.payees.length}`,
-    `  categories:      ${reference.categories.length}`,
+    `  categories:      ${reference.categories.filter((category) => !isClassificationItem(category)).length}`,
+    `  classifications: ${reference.classifications.length} (${reference.categories.filter(isClassificationItem).length} items)`,
     `  currencies:      ${reference.currencies.length} (${reference.exchangeRates.length} exchange rates)`,
     `  transactions:    ${transactions.transactions.length} (${transactions.splits.length} split children, ${transactions.transfers.length} transfer pairs)`,
     `  securities:      ${investments.securities.length} (${investments.prices.length} prices, ${investments.securitySplits.length} stock splits, ${investments.lots.length} lots)`,
@@ -195,6 +201,10 @@ export function mappingSummary(tables: MnyTables): string[] {
     accounts,
     securities,
     bills: tables.bills.bills,
+    exchangeRates: resolveExchangeRates(
+      tables.reference.exchangeRates,
+      currencyCodesByHandle(tables.reference),
+    ),
   });
   const transactions = mapTransactions({
     transactions: tables.transactions,
@@ -204,11 +214,14 @@ export function mappingSummary(tables: MnyTables): string[] {
     cashKeyByAccountKey: cashKeyByAccountKey(accounts),
     tradesByHandle: tradesByHandle(mappedInvestments),
   });
-  const investments = reconcileEmbeddedAccruedInterest(
-    applyInvestmentCashSources(
-      mappedInvestments,
-      transactions.investmentCashSources,
+  const investments = adoptCashLegTags(
+    reconcileEmbeddedAccruedInterest(
+      applyInvestmentCashSources(
+        mappedInvestments,
+        transactions.investmentCashSources,
+      ),
     ),
+    transactions.tradeCashLegTagHandles,
   );
   const holdings = crossCheckHoldings({
     transactions: investments.transactions,
@@ -226,6 +239,13 @@ export function mappingSummary(tables: MnyTables): string[] {
     asOf: todayIsoDate(),
   });
   const loans = mapLoans({ accounts, transactions, bills: bills.bills });
+  const tags = mapClassificationTags(
+    tables.reference,
+    new Set([
+      ...transactions.referencedTags,
+      ...referencedTradeTags(investments),
+    ]),
+  );
   const balances = computeExpectedBalances(
     accounts,
     transactions,
@@ -275,6 +295,7 @@ export function mappingSummary(tables: MnyTables): string[] {
     `  transactions:    ${transactions.transactions.length} (${transactions.transfersLinked} transfers linked, ${transactions.skipped} skipped, ${transactions.tradeCashLegs} cash rows written by their trade, ${transactions.investmentCashSources.size} trades funded by a banking row)`,
     `  securities:      ${securities.securities.length} (${securities.skipped} skipped as currencies or unusable)`,
     `  investments:     ${investments.transactions.length} (${investments.transfersPaired} share transfers paired, ${investments.skipped} skipped)`,
+    `  tags:            ${tags.tags.length} from classifications (${tags.skipped} items unreferenced)${tags.tags.length > 0 ? `: ${tags.tags.map((tag) => tag.name).join(", ")}` : ""}`,
     "",
     "  account                                    ccy   txns        opening          final",
     ...accounts.accounts.map((account) =>

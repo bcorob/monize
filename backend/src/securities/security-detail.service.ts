@@ -2,8 +2,14 @@ import { Injectable } from "@nestjs/common";
 import { roundMoney, roundToDecimals, sumMoney } from "../common/round.util";
 import { Security } from "./entities/security.entity";
 import { InvestmentAction } from "./entities/investment-transaction.entity";
-import { baseInvestmentAction } from "./investment-replay.util";
+import {
+  acquisitionCost,
+  baseInvestmentAction,
+  investmentIncomeAmount,
+} from "./investment-replay.util";
+import { investmentRowHasEffect } from "./investment-row-effects.util";
 import { SecuritiesService } from "./securities.service";
+import { DailyPriceChange } from "./daily-change.util";
 import { PortfolioService } from "./portfolio.service";
 import {
   InvestmentTransactionsService,
@@ -71,7 +77,8 @@ export interface SecurityDetailActivity {
   firstTransactionDate: string | null;
   lastTransactionDate: string | null;
   /** Cost of every acquiring leg (buys, reinvestments, transfers in). */
-  totalInvested: number;
+  /** Null when an acquiring or transferring row has no price to state its cost. */
+  totalInvested: number | null;
   /** Cash taken out on SELL legs, commission deducted. */
   totalSold: number;
   /** Dividends, interest and distributed capital gains received. */
@@ -85,6 +92,13 @@ export interface SecurityDetailActivity {
    * would be a number in no currency at all.
    */
   realizedGain: number | null;
+  /**
+   * False when a sale drew on shares of unknown cost, so its gain is unknown
+   * and `realizedGain` is null although the sales sit in one currency.
+   */
+  realizedGainComplete: boolean;
+  /** The gains that are known, when `realizedGainComplete` is false. */
+  realizedGainKnownSubtotal: number | null;
   realizedGainCurrency: string | null;
   /**
    * Distinct account currencies the security was sold from, for naming them
@@ -112,6 +126,8 @@ export interface SecurityDetail {
   hasTransactions: boolean;
   /** True when the security was held and has since been sold down to nothing. */
   isPositionClosed: boolean;
+  /** The security's daily move (`resolveDailyPriceChange`); null when refused. */
+  dailyChange: DailyPriceChange | null;
 }
 
 /**
@@ -124,7 +140,7 @@ const UNIT_PRICE_DECIMALS = 10;
 /** One realized-gain entry, narrowed to the fields this service reads. */
 interface RealizedGainRow {
   securityId: string;
-  realizedGain: number;
+  realizedGain: number | null;
   accountCurrencyCode: string | null;
 }
 
@@ -137,13 +153,6 @@ const ACQUIRING_ACTIONS: ReadonlySet<InvestmentAction> = new Set([
   InvestmentAction.BUY,
   InvestmentAction.REINVEST,
   InvestmentAction.TRANSFER_IN,
-]);
-
-/** Actions whose `totalAmount` is income rather than a change of position. */
-const INCOME_ACTIONS: ReadonlySet<InvestmentAction> = new Set([
-  InvestmentAction.DIVIDEND,
-  InvestmentAction.INTEREST,
-  InvestmentAction.CAPITAL_GAIN,
 ]);
 
 /**
@@ -253,6 +262,7 @@ export class SecurityDetailService {
       // exact balance: a security never traded gets the no-data state instead.
       isPositionClosed:
         history.transactions.length > 0 && history.currentQuantityAll === 0,
+      dailyChange: await this.securitiesService.getDailyPriceChange(securityId),
     };
   }
 
@@ -343,6 +353,36 @@ export class SecurityDetailService {
     });
   }
 
+  /**
+   * What was put in: the executed cost of every acquisition, commission
+   * included (`acquisitionCost`, stored total first). A transfer between two
+   * of the user's own accounts moves no money in or out of the security, so a
+   * paired leg adds nothing. A TRANSFER_IN with no other leg is shares arriving
+   * from outside, which counts at its stated cost. A row that cannot state its
+   * cost makes the total unknown, never zero.
+   */
+  private totalInvested(
+    effects: readonly SecurityHistoryTransaction[],
+  ): number | null {
+    const parts: number[] = [];
+    for (const tx of effects) {
+      const action = baseInvestmentAction(tx.action) as InvestmentAction;
+      if (!ACQUIRING_ACTIONS.has(action)) continue;
+      if (action === InvestmentAction.TRANSFER_IN && tx.linkedTransactionId) {
+        continue;
+      }
+      const cost = acquisitionCost({
+        quantity: Math.abs(Number(tx.quantity) || 0),
+        price: tx.price,
+        commission: tx.commission,
+        totalAmount: tx.totalAmount,
+      });
+      if (cost === null) return null;
+      parts.push(cost);
+    }
+    return sumMoney(parts);
+  }
+
   private buildActivity(
     securityId: string,
     transactions: readonly SecurityHistoryTransaction[],
@@ -357,12 +397,21 @@ export class SecurityDetailService {
       ...new Set(mine.map((entry) => entry.accountCurrencyCode ?? "")),
     ].sort();
     const hasOneCurrency = currencies.length === 1 && currencies[0] !== "";
+    // A sale from shares of unknown cost has no gain: the total is unknown,
+    // and the gains that are known are a subtotal of it.
+    const knownGains = mine.flatMap((entry) =>
+      entry.realizedGain === null ? [] : [entry.realizedGain],
+    );
+    const gainsComplete = knownGains.length === mine.length;
 
+    // The history lists a VOID row as a record, which the dates and the count
+    // below still describe; it moved no money, so it joins no money total.
+    const effects = transactions.filter(investmentRowHasEffect);
     const amountsFor = (
       predicate: (tx: SecurityHistoryTransaction) => boolean,
     ): number =>
       sumMoney(
-        transactions.filter(predicate).map((tx) => Number(tx.totalAmount) || 0),
+        effects.filter(predicate).map((tx) => Number(tx.totalAmount) || 0),
       );
 
     return {
@@ -373,32 +422,24 @@ export class SecurityDetailService {
       // Cost, not cash out: `totalAmount` is zero on reinvestments and transfers
       // in, which still acquire shares and still add to cost basis, so summing
       // it would report nothing invested beside a real cost basis.
-      totalInvested: sumMoney(
-        transactions
-          .filter((tx) =>
-            ACQUIRING_ACTIONS.has(
-              baseInvestmentAction(tx.action) as InvestmentAction,
-            ),
-          )
-          .map(
-            (tx) =>
-              Math.abs(Number(tx.quantity) || 0) * (Number(tx.price) || 0),
-          ),
-      ),
+      totalInvested: this.totalInvested(effects),
       // Base-normalized: a CD/bond redemption is a sale, and the term'd gain
       // distributions are income; the raw action only refines the kind.
       totalSold: amountsFor(
         (tx) => baseInvestmentAction(tx.action) === InvestmentAction.SELL,
       ),
-      dividends: amountsFor((tx) =>
-        INCOME_ACTIONS.has(baseInvestmentAction(tx.action) as InvestmentAction),
-      ),
-      fees: sumMoney(transactions.map((tx) => Number(tx.commission) || 0)),
+      // Every distribution, paid in cash or reinvested: a reinvestment's shares
+      // are in the cost basis this figure is set against, so leaving its
+      // income out would read the distribution as no return at all.
+      dividends: sumMoney(effects.map((tx) => investmentIncomeAmount(tx))),
+      fees: sumMoney(effects.map((tx) => Number(tx.commission) || 0)),
       // One currency, or nothing: gains realized in a PLN account and in a EUR
       // account are not addable, and their sum would be in no currency at all.
-      realizedGain: hasOneCurrency
-        ? sumMoney(mine.map((entry) => entry.realizedGain))
-        : null,
+      realizedGain:
+        hasOneCurrency && gainsComplete ? sumMoney(knownGains) : null,
+      realizedGainComplete: gainsComplete,
+      realizedGainKnownSubtotal:
+        hasOneCurrency && !gainsComplete ? sumMoney(knownGains) : null,
       realizedGainCurrency: hasOneCurrency ? currencies[0] : null,
       realizedGainCurrencies: currencies.filter((code) => code !== ""),
       realizedSaleCount: mine.length,

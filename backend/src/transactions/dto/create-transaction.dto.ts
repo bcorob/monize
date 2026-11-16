@@ -1,6 +1,5 @@
 import {
   IsString,
-  IsNumber,
   IsOptional,
   IsDateString,
   IsUUID,
@@ -12,6 +11,7 @@ import {
   IsArray,
   ArrayMaxSize,
   ValidateNested,
+  IsNotEmpty,
 } from "class-validator";
 import { Type } from "class-transformer";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
@@ -19,6 +19,10 @@ import { CreateTransactionSplitDto } from "./create-transaction-split.dto";
 import { TransactionStatus } from "../entities/transaction.entity";
 import { SanitizeHtml } from "../../common/decorators/sanitize-html.decorator";
 import { IsCurrencyCode } from "../../common/validators/is-currency-code.validator";
+import { TRANSACTION_NOTE_MAX_LENGTH } from "../../common/transaction-note";
+import { EXTERNAL_ID_MAX_LENGTH } from "../transaction-external-id";
+import { IsFxRate } from "../../common/validators/is-fx-rate.validator";
+import { IsMoneyAmount } from "../../common/validators/is-money-amount.validator";
 
 export class CreateTransactionDto {
   @ApiProperty({ description: "Account ID where the transaction occurs" })
@@ -55,7 +59,7 @@ export class CreateTransactionDto {
     description:
       "Transaction amount (positive for income, negative for expense)",
   })
-  @IsNumber({ maxDecimalPlaces: 4 })
+  @IsMoneyAmount()
   @Min(-999999999999)
   @Max(999999999999)
   amount: number;
@@ -66,8 +70,9 @@ export class CreateTransactionDto {
 
   @ApiPropertyOptional({ description: "Exchange rate (defaults to 1.0)" })
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 10 })
-  @Min(0.000001)
+  // Positive and representable at the rate column's ten places (1e-10): a
+  // CAD->BTC rate is 0.0000073529.
+  @IsFxRate()
   exchangeRate?: number;
 
   @ApiPropertyOptional({
@@ -75,7 +80,7 @@ export class CreateTransactionDto {
       "Original amount as entered in the foreign currency the user actually paid in. Provided together with originalCurrencyCode; amount stays in the account currency.",
   })
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 4 })
+  @IsMoneyAmount()
   @Min(-999999999999)
   @Max(999999999999)
   originalAmount?: number | null;
@@ -91,7 +96,7 @@ export class CreateTransactionDto {
   @ApiPropertyOptional({ description: "Transaction description/notes" })
   @IsOptional()
   @IsString()
-  @MaxLength(500)
+  @MaxLength(TRANSACTION_NOTE_MAX_LENGTH)
   @SanitizeHtml()
   description?: string;
 
@@ -154,4 +159,15 @@ export class CreateTransactionDto {
   @IsArray()
   @IsUUID(undefined, { each: true })
   tagIds?: string[];
+
+  @ApiPropertyOptional({
+    description:
+      "Your own stable id for this row (for example the bank's transaction id), unique per account. Send the same key on every retry: a create that repeats a key already used in the account returns the existing transaction instead of creating a second one, so a request whose response was lost can be retried safely. Stored exactly as sent, and not changeable afterwards; find a row by it with GET /transactions?externalId=.",
+    maxLength: EXTERNAL_ID_MAX_LENGTH,
+  })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  @MaxLength(EXTERNAL_ID_MAX_LENGTH)
+  externalId?: string;
 }

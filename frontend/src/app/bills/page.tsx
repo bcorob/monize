@@ -3,39 +3,33 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { useLocalStorage } from '@/hooks/useLocalStorage';
 import toast from 'react-hot-toast';
-import {
-  format,
-  startOfMonth,
-  endOfMonth,
-  eachDayOfInterval,
-  isSameMonth,
-  isToday as checkIsToday,
-  addMonths,
-  subMonths,
-  getDay,
-} from 'date-fns';
+import { format } from 'date-fns';
+import { DocumentArrowDownIcon } from '@heroicons/react/24/outline';
 import { Button } from '@/components/ui/Button';
 import { ScheduledTransactionForm } from '@/components/scheduled-transactions/ScheduledTransactionForm';
 import { CashFlowForecastChart } from '@/components/bills/CashFlowForecastChart';
+import { ScheduledCalendarGrid } from '@/components/bills/ScheduledCalendarGrid';
+import { CalendarMonthNav } from '@/components/calendar/CalendarMonthNav';
 import { ScheduledTransactionList } from '@/components/scheduled-transactions/ScheduledTransactionList';
 import { BillsFilterPanel } from '@/components/scheduled-transactions/BillsFilterPanel';
 import { OverrideEditorDialog } from '@/components/scheduled-transactions/OverrideEditorDialog';
 import { OccurrenceDatePicker } from '@/components/scheduled-transactions/OccurrenceDatePicker';
 import { PostTransactionDialog } from '@/components/scheduled-transactions/PostTransactionDialog';
-import { DensityToggle } from '@/components/ui/DensityToggle';
+import { ViewModeToggle } from '@/components/ui/ViewModeToggle';
+import { ListTopToolbar, LIST_TOOLBAR_BUTTON_CLASS } from '@/components/ui/ListTopToolbar';
+import { useViewMode } from '@/store/viewModeStore';
+import { useFinancialToday } from '@/hooks/useFinancialToday';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { SummaryCard, SummaryIcons } from '@/components/ui/SummaryCard';
 import { scheduledTransactionsApi } from '@/lib/scheduled-transactions';
-import { transactionsApi } from '@/lib/transactions';
 import { categoriesApi } from '@/lib/categories';
 import { createCategoryFromInput } from '@/lib/category-create';
 import { buildCategoryColorMap } from '@/lib/categoryUtils';
 import { accountsApi } from '@/lib/accounts';
-import { ScheduledTransaction, ScheduledTransactionOverride } from '@/types/scheduled-transaction';
+import { SelectedLoanOccurrence, ScheduledTransaction, ScheduledTransactionOverride } from '@/types/scheduled-transaction';
 import { Category } from '@/types/category';
 import { Account } from '@/types/account';
 import { useBillsFilters } from '@/hooks/useBillsFilters';
@@ -44,11 +38,19 @@ import {
   derivePayeesFromScheduledTransactions,
   deriveAccountsFromScheduledTransactions,
 } from '@/lib/bills-filters';
+import { BILLS_CSV_HEADERS, buildBillsCsvRows } from '@/lib/bills-export';
+import { exportToCsv } from '@/lib/csv-export';
 import { parseLocalDate } from '@/lib/utils';
-import { SCHEDULED_KIND_CHIP_CLASSES, occurrenceKind } from '@/lib/scheduled-kind';
-import { scheduleEffectiveAmount } from '@/lib/scheduled-effective-amount';
-import { advanceByFrequency, isOneTime, monthlyEquivalent } from '@/lib/frequency';
-import type { FutureTransaction } from '@/lib/forecast';
+import { buildScheduledCalendarDays } from '@/lib/scheduled-calendar';
+import { occurrenceKind } from '@/lib/scheduled-kind';
+import {
+  estimatedTypicalAmount,
+  nextOccurrenceDueDate,
+  scheduleEffectiveAmount,
+} from '@/lib/scheduled-effective-amount';
+import { monthlyEquivalent } from '@/lib/frequency';
+import { projectPayrollOccurrence, type FutureTransaction } from '@/lib/forecast';
+import { loadFutureTransactions } from '@/lib/future-transactions';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { combineTotals, isComplete, sumConverted } from '@/lib/currency-total';
@@ -58,10 +60,12 @@ import { useFormModal } from '@/hooks/useFormModal';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { createLogger } from '@/lib/logger';
+import { TOUR_ANCHORS, tourAnchor } from '@/lib/tours/anchors';
 import { getErrorMessage } from '@/lib/errors';
 import { useOnUndoRedo } from '@/hooks/useOnUndoRedo';
 import { useOnAiAction } from '@/hooks/useOnAiAction';
 import { useHighlightParam } from '@/hooks/useHighlightTarget';
+import { useMobileAddAction } from '@/store/mobileAddActionStore';
 
 const logger = createLogger('Bills');
 
@@ -72,6 +76,12 @@ interface OverrideEditorState {
   existingOverride: ScheduledTransactionOverride | null;
   // When set (post-reconciliation flow), seeds the Amount field with this value.
   prefillAmount: number | null;
+  // A loan bill's occurrence as the server priced it at its own due date: the
+  // editor opens on its amount and lines rather than the template's.
+  loanOccurrence: SelectedLoanOccurrence | null;
+  // A payroll bill's occurrence as the yearly room leaves its deduction lines,
+  // by category id: the editor opens on those lines rather than the template's.
+  payrollDeductions: Record<string, number> | null;
 }
 
 /**
@@ -114,7 +124,9 @@ function BillsContent() {
   // Passive deep-link target (e.g. the AI chat "view this bill" link): flash and
   // scroll to the row without opening the post flow that ?postBillId triggers.
   const highlightId = useHighlightParam();
-  const { formatCurrency } = useNumberFormat();
+  const linkedBillId = searchParams.get('highlight');
+  const { formatCurrency, formatNumber } = useNumberFormat();
+  const financialToday = useFinancialToday();
   // The reader's reporting currency and the converter into it. The monthly net
   // spans one currency or none (issue #1247).
   const { convertToDefault, defaultCurrency, ratesUnavailable } =
@@ -125,9 +137,17 @@ function BillsContent() {
   const [futureTransactions, setFutureTransactions] = useState<FutureTransaction[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const { showForm, editingItem: editingTransaction, openCreate, openEdit, close, isEditing, modalProps, setFormDirty, unsavedChangesDialog, formSubmitRef } = useFormModal<ScheduledTransaction>();
-  const [filterType, setFilterType] = useLocalStorage<'all' | 'bills' | 'deposits'>('monize-bills-filter-type', 'all');
-  const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list');
+  // The list ("table") or the month calendar: remembered per screen in the
+  // shared view-mode store, as Transactions and Investments remember theirs.
+  const { view: viewMode, setView: setViewMode } = useViewMode('bills');
+  // A ?highlight= link (a calendar chip on Transactions, the assistant) points
+  // at a row, and only the list draws rows: arriving with one opens the list
+  // even when the calendar was the remembered view.
+  useEffect(() => {
+    if (highlightId) setViewMode('table');
+  }, [highlightId, setViewMode]);
   const filters = useBillsFilters();
+  const { filterType } = filters;
   const [calendarMonth, setCalendarMonth] = useState(new Date());
   const [overrideEditor, setOverrideEditor] = useState<OverrideEditorState>({
     isOpen: false,
@@ -135,6 +155,8 @@ function BillsContent() {
     date: '',
     existingOverride: null,
     prefillAmount: null,
+    loanOccurrence: null,
+    payrollDeductions: null,
   });
   // Prefill state for a new transfer schedule created from the reconcile flow.
   const [createPrefill, setCreatePrefill] = useState<{
@@ -168,57 +190,53 @@ function BillsContent() {
   // wins".
   const loadGenerationRef = useRef(0);
 
-  const loadData = useCallback(async () => {
-    const generation = ++loadGenerationRef.current;
-    setIsLoading(true);
-    try {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const tomorrowStr = `${tomorrow.getFullYear()}-${String(tomorrow.getMonth() + 1).padStart(2, '0')}-${String(tomorrow.getDate()).padStart(2, '0')}`;
-
-      const [transactionsData, categoriesData, accountsData, futureData] = await Promise.all([
-        scheduledTransactionsApi.getAll(),
-        categoriesApi.getAll(),
-        accountsApi.getAll(),
-        transactionsApi.getAll({ startDate: tomorrowStr, limit: 200 }),
-      ]);
-      // A newer load started while this one was awaiting: discard this result
-      // so it cannot overwrite the fresher state.
-      if (generation !== loadGenerationRef.current) return;
-      setScheduledTransactions(transactionsData);
-      setCategories(categoriesData);
-      setAccounts(accountsData);
-      setFutureTransactions(
-        futureData.data
-          .filter(t => t.status !== 'VOID')
-          .map(t => ({
-            id: t.id,
-            accountId: t.accountId,
-            name: t.payeeName || t.payee?.name || t.description || 'Transaction',
-            amount: Number(t.amount),
-            date: t.transactionDate.split('T')[0],
-          }))
-      );
-    } catch (error) {
-      // A superseded request must not surface an obsolete failure over a newer
-      // load that has already succeeded.
-      if (generation !== loadGenerationRef.current) return;
-      toast.error(getErrorMessage(error, t('toasts.loadFailed')));
-      logger.error(error);
-    } finally {
-      if (generation === loadGenerationRef.current) {
-        setIsLoading(false);
+  // Loads the page's data. The mount load shows the spinner (isLoading starts
+  // true); a refresh after a write (create, edit, delete, post, skip, an
+  // override, an undo or an AI action) leaves isLoading alone, so the rows and
+  // the forecast stay on screen and the new data swaps in when it arrives.
+  // Setting isLoading on a refresh unmounted the list and the chart and drew
+  // the whole page again for every change.
+  const refreshData = useCallback(() => {
+    // Writes live in `run` so they land after the request, not during the effect.
+    const run = async () => {
+      const generation = ++loadGenerationRef.current;
+      try {
+        const [transactionsData, categoriesData, accountsData, futureData] = await Promise.all([
+          scheduledTransactionsApi.getAll(),
+          categoriesApi.getAll(),
+          accountsApi.getAll(),
+          loadFutureTransactions(t('forecast.untitledTransaction')),
+        ]);
+        // A newer load started while this one was awaiting: discard this result
+        // so it cannot overwrite the fresher state.
+        if (generation !== loadGenerationRef.current) return;
+        setScheduledTransactions(transactionsData);
+        setCategories(categoriesData);
+        setAccounts(accountsData);
+        setFutureTransactions(futureData);
+      } catch (error) {
+        // A superseded request must not surface an obsolete failure over a newer
+        // load that has already succeeded.
+        if (generation !== loadGenerationRef.current) return;
+        toast.error(getErrorMessage(error, t('toasts.loadFailed')));
+        logger.error(error);
+      } finally {
+        if (generation === loadGenerationRef.current) {
+          setIsLoading(false);
+        }
       }
-    }
+    };
+    return run();
   }, [t]);
 
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
 
-  useOnUndoRedo(loadData);
+  useEffect(() => {
+    refreshData();
+  }, [refreshData]);
+
+  useOnUndoRedo(refreshData);
   // Refresh on AI chat-bubble writes (the forecast depends on transactions).
-  useOnAiAction(loadData);
+  useOnAiAction(refreshData);
 
   const handleCreateNew = () => {
     // Clear any stale reconcile prefill so a manual create starts blank.
@@ -296,7 +314,7 @@ function BillsContent() {
       setCreatePrefill(null);
       clearReconcileParams();
     }
-    loadData();
+    refreshData();
   };
 
   // Open the override editor directly on a schedule's next instance, optionally
@@ -324,6 +342,8 @@ function BillsContent() {
       date,
       existingOverride,
       prefillAmount: prefillAmount ?? null,
+      loanOccurrence: null,
+    payrollDeductions: null,
     });
   };
 
@@ -344,7 +364,7 @@ function BillsContent() {
     });
   };
 
-  const handleDatePickerSelect = async (date: string) => {
+  const handleDatePickerSelect = async (date: string, loanOccurrence?: SelectedLoanOccurrence) => {
     const transaction = datePicker.transaction;
     if (!transaction) return;
 
@@ -379,6 +399,8 @@ function BillsContent() {
         date: overrideByOverrideDate?.originalDate || date, // Use original date if this was an override
         existingOverride,
         prefillAmount: null,
+        loanOccurrence: loanOccurrence ?? null,
+        payrollDeductions: projectPayrollOccurrence(scheduledTransactions, transaction.id, date),
       });
     } catch (error) {
       logger.error('Failed to check for existing override:', error);
@@ -389,6 +411,8 @@ function BillsContent() {
         date,
         existingOverride: null,
         prefillAmount: null,
+        loanOccurrence: loanOccurrence ?? null,
+        payrollDeductions: projectPayrollOccurrence(scheduledTransactions, transaction.id, date),
       });
     }
   };
@@ -427,6 +451,8 @@ function BillsContent() {
       date: '',
       existingOverride: null,
       prefillAmount: null,
+      loanOccurrence: null,
+    payrollDeductions: null,
     });
     if (wasReconcileDeepLink) {
       clearReconcileParams();
@@ -434,7 +460,7 @@ function BillsContent() {
   };
 
   const handleOverrideEditorSave = () => {
-    loadData();
+    refreshData();
   };
 
   const handlePost = (transaction: ScheduledTransaction) => {
@@ -449,7 +475,7 @@ function BillsContent() {
   };
 
   const handlePostDialogPosted = () => {
-    loadData();
+    refreshData();
   };
 
   // Auto-open the Post dialog when arriving from the dashboard widget
@@ -508,12 +534,42 @@ function BillsContent() {
       return true;
     });
 
-    return filterScheduledTransactions(byType, filters.filterState).sort((a, b) => {
+    const shown = filterScheduledTransactions(byType, filters.filterState);
+    // A link names one row, so the remembered filters must not hide it. Kept
+    // while the URL names it, without touching what the reader has saved.
+    const linked = shown.some((t) => t.id === linkedBillId)
+      ? []
+      : scheduledTransactions.filter((t) => t.id === linkedBillId);
+
+    return [...shown, ...linked].sort((a, b) => {
       const dateA = a.nextOverride?.overrideDate || a.nextDueDate || '';
       const dateB = b.nextOverride?.overrideDate || b.nextDueDate || '';
       return dateA.localeCompare(dateB);
     });
-  }, [scheduledTransactions, filterType, filters.filterState]);
+  }, [scheduledTransactions, filterType, filters.filterState, linkedBillId]);
+
+  // How many schedules each type segment would show, for its label. The same
+  // `billKind` the filter above uses, so a count never disagrees with its list.
+  const typeCounts = useMemo(
+    () => ({
+      all: scheduledTransactions.length,
+      bills: scheduledTransactions.filter((st) => billKind(st) === 'bill').length,
+      deposits: scheduledTransactions.filter((st) => billKind(st) === 'deposit').length,
+    }),
+    [scheduledTransactions],
+  );
+
+  // The list as drawn -- its filters and its order -- written to CSV. The rows
+  // are already loaded, so there is no request to wait on.
+  const handleExport = useCallback(() => {
+    const stamp = format(new Date(), 'yyyy-MM-dd_HHmmss');
+    exportToCsv(
+      `Monize_Bills_${stamp}.csv`,
+      BILLS_CSV_HEADERS,
+      buildBillsCsvRows(filteredTransactions),
+    );
+    toast.success(t('toolbar.exported', { count: filteredTransactions.length }));
+  }, [filteredTransactions, t]);
 
   const categoryColorMap = useMemo(() => buildCategoryColorMap(categories), [categories]);
 
@@ -541,7 +597,10 @@ function BillsContent() {
       // The amount this schedule would post today, not the persisted snapshot:
       // for an FX-sensitive schedule that scalar was calculated at an older rate.
       const effectiveAmount = scheduleEffectiveAmount(t);
-      const effective = effectiveAmount.amount;
+      // An estimated bill's monthly equivalent is its typical month over the
+      // year ahead, not the next month's seasonal figure (issue #2096).
+      const typical = estimatedTypicalAmount(t, financialToday);
+      const effective = typical !== undefined ? typical : effectiveAmount.amount;
       const amount = effective ?? Number(t.amount);
       // The kind comes from the SAME occurrence the magnitude does. Reading the
       // stored sign here put a re-priced inflow of 20 into `monthlyBills` and
@@ -564,7 +623,7 @@ function BillsContent() {
         if (effective === null) amountsResolved = false;
         else
           billComponents.push({
-            monthly: monthlyEquivalent(Math.abs(amount), t.frequency),
+            monthly: monthlyEquivalent(Math.abs(amount), t.frequency, t.customRecurrence),
             currencyCode: effectiveAmount.currencyCode,
           });
       } else if (kind === 'deposit') {
@@ -572,14 +631,14 @@ function BillsContent() {
         if (effective === null) amountsResolved = false;
         else
           depositComponents.push({
-            monthly: monthlyEquivalent(amount, t.frequency),
+            monthly: monthlyEquivalent(amount, t.frequency, t.customRecurrence),
             currencyCode: effectiveAmount.currencyCode,
           });
       }
 
       if (t.isActive && t.nextDueDate) {
         try {
-          const dueDate = parseLocalDate(t.nextDueDate);
+          const dueDate = parseLocalDate(nextOccurrenceDueDate(t));
           if (dueDate && !isNaN(dueDate.getTime()) && dueDate <= today) {
             dueCount++;
           }
@@ -623,7 +682,7 @@ function BillsContent() {
       monthlyHasUnpriceable: !amountsResolved,
       dueCount,
     };
-  }, [scheduledTransactions, convertToDefault]);
+  }, [scheduledTransactions, convertToDefault, financialToday]);
 
   /**
    * Why the Monthly Net is withheld, or `undefined` when it is not.
@@ -654,77 +713,12 @@ function BillsContent() {
     return t('page.summaryNetUnpriceable');
   }, [summary, ratesUnavailable, t]);
 
-  // Generate upcoming occurrences for calendar view
-  const getNextOccurrences = (st: ScheduledTransaction, _monthsAhead: number = 3): Date[] => {
-    if (!st.nextDueDate) return [];
-    const occurrences: Date[] = [];
-    const startDate = subMonths(startOfMonth(calendarMonth), 1);
-    const endDate = addMonths(endOfMonth(calendarMonth), 1);
-    let nextDate = parseLocalDate(st.nextDueDate);
+  const calendarDays = useMemo(
+    () => buildScheduledCalendarDays(scheduledTransactions, calendarMonth),
+    [calendarMonth, scheduledTransactions],
+  );
 
-    // Build override lookup map: originalDate -> overrideDate
-    const overrideMap = new Map<string, string>();
-    if (st.futureOverrides) {
-      for (const o of st.futureOverrides) {
-        overrideMap.set(o.originalDate.split('T')[0], o.overrideDate.split('T')[0]);
-      }
-    }
-    // Fallback to nextOverride if futureOverrides is not populated
-    if (st.nextOverride?.overrideDate && !overrideMap.has(st.nextDueDate)) {
-      overrideMap.set(st.nextDueDate, st.nextOverride.overrideDate);
-    }
-
-    let count = 0;
-
-    while (nextDate <= endDate && count < 100) {
-      const dateKey = format(nextDate, 'yyyy-MM-dd');
-      const overrideDateStr = overrideMap.get(dateKey);
-      const effectiveDate = overrideDateStr && overrideDateStr !== dateKey
-        ? parseLocalDate(overrideDateStr)
-        : nextDate;
-
-      if (effectiveDate >= startDate && effectiveDate <= endDate) {
-        occurrences.push(new Date(effectiveDate));
-      }
-      if (isOneTime(st.frequency)) return occurrences;
-      nextDate = advanceByFrequency(nextDate, st.frequency);
-      count++;
-    }
-    return occurrences;
-  };
-
-  const calendarDays = useMemo(() => {
-    const monthStart = startOfMonth(calendarMonth);
-    const monthEnd = endOfMonth(calendarMonth);
-    const calStart = new Date(monthStart);
-    calStart.setDate(calStart.getDate() - getDay(monthStart));
-    const calEnd = new Date(monthEnd);
-    calEnd.setDate(calEnd.getDate() + (6 - getDay(monthEnd)));
-
-    const days = eachDayOfInterval({ start: calStart, end: calEnd });
-    const billsByDate = new Map<string, ScheduledTransaction[]>();
-
-    // Every active schedule is on the calendar, whatever its kind: transfers and
-    // zero-amount reminders have due dates like anything else, and leaving them
-    // off makes a schedule the list shows simply vanish (issue #1124).
-    const active = scheduledTransactions.filter((st) => st.isActive);
-    active.forEach((st) => {
-      getNextOccurrences(st).forEach((date) => {
-        const key = format(date, 'yyyy-MM-dd');
-        const existing = billsByDate.get(key) || [];
-        existing.push(st);
-        billsByDate.set(key, existing);
-      });
-    });
-
-    return days.map((date) => ({
-      date,
-      isCurrentMonth: isSameMonth(date, calendarMonth),
-      isToday: checkIsToday(date),
-      bills: billsByDate.get(format(date, 'yyyy-MM-dd')) || [],
-    }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [calendarMonth, scheduledTransactions]);
+  useMobileAddAction(t('page.newButton'), handleCreateNew);
 
   return (
     <PageLayout>
@@ -733,8 +727,12 @@ function BillsContent() {
         <PageHeader
           title={t('page.title')}
           subtitle={t('page.subtitle')}
-          helpUrl="https://github.com/kenlasko/monize/wiki/Bills-and-Deposits"
-          actions={<Button onClick={handleCreateNew}>{t('page.newButton')}</Button>}
+          help='bills'
+          actions={
+            <Button onClick={handleCreateNew} {...tourAnchor(TOUR_ANCHORS.billsNewButton)}>
+              {t('page.newButton')}
+            </Button>
+          }
         />
         {/* Summary Cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-6 mb-6">
@@ -768,24 +766,30 @@ function BillsContent() {
         </div>
 
         {/* Cash Flow Forecast Chart */}
-        <ErrorBoundary fallback={
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6 mb-6">
-            <p className="text-gray-500 dark:text-gray-400">{t('page.chartUnavailable')}</p>
-          </div>
-        }>
-          <CashFlowForecastChart
-            scheduledTransactions={scheduledTransactions}
-            accounts={accounts}
-            futureTransactions={futureTransactions}
-            isLoading={isLoading}
-          />
-        </ErrorBoundary>
+        <div {...tourAnchor(TOUR_ANCHORS.billsCashFlowForecast)}>
+          <ErrorBoundary fallback={
+            <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6 mb-6">
+              <p className="text-gray-500 dark:text-gray-400">{t('page.chartUnavailable')}</p>
+            </div>
+          }>
+            <CashFlowForecastChart
+              scheduledTransactions={scheduledTransactions}
+              accounts={accounts}
+              futureTransactions={futureTransactions}
+              isLoading={isLoading}
+            />
+          </ErrorBoundary>
+        </div>
 
         {/* Form Modal */}
-        <Modal isOpen={showForm} onClose={handleFormClose} {...modalProps} maxWidth="6xl" className="p-6 !max-w-[69rem]">
-          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-            {isEditing ? t('form.titleEdit') : t('form.titleNew')}
-          </h2>
+        <Modal
+          isOpen={showForm}
+          onClose={handleFormClose}
+          {...modalProps}
+          maxWidth="6xl"
+          className="p-6 !max-w-[69rem]"
+          title={isEditing ? t('form.titleEdit') : t('form.titleNew')}
+        >
           <ScheduledTransactionForm
             key={editingTransaction?.id || (createPrefill ? 'new-prefill' : 'new')}
             scheduledTransaction={editingTransaction}
@@ -800,187 +804,100 @@ function BillsContent() {
         </Modal>
         <UnsavedChangesDialog {...unsavedChangesDialog} />
 
-        {viewMode === 'list' && (
-          <div className="mb-6">
-            <BillsFilterPanel
-              filtersExpanded={filters.filtersExpanded}
-              setFiltersExpanded={filters.setFiltersExpanded}
-              nameSearch={filters.nameSearch}
-              setNameSearch={filters.setNameSearch}
-              selectedPayeeIds={filters.selectedPayeeIds}
-              setSelectedPayeeIds={filters.setSelectedPayeeIds}
-              selectedAccountIds={filters.selectedAccountIds}
-              setSelectedAccountIds={filters.setSelectedAccountIds}
-              selectedCategoryIds={filters.selectedCategoryIds}
-              setSelectedCategoryIds={filters.setSelectedCategoryIds}
-              accounts={billsAccounts}
-              categories={categories}
-              payees={payees}
-              activeFilterCount={filters.activeFilterCount}
-              onClearFilters={filters.clearFilters}
-            />
-          </div>
-        )}
-
-        {/* View Toggle + Filter Tabs */}
-        <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-700/50 rounded-lg mb-6">
-          <div className="border-b border-gray-200 dark:border-gray-700 flex flex-wrap items-center justify-between">
-            <nav className="-mb-px flex">
-              <button
-                onClick={() => setViewMode('list')}
-                className={`py-4 px-6 text-sm font-medium border-b-2 ${
-                  viewMode === 'list'
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
-                }`}
-              >
-                {t('viewTabs.list')}
-              </button>
-              <button
-                onClick={() => setViewMode('calendar')}
-                className={`py-4 px-6 text-sm font-medium border-b-2 ${
-                  viewMode === 'calendar'
-                    ? 'border-blue-500 text-blue-600 dark:text-blue-400'
-                    : 'border-transparent text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 hover:border-gray-300 dark:hover:border-gray-600'
-                }`}
-              >
-                {t('viewTabs.calendar')}
-              </button>
-            </nav>
-            {viewMode === 'list' && (
-              <div className="flex items-center pr-4 gap-2">
-                <div className="hidden sm:flex gap-2">
-                  {(['all', 'bills', 'deposits'] as const).map((type) => (
-                    <button
-                      key={type}
-                      onClick={() => setFilterType(type)}
-                      className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                        filterType === type
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'
-                      }`}
-                    >
-                      {type === 'all' ? t('viewTabs.filterAll', { count: scheduledTransactions.length }) :
-                       type === 'bills' ? t('viewTabs.filterBills', { count: scheduledTransactions.filter((st) => billKind(st) === 'bill').length }) :
-                       t('viewTabs.filterDeposits', { count: scheduledTransactions.filter((st) => billKind(st) === 'deposit').length })}
-                    </button>
-                  ))}
-                </div>
-                {/* Density belongs to the list, so it sits with the list's own
-                    controls and is absent from the calendar. `sm` -- the plain
-                    borderless button every other table's toggle is, rather than
-                    a filled chip: it is not a fourth filter beside All/Bills/
-                    Deposits and must not read as one. It stays visible below
-                    `sm`, where the type chips do not: the rows are still there
-                    to tighten. */}
-                <DensityToggle view="bills" />
-              </div>
-            )}
-            {viewMode === 'calendar' && (
-              <div className="flex items-center gap-2 px-4 py-2 sm:py-0 sm:pr-4 sm:pl-0 w-full sm:w-auto justify-center sm:justify-end">
-                <button
-                  onClick={() => setCalendarMonth(subMonths(calendarMonth, 1))}
-                  className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
-                >
-                  <svg className="h-5 w-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-                <span className="text-sm font-semibold text-gray-900 dark:text-gray-100 min-w-[130px] text-center">
-                  {format(calendarMonth, 'MMMM yyyy')}
-                </span>
-                <button
-                  onClick={() => setCalendarMonth(addMonths(calendarMonth, 1))}
-                  className="p-1.5 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
-                >
-                  <svg className="h-5 w-5 text-gray-600 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
-                <button
-                  onClick={() => setCalendarMonth(new Date())}
-                  className="ml-1 px-3 py-1 text-sm text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-md"
-                >
-                  {t('viewTabs.todayButton')}
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {viewMode === 'list' ? (
-          /* Scheduled Transactions List */
-          <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-700/50 rounded-lg overflow-hidden">
-            {isLoading ? (
-              <LoadingSpinner text={t('page.loadingText')} />
-            ) : (
-              <ScheduledTransactionList
-                transactions={filteredTransactions}
-                onEdit={handleEdit}
-                onEditOccurrence={handleEditOccurrence}
-                onPost={handlePost}
-                onRefresh={loadData}
-                categoryColorMap={categoryColorMap}
-                highlightId={highlightId}
+        {viewMode === 'table' ? (
+          <>
+            <div className="mb-6">
+              <BillsFilterPanel
+                filterType={filters.filterType}
+                setFilterType={filters.setFilterType}
+                typeCounts={typeCounts}
+                filtersExpanded={filters.filtersExpanded}
+                setFiltersExpanded={filters.setFiltersExpanded}
+                nameSearch={filters.nameSearch}
+                setNameSearch={filters.setNameSearch}
+                selectedPayeeIds={filters.selectedPayeeIds}
+                setSelectedPayeeIds={filters.setSelectedPayeeIds}
+                selectedAccountIds={filters.selectedAccountIds}
+                setSelectedAccountIds={filters.setSelectedAccountIds}
+                selectedCategoryIds={filters.selectedCategoryIds}
+                setSelectedCategoryIds={filters.setSelectedCategoryIds}
+                accounts={billsAccounts}
+                categories={categories}
+                payees={payees}
+                activeFilterCount={filters.activeFilterCount}
+                onClearFilters={filters.clearFilters}
               />
-            )}
-          </div>
-        ) : (
-          /* Calendar View */
-          <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-700/50 rounded-lg overflow-hidden">
-            <div className="grid grid-cols-7">
-              {(['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const).map((day) => (
-                <div
-                  key={day}
-                  className="px-2 py-3 text-center text-sm font-medium text-gray-500 dark:text-gray-400 border-b border-gray-200 dark:border-gray-700"
-                >
-                  {t(`calendar.days.${day}`)}
-                </div>
-              ))}
             </div>
-            <div className="grid grid-cols-7">
-              {calendarDays.map((day, index) => (
-                <div
-                  key={index}
-                  className={`min-h-[100px] p-1 border-b border-r border-gray-200 dark:border-gray-700 ${
-                    !day.isCurrentMonth
-                      ? 'bg-gray-50 dark:bg-gray-900/50'
-                      : 'bg-white dark:bg-gray-800'
-                  }`}
-                >
-                  <div
-                    className={`text-sm font-medium mb-1 w-7 h-7 flex items-center justify-center rounded-full ${
-                      day.isToday
-                        ? 'bg-blue-600 text-white'
-                        : day.isCurrentMonth
-                        ? 'text-gray-900 dark:text-gray-100'
-                        : 'text-gray-400 dark:text-gray-600'
-                    }`}
+
+            {/* Scheduled Transactions List. The bar above the rows is the
+                register's: the Table / Calendar switch and the count on the
+                left, Export and the density toggle on the right, directly
+                over the column headers. The list is drawn whole, so the bar
+                carries no pager. */}
+            <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-700/50 rounded-lg overflow-hidden">
+              <ListTopToolbar
+                densityView="bills"
+                viewToggle={<ViewModeToggle value={viewMode} onChange={setViewMode} />}
+                summary={
+                  isLoading
+                    ? null
+                    : t.rich('toolbar.showing', {
+                        shown: formatNumber(filteredTransactions.length, 0),
+                        total: formatNumber(scheduledTransactions.length, 0),
+                        b: (chunks) => <span className="font-medium">{chunks}</span>,
+                      })
+                }
+                actions={
+                  <button
+                    type="button"
+                    onClick={handleExport}
+                    disabled={isLoading || filteredTransactions.length === 0}
+                    className={`${LIST_TOOLBAR_BUTTON_CLASS} gap-1`}
+                    title={t('toolbar.exportTitle')}
                   >
-                    {format(day.date, 'd')}
-                  </div>
-                  <div className="space-y-0.5">
-                    {day.bills.slice(0, 3).map((bill, billIndex) => (
-                      <div
-                        key={billIndex}
-                        onClick={() => handleEdit(bill)}
-                        className={`px-1 py-0.5 text-xs rounded truncate cursor-pointer ${
-                          SCHEDULED_KIND_CHIP_CLASSES[billKind(bill)]
-                        } hover:opacity-80`}
-                      >
-                        {bill.name}
-                      </div>
-                    ))}
-                    {day.bills.length > 3 && (
-                      <div className="text-xs text-gray-500 dark:text-gray-400 px-1">
-                        {t('calendar.more', { count: day.bills.length - 3 })}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
+                    <DocumentArrowDownIcon className="w-4 h-4" aria-hidden="true" />
+                    <span className="hidden sm:inline">{t('toolbar.exportButton')}</span>
+                  </button>
+                }
+              />
+              {isLoading ? (
+                <LoadingSpinner text={t('page.loadingText')} />
+              ) : (
+                <ScheduledTransactionList
+                  transactions={filteredTransactions}
+                  onEdit={handleEdit}
+                  onEditOccurrence={handleEditOccurrence}
+                  onPost={handlePost}
+                  onRefresh={refreshData}
+                  categoryColorMap={categoryColorMap}
+                  highlightId={highlightId}
+                />
+              )}
             </div>
-          </div>
+          </>
+        ) : (
+          <>
+            {/* Calendar toolbar: the Table / Calendar switch at the
+                left-hand end, where the table's bar has it, and the month
+                navigation centred in the row from `sm` up. It sits on the
+                page rather than in a card, as the Transactions calendar's
+                toolbar does. */}
+            <div className="mb-3 flex flex-wrap items-center gap-2 sm:grid sm:grid-cols-[1fr_auto_1fr]">
+              <div className="flex items-center gap-2 sm:justify-self-start">
+                <ViewModeToggle value={viewMode} onChange={setViewMode} />
+              </div>
+              <CalendarMonthNav
+                month={format(calendarMonth, 'yyyy-MM')}
+                onMonthChange={(next) => setCalendarMonth(parseLocalDate(`${next}-01`))}
+                today={financialToday}
+              />
+            </div>
+
+            {/* Calendar View: the grid sits on the page, not in a card, so
+                its weekday row carries no fill, as the Transactions calendar's
+                does. */}
+            <ScheduledCalendarGrid days={calendarDays} onSelect={handleEdit} />
+          </>
         )}
       </main>
 
@@ -1005,6 +922,8 @@ function BillsContent() {
           accounts={accounts}
           existingOverride={overrideEditor.existingOverride}
           prefillAmount={overrideEditor.prefillAmount}
+          loanOccurrence={overrideEditor.loanOccurrence}
+          payrollDeductions={overrideEditor.payrollDeductions}
           onClose={handleOverrideEditorClose}
           onSave={handleOverrideEditorSave}
           onCreateCategory={createCategoryFromTypedName}
@@ -1027,12 +946,17 @@ function BillsContent() {
       )}
 
       {/* Override Confirmation Dialog */}
-      <Modal isOpen={overrideConfirm.isOpen} onClose={handleOverrideConfirmCancel} maxWidth="lg" className="px-6 py-5">
+      {/* Three answers (Cancel, keep, delete), so not a two-button
+          ConfirmDialog; titled through Modal so the dialog is named. */}
+      <Modal
+        isOpen={overrideConfirm.isOpen}
+        onClose={handleOverrideConfirmCancel}
+        maxWidth="lg"
+        className="p-6"
+        title={t('overrideConfirm.title')}
+      >
         <div className="mb-4">
-          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">
-            {t('overrideConfirm.title')}
-          </h3>
-          <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-sm text-gray-500 dark:text-gray-400">
             {t('overrideConfirm.message', { count: overrideConfirm.overrideCount })}
           </p>
           <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
@@ -1046,7 +970,7 @@ function BillsContent() {
           <Button variant="outline" onClick={handleOverrideConfirmKeep}>
             {t('overrideConfirm.keepButton')}
           </Button>
-          <Button onClick={handleOverrideConfirmDelete} className="bg-red-600 hover:bg-red-700">
+          <Button variant="danger" onClick={handleOverrideConfirmDelete}>
             {t('overrideConfirm.deleteButton')}
           </Button>
         </div>

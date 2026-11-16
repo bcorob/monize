@@ -3,6 +3,7 @@
     "noneToUpdate": "更新する有価証券がありません",
     "updated": "{count, plural, one {# 件の有価証券の株価を更新しました} other {# 件の有価証券の株価を更新しました}}",
     "partialFailure": "株価の更新: {updated} 件成功、{failed} 件失敗{symbols}",
+    "partialFailureWithReasons": "株価の更新: {updated} 件成功、{failed} 件失敗{symbols}\n{reasons}",
     "failed": "株価の更新に失敗しました"
   },
   "page": {
@@ -10,6 +11,7 @@
     "subtitle": "株式、ETF、投資信託などの有価証券を管理する",
     "newSecurity": "+ 新しい有価証券",
     "searchPlaceholder": "シンボルまたは名前で検索...",
+    "statusFilterLabel": "ステータス",
     "statusAll": "すべて ({count})",
     "statusActive": "有効 ({count})",
     "statusInactive": "無効 ({count})",
@@ -49,6 +51,7 @@
       "name": "名前",
       "type": "種類",
       "shares": "株数",
+      "value": "評価額",
       "exchange": "取引所",
       "currency": "通貨",
       "provider": "プロバイダー",
@@ -63,12 +66,10 @@
       "inactive": "無効",
       "inactiveShort": "無効"
     },
-    "providerTitle": {
-      "override": "有価証券ごとのプロバイダー設定",
-      "inherited": "デフォルトの株価プロバイダー設定から継承"
-    },
+    "providerInherited": "{provider}（既定）",
     "columnTitles": {
       "shares": "すべての勘定科目で保有している現在の株数",
+      "value": "すべての勘定科目で保有している株数に直近の株価を掛けた金額（銘柄自身の通貨建て）",
       "source": "直近の株価のソース"
     },
     "actions": {
@@ -115,7 +116,11 @@
     "exchangeLabel": "取引所",
     "currencyLabel": "通貨",
     "currencyNotConfigured": "{code} — 登録した通貨にありません",
+    "currencyPlaceholder": "通貨を選択...",
+    "currencyNotReported": "プロバイダーがこの暗号資産の通貨を報告しませんでした。この銘柄が建値されている法定通貨を選択してください。",
     "quoteProviderLabel": "株価プロバイダー",
+    "skipPriceUpdatesLabel": "価格の自動更新を無効にする",
+    "skipPriceUpdatesHelp": "Monize はこの銘柄の価格を取得しません。どのプロバイダーも価格を提供できない銘柄に使用してください。自分で入力した価格は引き続き反映されます。別の相場プロバイダーまたは MSN 銘柄 ID を選択すると、更新が再び有効になります。",
     "msnIdLabel": "MSN 銘柄 ID（上級者向け）",
     "lookupProviderAriaLabel": "プロバイダーを検索",
     "lookupButton": "検索",
@@ -139,7 +144,11 @@
     "providers": {
       "auto": "自動",
       "yahoo": "Yahoo",
-      "msn": "MSN"
+      "msn": "MSN",
+      "lse": "LSE",
+      "deutsche_boerse": "Deutsche Börse",
+      "bond_engine": "債券エンジン",
+      "html_table": "Webページの表"
     },
     "types": {
       "select": "種類を選択...",
@@ -189,16 +198,50 @@
       "deleteConfirm": "削除",
       "deleteSuccess": "資産クラス「{name}」を削除しました",
       "deleteFailed": "資産クラス「{name}」を削除できませんでした"
+    },
+    "bondFetchAction": "公式ソースから {code} を取得",
+    "bondFetching": "{code} を発行体から参照レートとともに取得しています。最大 1 分かかることがあります。",
+    "bondFetchFailed": "シリーズを取得できませんでした。",
+    "bondCurrencyLocked": "この銘柄は{linkedCurrency}の債券の種類にリンクされています。通貨を{linkedCurrency}に戻すか、先に債券の種類のリンクを解除してください(解除すると計算済みの価格が削除されます)。",
+    "bondProgramLabel": "債券の種類",
+    "bondProgramNone": "未リンク",
+    "bondProgramCurrent": "リンク済みの債券の種類",
+    "bondProgramLoading": "債券の種類を読み込み中...",
+    "bondProgramLoadFailed": "債券の種類を読み込めなかったため、債券の種類をまだリンクできません。",
+    "bondProgramRetry": "再試行",
+    "bondNoPrograms": "債券カタログにはまだ債券の種類がありません。",
+    "bondAutoFetchLabel": "この債券の種類の新しいシリーズを自動で取得する",
+    "bondAutoFetchHelp": "オンにすると、Monize は毎日、この債券の種類の新しいシリーズを公式ソースから読み取ります。シリーズを先に取得しなくても購入を記録できます。",
+    "bondCountryLabel": "国",
+    "bondCountryOther": "その他",
+    "bondCountryOtherInfo": "他の国の債券への対応は、プロジェクトの<link>GitHub</link>でリクエストできます。",
+    "quoteTable": {
+      "urlLabel": "価格表のウェブページ",
+      "urlHelp": "ページには、見出し行に日付列と終値列がある表が必要です。",
+      "test": "テスト",
+      "previewFailed": "ページを読み込めませんでした。",
+      "summary": "{first}から{last}までの{count, plural, other {#日分}}",
+      "columns": "使用した列: {columns}",
+      "currency": "ページに表示された通貨: {currency}",
+      "noCurrency": "ページに通貨の表示がありません。価格は銘柄の通貨で保存されます。",
+      "skipped": "{count, plural, other {読み取れない#行をスキップしました}}",
+      "headers": {
+        "date": "日付",
+        "open": "始値",
+        "high": "高値",
+        "low": "安値",
+        "close": "終値",
+        "volume": "出来高"
+      }
     }
   },
   "priceForm": {
     "dateLabel": "日付",
     "closePriceLabel": "終値",
-    "openPriceLabel": "始値",
-    "highPriceLabel": "高値",
-    "lowPriceLabel": "安値",
-    "volumeLabel": "出来高",
-    "optionalPlaceholder": "任意",
+    "openPriceLabel": "始値（任意）",
+    "highPriceLabel": "高値（任意）",
+    "lowPriceLabel": "安値（任意）",
+    "volumeLabel": "出来高（任意）",
     "submitCreate": "株価を追加",
     "submitUpdate": "株価を更新"
   },
@@ -246,7 +289,9 @@
     },
     "collapseAll": "すべて折りたたむ",
     "expandAll": "すべて展開",
-    "groupCount": "価格 {count} 件"
+    "groupCount": "価格 {count} 件",
+    "addYearButton": "履歴をもう1年追加",
+    "addYearTitle": "プロバイダーから過去価格をさらに1年分取得します"
   },
   "transactionHistory": {
     "accountLabel": "勘定科目",
@@ -284,7 +329,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "長期キャピタルゲインの再投資",
       "CAPITAL_GAIN_SHORT": "短期キャピタルゲイン",
       "CAPITAL_GAIN_LONG": "長期キャピタルゲイン",
-      "REDEEM": "CD・債券の償還"
+      "REDEEM": "CD・債券の償還",
+      "RETURN_OF_CAPITAL": "資本の払い戻し"
     },
     "toasts": {
       "loadHistoryFailed": "履歴の読み込みに失敗しました",
@@ -333,11 +379,20 @@
     "nameRequired": "名前は必須です",
     "nameMax": "名前は 255 文字以内にしてください",
     "currencyRequired": "通貨は必須です",
-    "descriptionMax": "説明は5000文字以内である必要があります"
+    "bondProgramRequired": "債券の種類は必須です",
+    "descriptionMax": "説明は5000文字以内である必要があります",
+    "quoteUrlRequired": "価格表のあるページを入力してください。",
+    "quoteUrlInvalid": "http:// または https:// で始まる完全なアドレスを入力してください。"
   },
   "priceValidation": {
     "dateRequired": "日付は必須です",
     "priceRequired": "株価は必須です",
     "priceNonNegative": "株価は 0 以上の値にしてください"
+  },
+  "priceAlert": {
+    "label": "価格変動アラート (%)",
+    "help": "空欄で無効。直前の利用可能な取引日の価格と比べた上昇・下落を、銘柄ごとにUTC日付で1日1回まで通知します。",
+    "range": "0.1〜1000の割合を入力してください。",
+    "chartLabel": "価格アラートにチャートを含める"
   }
 }

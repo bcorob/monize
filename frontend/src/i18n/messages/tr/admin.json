@@ -46,6 +46,8 @@
     "colProvider": "Sağlayıcı",
     "colStatus": "Durum",
     "colLastLogin": "Son Giriş",
+    "colBackups": "Yedeklemeler",
+    "colAttachments": "Ekler",
     "colActions": "İşlemler",
     "youSuffix": "(siz)",
     "noEmail": "E-posta yok",
@@ -60,7 +62,22 @@
     "clickToDisable": "Devre dışı bırakmak için tıklayın",
     "clickToEnable": "Etkinleştirmek için tıklayın",
     "resetPassword": "Şifreyi Sıfırla",
-    "noUsers": "Kullanıcı bulunamadı."
+    "resetTwoFactor": "2FA'yı Sıfırla",
+    "unlinkSso": "SSO Bağlantısını Kaldır",
+    "noUsers": "Kullanıcı bulunamadı.",
+    "storageLoading": "Yükleniyor…",
+    "storageUnavailable": "Kullanılamıyor",
+    "storageUnavailableHint": "Depolama kullanımı yüklenemedi. Yeniden denemek için sayfayı yenileyin.",
+    "storageUnknown": "Bilinmiyor",
+    "storageUnknownStore": "Bu kullanıcının yedekleme deposu okunamadı, bu yüzden boyut bilinmiyor. Yedekleme konumunu Yedeklemeler sayfasından kontrol edin.",
+    "storageNotReported": "Bildirilmedi",
+    "storageNotReportedHint": "Bu hesap son depolama okumasında yoktu. Dahil etmek için sayfayı yenileyin.",
+    "backupsOff": "Kapalı",
+    "backupsOffHint": "Bu kullanıcı için otomatik yedekleme etkin değil ve saklanan yedekleme yok.",
+    "backupScheduleOff": "Zamanlama kapalı",
+    "backupScheduleOffHint": "Otomatik yedekleme kapalı; bu dosyalar saklama süresinin henüz kaldırmadıklarıdır.",
+    "backupCount": "{count, plural, =0 {Yedekleme yok} one {# yedekleme} other {# yedekleme}}",
+    "attachmentCount": "{count, plural, =0 {Dosya yok} one {# dosya} other {# dosya}}"
   },
   "usersPage": {
     "title": "Kullanıcı Yönetimi",
@@ -81,7 +98,10 @@
       "loadFailed": "Kullanıcılar yüklenemedi",
       "deleteFailed": "Kullanıcı silinemedi",
       "disableFailed": "Kullanıcı devre dışı bırakılamadı",
-      "resetFailed": "Şifre sıfırlanamadı"
+      "resetFailed": "Şifre sıfırlanamadı",
+      "twoFactorReset": "{name} için iki faktörlü kimlik doğrulama sıfırlandı. Tüm oturumları kapatıldı.",
+      "resetTwoFactorFailed": "İki faktörlü kimlik doğrulama sıfırlanamadı",
+      "unlinkSsoFailed": "SSO bağlantısı kaldırılamadı"
     },
     "dialogs": {
       "promoteTitle": "Kullanıcı Yükseltilsin mi?",
@@ -96,6 +116,14 @@
       "resetTitle": "Şifre Sıfırlansın mı?",
       "resetMessage": "Bu işlem {name} için yeni bir geçici şifre oluşturacaktır. Bir sonraki girişlerinde şifrelerini değiştirmeleri gerekecektir.",
       "resetConfirm": "Şifreyi Sıfırla",
+      "unlinkSsoTitle": "SSO Bağlantısı Kaldırılsın mı?",
+      "unlinkSsoMessage": "Bu işlem {name} hesabını yerel hesaba dönüştürür. Aynı e-posta adresiyle sonradan yapılan bir SSO girişi hesabı yeniden bağlayabilir. Sistem geçici bir şifre oluşturur ve {name} bir sonraki girişte bu şifreyi değiştirmelidir.",
+      "unlinkSsoConfirm": "SSO Bağlantısını Kaldır",
+      "unlinkSsoResultTitle": "SSO Bağlantısı Kaldırıldı",
+      "unlinkSsoResultDesc": "{name} hesabı artık yerel bir hesaptır. Oturum açabilmesi için bu geçici şifreyi kendisiyle paylaşın.",
+      "resetTwoFactorTitle": "İki Faktörlü Kimlik Doğrulama Sıfırlansın mı?",
+      "resetTwoFactorMessage": "Bu işlem {name} için iki faktörlü kimlik doğrulamayı kapatır, yedek kodlarını ve güvenilen cihazlarını siler ve tüm oturumlarını kapatır. Ardından şifresiyle giriş yapıp 2FA'yı yeniden kurabilir. Kimlik doğrulama uygulamasını ve yedek kodlarını kaybettiğinde ya da JWT_SECRET değiştirildikten sonra kullanın.",
+      "resetTwoFactorConfirm": "2FA'yı Sıfırla",
       "deleteTitle": "Kullanıcı Silinsin mi?",
       "deleteMessage": "{name} adlı kullanıcıyı silmek istediğinizden emin misiniz? Bu işlem hesabını ve tüm ilişkili verilerini kalıcı olarak kaldıracaktır. Bu işlem geri alınamaz. Başka bir hesabın temsilcisiyse kendi verileri kaldırılır ancak delegasyon çalışmaya devam edebilmesi için girişleri korunur -- salt temsilci kullanıcı olurlar.",
       "deleteConfirm": "Kullanıcıyı Sil",
@@ -103,6 +131,84 @@
       "tempPasswordTitleUpgraded": "Hesap Yükseltildi",
       "tempPasswordDescCreated": "{name} için geçici bir şifre oluşturuldu. Giriş yapmaları için paylaşın.",
       "tempPasswordDescUpgraded": "Mevcut paylaşımlı bir kullanıcı tam hesaba yükseltildi. Bu geçici şifreyi {name} ile paylaşın."
+    }
+  },
+  "notificationsPage": {
+    "title": "Bildirimler",
+    "subtitle": "Bu Monize örneğinin sunduğu teslim kanalları ve arkalarındaki anlık bildirim kimliği.",
+    "loading": "Bildirim ayarları yükleniyor...",
+    "loadUnavailable": "Monize bildirim ayarlarını sunucudan okuyamadı. Yeniden denemek için sayfayı yenileyin.",
+    "channelsHeading": "Teslim kanalları",
+    "identityHeading": "Web Push kimliği",
+    "perAccountNote": "Cihazlar, test bildirimleri ve bildirim tercihleri her hesabın kendisine aittir ve Ayarlar'dan yönetilir. Yönetici örneği yapılandırır; başkasının bildirimlerini ne gönderir ne de görür.",
+    "channelState": {
+      "on": "Açık",
+      "off": "Kapalı",
+      "unconfigured": "Kullanılamıyor",
+      "unknown": "Bilinmiyor"
+    },
+    "channels": {
+      "inApp": {
+        "name": "Uygulama içi bildirimler",
+        "description": "Başlıktaki zil. Her zaman kullanılabilir ve kapatılamaz: diğer tüm kanallar başarısız olsa bile bildirim burada durur."
+      },
+      "webPush": {
+        "name": "Tarayıcı anlık bildirimi",
+        "description": "Monize kapalıyken bile telefona veya masaüstüne ulaşan bildirimler. Firebase, Google Play veya Apple Developer hesabı gerekmez.",
+        "toggleLabel": "Bu örnek için tarayıcı anlık bildirimini etkinleştir",
+        "missingKeys": "Bu örneğin anlık bildirim anahtar çifti yok. ENCRYPTION_KEY değerini ayarlayıp yeniden başlatın: Monize bir sonraki açılışta çifti kendisi üretir.",
+        "keyUnreadable": "Bu örnek, kayıtlı anlık bildirim anahtar çiftini çözemiyor; bu yüzden hiçbir şey teslim edilmiyor. Kurtarmak için aşağıdan anahtar çiftini değiştirin.",
+        "serverKeyMissing": "Bu örnekte ENCRYPTION_KEY yok, bu yüzden kaydettiği push anahtar çiftini açamıyor. Dağıtımda ENCRYPTION_KEY ayarlayın ve yeniden başlatın — anahtar yokken döndürmek yardımcı olamaz."
+      },
+      "email": {
+        "name": "E-posta",
+        "description": "Fatura hatırlatmaları, bütçe özetleri ve sistem uyarıları her hesabın e-posta adresine gönderilir.",
+        "missingSmtp": "Yapılandırılmış bir posta sunucusu yok. E-postayı etkinleştirmek için SMTP ortam değişkenlerini ayarlayın.",
+        "statusUnavailable": "Monize posta sunucusunun durumunu okuyamadı."
+      },
+      "ntfy": {
+        "name": "ntfy ve UnifiedPush",
+        "description": "Aynı şifreli push, Google veya Apple altyapısı yerine kendi barındırdığınız bir UnifiedPush dağıtıcısına (ntfy, NextPush) teslim edilir. Bu örneğin push anahtar çiftini ve anahtarını paylaşır; herkes uç noktasını kendi UnifiedPush uygulamasından kaydeder ve kanalı Ayarlar’dan açar.",
+        "followsWebPush": "Tarayıcı push’u kapalıyken veya anahtar çifti kullanılamıyorken kullanılamaz — bu kanal aynı anahtar çiftiyle teslim edilir."
+      }
+    },
+    "identity": {
+      "fingerprintLabel": "Anahtar parmak izi",
+      "generatedLabel": "Oluşturulma",
+      "devicesLabel": "Kayıtlı cihazlar",
+      "deviceCounts": "{live} etkin, {disabled} devre dışı",
+      "rotateDescription": "Değiştirme bu örneğin anahtar çiftini yeniler. Kayıtlı her cihaz erişilemez hale gelir ve anlık bildirimleri yeniden açması gerekir; bu nedenle yalnızca anahtar ifşa olmuş olabilecekse değiştirin.",
+      "rotateButton": "Anahtar çiftini değiştir",
+      "rotatingButton": "Değiştiriliyor...",
+      "missingEncryptionKey": "ENCRYPTION_KEY ayarlanmadığı ve özel anahtarın şifrelenmeden saklanması gerekeceği için bu örneğin anlık bildirim anahtar çifti yok. Değişkeni ayarlayıp yeniden başlatın: Monize çifti kendisi üretir.",
+      "keyUnreadable": "Bu örnek, artık çözemediği bir anlık bildirim anahtar çifti tutuyor; bu yüzden hiçbir şey teslim edilmiyor. Çalışan bir veritabanında ENCRYPTION_KEY değiştiğinde ya da bir yedek başka bir örneğe geri yüklendiğinde olur. Kurtarmak için anahtar çiftini değiştirin; her cihaz yeniden kaydolacaktır.",
+      "serverKeyMissing": "Bu örnekte ENCRYPTION_KEY tanımlı değil, bu yüzden kaydettiği push anahtar çiftini açamıyor. Anahtar yokken döndürmek işe yaramaz: dağıtımda ENCRYPTION_KEY değerini ayarlayın ve yeniden başlatın; push mevcut cihazlarla yeniden çalışır."
+    },
+    "dialogs": {
+      "rotateTitle": "Anlık bildirim anahtar çifti değiştirilsin mi?",
+      "rotateMessage": "{count, plural, =0 {Henüz kayıtlı cihaz yok, kaybedilecek bir şey de yok.} one {Kayıtlı 1 cihaz, o tarayıcıda anlık bildirimler yeniden açılana kadar bildirim almayı bırakacak.} other {Kayıtlı # cihaz, her tarayıcıda anlık bildirimler yeniden açılana kadar bildirim almayı bırakacak.}}",
+      "rotateConfirm": "Değiştir"
+    },
+    "toasts": {
+      "loadFailed": "Bildirim ayarları yüklenemedi",
+      "pushEnabled": "Bu örnek için tarayıcı anlık bildirimi etkinleştirildi",
+      "pushDisabled": "Bu örnek için tarayıcı anlık bildirimi kapatıldı",
+      "pushToggleFailed": "Tarayıcı anlık bildirim ayarı değiştirilemedi",
+      "rotated": "{count, plural, =0 {Anahtar çifti değiştirildi} one {Anahtar çifti değiştirildi; 1 cihazın yeniden kaydolması gerekiyor} other {Anahtar çifti değiştirildi; # cihazın yeniden kaydolması gerekiyor}}",
+      "rotateFailed": "Anahtar çifti değiştirilemedi"
+    }
+  },
+  "backupsPage": {
+    "title": "Yedekler",
+    "subtitle": "Her hesabın kendi finansal kayıtlarının zamanlanmış, sıkıştırılmış yedek dosyaları.",
+    "scope": {
+      "heading": "Tam veritabanı yedeği değildir",
+      "perUser": "Aşağıdaki zamanlamaya göre sunucu, her hesabın kendi finansal kayıtlarının sıkıştırılmış bir yedek dosyasını yazar ve saklama ilkesine göre eskileri siler. Tüm etkin hesaplar kapsanır.",
+      "notFullDatabase": "Bu bir PostgreSQL dökümü değildir: şemayı, sunucu yapılandırmasını ve bir hesabın finansal kayıtları dışındaki hiçbir şeyi içermez. Tüm örneğin felaket kurtarması için veritabanını ve ek depolamasını kendi araçlarınızla yedekleyin."
+    },
+    "demoRestricted": {
+      "heading": "Demo Modunda Kısıtlı",
+      "body": "Otomatik yedekleme yapılandırması demo modunda devre dışıdır."
     }
   }
 }

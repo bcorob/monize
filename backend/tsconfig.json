@@ -7,7 +7,22 @@
     "emitDecoratorMetadata": true,
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
+    // Source profiles (src/bank-sync/profiles/*.json) are imported as modules so
+    // the compiler emits each one into dist/ beside the code that reads it.
+    "resolveJsonModule": true,
     "target": "ES2021",
+    // The ES2021 defaults plus `ErrorOptions`, so `new Error(message, { cause })`
+    // type-checks (eslint's preserve-caught-error asks for it). Node has
+    // supported `cause` since 16.9; emitted code is unchanged.
+    "lib": [
+      "es2021",
+      "es2022.error",
+      "dom",
+      "dom.iterable",
+      "dom.asynciterable",
+      "webworker.importscripts",
+      "scripthost"
+    ],
     "sourceMap": true,
     "outDir": "./dist",
     "rootDir": "./src",

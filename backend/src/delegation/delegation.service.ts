@@ -32,9 +32,15 @@ import { DelegateAccountFavourite } from "./entities/delegate-account-favourite.
 import { User } from "../users/entities/user.entity";
 import { UserPreference } from "../users/entities/user-preference.entity";
 import { RefreshToken } from "../auth/entities/refresh-token.entity";
+import {
+  revokeOAuthGrantsAfterCommit,
+  revokeRefreshSessionsAfterCommit,
+  revokeStandingCredentials,
+} from "../auth/credential-revocation";
 import { Account, AccountType } from "../accounts/entities/account.entity";
 import { Transaction } from "../transactions/entities/transaction.entity";
 import { ScheduledTransaction } from "../scheduled-transactions/entities/scheduled-transaction.entity";
+import { ScheduledTransactionOverride } from "../scheduled-transactions/entities/scheduled-transaction-override.entity";
 import { hashToken } from "../auth/crypto.util";
 import { generateReadablePassword } from "../admin/utils/password-generator";
 import { I18nService } from "nestjs-i18n";
@@ -44,6 +50,7 @@ import { resolveUserEmailLocale } from "../i18n/resolve-user-email-locale";
 import { EmailService } from "../notifications/email.service";
 import { delegateInviteTemplate } from "../notifications/email-templates";
 import { ConfigService } from "@nestjs/config";
+import { ModuleRef } from "@nestjs/core";
 import { CreateDelegateDto } from "./dto/create-delegate.dto";
 import { AccountGrantDto } from "./dto/set-grants.dto";
 import {
@@ -51,6 +58,7 @@ import {
   DelegateCapabilityOp,
   DelegateSection,
 } from "./decorators/delegate-access.decorator";
+import { isTwoFactorActive } from "../auth/two-factor-state";
 
 export interface ResourceCapabilities {
   create: boolean;
@@ -69,6 +77,7 @@ export interface DelegateSectionSet {
   budgets: boolean;
   reports: boolean;
   ai: boolean;
+  warranties: boolean;
 }
 
 const SECTION_FIELD: Record<DelegateSection, keyof AccountDelegate> = {
@@ -77,6 +86,7 @@ const SECTION_FIELD: Record<DelegateSection, keyof AccountDelegate> = {
   budgets: "budgetsCanRead",
   reports: "reportsCanRead",
   ai: "aiCanRead",
+  warranties: "warrantiesCanRead",
 };
 
 /**
@@ -123,6 +133,7 @@ export class DelegationService {
     private configService: ConfigService,
     private dataSource: DataSource,
     private readonly i18n: I18nService,
+    private readonly moduleRef: ModuleRef,
   ) {}
 
   /**
@@ -260,9 +271,7 @@ export class DelegationService {
           repo.findOne({ where: { userId: ownerUserId } }),
         ),
       ]);
-      const ownerRequires2FA = !!(
-        ownerPref?.twoFactorEnabled && owner?.twoFactorSecret
-      );
+      const ownerRequires2FA = isTwoFactorActive(ownerPref, owner);
       if (!ownerRequires2FA) return false;
 
       const [delegate, delegatePref] = await Promise.all([
@@ -273,9 +282,7 @@ export class DelegationService {
           repo.findOne({ where: { userId: delegateUserId } }),
         ),
       ]);
-      const delegateHas2FA = !!(
-        delegatePref?.twoFactorEnabled && delegate?.twoFactorSecret
-      );
+      const delegateHas2FA = isTwoFactorActive(delegatePref, delegate);
       return !delegateHas2FA;
     });
   }
@@ -347,17 +354,37 @@ export class DelegationService {
    * transfer counterpart when it is a transfer. Empty if the row does not
    * exist (the owner-scoped service then returns 404).
    */
+  /**
+   * Every account a scheduled transaction moves money in, primary account
+   * first. Posting (manually or by the auto-post cron) writes into all of
+   * them -- the transfer counterpart, the investment funding account, each
+   * split's transfer account and any per-occurrence override split's -- so a
+   * delegate write gated on only the primary account could move money
+   * through an account it was never granted.
+   */
   async accountIdsForScheduled(scheduledId: string): Promise<string[]> {
     const st = await this.scoped(ScheduledTransaction, (repo) =>
       repo.findOne({
         where: { id: scheduledId },
-        select: ["accountId", "transferAccountId", "isTransfer"],
+        relations: { splits: true },
       }),
     );
     if (!st) return [];
+    const overrides = await this.scoped(ScheduledTransactionOverride, (repo) =>
+      repo.find({
+        where: { scheduledTransactionId: scheduledId },
+        select: ["id", "splits"],
+      }),
+    );
     const ids = new Set<string>([st.accountId]);
-    if (st.isTransfer && st.transferAccountId) {
-      ids.add(st.transferAccountId);
+    const add = (id: string | null | undefined) => {
+      if (id) ids.add(id);
+    };
+    if (st.isTransfer) add(st.transferAccountId);
+    add(st.investmentFundingAccountId);
+    for (const split of st.splits ?? []) add(split.transferAccountId);
+    for (const override of overrides) {
+      for (const split of override.splits ?? []) add(split.transferAccountId);
     }
     return [...ids];
   }
@@ -370,6 +397,33 @@ export class DelegationService {
       }),
     );
     return grants.map((g) => g.accountId);
+  }
+
+  /**
+   * Whether the active delegation can read everything the owner has: every
+   * section, and a READ grant on every account the owner owns (closed ones
+   * included). A route that cannot narrow its answer to a delegate's grants
+   * (@DelegateRequiresFullScope) is reachable only then. Reads the owner's
+   * account ids, so it runs under the guard's delegate context.
+   */
+  async grantsWholeLedger(delegationId: string): Promise<boolean> {
+    const delegation = await this.scoped(AccountDelegate, (repo) =>
+      repo.findOne({
+        where: { id: delegationId, status: "active" },
+      }),
+    );
+    if (!delegation) return false;
+    if (!SECTION_FIELDS.every((field) => !!delegation[field])) return false;
+    const readable = await this.readableAccountIds(delegationId);
+    const ungranted = await this.scoped(Account, (repo) =>
+      repo.count({
+        where: {
+          userId: delegation.ownerUserId,
+          ...(readable.length > 0 ? { id: Not(In(readable)) } : {}),
+        },
+      }),
+    );
+    return ungranted === 0;
   }
 
   /**
@@ -463,8 +517,9 @@ export class DelegationService {
     if (!Array.isArray(accountIds)) {
       throw new BadRequestException(
         tr(
-          "errors.delegation.accountIdsMustBeArray",
-          "accountIds must be an array",
+          "errors.params.mustBeArray",
+          'The value of "accountIds" must be an array',
+          { param: "accountIds" },
         ),
       );
     }
@@ -806,6 +861,7 @@ export class DelegationService {
       budgets: !!d?.budgetsCanRead,
       reports: !!d?.reportsCanRead,
       ai: !!d?.aiCanRead,
+      warranties: !!d?.warrantiesCanRead,
     };
   }
 
@@ -894,27 +950,13 @@ export class DelegationService {
         | "investmentsCanRead"
         | "budgetsCanRead"
         | "reportsCanRead"
-        | "aiCanRead",
+        | "aiCanRead"
+        | "warrantiesCanRead",
         boolean
       >
     >,
   ): Promise<void> {
-    const delegation = await this.scoped(AccountDelegate, (repo) =>
-      repo.findOne({
-        where: { id: delegationId, ownerUserId },
-      }),
-    );
-    if (!delegation) {
-      throw new NotFoundException(
-        tr("errors.delegation.delegateNotFound", "Delegate not found"),
-      );
-    }
-    for (const [key, value] of Object.entries(sections)) {
-      if (value !== undefined) {
-        (delegation as unknown as Record<string, boolean>)[key] = value;
-      }
-    }
-    await this.scoped(AccountDelegate, (repo) => repo.save(delegation));
+    await this.writeDelegationFlags(ownerUserId, delegationId, sections);
   }
 
   async setCapabilities(
@@ -935,22 +977,38 @@ export class DelegationService {
       >
     >,
   ): Promise<void> {
-    const delegation = await this.scoped(AccountDelegate, (repo) =>
-      repo.findOne({
-        where: { id: delegationId, ownerUserId },
-      }),
+    await this.writeDelegationFlags(ownerUserId, delegationId, caps);
+  }
+
+  /**
+   * Write only the flags given, by one conditional `UPDATE` keyed on the
+   * owner, and 404 when it matches nothing.
+   *
+   * Reading the entity in one transaction and `save`-ing it in another wrote
+   * every column back from a stale copy, and when a revoke had deleted the row
+   * in between, `save` found nothing by id and INSERTed it: the same
+   * delegation back as `active` with its flags (A26-M05). Two settings saves
+   * also overwrote each other's columns.
+   */
+  private async writeDelegationFlags(
+    ownerUserId: string,
+    delegationId: string,
+    flags: Partial<Record<string, boolean>>,
+  ): Promise<void> {
+    const patch = Object.fromEntries(
+      Object.entries(flags).filter(([, value]) => value !== undefined),
+    ) as Partial<AccountDelegate>;
+    const matched = await this.scoped(AccountDelegate, async (repo) =>
+      Object.keys(patch).length > 0
+        ? ((await repo.update({ id: delegationId, ownerUserId }, patch))
+            .affected ?? 0) > 0
+        : repo.exists({ where: { id: delegationId, ownerUserId } }),
     );
-    if (!delegation) {
+    if (!matched) {
       throw new NotFoundException(
         tr("errors.delegation.delegateNotFound", "Delegate not found"),
       );
     }
-    for (const [key, value] of Object.entries(caps)) {
-      if (value !== undefined) {
-        (delegation as unknown as Record<string, boolean>)[key] = value;
-      }
-    }
-    await this.scoped(AccountDelegate, (repo) => repo.save(delegation));
   }
 
   /**
@@ -1056,7 +1114,13 @@ export class DelegationService {
     let inviteToken: string | undefined;
 
     return withScopedDb(this.dataSource, async (manager) => {
-      let delegateUser = await manager.findOne(User, { where: { email } });
+      // Locked: linking an existing login to a second owner is the event that
+      // takes away the first owner's right to reset its password, so the link
+      // and a reset of the same login serialize on this row (A26-M05).
+      let delegateUser = await manager.findOne(User, {
+        where: { email },
+        lock: { mode: "pessimistic_write" },
+      });
       const isNew = !delegateUser;
 
       if (delegateUser && delegateUser.id === ownerUserId) {
@@ -1083,27 +1147,39 @@ export class DelegationService {
       // this check the front end's email-lookup race (Add clicked before
       // the 400ms debounced lookup finishes) lets a stray dto.password
       // overwrite a real user's password.
+      //
+      // A pure delegate row is owner-managed only by the owner whose
+      // delegation it is. Once ANY other owner has a delegation to it, its
+      // login also opens that owner's data: setting its password, minting an
+      // invite token or clearing its lockout here would let this owner sign
+      // in as the delegate and switch into the other owner's context. The
+      // reset path holds the same rule (`canOwnerResetDelegatePassword`);
+      // here the caller only links the delegation.
       let mayManageCredentials = true;
       if (delegateUser) {
         if (delegateUser.oidcSubject || delegateUser.role === "admin") {
           mayManageCredentials = false;
         } else {
-          const [ownsAccounts, ownsDelegations, alreadyDelegate] =
-            await Promise.all([
-              manager.count(Account, {
-                where: { userId: delegateUser.id },
-              }),
-              manager.count(AccountDelegate, {
-                where: { ownerUserId: delegateUser.id },
-              }),
-              manager.count(AccountDelegate, {
-                where: { delegateUserId: delegateUser.id },
-              }),
-            ]);
+          const ownsAccounts = await manager.count(Account, {
+            where: { userId: delegateUser.id },
+          });
+          const ownsDelegations = await manager.count(AccountDelegate, {
+            where: { ownerUserId: delegateUser.id },
+          });
+          const alreadyDelegate = await manager.count(AccountDelegate, {
+            where: { delegateUserId: delegateUser.id },
+          });
+          const delegateOfAnotherOwner = await manager.count(AccountDelegate, {
+            where: {
+              delegateUserId: delegateUser.id,
+              ownerUserId: Not(ownerUserId),
+            },
+          });
           const isPureDelegateRow = alreadyDelegate > 0;
           if (
             ownsAccounts > 0 ||
             ownsDelegations > 0 ||
+            delegateOfAnotherOwner > 0 ||
             (!isPureDelegateRow && !!delegateUser.passwordHash)
           ) {
             mayManageCredentials = false;
@@ -1281,14 +1357,15 @@ export class DelegationService {
         // own right (isDelegateOnly=false). Without the isDelegateOnly
         // check a self-registered user who hasn't created any accounts yet
         // would be silently deleted on revoke.
-        const [otherDelegations, ownsAccounts, ownsDelegations] =
-          await Promise.all([
-            manager.count(AccountDelegate, { where: { delegateUserId } }),
-            manager.count(Account, { where: { userId: delegateUserId } }),
-            manager.count(AccountDelegate, {
-              where: { ownerUserId: delegateUserId },
-            }),
-          ]);
+        const otherDelegations = await manager.count(AccountDelegate, {
+          where: { delegateUserId },
+        });
+        const ownsAccounts = await manager.count(Account, {
+          where: { userId: delegateUserId },
+        });
+        const ownsDelegations = await manager.count(AccountDelegate, {
+          where: { ownerUserId: delegateUserId },
+        });
         const delegateUser = await manager.findOne(User, {
           where: { id: delegateUserId },
         });
@@ -1455,17 +1532,40 @@ export class DelegationService {
     // so a locked-out delegate can sign in with the new password.
     delegate.failedLoginAttempts = 0;
     delegate.lockedUntil = null;
-    await this.systemScoped(User, (repo) => repo.save(delegate));
-
     // Same reach: the sessions being cut are the delegate's, and
     // `refresh_tokens` is keyed to them. A scoped UPDATE matched nothing, so
     // the old password's sessions survived a reset that reported success --
     // the one outcome a credential rotation must never have.
-    await this.systemScoped(RefreshToken, (repo) =>
-      repo.update(
-        { userId: delegate.id, isRevoked: false },
-        { isRevoked: true },
+    // The password, PATs and trusted devices are one transaction, so a reset
+    // whose revocation fails leaves the old password in place; the refresh
+    // sessions converge and the OAuth grants go after the commit
+    // (`credential-revocation.ts`).
+    await withSystemContext(() =>
+      withScopedDb(this.dataSource, async (manager) => {
+        await manager.getRepository(User).save(delegate);
+        await manager
+          .getRepository(RefreshToken)
+          .update(
+            { userId: delegate.id, isRevoked: false },
+            { isRevoked: true },
+          );
+        await revokeStandingCredentials(manager, delegate.id);
+      }),
+    );
+    // The blanket UPDATE above misses a successor a concurrent rotation
+    // inserted after its snapshot; converge under the family locks. System
+    // context for the same reach as the write above.
+    await withSystemContext(() =>
+      revokeRefreshSessionsAfterCommit(
+        this.dataSource,
+        delegate.id,
+        this.logger,
       ),
+    );
+    await revokeOAuthGrantsAfterCommit(
+      this.moduleRef,
+      delegate.id,
+      this.logger,
     );
 
     return { temporaryPassword };

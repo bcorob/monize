@@ -1,0 +1,40 @@
+diff --git a/node_modules/next/dist/esm/server/body-streams.js b/node_modules/next/dist/esm/server/body-streams.js
+index 89344fc..c8083b6 100644
+--- a/node_modules/next/dist/esm/server/body-streams.js
++++ b/node_modules/next/dist/esm/server/body-streams.js
+@@ -12,8 +12,15 @@ export function requestToBodyStream(context, KUint8Array, stream) {
+         }
+     });
+ }
++// Monize patch (patches/next+*.patch, issue #1442): the request keeps its own
++// `_destroy`. A plain Readable's emits `error` unconditionally; the
++// IncomingMessage's emits it only when something listens. Copied over, a client
++// that disconnected mid-response raised `uncaughtException: Error: aborted`.
++// Everything else is still swapped: the buffered body is read through the event
++// table the two now share.
+ function replaceRequestBody(base, stream) {
+     for(const key in stream){
++        if (key === '_destroy') continue;
+         let v = stream[key];
+         if (typeof v === 'function') {
+             v = v.bind(base);
+diff --git a/node_modules/next/dist/server/body-streams.js b/node_modules/next/dist/server/body-streams.js
+index 0f2d2e9..346c390 100644
+--- a/node_modules/next/dist/server/body-streams.js
++++ b/node_modules/next/dist/server/body-streams.js
+@@ -39,8 +39,15 @@ function requestToBodyStream(context, KUint8Array, stream) {
+         }
+     });
+ }
++// Monize patch (patches/next+*.patch, issue #1442): the request keeps its own
++// `_destroy`. A plain Readable's emits `error` unconditionally; the
++// IncomingMessage's emits it only when something listens. Copied over, a client
++// that disconnected mid-response raised `uncaughtException: Error: aborted`.
++// Everything else is still swapped: the buffered body is read through the event
++// table the two now share.
+ function replaceRequestBody(base, stream) {
+     for(const key in stream){
++        if (key === '_destroy') continue;
+         let v = stream[key];
+         if (typeof v === 'function') {
+             v = v.bind(base);

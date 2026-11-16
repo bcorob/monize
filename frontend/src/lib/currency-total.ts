@@ -114,3 +114,23 @@ export function combineTotals(
     excludedCount,
   };
 }
+
+/**
+ * The `ConvertedTotal` of a built-in report's headline figure.
+ *
+ * The server withholds a total (`null`) when a row could not be converted and
+ * sends the part that did as a `known*` sibling. `value` is that known part;
+ * the completeness comes from the response's own `missingCurrencies` and
+ * `excludedCount`, so `PartialTotal` marks it exactly when something was left
+ * out. A response that predates the fields reads as complete.
+ */
+export function reportTotal(
+  value: number,
+  report: { missingCurrencies?: readonly string[]; excludedCount?: number } | null | undefined,
+): ConvertedTotal {
+  return {
+    value,
+    missingCurrencies: [...(report?.missingCurrencies ?? [])],
+    excludedCount: report?.excludedCount ?? 0,
+  };
+}

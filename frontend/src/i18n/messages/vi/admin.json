@@ -1,6 +1,214 @@
 {
-  "createUserModal": {"title": "Thêm người dùng","description": "Tạo tài khoản mới. Bạn có thể gửi email mời, tự đặt mật khẩu hoặc tạo mật khẩu tạm thời để chia sẻ.","emailLabel": "Email","emailPlaceholder": "user@example.com","firstNameLabel": "Tên (tùy chọn)","firstNamePlaceholder": "Tên","lastNameLabel": "Họ (tùy chọn)","lastNamePlaceholder": "Họ","roleLabel": "Vai trò","roleUser": "Người dùng","roleAdmin": "Quản trị viên","credentialsLegend": "Thông tin đăng nhập","inviteLabel": "Gửi email mời để đặt mật khẩu","inviteSmtpNote": "Yêu cầu SMTP được cấu hình.","setPasswordLabel": "Đặt mật khẩu ngay bây giờ","tempPasswordLabel": "Tạo mật khẩu tạm thời","tempPasswordNote": "Chỉ hiển thị một lần sau khi tạo. Người dùng phải đổi mật khẩu khi đăng nhập lần đầu.","passwordFieldLabel": "Mật khẩu","passwordPlaceholder": "Đặt mật khẩu","createButton": "Tạo người dùng","validation": {"invalidPassword": "Mật khẩu không hợp lệ."},"toasts": {"createFailed": "Không thể tạo người dùng"}},
-  "resetPasswordModal": {"defaultTitle": "Đặt lại mật khẩu thành công","defaultDescription": "Mật khẩu tạm thời đã được đặt cho {userName}.","temporaryPasswordLabel": "Mật khẩu tạm thời","copy": "Sao chép","copied": "Đã sao chép","notShownAgain": "Mật khẩu này sẽ không được hiển thị lại.","mustChangeOnLogin": "Người dùng sẽ phải đổi mật khẩu khi đăng nhập tiếp theo.","toasts": {"copied": "Đã sao chép mật khẩu vào bộ nhớ tạm","copyFailed": "Không thể sao chép vào bộ nhớ tạm"}},
-  "userTable": {"colUser": "Người dùng","colRole": "Vai trò","colProvider": "Nhà cung cấp","colStatus": "Trạng thái","colLastLogin": "Đăng nhập lần cuối","colActions": "Hành động","youSuffix": "(bạn)","noEmail": "Không có email","unknown": "Không xác định","never": "Chưa bao giờ","providerSso": "SSO","providerLocal": "Cục bộ","roleAdmin": "Quản trị viên","roleUser": "Người dùng","statusActive": "Đang hoạt động","statusDisabled": "Đã vô hiệu hóa","clickToDisable": "Nhấn để vô hiệu hóa","clickToEnable": "Nhấn để kích hoạt","resetPassword": "Đặt lại mật khẩu","noUsers": "Không tìm thấy người dùng nào."},
-  "usersPage": {"title": "Quản lý người dùng","userCount": "{count, plural, one {# người dùng} other {# người dùng}}","newUser": "+ Người dùng mới","loadingUsers": "Đang tải người dùng...","toasts": {"inviteSent": "Đã gửi email mời đến {email}","userCreated": "{name} đã được tạo","userUpgraded": "{name} đã được nâng cấp thành tài khoản đầy đủ","roleChanged": "{name} hiện là {role}","roleAdmin": "quản trị viên","roleUser": "người dùng","userEnabled": "{name} đã được kích hoạt","userDisabled": "{name} đã bị vô hiệu hóa","userDeleted": "{name} đã bị xóa","userDowngraded": "Dữ liệu của {name} đã bị xóa; quyền truy cập ủy quyền của họ vẫn còn.","loadFailed": "Không thể tải người dùng","deleteFailed": "Không thể xóa người dùng","disableFailed": "Không thể vô hiệu hóa người dùng","resetFailed": "Không thể đặt lại mật khẩu"},"dialogs": {"promoteTitle": "Thăng cấp người dùng?","demoteTitle": "Hạ cấp người dùng?","promoteMessage": "Bạn có chắc chắn muốn thăng cấp {name} lên {role}?","demoteMessage": "Bạn có chắc chắn muốn hạ cấp {name} xuống {role}?","promoteConfirm": "Thăng lên quản trị viên","demoteConfirm": "Hạ xuống người dùng","disableTitle": "Vô hiệu hóa người dùng?","disableMessage": "Bạn có chắc chắn muốn vô hiệu hóa {name}? Họ sẽ không thể đăng nhập.","disableConfirm": "Vô hiệu hóa người dùng","resetTitle": "Đặt lại mật khẩu?","resetMessage": "Điều này sẽ tạo mật khẩu tạm thời mới cho {name}. Họ sẽ phải đổi mật khẩu khi đăng nhập tiếp theo.","resetConfirm": "Đặt lại mật khẩu","deleteTitle": "Xóa người dùng?","deleteMessage": "Bạn có chắc chắn muốn xóa {name}? Điều này sẽ xóa vĩnh viễn tài khoản và tất cả dữ liệu liên quan của họ. Hành động này không thể hoàn tác. Nếu họ là người được ủy quyền của tài khoản khác, dữ liệu của họ bị xóa nhưng thông tin đăng nhập được giữ lại để ủy quyền vẫn hoạt động -- họ trở thành người dùng chỉ có ủy quyền.","deleteConfirm": "Xóa người dùng","tempPasswordTitleCreated": "Người dùng đã được tạo","tempPasswordTitleUpgraded": "Tài khoản đã được nâng cấp","tempPasswordDescCreated": "Mật khẩu tạm thời đã được tạo cho {name}. Hãy chia sẻ với họ để đăng nhập.","tempPasswordDescUpgraded": "Người dùng chung hiện có đã được nâng cấp thành tài khoản đầy đủ. Hãy chia sẻ mật khẩu tạm thời này với {name}."}}
+  "createUserModal": {
+    "title": "Thêm người dùng",
+    "description": "Tạo tài khoản mới. Bạn có thể gửi email mời, tự đặt mật khẩu hoặc tạo mật khẩu tạm thời để chia sẻ.",
+    "emailLabel": "Email",
+    "emailPlaceholder": "user@example.com",
+    "firstNameLabel": "Tên (tùy chọn)",
+    "firstNamePlaceholder": "Tên",
+    "lastNameLabel": "Họ (tùy chọn)",
+    "lastNamePlaceholder": "Họ",
+    "roleLabel": "Vai trò",
+    "roleUser": "Người dùng",
+    "roleAdmin": "Quản trị viên",
+    "credentialsLegend": "Thông tin đăng nhập",
+    "inviteLabel": "Gửi email mời để đặt mật khẩu",
+    "inviteSmtpNote": "Yêu cầu SMTP được cấu hình.",
+    "setPasswordLabel": "Đặt mật khẩu ngay bây giờ",
+    "tempPasswordLabel": "Tạo mật khẩu tạm thời",
+    "tempPasswordNote": "Chỉ hiển thị một lần sau khi tạo. Người dùng phải đổi mật khẩu khi đăng nhập lần đầu.",
+    "passwordFieldLabel": "Mật khẩu",
+    "passwordPlaceholder": "Đặt mật khẩu",
+    "createButton": "Tạo người dùng",
+    "validation": {
+      "invalidPassword": "Mật khẩu không hợp lệ."
+    },
+    "toasts": {
+      "createFailed": "Không thể tạo người dùng"
+    }
+  },
+  "resetPasswordModal": {
+    "defaultTitle": "Đặt lại mật khẩu thành công",
+    "defaultDescription": "Mật khẩu tạm thời đã được đặt cho {userName}.",
+    "temporaryPasswordLabel": "Mật khẩu tạm thời",
+    "copy": "Sao chép",
+    "copied": "Đã sao chép",
+    "notShownAgain": "Mật khẩu này sẽ không được hiển thị lại.",
+    "mustChangeOnLogin": "Người dùng sẽ phải đổi mật khẩu khi đăng nhập tiếp theo.",
+    "toasts": {
+      "copied": "Đã sao chép mật khẩu vào bộ nhớ tạm",
+      "copyFailed": "Không thể sao chép vào bộ nhớ tạm"
+    }
+  },
+  "userTable": {
+    "colUser": "Người dùng",
+    "colRole": "Vai trò",
+    "colProvider": "Nhà cung cấp",
+    "colStatus": "Trạng thái",
+    "colLastLogin": "Đăng nhập lần cuối",
+    "colBackups": "Bản sao lưu",
+    "colAttachments": "Tệp đính kèm",
+    "colActions": "Hành động",
+    "youSuffix": "(bạn)",
+    "noEmail": "Không có email",
+    "unknown": "Không xác định",
+    "never": "Chưa bao giờ",
+    "providerSso": "SSO",
+    "providerLocal": "Cục bộ",
+    "roleAdmin": "Quản trị viên",
+    "roleUser": "Người dùng",
+    "statusActive": "Đang hoạt động",
+    "statusDisabled": "Đã vô hiệu hóa",
+    "clickToDisable": "Nhấn để vô hiệu hóa",
+    "clickToEnable": "Nhấn để kích hoạt",
+    "resetPassword": "Đặt lại mật khẩu",
+    "resetTwoFactor": "Đặt lại 2FA",
+    "unlinkSso": "Hủy liên kết SSO",
+    "noUsers": "Không tìm thấy người dùng nào.",
+    "storageLoading": "Đang tải…",
+    "storageUnavailable": "Không khả dụng",
+    "storageUnavailableHint": "Không thể tải mức sử dụng lưu trữ. Hãy tải lại trang để thử lại.",
+    "storageUnknown": "Không rõ",
+    "storageUnknownStore": "Không đọc được kho sao lưu của người dùng này nên không rõ dung lượng. Hãy kiểm tra vị trí sao lưu trên trang Bản sao lưu.",
+    "storageNotReported": "Chưa ghi nhận",
+    "storageNotReportedHint": "Tài khoản này không có trong lần đọc dung lượng gần nhất. Hãy tải lại trang để đưa vào.",
+    "backupsOff": "Tắt",
+    "backupsOffHint": "Sao lưu tự động chưa được bật cho người dùng này và không có bản sao lưu nào được lưu.",
+    "backupScheduleOff": "Lịch đã tắt",
+    "backupScheduleOffHint": "Sao lưu tự động đang tắt; các tệp này là những gì chính sách lưu giữ chưa xóa.",
+    "backupCount": "{count, plural, =0 {Không có bản sao lưu} one {# bản sao lưu} other {# bản sao lưu}}",
+    "attachmentCount": "{count, plural, =0 {Không có tệp} one {# tệp} other {# tệp}}"
+  },
+  "usersPage": {
+    "title": "Quản lý người dùng",
+    "userCount": "{count, plural, one {# người dùng} other {# người dùng}}",
+    "newUser": "+ Người dùng mới",
+    "loadingUsers": "Đang tải người dùng...",
+    "toasts": {
+      "inviteSent": "Đã gửi email mời đến {email}",
+      "userCreated": "{name} đã được tạo",
+      "userUpgraded": "{name} đã được nâng cấp thành tài khoản đầy đủ",
+      "roleChanged": "{name} hiện là {role}",
+      "roleAdmin": "quản trị viên",
+      "roleUser": "người dùng",
+      "userEnabled": "{name} đã được kích hoạt",
+      "userDisabled": "{name} đã bị vô hiệu hóa",
+      "userDeleted": "{name} đã bị xóa",
+      "userDowngraded": "Dữ liệu của {name} đã bị xóa; quyền truy cập ủy quyền của họ vẫn còn.",
+      "loadFailed": "Không thể tải người dùng",
+      "deleteFailed": "Không thể xóa người dùng",
+      "disableFailed": "Không thể vô hiệu hóa người dùng",
+      "resetFailed": "Không thể đặt lại mật khẩu",
+      "twoFactorReset": "Đã đặt lại xác thực hai yếu tố cho {name}. Họ đã bị đăng xuất.",
+      "resetTwoFactorFailed": "Không thể đặt lại xác thực hai yếu tố",
+      "unlinkSsoFailed": "Hủy liên kết SSO thất bại"
+    },
+    "dialogs": {
+      "promoteTitle": "Thăng cấp người dùng?",
+      "demoteTitle": "Hạ cấp người dùng?",
+      "promoteMessage": "Bạn có chắc chắn muốn thăng cấp {name} lên {role}?",
+      "demoteMessage": "Bạn có chắc chắn muốn hạ cấp {name} xuống {role}?",
+      "promoteConfirm": "Thăng lên quản trị viên",
+      "demoteConfirm": "Hạ xuống người dùng",
+      "disableTitle": "Vô hiệu hóa người dùng?",
+      "disableMessage": "Bạn có chắc chắn muốn vô hiệu hóa {name}? Họ sẽ không thể đăng nhập.",
+      "disableConfirm": "Vô hiệu hóa người dùng",
+      "resetTitle": "Đặt lại mật khẩu?",
+      "resetMessage": "Điều này sẽ tạo mật khẩu tạm thời mới cho {name}. Họ sẽ phải đổi mật khẩu khi đăng nhập tiếp theo.",
+      "resetConfirm": "Đặt lại mật khẩu",
+      "unlinkSsoTitle": "Hủy liên kết SSO?",
+      "unlinkSsoMessage": "Thao tác này chuyển tài khoản của {name} thành tài khoản cục bộ. Lần đăng nhập SSO sau đó với cùng địa chỉ email có thể liên kết lại tài khoản. Hệ thống tạo mật khẩu tạm thời, và {name} phải đổi mật khẩu khi đăng nhập tiếp theo.",
+      "unlinkSsoConfirm": "Hủy liên kết SSO",
+      "unlinkSsoResultTitle": "Đã hủy liên kết SSO",
+      "unlinkSsoResultDesc": "Tài khoản của {name} hiện là tài khoản cục bộ. Hãy chia sẻ mật khẩu tạm thời này với họ để họ đăng nhập.",
+      "resetTwoFactorTitle": "Đặt lại xác thực hai yếu tố?",
+      "resetTwoFactorMessage": "Thao tác này tắt xác thực hai yếu tố của {name}, xóa mã dự phòng và các thiết bị đáng tin cậy của họ, đồng thời đăng xuất họ khỏi mọi nơi. Sau đó họ có thể đăng nhập bằng mật khẩu và thiết lập lại 2FA. Hãy dùng khi họ đã mất ứng dụng xác thực và mã dự phòng, hoặc sau khi JWT_SECRET được thay đổi.",
+      "resetTwoFactorConfirm": "Đặt lại 2FA",
+      "deleteTitle": "Xóa người dùng?",
+      "deleteMessage": "Bạn có chắc chắn muốn xóa {name}? Điều này sẽ xóa vĩnh viễn tài khoản và tất cả dữ liệu liên quan của họ. Hành động này không thể hoàn tác. Nếu họ là người được ủy quyền của tài khoản khác, dữ liệu của họ bị xóa nhưng thông tin đăng nhập được giữ lại để ủy quyền vẫn hoạt động -- họ trở thành người dùng chỉ có ủy quyền.",
+      "deleteConfirm": "Xóa người dùng",
+      "tempPasswordTitleCreated": "Người dùng đã được tạo",
+      "tempPasswordTitleUpgraded": "Tài khoản đã được nâng cấp",
+      "tempPasswordDescCreated": "Mật khẩu tạm thời đã được tạo cho {name}. Hãy chia sẻ với họ để đăng nhập.",
+      "tempPasswordDescUpgraded": "Người dùng chung hiện có đã được nâng cấp thành tài khoản đầy đủ. Hãy chia sẻ mật khẩu tạm thời này với {name}."
+    }
+  },
+  "notificationsPage": {
+    "title": "Thông báo",
+    "subtitle": "Các kênh gửi mà phiên bản Monize này cung cấp, cùng danh tính đẩy phía sau chúng.",
+    "loading": "Đang tải cài đặt thông báo...",
+    "loadUnavailable": "Monize không đọc được cài đặt thông báo từ máy chủ. Hãy tải lại trang để thử lại.",
+    "channelsHeading": "Kênh gửi",
+    "identityHeading": "Danh tính Web Push",
+    "perAccountNote": "Thiết bị, thông báo thử nghiệm và tùy chọn thông báo thuộc về từng tài khoản và được quản lý trong Cài đặt. Quản trị viên cấu hình phiên bản này và không bao giờ gửi hay xem thông báo của người khác.",
+    "channelState": {
+      "on": "Bật",
+      "off": "Tắt",
+      "unconfigured": "Không khả dụng",
+      "unknown": "Không rõ"
+    },
+    "channels": {
+      "inApp": {
+        "name": "Thông báo trong ứng dụng",
+        "description": "Chuông trên thanh tiêu đề. Luôn có sẵn và không thể tắt: đây là nơi thông báo vẫn tồn tại ngay cả khi mọi kênh khác thất bại."
+      },
+      "webPush": {
+        "name": "Đẩy từ trình duyệt",
+        "description": "Thông báo được gửi tới điện thoại hoặc máy tính ngay cả khi Monize đã đóng. Không cần Firebase, Google Play hay tài khoản Apple Developer.",
+        "toggleLabel": "Bật đẩy từ trình duyệt cho phiên bản này",
+        "missingKeys": "Phiên bản này chưa có cặp khóa đẩy. Hãy đặt ENCRYPTION_KEY rồi khởi động lại: Monize sẽ tự tạo cặp khóa ở lần khởi động sau.",
+        "keyUnreadable": "Phiên bản này không giải mã được cặp khóa đẩy đã lưu, nên không có gì được gửi đi. Hãy xoay cặp khóa bên dưới để khôi phục.",
+        "serverKeyMissing": "Phiên bản này không có ENCRYPTION_KEY nên không thể mở cặp khóa push đã lưu. Hãy đặt ENCRYPTION_KEY trong bản triển khai và khởi động lại — luân chuyển khóa không giúp được khi khóa còn thiếu."
+      },
+      "email": {
+        "name": "Email",
+        "description": "Nhắc hóa đơn, bản tóm tắt ngân sách và cảnh báo hệ thống gửi tới địa chỉ email của từng tài khoản.",
+        "missingSmtp": "Chưa cấu hình máy chủ thư. Hãy đặt các biến môi trường SMTP để bật email.",
+        "statusUnavailable": "Monize không đọc được trạng thái máy chủ thư."
+      },
+      "ntfy": {
+        "name": "ntfy và UnifiedPush",
+        "description": "Cùng một push được mã hóa, gửi tới bộ phân phối UnifiedPush tự lưu trữ (ntfy, NextPush) thay vì hạ tầng của Google hay Apple. Kênh này dùng chung cặp khóa push và công tắc của phiên bản này; mỗi người đăng ký endpoint từ ứng dụng UnifiedPush của mình và bật kênh trong Cài đặt.",
+        "followsWebPush": "Không khả dụng khi push trình duyệt đang tắt hoặc cặp khóa của nó không thể dùng — kênh này được gửi bằng cùng cặp khóa đó."
+      }
+    },
+    "identity": {
+      "fingerprintLabel": "Dấu vân tay khóa",
+      "generatedLabel": "Được tạo",
+      "devicesLabel": "Thiết bị đã đăng ký",
+      "deviceCounts": "{live} đang hoạt động, {disabled} đã ngừng",
+      "rotateDescription": "Xoay khóa sẽ thay cặp khóa của phiên bản này. Mọi thiết bị đã đăng ký sẽ không còn nhận được thông báo và phải bật đẩy lại, vì vậy chỉ xoay khi khóa có thể đã bị lộ.",
+      "rotateButton": "Xoay cặp khóa",
+      "rotatingButton": "Đang xoay...",
+      "missingEncryptionKey": "Phiên bản này chưa có cặp khóa đẩy vì ENCRYPTION_KEY chưa được đặt và khóa riêng sẽ phải lưu ở dạng không mã hóa. Hãy đặt biến này rồi khởi động lại: Monize sẽ tự tạo cặp khóa.",
+      "keyUnreadable": "Phiên bản này giữ một cặp khóa đẩy mà nó không còn giải mã được, nên không có gì được gửi đi. Điều này xảy ra khi ENCRYPTION_KEY thay đổi trên cơ sở dữ liệu đang chạy, hoặc khi bản sao lưu được khôi phục sang phiên bản khác. Hãy xoay cặp khóa để khôi phục; mọi thiết bị sẽ đăng ký lại.",
+      "serverKeyMissing": "Phiên bản này chưa đặt ENCRYPTION_KEY nên không thể mở cặp khóa push đã lưu. Việc luân chuyển khóa sẽ không giúp gì khi khóa còn thiếu: hãy đặt ENCRYPTION_KEY trong bản triển khai và khởi động lại, push sẽ hoạt động lại với các thiết bị hiện có."
+    },
+    "dialogs": {
+      "rotateTitle": "Xoay cặp khóa đẩy?",
+      "rotateMessage": "{count, plural, =0 {Chưa có thiết bị nào được đăng ký nên không mất gì cả.} other {# thiết bị đã đăng ký sẽ ngừng nhận thông báo cho đến khi bật lại đẩy trong từng trình duyệt.}}",
+      "rotateConfirm": "Xoay"
+    },
+    "toasts": {
+      "loadFailed": "Không tải được cài đặt thông báo",
+      "pushEnabled": "Đã bật đẩy từ trình duyệt cho phiên bản này",
+      "pushDisabled": "Đã tắt đẩy từ trình duyệt cho phiên bản này",
+      "pushToggleFailed": "Không thay đổi được cài đặt đẩy từ trình duyệt",
+      "rotated": "{count, plural, =0 {Đã xoay cặp khóa} other {Đã xoay cặp khóa; # thiết bị phải đăng ký lại}}",
+      "rotateFailed": "Không xoay được cặp khóa"
+    }
+  },
+  "backupsPage": {
+    "title": "Sao lưu",
+    "subtitle": "Tệp sao lưu nén theo lịch chứa hồ sơ tài chính của từng tài khoản.",
+    "scope": {
+      "heading": "Không phải bản sao lưu toàn bộ cơ sở dữ liệu",
+      "perUser": "Theo lịch bên dưới, máy chủ ghi một tệp sao lưu nén chứa hồ sơ tài chính của từng tài khoản và xoá bớt các tệp cũ theo chính sách lưu giữ. Mọi tài khoản đang hoạt động đều được bao gồm.",
+      "notFullDatabase": "Đây không phải bản dump PostgreSQL: nó không chứa lược đồ, cấu hình máy chủ hay bất cứ thứ gì ngoài hồ sơ tài chính của một tài khoản. Để khôi phục thảm hoạ toàn bộ phiên bản, hãy sao lưu cơ sở dữ liệu và kho tệp đính kèm bằng công cụ riêng của bạn."
+    },
+    "demoRestricted": {
+      "heading": "Bị hạn chế trong Chế độ Demo",
+      "body": "Cấu hình sao lưu tự động bị tắt trong chế độ demo."
+    }
+  }
 }

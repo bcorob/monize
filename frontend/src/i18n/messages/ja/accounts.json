@@ -1,4 +1,13 @@
 {
+  "paymentMatching": {
+    "toggleLabel": "{kind, select, mortgage {インポートした銀行の支払いをこの住宅ローンと照合する} other {インポートした銀行の支払いをこのローンと照合する}}",
+    "toggleHelp": "インポートした銀行取引が受取人パターンに一致すると、Monizeはそれを予定された支払いに充当し、別の請求取引を登録する代わりに元本と利息に分割します。",
+    "payeePattern": "受取人パターン",
+    "payeePatternPlaceholder": "例：*マイバンク*",
+    "descriptionPattern": "説明パターン（任意）",
+    "descriptionPatternPlaceholder": "例：*ローン返済*",
+    "fromAccount": "{account} からの引き落としと照合されます。"
+  },
   "nameSuffix": {
     "cash": "現金",
     "brokerage": "証券"
@@ -22,9 +31,7 @@
     "noMatch": "フィルターに一致する勘定科目がありません。",
     "clearFilters": "フィルターをクリア",
     "filter": {
-      "all": "すべて",
-      "active": "有効",
-      "closed": "閉鎖済み",
+      "allCount": "すべて ({count})",
       "netWorthAll": "純資産：すべて",
       "inNetWorth": "純資産に含む",
       "excludedFromNetWorth": "純資産から除外",
@@ -32,7 +39,10 @@
       "typeAriaLabel": "勘定科目の種類で絞り込む",
       "searchPlaceholder": "勘定科目を検索...",
       "searchAriaLabel": "名前で勘定科目を検索",
-      "searchClear": "検索をクリア"
+      "searchClear": "検索をクリア",
+      "activeCount": "有効 ({count})",
+      "closedCount": "閉鎖済み ({count})",
+      "statusLabel": "ステータス"
     },
     "accountCount": "{total} 件中 {filtered} 件の勘定科目",
     "groupCount": "{count, plural, one {# 件の勘定科目} other {# 件の勘定科目}}",
@@ -40,6 +50,8 @@
       "accountName": "勘定科目名",
       "type": "種類",
       "status": "ステータス",
+      "lastReconciled": "最終照合日",
+      "unreconciled": "未照合",
       "balance": "残高",
       "actions": "操作"
     },
@@ -50,8 +62,11 @@
     "statusClosed": "閉鎖済み",
     "marketValue": "時価",
     "combinedBreakdown": "投資 {investments} · 現金 {cash}",
+    "combinedInvestments": "投資 {amount}",
+    "combinedCash": "現金 {amount}",
     "combinedUnknown": "合計を表示できません",
     "combinedUnknownTooltip": "{count, plural, other {# 件の保有銘柄に価格がないため、この口座の合計を算出できません}}",
+    "combinedUnknownValuation": "この口座の一部の保有銘柄をレポート通貨に換算できなかったため、合計を算出できません。通貨ページで不足している為替レートを追加してください。",
     "combinedUnknownNoPortfolio": "保有銘柄を読み込めなかったため、この口座の合計を算出できません",
     "limit": "限度額：{amount}",
     "pairedWith": "{name} とペア",
@@ -81,7 +96,11 @@
     "jointSharedBy": "{owner} さんが共有",
     "jointSharedWith": "{count, plural, other {# 人}}と共有",
     "includeInNetWorth": "自分の純資産に含める",
-    "excludeFromNetWorth": "自分の純資産から除外する"
+    "excludeFromNetWorth": "自分の純資産から除外する",
+    "neverReconciled": "未照合",
+    "lastReconciledOn": "{date} に照合済み",
+    "neverReconciledCard": "未照合",
+    "unreconciledCard": "{count, plural, other {未照合 {formatted} 件}}"
   },
   "contextMenu": {
     "subtypeBrokerage": "証券口座",
@@ -117,17 +136,23 @@
     "accountType": "勘定科目の種類",
     "currency": "通貨",
     "currencyLocked": "この勘定科目にはすでに取引があるため、通貨はロックされています。変更すると既存の残高が暗黙的に再建てになります。",
+    "accountTypeKindLocked": "この勘定科目の取引により通貨がロックされているため、暗号資産ウォレットと法定通貨の勘定科目タイプの間で切り替えることはできません。",
+    "currencyPlaceholder": "通貨を選択...",
+    "noCryptoCurrencies": "暗号資産ウォレットは1つの暗号資産を保有しますが、まだ設定されていません。<currencies>通貨ページ</currencies>で追加してから、ここで選択してください。<guide>暗号資産の追加方法</guide>",
     "openingBalance": "開始残高",
     "loanAmount": "ローン金額",
     "mortgageAmount": "住宅ローン金額",
     "accountNumber": "口座番号（任意）",
     "institution": "金融機関（任意）",
-    "institutionRequired": "貸し手/金融機関（必須）",
+    "institutionRequired": "貸し手/金融機関",
     "institutionPlaceholder": "金融機関を選択または作成...",
     "newInstitutionTitle": "新規金融機関",
     "creditLimit": "クレジット限度額（任意）",
+    "balanceAlertsHeading": "残高アラート",
+    "lowBalanceThreshold": "この額を下回ったら通知（任意）",
+    "highBalanceThreshold": "この額を上回ったら通知（任意）",
     "interestRateOptional": "利率 %（任意）",
-    "interestRateRequired": "利率 %（必須）",
+    "interestRateRequired": "利率 %",
     "description": "説明（任意）",
     "excludeFromNetWorth": "純資産から除外",
     "favourite": "お気に入り",
@@ -157,13 +182,12 @@
       "mortgage": "住宅ローン",
       "asset": "資産",
       "cash": "現金",
+      "crypto": "暗号資産ウォレット",
       "other": "その他"
     },
     "statementDueDayPlaceholder": "例：15",
     "statementSettlementDayPlaceholder": "例：25",
     "fxFeeTitle": "外貨換算手数料 （任意）",
-    "fxFeePercent": "手数料率",
-    "fxFeePercentPlaceholder": "例: 2.5",
     "jointSharedWith": "{count, plural, other {# 人}}と共有している共同口座",
     "jointManage": "共有を管理",
     "cashSection": {
@@ -192,10 +216,10 @@
   },
   "loanFields": {
     "title": "ローン支払い詳細",
-    "paymentAmount": "支払い金額（必須）",
-    "paymentFrequency": "支払い頻度（必須）",
-    "firstPaymentDate": "初回支払日（必須）",
-    "paymentFromAccount": "支払い元勘定科目（必須）",
+    "paymentAmount": "支払い金額",
+    "paymentFrequency": "支払い頻度",
+    "firstPaymentDate": "初回支払日",
+    "paymentFromAccount": "支払い元勘定科目",
     "interestCategory": "利息カテゴリ",
     "selectFrequency": "頻度を選択...",
     "selectAccount": "勘定科目を選択...",
@@ -222,33 +246,32 @@
     "analyzingHistory": "取引履歴を分析中...",
     "detectedPayments": "{from} から {to} までの {count} 件の支払いを検出しました。",
     "confidence": "信頼度：",
-    "lastSplit": "最後の支払い分割：{currency}{principal} 元金 / {currency}{interest} 利息",
-    "extraPayments": "{count, plural, one {元金への追加支払い # 件} other {元金への追加支払い # 件}}（平均 {currency}{avg}/期間）",
+    "lastSplit": "最後の支払い分割：{principal} 元金 / {interest} 利息",
+    "extraPayments": "{count, plural, one {元金への追加支払い # 件} other {元金への追加支払い # 件}}（平均 {avg}/期間）",
     "reviewValues": "保存する前に以下の値を確認して調整してください。",
-    "regularPaymentAmount": "定期支払い金額 *",
+    "regularPaymentAmount": "定期支払い金額",
     "includeExtraPrincipal": "元金への追加支払いを含む",
     "extraPrincipalPerPayment": "支払いごとの追加元金",
-    "totalPayment": "合計支払い：{currency}{amount}",
+    "totalPayment": "合計支払い：{amount}",
     "useDetectedSplit": "インポートされた取引から元金/利息の分割を使用する",
-    "useDetectedSplitDesc": "利息に {currency}{interest} を使用し、残りを元金に充当します",
+    "useDetectedSplitDesc": "利息に {interest} を使用し、残りを元金に充当します",
     "calculateFromRate": "利率と現在残高から分割を計算します",
-    "paymentFrequency": "支払い頻度 *",
-    "paymentFromAccount": "支払い元勘定科目 *",
+    "paymentFrequency": "支払い頻度",
+    "paymentFromAccount": "支払い元勘定科目",
     "selectAccount": "勘定科目を選択...",
-    "nextPaymentDate": "次回支払日 *",
+    "nextPaymentDate": "次回支払日",
     "annualInterestRate": "年利率（%）",
     "interestRatePlaceholder": "例：5.5",
     "estimatedFromHistory": "取引履歴からの推定：{rate}%",
     "interestExpenseCategory": "利息費用カテゴリ",
+    "interestExpenseCategoryRequired": "利息費用カテゴリ",
     "detectedCategory": "検出済み：{name}",
     "selectCategory": "カテゴリを選択...",
     "payeeLender": "支払先 / 貸し手",
     "selectOrCreatePayee": "支払先を選択または作成...",
     "mortgageDetails": "住宅ローンの詳細",
-    "canadianMortgage": "カナダの住宅ローン（半年複利）",
-    "variableRate": "変動金利",
     "amortizationMonths": "償却期間（月）",
-    "termMonths": "ローン期間（月）",
+    "termMonths": "金利固定期間（月）",
     "autoPost": "期日に自動で取引を記帳する",
     "skip": "スキップ",
     "setUpPayments": "支払いを設定",
@@ -264,26 +287,46 @@
     },
     "toasts": {
       "setupComplete": "{account} の定期支払いが設定されました"
+    },
+    "firstInstallment": "初回の返済額",
+    "firstInstallmentHelp": "この住宅ローンには固定の返済額がありません。各回の返済額は残高、金利、償還期間から計算されます。これは {date} が期日の返済額で、追加の元金を含みます。",
+    "firstInstallmentPending": "初回の返済額を計算するには、次回の返済日を入力してください。",
+    "firstInstallmentCalculating": "初回の返済額を計算しています...",
+    "firstInstallmentFailed": "初回の返済額を計算できませんでした。下の値を確認して、もう一度お試しください。",
+    "paymentMatching": {
+      "autoPostDisabled": "自動的に無効化されました。支払いマッチングは銀行自身の引き落としからこの請求を決済するため、請求自体も記帳してはいけません。",
+      "payeePatternRequired": "* ワイルドカードを含む受取人パターンを入力してください"
     }
   },
   "mortgageFields": {
     "title": "住宅ローンの詳細",
-    "canadianMortgage": "カナダの住宅ローン",
-    "canadianMortgageDesc": "固定金利に半年複利を使用します（カナダでは法律で義務付けられています）",
-    "variableRate": "変動金利",
-    "variableRateDesc": "期間中に金利が変動する可能性があります（月次複利を使用）",
-    "variableRateLoanDetailsLink": "<link>ローン詳細</link>で金利変更を記録します。",
-    "termLength": "ローン期間",
-    "termLengthNoTerm": "期間なしの場合は0年0ヶ月のままにしてください。",
-    "amortizationPeriod": "償却期間（必須）",
+    "type": {
+      "label": "住宅ローンの種類",
+      "ANNUITY": "元利均等返済",
+      "CANADIAN_FIXED": "カナダの固定金利",
+      "LINEAR": "元金均等返済",
+      "INTEREST_ONLY": "利息のみ",
+      "help": {
+        "ANNUITY": "毎月の返済総額が同じです。変動金利の住宅ローンもこちらを選択してください。",
+        "CANADIAN_FIXED": "カナダの固定金利契約です。利息は年2回複利計算されます。",
+        "LINEAR": "毎月の元金部分が同じで、返済総額は減っていきます。",
+        "INTEREST_ONLY": "利息のみを支払い、残高は変わりません。"
+      }
+    },
+    "rateChangesLoanDetailsLink": "<link>ローン詳細</link>で金利変更を記録します。",
+    "termLength": "金利固定期間",
+    "termLengthHelp": "金利または契約期間が続く長さです（例：5年固定金利）。終了前にMonizeからリマインダーを送れます。期間なしの場合は0年0ヶ月のままにしてください。",
+    "amortizationPeriod": "償却期間",
     "years": "年",
     "months": "ヶ月",
-    "paymentFrequency": "支払い頻度（必須）",
-    "firstPaymentDate": "初回支払日（必須）",
-    "paymentFromAccount": "支払い元勘定科目（必須）",
-    "interestCategory": "利息カテゴリ",
+    "paymentFrequency": "支払い頻度",
+    "firstPaymentDate": "初回支払日",
+    "paymentFromAccount": "支払い元勘定科目",
+    "paymentFromAccountEditHelp": "変更すると、今後の予定支払いと支払い照合ルールが新しい口座に移動します。記帳済みの支払いは変更されません。",
+    "interestCategory": "利息カテゴリ（任意）",
+    "interestCategoryRequired": "利息カテゴリ",
     "interestBookingMode": {
-      "label": "利息の記録方法は？",
+      "label": "利息の記帳方法",
       "help": "金利検出が正しく読めるようにします。ほとんどは自動でOK。",
       "AUTO": "自動（推奨）",
       "SPLIT": "支払いの分割項目",
@@ -330,6 +373,72 @@
       "memoLabel": "繰上返済のメモテキスト",
       "memoPlaceholder": "例: 繰上返済",
       "memoHelp": "支払いのメモ、その元取引のメモ、または分割のメモに対する大文字小文字を区別しない部分一致。"
+    },
+    "prepaymentMode": {
+      "label": "繰上返済の効果",
+      "SHORTEN_TERM": "期間を短縮（毎月の元金は同じ）",
+      "LOWER_INSTALLMENT": "返済額を減額（終了日は同じ）",
+      "help": "金融機関に確認してください。繰上返済後の明細で元金部分が変わらなければ、期間が短縮されています。"
+    },
+    "previewFirstInstallment": "初回の返済額：",
+    "detect": {
+      "toggle": "わからない場合は、数回分の返済を入力してください",
+      "title": "住宅ローンの種類を調べる",
+      "intro": "明細書から連続する2〜3回分の返済を古い順に入力してください。残高は任意です。残高と金利があれば、利息が年2回複利計算されるかどうかをMonizeが判別できます。",
+      "installment": "{number}回目の返済",
+      "principal": "元金",
+      "interest": "利息",
+      "balance": "返済前の残高（任意）",
+      "rowIncomplete": "元金と利息の両方を入力するか、行を空欄のままにしてください。",
+      "rate": "上で入力した金利 {rate} と照合しています。",
+      "noRate": "上で金利が入力されていないため、複利計算を確認できません。",
+      "needsFrequency": "先に下の支払い頻度を選択してください。返済はその間隔で読み取られます。",
+      "submit": "種類を提案",
+      "close": "閉じる",
+      "suggested": "提案された種類：{type}",
+      "noSuggestion": "提案できる種類はありません。",
+      "lowConfidence": "信頼度が低い：使用する前に契約書で確認するか、金融機関にお問い合わせください。",
+      "use": "この種類を使用",
+      "failed": "リクエストが失敗したため、返済を確認できませんでした。もう一度お試しください。",
+      "reason": {
+        "TOO_FEW_SAMPLES": "比較するには、連続する返済が少なくとも2回分必要です。",
+        "INVALID_SAMPLE": "金額が負の値または読み取れない返済があります。",
+        "NO_PAYMENT": "これらの返済では、元金が返済されておらず、利息も発生していません。",
+        "AMBIGUOUS_CONSTANT_PRINCIPAL_AND_INSTALLMENT": "どの返済でも元金と返済総額が同じため、元金均等返済と元利均等返済のどちらにも当てはまります。間隔の離れた返済で試すか、契約書を確認してください。",
+        "ACCELERATED_FREQUENCY": "これらの返済は元金均等返済または利息のみに見えますが、加速払いの支払い頻度ではそうはなりません。支払い頻度を確認してください。",
+        "NO_RULE_FITS": "これらの返済では、元金も返済総額も一定ではありません。途中で金利が変わった場合は、同じ金利期間の返済を使用してください。",
+        "ZERO_PRINCIPAL": "元金が返済されていないため、残高は変わりません。",
+        "ZERO_PRINCIPAL_RATE_MISMATCH": "元金は返済されていませんが、利息が残高に対する提示金利と一致しません。金利を確認してください。",
+        "CONSTANT_PRINCIPAL": "元金部分が毎回同じで、返済総額は減っています。",
+        "CONSTANT_PRINCIPAL_RATE_MISMATCH": "元金部分は毎回同じですが、利息が残高に対する提示金利と一致しません。金利を確認してください。",
+        "CONSTANT_INSTALLMENT_SEMI_ANNUAL": "返済総額が毎回同じで、利息は提示金利を年2回複利計算した額と一致します。",
+        "CONSTANT_INSTALLMENT_NOMINAL": "返済総額が毎回同じで、利息は年2回の複利計算なしの提示金利と一致します。",
+        "CONSTANT_INSTALLMENT_RATE_UNCHECKED": "返済総額が毎回同じです。各返済前の残高と金利がないため、年2回の複利計算かどうかは確認できませんでした。",
+        "CONSTANT_INSTALLMENT_COMPOUNDING_AMBIGUOUS": "返済総額が毎回同じですが、残高が小さすぎて年2回の複利計算かどうかを区別できません。カナダの固定金利契約であれば、契約条件にその旨が記載されています。",
+        "CONSTANT_INSTALLMENT_RATE_MISMATCH": "返済総額が毎回同じですが、利息は提示金利でどちらの計算方法とも一致しません。利息が日割りで計算されている可能性があります。金利を確認してください。"
+      },
+      "history": {
+        "action": "住宅ローンの種類を検出",
+        "title": "返済から判定した住宅ローンの種類",
+        "intro": "同じ金利で記帳された最新の返済から読み取ります。勘定科目を保存するまで何も変更されません。",
+        "current": "現在の種類：{type}",
+        "alreadySet": "この住宅ローンはすでに提案された種類に設定されています。",
+        "rate": "適用中の金利：{rate}",
+        "noRate": "これらの日付の金利が記録されていないため、複利計算は確認されませんでした。",
+        "noSamples": "元金と利息の両方を含む記帳済みの返済が見つかりませんでした。この機能を使うには、返済を元金と利息に分割して記録してください。",
+        "colDate": "日付",
+        "colPrincipal": "元金",
+        "colInterest": "利息",
+        "colBalance": "返済前の残高",
+        "balanceUnknown": "不明",
+        "failed": "リクエストが失敗したため、返済履歴を読み取れませんでした。もう一度お試しください。",
+        "cancel": "キャンセル",
+        "use": "この種類で勘定科目を編集"
+      }
+    },
+    "originalPrincipal": {
+      "label": "当初借入金額",
+      "help": "当初借り入れた金額です。履歴の記録がローン開始後から始まる口座では、これは借入額であり、期首残高（履歴開始時点の債務）ではありません。"
     }
   },
   "assetFields": {
@@ -352,13 +461,19 @@
   "validation": {
     "nameRequired": "勘定科目名は必須です",
     "currencyCodeLength": "通貨コードは3文字でなければなりません",
+    "currencyRequired": "通貨を選択してください",
     "institutionRequired": "金融機関を選択または作成してください",
     "interestRateRequired": "利率は必須です",
     "paymentAmountRequired": "支払い金額は必須です",
     "paymentFrequencyRequired": "支払い頻度は必須です",
     "paymentStartDateRequired": "初回支払日は必須です",
     "paymentAccountRequired": "支払い元勘定科目は必須です",
-    "amortizationRequired": "償却期間は必須です"
+    "amortizationRequired": "償却期間は必須です",
+    "interestCategoryRequired": "このローンの利息を記帳するカテゴリを選択してください",
+    "acceleratedNeedsAnnuity": "この住宅ローンは繰上げ型の返済スケジュールで支払われており、これは元利均等返済の住宅ローンにしかありません。元金均等返済や利息のみの住宅ローンには通常の返済頻度が必要なため、元利均等の種類のままにしてください。",
+    "paymentMatchingPayeePatternRequired": "銀行の引き落としと照合する受取人パターンを入力してください",
+    "paymentMatchingPayeePatternWildcard": "受取人パターンには * ワイルドカードを含める必要があります",
+    "paymentMatchingDescriptionPatternWildcard": "説明パターンには * ワイルドカードを含める必要があります"
   },
   "loanDetail": {
     "backToAccounts": "勘定科目一覧に戻る",
@@ -386,7 +501,12 @@
       "estRemainingInterest": "残り利息（推定）",
       "notSet": "未設定",
       "notAvailable": "なし",
-      "paidOff": "完済"
+      "paidOff": "完済",
+      "nextInstallment": "次回の返済額",
+      "dueOn": "期日 {date}",
+      "finalPayment": "最終返済額",
+      "nextInstallmentDue": "次回の返済額（期日 {date}）",
+      "finalPaymentDue": "最終返済額（期日 {date}）"
     },
     "schedule": {
       "title": "返済スケジュール",
@@ -455,7 +575,19 @@
       "budgetLabel": "毎月の支払い総額",
       "budgetHint": "毎月、ローンに一定の総額を充てます。繰上返済は返済額を差し引いた残りです。返済額が下がると、総額を保つよう繰上返済が増えます。",
       "budgetBelowInstallment": "現在の返済額（{amount}）を下回っています。繰上返済するには増やしてください。",
-      "windowInverted": "開始日が終了日より後のため、このプランは適用されません。"
+      "windowInverted": "開始日が終了日より後のため、このプランは適用されません。",
+      "unavailable": {
+        "title": "この融資の繰上返済シミュレーションはまだ計算できません。",
+        "reasonPaidOff": "この融資には残高がないため、償却するものはありません。",
+        "reasonNoFrequency": "この融資には支払頻度が設定されていません。アカウント設定で追加してください。",
+        "reasonNoRate": "この融資には金利が保存されていません。アカウント設定で金利を設定するか、本日以前の日付で金利変更を記録してください。下の予定表に行ごとに表示される金利は請求された利息から再構成されたもので、保存された金利ではありません。",
+        "reasonNoPayment": "返済額を特定できません。定期的な返済を融資口座への送金として記録し（元金、利息は分割行または別の分類済み支出として）、またはアカウント設定で支払額を設定してください。振替元口座に通常の支出として記録された支払は融資口座に届かないため、予定表はそれらを認識できません。",
+        "reasonNoAmortization": "この住宅ローンには償還期間が設定されていないため、返済額と期間の終了日を計算できません。口座設定で償還期間を設定してください。",
+        "reasonNoPaymentStart": "この住宅ローンには初回返済日が設定されていないため、期間終了までの残りの返済回数を数えられません。口座設定から定期返済を設定してください。入力した最初の期日が第1回返済になります。",
+        "reasonNoPrincipal": "この住宅ローンには当初の借入額が設定されていないため、元金均等の元金額を計算できません。口座設定で住宅ローンの金額を設定してください。"
+      },
+      "budgetBelowNextInstallment": "次回の返済額（{amount}、期日 {date}）を下回っています。繰上返済するにはそれより高く設定してください。",
+      "shortenTermNeedsPrincipal": "この住宅ローンには当初の借入額が設定されていないため、期間短縮をシミュレーションできません。返済額の減額を選ぶか、口座設定で住宅ローンの金額を設定してください。"
     },
     "comparison": {
       "newPayoff": "新しい完済日",
@@ -471,7 +603,8 @@
       "newInstallment": "新しい返済額",
       "installmentDrop": "{payment} (−{reduction})",
       "monthlyPayment": "毎月の返済額",
-      "overpaymentAtFrequency": "{frequency}: +{amount}"
+      "overpaymentAtFrequency": "{frequency}: +{amount}",
+      "firstPayment": "初回の支払額"
     },
     "chart": {
       "title": "完済タイムライン",
@@ -538,6 +671,71 @@
       "seriesActual": "実際の残高",
       "unknown": "不明"
     },
+    "paymentMatching": {
+      "title": "支払いマッチング",
+      "description": "銀行自身による各回の返済の引き落としを認識し、請求を別途記帳する代わりに、融資のスケジュールに対して元本と利息として決済します。",
+      "noSchedule": "支払いマッチングは、銀行の引き落としを融資の定期支払いに対して決済します。先にこの融資の支払いを設定してください。",
+      "noRule": "この融資にリンクされた支払いマッチングのルールはありません。",
+      "createOne": "作成する",
+      "ruleLabel": "ルール:",
+      "ruleLoading": "ルールを読み込み中",
+      "ruleFailed": "支払いマッチングのルールを読み込めませんでした。",
+      "scheduleLoading": "定期支払いを読み込み中",
+      "scheduleFailed": "融資の定期支払いを読み込めませんでした。",
+      "retry": "再試行",
+      "autoPost": {
+        "title": "定期支払いがまだ自動で記帳されます",
+        "body": "この融資の請求で自動記帳がオンになっているため、ルールが銀行の引き落としから決済した返済が請求によっても記帳されてしまいます。「請求書・入金」で、この請求の自動記帳をオフにしてください。"
+      },
+      "preconditions": {
+        "openingBalance": "融資の開始残高は、処理する履歴の開始時点の借入残高である必要があります。各回の返済の利息はこの残高に基づいて計算されます。",
+        "originalPrincipal": "当初元本は、開始残高ではなく、当初の借入額である必要があります。",
+        "scheduleStart": "定期支払いが始まる {date} より前の日付の引き落としには、照合する返済回がありません。"
+      },
+      "process": {
+        "button": "履歴を処理",
+        "scope": "{account} の引き落としに対して、古いものから順にルールを実行します。",
+        "running": "履歴を処理中: これまでに {count, plural, one {# 回分の返済} other {# 回分の返済}}を決済しました。",
+        "done": "{count, plural, =0 {決済された返済はありません。} one {# 回分の返済を決済しました。} other {# 回分の返済を決済しました。}}",
+        "undo": "実行の各ページは、操作履歴から元に戻せます。",
+        "failed": "履歴の処理が停止しました",
+        "stuckTitle": "履歴の処理を続行できませんでした",
+        "stuck": "{date} の日付の取引が {limit, number} 件を超えているため、その日より先に進めません。残りは「ツール > ルール」から、より絞り込んだフィルターで決済してください。",
+        "stuckUnknown": "サーバーが処理の到達地点を返さなかったため、続行できません。ページを再読み込みして、もう一度お試しください。"
+      },
+      "create": {
+        "title": "支払いマッチングのルールを作成",
+        "description": "このルールは、融資の定期支払いの口座からの一致する引き落としを決済し、請求の自動記帳はオフになります。",
+        "descriptionWithAccount": "このルールは、{account} からの一致する引き落としを決済し、請求の自動記帳はオフになります。",
+        "submit": "ルールを作成",
+        "payeePatternRequired": "* ワイルドカードを含む受取人パターンを入力してください",
+        "descriptionPatternWildcard": "説明パターンには * ワイルドカードを含める必要があります",
+        "failed": "支払いマッチングのルールを作成できませんでした。",
+        "done": "ルール「{name}」を作成しました"
+      },
+      "settled": {
+        "title": "決済済みの返済",
+        "titleWithCount": "決済済みの返済（{count}）",
+        "colDueDate": "期日",
+        "colTransaction": "取引",
+        "colPrincipal": "元本",
+        "colInterest": "利息",
+        "colExtra": "追加元本",
+        "colDebtBefore": "返済前の残高",
+        "openTransaction": "取引を開く",
+        "void": "無効",
+        "notRecorded": "記録なし",
+        "empty": {
+          "title": "決済済みの返済はまだありません",
+          "body": "履歴を処理するか、銀行の引き落としをインポートして、返済を決済してください。"
+        },
+        "error": {
+          "title": "決済済みの返済を読み込めませんでした",
+          "body": "これは空のリストではありません。再試行して、どの返済が決済されたかを確認してください。",
+          "retry": "再試行"
+        }
+      }
+    },
     "lineOfCredit": {
       "currentBalance": "現在残高",
       "creditLimit": "与信枠",
@@ -549,7 +747,10 @@
     },
     "rateHistory": {
       "scheduledUpdateTitle": "予定支払いを更新しますか？",
-      "scheduledUpdateMessage": "予定された請求支払い「{name}」を新しい金利に合わせて更新できます：合計 {payment}（元金 {principal}、利息 {interest}）。今すぐ更新しますか？",
+      "scheduledUpdateNextPaymentUnchanged": "予定された請求支払い「{name}」は金利履歴と一致しています。次回の支払い（{date}）：変更なし（{payment}）。",
+      "scheduledUpdateNextPaymentChanged": "予定された請求支払い「{name}」を金利履歴に合わせて更新できます。次回の支払い（{date}）：{before} → {after}（元金 {principal}、利息 {interest}）。",
+      "scheduledUpdateNextPaymentNew": "予定された請求支払い「{name}」を金利履歴に合わせて更新できます。次回の支払い（{date}）：{payment}（元金 {principal}、利息 {interest}）。",
+      "scheduledUpdateUpcomingChange": "{date}から支払いは{amount}になります。",
       "scheduledUpdateDefaultName": "この住宅ローン",
       "scheduledUpdateConfirm": "支払いを更新",
       "scheduledUpdateSkip": "そのままにする",
@@ -616,6 +817,54 @@
       "memoLabel": "繰り上げ返済の摘要",
       "memoPlaceholder": "例: 追加元金",
       "memoHelp": "摘要にこのテキストが含まれる支払いは繰り上げ返済として扱われます（大文字と小文字は区別しません）。"
+    },
+    "notAmortizing": {
+      "title": "この融資は完済しないため、完済予定日と残りの利息は不明です。",
+      "paymentBelowInterest": "返済額（{payment}）は{rate}%での月利（約{interest}）を下回っているため、残高は減りません。利息を賄えるよう、実際の返済額（金利履歴の項目または口座の支払額）を記録してください。",
+      "beyondHorizon": "返済額は利息を賄っていますが、期間が予測範囲を超えているため、完済日と残りの利息は表示されません。"
+    }
+  },
+  "loanFees": {
+    "title": "住宅ローンの費用",
+    "help": "住宅ローンの各支払いとあわせて徴収される保険料、税金、その他の費用です。各費用は定期支払いの個別の行になり、選択したカテゴリに記帳されます。費用は固定額、現在残高に対する割合（支払いごとに再計算）、当初残高に対する割合のいずれかで、支払いごとまたは年単位で課されます。",
+    "panelDescription": "住宅ローンの各定期支払いとあわせて徴収される費用です。保存すると次回の支払いの行が更新されます。",
+    "none": "この住宅ローンの支払いでは費用は徴収されません。",
+    "name": "費用名",
+    "category": "カテゴリ",
+    "calculation": "計算方法",
+    "basis": "適用単位",
+    "amount": "金額",
+    "rate": "料率",
+    "add": "費用を追加",
+    "remove": "費用を削除",
+    "edit": "費用を編集",
+    "editTitle": "住宅ローンの費用",
+    "save": "費用を保存",
+    "cancel": "キャンセル",
+    "saved": "住宅ローンの費用を保存しました。",
+    "saveFailed": "住宅ローンの費用を保存できませんでした。",
+    "loading": "費用を読み込み中...",
+    "loadFailed": "住宅ローンの費用を読み込めませんでした。",
+    "retry": "再試行",
+    "unknownCategory": "不明なカテゴリ",
+    "unknownValue": "不明",
+    "summaryPerPayment": "支払いごとに{value}、{calculation}",
+    "summaryAnnual": "年間{value}、{calculation}",
+    "paymentMatchingConflict": "支払いマッチングは、費用を含む支払いをまだ決済できません。支払いマッチングをオフにするか、費用を削除してください。",
+    "paymentMatchingNote": "この住宅ローンには支払いマッチングのルールがあります。支払いマッチングは費用を含む支払いをまだ精算できないため、ルールがある間は費用を追加できません。",
+    "calculations": {
+      "fixed": "固定額",
+      "percentCurrentBalance": "現在残高に対する割合",
+      "percentOriginalBalance": "当初残高に対する割合"
+    },
+    "bases": {
+      "perPayment": "支払いごと",
+      "annual": "年単位"
+    },
+    "errors": {
+      "required": "必須",
+      "duplicate": "各費用には、利息カテゴリ以外の個別のカテゴリが必要です",
+      "range": "100%以下の料率を入力してください"
     }
   }
 }

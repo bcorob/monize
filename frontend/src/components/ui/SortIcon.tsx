@@ -12,7 +12,7 @@ export function SortIcon<F extends string>({
   sortDirection: 'asc' | 'desc';
 }) {
   if (sortField !== field) {
-    return <span className="ml-1 text-gray-300 dark:text-gray-600">↕</span>;
+    return <span aria-hidden="true" className="ml-1 text-gray-300 dark:text-gray-600">↕</span>;
   }
-  return <span className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>;
+  return <span aria-hidden="true" className="ml-1">{sortDirection === 'asc' ? '↑' : '↓'}</span>;
 }

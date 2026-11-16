@@ -30,11 +30,6 @@
       "actions": "क्रियाएं"
     },
     "accountCount": "{count, plural, =0 {कोई खाता नहीं} one {# खाता} other {# खाते}}",
-    "statusFilter": {
-      "all": "सभी",
-      "active": "सक्रिय",
-      "closed": "बंद"
-    },
     "actions": {
       "manageAccounts": "खाते"
     },

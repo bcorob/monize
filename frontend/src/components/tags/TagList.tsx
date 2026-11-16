@@ -6,13 +6,15 @@ import { Tag } from '@/types/tag';
 import { getIconComponent } from '@/components/ui/IconPicker';
 import { useTableDensity, type DensityLevel } from '@/hooks/useTableDensity';
 import { useDensityPreference } from '@/store/densityStore';
-import { SortIcon } from '@/components/ui/SortIcon';
 import { useLongPress, type LongPressRowHandlers } from '@/hooks/useLongPress';
 import { RowActions } from '@/components/ui/row-actions/RowActions';
 import { RowActionSheet } from '@/components/ui/row-actions/RowActionSheet';
 import type { RowAction } from '@/components/ui/row-actions/rowAction';
 import { DensityToggleBar } from '@/components/ui/DensityToggle';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { Button } from '@/components/ui/Button';
+import { SortableTh, Th } from '@/components/ui/Table';
+import { TagIcon } from '@heroicons/react/24/outline';
 
 export type { DensityLevel } from '@/hooks/useTableDensity';
 
@@ -31,8 +33,18 @@ function buildTagActions(
   ];
 }
 
-export type SortField = 'name' | 'createdAt';
+export type SortField = 'name' | 'count';
 export type SortDirection = 'asc' | 'desc';
+
+/**
+ * A stored sort field this list can still draw a control for. The sort is
+ * remembered in local storage (`monize-tags-sort-field`), and a value an older
+ * build wrote (`createdAt`, which no header ever offered) would otherwise
+ * leave the list in an order no button names.
+ */
+function isTagSortField(value: unknown): value is SortField {
+  return value === 'name' || value === 'count';
+}
 
 interface TagRowProps {
   tag: Tag;
@@ -104,7 +116,10 @@ const TagRow = memo(function TagRow({
           <span className="text-sm text-gray-400 dark:text-gray-500">-</span>
         )}
       </td>
-      <td className={`${cellPadding} whitespace-nowrap text-right text-sm text-gray-500 dark:text-gray-400 hidden sm:table-cell`}>
+      {/* Shown at every width: on a phone the count is what a tag row has to
+          say beyond its name (the icon is decoration), and a one-figure column
+          fits beside the name where the four-cell card it replaced did not. */}
+      <td className={`${cellPadding} whitespace-nowrap text-right text-sm text-gray-500 dark:text-gray-400`}>
         {transactionCount}
       </td>
       <td className={`${cellPadding} whitespace-nowrap text-right text-sm font-medium hidden min-[480px]:table-cell sticky right-0 ${density !== 'normal' && index % 2 === 1 ? 'bg-gray-50 dark:bg-table-stripe-dark' : 'bg-white dark:bg-gray-900'} group-hover:bg-gray-100 dark:group-hover:bg-gray-800`}>
@@ -123,6 +138,13 @@ interface TagListProps {
   sortField?: SortField;
   sortDirection?: SortDirection;
   onSort?: (field: SortField) => void;
+  /**
+   * Why an empty list is empty: true when the search hides every tag, false
+   * when there are no tags at all (the first-run state, which offers a create).
+   */
+  isFiltered?: boolean;
+  /** Opens the create dialog from the first-run empty state. */
+  onCreate?: () => void;
 }
 
 export function TagList({
@@ -134,6 +156,8 @@ export function TagList({
   sortField: propSortField,
   sortDirection: propSortDirection,
   onSort,
+  isFiltered = false,
+  onCreate,
 }: TagListProps) {
   const t = useTranslations('tags');
   const tc = useTranslations('common');
@@ -142,10 +166,14 @@ export function TagList({
   const [localSortField, setLocalSortField] = useState<SortField>('name');
   const [localSortDirection, setLocalSortDirection] = useState<SortDirection>('asc');
 
-  const sortField = propSortField ?? localSortField;
+  const requestedSortField = propSortField ?? localSortField;
+  const sortField: SortField = isTagSortField(requestedSortField) ? requestedSortField : 'name';
   const sortDirection = propSortDirection ?? localSortDirection;
 
   const { cellPadding, headerPadding } = useTableDensity(density);
+  // No phone card here, unlike the other lists: the maintainer's device review
+  // dropped it. The Transactions column shows at every width, and the name and
+  // the count are all a tag row has to say on a phone.
 
   const handleSort = useCallback((field: SortField) => {
     if (onSort) {
@@ -155,10 +183,11 @@ export function TagList({
         setLocalSortDirection((prev) => (prev === 'asc' ? 'desc' : 'asc'));
       } else {
         setLocalSortField(field);
-        setLocalSortDirection('asc');
+        setLocalSortDirection(field === 'count' ? 'desc' : 'asc');
       }
     }
   }, [onSort, localSortField]);
+  const sortProps = { sortField, sortDirection, onSort: handleSort };
 
   const handleDeleteClick = useCallback((tag: Tag) => {
     onDelete(tag);
@@ -174,23 +203,31 @@ export function TagList({
       let comparison = 0;
       if (sortField === 'name') {
         comparison = a.name.localeCompare(b.name);
-      } else if (sortField === 'createdAt') {
-        comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+      } else if (sortField === 'count') {
+        comparison = (transactionCounts?.[a.id] ?? 0) - (transactionCounts?.[b.id] ?? 0);
       }
       return sortDirection === 'asc' ? comparison : -comparison;
     });
-  }, [tags, sortField, sortDirection]);
+  }, [tags, sortField, sortDirection, transactionCounts]);
 
   if (tags.length === 0) {
-    return (
+    return isFiltered ? (
       <EmptyState
-        icon={
-          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-          </svg>
-        }
+        icon={<TagIcon />}
         title={t('list.empty.title')}
         description={t('list.empty.body')}
+      />
+    ) : (
+      <EmptyState
+        icon={<TagIcon />}
+        title={t('page.emptyState.title')}
+        description={t('page.emptyState.body')}
+        action={
+          onCreate && (
+            <Button onClick={onCreate}>{t('page.emptyState.createButton')}</Button>
+          )
+        }
+        help="tags"
       />
     );
   }
@@ -203,23 +240,16 @@ export function TagList({
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
           <thead className="bg-gray-50 dark:bg-gray-800">
             <tr>
-              <th
-                className={`${headerPadding} text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:text-gray-700 dark:hover:text-gray-200`}
-                onClick={() => handleSort('name')}
-              >
-                {t('list.header.name')}<SortIcon field="name" sortField={sortField} sortDirection={sortDirection} />
-              </th>
-              <th
-                className={`${headerPadding} text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell`}
-              >
-                {t('list.header.icon')}
-              </th>
-              <th className={`${headerPadding} text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden sm:table-cell`}>
+              <SortableTh {...sortProps} field="name" className={headerPadding}>
+                {t('list.header.name')}
+              </SortableTh>
+              <Th className={`${headerPadding} hidden sm:table-cell`}>{t('list.header.icon')}</Th>
+              <SortableTh {...sortProps} field="count" align="right" className={headerPadding}>
                 {t('list.header.transactions')}
-              </th>
-              <th className={`${headerPadding} text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider hidden min-[480px]:table-cell sticky right-0 bg-gray-50 dark:bg-gray-800`}>
+              </SortableTh>
+              <Th align="right" className={`${headerPadding} hidden min-[480px]:table-cell sticky right-0 bg-gray-50 dark:bg-gray-800`}>
                 {t('list.header.actions')}
-              </th>
+              </Th>
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">

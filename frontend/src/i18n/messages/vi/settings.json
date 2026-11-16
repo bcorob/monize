@@ -19,10 +19,11 @@
     "passwordRequired": "Cần có mật khẩu hiện tại để thay đổi email",
     "noChanges": "Không có thay đổi nào để lưu",
     "passwordConfirmNote": "Cần xác nhận mật khẩu khi thay đổi địa chỉ email.",
+    "pendingEmailNotice": "Liên kết xác nhận đã được gửi đến {email}. Địa chỉ email của bạn sẽ thay đổi sau khi bạn mở liên kết đó.",
     "saveButton": "Lưu hồ sơ",
-    "savingButton": "Đang lưu...",
     "toasts": {
       "success": "Hồ sơ đã được cập nhật thành công",
+      "confirmationSent": "Kiểm tra {email} để nhận liên kết xác nhận địa chỉ email mới của bạn",
       "updateFailed": "Không thể cập nhật hồ sơ"
     },
     "validation": {
@@ -36,7 +37,8 @@
   },
   "security": {
     "heading": "Bảo mật",
-    "ssoNotice": "Tài khoản của bạn sử dụng Đăng nhập một lần (SSO) để xác thực. Mật khẩu bên dưới không được dùng để đăng nhập nhưng có thể được giữ như bản dự phòng nếu SSO bị tắt.",
+    "ssoPasswordFallbackNotice": "Tài khoản của bạn sử dụng Đăng nhập một lần (SSO). Bạn cũng có thể đăng nhập bằng mật khẩu bên dưới khi SSO không khả dụng. Hãy bật xác thực hai yếu tố để bảo vệ cách đăng nhập dự phòng này.",
+    "ssoNotice": "Tài khoản của bạn dùng đăng nhập một lần (SSO). Đăng nhập bằng mật khẩu đã bị tắt đối với tài khoản SSO trên máy chủ này.",
     "currentPasswordLabel": "Mật khẩu hiện tại",
     "currentPasswordPlaceholder": "Nhập mật khẩu hiện tại",
     "newPasswordLabel": "Mật khẩu mới",
@@ -44,7 +46,6 @@
     "confirmPasswordLabel": "Xác nhận mật khẩu mới",
     "confirmPasswordPlaceholder": "Xác nhận mật khẩu mới",
     "changePasswordButton": "Thay đổi mật khẩu",
-    "changingPasswordButton": "Đang thay đổi...",
     "toasts": {
       "passwordChanged": "Mật khẩu đã được thay đổi thành công",
       "passwordChangeFailed": "Không thể thay đổi mật khẩu"
@@ -58,14 +59,28 @@
       "addLayerDescription": "Thêm một lớp bảo mật cho tài khoản của bạn.",
       "enableButton": "Bật 2FA",
       "disableButton": "Tắt 2FA",
+      "resetButton": "Đặt lại 2FA",
       "disableModal": {
         "title": "Tắt xác thực hai yếu tố",
-        "description": "Nhập mã 6 chữ số hiện tại của bạn để xác nhận tắt 2FA.",
+        "description": "Nhập mã 6 chữ số từ ứng dụng xác thực của bạn, hoặc một trong các mã dự phòng (xxxx-xxxx), để xác nhận tắt 2FA.",
         "verificationCodeLabel": "Mã xác minh",
         "disablingButton": "Đang tắt...",
         "toasts": {
           "disabled": "Xác thực hai yếu tố đã bị tắt",
           "disableFailed": "Không thể tắt 2FA"
+        }
+      },
+      "resetModal": {
+        "title": "Đặt lại xác thực hai yếu tố",
+        "description": "Dùng tùy chọn này nếu ứng dụng xác thực hoặc mã dự phòng của bạn có thể đã bị lộ, hoặc nếu mã xác thực của bạn không còn hoạt động (ví dụ sau khi thay đổi bí mật máy chủ).",
+        "effect": "Trình xác thực hiện tại, mã dự phòng và thiết bị tin cậy của bạn sẽ ngừng hoạt động, và bạn sẽ bị đăng xuất khỏi mọi thiết bị khác. Sau đó bạn thiết lập ngay một trình xác thực mới.",
+        "passwordLabel": "Mật khẩu tài khoản",
+        "codeLabel": "Mã xác thực hoặc mã dự phòng",
+        "codeHint": "Nhập mã 6 chữ số từ ứng dụng xác thực của bạn. Nếu trình xác thực không còn hoạt động, hãy nhập một trong các mã dự phòng (xxxx-xxxx) thay thế.",
+        "resettingButton": "Đang đặt lại...",
+        "toasts": {
+          "reset": "Đã đặt lại xác thực hai yếu tố. Hãy thiết lập trình xác thực mới ngay bây giờ.",
+          "resetFailed": "Không thể đặt lại 2FA"
         }
       }
     },
@@ -90,6 +105,8 @@
       "noDevices": "Không có thiết bị đáng tin cậy. Khi bạn chọn \"Đừng hỏi lại trên trình duyệt này\" trong khi đăng nhập 2FA, thiết bị sẽ xuất hiện ở đây.",
       "currentBadge": "Hiện tại",
       "revokeButton": "Thu hồi",
+      "ipAddress": "IP: {ip}",
+      "dates": "Đã thêm {added} · Lần sử dụng cuối {lastUsed} · Hết hạn {expires}",
       "revokeAllModal": {
         "title": "Thu hồi tất cả thiết bị đáng tin cậy",
         "description": "Điều này sẽ xóa tất cả thiết bị đáng tin cậy. Bạn sẽ cần nhập mã 2FA trong lần đăng nhập tiếp theo từ bất kỳ thiết bị nào."
@@ -110,8 +127,20 @@
   },
   "preferences": {
     "heading": "Sở thích",
+    "groups": {
+      "languageRegion": "Ngôn ngữ & Khu vực",
+      "appearance": "Giao diện",
+      "datesNumbers": "Ngày & Số",
+      "investments": "Đầu tư",
+      "transactions": "Giao dịch",
+      "application": "Ứng dụng",
+      "defaultViews": "Chế độ xem mặc định",
+      "mobileNavigation": "Điều hướng di động"
+    },
     "themeLabel": "Giao diện",
     "defaultCurrencyLabel": "Tiền tệ mặc định",
+    "defaultCurrencyHelp": "Dùng để tính tổng tài khoản, giá trị tài sản thuần và báo cáo của bạn, và là loại tiền mà cột Tỷ giá trên trang Tiền tệ chuyển đổi sang.",
+    "defaultCurrencyNoCrypto": "Tiền mã hóa không được cung cấp ở đây: tổng và báo cáo luôn được hiển thị bằng tiền pháp định.",
     "preferredExchangesLabel": "Sàn giao dịch ưa thích (để tra cứu giấy chứng khoán)",
     "preferredExchangesHelp": "Chọn tối đa 3 sàn giao dịch theo thứ tự ưu tiên. Chúng sẽ được ưu tiên khi tra cứu giấy chứng khoán.",
     "exchangePriorityPlaceholder": "Ưu tiên {n}",
@@ -131,10 +160,22 @@
     "lockReconciledLabel": "Khóa giao dịch đã đối soát",
     "lockReconciledTooltip": "Khi tùy chọn này tắt, Monize cảnh báo trước khi có chỉnh sửa làm thay đổi ngày hoặc số tiền của một giao dịch đã đối soát, rồi vẫn cho phép. Khi bật, giao dịch đã đối soát hoàn toàn không thể chỉnh sửa, xóa hay hủy đối soát. Hãy tắt lại để thực hiện chỉnh sửa.",
     "timeFormatLabel": "Định dạng giờ",
+    "timeFormatOptions": {
+      "h24": "24 giờ (14:30)",
+      "h12": "12 giờ (2:30 PM)"
+    },
     "recentTransactionsLabel": "Giao tác gần đây trong điền nhanh",
     "recentTransactionsHelp": "Số mục được hiển thị trong cửa sổ bật lên lịch sử bên cạnh trường Người nhận trên biểu mẫu giao tác.",
-    "saveButton": "Lưu sở thích",
-    "savingButton": "Đang lưu...",
+    "mapProviderLabel": "Nhà cung cấp bản đồ cho địa chỉ",
+    "mapProviderHelp": "Dịch vụ bản đồ nào sẽ mở khi bạn nhấp vào một địa chỉ trong trình duyệt máy tính. Điện thoại và máy tính bảng luôn mở ứng dụng bản đồ của riêng chúng, bất kể bạn chọn gì ở đây. Tự động sẽ dùng OpenStreetMap trên máy tính.",
+    "mapProviderOptions": {
+      "device": "Tự động",
+      "apple": "Apple Maps",
+      "bing": "Bing Maps",
+      "google": "Google Maps",
+      "openstreetmap": "OpenStreetMap",
+      "waze": "Waze"
+    },
     "toasts": {
       "saved": "Đã lưu sở thích",
       "saveFailed": "Không thể lưu sở thích",
@@ -182,10 +223,47 @@
       "highcontrast": "Độ tương phản cao",
       "colorblind": "An toàn cho người mù màu"
     },
-    "timezoneBrowserOption": "Sử dụng múi giờ trình duyệt (tự động phát hiện là {tz})"
+    "timezoneBrowserOption": "Sử dụng múi giờ trình duyệt (tự động phát hiện là {tz})",
+    "defaultViews": {
+      "intro": "Áp dụng trong mọi trình duyệt chưa có cài đặt riêng, chẳng hạn thiết bị mới hoặc cửa sổ riêng tư. Thay đổi bạn thực hiện trên một trang sẽ được trình duyệt đó ghi nhớ và được ưu tiên.",
+      "rowsLabel": "Mật độ hàng",
+      "hideRegisterYearLabel": "Ẩn năm trong ngày của sổ giao tác",
+      "chartCollapsedLabel": "Bắt đầu với biểu đồ trên trang Giao tác được thu gọn",
+      "widgetsCollapsedLabel": "Bắt đầu với thông tin tài khoản, người nhận và danh mục được thu gọn",
+      "accountOpenTargetLabel": "Chế độ xem tài khoản mặc định",
+      "accountOpenTargetOptions": {
+        "register": "Hiển thị giao tác của tài khoản",
+        "dashboard": "Hiển thị bảng điều khiển của tài khoản"
+      },
+      "accountOpenTargetHelp": "Áp dụng khi bạn nhấp vào một tài khoản trên trang Tài khoản hoặc trong Tài khoản yêu thích trên bảng điều khiển.",
+      "columnsLabel": "Các cột hiển thị",
+      "columnsHelp": "Bỏ chọn một ô để ẩn cột đó theo mặc định. Menu Cột của bảng chỉ thay đổi điều này trên trình duyệt đó.",
+      "columnTables": {
+        "transactions": "Giao dịch",
+        "investmentHoldings": "Danh mục đầu tư nắm giữ",
+        "investmentRegister": "Giao dịch đầu tư"
+      },
+      "applyHere": "Dùng các mặc định này trong trình duyệt này",
+      "applyHereHelp": "Xóa các cài đặt hiển thị mà trình duyệt này đã lưu, để các mặc định ở trên cũng áp dụng tại đây.",
+      "appliedHere": "Trình duyệt này hiện dùng chế độ xem mặc định của bạn"
+    },
+    "mobileTabs": {
+      "intro": "Chọn tối đa ba tab cho thanh ở cuối điện thoại hoặc máy tính bảng. Nút thêm và Thêm luôn hiển thị.",
+      "slotLabel": "Tab {number}",
+      "none": "Không có"
+    }
   },
   "notifications": {
     "heading": "Thông báo",
+    "portfolioAlert": {
+      "title": "Biến động giá trị đầu tư",
+      "description": "Thông báo cho tôi mỗi ngày một lần khi các tài khoản đầu tư của tôi biến động vượt ngưỡng, được đo từ thay đổi thị trường và cổ tức (không tính nạp và rút tiền).",
+      "enableLabel": "Bật cảnh báo biến động đầu tư",
+      "thresholdLabel": "Thông báo khi mức biến động hằng ngày ít nhất là",
+      "saveError": "Không thể lưu ngưỡng",
+      "loadError": "Không thể tải cài đặt cảnh báo đầu tư",
+      "retry": "Thử lại"
+    },
     "smtpNotConfigured": "Thông báo email không có sẵn. SMTP chưa được quản trị viên cấu hình.",
     "emailNotificationsTitle": "Thông báo email",
     "emailNotificationsDescription": "Nhận nhắc nhở email cho các hóa đơn sắp đến và cảnh báo ngân sách",
@@ -212,6 +290,148 @@
       "digestUpdateFailed": "Không thể cập nhật tùy chọn tóm tắt ngân sách",
       "digestDayFailed": "Không thể cập nhật ngày tóm tắt",
       "testEmailFailed": "Không thể gửi email thử nghiệm"
+    },
+    "push": {
+      "heading": "Đẩy từ trình duyệt",
+      "collapsedDevices": "{count, plural, =0 {Chưa đăng ký thiết bị nào} other {Đã đăng ký # thiết bị}}",
+      "collapsedDevicesWithRetired": "{count, plural, =0 {Chưa đăng ký thiết bị nào} other {Đã đăng ký # thiết bị}}, {retired, plural, other {# đã ngừng}}",
+      "collapsedDevicesUnavailable": "Không tải được danh sách thiết bị",
+      "diagnostics": {
+        "summary": "Chẩn đoán thông báo",
+        "intro": "Những gì trình duyệt và thiết bị này báo cáo cho Monize về thông báo. Hãy làm mới sau khi thay đổi một cài đặt, rồi dùng Sao chép để gửi báo cáo đầy đủ.",
+        "refresh": "Làm mới",
+        "copy": "Sao chép báo cáo",
+        "copied": "Đã sao chép chẩn đoán vào bảng nhớ tạm"
+      },
+      "description": "Đăng ký thiết bị này để Monize có thể gửi tới nó ngay cả khi ứng dụng đã đóng. Hiện chỉ có thông báo thử nghiệm được gửi theo đường này; mọi thứ khác vẫn đến ở chuông.",
+      "androidNotify": "Trên Android, chỉ cấp quyền là chưa đủ: hệ thống vẫn có thể ẩn thông báo. Nhấn giữ biểu tượng Monize trên màn hình chính, chạm Thông tin ứng dụng, rồi Thông báo, và đảm bảo chúng đang bật.",
+      "permissionHint": "Khi bạn bật, trình duyệt sẽ xin quyền hiển thị thông báo. Không có gì được gửi trước khi bạn cho phép.",
+      "enableButton": "Bật trên thiết bị này",
+      "enablingButton": "Đang bật...",
+      "sendTestButton": "Gửi thông báo thử nghiệm",
+      "sendingTestButton": "Đang gửi...",
+      "removeButton": "Xóa",
+      "removeDialog": {
+        "title": "Xóa thiết bị",
+        "message": "Xóa {device}? Thiết bị sẽ không nhận thông báo đẩy cho đến khi bật lại đẩy trên thiết bị đó."
+      },
+      "thisDevice": "Thiết bị này",
+      "held": "Đã đăng xuất trên thiết bị này. Thông báo đẩy sẽ tiếp tục khi bạn đăng nhập lại tại đây.",
+      "unifiedpushBadge": "UnifiedPush",
+      "unnamedDevice": "Thiết bị chưa đặt tên",
+      "noLiveDevices": "Chưa có thiết bị nào được đăng ký. Hãy bật đẩy trên thiết bị này để gửi thử nghiệm.",
+      "noDeliverableDevices": "Bạn đã đăng xuất trên mọi thiết bị nên thông báo thử không có nơi để gửi đến. Thông báo đẩy sẽ tiếp tục trên một thiết bị khi bạn đăng nhập lại tại đó.",
+      "notConfigured": "Đẩy từ trình duyệt không khả dụng trên phiên bản Monize này. Quản trị viên có thể bật trong khu vực Admin.",
+      "disabledByAdmin": "Quản trị viên đã tắt đẩy từ trình duyệt cho phiên bản Monize này.",
+      "keyUnreadable": "Monize không đọc được cặp khóa đẩy của phiên bản này nên không có gì được gửi đi. Quản trị viên có thể khôi phục bằng cách xoay cặp khóa trong khu vực Admin.",
+      "serverKeyMissing": "Phiên bản Monize này thiếu khóa mã hóa cần để mở cặp khóa push, nên không thể gửi được gì. Quản trị viên phải đặt khóa đó trong bản triển khai và khởi động lại.",
+      "statusUnavailable": "Monize không kiểm tra được đẩy từ trình duyệt có khả dụng hay không. Hãy tải lại trang để thử lại.",
+      "devicesUnavailable": "Monize không tải được các thiết bị đã đăng ký của bạn. Mọi thứ khác trên trang này vẫn hoạt động; hãy tải lại để thử lại.",
+      "unsupported": {
+        "unsupported": "Trình duyệt này không thể nhận thông báo đẩy.",
+        "denied": "Thông báo cho Monize đang bị chặn trong trình duyệt này. Hãy cho phép trong cài đặt trang web rồi tải lại trang.",
+        "ios-browser": "Trên iPhone và iPad, thông báo đẩy chỉ hoạt động sau khi cài Monize vào Màn hình chính. Chọn Chia sẻ, rồi Thêm vào Màn hình chính, và mở Monize từ đó.",
+        "shell": {
+          "electron": "Thông báo không khả dụng trong cửa sổ máy tính của Monize. Hãy mở Monize trong trình duyệt từ menu khay hệ thống (\"Open in browser\"), thông báo đẩy vẫn hoạt động ở đó.",
+          "capacitor": "Thông báo đẩy chưa khả dụng trong ứng dụng Monize cho Android. Hãy mở Monize trong trình duyệt để nhận thông báo."
+        }
+      },
+      "native": "Ứng dụng Monize trên máy tính hiển thị thông báo của bạn trên PC này khi đang chạy, kể cả khi cửa sổ đã được đóng xuống khay hệ thống, nên không có gì cần bật ở đây. Cài đặt thông báo của Windows quyết định cách chúng hiển thị.",
+      "disabledReason": {
+        "GONE": "Không còn tiếp cận được. Hãy bật lại đẩy trong trình duyệt đó.",
+        "KEY_ROTATED": "Đã ngừng khi phiên bản này xoay cặp khóa đẩy. Hãy bật lại đẩy trong trình duyệt đó.",
+        "FAILING": "Đã ngừng sau nhiều lần gửi thất bại. Hãy bật lại đẩy trong trình duyệt đó."
+      },
+      "toasts": {
+        "enabled": "Đã bật thông báo đẩy trên thiết bị này",
+        "enableFailed": "Không thể bật thông báo đẩy",
+        "permissionDenied": "Trình duyệt này đang chặn thông báo của Monize. Hãy cho phép trong cài đặt trang web rồi thử lại.",
+        "permissionDeniedIos": "Thông báo đang bị chặn với Monize. Mở Cài đặt iOS, rồi Thông báo, rồi Monize để cho phép.",
+        "permissionDismissed": "Thông báo chưa được bật. Hãy chọn Cho phép khi trình duyệt hỏi.",
+        "permissionNoPrompt": "Thông báo chưa được bật và không có hộp thoại nào xuất hiện. Mở Cài đặt iOS, rồi Thông báo, rồi Monize, và cho phép ở đó. Nếu không thấy Monize trong danh sách, hãy xóa khỏi Màn hình chính, thêm lại (Chia sẻ, rồi Thêm vào Màn hình chính) và thử lần nữa.",
+        "removed": "Đã xóa thiết bị",
+        "removeFailed": "Không thể xóa thiết bị",
+        "testSent": "{count, plural, other {Đã gửi thông báo thử nghiệm tới # thiết bị}}",
+        "testPartial": "Thông báo thử nghiệm đã tới {delivered} trên {attempted} thiết bị",
+        "testFailed": "Không thể gửi thông báo thử nghiệm",
+        "pushServiceRefused": "Dịch vụ push của trình duyệt đã từ chối đăng ký. Hãy thử lại sau ít phút; nếu vẫn lỗi, kiểm tra cài đặt push của trình duyệt.",
+        "pushServiceRefusedBrave": "Brave chặn dịch vụ push theo mặc định. Trong Brave, mở Cài đặt, rồi Quyền riêng tư và bảo mật, bật \"Sử dụng dịch vụ của Google cho tin nhắn push\", khởi động lại trình duyệt và thử lại."
+      },
+      "testResults": {
+        "heading": "Lần thử gần nhất, theo thiết bị",
+        "status": {
+          "sent": "đã gửi tới dịch vụ push",
+          "expired": "đăng ký đã hết hạn; bật lại push trên thiết bị đó",
+          "transient": "chưa gửi được (lỗi tạm thời); thử lại",
+          "unconfigured": "phiên bản này hiện không thể ký tin nhắn push"
+        }
+      },
+      "transport": {
+        "webpush": "Web push",
+        "unifiedpush": "UnifiedPush"
+      },
+      "facts": {
+        "endpoint": "Điểm cuối",
+        "transport": "Gửi qua",
+        "registeredIp": "Đăng ký từ",
+        "registered": "Đã đăng ký",
+        "lastSeen": "Hoạt động gần nhất",
+        "lastDelivery": "Lần gửi gần nhất",
+        "noDelivery": "Chưa gửi gì",
+        "userAgent": "Trình duyệt",
+        "unknownIp": "Không rõ"
+      }
+    },
+    "preferences": {
+      "heading": "Cách thông báo cho tôi",
+      "description": "Chọn những loại mà Monize gửi qua email hoặc push, và tần suất gửi.",
+      "categoryHeader": "Thông báo",
+      "channels": {
+        "emailReport": "Email (báo cáo)",
+        "emailNotification": "Email (cảnh báo)",
+        "push": "Push",
+        "unifiedpush": "UnifiedPush",
+        "unifiedpushHint": "Thông báo được gửi qua ứng dụng phân phối do bạn tự chạy, chẳng hạn ntfy, thay vì dịch vụ push của hãng trình duyệt. Hãy đăng ký một điểm cuối trong ứng dụng đó để dùng kênh này."
+      },
+      "categories": {
+        "PAYMENTS": "Hóa đơn và đã lên lịch",
+        "BUDGETS": "Ngân sách",
+        "SYSTEM": "Cảnh báo hệ thống",
+        "BALANCES": "Số dư tài khoản",
+        "INVESTMENTS": "Giá trị đầu tư",
+        "STRATEGIES": "Tín hiệu chiến lược",
+        "BANK_SYNC": "Kết nối ngân hàng",
+        "BANK_SYNC_ACTIVITY": "Kết quả đồng bộ ngân hàng",
+        "EMAIL_RECEIPTS": "Biên lai email",
+        "BONDS": "Trái phiếu",
+        "AI_REVIEW": "Đề xuất xem xét AI",
+        "WARRANTIES": "Nhắc nhở bảo hành",
+        "SECURITY": "Bảo mật",
+        "SHARED_EXPENSES": "Chi phí chung"
+      },
+      "channelNotApplicable": "Không áp dụng cho loại thông báo này",
+      "emailToggleLabel": "Email báo cáo cho {category}",
+      "emailNotificationToggleLabel": "Email cảnh báo cho {category}",
+      "pushToggleLabel": "Push cho {category}",
+      "unifiedpushToggleLabel": "UnifiedPush cho {category}",
+      "saveFailed": "Không thể lưu cài đặt đó",
+      "emailUnavailable": "Bật thông báo qua email ở trên để gửi chúng qua email.",
+      "pushUnavailable": "Chưa có thiết bị nào đăng ký nhận push, nên kênh này không thể gửi được gì.",
+      "throttle": {
+        "label": "Giãn cách",
+        "ariaLabel": "Thời gian chờ cho {category}",
+        "hint": "Bỏ qua một cảnh báo hoặc push nếu một cái cùng nhóm đã gửi trong khoảng thời gian này.",
+        "options": {
+          "0": "Tắt",
+          "5": "5 phút",
+          "15": "15 phút",
+          "30": "30 phút",
+          "60": "1 giờ",
+          "360": "6 giờ",
+          "1440": "24 giờ"
+        }
+      },
+      "pushEnableHint": "Trình duyệt này chưa đăng ký nhận thông báo push."
     }
   },
   "help": {
@@ -229,9 +449,10 @@
       "label": "Thảo luận",
       "description": "Đặt câu hỏi và chia sẻ ý tưởng với cộng đồng."
     },
-    "wiki": {
-      "label": "Wiki",
-      "description": "Duyệt các hướng dẫn và tài liệu."
+    "docs": {
+      "label": "Tài liệu",
+      "description": "Duyệt hướng dẫn sử dụng.",
+      "openOnline": "Mở trên monize.net"
     },
     "supportBackup": {
       "label": "Tạo bản sao lưu hỗ trợ",
@@ -280,7 +501,7 @@
   "supportBackup": {
     "title": "Tạo bản sao lưu hỗ trợ",
     "howItWorks": "Tạo một bản sao đã ẩn danh của bản sao lưu: tên bị che (giữ hai ký tự đầu và cuối), ghi chú/mô tả/số tài khoản bị xoá, và mọi số tiền được nhân với một hệ số ẩn duy nhất, trong khi các giá trị công khai (tỷ giá, giá, lãi suất) giữ nguyên. Tệp luôn được mã hoá bằng mật khẩu bên dưới và khôi phục như bản sao lưu bình thường. Điều này bảo vệ trước sự lộ lọt tình cờ, không phải trước người đã biết bạn — ngày tháng, tần suất và cấu trúc được giữ để lỗi vẫn tái hiện được.",
-    "sectionsLabel": "Bao gồm những gì",
+    "sectionsLabel": "Các phần cần bao gồm",
     "sections": {
       "investments": "Đầu tư (chứng khoán, nắm giữ, giá)",
       "scheduled": "Giao dịch định kỳ",
@@ -325,6 +546,17 @@
       "description": "Xóa dữ liệu tài chính khỏi tài khoản của bạn. Không thể hoàn tác.",
       "openButton": "Xóa dữ liệu...",
       "alwaysDeletedHeading": "Những thứ sau sẽ luôn được xóa:",
+      "alwaysDeletedItems": {
+        "transactions": "Tất cả giao dịch và các khoản chia tách",
+        "scheduled": "Tất cả giao dịch định kỳ/đã lên lịch",
+        "securities": "Tất cả chứng khoán, giá, số lượng nắm giữ và giao dịch đầu tư",
+        "budgets": "Tất cả ngân sách và cảnh báo ngân sách",
+        "monthlySummaries": "Tóm tắt số dư tài khoản hàng tháng",
+        "customReports": "Báo cáo tùy chỉnh, thẻ và ánh xạ nhập",
+        "actionHistory": "Lịch sử thao tác (hoàn tác/làm lại)",
+        "rules": "Tất cả quy tắc giao dịch",
+        "institutions": "Các tổ chức tài chính"
+      },
       "optionalHeading": "Tùy chọn cũng xóa:",
       "accountsOption": "Tài khoản",
       "categoriesOption": "Danh mục",
@@ -370,7 +602,8 @@
   },
   "apiAccess": {
     "heading": "Truy cập API",
-    "description": "Tạo mã thông báo truy cập cá nhân để kết nối các công cụ AI bên ngoài như Claude Desktop qua MCP.",
+    "description": "Tạo mã thông báo truy cập cá nhân để kết nối các công cụ AI bên ngoài như Claude Desktop qua MCP, hoặc để gọi REST API tại /api/v1.",
+    "restrictedNote": "Mã thông báo đọc chỉ có thể đọc. Các điểm cuối đăng nhập, bảo mật, quản trị, chia sẻ và sao lưu không khả dụng với mã thông báo.",
     "createTokenButton": "Tạo mã thông báo",
     "mcpServerUrlLabel": "URL máy chủ MCP",
     "mcpServerUrlHelp": "Sử dụng URL này khi cấu hình các ứng dụng MCP như Claude Code hoặc Claude Desktop.",
@@ -384,7 +617,7 @@
     "revokeButton": "Thu hồi",
     "revokeModal": {
       "title": "Thu hồi mã thông báo",
-      "message": "Mã thông báo này sẽ ngừng hoạt động ngay lập tức. Bất kỳ kết nối MCP nào sử dụng nó sẽ bị ngắt kết nối.",
+      "message": "Mã thông báo này sẽ ngừng hoạt động ngay lập tức. Bất kỳ kết nối MCP hoặc ứng dụng khách API nào sử dụng nó sẽ bị ngắt kết nối.",
       "confirmLabel": "Thu hồi"
     },
     "createModal": {
@@ -430,26 +663,27 @@
       "copyUrlFailed": "Không thể sao chép URL",
       "loadFailed": "Không thể tải mã thông báo API",
       "createFailed": "Không thể tạo mã thông báo",
-      "revokeFailed": "Không thể thu hồi mã thông báo"
+      "revokeFailed": "Không thể thu hồi mã thông báo",
+      "reauthFailed": "Không thể xác nhận xác thực lại"
+    },
+    "stepUp": {
+      "reason": "Mã thông báo có thể truy cập tài khoản của bạn mà không cần đăng nhập, vì vậy hãy xác nhận danh tính trước khi tạo."
     },
     "relative": {
-      "never": "Không bao giờ",
-      "today": "Hôm nay",
-      "yesterday": "Hôm qua",
-      "daysAgo": "{count} ngày trước",
-      "monthsAgo": "{count} tháng trước"
+      "never": "Không bao giờ"
     }
   },
   "autoBackup": {
     "heading": "Sao lưu tự động",
-    "description": "Tự động sao lưu dữ liệu của bạn vào một thư mục theo lịch. Vì Monize chạy trong Docker, bạn phải ánh xạ một thư mục máy chủ vào container dưới dạng volume (VD: -v /host/backups:/data/backups).",
-    "adminManagedNote": "Chỉ quản trị viên mới có thể thay đổi các cài đặt này. Tất cả người dùng khác được sao lưu tự động theo cùng lịch trình và chính sách lưu giữ, mỗi người vào một thư mục riêng.",
+    "description": "Một lịch duy nhất cho toàn bộ bản triển khai: máy chủ sao lưu dữ liệu của mọi tài khoản vào kho lưu trữ bên dưới. Vì Monize chạy trong Docker, cần gắn một thư mục cục bộ vào vùng chứa dưới dạng volume (ví dụ: -v /host/backups:/data/backups).",
+    "adminManagedNote": "Chỉ quản trị viên mới thay đổi được chính sách này, và nó áp dụng cho mọi tài khoản trên bản triển khai này, mỗi tài khoản vào một thư mục riêng.",
+    "demoDisabledNote": "Các điều khiển này ở chế độ chỉ đọc trong chế độ demo.",
     "loadingText": "Đang tải...",
     "enableLabel": "Bật sao lưu tự động",
     "backupFolderLabel": "Thư mục sao lưu",
     "backupFolderPlaceholder": "/data/backups",
-    "perUserFolderHelp": "Bản sao lưu của mỗi người dùng nằm trong thư mục riêng bên trong thư mục này, được đặt tên theo ID người dùng.",
-    "perUserFolderHelpWithPath": "Bản sao lưu của mỗi người dùng nằm trong thư mục riêng bên trong thư mục này, được đặt tên theo ID người dùng. Của bạn: {path}",
+    "perUserFolderHelp": "Bản sao lưu của mỗi tài khoản nằm trong thư mục riêng bên trong thư mục này, đặt tên theo ID tài khoản.",
+    "perUserFolderHelpWithPath": "Bản sao lưu của mỗi tài khoản nằm trong thư mục riêng bên trong thư mục này, đặt tên theo ID tài khoản. Ví dụ: {path}",
     "browseButton": "Duyệt...",
     "validateButton": "Xác thực",
     "validatingButton": "Đang xác thực...",
@@ -471,26 +705,26 @@
       "monthlyHelp": "Giữ một bản mỗi tháng"
     },
     "status": {
-      "heading": "Trạng thái",
-      "lastBackup": "Sao lưu lần cuối",
-      "nextBackup": "Sao lưu tiếp theo",
+      "heading": "Trạng thái bản triển khai",
+      "lastBackup": "Bản sao lưu gần nhất",
+      "nextBackup": "Bản sao lưu theo lịch kế tiếp",
       "error": "Lỗi",
       "success": "Thành công",
-      "failed": "Thất bại",
-      "partial": "Một phần"
+      "partial": "Một phần",
+      "failed": "Thất bại"
     },
-    "saveButton": "Lưu cài đặt",
-    "savingButton": "Đang lưu...",
-    "runNowButton": "Chạy sao lưu ngay",
-    "runningButton": "Đang chạy sao lưu...",
+    "saveButton": "Lưu chính sách",
+    "runNowButton": "Sao lưu mọi tài khoản ngay",
+    "runningButton": "Đang sao lưu...",
     "toasts": {
-      "saved": "Cài đặt sao lưu tự động đã được lưu",
-      "backupCreated": "Sao lưu đã được tạo: {filename}",
+      "saved": "Đã lưu chính sách sao lưu và áp dụng cho mọi tài khoản",
       "folderValid": "Thư mục hợp lệ và có thể ghi",
       "loadFailed": "Không thể tải cài đặt sao lưu tự động",
       "saveFailed": "Không thể lưu cài đặt",
       "runFailed": "Không thể chạy sao lưu",
-      "browseFailed": "Không thể duyệt thư mục"
+      "browseFailed": "Không thể duyệt thư mục",
+      "backupRunFinished": "Đã sao lưu {backedUp} trên {requested} tài khoản",
+      "backupRunIncomplete": "Đã sao lưu {backedUp} trên {requested}: {partial} một phần, {failed} thất bại. Xem trạng thái bên dưới."
     },
     "folderErrors": {
       "required": "Cần có đường dẫn thư mục",
@@ -505,9 +739,22 @@
     },
     "noStorage": {
       "title": "Bản triển khai này không có bộ lưu trữ sao lưu",
-      "body": "Bản sao lưu tự động sẽ được ghi vào {folderPath}, nơi bản triển khai này không thể ghi. Quản trị viên cần gắn bộ lưu trữ ở đó trước khi lịch trình có thể chạy."
+      "body": "Bản sao lưu tự động sẽ được ghi vào {folderPath}, nơi bản triển khai này không ghi được. Quản trị viên cần cung cấp kho lưu trữ đó trước khi lịch có thể chạy."
     },
-    "never": "Không bao giờ"
+    "never": "Không bao giờ",
+    "coverage": {
+      "accounts": "Đã lên lịch cho {scheduled} trên {total} tài khoản đang hoạt động của bản triển khai này.",
+      "unknown": "Không có thông tin về phạm vi của chính sách này."
+    },
+    "storage": {
+      "heading": "Kho lưu trữ bản sao lưu",
+      "providerLocal": "Thư mục cục bộ",
+      "providerS3": "Kho đối tượng tương thích S3",
+      "providerUnknown": "Kho lưu trữ",
+      "localHelp": "Được đặt bởi BACKUP_STORAGE_PROVIDER. Bản sao lưu của mỗi tài khoản nằm trong thư mục riêng bên trong thư mục này, đặt tên theo ID tài khoản.",
+      "fixedHelp": "Được đặt bởi BACKUP_STORAGE_PROVIDER. Bucket và tiền tố khoá thuộc về bản triển khai nên ở đây không có thư mục để chọn; bản sao lưu của mỗi tài khoản nằm dưới tiền tố khoá riêng.",
+      "artifactCount": "Kho này hiện giữ {count} tệp sao lưu của tài khoản bạn. Chuyển kho lưu trữ không di chuyển các bản sao lưu hiện có."
+    }
   },
   "backupRestore": {
     "heading": "Sao lưu & Khôi phục",
@@ -557,8 +804,8 @@
       },
       "toasts": {
         "success": "Sao lưu đã được tải xuống thành công",
-        "incomplete": "Đã tải xuống bản sao lưu, nhưng bản này KHÔNG ĐẦY ĐỦ: {unusable} trong {total} tệp đính kèm không thể được lưu nguyên vẹn ({missing} bị thiếu, {inconsistent} không qua được kiểm tra tính toàn vẹn). Đừng coi tệp này là bản sao lưu đầy đủ — hãy sửa bộ lưu trữ tệp đính kèm và xuất lại.",
-        "failed": "Không thể tạo sao lưu"
+        "failed": "Không thể tạo sao lưu",
+        "incomplete": "Đã tải xuống bản sao lưu, nhưng bản này KHÔNG ĐẦY ĐỦ: {unusable} trong {total} tệp đính kèm không thể được lưu nguyên vẹn ({missing} bị thiếu, {inconsistent} không qua được kiểm tra tính toàn vẹn). Đừng coi tệp này là bản sao lưu đầy đủ — hãy sửa bộ lưu trữ tệp đính kèm và xuất lại."
       }
     },
     "restore": {
@@ -580,16 +827,130 @@
         "pleaseEnterPassword": "Vui lòng nhập mật khẩu để xác nhận",
         "encryptedNeedsPassword": "Sao lưu này được mã hóa. Nhập mật khẩu đã được tạo cùng với nó vào trường \"Mật khẩu sao lưu\", sau đó thử lại.",
         "failed": "Không thể khôi phục sao lưu",
+        "interrupted": "Quá trình khôi phục bị gián đoạn trước khi máy chủ phản hồi. Khôi phục được áp dụng toàn bộ hoặc không áp dụng gì, nên dữ liệu của bạn hoặc đã được khôi phục hoàn toàn hoặc không thay đổi. Hãy tải lại trang để kiểm tra trước khi thử lại.",
         "reauthRedirect": "Bạn sẽ được chuyển đến nhà cung cấp danh tính để xác nhận đúng là bạn. Khi trở lại, hãy chọn lại tệp sao lưu."
-      }
+      },
+      "selectedFile": "Đã chọn: {filename}"
     },
     "restoreResult": {
       "title": "Khôi phục hoàn tất",
-      "description": "Dữ liệu của bạn đã được khôi phục thành công. Dưới đây là tóm tắt những gì đã được khôi phục:",
       "totalRecords": "Tổng số bản ghi",
-      "doneButton": "Xong",
       "skippedAttachments": "{count, plural, other {# tệp đính kèm không được phục hồi}}: bản sao lưu không mang theo byte dùng được cho chúng — khi xuất, chúng bị thiếu hoặc không qua được kiểm tra tổng, hoặc tệp có trước các bản sao lưu tự chứa. Hãy xuất bản sao lưu mới khi bộ lưu trữ tệp đính kèm đã ổn.",
-      "unusableAiProviderKeys": "{count, plural, other {# nhà cung cấp AI đã được khôi phục mà không có khóa API dùng được}}: bản sao lưu này được tạo trước khi khóa của nhà cung cấp đi kèm trong đó, nên khóa đã lưu thuộc về máy chủ tạo ra tệp, hoặc máy chủ này chưa cấu hình khóa mã hóa để lưu khóa đó. Hãy mở Cài đặt → Nhà cung cấp AI và nhập lại khóa API."
+      "unusableAiProviderKeys": "{count, plural, other {# nhà cung cấp AI đã được khôi phục mà không có khóa API dùng được}}: bản sao lưu này được tạo trước khi khóa của nhà cung cấp đi kèm trong đó, nên khóa đã lưu thuộc về máy chủ tạo ra tệp, hoặc máy chủ này chưa cấu hình khóa mã hóa để lưu khóa đó. Hãy mở Cài đặt → Nhà cung cấp AI và nhập lại khóa API.",
+      "unlinkedBondSecurities": "{count, plural, other {# chứng khoán trái phiếu đã được khôi phục mà không liên kết với công cụ trái phiếu của nó}}: danh mục trái phiếu của máy chủ này không có chuỗi này (hoặc có nhưng bằng đơn vị tiền tệ khác), nên công cụ tính trái phiếu không còn định giá chúng và giá đã tính của chúng không được khôi phục. Hãy mở từng chứng khoán và liên kết lại với một công cụ trái phiếu.",
+      "unlinkedBondSeries": "{count, plural, other {# giao dịch trái phiếu đã mất series}} vì không thể lấy series từ nguồn chính thức. Các giao dịch được khôi phục không có series và sẽ giữ nguyên như vậy cho đến khi bạn tải series.",
+      "unrecoveredBondSeries": "Các series trái phiếu nêu trong bản sao lưu nhưng không thể tải: {count}.",
+      "unrecoveredBondSeriesItem": "{series} ({country}): {reason}",
+      "unrecoveredBondSeriesMore": "và {count} mục nữa",
+      "unrecoveredBondSeriesAction": "Để khôi phục, hãy mở chứng khoán trái phiếu, tải series trên trang của nó (Làm mới) và chọn series trong các giao dịch chưa có.",
+      "unrecoveredBondSeriesReason": {
+        "not-published": "tổ chức phát hành chưa công bố series này",
+        "source-unavailable": "nguồn chính thức không trả lời; hãy thử lại sau",
+        "no-adapter": "máy chủ này không có nguồn cho quốc gia của tổ chức phát hành này",
+        "refused": "câu trả lời của nguồn chính thức không được chấp nhận",
+        "rate-limited": "nguồn chính thức yêu cầu chậm lại; hãy thử lại sau",
+        "not-attempted": "quá nhiều series trong một lần khôi phục; không thử",
+        "other": "lý do không xác định"
+      },
+      "doneButton": "Xong",
+      "unlinkedBondSecuritiesList": "Chứng khoán bị ảnh hưởng: {symbols}.",
+      "unlinkedBondSecuritiesMore": "và {count} mã nữa",
+      "currencyKindMismatchAccounts": "{count, plural, other {# tài khoản được khôi phục với loại tiền tệ không khớp với loại tài khoản}}: tài khoản tiền mã hóa cần một tiền mã hóa, còn mọi tài khoản khác cần tiền pháp định. Trên máy chủ này, tiền tệ đó thuộc loại ngược lại. Hãy sửa tiền tệ của tài khoản, hoặc loại của tiền tệ trên trang Tiền tệ.",
+      "currencyKindMismatchAccountsList": "Tài khoản bị ảnh hưởng: {names}.",
+      "currencyKindMismatchSecurities": "{count, plural, other {# chứng khoán}} đang được định giá bằng tiền mã hóa trên máy chủ này, trong khi chứng khoán cần tiền pháp định. Hãy sửa tiền tệ của chứng khoán, hoặc loại của tiền tệ trên trang Tiền tệ.",
+      "currencyKindMismatchSecuritiesList": "Chứng khoán bị ảnh hưởng: {symbols}.",
+      "currencyKindMismatchMore": "và {count} mục nữa",
+      "currencyKindMismatchDefaultCurrency": "Tiền tệ mặc định của bạn, {code}, là tiền mã hóa trên máy chủ này, nhưng tổng và báo cáo luôn được hiển thị bằng tiền pháp định. Hãy chọn một Tiền tệ mặc định là tiền pháp định trong Cài đặt → Sở thích.",
+      "counts": {
+        "sharedGroups": "Nhóm chi tiêu chung",
+        "sharedParticipants": "Thành viên nhóm",
+        "sharedEntries": "Mục ghi của nhóm",
+        "sharedAllocations": "Phân chia chi phí",
+        "sharedActivity": "Hoạt động nhóm",
+        "sharedPeople": "Liên hệ chi tiêu chung",
+        "sharedPersonLinks": "Liên hệ được liên kết",
+        "sharedIntegrations": "Kết nối với tài chính cá nhân",
+        "sharedPostings": "Bút toán cá nhân cho chi tiêu chung",
+        "sharedLedgerLinks": "Giao dịch cá nhân được liên kết",
+        "budgetBuckets": "Hũ ngân sách",
+        "budgetPeriodBuckets": "Hũ kỳ ngân sách"
+      }
+    },
+    "storedBackups": {
+      "heading": "Sao lưu tự động",
+      "description": "Các bản sao lưu máy chủ này tạo cho bạn theo lịch riêng của nó. Tải một bản về để giữ bản sao của riêng bạn, hoặc khôi phục từ nó bằng biểu mẫu bên dưới.",
+      "adminScheduleNote": "Cài đặt sao lưu tự động nằm trong <link>Quản trị → Sao lưu</link>.",
+      "loading": "Đang tải các bản sao lưu...",
+      "loadFailed": "Không tải được các bản sao lưu lưu trên máy chủ",
+      "retryButton": "Thử lại",
+      "empty": "Máy chủ này chưa giữ bản sao lưu tự động nào của bạn.",
+      "columns": {
+        "filename": "Tệp",
+        "modified": "Ngày sửa đổi",
+        "size": "Kích thước",
+        "actions": "Thao tác"
+      },
+      "downloadButton": "Tải xuống",
+      "restoreButton": "Khôi phục",
+      "workingButton": "Đang xử lý...",
+      "downloadFailed": "Không tải xuống được bản sao lưu",
+      "offsite": {
+        "disclosure": "Đích ngoài máy chủ",
+        "disclosureDescription": "Sau mỗi lần sao lưu tự động hoàn tất, một bản sao đã mã hóa có thể được gửi tới kho lưu trữ S3, qua email, hoặc cả hai: ba bản sao, hai kiểu lưu trữ, một trong số đó nằm ngoài máy này. Chỉ bản sao lưu đã mã hóa mới được gửi đi.",
+        "encryptionUnavailable": "Máy chủ này chưa đặt khóa mã hóa, nên không thể lưu thông tin đăng nhập cho bucket của riêng bạn. Bucket của chính máy chủ và các bản sao gửi qua email vẫn hoạt động.",
+        "loading": "Đang tải các đích ngoài máy chủ của bạn...",
+        "loadFailed": "Không tải được các đích sao lưu ngoài máy chủ của bạn",
+        "retryButton": "Thử lại",
+        "demoNote": "Không thể thay đổi các đích ngoài máy chủ trong bản demo.",
+        "saveButton": "Lưu các đích",
+        "saved": "Đã lưu các đích ngoài máy chủ",
+        "saveFailed": "Không lưu được các đích sao lưu ngoài máy chủ của bạn",
+        "s3": {
+          "heading": "Kho lưu trữ S3",
+          "modeLabel": "Đích của bản sao",
+          "modeOff": "Tắt",
+          "modeDeployment": "Bucket của máy chủ này",
+          "modeOwn": "Bucket của riêng tôi",
+          "deploymentUnavailable": "Máy chủ này không có bucket ngoài máy chủ của riêng nó, nên quản trị viên sẽ phải thiết lập. Thay vào đó, bạn có thể dùng bucket của riêng mình.",
+          "bucketLabel": "Bucket",
+          "regionLabel": "Vùng",
+          "regionHelp": "Nhiều dịch vụ tương thích S3 bỏ qua giá trị này.",
+          "prefixLabel": "Tiền tố khóa",
+          "prefixHelp": "Thư mục tùy chọn bên trong bucket, để bản sao lưu của bạn có thể dùng chung bucket với dữ liệu khác.",
+          "endpointLabel": "Endpoint",
+          "endpointHelp": "Chỉ dành cho dịch vụ tương thích S3 như MinIO, R2 hoặc B2. Để trống nếu dùng AWS.",
+          "forcePathStyleLabel": "Dùng địa chỉ kiểu đường dẫn",
+          "forcePathStyleHelp": "Bắt buộc với MinIO và một số dịch vụ tương thích S3 khác.",
+          "accessKeyIdLabel": "ID khóa truy cập",
+          "secretAccessKeyLabel": "Khóa truy cập bí mật",
+          "storedPlaceholder": "•••• đã lưu",
+          "credentialsHelp": "Thông tin đăng nhập được lưu ở dạng mã hóa trên máy chủ này và không bao giờ hiển thị lại. Để trống các ô này nếu muốn giữ thông tin đã lưu.",
+          "clearCredentialsButton": "Xóa thông tin đăng nhập đã lưu",
+          "clearConfirmTitle": "Xóa thông tin đăng nhập đã lưu?",
+          "clearConfirmMessage": "Máy chủ này sẽ quên ID khóa truy cập và khóa truy cập bí mật của bạn. Sẽ không có bản sao nào được gửi tới bucket của bạn cho đến khi bạn nhập lại.",
+          "credentialsCleared": "Đã xóa thông tin đăng nhập đã lưu",
+          "clearFailed": "Không xóa được thông tin đăng nhập đã lưu"
+        },
+        "email": {
+          "heading": "Email",
+          "toggleLabel": "Gửi email cho tôi một bản sao của mỗi bản sao lưu tự động đã hoàn tất",
+          "addressLabel": "Gửi bản sao tới",
+          "addressPlaceholder": "user@example.com",
+          "sizeNote": "Bản sao lưu vượt quá giới hạn kích thước của máy chủ này sẽ không được đính kèm; thay vào đó bạn nhận được thông báo nêu tên tệp."
+        },
+        "rowStatus": {
+          "iconTitle": "{destination}: {status}",
+          "destinationS3": "S3",
+          "destinationEmail": "Email",
+          "statusPending": "Đang chờ",
+          "statusUploading": "Đang gửi",
+          "statusUploaded": "Đã sao chép",
+          "statusFailed": "Thất bại",
+          "statusConflict": "Xung đột",
+          "statusSkippedUnencrypted": "Đã bỏ qua: chưa mã hóa",
+          "statusSkippedTooLarge": "Đã bỏ qua: quá lớn"
+        }
+      }
     }
   },
   "sharedAccess": {
@@ -659,16 +1020,57 @@
       "sections": "Phần",
       "shared": "Dữ liệu chia sẻ"
     },
+    "ops": {
+      "read": "Đọc",
+      "create": "Tạo",
+      "edit": "Chỉnh sửa",
+      "delete": "Xóa",
+      "joint": "Chung"
+    },
     "sections": {
-      "description": "Cấp quyền truy cập chỉ đọc vào toàn bộ các phần ứng dụng. Dữ liệu phạm vi tài khoản vẫn cần quyền truy cập từng tài khoản."
+      "description": "Cấp quyền truy cập chỉ đọc vào toàn bộ các phần ứng dụng. Dữ liệu phạm vi tài khoản vẫn cần quyền truy cập từng tài khoản.",
+      "bills": {
+        "label": "Hóa đơn & Tiền gửi",
+        "description": "Giao dịch định kỳ của các tài khoản được cấp"
+      },
+      "investments": {
+        "label": "Đầu tư",
+        "description": "Danh mục nắm giữ và giao dịch đầu tư của các tài khoản được cấp"
+      },
+      "budgets": {
+        "label": "Ngân sách",
+        "description": "Số liệu ngân sách chỉ đọc"
+      },
+      "reports": {
+        "label": "Báo cáo",
+        "description": "Báo cáo chỉ đọc"
+      },
+      "ai": {
+        "label": "Trợ lý AI",
+        "description": "Dùng nhà cung cấp AI do chủ sở hữu cấu hình"
+      },
+      "aiRequiresFullAccess": "Trợ lý AI đọc toàn bộ tài khoản và các phần, vì vậy chỉ trả lời cho người đại diện này khi họ có thể đọc tất cả tài khoản của bạn và mọi phần khác.",
+      "warranties": {
+        "label": "Bảo hành",
+        "description": "Bảo hành, tài liệu và yêu cầu bảo hành kèm theo. Giao dịch mua được liên kết chỉ hiển thị nếu nằm trong tài khoản mà người được ủy quyền có thể đọc."
+      },
+      "toggleLabel": "Phần {section}"
     },
     "accounts": {
       "noAccounts": "Không có tài khoản nào để cấp.",
       "grantAll": "Cấp tất cả",
-      "jointRequiresFullAccount": "Tài khoản chung chỉ có thể được chia sẻ với người dùng có tài khoản Monize riêng"
+      "jointRequiresFullAccount": "Tài khoản chung chỉ có thể được chia sẻ với người dùng có tài khoản Monize riêng",
+      "grantAllLabel": "{op} tất cả tài khoản {type}",
+      "grantLabel": "Quyền {op} đối với {account}"
     },
     "shared": {
-      "description": "Đọc người nhận, danh mục và thẻ luôn được phép. Đây là các điều khiển tạo/chỉnh sửa/xóa."
+      "description": "Đọc người nhận, danh mục và thẻ luôn được phép. Đây là các điều khiển tạo/chỉnh sửa/xóa.",
+      "toggleLabel": "{op} {resource}",
+      "resources": {
+        "payees": "Người nhận thanh toán",
+        "categories": "Danh mục",
+        "tags": "Thẻ nhãn"
+      }
     },
     "saveButton": "Lưu",
     "toasts": {
@@ -687,11 +1089,13 @@
     "emergencyAccess": "Truy cập khẩn cấp",
     "apiAccess": "Truy cập API",
     "aiSettings": "Cài đặt AI",
+    "emailReceipts": "Hóa đơn qua email",
     "backupRestore": "Sao lưu & Khôi phục",
-    "autoBackup": "Sao lưu tự động",
     "help": "Trợ giúp & Hỗ trợ",
     "dangerZone": "Khu vực nguy hiểm",
-    "about": "Giới thiệu"
+    "about": "Giới thiệu",
+    "payeeLookup": "Tra cứu người nhận",
+    "bankSync": "Đồng bộ ngân hàng"
   },
   "page": {
     "title": "Cài đặt",
@@ -715,6 +1119,14 @@
       "title": "Cài đặt AI",
       "description": "Cấu hình nhà cung cấp AI, quản lý khóa API và xem số liệu thống kê sử dụng."
     },
+    "emailReceiptsCard": {
+      "title": "Hóa đơn qua email",
+      "description": "Kết nối một hộp thư cho email xác nhận đơn hàng và quản lý các hồ sơ đọc chúng."
+    },
+    "bankSyncCard": {
+      "title": "Đồng bộ ngân hàng",
+      "description": "Kết nối ngân hàng của bạn qua Open Banking và nhập các giao dịch đã ghi sổ vào tài khoản của bạn."
+    },
     "delegateSecurityError": "Không thể tải cài đặt bảo mật của bạn.",
     "toasts": {
       "securityLoadFailed": "Không thể tải cài đặt bảo mật",
@@ -732,6 +1144,14 @@
       "enabled": "Đã bật bong bóng trò chuyện nổi",
       "disabled": "Đã tắt bong bóng trò chuyện nổi",
       "saveFailed": "Không thể cập nhật cài đặt bong bóng trò chuyện"
+    },
+    "trivia": {
+      "title": "Thông tin thú vị từ AI",
+      "subtitle": "Điền vào tiện ích Thông tin thú vị trên bảng điều khiển của bạn các thông tin về giá trị ròng và các khoản đầu tư, được tạo lại mỗi sáng và do AI viết nếu bạn đã thiết lập nhà cung cấp. Thêm tiện ích bằng Tùy chỉnh trên bảng điều khiển. Khi tắt, tiện ích không hiển thị thông tin nào và không hỏi nhà cung cấp nào.",
+      "toggleLabel": "Điền tiện ích Thông tin thú vị trên bảng điều khiển bằng thông tin thú vị từ AI",
+      "enabled": "Đã bật thông tin thú vị từ AI",
+      "disabled": "Đã tắt thông tin thú vị từ AI",
+      "saveFailed": "Không thể cập nhật cài đặt thông tin thú vị từ AI"
     },
     "demoRestricted": {
       "heading": "Bị hạn chế trong chế độ demo",
@@ -812,7 +1232,6 @@
       "editMessageButton": "Chỉnh sửa",
       "messagePlaceholder": "Ghi chú, hướng dẫn, vị trí các tài liệu quan trọng...",
       "maxCharsNote": "Tối đa 4000 ký tự. Được lưu trữ mã hóa.",
-      "cancelButton": "Hủy",
       "saveButton": "Lưu tin nhắn",
       "toasts": {
         "saved": "Tin nhắn đã được lưu",
@@ -857,7 +1276,7 @@
       "grantStatus": "Trạng thái cấp: ",
       "unknown": "không xác định",
       "never": "không bao giờ",
-      "daysAgo": "{count} ngày trước",
+      "withRelative": "{timestamp} ({relative})",
       "grantedOn": "đã cấp vào {timestamp}",
       "notYetGranted": "chưa được cấp",
       "timerNote": "Bộ đếm thời gian tự động đặt lại bất kỳ lúc nào bạn sử dụng ứng dụng -- đăng nhập, xem trang, ghi nhận giao tác, bất kỳ thứ gì được xác thực."
@@ -874,6 +1293,17 @@
     },
     "stepUp": {
       "reason": "Xác minh lại danh tính của bạn để xem hoặc chỉnh sửa tin nhắn truy cập khẩn cấp."
+    },
+    "validation": {
+      "wholeDays": "Chỉ số ngày nguyên",
+      "minDays": "{min, plural, other {Phải ít nhất # ngày}}",
+      "maxDays": "{max, plural, other {Phải không quá # ngày}}",
+      "reminderBeforeGrant": "Số ngày nhắc nhở phải nhỏ hơn số ngày cấp quyền",
+      "messageMax": "Tin nhắn tối đa {max} ký tự",
+      "firstNameRequired": "Tên là bắt buộc",
+      "firstNameMax": "Tên tối đa {max} ký tự",
+      "emailInvalid": "Nhập địa chỉ email hợp lệ",
+      "emailMax": "Email tối đa {max} ký tự"
     },
     "toasts": {
       "loadFailed": "Không thể tải truy cập khẩn cấp",
@@ -908,6 +1338,10 @@
       "editButton": "Chỉnh sửa",
       "deleteButton": "Xóa"
     },
+    "deleteDialog": {
+      "title": "Xóa nhà cung cấp AI",
+      "message": "Xóa {name}? Khóa API đã lưu cũng bị xóa theo. Không thể hoàn tác thao tác này."
+    },
     "configForm": {
       "addTitle": "Thêm nhà cung cấp AI",
       "editTitle": "Chỉnh sửa nhà cung cấp",
@@ -919,6 +1353,7 @@
       "ollamaCloudNote": "Tên mô hình phải bao gồm hậu tố -cloud (VD: gpt-oss:20b-cloud).",
       "apiKeyLabel": "Khóa API",
       "baseUrlLabel": "URL cơ sở",
+      "baseUrlPrivateNote": "Địa chỉ riêng hoặc cục bộ (localhost, 192.168.x.x hoặc tên container) chỉ hoạt động với quản trị viên, hoặc khi người vận hành máy chủ cho phép địa chỉ đó. Nếu không, hãy dùng địa chỉ có thể truy cập từ internet.",
       "priorityLabel": "Ưu tiên",
       "priorityHelp": "Số nhỏ hơn = ưu tiên cao hơn. Được sử dụng để đặt thứ tự dự phòng.",
       "costRatesHeading": "Tỷ lệ chi phí (tùy chọn)",
@@ -1027,5 +1462,468 @@
       "all": "Tất cả thời gian"
     },
     "estCostTooltip": "Ước tính sử dụng tỷ lệ chi phí bạn đã cấu hình trên mỗi nhà cung cấp. Không bao gồm bất kỳ hoạt động nào mà không có tỷ lệ phù hợp được đặt."
+  },
+  "payeeLookup": {
+    "title": "Tra cứu người nhận",
+    "subtitle": "Trang web, địa chỉ, email và số điện thoại của người nhận đến từ đâu, và khi nào việc tra cứu tự chạy.",
+    "saved": "Đã lưu cài đặt tra cứu người nhận",
+    "saveFailed": "Không thể lưu cài đặt tra cứu người nhận",
+    "loadFailed": "Không thể tải cài đặt tra cứu người nhận. Hãy tải lại trang để thử lại.",
+    "googlePlaces": {
+      "toggleLabel": "Dùng Google Places để tra cứu người nhận",
+      "notConfigured": "Thêm khóa API Google Places để tra cứu doanh nghiệp trong danh bạ của Google thay vì qua nhà cung cấp AI của bạn.",
+      "operatorManaged": "Do quản trị viên máy chủ này thiết lập. Bạn có thể tắt cho những người nhận của mình.",
+      "configure": "Thiết lập",
+      "edit": "Sửa",
+      "removeKey": "Xóa khóa",
+      "usage": "Đã dùng tháng này: {used} trên {cap}",
+      "usageNoCap": "Đã dùng tháng này: {used}. Không giới hạn hằng tháng.",
+      "keyUnreadable": "Máy chủ này không đọc được khóa API đã lưu. Điều này xảy ra khi bản sao lưu được khôi phục sang máy chủ khác, hoặc sau khi khóa mã hóa thay đổi. Hãy nhập lại khóa để khắc phục.",
+      "encryptionUnavailable": "Máy chủ này chưa cấu hình khóa mã hóa nên không thể lưu khóa API an toàn. Hãy đề nghị quản trị viên thiết lập một khóa.",
+      "modalTitle": "Google Places",
+      "modalSubtitle": "Monize gửi tên người nhận và địa chỉ bạn đã có tới Google, và không lưu gì tại đó.",
+      "apiKeyLabel": "Khóa API",
+      "apiKeyPlaceholder": "Dán khóa API Google Places của bạn",
+      "apiKeyHelp": "Tạo khóa trong Google Cloud console với Places API (New) đã bật. Để trống để giữ khóa đã lưu.",
+      "capToggleLabel": "Giới hạn số yêu cầu mỗi tháng",
+      "capHelp": "Google cung cấp {free} yêu cầu Text Search miễn phí mỗi tháng cho các trường mà tra cứu này cần. Vượt giới hạn, tra cứu sẽ quay lại nhà cung cấp AI của bạn.",
+      "capLabel": "Số yêu cầu mỗi tháng",
+      "capRange": "Hãy nhập một số từ {min} đến {max}.",
+      "test": "Kiểm tra",
+      "testing": "Đang kiểm tra...",
+      "testSuccess": "Google đã chấp nhận khóa.",
+      "save": "Lưu",
+      "cancel": "Hủy",
+      "setupInstructions": "Hướng dẫn thiết lập"
+    },
+    "automatic": {
+      "title": "Tự động tra cứu thông tin liên hệ người nhận",
+      "subtitle": "Tự động tra cứu website, địa chỉ, email và số điện thoại của người nhận mới. Tên người nhận được gửi đi, cùng với ghi chú, website, địa chỉ, email và điện thoại đã có, để việc tra cứu phân biệt đúng doanh nghiệp và đúng địa điểm.",
+      "toggleLabel": "Bật tự động tra cứu thông tin liên hệ người nhận",
+      "enabled": "Đã bật tự động tra cứu thông tin liên hệ",
+      "disabled": "Đã tắt tự động tra cứu thông tin liên hệ",
+      "saveFailed": "Không thể cập nhật cài đặt tra cứu thông tin liên hệ",
+      "noSource": "Hãy bật một nguồn ở trên để tra cứu người nhận tự động. Khi cả hai đều tắt, không có gì trả lời được yêu cầu tra cứu."
+    },
+    "order": {
+      "title": "Nguồn nào trả lời trước",
+      "placesTitle": "Google Places",
+      "placesHelp": "Dữ liệu danh bạ, rẻ hơn cho mỗi lần tra cứu. Google không có địa chỉ email.",
+      "aiTitle": "Nhà cung cấp AI hiện có",
+      "aiHelp": "Có thể tìm được địa chỉ email và tốn một lệnh gọi mô hình cho mỗi lần tra cứu.",
+      "aiToggleLabel": "Dùng nhà cung cấp AI để tra cứu người nhận",
+      "aiProviderLabel": "Nhà cung cấp sử dụng",
+      "aiProviderAny": "Bất kỳ nhà cung cấp nào, theo thứ tự ưu tiên",
+      "moveUp": "Di chuyển lên",
+      "moveDown": "Di chuyển xuống"
+    }
+  },
+  "bankSync": {
+    "backLink": "Quay lại Cài đặt",
+    "title": "Đồng bộ ngân hàng",
+    "subtitle": "Nhập các giao dịch đã ghi sổ của tài khoản ngân hàng qua Open Banking",
+    "demoRestricted": {
+      "heading": "Bị hạn chế trong chế độ demo",
+      "body": "Đồng bộ ngân hàng bị vô hiệu hóa trong chế độ demo."
+    },
+    "loadFailed": {
+      "title": "Không thể tải đồng bộ ngân hàng",
+      "retry": "Thử lại"
+    },
+    "credentials": {
+      "title": "Ứng dụng Enable Banking",
+      "subtitle": "Monize đọc các tài khoản ngân hàng của bạn thông qua ứng dụng Enable Banking của chính bạn. Hãy đăng ký một ứng dụng trong bảng điều khiển Enable Banking, sau đó nhập ID ứng dụng và khóa riêng của nó tại đây.",
+      "notConfigured": "Chưa thiết lập ứng dụng nào.",
+      "applicationId": "ID ứng dụng",
+      "keyStored": "Đã lưu một khóa riêng.",
+      "keyMissing": "Chưa lưu khóa riêng nào.",
+      "configure": "Thiết lập thông tin đăng nhập",
+      "edit": "Sửa thông tin đăng nhập",
+      "remove": "Xóa thông tin đăng nhập",
+      "test": "Kiểm tra kết nối",
+      "testing": "Đang kiểm tra...",
+      "encryptionUnavailable": "Máy chủ này chưa cấu hình khóa mã hóa nên không thể lưu thông tin đăng nhập.",
+      "redirectUrlLabel": "URL chuyển hướng",
+      "redirectUrlHelp": "Hãy đăng ký chính xác URL này làm URL chuyển hướng trong bảng điều khiển Enable Banking. Ngân hàng sẽ đưa bạn quay lại URL này sau khi bạn cấp quyền truy cập.",
+      "redirectUrlNotPublic": "URL chuyển hướng không cần truy cập được từ internet. Chỉ trình duyệt của bạn mở nó.",
+      "redirectUrlHttpWarning": "Ứng dụng “Production” chỉ chấp nhận URL chuyển hướng https. URL này dùng http nên chỉ hoạt động với ứng dụng “Sandbox”. Hãy đặt PUBLIC_APP_URL thành địa chỉ https của Monize.",
+      "copy": "Sao chép",
+      "copied": "Đã sao chép",
+      "copyFailed": "Không thể sao chép",
+      "testSuccess": "Ứng dụng hoạt động: {name}",
+      "testSuccessNoName": "Ứng dụng hoạt động.",
+      "testRedirectMissing": "Ứng dụng hoạt động, nhưng URL chuyển hướng ở trên chưa được đăng ký cho nó. Hãy thêm nó trong bảng điều khiển Enable Banking.",
+      "testFailed": "Nhà cung cấp không chấp nhận thông tin đăng nhập này.",
+      "testError": "Không thể kiểm tra thông tin đăng nhập",
+      "saved": "Đã lưu thông tin đăng nhập. Dùng Kiểm tra kết nối để xác minh.",
+      "saveFailed": "Không thể lưu thông tin đăng nhập",
+      "removed": "Đã xóa thông tin đăng nhập",
+      "removeFailed": "Không thể xóa thông tin đăng nhập",
+      "removeConfirm": {
+        "title": "Xóa thông tin đăng nhập",
+        "message": "ID ứng dụng và khóa riêng đã lưu sẽ bị xóa khỏi Monize. Bạn sẽ cần nhập lại chúng trước khi có thể kết nối ngân hàng hoặc đồng bộ.",
+        "confirm": "Xóa"
+      },
+      "help": {
+        "show": "Hiện trợ giúp thiết lập",
+        "hide": "Ẩn trợ giúp thiết lập",
+        "whatIsTitle": "Enable Banking là gì?",
+        "whatIsBody": "Enable Banking là một công ty được cấp phép tại EU với tư cách nhà cung cấp dịch vụ thông tin tài khoản (AISP) theo PSD2. Công ty kết nối với ngân hàng của bạn thay bạn và cấp cho Monize quyền truy cập chỉ đọc vào tài khoản, số dư và giao dịch của bạn. Bạn đăng nhập tại chính ngân hàng của mình. Monize và Enable Banking không bao giờ thấy mật khẩu ngân hàng của bạn. Enable Banking làm việc với các ngân hàng trong Khu vực Kinh tế Châu Âu.",
+        "dataFlow": "Sau khi bạn kết nối ngân hàng, Enable Banking có thể đọc dữ liệu ngân hàng của bạn: dữ liệu tài khoản của bạn đi qua dịch vụ của Enable Banking trên đường đến Monize. Enable Banking cho biết họ không lưu trữ dữ liệu này. Điều khoản của họ được áp dụng: <terms>Điều khoản API của Enable Banking</terms>.",
+        "whatIsFree": "Để dùng cá nhân, một ứng dụng miễn phí ở chế độ sản xuất hạn chế là đủ. Ứng dụng chỉ đọc các tài khoản mà bạn liên kết với nó trong bảng điều khiển.",
+        "setupTitle": "Cách thiết lập",
+        "step1": "Tạo tài khoản tại <link>Enable Banking</link> (chọn “Get Started” và chờ email xác nhận). Sau đó đăng nhập vào bảng điều khiển và mở “API applications”.",
+        "step2": "Chọn “Production”. Monize chỉ đọc các tài khoản ngân hàng thật của bạn thông qua ứng dụng Production. Chỉ chọn “Sandbox” nếu bạn muốn thử kết nối trước: môi trường này chỉ hiển thị dữ liệu demo từ các ngân hàng thử nghiệm.",
+        "step3": "Giữ nguyên lựa chọn “Generate in the browser” cho khóa riêng.",
+        "step4": "Nhập các giá trị bên dưới vào biểu mẫu. Với “Production”, mọi trường đều bắt buộc.",
+        "registrationValuesTitle": "Giá trị cần dán vào biểu mẫu",
+        "registrationValuesNote": "Nhãn và giá trị giữ nguyên tiếng Anh vì bảng điều khiển bằng tiếng Anh.",
+        "registrationTemplatesNote": "Hai URL trỏ đến các mẫu của Monize. Ở chế độ hạn chế, Enable Banking không kiểm tra chúng. Nếu người khác dùng phiên bản Monize của bạn, hãy xuất bản các trang riêng với tên của bạn thay thế.",
+        "emailPlaceholder": "Địa chỉ email của bạn",
+        "copyField": "Sao chép {field}",
+        "step5": "Chọn “Register”. Trình duyệt của bạn sẽ lưu tệp khóa riêng (.pem). Hãy giữ bí mật tệp này.",
+        "step6": "Với “Production”, ứng dụng mới hiển thị “Inactive”. Chọn “Activate by linking accounts”, chọn quốc gia, ngân hàng của bạn và loại sử dụng (“personal” cho tài khoản cá nhân, “business” cho tài khoản doanh nghiệp), rồi chọn “Link”. Sau đó đăng nhập vào ngân hàng của bạn và ủy quyền các tài khoản. Đừng chọn “Request activation”: tùy chọn này yêu cầu khả dụng chung, điều mà việc dùng cá nhân không cần. Nếu không liên kết tài khoản, ngân hàng sẽ không trả về tài khoản nào. Sau này, khi kết nối ngân hàng trong Monize, hãy chọn cùng loại sử dụng.",
+        "step7": "Nhập ID ứng dụng trong danh sách ứng dụng và tải tệp khóa riêng lên tại đây.",
+        "sandboxNote": "Các giao dịch từ ứng dụng Sandbox là dữ liệu demo. Chỉ liên kết tài khoản ngân hàng Sandbox với một tài khoản thử nghiệm trong Monize, không liên kết với tài khoản chứa các giao dịch thật của bạn.",
+        "networkTitle": "Truy cập mạng",
+        "networkBody": "Khi ngân hàng đưa bạn quay lại, trình duyệt của bạn mở URL chuyển hướng. Máy chủ Enable Banking không kết nối với Monize. Vì vậy Monize không cần truy cập được từ internet hay từ địa chỉ IP của Enable Banking. URL chuyển hướng phải mở được trong trình duyệt mà bạn dùng để cấp quyền truy cập.",
+        "networkOutbound": "Máy chủ Monize phải kết nối được tới api.enablebanking.com qua HTTPS (cổng 443)."
+      },
+      "modalSource": "Lấy ID ứng dụng và khóa riêng từ <link>bảng điều khiển Enable Banking</link>."
+    },
+    "credentialsModal": {
+      "title": "Thông tin đăng nhập Enable Banking",
+      "subtitle": "Được lưu dưới dạng mã hóa trên máy chủ này. Khóa riêng sẽ không bao giờ được hiển thị lại.",
+      "applicationIdLabel": "ID ứng dụng",
+      "applicationIdPlaceholder": "ID của ứng dụng Enable Banking của bạn",
+      "applicationIdRequired": "Nhập ID ứng dụng",
+      "applicationIdTooLong": "ID ứng dụng quá dài",
+      "privateKeyLabel": "Khóa riêng (PEM)",
+      "privateKeyPlaceholder": "Dán khóa riêng PEM của ứng dụng của bạn",
+      "privateKeyStoredPlaceholder": "Đã lưu một khóa. Để trống để giữ nguyên, hoặc dán khóa mới để thay thế.",
+      "privateKeyHelp": "Dán toàn bộ tệp PEM bạn đã tải xuống khi đăng ký ứng dụng.",
+      "privateKeyRequired": "Nhập khóa riêng",
+      "privateKeyInvalid": "Đây không giống khóa riêng PEM. Nó phải là một khối bắt đầu bằng BEGIN và kết thúc bằng PRIVATE KEY.",
+      "privateKeyTooLong": "Khóa riêng quá dài",
+      "loadKeyFile": "Tải tệp khóa",
+      "keyFileTooLarge": "Tệp lớn hơn 16 KB. Hãy chọn tệp .pem mà Enable Banking đã lưu.",
+      "keyFileReadFailed": "Không thể đọc tệp.",
+      "cancel": "Hủy",
+      "save": "Lưu",
+      "saving": "Đang lưu..."
+    },
+    "connections": {
+      "title": "Ngân hàng đã kết nối",
+      "subtitle": "Mỗi tài khoản ngân hàng được liên kết với một tài khoản Monize, và các giao dịch đã ghi sổ của nó được nhập vào tài khoản đó.",
+      "connect": "Kết nối ngân hàng",
+      "credentialsFirst": "Hãy thiết lập thông tin đăng nhập Enable Banking ở trên trước khi kết nối ngân hàng.",
+      "loadFailed": "Không thể tải các kết nối ngân hàng của bạn.",
+      "empty": {
+        "title": "Chưa kết nối ngân hàng nào",
+        "description": "Kết nối ngân hàng để nhập các giao dịch đã ghi sổ vào tài khoản Monize của bạn."
+      }
+    },
+    "connect": {
+      "title": "Kết nối ngân hàng",
+      "subtitle": "Bạn sẽ được chuyển đến ngân hàng để cấp quyền truy cập chỉ đọc.",
+      "whySecondAuthorization": "Tại đây bạn ủy quyền lại ở ngân hàng, kể cả khi bạn đã liên kết cùng các tài khoản đó trong bảng điều khiển của Enable Banking. Bảng điều khiển chỉ liệt kê những tài khoản mà ứng dụng được phép đọc, và sự đồng ý của nó kết thúc ngay trong ngày. Bước này cho Monize sự đồng ý riêng để đọc số dư và giao dịch, tối đa 180 ngày. Khi sắp hết hạn, thẻ kết nối hiển thị “Gia hạn sự đồng ý”.",
+      "countryLabel": "Quốc gia",
+      "countryPlaceholder": "Chọn quốc gia",
+      "institutionLabel": "Ngân hàng",
+      "institutionPlaceholder": "Tìm ngân hàng của bạn",
+      "institutionsLoading": "Đang tải ngân hàng...",
+      "institutionsFailed": "Không thể tải danh sách ngân hàng.",
+      "retry": "Thử lại",
+      "noInstitutions": "Nhà cung cấp không liệt kê ngân hàng nào cho quốc gia này.",
+      "psuTypeLabel": "Chủ tài khoản",
+      "psuPersonal": "Cá nhân",
+      "psuBusiness": "Doanh nghiệp",
+      "consentDays": "{days, plural, other {Ngân hàng này cho phép truy cập tối đa # ngày trước khi bạn phải gia hạn.}}",
+      "continue": "Tiếp tục đến ngân hàng",
+      "continuing": "Đang kết nối...",
+      "cancel": "Hủy",
+      "unsafeUrl": "Địa chỉ ngân hàng do máy chủ trả về không phải địa chỉ https an toàn nên Monize không mở nó.",
+      "failed": "Không thể bắt đầu kết nối"
+    },
+    "connection": {
+      "status": {
+        "pending": "Đang chờ",
+        "active": "Đang hoạt động",
+        "expired": "Đã hết hạn",
+        "revoked": "Đã thu hồi",
+        "failed": "Thất bại"
+      },
+      "validUntil": "Quyền truy cập có hiệu lực đến {date}",
+      "expiresSoon": "Sắp hết hạn",
+      "autoSync": "Tự động đồng bộ mỗi ngày một lần",
+      "autoSyncOn": "Đã bật đồng bộ tự động",
+      "autoSyncOff": "Đã tắt đồng bộ tự động",
+      "autoSyncFailed": "Không thể thay đổi đồng bộ tự động",
+      "renew": "Gia hạn sự đồng ý",
+      "renewFailed": "Không thể bắt đầu gia hạn",
+      "syncAll": "Đồng bộ tất cả",
+      "syncingAll": "Đang đồng bộ...",
+      "syncAllFailed": "Không thể đồng bộ ngân hàng này",
+      "disconnect": "Ngắt kết nối",
+      "disconnected": "Đã ngắt kết nối ngân hàng",
+      "disconnectFailed": "Không thể ngắt kết nối ngân hàng",
+      "disconnectConfirm": {
+        "title": "Ngắt kết nối {bank}",
+        "message": "Monize ngừng đồng bộ ngân hàng này và yêu cầu ngân hàng chấm dứt quyền truy cập. Các giao dịch đã nhập vẫn được giữ lại, và kết nối lại ngân hàng sẽ không nhập chúng lần thứ hai.",
+        "confirm": "Ngắt kết nối"
+      },
+      "pendingHint": "Việc cấp quyền tại ngân hàng chưa được hoàn tất. Hãy gia hạn sự đồng ý để thử lại; các tài khoản đã liên kết vẫn được giữ nguyên.",
+      "noAccounts": "Ngân hàng chưa báo cáo tài khoản nào cho kết nối này.",
+      "accountsHeading": "Tài khoản ngân hàng",
+      "matchAccounts": "Ghép theo số tài khoản",
+      "matching": "Đang ghép...",
+      "matchLinked": "{count, plural, other {Đã liên kết # tài khoản ngân hàng với tài khoản có cùng số}}",
+      "matchSuggested": "{count, plural, other {# tài khoản ngân hàng khớp với nhiều hơn một tài khoản của bạn: hãy tự chọn tài khoản}}",
+      "matchBoth": "{linked}. {suggested}",
+      "matchNone": "Không có tài khoản ngân hàng nào được liên kết: không tài khoản nào có số khớp với tài khoản của bạn.",
+      "matchFailed": "Không thể ghép các tài khoản ngân hàng",
+      "syncAllNeedsPreview": "Đồng bộ tất cả sẽ chờ đến khi lần nhập đầu tiên của mỗi tài khoản mới liên kết được xác nhận. Hãy dùng Đồng bộ ngay trên tài khoản đó để xem trước.",
+      "notifySuccess": "Thông báo sau lần đồng bộ hằng ngày",
+      "notifySuccessOptions": {
+        "always": "Sau mỗi lần đồng bộ",
+        "when_imported": "Chỉ khi có giao dịch được nhập",
+        "never": "Không bao giờ"
+      },
+      "notifySuccessSaved": "Đã lưu cài đặt thông báo",
+      "notifySuccessFailed": "Không thể thay đổi cài đặt thông báo",
+      "tagOperationType": "Gắn thẻ loại thao tác của ngân hàng cho giao dịch",
+      "tagOperationTypeHelp": "Mỗi giao dịch được nhập sẽ có một thẻ mang tên loại thao tác của ngân hàng, như Thanh toán bằng thẻ hoặc Chuyển khoản đến, để các quy tắc và báo cáo có thể dùng.",
+      "tagOperationTypeOn": "Đã bật thẻ loại thao tác",
+      "tagOperationTypeOff": "Đã tắt thẻ loại thao tác",
+      "tagOperationTypeFailed": "Không thể đổi thẻ loại thao tác"
+    },
+    "profileNotes": {
+      "title": "API của ngân hàng này hoạt động thế nào",
+      "show": "Hiện cách API của ngân hàng này hoạt động",
+      "hide": "Ẩn cách API của ngân hàng này hoạt động",
+      "severity": {
+        "warning": "Cảnh báo:",
+        "info": "Ghi chú:"
+      }
+    },
+    "account": {
+      "unnamed": "Tài khoản ngân hàng chưa đặt tên",
+      "linkLabel": "Tài khoản Monize",
+      "notLinked": "Chưa liên kết",
+      "noEligibleAccounts": "Không có tài khoản Monize đang mở nào cùng loại tiền tệ này để liên kết.",
+      "linkFailed": "Không thể liên kết tài khoản",
+      "unlinked": "Đã hủy liên kết tài khoản",
+      "unlinkFailed": "Không thể hủy liên kết tài khoản",
+      "syncFrom": "Đang nhập từ {date}",
+      "changeCutoff": "Đổi ngày bắt đầu",
+      "syncNow": "Đồng bộ ngay",
+      "syncing": "Đang đồng bộ...",
+      "syncFailed": "Không thể đồng bộ tài khoản này",
+      "neverSynced": "Chưa đồng bộ",
+      "lastSynced": "Đồng bộ lần cuối {time}",
+      "lastSyncOk": "Thành công",
+      "lastSyncFailed": "Thất bại",
+      "bankBalance": "Số dư ngân hàng",
+      "bankBalanceAsOf": "{amount} tính đến {date}",
+      "balanceNotReported": "Ngân hàng không báo cáo",
+      "balanceNotSynced": "Chưa đồng bộ",
+      "monizeBalance": "Số dư Monize",
+      "difference": "Chênh lệch",
+      "differenceHelp": "Số dư ngân hàng là số dư mà ngân hàng đã báo cáo vào ngày được hiển thị. Số dư này có thể bao gồm các giao dịch ngân hàng chưa ghi sổ, hoặc được ghi sổ sau ngày đó, vì vậy chênh lệch nhỏ giữa các lần đồng bộ là bình thường.",
+      "differenceHidden": "Số dư ngân hàng tính bằng {bankCurrency} còn tài khoản Monize tính bằng {monizeCurrency}, nên không hiển thị chênh lệch.",
+      "deletedNote": "Giao dịch bạn xóa trong Monize sẽ không được nhập lại ở lần đồng bộ sau, nên dòng đã xóa vẫn được giữ là đã xóa.",
+      "createNew": "Tạo tài khoản mới",
+      "suggestedName": "{type} {number}",
+      "createdLinked": "Đã tạo và liên kết tài khoản",
+      "createdLinkFailed": "Đã tạo tài khoản nhưng không thể liên kết",
+      "preview": "Xem trước",
+      "firstSyncPreview": "Lần nhập đầu tiên được xác nhận từ bản xem trước các giao dịch."
+    },
+    "link": {
+      "title": "Liên kết với {account}",
+      "editTitle": "Ngày bắt đầu cho {account}",
+      "syncFromLabel": "Nhập giao dịch từ",
+      "syncFromHelp": "Đã điền sẵn ngày mà Monize chọn theo mặc định. Xóa trường này và Monize sẽ chọn giúp bạn.",
+      "beforeCutoff": "Các giao dịch ngân hàng đã ghi sổ trước ngày này sẽ không bao giờ được nhập.",
+      "duplicateWarning": "Ngày sớm hơn giao dịch mới nhất trong tài khoản có thể tạo ra các giao dịch trùng lặp với những giao dịch bạn đã nhập.",
+      "save": "Liên kết tài khoản",
+      "saveEdit": "Lưu",
+      "saving": "Đang lưu...",
+      "cancel": "Hủy",
+      "saved": "Đã liên kết tài khoản",
+      "editSaved": "Đã lưu ngày bắt đầu",
+      "saveFailed": "Không thể lưu liên kết",
+      "loadingDefaults": "Đang đọc tài khoản...",
+      "defaultsFailed": "Không thể đọc giao dịch mới nhất của tài khoản này, nên Monize không thể cho biết ngày bắt đầu này có tạo giao dịch trùng hay không.",
+      "newestTransaction": "Giao dịch mới nhất trong tài khoản này: {date}",
+      "emptyAccount": "{days, plural, other {Tài khoản trống: lần nhập bao gồm # ngày gần nhất}}"
+    },
+    "sync": {
+      "summary": "{imported, plural, =0 {Không có giao dịch nào được nhập} other {Đã nhập # giao dịch}}, {skipped, plural, =0 {không bỏ qua giao dịch nào} other {bỏ qua # giao dịch vì đã nhập}}, {refused, plural, =0 {không từ chối giao dịch nào} other {từ chối #}}",
+      "summaryWithReasons": "{summary}. Bị từ chối: {reasons}",
+      "outcomeUnknown": "Kết quả đồng bộ chưa được biết. Hãy tải lại trang để xem những gì đã được nhập.",
+      "failedAccountItem": "{account} ({message})",
+      "allFailed": "Không thể đồng bộ: {accounts}",
+      "partialFailure": "{summary}. Không thể đồng bộ: {accounts}",
+      "reason": {
+        "missing_date": "{count, plural, other {# giao dịch không có ngày}}",
+        "future_date": "{count, plural, other {# giao dịch có ngày trong tương lai}}",
+        "invalid_amount": "{count, plural, other {# giao dịch có số tiền không hợp lệ}}",
+        "unknown_direction": "{count, plural, other {# giao dịch không rõ chiều}}",
+        "currency_mismatch": "{count, plural, other {# giao dịch bằng loại tiền tệ khác}}",
+        "other": "{count, plural, other {# giao dịch vì lý do khác}}",
+        "missing_identity": "Thiếu mã giao dịch ngân hàng: {count, number}"
+      },
+      "needsPreview": "Mở bản xem trước của {accounts} và xác nhận lần nhập đầu tiên",
+      "withNeedsPreview": "{message}. {needsPreview}"
+    },
+    "callback": {
+      "title": "Đang kết nối ngân hàng của bạn",
+      "subtitle": "Vui lòng chờ trong khi Monize hoàn tất kết nối",
+      "success": "Đã kết nối ngân hàng",
+      "successNamed": "Đã kết nối với {bank}",
+      "bankError": "Ngân hàng của bạn không cấp quyền truy cập: {message}",
+      "missingState": "Ngân hàng không trả về phản hồi hợp lệ. Hãy bắt đầu lại kết nối.",
+      "notActive": "Không thể hoàn tất kết nối",
+      "failed": "Không thể hoàn tất kết nối",
+      "autoLinked": "{count, plural, other {Đã liên kết # tài khoản ngân hàng với tài khoản có cùng số. Hãy kiểm tra trước lần nhập đầu tiên.}}",
+      "autoSuggested": "{count, plural, other {# tài khoản ngân hàng khớp với nhiều hơn một tài khoản của bạn: hãy chọn tài khoản trong danh sách.}}"
+    },
+    "accountType": {
+      "CACC": "Tài khoản thanh toán",
+      "CARD": "Thẻ",
+      "SVGS": "Tiết kiệm",
+      "LOAN": "Khoản vay",
+      "other": "Loại tài khoản {code}"
+    },
+    "mismatch": {
+      "bankCard": "Ngân hàng báo cáo tài khoản này là thẻ, nhưng loại của {account} là {type}, không phải {creditCard}. Giao dịch của thẻ sẽ bị nhập vào loại tài khoản sai.",
+      "monizeCard": "Loại của {account} là {creditCard}, nhưng ngân hàng báo cáo tài khoản này là: {bankType}. Hãy kiểm tra xem đây có đúng là tài khoản ngân hàng không.",
+      "confirm": "Tôi hiểu, vẫn liên kết các tài khoản"
+    },
+    "preview": {
+      "title": "Xem trước việc nhập vào {account}",
+      "description": "Không có gì được nhập cho đến khi bạn xác nhận. Đây là những gì ngân hàng báo cáo và những gì Monize sẽ làm với từng giao dịch.",
+      "loading": "Đang đọc ngân hàng...",
+      "loadFailed": "Không thể xem trước tài khoản này",
+      "retry": "Thử lại",
+      "close": "Đóng",
+      "import": "{count, plural, =0 {Xác nhận: không có gì mới để nhập} other {Nhập # giao dịch}}",
+      "importing": "Đang nhập...",
+      "importFailed": "Không thể nhập các giao dịch",
+      "planChanged": "Dữ liệu của ngân hàng đã thay đổi kể từ bản xem trước này, nên chưa có gì được nhập. Bản xem trước đã được đọc lại: hãy kiểm tra và nhập lần nữa.",
+      "monizeBalance": "Số dư Monize hiện tại",
+      "balanceAfter": "Số dư Monize sau khi nhập",
+      "bankBalance": "Số dư ngân hàng",
+      "bankBalanceAsOf": "{amount} tính đến {date}",
+      "bankBalanceNotReported": "Ngân hàng không báo cáo",
+      "difference": "Chênh lệch sau khi nhập",
+      "differenceHelp": "Số dư ngân hàng trừ số dư Monize sau khi nhập. Bằng không nghĩa là hai số khớp nhau. Số dư ngân hàng có thể gồm các giao dịch ngân hàng chưa ghi sổ, nên chênh lệch nhỏ là bình thường.",
+      "differenceHidden": "Số dư ngân hàng tính bằng {bankCurrency} còn tài khoản Monize tính bằng {monizeCurrency}, nên không hiển thị chênh lệch.",
+      "filterLabel": "Hiển thị giao dịch",
+      "filter": {
+        "all": "Tất cả",
+        "new": "Mới",
+        "duplicate": "Đã nhập",
+        "refused": "Bị từ chối",
+        "pending": "Đang chờ",
+        "before_cutoff": "Trước ngày bắt đầu",
+        "withCount": "{label} ({count})",
+        "excluded": "Ngoại lệ"
+      },
+      "outcome": {
+        "new": "Mới",
+        "duplicate": "Đã nhập",
+        "refused": "Bị từ chối",
+        "pending": "Đang chờ",
+        "before_cutoff": "Trước ngày bắt đầu",
+        "excluded": "Ngoại lệ"
+      },
+      "refusal": {
+        "missing_date": "Không có ngày",
+        "future_date": "Ngày trong tương lai",
+        "invalid_amount": "Số tiền không hợp lệ",
+        "unknown_direction": "Chiều không rõ",
+        "currency_mismatch": "Loại tiền tệ khác",
+        "other": "Bị từ chối",
+        "missing_identity": "Thiếu mã giao dịch ngân hàng"
+      },
+      "columns": {
+        "date": "Ngày",
+        "payee": "Người nhận",
+        "category": "Danh mục",
+        "status": "Trạng thái",
+        "amount": "Số tiền",
+        "select": "Chọn và chi tiết"
+      },
+      "noPayee": "Không có người nhận",
+      "dateUnknown": "Không có ngày",
+      "amountUnknown": "Không rõ",
+      "empty": {
+        "all": "Ngân hàng không trả về giao dịch nào cho giai đoạn này.",
+        "filtered": "Không có giao dịch nào trong danh sách này."
+      },
+      "selectAllNew": "Chọn tất cả giao dịch mới trong danh sách này",
+      "selectAllExceptions": "Chọn tất cả ngoại lệ trong danh sách này",
+      "selectRow": "Nhập {payee}",
+      "selectException": "Bỏ {payee} khỏi ngoại lệ",
+      "summary": "Nhập {import}, bỏ qua {skip}, thêm {except} vào ngoại lệ",
+      "importNothing": "Xác nhận mà không nhập",
+      "exceptions": {
+        "intro": "Giao dịch trong ngoại lệ sẽ không bao giờ được nhập. Bỏ một giao dịch khỏi ngoại lệ để thấy nó là mới trở lại.",
+        "remove": "{count, plural, =0 {Bỏ khỏi ngoại lệ} other {Bỏ # khỏi ngoại lệ}}",
+        "removing": "Đang bỏ...",
+        "removed": "{count, plural, other {Đã bỏ # giao dịch khỏi ngoại lệ}}",
+        "removedNone": "Chưa bỏ gì khỏi ngoại lệ",
+        "removeFailed": "Không thể bỏ các ngoại lệ"
+      },
+      "details": {
+        "operation": {
+          "heading": "Loại thao tác",
+          "none": "Giao dịch này không có thẻ loại thao tác.",
+          "tag": "Thẻ từ loại thao tác của ngân hàng: {tag}"
+        }
+      },
+      "historyBatch": "Lô lịch sử: từ {from} đến {to}.",
+      "historyBatchRemaining": "Lô lịch sử: từ {from} đến {to}. Vẫn còn lịch sử. Sau khi nhập lô này, hãy mở bản xem trước của lô tiếp theo."
+    },
+    "simplefin": {
+      "provider": "Nhà cung cấp dữ liệu",
+      "description": "Kết nối ngân hàng trong <bridge>SimpleFIN Bridge</bridge> rồi dán mã thiết lập dùng một lần tại đây. Quyền truy cập chỉ để đọc.",
+      "openBridge": "Mở SimpleFIN Bridge",
+      "setupToken": "Mã thiết lập",
+      "connect": "Kết nối SimpleFIN",
+      "connected": "SimpleFIN đã được kết nối.",
+      "savedDiscoveryFailed": "Đã kết nối nhưng việc tìm tài khoản cần được xử lý. Thử lại mà không dùng mã mới.",
+      "refresh": "Làm mới tài khoản",
+      "failed": "Không thể hoàn tất yêu cầu. Kiểm tra trạng thái kết nối trước khi dùng mã mới.",
+      "loadFailed": "Không thể tải trạng thái SimpleFIN.",
+      "encryptionRequired": "Nhờ quản trị viên cấu hình mã hóa trước khi kết nối SimpleFIN.",
+      "remove": "Xóa SimpleFIN khỏi Monize",
+      "removeTitle": "Xóa quyền truy cập của mọi tổ chức?",
+      "removeBody": "Thao tác này tắt toàn bộ đồng bộ SimpleFIN trong Monize và giữ lịch sử. Thu hồi mã ứng dụng trong Bridge để chấm dứt truy cập từ xa.",
+      "replaceTitle": "Thay quyền truy cập SimpleFIN?",
+      "replaceBody": "Thao tác này thay quyền truy cập của mọi tổ chức. Liên kết tài khoản hiện có được giữ; các định danh thay đổi cần được kiểm tra.",
+      "quota": "Còn {remaining} yêu cầu",
+      "nextEligible": "Lần khả dụng tiếp theo: {date}",
+      "stopTitle": "Dừng đồng bộ {bank}?",
+      "stopBody": "Các liên kết và giao dịch hiện có được giữ nguyên.",
+      "stop": "Dừng đồng bộ",
+      "stopped": "Đã dừng đồng bộ",
+      "title": "SimpleFIN",
+      "enableBanking": "Enable Banking",
+      "errors": {
+        "unauthorized": "Kết nối lại bằng mã thiết lập mới.",
+        "payment_required": "Kiểm tra gói đăng ký SimpleFIN Bridge.",
+        "rate_limited": "Đã đạt giới hạn yêu cầu. Đợi trước khi làm mới.",
+        "no_accounts": "Chưa có tài khoản được chia sẻ. Kiểm tra quyền truy cập trong Bridge.",
+        "partial_data": "Một số dữ liệu chưa đầy đủ. Kiểm tra Bridge rồi làm mới.",
+        "identity_review": "Định danh tài khoản đã thay đổi. Kiểm tra liên kết trước khi bật đồng bộ.",
+        "invalid_response": "Bridge trả về dữ liệu chưa được hỗ trợ. Hãy làm mới sau.",
+        "unavailable": "SimpleFIN không phản hồi. Hãy thử lại sau."
+      },
+      "resume": "Tiếp tục đồng bộ",
+      "lastKnownConnected": "SimpleFIN đã kết nối ở lần kiểm tra thành công gần nhất."
+    }
   }
 }

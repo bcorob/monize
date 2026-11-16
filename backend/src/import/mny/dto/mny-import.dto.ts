@@ -1,4 +1,5 @@
-import { Type } from "class-transformer";
+import { Transform, Type } from "class-transformer";
+import { IsCurrencyCode } from "../../../common/validators/is-currency-code.validator";
 import {
   IsArray,
   IsBoolean,
@@ -6,9 +7,9 @@ import {
   IsOptional,
   IsString,
   IsUUID,
-  Length,
   MaxLength,
   Min,
+  ValidateIf,
   ValidateNested,
 } from "class-validator";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
@@ -52,8 +53,11 @@ export class MnyAccountOptionDto {
     description: "ISO code overriding the currency Money recorded",
   })
   @IsOptional()
-  @IsString()
-  @Length(3, 3)
+  @ValidateIf((_o, v) => v !== null && v !== "")
+  @Transform(({ value }) =>
+    typeof value === "string" ? value.toUpperCase() : value,
+  )
+  @IsCurrencyCode()
   currencyOverride?: string | null;
 }
 
@@ -164,6 +168,12 @@ export class MnyImportJobDto {
     description: "Whether Retry over the same file is worth offering",
   })
   retryable: boolean;
+
+  @ApiProperty({
+    description:
+      "True once the import's rows reached the ledger; a failure after it is not 'nothing saved', and the file must not be imported again",
+  })
+  dataCommitted: boolean;
 
   @ApiPropertyOptional()
   startedAt: Date | null;

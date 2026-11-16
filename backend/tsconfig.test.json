@@ -9,7 +9,7 @@
 // "cookie-parser"`, three files under `test/` kept `import * as cookieParser` and
 // stopped compiling. Because CI runs only `test:unit` and `test:integration`
 // (neither of which touches `test/*.e2e-spec.ts`), four suites sat dead for over a
-// week -- one of them cited in `backend/CLAUDE.md` as the safety net for the
+// week -- one of them cited in `docs/backend/entities-and-dtos.md` as the safety net for the
 // raw-select transformer rule, and one edited while it was already broken.
 //
 // No `outDir`/`rootDir`: this config never emits, it only checks.

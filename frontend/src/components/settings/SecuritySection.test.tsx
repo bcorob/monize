@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@/test/render';
+import { render, screen, fireEvent, waitFor, within, act } from '@/test/render';
 import { SecuritySection } from './SecuritySection';
 import { User, UserPreferences } from '@/types/auth';
 
@@ -16,12 +16,17 @@ vi.mock('@/lib/auth', () => ({
     revokeAllTrustedDevices: vi.fn().mockResolvedValue({ count: 0 }),
     revokeTrustedDevice: vi.fn().mockResolvedValue({}),
     disable2FA: vi.fn().mockResolvedValue({}),
+    reset2FA: vi.fn().mockResolvedValue({}),
     generateBackupCodes: vi.fn().mockResolvedValue({ codes: [] }),
   },
 }));
 
+const { mockUpdatePreferencesStore } = vi.hoisted(() => ({
+  mockUpdatePreferencesStore: vi.fn(),
+}));
+
 vi.mock('@/store/preferencesStore', () => ({
-  usePreferencesStore: vi.fn((selector: any) => selector({ updatePreferences: vi.fn() })),
+  usePreferencesStore: vi.fn((selector: any) => selector({ updatePreferences: mockUpdatePreferencesStore })),
 }));
 
 vi.mock('@/components/auth/TwoFactorSetup', () => ({
@@ -50,6 +55,7 @@ vi.mock('@/lib/errors', () => ({
 import { userSettingsApi } from '@/lib/user-settings';
 import { authApi } from '@/lib/auth';
 import toast from 'react-hot-toast';
+import { useRouter } from 'next/navigation';
 
 const mockUser: User = {
   id: '1',
@@ -74,7 +80,6 @@ const mockPreferences: UserPreferences = {
   colorTheme: 'default',
   defaultCurrency: 'CAD',
   notificationEmail: false,
-  notificationBrowser: false,
   twoFactorEnabled: false,
   gettingStartedDismissed: false,
   weekStartsOn: 1,
@@ -85,13 +90,17 @@ const mockPreferences: UserPreferences = {
   favouriteReportIds: [],
   dashboardWidgets: [],
   dashboardWidgetConfig: {},
+  hiddenTableColumns: {},
   preferredExchanges: [],
     defaultQuoteProvider: 'yahoo' as const,
     recentTransactionsLimit: 5,
   aiBubbleEnabled: false,
+  aiTriviaEnabled: true,
   showWhatsNew: true,
   lockReconciledTransactions: false,
+  payeeContactLookupEnabled: false,
   language: 'en',
+  defaultMapProvider: 'device',
   createdAt: '2024-01-01T00:00:00Z',
   updatedAt: '2024-01-01T00:00:00Z',
 };
@@ -382,6 +391,56 @@ describe('SecuritySection', () => {
     });
   });
 
+  // --- SSO account with a local password ---
+  describe('SSO user with a local password', () => {
+    const ssoUser = { ...mockUser, authProvider: 'oidc' as const, hasPassword: true };
+
+    it('shows only the SSO-unavailable message when the instance flag is off', () => {
+      render(
+        <SecuritySection
+          user={ssoUser}
+          preferences={mockPreferences}
+          force2fa={false}
+          onPreferencesUpdated={mockOnPreferencesUpdated}
+        />
+      );
+      expect(screen.getByText(/Two-factor authentication is not available for SSO accounts/)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Enable 2FA' })).not.toBeInTheDocument();
+      expect(screen.getByText(/Password sign-in is turned off for SSO accounts on this server/)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Change Password' })).not.toBeInTheDocument();
+    });
+
+    it('shows the 2FA controls and the fallback notice when the flag is on', () => {
+      render(
+        <SecuritySection
+          user={ssoUser}
+          preferences={mockPreferences}
+          force2fa={false}
+          oidcPasswordLogin={true}
+          onPreferencesUpdated={mockOnPreferencesUpdated}
+        />
+      );
+      expect(screen.getByRole('button', { name: 'Enable 2FA' })).toBeInTheDocument();
+      expect(screen.queryByText(/Two-factor authentication is not available for SSO accounts/)).not.toBeInTheDocument();
+      expect(screen.getByText(/when SSO is unavailable/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Change Password' })).toBeInTheDocument();
+    });
+
+    it('loads trusted devices when the flag is on and 2FA is enabled', async () => {
+      render(
+        <SecuritySection
+          user={ssoUser}
+          preferences={{ ...mockPreferences, twoFactorEnabled: true }}
+          force2fa={false}
+          oidcPasswordLogin={true}
+          onPreferencesUpdated={mockOnPreferencesUpdated}
+        />
+      );
+      await waitFor(() => expect(authApi.getTrustedDevices).toHaveBeenCalled());
+      expect(screen.getByRole('button', { name: 'Disable 2FA' })).toBeInTheDocument();
+    });
+  });
+
   // --- 2FA disable button (when enabled) ---
   it('shows Disable 2FA button when 2FA is enabled and force2fa is false', async () => {
     const prefsWith2fa = { ...mockPreferences, twoFactorEnabled: true };
@@ -437,7 +496,7 @@ describe('SecuritySection', () => {
 
     await waitFor(() => {
       expect(screen.getByText('Disable Two-Factor Authentication')).toBeInTheDocument();
-      expect(screen.getByText('Enter your current 6-digit code to confirm disabling 2FA.')).toBeInTheDocument();
+      expect(screen.getByText('Enter the 6-digit code from your authenticator app, or one of your backup codes (xxxx-xxxx), to confirm disabling 2FA.')).toBeInTheDocument();
       expect(screen.getByLabelText('Verification Code')).toBeInTheDocument();
     });
   });
@@ -501,6 +560,35 @@ describe('SecuritySection', () => {
 
     await waitFor(() => {
       expect(toast.success).toHaveBeenCalledWith('Two-factor authentication disabled');
+    });
+  });
+
+  it('accepts a backup code to disable 2FA, for a user whose authenticator codes no longer work', async () => {
+    const prefsWith2fa = { ...mockPreferences, twoFactorEnabled: true };
+    (authApi.disable2FA as any).mockResolvedValueOnce({});
+
+    render(
+      <SecuritySection
+        user={mockUser}
+        preferences={prefsWith2fa}
+        force2fa={false}
+        onPreferencesUpdated={mockOnPreferencesUpdated}
+      />
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Disable 2FA' }));
+    await waitFor(() => {
+      expect(screen.getByLabelText('Verification Code')).toBeInTheDocument();
+    });
+
+    fireEvent.change(screen.getByLabelText('Verification Code'), { target: { value: 'ABCD-EF01' } });
+    const disableButtons = screen.getAllByRole('button', { name: /Disable 2FA/ });
+    const modalDisableBtn = disableButtons[disableButtons.length - 1];
+    expect(modalDisableBtn).not.toBeDisabled();
+    fireEvent.click(modalDisableBtn);
+
+    await waitFor(() => {
+      expect(authApi.disable2FA).toHaveBeenCalledWith('abcd-ef01');
     });
   });
 
@@ -1190,8 +1278,8 @@ describe('SecuritySection', () => {
     });
   });
 
-  // --- Verification code only allows digits ---
-  it('strips non-digit characters from the verification code input', async () => {
+  // --- Verification code keeps only what a TOTP or backup code can hold ---
+  it('strips characters no authenticator or backup code contains', async () => {
     const prefsWith2fa = { ...mockPreferences, twoFactorEnabled: true };
 
     render(
@@ -1209,7 +1297,7 @@ describe('SecuritySection', () => {
       expect(screen.getByLabelText('Verification Code')).toBeInTheDocument();
     });
 
-    fireEvent.change(screen.getByLabelText('Verification Code'), { target: { value: 'abc123' } });
+    fireEvent.change(screen.getByLabelText('Verification Code'), { target: { value: 'xyz 12!3#' } });
 
     expect((screen.getByLabelText('Verification Code') as HTMLInputElement).value).toBe('123');
   });
@@ -1369,6 +1457,158 @@ describe('SecuritySection', () => {
 
     await waitFor(() => {
       expect(screen.queryByTestId('backup-codes-display')).not.toBeInTheDocument();
+    });
+  });
+
+  // --- 2FA reset (replace an exposed or unusable authenticator) ---
+  describe('Reset 2FA', () => {
+    const prefsWith2fa = { ...mockPreferences, twoFactorEnabled: true };
+
+    const renderEnabled = (force2fa: boolean) =>
+      render(
+        <SecuritySection
+          user={mockUser}
+          preferences={prefsWith2fa}
+          force2fa={force2fa}
+          onPreferencesUpdated={mockOnPreferencesUpdated}
+        />
+      );
+
+    const openResetDialog = async () => {
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Reset 2FA' })).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Reset 2FA' }));
+      await waitFor(() => {
+        expect(screen.getByRole('dialog', { name: 'Reset Two-Factor Authentication' })).toBeInTheDocument();
+      });
+      return screen.getByRole('dialog', { name: 'Reset Two-Factor Authentication' });
+    };
+
+    const fillAndSubmit = (dialog: HTMLElement, password: string, code: string) => {
+      fireEvent.change(within(dialog).getByLabelText('Account Password'), { target: { value: password } });
+      fireEvent.change(within(dialog).getByLabelText('Authenticator or Backup Code'), { target: { value: code } });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Reset 2FA' }));
+    };
+
+    it('is offered under FORCE_2FA, where Disable is not', async () => {
+      renderEnabled(true);
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Reset 2FA' })).toBeInTheDocument();
+      });
+      expect(screen.getByText('Required by administrator')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Disable 2FA' })).not.toBeInTheDocument();
+    });
+
+    it('is offered beside Disable when 2FA is optional, and not at all when 2FA is off', async () => {
+      const { unmount } = renderEnabled(false);
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: 'Reset 2FA' })).toBeInTheDocument();
+      });
+      expect(screen.getByRole('button', { name: 'Disable 2FA' })).toBeInTheDocument();
+      unmount();
+
+      render(
+        <SecuritySection
+          user={mockUser}
+          preferences={mockPreferences}
+          force2fa={true}
+          onPreferencesUpdated={mockOnPreferencesUpdated}
+        />
+      );
+      expect(screen.queryByRole('button', { name: 'Reset 2FA' })).not.toBeInTheDocument();
+    });
+
+    it('explains when to use it and asks for the password and a code', async () => {
+      renderEnabled(true);
+      const dialog = await openResetDialog();
+
+      expect(within(dialog).getByText(/stopped working \(for example after a server secret change\)/)).toBeInTheDocument();
+      expect(within(dialog).getByText(/enter one of your backup codes/)).toBeInTheDocument();
+      const submit = within(dialog).getByRole('button', { name: 'Reset 2FA' });
+      expect(submit).toBeDisabled();
+
+      // A password alone is not enough: the code is required.
+      fireEvent.change(within(dialog).getByLabelText('Account Password'), { target: { value: 'pw' } });
+      expect(submit).toBeDisabled();
+      fireEvent.change(within(dialog).getByLabelText('Authenticator or Backup Code'), { target: { value: '12345' } });
+      expect(submit).toBeDisabled();
+      fireEvent.change(within(dialog).getByLabelText('Authenticator or Backup Code'), { target: { value: '123456' } });
+      expect(submit).toBeEnabled();
+    });
+
+    it('resets with a backup code and starts enrollment in place when 2FA is optional', async () => {
+      renderEnabled(false);
+      const dialog = await openResetDialog();
+
+      await act(async () => {
+        fillAndSubmit(dialog, 'my-password', 'ABCD-EF01');
+      });
+
+      expect(authApi.reset2FA).toHaveBeenCalledWith('my-password', 'abcd-ef01');
+      await waitFor(() => {
+        expect(screen.getByTestId('two-factor-setup')).toBeInTheDocument();
+      });
+      expect(screen.queryByRole('dialog', { name: 'Reset Two-Factor Authentication' })).not.toBeInTheDocument();
+      expect(mockOnPreferencesUpdated).toHaveBeenCalledWith({ ...prefsWith2fa, twoFactorEnabled: false });
+      expect(mockUpdatePreferencesStore).toHaveBeenCalledWith({ ...prefsWith2fa, twoFactorEnabled: false });
+      expect(toast.success).toHaveBeenCalledWith('Two-factor authentication reset. Set up your new authenticator now.');
+      expect(useRouter().push).not.toHaveBeenCalled();
+      // 2FA now reads as off until the new authenticator is confirmed.
+      expect(screen.getByRole('button', { name: 'Enable 2FA' })).toBeInTheDocument();
+    });
+
+    it('records 2FA as off in the store and sends a forced user to /setup-2fa', async () => {
+      renderEnabled(true);
+      const dialog = await openResetDialog();
+
+      await act(async () => {
+        fillAndSubmit(dialog, 'my-password', '123456');
+      });
+
+      expect(authApi.reset2FA).toHaveBeenCalledWith('my-password', '123456');
+      // The store says "off" before the navigation, so ProtectedRoute and
+      // /setup-2fa agree about what is owed; the page flips it back on when
+      // enrollment completes.
+      expect(mockUpdatePreferencesStore).toHaveBeenCalledWith({ ...prefsWith2fa, twoFactorEnabled: false });
+      expect(useRouter().push).toHaveBeenCalledWith('/setup-2fa');
+      expect(mockUpdatePreferencesStore.mock.invocationCallOrder[0]).toBeLessThan(
+        vi.mocked(useRouter().push).mock.invocationCallOrder[0],
+      );
+      expect(screen.queryByTestId('two-factor-setup')).not.toBeInTheDocument();
+    });
+
+    it('shows the error, keeps the dialog open and leaves 2FA enabled when the server refuses', async () => {
+      vi.mocked(authApi.reset2FA).mockRejectedValueOnce(new Error('Invalid verification code'));
+      renderEnabled(true);
+      const dialog = await openResetDialog();
+
+      await act(async () => {
+        fillAndSubmit(dialog, 'my-password', '123456');
+      });
+
+      expect(toast.error).toHaveBeenCalledWith('Failed to reset 2FA');
+      expect(screen.getByRole('dialog', { name: 'Reset Two-Factor Authentication' })).toBeInTheDocument();
+      expect(mockUpdatePreferencesStore).not.toHaveBeenCalled();
+      expect(mockOnPreferencesUpdated).not.toHaveBeenCalled();
+      expect(useRouter().push).not.toHaveBeenCalled();
+      expect(screen.getByText('Enabled')).toBeInTheDocument();
+    });
+
+    it('clears what was typed when cancelled', async () => {
+      renderEnabled(false);
+      const dialog = await openResetDialog();
+      fireEvent.change(within(dialog).getByLabelText('Account Password'), { target: { value: 'pw' } });
+
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+      await waitFor(() => {
+        expect(screen.queryByRole('dialog', { name: 'Reset Two-Factor Authentication' })).not.toBeInTheDocument();
+      });
+
+      const reopened = await openResetDialog();
+      expect(within(reopened).getByLabelText('Account Password')).toHaveValue('');
+      expect(authApi.reset2FA).not.toHaveBeenCalled();
     });
   });
 });

@@ -1,9 +1,10 @@
+import { SharedReviewService } from "../../shared-expenses/shared-review.service";
 import { Injectable } from "@nestjs/common";
 import { z } from "zod";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 import { BudgetReportsService } from "../../budgets/budget-reports.service";
 import {
-  UserContextResolver,
+  resolveUserContext,
   requireScope,
   toolResult,
   toolError,
@@ -14,47 +15,52 @@ import { READ_ONLY } from "../mcp-annotations";
 
 @Injectable()
 export class McpBudgetsTools {
-  constructor(private readonly budgetReportsService: BudgetReportsService) {}
+  constructor(
+    private readonly budgetReportsService: BudgetReportsService,
+    private readonly sharedReview: SharedReviewService,
+  ) {}
 
-  register(server: McpServer, resolve: UserContextResolver) {
+  register(server: McpServer) {
     server.registerTool(
       "get_budget_status",
       {
         title: "Budget status",
         annotations: READ_ONLY,
         description:
-          "Get budget status for a specific period. Returns total budgeted vs actual spending, per-category breakdowns, spending velocity, safe daily spend, and health score. Returns the same shape as the AI Assistant's get_budget_status tool.",
-        inputSchema: {
+          "Period budget versus actuals by category, velocity, safe daily spend " +
+          "and health score. Unpriced upcoming bills make " +
+          "`velocity.safeDailySpend` null and `upcomingBillsComplete` false.",
+        inputSchema: z.object({
           period: z
             .string()
             .max(20)
             .optional()
             .describe(
-              "Which period to check: 'CURRENT' for the current month, 'PREVIOUS' for last month, or a specific month in YYYY-MM format. Default: CURRENT.",
+              "'CURRENT' (default), 'PREVIOUS', or a specific YYYY-MM month.",
             ),
           budgetName: z
             .string()
             .max(100)
             .optional()
-            .describe(
-              "Optional: filter to a specific budget by name. If omitted, uses the first active budget.",
-            ),
-        },
+            .describe("Defaults to the first active budget."),
+        }),
         outputSchema: getBudgetStatusOutput,
       },
-      async (args, extra) => {
-        const ctx = resolve(extra.sessionId);
-        if (!ctx) return toolError("No user context");
-        const check = requireScope(ctx.scopes, "read");
+      async (args, ctx) => {
+        const user = resolveUserContext(ctx);
+        if (!user) return toolError("No user context");
+        const check = requireScope(user.scopes, "read");
         if (check.error) return check.result;
 
         try {
           const data = await this.budgetReportsService.getLlmBudgetStatus(
-            ctx.userId,
+            user.userId,
             args.period ?? "CURRENT",
             args.budgetName,
           );
-          return toolResult(data);
+          return toolResult(
+            await this.sharedReview.annotate(user.userId, data),
+          );
         } catch (err: unknown) {
           return safeToolError(err);
         }

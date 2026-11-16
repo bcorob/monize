@@ -5,6 +5,7 @@ import { AccountDelegateGuard } from "../delegation/guards/account-delegate.guar
 import { RefreshToken } from "./entities/refresh-token.entity";
 import { User } from "../users/entities/user.entity";
 import { AutoBackupSettings } from "../backup/entities/auto-backup-settings.entity";
+import { AutoBackupPolicyRow } from "../backup/entities/auto-backup-policy.entity";
 import { EmergencyAccessSettings } from "../emergency-access/entities/emergency-access-settings.entity";
 import { getRequestContext } from "../common/request-context";
 import { createScopedDbMocks } from "../test-helpers/scoped-db-testing";
@@ -30,7 +31,7 @@ describe("R7 modules RLS context smoke (real withScopedDb)", () => {
   const OWNER_ID = "0a1b2c3d-4e5f-4a6b-8c7d-9e0f1a2b3c4d";
   const DELEGATE_ID = "d1a2b3c4-5e6f-4a7b-8c9d-0e1f2a3b4c5d";
 
-  it("purgeExpiredRefreshTokens runs its bulk deletes under the system context", async () => {
+  it("purgeExpiredRefreshTokens runs its bulk delete under the system context", async () => {
     const refreshRepo = {
       delete: jest.fn().mockResolvedValue({ affected: 2 }),
     };
@@ -44,14 +45,23 @@ describe("R7 modules RLS context smoke (real withScopedDb)", () => {
 
     await service.purgeExpiredRefreshTokens();
 
-    expect(refreshRepo.delete).toHaveBeenCalledTimes(2);
+    expect(refreshRepo.delete).toHaveBeenCalledTimes(1);
   });
 
   it("handleAutoBackupCron reads its due-settings fan-out under the system context", async () => {
-    const settingsRepo = { find: jest.fn().mockResolvedValue([]) };
-    const usersRepo = { find: jest.fn().mockResolvedValue([]) };
+    const settingsRepo = {
+      find: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn().mockResolvedValue(null),
+    };
+    // The deployment policy singleton the reconcile reads before its fan-out.
+    const policyRepo = { findOne: jest.fn().mockResolvedValue(null) };
+    const usersRepo = {
+      find: jest.fn().mockResolvedValue([]),
+      findOne: jest.fn().mockResolvedValue(null),
+    };
     const { dataSource } = createScopedDbMocks([
       [AutoBackupSettings, settingsRepo],
+      [AutoBackupPolicyRow, policyRepo],
       [User, usersRepo],
     ]);
 
@@ -61,6 +71,14 @@ describe("R7 modules RLS context smoke (real withScopedDb)", () => {
       {} as never,
       { isDemo: false } as never,
       { isUnderMaintenance: jest.fn().mockResolvedValue(false) } as never,
+      {
+        raiseAdminAlert: jest
+          .fn()
+          .mockResolvedValue({ created: 0, emailed: 0 }),
+      } as never,
+      // The off-site dispatch: never reached here (no user is due), and never
+      // throwing when it is.
+      { dispatchAfterBackup: jest.fn().mockResolvedValue(undefined) } as never,
       { get: jest.fn() } as never,
     );
 

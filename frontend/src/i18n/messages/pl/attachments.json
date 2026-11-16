@@ -11,9 +11,76 @@
   "uploaded": "Dodano załącznik",
   "deleted": "Usunięto załącznik",
   "loadFailed": "Nie udało się wczytać załączników",
+  "retry": "Spróbuj ponownie",
   "uploadFailed": "Nie udało się przesłać załącznika",
   "deleteFailed": "Nie udało się usunąć załącznika",
   "tooLarge": "Plik jest za duży (maksymalnie {max})",
   "unsupported": "Nieobsługiwany typ pliku. Dozwolone: obrazy lub PDF",
-  "tooMany": "Maksymalnie {max} załączników na transakcję"
+  "tooMany": "Maksymalnie {max} załączników na transakcję",
+  "fromWarranty": "Z gwarancji: {name}",
+  "fromLinkedWarranty": "Z powiązanej gwarancji",
+  "scan": {
+    "button": "Skanuj dokument",
+    "title": "Skanuj dokument",
+    "description": "Wyprostuj i oczyść zdjęcie dokumentu przed dołączeniem go.",
+    "analysing": "Trwa szukanie dokumentu na zdjęciu…",
+    "failed": "Nie udało się zeskanować dokumentu. Nadal możesz dołączyć zdjęcie w obecnej postaci.",
+    "viewEnhanced": "Poprawione",
+    "viewOriginal": "Oryginał",
+    "rotate": "Obróć",
+    "styleLabel": "Wykończenie",
+    "styles": {
+      "colour": "Kolor",
+      "grayscale": "Skala szarości",
+      "blackAndWhite": "Czarno-białe",
+      "none": "Bez poprawek"
+    },
+    "styleHints": {
+      "colour": "Wyrównuje oświetlenie, podnosi kontrast i wyostrza tekst.",
+      "grayscale": "To samo oczyszczenie bez koloru. Mniejsze i bez zabarwienia, jakie papier przyjmuje w sztucznym świetle.",
+      "blackAndWhite": "Tylko tusz i papier. Najlepsze do tekstu drukowanego; spłaszczy zdjęcia i logotypy.",
+      "none": "Wyprostowane i przycięte, poza tym dokładnie tak, jak sfotografowano. Użyj, gdy poprawki psują temat."
+    },
+    "adjustments": {
+      "brightness": "Jasność ({value})",
+      "contrast": "Kontrast ({value})"
+    },
+    "resetAdjustments": "Przywróć jasność i kontrast",
+    "adjustHint": "Przełącz na „Oryginał”, aby przeciągnąć narożniki, jeśli krawędzie są nieprawidłowe.",
+    "updating": "Aktualizowanie podglądu…",
+    "noDocumentFound": "Nie znaleziono krawędzi dokumentu, więc użyto całego zdjęcia. Przełącz na „Oryginał” i ustaw narożniki samodzielnie.",
+    "previewEnhancedAlt": "Podgląd poprawionego skanu",
+    "previewOriginalAlt": "Podgląd oryginalnego zdjęcia",
+    "useEnhanced": "Użyj poprawionej wersji",
+    "keepOriginal": "Zachowaj tylko oryginał",
+    "retake": "Zrób ponownie",
+    "cancel": "Anuluj",
+    "originalTooLarge": "Oryginalne zdjęcie przekracza {max}, więc dołączony zostanie tylko poprawiony skan.",
+    "warnings": {
+      "blurry": "Zdjęcie wygląda na poruszone. Ponowne wykonanie da ostrzejszy skan.",
+      "edgesOutsideFrame": "Dokument dotyka krawędzi zdjęcia. Zrób zdjęcie ponownie tak, aby wokół całej strony był margines. Żaden bok nie może dotykać krawędzi.",
+      "lowResolution": "Skan jest dość mały, drobny druk może być trudny do odczytania."
+    },
+    "corners": {
+      "label": "Narożniki dokumentu",
+      "topLeft": "Lewy górny narożnik",
+      "topRight": "Prawy górny narożnik",
+      "bottomRight": "Prawy dolny narożnik",
+      "bottomLeft": "Lewy dolny narożnik"
+    },
+    "originalKept": "oryginał zachowany"
+  },
+  "preview": {
+    "loading": "Ładowanie podglądu…",
+    "failed": "Nie udało się wczytać podglądu. Nadal możesz pobrać plik.",
+    "storeUnavailable": "Ten plik znajduje się w magazynie, do którego ten serwer nie ma teraz dostępu, więc nie można go ani podejrzeć, ani pobrać. Nic nie zginęło: poproś administratora o przywrócenie ustawień magazynu załączników.",
+    "unsupported": "Tego typu pliku nie można podejrzeć. Nadal możesz go pobrać.",
+    "fit": "Dopasuj do ekranu",
+    "actualSize": "Rzeczywisty rozmiar",
+    "versionLabel": "Wersja",
+    "zoomLabel": "Powiększenie",
+    "pageCount": "{count, plural, one {# strona} few {# strony} many {# stron} other {# strony}}",
+    "page": "Strona {page} z {total}",
+    "open": "Podgląd {name}"
+  }
 }

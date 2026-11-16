@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { totalFromQuantity, quantityFromTotal, roundPrice, roundMoney, usableClose } from './investmentFold';
+import { totalFromQuantity, quantityFromTotal, priceFromTotal, roundPrice, usableClose } from './investmentFold';
 
 describe('usableClose', () => {
   it('returns the latest positive close with its date', () => {
@@ -29,15 +29,6 @@ describe('usableClose', () => {
 
   it('defaults a missing date to null', () => {
     expect(usableClose([{ closePrice: 10 }])).toEqual({ price: 10, date: null });
-  });
-});
-
-describe('roundMoney', () => {
-  it('rounds to money precision (4dp)', () => {
-    expect(roundMoney(1.23456)).toBe(1.2346);
-    expect(roundMoney(1.23454)).toBe(1.2345);
-    expect(roundMoney(99.99999)).toBe(100);
-    expect(roundMoney(100)).toBe(100);
   });
 });
 
@@ -89,5 +80,31 @@ describe('quantityFromTotal', () => {
   it('returns 0 rather than dividing by a non-positive price', () => {
     expect(quantityFromTotal(1000, 0, 1, 0)).toBe(0);
     expect(quantityFromTotal(1000, -5, 1, 0)).toBe(0);
+  });
+});
+
+describe('priceFromTotal', () => {
+  it('backs a buy commission out before dividing (sign +1)', () => {
+    // (1005 - 5) / 10 = 100
+    expect(priceFromTotal(1005, 10, 1, 5)).toBe(100);
+  });
+
+  it('adds a sell commission back before dividing (sign -1)', () => {
+    // (995 + 5) / 10 = 100
+    expect(priceFromTotal(995, 10, -1, 5)).toBe(100);
+  });
+
+  it('rounds to price precision (6dp)', () => {
+    // 1000 / 7 = 142.857142857..., rounded to 6dp = 142.857143
+    expect(priceFromTotal(1000, 7, 1, 0)).toBe(142.857143);
+  });
+
+  it('never returns a negative price when commission exceeds the total', () => {
+    expect(priceFromTotal(3, 10, 1, 10)).toBe(0);
+  });
+
+  it('returns 0 rather than dividing by a non-positive quantity', () => {
+    expect(priceFromTotal(1000, 0, 1, 0)).toBe(0);
+    expect(priceFromTotal(1000, -5, 1, 0)).toBe(0);
   });
 });

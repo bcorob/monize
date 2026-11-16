@@ -34,6 +34,12 @@
     "dismiss": "Schließen",
     "dismissAriaLabel": "Update-Benachrichtigung schließen"
   },
+  "jwtSecretBanner": {
+    "label": "JWT_SECRET ist unsicher.",
+    "detail": "Es ist ein veröffentlichter Platzhalter oder zu leicht zu erraten, sodass Sitzungstoken gefälscht werden können. Erzeugen Sie einen starken Wert mit <code>openssl rand -base64 32</code>. Eine Änderung macht Codes aus Authentifizierungs-Apps ungültig und vergisst vertrauenswürdige Geräte: Benutzer melden sich mit einem Backup-Code an und richten 2FA neu ein, und für alle ohne Backup-Code setzen Sie die 2FA in der <users>Benutzerverwaltung</users> zurück. Lesen Sie vorher <code>docs/backend/modules-and-runtime.md</code> (Changing JWT_SECRET).",
+    "dismiss": "Schließen",
+    "dismissAriaLabel": "JWT_SECRET-Warnung schließen"
+  },
   "actionHistory": {
     "title": "Aktionsverlauf",
     "buttonAriaLabel": "Aktionsverlauf",
@@ -58,6 +64,7 @@
       "tag": "Etikett",
       "account": "Konto",
       "scheduled_transaction": "Terminiert",
+      "scheduled_posting": "Terminiert",
       "security": "Wertpapier",
       "budget": "Budget",
       "custom_report": "Bericht"
@@ -79,7 +86,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "Wiederanlage langfristiger Kapitalerträge",
       "CAPITAL_GAIN_SHORT": "Kurzfristiger Kapitalertrag",
       "CAPITAL_GAIN_LONG": "Langfristiger Kapitalertrag",
-      "REDEEM": "CD/Anleihe einlösen"
+      "REDEEM": "CD/Anleihe einlösen",
+      "RETURN_OF_CAPITAL": "Kapitalrückzahlung"
     },
     "descriptions": {
       "createdAccount": "Konto \"{name}\" erstellt",
@@ -99,6 +107,7 @@
       "deletedInvestmentReport": "Anlagebericht \"{name}\" gelöscht",
       "createdPayee": "Zahlungsempfänger \"{name}\" erstellt",
       "updatedPayee": "Zahlungsempfänger \"{name}\" aktualisiert",
+      "lookedUpPayeeContact": "Kontaktangaben für Zahlungsempfänger \"{name}\" nachgeschlagen",
       "deletedPayee": "Zahlungsempfänger \"{name}\" gelöscht",
       "createdReport": "Bericht \"{name}\" erstellt",
       "updatedReport": "Bericht \"{name}\" aktualisiert",
@@ -106,6 +115,7 @@
       "createdScheduledTransaction": "Geplante Buchung \"{name}\" erstellt",
       "updatedScheduledTransaction": "Geplante Buchung \"{name}\" aktualisiert",
       "deletedScheduledTransaction": "Geplante Buchung \"{name}\" gelöscht",
+      "postedScheduledTransaction": "Geplante Buchung \"{name}\" gebucht",
       "createdSecurity": "Wertpapier \"{symbol}\" erstellt",
       "updatedSecurity": "Wertpapier \"{symbol}\" aktualisiert",
       "deletedSecurity": "Wertpapier \"{symbol}\" gelöscht",
@@ -115,26 +125,23 @@
       "createdTransaction": "Buchung {payee} {amount} erstellt",
       "updatedTransaction": "Buchung {payee} {amount} aktualisiert",
       "deletedTransaction": "Buchung {payee} {amount} gelöscht",
+      "convertedToTransfer": "Transaktion {payee} {amount} in eine Überweisung umgewandelt",
+      "convertedToTransaction": "Überweisung {payee} {amount} in eine Transaktion umgewandelt",
       "bulkUpdatedTransactions": "{count, plural, one {# Buchung} other {# Buchungen}} massenweise aktualisiert",
       "createdTransfer": "Überweisung {amount} von {from} nach {to} erstellt",
       "createdInvestmentTransaction": "{action}-Transaktion erstellt",
       "updatedInvestmentTransaction": "{action}-Transaktion aktualisiert",
       "deletedInvestmentTransaction": "{action}-Transaktion gelöscht",
       "transferredSecurity": "Wertpapier zwischen Konten übertragen",
-      "updatedSecurityTransfer": "Wertpapierübertragung aktualisiert"
-    },
-    "timeAgo": {
-      "justNow": "gerade eben",
-      "minutes": "vor {count} Min.",
-      "hours": "vor {count} Std.",
-      "days": "vor {count} T."
+      "updatedSecurityTransfer": "Wertpapierübertragung aktualisiert",
+      "ranTransactionRule": "Regel „{name}“ auf {count, plural, one {# Buchung} other {# Buchungen}} angewendet"
     },
     "undonePrefix": "Rückgängig gemacht: {description}",
     "redonePrefix": "Wiederholt: {description}"
   },
   "pageHeader": {
-    "helpAriaLabel": "Monize-Wiki für Hilfe zu diesem Bereich öffnen",
-    "helpTooltip": "Monize-Wiki für Hilfe zu diesem Bereich öffnen"
+    "helpAriaLabel": "Hilfe zu dieser Seite",
+    "helpTooltip": "Hilfe zu dieser Seite"
   },
   "bootSplash": {
     "loading": "Monize wird geladen",
@@ -145,5 +152,17 @@
     "title": "Verbindung nicht möglich",
     "message": "Monize konnte den Server nicht erreichen. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
     "retry": "Erneut versuchen"
+  },
+  "pushBanner": {
+    "enableTitle": "Benachrichtigungen aktivieren?",
+    "enableBody": "Monize kann Sie auf diesem Gerät an Rechnungen und Budgetgrenzen erinnern, auch wenn die App geschlossen ist. Ihr Browser fragt Sie um Erlaubnis.",
+    "enableButton": "Aktivieren",
+    "enabling": "Wird aktiviert…",
+    "installIosTitle": "Fügen Sie Monize zuerst zum Home-Bildschirm hinzu.",
+    "installIosBody": "Auf iPhone und iPad funktionieren Benachrichtigungen nur in der installierten App. Tippen Sie auf Teilen, dann auf Zum Home-Bildschirm, und öffnen Sie Monize von dort.",
+    "blockedTitle": "Benachrichtigungen sind für Monize blockiert.",
+    "blockedBody": "Erlauben Sie sie in den Website-Einstellungen Ihres Browsers für diese Seite. Monize kann nicht von selbst erneut fragen.",
+    "blockedIosBody": "Öffnen Sie die iOS-Einstellungen, dann Mitteilungen, dann Monize, und erlauben Sie sie dort. Falls Monize nicht aufgeführt ist, entfernen Sie es vom Home-Bildschirm und fügen Sie es erneut hinzu.",
+    "dismiss": "Nicht jetzt"
   }
 }

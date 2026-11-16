@@ -46,6 +46,8 @@
     "colProvider": "Anbieter",
     "colStatus": "Status",
     "colLastLogin": "Letzte Anmeldung",
+    "colBackups": "Backups",
+    "colAttachments": "Anhänge",
     "colActions": "Aktionen",
     "youSuffix": "(Sie)",
     "noEmail": "Keine E-Mail",
@@ -60,7 +62,22 @@
     "clickToDisable": "Klicken zum Deaktivieren",
     "clickToEnable": "Klicken zum Aktivieren",
     "resetPassword": "Passwort zurücksetzen",
-    "noUsers": "Keine Benutzer gefunden."
+    "resetTwoFactor": "2FA zurücksetzen",
+    "unlinkSso": "SSO trennen",
+    "noUsers": "Keine Benutzer gefunden.",
+    "storageLoading": "Wird geladen…",
+    "storageUnavailable": "Nicht verfügbar",
+    "storageUnavailableHint": "Die Speichernutzung konnte nicht geladen werden. Laden Sie die Seite neu, um es erneut zu versuchen.",
+    "storageUnknown": "Unbekannt",
+    "storageUnknownStore": "Der Backup-Speicher konnte für diesen Benutzer nicht gelesen werden, daher ist die Größe unbekannt. Prüfen Sie den Backup-Speicherort auf der Seite „Backups“.",
+    "storageNotReported": "Nicht erfasst",
+    "storageNotReportedHint": "Dieses Konto war in der letzten Speicherabfrage nicht enthalten. Laden Sie die Seite neu, um es einzubeziehen.",
+    "backupsOff": "Aus",
+    "backupsOffHint": "Automatische Backups sind für diesen Benutzer nicht aktiviert, und es sind keine gespeichert.",
+    "backupScheduleOff": "Zeitplan aus",
+    "backupScheduleOffHint": "Automatische Backups sind deaktiviert; diese Dateien sind das, was die Aufbewahrung noch nicht entfernt hat.",
+    "backupCount": "{count, plural, =0 {Keine Backups} one {# Backup} other {# Backups}}",
+    "attachmentCount": "{count, plural, =0 {Keine Dateien} one {# Datei} other {# Dateien}}"
   },
   "usersPage": {
     "title": "Benutzerverwaltung",
@@ -81,7 +98,10 @@
       "loadFailed": "Benutzer konnten nicht geladen werden",
       "deleteFailed": "Benutzer konnte nicht gelöscht werden",
       "disableFailed": "Benutzer konnte nicht deaktiviert werden",
-      "resetFailed": "Passwort konnte nicht zurückgesetzt werden"
+      "resetFailed": "Passwort konnte nicht zurückgesetzt werden",
+      "twoFactorReset": "Die Zwei-Faktor-Authentifizierung für {name} wurde zurückgesetzt. Die Person wurde abgemeldet.",
+      "resetTwoFactorFailed": "Zwei-Faktor-Authentifizierung konnte nicht zurückgesetzt werden",
+      "unlinkSsoFailed": "SSO konnte nicht getrennt werden"
     },
     "dialogs": {
       "promoteTitle": "Benutzer befördern?",
@@ -96,6 +116,14 @@
       "resetTitle": "Passwort zurücksetzen?",
       "resetMessage": "Dadurch wird ein neues temporäres Passwort für {name} generiert. Die Person muss es bei der nächsten Anmeldung ändern.",
       "resetConfirm": "Passwort zurücksetzen",
+      "unlinkSsoTitle": "SSO trennen?",
+      "unlinkSsoMessage": "Dadurch wird das Konto von {name} in ein lokales Konto umgewandelt. Eine spätere SSO-Anmeldung mit derselben E-Mail-Adresse kann es wieder verknüpfen. Das System erzeugt ein temporäres Passwort, und {name} muss es bei der nächsten Anmeldung ändern.",
+      "unlinkSsoConfirm": "SSO trennen",
+      "unlinkSsoResultTitle": "SSO getrennt",
+      "unlinkSsoResultDesc": "Das Konto von {name} ist jetzt ein lokales Konto. Geben Sie dieses temporäre Passwort an die Person weiter, damit sie sich anmelden kann.",
+      "resetTwoFactorTitle": "Zwei-Faktor-Authentifizierung zurücksetzen?",
+      "resetTwoFactorMessage": "Dadurch wird die Zwei-Faktor-Authentifizierung für {name} ausgeschaltet, ihre Backup-Codes und vertrauenswürdigen Geräte werden gelöscht und sie wird überall abgemeldet. Danach kann sich die Person mit ihrem Passwort anmelden und 2FA neu einrichten. Verwenden Sie dies, wenn sie ihre Authentifizierungs-App und ihre Backup-Codes verloren hat oder nachdem JWT_SECRET geändert wurde.",
+      "resetTwoFactorConfirm": "2FA zurücksetzen",
       "deleteTitle": "Benutzer löschen?",
       "deleteMessage": "Möchten Sie {name} wirklich löschen? Das Konto und alle zugehörigen Daten werden dauerhaft entfernt. Diese Aktion kann nicht rückgängig gemacht werden. Wenn die Person Delegierter eines anderen Kontos ist, werden die eigenen Daten entfernt, die Anmeldung jedoch beibehalten, damit die Delegation weiterhin funktioniert – die Person wird zum reinen Delegierten.",
       "deleteConfirm": "Benutzer löschen",
@@ -103,6 +131,84 @@
       "tempPasswordTitleUpgraded": "Konto hochgestuft",
       "tempPasswordDescCreated": "Für {name} wurde ein temporäres Passwort generiert. Teilen Sie es der Person mit, damit sie sich anmelden kann.",
       "tempPasswordDescUpgraded": "Ein bestehender geteilter Benutzer wurde auf ein vollständiges Konto hochgestuft. Teilen Sie {name} dieses temporäre Passwort mit."
+    }
+  },
+  "notificationsPage": {
+    "title": "Benachrichtigungen",
+    "subtitle": "Zustellkanäle dieser Monize-Instanz und die Push-Identität dahinter.",
+    "loading": "Benachrichtigungseinstellungen werden geladen ...",
+    "loadUnavailable": "Monize konnte die Benachrichtigungseinstellungen nicht vom Server lesen. Laden Sie die Seite neu, um es erneut zu versuchen.",
+    "channelsHeading": "Zustellkanäle",
+    "identityHeading": "Web-Push-Identität",
+    "perAccountNote": "Geräte, Testbenachrichtigungen und Benachrichtigungseinstellungen gehören zu jedem Konto und werden in den Einstellungen verwaltet. Die Administration konfiguriert die Instanz und sendet nie an fremde Benachrichtigungen – und sieht sie auch nicht.",
+    "channelState": {
+      "on": "Ein",
+      "off": "Aus",
+      "unconfigured": "Nicht verfügbar",
+      "unknown": "Unbekannt"
+    },
+    "channels": {
+      "inApp": {
+        "name": "In-App-Benachrichtigungen",
+        "description": "Die Glocke in der Kopfzeile. Immer verfügbar und nicht abschaltbar: Hier lebt eine Benachrichtigung, auch wenn jeder andere Kanal ausfällt."
+      },
+      "webPush": {
+        "name": "Browser-Push",
+        "description": "Benachrichtigungen auf Telefon oder Desktop, auch wenn Monize geschlossen ist. Benötigt weder Firebase noch ein Google-Play- oder Apple-Developer-Konto.",
+        "toggleLabel": "Browser-Push für diese Instanz aktivieren",
+        "missingKeys": "Diese Instanz hat kein Push-Schlüsselpaar. Setzen Sie ENCRYPTION_KEY und starten Sie neu: Monize erzeugt das Paar beim nächsten Start selbst.",
+        "keyUnreadable": "Diese Instanz kann ihr gespeichertes Push-Schlüsselpaar nicht entschlüsseln, es kann nichts zugestellt werden. Erneuern Sie das Schlüsselpaar unten.",
+        "serverKeyMissing": "Für diese Instanz ist kein ENCRYPTION_KEY gesetzt, daher kann das gespeicherte Push-Schlüsselpaar nicht geöffnet werden. Setzen Sie ENCRYPTION_KEY im Deployment und starten Sie neu — ein Rotieren hilft bei fehlendem Schlüssel nicht."
+      },
+      "email": {
+        "name": "E-Mail",
+        "description": "Rechnungserinnerungen, Budget-Zusammenfassungen und Systemwarnungen an die E-Mail-Adresse des jeweiligen Kontos.",
+        "missingSmtp": "Es ist kein Mailserver konfiguriert. Setzen Sie die SMTP-Umgebungsvariablen, um E-Mail zu aktivieren.",
+        "statusUnavailable": "Monize konnte den Status des Mailservers nicht lesen."
+      },
+      "ntfy": {
+        "name": "ntfy und UnifiedPush",
+        "description": "Dieselben verschlüsselten Push-Nachrichten, zugestellt über einen selbst gehosteten UnifiedPush-Distributor (ntfy, NextPush) statt über die Infrastruktur von Google oder Apple. Der Kanal nutzt das Push-Schlüsselpaar und den Schalter dieser Instanz; jede Person registriert ihren Endpunkt in ihrer UnifiedPush-App und schaltet den Kanal in den Einstellungen ein.",
+        "followsWebPush": "Nicht verfügbar, solange Browser-Push aus ist oder sein Schlüsselpaar nicht verwendet werden kann — dieser Kanal wird mit demselben Schlüsselpaar zugestellt."
+      }
+    },
+    "identity": {
+      "fingerprintLabel": "Schlüssel-Fingerabdruck",
+      "generatedLabel": "Erzeugt",
+      "devicesLabel": "Registrierte Geräte",
+      "deviceCounts": "{live} aktiv, {disabled} stillgelegt",
+      "rotateDescription": "Beim Erneuern wird das Schlüsselpaar dieser Instanz ersetzt. Jedes registrierte Gerät ist danach nicht mehr erreichbar und muss Push erneut aktivieren – erneuern Sie also nur, wenn der Schlüssel offengelegt sein könnte.",
+      "rotateButton": "Schlüsselpaar erneuern",
+      "rotatingButton": "Wird erneuert ...",
+      "missingEncryptionKey": "Diese Instanz hat kein Push-Schlüsselpaar, weil ENCRYPTION_KEY nicht gesetzt ist und der private Schlüssel unverschlüsselt gespeichert werden müsste. Setzen Sie die Variable und starten Sie neu: Monize erzeugt das Paar selbst.",
+      "keyUnreadable": "Diese Instanz besitzt ein Push-Schlüsselpaar, das sie nicht mehr entschlüsseln kann – es kann nichts zugestellt werden. Das passiert, wenn sich ENCRYPTION_KEY bei laufender Datenbank ändert oder ein Backup auf einer anderen Instanz wiederhergestellt wird. Erneuern Sie das Schlüsselpaar; alle Geräte registrieren sich danach neu.",
+      "serverKeyMissing": "Für diese Instanz ist kein ENCRYPTION_KEY gesetzt, daher kann sie das gespeicherte Push-Schlüsselpaar nicht öffnen. Ein Rotieren hilft bei fehlendem Schlüssel nicht: Setzen Sie ENCRYPTION_KEY im Deployment und starten Sie neu — Push funktioniert dann mit den bestehenden Geräten weiter."
+    },
+    "dialogs": {
+      "rotateTitle": "Push-Schlüsselpaar erneuern?",
+      "rotateMessage": "{count, plural, =0 {Es ist noch kein Gerät registriert, es geht also nichts verloren.} one {Ein registriertes Gerät erhält keine Benachrichtigungen mehr, bis Push in diesem Browser wieder aktiviert wird.} other {# registrierte Geräte erhalten keine Benachrichtigungen mehr, bis Push in jedem dieser Browser wieder aktiviert wird.}}",
+      "rotateConfirm": "Erneuern"
+    },
+    "toasts": {
+      "loadFailed": "Benachrichtigungseinstellungen konnten nicht geladen werden",
+      "pushEnabled": "Browser-Push für diese Instanz aktiviert",
+      "pushDisabled": "Browser-Push für diese Instanz deaktiviert",
+      "pushToggleFailed": "Die Browser-Push-Einstellung konnte nicht geändert werden",
+      "rotated": "{count, plural, =0 {Schlüsselpaar erneuert} one {Schlüsselpaar erneuert; 1 Gerät muss sich erneut registrieren} other {Schlüsselpaar erneuert; # Geräte müssen sich erneut registrieren}}",
+      "rotateFailed": "Das Schlüsselpaar konnte nicht erneuert werden"
+    }
+  },
+  "backupsPage": {
+    "title": "Sicherungen",
+    "subtitle": "Geplante, komprimierte Sicherungsdateien der Finanzdaten jedes einzelnen Kontos.",
+    "scope": {
+      "heading": "Keine vollständige Datenbanksicherung",
+      "perUser": "Nach dem unten eingestellten Zeitplan schreibt der Server für jedes Konto eine komprimierte Sicherungsdatei seiner eigenen Finanzdaten und löscht ältere gemäß der Aufbewahrungsrichtlinie. Alle aktiven Konten sind erfasst.",
+      "notFullDatabase": "Es ist kein PostgreSQL-Dump: Schema, Serverkonfiguration und alles außerhalb der Finanzdaten eines Kontos werden nicht erfasst. Für die Notfallwiederherstellung der gesamten Instanz sichern Sie die Datenbank und den Anhangspeicher mit Ihren eigenen Werkzeugen."
+    },
+    "demoRestricted": {
+      "heading": "Im Demomodus eingeschränkt",
+      "body": "Die Konfiguration der automatischen Sicherung ist im Demomodus deaktiviert."
     }
   }
 }

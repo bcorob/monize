@@ -6,7 +6,7 @@ import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Cog6ToothIcon } from '@heroicons/react/24/outline';
-import { WidgetIconPuck } from './widget-meta';
+import { WidgetIconPuck, WidgetTitle } from './widget-meta';
 import type { DashboardWidgetId } from './widget-registry';
 import { useWidgetConfig } from '@/hooks/useWidgetConfig';
 import {
@@ -21,6 +21,11 @@ const IDENTITY_DEFAULTS: WidgetIdentityConfig = {};
 interface WidgetCardProps {
   /** Widget heading (the built-in, translated title). */
   title: string;
+  /**
+   * Route the title links to: the report or section showing the same figures in
+   * full. Omit for a widget with no fuller view.
+   */
+  titleHref?: string;
   /**
    * Widget id. When provided, the settings gear also lets the user set a custom
    * display name (overriding {@link title}) and an optional description, stored
@@ -39,8 +44,6 @@ interface WidgetCardProps {
   configTitle?: string;
   /** Card body (chart, skeleton, or empty state). */
   children: ReactNode;
-  /** Tailwind min-height for the card. Charts default to a tall card. */
-  minHeightClass?: string;
   className?: string;
 }
 
@@ -54,12 +57,12 @@ interface WidgetCardProps {
  */
 export function WidgetCard({
   title,
+  titleHref,
   widgetId,
   headerRight,
   configControls,
   configTitle,
   children,
-  minHeightClass = 'lg:min-h-[540px]',
   className = '',
 }: WidgetCardProps) {
   const t = useTranslations('dashboard');
@@ -77,15 +80,24 @@ export function WidgetCard({
   return (
     <Card
       padding="md"
-      className={`${minHeightClass} flex flex-col h-full ${className}`}
+      // The card fills its grid item through the grid's own stretch, and
+      // never through `h-full`: `height: 100%` in an auto-sized row is a
+      // percentage of a track the card is itself supposed to size, and WebKit
+      // sizes that row without the card's own content in it. The card then
+      // keeps the height its neighbour set while its own content -- the pie
+      // chart's opened Other list -- spills out of the box (issue #1382). Its
+      // height floor is the grid item's (`DashboardGridItem`), not its own.
+      className={`flex flex-col ${className}`}
     >
-      <div className="flex items-start justify-between gap-2 mb-4">
+      {/* The header wraps rather than squeezing the title: a widget whose
+          header-right carries a figure, a range and a button needs more width
+          than a phone has beside a title, and a truncated title names no
+          widget. Above the wrap the row is unchanged. */}
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-4">
         <div className="flex min-w-0 items-start gap-2.5">
           {widgetId && <WidgetIconPuck id={widgetId as DashboardWidgetId} />}
           <div className="min-w-0">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 truncate">
-              {displayTitle}
-            </h3>
+            <WidgetTitle href={titleHref}>{displayTitle}</WidgetTitle>
             {description && (
               <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400 line-clamp-2">
                 {description}
@@ -93,14 +105,17 @@ export function WidgetCard({
             )}
           </div>
         </div>
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex items-center gap-2 flex-shrink-0 ml-auto">
           {headerRight}
           {hasGear && (
             <button
               type="button"
               onClick={() => setShowConfig(true)}
               aria-label={t('widgets.configure', { name: title })}
-              className="p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              // `self-start` keeps the gear on the FIRST line of a header-right
+              // that wraps onto two. A single-line one is the gear's own height,
+              // where start and centre are the same place, so nothing moves.
+              className="self-start p-1.5 rounded-md text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
             >
               <Cog6ToothIcon aria-hidden className="h-4 w-4" />
             </button>
@@ -115,12 +130,10 @@ export function WidgetCard({
           isOpen={showConfig}
           onClose={() => setShowConfig(false)}
           maxWidth="md"
-          className="p-4 sm:p-6"
+          className="p-6"
           pushHistory
+          title={configTitle ?? title}
         >
-          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">
-            {configTitle ?? title}
-          </h3>
           <div className="space-y-4">
             {configControls}
             {identityEnabled && (

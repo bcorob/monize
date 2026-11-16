@@ -1,8 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act, within } from '@/test/render';
+import { render, screen, fireEvent, waitFor, act, within, cleanup } from '@/test/render';
 import * as nextNavigation from 'next/navigation';
 import { AccountList } from './AccountList';
 import { Account } from '@/types/account';
+import type { UserPreferences } from '@/types/auth';
+import { usePreferencesStore } from '@/store/preferencesStore';
 import { accountsApi } from '@/lib/accounts';
 import { useDensityStore } from '@/store/densityStore';
 
@@ -16,12 +18,15 @@ vi.mock('@/lib/accounts', () => ({
   },
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (n: number, _currency?: string) => `$${n.toFixed(2)}`,
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (n: number, _currency?: string) => `$${n.toFixed(2)}`,
+    }),
+  };
+});
 const exchangeMocks = vi.hoisted(() => ({
   convertToDefault: vi.fn((n: number, _currency?: string) => n),
 }));
@@ -75,8 +80,7 @@ function createAccount(overrides: Partial<Account> = {}): Account {
     assetCategoryId: null,
     dateAcquired: null,
     linkedLoanAccountId: null,
-    isCanadianMortgage: false,
-    isVariableRate: false,
+    mortgageType: 'ANNUITY',
     termMonths: null,
     termEndDate: null,
     amortizationMonths: null,
@@ -230,6 +234,36 @@ describe('AccountList', () => {
     expect(densityButton).toHaveTextContent('Normal');
   });
 
+  it('draws Normal row actions as icons on a table too narrow for their labels', () => {
+    const observers: ResizeObserverCallback[] = [];
+    vi.stubGlobal('ResizeObserver', class {
+      constructor(callback: ResizeObserverCallback) { observers.push(callback); }
+      observe() {}
+      disconnect() {}
+    });
+    const resizeTable = (width: number) =>
+      act(() => observers.forEach((notify) =>
+        notify([{ contentRect: { width } } as ResizeObserverEntry], {} as ResizeObserver)));
+    try {
+      render(
+        <AccountList
+          accounts={[createAccount()]}
+          onEdit={mockOnEdit}
+          defaultCurrency="CAD" convertToDefault={exchangeMocks.convertToDefault} onRefresh={mockOnRefresh}
+        />
+      );
+      expect(screen.getByRole('button', { name: 'Edit' })).toHaveTextContent('Edit');
+
+      resizeTable(1000);
+      expect(screen.getByRole('button', { name: 'Edit' })).toHaveTextContent('');
+
+      resizeTable(1400);
+      expect(screen.getByRole('button', { name: 'Edit' })).toHaveTextContent('Edit');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('shows Active and Closed status badges', () => {
     const accounts = [
       createAccount({ name: 'Active Account', isClosed: false }),
@@ -373,7 +407,7 @@ describe('AccountList', () => {
     // Click the "Active" status filter button
     const statusButtons = screen.getAllByRole('button');
     const activeFilterButton = statusButtons.find(
-      (btn) => btn.textContent === 'Active' && btn.closest('.inline-flex.rounded-md')
+      (btn) => !!btn.textContent?.startsWith('Active (') && !!btn.closest('[role="group"]')
     );
     expect(activeFilterButton).toBeTruthy();
     fireEvent.click(activeFilterButton!);
@@ -395,7 +429,7 @@ describe('AccountList', () => {
 
     // Click the "Closed" status filter button in the segmented control
     const closedFilterButton = screen.getAllByRole('button').find(
-      (btn) => btn.textContent === 'Closed' && btn.closest('.inline-flex.rounded-md')
+      (btn) => !!btn.textContent?.startsWith('Closed (') && !!btn.closest('[role="group"]')
     );
     expect(closedFilterButton).toBeTruthy();
     fireEvent.click(closedFilterButton!);
@@ -669,7 +703,7 @@ describe('AccountList', () => {
 
     // Filter by closed status when all accounts are active
     const closedFilterButton = screen.getAllByRole('button').find(
-      (btn) => btn.textContent === 'Closed' && btn.closest('.inline-flex.rounded-md')
+      (btn) => !!btn.textContent?.startsWith('Closed (') && !!btn.closest('[role="group"]')
     );
     expect(closedFilterButton).toBeTruthy();
     fireEvent.click(closedFilterButton!);
@@ -744,6 +778,53 @@ describe('AccountList', () => {
     const rows = screen.getAllByRole('row');
     expect(rows[2]).toHaveTextContent('Active Acct');
     expect(rows[3]).toHaveTextContent('Closed Acct');
+  });
+
+  it('sorts by Last Reconciled, longest-unreconciled first', () => {
+    const accounts = [
+      createAccount({ id: 'a1', name: 'Alpha', lastReconciledDate: '2026-09-30' }),
+      createAccount({ id: 'a2', name: 'Bravo', lastReconciledDate: null }),
+      createAccount({ id: 'a3', name: 'Charlie', lastReconciledDate: '2026-06-30' }),
+    ];
+
+    render(
+      <AccountList accounts={accounts} onEdit={mockOnEdit} defaultCurrency="CAD" convertToDefault={exchangeMocks.convertToDefault} onRefresh={mockOnRefresh} />
+    );
+
+    fireEvent.click(screen.getByText('Last Reconciled'));
+
+    // rows[0] = table header, rows[1] = the CHEQUING group header.
+    const rows = screen.getAllByRole('row');
+    expect(rows[2]).toHaveTextContent('Bravo');
+    expect(rows[3]).toHaveTextContent('Charlie');
+    expect(rows[4]).toHaveTextContent('Alpha');
+  });
+
+  it('sorts by Unreconciled, fewest outstanding first', () => {
+    const accounts = [
+      createAccount({ id: 'a1', name: 'Alpha', unreconciledCount: 12 }),
+      createAccount({ id: 'a2', name: 'Bravo', unreconciledCount: 0 }),
+      createAccount({ id: 'a3', name: 'Charlie', unreconciledCount: 3 }),
+    ];
+
+    render(
+      <AccountList accounts={accounts} onEdit={mockOnEdit} defaultCurrency="CAD" convertToDefault={exchangeMocks.convertToDefault} onRefresh={mockOnRefresh} />
+    );
+
+    fireEvent.click(screen.getByText('Unreconciled'));
+
+    // rows[0] = table header, rows[1] = the CHEQUING group header.
+    let rows = screen.getAllByRole('row');
+    expect(rows[2]).toHaveTextContent('Bravo');
+    expect(rows[3]).toHaveTextContent('Charlie');
+    expect(rows[4]).toHaveTextContent('Alpha');
+
+    fireEvent.click(screen.getByText('Unreconciled'));
+
+    rows = screen.getAllByRole('row');
+    expect(rows[2]).toHaveTextContent('Alpha');
+    expect(rows[3]).toHaveTextContent('Charlie');
+    expect(rows[4]).toHaveTextContent('Bravo');
   });
 
   it('enables Close button when account balance is zero', () => {
@@ -1010,9 +1091,8 @@ describe('AccountList', () => {
     expect(screen.getAllByText('$12345.67').length).toBeGreaterThanOrEqual(1);
     // The row now states what the total is made of rather than labelling it
     // "Market value": an investment account's worth is holdings plus cash.
-    expect(
-      screen.getByText('Investments $12345.67 · Cash $0.00'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Investments $12345.67')).toBeInTheDocument();
+    expect(screen.getByText('Cash $0.00')).toBeInTheDocument();
   });
 
   it('combines a pair market value and cash balance into one row total', () => {
@@ -1046,9 +1126,8 @@ describe('AccountList', () => {
     );
 
     expect(screen.getAllByText('$15500.00').length).toBeGreaterThanOrEqual(1);
-    expect(
-      screen.getByText('Investments $12000.00 · Cash $3500.00'),
-    ).toBeInTheDocument();
+    expect(screen.getByText('Investments $12000.00')).toBeInTheDocument();
+    expect(screen.getByText('Cash $3500.00')).toBeInTheDocument();
   });
 
   // The defect the combined value exists to prevent: an account whose holdings
@@ -1089,6 +1168,52 @@ describe('AccountList', () => {
     expect(within(row).getByText('Total unavailable')).toBeInTheDocument();
     expect(within(row).queryByText('$3500.00')).not.toBeInTheDocument();
     expect(within(row).queryByText('$9000.00')).not.toBeInTheDocument();
+  });
+
+  // valuationComplete also covers a missing exchange rate with every price
+  // present, which the unpriced count (zero here) cannot see.
+  it('shows no total for an account whose valuation is incomplete though every holding is priced', () => {
+    const accounts = [
+      createAccount({
+        id: 'broker-1',
+        name: 'TFSA - Brokerage',
+        accountType: 'INVESTMENT',
+        accountSubType: 'INVESTMENT_BROKERAGE',
+        linkedAccountId: 'cash-1',
+        currentBalance: 0,
+      }),
+      createAccount({
+        id: 'cash-1',
+        name: 'TFSA - Cash',
+        accountType: 'INVESTMENT',
+        accountSubType: 'INVESTMENT_CASH',
+        linkedAccountId: 'broker-1',
+        currentBalance: 3500,
+      }),
+    ];
+
+    render(
+      <AccountList
+        accounts={accounts}
+        brokerageMarketValues={new Map([['broker-1', 9000]])}
+        unpricedHoldingCounts={new Map([['broker-1', 0]])}
+        incompleteHoldingAccountIds={new Set(['broker-1'])}
+        onEdit={mockOnEdit}
+        defaultCurrency="CAD" convertToDefault={exchangeMocks.convertToDefault} onRefresh={mockOnRefresh}
+      />
+    );
+
+    const row = screen.getByText('TFSA').closest('tr')!;
+    expect(within(row).getByText('—')).toBeInTheDocument();
+    expect(within(row).getByText('Total unavailable')).toBeInTheDocument();
+    expect(within(row).queryByText('$3500.00')).not.toBeInTheDocument();
+    expect(within(row).queryByText('$9000.00')).not.toBeInTheDocument();
+    // The tooltip says what is missing: not a failed load, not a price.
+    const tooltip = within(row).getByText('—').getAttribute('title') ?? '';
+    expect(tooltip).not.toMatch(/could not be loaded|no price/);
+    expect(tooltip).toMatch(/exchange rate/i);
+    // The group total leaves the account out and says so.
+    expect(screen.getAllByTestId('partial-total').length).toBeGreaterThan(0);
   });
 
   it('shows credit limit for accounts with a credit limit', () => {
@@ -1196,6 +1321,27 @@ describe('AccountList', () => {
     expect(mockOnRefresh).not.toHaveBeenCalled();
   });
 
+  it('puts the search first and counts every status segment', () => {
+    const accounts = [
+      createAccount({ id: 'a1', name: 'Open One' }),
+      createAccount({ id: 'a2', name: 'Open Two' }),
+      createAccount({ id: 'a3', name: 'Shut', isClosed: true }),
+    ];
+
+    render(
+      <AccountList accounts={accounts} onEdit={mockOnEdit} defaultCurrency="CAD" convertToDefault={exchangeMocks.convertToDefault} onRefresh={mockOnRefresh} />
+    );
+
+    const group = screen.getByRole('group', { name: 'Status' });
+    expect(within(group).getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'All (3)',
+      'Active (2)',
+      'Closed (1)',
+    ]);
+    const search = screen.getByRole('textbox', { name: 'Search accounts by name' });
+    expect(search.compareDocumentPosition(group) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('shows the "All" segmented button as selected by default', () => {
     const accounts = [createAccount()];
 
@@ -1205,10 +1351,10 @@ describe('AccountList', () => {
 
     // The "All" button in the segmented control should have active styling
     const allButton = screen.getAllByRole('button').find(
-      (btn) => btn.textContent === 'All' && btn.closest('.inline-flex.rounded-md')
+      (btn) => !!btn.textContent?.startsWith('All (') && !!btn.closest('[role="group"]')
     );
     expect(allButton).toBeTruthy();
-    expect(allButton!.className).toContain('bg-blue-600');
+    expect(allButton).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('shows an interactive favourite star for favourite accounts', () => {
@@ -1479,7 +1625,7 @@ describe('AccountList', () => {
 
     // Filter by closed status when all accounts are active to produce empty results
     const closedFilterButton = screen.getAllByRole('button').find(
-      (btn) => btn.textContent === 'Closed' && btn.closest('.inline-flex.rounded-md')
+      (btn) => !!btn.textContent?.startsWith('Closed (') && !!btn.closest('[role="group"]')
     );
     expect(closedFilterButton).toBeTruthy();
     fireEvent.click(closedFilterButton!);
@@ -1639,6 +1785,32 @@ describe('AccountList', () => {
       fireEvent.click(screen.getByText('Main Chequing'));
 
       expect(mockPush).toHaveBeenCalledWith('/transactions?accountId=chequing-1');
+    });
+
+    describe('when the reader chose to open accounts on their dashboard', () => {
+      beforeEach(() => {
+        usePreferencesStore.setState({
+          preferences: { viewDefaults: { accountOpenTarget: 'dashboard' } } as unknown as UserPreferences,
+        });
+      });
+      afterEach(() => {
+        // Unmount first: this hook runs before Testing Library's own cleanup,
+        // and a store write to a mounted list re-renders it outside act.
+        cleanup();
+        usePreferencesStore.setState({ preferences: null });
+      });
+
+      it('opens a chequing account on its dashboard', () => {
+        const account = createAccount({ id: 'chequing-1', name: 'Main Chequing', accountType: 'CHEQUING' });
+
+        render(
+          <AccountList accounts={[account]} onEdit={mockOnEdit} defaultCurrency="CAD" convertToDefault={exchangeMocks.convertToDefault} onRefresh={mockOnRefresh} />
+        );
+
+        fireEvent.click(screen.getByText('Main Chequing'));
+
+        expect(mockPush).toHaveBeenCalledWith('/accounts/chequing-1');
+      });
     });
   });
 
@@ -2658,6 +2830,28 @@ describe('AccountList', () => {
       expect(screen.getAllByText('Line of Credit').length).toBeGreaterThanOrEqual(2);
     });
 
+    it('renders a CRYPTO account under its own group, between cash and investments', () => {
+      const accounts = [
+        createAccount({ id: 'i1', name: 'Brokerage', accountType: 'INVESTMENT' }),
+        createAccount({ id: 'w1', name: 'Bitcoin Wallet', accountType: 'CRYPTO', currencyCode: 'BTC' }),
+        createAccount({ id: 'k1', name: 'Petty Cash', accountType: 'CASH' }),
+      ];
+
+      render(
+        <AccountList accounts={accounts} onEdit={mockOnEdit} defaultCurrency="CAD" convertToDefault={exchangeMocks.convertToDefault} onRefresh={mockOnRefresh} />
+      );
+
+      expect(screen.getByText('Bitcoin Wallet')).toBeInTheDocument();
+      // "Crypto Wallet" appears in both group header and type badge
+      expect(screen.getAllByText('Crypto Wallet').length).toBeGreaterThanOrEqual(2);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Filter by account type' }));
+      const optionLabels = screen
+        .getAllByRole('checkbox')
+        .map((box) => box.closest('label')?.textContent?.trim());
+      expect(optionLabels).toEqual(['Cash', 'Crypto Wallet', 'Investment']);
+    });
+
     it('renders OTHER account type group', () => {
       const account = createAccount({ id: 'o1', name: 'Other Account', accountType: 'OTHER' });
 
@@ -2841,18 +3035,18 @@ describe('AccountList', () => {
 
       // Click Active filter to change filterStatus away from ''
       const activeBtn = screen.getAllByRole('button').find(
-        (btn) => btn.textContent === 'Active' && btn.closest('.inline-flex.rounded-md')
+        (btn) => !!btn.textContent?.startsWith('Active (') && !!btn.closest('[role="group"]')
       )!;
       fireEvent.click(activeBtn);
 
-      // Now "All" button should not have bg-blue-600 (it's no longer selected)
+      // Now "All" is no longer the pressed segment
       const allBtn = screen.getAllByRole('button').find(
-        (btn) => btn.textContent === 'All' && btn.closest('.inline-flex.rounded-md')
+        (btn) => !!btn.textContent?.startsWith('All (') && !!btn.closest('[role="group"]')
       )!;
-      expect(allBtn.className).not.toContain('bg-blue-600');
+      expect(allBtn).toHaveAttribute('aria-pressed', 'false');
 
-      // Active button now has bg-blue-600
-      expect(activeBtn.className).toContain('bg-blue-600');
+      // Active is now the pressed segment
+      expect(activeBtn).toHaveAttribute('aria-pressed', 'true');
     });
 
     it('dense mode with deletable active brokerage account hides reconcile button', () => {

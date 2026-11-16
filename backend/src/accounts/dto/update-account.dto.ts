@@ -22,6 +22,13 @@ import {
 import { PAYMENT_FREQUENCIES, PaymentFrequency } from "./create-account.dto";
 import { SanitizeHtml } from "../../common/decorators/sanitize-html.decorator";
 import { IsCurrencyCode } from "../../common/validators/is-currency-code.validator";
+import {
+  MORTGAGE_TYPES,
+  MortgageType,
+  PREPAYMENT_MODES,
+  PrepaymentMode,
+} from "../mortgage-type.util";
+import { IsMoneyAmount } from "../../common/validators/is-money-amount.validator";
 
 export class UpdateAccountDto {
   @ApiPropertyOptional({
@@ -57,7 +64,7 @@ export class UpdateAccountDto {
     description: "Opening balance for the account",
   })
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 4 })
+  @IsMoneyAmount()
   @Min(-999999999999)
   @Max(999999999999)
   openingBalance?: number;
@@ -106,7 +113,7 @@ export class UpdateAccountDto {
     description: "Credit limit (for credit cards)",
   })
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 4 })
+  @IsMoneyAmount(4)
   @IsPositive()
   creditLimit?: number;
 
@@ -119,6 +126,32 @@ export class UpdateAccountDto {
   @Min(0)
   @Max(100)
   interestRate?: number;
+
+  @ApiPropertyOptional({
+    example: 50.0,
+    nullable: true,
+    description:
+      "Notify when the balance drops below this (account currency); null clears it.",
+  })
+  @IsOptional()
+  @ValidateIf((_o, value) => value !== null)
+  @IsMoneyAmount()
+  @Min(-999999999999)
+  @Max(999999999999)
+  lowBalanceThreshold?: number | null;
+
+  @ApiPropertyOptional({
+    example: 10000.0,
+    nullable: true,
+    description:
+      "Notify when the balance rises above this (account currency); null clears it.",
+  })
+  @IsOptional()
+  @ValidateIf((_o, value) => value !== null)
+  @IsMoneyAmount()
+  @Min(-999999999999)
+  @Max(999999999999)
+  highBalanceThreshold?: number | null;
 
   @ApiPropertyOptional({
     example: true,
@@ -173,7 +206,7 @@ export class UpdateAccountDto {
     description: "Monthly payment amount for loans",
   })
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 4 })
+  @IsMoneyAmount(4)
   @IsPositive()
   paymentAmount?: number;
 
@@ -297,20 +330,24 @@ export class UpdateAccountDto {
 
   // Mortgage-specific fields
   @ApiPropertyOptional({
-    example: true,
-    description: "Whether this is a Canadian mortgage",
+    example: "CANADIAN_FIXED",
+    description:
+      "Mortgage type: ANNUITY (nominal rate divided by the payments per year), CANADIAN_FIXED (semi-annual compounding), LINEAR (constant principal) or INTEREST_ONLY (no principal until the final payment). Absent leaves the stored type unchanged.",
+    enum: MORTGAGE_TYPES,
   })
   @IsOptional()
-  @IsBoolean()
-  isCanadianMortgage?: boolean;
+  @IsIn(MORTGAGE_TYPES)
+  mortgageType?: MortgageType;
 
   @ApiPropertyOptional({
-    example: false,
-    description: "Whether this is a variable rate mortgage",
+    example: "SHORTEN_TERM",
+    description:
+      "LINEAR mortgages only: what an extra repayment does to the constant principal. SHORTEN_TERM (the default when absent) keeps it and ends the loan earlier; LOWER_INSTALLMENT re-derives it as the remaining debt over the remaining payments. Stored as null for every other type.",
+    enum: PREPAYMENT_MODES,
   })
   @IsOptional()
-  @IsBoolean()
-  isVariableRate?: boolean;
+  @IsIn(PREPAYMENT_MODES)
+  prepaymentMode?: PrepaymentMode | null;
 
   @ApiPropertyOptional({
     example: 60,
@@ -329,4 +366,15 @@ export class UpdateAccountDto {
   @IsNumber()
   @IsPositive()
   amortizationMonths?: number;
+
+  @ApiPropertyOptional({
+    example: 300000,
+    description:
+      "Loans and mortgages: the amount originally borrowed, kept apart from the opening balance (the debt where this ledger starts). A LINEAR mortgage's constant principal is this over the scheduled payment count; null falls back to the opening balance. A LINEAR mortgage's scheduled payment is repriced when it changes",
+  })
+  @IsOptional()
+  @IsMoneyAmount(4)
+  @IsPositive()
+  @Max(999999999999)
+  originalPrincipal?: number | null;
 }

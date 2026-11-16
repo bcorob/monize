@@ -1,4 +1,13 @@
 {
+  "paymentMatching": {
+    "toggleLabel": "{kind, select, mortgage {Associa i pagamenti bancari importati a questo mutuo} other {Associa i pagamenti bancari importati a questo prestito}}",
+    "toggleHelp": "Quando una transazione bancaria importata corrisponde al modello del beneficiario, Monize la usa per saldare il pagamento pianificato e la suddivide in capitale e interessi, invece di registrare una transazione di fattura separata.",
+    "payeePattern": "Pattern del beneficiario",
+    "payeePatternPlaceholder": "es. *LA MIA BANCA*",
+    "descriptionPattern": "Pattern della descrizione (opzionale)",
+    "descriptionPatternPlaceholder": "es. *Rata del prestito*",
+    "fromAccount": "Confrontato con gli addebiti di {account}."
+  },
   "nameSuffix": {
     "cash": "Contanti",
     "brokerage": "Intermediazione"
@@ -22,9 +31,7 @@
     "noMatch": "Nessun conto corrisponde ai filtri.",
     "clearFilters": "Cancella filtri",
     "filter": {
-      "all": "Tutti",
-      "active": "Attivi",
-      "closed": "Chiusi",
+      "allCount": "Tutti ({count})",
       "netWorthAll": "Patrimonio netto: Tutti",
       "inNetWorth": "Incluso nel patrimonio netto",
       "excludedFromNetWorth": "Escluso dal patrimonio netto",
@@ -32,7 +39,10 @@
       "typeAriaLabel": "Filtra per tipo di conto",
       "searchPlaceholder": "Cerca conti...",
       "searchAriaLabel": "Cerca conti per nome",
-      "searchClear": "Cancella ricerca"
+      "searchClear": "Cancella ricerca",
+      "activeCount": "Attivi ({count})",
+      "closedCount": "Chiusi ({count})",
+      "statusLabel": "Stato"
     },
     "accountCount": "{filtered} di {total} conti",
     "groupCount": "{count, plural, one {# conto} other {# conti}}",
@@ -40,6 +50,8 @@
       "accountName": "Nome conto",
       "type": "Tipo",
       "status": "Stato",
+      "lastReconciled": "Ultima riconciliazione",
+      "unreconciled": "Non riconciliate",
       "balance": "Saldo",
       "actions": "Azioni"
     },
@@ -50,8 +62,11 @@
     "statusClosed": "Chiuso",
     "marketValue": "Valore di mercato",
     "combinedBreakdown": "Investimenti {investments} · Liquidità {cash}",
+    "combinedInvestments": "Investimenti {amount}",
+    "combinedCash": "Liquidità {amount}",
     "combinedUnknown": "Totale non disponibile",
     "combinedUnknownTooltip": "{count, plural, one {# posizione non ha un prezzo, quindi il totale di questo conto non può essere calcolato} other {# posizioni non hanno un prezzo, quindi il totale di questo conto non può essere calcolato}}",
+    "combinedUnknownValuation": "Alcune posizioni di questo conto non sono state convertite nella tua valuta di riferimento, quindi il totale non può essere calcolato. Aggiungi il tasso di cambio mancante nella pagina Valute.",
     "combinedUnknownNoPortfolio": "Non è stato possibile caricare le posizioni, quindi il totale di questo conto non può essere calcolato",
     "limit": "Limite: {amount}",
     "pairedWith": "Abbinato con {name}",
@@ -81,7 +96,11 @@
     "jointSharedBy": "Condiviso da {owner}",
     "jointSharedWith": "Condiviso con {count, plural, one {# persona} other {# persone}}",
     "includeInNetWorth": "Includi nel mio patrimonio netto",
-    "excludeFromNetWorth": "Escludi dal mio patrimonio netto"
+    "excludeFromNetWorth": "Escludi dal mio patrimonio netto",
+    "neverReconciled": "Mai",
+    "lastReconciledOn": "Riconciliato il {date}",
+    "neverReconciledCard": "Mai riconciliato",
+    "unreconciledCard": "{count, plural, one {{formatted} non riconciliata} other {{formatted} non riconciliate}}"
   },
   "contextMenu": {
     "subtypeBrokerage": "Intermediazione",
@@ -117,17 +136,23 @@
     "accountType": "Tipo di conto",
     "currency": "Valuta",
     "currencyLocked": "La valuta è bloccata perché il conto ha già delle transazioni. Modificarla ridenominerebbe silenziosamente i saldi esistenti.",
+    "accountTypeKindLocked": "La valuta è bloccata dalle transazioni di questo conto, quindi non può passare tra Portafoglio cripto e un tipo di conto in valuta fiat.",
+    "currencyPlaceholder": "Seleziona una valuta...",
+    "noCryptoCurrencies": "Un portafoglio cripto contiene una criptovaluta e non ne è ancora stata configurata nessuna. Aggiungine una nella <currencies>pagina Valute</currencies>, poi sceglila qui. <guide>Come aggiungere una criptovaluta</guide>",
     "openingBalance": "Saldo d'apertura",
     "loanAmount": "Importo prestito",
     "mortgageAmount": "Importo mutuo",
     "accountNumber": "Numero di conto (facoltativo)",
     "institution": "Istituzione (facoltativa)",
-    "institutionRequired": "Istituto/Istituzione (obbligatorio)",
+    "institutionRequired": "Istituto/Istituzione",
     "institutionPlaceholder": "Seleziona o crea un'istituzione...",
     "newInstitutionTitle": "Nuova istituzione",
     "creditLimit": "Limite di credito (facoltativo)",
+    "balanceAlertsHeading": "Avvisi di saldo",
+    "lowBalanceThreshold": "Avvisa sotto (facoltativo)",
+    "highBalanceThreshold": "Avvisa sopra (facoltativo)",
     "interestRateOptional": "Tasso d'interesse % (facoltativo)",
-    "interestRateRequired": "Tasso d'interesse % (obbligatorio)",
+    "interestRateRequired": "Tasso d'interesse %",
     "description": "Descrizione (facoltativa)",
     "excludeFromNetWorth": "Escludi dal patrimonio netto",
     "favourite": "Preferito",
@@ -157,13 +182,12 @@
       "mortgage": "Mutuo",
       "asset": "Attività",
       "cash": "Contanti",
+      "crypto": "Portafoglio cripto",
       "other": "Altro"
     },
     "statementDueDayPlaceholder": "es. 15",
     "statementSettlementDayPlaceholder": "es. 25",
     "fxFeeTitle": "Commissione di conversione valuta estera (facoltativa)",
-    "fxFeePercent": "Percentuale della commissione",
-    "fxFeePercentPlaceholder": "es. 2,5",
     "jointSharedWith": "Conto cointestato condiviso con {count, plural, one {# persona} other {# persone}}",
     "jointManage": "Gestisci condivisione",
     "cashSection": {
@@ -192,10 +216,10 @@
   },
   "loanFields": {
     "title": "Dettagli pagamento prestito",
-    "paymentAmount": "Importo pagamento (obbligatorio)",
-    "paymentFrequency": "Frequenza pagamento (obbligatoria)",
-    "firstPaymentDate": "Data primo pagamento (obbligatoria)",
-    "paymentFromAccount": "Pagamento dal conto (obbligatorio)",
+    "paymentAmount": "Importo pagamento",
+    "paymentFrequency": "Frequenza pagamento",
+    "firstPaymentDate": "Data primo pagamento",
+    "paymentFromAccount": "Pagamento dal conto",
     "interestCategory": "Categoria interessi",
     "selectFrequency": "Seleziona frequenza...",
     "selectAccount": "Seleziona conto...",
@@ -222,33 +246,32 @@
     "analyzingHistory": "Analisi dello storico transazioni...",
     "detectedPayments": "Rilevati {count} pagamenti dal {from} al {to}.",
     "confidence": "Affidabilità:",
-    "lastSplit": "Ultima suddivisione pagamento: {currency}{principal} capitale / {currency}{interest} interessi",
-    "extraPayments": "{count, plural, one {# pagamento principale aggiuntivo} other {# pagamenti principali aggiuntivi}} rilevati (media {currency}{avg}/periodo)",
+    "lastSplit": "Ultima suddivisione pagamento: {principal} capitale / {interest} interessi",
+    "extraPayments": "{count, plural, one {# pagamento principale aggiuntivo} other {# pagamenti principali aggiuntivi}} rilevati (media {avg}/periodo)",
     "reviewValues": "Rivedi e modifica i valori qui sotto prima di salvare.",
-    "regularPaymentAmount": "Importo pagamento regolare *",
+    "regularPaymentAmount": "Importo pagamento regolare",
     "includeExtraPrincipal": "Includi pagamento aggiuntivo al capitale",
     "extraPrincipalPerPayment": "Capitale aggiuntivo per pagamento",
-    "totalPayment": "Pagamento totale: {currency}{amount}",
+    "totalPayment": "Pagamento totale: {amount}",
     "useDetectedSplit": "Usa suddivisione capitale/interessi dalle transazioni importate",
-    "useDetectedSplitDesc": "Verranno usati {currency}{interest} per gli interessi, il resto al capitale",
+    "useDetectedSplitDesc": "Verranno usati {interest} per gli interessi, il resto al capitale",
     "calculateFromRate": "La suddivisione verrà calcolata dal tasso d'interesse e dal saldo corrente",
-    "paymentFrequency": "Frequenza pagamento *",
-    "paymentFromAccount": "Pagamento dal conto *",
+    "paymentFrequency": "Frequenza pagamento",
+    "paymentFromAccount": "Pagamento dal conto",
     "selectAccount": "Seleziona conto...",
-    "nextPaymentDate": "Data prossimo pagamento *",
+    "nextPaymentDate": "Data prossimo pagamento",
     "annualInterestRate": "Tasso d'interesse annuo (%)",
     "interestRatePlaceholder": "es. 5,5",
     "estimatedFromHistory": "Stimato dallo storico transazioni: {rate}%",
     "interestExpenseCategory": "Categoria spese interessi",
+    "interestExpenseCategoryRequired": "Categoria spese interessi",
     "detectedCategory": "Rilevata: {name}",
     "selectCategory": "Seleziona categoria...",
     "payeeLender": "Beneficiario / Istituto mutuante",
     "selectOrCreatePayee": "Seleziona o crea beneficiario...",
     "mortgageDetails": "Dettagli mutuo",
-    "canadianMortgage": "Mutuo canadese (capitalizzazione semestrale)",
-    "variableRate": "Tasso variabile",
     "amortizationMonths": "Ammortamento (mesi)",
-    "termMonths": "Durata (mesi)",
+    "termMonths": "Periodo a tasso fisso (mesi)",
     "autoPost": "Registra automaticamente le transazioni alla scadenza",
     "skip": "Salta",
     "setUpPayments": "Configura pagamenti",
@@ -264,26 +287,46 @@
     },
     "toasts": {
       "setupComplete": "Pagamenti pianificati configurati per {account}"
+    },
+    "firstInstallment": "Prima rata",
+    "firstInstallmentHelp": "Questo mutuo non ha un pagamento fisso: ogni rata è calcolata dal saldo, dal tasso e dal periodo di ammortamento. Questa è la rata in scadenza il {date}, compreso l'eventuale capitale aggiuntivo.",
+    "firstInstallmentPending": "Inserisci la data del prossimo pagamento per calcolare la prima rata.",
+    "firstInstallmentCalculating": "Calcolo della prima rata...",
+    "firstInstallmentFailed": "Non è stato possibile calcolare la prima rata. Controlla i valori qui sotto e riprova.",
+    "paymentMatching": {
+      "autoPostDisabled": "Disattivato automaticamente: la corrispondenza dei pagamenti regola questa fattura in base all'addebito della banca stessa, quindi non deve anche registrarsi da sola.",
+      "payeePatternRequired": "Inserisci un pattern del beneficiario che includa un carattere jolly *"
     }
   },
   "mortgageFields": {
     "title": "Dettagli mutuo",
-    "canadianMortgage": "Mutuo canadese",
-    "canadianMortgageDesc": "Usa la capitalizzazione semestrale per i tassi fissi (richiesta per legge in Canada)",
-    "variableRate": "Tasso variabile",
-    "variableRateDesc": "Il tasso può cambiare durante la durata del mutuo (usa capitalizzazione mensile)",
-    "variableRateLoanDetailsLink": "Registra le variazioni del tasso nei <link>dettagli del prestito</link>.",
-    "termLength": "Durata del termine",
-    "termLengthNoTerm": "Lascia a 0 anni e 0 mesi per nessun termine.",
-    "amortizationPeriod": "Periodo di ammortamento (obbligatorio)",
+    "type": {
+      "label": "Tipo di mutuo",
+      "ANNUITY": "Alla francese (rata costante)",
+      "CANADIAN_FIXED": "Tasso fisso canadese",
+      "LINEAR": "All'italiana (quota capitale costante)",
+      "INTEREST_ONLY": "Solo interessi",
+      "help": {
+        "ANNUITY": "La rata totale è la stessa ogni mese. Sceglilo anche per un mutuo a tasso variabile.",
+        "CANADIAN_FIXED": "Un contratto canadese a tasso fisso; gli interessi si capitalizzano due volte l'anno.",
+        "LINEAR": "La quota capitale è la stessa ogni mese e la rata totale scende.",
+        "INTEREST_ONLY": "Paghi solo gli interessi e il debito residuo non cambia."
+      }
+    },
+    "rateChangesLoanDetailsLink": "Registra le variazioni del tasso nei <link>dettagli del prestito</link>.",
+    "termLength": "Periodo a tasso fisso",
+    "termLengthHelp": "Per quanto tempo vale il tuo tasso di interesse o il termine del contratto, ad esempio un tasso fisso a 5 anni. Monize può ricordartelo prima della scadenza. Lascia a 0 anni e 0 mesi per nessun termine.",
+    "amortizationPeriod": "Periodo di ammortamento",
     "years": "Anni",
     "months": "Mesi",
-    "paymentFrequency": "Frequenza pagamento (obbligatoria)",
-    "firstPaymentDate": "Data primo pagamento (obbligatoria)",
-    "paymentFromAccount": "Pagamento dal conto (obbligatorio)",
-    "interestCategory": "Categoria interessi",
+    "paymentFrequency": "Frequenza pagamento",
+    "firstPaymentDate": "Data primo pagamento",
+    "paymentFromAccount": "Pagamento dal conto",
+    "paymentFromAccountEditHelp": "Modificandolo, i prossimi pagamenti pianificati e la regola di abbinamento dei pagamenti passano al nuovo conto. I pagamenti già registrati non cambiano.",
+    "interestCategory": "Categoria interessi (facoltativo)",
+    "interestCategoryRequired": "Categoria interessi",
     "interestBookingMode": {
-      "label": "Come vengono registrati gli interessi?",
+      "label": "Registrazione degli interessi",
       "help": "Così il rilevamento del tasso li legge bene. Auto va nella maggior parte dei casi.",
       "AUTO": "Automatico (consigliato)",
       "SPLIT": "Voce divisa del pagamento",
@@ -330,6 +373,72 @@
       "memoLabel": "Testo memo di estinzione anticipata",
       "memoPlaceholder": "es. estinzione anticipata",
       "memoHelp": "Corrispondenza di sottostringa senza distinzione tra maiuscole e minuscole con il memo del pagamento, il memo della transazione di origine o il memo di una suddivisione."
+    },
+    "prepaymentMode": {
+      "label": "Effetto di un rimborso anticipato",
+      "SHORTEN_TERM": "Riduce la durata (stessa quota capitale ogni mese)",
+      "LOWER_INSTALLMENT": "Riduce la rata (stessa data di fine)",
+      "help": "Chiedi alla tua banca. Se dopo un rimborso anticipato la quota capitale nell'estratto conto resta uguale, la durata è stata ridotta."
+    },
+    "previewFirstInstallment": "Prima rata:",
+    "detect": {
+      "toggle": "Non sei sicuro? Inserisci alcune rate",
+      "title": "Scopri il tipo di mutuo",
+      "intro": "Copia due o tre rate consecutive da un estratto conto, dalla più vecchia. Il debito residuo è facoltativo: con questo e il tasso di interesse, Monize può capire se gli interessi si capitalizzano due volte l'anno.",
+      "installment": "Rata {number}",
+      "principal": "Quota capitale",
+      "interest": "Interessi",
+      "balance": "Debito residuo prima (facoltativo)",
+      "rowIncomplete": "Inserisci sia la quota capitale sia gli interessi, oppure lascia la riga vuota.",
+      "rate": "Verificato rispetto al tasso di interesse inserito sopra, {rate}.",
+      "noRate": "Non è stato inserito alcun tasso di interesse sopra, quindi la capitalizzazione non può essere verificata.",
+      "needsFrequency": "Scegli prima la frequenza di pagamento qui sotto: le rate vengono lette con quella cadenza.",
+      "submit": "Suggerisci un tipo",
+      "close": "Chiudi",
+      "suggested": "Tipo suggerito: {type}",
+      "noSuggestion": "Nessun tipo suggerito.",
+      "lowConfidence": "Affidabilità bassa: verifica con il tuo contratto o chiedi alla tua banca prima di usarlo.",
+      "use": "Usa questo tipo",
+      "failed": "Non è stato possibile verificare le rate perché la richiesta non è riuscita. Riprova.",
+      "reason": {
+        "TOO_FEW_SAMPLES": "Servono almeno due rate consecutive per il confronto.",
+        "INVALID_SAMPLE": "Una rata ha un importo negativo o illeggibile.",
+        "NO_PAYMENT": "Le rate non rimborsano capitale e non addebitano interessi.",
+        "AMBIGUOUS_CONSTANT_PRINCIPAL_AND_INSTALLMENT": "La quota capitale e la rata totale sono uguali in ogni rata, il che vale sia per un mutuo all'italiana sia per uno alla francese. Prova con rate più distanziate oppure verifica il tuo contratto.",
+        "ACCELERATED_FREQUENCY": "Queste rate sembrano all'italiana o di soli interessi, il che non è possibile con una frequenza di pagamento accelerata. Verifica la frequenza di pagamento.",
+        "NO_RULE_FITS": "Né la quota capitale né la rata totale restano uguali in queste rate. Se il tasso è cambiato tra una e l'altra, usa rate dello stesso periodo di tasso.",
+        "ZERO_PRINCIPAL": "Non viene rimborsato capitale, quindi il debito residuo non cambia.",
+        "ZERO_PRINCIPAL_RATE_MISMATCH": "Non viene rimborsato capitale, ma gli interessi non corrispondono al tasso indicato applicato al debito residuo. Verifica il tasso.",
+        "CONSTANT_PRINCIPAL": "La quota capitale è sempre la stessa e la rata totale scende.",
+        "CONSTANT_PRINCIPAL_RATE_MISMATCH": "La quota capitale è sempre la stessa, ma gli interessi non corrispondono al tasso indicato applicato al debito residuo. Verifica il tasso.",
+        "CONSTANT_INSTALLMENT_SEMI_ANNUAL": "La rata totale è sempre la stessa e gli interessi corrispondono al tasso indicato capitalizzato due volte l'anno.",
+        "CONSTANT_INSTALLMENT_NOMINAL": "La rata totale è sempre la stessa e gli interessi corrispondono al tasso indicato senza capitalizzazione semestrale.",
+        "CONSTANT_INSTALLMENT_RATE_UNCHECKED": "La rata totale è sempre la stessa. Senza il debito residuo prima di ogni rata e il tasso di interesse, non è stato possibile verificare la capitalizzazione semestrale.",
+        "CONSTANT_INSTALLMENT_COMPOUNDING_AMBIGUOUS": "La rata totale è sempre la stessa, ma il debito residuo è troppo piccolo per distinguere la capitalizzazione semestrale. Un contratto canadese a tasso fisso lo indica nelle sue condizioni.",
+        "CONSTANT_INSTALLMENT_RATE_MISMATCH": "La rata totale è sempre la stessa, ma al tasso indicato gli interessi non corrispondono a nessuna delle due convenzioni. Gli interessi potrebbero essere calcolati giornalmente; verifica il tasso."
+      },
+      "history": {
+        "action": "Rileva tipo di mutuo",
+        "title": "Tipo di mutuo dai tuoi pagamenti",
+        "intro": "Ricavato dalle ultime rate registrate a uno stesso tasso. Non cambia nulla finché non salvi il conto.",
+        "current": "Tipo attuale: {type}",
+        "alreadySet": "Questo mutuo ha già il tipo suggerito.",
+        "rate": "Tasso di interesse in vigore: {rate}",
+        "noRate": "Nessun tasso di interesse è registrato per queste date, quindi la capitalizzazione non è stata verificata.",
+        "noSamples": "Non è stata trovata alcuna rata registrata con sia una quota capitale sia una quota interessi. Registra i tuoi pagamenti divisi tra capitale e interessi per usare questa funzione.",
+        "colDate": "Data",
+        "colPrincipal": "Quota capitale",
+        "colInterest": "Interessi",
+        "colBalance": "Debito residuo prima",
+        "balanceUnknown": "Sconosciuto",
+        "failed": "Non è stato possibile leggere lo storico dei pagamenti perché la richiesta non è riuscita. Riprova.",
+        "cancel": "Annulla",
+        "use": "Modifica conto con questo tipo"
+      }
+    },
+    "originalPrincipal": {
+      "label": "Capitale originario",
+      "help": "L'importo originariamente preso in prestito. Per un conto il cui storico registrato inizia dopo l'avvio del mutuo, questo è l'importo preso in prestito, non il saldo iniziale — che è il debito all'inizio del tuo storico."
     }
   },
   "assetFields": {
@@ -352,13 +461,19 @@
   "validation": {
     "nameRequired": "Il nome del conto è obbligatorio",
     "currencyCodeLength": "Il codice valuta deve essere di 3 caratteri",
+    "currencyRequired": "Seleziona una valuta",
     "institutionRequired": "Seleziona o crea un istituto",
     "interestRateRequired": "Il tasso d'interesse è obbligatorio",
     "paymentAmountRequired": "L'importo del pagamento è obbligatorio",
     "paymentFrequencyRequired": "La frequenza di pagamento è obbligatoria",
     "paymentStartDateRequired": "La data del primo pagamento è obbligatoria",
     "paymentAccountRequired": "Il conto di pagamento è obbligatorio",
-    "amortizationRequired": "Il periodo di ammortamento è obbligatorio"
+    "amortizationRequired": "Il periodo di ammortamento è obbligatorio",
+    "interestCategoryRequired": "Scegli la categoria in cui vengono registrati gli interessi di questo prestito",
+    "acceleratedNeedsAnnuity": "Questo mutuo è pagato con un piano accelerato, che ha solo un mutuo a rata costante. Un mutuo lineare o solo interessi richiede una frequenza di pagamento regolare, quindi mantieni un tipo a rata costante.",
+    "paymentMatchingPayeePatternRequired": "Inserisci un pattern del beneficiario per riconoscere l'addebito della banca",
+    "paymentMatchingPayeePatternWildcard": "Il pattern del beneficiario deve includere un carattere jolly *",
+    "paymentMatchingDescriptionPatternWildcard": "Il pattern della descrizione deve includere un carattere jolly *"
   },
   "loanDetail": {
     "backToAccounts": "Torna ai conti",
@@ -386,7 +501,12 @@
       "estRemainingInterest": "Interessi residui stim.",
       "notSet": "Non impostato",
       "notAvailable": "N/D",
-      "paidOff": "Estinto"
+      "paidOff": "Estinto",
+      "nextInstallment": "Prossima rata",
+      "dueOn": "Scade il {date}",
+      "finalPayment": "Pagamento finale",
+      "nextInstallmentDue": "Prossima rata (scade il {date})",
+      "finalPaymentDue": "Pagamento finale (scade il {date})"
     },
     "schedule": {
       "title": "Piano di ammortamento",
@@ -455,7 +575,19 @@
       "budgetLabel": "Pagamento mensile totale",
       "budgetHint": "Destina ogni mese un totale fisso al prestito; il versamento extra è ciò che resta dopo la rata. Quando la rata cala, il versamento cresce per mantenere lo stesso totale.",
       "budgetBelowInstallment": "È inferiore alla rata attuale ({amount}); aumentalo per versare di più.",
-      "windowInverted": "La data di inizio è successiva alla data di fine, quindi questo piano non si applica mai."
+      "windowInverted": "La data di inizio è successiva alla data di fine, quindi questo piano non si applica mai.",
+      "unavailable": {
+        "title": "La simulazione dell'estinzione anticipata non può ancora essere calcolata per questo prestito.",
+        "reasonPaidOff": "Questo prestito non ha saldo residuo, quindi non c'è più nulla da ammortizzare.",
+        "reasonNoFrequency": "Per questo prestito non è impostata una frequenza di pagamento. Aggiungila nelle impostazioni del conto.",
+        "reasonNoRate": "Per questo prestito non è salvato un tasso di interesse. Imposta il tasso nelle impostazioni del conto oppure registra una variazione di tasso con data odierna o precedente. Un tasso mostrato per riga nel piano qui sotto è ricostruito dagli interessi addebitati e non è un tasso salvato.",
+        "reasonNoPayment": "L'importo della rata non può essere determinato. Registra le rate regolari come trasferimenti verso il conto del prestito (capitale, con gli interessi come riga di suddivisione o come spesa categorizzata separata), oppure imposta l'importo del pagamento nelle impostazioni del conto. I pagamenti registrati come spese ordinarie sul conto di origine non raggiungono mai il conto del prestito, quindi il piano non può vederli.",
+        "reasonNoAmortization": "Questo mutuo non ha un periodo di ammortamento, quindi non è possibile calcolarne le rate né la fine della durata. Imposta il periodo di ammortamento nelle impostazioni del conto.",
+        "reasonNoPaymentStart": "Questo mutuo non ha una data del primo pagamento, quindi non è possibile contare i pagamenti rimanenti fino alla fine della durata. Configura il suo pagamento programmato dalle impostazioni del conto; la prima data di scadenza che inserisci diventa il pagamento 1.",
+        "reasonNoPrincipal": "Questo mutuo non ha un importo originario, quindi non è possibile calcolarne la quota capitale costante. Imposta l'importo del mutuo nelle impostazioni del conto."
+      },
+      "budgetBelowNextInstallment": "È inferiore alla prossima rata ({amount}, scade il {date}); aumentalo oltre per effettuare un rimborso anticipato.",
+      "shortenTermNeedsPrincipal": "Questo mutuo non ha un importo originario, quindi non è possibile simulare una durata ridotta. Scegli di ridurre la rata oppure imposta l'importo del mutuo nelle impostazioni del conto."
     },
     "comparison": {
       "newPayoff": "Nuova data di estinzione",
@@ -471,7 +603,8 @@
       "newInstallment": "Nuova rata",
       "installmentDrop": "{payment} (−{reduction})",
       "monthlyPayment": "Rata mensile",
-      "overpaymentAtFrequency": "{frequency}: +{amount}"
+      "overpaymentAtFrequency": "{frequency}: +{amount}",
+      "firstPayment": "Primo pagamento"
     },
     "chart": {
       "title": "Cronologia di estinzione",
@@ -538,6 +671,71 @@
       "seriesActual": "Saldo effettivo",
       "unknown": "Sconosciuto"
     },
+    "paymentMatching": {
+      "title": "Abbinamento dei pagamenti",
+      "description": "Riconosce l'addebito di ogni rata da parte della banca e lo imputa al piano del prestito come capitale e interessi, invece di registrare la fattura separatamente.",
+      "noSchedule": "L'abbinamento dei pagamenti imputa gli addebiti della banca al pagamento programmato del prestito. Imposta prima i pagamenti di questo prestito.",
+      "noRule": "Nessuna regola di abbinamento dei pagamenti è collegata a questo prestito.",
+      "createOne": "Creane una",
+      "ruleLabel": "Regola:",
+      "ruleLoading": "Caricamento della regola",
+      "ruleFailed": "Impossibile caricare la regola di abbinamento dei pagamenti.",
+      "scheduleLoading": "Caricamento del pagamento programmato",
+      "scheduleFailed": "Impossibile caricare il pagamento programmato del prestito.",
+      "retry": "Riprova",
+      "autoPost": {
+        "title": "Il pagamento programmato si registra ancora da solo",
+        "body": "La registrazione automatica è attiva sulla fattura di questo prestito, quindi una rata che la regola imputa dall'addebito della banca verrebbe registrata anche dalla fattura. Disattiva la registrazione automatica della fattura in Fatture & Versamenti."
+      },
+      "preconditions": {
+        "openingBalance": "Il saldo iniziale del prestito deve essere il debito all'inizio della cronologia elaborata; gli interessi di ogni rata sono calcolati su di esso.",
+        "originalPrincipal": "Il capitale originario deve essere l'importo preso in prestito inizialmente, non il saldo iniziale.",
+        "scheduleStart": "Gli addebiti con data anteriore al {date}, quando inizia il pagamento programmato, non hanno alcuna rata a cui essere abbinati."
+      },
+      "process": {
+        "button": "Elabora cronologia",
+        "scope": "Applica la regola agli addebiti di {account}, a partire dai più vecchi.",
+        "running": "Elaborazione della cronologia: finora {count, plural, one {# rata imputata} other {# rate imputate}}.",
+        "done": "{count, plural, =0 {Nessuna rata è stata imputata.} one {# rata è stata imputata.} other {# rate sono state imputate.}}",
+        "undo": "Ogni pagina dell'elaborazione può essere annullata dalla cronologia azioni.",
+        "failed": "Elaborazione della cronologia interrotta",
+        "stuckTitle": "Impossibile proseguire l'elaborazione della cronologia",
+        "stuck": "Più di {limit, number} transazioni hanno data {date}, quindi l'elaborazione non può andare oltre quel giorno. Imputa il resto da Strumenti > Regole con un filtro più ristretto.",
+        "stuckUnknown": "Il server non ha indicato fin dove è arrivata l'elaborazione, quindi non può proseguire. Ricarica la pagina e riprova."
+      },
+      "create": {
+        "title": "Crea regola di abbinamento dei pagamenti",
+        "description": "La regola imputa gli addebiti corrispondenti dal conto del pagamento programmato del prestito, e la registrazione automatica della fattura viene disattivata.",
+        "descriptionWithAccount": "La regola imputa gli addebiti corrispondenti da {account}, e la registrazione automatica della fattura viene disattivata.",
+        "submit": "Crea regola",
+        "payeePatternRequired": "Inserisci un pattern del beneficiario che includa un carattere jolly *",
+        "descriptionPatternWildcard": "Un pattern della descrizione deve includere un carattere jolly *",
+        "failed": "Impossibile creare la regola di abbinamento dei pagamenti.",
+        "done": "Regola \"{name}\" creata"
+      },
+      "settled": {
+        "title": "Rate imputate",
+        "titleWithCount": "Rate imputate ({count})",
+        "colDueDate": "Data di scadenza",
+        "colTransaction": "Transazione",
+        "colPrincipal": "Capitale",
+        "colInterest": "Interessi",
+        "colExtra": "Capitale extra",
+        "colDebtBefore": "Debito precedente",
+        "openTransaction": "Apri la transazione",
+        "void": "Annullata",
+        "notRecorded": "Non registrato",
+        "empty": {
+          "title": "Nessuna rata ancora imputata",
+          "body": "Elabora la cronologia o importa gli addebiti della banca per imputare le rate."
+        },
+        "error": {
+          "title": "Impossibile caricare le rate imputate",
+          "body": "Questa non è una lista vuota. Riprova per vedere quali rate sono state imputate.",
+          "retry": "Riprova"
+        }
+      }
+    },
     "lineOfCredit": {
       "currentBalance": "Saldo attuale",
       "creditLimit": "Limite di credito",
@@ -549,7 +747,10 @@
     },
     "rateHistory": {
       "scheduledUpdateTitle": "Aggiornare il pagamento pianificato?",
-      "scheduledUpdateMessage": "Il pagamento pianificato della bolletta \"{name}\" può essere aggiornato in base al nuovo tasso: {payment} totali, suddivisi in {principal} di capitale e {interest} di interessi. Aggiornarlo ora?",
+      "scheduledUpdateNextPaymentUnchanged": "Il pagamento pianificato della bolletta \"{name}\" corrisponde già alla cronologia dei tassi. Prossimo pagamento il {date}: invariato ({payment}).",
+      "scheduledUpdateNextPaymentChanged": "Il pagamento pianificato della bolletta \"{name}\" può essere aggiornato in base alla cronologia dei tassi. Prossimo pagamento il {date}: {before} → {after}, suddiviso in {principal} di capitale e {interest} di interessi.",
+      "scheduledUpdateNextPaymentNew": "Il pagamento pianificato della bolletta \"{name}\" può essere aggiornato in base alla cronologia dei tassi. Prossimo pagamento il {date}: {payment}, suddiviso in {principal} di capitale e {interest} di interessi.",
+      "scheduledUpdateUpcomingChange": "Dal {date} il pagamento diventa {amount}.",
       "scheduledUpdateDefaultName": "questo mutuo",
       "scheduledUpdateConfirm": "Aggiorna pagamento",
       "scheduledUpdateSkip": "Lascia invariato",
@@ -616,6 +817,54 @@
       "memoLabel": "Memo di rimborso anticipato",
       "memoPlaceholder": "es. Capitale aggiuntivo",
       "memoHelp": "I pagamenti il cui memo contiene questo testo vengono conteggiati come rimborsi anticipati (senza distinzione tra maiuscole e minuscole)."
+    },
+    "notAmortizing": {
+      "title": "Questo prestito non si estingue, quindi la data di estinzione stimata e gli interessi residui sono sconosciuti.",
+      "paymentBelowInterest": "La rata ({payment}) è inferiore agli interessi mensili (circa {interest}) al {rate}%, quindi il saldo non scende mai. Registra la rata reale (la voce nella cronologia dei tassi o l'importo di pagamento del conto) in modo che copra gli interessi.",
+      "beyondHorizon": "La rata copre gli interessi, ma la durata supera l'orizzonte di proiezione, quindi la data di estinzione e gli interessi residui non vengono mostrati."
+    }
+  },
+  "loanFees": {
+    "title": "Spese del mutuo",
+    "help": "Assicurazioni, imposte o altre spese riscosse con ogni pagamento del mutuo. Ogni spesa diventa una riga a sé del pagamento programmato, registrata nella categoria che scegli. Una spesa può essere un importo fisso, una percentuale del saldo attuale (ricalcolata a ogni pagamento) o una percentuale del saldo originario, addebitata per pagamento o all'anno.",
+    "panelDescription": "Spese riscosse con ogni pagamento programmato del mutuo. Il salvataggio aggiorna le righe del prossimo pagamento.",
+    "none": "Con il pagamento di questo mutuo non vengono riscosse spese.",
+    "name": "Nome della spesa",
+    "category": "Categoria",
+    "calculation": "Calcolata come",
+    "basis": "Il valore si applica",
+    "amount": "Importo",
+    "rate": "Tasso",
+    "add": "Aggiungi una spesa",
+    "remove": "Rimuovi spesa",
+    "edit": "Modifica spese",
+    "editTitle": "Spese del mutuo",
+    "save": "Salva spese",
+    "cancel": "Annulla",
+    "saved": "Le spese del mutuo sono state salvate.",
+    "saveFailed": "Impossibile salvare le spese del mutuo.",
+    "loading": "Caricamento spese...",
+    "loadFailed": "Impossibile caricare le spese del mutuo.",
+    "retry": "Riprova",
+    "unknownCategory": "Categoria sconosciuta",
+    "unknownValue": "sconosciuto",
+    "summaryPerPayment": "{value} per pagamento, {calculation}",
+    "summaryAnnual": "{value} all'anno, {calculation}",
+    "paymentMatchingConflict": "L'abbinamento dei pagamenti non può ancora saldare un pagamento che include spese. Disattiva l'abbinamento dei pagamenti o rimuovi le spese.",
+    "paymentMatchingNote": "Questo mutuo ha una regola di abbinamento dei pagamenti. L'abbinamento non può ancora saldare un pagamento che include spese, quindi non si possono aggiungere spese finché la regola esiste.",
+    "calculations": {
+      "fixed": "Importo fisso",
+      "percentCurrentBalance": "Percentuale del saldo attuale",
+      "percentOriginalBalance": "Percentuale del saldo originario"
+    },
+    "bases": {
+      "perPayment": "Per pagamento",
+      "annual": "All'anno"
+    },
+    "errors": {
+      "required": "Obbligatorio",
+      "duplicate": "Ogni spesa richiede una propria categoria, diversa dalla categoria degli interessi",
+      "range": "Inserisci un tasso non superiore al 100%"
     }
   }
 }

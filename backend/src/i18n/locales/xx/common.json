@@ -5,6 +5,13 @@
     "cash": "[XX-Cash-XX]",
     "brokerage": "[XX-Brokerage-XX]"
   },
+  "oauthConsent": {
+    "destinationLabel": "[XX-If you allow access, Monize will send the authorization to:-XX]",
+    "destinationUnknown": "[XX-Monize could not determine where this authorization would be sent. Do not allow access.-XX]",
+    "unverifiedNotice": "[XX-This application registered itself with this Monize server, and Monize has not verified who operates it; its name is whatever it chose to call itself. Only allow access if you started this connection yourself from that application and the address above belongs to it.-XX]",
+    "claimedWebsite": "[XX-Website stated by the application: {{ website }}-XX]",
+    "websiteMismatch": "[XX-The application says its website is {{ website }}, but the authorization will be sent to a different address.-XX]"
+  },
   "import": {
     "voidedTransactionNote": "[XX-Voided in the source; the original amount was omitted from the export and imported as zero.-XX]"
   },
@@ -17,5 +24,20 @@
       "stalled": "[XX-I kept saying I would keep working instead of finishing, so this answer is based on the data I gathered before stopping.-XX]"
     },
     "synthesisFailed": "[XX-I gathered data for this question but couldn't complete the analysis, so I don't have a reliable answer. Try asking something narrower.-XX]"
+  },
+  "bankSync": {
+    "operationTypes": {
+      "cardPayment": "[XX-Card payment-XX]",
+      "transferIn": "[XX-Incoming transfer-XX]",
+      "transferOut": "[XX-Outgoing transfer-XX]",
+      "mobilePayment": "[XX-Mobile payment-XX]",
+      "cashWithdrawal": "[XX-Cash withdrawal-XX]",
+      "cashWithdrawalBlik": "[XX-Cash withdrawal (BLIK)-XX]",
+      "mobilePaymentRefund": "[XX-Mobile payment refund-XX]",
+      "standingOrder": "[XX-Standing order-XX]",
+      "cashback": "[XX-Cashback-XX]",
+      "loanRepayment": "[XX-Loan repayment-XX]",
+      "creditCardRepayment": "[XX-Credit card repayment-XX]"
+    }
   }
 }

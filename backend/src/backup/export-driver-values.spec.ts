@@ -22,10 +22,18 @@ import { RESTORE_PLAN } from "./restore-plan";
  * Timestamps and DATEs are the same shape of hazard with a subtler outcome: a
  * `Date` serialises to an ISO instant, and for a DATE column that can shift the
  * day when it is parsed back in a negative-offset zone. `main.ts` installs a
- * global DATE-as-string parser, but `backend/CLAUDE.md` is explicit that it must
+ * global DATE-as-string parser, but `docs/backend/entities-and-dtos.md` is explicit that it must
  * not be relied on, since it is absent in any process that does not boot the app.
  * That is left as-is here (it needs a driver-level fix, not an export-level one)
  * and is asserted only to the extent that DATE columns are never bytea.
+ *
+ * The other half of the same problem is a column the export never reads. A table
+ * that lists its columns (because one of them is bytea) stops describing the
+ * table the moment a migration adds a column and the list is not updated: the
+ * backup omits it, and a restore -- which deletes the user's rows and reinserts
+ * from the archive -- writes NULL over it, silently. `payees.address`/`email`/
+ * `phone` shipped exactly that way, so the completeness of every explicit column
+ * list is asserted below.
  */
 
 const SCHEMA_PATH = join(__dirname, "..", "..", "..", "database", "schema.sql");
@@ -55,6 +63,33 @@ function byteaColumns(): string[] {
     }
   }
   return found;
+}
+
+/**
+ * Every column the schema declares for one table.
+ *
+ * Column lines start with a lowercase identifier; constraint clauses and the
+ * continuation lines of a column definition (`REFERENCES ...`, `ON DELETE ...`)
+ * start with an uppercase keyword, which is what separates the two.
+ */
+function schemaColumns(table: string): string[] {
+  const body = uncommentedSchema.match(
+    new RegExp(
+      `CREATE TABLE(?: IF NOT EXISTS)?\\s+${table}\\s*\\(([\\s\\S]*?)\\n\\);`,
+    ),
+  );
+  if (!body) return [];
+  const columns: string[] = [];
+  for (const line of body[1].split("\n")) {
+    const trimmed = line.trim();
+    if (
+      /^(CONSTRAINT|UNIQUE|PRIMARY|FOREIGN|CHECK|EXCLUDE|LIKE)\b/i.test(trimmed)
+    )
+      continue;
+    const match = trimmed.match(/^([a-z_][a-z0-9_]*)\s+\S/);
+    if (match) columns.push(match[1]);
+  }
+  return columns;
 }
 
 /** The SQL of each export query, keyed by the table it reads. */
@@ -100,6 +135,27 @@ describe("export driver values", () => {
       // A restored table with no export query would be wiped and never refilled.
       expect(missing).toEqual([]);
     });
+
+    it("reads the columns of a table it does not otherwise assert about", () => {
+      // The completeness sweep below is only worth as much as this parser: a
+      // regex that stopped matching would report every list as complete.
+      expect(schemaColumns("payees")).toEqual(
+        expect.arrayContaining([
+          "id",
+          "user_id",
+          "name",
+          "default_category_id",
+          "notes",
+          "website",
+          "logo_data",
+          "is_active",
+          "created_at",
+        ]),
+      );
+      // A constraint clause and a column's continuation lines are not columns.
+      expect(schemaColumns("user_preferences")).not.toContain("constraint");
+      expect(schemaColumns("payees")).not.toContain("references");
+    });
   });
 
   it("reads every exported bytea column through encode(..., 'base64')", () => {
@@ -129,6 +185,35 @@ describe("export driver values", () => {
     // `SELECT *` picks up a bytea column silently the moment a migration adds
     // one, which is why these tables list their columns explicitly.
     expect([...new Set(wildcards)]).toEqual([]);
+  });
+
+  it("selects every schema column of a table whose export lists them", () => {
+    const short: string[] = [];
+    const unparsed: string[] = [];
+    for (const [table, sql] of queries) {
+      // `SELECT *` (aliased or not) picks up a new column on its own; only an
+      // explicit list can fall behind the schema.
+      if (/SELECT\s+(?:\w+\.)?\*/i.test(sql)) continue;
+      const columns = schemaColumns(table);
+      // A table the parser cannot find yields no columns and would pass this
+      // sweep by having nothing to check -- exactly the silence it exists to
+      // break.
+      if (columns.length === 0) {
+        unparsed.push(table);
+        continue;
+      }
+      const missing = columns.filter(
+        (column) => !new RegExp(`\\b${column}\\b`).test(sql),
+      );
+      if (missing.length) short.push(`${table}: ${missing.join(", ")}`);
+    }
+    expect(unparsed).toEqual([]);
+
+    // A column missing from an explicit list is absent from every backup, and a
+    // restore writes NULL over it -- see this file's header. Add it to the
+    // SELECT (through `encode(col, 'base64')` if it is bytea), or, if it truly
+    // must not be exported, say so here with the reason.
+    expect(short).toEqual([]);
   });
 
   it("keeps the restore's bytea decode in step with the export's encode", () => {

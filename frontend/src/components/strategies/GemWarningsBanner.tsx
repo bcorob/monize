@@ -6,8 +6,9 @@ import {
   InformationCircleIcon,
   XCircleIcon,
 } from "@heroicons/react/24/outline";
-import { GemWarning, GemWarningCode } from "@/types/gem-strategy";
+import { GemAssetRef, GemWarning, GemWarningCode } from "@/types/gem-strategy";
 import { GEM_ROLE_ORDER } from "@/lib/gem-strategy-view";
+import { useDateFormat } from "@/hooks/useDateFormat";
 import { useGemLabels } from "./useGemLabels";
 
 /**
@@ -16,6 +17,7 @@ import { useGemLabels } from "./useGemLabels";
  * and repeating them here would say the same thing twice.
  */
 const BANNER_CODES: GemWarningCode[] = [
+  "SHORT_HISTORY",
   "CALCULATION_FAILED",
   "STALE_PRICES",
   "UNMAPPED_ROLE",
@@ -46,7 +48,7 @@ const TONES: Record<
 };
 
 function toneFor(code: GemWarningCode): "error" | "warning" | "info" {
-  if (code === "CALCULATION_FAILED") return "error";
+  if (code === "CALCULATION_FAILED" || code === "SHORT_HISTORY") return "error";
   if (code === "FIRST_RUN") return "info";
   return "warning";
 }
@@ -55,6 +57,8 @@ interface GemWarningsBannerProps {
   warnings: GemWarning[];
   /** Momentum window, named by the incomplete-history warning. */
   lookbackMonths: number;
+  /** Role assignments, so SHORT_HISTORY can name the instrument (its symbol). */
+  assets: GemAssetRef[];
 }
 
 /**
@@ -65,9 +69,13 @@ interface GemWarningsBannerProps {
 export function GemWarningsBanner({
   warnings,
   lookbackMonths,
+  assets,
 }: GemWarningsBannerProps) {
   const t = useTranslations("strategies");
   const { roleLabel } = useGemLabels();
+  const { formatDate } = useDateFormat();
+
+  const symbolByRole = new Map(assets.map((asset) => [asset.role, asset.symbol]));
 
   const shown = BANNER_CODES.flatMap((code) =>
     warnings.filter((warning) => warning.code === code),
@@ -83,25 +91,57 @@ export function GemWarningsBanner({
         const roles = GEM_ROLE_ORDER.filter((role) =>
           (warning.roles ?? []).includes(role),
         );
+        const isAlert =
+          warning.code === "CALCULATION_FAILED" ||
+          warning.code === "SHORT_HISTORY";
         return (
           <div
             key={`${warning.code}-${index}`}
-            role={warning.code === "CALCULATION_FAILED" ? "alert" : "status"}
+            role={isAlert ? "alert" : "status"}
             className={`flex items-start gap-2 rounded-lg border px-3 py-2 text-sm ${tone.wrapper}`}
           >
             <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
-            <p>
-              {t(`gem.warnings.${warning.code}` as Parameters<typeof t>[0], {
-                months: lookbackMonths,
-                count: warning.count ?? 0,
-              })}
-              {roles.length > 0 && (
-                <span className="font-medium">
-                  {" "}
-                  {roles.map((role) => roleLabel(role)).join(", ")}
-                </span>
-              )}
-            </p>
+            {warning.code === "SHORT_HISTORY" ? (
+              // Names the instrument (role plus its symbol) and the date its
+              // prices must reach back to, then how to fix it -- the security
+              // page's "add another year of price history" control.
+              <div>
+                <p>
+                  {t("gem.warnings.SHORT_HISTORY", {
+                    from: warning.requiredFrom
+                      ? formatDate(warning.requiredFrom)
+                      : "",
+                  })}
+                  {roles.length > 0 && (
+                    <span className="font-medium">
+                      {" "}
+                      {roles
+                        .map((role) => {
+                          const symbol = symbolByRole.get(role);
+                          return symbol
+                            ? `${roleLabel(role)} (${symbol})`
+                            : roleLabel(role);
+                        })
+                        .join(", ")}
+                    </span>
+                  )}
+                </p>
+                <p className="mt-1">{t("gem.warnings.shortHistoryFix")}</p>
+              </div>
+            ) : (
+              <p>
+                {t(`gem.warnings.${warning.code}` as Parameters<typeof t>[0], {
+                  months: lookbackMonths,
+                  count: warning.count ?? 0,
+                })}
+                {roles.length > 0 && (
+                  <span className="font-medium">
+                    {" "}
+                    {roles.map((role) => roleLabel(role)).join(", ")}
+                  </span>
+                )}
+              </p>
+            )}
           </div>
         );
       })}

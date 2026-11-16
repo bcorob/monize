@@ -39,6 +39,15 @@ export interface TransactionSplit {
   transferAccountId: string | null;
   transferAccount: Account | null;
   linkedTransactionId: string | null;
+  /**
+   * A transfer line's counterpart, as far as the split editor needs it: the
+   * amount that arrived in the target account, in that account's currency.
+   */
+  linkedTransaction?: {
+    id: string;
+    amount: number;
+    currencyCode: string;
+  } | null;
   amount: number;
   memo: string | null;
   tags?: Tag[];
@@ -57,6 +66,7 @@ export interface TransactionSplit {
 }
 
 export interface Transaction {
+  sharedExpensePostingId?: string | null;
   id: string;
   userId: string;
   accountId: string;
@@ -95,6 +105,13 @@ export interface Transaction {
   linkedInvestmentTransactionId?: string | null;
   /** Number of file attachments on this transaction (populated by the list endpoint). */
   attachmentCount?: number;
+  /** Number of unarchived warranties linked to this transaction (populated by the list endpoint). */
+  warrantyCount?: number;
+  /**
+   * The key an API client created this row with (unique per account), or null.
+   * Not shown in the app; it exists so a client can retry a create safely.
+   */
+  externalId?: string | null;
   splits?: TransactionSplit[];
   tags?: Tag[];
   createdAt: string;
@@ -107,6 +124,12 @@ export interface CreateSplitData {
   transferAccountId?: string;
   investment?: InvestmentSplitDetails;
   amount: number;
+  /**
+   * Transfer lines only: what arrives in the target account, unsigned, in its
+   * currency. Sent for a cross-currency line so the counterpart records the
+   * figure the user confirmed rather than the market conversion.
+   */
+  transferTargetAmount?: number;
   memo?: string;
   tagIds?: string[];
   // Id of the source split this row continues (issue #1167 F4). Sent on a
@@ -153,6 +176,24 @@ export interface CurrencySummary {
   transactionCount: number;
 }
 
+/**
+ * A summary in the reader's reporting currency, converted by the server with
+ * each row at its own settled rate or the market rate on its own date (issue
+ * #2106). The totals are null while a bucket has no rate; `known*` carry what
+ * converted.
+ */
+export interface SummaryInReportingCurrency {
+  currency: string;
+  totalIncome: number | null;
+  totalExpenses: number | null;
+  netCashFlow: number | null;
+  knownIncome: number;
+  knownExpenses: number;
+  includedTransactionCount: number;
+  excludedTransactionCount: number;
+  missingCurrencies: string[];
+}
+
 export interface TransactionSummary {
   totalIncome: number;
   totalExpenses: number;
@@ -161,6 +202,7 @@ export interface TransactionSummary {
   firstTransactionDate?: string | null;
   lastTransactionDate?: string | null;
   byCurrency?: Record<string, CurrencySummary>;
+  converted?: SummaryInReportingCurrency;
 }
 
 export interface GroupedTotal {
@@ -169,11 +211,17 @@ export interface GroupedTotal {
   currencyCode: string;
   total: number;
   count: number;
+  /** The reporting currency `convertedTotal` is in. */
+  convertedCurrency?: string;
+  /** `total` converted by the server at each row's own rate or date; null without one. */
+  convertedTotal?: number | null;
 }
 
 export interface RecurringChargeInfo {
   payeeName: string;
   payeeId: string | null;
+  /** The currency every amount is in: a charge is detected per currency. */
+  currencyCode: string;
   amounts: number[];
   dates: string[];
   frequency: string;
@@ -185,7 +233,12 @@ export interface RecurringChargeInfo {
 
 export interface MonthlyTotal {
   month: string;
-  total: number;
+  /** Currency the totals are in; absent on older responses. */
+  currency?: string;
+  /** Null while a part of the month has no exchange rate; see knownSubtotal. */
+  total: number | null;
+  /** The part of a withheld total that did convert. */
+  knownSubtotal?: number;
   count: number;
 }
 
@@ -199,6 +252,13 @@ export interface FxFeeMonthlyTotal {
   currencyCode: string;
   feeTotal: number;
   count: number;
+  /** The reporting currency `convertedFeeTotal` is in. */
+  convertedCurrency?: string;
+  /**
+   * `feeTotal` converted by the server, each fee at its own transaction's rate
+   * or date (issue #2106); null without an admissible rate.
+   */
+  convertedFeeTotal?: number | null;
 }
 
 export interface TransactionFilters {
@@ -218,11 +278,100 @@ export interface PaginationInfo {
   hasMore: boolean;
 }
 
+/** A search field, as the server names it; `any` is a bare word or phrase. */
+export type SearchField =
+  | 'any'
+  | 'payee'
+  | 'memo'
+  | 'cat'
+  | 'tag'
+  | 'account'
+  | 'ref'
+  | 'amount'
+  | 'date'
+  | 'status'
+  | 'is'
+  | 'has';
+
+export type SearchOp =
+  | 'contains'
+  | 'exact'
+  | 'glob'
+  | 'eq'
+  | 'gt'
+  | 'gte'
+  | 'lt'
+  | 'lte'
+  | 'between';
+
+/** One term of a search as the server read it (`searchInterpretation`). */
+export interface SearchTermEcho {
+  field: SearchField;
+  op: SearchOp;
+  /** An amount is a plain decimal string, a date ISO `yyyy-MM-dd`. */
+  value: string;
+  /** `between` only: the inclusive upper bound. */
+  valueTo?: string;
+  negated: boolean;
+  /** The term as typed. */
+  raw: string;
+  /** Set when the server could not use the term as written. */
+  ignored?: 'malformed' | 'empty';
+}
+
+export interface SearchInterpretation {
+  terms: SearchTermEcho[];
+}
+
 export interface PaginatedTransactions {
   data: Transaction[];
   pagination: PaginationInfo;
   /** Starting balance for running balance calculation (only set when filtering by single account) */
   startingBalance?: number;
+  /**
+   * Why no starting balance came back, where one otherwise would have. Read as
+   * `=== 'sort'`: absent is "nothing to say", not "a balance is coming".
+   */
+  startingBalanceWithheld?: 'sort';
+  /**
+   * How the server read the search string, term by term. Present when a
+   * search was sent; absent from a server that predates the search syntax, in
+   * which case nothing is shown.
+   */
+  searchInterpretation?: SearchInterpretation;
+}
+
+interface ExportNamedRef {
+  name: string;
+}
+
+/**
+ * One row of `GET /transactions/export`: only the fields the Transactions
+ * page's CSV is built from, in the full row's nesting, so a whole filtered
+ * register fits in one response (issue #2198). Twin of `TransactionExportRow`
+ * in `backend/src/transactions/register-export.ts`.
+ */
+export interface TransactionExportRow {
+  id: string;
+  transactionDate: string;
+  /** Arrives as the decimal string the API serializes ("-67.9900"). */
+  amount: number | string;
+  currencyCode: string;
+  status: TransactionStatus;
+  description: string | null;
+  payeeName: string | null;
+  isSplit: boolean;
+  isTransfer: boolean;
+  account: ExportNamedRef | null;
+  payee: ExportNamedRef | null;
+  category: ExportNamedRef | null;
+  tags: ExportNamedRef[];
+  linkedTransaction: { account: ExportNamedRef | null } | null;
+  splits: {
+    amount: number | string;
+    category: ExportNamedRef | null;
+    transferAccount: ExportNamedRef | null;
+  }[];
 }
 
 // Transfer types
@@ -239,6 +388,12 @@ export interface CreateTransferData {
   status?: TransactionStatus;
   /** Optional category; surfaces the transfer in the monthly category breakdown without counting as income/expense. null clears it. */
   categoryId?: string | null;
+  /** Destination amount for a cross-currency transfer; overrides the rate. */
+  toAmount?: number;
+  payeeId?: string | null;
+  payeeName?: string | null;
+  /** Applied to both legs. */
+  tagIds?: string[];
 }
 
 export interface TransferResult {

@@ -5,11 +5,17 @@
     "test": "playwright test",
     "test:headed": "playwright test --headed",
     "test:debug": "playwright test --debug",
-    "test:report": "playwright show-report"
+    "test:report": "playwright show-report",
+    "test:push": "playwright test --config playwright.push.config.ts",
+    "readme:screenshots": "playwright test --config playwright.readme.config.ts",
+    "readme:gifs": "node readme/make-gifs.mjs",
+    "readme:optimize": "node readme/optimize-pngs.mjs",
+    "docs:screenshots": "playwright test --config playwright.docs.config.ts --project=dark --project=light",
+    "docs:admin": "playwright test --config playwright.docs.config.ts --project=admin"
   },
   "devDependencies": {
-    "@playwright/test": "^1.50.0",
-    "@types/node": "^25.3.5",
-    "otplib": "^12.0.1"
+    "@playwright/test": "^1.65.0",
+    "@types/node": "^26.6.6",
+    "otplib": "^13.6.0"
   }
 }

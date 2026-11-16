@@ -27,6 +27,7 @@ export const SECURITY_REQUIRED_ACTIONS = new Set<InvestmentAction>([
   InvestmentAction.REINVEST_CAPITAL_GAIN_LONG,
   InvestmentAction.ADD_SHARES,
   InvestmentAction.REMOVE_SHARES,
+  InvestmentAction.RETURN_OF_CAPITAL,
 ]);
 
 export const QUANTITY_PRICE_ACTIONS = new Set<InvestmentAction>([
@@ -51,4 +52,5 @@ export const AMOUNT_ONLY_ACTIONS = new Set<InvestmentAction>([
   InvestmentAction.CAPITAL_GAIN,
   InvestmentAction.CAPITAL_GAIN_SHORT,
   InvestmentAction.CAPITAL_GAIN_LONG,
+  InvestmentAction.RETURN_OF_CAPITAL,
 ]);

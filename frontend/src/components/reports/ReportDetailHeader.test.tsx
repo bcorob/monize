@@ -54,6 +54,15 @@ describe('ReportDetailHeader', () => {
     ).toBeTruthy();
   });
 
+  it('lets a long title wrap on mobile instead of truncating it', async () => {
+    await renderHeader();
+    const heading = screen.getByRole('heading', { level: 1 });
+    // The identity wraps unclamped on a phone; the ellipsis is desktop-only.
+    expect(heading.className).toContain('break-words');
+    expect(heading.className).not.toMatch(/(^|\s)truncate(\s|$)/);
+    expect(heading.className).toContain('sm:truncate');
+  });
+
   it('renders the title, subtitle and actions', async () => {
     await renderHeader();
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Tax Summary');

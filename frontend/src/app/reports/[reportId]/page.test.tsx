@@ -51,6 +51,7 @@ vi.mock('@/components/reports/NetWorthReport', () => ({ NetWorthReport: () => <d
 vi.mock('@/components/reports/AccountBalancesReport', () => ({ AccountBalancesReport: () => <div data-testid="r-account-balances" /> }));
 vi.mock('@/components/reports/CashFlowReport', () => ({ CashFlowReport: () => <div data-testid="r-cash-flow" /> }));
 vi.mock('@/components/reports/TaxSummaryReport', () => ({ TaxSummaryReport: () => <div data-testid="r-tax-summary" /> }));
+vi.mock('@/components/reports/PayrollDeductionsReport', () => ({ PayrollDeductionsReport: () => <div data-testid="r-payroll-deductions" /> }));
 vi.mock('@/components/reports/YearOverYearReport', () => ({ YearOverYearReport: () => <div data-testid="r-year-over-year" /> }));
 vi.mock('@/components/reports/DebtPayoffTimelineReport', () => ({ DebtPayoffTimelineReport: () => <div data-testid="r-debt-payoff-timeline" /> }));
 vi.mock('@/components/reports/LoanAmortizationReport', () => ({ LoanAmortizationReport: () => <div data-testid="r-loan-amortization" /> }));
@@ -70,6 +71,7 @@ vi.mock('@/components/reports/RecurringExpensesReport', () => ({ RecurringExpens
 vi.mock('@/components/reports/SpendingAnomaliesReport', () => ({ SpendingAnomaliesReport: () => <div data-testid="r-spending-anomalies" /> }));
 vi.mock('@/components/reports/WeekendVsWeekdayReport', () => ({ WeekendVsWeekdayReport: () => <div data-testid="r-weekend-weekday-spending" /> }));
 vi.mock('@/components/reports/MonthlyComparisonReport', () => ({ MonthlyComparisonReport: () => <div data-testid="r-monthly-comparison" /> }));
+vi.mock('@/components/reports/CashFlowSankeyReport', () => ({ CashFlowSankeyReport: () => <div data-testid="r-cash-flow-sankey" /> }));
 vi.mock('@/components/reports/ForeignCurrencyFeesReport', () => ({ ForeignCurrencyFeesReport: () => <div data-testid="r-foreign-currency-fees" /> }));
 vi.mock('@/components/reports/UncategorizedTransactionsReport', () => ({ UncategorizedTransactionsReport: () => <div data-testid="r-uncategorized-transactions" /> }));
 vi.mock('@/components/reports/DuplicateTransactionReport', () => ({ DuplicateTransactionReport: () => <div data-testid="r-duplicate-transactions" /> }));
@@ -96,6 +98,7 @@ const ALL_REPORT_IDS = [
   'account-balances',
   'cash-flow',
   'tax-summary',
+  'payroll-deductions',
   'year-over-year',
   'debt-payoff-timeline',
   'loan-amortization',
@@ -115,6 +118,7 @@ const ALL_REPORT_IDS = [
   'spending-anomalies',
   'weekend-weekday-spending',
   'monthly-comparison',
+  'cash-flow-sankey',
   'foreign-currency-fees',
   'uncategorized-transactions',
   'duplicate-transactions',

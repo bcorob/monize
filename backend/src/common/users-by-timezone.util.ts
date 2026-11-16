@@ -1,4 +1,4 @@
-import { DataSource } from "typeorm";
+import { DataSource, EntityManager } from "typeorm";
 import { withScopedDb } from "./db/scoped-db";
 
 /**
@@ -40,17 +40,47 @@ export async function getUsersByEffectiveTimezone(
 
   const userIdsByTz = new Map<string, string[]>();
   for (const { user_id, timezone, last_client_timezone } of rows) {
-    const explicit = timezone?.trim();
-    const cached = last_client_timezone?.trim();
-    const tz =
-      explicit && explicit !== "browser"
-        ? explicit
-        : cached && cached !== "browser"
-          ? cached
-          : "UTC";
+    const tz = resolveEffectiveTimezone(timezone, last_client_timezone);
     const list = userIdsByTz.get(tz) ?? [];
     list.push(user_id);
     userIdsByTz.set(tz, list);
   }
   return userIdsByTz;
+}
+
+/**
+ * The effective IANA timezone of one user, by the rule `getUsersByEffectiveTimezone`
+ * applies to everyone: the explicit preference, else the last client timezone
+ * seen, else UTC. Runs on the caller's transaction.
+ */
+export async function getEffectiveTimezoneOfUser(
+  m: EntityManager,
+  userId: string,
+): Promise<string> {
+  const rows: {
+    timezone: string | null;
+    last_client_timezone: string | null;
+  }[] = await m.query(
+    `SELECT timezone, last_client_timezone
+       FROM user_preferences
+      WHERE user_id = $1`,
+    [userId],
+  );
+  return resolveEffectiveTimezone(
+    rows[0]?.timezone,
+    rows[0]?.last_client_timezone,
+  );
+}
+
+function resolveEffectiveTimezone(
+  timezone: string | null | undefined,
+  lastClientTimezone: string | null | undefined,
+): string {
+  const explicit = timezone?.trim();
+  const cached = lastClientTimezone?.trim();
+  return explicit && explicit !== "browser"
+    ? explicit
+    : cached && cached !== "browser"
+      ? cached
+      : "UTC";
 }

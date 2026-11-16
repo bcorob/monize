@@ -4,5 +4,8 @@
   },
   "common": {
     "oauthProviderNotInitialized": "OAuth provider not initialised"
+  },
+  "accounts": {
+    "mortgageMethodPaymentMismatch": "The payment amount must be this {{ type }} mortgage's first installment plus any extra principal, which the server derives from the debt, the rate and the amortisation; preview it again"
   }
 }

@@ -18,8 +18,8 @@ describe('UnknownAmount', () => {
     // Assistive technology gets words, not the glyph.
     expect(screen.getByText('Amount not available')).toBeInTheDocument();
     // And the reason is available, not just "unavailable". `InfoTooltip` exposes
-    // its body through the trigger's aria-label (its popover is hover-only), so
-    // that is where a reader finds WHY the figure is missing.
+    // its body through the trigger's aria-label as well as its popover, so that
+    // is where a screen reader finds WHY the figure is missing.
     expect(
       screen.getByLabelText(/no exchange rate is available/i),
     ).toBeInTheDocument();

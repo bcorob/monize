@@ -17,6 +17,10 @@ interface MultiAccountReviewStepProps {
   onImport: () => void;
   setStep: (step: ImportStep) => void;
   hasSecuritiesToMap: boolean;
+  /** The user's type, by account name, for each account the file leaves untyped. */
+  accountTypeChoices: Record<string, string>;
+  onAccountTypeChoiceChange: (accountName: string, accountType: string) => void;
+  accountTypeOptions: Array<{ value: string; label: string }>;
 }
 
 export function MultiAccountReviewStep({
@@ -30,11 +34,28 @@ export function MultiAccountReviewStep({
   onImport,
   setStep,
   hasSecuritiesToMap,
+  accountTypeChoices,
+  onAccountTypeChoiceChange,
+  accountTypeOptions,
 }: MultiAccountReviewStepProps) {
   const t = useTranslations('import');
   const { categoryDefs, tagDefs = [], accounts, totalTransactionCount } = multiAccountData;
   const incomeCategories = categoryDefs.filter((c) => c.isIncome);
   const expenseCategories = categoryDefs.filter((c) => !c.isIncome);
+  // The file names no type for these; the import is not offered until the
+  // user has chosen one for each, rather than assume chequing.
+  const untypedAccountNames = [
+    ...new Set(
+      accounts
+        .filter((acc) => acc.accountName && acc.accountType === null)
+        .map((acc) => acc.accountName),
+    ),
+  ];
+  const typesStillNeeded = untypedAccountNames.filter((name) => !accountTypeChoices[name]).length;
+  const chooseTypeOptions = [
+    { value: '', label: t('multiAccountReview.chooseAccountType') },
+    ...accountTypeOptions,
+  ];
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -86,9 +107,23 @@ export function MultiAccountReviewStep({
         <div className="bg-card border border-border rounded-lg divide-y divide-border">
           {accounts.map((acc, i) => (
             <div key={i} className="flex justify-between items-center px-4 py-2">
-              <div>
+              <div className="flex items-center gap-2">
                 <span className="text-sm font-medium text-foreground">{acc.accountName}</span>
-                <span className="ml-2 text-xs text-muted-foreground">({acc.accountType})</span>
+                {acc.accountType === null && acc.accountName ? (
+                  <div className="w-44">
+                    <Select
+                      aria-label={t('multiAccountReview.accountTypeFor', { name: acc.accountName })}
+                      value={accountTypeChoices[acc.accountName] ?? ''}
+                      onChange={(e) => onAccountTypeChoiceChange(acc.accountName, e.target.value)}
+                      options={chooseTypeOptions}
+                      className="py-1 text-xs"
+                    />
+                  </div>
+                ) : (
+                  acc.accountType !== null && (
+                    <span className="text-xs text-muted-foreground">({acc.accountType})</span>
+                  )
+                )}
               </div>
               <div className="text-right">
                 <span className="text-sm text-muted-foreground">
@@ -178,6 +213,15 @@ export function MultiAccountReviewStep({
         </div>
       )}
 
+      {/* Account types the file does not name */}
+      {typesStillNeeded > 0 && (
+        <div className="mb-6 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+          <p className="text-sm text-amber-800 dark:text-amber-300">
+            {t('multiAccountReview.accountTypesNeeded', { count: typesStillNeeded })}
+          </p>
+        </div>
+      )}
+
       {/* Securities notice */}
       {hasSecuritiesToMap && (
         <div className="mb-6 p-3 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
@@ -197,13 +241,14 @@ export function MultiAccountReviewStep({
           {t('navigation.back')}
         </Button>
         {hasSecuritiesToMap ? (
-          <Button onClick={() => setStep('mapSecurities')}>
+          <Button onClick={() => setStep('mapSecurities')} disabled={typesStillNeeded > 0}>
             {t('multiAccountReview.nextMapSecurities')}
           </Button>
         ) : (
           <Button
             onClick={onImport}
             isLoading={isLoading}
+            disabled={typesStillNeeded > 0}
           >
             {t('multiAccountReview.importAll')}
           </Button>

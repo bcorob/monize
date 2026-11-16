@@ -2,7 +2,13 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
-import { gainLossColor } from '@/lib/format';
+import {
+  gainLossColor,
+  moneyDecimalsForCurrency,
+  roundMoney,
+  sumMoney,
+} from '@/lib/format';
+import { useCurrencyDecimalsVersion } from '@/hooks/useCurrencyDecimalsVersion';
 import { chartColors } from '@/lib/chart-colors';
 import { Skeleton } from '@/components/ui/LoadingSkeleton';
 import {
@@ -19,6 +25,8 @@ import {
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import { ChartDownloadButton } from '@/components/ui/ChartDownloadButton';
+import { ChartCollapseButton } from '@/components/transactions/ChartCollapseControls';
+import { CHART_GRID_PROPS, CHART_TOOLTIP_CLASS } from '@/lib/chart-style';
 
 
 // When the largest bar is at least this many times taller than the smallest,
@@ -74,6 +82,8 @@ interface AccountBalancesBarChartProps {
   isLoading: boolean;
   currencyCode?: string;
   onAccountClick?: (accountId: string) => void;
+  /** Offer the header button that folds the chart away (the Transactions page). */
+  onCollapse?: () => void;
 }
 
 interface ChartDataPoint {
@@ -86,16 +96,16 @@ interface ChartDataPoint {
 function AccountBalanceTooltip({
   active,
   payload,
-  formatCurrency,
+  formatValue,
 }: {
   active?: boolean;
   payload?: Array<{ payload: ChartDataPoint }>;
-  formatCurrency: (v: number) => string;
+  formatValue: (v: number) => string;
 }) {
   if (active && payload?.[0]) {
     const data = payload[0].payload;
     return (
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3">
+      <div className={CHART_TOOLTIP_CLASS}>
         <p className="font-medium text-gray-900 dark:text-gray-100 mb-1">
           {data.accountName}
         </p>
@@ -104,7 +114,7 @@ function AccountBalanceTooltip({
             gainLossColor(data.balance)
           }`}
         >
-          {formatCurrency(data.balance)}
+          {formatValue(data.balance)}
         </p>
       </div>
     );
@@ -117,17 +127,18 @@ export function AccountBalancesBarChart({
   isLoading,
   currencyCode,
   onAccountClick,
+  onCollapse,
 }: AccountBalancesBarChartProps) {
   const t = useTranslations('transactions');
   const chartTitle = t('charts.accountBalances.title');
-  const { formatCurrency: formatCurrencyFull, formatCurrencyAxis } = useNumberFormat();
+  const { formatCurrency, formatCurrencyAxis, formatNumber } = useNumberFormat();
   const chartRef = useRef<HTMLDivElement>(null);
   const [scaleMode, setScaleMode] = useState<ScaleMode>('auto');
   const isMobile = useIsMobile();
 
-  const formatCurrency = useCallback(
-    (value: number) => formatCurrencyFull(value, currencyCode),
-    [formatCurrencyFull, currencyCode],
+  const formatValue = useCallback(
+    (value: number) => formatCurrency(value, currencyCode),
+    [formatCurrency, currencyCode],
   );
 
   const formatAxis = useCallback(
@@ -167,23 +178,32 @@ export function AccountBalancesBarChart({
   // desktop switches to vertical once the bar count crosses the crowding threshold.
   const verticalXAxis = isMobile || chartData.length > DESKTOP_VERTICAL_AXIS_THRESHOLD;
 
+  // The registry fills after the first render, so the summary is recomputed
+  // when a coin's places arrive.
+  const registryVersion = useCurrencyDecimalsVersion();
   const summary = useMemo(() => {
     if (chartData.length === 0) return null;
-    const totalCents = chartData.reduce(
-      (sum, d) => sum + Math.round(d.balance * 10000),
-      0,
+    // The series is in the account's currency: sum and round at its places
+    // (four for fiat, a coin's own up to eight), never at a fixed 10000 scale.
+    const decimals = moneyDecimalsForCurrency(currencyCode);
+    const total = sumMoney(
+      chartData.map((d) => d.balance),
+      decimals,
     );
-    const total = totalCents / 10000;
-    const avgBalance = total / chartData.length;
+    const avgBalance = roundMoney(total / chartData.length, decimals);
     return { total, avgBalance, accountsCount: chartData.length };
-  }, [chartData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- registryVersion re-reads the registry
+  }, [chartData, currencyCode, registryVersion]);
 
   if (isLoading) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 mb-6 min-h-[420px]">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-          {chartTitle}
-        </h3>
+        <div className="flex items-center justify-between mb-4 gap-2">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            {chartTitle}
+          </h3>
+          {onCollapse && <ChartCollapseButton onCollapse={onCollapse} />}
+        </div>
         <div className="h-72 flex items-center justify-center">
           <Skeleton className="w-full h-full" />
         </div>
@@ -194,9 +214,12 @@ export function AccountBalancesBarChart({
   if (chartData.length === 0) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 mb-6 min-h-[420px]">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-          {chartTitle}
-        </h3>
+        <div className="flex items-center justify-between mb-4 gap-2">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+            {chartTitle}
+          </h3>
+          {onCollapse && <ChartCollapseButton onCollapse={onCollapse} />}
+        </div>
         <div className="h-72 flex items-center justify-center text-gray-500 dark:text-gray-400">
           <p>{t('charts.accountBalances.noData')}</p>
         </div>
@@ -235,6 +258,7 @@ export function AccountBalancesBarChart({
             })}
           </div>
           <ChartDownloadButton chartRef={chartRef} filename={chartTitle} />
+          {onCollapse && <ChartCollapseButton onCollapse={onCollapse} />}
         </div>
       </div>
 
@@ -249,7 +273,10 @@ export function AccountBalancesBarChart({
         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
           <BarChart
             data={chartData}
-            margin={{ top: 20, right: isMobile ? 16 : 5, left: -10, bottom: 0 }}
+            // No negative left margin: the Y axis sizes itself to its widest
+            // label (`width="auto"`), and pulling the plot left of that clips
+            // the start of every tick label against the card.
+            margin={{ top: 20, right: isMobile ? 16 : 5, left: 0, bottom: 0 }}
             // Fire on clicks anywhere in the tooltip-highlighted column (not
             // just the bar rect). Prefer state.activeLabel -- which Recharts
             // sets to the active category whenever the cursor is in an
@@ -268,7 +295,7 @@ export function AccountBalancesBarChart({
           >
             {/* The token carries its own dark override, so the dark-variant
                 stroke class this used to need alongside it is gone. */}
-            <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+            <CartesianGrid {...CHART_GRID_PROPS} />
             <XAxis
               dataKey="accountName"
               tick={
@@ -295,7 +322,7 @@ export function AccountBalancesBarChart({
               allowDataOverflow={false}
             />
             <Tooltip
-              content={<AccountBalanceTooltip formatCurrency={formatCurrency} />}
+              content={<AccountBalanceTooltip formatValue={formatValue} />}
               // Keep the highlight rect visually present but transparent to
               // pointer events so clicks fall through to BarChart's onClick.
               cursor={{ fill: chartColors.grid, fillOpacity: 0.35, style: { pointerEvents: 'none' } }}
@@ -325,7 +352,7 @@ export function AccountBalancesBarChart({
                 <LabelList
                   dataKey="balance"
                   position="top"
-                  formatter={(value: unknown) => formatCurrency(Number(value))}
+                  formatter={(value: unknown) => formatValue(Number(value))}
                   style={{ fill: chartColors.axis, fontSize: 11, fontWeight: 500 }}
                 />
               )}
@@ -344,7 +371,7 @@ export function AccountBalancesBarChart({
                 gainLossColor(summary.avgBalance)
               }`}
             >
-              {formatCurrency(summary.avgBalance)}
+              {formatValue(summary.avgBalance)}
             </div>
           </div>
           <div>
@@ -354,13 +381,13 @@ export function AccountBalancesBarChart({
                 gainLossColor(summary.total)
               }`}
             >
-              {formatCurrency(summary.total)}
+              {formatValue(summary.total)}
             </div>
           </div>
           <div>
             <div className="text-sm text-gray-500 dark:text-gray-400">{t('charts.accountBalances.accounts')}</div>
             <div className="font-semibold text-gray-900 dark:text-gray-100">
-              {summary.accountsCount.toLocaleString()}
+              {formatNumber(summary.accountsCount, 0)}
             </div>
           </div>
         </div>

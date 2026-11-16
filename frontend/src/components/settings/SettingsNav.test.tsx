@@ -10,7 +10,7 @@ vi.mock('next/link', () => ({
 }));
 
 // Mock heroicons
-vi.mock('@heroicons/react/20/solid', () => ({
+vi.mock('@heroicons/react/24/outline', () => ({
   ArrowTopRightOnSquareIcon: (props: any) => <svg data-testid="external-icon" {...props} />,
   ChevronDownIcon: (props: any) => <svg data-testid="chevron-icon" {...props} />,
 }));

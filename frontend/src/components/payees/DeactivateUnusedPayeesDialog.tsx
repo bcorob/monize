@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
+import { Th } from '@/components/ui/Table';
 import { payeesApi } from '@/lib/payees';
 import { DeactivationCandidate } from '@/types/payee';
 import toast from 'react-hot-toast';
@@ -55,13 +56,15 @@ export function DeactivateUnusedPayeesDialog({
   }, [maxTransactions, monthsUnused, t]);
 
   // Reset state when dialog opens
-  useEffect(() => {
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  if (wasOpen !== isOpen) {
+    setWasOpen(isOpen);
     if (isOpen) {
       setCandidates([]);
       setSelectedIds(new Set());
       setHasPreviewLoaded(false);
     }
-  }, [isOpen]);
+  }
 
   const handleApply = async () => {
     if (selectedIds.size === 0) {
@@ -121,26 +124,38 @@ export function DeactivateUnusedPayeesDialog({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} maxWidth="2xl" className="overflow-hidden flex flex-col">
-      {/* Header */}
-      <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700">
-        <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-          {t('deactivateUnused.title')}
-        </h2>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto px-6 py-4">
-        {/* Description */}
-        <div className="mb-6 p-4 bg-amber-50 dark:bg-amber-900/30 rounded-lg border border-amber-200 dark:border-amber-800">
-          <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-200 mb-2">
-            {t('deactivateUnused.howItWorksTitle')}
-          </h3>
-          <p className="text-sm text-amber-700 dark:text-amber-300">
-            {t('deactivateUnused.howItWorksBody')}
-          </p>
-        </div>
-
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidth="2xl"
+      title={t('deactivateUnused.title')}
+      description={t('deactivateUnused.howItWorksBody')}
+      className="p-6 overflow-hidden flex flex-col"
+      footer={
+        <>
+          <div className="mr-auto text-sm text-gray-500 dark:text-gray-400">
+            {selectedIds.size > 0 && (
+              <span>{t('deactivateUnused.selectedCount', { count: selectedIds.size })}</span>
+            )}
+          </div>
+          <div className="flex gap-3">
+            <Button variant="secondary" onClick={onClose} disabled={isApplying}>
+              {tc('cancel')}
+            </Button>
+            <Button
+              variant="danger"
+              onClick={handleApply}
+              disabled={isApplying || selectedIds.size === 0}
+            >
+              {isApplying ? t('deactivateUnused.deactivating') : t('deactivateUnused.deactivateButton', { count: selectedIds.size })}
+            </Button>
+          </div>
+        </>
+      }
+    >
+      {/* Content: the one region that scrolls, so the title and the button
+          row stay on screen however many candidates the preview finds. */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {/* Settings */}
         <div className="space-y-6 mb-6">
           {/* Maximum Transactions */}
@@ -239,16 +254,18 @@ export function DeactivateUnusedPayeesDialog({
                 <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
                   <thead className="bg-gray-50 dark:bg-gray-700">
                     <tr>
-                      <th className="w-10 px-3 py-2"></th>
-                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                      <Th className="w-10 px-3 py-2">
+                        {t('deactivateUnused.columns.deactivate')}
+                      </Th>
+                      <Th className="px-3 py-2">
                         {t('deactivateUnused.columns.payee')}
-                      </th>
-                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase hidden sm:table-cell">
+                      </Th>
+                      <Th align="right" className="px-3 py-2 hidden sm:table-cell">
                         {t('deactivateUnused.columns.transactions')}
-                      </th>
-                      <th className="px-3 py-2 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+                      </Th>
+                      <Th align="right" className="px-3 py-2">
                         {t('deactivateUnused.columns.lastUsed')}
-                      </th>
+                      </Th>
                     </tr>
                   </thead>
                   <tbody className="bg-white dark:bg-gray-800 divide-y divide-gray-200 dark:divide-gray-700">
@@ -298,27 +315,6 @@ export function DeactivateUnusedPayeesDialog({
             )}
           </div>
         )}
-      </div>
-
-      {/* Footer */}
-      <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-between items-center">
-        <div className="text-sm text-gray-500 dark:text-gray-400">
-          {selectedIds.size > 0 && (
-            <span>{t('deactivateUnused.selectedCount', { count: selectedIds.size })}</span>
-          )}
-        </div>
-        <div className="flex gap-3">
-          <Button variant="secondary" onClick={onClose} disabled={isApplying}>
-            {tc('cancel')}
-          </Button>
-          <Button
-            variant="danger"
-            onClick={handleApply}
-            disabled={isApplying || selectedIds.size === 0}
-          >
-            {isApplying ? t('deactivateUnused.deactivating') : t('deactivateUnused.deactivateButton', { count: selectedIds.size })}
-          </Button>
-        </div>
       </div>
     </Modal>
   );

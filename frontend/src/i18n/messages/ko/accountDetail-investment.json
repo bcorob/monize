@@ -5,6 +5,8 @@
     "dividendsInterest": "배당 및 이자",
     "realizedGains": "실현 손익",
     "ytd": "연초 이후",
+    "realizedKnownPart": "확인된 부분: {amount}",
+    "realizedUnknownReason": "이 손익은 계산할 수 없습니다. 포지션에 비용 없이 추가된 주식이 있어 매도한 주식의 원가를 알 수 없습니다. 해당 주식을 추가한 거래를 열어 가격을 입력하세요.",
     "empty": "올해 투자 수익이 없습니다"
   },
   "register": {

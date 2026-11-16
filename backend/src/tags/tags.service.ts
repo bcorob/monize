@@ -2,17 +2,79 @@ import {
   Injectable,
   NotFoundException,
   ConflictException,
+  BadRequestException,
   Logger,
 } from "@nestjs/common";
 import { tr } from "../i18n/translate";
 import { DataSource, EntityManager, QueryRunner, In } from "typeorm";
 import { Tag } from "./entities/tag.entity";
 import { TransactionTag } from "./entities/transaction-tag.entity";
+import { Transaction } from "../transactions/entities/transaction.entity";
 import { TransactionSplitTag } from "./entities/transaction-split-tag.entity";
 import { CreateTagDto } from "./dto/create-tag.dto";
 import { UpdateTagDto } from "./dto/update-tag.dto";
 import { ActionHistoryService } from "../action-history/action-history.service";
 import { withScopedDb } from "../common/db/scoped-db";
+import { LEDGER_EXCLUDES_VOID } from "../common/ledger-balance.sql";
+import { todayYMD } from "../common/date-utils";
+import { didYouMean } from "../common/name-suggestions.util";
+import { stripHtml } from "../common/sanitization.util";
+import { TransactionSplit } from "../transactions/entities/transaction-split.entity";
+import {
+  LLM_TAGS_DEFAULT_LIMIT,
+  LLM_TAGS_MAX_LIMIT,
+  LlmTagsResult,
+} from "./tag-llm-shape";
+
+/** Upper bounds for one additive/removal call (design 6.2). */
+export const MAX_TAGS_PER_CALL = 100;
+export const MAX_TRANSACTIONS_PER_CALL = 1000;
+
+/**
+ * Rows per INSERT in addTransactionTags. A link binds two parameters and one
+ * PostgreSQL statement takes at most 65535, so the 1000 x 100 upper bound
+ * (200000 parameters) is written in batches, all on the caller's transaction.
+ */
+export const TAG_LINK_INSERT_BATCH = 5000;
+
+/**
+ * Tag names to look up: trimmed, blanks dropped, each name once however it is
+ * spelled (the first spelling wins), in order. A name is matched as stored;
+ * only one a write will create is cleaned (`previewTagChange`).
+ */
+export function uniqueTagNames(names: readonly string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of names) {
+    const name = raw.trim();
+    const key = name.toLowerCase();
+    if (name === "" || seen.has(key)) continue;
+    seen.add(key);
+    out.push(name);
+  }
+  return out;
+}
+
+/** One tag's use on non-void transactions: latest date (YYYY-MM-DD) and number of uses. */
+export interface TagUsage {
+  lastUsed: string;
+  count: number;
+}
+
+/**
+ * The tag change an edit proposes against the tags a row carries now, resolved
+ * by name: only what differs is in it (a tag the row already carries is not
+ * added again, one it does not carry is not removed).
+ */
+export interface TagChangePreview {
+  /** Names to add, spelled as the user's existing tag when there is one. */
+  tagNames: string[];
+  /** The subset of `tagNames` the user has no tag for yet: the write creates them. */
+  newTagNames: string[];
+  /** Ids of the carried tags to remove, and their names for the card. */
+  removeTagIds: string[];
+  removeTagNames: string[];
+}
 
 @Injectable()
 export class TagsService {
@@ -205,6 +267,276 @@ export class TagsService {
   }
 
   /**
+   * How each of the user's tags has been used, for ordering the pickers that
+   * apply tags to a transaction: the latest date of a non-void transaction
+   * carrying it (on the transaction or on one of its splits) and how many
+   * times it was applied. A tag never used, or used only on void rows, is
+   * absent.
+   *
+   * - A row dated after today does not count until its date arrives, so a
+   *   mistyped year cannot hold a tag at the top of the picker.
+   * - One use is one movement: tagging a transfer writes a link on both legs,
+   *   and a split transfer tags the split and its counterpart, so the legs
+   *   collapse to one `use_id` (the smaller leg id, or the split's id).
+   * - `accountScope` is an acting delegate's READ-granted accounts
+   *   (`delegateReadableAccountScope`); `undefined` means every account, and
+   *   an empty scope reports nothing.
+   */
+  async getUsage(
+    userId: string,
+    accountScope?: readonly string[],
+  ): Promise<Record<string, TagUsage>> {
+    if (accountScope !== undefined && accountScope.length === 0) return {};
+    const params: unknown[] = [userId, todayYMD()];
+    let scopeClause = "";
+    if (accountScope !== undefined) {
+      params.push([...accountScope]);
+      scopeClause = "AND t.account_id = ANY($3::uuid[])";
+    }
+    // The owner filter sits inside each branch so the scan starts from the
+    // user's tags (idx_transaction_tags_tag / idx_transaction_split_tags_tag)
+    // rather than from every user's links.
+    const rowFilter = `${LEDGER_EXCLUDES_VOID}
+                  AND t.transaction_date <= $2::date
+                  ${scopeClause}`;
+    const rows: Array<{ tag_id: string; last_used: string; count: string }> =
+      await withScopedDb(this.dataSource, (m) =>
+        m.query(
+          `SELECT u.tag_id,
+                  TO_CHAR(MAX(u.transaction_date), 'YYYY-MM-DD') AS last_used,
+                  COUNT(DISTINCT u.use_id) AS count
+             FROM (
+               SELECT tt.tag_id, t.transaction_date,
+                      COALESCE(
+                        cs.id,
+                        LEAST(t.id, COALESCE(t.linked_transaction_id, t.id))
+                      ) AS use_id
+                 FROM transaction_tags tt
+                 JOIN tags g ON g.id = tt.tag_id AND g.user_id = $1
+                 JOIN transactions t ON t.id = tt.transaction_id
+                 LEFT JOIN transaction_splits cs
+                        ON cs.linked_transaction_id = t.id
+                WHERE ${rowFilter}
+               UNION ALL
+               SELECT st.tag_id, t.transaction_date, s.id AS use_id
+                 FROM transaction_split_tags st
+                 JOIN tags g ON g.id = st.tag_id AND g.user_id = $1
+                 JOIN transaction_splits s ON s.id = st.transaction_split_id
+                 JOIN transactions t ON t.id = s.transaction_id
+                WHERE ${rowFilter}
+             ) u
+            GROUP BY u.tag_id`,
+          params,
+        ),
+      );
+
+    const usage: Record<string, TagUsage> = {};
+    for (const row of rows) {
+      usage[row.tag_id] = { lastUsed: row.last_used, count: Number(row.count) };
+    }
+    return usage;
+  }
+
+  /**
+   * The user's tags for the AI tools, in name order, each with how it has been
+   * used (`getUsage`: non-void rows dated today or earlier, a transfer once).
+   * `search` keeps the names containing it, case-insensitively.
+   */
+  async getLlmTags(
+    userId: string,
+    options: { search?: string; limit?: number } = {},
+  ): Promise<LlmTagsResult> {
+    const limit = Math.min(
+      Math.max(1, Math.trunc(options.limit ?? LLM_TAGS_DEFAULT_LIMIT)),
+      LLM_TAGS_MAX_LIMIT,
+    );
+    const needle = options.search?.trim().toLowerCase() ?? "";
+    const all = await this.findAll(userId);
+    const matched = needle
+      ? all.filter((tag) => tag.name.toLowerCase().includes(needle))
+      : all;
+    const usage = await this.getUsage(userId);
+    return {
+      tags: matched.slice(0, limit).map((tag) => ({
+        id: tag.id,
+        name: tag.name,
+        color: tag.color,
+        icon: tag.icon,
+        useCount: usage[tag.id]?.count ?? 0,
+        lastUsed: usage[tag.id]?.lastUsed ?? null,
+      })),
+      total: matched.length,
+      truncated: matched.length > limit,
+    };
+  }
+
+  /**
+   * Resolve the tag names an edit adds and removes against the tags a row
+   * carries now (`carried`), on the caller's manager, reading only. A
+   * name to add the user has no tag for is new (the write creates it); a name
+   * to remove must be one of the user's tags (a typo is refused with the
+   * closest names, never read as "nothing to remove"); a name in both lists is
+   * refused, since the edit would contradict itself.
+   */
+  async previewTagChange(
+    m: EntityManager,
+    userId: string,
+    /**
+     * The tags the row carries now. A change that writes to several places (a
+     * transfer's legs and the split a leg belongs to) passes the tags carried
+     * on EVERY place, which decides an addition, and on ANY place, which
+     * decides a removal; one row passes one set for both.
+     */
+    carried:
+      | ReadonlySet<string>
+      | { everywhere: ReadonlySet<string>; anywhere: ReadonlySet<string> },
+    addNames: readonly string[],
+    removeNames: readonly string[],
+  ): Promise<TagChangePreview> {
+    const { everywhere, anywhere } =
+      "everywhere" in carried
+        ? carried
+        : { everywhere: carried, anywhere: carried };
+    const add = uniqueTagNames(addNames);
+    const remove = uniqueTagNames(removeNames);
+    const preview: TagChangePreview = {
+      tagNames: [],
+      newTagNames: [],
+      removeTagIds: [],
+      removeTagNames: [],
+    };
+    if (add.length === 0 && remove.length === 0) return preview;
+    if (add.length + remove.length > MAX_TAGS_PER_CALL) {
+      throw new BadRequestException(
+        tr(
+          "errors.tags.tooManyTags",
+          `At most ${MAX_TAGS_PER_CALL} tags can be changed in one call`,
+          { max: MAX_TAGS_PER_CALL },
+        ),
+      );
+    }
+    const removeKeys = new Set(remove.map((name) => name.toLowerCase()));
+    const both = add.find((name) => removeKeys.has(name.toLowerCase()));
+    if (both !== undefined) {
+      throw new BadRequestException(
+        tr(
+          "errors.tags.addAndRemove",
+          `The tag "${both}" cannot be both added and removed in one edit`,
+          { name: both },
+        ),
+      );
+    }
+
+    // A name the user has no tag for is created as `CreateTagDto` would store
+    // it (markup stripped), so its cleaned spelling is looked up too.
+    const cleaned = (name: string) => (stripHtml(name) ?? "").trim();
+    const known = await this.findByNames(m, userId, [
+      ...add,
+      ...add.map(cleaned),
+      ...remove,
+    ]);
+    const byKey = new Map(known.map((tag) => [tag.name.toLowerCase(), tag]));
+    const unknown = remove.find((name) => !byKey.has(name.toLowerCase()));
+    if (unknown !== undefined) {
+      const suggestion = didYouMean(
+        unknown,
+        (await m.find(Tag, { where: { userId } })).map((t) => t.name),
+      );
+      throw new NotFoundException(
+        tr("errors.tags.unknownName", `Unknown tag: ${unknown}.${suggestion}`, {
+          name: unknown,
+          suggestion,
+        }),
+      );
+    }
+    const added = new Set<string>();
+    for (const name of add) {
+      const clean = cleaned(name);
+      const tag =
+        byKey.get(name.toLowerCase()) ?? byKey.get(clean.toLowerCase());
+      const spelled = tag?.name ?? clean;
+      if (!spelled || added.has(spelled.toLowerCase())) continue;
+      added.add(spelled.toLowerCase());
+      if (!tag) {
+        preview.tagNames.push(spelled);
+        preview.newTagNames.push(spelled);
+      } else if (!everywhere.has(tag.id)) {
+        preview.tagNames.push(spelled);
+      }
+    }
+    for (const name of remove) {
+      const tag = byKey.get(name.toLowerCase())!;
+      if (anywhere.has(tag.id)) {
+        preview.removeTagIds.push(tag.id);
+        preview.removeTagNames.push(tag.name);
+      }
+    }
+    return preview;
+  }
+
+  /**
+   * Add tags to transaction splits without touching the tags they carry, on
+   * the caller's manager. The split counterpart of `addTransactionTags`: tag
+   * and split ownership are checked before the write, and the insert is
+   * ON CONFLICT DO NOTHING on the (split, tag) primary key, so a repeat leaves
+   * one link.
+   */
+  async addSplitTags(
+    m: EntityManager,
+    userId: string,
+    splitIds: readonly string[],
+    tagIds: readonly string[],
+  ): Promise<void> {
+    const plan = await this.prepareSplitTagChange(m, userId, splitIds, tagIds);
+    if (!plan) return;
+    await m
+      .createQueryBuilder()
+      .insert()
+      .into(TransactionSplitTag)
+      .values(
+        plan.splitIds.flatMap((transactionSplitId) =>
+          plan.tagIds.map((tagId) => ({ transactionSplitId, tagId })),
+        ),
+      )
+      .orIgnore()
+      .execute();
+  }
+
+  /** Remove exactly the named (split, tag) links; other tags stay. */
+  async removeSplitTags(
+    m: EntityManager,
+    userId: string,
+    splitIds: readonly string[],
+    tagIds: readonly string[],
+  ): Promise<void> {
+    const plan = await this.prepareSplitTagChange(m, userId, splitIds, tagIds);
+    if (!plan) return;
+    await m.delete(TransactionSplitTag, {
+      transactionSplitId: In(plan.splitIds),
+      tagId: In(plan.tagIds),
+    });
+  }
+
+  private async prepareSplitTagChange(
+    m: EntityManager,
+    userId: string,
+    splitIds: readonly string[],
+    tagIds: readonly string[],
+  ): Promise<{ splitIds: string[]; tagIds: string[] } | null> {
+    const plan = await this.prepareTagLinkChange(
+      m,
+      userId,
+      splitIds,
+      tagIds,
+      (ids) =>
+        m.count(TransactionSplit, {
+          where: { id: In(ids), transaction: { userId } },
+        }),
+    );
+    return plan && { splitIds: plan.rowIds, tagIds: plan.tIds };
+  }
+
+  /**
    * Run `fn` against the caller's QueryRunner transaction when one is passed
    * (the transactions module's flows still manage their own QueryRunner until
    * task R2), otherwise inside a `withScopedDb` of our own.
@@ -290,6 +622,201 @@ export class TagsService {
         );
         await manager.save(TransactionTag, newTags);
       }
+    });
+  }
+
+  /**
+   * Validate and dedupe the inputs of addTransactionTags /
+   * removeTransactionTags: bounds first (no query), then tag ownership and
+   * transaction ownership on the caller's manager, before any write. Returns
+   * null when there is nothing to do.
+   */
+  private async prepareTransactionTagChange(
+    m: EntityManager,
+    userId: string,
+    transactionIds: readonly string[],
+    tagIds: readonly string[],
+  ): Promise<{ txIds: string[]; tIds: string[] } | null> {
+    // The existing methods rely on RLS alone for the transaction side; the
+    // additive path checks it explicitly so a foreign id is refused, not
+    // silently skipped or written.
+    const plan = await this.prepareTagLinkChange(
+      m,
+      userId,
+      transactionIds,
+      tagIds,
+      (ids) => m.count(Transaction, { where: { id: In(ids), userId } }),
+    );
+    return plan && { txIds: plan.rowIds, tIds: plan.tIds };
+  }
+
+  /**
+   * The checks every additive or removing tag-link change makes, for
+   * transactions and split lines alike: dedupe, the bounds first (no query),
+   * then tag ownership and row ownership (`countOwned`) on the caller's
+   * manager, before any write. Returns null when there is nothing to do.
+   */
+  private async prepareTagLinkChange(
+    m: EntityManager,
+    userId: string,
+    rowIds: readonly string[],
+    tagIds: readonly string[],
+    countOwned: (ids: string[]) => Promise<number>,
+  ): Promise<{ rowIds: string[]; tIds: string[] } | null> {
+    const ids = [...new Set(rowIds)];
+    const tIds = [...new Set(tagIds)];
+    if (ids.length === 0 || tIds.length === 0) {
+      return null;
+    }
+    if (tIds.length > MAX_TAGS_PER_CALL) {
+      throw new BadRequestException(
+        tr(
+          "errors.tags.tooManyTags",
+          `At most ${MAX_TAGS_PER_CALL} tags can be changed in one call`,
+          { max: MAX_TAGS_PER_CALL },
+        ),
+      );
+    }
+    if (ids.length > MAX_TRANSACTIONS_PER_CALL) {
+      throw new BadRequestException(
+        tr(
+          "errors.tags.tooManyTransactions",
+          `At most ${MAX_TRANSACTIONS_PER_CALL} transactions can be changed in one call`,
+          { max: MAX_TRANSACTIONS_PER_CALL },
+        ),
+      );
+    }
+
+    // Same ownership check as setTransactionTags / setTransactionTagsBulk.
+    const tags = await m.find(Tag, { where: { id: In(tIds), userId } });
+    if (tags.length !== tIds.length) {
+      throw new NotFoundException(
+        tr("errors.tags.oneOrMoreNotFound", "One or more tags not found"),
+      );
+    }
+    if ((await countOwned(ids)) !== ids.length) {
+      throw new NotFoundException(
+        tr(
+          "errors.tags.oneOrMoreTransactionsNotFound",
+          "One or more transactions not found",
+        ),
+      );
+    }
+    return { rowIds: ids, tIds };
+  }
+
+  /**
+   * Add tags to many transactions without touching the tags they already
+   * carry. Runs on the caller's EntityManager (its withScopedDb transaction).
+   * Idempotent: (transaction_id, tag_id) is the primary key and the insert is
+   * ON CONFLICT DO NOTHING, so a repeat leaves one link.
+   */
+  async addTransactionTags(
+    m: EntityManager,
+    userId: string,
+    transactionIds: readonly string[],
+    tagIds: readonly string[],
+  ): Promise<void> {
+    const plan = await this.prepareTransactionTagChange(
+      m,
+      userId,
+      transactionIds,
+      tagIds,
+    );
+    if (!plan) {
+      return;
+    }
+    const rows = plan.txIds.flatMap((transactionId) =>
+      plan.tIds.map((tagId) => ({ transactionId, tagId })),
+    );
+    for (let i = 0; i < rows.length; i += TAG_LINK_INSERT_BATCH) {
+      await m
+        .createQueryBuilder()
+        .insert()
+        .into(TransactionTag)
+        .values(rows.slice(i, i + TAG_LINK_INSERT_BATCH))
+        .orIgnore()
+        .execute();
+    }
+  }
+
+  /**
+   * The user's tags whose names equal `names` case-insensitively, on the
+   * caller's manager (read only). A name the user has no tag for is absent from
+   * the result. Used to preview which tag names a proposal would create.
+   */
+  async findByNames(
+    m: EntityManager,
+    userId: string,
+    names: readonly string[],
+  ): Promise<Tag[]> {
+    const lowered = [...new Set(names.map((n) => n.trim().toLowerCase()))];
+    if (lowered.length === 0) return [];
+    return m
+      .getRepository(Tag)
+      .createQueryBuilder("tag")
+      .where("tag.userId = :userId", { userId })
+      .andWhere("LOWER(tag.name) IN (:...lowered)", { lowered })
+      .getMany();
+  }
+
+  /**
+   * Find the user's tag for each name (case-insensitively) or create it, on the
+   * caller's manager, and return them in the order of `names`, each once. The
+   * insert is guarded by `WHERE NOT EXISTS` and by `ON CONFLICT DO NOTHING` against
+   * the unique index `idx_tags_user_name`, so two writers racing for one name leave
+   * one tag and neither fails; the select that follows reads what is there. The tag is
+   * written in the caller's transaction, so a rollback drops a tag it created.
+   * Blank names are skipped; at most `MAX_TAGS_PER_CALL` are taken.
+   */
+  async findOrCreateByNames(
+    m: EntityManager,
+    userId: string,
+    names: readonly string[],
+  ): Promise<Tag[]> {
+    const wanted = uniqueTagNames(names).slice(0, MAX_TAGS_PER_CALL);
+    for (const name of wanted) {
+      // The WHERE NOT EXISTS makes the common case a no-op; the unique index
+      // `idx_tags_user_name` (user_id, LOWER(name)) is the backstop for two
+      // writers racing for one name, and a target-less ON CONFLICT DO NOTHING
+      // turns that loss into "the other one's tag", which the select below reads.
+      await m.query(
+        `INSERT INTO tags (user_id, name)
+         SELECT $1::uuid, $2::varchar
+          WHERE NOT EXISTS (
+                  SELECT 1 FROM tags
+                   WHERE user_id = $1::uuid AND LOWER(name) = LOWER($2::varchar))
+         ON CONFLICT DO NOTHING`,
+        [userId, name],
+      );
+    }
+    const found = await this.findByNames(m, userId, wanted);
+    const byKey = new Map(found.map((tag) => [tag.name.toLowerCase(), tag]));
+    return wanted.flatMap((name) => {
+      const tag = byKey.get(name.toLowerCase());
+      return tag ? [tag] : [];
+    });
+  }
+
+  /** Remove exactly the named (transaction, tag) links; other tags stay. */
+  async removeTransactionTags(
+    m: EntityManager,
+    userId: string,
+    transactionIds: readonly string[],
+    tagIds: readonly string[],
+  ): Promise<void> {
+    const plan = await this.prepareTransactionTagChange(
+      m,
+      userId,
+      transactionIds,
+      tagIds,
+    );
+    if (!plan) {
+      return;
+    }
+    await m.delete(TransactionTag, {
+      transactionId: In(plan.txIds),
+      tagId: In(plan.tIds),
     });
   }
 

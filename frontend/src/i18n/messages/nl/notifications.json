@@ -1,0 +1,287 @@
+{
+  "title": "Meldingen",
+  "unread": "{count} ongelezen",
+  "markAllRead": "Alles markeren als gelezen",
+  "loading": "Meldingen worden geladen...",
+  "empty": "Geen meldingen",
+  "undo": "Ongedaan maken",
+  "buttonTitle": "Meldingen",
+  "buttonAriaLabel": "Meldingen",
+  "dismissAriaLabel": "Melding sluiten",
+  "closeAriaLabel": "Meldingen sluiten",
+  "emptyFiltered": "Geen melding komt overeen met het huidige filter",
+  "deleteAll": "Alles verwijderen",
+  "deleteAllConfirmTitle": "Meldingen verwijderen",
+  "deleteAllConfirmMessageAll": "Alle meldingen verwijderen? Dit kan niet ongedaan worden gemaakt.",
+  "deleteAllConfirmMessageFiltered": "Elke melding die aan het huidige filter voldoet verwijderen, ook de niet weergegeven? Dit kan niet ongedaan worden gemaakt.",
+  "deleted": "{count, plural, one {# melding verwijderd} other {# meldingen verwijderd}}",
+  "deleteFailed": "De meldingen konden niet worden verwijderd",
+  "filter": {
+    "financial": "Financieel",
+    "system": "Systeem"
+  },
+  "severity": {
+    "critical": "Kritiek",
+    "warning": "Waarschuwing",
+    "success": "Goed nieuws",
+    "info": "Info"
+  },
+  "reminder": {
+    "remindAriaLabel": "Herinner mij hieraan",
+    "stopAriaLabel": "Deze herinnering stoppen",
+    "stopped": "Herinnering gestopt",
+    "stopFailed": "De herinnering kon niet worden gestopt",
+    "created": "Herinnering ingesteld",
+    "createFailed": "De herinnering kon niet worden ingesteld",
+    "dialogTitle": "Herinner mij",
+    "dialogDescription": "Ontvang deze melding later opnieuw totdat je actie onderneemt.",
+    "modeLabel": "Frequentie",
+    "modeRepeat": "Herhalen tot ik stop",
+    "modeOnce": "Nog een keer",
+    "intervalLabelRepeat": "Herinner mij elke",
+    "intervalLabelOnce": "Herinner mij na",
+    "durationMinutes": "{minutes, plural, one {# minuut} other {# minuten}}",
+    "durationHours": "{hours, plural, one {# uur} other {# uur}}",
+    "cancel": "Annuleren",
+    "confirm": "Herinnering instellen",
+    "pageTitle": "Actieve herinneringen",
+    "empty": "Geen actieve herinneringen",
+    "loadFailed": "Herinneringen konden niet worden geladen",
+    "retry": "Opnieuw proberen",
+    "nextFire": "Volgende herinnering: {date}",
+    "openTarget": "Gerelateerde pagina openen",
+    "delegateUnavailable": "Schakel terug naar je eigen account om herinneringen te beheren."
+  },
+  "billDue": {
+    "titleOverdue": "{payee} achterstallig",
+    "titleToday": "{payee} vandaag verschuldigd",
+    "titleTomorrow": "{payee} morgen verschuldigd",
+    "titleInDays": "{payee} over {days} dagen verschuldigd",
+    "amountDue": "{amount} te betalen op {date}",
+    "amountUnavailable": "Bedrag niet beschikbaar (geen actuele wisselkoers), te betalen op {date}"
+  },
+  "gemSignal": {
+    "riskTitle": "{strategy} overgeschakeld naar {state}",
+    "riskMessage": "Uw GEM-strategie \"{strategy}\" is gewijzigd van {fromState} naar {toState}. Open om de aanbeveling te bekijken.",
+    "allocationTitle": "{strategy} heeft het doel gewijzigd",
+    "allocationMessage": "Uw GEM-strategie \"{strategy}\" richt zich nu op {target}. Open om de aanbeveling te bekijken.",
+    "riskOn": "risk-on",
+    "riskOff": "risk-off"
+  },
+  "bond": {
+    "maturitySoonTitle": "{series} loopt af op {date}",
+    "maturitySoonMessage": "{quantity} × {series} lopen af op {date}. {payout}",
+    "interestTitle": "{series}: rentebetaling op {date}",
+    "interestMessage": "{quantity} × {series} keren op {date} {amount} rente uit. Boek de rente op de effectenpagina als die nog niet op je rekening staat.",
+    "interestMessageUnknown": "{quantity} × {series} keren op {date} rente uit. Het bedrag is nog niet bekend: een rente waarvan het afhangt is niet gepubliceerd.",
+    "rateResetTitle": "{series}: nieuwe renteperiode",
+    "rateResetMessage": "{series} is op {date} gestart met periode {period} tegen {rate} per jaar.",
+    "unbookedTitle": "{series}: afgelopen, aflossing niet geboekt",
+    "unbookedMessage": "{quantity} × {series} zijn op {date} afgelopen en er is geen aflossing geboekt. {payout} Boek de aflossing op de effectenpagina.",
+    "payoutKnown": "De uitbetaling is {payout}.",
+    "payoutUnknown": "De uitbetaling is nog niet bekend: {reason}.",
+    "reason": {
+      "RATE_UNKNOWN": "een rente waarvan ze afhangt is nog niet gepubliceerd",
+      "TERMS_INCOMPLETE": "de voorwaarden van de serie zijn onvolledig",
+      "PURCHASE_OUTSIDE_SALE_WINDOW": "een aankoopdatum valt buiten de verkoopperiode van de serie",
+      "PURCHASE_AFTER_MATURITY": "een aankoopdatum ligt op of na de einddatum van de serie",
+      "other": "ze kan niet worden berekend uit de opgeslagen gegevens"
+    },
+    "benchmarkTitle": "{benchmark}: nieuwe waarneming {observation}",
+    "benchmarkIntro": "{publisher} publiceerde {benchmark} voor {observation}: {value}.",
+    "benchmarkSeries": "{series}: periode vanaf {date} tegen {rate} per jaar.",
+    "benchmarkSeriesProjected": "{series}: periode vanaf {date} tegen een verwachte {rate} per jaar.",
+    "benchmarkSeriesUnknown": "{series}: periode vanaf {date}, de rente is nog niet bekend.",
+    "benchmarkMore": "En {more} andere.",
+    "missingTitle": "Obligatiecijfers nog niet bekend",
+    "missingMessage": "Sommige obligatiecijfers kunnen niet worden berekend. {causes}",
+    "cause": {
+      "observation": "De waarneming {observation} van {benchmark} ({publisher}) is niet opgeslagen: ze is nog niet gepubliceerd of de feed is sindsdien niet opgehaald. Vernieuw op de obligatiepagina.",
+      "observationNoPublisher": "De waarneming {observation} van {benchmark} is niet opgeslagen: ze is nog niet gepubliceerd of de feed is sindsdien niet opgehaald. Vernieuw op de obligatiepagina.",
+      "terms": "De voorwaarden van {series} zijn onvolledig. Vernieuw de serie op de obligatiepagina.",
+      "purchase": "Een aankoop van {series} op {date} valt buiten de verkoopperiode ({from} tot {to}). Corrigeer de aankoopdatum.",
+      "purchaseAfterMaturity": "Een aankoop van {series} op {date} ligt op of na de einddatum ({maturity}). Corrigeer de aankoopdatum.",
+      "lots": "De partijen kunnen niet uit het grootboek worden afgeleid ({code}). Corrigeer het grootboek.",
+      "lotsRow": "{action} van {date}: de partijen kunnen niet worden afgeleid ({code}). Corrigeer de transactie.",
+      "lotsRowSeries": "{action} van {date}: geen serie toegewezen ({code}). Kies de serie bij die transactie.",
+      "lotsRowRemoval": "{action} van {date}: haalt meer weg dan de rekening van die serie bezit ({code}). Corrigeer de transactie."
+    },
+    "action": {
+      "BUY": "Aankoop",
+      "SELL": "Verkoop",
+      "REINVEST": "Herbelegging",
+      "ADD_SHARES": "Toevoeging van stukken",
+      "REMOVE_SHARES": "Verwijdering van stukken",
+      "SPLIT": "Split",
+      "TRANSFER_IN": "Inkomende overboeking",
+      "TRANSFER_OUT": "Uitgaande overboeking",
+      "other": "Transactie"
+    },
+    "benchmarks": {
+      "PL_CPI_GUS_YOY": "CPI, 12 maanden (GUS)",
+      "PL_NBP_REFERENCE": "NBP-referentierente",
+      "US_CPI_U_NSA": "CPI-U, alle posten, niet seizoensgecorrigeerd (BLS)",
+      "US_TBILL_13W_MMY": "Rendement van 13-weeks schatkistpapier"
+    }
+  },
+  "portfolioMovement": {
+    "titleUp": "Beleggingen {percent}% hoger",
+    "titleDown": "Beleggingen {percent}% lager",
+    "messageUp": "Uw beleggingen staan van {from} tot {to} {percent}% hoger, exclusief stortingen en opnames. Open om te bekijken.",
+    "messageDown": "Uw beleggingen staan van {from} tot {to} {percent}% lager, exclusief stortingen en opnames. Open om te bekijken."
+  },
+  "balanceThreshold": {
+    "titleLow": "{account} ligt onder uw drempel",
+    "titleHigh": "{account} ligt boven uw drempel",
+    "messageLow": "{account} is gedaald naar {balance}, onder uw drempel van {threshold}.",
+    "messageHigh": "{account} is gestegen naar {balance}, boven uw drempel van {threshold}."
+  },
+  "system": {
+    "backupFailed": {
+      "title": "Automatische back-up mislukt",
+      "message": "De automatische back-up voor {user} is mislukt: {error}"
+    },
+    "backupPartial": {
+      "title": "Automatische back-up onvolledig",
+      "messageAttachments": "De back-up voor {user} is weggeschreven, maar {missing} van {expected} bijlagen konden niet worden opgenomen en {inconsistent} kwamen niet overeen met hun metagegevens. Volledige back-ups zijn bewaard.",
+      "messagePromotion": "De dagelijkse back-up voor {user} is gelukt, maar de wekelijkse of maandelijkse kopie kon niet worden weggeschreven: {error}",
+      "messageRetention": "De back-up voor {user} is gelukt, maar oude back-upbestanden konden niet worden opgeruimd: {error}"
+    },
+    "encryptionKeyMissing": {
+      "title": "Encryptiesleutel niet geconfigureerd",
+      "message": "ENCRYPTION_KEY is niet ingesteld, dus back-ups worden onversleuteld weggeschreven en geheimen kunnen niet worden opgeslagen. Een toekomstige versie start niet meer zonder deze sleutel."
+    },
+    "jwtSecretWeak": {
+      "title": "JWT_SECRET is zwak",
+      "message": "JWT_SECRET is een gepubliceerde voorbeeldwaarde of te voorspelbaar, waardoor sessietokens kunnen worden vervalst. Genereer een sterke waarde (openssl rand -base64 32). Wijzigen zorgt ervoor dat codes uit authenticator-apps niet meer werken en vertrouwde apparaten worden vergeten: gebruikers loggen in met een back-upcode en stellen 2FA opnieuw in, en voor wie er geen heeft stel je de 2FA opnieuw in via Gebruikersbeheer. Lees eerst docs/backend/modules-and-runtime.md (Changing JWT_SECRET)."
+    },
+    "smtpFailure": {
+      "title": "E-mailbezorging mislukt",
+      "message": "Monize kon geen e-mail verzenden: {error}. Meldingen en herinneringen worden niet bezorgd."
+    },
+    "providerOutage": {
+      "title": "{provider} reageert niet",
+      "message": "Marktgegevens van {provider} zijn niet beschikbaar. Koersen en indexgegevens kunnen verouderd zijn totdat de provider weer reageert."
+    },
+    "providerRecovered": {
+      "title": "{provider} reageert weer",
+      "message": "De storing is voorbij en marktgegevens van {provider} worden weer bijgewerkt."
+    },
+    "scheduledPostFailed": {
+      "title": "{name} kon niet worden geboekt",
+      "message": "Je geplande transactie met vervaldatum {date} is niet automatisch geboekt: {error}. Je kunt deze handmatig boeken via Facturen & stortingen."
+    }
+  },
+  "priceMovement": {
+    "title": "Melding bij koerswijziging: {symbol} ({percent}%)",
+    "message": "{symbol}: {percent}% ten opzichte van de vorige beschikbare sessie."
+  },
+  "bankSync": {
+    "expiringTitleToday": "{institution}: toegang tot de bank eindigt vandaag",
+    "expiringTitleOneDay": "{institution}: toegang tot de bank eindigt binnen 1 dag",
+    "expiringTitleDays": "{institution}: toegang tot de bank eindigt binnen {days} dagen",
+    "expiringMessage": "Uw toestemming voor Monize om {institution} te lezen eindigt op {date}. Verleng de koppeling in Monize om te blijven synchroniseren.",
+    "expiredTitle": "{institution}: toegang tot de bank is beëindigd",
+    "expiredMessage": "Uw toestemming voor Monize om {institution} te lezen is beëindigd. Verleng de koppeling in Monize om de synchronisatie te hervatten.",
+    "failedTitle": "{institution}: synchronisatie mislukt",
+    "failedMessage": "De dagelijkse synchronisatie van {institution} is mislukt voor: {accounts}. Open de instellingen voor banksynchronisatie om te zien waarom.",
+    "failedCredentialsMessage": "De dagelijkse synchronisatie van {institution} kon niet starten omdat de inloggegevens voor banksynchronisatie ontbreken of zijn geweigerd. Controleer ze in de instellingen voor banksynchronisatie.",
+    "unnamedAccount": "een rekening",
+    "importedTitle": "{institution}: nieuwe transacties geïmporteerd",
+    "importedMessage": "Door de dagelijkse synchronisatie uit {institution} geïmporteerde transacties: {imported}.",
+    "importedNoneTitle": "{institution}: geen nieuwe transacties",
+    "importedNoneMessage": "De dagelijkse synchronisatie van {institution} vond geen nieuwe transacties."
+  },
+  "emailReceiptsAttention": {
+    "title": "E-mailkwitanties vereisen aandacht",
+    "message": "Uw kwitantiemap bevat {noParser} zonder profiel en {parseFailed} die het profiel niet herkende. Open om te controleren."
+  },
+  "aiReview": {
+    "readyTitle": "AI-voorstellen wachten op uw goedkeuring",
+    "readyMessage": "{count, plural, one {# AI-voorstel wacht} other {# AI-voorstellen wachten}} op uw goedkeuring, waarvan {added} nieuw. Open de AI-beoordelingsinbox om ze goed te keuren of te negeren.",
+    "expiringTitle": "AI-voorstellen verlopen binnenkort",
+    "expiringMessage": "{count, plural, one {# AI-voorstel verloopt} other {# AI-voorstellen verlopen}} binnenkort. Het eerste verloopt op {date}. Open de AI-beoordelingsinbox om ze goed te keuren of te negeren."
+  },
+  "warranty": {
+    "expiringTitle": "{name}: garantie verloopt binnen {days, plural, one {# dag} other {# dagen}}",
+    "expiringMessage": "De garantie voor {name} verloopt op {date}. Open hem om de documenten te bekijken of een claim vast te leggen.",
+    "todayTitle": "{name}: garantie verloopt vandaag",
+    "todayMessage": "De garantie voor {name} verloopt vandaag, {date}. Open hem om de documenten te bekijken of een claim vast te leggen."
+  },
+  "security": {
+    "oauthTitle": "Nieuwe app gekoppeld: {clientName}",
+    "oauthMessage": "De applicatie {clientName} heeft zojuist toegang gekregen tot je Monize-account. Was jij dit niet, wijzig dan nu je wachtwoord: daarmee wordt de toegang van alle gekoppelde applicaties ingetrokken.",
+    "relayTitle": "Een nieuwe verbinding heeft je AI-chat beantwoord",
+    "relayMessage": "Een verbinding die je Monize AI-chat nog niet eerder had beantwoord, heeft zojuist een prompt opgehaald. Heb je deze assistent niet gekoppeld, wijzig dan je wachtwoord."
+  },
+  "payrollDeduction": {
+    "resetTitle": "{category}: bevestig het maximum voor volgend jaar",
+    "resetMessage": "De inhouding {category} op {bill} wordt op {date} opnieuw ingesteld. Werk het jaarmaximum bij als het verandert; anders geldt {amount} opnieuw."
+  },
+  "shared": {
+    "title": "Gedeelde uitgaven",
+    "message": "Een gedeelde groep is bijgewerkt. Open Monize om de wijziging te bekijken."
+  },
+  "native": {
+    "payments": {
+      "title": "Betalingsherinnering",
+      "body": "Een rekening of geplande betaling vraagt uw aandacht. Open Monize voor de details."
+    },
+    "budgets": {
+      "title": "Budgetwaarschuwing",
+      "body": "Een van uw budgetten vraagt uw aandacht. Open Monize voor de details."
+    },
+    "system": {
+      "title": "Systeemmelding",
+      "body": "Monize heeft een systeemmelding voor u. Open de app voor de details."
+    },
+    "balances": {
+      "title": "Saldowaarschuwing",
+      "body": "Een rekeningsaldo heeft een door u ingestelde drempel overschreden. Open Monize voor de details."
+    },
+    "investments": {
+      "title": "Beleggingsbeweging",
+      "body": "Uw beleggingen zijn vandaag bewogen. Open Monize voor de details."
+    },
+    "strategies": {
+      "title": "Strategiesignaal",
+      "body": "Een van uw strategieën heeft de aanbeveling gewijzigd. Open Monize voor de details."
+    },
+    "bank_sync": {
+      "title": "Bankkoppeling",
+      "body": "Een bankkoppeling vraagt uw aandacht. Open Monize voor de details."
+    },
+    "bank_sync_activity": {
+      "title": "Banksynchronisatie",
+      "body": "Er is nieuws over uw banksynchronisatie. Open Monize voor de details."
+    },
+    "email_receipts": {
+      "title": "E-mailkwitanties vereisen aandacht",
+      "body": "Sommige e-mails in uw kwitantiemap hebben een profiel nodig of moeten worden gecorrigeerd. Open Monize voor meer informatie."
+    },
+    "bonds": {
+      "title": "Obligatiemelding",
+      "body": "Er is nieuws over een van je obligaties. Open Monize voor de details."
+    },
+    "ai_review": {
+      "title": "AI-beoordelingsvoorstellen",
+      "body": "Enkele AI-beoordelingsvoorstellen wachten op je beslissing. Open Monize voor de details."
+    },
+    "warranties": {
+      "title": "Garantieherinnering",
+      "body": "Een van je garanties verloopt binnenkort. Open Monize voor de details."
+    },
+    "shared_expenses": {
+      "title": "Gedeelde uitgaven",
+      "body": "Een gedeelde groep is bijgewerkt. Open Monize om de wijziging te bekijken."
+    },
+    "security": {
+      "title": "Beveiligingsmelding",
+      "body": "Er is iets veranderd in wie toegang heeft tot je Monize-account. Open Monize voor de details."
+    },
+    "fallback": {
+      "title": "Monize",
+      "body": "Je hebt een nieuwe melding in Monize."
+    }
+  }
+}

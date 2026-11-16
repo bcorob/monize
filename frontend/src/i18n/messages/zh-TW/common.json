@@ -10,6 +10,8 @@
     "versionLabel": "版本 {version}",
     "expandAll": "全部展開",
     "collapseAll": "全部收合",
+    "changeCount": "{count, plural, other {# 項變更}}",
+    "otherSections": "修正與詳細資訊",
     "viewFullNotes": "查看完整版本說明",
     "dontShowAgain": "不再顯示",
     "showNextLogin": "下次登入時顯示",
@@ -38,6 +40,14 @@
     "scheduleRecurring": "設為固定排程",
     "more": "更多操作"
   },
+  "columns": {
+    "button": "欄位",
+    "buttonWithHidden": "欄位，已隱藏 {count} 個",
+    "menuLabel": "顯示或隱藏欄位",
+    "showAll": "全部顯示",
+    "hideColumn": "隱藏欄位",
+    "sheetSubtitle": "可在「欄位」選單中重新顯示。"
+  },
   "loading": "載入中...",
   "pagination": {
     "showing": "顯示",
@@ -60,6 +70,7 @@
   },
   "exportDropdown": {
     "export": "匯出",
+    "exportCsv": "匯出 CSV",
     "exporting": "匯出中...",
     "exportPdf": "匯出 PDF",
     "exportReport": "匯出報告",
@@ -88,6 +99,7 @@
     "stackedChart": "100% 堆疊長條圖",
     "lineChart": "折線圖",
     "areaChart": "面積圖",
+    "sankeyChart": "流向圖",
     "table": "表格"
   },
   "formActions": {
@@ -118,8 +130,15 @@
     "search": "搜尋...",
     "selectAll": "全選",
     "clear": "清除",
+    "clearSearch": "清除搜尋",
     "noOptions": "找不到選項",
     "selectedCount": "已選擇 {count}"
+  },
+  "categoryFilter": {
+    "uncategorized": "未分類",
+    "transfers": "轉帳",
+    "allIncome": "所有收入類別",
+    "allExpenses": "所有支出類別"
   },
   "combobox": {
     "createOption": "建立「{value}」",
@@ -137,6 +156,7 @@
   },
   "dateInput": {
     "shortcutsTitle": "鍵盤快速鍵",
+    "openPicker": "開啟日期選擇器",
     "today": "今天",
     "firstDayOfYear": "年初第一天",
     "lastDayOfYear": "年末最後一天",
@@ -158,6 +178,7 @@
     "CASH": "現金",
     "LINE_OF_CREDIT": "信用額度",
     "ASSET": "資產",
+    "CRYPTO": "加密錢包",
     "OTHER": "其他"
   },
   "accountFilter": {
@@ -241,12 +262,20 @@
     "marker": "—",
     "srLabel": "金額不可用",
     "scheduledFx": "無法計算目前金額：找不到此排程項目結算貨幣對的匯率。已儲存的金額是以舊匯率計算，因此不予顯示。",
-    "displayFx": "此金額無法在此處顯示：金額本身已知，但沒有可用匯率將其換算為該合計所用的貨幣。請在「貨幣」頁面重新整理匯率。"
+    "displayFx": "此金額無法在此處顯示：金額本身已知，但沒有可用匯率將其換算為該合計所用的貨幣。請在「貨幣」頁面重新整理匯率。",
+    "noCashBalance": "無法計算此值：此檢視中的某個現金帳戶未回報當天的餘額，因此其持有金額是未知，而不是零。請重新載入報表；若問題持續，表示當天的餘額無法計算，值得回報。",
+    "noPrice": "無法計算此金額：持有股數已知，但該證券沒有可用於估值的價格。請重新整理價格，或在該證券的價格記錄中手動新增一筆。",
+    "noBaseline": "無法得出此數值：它是一項對比，而沒有更早的數值可供比較。沒有缺少的內容，因此無須補充。",
+    "staleQuote": "無法計算當日變動：該證券的最新價格早於最近一個交易時段，由此得出的任何變動都屬於更早的日期。請更新價格，或檢查該證券的報價來源。",
+    "unknownCurrency": "無法顯示此金額：記錄未指明任何證券，因此該數字的幣別未知。請開啟該交易並為其指定證券，以便標示其金額。"
   },
   "density": {
     "title": "切換列間距",
     "normal": "一般",
     "compact": "緊密",
     "dense": "密集"
+  },
+  "scheduledOverdue": {
+    "included": "包含 {count, plural, one {# 筆} other {# 筆}}逾期排程交易"
   }
 }

@@ -7,7 +7,6 @@ import {
 import {
   solveRecurringForInterestSavings,
   solveRecurringForPayoffMonth,
-  solveRecurringForTargetInterest,
 } from './loan-overpayment-solver';
 
 function baseInput(overrides: Partial<LoanScheduleInput> = {}): LoanScheduleInput {
@@ -22,32 +21,6 @@ function baseInput(overrides: Partial<LoanScheduleInput> = {}): LoanScheduleInpu
 }
 
 const baseline = generateLoanSchedule(baseInput());
-
-describe('solveRecurringForTargetInterest', () => {
-  it('finds a recurring extra that brings total interest at or below a reachable target', () => {
-    const target = baseline.totalInterest / 2;
-    const solved = solveRecurringForTargetInterest(baseInput(), target);
-
-    expect(solved.status).toBe('ok');
-    expect(solved.amount).toBeGreaterThan(0);
-    expect(solved.result!.totalInterest).toBeLessThanOrEqual(target + 0.5);
-    // Smallest such amount: one step less overshoots the target.
-    expect(solved.result!.totalInterest).toBeGreaterThan(target - baseline.totalInterest * 0.05);
-  });
-
-  it('returns already-met (0 extra) when the loan already costs at most the target', () => {
-    const solved = solveRecurringForTargetInterest(baseInput(), baseline.totalInterest + 1000);
-    expect(solved.status).toBe('already-met');
-    expect(solved.amount).toBe(0);
-  });
-
-  it('returns unreachable when even the maximum extra cannot get interest that low', () => {
-    const solved = solveRecurringForTargetInterest(baseInput(), 1);
-    expect(solved.status).toBe('unreachable');
-    expect(solved.amount).toBeNull();
-    expect(solved.interestSaved).toBeNull();
-  });
-});
 
 describe('solveRecurringForInterestSavings', () => {
   it('finds a recurring extra that saves at least the target vs the baseline', () => {
@@ -116,8 +89,7 @@ describe('goal-seek under non-monthly loan frequencies', () => {
       5,
       300,
       'BIWEEKLY',
-      false,
-      false,
+      'ANNUITY',
     ),
     frequency: 'BIWEEKLY',
     firstPaymentDate: new Date(2026, 0, 1),
@@ -184,25 +156,19 @@ describe('a target cannot be met by a truncated schedule', () => {
     expect(savings.status).toBe('baseline-incomplete');
     expect(savings.amount).toBeNull();
     expect(savings.interestSaved).toBeNull();
-
-    // Same for an absolute target: "already met" would be a claim about the
-    // horizon's interest, which is smaller than the loan's.
-    const target = solveRecurringForTargetInterest(
-      nonAmortizing(),
-      incomplete.totalInterest + 1,
-    );
-    expect(target.status).toBe('baseline-incomplete');
   });
 
-  it('never counts a truncated candidate as meeting an interest target', () => {
-    // maxPayments caps every candidate schedule, so no amount can prove a
-    // lifetime interest below the target -- the answer is unreachable, not a
-    // small amount whose truncated interest happens to look low enough.
-    const solved = solveRecurringForTargetInterest(
-      { ...nonAmortizing(), maxPayments: 12 },
-      1,
-    );
-    expect(solved.status).toBe('baseline-incomplete');
+  it('never reports a saving when maxPayments truncates an amortizing loan', () => {
+    // maxPayments caps every candidate schedule, so its interest is a subtotal
+    // of the loan's, never a lifetime figure to measure a saving against.
+    const capped = baseInput({ maxPayments: 12 });
+    expect(baseline.numPayments).toBeGreaterThan(12);
+    expect(generateLoanSchedule(capped).paidOff).toBe(false);
+
+    const savings = solveRecurringForInterestSavings(capped, 1);
+    expect(savings.status).toBe('baseline-incomplete');
+    expect(savings.amount).toBeNull();
+    expect(savings.interestSaved).toBeNull();
   });
 });
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@/test/render';
+import { render, screen, waitFor, fireEvent, act, within } from '@/test/render';
 import toast from 'react-hot-toast';
 import BudgetsPage from './page';
 
@@ -50,10 +50,12 @@ vi.mock('@/store/authStore', () => ({
 }));
 
 // Mock preferences store
+// Mutable so a test can choose the reader's date format; reset in beforeEach.
+const mockPreferences: Record<string, unknown> = {};
 vi.mock('@/store/preferencesStore', () => ({
   usePreferencesStore: (selector?: any) => {
     const state = {
-      preferences: { twoFactorEnabled: true, theme: 'system', defaultCurrency: 'USD' },
+      preferences: { twoFactorEnabled: true, theme: 'system', defaultCurrency: 'USD', ...mockPreferences },
       isLoaded: true,
       _hasHydrated: true,
     };
@@ -133,6 +135,7 @@ describe('BudgetsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetAll.mockResolvedValue([]);
+    for (const key of Object.keys(mockPreferences)) delete mockPreferences[key];
   });
 
   it('renders the page with title', async () => {
@@ -152,11 +155,12 @@ describe('BudgetsPage', () => {
     expect(screen.getByText('Create Your First Budget')).toBeInTheDocument();
   });
 
-  it('shows budget cards when budgets exist', async () => {
+  it('lists budgets as table rows, not a card grid', async () => {
     mockGetAll.mockResolvedValue([
       {
         id: 'budget-1',
         name: 'February 2026',
+        description: null,
         strategy: 'FIXED',
         budgetType: 'MONTHLY',
         isActive: true,
@@ -167,12 +171,54 @@ describe('BudgetsPage', () => {
 
     render(<BudgetsPage />);
 
-    await waitFor(() => {
-      expect(screen.getByText('February 2026')).toBeInTheDocument();
+    const row = await screen.findByRole('row', { name: /February 2026/ });
+    expect(screen.getByRole('table')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /February 2026/ })).toBeNull();
+    const headers = screen.getAllByRole('columnheader').map((th) => th.textContent);
+    expect(headers).toEqual(['Name', 'Strategy', 'Type', 'Categories', 'Started', 'Status']);
+    const cells = within(row).getAllByRole('cell');
+    expect(cells[1]).toHaveTextContent('Fixed');
+    expect(cells[2]).toHaveTextContent('Monthly');
+    // The count is a number column, right-aligned.
+    expect(cells[3]).toHaveTextContent('2');
+    expect(cells[3].className).toContain('text-right');
+    expect(screen.getAllByRole('columnheader')[3].className).toContain('text-right');
+    // The status is the shared Badge.
+    expect(within(cells[5]).getByText('Active').className).toContain('rounded-full');
+  });
+
+  it('shows the start date in the reader\'s date format', async () => {
+    mockPreferences.dateFormat = 'DD/MM/YYYY';
+    mockGetAll.mockResolvedValue([
+      {
+        id: 'budget-1',
+        name: 'February 2026',
+        description: null,
+        strategy: 'FIXED',
+        budgetType: 'MONTHLY',
+        isActive: true,
+        periodStart: '2026-02-01',
+        categories: [],
+      },
+    ]);
+
+    render(<BudgetsPage />);
+
+    const row = await screen.findByRole('row', { name: /February 2026/ });
+    expect(within(row).getByText('01/02/2026')).toBeInTheDocument();
+  });
+
+  it('draws the list inside the card, with a spinner there while it loads', async () => {
+    let resolve: (value: unknown[]) => void = () => {};
+    mockGetAll.mockReturnValue(new Promise((r) => { resolve = r; }));
+
+    render(<BudgetsPage />);
+
+    const spinner = screen.getByTestId('loading-spinner');
+    expect(spinner.parentElement?.className).toContain('overflow-hidden');
+    await act(async () => {
+      resolve([]);
     });
-    expect(screen.getByText('Active')).toBeInTheDocument();
-    expect(screen.getByText('Fixed - Monthly')).toBeInTheDocument();
-    expect(screen.getByText('2 categories')).toBeInTheDocument();
   });
 
   it('shows the wizard when clicking New Budget', async () => {
@@ -229,11 +275,12 @@ describe('BudgetsPage', () => {
     });
   });
 
-  it('navigates to budget detail on card click', async () => {
+  it('opens a budget from a click anywhere on its row, or Enter on the focused row', async () => {
     mockGetAll.mockResolvedValue([
       {
         id: 'budget-1',
         name: 'Budget',
+        description: null,
         strategy: 'FIXED',
         budgetType: 'MONTHLY',
         isActive: true,
@@ -244,12 +291,24 @@ describe('BudgetsPage', () => {
 
     render(<BudgetsPage />);
 
-    await waitFor(() => {
-      expect(screen.getByText('Budget')).toBeInTheDocument();
-    });
-
-    fireEvent.click(screen.getByText('Budget'));
+    const row = await screen.findByRole('row', { name: /Budget/ });
+    // A cell away from the name opens it too: the whole row is the target.
+    fireEvent.click(within(row).getByText('Monthly'));
     expect(mockPush).toHaveBeenCalledWith('/budgets/budget-1');
+
+    mockPush.mockClear();
+    expect(row).toHaveAttribute('tabindex', '0');
+    fireEvent.keyDown(row, { key: 'Enter' });
+    expect(mockPush).toHaveBeenCalledWith('/budgets/budget-1');
+  });
+
+  it('renders the shared EmptyState when there are no budgets', async () => {
+    render(<BudgetsPage />);
+
+    const title = await screen.findByText('No budgets yet');
+    expect(title.tagName).toBe('H3');
+    expect(title.parentElement?.className).toContain('text-center');
+    expect(screen.queryByRole('table')).toBeNull();
   });
 
   it('shows error toast when loading budgets fails', async () => {

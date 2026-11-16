@@ -1,0 +1,618 @@
+{
+  "page": {
+    "title": "规则",
+    "subtitle": "在交易创建或导入时，自动填写标签、分类和收款方",
+    "createButton": "创建规则",
+    "loading": "正在加载规则...",
+    "totalCount": "{count, plural, other {# 条规则}}"
+  },
+  "empty": {
+    "title": "还没有规则",
+    "body": "规则会监视新建和导入的交易，并在条件匹配时填写标签、分类或收款方。创建您的第一条规则即可开始。",
+    "createButton": "创建第一条规则"
+  },
+  "error": {
+    "title": "无法加载您的规则",
+    "body": "没有显示内容是因为请求失败，而不是因为您没有规则。请检查网络连接后重试。",
+    "retry": "重试"
+  },
+  "list": {
+    "header": {
+      "order": "顺序",
+      "enabled": "启用",
+      "name": "规则",
+      "summary": "摘要",
+      "actions": "操作"
+    },
+    "summary": "{trigger, select, create {创建时} import {导入时} both {创建或导入时} other {无触发条件}} · {conditions, plural, =0 {无条件} other {# 个条件}} · {actions, plural, =0 {无操作} other {# 个操作}}",
+    "enabledLabel": "启用 {name}"
+  },
+  "actions": {
+    "moveUp": "上移",
+    "moveDown": "下移",
+    "run": "在现有交易上运行",
+    "runInvalid": "请先修复规则再运行"
+  },
+  "invalid": {
+    "badge": "无效",
+    "tooltip": "在修复之前将被跳过：{reasons}。",
+    "reasons": {
+      "referenceMissing": "它使用的标签、收款方、分类或账户已不存在",
+      "noActions": "它没有任何操作",
+      "tooLarge": "它的条件过大",
+      "duplicateAction": "它重复了只允许出现一次的操作",
+      "unreadable": "无法读取它已保存的定义",
+      "other": "它的定义无效"
+    }
+  },
+  "duplicate": {
+    "name": "{name}（副本）"
+  },
+  "delete": {
+    "title": "删除规则",
+    "message": "确定要删除“{name}”吗？此操作无法撤销。"
+  },
+  "toasts": {
+    "enabled": "规则已启用",
+    "disabled": "规则已停用",
+    "toggleFailed": "无法更改规则",
+    "deleted": "规则已删除",
+    "deleteFailed": "无法删除规则",
+    "duplicated": "规则已复制。副本在您启用之前保持关闭",
+    "duplicateFailed": "无法复制规则",
+    "reorderFailed": "无法更改规则顺序",
+    "listChanged": "规则列表已在别处更改并重新加载。请重试",
+    "loadFailed": "无法加载规则"
+  },
+  "editor": {
+    "page": {
+      "newTitle": "新建规则",
+      "editTitle": "编辑规则",
+      "subtitle": "选择规则何时运行、适用于哪些交易，以及要更改什么",
+      "backToRules": "返回规则",
+      "loading": "正在加载规则..."
+    },
+    "name": {
+      "label": "名称",
+      "placeholder": "例如：为咖啡店添加标签"
+    },
+    "enabled": {
+      "label": "启用规则"
+    },
+    "sections": {
+      "when": "何时",
+      "if": "如果",
+      "then": "则"
+    },
+    "when": {
+      "description": "选择规则何时检查交易",
+      "created": "创建交易时",
+      "imported": "导入交易时",
+      "atLeastOne": "请至少保持选中一个选项",
+      "stopProcessing": "停止处理其他规则",
+      "stopProcessingHelp": "此规则与某笔交易匹配后，列表中排在它之后的规则将不再对该交易运行。",
+      "window": {
+        "title": "生效期间",
+        "help": "此规则仅适用于日期在该期间内的交易：创建或导入时，以及测试或运行规则时。日期留空表示不限。",
+        "from": "起始日期",
+        "to": "结束日期",
+        "backwards": "结束日期不能早于起始日期",
+        "noLimit": "不限",
+        "words": "仅适用于日期从 {from} 到 {to} 的交易"
+      }
+    },
+    "if": {
+      "description": "仅对匹配的交易执行操作",
+      "everyTransaction": "尚无条件，因此此规则适用于每一笔交易。"
+    },
+    "then": {
+      "description": "操作按此顺序执行",
+      "empty": "尚无操作。请至少添加一个。",
+      "limit": "一条规则最多可以有 {max} 个操作。"
+    },
+    "group": {
+      "matchAll": "满足以下全部",
+      "matchAny": "满足以下任意一项",
+      "matchLabel": "匹配方式",
+      "not": "对组取反",
+      "notHelp": "取反的组在其条件不成立时匹配。",
+      "title": "条件组",
+      "addCondition": "+ 添加条件",
+      "addGroup": "+ 添加条件组",
+      "depthLimit": "条件组最多可嵌套 {max} 层。",
+      "sizeLimit": "已达到条件数量上限。",
+      "empty": "此条件组为空。"
+    },
+    "condition": {
+      "title": "条件",
+      "field": "字段",
+      "operator": "运算符",
+      "value": "值"
+    },
+    "fields": {
+      "accountId": "账户",
+      "fromAccountId": "转出账户（转账）",
+      "toAccountId": "转入账户（转账）",
+      "type": "类型",
+      "payeeId": "收款方",
+      "payeeText": "收到的收款方原文",
+      "categoryId": "分类",
+      "description": "说明",
+      "amount": "金额（含正负号）",
+      "absAmount": "金额（忽略正负号）",
+      "currencyCode": "币种",
+      "tagIds": "标签",
+      "hasSplits": "有拆分",
+      "referenceNumber": "参考编号",
+      "dayOfMonth": "每月的日期",
+      "weekday": "星期几",
+      "status": "状态",
+      "hasAttachment": "有附件",
+      "date": "日期"
+    },
+    "operators": {
+      "eq": "等于",
+      "neq": "不等于",
+      "in": "属于以下任一项",
+      "notIn": "不属于以下任何一项",
+      "isEmpty": "为空",
+      "contains": "包含",
+      "startsWith": "开头为",
+      "matches": "匹配模式",
+      "lt": "小于",
+      "lte": "不大于",
+      "gt": "大于",
+      "gte": "不小于",
+      "between": "介于",
+      "hasAny": "含有以下任一项",
+      "hasAll": "含有以下全部",
+      "hasNone": "不含以下任何一项",
+      "inSubtree": "属于该分类或其子分类"
+    },
+    "types": {
+      "EXPENSE": "支出",
+      "INCOME": "收入",
+      "TRANSFER": "转账"
+    },
+    "value": {
+      "account": "选择账户",
+      "accounts": "选择账户",
+      "payee": "选择收款方",
+      "payees": "选择收款方",
+      "category": "选择分类",
+      "categories": "选择分类",
+      "tags": "选择标签",
+      "currency": "选择币种",
+      "currencies": "选择币种",
+      "types": "选择类型",
+      "matchesHint": "用 * 匹配任意文本，例如 *咖啡*。 不含 * 的模式只匹配整段文本。用 {capture} 保留该位置的文本，供此规则的操作使用，例如 {example}。名称由小写字母和数字组成，一个模式最多可保留 {max} 段文本。",
+      "amount": "金额",
+      "from": "从",
+      "to": "到",
+      "yes": "是",
+      "no": "否",
+      "days": "选择日期",
+      "weekdays": "选择星期",
+      "statuses": "选择状态"
+    },
+    "action": {
+      "title": "操作",
+      "type": "操作类型",
+      "tags": "标签",
+      "category": "分类",
+      "payee": "收款方",
+      "instruction": "审核说明",
+      "instructionPlaceholder": "例如：按收据拆分这笔消费",
+      "instructionHelp": "规则只会请求审核。任何更改在执行前都需要由人工批准。",
+      "onlyIfEmpty": "仅在为空时",
+      "onlyIfEmptyHelp": "开启后，仅当交易没有分类或收款方时，规则才会填写。它不会替换手动设置的值，也不会替换由收款方默认分类设置的值。关闭后可进行替换。",
+      "add": "+ 添加操作",
+      "reviewInbox": "查看审核收件箱",
+      "payeeTemplate": "收款方名称",
+      "descriptionTemplate": "说明文本",
+      "templateHelp": "纯文本。花括号中的每个占位符都会被交易中的文本替换。在下方选择占位符即可插入。",
+      "joinHelp": "文本会按所写原样接在当前说明之后或之前，因此请自行加入需要的空格或分隔符。",
+      "placeholders": "占位符",
+      "placeholdersHelp": "{payeeText} 是收到时的收款方文本。{description} 是此操作运行时的说明。其余占位符是此规则的模式中命名的捕获。",
+      "insertPlaceholder": "插入 {name}",
+      "unknownPlaceholders": "此规则未定义：{names}。请从列表中选择占位符，或在上方的模式中捕获它。",
+      "invalidPlaceholders": "不是有效的占位符：{names}。名称由小写字母和数字组成。",
+      "createIfMissing": "收款方不存在时创建",
+      "createIfMissingHelp": "开启后，如果没有收款方与该名称匹配（按名称、别名或相近匹配），则创建新的收款方。规则创建的收款方在撤销运行后仍会保留。",
+      "onlyIfEmptyDescriptionHelp": "开启后，仅当交易没有说明时，规则才会写入说明。关闭后每次都会写入。",
+      "mode": "说明写入方式",
+      "modes": {
+        "replace": "替换说明",
+        "append": "添加到说明之后",
+        "prepend": "添加到说明之前"
+      },
+      "convertHelp": "匹配的收入或支出会成为转账的一方。另一方将在你选择的账户中创建,该账户必须使用相同的币种。",
+      "direction": "方向",
+      "directionTo": "支出:资金转入另一个账户",
+      "directionFrom": "收入:资金来自另一个账户",
+      "clearCategory": "清除分类",
+      "clearCategoryHelp": "转账没有分类。关闭此项可保留交易已有的分类。",
+      "splitPayee": "交易的收款方(可选)",
+      "splitHint": "每个部分的金额取自上方模式中的捕获值,或取剩余部分。各部分之和必须等于交易金额,否则规则不会改动该交易。",
+      "splitNoCaptures": "尚未定义任何捕获值。请在上方的模式中用花括号写一个名称,例如 PRINCIPAL: {example},即可在此用作金额。",
+      "partAmountPlaceholder": "选择金额...",
+      "partRest": "其余部分",
+      "partAccount": "账户",
+      "partPayee": "另一方的收款方(可选)",
+      "partsLimit": "一次拆分最多可以有 {max} 个部分。",
+      "guideTitle": "使用方法",
+      "splitGuideHow": "在“如果”中，针对收款人文本或描述添加条件，运算符选择“匹配模式”，并在金额所在位置用花括号写上名称，例如 {first}。每个名称都会成为可为某个部分选择的金额，也可以选择“其余部分”。各部分之和必须等于交易金额，否则规则不会改动该交易。一个部分可以是类别，也可以是转到另一账户的转账（转账会改变该账户的余额）。",
+      "splitGuideExampleTitle": "示例：一笔贷款还款",
+      "splitGuideBank": "银行文本：本金: 1200.50 利息: 300.25 罚息: 0.00",
+      "splitGuidePattern": "模式：*本金: {first} 利息: {second} 罚息*",
+      "splitGuidePart1": "部分 1：{first} 作为转到贷款账户的转账",
+      "splitGuidePart2": "部分 2：{second} 归入类别“贷款：利息”",
+      "splitGuideResult": "对于 -1500.75 的结果：-1200.50 转入贷款账户，-300.25 记为利息支出。",
+      "splitGuideTip": "提示：在“生效期间”中设置开始日期，以免改动较早已对账的交易，并在保存前使用测试面板。",
+      "convertGuide": "支出会变成转到所选账户的转账，收入会变成从该账户转入的转账。只有另一个账户的余额会变化。提示：使用“生效期间”，以免改动较早的交易。",
+      "splitGuideName1": "benjin",
+      "splitGuideName2": "lixi",
+      "loanGuide": "适用于以单笔金额偿还抵押贷款或贷款分期还款的银行扣款。在\"如果\"中，按账户、收款人文本或描述匹配该笔扣款。该交易会变为拆分交易：本金转入贷款账户，利息计入利息分类，两者都按所偿还的那一期计算。提示：关闭该贷款计划付款的自动过账，以免该期被重复偿还，并在保存前使用测试面板。",
+      "loan": {
+        "help": "匹配到的扣款会偿还该贷款的下一期，其到期日与扣款日期相近。Monize 会为该期计算本金和利息；你无需输入金额。",
+        "account": "贷款账户",
+        "accountPlaceholder": "选择一笔抵押贷款或贷款…",
+        "noLoans": "你没有可结算的未结清抵押贷款或贷款账户。",
+        "window": "到期日窗口",
+        "windowHelp": "银行可能在到期日前后多久扣款。在某一期到期日前后这么多天内的扣款将偿还该期；窗口之外的扣款保持不变。",
+        "daysBefore": "到期日前的天数",
+        "daysAfter": "到期日后的天数",
+        "excess": "扣款高于该期还款额",
+        "excessPolicies": {
+          "extra_principal": "将差额作为额外本金偿还",
+          "refuse": "保持该交易不变"
+        },
+        "shortfall": "扣款低于该期还款额",
+        "shortfallPolicies": {
+          "refuse": "保持该交易不变",
+          "interest_first": "先偿还利息，其余作为本金"
+        },
+        "policyNote": "几分钱的差额由利息部分吸收。",
+        "policyHelp": "银行会分别对每部分四舍五入，因此扣款与应还金额相差不超过货币最小单位的 5 倍（大多数货币为 0.05）时视为精确匹配，差额计入利息部分。更大的差额按上面两种选择之一处理。",
+        "interestCategory": "利息分类（可选）",
+        "interestCategoryPlaceholder": "该贷款自己的利息分类",
+        "autoPostTitle": "该贷款的计划付款会自动过账",
+        "autoPostBody": "该贷款的计划付款已开启自动过账，这样它和此规则结算的银行扣款会同时偿还同一期。请关闭该计划付款的自动过账。"
+      }
+    },
+    "actionTypes": {
+      "add_tags": "添加标签",
+      "remove_tags": "移除标签",
+      "set_category": "设置分类",
+      "set_payee": "设置收款方",
+      "request_ai_review": "请求 AI 审核",
+      "set_payee_from_text": "根据文本设置收款方",
+      "set_description": "设置说明",
+      "convert_to_transfer": "转为转账",
+      "split": "拆分交易",
+      "settle_loan_installment": "结算一期贷款还款"
+    },
+    "save": {
+      "button": "保存规则",
+      "createdToast": "规则已创建",
+      "savedToast": "规则已保存",
+      "failedToast": "无法保存规则",
+      "summary": "规则未保存。请修正下方标记的项目后重试。"
+    },
+    "loadError": {
+      "title": "无法加载规则",
+      "body": "之所以没有显示任何内容，是因为请求失败，而不是规则为空。请检查网络连接后重试。",
+      "lookupsBody": "无法加载账户、收款方、分类、标签和币种列表，因此无法安全地显示规则。请检查网络连接后重试。",
+      "notFound": "此规则已不存在，可能已被删除。",
+      "retry": "重试"
+    },
+    "invalid": {
+      "title": "此规则无法运行",
+      "repaired": "已保存定义中的部分内容无法读取，已在此处移除或重置。保存前请检查规则。"
+    },
+    "conflict": {
+      "title": "此规则已在别处被更改",
+      "body": "请重新加载以查看最新版本。您未保存的修改将会丢失。",
+      "reload": "重新加载"
+    },
+    "errors": {
+      "codes": {
+        "INVALID_SHAPE": "此部分的格式编辑器无法识别。",
+        "UNKNOWN_KEY": "此部分包含一个不存在的设置。",
+        "UNKNOWN_FIELD": "请选择字段。",
+        "UNKNOWN_ACTION": "请选择操作。",
+        "OPERATOR_NOT_ALLOWED": "此字段不允许使用该运算符。",
+        "VALUE_REQUIRED": "请输入或选择一个值。",
+        "VALUE_NOT_ALLOWED": "此运算符不接受值。",
+        "VALUE_TYPE": "该值的类型不适用于此字段。",
+        "VALUE_OUT_OF_RANGE": "该值超出范围。",
+        "VALUE_TOO_LONG": "文本过长。",
+        "VALUE_EMPTY": "请输入文本。",
+        "INVALID_UUID": "请从列表中选择一项。",
+        "INVALID_ENUM": "请选择列出的值之一。",
+        "INVALID_CURRENCY": "请选择币种。",
+        "ARRAY_EMPTY": "请至少选择一项。",
+        "ARRAY_TOO_LARGE": "选择的项目过多。",
+        "RANGE_ORDER": "第一个值不能大于第二个值。",
+        "MAX_DEPTH": "条件组嵌套过深。上限为 {maxDepth} 层。",
+        "MAX_LEAVES": "条件过多。上限为 {maxLeaves} 个。",
+        "MAX_NODES": "条件和条件组过多。上限为 {maxNodes} 个。",
+        "NO_ACTIONS": "请至少添加一个操作。",
+        "TOO_MANY_ACTIONS": "操作过多。上限为 {maxActions} 个。",
+        "DUPLICATE_ACTION": "一条规则只能有一个 AI 审核、一个转账、拆分或贷款结算，以及一个取剩余部分的拆分部分。",
+        "CONFLICTING_ACTIONS": "转账、拆分或贷款结算操作不能与\"设置分类\"组合，且其每个部分要么有分类，要么有账户。",
+        "INVALID_CAPTURE": "捕获名称由小写字母和数字组成，以字母开头，最长 20 个字符。",
+        "TOO_MANY_CAPTURES": "一个模式最多可包含 5 个捕获。",
+        "DUPLICATE_CAPTURE": "每个捕获名称在一条规则中只能使用一次。",
+        "UNKNOWN_CAPTURE": "这里使用了此规则中没有任何条件定义的捕获值。",
+        "LOOKS_LIKE_REGEX": "不支持正则表达式：| \\ 和 [xy] 这类简短的方括号字符类会被当作普通字符，因此按正则写的模式永远匹配不到本意。若要匹配多个文本之一，请添加“满足以下任意一项”分组，并为每个文本各放一个条件。",
+        "PATTERN_WITHOUT_WILDCARD": "不含 * 时，此模式必须与整段文本完全相同。整段文本请用“等于”，部分文本请用“包含”，或在文本两侧加上 *，例如 *咖啡*。",
+        "REFERENCE_NOT_FOUND": "此处选择的项目已不存在。请选择其他项目。",
+        "NAME_REQUIRED": "请输入规则名称。",
+        "UNKNOWN": "此部分无效。"
+      }
+    },
+    "run": {
+      "button": "在现有交易上运行",
+      "saveFirst": "请保存更改以运行已保存的规则。"
+    },
+    "expression": {
+      "modeLabel": "条件视图",
+      "visual": "可视化",
+      "expression": "表达式",
+      "label": "条件表达式",
+      "help": "以文本形式编写条件。用 && 表示全部满足，用 || 表示满足任意一个，用 !( ... ) 表示取反。用名称引用项目：account(\"名称\")、payee(\"名称\")、category(\"上级: 下级\") 和 tag(\"名称\")。下划线 _ 表示尚未选择的值。matchesGlob 以 * 作为通配符。仅支持建议中提供的语法。",
+      "blocked": "请先修正表达式，才能切换回可视化视图或保存。",
+      "errorAt": "第 {line} 行，第 {column} 列：{message}",
+      "suggestions": "建议",
+      "errors": {
+        "tooLong": "表达式太长。上限为 {max} 个字符。",
+        "unexpectedChar": "不支持字符 {char}。",
+        "unterminatedString": "此文本缺少结束引号。",
+        "invalidEscape": "不支持此转义序列。",
+        "badNumber": "这不是有效的数字。",
+        "expectedExpression": "此处需要一个条件。",
+        "expectedField": "此处需要字段名称。",
+        "expectedOperator": "字段后需要运算符或方法。",
+        "expectedValue": "此处需要一个值。",
+        "expectedSymbol": "此处需要 {symbol}。",
+        "unexpectedToken": "意外的内容：{token}。",
+        "unsupported": "不支持这一部分。请只使用建议中提供的语法。",
+        "unknownField": "未知字段 {name}。",
+        "unknownFunction": "未知的函数或方法 {name}。",
+        "operatorNotAllowed": "字段 {field} 不能与 {operator} 一起使用。",
+        "wrongValueType": "{expected, select, text {需要带引号的文本。} number {需要一个数字。} boolean {需要 true 或 false。} list {需要方括号中的列表。} account {需要一个账户，例如 account(\"名称\")。} payee {需要一个收款方，例如 payee(\"名称\")。} category {需要一个分类，例如 category(\"上级: 下级\")。} tag {需要一个标签，例如 tag(\"名称\")。} other {此值的类型不正确。}}",
+        "invalidEnum": "请使用以下之一：{values}。",
+        "invalidCurrency": "请使用带引号的三个字母货币代码，例如 \"CAD\"。",
+        "valueTooLong": "文本太长。上限为 {max} 个字符。",
+        "listTooLong": "列表太长。上限为 {max} 项。",
+        "unknownEntity": "{kind, select, account {没有名为 {name} 的账户。} payee {没有名为 {name} 的收款方。} category {没有名为 {name} 的分类。} tag {没有名为 {name} 的标签。} other {没有名为 {name} 的项目。}}",
+        "ambiguousEntity": "有 {count} 个项目名为 {name}。请加上所指项目的编号，例如 {example}。",
+        "entityOrdinal": "{name} 的编号必须在 1 到 {count} 之间。",
+        "maxDepth": "分组嵌套过深。上限为 {max} 层。",
+        "maxLeaves": "条件过多。上限为 {max}。",
+        "maxNodes": "条件和分组过多。上限为 {max}。",
+        "tooNested": "嵌套的括号过多。"
+      }
+    }
+  },
+  "test": {
+    "title": "测试",
+    "description": "在你现有的交易上试用该规则。不会更改任何内容。",
+    "button": "测试规则",
+    "again": "重新测试",
+    "incomplete": "请先完成上方的条件和操作，再测试规则。",
+    "idle": "选择要试用规则的交易，然后选择“测试规则”。",
+    "running": "正在测试规则...",
+    "failed": "无法完成测试。{message}",
+    "stale": "自该结果生成后，规则或筛选条件已更改。请重新测试以查看当前结果。"
+  },
+  "match": {
+    "button": "测试规则",
+    "buttonLabel": "测试规则：条件",
+    "incomplete": "请完成上方的条件，以查看它们匹配哪些交易。",
+    "windowBackwards": "生效日期的结束早于开始，因此没有交易能匹配。",
+    "summary": "{count, plural, =0 {没有匹配的交易} other {# 笔匹配的交易}}",
+    "summaryPending": "匹配的交易",
+    "running": "正在查找匹配的交易...",
+    "failed": "无法加载匹配的交易。{message}",
+    "empty": "没有现有交易符合这些条件。",
+    "truncated": "仅检查了最新的 {scanned, number} 笔交易。",
+    "stale": "自此次测试以来条件已更改。请再次选择“测试规则”以查看当前的匹配结果。"
+  },
+  "run": {
+    "title": "在现有交易上运行“{name}”",
+    "description": "先预览规则会更改什么，再确认。你可以在操作历史中撤销此次运行。",
+    "previewButton": "预览",
+    "confirmButton": "确认并运行",
+    "idle": "选择账户和日期，然后选择“预览”。在你确认之前不会有任何更改。",
+    "loadingPreview": "正在加载预览...",
+    "previewFailed": "无法加载预览，因此无法运行任何内容。{message}",
+    "stale": "自该预览生成后，筛选条件已更改。运行前请重新预览。",
+    "accountsLoading": "正在加载账户...",
+    "accountsFailed": "无法加载你的账户，因此筛选条件不可用。",
+    "retry": "重试",
+    "summary": "已检查 {scanned, plural, other {# 笔交易}}，其中 {matched, plural, other {# 笔交易}}将被更改。",
+    "matchesNone": "此规则与已检查的所有交易都不匹配（{scanned} 笔）。保存前请检查条件。不含 * 的模式只匹配整段文本。",
+    "noChange": "在检查的 {scanned} 笔交易中，有 {matched} 笔符合规则条件，但不会有任何更改（例如它们已有该值且开启了“仅在为空时”）。这不是错误。",
+    "aiReview": "{count, plural, other {# 笔交易将加入 AI 审核队列}}。确认后才会创建请求。",
+    "truncated": "匹配的交易多于上限允许的数量。仅包含最新的交易。请提高上限或缩小日期范围以包含其余交易。",
+    "truncatedOldest": "匹配的交易超过了限制数量。由于此规则按日期顺序结算贷款还款，因此仅包含最早的部分。请在此次运行之后再次运行，以包含剩余部分。",
+    "noMatches": {
+      "title": "没有交易会被更改",
+      "body": "已检查的交易都不符合该规则，或者规则不会更改它们。"
+    },
+    "table": {
+      "date": "日期",
+      "payee": "收款方",
+      "amount": "金额",
+      "change": "计划的更改",
+      "noPayee": "无收款方"
+    },
+    "skipped": {
+      "title": "{count, plural, other {# 笔交易}}保持不变",
+      "line": "{count, plural, other {# 笔交易}}：{reason}",
+      "missing": "贷款缺少：{inputs}。"
+    },
+    "skipReasons": {
+      "reconciled_locked": "已对账并被锁定",
+      "transfer_leg_category": "是转账，转账没有分类",
+      "split_category": "已拆分，因此分类属于各拆分项",
+      "cross_owner_transfer_payee": "是转给其他所有者的转账，此规则不能更改其收款方",
+      "empty_render": "某个操作的文本对它而言为空",
+      "payee_not_found": "没有收款方使用规则生成的名称，且规则不会创建",
+      "other": "规则无法更改它",
+      "row_is_transfer_leg": "它已经是转账",
+      "row_has_splits": "它已经被拆分",
+      "row_is_void": "它已作废",
+      "zero_amount": "它的金额为零",
+      "transfer_direction_mismatch": "转账方向不匹配:支出转入账户,收入来自账户",
+      "transfer_same_account": "转账账户就是交易本身的账户",
+      "transfer_account_unavailable": "转账账户不可用(已删除或不属于你)",
+      "transfer_currency_mismatch": "转账账户使用的币种不同",
+      "split_amount_unparseable": "其文本中的金额无法读取为数字",
+      "split_sum_mismatch": "各部分之和与其金额不符",
+      "split_too_few_parts": "去掉零金额后剩余部分不足两个",
+      "row_from_scheduled_posting": "它是由该贷款的计划付款过账的，该付款已偿还这一期",
+      "row_is_income": "它是一笔收入，而只有扣款才能偿还一期",
+      "loan_account_unavailable": "贷款账户不可用（已删除、已关闭、不属于你，或不是抵押贷款或贷款）",
+      "loan_interest_booked_separately": "该贷款将利息记为单独的交易，因此一次付款无法包含它",
+      "loan_not_configured": "该贷款缺少计算一期还款所需的信息",
+      "no_installment_in_window": "该贷款没有任何一期在其日期附近的窗口内到期",
+      "occurrence_already_posted": "窗口内到期的这一期已经偿还",
+      "loan_debt_retired": "该贷款已经还清",
+      "installment_amount_excess": "它超过该期还款额，规则会使较大的扣款保持不变",
+      "installment_amount_shortfall": "它低于该期还款额，规则会使较小的扣款保持不变"
+    },
+    "change": {
+      "category": "分类：{before} → {after}",
+      "payee": "收款方：{before} → {after}",
+      "payeeNew": "收款方：{before} → {name}（新建）",
+      "tagsAdded": "已添加的标签：{tags}",
+      "tagsRemoved": "已移除的标签：{tags}",
+      "none": "无",
+      "unknown": "已删除的项目",
+      "payeeCreated": "{done, select, yes {已创建新收款方：{name}} other {将创建新收款方：{name}}}",
+      "description": "说明：{before} → {after}",
+      "descriptionSet": "将说明设为 {value}",
+      "transfer": "{done, select, yes {已成为与 {account} 的转账} other {将成为与 {account} 的转账}}",
+      "split": "{done, select, yes {已拆分为 {count, plural, other {# 个部分}}} other {将拆分为 {count, plural, other {# 个部分}}}}",
+      "splitPart": "部分 {number}:{amount} {target}",
+      "splitPartMemo": ",备注“{memo}”",
+      "splitToTransfer": "转入 {account}",
+      "splitToTransferPayee": "转入 {account},收款方 {payee}",
+      "splitToCategory": "归为 {category}",
+      "splitUncategorised": "无分类",
+      "loanSettlement": "{done, select, yes {已结算} other {结算}} {account} 的第 {number} 期，到期日 {dueDate}：本金 {principal}，利息 {interest}{hasExtra, select, yes {，额外本金 {extra}} other {}}。结算前欠款：{debtBefore}"
+    },
+    "filters": {
+      "accounts": "账户",
+      "allAccounts": "所有账户",
+      "startDate": "从",
+      "endDate": "到",
+      "backwards": "开始日期不能晚于结束日期。",
+      "limit": "要检查的最新交易数",
+      "help": "仅检查范围内最新的交易，最多 {max} 笔。"
+    },
+    "errors": {
+      "PREVIEW_CHANGED": "自预览生成后，交易或规则已更改。请查看新的预览后再次运行。",
+      "RUN_TOO_LARGE": "此次运行更改的交易过多，无法一步撤销。请缩小账户或日期范围后重试。",
+      "INVALID_RULE": "此规则无效，因此无法运行。请先打开并修复它。",
+      "DATE_RANGE_INVALID": "开始日期不能晚于结束日期。",
+      "draftInvalid": "规则不完整或无效。请检查上方的条件和操作。",
+      "testFailed": "测试规则时出错。",
+      "previewFailed": "加载预览时出错。",
+      "runFailed": "无法完成运行。重试之前请先查看操作历史。"
+    },
+    "toast": {
+      "done": "{count, plural, =0 {没有交易被更改} other {已更改 # 笔交易}}。你可以在操作历史中撤销。",
+      "changedNoUndo": "{count, plural, other {已更改 # 笔交易}}。",
+      "aiReviewsQueued": "{count, plural, other {已将 # 笔交易加入 AI 审核队列}}。",
+      "aiReviewsAlreadyQueued": "{count, plural, other {# 笔交易已有未完成的 AI 审核请求，因此没有新增加入队列的内容}}。",
+      "noChanges": "没有交易被更改。"
+    },
+    "done": {
+      "summary": "{count, plural, =0 {没有交易被更改。} other {已更改 # 笔交易。}}",
+      "aiReviewsQueued": "{count, plural, other {已将 # 笔交易加入 AI 审核队列。}}",
+      "aiReviewsAlreadyQueued": "{count, plural, other {# 笔交易已有未完成的 AI 审核请求，因此未再次加入队列。}}",
+      "undo": "你可以在操作历史中撤销此次运行。"
+    },
+    "missingInputs": {
+      "scheduledPayment": "一笔计划付款",
+      "managedTemplate": "一笔拆分为本金和利息的付款",
+      "scheduleCalendar": "一份还款计划",
+      "interestCategory": "一个利息分类",
+      "amortizationMonths": "摊销期",
+      "paymentStartDate": "首次还款日期",
+      "paymentFrequency": "还款频率",
+      "originalPrincipal": "原始本金",
+      "rate": "该日期的利率",
+      "payment": "还款金额",
+      "other": "一项贷款设置"
+    }
+  },
+  "applications": {
+    "title": "历史",
+    "description": "此规则最近更改的交易，最新的在前。",
+    "loading": "正在加载历史...",
+    "error": {
+      "title": "无法加载历史",
+      "body": "没有显示内容是因为请求失败，而不是因为规则尚未运行。请检查网络连接后重试。",
+      "retry": "重试"
+    },
+    "empty": {
+      "title": "此规则尚未更改任何内容",
+      "body": "当它更改交易时，更改会列在这里。"
+    },
+    "source": {
+      "create": "创建时",
+      "import": "导入时",
+      "manual": "手动运行",
+      "other": "其他"
+    },
+    "table": {
+      "date": "日期",
+      "payee": "收款方",
+      "amount": "金额",
+      "source": "来源",
+      "change": "更改",
+      "appliedAt": "应用时间",
+      "open": "打开交易",
+      "noPayee": "无收款方",
+      "view": "查看"
+    }
+  },
+  "words": {
+    "everyTransaction": "每笔交易",
+    "group": {
+      "all": "满足以下全部：",
+      "any": "满足以下任意一项：",
+      "notAll": "不满足以下全部：",
+      "notAny": "不满足以下任何一项："
+    },
+    "leaf": "{field} {operator} {value}",
+    "leafNoValue": "{field} {operator}",
+    "range": "{from} 和 {to}",
+    "text": "“{value}”",
+    "unknownCondition": "此版本无法显示的条件",
+    "unknownAction": "此版本无法显示的操作",
+    "action": {
+      "add_tags": "添加标签：{tags}",
+      "remove_tags": "移除标签：{tags}",
+      "set_category": "将分类设置为 {name}{onlyIfEmpty, select, yes {（仅在为空时）} other {}}",
+      "set_payee": "将收款方设置为 {name}{onlyIfEmpty, select, yes {（仅在为空时）} other {}}",
+      "request_ai_review": "请求 AI 审核：{instruction}",
+      "set_payee_from_text": "根据文本设置收款方：“{template}”{createIfMissing, select, yes {（不存在则创建）} other {}}{onlyIfEmpty, select, yes {（仅在为空时）} other {}}",
+      "set_description": "设置说明（{mode, select, append {追加} prepend {前置} other {替换}}）：“{template}”{onlyIfEmpty, select, yes {（仅在为空时）} other {}}",
+      "convert_to_transfer": "转为{direction, select, from {来自} other {转至}} {account} 的转账",
+      "split": "拆分为：{parts}",
+      "settle_loan_installment": "按到期日前最多 {before, plural, other {# 天}}或到期日后最多 {after, plural, other {# 天}}内的扣款结算 {account} 的这一期；较大的扣款{excess, select, refuse {保持不变} other {偿还额外本金}}，较小的扣款{shortfall, select, interest_first {先偿还利息} other {保持不变}}"
+    },
+    "splitPart": {
+      "transfer": "{amount} 转入 {account}",
+      "category": "{amount} 计入 {category}",
+      "plain": "{amount}",
+      "rest": "其余部分"
+    }
+  }
+}

@@ -1,8 +1,87 @@
 {
   "page": {
-    "welcomePrefix": "Willkommen",
-    "welcomeWithName": "Willkommen, {name}!",
-    "subtitle": "Hier ist Ihre Finanzübersicht"
+    "greeting": {
+      "morning": "Guten Morgen",
+      "morningWithName": "Guten Morgen, {name}",
+      "afternoon": "Guten Tag",
+      "afternoonWithName": "Guten Tag, {name}",
+      "evening": "Guten Abend",
+      "eveningWithName": "Guten Abend, {name}"
+    }
+  },
+  "hero": {
+    "label": "Nettovermögen im Überblick",
+    "netWorth": "Nettovermögen",
+    "changeThisMonth": "<dir>{direction, select, up {Gestiegen um} other {Gesunken um}}</dir> {amount} in diesem Monat",
+    "changeThisMonthWithPercent": "<dir>{direction, select, up {Gestiegen um} other {Gesunken um}}</dir> {amount} · {percent} in diesem Monat",
+    "assets": "<strong><value></value></strong> Vermögen",
+    "liabilities": "<strong><value></value></strong> Verbindlichkeiten",
+    "invested": "<strong><value></value></strong> investiert",
+    "investedUnpriced": "Kein aktueller Kurs für {symbols}, daher sind diese Positionen nicht enthalten. Aktualisieren Sie die Kurse auf der Seite „Investments“ oder tragen Sie einen im Kursverlauf des Wertpapiers ein.",
+    "portfolioLabel": "Portfolioübersicht",
+    "portfolioValueFor": "Portfoliowert <names>({accounts})</names>",
+    "portfolioEmpty": "Noch keine Anlagekonten. Fügen Sie eines hinzu, um Ihr Portfolio hier zu sehen.",
+    "portfolioLoadFailed": "Ihr Portfolio konnte nicht geladen werden. Laden Sie das Dashboard neu, um es erneut zu versuchen.",
+    "portfolioChangeFailed": "Die Veränderung in diesem Zeitraum konnte nicht geladen werden. Laden Sie das Dashboard neu, um es erneut zu versuchen.",
+    "changeOverWindow": "<dir>{direction, select, up {Gestiegen um} other {Gesunken um}}</dir> {amount} · {window}",
+    "holdings": "<strong><value></value></strong> Depot",
+    "cash": "<strong><value></value></strong> Barmittel",
+    "metricLine": "<strong><value></value></strong> {metric}",
+    "metricNames": {
+      "simpleReturn": "Einfache Rendite",
+      "twr": "TWR",
+      "mwr": "MWR",
+      "cagr": "CAGR"
+    },
+    "showSet": "{name} anzeigen",
+    "cycleControls": "Auswählen, was der Hero-Bereich zeigt",
+    "cagrUnavailable": "Die CAGR braucht mindestens ein Jahr Anlagehistorie in diesen Konten, mit mehr Einzahlungen als Entnahmen.",
+    "intradayUnavailable": "Für einige dieser Positionen gibt es keine Intraday-Kurse, daher kann kein Tagesdiagramm gezeichnet werden. Wählen Sie unter „Anpassen“ einen längeren Zeitraum."
+  },
+  "trivia": {
+    "title": "Wissenswertes",
+    "position": "{index} von {total}",
+    "previous": "Vorheriger Fakt",
+    "next": "Nächster Fakt",
+    "empty": "Fakten erscheinen hier, sobald genug Verlauf vorhanden ist: zwei Monate Nettovermögen, bewertete Anlagen, einige Monate Ausgaben und Einnahmen oder Garantien, die Sie erfassen. Die Liste wird jeden Morgen neu erstellt.",
+    "off": "KI-Wissenswertes ist ausgeschaltet. Schalte es in den <link>KI-Einstellungen</link> ein.",
+    "topics": {
+      "netWorth": "Nettovermögen",
+      "investments": "Investments",
+      "spending": "Ausgaben",
+      "income": "Einnahmen",
+      "activity": "Ihre Daten",
+      "warranties": "Garantien"
+    },
+    "aiGenerated": "Von KI aus Ihren Zahlen geschrieben",
+    "facts": {
+      "netWorthSinceStart": "Ihr Nettovermögen betrug im {startMonth} {startAmount}. Seitdem hat es um {startGain} zugelegt und ist damit etwa {startMultiple}-mal so groß.",
+      "netWorthBiggestJump": "{jumpMonth} war Ihr größter Sprung innerhalb eines Monats. Das Nettovermögen stieg um {jumpAmount}, von {jumpFrom} im {jumpPreviousMonth} auf {jumpTo}.",
+      "netWorthHighPoint": "Ihr Höchststand lag bei {peakAmount} im {peakMonth}. Aktuell liegen Sie {peakBelow} darunter.",
+      "netWorthAtHighPoint": "Sie sind auf Ihrem Höchststand: Das Nettovermögen lag nie über {currentHigh}.",
+      "netWorthBiggestDip": "Ihr größter Einbruch ließ das Nettovermögen von {dipFromAmount} im {dipFromMonth} auf {dipToAmount} im {dipToMonth} sinken, ein Rückgang von {dipPercent}.",
+      "netWorthBiggestDipRecovered": "Ihr größter Einbruch ließ das Nettovermögen von {dipFromAmount} im {dipFromMonth} auf {dipToAmount} im {dipToMonth} sinken. Bis {dipRecoveredMonth} hatten Sie sich erholt.",
+      "netWorthLargestAsset": "{assetName} ist {assetValue} wert, das sind {assetPercent} Ihres Vermögens.",
+      "investmentsShareOfAssets": "Ihre Investments sind {investmentsValue} wert, das sind {investmentsPercent} Ihres Vermögens.",
+      "investmentsGain": "Ihre Investments haben {gainAmount} ({gainPercent}) über ihren Anschaffungskosten von {gainCostBasis} zugelegt.",
+      "investmentsLoss": "Ihre Investments liegen {gainAmount} ({gainPercent}) unter ihren Anschaffungskosten von {gainCostBasis}.",
+      "investmentsCagr": "Die annualisierte Rendite Ihrer Investments beträgt etwa {cagrPercent} (CAGR).",
+      "investmentsBiggestHolding": "Ihre größte Position ist {holdingSymbol} mit etwa {holdingPercent} des Portfolios ({holdingValue} in {holdingAccounts}).",
+      "investmentsBestPerformer": "Ihr bester Wert ist {bestSymbol} mit einem Plus von {bestPercent}. Er kostete {bestCost} und ist jetzt {bestValue} wert.",
+      "investmentsForeignAccount": "Ihr Konto {foreignName} wird in {foreignCurrency} geführt. Die Bestände von {foreignBalance} entsprechen {foreignConverted} bei einem Kurs von etwa {foreignRate}.",
+      "investmentsLargestAccount": "Ihr größtes Anlagekonto ist {largestName} mit {largestValue}.",
+      "spendingTopCategory": "In den letzten zwölf Monaten entfiel der größte Teil Ihrer Ausgaben auf {topCategoryName}: {topCategoryAmount}, das sind {topCategoryPercent}.",
+      "spendingTopPayee": "In den letzten zwölf Monaten haben Sie am meisten bei {topPayeeName} ausgegeben: {topPayeeAmount}.",
+      "spendingBiggestMonth": "{biggestSpendMonth} war mit {biggestSpendAmount} Ihr ausgabenstärkster Monat der letzten zwölf.",
+      "incomeKeptShare": "In den letzten zwölf Monaten haben Sie {keptAmount} von Ihren Einnahmen behalten, das sind {keptPercent} Ihres Einkommens.",
+      "incomeSurplusMonths": "Monate der letzten {windowMonths}, in denen mehr einging als ausging: {surplusMonths}.",
+      "incomeTopSource": "{topSourceName} machte in den letzten zwölf Monaten {topSourcePercent} Ihres Einkommens aus.",
+      "activityTransactions": "Transaktionen in Ihren Konten: {transactionCount}, zurück bis {firstTransactionMonth}.",
+      "activityPayees": "Zahlungsempfänger, die Sie in Monize führen: {payeeCount}. Kategorien: {categoryCount}.",
+      "activityScheduled": "Geplante Transaktionen, die Monize für Sie verfolgt: {scheduledCount}.",
+      "warrantiesCovered": "Garantien, die Sie erfassen und die noch gelten: {warrantyCount}.",
+      "warrantiesNextExpiry": "Die nächste Garantie, die abläuft, ist {nextWarrantyName}, im {nextWarrantyMonth}."
+    }
   },
   "favouriteAccounts": {
     "title": "Favoritenkonten",
@@ -21,12 +100,10 @@
   "upcomingBills": {
     "title": "Bevorstehende Rechnungen und Einzahlungen",
     "empty": "Keine überfälligen oder bevorstehenden Rechnungen, Einzahlungen oder Überweisungen innerhalb der Erinnerungsfenster.",
-    "perReminderSettings": "Gemäß Erinnerungseinstellungen",
     "postTransaction": "Diese Buchung ausführen",
     "manual": "Manuell",
-    "manualTitle": "Erfordert manuelle Buchung",
     "negativeBalanceWarning": "Diese Buchung bringt den Kontosaldo unter null",
-    "viewAll": "Alle Rechnungen und Einzahlungen anzeigen",
+    "negativeBalanceLegend": "Bringt sein Konto unter null",
     "moreItems": "+{count} weitere",
     "overdue": "Überfällig",
     "today": "Heute",
@@ -38,7 +115,23 @@
       "transfer": "Überweisung",
       "reminder": "Erinnerung",
       "unknown": "Unbekannt"
-    }
+    },
+    "scope": {
+      "dueSoon": "Bald fällig",
+      "all": "Alle anstehenden"
+    },
+    "viewLabel": "Ansicht",
+    "viewList": "Liste",
+    "viewCalendar": "Kalender",
+    "previousMonth": "Vorheriger Monat",
+    "nextMonth": "Nächster Monat",
+    "emptyAll": "Keine aktiven Rechnungen, Einzahlungen oder Überweisungen geplant.",
+    "estimated": "Geschätzt"
+  },
+  "cashFlowForecast": {
+    "title": "Cashflow-Prognose",
+    "period": "Prognosezeitraum",
+    "loadFailed": "Die bereits nach heute datierten Buchungen konnten nicht geladen werden, daher kann die Prognose nicht angezeigt werden. Laden Sie das Dashboard neu, um es erneut zu versuchen."
   },
   "gettingStarted": {
     "title": "Erste Schritte",
@@ -76,8 +169,12 @@
     "title": "Ausgaben-Einblicke",
     "empty": "Keine Einblicke verfügbar. Besuchen Sie die Einblicke-Seite, um Ihre erste Analyse zu generieren.",
     "goToInsights": "Zu Einblicken",
-    "viewAll": "Alle Einblicke anzeigen",
     "activeCount": "{count} aktiv"
+  },
+  "warrantiesExpiring": {
+    "title": "Bald ablaufende Garantien",
+    "empty": "In den nächsten 30 Tagen läuft nichts ab",
+    "loadFailed": "Ihre ablaufenden Garantien konnten nicht geladen werden. Laden Sie das Dashboard neu, um es erneut zu versuchen."
   },
   "topMovers": {
     "title": "Top-Beweger",
@@ -88,13 +185,20 @@
       "noLosers": "Heute keine Verlierer."
     },
     "dailyChange": "Tagesveränderung",
+    "dailyChangeOn": "Tagesveränderung · {date}",
     "openPriceHistory": "Kursverlauf für {symbol}",
     "refreshPrices": "Kurse aktualisieren",
     "viewPortfolio": "Portfolio anzeigen",
     "filter": {
-      "all": "Alle",
-      "gainers": "Gewinner",
-      "losers": "Verlierer"
+      "all": "Alle ({count})",
+      "gainers": "Gewinner ({count})",
+      "losers": "Verlierer ({count})",
+      "label": "Richtung"
+    },
+    "metric": {
+      "label": "Anzeigen",
+      "price": "Kurs",
+      "holdings": "Bestand"
     }
   },
   "favouriteSecurities": {
@@ -102,15 +206,17 @@
     "empty": "Noch keine Favoritwertpapiere. Besuchen Sie die <securitiesLink>Wertpapierseite</securitiesLink> und markieren Sie die Wertpapiere, die Sie hier verfolgen möchten.",
     "noPriceYet": "Noch kein Kurs",
     "dailyChange": "Tagesveränderung",
+    "dailyChangeOn": "Tagesveränderung · {date}",
     "openPriceHistory": "Kursverlauf für {symbol}",
-    "refreshPrices": "Kurse aktualisieren",
-    "manage": "Wertpapiere verwalten"
+    "refreshPrices": "Kurse aktualisieren"
   },
   "netWorth": {
     "title": "Reinvermögen",
     "empty": "Noch keine Reinvermögensdaten verfügbar.",
-    "past12Months": "Letzte 12 Monate",
-    "viewReport": "Vollständigen Bericht anzeigen"
+    "barStyle": "Balkenstil",
+    "barStyleNetWorth": "Reinvermögen",
+    "barStyleAccountType": "Nach Kontotyp",
+    "loadFailed": "Der Verlauf Ihres Reinvermögens konnte nicht geladen werden. Laden Sie das Dashboard neu, um es erneut zu versuchen."
   },
   "assetsVsLiabilities": {
     "title": "Aktiva vs. Verbindlichkeiten",
@@ -118,14 +224,22 @@
     "current": "Aktuell",
     "netWorthLabel": "Reinvermögen",
     "assets": "Aktiva",
-    "liabilities": "Verbindlichkeiten"
+    "liabilities": "Verbindlichkeiten",
+    "partialName": "{name} (unvollständig)",
+    "viewCallouts": "Beschriftungen",
+    "viewLegend": "Legende"
   },
   "expensesPieChart": {
     "title": "Ausgaben nach Kategorie",
     "empty": "Keine Ausgabendaten für diesen Zeitraum.",
     "total": "Gesamt",
     "uncategorized": "Nicht kategorisiert",
-    "other": "Sonstiges"
+    "other": "Sonstiges",
+    "insideOther": "{count, plural, one {# Kategorie unter Sonstige} other {# Kategorien unter Sonstige}}",
+    "topLevelOnly": "Oberkategorien",
+    "topLevelOnlyHint": "Unterkategorien der Oberkategorie zurechnen",
+    "viewCallouts": "Beschriftungen",
+    "viewLegend": "Legende"
   },
   "incomeExpenses": {
     "title": "Einnahmen vs. Ausgaben",
@@ -135,18 +249,85 @@
   },
   "customize": {
     "button": "Anpassen",
-    "title": "Dashboard anpassen",
-    "description": "Das Layout unten entspricht Ihrem Dashboard: Widgets fließen von links nach rechts, auf großen Bildschirmen zwei pro Zeile.",
     "moveEarlier": "{name} nach vorne verschieben",
     "moveLater": "{name} nach hinten verschieben",
-    "dragToReorder": "Ziehen Sie Widgets, um sie neu anzuordnen, oder verwenden Sie die Pfeilschaltflächen.",
-    "hiddenWidgets": "Ausgeblendete Widgets",
-    "hide": "{name} ausblenden",
-    "show": "{name} einblenden",
     "atLeastOne": "Wählen Sie mindestens ein Widget für das Dashboard aus.",
     "reset": "Auf Standard zurücksetzen",
     "toasts": {
       "saveFailed": "Dashboard-Layout konnte nicht gespeichert werden"
+    },
+    "hero": {
+      "title": "Dashboard-Kopfbereich",
+      "description": "Die Eröffnungszahlen und das Diagramm unter der Begrüßung: Ihr Nettovermögen, Ihr Portfolio oder Auto, um jede Minute zwischen beiden zu wechseln.",
+      "show": "Dashboard-Kopfbereich anzeigen",
+      "range": "Diagramm",
+      "set": "Anzeigen",
+      "sets": {
+        "auto": "Auto",
+        "netWorth": "Nettovermögen",
+        "portfolio": "Portfoliowert"
+      },
+      "metric": "Kennzahl",
+      "metrics": {
+        "simpleReturn": "Einfache Rendite",
+        "twr": "TWR",
+        "mwr": "MWR",
+        "cagr": "CAGR"
+      }
+    }
+  },
+  "edit": {
+    "barLabel": "Dashboard anordnen",
+    "addWidget": "Widget hinzufügen",
+    "heroSettings": "Einstellungen Kopfbereich",
+    "done": "Fertig",
+    "phoneNote": "Widget-Größen gelten auf breiteren Bildschirmen.",
+    "remove": "{name} entfernen",
+    "grip": "{name} verschieben",
+    "gripHint": "Ziehen, um {name} zu verschieben, oder Pfeiltasten drücken",
+    "moved": "{name} an Position {position} von {count} verschoben",
+    "removed": "{name} entfernt",
+    "added": "{name} hinzugefügt",
+    "resized": "{name} ist jetzt {size}",
+    "resizedBoth": "{name} ist jetzt {width} und {height}",
+    "twoChanges": "{first}. {second}",
+    "placeholder": "Wird im Dashboard angezeigt, sobald es etwas anzuzeigen gibt.",
+    "addTitle": "Widget hinzufügen",
+    "addDescription": "Ein hinzugefügtes Widget steht am Ende des Dashboards. Nichts wird gespeichert, bis Sie Fertig wählen.",
+    "addEmpty": "Alle Widgets sind bereits auf Ihrem Dashboard",
+    "addToSpace": "Widget hinzufügen (freier Platz: {width})",
+    "addSlotDescription": "Es werden nur Widgets aufgeführt, die in diesen Platz passen, und das gewählte füllt ihn. Nichts wird gespeichert, bis Sie Fertig wählen.",
+    "addSlotEmpty": "Kein verborgenes Widget passt in diesen Platz. Ziehen Sie ein Widget hierher, um es einzufügen.",
+    "resize": "Größe von {name} ändern",
+    "resizeHint": "Ziehen, um die Größe von {name} zu ändern, oder Pfeiltasten drücken",
+    "widthLabel": "Breite",
+    "heightLabel": "Höhe",
+    "presetName": "{short}, {name}",
+    "widthOf": "Breite von {name}",
+    "heightOf": "Höhe von {name}",
+    "widthShort": {
+      "third": "1/3",
+      "half": "1/2",
+      "twoThirds": "2/3",
+      "full": "Voll"
+    },
+    "widthName": {
+      "third": "Ein Drittel Breite",
+      "half": "Halbe Breite",
+      "twoThirds": "Zwei Drittel Breite",
+      "full": "Volle Breite"
+    },
+    "heightShort": {
+      "auto": "Auto",
+      "compact": "S",
+      "standard": "M",
+      "tall": "L"
+    },
+    "heightName": {
+      "auto": "Automatische Höhe",
+      "compact": "Kompakte Höhe",
+      "standard": "Standardhöhe",
+      "tall": "Große Höhe"
     }
   },
   "favouriteReports": {
@@ -156,22 +337,28 @@
   },
   "widgets": {
     "configure": "{name} konfigurieren",
+    "asOf": "Stand {date}",
     "done": "Fertig",
     "configSaveFailed": "Widget-Einstellungen konnten nicht gespeichert werden. Bitte versuchen Sie es erneut.",
     "timeframe": "Zeitraum",
     "accounts": "Konten",
     "chartType": "Diagrammtyp",
     "view": "Ansicht",
+    "viewCalloutsHint": "Beschriftungen brauchen einen breiteren Bildschirm. Wo sie nicht passen, wird die Legende angezeigt.",
     "displayName": "Anzeigename",
     "description": "Beschreibung",
     "descriptionPlaceholder": "Optionale Beschreibung hinzufügen",
     "rangeLabels": {
+      "1d": "1D",
+      "1w": "1W",
+      "mtd": "MTD",
       "1m": "1M",
       "3m": "3M",
       "6m": "6M",
       "1y": "1Y",
       "2y": "2Y",
       "5y": "5Y",
+      "10y": "10Y",
       "ytd": "YTD",
       "all": "Alle"
     }
@@ -179,7 +366,10 @@
   "portfolioValue": {
     "title": "Portfolio-Wert",
     "empty": "Noch keine Anlagehistorie vorhanden.",
-    "refresh": "Aktuellen Wert aktualisieren"
+    "refresh": "Aktuellen Wert aktualisieren",
+    "investmentResult": "Anlageergebnis",
+    "periodBreakdownInvestedTooltip": "Der Wert der Wertpapiere hat sich in diesem Zeitraum um {valueChange} verändert. Davon wurden {netInvested} eingezahlt, abzüglich Verkäufen, und sie haben {income} an Dividenden und Zinsen ausgeschüttet. Eine in Anteilen wieder angelegte Ausschüttung zählt in beiden Beträgen. Der Betrag oben ist das, was die Anlagen selbst erwirtschaftet haben, ohne nicht investiertes Bargeld.",
+    "notAvailable": "N/A"
   },
   "spendingByPayee": {
     "title": "Ausgaben nach Zahlungsempfänger",
@@ -225,14 +415,19 @@
       "MUTUAL_FUND": "Investmentfonds",
       "BOND": "Anleihen",
       "CASH": "Bargeld"
-    }
+    },
+    "viewType": "Wertpapierart",
+    "viewAssetClass": "Anlageklasse",
+    "otherAssetClasses": "Sonstige",
+    "emptyAssetClass": "Noch keine Aufschlüsselung nach Anlageklassen verfügbar."
   },
   "geographicAllocation": {
     "title": "Geografische Allokation",
     "empty": "Keine Bestände vorhanden.",
     "viewRegion": "Region",
     "viewExchange": "Börse",
-    "viewCountry": "Land"
+    "viewCountry": "Land",
+    "listingBasisNote": "Gruppiert nach dem Börsenplatz jeder Position. Wechseln Sie zu Land, um in Fonds hineinzuschauen."
   },
   "recurringExpenses": {
     "title": "Top wiederkehrende Ausgaben",
@@ -240,7 +435,9 @@
     "minOccurrences": "Mindestanzahl Vorkommen",
     "minOccurrencesOption": "{count} oder mehr",
     "occurrences": "{count} Vorkommen",
-    "monthlyEstimate": "Monatliche Schätzung"
+    "monthlyEstimate": "Monatliche Schätzung",
+    "viewCallouts": "Beschriftungen",
+    "viewLegend": "Legende"
   },
   "weekendVsWeekday": {
     "title": "Wochenend- vs. Wochentagsausgaben",
@@ -249,5 +446,14 @@
     "weekdayLabel": "Wochentag",
     "viewOverview": "Übersicht",
     "viewByDay": "Nach Tag"
+  },
+  "cashFlowSankey": {
+    "title": "Cashflow-Sankey",
+    "empty": "Keine Einnahmen, Ausgaben oder Überweisungen in diesem Zeitraum.",
+    "depth": "Detailtiefe",
+    "depthCategories": "Kategorien",
+    "depthSubcategories": "Unterkategorien",
+    "viewDiagram": "Diagramm",
+    "viewTable": "Tabelle"
   }
 }

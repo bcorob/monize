@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, MutableRefObject } from 'react';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, useWatch, Controller } from 'react-hook-form';
 import '@/lib/zodConfig';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -150,7 +150,6 @@ export function CustomReportForm({ report, onSubmit, onCancel, onDirtyChange, su
     register,
     handleSubmit,
     control,
-    watch,
     setValue,
     formState: { errors, isSubmitting, isDirty },
   } = useForm<FormData>({
@@ -196,8 +195,8 @@ export function CustomReportForm({ report, onSubmit, onCancel, onDirtyChange, su
 
   useFormDirtyNotify(isDirty, onDirtyChange);
 
-  const watchTimeframeType = watch('timeframeType');
-  const watchViewType = watch('viewType');
+  const watchTimeframeType = useWatch({ control, name: 'timeframeType' });
+  const watchViewType = useWatch({ control, name: 'viewType' });
 
   useEffect(() => {
     const loadData = async () => {

@@ -1,6 +1,15 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@/test/render';
-import { AccountRow, AccountRowProps, buildAccountActions } from './AccountRow';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, renderHook, screen, fireEvent, act } from '@/test/render';
+import { useNumberFormat } from '@/hooks/useNumberFormat';
+import { clearCurrencyDecimals, registerCurrencyDecimals } from '@/lib/currency-decimals';
+import {
+  AccountRow,
+  AccountRowProps,
+  buildAccountActions,
+  reconcileLedgerOf,
+  unreconciledCountOf,
+} from './AccountRow';
+import { ACCOUNT_COLUMN_TIER, ACCOUNT_NAME_CELL_FLEX } from './account-list-columns';
 import type { LogicalAccount } from '@/lib/logical-accounts';
 import { Account } from '@/types/account';
 
@@ -37,8 +46,7 @@ function createAccount(overrides: Partial<Account> = {}): Account {
     assetCategoryId: null,
     dateAcquired: null,
     linkedLoanAccountId: null,
-    isCanadianMortgage: false,
-    isVariableRate: false,
+    mortgageType: 'ANNUITY',
     termMonths: null,
     termEndDate: null,
     amortizationMonths: null,
@@ -62,8 +70,6 @@ function createDefaultProps(overrides: Partial<AccountRowProps> = {}): AccountRo
     accountNameMap: new Map(),
     brokerageMarketValue: undefined,
     defaultCurrency: 'CAD',
-    formatCurrency: (amount: number | string | null | undefined, _currency: string) =>
-      `$${Number(amount || 0).toFixed(2)}`,
     formatCurrencyBase: (value: number, _currencyCode?: string) =>
       `$${value.toFixed(2)}`,
     convertToDefault: (value: number, _fromCurrency: string) => value,
@@ -78,6 +84,7 @@ function createDefaultProps(overrides: Partial<AccountRowProps> = {}): AccountRo
         CASH: 'Cash',
         LINE_OF_CREDIT: 'Line of Credit',
         ASSET: 'Asset',
+        CRYPTO: 'Crypto Wallet',
         OTHER: 'Other',
       };
       return labels[type] || type;
@@ -434,6 +441,59 @@ describe('AccountRow', () => {
 
       const cells = screen.queryAllByText(/\u2248/);
       expect(cells).toHaveLength(0);
+    });
+  });
+
+  describe('a coin wallet in a currency other than the reader\'s', () => {
+    afterEach(() => {
+      act(() => clearCurrencyDecimals());
+    });
+
+    /** The row through the real formatter, so the code Intl writes is in play. */
+    function renderWallet() {
+      const { result } = renderHook(() => useNumberFormat());
+      renderAccountRow(
+        createDefaultProps({
+          density: 'dense',
+          defaultCurrency: 'CAD',
+          account: createAccount({
+            name: 'Bitcoin Wallet',
+            accountType: 'CRYPTO',
+            currencyCode: 'BTC',
+            currentBalance: 0.007,
+          }),
+          formatCurrencyBase: result.current.formatCurrency,
+          convertToDefault: () => null,
+        }),
+      );
+    }
+
+    /** Every text node naming the balance, NBSP folded to a plain space. */
+    const balanceTexts = () =>
+      screen
+        .getAllByText(/0\.0/)
+        .map((el) => (el.textContent ?? '').replace(/\u00a0/g, ' '));
+
+    it('names an unregistered coin once, where Intl already wrote its code', () => {
+      renderWallet();
+      const texts = balanceTexts();
+      expect(texts).toContain('BTC 0.01');
+      expect(texts.some((text) => /BTC.*BTC/.test(text))).toBe(false);
+    });
+
+    it('names a registered coin without a symbol once', () => {
+      registerCurrencyDecimals([{ code: 'BTC', decimalPlaces: 4 }]);
+      renderWallet();
+      const texts = balanceTexts();
+      // It read "BTC 0.0070 BTC".
+      expect(texts).toContain('BTC 0.0070');
+      expect(texts.some((text) => /BTC.*BTC/.test(text))).toBe(false);
+    });
+
+    it('shows a registered coin\'s symbol and names its code once', () => {
+      registerCurrencyDecimals([{ code: 'BTC', decimalPlaces: 4, symbol: '\u20bf' }]);
+      renderWallet();
+      expect(balanceTexts()).toContain('\u20bf0.0070 BTC');
     });
   });
 
@@ -1130,6 +1190,74 @@ describe('AccountRow', () => {
       expect(byKey.get('netWorthExclusion')?.hidden).toBe(true);
     });
   });
+  describe('the Close action on a small balance', () => {
+    const labels = {
+      viewTransactions: 'View Transactions',
+      details: 'Details',
+      edit: 'Edit',
+      reconcile: 'Reconcile',
+      close: 'Close',
+      closeTitleDisabled: 'Balance must be zero',
+      closeTitleEnabled: 'Close account',
+      reopen: 'Reopen',
+      delete: 'Delete',
+    };
+    const handlers = {
+      onDetails: vi.fn(),
+      onEdit: vi.fn(),
+      onReconcile: vi.fn(),
+      onCloseClick: vi.fn(),
+      onReopen: vi.fn(),
+      onDeleteClick: vi.fn(),
+    };
+    const closeActionFor = (currencyCode: string, value: number) => {
+      const account = createAccount({ currencyCode, currentBalance: value });
+      const logical: LogicalAccount = {
+        id: account.id,
+        primary: account,
+        cash: null,
+        memberIds: [account.id],
+        displayName: account.name,
+        isInvestment: false,
+        cashRegisterId: null,
+        holdingsAccountId: null,
+        combinedValue: value,
+      };
+      const actions = buildAccountActions(account, true, labels, handlers, logical);
+      return actions.find((a) => a.key === 'close');
+    };
+
+    afterEach(() => {
+      act(() => clearCurrencyDecimals());
+    });
+
+    it('does not offer Close on a coin wallet holding 0.000025 BTC', () => {
+      act(() => registerCurrencyDecimals([{ code: 'BTC', decimalPlaces: 8 }]));
+      const close = closeActionFor('BTC', 0.000025);
+      expect(close?.disabled).toBe(true);
+      expect(close?.title).toBe('Balance must be zero');
+    });
+
+    it('does not offer Close on a coin the registry has not loaded yet', () => {
+      expect(closeActionFor('BTC', 0.000025)?.disabled).toBe(true);
+    });
+
+    it('still offers Close on an empty coin wallet', () => {
+      act(() => registerCurrencyDecimals([{ code: 'BTC', decimalPlaces: 8 }]));
+      const close = closeActionFor('BTC', 0);
+      expect(close?.disabled).toBe(false);
+      expect(close?.title).toBe('Close account');
+    });
+
+    it('treats a CAD balance of 0.004 as before (non-zero at four places)', () => {
+      expect(closeActionFor('CAD', 0.004)?.disabled).toBe(true);
+    });
+
+    it('treats a CAD balance below half a basis point as empty, as before', () => {
+      expect(closeActionFor('CAD', 0.00004)?.disabled).toBe(false);
+    });
+  });
+
   describe('a folded investment pair', () => {
     const brokerage = createAccount({
       id: 'brok',
@@ -1184,9 +1312,8 @@ describe('AccountRow', () => {
       );
 
       expect(screen.getByText('$15500.00')).toBeInTheDocument();
-      expect(
-        screen.getByText('Investments $12000.00 · Cash $3500.00'),
-      ).toBeInTheDocument();
+      expect(screen.getByText('Investments $12000.00')).toBeInTheDocument();
+      expect(screen.getByText('Cash $3500.00')).toBeInTheDocument();
     });
 
     it('drops the pairing chrome that existed to explain two rows', () => {
@@ -1332,6 +1459,189 @@ describe('AccountRow', () => {
       const close = screen.getByText('Close');
       expect(close).toBeDisabled();
       expect(close.closest('button')).toHaveAttribute('title', 'Total unknown');
+    });
+  });
+  describe('Last Reconciled column', () => {
+    // The tier row's fourth cell, after Name, Type and Status.
+    const lastReconciledCell = (container: HTMLElement) =>
+      container.querySelectorAll('tr > td')[3] as HTMLElement;
+
+    it('shows the date the account was last reconciled to', () => {
+      const { container } = renderAccountRow(
+        createDefaultProps({ account: createAccount({ lastReconciledDate: '2026-09-15' }) }),
+      );
+      expect(lastReconciledCell(container).textContent).toMatch(/2026/);
+      expect(lastReconciledCell(container)).not.toHaveTextContent('Never');
+    });
+
+    it('says Never for an account with nothing reconciled', () => {
+      const { container } = renderAccountRow(
+        createDefaultProps({ account: createAccount({ lastReconciledDate: null }) }),
+      );
+      expect(lastReconciledCell(container)).toHaveTextContent('Never');
+    });
+
+    it('stays blank when the date is not known, rather than claiming Never', () => {
+      // A joint row is reconciled by its owner only; an older backend sends no field.
+      for (const account of [
+        createAccount({ isJoint: true, lastReconciledDate: '2026-09-15' }),
+        createAccount({ lastReconciledDate: undefined }),
+      ]) {
+        const { container, unmount } = renderAccountRow(createDefaultProps({ account }));
+        expect(lastReconciledCell(container).textContent).toBe('');
+        unmount();
+      }
+    });
+
+    it('shows a folded pair the date of the cash half its Reconcile action opens', () => {
+      const brokerage = createAccount({
+        id: 'brok',
+        accountType: 'INVESTMENT',
+        accountSubType: 'INVESTMENT_BROKERAGE',
+        lastReconciledDate: null,
+      });
+      const cash = createAccount({
+        id: 'cash',
+        accountType: 'INVESTMENT',
+        accountSubType: 'INVESTMENT_CASH',
+        lastReconciledDate: '2026-08-31',
+      });
+      const logical: LogicalAccount = {
+        id: 'brok',
+        primary: brokerage,
+        cash,
+        memberIds: ['brok', 'cash'],
+        displayName: 'TFSA',
+        isInvestment: true,
+        cashRegisterId: 'cash',
+        holdingsAccountId: 'brok',
+        combinedValue: 100,
+      };
+      expect(reconcileLedgerOf(brokerage, logical)).toBe(cash);
+      const { container } = renderAccountRow(createDefaultProps({ account: brokerage, logical }));
+      expect(lastReconciledCell(container).textContent).toMatch(/2026/);
+    });
+
+    it('stays blank for a brokerage with no cash ledger to reconcile', () => {
+      const logical = brokerageLogical(100);
+      expect(reconcileLedgerOf(logical.primary, logical)).toBeNull();
+      const { container } = renderAccountRow(
+        createDefaultProps({ account: logical.primary, logical }),
+      );
+      expect(lastReconciledCell(container).textContent).toBe('');
+    });
+
+    it('carries the date on the phone card too', () => {
+      renderAccountRow(
+        createDefaultProps({ wrapped: true, account: createAccount({ lastReconciledDate: null }) }),
+      );
+      expect(screen.getByText('Never reconciled')).toBeInTheDocument();
+    });
+  });
+  // Balance outranks every column to its left: on a narrow table those drop
+  // out (or, for the name, give up width) and Balance is always drawn.
+  describe('column priority', () => {
+    it('drops Type, Status and both reconciliation columns before Balance', () => {
+      const { container } = renderAccountRow(createDefaultProps());
+      const cells = Array.from(container.querySelectorAll('tr > td')) as HTMLElement[];
+      const [name, type, status, lastReconciled, unreconciled, balance] = cells;
+      expect(name.className).toContain(ACCOUNT_NAME_CELL_FLEX);
+      expect(type.className).toContain(ACCOUNT_COLUMN_TIER.type);
+      expect(status.className).toContain(ACCOUNT_COLUMN_TIER.status);
+      expect(lastReconciled.className).toContain(ACCOUNT_COLUMN_TIER.lastReconciled);
+      expect(unreconciled.className).toContain(ACCOUNT_COLUMN_TIER.unreconciled);
+      expect(balance.className.split(/\s+/)).not.toContain('hidden');
+    });
+
+    it('keeps text action labels at Normal when nothing narrows them', () => {
+      renderAccountRow(createDefaultProps());
+      expect(screen.getByRole('button', { name: 'Edit' })).toHaveTextContent('Edit');
+    });
+
+    it('draws the actions as icons when actionDensity says the labels do not fit', () => {
+      renderAccountRow(createDefaultProps({ actionDensity: 'compact' }));
+      const edit = screen.getByRole('button', { name: 'Edit' });
+      expect(edit).toHaveAttribute('aria-label', 'Edit');
+      expect(edit).toHaveTextContent('');
+    });
+  });
+
+  describe('Unreconciled column', () => {
+    // The tier row's fifth cell, after Name, Type, Status and Last Reconciled.
+    const unreconciledCell = (container: HTMLElement) =>
+      container.querySelectorAll('tr > td')[4] as HTMLElement;
+
+    it('shows how many rows the account has left to reconcile', () => {
+      const { container } = renderAccountRow(
+        createDefaultProps({ account: createAccount({ unreconciledCount: 1234 }) }),
+      );
+      expect(unreconciledCell(container).textContent).toBe('1,234');
+    });
+
+    it('shows zero for an account with nothing outstanding', () => {
+      const { container } = renderAccountRow(
+        createDefaultProps({ account: createAccount({ unreconciledCount: 0 }) }),
+      );
+      expect(unreconciledCell(container).textContent).toBe('0');
+    });
+
+    it('stays blank when the count is not known, rather than claiming zero', () => {
+      // A joint row is reconciled by its owner only; an older backend sends no field.
+      for (const account of [
+        createAccount({ isJoint: true, unreconciledCount: 4 }),
+        createAccount({ unreconciledCount: undefined }),
+      ]) {
+        const { container, unmount } = renderAccountRow(createDefaultProps({ account }));
+        expect(unreconciledCell(container).textContent).toBe('');
+        unmount();
+      }
+    });
+
+    it('shows a folded pair the count of the cash half its Reconcile action opens', () => {
+      const brokerage = createAccount({
+        id: 'brok',
+        accountType: 'INVESTMENT',
+        accountSubType: 'INVESTMENT_BROKERAGE',
+        unreconciledCount: 0,
+      });
+      const cash = createAccount({
+        id: 'cash',
+        accountType: 'INVESTMENT',
+        accountSubType: 'INVESTMENT_CASH',
+        unreconciledCount: 6,
+      });
+      const logical: LogicalAccount = {
+        id: 'brok',
+        primary: brokerage,
+        cash,
+        memberIds: ['brok', 'cash'],
+        displayName: 'TFSA',
+        isInvestment: true,
+        cashRegisterId: 'cash',
+        holdingsAccountId: 'brok',
+        combinedValue: 100,
+      };
+      expect(unreconciledCountOf(brokerage, logical)).toBe(6);
+      const { container } = renderAccountRow(createDefaultProps({ account: brokerage, logical }));
+      expect(unreconciledCell(container).textContent).toBe('6');
+    });
+
+    it('stays blank for a brokerage with no cash ledger to reconcile', () => {
+      const logical = brokerageLogical(100);
+      const { container } = renderAccountRow(
+        createDefaultProps({
+          account: { ...logical.primary, unreconciledCount: 3 },
+          logical: { ...logical, primary: { ...logical.primary, unreconciledCount: 3 } },
+        }),
+      );
+      expect(unreconciledCell(container).textContent).toBe('');
+    });
+
+    it('carries the count on the phone card too', () => {
+      renderAccountRow(
+        createDefaultProps({ wrapped: true, account: createAccount({ unreconciledCount: 5 }) }),
+      );
+      expect(screen.getByText('5 unreconciled')).toBeInTheDocument();
     });
   });
 });

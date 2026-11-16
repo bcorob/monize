@@ -38,6 +38,12 @@ describe('MultiAccountReviewStep', () => {
     onImport: vi.fn(),
     setStep: vi.fn(),
     hasSecuritiesToMap: false,
+    accountTypeChoices: {} as Record<string, string>,
+    onAccountTypeChoiceChange: vi.fn(),
+    accountTypeOptions: [
+      { value: 'CHEQUING', label: 'Chequing' },
+      { value: 'CASH', label: 'Cash' },
+    ],
   };
 
   beforeEach(() => {
@@ -191,5 +197,51 @@ describe('MultiAccountReviewStep', () => {
     };
     render(<MultiAccountReviewStep {...defaultProps} multiAccountData={dataWithOneTransaction} />);
     expect(screen.getByText('1 transaction')).toBeInTheDocument();
+  });
+
+  describe('accounts the file leaves untyped', () => {
+    const untypedData: ParsedQifMultiAccountResponse = {
+      ...defaultMultiAccountData,
+      accounts: [
+        ...defaultMultiAccountData.accounts,
+        { accountName: 'Old Wallet', accountType: null, transactionCount: 0, dateRange: { start: '', end: '' } },
+      ],
+    };
+
+    it('asks for a type and withholds the import until one is chosen', () => {
+      render(<MultiAccountReviewStep {...defaultProps} multiAccountData={untypedData} />);
+      const picker = screen.getByLabelText('Account type for Old Wallet');
+      expect(picker).toHaveValue('');
+      expect(screen.getByText(/does not say what type 1 account is/)).toBeInTheDocument();
+      expect(screen.getByText('Import All').closest('button')).toBeDisabled();
+
+      fireEvent.change(picker, { target: { value: 'CASH' } });
+      expect(defaultProps.onAccountTypeChoiceChange).toHaveBeenCalledWith('Old Wallet', 'CASH');
+    });
+
+    it('offers the import once every untyped account has a type', () => {
+      render(
+        <MultiAccountReviewStep
+          {...defaultProps}
+          multiAccountData={untypedData}
+          accountTypeChoices={{ 'Old Wallet': 'CASH' }}
+        />,
+      );
+      expect(screen.getByLabelText('Account type for Old Wallet')).toHaveValue('CASH');
+      expect(screen.queryByText(/does not say what type/)).not.toBeInTheDocument();
+      fireEvent.click(screen.getByText('Import All'));
+      expect(defaultProps.onImport).toHaveBeenCalledTimes(1);
+    });
+
+    it('withholds the step to securities too while a type is missing', () => {
+      render(
+        <MultiAccountReviewStep
+          {...defaultProps}
+          multiAccountData={untypedData}
+          hasSecuritiesToMap={true}
+        />,
+      );
+      expect(screen.getByText('Next: Map Securities').closest('button')).toBeDisabled();
+    });
   });
 });

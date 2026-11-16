@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useLayoutEffect, useCallback, useMemo, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useTranslations } from 'next-intl';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
+import { securityFormModalProps } from '@/components/securities/security-form-modal';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
@@ -20,10 +21,14 @@ import { SecurityAboutCard } from '@/components/securities/detail/SecurityAboutC
 import { SecurityPerformanceCard } from '@/components/securities/detail/SecurityPerformanceCard';
 import { SecurityPositionInfoCard } from '@/components/securities/detail/SecurityPositionInfoCard';
 import { SecurityAccountsTable } from '@/components/securities/detail/SecurityAccountsTable';
+import { SecurityBondBreakdownCard } from '@/components/securities/detail/SecurityBondBreakdownCard';
 import { SecurityBreakdownCard } from '@/components/securities/detail/SecurityBreakdownCard';
+import { SecurityBondCard } from '@/components/securities/detail/SecurityBondCard';
+import { useFinancialToday } from '@/hooks/useFinancialToday';
 import { useOnUndoRedo } from '@/hooks/useOnUndoRedo';
 import { useOnAiAction } from '@/hooks/useOnAiAction';
 import { usePriceRefresh } from '@/hooks/usePriceRefresh';
+import { BondRefreshProgress } from '@/components/securities/BondRefreshProgress';
 import { investmentsApi } from '@/lib/investments';
 import { getErrorMessage } from '@/lib/errors';
 import { SECURITY_PRICE_HISTORY_LIMIT } from '@/lib/constants';
@@ -66,6 +71,14 @@ const SecurityPriceHistory = dynamic(
   { ssr: false },
 );
 
+const SecurityBondTermsTab = dynamic(
+  () =>
+    import('@/components/securities/detail/SecurityBondTermsTab').then((m) => ({
+      default: m.SecurityBondTermsTab,
+    })),
+  { ssr: false },
+);
+
 const SecurityDocumentsTab = dynamic(
   () =>
     import('@/components/securities/detail/SecurityDocumentsTab').then((m) => ({
@@ -86,32 +99,24 @@ const TAB_KEYS = [
   'overview',
   'transactions',
   'prices',
+  'terms',
   'documents',
   'news',
 ] as const;
 type TabKey = (typeof TAB_KEYS)[number];
 
+/**
+ * A program-linked security gets the terms history in place of the Price
+ * history tab (its manual prices sit under the terms); every other security
+ * has the reverse. A tab the security does not have falls back to Overview.
+ */
+function tabKeysFor(isBond: boolean): readonly TabKey[] {
+  return TAB_KEYS.filter((key) => key !== (isBond ? 'prices' : 'terms'));
+}
+
 /** `?tab=` if it names a real tab, so a link can point at one. */
 function tabFromQuery(value: string | null): TabKey {
   return TAB_KEYS.includes(value as TabKey) ? (value as TabKey) : 'overview';
-}
-
-/**
- * How old the newest close may be and still describe "today's" move. Covers a
- * long weekend plus a public holiday, which is the normal gap between sessions.
- */
-const STALE_QUOTE_DAYS = 4;
-
-/** Whole days between an ISO `yyyy-MM-dd` and today. */
-function daysSince(isoDate: string): number {
-  const then = new Date(`${isoDate}T00:00:00`).getTime();
-  const today = new Date();
-  const midnight = new Date(
-    today.getFullYear(),
-    today.getMonth(),
-    today.getDate(),
-  ).getTime();
-  return Math.round((midnight - then) / 86_400_000);
 }
 
 export default function SecurityDetailPage() {
@@ -151,47 +156,68 @@ function SecurityDetailContent() {
   // The security on screen right now, readable from inside an in-flight load.
   // The switcher moves between securities on the same route (`router.push`
   // below), so this component stays mounted and a load started for the previous
-  // one can still be running. Assigned during render so it is never a render
-  // behind the id the page is currently showing.
+  // one can still be running. Assigned in a layout effect, before any effect
+  // or response can read it, so it is never a commit behind the id the page is
+  // currently showing.
   const shownIdRef = useRef(securityId);
-  shownIdRef.current = securityId;
+  useLayoutEffect(() => {
+    shownIdRef.current = securityId;
+  });
 
-  const loadData = useCallback(async () => {
-    const requestedId = securityId;
-    // Every write below is guarded on the page still showing the security this
-    // load was started for. Without it a slow response for the previous
-    // security lands after the new one's and paints its figures under the new
-    // URL -- the reader sees another instrument's position, and nothing looks
-    // wrong until they reload.
-    const isStale = () => shownIdRef.current !== requestedId;
-
+  // Switching securities shows the spinner again; set during render rather
+  // than in the effect that loads the new one.
+  const [loadingId, setLoadingId] = useState(securityId);
+  if (loadingId !== securityId) {
+    setLoadingId(securityId);
     setIsLoading(true);
     setError(null);
-    try {
-      // The detail is the page; prices and trades feed the chart and its
-      // markers, so a failure in either costs the chart, never the page.
-      const detailData = await investmentsApi.getSecurityDetail(requestedId);
-      const [priceData, historyData] = await Promise.all([
-        investmentsApi
-          .getSecurityPrices(requestedId, { limit: SECURITY_PRICE_HISTORY_LIMIT })
-          .catch(() => []),
-        investmentsApi
-          .getSecurityTransactionHistory(requestedId)
-          .catch(() => null),
-      ]);
-      if (isStale()) return;
-      setDetail(detailData);
-      setPrices(priceData);
-      setTrades(historyData?.transactions ?? []);
-    } catch (err) {
-      if (isStale()) return;
-      const message = getErrorMessage(err, t('loadFailed'));
-      setError(message);
-    } finally {
-      // A stale load must not clear the spinner the current one put up.
-      if (!isStale()) setIsLoading(false);
-    }
+  }
+
+  // The mount / security-switch load: the state already says loading.
+  const fetchData = useCallback(() => {
+    // Writes live in `run` so they land after the request, not during the effect.
+    const run = async () => {
+      const requestedId = securityId;
+      // Every write below is guarded on the page still showing the security this
+      // load was started for. Without it a slow response for the previous
+      // security lands after the new one's and paints its figures under the new
+      // URL -- the reader sees another instrument's position, and nothing looks
+      // wrong until they reload.
+      const isStale = () => shownIdRef.current !== requestedId;
+
+      try {
+        // The detail is the page; prices and trades feed the chart and its
+        // markers, so a failure in either costs the chart, never the page.
+        const detailData = await investmentsApi.getSecurityDetail(requestedId);
+        const [priceData, historyData] = await Promise.all([
+          investmentsApi
+            .getSecurityPrices(requestedId, { limit: SECURITY_PRICE_HISTORY_LIMIT })
+            .catch(() => []),
+          investmentsApi
+            .getSecurityTransactionHistory(requestedId)
+            .catch(() => null),
+        ]);
+        if (isStale()) return;
+        setDetail(detailData);
+        setPrices(priceData);
+        setTrades(historyData?.transactions ?? []);
+      } catch (err) {
+        if (isStale()) return;
+        const message = getErrorMessage(err, t('loadFailed'));
+        setError(message);
+      } finally {
+        // A stale load must not clear the spinner the current one put up.
+        if (!isStale()) setIsLoading(false);
+      }
+    };
+    return run();
   }, [securityId, t]);
+
+  const loadData = useCallback(() => {
+    setIsLoading(true);
+    setError(null);
+    return fetchData();
+  }, [fetchData]);
 
   // After a price refresh the quote and the market-value cards are stale, but
   // the page is already on screen -- reload in place rather than through
@@ -221,13 +247,24 @@ function SecurityDetailContent() {
     triggerManualRefresh: refreshPrices,
   } = usePriceRefresh({ onRefreshComplete: reloadAfterPriceRefresh });
 
+  // One signal for every bond section that loads its own data: bumped when a
+  // price refresh settles (success, failure or nothing to do), so each re-reads
+  // the series, offer and catalog the refresh may have changed, in place and
+  // without remounting (which would reset the as-of date, scenario and tab).
+  const [bondDataVersion, setBondDataVersion] = useState(0);
+  const [wasRefreshingPrice, setWasRefreshingPrice] = useState(false);
+  if (wasRefreshingPrice !== isRefreshingPrice) {
+    setWasRefreshingPrice(isRefreshingPrice);
+    if (!isRefreshingPrice) setBondDataVersion((v) => v + 1);
+  }
+
   const handleRefreshPrice = useCallback(() => {
     void refreshPrices([securityId]);
   }, [refreshPrices, securityId]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    fetchData();
+  }, [fetchData]);
 
   useEffect(() => {
     let cancelled = false;
@@ -251,14 +288,19 @@ function SecurityDetailContent() {
   const priceSeries = useMemo(() => toPriceSeries(prices), [prices]);
   const quantitySteps = useMemo(() => buildQuantitySteps(trades), [trades]);
 
-  // The newest close, plus how far it moved against the one before it. Derived
-  // here rather than fetched: the page already holds the whole series, and the
-  // quote endpoints answer for the portfolio rather than for one security.
+  // The newest close, plus the server's daily move (`detail.dailyChange`, from
+  // `resolveDailyPriceChange`). A refusal is null: the header then shows the
+  // newest session's date and no change figure. A move for another session
+  // than the newest close shown (a stale read) is not shown under it.
+  const serverChange = detail?.dailyChange ?? null;
+  const financialToday = useFinancialToday();
   const quote = useMemo(() => {
     const latest = priceSeries[priceSeries.length - 1];
     if (!latest) return null;
-    const previous = priceSeries[priceSeries.length - 2];
-    const change = previous ? roundToDecimals(latest.close - previous.close, 6) : null;
+    const move =
+      serverChange && serverChange.priceDate === latest.date
+        ? serverChange
+        : null;
     return {
       price: latest.close,
       priceDate: latest.date,
@@ -266,18 +308,13 @@ function SecurityDetailContent() {
       // predating the column, manual entries and transaction-derived prices
       // have none, and fall back to the date alone.
       quotedAt: latest.quotedAt ?? null,
-      change,
-      changePercent:
-        previous && previous.close !== 0 && change !== null
-          ? roundToDecimals((change / previous.close) * 100, 2)
-          : null,
-      // A move is only "today's" if the quote it came from is fresh. Prices are
-      // refreshed daily and there are no weekend closes, so anything within a
-      // few days still counts as the latest session; older than that and the
-      // header says "last move" instead of misdating it.
-      isCurrent: daysSince(latest.date) <= STALE_QUOTE_DAYS,
+      change: move ? roundToDecimals(move.dailyChange, 6) : null,
+      changePercent: move ? roundToDecimals(move.dailyChangePercent, 2) : null,
+      // The server accepts the last session's move too (Friday's close read on
+      // Saturday), so only today's own session is labelled "today".
+      isCurrent: move ? move.priceDate === financialToday : false,
     };
-  }, [priceSeries]);
+  }, [priceSeries, serverChange, financialToday]);
 
   const handleToggleFavourite = useCallback(async () => {
     if (!detail) return;
@@ -354,7 +391,11 @@ function SecurityDetailContent() {
   }
 
   const { security } = detail;
-  const tabs = TAB_KEYS.map((key) => ({ key, label: t(`tabs.${key}`) }));
+  const isBond = !!security.bondProgramId;
+  const tabKeys = tabKeysFor(isBond);
+  const tabs = tabKeys.map((key) => ({ key, label: t(`tabs.${key}`) }));
+  // A stale `?tab=prices` on a bond (or `?tab=terms` elsewhere) shows Overview.
+  const activeTab: TabKey = tabKeys.includes(tab) ? tab : 'overview';
 
   return (
     <PageLayout>
@@ -370,6 +411,11 @@ function SecurityDetailContent() {
           isRefreshingPrice={isRefreshingPrice}
           securities={securities}
           onSelectSecurity={(id) => router.push(`/securities/${id}`)}
+        />
+
+        <BondRefreshProgress
+          programId={security.bondProgramId ?? null}
+          active={isRefreshingPrice && !!security.bondProgramId}
         />
 
         <div className="space-y-6">
@@ -429,8 +475,16 @@ function SecurityDetailContent() {
                     : null
                 }
                 prices={priceSeries}
+                refreshVersion={bondDataVersion}
               />
-              <SecurityBreakdownCard security={security} />
+              {security.bondProgramId ? (
+                <SecurityBondBreakdownCard
+                  security={security}
+                  refreshVersion={bondDataVersion}
+                />
+              ) : (
+                <SecurityBreakdownCard security={security} />
+              )}
             </div>
           </div>
 
@@ -438,7 +492,7 @@ function SecurityDetailContent() {
             <div {...tourAnchor(TOUR_ANCHORS.securityDetailTabs)}>
               <Tabs
                 tabs={tabs}
-                value={tab}
+                value={activeTab}
                 onChange={setTab}
                 idPrefix="securityDetail"
                 ariaLabel={t('tabs.ariaLabel')}
@@ -454,7 +508,7 @@ function SecurityDetailContent() {
               <TabPanel
                 idPrefix="securityDetail"
                 tabKey="overview"
-                isActive={tab === 'overview'}
+                isActive={activeTab === 'overview'}
                 className="mt-6 space-y-6"
               >
                 {/* One height across the row: the three cards hold different
@@ -473,13 +527,21 @@ function SecurityDetailContent() {
                   </div>
                 </div>
 
+                {security.bondProgramId && (
+                  <SecurityBondCard
+                    security={security}
+                    onPricesChanged={reloadAfterPriceRefresh}
+                    refreshVersion={bondDataVersion}
+                  />
+                )}
+
                 <SecurityAccountsTable detail={detail} />
               </TabPanel>
 
               <TabPanel
                 idPrefix="securityDetail"
                 tabKey="transactions"
-                isActive={tab === 'transactions'}
+                isActive={activeTab === 'transactions'}
                 // Holds its own fetched rows: unmounting would refetch and replay
                 // the loading state on every return to the tab.
                 keepMounted
@@ -490,33 +552,67 @@ function SecurityDetailContent() {
                 </div>
               </TabPanel>
 
-              <TabPanel
-                idPrefix="securityDetail"
-                tabKey="prices"
-                isActive={tab === 'prices'}
-                keepMounted
-                className="mt-6"
-              >
-                <div className="rounded-lg bg-white p-4 shadow dark:bg-gray-800 dark:shadow-gray-700/50">
-                  <SecurityPriceHistory security={security} />
-                </div>
-              </TabPanel>
+              {isBond ? (
+                <TabPanel
+                  idPrefix="securityDetail"
+                  tabKey="terms"
+                  isActive={activeTab === 'terms'}
+                  keepMounted
+                  className="mt-6"
+                >
+                  <SecurityBondTermsTab
+                    security={security}
+                    refreshVersion={bondDataVersion}
+                  />
+                  {/* The only place to enter a price by hand; the engine never
+                      replaces one (INV-BOND-005), so a linked bond keeps it. */}
+                  <section className="mt-6">
+                    <h2 className="mb-3 text-lg font-semibold text-gray-900 dark:text-gray-100">
+                      {t('bondPrices.title')}
+                    </h2>
+                    <div className="rounded-lg bg-white p-4 shadow dark:bg-gray-800 dark:shadow-gray-700/50">
+                      <SecurityPriceHistory
+                        security={security}
+                        onPricesChanged={reloadAfterPriceRefresh}
+                      />
+                    </div>
+                  </section>
+                </TabPanel>
+              ) : (
+                <TabPanel
+                  idPrefix="securityDetail"
+                  tabKey="prices"
+                  isActive={activeTab === 'prices'}
+                  keepMounted
+                  className="mt-6"
+                >
+                  <div className="rounded-lg bg-white p-4 shadow dark:bg-gray-800 dark:shadow-gray-700/50">
+                    <SecurityPriceHistory
+                      security={security}
+                      onPricesChanged={reloadAfterPriceRefresh}
+                    />
+                  </div>
+                </TabPanel>
+              )}
 
               <TabPanel
                 idPrefix="securityDetail"
                 tabKey="documents"
-                isActive={tab === 'documents'}
+                isActive={activeTab === 'documents'}
                 // Loads its own list, so it keeps it between visits.
                 keepMounted
                 className="mt-6"
               >
-                <SecurityDocumentsTab security={security} />
+                <SecurityDocumentsTab
+                  security={security}
+                  refreshVersion={bondDataVersion}
+                />
               </TabPanel>
 
               <TabPanel
                 idPrefix="securityDetail"
                 tabKey="news"
-                isActive={tab === 'news'}
+                isActive={activeTab === 'news'}
                 keepMounted
                 className="mt-6"
               >
@@ -531,21 +627,16 @@ function SecurityDetailContent() {
         <Modal
           isOpen={isEditing}
           onClose={() => setIsEditing(false)}
-          maxWidth="3xl"
-          className="p-6"
+          {...securityFormModalProps}
+          title={ts('page.modalTitleEdit')}
           pushHistory
         >
           {isEditing && (
-            <>
-              <h2 className="mb-4 text-2xl font-bold text-gray-900 dark:text-gray-100">
-                {ts('page.modalTitleEdit')}
-              </h2>
-              <SecurityForm
-                security={security}
-                onSubmit={handleEditSubmit}
-                onCancel={() => setIsEditing(false)}
-              />
-            </>
+            <SecurityForm
+              security={security}
+              onSubmit={handleEditSubmit}
+              onCancel={() => setIsEditing(false)}
+            />
           )}
         </Modal>
       </main>

@@ -1,0 +1,287 @@
+{
+  "title": "Benachrichtigungen",
+  "unread": "{count} ungelesen",
+  "markAllRead": "Alle als gelesen markieren",
+  "loading": "Benachrichtigungen werden geladen...",
+  "empty": "Keine Benachrichtigungen",
+  "undo": "Rückgängig",
+  "buttonTitle": "Benachrichtigungen",
+  "buttonAriaLabel": "Benachrichtigungen",
+  "dismissAriaLabel": "Benachrichtigung verwerfen",
+  "closeAriaLabel": "Benachrichtigungen schließen",
+  "emptyFiltered": "Keine Benachrichtigung entspricht dem aktuellen Filter",
+  "deleteAll": "Alle löschen",
+  "deleteAllConfirmTitle": "Benachrichtigungen löschen",
+  "deleteAllConfirmMessageAll": "Alle Benachrichtigungen löschen? Das kann nicht rückgängig gemacht werden.",
+  "deleteAllConfirmMessageFiltered": "Jede Benachrichtigung löschen, die dem aktuellen Filter entspricht, auch nicht angezeigte? Das kann nicht rückgängig gemacht werden.",
+  "deleted": "{count, plural, one {# Benachrichtigung gelöscht} other {# Benachrichtigungen gelöscht}}",
+  "deleteFailed": "Die Benachrichtigungen konnten nicht gelöscht werden",
+  "filter": {
+    "financial": "Finanziell",
+    "system": "System"
+  },
+  "severity": {
+    "critical": "Kritisch",
+    "warning": "Warnung",
+    "success": "Gute Nachricht",
+    "info": "Info"
+  },
+  "reminder": {
+    "remindAriaLabel": "Mich daran erinnern",
+    "stopAriaLabel": "Diese Erinnerung stoppen",
+    "stopped": "Erinnerung gestoppt",
+    "stopFailed": "Die Erinnerung konnte nicht gestoppt werden",
+    "created": "Erinnerung eingestellt",
+    "createFailed": "Die Erinnerung konnte nicht eingestellt werden",
+    "dialogTitle": "Erinnere mich",
+    "dialogDescription": "Erhalte diese Benachrichtigung später erneut, bis du reagierst.",
+    "modeLabel": "Häufigkeit",
+    "modeRepeat": "Wiederholen, bis ich stoppe",
+    "modeOnce": "Nur noch einmal",
+    "intervalLabelRepeat": "Erinnere mich alle",
+    "intervalLabelOnce": "Erinnere mich nach",
+    "durationMinutes": "{minutes, plural, one {# Minute} other {# Minuten}}",
+    "durationHours": "{hours, plural, one {# Stunde} other {# Stunden}}",
+    "cancel": "Abbrechen",
+    "confirm": "Erinnerung einstellen",
+    "pageTitle": "Aktive Erinnerungen",
+    "empty": "Keine aktiven Erinnerungen",
+    "loadFailed": "Erinnerungen konnten nicht geladen werden",
+    "retry": "Erneut versuchen",
+    "nextFire": "Nächste Erinnerung: {date}",
+    "openTarget": "Zugehörige Seite öffnen",
+    "delegateUnavailable": "Wechsle zurück zu deinem eigenen Konto, um Erinnerungen zu verwalten."
+  },
+  "billDue": {
+    "titleOverdue": "{payee} überfällig",
+    "titleToday": "{payee} heute fällig",
+    "titleTomorrow": "{payee} morgen fällig",
+    "titleInDays": "{payee} fällig in {days} Tagen",
+    "amountDue": "{amount} fällig am {date}",
+    "amountUnavailable": "Betrag nicht verfügbar (kein aktueller Wechselkurs), fällig am {date}"
+  },
+  "gemSignal": {
+    "riskTitle": "{strategy} auf {state} umgestellt",
+    "riskMessage": "Ihre GEM-Strategie \"{strategy}\" ist von {fromState} auf {toState} gewechselt. Öffnen Sie, um die Empfehlung zu prüfen.",
+    "allocationTitle": "{strategy} hat das Ziel geändert",
+    "allocationMessage": "Ihre GEM-Strategie \"{strategy}\" zielt jetzt auf {target}. Öffnen Sie, um die Empfehlung zu prüfen.",
+    "riskOn": "risk-on",
+    "riskOff": "risk-off"
+  },
+  "bond": {
+    "maturitySoonTitle": "{series}: Fälligkeit am {date}",
+    "maturitySoonMessage": "{quantity} × {series} werden am {date} fällig. {payout}",
+    "interestTitle": "{series}: Zinszahlung am {date}",
+    "interestMessage": "{quantity} × {series} zahlen am {date} {amount} Zinsen. Buchen Sie sie auf der Wertpapierseite, falls sie noch nicht auf Ihrem Konto sind.",
+    "interestMessageUnknown": "{quantity} × {series} zahlen am {date} Zinsen. Der Betrag steht noch nicht fest: Ein Zinssatz, von dem er abhängt, ist noch nicht veröffentlicht.",
+    "rateResetTitle": "{series}: neue Zinsperiode",
+    "rateResetMessage": "{series} hat am {date} die Periode {period} mit {rate} p. a. begonnen.",
+    "unbookedTitle": "{series}: fällig, Rückzahlung nicht gebucht",
+    "unbookedMessage": "{quantity} × {series} wurden am {date} fällig, und es ist keine Rückzahlung gebucht. {payout} Buchen Sie die Rückzahlung auf der Wertpapierseite.",
+    "payoutKnown": "Die Auszahlung beträgt {payout}.",
+    "payoutUnknown": "Die Auszahlung steht noch nicht fest: {reason}.",
+    "reason": {
+      "RATE_UNKNOWN": "ein Zinssatz, von dem sie abhängt, ist noch nicht veröffentlicht",
+      "TERMS_INCOMPLETE": "die Konditionen der Serie sind unvollständig",
+      "PURCHASE_OUTSIDE_SALE_WINDOW": "ein Kaufdatum liegt außerhalb des Verkaufszeitraums der Serie",
+      "PURCHASE_AFTER_MATURITY": "ein Kaufdatum liegt am oder nach dem Fälligkeitstag der Serie",
+      "other": "sie lässt sich aus den gespeicherten Daten nicht berechnen"
+    },
+    "benchmarkTitle": "{benchmark}: neuer Wert für {observation}",
+    "benchmarkIntro": "{publisher} hat {benchmark} für {observation} veröffentlicht: {value}.",
+    "benchmarkSeries": "{series}: Periode ab {date} mit {rate} p. a.",
+    "benchmarkSeriesProjected": "{series}: Periode ab {date} mit prognostizierten {rate} p. a.",
+    "benchmarkSeriesUnknown": "{series}: Periode ab {date}, der Zinssatz steht noch nicht fest.",
+    "benchmarkMore": "Und {more} weitere.",
+    "missingTitle": "Anleihedaten noch nicht bekannt",
+    "missingMessage": "Einige Anleihedaten lassen sich nicht berechnen. {causes}",
+    "cause": {
+      "observation": "Der Wert {observation} von {benchmark} ({publisher}) ist nicht gespeichert: Er ist noch nicht veröffentlicht, oder der Feed wurde seitdem nicht abgerufen. Aktualisieren Sie auf der Anleiheseite.",
+      "observationNoPublisher": "Der Wert {observation} von {benchmark} ist nicht gespeichert: Er ist noch nicht veröffentlicht, oder der Feed wurde seitdem nicht abgerufen. Aktualisieren Sie auf der Anleiheseite.",
+      "terms": "Die Konditionen von {series} sind unvollständig. Aktualisieren Sie die Serie auf der Anleiheseite.",
+      "purchase": "Ein Kauf von {series} am {date} liegt außerhalb des Verkaufszeitraums ({from} bis {to}). Korrigieren Sie das Kaufdatum.",
+      "purchaseAfterMaturity": "Ein Kauf von {series} am {date} liegt am oder nach der Fälligkeit ({maturity}). Korrigieren Sie das Kaufdatum.",
+      "lots": "Die Lots lassen sich nicht aus dem Buchungsverlauf ableiten ({code}). Korrigieren Sie den Buchungsverlauf.",
+      "lotsRow": "{action} vom {date}: Die Lots lassen sich nicht ableiten ({code}). Korrigiere die Buchung.",
+      "lotsRowSeries": "{action} vom {date} ist keiner Serie zugeordnet ({code}). Wähle die Serie in dieser Buchung.",
+      "lotsRowRemoval": "{action} vom {date} entnimmt mehr, als das Konto von dieser Serie hält ({code}). Korrigiere die Buchung."
+    },
+    "action": {
+      "BUY": "Kauf",
+      "SELL": "Verkauf",
+      "REINVEST": "Wiederanlage",
+      "ADD_SHARES": "Anteilszubuchung",
+      "REMOVE_SHARES": "Anteilsausbuchung",
+      "SPLIT": "Split",
+      "TRANSFER_IN": "Eingehende Übertragung",
+      "TRANSFER_OUT": "Ausgehende Übertragung",
+      "other": "Buchung"
+    },
+    "benchmarks": {
+      "PL_CPI_GUS_YOY": "Inflationsrate (VPI), 12 Monate (GUS)",
+      "PL_NBP_REFERENCE": "NBP-Referenzzins",
+      "US_CPI_U_NSA": "CPI-U, alle Waren und Dienstleistungen, nicht saisonbereinigt (BLS)",
+      "US_TBILL_13W_MMY": "Rendite der 13-wöchigen Treasury Bills"
+    }
+  },
+  "portfolioMovement": {
+    "titleUp": "Anlagen {percent}% im Plus",
+    "titleDown": "Anlagen {percent}% im Minus",
+    "messageUp": "Ihre Anlagen liegen vom {from} bis {to} um {percent}% im Plus, ohne Ein- und Auszahlungen. Öffnen Sie zur Prüfung.",
+    "messageDown": "Ihre Anlagen liegen vom {from} bis {to} um {percent}% im Minus, ohne Ein- und Auszahlungen. Öffnen Sie zur Prüfung."
+  },
+  "balanceThreshold": {
+    "titleLow": "{account} liegt unter Ihrem Schwellenwert",
+    "titleHigh": "{account} liegt über Ihrem Schwellenwert",
+    "messageLow": "{account} ist auf {balance} gefallen, unter Ihren Schwellenwert von {threshold}.",
+    "messageHigh": "{account} ist auf {balance} gestiegen, über Ihren Schwellenwert von {threshold}."
+  },
+  "system": {
+    "backupFailed": {
+      "title": "Automatisches Backup fehlgeschlagen",
+      "message": "Das automatische Backup für {user} ist fehlgeschlagen: {error}"
+    },
+    "backupPartial": {
+      "title": "Automatisches Backup unvollständig",
+      "messageAttachments": "Das Backup für {user} wurde geschrieben, aber {missing} von {expected} Anhängen konnten nicht aufgenommen werden und {inconsistent} stimmten nicht mit ihren Metadaten überein. Vollständige Backups wurden bewahrt.",
+      "messagePromotion": "Das tägliche Backup für {user} war erfolgreich, aber die wöchentliche oder monatliche Kopie konnte nicht geschrieben werden: {error}",
+      "messageRetention": "Das Backup für {user} war erfolgreich, aber alte Backup-Dateien konnten nicht aufgeräumt werden: {error}"
+    },
+    "encryptionKeyMissing": {
+      "title": "Verschlüsselungsschlüssel nicht konfiguriert",
+      "message": "ENCRYPTION_KEY ist nicht gesetzt, daher werden Backups unverschlüsselt geschrieben und Geheimnisse können nicht gespeichert werden. Eine zukünftige Version wird ohne den Schlüssel nicht mehr starten."
+    },
+    "jwtSecretWeak": {
+      "title": "JWT_SECRET ist unsicher",
+      "message": "JWT_SECRET ist ein veröffentlichter Platzhalter oder zu leicht zu erraten, sodass Sitzungstoken gefälscht werden können. Erzeugen Sie einen starken Wert (openssl rand -base64 32). Eine Änderung macht Codes aus Authentifizierungs-Apps ungültig und vergisst vertrauenswürdige Geräte: Benutzer melden sich mit einem Backup-Code an und richten 2FA neu ein, und für alle ohne Backup-Code setzen Sie die 2FA in der Benutzerverwaltung zurück. Lesen Sie vorher docs/backend/modules-and-runtime.md (Changing JWT_SECRET)."
+    },
+    "smtpFailure": {
+      "title": "E-Mail-Zustellung schlägt fehl",
+      "message": "Monize konnte keine E-Mail senden: {error}. Benachrichtigungen und Erinnerungen werden nicht zugestellt."
+    },
+    "providerOutage": {
+      "title": "{provider} antwortet nicht",
+      "message": "Marktdaten von {provider} sind nicht verfügbar. Kurse und Indexdaten sind möglicherweise veraltet, bis der Anbieter wieder antwortet."
+    },
+    "providerRecovered": {
+      "title": "{provider} antwortet wieder",
+      "message": "Der Ausfall ist vorbei und Marktdaten von {provider} werden wieder aktualisiert."
+    },
+    "scheduledPostFailed": {
+      "title": "{name} konnte nicht gebucht werden",
+      "message": "Ihre geplante Transaktion, fällig am {date}, wurde nicht automatisch gebucht: {error}. Sie können sie unter Rechnungen & Einzahlungen manuell buchen."
+    }
+  },
+  "priceMovement": {
+    "title": "Alarm bei Kursänderung: {symbol} ({percent}%)",
+    "message": "{symbol}: {percent}% gegenüber der letzten verfügbaren Sitzung."
+  },
+  "bankSync": {
+    "expiringTitleToday": "{institution}: Bankzugriff endet heute",
+    "expiringTitleOneDay": "{institution}: Bankzugriff endet innerhalb von 1 Tag",
+    "expiringTitleDays": "{institution}: Bankzugriff endet innerhalb von {days} Tagen",
+    "expiringMessage": "Ihre Einwilligung, dass Monize auf {institution} zugreifen darf, endet am {date}. Erneuern Sie die Verbindung in Monize, um weiter zu synchronisieren.",
+    "expiredTitle": "{institution}: Bankzugriff ist beendet",
+    "expiredMessage": "Ihre Einwilligung, dass Monize auf {institution} zugreifen darf, ist beendet. Erneuern Sie die Verbindung in Monize, um die Synchronisierung fortzusetzen.",
+    "failedTitle": "{institution}: Synchronisierung fehlgeschlagen",
+    "failedMessage": "Die tägliche Synchronisierung von {institution} ist fehlgeschlagen für: {accounts}. Öffnen Sie die Einstellungen der Bank-Synchronisierung, um den Grund zu sehen.",
+    "failedCredentialsMessage": "Die tägliche Synchronisierung von {institution} konnte nicht starten, weil die Zugangsdaten der Bank-Synchronisierung fehlen oder abgelehnt wurden. Prüfen Sie sie in den Einstellungen der Bank-Synchronisierung.",
+    "unnamedAccount": "ein Konto",
+    "importedTitle": "{institution}: neue Buchungen importiert",
+    "importedMessage": "Durch die tägliche Synchronisierung aus {institution} importierte Buchungen: {imported}.",
+    "importedNoneTitle": "{institution}: keine neuen Buchungen",
+    "importedNoneMessage": "Die tägliche Synchronisierung von {institution} hat keine neuen Buchungen gefunden."
+  },
+  "emailReceiptsAttention": {
+    "title": "E-Mail-Belege benötigen Aufmerksamkeit",
+    "message": "Ihr Belegepostfach enthält {noParser} ohne Profil und {parseFailed}, die ihr Profil nicht erkannt hat. Öffnen Sie zur Prüfung."
+  },
+  "aiReview": {
+    "readyTitle": "KI-Vorschläge warten auf Ihre Freigabe",
+    "readyMessage": "{count, plural, one {# KI-Vorschlag wartet} other {# KI-Vorschläge warten}} auf Ihre Freigabe, davon {added} neu. Öffnen Sie den KI-Prüfeingang, um sie freizugeben oder abzulehnen.",
+    "expiringTitle": "KI-Vorschläge laufen bald ab",
+    "expiringMessage": "{count, plural, one {# KI-Vorschlag läuft} other {# KI-Vorschläge laufen}} bald ab. Der erste läuft am {date} ab. Öffnen Sie den KI-Prüfeingang, um sie freizugeben oder abzulehnen."
+  },
+  "warranty": {
+    "expiringTitle": "{name}: Garantie läuft in {days, plural, one {# Tag} other {# Tagen}} ab",
+    "expiringMessage": "Die Garantie für {name} läuft am {date} ab. Öffnen Sie sie, um ihre Dokumente zu prüfen oder einen Anspruch zu erfassen.",
+    "todayTitle": "{name}: Garantie läuft heute ab",
+    "todayMessage": "Die Garantie für {name} läuft heute, am {date}, ab. Öffnen Sie sie, um ihre Dokumente zu prüfen oder einen Anspruch zu erfassen."
+  },
+  "security": {
+    "oauthTitle": "Neue App verbunden: {clientName}",
+    "oauthMessage": "Der Anwendung {clientName} wurde soeben Zugriff auf Ihr Monize-Konto gewährt. Wenn Sie das nicht waren, ändern Sie jetzt Ihr Passwort: Dadurch wird der Zugriff aller verbundenen Anwendungen widerrufen.",
+    "relayTitle": "Eine neue Verbindung hat Ihren KI-Chat beantwortet",
+    "relayMessage": "Eine Verbindung, die Ihren Monize-KI-Chat bisher nicht beantwortet hat, hat gerade eine Eingabe abgeholt. Wenn Sie diesen Assistenten nicht verbunden haben, ändern Sie Ihr Passwort."
+  },
+  "payrollDeduction": {
+    "resetTitle": "{category}: Höchstbetrag für das nächste Jahr bestätigen",
+    "resetMessage": "Der Abzug {category} auf {bill} wird am {date} zurückgesetzt. Aktualisieren Sie den Jahreshöchstbetrag, falls er sich ändert; andernfalls gilt wieder {amount}."
+  },
+  "shared": {
+    "title": "Gemeinsame Ausgaben",
+    "message": "Eine gemeinsame Gruppe wurde aktualisiert. Öffne Monize, um die Änderungen anzusehen."
+  },
+  "native": {
+    "payments": {
+      "title": "Zahlungserinnerung",
+      "body": "Eine Rechnung oder geplante Zahlung braucht Ihre Aufmerksamkeit. Öffnen Sie Monize für die Details."
+    },
+    "budgets": {
+      "title": "Budgetwarnung",
+      "body": "Eines Ihrer Budgets braucht Ihre Aufmerksamkeit. Öffnen Sie Monize für die Details."
+    },
+    "system": {
+      "title": "Systemhinweis",
+      "body": "Monize hat einen Systemhinweis für Sie. Öffnen Sie die App für die Details."
+    },
+    "balances": {
+      "title": "Kontostandwarnung",
+      "body": "Ein Kontostand hat einen von Ihnen festgelegten Schwellenwert überschritten. Öffnen Sie Monize für die Details."
+    },
+    "investments": {
+      "title": "Anlagebewegung",
+      "body": "Ihre Anlagen haben sich heute bewegt. Öffnen Sie Monize für die Details."
+    },
+    "strategies": {
+      "title": "Strategiesignal",
+      "body": "Eine Ihrer Strategien hat ihre Empfehlung geändert. Öffnen Sie Monize für die Details."
+    },
+    "bank_sync": {
+      "title": "Bankverbindung",
+      "body": "Eine Bankverbindung braucht Ihre Aufmerksamkeit. Öffnen Sie Monize für die Details."
+    },
+    "bank_sync_activity": {
+      "title": "Bank-Synchronisierung",
+      "body": "Es gibt Neuigkeiten zu Ihrer Bank-Synchronisierung. Öffnen Sie Monize für die Details."
+    },
+    "email_receipts": {
+      "title": "E-Mail-Belege benötigen Aufmerksamkeit",
+      "body": "Einige E-Mails in Ihrem Belegepostfach benötigen ein Profil oder eine Korrektur. Öffnen Sie Monize für die Details."
+    },
+    "bonds": {
+      "title": "Anleihen-Hinweis",
+      "body": "Zu einer Ihrer Anleihen gibt es Neuigkeiten. Öffnen Sie Monize für die Details."
+    },
+    "ai_review": {
+      "title": "KI-Prüfvorschläge",
+      "body": "Einige KI-Prüfvorschläge warten auf Ihre Entscheidung. Öffnen Sie Monize für die Details."
+    },
+    "warranties": {
+      "title": "Garantie-Erinnerung",
+      "body": "Eine Ihrer Garantien läuft bald ab. Öffnen Sie Monize für die Details."
+    },
+    "shared_expenses": {
+      "title": "Gemeinsame Ausgaben",
+      "body": "Eine gemeinsame Gruppe wurde aktualisiert. Öffne Monize, um die Änderungen anzusehen."
+    },
+    "security": {
+      "title": "Sicherheitshinweis",
+      "body": "Es hat sich etwas geändert, wer auf Ihr Monize-Konto zugreifen kann. Öffnen Sie Monize für die Details."
+    },
+    "fallback": {
+      "title": "Monize",
+      "body": "Sie haben eine neue Benachrichtigung in Monize."
+    }
+  }
+}

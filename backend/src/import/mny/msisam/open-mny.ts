@@ -1,14 +1,41 @@
 import MDBReader from "mdb-reader";
 import type { Value } from "mdb-reader";
 
-import { MnyUnreadableDatabaseError } from "../mny-errors";
-import { MsisamEncryptionScheme } from "./jet-header";
+import {
+  MnyNotAMoneyFileError,
+  MnyUnreadableDatabaseError,
+} from "../mny-errors";
+import { MnyFileFormat } from "../model/mny-money99";
+import { JET_ENGINE_NAME, MsisamEncryptionScheme } from "./jet-header";
 import { decryptMsisamInPlace, readMsisamMetadata } from "./msisam-decrypt";
 
 /** What page 0 says about a file, however its pages were obtained. */
 interface MsisamFileMetadata {
+  readonly format: MnyFileFormat;
   readonly scheme: MsisamEncryptionScheme;
   readonly passwordProtected: boolean;
+}
+
+/** Tables every Money version has. */
+const MONEY_TABLES = ["ACCT", "TRN", "DHD"] as const;
+
+/**
+ * Refuses a Jet 3 file that lacks Money's tables. Its header cannot say: a
+ * Money 97-99 file and an Access 97 `.mdb` both read "Standard Jet DB",
+ * version 0. An MSISAM file is Money's by its engine name alone.
+ *
+ * @throws MnyNotAMoneyFileError
+ */
+export function assertMoneyTables(
+  format: MnyFileFormat,
+  tableNames: readonly string[],
+): void {
+  if (
+    format === "jet3" &&
+    !MONEY_TABLES.every((table) => tableNames.includes(table))
+  ) {
+    throw new MnyNotAMoneyFileError(JET_ENGINE_NAME);
+  }
 }
 
 /**
@@ -48,6 +75,11 @@ export interface MnyTable {
 }
 
 export interface MnyDatabase {
+  /**
+   * `jet3` for a Money 97-99 file, `msisam` for Money 2001 onwards. The two
+   * use different code spaces for the same columns (`mny-money99.ts`).
+   */
+  readonly format: MnyFileFormat;
   /** Key-derivation scheme the source file used. */
   readonly scheme: MsisamEncryptionScheme;
   /** True when a non-blank password was needed to open the file. */
@@ -128,7 +160,7 @@ export function openDecryptedMnyFile(buffer: Buffer): MnyDatabase {
 
 function openDatabase(
   buffer: Buffer,
-  { scheme, passwordProtected }: MsisamFileMetadata,
+  { format, scheme, passwordProtected }: MsisamFileMetadata,
 ): MnyDatabase {
   let reader: MDBReader;
   let tableNames: string[];
@@ -152,10 +184,12 @@ function openDatabase(
     throw new MnyUnreadableDatabaseError(error);
   }
 
+  assertMoneyTables(format, tableNames);
   const present = new Set(tableNames);
   const cache = new Map<string, MnyTable>();
 
   return {
+    format,
     scheme,
     passwordProtected,
     tableNames,

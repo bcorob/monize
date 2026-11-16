@@ -17,10 +17,18 @@ import { SecurityToolPrepService } from "./security-tool-prep.service";
 import { SecurityPriceService } from "./security-price.service";
 import { YahooFinanceService } from "./yahoo-finance.service";
 import { MsnFinanceService } from "./msn-finance.service";
+import { LseFinanceService } from "./lse-finance.service";
+import { DeutscheBoerseFinanceService } from "./deutsche-boerse-finance.service";
+import { HtmlTableFinanceService } from "./html-table-finance.service";
+import { QuoteTablePreviewController } from "./quote-table-preview.controller";
 import { QuoteProviderRegistry } from "./providers/quote-provider.registry";
 import { HoldingsService } from "./holdings.service";
+import { HoldingsDriftReportService } from "./holdings-drift-report.service";
 import { InvestmentTransactionsService } from "./investment-transactions.service";
+import { TransferPairLinkService } from "./transfer-pair-link.service";
 import { PortfolioService } from "./portfolio.service";
+import { PortfolioSummaryInvalidationBridge } from "./portfolio-summary-invalidation.bridge";
+import { DailyMovementService } from "./daily-movement.service";
 import { PortfolioCalculationService } from "./portfolio-calculation.service";
 import { SecurityDetailService } from "./security-detail.service";
 import { SecurityDocumentsService } from "./security-documents.service";
@@ -40,6 +48,7 @@ import { NetWorthModule } from "../net-worth/net-worth.module";
 import { ActionHistoryModule } from "../action-history/action-history.module";
 import { DelegationModule } from "../delegation/delegation.module";
 import { ProviderHealthModule } from "../provider-health/provider-health.module";
+import { BondsModule } from "../bonds/bonds.module";
 
 @Module({
   imports: [
@@ -66,18 +75,29 @@ import { ProviderHealthModule } from "../provider-health/provider-health.module"
     forwardRef(() => NetWorthModule),
     ActionHistoryModule,
     forwardRef(() => DelegationModule),
+    // A bond link recomputes the security's engine prices after its commit.
+    forwardRef(() => BondsModule),
   ],
   providers: [
     SecuritiesService,
+    TransferPairLinkService,
     SecurityToolPrepService,
     SecurityPriceService,
     YahooFinanceService,
     MsnFinanceService,
+    LseFinanceService,
+    DeutscheBoerseFinanceService,
+    HtmlTableFinanceService,
     QuoteProviderRegistry,
     HoldingsService,
+    HoldingsDriftReportService,
     InvestmentTransactionsService,
     PortfolioCalculationService,
     PortfolioService,
+    // Subscribes this replica to memo invalidations and announces its own;
+    // `EventBusModule` is `@Global()`, so no module edge is needed for it.
+    PortfolioSummaryInvalidationBridge,
+    DailyMovementService,
     SecurityDetailService,
     SecurityDocumentsService,
     SecurityNewsService,
@@ -91,6 +111,7 @@ import { ProviderHealthModule } from "../provider-health/provider-health.module"
     InvestmentTransactionsController,
     PortfolioController,
     PerformanceComparisonController,
+    QuoteTablePreviewController,
   ],
   exports: [
     SecuritiesService,
@@ -98,6 +119,9 @@ import { ProviderHealthModule } from "../provider-health/provider-health.module"
     SecurityPriceService,
     YahooFinanceService,
     MsnFinanceService,
+    LseFinanceService,
+    DeutscheBoerseFinanceService,
+    HtmlTableFinanceService,
     QuoteProviderRegistry,
     HoldingsService,
     InvestmentTransactionsService,

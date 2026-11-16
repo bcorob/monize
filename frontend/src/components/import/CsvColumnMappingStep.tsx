@@ -3,14 +3,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
+import { InfoTooltip } from '@/components/ui/InfoTooltip';
 import { CsvTransferRules } from './CsvTransferRules';
 import { ImportStep } from '@/app/import/import-utils';
 import {
   CsvColumnMappingConfig,
   CsvTransferRule,
   SavedColumnMapping,
-  DATE_FORMAT_OPTIONS,
-  detectCsvDateFormat,
+  CSV_DATE_FORMAT_OPTIONS,
   CANONICAL_INVESTMENT_ACTIONS,
   DEFAULT_INVESTMENT_ACTION_KEYWORDS,
   CanonicalInvestmentAction,
@@ -21,6 +21,8 @@ import { Account } from '@/types/account';
 interface CsvColumnMappingStepProps {
   headers: string[];
   sampleRows: string[][];
+  /** Per column, the date format the server found reads most of the file. */
+  columnDateFormats: (string | null)[];
   columnMapping: CsvColumnMappingConfig;
   onColumnMappingChange: (mapping: CsvColumnMappingConfig) => void;
   onInvestmentModeChange: (enabled: boolean) => void;
@@ -51,6 +53,7 @@ type AmountMode = 'single' | 'split';
 export function CsvColumnMappingStep({
   headers,
   sampleRows,
+  columnDateFormats,
   columnMapping,
   onColumnMappingChange,
   onInvestmentModeChange,
@@ -77,18 +80,17 @@ export function CsvColumnMappingStep({
   const [validationError, setValidationError] = useState('');
   const [saveName, setSaveName] = useState('');
   const [showSaveInput, setShowSaveInput] = useState(false);
-  // Auto-detect date format from sample data on first render
+  // On first render, preselect the date format the server detected for the
+  // date column over every row of the file
   const [autoDetectedFormat] = useState(() => {
-    if (sampleRows.length === 0) return null;
     const dateColIndex = columnMapping.date;
     if (dateColIndex === undefined || dateColIndex < 0) return null;
-    const sampleDates = sampleRows.map((row) => row[dateColIndex] || '').filter(Boolean);
-    return detectCsvDateFormat(sampleDates);
+    return columnDateFormats[dateColIndex] ?? null;
   });
 
   const effectiveDateFormat = autoDetectedFormat || columnMapping.dateFormat;
   const [customModeActive, setCustomModeActive] = useState(false);
-  const isCustom = customModeActive || (!DATE_FORMAT_OPTIONS.some((o) => o.value === effectiveDateFormat) && effectiveDateFormat !== '');
+  const isCustom = customModeActive || (!CSV_DATE_FORMAT_OPTIONS.some((o) => o.value === effectiveDateFormat) && effectiveDateFormat !== '');
   const [customFormat, setCustomFormat] = useState(isCustom ? effectiveDateFormat : '');
   const autoDetectedRef = useRef(false);
 
@@ -232,7 +234,7 @@ export function CsvColumnMappingStep({
               }}
               className="px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
             >
-              {DATE_FORMAT_OPTIONS.map((o) => (
+              {CSV_DATE_FORMAT_OPTIONS.map((o) => (
                 <option key={o.value} value={o.value}>{o.label}</option>
               ))}
               <option value={CUSTOM_FORMAT_VALUE}>{t('csvMapping.customOption')}</option>
@@ -285,7 +287,10 @@ export function CsvColumnMappingStep({
 
         {/* Column Mapping */}
         <div className="mb-6 space-y-3">
-          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('csvMapping.columnMappingTitle')}</h3>
+          <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+            {t('csvMapping.columnMappingTitle')}
+            <InfoTooltip text={t('csvMapping.columnMappingHelp')} learnMore="importCsvMapping" />
+          </h3>
 
           <div>
             <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">{t('csvMapping.kindField')}</label>
@@ -347,7 +352,10 @@ export function CsvColumnMappingStep({
               </div>
               {!investmentMode && (
               <div>
-                <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">{t('csvMapping.signField')}</label>
+                <label className="block text-xs text-gray-600 dark:text-gray-400 mb-1">
+                  {t('csvMapping.signField')}
+                  <InfoTooltip text={t('csvMapping.signFieldHelp')} learnMore="importAmountSign" />
+                </label>
                 <select
                   value={columnMapping.amountTypeColumn !== undefined ? 'type-column' : columnMapping.reverseSign ? 'reverse' : 'normal'}
                   onChange={(e) => {
@@ -734,6 +742,13 @@ export function CsvColumnMappingStep({
           </div>
         </div>
 
+        {/* Transfer Rules (inert in investment mode: rows classify by action) */}
+        {!investmentMode && (
+          <div className="mb-6">
+            <CsvTransferRules rules={transferRules} onChange={onTransferRulesChange} accounts={accounts} />
+          </div>
+        )}
+
         {/* Save/Load Mappings */}
         <div className="mb-6 p-3 bg-gray-50 dark:bg-gray-700 rounded-lg space-y-3">
           <h3 className="text-sm font-medium text-gray-700 dark:text-gray-300">{t('csvMapping.savedMappingsTitle')}</h3>
@@ -800,13 +815,6 @@ export function CsvColumnMappingStep({
             </div>
           )}
         </div>
-
-        {/* Transfer Rules (inert in investment mode: rows classify by action) */}
-        {!investmentMode && (
-          <div className="mb-6">
-            <CsvTransferRules rules={transferRules} onChange={onTransferRulesChange} accounts={accounts} />
-          </div>
-        )}
 
         {/* Validation Error */}
         {validationError && (

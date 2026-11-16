@@ -6,7 +6,7 @@
       "category": "Category",
       "amount": "Amount",
       "schedule": "Schedule",
-      "auto": "Auto",
+      "auto": "Auto-Post",
       "actions": "Actions"
     },
     "empty": {
@@ -22,8 +22,9 @@
     "modifiedBadge": "{count} modified",
     "modifiedTitle": "{count, plural, one {# upcoming occurrence modified} other {# upcoming occurrences modified}}",
     "modifiedAmountTitle": "Modified for next occurrence",
+    "modifiedDateTitle": "Date modified for this occurrence",
+    "splitBadge": "Split ({count})",
     "autoPostBadge": "On",
-    "autoPostTitle": "Auto-posts when due",
     "inactiveSuffix": " — Inactive",
     "actionTitles": {
       "post": "Post transaction",
@@ -62,7 +63,8 @@
       "skipFailed": "Failed to skip occurrence",
       "deleteFailed": "Failed to delete"
     },
-    "foreignAmountTitle": "The amount the biller charges, in its own currency"
+    "foreignAmountTitle": "The amount the biller charges, in its own currency",
+    "estimatedLabel": "Estimated"
   },
   "filters": {
     "label": "Filters",
@@ -74,9 +76,7 @@
     "accountsLabel": "Accounts",
     "accountsPlaceholder": "All accounts",
     "categoriesLabel": "Categories",
-    "categoriesPlaceholder": "All categories",
-    "collapseAriaLabel": "Collapse filters",
-    "expandAriaLabel": "Expand filters"
+    "categoriesPlaceholder": "All categories"
   },
   "postDialog": {
     "title": "Post Transaction",
@@ -85,8 +85,8 @@
     "descriptionRegular": "Post \"{name}\" to {account}. Modify values below if needed for this posting only.",
     "transactionDateLabel": "Transaction Date",
     "todayButton": "Today",
-    "quantityLabel": "Quantity (shares)",
-    "pricePerShareLabel": "Price per share",
+    "quantityLabel": "Quantity (Shares)",
+    "pricePerShareLabel": "Price per Share",
     "totalPriceLabel": "Total Price",
     "totalAmountLabel": "Total Amount",
     "descriptionLabel": "Description (optional)",
@@ -114,7 +114,8 @@
       "totalAmountRequired": "Total amount is required",
       "splitsMinimum": "Split transactions require at least 2 splits",
       "splitsTotal": "Split amounts must equal the transaction amount",
-      "fxRateUnavailable": "No exchange rate is available for {from} to {to} on this date."
+      "fxRateUnavailable": "No exchange rate is available for {from} to {to} on this date.",
+      "estimateUnknown": "This occurrence's estimated amount is unknown. Enter the amount to post it."
     },
     "latestPlaceholder": "Latest: {price}",
     "descriptionPlaceholder": "Description...",
@@ -127,18 +128,40 @@
       "noRateWarning": "No exchange rate found for {from} to {to} on {date}. Pick another date, or refresh rates.",
       "feeCaption": "Includes a {percent}% foreign transaction fee ({fee}).",
       "totalInCurrency": "Total in {currency}"
-    }
+    },
+    "estimatedHint": "This amount is an estimate; change it to what you actually paid. {detail}"
   },
   "occurrencePicker": {
     "title": "Select Occurrence Date",
-    "description": "Choose which occurrence of \"{name}\" to modify:",
+    "description": "Choose which occurrence of \"{name}\" to modify. Changing one here overrides just that date; every other occurrence keeps following the schedule. <guide>Learn more</guide>.",
     "modifiedBadge": "Modified",
     "nextDueBadge": "Next Due",
     "dateMoved": "Date moved from {date}",
     "amountChange": "Amount: {amount}",
     "categoryChange": "Category: {category}",
     "noteChange": "Note: {note}",
-    "splitModified": "Split modified"
+    "splitModified": "Split modified",
+    "estimatedAmount": "Estimated: {amount}",
+    "estimateUnknown": "Estimate unknown"
+  },
+  "loanOccurrence": {
+    "loading": "Working out each occurrence's payment.",
+    "loadFailed": "The payment of each occurrence could not be loaded.",
+    "retry": "Retry",
+    "amountUnknown": "Payment unknown",
+    "notProjected": "Payment not worked out this far ahead",
+    "paymentChangesBadge": "Payment changes",
+    "editorUnknown": "This occurrence's payment cannot be worked out, so the amount starts empty. {reason}",
+    "editorLinesUnknown": "This occurrence's split between principal and interest cannot be worked out, so the lines start from the schedule's. {reason}",
+    "amountRequired": "Enter this occurrence's amount before saving.",
+    "missing": {
+      "rate": "No interest rate is recorded for {date}. Add it to the loan's rate history.",
+      "cadence": "The loan's payment frequency ({frequency}) cannot be priced. Check the loan's payment frequency.",
+      "overrideLines": "This occurrence's lines are not principal, interest and extra principal. Edit its lines.",
+      "overrideOnSettledDebt": "The loan is paid off by this date, so this occurrence's amount cannot be divided into principal and interest. Edit or reset the occurrence.",
+      "earlierOccurrence": "It depends on the occurrence of {date}, whose payment cannot be worked out.",
+      "unknown": "The reason was not given."
+    }
   },
   "overrideEditor": {
     "title": "Edit Occurrence",
@@ -146,8 +169,8 @@
     "descriptionRegular": "Modifying \"{name}\" for this occurrence only.",
     "overrideExists": "(Override exists)",
     "occurrenceDateLabel": "Occurrence Date",
-    "quantityLabel": "Quantity (shares)",
-    "pricePerShareLabel": "Price per share",
+    "quantityLabel": "Quantity (Shares)",
+    "pricePerShareLabel": "Price per Share",
     "totalPriceLabel": "Total Price",
     "totalAmountLabel": "Total Amount",
     "amountLabel": "Amount",
@@ -179,7 +202,9 @@
       "quantityRequired": "Quantity must be greater than zero",
       "priceRequired": "Price must be greater than zero",
       "totalAmountRequired": "Total amount is required"
-    }
+    },
+    "estimatedHint": "This amount is the estimate for this occurrence. Leave it as it is and the occurrence keeps following the estimate as new payments arrive. {detail}",
+    "keepEstimate": "Keep this amount, even when new payments change the estimate"
   },
   "form": {
     "tabs": {
@@ -205,7 +230,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "Reinvest Long-Term Cap Gain",
       "CAPITAL_GAIN_SHORT": "Short-Term Capital Gain",
       "CAPITAL_GAIN_LONG": "Long-Term Capital Gain",
-      "REDEEM": "Redeem CD/Bond"
+      "REDEEM": "Redeem CD/Bond",
+      "RETURN_OF_CAPITAL": "Return of Capital"
     },
     "submitCreate": "Create",
     "submitUpdate": "Update",
@@ -237,17 +263,18 @@
     "toAccountLabel": "To Account",
     "toAccountPlaceholder": "Select destination account...",
     "transferAmountLabel": "Transfer Amount",
-    "transferCategoryLabel": "Category (Optional)",
+    "transferCategoryLabel": "Category (optional)",
     "transferCategoryNote": "Optional: categorize this transfer (e.g. a recurring investment contribution) so it appears in the monthly category breakdown. It does not count as income or an expense.",
     "actionLabel": "Action",
     "securityLabel": "Security",
     "securityPlaceholder": "Select security...",
-    "quantityLabel": "Quantity (shares)",
-    "pricePerShareLabel": "Price per share",
+    "quantityLabel": "Quantity (Shares)",
+    "pricePerShareLabel": "Price per Share",
     "latestPlaceholder": "Latest: {price}",
     "commissionLabel": "Commission",
     "totalValueLabel": "Total Value",
     "fundingAccountLabel": "Funding Account (optional)",
+    "fundingAccountTooltip": "The account this schedule's cash actually settles in, not the brokerage above: the one the cash flow forecast charges or credits. Leave it blank to use the brokerage's own cash account.",
     "fundingAccountPlaceholder": "Use brokerage cash (default)",
     "fundingAccountHelp": "Defaults to the investment account's cash side. Pick another account to model contribution+buy.",
     "endConditionTitle": "End Condition (optional)",
@@ -282,14 +309,21 @@
       "quantityRequired": "Quantity must be greater than zero",
       "priceRequired": "Price must be greater than zero",
       "totalAmountRequired": "Total amount is required for this action",
-      "fxRateRequired": "Enter an amount in the chosen currency before saving. No exchange rate is available yet."
+      "fxRateRequired": "Enter an amount in the chosen currency before saving. No exchange rate is available yet.",
+      "estimateNeedsPayeeAndCategory": "Choose a payee and a category to estimate the amount from."
     },
     "fx": {
       "amountInCurrency": "Amount in {currency}",
       "estimateCaption": "About {total} at 1 {from} = {rate} {to}.",
       "noRateWarning": "No exchange rate found for {from} to {to}. Pick another currency, or enter the amount in {to}.",
       "feeCaption": "Includes a {percent}% foreign transaction fee ({fee})."
-    }
+    },
+    "estimateLabel": "Estimate",
+    "estimateTooltip": "Work out each occurrence's amount from the last 24 months of payments to this payee in this category, month by month, so a bill that costs more in some months is forecast that way. You can still change any occurrence, and you confirm the amount when you post it.",
+    "estimateTooltipTransfer": "Work out each occurrence's amount from the last 24 months of transfers to this account. When the account owes more than that, the payment is raised to match: on a credit card with statement settlement and due days, the payment for the statement that closed and the one for the open cycle; otherwise the next payment. You can still change any occurrence, and you confirm the amount when you post it.",
+    "estimateDelegateDisabled": "Only the owner can turn the estimate on or off: it reads the payments in all of the owner's accounts.",
+    "estimatedAmountNote": "Auto-calculated from payment history. {detail}",
+    "autoPostDisabledEstimate": "An estimated amount is confirmed when you post it, so it is not posted automatically."
   },
   "postTransaction": {
     "minSplits": "Split transactions require at least 2 splits",
@@ -308,10 +342,83 @@
     "EVERY4MONTHS": "Every 4 Months",
     "SEMIANNUAL": "Twice a Year",
     "YEARLY": "Yearly",
-    "EVERY2YEARS": "Every 2 Years"
+    "EVERY2YEARS": "Every 2 Years",
+    "CUSTOM": "Custom"
+  },
+  "customRecurrence": {
+    "title": "Repeats",
+    "unitLabel": "Repeat by",
+    "units": {
+      "WEEK": "Weekly",
+      "MONTH": "Monthly",
+      "YEAR": "Yearly"
+    },
+    "every": "Every",
+    "intervalLabel": "Repeat every",
+    "unitSuffix": {
+      "WEEK": "{interval, plural, one {week on} other {weeks on}}",
+      "MONTH": "{interval, plural, one {month on} other {months on}}",
+      "YEAR": "{interval, plural, one {year on} other {years on}}"
+    },
+    "weekdaysLabel": "Days of the week",
+    "monthDaysLabel": "Days of the month",
+    "lastDayChip": "Last day",
+    "lastDay": "last day",
+    "dayOfMonth": "{day, selectordinal, one {#st} two {#nd} few {#rd} other {#th}}",
+    "monthHint": "A day past the end of a short month falls on its last day, and two days that land on the same date post once.",
+    "datesLabel": "Dates of the year",
+    "monthLabel": "Month",
+    "dayLabel": "Day",
+    "addDate": "Add date",
+    "removeDate": "Remove {date}",
+    "yearHint": "29 February falls on 28 February in years without one.",
+    "summary": {
+      "WEEK": "{interval, plural, one {Every week on {days}} other {Every # weeks on {days}}}",
+      "MONTH": "{interval, plural, one {Every month on the {days}} other {Every # months on the {days}}}",
+      "YEAR": "{interval, plural, one {Every year on {days}} other {Every # years on {days}}}"
+    },
+    "errors": {
+      "noDays": {
+        "WEEK": "Pick at least one day of the week.",
+        "MONTH": "Pick at least one day of the month.",
+        "YEAR": "Add at least one date."
+      },
+      "interval": "Enter a number from 1 to 12.",
+      "invalid": "This pattern cannot be saved. Pick the days again."
+    },
+    "firstOccurrence": "First occurrence: {date}",
+    "nextOccurrence": "Next occurrence: {date}",
+    "nextOccurrenceOffPattern": "Next occurrence: {date}. This date is off the pattern; later occurrences follow it.",
+    "orphanWarning": "{count, plural, one {# edited occurrence ({dates}) no longer falls on this pattern and will be removed when you save.} other {# edited occurrences ({dates}) no longer fall on this pattern and will be removed when you save.}}",
+    "notForLoan": "A loan or mortgage payment cannot use a custom frequency; choose a fixed frequency.",
+    "notForPayroll": "A payroll bill with deduction limits cannot use a custom frequency; choose a fixed frequency."
   },
   "validation": {
     "nameRequired": "Name is required",
     "dueDateRequired": "Due date is required"
+  },
+  "estimate": {
+    "thePayee": "this payee",
+    "theAccount": "the account",
+    "theCategory": "this category",
+    "basis": "Estimated from {count, plural, one {# payment} other {# payments}}, the latest on {date}.",
+    "basisWithGrowth": "Estimated from {count, plural, one {# payment} other {# payments}}, the latest on {date}, with a {growth} change year over year.",
+    "basisYear": "Average of {count, plural, one {# payment} other {# payments}} in the last 12 months, the latest on {date}.",
+    "basisRecent": "Average of the latest {count, plural, one {# payment} other {# payments}}, the latest on {date}.",
+    "basisRecentWithGrowth": "Average of the latest {count, plural, one {# payment} other {# payments}}, the latest on {date}, with a {growth} change year over year.",
+    "basisSeasonal": "Average of the latest {count, plural, one {# payment} other {# payments}}, adjusted for each month's season, the latest on {date}.",
+    "basisSeasonalWithGrowth": "Average of the latest {count, plural, one {# payment} other {# payments}}, adjusted for each month's season, the latest on {date}, with a {growth} change year over year.",
+    "basisWithheld": "Estimated from the payee and category's payment history.",
+    "basisWithheldTransfer": "Estimated from the history of transfers to {account}.",
+    "raisedToBalance": "Raised to cover what {account} owes for this payment.",
+    "basisAndRaise": "{basis} {raised}",
+    "noHistoryTransfer": "No transfers to {account} from this account in the last {months} months, so the amount is unknown. Enter each occurrence's amount, or record a transfer.",
+    "missingRateTransfer": "No exchange rate from {from} to {to} to convert a past transfer or what {account} owes, so the amount is unknown. Add the rate on the Currencies page.",
+    "noBasisTransfer": "Choose the account to transfer to, to estimate the amount from the transfers to it.",
+    "pendingTransfer": "The amount is worked out from the transfers to this account and what it owes.",
+    "noHistory": "No payments to {payee} in {category} in the last {months} months, so the amount is unknown. Enter each occurrence's amount, or record a payment.",
+    "missingRate": "No exchange rate from {from} to {to} to convert a past payment, so the amount is unknown. Add the rate on the Currencies page.",
+    "noBasis": "Choose a payee and a category to estimate the amount from their payment history.",
+    "pending": "The amount is worked out from the payee and category's payment history."
   }
 }

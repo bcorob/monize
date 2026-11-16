@@ -1,5 +1,7 @@
 'use client';
 
+import { useNumberFormat } from '@/hooks/useNumberFormat';
+
 interface RateCellProps {
   annualRate: number | null;
   /**
@@ -16,7 +18,8 @@ interface RateCellProps {
  * and this rate, so a rate change can be recorded straight from the schedule.
  */
 export function RateCell({ annualRate, onEdit, editLabel }: RateCellProps) {
-  const display = annualRate != null ? `${annualRate.toFixed(2)}%` : '—';
+  const { formatPercent } = useNumberFormat();
+  const display = annualRate != null ? formatPercent(annualRate, 2) : '—';
 
   if (!onEdit) {
     return <span className="text-gray-500 dark:text-gray-400">{display}</span>;

@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import { PayeeAlias } from '@/types/payee';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { payeesApi } from '@/lib/payees';
 import toast from 'react-hot-toast';
 import { getErrorMessage } from '@/lib/errors';
@@ -19,22 +20,35 @@ export function PayeeAliasManager({ payeeId, onPendingAliasesChange }: PayeeAlia
   const [aliases, setAliases] = useState<PayeeAlias[]>([]);
   const [pendingAliases, setPendingAliases] = useState<string[]>([]);
   const [newAlias, setNewAlias] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isAdding, setIsAdding] = useState(false);
-
   const isLocalMode = !payeeId;
 
-  const loadAliases = useCallback(async () => {
-    if (isLocalMode) return;
-    setIsLoading(true);
-    try {
-      const data = await payeesApi.getAliases(payeeId);
-      setAliases(data);
-    } catch (error) {
-      toast.error(getErrorMessage(error, t('aliases.toasts.loadFailed')));
-    } finally {
-      setIsLoading(false);
-    }
+  const [isLoading, setIsLoading] = useState(!isLocalMode);
+  const [isAdding, setIsAdding] = useState(false);
+
+  // A different payee is a new request: it shows as loading from the render
+  // that asks for it (the "info from previous render" pattern), not from a
+  // setState in the effect that fetches it.
+  const [loadingFor, setLoadingFor] = useState(payeeId);
+  if (loadingFor !== payeeId) {
+    setLoadingFor(payeeId);
+    if (payeeId) setIsLoading(true);
+  }
+
+  const loadAliases = useCallback(() => {
+    if (isLocalMode) return Promise.resolve();
+    // The writes live in the inner function so they run after the request,
+    // not during the effect that starts it.
+    const run = async () => {
+      try {
+        const data = await payeesApi.getAliases(payeeId);
+        setAliases(data);
+      } catch (error) {
+        toast.error(getErrorMessage(error, t('aliases.toasts.loadFailed')));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    return run();
   }, [payeeId, isLocalMode, t]);
 
   useEffect(() => {
@@ -121,7 +135,9 @@ export function PayeeAliasManager({ payeeId, onPendingAliasesChange }: PayeeAlia
 
       {/* Existing aliases */}
       {!isLocalMode && isLoading ? (
-        <p className="text-sm text-gray-400">{t('aliases.loading')}</p>
+        <div className="text-sm">
+          <LoadingSpinner size="sm" fullContainer={false} text={t('aliases.loading')} />
+        </div>
       ) : displayAliases.length > 0 ? (
         <ul className="space-y-1">
           {displayAliases.map((aliasText, index) => (

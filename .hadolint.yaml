@@ -1,14 +1,29 @@
 ignored:
   # Pin versions in apk add. Alpine APK does not provide stable version pinning,
-  # and we mitigate base-image CVEs via Trivy scanning + Dependabot updates on
-  # the FROM image tag instead.
+  # and we mitigate base-image CVEs by upgrading the OS packages at build time
+  # (DL3017 below) plus Trivy scanning and Dependabot updates on the FROM tag.
   - DL3018
   # Pin versions in npm. We use package-lock.json (npm ci) which provides
   # deterministic version pinning at the lockfile level.
   - DL3016
+  # Do not use apk upgrade. Deliberately overridden in the production stages,
+  # and hadolint's rationale is what makes the case: it argues an upgrade in a
+  # child image is non-deterministic and that the base image should be updated
+  # instead. We do not control that base -- node:24-alpine is rebuilt on Node's
+  # release cadence, not Alpine's, so between rebuilds it carries whatever
+  # libcrypto3/libssl3 the tag was cut with, and Dependabot has no newer tag to
+  # bump to. That lag was the entirety of this repository's open Trivy alerts.
+  # The determinism the rule protects is already spent on DL3018 above, and the
+  # build is pinned where it matters instead: the image is signed, its digest
+  # is what every gate scans, and its SBOM records the versions that shipped.
+  # frontend/src/test/dockerfile-os-upgrade.test.ts fails if a production stage
+  # loses the upgrade, so this exemption cannot outlive the thing it exempts.
+  - DL3017
 
+# CI pulls no image from Docker Hub (docs/verification-contract.md section 7):
+# the base images come from mirror.gcr.io, Google's mirror of the official images.
 trustedRegistries:
-  - docker.io
+  - mirror.gcr.io
   - ghcr.io
 
 failure-threshold: warning

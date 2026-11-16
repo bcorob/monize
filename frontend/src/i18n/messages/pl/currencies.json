@@ -4,6 +4,7 @@
     "subtitle": "Zarządzaj walutami używanymi na kontach i w papierach wartościowych",
     "refreshRates": "Odśwież kursy",
     "refreshing": "Odświeżanie...",
+    "statusFilterLabel": "Status",
     "newCurrency": "+ Nowa waluta",
     "searchPlaceholder": "Szukaj po kodzie lub nazwie...",
     "statusAll": "Wszystkie ({count})",
@@ -13,6 +14,15 @@
     "modalTitleNew": "Nowa waluta",
     "loading": "Wczytywanie walut...",
     "count": "{count, plural, one {# waluta} few {# waluty} many {# walut} other {# waluty}}",
+    "providers": {
+      "line": "Kursy z: {providers}",
+      "separator": ", następnie ",
+      "names": {
+        "frankfurter": "Frankfurter (kursy referencyjne EBC)",
+        "yahoo": "Yahoo Finance",
+        "crypto": "Pary kryptowalutowe (Yahoo)"
+      }
+    },
     "toasts": {
       "loadFailed": "Nie udało się wczytać walut",
       "updated": "Waluta została zaktualizowana",
@@ -24,6 +34,7 @@
       "statusFailed": "Nie udało się zmienić statusu waluty",
       "ratesRefreshed": "Kursy walut odświeżone: zaktualizowano {updated} par",
       "ratesRefreshedWithFailed": "Kursy walut odświeżone: zaktualizowano {updated}, nieudane {failed}",
+      "ratesAllFailed": "Nie udało się pobrać żadnych kursów walut; dostawca nie odpowiedział",
       "ratesFailed": "Nie udało się odświeżyć kursów walut"
     },
     "summary": {
@@ -44,6 +55,8 @@
       "actions": "Akcje"
     },
     "defaultBadge": "Domyślna",
+    "cryptoBadge": "Krypto",
+    "noPriceSymbol": "Brak symbolu ceny",
     "statusBadge": {
       "active": "Aktywny",
       "activeShort": "Akt",
@@ -61,9 +74,10 @@
       "activate": "Aktywuj",
       "deleteCurrency": "Usuń walutę"
     },
-    "usageTooltip": "{accounts} konto(a), {securities} papier(y) wartościowy(e)",
     "usageAccounts": "{count, plural, one {# konto} few {# konta} many {# kont} other {# konta}}",
     "usageSecurities": "{count, plural, one {# papier} few {# papiery} many {# papierów} other {# papieru}}",
+    "rateHelp": "Ile jest warta jedna jednostka każdej waluty w {currency}.",
+    "rateMissing": "Brak zapisanego kursu wymiany dla {from} na {to}.",
     "empty": {
       "title": "Brak walut",
       "subtitle": "Zacznij od dodania waluty."
@@ -88,6 +102,20 @@
     "symbolLabel": "Symbol",
     "symbolPlaceholder": "np. $, €, £, ¥",
     "decimalPlacesLabel": "Miejsca dziesiętne",
+    "kindLabel": "Rodzaj",
+    "kindOptions": {
+      "fiat": "Waluta fiducjarna",
+      "crypto": "Kryptowaluta"
+    },
+    "kindLocked": "{code} jest używana, więc jej rodzaju nie można zmienić.",
+    "quoteSymbolLabel": "Symbol ceny (opcjonalnie)",
+    "quoteSymbolPlaceholder": "np. BTC-EUR",
+    "quoteSymbolHelp": "Symbol Yahoo Finance, na podstawie którego pobierana jest cena monety: jej ticker, łącznik i waluta, w której jest notowana, na przykład BTC-EUR. Kursy wymiany monety są pobierane za jego pomocą.",
+    "verifyButton": "Zweryfikuj",
+    "quoteSymbolPricedIn": "Wycena w {currency}",
+    "quoteSymbolMissing": "Bez symbolu ceny waluta nie ma kursu wymiany.",
+    "quoteSymbolNotCrypto": "{symbol} nie jest kryptowalutą. Wpisz parę monety, na przykład BTC-EUR.",
+    "quoteSymbolNotFound": "Nie znaleziono kryptowaluty dla {symbol}",
     "lookupButton": "Wyszukaj",
     "lookingUp": "Wyszukiwanie...",
     "clearButton": "Wyczyść",
@@ -99,9 +127,14 @@
       "found": "Znaleziono: {details}",
       "notFound": "Nie znaleziono waluty dla \"{query}\"",
       "lookupFailed": "Wyszukiwanie nie powiodło się - spróbuj ponownie",
-      "reactivateFailed": "Nie udało się ponownie aktywować waluty"
+      "reactivateFailed": "Nie udało się ponownie aktywować waluty",
+      "verifyEmpty": "Wpisz symbol ceny, na przykład BTC-EUR, aby go zweryfikować",
+      "verifyFailed": "Nie udało się zweryfikować symbolu ceny"
     },
     "inactiveNotice": "{code} jest już na Twojej liście, ale jest nieaktywna.",
+    "nonIsoNotice": "{code} nie jest standardowym kodem waluty. Jeśli jest to kryptowaluta, ustaw jej rodzaj na Kryptowaluta. <guide>Przeczytaj o kryptowalutach w przewodniku użytkownika</guide>.",
+    "switchToCrypto": "Użyj kryptowaluty",
+    "cryptoPrecisionNotice": "Kwoty w kryptowalucie są przechowywane z dokładnością do ośmiu miejsc dziesiętnych, czyli z precyzją zapisu, więc nie można wprowadzić opłaty mniejszej niż {smallest}. <guide>Zobacz, jak rejestrować opłaty portfela</guide>.",
     "reactivateButton": "Aktywuj ponownie {code}",
     "reactivating": "Ponowne aktywowanie..."
   },
@@ -110,6 +143,53 @@
     "nameRequired": "Nazwa jest wymagana",
     "nameMax": "Nazwa może mieć maksymalnie 100 znaków",
     "symbolRequired": "Symbol jest wymagany",
-    "symbolMax": "Symbol może mieć maksymalnie 10 znaków"
+    "symbolMax": "Symbol może mieć maksymalnie 10 znaków",
+    "quoteSymbolMax": "Symbol ceny może mieć maksymalnie 20 znaków",
+    "quoteSymbolRequiresCrypto": "Tylko kryptowaluta ma symbol ceny",
+    "quoteSymbolNotAPair": "Wpisz parę, na przykład BTC-EUR: moneta, łącznik i trzyliterowy kod waluty"
+  },
+  "rateHistory": {
+    "title": "Historia kursu",
+    "stored": "Zapisana historia: {start} do {end} ({count} obserwacji)",
+    "none": "Brak zapisanej historii dla {pair}",
+    "loading": "Sprawdzanie zapisanej historii kursu...",
+    "loadFailed": "Nie udało się odczytać zapisanej historii kursu",
+    "fillGaps": "Uzupełnij luki w historii kursu",
+    "filling": "Pobieranie brakujących kursów...",
+    "fillGapsTitle": "Pobiera dzienne kursy, których brakuje Twoim raportom, od pierwszej daty, w której Twoje dane używają {code}, po dziś.",
+    "hint": "Raporty datowane przed pierwszym zapisanym kursem nie mogą przeliczyć {pair}.",
+    "list": {
+      "heading": "Zapisane kursy",
+      "invertedHelp": "Kurs oznaczony jako (odwrócony) jest odwrotnością tego, co Monize faktycznie zapisało dla tej pary, a nie inną obserwacją.",
+      "direction": "Pokazane jako {to} za 1 {from}.",
+      "loading": "Wczytywanie zapisanych kursów...",
+      "loadFailed": "Nie udało się odczytać zapisanych kursów",
+      "empty": "Brak zapisanych kursów do wyświetlenia",
+      "truncated": "Pokazano {count} najnowszych zapisanych kursów; starsze nie są wymienione.",
+      "inverted": "odwrócony",
+      "unknownRate": "Nieznany",
+      "columns": {
+        "date": "Data",
+        "rate": "Kurs",
+        "source": "Źródło"
+      },
+      "sources": {
+        "yahooFinance": "Yahoo Finance",
+        "frankfurter": "Frankfurter (EBC)",
+        "mnyImport": "Import z Money",
+        "yahooCrypto": "Pary kryptowalutowe (Yahoo)",
+        "unknown": "Nieznane"
+      }
+    },
+    "toasts": {
+      "filled": "Dodano {count} kursów; historia zaczyna się teraz od {start}",
+      "partial": "Zapisano {count} kursów; historia zaczyna się teraz {start}. Pozostało {windows} luk do pobrania, naciśnij ponownie, aby kontynuować.",
+      "moreToFetch": "Tym razem nie zapisano żadnych kursów; pozostało {windows} luk do pobrania, naciśnij ponownie, aby kontynuować.",
+      "noGaps": "{pair} ma już dzienny kurs dla każdej daty potrzebnej Twoim raportom",
+      "noNewRates": "Nie zapisano nowych kursów dla {pair}",
+      "unused": "Żadne z Twoich kont, walorów ani transakcji nie używa {code}, więc nie ma kursów do pobrania",
+      "providerFloor": "Dostawca nie ma kursów dla {pair} sprzed {date}",
+      "failed": "Nie udało się uzupełnić historii kursu"
+    }
   }
 }

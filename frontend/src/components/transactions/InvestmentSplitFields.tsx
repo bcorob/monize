@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { Select } from '@/components/ui/Select';
 import { NumericInput } from '@/components/ui/NumericInput';
@@ -13,9 +13,10 @@ import {
 import {
   FX_RATE_DISPLAY_DECIMALS,
   roundToDecimals,
+  roundFxRate,
   getCurrencySymbol,
 } from '@/lib/format';
-import { useExchangeRates } from '@/hooks/useExchangeRates';
+import { exchangeRatesApi } from '@/lib/exchange-rates';
 import { InvestmentAction, Security } from '@/types/investment';
 import { InvestmentSplitDetails } from '@/types/transaction';
 import { baseInvestmentAction } from '@/lib/investment-actions';
@@ -33,6 +34,17 @@ interface InvestmentSplitFieldsProps {
   ) => void;
   disabled?: boolean;
   currencyCode?: string;
+  /**
+   * The parent transaction's date (`YYYY-MM-DD`). The rate prefills from the rate
+   * for THIS day (INV-FX-001), never the latest; without a date nothing is
+   * looked up and the rate stays unresolved until the person types one.
+   */
+  transactionDate?: string;
+  /**
+   * The row's `exchangeRateEdited` latch: the person typed this rate, so a pair
+   * or date change does not ask again.
+   */
+  rateEdited?: boolean;
 }
 
 const ACTION_LABELS: Record<InvestmentAction, string> = {
@@ -53,6 +65,7 @@ const ACTION_LABELS: Record<InvestmentAction, string> = {
   CAPITAL_GAIN_SHORT: 'Short-Term Capital Gain',
   CAPITAL_GAIN_LONG: 'Long-Term Capital Gain',
   REDEEM: 'Redeem CD/Bond',
+  RETURN_OF_CAPITAL: 'Return of Capital',
 };
 
 const ACTIONS_NEEDING_SECURITY: ReadonlySet<InvestmentAction> = new Set([
@@ -61,6 +74,7 @@ const ACTIONS_NEEDING_SECURITY: ReadonlySet<InvestmentAction> = new Set([
   'REINVEST',
   'DIVIDEND',
   'CAPITAL_GAIN',
+  'RETURN_OF_CAPITAL',
 ]);
 
 const ACTIONS_NEEDING_QUANTITY_PRICE: ReadonlySet<InvestmentAction> = new Set([
@@ -74,10 +88,11 @@ export function InvestmentSplitFields({
   onChange,
   disabled = false,
   currencyCode = 'CAD',
+  transactionDate,
+  rateEdited = false,
 }: InvestmentSplitFieldsProps) {
   const t = useTranslations('transactions');
   const [securities, setSecurities] = useState<Security[]>([]);
-  const { getRate } = useExchangeRates();
 
   useEffect(() => {
     investmentsApi
@@ -115,16 +130,15 @@ export function InvestmentSplitFields({
    * two halves of one split described different amounts of money. 1 is only the
    * answer when the two currencies match.
    */
-  const marketRate = crossCurrency ? getRate(securityCurrency, currencyCode) : 1;
   const statedRate = value?.exchangeRate;
-  const effectiveRate = crossCurrency
-    ? (statedRate ?? marketRate ?? undefined)
-    : 1;
+  const effectiveRate = crossCurrency ? (statedRate ?? undefined) : 1;
   const rateUnresolved = crossCurrency && !(Number(effectiveRate) > 0);
 
   const updateField = <K extends keyof InvestmentSplitDetails>(
     field: K,
     fieldValue: InvestmentSplitDetails[K],
+    // A prefilled rate is not the person's edit: it must not latch.
+    intent: { prefill?: boolean } = {},
   ) => {
     const securityChanged =
       field === 'securityId' && fieldValue !== value?.securityId;
@@ -153,19 +167,16 @@ export function InvestmentSplitFields({
     // A security change moves the settlement pair, so the rate in force (which may
     // be the same-currency 1, or a rate resolved for the *old* pair) must not
     // carry over onto the new pair (issue #1167 R9-F3): a stale 1 blessed as the
-    // new pair's rate books the trade unconverted. Recompute from the NEW
-    // security -- its current market rate for the new pair, or 1 when the new pair
-    // is same-currency -- and leave it unresolved (undefined) rather than 1 when a
-    // cross-currency rate is unavailable. Clear the recorded pair too, so no stale
-    // scalar is blessed for a pair it was not resolved for.
+    // new pair's rate books the trade unconverted. Leave it unresolved
+    // (undefined) for a cross-currency pair, or 1 when the new pair is
+    // same-currency; the dated lookup below fills the rate in for the trade date.
+    // Clear the recorded pair too, so no stale scalar is blessed for a pair it
+    // was not resolved for.
     if (securityChanged) {
       const nextSecurity = securities.find((s) => s.id === next.securityId);
       const nextSecurityCurrency = nextSecurity?.currencyCode ?? currencyCode;
       const nextCross = nextSecurityCurrency !== currencyCode;
-      const nextMarket = nextCross
-        ? getRate(nextSecurityCurrency, currencyCode)
-        : 1;
-      next.exchangeRate = nextCross ? (nextMarket ?? undefined) : 1;
+      next.exchangeRate = nextCross ? undefined : 1;
       next.exchangeRateFromCurrency = undefined;
       next.exchangeRateToCurrency = undefined;
     }
@@ -189,10 +200,51 @@ export function InvestmentSplitFields({
     const rate = Number(next.exchangeRate);
     const amount = rate > 0 ? roundToDecimals(cashImpact * rate, 4) : 0;
     onChange(next, amount, {
-      rateEdited: field === 'exchangeRate',
+      rateEdited: field === 'exchangeRate' && !intent.prefill,
       securityChanged,
     });
   };
+
+  // Prefill the rate for the PARENT'S DATE (INV-FX-001), never the latest. Keyed
+  // on pair and day: a change of either asks again unless the person typed the
+  // rate (`rateEdited`). A rate the row already carried on load is kept for the
+  // pair and day it was committed for. The answer is adopted only while its
+  // request is current (the cleanup cancels a superseded one), and a null answer
+  // or a failed request leaves the rate unresolved rather than falling back.
+  const latest = useRef({ updateField, statedRate });
+  useEffect(() => {
+    latest.current = { updateField, statedRate };
+  });
+  const keptRateKeyRef = useRef<string | null | undefined>(undefined);
+  useEffect(() => {
+    if (!crossCurrency || rateEdited) return;
+    if (!transactionDate || !/^\d{4}-\d{2}-\d{2}$/.test(transactionDate)) return;
+    const rateKey = `${securityCurrency}->${currencyCode}@${transactionDate}`;
+    if (keptRateKeyRef.current === undefined) {
+      const stated = latest.current.statedRate;
+      keptRateKeyRef.current = stated !== undefined && stated > 0 ? rateKey : null;
+    }
+    if (keptRateKeyRef.current === rateKey) return;
+    keptRateKeyRef.current = null;
+    let cancelled = false;
+    // The rate in force answered another pair or day; do not leave it standing
+    // while the new one is in flight.
+    if (latest.current.statedRate !== undefined) {
+      latest.current.updateField('exchangeRate', undefined, { prefill: true });
+    }
+    exchangeRatesApi
+      .getRateForDate(securityCurrency, currencyCode, transactionDate)
+      .then((rate) => {
+        if (cancelled || rate === null || !(rate > 0)) return;
+        latest.current.updateField('exchangeRate', roundFxRate(rate), { prefill: true });
+      })
+      .catch(() => {
+        /* unresolved: the alert below says so */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [crossCurrency, rateEdited, transactionDate, securityCurrency, currencyCode]);
 
   // Base-normalized so the Money-vocabulary refinements behave as their base.
   const needsSecurity = ACTIONS_NEEDING_SECURITY.has(baseInvestmentAction(action));
@@ -261,7 +313,7 @@ export function InvestmentSplitFields({
           value={price || undefined}
           onChange={(v) => updateField('price', Number(v ?? 0))}
           disabled={disabled}
-          placeholder={t('investmentSplit.amountPlaceholder', { currency: securityCurrency })}
+          placeholder={t('investmentSplit.amountOnlyPlaceholder')}
           prefix={symbol}
           allowNegative={false}
         />

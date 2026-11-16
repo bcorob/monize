@@ -1,0 +1,618 @@
+{
+  "page": {
+    "title": "規則",
+    "subtitle": "在交易建立或匯入時，自動填入標籤、分類與收款對象",
+    "createButton": "建立規則",
+    "loading": "正在載入規則...",
+    "totalCount": "{count, plural, other {# 條規則}}"
+  },
+  "empty": {
+    "title": "尚無規則",
+    "body": "規則會監看新增與匯入的交易，並在條件符合時填入標籤、分類或收款對象。建立您的第一條規則即可開始。",
+    "createButton": "建立第一條規則"
+  },
+  "error": {
+    "title": "無法載入您的規則",
+    "body": "未顯示任何內容是因為請求失敗，而不是因為您沒有規則。請檢查網路連線後再試一次。",
+    "retry": "重試"
+  },
+  "list": {
+    "header": {
+      "order": "順序",
+      "enabled": "啟用",
+      "name": "規則",
+      "summary": "摘要",
+      "actions": "操作"
+    },
+    "summary": "{trigger, select, create {建立時} import {匯入時} both {建立或匯入時} other {無觸發條件}} · {conditions, plural, =0 {無條件} other {# 個條件}} · {actions, plural, =0 {無動作} other {# 個動作}}",
+    "enabledLabel": "啟用 {name}"
+  },
+  "actions": {
+    "moveUp": "上移",
+    "moveDown": "下移",
+    "run": "在現有交易上執行",
+    "runInvalid": "請先修復規則再執行"
+  },
+  "invalid": {
+    "badge": "無效",
+    "tooltip": "在修正之前將被略過：{reasons}。",
+    "reasons": {
+      "referenceMissing": "它使用的標籤、收款對象、分類或帳戶已不存在",
+      "noActions": "它沒有任何動作",
+      "tooLarge": "它的條件過大",
+      "duplicateAction": "它重複了只允許出現一次的動作",
+      "unreadable": "無法讀取它已儲存的定義",
+      "other": "它的定義無效"
+    }
+  },
+  "duplicate": {
+    "name": "{name}（副本）"
+  },
+  "delete": {
+    "title": "刪除規則",
+    "message": "確定要刪除「{name}」嗎？此動作無法復原。"
+  },
+  "toasts": {
+    "enabled": "規則已啟用",
+    "disabled": "規則已停用",
+    "toggleFailed": "無法變更規則",
+    "deleted": "規則已刪除",
+    "deleteFailed": "無法刪除規則",
+    "duplicated": "規則已複製。副本在您啟用之前保持關閉",
+    "duplicateFailed": "無法複製規則",
+    "reorderFailed": "無法變更規則順序",
+    "listChanged": "規則清單已在其他地方變更並重新載入。請再試一次",
+    "loadFailed": "無法載入規則"
+  },
+  "editor": {
+    "page": {
+      "newTitle": "新增規則",
+      "editTitle": "編輯規則",
+      "subtitle": "選擇規則何時執行、適用於哪些交易，以及要變更什麼",
+      "backToRules": "返回規則",
+      "loading": "正在載入規則..."
+    },
+    "name": {
+      "label": "名稱",
+      "placeholder": "例如：為咖啡店加上標籤"
+    },
+    "enabled": {
+      "label": "啟用規則"
+    },
+    "sections": {
+      "when": "何時",
+      "if": "如果",
+      "then": "則"
+    },
+    "when": {
+      "description": "選擇規則何時檢查交易",
+      "created": "建立交易時",
+      "imported": "匯入交易時",
+      "atLeastOne": "請至少保持勾選一個選項",
+      "stopProcessing": "停止處理其他規則",
+      "stopProcessingHelp": "此規則與某筆交易相符後，清單中排在它之後的規則將不再對該筆交易執行。",
+      "window": {
+        "title": "生效期間",
+        "help": "此規則僅適用於日期在該期間內的交易：建立或匯入時，以及測試或執行規則時。日期留空表示不限。",
+        "from": "起始日期",
+        "to": "結束日期",
+        "backwards": "結束日期不可早於起始日期",
+        "noLimit": "不限",
+        "words": "僅適用於日期從 {from} 到 {to} 的交易"
+      }
+    },
+    "if": {
+      "description": "僅對相符的交易執行動作",
+      "everyTransaction": "尚無條件，因此此規則適用於每一筆交易。"
+    },
+    "then": {
+      "description": "動作依此順序執行",
+      "empty": "尚無動作。請至少新增一個。",
+      "limit": "一條規則最多可以有 {max} 個動作。"
+    },
+    "group": {
+      "matchAll": "符合以下全部",
+      "matchAny": "符合以下任一項",
+      "matchLabel": "比對方式",
+      "not": "對群組取反",
+      "notHelp": "取反的群組在其條件不成立時相符。",
+      "title": "群組",
+      "addCondition": "+ 新增條件",
+      "addGroup": "+ 新增群組",
+      "depthLimit": "群組最多可巢狀 {max} 層。",
+      "sizeLimit": "已達條件數量上限。",
+      "empty": "此群組是空的。"
+    },
+    "condition": {
+      "title": "條件",
+      "field": "欄位",
+      "operator": "運算子",
+      "value": "值"
+    },
+    "fields": {
+      "accountId": "帳戶",
+      "fromAccountId": "轉出帳戶（轉帳）",
+      "toAccountId": "轉入帳戶（轉帳）",
+      "type": "類型",
+      "payeeId": "收款對象",
+      "payeeText": "收到的收款對象原文",
+      "categoryId": "分類",
+      "description": "說明",
+      "amount": "金額（含正負號）",
+      "absAmount": "金額（忽略正負號）",
+      "currencyCode": "幣別",
+      "tagIds": "標籤",
+      "hasSplits": "有拆分",
+      "referenceNumber": "參考號碼",
+      "dayOfMonth": "每月的日期",
+      "weekday": "星期幾",
+      "status": "狀態",
+      "hasAttachment": "有附件",
+      "date": "日期"
+    },
+    "operators": {
+      "eq": "等於",
+      "neq": "不等於",
+      "in": "屬於以下任一項",
+      "notIn": "不屬於以下任何一項",
+      "isEmpty": "為空",
+      "contains": "包含",
+      "startsWith": "開頭為",
+      "matches": "符合模式",
+      "lt": "小於",
+      "lte": "不大於",
+      "gt": "大於",
+      "gte": "不小於",
+      "between": "介於",
+      "hasAny": "含有以下任一項",
+      "hasAll": "含有以下全部",
+      "hasNone": "不含以下任何一項",
+      "inSubtree": "屬於該分類或其子分類"
+    },
+    "types": {
+      "EXPENSE": "支出",
+      "INCOME": "收入",
+      "TRANSFER": "轉帳"
+    },
+    "value": {
+      "account": "選擇帳戶",
+      "accounts": "選擇帳戶",
+      "payee": "選擇收款對象",
+      "payees": "選擇收款對象",
+      "category": "選擇分類",
+      "categories": "選擇分類",
+      "tags": "選擇標籤",
+      "currency": "選擇幣別",
+      "currencies": "選擇幣別",
+      "types": "選擇類型",
+      "matchesHint": "用 * 比對任意文字，例如 *咖啡*。 不含 * 的模式只比對整段文字。用 {capture} 保留該位置的文字，供此規則的動作使用，例如 {example}。名稱由小寫字母和數字組成，一個模式最多可保留 {max} 段文字。",
+      "amount": "金額",
+      "from": "從",
+      "to": "到",
+      "yes": "是",
+      "no": "否",
+      "days": "選擇日期",
+      "weekdays": "選擇星期",
+      "statuses": "選擇狀態"
+    },
+    "action": {
+      "title": "動作",
+      "type": "動作類型",
+      "tags": "標籤",
+      "category": "分類",
+      "payee": "收款對象",
+      "instruction": "審查說明",
+      "instructionPlaceholder": "例如：依收據拆分這筆消費",
+      "instructionHelp": "規則只會請求審核。任何變更在執行前都需要由人員核准。",
+      "onlyIfEmpty": "僅在為空時",
+      "onlyIfEmptyHelp": "開啟後，只有在交易沒有分類或收款對象時，規則才會填入。它不會取代手動設定的值，也不會取代由收款對象預設分類所設定的值。關閉後即可取代。",
+      "add": "+ 新增動作",
+      "reviewInbox": "檢視審核收件匣",
+      "payeeTemplate": "收款對象名稱",
+      "descriptionTemplate": "說明文字",
+      "templateHelp": "純文字。大括號中的每個預留位置都會被交易中的文字取代。在下方選擇預留位置即可插入。",
+      "joinHelp": "文字會依所寫原樣接在目前說明之後或之前，因此請自行加入需要的空格或分隔符號。",
+      "placeholders": "預留位置",
+      "placeholdersHelp": "{payeeText} 是收到時的收款對象文字。{description} 是此動作執行時的說明。其餘預留位置是此規則的模式中命名的擷取。",
+      "insertPlaceholder": "插入 {name}",
+      "unknownPlaceholders": "此規則未定義：{names}。請從清單中選擇預留位置，或在上方的模式中擷取它。",
+      "invalidPlaceholders": "不是有效的預留位置：{names}。名稱由小寫字母和數字組成。",
+      "createIfMissing": "收款對象不存在時建立",
+      "createIfMissingHelp": "開啟後，若沒有收款對象符合該名稱（依名稱、別名或相近符合），則建立新的收款對象。規則建立的收款對象在復原執行後仍會保留。",
+      "onlyIfEmptyDescriptionHelp": "開啟後，僅當交易沒有說明時，規則才會寫入說明。關閉後每次都會寫入。",
+      "mode": "說明寫入方式",
+      "modes": {
+        "replace": "取代說明",
+        "append": "加在說明之後",
+        "prepend": "加在說明之前"
+      },
+      "convertHelp": "符合的收入或支出會成為轉帳的一方。另一方會建立在您選擇的帳戶中,該帳戶必須使用相同的幣別。",
+      "direction": "方向",
+      "directionTo": "支出:資金轉入另一個帳戶",
+      "directionFrom": "收入:資金來自另一個帳戶",
+      "clearCategory": "清除分類",
+      "clearCategoryHelp": "轉帳沒有分類。關閉此項可保留交易已有的分類。",
+      "splitPayee": "交易的收款對象(選填)",
+      "splitHint": "每個部分的金額取自上方模式中的擷取值,或取剩餘部分。各部分的總和必須等於交易金額,否則規則不會變更該交易。",
+      "splitNoCaptures": "尚未定義任何擷取值。請在上方的模式中用大括號寫一個名稱,例如 PRINCIPAL: {example},即可在此用作金額。",
+      "partAmountPlaceholder": "選擇金額...",
+      "partRest": "其餘部分",
+      "partAccount": "帳戶",
+      "partPayee": "另一方的收款對象(選填)",
+      "partsLimit": "一次拆分最多可以有 {max} 個部分。",
+      "guideTitle": "使用方式",
+      "splitGuideHow": "在「如果」中，針對收款人文字或說明新增條件，運算子選擇「符合模式」，並在金額所在位置用大括號寫上名稱，例如 {first}。每個名稱都會成為可為某個部分選擇的金額，也可以選擇「其餘部分」。各部分的總和必須等於交易金額，否則規則不會變更該交易。一個部分可以是類別，也可以是轉到另一個帳戶的轉帳（轉帳會改變該帳戶的餘額）。",
+      "splitGuideExampleTitle": "範例：一筆貸款還款",
+      "splitGuideBank": "銀行文字：本金: 1200.50 利息: 300.25 違約金: 0.00",
+      "splitGuidePattern": "模式：*本金: {first} 利息: {second} 違約金*",
+      "splitGuidePart1": "部分 1：{first} 作為轉到貸款帳戶的轉帳",
+      "splitGuidePart2": "部分 2：{second} 歸入類別「貸款：利息」",
+      "splitGuideResult": "-1500.75 的結果：-1200.50 轉入貸款帳戶，-300.25 記為利息支出。",
+      "splitGuideTip": "提示：在「生效期間」中設定開始日期，以免變更較早已對帳的交易，並在儲存前使用測試面板。",
+      "convertGuide": "支出會變成轉到所選帳戶的轉帳，收入會變成從該帳戶轉入的轉帳。只有另一個帳戶的餘額會變動。提示：使用「生效期間」，以免變更較早的交易。",
+      "splitGuideName1": "benjin",
+      "splitGuideName2": "lixi",
+      "loanGuide": "適用於以單筆金額償還抵押貸款或貸款分期還款的銀行扣款。在「如果」中，按帳戶、收款人文字或說明比對該筆扣款。該交易會變成拆分交易：本金轉入貸款帳戶，利息計入利息分類，兩者都依所償還的那一期計算。提示：關閉該貸款排程付款的自動過帳，以免該期被重複償還，並在儲存前使用測試面板。",
+      "loan": {
+        "help": "符合條件的扣款會償還該貸款的下一期，其到期日與扣款日期相近。Monize 會為該期計算本金與利息；你不需要輸入金額。",
+        "account": "貸款帳戶",
+        "accountPlaceholder": "選擇一筆抵押貸款或貸款…",
+        "noLoans": "你沒有可結算的未結清抵押貸款或貸款帳戶。",
+        "window": "到期日區間",
+        "windowHelp": "銀行可能在到期日前後多久扣款。在某一期到期日前後這麼多天內的扣款會償還該期；區間之外的扣款維持不變。",
+        "daysBefore": "到期日前的天數",
+        "daysAfter": "到期日後的天數",
+        "excess": "扣款高於該期還款額",
+        "excessPolicies": {
+          "extra_principal": "將差額作為額外本金償還",
+          "refuse": "保持該交易不變"
+        },
+        "shortfall": "扣款低於該期還款額",
+        "shortfallPolicies": {
+          "refuse": "保持該交易不變",
+          "interest_first": "先償還利息，其餘作為本金"
+        },
+        "policyNote": "幾分錢的差額由利息部分吸收。",
+        "policyHelp": "銀行會分別對每部分四捨五入，因此扣款與應還金額相差不超過貨幣最小單位的 5 倍（大多數貨幣為 0.05）時視為精確相符，差額計入利息部分。更大的差額依上方兩種選擇之一處理。",
+        "interestCategory": "利息分類（可選）",
+        "interestCategoryPlaceholder": "該貸款自己的利息分類",
+        "autoPostTitle": "該貸款的排程付款會自動過帳",
+        "autoPostBody": "該貸款的排程付款已開啟自動過帳，這樣它與此規則結算的銀行扣款會同時償還同一期。請關閉該排程付款的自動過帳。"
+      }
+    },
+    "actionTypes": {
+      "add_tags": "新增標籤",
+      "remove_tags": "移除標籤",
+      "set_category": "設定分類",
+      "set_payee": "設定收款對象",
+      "request_ai_review": "請求 AI 審核",
+      "set_payee_from_text": "依文字設定收款對象",
+      "set_description": "設定說明",
+      "convert_to_transfer": "轉為轉帳",
+      "split": "拆分交易",
+      "settle_loan_installment": "結算一期貸款還款"
+    },
+    "save": {
+      "button": "儲存規則",
+      "createdToast": "規則已建立",
+      "savedToast": "規則已儲存",
+      "failedToast": "無法儲存規則",
+      "summary": "規則尚未儲存。請修正下方標記的項目後再試一次。"
+    },
+    "loadError": {
+      "title": "無法載入規則",
+      "body": "之所以沒有顯示任何內容，是因為要求失敗，而不是規則為空。請檢查網路連線後再試一次。",
+      "lookupsBody": "無法載入帳戶、收款對象、分類、標籤和幣別清單，因此無法安全地顯示規則。請檢查網路連線後再試一次。",
+      "notFound": "此規則已不存在，可能已被刪除。",
+      "retry": "重試"
+    },
+    "invalid": {
+      "title": "此規則無法執行",
+      "repaired": "已儲存定義中的部分內容無法讀取，已在此處移除或重設。儲存前請檢查規則。"
+    },
+    "conflict": {
+      "title": "此規則已在其他地方被變更",
+      "body": "請重新載入以查看最新版本。您尚未儲存的修改將會遺失。",
+      "reload": "重新載入"
+    },
+    "errors": {
+      "codes": {
+        "INVALID_SHAPE": "此部分的格式編輯器無法辨識。",
+        "UNKNOWN_KEY": "此部分包含一個不存在的設定。",
+        "UNKNOWN_FIELD": "請選擇欄位。",
+        "UNKNOWN_ACTION": "請選擇動作。",
+        "OPERATOR_NOT_ALLOWED": "此欄位不允許使用該運算子。",
+        "VALUE_REQUIRED": "請輸入或選擇一個值。",
+        "VALUE_NOT_ALLOWED": "此運算子不接受值。",
+        "VALUE_TYPE": "該值的類型不適用於此欄位。",
+        "VALUE_OUT_OF_RANGE": "該值超出範圍。",
+        "VALUE_TOO_LONG": "文字過長。",
+        "VALUE_EMPTY": "請輸入文字。",
+        "INVALID_UUID": "請從清單中選擇一項。",
+        "INVALID_ENUM": "請選擇所列的值之一。",
+        "INVALID_CURRENCY": "請選擇幣別。",
+        "ARRAY_EMPTY": "請至少選擇一項。",
+        "ARRAY_TOO_LARGE": "選擇的項目過多。",
+        "RANGE_ORDER": "第一個值不可大於第二個值。",
+        "MAX_DEPTH": "群組巢狀過深。上限為 {maxDepth} 層。",
+        "MAX_LEAVES": "條件過多。上限為 {maxLeaves} 個。",
+        "MAX_NODES": "條件和群組過多。上限為 {maxNodes} 個。",
+        "NO_ACTIONS": "請至少新增一個動作。",
+        "TOO_MANY_ACTIONS": "動作過多。上限為 {maxActions} 個。",
+        "DUPLICATE_ACTION": "一條規則只能有一個 AI 審核、一個轉帳、拆分或貸款結算，以及一個取剩餘部分的拆分部分。",
+        "CONFLICTING_ACTIONS": "轉帳、拆分或貸款結算動作不能與「設定分類」組合，且其每個部分要麼有分類，要麼有帳戶。",
+        "INVALID_CAPTURE": "擷取名稱由小寫字母和數字組成，以字母開頭，最長 20 個字元。",
+        "TOO_MANY_CAPTURES": "一個模式最多可包含 5 個擷取。",
+        "DUPLICATE_CAPTURE": "每個擷取名稱在一條規則中只能使用一次。",
+        "UNKNOWN_CAPTURE": "這裡使用了此規則中沒有任何條件定義的擷取值。",
+        "LOOKS_LIKE_REGEX": "不支援正規表示式：| \\ 和 [xy] 這類簡短的方括號字元類別會被視為一般字元，因此以正規表示式寫成的模式永遠比對不到原意。若要比對多個文字之一，請新增「符合以下任一項」群組，並為每個文字各放一個條件。",
+        "PATTERN_WITHOUT_WILDCARD": "不含 * 時，此模式必須與整段文字完全相同。整段文字請用「等於」，部分文字請用「包含」，或在文字兩側加上 *，例如 *咖啡*。",
+        "REFERENCE_NOT_FOUND": "此處選擇的項目已不存在。請選擇其他項目。",
+        "NAME_REQUIRED": "請輸入規則名稱。",
+        "UNKNOWN": "此部分無效。"
+      }
+    },
+    "run": {
+      "button": "在現有交易上執行",
+      "saveFirst": "請儲存變更以執行已儲存的規則。"
+    },
+    "expression": {
+      "modeLabel": "條件檢視",
+      "visual": "視覺化",
+      "expression": "運算式",
+      "label": "條件運算式",
+      "help": "以文字形式撰寫條件。用 && 表示全部符合，用 || 表示符合任一個，用 !( ... ) 表示否定。以名稱參照項目：account(\"名稱\")、payee(\"名稱\")、category(\"上層: 下層\") 和 tag(\"名稱\")。底線 _ 代表尚未選擇的值。matchesGlob 以 * 作為萬用字元。僅支援建議中提供的語法。",
+      "blocked": "請先修正運算式，才能切換回視覺化檢視或儲存。",
+      "errorAt": "第 {line} 行，第 {column} 欄：{message}",
+      "suggestions": "建議",
+      "errors": {
+        "tooLong": "運算式太長。上限為 {max} 個字元。",
+        "unexpectedChar": "不支援字元 {char}。",
+        "unterminatedString": "此文字缺少結尾引號。",
+        "invalidEscape": "不支援此跳脫序列。",
+        "badNumber": "這不是有效的數字。",
+        "expectedExpression": "此處需要一個條件。",
+        "expectedField": "此處需要欄位名稱。",
+        "expectedOperator": "欄位後需要運算子或方法。",
+        "expectedValue": "此處需要一個值。",
+        "expectedSymbol": "此處需要 {symbol}。",
+        "unexpectedToken": "非預期的內容：{token}。",
+        "unsupported": "不支援這一部分。請只使用建議中提供的語法。",
+        "unknownField": "未知的欄位 {name}。",
+        "unknownFunction": "未知的函式或方法 {name}。",
+        "operatorNotAllowed": "欄位 {field} 不能與 {operator} 一起使用。",
+        "wrongValueType": "{expected, select, text {需要帶引號的文字。} number {需要一個數字。} boolean {需要 true 或 false。} list {需要方括號中的清單。} account {需要一個帳戶，例如 account(\"名稱\")。} payee {需要一個收款對象，例如 payee(\"名稱\")。} category {需要一個分類，例如 category(\"上層: 下層\")。} tag {需要一個標籤，例如 tag(\"名稱\")。} other {此值的類型不正確。}}",
+        "invalidEnum": "請使用下列其中之一：{values}。",
+        "invalidCurrency": "請使用帶引號的三個字母貨幣代碼，例如 \"CAD\"。",
+        "valueTooLong": "文字太長。上限為 {max} 個字元。",
+        "listTooLong": "清單太長。上限為 {max} 項。",
+        "unknownEntity": "{kind, select, account {沒有名為 {name} 的帳戶。} payee {沒有名為 {name} 的收款對象。} category {沒有名為 {name} 的分類。} tag {沒有名為 {name} 的標籤。} other {沒有名為 {name} 的項目。}}",
+        "ambiguousEntity": "有 {count} 個項目名為 {name}。請加上所指項目的編號，例如 {example}。",
+        "entityOrdinal": "{name} 的編號必須介於 1 到 {count} 之間。",
+        "maxDepth": "群組巢狀過深。上限為 {max} 層。",
+        "maxLeaves": "條件過多。上限為 {max}。",
+        "maxNodes": "條件和群組過多。上限為 {max}。",
+        "tooNested": "巢狀括號過多。"
+      }
+    }
+  },
+  "test": {
+    "title": "測試",
+    "description": "在你現有的交易上試用此規則。不會變更任何內容。",
+    "button": "測試規則",
+    "again": "重新測試",
+    "incomplete": "請先完成上方的條件和動作，再測試規則。",
+    "idle": "選擇要試用規則的交易，然後選擇「測試規則」。",
+    "running": "正在測試規則...",
+    "failed": "無法完成測試。{message}",
+    "stale": "自此結果產生後，規則或篩選條件已變更。請重新測試以查看目前結果。"
+  },
+  "match": {
+    "button": "測試規則",
+    "buttonLabel": "測試規則：條件",
+    "incomplete": "請完成上方的條件，以查看它們符合哪些交易。",
+    "windowBackwards": "生效日期的結束早於開始，因此沒有交易能符合。",
+    "summary": "{count, plural, =0 {沒有符合的交易} other {# 筆符合的交易}}",
+    "summaryPending": "符合的交易",
+    "running": "正在尋找符合的交易...",
+    "failed": "無法載入符合的交易。{message}",
+    "empty": "沒有現有交易符合這些條件。",
+    "truncated": "僅檢查了最新的 {scanned, number} 筆交易。",
+    "stale": "自此次測試以來條件已變更。請再次選擇「測試規則」以查看目前的符合結果。"
+  },
+  "run": {
+    "title": "在現有交易上執行「{name}」",
+    "description": "先預覽規則會變更什麼，再確認。你可以在操作記錄中復原此次執行。",
+    "previewButton": "預覽",
+    "confirmButton": "確認並執行",
+    "idle": "選擇帳戶和日期，然後選擇「預覽」。在你確認之前不會有任何變更。",
+    "loadingPreview": "正在載入預覽...",
+    "previewFailed": "無法載入預覽，因此無法執行任何內容。{message}",
+    "stale": "自此預覽產生後，篩選條件已變更。執行前請重新預覽。",
+    "accountsLoading": "正在載入帳戶...",
+    "accountsFailed": "無法載入你的帳戶，因此篩選條件無法使用。",
+    "retry": "重試",
+    "summary": "已檢查 {scanned, plural, other {# 筆交易}}，其中 {matched, plural, other {# 筆交易}}將被變更。",
+    "matchesNone": "此規則與已檢查的所有交易都不相符（{scanned} 筆）。儲存前請檢查條件。不含 * 的模式只比對整段文字。",
+    "noChange": "在檢查的 {scanned} 筆交易中，有 {matched} 筆符合規則條件，但不會有任何變更（例如它們已有該值且開啟了「僅在為空時」）。這不是錯誤。",
+    "aiReview": "{count, plural, other {# 筆交易將加入 AI 審核佇列}}。確認後才會建立請求。",
+    "truncated": "符合的交易多於上限允許的數量。僅包含最新的交易。請提高上限或縮小日期範圍以包含其餘交易。",
+    "truncatedOldest": "符合的交易超過了限制數量。由於此規則依日期順序結算貸款還款，因此僅包含最早的部分。請在此次執行之後再次執行，以納入剩餘部分。",
+    "noMatches": {
+      "title": "沒有交易會被變更",
+      "body": "已檢查的交易都不符合此規則，或規則不會變更它們。"
+    },
+    "table": {
+      "date": "日期",
+      "payee": "收款對象",
+      "amount": "金額",
+      "change": "預定的變更",
+      "noPayee": "無收款對象"
+    },
+    "skipped": {
+      "title": "{count, plural, other {# 筆交易}}維持不變",
+      "line": "{count, plural, other {# 筆交易}}：{reason}",
+      "missing": "貸款缺少：{inputs}。"
+    },
+    "skipReasons": {
+      "reconciled_locked": "已對帳並被鎖定",
+      "transfer_leg_category": "是轉帳，轉帳沒有分類",
+      "split_category": "已拆分，因此分類屬於各拆分項",
+      "cross_owner_transfer_payee": "是轉給其他擁有者的轉帳，此規則不能變更其收款對象",
+      "empty_render": "某個動作的文字對它而言為空",
+      "payee_not_found": "沒有收款對象使用規則產生的名稱，且規則不會建立",
+      "other": "規則無法變更它",
+      "row_is_transfer_leg": "它已經是轉帳",
+      "row_has_splits": "它已經被拆分",
+      "row_is_void": "它已作廢",
+      "zero_amount": "它的金額為零",
+      "transfer_direction_mismatch": "轉帳方向不符:支出轉入帳戶,收入來自帳戶",
+      "transfer_same_account": "轉帳帳戶就是交易本身的帳戶",
+      "transfer_account_unavailable": "轉帳帳戶無法使用(已刪除或不屬於您)",
+      "transfer_currency_mismatch": "轉帳帳戶使用的幣別不同",
+      "split_amount_unparseable": "其文字中的金額無法讀取為數字",
+      "split_sum_mismatch": "各部分的總和與其金額不符",
+      "split_too_few_parts": "去掉零金額後剩餘部分不足兩個",
+      "row_from_scheduled_posting": "它是由該貸款的排程付款過帳的，該付款已償還這一期",
+      "row_is_income": "它是一筆收入，而只有扣款才能償還一期",
+      "loan_account_unavailable": "貸款帳戶無法使用（已刪除、已結清、不屬於你，或不是抵押貸款或貸款）",
+      "loan_interest_booked_separately": "該貸款將利息記為單獨的交易，因此一次付款無法包含它",
+      "loan_not_configured": "該貸款缺少計算一期還款所需的資訊",
+      "no_installment_in_window": "該貸款沒有任何一期在其日期附近的區間內到期",
+      "occurrence_already_posted": "區間內到期的這一期已經償還",
+      "loan_debt_retired": "該貸款已經還清",
+      "installment_amount_excess": "它超過該期還款額，規則會使較大的扣款維持不變",
+      "installment_amount_shortfall": "它低於該期還款額，規則會使較小的扣款維持不變"
+    },
+    "change": {
+      "category": "分類：{before} → {after}",
+      "payee": "收款對象：{before} → {after}",
+      "payeeNew": "收款對象：{before} → {name}（新增）",
+      "tagsAdded": "已新增的標籤：{tags}",
+      "tagsRemoved": "已移除的標籤：{tags}",
+      "none": "無",
+      "unknown": "已刪除的項目",
+      "payeeCreated": "{done, select, yes {已建立新收款對象：{name}} other {將建立新收款對象：{name}}}",
+      "description": "說明：{before} → {after}",
+      "descriptionSet": "將說明設為 {value}",
+      "transfer": "{done, select, yes {已成為與 {account} 的轉帳} other {將成為與 {account} 的轉帳}}",
+      "split": "{done, select, yes {已拆分為 {count, plural, other {# 個部分}}} other {將拆分為 {count, plural, other {# 個部分}}}}",
+      "splitPart": "部分 {number}:{amount} {target}",
+      "splitPartMemo": ",備註「{memo}」",
+      "splitToTransfer": "轉入 {account}",
+      "splitToTransferPayee": "轉入 {account},收款對象 {payee}",
+      "splitToCategory": "歸為 {category}",
+      "splitUncategorised": "無分類",
+      "loanSettlement": "{done, select, yes {已結算} other {結算}} {account} 的第 {number} 期，到期日 {dueDate}：本金 {principal}，利息 {interest}{hasExtra, select, yes {，額外本金 {extra}} other {}}。結算前欠款：{debtBefore}"
+    },
+    "filters": {
+      "accounts": "帳戶",
+      "allAccounts": "所有帳戶",
+      "startDate": "從",
+      "endDate": "到",
+      "backwards": "開始日期不能晚於結束日期。",
+      "limit": "要檢查的最新交易數",
+      "help": "僅檢查範圍內最新的交易，最多 {max} 筆。"
+    },
+    "errors": {
+      "PREVIEW_CHANGED": "自預覽產生後，交易或規則已變更。請查看新的預覽後再次執行。",
+      "RUN_TOO_LARGE": "此次執行變更的交易過多，無法一步復原。請縮小帳戶或日期範圍後重試。",
+      "INVALID_RULE": "此規則無效，因此無法執行。請先開啟並修復它。",
+      "DATE_RANGE_INVALID": "開始日期不能晚於結束日期。",
+      "draftInvalid": "規則不完整或無效。請檢查上方的條件和動作。",
+      "testFailed": "測試規則時發生錯誤。",
+      "previewFailed": "載入預覽時發生錯誤。",
+      "runFailed": "無法完成執行。重試之前請先查看操作記錄。"
+    },
+    "toast": {
+      "done": "{count, plural, =0 {沒有交易被變更} other {已變更 # 筆交易}}。你可以在操作記錄中復原。",
+      "changedNoUndo": "{count, plural, other {已變更 # 筆交易}}。",
+      "aiReviewsQueued": "{count, plural, other {已將 # 筆交易加入 AI 審核佇列}}。",
+      "aiReviewsAlreadyQueued": "{count, plural, other {# 筆交易已有未完成的 AI 審核請求，因此沒有新增加入佇列的內容}}。",
+      "noChanges": "沒有交易被變更。"
+    },
+    "done": {
+      "summary": "{count, plural, =0 {沒有交易被變更。} other {已變更 # 筆交易。}}",
+      "aiReviewsQueued": "{count, plural, other {已將 # 筆交易加入 AI 審核佇列。}}",
+      "aiReviewsAlreadyQueued": "{count, plural, other {# 筆交易已有未完成的 AI 審核請求，因此未再次加入佇列。}}",
+      "undo": "你可以在操作記錄中復原此次執行。"
+    },
+    "missingInputs": {
+      "scheduledPayment": "一筆排程付款",
+      "managedTemplate": "一筆拆分為本金與利息的付款",
+      "scheduleCalendar": "一份還款排程",
+      "interestCategory": "一個利息分類",
+      "amortizationMonths": "攤還期",
+      "paymentStartDate": "首次還款日期",
+      "paymentFrequency": "還款頻率",
+      "originalPrincipal": "原始本金",
+      "rate": "該日期的利率",
+      "payment": "還款金額",
+      "other": "一項貸款設定"
+    }
+  },
+  "applications": {
+    "title": "記錄",
+    "description": "此規則最近變更的交易，最新的在前。",
+    "loading": "正在載入記錄...",
+    "error": {
+      "title": "無法載入記錄",
+      "body": "沒有顯示內容是因為請求失敗，而不是因為規則尚未執行。請檢查網路連線後重試。",
+      "retry": "重試"
+    },
+    "empty": {
+      "title": "此規則尚未變更任何內容",
+      "body": "當它變更交易時，變更會列在這裡。"
+    },
+    "source": {
+      "create": "建立時",
+      "import": "匯入時",
+      "manual": "手動執行",
+      "other": "其他"
+    },
+    "table": {
+      "date": "日期",
+      "payee": "收款對象",
+      "amount": "金額",
+      "source": "來源",
+      "change": "變更",
+      "appliedAt": "套用時間",
+      "open": "開啟交易",
+      "noPayee": "無收款對象",
+      "view": "檢視"
+    }
+  },
+  "words": {
+    "everyTransaction": "每筆交易",
+    "group": {
+      "all": "符合以下全部：",
+      "any": "符合以下任一項：",
+      "notAll": "不符合以下全部：",
+      "notAny": "不符合以下任何一項："
+    },
+    "leaf": "{field} {operator} {value}",
+    "leafNoValue": "{field} {operator}",
+    "range": "{from} 和 {to}",
+    "text": "「{value}」",
+    "unknownCondition": "此版本無法顯示的條件",
+    "unknownAction": "此版本無法顯示的動作",
+    "action": {
+      "add_tags": "新增標籤：{tags}",
+      "remove_tags": "移除標籤：{tags}",
+      "set_category": "將分類設定為 {name}{onlyIfEmpty, select, yes {（僅在為空時）} other {}}",
+      "set_payee": "將收款對象設定為 {name}{onlyIfEmpty, select, yes {（僅在為空時）} other {}}",
+      "request_ai_review": "請求 AI 審核：{instruction}",
+      "set_payee_from_text": "依文字設定收款對象：「{template}」{createIfMissing, select, yes {（不存在則建立）} other {}}{onlyIfEmpty, select, yes {（僅在為空時）} other {}}",
+      "set_description": "設定說明（{mode, select, append {附加} prepend {前置} other {取代}}）：「{template}」{onlyIfEmpty, select, yes {（僅在為空時）} other {}}",
+      "convert_to_transfer": "轉為{direction, select, from {來自} other {轉至}} {account} 的轉帳",
+      "split": "拆分為：{parts}",
+      "settle_loan_installment": "按到期日前最多 {before, plural, other {# 天}}或到期日後最多 {after, plural, other {# 天}}內的扣款結算 {account} 的這一期；較大的扣款{excess, select, refuse {維持不變} other {償還額外本金}}，較小的扣款{shortfall, select, interest_first {先償還利息} other {維持不變}}"
+    },
+    "splitPart": {
+      "transfer": "{amount} 轉入 {account}",
+      "category": "{amount} 計入 {category}",
+      "plain": "{amount}",
+      "rest": "其餘部分"
+    }
+  }
+}

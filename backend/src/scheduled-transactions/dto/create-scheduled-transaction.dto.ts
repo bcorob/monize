@@ -13,7 +13,6 @@ import {
   Min,
   Max,
   MaxLength,
-  IsPositive,
 } from "class-validator";
 import { Type } from "class-transformer";
 import { CreateScheduledTransactionSplitDto } from "./create-scheduled-transaction-split.dto";
@@ -21,6 +20,12 @@ import { SanitizeHtml } from "../../common/decorators/sanitize-html.decorator";
 import { IsCurrencyCode } from "../../common/validators/is-currency-code.validator";
 import { InvestmentAction } from "../../securities/entities/investment-transaction.entity";
 import { MAX_REMINDER_DAYS_BEFORE } from "../reminder-window";
+import { TRANSACTION_NOTE_MAX_LENGTH } from "../../common/transaction-note";
+import { IsMoneyAmount } from "../../common/validators/is-money-amount.validator";
+import { IsFxRate } from "../../common/validators/is-fx-rate.validator";
+import { IsShareQuantity } from "../../common/validators/is-share-quantity.validator";
+import { IsCustomRecurrence } from "../../common/validators/is-custom-recurrence.validator";
+import type { CustomRecurrence } from "../../common/custom-recurrence";
 
 export enum FrequencyType {
   ONCE = "ONCE",
@@ -36,6 +41,8 @@ export enum FrequencyType {
   SEMIANNUAL = "SEMIANNUAL",
   YEARLY = "YEARLY",
   EVERY2YEARS = "EVERY2YEARS",
+  /** Repeats by `customRecurrence` (docs/specs/custom-recurrence.md). */
+  CUSTOM = "CUSTOM",
 }
 
 export class CreateScheduledTransactionDto {
@@ -61,7 +68,7 @@ export class CreateScheduledTransactionDto {
   @IsUUID()
   categoryId?: string;
 
-  @IsNumber({ maxDecimalPlaces: 4 })
+  @IsMoneyAmount()
   @Min(-999999999999)
   @Max(999999999999)
   amount: number;
@@ -76,12 +83,11 @@ export class CreateScheduledTransactionDto {
    * CreateTransactionDto -- the two are validated by one shared helper.
    */
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 10 })
-  @Min(0.000001)
+  @IsFxRate()
   exchangeRate?: number;
 
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 4 })
+  @IsMoneyAmount()
   @Min(-999999999999)
   @Max(999999999999)
   originalAmount?: number | null;
@@ -92,12 +98,27 @@ export class CreateScheduledTransactionDto {
 
   @IsOptional()
   @IsString()
-  @MaxLength(500)
+  @MaxLength(TRANSACTION_NOTE_MAX_LENGTH)
   @SanitizeHtml()
   description?: string;
 
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  @SanitizeHtml()
+  referenceNumber?: string | null;
+
   @IsEnum(FrequencyType)
   frequency: FrequencyType;
+
+  /**
+   * The rule a `CUSTOM` schedule repeats by: required with that frequency and
+   * refused with any other (docs/specs/custom-recurrence.md section 5). `null`
+   * clears it. Validated and canonicalized by `normalizeCustomRecurrence`.
+   */
+  @IsOptional()
+  @IsCustomRecurrence()
+  customRecurrence?: CustomRecurrence | null;
 
   @IsDateString()
   nextDueDate: string;
@@ -122,6 +143,18 @@ export class CreateScheduledTransactionDto {
   @IsOptional()
   @IsBoolean()
   autoPost?: boolean;
+
+  /**
+   * Estimate every occurrence's amount from the payee and category's payment
+   * history (docs/specs/scheduled-amount-estimate.md). Refused on a split,
+   * transfer, investment, foreign-currency or auto-posted schedule, and without
+   * a payee and a category to match the history on. `amount` is still sent and
+   * still validated; the server replaces it with the next occurrence's estimate
+   * when one is known.
+   */
+  @IsOptional()
+  @IsBoolean()
+  amountIsEstimated?: boolean;
 
   /**
    * How many days before an occurrence the reminder email goes out.
@@ -165,27 +198,26 @@ export class CreateScheduledTransactionDto {
   investmentFundingAccountId?: string;
 
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 8 })
+  @IsShareQuantity()
   @Min(0)
   investmentQuantity?: number;
 
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 10 })
+  @IsMoneyAmount(10)
   @Min(0)
   investmentPrice?: number;
 
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 4 })
+  @IsMoneyAmount(4)
   @Min(0)
   investmentCommission?: number;
 
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 4 })
+  @IsMoneyAmount(4)
   investmentTotalAmount?: number;
 
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 10 })
-  @IsPositive()
+  @IsFxRate()
   investmentExchangeRate?: number;
 
   @IsOptional()

@@ -2,7 +2,7 @@ import { DataSource } from "typeorm";
 import { Test, TestingModule } from "@nestjs/testing";
 import { getRepositoryToken } from "@nestjs/typeorm";
 import { DataQualityReportsService } from "./data-quality-reports.service";
-import { ReportCurrencyService } from "./report-currency.service";
+import { RawRateBasis, ReportCurrencyService } from "./report-currency.service";
 import { Transaction } from "../transactions/entities/transaction.entity";
 import {
   createScopedDbMocks,
@@ -30,9 +30,14 @@ describe("DataQualityReportsService", () => {
 
     currencyService = {
       getDefaultCurrency: jest.fn().mockResolvedValue("USD"),
-      buildRateMap: jest.fn().mockResolvedValue(new Map()),
-      convertAmount: jest.fn().mockImplementation((amount) => amount),
+      // The converter a report builds, per row; a test swaps its body.
+      convertRow: jest.fn().mockImplementation((amount: number) => amount),
+      buildConverter: jest.fn(),
     };
+    currencyService.buildConverter.mockImplementation(
+      async () => (amount: number, row: RawRateBasis) =>
+        currencyService.convertRow(amount, row),
+    );
 
     ({ manager: scopedManager, dataSource: scopedDataSource } =
       createScopedDbMocks([[Transaction, transactionsRepository as never]]));
@@ -59,6 +64,46 @@ describe("DataQualityReportsService", () => {
   // getUncategorizedTransactions
   // ---------------------------------------------------------------------------
   describe("getUncategorizedTransactions", () => {
+    it("leaves a currency's summary out whole when one of its days has no rate (issue #2106)", async () => {
+      currencyService.convertRow.mockImplementation(
+        (amount: number, row: RawRateBasis) =>
+          row.tx_date === "2024-01-05" ? null : amount,
+      );
+      scopedManager.query.mockResolvedValueOnce([]);
+      scopedManager.query.mockResolvedValueOnce([
+        {
+          currency_code: "EUR",
+          tx_date: "2025-06-01",
+          own_rate: null,
+          total_count: "1",
+          expense_count: "1",
+          expense_total: "100",
+          income_count: "0",
+          income_total: "0",
+        },
+        {
+          currency_code: "EUR",
+          tx_date: "2024-01-05",
+          own_rate: null,
+          total_count: "1",
+          expense_count: "1",
+          expense_total: "50",
+          income_count: "0",
+          income_total: "0",
+        },
+      ]);
+
+      const result = await service.getUncategorizedTransactions(
+        mockUserId,
+        undefined,
+        "2025-12-31",
+      );
+
+      expect(result.summary.expenseTotal).toBeNull();
+      expect(result.summary.knownExpenseTotal).toBe(0);
+      expect(result.summary.totalCount).toBe(2);
+    });
+
     it("returns empty result when no uncategorized transactions exist", async () => {
       // First call: transaction list query
       scopedManager.query.mockResolvedValueOnce([]);
@@ -76,8 +121,11 @@ describe("DataQualityReportsService", () => {
         totalCount: 0,
         expenseCount: 0,
         expenseTotal: 0,
+        knownExpenseTotal: 0,
         incomeCount: 0,
         incomeTotal: 0,
+        knownIncomeTotal: 0,
+        currencyCode: "USD",
       });
     });
 
@@ -124,6 +172,7 @@ describe("DataQualityReportsService", () => {
       expect(result.transactions).toHaveLength(2);
       expect(result.transactions[0].id).toBe("tx-1");
       expect(result.transactions[0].amount).toBe(-50);
+      expect(result.transactions[0].currencyCode).toBe("USD");
       expect(result.transactions[0].payeeName).toBe("Coffee Shop");
       expect(result.transactions[0].description).toBe("Morning coffee");
       expect(result.transactions[0].accountName).toBe("Checking");
@@ -134,14 +183,11 @@ describe("DataQualityReportsService", () => {
       expect(result.transactions[1].accountId).toBe("acc-2");
     });
 
-    it("calculates summary from multiple currency rows", async () => {
-      currencyService.convertAmount.mockImplementation(
-        (amount: number, fromCurrency: string) => {
-          if (fromCurrency === "EUR") return amount * 1.1;
-          return amount;
-        },
+    it("converts summary currency groups into one explicitly denominated total", async () => {
+      currencyService.convertRow.mockImplementation(
+        (amount: number, { currency_code: fromCurrency }: RawRateBasis) =>
+          fromCurrency === "EUR" ? amount * 1.1 : amount,
       );
-
       scopedManager.query.mockResolvedValueOnce([]);
       scopedManager.query.mockResolvedValueOnce([
         {
@@ -170,21 +216,19 @@ describe("DataQualityReportsService", () => {
 
       expect(result.summary.totalCount).toBe(8);
       expect(result.summary.expenseCount).toBe(5);
-      // 300 USD + 200 EUR * 1.1 = 300 + 220 = 520
-      expect(result.summary.expenseTotal).toBe(520);
       expect(result.summary.incomeCount).toBe(3);
-      // 1000 USD + 500 EUR * 1.1 = 1000 + 550 = 1550
+      expect(result.summary.expenseTotal).toBe(520);
       expect(result.summary.incomeTotal).toBe(1550);
+      expect(result.summary.currencyCode).toBe("USD");
     });
 
-    it("converts transaction amounts from foreign currencies", async () => {
-      currencyService.convertAmount.mockImplementation(
-        (amount: number, fromCurrency: string) => {
+    it("returns a transaction amount in the report currency", async () => {
+      currencyService.convertRow.mockImplementation(
+        (amount: number, { currency_code: fromCurrency }: RawRateBasis) => {
           if (fromCurrency === "EUR") return amount * 1.1;
           return amount;
         },
       );
-
       scopedManager.query.mockResolvedValueOnce([
         {
           id: "tx-1",
@@ -205,8 +249,8 @@ describe("DataQualityReportsService", () => {
         "2025-12-31",
       );
 
-      // -100 EUR * 1.1 = -110 (use toBeCloseTo for floating point)
       expect(result.transactions[0].amount).toBeCloseTo(-110, 2);
+      expect(result.transactions[0].currencyCode).toBe("USD");
     });
 
     it("includes startDate filter when provided", async () => {
@@ -238,7 +282,7 @@ describe("DataQualityReportsService", () => {
 
       const listQueryCall = scopedManager.query.mock.calls[0];
       expect(listQueryCall[0]).not.toContain("transaction_date >= $");
-      expect(listQueryCall[1]).toEqual([mockUserId, "2025-12-31", 500]);
+      expect(listQueryCall[1]).toEqual([mockUserId, "2025-12-31", "USD", 500]);
     });
 
     it("uses custom limit parameter", async () => {
@@ -317,11 +361,11 @@ describe("DataQualityReportsService", () => {
       expect(result.transactions[0].transactionDate).toBe("2025-03-15");
     });
 
-    it("calls currency service with correct user id", async () => {
+    it("uses the user's default as the report currency", async () => {
       scopedManager.query.mockResolvedValueOnce([]);
       scopedManager.query.mockResolvedValueOnce([]);
 
-      await service.getUncategorizedTransactions(
+      const result = await service.getUncategorizedTransactions(
         mockUserId,
         "2025-01-01",
         "2025-12-31",
@@ -330,7 +374,11 @@ describe("DataQualityReportsService", () => {
       expect(currencyService.getDefaultCurrency).toHaveBeenCalledWith(
         mockUserId,
       );
-      expect(currencyService.buildRateMap).toHaveBeenCalledWith("USD");
+      expect(currencyService.buildConverter).toHaveBeenCalledWith(
+        expect.any(Array),
+        "USD",
+      );
+      expect(result.summary.currencyCode).toBe("USD");
     });
 
     it("handles both startDate and limit parameters together", async () => {
@@ -345,13 +393,109 @@ describe("DataQualityReportsService", () => {
       );
 
       const listQueryCall = scopedManager.query.mock.calls[0];
-      // Params: userId, endDate, startDate, limit
+      // Params: userId, endDate, reporting currency, startDate, limit
       expect(listQueryCall[1]).toEqual([
         mockUserId,
         "2025-12-31",
+        "USD",
         "2025-06-01",
         50,
       ]);
+    });
+  });
+
+  // ---------------------------------------------------------------------------
+  // A missing exchange rate is unknown, never 1:1 (INV-FX-001)
+  // ---------------------------------------------------------------------------
+  describe("getUncategorizedTransactions with a currency that has no rate", () => {
+    beforeEach(() => {
+      currencyService.convertRow.mockImplementation(
+        (amount: number, { currency_code: from }: RawRateBasis) =>
+          from === "JPY" ? null : amount,
+      );
+    });
+
+    it("keeps the row with its own amount and currency, never the default's label", async () => {
+      scopedManager.query.mockResolvedValueOnce([
+        {
+          id: "tx-jpy",
+          transaction_date: "2025-05-01",
+          currency_code: "JPY",
+          amount: "-100000",
+          payee_name: "Tokyo Shop",
+          description: null,
+          account_name: "Yen Account",
+          account_id: "acc-1",
+        },
+      ]);
+      scopedManager.query.mockResolvedValueOnce([]);
+
+      const result = await service.getUncategorizedTransactions(
+        mockUserId,
+        "2025-01-01",
+        "2025-12-31",
+      );
+
+      expect(result.transactions).toHaveLength(1);
+      expect(result.transactions[0].amount).toBe(-100000);
+      expect(result.transactions[0].currencyCode).toBe("JPY");
+    });
+
+    it("withholds the summary totals and keeps the converted subtotal", async () => {
+      scopedManager.query.mockResolvedValueOnce([]);
+      scopedManager.query.mockResolvedValueOnce([
+        {
+          currency_code: "USD",
+          total_count: "1",
+          expense_count: "1",
+          expense_total: "50.00",
+          income_count: "0",
+          income_total: "0",
+        },
+        {
+          currency_code: "JPY",
+          total_count: "1",
+          expense_count: "1",
+          expense_total: "100000",
+          income_count: "0",
+          income_total: "0",
+        },
+      ]);
+
+      const result = await service.getUncategorizedTransactions(
+        mockUserId,
+        "2025-01-01",
+        "2025-12-31",
+      );
+
+      expect(result.summary.expenseTotal).toBeNull();
+      expect(result.summary.incomeTotal).toBeNull();
+      expect(result.summary.knownExpenseTotal).toBe(50);
+      expect(result.summary.knownIncomeTotal).toBe(0);
+      // A count needs no rate: both uncategorized rows still need filing.
+      expect(result.summary.totalCount).toBe(2);
+      expect(result.summary.expenseCount).toBe(2);
+      expect(result.summary.currencyCode).toBe("USD");
+      expect(result.currency).toBe("USD");
+      expect(result.missingCurrencies).toEqual(["JPY"]);
+      expect(result.excludedCount).toBe(1);
+      expect(JSON.stringify(result.summary)).not.toContain("100000");
+    });
+
+    it("answers zero, not null, when nothing is uncategorized", async () => {
+      scopedManager.query.mockResolvedValueOnce([]);
+      scopedManager.query.mockResolvedValueOnce([]);
+
+      const result = await service.getUncategorizedTransactions(
+        mockUserId,
+        "2025-01-01",
+        "2025-12-31",
+      );
+
+      expect(result.summary.expenseTotal).toBe(0);
+      expect(result.summary.incomeTotal).toBe(0);
+      expect(result.missingCurrencies).toEqual([]);
+      expect(result.excludedCount).toBe(0);
     });
   });
 

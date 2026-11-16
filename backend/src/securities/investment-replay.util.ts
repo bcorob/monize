@@ -34,6 +34,70 @@ export function baseInvestmentAction(
 }
 
 /**
+ * The order every ledger replay reads `investment_transactions` in.
+ *
+ * A position is a function of *economic* order, not of the order the rows were
+ * entered in: a back-dated SELL entered after a later BUY still relieves basis
+ * before that BUY blends in. `transaction_date` alone is not a total order --
+ * rows written by one import or one split share `created_at` to the microsecond
+ * -- so the primary key breaks the remaining tie and makes the replay a pure
+ * function of the ledger's contents rather than of the plan PostgreSQL happened
+ * to choose. Without the `id` leg two replays of the same unchanged ledger could
+ * relieve basis in different orders and store two different average costs.
+ *
+ * Use this constant for a TypeORM `order`, and `INVESTMENT_REPLAY_ORDER_SQL`
+ * for a raw `SELECT`, rather than restating the columns.
+ */
+export const INVESTMENT_REPLAY_ORDER = {
+  transactionDate: "ASC",
+  createdAt: "ASC",
+  id: "ASC",
+} as const;
+
+/** `INVESTMENT_REPLAY_ORDER` spelled for a raw `ORDER BY`. */
+export const INVESTMENT_REPLAY_ORDER_SQL =
+  "transaction_date ASC, created_at ASC, id ASC";
+
+/**
+ * `rows` in replay order with the TRANSFER_OUT leg of a transfer ahead of its
+ * TRANSFER_IN leg (A26-M21, A26-M22).
+ *
+ * Both legs of a transfer are written in one transaction, so `created_at` -- a
+ * statement timestamp -- is identical on the pair and the SQL order between
+ * them is whatever the plan happens to produce. The OUT leg has to be seen
+ * first, because it is what tells the IN leg what the shares cost. Only the two
+ * legs are reordered: the comparator returns 0 for everything else at the same
+ * instant, and `sort` is stable, so nothing else moves. The input is not
+ * modified.
+ *
+ * Every fold that hands a transferred-in lot the basis its source released
+ * reads its rows through this, so the carry cannot depend on which leg the
+ * database happened to return first.
+ */
+export function orderTransferOutBeforeIn<
+  T extends {
+    transactionDate: string;
+    createdAt: Date;
+    action: InvestmentAction | string;
+  },
+>(rows: readonly T[]): T[] {
+  const legRank = (action: InvestmentAction | string): number =>
+    action === InvestmentAction.TRANSFER_OUT
+      ? -1
+      : action === InvestmentAction.TRANSFER_IN
+        ? 1
+        : 0;
+  return [...rows].sort((a, b) => {
+    if (a.transactionDate !== b.transactionDate) {
+      return a.transactionDate < b.transactionDate ? -1 : 1;
+    }
+    const created = Number(a.createdAt) - Number(b.createdAt);
+    if (created !== 0) return created;
+    return legRank(a.action) - legRank(b.action);
+  });
+}
+
+/**
  * The canonical share-count effect of one investment action.
  *
  * Every surface that reconstructs a position from its transaction history --
@@ -54,7 +118,9 @@ export function baseInvestmentAction(
  * - SPLIT -- a **ratio**, not a share count. The position is multiplied by it,
  *   which is what preserves total cost basis across a split. A 2-for-1 split
  *   carries `quantity = 2`; a 1-for-2 reverse split carries `0.5`.
- * - DIVIDEND / INTEREST / CAPITAL_GAIN -- cash only, no share movement.
+ * - DIVIDEND / INTEREST / CAPITAL_GAIN / RETURN_OF_CAPITAL -- cash only, no
+ *   share movement (a return of capital moves basis instead; see
+ *   `applyReturnOfCapital`).
  *
  * A non-positive SPLIT ratio is not applied: it would zero or invert a real
  * position, and a row that cannot say what the split was is not evidence that
@@ -78,7 +144,8 @@ export function applyActionToQuantity(
     case InvestmentAction.SPLIT:
       return quantity > 0 ? currentQuantity * quantity : currentQuantity;
     default:
-      // DIVIDEND / INTEREST / CAPITAL_GAIN move cash, not shares.
+      // DIVIDEND / INTEREST / CAPITAL_GAIN / RETURN_OF_CAPITAL move cash, not
+      // shares.
       return currentQuantity;
   }
 }
@@ -138,6 +205,166 @@ export const CASH_INCOME_ACTIONS: readonly InvestmentAction[] = [
 ];
 
 /**
+ * The income each reinvestment records. A reinvest is a distribution paid in
+ * shares rather than cash: it is income of the same kind as its cash twin (it
+ * is on the 1099-DIV like one, and Money counted it as one), and it buys the
+ * shares at the same moment, so no cash moves.
+ *
+ * Income surfaces count it through {@link incomeKind}. A formula whose market
+ * value already holds the reinvested shares and whose base does not hold their
+ * cost (a period return, net invested) reads `CASH_INCOME_ACTIONS` instead,
+ * because adding the distribution there counts the same value twice.
+ */
+const INCOME_KIND_BY_REINVEST_ACTION: ReadonlyMap<
+  InvestmentAction | string,
+  InvestmentAction
+> = new Map([
+  [InvestmentAction.REINVEST, InvestmentAction.DIVIDEND],
+  [InvestmentAction.REINVEST_INTEREST, InvestmentAction.INTEREST],
+  [
+    InvestmentAction.REINVEST_CAPITAL_GAIN_SHORT,
+    InvestmentAction.CAPITAL_GAIN_SHORT,
+  ],
+  [
+    InvestmentAction.REINVEST_CAPITAL_GAIN_LONG,
+    InvestmentAction.CAPITAL_GAIN_LONG,
+  ],
+]);
+
+/** The actions that record a distribution paid in shares. */
+export const REINVESTED_INCOME_ACTIONS: readonly InvestmentAction[] = [
+  ...INCOME_KIND_BY_REINVEST_ACTION.keys(),
+] as InvestmentAction[];
+
+/**
+ * The kind of income `action` records, as the cash-income action it equals
+ * (DIVIDEND, INTEREST, CAPITAL_GAIN or a short/long refinement), or `null` for
+ * an action that records none. `baseInvestmentAction` of the answer collapses
+ * the kinds for a surface that only needs dividend / interest / capital gain.
+ */
+export function incomeKind(
+  action: InvestmentAction | string,
+): InvestmentAction | null {
+  if (CASH_INCOME_ACTIONS.includes(action as InvestmentAction)) {
+    return action as InvestmentAction;
+  }
+  return INCOME_KIND_BY_REINVEST_ACTION.get(action) ?? null;
+}
+
+/**
+ * What a reinvested distribution came to, in the security's currency, unsigned.
+ *
+ * The stored total is the fact when the row has one -- an imported reinvest
+ * keeps the file's amount, and some files carry no price beside it. A row
+ * created in the app stores no total for a reinvest, so it is valued as its
+ * shares entered the basis: quantity x price + commission (`acquisitionCost`
+ * without a rate). Either way a gain measured as `value + income - cost` nets
+ * the reinvestment to the distribution it was. `null` when the row carries
+ * neither a total nor a price.
+ */
+export function reinvestedIncomeAmount(tx: {
+  quantity?: number | string | null;
+  price?: number | string | null;
+  commission?: number | string | null;
+  totalAmount?: number | string | null;
+}): number | null {
+  const total = Number(tx.totalAmount);
+  if (Number.isFinite(total) && total !== 0) return Math.abs(total);
+  return acquisitionCost(tx);
+}
+
+/**
+ * The income one row records, in the security's currency: a cash distribution's
+ * `totalAmount`, a reinvested one's {@link reinvestedIncomeAmount}, and 0 for a
+ * row that records no income.
+ *
+ * A legacy reinvest with neither a total nor a price counts 0: the cost basis
+ * leaves the same row out (`acquisitionCost` returns `null`), and a gain read
+ * as `value + income - cost` stays consistent only if income leaves it out too.
+ * A VOID row is the caller's to drop, as every total over these rows does.
+ */
+export function investmentIncomeAmount(tx: {
+  action: InvestmentAction | string;
+  quantity?: number | string | null;
+  price?: number | string | null;
+  commission?: number | string | null;
+  totalAmount?: number | string | null;
+}): number {
+  if (CASH_INCOME_ACTIONS.includes(tx.action as InvestmentAction)) {
+    return Number(tx.totalAmount) || 0;
+  }
+  if (INCOME_KIND_BY_REINVEST_ACTION.has(tx.action)) {
+    return reinvestedIncomeAmount(tx) ?? 0;
+  }
+  return 0;
+}
+
+/**
+ * What an action does to the INVESTED part of a portfolio -- the securities,
+ * with the cash beside them left out.
+ *
+ * The invested part's P&L and time-weighted return
+ * (`docs/specs/portfolio-period-result.md` section 10) need exactly this
+ * classification, and it is the one list that decides it:
+ *
+ * - `capitalIn` -- value entering the invested part. Buying is not earning, so
+ *   it must cancel out of the result and enter the base of the return.
+ * - `capitalOut` -- value leaving it. Selling is not losing; the proceeds are
+ *   what the position came to, and the cash they become earns nothing after.
+ * - `income` -- cash the invested part paid out and therefore EARNED. It leaves
+ *   as cash and stays in the result.
+ * - `reinvestedIncome` -- REINVEST and its refinements: a distribution the
+ *   invested part earned and put straight back into shares, the DIVIDEND and
+ *   BUY it stands for in one row. A surface prints it in BOTH the income and
+ *   the capital figure, so the result they add up to is unchanged; the return
+ *   chains read neither, because its shares are already in the day's value and
+ *   no value crossed the boundary.
+ * - `none` -- SPLIT moves no value (it is a ratio).
+ *
+ * RETURN_OF_CAPITAL is `capitalOut`: the security pays back part of what was
+ * invested in it, so value leaves the invested part as cash without being
+ * earned -- the price falls by what was returned, and counting the cash as
+ * income would report the same value as a gain it never was.
+ *
+ * Keyed by BASE action, so a Money-vocabulary refinement cannot fall out of the
+ * classification by being forgotten here -- `investedFlowKind` normalizes
+ * first. `investment-replay.util.spec.ts` holds every `InvestmentAction` member
+ * to a kind, so a new action is a failing test rather than a silent zero in a
+ * capital flow.
+ */
+export type InvestedFlowKind =
+  "capitalIn" | "capitalOut" | "income" | "reinvestedIncome" | "none";
+
+export const INVESTED_FLOW_KIND_BY_BASE_ACTION: ReadonlyMap<
+  InvestmentAction,
+  InvestedFlowKind
+> = new Map([
+  [InvestmentAction.BUY, "capitalIn" as const],
+  [InvestmentAction.TRANSFER_IN, "capitalIn" as const],
+  [InvestmentAction.ADD_SHARES, "capitalIn" as const],
+  [InvestmentAction.SELL, "capitalOut" as const],
+  [InvestmentAction.TRANSFER_OUT, "capitalOut" as const],
+  [InvestmentAction.REMOVE_SHARES, "capitalOut" as const],
+  [InvestmentAction.RETURN_OF_CAPITAL, "capitalOut" as const],
+  [InvestmentAction.DIVIDEND, "income" as const],
+  [InvestmentAction.INTEREST, "income" as const],
+  [InvestmentAction.CAPITAL_GAIN, "income" as const],
+  [InvestmentAction.REINVEST, "reinvestedIncome" as const],
+  [InvestmentAction.SPLIT, "none" as const],
+]);
+
+/** What `action` does to the invested part; `none` for anything that moves no value. */
+export function investedFlowKind(
+  action: InvestmentAction | string,
+): InvestedFlowKind {
+  return (
+    INVESTED_FLOW_KIND_BY_BASE_ACTION.get(
+      baseInvestmentAction(action) as InvestmentAction,
+    ) ?? "none"
+  );
+}
+
+/**
  * The only actions allowed to use an explicit funding account: a BUY draws the
  * purchase cost from it, a SELL deposits the proceeds into it. Cash-bearing
  * DIVIDEND / INTEREST / CAPITAL_GAIN settle against the brokerage's linked cash
@@ -160,6 +387,83 @@ export const FUNDING_ACCOUNT_ACTIONS: ReadonlySet<InvestmentAction> = new Set([
   InvestmentAction.SELL,
   InvestmentAction.REDEEM,
 ]);
+
+/**
+ * What a return of capital paid back, unsigned, or `null` when the row cannot
+ * say.
+ *
+ * The stored total is in the security's currency. Given an `exchangeRate`, the
+ * amount is converted with it, the same way `acquisitionCost` converts the
+ * basis it is drawn against, so a replay in the settlement account's currency
+ * subtracts like from like. A stored zero or negative rate is
+ * absent-not-applicable, exactly as there: the reduction is unknown rather
+ * than taken at par.
+ */
+export function returnOfCapitalAmount(tx: {
+  totalAmount?: number | string | null;
+  exchangeRate?: number | string | null;
+}): number | null {
+  const total = Math.abs(Number(tx.totalAmount));
+  if (!Number.isFinite(total)) return null;
+  const rate = tx.exchangeRate == null ? 1 : Number(tx.exchangeRate);
+  if (!Number.isFinite(rate) || rate <= 0) return null;
+  return total * rate;
+}
+
+/** A position's basis after a return of capital, and the gain it realized. */
+export interface ReturnOfCapitalEffect {
+  /** The basis left, never below zero. */
+  costBasis: number;
+  /** How much of the basis the distribution paid back. */
+  basisReturned: number;
+  /**
+   * What the distribution paid beyond the basis: a realized capital gain on
+   * the distribution's date, because there was no cost left for it to return.
+   */
+  realizedGain: number;
+}
+
+/**
+ * Apply a return of capital to a position's total cost basis.
+ *
+ * A return of capital is not income: it hands back part of what the shares
+ * cost, so it comes off the basis and a later sale measures its gain against
+ * what is left. The basis cannot go below zero -- a position cannot have cost
+ * less than nothing -- so whatever exceeds it is a capital gain realized when
+ * it was paid, which is how both the IRS (Publication 550, "Nondividend
+ * Distributions") and the CRA (negative adjusted cost base) treat it. Every
+ * replay that carries a basis folds the row through here, so the holdings
+ * page, the realized-gain report and the capital-gains chart cannot disagree
+ * about the same distribution. `docs/specs/return-of-capital.md`.
+ */
+export function applyReturnOfCapital(
+  costBasis: number,
+  amount: number,
+): ReturnOfCapitalEffect {
+  const basis = Math.max(costBasis, 0);
+  const returned = Math.max(amount, 0);
+  const basisReturned = Math.min(basis, returned);
+  return {
+    costBasis: basis - basisReturned,
+    basisReturned,
+    realizedGain: returned - basisReturned,
+  };
+}
+
+/**
+ * The basis a security-currency replay keeps after a return of capital row:
+ * `applyReturnOfCapital` over the row's stored total, the row's rate not
+ * applied. A row that cannot say what it paid leaves the basis as it was.
+ */
+export function basisAfterReturnOfCapital(
+  costBasis: number,
+  tx: { totalAmount?: number | string | null },
+): number {
+  const amount = returnOfCapitalAmount({ totalAmount: tx.totalAmount });
+  return amount === null
+    ? costBasis
+    : applyReturnOfCapital(costBasis, amount).costBasis;
+}
 
 /**
  * Whether an action adds shares to a position without supplying a cost for
@@ -199,6 +503,15 @@ export function acquisitionCost(tx: {
   price?: number | string | null;
   commission?: number | string | null;
   exchangeRate?: number | string | null;
+  /**
+   * The row's executed total, when the caller reads a stored row. It is what
+   * the acquisition came to -- commission included, by the same convention
+   * `deriveInvestmentTotal` writes it with -- and the price beside it is a
+   * quotient of it, so `quantity * price + commission` reproduces it only to
+   * within the price's rounding. Given, it is used; absent, the cost is built
+   * from the price as it always was.
+   */
+  totalAmount?: number | string | null;
 }): number | null {
   const quantity = Number(tx.quantity) || 0;
   const commission = Number(tx.commission) || 0;
@@ -214,42 +527,44 @@ export function acquisitionCost(tx: {
   const price = Number(tx.price) || 0;
   // An absent rate means the trade settled in its own currency (the entity
   // default is 1). A stored zero or negative rate is absent-not-applicable
-  // (root CLAUDE.md: "Rate 1 means same currency, never no rate found"), so
+  // (`AGENTS.md`: "Rate 1 means same currency, never no rate found"), so
   // the basis is unknown rather than converted at par -- `|| 1` here would
   // bake the silent 1:1 fallback into the one door every basis goes through.
   const rate = tx.exchangeRate == null ? 1 : Number(tx.exchangeRate);
   if (!Number.isFinite(rate) || rate <= 0) return null;
+  const total =
+    tx.totalAmount === null || tx.totalAmount === undefined
+      ? null
+      : Number(tx.totalAmount);
+  if (total !== null && Number.isFinite(total) && total !== 0) {
+    return Math.abs(total) * rate;
+  }
   return (quantity * price + commission) * rate;
 }
 
 /**
- * The per-share cost of an acquisition, commission included.
- *
- * `Holding.averageCost` is maintained incrementally on every acquisition, and it
- * was fed the raw market price -- so the live holding said 100.00 per share while
- * a rebuild, which goes through `acquisitionCost`, said 101.00 for the same buy.
- * The two disagreed until something unrelated triggered a rebuild, and the
- * holdings screen showed whichever had run last (review finding FR-008).
- *
- * Falls back to the price when there are no shares to divide by, and when the
- * row cannot say what it cost -- an unpriced acquisition has no per-share cost to
- * derive, and the caller's existing price guard decides what to do about that.
+ * Below this many shares a replayed position is not a holding at all: the
+ * stored quantity scale is 8 decimal places, so anything smaller is a rounding
+ * residue of the fold rather than a share somebody owns.
  */
-export function acquisitionUnitCost(tx: {
-  quantity?: number | string | null;
-  price?: number | string | null;
-  commission?: number | string | null;
-}): number {
-  const quantity = Number(tx.quantity) || 0;
-  const price = Number(tx.price) || 0;
-  if (quantity === 0) return price;
+export const HOLDING_QUANTITY_EPSILON = 0.00000001;
 
-  const cost = acquisitionCost({
-    quantity,
-    price: tx.price,
-    commission: tx.commission,
-  });
-  if (cost === null) return price;
-
-  return cost / quantity;
+/**
+ * The `holdings` row a rebuild writes for a replayed position, or `null` when a
+ * rebuild would store no row for it at all.
+ *
+ * Every rebuild writer projects the fold the same way -- drop the position when
+ * the ledger accounts for no shares, and store `averageCost = 0` for a negative
+ * (short) quantity, because the per-share basis of shares you do not hold is
+ * not a number. The drift report compares the stored row against this rather
+ * than against an idea of its own, so what it reports is exactly what a rebuild
+ * would change.
+ */
+export function projectedHoldingRow(
+  position: { quantity: number; totalCost: number } | undefined | null,
+): { quantity: number; averageCost: number } | null {
+  if (!position) return null;
+  const { quantity, totalCost } = position;
+  if (Math.abs(quantity) <= HOLDING_QUANTITY_EPSILON) return null;
+  return { quantity, averageCost: quantity > 0 ? totalCost / quantity : 0 };
 }

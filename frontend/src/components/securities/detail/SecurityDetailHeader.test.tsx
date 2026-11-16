@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { cleanup, screen } from '@testing-library/react';
-import { render } from '@/test/render';
+import { render, act } from '@/test/render';
 import { SecurityDetailHeader, type SecurityQuote } from './SecurityDetailHeader';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import type { Security } from '@/types/investment';
@@ -150,6 +150,27 @@ describe('SecurityDetailHeader', () => {
         expect.stringContaining('holidays'),
       );
     });
+  });
+
+  it('wraps the name while the header is stacked and truncates only once it goes row-wise', async () => {
+    const longName =
+      'A Very Long Security Name That Would Otherwise Be Truncated Corporation Inc.';
+    await act(async () => {
+      renderHeader({ name: longName });
+    });
+    const heading = screen.getByRole('heading', { level: 1 });
+    expect(heading).toHaveTextContent(longName);
+    // Split on whitespace for an exact-token match, so a revert to `sm:truncate`
+    // (or a bare `truncate`) fails rather than being hidden by a substring hit.
+    const tokens = heading.className.split(/\s+/);
+    // Wraps unclamped while the header is stacked (below `lg`); the single-line
+    // ellipsis applies only once the layout flips to a row at `lg`, matching the
+    // outer `lg:flex-row` breakpoint. Truncating from `sm` was the bug: the
+    // header is still stacked with room to wrap between 640px and 1023px.
+    expect(tokens).toContain('break-words');
+    expect(tokens).toContain('lg:truncate');
+    expect(tokens).not.toContain('sm:truncate');
+    expect(tokens).not.toContain('truncate');
   });
 
   it('renders nothing about timing when there is no price at all', () => {

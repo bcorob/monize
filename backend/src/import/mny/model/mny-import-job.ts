@@ -90,6 +90,10 @@ export interface MnyImportResult {
   readonly accountsCreated: number;
   readonly payeesCreated: number;
   readonly categoriesCreated: number;
+  /** Tags created for Money's classification items; a reused tag is not counted. */
+  readonly tagsCreated: number;
+  /** Tag links written onto transactions and split legs, new tags or reused. */
+  readonly tagLinksApplied: number;
   readonly transactionsCreated: number;
   readonly splitsCreated: number;
   readonly transfersLinked: number;
@@ -98,11 +102,19 @@ export interface MnyImportResult {
   readonly pricesImported: number;
   readonly exchangeRatesImported: number;
   readonly billsCreated: number;
+  /**
+   * Acquisitions of a bond-program security imported without a series (the file
+   * names none and none was on sale on the date): the bond lots report such a
+   * row until its series is chosen. Absent when zero.
+   */
+  readonly bondRowsWithoutSeries?: number;
   /** Rows the mapper could not use, by reason. Mirrors the warning codes. */
   readonly skipped: {
     readonly accounts: number;
     readonly payees: number;
     readonly categories: number;
+    /** Classification items no imported row references. */
+    readonly tags: number;
     readonly transactions: number;
     /** Bill series with no usable template or date -- not unticked ones. */
     readonly bills: number;

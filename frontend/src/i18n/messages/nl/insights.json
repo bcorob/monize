@@ -4,19 +4,29 @@
     "subtitle": "AI-gestuurde analyse van je uitgavenpatronen en afwijkingen"
   },
   "list": {
-    "lastUpdated": "Laatst bijgewerkt: {date} {time}",
     "refreshButton": "Inzichten vernieuwen",
-    "generating": "Genereren...",
+    "refreshAge": "({time})",
+    "summary": {
+      "active": "Actieve inzichten",
+      "alerts": "Meldingen",
+      "warnings": "Waarschuwingen"
+    },
     "allTypes": "Alle typen",
-    "allSeverities": "Alle ernstgraden",
+    "typeFilterLabel": "Type",
+    "severityFilterLabel": "Ernst",
+    "severityFilter": {
+      "all": "Alle ({count})",
+      "alert": "Meldingen ({count})",
+      "warning": "Waarschuwingen ({count})",
+      "info": "Info ({count})"
+    },
     "showDismissed": "Gesloten tonen",
     "emptyNoInsights": "Nog geen inzichten gegenereerd. Klik op \"Inzichten vernieuwen\" om je uitgavenpatronen te analyseren.",
     "emptyFiltered": "Geen inzichten komen overeen met je huidige filters.",
     "generateButton": "Inzichten genereren",
-    "alertCount": "{count, plural, one {# melding} other {# meldingen}}",
-    "warningCount": "{count, plural, one {# waarschuwing} other {# waarschuwingen}}",
     "errorLoadFailed": "Inzichten laden mislukt. Probeer het opnieuw.",
     "errorGenerateFailed": "Inzichten genereren mislukt. Controleer of je een AI-provider hebt geconfigureerd.",
+    "errorDismissFailed": "Inzicht sluiten mislukt. Probeer het opnieuw.",
     "errorTimeout": "Het genereren van inzichten duurt langer dan verwacht. Even geduld of vernieuw de pagina."
   },
   "card": {

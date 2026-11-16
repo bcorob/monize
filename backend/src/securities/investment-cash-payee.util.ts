@@ -85,6 +85,7 @@ export function formatInvestmentCashPayeeName(
 
     case InvestmentAction.DIVIDEND:
     case InvestmentAction.CAPITAL_GAIN:
+    case InvestmentAction.RETURN_OF_CAPITAL:
       return `${actionLabel}: ${input.symbol || "Unknown"} ${formatAmount(
         total,
         currencyCode,

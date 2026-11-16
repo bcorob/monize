@@ -315,14 +315,13 @@ export function computePeriodReturn(
  * figure rather than mix units.
  */
 export interface PositionReturnInput {
-  /** Gross cost of every acquiring leg, commission excluded. */
-  totalInvested: number;
+  /** Cost of every acquiring leg, commission included; null when unknown. */
+  totalInvested: number | null;
   /** Worth of what is still held; null when it cannot be known. */
   marketValue: number | null;
   /** Cost basis of what is still held; null when it cannot be known. */
   costBasis: number | null;
   dividends: number;
-  fees: number;
   realizedGain: number | null;
   realizedGainCurrency: string | null;
   /** Zero means never sold, which is a realised gain of nothing. */
@@ -333,7 +332,7 @@ export interface PositionReturnInput {
 }
 
 export interface PositionReturn {
-  /** Unrealised + realised + income - fees, in the security's currency. */
+  /** Unrealised + realised + income, in the security's currency. */
   profit: number;
   /** That profit over the capital ever put in, as a percentage. */
   percent: number;
@@ -359,7 +358,7 @@ export function computePositionReturn(
   input: PositionReturnInput,
 ): PositionReturn | null {
   // No capital in means no return to state -- and no denominator either.
-  if (!(input.totalInvested > 0)) return null;
+  if (input.totalInvested === null || !(input.totalInvested > 0)) return null;
 
   let realized = 0;
   if (input.realizedSaleCount > 0) {
@@ -380,10 +379,10 @@ export function computePositionReturn(
     unrealized = input.marketValue - input.costBasis;
   }
 
-  const profit = roundToDecimals(
-    unrealized + realized + input.dividends - input.fees,
-    4,
-  );
+  // Commissions are not subtracted again: the cost basis and the realized gain
+  // already carry them (buy commission in the basis, sell commission in the
+  // proceeds), so taking `fees` off here counted each one twice.
+  const profit = roundToDecimals(unrealized + realized + input.dividends, 4);
   return {
     profit,
     percent: roundToDecimals((profit / input.totalInvested) * 100, 2),
@@ -464,31 +463,19 @@ export function filterPriceWindow(
   );
 }
 
-/**
- * A formatted amount with its currency code appended, when the security is not
- * quoted in the user's own currency.
- *
- * Every figure on the detail page is in the security's currency and none of them
- * is converted, so a reader whose default is CAD needs to be told that "$1,300"
- * is not their $1,300. Symbols do not carry that: `$` is four currencies and `kr`
- * is three. Matches how the Investments page marks a foreign holding, so the two
- * screens read the same way.
- */
-export function withCurrencyCode(
-  formatted: string,
-  currencyCode: string,
-  defaultCurrency: string,
-): string {
-  return currencyCode && currencyCode !== defaultCurrency
-    ? `${formatted} ${currencyCode}`
-    : formatted;
-}
-
 /** Most decimal places a price column will show, matching NUMERIC(24,10). */
 export const MAX_PRICE_DECIMALS = 10;
 
 /** Fewest, so a whole-number price still reads as money. */
 const MIN_PRICE_DECIMALS = 2;
+
+/**
+ * What a TRADE's per-share price is shown at: enough to see that 141 shares
+ * went at 5.8220567376 rather than at 5.82, and no more than a person reads.
+ * A price derived from an executed total is stored at ten decimals
+ * (INV-TRADE-001); six is what `formatPrice` shows and what this matches.
+ */
+export const TRADE_PRICE_DISPLAY_DECIMALS = 6;
 
 /** Decimal places a single number is written with, or null if not readable. */
 function decimalPlacesOf(value: number): number | null {
@@ -514,18 +501,26 @@ function decimalPlacesOf(value: number): number | null {
  * each to its own precision put two and six decimals side by side in one column
  * of figures that should be scannable at a glance. The widest count any value
  * needs is the one they all use, so every row lines up.
+ *
+ * `max` caps it for a column that shows fewer than the storage scale -- a
+ * trade's price column passes `TRADE_PRICE_DISPLAY_DECIMALS`, so a price
+ * derived from an executed total reads as 5.822057 rather than as all ten
+ * stored decimals.
  */
-export function priceDecimals(values: readonly (number | null)[]): number {
+export function priceDecimals(
+  values: readonly (number | null)[],
+  max: number = MAX_PRICE_DECIMALS,
+): number {
   let widest = MIN_PRICE_DECIMALS;
   for (const value of values) {
     if (value === null || value === undefined) continue;
     const places = decimalPlacesOf(value);
     // Unreadable means "at least as precise as anything we can count", so it
     // takes the column straight to the maximum.
-    if (places === null) return MAX_PRICE_DECIMALS;
+    if (places === null) return max;
     if (places > widest) widest = places;
   }
-  return Math.min(widest, MAX_PRICE_DECIMALS);
+  return Math.min(widest, max);
 }
 
 /** A month's worth of price rows, newest month first within its year. */

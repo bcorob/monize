@@ -10,6 +10,9 @@ import {
   DataSourceMock,
   ManagerMock,
 } from "../test-helpers/scoped-db-testing";
+import { Currency } from "../currencies/entities/currency.entity";
+import { UserPreference } from "../users/entities/user-preference.entity";
+import { currencyPlacesRepoMock } from "../test-helpers/currency-places-testing";
 
 jest.mock("../common/db/scoped-db", () =>
   jest.requireActual("../test-helpers/scoped-db-testing").scopedDbMockModule(),
@@ -53,6 +56,7 @@ describe("CategoryDetailService", () => {
       addGroupBy: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
       addOrderBy: jest.fn().mockReturnThis(),
+      setParameter: jest.fn().mockReturnThis(),
       limit: jest.fn().mockReturnThis(),
       getRawOne: jest.fn().mockResolvedValue(undefined),
       getRawMany: jest.fn().mockResolvedValue([]),
@@ -87,12 +91,12 @@ describe("CategoryDetailService", () => {
         queryBuilder({
           getRawMany: jest.fn().mockResolvedValue(options.accountRows ?? []),
         }),
-      )
-      .mockImplementationOnce(() =>
-        queryBuilder({
-          getRawOne: jest.fn().mockResolvedValue(options.largestRow),
-        }),
       );
+    txManager.createQueryBuilder.mockImplementationOnce(() =>
+      queryBuilder({
+        getRawOne: jest.fn().mockResolvedValue(options.largestRow),
+      }),
+    );
     // getAllCategoryIdsWithChildren reads every category of the user.
     categoryRepository.find.mockResolvedValue(
       options.allCategories ?? [
@@ -111,8 +115,14 @@ describe("CategoryDetailService", () => {
     payeeRepository = { find: jest.fn().mockResolvedValue([]) };
 
     const { manager, dataSource } = createScopedDbMocks([
+      [Currency, currencyPlacesRepoMock({ BTC: 8 })],
       [Category, categoryRepository],
       [Payee, payeeRepository],
+      // The reader reports in CAD, the fixtures' fiat currency.
+      [
+        UserPreference,
+        { findOne: jest.fn().mockResolvedValue({ defaultCurrency: "CAD" }) },
+      ],
     ]);
     txManager = manager;
     mockDataSource = dataSource;
@@ -222,6 +232,8 @@ describe("CategoryDetailService", () => {
         transactionCount: 37,
         total: -1234.5679,
         lastTransactionDate: "2026-06-30",
+        convertedCurrency: "CAD",
+        convertedTotal: -1234.5679,
       },
       {
         accountId: "acct-2",
@@ -231,8 +243,148 @@ describe("CategoryDetailService", () => {
         transactionCount: 4,
         total: -89.5,
         lastTransactionDate: null,
+        convertedCurrency: "CAD",
+        convertedTotal: -89.5,
       },
     ]);
+  });
+
+  it("keeps a BTC account's total and largest row at its eight places (INV-MONEY-001)", async () => {
+    txManager.query.mockResolvedValue([
+      {
+        from_currency: "BTC",
+        to_currency: "CAD",
+        rate: "100000",
+        rate_date: "2026-06-29",
+      },
+    ]);
+    given({
+      accountRows: [
+        // A foreign account's rows come split by day and own rate.
+        {
+          accountId: "acct-btc",
+          accountName: "Wallet",
+          accountType: "CRYPTO",
+          currencyCode: "BTC",
+          transactionCount: "2",
+          total: "-0.00045710",
+          lastTransactionDate: "2026-06-30",
+          fx_day: "2026-06-30",
+          fx_original_currency: null,
+          fx_exchange_rate: "1",
+        },
+        {
+          accountId: "acct-1",
+          accountName: "Chequing",
+          accountType: "CHEQUING",
+          currencyCode: "CAD",
+          transactionCount: "1",
+          total: "-12.34567",
+          lastTransactionDate: "2026-06-30",
+        },
+      ],
+      largestRow: {
+        id: "tx-btc",
+        transactionDate: "2026-06-30",
+        amount: "-0.00043210",
+        currencyCode: "BTC",
+        description: undefined,
+        payeeName: undefined,
+        accountId: "acct-btc",
+        accountName: "Wallet",
+      },
+    });
+
+    const detail = await service.getDetail(USER_ID, CATEGORY_ID);
+
+    // The coin keeps its satoshis; the fiat figure still rounds at four.
+    expect(detail.accounts.map((a) => a.total)).toEqual([-0.0004571, -12.3457]);
+    // Into CAD at the coin's rate on its own day (issue #2106).
+    expect(detail.accounts.map((a) => a.convertedTotal)).toEqual([
+      -45.71, -12.3457,
+    ]);
+    expect(detail.largestTransaction?.amount).toBe(-0.0004321);
+  });
+
+  it("folds a foreign account's day parts back into one row from the one read (issue #2130)", async () => {
+    txManager.query.mockResolvedValue([
+      {
+        from_currency: "CAD",
+        to_currency: "USD",
+        rate: "0.8",
+        rate_date: "2026-01-10",
+      },
+      {
+        from_currency: "CAD",
+        to_currency: "USD",
+        rate: "0.7142857143",
+        rate_date: "2026-06-10",
+      },
+    ]);
+    const part = (
+      day: string,
+      count: string,
+      total: string,
+      own?: { currency: string; rate: string },
+    ) => ({
+      accountId: "acct-us",
+      accountName: "US Card",
+      accountType: "CREDIT_CARD",
+      currencyCode: "USD",
+      transactionCount: count,
+      total,
+      lastTransactionDate: day,
+      fx_day: day,
+      fx_original_currency: own?.currency ?? null,
+      fx_exchange_rate: own?.rate ?? "1",
+    });
+    given({
+      accountRows: [
+        {
+          accountId: "acct-1",
+          accountName: "Chequing",
+          accountType: "CHEQUING",
+          currencyCode: "CAD",
+          transactionCount: "2",
+          total: "-10",
+          lastTransactionDate: "2026-03-01",
+          fx_day: null,
+          fx_original_currency: null,
+          fx_exchange_rate: null,
+        },
+        part("2026-01-12", "1", "-100"),
+        part("2026-06-12", "1", "-100"),
+        // Settled into CAD at its own 1.30 (0.7692307692 USD per CAD).
+        part("2026-06-12", "1", "-100", {
+          currency: "CAD",
+          rate: "0.7692307692",
+        }),
+      ],
+    });
+
+    const detail = await service.getDetail(USER_ID, CATEGORY_ID);
+
+    // 100 at 1.25, 100 at 1.40 and 100 at its own 1.30; most rows first.
+    expect(detail.accounts).toEqual([
+      {
+        accountId: "acct-us",
+        accountName: "US Card",
+        accountType: "CREDIT_CARD",
+        currencyCode: "USD",
+        transactionCount: 3,
+        total: -300,
+        lastTransactionDate: "2026-06-12",
+        convertedCurrency: "CAD",
+        convertedTotal: -395,
+      },
+      expect.objectContaining({
+        accountId: "acct-1",
+        transactionCount: 2,
+        convertedTotal: -10,
+      }),
+    ]);
+    // Stats, breakdown and largest transaction: no second breakdown read.
+    expect(txManager.createQueryBuilder).toHaveBeenCalledTimes(3);
   });
 
   it("maps the largest transaction and defaults its optional fields to null", async () => {
@@ -290,5 +442,58 @@ describe("CategoryDetailService", () => {
     await service.getDetail(USER_ID, CATEGORY_ID);
 
     expect(mockDataSource.transaction).toHaveBeenCalledTimes(1);
+  });
+
+  describe("an account scope (an acting delegate's READ grants)", () => {
+    /** Queue three builders and hand them back so a test can read their clauses. */
+    function capturedBuilders() {
+      // Replaces the builders `given` queued, keeping its other stubs.
+      txManager.createQueryBuilder.mockReset();
+      const builders = [queryBuilder(), queryBuilder(), queryBuilder()];
+      for (const builder of builders) {
+        txManager.createQueryBuilder.mockImplementationOnce(() => builder);
+      }
+      return builders;
+    }
+
+    it("narrows every transaction figure to the scoped accounts", async () => {
+      given({});
+      const builders = capturedBuilders();
+
+      await service.getDetail(USER_ID, CATEGORY_ID, ["acc-a", "acc-b"]);
+
+      for (const builder of builders) {
+        expect(builder.andWhere).toHaveBeenCalledWith(
+          "t.account_id IN (:...delegateScopeAccountIds)",
+          { delegateScopeAccountIds: ["acc-a", "acc-b"] },
+        );
+      }
+    });
+
+    it("matches no transaction for an empty scope, never the whole ledger", async () => {
+      given({});
+      const builders = capturedBuilders();
+
+      await service.getDetail(USER_ID, CATEGORY_ID, []);
+
+      for (const builder of builders) {
+        expect(builder.andWhere).toHaveBeenCalledWith("1 = 0");
+      }
+    });
+
+    it("leaves the owner's (unscoped) figures across every account", async () => {
+      given({});
+      const builders = capturedBuilders();
+
+      await service.getDetail(USER_ID, CATEGORY_ID);
+
+      for (const builder of builders) {
+        const clauses = builder.andWhere.mock.calls.map((call) => call[0]);
+        expect(clauses).not.toContain(
+          "t.account_id IN (:...delegateScopeAccountIds)",
+        );
+        expect(clauses).not.toContain("1 = 0");
+      }
+    });
   });
 });

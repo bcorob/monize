@@ -4,10 +4,15 @@ import { useState } from 'react';
 import toast from 'react-hot-toast';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
+import { PushDevicesPanel } from './PushDevicesPanel';
+import { PushDiagnostics } from './PushDiagnostics';
+import { NotificationPreferencesMatrix } from './NotificationPreferencesMatrix';
+import { PortfolioAlertControl } from './PortfolioAlertControl';
 import { userSettingsApi } from '@/lib/user-settings';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import { UserPreferences } from '@/types/auth';
 import { getErrorMessage } from '@/lib/errors';
+import { TOUR_ANCHORS, tourAnchor } from '@/lib/tours/anchors';
 
 interface NotificationsSectionProps {
   initialNotificationEmail: boolean;
@@ -88,9 +93,15 @@ export function NotificationsSection({
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-700/50 rounded-lg p-6 mb-6">
+    <div
+      {...tourAnchor(TOUR_ANCHORS.settingsNotifications)}
+      className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-700/50 rounded-lg p-6 mb-6"
+    >
       <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">{t('heading')}</h2>
 
+      {/* Email and browser push are separate channels, so the SMTP gate below
+          covers only the email half. Nesting push inside it hid the whole push
+          surface on every deployment that never configured a mail server. */}
       {!smtpConfigured ? (
         <p className="text-sm text-gray-500 dark:text-gray-400">
           {t('smtpNotConfigured')}
@@ -124,10 +135,10 @@ export function NotificationsSection({
           {notificationEmail && (
             <>
               <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
-                <h3 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100 mb-1">
                   {t('budgetNotificationsHeading')}
                 </h3>
-                <div className="space-y-3">
+                <div className="mt-2 space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-sm text-gray-700 dark:text-gray-300">{t('weeklyBudgetDigestTitle')}</p>
@@ -176,7 +187,10 @@ export function NotificationsSection({
             </>
           )}
 
-          <div className="border-t border-gray-200 dark:border-gray-700 pt-4">
+          {/* `pb-4` mirrors the `pt-4` every block below carries: without it the
+              next section's rule sits flush against the Send Test Email button,
+              which reads as a border on the button rather than a divider. */}
+          <div className="border-t border-gray-200 pt-4 pb-4 dark:border-gray-700">
             <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
               {t('sendTestEmailDescription')}
             </p>
@@ -191,6 +205,19 @@ export function NotificationsSection({
           </div>
         </div>
       )}
+
+      {/* The channel matrix spans email AND push, so it renders independent of
+          the email master switch: push preferences must be reachable when email
+          is off or unconfigured (delivery isolation). Its email columns gate on
+          `emailAvailable`; its push column gates on a live device. */}
+      <NotificationPreferencesMatrix
+        emailAvailable={smtpConfigured && notificationEmail}
+      />
+
+      <PortfolioAlertControl />
+
+      <PushDevicesPanel />
+      <PushDiagnostics />
     </div>
   );
 }

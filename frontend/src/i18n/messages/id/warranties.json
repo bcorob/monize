@@ -1,0 +1,321 @@
+{
+  "page": {
+    "title": "Garansi",
+    "subtitle": "Apa yang Anda beli, kapan garansinya berakhir, dan siapa penjualnya",
+    "newButton": "Tambah garansi",
+    "exportButton": "Ekspor CSV",
+    "importButton": "Impor CSV",
+    "loading": "Memuat garansi...",
+    "loadFailed": "Garansi Anda tidak dapat dimuat.",
+    "retry": "Coba lagi",
+    "summary": {
+      "active": "Aktif",
+      "expiring": "Segera berakhir",
+      "expired": "Berakhir",
+      "lifetime": "Seumur hidup",
+      "unavailable": "Tidak dimuat",
+      "expiringHint": "Dalam {days} hari"
+    },
+    "filters": {
+      "label": "Filter menurut status",
+      "all": "Semua",
+      "expiring": "Akan berakhir",
+      "active": "Aktif",
+      "expired": "Berakhir",
+      "lifetime": "Seumur hidup",
+      "counted": {
+        "all": "Semua ({count})",
+        "expiring": "Akan berakhir ({count})",
+        "active": "Aktif ({count})",
+        "expired": "Berakhir ({count})",
+        "lifetime": "Seumur hidup ({count})"
+      }
+    },
+    "search": {
+      "label": "Cari garansi",
+      "placeholder": "Cari nama, penjual, model, atau nomor seri"
+    },
+    "archivedToggle": "Tampilkan yang diarsipkan",
+    "transactionChip": {
+      "label": "Garansi untuk satu transaksi",
+      "clear": "Tampilkan semua garansi"
+    },
+    "pager": {
+      "itemName": "garansi",
+      "total": "{count, plural, other {{total} garansi}}"
+    },
+    "empty": {
+      "title": "Belum ada garansi",
+      "description": "Tambahkan garansi untuk memantau kapan masa berlakunya berakhir.",
+      "filteredTitle": "Tidak ada garansi yang cocok",
+      "filteredDescription": "Coba status lain, atau hapus pencarian.",
+      "archivedTitle": "Tidak ada garansi yang diarsipkan"
+    },
+    "modal": {
+      "newTitle": "Garansi baru",
+      "editTitle": "Edit garansi"
+    },
+    "delete": {
+      "title": "Hapus garansi",
+      "message": "Hapus \"{name}\"? Klaim dan dokumennya ikut terhapus, dan tindakan ini tidak dapat dibatalkan."
+    },
+    "toasts": {
+      "created": "Garansi ditambahkan",
+      "updated": "Garansi diperbarui",
+      "deleted": "Garansi dihapus",
+      "archived": "Garansi diarsipkan",
+      "unarchived": "Garansi dipulihkan",
+      "createFailed": "Garansi tidak dapat ditambahkan",
+      "updateFailed": "Garansi tidak dapat diperbarui",
+      "deleteFailed": "Garansi tidak dapat dihapus",
+      "archiveFailed": "Garansi tidak dapat diarsipkan",
+      "unarchiveFailed": "Garansi tidak dapat dipulihkan",
+      "prefillFailed": "Transaksi tersebut tidak dapat dimuat, jadi garansi dimulai dalam keadaan kosong",
+      "exported": "{count, plural, other {{shown} garansi diekspor}}",
+      "exportFailed": "Garansi tidak dapat diekspor"
+    }
+  },
+  "status": {
+    "lifetime": "Seumur hidup",
+    "active": "Aktif",
+    "expiring": "Segera berakhir",
+    "expired": "Berakhir"
+  },
+  "daysLeft": {
+    "left": "{count, plural, other {{days} hari lagi}}",
+    "today": "Berakhir hari ini",
+    "ago": "{count, plural, other {Berakhir {days} hari lalu}}",
+    "leftYears": "{yearsCount, plural, other {{years} tahun}}, {daysCount, plural, other {{days} hari}} lagi",
+    "agoYears": "Berakhir {yearsCount, plural, other {{years} tahun}}, {daysCount, plural, other {{days} hari}} lalu"
+  },
+  "kind": {
+    "manufacturer": "Produsen",
+    "extended": "Diperpanjang",
+    "store": "Toko",
+    "other": "Lainnya"
+  },
+  "list": {
+    "columns": {
+      "name": "Nama",
+      "status": "Status",
+      "expiresOn": "Berakhir",
+      "purchaseDate": "Dibeli",
+      "price": "Harga",
+      "documents": "Dokumen",
+      "claims": "Klaim terbuka",
+      "actions": "Tindakan"
+    },
+    "sortLabel": "Urutkan menurut",
+    "lifetime": "Seumur hidup",
+    "noPrice": "Tidak ada",
+    "actions": {
+      "archive": "Arsipkan",
+      "unarchive": "Batalkan arsip"
+    }
+  },
+  "form": {
+    "nameLabel": "Nama",
+    "namePlaceholder": "Apa yang Anda beli",
+    "vendorLabel": "Penjual",
+    "vendorPlaceholder": "Pilih atau ketik penjual",
+    "modelLabel": "Nomor model",
+    "serialsLabel": "Nomor seri",
+    "serialLabel": "Nomor seri {index}",
+    "addSerial": "Tambah nomor seri",
+    "removeSerial": "Hapus nomor seri {index}",
+    "serialsLimit": "Hingga {max} nomor seri",
+    "kindLabel": "Jenis garansi",
+    "purchaseDateLabel": "Tanggal pembelian",
+    "expiry": {
+      "label": "Garansi berakhir",
+      "date": "Pada tanggal tertentu",
+      "duration": "Setelah jangka waktu",
+      "lifetime": "Tidak pernah",
+      "expiresOnLabel": "Berakhir pada",
+      "years": "Tahun",
+      "months": "Bulan",
+      "days": "Hari",
+      "computed": "Berakhir pada {date}",
+      "needsPurchaseDate": "Masukkan tanggal pembelian untuk menghitung kapan garansi berakhir",
+      "lifetimeHint": "Garansi seumur hidup tidak memiliki tanggal akhir dan pengingat"
+    },
+    "priceLabel": "Harga pembelian",
+    "productUrlLabel": "Halaman produk",
+    "productUrlPlaceholder": "https://",
+    "notesLabel": "Catatan",
+    "submitCreate": "Tambah garansi",
+    "submitUpdate": "Simpan perubahan"
+  },
+  "validation": {
+    "nameRequired": "Masukkan nama",
+    "nameTooLong": "Gunakan maksimal 200 karakter",
+    "vendorTooLong": "Gunakan maksimal 200 karakter",
+    "modelTooLong": "Gunakan maksimal 100 karakter",
+    "serialTooLong": "Gunakan maksimal 100 karakter untuk setiap nomor seri",
+    "serialsTooMany": "Hingga 10 nomor seri",
+    "purchaseDateRequired": "Masukkan tanggal pembelian",
+    "expiresOnRequired": "Masukkan tanggal berakhirnya garansi",
+    "expiresBeforePurchase": "Garansi tidak dapat berakhir sebelum tanggal pembelian",
+    "durationRequired": "Masukkan jangka waktu lebih dari nol",
+    "priceNegative": "Harga tidak boleh negatif",
+    "priceNeedsCurrency": "Pilih mata uang harga",
+    "urlInvalid": "Masukkan alamat web yang diawali http:// atau https://",
+    "urlTooLong": "Gunakan maksimal 500 karakter",
+    "notesTooLong": "Gunakan maksimal 2000 karakter"
+  },
+  "detail": {
+    "back": "Kembali ke Garansi",
+    "loading": "Memuat garansi...",
+    "loadFailed": "Garansi ini tidak dapat dimuat.",
+    "notFound": "Garansi ini tidak ditemukan.",
+    "retry": "Coba lagi",
+    "archivedBadge": "Diarsipkan",
+    "switcher": {
+      "trigger": "Pindah garansi",
+      "placeholder": "Saring garansi...",
+      "noMatches": "Tidak ada garansi yang cocok"
+    },
+    "summary": {
+      "expires": "Berakhir",
+      "purchased": "Dibeli",
+      "price": "Harga pembelian",
+      "openClaims": "Klaim terbuka"
+    },
+    "card": {
+      "title": "Detail",
+      "kind": "Jenis garansi",
+      "vendor": "Penjual",
+      "serialNumbers": "Nomor seri",
+      "model": "Nomor model",
+      "productUrl": "Halaman produk",
+      "notes": "Catatan",
+      "none": "Tidak ada",
+      "lifetime": "Seumur hidup"
+    },
+    "transaction": {
+      "title": "Pembelian",
+      "edit": "Edit pembelian tanggal {date}: {payee}, {amount}",
+      "viewInRegister": "Lihat di register",
+      "loadFailed": "Gagal memuat pembelian",
+      "dateInAccount": "{date} · {account}",
+      "none": "Tidak ada transaksi yang ditautkan",
+      "unreadable": "Pembelian ini ada di akun yang tidak dapat Anda baca.",
+      "noPayee": "Tanpa penerima"
+    }
+  },
+  "documents": {
+    "title": "Dokumen",
+    "empty": "Belum ada dokumen",
+    "pendingHint": "Dokumen akan diunggah saat Anda menyimpan garansi.",
+    "tooMany": "Maksimum {max} dokumen per garansi",
+    "uploadFailedAfterCreate": "Garansi ditambahkan, tetapi {count, plural, one {dokumen ini} other {dokumen-dokumen ini}} tidak dapat diunggah: {names}. Tambahkan dari bagian Dokumen garansi.",
+    "kindFor": "Jenis dokumen untuk {name}",
+    "kindUpdateFailed": "Gagal mengubah jenis dokumen",
+    "addExisting": "Tambahkan yang Ada",
+    "addExistingTitle": "Tambahkan Dokumen yang Ada",
+    "addExistingHelp": "Pilih berkas yang sudah Anda unggah ke transaksi atau garansi lain. Salinannya ditambahkan ke garansi ini; aslinya tetap di tempatnya.",
+    "addExistingFrom": "Lokasi dokumen saat ini",
+    "fromTransaction": "Sebuah transaksi",
+    "fromWarranty": "Garansi lain",
+    "addExistingDocument": "Dokumen",
+    "addExistingKind": "Jenis dokumen pada garansi ini",
+    "addExistingNone": "Tidak ada dokumen di sini untuk ditambahkan.",
+    "addExistingLoadFailed": "Tidak dapat memuat dokumen. Silakan coba lagi.",
+    "addExistingFailed": "Gagal menambahkan dokumen",
+    "addExistingSubmit": "Tambahkan Dokumen",
+    "choose": "Pilih…",
+    "preview": "Pratinjau",
+    "kinds": {
+      "receipt": "Struk",
+      "manual": "Buku panduan",
+      "photo": "Foto",
+      "warranty": "Garansi",
+      "other": "Lainnya"
+    }
+  },
+  "claims": {
+    "title": "Klaim",
+    "add": "Tambah klaim",
+    "empty": "Belum ada klaim",
+    "loading": "Memuat klaim...",
+    "loadFailed": "Klaim tidak dapat dimuat.",
+    "retry": "Coba lagi",
+    "statuses": {
+      "open": "Terbuka",
+      "approved": "Disetujui",
+      "denied": "Ditolak",
+      "resolved": "Selesai"
+    },
+    "claimedOn": "Diklaim {date}",
+    "resolvedOnLine": "Ditutup {date}",
+    "resolutionLine": "Penyelesaian: {text}",
+    "modal": {
+      "newTitle": "Klaim baru",
+      "editTitle": "Edit klaim"
+    },
+    "form": {
+      "claimDateLabel": "Tanggal klaim",
+      "statusLabel": "Status",
+      "descriptionLabel": "Deskripsi",
+      "resolutionLabel": "Penyelesaian",
+      "resolvedOnLabel": "Ditutup pada",
+      "resolvedOnHint": "Hanya untuk klaim yang selesai atau ditolak",
+      "submitCreate": "Tambah klaim",
+      "submitUpdate": "Simpan perubahan"
+    },
+    "validation": {
+      "claimDateRequired": "Masukkan tanggal klaim",
+      "resolvedOnBeforeClaim": "Klaim tidak dapat ditutup sebelum diajukan",
+      "textTooLong": "Gunakan maksimal 2000 karakter"
+    },
+    "delete": {
+      "title": "Hapus klaim",
+      "message": "Hapus klaim yang diajukan pada {date}? Tindakan ini tidak dapat dibatalkan."
+    },
+    "toasts": {
+      "created": "Klaim ditambahkan",
+      "updated": "Klaim diperbarui",
+      "deleted": "Klaim dihapus",
+      "createFailed": "Klaim tidak dapat ditambahkan",
+      "updateFailed": "Klaim tidak dapat diperbarui",
+      "deleteFailed": "Klaim tidak dapat dihapus"
+    }
+  },
+  "import": {
+    "title": "Impor garansi dari CSV",
+    "description": "File CSV dengan kolom Warracker, misalnya hasil ekspor dari Warracker atau dari halaman ini. Anda melihat setiap baris sebelum ada yang disimpan.",
+    "fileLabel": "File CSV",
+    "chooseFile": "Pilih file",
+    "noFileChosen": "Belum ada file yang dipilih",
+    "checking": "Memeriksa file...",
+    "previewFailed": "File tidak dapat diperiksa",
+    "summary": "{count, plural, other {{valid} dari {total} baris dapat diimpor.}}",
+    "invalidSummary": "{count, plural, other {{shown} baris tidak valid dan tidak dapat diimpor seperti apa adanya.}}",
+    "skipInvalid": "Lewati baris yang tidak valid dan impor sisanya",
+    "nothingToImport": "Perbaiki file lalu pilih lagi.",
+    "skippedColumns": "Kolom yang tidak diimpor:",
+    "columns": {
+      "line": "Baris",
+      "name": "Nama",
+      "expires": "Berakhir",
+      "outcome": "Hasil",
+      "problems": "Masalah"
+    },
+    "outcome": {
+      "valid": "Siap",
+      "invalid": "Tidak valid",
+      "created": "Diimpor"
+    },
+    "unnamed": "(tanpa nama)",
+    "noExpiry": "Belum diatur",
+    "lifetime": "Seumur hidup",
+    "errorItem": "Kesalahan: {message}",
+    "warningItem": "Catatan: {message}",
+    "submit": "Impor",
+    "submitCount": "{count, plural, other {Impor {shown} garansi}}",
+    "toasts": {
+      "imported": "{count, plural, other {{shown} garansi diimpor}}",
+      "failed": "Garansi tidak dapat diimpor"
+    }
+  }
+}

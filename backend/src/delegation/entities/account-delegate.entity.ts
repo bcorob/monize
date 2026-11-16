@@ -83,6 +83,12 @@ export class AccountDelegate {
   @Column({ name: "ai_can_read", type: "boolean", default: false })
   aiCanRead: boolean;
 
+  // The sixth section (docs/specs/warranty-tracker.md decision 9):
+  // warranties, their documents and their claims. Read only; the linked
+  // purchase additionally needs the per-account READ grant (WTY-007).
+  @Column({ name: "warranties_can_read", type: "boolean", default: false })
+  warrantiesCanRead: boolean;
+
   @ManyToOne(() => User)
   @JoinColumn({ name: "owner_user_id" })
   owner: User;

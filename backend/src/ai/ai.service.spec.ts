@@ -9,6 +9,7 @@ import { AiProviderFactory } from "./ai-provider.factory";
 import { AiUsageService } from "./ai-usage.service";
 import { AiRelayService, RelayTimeoutError } from "./relay/ai-relay.service";
 import { createScopedDbMocks } from "../test-helpers/scoped-db-testing";
+import { User } from "../users/entities/user.entity";
 
 jest.mock("../common/db/scoped-db", () =>
   jest.requireActual("../test-helpers/scoped-db-testing").scopedDbMockModule(),
@@ -18,6 +19,7 @@ describe("AiService", () => {
   let service: AiService;
   let scopedManager: Record<string, jest.Mock>;
   let mockConfigRepository: Record<string, jest.Mock>;
+  let mockUserRepository: Record<string, jest.Mock>;
   let mockEncryptionService: Partial<
     Record<keyof EncryptionService, jest.Mock>
   >;
@@ -110,8 +112,15 @@ describe("AiService", () => {
       enqueuePrompt: jest.fn().mockResolvedValue({ text: "Relay answer" }),
     };
 
+    // The owner is an admin unless a test says otherwise, which is the
+    // entitlement every self-hosted-provider test below was written under.
+    mockUserRepository = {
+      findOne: jest.fn().mockResolvedValue({ id: userId, role: "admin" }),
+    };
+
     const scoped = createScopedDbMocks([
       [AiProviderConfig, mockConfigRepository],
+      [User, mockUserRepository],
     ]);
     scopedManager = scoped.manager as unknown as Record<string, jest.Mock>;
     scopedManager.query.mockResolvedValue([{ id: userId }]);
@@ -247,7 +256,7 @@ describe("AiService", () => {
       expect(mockConfigRepository.save).toHaveBeenCalled();
     });
 
-    it("allows private/local baseUrl for self-hosted providers", async () => {
+    it("allows private/local baseUrl for an admin's self-hosted provider", async () => {
       await service.createConfig(userId, {
         provider: "ollama",
         baseUrl: "http://192.168.1.100:11434",
@@ -715,6 +724,28 @@ describe("AiService", () => {
       ).rejects.toThrow(BadRequestException);
     });
 
+    it("keeps the relay out of the fall-through when asked to", async () => {
+      mockConfigRepository.find.mockResolvedValue([
+        makeConfig({ id: "c1", provider: "anthropic" }),
+        makeConfig({ id: "c2", provider: "mcp_relay" }),
+      ]);
+      mockProviderFactory.createProvider!.mockReturnValue({
+        complete: jest.fn().mockRejectedValue(new Error("API error")),
+      });
+
+      await expect(
+        service.complete(
+          userId,
+          { messages: [], maxTokens: 10 } as never,
+          "dashboard_trivia",
+          {
+            skipRelay: true,
+          },
+        ),
+      ).rejects.toThrow();
+      expect(mockRelayService.enqueuePrompt).not.toHaveBeenCalled();
+    });
+
     it("throws with all errors when all providers fail", async () => {
       const config1 = makeConfig({ id: "c1", provider: "anthropic" });
       const config2 = makeConfig({ id: "c2", provider: "openai" });
@@ -740,7 +771,7 @@ describe("AiService", () => {
         model: null,
       });
       mockConfigRepository.find.mockResolvedValue([relayConfig]);
-      mockRelayService.getStatus!.mockReturnValue({
+      mockRelayService.getStatus!.mockResolvedValue({
         state: "listening",
         queued: 0,
       });
@@ -787,7 +818,7 @@ describe("AiService", () => {
         model: null,
       });
       mockConfigRepository.find.mockResolvedValue([relayConfig]);
-      mockRelayService.getStatus!.mockReturnValue({
+      mockRelayService.getStatus!.mockResolvedValue({
         state: "listening",
         queued: 0,
       });
@@ -827,6 +858,7 @@ describe("AiService", () => {
       expect(mockRelayService.enqueuePrompt).not.toHaveBeenCalled();
       expect(mockProviderFactory.createProvider).toHaveBeenCalledWith(
         anthropicConfig,
+        "public-only",
       );
       // The relay failure is logged as a provider error before the fallback.
       expect(mockUsageService.logUsage).toHaveBeenCalledWith(
@@ -861,7 +893,7 @@ describe("AiService", () => {
         apiKeyEnc: null,
       });
       mockConfigRepository.find.mockResolvedValue([relayConfig]);
-      mockRelayService.getStatus!.mockReturnValue({
+      mockRelayService.getStatus!.mockResolvedValue({
         state: "listening",
         queued: 0,
       });
@@ -890,7 +922,7 @@ describe("AiService", () => {
         relayConfig,
         anthropicConfig,
       ]);
-      mockRelayService.getStatus!.mockReturnValue({
+      mockRelayService.getStatus!.mockResolvedValue({
         state: "listening",
         queued: 0,
       });
@@ -907,6 +939,7 @@ describe("AiService", () => {
       expect(result.content).toBe("Response text");
       expect(mockProviderFactory.createProvider).toHaveBeenCalledWith(
         anthropicConfig,
+        "public-only",
       );
     });
 
@@ -929,6 +962,262 @@ describe("AiService", () => {
       expect(mockEncryptionService.encrypt).toHaveBeenCalledWith(
         "sk-default-key",
       );
+    });
+  });
+
+  describe("completeWithWebSearch()", () => {
+    const request = {
+      systemPrompt: "Find contact details.",
+      messages: [{ role: "user" as const, content: 'Business name: "Acme"' }],
+    };
+    const search = { maxUses: 3 };
+
+    it("uses the provider's own web search when it has one, in JSON mode", async () => {
+      mockConfigRepository.find.mockResolvedValue([makeConfig()]);
+      const completeWithWebSearch = jest.fn().mockResolvedValue({
+        content: '{"website":"https://acme.example"}',
+        usage: { inputTokens: 40, outputTokens: 12 },
+        model: "claude-sonnet-4-6",
+        provider: "anthropic",
+        searched: true,
+        searchCount: 1,
+      });
+      const complete = jest.fn();
+      mockProviderFactory.createProvider!.mockReturnValue({
+        supportsWebSearch: true,
+        completeWithWebSearch,
+        complete,
+      });
+
+      const result = await service.completeWithWebSearch(
+        userId,
+        request,
+        search,
+        "payee_lookup",
+      );
+
+      expect(completeWithWebSearch).toHaveBeenCalledWith(
+        { ...request, responseFormat: "json" },
+        search,
+      );
+      expect(complete).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ searched: true, searchCount: 1 });
+      expect(mockUsageService.logUsage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          userId,
+          provider: "anthropic",
+          feature: "payee_lookup",
+          inputTokens: 40,
+          outputTokens: 12,
+        }),
+      );
+    });
+
+    it("answers from model knowledge through complete() for a provider without search", async () => {
+      mockConfigRepository.find.mockResolvedValue([
+        makeConfig({ provider: "ollama" }),
+      ]);
+      const complete = jest.fn().mockResolvedValue({
+        content: "{}",
+        usage: { inputTokens: 5, outputTokens: 2 },
+        model: "llama3",
+        provider: "ollama",
+      });
+      mockProviderFactory.createProvider!.mockReturnValue({
+        supportsWebSearch: false,
+        complete,
+      });
+
+      const result = await service.completeWithWebSearch(
+        userId,
+        request,
+        search,
+        "payee_lookup",
+      );
+
+      expect(complete).toHaveBeenCalledWith({
+        ...request,
+        responseFormat: "json",
+      });
+      expect(result).toEqual({
+        content: "{}",
+        usage: { inputTokens: 5, outputTokens: 2 },
+        model: "llama3",
+        provider: "ollama",
+        searched: false,
+        searchCount: 0,
+      });
+    });
+
+    it("routes the relay through the agent, asking it to search, and marks the answer viaRelay", async () => {
+      mockConfigRepository.find.mockResolvedValue([
+        makeConfig({ provider: "mcp_relay", apiKeyEnc: null, model: null }),
+      ]);
+      mockRelayService.getStatus!.mockResolvedValue({
+        state: "listening",
+        queued: 0,
+      });
+      mockRelayService.enqueuePrompt!.mockResolvedValue({
+        text: '{"website":"https://acme.example"}',
+      });
+
+      const result = await service.completeWithWebSearch(
+        userId,
+        request,
+        search,
+        "payee_lookup",
+      );
+
+      expect(mockProviderFactory.createProvider).not.toHaveBeenCalled();
+      const prompt = mockRelayService.enqueuePrompt!.mock.calls[0][1] as string;
+      expect(prompt).toContain("Find contact details.");
+      expect(prompt).toContain("web search tool");
+      expect(prompt).toContain("at most 3 searches");
+      // responseFormat "json" is forced so the relay prompt carries the
+      // raw-JSON instruction the parser depends on.
+      expect(prompt).toContain("Respond with ONLY the JSON");
+      expect(result).toEqual({
+        content: '{"website":"https://acme.example"}',
+        usage: { inputTokens: 0, outputTokens: 0 },
+        model: "relay-agent",
+        provider: "mcp_relay",
+        searched: false,
+        searchCount: 0,
+        viaRelay: true,
+      });
+      expect(mockUsageService.logUsage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider: "mcp_relay",
+          feature: "payee_lookup",
+        }),
+      );
+    });
+
+    it("falls through to the next provider in priority order and logs the failure", async () => {
+      mockConfigRepository.find.mockResolvedValue([
+        makeConfig({ id: "c1", priority: 0, provider: "anthropic" }),
+        makeConfig({ id: "c2", priority: 1, provider: "ollama" }),
+      ]);
+      let calls = 0;
+      mockProviderFactory.createProvider!.mockImplementation(() => {
+        calls += 1;
+        if (calls === 1) {
+          return {
+            supportsWebSearch: true,
+            completeWithWebSearch: jest
+              .fn()
+              .mockRejectedValue(new Error("Rate limited")),
+          };
+        }
+        return {
+          supportsWebSearch: false,
+          complete: jest.fn().mockResolvedValue({
+            content: "{}",
+            usage: { inputTokens: 1, outputTokens: 1 },
+            model: "llama3",
+            provider: "ollama",
+          }),
+        };
+      });
+
+      const result = await service.completeWithWebSearch(
+        userId,
+        request,
+        search,
+        "payee_lookup",
+      );
+
+      expect(result.provider).toBe("ollama");
+      expect(mockUsageService.logUsage).toHaveBeenCalledTimes(2);
+      expect(mockUsageService.logUsage).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          provider: "anthropic",
+          feature: "payee_lookup",
+          error: "Rate limited",
+        }),
+      );
+    });
+
+    it("surfaces the relay's own error for a relay-only setup", async () => {
+      mockConfigRepository.find.mockResolvedValue([
+        makeConfig({ provider: "mcp_relay", apiKeyEnc: null, model: null }),
+      ]);
+      mockRelayService.getStatus!.mockResolvedValue({
+        state: "offline",
+        queued: 0,
+      });
+
+      await expect(
+        service.completeWithWebSearch(userId, request, search, "payee_lookup"),
+      ).rejects.toThrow("relay agent is not connected");
+    });
+
+    it("throws when no providers are configured", async () => {
+      mockConfigRepository.find.mockResolvedValue([]);
+
+      await expect(
+        service.completeWithWebSearch(userId, request, search, "payee_lookup"),
+      ).rejects.toThrow(BadRequestException);
+    });
+  });
+
+  describe("canAnswerNow()", () => {
+    it("is false when no provider is configured", async () => {
+      mockConfigRepository.find.mockResolvedValue([]);
+      await expect(service.canAnswerNow(userId)).resolves.toBe(false);
+      expect(mockRelayService.getStatus).not.toHaveBeenCalled();
+    });
+
+    it("is true for a configured provider that is not the relay, without asking the relay", async () => {
+      mockConfigRepository.find.mockResolvedValue([makeConfig()]);
+      await expect(service.canAnswerNow(userId)).resolves.toBe(true);
+      expect(mockRelayService.getStatus).not.toHaveBeenCalled();
+    });
+
+    it("is true when the system default answers and the user has none of their own", async () => {
+      mockConfigRepository.find.mockResolvedValue([]);
+      mockConfigService.get!.mockImplementation((key: string) => {
+        if (key === "AI_DEFAULT_PROVIDER") return "openai";
+        if (key === "AI_DEFAULT_MODEL") return "gpt-4o";
+        return undefined;
+      });
+      await expect(service.canAnswerNow(userId)).resolves.toBe(true);
+    });
+
+    describe("when the user's top provider is the MCP relay", () => {
+      beforeEach(() => {
+        mockConfigRepository.find.mockResolvedValue([
+          makeConfig({ provider: "mcp_relay", priority: 0 }),
+          makeConfig({ id: "config-2", priority: 1 }),
+        ]);
+      });
+
+      it.each(["listening", "busy"])(
+        "is true while the agent is %s",
+        async (state) => {
+          mockRelayService.getStatus!.mockResolvedValue({ state, queued: 0 });
+          await expect(service.canAnswerNow(userId)).resolves.toBe(true);
+        },
+      );
+
+      it("is false while the agent is offline, whatever other providers exist", async () => {
+        mockRelayService.getStatus!.mockResolvedValue({
+          state: "offline",
+          queued: 0,
+        });
+        await expect(service.canAnswerNow(userId)).resolves.toBe(false);
+      });
+
+      it("is false when the relay's state cannot be read: a failed read is never a yes", async () => {
+        mockRelayService.getStatus!.mockRejectedValue(new Error("db down"));
+        await expect(service.canAnswerNow(userId)).resolves.toBe(false);
+      });
+    });
+
+    it("is false when the status cannot be read", async () => {
+      mockConfigRepository.find.mockRejectedValue(new Error("db down"));
+      await expect(service.canAnswerNow(userId)).resolves.toBe(false);
     });
   });
 

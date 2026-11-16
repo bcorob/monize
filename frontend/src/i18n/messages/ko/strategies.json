@@ -330,14 +330,13 @@
       "fillMissingDone": "{count, plural, other {#개 종목을 추가했습니다}}. 가격을 불러와 첫 시그널을 계산하려면 구성을 저장하세요.",
       "fillMissingError": "추천 종목을 추가할 수 없습니다.",
       "lookbackMonths": "모멘텀 기간(개월)",
-      "taxRatePercent": "세율(%)",
-      "commissionAmount": "거래당 수수료",
+      "taxRatePercent": "세율 (선택 사항)",
+      "commissionAmount": "거래당 수수료 (선택 사항)",
       "rulesSourceUrl": "따르는 규칙의 링크",
       "rulesSourceUrlPlaceholder": "https://example.com/dual-momentum",
       "rulesSourceLabel": "그 링크에 표시할 문구",
       "rulesSourceLabelPlaceholder": "example.com",
       "rulesSourceHint": "둘 다 선택 사항이며 어떤 계산에도 영향을 주지 않습니다. 이 전략이 따르는 규칙이 적힌 곳(기사, 책의 한 쪽, 직접 쓴 메모 등)으로 가는 링크를 보고서 하단에 넣어, 나중에 어떤 버전에 맞춰 설정했는지 확인할 수 있게 합니다.",
-      "optional": "선택 사항",
       "save": "구성 저장",
       "saved": "전략 구성을 저장했습니다.",
       "saveError": "전략 구성을 저장할 수 없습니다.",
@@ -358,7 +357,9 @@
       "NO_POSITION": "전략 계좌에 종목이 없습니다.",
       "FIRST_RUN": "이 전략은 아직 평가되지 않았습니다 – 첫 시그널은 다음 예정 평가 후에 표시됩니다.",
       "STALE_PRICES": "이 리포트의 근거가 되는 일부 가격이 최신이 아니므로 갱신 후 신호가 바뀔 수 있습니다. 가장 오래되었거나 아예 없는 항목:",
-      "CALCULATION_FAILED": "사용 가능한 데이터로는 시그널을 계산할 수 없습니다."
+      "CALCULATION_FAILED": "사용 가능한 데이터로는 시그널을 계산할 수 없습니다.",
+      "SHORT_HISTORY": "현재 기간을 평가하기에 가격 이력이 부족합니다. 이 역할에는 {from}까지의 가격이 필요합니다:",
+      "shortHistoryFix": "이 종목들을 각각 열고 ‘가격 이력 1년 더 추가’를 사용한 다음 이 보고서를 다시 여세요."
     },
     "footer": {
       "pastResults": "과거 성과가 미래 수익을 보장하지는 않습니다.",

@@ -1,0 +1,120 @@
+{
+  "view": {
+    "label": "檢視模式",
+    "table": "表格",
+    "calendar": "日曆"
+  },
+  "grid": {
+    "label": "月份"
+  },
+  "toolbar": {
+    "layers": "圖層"
+  },
+  "layers": {
+    "transactions": "交易",
+    "balances": "餘額",
+    "values": "市值",
+    "dailyChange": "當日變動"
+  },
+  "legend": {
+    "label": "圖例",
+    "scheduled": "已排程"
+  },
+  "chip": {
+    "noPayee": "無收款人",
+    "overdue": "已逾期",
+    "scheduled": "已排程",
+    "noSymbol": "無代號"
+  },
+  "day": {
+    "itemCount": "{count, plural, other {#項}}",
+    "moreChips": "另有 {count} 項",
+    "newTransaction": "在這一天新增交易",
+    "noItems": "這一天沒有任何內容。",
+    "scheduledHint": "已排程。請開啟帳單與存款進行修改。",
+    "newInvestmentTransaction": "在這一天新增投資交易"
+  },
+  "banner": {
+    "title": "部分數字未顯示",
+    "rowCap": "本月有 {count} 筆交易，超過日曆可顯示的 {limit} 筆。請縮小篩選範圍以檢視。",
+    "scheduledUnavailable": "無法載入本月的排程項目。顯示的項目是完整的，但缺少排程項目。",
+    "scheduledTruncated": "這麼遠的未來不會顯示部分排程項目。請靠近今天以查看全部。",
+    "balancesScopeEmpty": "沒有選取任何帳戶，因此沒有可顯示的餘額。請在篩選條件中選擇帳戶。",
+    "balancesMissingRates": "本月部分日期缺少 {pairs} 的匯率，因此這些合計不予顯示。請開啟「貨幣」並更新匯率。",
+    "balancesForecastGaps": "以下排程項目尚無法定價，因此預測餘額不予顯示：{schedules}。",
+    "balancesForecastWithheld": "預測餘額不予顯示：至少有一個排程項目尚無法定價，且未回報原因。",
+    "balancesUnforecastable": "{count, plural, other {選取的 # 個帳戶沒有自己的預測，因此預測合計不予顯示。}}",
+    "valuesUnpriced": "本月部分日期缺少 {securities} 的價格，因此這些市值不予顯示。請在該證券的價格紀錄中新增價格，或更新價格。",
+    "valuesMissingRates": "本月部分日期缺少 {pairs} 的匯率，因此這些市值不予顯示。請開啟「貨幣」並更新匯率。",
+    "notesUnavailable": "無法載入本月的備註。您寫過的備註仍然保存著。"
+  },
+  "errors": {
+    "monthFailed": "無法載入本月。",
+    "balancesFailed": "無法載入本月的餘額。",
+    "valuesFailed": "無法載入本月的投資組合市值。",
+    "movementsFailed": "無法載入本月的每日變動。",
+    "movementDetailFailed": "無法載入這一天的明細。"
+  },
+  "balance": {
+    "actualTitle": "當日結束餘額",
+    "projectedTitle": "預測餘額",
+    "projected": "預測",
+    "projectedHint": "依今天結束時的餘額，以及到這一天為止的所有排程項目推算。",
+    "projectedFromItems": "依今天結束時的餘額，以及到這一天為止的所有排程項目推算，包含下方列出的項目。",
+    "partial": "部分：所選範圍中有 {amount} 可以算出，其餘無法算出，因此不顯示合計。",
+    "missingRates": "該金額所對應日期缺少 {pairs} 的匯率。請開啟「貨幣」並更新匯率。",
+    "unforecastable": "{count, plural, other {選取的 # 個帳戶沒有自己的預測，因此預測合計不予顯示。}}"
+  },
+  "value": {
+    "title": "投資組合市值",
+    "unpriced": "這一天缺少 {securities} 的價格，因此不顯示市值。請在該證券的價格紀錄中新增價格，或更新價格。",
+    "missingRates": "這一天缺少 {pairs} 的匯率，因此不顯示市值。請開啟「貨幣」並更新匯率。"
+  },
+  "change": {
+    "openDetail": "查看這一天的變動明細",
+    "detailTitle": "{date} 的變動",
+    "headline": "市場變動",
+    "headlineValue": "{amount}（{percent}）",
+    "gains": "上漲",
+    "losses": "下跌",
+    "unchanged": "{count, plural, other {# 檔證券收平。}}",
+    "remainder": "現金、配息與交易",
+    "row": "{quantity} 單位，從 {from} 到 {to} {currency}",
+    "reasons": {
+      "notTradingDay": "這一天持有的證券都沒有價格，因此沒有可回報的交易日。",
+      "unpricedHolding": "某個部位在這一天或前一天沒有價格，因此變動未知。",
+      "missingRate": "缺少匯率，因此無法換算變動。",
+      "flowIncomplete": "這一天的存入或提領無法換算，因此無法把變動與其區分開。",
+      "cashIncomplete": "某個現金帳戶在這一天沒有回報餘額，因此當天的價值不完整，變動未知。",
+      "noPriorValue": "沒有更早的市值可用來比較這一天。",
+      "zeroBaseline": "前一天投資組合是空的，因此沒有可計算的百分比。"
+    }
+  },
+  "notes": {
+    "title": "備註",
+    "add": "新增備註",
+    "saveFailed": "備註儲存失敗，請再試一次。",
+    "deleteFailed": "備註刪除失敗，請再試一次。",
+    "deleteTitle": "刪除這則備註？",
+    "deleteMessage": "這一天的備註將被刪除，且無法復原。",
+    "discardTitle": "捨棄這則備註？",
+    "discardMessage": "您正在寫的備註尚未儲存。離開這一天會捨棄它。",
+    "discardConfirm": "捨棄",
+    "startDate": "開始日",
+    "endDate": "結束日",
+    "spanRange": "{start} 至 {end}",
+    "spanCount": "{count, plural, other {# 天}}",
+    "spanBackwards": "結束日不能早於開始日。",
+    "spanTooLong": "一則備註最多可涵蓋 {days} 天。",
+    "spanMissesDay": "所選的日期不包含您正在為其撰寫備註的那一天。",
+    "deleteSpanMessage": "{count, plural, other {此備註涵蓋 # 天，全部都會被清除。此操作無法復原。}}"
+  },
+  "monthPicker": {
+    "title": "跳至其他月份",
+    "typeLabel": "輸入月份或年份",
+    "placeholder": "例如 3月 1998、1998-03、3/1998",
+    "unreadable": "無法將其辨識為月份。請試試年份、月份名稱或 1998-03。",
+    "previousYear": "上一年",
+    "nextYear": "下一年"
+  }
+}

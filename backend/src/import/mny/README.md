@@ -1,7 +1,7 @@
 # Microsoft Money (`.mny`) import
 
 Native TypeScript pipeline for importing complete Microsoft Money files. Design and task list:
-`docs/future-plans/mny-import.md`.
+`docs/specs/mny-import.md`.
 
 ```
 .mny upload -> msisam/msisam-decrypt.ts -> mdb-reader -> msisam/open-mny.ts
@@ -62,6 +62,22 @@ A missing table yields zero rows; a missing column yields the converter's defaul
 reported in `TableAvailability` (`missingTables` / `missingFields`) so the wizard can say "this
 file has no scheduled bills" instead of failing.
 
+### A row in `CAT` is not necessarily a category
+
+`CAT` holds the items of Money's two user-named classifications beside the
+categories, told apart only by `hct` (`CT.hct`; 0 is the category tree). A
+classification's top-level item is `nLevel` 0 with a null parent, exactly like
+the INCOME and EXPENSE roots, so the level filter alone hides it -- but a nested
+item is `nLevel` 1 under it and would import as a top-level category named after
+it. `mapCategories` filters on `isClassificationItem` first, and
+`map/map-classifications.ts` turns the items a row references into tags named
+`<classification>:<item path>` (`Properties:20 Spring Apartment`), the
+`key:value` shape `tag-key-value.util.ts` already groups by. `TRN.lHcls1` /
+`lHcls2` name the item per row, so each side of a transfer and each split leg is
+tagged on its own; a trade's cash leg takes the investment row's item, plus the item
+on Money's own sleeve-side cash row it replaces (`adoptCashLegTags`), when this
+writer creates the leg, and keeps the banking row's own when it adopts one.
+
 ## Inspecting a real file
 
 ```bash
@@ -107,6 +123,26 @@ not the cause -- see `helm/README.md` for the sizing table.
   transaction is open -- and the wizard only polls every 1500 ms, so a report per 500-row chunk
   writes a hundred-odd updates nobody reads.
 
+### A trade is stored in the security's currency
+
+`TRN.amt` is in the account's currency, but Monize reads an investment row's `price` and `total_amount`
+as the security's currency and `exchange_rate` as security -> cash account. For a security quoted in
+another currency than its account, `mapInvestments` converts at import with the file's own rate
+(`resolveExchangeRates` rows through `resolveFxRate`, rate 1 only for equal codes). The cash leg stays
+in the account's currency. Where the file has no rate near the trade date, `MnyMarketRateService`
+looks one up -- Monize's stored history through `resolveStoredRate`, then one provider window per pair
+through `fillRateWindow`, persisted -- and the file is parsed again with it; each trade converted that
+way carries a `crossCurrencyTradeMarketRate` warning. The parser itself never touches the database: it
+reports what it could not convert as `investments.rateGaps`. Both the preview and the job parse through
+that service, and the job finds stored what the preview fetched. With no rate from either, the figures
+stay in the account's currency at rate 1 and a `crossCurrencyTradeUnconverted` warning says so, naming
+`provider_unanswered` when the provider did not answer rather than had nothing. Money 97-99 keep one
+rate per pair, so on those files this is most cross-currency trades. `mny:inspect` reads the file
+alone, so it still reports them unconverted. In the same way a synthesized sleeve
+row takes the far row's own amount across currencies, and `transferAmountMismatch` compares each
+synthesized row with Money's far row, which the expected-balance check (a sum of the mapped rows)
+cannot do.
+
 ### A row Money does not store may still be one Monize has to write
 
 Money's model and Monize's are not the same shape, and the gaps are silent. A transfer from a
@@ -138,7 +174,7 @@ money moved, on rows that exist only to say a trade settled (issue #1204).
 
 The leg now carries the same activity label a natively entered and a QIF-imported trade already
 store (`Buy: VOO 10 @ $100.00`), built by `backend/src/securities/investment-cash-payee.util.ts` --
-the one implementation of that label, quoted in the row's own currency. Money's payee still wins
+the one implementation of that label, quoted in the currency the price and total are in (`securityCurrencyCode`). Money's payee still wins
 when the file recorded one; the label is the fallback, never an override, so nothing the user
 entered is replaced by generated text.
 
@@ -229,11 +265,31 @@ together, per account.
   stages anything other than what `POST /parse` stages is not testing the import.
 - **Money 2001 files use a different key derivation** ("old" scheme, flags bit `0x6` clear) that
   uses no password at all. Both schemes must keep working; the fixtures cover each.
+- **Money 97-99 is a different code space, not an older vintage of the same one.**
+  The file is plain Jet 3 (`format: "jet3"`, nothing to decrypt), and its `grftt`
+  bits and `act` codes collide with Money Plus's: its void bit is Money Plus's
+  loan-account bit, its loan-template bit is Money Plus's VOID, its `act` 1 is a
+  sale. Read through the Money Plus tables, voided rows import live, pending
+  scheduled instances import as posted, and sales import as purchases -- and every
+  balance still reconciles against the mapper's own output. `readTransactionData`
+  rebuilds the flags in the Money Plus layout (`tables/money99-transactions.ts`) and
+  the mappers look actions up by format (`model/mny-actions.ts`,
+  `model/mny-money99.ts`); `sample-money99.mny` asserts Money 99's own balances.
+  It has no `BILL` table either: `tables/money99-bills.ts` turns each `TRN`
+  template that names a pending instance (`htrnSrc`) into the `BILL` row
+  `mapBills` expects, which is also what keeps a scheduled transfer to one bill.
+  Recording a split in Money 99 rewrites the trades before it (quantities and
+  prices), so its `SEC_SPLIT` rows are not even reported; and a CD is bought by
+  amount, with no units, so it imports as units of 1 the way Money Plus stores it.
 - **`TRN` holds the payee in `lHpay` on Money Plus and `hpay` before it.** Reading one name only
   drops every payee on the other vintage. Column aliases belong in the reader spec, never in a
   mapper.
 - **`SEC_SPLIT` has no security column.** Resolve it through `MnyInvestmentData.splitSecurities`,
   which is built from `SP.hss` -> `SP.hsec`.
+- **A trade the investment mapper skips still has its cash.** Its cash row in
+  the trade's own sleeve imports on its own (`unwrittenTradeCashRows`); a
+  synthesized counterpart for it would land in the same sleeve and net it to
+  zero, which no balance check can see because both rows are the mapper's.
 - **Never apply a `SEC_SPLIT` ratio to a position.** Money does not adjust its own share counts
   for those rows, so an importer that does disagrees with the file it read: seven positions
   across two files (the maintainer's VTI, VWO, XIC and XIU, `sample.mny`'s MSFT, LEH and ADM)

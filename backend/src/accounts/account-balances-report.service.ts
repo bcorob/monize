@@ -3,8 +3,15 @@ import { DataSource } from "typeorm";
 import { withScopedDb } from "../common/db/scoped-db";
 import { FxAggregate } from "../common/fx-aggregate";
 import { convertWithRateLookup } from "../common/currency-conversion.util";
-import { roundMoney } from "../common/round.util";
-import { applyActionToQuantity } from "../securities/investment-replay.util";
+import {
+  FIAT_MONEY_DECIMALS,
+  moneyDecimalsFor,
+  roundMoney,
+} from "../common/round.util";
+import {
+  applyActionToQuantity,
+  INVESTMENT_REPLAY_ORDER_SQL,
+} from "../securities/investment-replay.util";
 import {
   BOUNDARY_LAG_DAYS,
   closeAt,
@@ -19,6 +26,11 @@ import { todayYMD } from "../common/date-utils";
 import { UserPreference } from "../users/entities/user-preference.entity";
 import { ExchangeRateService } from "../currencies/exchange-rate.service";
 import { SecurityPriceService } from "../securities/security-price.service";
+import {
+  BondValuationService,
+  SecurityValueByAccount,
+} from "../bonds/bond-valuation.service";
+import { bondHoldingValue } from "../bonds/bond-holding-value";
 import { preferredCurrency } from "../common/default-currency.util";
 import { LEDGER_MOVEMENT_PREDICATE } from "../common/ledger-balance.sql";
 
@@ -257,6 +269,8 @@ export class AccountBalancesReportService {
     private readonly exchangeRates: ExchangeRateService,
     @Inject(forwardRef(() => SecurityPriceService))
     private readonly securityPrices: SecurityPriceService,
+    @Inject(forwardRef(() => BondValuationService))
+    private readonly bondValuation: BondValuationService,
   ) {}
 
   private scopedQuery<T = any>(sql: string, params?: any[]): Promise<T> {
@@ -373,6 +387,11 @@ export class AccountBalancesReportService {
       this.pricesForReport(heldSecurityIds, storedPrices, marketDate),
     ]);
 
+    const bondValues = await this.bondValuesAsOf(
+      userId,
+      heldSecurityIds,
+      asOfDate,
+    );
     const marketValues = this.valuePositions(
       holdingsAccounts,
       positions,
@@ -380,6 +399,7 @@ export class AccountBalancesReportService {
       securityCurrencies,
       rates,
       asOfDate,
+      bondValues,
     );
 
     const display = this.displayRates(
@@ -446,20 +466,41 @@ export class AccountBalancesReportService {
     jointAccountIds: string[],
     restriction: string[] | null,
   ): Promise<Map<string, number>> {
-    const rows: Array<{ id: string; balance: string }> = await this.scopedQuery(
+    // Each balance is in its account's own currency, before any conversion,
+    // so it rounds at that currency's precision; the places ride along in
+    // the same statement rather than a read per account.
+    const rows: Array<{
+      id: string;
+      balance: string;
+      decimal_places?: number | string | null;
+    }> = await this.scopedQuery(
       `SELECT a.id,
-                COALESCE(a.opening_balance, 0) + COALESCE(SUM(t.amount), 0) AS balance
+                COALESCE(a.opening_balance, 0) + COALESCE(SUM(t.amount), 0) AS balance,
+                c.decimal_places
            FROM accounts a
+           LEFT JOIN currencies c ON c.code = a.currency_code
            LEFT JOIN transactions t ON t.account_id = a.id
             AND ${LEDGER_MOVEMENT_PREDICATE}
             AND t.transaction_date <= $2
           WHERE (a.user_id = $1 OR a.id = ANY($3::UUID[]))
             AND ($4::UUID[] IS NULL OR a.id = ANY($4::UUID[]))
-          GROUP BY a.id, a.opening_balance`,
+          GROUP BY a.id, a.opening_balance, c.decimal_places`,
       [userId, asOfDate, jointAccountIds, restriction],
     );
 
-    return new Map(rows.map((r) => [r.id, roundMoney(Number(r.balance))]));
+    return new Map(
+      rows.map((r) => [
+        r.id,
+        roundMoney(
+          Number(r.balance),
+          moneyDecimalsFor(
+            r.decimal_places === null || r.decimal_places === undefined
+              ? null
+              : Number(r.decimal_places),
+          ),
+        ),
+      ]),
+    );
   }
 
   /**
@@ -566,7 +607,7 @@ export class AccountBalancesReportService {
           AND security_id IS NOT NULL
           AND status != 'VOID'
           AND transaction_date <= $2
-        ORDER BY transaction_date ASC, created_at ASC`,
+        ORDER BY ${INVESTMENT_REPLAY_ORDER_SQL}`,
       [accountIds, asOfDate],
     );
 
@@ -592,6 +633,46 @@ export class AccountBalancesReportService {
   }
 
   /**
+   * What each account's lots of every bond-linked security held are worth at
+   * `asOfDate` (the report's date, whatever it is: the engine values a lot on
+   * any day). A linked security's stored close is the blend over every
+   * account's lots, so an account holding other series than the blend's average
+   * would be shown the average (bond-program-securities.md 2.4). A security
+   * whose valuation throws maps to null: unpriced, never the blend. One
+   * `valueByAccount` call per linked security. Owner-scoped, so a security of
+   * another owner (a joint account's) is unpriced here.
+   */
+  private async bondValuesAsOf(
+    userId: string,
+    securityIds: string[],
+    asOfDate: string,
+  ): Promise<Map<string, SecurityValueByAccount | null>> {
+    const values = new Map<string, SecurityValueByAccount | null>();
+    if (securityIds.length === 0) return values;
+    const linked: Array<{ id: string }> = await this.scopedQuery(
+      `SELECT id FROM securities
+        WHERE id = ANY($1::UUID[]) AND bond_program_id IS NOT NULL`,
+      [securityIds],
+    );
+    for (const { id } of linked) {
+      try {
+        values.set(
+          id,
+          await this.bondValuation.valueByAccount(userId, id, asOfDate),
+        );
+      } catch (error) {
+        this.logger.warn(
+          `Bond valuation of security ${id} at ${asOfDate} failed; its positions are unpriced: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+        values.set(id, null);
+      }
+    }
+    return values;
+  }
+
+  /**
    * Value each account's replayed positions at the prices and rates standing
    * for the report's date.
    *
@@ -606,6 +687,7 @@ export class AccountBalancesReportService {
     securityCurrencies: Map<string, string>,
     rates: ResolvedRates,
     asOfDate: string,
+    bondValues: ReadonlyMap<string, SecurityValueByAccount | null> = new Map(),
   ): Map<string, AccountValuation> {
     const result = new Map<string, AccountValuation>();
     const lookup = (from: string, to: string) =>
@@ -620,19 +702,36 @@ export class AccountBalancesReportService {
 
       for (const [securityId, quantity] of bySecurity ?? []) {
         if (Math.abs(quantity) <= QUANTITY_EPSILON) continue;
+        // A bond-linked position is its own account's lots, or unknown.
+        const isLinked = bondValues.has(securityId);
         const price = prices.prices.get(securityId);
+        const own = isLinked
+          ? bondHoldingValue(
+              bondValues.get(securityId),
+              account.id,
+              quantity,
+              price,
+            )
+          : null;
         // An unpriced position is unknown, not free. Folding it in at zero is
         // what makes a partial valuation look like a settled one.
-        if (price == null) {
+        if (isLinked ? own === null || "unpriced" in own : price == null) {
           unpriced.add(securityId);
           continue;
         }
-        if (prices.approximated.has(securityId))
+        // A linked holding worth the engine's lots used no stored close; one
+        // worth the person's price used it, approximated or not.
+        if (
+          (own === null || ("basis" in own && own.basis === "MARKET_PRICE")) &&
+          prices.approximated.has(securityId)
+        )
           approximatedPrices.add(securityId);
         const securityCurrency =
           securityCurrencies.get(securityId) ?? account.currencyCode;
         const converted = convertWithRateLookup(
-          quantity * price,
+          own !== null && "marketValue" in own
+            ? Number(own.marketValue)
+            : quantity * (price as number),
           securityCurrency,
           account.currencyCode,
           lookup,
@@ -658,7 +757,11 @@ export class AccountBalancesReportService {
         );
       }
       const complete = aggregate.isComplete && unpriced.size === 0;
-      const knownSubtotal = roundMoney(aggregate.knownSubtotal);
+      // Investment positions are fiat (INV-CRYPTO-001).
+      const knownSubtotal = roundMoney(
+        aggregate.knownSubtotal,
+        FIAT_MONEY_DECIMALS,
+      );
       if (approximatedPrices.size > 0 || approximatedPairs.size > 0) {
         this.logger.log(
           `Account ${account.id} valuation at ${asOfDate} uses the closest available data: ` +

@@ -1,8 +1,87 @@
 {
   "page": {
-    "welcomePrefix": "Добро пожаловать",
-    "welcomeWithName": "Добро пожаловать, {name}!",
-    "subtitle": "Обзор ваших финансов"
+    "greeting": {
+      "morning": "Доброе утро",
+      "morningWithName": "Доброе утро, {name}",
+      "afternoon": "Добрый день",
+      "afternoonWithName": "Добрый день, {name}",
+      "evening": "Добрый вечер",
+      "eveningWithName": "Добрый вечер, {name}"
+    }
+  },
+  "hero": {
+    "label": "Сводка чистых активов",
+    "netWorth": "Чистые активы",
+    "changeThisMonth": "<dir>{direction, select, up {Рост на} other {Снижение на}}</dir> {amount} за этот месяц",
+    "changeThisMonthWithPercent": "<dir>{direction, select, up {Рост на} other {Снижение на}}</dir> {amount} · {percent} за этот месяц",
+    "assets": "<strong><value></value></strong> активов",
+    "liabilities": "<strong><value></value></strong> обязательств",
+    "invested": "<strong><value></value></strong> инвестировано",
+    "investedUnpriced": "Нет текущей цены для {symbols}, поэтому эти позиции не учтены. Обновите цены на странице «Инвестиции» или добавьте цену в истории цен бумаги.",
+    "portfolioLabel": "Сводка портфеля",
+    "portfolioValueFor": "Стоимость портфеля <names>({accounts})</names>",
+    "portfolioEmpty": "Пока нет инвестиционных счетов. Добавьте счёт, чтобы видеть здесь портфель.",
+    "portfolioLoadFailed": "Не удалось загрузить портфель. Перезагрузите панель и попробуйте снова.",
+    "portfolioChangeFailed": "Не удалось загрузить изменение за этот период. Перезагрузите панель и попробуйте снова.",
+    "changeOverWindow": "<dir>{direction, select, up {Рост на} other {Снижение на}}</dir> {amount} · {window}",
+    "holdings": "<strong><value></value></strong> в позициях",
+    "cash": "<strong><value></value></strong> денежных средств",
+    "metricLine": "<strong><value></value></strong> {metric}",
+    "metricNames": {
+      "simpleReturn": "Простая доходность",
+      "twr": "TWR",
+      "mwr": "MWR",
+      "cagr": "CAGR"
+    },
+    "showSet": "Показать: {name}",
+    "cycleControls": "Выберите, что показывает главный блок",
+    "cagrUnavailable": "Для CAGR нужна как минимум годовая история инвестиций на этих счетах и пополнения больше снятий.",
+    "intradayUnavailable": "Для некоторых позиций нет внутридневных цен, поэтому дневной график построить нельзя. Выберите более длинный период в настройках."
+  },
+  "trivia": {
+    "title": "Интересные факты",
+    "position": "{index} из {total}",
+    "previous": "Предыдущий факт",
+    "next": "Следующий факт",
+    "empty": "Факты появятся здесь, когда накопится достаточно истории: два месяца чистых активов, инвестиции с ценой, несколько месяцев расходов и доходов или гарантии, которые вы отслеживаете. Список обновляется каждое утро.",
+    "off": "Интересные факты от ИИ отключены. Включите их в разделе <link>Настройки ИИ</link>.",
+    "topics": {
+      "netWorth": "Чистые активы",
+      "investments": "Инвестиции",
+      "spending": "Расходы",
+      "income": "Доходы",
+      "activity": "Ваши записи",
+      "warranties": "Гарантии"
+    },
+    "aiGenerated": "Текст составлен ИИ по вашим данным",
+    "facts": {
+      "netWorthSinceStart": "В {startMonth} ваши чистые активы составляли {startAmount}. С тех пор они выросли на {startGain}, то есть примерно в {startMultiple} раза.",
+      "netWorthBiggestJump": "{jumpMonth} стал вашим самым резким скачком за один месяц. Чистые активы выросли на {jumpAmount}: с {jumpFrom} в {jumpPreviousMonth} до {jumpTo}.",
+      "netWorthHighPoint": "Ваш пик составил {peakAmount} в {peakMonth}. Сейчас вы на {peakBelow} ниже.",
+      "netWorthAtHighPoint": "Вы на пике: чистые активы никогда не были выше {currentHigh}.",
+      "netWorthBiggestDip": "Ваше самое сильное падение снизило чистые активы с {dipFromAmount} в {dipFromMonth} до {dipToAmount} в {dipToMonth}, то есть на {dipPercent}.",
+      "netWorthBiggestDipRecovered": "Ваше самое сильное падение снизило чистые активы с {dipFromAmount} в {dipFromMonth} до {dipToAmount} в {dipToMonth}. К {dipRecoveredMonth} вы восстановились.",
+      "netWorthLargestAsset": "{assetName} стоит {assetValue}, это {assetPercent} ваших активов.",
+      "investmentsShareOfAssets": "Ваши инвестиции стоят {investmentsValue}, это {investmentsPercent} ваших активов.",
+      "investmentsGain": "Ваши инвестиции выросли на {gainAmount} ({gainPercent}) относительно базовой стоимости {gainCostBasis}.",
+      "investmentsLoss": "Ваши инвестиции упали на {gainAmount} ({gainPercent}) относительно базовой стоимости {gainCostBasis}.",
+      "investmentsCagr": "Годовая доходность ваших инвестиций составляет около {cagrPercent} (CAGR).",
+      "investmentsBiggestHolding": "Ваша крупнейшая позиция: {holdingSymbol}, примерно {holdingPercent} портфеля ({holdingValue} в {holdingAccounts}).",
+      "investmentsBestPerformer": "Лучший результат у {bestSymbol}: рост на {bestPercent}. Покупка обошлась в {bestCost}, сейчас это {bestValue}.",
+      "investmentsForeignAccount": "Ваш счёт {foreignName} ведётся в валюте {foreignCurrency}. Активы на {foreignBalance} при курсе около {foreignRate} равны {foreignConverted}.",
+      "investmentsLargestAccount": "Ваш крупнейший инвестиционный счёт: {largestName}, {largestValue}.",
+      "spendingTopCategory": "За последние двенадцать месяцев больше всего ваших расходов пришлось на «{topCategoryName}»: {topCategoryAmount}, или {topCategoryPercent}.",
+      "spendingTopPayee": "За последние двенадцать месяцев больше всего вы потратили у получателя «{topPayeeName}»: {topPayeeAmount}.",
+      "spendingBiggestMonth": "{biggestSpendMonth} стал вашим самым затратным месяцем из последних двенадцати: {biggestSpendAmount}.",
+      "incomeKeptShare": "За последние двенадцать месяцев вы сохранили {keptAmount} из поступивших средств, это {keptPercent} вашего дохода.",
+      "incomeSurplusMonths": "Месяцы из последних {windowMonths}, в которые поступило больше, чем потрачено: {surplusMonths}.",
+      "incomeTopSource": "{topSourceName} принёс {topSourcePercent} вашего дохода за последние двенадцать месяцев.",
+      "activityTransactions": "Транзакций в ваших реестрах: {transactionCount}, начиная с {firstTransactionMonth}.",
+      "activityPayees": "Получателей платежей в Monize: {payeeCount}. Категорий: {categoryCount}.",
+      "activityScheduled": "Запланированных транзакций, которые Monize отслеживает для вас: {scheduledCount}.",
+      "warrantiesCovered": "Отслеживаемые вами гарантии, которые ещё действуют: {warrantyCount}.",
+      "warrantiesNextExpiry": "Следующая гарантия, срок которой истекает, это {nextWarrantyName}, в {nextWarrantyMonth}."
+    }
   },
   "favouriteAccounts": {
     "title": "Избранные счета",
@@ -21,12 +100,10 @@
   "upcomingBills": {
     "title": "Предстоящие счета и поступления",
     "empty": "Нет просроченных или предстоящих счетов, поступлений или переводов в рамках их периодов уведомлений.",
-    "perReminderSettings": "По настройкам напоминаний",
     "postTransaction": "Провести эту проводку",
     "manual": "Вручную",
-    "manualTitle": "Требует ручного проведения",
     "negativeBalanceWarning": "Эта проводка приведёт к тому, что остаток по счёту уйдёт в минус",
-    "viewAll": "Просмотреть все счета и поступления",
+    "negativeBalanceLegend": "Уводит баланс счёта ниже нуля",
     "moreItems": "+{count} ещё",
     "overdue": "Просрочено",
     "today": "Сегодня",
@@ -38,7 +115,23 @@
       "transfer": "Перевод",
       "reminder": "Напоминание",
       "unknown": "Неизвестно"
-    }
+    },
+    "scope": {
+      "dueSoon": "Скоро к оплате",
+      "all": "Все предстоящие"
+    },
+    "viewLabel": "Вид",
+    "viewList": "Список",
+    "viewCalendar": "Календарь",
+    "previousMonth": "Предыдущий месяц",
+    "nextMonth": "Следующий месяц",
+    "emptyAll": "Нет запланированных активных счетов, поступлений или переводов.",
+    "estimated": "Оценка"
+  },
+  "cashFlowForecast": {
+    "title": "Прогноз денежного потока",
+    "period": "Период прогноза",
+    "loadFailed": "Не удалось загрузить проводки, датированные позже сегодняшнего дня, поэтому прогноз нельзя показать. Перезагрузите панель, чтобы повторить попытку."
   },
   "gettingStarted": {
     "title": "Начало работы",
@@ -76,8 +169,12 @@
     "title": "Аналитика расходов",
     "empty": "Нет доступной аналитики. Перейдите на страницу «Аналитика», чтобы создать первый анализ.",
     "goToInsights": "Перейти к аналитике",
-    "viewAll": "Просмотреть всю аналитику",
     "activeCount": "{count} активных"
+  },
+  "warrantiesExpiring": {
+    "title": "Гарантии, которые скоро истекают",
+    "empty": "В ближайшие 30 дней ничего не истекает",
+    "loadFailed": "Не удалось загрузить истекающие гарантии. Перезагрузите панель, чтобы попробовать снова."
   },
   "topMovers": {
     "title": "Лидеры изменений",
@@ -88,13 +185,20 @@
       "noLosers": "Сегодня нет падающих активов."
     },
     "dailyChange": "Изменение за день",
+    "dailyChangeOn": "Изменение за день · {date}",
     "openPriceHistory": "История цены: {symbol}",
     "refreshPrices": "Обновить цены",
     "viewPortfolio": "Просмотреть портфель",
     "filter": {
-      "all": "Все",
-      "gainers": "Растущие",
-      "losers": "Падающие"
+      "all": "Все ({count})",
+      "gainers": "Растущие ({count})",
+      "losers": "Падающие ({count})",
+      "label": "Направление"
+    },
+    "metric": {
+      "label": "Показать",
+      "price": "Цена",
+      "holdings": "Активы"
     }
   },
   "favouriteSecurities": {
@@ -102,15 +206,17 @@
     "empty": "Нет избранных ценных бумаг. Перейдите на <securitiesLink>страницу ценных бумаг</securitiesLink> и отметьте звёздочкой те, которые хотите отслеживать.",
     "noPriceYet": "Цена пока отсутствует",
     "dailyChange": "Изменение за день",
+    "dailyChangeOn": "Изменение за день · {date}",
     "openPriceHistory": "История цены: {symbol}",
-    "refreshPrices": "Обновить цены",
-    "manage": "Управление ценными бумагами"
+    "refreshPrices": "Обновить цены"
   },
   "netWorth": {
     "title": "Чистая стоимость",
     "empty": "Данные о чистой стоимости пока недоступны.",
-    "past12Months": "За последние 12 месяцев",
-    "viewReport": "Просмотреть полный отчёт"
+    "barStyle": "Стиль столбцов",
+    "barStyleNetWorth": "Чистая стоимость",
+    "barStyleAccountType": "По типу счёта",
+    "loadFailed": "Не удалось загрузить историю чистой стоимости. Перезагрузите панель, чтобы повторить попытку."
   },
   "assetsVsLiabilities": {
     "title": "Активы и обязательства",
@@ -118,14 +224,22 @@
     "current": "Текущее",
     "netWorthLabel": "Чистая стоимость",
     "assets": "Активы",
-    "liabilities": "Обязательства"
+    "liabilities": "Обязательства",
+    "partialName": "{name} (неполные)",
+    "viewCallouts": "Подписи",
+    "viewLegend": "Условные обозначения"
   },
   "expensesPieChart": {
     "title": "Расходы по категориям",
     "empty": "Нет данных о расходах за этот период.",
     "total": "Итого",
     "uncategorized": "Без категории",
-    "other": "Прочее"
+    "other": "Прочее",
+    "insideOther": "{count, plural, one {# категория в Прочем} few {# категории в Прочем} many {# категорий в Прочем} other {# категорий в Прочем}}",
+    "topLevelOnly": "Категории верхнего уровня",
+    "topLevelOnlyHint": "Учитывать подкатегории в родительской категории",
+    "viewCallouts": "Подписи",
+    "viewLegend": "Условные обозначения"
   },
   "incomeExpenses": {
     "title": "Доходы и расходы",
@@ -135,18 +249,85 @@
   },
   "customize": {
     "button": "Настроить",
-    "title": "Настройка панели управления",
-    "description": "Макет ниже соответствует вашей панели управления: виджеты располагаются слева направо, по два в ряд на больших экранах.",
     "moveEarlier": "Переместить {name} вперёд",
     "moveLater": "Переместить {name} назад",
-    "dragToReorder": "Перетаскивайте виджеты, чтобы изменить их расположение, или используйте кнопки со стрелками.",
-    "hiddenWidgets": "Скрытые виджеты",
-    "hide": "Скрыть {name}",
-    "show": "Показать {name}",
     "atLeastOne": "Выберите хотя бы один виджет для панели управления.",
     "reset": "Сбросить по умолчанию",
     "toasts": {
       "saveFailed": "Не удалось сохранить макет панели управления"
+    },
+    "hero": {
+      "title": "Шапка панели",
+      "description": "Первые цифры и график под приветствием: ваши чистые активы, ваш портфель или «Авто», которое каждую минуту переключает их.",
+      "show": "Показывать шапку панели",
+      "range": "График",
+      "set": "Показывать",
+      "sets": {
+        "auto": "Авто",
+        "netWorth": "Чистые активы",
+        "portfolio": "Стоимость портфеля"
+      },
+      "metric": "Показатель",
+      "metrics": {
+        "simpleReturn": "Простая доходность",
+        "twr": "TWR",
+        "mwr": "MWR",
+        "cagr": "CAGR"
+      }
+    }
+  },
+  "edit": {
+    "barLabel": "Расположить панель",
+    "addWidget": "Добавить виджет",
+    "heroSettings": "Настройки шапки",
+    "done": "Готово",
+    "phoneNote": "Размеры виджетов применяются на более широких экранах.",
+    "remove": "Удалить {name}",
+    "grip": "Переместить {name}",
+    "gripHint": "Перетащите, чтобы переместить {name}, или нажимайте клавиши со стрелками",
+    "moved": "{name} перемещён на позицию {position} из {count}",
+    "removed": "{name}: удалено",
+    "added": "{name}: добавлено",
+    "resized": "{name}: теперь {size}",
+    "resizedBoth": "{name}: теперь {width} и {height}",
+    "twoChanges": "{first}. {second}",
+    "placeholder": "Появится на панели, когда будет что показать.",
+    "addTitle": "Добавить виджет",
+    "addDescription": "Добавленный виджет окажется в конце панели. Ничего не сохранится, пока вы не нажмёте «Готово».",
+    "addEmpty": "Все виджеты уже на вашей панели",
+    "addToSpace": "Добавить виджет в это место ({width})",
+    "addSlotDescription": "Показаны только виджеты, которые помещаются в это место, и выбранный виджет займёт его. Ничего не сохранится, пока вы не нажмёте «Готово».",
+    "addSlotEmpty": "Ни один скрытый виджет не помещается в это место. Перетащите виджет сюда, чтобы переместить его.",
+    "resize": "Изменить размер: {name}",
+    "resizeHint": "Перетащите, чтобы изменить размер: {name}, или нажимайте клавиши со стрелками",
+    "widthLabel": "Ширина",
+    "heightLabel": "Высота",
+    "presetName": "{short}, {name}",
+    "widthOf": "Ширина: {name}",
+    "heightOf": "Высота: {name}",
+    "widthShort": {
+      "third": "1/3",
+      "half": "1/2",
+      "twoThirds": "2/3",
+      "full": "Полная"
+    },
+    "widthName": {
+      "third": "Одна треть ширины",
+      "half": "Половина ширины",
+      "twoThirds": "Две трети ширины",
+      "full": "Полная ширина"
+    },
+    "heightShort": {
+      "auto": "Авто",
+      "compact": "S",
+      "standard": "M",
+      "tall": "L"
+    },
+    "heightName": {
+      "auto": "Автоматическая высота",
+      "compact": "Компактная высота",
+      "standard": "Стандартная высота",
+      "tall": "Большая высота"
     }
   },
   "favouriteReports": {
@@ -156,22 +337,28 @@
   },
   "widgets": {
     "configure": "Настроить {name}",
+    "asOf": "на {date}",
     "done": "Готово",
     "configSaveFailed": "Не удалось сохранить настройки виджета. Повторите попытку.",
     "timeframe": "Период",
     "accounts": "Счета",
     "chartType": "Тип диаграммы",
     "view": "Вид",
+    "viewCalloutsHint": "Подписям нужен более широкий экран. Где они не помещаются, показываются условные обозначения.",
     "displayName": "Отображаемое имя",
     "description": "Описание",
     "descriptionPlaceholder": "Добавьте необязательное описание",
     "rangeLabels": {
+      "1d": "1D",
+      "1w": "1Н",
+      "mtd": "С нач. мес.",
       "1m": "1M",
       "3m": "3M",
       "6m": "6M",
       "1y": "1Y",
       "2y": "2Y",
       "5y": "5Y",
+      "10y": "10Y",
       "ytd": "YTD",
       "all": "Всё"
     }
@@ -179,7 +366,10 @@
   "portfolioValue": {
     "title": "Стоимость портфеля",
     "empty": "Пока нет истории инвестиций для отображения.",
-    "refresh": "Обновить текущую стоимость"
+    "refresh": "Обновить текущую стоимость",
+    "investmentResult": "Результат инвестирования",
+    "periodBreakdownInvestedTooltip": "Стоимость ценных бумаг за этот период изменилась на {valueChange}. Из них {netInvested} составили вложения за вычетом продаж, а выплаты дивидендов и процентов составили {income}. Выплата, реинвестированная в акции, учитывается в обеих суммах. Сумма выше показывает доход самих инвестиций, без учёта неинвестированных денежных средств.",
+    "notAvailable": "Н/Д"
   },
   "spendingByPayee": {
     "title": "Расходы по получателям",
@@ -225,14 +415,19 @@
       "MUTUAL_FUND": "Паевые фонды",
       "BOND": "Облигации",
       "CASH": "Наличные"
-    }
+    },
+    "viewType": "Тип бумаги",
+    "viewAssetClass": "Класс активов",
+    "otherAssetClasses": "Прочее",
+    "emptyAssetClass": "Разбивка по классам активов пока недоступна."
   },
   "geographicAllocation": {
     "title": "Географическое распределение",
     "empty": "Нет активов для отображения.",
     "viewRegion": "Регион",
     "viewExchange": "Биржа",
-    "viewCountry": "Страна"
+    "viewCountry": "Страна",
+    "listingBasisNote": "Сгруппировано по бирже листинга каждой позиции. Переключитесь на Страну, чтобы заглянуть внутрь фондов."
   },
   "recurringExpenses": {
     "title": "Основные регулярные расходы",
@@ -240,7 +435,9 @@
     "minOccurrences": "Минимальное количество вхождений",
     "minOccurrencesOption": "{count} или более",
     "occurrences": "{count} вхождений",
-    "monthlyEstimate": "Ежемесячная оценка"
+    "monthlyEstimate": "Ежемесячная оценка",
+    "viewCallouts": "Подписи",
+    "viewLegend": "Условные обозначения"
   },
   "weekendVsWeekday": {
     "title": "Расходы в выходные против будней",
@@ -249,5 +446,14 @@
     "weekdayLabel": "Будни",
     "viewOverview": "Обзор",
     "viewByDay": "По дням"
+  },
+  "cashFlowSankey": {
+    "title": "Диаграмма Сэнки денежных потоков",
+    "empty": "За этот период нет доходов, расходов или переводов.",
+    "depth": "Детализация",
+    "depthCategories": "Категории",
+    "depthSubcategories": "Подкатегории",
+    "viewDiagram": "Диаграмма",
+    "viewTable": "Таблица"
   }
 }

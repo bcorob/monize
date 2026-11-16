@@ -4,6 +4,7 @@ import {
   isKeyValueTag,
   normalizeTagKey,
   collectTagKeys,
+  collectTagValues,
 } from "./tag-key-value";
 
 describe("tag-key-value", () => {
@@ -59,5 +60,20 @@ describe("tag-key-value", () => {
         "plain",
       ]),
     ).toEqual(["country", "sector"]);
+  });
+});
+
+describe('collectTagValues', () => {
+  it('lists the distinct values under one key, case-insensitive on the key', () => {
+    expect(
+      collectTagValues(
+        ['scope:stall', 'Scope:household', 'scope:household', 'country:poland', 'plain', 'scope:', ':x'],
+        'SCOPE',
+      ),
+    ).toEqual(['household', 'stall']);
+  });
+
+  it('is empty for an unknown key', () => {
+    expect(collectTagValues(['scope:a'], 'other')).toEqual([]);
   });
 });

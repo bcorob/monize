@@ -34,6 +34,12 @@
     "dismiss": "关闭",
     "dismissAriaLabel": "关闭更新通知"
   },
+  "jwtSecretBanner": {
+    "label": "JWT_SECRET 强度不足。",
+    "detail": "它是公开的示例值或过于容易猜测，会话令牌可能被伪造。请使用 <code>openssl rand -base64 32</code> 生成一个强密钥。更改后，身份验证器应用中的验证码将失效，受信任设备也会被清除：用户使用备用码登录后重新设置 2FA，对于没有备用码的用户，请在<users>用户管理</users>中重置其 2FA。请先阅读 <code>docs/backend/modules-and-runtime.md</code>（Changing JWT_SECRET）。",
+    "dismiss": "关闭",
+    "dismissAriaLabel": "关闭 JWT_SECRET 警告"
+  },
   "actionHistory": {
     "title": "操作历史",
     "buttonAriaLabel": "操作历史",
@@ -58,6 +64,7 @@
       "tag": "标签",
       "account": "账户",
       "scheduled_transaction": "计划交易",
+      "scheduled_posting": "计划交易",
       "security": "证券",
       "budget": "预算",
       "custom_report": "报表"
@@ -79,7 +86,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "长期资本收益再投资",
       "CAPITAL_GAIN_SHORT": "短期资本收益",
       "CAPITAL_GAIN_LONG": "长期资本收益",
-      "REDEEM": "赎回存单/债券"
+      "REDEEM": "赎回存单/债券",
+      "RETURN_OF_CAPITAL": "资本返还"
     },
     "descriptions": {
       "createdAccount": "已创建账户\"{name}\"",
@@ -99,6 +107,7 @@
       "deletedInvestmentReport": "已删除投资报表\"{name}\"",
       "createdPayee": "已创建收款人\"{name}\"",
       "updatedPayee": "已更新收款人\"{name}\"",
+      "lookedUpPayeeContact": "已查找收款人“{name}”的联系信息",
       "deletedPayee": "已删除收款人\"{name}\"",
       "createdReport": "已创建报表\"{name}\"",
       "updatedReport": "已更新报表\"{name}\"",
@@ -106,6 +115,7 @@
       "createdScheduledTransaction": "已创建计划交易\"{name}\"",
       "updatedScheduledTransaction": "已更新计划交易\"{name}\"",
       "deletedScheduledTransaction": "已删除计划交易\"{name}\"",
+      "postedScheduledTransaction": "已过账计划交易\"{name}\"",
       "createdSecurity": "已创建证券\"{symbol}\"",
       "updatedSecurity": "已更新证券\"{symbol}\"",
       "deletedSecurity": "已删除证券\"{symbol}\"",
@@ -115,26 +125,23 @@
       "createdTransaction": "已创建交易 {payee} {amount}",
       "updatedTransaction": "已更新交易 {payee} {amount}",
       "deletedTransaction": "已删除交易 {payee} {amount}",
+      "convertedToTransfer": "已将交易 {payee} {amount} 转换为转账",
+      "convertedToTransaction": "已将转账 {payee} {amount} 转换为交易",
       "bulkUpdatedTransactions": "已批量更新 {count, plural, one {# 笔交易} other {# 笔交易}}",
       "createdTransfer": "已创建从 {from} 到 {to} 的转账 {amount}",
       "createdInvestmentTransaction": "已创建 {action} 交易",
       "updatedInvestmentTransaction": "已更新 {action} 交易",
       "deletedInvestmentTransaction": "已删除 {action} 交易",
       "transferredSecurity": "已在账户间转移证券",
-      "updatedSecurityTransfer": "已更新证券转移"
-    },
-    "timeAgo": {
-      "justNow": "刚刚",
-      "minutes": "{count} 分钟前",
-      "hours": "{count} 小时前",
-      "days": "{count} 天前"
+      "updatedSecurityTransfer": "已更新证券转移",
+      "ranTransactionRule": "已在 {count, plural, other {# 笔交易}}上运行规则“{name}”"
     },
     "undonePrefix": "已撤销：{description}",
     "redonePrefix": "已重做：{description}"
   },
   "pageHeader": {
-    "helpAriaLabel": "打开 Monize 维基以获取此部分的帮助",
-    "helpTooltip": "打开 Monize 维基以获取此部分的帮助"
+    "helpAriaLabel": "此页面的帮助",
+    "helpTooltip": "此页面的帮助"
   },
   "bootSplash": {
     "loading": "正在加载 Monize",
@@ -145,5 +152,17 @@
     "title": "无法连接",
     "message": "Monize 无法连接到服务器。请检查您的网络连接后重试。",
     "retry": "重试"
+  },
+  "pushBanner": {
+    "enableTitle": "要开启通知吗？",
+    "enableBody": "即使应用已关闭，Monize 也能在此设备上提醒你账单和预算上限。浏览器会请求你的许可。",
+    "enableButton": "开启",
+    "enabling": "正在开启…",
+    "installIosTitle": "请先将 Monize 添加到主屏幕。",
+    "installIosBody": "在 iPhone 和 iPad 上，通知只能从已安装的应用中使用。点按“分享”，然后“添加到主屏幕”，再从那里打开 Monize。",
+    "blockedTitle": "Monize 的通知已被阻止。",
+    "blockedBody": "请在浏览器的本页站点设置中允许通知。Monize 无法自行再次询问。",
+    "blockedIosBody": "打开 iOS“设置”，然后“通知”，再选择 Monize 并允许。如果列表中没有 Monize，请从主屏幕移除后重新添加。",
+    "dismiss": "暂不"
   }
 }

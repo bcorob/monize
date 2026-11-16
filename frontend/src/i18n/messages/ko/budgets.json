@@ -1,29 +1,4 @@
 {
-  "alerts": {
-    "title": "알림",
-    "unread": "{count}개 읽지 않음",
-    "markAllRead": "모두 읽음으로 표시",
-    "loading": "알림 로드 중...",
-    "empty": "알림 없음",
-    "undo": "실행 취소",
-    "buttonTitle": "알림",
-    "buttonAriaLabel": "알림",
-    "dismissAriaLabel": "알림 닫기",
-    "severity": {
-      "critical": "긴급",
-      "warning": "경고",
-      "success": "좋은 소식",
-      "info": "정보"
-    },
-    "billDue": {
-      "titleOverdue": "{payee} 결제 기한 초과",
-      "titleToday": "{payee} 오늘 결제 예정",
-      "titleTomorrow": "{payee} 내일 결제 예정",
-      "titleInDays": "{payee} {days}일 후 결제 예정",
-      "amountDue": "{date}에 {amount} 결제",
-      "amountUnavailable": "금액을 확인할 수 없습니다 (현재 환율 없음). 결제일 {date}"
-    }
-  },
   "summary503020": {
     "title": "50/30/20 배분",
     "groups": {
@@ -38,6 +13,7 @@
     "editTitle": "편집: {name}",
     "budgetAmount": "예산 금액",
     "rolloverType": "이월 유형",
+    "rolloverTypeTooltip": "이 카테고리의 미사용 예산은 초기화되지 않고 다음 기간으로 이월됩니다. 초과 지출은 절대 빚으로 이월되지 않으며, 이월 한도가 쌓일 수 있는 금액을 제한합니다.",
     "rolloverCap": "이월 한도 (선택)",
     "rolloverCapPlaceholder": "한도 없음",
     "flexGroup": "플렉스 그룹 (선택)",
@@ -59,7 +35,10 @@
       "WANT": "선택",
       "SAVING": "저축"
     },
-    "saving": "저장 중..."
+    "saving": "저장 중...",
+    "remove": "예산에서 제거",
+    "bucket": "버킷",
+    "bucketUnassigned": "미배정"
   },
   "categoryList": {
     "title": "카테고리 예산",
@@ -108,7 +87,6 @@
     "baseIncomePlaceholder": "예상 월 소득",
     "active": "활성",
     "saveChanges": "변경사항 저장",
-    "saving": "저장 중...",
     "typeOptions": {
       "MONTHLY": "월별",
       "ANNUAL": "연간",
@@ -118,7 +96,8 @@
       "FIXED": "고정",
       "ROLLOVER": "이월",
       "ZERO_BASED": "제로베이스",
-      "FIFTY_THIRTY_TWENTY": "50/30/20"
+      "FIFTY_THIRTY_TWENTY": "50/30/20",
+      "BUCKET": "버킷"
     }
   },
   "healthGauge": {
@@ -134,7 +113,8 @@
     "title": "지출 히트맵 - {monthLabel}",
     "ariaLabel": "지출 히트맵",
     "less": "적음",
-    "more": "많음"
+    "more": "많음",
+    "readout": "{date}: {amount}"
   },
   "periodDetail": {
     "summaryCards": {
@@ -159,7 +139,8 @@
     "rolloverBadge": "+{amount} 이월",
     "underBudgetLabel": "{amount} 예산 절감",
     "overBudgetLabel": "{amount} 예산 초과",
-    "carriedForward": "{amount} 이월됨"
+    "carriedForward": "{amount} 이월됨",
+    "dateRange": "{start} ~ {end}"
   },
   "periodSelector": {
     "label": "기간:",
@@ -208,6 +189,7 @@
   },
   "velocity": {
     "title": "지출 속도",
+    "titleTooltip": "일일 지출률과 안전한 지출 속도를 기간 종료 시점까지 예측한 값입니다. 실제 사용 가능 금액은 아직 도래하지 않은 예정된 청구서를 뺀 금액이므로, 여유가 있어 보이는 예산이 이미 지출해야 할 돈에 쓰이지 않도록 합니다.",
     "dailyBurnRate": "일일 지출률",
     "safeToSpend": "안전 지출 가능액",
     "projectedMonthEnd": "월말 예상",
@@ -260,6 +242,10 @@
       "FIFTY_THIRTY_TWENTY": {
         "label": "50/30/20",
         "description": "필수 50%, 선택 30%, 저축 20%. 카테고리는 그룹별로 분류됩니다."
+      },
+      "BUCKET": {
+        "label": "버킷",
+        "description": "소득을 이름 붙인 몇 개의 버킷으로 나눕니다. 모든 카테고리가 아니라 버킷별로 확인하세요."
       }
     },
     "profiles": {
@@ -280,6 +266,23 @@
       "analyzeFailed": "지출 분석에 실패했습니다"
     }
   },
+  "lineNames": {
+    "transfersFrom": "{name}에서 이체",
+    "unknown": "알 수 없음"
+  },
+  "transferIncomeForm": {
+    "hint": "이 계좌에서 들어오는 돈은 다시 돌려보낸 금액을 뺀 만큼 예산의 수입으로 계산됩니다.",
+    "account": "출금 계좌",
+    "accountPlaceholder": "계좌 선택",
+    "accountRequired": "이체가 들어오는 계좌를 선택하세요",
+    "amount": "계획 금액",
+    "submit": "추가"
+  },
+  "transfersInAsIncome": {
+    "label": "제외된 계좌에서 들어오는 이체를 수입으로 계산",
+    "hint": "제외된 계좌에서 이 예산의 계좌로 이체된 돈은 다시 돌려보낸 금액을 뺀 만큼 수입으로 계산됩니다. 자체 이체 항목이 있는 계좌는 그 항목에서 계산됩니다.",
+    "noExcludedAccounts": "이 예산은 아직 제외된 계좌가 없어 아무것도 계산되지 않습니다."
+  },
   "wizardCategories": {
     "title": "카테고리 검토",
     "noAnalysis": "분석 데이터가 없습니다. 뒤로 돌아가 분석을 먼저 실행하세요.",
@@ -287,6 +290,7 @@
       "income": "소득",
       "expenses": "지출",
       "transfers": "이체 / 저축",
+      "transfersIn": "입금 이체(수입)",
       "trendMedian": "추세 / 중앙값",
       "amount": "금액"
     },
@@ -296,6 +300,7 @@
       "transfers": "이체",
       "remaining": "잔여"
     },
+    "transfersInHint": "선택한 계좌에서 들어오는 돈은 다시 돌려보낸 금액을 뺀 만큼 수입으로 계산됩니다. 저축 예비금처럼 수입을 꺼내 쓰는 계좌만 선택하세요.",
     "allocation503020": "50/30/20 배분",
     "allocationTarget": "(목표 {percent}%)",
     "nextButton": "다음: 구성",
@@ -326,7 +331,8 @@
       "FIXED": "카테고리별 금액을 설정합니다. 미사용 예산은 기간마다 초기화됩니다.",
       "ROLLOVER": "미사용 예산이 카테고리별 이월 규칙에 따라 다음 기간으로 이월됩니다.",
       "ZERO_BASED": "모든 소득에 용도가 지정됩니다. 소득에서 지출을 빼면 0이 되어야 합니다.",
-      "FIFTY_THIRTY_TWENTY": "카테고리를 필수(50%), 선택(30%), 저축(20%)으로 분류합니다."
+      "FIFTY_THIRTY_TWENTY": "카테고리를 필수(50%), 선택(30%), 저축(20%)으로 분류합니다.",
+      "BUCKET": "소득을 이름 붙인 버킷으로 나눕니다. 각 카테고리는 하나의 버킷에 속합니다."
     },
     "linkBudgetToIncome": "예산을 소득에 연결",
     "linkBudgetToIncomeHint": "카테고리 금액이 기본 소득의 백분율이 됩니다",
@@ -334,6 +340,7 @@
     "estimatedFromAnalysis": "분석 기준 예상: {amount}/월",
     "defaultRolloverType": "기본 이월 유형",
     "rolloverHint": "모든 카테고리의 기본값을 설정합니다. 예산 생성 후 개별 카테고리를 사용자 정의할 수 있습니다.",
+    "rolloverTooltip": "카테고리의 미사용 예산은 초기화되지 않고 다음 기간으로 이월됩니다. 초과 지출은 절대 빚으로 이월되지 않으며, 이월 한도가 카테고리에 쌓일 수 있는 금액을 제한합니다.",
     "rolloverOptions": {
       "NONE": "없음 -- 매 기간 초기화",
       "MONTHLY": "월별 -- 매월 이월",
@@ -353,6 +360,7 @@
     },
     "flexGroupPlaceholder": "예: 여가비",
     "excludedAccountsHint": "제외된 계정의 거래는 예산 합계에 포함되지 않습니다.",
+    "excludedAccountsTooltip": "계정을 제외하면 해당 거래는 이 예산의 지출, 수입, 이월, 건강 점수에서만 제외됩니다. 거래 내역과 보고서, 그리고 해당 계정을 제외하지 않은 다른 예산에서는 평소처럼 계속 나타납니다.",
     "excludedCount": "{count}개 계정 제외됨",
     "categoriesAndTransfers": "{categories}개 카테고리 및 {transfers}개 이체 선택됨",
     "budgetTypeOptions": {
@@ -372,8 +380,10 @@
       "rollover": "이월",
       "alerts": "알림",
       "incomeLinked": "소득 연결",
-      "excludedAccounts": "제외 계정"
+      "excludedAccounts": "제외 계정",
+      "transfersInAsIncome": "입금 이체"
     },
+    "transfersInAsIncomeOn": "제외된 계좌에서의 이체를 수입으로 계산",
     "rolloverOff": "끔",
     "alertsValue": "경고 {warn}% / 긴급 {critical}%",
     "accountCount": "{count}개 계정",
@@ -392,7 +402,8 @@
     "categoryTypes": {
       "income": "소득",
       "expense": "지출",
-      "transfer": "이체"
+      "transfer": "이체",
+      "transferIn": "입금 이체"
     },
     "createButton": "예산 만들기",
     "categoryCount": "{count}개 카테고리",
@@ -400,6 +411,19 @@
     "toasts": {
       "created": "예산이 성공적으로 만들어졌습니다",
       "failed": "예산 만들기에 실패했습니다"
+    }
+  },
+  "wizardBuckets": {
+    "title": "버킷",
+    "description": "소득을 버킷으로 나눈 다음, 아래의 각 지출과 이체에 버킷을 선택하세요.",
+    "selectLabel": "{name}의 버킷",
+    "unassigned": "미배정",
+    "tallyTitle": "버킷별 항목 수",
+    "tallyValue": "{count, plural, one {#개 항목} other {#개 항목}} · {amount}",
+    "review": {
+      "lineCount": "{count, plural, one {#개 항목} other {#개 항목}}",
+      "unassigned": "{count, plural, one {지출 또는 이체 항목 #개} other {지출 또는 이체 항목 #개}}가 어떤 버킷에도 속해 있지 않습니다. 예산을 그대로 만들고 나중에 편집 페이지에서 배정할 수 있습니다.",
+      "noBuckets": "이 예산에는 아직 버킷이 없습니다. 그대로 만들고 나중에 편집 페이지에서 버킷을 추가할 수 있습니다."
     }
   },
   "zeroBasedBar": {
@@ -483,6 +507,23 @@
           "모든 지출을 그룹별로 분류해야 함"
         ],
         "bestFor": "카테고리를 일일이 추적하지 않고 균형 잡힌 경험 기반 접근법을 원하는 분들."
+      },
+      "BUCKET": {
+        "title": "버킷 예산",
+        "description": "소득을 이름 붙인 몇 개의 버킷으로 나누고, 각 버킷에 소득 대비 비율 또는 고정 금액으로 목표를 정합니다. 모든 카테고리는 하나의 버킷에 속하므로 카테고리마다 보지 않고 버킷만 확인하면 됩니다. 버킷은 남은 금액을 다음 기간으로 이월할 수 있습니다.",
+        "pros": [
+          "확인할 숫자가 적음",
+          "각 버킷 안에서 유연함",
+          "저축 버킷은 시간이 지나며 쌓임",
+          "버킷 안의 불규칙한 지출에도 적합"
+        ],
+        "cons": [
+          "카테고리별 세부 정보가 적음",
+          "카테고리를 버킷으로 분류해야 함",
+          "비율 목표에는 소득 금액이 필요함",
+          "이월 잔액은 가끔 확인해야 함"
+        ],
+        "bestFor": "카테고리별 예산은 번거롭지만 50/30/20보다는 체계가 필요한 분들."
       }
     }
   },
@@ -496,11 +537,18 @@
         "description": "지출 내역을 분석하여 첫 번째 예산을 만드세요. 마법사가 거래 내역을 바탕으로 현실적인 금액을 제안해 드립니다.",
         "cta": "첫 번째 예산 만들기"
       },
+      "loading": "예산 로드 중...",
+      "columns": {
+        "name": "이름",
+        "strategy": "전략",
+        "type": "유형",
+        "categories": "카테고리",
+        "started": "시작일",
+        "status": "상태"
+      },
       "card": {
         "active": "활성",
-        "inactive": "비활성",
-        "categories": "{count}개 카테고리",
-        "started": "{date}에 시작됨"
+        "inactive": "비활성"
       }
     },
     "create": {
@@ -509,6 +557,9 @@
     },
     "detail": {
       "backToBudgets": "예산 목록으로",
+      "switchBudget": "다른 예산으로 이동",
+      "switchPlaceholder": "예산 검색...",
+      "switchNoMatches": "일치하는 예산이 없습니다",
       "notFound": "예산을 찾을 수 없습니다",
       "delete": {
         "title": "예산 삭제",
@@ -526,22 +577,37 @@
     "edit": {
       "subtitlePrefix": "편집: ",
       "subtitle": "예산 설정 및 카테고리 배분을 업데이트하세요",
-      "backToDashboard": "대시보드로",
+      "backToBudget": "{name}(으)로 돌아가기",
       "budgetSettings": "예산 설정",
       "categoryAllocations": "카테고리 배분",
       "income": "소득",
+      "addTransferIncome": "이체 수입 추가",
+      "addTransferIncomeTitle": "이체 수입 추가",
+      "outsideTransferIncome": "이 예산 밖의 계좌에서 온 이체",
+      "outsideTransferIncomeHint": "이 예산이 제외된 계좌에서 들어오는 이체를 수입으로 계산하므로 이번 기간에 포함되었습니다.",
       "expensesWithCount": "지출 ({count})",
       "resetsEachPeriod": "매 기간 초기화",
       "percentUsed": "{percent}% 사용됨",
       "rolloverType": "이월: {type}",
       "editCategoryTitle": "{name} 편집",
+      "remove": {
+        "title": "카테고리 제거",
+        "message": "이 예산에서 \"{name}\"을(를) 제거하시겠습니까? {amount} 배정액은 더 이상 예산에 포함되지 않으며, 지난 예산 기간의 내역도 삭제됩니다. 거래에는 영향이 없습니다. 이 작업은 취소할 수 없습니다.",
+        "confirm": "제거"
+      },
       "toasts": {
         "updated": "예산이 업데이트되었습니다",
         "updateFailed": "예산 업데이트에 실패했습니다",
         "categoryUpdated": "카테고리가 업데이트되었습니다",
         "categoryFailed": "카테고리 업데이트에 실패했습니다",
-        "loadFailed": "예산 로드에 실패했습니다"
-      }
+        "loadFailed": "예산 로드에 실패했습니다",
+        "categoryRemoved": "카테고리를 예산에서 제거했습니다",
+        "categoryRemoveFailed": "카테고리를 제거하지 못했습니다",
+        "transferIncomeAdded": "이체 수입을 추가했습니다",
+        "transferIncomeFailed": "이체 수입을 추가하지 못했습니다"
+      },
+      "buckets": "버킷",
+      "unassignedBucket": "미배정"
     }
   },
   "validation": {
@@ -552,5 +618,140 @@
   "categoryValidation": {
     "amountMin": "금액은 0 이상이어야 합니다",
     "mustBeNumber": "숫자여야 합니다"
+  },
+  "bucketEditor": {
+    "presetLabel": "프리셋으로 시작",
+    "presets": {
+      "THREE": "버킷 3개",
+      "FOUR": "버킷 4개 (60/10/10/20)",
+      "SCRATCH": "처음부터 시작"
+    },
+    "presetBucketNames": {
+      "fixedCosts": "고정비",
+      "everydaySpending": "일상 지출",
+      "savings": "저축",
+      "dailyExpenses": "일상 경비",
+      "splurge": "자유 지출",
+      "longTermGoals": "장기 목표",
+      "safetyAndDebt": "안전 자금 및 부채"
+    },
+    "listLabel": "버킷",
+    "empty": {
+      "title": "아직 버킷이 없습니다",
+      "description": "프리셋으로 시작하거나 버킷을 추가한 다음 각 카테고리를 배정하세요."
+    },
+    "add": "버킷 추가",
+    "limitReached": "예산 하나에 버킷은 최대 {max}개까지 만들 수 있습니다.",
+    "newTitle": "새 버킷",
+    "editTitle": "{name} 편집",
+    "summary": "비율 목표의 합계는 {percent}, 금액 목표의 합계는 {amount}입니다.",
+    "row": {
+      "percentTarget": "소득의 {percent}",
+      "amountTarget": "기간당 {amount}",
+      "noCarry": "매 기간 새로 시작",
+      "carries": "이월됨",
+      "carriesUpTo": "이월됨, 최대 {cap}",
+      "caption": "{target} · {carry}",
+      "edit": "편집",
+      "delete": "삭제",
+      "editLabel": "{name} 편집",
+      "deleteLabel": "{name} 삭제"
+    },
+    "targetTypes": {
+      "PERCENT": "소득 대비 비율",
+      "AMOUNT": "고정 금액"
+    },
+    "form": {
+      "name": "이름",
+      "namePlaceholder": "예: 저축",
+      "targetType": "목표",
+      "targetTypeTooltip": "비율 목표는 예산 소득에 대한 비율입니다. 소득 연동 예산은 이번 기간에 받은 소득, 그렇지 않으면 기준 소득, 그것도 없으면 소득 카테고리의 금액을 기준으로 합니다. 고정 금액은 매 기간 동일합니다.",
+      "targetPercent": "소득 대비 비율",
+      "targetAmount": "기간당 금액",
+      "carryOver": "남은 금액 이월",
+      "carryOverTooltip": "기간이 끝날 때 버킷에 남은 금액이 다음 기간에 더해집니다. 초과 지출한 버킷은 아무것도 이월되지 않습니다.",
+      "carryCap": "이월 한도 (선택)",
+      "carryCapPlaceholder": "한도 없음",
+      "save": "저장",
+      "saveChanges": "변경 사항 저장"
+    },
+    "validation": {
+      "nameRequired": "이름을 입력하세요",
+      "nameMax": "이름은 최대 {max}자까지 가능합니다",
+      "nameDuplicate": "같은 이름의 다른 버킷이 이미 있습니다",
+      "targetRequired": "목표를 입력하세요",
+      "percentRange": "비율 목표는 0보다 크고 100 이하여야 합니다",
+      "percentDecimals": "비율 목표는 소수점 둘째 자리까지 가능합니다",
+      "amountPositive": "금액 목표는 0보다 커야 합니다",
+      "capNeedsCarryOver": "이월 한도를 쓰려면 이월을 켜야 합니다",
+      "capPositive": "이월 한도는 0보다 커야 합니다"
+    },
+    "delete": {
+      "title": "버킷 삭제",
+      "message": "버킷 \"{name}\"을(를) 삭제하시겠습니까? 이 버킷의 카테고리는 미배정이 됩니다.",
+      "confirm": "삭제"
+    },
+    "replace": {
+      "title": "버킷 교체",
+      "message": "현재 버킷을 \"{preset}\"(으)로 교체하시겠습니까? 현재 버킷은 삭제되고 그 카테고리는 미배정이 됩니다.",
+      "clearMessage": "모든 버킷을 삭제하고 처음부터 시작하시겠습니까? 해당 카테고리는 미배정이 됩니다.",
+      "confirm": "교체"
+    },
+    "toasts": {
+      "created": "버킷을 추가했습니다",
+      "updated": "버킷을 업데이트했습니다",
+      "deleted": "버킷을 삭제했습니다",
+      "saveFailed": "버킷 저장에 실패했습니다",
+      "deleteFailed": "버킷 삭제에 실패했습니다",
+      "presetApplied": "프리셋을 적용했습니다",
+      "presetFailed": "프리셋 적용에 실패했습니다"
+    }
+  },
+  "bucketSummary": {
+    "title": "버킷 배분",
+    "loading": "버킷 배분 불러오는 중",
+    "loadFailed": "버킷 배분을 불러오지 못했습니다. 잠시 후 다시 시도하세요.",
+    "emptyTitle": "아직 버킷이 없습니다",
+    "emptyDescription": "버킷을 추가해 소득을 이름 붙인 몫으로 나누세요.",
+    "emptyAction": "버킷 추가",
+    "income": "버킷 소득",
+    "incomeUnknown": "알 수 없음",
+    "incomeSource": {
+      "ACTUAL": "이번 기간의 실제 소득 기준",
+      "BASE_INCOME": "예산의 기준 소득 기준",
+      "INCOME_LINES": "계획한 소득 카테고리 기준",
+      "NONE": "소득을 찾을 수 없음"
+    },
+    "totalAllocated": "총 배분액",
+    "allocatedSoFar": "지금까지 배분",
+    "allocatedSoFarHint": "금액을 알 수 없는 버킷이 있어 일부만 반영된 수치입니다.",
+    "unallocated": "미배분",
+    "unallocatedUnknown": "알 수 없음",
+    "overAllocatedHint": "초과 배분: 버킷의 합계가 소득보다 큽니다.",
+    "targetPercent": "소득의 {percent}",
+    "targetAmount": "기간당 {amount}",
+    "carriedIn": "이월 {amount}",
+    "spent": "지출",
+    "available": "사용 가능",
+    "overspent": "초과 지출",
+    "categories": "{count, plural, one {카테고리 #개} other {카테고리 #개}}",
+    "allocationUnknown": "예산에 기준 소득을 설정하거나 소득 카테고리를 추가하세요.",
+    "allocationUnknownAction": "예산 편집",
+    "unassignedTitle": "미배정",
+    "unassignedDescription": "{count, plural, one {카테고리 항목 #개} other {카테고리 항목 #개}}가 어떤 버킷에도 속해 있지 않습니다.",
+    "unassignedPlanned": "계획",
+    "unassignedAction": "배정하기"
+  },
+  "periodBuckets": {
+    "title": "버킷",
+    "name": "버킷",
+    "target": "목표",
+    "allocated": "배분",
+    "allocatedUnknown": "알 수 없음",
+    "carriedIn": "전기 이월",
+    "spent": "지출",
+    "carriedOut": "차기 이월",
+    "targetPercent": "소득의 {percent}",
+    "targetAmount": "기간당 {amount}"
   }
 }

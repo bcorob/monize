@@ -102,7 +102,10 @@ describe("GemStrategyService", () => {
   let signalService: Record<string, jest.Mock>;
   let positionService: { build: jest.Mock };
   let performanceService: { build: jest.Mock };
-  let priceService: { latestPriceDates: jest.Mock };
+  let priceService: {
+    latestPriceDates: jest.Mock;
+    earliestPriceDates: jest.Mock;
+  };
   let backfillService: { ensureHistory: jest.Mock };
   let backtestService: { build: jest.Mock };
 
@@ -207,6 +210,13 @@ describe("GemStrategyService", () => {
         .fn()
         .mockImplementation((ids: string[]) =>
           Promise.resolve(new Map(ids.map((id) => [id, "2025-08-13"]))),
+        ),
+      // Every required leg has deep history by default, so the short-history
+      // warning stays off unless a test moves an earliest date forward.
+      earliestPriceDates: jest
+        .fn()
+        .mockImplementation((ids: string[]) =>
+          Promise.resolve(new Map(ids.map((id) => [id, "2000-01-01"]))),
         ),
     };
     backfillService = { ensureHistory: jest.fn().mockResolvedValue([]) };
@@ -624,6 +634,36 @@ describe("GemStrategyService", () => {
       const report = await service.getReport(userId);
       expect(report.signal).toBeNull();
       expect(report.warnings.map((w) => w.code)).toContain(
+        "CALCULATION_FAILED",
+      );
+    });
+
+    it("names the leg and the date when a required instrument's history is too short", async () => {
+      // No current signal, and the EM leg's earliest close (2025-06-01) is
+      // after the window start (2024-07-31 = the 2025-07 evaluation minus 12
+      // months), so the trailing return has no base. The warning names the leg
+      // and the date to fetch prices back to, in place of the generic failure.
+      signalService.currentSignal.mockReturnValue(null);
+      priceService.earliestPriceDates.mockImplementation((ids: string[]) =>
+        Promise.resolve(
+          new Map(
+            ids.map((id) => [
+              id,
+              id === "sec-emim" ? "2025-06-01" : "2000-01-01",
+            ]),
+          ),
+        ),
+      );
+
+      const report = await service.getReport(userId);
+
+      expect(report.warnings.find((w) => w.code === "SHORT_HISTORY")).toEqual({
+        code: "SHORT_HISTORY",
+        roles: ["EM_EQUITY"],
+        requiredFrom: "2024-07-31",
+      });
+      // The specific warning replaces the generic one it explains.
+      expect(report.warnings.map((w) => w.code)).not.toContain(
         "CALCULATION_FAILED",
       );
     });

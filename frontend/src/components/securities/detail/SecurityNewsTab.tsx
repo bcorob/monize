@@ -38,16 +38,30 @@ export function SecurityNewsTab({ security }: SecurityNewsTabProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  // A different security is a new request: it shows as loading from the
+  // render that asks for it (the "info from previous render" pattern). The
+  // first load needs nothing here, `isLoading` starts true and `error` null.
+  const [loadingFor, setLoadingFor] = useState(security.id);
+  if (loadingFor !== security.id) {
+    setLoadingFor(security.id);
     setIsLoading(true);
     setError(null);
-    try {
-      setNews(await investmentsApi.getSecurityNews(security.id));
-    } catch (err) {
-      setError(getErrorMessage(err, t('news.loadFailed')));
-    } finally {
-      setIsLoading(false);
-    }
+  }
+
+  const load = useCallback(() => {
+    // The writes live in the inner function so they run after the request,
+    // not during the effect that starts it.
+    const run = async () => {
+      try {
+        const loaded = await investmentsApi.getSecurityNews(security.id);
+        setNews(loaded);
+      } catch (err) {
+        setError(getErrorMessage(err, t('news.loadFailed')));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    return run();
   }, [security.id, t]);
 
   useEffect(() => {

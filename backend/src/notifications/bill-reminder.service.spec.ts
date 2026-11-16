@@ -5,6 +5,8 @@ import { I18nService } from "nestjs-i18n";
 import { BillReminderService } from "./bill-reminder.service";
 import { ScheduledEffectiveAmountService } from "../scheduled-transactions/scheduled-effective-amount.service";
 import { ScheduledOccurrenceService } from "../scheduled-transactions/scheduled-occurrence.service";
+import { ScheduledAmountEstimateService } from "../scheduled-transactions/scheduled-amount-estimate.service";
+import { ScheduledTransactionLoanService } from "../scheduled-transactions/scheduled-transaction-loan.service";
 import { InvestmentTransactionsService } from "../securities/investment-transactions.service";
 import {
   createInvestmentFxMock,
@@ -16,6 +18,7 @@ import { ScheduledTransactionOverride } from "../scheduled-transactions/entities
 import { User } from "../users/entities/user.entity";
 import { UserPreference } from "../users/entities/user-preference.entity";
 import { createScopedDbMocks } from "../test-helpers/scoped-db-testing";
+import { NotificationPreferenceService } from "../notification-center/notification-preference.service";
 import {
   createJobClaimMock,
   TEST_LEASE_TOKEN,
@@ -96,6 +99,23 @@ describe("BillReminderService", () => {
         // Both read-side services are real over the stubbed FX source: which
         // occurrence is due and what it costs ARE their output (issue #1247).
         ScheduledOccurrenceService,
+        // No estimated schedule unless a test says so (issue #2096); the
+        // estimate's own arithmetic is `amount-estimate.spec.ts`'s.
+        {
+          provide: ScheduledAmountEstimateService,
+          useValue: {
+            estimateMany: jest.fn().mockResolvedValue(new Map()),
+            estimateFor: jest.fn(),
+          },
+        },
+        // No loan bill here: the per-occurrence loan pricing is
+        // `scheduled-occurrence.service.spec.ts`'s.
+        {
+          provide: ScheduledTransactionLoanService,
+          useValue: {
+            projectLoanOccurrencesMany: jest.fn().mockResolvedValue(new Map()),
+          },
+        },
         ScheduledEffectiveAmountService,
         {
           provide: InvestmentTransactionsService,
@@ -110,6 +130,20 @@ describe("BillReminderService", () => {
           useValue: {
             translate: (key: string, opts?: { defaultValue?: string }) =>
               opts?.defaultValue ?? key,
+          },
+        },
+        {
+          // Mirror the real resolver's master-gate: with no per-category row,
+          // resolveEmail == the user's notification_email, so the existing
+          // preferencesRepo fixtures keep controlling the email path.
+          provide: NotificationPreferenceService,
+          useValue: {
+            resolveEmail: jest.fn(async (userId: string) => {
+              const prefs = await preferencesRepo.findOne({
+                where: { userId },
+              });
+              return prefs ? prefs.notificationEmail !== false : true;
+            }),
           },
         },
       ],
@@ -571,6 +605,11 @@ describe("BillReminderService", () => {
               logoContentType: null,
               hasLogo: false,
               logoFetchedAt: null,
+              address: null,
+              email: null,
+              phone: null,
+              contactLookupAt: null,
+              contactLookupSource: null,
               isActive: true,
               defaultCategory: null as any,
               createdAt: new Date(),
@@ -856,6 +895,61 @@ describe("BillReminderService", () => {
 
           // Should have tried to send to both users
           expect(emailService.sendMail).toHaveBeenCalledTimes(2);
+        });
+
+        it("passes over a bill it cannot expand and reminds every other user", async () => {
+          // A row the cross-user pass cannot walk (here a start date that is
+          // not a date) used to throw out of the loop and end the run for
+          // everybody.
+          const broken = makeBill({
+            id: "bill-broken",
+            userId: userId1,
+            frequency: "MONTHLY",
+            startDate: "not-a-date" as unknown as string,
+            nextDueDate: daysFromNow(1),
+            reminderDaysBefore: 3,
+          });
+          const healthy = makeBill({
+            id: "bill-healthy",
+            userId: userId2,
+            nextDueDate: daysFromNow(1),
+            reminderDaysBefore: 3,
+          });
+          scheduledTransactionsRepo.find.mockResolvedValue([broken, healthy]);
+          preferencesRepo.findOne.mockResolvedValue({
+            notificationEmail: true,
+          });
+          usersRepo.findOne.mockResolvedValue(mockUser2);
+
+          await expect(service.sendBillReminders()).resolves.toBeUndefined();
+
+          expect(emailService.sendMail).toHaveBeenCalledTimes(1);
+          expect(emailService.sendMail.mock.calls[0][0]).toBe(
+            "user2@example.com",
+          );
+        });
+
+        it("moves on to the next user when one user's claim fails", async () => {
+          const bill1 = makeBill({
+            id: "bill-1",
+            userId: userId1,
+            nextDueDate: daysFromNow(1),
+          });
+          const bill2 = makeBill({
+            id: "bill-2",
+            userId: userId2,
+            nextDueDate: daysFromNow(1),
+          });
+          scheduledTransactionsRepo.find.mockResolvedValue([bill1, bill2]);
+          preferencesRepo.findOne.mockResolvedValue({
+            notificationEmail: true,
+          });
+          usersRepo.findOne.mockResolvedValue(mockUser2);
+          jobClaims.claimLease.mockRejectedValueOnce(new Error("lease table"));
+
+          await expect(service.sendBillReminders()).resolves.toBeUndefined();
+
+          expect(emailService.sendMail).toHaveBeenCalledTimes(1);
         });
 
         it("does not throw when sendMail throws an error", async () => {

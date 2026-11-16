@@ -77,9 +77,9 @@ export function CategoryInfoWidget({
   const t = useTranslations('transactions');
   const tCommon = useTranslations('common');
   const router = useRouter();
-  const { formatCurrency } = useNumberFormat();
+  const { formatCurrency, formatPercentTrimmed } = useNumberFormat();
   const { formatDate } = useDateFormat();
-  const { convertToDefault, defaultCurrency } = useExchangeRates();
+  const { defaultCurrency } = useExchangeRates();
 
   const [summary, setSummary] = useState<TransactionSummary | null>(null);
   const [groupedPayees, setGroupedPayees] = useState<GroupedTotal[]>([]);
@@ -152,8 +152,8 @@ export function CategoryInfoWidget({
   );
 
   const currencyStrategy = useMemo(
-    () => buildDisplayCurrencyStrategy(summary, defaultCurrency, convertToDefault),
-    [summary, defaultCurrency, convertToDefault],
+    () => buildDisplayCurrencyStrategy(summary, defaultCurrency),
+    [summary, defaultCurrency],
   );
 
   const totals = useMemo(
@@ -204,7 +204,9 @@ export function CategoryInfoWidget({
   // as the intuitive "total spend / months elapsed".
   const monthlyAverage = useMemo(() => {
     if (monthlyTotals.length === 0) return null;
-    const sum = sumMoney(monthlyTotals.map((m) => Math.abs(m.total)));
+    // A month without a rate has no total, so the average is withheld.
+    if (monthlyTotals.some((m) => m.total === null)) return null;
+    const sum = sumMoney(monthlyTotals.map((m) => Math.abs(m.total as number)));
     const elapsedMonths = countElapsedPeriods(monthlyTotals, 'month');
     return elapsedMonths > 0 ? sum / elapsedMonths : null;
   }, [monthlyTotals]);
@@ -366,7 +368,7 @@ export function CategoryInfoWidget({
               {t('categoryWidget.monthlyAverage')}
             </dt>
             <dd className="text-gray-900 dark:text-gray-100 text-right">
-              {formatCurrency(monthlyAverage, currencyStrategy.displayCurrency)}
+              {formatCurrency(monthlyAverage, monthlyTotals.find((m) => m.currency)?.currency ?? currencyStrategy.displayCurrency)}
             </dd>
           </div>
         )}
@@ -386,7 +388,7 @@ export function CategoryInfoWidget({
           <ul className="space-y-1 text-sm">
             {subcategoryShares.map((row) => {
               const label = row.name ?? t('categoryWidget.thisCategory');
-              const amount = `${formatCurrency(Math.abs(row.total), currencyStrategy.displayCurrency)} · ${Math.round(row.share * 100)}%`;
+              const amount = `${formatCurrency(Math.abs(row.total), currencyStrategy.displayCurrency)} · ${formatPercentTrimmed(Math.round(row.share * 100))}`;
               const clickable = row.id !== category.id && onSubcategoryClick;
               return (
                 <li key={row.id}>
@@ -396,14 +398,14 @@ export function CategoryInfoWidget({
                       onClick={() => onSubcategoryClick!(row.id)}
                       className="w-full flex items-baseline justify-between gap-3 text-left rounded hover:bg-gray-50 dark:hover:bg-gray-700/40 px-1 -mx-1"
                     >
-                      <span className="text-blue-600 dark:text-blue-400 truncate">{label}</span>
+                      <span className="text-blue-600 dark:text-blue-400 min-w-0 break-words sm:truncate" title={label}>{label}</span>
                       <span className="text-gray-900 dark:text-gray-100 whitespace-nowrap">
                         {amount}
                       </span>
                     </button>
                   ) : (
                     <div className="flex items-baseline justify-between gap-3 px-1 -mx-1">
-                      <span className="text-gray-700 dark:text-gray-300 truncate">{label}</span>
+                      <span className="text-gray-700 dark:text-gray-300 min-w-0 break-words sm:truncate" title={label}>{label}</span>
                       <span className="text-gray-900 dark:text-gray-100 whitespace-nowrap">
                         {amount}
                       </span>
@@ -441,12 +443,12 @@ export function CategoryInfoWidget({
                       onClick={() => onPayeeClick(row.id!)}
                       className="w-full flex items-baseline justify-between gap-3 text-left rounded hover:bg-gray-50 dark:hover:bg-gray-700/40 px-1 -mx-1"
                     >
-                      <span className="text-blue-600 dark:text-blue-400 truncate">{label}</span>
+                      <span className="text-blue-600 dark:text-blue-400 min-w-0 break-words sm:truncate" title={label}>{label}</span>
                       <span className="text-gray-900 dark:text-gray-100">{amount}</span>
                     </button>
                   ) : (
                     <div className="flex items-baseline justify-between gap-3 px-1 -mx-1">
-                      <span className="text-gray-700 dark:text-gray-300 truncate">{label}</span>
+                      <span className="text-gray-700 dark:text-gray-300 min-w-0 break-words sm:truncate" title={label}>{label}</span>
                       <span className="text-gray-900 dark:text-gray-100">{amount}</span>
                     </div>
                   )}

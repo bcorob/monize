@@ -1,0 +1,120 @@
+{
+  "page": {
+    "title": "Skrzynka przeglądów AI",
+    "subtitle": "Transakcje, które reguła kazała sprawdzić sztucznej inteligencji, profile, które asystent miał przygotować, oraz zmiany zaproponowane przez asystenta do Twojej akceptacji."
+  },
+  "filter": {
+    "label": "Filtruj według statusu",
+    "open": "Otwarte",
+    "pending": "Oczekujące",
+    "claimed": "W trakcie przeglądu",
+    "proposed": "Zaproponowane",
+    "applied": "Zastosowane",
+    "rejected": "Odrzucone",
+    "expired": "Wygasłe"
+  },
+  "kindFilter": {
+    "label": "Filtruj według rodzaju",
+    "all": "Wszystkie",
+    "email_receipt": "Paragony z e-maili",
+    "transaction_review": "Reguły",
+    "option": "{label} ({count})"
+  },
+  "status": {
+    "pending": "Oczekuje",
+    "claimed": "W trakcie przeglądu",
+    "proposed": "Zaproponowano",
+    "applied": "Zastosowano",
+    "rejected": "Odrzucono",
+    "expired": "Wygasło"
+  },
+  "columns": {
+    "date": "Data",
+    "request": "Prośba",
+    "amount": "Kwota",
+    "status": "Status"
+  },
+  "row": {
+    "noPayee": "Brak odbiorcy",
+    "transactionMissing": "Ta transakcja już nie istnieje",
+    "rule": "Reguła: {name}",
+    "manualRequest": "Zgłoszono ręcznie",
+    "trade": "{action, select, BUY {Zakup {quantity} jedn. {symbol}} SELL {Sprzedaż {quantity} jedn. {symbol}} DIVIDEND {Dywidenda z {symbol}} REINVEST {Reinwestycja dywidendy w {quantity} jedn. {symbol}} other {Transakcja na {symbol}}}",
+    "receiptInstruction": {
+      "automatic": "Uzupełnij tę transakcję na podstawie załączonego e-maila z zamówieniem: podziel ją na pozycje, każdą z kategorią, albo ustaw opis.",
+      "chat": "Poproszono o rozpoznanie załączonego e-maila z zamówieniem: podziel tę transakcję na produkty, każdy z kategorią, albo ustaw opis.",
+      "categorize": "Przypisz kategorię każdej pozycji załączonego e-maila z zamówieniem, której nie skategoryzowała żadna reguła. Następnie zaproponuj podział tej transakcji albo ustaw opis.",
+      "parsed": "Zapisany parser odczytał e-mail z zamówieniem i proponuje dla transakcji te pozycje kategorii oraz ten opis.",
+      "trade": "Wiadomość z potwierdzeniem transakcji odczytana przez zapisany parser proponuje tę transakcję inwestycyjną. Przed zatwierdzeniem sprawdź konto, papier wartościowy, liczbę jednostek i sumę u swojego brokera.",
+      "tradeChat": "Poprosiłeś o rozpoznanie załączonego potwierdzenia transakcji: zaproponuj zgłaszaną w nim transakcję inwestycyjną, czyli kupno, sprzedaż, dywidendę pieniężną lub reinwestowaną dywidendę."
+    },
+    "emailReceipt": "Paragon z e-maila: {subject}, nadawca: {sender}",
+    "emailReceiptForwarded": "Paragon z e-maila: {subject}, nadawca: {sender}, przekazane przez: {forwarder}",
+    "emailReceiptMissing": "Paragon z e-maila (wiadomość została usunięta)",
+    "parserDraft": "Szkic profilu z {count, plural, one {# wiadomości} few {# wiadomości} many {# wiadomości} other {# wiadomości}} ({domain})",
+    "viewEmailReceipts": "Zobacz paragony z e-maili",
+    "agentNote": "Uwaga asystenta: {reason}",
+    "dates": "Utworzono {created}, wygasa {expires}",
+    "viewTransaction": "Zobacz transakcję",
+    "waitingForAgent": "Oczekiwanie na agenta AI. <link>Połącz dostawcę AI w Ustawieniach</link> lub pozwól klientowi MCP ją przejąć.",
+    "parserDraftReady": "Szkic profilu gotowy. <link>Przetestuj i zatwierdź go w ustawieniach profili</link>.",
+    "tradePending": "Transakcja z e-maila, jeszcze nieodczytana",
+    "tradeEmail": "Wiadomość z potwierdzeniem transakcji",
+    "parserDraftIds": "Identyfikatory szkiców profili: {ids}"
+  },
+  "actions": {
+    "dismiss": "Odrzuć"
+  },
+  "proposal": {
+    "errorTitle": "Tej propozycji nie można już zastosować"
+  },
+  "bulk": {
+    "selectRow": "Zaznacz: {name}",
+    "selectAll": "Zaznacz wszystkie widoczne żądania, które można zatwierdzić lub wysłać",
+    "approveSelected": "Zatwierdź zaznaczone ({count})",
+    "approveAllShown": "Zatwierdź wszystkie pokazane ({count})",
+    "summary": "{approved, plural, one {Zastosowano # propozycję} few {Zastosowano # propozycje} many {Zastosowano # propozycji} other {Zastosowano # propozycji}}, nie zastosowano: {failed}.",
+    "closeSummary": "Zamknij",
+    "failure": "{name}: {reason}",
+    "noReason": "Nie podano powodu",
+    "unknownRequest": "Prośba",
+    "failed": "Nie udało się zastosować propozycji",
+    "dialog": {
+      "title": "{count, plural, one {Zastosować # propozycję?} few {Zastosować # propozycje?} many {Zastosować # propozycji?} other {Zastosować # propozycji?}}",
+      "message": "Każda propozycja jest sprawdzana względem transakcji w jej obecnym stanie i stosowana osobno. Propozycja, która już nie pasuje, jest pomijana i zgłaszana, a pozostałe są nadal stosowane. Przejrzyj propozycje przed ich zatwierdzeniem.",
+      "confirm": "{count, plural, one {Zastosuj # propozycję} few {Zastosuj # propozycje} many {Zastosuj # propozycji} other {Zastosuj # propozycji}}"
+    }
+  },
+  "sendToAssistant": {
+    "button": "Skieruj {count, plural, one {# oczekujące żądanie} few {# oczekujące żądania} many {# oczekujących żądań} other {# oczekującego żądania}} do asystenta AI",
+    "buttonSelected": "Skieruj {count, plural, one {# zaznaczone żądanie} few {# zaznaczone żądania} many {# zaznaczonych żądań} other {# zaznaczonego żądania}} do asystenta AI",
+    "prompt": "Przetwórz moje oczekujące żądania przeglądu AI narzędziem ai_review_requests: wyświetl ich listę, przejmij każde z nich, wykonaj jego instrukcję i prześlij propozycję. Dla żądania szkicu profilu utwórz profil narzędziem email_receipt_parsers. Nic nie zostanie zmienione, dopóki nie zatwierdzę propozycji w skrzynce przeglądu AI.",
+    "promptSelected": "Przetwórz narzędziem ai_review_requests {count, plural, one {to żądanie przeglądu AI} few {te # żądania przeglądu AI} many {tych # żądań przeglądu AI} other {te # żądania przeglądu AI}}: {ids}. Przejmij każde z nich po identyfikatorze, wykonaj jego instrukcję i prześlij propozycję. Dla żądania szkicu profilu utwórz profil narzędziem email_receipt_parsers. Nie ruszaj pozostałych żądań. Nic nie zostanie zmienione, dopóki nie zatwierdzę propozycji w skrzynce przeglądu AI.",
+    "opened": "Otwarto czat z przygotowaną wiadomością. Przeczytaj ją i naciśnij Wyślij.",
+    "unavailable": "Asystent AI nie może teraz odpowiedzieć. Połącz dostawcę AI w Ustawieniach albo połącz klienta MCP. Żądania nadal czekają tutaj."
+  },
+  "dismissDialog": {
+    "title": "Odrzucić tę prośbę?",
+    "message": "Nikt nie zostanie ponownie poproszony o zajęcie się tą prośbą. Nic, czego dotyczyła, nie zostanie zmienione.",
+    "confirm": "Odrzuć prośbę"
+  },
+  "loading": "Wczytywanie próśb o przegląd...",
+  "error": {
+    "title": "Nie udało się wczytać próśb o przegląd",
+    "body": "Lista się nie wczytała, więc może nie być pusta. Sprawdź połączenie i spróbuj ponownie.",
+    "retry": "Spróbuj ponownie"
+  },
+  "empty": {
+    "title": "Brak próśb o przegląd",
+    "body": "Prośby pojawiają się tutaj, gdy reguła z akcją „Poproś o przegląd AI” pasuje do transakcji. Asystent AI lub klient MCP, na przykład agent przekaźnika, opracowuje kolejkę i proponuje zmianę do Twojej akceptacji.",
+    "filteredTitle": "Brak próśb o tym statusie",
+    "filteredBody": "Wybierz inny status, aby zobaczyć pozostałe prośby."
+  },
+  "toasts": {
+    "approved": "Propozycja zastosowana",
+    "dismissed": "Prośba odrzucona",
+    "dismissFailed": "Nie udało się odrzucić prośby",
+    "approveFailed": "Nie udało się zastosować propozycji",
+    "changed": "Ta prośba w międzyczasie się zmieniła. Lista została wczytana ponownie."
+  }
+}

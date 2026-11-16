@@ -7,16 +7,24 @@ vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
-vi.mock("@/hooks/useNumberFormat", () => ({
-  useNumberFormat: () => ({
-    formatCurrencyCompact: (n: number) => `$${n.toFixed(2)}`,
-    formatCurrency: (n: number) => `$${n.toFixed(2)}`,
-    formatCurrencyAxis: (n: number) => `$${n}`,
-    defaultCurrency: "CAD",
-  }),
-}));
-
-const STABLE_RANGE = { start: "2025-01-01", end: "2025-03-31" };
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrencyCompact: (n: number) => `$${n.toFixed(2)}`,
+      formatCurrency: (n: number) => `$${n.toFixed(2)}`,
+      formatCurrencyAxis: (n: number) => `$${n}`,
+      defaultCurrency: "CAD",
+    }),
+};
+});
+// The selection the mocked range hook reports; a test moves it and re-renders.
+const mockRange = { end: "2025-03-31" };
+const STABLE_RANGE = {
+  start: "2025-01-01",
+  get end() { return mockRange.end; },
+};
 vi.mock("@/hooks/useDateRange", () => ({
   useDateRange: () => ({
     dateRange: "3m",
@@ -73,10 +81,10 @@ vi.mock("@/lib/built-in-reports", () => ({
 }));
 
 vi.mock("@/components/ui/ExportDropdown", () => ({
-  ExportDropdown: ({ onExportCsv, onExportPdf }: any) => (
+  ExportDropdown: ({ onExportCsv, onExportPdf, disabled }: any) => (
     <div data-testid="export-dropdown">
-      <button data-testid="export-csv" onClick={onExportCsv}>CSV</button>
-      <button data-testid="export-pdf" onClick={onExportPdf}>PDF</button>
+      <button data-testid="export-csv" onClick={onExportCsv} data-disabled={String(disabled === true)}>CSV</button>
+      <button data-testid="export-pdf" onClick={onExportPdf} data-disabled={String(disabled === true)}>PDF</button>
     </div>
   ),
 }));
@@ -105,6 +113,7 @@ describe("SpendingByPayeeReport", () => {
     vi.clearAllMocks();
     mockPush.mockClear();
     barOnClickArg = { id: "p-1" };
+    mockRange.end = "2025-03-31";
   });
 
   it("shows loading state initially", () => {
@@ -301,5 +310,64 @@ describe("SpendingByPayeeReport", () => {
       await act(async () => { fireEvent.click(ths[i]); });
     }
     await act(async () => { fireEvent.click(screen.getByTestId("export-csv")); });
+  });
+
+  it("marks the total a subtotal and shows no 0.00 when a payee row was left out", async () => {
+    mockGetSpendingByPayee.mockResolvedValue({
+      data: [{ payeeId: "p-1", payeeName: "Superstore", total: 50 }],
+      totalSpending: null,
+      knownSpending: 50,
+      currency: "CAD",
+      missingCurrencies: ["JPY"],
+      excludedCount: 1,
+    });
+    render(<SpendingByPayeeReport />);
+    expect(await screen.findByTestId("partial-total")).toBeInTheDocument();
+    expect(screen.getByTestId("partial-total")).toHaveTextContent("$50.00");
+    expect(screen.queryByText("$0.00")).not.toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByTestId("toggle-table")); });
+    expect(await screen.findByTestId("partial-total")).toHaveTextContent("$50.00");
+    expect(screen.queryByText("$0.00")).not.toBeInTheDocument();
+  });
+});
+
+describe("SpendingByPayeeReport: a reload is not the previous answer", () => {
+  const answer = { data: [{ payeeId: "p-1", payeeName: "Shop", total: 100 }], totalSpending: 100 };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockRange.end = "2025-03-31";
+  });
+
+  async function loadThenChangeRange(next: () => unknown) {
+    mockGetSpendingByPayee.mockResolvedValue(answer);
+    let view!: ReturnType<typeof render>;
+    await act(async () => {
+      view = render(<SpendingByPayeeReport />);
+    });
+    expect(screen.getByTestId("export-pdf")).toHaveAttribute("data-disabled", "false");
+
+    mockGetSpendingByPayee.mockImplementation(next);
+    mockRange.end = "2025-04-30";
+    await act(async () => {
+      view.rerender(<SpendingByPayeeReport />);
+    });
+    await waitFor(() =>
+      expect(mockGetSpendingByPayee).toHaveBeenLastCalledWith(
+        expect.objectContaining({ endDate: "2025-04-30" }),
+      ),
+    );
+  }
+
+  it("disables the export while the next request has failed", async () => {
+    await loadThenChangeRange(() => Promise.reject(new Error("500")));
+    expect(screen.getByTestId("export-pdf")).toHaveAttribute("data-disabled", "true");
+    expect(screen.getByTestId("export-csv")).toHaveAttribute("data-disabled", "true");
+  });
+
+  it("disables the export while the next request is pending", async () => {
+    await loadThenChangeRange(() => new Promise(() => {}));
+    expect(screen.getByTestId("export-pdf")).toHaveAttribute("data-disabled", "true");
+    expect(screen.getByTestId("export-csv")).toHaveAttribute("data-disabled", "true");
   });
 });

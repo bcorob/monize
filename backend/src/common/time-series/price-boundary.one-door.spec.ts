@@ -48,15 +48,6 @@ const BASELINE: ReadonlyArray<{ file: string; reason: string }> = [
       "valuation.",
   },
   {
-    file: "currencies/exchange-rate.service.ts",
-    reason:
-      "getLatestRate takes an optional maxAgeDays and its money call sites " +
-      "pass one; getRateForDate's carry-forward has an upper bound but no " +
-      "lower one. Pre-existing, and deliberately not built upon -- the " +
-      "Security Performance comparison converts nothing (see " +
-      "docs/security-benchmark-comparison.md section 2).",
-  },
-  {
     file: "securities/portfolio.service.ts",
     reason:
       "getLatestPrices and the ROW_NUMBER latest-close CTEs behind the " +
@@ -74,14 +65,6 @@ const BASELINE: ReadonlyArray<{ file: string; reason: string }> = [
       "Latest price *source* per security (which provider last wrote), and " +
       "the securities list's latest-close column. The source is metadata " +
       "about the row, not a value-for-a-date.",
-  },
-  {
-    file: "monte-carlo/monte-carlo.service.ts",
-    reason:
-      "Year-end closes for the historical return sample. Bounded by the " +
-      "bucket rather than by a lag window; it also carries a per-row " +
-      "COALESCE(adjusted_close, close_price), which rule 1 forbids and which " +
-      "is recorded here so it is not mistaken for an endorsed pattern.",
   },
 ];
 

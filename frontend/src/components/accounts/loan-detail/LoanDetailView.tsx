@@ -2,6 +2,7 @@
 
 import {
   useCallback,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -13,7 +14,12 @@ import { AmortizationScheduleTable } from '@/components/accounts/loan-detail/Amo
 import { OverpaymentSimulator } from '@/components/accounts/loan-detail/OverpaymentSimulator';
 import { PayoffComparisonChart } from '@/components/accounts/loan-detail/PayoffComparisonChart';
 import { RateHistorySidebar } from '@/components/accounts/loan-detail/RateHistorySidebar';
+import {
+  PaymentMatchingPanel,
+  type LoanSettlementsState,
+} from '@/components/accounts/loan-detail/PaymentMatchingPanel';
 import { ComparisonSummaryCards } from '@/components/accounts/loan-detail/ComparisonSummaryCards';
+import { LoanFeesPanel } from '@/components/accounts/loan-detail/LoanFeesPanel';
 import { SavedScenariosPanel } from '@/components/accounts/loan-detail/SavedScenariosPanel';
 import {
   hasKnownInterestSaved,
@@ -21,20 +27,24 @@ import {
   type ScenarioOutcome,
 } from '@/components/accounts/loan-detail/ScenarioComparisonChart';
 import { createScenarioLabels } from '@/components/accounts/loan-detail/loan-scenario-labels';
-import { ExportDropdown } from '@/components/ui/ExportDropdown';
 import { sanitizeFilename } from '@/lib/export-filename';
 import { buildScheduleDisplayRows, type DisplayRow } from '@/lib/loan-schedule-rows';
 import type { CellValue, PdfTableSection } from '@/lib/pdf-export';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useChartDateFormat } from '@/hooks/useChartDateFormat';
+import { useDateFormat } from '@/hooks/useDateFormat';
 import { useFinancialToday } from '@/hooks/useFinancialToday';
 import { PastImpactSection } from '@/components/accounts/loan-detail/PastImpactSection';
 import { useLoanRateEditing } from '@/components/accounts/loan-detail/useLoanRateEditing';
 import {
   buildLoanProjectionInput,
   deriveLoanPaymentHistory,
+  diagnoseLoanProjection,
   resolveCurrentLoanTerms,
 } from '@/lib/loan-history';
+import { SimulatorUnavailableNotice } from '@/components/accounts/loan-detail/SimulatorUnavailableNotice';
+import { LoanNotAmortizingNotice } from '@/components/accounts/loan-detail/LoanNotAmortizingNotice';
+import { loanNotAmortizingReason } from '@/lib/loan-figures';
 import { computePastImpact } from '@/lib/loan-past-impact';
 import {
   OverpaymentPlan,
@@ -44,7 +54,7 @@ import {
   generateLoanSchedule,
 } from '@/lib/loan-schedule';
 import { scenarioToPlan } from '@/lib/loan-scenarios';
-import type { Account } from '@/types/account';
+import type { Account, MortgageType } from '@/types/account';
 import type { LoanProjectionAnchor } from '@/types/scheduled-transaction';
 import type { Transaction } from '@/types/transaction';
 import type { LoanScenario } from '@/types/loan-scenario';
@@ -69,12 +79,28 @@ interface LoanDetailViewProps {
   onScenariosChanged: () => void;
   onRateChangesChanged: () => void;
   /**
-   * When provided, the loan's PDF export handler is published here (so a parent
-   * -- e.g. the account detail header -- can trigger it) and the inline export
-   * button is not rendered. Left unset on the reports surface, which keeps the
-   * inline button.
+   * The loan's PDF export handler is published here for the container to
+   * trigger -- the account detail header renders it beside View Transactions,
+   * the overpayment simulator report in its account-selector card. This view
+   * draws no export button of its own: a loose button above the summary cards
+   * sat outside the card every other control was in, worst on a phone.
    */
-  exportPdfRef?: MutableRefObject<(() => Promise<void>) | null>;
+  exportPdfRef: MutableRefObject<(() => Promise<void>) | null>;
+  /**
+   * Opens the container's account edit form with a detected mortgage type
+   * preselected (the Rate History panel's "Detect mortgage type"). A container
+   * without an edit form leaves it out, and the action is not offered.
+   */
+  onUseMortgageType?: (type: MortgageType) => void;
+  /**
+   * The Payment matching panel's data and reload, from a container that
+   * loads the loan's settled installments with its history (the account
+   * page). Absent, the panel is not rendered.
+   */
+  paymentMatching?: {
+    settlements: LoanSettlementsState;
+    onChanged: () => void | Promise<void>;
+  };
 }
 
 /**
@@ -95,10 +121,13 @@ export function LoanDetailView({
   onScenariosChanged,
   onRateChangesChanged,
   exportPdfRef,
+  onUseMortgageType,
+  paymentMatching,
 }: LoanDetailViewProps) {
   const t = useTranslations('accounts');
-  const { formatCurrency } = useNumberFormat();
+  const { formatCurrency, formatPercentTrimmed } = useNumberFormat();
   const formatChartDate = useChartDateFormat();
+  const { formatDate } = useDateFormat();
   const [plan, setPlan] = useState<OverpaymentPlan | null>(null);
   const [loadedPlan, setLoadedPlan] = useState<OverpaymentPlan | null>(null);
   const [loadedPlanVersion, setLoadedPlanVersion] = useState(0);
@@ -111,6 +140,13 @@ export function LoanDetailView({
     setLoadedPlanVersion((version) => version + 1);
   }, []);
 
+  // The user's calendar day -- what decides whether the anchor is still ahead
+  // of them. The backend prices the same installment against its own
+  // request-timezone `todayYMD()`, so reading UTC here would put the schedule
+  // table and the bill on two different calendars. It also bounds the history:
+  // a VOID or future-dated row has moved no balance yet (A26-M28).
+  const todayYmd = useFinancialToday();
+
   // Overpayment recognition settings (category / memo / payee) now live in the
   // account edit form, so the `account` prop always carries the saved values.
   const history = useMemo(
@@ -120,15 +156,10 @@ export function LoanDetailView({
         transactions,
         rateChanges,
         interestTransactions,
+        todayYmd,
       ),
-    [account, transactions, rateChanges, interestTransactions],
+    [account, transactions, rateChanges, interestTransactions, todayYmd],
   );
-
-  // The user's calendar day -- what decides whether the anchor is still ahead
-  // of them. The backend prices the same installment against its own
-  // request-timezone `todayYMD()`, so reading UTC here would put the schedule
-  // table and the bill on two different calendars.
-  const todayYmd = useFinancialToday();
 
   // The borrower's real current installment (principal + interest) from the
   // payment history, shown on the summary card and used to seed the projection.
@@ -161,9 +192,36 @@ export function LoanDetailView({
     [account, history, rateChanges, projectionAnchor, todayYmd],
   );
 
+  // When there is no projection, why -- so the simulator's absence is explained
+  // rather than a blank space. Shares the projection gate's own evaluation, so
+  // this reason and `projectionInput` cannot disagree about whether a schedule
+  // exists.
+  const projectionUnavailableReason = useMemo(
+    () =>
+      projectionInput
+        ? null
+        : diagnoseLoanProjection(
+            account,
+            history,
+            rateChanges,
+            projectionAnchor,
+            todayYmd,
+          ),
+    [projectionInput, account, history, rateChanges, projectionAnchor, todayYmd],
+  );
+
   const baseline = useMemo(
     () => (projectionInput ? generateLoanSchedule(projectionInput) : null),
     [projectionInput],
+  );
+
+  // The projection built but does not reach payoff (so the payoff date and
+  // remaining interest are unknown). Why -- so the "unknown" on the cards is
+  // explained rather than left as a dead end. Reads the same baseline the cards
+  // do, so it never claims a reason the figures do not have.
+  const notAmortizing = useMemo(
+    () => loanNotAmortizingReason(projectionInput, baseline),
+    [projectionInput, baseline],
   );
 
   const scenario = useMemo(
@@ -254,6 +312,7 @@ export function LoanDetailView({
     const additionalTables = buildLoanReportTables({
       t,
       formatCurrency,
+      formatPercentTrimmed,
       formatChartDate,
       currencyCode: account.currencyCode,
       rateChanges,
@@ -272,18 +331,36 @@ export function LoanDetailView({
           color: '#dc2626',
         },
         {
-          label: t('loanDetail.summary.payment'),
+          // Dated for a method whose installment changes every due date, as
+          // the card on the page is.
+          label:
+            currentInstallment != null && currentTerms.paymentDate != null
+              ? t('loanDetail.summary.nextInstallmentDue', {
+                  date: formatDate(currentTerms.paymentDate),
+                })
+              : t('loanDetail.summary.payment'),
           value:
             currentInstallment != null
               ? formatCurrency(currentInstallment, account.currencyCode)
               : t('loanDetail.summary.notSet'),
           color: '#2563eb',
         },
+        ...(currentTerms.finalPayment
+          ? [
+              {
+                label: t('loanDetail.summary.finalPaymentDue', {
+                  date: formatDate(currentTerms.finalPayment.date),
+                }),
+                value: formatCurrency(currentTerms.finalPayment.amount, account.currencyCode),
+                color: '#2563eb',
+              },
+            ]
+          : []),
         {
           label: t('loanDetail.summary.interestRate'),
           value:
             currentTerms.annualRate != null
-              ? `${currentTerms.annualRate}%`
+              ? formatPercentTrimmed(currentTerms.annualRate)
               : t('loanDetail.summary.notSet'),
           color: '#ea580c',
         },
@@ -307,39 +384,68 @@ export function LoanDetailView({
     });
   };
 
-  // Published to the parent (account header) so it can render the export button
-  // on the same row as View Transactions; when set, the inline button below is
-  // suppressed. Assigned during render (not in an effect) so the latest closure
-  // -- with the current scenarios/schedule -- is always what fires on click.
-  if (exportPdfRef) exportPdfRef.current = handleExportPdf;
+  // Published to the container so it can render the export button in its own
+  // control row. Reassigned after every commit so the latest closure -- with
+  // the current scenarios/schedule -- is always what fires on click.
+  useLayoutEffect(() => {
+    exportPdfRef.current = handleExportPdf;
+  });
+
+  // Beside the Rate History panel, wherever that sits. Keyed by the loan, so
+  // a Process history result never outlives the loan it ran on.
+  const paymentMatchingPanel = paymentMatching ? (
+    <PaymentMatchingPanel
+      key={account.id}
+      account={account}
+      settlements={paymentMatching.settlements}
+      onChanged={paymentMatching.onChanged}
+    />
+  ) : null;
+  // A mortgage's fees (docs/specs/mortgage-fees.md), beside the payment
+  // matching panel: both describe what the scheduled payment collects.
+  const loanFeesPanel =
+    account.accountType === 'MORTGAGE' ? (
+      <LoanFeesPanel key={`fees-${account.id}`} account={account} onChanged={paymentMatching?.onChanged} />
+    ) : null;
 
   return (
     <div className="space-y-6" ref={viewRef}>
-      {!exportPdfRef && (
-        <div className="flex justify-end">
-          <ExportDropdown onExportPdf={handleExportPdf} />
-        </div>
-      )}
-
       <LoanSummaryCards
         account={account}
         startingBalance={history.startingBalance}
         currentInstallment={currentInstallment}
+        currentInstallmentDate={currentTerms.paymentDate}
+        finalPayment={currentTerms.finalPayment}
         currentAnnualRate={currentTerms.annualRate}
         baseline={baseline}
       />
 
+      {notAmortizing && (
+        <LoanNotAmortizingNotice
+          reason={notAmortizing}
+          currencyCode={account.currencyCode}
+        />
+      )}
+
       <PastImpactSection account={account} impact={impact} />
 
       {/* Active loan: the Rate History panel sits full-width above the
-          Overpayment Simulator, never beside it. */}
+          Overpayment Simulator, never beside it. When the loan cannot be
+          projected, the simulator's place shows why (the Rate History panel
+          then moves full-width below the schedule, in the block near the end). */}
+      {!projectionInput && projectionUnavailableReason && (
+        <SimulatorUnavailableNotice reason={projectionUnavailableReason} />
+      )}
       {projectionInput && (
         <div className="flex flex-col gap-6">
           <RateHistorySidebar
             account={account}
             rateChanges={rateChanges}
             editing={rateEditing}
+            onUseMortgageType={onUseMortgageType}
           />
+          {paymentMatchingPanel}
+          {loanFeesPanel}
           <div className="w-full">
             <OverpaymentSimulator
               accountId={account.id}
@@ -420,11 +526,16 @@ export function LoanDetailView({
       {/* Finished loan (no simulator): the Rate History panel goes full-width
           below the schedule. */}
       {!projectionInput && (
-        <RateHistorySidebar
-          account={account}
-          rateChanges={rateChanges}
-          editing={rateEditing}
-        />
+        <>
+          <RateHistorySidebar
+            account={account}
+            rateChanges={rateChanges}
+            editing={rateEditing}
+            onUseMortgageType={onUseMortgageType}
+          />
+          {paymentMatchingPanel}
+          {loanFeesPanel}
+        </>
       )}
     </div>
   );
@@ -433,6 +544,9 @@ export function LoanDetailView({
 interface LoanReportTableDeps {
   t(key: string, values?: Record<string, string | number>): string;
   formatCurrency(amount: number, currency?: string): string;
+  // A rate is as user-facing in the PDF as it is on screen, and this builder is
+  // a plain function, so the reader's formatter comes in as a dependency.
+  formatPercentTrimmed(value: number): string;
   formatChartDate(date: string, format: 'MMM d, yyyy'): string;
   currencyCode: string;
   rateChanges: LoanRateChange[];
@@ -448,6 +562,7 @@ interface LoanReportTableDeps {
 function buildLoanReportTables({
   t,
   formatCurrency,
+  formatPercentTrimmed,
   formatChartDate,
   currencyCode,
   rateChanges,
@@ -477,7 +592,7 @@ function buildLoanReportTables({
       ],
       rows: sortedRates.map((change) => [
         day(change.effectiveDate),
-        `${change.annualRate}%`,
+        formatPercentTrimmed(change.annualRate),
         sourceLabel(change),
         change.newPaymentAmount != null
           ? money(change.newPaymentAmount)
@@ -501,7 +616,7 @@ function buildLoanReportTables({
       money(row.interest),
       money(row.principal),
       ...(showExtra ? [row.extraPrincipal > 0 ? money(row.extraPrincipal) : '—'] : []),
-      row.annualRate != null ? `${row.annualRate}%` : '—',
+      row.annualRate != null ? formatPercentTrimmed(row.annualRate) : '—',
       money(row.balance),
     ]);
     const totalRow: (string | number)[] = [

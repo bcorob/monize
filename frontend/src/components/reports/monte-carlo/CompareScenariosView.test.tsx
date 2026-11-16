@@ -22,13 +22,16 @@ const mockCache = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/monte-carlo-cache', () => mockCache);
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (n: number) => `$${n.toFixed(0)}`,
-    defaultCurrency: 'USD',
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (n: number) => `$${n.toFixed(0)}`,
+      defaultCurrency: 'USD',
+    }),
+  };
+});
 const mockExportToCsv = vi.hoisted(() => vi.fn());
 vi.mock('@/lib/csv-export', () => ({ exportToCsv: mockExportToCsv }));
 

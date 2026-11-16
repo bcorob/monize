@@ -1,0 +1,287 @@
+{
+  "title": "通知",
+  "unread": "{count} 件未読",
+  "markAllRead": "すべて既読にする",
+  "loading": "通知を読み込んでいます...",
+  "empty": "通知はありません",
+  "undo": "元に戻す",
+  "buttonTitle": "通知",
+  "buttonAriaLabel": "通知",
+  "dismissAriaLabel": "通知を閉じる",
+  "closeAriaLabel": "通知一覧を閉じる",
+  "emptyFiltered": "現在のフィルターに一致する通知はありません",
+  "deleteAll": "すべて削除",
+  "deleteAllConfirmTitle": "通知を削除",
+  "deleteAllConfirmMessageAll": "すべての通知を削除しますか？この操作は取り消せません。",
+  "deleteAllConfirmMessageFiltered": "現在のフィルターに一致する通知を、表示されていないものも含めてすべて削除しますか？この操作は取り消せません。",
+  "deleted": "{count, plural, other {# 件の通知を削除しました}}",
+  "deleteFailed": "通知を削除できませんでした",
+  "filter": {
+    "financial": "財務",
+    "system": "システム"
+  },
+  "severity": {
+    "critical": "緊急",
+    "warning": "警告",
+    "success": "お知らせ",
+    "info": "情報"
+  },
+  "reminder": {
+    "remindAriaLabel": "これをリマインドする",
+    "stopAriaLabel": "このリマインダーを停止",
+    "stopped": "リマインダーを停止しました",
+    "stopFailed": "リマインダーを停止できませんでした",
+    "created": "リマインダーを設定しました",
+    "createFailed": "リマインダーを設定できませんでした",
+    "dialogTitle": "リマインド",
+    "dialogDescription": "対応するまで、後でこの通知を再度受け取ります。",
+    "modeLabel": "頻度",
+    "modeRepeat": "停止するまで繰り返す",
+    "modeOnce": "もう一度だけ",
+    "intervalLabelRepeat": "次の間隔でリマインド",
+    "intervalLabelOnce": "次の時間後にリマインド",
+    "durationMinutes": "{minutes, plural, other {# 分}}",
+    "durationHours": "{hours, plural, other {# 時間}}",
+    "cancel": "キャンセル",
+    "confirm": "リマインダーを設定",
+    "pageTitle": "有効なリマインダー",
+    "empty": "有効なリマインダーはありません",
+    "loadFailed": "リマインダーを読み込めませんでした",
+    "retry": "再試行",
+    "nextFire": "次のリマインダー: {date}",
+    "openTarget": "関連ページを開く",
+    "delegateUnavailable": "リマインダーを管理するには、自分のアカウントに戻ってください。"
+  },
+  "billDue": {
+    "titleOverdue": "{payee} は支払期日超過",
+    "titleToday": "{payee} は今日が支払期日",
+    "titleTomorrow": "{payee} は明日が支払期日",
+    "titleInDays": "{payee} は{days}日後が支払期日",
+    "amountDue": "{date} に {amount} の支払い",
+    "amountUnavailable": "金額が不明です (現在の為替レートがありません)。支払期日は {date}"
+  },
+  "gemSignal": {
+    "riskTitle": "{strategy} が {state} に切り替わりました",
+    "riskMessage": "GEM戦略「{strategy}」が {fromState} から {toState} に変わりました。推奨内容を確認するには開いてください。",
+    "allocationTitle": "{strategy} の目標が変わりました",
+    "allocationMessage": "GEM戦略「{strategy}」の目標が {target} になりました。推奨内容を確認するには開いてください。",
+    "riskOn": "リスクオン",
+    "riskOff": "リスクオフ"
+  },
+  "bond": {
+    "maturitySoonTitle": "{series}：{date}に満期",
+    "maturitySoonMessage": "{quantity} × {series} が {date} に満期を迎えます。{payout}",
+    "interestTitle": "{series}：{date} の利子支払い",
+    "interestMessage": "{quantity} × {series} の利子 {amount} が {date} に支払われます。口座にまだ反映されていない場合は、銘柄ページで記帳してください。",
+    "interestMessageUnknown": "{quantity} × {series} の利子が {date} に支払われます。金額はまだ不明です。参照する金利が未公表です。",
+    "rateResetTitle": "{series}：新しい利息期間",
+    "rateResetMessage": "{series}：{date} から期間 {period}、年利 {rate}。",
+    "unbookedTitle": "{series}：満期到来、償還が未記帳",
+    "unbookedMessage": "{quantity} × {series} は {date} に満期を迎えましたが、償還が記帳されていません。{payout}銘柄ページで償還を記帳してください。",
+    "payoutKnown": "支払額は {payout} です。",
+    "payoutUnknown": "支払額はまだ確定していません。理由：{reason}。",
+    "reason": {
+      "RATE_UNKNOWN": "参照する金利がまだ公表されていない",
+      "TERMS_INCOMPLETE": "シリーズの条件が不完全",
+      "PURCHASE_OUTSIDE_SALE_WINDOW": "購入日がシリーズの販売期間外",
+      "PURCHASE_AFTER_MATURITY": "購入日が銘柄の満期日以降になっています",
+      "other": "保存されているデータから算出できない"
+    },
+    "benchmarkTitle": "{benchmark}：新しい観測値 {observation}",
+    "benchmarkIntro": "{publisher} が {observation} の {benchmark} を公表しました：{value}。",
+    "benchmarkSeries": "{series}：{date} 開始の期間、年利 {rate}。",
+    "benchmarkSeriesProjected": "{series}：{date} 開始の期間、予測年利 {rate}。",
+    "benchmarkSeriesUnknown": "{series}：{date} 開始の期間、金利はまだ不明です。",
+    "benchmarkMore": "ほか {more} 件。",
+    "missingTitle": "債券の数値がまだ不明です",
+    "missingMessage": "一部の債券の数値を算出できません。{causes}",
+    "cause": {
+      "observation": "{benchmark}（{publisher}）の {observation} の観測値が保存されていません（未公表、またはその後フィードが取得されていません）。債券ページで更新してください。",
+      "observationNoPublisher": "{benchmark} の {observation} の観測値が保存されていません（未公表、またはその後フィードが取得されていません）。債券ページで更新してください。",
+      "terms": "{series} の条件が不完全です。債券ページでシリーズを更新してください。",
+      "purchase": "{date} の {series} の購入が販売期間（{from} ～ {to}）の外です。購入日を修正してください。",
+      "purchaseAfterMaturity": "{date} の {series} の購入は、満期（{maturity}）以降です。購入日を修正してください。",
+      "lots": "元帳からロットを導出できません（{code}）。元帳を修正してください。",
+      "lotsRow": "{date} の{action}：ロットを導出できません（{code}）。取引を修正してください。",
+      "lotsRowSeries": "{date} の{action}：シリーズに割り当てられていません（{code}）。その取引でシリーズを選択してください。",
+      "lotsRowRemoval": "{date} の{action}：口座がそのシリーズで保有する数量を超えて減らしています（{code}）。取引を修正してください。"
+    },
+    "action": {
+      "BUY": "購入",
+      "SELL": "売却",
+      "REINVEST": "再投資",
+      "ADD_SHARES": "口数の追加",
+      "REMOVE_SHARES": "口数の削除",
+      "SPLIT": "分割",
+      "TRANSFER_IN": "振替入金",
+      "TRANSFER_OUT": "振替出金",
+      "other": "取引"
+    },
+    "benchmarks": {
+      "PL_CPI_GUS_YOY": "消費者物価指数 前年比12か月 (GUS)",
+      "PL_NBP_REFERENCE": "NBP 基準金利",
+      "US_CPI_U_NSA": "CPI-U 全項目、季節調整なし (BLS)",
+      "US_TBILL_13W_MMY": "13週物財務省短期証券の利回り"
+    }
+  },
+  "portfolioMovement": {
+    "titleUp": "投資が {percent}% 上昇",
+    "titleDown": "投資が {percent}% 下落",
+    "messageUp": "{from}から{to}にかけて、入出金を除いて投資が {percent}% 上昇しています。確認するには開いてください。",
+    "messageDown": "{from}から{to}にかけて、入出金を除いて投資が {percent}% 下落しています。確認するには開いてください。"
+  },
+  "balanceThreshold": {
+    "titleLow": "{account} がしきい値を下回っています",
+    "titleHigh": "{account} がしきい値を上回っています",
+    "messageLow": "{account} が {balance} に下がり、しきい値 {threshold} を下回りました。",
+    "messageHigh": "{account} が {balance} に上がり、しきい値 {threshold} を上回りました。"
+  },
+  "system": {
+    "backupFailed": {
+      "title": "自動バックアップに失敗しました",
+      "message": "{user} の自動バックアップに失敗しました: {error}"
+    },
+    "backupPartial": {
+      "title": "自動バックアップが不完全です",
+      "messageAttachments": "{user} のバックアップは書き込まれましたが、{expected} 件中 {missing} 件の添付ファイルを含められず、{inconsistent} 件はメタデータと一致しませんでした。完全なバックアップは保持されています。",
+      "messagePromotion": "{user} の日次バックアップは成功しましたが、週次または月次のコピーを書き込めませんでした: {error}",
+      "messageRetention": "{user} のバックアップは成功しましたが、古いバックアップファイルを削除できませんでした: {error}"
+    },
+    "encryptionKeyMissing": {
+      "title": "暗号化キーが設定されていません",
+      "message": "ENCRYPTION_KEY が設定されていないため、バックアップは暗号化されずに書き込まれ、シークレットを保存できません。将来のリリースではこのキーがないと起動しなくなります。"
+    },
+    "jwtSecretWeak": {
+      "title": "JWT_SECRET が脆弱です",
+      "message": "JWT_SECRET が公開済みのプレースホルダーであるか推測されやすいため、セッショントークンを偽造される可能性があります。強力な値を生成してください（openssl rand -base64 32）。変更すると認証アプリのコードが使えなくなり、信頼済みデバイスも解除されます。ユーザーはバックアップコードでサインインして 2FA を設定し直し、バックアップコードのないユーザーはユーザー管理で 2FA をリセットしてください。事前に docs/backend/modules-and-runtime.md（Changing JWT_SECRET）を確認してください。"
+    },
+    "smtpFailure": {
+      "title": "メール送信に失敗しています",
+      "message": "Monize はメールを送信できませんでした: {error}。通知やリマインダーが配信されていません。"
+    },
+    "providerOutage": {
+      "title": "{provider} が応答していません",
+      "message": "{provider} からの市場データを取得できません。再び応答するまで、価格や指数データが古い可能性があります。"
+    },
+    "providerRecovered": {
+      "title": "{provider} が再び応答しています",
+      "message": "障害は解消し、{provider} からの市場データは再び更新されています。"
+    },
+    "scheduledPostFailed": {
+      "title": "{name} を記帳できませんでした",
+      "message": "{date} が期日の定期取引を自動で記帳できませんでした: {error}。請求書・入金の画面から手動で記帳できます。"
+    }
+  },
+  "priceMovement": {
+    "title": "価格変動アラート: {symbol} ({percent}%)",
+    "message": "{symbol}：直前の利用可能な取引日比 {percent}%。"
+  },
+  "bankSync": {
+    "expiringTitleToday": "{institution}: 銀行へのアクセスは本日終了します",
+    "expiringTitleOneDay": "{institution}: 銀行へのアクセスは 1 日以内に終了します",
+    "expiringTitleDays": "{institution}: 銀行へのアクセスは {days} 日以内に終了します",
+    "expiringMessage": "Monize が {institution} を読み取るための同意は {date} に終了します。同期を続けるには、Monize で接続を更新してください。",
+    "expiredTitle": "{institution}: 銀行へのアクセスは終了しました",
+    "expiredMessage": "Monize が {institution} を読み取るための同意は終了しました。同期を再開するには、Monize で接続を更新してください。",
+    "failedTitle": "{institution}: 同期に失敗しました",
+    "failedMessage": "{institution} の毎日の同期が次の口座で失敗しました: {accounts}。原因は銀行同期の設定で確認してください。",
+    "failedCredentialsMessage": "銀行同期の認証情報がないか拒否されたため、{institution} の毎日の同期を開始できませんでした。銀行同期の設定で認証情報を確認してください。",
+    "unnamedAccount": "名称のない口座",
+    "importedTitle": "{institution}: 新しい取引をインポートしました",
+    "importedMessage": "毎日の同期で {institution} からインポートした取引: {imported} 件。",
+    "importedNoneTitle": "{institution}: 新しい取引はありません",
+    "importedNoneMessage": "{institution} の毎日の同期では新しい取引が見つかりませんでした。"
+  },
+  "emailReceiptsAttention": {
+    "title": "メール領収書に注意が必要です",
+    "message": "受信トレイには、プロファイルなしの{noParser}とそのプロファイルが認識できなかった{parseFailed}があります。確認のために開いてください。"
+  },
+  "aiReview": {
+    "readyTitle": "AIの提案が承認を待っています",
+    "readyMessage": "{count, plural, other {#件}}のAI提案が承認を待っています（うち{added}件は新規）。AIレビュー受信箱を開いて承認または却下してください。",
+    "expiringTitle": "AIの提案がまもなく期限切れになります",
+    "expiringMessage": "{count, plural, other {#件}}のAI提案がまもなく期限切れになります。最初の期限は{date}です。AIレビュー受信箱を開いて承認または却下してください。"
+  },
+  "warranty": {
+    "expiringTitle": "{name}：保証が {days, plural, other {# 日}}以内に期限切れになります",
+    "expiringMessage": "{name} の保証は {date} に期限切れになります。開いて書類を確認するか、保証請求を記録してください。",
+    "todayTitle": "{name}：保証が本日期限切れになります",
+    "todayMessage": "{name} の保証は本日 {date} に期限切れになります。開いて書類を確認するか、保証請求を記録してください。"
+  },
+  "security": {
+    "oauthTitle": "新しいアプリが接続されました: {clientName}",
+    "oauthMessage": "アプリケーション {clientName} に、お使いの Monize アカウントへのアクセスが付与されました。心当たりがない場合は、今すぐパスワードを変更してください。接続中のすべてのアプリケーションのアクセスが取り消されます。",
+    "relayTitle": "新しい接続が AI チャットに応答しました",
+    "relayMessage": "これまで Monize の AI チャットに応答したことのない接続が、プロンプトを取得しました。このアシスタントを接続していない場合は、パスワードを変更してください。"
+  },
+  "payrollDeduction": {
+    "resetTitle": "{category}：来年の上限額を確認してください",
+    "resetMessage": "{bill} の {category} 控除は {date} にリセットされます。年間上限額が変わる場合は更新してください。変わらなければ {amount} が再び適用されます。"
+  },
+  "shared": {
+    "title": "共同支出",
+    "message": "共有グループが更新されました。Monizeを開いて確認してください。"
+  },
+  "native": {
+    "payments": {
+      "title": "支払いのリマインダー",
+      "body": "請求または予定された支払いに確認が必要です。詳細は Monize を開いてご確認ください。"
+    },
+    "budgets": {
+      "title": "予算アラート",
+      "body": "いずれかの予算に確認が必要です。詳細は Monize を開いてご確認ください。"
+    },
+    "system": {
+      "title": "システム通知",
+      "body": "Monize からのシステム通知があります。詳細はアプリを開いてご確認ください。"
+    },
+    "balances": {
+      "title": "残高アラート",
+      "body": "口座残高が設定したしきい値を超えました。詳細は Monize を開いてご確認ください。"
+    },
+    "investments": {
+      "title": "投資の変動",
+      "body": "本日、投資に変動がありました。詳細は Monize を開いてご確認ください。"
+    },
+    "strategies": {
+      "title": "戦略シグナル",
+      "body": "いずれかの戦略が推奨内容を変更しました。詳細は Monize を開いてご確認ください。"
+    },
+    "bank_sync": {
+      "title": "銀行接続",
+      "body": "銀行接続の確認が必要です。詳細は Monize を開いてご確認ください。"
+    },
+    "bank_sync_activity": {
+      "title": "銀行同期",
+      "body": "銀行同期に新しいお知らせがあります。詳細は Monize を開いてご確認ください。"
+    },
+    "email_receipts": {
+      "title": "メール領収書に注意が必要です",
+      "body": "受信トレイ内のいくつかのメールはプロファイルまたは修正が必要です。詳細はMonizeを開いてください。"
+    },
+    "bonds": {
+      "title": "債券のお知らせ",
+      "body": "保有している債券に関するお知らせがあります。詳細は Monize を開いてご確認ください。"
+    },
+    "ai_review": {
+      "title": "AIレビューの提案",
+      "body": "AIレビューの提案があなたの判断を待っています。詳細はMonizeを開いてください。"
+    },
+    "warranties": {
+      "title": "保証のリマインダー",
+      "body": "保証の 1 つがまもなく期限切れになります。詳細は Monize を開いてください。"
+    },
+    "shared_expenses": {
+      "title": "共同支出",
+      "body": "共有グループが更新されました。Monizeを開いて確認してください。"
+    },
+    "security": {
+      "title": "セキュリティのお知らせ",
+      "body": "Monize アカウントにアクセスできるユーザーに変更がありました。詳細は Monize を開いてください。"
+    },
+    "fallback": {
+      "title": "Monize",
+      "body": "Monize に新しい通知があります。"
+    }
+  }
+}

@@ -1,6 +1,6 @@
 import { Injectable } from "@nestjs/common";
 import { z } from "zod";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
 
 @Injectable()
 export class McpBudgetCheckPrompt {
@@ -10,12 +10,12 @@ export class McpBudgetCheckPrompt {
       {
         title: "Budget check",
         description: "Check spending patterns against typical monthly expenses",
-        argsSchema: {
+        argsSchema: z.object({
           month: z
             .string()
             .optional()
             .describe("Month to check (e.g., '2025-01' or 'January 2025')"),
-        },
+        }),
       },
       async (args) => {
         const month = args.month || "this month";

@@ -5,6 +5,7 @@ import { useTranslations } from 'next-intl';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/authStore';
 import { delegationApi } from '@/lib/delegation';
+import { clearIdentityScopedSessionStorage } from '@/lib/identity-session-storage';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('DelegationBanner');
@@ -26,6 +27,9 @@ export function DelegationBanner() {
     setSwitching(true);
     try {
       await delegationApi.switchContext(targetUserId);
+      // The reload keeps sessionStorage; drop what the previous context wrote
+      // so the new one is not drawn it (INV-SHARE-003).
+      clearIdentityScopedSessionStorage();
       // Full reload so every view re-fetches under the new context, but
       // stay on whatever page the user was on rather than bouncing back
       // to /dashboard each time.

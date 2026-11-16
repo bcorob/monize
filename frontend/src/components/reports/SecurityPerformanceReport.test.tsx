@@ -7,23 +7,26 @@ vi.mock('@/lib/pdf-export', () => ({
 }));
 
 vi.mock('@/components/ui/ExportDropdown', () => ({
-  ExportDropdown: ({ onExportCsv, onExportPdf }: any) => (
+  ExportDropdown: ({ onExportCsv, onExportPdf, disabled }: any) => (
     <div data-testid="export-dropdown">
       {onExportCsv && <button data-testid="export-csv" onClick={onExportCsv}>CSV</button>}
-      <button data-testid="export-pdf" onClick={onExportPdf}>PDF</button>
+      <button data-testid="export-pdf" onClick={onExportPdf} data-disabled={String(disabled === true)}>PDF</button>
     </div>
   ),
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatSignedPercent: (n: number, decimals = 2) => `${n >= 0 ? '+' : ''}${n.toFixed(decimals)}%`,
-    formatCurrency: (n: number) => `$${n.toFixed(2)}`,
-    formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
-    formatCurrencyAxis: (n: number) => `$${n}`,
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatSignedPercent: (n: number, decimals = 2) => `${n >= 0 ? '+' : ''}${n.toFixed(decimals)}%`,
+      formatCurrency: (n: number) => `$${n.toFixed(2)}`,
+      formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
+      formatCurrencyAxis: (n: number) => `$${n}`,
+    }),
+  };
+});
 vi.mock('@/hooks/useExchangeRates', () => ({
   useExchangeRates: () => ({
     defaultCurrency: 'CAD',
@@ -343,7 +346,7 @@ describe('SecurityPerformanceReport', () => {
     await waitFor(() => {
       expect(screen.getByText(/Failed to load report data/)).toBeInTheDocument();
     });
-    expect(screen.getByRole('button', { name: /Try again/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Try Again/ })).toBeInTheDocument();
   });
 
   it('exports pdf in chart view', async () => {
@@ -433,6 +436,51 @@ describe('SecurityPerformanceReport', () => {
     await act(async () => {
       fireEvent.click(screen.getByTestId('export-pdf'));
     });
+  });
+
+  it('lists a reinvested dividend at its shares\' cost, and no reinvested interest or void row, as dividends', async () => {
+    // Discussion #1670: a reinvest created in the app stores no total, so the
+    // dividend it records is quantity x price. Reinvested interest is interest.
+    const { exportToPdf } = await import('@/lib/pdf-export');
+    (exportToPdf as any).mockClear();
+    mockGetSecurities.mockResolvedValue(mockSecurities);
+    mockGetPortfolioSummary.mockResolvedValue({ holdings: mockHoldings });
+    mockGetSecurityPrices.mockResolvedValue([]);
+    mockGetTransactions.mockResolvedValue({
+      data: [
+        { id: 'tx-1', transactionDate: '2024-06-15', action: 'DIVIDEND', quantity: null, price: null, totalAmount: 50, securityId: 's-1', security: { symbol: 'AAPL', name: 'A' }, accountId: 'acc-1' },
+        { id: 'tx-2', transactionDate: '2024-07-15', action: 'REINVEST', quantity: 2, price: 25, commission: 0, totalAmount: 0, securityId: 's-1', security: { symbol: 'AAPL', name: 'A' }, accountId: 'acc-1' },
+        { id: 'tx-3', transactionDate: '2024-08-15', action: 'REINVEST_INTEREST', quantity: 1, price: 9, commission: 0, totalAmount: 0, securityId: 's-1', security: { symbol: 'AAPL', name: 'A' }, accountId: 'acc-1' },
+        // A VOID dividend paid nothing.
+        { id: 'tx-4', transactionDate: '2024-09-15', action: 'DIVIDEND', status: 'VOID', quantity: null, price: null, totalAmount: 75, securityId: 's-1', security: { symbol: 'AAPL', name: 'A' }, accountId: 'acc-1' },
+      ],
+      pagination: { hasMore: false },
+    });
+    render(<SecurityPerformanceReport />);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: SELECT_PLACEHOLDER })).toBeInTheDocument();
+    });
+    await selectSecurity('AAPL - Apple Inc.');
+    await waitFor(() => {
+      expect(screen.getByText('Dividends')).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByText('Dividends'));
+    await waitFor(() => {
+      expect(screen.getByTestId('export-pdf')).toBeInTheDocument();
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('export-pdf'));
+    });
+
+    const { tableData } = (exportToPdf as any).mock.calls[0][0];
+    expect(tableData.rows).toHaveLength(2);
+    const byType = new Map<string, string>(
+      tableData.rows.map((row: string[]) => [row[2], row[3]]),
+    );
+    expect([...byType.keys()].sort()).toEqual(['DIVIDEND', 'REINVEST']);
+    // 2 x 25 is the same 50 the cash dividend paid.
+    expect(byType.get('REINVEST')).toBe(byType.get('DIVIDEND'));
+    expect(tableData.totalRow[3]).toMatch(/100/);
   });
 
   it('paginates transactions through multiple pages', async () => {
@@ -616,6 +664,50 @@ describe('SecurityPerformanceReport', () => {
     });
     expect(screen.getByText('Needs 1+ year of data')).toBeInTheDocument();
     expect(screen.getAllByText('-').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('shows an unpriced holding as unknown, with no return or percentage', async () => {
+    const unpriced = { ...mockHoldings[0], currentPrice: null, marketValue: null, gainLoss: null, gainLossPercent: null };
+    mockGetSecurities.mockResolvedValue(mockSecurities);
+    mockGetPortfolioSummary.mockResolvedValue({ holdings: [unpriced] });
+    mockGetSecurityPrices.mockResolvedValue([]);
+    mockGetTransactions.mockResolvedValue({ data: [], pagination: { hasMore: false } });
+
+    render(<SecurityPerformanceReport />);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: SELECT_PLACEHOLDER })).toBeInTheDocument();
+    });
+    await selectSecurity('AAPL - Apple Inc.');
+
+    await waitFor(() => {
+      expect(screen.getByText('Total Return')).toBeInTheDocument();
+    });
+    expect(screen.getAllByText('No price for AAPL').length).toBeGreaterThanOrEqual(1);
+    expect(screen.queryByText(/-100/)).not.toBeInTheDocument();
+  });
+
+  it('omits the annualized return when later activity follows the first buy', async () => {
+    mockGetSecurities.mockResolvedValue(mockSecurities);
+    mockGetPortfolioSummary.mockResolvedValue({ holdings: mockHoldings });
+    mockGetSecurityPrices.mockResolvedValue([]);
+    mockGetTransactions.mockResolvedValue({
+      data: [
+        { id: 'tx-1', transactionDate: '2020-01-01', action: 'BUY', quantity: 5, price: 150, totalAmount: 750, securityId: 's-1', security: { symbol: 'AAPL', name: 'A' }, accountId: 'acc-1' },
+        { id: 'tx-2', transactionDate: '2025-01-01', action: 'BUY', quantity: 5, price: 150, totalAmount: 750, securityId: 's-1', security: { symbol: 'AAPL', name: 'A' }, accountId: 'acc-1' },
+      ],
+      pagination: { hasMore: false },
+    });
+
+    render(<SecurityPerformanceReport />);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: SELECT_PLACEHOLDER })).toBeInTheDocument();
+    });
+    await selectSecurity('AAPL - Apple Inc.');
+
+    await waitFor(() => {
+      expect(screen.getByText('Annualized Return')).toBeInTheDocument();
+    });
+    expect(screen.getByText('Shown only for a single buy with no later activity')).toBeInTheDocument();
   });
 
   it('shows multiple accounts indicator when accountCount > 1', async () => {
@@ -1322,5 +1414,89 @@ describe('SecurityPerformanceReport', () => {
         expect.objectContaining({ indexCodes: ['SP500'] }),
       ),
     );
+  });
+});
+
+describe('SecurityPerformanceReport: a failed or pending request is not exportable', () => {
+  const comparison = {
+    window: { start: '2024-01-01', end: '2024-12-31' },
+    sampling: 'day',
+    series: [],
+    points: [],
+    totals: {},
+    gaps: [],
+    excluded: [],
+    status: 'complete',
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetSecurities.mockResolvedValue(mockSecurities);
+    mockGetPortfolioSummary.mockResolvedValue({ holdings: mockHoldings });
+    mockGetInvestmentAccounts.mockResolvedValue([{ id: 'acc-1', name: 'Brokerage 1', currencyCode: 'USD' }]);
+    mockGetMarketIndexes.mockResolvedValue(mockMarketIndexes);
+    mockGetTransactions.mockResolvedValue({ data: [], pagination: { hasMore: false } });
+    mockGetPerformanceComparison.mockResolvedValue(comparison);
+  });
+
+  async function renderReport() {
+    await act(async () => {
+      render(<SecurityPerformanceReport />);
+    });
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: SELECT_PLACEHOLDER })).toBeInTheDocument();
+    });
+  }
+
+  it('offers the export for a loaded single security (control)', async () => {
+    mockGetSecurityPrices.mockResolvedValue([
+      { id: 1, securityId: 's-1', priceDate: '2025-01-01', closePrice: 175, createdAt: '' },
+    ]);
+    await renderReport();
+    await selectSecurity('AAPL - Apple Inc.');
+    await screen.findByText('Price Chart');
+    expect(screen.getByTestId('export-pdf')).toHaveAttribute('data-disabled', 'false');
+  });
+
+  it('disables the export while the security detail request has failed', async () => {
+    mockGetSecurityPrices.mockRejectedValue(new Error('500'));
+    await renderReport();
+    await selectSecurity('AAPL - Apple Inc.');
+    await waitFor(() => expect(mockGetSecurityPrices).toHaveBeenCalled());
+    expect(screen.getByTestId('export-pdf')).toHaveAttribute('data-disabled', 'true');
+  });
+
+  it('disables the export while the security detail request is pending', async () => {
+    mockGetSecurityPrices.mockReturnValue(new Promise(() => {}));
+    await renderReport();
+    await selectSecurity('AAPL - Apple Inc.');
+    await waitFor(() => expect(mockGetSecurityPrices).toHaveBeenCalled());
+    expect(screen.getByTestId('export-pdf')).toHaveAttribute('data-disabled', 'true');
+  });
+
+  async function loadComparisonThenAddASecurity(next: () => unknown) {
+    await renderReport();
+    await selectSecurity('AAPL - Apple Inc.');
+    await selectSecurity('VTI - Vanguard Total Stock');
+    await screen.findByText('Performance Comparison');
+    await waitFor(() => expect(screen.getByTestId('export-pdf')).toHaveAttribute('data-disabled', 'false'));
+
+    mockGetPerformanceComparison.mockImplementation(next);
+    await selectSecurity('BARE - Bare Security');
+    await waitFor(() =>
+      expect(mockGetPerformanceComparison).toHaveBeenLastCalledWith(
+        expect.objectContaining({ securityIds: ['s-1', 's-2', 's-4'] }),
+      ),
+    );
+  }
+
+  it('disables the export while the next comparison request has failed', async () => {
+    await loadComparisonThenAddASecurity(() => Promise.reject(new Error('500')));
+    await waitFor(() => expect(screen.getByTestId('export-pdf')).toHaveAttribute('data-disabled', 'true'));
+  });
+
+  it('disables the export while the next comparison request is pending', async () => {
+    await loadComparisonThenAddASecurity(() => new Promise(() => {}));
+    await waitFor(() => expect(screen.getByTestId('export-pdf')).toHaveAttribute('data-disabled', 'true'));
   });
 });

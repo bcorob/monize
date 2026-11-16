@@ -4,6 +4,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { applyAppRoleGrants } from "./common/db/app-role";
 import { acquireDbLifecycleLock } from "./common/db/advisory-locks";
+import { orderMigrations } from "./common/db/migration-filename";
 import {
   formatMissingDbFunctions,
   missingDbFunctions,
@@ -339,13 +340,19 @@ export async function runMigrations() {
     );
     const appliedSet = new Set(applied.rows.map((r) => r.filename));
 
-    // Find all .sql migration files, sorted by filename
-    const files = fs
-      .readdirSync(migrationsDir)
-      .filter(
-        (f) => f.endsWith(".sql") && !f.includes(path.sep) && !f.includes("/"),
-      )
-      .sort();
+    // Every .sql migration file, in apply order: numeric prefix, then full
+    // filename (migration-filename.ts). Not a string sort -- one agrees with
+    // this order today only because every historical prefix begins with 0 or
+    // 1 and every timestamp with 2 (issue #1277). A filename carrying neither
+    // prefix form throws here and fails the run below.
+    const files = orderMigrations(
+      fs
+        .readdirSync(migrationsDir)
+        .filter(
+          (f) =>
+            f.endsWith(".sql") && !f.includes(path.sep) && !f.includes("/"),
+        ),
+    );
 
     // Run pending migrations in order
     let count = 0;

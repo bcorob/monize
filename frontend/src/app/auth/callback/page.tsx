@@ -9,25 +9,20 @@ import toast from 'react-hot-toast';
 import { useTranslations } from 'next-intl';
 import { OnboardingPreferencesScreen } from '@/components/auth/OnboardingPreferencesScreen';
 import { stashOidcReauthArtifact } from '@/lib/stepUpToken';
+import { safeReturnTo } from '@/lib/return-to';
 
 /**
  * Same-origin path stashed before an OIDC redirect, consumed once.
  *
- * The `startsWith` checks are an open-redirect guard: `//evil.test` and `/\\evil`
- * are both absolute in a browser despite the leading slash.
+ * `safeReturnTo` is the open-redirect guard: it resolves the value against this
+ * origin, so `//evil.test`, `/\\evil` and `/<tab>/evil.test` (which the URL
+ * parser reads as `//evil.test`) are all refused.
  */
 function readReturnTo(): string | null {
   try {
     const stored = sessionStorage.getItem('postLoginReturnTo');
     sessionStorage.removeItem('postLoginReturnTo');
-    if (
-      stored &&
-      stored.startsWith('/') &&
-      !stored.startsWith('//') &&
-      !stored.startsWith('/\\')
-    ) {
-      return stored;
-    }
+    return safeReturnTo(stored);
   } catch {
     // sessionStorage unavailable -- caller falls through to /dashboard.
   }

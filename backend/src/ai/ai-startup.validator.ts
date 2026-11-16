@@ -38,7 +38,9 @@ export class AiStartupValidator implements OnApplicationBootstrap {
     this.logger.log(`Validating connection to AI provider: ${label}`);
 
     try {
-      const provider = this.providerFactory.createProvider(config);
+      // The operator's own endpoint: AI_DEFAULT_BASE_URL is theirs to point
+      // at a LAN or loopback host, so no address restriction applies.
+      const provider = this.providerFactory.createProvider(config, "any");
       const available = await provider.isAvailable();
       if (available) {
         this.logger.log(`AI provider OK: ${label}`);

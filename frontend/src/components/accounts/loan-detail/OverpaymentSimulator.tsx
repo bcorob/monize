@@ -10,6 +10,7 @@ import {
   OverpaymentFrequency,
   OverpaymentMode,
   OverpaymentPlan,
+  isoDay,
 } from '@/lib/loan-schedule';
 import {
   SolveStatus,
@@ -20,6 +21,7 @@ import {
 import { accountsApi } from '@/lib/accounts';
 import { getCurrencySymbol } from '@/lib/format';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
+import { useDateFormat } from '@/hooks/useDateFormat';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('OverpaymentSimulator');
@@ -149,6 +151,7 @@ export function OverpaymentSimulator({
 }: OverpaymentSimulatorProps) {
   const t = useTranslations('accounts');
   const { formatCurrency } = useNumberFormat();
+  const { formatDate } = useDateFormat();
   const currencySymbol = getCurrencySymbol(currencyCode);
 
   const [form, setForm] = useState<SimulatorFormState>(EMPTY_FORM);
@@ -306,12 +309,26 @@ export function OverpaymentSimulator({
     form.endDate !== '';
 
   // A budget below the current installment leaves nothing to overpay; warn.
+  // For a LINEAR or INTEREST_ONLY mortgage `paymentAmount` is the first
+  // projected installment (each row has its own, and the extra in a row is the
+  // budget less that row's), so the warning names that installment and its
+  // date.
   const budgetBelowInstallment =
     isBudget &&
     form.budget !== undefined &&
     form.budget > 0 &&
     projectionInput != null &&
     form.budget < projectionInput.paymentAmount;
+
+  // A LINEAR mortgage whose amount borrowed is unknown has no constant
+  // principal, so a shortened-term what-if on it is withheld by the engine
+  // rather than priced with a principal of 0; say why and what to do. A
+  // payoff goal always shortens the term.
+  const shortenTermUnavailable =
+    hasInput &&
+    projectionInput?.mortgageType === 'LINEAR' &&
+    projectionInput.methodTerms?.constantPrincipal === null &&
+    (form.simType === 'PAYOFF' || form.mode === 'SHORTEN_TERM');
 
   // An inverted window (start after end) is never true, so the plan would
   // silently do nothing; warn instead of leaving the chart unchanged.
@@ -471,9 +488,19 @@ export function OverpaymentSimulator({
       )}
       {budgetBelowInstallment && projectionInput && (
         <p className="mt-2 text-sm text-amber-700 dark:text-amber-400">
-          {t('loanDetail.simulator.budgetBelowInstallment', {
-            amount: formatCurrency(projectionInput.paymentAmount, currencyCode),
-          })}
+          {projectionInput.methodTerms
+            ? t('loanDetail.simulator.budgetBelowNextInstallment', {
+                amount: formatCurrency(projectionInput.paymentAmount, currencyCode),
+                date: formatDate(isoDay(projectionInput.firstPaymentDate)),
+              })
+            : t('loanDetail.simulator.budgetBelowInstallment', {
+                amount: formatCurrency(projectionInput.paymentAmount, currencyCode),
+              })}
+        </p>
+      )}
+      {shortenTermUnavailable && (
+        <p className="mt-2 text-sm text-amber-700 dark:text-amber-400">
+          {t('loanDetail.simulator.shortenTermNeedsPrincipal')}
         </p>
       )}
       {windowInverted && (

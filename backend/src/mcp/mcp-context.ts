@@ -1,6 +1,12 @@
+import { sharedLedgerRefusal } from "../common/db/shared-ledger-refusal";
 import { sanitizeToolResultStrings } from "../common/sanitization.util";
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { RequestId } from "@modelcontextprotocol/sdk/types.js";
+import type { AuthInfo, ServerContext } from "@modelcontextprotocol/server";
+import {
+  ConfirmMismatchError,
+  ConfirmNotAnsweredError,
+  ConfirmRequiredError,
+} from "./mcp-confirm";
+import { hasApiScope } from "../auth/scopes";
 
 export interface McpUserContext {
   userId: string;
@@ -9,22 +15,103 @@ export interface McpUserContext {
    * Stable identifier of the credential that authorized this request: the PAT
    * row's id, or the OAuth grant behind the access token.
    *
-   * A session is bound to one credential. Matching only `userId` let a session
-   * outlive the credential that created it: a read-only PAT presenting the
-   * session id of a session opened with a write PAT inherited the write scope,
-   * and a replacement token kept a session alive after the original was revoked
-   * (P2-004). Absent only for a context built before this field existed, which
-   * the transport treats as "cannot be matched" and refuses.
+   * Matching only `userId` let a 2025-era session outlive the credential that
+   * created it: a read-only PAT presenting the session id of a session opened
+   * with a write PAT inherited the write scope, and a replacement token kept a
+   * session alive after the original was revoked (P2-004). It is also the
+   * caller key a 2026-07-28 request has instead of a session (see
+   * `callerKey`). A context without one cannot be bound, and the transport
+   * refuses it rather than serving an unbindable credential.
    */
   credentialId?: string;
 }
 
-export type UserContextResolver = (
-  sessionId?: string,
-) => McpUserContext | undefined;
+/**
+ * The `extra` payload the transport puts on the request's `AuthInfo`, and the
+ * only place a tool handler may learn who is calling.
+ *
+ * Identity is a property of the REQUEST, not of a session: the 2026-07-28
+ * revision has no sessions at all, and even on a 2025-era connection the
+ * bearer token rides on every request, so the credential presented on THIS
+ * request decides the user and the scopes (INV-MCP-001). `userId` never comes
+ * from tool arguments.
+ */
+interface McpAuthExtra {
+  userId: string;
+  scopes: string;
+  credentialId: string;
+}
+
+/**
+ * Build the SDK `AuthInfo` the transport attaches to a validated request.
+ *
+ * Returns `undefined` for a context that carries no `credentialId` -- an OAuth
+ * grant with no id cannot be bound to anything, and an unbindable credential
+ * must be refused rather than served.
+ */
+export function toAuthInfo(
+  user: McpUserContext,
+  token: string,
+): AuthInfo | undefined {
+  if (!user.credentialId) return undefined;
+  const extra: McpAuthExtra = {
+    userId: user.userId,
+    scopes: user.scopes,
+    credentialId: user.credentialId,
+  };
+  return {
+    token,
+    clientId: user.credentialId,
+    scopes: user.scopes ? user.scopes.split(",") : [],
+    extra: extra as unknown as Record<string, unknown>,
+  };
+}
+
+/**
+ * The calling user, read from the request's own validated credential.
+ *
+ * The shape is checked rather than cast: `authInfo` is pass-through data the
+ * transport supplied, and a handler that trusted a malformed one would run
+ * with an undefined user id.
+ */
+export function resolveUserContext(
+  ctx: Pick<ServerContext, "http">,
+): McpUserContext | undefined {
+  const extra = ctx.http?.authInfo?.extra as Partial<McpAuthExtra> | undefined;
+  if (
+    typeof extra?.userId !== "string" ||
+    typeof extra.scopes !== "string" ||
+    typeof extra.credentialId !== "string"
+  ) {
+    return undefined;
+  }
+  return {
+    userId: extra.userId,
+    scopes: extra.scopes,
+    credentialId: extra.credentialId,
+  };
+}
+
+/**
+ * Which client this call belongs to, for the things that are genuinely about
+ * one connected agent rather than about the user: the web-chat relay claim and
+ * the observed elicitation behaviour.
+ *
+ * A 2025-era connection has a session id and keeps using it, so relay
+ * semantics there are unchanged. A 2026-07-28 request has no session, and the
+ * credential is the only stable per-client fact on the wire -- so two clients
+ * sharing one token share a caller key (`docs/backend/mcp.md`).
+ * `undefined` means "cannot prove which client", which callers must treat as a
+ * direct client, never as a relay turn.
+ */
+export function callerKey(
+  ctx: Pick<ServerContext, "sessionId" | "http">,
+): string | undefined {
+  return ctx.sessionId ?? resolveUserContext(ctx)?.credentialId;
+}
 
 export function hasScope(scopes: string, required: string): boolean {
-  return scopes.split(",").includes(required);
+  return hasApiScope(scopes, required);
 }
 
 export function requireScope(
@@ -66,6 +153,18 @@ export function toolError(message: string) {
  * all other errors return a generic message to avoid leaking internals.
  */
 export function safeToolError(err: unknown) {
+  const sharedRefusal = sharedLedgerRefusal(err);
+  if (sharedRefusal) return toolError(sharedRefusal);
+  // A confirmation that no longer matches the change, or a deletion nobody
+  // confirmed, is not an internal failure: it is a refusal the caller can act
+  // on, and the model needs to be told what to do rather than to retry.
+  if (
+    err instanceof ConfirmMismatchError ||
+    err instanceof ConfirmNotAnsweredError ||
+    err instanceof ConfirmRequiredError
+  ) {
+    return toolError(err.message);
+  }
   if (
     err &&
     typeof err === "object" &&
@@ -129,71 +228,28 @@ function normalizeNonFiniteNumbers(data: unknown): unknown {
   return data;
 }
 
-export type WriteConfirmation = "accepted" | "declined" | "unsupported";
-
-// A human needs time to read and decide, so override the SDK's short default
-// request timeout for the confirmation round-trip.
-const CONFIRM_TIMEOUT_MS = 5 * 60 * 1000;
-
 /**
- * Ask the MCP client to confirm a write via elicitation -- the MCP-native
- * equivalent of the AI Assistant's approve/reject card. Returns:
- *  - "accepted": the user approved; proceed with the write.
- *  - "declined": the user rejected/cancelled, or a supported dialog
- *    failed/timed out; abort so a write never happens without an explicit
- *    accept.
- *  - "unsupported": the client advertises no form-elicitation capability, so no
- *    dialog can be shown and the caller falls back to its normal behavior. The
- *    client still gates every tool call with its own approval prompt, so this
- *    is not a consent bypass. Claude Desktop currently lands here: it does not
- *    advertise the elicitation capability (and returns -32601 for
- *    elicitation/create), so writes proceed under its own per-tool approval
- *    rather than an MCP-native confirm dialog.
+ * The one success path for a tool.
  *
- * We pre-check the capability (rather than relying solely on the thrown
- * "client does not support elicitation" error) so that only a genuine lack of
- * capability falls through to the write -- a dismissed or timed-out dialog on a
- * capable client must abort.
+ * It returns `structuredContent` and NOTHING ELSE. Every tool here declares an
+ * `outputSchema`, so `structuredContent` is what the SDK validates and what a
+ * client reads; the spec's backwards-compatibility advice to ALSO emit the
+ * serialized JSON as a text block meant every result travelled twice, once
+ * pretty-printed, and a model paid for both halves of every answer. A portfolio
+ * summary or a page of transactions is far larger than the tool definition that
+ * asked for it, so this is the bigger half of the per-request cost.
  *
- * `relatedRequestId` MUST be the in-flight tool call's request id (from the
- * handler's `extra.requestId`). Over the Streamable HTTP transport, a
- * server-to-client request with no related request id is routed to the
- * standalone GET SSE stream, which a tool-calling client (Claude Desktop, IDE
- * agents) does not keep open during a `tools/call` -- so the elicitation is
- * silently dropped and never shown, then times out as a decline. Threading the
- * tool call's id sends the elicitation back over that call's own POST SSE
- * stream, where the client is listening.
+ * The cost of dropping it is a client too old to read `structuredContent`, which
+ * would see an empty result rather than a degraded one. Restoring the block is a
+ * one-line change here if such a client turns up.
+ *
+ * Errors keep their text block: `toolError` carries no structured content, and
+ * an error bypasses output validation entirely.
  */
-export async function confirmWrite(
-  server: McpServer,
-  message: string,
-  relatedRequestId: RequestId,
-): Promise<WriteConfirmation> {
-  const capabilities = server.server.getClientCapabilities();
-  if (!capabilities?.elicitation?.form) {
-    return "unsupported";
-  }
-  try {
-    const result = await server.server.elicitInput(
-      {
-        message,
-        // No fields to collect -- the accept/decline/cancel action is the answer.
-        requestedSchema: { type: "object", properties: {} },
-      },
-      { timeout: CONFIRM_TIMEOUT_MS, relatedRequestId },
-    );
-    return result.action === "accept" ? "accepted" : "declined";
-  } catch {
-    return "declined";
-  }
-}
-
 export function toolResult(data: unknown) {
   const sanitized = normalizeNonFiniteNumbers(sanitizeToolResultStrings(data));
   return {
-    content: [
-      { type: "text" as const, text: JSON.stringify(sanitized, null, 2) },
-    ],
+    content: [] as { type: "text"; text: string }[],
     structuredContent: toStructuredContent(sanitized),
   };
 }

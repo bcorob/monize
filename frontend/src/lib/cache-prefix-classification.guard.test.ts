@@ -37,6 +37,18 @@ const TRANSACTION_DERIVED: ReadonlyArray<[string, string]> = [
     'budgets:',
     'dashboard progress and per-category status are sums of categorised transactions',
   ],
+  [
+    'warranties:',
+    "each warranty carries its linked purchase's date, payee and amount (linkedTransaction), and deleting that transaction unlinks it, so a transaction write changes the cached view",
+  ],
+  [
+    'payroll-deductions:',
+    "each rule carries paidToDate and remaining, the category's sum over the period's transaction rows (docs/specs/payroll-deductions.md section 5.3)",
+  ],
+  [
+    'scheduled:',
+    "schedule definitions plus their #1167 FX-derived forecast fields and, since payroll deductions, each bill's payrollDeductions figures (remaining is the category's sum over transaction rows), so a transaction write changes the forecast the read model drives; an FX-input change still drops it via invalidateScheduledFxReadModel",
+  ],
 ];
 
 /** Kept -- a transaction write cannot change these. */
@@ -46,8 +58,8 @@ const REFERENCE_DATA: ReadonlyArray<[string, string]> = [
   ['institutions:', 'institution records'],
   ['tags:', 'tag records'],
   [
-    'scheduled:',
-    'schedule definitions plus their #1167 FX-derived forecast fields. A transaction write does not touch it, so it stays out of invalidateBalanceCaches; its own writers invalidate it, and an FX-input change (rate refresh, account/security currency edit) drops it via invalidateScheduledFxReadModel',
+    'loan-fees:',
+    "a mortgage's fee terms (docs/specs/mortgage-fees.md); the priced fee lines live on the scheduled read model, and a transaction write cannot change a fee's terms",
   ],
   [
     'reports:',
@@ -61,6 +73,26 @@ const REFERENCE_DATA: ReadonlyArray<[string, string]> = [
   [
     'exchange-rates:',
     'rate snapshots from the provider; a user transaction does not move a rate',
+  ],
+  [
+    'ai:',
+    "the AI provider status -- whether this user has a provider that can answer a lookup at all. It follows the provider rows in Settings, which drop it themselves; a transaction cannot change it",
+  ],
+  [
+    'calendar:',
+    "the reader's own notes on calendar dates. A note moves no money and nothing financial reads it, so a transaction write cannot change one; its own writes drop it",
+  ],
+  [
+    'payee-lookup:',
+    "whether a payee contact lookup can run and which source would answer it -- the Google Places configuration and cap, plus whether an AI provider exists. Its own settings writes drop it, and so does every AI provider mutation, because the answer depends on both; a transaction cannot change it",
+  ],
+  [
+    'help:',
+    'the user guide bundled into the backend image; it is text from the release and no write the user can make changes it',
+  ],
+  [
+    'bank-sync:',
+    "bank sync status, institutions and connections with their bank accounts: the bank's own balance and the sync outcome, none of it summed from Monize transactions. The sync routes drop it themselves and, when a row was written, the balance caches as well",
   ],
 ];
 
@@ -140,5 +172,21 @@ describe('cache prefix classification', () => {
       .filter((prefix) => !allPrefixes.has(prefix));
 
     expect(stale).toEqual([]);
+  });
+
+  it('no module reads or writes the cache by hand outside apiCache.ts', () => {
+    // Use `dedupe` for a read (it is generation-aware, so a request that raced
+    // an invalidation cannot repopulate the cache) and `patchCached` for an
+    // in-place rewrite. `getCached` / `setCache` are for tests only.
+    const hand = /\b(?:getCached|setCache)\s*(?:<[^>]*>)?\s*\(/;
+    const offenders: string[] = [];
+    for (const [path, source] of Object.entries(sources)) {
+      if (/\.test\.tsx?$/.test(path)) continue;
+      if (path.endsWith('/src/lib/apiCache.ts')) continue;
+      source.split('\n').forEach((line, index) => {
+        if (hand.test(line)) offenders.push(`${path}:${index + 1}`);
+      });
+    }
+    expect(offenders).toEqual([]);
   });
 });

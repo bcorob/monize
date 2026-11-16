@@ -1,0 +1,113 @@
+{
+  "landing": {
+    "title": "Podatki",
+    "subtitle": "Narzędzia do potrąceń i podatków kształtujących Twoje wynagrodzenie",
+    "tools": {
+      "payrollDeductions": {
+        "title": "Potrącenia z wynagrodzenia",
+        "description": "Ustaw roczne maksima dla potrąceń takich jak emerytura i ubezpieczenie od bezrobocia, a wypłata przestanie je pobierać po osiągnięciu maksimum."
+      }
+    }
+  },
+  "payroll": {
+    "title": "Potrącenia z wynagrodzenia",
+    "subtitle": "Roczne maksima dla pozycji potrąceń w rachunku wynagrodzenia",
+    "backToTaxes": "Wróć do podatków",
+    "newButton": "+ Nowa reguła",
+    "loading": "Ładowanie potrąceń z wynagrodzenia...",
+    "emptyState": {
+      "title": "Brak reguł potrąceń",
+      "body": "Wybierz zaplanowaną transakcję będącą Twoją wypłatą, jej kategorie potrąceń i ustaw roczny limit dla każdej z nich. Transakcja przestaje pobierać potrącenie po osiągnięciu limitu i zaczyna od nowa w dniu resetu.",
+      "createButton": "Utwórz pierwszą regułę"
+    },
+    "yearToDate": {
+      "show": "Pokaż narastająco w roku",
+      "hide": "Ukryj narastająco w roku",
+      "title": "Zapłacono w tym okresie",
+      "help": "Ile kategoria pobrała w okresie obejmującym dzisiaj, na wszystkich kontach, w walucie rachunku.",
+      "foreignRows": "{count, plural, one {# pozycja} few {# pozycje} many {# pozycji} other {# pozycji}} w innej walucie nie policzono"
+    },
+    "previousPeriods": {
+      "show": "Pokaż poprzednie okresy",
+      "hide": "Ukryj poprzednie okresy",
+      "title": "Poprzednie okresy",
+      "help": "Ile każda kategoria pobrała w swoich minionych okresach, na wszystkich kontach, w walucie transakcji. Bieżący okres znajduje się w tabeli od początku roku.",
+      "loading": "Ładowanie poprzednich okresów...",
+      "empty": "W żadnym wcześniejszym okresie nic jeszcze nie pobrano.",
+      "loadFailed": "Nie udało się załadować poprzednich okresów"
+    },
+    "list": {
+      "bill": "Rachunek",
+      "category": "Kategoria",
+      "yearlyMaximum": "Roczne maksimum",
+      "nextMaximum": "Od {date}: {amount}",
+      "resetsOn": "Reset",
+      "perPaycheque": "Na wypłatę",
+      "period": "Okres",
+      "paid": "Zapłacono",
+      "remaining": "Pozostało",
+      "actions": "Akcje",
+      "fromLine": "Z pozycji rachunku",
+      "entered": "Wpisane",
+      "expectedMissing": "Wymagana oczekiwana kwota",
+      "periodRange": "Od {start} do {end}"
+    },
+    "modal": {
+      "newTitle": "Nowa reguła potrącenia",
+      "editTitle": "Edytuj regułę potrącenia"
+    },
+    "form": {
+      "billLabel": "Zaplanowany rachunek wynagrodzenia",
+      "billPlaceholder": "Wybierz rachunek będący Twoją wypłatą",
+      "billHelp": "Zaplanowana wpłata, której pozycje zawierają potrącenia. Oferowane są tylko transakcje, które wpłacają więcej, niż pobierają, i tylko ich pozycje potrąceń można ograniczyć.",
+      "categoryLabel": "Kategoria potrącenia {index}",
+      "categoryPlaceholder": "Wybierz pozycję potrącenia",
+      "yearlyMaximumLabel": "Roczne maksimum",
+      "yearlyMaximumHelp": "Najwięcej, ile ta kategoria pobiera w jednym okresie, w walucie rachunku. Pozycja jest zmniejszana do pozostałego zapasu, aż do zera.",
+      "yearlyMaximumSuggested": "Oszacowano na podstawie tego, co ta kategoria już pobrała.",
+      "resetPeriodLabel": "Reset",
+      "resetDateLabel": "Data resetu",
+      "resetDateHelp": "Liczenie zaczyna się od nowa tego dnia każdego roku. Zwykle pierwszy dzień roku.",
+      "expectedLabel": "Oczekiwane na wypłatę",
+      "expectedHelp": "Pozycja transakcji dla tej kategorii wynosi zero, więc prognoza potrzebuje kwoty, jaką zwykle potrąca każda wypłata.",
+      "expectedFromLine": "Pozycja rachunku potrąca {amount} na wypłatę.",
+      "expectedSuggested": "Zasugerowano na podstawie kwoty, która najczęściej występuje w Twoich transakcjach w tej kategorii w ostatnim roku.",
+      "thisPeriod": "Ten okres, od {start} do {end}",
+      "nextPeriod": "Następny okres, od {date}",
+      "setNextPeriod": "Ustaw kwoty na następny okres, od {date}",
+      "nextYearlyMaximumLabel": "Maksimum w następnym okresie",
+      "nextYearlyMaximumHelp": "Maksimum od następnego resetu. Zostaw puste, aby zachować maksimum tego okresu. Pozostały limit i procent tego okresu się nie zmieniają.",
+      "nextExpectedLabel": "Oczekiwane na wypłatę w następnym okresie",
+      "nextExpectedHelp": "Kwota potrącana z każdej wypłaty od następnego resetu. Zostaw puste, aby zachować kwotę tego okresu.",
+      "sameAsThisPeriod": "Tak jak w tym okresie",
+      "periods": {
+        "YEARLY": "Rocznie"
+      },
+      "validation": {
+        "billRequired": "Wybierz rachunek wynagrodzenia",
+        "categoryRequired": "Wybierz kategorię",
+        "yearlyMaximumRequired": "Wpisz roczne maksimum",
+        "resetDateRequired": "Wpisz datę resetu",
+        "expectedRequired": "Wpisz oczekiwaną kwotę na wypłatę",
+        "categoryDuplicate": "Ta kategoria jest już na liście"
+      },
+      "categoriesLegend": "Kategorie potrąceń",
+      "addCategory": "+ Dodaj kolejną kategorię",
+      "removeCategory": "Usuń kategorię {index}",
+      "noDeductionLines": "Ta transakcja nie ma pozycji potrąceń. Najpierw dodaj potrącenia jako ujemne pozycje podziału na transakcji."
+    },
+    "delete": {
+      "title": "Usuń regułę potrącenia",
+      "message": "Usunąć regułę {category} w {bill}? Zaksięgowane transakcje się nie zmieniają; następna wypłata zaksięguje pełną pozycję."
+    },
+    "toasts": {
+      "created": "{count, plural, one {Utworzono regułę potrącenia} few {Utworzono # reguły potrąceń} many {Utworzono # reguł potrąceń} other {Utworzono # reguły potrąceń}}",
+      "updated": "Zaktualizowano regułę potrącenia",
+      "deleted": "Usunięto regułę potrącenia",
+      "loadFailed": "Nie udało się załadować potrąceń z wynagrodzenia",
+      "createFailed": "Nie udało się utworzyć reguły potrącenia",
+      "updateFailed": "Nie udało się zaktualizować reguły potrącenia",
+      "deleteFailed": "Nie udało się usunąć reguły potrącenia"
+    }
+  }
+}

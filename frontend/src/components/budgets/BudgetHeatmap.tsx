@@ -1,8 +1,10 @@
 'use client';
 
-import { useMemo, useCallback } from 'react';
-import { useTranslations, useLocale } from 'next-intl';
+import { useMemo, useCallback, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
+import { useDateFormat } from '@/hooks/useDateFormat';
+import { useChartDateFormat } from '@/hooks/useChartDateFormat';
 import {
   eachDayOfInterval,
   getDay,
@@ -23,7 +25,8 @@ interface BudgetHeatmapProps {
 }
 
 function getHeatColor(amount: number, maxAmount: number): string {
-  if (amount === 0 || maxAmount === 0) return 'bg-gray-100 dark:bg-gray-700';
+  // A refund day is negative: it is not heat.
+  if (amount <= 0 || maxAmount <= 0) return 'bg-gray-100 dark:bg-gray-700';
   const intensity = amount / maxAmount;
   if (intensity > 0.75) return 'bg-red-400 dark:bg-red-500';
   if (intensity > 0.5) return 'bg-orange-300 dark:bg-orange-400';
@@ -37,14 +40,15 @@ export function BudgetHeatmap({
   periodEnd,
   formatCurrency,
 }: BudgetHeatmapProps) {
-  const locale = useLocale();
   const tc = useTranslations('common');
+  const { formatDate } = useDateFormat();
+  const formatChartDate = useChartDateFormat();
   // Grid is Monday-first (see getDay conversion below); the catalog array is
   // Sunday-first, so rotate Sunday to the end.
   const narrowDays = tc.raw('weekdaysNarrow') as string[];
   const WEEKDAY_LABELS = [...narrowDays.slice(1), narrowDays[0]];
 
-  const { days, maxAmount, spendingMap, monthLabel } = useMemo(() => {
+  const { days, maxAmount, spendingMap, peakDate, monthLabel } = useMemo(() => {
     const start = new Date(periodStart + 'T00:00:00');
     const end = new Date(periodEnd + 'T00:00:00');
     const allDays = eachDayOfInterval({ start, end });
@@ -55,20 +59,23 @@ export function BudgetHeatmap({
     }
 
     let max = 0;
-    for (const amount of map.values()) {
-      if (amount > max) max = amount;
+    let peak: string | null = null;
+    for (const [date, amount] of map.entries()) {
+      if (amount > max) {
+        max = amount;
+        peak = date;
+      }
     }
 
     return {
       days: allDays,
       maxAmount: max,
       spendingMap: map,
-      monthLabel: new Intl.DateTimeFormat(locale, {
-        month: 'long',
-        year: 'numeric',
-      }).format(start),
+      peakDate: peak,
+      // The month heading in the reader's language, never a fixed pattern.
+      monthLabel: formatChartDate(periodStart, 'MMMM yyyy'),
     };
-  }, [dailySpending, periodStart, periodEnd, locale]);
+  }, [dailySpending, periodStart, periodEnd, formatChartDate]);
 
   // Build weekly grid: rows = weeks, cols = days of week (Monday=0)
   const weeks = useMemo(() => {
@@ -103,6 +110,19 @@ export function BudgetHeatmap({
   const t = useTranslations('budgets');
   const router = useRouter();
   const today = new Date();
+
+  // The day whose figure the readout under the grid names. A day's amount
+  // used to live only in a hover-only `title`, which a phone and a keyboard
+  // never reach; pointing at or focusing a day names it here, and until one
+  // is chosen the readout shows the period's busiest day.
+  const [chosenDate, setChosenDate] = useState<string | null>(null);
+  const dayKeys = useMemo(() => new Set(days.map((d) => format(d, 'yyyy-MM-dd'))), [days]);
+  const readoutDate = chosenDate !== null && dayKeys.has(chosenDate) ? chosenDate : peakDate;
+  const dayReadout = (date: string) =>
+    t('heatmap.readout', {
+      date: formatDate(date),
+      amount: formatCurrency(spendingMap.get(date) ?? 0),
+    });
 
   const handleDateClick = useCallback((date: Date) => {
     const dateStr = format(date, 'yyyy-MM-dd');
@@ -144,24 +164,25 @@ export function BudgetHeatmap({
 
                   const isToday = isSameDay(day.date, today);
                   const color = getHeatColor(day.amount, maxAmount);
-                  const dateLabel = new Intl.DateTimeFormat(locale, {
-                    month: 'short',
-                    day: 'numeric',
-                  }).format(day.date);
+                  const dateKey = format(day.date, 'yyyy-MM-dd');
 
                   return (
                     <td key={dayIdx} className="p-0.5">
-                      <div
-                        className={`w-8 h-8 rounded-sm flex items-center justify-center text-xs cursor-pointer hover:ring-2 hover:ring-blue-400 transition-shadow ${color} ${
+                      {/* A button, so the keyboard reaches the day; its figure
+                          is the readout below and its accessible name. */}
+                      <button
+                        type="button"
+                        className={`w-8 h-8 rounded-sm flex items-center justify-center text-xs cursor-pointer hover:ring-2 hover:ring-blue-400 transition-shadow motion-reduce:transition-none focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${color} ${
                           isToday ? 'ring-2 ring-blue-500' : ''
                         }`}
-                        title={`${dateLabel}: ${formatCurrency(day.amount)}`}
-                        data-testid={`heatmap-cell-${format(day.date, 'yyyy-MM-dd')}`}
+                        aria-label={dayReadout(dateKey)}
+                        data-testid={`heatmap-cell-${dateKey}`}
                         onClick={() => handleDateClick(day.date)}
-                        role="link"
+                        onFocus={() => setChosenDate(dateKey)}
+                        onMouseEnter={() => setChosenDate(dateKey)}
                       >
                         {format(day.date, 'd')}
-                      </div>
+                      </button>
                     </td>
                   );
                 })}
@@ -170,6 +191,15 @@ export function BudgetHeatmap({
           </tbody>
         </table>
       </div>
+      {readoutDate !== null && (
+        <p
+          aria-live="polite"
+          data-testid="heatmap-readout"
+          className="mt-3 text-center text-sm text-gray-700 dark:text-gray-300"
+        >
+          {dayReadout(readoutDate)}
+        </p>
+      )}
       <div className="flex items-center justify-center gap-2 mt-3 text-xs text-gray-500 dark:text-gray-400">
         <span>{t('heatmap.less')}</span>
         <div className="w-4 h-4 rounded-sm bg-gray-100 dark:bg-gray-700" />

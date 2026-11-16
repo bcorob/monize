@@ -27,12 +27,21 @@ vi.mock('@/store/authStore', () => ({
   ),
 }));
 
+const mockReleasePush = vi.fn().mockResolvedValue(undefined);
+const mockHoldPush = vi.fn().mockResolvedValue(undefined);
+vi.mock('@/lib/push', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/push')>()),
+  releasePushForSignOut: () => mockReleasePush(),
+  holdPushForSignOut: () => mockHoldPush(),
+}));
+
 vi.mock('@/lib/errors', () => ({
   getErrorMessage: vi.fn((_error: unknown, fallback: string) => fallback),
 }));
 
 import { userSettingsApi } from '@/lib/user-settings';
 import { authApi } from '@/lib/auth';
+import { endSignOut, isSigningOut } from '@/lib/logout-state';
 import toast from 'react-hot-toast';
 
 const localUser: User = {
@@ -127,6 +136,68 @@ describe('DangerZoneSection', () => {
       });
     });
 
+    // Only the header sign-out holds a device. A deleted or downgraded account
+    // cannot resume one, so its row and subscription are released in full.
+    it('releases push in full rather than holding it', async () => {
+      (userSettingsApi.deleteAccount as ReturnType<typeof vi.fn>).mockResolvedValue({
+        downgraded: true,
+      });
+
+      render(<DangerZoneSection user={localUser} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Delete Account' }));
+      fireEvent.change(screen.getByPlaceholderText('Type DELETE'), { target: { value: 'DELETE' } });
+      fireEvent.change(screen.getByPlaceholderText('Enter your password'), { target: { value: 'mypass' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm Delete' }));
+
+      await waitFor(() => expect(authState.logout).toHaveBeenCalled());
+      expect(mockReleasePush).toHaveBeenCalledTimes(1);
+      expect(mockHoldPush).not.toHaveBeenCalled();
+    });
+
+    // The page still mounted after deletion polls and gets 401s. Unless the
+    // sign-out is marked, the interceptor hard-replaces to /login and aborts
+    // this component's own router.push('/login').
+    it('marks the sign-out before the account is deleted', async () => {
+      endSignOut();
+      let signingOutAtDelete: boolean | undefined;
+      (userSettingsApi.deleteAccount as ReturnType<typeof vi.fn>).mockImplementationOnce(
+        async () => {
+          signingOutAtDelete = isSigningOut();
+          return { downgraded: false };
+        },
+      );
+
+      render(<DangerZoneSection user={localUser} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Delete Account' }));
+      fireEvent.change(screen.getByPlaceholderText('Type DELETE'), { target: { value: 'DELETE' } });
+      fireEvent.change(screen.getByPlaceholderText('Enter your password'), { target: { value: 'mypass' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm Delete' }));
+
+      await waitFor(() => expect(authState.logout).toHaveBeenCalled());
+      expect(signingOutAtDelete).toBe(true);
+      endSignOut();
+    });
+
+    it('clears the sign-out mark when the deletion fails', async () => {
+      endSignOut();
+      (userSettingsApi.deleteAccount as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
+        new Error('Wrong password'),
+      );
+
+      render(<DangerZoneSection user={localUser} />);
+
+      fireEvent.click(screen.getByRole('button', { name: 'Delete Account' }));
+      fireEvent.change(screen.getByPlaceholderText('Type DELETE'), { target: { value: 'DELETE' } });
+      fireEvent.change(screen.getByPlaceholderText('Enter your password'), { target: { value: 'mypass' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Confirm Delete' }));
+
+      await waitFor(() => expect(toast.error).toHaveBeenCalled());
+      expect(isSigningOut()).toBe(false);
+      expect(authState.logout).not.toHaveBeenCalled();
+    });
+
     it('shows a downgrade-aware toast when the backend reports downgraded=true', async () => {
       (userSettingsApi.deleteAccount as ReturnType<typeof vi.fn>).mockResolvedValue({
         downgraded: true,
@@ -195,6 +266,12 @@ describe('DangerZoneSection', () => {
       expect(screen.getByText('Categories')).toBeInTheDocument();
       expect(screen.getByText('Payees')).toBeInTheDocument();
       expect(screen.getByText('Currency preferences')).toBeInTheDocument();
+      expect(
+        screen.getByText('All transactions and splits'),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText('Action history (undo/redo)'),
+      ).toBeInTheDocument();
     });
 
     it('requires password for local auth users', () => {

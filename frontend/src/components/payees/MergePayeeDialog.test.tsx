@@ -27,6 +27,11 @@ const sourcePayee: Payee = {
   website: null,
   hasLogo: false,
   logoFetchedAt: null,
+  contactLookupAt: null,
+  contactLookupSource: null,
+  address: null,
+  email: null,
+  phone: null,
   isActive: true,
   createdAt: '2025-01-01',
   transactionCount: 5,
@@ -42,6 +47,11 @@ const targetPayee: Payee = {
   website: null,
   hasLogo: false,
   logoFetchedAt: null,
+  contactLookupAt: null,
+  contactLookupSource: null,
+  address: null,
+  email: null,
+  phone: null,
   isActive: true,
   createdAt: '2025-01-01',
 };
@@ -69,6 +79,8 @@ describe('MergePayeeDialog', () => {
       />
     );
 
+    // Titled through Modal, so the dialog is named by its title.
+    expect(screen.getByRole('dialog', { name: 'Merge Payee' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Merge Payee' })).toBeInTheDocument();
     expect(screen.getByText('STARBUCKS #12345')).toBeInTheDocument();
     expect(screen.getByText('5 transactions will be migrated')).toBeInTheDocument();

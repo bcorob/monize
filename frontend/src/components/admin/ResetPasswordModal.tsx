@@ -43,11 +43,9 @@ export function ResetPasswordModal({
   };
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} maxWidth="md" className="p-6">
-      <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-2">
-        {resolvedTitle}
-      </h3>
-
+    <Modal isOpen={isOpen} onClose={onClose} maxWidth="md" className="p-6" title={resolvedTitle}>
+      {/* Says whose password this is, once, beside the only copy of it: not
+          help that a reader meets again, so it stays a paragraph. */}
       <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
         {description ?? t('resetPasswordModal.defaultDescription', { userName })}
       </p>

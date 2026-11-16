@@ -1,0 +1,113 @@
+{
+  "landing": {
+    "title": "税务",
+    "subtitle": "用于影响您工资的扣款和税务的工具",
+    "tools": {
+      "payrollDeductions": {
+        "title": "工资扣款",
+        "description": "为养老金、就业保险等扣款设置年度上限，达到上限后工资将停止扣除。"
+      }
+    }
+  },
+  "payroll": {
+    "title": "工资扣款",
+    "subtitle": "工资账单扣款行的年度上限",
+    "backToTaxes": "返回税务",
+    "newButton": "+ 新建规则",
+    "loading": "正在加载工资扣款...",
+    "emptyState": {
+      "title": "尚无扣款规则",
+      "body": "选择作为您工资的定期交易，选择其扣款类别，并为每个类别设置年度上限。达到上限后，该交易停止收取该项扣款，并在重置日期重新开始。",
+      "createButton": "创建您的第一条规则"
+    },
+    "yearToDate": {
+      "show": "显示年初至今",
+      "hide": "隐藏年初至今",
+      "title": "本期已付",
+      "help": "该类别在包含今天的周期内，于所有账户中按账单货币扣除的金额。",
+      "foreignRows": "其他货币的 {count, plural, other {# 行}}未计入"
+    },
+    "previousPeriods": {
+      "show": "显示以前的期间",
+      "hide": "隐藏以前的期间",
+      "title": "以前的期间",
+      "help": "每个类别在过去各期间于所有账户中按交易货币扣除的金额。当前期间见本年至今表。",
+      "loading": "正在加载以前的期间...",
+      "empty": "以前的期间尚未扣除任何金额。",
+      "loadFailed": "无法加载以前的期间"
+    },
+    "list": {
+      "bill": "账单",
+      "category": "类别",
+      "yearlyMaximum": "年度上限",
+      "nextMaximum": "自 {date} 起：{amount}",
+      "resetsOn": "重置日期",
+      "perPaycheque": "每次发薪",
+      "period": "周期",
+      "paid": "已付",
+      "remaining": "剩余",
+      "actions": "操作",
+      "fromLine": "来自账单的行",
+      "entered": "已输入",
+      "expectedMissing": "需要预期金额",
+      "periodRange": "{start} 至 {end}"
+    },
+    "modal": {
+      "newTitle": "新建扣款规则",
+      "editTitle": "编辑扣款规则"
+    },
+    "form": {
+      "billLabel": "工资计划账单",
+      "billPlaceholder": "选择作为您工资的账单",
+      "billHelp": "各行记载扣款的定期存入交易。仅提供存入多于扣除的交易，且只能对其扣款行设置上限。",
+      "categoryLabel": "扣款类别 {index}",
+      "categoryPlaceholder": "选择扣款行",
+      "yearlyMaximumLabel": "年度上限",
+      "yearlyMaximumHelp": "该类别在一个周期内扣除的最高金额，按账单货币计。该行会减少到剩余额度，最低为零。",
+      "yearlyMaximumSuggested": "根据此类别已扣除的金额估算。",
+      "resetPeriodLabel": "重置",
+      "resetDateLabel": "重置日期",
+      "resetDateHelp": "每年在这一天重新开始计算。通常是一年的第一天。",
+      "expectedLabel": "每次发薪的预期金额",
+      "expectedHelp": "此交易在该类别的行为零，因此预测需要每次工资通常扣除的金额。",
+      "expectedFromLine": "账单的行每次发薪扣除 {amount}。",
+      "expectedSuggested": "根据过去一年中您在此类别的交易最常出现的金额建议。",
+      "thisPeriod": "本期，{start} 至 {end}",
+      "nextPeriod": "下一期，自 {date} 起",
+      "setNextPeriod": "设置自 {date} 起的下一期金额",
+      "nextYearlyMaximumLabel": "下一期上限",
+      "nextYearlyMaximumHelp": "自下次重置起的上限。留空则沿用本期上限。本期的剩余额度和百分比不变。",
+      "nextExpectedLabel": "下一期每次发薪的预期金额",
+      "nextExpectedHelp": "自下次重置起每次发薪扣除的金额。留空则沿用本期金额。",
+      "sameAsThisPeriod": "与本期相同",
+      "periods": {
+        "YEARLY": "每年"
+      },
+      "validation": {
+        "billRequired": "请选择工资账单",
+        "categoryRequired": "请选择类别",
+        "yearlyMaximumRequired": "请输入年度上限",
+        "resetDateRequired": "请输入重置日期",
+        "expectedRequired": "请输入每次发薪的预期金额",
+        "categoryDuplicate": "此类别已在列表中"
+      },
+      "categoriesLegend": "扣款类别",
+      "addCategory": "+ 添加另一个类别",
+      "removeCategory": "移除类别 {index}",
+      "noDeductionLines": "此交易没有扣款行。请先在交易中将扣款添加为负数拆分行。"
+    },
+    "delete": {
+      "title": "删除扣款规则",
+      "message": "删除 {bill} 上的 {category} 规则？已记账的交易不会改变；下一次发薪将记入完整的行。"
+    },
+    "toasts": {
+      "created": "{count, plural, other {已创建 # 条扣款规则}}",
+      "updated": "扣款规则已更新",
+      "deleted": "扣款规则已删除",
+      "loadFailed": "无法加载工资扣款",
+      "createFailed": "无法创建扣款规则",
+      "updateFailed": "无法更新扣款规则",
+      "deleteFailed": "无法删除扣款规则"
+    }
+  }
+}

@@ -1,0 +1,100 @@
+{
+  "entry": {
+    "history": "Historial de condiciones de {program}"
+  },
+  "offer": {
+    "loading": "Cargando los bonos a la venta...",
+    "loadFailed": "No se pudieron cargar los bonos a la venta.",
+    "retry": "Reintentar",
+    "empty": "Hoy no hay ninguna serie a la venta.",
+    "asOf": "A la venta el {date}. Cada cifra corresponde a un bono comprado hoy y mantenido hasta el vencimiento.",
+    "comparisonNote": "La rentabilidad anualizada es una cifra de comparación entre productos de distinto plazo, no una promesa de lo que ganará.",
+    "couponsNote": "Cupones no reinvertidos: en un bono que paga cupones, el valor al vencimiento suma todos los cupones pagados.",
+    "projected": "Proyectado",
+    "projectedTitle": "Esta cifra se apoya en un valor de referencia supuesto, no solo en tipos publicados.",
+    "assumptions": {
+      "title": "Supuestos",
+      "intro": "Los periodos que aún no han empezado se valoran con estos valores de referencia. Cambie uno para ver su efecto en cada fila.",
+      "label": "{benchmark} (%)",
+      "latest": "Último valor publicado: {value} ({observation})",
+      "reset": "Usar los últimos valores publicados",
+      "updating": "Actualizando las cifras..."
+    },
+    "columns": {
+      "series": "Serie",
+      "saleWindow": "A la venta",
+      "length": "Plazo",
+      "firstPeriodRate": "Primer periodo",
+      "rule": "Tipo",
+      "capitalization": "Intereses",
+      "redemption": "Reembolso anticipado",
+      "maturityValue": "Valor al vencimiento",
+      "totalReturn": "Rentabilidad total",
+      "annualizedReturn": "Rentabilidad anualizada",
+      "terms": "Condiciones"
+    },
+    "saleWindowValue": "{from} a {to}",
+    "lengthValue": "{months, plural, one {# mes} other {# meses}}",
+    "lengthDaysValue": "{days, plural, one {# día} other {# días}}",
+    "rule": {
+      "fixed": "Fijo {rate} anual",
+      "benchmark": "{benchmark} + {addend}",
+      "floor": "Suelo de la referencia {floor}",
+      "daily": "Diario: {benchmark} + {addend}",
+      "discount": "Descuento sobre el valor nominal"
+    },
+    "capitalization": {
+      "NONE": "Se pagan en cada periodo",
+      "COMPOUND_AT_PERIOD_END": "Capitalizados al final de cada periodo"
+    },
+    "redemption": {
+      "none": "Solo al vencimiento",
+      "onDemand": "A petición",
+      "fee": "Comisión de {amount} por bono",
+      "forfeit": "Se pierden los intereses devengados en el periodo"
+    },
+    "couponsNotReinvested": "Cupones no reinvertidos"
+  },
+  "history": {
+    "loading": "Cargando el historial...",
+    "loadFailed": "No se pudo cargar el historial.",
+    "retry": "Reintentar",
+    "empty": "Aún no hay guardada ninguna serie de este producto.",
+    "coverage": "El catálogo abarca de {from} a {to}.",
+    "rateChartTitle": "Tipo del primer periodo y margen por mes de venta",
+    "feeChartTitle": "Comisión de reembolso anticipado por mes de venta",
+    "rate": "Tipo del primer periodo",
+    "rateChartNote": "En los bonos de tipo fijo, la línea muestra el tipo anual.",
+    "addend": "Margen o diferencial",
+    "fee": "Comisión de reembolso anticipado",
+    "gapsNote": "Un mes sin serie guardada es un hueco en la línea, nunca un valor deducido de los meses vecinos.",
+    "missingTitle": "Meses que faltan en el catálogo ({count})",
+    "noMissing": "No falta ningún mes entre la primera y la última serie guardada.",
+    "tableTitle": "Todas las series guardadas",
+    "groupCount": "{count} serie(s)",
+    "unknownYear": "Fecha de venta desconocida",
+    "columns": {
+      "series": "Serie",
+      "saleWindow": "A la venta",
+      "rate": "Tipo del primer periodo o tipo anual",
+      "addend": "Margen o diferencial",
+      "fee": "Comisión de reembolso anticipado",
+      "floor": "Suelo del importe reembolsado",
+      "version": "Versión de las condiciones",
+      "source": "Fuente"
+    },
+    "floor": {
+      "ALL_PERIODS": "Todos los periodos",
+      "FIRST_PERIOD": "Solo el primer periodo"
+    },
+    "none": "Ninguno",
+    "held": "En cartera"
+  },
+  "refreshProgress": {
+    "label": "Actualizando los datos del bono",
+    "offer": "Comprobando la oferta actual…",
+    "series": "Obteniendo la serie {done} de {total}: {seriesCode}",
+    "historyComplete": "El historial está completo",
+    "starting": "Iniciando…"
+  }
+}

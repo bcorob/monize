@@ -3,9 +3,9 @@ import { createAccount, createTransaction } from '../helpers/factories';
 import { uniqueId } from '../helpers/api';
 
 // Reconciliation is a setup -> reconcile -> complete flow. The end-to-end test
-// seeds a CLEARED transaction whose amount matches the statement balance: the
-// reconcile step pre-selects cleared transactions, so the difference is zero
-// and Finish is enabled.
+// seeds a transaction whose amount matches the statement balance: the
+// reconcile step pre-selects every transaction up to the statement date, so the
+// difference is zero and Finish is enabled.
 test.describe('Reconciliation', () => {
   test('navigates to the reconcile page', async ({ authedPage: page }) => {
     await page.goto('/reconcile');
@@ -41,7 +41,7 @@ test.describe('Reconciliation', () => {
     await page.getByLabel(/statement ending balance/i).first().fill('100');
     await page.getByRole('button', { name: /start reconciliation/i }).click();
 
-    // Cleared transaction is pre-selected -> difference is zero -> Finish enabled.
+    // The transaction is pre-selected -> difference is zero -> Finish enabled.
     const finish = page.getByRole('button', { name: /finish reconciliation/i });
     await expect(finish).toBeEnabled({ timeout: 10000 });
     await finish.click();

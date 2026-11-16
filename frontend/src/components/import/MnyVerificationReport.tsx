@@ -2,12 +2,12 @@
 
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
-import { formatCurrency } from '@/lib/format';
 import { formatAccountType } from '@/lib/account-utils';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { MnyImportResult } from '@/lib/import-mny';
 import { AccountType } from '@/types/account';
 import { MnyWarningsPanel } from './MnyWarningsPanel';
+import { Th } from '@/components/ui/Table';
 
 /** Account types whose verification line is badged, per the comment below. */
 const LOAN_TYPES: ReadonlySet<string> = new Set(['LOAN', 'MORTGAGE']);
@@ -42,7 +42,7 @@ export function MnyVerificationReport({
   const tc = useTranslations('common');
   // Share counts go through the app's own quantity formatter, so the report
   // reads in the user's number locale like every other holdings view.
-  const { formatQuantity } = useNumberFormat();
+  const { formatQuantity, formatCurrency } = useNumberFormat();
 
   const mismatches = result.verification.filter((line) => !line.matches);
   const holdingMismatches = result.holdings.filter((line) => !line.matches);
@@ -124,6 +124,12 @@ export function MnyVerificationReport({
           label={t('mnyComplete.counts.categories')}
           value={result.categoriesCreated}
         />
+        {result.tagLinksApplied > 0 && (
+          <Tile
+            label={t('mnyComplete.counts.taggedRows')}
+            value={result.tagLinksApplied}
+          />
+        )}
         {result.securitiesCreated > 0 && (
           <Tile
             label={t('mnyComplete.counts.securities')}
@@ -162,6 +168,12 @@ export function MnyVerificationReport({
         </p>
       )}
 
+      {(result.bondRowsWithoutSeries ?? 0) > 0 && (
+        <p className="mb-6 text-sm text-amber-800 dark:text-amber-300">
+          {t('mnyComplete.bondRowsWithoutSeries', { count: result.bondRowsWithoutSeries ?? 0 })}
+        </p>
+      )}
+
       {/* Per-account reconciliation */}
       <div className="mb-6">
         <h3 className="text-sm font-semibold text-foreground mb-2">
@@ -170,22 +182,22 @@ export function MnyVerificationReport({
         <div className="bg-card border border-border rounded-lg overflow-x-auto">
           <table className="min-w-full text-sm">
             <thead>
-              <tr className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
-                <th className="px-3 py-2 text-left font-medium">
+              <tr className="border-b border-border">
+                <Th className="px-3 py-2">
                   {t('mnyComplete.table.account')}
-                </th>
-                <th className="px-3 py-2 text-right font-medium">
+                </Th>
+                <Th align="right" className="px-3 py-2">
                   {t('mnyComplete.table.transactions')}
-                </th>
-                <th className="px-3 py-2 text-right font-medium">
+                </Th>
+                <Th align="right" className="px-3 py-2">
                   {t('mnyComplete.table.expected')}
-                </th>
-                <th className="px-3 py-2 text-right font-medium">
+                </Th>
+                <Th align="right" className="px-3 py-2">
                   {t('mnyComplete.table.imported')}
-                </th>
-                <th className="px-3 py-2 text-right font-medium">
+                </Th>
+                <Th align="right" className="px-3 py-2">
                   {t('mnyComplete.table.delta')}
-                </th>
+                </Th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -252,22 +264,22 @@ export function MnyVerificationReport({
           <div className="bg-card border border-border rounded-lg overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead>
-                <tr className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="px-3 py-2 text-left font-medium">
+                <tr className="border-b border-border">
+                  <Th className="px-3 py-2">
                     {t('mnyComplete.table.account')}
-                  </th>
-                  <th className="px-3 py-2 text-left font-medium">
+                  </Th>
+                  <Th className="px-3 py-2">
                     {t('mnyComplete.table.security')}
-                  </th>
-                  <th className="px-3 py-2 text-right font-medium">
+                  </Th>
+                  <Th align="right" className="px-3 py-2">
                     {t('mnyComplete.table.lotShares')}
-                  </th>
-                  <th className="px-3 py-2 text-right font-medium">
+                  </Th>
+                  <Th align="right" className="px-3 py-2">
                     {t('mnyComplete.table.importedShares')}
-                  </th>
-                  <th className="px-3 py-2 text-right font-medium">
+                  </Th>
+                  <Th align="right" className="px-3 py-2">
                     {t('mnyComplete.table.delta')}
-                  </th>
+                  </Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">

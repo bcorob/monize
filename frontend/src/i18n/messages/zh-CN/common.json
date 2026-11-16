@@ -10,6 +10,8 @@
     "versionLabel": "版本 {version}",
     "expandAll": "全部展开",
     "collapseAll": "全部收起",
+    "changeCount": "{count, plural, other {# 项更改}}",
+    "otherSections": "修复与详情",
     "viewFullNotes": "查看完整版本说明",
     "dontShowAgain": "不再显示",
     "showNextLogin": "下次登录时显示",
@@ -38,6 +40,14 @@
     "scheduleRecurring": "设为定期计划",
     "more": "更多操作"
   },
+  "columns": {
+    "button": "列",
+    "buttonWithHidden": "列，已隐藏 {count} 个",
+    "menuLabel": "显示或隐藏列",
+    "showAll": "全部显示",
+    "hideColumn": "隐藏列",
+    "sheetSubtitle": "可在“列”菜单中重新显示。"
+  },
   "loading": "加载中...",
   "pagination": {
     "showing": "显示",
@@ -60,6 +70,7 @@
   },
   "exportDropdown": {
     "export": "导出",
+    "exportCsv": "导出 CSV",
     "exporting": "导出中...",
     "exportPdf": "导出 PDF",
     "exportReport": "导出报告",
@@ -88,6 +99,7 @@
     "stackedChart": "100% 堆叠条形图",
     "lineChart": "折线图",
     "areaChart": "面积图",
+    "sankeyChart": "流向图",
     "table": "表格"
   },
   "formActions": {
@@ -118,8 +130,15 @@
     "search": "搜索...",
     "selectAll": "全选",
     "clear": "清除",
+    "clearSearch": "清除搜索",
     "noOptions": "未找到选项",
     "selectedCount": "已选择 {count}"
+  },
+  "categoryFilter": {
+    "uncategorized": "未分类",
+    "transfers": "转账",
+    "allIncome": "所有收入分类",
+    "allExpenses": "所有支出分类"
   },
   "combobox": {
     "createOption": "创建 \"{value}\"",
@@ -137,6 +156,7 @@
   },
   "dateInput": {
     "shortcutsTitle": "键盘快捷键",
+    "openPicker": "打开日期选择器",
     "today": "今天",
     "firstDayOfYear": "年初第一天",
     "lastDayOfYear": "年末最后一天",
@@ -158,6 +178,7 @@
     "CASH": "现金",
     "LINE_OF_CREDIT": "信用额度",
     "ASSET": "资产",
+    "CRYPTO": "加密钱包",
     "OTHER": "其他"
   },
   "accountFilter": {
@@ -241,12 +262,20 @@
     "marker": "—",
     "srLabel": "金额不可用",
     "scheduledFx": "无法计算当前金额：找不到该计划项目结算货币对的汇率。已保存的金额是按旧汇率计算的，因此不予显示。",
-    "displayFx": "此金额无法在此处显示：金额本身已知，但没有可用汇率将其换算为该合计所用的货币。请在“货币”页面刷新汇率。"
+    "displayFx": "此金额无法在此处显示：金额本身已知，但没有可用汇率将其换算为该合计所用的货币。请在“货币”页面刷新汇率。",
+    "noCashBalance": "无法计算此值：此视图中的某个现金账户未报告当天的余额，因此其持有金额是未知，而不是零。请重新加载报表；如果问题仍然存在，说明当天的余额无法计算，值得报告。",
+    "noPrice": "无法计算此金额：持有股数已知，但该证券没有可用于估值的价格。请刷新价格，或在该证券的价格历史中手动添加一条。",
+    "noBaseline": "无法得出该数值：它是一项对比，而没有更早的数值可供比较。没有缺失的内容，因此无需补充。",
+    "staleQuote": "无法计算当日涨跌：该证券的最新价格早于最近一个交易时段，由此得出的任何变动都属于更早的日期。请刷新价格，或检查该证券的报价来源。",
+    "unknownCurrency": "无法显示此金额：记录未指明任何证券，因此该数字的币种未知。请打开该交易并为其指定证券，以便标注其金额。"
   },
   "density": {
     "title": "切换行密度",
     "normal": "正常",
     "compact": "紧凑",
     "dense": "密集"
+  },
+  "scheduledOverdue": {
+    "included": "包含 {count, plural, one {# 笔} other {# 笔}}逾期定期交易"
   }
 }

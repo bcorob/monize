@@ -110,15 +110,16 @@ export function ImportDefaultCategoriesDialog({
   }));
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} maxWidth="md" className="p-6" pushHistory>
-      <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-        {t('title')}
-      </h2>
-      <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-        {t('description')}
-      </p>
-
-      <div className="mt-6 space-y-4">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidth="md"
+      className="p-6"
+      pushHistory
+      title={t('title')}
+      description={t('description')}
+    >
+      <div className="space-y-4">
         <div>
           <Select
             label={t('countryLabel')}

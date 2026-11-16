@@ -4,6 +4,7 @@
     "subtitle": "अपने खातों और प्रतिभूतियों में उपयोग की जाने वाली मुद्राएं प्रबंधित करें",
     "refreshRates": "दरें रीफ्रेश करें",
     "refreshing": "रीफ्रेश हो रहा है...",
+    "statusFilterLabel": "स्थिति",
     "newCurrency": "+ नई मुद्रा",
     "searchPlaceholder": "कोड या नाम से खोजें...",
     "statusAll": "सभी ({count})",
@@ -13,6 +14,15 @@
     "modalTitleNew": "नई मुद्रा",
     "loading": "मुद्राएं लोड हो रही हैं...",
     "count": "{count, plural, one {# मुद्रा} other {# मुद्राएं}}",
+    "providers": {
+      "line": "दरें {providers} से",
+      "separator": ", फिर ",
+      "names": {
+        "frankfurter": "Frankfurter (ECB संदर्भ दरें)",
+        "yahoo": "Yahoo Finance",
+        "crypto": "क्रिप्टो जोड़े (Yahoo)"
+      }
+    },
     "toasts": {
       "loadFailed": "मुद्राएं लोड करने में विफल",
       "updated": "मुद्रा सफलतापूर्वक अपडेट की गई",
@@ -24,6 +34,7 @@
       "statusFailed": "मुद्रा स्थिति अपडेट करने में विफल",
       "ratesRefreshed": "विनिमय दरें रीफ्रेश की गईं: {updated} जोड़े अपडेट हुए",
       "ratesRefreshedWithFailed": "विनिमय दरें रीफ्रेश की गईं: {updated} अपडेट, {failed} विफल",
+      "ratesAllFailed": "कोई विनिमय दर प्राप्त नहीं की जा सकी; प्रदाता ने उत्तर नहीं दिया",
       "ratesFailed": "विनिमय दरें रीफ्रेश करने में विफल"
     },
     "summary": {
@@ -44,6 +55,8 @@
       "actions": "क्रियाएं"
     },
     "defaultBadge": "डिफ़ॉल्ट",
+    "cryptoBadge": "क्रिप्टो",
+    "noPriceSymbol": "कोई मूल्य प्रतीक नहीं",
     "statusBadge": {
       "active": "सक्रिय",
       "activeShort": "सक्रि",
@@ -61,9 +74,10 @@
       "activate": "सक्रिय करें",
       "deleteCurrency": "मुद्रा हटाएं"
     },
-    "usageTooltip": "{accounts} खाता(ते), {securities} प्रतिभूति",
     "usageAccounts": "{count, plural, one {# खाता} other {# खाते}}",
-    "usageSecurities": "{count, plural, one {# प्रति} other {# प्रतिभूतियां}}",
+    "usageSecurities": "{count, plural, one {# प्रतिभूति} other {# प्रतिभूतियाँ}}",
+    "rateHelp": "प्रत्येक मुद्रा की एक इकाई का {currency} में मूल्य।",
+    "rateMissing": "{from} से {to} के लिए कोई संगृहीत विनिमय दर नहीं है।",
     "empty": {
       "title": "कोई मुद्रा नहीं",
       "subtitle": "एक मुद्रा जोड़कर शुरू करें।"
@@ -88,6 +102,20 @@
     "symbolLabel": "प्रतीक",
     "symbolPlaceholder": "उदा., $, €, £, ¥",
     "decimalPlacesLabel": "दशमलव स्थान",
+    "kindLabel": "प्रकार",
+    "kindOptions": {
+      "fiat": "फ़िएट मुद्रा",
+      "crypto": "क्रिप्टोकरेंसी"
+    },
+    "kindLocked": "{code} उपयोग में है, इसलिए इसका प्रकार नहीं बदला जा सकता।",
+    "quoteSymbolLabel": "मूल्य प्रतीक (वैकल्पिक)",
+    "quoteSymbolPlaceholder": "उदा. BTC-EUR",
+    "quoteSymbolHelp": "वह Yahoo Finance प्रतीक जिससे कॉइन का मूल्य लिया जाता है: उसका टिकर, एक हाइफ़न और वह मुद्रा जिसमें उसका भाव दिया जाता है, जैसे BTC-EUR। कॉइन की विनिमय दरें इसी के माध्यम से प्राप्त की जाती हैं।",
+    "verifyButton": "सत्यापित करें",
+    "quoteSymbolPricedIn": "{currency} में मूल्य",
+    "quoteSymbolMissing": "मूल्य प्रतीक के बिना मुद्रा की कोई विनिमय दर नहीं होती।",
+    "quoteSymbolNotCrypto": "{symbol} क्रिप्टोकरेंसी नहीं है। किसी कॉइन का जोड़ा दर्ज करें, जैसे BTC-EUR।",
+    "quoteSymbolNotFound": "{symbol} के लिए कोई क्रिप्टोकरेंसी नहीं मिली",
     "lookupButton": "लुकअप",
     "lookingUp": "लुकअप हो रहा है...",
     "clearButton": "साफ़ करें",
@@ -99,9 +127,14 @@
       "found": "मिला: {details}",
       "notFound": "\"{query}\" के लिए कोई मुद्रा नहीं मिली",
       "lookupFailed": "लुकअप विफल - कृपया पुनः प्रयास करें",
-      "reactivateFailed": "मुद्रा को पुनः सक्रिय करने में विफल"
+      "reactivateFailed": "मुद्रा को पुनः सक्रिय करने में विफल",
+      "verifyEmpty": "सत्यापित करने के लिए BTC-EUR जैसा मूल्य प्रतीक दर्ज करें",
+      "verifyFailed": "मूल्य प्रतीक सत्यापित करने में विफल"
     },
     "inactiveNotice": "{code} पहले से आपकी सूची में है, लेकिन निष्क्रिय है।",
+    "nonIsoNotice": "{code} कोई मानक मुद्रा कोड नहीं है। यदि यह क्रिप्टोकरेंसी है, तो इसका प्रकार क्रिप्टोकरेंसी पर सेट करें। <guide>उपयोगकर्ता गाइड में क्रिप्टोकरेंसी के बारे में पढ़ें</guide>।",
+    "switchToCrypto": "क्रिप्टोकरेंसी का उपयोग करें",
+    "cryptoPrecisionNotice": "क्रिप्टोकरेंसी में राशियाँ अधिकतम आठ दशमलव स्थानों तक रखी जाती हैं, जो उनके संग्रहीत होने की सटीकता है, इसलिए {smallest} से कम शुल्क दर्ज नहीं किया जा सकता। <guide>वॉलेट शुल्क दर्ज करने का तरीका देखें</guide>।",
     "reactivateButton": "{code} पुनः सक्रिय करें",
     "reactivating": "पुनः सक्रिय किया जा रहा है..."
   },
@@ -110,6 +143,53 @@
     "nameRequired": "नाम आवश्यक है",
     "nameMax": "नाम 100 अक्षरों से कम होना चाहिए",
     "symbolRequired": "प्रतीक आवश्यक है",
-    "symbolMax": "प्रतीक 10 अक्षरों से कम होना चाहिए"
+    "symbolMax": "प्रतीक 10 अक्षरों से कम होना चाहिए",
+    "quoteSymbolMax": "मूल्य प्रतीक 20 अक्षरों या उससे कम का होना चाहिए",
+    "quoteSymbolRequiresCrypto": "केवल क्रिप्टोकरेंसी का मूल्य प्रतीक होता है",
+    "quoteSymbolNotAPair": "BTC-EUR जैसा जोड़ा दर्ज करें: कॉइन, एक हाइफ़न और तीन अक्षरों का मुद्रा कोड"
+  },
+  "rateHistory": {
+    "title": "दर इतिहास",
+    "stored": "सहेजा गया इतिहास: {start} से {end} ({count} अवलोकन)",
+    "none": "{pair} के लिए कोई सहेजा गया इतिहास नहीं",
+    "loading": "सहेजा गया दर इतिहास जाँचा जा रहा है...",
+    "loadFailed": "सहेजा गया दर इतिहास पढ़ा नहीं जा सका",
+    "fillGaps": "दर इतिहास की कमियाँ भरें",
+    "filling": "छूटी हुई दरें लाई जा रही हैं...",
+    "fillGapsTitle": "आपकी रिपोर्टों में छूटी दैनिक दरें लाता है, उस पहली तारीख से जब आपका डेटा {code} का उपयोग करता है, आज तक।",
+    "hint": "पहली सहेजी गई दर से पहले की तारीख वाली रिपोर्ट {pair} को नहीं बदल सकतीं।",
+    "list": {
+      "heading": "संग्रहीत दरें",
+      "invertedHelp": "(उलटी) के रूप में चिह्नित दर वह है जो Monize ने इस जोड़े के लिए वास्तव में संगृहीत किया था उसका व्युत्क्रम है, कोई अलग निरीक्षण नहीं।",
+      "direction": "1 {from} के लिए {to} के रूप में दिखाया गया।",
+      "loading": "संग्रहीत दरें लोड हो रही हैं...",
+      "loadFailed": "संग्रहीत दरें पढ़ी नहीं जा सकीं",
+      "empty": "सूचीबद्ध करने के लिए कोई संग्रहीत दर नहीं",
+      "truncated": "सबसे हाल की {count} संग्रहीत दरें दिखाई जा रही हैं; पुरानी सूचीबद्ध नहीं हैं।",
+      "inverted": "उलटी",
+      "unknownRate": "अज्ञात",
+      "columns": {
+        "date": "तारीख",
+        "rate": "दर",
+        "source": "स्रोत"
+      },
+      "sources": {
+        "yahooFinance": "Yahoo Finance",
+        "frankfurter": "Frankfurter (ECB)",
+        "mnyImport": "Money आयात",
+        "yahooCrypto": "क्रिप्टो जोड़े (Yahoo)",
+        "unknown": "अज्ञात"
+      }
+    },
+    "toasts": {
+      "filled": "{count} दरें जोड़ी गईं; इतिहास अब {start} से शुरू होता है",
+      "partial": "{count} दरें संग्रहीत; इतिहास अब {start} से शुरू होता है। {windows} और कमियाँ लानी हैं, जारी रखने के लिए फिर दबाएँ।",
+      "moreToFetch": "इस बार कोई दर संग्रहीत नहीं हुई; {windows} कमियाँ अब भी लानी हैं, जारी रखने के लिए फिर दबाएँ।",
+      "noGaps": "{pair} के पास आपकी रिपोर्ट के लिए आवश्यक हर तारीख की दैनिक दर पहले से मौजूद है",
+      "noNewRates": "{pair} के लिए कोई नई दर संग्रहीत नहीं हुई",
+      "unused": "आपका कोई खाता, होल्डिंग या लेनदेन {code} का उपयोग नहीं करता, इसलिए लाने के लिए कोई दर नहीं है",
+      "providerFloor": "प्रदाता के पास {date} से पहले {pair} की कोई दर नहीं है",
+      "failed": "दर इतिहास भरा नहीं जा सका"
+    }
   }
 }

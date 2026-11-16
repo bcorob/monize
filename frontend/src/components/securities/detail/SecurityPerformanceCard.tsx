@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { useTranslations } from 'next-intl';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
-import { gainLossColor } from '@/lib/format';
+import { PerformancePeriodsCard } from '@/components/ui/PerformancePeriodsCard';
 import {
   PERFORMANCE_PERIODS,
   computePeriodReturn,
@@ -28,6 +28,10 @@ interface SecurityPerformanceCardProps {
  * provider supplies an adjusted close; when it does not, the returns are measured
  * on price alone and a fund that pays out looks worse than it was by its whole
  * yield -- which is worth saying out loud rather than leaving to be discovered.
+ *
+ * The table itself is `PerformancePeriodsCard`, shared with the Investments
+ * page's portfolio result: two subjects, one layout, so a reader moving between
+ * them does not have to re-learn it.
  */
 export function SecurityPerformanceCard({
   prices,
@@ -35,71 +39,44 @@ export function SecurityPerformanceCard({
   const t = useTranslations('securityDetail');
   const { formatSignedPercent } = useNumberFormat();
 
-  const returns = useMemo(
+  const entries = useMemo(
     () =>
-      PERFORMANCE_PERIODS.map((period) => ({
-        period,
-        value: computePeriodReturn(prices, periodStartDate(period)),
-      })),
-    [prices],
+      PERFORMANCE_PERIODS.map((period) => {
+        const value = computePeriodReturn(prices, periodStartDate(period));
+        return {
+          period,
+          label: t(`performance.periods.${period}` as Parameters<typeof t>[0]),
+          primary: value === null ? null : formatSignedPercent(value),
+          primaryValue: value,
+        };
+      }),
+    [prices, t, formatSignedPercent],
   );
 
-  const hasAny = returns.some((entry) => entry.value !== null);
   // `unknown` means no adjusted series exists, so these returns exclude dividends.
   const includesDividends = inferDistributionPolicy(prices) !== 'unknown';
 
   return (
-    <div className="flex h-full flex-col rounded-lg bg-white p-4 shadow dark:bg-gray-800 dark:shadow-gray-700/50">
-      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-        {t('performance.title')}
-      </h3>
-      {/* These are the security's returns, not the holder's: they measure the
-          instrument over a window regardless of when it was bought or whether it
-          was held at all. Readers take any "Performance" heading on a page about
-          their own holding to mean their own return, so the card says which one
-          it is and where to find the other. */}
-      <p className="mb-3 mt-0.5 text-xs text-gray-500 dark:text-gray-400">
-        {t('performance.subject')}
-      </p>
-      {hasAny ? (
-        <dl className="space-y-2">
-          {returns.map(({ period, value }) => (
-            <div key={period} className="flex items-baseline justify-between gap-4">
-              <dt className="text-sm text-gray-500 dark:text-gray-400">
-                {t(`performance.periods.${period}` as Parameters<typeof t>[0])}
-              </dt>
-              <dd
-                className={`text-sm font-medium tabular-nums ${
-                  value === null
-                    ? 'text-gray-400 dark:text-gray-500'
-                    : gainLossColor(value)
-                }`}
-              >
-                {value === null
-                  ? t('performance.unavailable')
-                  : formatSignedPercent(value)}
-              </dd>
-            </div>
-          ))}
-        </dl>
-      ) : (
-        <p className="text-sm text-gray-500 dark:text-gray-400">
-          {t('performance.empty')}
-        </p>
-      )}
-      {hasAny &&
-        (includesDividends ? (
-          <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
-            {t('performance.includesDividends')}
-          </p>
-        ) : (
-          <p
-            className="mt-3 text-xs text-amber-600 dark:text-amber-500"
-            title={t('performance.excludesDividendsTitle')}
-          >
-            {t('performance.excludesDividends')}
-          </p>
-        ))}
-    </div>
+    <PerformancePeriodsCard
+      title={t('performance.title')}
+      /* These are the security's returns, not the holder's: they measure the
+         instrument over a window regardless of when it was bought or whether it
+         was held at all. Readers take any "Performance" heading on a page about
+         their own holding to mean their own return, so the card says which one
+         it is and where to find the other. */
+      subtitle={t('performance.subject')}
+      entries={entries}
+      unavailableLabel={t('performance.unavailable')}
+      emptyMessage={t('performance.empty')}
+      footnote={
+        includesDividends
+          ? t('performance.includesDividends')
+          : t('performance.excludesDividends')
+      }
+      footnoteTone={includesDividends ? 'muted' : 'warning'}
+      footnoteTitle={
+        includesDividends ? undefined : t('performance.excludesDividendsTitle')
+      }
+    />
   );
 }

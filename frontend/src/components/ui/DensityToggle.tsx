@@ -24,7 +24,7 @@ import { useDensityPreference, type DensityView } from '@/store/densityStore';
  * Size is a claim about the toolbar the button lands in, not a taste. `sm` is
  * the bar above a table; `md` matches the `text-sm` controls in the investment
  * register's toolbar (a `sm` button there stands a few pixels short of its
- * neighbours -- see frontend/CLAUDE.md); `chip` is the filled pill used in the
+ * neighbours -- see docs/frontend/tables-and-registers.md); `chip` is the filled pill used in the
  * Reports filter row, where the neighbours are chips rather than plain buttons.
  */
 type DensityToggleSize = 'sm' | 'md' | 'chip';

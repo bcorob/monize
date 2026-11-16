@@ -4,6 +4,7 @@
     "subtitle": "管理您账户和证券中使用的货币",
     "refreshRates": "刷新汇率",
     "refreshing": "刷新中...",
+    "statusFilterLabel": "状态",
     "newCurrency": "+ 新增货币",
     "searchPlaceholder": "按代码或名称搜索...",
     "statusAll": "全部 ({count})",
@@ -13,6 +14,15 @@
     "modalTitleNew": "新增货币",
     "loading": "加载货币中...",
     "count": "{count, plural, one {# 种货币} other {# 种货币}}",
+    "providers": {
+      "line": "汇率来源：{providers}",
+      "separator": "，其次 ",
+      "names": {
+        "frankfurter": "Frankfurter（欧洲央行参考汇率）",
+        "yahoo": "Yahoo Finance",
+        "crypto": "加密货币对 (Yahoo)"
+      }
+    },
     "toasts": {
       "loadFailed": "加载货币失败",
       "updated": "货币更新成功",
@@ -24,6 +34,7 @@
       "statusFailed": "更新货币状态失败",
       "ratesRefreshed": "汇率已刷新：{updated} 对已更新",
       "ratesRefreshedWithFailed": "汇率已刷新：{updated} 对成功，{failed} 对失败",
+      "ratesAllFailed": "无法获取任何汇率；提供商未响应",
       "ratesFailed": "刷新汇率失败"
     },
     "summary": {
@@ -44,6 +55,8 @@
       "actions": "操作"
     },
     "defaultBadge": "默认",
+    "cryptoBadge": "加密",
+    "noPriceSymbol": "无价格符号",
     "statusBadge": {
       "active": "启用",
       "activeShort": "启",
@@ -61,9 +74,10 @@
       "activate": "启用",
       "deleteCurrency": "删除货币"
     },
-    "usageTooltip": "{accounts} 个账户，{securities} 种证券",
-    "usageAccounts": "{count, plural, one {# 个账户} other {# 个账户}}",
-    "usageSecurities": "{count, plural, one {# 种证券} other {# 种证券}}",
+    "usageAccounts": "{count, plural, other {# 个账户}}",
+    "usageSecurities": "{count, plural, other {# 只证券}}",
+    "rateHelp": "每种货币一个单位折合多少 {currency}。",
+    "rateMissing": "没有 {from} 到 {to} 的已存汇率。",
     "empty": {
       "title": "无货币",
       "subtitle": "从添加一种货币开始。"
@@ -88,6 +102,20 @@
     "symbolLabel": "符号",
     "symbolPlaceholder": "例如：$、€、£、¥",
     "decimalPlacesLabel": "小数位数",
+    "kindLabel": "类型",
+    "kindOptions": {
+      "fiat": "法定货币",
+      "crypto": "加密货币"
+    },
+    "kindLocked": "{code} 正在使用中，因此无法更改其类型。",
+    "quoteSymbolLabel": "价格符号（可选）",
+    "quoteSymbolPlaceholder": "例如 BTC-EUR",
+    "quoteSymbolHelp": "用于获取该币种价格的 Yahoo Finance 符号：其代码、连字符和计价货币，例如 BTC-EUR。该币种的汇率通过它获取。",
+    "verifyButton": "验证",
+    "quoteSymbolPricedIn": "以 {currency} 计价",
+    "quoteSymbolMissing": "没有价格符号，该货币就没有汇率。",
+    "quoteSymbolNotCrypto": "{symbol} 不是加密货币。请输入币种的交易对，例如 BTC-EUR。",
+    "quoteSymbolNotFound": "未找到 {symbol} 对应的加密货币",
     "lookupButton": "查询",
     "lookingUp": "查询中...",
     "clearButton": "清除",
@@ -99,9 +127,14 @@
       "found": "已找到：{details}",
       "notFound": "未找到 \"{query}\" 对应的货币",
       "lookupFailed": "查询失败，请重试",
-      "reactivateFailed": "重新启用货币失败"
+      "reactivateFailed": "重新启用货币失败",
+      "verifyEmpty": "请输入 BTC-EUR 之类的价格符号进行验证",
+      "verifyFailed": "验证价格符号失败"
     },
     "inactiveNotice": "{code} 已在您的列表中，但处于未启用状态。",
+    "nonIsoNotice": "{code} 不是标准的货币代码。如果它是加密货币，请将其类型设置为加密货币。<guide>请在用户指南中了解加密货币</guide>。",
+    "switchToCrypto": "使用加密货币",
+    "cryptoPrecisionNotice": "加密货币的金额最多保留八位小数（即其存储精度），因此无法输入低于 {smallest} 的手续费。<guide>查看如何记录钱包手续费</guide>。",
     "reactivateButton": "重新启用 {code}",
     "reactivating": "正在重新启用..."
   },
@@ -110,6 +143,53 @@
     "nameRequired": "名称为必填项",
     "nameMax": "名称不能超过 100 个字符",
     "symbolRequired": "符号为必填项",
-    "symbolMax": "符号不能超过 10 个字符"
+    "symbolMax": "符号不能超过 10 个字符",
+    "quoteSymbolMax": "价格符号不能超过 20 个字符",
+    "quoteSymbolRequiresCrypto": "只有加密货币才有价格符号",
+    "quoteSymbolNotAPair": "请输入 BTC-EUR 这样的交易对：币种、连字符和三位字母的货币代码"
+  },
+  "rateHistory": {
+    "title": "汇率历史",
+    "stored": "已存储历史：{start} 至 {end}（{count} 条观测值）",
+    "none": "没有 {pair} 的已存储历史",
+    "loading": "正在检查已存储的汇率历史...",
+    "loadFailed": "无法读取已存储的汇率历史",
+    "fillGaps": "补全汇率历史的缺口",
+    "filling": "正在获取缺失的汇率...",
+    "fillGapsTitle": "获取报表中缺失的每日汇率，从您的数据首次使用 {code} 的日期起至今天。",
+    "hint": "日期早于最早存储汇率的报告无法换算 {pair}。",
+    "list": {
+      "heading": "已存汇率",
+      "invertedHelp": "标记为（反向换算）的汇率是 Monize 为该货币对实际存储值的倒数，而不是另一个观测值。",
+      "direction": "按每 1 {from} 折合 {to} 显示。",
+      "loading": "正在加载已存汇率...",
+      "loadFailed": "无法读取已存汇率",
+      "empty": "没有可列出的已存汇率",
+      "truncated": "仅显示最近 {count} 条已存汇率；更早的不在列表中。",
+      "inverted": "反向换算",
+      "unknownRate": "未知",
+      "columns": {
+        "date": "日期",
+        "rate": "汇率",
+        "source": "来源"
+      },
+      "sources": {
+        "yahooFinance": "Yahoo Finance",
+        "frankfurter": "Frankfurter（欧洲央行）",
+        "mnyImport": "Money 导入",
+        "yahooCrypto": "加密货币对 (Yahoo)",
+        "unknown": "未知"
+      }
+    },
+    "toasts": {
+      "filled": "已添加 {count} 条汇率；历史现在从 {start} 开始",
+      "partial": "已存储 {count} 条汇率；历史现从 {start} 开始。还有 {windows} 个缺口待获取，再次点击以继续。",
+      "moreToFetch": "本次未存储任何汇率；还有 {windows} 个缺口待获取，再次点击以继续。",
+      "noGaps": "{pair} 已有报表所需每个日期的每日汇率",
+      "noNewRates": "未为 {pair} 存储任何新汇率",
+      "unused": "您的账户、持仓和交易都没有使用 {code}，因此没有可获取的汇率",
+      "providerFloor": "数据提供方没有 {date} 之前的 {pair} 汇率",
+      "failed": "无法补全汇率历史"
+    }
   }
 }

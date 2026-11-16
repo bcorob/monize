@@ -110,10 +110,18 @@ describe("AnthropicProvider", () => {
     // long-running fetch wrapper so SDK calls inherit disabled timeouts.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const Anthropic = require("@anthropic-ai/sdk").default;
+    const sdkOptions = Anthropic.mock.calls[Anthropic.mock.calls.length - 1][0];
+    expect(typeof sdkOptions.fetch).toBe("function");
+    expect(sdkOptions.fetch).not.toBe(global.fetch);
+  });
+
+  it("hands the SDK the egress-policy fetch the factory passes", () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { longRunningFetch } = require("./long-running-fetch");
-    expect(Anthropic).toHaveBeenCalledWith(
-      expect.objectContaining({ fetch: longRunningFetch }),
+    const Anthropic = require("@anthropic-ai/sdk").default;
+    const egressFetch = jest.fn() as unknown as typeof fetch;
+    new AnthropicProvider("sk-test", "claude-sonnet-4-20250514", egressFetch);
+    expect(Anthropic).toHaveBeenLastCalledWith(
+      expect.objectContaining({ fetch: egressFetch }),
     );
   });
 
@@ -603,7 +611,8 @@ describe("AnthropicProvider", () => {
       const result = await provider.verifyModel();
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.reason).toContain("ECONNREFUSED");
+        expect(result.reason).not.toContain("ECONNREFUSED");
+        expect(result.reason).toMatch(/could not verify the configured model/i);
       }
     });
 
@@ -612,7 +621,8 @@ describe("AnthropicProvider", () => {
       const result = await provider.verifyModel();
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.reason).toContain("string-error");
+        expect(result.reason).not.toContain("string-error");
+        expect(result.reason).toMatch(/could not verify the configured model/i);
       }
     });
   });
@@ -797,6 +807,21 @@ describe("AnthropicProvider", () => {
       });
       expect(mockCreate.mock.calls[0][0].temperature).toBe(0.5);
     });
+
+    it("omits temperature for a model that rejects sampling parameters", async () => {
+      mockCreate.mockResolvedValueOnce({
+        content: [{ type: "text", text: "x" }],
+        usage: { input_tokens: 1, output_tokens: 1 },
+        stop_reason: "end_turn",
+        model: "claude-sonnet-5-5",
+      });
+      await new AnthropicProvider("k", "claude-sonnet-5-5").complete({
+        systemPrompt: "s",
+        messages: [{ role: "user", content: "u" }],
+        temperature: 0.1,
+      });
+      expect(mockCreate.mock.calls[0][0]).not.toHaveProperty("temperature");
+    });
   });
 
   describe("streamWithTools error paths", () => {
@@ -874,5 +899,228 @@ describe("AnthropicProvider", () => {
         })(),
       ).rejects.toBe("iter-err");
     });
+  });
+});
+
+describe("AnthropicProvider.completeWithWebSearch", () => {
+  const request = {
+    systemPrompt: "Find contact details.",
+    messages: [{ role: "user" as const, content: 'Business name: "Acme"' }],
+    temperature: 0,
+    maxTokens: 600,
+  };
+
+  const searchedResponse = (overrides: Record<string, unknown> = {}) => ({
+    content: [
+      {
+        type: "server_tool_use",
+        id: "srvtoolu_1",
+        name: "web_search",
+        input: { query: "Acme official site" },
+      },
+      {
+        type: "web_search_tool_result",
+        tool_use_id: "srvtoolu_1",
+        content: [
+          {
+            type: "web_search_result",
+            title: "Acme",
+            url: "https://acme.example",
+            encrypted_content: "x",
+            page_age: null,
+          },
+        ],
+      },
+      { type: "text", text: '{"website":"https://acme.example"}' },
+    ],
+    stop_reason: "end_turn",
+    usage: {
+      input_tokens: 40,
+      output_tokens: 12,
+      server_tool_use: { web_search_requests: 1, web_fetch_requests: 0 },
+    },
+    model: "claude-sonnet-4-6",
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("declares the capability", () => {
+    expect(
+      new AnthropicProvider("k", "claude-sonnet-4-6").supportsWebSearch,
+    ).toBe(true);
+  });
+
+  it("sends the 2026 variant with max_uses for a modern model, through the simple message path", async () => {
+    mockCreate.mockResolvedValueOnce(searchedResponse());
+    const provider = new AnthropicProvider("k", "claude-sonnet-4-6");
+
+    const result = await provider.completeWithWebSearch(request, {
+      maxUses: 3,
+    });
+
+    const body = mockCreate.mock.calls[0][0];
+    expect(body.tools).toEqual([
+      { type: "web_search_20260209", name: "web_search", max_uses: 3 },
+    ]);
+    expect(body.messages).toEqual([
+      { role: "user", content: 'Business name: "Acme"' },
+    ]);
+    expect(body.temperature).toBe(0);
+    expect(body.max_tokens).toBe(600);
+    expect(result).toEqual({
+      content: '{"website":"https://acme.example"}',
+      usage: { inputTokens: 40, outputTokens: 12 },
+      model: "claude-sonnet-4-6",
+      provider: "anthropic",
+      searched: true,
+      searchCount: 1,
+    });
+  });
+
+  it("sends the 2025 variant for an older model", async () => {
+    mockCreate.mockResolvedValueOnce(searchedResponse());
+    const provider = new AnthropicProvider("k", "claude-sonnet-4-20250514");
+
+    await provider.completeWithWebSearch(request, { maxUses: 2 });
+
+    expect(mockCreate.mock.calls[0][0].tools[0].type).toBe(
+      "web_search_20250305",
+    );
+  });
+
+  it("retries once with the other variant when the API rejects the tool type", async () => {
+    const rejection = Object.assign(
+      new Error("tools.0.type: web_search_20260209 is not supported"),
+      { status: 400 },
+    );
+    mockCreate
+      .mockRejectedValueOnce(rejection)
+      .mockResolvedValueOnce(searchedResponse());
+    const provider = new AnthropicProvider("k", "claude-sonnet-4-6");
+
+    const result = await provider.completeWithWebSearch(request, {
+      maxUses: 3,
+    });
+
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+    expect(mockCreate.mock.calls[0][0].tools[0].type).toBe(
+      "web_search_20260209",
+    );
+    expect(mockCreate.mock.calls[1][0].tools[0].type).toBe(
+      "web_search_20250305",
+    );
+    expect(result.searched).toBe(true);
+  });
+
+  it("rethrows a 400 that is not about the tool type, without retrying", async () => {
+    const rejection = Object.assign(new Error("model: not found"), {
+      status: 400,
+    });
+    mockCreate.mockRejectedValueOnce(rejection);
+    const provider = new AnthropicProvider("k", "claude-sonnet-4-6");
+
+    await expect(
+      provider.completeWithWebSearch(request, { maxUses: 3 }),
+    ).rejects.toBe(rejection);
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+  });
+
+  it("reports searched=false when the only search result is an error object", async () => {
+    mockCreate.mockResolvedValueOnce(
+      searchedResponse({
+        content: [
+          {
+            type: "web_search_tool_result",
+            tool_use_id: "srvtoolu_1",
+            content: {
+              type: "web_search_tool_result_error",
+              error_code: "max_uses_exceeded",
+            },
+          },
+          { type: "text", text: "{}" },
+        ],
+      }),
+    );
+    const provider = new AnthropicProvider("k", "claude-sonnet-4-6");
+
+    const result = await provider.completeWithWebSearch(request, {
+      maxUses: 3,
+    });
+
+    expect(result.searched).toBe(false);
+    expect(result.searchCount).toBe(1);
+  });
+
+  it("reports searched=false when no search ran", async () => {
+    mockCreate.mockResolvedValueOnce(
+      searchedResponse({
+        content: [{ type: "text", text: "{}" }],
+        usage: { input_tokens: 5, output_tokens: 2, server_tool_use: null },
+      }),
+    );
+    const provider = new AnthropicProvider("k", "claude-sonnet-4-6");
+
+    const result = await provider.completeWithWebSearch(request, {
+      maxUses: 3,
+    });
+
+    expect(result).toMatchObject({ searched: false, searchCount: 0 });
+  });
+
+  it("resumes a pause_turn once, sending the paused content back as the assistant turn", async () => {
+    const paused = searchedResponse({
+      content: [
+        {
+          type: "server_tool_use",
+          id: "srvtoolu_1",
+          name: "web_search",
+          input: { query: "Acme" },
+        },
+      ],
+      stop_reason: "pause_turn",
+      usage: {
+        input_tokens: 10,
+        output_tokens: 3,
+        server_tool_use: { web_search_requests: 1, web_fetch_requests: 0 },
+      },
+    });
+    mockCreate
+      .mockResolvedValueOnce(paused)
+      .mockResolvedValueOnce(searchedResponse());
+    const provider = new AnthropicProvider("k", "claude-sonnet-4-6");
+
+    const result = await provider.completeWithWebSearch(request, {
+      maxUses: 3,
+    });
+
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+    const second = mockCreate.mock.calls[1][0];
+    expect(second.messages).toEqual([
+      { role: "user", content: 'Business name: "Acme"' },
+      { role: "assistant", content: paused.content },
+    ]);
+    expect(result.content).toBe('{"website":"https://acme.example"}');
+    expect(result.usage).toEqual({ inputTokens: 50, outputTokens: 15 });
+    expect(result.searchCount).toBe(2);
+  });
+
+  it("stops after one continuation when the server pauses again", async () => {
+    const paused = searchedResponse({
+      content: [],
+      stop_reason: "pause_turn",
+      usage: { input_tokens: 1, output_tokens: 1, server_tool_use: null },
+    });
+    mockCreate.mockResolvedValueOnce(paused).mockResolvedValueOnce(paused);
+    const provider = new AnthropicProvider("k", "claude-sonnet-4-6");
+
+    const result = await provider.completeWithWebSearch(request, {
+      maxUses: 3,
+    });
+
+    expect(mockCreate).toHaveBeenCalledTimes(2);
+    expect(result).toMatchObject({ content: "", searched: false });
   });
 });

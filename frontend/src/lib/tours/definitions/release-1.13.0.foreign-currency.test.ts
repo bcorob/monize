@@ -144,6 +144,10 @@ describe('foreign-currency release tour', () => {
   it('routes to a dynamic account detail page then highlights its fx section', () => {
     const openDetail = tour.steps.find((s) => s.id === 'openAccountDetail')!;
     expect(openDetail.advance).toEqual({ type: 'route', route: '/accounts/' });
+    // Parked left: the default bottom-right corner lands on the row actions
+    // this step tells the user to open (the same collision the introduction
+    // tour's account-detail step hit in CI).
+    expect(openDetail.placement).toBe('left');
 
     const section = tour.steps.find((s) => s.id === 'fxSection')!;
     expect(section.routeMatch).toBe('/accounts/');

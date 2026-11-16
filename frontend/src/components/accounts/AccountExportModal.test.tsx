@@ -361,7 +361,7 @@ describe('AccountExportModal', () => {
     });
   });
 
-  describe('resolveBrowserDateFormat locale branches', () => {
+  describe('browser date format, resolved by the shared resolveDateFormatPattern', () => {
     const originalIntlDateTimeFormat = globalThis.Intl.DateTimeFormat;
 
     function mockIntlForOrder(parts: Array<{ type: string; value: string }>) {
@@ -455,11 +455,12 @@ describe('AccountExportModal', () => {
       });
     });
 
-    it('uses / as separator when no literal part is found', async () => {
+    it('keeps the locale\'s own (absent) separators rather than inventing one', async () => {
       vi.mocked(accountsApi.exportAccount).mockResolvedValue(undefined);
       usePreferencesStore.setState({ preferences: { dateFormat: 'browser' } as any, isLoaded: true });
 
-      // MM/DD/YYYY order but no literal part — sep falls back to '/'
+      // MM/DD/YYYY order but no literal part: the pattern is the parts as the
+      // locale writes them, the same pattern useDateFormat reads typed dates with.
       mockIntlForOrder([
         { type: 'month', value: '12' },
         { type: 'day', value: '31' },
@@ -470,7 +471,7 @@ describe('AccountExportModal', () => {
       await act(async () => { fireEvent.click(screen.getByText('Export')); });
       await waitFor(() => {
         expect(accountsApi.exportAccount).toHaveBeenCalledWith(
-          'account-1', 'csv', expect.objectContaining({ dateFormat: 'MM/DD/YYYY' }),
+          'account-1', 'csv', expect.objectContaining({ dateFormat: 'MMDDYYYY' }),
         );
       });
     });

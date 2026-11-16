@@ -80,7 +80,7 @@ describe('TwoFactorVerify', () => {
 
     await waitFor(() => {
       expect(authApi.verify2FA).toHaveBeenCalledWith(tempToken, '654321', true);
-      expect(onVerified).toHaveBeenCalledWith(mockUser);
+      expect(onVerified).toHaveBeenCalledWith(mockUser, { usedBackupCode: false, backupCodesRemaining: null });
     });
   });
 
@@ -175,7 +175,7 @@ describe('TwoFactorVerify', () => {
       createdAt: '2026-01-01',
       updatedAt: '2026-01-01',
     };
-    vi.mocked(authApi.verify2FA).mockResolvedValue({ user: mockUser });
+    vi.mocked(authApi.verify2FA).mockResolvedValue({ user: mockUser, usedBackupCode: true, backupCodesRemaining: 4 });
 
     render(
       <TwoFactorVerify tempToken={tempToken} onVerified={onVerified} onCancel={onCancel} />,
@@ -190,7 +190,9 @@ describe('TwoFactorVerify', () => {
 
     await waitFor(() => {
       expect(authApi.verify2FA).toHaveBeenCalledWith(tempToken, 'a1b2-c3d4', false);
-      expect(onVerified).toHaveBeenCalledWith(mockUser);
+      // The server's report of a backup-code sign-in is handed on, so the
+      // login page can send the user to reset their 2FA.
+      expect(onVerified).toHaveBeenCalledWith(mockUser, { usedBackupCode: true, backupCodesRemaining: 4 });
     });
   });
 

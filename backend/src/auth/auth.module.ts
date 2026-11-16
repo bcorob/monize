@@ -1,11 +1,11 @@
 import { Module } from "@nestjs/common";
+import { APP_GUARD } from "@nestjs/core";
 import { JwtModule } from "@nestjs/jwt";
 import { PassportModule } from "@nestjs/passport";
 import { ConfigModule, ConfigService } from "@nestjs/config";
 
 import { AuthService } from "./auth.service";
 import { AuthController } from "./auth.controller";
-import { LocalStrategy } from "./strategies/local.strategy";
 import { JwtStrategy } from "./strategies/jwt.strategy";
 import { OidcService } from "./oidc/oidc.service";
 import { OidcReauthService } from "./oidc/oidc-reauth.service";
@@ -14,10 +14,14 @@ import { PasswordBreachService } from "./password-breach.service";
 import { TokenService } from "./token.service";
 import { TwoFactorService } from "./two-factor.service";
 import { AuthEmailService } from "./auth-email.service";
+import { AuthStateSweeperService } from "./auth-state-sweeper.service";
+import { AuthAttemptCounterModule } from "./auth-attempt-counter.module";
+import { SingleUseTokenModule } from "./single-use-token.module";
 import { PatController } from "./pat.controller";
 import { StepUpAuthService } from "./step-up/step-up.service";
 import { StepUpAuthController } from "./step-up/step-up.controller";
 import { StepUpGuard } from "./step-up/step-up.guard";
+import { PatAccessGuard } from "./guards/pat-access.guard";
 import { UsersModule } from "../users/users.module";
 import { NotificationsModule } from "../notifications/notifications.module";
 import { DelegationModule } from "../delegation/delegation.module";
@@ -25,6 +29,8 @@ import { DelegationModule } from "../delegation/delegation.module";
 @Module({
   imports: [
     PassportModule,
+    AuthAttemptCounterModule,
+    SingleUseTokenModule,
     UsersModule,
     NotificationsModule,
     DelegationModule,
@@ -45,10 +51,10 @@ import { DelegationModule } from "../delegation/delegation.module";
   ],
   providers: [
     AuthService,
+    AuthStateSweeperService,
     TokenService,
     TwoFactorService,
     AuthEmailService,
-    LocalStrategy,
     JwtStrategy,
     OidcService,
     OidcReauthService,
@@ -56,10 +62,16 @@ import { DelegationModule } from "../delegation/delegation.module";
     PasswordBreachService,
     StepUpAuthService,
     StepUpGuard,
+    PatAccessGuard,
+    // Global: a PAT is refused on every route that did not opt in with
+    // `@AllowPat()`, wherever the controller lives.
+    { provide: APP_GUARD, useExisting: PatAccessGuard },
   ],
   controllers: [AuthController, PatController, StepUpAuthController],
   exports: [
     AuthService,
+    AuthAttemptCounterModule,
+    SingleUseTokenModule,
     TokenService,
     TwoFactorService,
     AuthEmailService,

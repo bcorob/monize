@@ -1,11 +1,11 @@
 import { McpCategoryTreeResource } from "./category-tree.resource";
-import { UserContextResolver } from "../mcp-context";
+import { mcpTestCtx, McpTestContext } from "../testing/mcp-test-context";
 
 describe("McpCategoryTreeResource", () => {
   let resource: McpCategoryTreeResource;
   let categoriesService: Record<string, jest.Mock>;
   let server: { registerResource: jest.Mock };
-  let resolve: jest.MockedFunction<UserContextResolver>;
+  let ctx: McpTestContext;
   let handler: (...args: any[]) => any;
 
   beforeEach(() => {
@@ -21,8 +21,8 @@ describe("McpCategoryTreeResource", () => {
       }),
     };
 
-    resolve = jest.fn();
-    resource.register(server as any, resolve);
+    ctx = mcpTestCtx();
+    resource.register(server as any);
   });
 
   it("should register the resource", () => {
@@ -35,24 +35,24 @@ describe("McpCategoryTreeResource", () => {
   });
 
   it("should return error when no user context", async () => {
-    resolve.mockReturnValue(undefined);
-    const result = await handler("monize://categories", { sessionId: "s1" });
+    ctx.setUser(undefined);
+    const result = await handler("monize://categories", ctx);
     expect(result.contents[0].text).toContain("Error");
   });
 
   it("should return error when scope check fails", async () => {
-    resolve.mockReturnValue({ userId: "u1", scopes: "write" });
-    const result = await handler("monize://categories", { sessionId: "s1" });
+    ctx.setUser({ userId: "u1", scopes: "write" });
+    const result = await handler("monize://categories", ctx);
     expect(result.contents[0].text).toContain("Insufficient scope");
   });
 
   it("should return category tree", async () => {
-    resolve.mockReturnValue({ userId: "u1", scopes: "read" });
+    ctx.setUser({ userId: "u1", scopes: "read" });
     categoriesService.getTree.mockResolvedValue([
       { id: "c1", name: "Food", children: [{ id: "c2", name: "Groceries" }] },
     ]);
 
-    const result = await handler("monize://categories", { sessionId: "s1" });
+    const result = await handler("monize://categories", ctx);
     const parsed = JSON.parse(result.contents[0].text);
     expect(parsed[0].name).toBe("Food");
     expect(parsed[0].children).toHaveLength(1);

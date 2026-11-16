@@ -1,0 +1,287 @@
+{
+  "title": "알림",
+  "unread": "{count}개 읽지 않음",
+  "markAllRead": "모두 읽음으로 표시",
+  "loading": "알림을 불러오는 중...",
+  "empty": "알림이 없습니다",
+  "undo": "실행 취소",
+  "buttonTitle": "알림",
+  "buttonAriaLabel": "알림",
+  "dismissAriaLabel": "알림 지우기",
+  "closeAriaLabel": "알림 닫기",
+  "emptyFiltered": "현재 필터와 일치하는 알림이 없습니다",
+  "deleteAll": "모두 삭제",
+  "deleteAllConfirmTitle": "알림 삭제",
+  "deleteAllConfirmMessageAll": "모든 알림을 삭제할까요? 되돌릴 수 없습니다.",
+  "deleteAllConfirmMessageFiltered": "표시되지 않은 것까지 포함해 현재 필터와 일치하는 모든 알림을 삭제할까요? 되돌릴 수 없습니다.",
+  "deleted": "{count, plural, other {알림 #개를 삭제했습니다}}",
+  "deleteFailed": "알림을 삭제할 수 없습니다",
+  "filter": {
+    "financial": "금융",
+    "system": "시스템"
+  },
+  "severity": {
+    "critical": "긴급",
+    "warning": "경고",
+    "success": "좋은 소식",
+    "info": "정보"
+  },
+  "reminder": {
+    "remindAriaLabel": "이것을 알림 설정",
+    "stopAriaLabel": "이 알림 중지",
+    "stopped": "알림이 중지되었습니다",
+    "stopFailed": "알림을 중지할 수 없습니다",
+    "created": "알림이 설정되었습니다",
+    "createFailed": "알림을 설정할 수 없습니다",
+    "dialogTitle": "알림 설정",
+    "dialogDescription": "조치를 취할 때까지 나중에 이 알림을 다시 받습니다.",
+    "modeLabel": "빈도",
+    "modeRepeat": "중지할 때까지 반복",
+    "modeOnce": "한 번만 더",
+    "intervalLabelRepeat": "다음 간격마다 알림",
+    "intervalLabelOnce": "다음 시간 후에 알림",
+    "durationMinutes": "{minutes, plural, other {# 분}}",
+    "durationHours": "{hours, plural, other {# 시간}}",
+    "cancel": "취소",
+    "confirm": "알림 설정",
+    "pageTitle": "활성 알림",
+    "empty": "활성 알림이 없습니다",
+    "loadFailed": "알림을 불러오지 못했습니다",
+    "retry": "다시 시도",
+    "nextFire": "다음 알림: {date}",
+    "openTarget": "관련 페이지 열기",
+    "delegateUnavailable": "알림을 관리하려면 본인 계정으로 돌아가세요."
+  },
+  "billDue": {
+    "titleOverdue": "{payee} 결제 기한 초과",
+    "titleToday": "{payee} 오늘 결제 예정",
+    "titleTomorrow": "{payee} 내일 결제 예정",
+    "titleInDays": "{payee} {days}일 후 결제 예정",
+    "amountDue": "{date}에 {amount} 결제",
+    "amountUnavailable": "금액을 확인할 수 없습니다 (현재 환율 없음). 결제일 {date}"
+  },
+  "gemSignal": {
+    "riskTitle": "{strategy}이(가) {state}(으)로 전환되었습니다",
+    "riskMessage": "GEM 전략 \"{strategy}\"이(가) {fromState}에서 {toState}(으)로 변경되었습니다. 추천을 검토하려면 여세요.",
+    "allocationTitle": "{strategy}의 목표가 변경되었습니다",
+    "allocationMessage": "GEM 전략 \"{strategy}\"이(가) 이제 {target}을(를) 목표로 합니다. 추천을 검토하려면 여세요.",
+    "riskOn": "리스크 온",
+    "riskOff": "리스크 오프"
+  },
+  "bond": {
+    "maturitySoonTitle": "{series}: {date} 만기",
+    "maturitySoonMessage": "{quantity} × {series}이(가) {date}에 만기됩니다. {payout}",
+    "interestTitle": "{series}: {date} 이자 지급",
+    "interestMessage": "{quantity} × {series}의 이자 {amount}이(가) {date}에 지급됩니다. 아직 계좌에 반영되지 않았다면 종목 페이지에서 기록하세요.",
+    "interestMessageUnknown": "{quantity} × {series}의 이자가 {date}에 지급됩니다. 금액은 아직 알 수 없습니다. 이자 산정에 쓰이는 금리가 아직 공시되지 않았습니다.",
+    "rateResetTitle": "{series}: 새 이자 기간",
+    "rateResetMessage": "{series}: {date}부터 기간 {period}, 연 {rate}.",
+    "unbookedTitle": "{series}: 만기 도래, 상환 미기록",
+    "unbookedMessage": "{quantity} × {series}이(가) {date}에 만기되었지만 상환이 기록되지 않았습니다. {payout} 종목 페이지에서 상환을 기록하세요.",
+    "payoutKnown": "지급액은 {payout}입니다.",
+    "payoutUnknown": "지급액은 아직 알 수 없습니다. 이유: {reason}.",
+    "reason": {
+      "RATE_UNKNOWN": "금리가 아직 공시되지 않음",
+      "TERMS_INCOMPLETE": "시리즈의 조건이 불완전함",
+      "PURCHASE_OUTSIDE_SALE_WINDOW": "매수일이 시리즈의 판매 기간을 벗어남",
+      "PURCHASE_AFTER_MATURITY": "매수일이 시리즈의 만기일 당일이거나 그 이후입니다",
+      "other": "저장된 데이터로 계산할 수 없음"
+    },
+    "benchmarkTitle": "{benchmark}: 새 관측값 {observation}",
+    "benchmarkIntro": "{publisher}이(가) {observation}의 {benchmark}을(를) 발표했습니다: {value}.",
+    "benchmarkSeries": "{series}: {date}부터 시작하는 기간, 연 {rate}.",
+    "benchmarkSeriesProjected": "{series}: {date}부터 시작하는 기간, 예상 연 {rate}.",
+    "benchmarkSeriesUnknown": "{series}: {date}부터 시작하는 기간, 금리는 아직 알 수 없습니다.",
+    "benchmarkMore": "그 외 {more}개.",
+    "missingTitle": "채권 수치를 아직 알 수 없습니다",
+    "missingMessage": "일부 채권 수치를 계산할 수 없습니다. {causes}",
+    "cause": {
+      "observation": "{benchmark}({publisher})의 {observation} 관측값이 저장되어 있지 않습니다(아직 발표되지 않았거나 이후 피드를 가져오지 않음). 채권 페이지에서 새로고침하세요.",
+      "observationNoPublisher": "{benchmark}의 {observation} 관측값이 저장되어 있지 않습니다(아직 발표되지 않았거나 이후 피드를 가져오지 않음). 채권 페이지에서 새로고침하세요.",
+      "terms": "{series}의 조건이 불완전합니다. 채권 페이지에서 시리즈를 새로고침하세요.",
+      "purchase": "{date}의 {series} 매수가 판매 기간({from} ~ {to})을 벗어납니다. 매수일을 수정하세요.",
+      "purchaseAfterMaturity": "{date}의 {series} 매수는 만기({maturity}) 당일 또는 그 이후입니다. 매수일을 수정하세요.",
+      "lots": "원장에서 로트를 도출할 수 없습니다({code}). 원장을 수정하세요.",
+      "lotsRow": "{date} {action}: 로트를 도출할 수 없습니다({code}). 거래를 수정하세요.",
+      "lotsRowSeries": "{date} {action}: 시리즈에 배정되지 않았습니다({code}). 해당 거래에서 시리즈를 선택하세요.",
+      "lotsRowRemoval": "{date} {action}: 계좌가 해당 시리즈로 보유한 수량보다 많이 제거합니다({code}). 거래를 수정하세요."
+    },
+    "action": {
+      "BUY": "매수",
+      "SELL": "매도",
+      "REINVEST": "재투자",
+      "ADD_SHARES": "수량 추가",
+      "REMOVE_SHARES": "수량 제거",
+      "SPLIT": "분할",
+      "TRANSFER_IN": "입금 이체",
+      "TRANSFER_OUT": "출금 이체",
+      "other": "거래"
+    },
+    "benchmarks": {
+      "PL_CPI_GUS_YOY": "소비자물가지수, 12개월 (GUS)",
+      "PL_NBP_REFERENCE": "NBP 기준금리",
+      "US_CPI_U_NSA": "CPI-U, 전 품목, 계절 조정 없음 (BLS)",
+      "US_TBILL_13W_MMY": "13주 미국 재무부 단기 증권 수익률"
+    }
+  },
+  "portfolioMovement": {
+    "titleUp": "투자 {percent}% 상승",
+    "titleDown": "투자 {percent}% 하락",
+    "messageUp": "{from}부터 {to}까지 입출금을 제외하고 투자가 {percent}% 상승했습니다. 검토하려면 여세요.",
+    "messageDown": "{from}부터 {to}까지 입출금을 제외하고 투자가 {percent}% 하락했습니다. 검토하려면 여세요."
+  },
+  "balanceThreshold": {
+    "titleLow": "{account}이(가) 기준값 아래입니다",
+    "titleHigh": "{account}이(가) 기준값 위입니다",
+    "messageLow": "{account}이(가) {balance}(으)로 떨어져 기준값 {threshold} 아래입니다.",
+    "messageHigh": "{account}이(가) {balance}(으)로 올라 기준값 {threshold} 위입니다."
+  },
+  "system": {
+    "backupFailed": {
+      "title": "자동 백업 실패",
+      "message": "{user}의 자동 백업이 실패했습니다: {error}"
+    },
+    "backupPartial": {
+      "title": "자동 백업 불완전",
+      "messageAttachments": "{user}의 백업이 기록되었지만 첨부 파일 {expected}개 중 {missing}개를 포함하지 못했고 {inconsistent}개는 메타데이터와 일치하지 않았습니다. 완전한 백업은 보존되었습니다.",
+      "messagePromotion": "{user}의 일일 백업은 성공했지만 주간 또는 월간 사본을 기록하지 못했습니다: {error}",
+      "messageRetention": "{user}의 백업은 성공했지만 오래된 백업 파일을 정리하지 못했습니다: {error}"
+    },
+    "encryptionKeyMissing": {
+      "title": "암호화 키가 설정되지 않음",
+      "message": "ENCRYPTION_KEY가 설정되어 있지 않아 백업이 암호화되지 않은 채 기록되고 비밀 정보를 저장할 수 없습니다. 향후 릴리스에서는 이 키 없이 시작되지 않습니다."
+    },
+    "jwtSecretWeak": {
+      "title": "JWT_SECRET이 취약합니다",
+      "message": "JWT_SECRET이 공개된 예시 값이거나 너무 쉽게 추측할 수 있어 세션 토큰이 위조될 수 있습니다. 강력한 값을 생성하세요(openssl rand -base64 32). 값을 변경하면 인증 앱 코드가 더 이상 작동하지 않고 신뢰할 수 있는 기기도 해제됩니다. 사용자는 백업 코드로 로그인한 뒤 2FA를 다시 설정하고, 백업 코드가 없는 사용자는 사용자 관리에서 2FA를 재설정하세요. 먼저 docs/backend/modules-and-runtime.md(Changing JWT_SECRET)를 확인하세요."
+    },
+    "smtpFailure": {
+      "title": "이메일 발송이 실패하고 있음",
+      "message": "Monize가 이메일을 보내지 못했습니다: {error}. 알림과 미리 알림이 전달되지 않고 있습니다."
+    },
+    "providerOutage": {
+      "title": "{provider}가 응답하지 않음",
+      "message": "{provider}의 시장 데이터를 사용할 수 없습니다. 다시 응답할 때까지 가격과 지수 데이터가 오래된 상태일 수 있습니다."
+    },
+    "providerRecovered": {
+      "title": "{provider}가 다시 응답함",
+      "message": "장애가 해소되어 {provider}의 시장 데이터가 다시 갱신되고 있습니다."
+    },
+    "scheduledPostFailed": {
+      "title": "{name}을(를) 기록하지 못했습니다",
+      "message": "{date}이 만기인 예약 거래가 자동으로 기록되지 않았습니다: {error}. 청구서 및 입금 화면에서 수동으로 기록할 수 있습니다."
+    }
+  },
+  "priceMovement": {
+    "title": "가격 변동 알림: {symbol} ({percent}%)",
+    "message": "{symbol}: 이전 데이터가 있는 거래일 대비 {percent}%."
+  },
+  "bankSync": {
+    "expiringTitleToday": "{institution}: 은행 접근이 오늘 종료됩니다",
+    "expiringTitleOneDay": "{institution}: 은행 접근이 1일 이내에 종료됩니다",
+    "expiringTitleDays": "{institution}: 은행 접근이 {days}일 이내에 종료됩니다",
+    "expiringMessage": "Monize가 {institution}을(를) 읽도록 한 동의가 {date}에 종료됩니다. 동기화를 계속하려면 Monize에서 연결을 갱신하세요.",
+    "expiredTitle": "{institution}: 은행 접근이 종료되었습니다",
+    "expiredMessage": "Monize가 {institution}을(를) 읽도록 한 동의가 종료되었습니다. 동기화를 다시 시작하려면 Monize에서 연결을 갱신하세요.",
+    "failedTitle": "{institution}: 동기화 실패",
+    "failedMessage": "{institution}의 일일 동기화가 다음 계정에서 실패했습니다: {accounts}. 이유는 은행 동기화 설정에서 확인하세요.",
+    "failedCredentialsMessage": "은행 동기화 자격 증명이 없거나 거부되어 {institution}의 일일 동기화를 시작할 수 없었습니다. 은행 동기화 설정에서 자격 증명을 확인하세요.",
+    "unnamedAccount": "이름 없는 계정",
+    "importedTitle": "{institution}: 새 거래를 가져왔습니다",
+    "importedMessage": "일일 동기화로 {institution}에서 가져온 거래: {imported}건.",
+    "importedNoneTitle": "{institution}: 새 거래 없음",
+    "importedNoneMessage": "{institution}의 일일 동기화에서 새 거래를 찾지 못했습니다."
+  },
+  "emailReceiptsAttention": {
+    "title": "이메일 영수증에 주의가 필요합니다",
+    "message": "수신함에는 프로필이 없는 {noParser}개와 프로필이 인식하지 못한 {parseFailed}개가 있습니다. 검토하기 위해 열어주세요."
+  },
+  "aiReview": {
+    "readyTitle": "AI 제안이 승인을 기다리고 있습니다",
+    "readyMessage": "AI 제안 {count, plural, other {#건}}이 승인을 기다리고 있습니다(새 제안 {added}건). AI 검토 받은편지함을 열어 승인하거나 거절하세요.",
+    "expiringTitle": "AI 제안이 곧 만료됩니다",
+    "expiringMessage": "AI 제안 {count, plural, other {#건}}이 곧 만료됩니다. 가장 먼저 만료되는 제안은 {date}에 만료됩니다. AI 검토 받은편지함을 열어 승인하거나 거절하세요."
+  },
+  "warranty": {
+    "expiringTitle": "{name}: 보증이 {days, plural, other {#일}} 안에 만료됩니다",
+    "expiringMessage": "{name}의 보증이 {date}에 만료됩니다. 열어서 문서를 검토하거나 보증 청구를 기록하세요.",
+    "todayTitle": "{name}: 보증이 오늘 만료됩니다",
+    "todayMessage": "{name}의 보증이 오늘({date}) 만료됩니다. 열어서 문서를 검토하거나 보증 청구를 기록하세요."
+  },
+  "security": {
+    "oauthTitle": "새 앱이 연결되었습니다: {clientName}",
+    "oauthMessage": "애플리케이션 {clientName}에 Monize 계정 접근 권한이 방금 부여되었습니다. 본인이 아니라면 지금 비밀번호를 변경하세요. 연결된 모든 애플리케이션의 접근 권한이 취소됩니다.",
+    "relayTitle": "새 연결이 AI 채팅에 응답했습니다",
+    "relayMessage": "이전에 Monize AI 채팅에 응답한 적 없는 연결이 방금 프롬프트를 가져갔습니다. 이 어시스턴트를 연결하지 않았다면 비밀번호를 변경하세요."
+  },
+  "payrollDeduction": {
+    "resetTitle": "{category}: 내년 상한액을 확인하세요",
+    "resetMessage": "{bill}의 {category} 공제가 {date}에 초기화됩니다. 연간 상한액이 바뀌면 업데이트하세요. 그렇지 않으면 {amount}이(가) 다시 적용됩니다."
+  },
+  "shared": {
+    "title": "공동 지출",
+    "message": "공유 그룹에 변경 사항이 있습니다. Monize를 열어 확인하세요."
+  },
+  "native": {
+    "payments": {
+      "title": "결제 알림",
+      "body": "청구서 또는 예약된 결제에 확인이 필요합니다. 자세한 내용은 Monize를 열어 확인하세요."
+    },
+    "budgets": {
+      "title": "예산 경고",
+      "body": "예산 중 하나에 확인이 필요합니다. 자세한 내용은 Monize를 열어 확인하세요."
+    },
+    "system": {
+      "title": "시스템 알림",
+      "body": "Monize에서 시스템 알림이 있습니다. 자세한 내용은 앱을 열어 확인하세요."
+    },
+    "balances": {
+      "title": "잔액 경고",
+      "body": "계좌 잔액이 설정한 기준값을 넘었습니다. 자세한 내용은 Monize를 열어 확인하세요."
+    },
+    "investments": {
+      "title": "투자 변동",
+      "body": "오늘 투자 자산에 변동이 있었습니다. 자세한 내용은 Monize를 열어 확인하세요."
+    },
+    "strategies": {
+      "title": "전략 신호",
+      "body": "전략 중 하나의 추천이 변경되었습니다. 자세한 내용은 Monize를 열어 확인하세요."
+    },
+    "bank_sync": {
+      "title": "은행 연결",
+      "body": "은행 연결에 확인이 필요합니다. 자세한 내용은 Monize를 열어 확인하세요."
+    },
+    "bank_sync_activity": {
+      "title": "은행 동기화",
+      "body": "은행 동기화에 새로운 소식이 있습니다. 자세한 내용은 Monize를 열어 확인하세요."
+    },
+    "email_receipts": {
+      "title": "이메일 영수증에 주의가 필요합니다",
+      "body": "수신함의 일부 이메일에는 프로필이 필요하거나 수정이 필요합니다. 자세한 내용은 Monize를 열어주세요."
+    },
+    "bonds": {
+      "title": "채권 알림",
+      "body": "보유 중인 채권에 새로운 소식이 있습니다. 자세한 내용은 Monize를 열어 확인하세요."
+    },
+    "ai_review": {
+      "title": "AI 검토 제안",
+      "body": "일부 AI 검토 제안이 회원님의 결정을 기다리고 있습니다. 자세한 내용은 Monize를 열어 확인하세요."
+    },
+    "warranties": {
+      "title": "보증 알림",
+      "body": "보증 중 하나가 곧 만료됩니다. 자세한 내용은 Monize를 열어 확인하세요."
+    },
+    "shared_expenses": {
+      "title": "공동 지출",
+      "body": "공유 그룹에 변경 사항이 있습니다. Monize를 열어 확인하세요."
+    },
+    "security": {
+      "title": "보안 알림",
+      "body": "Monize 계정에 접근할 수 있는 대상이 변경되었습니다. 자세한 내용은 Monize를 열어 확인하세요."
+    },
+    "fallback": {
+      "title": "Monize",
+      "body": "Monize에 새 알림이 있습니다."
+    }
+  }
+}

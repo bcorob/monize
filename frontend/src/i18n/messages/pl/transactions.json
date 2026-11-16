@@ -76,7 +76,10 @@
     "collapseAria": "Ukryj informacje o koncie",
     "showAccountNumber": "Pokaż numer konta",
     "hideAccountNumber": "Ukryj numer konta",
-    "show": "Pokaż informacje o koncie"
+    "show": "Pokaż informacje o koncie",
+    "nextInstallment": "Następna rata",
+    "finalPayment": "Płatność końcowa",
+    "amountDueOn": "{amount}, termin {date}"
   },
   "page": {
     "title": "Transakcje",
@@ -121,13 +124,19 @@
       "balance": "Saldo",
       "attachments": "Załączniki",
       "status": "Status",
+      "statusHelp": "Nieuzgodniona, Rozliczona lub Uzgodniona to etapy dopasowywania do wyciągu bankowego. Anulowana odwołuje transakcję, ale zachowuje jej zapis; nie zmienia już salda konta.",
       "actions": "Akcje"
+    },
+    "sort": {
+      "balanceHiddenHint": "Posortuj według daty, aby zobaczyć saldo bieżące",
+      "stripLabel": "Sortuj według"
     },
     "dateDisplay": {
       "toggleLabel": "Ukryj rok",
       "toggleTitle": "Usuń rok z dat, aby zmieściło się więcej nazwy odbiorcy"
     },
     "attachmentsCount": "{count, plural, one {# załącznik} few {# załączniki} many {# załączników} other {# załącznika}}",
+    "warrantiesCount": "{count, plural, one {# gwarancja} few {# gwarancje} many {# gwarancji} other {# gwarancji}}",
     "today": "Dzisiaj",
     "export": {
       "button": "Eksportuj",
@@ -165,7 +174,6 @@
     },
     "row": {
       "viewPayeeTitle": "Zobacz szczegóły {name}",
-      "ref": "Nr: {number}",
       "investmentLabel": "Inwestycja",
       "linkedInvestmentTitle": "Zobacz w Inwestycjach",
       "filterByDate": "Filtruj według daty \"{date}\"",
@@ -212,13 +220,13 @@
       "title": "Filtry",
       "clear": "Wyczyść",
       "hide": "Ukryj",
-      "show": "Pokaż"
+      "show": "Pokaż filtry"
     },
     "accounts": {
-      "label": "Pokaż konta:",
-      "all": "Wszystkie",
-      "active": "Aktywny",
-      "closed": "Zamknięte"
+      "label": "Pokaż konta",
+      "allCount": "Wszystkie ({count})",
+      "activeCount": "Aktywny ({count})",
+      "closedCount": "Zamknięte ({count})"
     },
     "fields": {
       "accounts": "Konta",
@@ -251,7 +259,7 @@
       "statuses": "Wszystkie statusy",
       "amountMin": "Min",
       "amountMax": "Maks",
-      "search": "Szukaj odbiorcy, kategorii, kwoty, tagu, opisu, nr referencyjnego...",
+      "search": "Szukaj albo spróbuj #10 lub payee:costco",
       "tagKeyValue": "np. usa"
     },
     "tagKeyNone": "Dowolny (bez filtra klucza)",
@@ -312,7 +320,7 @@
     },
     "modal": {
       "title": "Zbiorcza aktualizacja transakcji",
-      "subtitle": "Zaktualizuj {count, plural, one {# zaznaczoną transakcję} few {# zaznaczone transakcje} many {# zaznaczonych transakcji} other {# zaznaczonych transakcji}}. Przełącz pola, które chcesz zmienić.",
+      "help": "Przełącz pola, które chcesz zmienić.",
       "submitLabel": "{count, plural, one {Zaktualizuj # transakcję} few {Zaktualizuj # transakcje} many {Zaktualizuj # transakcji} other {Zaktualizuj # transakcji}}",
       "payee": "Odbiorca",
       "category": "Kategoria",
@@ -360,8 +368,9 @@
       "fromAccount": "Konto źródłowe",
       "toAccount": "Konto docelowe",
       "transferAmount": "Kwota przelewu",
-      "transferAmountWithCurrency": "Kwota przelewu ({currency})",
-      "amountReceived": "Kwota otrzymana ({currency})",
+      "amountReceivedLabel": "Kwota otrzymana",
+      "transferAmountInCurrency": "Kwota przelewu ({currency})",
+      "amountReceivedInCurrency": "Kwota otrzymana ({currency})",
       "payeeOptional": "Odbiorca (opcjonalnie)",
       "categoryOptional": "Kategoria (opcjonalnie)"
     },
@@ -391,10 +400,16 @@
     "submitCreateAndNewDescription": "Zapisz i zacznij kolejną, zachowując konto i datę.",
     "submitOptions": "Wybierz, co dzieje się po utworzeniu",
     "submitUpdate": "Zaktualizuj: {mode}",
+    "submitConvert": "Przekonwertuj na {mode}",
     "reconciledConfirm": {
       "title": "Edytować uzgodnioną transakcję?",
       "message": "Ta transakcja jest uzgodniona. Jej zmiana wpłynie na zakończone uzgodnienie. Czy mimo to chcesz zapisać zmiany?",
       "confirm": "Zapisz zmiany"
+    },
+    "counterpartConfirm": {
+      "title": "Przekonwertować ten przelew?",
+      "message": "Druga strona tego przelewu została już rozliczona lub uzgodniona. Przekonwertowanie go na transakcję usunie ten wpis z drugiego konta i zmieni saldo sprawdzone z wyciągiem. Czy chcesz kontynuować?",
+      "confirm": "Przekonwertuj mimo to"
     },
     "modeLabel": {
       "transfer": "Przelew",
@@ -424,6 +439,8 @@
       "destinationRequired": "Wybierz konto docelowe",
       "sameAccount": "Konto źródłowe i docelowe muszą być różne",
       "negativeTransfer": "Kwota przelewu nie może być ujemna",
+      "convertedToTransfer": "Przekonwertowano na przelew",
+      "convertedToTransaction": "Przekonwertowano na transakcję",
       "payeeCreated": "Utworzono odbiorcę \"{name}\"",
       "payeeCreateFailed": "Nie udało się utworzyć odbiorcy",
       "payeeReactivated": "Odbiorca \"{name}\" został przywrócony",
@@ -458,10 +475,20 @@
       },
       "feeCaption": "Zawiera opłatę za transakcję zagraniczną {percent}% ({fee})."
     },
-    "jointSplitDisabled": "Transakcjami podzielonymi na wspólnym koncie może zarządzać tylko właściciel"
+    "jointSplitDisabled": "Transakcjami podzielonymi na wspólnym koncie może zarządzać tylko właściciel",
+    "warranties": {
+      "title": "Gwarancje",
+      "add": "Dodaj gwarancję",
+      "expires": "Wygasa {date}",
+      "loading": "Wczytywanie gwarancji",
+      "loadError": "Nie udało się wczytać gwarancji tej transakcji.",
+      "empty": "Nie ma jeszcze gwarancji"
+    },
+    "conversionLockedNote": "Ten przelew należy do transakcji podzielonej lub do konta innego właściciela, więc tutaj może pozostać tylko przelewem. Zmień go w podziale albo usuń i utwórz żądany wpis."
   },
   "splitEditor": {
     "header": "Szczegóły podziału",
+    "headerTooltip": "Każdy wiersz może być kategorią, przelewem na inne konto lub inwestycją. Wiersze muszą sumować się do całkowitej kwoty transakcji; Rozłóż równo i Rozłóż proporcjonalnie rozdzielają resztę za Ciebie.",
     "distributeProportionally": "Rozłóż proporcjonalnie",
     "distributeProportionallyTitle": "Rozłóż pozostałą kwotę proporcjonalnie do kwoty każdego podziału",
     "distributeEvenly": "Rozłóż równo",
@@ -521,7 +548,7 @@
     "quantityPlaceholder": "Ilość",
     "pricePlaceholder": "Cena",
     "commissionPlaceholder": "Prowizja",
-    "amountPlaceholder": "Kwota ({currency})",
+    "amountOnlyPlaceholder": "Kwota",
     "ratePlaceholder": "{to} za 1 {from}",
     "ariaRate": "Kurs wymiany ({to} za 1 {from})",
     "rateHint": "Ilość, cena i prowizja są w {from}; ten kurs przelicza wpływ gotówkowy na {to}.",
@@ -551,6 +578,7 @@
       "total": "Suma",
       "transactions": "Transakcje",
       "tooltip": "{count, plural, one {# transakcja} few {# transakcje} many {# transakcji} other {# transakcji}}",
+      "partialNote": "Dla niektórych kwot brak kursu wymiany. Te kwoty nie są w tych sumach.",
       "quarterLabel": "K{quarter} {year}",
       "quarterTick": "K{quarter} {year}",
       "granularityLabel": "Grupowanie",
@@ -575,6 +603,11 @@
       "log": "Logarytmiczna",
       "autoTitle": "Auto ({scale})",
       "scaleTitle": "Skala {label}"
+    },
+    "collapse": {
+      "hide": "Ukryj wykres",
+      "show": "Pokaż wykres",
+      "hidden": "Wykres ukryty"
     }
   },
   "toasts": {
@@ -597,5 +630,71 @@
     "title": "Wydatki wg {key}",
     "other": "Inne",
     "noData": "Brak otagowanych wydatków do podziału dla tego klucza."
+  },
+  "searchSyntax": {
+    "open": "Składnia wyszukiwania",
+    "title": "Składnia wyszukiwania",
+    "fields": "Pola: payee, memo, cat, tag, account, ref, amount, date, status, is, has. Wybierz przykład, aby wstawić go do pola wyszukiwania.",
+    "examples": {
+      "allWords": "Każde słowo występuje gdzieś",
+      "phrase": "Dokładnie ta fraza",
+      "exclude": "Pomiń wszystko pasujące do refund",
+      "fieldContains": "Odbiorca zawiera costco",
+      "fieldExact": "Odbiorca to dokładnie Costco",
+      "reference": "Numer czeku lub referencji dokładnie 10",
+      "wildcard": "Referencja zaczyna się od 10",
+      "amountOver": "Kwota powyżej 100",
+      "amountRange": "Kwota od 50 do 100",
+      "datePeriod": "Dowolny dzień marca 2026",
+      "isSplit": "Transakcje podzielone",
+      "hasAttachment": "Ma załącznik",
+      "hasWarranty": "Ma gwarancję"
+    }
+  },
+  "searchInterpretation": {
+    "label": "Szukam:",
+    "negated": "nie {phrase}",
+    "malformed": "{raw} (niezrozumiałe, szukane jako tekst)",
+    "empty": "{raw} (puste, pominięte)",
+    "status": "Status to {value}",
+    "any": "„{value}” w dowolnym polu",
+    "fields": {
+      "payee": "Odbiorca",
+      "memo": "Notatka",
+      "cat": "Kategoria",
+      "tag": "Tag",
+      "account": "Konto",
+      "ref": "Referencja",
+      "amount": "Kwota",
+      "date": "Data",
+      "status": "Status",
+      "is": "Typ",
+      "has": "Ma"
+    },
+    "ops": {
+      "contains": "{field} zawiera „{value}”",
+      "exact": "{field} to „{value}”",
+      "glob": "{field} pasuje do „{value}”",
+      "eq": "{field} to {value}",
+      "gt": "{field} powyżej {value}",
+      "gte": "{field} {value} lub więcej",
+      "lt": "{field} poniżej {value}",
+      "lte": "{field} {value} lub mniej",
+      "between": "{field} od {value} do {valueTo}"
+    },
+    "enum": {
+      "is": {
+        "transfer": "Przelewy",
+        "split": "Transakcje podzielone",
+        "uncategorized": "Bez kategorii"
+      },
+      "has": {
+        "attachment": "Ma załącznik",
+        "warranty": "Ma gwarancję",
+        "ref": "Ma numer referencyjny",
+        "memo": "Ma notatkę",
+        "tag": "Ma tag"
+      }
+    }
   }
 }

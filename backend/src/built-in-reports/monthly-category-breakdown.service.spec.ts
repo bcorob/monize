@@ -12,6 +12,10 @@ import {
   DataSourceMock,
   ManagerMock,
 } from "../test-helpers/scoped-db-testing";
+import {
+  FIXTURE_TX_DATE,
+  rateIndexOf,
+} from "../test-helpers/report-rate-testing";
 
 jest.mock("../common/db/scoped-db", () =>
   jest.requireActual("../test-helpers/scoped-db-testing").scopedDbMockModule(),
@@ -39,6 +43,7 @@ describe("MonthlyCategoryBreakdownService", () => {
     icon: null,
     color: "#FF5733",
     isIncome: false,
+    autoSign: null,
     isSystem: false,
     createdAt: new Date("2025-01-01"),
   };
@@ -54,6 +59,7 @@ describe("MonthlyCategoryBreakdownService", () => {
     icon: null,
     color: "#33FF57",
     isIncome: false,
+    autoSign: null,
     isSystem: false,
     createdAt: new Date("2025-01-02"),
   };
@@ -69,6 +75,7 @@ describe("MonthlyCategoryBreakdownService", () => {
     icon: null,
     color: "#5733FF",
     isIncome: true,
+    autoSign: null,
     isSystem: false,
     createdAt: new Date("2025-01-03"),
   };
@@ -89,7 +96,7 @@ describe("MonthlyCategoryBreakdownService", () => {
       findOne: jest.fn().mockResolvedValue({ defaultCurrency: "USD" }),
     };
     exchangeRateService = {
-      getLatestRates: jest.fn().mockResolvedValue(mockExchangeRates),
+      getRateIndex: jest.fn().mockResolvedValue(rateIndexOf(mockExchangeRates)),
     };
 
     ({ manager: scopedManager, dataSource: scopedDataSource } =
@@ -131,6 +138,35 @@ describe("MonthlyCategoryBreakdownService", () => {
     );
   });
 
+  it("leaves a category's foreign month out whole when one of its days has no rate (issue #2106)", async () => {
+    // EUR->USD is stored for the fixture day only; 2024-01-05 has no rate.
+    const part = (txDate: string, withdrawals: string) => ({
+      month: "2026-01",
+      category_id: null,
+      currency_code: "EUR",
+      tx_date: txDate,
+      own_rate: null,
+      deposits: "0",
+      withdrawals,
+    });
+    scopedManager.query
+      .mockResolvedValueOnce([
+        part(FIXTURE_TX_DATE, "100"),
+        part("2024-01-05", "50"),
+      ])
+      .mockResolvedValueOnce([]);
+
+    const result = await service.getMonthlyCategoryBreakdown(
+      mockUserId,
+      "2024-01-01",
+      "2026-01-31",
+    );
+
+    expect(result.data).toEqual([]);
+    expect(result.excludedCount).toBe(1);
+    expect(result.missingCurrencies).toEqual(["EUR"]);
+  });
+
   it("returns empty data when no transactions exist", async () => {
     const result = await service.getMonthlyCategoryBreakdown(
       mockUserId,
@@ -153,6 +189,7 @@ describe("MonthlyCategoryBreakdownService", () => {
         account_id: "acc-chequing",
         account_name: "Chequing",
         currency_code: "USD",
+        tx_date: FIXTURE_TX_DATE,
         outflow: "500.00",
         inflow: "0.00",
       },
@@ -161,6 +198,7 @@ describe("MonthlyCategoryBreakdownService", () => {
         account_id: "acc-savings",
         account_name: "Savings",
         currency_code: "USD",
+        tx_date: FIXTURE_TX_DATE,
         outflow: "0.00",
         inflow: "500.00",
       },
@@ -194,6 +232,7 @@ describe("MonthlyCategoryBreakdownService", () => {
         month: "2025-02",
         category_id: "cat-child",
         currency_code: "USD",
+        tx_date: FIXTURE_TX_DATE,
         deposits: "0.00",
         withdrawals: "120.00",
       },
@@ -201,6 +240,7 @@ describe("MonthlyCategoryBreakdownService", () => {
         month: "2025-01",
         category_id: "cat-child",
         currency_code: "USD",
+        tx_date: FIXTURE_TX_DATE,
         deposits: "0.00",
         withdrawals: "100.00",
       },
@@ -239,6 +279,7 @@ describe("MonthlyCategoryBreakdownService", () => {
         month: "2025-01",
         category_id: "cat-income",
         currency_code: "USD",
+        tx_date: FIXTURE_TX_DATE,
         deposits: "5000.00",
         withdrawals: "0.00",
       },
@@ -269,6 +310,7 @@ describe("MonthlyCategoryBreakdownService", () => {
         month: "2025-01",
         category_id: "cat-child",
         currency_code: "USD",
+        tx_date: FIXTURE_TX_DATE,
         deposits: "300.00",
         withdrawals: "100.00",
       },
@@ -296,6 +338,7 @@ describe("MonthlyCategoryBreakdownService", () => {
         month: "2025-01",
         category_id: null,
         currency_code: "USD",
+        tx_date: FIXTURE_TX_DATE,
         deposits: "0.00",
         withdrawals: "40.00",
       },
@@ -303,6 +346,7 @@ describe("MonthlyCategoryBreakdownService", () => {
         month: "2025-01",
         category_id: "ghost-cat",
         currency_code: "USD",
+        tx_date: FIXTURE_TX_DATE,
         deposits: "0.00",
         withdrawals: "10.00",
       },
@@ -327,6 +371,7 @@ describe("MonthlyCategoryBreakdownService", () => {
         month: "2025-01",
         category_id: "cat-child",
         currency_code: "EUR",
+        tx_date: FIXTURE_TX_DATE,
         deposits: "0.00",
         withdrawals: "100.00",
       },
@@ -356,6 +401,7 @@ describe("MonthlyCategoryBreakdownService", () => {
     expect(scopedManager.query.mock.calls[0][1]).toEqual([
       mockUserId,
       "2025-12-31",
+      "USD",
       "2025-01-01",
     ]);
 
@@ -367,8 +413,8 @@ describe("MonthlyCategoryBreakdownService", () => {
       "2025-12-31",
     );
     const call = scopedManager.query.mock.calls[0];
-    expect(call[1]).toEqual([mockUserId, "2025-12-31"]);
-    expect(call[0]).not.toContain("$3");
+    expect(call[1]).toEqual([mockUserId, "2025-12-31", "USD"]);
+    expect(call[0]).not.toContain("transaction_date >= $");
   });
 
   it("excludes transfers, investments and the asset-value-change category in SQL", async () => {
@@ -392,7 +438,7 @@ describe("MonthlyCategoryBreakdownService", () => {
     expect(sql).toContain("parent_transaction_id IS NULL");
   });
 
-  it("includes the outflow leg of a categorized transfer in the category query", async () => {
+  it("keeps a categorized transfer out of the category query (INV-REPORT-003)", async () => {
     await service.getMonthlyCategoryBreakdown(
       mockUserId,
       "2025-01-01",
@@ -400,14 +446,11 @@ describe("MonthlyCategoryBreakdownService", () => {
     );
 
     const categorySql = scopedManager.query.mock.calls[0][0];
-    // A categorized transfer is counted once, as its outflow leg, under its
-    // category -- without ever being treated as income/expense elsewhere.
-    expect(categorySql).toContain("t.is_transfer = true");
-    expect(categorySql).toContain("t.category_id IS NOT NULL");
-    expect(categorySql).toContain("t.amount < 0");
+    expect(categorySql).toContain("AND t.is_transfer = false");
+    expect(categorySql).not.toContain("t.is_transfer = true");
   });
 
-  it("excludes categorized transfers from the transfer rollup to avoid double-counting", async () => {
+  it("reports a categorized transfer only in the transfer rollup", async () => {
     await service.getMonthlyCategoryBreakdown(
       mockUserId,
       "2025-01-01",
@@ -416,6 +459,153 @@ describe("MonthlyCategoryBreakdownService", () => {
 
     const transferSql = scopedManager.query.mock.calls[1][0];
     expect(transferSql).toContain("t.is_transfer = true");
-    expect(transferSql).toContain("t.category_id IS NULL");
+    expect(transferSql).not.toContain("t.category_id IS NULL");
+  });
+
+  // A missing exchange rate is unknown, never 1:1 (INV-FX-001).
+  describe("a currency that has no rate", () => {
+    beforeEach(() => {
+      exchangeRateService.getRateIndex.mockResolvedValue(rateIndexOf([]));
+    });
+
+    it("leaves the unconverted rows out of every figure and names the currency", async () => {
+      categoriesRepository.find.mockResolvedValue([mockIncomeCategory]);
+      scopedManager.query
+        .mockResolvedValueOnce([
+          {
+            month: "2025-01",
+            category_id: "cat-income",
+            currency_code: "USD",
+            tx_date: FIXTURE_TX_DATE,
+            deposits: "50.00",
+            withdrawals: "0.00",
+          },
+          {
+            month: "2025-02",
+            category_id: "cat-income",
+            currency_code: "JPY",
+            tx_date: FIXTURE_TX_DATE,
+            deposits: "100000",
+            withdrawals: "0.00",
+          },
+        ])
+        .mockResolvedValueOnce([
+          {
+            month: "2025-03",
+            account_id: "acc-yen",
+            account_name: "Yen",
+            currency_code: "JPY",
+            tx_date: FIXTURE_TX_DATE,
+            outflow: "100000",
+            inflow: "0.00",
+          },
+        ]);
+
+      const result = await service.getMonthlyCategoryBreakdown(
+        mockUserId,
+        "2025-01-01",
+        "2025-12-31",
+      );
+
+      expect(result.months).toEqual(["2025-01"]);
+      expect(result.data).toHaveLength(1);
+      expect(result.data[0].depositTotal).toBe(50);
+      expect(result.transfers).toEqual([]);
+      expect(result.currency).toBe("USD");
+      expect(result.missingCurrencies).toEqual(["JPY"]);
+      expect(result.excludedCount).toBe(2);
+      expect(JSON.stringify(result)).not.toContain("100000");
+    });
+
+    it("reports no gaps when nothing is excluded", async () => {
+      const result = await service.getMonthlyCategoryBreakdown(
+        mockUserId,
+        "2025-01-01",
+        "2025-12-31",
+      );
+
+      expect(result.missingCurrencies).toEqual([]);
+      expect(result.excludedCount).toBe(0);
+    });
+  });
+
+  describe("account filter", () => {
+    it("adds no account predicate and no parameter without a selection", async () => {
+      await service.getMonthlyCategoryBreakdown(
+        mockUserId,
+        "2025-01-01",
+        "2025-12-31",
+      );
+      await service.getMonthlyCategoryBreakdown(
+        mockUserId,
+        "2025-01-01",
+        "2025-12-31",
+        { accountIds: [] },
+      );
+
+      const calls = scopedManager.query.mock.calls;
+      expect(calls).toHaveLength(4);
+      for (const [sql, params] of calls) {
+        expect(sql).not.toContain("ANY(");
+        expect(params).toEqual([mockUserId, "2025-12-31", "USD", "2025-01-01"]);
+      }
+      // The two requests are the same SQL: omitting it is today's query.
+      expect(calls[2][0]).toBe(calls[0][0]);
+      expect(calls[3][0]).toBe(calls[1][0]);
+    });
+
+    it("scopes BOTH the category query and the transfer-rows query, parameterized", async () => {
+      await service.getMonthlyCategoryBreakdown(
+        mockUserId,
+        "2025-01-01",
+        "2025-12-31",
+        { accountIds: ["acct-1", "acct-2"] },
+      );
+
+      const [categorySql, categoryParams] = scopedManager.query.mock.calls[0];
+      const [transferSql, transferParams] = scopedManager.query.mock.calls[1];
+      for (const [sql, params] of [
+        [categorySql, categoryParams],
+        [transferSql, transferParams],
+      ] as const) {
+        expect(sql).toContain("t.account_id = ANY($5::uuid[])");
+        expect(sql).not.toContain("acct-1");
+        expect(params).toEqual([
+          mockUserId,
+          "2025-12-31",
+          "USD",
+          "2025-01-01",
+          ["acct-1", "acct-2"],
+        ]);
+      }
+    });
+
+    it("numbers the account parameter around an absent start date", async () => {
+      await service.getMonthlyCategoryBreakdown(
+        mockUserId,
+        undefined,
+        "2025-12-31",
+        { accountIds: ["acct-1"] },
+      );
+
+      for (const [sql, params] of scopedManager.query.mock.calls) {
+        expect(sql).toContain("t.account_id = ANY($4::uuid[])");
+        expect(params).toEqual([mockUserId, "2025-12-31", "USD", ["acct-1"]]);
+      }
+    });
+
+    it("keeps every other exclusion on both queries when scoped", async () => {
+      await service.getMonthlyCategoryBreakdown(
+        mockUserId,
+        "2025-01-01",
+        "2025-12-31",
+        { accountIds: ["acct-1"] },
+      );
+      const [categorySql] = scopedManager.query.mock.calls[0];
+      const [transferSql] = scopedManager.query.mock.calls[1];
+      expect(categorySql).toContain("status != 'VOID'");
+      expect(categorySql).toContain("INVESTMENT_BROKERAGE");
+      expect(transferSql).toContain("status != 'VOID'");
+    });
   });
 });

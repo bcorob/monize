@@ -76,7 +76,10 @@
     "collapseAria": "खाते की जानकारी छुपाएं",
     "showAccountNumber": "खाता संख्या दिखाएं",
     "hideAccountNumber": "खाता संख्या छुपाएं",
-    "show": "खाते की जानकारी दिखाएं"
+    "show": "खाते की जानकारी दिखाएं",
+    "nextInstallment": "अगली किस्त",
+    "finalPayment": "अंतिम भुगतान",
+    "amountDueOn": "{amount}, देय {date}"
   },
   "page": {
     "title": "लेन-देन",
@@ -121,13 +124,19 @@
       "balance": "शेष",
       "attachments": "अटैचमेंट",
       "status": "स्थिति",
+      "statusHelp": "असमाधानित, समाशोधित या समाधानित बैंक स्टेटमेंट से मिलान की दिशा में चरण हैं। रद्द एक लेनदेन को निरस्त करता है लेकिन उसका रिकॉर्ड रखता है; यह अब खाते की शेष राशि को नहीं बदलता।",
       "actions": "क्रियाएं"
+    },
+    "sort": {
+      "balanceHiddenHint": "चालू शेष देखने के लिए दिनांक के अनुसार क्रमबद्ध करें",
+      "stripLabel": "इसके अनुसार क्रमबद्ध करें"
     },
     "dateDisplay": {
       "toggleLabel": "वर्ष छिपाएँ",
       "toggleTitle": "तिथियों से वर्ष हटाएँ ताकि भुगतानकर्ता का नाम अधिक दिखे"
     },
     "attachmentsCount": "{count, plural, one {# अटैचमेंट} other {# अटैचमेंट}}",
+    "warrantiesCount": "{count, plural, one {# वारंटी} other {# वारंटी}}",
     "today": "आज",
     "export": {
       "button": "निर्यात",
@@ -165,7 +174,6 @@
     },
     "row": {
       "viewPayeeTitle": "{name} का विवरण देखें",
-      "ref": "संदर्भ: {number}",
       "investmentLabel": "निवेश",
       "linkedInvestmentTitle": "निवेश में देखें",
       "filterByDate": "तिथि \"{date}\" से फ़िल्टर करें",
@@ -212,13 +220,13 @@
       "title": "फ़िल्टर",
       "clear": "साफ करें",
       "hide": "छुपाएं",
-      "show": "दिखाएं"
+      "show": "फ़िल्टर दिखाएं"
     },
     "accounts": {
-      "label": "खाते दिखाएं:",
-      "all": "सभी",
-      "active": "सक्रिय",
-      "closed": "बंद"
+      "label": "खाते दिखाएं",
+      "allCount": "सभी ({count})",
+      "activeCount": "सक्रिय ({count})",
+      "closedCount": "बंद ({count})"
     },
     "fields": {
       "accounts": "खाते",
@@ -251,7 +259,7 @@
       "statuses": "सभी स्थितियां",
       "amountMin": "न्यूनतम",
       "amountMax": "अधिकतम",
-      "search": "भुगतानकर्ता, श्रेणी, राशि, टैग, विवरण, संदर्भ # खोजें...",
+      "search": "खोजें, या #10 या payee:costco आज़माएँ",
       "tagKeyValue": "जैसे usa"
     },
     "tagKeyNone": "कोई भी (कुंजी फ़िल्टर नहीं)",
@@ -312,7 +320,7 @@
     },
     "modal": {
       "title": "लेन-देन बल्क अपडेट",
-      "subtitle": "{count, plural, one {# चयनित लेन-देन} other {# चयनित लेन-देन}} अपडेट करें। जिन फ़ील्ड को बदलना चाहते हैं उन्हें टॉगल करें।",
+      "help": "जिन फ़ील्ड को बदलना चाहते हैं उन्हें टॉगल करें।",
       "submitLabel": "{count, plural, one {# लेन-देन} other {# लेन-देन}} अपडेट करें",
       "payee": "भुगतानकर्ता",
       "category": "श्रेणी",
@@ -360,8 +368,9 @@
       "fromAccount": "स्रोत खाता",
       "toAccount": "गंतव्य खाता",
       "transferAmount": "ट्रांसफर राशि",
-      "transferAmountWithCurrency": "ट्रांसफर राशि ({currency})",
-      "amountReceived": "प्राप्त राशि ({currency})",
+      "amountReceivedLabel": "प्राप्त राशि",
+      "transferAmountInCurrency": "ट्रांसफर राशि ({currency})",
+      "amountReceivedInCurrency": "प्राप्त राशि ({currency})",
       "payeeOptional": "भुगतानकर्ता (वैकल्पिक)",
       "categoryOptional": "श्रेणी (वैकल्पिक)"
     },
@@ -391,10 +400,16 @@
     "submitCreateAndNewDescription": "सहेजें और उसी खाते और तारीख के साथ नया शुरू करें।",
     "submitOptions": "चुनें कि बनाने के बाद क्या हो",
     "submitUpdate": "{mode} अपडेट करें",
+    "submitConvert": "{mode} में बदलें",
     "reconciledConfirm": {
       "title": "समाधानित लेन-देन संपादित करें?",
       "message": "यह लेन-देन समाधानित है। इसे बदलने से पूर्ण किए गए समाधान पर असर पड़ेगा। क्या आप फिर भी अपने परिवर्तन सहेजना चाहते हैं?",
       "confirm": "परिवर्तन सहेजें"
+    },
+    "counterpartConfirm": {
+      "title": "इस स्थानांतरण को बदलें?",
+      "message": "इस स्थानांतरण का दूसरा पक्ष पहले ही क्लियर या समाधानित हो चुका है। इसे लेन-देन में बदलने से वह प्रविष्टि दूसरे खाते से हट जाएगी और एक ऐसा शेष बदल जाएगा जिसे विवरण से जाँचा गया था। क्या आप जारी रखना चाहते हैं?",
+      "confirm": "फिर भी बदलें"
     },
     "modeLabel": {
       "transfer": "ट्रांसफर",
@@ -424,6 +439,8 @@
       "destinationRequired": "कृपया गंतव्य खाता चुनें",
       "sameAccount": "स्रोत और गंतव्य खाते अलग होने चाहिए",
       "negativeTransfer": "ट्रांसफर राशि ऋणात्मक नहीं होनी चाहिए",
+      "convertedToTransfer": "स्थानांतरण में बदला गया",
+      "convertedToTransaction": "लेन-देन में बदला गया",
       "payeeCreated": "भुगतानकर्ता \"{name}\" बनाया गया",
       "payeeCreateFailed": "भुगतानकर्ता बनाने में विफल",
       "payeeReactivated": "भुगतानकर्ता \"{name}\" पुनः सक्रिय किया गया",
@@ -458,10 +475,20 @@
       },
       "feeCaption": "इसमें {percent}% विदेशी लेनदेन शुल्क ({fee}) शामिल है।"
     },
-    "jointSplitDisabled": "साझा खाते में विभाजित लेनदेन केवल स्वामी ही प्रबंधित कर सकता है"
+    "jointSplitDisabled": "साझा खाते में विभाजित लेनदेन केवल स्वामी ही प्रबंधित कर सकता है",
+    "warranties": {
+      "title": "वारंटी",
+      "add": "वारंटी जोड़ें",
+      "expires": "{date} को समाप्त",
+      "loading": "वारंटी लोड हो रही हैं",
+      "loadError": "इस लेनदेन की वारंटी लोड नहीं हो सकीं।",
+      "empty": "अभी तक कोई वारंटी नहीं"
+    },
+    "conversionLockedNote": "यह स्थानांतरण एक विभाजित लेन-देन या किसी अन्य स्वामी के खाते से संबंधित है, इसलिए यहाँ यह केवल स्थानांतरण ही रह सकता है। इसे विभाजन से बदलें या हटाकर इच्छित प्रविष्टि बनाएँ।"
   },
   "splitEditor": {
     "header": "विभाजन विवरण",
+    "headerTooltip": "प्रत्येक पंक्ति एक श्रेणी, किसी अन्य खाते में स्थानांतरण, या एक निवेश हो सकती है। पंक्तियों का योग लेनदेन की कुल राशि के बराबर होना चाहिए; समान रूप से वितरित करें और आनुपातिक रूप से वितरित करें बाकी राशि को आपके लिए बाँट देते हैं।",
     "distributeProportionally": "आनुपातिक रूप से वितरित करें",
     "distributeProportionallyTitle": "प्रत्येक विभाजन की राशि के आधार पर शेष राशि आनुपातिक रूप से वितरित करें",
     "distributeEvenly": "समान रूप से वितरित करें",
@@ -521,7 +548,7 @@
     "quantityPlaceholder": "मात्रा",
     "pricePlaceholder": "मूल्य",
     "commissionPlaceholder": "कमीशन",
-    "amountPlaceholder": "राशि ({currency})",
+    "amountOnlyPlaceholder": "राशि",
     "ratePlaceholder": "1 {from} पर {to}",
     "ariaRate": "विनिमय दर (1 {from} पर {to})",
     "rateHint": "मात्रा, कीमत और कमीशन {from} में हैं; यह दर नकदी प्रभाव को {to} में परिवर्तित करती है।",
@@ -551,6 +578,7 @@
       "total": "कुल",
       "transactions": "लेन-देन",
       "tooltip": "{count, plural, one {# लेन-देन} other {# लेन-देन}}",
+      "partialNote": "कुछ राशियों के लिए विनिमय दर नहीं है और वे इन योगों में शामिल नहीं हैं।",
       "quarterLabel": "Q{quarter} {year}",
       "quarterTick": "Q{quarter} {year}",
       "granularityLabel": "समूहन",
@@ -575,6 +603,11 @@
       "log": "लॉग",
       "autoTitle": "स्वत: ({scale})",
       "scaleTitle": "{label} स्केल"
+    },
+    "collapse": {
+      "hide": "चार्ट छिपाएँ",
+      "show": "चार्ट दिखाएँ",
+      "hidden": "चार्ट छिपा हुआ है"
     }
   },
   "toasts": {
@@ -597,5 +630,71 @@
     "title": "{key} के अनुसार खर्च",
     "other": "अन्य",
     "noData": "इस कुंजी के लिए विभाजित करने हेतु कोई टैग किया गया खर्च नहीं है।"
+  },
+  "searchSyntax": {
+    "open": "खोज सिंटैक्स",
+    "title": "खोज सिंटैक्स",
+    "fields": "फ़ील्ड: payee, memo, cat, tag, account, ref, amount, date, status, is, has। किसी उदाहरण को खोज बॉक्स में डालने के लिए उसे चुनें।",
+    "examples": {
+      "allWords": "हर शब्द कहीं न कहीं मिलता है",
+      "phrase": "यही सटीक वाक्यांश",
+      "exclude": "refund से मेल खाने वाली हर चीज़ हटाएँ",
+      "fieldContains": "प्राप्तकर्ता में costco है",
+      "fieldExact": "प्राप्तकर्ता ठीक Costco है",
+      "reference": "चेक या संदर्भ संख्या ठीक 10",
+      "wildcard": "संदर्भ 10 से शुरू होता है",
+      "amountOver": "राशि 100 से अधिक",
+      "amountRange": "राशि 50 से 100 तक",
+      "datePeriod": "मार्च 2026 का कोई भी दिन",
+      "isSplit": "विभाजित लेन-देन",
+      "hasAttachment": "अनुलग्नक है",
+      "hasWarranty": "वारंटी है"
+    }
+  },
+  "searchInterpretation": {
+    "label": "खोज रहे हैं:",
+    "negated": "{phrase} नहीं",
+    "malformed": "{raw} (समझा नहीं गया, पाठ के रूप में खोजा गया)",
+    "empty": "{raw} (खाली, अनदेखा)",
+    "status": "स्थिति {value} है",
+    "any": "“{value}” कहीं भी",
+    "fields": {
+      "payee": "प्राप्तकर्ता",
+      "memo": "नोट",
+      "cat": "श्रेणी",
+      "tag": "टैग",
+      "account": "खाता",
+      "ref": "संदर्भ",
+      "amount": "राशि",
+      "date": "तारीख",
+      "status": "स्थिति",
+      "is": "प्रकार",
+      "has": "में है"
+    },
+    "ops": {
+      "contains": "{field} में “{value}” है",
+      "exact": "{field} “{value}” है",
+      "glob": "{field} “{value}” से मेल खाता है",
+      "eq": "{field} {value} है",
+      "gt": "{field} {value} से अधिक",
+      "gte": "{field} {value} या अधिक",
+      "lt": "{field} {value} से कम",
+      "lte": "{field} {value} या कम",
+      "between": "{field} {value} से {valueTo} तक"
+    },
+    "enum": {
+      "is": {
+        "transfer": "स्थानांतरण",
+        "split": "विभाजित लेन-देन",
+        "uncategorized": "बिना श्रेणी"
+      },
+      "has": {
+        "attachment": "अनुलग्नक है",
+        "warranty": "वारंटी है",
+        "ref": "संदर्भ संख्या है",
+        "memo": "नोट है",
+        "tag": "टैग है"
+      }
+    }
   }
 }

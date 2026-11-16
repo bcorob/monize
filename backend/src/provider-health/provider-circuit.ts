@@ -137,7 +137,7 @@ export class ProviderCircuit {
 
   /**
    * @param now injected clock. Every test in this repo that reads the wall
-   *   clock is a test about today's date (root `CLAUDE.md`); a breaker whose
+   *   clock is a test about today's date (`AGENTS.md`); a breaker whose
    *   windows could only be tested by waiting them out would not be tested.
    */
   constructor(private readonly now: () => number = Date.now) {}

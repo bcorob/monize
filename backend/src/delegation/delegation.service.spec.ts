@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import * as bcrypt from "bcryptjs";
+import { FindOperator, In, Not } from "typeorm";
 import { I18nService } from "nestjs-i18n";
 import { DelegationService, DELEGATE_2FA_REQUIRED } from "./delegation.service";
 import { DelegateAccountFavourite } from "./entities/delegate-account-favourite.entity";
@@ -15,7 +16,11 @@ import { RefreshToken } from "../auth/entities/refresh-token.entity";
 import { Account } from "../accounts/entities/account.entity";
 import { Transaction } from "../transactions/entities/transaction.entity";
 import { ScheduledTransaction } from "../scheduled-transactions/entities/scheduled-transaction.entity";
+import { ScheduledTransactionOverride } from "../scheduled-transactions/entities/scheduled-transaction-override.entity";
 import { createScopedDbMocks } from "../test-helpers/scoped-db-testing";
+import { PersonalAccessToken } from "../auth/entities/personal-access-token.entity";
+import { TrustedDevice } from "../users/entities/trusted-device.entity";
+import { OAUTH_GRANT_REVOKER } from "../auth/credential-revocation";
 
 jest.mock("../common/db/scoped-db", () =>
   jest.requireActual("../test-helpers/scoped-db-testing").scopedDbMockModule(),
@@ -36,13 +41,18 @@ describe("DelegationService", () => {
   let usersRepo: Record<string, jest.Mock>;
   let prefsRepo: Record<string, jest.Mock>;
   let refreshRepo: Record<string, jest.Mock>;
+  let patRepo: Record<string, jest.Mock>;
+  let trustedDevicesRepo: Record<string, jest.Mock>;
+  let oauthProviderService: { revokeAllForUser: jest.Mock };
   let accountsRepo: Record<string, jest.Mock>;
   let transactionsRepo: Record<string, jest.Mock>;
   let scheduledTxRepo: Record<string, jest.Mock>;
+  let scheduledOverrideRepo: Record<string, jest.Mock>;
   let delegateFavouritesRepo: Record<string, jest.Mock>;
   let emailService: Record<string, jest.Mock>;
   let configService: Record<string, jest.Mock>;
   let dataSource: Record<string, jest.Mock>;
+  let scopedManager: Record<string, jest.Mock>;
 
   beforeEach(() => {
     delegatesRepo = {
@@ -50,14 +60,20 @@ describe("DelegationService", () => {
       find: jest.fn(),
       save: jest.fn(),
       count: jest.fn().mockResolvedValue(0),
+      update: jest.fn().mockResolvedValue({ affected: 1 }),
+      exists: jest.fn().mockResolvedValue(true),
     };
     grantsRepo = { findOne: jest.fn(), find: jest.fn(), count: jest.fn() };
     usersRepo = { findOne: jest.fn(), find: jest.fn(), save: jest.fn() };
     prefsRepo = { findOne: jest.fn() };
     refreshRepo = { update: jest.fn() };
+    patRepo = { update: jest.fn() };
+    trustedDevicesRepo = { delete: jest.fn() };
+    oauthProviderService = { revokeAllForUser: jest.fn().mockResolvedValue(0) };
     accountsRepo = { find: jest.fn(), exists: jest.fn(), count: jest.fn() };
     transactionsRepo = { findOne: jest.fn() };
     scheduledTxRepo = { findOne: jest.fn() };
+    scheduledOverrideRepo = { find: jest.fn().mockResolvedValue([]) };
     delegateFavouritesRepo = {
       find: jest.fn(),
       findOne: jest.fn(),
@@ -79,8 +95,15 @@ describe("DelegationService", () => {
       [Account, accountsRepo as never],
       [Transaction, transactionsRepo as never],
       [ScheduledTransaction, scheduledTxRepo as never],
+      [ScheduledTransactionOverride, scheduledOverrideRepo as never],
       [DelegateAccountFavourite, delegateFavouritesRepo as never],
+      [PersonalAccessToken, patRepo as never],
+      [TrustedDevice, trustedDevicesRepo as never],
     ]);
+    // `repo.manager` is the transaction's manager, as on a real repository.
+    (refreshRepo as Record<string, unknown>).manager = scoped.manager;
+    scopedManager = scoped.manager as unknown as Record<string, jest.Mock>;
+    scopedManager.query.mockResolvedValue([]);
     dataSource = scoped.dataSource as unknown as Record<string, jest.Mock>;
 
     const i18nStub = {
@@ -93,6 +116,11 @@ describe("DelegationService", () => {
       configService as any,
       dataSource as any,
       i18nStub,
+      {
+        get: jest.fn((token: unknown) =>
+          token === OAUTH_GRANT_REVOKER ? oauthProviderService : undefined,
+        ),
+      } as any,
     );
   });
 
@@ -112,6 +140,7 @@ describe("DelegationService", () => {
       if (entity === Account) return accountsRepo;
       if (entity === Transaction) return transactionsRepo;
       if (entity === ScheduledTransaction) return scheduledTxRepo;
+      if (entity === ScheduledTransactionOverride) return scheduledOverrideRepo;
       if (entity === DelegateAccountFavourite) return delegateFavouritesRepo;
       throw new Error(`unregistered entity in transaction: ${String(entity)}`);
     });
@@ -281,6 +310,49 @@ describe("DelegationService", () => {
         "a1",
         "a2",
       ]);
+    });
+
+    it("ignores a stale transferAccountId on a non-transfer", async () => {
+      scheduledTxRepo.findOne.mockResolvedValue({
+        accountId: "a1",
+        isTransfer: false,
+        transferAccountId: "a2",
+      });
+      await expect(service.accountIdsForScheduled("s1")).resolves.toEqual([
+        "a1",
+      ]);
+    });
+
+    // A delegate write on a schedule posts into every account it names; gating
+    // only the primary account let a delegate post an owner-created split or
+    // funded schedule through an account they were never granted.
+    it("includes the funding, split and override-split transfer accounts", async () => {
+      scheduledTxRepo.findOne.mockResolvedValue({
+        accountId: "a1",
+        isTransfer: false,
+        transferAccountId: null,
+        investmentFundingAccountId: "fund",
+        splits: [
+          { transferAccountId: "split-b" },
+          { transferAccountId: null },
+          { transferAccountId: "a1" },
+        ],
+      });
+      scheduledOverrideRepo.find.mockResolvedValue([
+        { splits: [{ transferAccountId: "ovr-c" }, { categoryId: "cat" }] },
+        { splits: null },
+      ]);
+      await expect(service.accountIdsForScheduled("s1")).resolves.toEqual([
+        "a1",
+        "fund",
+        "split-b",
+        "ovr-c",
+      ]);
+      expect(scheduledOverrideRepo.find).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { scheduledTransactionId: "s1" },
+        }),
+      );
     });
   });
 
@@ -691,6 +763,7 @@ describe("DelegationService", () => {
         ["budgetsCanRead"],
         ["reportsCanRead"],
         ["aiCanRead"],
+        ["warrantiesCanRead"],
       ])("keeps the owner context when %s is granted", async (field) => {
         arrangeGrantee({ [field]: true });
         grantsRepo.find.mockResolvedValue([
@@ -868,6 +941,7 @@ describe("DelegationService", () => {
           budgets: false,
           reports: false,
           ai: false,
+          warranties: false,
         },
       });
     });
@@ -892,6 +966,7 @@ describe("DelegationService", () => {
         budgets: false,
         reports: true,
         ai: false,
+        warranties: false,
       });
     });
 
@@ -978,35 +1053,34 @@ describe("DelegationService", () => {
   });
 
   describe("setCapabilities", () => {
-    it("throws when the delegation is not owned by the caller", async () => {
-      delegatesRepo.findOne.mockResolvedValue(null);
+    it("throws when the delegation is not owned by the caller (or was revoked)", async () => {
+      delegatesRepo.update.mockResolvedValue({ affected: 0 });
       await expect(
         service.setCapabilities(OWNER_ID, "g1", { payeesCanCreate: true }),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it("updates only the provided flags", async () => {
-      const delegation = {
-        id: "g1",
-        ownerUserId: OWNER_ID,
-        payeesCanCreate: false,
-        payeesCanEdit: false,
-        categoriesCanEdit: true,
-        tagsCanDelete: false,
-      };
-      delegatesRepo.findOne.mockResolvedValue(delegation);
-      delegatesRepo.save.mockResolvedValue(delegation);
-
+    it("updates only the provided flags, conditionally on the owner, never by save (A26-M05)", async () => {
       await service.setCapabilities(OWNER_ID, "g1", {
         payeesCanCreate: true,
         tagsCanDelete: true,
+        payeesCanEdit: undefined,
       });
 
-      expect(delegation.payeesCanCreate).toBe(true);
-      expect(delegation.tagsCanDelete).toBe(true);
-      expect(delegation.payeesCanEdit).toBe(false); // unchanged
-      expect(delegation.categoriesCanEdit).toBe(true); // unchanged
-      expect(delegatesRepo.save).toHaveBeenCalledWith(delegation);
+      expect(delegatesRepo.update).toHaveBeenCalledWith(
+        { id: "g1", ownerUserId: OWNER_ID },
+        { payeesCanCreate: true, tagsCanDelete: true },
+      );
+      // A save of a stale entity re-INSERTs a delegation a revoke deleted.
+      expect(delegatesRepo.save).not.toHaveBeenCalled();
+    });
+
+    it("404s an empty patch on a delegation that does not exist", async () => {
+      delegatesRepo.exists.mockResolvedValue(false);
+      await expect(
+        service.setCapabilities(OWNER_ID, "g1", {}),
+      ).rejects.toBeInstanceOf(NotFoundException);
+      expect(delegatesRepo.update).not.toHaveBeenCalled();
     });
   });
 
@@ -1021,6 +1095,7 @@ describe("DelegationService", () => {
         billsCanRead: true,
         investmentsCanRead: false,
         budgetsCanRead: true,
+        warrantiesCanRead: true,
       });
       await expect(service.hasSection("g1", "bills")).resolves.toBe(true);
       await expect(service.hasSection("g1", "investments")).resolves.toBe(
@@ -1028,6 +1103,72 @@ describe("DelegationService", () => {
       );
       await expect(service.hasSection("g1", "budgets")).resolves.toBe(true);
       await expect(service.hasSection("g1", "ai")).resolves.toBe(false);
+      await expect(service.hasSection("g1", "warranties")).resolves.toBe(true);
+    });
+  });
+
+  describe("grantsWholeLedger", () => {
+    const allSections = {
+      ownerUserId: "owner-1",
+      billsCanRead: true,
+      investmentsCanRead: true,
+      budgetsCanRead: true,
+      reportsCanRead: true,
+      aiCanRead: true,
+      warrantiesCanRead: true,
+    };
+
+    it("is false when there is no active delegation", async () => {
+      delegatesRepo.findOne.mockResolvedValue(null);
+      await expect(service.grantsWholeLedger("g1")).resolves.toBe(false);
+    });
+
+    it("is false while the warranties section is withheld: the assistant's tools read warranties too", async () => {
+      delegatesRepo.findOne.mockResolvedValue({
+        ...allSections,
+        warrantiesCanRead: false,
+      });
+      await expect(service.grantsWholeLedger("g1")).resolves.toBe(false);
+      expect(accountsRepo.count).not.toHaveBeenCalled();
+    });
+
+    it("is false when any section is withheld, without counting accounts", async () => {
+      delegatesRepo.findOne.mockResolvedValue({
+        ...allSections,
+        budgetsCanRead: false,
+      });
+      await expect(service.grantsWholeLedger("g1")).resolves.toBe(false);
+      expect(accountsRepo.count).not.toHaveBeenCalled();
+    });
+
+    it("is false while any owner account is not READ-granted", async () => {
+      delegatesRepo.findOne.mockResolvedValue(allSections);
+      grantsRepo.find.mockResolvedValue([{ accountId: "a1" }]);
+      accountsRepo.count.mockResolvedValue(1);
+      await expect(service.grantsWholeLedger("g1")).resolves.toBe(false);
+      expect(accountsRepo.count).toHaveBeenCalledWith({
+        where: { userId: "owner-1", id: Not(In(["a1"])) },
+      });
+    });
+
+    it("counts every owner account as ungranted when nothing is granted", async () => {
+      delegatesRepo.findOne.mockResolvedValue(allSections);
+      grantsRepo.find.mockResolvedValue([]);
+      accountsRepo.count.mockResolvedValue(2);
+      await expect(service.grantsWholeLedger("g1")).resolves.toBe(false);
+      expect(accountsRepo.count).toHaveBeenCalledWith({
+        where: { userId: "owner-1" },
+      });
+    });
+
+    it("is true when every section and every owner account is granted", async () => {
+      delegatesRepo.findOne.mockResolvedValue(allSections);
+      grantsRepo.find.mockResolvedValue([
+        { accountId: "a1" },
+        { accountId: "a2" },
+      ]);
+      accountsRepo.count.mockResolvedValue(0);
+      await expect(service.grantsWholeLedger("g1")).resolves.toBe(true);
     });
   });
 
@@ -1039,6 +1180,7 @@ describe("DelegationService", () => {
         budgetsCanRead: false,
         reportsCanRead: true,
         aiCanRead: true,
+        warrantiesCanRead: true,
       });
       await expect(service.getSections("g1")).resolves.toEqual({
         bills: true,
@@ -1046,6 +1188,7 @@ describe("DelegationService", () => {
         budgets: false,
         reports: true,
         ai: true,
+        warranties: true,
       });
     });
 
@@ -1057,38 +1200,30 @@ describe("DelegationService", () => {
         budgets: false,
         reports: false,
         ai: false,
+        warranties: false,
       });
     });
   });
 
   describe("setSectionGrants", () => {
-    it("throws when the delegation is not owned by the caller", async () => {
-      delegatesRepo.findOne.mockResolvedValue(null);
+    it("throws when the delegation is not owned by the caller (or was revoked)", async () => {
+      delegatesRepo.update.mockResolvedValue({ affected: 0 });
       await expect(
         service.setSectionGrants(OWNER_ID, "g1", { billsCanRead: true }),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
-    it("updates only the provided sections", async () => {
-      const delegation = {
-        id: "g1",
-        ownerUserId: OWNER_ID,
-        billsCanRead: false,
-        investmentsCanRead: true,
-        reportsCanRead: false,
-      };
-      delegatesRepo.findOne.mockResolvedValue(delegation);
-      delegatesRepo.save.mockResolvedValue(delegation);
-
+    it("updates only the provided sections, conditionally on the owner (A26-M05)", async () => {
       await service.setSectionGrants(OWNER_ID, "g1", {
         billsCanRead: true,
         reportsCanRead: true,
       });
 
-      expect(delegation.billsCanRead).toBe(true);
-      expect(delegation.reportsCanRead).toBe(true);
-      expect(delegation.investmentsCanRead).toBe(true); // unchanged
-      expect(delegatesRepo.save).toHaveBeenCalledWith(delegation);
+      expect(delegatesRepo.update).toHaveBeenCalledWith(
+        { id: "g1", ownerUserId: OWNER_ID },
+        { billsCanRead: true, reportsCanRead: true },
+      );
+      expect(delegatesRepo.save).not.toHaveBeenCalled();
     });
   });
 
@@ -1303,6 +1438,19 @@ describe("DelegationService", () => {
       };
       usersRepo.findOne.mockResolvedValue(delegate);
       usersRepo.save.mockResolvedValue(delegate);
+      // One live family left after the commit, so the converging revoke runs a
+      // pass under its lock and stops when the next pass changes nothing.
+      scopedManager.query.mockImplementation((sql: string) =>
+        Promise.resolve(
+          sql.includes("SELECT DISTINCT family_id")
+            ? [{ family_id: "fam-1" }]
+            : [],
+        ),
+      );
+      refreshRepo.update
+        .mockResolvedValueOnce({ affected: 1 })
+        .mockResolvedValueOnce({ affected: 1 })
+        .mockResolvedValue({ affected: 0 });
       const res = await service.resetDelegatePassword(OWNER_ID, "g1");
       expect(res.temporaryPassword).toBeTruthy();
       expect((delegate as any).mustChangePassword).toBe(true);
@@ -1312,6 +1460,42 @@ describe("DelegationService", () => {
       expect(refreshRepo.update).toHaveBeenCalledWith(
         { userId: DELEGATE_ID, isRevoked: false },
         { isRevoked: true },
+      );
+      // After the commit: the captured family, re-revoked under its lock, so a
+      // successor a concurrent rotation inserted is covered (A26-M02).
+      expect(refreshRepo.update).toHaveBeenCalledWith(
+        { userId: DELEGATE_ID, familyId: In(["fam-1"]), isRevoked: false },
+        { isRevoked: true },
+      );
+      expect(refreshRepo.update).toHaveBeenCalledTimes(3);
+    });
+
+    it("revokes the delegate's PATs, trusted devices and OAuth grants", async () => {
+      // An owner reset cut the delegate's web sessions only; any other
+      // credential issued on the old password kept working.
+      delegatesRepo.findOne.mockResolvedValue({
+        id: "g1",
+        delegateUserId: DELEGATE_ID,
+      });
+      const delegate = {
+        id: DELEGATE_ID,
+        oidcSubject: null,
+        isDelegateOnly: true,
+      };
+      usersRepo.findOne.mockResolvedValue(delegate);
+      usersRepo.save.mockResolvedValue(delegate);
+
+      await service.resetDelegatePassword(OWNER_ID, "g1");
+
+      expect(patRepo.update).toHaveBeenCalledWith(
+        { userId: DELEGATE_ID, isRevoked: false },
+        { isRevoked: true },
+      );
+      expect(trustedDevicesRepo.delete).toHaveBeenCalledWith({
+        userId: DELEGATE_ID,
+      });
+      expect(oauthProviderService.revokeAllForUser).toHaveBeenCalledWith(
+        DELEGATE_ID,
       );
     });
 
@@ -1435,6 +1619,29 @@ describe("DelegationService", () => {
       return manager;
     };
 
+    // `manager.count` over a fixed set of delegation rows, honouring the
+    // `delegateUserId` / `ownerUserId` equality and `Not(...)` filters the
+    // service passes. Accounts are always 0 (no data of their own).
+    const countDelegationsOf =
+      (rows: Array<{ ownerUserId: string; delegateUserId: string }>) =>
+      (entity: unknown, opts: { where?: Record<string, unknown> }) => {
+        if (entity !== AccountDelegate) return Promise.resolve(0);
+        const where = opts?.where ?? {};
+        const matches = (value: string, filter: unknown) => {
+          if (filter === undefined) return true;
+          if (filter instanceof FindOperator && filter.type === "not")
+            return value !== filter.value;
+          return value === filter;
+        };
+        return Promise.resolve(
+          rows.filter(
+            (r) =>
+              matches(r.ownerUserId, where.ownerUserId) &&
+              matches(r.delegateUserId, where.delegateUserId),
+          ).length,
+        );
+      };
+
     it("throws when the owner is not found", async () => {
       usersRepo.findOne.mockResolvedValue(null);
       await expect(
@@ -1475,15 +1682,15 @@ describe("DelegationService", () => {
       const manager = makeManager();
       manager.findOne
         .mockResolvedValueOnce(lockedUser) // User by email
-        .mockResolvedValueOnce(null); // no existing delegation
-      // Mark as a pure delegate (already someone else's delegate row,
-      // owns no data) so credential management is allowed -- a fresh
-      // self-registered user with no delegate role would not be.
-      manager.count.mockImplementation((entity: any, opts: any) => {
-        if (opts?.where?.delegateUserId === DELEGATE_ID)
-          return Promise.resolve(1);
-        return Promise.resolve(0);
-      });
+        .mockResolvedValueOnce({ id: "g1", status: "pending" }); // own delegation
+      // A pure delegate row of THIS owner only (owns no data, its one
+      // delegation is the caller's), so credential management is allowed --
+      // a fresh self-registered user with no delegate role would not be.
+      manager.count.mockImplementation(
+        countDelegationsOf([
+          { ownerUserId: OWNER_ID, delegateUserId: DELEGATE_ID },
+        ]),
+      );
       installTransactionMock(manager);
       await service.createDelegate(OWNER_ID, {
         email: "new@x.y",
@@ -1492,6 +1699,104 @@ describe("DelegationService", () => {
       expect(lockedUser.failedLoginAttempts).toBe(0);
       expect(lockedUser.lockedUntil).toBeNull();
       expect(lockedUser.passwordHash).not.toBe("old-hash");
+    });
+
+    describe("an existing delegate row of another owner (account takeover)", () => {
+      // The row exists solely as OTHER_OWNER_ID's delegate. Were the caller
+      // allowed to set its password, mint an invite token or clear its
+      // lockout, they could sign in as that delegate and switch into
+      // OTHER_OWNER_ID's data. Only the delegation may be linked.
+      const makeForeignDelegate = () => ({
+        id: DELEGATE_ID,
+        email: "shared@x.y",
+        oidcSubject: null,
+        role: "user",
+        isDelegateOnly: true,
+        passwordHash: "OTHER-OWNER-SET" as string | null,
+        mustChangePassword: false,
+        resetToken: null as string | null,
+        resetTokenExpiry: null as Date | null,
+        failedLoginAttempts: 5,
+        lockedUntil: new Date(Date.now() + 60000) as Date | null,
+      });
+
+      const arrange = (existing: ReturnType<typeof makeForeignDelegate>) => {
+        usersRepo.findOne.mockResolvedValue({ id: OWNER_ID, email: "own@x.y" });
+        const manager = makeManager();
+        manager.findOne
+          .mockResolvedValueOnce(existing) // User by email
+          .mockResolvedValueOnce(null); // no delegation from the caller yet
+        manager.count.mockImplementation(
+          countDelegationsOf([
+            { ownerUserId: OTHER_OWNER_ID, delegateUserId: DELEGATE_ID },
+          ]),
+        );
+        installTransactionMock(manager);
+        return manager;
+      };
+
+      const expectCredentialsUntouched = (
+        existing: ReturnType<typeof makeForeignDelegate>,
+      ) => {
+        expect(existing.passwordHash).toBe("OTHER-OWNER-SET");
+        expect(existing.resetToken).toBeNull();
+        expect(existing.resetTokenExpiry).toBeNull();
+        expect(existing.failedLoginAttempts).toBe(5);
+        expect(existing.lockedUntil).not.toBeNull();
+      };
+
+      it("does not set an owner-supplied password", async () => {
+        const existing = makeForeignDelegate();
+        const manager = arrange(existing);
+
+        const res = await service.createDelegate(OWNER_ID, {
+          email: "shared@x.y",
+          password: "StrongPass1!xyz",
+        } as any);
+
+        expectCredentialsUntouched(existing);
+        expect(res.temporaryPassword).toBeUndefined();
+        expect(res.invited).toBe(false);
+        // The delegation itself is still linked.
+        expect(manager.create).toHaveBeenCalledWith(
+          AccountDelegate,
+          expect.objectContaining({
+            ownerUserId: OWNER_ID,
+            delegateUserId: DELEGATE_ID,
+          }),
+        );
+      });
+
+      it("does not mint an invite token or send the invite", async () => {
+        emailService.getStatus.mockReturnValue({ configured: true });
+        emailService.sendMail.mockResolvedValue(undefined);
+        configService.get.mockReturnValue("http://app");
+        const existing = makeForeignDelegate();
+        arrange(existing);
+
+        const res = await service.createDelegate(OWNER_ID, {
+          email: "shared@x.y",
+          sendInvite: true,
+        } as any);
+
+        expectCredentialsUntouched(existing);
+        expect(res.invited).toBe(false);
+        expect(emailService.sendMail).not.toHaveBeenCalled();
+      });
+
+      it("does not issue a temporary password for a passwordless row", async () => {
+        const existing = makeForeignDelegate();
+        existing.passwordHash = null;
+        arrange(existing);
+
+        const res = await service.createDelegate(OWNER_ID, {
+          email: "shared@x.y",
+        } as any);
+
+        expect(existing.passwordHash).toBeNull();
+        expect(existing.failedLoginAttempts).toBe(5);
+        expect(res.temporaryPassword).toBeUndefined();
+      });
     });
 
     it("sends an invite when sendInvite is set and SMTP is configured", async () => {

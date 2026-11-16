@@ -19,8 +19,18 @@
 
 # The marketing site is static files deployed to Cloudflare Pages, not part of
 # either image. The backend context is the repo root, so without this its
-# assets ride along into the image for nothing.
+# assets ride along into the image for nothing. The user guide is the one
+# exception: the backend image bundles its text and, converted to WebP at build
+# time, its screenshots for in-app help (backend/Dockerfile).
 website
+!website/docs
+website/docs/*
+!website/docs/*.md
+!website/docs/nav.json
+!website/docs/search-index.json
+!website/docs/images
+website/docs/images/*
+!website/docs/images/*.png
 
 # Secrets and local env (the image gets config via runtime env vars)
 **/.env
@@ -32,3 +42,7 @@ website
 # test an import would otherwise be baked into the image. The committed test
 # fixtures are excluded too: nothing in the image reads them.
 **/*.mny
+
+# The Windows desktop shell (Electron) is built on a Windows runner, not in
+# either image; nothing under it is read by the backend or frontend build.
+desktop

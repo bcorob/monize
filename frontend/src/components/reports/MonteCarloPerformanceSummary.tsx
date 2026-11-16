@@ -3,6 +3,21 @@
 import { PerformanceSummary } from '@/lib/monte-carlo';
 import { InfoTooltip } from '@/components/ui/InfoTooltip';
 import { useTranslations } from 'next-intl';
+import type { NumberFormatters } from '@/hooks/useNumberFormat';
+import { CAPTION_CLASS, CellLabel, Th } from '@/components/ui/Table';
+
+// A value cell inside a wrapped row: no padding of its own below `sm` (the row
+// supplies it and the grid does the spacing), this table's own `px-3 py-1.5`
+// from `sm` up. The text size inherits `text-xs` from the table element at
+// every width, so there is no per-cell size to preserve. `whitespace-nowrap` is
+// not phone-only: a locale grouping thousands with a space could otherwise
+// break a figure in the middle, at any width. A number must not break; the
+// caption inside takes `whitespace-normal` back (CellLabel).
+const VALUE_CELL = 'p-0 text-right whitespace-nowrap sm:table-cell sm:px-3 sm:py-1.5';
+
+// The 50th-percentile column carries a highlight on both the header and the body
+// cell, and it survives into the phone card so the median value still stands out.
+const MEDIAN_HIGHLIGHT = 'bg-blue-50 dark:bg-blue-900/30';
 
 export type SummaryRow = {
   label: string;
@@ -95,63 +110,100 @@ export function buildPerformanceSummaryRows(
 export function formatSummaryValue(
   v: number,
   kind: SummaryRow['format'],
-  formatCurrency: (v: number) => string,
+  formatters: NumberFormatters,
 ): string {
   if (!Number.isFinite(v)) return '—';
-  if (kind === 'currency') return formatCurrency(v);
-  if (kind === 'percent') return `${(v * 100).toFixed(2)}%`;
-  return v.toFixed(2);
+  if (kind === 'currency') return formatters.formatCurrency(v);
+  // The band values are fractions (0.1234 = 12.34%); the formatter takes
+  // percentage units.
+  if (kind === 'percent') return formatters.formatPercent(v * 100, 2);
+  // A ratio is still a number a person reads, so it takes the same separators.
+  return formatters.formatNumber(v, 2);
 }
 
 export function PerformanceSummaryTable({
   summary,
-  formatCurrency,
+  formatters,
 }: {
   summary: PerformanceSummary;
-  formatCurrency: (v: number) => string;
+  formatters: NumberFormatters;
 }) {
   const t = useTranslations('reports');
   const rows = buildPerformanceSummaryRows(summary, t as TranslationFn);
   const formatValue = (v: number, kind: SummaryRow['format']): string =>
-    formatSummaryValue(v, kind, formatCurrency);
+    formatSummaryValue(v, kind, formatters);
 
   return (
+    // Below `sm` the table becomes a block and each row wraps into a two-track
+    // grid card so all six columns fit a phone without a horizontal scroll: line
+    // 1 is the statistic's label (the row identity, with its info tooltip),
+    // spanning both tracks; lines 2 to 4 carry the five percentile values two to
+    // a line, the 90th alone on the last. Nothing is dropped, and no value wraps
+    // (`VALUE_CELL`). From `sm` up it is the ordinary table, each cell restoring
+    // its own `px-3 py-1.5` and the table's `text-xs` inherited at every width,
+    // so at 640px+ it resolves to today's output in every respect but one:
+    // `VALUE_CELL`'s `whitespace-nowrap` is unprefixed, so it applies there as
+    // well, where the base cell carried no `white-space` class. That is
+    // deliberate and the constant says why. This table's header is not
+    // sortable, so below `sm` the column header row is simply block-hidden and
+    // every bare value carries a `CellLabel` naming its column; the label names
+    // itself. The 50th-percentile highlight follows its column into the card.
+    // Restyling `display` strips the implicit table semantics, so the ARIA roles
+    // are restated; the phone grid places cells out of DOM order, which stays
+    // the desktop column order.
     <div className="overflow-x-auto">
-      <table className="min-w-full text-xs">
-        <thead className="bg-gray-50 dark:bg-gray-900/40 text-gray-500 dark:text-gray-400">
-          <tr>
-            <th className="px-3 py-2 text-left font-medium">
+      <table role="table" className="block min-w-full text-xs sm:table">
+        <thead
+          role="rowgroup"
+          className="hidden bg-gray-50 dark:bg-gray-900/40 text-gray-500 dark:text-gray-400 sm:table-header-group"
+        >
+          <tr role="row">
+            <Th role="columnheader" className="px-3 py-2">
               {t('monteCarloPerformance.colSummaryStatistics')}
-            </th>
-            <th className="px-3 py-2 text-right font-medium">{t('monteCarloPerformance.col10thPercentile')}</th>
-            <th className="px-3 py-2 text-right font-medium">{t('monteCarloPerformance.col25thPercentile')}</th>
-            <th className="px-3 py-2 text-right font-semibold text-gray-700 dark:text-gray-200 bg-blue-50 dark:bg-blue-900/30">
+            </Th>
+            <Th role="columnheader" align="right" className="px-3 py-2">{t('monteCarloPerformance.col10thPercentile')}</Th>
+            <Th role="columnheader" align="right" className="px-3 py-2">{t('monteCarloPerformance.col25thPercentile')}</Th>
+            <Th role="columnheader" align="right" className={`px-3 py-2 font-semibold text-gray-700 dark:text-gray-200 ${MEDIAN_HIGHLIGHT}`}>
               {t('monteCarloPerformance.col50thPercentile')}
-            </th>
-            <th className="px-3 py-2 text-right font-medium">{t('monteCarloPerformance.col75thPercentile')}</th>
-            <th className="px-3 py-2 text-right font-medium">{t('monteCarloPerformance.col90thPercentile')}</th>
+            </Th>
+            <Th role="columnheader" align="right" className="px-3 py-2">{t('monteCarloPerformance.col75thPercentile')}</Th>
+            <Th role="columnheader" align="right" className="px-3 py-2">{t('monteCarloPerformance.col90thPercentile')}</Th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+        <tbody
+          role="rowgroup"
+          className="block divide-y divide-gray-200 dark:divide-gray-700 sm:table-row-group"
+        >
           {rows.map((row) => (
-            <tr key={row.label}>
-              <td className="px-3 py-1.5 text-gray-900 dark:text-gray-100">
+            <tr
+              key={row.label}
+              role="row"
+              className="grid grid-cols-2 items-start gap-x-3 gap-y-1.5 px-3 py-2 sm:table-row sm:p-0"
+            >
+              {/* The statistic's label is the row identity, so it carries no
+                  caption; it spans both tracks and wraps on a phone. */}
+              <td role="cell" className="col-start-1 col-span-2 row-start-1 p-0 text-gray-900 dark:text-gray-100 break-words sm:table-cell sm:px-3 sm:py-1.5 sm:break-normal">
                 {row.label}
                 <InfoTooltip text={row.description} />
               </td>
-              <td className="px-3 py-1.5 text-right">
+              <td role="cell" className={`col-start-1 row-start-2 ${VALUE_CELL}`}>
+                <CellLabel className={CAPTION_CLASS}>{t('monteCarloPerformance.col10thPercentile')}</CellLabel>
                 {formatValue(row.band.p10, row.format)}
               </td>
-              <td className="px-3 py-1.5 text-right">
+              <td role="cell" className={`col-start-2 row-start-2 ${VALUE_CELL}`}>
+                <CellLabel className={CAPTION_CLASS}>{t('monteCarloPerformance.col25thPercentile')}</CellLabel>
                 {formatValue(row.band.p25, row.format)}
               </td>
-              <td className="px-3 py-1.5 text-right font-semibold text-gray-900 dark:text-gray-100 bg-blue-50 dark:bg-blue-900/30">
+              <td role="cell" className={`col-start-1 row-start-3 font-semibold text-gray-900 dark:text-gray-100 ${MEDIAN_HIGHLIGHT} ${VALUE_CELL}`}>
+                <CellLabel className={CAPTION_CLASS}>{t('monteCarloPerformance.col50thPercentile')}</CellLabel>
                 {formatValue(row.band.p50, row.format)}
               </td>
-              <td className="px-3 py-1.5 text-right">
+              <td role="cell" className={`col-start-2 row-start-3 ${VALUE_CELL}`}>
+                <CellLabel className={CAPTION_CLASS}>{t('monteCarloPerformance.col75thPercentile')}</CellLabel>
                 {formatValue(row.band.p75, row.format)}
               </td>
-              <td className="px-3 py-1.5 text-right">
+              <td role="cell" className={`col-start-1 row-start-4 ${VALUE_CELL}`}>
+                <CellLabel className={CAPTION_CLASS}>{t('monteCarloPerformance.col90thPercentile')}</CellLabel>
                 {formatValue(row.band.p90, row.format)}
               </td>
             </tr>

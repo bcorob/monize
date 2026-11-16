@@ -4,19 +4,29 @@
     "subtitle": "Análise dos seus padrões de gastos e anomalias com recurso à IA"
   },
   "list": {
-    "lastUpdated": "Última atualização: {date} {time}",
     "refreshButton": "Atualizar análise",
-    "generating": "Gerando...",
+    "refreshAge": "({time})",
+    "summary": {
+      "active": "Análises ativas",
+      "alerts": "Alertas",
+      "warnings": "Avisos"
+    },
     "allTypes": "Todos os tipos",
-    "allSeverities": "Todas as gravidades",
+    "typeFilterLabel": "Tipo",
+    "severityFilterLabel": "Gravidade",
+    "severityFilter": {
+      "all": "Todas ({count})",
+      "alert": "Alertas ({count})",
+      "warning": "Avisos ({count})",
+      "info": "Informação ({count})"
+    },
     "showDismissed": "Mostrar dispensadas",
     "emptyNoInsights": "Ainda não foram geradas análises. Clique em \"Atualizar análise\" para analisar seus padrões de gastos.",
     "emptyFiltered": "Nenhuma análise corresponde aos filtros atuais.",
     "generateButton": "Gerar análise",
-    "alertCount": "{count, plural, one {# alerta} other {# alertas}}",
-    "warningCount": "{count, plural, one {# aviso} other {# avisos}}",
     "errorLoadFailed": "Falha ao carregar análises. Tente novamente.",
     "errorGenerateFailed": "Falha ao gerar análises. Certifique-se de que você tem um provedor de IA configurado.",
+    "errorDismissFailed": "Falha ao dispensar a análise. Tente novamente.",
     "errorTimeout": "A geração de análises está demorando mais do que o esperado. Aguarde ou recarregue a página."
   },
   "card": {

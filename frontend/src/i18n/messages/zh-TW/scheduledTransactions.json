@@ -6,7 +6,7 @@
       "category": "類別",
       "amount": "金額",
       "schedule": "排程",
-      "auto": "自動",
+      "auto": "自動過帳",
       "actions": "動作"
     },
     "empty": {
@@ -22,8 +22,9 @@
     "modifiedBadge": "{count} 次已修改",
     "modifiedTitle": "{count, plural, one {# 筆即將到來的付款已修改} other {# 筆即將到來的付款已修改}}",
     "modifiedAmountTitle": "下一次付款已修改",
+    "modifiedDateTitle": "已修改此次執行的日期",
+    "splitBadge": "分割（{count}）",
     "autoPostBadge": "開",
-    "autoPostTitle": "到期自動過帳",
     "inactiveSuffix": " — 非活躍",
     "actionTitles": {
       "post": "過帳交易",
@@ -62,7 +63,8 @@
       "skipFailed": "跳過付款失敗",
       "deleteFailed": "刪除失敗"
     },
-    "foreignAmountTitle": "收款人收取的金額，以其自身貨幣計"
+    "foreignAmountTitle": "收款人收取的金額，以其自身貨幣計",
+    "estimatedLabel": "估算"
   },
   "filters": {
     "label": "篩選",
@@ -74,9 +76,7 @@
     "accountsLabel": "科目",
     "accountsPlaceholder": "所有科目",
     "categoriesLabel": "類別",
-    "categoriesPlaceholder": "所有類別",
-    "collapseAriaLabel": "收合篩選",
-    "expandAriaLabel": "展開篩選"
+    "categoriesPlaceholder": "所有類別"
   },
   "postDialog": {
     "title": "過帳交易",
@@ -114,7 +114,8 @@
       "totalAmountRequired": "總金額為必填",
       "splitsMinimum": "分割交易至少需要 2 筆分割",
       "splitsTotal": "分割金額總計必須等於交易金額",
-      "fxRateUnavailable": "該日期沒有從 {from} 到 {to} 的可用匯率。"
+      "fxRateUnavailable": "該日期沒有從 {from} 到 {to} 的可用匯率。",
+      "estimateUnknown": "此次發生的估算金額未知。請輸入金額後再入帳。"
     },
     "latestPlaceholder": "最新：{price}",
     "descriptionPlaceholder": "描述...",
@@ -127,18 +128,40 @@
       "noRateWarning": "找不到 {date} 從 {from} 到 {to} 的匯率。請選擇其他日期，或重新整理匯率。",
       "feeCaption": "包含 {percent}% 境外交易手續費（{fee}）。",
       "totalInCurrency": "以 {currency} 計的總額"
-    }
+    },
+    "estimatedHint": "此金額為估算值；請改為您實際支付的金額。{detail}"
   },
   "occurrencePicker": {
     "title": "選擇付款日期",
-    "description": "選擇要修改的「{name}」付款：",
+    "description": "選擇要修改的「{name}」哪一次付款。在此修改一次只會覆寫該日期；其他每一次付款仍會遵循排程。<guide>了解更多</guide>。",
     "modifiedBadge": "已修改",
     "nextDueBadge": "下次到期",
     "dateMoved": "日期從 {date} 移動",
     "amountChange": "金額：{amount}",
     "categoryChange": "類別：{category}",
     "noteChange": "備註：{note}",
-    "splitModified": "分割已修改"
+    "splitModified": "分割已修改",
+    "estimatedAmount": "估算：{amount}",
+    "estimateUnknown": "估算未知"
+  },
+  "loanOccurrence": {
+    "loading": "正在計算每期的還款額。",
+    "loadFailed": "無法載入每期的還款額。",
+    "retry": "重試",
+    "amountUnknown": "還款額未知",
+    "notProjected": "尚未計算這麼遠的還款額",
+    "paymentChangesBadge": "還款額變更",
+    "editorUnknown": "無法計算本期的還款額，因此金額為空。{reason}",
+    "editorLinesUnknown": "無法計算本期本金與利息的劃分，因此明細沿用排程中的明細。{reason}",
+    "amountRequired": "儲存前請輸入本期的金額。",
+    "missing": {
+      "rate": "{date} 沒有記錄利率。請將其新增至貸款的利率歷史中。",
+      "cadence": "無法按貸款的還款頻率（{frequency}）計算。請檢查貸款的還款頻率。",
+      "overrideLines": "本期的明細不是本金、利息和額外本金。請編輯其明細。",
+      "overrideOnSettledDebt": "貸款在此日期前已還清，因此本期金額無法劃分為本金和利息。請編輯或重設本期。",
+      "earlierOccurrence": "它取決於 {date} 那一期，而那一期的還款額無法計算。",
+      "unknown": "未提供原因。"
+    }
   },
   "overrideEditor": {
     "title": "編輯付款",
@@ -179,7 +202,9 @@
       "quantityRequired": "數量必須大於零",
       "priceRequired": "價格必須大於零",
       "totalAmountRequired": "總金額為必填"
-    }
+    },
+    "estimatedHint": "此金額是這次發生的估算值。保持不變，這次發生會隨著新付款繼續沿用估算。{detail}",
+    "keepEstimate": "保留此金額，即使新付款改變了估算"
   },
   "form": {
     "tabs": {
@@ -205,7 +230,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "長期資本利得再投資",
       "CAPITAL_GAIN_SHORT": "短期資本利得",
       "CAPITAL_GAIN_LONG": "長期資本利得",
-      "REDEEM": "贖回定存單/債券"
+      "REDEEM": "贖回定存單/債券",
+      "RETURN_OF_CAPITAL": "資本返還"
     },
     "submitCreate": "建立",
     "submitUpdate": "更新",
@@ -248,6 +274,7 @@
     "commissionLabel": "手續費",
     "totalValueLabel": "總值",
     "fundingAccountLabel": "資金科目（選填）",
+    "fundingAccountTooltip": "此排程的現金實際結算的科目，而非上方的券商科目：現金流量預測會記入借方或貸方的正是這個科目。留空則使用券商本身的現金科目。",
     "fundingAccountPlaceholder": "使用券商現金（預設）",
     "fundingAccountHelp": "預設為投資科目的現金端。選擇其他科目以模擬投入加買入操作。",
     "endConditionTitle": "結束條件（選填）",
@@ -282,14 +309,21 @@
       "quantityRequired": "數量必須大於零",
       "priceRequired": "價格必須大於零",
       "totalAmountRequired": "此操作需要總金額",
-      "fxRateRequired": "儲存前請以所選貨幣輸入金額。目前還沒有可用的匯率。"
+      "fxRateRequired": "儲存前請以所選貨幣輸入金額。目前還沒有可用的匯率。",
+      "estimateNeedsPayeeAndCategory": "請選擇收款對象和類別以估算金額。"
     },
     "fx": {
       "amountInCurrency": "以 {currency} 計的金額",
       "estimateCaption": "約 {total}，按 1 {from} = {rate} {to} 計。",
       "noRateWarning": "找不到從 {from} 到 {to} 的匯率。請選擇其他貨幣，或以 {to} 輸入金額。",
       "feeCaption": "包含 {percent}% 境外交易手續費（{fee}）。"
-    }
+    },
+    "estimateLabel": "估算",
+    "estimateTooltip": "根據過去 24 個月在此類別下向此收款對象的付款，逐月計算每次發生的金額，使某些月份花費較多的帳單依此預測。您仍可修改任何一次發生，並在入帳時確認金額。",
+    "estimateTooltipTransfer": "根據過去 24 個月轉入此帳戶的轉帳計算每次的金額。當帳戶欠款更多時，付款會相應調高：對於設定了帳單結算日和繳款截止日的信用卡，調高已結帳單的付款和目前週期的付款；否則調高下一次付款。你仍可變更任何一次，並在入帳時確認金額。",
+    "estimateDelegateDisabled": "只有擁有者可以開啟或關閉估算：估算會讀取擁有者所有帳戶中的付款。",
+    "estimatedAmountNote": "根據付款紀錄自動計算。{detail}",
+    "autoPostDisabledEstimate": "估算金額需在入帳時確認，因此不會自動入帳。"
   },
   "postTransaction": {
     "minSplits": "分割交易至少需要 2 筆分割",
@@ -308,10 +342,83 @@
     "EVERY4MONTHS": "每 4 個月",
     "SEMIANNUAL": "每年兩次",
     "YEARLY": "每年",
-    "EVERY2YEARS": "每兩年"
+    "EVERY2YEARS": "每兩年",
+    "CUSTOM": "自訂"
+  },
+  "customRecurrence": {
+    "title": "重複",
+    "unitLabel": "重複方式",
+    "units": {
+      "WEEK": "每週",
+      "MONTH": "每月",
+      "YEAR": "每年"
+    },
+    "every": "每",
+    "intervalLabel": "重複間隔",
+    "unitSuffix": {
+      "WEEK": "{interval, plural, other {週，星期：}}",
+      "MONTH": "{interval, plural, other {個月，日期：}}",
+      "YEAR": "{interval, plural, other {年，日期：}}"
+    },
+    "weekdaysLabel": "星期",
+    "monthDaysLabel": "每月日期",
+    "lastDayChip": "最後一天",
+    "lastDay": "最後一天",
+    "dayOfMonth": "{day, selectordinal, other {#日}}",
+    "monthHint": "超出短月月底的日期會順延到該月最後一天，落在同一日期的兩天只會入帳一次。",
+    "datesLabel": "每年日期",
+    "monthLabel": "月",
+    "dayLabel": "日",
+    "addDate": "新增日期",
+    "removeDate": "移除 {date}",
+    "yearHint": "沒有 2 月 29 日的年份，該日會改到 2 月 28 日。",
+    "summary": {
+      "WEEK": "{interval, plural, other {每 # 週，{days}}}",
+      "MONTH": "{interval, plural, other {每 # 個月，{days}}}",
+      "YEAR": "{interval, plural, other {每 # 年，{days}}}"
+    },
+    "errors": {
+      "noDays": {
+        "WEEK": "請至少選擇一個星期。",
+        "MONTH": "請至少選擇一個日期。",
+        "YEAR": "請至少新增一個日期。"
+      },
+      "interval": "請輸入 1 到 12 之間的數字。",
+      "invalid": "無法儲存此規律。請重新選擇日期。"
+    },
+    "firstOccurrence": "首次付款：{date}",
+    "nextOccurrence": "下次付款：{date}",
+    "nextOccurrenceOffPattern": "下次付款：{date}。此日期不在規律內；之後的付款仍依規律進行。",
+    "orphanWarning": "{count, plural, other {已編輯的 # 筆付款（{dates}）不再符合此規律，儲存時將被移除。}}",
+    "notForLoan": "貸款或房貸還款不能使用自訂頻率；請選擇固定頻率。",
+    "notForPayroll": "設有扣款上限的薪資帳單不能使用自訂頻率；請選擇固定頻率。"
   },
   "validation": {
     "nameRequired": "名稱為必填",
     "dueDateRequired": "到期日為必填"
+  },
+  "estimate": {
+    "thePayee": "此收款對象",
+    "theAccount": "該帳戶",
+    "theCategory": "此類別",
+    "basis": "根據 {count, plural, other {# 筆付款}}估算，最近一筆在 {date}。",
+    "basisWithGrowth": "根據 {count, plural, other {# 筆付款}}估算，最近一筆在 {date}，並計入 {growth} 的年增減。",
+    "basisYear": "過去 12 個月 {count, plural, other {# 筆付款}}的平均值，最近一筆在 {date}。",
+    "basisRecent": "最近 {count, plural, other {# 筆付款}}的平均值，最近一筆在 {date}。",
+    "basisRecentWithGrowth": "最近 {count, plural, other {# 筆付款}}的平均值，最近一筆在 {date}，並計入 {growth} 的年增減。",
+    "basisSeasonal": "最近 {count, plural, other {# 筆付款}}的平均值，依各月季節性調整，最近一筆在 {date}。",
+    "basisSeasonalWithGrowth": "最近 {count, plural, other {# 筆付款}}的平均值，依各月季節性調整，最近一筆在 {date}，並計入 {growth} 的年增減。",
+    "basisWithheld": "根據收款對象和類別的付款紀錄估算。",
+    "basisWithheldTransfer": "根據轉入 {account} 的轉帳紀錄估算。",
+    "raisedToBalance": "已調高以支付 {account} 在本次付款中的欠款。",
+    "basisAndRaise": "{basis}{raised}",
+    "noHistoryTransfer": "過去 {months} 個月內沒有從此帳戶轉入 {account} 的轉帳，因此金額未知。請輸入每次的金額，或記錄一筆轉帳。",
+    "missingRateTransfer": "沒有從 {from} 到 {to} 的匯率來換算過去的轉帳或 {account} 的欠款，因此金額未知。請在「貨幣」頁面新增匯率。",
+    "noBasisTransfer": "選擇轉入帳戶，即可根據轉入該帳戶的轉帳估算金額。",
+    "pendingTransfer": "金額根據轉入此帳戶的轉帳及其欠款計算。",
+    "noHistory": "過去 {months} 個月內在 {category} 下沒有向 {payee} 的付款，因此金額未知。請輸入每次發生的金額，或記錄一筆付款。",
+    "missingRate": "沒有從 {from} 到 {to} 的匯率來換算過去的付款，因此金額未知。請在「貨幣」頁面新增匯率。",
+    "noBasis": "請選擇收款對象和類別，以根據其付款紀錄估算金額。",
+    "pending": "金額根據收款對象和類別的付款紀錄計算。"
   }
 }

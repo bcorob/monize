@@ -24,13 +24,20 @@ import {
   AllowDelegate,
   DelegateRequiresCapability,
 } from "../delegation/decorators/delegate-access.decorator";
+import { DelegationService } from "../delegation/delegation.service";
+import { delegateReadableAccountScope } from "../delegation/delegate-account-scope.util";
+import { AllowPat } from "../auth/pat-access/pat-access.decorator";
 
 @ApiTags("Tags")
+@AllowPat()
 @Controller("tags")
 @UseGuards(AuthGuard("jwt"))
 @ApiBearerAuth()
 export class TagsController {
-  constructor(private readonly tagsService: TagsService) {}
+  constructor(
+    private readonly tagsService: TagsService,
+    private readonly delegationService: DelegationService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: "Get all tags for the authenticated user" })
@@ -49,6 +56,22 @@ export class TagsController {
   })
   getAllTransactionCounts(@Request() req) {
     return this.tagsService.getAllTransactionCounts(req.user.id);
+  }
+
+  @Get("usage")
+  @AllowDelegate()
+  @ApiOperation({
+    summary: "Get the latest use date and use count of every used tag",
+  })
+  @ApiResponse({ status: 200, description: "Tag usage retrieved successfully" })
+  async getUsage(@Request() req) {
+    // An acting delegate's ordering comes only from the accounts they were
+    // granted READ on, like the register and the detail pages.
+    const accountScope = await delegateReadableAccountScope(
+      req,
+      this.delegationService,
+    );
+    return this.tagsService.getUsage(req.user.id, accountScope);
   }
 
   @Get(":id")

@@ -110,3 +110,37 @@ describe('userSettingsApi', () => {
     expect(result.message).toBe('sent');
   });
 });
+
+describe('userSettingsApi.updatePreferences cache scope (INV-CACHE-001)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearAllCache();
+    setCache('investments:summary:all', { totalPortfolioValue: 1 });
+    setCache('accounts:all:false', [{ id: 'a' }]);
+    setCache('budgets:dashboard', { id: 'b' });
+    vi.mocked(apiClient.patch).mockResolvedValue({ data: {} });
+  });
+
+  const expectDropped = () => {
+    expect(getCached('investments:summary:all')).toBeUndefined();
+    expect(getCached('accounts:all:false')).toBeUndefined();
+    expect(getCached('budgets:dashboard')).toBeUndefined();
+  };
+
+  it('a reporting-currency change drops every cached figure', async () => {
+    await userSettingsApi.updatePreferences({ defaultCurrency: 'CAD' });
+    expectDropped();
+  });
+
+  it('a timezone change drops every cached figure', async () => {
+    await userSettingsApi.updatePreferences({ timezone: 'Europe/Warsaw' });
+    expectDropped();
+  });
+
+  it('an unrelated preference leaves the caches', async () => {
+    await userSettingsApi.updatePreferences({ theme: 'dark' });
+    expect(getCached('investments:summary:all')).toEqual({ totalPortfolioValue: 1 });
+    expect(getCached('accounts:all:false')).toEqual([{ id: 'a' }]);
+    expect(getCached('budgets:dashboard')).toEqual({ id: 'b' });
+  });
+});

@@ -6,7 +6,7 @@
       "category": "カテゴリ",
       "amount": "金額",
       "schedule": "スケジュール",
-      "auto": "自動",
+      "auto": "自動投稿",
       "actions": "操作"
     },
     "empty": {
@@ -22,8 +22,9 @@
     "modifiedBadge": "{count}件変更",
     "modifiedTitle": "{count, plural, one {今後の発生#件が変更されています} other {今後の発生#件が変更されています}}",
     "modifiedAmountTitle": "次回の発生分の金額が変更されています",
+    "modifiedDateTitle": "この回の予定日を変更済み",
+    "splitBadge": "分割 ({count})",
     "autoPostBadge": "オン",
-    "autoPostTitle": "期日に自動投稿",
     "inactiveSuffix": " — 非アクティブ",
     "actionTitles": {
       "post": "取引を投稿",
@@ -62,7 +63,8 @@
       "skipFailed": "発生のスキップに失敗しました",
       "deleteFailed": "削除に失敗しました"
     },
-    "foreignAmountTitle": "支払先が請求する金額（支払先の通貨）"
+    "foreignAmountTitle": "支払先が請求する金額（支払先の通貨）",
+    "estimatedLabel": "見積もり"
   },
   "filters": {
     "label": "フィルター",
@@ -74,9 +76,7 @@
     "accountsLabel": "口座",
     "accountsPlaceholder": "すべての口座",
     "categoriesLabel": "カテゴリ",
-    "categoriesPlaceholder": "すべてのカテゴリ",
-    "collapseAriaLabel": "フィルターを折りたたむ",
-    "expandAriaLabel": "フィルターを展開する"
+    "categoriesPlaceholder": "すべてのカテゴリ"
   },
   "postDialog": {
     "title": "取引を投稿",
@@ -114,7 +114,8 @@
       "totalAmountRequired": "合計金額は必須です",
       "splitsMinimum": "分割取引には少なくとも2つの分割が必要です",
       "splitsTotal": "分割金額の合計は取引金額と一致する必要があります",
-      "fxRateUnavailable": "この日付では {from} から {to} への為替レートが利用できません。"
+      "fxRateUnavailable": "この日付では {from} から {to} への為替レートが利用できません。",
+      "estimateUnknown": "この回の見積もり金額は不明です。記帳するには金額を入力してください。"
     },
     "latestPlaceholder": "最新: {price}",
     "descriptionPlaceholder": "説明...",
@@ -127,18 +128,40 @@
       "noRateWarning": "{date} の {from} から {to} への為替レートが見つかりません。別の日付を選ぶか、レートを更新してください。",
       "feeCaption": "{percent}% の外貨取引手数料（{fee}）が含まれます。",
       "totalInCurrency": "{currency} での合計"
-    }
+    },
+    "estimatedHint": "この金額は見積もりです。実際に支払った金額に変更してください。{detail}"
   },
   "occurrencePicker": {
     "title": "発生日を選択",
-    "description": "変更する「{name}」の発生を選択してください:",
+    "description": "変更する「{name}」の発生を選択してください。ここで1件を変更しても、その日付だけが上書きされ、他の発生は引き続きスケジュールに従います。<guide>詳しくはこちら</guide>。",
     "modifiedBadge": "変更済み",
     "nextDueBadge": "次回期限",
     "dateMoved": "日付が{date}から移動されました",
     "amountChange": "金額: {amount}",
     "categoryChange": "カテゴリ: {category}",
     "noteChange": "メモ: {note}",
-    "splitModified": "分割が変更されました"
+    "splitModified": "分割が変更されました",
+    "estimatedAmount": "見積もり: {amount}",
+    "estimateUnknown": "見積もり不明"
+  },
+  "loanOccurrence": {
+    "loading": "各回の支払額を計算しています。",
+    "loadFailed": "各回の支払額を読み込めませんでした。",
+    "retry": "再試行",
+    "amountUnknown": "支払額不明",
+    "notProjected": "この先の支払額は計算されていません",
+    "paymentChangesBadge": "支払額が変わります",
+    "editorUnknown": "この回の支払額を計算できないため、金額は空欄です。{reason}",
+    "editorLinesUnknown": "この回の元金と利息の内訳を計算できないため、明細はスケジュールの内容から始まります。{reason}",
+    "amountRequired": "保存する前にこの回の金額を入力してください。",
+    "missing": {
+      "rate": "{date} の金利が記録されていません。ローンの金利履歴に追加してください。",
+      "cadence": "ローンの支払頻度 ({frequency}) では計算できません。ローンの支払頻度を確認してください。",
+      "overrideLines": "この回の明細が元金、利息、追加元金になっていません。明細を編集してください。",
+      "overrideOnSettledDebt": "この日付までにローンは完済されているため、この回の金額を元金と利息に分けられません。この回を編集するかリセットしてください。",
+      "earlierOccurrence": "支払額を計算できない {date} の回に依存しています。",
+      "unknown": "理由は示されていません。"
+    }
   },
   "overrideEditor": {
     "title": "発生を編集",
@@ -179,7 +202,9 @@
       "quantityRequired": "数量はゼロより大きい必要があります",
       "priceRequired": "価格はゼロより大きい必要があります",
       "totalAmountRequired": "合計金額は必須です"
-    }
+    },
+    "estimatedHint": "この金額はこの回の見積もりです。そのままにしておくと、新しい支払いが入るたびにこの回は見積もりに従い続けます。{detail}",
+    "keepEstimate": "新しい支払いで見積もりが変わっても、この金額を保持する"
   },
   "form": {
     "tabs": {
@@ -205,7 +230,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "長期キャピタルゲインの再投資",
       "CAPITAL_GAIN_SHORT": "短期キャピタルゲイン",
       "CAPITAL_GAIN_LONG": "長期キャピタルゲイン",
-      "REDEEM": "CD・債券の償還"
+      "REDEEM": "CD・債券の償還",
+      "RETURN_OF_CAPITAL": "資本の払い戻し"
     },
     "submitCreate": "作成",
     "submitUpdate": "更新",
@@ -248,6 +274,7 @@
     "commissionLabel": "手数料",
     "totalValueLabel": "合計価値",
     "fundingAccountLabel": "資金調達口座（任意）",
+    "fundingAccountTooltip": "このスケジュールの現金が実際に決済される口座で、上の証券口座ではありません。キャッシュフロー予測が引いたり加えたりするのはこの口座です。空欄のままにすると、証券口座自体の現金側が使われます。",
     "fundingAccountPlaceholder": "証券口座の現金を使用（デフォルト）",
     "fundingAccountHelp": "デフォルトは投資口座の現金サイドです。拠出＋購入をモデル化するには別の口座を選択してください。",
     "endConditionTitle": "終了条件（任意）",
@@ -282,14 +309,21 @@
       "quantityRequired": "数量はゼロより大きい必要があります",
       "priceRequired": "価格はゼロより大きい必要があります",
       "totalAmountRequired": "このアクションには合計金額が必要です",
-      "fxRateRequired": "保存する前に、選択した通貨で金額を入力してください。まだ為替レートを取得できていません。"
+      "fxRateRequired": "保存する前に、選択した通貨で金額を入力してください。まだ為替レートを取得できていません。",
+      "estimateNeedsPayeeAndCategory": "金額を見積もる支払先とカテゴリを選択してください。"
     },
     "fx": {
       "amountInCurrency": "{currency} での金額",
       "estimateCaption": "約 {total}（1 {from} = {rate} {to}）。",
       "noRateWarning": "{from} から {to} への為替レートが見つかりません。別の通貨を選ぶか、金額を {to} で入力してください。",
       "feeCaption": "{percent}% の外貨取引手数料（{fee}）が含まれます。"
-    }
+    },
+    "estimateLabel": "見積もり",
+    "estimateTooltip": "この支払先へのこのカテゴリでの過去24か月の支払いから、各回の金額を月ごとに算出します。月によって高くなる請求はそのように予測されます。各回はいつでも変更でき、金額は記帳時に確認します。",
+    "estimateTooltipTransfer": "この口座への過去24か月の振替から各回の金額を算出します。口座の未払い額がそれを上回る場合は、支払いをそれに合わせて引き上げます。締め日と支払期日が設定されたクレジットカードでは、締め済みの明細の支払いと現在のサイクルの支払い、それ以外では次回の支払いです。各回はいつでも変更でき、金額は記帳時に確認します。",
+    "estimateDelegateDisabled": "見積もりのオン・オフは所有者だけが切り替えられます。所有者のすべての口座の支払いを読み取るためです。",
+    "estimatedAmountNote": "支払い履歴から自動計算されます。{detail}",
+    "autoPostDisabledEstimate": "見積もり金額は記帳時に確認するため、自動では記帳されません。"
   },
   "postTransaction": {
     "minSplits": "分割取引には少なくとも2つの分割が必要です",
@@ -308,10 +342,83 @@
     "EVERY4MONTHS": "4か月ごと",
     "SEMIANNUAL": "年2回",
     "YEARLY": "毎年",
-    "EVERY2YEARS": "2年ごと"
+    "EVERY2YEARS": "2年ごと",
+    "CUSTOM": "カスタム"
+  },
+  "customRecurrence": {
+    "title": "繰り返し",
+    "unitLabel": "繰り返す単位",
+    "units": {
+      "WEEK": "毎週",
+      "MONTH": "毎月",
+      "YEAR": "毎年"
+    },
+    "every": "毎",
+    "intervalLabel": "繰り返す間隔",
+    "unitSuffix": {
+      "WEEK": "{interval, plural, other {週ごと、曜日は}}",
+      "MONTH": "{interval, plural, other {か月ごと、日付は}}",
+      "YEAR": "{interval, plural, other {年ごと、日付は}}"
+    },
+    "weekdaysLabel": "曜日",
+    "monthDaysLabel": "日付",
+    "lastDayChip": "月末",
+    "lastDay": "月末",
+    "dayOfMonth": "{day, selectordinal, other {#日}}",
+    "monthHint": "短い月の末日を超える日は月末に振り替えられ、同じ日付になる2つの日は1回だけ計上されます。",
+    "datesLabel": "1年の日付",
+    "monthLabel": "月",
+    "dayLabel": "日",
+    "addDate": "日付を追加",
+    "removeDate": "{date}を削除",
+    "yearHint": "2月29日は、その日がない年には2月28日になります。",
+    "summary": {
+      "WEEK": "{interval, plural, other {#週ごとの{days}}}",
+      "MONTH": "{interval, plural, other {#か月ごとの{days}}}",
+      "YEAR": "{interval, plural, other {#年ごとの{days}}}"
+    },
+    "errors": {
+      "noDays": {
+        "WEEK": "曜日を1つ以上選択してください。",
+        "MONTH": "日付を1つ以上選択してください。",
+        "YEAR": "日付を1つ以上追加してください。"
+      },
+      "interval": "1から12の数値を入力してください。",
+      "invalid": "このパターンは保存できません。日付を選び直してください。"
+    },
+    "firstOccurrence": "初回の発生：{date}",
+    "nextOccurrence": "次回の発生：{date}",
+    "nextOccurrenceOffPattern": "次回の発生：{date}。この日付はパターン外です。以降の発生はパターンに従います。",
+    "orphanWarning": "{count, plural, other {編集済みの発生#件（{dates}）はこのパターンに該当しなくなったため、保存時に削除されます。}}",
+    "notForLoan": "ローンまたは住宅ローンの返済にはカスタムの頻度を使用できません。固定の頻度を選択してください。",
+    "notForPayroll": "控除上限のある給与の請求にはカスタムの頻度を使用できません。固定の頻度を選択してください。"
   },
   "validation": {
     "nameRequired": "名前は必須です",
     "dueDateRequired": "期日は必須です"
+  },
+  "estimate": {
+    "thePayee": "この支払先",
+    "theAccount": "この口座",
+    "theCategory": "このカテゴリ",
+    "basis": "{count, plural, other {#件の支払い}}から見積もり。最新は{date}。",
+    "basisWithGrowth": "{count, plural, other {#件の支払い}}から見積もり。最新は{date}、前年比 {growth} の変化を反映。",
+    "basisYear": "過去12か月の{count, plural, other {#件の支払い}}の平均。最新は{date}。",
+    "basisRecent": "直近{count, plural, other {#件の支払い}}の平均。最新は{date}。",
+    "basisRecentWithGrowth": "直近{count, plural, other {#件の支払い}}の平均。最新は{date}、前年比 {growth} の変化を反映。",
+    "basisSeasonal": "直近{count, plural, other {#件の支払い}}の平均を月ごとの季節変動で調整。最新は{date}。",
+    "basisSeasonalWithGrowth": "直近{count, plural, other {#件の支払い}}の平均を月ごとの季節変動で調整。最新は{date}、前年比 {growth} の変化を反映。",
+    "basisWithheld": "支払先とカテゴリの支払い履歴から見積もり。",
+    "basisWithheldTransfer": "{account}への振替履歴から見積もり。",
+    "raisedToBalance": "この支払いで{account}の未払い分をまかなうよう引き上げました。",
+    "basisAndRaise": "{basis}{raised}",
+    "noHistoryTransfer": "過去{months}か月にこの口座から{account}への振替がないため、金額は不明です。各回の金額を入力するか、振替を記録してください。",
+    "missingRateTransfer": "過去の振替または{account}の未払い額を換算する{from}から{to}への為替レートがないため、金額は不明です。通貨ページでレートを追加してください。",
+    "noBasisTransfer": "振替先口座を選択すると、その口座への振替から金額を見積もります。",
+    "pendingTransfer": "金額はこの口座への振替とその未払い額から算出されます。",
+    "noHistory": "過去{months}か月に{category}で{payee}への支払いがないため、金額は不明です。各回の金額を入力するか、支払いを記録してください。",
+    "missingRate": "過去の支払いを換算する{from}から{to}への為替レートがないため、金額は不明です。通貨ページでレートを追加してください。",
+    "noBasis": "支払先とカテゴリを選択すると、その支払い履歴から金額を見積もります。",
+    "pending": "金額は支払先とカテゴリの支払い履歴から算出されます。"
   }
 }

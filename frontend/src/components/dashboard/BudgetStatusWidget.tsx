@@ -21,7 +21,7 @@ interface BudgetStatusWidgetProps {
 export function BudgetStatusWidget({ isLoading: parentLoading }: BudgetStatusWidgetProps) {
   const t = useTranslations('dashboard');
   const router = useRouter();
-  const { formatCurrency } = useNumberFormat();
+  const { formatCurrency, formatPercent } = useNumberFormat();
   const [summary, setSummary] = useState<DashboardBudgetSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [hasError, setHasError] = useState(false);
@@ -47,11 +47,11 @@ export function BudgetStatusWidget({ isLoading: parentLoading }: BudgetStatusWid
 
   if (isLoading || parentLoading) {
     return (
-      <div className={`${CARD_CLASS} p-3 sm:p-6 lg:min-h-[390px]`}>
-        <WidgetHeading id="budget-status" onClick={() => router.push('/budgets')} className="mb-4">
+      <div className={`${CARD_CLASS} p-3 sm:p-6`}>
+        <WidgetHeading id="budget-status" href="/budgets" className="mb-4">
           {sectionTitle}
         </WidgetHeading>
-        <div className="animate-pulse space-y-3">
+        <div className="animate-pulse skeleton-shimmer space-y-3">
           <div className="h-8 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
           <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded" />
           <div className="h-16 bg-gray-200 dark:bg-gray-700 rounded" />
@@ -62,8 +62,8 @@ export function BudgetStatusWidget({ isLoading: parentLoading }: BudgetStatusWid
 
   if (hasError || !summary) {
     return (
-      <div className={`${CARD_CLASS} p-3 sm:p-6 lg:min-h-[390px]`}>
-        <WidgetHeading id="budget-status" onClick={() => router.push('/budgets')} className="mb-4">
+      <div className={`${CARD_CLASS} p-3 sm:p-6`}>
+        <WidgetHeading id="budget-status" href="/budgets" className="mb-4">
           {sectionTitle}
         </WidgetHeading>
         <p className="text-gray-500 dark:text-gray-400 text-sm">
@@ -80,9 +80,9 @@ export function BudgetStatusWidget({ isLoading: parentLoading }: BudgetStatusWid
   }
 
   return (
-    <div className={`${CARD_CLASS} p-3 sm:p-6 lg:min-h-[390px]`}>
+    <div className={`${CARD_CLASS} p-3 sm:p-6`}>
       <div className="flex items-center justify-between mb-3">
-        <WidgetHeading id="budget-status" onClick={() => router.push(`/budgets/${summary.budgetId}`)}>
+        <WidgetHeading id="budget-status" href={`/budgets/${summary.budgetId}`}>
           {sectionTitle}
         </WidgetHeading>
         <span className="text-xs text-gray-500 dark:text-gray-400">
@@ -94,7 +94,7 @@ export function BudgetStatusWidget({ isLoading: parentLoading }: BudgetStatusWid
       <div className="mb-3">
         <div className="flex items-baseline justify-between mb-1">
           <span className={`text-xl font-bold ${budgetPercentColor(summary.percentUsed)}`}>
-            {summary.percentUsed.toFixed(0)}%
+            {formatPercent(summary.percentUsed, 0)}
           </span>
           <span className="text-xs text-gray-500 dark:text-gray-400">
             {formatCurrency(summary.totalSpent)} / {formatCurrency(summary.totalBudgeted)}
@@ -132,7 +132,7 @@ export function BudgetStatusWidget({ isLoading: parentLoading }: BudgetStatusWid
                     {cat.categoryName}
                   </span>
                   <span className={`text-xs font-medium ${budgetPercentColor(cat.percentUsed)}`}>
-                    {cat.percentUsed.toFixed(0)}%
+                    {formatPercent(cat.percentUsed, 0)}
                   </span>
                 </div>
                 <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-1.5">

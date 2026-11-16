@@ -1,4 +1,5 @@
 import apiClient from './api';
+import type { TransactionSortField } from './transaction-sort';
 import {
   Transaction,
   TransactionSplit,
@@ -22,6 +23,7 @@ import {
   RecurringChargeInfo,
   StaleUnreconciledSummary,
   RegisterFilterOptions,
+  TransactionExportRow,
 } from '@/types/transaction';
 import { invalidateBalanceCaches } from './apiCache';
 import { API_MAX_PAGE_LIMIT } from './api-page-limits';
@@ -95,6 +97,38 @@ export interface TransactionsGetAllParams {
   tagKeyValue?: string;
   /** Filter by attachment presence: true = only with, false = only without. */
   hasAttachments?: boolean;
+  /**
+   * Which column the register is sorted by, and which way. Sent only by a
+   * surface that offers sorting; omitting both takes the server's own order
+   * (by date, newest first), which is what every other caller wants.
+   */
+  sortBy?: TransactionSortField;
+  sortDirection?: 'asc' | 'desc';
+}
+
+/** The register's filters, without the paging a single page adds. */
+export type TransactionsRegisterFilterParams = Omit<
+  TransactionsGetAllParams,
+  'page' | 'limit' | 'targetTransactionId'
+>;
+
+/** The register's filters as the API reads them, shared by the list and its export. */
+function buildRegisterFilterParams(params?: TransactionsRegisterFilterParams) {
+  return {
+    ...buildFilterParams(params),
+    startDate: params?.startDate,
+    endDate: params?.endDate,
+    search: params?.search,
+    amountFrom: params?.amountFrom,
+    amountTo: params?.amountTo,
+    statuses: params?.statuses && params.statuses.length > 0 ? params.statuses.join(',') : undefined,
+    tagKey: params?.tagKey || undefined,
+    tagKeyOp: params?.tagKey ? params?.tagKeyOp : undefined,
+    tagKeyValue: params?.tagKey ? params?.tagKeyValue || undefined : undefined,
+    hasAttachments: params?.hasAttachments,
+    sortBy: params?.sortBy,
+    sortDirection: params?.sortDirection,
+  };
 }
 
 export const transactionsApi = {
@@ -108,20 +142,10 @@ export const transactionsApi = {
   // Get paginated transactions with optional filters
   getAll: async (params?: TransactionsGetAllParams): Promise<PaginatedTransactions> => {
     const apiParams = {
-      ...buildFilterParams(params),
-      startDate: params?.startDate,
-      endDate: params?.endDate,
+      ...buildRegisterFilterParams(params),
       page: params?.page,
       limit: params?.limit,
-      search: params?.search,
       targetTransactionId: params?.targetTransactionId,
-      amountFrom: params?.amountFrom,
-      amountTo: params?.amountTo,
-      statuses: params?.statuses && params.statuses.length > 0 ? params.statuses.join(',') : undefined,
-      tagKey: params?.tagKey || undefined,
-      tagKeyOp: params?.tagKey ? params?.tagKeyOp : undefined,
-      tagKeyValue: params?.tagKey ? params?.tagKeyValue || undefined : undefined,
-      hasAttachments: params?.hasAttachments,
     };
 
     const response = await apiClient.get<PaginatedTransactions>('/transactions', {
@@ -129,6 +153,26 @@ export const transactionsApi = {
       timeout: 60000,
     });
     return response.data;
+  },
+
+  /**
+   * Every transaction matching the register's filters, in one request: the
+   * server walks the pages itself. Walking `getAll` from here took one request
+   * per page, which on a large ledger ran into the API's request throttle
+   * (issue #2198). The rows carry only the fields the CSV export writes.
+   */
+  getAllForExport: async (
+    params?: TransactionsRegisterFilterParams,
+  ): Promise<TransactionExportRow[]> => {
+    const response = await apiClient.get<{ data: TransactionExportRow[] }>(
+      '/transactions/export',
+      {
+        params: buildRegisterFilterParams(params),
+        // The whole register in one response; a large ledger takes a while.
+        timeout: 300000,
+      },
+    );
+    return response.data.data;
   },
 
   /**
@@ -479,6 +523,36 @@ export const transactionsApi = {
   ): Promise<TransferResult> => {
     const response = await apiClient.patch<TransferResult>(
       `/transactions/${transactionId}/transfer`,
+      data,
+    );
+    invalidateBalanceCaches();
+    return response.data;
+  },
+
+  // ==================== Conversion Methods ====================
+
+  // Convert an existing transaction (plain or split) into one leg of the
+  // transfer described, in place: the row keeps its id; the other leg is created.
+  convertToTransfer: async (
+    transactionId: string,
+    data: CreateTransferData,
+  ): Promise<TransferResult> => {
+    const response = await apiClient.post<TransferResult>(
+      `/transactions/${transactionId}/convert-to-transfer`,
+      data,
+    );
+    invalidateBalanceCaches();
+    return response.data;
+  },
+
+  // Convert a transfer leg back into a transaction (plain or split), in place:
+  // the counterpart is removed and the body applied to the kept row.
+  convertToTransaction: async (
+    transactionId: string,
+    data: UpdateTransactionData,
+  ): Promise<Transaction> => {
+    const response = await apiClient.post<Transaction>(
+      `/transactions/${transactionId}/convert-to-transaction`,
       data,
     );
     invalidateBalanceCaches();

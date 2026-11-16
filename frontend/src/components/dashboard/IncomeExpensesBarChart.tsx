@@ -14,24 +14,16 @@ import {
   Legend,
   ResponsiveContainer,
 } from 'recharts';
-import {
-  format,
-  startOfWeek,
-  endOfWeek,
-  eachWeekOfInterval,
-  startOfMonth,
-  endOfMonth,
-  eachMonthOfInterval,
-} from 'date-fns';
+import { parseISO } from 'date-fns';
 import { chartColors } from '@/lib/chart-colors';
 import { Account } from '@/types/account';
-import { parseLocalDate } from '@/lib/utils';
-import { transactionsApi } from '@/lib/transactions';
+import { builtInReportsApi } from '@/lib/built-in-reports';
+import { IncomeExpensePeriodItem } from '@/types/built-in-reports';
 import { useDateFormat } from '@/hooks/useDateFormat';
 import { useChartDateFormat } from '@/hooks/useChartDateFormat';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
-import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { PartialTotal } from '@/components/ui/PartialTotal';
+import type { ConvertedTotal } from '@/lib/currency-total';
 import { useReportData } from '@/hooks/useReportData';
 import { useWidgetConfig } from '@/hooks/useWidgetConfig';
 import { usePreferencesStore } from '@/store/preferencesStore';
@@ -44,6 +36,7 @@ import {
   SPENDING_RANGES,
   RangeAccountsConfig,
 } from './widget-config';
+import { CHART_GRID_PROPS, CHART_TOOLTIP_CLASS } from '@/lib/chart-style';
 
 const WIDGET_ID = 'income-expenses';
 
@@ -68,7 +61,7 @@ function IncomeExpensesTooltip({
 }) {
   if (active && payload && payload.length) {
     return (
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3">
+      <div className={CHART_TOOLTIP_CLASS}>
         <p className="font-medium text-gray-900 dark:text-gray-100 mb-1">
           {periodLabel(label ?? '')}
         </p>
@@ -101,7 +94,6 @@ export function IncomeExpensesBarChart({
   const { formatDate } = useDateFormat();
   const formatChartDate = useChartDateFormat();
   const { formatCurrencyCompact: formatCurrency, formatCurrencyAxis } = useNumberFormat();
-  const { convertToDefault, defaultCurrency } = useExchangeRates();
   const weekStartsOn = (usePreferencesStore((s) => s.preferences?.weekStartsOn) ?? 1) as 0 | 1 | 2 | 3 | 4 | 5 | 6;
   const { config, updateConfig } = useWidgetConfig<RangeAccountsConfig>(
     WIDGET_ID,
@@ -115,117 +107,69 @@ export function IncomeExpensesBarChart({
   );
   const accountIdsKey = config.accountIds.join(',');
 
-  const { data: transactions, isLoading: dataLoading } = useReportData(
+  /**
+   * The bars come from the Income vs Expenses report, which is the one place
+   * that decides which rows count and which side of the line they fall on: VOID
+   * rows out, asset-category accounts out, a split's transfer line out,
+   * investment rows out by linkage rather than by account type
+   * (INV-REPORT-001), and an uncategorized amount classified by its sign only
+   * after its category has been asked. This widget applied a simpler set of
+   * those rules over paged transactions and disagreed with the report about the
+   * same period.
+   *
+   * Bucketing goes with the question rather than being done to the answer:
+   * which transaction belongs to which bar is half of deciding what the bar
+   * says, so the granularity and the user's first day of the week are asked of
+   * the server, which returns every bucket in the window with the dates it
+   * covers.
+   */
+  const { data: response, isLoading: dataLoading } = useReportData(
     () =>
-      transactionsApi.getAllPages({
+      builtInReportsApi.getIncomeVsExpenses({
         startDate: start || undefined,
         endDate: end,
         accountIds: config.accountIds.length > 0 ? config.accountIds : undefined,
+        bucket: isWeekly ? 'week' : 'month',
+        weekStartsOn,
       }),
-    [start, end, accountIdsKey],
+    [start, end, accountIdsKey, isWeekly, weekStartsOn],
   );
 
-  // Group transactions into weekly (recent) or monthly (longer) buckets and
-  // split each bucket's activity into income and expenses.
-  const breakdown = useMemo(() => {
-    const txns = transactions ?? [];
-    // Currencies excluded from the bars for want of a rate, and how many
-    // individual amounts (a component count, not a currency count) were dropped.
-    const missingCurrencies = new Set<string>();
-    let excludedCount = 0;
-    const startDate = start ? parseLocalDate(start) : parseLocalDate(end);
-    const endDate = parseLocalDate(end);
-
-    const buckets = isWeekly
-      ? eachWeekOfInterval(
-          { start: startOfWeek(startDate, { weekStartsOn }), end: endDate },
-          { weekStartsOn },
-        ).map((bucketStart) => ({
-          bucketStart,
-          bucketEnd: endOfWeek(bucketStart, { weekStartsOn }),
-          label: formatDate(bucketStart),
-          income: 0,
-          expenses: 0,
-        }))
-      : eachMonthOfInterval({ start: startOfMonth(startDate), end: endDate }).map(
-          (bucketStart) => ({
-            bucketStart,
-            bucketEnd: endOfMonth(bucketStart),
-            label: formatChartDate(bucketStart, 'MMM yyyy'),
-            income: 0,
-            expenses: 0,
-          }),
-        );
-
-    txns.forEach((tx) => {
-      // Skip transfers and investment account transactions
-      if (tx.isTransfer) return;
-      if (tx.account?.accountType === 'INVESTMENT') return;
-
-      const txDate = parseLocalDate(tx.transactionDate);
-      const bucket = buckets.find(
-        (b) => txDate >= b.bucketStart && txDate <= b.bucketEnd,
-      );
-      if (!bucket) return;
-
-      // Every line of a transaction shares its currency, so a missing rate
-      // excludes the whole transaction once -- not once per split line, which
-      // would report more excluded amounts than there are transactions.
-      let txExcluded = false;
-      const classifyAmount = (rawAmount: number, category: { isIncome: boolean } | null | undefined) => {
-        const amount = convertToDefault(rawAmount, tx.currencyCode);
-        // No rate: the amount belongs to neither bar. Counting the unconverted
-        // figure would size a bar in the wrong currency, and counting zero would
-        // silently shrink the month.
-        if (amount === null) {
-          missingCurrencies.add(tx.currencyCode);
-          txExcluded = true;
-          return;
-        }
-        if (category?.isIncome === true) {
-          bucket.income += amount;
-        } else if (category?.isIncome === false) {
-          bucket.expenses += -1 * amount;
-        } else {
-          // Uncategorized: fall back to sign-based
-          if (amount >= 0) {
-            bucket.income += amount;
-          } else {
-            bucket.expenses += Math.abs(amount);
-          }
-        }
-      };
-
-      if (tx.splits && tx.splits.length > 0) {
-        tx.splits.forEach((split) => {
-          if (split.transferAccountId) return;
-          classifyAmount(Number(split.amount) || 0, split.category);
-        });
-      } else {
-        classifyAmount(Number(tx.amount) || 0, tx.category);
-      }
-      if (txExcluded) excludedCount += 1;
-    });
-
-    return {
-      data: buckets.map((b) => ({
-        name: b.label,
-        Income: Math.round(b.income),
-        Expenses: Math.round(b.expenses),
-        startDate: format(b.bucketStart, 'yyyy-MM-dd'),
-        endDate: format(b.bucketEnd, 'yyyy-MM-dd'),
+  const chartData = useMemo(
+    () =>
+      (response?.data ?? []).map((item: IncomeExpensePeriodItem) => ({
+        // A week is named by the date it opens, the way the register writes a
+        // date; a month by its name and year.
+        name: isWeekly
+          ? formatDate(item.periodStart)
+          : formatChartDate(parseISO(item.periodStart), 'MMM yyyy'),
+        Income: Math.round(item.income),
+        Expenses: Math.round(item.expenses),
+        startDate: item.periodStart,
+        endDate: item.periodEnd,
       })),
-      missingCurrencies: [...missingCurrencies],
-      excludedCount,
-    };
-  }, [transactions, start, end, isWeekly, formatDate, formatChartDate, convertToDefault, weekStartsOn]);
+    [response, isWeekly, formatDate, formatChartDate],
+  );
 
-  const chartData = breakdown.data;
-  // The partial-total marker the income/expenses/net figures share.
-  const totalsMarker = {
-    missingCurrencies: breakdown.missingCurrencies,
-    excludedCount: breakdown.excludedCount,
+  /**
+   * The window's income and expenses, and whether they are the whole story. The
+   * server leaves a row it could not convert out of every figure and says so,
+   * so these are subtotals exactly when it reports an exclusion.
+   */
+  const completeness = useMemo(
+    () => ({
+      missingCurrencies: response?.missingCurrencies ?? [],
+      excludedCount: response?.excludedCount ?? 0,
+    }),
+    [response],
+  );
+  const totals = {
+    income: response?.totals.knownIncome ?? 0,
+    expenses: response?.totals.knownExpenses ?? 0,
+    net: response?.totals.knownNet ?? 0,
   };
+  const marked = (value: number): ConvertedTotal => ({ value, ...completeness });
+  const displayCurrency = response?.currency ?? '';
 
   const barClickedRef = useRef(false);
 
@@ -250,16 +194,6 @@ export function IncomeExpensesBarChart({
       router.push(`/transactions?startDate=${item.startDate}&endDate=${item.endDate}`);
     }
   };
-
-  const totals = useMemo(() => {
-    return chartData.reduce(
-      (acc, bucket) => ({
-        income: acc.income + bucket.Income,
-        expenses: acc.expenses + bucket.Expenses,
-      }),
-      { income: 0, expenses: 0 }
-    );
-  }, [chartData]);
 
   const configControls = (
     <>
@@ -288,6 +222,7 @@ export function IncomeExpensesBarChart({
   return (
     <WidgetCard
       title={t('incomeExpenses.title')}
+      titleHref="/reports/income-vs-expenses"
       widgetId={WIDGET_ID}
       configTitle={t('incomeExpenses.title')}
       configControls={configControls}
@@ -298,7 +233,7 @@ export function IncomeExpensesBarChart({
       }
     >
       {loading ? (
-        <div className="flex-1 min-h-[16rem] animate-pulse rounded-md bg-gray-100 dark:bg-gray-700/50" />
+        <div className="flex-1 min-h-[16rem] animate-pulse skeleton-shimmer rounded-md bg-gray-100 dark:bg-gray-700/50" />
       ) : (
         <>
           <div className="flex-1 min-h-[16rem]">
@@ -310,7 +245,7 @@ export function IncomeExpensesBarChart({
                 onClick={handleChartClick}
                 style={{ cursor: 'pointer' }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+                <CartesianGrid {...CHART_GRID_PROPS} />
                 <XAxis
                   dataKey="name"
                   tick={{ fill: chartColors.axis, fontSize: 12 }}
@@ -356,7 +291,7 @@ export function IncomeExpensesBarChart({
             <div>
               <div className="text-sm text-gray-500 dark:text-gray-400">{t('incomeExpenses.income')}</div>
               <div className="font-semibold text-green-600 dark:text-green-400">
-                <PartialTotal total={{ value: totals.income, ...totalsMarker }} displayCurrency={defaultCurrency}>
+                <PartialTotal total={marked(totals.income)} displayCurrency={displayCurrency}>
                   {formatCurrency(totals.income)}
                 </PartialTotal>
               </div>
@@ -364,18 +299,18 @@ export function IncomeExpensesBarChart({
             <div>
               <div className="text-sm text-gray-500 dark:text-gray-400">{t('incomeExpenses.expenses')}</div>
               <div className="font-semibold text-red-600 dark:text-red-400">
-                <PartialTotal total={{ value: totals.expenses, ...totalsMarker }} displayCurrency={defaultCurrency}>
+                <PartialTotal total={marked(totals.expenses)} displayCurrency={displayCurrency}>
                   {formatCurrency(totals.expenses)}
                 </PartialTotal>
               </div>
             </div>
             <div>
               <div className="text-sm text-gray-500 dark:text-gray-400">{t('incomeExpenses.net')}</div>
-              <div
-                className={`font-semibold ${gainLossColor(totals.income - totals.expenses)}`}
-              >
-                <PartialTotal total={{ value: totals.income - totals.expenses, ...totalsMarker }} displayCurrency={defaultCurrency}>
-                  {formatCurrency(totals.income - totals.expenses)}
+              <div className={`font-semibold ${gainLossColor(totals.net)}`}>
+                {/* Net is the server's own subtraction, not income minus
+                    expenses re-derived here from two rounded figures. */}
+                <PartialTotal total={marked(totals.net)} displayCurrency={displayCurrency}>
+                  {formatCurrency(totals.net)}
                 </PartialTotal>
               </div>
             </div>

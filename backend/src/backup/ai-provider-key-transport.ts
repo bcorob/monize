@@ -46,9 +46,7 @@ export interface AiKeyCrypto {
 
 /** What the export did with one row's key, for the caller's log line. */
 export type AiProviderKeyExportOutcome =
-  | "no-key"
-  | "decrypted"
-  | "left-encrypted";
+  "no-key" | "decrypted" | "left-encrypted";
 
 export interface AiProviderKeyExportResult {
   row: Record<string, unknown>;

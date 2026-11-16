@@ -1,11 +1,11 @@
 import { McpAccountListResource } from "./account-list.resource";
-import { UserContextResolver } from "../mcp-context";
+import { mcpTestCtx, McpTestContext } from "../testing/mcp-test-context";
 
 describe("McpAccountListResource", () => {
   let resource: McpAccountListResource;
   let accountsService: Record<string, jest.Mock>;
   let server: { registerResource: jest.Mock };
-  let resolve: jest.MockedFunction<UserContextResolver>;
+  let ctx: McpTestContext;
   let handler: (...args: any[]) => any;
 
   beforeEach(() => {
@@ -22,8 +22,8 @@ describe("McpAccountListResource", () => {
       }),
     };
 
-    resolve = jest.fn();
-    resource.register(server as any, resolve);
+    ctx = mcpTestCtx();
+    resource.register(server as any);
   });
 
   it("should register the resource", () => {
@@ -36,23 +36,23 @@ describe("McpAccountListResource", () => {
   });
 
   it("should return error when no user context", async () => {
-    resolve.mockReturnValue(undefined);
-    const result = await handler("monize://accounts", { sessionId: "s1" });
+    ctx.setUser(undefined);
+    const result = await handler("monize://accounts", ctx);
     expect(result.contents[0].text).toContain("Error");
   });
 
   it("should return error when scope check fails", async () => {
-    resolve.mockReturnValue({ userId: "u1", scopes: "write" });
-    const result = await handler("monize://accounts", { sessionId: "s1" });
+    ctx.setUser({ userId: "u1", scopes: "write" });
+    const result = await handler("monize://accounts", ctx);
     expect(result.contents[0].text).toContain("Insufficient scope");
   });
 
   it("should return accounts and summary", async () => {
-    resolve.mockReturnValue({ userId: "u1", scopes: "read" });
+    ctx.setUser({ userId: "u1", scopes: "read" });
     accountsService.findAll.mockResolvedValue([{ id: "a1", name: "Checking" }]);
     accountsService.getSummary.mockResolvedValue({ netWorth: 5000 });
 
-    const result = await handler("monize://accounts", { sessionId: "s1" });
+    const result = await handler("monize://accounts", ctx);
     expect(result.contents[0].mimeType).toBe("application/json");
     const parsed = JSON.parse(result.contents[0].text);
     expect(parsed.accounts).toHaveLength(1);

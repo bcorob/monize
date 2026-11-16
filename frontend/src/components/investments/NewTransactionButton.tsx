@@ -4,6 +4,7 @@ import { useState, useRef, useCallback } from 'react';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/Button';
 import { useClickOutside } from '@/hooks/useClickOutside';
+import { ChevronDownIcon } from '@heroicons/react/24/outline';
 
 interface NewTransactionButtonProps {
   onNewInvestment: () => void;
@@ -44,14 +45,13 @@ export function NewTransactionButton({ onNewInvestment, onNewCash }: NewTransact
       <Button
         ref={triggerRef}
         onClick={() => setIsOpen((open) => !open)}
-        className="w-full whitespace-nowrap sm:w-auto"
+        className="w-full gap-1.5 whitespace-nowrap sm:w-auto"
         aria-haspopup="true"
         aria-expanded={isOpen}
       >
         {t('newTransactionButton.label')}
-        <svg className="ml-1.5 h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
+        {/* A menu caret trails its label, as ActionMenu's does. */}
+        <ChevronDownIcon className="h-3 w-3" aria-hidden="true" />
       </Button>
 
       {isOpen && (

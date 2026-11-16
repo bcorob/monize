@@ -1,4 +1,9 @@
 import { Test, TestingModule } from "@nestjs/testing";
+
+// The metadata keys @nestjs/throttler's @Throttle writes per throttler name
+// (its THROTTLER_LIMIT / THROTTLER_TTL constants, not exported by the package).
+const THROTTLER_LIMIT = "THROTTLER:LIMIT";
+const THROTTLER_TTL = "THROTTLER:TTL";
 import { MonteCarloController } from "./monte-carlo.controller";
 import { MonteCarloService } from "./monte-carlo.service";
 import { CreateScenarioDto } from "./dto/create-scenario.dto";
@@ -139,6 +144,28 @@ describe("MonteCarloController", () => {
       mockService.getBrokerageAccounts!.mockReturnValue("accounts");
       expect(controller.brokerageAccounts(mockReq)).toBe("accounts");
       expect(mockService.getBrokerageAccounts).toHaveBeenCalledWith("user-1");
+    });
+  });
+
+  describe("run throttling", () => {
+    // A simulation runs synchronously on the event loop, so both run routes
+    // carry a per-route ceiling below the global 100 a minute.
+    const limitOf = (handler: unknown): number | undefined =>
+      Reflect.getMetadata(`${THROTTLER_LIMIT}default`, handler as object);
+
+    it.each(["run", "runSaved"] as const)(
+      "%s is throttled to at most 10 a minute",
+      (method) => {
+        const handler = MonteCarloController.prototype[method];
+        expect(limitOf(handler)).toBe(10);
+        expect(
+          Reflect.getMetadata(`${THROTTLER_TTL}default`, handler as object),
+        ).toBe(60_000);
+      },
+    );
+
+    it("leaves the read routes on the global limit", () => {
+      expect(limitOf(MonteCarloController.prototype.list)).toBeUndefined();
     });
   });
 });

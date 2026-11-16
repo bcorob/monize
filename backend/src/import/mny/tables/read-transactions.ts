@@ -10,16 +10,24 @@ import {
   toInteger,
   toOptionalText,
 } from "../model/mny-values";
+import { MnyFileFormat } from "../model/mny-money99";
 import { MnyDatabase } from "../msisam/open-mny";
+import { adaptMoney99Transactions } from "./money99-transactions";
 import { RowSpec, TableAvailability, readTableByName } from "./table-reader";
 
 /**
  * Readers for `TRN`, `TRN_SPLIT` and `TRN_XFER`.
  *
- * The one version alias that matters lives here: Money Plus moved the payee
- * handle from `hpay` to `lHpay`. A file has exactly one of the two, so reading
- * only `hpay` silently drops every payee on a Money Plus file -- the newest
- * name is therefore listed first.
+ * The version aliases live here: Money Plus moved the payee handle from `hpay`
+ * to `lHpay`, and the classification handles from `hcls1` / `hcls2` to
+ * `lHcls1` / `lHcls2`. A file has exactly one of each pair, so reading only the
+ * old name silently drops every payee on a Money Plus file -- the newest name
+ * is therefore listed first.
+ *
+ * A Money 97-99 file differs by more than names, and its rows are rewritten
+ * into the Money 2001+ shape here (`adaptMoney99Transactions`), so no mapper
+ * has to know which format it is reading -- except for the action table, which
+ * the mappers look up by `format`.
  */
 
 const TRANSACTION_SPEC: RowSpec<MnyTransaction> = {
@@ -38,6 +46,9 @@ const TRANSACTION_SPEC: RowSpec<MnyTransaction> = {
   reference: { from: "szId", as: toOptionalText },
   memo: { from: "mMemo", as: toOptionalText },
   billSeries: { from: "hbillHead", as: toHandle },
+  // Money writes -1 for "no classification", which `toHandle` reads as null.
+  classification1: { from: ["lHcls1", "hcls1"], as: toHandle },
+  classification2: { from: ["lHcls2", "hcls2"], as: toHandle },
 };
 
 const SPLIT_SPEC: RowSpec<MnyTransactionSplit> = {
@@ -52,6 +63,8 @@ const TRANSFER_SPEC: RowSpec<MnyTransfer> = {
 };
 
 export interface MnyTransactionData {
+  /** Which code space `TRN.act` is in; see `mapInvestmentAction`. */
+  readonly format: MnyFileFormat;
   readonly transactions: MnyTransaction[];
   readonly splits: MnyTransactionSplit[];
   readonly transfers: MnyTransfer[];
@@ -63,10 +76,16 @@ export function readTransactionData(db: MnyDatabase): MnyTransactionData {
   const splits = readTableByName(db, "TRN_SPLIT", SPLIT_SPEC);
   const transfers = readTableByName(db, "TRN_XFER", TRANSFER_SPEC);
 
+  const rows =
+    db.format === "jet3"
+      ? adaptMoney99Transactions(transactions.rows, transfers.rows)
+      : { transactions: transactions.rows, transfers: transfers.rows };
+
   return {
-    transactions: transactions.rows,
+    format: db.format,
+    transactions: rows.transactions,
     splits: splits.rows,
-    transfers: transfers.rows,
+    transfers: rows.transfers,
     availability: [
       transactions.availability,
       splits.availability,

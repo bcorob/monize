@@ -1,10 +1,18 @@
 import { Test, TestingModule } from "@nestjs/testing";
-import { BadRequestException, NotFoundException } from "@nestjs/common";
+import { Currency } from "../currencies/entities/currency.entity";
+import { currencyPlacesRepoMock } from "../test-helpers/currency-places-testing";
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from "@nestjs/common";
 import { DataSource } from "typeorm";
 import { TransactionSplitService } from "./transaction-split.service";
 import { Transaction, TransactionStatus } from "./entities/transaction.entity";
 import { TransactionSplit } from "./entities/transaction-split.entity";
+import { SplitKind } from "./entities/split-kind.enum";
 import { Category } from "../categories/entities/category.entity";
+import { UserPreference } from "../users/entities/user-preference.entity";
 import { ExchangeRateService } from "../currencies/exchange-rate.service";
 import { AccountsService } from "../accounts/accounts.service";
 import { isTransactionInFuture } from "../common/date-utils";
@@ -41,6 +49,7 @@ describe("TransactionSplitService", () => {
   let transactionsRepository: Record<string, jest.Mock>;
   let splitsRepository: Record<string, jest.Mock>;
   let categoriesRepository: Record<string, jest.Mock>;
+  let userPreferencesRepository: Record<string, jest.Mock>;
   let accountsService: Record<string, jest.Mock>;
   let exchangeRateService: Record<string, jest.Mock>;
   let mockDataSource: DataSourceMock;
@@ -54,6 +63,7 @@ describe("TransactionSplitService", () => {
     userId: "user-1",
     accountId: "account-1",
     amount: -100,
+    currencyCode: "USD",
     transactionDate: "2026-01-15",
     payeeName: "Grocery Store",
     isSplit: true,
@@ -79,6 +89,9 @@ describe("TransactionSplitService", () => {
         amount: Number(transaction.amount ?? 0),
         transactionDate: String(transaction.transactionDate ?? "2026-01-15"),
         isSplit: transaction.isSplit ?? false,
+        // The counterparts take the LOCKED parent's status, not the caller's
+        // copy (A26-M09), so the committed row has to carry it.
+        status: transaction.status ?? TransactionStatus.UNRECONCILED,
         // The counterpart rows are built from the locked parent's payee too
         // (FV4-002), so the committed row has to carry it.
         payeeId: transaction.payeeId ?? null,
@@ -188,10 +201,19 @@ describe("TransactionSplitService", () => {
       recalculateCurrentBalance: jest.fn().mockResolvedValue(undefined),
     };
 
+    // The strict reconciled lock reads the preference only when a candidate
+    // row is RECONCILED; off unless a spec turns it on.
+    userPreferencesRepository = {
+      findOne: jest.fn().mockResolvedValue(null),
+    };
+
     const tenantMocks = createScopedDbMocks([
       [Transaction, transactionsRepository],
       [TransactionSplit, splitsRepository],
       [Category, categoriesRepository],
+      [UserPreference, userPreferencesRepository],
+      // `decimal_places` per currency, for the precision refusals.
+      [Currency, currencyPlacesRepoMock({ BTC: 8 })],
     ]);
     mockDataSource = tenantMocks.dataSource;
 
@@ -235,9 +257,17 @@ describe("TransactionSplitService", () => {
     const investmentTransactionsService = {
       createEmbeddedForSplit: jest.fn().mockResolvedValue({}),
       reverseAndRemoveEmbedded: jest.fn().mockResolvedValue(undefined),
+      // The post-commit bond price recompute of the securities the embedded
+      // rows touched (INV-BOND-005).
+      recomputeBondPricesAfterSplitWrite: jest
+        .fn()
+        .mockResolvedValue(undefined),
       // The parent's status propagation asks the investment service to carry
       // the boundary onto embedded rows; an empty set means none were touched.
       applyParentStatusToEmbeddedRows: jest.fn().mockResolvedValue(new Set()),
+      // The advisory lock a split-parent write takes before its row locks;
+      // the real method returns nothing.
+      lockEmbeddedHoldingScopes: jest.fn().mockResolvedValue(undefined),
     };
 
     netWorthService = {
@@ -283,6 +313,74 @@ describe("TransactionSplitService", () => {
         { amount: -40, categoryId: "cat-2" },
       ];
       expect(() => service.validateSplits(splits, -100)).not.toThrow();
+    });
+
+    it("refuses a received amount on a line that is not a transfer", () => {
+      const splits = [
+        { amount: -60, categoryId: "cat-1", transferTargetAmount: 44 },
+        { amount: -40, categoryId: "cat-2" },
+      ];
+      expect(() => service.validateSplits(splits, -100)).toThrow(
+        BadRequestException,
+      );
+    });
+
+    describe("at the parent currency's money precision (INV-MONEY-001)", () => {
+      const btc = { code: "BTC", decimalPlaces: 8 };
+      const cad = { code: "CAD", decimalPlaces: 2 };
+
+      it("balances a BTC network-fee split at eight places", () => {
+        const splits = [
+          { amount: -0.005, transferAccountId: "chequing" },
+          { amount: -0.000025, categoryId: "fees" },
+        ];
+        expect(() =>
+          service.validateSplits(splits, -0.005025, btc),
+        ).not.toThrow();
+      });
+
+      it("refuses a BTC split a satoshi short of its parent", () => {
+        const splits = [
+          { amount: -0.005, transferAccountId: "chequing" },
+          { amount: -0.000025, categoryId: "fees" },
+        ];
+        expect(() => service.validateSplits(splits, -0.00502501, btc)).toThrow(
+          /must equal transaction amount/,
+        );
+      });
+
+      it("refuses a BTC line with a ninth place, naming the line", () => {
+        const splits = [
+          { amount: -0.005, transferAccountId: "chequing" },
+          { amount: -0.000025001, categoryId: "fees" },
+        ];
+        expect(() => service.validateSplits(splits, -0.005025001, btc)).toThrow(
+          /splits\[1\]\.amount/,
+        );
+      });
+
+      it("accepts CAD lines at three places and refuses five", () => {
+        expect(() =>
+          service.validateSplits(
+            [
+              { amount: -12.345, categoryId: "cat-1" },
+              { amount: -7.655, categoryId: "cat-2" },
+            ],
+            -20,
+            cad,
+          ),
+        ).not.toThrow();
+        expect(() =>
+          service.validateSplits(
+            [
+              { amount: -12.34567, categoryId: "cat-1" },
+              { amount: -7.65433, categoryId: "cat-2" },
+            ],
+            -20,
+            cad,
+          ),
+        ).toThrow(BadRequestException);
+      });
     });
 
     it("passes validation for a single transfer split", () => {
@@ -576,6 +674,205 @@ describe("TransactionSplitService", () => {
       );
     });
 
+    describe("transferTargetAmount", () => {
+      const mockAccounts = (targetCurrency: string) =>
+        accountsService.findOne
+          .mockResolvedValueOnce({
+            id: "account-2",
+            name: "Target",
+            currencyCode: targetCurrency,
+          })
+          .mockResolvedValueOnce({
+            id: "account-1",
+            name: "Checking",
+            currencyCode: "USD",
+          });
+
+      const createOne = (amount: number, transferTargetAmount: number) => {
+        splitsRepository.save.mockResolvedValueOnce({
+          id: "split-new",
+          transactionId: "tx-1",
+          transferAccountId: "account-2",
+          amount,
+        });
+        transactionsRepository.save.mockResolvedValueOnce({
+          id: "linked-tx-1",
+          accountId: "account-2",
+        });
+        return service.createSplits(
+          "tx-1",
+          [{ amount, transferAccountId: "account-2", transferTargetAmount }],
+          "user-1",
+          "account-1",
+          new Date("2026-01-15"),
+          "Store",
+          "payee-uuid-1",
+        );
+      };
+
+      it("credits the stated received amount at its implied rate, not the market rate", async () => {
+        // The bank settled 50 USD as 44.50 EUR after its FX fee; the market
+        // rate (0.9) would have credited 45.00.
+        mockAccounts("EUR");
+        exchangeRateService.getRateForDate.mockResolvedValue(0.9);
+
+        await createOne(-50, 44.5);
+
+        expect(exchangeRateService.getRateForDate).not.toHaveBeenCalled();
+        expect(transactionsRepository.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            accountId: "account-2",
+            currencyCode: "EUR",
+            amount: 44.5,
+            exchangeRate: 0.89,
+          }),
+        );
+        expect(accountsService.updateBalance).toHaveBeenCalledWith(
+          "account-2",
+          44.5,
+        );
+      });
+
+      it("debits the target when the line brings money into the parent", async () => {
+        mockAccounts("EUR");
+
+        await createOne(50, 44.5);
+
+        expect(transactionsRepository.create).toHaveBeenCalledWith(
+          expect.objectContaining({ amount: -44.5, exchangeRate: 0.89 }),
+        );
+      });
+
+      it("refuses a same-currency received amount that differs from the line", async () => {
+        mockAccounts("USD");
+
+        await expect(createOne(-50, 49)).rejects.toThrow(BadRequestException);
+        expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      });
+
+      it("accepts a same-currency received amount equal to the line", async () => {
+        mockAccounts("USD");
+
+        await createOne(-50, 50);
+
+        expect(transactionsRepository.create).toHaveBeenCalledWith(
+          expect.objectContaining({ amount: 50, exchangeRate: 1 }),
+        );
+      });
+
+      it("asks for a currency with no row once for the whole operation, not once per line", async () => {
+        // ZZZ has no `currencies` row: absent from the map, but already asked for.
+        accountsService.findOne.mockImplementation(
+          async (_u: string, id: string) => ({
+            id,
+            name: id,
+            currencyCode: "ZZZ",
+          }),
+        );
+        const lines = [-10, -20, -30].map((amount) => ({
+          amount,
+          transferAccountId: "account-2",
+        }));
+        const query = mockQueryRunner.manager.getRepository(Currency).query;
+        query.mockClear();
+
+        await service.createSplits(
+          "tx-1",
+          lines,
+          "user-1",
+          "account-1",
+          new Date("2026-01-15"),
+          "Store",
+          null,
+        );
+
+        expect(accountsService.findOne).toHaveBeenCalledTimes(6);
+        expect(query).toHaveBeenCalledTimes(1);
+      });
+
+      it("converts a CAD line into a BTC wallet at eight places", async () => {
+        accountsService.findOne
+          .mockResolvedValueOnce({
+            id: "account-2",
+            name: "Wallet",
+            currencyCode: "BTC",
+          })
+          .mockResolvedValueOnce({
+            id: "account-1",
+            name: "Chequing",
+            currencyCode: "CAD",
+          });
+        // BTC->CAD 136000.1234567890, read the other way at rate precision.
+        exchangeRateService.getRateForDate.mockResolvedValue(0.0000073529);
+        splitsRepository.save.mockResolvedValueOnce({
+          id: "split-new",
+          transactionId: "tx-1",
+          transferAccountId: "account-2",
+          amount: -1700,
+        });
+        transactionsRepository.save.mockResolvedValueOnce({
+          id: "linked-tx-1",
+          accountId: "account-2",
+        });
+
+        await service.createSplits(
+          "tx-1",
+          [{ amount: -1700, transferAccountId: "account-2" }],
+          "user-1",
+          "account-1",
+          new Date("2026-01-15"),
+          "Exchange",
+          null,
+        );
+
+        // 0.01249993, not the 0.0125 four places would round it to.
+        expect(transactionsRepository.create).toHaveBeenCalledWith(
+          expect.objectContaining({ currencyCode: "BTC", amount: 0.01249993 }),
+        );
+        expect(accountsService.updateBalance).toHaveBeenCalledWith(
+          "account-2",
+          0.01249993,
+        );
+      });
+
+      it("stores a stated BTC received amount as given and refuses a ninth place", async () => {
+        const intoWallet = () =>
+          accountsService.findOne
+            .mockResolvedValueOnce({
+              id: "account-2",
+              name: "Wallet",
+              currencyCode: "BTC",
+            })
+            .mockResolvedValueOnce({
+              id: "account-1",
+              name: "Checking",
+              currencyCode: "USD",
+            });
+        intoWallet();
+        await createOne(-1700, 0.01249993);
+        expect(transactionsRepository.create).toHaveBeenCalledWith(
+          expect.objectContaining({
+            amount: 0.01249993,
+            exchangeRate: 0.0000073529,
+          }),
+        );
+
+        accountsService.updateBalance.mockClear();
+        intoWallet();
+        await expect(createOne(-1700, 0.012499931)).rejects.toThrow(
+          /transferTargetAmount/,
+        );
+        expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      });
+
+      it("refuses a received amount of zero against a non-zero line", async () => {
+        mockAccounts("EUR");
+
+        await expect(createOne(-50, 0)).rejects.toThrow(BadRequestException);
+        expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      });
+    });
+
     it("refuses a cross-currency transfer child with no determinable rate", async () => {
       // Refusing beats posting at par: 50 USD credited as 50 EUR looks entirely
       // normal and is wrong by the whole FX difference.
@@ -784,6 +1081,26 @@ describe("TransactionSplitService", () => {
       expect(transactionsRepository.update).not.toHaveBeenCalled();
     });
 
+    it("restores the counterpart to UNRECONCILED, not the parent's new status (#2071)", async () => {
+      // Only VOID-ness is shared (INV-TRANSFER-001). The parent leaving VOID as
+      // RECONCILED must not stamp RECONCILED onto the counterpart leg -- that
+      // account's own statement never touched it.
+      splitsRepository.find.mockResolvedValue([transferSplit]);
+      stubLocks([counterpartRow(TransactionStatus.VOID)]);
+
+      await service.applyParentStatusToTransferCounterparts(
+        mockQueryRunner.manager as never,
+        "tx-1",
+        "user-1",
+        TransactionStatus.RECONCILED,
+      );
+
+      expect(transactionsRepository.update).toHaveBeenCalledWith(
+        "linked-tx-1",
+        { status: TransactionStatus.UNRECONCILED, reconciledDate: null },
+      );
+    });
+
     it("leaves a category child's split alone", async () => {
       // Only transfer children have a counterpart row to carry the status to.
       splitsRepository.find.mockResolvedValue([
@@ -847,6 +1164,51 @@ describe("TransactionSplitService", () => {
         userId: "user-1",
       });
       expect(transactionsRepository.remove).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Issue #2039: a leg is a row in another account that the replacement, the
+     * edit with splits, the delete and the conversion of its parent all delete,
+     * so a reconciled one is refused under the strict lock -- before the
+     * embedded rows are reversed or any leg is removed.
+     */
+    it("refuses a reconciled leg under the strict lock before writing anything", async () => {
+      userPreferencesRepository.findOne.mockResolvedValue({
+        userId: "user-1",
+        lockReconciledTransactions: true,
+      });
+      splitsRepository.find.mockResolvedValue([
+        {
+          id: "split-1",
+          transactionId: "tx-1",
+          kind: SplitKind.INVESTMENT,
+          investmentTransaction: { id: "inv-1", accountId: "brokerage" },
+        },
+        {
+          id: "split-2",
+          transactionId: "tx-1",
+          linkedTransactionId: "linked-tx-1",
+          transferAccountId: "account-2",
+        },
+      ]);
+      stubLocks([
+        lockedTransactionRow({
+          id: "linked-tx-1",
+          accountId: "account-2",
+          amount: 50,
+          status: TransactionStatus.RECONCILED,
+        }),
+      ]);
+
+      await expect(
+        service.deleteSplitSideEffects("tx-1", "user-1"),
+      ).rejects.toThrow(/reconciled/i);
+
+      expect(
+        (service as any).investmentTransactionsService.reverseAndRemoveEmbedded,
+      ).not.toHaveBeenCalled();
+      expect(mockQueryRunner.manager.delete).not.toHaveBeenCalled();
+      expect(accountsService.updateBalance).not.toHaveBeenCalled();
     });
 
     it("skips splits without linkedTransactionId or transferAccountId", async () => {
@@ -1008,6 +1370,7 @@ describe("TransactionSplitService", () => {
         ...mockTransaction,
         status: TransactionStatus.VOID,
       } as Transaction;
+      lockParent(transaction);
 
       splitsRepository.find.mockResolvedValue([]);
       accountsService.findOne.mockResolvedValue({
@@ -1034,6 +1397,41 @@ describe("TransactionSplitService", () => {
       expect(accountsService.updateBalance).not.toHaveBeenCalledWith(
         "account-2",
         40,
+      );
+    });
+
+    /**
+     * Lock order (`common/db/locks.ts`): advisory locks come before row locks.
+     *
+     * A replacement reaches the holdings advisory lock twice on the way --
+     * `deleteSplitSideEffects` tearing the parent's embedded investment rows
+     * down, `createEmbeddedForSplit` building the new ones -- while
+     * `InvestmentTransactionsService.update()` takes that advisory lock first
+     * and then row-locks the same parent. Advisory A then row P against row P
+     * then advisory A is `40P01` for both, so the advisory lock is the first
+     * statement of this transaction.
+     */
+    it("locks the embedded investment scopes before the parent's row lock", async () => {
+      const transaction = { ...mockTransaction } as Transaction;
+      lockParent(transaction);
+      splitsRepository.find.mockResolvedValue([]);
+      const lockScopes = jest.spyOn(service, "lockEmbeddedInvestmentScopes");
+
+      await service.updateSplits(
+        transaction,
+        [
+          { amount: -60, categoryId: "cat-1" },
+          { amount: -40, categoryId: "cat-2" },
+        ],
+        "user-1",
+      );
+
+      expect(lockScopes).toHaveBeenCalledWith(expect.anything(), "user-1", [
+        "tx-1",
+      ]);
+      expect(lockTransactionRow).toHaveBeenCalled();
+      expect(lockScopes.mock.invocationCallOrder[0]).toBeLessThan(
+        (lockTransactionRow as jest.Mock).mock.invocationCallOrder[0],
       );
     });
 
@@ -1170,6 +1568,7 @@ describe("TransactionSplitService", () => {
           id: "tx-1",
           accountId: "account-1",
           amount: -100,
+          currencyCode: "USD",
           transactionDate: "2026-01-15",
           status: TransactionStatus.UNRECONCILED,
           payeeName: "Store",
@@ -1264,6 +1663,122 @@ describe("TransactionSplitService", () => {
         memo: null,
       });
       expect(result.id).toBe("new-split-id");
+    });
+
+    /**
+     * Issue #2039: a whole set -- a parent flagged a split whose lines add up
+     * to it -- grows by the added line, the mirror of removeSplit, so the lines
+     * still add up to the parent and its account moves by the line.
+     */
+    describe("on a whole set", () => {
+      function stubAdded(amount: number): void {
+        splitsRepository.find.mockResolvedValue([
+          { ...mockSplit, amount: -60 },
+          { ...mockSplit2, amount: -40 },
+        ]);
+        splitsRepository.findOne.mockResolvedValue({
+          id: "new-split",
+          transactionId: "tx-1",
+          amount,
+          categoryId: "cat-3",
+        });
+      }
+
+      it("grows the parent by a line of its own sign and moves its account", async () => {
+        const transaction = { ...mockTransaction } as Transaction;
+        lockParent(transaction);
+        stubAdded(-10);
+
+        await service.addSplit(
+          transaction,
+          { amount: -10, categoryId: "cat-3" },
+          "user-1",
+        );
+
+        expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+          Transaction,
+          "tx-1",
+          { amount: -110 },
+        );
+        expect(accountsService.updateBalance).toHaveBeenCalledWith(
+          "account-1",
+          -10,
+        );
+        expect(netWorthService.triggerDebouncedRecalc).toHaveBeenCalledWith(
+          "account-1",
+          "user-1",
+        );
+      });
+
+      it("shrinks the parent by an opposite-signed line rather than leaving it short", async () => {
+        const transaction = { ...mockTransaction } as Transaction;
+        lockParent(transaction);
+        stubAdded(10);
+
+        await service.addSplit(
+          transaction,
+          { amount: 10, categoryId: "cat-3" },
+          "user-1",
+        );
+
+        expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+          Transaction,
+          "tx-1",
+          { amount: -90 },
+        );
+        expect(accountsService.updateBalance).toHaveBeenCalledWith(
+          "account-1",
+          10,
+        );
+      });
+
+      it("re-totals a VOID parent without moving its account", async () => {
+        const transaction = {
+          ...mockTransaction,
+          status: TransactionStatus.VOID,
+        } as Transaction;
+        lockParent(transaction);
+        stubAdded(-10);
+
+        await service.addSplit(
+          transaction,
+          { amount: -10, categoryId: "cat-3" },
+          "user-1",
+        );
+
+        expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+          Transaction,
+          "tx-1",
+          { amount: -110 },
+        );
+        expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      });
+
+      it("leaves a set short of its parent at the parent's amount", async () => {
+        const transaction = { ...mockTransaction } as Transaction;
+        lockParent(transaction);
+        splitsRepository.find.mockResolvedValue([
+          { ...mockSplit, amount: -60 },
+        ]);
+        splitsRepository.findOne.mockResolvedValue({
+          id: "new-split",
+          transactionId: "tx-1",
+          amount: -10,
+        });
+
+        await service.addSplit(
+          transaction,
+          { amount: -10, categoryId: "cat-3" },
+          "user-1",
+        );
+
+        expect(mockQueryRunner.manager.update).not.toHaveBeenCalledWith(
+          Transaction,
+          "tx-1",
+          expect.objectContaining({ amount: expect.anything() }),
+        );
+        expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      });
     });
 
     it("throws when adding split would exceed transaction amount", async () => {
@@ -1456,12 +1971,13 @@ describe("TransactionSplitService", () => {
       };
 
       splitsRepository.findOne.mockResolvedValue(splitToRemove);
+      // -60.00 + -25.00 + -15.00: the set adds up to the -100.00 parent.
       mockQueryRunner.manager.find.mockResolvedValue([
-        { ...mockSplit2 },
+        { ...mockSplit2, amount: -25 },
         {
           id: "split-3",
           transactionId: "tx-1",
-          amount: -20,
+          amount: -15,
           categoryId: "cat-3",
         },
       ]);
@@ -1471,10 +1987,26 @@ describe("TransactionSplitService", () => {
       expect(mockQueryRunner.manager.remove).toHaveBeenCalledWith(
         splitToRemove,
       );
+      // The line's money leaves the parent with it (issue #2025): -100.00 less
+      // the -60.00 line, and the account gets the 60.00 back.
+      expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+        Transaction,
+        "tx-1",
+        { amount: -40 },
+      );
+      expect(accountsService.updateBalance).toHaveBeenCalledWith(
+        "account-1",
+        60,
+      );
+      // Two lines remain, so the parent stays a split.
       expect(mockQueryRunner.manager.update).not.toHaveBeenCalledWith(
         Transaction,
-        expect.anything(),
-        expect.anything(),
+        "tx-1",
+        expect.objectContaining({ isSplit: false }),
+      );
+      expect(netWorthService.triggerDebouncedRecalc).toHaveBeenCalledWith(
+        "account-1",
+        "user-1",
       );
     });
 
@@ -1570,7 +2102,13 @@ describe("TransactionSplitService", () => {
       expect(mockQueryRunner.manager.remove).toHaveBeenCalledWith(lastSplit);
     });
 
-    it("collapses to non-split and removes linked transaction when last split is a transfer", async () => {
+    /**
+     * Issue #2025: a -100.00 split of -60.00 Groceries and a -40.00 transfer to
+     * Savings. Removing the Groceries line used to delete the Savings leg the
+     * request never named and leave a -100.00 parent with no category and no
+     * transfer. The parent becomes the -40.00 transfer and the leg stays.
+     */
+    it("makes the parent the remaining transfer and keeps its leg when the last split is a transfer", async () => {
       const transaction = { ...mockTransaction } as Transaction;
       lockParent(
         transaction,
@@ -1600,20 +2138,357 @@ describe("TransactionSplitService", () => {
 
       await service.removeSplit(transaction, "split-1", "user-1");
 
-      expect(accountsService.updateBalance).toHaveBeenCalledWith(
-        "account-3",
-        -40,
+      // The leg in the other account is neither deleted nor reversed.
+      expect(mockQueryRunner.manager.delete).not.toHaveBeenCalledWith(
+        Transaction,
+        expect.objectContaining({ id: "linked-tx-2" }),
       );
+      expect(accountsService.updateBalance).not.toHaveBeenCalledWith(
+        "account-3",
+        expect.anything(),
+      );
+      // Only the removed line's 60.00 comes back to the parent's account.
+      expect(accountsService.updateBalance).toHaveBeenCalledTimes(1);
+      expect(accountsService.updateBalance).toHaveBeenCalledWith(
+        "account-1",
+        60,
+      );
+      expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+        Transaction,
+        "tx-1",
+        { amount: -40 },
+      );
+      // The pair links both ways, as a created transfer's legs do.
+      expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+        Transaction,
+        "tx-1",
+        {
+          isSplit: false,
+          isTransfer: true,
+          categoryId: null,
+          linkedTransactionId: "linked-tx-2",
+        },
+      );
+      expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+        Transaction,
+        "linked-tx-2",
+        { linkedTransactionId: "tx-1" },
+      );
+      expect(mockQueryRunner.manager.remove).toHaveBeenCalledWith(lastSplit);
+    });
+
+    /**
+     * The other half of issue #2025: removing the transfer line deletes the
+     * Savings leg, as asked, and the parent becomes a -60.00 Groceries
+     * transaction with the 40.00 back in Chequing -- not a -100.00 Groceries
+     * transaction whose 40.00 left Chequing and arrived nowhere.
+     */
+    it("re-totals the parent and returns the line's money when the transfer line is removed", async () => {
+      const transaction = { ...mockTransaction } as Transaction;
+      const transferSplit = {
+        id: "split-2",
+        transactionId: "tx-1",
+        kind: "TRANSFER",
+        categoryId: null,
+        linkedTransactionId: "linked-tx-2",
+        transferAccountId: "account-3",
+        amount: -40,
+      };
+      lockParent(
+        transaction,
+        lockedTransactionRow({
+          id: "linked-tx-2",
+          accountId: "account-3",
+          amount: 40,
+        }),
+      );
+      splitsRepository.findOne.mockResolvedValue(transferSplit);
+      const lastSplit = {
+        ...mockSplit,
+        kind: "CATEGORY",
+        categoryId: "cat-groceries",
+      };
+      mockQueryRunner.manager.find.mockResolvedValue([lastSplit]);
+
+      await service.removeSplit(transaction, "split-2", "user-1");
+
       expect(mockQueryRunner.manager.delete).toHaveBeenCalledWith(Transaction, {
         id: "linked-tx-2",
         userId: "user-1",
       });
+      expect(accountsService.updateBalance).toHaveBeenCalledWith(
+        "account-3",
+        -40,
+      );
+      expect(accountsService.updateBalance).toHaveBeenCalledWith(
+        "account-1",
+        40,
+      );
       expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
         Transaction,
         "tx-1",
-        { isSplit: false, categoryId: null },
+        { amount: -60 },
+      );
+      expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+        Transaction,
+        "tx-1",
+        { isSplit: false, categoryId: "cat-groceries" },
       );
       expect(mockQueryRunner.manager.remove).toHaveBeenCalledWith(lastSplit);
+    });
+
+    it("re-totals a VOID parent without moving its account's balance", async () => {
+      const transaction = {
+        ...mockTransaction,
+        status: TransactionStatus.VOID,
+      } as Transaction;
+      lockParent(transaction);
+      splitsRepository.findOne.mockResolvedValue({ ...mockSplit });
+      mockQueryRunner.manager.find.mockResolvedValue([
+        { ...mockSplit2 },
+        { id: "split-3", transactionId: "tx-1", amount: 0 },
+      ]);
+
+      await service.removeSplit(transaction, "split-1", "user-1");
+
+      expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+        Transaction,
+        "tx-1",
+        { amount: -40 },
+      );
+      expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      expect(accountsService.recalculateCurrentBalance).not.toHaveBeenCalled();
+    });
+
+    it("recomputes a future-dated parent's account rather than moving it by a delta", async () => {
+      mockedIsTransactionInFuture.mockReturnValue(true);
+      const transaction = {
+        ...mockTransaction,
+        transactionDate: "2027-06-15",
+      } as Transaction;
+      lockParent(transaction);
+      splitsRepository.findOne.mockResolvedValue({ ...mockSplit });
+      mockQueryRunner.manager.find.mockResolvedValue([
+        { ...mockSplit2 },
+        { id: "split-3", transactionId: "tx-1", amount: 0 },
+      ]);
+
+      await service.removeSplit(transaction, "split-1", "user-1");
+
+      expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      expect(accountsService.recalculateCurrentBalance).toHaveBeenCalledWith(
+        "user-1",
+        "account-1",
+      );
+    });
+
+    it("leaves the amount and the balance alone when the removed line is zero", async () => {
+      const transaction = { ...mockTransaction } as Transaction;
+      lockParent(transaction);
+      splitsRepository.findOne.mockResolvedValue({ ...mockSplit, amount: 0 });
+      mockQueryRunner.manager.find.mockResolvedValue([
+        { ...mockSplit, id: "split-3" },
+        { ...mockSplit2 },
+      ]);
+
+      await service.removeSplit(transaction, "split-1", "user-1");
+
+      expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+      expect(accountsService.updateBalance).not.toHaveBeenCalled();
+    });
+
+    /**
+     * A set built line by line through `addSplit` may hold less than the
+     * parent, and `addSplit` moved neither the parent's amount nor its account,
+     * so removing a line from it moves neither back. Its last line cannot
+     * become the parent either: the parent would carry that line's category,
+     * or its transfer, for money the line never held.
+     */
+    it("leaves a parent its lines never added up to, and does not collapse into its last line", async () => {
+      const transaction = { ...mockTransaction } as Transaction;
+      lockParent(transaction);
+      splitsRepository.findOne.mockResolvedValue({
+        ...mockSplit,
+        amount: -30,
+      });
+      const lastSplit = {
+        ...mockSplit2,
+        linkedTransactionId: "linked-tx-2",
+        transferAccountId: "account-3",
+        categoryId: null,
+      };
+      mockQueryRunner.manager.find.mockResolvedValue([lastSplit]);
+
+      await service.removeSplit(transaction, "split-1", "user-1");
+
+      // -30.00 and -40.00 never made the -100.00 parent.
+      expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+      expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      expect(accountsService.recalculateCurrentBalance).not.toHaveBeenCalled();
+      expect(mockQueryRunner.manager.remove).not.toHaveBeenCalledWith(
+        lastSplit,
+      );
+      expect(lockTransactionRow).not.toHaveBeenCalledWith(
+        expect.anything(),
+        "linked-tx-2",
+        "user-1",
+      );
+    });
+
+    /**
+     * The review's case: a plain -100.00 row given one -30.00 line through
+     * `addSplit` (which flips nothing until a second line), then that line
+     * removed. Nothing moved when it was added, so nothing moves back.
+     */
+    it("moves nothing when the only line of an incomplete set is removed", async () => {
+      const transaction = { ...mockTransaction, isSplit: false } as Transaction;
+      lockParent(transaction);
+      splitsRepository.findOne.mockResolvedValue({
+        ...mockSplit,
+        amount: -30,
+      });
+      mockQueryRunner.manager.find.mockResolvedValue([]);
+
+      await service.removeSplit(transaction, "split-1", "user-1");
+
+      expect(mockQueryRunner.manager.update).not.toHaveBeenCalledWith(
+        Transaction,
+        "tx-1",
+        expect.objectContaining({ amount: expect.anything() }),
+      );
+      expect(accountsService.updateBalance).not.toHaveBeenCalled();
+    });
+
+    /**
+     * `addSplit` flags the parent a split only at the second line, so a first
+     * line equal to the whole parent "covers" it by sum alone. Nothing moved
+     * when it was added, so its removal moves nothing back either.
+     */
+    it("moves nothing when the first addSplit line, equal to the parent, is removed", async () => {
+      const transaction = { ...mockTransaction, isSplit: false } as Transaction;
+      lockParent(transaction);
+      splitsRepository.findOne.mockResolvedValue({
+        ...mockSplit,
+        amount: -100,
+      });
+      mockQueryRunner.manager.find.mockResolvedValue([]);
+
+      await service.removeSplit(transaction, "split-1", "user-1");
+
+      expect(mockQueryRunner.manager.update).not.toHaveBeenCalledWith(
+        Transaction,
+        "tx-1",
+        expect.objectContaining({ amount: expect.anything() }),
+      );
+      expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      expect(accountsService.recalculateCurrentBalance).not.toHaveBeenCalled();
+    });
+
+    it("re-totals the parent to zero when its single pass-through line is removed", async () => {
+      const transaction = { ...mockTransaction } as Transaction;
+      lockParent(
+        transaction,
+        lockedTransactionRow({
+          id: "linked-tx-1",
+          accountId: "account-2",
+          amount: 100,
+        }),
+      );
+      splitsRepository.findOne.mockResolvedValue({
+        ...mockSplit,
+        categoryId: null,
+        linkedTransactionId: "linked-tx-1",
+        transferAccountId: "account-2",
+        amount: -100,
+      });
+      mockQueryRunner.manager.find.mockResolvedValue([]);
+
+      await service.removeSplit(transaction, "split-1", "user-1");
+
+      // The leg goes, as asked, and the 100.00 that left with it comes back.
+      expect(accountsService.updateBalance).toHaveBeenCalledWith(
+        "account-2",
+        -100,
+      );
+      expect(accountsService.updateBalance).toHaveBeenCalledWith(
+        "account-1",
+        100,
+      );
+      expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+        Transaction,
+        "tx-1",
+        { amount: 0 },
+      );
+      expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+        Transaction,
+        "tx-1",
+        { isSplit: false },
+      );
+    });
+
+    /**
+     * An embedded investment row carries no cash transaction of its own
+     * (`transactionId: null`): the parent is its cash side, so the re-total is
+     * the only movement of the cash account, once.
+     */
+    it("re-totals the parent once when an investment line is removed", async () => {
+      const transaction = { ...mockTransaction } as Transaction;
+      lockParent(transaction);
+      const investmentTransaction = {
+        id: "inv-1",
+        accountId: "brokerage-1",
+        transactionId: null,
+      };
+      splitsRepository.findOne.mockResolvedValue({
+        ...mockSplit,
+        kind: SplitKind.INVESTMENT,
+        categoryId: null,
+        investmentTransaction,
+      });
+      mockQueryRunner.manager.find.mockResolvedValue([
+        { ...mockSplit2 },
+        { id: "split-3", transactionId: "tx-1", amount: 0 },
+      ]);
+
+      await service.removeSplit(transaction, "split-1", "user-1");
+
+      expect(
+        (service as any).investmentTransactionsService.reverseAndRemoveEmbedded,
+      ).toHaveBeenCalledWith(
+        mockQueryRunner.manager,
+        "user-1",
+        investmentTransaction,
+        expect.anything(),
+      );
+      expect(accountsService.updateBalance).toHaveBeenCalledTimes(1);
+      expect(accountsService.updateBalance).toHaveBeenCalledWith(
+        "account-1",
+        60,
+      );
+      expect(netWorthService.triggerDebouncedRecalc).toHaveBeenCalledWith(
+        "brokerage-1",
+        "user-1",
+      );
+    });
+
+    it("refuses to make the parent a transfer whose leg is gone", async () => {
+      const transaction = { ...mockTransaction } as Transaction;
+      // Only the parent is locked: the remaining line's leg is not there.
+      lockParent(transaction);
+      splitsRepository.findOne.mockResolvedValue({ ...mockSplit });
+      mockQueryRunner.manager.find.mockResolvedValue([
+        {
+          ...mockSplit2,
+          linkedTransactionId: "linked-tx-2",
+          transferAccountId: "account-3",
+          categoryId: null,
+        },
+      ]);
+
+      await expect(
+        service.removeSplit(transaction, "split-1", "user-1"),
+      ).rejects.toThrow(ConflictException);
+      expect(netWorthService.triggerDebouncedRecalc).not.toHaveBeenCalled();
     });
 
     it("sets isSplit false when no splits remain", async () => {
@@ -1665,7 +2540,10 @@ describe("TransactionSplitService", () => {
 
       await service.removeSplit(transaction, "split-1", "user-1");
 
-      expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      expect(accountsService.updateBalance).not.toHaveBeenCalledWith(
+        "account-2",
+        expect.anything(),
+      );
       expect(mockQueryRunner.manager.remove).toHaveBeenCalledWith(
         transferSplit,
       );
@@ -1718,7 +2596,10 @@ describe("TransactionSplitService", () => {
         id: "linked-tx-1",
         userId: "user-1",
       });
-      expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      expect(accountsService.updateBalance).not.toHaveBeenCalledWith(
+        "account-2",
+        expect.anything(),
+      );
       expect(accountsService.recalculateCurrentBalance).not.toHaveBeenCalled();
     });
 
@@ -1786,7 +2667,10 @@ describe("TransactionSplitService", () => {
         id: "linked-tx-1",
         userId: "user-1",
       });
-      expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      expect(accountsService.updateBalance).not.toHaveBeenCalledWith(
+        "account-2",
+        expect.anything(),
+      );
     });
 
     /**
@@ -1821,6 +2705,190 @@ describe("TransactionSplitService", () => {
       expect(splitsRepository.findOne).not.toHaveBeenCalled();
       expect(mockQueryRunner.manager.remove).not.toHaveBeenCalled();
       expect(accountsService.updateBalance).not.toHaveBeenCalled();
+    });
+    /**
+     * Issue #2039: the removed line's leg is deleted and a collapse's kept leg
+     * is relinked, so each is a write in another account and a reconciled one
+     * is refused under the strict lock, before the first write.
+     */
+    describe("a reconciled leg under the strict lock", () => {
+      beforeEach(() => {
+        userPreferencesRepository.findOne.mockResolvedValue({
+          userId: "user-1",
+          lockReconciledTransactions: true,
+        });
+      });
+
+      function expectNothingWritten(): void {
+        expect(mockQueryRunner.manager.remove).not.toHaveBeenCalled();
+        expect(mockQueryRunner.manager.delete).not.toHaveBeenCalled();
+        expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+        expect(mockQueryRunner.manager.query).not.toHaveBeenCalled();
+        expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      }
+
+      it("refuses to remove a transfer line whose leg is reconciled", async () => {
+        const transaction = { ...mockTransaction } as Transaction;
+        lockParent(
+          transaction,
+          lockedTransactionRow({
+            id: "linked-tx-1",
+            accountId: "account-2",
+            amount: 40,
+            status: TransactionStatus.RECONCILED,
+          }),
+        );
+        splitsRepository.findOne.mockResolvedValue({
+          id: "split-1",
+          transactionId: "tx-1",
+          linkedTransactionId: "linked-tx-1",
+          transferAccountId: "account-2",
+          amount: -40,
+        });
+        mockQueryRunner.manager.find.mockResolvedValue([
+          { id: "split-2", transactionId: "tx-1", amount: -30 },
+          { id: "split-3", transactionId: "tx-1", amount: -30 },
+        ]);
+
+        await expect(
+          service.removeSplit(transaction, "split-1", "user-1"),
+        ).rejects.toThrow(/reconciled/i);
+
+        expectNothingWritten();
+      });
+
+      it("refuses to collapse the parent into a transfer line whose leg is reconciled", async () => {
+        const transaction = { ...mockTransaction } as Transaction;
+        lockParent(
+          transaction,
+          lockedTransactionRow({
+            id: "linked-tx-2",
+            accountId: "account-3",
+            amount: 40,
+            status: TransactionStatus.RECONCILED,
+          }),
+        );
+        splitsRepository.findOne.mockResolvedValue({
+          ...mockSplit,
+          linkedTransactionId: null,
+          transferAccountId: null,
+        });
+        mockQueryRunner.manager.find.mockResolvedValue([
+          {
+            id: "split-2",
+            transactionId: "tx-1",
+            categoryId: null,
+            linkedTransactionId: "linked-tx-2",
+            transferAccountId: "account-3",
+            amount: -40,
+          },
+        ]);
+
+        await expect(
+          service.removeSplit(transaction, "split-1", "user-1"),
+        ).rejects.toThrow(/reconciled/i);
+
+        expect(lockTransactionRows).toHaveBeenCalledWith(
+          expect.anything(),
+          ["linked-tx-2"],
+          "user-1",
+        );
+        expectNothingWritten();
+      });
+    });
+
+    /**
+     * Issue #2039: the parent becomes its last line, so the line's tags join
+     * the parent's and its memo fills a blank description, before the line's
+     * row is removed and takes them with it.
+     */
+    it("carries the last line's tags and memo onto the parent when it collapses", async () => {
+      const transaction = { ...mockTransaction } as Transaction;
+      lockParent(transaction);
+      splitsRepository.findOne.mockResolvedValue({
+        ...mockSplit,
+        linkedTransactionId: null,
+        transferAccountId: null,
+      });
+      const lastSplit = {
+        id: "split-2",
+        transactionId: "tx-1",
+        categoryId: "cat-2",
+        linkedTransactionId: null,
+        transferAccountId: null,
+        amount: -40,
+        memo: "  Drinks  ",
+      };
+      mockQueryRunner.manager.find.mockResolvedValue([lastSplit]);
+
+      await service.removeSplit(transaction, "split-1", "user-1");
+
+      const query = mockQueryRunner.manager.query as jest.Mock;
+      expect(query).toHaveBeenCalledWith(
+        expect.stringContaining("INSERT INTO transaction_tags"),
+        ["tx-1", "split-2", "user-1"],
+      );
+      expect(query).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /UPDATE transactions SET description[\s\S]*COALESCE\(TRIM\(description\), ''\) = ''/,
+        ),
+        ["tx-1", "user-1", "Drinks"],
+      );
+      const lineRemoved = (
+        mockQueryRunner.manager.remove as jest.Mock
+      ).mock.calls.findIndex(([row]) => row === lastSplit);
+      expect(lineRemoved).toBeGreaterThanOrEqual(0);
+      expect(Math.max(...query.mock.invocationCallOrder)).toBeLessThan(
+        (mockQueryRunner.manager.remove as jest.Mock).mock.invocationCallOrder[
+          lineRemoved
+        ],
+      );
+    });
+
+    it("carries the tags but writes no description for a last line without a memo", async () => {
+      const transaction = { ...mockTransaction } as Transaction;
+      lockParent(transaction);
+      splitsRepository.findOne.mockResolvedValue({
+        ...mockSplit,
+        linkedTransactionId: null,
+        transferAccountId: null,
+      });
+      mockQueryRunner.manager.find.mockResolvedValue([
+        {
+          id: "split-2",
+          transactionId: "tx-1",
+          categoryId: "cat-2",
+          amount: -40,
+          memo: "   ",
+        },
+      ]);
+
+      await service.removeSplit(transaction, "split-1", "user-1");
+
+      const query = mockQueryRunner.manager.query as jest.Mock;
+      expect(query).toHaveBeenCalledTimes(1);
+      expect(query).toHaveBeenCalledWith(
+        expect.stringContaining("INSERT INTO transaction_tags"),
+        ["tx-1", "split-2", "user-1"],
+      );
+    });
+
+    it("carries nothing when two lines remain", async () => {
+      const transaction = { ...mockTransaction } as Transaction;
+      lockParent(transaction);
+      splitsRepository.findOne.mockResolvedValue({
+        ...mockSplit,
+        linkedTransactionId: null,
+        transferAccountId: null,
+      });
+      mockQueryRunner.manager.find.mockResolvedValue([
+        { ...mockSplit2, amount: -25 },
+        { id: "split-3", transactionId: "tx-1", amount: -15, memo: "Tip" },
+      ]);
+
+      await service.removeSplit(transaction, "split-1", "user-1");
+
+      expect(mockQueryRunner.manager.query).not.toHaveBeenCalled();
     });
   });
 
@@ -1882,6 +2950,7 @@ describe("TransactionSplitService", () => {
         transactionDate: "2026-01-15",
         payeeName: "Stale Payee",
         payeeId: "payee-stale",
+        status: TransactionStatus.UNRECONCILED,
       } as Transaction;
       stubLocks([
         lockedTransactionRow({
@@ -1892,6 +2961,8 @@ describe("TransactionSplitService", () => {
           isSplit: true,
           payeeId: "payee-committed",
           payeeName: "Committed Payee",
+          // Voided after the caller read it (A26-M09).
+          status: TransactionStatus.VOID,
         }),
       ]);
       splitsRepository.find.mockResolvedValue([]);
@@ -1915,10 +2986,15 @@ describe("TransactionSplitService", () => {
         "Committed Payee",
         "payee-committed",
         // The merged call also passes the parent's status option and the
-        // touched-accounts set for the post-commit net-worth fan-out. This
-        // fixture carries no status, so the option is { parentStatus: undefined };
-        // the set is incidental to what this test pins down.
-        { parentStatus: undefined },
+        // touched-accounts set for the post-commit net-worth fan-out. The status
+        // is the committed row's VOID, not the caller's UNRECONCILED (A26-M09);
+        // the set is incidental to what this test pins down. `carriedSeries` is
+        // the parent's embedded rows, read before the rebuild (none here).
+        {
+          parentStatus: TransactionStatus.VOID,
+          carriedSeries: [],
+          touchedSecurityIds: expect.any(Set),
+        },
         expect.any(Set),
       );
     });
@@ -2445,6 +3521,7 @@ describe("TransactionSplitService", () => {
         mockQueryRunner.manager,
         "user-1",
         investmentTx,
+        { touchedSecurityIds: expect.any(Set) },
       );
       expect(mockDataSource.transaction).toHaveBeenCalled();
     });
@@ -2516,11 +3593,13 @@ describe("TransactionSplitService", () => {
         mockQueryRunner.manager,
         "user-1",
         { id: "inv-a" },
+        expect.objectContaining({ bondGuard: expect.any(Object) }),
       );
       expect(investmentService.reverseAndRemoveEmbedded).toHaveBeenCalledWith(
         mockQueryRunner.manager,
         "user-1",
         { id: "inv-b" },
+        expect.objectContaining({ bondGuard: expect.any(Object) }),
       );
     });
 
@@ -2566,6 +3645,300 @@ describe("TransactionSplitService", () => {
 
       const investmentService = (service as any).investmentTransactionsService;
       expect(investmentService.createEmbeddedForSplit).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe("the bond price recompute after a split write (INV-BOND-005, INV-CACHE-001)", () => {
+    const investmentService = () =>
+      (service as any).investmentTransactionsService;
+    const embeddedSplit = (id: string, securityId: string) => ({
+      id: `split-${id}`,
+      kind: "investment",
+      investmentTransaction: { id: `inv-${id}`, securityId, accountId: "b-1" },
+    });
+
+    it("createSplits collects the security of each embedded row it creates", async () => {
+      accountsService.findOne.mockResolvedValueOnce({
+        id: "account-1",
+        accountSubType: "INVESTMENT_CASH",
+        linkedAccountId: "brokerage-1",
+      });
+      investmentService().createEmbeddedForSplit.mockResolvedValueOnce({
+        securityId: "sec-1",
+      });
+      const touchedSecurityIds = new Set<string>();
+      await service.createSplits(
+        "tx-1",
+        [
+          {
+            amount: -3000,
+            investment: {
+              action: "BUY" as any,
+              securityId: "sec-1",
+              quantity: 30,
+              price: 100,
+              commission: 0,
+            },
+          },
+        ] as any,
+        "user-1",
+        "account-1",
+        new Date("2026-05-09"),
+        undefined,
+        undefined,
+        { touchedSecurityIds },
+      );
+      expect([...touchedSecurityIds]).toEqual(["sec-1"]);
+    });
+
+    it("deleteSplitSideEffects tracks every embedded security once, removes each row under ONE guard and verifies after the last (a parent holding the BUY and the SELL it covers is not refused half way)", async () => {
+      splitsRepository.find.mockResolvedValue([
+        embeddedSplit("a", "sec-1"),
+        embeddedSplit("b", "sec-1"),
+      ]);
+      transactionsRepository.find.mockResolvedValue([]);
+      investmentService().reverseAndRemoveEmbedded.mockClear();
+      const touchedSecurityIds = new Set<string>();
+
+      await service.deleteSplitSideEffects("tx-1", "user-1", {
+        touchedSecurityIds,
+      });
+
+      const calls = investmentService().reverseAndRemoveEmbedded.mock.calls;
+      expect(calls).toHaveLength(2);
+      expect(calls[0][3].bondGuard).toBeDefined();
+      expect(calls[1][3].bondGuard).toBe(calls[0][3].bondGuard);
+      expect(calls[0][3].touchedSecurityIds).toBe(touchedSecurityIds);
+    });
+
+    it("updateSplits dispatches the recompute for the torn-down and recreated securities AFTER the transaction", async () => {
+      const transaction = { ...mockTransaction } as Transaction;
+      lockParent(transaction);
+      splitsRepository.find.mockResolvedValue([]);
+      investmentService().recomputeBondPricesAfterSplitWrite.mockClear();
+      investmentService().reverseAndRemoveEmbedded.mockImplementation(
+        async (_m: unknown, _u: unknown, _row: unknown, options: any) => {
+          options.touchedSecurityIds.add("sec-old");
+        },
+      );
+      splitsRepository.find.mockResolvedValue([embeddedSplit("a", "sec-old")]);
+
+      await service.updateSplits(
+        transaction,
+        [
+          { amount: -70, categoryId: "cat-1" },
+          { amount: -30, categoryId: "cat-2" },
+        ],
+        "user-1",
+      );
+
+      expect(
+        investmentService().recomputeBondPricesAfterSplitWrite,
+      ).toHaveBeenCalledWith("user-1", ["sec-old"]);
+      const finalUpdate = mockQueryRunner.manager.update.mock.calls.findIndex(
+        ([entity, , data]: any[]) =>
+          entity === Transaction && data?.isSplit === true,
+      );
+      expect(
+        mockQueryRunner.manager.update.mock.invocationCallOrder[finalUpdate],
+      ).toBeLessThan(
+        investmentService().recomputeBondPricesAfterSplitWrite.mock
+          .invocationCallOrder[0],
+      );
+      investmentService().reverseAndRemoveEmbedded.mockResolvedValue(undefined);
+    });
+
+    it("updateSplits dispatches nothing when no embedded row was involved", async () => {
+      const transaction = { ...mockTransaction } as Transaction;
+      lockParent(transaction);
+      splitsRepository.find.mockResolvedValue([]);
+      investmentService().recomputeBondPricesAfterSplitWrite.mockClear();
+      await service.updateSplits(
+        transaction,
+        [
+          { amount: -70, categoryId: "cat-1" },
+          { amount: -30, categoryId: "cat-2" },
+        ],
+        "user-1",
+      );
+      expect(
+        investmentService().recomputeBondPricesAfterSplitWrite,
+      ).not.toHaveBeenCalled();
+    });
+
+    it("removeSplit dispatches the recompute of the removed embedded row's security after the commit", async () => {
+      splitsRepository.findOne.mockResolvedValue({
+        id: "split-3",
+        transactionId: "tx-1",
+        kind: "investment",
+        investmentTransaction: { id: "inv-1", securityId: "sec-9" },
+      });
+      mockQueryRunner.manager.find = jest.fn().mockResolvedValue([
+        { id: "split-1", kind: "category", categoryId: "cat-1" },
+        { id: "split-2", kind: "category", categoryId: "cat-2" },
+      ]);
+      investmentService().recomputeBondPricesAfterSplitWrite.mockClear();
+      investmentService().reverseAndRemoveEmbedded.mockImplementationOnce(
+        async (_m: unknown, _u: unknown, _row: unknown, options: any) => {
+          options.touchedSecurityIds.add("sec-9");
+        },
+      );
+
+      await service.removeSplit(
+        { ...mockTransaction } as Transaction,
+        "split-3",
+        "user-1",
+      );
+
+      expect(
+        investmentService().recomputeBondPricesAfterSplitWrite,
+      ).toHaveBeenCalledWith("user-1", ["sec-9"]);
+    });
+
+    it("applyParentStatusToTransferCounterparts hands the collector to the embedded rows' status pass", async () => {
+      splitsRepository.find.mockResolvedValue([]);
+      const touchedSecurityIds = new Set<string>();
+      await service.applyParentStatusToTransferCounterparts(
+        mockQueryRunner.manager as any,
+        "tx-1",
+        "user-1",
+        TransactionStatus.VOID,
+        touchedSecurityIds,
+      );
+      expect(
+        investmentService().applyParentStatusToEmbeddedRows,
+      ).toHaveBeenCalledWith(
+        mockQueryRunner.manager,
+        "user-1",
+        "tx-1",
+        TransactionStatus.VOID,
+        touchedSecurityIds,
+      );
+    });
+  });
+
+  describe("the bond series of recreated embedded rows (INV-BOND-007)", () => {
+    const investment = (quantity: number, securityId = "sec-1") => ({
+      action: "BUY" as any,
+      securityId,
+      quantity,
+      price: 100,
+      commission: 0,
+    });
+
+    it("reads the parent's embedded rows before they are torn down and hands them to createSplits", async () => {
+      const transaction = { ...mockTransaction } as Transaction;
+      lockParent(transaction);
+      splitsRepository.find.mockResolvedValue([]);
+      mockQueryRunner.manager.query.mockImplementation((sql: string) =>
+        Promise.resolve(
+          typeof sql === "string" &&
+            sql.includes(
+              "JOIN transaction_splits ts ON ts.id = it.transaction_split_id",
+            )
+            ? [
+                {
+                  security_id: "sec-1",
+                  action: "BUY",
+                  quantity: "30.00000000",
+                  tx_date: "2026-03-20",
+                  bond_instrument_id: null,
+                },
+              ]
+            : [],
+        ),
+      );
+      const createSplits = jest.spyOn(service, "createSplits");
+      const deleteSideEffects = jest.spyOn(service, "deleteSplitSideEffects");
+
+      await service.updateSplits(
+        transaction,
+        [
+          { amount: -60, categoryId: "cat-1" },
+          { amount: -40, categoryId: "cat-2" },
+        ],
+        "user-1",
+      );
+
+      expect(createSplits.mock.calls[0][7]).toEqual({
+        parentStatus: TransactionStatus.UNRECONCILED,
+        carriedSeries: [
+          {
+            securityId: "sec-1",
+            action: "BUY",
+            quantity: 30,
+            transactionDate: "2026-03-20",
+            bondInstrumentId: null,
+          },
+        ],
+        touchedSecurityIds: expect.any(Set),
+      });
+      const readOrder = mockQueryRunner.manager.query.mock.calls.findIndex(
+        ([sql]: [string]) => String(sql).includes("it.transaction_split_id"),
+      );
+      expect(readOrder).toBeGreaterThanOrEqual(0);
+      expect(
+        mockQueryRunner.manager.query.mock.invocationCallOrder[readOrder],
+      ).toBeLessThan(deleteSideEffects.mock.invocationCallOrder[0]);
+    });
+
+    it("gives each recreated row the series of the row it replaces: same security, action, quantity and date, each predecessor once, NULL included", async () => {
+      accountsService.findOne.mockResolvedValueOnce({
+        id: "account-1",
+        accountSubType: "INVESTMENT_CASH",
+        linkedAccountId: "brokerage-1",
+      });
+      const carriedSeries = [
+        {
+          securityId: "sec-1",
+          action: "BUY",
+          quantity: 30,
+          transactionDate: "2026-05-09",
+          bondInstrumentId: "series-A",
+        },
+        {
+          securityId: "sec-1",
+          action: "BUY",
+          quantity: 30,
+          transactionDate: "2026-05-09",
+          bondInstrumentId: null,
+        },
+        {
+          // Another date: not the same split.
+          securityId: "sec-2",
+          action: "BUY",
+          quantity: 20,
+          transactionDate: "2026-01-01",
+          bondInstrumentId: "series-B",
+        },
+      ];
+
+      await service.createSplits(
+        "tx-1",
+        [
+          { amount: -3000, investment: investment(30) },
+          { amount: -3000, investment: investment(30) },
+          { amount: -2000, investment: investment(20, "sec-2") },
+          { amount: -3000, investment: investment(30) },
+        ],
+        "user-1",
+        "account-1",
+        new Date("2026-05-09"),
+        undefined,
+        undefined,
+        { carriedSeries },
+      );
+
+      const investmentService = (service as any).investmentTransactionsService;
+      const handed = investmentService.createEmbeddedForSplit.mock.calls.map(
+        (call: unknown[]) => call[9],
+      );
+      expect(handed).toEqual([
+        expect.objectContaining({ bondInstrumentId: "series-A" }),
+        expect.objectContaining({ bondInstrumentId: null }),
+        null,
+        null,
+      ]);
     });
   });
 

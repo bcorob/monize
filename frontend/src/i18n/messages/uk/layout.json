@@ -34,6 +34,12 @@
     "dismiss": "Закрити",
     "dismissAriaLabel": "Закрити сповіщення про оновлення"
   },
+  "jwtSecretBanner": {
+    "label": "JWT_SECRET ненадійний.",
+    "detail": "Це опубліковане значення-заглушка або надто передбачуване значення, тому токени сеансів можна підробити. Згенеруйте надійне значення командою <code>openssl rand -base64 32</code>. Після його зміни коди із застосунків автентифікації перестануть працювати, а довірені пристрої буде забуто: користувачі входять із резервним кодом і заново налаштовують 2FA, а тим, у кого його немає, ви скидаєте 2FA в розділі <users>Управління користувачами</users>. Спершу прочитайте <code>docs/backend/modules-and-runtime.md</code> (Changing JWT_SECRET).",
+    "dismiss": "Закрити",
+    "dismissAriaLabel": "Закрити попередження про JWT_SECRET"
+  },
   "actionHistory": {
     "title": "Журнал дій",
     "buttonAriaLabel": "Журнал дій",
@@ -58,6 +64,7 @@
       "tag": "Тег",
       "account": "Рахунок",
       "scheduled_transaction": "Запланована",
+      "scheduled_posting": "Запланована",
       "security": "Цінний папір",
       "budget": "Бюджет",
       "custom_report": "Звіт"
@@ -79,7 +86,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "Реінвестування довгострокового приросту капіталу",
       "CAPITAL_GAIN_SHORT": "Короткостроковий приріст капіталу",
       "CAPITAL_GAIN_LONG": "Довгостроковий приріст капіталу",
-      "REDEEM": "Погашення CD/облігації"
+      "REDEEM": "Погашення CD/облігації",
+      "RETURN_OF_CAPITAL": "Повернення капіталу"
     },
     "descriptions": {
       "createdAccount": "Створено рахунок \"{name}\"",
@@ -99,6 +107,7 @@
       "deletedInvestmentReport": "Видалено інвестиційний звіт \"{name}\"",
       "createdPayee": "Створено одержувача \"{name}\"",
       "updatedPayee": "Оновлено одержувача \"{name}\"",
+      "lookedUpPayeeContact": "Знайдено контактні дані отримувача «{name}»",
       "deletedPayee": "Видалено одержувача \"{name}\"",
       "createdReport": "Створено звіт \"{name}\"",
       "updatedReport": "Оновлено звіт \"{name}\"",
@@ -106,6 +115,7 @@
       "createdScheduledTransaction": "Створено заплановану транзакцію \"{name}\"",
       "updatedScheduledTransaction": "Оновлено заплановану транзакцію \"{name}\"",
       "deletedScheduledTransaction": "Видалено заплановану транзакцію \"{name}\"",
+      "postedScheduledTransaction": "Проведено заплановану транзакцію \"{name}\"",
       "createdSecurity": "Створено цінний папір \"{symbol}\"",
       "updatedSecurity": "Оновлено цінний папір \"{symbol}\"",
       "deletedSecurity": "Видалено цінний папір \"{symbol}\"",
@@ -115,26 +125,23 @@
       "createdTransaction": "Створено транзакцію {payee} {amount}",
       "updatedTransaction": "Оновлено транзакцію {payee} {amount}",
       "deletedTransaction": "Видалено транзакцію {payee} {amount}",
+      "convertedToTransfer": "Транзакцію {payee} {amount} перетворено на переказ",
+      "convertedToTransaction": "Переказ {payee} {amount} перетворено на транзакцію",
       "bulkUpdatedTransactions": "Масово оновлено {count, plural, one {# транзакцію} other {# транзакцій}}",
       "createdTransfer": "Створено переказ {amount} з {from} на {to}",
       "createdInvestmentTransaction": "Створено транзакцію {action}",
       "updatedInvestmentTransaction": "Оновлено транзакцію {action}",
       "deletedInvestmentTransaction": "Видалено транзакцію {action}",
       "transferredSecurity": "Переведено цінні папери між рахунками",
-      "updatedSecurityTransfer": "Оновлено переказ цінних паперів"
-    },
-    "timeAgo": {
-      "justNow": "щойно",
-      "minutes": "{count} хв тому",
-      "hours": "{count} год тому",
-      "days": "{count} д тому"
+      "updatedSecurityTransfer": "Оновлено переказ цінних паперів",
+      "ranTransactionRule": "{count, plural, one {Правило «{name}» запущено для # транзакції} few {Правило «{name}» запущено для # транзакцій} many {Правило «{name}» запущено для # транзакцій} other {Правило «{name}» запущено для # транзакцій}}"
     },
     "undonePrefix": "Скасовано: {description}",
     "redonePrefix": "Повторено: {description}"
   },
   "pageHeader": {
-    "helpAriaLabel": "Відкрити вікі Monize для допомоги з цим розділом",
-    "helpTooltip": "Відкрити вікі Monize для допомоги з цим розділом"
+    "helpAriaLabel": "Довідка щодо цієї сторінки",
+    "helpTooltip": "Довідка щодо цієї сторінки"
   },
   "bootSplash": {
     "loading": "Завантаження Monize",
@@ -145,5 +152,17 @@
     "title": "Не вдається підключитися",
     "message": "Monize не вдалося зв'язатися з сервером. Перевірте з'єднання та спробуйте ще раз.",
     "retry": "Спробувати ще раз"
+  },
+  "pushBanner": {
+    "enableTitle": "Увімкнути повідомлення?",
+    "enableBody": "Monize може нагадувати на цьому пристрої про рахунки та ліміти бюджету, навіть коли застосунок закритий. Браузер запитає дозвіл.",
+    "enableButton": "Увімкнути",
+    "enabling": "Увімкнення…",
+    "installIosTitle": "Спершу додайте Monize на головний екран.",
+    "installIosBody": "На iPhone та iPad повідомлення працюють лише із встановленого застосунку. Торкніться «Поділитися», потім «На екран «Домівка»», і відкрийте Monize звідти.",
+    "blockedTitle": "Повідомлення для Monize заблоковані.",
+    "blockedBody": "Дозвольте їх у налаштуваннях сайту в браузері для цієї сторінки. Monize не може запитати вдруге самостійно.",
+    "blockedIosBody": "Відкрийте «Налаштування» iOS, потім «Повідомлення», потім Monize, і дозвольте їх там. Якщо Monize немає у списку, вилучіть його з головного екрана та додайте знову.",
+    "dismiss": "Не зараз"
   }
 }

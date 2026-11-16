@@ -38,7 +38,6 @@ export function buildDefaultPreferences(
   preferences.theme = "system";
   preferences.timezone = "browser";
   preferences.notificationEmail = true;
-  preferences.notificationBrowser = true;
   preferences.twoFactorEnabled = false;
   preferences.gettingStartedDismissed = false;
   preferences.favouriteReportIds = [];

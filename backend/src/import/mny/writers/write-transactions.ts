@@ -5,6 +5,12 @@ import { SplitKind } from "../../../transactions/entities/split-kind.enum";
 import { roundMoney } from "../../../common/round.util";
 import { MappedTransaction } from "../model/mny-import-model";
 import { INSERT_CHUNK_SIZE, chunk } from "./chunk";
+import {
+  TagLink,
+  tagIdsFor,
+  writeSplitTagLinks,
+  writeTransactionTagLinks,
+} from "./write-tags";
 
 /**
  * Bulk writer for transactions and their splits (design ADR-9).
@@ -32,6 +38,11 @@ export interface WriteTransactionsInput {
   readonly payeeIdByHandle: ReadonlyMap<number, string>;
   /** Money `hpay` -> the payee's name, stored alongside the id. */
   readonly payeeNameByHandle: ReadonlyMap<number, string>;
+  /**
+   * Classification item (`CAT.hcat`) -> Monize tag id, from `writeTags`. A
+   * handle absent here (an unknown item) writes no link.
+   */
+  readonly tagIdByHandle: ReadonlyMap<number, string>;
   /** Called after each chunk, so the wizard's progress bar moves. */
   readonly onProgress?: (processed: number, total: number) => Promise<void>;
 }
@@ -40,6 +51,8 @@ export interface WrittenTransactions {
   readonly transactionsCreated: number;
   readonly splitsCreated: number;
   readonly linksApplied: number;
+  /** Tag links written, on transactions and on split legs together. */
+  readonly tagLinksApplied: number;
   /** Account ids that received at least one row, for post-processing. */
   readonly affectedAccountIds: ReadonlySet<string>;
   /**
@@ -112,12 +125,31 @@ export async function writeTransactions(
   }
 
   const linksApplied = await backPatchLinks(manager, writable);
+  const tagLinks = await writeTransactionTagLinks(
+    manager,
+    writable.flatMap((transaction) =>
+      tagIdsFor(transaction.tagHandles, input.tagIdByHandle).map(
+        (tagId): TagLink => ({ rowId: transaction.id, tagId }),
+      ),
+    ),
+  );
   const splits = await writeSplits(splitRepo, input, writable);
+  const splitTagLinks = await writeSplitTagLinks(
+    manager,
+    writable.flatMap((transaction) =>
+      transaction.splits.flatMap((split) =>
+        tagIdsFor(split.tagHandles, input.tagIdByHandle).map(
+          (tagId): TagLink => ({ rowId: split.id, tagId }),
+        ),
+      ),
+    ),
+  );
 
   return {
     transactionsCreated: writable.length,
     splitsCreated: splits.created,
     linksApplied,
+    tagLinksApplied: tagLinks + splitTagLinks,
     affectedAccountIds,
     writtenTransactionIds: new Set(
       writable.map((transaction) => transaction.id),

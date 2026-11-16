@@ -10,6 +10,8 @@
     "versionLabel": "Version {version}",
     "expandAll": "Tout développer",
     "collapseAll": "Tout réduire",
+    "changeCount": "{count, plural, one {# modification} other {# modifications}}",
+    "otherSections": "Corrections et détails",
     "viewFullNotes": "Voir les notes de version complètes",
     "dontShowAgain": "Ne plus afficher",
     "showNextLogin": "Afficher à la prochaine connexion",
@@ -38,6 +40,14 @@
     "scheduleRecurring": "Rendre récurrent",
     "more": "Plus d'actions"
   },
+  "columns": {
+    "button": "Colonnes",
+    "buttonWithHidden": "Colonnes, masquées : {count}",
+    "menuLabel": "Afficher ou masquer des colonnes",
+    "showAll": "Tout afficher",
+    "hideColumn": "Masquer la colonne",
+    "sheetSubtitle": "Réaffichez-la depuis le menu Colonnes."
+  },
   "loading": "Chargement...",
   "pagination": {
     "showing": "Affichage",
@@ -60,6 +70,7 @@
   },
   "exportDropdown": {
     "export": "Exporter",
+    "exportCsv": "Exporter en CSV",
     "exporting": "Exportation...",
     "exportPdf": "Exporter en PDF",
     "exportReport": "Exporter le rapport",
@@ -88,6 +99,7 @@
     "stackedChart": "Graphique à barres empilées 100 %",
     "lineChart": "Graphique en courbes",
     "areaChart": "Graphique en aires",
+    "sankeyChart": "Diagramme de flux",
     "table": "Tableau"
   },
   "formActions": {
@@ -118,8 +130,15 @@
     "search": "Rechercher...",
     "selectAll": "Tout sélectionner",
     "clear": "Effacer",
+    "clearSearch": "Effacer la recherche",
     "noOptions": "Aucune option trouvée",
     "selectedCount": "{count} sélectionnés"
+  },
+  "categoryFilter": {
+    "uncategorized": "Non catégorisé",
+    "transfers": "Virements",
+    "allIncome": "Toutes les catégories de revenus",
+    "allExpenses": "Toutes les catégories de dépenses"
   },
   "combobox": {
     "createOption": "Créer « {value} »",
@@ -137,6 +156,7 @@
   },
   "dateInput": {
     "shortcutsTitle": "Raccourcis clavier",
+    "openPicker": "Ouvrir le sélecteur de date",
     "today": "Aujourd'hui",
     "firstDayOfYear": "Premier jour de l'année",
     "lastDayOfYear": "Dernier jour de l'année",
@@ -158,6 +178,7 @@
     "CASH": "Espèces",
     "LINE_OF_CREDIT": "Ligne de crédit",
     "ASSET": "Actif",
+    "CRYPTO": "Portefeuille crypto",
     "OTHER": "Autre"
   },
   "accountFilter": {
@@ -241,12 +262,20 @@
     "marker": "—",
     "srLabel": "Montant non disponible",
     "scheduledFx": "Le montant actuel ne peut pas être déterminé : aucun taux de change n'est disponible pour la paire de devises de règlement de cet élément planifié. Le montant enregistré a été calculé à un taux antérieur, il n'est donc pas affiché.",
-    "displayFx": "Ce montant ne peut pas être affiché ici : la valeur est connue, mais aucun taux de change n'est disponible pour la convertir dans la devise de ce total. Actualisez les taux sur la page Devises."
+    "displayFx": "Ce montant ne peut pas être affiché ici : la valeur est connue, mais aucun taux de change n'est disponible pour la convertir dans la devise de ce total. Actualisez les taux sur la page Devises.",
+    "noCashBalance": "Cette valeur ne peut pas être calculée : un compte de trésorerie de cette vue n'a signalé aucun solde pour ce jour, donc ce qu'il détenait est inconnu, et non nul. Rechargez le rapport ; si le problème persiste, les soldes du jour n'ont pas pu être calculés et cela mérite d'être signalé.",
+    "noPrice": "Cette valeur ne peut pas être calculée : le nombre d'actions détenues est connu, mais le titre n'a aucun cours permettant de les valoriser. Actualisez les cours ou saisissez-en un à la main dans l'historique des cours du titre.",
+    "noBaseline": "Ce chiffre ne peut pas être calculé : il s'agit d'une comparaison et il n'existe aucune valeur antérieure à laquelle le comparer. Rien ne manque, il n'y a donc rien à ajouter.",
+    "staleQuote": "La variation du jour ne peut pas être calculée : le cours le plus récent du titre est antérieur à la dernière séance, toute variation calculée à partir de lui serait donc celle d'un jour précédent. Actualisez les cours ou vérifiez le fournisseur de cours du titre.",
+    "unknownCurrency": "Ce montant ne peut pas être affiché : l'enregistrement ne nomme aucun titre, la devise du chiffre est donc inconnue. Ouvrez la transaction et attribuez-lui un titre pour que ses montants puissent être libellés."
   },
   "density": {
     "title": "Changer la densité des lignes",
     "normal": "Normal",
     "compact": "Compact",
     "dense": "Dense"
+  },
+  "scheduledOverdue": {
+    "included": "Inclut {count, plural, one {# transaction récurrente en retard} other {# transactions récurrentes en retard}}"
   }
 }

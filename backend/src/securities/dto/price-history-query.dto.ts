@@ -27,7 +27,7 @@ export class PriceHistoryQueryDto {
    * `@ValidateIf` rather than `@IsOptional` alone: a chart on a preset range
    * sends `startDate=""`, and `@IsOptional` waives validation for `undefined`
    * and `null` only -- the format check would otherwise run on the empty string
-   * and reject the request (`backend/CLAUDE.md`, DTO conventions).
+   * and reject the request (`docs/backend/entities-and-dtos.md`, DTO conventions).
    */
   @ApiPropertyOptional({ description: "Earliest price date (YYYY-MM-DD)" })
   @ValidateIf(

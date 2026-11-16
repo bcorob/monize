@@ -1,6 +1,5 @@
 /**
- * The shapes a loan schedule is described by, and the two roundings applied to
- * them.
+ * The shapes a loan schedule is described by.
  *
  * At the bottom of this module graph on purpose: `loan-schedule.ts` and
  * `loan-comparison.ts` both need these, and a type module neither of them
@@ -10,6 +9,8 @@
 
 import type { ScheduleFrequency } from '@/lib/loan-frequency';
 import type { OverpaymentPlan } from '@/lib/loan-overpayments';
+import type { MethodScheduleTerms } from '@/lib/mortgage-installment';
+import type { MortgageType } from '@/types/account';
 
 /** A step on the loan's interest-rate timeline, applied during generation */
 export interface RateChange {
@@ -65,12 +66,33 @@ export interface LoanScheduleInput {
   startingBalance: number;
   /** Annual rate as a percentage, e.g. 5.5 */
   annualRate: number;
-  /** Regular contractual payment per period */
+  /**
+   * Regular contractual payment per period. A LINEAR or INTEREST_ONLY
+   * mortgage has none: there it is the first projected installment, which
+   * the engine does not read, because every row derives its own
+   * (`methodTerms`).
+   */
   paymentAmount: number;
   frequency: ScheduleFrequency;
-  /** Canadian fixed-rate mortgages compound semi-annually */
-  isCanadian?: boolean;
-  isVariableRate?: boolean;
+  /**
+   * The mortgage type whose traits price each period (`lib/mortgage-type.ts`):
+   * `CANADIAN_FIXED` compounds semi-annually, `LINEAR` and `INTEREST_ONLY`
+   * derive each row's principal by their method. Read from an account through
+   * `mortgageTypeOf`. Absent means `ANNUITY`, the engine every plain `LOAN`
+   * account uses.
+   */
+  mortgageType?: MortgageType;
+  /**
+   * What a `LINEAR` or `INTEREST_ONLY` mortgage prices each row by
+   * (docs/specs/mortgage-types.md, table 4.3): its prepayment mode, the
+   * constant principal, the scheduled payment count and the payments left to
+   * the term end, from `methodScheduleTerms`. Required for those methods --
+   * without it the schedule is withheld (no rows, not paid off) rather than
+   * priced as an annuity -- and ignored by the annuity methods, as are
+   * `fixedEndPeriod`, `rescueEndPeriod`, `lowerEndPeriod` and every stated
+   * rate-change payment.
+   */
+  methodTerms?: MethodScheduleTerms;
   /** Date of the first projected payment (row 1) */
   firstPaymentDate: Date;
   overpayments?: OverpaymentPlan;
@@ -163,6 +185,16 @@ export interface LoanScheduleResult {
   numPayments: number;
   paidOff: boolean;
   /**
+   * Whether every period's payment covered that period's interest. When false
+   * the installment is below the interest at the rate in effect, so the balance
+   * never falls and the loan cannot amortize -- a distinct reason from a term
+   * simply longer than the projection horizon (both leave `paidOff` false). The
+   * surface uses this to explain WHY payoff and remaining interest are unknown:
+   * a payment that does not cover interest is usually a stale or unset
+   * installment the user can fix, not a property of the loan.
+   */
+  coveredInterest: boolean;
+  /**
    * The regular installment in effect at the end of the schedule. Equal to the
    * contractual payment for SHORTEN_TERM; the recomputed lower payment for
    * LOWER_INSTALLMENT (PL *obniżenie raty*).
@@ -174,6 +206,14 @@ export interface LoanScheduleResult {
    * `paidOff` first.
    */
   finalPaymentAmount: number;
+  /**
+   * `false` on the schedule of a LINEAR or INTEREST_ONLY mortgage, whose
+   * installment changes from one row to the next: it has no level installment,
+   * so `finalPaymentAmount` is only the last row's and is not "the new
+   * installment" a lower-installment overpayment produces. Absent on an
+   * annuity's schedule.
+   */
+  levelInstallment?: false;
 }
 
 export interface ScenarioComparison {
@@ -208,15 +248,10 @@ export interface ScenarioComparison {
    * whatever the re-levelled payment happened to be at the horizon's last row,
    * mid-schedule. Reporting a drop from it put "New Installment: X (-Y)" beside
    * "Unknown" for time and interest saved on the same card row.
+   *
+   * Also `null` for a schedule without a level installment
+   * (`levelInstallment === false`): two last rows are not an installment and
+   * the one it fell to.
    */
   installmentReduction: number | null;
-}
-
-export function round2(value: number): number {
-  return Math.round(value * 100) / 100;
-}
-
-/** Storage precision (decimal(20,4)), matching backend roundMoney */
-export function round4(value: number): number {
-  return Math.round(value * 10000) / 10000;
 }

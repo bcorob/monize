@@ -2,7 +2,10 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { aiApi } from '@/lib/ai';
 import { notifyAiAction } from '@/lib/aiActionSignal';
+import { isRuleAiActionType } from '@/lib/ai-action-card';
 import { clearAllCache } from '@/lib/apiCache';
+import { invalidateTransactionRulesCache } from '@/lib/transaction-rules-api';
+import { notifyUndoRedo } from '@/lib/undoRedoSignal';
 import type {
   ChartPayload,
   PendingAction,
@@ -748,6 +751,7 @@ export const useAiChatStore = create<AiChatState>()(
               resultId: res.id,
               resultCount: res.count,
               resultSkipped: res.skipped,
+              resultRuleRun: res.ruleRun,
             }),
           }));
           // The write landed server-side; tell any mounted list page to reload
@@ -757,6 +761,14 @@ export const useAiChatStore = create<AiChatState>()(
           // and a subscriber's refetch would otherwise be served the values
           // this action just replaced.
           clearAllCache();
+          if (isRuleAiActionType(action.type)) {
+            // What the rules pages read, dropped by name as well: the rule
+            // list is cached under its own prefix and the editor and the list
+            // must not be served the version this action just replaced.
+            invalidateTransactionRulesCache();
+            // A run is undoable from the action history; tell its panel.
+            if (action.type === 'run_transaction_rule') notifyUndoRedo();
+          }
           notifyAiAction();
         } catch (err) {
           const errorMessage =

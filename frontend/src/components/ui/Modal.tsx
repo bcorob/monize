@@ -2,14 +2,32 @@
 
 import { ReactNode, useEffect, useId, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { HOVER_ROW_ON_CARD } from './Card';
-import { useTranslations } from 'next-intl';
-import { XMarkIcon } from '@heroicons/react/24/outline';
+import { InfoTooltip } from './InfoTooltip';
+import type { DocsLink } from '@/lib/docs-links';
 
 // Tracks programmatic history.back() calls from modal cleanup.
 // When a nested modal closes programmatically, it pops its history entry which fires popstate.
 // Parent modals must skip that popstate to avoid cascading closes.
 let pendingProgrammaticPops = 0;
+
+// The popstates those back() calls cause, marked by the one listener below.
+// It consumes each counted pop exactly once, whether or not a modal is still
+// open to see it: a count left with no modal listening used to swallow the
+// next modal's real Back. Marked per event rather than by a flag, because a
+// browser runs microtasks between the listeners of one dispatch.
+const programmaticPopEvents = new WeakSet<Event>();
+let programmaticPopListening = false;
+
+/** Registered with the first history entry, so it runs before every modal's own listener. */
+function listenForProgrammaticPops() {
+  if (programmaticPopListening) return;
+  programmaticPopListening = true;
+  window.addEventListener('popstate', (event) => {
+    if (pendingProgrammaticPops === 0) return;
+    pendingProgrammaticPops--;
+    programmaticPopEvents.add(event);
+  });
+}
 
 // Tracks how many modals currently need body scroll locked.
 // Only the last modal to close should restore body overflow.
@@ -69,16 +87,25 @@ interface ModalProps {
    *  ordinary z-50 backdrop sits *below* the tour overlay so in-form spotlight
    *  cutouts work. */
   elevated?: boolean;
-  /** Heading for the dialog. Supplying it draws the standard header -- title,
-   *  a close button, a rule under both -- and wires `aria-labelledby`, so the
-   *  dialog announces itself by name instead of as an unlabelled region.
+  /** Heading for the dialog. Supplying it draws the standard heading -- the
+   *  New Transaction dialog's large bold title, with no rule under it and no
+   *  close button beside it -- and wires `aria-labelledby`, so the dialog
+   *  announces itself by name instead of as an unlabelled region. The dialog
+   *  must offer its own Cancel or Close button.
    *
    *  Every call site used to hand-roll this, which is how eight different
    *  heading treatments ended up in the tree for the same slot. */
   title?: ReactNode;
-  /** Optional line under the title, wired to `aria-describedby`. */
-  description?: ReactNode;
-  /** Right-aligned action row along the bottom, above a rule. */
+  /** Keep `title` as the dialog's accessible name but draw no heading, for a
+   *  surface whose first line is its own control (the command palette's box). */
+  titleHidden?: boolean;
+  /** Optional explanation, drawn as an `InfoTooltip` beside the title rather
+   *  than a paragraph every reader must read again on each open, and wired to
+   *  `aria-describedby`. */
+  description?: string;
+  /** Where the guide explains `description` further; adds a "Learn more" link to its tooltip. */
+  descriptionLearnMore?: DocsLink;
+  /** Right-aligned action row along the bottom. */
   footer?: ReactNode;
   /** Padding for the body.
    *
@@ -87,6 +114,34 @@ interface ModalProps {
    *  and a default would double it on every one of them. New call sites using
    *  `title` should pass `md`. */
   padding?: 'none' | 'md';
+  /** Fill the phone's viewport, and stay the centred card everywhere else.
+   *
+   *  For a surface whose content wants every pixel a phone has -- an
+   *  attachment preview -- the 16px backdrop inset and the height cap are
+   *  wasted space, and the backdrop's padding is not reachable from
+   *  `className` (it sits on the outer element). Spelled with `max-sm:`
+   *  variants only: Tailwind emits those after every base utility, so they
+   *  win below 640px and vanish above it without touching the base classes
+   *  the other call sites rely on. Centre variant only. */
+  fullScreenOnPhone?: boolean;
+  /** Give the panel a fixed height (the smaller of 90vh and 56rem) as a flex
+   *  column, so the header and the footer stay where they are and the body is a
+   *  flex child (`min-h-0 flex-1`, itself a flex column) that takes whatever
+   *  height is left. The panel no longer scrolls: the caller makes one region
+   *  of its body scroll (`min-h-0 flex-1 overflow-y-auto`), which is how a long
+   *  list keeps its footer's action on the screen with no second scrollbar and
+   *  no gap under the footer.
+   *
+   *  The body is always wrapped here, with the `padding` asked for. It scrolls
+   *  only as a last resort, when a viewport is too short for what the caller
+   *  gave a floor to. Off by default; combined with `fullScreenOnPhone` the
+   *  phone gets the whole viewport. Centre variant only. */
+  fixedHeight?: boolean;
+  /** Sit near the top of the screen instead of centred, so a panel whose height
+   *  follows its content does not move its top edge as the content changes. The
+   *  panel starts 4dvh down; a caller that scrolls its own content caps it at
+   *  `96dvh - 1rem`. Centre variant only. */
+  anchorTop?: boolean;
 }
 
 const maxWidthClasses = {
@@ -113,11 +168,15 @@ export function Modal({
   variant = 'center',
   elevated = false,
   title,
+  titleHidden = false,
   description,
+  descriptionLearnMore,
   footer,
   padding = 'none',
+  fullScreenOnPhone = false,
+  fixedHeight = false,
+  anchorTop = false,
 }: ModalProps) {
-  const t = useTranslations('common');
   const generatedId = useId();
   const titleId = `${generatedId}-title`;
   const descriptionId = `${generatedId}-description`;
@@ -129,6 +188,7 @@ export function Modal({
   const modalIdRef = useRef(-1);
   // Focus trap refs
   const modalRef = useRef<HTMLDivElement>(null);
+  const lifetimeRef = useRef<symbol | null>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
 
   // Attempt to close — checks onBeforeClose before proceeding
@@ -163,6 +223,7 @@ export function Modal({
     if (!pushHistory) return;
 
     if (isOpen && !historyPushedRef.current) {
+      listenForProgrammaticPops();
       window.history.pushState({ ...window.history.state, modal: true }, '');
       historyPushedRef.current = true;
       closedByPopstateRef.current = false;
@@ -191,12 +252,9 @@ export function Modal({
   useEffect(() => {
     if (!isOpen || !pushHistory || !historyPushedRef.current) return;
 
-    const handlePopstate = () => {
+    const handlePopstate = (event: PopStateEvent) => {
       // Skip popstate events caused by programmatic modal cleanup (not user back button)
-      if (pendingProgrammaticPops > 0) {
-        pendingProgrammaticPops--;
-        return;
-      }
+      if (programmaticPopEvents.has(event)) return;
       // Another modal already handled this popstate in the same event dispatch cycle
       if (popstateConsumed) return;
       if (historyPushedRef.current) {
@@ -219,16 +277,20 @@ export function Modal({
     return () => window.removeEventListener('popstate', handlePopstate);
   }, [isOpen, pushHistory, attemptClose]);
 
-  // Cleanup: if component unmounts while modal is open and history was pushed
+  // Strict Mode replays effects on mount. Only a real unmount removes history;
+  // otherwise its queued back() can consume the next modal's history entry.
   useEffect(() => {
+    const lifetime = Symbol();
+    lifetimeRef.current = lifetime;
     return () => {
-      if (historyPushedRef.current) {
+      queueMicrotask(() => {
+        if (lifetimeRef.current !== lifetime || !historyPushedRef.current) return;
         historyPushedRef.current = false;
         const idx = openModalStack.indexOf(modalIdRef.current);
         if (idx !== -1) openModalStack.splice(idx, 1);
         pendingProgrammaticPops++;
         window.history.back();
-      }
+      });
     };
   }, []);
 
@@ -257,9 +319,14 @@ export function Modal({
 
     const frameId = requestAnimationFrame(() => {
       if (!modalRef.current) return;
-      const focusable = modalRef.current.querySelectorAll(FOCUSABLE_SELECTOR);
+      // Skip the heading's help icon: focus arriving there programmatically
+      // reads as keyboard focus and would open the description's tooltip on
+      // every open, which is the paragraph it replaced in another shape.
+      const focusable = Array.from(
+        modalRef.current.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR),
+      ).filter((el) => !el.closest('[data-modal-heading]'));
       if (focusable.length > 0) {
-        (focusable[0] as HTMLElement).focus();
+        focusable[0].focus();
       } else {
         modalRef.current.focus();
       }
@@ -328,6 +395,8 @@ export function Modal({
   if (!isOpen) return null;
 
   const isDrawer = variant === 'drawer-left';
+  const fillPhone = fullScreenOnPhone && !isDrawer;
+  const fixed = fixedHeight && !isDrawer;
 
   // Backdrop alignment: drawer pins its panel to the left edge; the default
   // centers the card with padding.
@@ -336,8 +405,10 @@ export function Modal({
   } flex ${
     isDrawer
       ? 'justify-start'
-      : 'items-center justify-center p-4'
-  }`;
+      : anchorTop
+        ? 'items-start justify-center p-4 pt-[4dvh]'
+        : 'items-center justify-center p-4'
+  }${fillPhone ? ' max-sm:p-0' : ''}`;
 
   // Panel shape. The drawer is a full-height left sheet that slides in from
   // off-screen via the CSS @starting-style (`starting:`) variant -- no extra
@@ -348,9 +419,33 @@ export function Modal({
   // is no exit animation: the panel unmounts on close, and holding it mounted
   // to animate out would mean tracking closing state through the stacked-modal
   // and popstate machinery for a few hundred milliseconds of polish.
+  //
+  // A panel that is not `fixedHeight` sizes to its content and is capped at
+  // the viewport less the backdrop's `p-4` inset, never at a fraction of it:
+  // a 90vh cap scrolled a long form inside the panel on a short desktop
+  // window while the backdrop still had room to spare (#2019). `dvh` follows
+  // a phone browser's collapsing toolbar, which `vh` does not.
   const panelClassName = isDrawer
     ? `bg-white dark:bg-gray-800 shadow-xl dark:shadow-gray-700/50 h-full w-[85%] max-w-sm ${overflowClass} outline-none transition-transform duration-200 ease-out translate-x-0 starting:-translate-x-full motion-reduce:transition-none ${className}`
-    : `bg-white dark:bg-gray-800 rounded-lg shadow-xl dark:shadow-gray-700/50 ${maxWidthClasses[maxWidth]} w-full max-h-[90vh] ${overflowClass} outline-none transition duration-200 ease-out opacity-100 scale-100 starting:opacity-0 starting:scale-95 motion-reduce:transition-none ${className}`;
+    : `bg-white dark:bg-gray-800 rounded-lg shadow-xl dark:shadow-gray-700/50 ${maxWidthClasses[maxWidth]} w-full ${
+        fixed
+          ? `h-[min(90vh,56rem)] flex flex-col ${allowOverflow ? 'overflow-visible' : 'overflow-hidden'}`
+          : `max-h-[calc(100dvh-2rem)] ${overflowClass}`
+      } outline-none transition duration-200 ease-out opacity-100 scale-100 starting:opacity-0 starting:scale-95 motion-reduce:transition-none${fillPhone ? ' max-sm:h-dvh max-sm:max-h-none max-sm:max-w-none max-sm:rounded-none' : ''} ${className}`;
+
+  // The title and the button row follow the New Transaction dialog: a large
+  // bold heading and a right-aligned row, separated from the body by space
+  // alone -- no rule under the header or over the buttons, and no X beside the
+  // title (Cancel / Close in the button row, Escape and the backdrop close).
+  // With `padding="none"` the caller pads the panel through `className`, as
+  // the TransactionForm hosts do, so the heading sits inside that padding.
+  const padded = padding === 'md' || fixed;
+  const titleBlockClassName = `flex items-center gap-2 ${
+    padded ? 'px-4 pt-4 sm:px-6 sm:pt-6' : 'mb-4'
+  }${fixed ? ' shrink-0' : ''}`;
+  const footerClassName = `flex flex-wrap items-center justify-end gap-2 ${
+    padded ? 'px-4 pb-4 sm:px-6 sm:pb-6' : 'pt-4'
+  }${fixed ? ' shrink-0' : ''}`;
 
   return createPortal(
     <div
@@ -368,30 +463,26 @@ export function Modal({
         onClick={(e) => e.stopPropagation()}
         onSubmit={(e) => e.stopPropagation()}
       >
-        {title && (
-          <div className="flex items-start justify-between gap-4 border-b border-gray-200 px-4 py-3 sm:px-6 dark:border-gray-700">
-            <div className="min-w-0">
-              <h2
-                id={titleId}
-                className="text-lg font-semibold text-gray-900 dark:text-gray-100"
-              >
-                {title}
-              </h2>
-              {description && (
-                <p id={descriptionId} className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        {title && titleHidden && (
+          <h2 id={titleId} className="sr-only">
+            {title}
+          </h2>
+        )}
+        {title && !titleHidden && (
+          <div className={titleBlockClassName} data-modal-heading>
+            <h2
+              id={titleId}
+              className="min-w-0 text-2xl font-bold text-gray-900 dark:text-gray-100"
+            >
+              {title}
+            </h2>
+            {description && (
+              <>
+                <InfoTooltip text={description} usePortal learnMore={descriptionLearnMore} />
+                <span id={descriptionId} className="sr-only">
                   {description}
-                </p>
-              )}
-            </div>
-            {onClose && (
-              <button
-                type="button"
-                onClick={() => attemptClose('escape')}
-                aria-label={t('close')}
-                className={`-mr-1 shrink-0 rounded-md p-1 text-gray-400 hover:text-gray-600 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:hover:text-gray-200 ${HOVER_ROW_ON_CARD}`}
-              >
-                <XMarkIcon className="h-5 w-5" />
-              </button>
+                </span>
+              </>
             )}
           </div>
         )}
@@ -399,9 +490,19 @@ export function Modal({
             call sites that predate these props render exactly the tree they
             did before -- several make the panel their own scroll or flex
             parent, which an unconditional div would break. */}
-        {padding === 'md' ? <div className="p-4 sm:p-6">{children}</div> : children}
+        {fixed ? (
+          <div
+            className={`flex min-h-0 flex-1 flex-col overflow-y-auto${padding === 'md' ? ' p-4 sm:p-6' : ''}`}
+          >
+            {children}
+          </div>
+        ) : padding === 'md' ? (
+          <div className="p-4 sm:p-6">{children}</div>
+        ) : (
+          children
+        )}
         {footer && (
-          <div className="flex flex-wrap items-center justify-end gap-2 border-t border-gray-200 px-4 py-3 sm:px-6 dark:border-gray-700">
+          <div className={footerClassName}>
             {footer}
           </div>
         )}

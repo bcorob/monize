@@ -8,12 +8,15 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
+    }),
+  };
+});
 const mockGetDashboardSummary = vi.fn();
 vi.mock('@/lib/budgets', () => ({
   budgetsApi: {
@@ -208,9 +211,10 @@ describe('BudgetStatusWidget', () => {
       expect(screen.getByText('60%')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('Budget Status'));
-
-    expect(mockPush).toHaveBeenCalledWith('/budgets/budget-123');
+    expect(screen.getByRole('link', { name: 'Budget Status' })).toHaveAttribute(
+      'href',
+      '/budgets/budget-123',
+    );
   });
 
   it('navigates to budget detail page when "View full budget" is clicked', async () => {
@@ -239,12 +243,13 @@ describe('BudgetStatusWidget', () => {
     expect(mockPush).toHaveBeenCalledWith('/budgets');
   });
 
-  it('navigates to budgets page when title is clicked in loading state', () => {
+  it('links the title to the budgets page in the loading state', () => {
     render(<BudgetStatusWidget isLoading={true} />);
 
-    fireEvent.click(screen.getByText('Budget Status'));
-
-    expect(mockPush).toHaveBeenCalledWith('/budgets');
+    expect(screen.getByRole('link', { name: 'Budget Status' })).toHaveAttribute(
+      'href',
+      '/budgets',
+    );
   });
 
   it('navigates to budgets page when title is clicked in empty state', async () => {
@@ -258,9 +263,10 @@ describe('BudgetStatusWidget', () => {
       ).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByText('Budget Status'));
-
-    expect(mockPush).toHaveBeenCalledWith('/budgets');
+    expect(screen.getByRole('link', { name: 'Budget Status' })).toHaveAttribute(
+      'href',
+      '/budgets',
+    );
   });
 
   it('shows days remaining', async () => {

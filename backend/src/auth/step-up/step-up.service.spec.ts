@@ -9,7 +9,7 @@ import {
 } from "@nestjs/common";
 import * as bcrypt from "bcryptjs";
 
-import { StepUpAuthService } from "./step-up.service";
+import { StepUpAuthService, STEP_UP_ATTEMPT_SCOPE } from "./step-up.service";
 import { TwoFactorService } from "../two-factor.service";
 import { User } from "../../users/entities/user.entity";
 import { UserPreference } from "../../users/entities/user-preference.entity";
@@ -18,6 +18,11 @@ import {
   withStepUpClaimLedger,
 } from "../../test-helpers/scoped-db-testing";
 import { OidcReauthService } from "../oidc/oidc-reauth.service";
+import {
+  authAttemptCounterProvider,
+  createAuthAttemptCounterMock,
+  type AuthAttemptCounterMock,
+} from "../../test-helpers/auth-attempt-counter-testing";
 
 jest.mock("../../common/db/scoped-db", () =>
   jest
@@ -41,6 +46,7 @@ describe("StepUpAuthService", () => {
   });
 
   let service: StepUpAuthService;
+  let attemptCounters: AuthAttemptCounterMock;
   let usersRepo: Record<string, jest.Mock>;
   let preferencesRepo: Record<string, jest.Mock>;
   let twoFactor: Record<string, jest.Mock>;
@@ -49,6 +55,7 @@ describe("StepUpAuthService", () => {
   const userId = "11111111-1111-1111-1111-111111111111";
 
   beforeEach(async () => {
+    attemptCounters = createAuthAttemptCounterMock();
     usersRepo = { findOne: jest.fn() };
     preferencesRepo = { findOne: jest.fn() };
     twoFactor = { verifyTotpForUser: jest.fn() };
@@ -77,6 +84,7 @@ describe("StepUpAuthService", () => {
         { provide: TwoFactorService, useValue: twoFactor },
         { provide: JwtService, useValue: jwt },
         { provide: ConfigService, useValue: { get: jest.fn() } },
+        authAttemptCounterProvider(attemptCounters),
       ],
     }).compile();
 
@@ -280,6 +288,54 @@ describe("StepUpAuthService", () => {
         ).rejects.toBeInstanceOf(UnauthorizedException);
       }
       // 11th attempt -- even with the correct password -- should be locked out.
+      await expect(
+        service.verifyAndIssue(userId, "emergency-access", {
+          password: "hunter2",
+        }),
+      ).rejects.toThrow(/too many/i);
+    });
+
+    // The scope and key are the contract between replicas.
+    it("counts a failure under the step-up scope, keyed by user and purpose", async () => {
+      await service
+        .verifyAndIssue(userId, "emergency-access", { password: "wrong" })
+        .catch(() => undefined);
+
+      expect(attemptCounters.increment).toHaveBeenCalledWith(
+        STEP_UP_ATTEMPT_SCOPE,
+        `${userId}:emergency-access`,
+        30 * 60 * 1000,
+        // As the `Map` did: the lockout lifts after a quiet window, not a fixed
+        // thirty minutes from the first failure.
+        "sliding",
+      );
+    });
+
+    // The reason the counter moved onto a row: this process saw none of the
+    // ten failures.
+    it("locks out on a count another replica wrote", async () => {
+      attemptCounters.rows.set(
+        `${STEP_UP_ATTEMPT_SCOPE}\u0000${userId}:emergency-access`,
+        { count: 10, windowExpiresAt: new Date(Date.now() + 60_000) },
+      );
+
+      await expect(
+        service.verifyAndIssue(userId, "emergency-access", {
+          password: "hunter2",
+        }),
+      ).rejects.toThrow(/too many/i);
+    });
+
+    it("refuses over the cap without checking the password, even when the peek saw room", async () => {
+      // A concurrent burst: every request's peek read the same low count, so
+      // the bound is the count the reservation committed (A26-L08). The
+      // password here is correct; a check would have issued a token.
+      attemptCounters.peek.mockResolvedValue(0);
+      attemptCounters.increment.mockResolvedValueOnce({
+        count: 11,
+        windowExpiresAt: new Date(Date.now() + 60_000),
+      });
+
       await expect(
         service.verifyAndIssue(userId, "emergency-access", {
           password: "hunter2",

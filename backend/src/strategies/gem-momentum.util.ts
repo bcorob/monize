@@ -9,6 +9,7 @@ import {
 } from "./entities/gem-strategy-signal.entity";
 import { GemCadence } from "./entities/gem-strategy.entity";
 import {
+  BOUNDARY_HOLIDAY_DAYS,
   BOUNDARY_LAG_DAYS,
   PricePoint,
   daysBetween,
@@ -261,6 +262,14 @@ export function trailingReturnPercent(
  * Momentum per role over the lookback window ending at `evaluatedOn`. A role
  * with no instrument, or with prices that do not cover the window, comes back
  * null so every caller renders it as unknown.
+ *
+ * The roles are one decision, so they are priced at one session: the newest
+ * exit close any role holds on or before `evaluatedOn` is the boundary's
+ * session, and a role whose own exit trails it by more than
+ * `BOUNDARY_HOLIDAY_DAYS` is not priced. Its series has a gap at the boundary
+ * (a feed outage), not a holiday, and its 18th compared with another role's
+ * 30th is not a ranking (A26-M27). Unknown, the period defers through
+ * `evaluate` exactly as an unpriced role does.
  */
 export function momentumSnapshot(
   pricesByRole: Partial<Record<GemAssetRole, PricePoint[]>>,
@@ -269,12 +278,27 @@ export function momentumSnapshot(
 ): GemMomentumSnapshot {
   const from = ymd(addMonthsUtc(parseYmd(evaluatedOn), -lookbackMonths));
   const snapshot: GemMomentumSnapshot = {};
+  const exits = new Map<GemAssetRole, string>();
   for (const [role, prices] of Object.entries(pricesByRole) as Array<
     [GemAssetRole, PricePoint[]]
   >) {
-    snapshot[role] = prices?.length
+    const momentum = prices?.length
       ? trailingReturnPercent(prices, from, evaluatedOn)
       : null;
+    snapshot[role] = momentum;
+    const exit = momentum === null ? null : pointAsOf(prices, evaluatedOn);
+    if (exit) exits.set(role, exit.date);
+  }
+  const session = [...exits.values()].reduce<string | null>(
+    (newest, date) => (newest === null || date > newest ? date : newest),
+    null,
+  );
+  if (session !== null) {
+    for (const [role, exitDate] of exits) {
+      if (daysBetween(exitDate, session) > BOUNDARY_HOLIDAY_DAYS) {
+        snapshot[role] = null;
+      }
+    }
   }
   return snapshot;
 }

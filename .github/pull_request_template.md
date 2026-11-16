@@ -11,6 +11,16 @@ Approved in: <!-- discussion/issue link -->
 
 <!-- What does this PR do, and why? Keep it to a single concern. -->
 
+## Invariants touched
+
+<!-- IDs from docs/system-invariants.md this change touches (e.g. INV-BALANCE-001), or "none". -->
+
+## Code review passes
+
+<!-- Run an AI code review before opening this PR and fix what it finds (Claude Code: /code-review, Codex: /review).
+     Expected: 3 passes when the change touches money, the database, RLS or security; 1 pass for other code; none for docs only.
+     Format: tool x count, e.g. "Claude Code /code-review x3", or "none (docs only)". -->
+
 ## Checklist
 
 - [ ] An approved discussion or issue exists and is linked above.

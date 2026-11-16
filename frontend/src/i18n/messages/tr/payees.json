@@ -8,9 +8,11 @@
     "autoMergePayees": "Alacaklıları Otomatik Birleştir",
     "newPayee": "+ Yeni Alacaklı",
     "searchPlaceholder": "Alacaklı ara...",
+    "statusFilterLabel": "Durum",
     "statusAll": "Tümü ({count})",
     "statusActive": "Aktif ({count})",
     "statusInactive": "Pasif ({count})",
+    "categoryFilterLabel": "Varsayılan Kategori",
     "categoryFilterAll": "Tüm Alacaklılar ({count})",
     "categoryFilterNoCategory": "Varsayılan Kategorisi Olmayanlar ({count})",
     "categoryFilterUncategorized": "Kategorisiz İşlemler ({count})",
@@ -34,7 +36,8 @@
       "inactive": "Pasif",
       "withoutCategory": "Kategorisiz"
     },
-    "applyDefaultCategories": "Varsayılan Kategorileri Uygula"
+    "applyDefaultCategories": "Varsayılan Kategorileri Uygula",
+    "lookupSettings": "Alacaklı arama ayarları"
   },
   "list": {
     "columns": {
@@ -82,13 +85,27 @@
     "categoryLabel": "Varsayılan Kategori",
     "notesLabel": "Notlar (isteğe bağlı)",
     "websiteLabel": "Web sitesi",
+    "addressLabel": "Adres",
+    "emailLabel": "E-posta",
+    "phoneLabel": "Telefon",
     "submitCreate": "Alacaklı Oluştur",
     "submitUpdate": "Alacaklıyı Güncelle",
     "applyCategoryLabel": "Bu kategoriyi mevcut işlemlere uygula",
     "applyCategoryNone": "Mevcut işlemleri değiştirme",
     "applyCategoryUncategorized": "Yalnızca kategorisi olmayan işlemler ({count})",
     "applyCategoryAll": "Tüm işlemler ({count})",
-    "applyCategoryHelp": "Transferler ve bölünmüş işlemler hiçbir zaman değiştirilmez."
+    "applyCategoryHelp": "Transferler ve bölünmüş işlemler hiçbir zaman değiştirilmez.",
+    "lookup": {
+      "button": "Bilgileri ara",
+      "searching": "İletişim bilgileri aranıyor...",
+      "suggested": "Aramanın önerdiği:",
+      "replaced": "Arama tarafından değiştirildi:",
+      "clear": "Arama değişikliklerini geri al",
+      "nothingFound": "Bu ad için herkese açık iletişim bilgisi bulunamadı.",
+      "noProvider": "İletişim bilgilerini bulmak için <link>alacaklı arama ayarları</link> bölümünde bir kaynak ayarlayın.",
+      "failed": "Arama tamamlanamadı. Daha sonra tekrar deneyin.",
+      "quotaExceeded": "Bu ayki Google Places aramaları tükendi. <link>Alacaklı arama ayarları</link> bölümünden sınırı artırın veya gelecek ayı bekleyin."
+    }
   },
   "merge": {
     "title": "Alacaklıyı Birleştir",
@@ -112,7 +129,6 @@
   },
   "categoryAutoAssign": {
     "title": "Varsayılan Kategorileri Otomatik Ata",
-    "howItWorksTitle": "Nasıl çalışır",
     "howItWorksBody": "Bu özellik, alacaklılara varsayılan kategoriler önermek için işlem geçmişinizi analiz eder. Her alacaklı için en sık kullanılan kategoriyi belirler ve bunu gelecekteki işlemler için varsayılan kategori olarak önerir. Gerektiğinde varsayılan kategoriyi her zaman değiştirebilirsiniz.",
     "minTransactionsLabel": "Minimum İşlem: {count}",
     "minTransactionsHelp": "Yalnızca en az bu kadar işlemi olan alacaklıları değerlendir",
@@ -133,6 +149,7 @@
       "line2": "Yukarıdaki ayarları değiştirmeyi deneyin."
     },
     "columns": {
+      "assign": "Ata",
       "payee": "Alacaklı",
       "suggestedCategory": "Önerilen Kategori",
       "match": "Eşleşme"
@@ -150,7 +167,6 @@
   },
   "autoMerge": {
     "title": "Alacaklıları Otomatik Birleştir",
-    "howItWorksTitle": "Nasıl çalışır",
     "howItWorksBody": "Bu özellik alacaklılarınızı tarar ve bir adın diğerini genişlettiği varyantları gruplandırır; örneğin \"Migros\", \"MİGROS A.Ş.\" ve \"MİGROS MARKET 0421\" hepsi \"Migros\"u temel alır. Her grup tek bir kanonik alacaklıda birleştirilir ve gelecekteki içe aktarmaların otomatik eşleşmesi için joker takma ad (örn. \"*MİGROS*\") oluşturulur. Yalnızca ortak bir kelimeyi paylaşan alacaklılar (örn. \"Royal Elektrik\" ve \"Royal Şehir Fidanlığı\") ayrı tutulur. Uygulamadan önce her grubu inceleyin ve ayarlayın.",
     "backupRecommendation": "Önerilen: Değişiklik yapmadan önce bir <link>yedek</link> oluşturun.",
     "minGroupSizeLabel": "Minimum Grup Boyutu: {count}",
@@ -210,7 +226,6 @@
   },
   "deactivateUnused": {
     "title": "Kullanılmayan Alacaklıları Devre Dışı Bırak",
-    "howItWorksTitle": "Nasıl çalışır",
     "howItWorksBody": "Bu özellik nadiren kullanılan alacaklıları bulur ve devre dışı bırakır. Devre dışı bırakılan alacaklılar işlem oluştururken alacaklı açılır menüsünde görünmez, ancak geçmiş işlemleri korunur. Bir alacaklıyı istediğiniz zaman alacaklılar listesinden yeniden etkinleştirebilirsiniz.",
     "maxTransactionsLabel": "{count, plural, one {# veya daha az işlem} other {# veya daha az işlem}}",
     "maxTransactionsHelp": "Yalnızca bu kadar veya daha az işlemi olan alacaklıları dahil et",
@@ -228,6 +243,7 @@
       "line2": "Yukarıdaki ayarları değiştirmeyi deneyin."
     },
     "columns": {
+      "deactivate": "Devre Dışı Bırak",
       "payee": "Alacaklı",
       "transactions": "İşlemler",
       "lastUsed": "Son Kullanım"
@@ -243,7 +259,7 @@
     }
   },
   "reactivate": {
-    "title": "Alacaklı Yeniden Etkinleştirilsin mi?",
+    "title": "Alacaklıyı Yeniden Etkinleştir",
     "message": "\"{name}\" alacaklısı daha önce devre dışı bırakıldı. Alacaklı açılır menülerinde tekrar görünmesi için yeniden etkinleştirmek ister misiniz?",
     "keepInactiveButton": "Hayır, Pasif Kalsın",
     "reactivateButton": "Yeniden Etkinleştir",
@@ -252,7 +268,7 @@
   "aliases": {
     "heading": "Takma Adlar",
     "description": "Takma adlar, içe aktarılan alacaklı adlarını bu alacaklıyla eşleştirir. Joker karakter olarak * kullanın (ör. \"STARBUCKS*\"). Büyük/küçük harf duyarsız.",
-    "loading": "Yükleniyor...",
+    "loading": "Takma adlar yükleniyor...",
     "noAliases": "Takma ad yapılandırılmamış",
     "removeTitle": "Takma adı kaldır",
     "removeButton": "Kaldır",
@@ -270,7 +286,10 @@
   },
   "selectCategoryPlaceholder": "Kategori seçin...",
   "validation": {
-    "nameRequired": "Alacaklı adı gereklidir"
+    "nameRequired": "Alacaklı adı gereklidir",
+    "emailInvalid": "Geçerli bir e-posta adresi girin",
+    "phoneInvalid": "Geçerli bir telefon numarası girin",
+    "phoneNeedsCountryCode": "Ülke kodunu ekleyin, örneğin +1 206 448 8762"
   },
   "defaultCategoryBackfill": {
     "allConfirmTitle": "Varsayılan kategoriler uygulansin mı?",

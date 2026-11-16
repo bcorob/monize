@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
+import { TABLE_CLASS, Th } from '@/components/ui/Table';
 
 export interface LookupCandidate {
   symbol: string;
@@ -10,7 +11,7 @@ export interface LookupCandidate {
   exchange: string | null;
   securityType: string | null;
   currencyCode: string | null;
-  provider?: 'yahoo' | 'msn';
+  provider?: 'yahoo' | 'msn' | 'lse' | 'deutsche_boerse';
   msnInstrumentId?: string | null;
 }
 
@@ -22,13 +23,29 @@ interface SecurityLookupPickerProps {
   onCancel: () => void;
 }
 
-function providerBadge(provider: 'yahoo' | 'msn' | undefined) {
+const PROVIDER_BADGE_LABELS: Record<string, string> = {
+  yahoo: 'Yahoo',
+  msn: 'MSN',
+  lse: 'LSE',
+  deutsche_boerse: 'Deutsche Börse',
+};
+
+const PROVIDER_BADGE_CLASSES: Record<string, string> = {
+  yahoo: 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300',
+  msn: 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300',
+  lse: 'bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300',
+  deutsche_boerse:
+    'bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300',
+};
+
+function providerBadge(
+  provider: 'yahoo' | 'msn' | 'lse' | 'deutsche_boerse' | undefined,
+) {
   if (!provider) return null;
-  const label = provider === 'msn' ? 'MSN' : 'Yahoo';
+  const label = PROVIDER_BADGE_LABELS[provider] ?? provider;
   const cls =
-    provider === 'msn'
-      ? 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300'
-      : 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
+    PROVIDER_BADGE_CLASSES[provider] ??
+    'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
   return (
     <span className={`inline-flex items-center rounded text-xs font-medium px-2 py-0.5 ${cls}`}>
       {label}
@@ -46,38 +63,32 @@ export function SecurityLookupPicker({
   const t = useTranslations('securities');
   const tc = useTranslations('common');
   return (
-    <Modal isOpen={isOpen} onClose={onCancel} maxWidth="6xl">
-      <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-          {t('lookupPicker.title', { query })}
-        </h2>
-        <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-          {t('lookupPicker.subtitle')}
-        </p>
-      </div>
+    <Modal
+      isOpen={isOpen}
+      onClose={onCancel}
+      maxWidth="6xl"
+      padding="md"
+      title={t('lookupPicker.title', { query })}
+      description={t('lookupPicker.subtitle')}
+      footer={
+        <Button type="button" variant="outline" onClick={onCancel}>
+          {tc('cancel')}
+        </Button>
+      }
+    >
       <div className="max-h-[60vh] overflow-y-auto">
-        <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+        <table className={TABLE_CLASS}>
           <thead className="bg-gray-50 dark:bg-gray-800 sticky top-0">
             <tr>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                {t('lookupPicker.columns.symbol')}
-              </th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                {t('lookupPicker.columns.name')}
-              </th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                {t('lookupPicker.columns.exchange')}
-              </th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                {t('lookupPicker.columns.currency')}
-              </th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                {t('lookupPicker.columns.type')}
-              </th>
-              <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-                {t('lookupPicker.columns.source')}
-              </th>
-              <th className="px-4 py-2" />
+              <Th>{t('lookupPicker.columns.symbol')}</Th>
+              <Th>{t('lookupPicker.columns.name')}</Th>
+              <Th>{t('lookupPicker.columns.exchange')}</Th>
+              <Th>{t('lookupPicker.columns.currency')}</Th>
+              <Th>{t('lookupPicker.columns.type')}</Th>
+              <Th>{t('lookupPicker.columns.source')}</Th>
+              <Th>
+                <span className="sr-only">{t('lookupPicker.selectButton')}</span>
+              </Th>
             </tr>
           </thead>
           <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
@@ -122,11 +133,6 @@ export function SecurityLookupPicker({
             ))}
           </tbody>
         </table>
-      </div>
-      <div className="p-4 flex justify-end gap-2 border-t border-gray-200 dark:border-gray-700">
-        <Button type="button" variant="ghost" onClick={onCancel}>
-          {tc('cancel')}
-        </Button>
       </div>
     </Modal>
   );

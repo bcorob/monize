@@ -3,7 +3,7 @@
 Status: accepted
 Date: 2026-08-04 (recorded retrospectively; the decision was made when the
 flat-folder backup collision was fixed, and is already stated as a rule in the
-root `CLAUDE.md`)
+`AGENTS.md`)
 
 ## Context
 

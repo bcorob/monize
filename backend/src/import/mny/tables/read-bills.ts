@@ -1,6 +1,7 @@
 import { MnyBill } from "../model/mny-rows";
 import { toDate, toHandle, toInteger, toNumber } from "../model/mny-values";
 import { MnyDatabase } from "../msisam/open-mny";
+import { readMoney99Bills } from "./money99-bills";
 import { RowSpec, TableAvailability, readTableByName } from "./table-reader";
 
 /**
@@ -8,7 +9,8 @@ import { RowSpec, TableAvailability, readTableByName } from "./table-reader";
  *
  * Money 2001 has no `BILL` table. Its absence is reported, never thrown --
  * assuming the Money Plus table set is what crash-looped the PR #192 proof of
- * concept on a Money 2001 file.
+ * concept on a Money 2001 file. Money 97-99 have none either, but keep their
+ * series as `TRN` templates, which `readMoney99Bills` turns into `BILL` rows.
  */
 
 const BILL_SPEC: RowSpec<MnyBill> = {
@@ -32,6 +34,9 @@ export interface MnyBillData {
 }
 
 export function readBillData(db: MnyDatabase): MnyBillData {
+  if (db.format === "jet3") {
+    return readMoney99Bills(db);
+  }
   const bills = readTableByName(db, "BILL", BILL_SPEC);
 
   return {

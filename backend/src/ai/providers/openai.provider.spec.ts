@@ -2,6 +2,7 @@ import { OpenAiProvider } from "./openai.provider";
 import type { AiToolStreamChunk, AiMessage } from "./ai-provider.interface";
 
 const mockCreate = jest.fn();
+const mockResponsesCreate = jest.fn();
 const mockListModels = jest.fn().mockResolvedValue({ data: [] });
 const mockRetrieveModel = jest.fn();
 
@@ -12,6 +13,9 @@ jest.mock("openai", () => ({
       completions: {
         create: mockCreate,
       },
+    },
+    responses: {
+      create: mockResponsesCreate,
     },
     models: {
       list: mockListModels,
@@ -81,10 +85,26 @@ describe("OpenAiProvider", () => {
     // long-running fetch wrapper so SDK calls inherit disabled timeouts.
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const OpenAI = require("openai").default;
+    const sdkOptions = OpenAI.mock.calls[OpenAI.mock.calls.length - 1][0];
+    expect(typeof sdkOptions.fetch).toBe("function");
+    expect(sdkOptions.fetch).not.toBe(global.fetch);
+  });
+
+  it("hands the SDK the egress-policy fetch the factory passes", () => {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { longRunningFetch } = require("./long-running-fetch");
-    expect(OpenAI).toHaveBeenCalledWith(
-      expect.objectContaining({ fetch: longRunningFetch }),
+    const OpenAI = require("openai").default;
+    const egressFetch = jest.fn() as unknown as typeof fetch;
+    new OpenAiProvider(
+      "sk-test",
+      "gpt-4o",
+      "https://api.example.test/v1",
+      egressFetch,
+    );
+    expect(OpenAI).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        fetch: egressFetch,
+        baseURL: "https://api.example.test/v1",
+      }),
     );
   });
 
@@ -707,7 +727,8 @@ describe("OpenAiProvider", () => {
       const result = await provider.verifyModel();
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.reason).toContain("ECONNREFUSED");
+        expect(result.reason).not.toContain("ECONNREFUSED");
+        expect(result.reason).toMatch(/could not verify the configured model/i);
       }
     });
 
@@ -716,7 +737,8 @@ describe("OpenAiProvider", () => {
       const result = await provider.verifyModel();
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.reason).toContain("plain-string");
+        expect(result.reason).not.toContain("plain-string");
+        expect(result.reason).toMatch(/could not verify the configured model/i);
       }
     });
 
@@ -960,5 +982,205 @@ describe("OpenAiProvider", () => {
       );
       expect(r.toolCalls[0].input).toEqual({});
     });
+  });
+});
+
+describe("OpenAiProvider.completeWithWebSearch", () => {
+  const request = {
+    systemPrompt: "Find contact details.",
+    messages: [{ role: "user" as const, content: 'Business name: "Acme"' }],
+    temperature: 0,
+    maxTokens: 600,
+    responseFormat: "json" as const,
+  };
+
+  const searchedResponse = (overrides: Record<string, unknown> = {}) => ({
+    output: [
+      { type: "web_search_call", id: "ws_1", status: "completed" },
+      {
+        type: "message",
+        id: "msg_1",
+        role: "assistant",
+        content: [
+          { type: "output_text", text: '{"website":"https://acme.example"}' },
+        ],
+      },
+    ],
+    output_text: '{"website":"https://acme.example"}',
+    usage: { input_tokens: 30, output_tokens: 9 },
+    model: "gpt-5",
+    ...overrides,
+  });
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it("declares the capability", () => {
+    expect(new OpenAiProvider("k", "gpt-5").supportsWebSearch).toBe(true);
+  });
+
+  it("calls the Responses API with the web_search tool, instructions and JSON output", async () => {
+    mockResponsesCreate.mockResolvedValueOnce(searchedResponse());
+    const provider = new OpenAiProvider("k", "gpt-5");
+
+    const result = await provider.completeWithWebSearch(request, {
+      maxUses: 3,
+    });
+
+    const body = mockResponsesCreate.mock.calls[0][0];
+    expect(body.model).toBe("gpt-5");
+    expect(body.tools).toEqual([{ type: "web_search" }]);
+    expect(body.instructions).toContain("Find contact details.");
+    expect(body.instructions).toContain("at most 3 times");
+    expect(body.input).toEqual([
+      { role: "user", content: 'Business name: "Acme"' },
+    ]);
+    expect(body.max_output_tokens).toBe(600);
+    expect(body.temperature).toBe(0);
+    expect(body.text).toEqual({ format: { type: "json_object" } });
+    expect(mockCreate).not.toHaveBeenCalled();
+    expect(result).toEqual({
+      content: '{"website":"https://acme.example"}',
+      usage: { inputTokens: 30, outputTokens: 9 },
+      model: "gpt-5",
+      provider: "openai",
+      searched: true,
+      searchCount: 1,
+    });
+  });
+
+  it("passes allowed domains as a search filter", async () => {
+    mockResponsesCreate.mockResolvedValueOnce(searchedResponse());
+    const provider = new OpenAiProvider("k", "gpt-5");
+
+    await provider.completeWithWebSearch(request, {
+      maxUses: 1,
+      allowedDomains: ["acme.example"],
+    });
+
+    expect(mockResponsesCreate.mock.calls[0][0].tools).toEqual([
+      { type: "web_search", filters: { allowed_domains: ["acme.example"] } },
+    ]);
+  });
+
+  it("reports searched=false when the model answered without searching", async () => {
+    mockResponsesCreate.mockResolvedValueOnce(
+      searchedResponse({
+        output: [
+          {
+            type: "message",
+            id: "msg_1",
+            role: "assistant",
+            content: [{ type: "output_text", text: "{}" }],
+          },
+        ],
+        output_text: "{}",
+      }),
+    );
+    const provider = new OpenAiProvider("k", "gpt-5");
+
+    const result = await provider.completeWithWebSearch(request, {
+      maxUses: 3,
+    });
+
+    expect(result).toMatchObject({ searched: false, searchCount: 0 });
+  });
+
+  it.each(["failed", "in_progress", "searching"] as const)(
+    "reports searched=false when the only search call is %s",
+    async (status) => {
+      // An error result is not a result. Reported as searched, the payee
+      // lookup stamps the answer ai-web-search, which skips the trust rule
+      // that drops an unverified address and phone below high confidence.
+      mockResponsesCreate.mockResolvedValueOnce(
+        searchedResponse({
+          output: [
+            { type: "web_search_call", id: "ws_1", status },
+            {
+              type: "message",
+              id: "msg_1",
+              role: "assistant",
+              content: [{ type: "output_text", text: "{}" }],
+            },
+          ],
+          output_text: "{}",
+        }),
+      );
+      const provider = new OpenAiProvider("k", "gpt-5");
+
+      const result = await provider.completeWithWebSearch(request, {
+        maxUses: 3,
+      });
+
+      expect(result).toMatchObject({ searched: false, searchCount: 0 });
+    },
+  );
+
+  it("falls back to web_search_preview when the current tool type is rejected", async () => {
+    const rejection = Object.assign(
+      new Error(
+        "Invalid value: 'web_search'. Supported values are: 'web_search_preview'",
+      ),
+      { status: 400 },
+    );
+    mockResponsesCreate
+      .mockRejectedValueOnce(rejection)
+      .mockResolvedValueOnce(searchedResponse());
+    const provider = new OpenAiProvider("k", "gpt-4o");
+
+    const result = await provider.completeWithWebSearch(request, {
+      maxUses: 3,
+    });
+
+    expect(mockResponsesCreate).toHaveBeenCalledTimes(2);
+    expect(mockResponsesCreate.mock.calls[1][0].tools).toEqual([
+      { type: "web_search_preview" },
+    ]);
+    expect(result.searched).toBe(true);
+  });
+
+  it("degrades to a plain JSON completion when neither tool type is accepted", async () => {
+    const rejection = Object.assign(new Error("web_search not supported"), {
+      status: 400,
+    });
+    mockResponsesCreate
+      .mockRejectedValueOnce(rejection)
+      .mockRejectedValueOnce(rejection);
+    mockCreate.mockResolvedValueOnce({
+      choices: [{ message: { content: "{}" }, finish_reason: "stop" }],
+      usage: { prompt_tokens: 3, completion_tokens: 1 },
+      model: "gpt-4o-mini",
+    });
+    const provider = new OpenAiProvider("k", "gpt-4o-mini");
+
+    const result = await provider.completeWithWebSearch(request, {
+      maxUses: 3,
+    });
+
+    expect(mockCreate).toHaveBeenCalledTimes(1);
+    expect(mockCreate.mock.calls[0][0].response_format).toEqual({
+      type: "json_object",
+    });
+    expect(result).toEqual({
+      content: "{}",
+      usage: { inputTokens: 3, outputTokens: 1 },
+      model: "gpt-4o-mini",
+      provider: "openai",
+      searched: false,
+      searchCount: 0,
+    });
+  });
+
+  it("rethrows an error that is not a tool-type rejection", async () => {
+    const rejection = Object.assign(new Error("Rate limited"), { status: 429 });
+    mockResponsesCreate.mockRejectedValueOnce(rejection);
+    const provider = new OpenAiProvider("k", "gpt-5");
+
+    await expect(
+      provider.completeWithWebSearch(request, { maxUses: 3 }),
+    ).rejects.toBe(rejection);
+    expect(mockResponsesCreate).toHaveBeenCalledTimes(1);
+    expect(mockCreate).not.toHaveBeenCalled();
   });
 });

@@ -1,7 +1,8 @@
 import React from 'react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@/test/render';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, act } from '@/test/render';
 import { AccountBalancesBarChart } from './AccountBalancesBarChart';
+import { clearCurrencyDecimals, registerCurrencyDecimals } from '@/lib/currency-decimals';
 
 // Capture the Bar onClick handler so we can simulate account bar clicks
 // without relying on the real recharts rendering pipeline.
@@ -13,11 +14,14 @@ let capturedBarChartOnClick: ((state: any) => void) | undefined;
 let capturedYAxisProps: any;
 // Capture the XAxis props so we can assert label rotation behaviour.
 let capturedXAxisProps: any;
+// Capture the BarChart margin so we can assert the Y axis labels have room.
+let capturedBarChartMargin: any;
 
 vi.mock('recharts', () => ({
   ResponsiveContainer: ({ children }: any) => <div data-testid="responsive-container">{children}</div>,
-  BarChart: ({ children, onClick }: any) => {
+  BarChart: ({ children, onClick, margin }: any) => {
     capturedBarChartOnClick = onClick;
+    capturedBarChartMargin = margin;
     return <div data-testid="bar-chart">{children}</div>;
   },
   Bar: ({ children, onClick }: any) => {
@@ -41,12 +45,16 @@ vi.mock('recharts', () => ({
 const mockFormatCurrency = vi.fn((n: number, _code?: string) => `$${n.toFixed(2)}`);
 const mockFormatCurrencyAxis = vi.fn((n: number, _code?: string) => `$${n}`);
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: mockFormatCurrency,
-    formatCurrencyAxis: mockFormatCurrencyAxis,
-  }),
-}));
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: mockFormatCurrency,
+      formatCurrencyAxis: mockFormatCurrencyAxis,
+    }),
+  };
+});
 
 // Control the mobile breakpoint deterministically from tests.
 const mockIsMobile = vi.fn(() => false);
@@ -70,6 +78,23 @@ describe('AccountBalancesBarChart', () => {
     render(<AccountBalancesBarChart data={[]} isLoading={true} />);
     expect(screen.getByText('Account Balances')).toBeInTheDocument();
     expect(document.querySelector('.animate-pulse')).toBeInTheDocument();
+  });
+
+  it('offers the fold button in every state, only where the page asks for it', () => {
+    const onCollapse = vi.fn();
+    const data = [{ accountId: 'a1', accountName: 'Checking', balance: 1000 }];
+    const { rerender } = render(<AccountBalancesBarChart data={data} isLoading={false} />);
+    expect(screen.queryByRole('button', { name: 'Hide chart' })).not.toBeInTheDocument();
+
+    for (const props of [
+      { data: [], isLoading: true },
+      { data: [], isLoading: false },
+      { data, isLoading: false },
+    ]) {
+      rerender(<AccountBalancesBarChart {...props} onCollapse={onCollapse} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Hide chart' }));
+    }
+    expect(onCollapse).toHaveBeenCalledTimes(3);
   });
 
   it('shows empty state when no data', () => {
@@ -142,6 +167,14 @@ describe('AccountBalancesBarChart', () => {
       expect(auto).toHaveAttribute('aria-pressed', 'true');
       expect(linear).toHaveAttribute('aria-pressed', 'false');
       expect(log).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('sizes the Y axis to its labels without pulling the plot past the card edge', () => {
+      render(<AccountBalancesBarChart data={skewedData} isLoading={false} />);
+      expect(capturedYAxisProps.width).toBe('auto');
+      // A negative left margin shifts the auto-sized axis out of the clipped
+      // chart box and cuts off the start of every tick label.
+      expect(capturedBarChartMargin.left).toBeGreaterThanOrEqual(0);
     });
 
     it('Auto mode uses linear scale when balances are similar in magnitude', () => {
@@ -256,6 +289,55 @@ describe('AccountBalancesBarChart', () => {
     expect(screen.getByText('$0.30')).toBeInTheDocument();
     // Average = 0.15
     expect(screen.getByText('$0.15')).toBeInTheDocument();
+  });
+
+  describe('a coin series', () => {
+    const renderBtc = () => {
+      mockFormatCurrency.mockImplementation((n: number) => `BTC ${n.toFixed(8)}`);
+      render(
+        <AccountBalancesBarChart
+          data={[
+            { accountId: 'a1', accountName: 'Cold', balance: 0.000025 },
+            { accountId: 'a2', accountName: 'Hot', balance: 0.00001 },
+          ]}
+          isLoading={false}
+          currencyCode="BTC"
+        />,
+      );
+    };
+
+    afterEach(() => {
+      act(() => clearCurrencyDecimals());
+    });
+
+    it('totals and averages at the coin\'s eight places', () => {
+      act(() => registerCurrencyDecimals([{ code: 'BTC', decimalPlaces: 8 }]));
+      renderBtc();
+      expect(screen.getByText('BTC 0.00003500')).toBeInTheDocument();
+      expect(screen.getByText('BTC 0.00001750')).toBeInTheDocument();
+    });
+
+    it('keeps the satoshis before the registry has loaded', () => {
+      renderBtc();
+      expect(screen.getByText('BTC 0.00003500')).toBeInTheDocument();
+      expect(screen.getByText('BTC 0.00001750')).toBeInTheDocument();
+    });
+
+    it('leaves a CAD series at four places', () => {
+      render(
+        <AccountBalancesBarChart
+          data={[
+            { accountId: 'a1', accountName: 'A', balance: 100.1234 },
+            { accountId: 'a2', accountName: 'B', balance: 200.0001 },
+          ]}
+          isLoading={false}
+          currencyCode="CAD"
+        />,
+      );
+      const values = mockFormatCurrency.mock.calls.map(([n]) => n);
+      expect(values).toContain(300.1235);
+      expect(values).toContain(150.0618);
+    });
   });
 
   it('passes Average and Total through formatCurrency with currencyCode', () => {

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import apiClient from './api';
-import { netWorthApi } from './net-worth';
+import { netWorthApi, twrSeriesByAccountTimeoutMs } from './net-worth';
+import { PORTFOLIO_VALUATION_TIMEOUT_MS } from './constants';
 
 vi.mock('./api', () => ({
   default: { get: vi.fn(), post: vi.fn() },
@@ -32,6 +33,62 @@ describe('netWorthApi', () => {
     });
   });
 
+  it('getInvestmentsPeriodResults fetches /net-worth/investments-period-results', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({
+      data: { currency: 'CAD', asOf: '2026-09-17', periods: {} },
+    });
+
+    const result = await netWorthApi.getInvestmentsPeriodResults({
+      periods: '1d,1y',
+      accountIds: 'a1',
+      displayCurrency: 'USD',
+    });
+
+    expect(apiClient.get).toHaveBeenCalledWith(
+      '/net-worth/investments-period-results',
+      {
+        params: { periods: '1d,1y', accountIds: 'a1', displayCurrency: 'USD' },
+        timeout: PORTFOLIO_VALUATION_TIMEOUT_MS,
+      },
+    );
+    expect(result.asOf).toBe('2026-09-17');
+  });
+
+  // A since-inception period over decades of history outlives the client's 10 s
+  // default; the read carries the valuation timeout (#1888).
+  it('getInvestmentsPeriodResult fetches /net-worth/investments-period-result', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: { currency: 'CAD' } });
+
+    await netWorthApi.getInvestmentsPeriodResult({ period: 'all', accountIds: 'a1' });
+
+    expect(apiClient.get).toHaveBeenCalledWith(
+      '/net-worth/investments-period-result',
+      {
+        params: { period: 'all', accountIds: 'a1' },
+        timeout: PORTFOLIO_VALUATION_TIMEOUT_MS,
+      },
+    );
+    expect(PORTFOLIO_VALUATION_TIMEOUT_MS).toBeGreaterThan(10_000);
+  });
+
+  it('getInvestmentsSecurityPeriodResults fetches the per-security split of the same window', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: { currency: 'CAD', securities: [] } });
+
+    await netWorthApi.getInvestmentsSecurityPeriodResults({
+      startDate: '2026-09-01',
+      baselineDate: '2026-08-31',
+      endDate: '2026-09-17',
+    });
+
+    expect(apiClient.get).toHaveBeenCalledWith(
+      '/net-worth/investments-period-result/securities',
+      {
+        params: { startDate: '2026-09-01', baselineDate: '2026-08-31', endDate: '2026-09-17' },
+        timeout: PORTFOLIO_VALUATION_TIMEOUT_MS,
+      },
+    );
+  });
+
   it('recalculate posts to /net-worth/recalculate', async () => {
     vi.mocked(apiClient.post).mockResolvedValue({ data: { success: true } });
     const result = await netWorthApi.recalculate();
@@ -44,6 +101,7 @@ describe('netWorthApi', () => {
     await netWorthApi.getInvestmentsDaily({ accountIds: 'a1', displayCurrency: 'CAD' });
     expect(apiClient.get).toHaveBeenCalledWith('/net-worth/investments-daily', {
       params: { accountIds: 'a1', displayCurrency: 'CAD' },
+      timeout: PORTFOLIO_VALUATION_TIMEOUT_MS,
     });
   });
 
@@ -52,6 +110,7 @@ describe('netWorthApi', () => {
     await netWorthApi.getInvestmentsDaily();
     expect(apiClient.get).toHaveBeenCalledWith('/net-worth/investments-daily', {
       params: undefined,
+      timeout: PORTFOLIO_VALUATION_TIMEOUT_MS,
     });
   });
 
@@ -66,7 +125,23 @@ describe('netWorthApi', () => {
     });
     expect(apiClient.get).toHaveBeenCalledWith('/net-worth/investments-breakdown', {
       params: { granularity: 'monthly', accountIds: 'a1', displayCurrency: 'CAD' },
+      timeout: PORTFOLIO_VALUATION_TIMEOUT_MS,
     });
     expect(result.granularity).toBe('monthly');
+  });
+
+  it('getInvestmentsTwrSeriesByAccount waits about one valuation per distinct account', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: { accounts: [] } });
+    await netWorthApi.getInvestmentsTwrSeriesByAccount({ period: '1y', accountIds: 'a1,a2,a2' });
+    expect(apiClient.get).toHaveBeenCalledWith('/net-worth/investments-twr-series', {
+      params: { period: '1y', accountIds: 'a1,a2,a2', groupBy: 'account' },
+      timeout: PORTFOLIO_VALUATION_TIMEOUT_MS * 2,
+    });
+  });
+
+  it('twrSeriesByAccountTimeoutMs is never under one valuation nor over the server timeout', () => {
+    expect(twrSeriesByAccountTimeoutMs(0)).toBe(PORTFOLIO_VALUATION_TIMEOUT_MS);
+    expect(twrSeriesByAccountTimeoutMs(3)).toBe(PORTFOLIO_VALUATION_TIMEOUT_MS * 3);
+    expect(twrSeriesByAccountTimeoutMs(25)).toBe(600_000);
   });
 });

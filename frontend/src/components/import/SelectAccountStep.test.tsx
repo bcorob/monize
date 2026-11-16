@@ -11,7 +11,11 @@ describe('SelectAccountStep', () => {
       transactions: [{ date: '2024-01-01', amount: -50, payee: 'Test', memo: '', category: '', number: '' }],
       investmentTransactions: [],
       qifType: 'Bank' as const,
-      accountType: 'Bank',
+      // `qifType` really is 'Bank' (a QIF file-type marker); `accountType` is
+      // the AccountType union and has no such member, so the copied value made
+      // `formatAccountType` look up `common.accountTypes.Bank` and render the
+      // key. Nothing failed, because the assertion below only checks the label.
+      accountType: 'CHEQUING',
       accountName: '',
       transactionCount: 1,
       dateRange: { start: '2024-01-01', end: '2024-01-31' },
@@ -163,8 +167,13 @@ describe('SelectAccountStep', () => {
       { id: 'acc-2', name: 'Brokerage', accountType: 'INVESTMENT', accountSubType: 'INVESTMENT_BROKERAGE' },
     ] as any[];
     render(<SelectAccountStep {...defaultProps} accounts={accounts} />);
-    // Only non-brokerage accounts should appear in the select
-    expect(screen.getByText(/Chequing/)).toBeInTheDocument();
+    // Only non-brokerage accounts should appear in the select. Match the whole
+    // option label rather than /Chequing/: the fixture's own account type now
+    // resolves to "Chequing" in the Detected Type line too, and a loose pattern
+    // matched that instead of the option. Assert the brokerage's ABSENCE as
+    // well -- that is the claim this test makes, and nothing checked it.
+    expect(screen.getByText('Chequing (Chequing)')).toBeInTheDocument();
+    expect(screen.queryByText(/Brokerage/)).not.toBeInTheDocument();
   });
 
   it('clicking create new account button calls setShowCreateAccount', () => {

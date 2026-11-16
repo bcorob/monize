@@ -6,7 +6,7 @@
 -- live, and it is the only migration in the RLS series that is not safe to
 -- deploy on its own schedule.
 --
--- Sequencing (see docs/future-plans/row-level-security-runbook.md): flip A is
+-- Sequencing (see docs/rls-runbook.md): flip A is
 -- the privilege drop -- the app connects as the unprivileged monize_app role
 -- instead of the owner, with policies still inert, which proves the role, its
 -- grants and every context-wrapping path work without changing a single query

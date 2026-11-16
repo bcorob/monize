@@ -46,6 +46,8 @@
     "colProvider": "공급자",
     "colStatus": "상태",
     "colLastLogin": "마지막 로그인",
+    "colBackups": "백업",
+    "colAttachments": "첨부 파일",
     "colActions": "작업",
     "youSuffix": "(본인)",
     "noEmail": "이메일 없음",
@@ -60,7 +62,22 @@
     "clickToDisable": "클릭하여 비활성화",
     "clickToEnable": "클릭하여 활성화",
     "resetPassword": "비밀번호 재설정",
-    "noUsers": "사용자를 찾을 수 없습니다."
+    "resetTwoFactor": "2FA 재설정",
+    "unlinkSso": "SSO 연결 해제",
+    "noUsers": "사용자를 찾을 수 없습니다.",
+    "storageLoading": "불러오는 중…",
+    "storageUnavailable": "사용할 수 없음",
+    "storageUnavailableHint": "저장 용량을 불러오지 못했습니다. 페이지를 새로 고쳐 다시 시도하세요.",
+    "storageUnknown": "알 수 없음",
+    "storageUnknownStore": "이 사용자의 백업 저장소를 읽을 수 없어 용량을 알 수 없습니다. 백업 페이지에서 백업 위치를 확인하세요.",
+    "storageNotReported": "집계 안 됨",
+    "storageNotReportedHint": "이 계정은 마지막 저장 용량 집계에 포함되지 않았습니다. 페이지를 새로 고치면 포함됩니다.",
+    "backupsOff": "꺼짐",
+    "backupsOffHint": "이 사용자의 자동 백업이 활성화되어 있지 않으며 저장된 백업도 없습니다.",
+    "backupScheduleOff": "일정 꺼짐",
+    "backupScheduleOffHint": "자동 백업이 꺼져 있습니다. 이 파일들은 보존 정책이 아직 삭제하지 않은 것입니다.",
+    "backupCount": "{count, plural, =0 {백업 없음} one {백업 #개} other {백업 #개}}",
+    "attachmentCount": "{count, plural, =0 {파일 없음} one {파일 #개} other {파일 #개}}"
   },
   "usersPage": {
     "title": "사용자 관리",
@@ -81,7 +98,10 @@
       "loadFailed": "사용자를 불러오지 못했습니다",
       "deleteFailed": "사용자 삭제에 실패했습니다",
       "disableFailed": "사용자 비활성화에 실패했습니다",
-      "resetFailed": "비밀번호 재설정에 실패했습니다"
+      "resetFailed": "비밀번호 재설정에 실패했습니다",
+      "twoFactorReset": "{name}의 2단계 인증이 재설정되었습니다. 해당 사용자는 로그아웃되었습니다.",
+      "resetTwoFactorFailed": "2단계 인증 재설정에 실패했습니다",
+      "unlinkSsoFailed": "SSO 연결 해제에 실패했습니다"
     },
     "dialogs": {
       "promoteTitle": "사용자를 승격하시겠습니까?",
@@ -96,6 +116,14 @@
       "resetTitle": "비밀번호를 재설정하시겠습니까?",
       "resetMessage": "{name}의 새 임시 비밀번호가 생성됩니다. 다음 로그인 시 비밀번호를 변경해야 합니다.",
       "resetConfirm": "비밀번호 재설정",
+      "unlinkSsoTitle": "SSO 연결을 해제하시겠습니까?",
+      "unlinkSsoMessage": "{name}의 계정이 로컬 계정으로 전환됩니다. 이후 같은 이메일 주소로 SSO 로그인하면 다시 연결될 수 있습니다. 시스템이 임시 비밀번호를 생성하며, {name}은(는) 다음 로그인 시 비밀번호를 변경해야 합니다.",
+      "unlinkSsoConfirm": "SSO 연결 해제",
+      "unlinkSsoResultTitle": "SSO 연결 해제됨",
+      "unlinkSsoResultDesc": "{name}의 계정이 이제 로컬 계정입니다. 로그인할 수 있도록 이 임시 비밀번호를 전달하세요.",
+      "resetTwoFactorTitle": "2단계 인증을 재설정하시겠습니까?",
+      "resetTwoFactorMessage": "{name}의 2단계 인증이 해제되고, 백업 코드와 신뢰할 수 있는 기기가 삭제되며, 모든 곳에서 로그아웃됩니다. 이후 비밀번호로 로그인해 2FA를 다시 설정할 수 있습니다. 인증 앱과 백업 코드를 모두 잃어버렸거나 JWT_SECRET을 변경한 후에 사용하세요.",
+      "resetTwoFactorConfirm": "2FA 재설정",
       "deleteTitle": "사용자를 삭제하시겠습니까?",
       "deleteMessage": "{name}을(를) 삭제하시겠습니까? 계정과 관련된 모든 데이터가 영구적으로 삭제됩니다. 이 작업은 되돌릴 수 없습니다. 해당 사용자가 다른 계정의 위임자인 경우, 개인 데이터는 삭제되지만 위임이 유지될 수 있도록 로그인은 보존됩니다. 위임 전용 사용자가 됩니다.",
       "deleteConfirm": "사용자 삭제",
@@ -103,6 +131,84 @@
       "tempPasswordTitleUpgraded": "계정 업그레이드됨",
       "tempPasswordDescCreated": "{name}의 임시 비밀번호가 생성되었습니다. 로그인할 수 있도록 공유하세요.",
       "tempPasswordDescUpgraded": "기존 공유 사용자가 정식 계정으로 업그레이드되었습니다. {name}에게 이 임시 비밀번호를 공유하세요."
+    }
+  },
+  "notificationsPage": {
+    "title": "알림",
+    "subtitle": "이 Monize 인스턴스가 제공하는 전달 채널과 그 뒤의 푸시 ID입니다.",
+    "loading": "알림 설정을 불러오는 중...",
+    "loadUnavailable": "Monize가 서버에서 알림 설정을 읽지 못했습니다. 페이지를 새로고침해 다시 시도하세요.",
+    "channelsHeading": "전달 채널",
+    "identityHeading": "Web Push ID",
+    "perAccountNote": "기기, 테스트 알림, 알림 환경설정은 각 계정의 것이며 설정에서 관리합니다. 관리자는 인스턴스를 구성할 뿐, 다른 사람의 알림을 보내거나 보지 않습니다.",
+    "channelState": {
+      "on": "켜짐",
+      "off": "꺼짐",
+      "unconfigured": "사용 불가",
+      "unknown": "알 수 없음"
+    },
+    "channels": {
+      "inApp": {
+        "name": "앱 내 알림",
+        "description": "헤더의 종 아이콘. 항상 사용할 수 있고 끌 수 없습니다. 다른 모든 채널이 실패해도 알림은 여기에 남습니다."
+      },
+      "webPush": {
+        "name": "브라우저 푸시",
+        "description": "Monize를 닫아 두어도 휴대폰이나 데스크톱으로 전달되는 알림입니다. Firebase, Google Play, Apple Developer 계정이 필요 없습니다.",
+        "toggleLabel": "이 인스턴스에서 브라우저 푸시 사용",
+        "missingKeys": "이 인스턴스에는 푸시 키 쌍이 없습니다. ENCRYPTION_KEY를 설정하고 다시 시작하세요. 다음 시작 때 Monize가 키 쌍을 직접 생성합니다.",
+        "keyUnreadable": "이 인스턴스는 저장된 푸시 키 쌍을 복호화할 수 없어 아무것도 전달되지 않습니다. 아래에서 키 쌍을 교체하면 복구됩니다.",
+        "serverKeyMissing": "이 인스턴스에는 ENCRYPTION_KEY가 없어 저장된 푸시 키 쌍을 열 수 없습니다. 배포에 ENCRYPTION_KEY를 설정하고 재시작하세요. 키가 없는 동안에는 교체로 해결할 수 없습니다."
+      },
+      "email": {
+        "name": "이메일",
+        "description": "청구 알림, 예산 요약, 시스템 경고를 각 계정의 이메일 주소로 보냅니다.",
+        "missingSmtp": "메일 서버가 구성되지 않았습니다. 이메일을 사용하려면 SMTP 환경 변수를 설정하세요.",
+        "statusUnavailable": "Monize가 메일 서버 상태를 읽지 못했습니다."
+      },
+      "ntfy": {
+        "name": "ntfy 및 UnifiedPush",
+        "description": "동일한 암호화 푸시를 Google이나 Apple 인프라 대신 자체 호스팅 UnifiedPush 배포자(ntfy, NextPush)로 전달합니다. 이 인스턴스의 푸시 키 쌍과 스위치를 공유하며, 각 사용자는 자신의 UnifiedPush 앱에서 엔드포인트를 등록하고 설정에서 채널을 켭니다.",
+        "followsWebPush": "브라우저 푸시가 꺼져 있거나 키 쌍을 사용할 수 없는 동안에는 사용할 수 없습니다 — 이 채널은 동일한 키 쌍으로 전달됩니다."
+      }
+    },
+    "identity": {
+      "fingerprintLabel": "키 지문",
+      "generatedLabel": "생성 시각",
+      "devicesLabel": "등록된 기기",
+      "deviceCounts": "활성 {live}대, 해제 {disabled}대",
+      "rotateDescription": "교체하면 이 인스턴스의 키 쌍이 바뀝니다. 등록된 모든 기기에 더 이상 도달할 수 없게 되고 푸시를 다시 켜야 하므로, 키가 노출되었을 수 있을 때만 교체하세요.",
+      "rotateButton": "키 쌍 교체",
+      "rotatingButton": "교체 중...",
+      "missingEncryptionKey": "ENCRYPTION_KEY가 설정되지 않아 개인 키를 암호화하지 않고 저장해야 하므로, 이 인스턴스에는 푸시 키 쌍이 없습니다. 설정 후 다시 시작하면 Monize가 키 쌍을 직접 생성합니다.",
+      "keyUnreadable": "이 인스턴스는 더 이상 복호화할 수 없는 푸시 키 쌍을 보관하고 있어 아무것도 전달되지 않습니다. 운영 중인 데이터베이스에서 ENCRYPTION_KEY가 바뀌었거나 백업을 다른 인스턴스로 복원했을 때 발생합니다. 키 쌍을 교체하면 복구되며, 모든 기기가 다시 등록합니다.",
+      "serverKeyMissing": "이 인스턴스에는 ENCRYPTION_KEY가 설정되어 있지 않아 저장된 푸시 키 쌍을 열 수 없습니다. 키가 없는 동안에는 교체해도 해결되지 않습니다. 배포에 ENCRYPTION_KEY를 설정하고 재시작하면 기존 기기로 푸시가 다시 작동합니다."
+    },
+    "dialogs": {
+      "rotateTitle": "푸시 키 쌍을 교체할까요?",
+      "rotateMessage": "{count, plural, =0 {아직 등록된 기기가 없어 잃을 것이 없습니다.} other {등록된 기기 #대는 각 브라우저에서 푸시를 다시 켤 때까지 알림을 받지 못합니다.}}",
+      "rotateConfirm": "교체"
+    },
+    "toasts": {
+      "loadFailed": "알림 설정을 불러오지 못했습니다",
+      "pushEnabled": "이 인스턴스에서 브라우저 푸시를 켰습니다",
+      "pushDisabled": "이 인스턴스에서 브라우저 푸시를 껐습니다",
+      "pushToggleFailed": "브라우저 푸시 설정을 변경하지 못했습니다",
+      "rotated": "{count, plural, =0 {키 쌍을 교체했습니다} other {키 쌍을 교체했습니다. 기기 #대가 다시 등록해야 합니다}}",
+      "rotateFailed": "키 쌍을 교체하지 못했습니다"
+    }
+  },
+  "backupsPage": {
+    "title": "백업",
+    "subtitle": "각 계정의 재무 기록을 예약에 따라 압축한 백업 파일입니다.",
+    "scope": {
+      "heading": "전체 데이터베이스 백업이 아닙니다",
+      "perUser": "아래 일정에 따라 서버는 각 계정의 재무 기록을 압축한 백업 파일을 기록하고 보존 정책에 따라 오래된 파일을 정리합니다. 활성 계정 전체가 대상입니다.",
+      "notFullDatabase": "PostgreSQL 덤프가 아닙니다. 스키마, 서버 구성, 계정의 재무 기록 외의 것은 포함되지 않습니다. 인스턴스 전체의 재해 복구를 위해서는 데이터베이스와 첨부 파일 저장소를 직접 백업하십시오."
+    },
+    "demoRestricted": {
+      "heading": "데모 모드에서 제한됨",
+      "body": "데모 모드에서는 자동 백업 구성이 비활성화됩니다."
     }
   }
 }

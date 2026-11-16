@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { useState } from 'react';
-import { render, screen, waitFor, fireEvent, act } from '@/test/render';
+import { render, screen, waitFor, fireEvent, act, within } from '@/test/render';
 import PayeesPage from './page';
+import { SEGMENTED_TOOLBAR_GROUP_CLASS, toolbarSegmentClass } from '@/components/ui/segmented-control';
 import toast from 'react-hot-toast';
 
 // Mock next/image
@@ -154,8 +155,49 @@ vi.mock('@/components/ui/Button', () => ({
   Button: ({ children, onClick, ...rest }: any) => <button onClick={onClick} {...rest}>{children}</button>,
 }));
 
+vi.mock('@/lib/payee-lookup', () => ({
+  payeeLookupApi: {
+    getSettings: vi.fn().mockResolvedValue({
+      mode: 'none',
+      configured: false,
+      enabled: true,
+      aiEnabled: true,
+      capEnabled: true,
+      monthlyCap: 1000,
+      apiKeyMasked: null,
+      apiKeyReadable: true,
+      usedThisMonth: 0,
+      preferredSource: 'google-places',
+      aiProviderConfigId: null,
+      encryptionAvailable: true,
+    }),
+    updateSettings: vi.fn(),
+    testKey: vi.fn(),
+    getStatus: vi.fn().mockResolvedValue({
+      available: false,
+      source: null,
+      aiConfigured: false,
+      aiEnabled: true,
+      preferredSource: 'google-places',
+      googlePlaces: { mode: 'none', enabled: true, capReached: false },
+    }),
+  },
+}));
+
+vi.mock('@/lib/ai', () => ({
+  aiApi: { getConfigs: vi.fn().mockResolvedValue([]) },
+}));
+
 vi.mock('@/components/ui/Modal', () => ({
-  Modal: ({ children, isOpen }: any) => isOpen ? <div data-testid="modal">{children}</div> : null,
+  // `maxWidth` is surfaced because one of these modals has to match a width
+  // set on another page; the real component turns it into a Tailwind class
+  // this mock never renders, so nothing else could see a change to it.
+  Modal: ({ children, isOpen, maxWidth }: any) =>
+    isOpen ? (
+      <div data-testid="modal" data-max-width={maxWidth}>
+        {children}
+      </div>
+    ) : null,
 }));
 
 vi.mock('@/components/ui/UnsavedChangesDialog', () => ({
@@ -286,18 +328,49 @@ describe('PayeesPage', () => {
       render(<PayeesPage />);
       await openMaintenance();
 
-      // Four maintenance actions behind one trigger; the header itself carries
+      // Every occasional action behind one trigger; the header itself carries
       // only that trigger and the everyday New Payee button.
-      expect(screen.getAllByRole('menuitem')).toHaveLength(4);
+      expect(screen.getAllByRole('menuitem')).toHaveLength(5);
       for (const label of [
         'Auto-Merge Payees',
         'Deactivate Unused',
         'Auto-Assign Categories',
         'Apply Default Categories',
+        'Payee Lookup settings',
       ]) {
         expect(screen.getByRole('menuitem', { name: label })).toBeInTheDocument();
         expect(screen.queryByRole('button', { name: label })).toBeNull();
       }
+    });
+
+    it('opens the same Payee Lookup settings the Settings page shows', async () => {
+      // The menu item renders PayeeLookupSection itself -- one component, so
+      // the two places cannot drift into offering different controls.
+      render(<PayeesPage />);
+      await openMaintenance();
+
+      await act(async () => {
+        fireEvent.click(
+          screen.getByRole('menuitem', { name: 'Payee Lookup settings' }),
+        );
+      });
+
+      // The Modal is mocked in this file, so the dialog is its test id; what
+      // matters is that the section itself rendered inside it.
+      await waitFor(() =>
+        expect(screen.getByTestId('modal')).toBeInTheDocument(),
+      );
+      expect(
+        screen.getByRole('button', { name: 'Set up' }),
+      ).toBeInTheDocument();
+      // And at the width the same section gets on Settings, whose content
+      // column is that page's max-w-6xl main less its lg:px-12, its lg:w-52
+      // nav and the lg:gap-10 between them (50.5rem). Sized off the default
+      // the card was half that and every row wrapped.
+      expect(screen.getByTestId('modal')).toHaveAttribute(
+        'data-max-width',
+        '3xl',
+      );
     });
 
     it('renders New Payee and the Maintenance trigger', async () => {
@@ -719,6 +792,29 @@ describe('PayeesPage', () => {
         expect(screen.queryByTestId('payee-p-1')).not.toBeInTheDocument();
         expect(screen.getByTestId('payee-p-5')).toBeInTheDocument();
       });
+    });
+  });
+
+  describe('Filter segments', () => {
+    // The two filters are the shared segmented control: a named group whose
+    // pressed segment reports itself, in a toolbar row that wraps on a phone.
+    it('draws the status and category filters as segmented groups with the pressed segment marked', async () => {
+      render(<PayeesPage />);
+      const status = await screen.findByRole('group', { name: 'Status' });
+      expect(status.className).toBe(SEGMENTED_TOOLBAR_GROUP_CLASS);
+      const active = within(status).getByRole('button', { name: 'Active (4)' });
+      expect(active).toHaveAttribute('aria-pressed', 'true');
+      expect(active.className).toBe(toolbarSegmentClass(true));
+      expect(within(status).getByRole('button', { name: 'All (4)' })).toHaveAttribute('aria-pressed', 'false');
+
+      const category = screen.getByRole('group', { name: 'Default Category' });
+      expect(category.className).toBe(SEGMENTED_TOOLBAR_GROUP_CLASS);
+      expect(within(category).getByRole('button', { name: 'All Payees (4)' })).toHaveAttribute('aria-pressed', 'true');
+      const noCategory = within(category).getByRole('button', { name: 'No Default Category (2)' });
+      await act(async () => { fireEvent.click(noCategory); });
+      expect(noCategory).toHaveAttribute('aria-pressed', 'true');
+      expect(noCategory.className).toBe(toolbarSegmentClass(true));
+      expect(status.parentElement!.className).toContain('flex-wrap');
     });
   });
 

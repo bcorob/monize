@@ -118,7 +118,7 @@ describe("readMnyFileHeader", () => {
     expect(error.message).toContain(JET_ENGINE_NAME);
   });
 
-  it("rejects Jet 3 files with an upgrade hint", () => {
+  it("rejects an MSISAM file that is not Jet 4", () => {
     const file = readMnyFixture("money2001");
     file[OFFSET_VERSION_BYTE] = VERSION_JET3;
 
@@ -126,6 +126,23 @@ describe("readMnyFileHeader", () => {
 
     expect(error).toBeInstanceOf(MnyUnsupportedVersionError);
     expect(error.code).toBe("mnyUnsupportedVersion");
-    expect(error.message).toContain("Money Plus Sunset");
+    expect(error.message).toContain("0x0");
+  });
+
+  it("reads a Money 97-99 file as an unencrypted Jet 3 database", () => {
+    const header = readMnyFileHeader(readMnyFixture("money99"));
+
+    expect(header).toMatchObject({
+      engineName: JET_ENGINE_NAME,
+      versionByte: VERSION_JET3,
+      format: "jet3",
+      scheme: "none",
+    });
+  });
+
+  it("reads every Money 2001+ fixture as MSISAM", () => {
+    expect(readMnyFileHeader(readMnyFixture("money2001")).format).toBe(
+      "msisam",
+    );
   });
 });

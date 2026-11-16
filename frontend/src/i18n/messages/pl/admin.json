@@ -46,6 +46,8 @@
     "colProvider": "Dostawca",
     "colStatus": "Status",
     "colLastLogin": "Ostatnie logowanie",
+    "colBackups": "Kopie zapasowe",
+    "colAttachments": "Załączniki",
     "colActions": "Akcje",
     "youSuffix": "(Ty)",
     "noEmail": "Brak adresu e-mail",
@@ -60,7 +62,22 @@
     "clickToDisable": "Kliknij, aby wyłączyć",
     "clickToEnable": "Kliknij, aby włączyć",
     "resetPassword": "Zresetuj hasło",
-    "noUsers": "Nie znaleziono użytkowników."
+    "resetTwoFactor": "Zresetuj 2FA",
+    "unlinkSso": "Odłącz SSO",
+    "noUsers": "Nie znaleziono użytkowników.",
+    "storageLoading": "Wczytywanie…",
+    "storageUnavailable": "Niedostępne",
+    "storageUnavailableHint": "Nie udało się wczytać zużycia miejsca. Odśwież stronę, aby spróbować ponownie.",
+    "storageUnknown": "Nieznane",
+    "storageUnknownStore": "Nie udało się odczytać magazynu kopii zapasowych tego użytkownika, więc rozmiar jest nieznany. Sprawdź lokalizację kopii na stronie Kopie zapasowe.",
+    "storageNotReported": "Brak danych",
+    "storageNotReportedHint": "Tego konta nie było w ostatnim odczycie zużycia miejsca. Odśwież stronę, aby je uwzględnić.",
+    "backupsOff": "Wyłączone",
+    "backupsOffHint": "Automatyczne kopie zapasowe nie są włączone dla tego użytkownika i żadna nie jest przechowywana.",
+    "backupScheduleOff": "Harmonogram wyłączony",
+    "backupScheduleOffHint": "Automatyczne kopie zapasowe są wyłączone; te pliki to te, których retencja jeszcze nie usunęła.",
+    "backupCount": "{count, plural, =0 {Brak kopii zapasowych} one {# kopia zapasowa} few {# kopie zapasowe} many {# kopii zapasowych} other {# kopii zapasowej}}",
+    "attachmentCount": "{count, plural, =0 {Brak plików} one {# plik} few {# pliki} many {# plików} other {# pliku}}"
   },
   "usersPage": {
     "title": "Zarządzanie użytkownikami",
@@ -81,7 +98,10 @@
       "loadFailed": "Nie udało się wczytać użytkowników",
       "deleteFailed": "Nie udało się usunąć użytkownika",
       "disableFailed": "Nie udało się wyłączyć użytkownika",
-      "resetFailed": "Nie udało się zresetować hasła"
+      "resetFailed": "Nie udało się zresetować hasła",
+      "twoFactorReset": "Uwierzytelnianie dwuskładnikowe użytkownika {name} zostało zresetowane. Użytkownik został wylogowany.",
+      "resetTwoFactorFailed": "Nie udało się zresetować uwierzytelniania dwuskładnikowego",
+      "unlinkSsoFailed": "Nie udało się odłączyć SSO"
     },
     "dialogs": {
       "promoteTitle": "Awansować użytkownika?",
@@ -96,6 +116,14 @@
       "resetTitle": "Zresetować hasło?",
       "resetMessage": "Spowoduje to wygenerowanie nowego hasła tymczasowego dla użytkownika {name}. Przy następnym logowaniu będzie wymagana jego zmiana.",
       "resetConfirm": "Zresetuj hasło",
+      "unlinkSsoTitle": "Odłączyć SSO?",
+      "unlinkSsoMessage": "Spowoduje to zmianę konta użytkownika {name} na konto lokalne. Późniejsze logowanie przez SSO z tym samym adresem e-mail może połączyć je ponownie. System wygeneruje hasło tymczasowe, a użytkownik {name} musi je zmienić przy następnym logowaniu.",
+      "unlinkSsoConfirm": "Odłącz SSO",
+      "unlinkSsoResultTitle": "SSO odłączone",
+      "unlinkSsoResultDesc": "Konto użytkownika {name} jest teraz kontem lokalnym. Przekaż mu to hasło tymczasowe, aby mógł się zalogować.",
+      "resetTwoFactorTitle": "Zresetować uwierzytelnianie dwuskładnikowe?",
+      "resetTwoFactorMessage": "Spowoduje to wyłączenie uwierzytelniania dwuskładnikowego użytkownika {name}, usunięcie jego kodów zapasowych i zaufanych urządzeń oraz wylogowanie go ze wszystkich sesji. Następnie będzie mógł zalogować się hasłem i ponownie skonfigurować 2FA. Użyj tej opcji, gdy utracił aplikację uwierzytelniającą i kody zapasowe albo po zmianie JWT_SECRET.",
+      "resetTwoFactorConfirm": "Zresetuj 2FA",
       "deleteTitle": "Usunąć użytkownika?",
       "deleteMessage": "Czy na pewno chcesz usunąć użytkownika {name}? Spowoduje to trwałe usunięcie jego konta i wszystkich powiązanych danych. Tej operacji nie można cofnąć. Jeśli jest delegatem innego konta, jego własne dane zostaną usunięte, ale login pozostanie zachowany, aby delegacja nadal działała -- stanie się użytkownikiem wyłącznie delegowanym.",
       "deleteConfirm": "Usuń użytkownika",
@@ -103,6 +131,84 @@
       "tempPasswordTitleUpgraded": "Konto zaktualizowane",
       "tempPasswordDescCreated": "Wygenerowano hasło tymczasowe dla użytkownika {name}. Przekaż mu je, aby mógł się zalogować.",
       "tempPasswordDescUpgraded": "Istniejący użytkownik współdzielony został przekształcony w pełne konto. Przekaż użytkownikowi {name} to hasło tymczasowe."
+    }
+  },
+  "notificationsPage": {
+    "title": "Powiadomienia",
+    "subtitle": "Kanały dostarczania dostępne w tej instancji Monize i tożsamość push, która za nimi stoi.",
+    "loading": "Wczytywanie ustawień powiadomień...",
+    "loadUnavailable": "Monize nie odczytał ustawień powiadomień z serwera. Odśwież stronę, aby spróbować ponownie.",
+    "channelsHeading": "Kanały dostarczania",
+    "identityHeading": "Tożsamość Web Push",
+    "perAccountNote": "Urządzenia, powiadomienia testowe i preferencje należą do każdego konta i są zarządzane w Ustawieniach. Administrator konfiguruje instancję i nigdy nie wysyła ani nie widzi cudzych powiadomień.",
+    "channelState": {
+      "on": "Włączony",
+      "off": "Wyłączony",
+      "unconfigured": "Niedostępny",
+      "unknown": "Nieznany"
+    },
+    "channels": {
+      "inApp": {
+        "name": "Powiadomienia w aplikacji",
+        "description": "Dzwonek w nagłówku. Zawsze dostępny i nie można go wyłączyć: to tutaj powiadomienie pozostaje nawet wtedy, gdy każdy inny kanał zawiedzie."
+      },
+      "webPush": {
+        "name": "Push w przeglądarce",
+        "description": "Powiadomienia docierające na telefon lub komputer nawet przy zamkniętym Monize. Nie wymaga Firebase ani konta Google Play czy Apple Developer.",
+        "toggleLabel": "Włącz push w przeglądarce dla tej instancji",
+        "missingKeys": "Ta instancja nie ma pary kluczy push. Ustaw ENCRYPTION_KEY i uruchom ponownie: przy następnym starcie Monize sam wygeneruje parę.",
+        "keyUnreadable": "Ta instancja nie potrafi odszyfrować zapisanej pary kluczy push, więc nic nie jest dostarczane. Wymień parę kluczy poniżej, aby odzyskać kanał.",
+        "serverKeyMissing": "Ta instancja nie ma ENCRYPTION_KEY, więc nie może otworzyć zapisanej pary kluczy push. Ustaw ENCRYPTION_KEY we wdrożeniu i zrestartuj — rotacja nie pomoże, dopóki brakuje klucza."
+      },
+      "email": {
+        "name": "E-mail",
+        "description": "Przypomnienia o rachunkach, podsumowania budżetu i alerty systemowe wysyłane na adres e-mail każdego konta.",
+        "missingSmtp": "Nie skonfigurowano serwera poczty. Ustaw zmienne środowiskowe SMTP, aby włączyć e-mail.",
+        "statusUnavailable": "Monize nie odczytał stanu serwera poczty."
+      },
+      "ntfy": {
+        "name": "ntfy i UnifiedPush",
+        "description": "Te same zaszyfrowane powiadomienia push, dostarczane do samodzielnie hostowanego dystrybutora UnifiedPush (ntfy, NextPush) zamiast infrastruktury Google lub Apple. Kanał współdzieli parę kluczy push i przełącznik tej instancji; każda osoba rejestruje swój endpoint w aplikacji UnifiedPush i włącza kanał w Ustawieniach.",
+        "followsWebPush": "Niedostępny, dopóki push w przeglądarce jest wyłączony lub jego para kluczy nie może być użyta — ten kanał jest dostarczany tą samą parą kluczy."
+      }
+    },
+    "identity": {
+      "fingerprintLabel": "Odcisk klucza",
+      "generatedLabel": "Wygenerowano",
+      "devicesLabel": "Zarejestrowane urządzenia",
+      "deviceCounts": "aktywne: {live}, wyłączone: {disabled}",
+      "rotateDescription": "Wymiana zastępuje parę kluczy tej instancji. Każde zarejestrowane urządzenie przestaje być osiągalne i musi ponownie włączyć push, więc wymieniaj klucze tylko wtedy, gdy klucz mógł zostać ujawniony.",
+      "rotateButton": "Wymień parę kluczy",
+      "rotatingButton": "Wymiana...",
+      "missingEncryptionKey": "Ta instancja nie ma pary kluczy push, ponieważ nie ustawiono ENCRYPTION_KEY, a klucz prywatny musiałby zostać zapisany bez szyfrowania. Ustaw ją i uruchom ponownie: Monize sam wygeneruje parę.",
+      "keyUnreadable": "Ta instancja ma parę kluczy push, której nie potrafi już odszyfrować, więc nic nie jest dostarczane. Dzieje się tak, gdy ENCRYPTION_KEY zmieni się przy działającej bazie albo gdy kopia zapasowa zostanie przywrócona na inną instancję. Wymień parę kluczy, aby odzyskać kanał; każde urządzenie zarejestruje się ponownie.",
+      "serverKeyMissing": "Ta instancja nie ma ustawionego ENCRYPTION_KEY, więc nie może otworzyć zapisanej pary kluczy push. Rotacja nie pomoże, dopóki brakuje klucza: ustaw ENCRYPTION_KEY we wdrożeniu i zrestartuj — powiadomienia push zadziałają z dotychczasowymi urządzeniami."
+    },
+    "dialogs": {
+      "rotateTitle": "Wymienić parę kluczy push?",
+      "rotateMessage": "{count, plural, =0 {Nie zarejestrowano jeszcze żadnego urządzenia, więc nic nie zostanie utracone.} one {Jedno zarejestrowane urządzenie przestanie otrzymywać powiadomienia, dopóki ktoś ponownie nie włączy push w tamtej przeglądarce.} few {# zarejestrowane urządzenia przestaną otrzymywać powiadomienia, dopóki push nie zostanie ponownie włączony w każdej z tych przeglądarek.} many {# zarejestrowanych urządzeń przestanie otrzymywać powiadomienia, dopóki push nie zostanie ponownie włączony w każdej z tych przeglądarek.} other {# zarejestrowanego urządzenia przestanie otrzymywać powiadomienia, dopóki push nie zostanie ponownie włączony w każdej z tych przeglądarek.}}",
+      "rotateConfirm": "Wymień"
+    },
+    "toasts": {
+      "loadFailed": "Nie udało się wczytać ustawień powiadomień",
+      "pushEnabled": "Włączono push w przeglądarce dla tej instancji",
+      "pushDisabled": "Wyłączono push w przeglądarce dla tej instancji",
+      "pushToggleFailed": "Nie udało się zmienić ustawienia push w przeglądarce",
+      "rotated": "{count, plural, =0 {Wymieniono parę kluczy} one {Wymieniono parę kluczy; 1 urządzenie musi zarejestrować się ponownie} few {Wymieniono parę kluczy; # urządzenia muszą zarejestrować się ponownie} many {Wymieniono parę kluczy; # urządzeń musi zarejestrować się ponownie} other {Wymieniono parę kluczy; # urządzenia musi zarejestrować się ponownie}}",
+      "rotateFailed": "Nie udało się wymienić pary kluczy"
+    }
+  },
+  "backupsPage": {
+    "title": "Kopie zapasowe",
+    "subtitle": "Zaplanowane, skompresowane pliki kopii zapasowych danych finansowych każdego konta.",
+    "scope": {
+      "heading": "To nie jest pełna kopia zapasowa bazy danych",
+      "perUser": "Zgodnie z harmonogramem poniżej serwer zapisuje skompresowany plik kopii zapasowej danych finansowych każdego konta i usuwa starsze zgodnie z polityką przechowywania. Obejmuje to wszystkie aktywne konta.",
+      "notFullDatabase": "To nie jest zrzut PostgreSQL: nie obejmuje schematu, konfiguracji serwera ani niczego poza danymi finansowymi konta. Aby przywrócić całą instancję po awarii, wykonaj kopię bazy danych i magazynu załączników własnymi narzędziami."
+    },
+    "demoRestricted": {
+      "heading": "Ograniczone w trybie demonstracyjnym",
+      "body": "Konfiguracja automatycznej kopii zapasowej jest wyłączona w trybie demonstracyjnym."
     }
   }
 }

@@ -3,6 +3,7 @@ import {
   mnyExchangeRate,
   mnySecurityPrice,
 } from "../__fixtures__/mny-row-builders";
+import { roundFxRate } from "../../../common/fx-entry.util";
 import {
   MNY_PRICE_SOURCE,
   UPSERT_CHUNK_SIZE,
@@ -25,10 +26,18 @@ const securityIds = new Map([
   [2, "ssssssss-0000-0000-0000-000000000002"],
 ]);
 
-function doubles() {
+/**
+ * A manager whose raw SQL is `query` and whose `currencies` read answers the
+ * CRYPTO codes in `coins` (the writer orients a coin pair coin -> fiat).
+ */
+function doubles(coins: readonly string[] = []) {
   const query = jest.fn().mockResolvedValue([]);
-  const manager = { query } as unknown as EntityManager;
-  return { manager, query };
+  const find = jest.fn().mockResolvedValue(coins.map((code) => ({ code })));
+  const manager = {
+    query,
+    getRepository: jest.fn(() => ({ find })),
+  } as unknown as EntityManager;
+  return { manager, query, find };
 }
 
 describe("dedupePrices", () => {
@@ -184,7 +193,10 @@ describe("resolveExchangeRates", () => {
     [2, "GBP"],
   ]);
 
-  it("resolves handles into ISO codes", () => {
+  it("resolves handles into ISO codes and orients the pair", () => {
+    // Money recorded USD->GBP; the table stores each pair once, in the
+    // orientation whose codes sort first, so the rate is inverted at ten
+    // decimals to match (INV-FX-003).
     const rows = resolveExchangeRates(
       [
         mnyExchangeRate({
@@ -199,9 +211,42 @@ describe("resolveExchangeRates", () => {
 
     expect(rows).toEqual([
       {
-        fromCurrency: "USD",
-        toCurrency: "GBP",
-        rate: 0.79,
+        fromCurrency: "GBP",
+        toCurrency: "USD",
+        rate: roundFxRate(1 / 0.79),
+        rateDate: "2026-01-05",
+      },
+    ]);
+  });
+
+  it("collapses the same pair and date recorded in both directions", () => {
+    // A file that records USD->GBP and GBP->USD for one day used to become two
+    // rows that nothing kept reciprocal. They now share a key, so the later row
+    // wins exactly as two recordings of one direction do -- and the multi-row
+    // upsert cannot see the same conflict key twice.
+    const rows = resolveExchangeRates(
+      [
+        mnyExchangeRate({
+          fromCurrency: 1,
+          toCurrency: 2,
+          rate: 0.79,
+          date: "2026-01-05",
+        }),
+        mnyExchangeRate({
+          fromCurrency: 2,
+          toCurrency: 1,
+          rate: 1.3,
+          date: "2026-01-05",
+        }),
+      ],
+      currencies,
+    );
+
+    expect(rows).toEqual([
+      {
+        fromCurrency: "GBP",
+        toCurrency: "USD",
+        rate: 1.3,
         rateDate: "2026-01-05",
       },
     ]);
@@ -266,9 +311,9 @@ describe("resolveExchangeRates", () => {
 
     expect(rows).toEqual([
       {
-        fromCurrency: "USD",
-        toCurrency: "GBP",
-        rate: 0.8,
+        fromCurrency: "GBP",
+        toCurrency: "USD",
+        rate: roundFxRate(1 / 0.8),
         rateDate: "2026-01-05",
       },
     ]);
@@ -276,8 +321,9 @@ describe("resolveExchangeRates", () => {
 });
 
 describe("writeExchangeRates", () => {
-  it("upserts additively on the pair and date", async () => {
+  it("inserts additively on the pair and date", async () => {
     const { manager, query } = doubles();
+    query.mockResolvedValueOnce([{ id: 1 }]);
 
     const written = await writeExchangeRates(
       manager,
@@ -300,12 +346,132 @@ describe("writeExchangeRates", () => {
       "ON CONFLICT (from_currency, to_currency, rate_date)",
     );
     expect(query.mock.calls[0][1]).toEqual([
-      "USD",
       "GBP",
-      0.79,
+      "USD",
+      roundFxRate(1 / 0.79),
       "2026-01-05",
       MNY_PRICE_SOURCE,
     ]);
+  });
+
+  // INV-FX-004. `exchange_rates` is shared by every user on the deployment, so a
+  // Money file -- which may record what one user's bank charged rather than the
+  // market -- must not replace a rate already there. The writer used to
+  // `DO UPDATE`, which let one user's import revalue every other user's history.
+  it("never overwrites a rate the global table already holds", async () => {
+    const { manager, query } = doubles();
+
+    await writeExchangeRates(
+      manager,
+      [
+        mnyExchangeRate({
+          fromCurrency: 1,
+          toCurrency: 2,
+          rate: 4.17,
+          date: "2026-01-05",
+        }),
+      ],
+      new Map([
+        [1, "EUR"],
+        [2, "PLN"],
+      ]),
+    );
+
+    const sql = query.mock.calls[0][0] as string;
+    expect(sql).toMatch(
+      /ON CONFLICT \(from_currency, to_currency, rate_date\) DO NOTHING/,
+    );
+    expect(sql).not.toMatch(/DO\s+UPDATE/i);
+  });
+
+  it("counts only the rows that landed, not the ones a conflict skipped", async () => {
+    const { manager, query } = doubles();
+    // Two usable rates offered; the database already held one of them, so the
+    // insert returns a single row.
+    query.mockResolvedValueOnce([{ id: 7 }]);
+
+    const written = await writeExchangeRates(
+      manager,
+      [
+        mnyExchangeRate({
+          fromCurrency: 1,
+          toCurrency: 2,
+          rate: 4.17,
+          date: "2026-01-05",
+        }),
+        mnyExchangeRate({
+          fromCurrency: 1,
+          toCurrency: 2,
+          rate: 4.18,
+          date: "2026-01-06",
+        }),
+      ],
+      new Map([
+        [1, "EUR"],
+        [2, "PLN"],
+      ]),
+    );
+
+    expect(query).toHaveBeenCalledTimes(1);
+    expect(written).toBe(1);
+  });
+
+  // A coin pair is stored coin -> fiat whichever code sorts first: IDR sorts
+  // before XBT, but IDR->XBT at 1/1.52e9 keeps one significant figure at ten
+  // decimals and resolves back 6% off.
+  it("stores a coin pair coin-first whatever the code order", async () => {
+    const { manager, query, find } = doubles(["XBT"]);
+    query.mockResolvedValueOnce([{ id: 1 }]);
+
+    await writeExchangeRates(
+      manager,
+      [
+        mnyExchangeRate({
+          fromCurrency: 1,
+          toCurrency: 2,
+          rate: roundFxRate(1 / 1.52e9),
+          date: "2026-01-05",
+        }),
+        mnyExchangeRate({
+          fromCurrency: 2,
+          toCurrency: 1,
+          rate: 1.52e9,
+          date: "2026-01-06",
+        }),
+      ],
+      new Map([
+        [1, "IDR"],
+        [2, "XBT"],
+      ]),
+    );
+
+    expect(find).toHaveBeenCalledTimes(1);
+    const params = query.mock.calls[0][1] as unknown[];
+    expect(params.slice(5, 7)).toEqual(["XBT", "IDR"]);
+    expect(params[7] as number).toBeCloseTo(1.52e9, 3);
+    expect(params.slice(8, 10)).toEqual(["2026-01-06", MNY_PRICE_SOURCE]);
+    expect(params[0]).toBe("XBT");
+    expect(params[1]).toBe("IDR");
+  });
+
+  it("drops a rate the column cannot hold rather than failing the insert", () => {
+    const rows = resolveExchangeRates(
+      [
+        mnyExchangeRate({
+          fromCurrency: 1,
+          toCurrency: 2,
+          rate: 1.1e10,
+          date: "2026-01-05",
+        }),
+      ],
+      new Map([
+        [1, "BTC"],
+        [2, "LBP"],
+      ]),
+      (code) => code === "BTC",
+    );
+
+    expect(rows).toEqual([]);
   });
 
   it("issues no statement when the file has no usable rates", async () => {

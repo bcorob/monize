@@ -3,6 +3,7 @@
 import { useTranslations } from 'next-intl';
 import type { BudgetCategory, CategoryBreakdown } from '@/types/budget';
 
+import { useNumberFormat } from '@/hooks/useNumberFormat';
 interface Budget503020SummaryProps {
   budgetCategories: BudgetCategory[];
   categoryBreakdown: CategoryBreakdown[];
@@ -23,6 +24,7 @@ export function Budget503020Summary({
   formatCurrency,
 }: Budget503020SummaryProps) {
   const t = useTranslations('budgets');
+  const { formatPercentTrimmed } = useNumberFormat();
   // Build a map from budgetCategoryId to categoryGroup
   const groupMap = new Map<string, string>();
   for (const bc of budgetCategories) {
@@ -91,7 +93,7 @@ export function Budget503020Summary({
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={`text-sm font-medium ${statusColor}`}>
-                    {actualPercent}%
+                    {formatPercentTrimmed(actualPercent)}
                   </span>
                   <span className="text-xs text-gray-500 dark:text-gray-400">
                     {formatCurrency(data.spent)}

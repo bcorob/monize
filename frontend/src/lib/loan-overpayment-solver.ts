@@ -5,6 +5,7 @@ import {
   RecurringOverpaymentFrequency,
   generateLoanSchedule,
 } from '@/lib/loan-schedule';
+import { roundToCents } from '@/lib/format';
 
 /**
  * Goal-seek helpers for the overpayment simulator: given a target (a total
@@ -160,7 +161,10 @@ function scheduleWith(
 }
 
 /** A generous upper bound: a recurring extra this large clears the balance in
- *  roughly one period, so the true answer always lies below it. */
+ *  roughly one period, so the true answer always lies below it. For a LINEAR
+ *  or INTEREST_ONLY mortgage `paymentAmount` is the first projected
+ *  installment (`LoanScheduleInput`), the figure that stands in for the
+ *  constant payment those methods do not have. */
 function upperBound(base: LoanScheduleInput): number {
   return Math.max(base.startingBalance, base.paymentAmount * 2, 1);
 }
@@ -188,32 +192,6 @@ function roundUpTo(amount: number, step: number): number {
  */
 function snapToStep(multiple: number, step: number): number {
   return Number((multiple * step).toFixed(9));
-}
-
-/**
- * Smallest recurring extra whose schedule leaves total interest at or below
- * `targetInterest`.
- * - `already-met`: the loan already costs that little (or less) with no extra.
- * - `unreachable`: even the maximum extra cannot get interest that low (the
- *   target is below the interest of a near-immediate payoff).
- * - `baseline-incomplete`: the loan does not pay off inside the projection
- *   horizon, so what it costs over its life is unknown.
- */
-export function solveRecurringForTargetInterest(
-  base: LoanScheduleInput,
-  targetInterest: number,
-  mode: OverpaymentMode = 'SHORTEN_TERM',
-  step = 1,
-  window: SolveWindow = {},
-): SolveResult {
-  return solveTargetInterestWithBaseline(
-    base,
-    scheduleWith(base, 0, mode),
-    targetInterest,
-    mode,
-    step,
-    window,
-  );
 }
 
 /** Core of the target-interest solve, reusing an already-computed baseline so
@@ -274,7 +252,7 @@ function solveTargetInterestWithBaseline(
     status: 'ok',
     amount,
     result,
-    interestSaved: round2(baseline.totalInterest - result.totalInterest),
+    interestSaved: roundToCents(baseline.totalInterest - result.totalInterest),
   };
 }
 
@@ -305,10 +283,6 @@ export function solveRecurringForInterestSavings(
     step,
     window,
   );
-}
-
-function round2(value: number): number {
-  return Math.round(value * 100) / 100;
 }
 
 /**
@@ -356,7 +330,7 @@ export function solveRecurringForPayoffMonth(
     // The date target is met either way, but the saving is only a number when
     // the baseline paid off too -- otherwise it is a horizon minus a lifetime.
     interestSaved: baseline.paidOff
-      ? round2(baseline.totalInterest - result.totalInterest)
+      ? roundToCents(baseline.totalInterest - result.totalInterest)
       : null,
   };
 }

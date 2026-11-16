@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { screen, fireEvent } from '@testing-library/react';
+import { screen, fireEvent, within } from '@testing-library/react';
 import { render } from '@/test/render';
 import { AccountSwitcher } from './AccountSwitcher';
 import type { Account } from '@/types/account';
@@ -49,6 +49,121 @@ describe('AccountSwitcher', () => {
     fireEvent.click(screen.getByRole('menuitem', { name: /Savings/ }));
     expect(onSelect).toHaveBeenCalledWith('acc-2');
     expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('lists the accounts alphabetically', () => {
+    // Previously in whatever order the API answered in.
+    open(
+      [
+        account('acc-1', 'Everyday Chequing'),
+        account('acc-4', 'Zephyr Savings', 'SAVINGS'),
+        account('acc-2', 'Anchor Loan', 'LOAN'),
+        account('acc-3', 'Mid Savings', 'SAVINGS'),
+      ],
+    );
+    expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+      'Anchor LoanLoan',
+      'Mid SavingsSavings',
+      'Zephyr SavingsSavings',
+    ]);
+  });
+
+  describe('favourites', () => {
+    const starred = (id: string, name: string, sortOrder: number, type = 'SAVINGS') =>
+      ({
+        ...account(id, name, type),
+        isFavourite: true,
+        favouriteSortOrder: sortOrder,
+      }) as Account;
+
+    it('lifts the starred accounts into their own section, above the rest', () => {
+      open([
+        account('acc-1', 'Everyday Chequing'),
+        account('acc-2', 'Anchor Loan', 'LOAN'),
+        starred('acc-3', 'Zephyr Savings', 1),
+      ]);
+
+      // Last alphabetically, first in the menu: the section decides.
+      expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
+        'Zephyr SavingsSavings',
+        'Anchor LoanLoan',
+      ]);
+      expect(
+        within(screen.getByRole('group', { name: 'Favourites' }))
+          .getAllByRole('menuitem')
+          .map((item) => item.textContent),
+      ).toEqual(['Zephyr SavingsSavings']);
+      expect(
+        within(screen.getByRole('group', { name: 'Other accounts' })).getAllByRole(
+          'menuitem',
+        ),
+      ).toHaveLength(1);
+    });
+
+    it('orders the starred accounts the way the user arranged them', () => {
+      open([
+        account('acc-1', 'Everyday Chequing'),
+        starred('acc-2', 'Alpha', 2),
+        starred('acc-3', 'Beta', 1),
+      ]);
+      expect(
+        within(screen.getByRole('group', { name: 'Favourites' }))
+          .getAllByRole('menuitem')
+          .map((item) => item.textContent),
+      ).toEqual(['BetaSavings', 'AlphaSavings']);
+    });
+
+    it('falls back to alphabetical where the arrangement does not separate them', () => {
+      // `favourite_sort_order` defaults to 0, so a user who starred three
+      // accounts and never dragged them has three ties -- and a stable sort
+      // would leave those in whatever order the API answered in.
+      open([
+        account('acc-1', 'Everyday Chequing'),
+        starred('acc-2', 'Zephyr', 0),
+        starred('acc-3', 'Anchor', 0),
+        starred('acc-4', 'Mid', 0),
+      ]);
+      expect(
+        within(screen.getByRole('group', { name: 'Favourites' }))
+          .getAllByRole('menuitem')
+          .map((item) => item.textContent),
+      ).toEqual(['AnchorSavings', 'MidSavings', 'ZephyrSavings']);
+    });
+
+    it('leaves the menu unsectioned when nothing is starred', () => {
+      open(two);
+      expect(screen.queryAllByRole('group')).toHaveLength(0);
+    });
+
+    it('leaves the menu unsectioned when the only starred account is this one', () => {
+      // The switcher never offers the account on screen, so the Favourites
+      // heading would have nothing under it.
+      open([starred('acc-1', 'Everyday Chequing', 1, 'CHEQUING'), two[1]], 'acc-1');
+      expect(screen.queryAllByRole('group')).toHaveLength(0);
+      expect(screen.getAllByRole('menuitem')).toHaveLength(1);
+    });
+
+    it('sorts a linked pair by the name it shows, not the stored one', () => {
+      // `displayName` strips the " - Brokerage" suffix, so ordering on the
+      // stored name would put this pair somewhere the reader cannot predict.
+      open([
+        account('acc-1', 'Everyday Chequing'),
+        account('acc-2', 'Anchor Loan', 'LOAN'),
+        {
+          ...account('brok-1', 'Zephyr TFSA - Brokerage', 'INVESTMENT'),
+          accountSubType: 'INVESTMENT_BROKERAGE',
+          linkedAccountId: 'cash-1',
+        } as Account,
+        {
+          ...account('cash-1', 'Zephyr TFSA - Cash', 'INVESTMENT'),
+          accountSubType: 'INVESTMENT_CASH',
+          linkedAccountId: 'brok-1',
+        } as Account,
+      ]);
+      expect(
+        screen.getAllByRole('menuitem').map((item) => item.textContent),
+      ).toEqual(['Anchor LoanLoan', 'Zephyr TFSAInvestment']);
+    });
   });
 
   it('filters a long list by name or type', () => {

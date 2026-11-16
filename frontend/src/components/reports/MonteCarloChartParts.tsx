@@ -3,6 +3,8 @@
 import { CashFlowType } from '@/lib/monte-carlo';
 import { chartColors } from '@/lib/chart-colors';
 import { useTranslations } from 'next-intl';
+import { gainLossColor } from '@/lib/format';
+import { CHART_TOOLTIP_CLASS } from '@/lib/chart-style';
 
 export interface CashFlowEvent {
   role: 'start' | 'end';
@@ -62,7 +64,7 @@ export function FanChartTooltip({
   events,
 }: {
   active?: boolean;
-  payload?: Array<{ payload?: Record<string, number> }>;
+  payload?: ReadonlyArray<{ payload?: Record<string, number> }>;
   label?: string;
   fmt: (v: number) => string;
   events?: CashFlowEvent[];
@@ -80,7 +82,7 @@ export function FanChartTooltip({
     [t('monteCarlo.tooltipRow10th'), row.p10],
   ];
   return (
-    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3 text-sm max-w-xs">
+    <div className={`${CHART_TOOLTIP_CLASS} text-sm max-w-xs`}>
       <p className="font-medium text-gray-900 dark:text-gray-100 mb-1">{label}</p>
       {rows.map(([name, value]) => (
         <p
@@ -104,13 +106,7 @@ export function FanChartTooltip({
                     ? e.name
                     : `${e.role === 'start' ? t('monteCarloResults.starts') : t('monteCarloResults.ends')}: ${e.name}`}
                 </div>
-                <div
-                  className={
-                    e.income
-                      ? 'text-emerald-700 dark:text-emerald-400'
-                      : 'text-red-700 dark:text-red-400'
-                  }
-                >
+                <div className={gainLossColor(e.income ? 1 : -1)}>
                   {e.income ? '+' : ''}
                   {fmt(e.amount)}
                   {e.flowType === 'RECURRING' ? ` ${t('monteCarlo.cashFlowPerYear')}` : ''}

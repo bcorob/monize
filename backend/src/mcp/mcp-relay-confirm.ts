@@ -1,6 +1,6 @@
 import type { AiRelayService } from "../ai/relay/ai-relay.service";
 import type { PendingAiAction } from "../ai/actions/ai-action.types";
-import { currentMcpSessionId } from "./mcp-session-context";
+import { currentMcpCallerKey } from "./mcp-session-context";
 
 /**
  * The ONE way an MCP write tool offers its confirmation card to the web chat.
@@ -11,7 +11,7 @@ import { currentMcpSessionId } from "./mcp-session-context";
  * `confirmWrite` in the calling MCP client.
  *
  * Tools must not call `relayService.emitPendingAction` directly: the decision
- * depends on the *calling session*, which lives in the ambient MCP session
+ * depends on the *calling client*, which lives in the ambient MCP caller
  * context, and a call site that forgets to pass it sends a direct client's
  * confirmation to a web chat nobody is watching. `mcp-relay-confirm.spec.ts`
  * scans the tool sources and fails on a direct call.
@@ -20,8 +20,8 @@ export function emitRelayCard(
   relayService: AiRelayService,
   userId: string,
   action: PendingAiAction,
-): boolean {
-  return relayService.emitPendingAction(userId, action, currentMcpSessionId());
+): Promise<boolean> {
+  return relayService.emitPendingAction(userId, action, currentMcpCallerKey());
 }
 
 /**

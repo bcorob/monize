@@ -6,19 +6,19 @@
  * excessive modifications to financial data.
  *
  * The mechanism lives in the shared `DailyWriteLimiter` so the AI Assistant's
- * action-confirmation endpoint enforces the same kind of cap.
+ * action-confirmation endpoint enforces the same kind of cap; the count is a
+ * row under `MCP_WRITE_SCOPE`, shared by every replica.
  */
 
 import { Injectable, Optional } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { AuthAttemptCounterService } from "../auth/auth-attempt-counter.service";
 import {
   DailyWriteLimiter,
-  WriteOperation,
+  MCP_WRITE_SCOPE,
   resolveDailyWriteLimit,
 } from "../common/daily-write-limiter";
 import { toolError } from "./mcp-context";
-
-export type { WriteOperation };
 
 /**
  * Default maximum number of write operations per user per day via MCP. Override
@@ -40,8 +40,13 @@ export const MCP_DAILY_WRITE_LIMIT = 50;
  */
 @Injectable()
 export class McpWriteLimiter extends DailyWriteLimiter {
-  constructor(@Optional() configService?: ConfigService) {
+  constructor(
+    counters: AuthAttemptCounterService,
+    @Optional() configService?: ConfigService,
+  ) {
     super(
+      counters,
+      MCP_WRITE_SCOPE,
       resolveDailyWriteLimit(
         configService?.get("MCP_DAILY_WRITE_LIMIT"),
         MCP_DAILY_WRITE_LIMIT,
@@ -54,8 +59,8 @@ export class McpWriteLimiter extends DailyWriteLimiter {
    * when the reservation would exceed the limit, or `undefined` when allowed.
    * Built on top of `checkLimit` so callers can record the writes afterwards.
    */
-  reserve(userId: string, count: number) {
-    const limitCheck = this.checkLimit(userId);
+  async reserve(userId: string, count: number) {
+    const limitCheck = await this.checkLimit(userId);
     if (limitCheck.currentCount + count > limitCheck.limit) {
       return toolError(
         `Daily write limit reached (${limitCheck.limit} operations per day). Try again tomorrow.`,

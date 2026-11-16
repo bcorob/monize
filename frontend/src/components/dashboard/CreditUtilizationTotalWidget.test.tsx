@@ -9,10 +9,12 @@ vi.mock('recharts', async () => (await import('@/test/recharts-mock')).rechartsM
 vi.mock('@/hooks/useWidgetConfig', () => ({
   useWidgetConfig: () => ({ config: { accountIds: [] }, updateConfig: vi.fn() }),
 }));
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({ formatCurrency: (n: number) => `$${n}` }),
-}));
-vi.mock('@/hooks/useExchangeRates', () => ({
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({ ...numberFormatMockDefaults(), formatCurrency: (n: number) => `$${n}` }),
+  };
+});vi.mock('@/hooks/useExchangeRates', () => ({
   useExchangeRates: () => ({ convert: (n: number) => n, defaultCurrency: 'USD' }),
 }));
 

@@ -273,3 +273,201 @@ describe("Scheduled loan dated ledger balance (integration)", () => {
     expect(anchor).toEqual({ nextDueDate: null, debt: null });
   });
 });
+
+/**
+ * The PostgreSQL half of INV-LOAN-006 for a LINEAR mortgage
+ * (docs/specs/mortgage-types.md, section 6.2 and table 7.3): the installment
+ * prices the ledger debt through its due date and, for LOWER_INSTALLMENT, the
+ * remaining scheduled payments counted from the calendar -- including for a
+ * next due date the user moved off it, which counts the calendar dates on or
+ * before it (section 2, `k(d)`). EUR 300,000 over 360 monthly payments from
+ * 2024-01-01 at 2.00%, with no rate history.
+ */
+describe("Scheduled LINEAR mortgage against the dated ledger (integration)", () => {
+  let module: TestingModule;
+  let service: ScheduledTransactionLoanService;
+  let dataSource: DataSource;
+  let userId: string;
+  let mortgageId: string;
+  let scheduledId: string;
+  let principalSplitId: string;
+  let interestSplitId: string;
+
+  beforeAll(async () => {
+    module = await createIntegrationModule([ScheduledLoanTestModule]);
+    service = module.get(ScheduledTransactionLoanService);
+    dataSource = module.get(DataSource);
+  });
+
+  afterAll(async () => {
+    await module.close();
+  });
+
+  beforeEach(async () => {
+    await cleanTables(dataSource, [
+      "scheduled_transaction_splits",
+      "scheduled_transactions",
+      "transactions",
+      "accounts",
+      "categories",
+      "users",
+    ]);
+    await dataSource.query(
+      `INSERT INTO currencies (code, name, symbol, decimal_places)
+       VALUES ('EUR', 'Euro', 'EUR', 2)
+       ON CONFLICT DO NOTHING`,
+    );
+    userId = (await createTestUserDirect(dataSource)).id;
+    const chequing = await createTestAccount(dataSource, userId, {
+      name: "Betaalrekening",
+      currencyCode: "EUR",
+      openingBalance: 50000,
+      currentBalance: 50000,
+    });
+    const interestCategory = await createTestCategory(dataSource, userId, {
+      name: "Hypotheekrente",
+    });
+    const mortgage = await createTestAccount(dataSource, userId, {
+      name: "Hypotheek",
+      currencyCode: "EUR",
+      openingBalance: -300000,
+      currentBalance: -300000,
+    });
+    mortgageId = mortgage.id;
+    await dataSource.manager.update(Account, mortgageId, {
+      accountType: AccountType.MORTGAGE,
+      mortgageType: "LINEAR",
+      prepaymentMode: "LOWER_INSTALLMENT",
+      interestRate: 2,
+      paymentAmount: null,
+      paymentFrequency: "MONTHLY",
+      paymentStartDate: "2024-01-01" as unknown as Date,
+      amortizationMonths: 360,
+      originalPrincipal: 300000,
+      interestCategoryId: interestCategory.id,
+    });
+
+    const scheduled = await dataSource.manager.save(
+      dataSource.manager.create(ScheduledTransaction, {
+        userId,
+        accountId: chequing.id,
+        name: "Hypotheek",
+        amount: -1308.3333,
+        currencyCode: "EUR",
+        frequency: "MONTHLY",
+        nextDueDate: "2025-07-01",
+        startDate: "2024-01-01",
+        isActive: true,
+        isSplit: true,
+      } as Partial<ScheduledTransaction>),
+    );
+    scheduledId = scheduled.id;
+    principalSplitId = (
+      await dataSource.manager.save(
+        dataSource.manager.create(ScheduledTransactionSplit, {
+          scheduledTransactionId: scheduledId,
+          kind: "transfer",
+          transferAccountId: mortgageId,
+          amount: -833.3333,
+          memo: "Principal",
+        } as Partial<ScheduledTransactionSplit>),
+      )
+    ).id;
+    interestSplitId = (
+      await dataSource.manager.save(
+        dataSource.manager.create(ScheduledTransactionSplit, {
+          scheduledTransactionId: scheduledId,
+          kind: "category",
+          categoryId: interestCategory.id,
+          amount: -475,
+          memo: "Interest",
+        } as Partial<ScheduledTransactionSplit>),
+      )
+    ).id;
+
+    const insertMortgageRow = (amount: number, date: string) =>
+      dataSource.manager.save(
+        dataSource.manager.create(Transaction, {
+          userId,
+          accountId: mortgageId,
+          transactionDate: date,
+          amount,
+          currencyCode: "EUR",
+          status: "UNRECONCILED",
+        } as Partial<Transaction>),
+      );
+    // Eighteen installments of 833.3333 (2024-01-01 to 2025-06-01), the
+    // 20,000 repayment on the 2025-07-01 due date, and a 1,000 repayment
+    // after it that belongs to a later installment.
+    for (let n = 0; n < 18; n++) {
+      const month = String((n % 12) + 1).padStart(2, "0");
+      await insertMortgageRow(
+        833.3333,
+        `${2024 + Math.floor(n / 12)}-${month}-01`,
+      );
+    }
+    await insertMortgageRow(20000, "2025-07-01");
+    await insertMortgageRow(1000, "2025-07-05");
+  });
+
+  const templateAmounts = async () => {
+    const splits = await dataSource.manager.find(ScheduledTransactionSplit, {
+      where: { scheduledTransactionId: scheduledId },
+    });
+    const scheduled = await dataSource.manager.findOne(ScheduledTransaction, {
+      where: { id: scheduledId },
+    });
+    return {
+      principal: Number(splits.find((s) => s.id === principalSplitId)!.amount),
+      interest: Number(splits.find((s) => s.id === interestSplitId)!.amount),
+      parent: Number(scheduled!.amount),
+    };
+  };
+
+  it("re-derives the principal from the dated debt over the remaining payments", async () => {
+    // Debt through 2025-07-01: 265,000.0006, remaining 342 (spec table 7.3).
+    await withUserContext(userId, () =>
+      service.recalculateLoanPaymentSplits(scheduledId),
+    );
+
+    expect(await templateAmounts()).toEqual({
+      principal: -774.8538,
+      interest: -441.6667,
+      parent: -1216.5205,
+    });
+  });
+
+  it("counts a due date moved off the calendar as the calendar dates before it", async () => {
+    // 2025-07-10 is k = 19, the same as 2025-07-01, so remaining stays 342;
+    // the debt now includes the 1,000 repaid on 2025-07-05: 264,000.0006.
+    await dataSource.manager.update(ScheduledTransaction, scheduledId, {
+      nextDueDate: "2025-07-10",
+    });
+
+    await withUserContext(userId, () =>
+      service.recalculateLoanPaymentSplits(scheduledId),
+    );
+
+    expect(await templateAmounts()).toEqual({
+      principal: -771.9298,
+      interest: -440,
+      parent: -1211.9298,
+    });
+  });
+
+  it("keeps the constant principal for SHORTEN_TERM on the same ledger", async () => {
+    await dataSource.manager.update(Account, mortgageId, {
+      prepaymentMode: null,
+    });
+
+    await withUserContext(userId, () =>
+      service.recalculateLoanPaymentSplits(scheduledId),
+    );
+
+    expect(await templateAmounts()).toEqual({
+      principal: -833.3333,
+      interest: -441.6667,
+      parent: -1275,
+    });
+  });
+});

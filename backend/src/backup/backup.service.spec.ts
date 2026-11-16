@@ -1,5 +1,9 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { gemConfigFingerprint } from "../strategies/gem-signal.service";
+import { BondPriceService } from "../bonds/bond-price.service";
+import { CryptoFxProvider } from "../currencies/providers/crypto-fx.provider";
+import { NetWorthService } from "../net-worth/net-worth.service";
+import { RateHistoryCatchUpService } from "../currencies/rate-history-catch-up.service";
 import { DataSource } from "typeorm";
 import {
   UnauthorizedException,
@@ -19,14 +23,21 @@ import { OidcReauthService } from "../auth/oidc/oidc-reauth.service";
 import { BackupService, RestoreBackupInput } from "./backup.service";
 import { BackupExportService } from "./backup-export.service";
 import { BackupRestoreService } from "./backup-restore.service";
-import { BackupAttachmentTransferService } from "./backup-attachment-transfer.service";
+import {
+  BackupAttachmentTransferService,
+  RESTORE_STAGING_INTENT_LEASE_MS,
+} from "./backup-attachment-transfer.service";
 import { BackupRestoreDatabaseService } from "./backup-restore-database.service";
+import { BackupBondSeriesRecoveryService } from "./backup-bond-series-recovery.service";
+import { BackupData } from "./backup-format";
 import { buildExportTableQueries } from "./export-table-queries";
 import { ATTACHMENT_EXPORT_SQL } from "./export-attachments";
+import { AttachmentStorageRegistry } from "../attachments/storage/attachment-storage.registry";
 import { restoreProcessingGate } from "./restore-processing-gate";
 import { User } from "../users/entities/user.entity";
 import { EncryptionService } from "../common/encryption/encryption.service";
 import { encryptBackup } from "./backup-crypto.util";
+import { createWrappedBackupKey } from "./backup-key-wrap";
 import * as bcrypt from "bcryptjs";
 import {
   createScopedDbMocks,
@@ -159,11 +170,15 @@ describe("BackupService", () => {
   let maintenance: UserMaintenanceMock;
   let mockDataSource: Record<string, jest.Mock>;
   let mockQueryRunner: Record<string, jest.Mock>;
+  /** Storage keys whose staging intent the (modelled) sweeper has claimed. */
+  let sweptIntentKeys: Set<string>;
   // Typed rather than Record<string, jest.Mock>: this is one of our own
   // interfaces, so tsc should reject a return shape the real provider cannot
-  // produce (backend/CLAUDE.md, "a mock must return what the real collaborator
+  // produce (docs/backend/testing.md, "a mock must return what the real collaborator
   // returns").
   let attachmentStorage: jest.Mocked<AttachmentStorageProvider>;
+  /** A second registered backend, for the part-way-through-a-switch case. */
+  let previousAttachmentStorage: jest.Mocked<AttachmentStorageProvider>;
   let attachmentStorageName: string;
 
   /**
@@ -414,13 +429,23 @@ describe("BackupService", () => {
       "created_at",
       "updated_at",
     ],
-    budget_alerts: [
+    notifications: [
       "id",
+      "user_id",
       "budget_id",
-      "type",
-      "threshold",
+      "budget_category_id",
+      "alert_type",
+      "severity",
+      "title",
+      "message",
+      "data",
+      "target",
+      "is_read",
+      "is_email_sent",
+      "period_start",
       "created_at",
-      "updated_at",
+      "dismissed_at",
+      "dedupe_key",
     ],
     custom_reports: [
       "id",
@@ -546,9 +571,32 @@ describe("BackupService", () => {
       "created_at",
       "updated_at",
     ],
+    payee_lookup_settings: [
+      "user_id",
+      "api_key_enc",
+      "google_places_enabled",
+      "cap_enabled",
+      "monthly_cap",
+      "created_at",
+      "updated_at",
+    ],
   };
 
   function mockQueryHandler(sql: string, params?: unknown[]) {
+    if (typeof sql === "string" && sql.includes("attachment_blob_tombstones")) {
+      // The staging intent protocol (object-intent.ts). The insert comes back as
+      // bare rows, the fenced delete as the UPDATE/DELETE `[rows, count]` tuple,
+      // exactly as the postgres driver shapes them. `sweptIntentKeys` models the
+      // sweeper having claimed a key: the upsert refuses it, the clear finds none.
+      const key = Array.isArray(params) ? String(params[2] ?? params[1]) : "";
+      const swept = sweptIntentKeys.has(key);
+      if (sql.includes("INSERT INTO")) {
+        return Promise.resolve(swept ? [] : [{ id: "intent" }]);
+      }
+      if (sql.includes("DELETE FROM")) {
+        return Promise.resolve(swept ? [[], 0] : [[{ id: "intent" }], 1]);
+      }
+    }
     if (
       typeof sql === "string" &&
       sql.includes("FROM transaction_attachments") &&
@@ -614,6 +662,7 @@ describe("BackupService", () => {
       findOne: jest.fn(),
     };
     ownedAttachments = [];
+    sweptIntentKeys = new Set();
 
     // Export reads and the restore transaction now both run through
     // `withScopedDb`, so the former QueryRunner is the transaction's
@@ -650,8 +699,20 @@ describe("BackupService", () => {
       get name() {
         return attachmentStorageName;
       },
+      addressable: true,
       save: jest.fn().mockResolvedValue(undefined),
       load: jest.fn().mockRejectedValue(new Error("no such object")),
+      delete: jest.fn().mockResolvedValue(undefined),
+    } as unknown as jest.Mocked<AttachmentStorageProvider>;
+    // The backend a storage switch is moving away from: registered, addressable,
+    // never the active one. Its reads delegate to the same double so a test sets
+    // up objects in one place; what it proves is that the export reaches a row's
+    // OWN backend, which before this was counted as a missing object.
+    previousAttachmentStorage = {
+      name: "s3",
+      addressable: true,
+      save: jest.fn().mockResolvedValue(undefined),
+      load: jest.fn((key: string) => attachmentStorage.load(key)),
       delete: jest.fn().mockResolvedValue(undefined),
     } as unknown as jest.Mocked<AttachmentStorageProvider>;
 
@@ -666,6 +727,17 @@ describe("BackupService", () => {
         BackupRestoreService,
         BackupAttachmentTransferService,
         BackupRestoreDatabaseService,
+        // The restore's bond series recovery is its own spec's subject; here it
+        // finds nothing to recover.
+        {
+          provide: BackupBondSeriesRecoveryService,
+          useValue: {
+            recover: jest.fn(async (_userId: string, data: BackupData) => ({
+              data,
+              unrecovered: [],
+            })),
+          },
+        },
         {
           provide: DataSource,
           useValue: mockDataSource,
@@ -676,6 +748,30 @@ describe("BackupService", () => {
         // survived (P2-005).
         OidcReauthService,
         userMaintenanceProvider(maintenance),
+        {
+          provide: BondPriceService,
+          useValue: {
+            recomputeSecurity: jest.fn().mockResolvedValue({}),
+            recomputeLinkedSecurities: jest.fn().mockResolvedValue(undefined),
+          },
+        },
+        // Told after the commit that `currencies` may hold restored coins.
+        {
+          provide: CryptoFxProvider,
+          useValue: { forgetCurrencies: jest.fn() },
+        },
+        // Started after the commit for the restored accounts; the fill itself
+        // is its own spec's subject (import-post-processing.service.spec.ts).
+        {
+          provide: RateHistoryCatchUpService,
+          useValue: { start: jest.fn() },
+        },
+        {
+          provide: NetWorthService,
+          useValue: {
+            recalculateAccount: jest.fn().mockResolvedValue(undefined),
+          },
+        },
         // Two ciphers, deliberately: `EncryptionService` still owns the
         // provider API keys the export carries, while the stored backup password
         // moved to `EncryptionService` (whose key does not depend on optional
@@ -692,6 +788,15 @@ describe("BackupService", () => {
         {
           provide: ATTACHMENT_STORAGE_PROVIDER,
           useValue: attachmentStorage,
+        },
+        {
+          // The real registry over the same double: the export and the download
+          // both resolve a row's backend through it now.
+          provide: AttachmentStorageRegistry,
+          useValue: new AttachmentStorageRegistry(attachmentStorage, [
+            attachmentStorage,
+            previousAttachmentStorage,
+          ]),
         },
       ],
     }).compile();
@@ -839,6 +944,35 @@ describe("BackupService", () => {
       ]);
     });
 
+    it("carries an object still held in the backend a switch moved away from", async () => {
+      // `local` is where new bytes go; this row's are in `s3` because the
+      // relocation has not reached it yet. Both are configured, so both are
+      // readable -- and an export that compared each row against the BOUND
+      // provider called this attachment missing and the artifact incomplete.
+      attachmentStorageName = "local";
+      storeHoldsWithMetadata(
+        [
+          {
+            id: A_ID,
+            provider: "s3",
+            byte_size: A_BYTES.length,
+            sha256: createHash("sha256").update(A_BYTES).digest("hex"),
+          },
+        ],
+        { [A_ID]: A_BYTES },
+      );
+
+      const result = await exported();
+
+      expect(result.attachment_blobs).toEqual([
+        { attachment_id: A_ID, data: A_BYTES.toString("base64") },
+      ]);
+      expect(previousAttachmentStorage.load).toHaveBeenCalledWith(A_ID);
+      expect(result.completeness).toEqual(
+        expect.objectContaining({ complete: true, includedAttachments: 1 }),
+      );
+    });
+
     it("reads nothing from the store on a database-provider deployment", async () => {
       // Those bytes are already in `attachment_blobs`; there is no object store.
       attachmentStorageName = "database";
@@ -850,13 +984,24 @@ describe("BackupService", () => {
     });
 
     it("skips a row written by a provider this runtime cannot address", async () => {
+      // "Not the bound provider" and "not addressable" used to be the same test,
+      // because the export compared each row against the bound provider's name.
+      // They are different facts: `s3` beside a bound `local` is a switch in
+      // progress and readable (above), while a backend this deployment has no
+      // configuration for is a row whose bytes cannot travel.
       attachmentStorageName = "local";
-      storeHolds([{ id: A_ID, provider: "s3" }], { [A_ID]: A_BYTES });
+      storeHolds([{ id: A_ID, provider: "azure-blob" }], { [A_ID]: A_BYTES });
 
       const result = await exported();
 
       expect(attachmentStorage.load).not.toHaveBeenCalled();
+      expect(previousAttachmentStorage.load).not.toHaveBeenCalled();
       expect(result.attachment_blobs).toEqual([]);
+      // And the artifact says it is incomplete by that attachment rather than
+      // reporting a success it cannot honour.
+      expect(result.completeness).toEqual(
+        expect.objectContaining({ complete: false, missingAttachments: 1 }),
+      );
     });
 
     it("finishes the export when one object cannot be read", async () => {
@@ -1455,7 +1600,15 @@ describe("BackupService", () => {
 
     it("should stream gzip-compressed JSON to the response", async () => {
       const mockCategories = [{ id: "cat-1", name: "Food", user_id: userId }];
-      const mockAccounts = [{ id: "acc-1", name: "Checking", user_id: userId }];
+      const mockAccounts = [
+        {
+          id: "acc-1",
+          name: "Checking",
+          user_id: userId,
+          managed_purpose: null,
+          shared_expense_group_id: null,
+        },
+      ];
 
       mockDataSource.query.mockImplementation((sql: string) => {
         if (sql.includes("categories")) return Promise.resolve(mockCategories);
@@ -1624,6 +1777,39 @@ describe("BackupService", () => {
       const { buffer: buf } = await service.exportToBuffer(userId, "pw");
       expect(buf.subarray(0, 4).toString("ascii")).toBe("MZBE");
     });
+
+    it("writes the identity of the bond series the rows reference, never their terms", async () => {
+      const identity = {
+        bondInstrumentId: "4a893370-246b-5a51-9930-6d098aea37e1",
+        issuerCountryCode: "PL",
+        issuerCode: "PL_MF",
+        programCode: "EDO",
+        seriesCode: "EDO1036",
+      };
+      const sqls: string[] = [];
+      mockDataSource.query.mockImplementation(async (sql: string) => {
+        sqls.push(String(sql));
+        return String(sql).includes("FROM bond_instruments i")
+          ? [{ ...identity, annual_rate: "0.0535", terms: { margin: 1 } }]
+          : [];
+      });
+      const { buffer } = await service.exportToBuffer(userId);
+      const artifact = JSON.parse(gunzipSync(buffer).toString("utf-8"));
+      // Exactly the five identity fields, even if the row carried more.
+      expect(artifact.bondCatalog).toEqual({ series: [identity] });
+      const read = sqls.find((sql) => sql.includes("FROM bond_instruments i"))!;
+      expect(read).toMatch(/investment_transactions/);
+      expect(read).not.toMatch(/bond_terms_versions|bond_period_rates|terms/);
+      // The version is unchanged: the member is added the way `completeness` was.
+      expect(artifact.version).toBe(1);
+    });
+
+    it("writes an empty identity list for a user holding no bond series", async () => {
+      mockDataSource.query.mockResolvedValue([]);
+      const { buffer } = await service.exportToBuffer(userId);
+      const artifact = JSON.parse(gunzipSync(buffer).toString("utf-8"));
+      expect(artifact.bondCatalog).toEqual({ series: [] });
+    });
   });
 
   describe("resolveStoredBackupPassword", () => {
@@ -1697,11 +1883,12 @@ describe("BackupService", () => {
       budget_categories: [],
       budget_periods: [],
       budget_period_categories: [],
-      budget_alerts: [],
+      notifications: [],
       custom_reports: [],
       investment_reports: [],
       import_column_mappings: [],
       monthly_account_balances: [],
+      payee_lookup_settings: [],
     };
 
     function makeInput(
@@ -1715,6 +1902,469 @@ describe("BackupService", () => {
         ...rest,
       };
     }
+
+    describe("notification restore field bounds", () => {
+      it("rejects malformed fields before spending an OIDC artifact or staging bytes", async () => {
+        mockUserRepo.findOne.mockResolvedValue({
+          ...mockUser,
+          authProvider: "oidc",
+          passwordHash: null,
+        });
+        const artifact = oidcArtifact();
+        await expect(
+          service.restoreData(
+            userId,
+            makeInput({
+              oidcIdToken: artifact,
+              data: {
+                ...validBackupData,
+                notifications: [{ title: "ok", target: {} }],
+              },
+            }),
+          ),
+        ).rejects.toThrow("Invalid backup notification");
+        expect(
+          mockQueryRunner.query.mock.calls.filter(([sql]) =>
+            /DELETE FROM/.test(String(sql)),
+          ),
+        ).toEqual([]);
+        expect(attachmentStorage.save).not.toHaveBeenCalled();
+        await expect(
+          service.restoreData(userId, makeInput({ oidcIdToken: artifact })),
+        ).resolves.toHaveProperty("message", "Backup restored successfully");
+      });
+
+      it("recomputes the engine prices of the restored securities through BondPriceService after the commit", async () => {
+        mockUserRepo.findOne.mockResolvedValue(mockUser);
+        (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+        const bondPrices = (
+          service as unknown as {
+            restoreService: {
+              bondPrices: { recomputeLinkedSecurities: jest.Mock };
+            };
+          }
+        ).restoreService.bondPrices;
+        bondPrices.recomputeLinkedSecurities.mockClear();
+        const data = {
+          ...validBackupData,
+          securities: [
+            { id: "5ec00000-0000-4000-8000-000000000001", user_id: userId },
+            { id: "5ec00000-0000-4000-8000-000000000002", user_id: userId },
+          ],
+        };
+        await service.restoreData(
+          userId,
+          makeInput({ password: "test", data }),
+        );
+        // One call, with the ids the restore wrote (remapped), not a lookup of its
+        // own: the linked-only filter is BondPriceService's.
+        expect(bondPrices.recomputeLinkedSecurities).toHaveBeenCalledTimes(1);
+        const [calledUser, ids] =
+          bondPrices.recomputeLinkedSecurities.mock.calls[0];
+        expect(calledUser).toBe(userId);
+        expect(ids).toHaveLength(2);
+        expect(ids).not.toContain("5ec00000-0000-4000-8000-000000000001");
+      });
+
+      /**
+       * A restore inserts the backup's currencies, coins among them, and no
+       * `CurrenciesService` write tells the crypto adapter. Without the
+       * forget, a restored coin is unclaimed until the adapter's five-minute
+       * cache expires and its pairs go to Yahoo's `=X` grammar.
+       */
+      it("tells the crypto adapter to re-read currencies after the commit, not before or on a failure", async () => {
+        mockUserRepo.findOne.mockResolvedValue(mockUser);
+        (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+        const cryptoFx = (
+          service as unknown as {
+            restoreService: { cryptoFx: { forgetCurrencies: jest.Mock } };
+          }
+        ).restoreService.cryptoFx;
+        cryptoFx.forgetCurrencies.mockClear();
+        const forgottenInsideTransaction: boolean[] = [];
+        mockDataSource.transaction.mockImplementation(
+          async (fn: (m: unknown) => unknown) => {
+            const result = await fn(mockDataSource.manager);
+            forgottenInsideTransaction.push(
+              cryptoFx.forgetCurrencies.mock.calls.length > 0,
+            );
+            return result;
+          },
+        );
+
+        await service.restoreData(userId, makeInput({ password: "test" }));
+
+        expect(cryptoFx.forgetCurrencies).toHaveBeenCalledTimes(1);
+        expect(forgottenInsideTransaction.every((seen) => !seen)).toBe(true);
+
+        cryptoFx.forgetCurrencies.mockClear();
+        mockQueryRunner.query.mockImplementation(
+          (sql: string, params?: unknown[]) =>
+            typeof sql === "string" && sql.includes("DELETE FROM")
+              ? Promise.reject(new Error("restore failed"))
+              : mockQueryHandler(sql, params),
+        );
+        await expect(
+          service.restoreData(userId, makeInput({ password: "test" })),
+        ).rejects.toThrow();
+        expect(cryptoFx.forgetCurrencies).not.toHaveBeenCalled();
+      });
+
+      /**
+       * `exchange_rates` is not part of a backup, and the daily refresh only
+       * ever stores today, so a restored ledger reaching back years had no
+       * rate for any of them until the user found "Fill gaps in rate history"
+       * (issue #2226). The restore starts the fill an import runs, after the
+       * commit and never on a failure.
+       */
+      it("pulls the restored accounts' rate history after the commit, and recomputes their snapshots once rates landed", async () => {
+        mockUserRepo.findOne.mockResolvedValue(mockUser);
+        (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+        const { rateHistoryCatchUp, netWorth } = (
+          service as unknown as {
+            restoreService: {
+              rateHistoryCatchUp: { start: jest.Mock };
+              netWorth: { recalculateAccount: jest.Mock };
+            };
+          }
+        ).restoreService;
+        rateHistoryCatchUp.start.mockClear();
+        netWorth.recalculateAccount.mockClear();
+        const startedInsideTransaction: boolean[] = [];
+        mockDataSource.transaction.mockImplementation(
+          async (fn: (m: unknown) => unknown) => {
+            const result = await fn(mockDataSource.manager);
+            startedInsideTransaction.push(
+              rateHistoryCatchUp.start.mock.calls.length > 0,
+            );
+            return result;
+          },
+        );
+        const data = {
+          ...validBackupData,
+          accounts: [
+            { id: "acc00000-0000-4000-8000-000000000001", user_id: userId },
+            { id: "acc00000-0000-4000-8000-000000000002", user_id: userId },
+          ],
+        };
+
+        await service.restoreData(
+          userId,
+          makeInput({ password: "test", data }),
+        );
+
+        expect(rateHistoryCatchUp.start).toHaveBeenCalledTimes(1);
+        expect(startedInsideTransaction.every((seen) => !seen)).toBe(true);
+        const [calledUser, ids, label, onStored] =
+          rateHistoryCatchUp.start.mock.calls[0];
+        expect(calledUser).toBe(userId);
+        expect(label).toBe("Post-restore");
+        // The ids the restore wrote (remapped), not the file's.
+        expect(ids).toHaveLength(2);
+        expect(ids).not.toContain("acc00000-0000-4000-8000-000000000001");
+        expect(netWorth.recalculateAccount).not.toHaveBeenCalled();
+
+        onStored();
+        expect(netWorth.recalculateAccount.mock.calls).toEqual(
+          ids.map((id: string) => [userId, id]),
+        );
+
+        rateHistoryCatchUp.start.mockClear();
+        mockQueryRunner.query.mockImplementation(
+          (sql: string, params?: unknown[]) =>
+            typeof sql === "string" && sql.includes("DELETE FROM")
+              ? Promise.reject(new Error("restore failed"))
+              : mockQueryHandler(sql, params),
+        );
+        await expect(
+          service.restoreData(userId, makeInput({ password: "test", data })),
+        ).rejects.toThrow();
+        expect(rateHistoryCatchUp.start).not.toHaveBeenCalled();
+      });
+
+      /**
+       * INV-CRYPTO-001 and crypto spec decision 11 on the restore path: the
+       * kind of a code is this deployment's, so a restored account, security
+       * or reporting currency may disagree with it. Reported beside
+       * `restored`, read inside the restore's transaction, never refused.
+       */
+      it("reports restored rows whose currency kind disagrees, and omits the field when none does", async () => {
+        mockUserRepo.findOne.mockResolvedValue(mockUser);
+        (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+
+        const clean = await service.restoreData(
+          userId,
+          makeInput({ password: "test" }),
+        );
+        expect(clean).not.toHaveProperty("currencyKindMismatches");
+
+        mockQueryRunner.query.mockImplementation(
+          (sql: string, params?: unknown[]) => {
+            const text = typeof sql === "string" ? sql : "";
+            if (
+              text.includes(
+                "(a.account_type = 'CRYPTO') <> (c.kind = 'CRYPTO')",
+              )
+            ) {
+              return Promise.resolve([{ name: "Ledger wallet" }]);
+            }
+            if (
+              text.includes("FROM securities s") &&
+              text.includes("c.kind = 'CRYPTO'")
+            ) {
+              return Promise.resolve([{ symbol: "BTC-USD" }]);
+            }
+            if (
+              text.includes("FROM user_preferences up") &&
+              text.includes("c.kind = 'CRYPTO'")
+            ) {
+              return Promise.resolve([{ code: "BTC" }]);
+            }
+            return mockQueryHandler(sql, params);
+          },
+        );
+
+        const result = await service.restoreData(
+          userId,
+          makeInput({ password: "test" }),
+        );
+
+        expect(result).toMatchObject({
+          message: "Backup restored successfully",
+          currencyKindMismatches: {
+            accounts: ["Ledger wallet"],
+            accountCount: 1,
+            securities: ["BTC-USD"],
+            securityCount: 1,
+            defaultCurrency: "BTC",
+          },
+        });
+        const mismatchRead = mockQueryRunner.query.mock.calls.find(([sql]) =>
+          String(sql).includes(
+            "(a.account_type = 'CRYPTO') <> (c.kind = 'CRYPTO')",
+          ),
+        );
+        expect(mismatchRead?.[1]).toEqual([userId]);
+      });
+
+      it("keeps only the series of the user's own program after the restore, in the restore's transaction (INV-BOND-007)", async () => {
+        mockUserRepo.findOne.mockResolvedValue(mockUser);
+        (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+        await service.restoreData(userId, makeInput({ password: "test" }));
+        const calls = mockQueryRunner.query.mock.calls.map(([sql]: [string]) =>
+          String(sql),
+        );
+        const clear = calls.findIndex((sql) =>
+          /UPDATE investment_transactions t\s+SET bond_instrument_id = NULL/.test(
+            sql,
+          ),
+        );
+        expect(clear).toBeGreaterThan(-1);
+        expect(mockQueryRunner.query.mock.calls[clear][1]).toEqual([userId]);
+        // After every table was inserted, before the transaction ends.
+        const lastInsert = calls.reduce(
+          (last, sql, i) => (/^\s*INSERT INTO/.test(sql) ? i : last),
+          -1,
+        );
+        expect(clear).toBeGreaterThan(lastInsert);
+      });
+
+      it("recomputes current_balance of the restored accounts from the ledger after the inserts", async () => {
+        mockUserRepo.findOne.mockResolvedValue(mockUser);
+        (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+        await service.restoreData(userId, makeInput({ password: "test" }));
+        const calls = mockQueryRunner.query.mock.calls.map(([sql]: [string]) =>
+          String(sql),
+        );
+        const recompute = calls.findIndex(
+          (sql) =>
+            /UPDATE accounts a\s+SET current_balance/.test(sql) &&
+            sql.includes("transaction_date <= $2"),
+        );
+        expect(recompute).toBeGreaterThan(-1);
+        const params = mockQueryRunner.query.mock.calls[recompute][1];
+        expect(params[0]).toBe(userId);
+        expect(params[1]).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+        const lastInsert = calls.reduce(
+          (last, sql, i) => (/^\s*INSERT INTO/.test(sql) ? i : last),
+          -1,
+        );
+        expect(recompute).toBeGreaterThan(lastInsert);
+      });
+
+      describe("bond series recovery", () => {
+        const recovery = () =>
+          (
+            service as unknown as {
+              restoreService: {
+                bondSeries: { recover: jest.Mock };
+              };
+            }
+          ).restoreService.bondSeries.recover;
+
+        it("recovers the referenced series after re-authentication and before the restore transaction", async () => {
+          mockUserRepo.findOne.mockResolvedValue(mockUser);
+          (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+          const order: string[] = [];
+          (bcrypt.compare as jest.Mock).mockImplementationOnce(async () => {
+            order.push("authenticated");
+            return true;
+          });
+          recovery().mockClear();
+          recovery().mockImplementationOnce(
+            async (_user: string, data: unknown) => {
+              order.push("recovered");
+              return { data, unrecovered: [] };
+            },
+          );
+          const originalTransaction =
+            mockDataSource.transaction.getMockImplementation()!;
+          mockDataSource.transaction.mockImplementation(
+            (...args: unknown[]) => {
+              order.push("transaction");
+              return originalTransaction(...(args as [never]));
+            },
+          );
+          await service.restoreData(userId, makeInput({ password: "test" }));
+          expect(recovery()).toHaveBeenCalledTimes(1);
+          expect(recovery().mock.calls[0][0]).toBe(userId);
+          // The user lookup opens a transaction of its own first; the restore's
+          // transaction is the one that follows the recovery.
+          const recovered = order.indexOf("recovered");
+          expect(order.indexOf("authenticated")).toBeLessThan(recovered);
+          expect(order.slice(recovered + 1)).toContain("transaction");
+        });
+
+        it("fetches nothing for a restore whose authentication is refused", async () => {
+          mockUserRepo.findOne.mockResolvedValue(mockUser);
+          (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+          recovery().mockClear();
+          await expect(
+            service.restoreData(userId, makeInput({ password: "wrong" })),
+          ).rejects.toThrow();
+          expect(recovery()).not.toHaveBeenCalled();
+        });
+
+        it("reports the series that could not be restored beside restored, naming at most the cap", async () => {
+          mockUserRepo.findOne.mockResolvedValue(mockUser);
+          (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+          const unrecovered = Array.from({ length: 60 }, (_, i) => ({
+            issuerCountryCode: "PL",
+            seriesCode: `EDO${String(i).padStart(4, "0")}`,
+            reason: "source-unavailable" as const,
+          }));
+          recovery().mockImplementationOnce(
+            async (_user: string, data: unknown) => ({ data, unrecovered }),
+          );
+          const result = await service.restoreData(
+            userId,
+            makeInput({ password: "test" }),
+          );
+          expect(result.unrecoveredBondSeries?.count).toBe(60);
+          expect(result.unrecoveredBondSeries?.series).toHaveLength(50);
+          expect(result.unrecoveredBondSeries?.series[0]).toEqual(
+            unrecovered[0],
+          );
+          expect(Object.keys(result.restored)).not.toContain(
+            "unrecoveredBondSeries",
+          );
+        });
+
+        it("omits the field when every series came back", async () => {
+          mockUserRepo.findOne.mockResolvedValue(mockUser);
+          (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+          const result = await service.restoreData(
+            userId,
+            makeInput({ password: "test" }),
+          );
+          expect(result.unrecoveredBondSeries).toBeUndefined();
+        });
+      });
+
+      it("reports the transactions restored without a series this catalog lacks, beside restored", async () => {
+        mockUserRepo.findOne.mockResolvedValue(mockUser);
+        (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+        const ABSENT = "22222222-2222-5222-8222-222222222222";
+        const base = mockQueryRunner.query.getMockImplementation()!;
+        mockQueryRunner.query.mockImplementation((sql: string, params) =>
+          String(sql).includes("FROM bond_instruments WHERE id = ANY")
+            ? Promise.resolve([])
+            : base(sql, params),
+        );
+        const result = await service.restoreData(
+          userId,
+          makeInput({
+            password: "test",
+            data: {
+              ...validBackupData,
+              accounts: [
+                {
+                  id: "44444444-4444-4444-8444-444444444444",
+                  user_id: userId,
+                  name: "Brokerage",
+                  account_type: "INVESTMENT",
+                  currency_code: "PLN",
+                },
+              ],
+              investment_transactions: [
+                {
+                  id: "33333333-3333-4333-8333-333333333333",
+                  user_id: userId,
+                  account_id: "44444444-4444-4444-8444-444444444444",
+                  action: "BUY",
+                  transaction_date: "2026-10-15",
+                  total_amount: 1,
+                  bond_instrument_id: ABSENT,
+                },
+              ],
+            } as never,
+          }),
+        );
+        expect(result).toMatchObject({ unlinkedBondSeries: { count: 1 } });
+        // Beside `restored`, never inside it.
+        expect(JSON.stringify(result.restored)).not.toContain("unlinkedBond");
+      });
+
+      it.each(["notifications", "budget_alerts"])(
+        "bounds rows arriving under %s through the full restore",
+        async (table) => {
+          mockUserRepo.findOne.mockResolvedValue(mockUser);
+          (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+          const { notifications: _notifications, ...base } = validBackupData;
+          const result = await service.restoreData(
+            userId,
+            makeInput({
+              password: "test",
+              data: {
+                ...base,
+                [table]: [
+                  {
+                    id: "aaaaaaaa-0000-4000-8000-000000000001",
+                    user_id: userId,
+                    alert_type: "BILL_DUE",
+                    severity: "info",
+                    title: "t".repeat(300),
+                    message: "Original",
+                    data: {},
+                    target: "/" + "x".repeat(300),
+                    dedupe_key: "k".repeat(150),
+                    period_start: "2026-01-01",
+                  },
+                ],
+              },
+            }),
+          );
+          const call = mockQueryRunner.query.mock.calls.find(([sql]) =>
+            String(sql).includes('INSERT INTO "notifications"'),
+          );
+          const inserted = insertColumnMap(call!);
+          expect(inserted.title).toBe("t".repeat(254) + "…");
+          expect(inserted.target).toBeNull();
+          expect(inserted.dedupe_key).toBe("k".repeat(120));
+          expect(result.restored.notifications).toBe(1);
+        },
+      );
+    });
 
     /**
      * The envelope's completeness claim is the half of F3RB-001 (issue #1069)
@@ -2177,6 +2827,125 @@ describe("BackupService", () => {
     });
 
     /**
+     * The same transport, on the second table that uses it.
+     *
+     * `payee_lookup_settings.api_key_enc` holds a Google Places key under this
+     * instance's ENCRYPTION_KEY, and is named for the same column as
+     * `ai_provider_configs` precisely so the transport applies to it. Nothing
+     * asserted that it did: removing the table from the restore's re-encryption
+     * left the whole backup suite green, unit and integration both, while a
+     * restore wrote the PLAINTEXT key into a column named for ciphertext --
+     * after which `PayeeLookupSettingsService.resolveSource` throws on decrypt,
+     * logs, and silently falls back to AI. The user's key is gone and the
+     * screen still shows one configured.
+     */
+    describe("Google Places keys arriving from another instance", () => {
+      function backupWithLookupRow(row: Record<string, unknown>) {
+        return {
+          ...validBackupData,
+          payee_lookup_settings: [
+            {
+              user_id: userId,
+              google_places_enabled: true,
+              cap_enabled: true,
+              monthly_cap: 1000,
+              ...row,
+            },
+          ],
+        };
+      }
+
+      /** What the INSERT actually wrote into `api_key_enc`. */
+      function insertedApiKey(): unknown {
+        const call = mockQueryRunner.query.mock.calls.find(([sql]) =>
+          String(sql).includes('INSERT INTO "payee_lookup_settings"'),
+        );
+        if (!call) return undefined;
+        const [sql, params] = call as [string, unknown[]];
+        const columns = /\(([^)]*)\) VALUES/.exec(sql)?.[1] ?? "";
+        const index = columns
+          .split(",")
+          .map((c) => c.trim().replace(/"/g, ""))
+          .indexOf("api_key_enc");
+        return index === -1 ? undefined : params[index];
+      }
+
+      beforeEach(() => {
+        mockUserRepo.findOne.mockResolvedValue(mockUser);
+        (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      });
+
+      it("re-encrypts a plaintext key under this instance's key", async () => {
+        await service.restoreData(
+          userId,
+          makeInput({
+            password: "test",
+            data: backupWithLookupRow({
+              api_key_enc: null,
+              api_key_plaintext: "AIza-places-live",
+            }),
+          }),
+        );
+
+        // Ciphertext, not the bare key: the column's name is a claim about its
+        // contents, and everything that reads it hands the value to decrypt().
+        expect(insertedApiKey()).toBe("enc:AIza-places-live");
+      });
+
+      it("never lets the plaintext reach the insert", async () => {
+        await service.restoreData(
+          userId,
+          makeInput({
+            password: "test",
+            data: backupWithLookupRow({
+              api_key_enc: null,
+              api_key_plaintext: "AIza-places-live",
+            }),
+          }),
+        );
+
+        const insertParams = mockQueryRunner.query.mock.calls
+          .filter(([sql]) =>
+            String(sql).includes('INSERT INTO "payee_lookup_settings"'),
+          )
+          .flatMap(([, params]) => (params as unknown[]) ?? []);
+        expect(insertParams).not.toContain("AIza-places-live");
+      });
+
+      it("counts a foreign ciphertext it cannot read", async () => {
+        // Same reporting as the AI table: the row is restored, the key inside
+        // it is not usable here, and the user has to be told rather than left
+        // with a masked key that never works.
+        const result = await service.restoreData(
+          userId,
+          makeInput({
+            password: "test",
+            data: backupWithLookupRow({
+              api_key_enc: "foreign-instance-ciphertext",
+            }),
+          }),
+        );
+
+        expect(insertedApiKey()).toBe("foreign-instance-ciphertext");
+        expect(result.unusableAiProviderKeys).toBe(1);
+      });
+
+      it("says nothing about a user who stored no key", async () => {
+        // A row exists because the user toggled Places off, or set a cap while
+        // the operator's key was in force. Nothing was lost.
+        const result = await service.restoreData(
+          userId,
+          makeInput({
+            password: "test",
+            data: backupWithLookupRow({ api_key_enc: null }),
+          }),
+        );
+
+        expect(result.unusableAiProviderKeys).toBeUndefined();
+      });
+    });
+
+    /**
      * Attachment bytes only travel inside a backup for the `database` provider.
      * For `local` and `s3` the metadata carries a `storage_key` equal to the
      * attachment's UUID, and the restore mints a new UUID for every row -- so
@@ -2197,6 +2966,13 @@ describe("BackupService", () => {
       ) {
         return {
           ...validBackupData,
+          // The transactions the attachments hang off travel in the same file,
+          // as the exporter writes them; a reference to a row the file does not
+          // carry refuses the restore (INV-BACKUP-009).
+          transactions: [
+            { id: TX_ID, user_id: userId },
+            { id: "44444444-4444-4444-8444-444444444444", user_id: userId },
+          ],
           transaction_attachments: [
             {
               id: OLD_ID,
@@ -2935,10 +3711,18 @@ describe("BackupService", () => {
           // readers -- a scan that can only see one file is a scan a refactor
           // silently disarms.
           const sources = backupModuleSources();
+          // Any `.load(` on a storage provider, however the provider was
+          // obtained. Pinned to `this.attachmentStorage.load(` it counted the
+          // spelling rather than the act: the export now resolves each row's own
+          // backend through `AttachmentStorageRegistry` and calls `store.load(`,
+          // which is the same read of the same kind of object -- and the guard
+          // went from "two readers, both accounted for" to "one" without a single
+          // reader moving.
           const reads = sources.flatMap(({ file, text }) =>
-            [...text.matchAll(/this\.attachmentStorage\.load\(/g)].map(
-              (match) => ({ file, at: match.index as number }),
-            ),
+            [...text.matchAll(/\.load\(/g)].map((match) => ({
+              file,
+              at: match.index as number,
+            })),
           );
           expect(reads).toHaveLength(2);
 
@@ -2990,17 +3774,30 @@ describe("BackupService", () => {
           expect(beforeRestoreRead).toContain("loadOwnedAttachmentSources(");
           expect(beforeRestoreRead).toContain("ownedSources.get(");
 
-          // The export never sees an uploaded document at all: the only ids it
-          // is ever handed come from its own `user_id`-scoped sweep, which is
-          // the single query in `export-attachments.ts` that produces them.
+          // The export never sees an uploaded document at all. Its only ids
+          // come from private ownership or current group access, including
+          // entry documents. An uploader whose access ended has no export grant.
           const exportBody = exporting.text.slice(
             exporting.start,
             exporting.end,
           );
           expect(exportBody).not.toContain("BackupData");
           const attachmentSql = sourceOf(sources, "export-attachments.ts");
-          expect(ATTACHMENT_EXPORT_SQL.metadata).toContain(
-            "WHERE user_id = $1",
+          const normalizeSql = (sql: string) => sql.replace(/\s+/g, " ").trim();
+          const visibleGroups = `SELECT g.id FROM shared_groups g WHERE
+            g.owner_user_id = $1 OR EXISTS (SELECT 1 FROM shared_memberships m
+              WHERE m.group_id = g.id AND m.user_id = $1 AND m.revoked_at IS NULL)`;
+          const visibleAttachments = (alias: string) =>
+            `(${alias}.user_id = $1 AND ${alias}.shared_group_id IS NULL AND ${alias}.shared_entry_id IS NULL)
+             OR ${alias}.shared_group_id IN (${visibleGroups})
+             OR ${alias}.shared_entry_id IN (SELECT id FROM shared_entries WHERE group_id IN (${visibleGroups}))`;
+          expect(normalizeSql(ATTACHMENT_EXPORT_SQL.metadata)).toBe(
+            normalizeSql(`SELECT id, storage_provider, byte_size, sha256
+              FROM transaction_attachments WHERE ${visibleAttachments("transaction_attachments")}
+              ORDER BY id`),
+          );
+          expect(normalizeSql(ATTACHMENT_EXPORT_SQL.blobDigests)).toContain(
+            normalizeSql(`WHERE ${visibleAttachments("ta")}`),
           );
           // ...and that sweep is the only place the export names an attachment
           // id, so there is no second, unscoped route to one.
@@ -3291,9 +4088,10 @@ describe("BackupService", () => {
           ownedAttachments = [];
           const data = {
             ...validBackupData,
-            transactions: Array.from({ length: 40 }, () => ({
-              id: randomUUID(),
-            })),
+            transactions: [
+              { id: TX_ID },
+              ...Array.from({ length: 40 }, () => ({ id: randomUUID() })),
+            ],
             transaction_attachments: [attachmentRow(OLD_ID)],
             attachment_blobs: [
               { attachment_id: OLD_ID, data: BYTES.toString("base64") },
@@ -3333,9 +4131,10 @@ describe("BackupService", () => {
           ];
           const data = {
             ...validBackupData,
-            transactions: Array.from({ length: 30 }, () => ({
-              id: randomUUID(),
-            })),
+            transactions: [
+              { id: TX_ID },
+              ...Array.from({ length: 30 }, () => ({ id: randomUUID() })),
+            ],
             transaction_attachments: [
               attachmentRow(CARRIED),
               attachmentRow(LEGACY_A),
@@ -3562,6 +4361,87 @@ describe("BackupService", () => {
         // left behind with nothing referencing it.
         expect(attachmentStorage.delete).toHaveBeenCalledWith(stagedKey);
       });
+
+      describe("staging upload intents", () => {
+        const intentCalls = (verb: "INSERT INTO" | "DELETE FROM") =>
+          mockQueryRunner.query.mock.calls.filter(
+            ([sql]: [unknown]) =>
+              String(sql).includes(verb) &&
+              String(sql).includes("attachment_blob_tombstones"),
+          );
+
+        it("records the intent before the bytes are put, and clears it in the restore", async () => {
+          attachmentStorage.load.mockResolvedValue(BYTES);
+
+          await service.restoreData(
+            userId,
+            makeInput({ password: "test", data: backupWithLocalAttachment() }),
+          );
+
+          const stagedKey = attachmentStorage.save.mock.calls[0][0];
+          const [record] = intentCalls("INSERT INTO");
+          expect(record[1]).toEqual([
+            userId,
+            "local",
+            stagedKey,
+            String(RESTORE_STAGING_INTENT_LEASE_MS),
+          ]);
+          const recordedAt = mockQueryRunner.query.mock.calls.indexOf(record);
+          expect(
+            mockQueryRunner.query.mock.invocationCallOrder[recordedAt],
+          ).toBeLessThan(attachmentStorage.save.mock.invocationCallOrder[0]);
+          const [clear] = intentCalls("DELETE FROM");
+          expect(clear[1]).toEqual(["local", stagedKey]);
+        });
+
+        it("does not write the bytes when the intent cannot be recorded", async () => {
+          attachmentStorage.load.mockResolvedValue(BYTES);
+          mockQueryRunner.query.mockImplementation((sql: string, params) => {
+            if (
+              String(sql).includes("INSERT INTO") &&
+              String(sql).includes("attachment_blob_tombstones")
+            ) {
+              return Promise.reject(new Error("tombstones unavailable"));
+            }
+            return mockQueryHandler(sql, params as unknown[]);
+          });
+
+          const result = await service.restoreData(
+            userId,
+            makeInput({ password: "test", data: backupWithLocalAttachment() }),
+          );
+
+          expect(attachmentStorage.save).not.toHaveBeenCalled();
+          expect(result.skippedAttachments).toBe(1);
+          expect(result.restored.transactionAttachments).toBe(0);
+        });
+
+        it("rolls back and discards when the sweeper claimed a staged key first", async () => {
+          attachmentStorage.load.mockResolvedValue(BYTES);
+          mockQueryRunner.query.mockImplementation((sql: string, params) => {
+            if (
+              String(sql).includes("DELETE FROM") &&
+              String(sql).includes("attachment_blob_tombstones")
+            ) {
+              return Promise.resolve([[], 0]);
+            }
+            return mockQueryHandler(sql, params as unknown[]);
+          });
+
+          await expect(
+            service.restoreData(
+              userId,
+              makeInput({
+                password: "test",
+                data: backupWithLocalAttachment(),
+              }),
+            ),
+          ).rejects.toThrow();
+
+          const stagedKey = attachmentStorage.save.mock.calls[0][0];
+          expect(attachmentStorage.delete).toHaveBeenCalledWith(stagedKey);
+        });
+      });
     });
 
     it("should throw UnauthorizedException if password is missing for local user", async () => {
@@ -3665,11 +4545,16 @@ describe("BackupService", () => {
       const backupWithData = {
         ...validBackupData,
         categories: [
-          { id: "cat-1", user_id: userId, name: "Food", parent_id: null },
+          {
+            id: "c0000000-0000-4000-8000-000000000001",
+            user_id: userId,
+            name: "Food",
+            parent_id: null,
+          },
         ],
         accounts: [
           {
-            id: "acc-1",
+            id: "a0000000-0000-4000-8000-000000000001",
             user_id: userId,
             name: "Checking",
             account_type: "CHEQUING",
@@ -3702,7 +4587,7 @@ describe("BackupService", () => {
         ...validBackupData,
         investment_reports: [
           {
-            id: "ir-1",
+            id: "e0000000-0000-4000-8000-000000000001",
             user_id: "different-user-id",
             name: "By Symbol",
             description: null,
@@ -3864,7 +4749,11 @@ describe("BackupService", () => {
       const backupWithDifferentUser = {
         ...validBackupData,
         categories: [
-          { id: "cat-1", user_id: "different-user-id", name: "Food" },
+          {
+            id: "c0000000-0000-4000-8000-000000000001",
+            user_id: "different-user-id",
+            name: "Food",
+          },
         ],
       };
 
@@ -3933,6 +4822,7 @@ describe("BackupService", () => {
       const accountId = randomUUID();
       const backupWithInvSplit = {
         ...validBackupData,
+        accounts: [{ id: accountId, user_id: userId, name: "Brokerage" }],
         securities: [
           { id: securityId, user_id: userId, symbol: "VEA", name: "Vanguard" },
         ],
@@ -3992,7 +4882,11 @@ describe("BackupService", () => {
           c[0].includes('"investment_security_id"'),
       );
       expect(update).toBeDefined();
-      expect(update![1]).toEqual([newSecurityId, newSplitId]);
+      expect(update![1]).toEqual([newSecurityId, newSplitId, userId]);
+      // The split has no user_id of its own; the repair is confined through its
+      // schedule's owner (INV-BACKUP-009).
+      expect(update![0]).toContain('FROM "scheduled_transactions" o');
+      expect(update![0]).toContain("o.user_id = $3");
     });
 
     it("should defer circular FK columns and update them after all inserts", async () => {
@@ -4093,7 +4987,9 @@ describe("BackupService", () => {
       const child = catRows.find((r) => r.name === "Child");
       expect(parent!.id).not.toBe(catParentId);
       expect(child!.id).not.toBe(catChildId);
-      expect(parentIdUpdate![1]).toEqual([parent!.id, child!.id]);
+      expect(parentIdUpdate![1]).toEqual([parent!.id, child!.id, userId]);
+      // Confined to the restoring user's rows, whatever id the file carried.
+      expect(parentIdUpdate![0]).toContain("user_id = $3");
 
       const linkedAccountUpdate = updateCalls.find(
         (call: unknown[]) =>
@@ -4170,11 +5066,13 @@ describe("BackupService", () => {
           c[0].includes('"institution_id"'),
       );
       expect(institutionUpdate).toBeDefined();
-      // The guard only sets the FK when the referenced institution exists.
+      // The guard only sets the FK when the referenced institution exists and
+      // is the restoring user's.
       expect(institutionUpdate![0]).toContain(
         'EXISTS (SELECT 1 FROM "institutions"',
       );
-      expect(institutionUpdate![1]).toEqual([instRow.id, acctRow.id]);
+      expect(institutionUpdate![0]).toContain("WHERE id = $1 AND user_id = $3");
+      expect(institutionUpdate![1]).toEqual([instRow.id, acctRow.id, userId]);
     });
 
     it("restores a legacy backup whose accounts reference institutions not in the backup", async () => {
@@ -4217,22 +5115,21 @@ describe("BackupService", () => {
       // institution_id must not be inserted directly.
       expect(accountInsert![0]).not.toContain("institution_id");
 
-      // The Phase-3 UPDATE is still guarded; with no institution it sets nothing.
+      // The dangling reference names no row of the file, so it is severed
+      // before Phase 3 (SEVERED_WHEN_UNRESOLVED) and never reaches an UPDATE --
+      // where the old EXISTS guard would have accepted any user's institution
+      // that happened to carry the id.
       const institutionUpdate = mockQueryRunner.query.mock.calls.find(
         (c: unknown[]) =>
           typeof c[0] === "string" &&
           c[0].includes('UPDATE "accounts"') &&
           c[0].includes('"institution_id"'),
       );
-      expect(institutionUpdate).toBeDefined();
-      expect(institutionUpdate![0]).toContain(
-        'EXISTS (SELECT 1 FROM "institutions"',
+      expect(institutionUpdate).toBeUndefined();
+      const params = mockQueryRunner.query.mock.calls.flatMap((c: unknown[]) =>
+        Array.isArray(c[1]) ? c[1] : [],
       );
-      // The dangling original id is never reused (no remap target existed).
-      expect(institutionUpdate![1]).toEqual([
-        danglingInstitutionId,
-        insertColumnMap(accountInsert!).id,
-      ]);
+      expect(params).not.toContain(danglingInstitutionId);
     });
 
     it("base64-decodes institution logo_data (bytea) on restore", async () => {
@@ -4508,12 +5405,14 @@ describe("BackupService", () => {
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
       const acctId = randomUUID();
+      const secId = randomUUID();
       const backup = {
         ...validBackupData,
+        securities: [{ id: secId, user_id: userId, symbol: "VEA" }],
         // A bigserial-style id and a non-id field with the same string value.
         // Neither should be rewritten as a UUID.
         security_prices: [
-          { id: "5", security_id: acctId, price_date: "2024-06-01" },
+          { id: "5", security_id: secId, price_date: "2024-06-01" },
         ],
         accounts: [
           {
@@ -4667,7 +5566,7 @@ describe("BackupService", () => {
         ],
         accounts: [
           {
-            id: "acc-1",
+            id: "a0000000-0000-4000-8000-000000000001",
             user_id: userId,
             name: "MYR Account",
             currency_code: "MYR",
@@ -4713,7 +5612,7 @@ describe("BackupService", () => {
         currencies: [],
         accounts: [
           {
-            id: "acc-1",
+            id: "a0000000-0000-4000-8000-000000000001",
             user_id: userId,
             name: "USD Account",
             currency_code: "USD",
@@ -4748,9 +5647,12 @@ describe("BackupService", () => {
       ];
       const backupWithJsonb = {
         ...validBackupData,
+        accounts: [
+          { id: "a0000000-0000-4000-8000-000000000001", user_id: userId },
+        ],
         securities: [
           {
-            id: "sec-1",
+            id: "5ec00000-0000-4000-8000-000000000001",
             user_id: userId,
             symbol: "VEA",
             name: "Vanguard FTSE",
@@ -4762,9 +5664,9 @@ describe("BackupService", () => {
         ],
         scheduled_transactions: [
           {
-            id: "sched-1",
+            id: "d0000000-0000-4000-8000-000000000001",
             user_id: userId,
-            account_id: "acc-1",
+            account_id: "a0000000-0000-4000-8000-000000000001",
             tag_ids: ["tag-1", "tag-2"],
           },
         ],
@@ -4802,9 +5704,12 @@ describe("BackupService", () => {
 
       const backupWithTimestamps = {
         ...validBackupData,
+        accounts: [
+          { id: "a0000000-0000-4000-8000-000000000001", user_id: userId },
+        ],
         categories: [
           {
-            id: "cat-1",
+            id: "c0000000-0000-4000-8000-000000000001",
             user_id: userId,
             name: "Food",
             created_at: "2024-06-15T10:30:00.000Z",
@@ -4812,9 +5717,9 @@ describe("BackupService", () => {
         ],
         transactions: [
           {
-            id: "txn-1",
+            id: "70000000-0000-4000-8000-000000000001",
             user_id: userId,
-            account_id: "acc-1",
+            account_id: "a0000000-0000-4000-8000-000000000001",
             amount: 100,
             created_at: "2024-07-01T08:00:00.000Z",
             updated_at: "2024-07-02T09:00:00.000Z",
@@ -4861,17 +5766,17 @@ describe("BackupService", () => {
         ...validBackupData,
         accounts: [
           {
-            id: "acc-1",
+            id: "a0000000-0000-4000-8000-000000000001",
             user_id: userId,
             name: "Checking",
-            linked_account_id: "acc-2",
+            linked_account_id: "a0000000-0000-4000-8000-000000000002",
             updated_at: "2024-06-01T00:00:00.000Z",
           },
           {
-            id: "acc-2",
+            id: "a0000000-0000-4000-8000-000000000002",
             user_id: userId,
             name: "Savings",
-            linked_account_id: "acc-1",
+            linked_account_id: "a0000000-0000-4000-8000-000000000001",
             updated_at: "2024-06-02T00:00:00.000Z",
           },
         ],
@@ -4888,6 +5793,21 @@ describe("BackupService", () => {
         return originalTransaction(...(args as [never]));
       });
 
+      let recomputeFlag: boolean | undefined;
+      let recomputeRan = false;
+      (
+        service as unknown as {
+          restoreService: {
+            bondPrices: { recomputeLinkedSecurities: jest.Mock };
+          };
+        }
+      ).restoreService.bondPrices.recomputeLinkedSecurities.mockImplementationOnce(
+        async () => {
+          recomputeRan = true;
+          recomputeFlag = getRequestContext()?.preserveTimestamps;
+        },
+      );
+
       await service.restoreData(
         userId,
         makeInput({ password: "test", data: backupWithFks }),
@@ -4896,7 +5816,12 @@ describe("BackupService", () => {
       // The user lookup runs under the caller's plain context; the restore
       // transaction itself carries the flag.
       expect(flagsSeen[0]).toBeUndefined();
-      expect(flagsSeen[flagsSeen.length - 1]).toBe(true);
+      expect(flagsSeen).toContain(true);
+      // The post-commit bond price recompute runs outside the restore's
+      // transaction and must not inherit the flag.
+      expect(recomputeFlag).toBeUndefined();
+      expect(recomputeFlag).not.toBe(true);
+      expect(recomputeRan).toBe(true);
 
       const allCalls = mockQueryRunner.query.mock.calls.map(
         (call: unknown[]) => call[0] as string,
@@ -5259,7 +6184,7 @@ describe("BackupService", () => {
         ...validBackupData,
         monte_carlo_scenarios: [
           {
-            id: "mc-1",
+            id: "3c000000-0000-4000-8000-000000000001",
             user_id: userId,
             name: "S1",
             account_ids: ["acc-a", "acc-b"],
@@ -5365,6 +6290,44 @@ describe("BackupService", () => {
         });
         const result = await service.restoreData(userId, {
           compressedData: await encryptedBlob(validBackupData, "stored-bk-pw"),
+          oidcIdToken: oidcArtifact(),
+        });
+        expect(result.message).toBe("Backup restored successfully");
+      });
+
+      it("restores what the automatic backup writes (key-wrapped container) with the password alone", async () => {
+        // The cron encrypts under a stored data key it can read without the
+        // password; the file must still open with nothing but that password,
+        // and without the server's copy of the key.
+        const key = await createWrappedBackupKey("login-password");
+        const { buffer } = await service.exportToBuffer(userId, key);
+        expect(buffer[4]).toBe(3);
+
+        mockUserRepo.findOne.mockResolvedValue(mockUser);
+        (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+        const result = await service.restoreData(userId, {
+          compressedData: buffer,
+          password: "login-password",
+        });
+
+        expect(result.message).toBe("Backup restored successfully");
+      });
+
+      it("opens an automatic backup with the stored data key when no password opens it", async () => {
+        const key = await createWrappedBackupKey("dedicated-password");
+        const { buffer } = await service.exportToBuffer(userId, key);
+
+        mockUserRepo.findOne.mockResolvedValue({
+          ...mockUser,
+          authProvider: "oidc",
+          passwordHash: null,
+          oidcSubject: "sub-1",
+          backupEncryptionEnabled: true,
+          backupKeyEnc: `enc:${key.dataKey.toString("base64")}`,
+          backupKeyWrap: key.wrap.toString("base64"),
+        });
+        const result = await service.restoreData(userId, {
+          compressedData: buffer,
           oidcIdToken: oidcArtifact(),
         });
         expect(result.message).toBe("Backup restored successfully");

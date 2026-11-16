@@ -58,6 +58,7 @@ describe("RLS enforcement (T2, catalog-driven)", () => {
     delegate_net_worth_exclusions: ["delegate_user_id"],
     emergency_access_settings: ["owner_user_id"],
     emergency_access_contacts: ["owner_user_id"],
+    shared_groups: ["owner_user_id"],
   };
 
   /** Tables owned through a parent row (migration 113), child -> owning path. */
@@ -66,6 +67,7 @@ describe("RLS enforcement (T2, catalog-driven)", () => {
     transaction_tags: "transactions",
     transaction_split_tags: "transaction_splits -> transactions",
     attachment_blobs: "transaction_attachments",
+    ai_relay_attachment_blobs: "ai_relay_attachments",
     scheduled_transaction_splits: "scheduled_transactions",
     scheduled_transaction_split_tags:
       "scheduled_transaction_splits -> scheduled_transactions",
@@ -74,11 +76,18 @@ describe("RLS enforcement (T2, catalog-driven)", () => {
     security_prices: "securities",
     security_tags: "securities",
     holdings: "accounts",
+    budget_buckets: "budgets",
     budget_categories: "budgets",
     budget_periods: "budgets",
     budget_period_categories: "budget_periods -> budgets",
+    budget_period_buckets: "budget_periods -> budgets",
     monte_carlo_cash_flows: "monte_carlo_scenarios",
     account_delegate_grants: "account_delegates",
+    shared_participants: "shared_groups",
+    shared_entries: "shared_groups",
+    shared_allocations: "shared_entries -> shared_groups",
+    shared_activity: "shared_groups",
+    shared_invitations: "shared_groups",
   };
 
   const USER_A = "aaaaaaaa-1111-4111-8111-111111111111";
@@ -268,11 +277,14 @@ describe("RLS enforcement (T2, catalog-driven)", () => {
           const got = visible
             .map((r: Record<string, unknown>) => pkKey(table, r))
             .sort();
-          const want = [pkKey(table, seeder.seededRowFor(table, user))];
+          const want = seeder
+            .seededRowsFor(table, user)
+            .map((row) => pkKey(table, row))
+            .sort();
           if (JSON.stringify(got) !== JSON.stringify(want)) {
             violations.push(
               `${table} (user ${user === USER_A ? "A" : "B"}): saw ${got.length} ` +
-                `row(s), expected exactly the 1 seeded row`,
+                `row(s), expected exactly the ${want.length} seeded rows`,
             );
           }
         }
@@ -725,6 +737,90 @@ describe("RLS enforcement (T2, catalog-driven)", () => {
           asAppRole(identity(DELEGATE), (m) => m.query(mab.sql, mab.values)),
         ).rejects.toThrow(/row-level security/i);
       });
+    });
+  });
+
+  /**
+   * A26-M06 / A26-S04-03: a delegation and its grants are issued by the owner,
+   * in the owner's own session, over the owner's own accounts. Before migration
+   * 20261022142820 the WITH CHECK repeated USING, so the delegate's read arm
+   * (`delegate_user_id = real user`) also admitted INSERTs: a delegate-side
+   * statement could issue itself a delegation from any owner, then a grant on
+   * any account, and the joint read arms showed it that owner's ledger.
+   */
+  describe("delegation rows are issued by the owner only", () => {
+    const ROLLED_BACK = "rolled back on purpose";
+
+    async function firstAccountOf(userId: string): Promise<string> {
+      const [row] = await dataSource.query(
+        "SELECT id FROM accounts WHERE user_id = $1 ORDER BY created_at LIMIT 1",
+        [userId],
+      );
+      return row.id;
+    }
+
+    it("refuses a delegate's own session a delegation naming another owner", async () => {
+      const insert = seeder.buildInsert("account_delegates", USER_A, {
+        delegate_user_id: DELEGATE,
+      });
+      await expect(
+        asAppRole(identity(DELEGATE), (m) =>
+          m.query(insert.sql, insert.values),
+        ),
+      ).rejects.toThrow(/row-level security/i);
+    });
+
+    it("refuses an acting delegate a delegation from the owner it acts for", async () => {
+      const insert = seeder.buildInsert("account_delegates", OWNER, {
+        delegate_user_id: USER_B,
+      });
+      await expect(
+        asAppRole(
+          { "app.current_user_id": OWNER, "app.real_user_id": DELEGATE },
+          (m) => m.query(insert.sql, insert.values),
+        ),
+      ).rejects.toThrow(/row-level security/i);
+    });
+
+    it("refuses a delegate a grant on the delegation it is only the delegate of", async () => {
+      const insert = seeder.buildInsert("account_delegate_grants", OWNER, {
+        delegation_id: delegationId,
+        account_id: ownerAccounts[1].id,
+      });
+      await expect(
+        asAppRole(identity(DELEGATE), (m) =>
+          m.query(insert.sql, insert.values),
+        ),
+      ).rejects.toThrow(/row-level security/i);
+    });
+
+    it("refuses the owner a grant on another owner's account", async () => {
+      const insert = seeder.buildInsert("account_delegate_grants", OWNER, {
+        delegation_id: delegationId,
+        account_id: await firstAccountOf(USER_A),
+      });
+      await expect(
+        asAppRole(identity(OWNER), (m) => m.query(insert.sql, insert.values)),
+      ).rejects.toThrow(/row-level security/i);
+    });
+
+    it("still lets the owner grant their own account and issue their own delegation", async () => {
+      const grant = seeder.buildInsert("account_delegate_grants", OWNER, {
+        delegation_id: delegationId,
+        account_id: ownerAccounts[1].id,
+      });
+      const delegation = seeder.buildInsert("account_delegates", OWNER, {
+        delegate_user_id: USER_B,
+      });
+      // Both writes succeed, then the transaction is rolled back so the shared
+      // fixture (one grant, one delegation) is what the other cases see.
+      await expect(
+        asAppRole(identity(OWNER), async (m) => {
+          await m.query(grant.sql, grant.values);
+          await m.query(delegation.sql, delegation.values);
+          throw new Error(ROLLED_BACK);
+        }),
+      ).rejects.toThrow(ROLLED_BACK);
     });
   });
 

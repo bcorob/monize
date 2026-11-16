@@ -6,13 +6,32 @@ import { PortfolioSummary } from '@/types/investment';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
 import { InfoTooltip } from '@/components/ui/InfoTooltip';
+import { UnknownAmount } from '@/components/ui/UnknownAmount';
+import {
+  hasRepairableDataCause,
+  periodResultUnknownReason,
+} from '@/components/investments/portfolio-period-result';
+import { IncompleteDataDetails } from '@/components/reports/IncompleteDataDetails';
+import {
+  hasIncompleteData,
+  type IncompleteDataCauses,
+} from '@/lib/incomplete-data-ranges';
 import { gainLossColor } from '@/lib/format';
+import { PartialTotal } from '@/components/ui/PartialTotal';
+import { partialTotalFor } from '@/lib/net-worth-completeness';
 
 interface PortfolioSummaryCardProps {
   summary: PortfolioSummary | null;
   isLoading: boolean;
   singleAccountCurrency?: string | null;
   titleSuffix?: string;
+  /**
+   * True where the screen has an account filter feeding this summary, so the
+   * repair offered under a withheld return may name it. The account detail view
+   * has none -- its scope is the account it is about -- and telling that reader
+   * to use a filter above would be a repair they cannot make.
+   */
+  hasAccountFilter?: boolean;
 }
 
 export function PortfolioSummaryCard({
@@ -20,6 +39,7 @@ export function PortfolioSummaryCard({
   isLoading,
   singleAccountCurrency,
   titleSuffix,
+  hasAccountFilter = false,
 }: PortfolioSummaryCardProps) {
   const t = useTranslations('investments');
   const { formatCurrency, formatSignedPercent } = useNumberFormat();
@@ -39,15 +59,22 @@ export function PortfolioSummaryCard({
       let holdings = 0;
       let costBasis = 0;
       let netInvested = 0;
+      let gainLoss = 0;
+      let gainCostBasis = 0;
       for (const acct of summary.holdingsByAccount) {
         cash += acct.cashBalance;
         holdings += acct.totalMarketValue;
         costBasis += acct.totalCostBasis;
         netInvested += acct.netInvested;
+        // The server's gain is over the holdings that have a value; value less
+        // every cost charged an unpriced holding's cost against a value that
+        // never included it (A26-M38). An older backend sends no
+        // `gainCostBasis`, and its gain was value less the whole cost.
+        gainLoss += acct.totalGainLoss;
+        gainCostBasis += acct.gainCostBasis ?? acct.totalCostBasis;
       }
       const portfolio = cash + holdings;
-      const gainLoss = holdings - costBasis;
-      const gainLossPercent = costBasis > 0 ? (gainLoss / costBasis) * 100 : 0;
+      const gainLossPercent = gainCostBasis > 0 ? (gainLoss / gainCostBasis) * 100 : 0;
       return { cash, holdings, costBasis, netInvested, portfolio, gainLoss, gainLossPercent };
     }
 
@@ -121,6 +148,45 @@ export function PortfolioSummaryCard({
     };
   }, [summary, foreignCurrency]);
 
+  // What a withheld return is waiting for, as the report's own list renders it.
+  // The server folded the window's per-point gaps into runs and resolved the
+  // names, because this card has no series of its own to fold: a summary that
+  // says "no price" sends the reader guessing which of their funds it is
+  // (#1392). Ids are the keys the list is built on; the labels are what is
+  // shown.
+  const diagnostics = useMemo(() => {
+    const data = summary?.returnDiagnostics;
+    if (!data) return null;
+    const causes: IncompleteDataCauses = {
+      prices: data.prices.map((row) => ({
+        key: row.securityId,
+        start: row.start,
+        end: row.end,
+      })),
+      rates: data.rates.map((row) => ({
+        key: row.pair,
+        start: row.start,
+        end: row.end,
+      })),
+      cash: data.cash.map((row) => ({
+        key: row.accountId,
+        start: row.start,
+        end: row.end,
+      })),
+    };
+    const symbols = new Map(
+      data.prices.map((row) => [row.securityId, row.symbol]),
+    );
+    const accountNames = new Map(
+      data.cash.map((row) => [row.accountId, row.name]),
+    );
+    return {
+      causes,
+      securityLabel: (id: string) => symbols.get(id) ?? id,
+      accountLabel: (id: string) => accountNames.get(id) ?? id,
+    };
+  }, [summary]);
+
   const fmtVal = (value: number) => {
     if (foreignCurrency) return `${formatCurrency(value, foreignCurrency)} ${foreignCurrency}`;
     return formatCurrency(value);
@@ -141,7 +207,7 @@ export function PortfolioSummaryCard({
         </h3>
         <div className="space-y-3">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="animate-pulse">
+            <div key={i} className="animate-pulse skeleton-shimmer">
               <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-1/3 mb-1" />
               <div className="h-6 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
             </div>
@@ -196,11 +262,46 @@ export function PortfolioSummaryCard({
     );
   }
   const valuationIncomplete = !completeness.valuationComplete;
+  // The gain and the simple return are over the holdings that have a value, so
+  // they are partial figures whenever the valuation is (A26-M38).
+  const gainPartial = partialTotalFor(
+    0,
+    completeness.valuationComplete,
+    completeness.missingRatePairs,
+  );
+  const gainDisplayCurrency = foreignCurrency ?? defaultCurrency;
 
   const gainLossVal = converted?.gainLoss ?? summary.totalGainLoss;
   const gainLossPercentVal = converted?.gainLossPercent ?? summary.totalGainLossPercent;
   const twr = summary.timeWeightedReturn;
+  // A withheld return names its cause, as the chart's does: "n/a" with no cause
+  // is a dead end, and the server sends the reasons precisely so the card can
+  // point at the repair (INV-PORTRESULT-002).
+  const twrUnknownReason = periodResultUnknownReason(
+    summary.timeWeightedReturnReasons ?? [],
+  );
+  // The same measure's second figure, withheld the same way: a portfolio too
+  // young to annualise, or a schedule of flows with no single rate, says so
+  // rather than borrowing the time-weighted number.
+  const mwr = summary.moneyWeightedReturn ?? null;
+  const mwrUnknownReason = periodResultUnknownReason(
+    summary.moneyWeightedReturnReasons ?? [],
+  );
   const cagrVal = summary.cagr;
+  // The list is offered only where there is a repair to make. `mwrUndefined`
+  // and `windowTooShort` withhold a figure with nothing missing behind them, so
+  // the marker beside the figure stands on its own there; a return withheld
+  // with no ranges at all (a server that sent none) shows nothing extra rather
+  // than an empty box.
+  const returnsAwaitData =
+    (twr == null &&
+      hasRepairableDataCause(summary.timeWeightedReturnReasons ?? [])) ||
+    (mwr == null &&
+      hasRepairableDataCause(summary.moneyWeightedReturnReasons ?? []));
+  const showReturnDiagnostics =
+    returnsAwaitData &&
+    diagnostics !== null &&
+    hasIncompleteData(diagnostics.causes);
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:min-h-[420px]">
@@ -269,7 +370,11 @@ export function PortfolioSummaryCard({
             <div>
               <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 flex items-center">
                 {t('portfolioSummary.totalGain')}
-                <InfoTooltip placement="top" text={t('portfolioSummary.totalGainTooltip')} />
+                <InfoTooltip
+                  placement="top"
+                  text={t('portfolioSummary.totalGainTooltip')}
+                  learnMore="investmentCashVsReturns"
+                />
               </div>
               <div className={`text-base sm:text-lg font-semibold ${returnColorClass((converted?.portfolio ?? summary.totalPortfolioValue) - (converted?.netInvested ?? summary.totalNetInvested))}`}>
                 {fmtVal((converted?.portfolio ?? summary.totalPortfolioValue) - (converted?.netInvested ?? summary.totalNetInvested))}
@@ -287,7 +392,11 @@ export function PortfolioSummaryCard({
             <div>
               <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 flex items-center">
                 {t('portfolioSummary.costBasis')}
-                <InfoTooltip placement="top" text={t('portfolioSummary.costBasisTooltip')} />
+                <InfoTooltip
+                  placement="top"
+                  text={t('portfolioSummary.costBasisTooltip')}
+                  learnMore="investmentCostBasis"
+                />
               </div>
               <div className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">
                 {fmtVal(converted?.costBasis ?? summary.totalCostBasis)}
@@ -299,8 +408,15 @@ export function PortfolioSummaryCard({
                 <InfoTooltip placement="top" text={t('portfolioSummary.gainLossTooltip')} />
               </div>
               <div className={`text-base sm:text-lg font-semibold ${returnColorClass(gainLossVal)}`}>
-                {fmtVal(gainLossVal)}
+                <PartialTotal total={gainPartial} displayCurrency={gainDisplayCurrency}>
+                  {fmtVal(gainLossVal)}
+                </PartialTotal>
               </div>
+              {valuationIncomplete && (
+                <div className="text-xs text-amber-700 dark:text-amber-300">
+                  {t('portfolioSummary.gainPartialCaption')}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -317,18 +433,45 @@ export function PortfolioSummaryCard({
                 <InfoTooltip placement="top" text={t('portfolioSummary.simpleReturnTooltip')} />
               </div>
               <div className={`text-base sm:text-lg font-semibold ${returnColorClass(gainLossPercentVal)}`}>
-                {formatPercent(gainLossPercentVal)}
+                <PartialTotal total={gainPartial} displayCurrency={gainDisplayCurrency}>
+                  {formatPercent(gainLossPercentVal)}
+                </PartialTotal>
               </div>
+              {valuationIncomplete && (
+                <div className="text-xs text-amber-700 dark:text-amber-300">
+                  {t('portfolioSummary.gainPartialCaption')}
+                </div>
+              )}
             </div>
             <div>
               <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 flex items-center">
                 {t('portfolioSummary.twr')}
                 <span className="hidden sm:inline">&nbsp;{t('portfolioSummary.twrFull')}</span>
-                <InfoTooltip placement="top" text={t('portfolioSummary.twrTooltip')} />
+                <InfoTooltip
+                  placement="top"
+                  text={t('portfolioSummary.twrTooltip')}
+                  learnMore="investmentCashVsReturns"
+                />
               </div>
               <div className={`text-base sm:text-lg font-semibold ${returnColorClass(twr)}`}>
                 {twr != null ? formatPercent(twr) : (
-                  <span className="text-gray-400 dark:text-gray-500 text-sm font-normal">{t('portfolioSummary.notAvailable')}</span>
+                  <UnknownAmount reason={twrUnknownReason} className="text-sm font-normal" />
+                )}
+              </div>
+            </div>
+            <div>
+              <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 flex items-center">
+                {t('portfolioSummary.mwr')}
+                <span className="hidden sm:inline">&nbsp;{t('portfolioSummary.mwrFull')}</span>
+                <InfoTooltip
+                  placement="top"
+                  text={t('portfolioSummary.mwrTooltip')}
+                  learnMore="investmentCashVsReturns"
+                />
+              </div>
+              <div className={`text-base sm:text-lg font-semibold ${returnColorClass(mwr)}`}>
+                {mwr != null ? formatPercent(mwr) : (
+                  <UnknownAmount reason={mwrUnknownReason} className="text-sm font-normal" />
                 )}
               </div>
             </div>
@@ -344,6 +487,27 @@ export function PortfolioSummaryCard({
               </div>
             </div>
           </div>
+
+          {showReturnDiagnostics && diagnostics && (
+            <div className="mt-4 space-y-2" data-testid="return-diagnostics">
+              <p className="text-sm text-gray-600 dark:text-gray-300">
+                {t('portfolioSummary.returnDiagnosticsLead')}
+              </p>
+              <IncompleteDataDetails
+                causes={diagnostics.causes}
+                securityLabel={diagnostics.securityLabel}
+                accountLabel={diagnostics.accountLabel}
+              />
+              {/* The second repair, and the one a reader with a workplace fund
+                  in its own account can make today: the summary is measured
+                  over the accounts the page's filter selected. */}
+              <p className="text-xs text-gray-500 dark:text-gray-400">
+                {hasAccountFilter
+                  ? t('portfolioSummary.returnDiagnosticsRepairFiltered')
+                  : t('portfolioSummary.returnDiagnosticsRepair')}
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>

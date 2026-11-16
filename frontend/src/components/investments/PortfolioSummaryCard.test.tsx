@@ -10,14 +10,17 @@ const mockGetRate = vi.fn(
 );
 let mockDefaultCurrency = 'CAD';
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (n: number, _currency?: string) => `$${n.toFixed(2)}`,
-    formatSignedPercent: (n: number, decimals = 2) =>
-      `${n >= 0 ? '+' : ''}${n.toFixed(decimals)}%`,
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (n: number, _currency?: string) => `$${n.toFixed(2)}`,
+      formatSignedPercent: (n: number, decimals = 2) =>
+        `${n >= 0 ? '+' : ''}${n.toFixed(decimals)}%`,
+    }),
+  };
+});
 vi.mock('@/hooks/useExchangeRates', () => ({
   useExchangeRates: () => ({
     getRate: mockGetRate,
@@ -41,6 +44,10 @@ const makeSummary = (overrides?: Record<string, any>) => ({
   totalCostBasis: 40000,
   totalNetInvested: 35000,
   timeWeightedReturn: 15.32,
+  timeWeightedReturnReasons: [],
+  timeWeightedReturnSince: '2025-06-14',
+  moneyWeightedReturn: 11.7,
+  moneyWeightedReturnReasons: [],
   cagr: 10.5,
   // The API always sends these; a fixture without them is a payload the server
   // cannot produce, and with them the completeness branches are actually exercised.
@@ -97,7 +104,8 @@ describe('PortfolioSummaryCard', () => {
   it('renders return metrics section', () => {
     render(<PortfolioSummaryCard summary={makeSummary()} isLoading={false} />);
     expect(screen.getByText('Simple Return')).toBeInTheDocument();
-    expect(screen.getByText(/TWR/)).toBeInTheDocument();
+    expect(screen.getByText('TWR')).toBeInTheDocument();
+    expect(screen.getByText('MWR')).toBeInTheDocument();
     expect(screen.getByText('CAGR')).toBeInTheDocument();
   });
 
@@ -111,10 +119,252 @@ describe('PortfolioSummaryCard', () => {
     expect(screen.getByText('+15.32%')).toBeInTheDocument();
   });
 
-  it('renders N/A when TWR is null', () => {
-    render(<PortfolioSummaryCard summary={makeSummary({ timeWeightedReturn: null, cagr: null })} isLoading={false} />);
+  // A withheld return names its cause through the same marker the chart uses;
+  // "N/A" with no cause leaves the reader nothing to do (#1392).
+  it('marks a withheld TWR as unknown and names the repair', () => {
+    render(
+      <PortfolioSummaryCard
+        summary={makeSummary({
+          timeWeightedReturn: null,
+          timeWeightedReturnReasons: ['incompletePrices'],
+        })}
+        isLoading={false}
+      />,
+    );
+    expect(screen.getByTestId('unknown-amount')).toBeInTheDocument();
+    expect(screen.queryByText('N/A')).not.toBeInTheDocument();
+  });
+
+  it('renders the money-weighted return beside the time-weighted one', () => {
+    render(
+      <PortfolioSummaryCard
+        summary={makeSummary({ timeWeightedReturn: 15.32, moneyWeightedReturn: 11.7 })}
+        isLoading={false}
+      />,
+    );
+    expect(screen.getByText('MWR')).toBeInTheDocument();
+    expect(screen.getByText('(Money-Weighted)')).toBeInTheDocument();
+    expect(screen.getByText('+15.32%')).toBeInTheDocument();
+    expect(screen.getByText('+11.70%')).toBeInTheDocument();
+  });
+
+  // Withheld the same way the TWR is: a portfolio younger than a month has no
+  // annual rate, and the marker names that rather than printing "N/A" or,
+  // worse, the time-weighted figure under this caption.
+  it('marks a withheld MWR as unknown while the TWR is still printed', () => {
+    render(
+      <PortfolioSummaryCard
+        summary={makeSummary({
+          timeWeightedReturn: 1.4,
+          moneyWeightedReturn: null,
+          moneyWeightedReturnReasons: ['windowTooShort'],
+        })}
+        isLoading={false}
+      />,
+    );
+    expect(screen.getByText('+1.40%')).toBeInTheDocument();
+    expect(screen.getByTestId('unknown-amount')).toBeInTheDocument();
+    expect(screen.queryByText('N/A')).not.toBeInTheDocument();
+  });
+
+  /**
+   * A marker saying "no price" is a dead end: the reader has to guess which of
+   * their funds it is. The server names and dates each gap; the card renders
+   * them with the same list the report uses, linked to the price history where
+   * the missing close is entered (#1392).
+   */
+  describe('withheld returns name their gaps', () => {
+    const withGaps = (overrides?: Record<string, any>) =>
+      makeSummary({
+        timeWeightedReturn: null,
+        timeWeightedReturnReasons: ['incompletePrices'],
+        moneyWeightedReturn: null,
+        moneyWeightedReturnReasons: ['incompletePrices'],
+        returnDiagnostics: {
+          since: '2025-06-14',
+          prices: [
+            {
+              securityId: 'sec-9',
+              symbol: 'PPK',
+              name: 'PPK Fund',
+              start: '2026-03-02',
+              end: '2026-05-30',
+            },
+          ],
+          rates: [],
+          cash: [],
+          truncated: { prices: false, rates: false, cash: false },
+        },
+        ...overrides,
+      });
+
+    it('names the security and its dates, and links to its price history', () => {
+      render(<PortfolioSummaryCard summary={withGaps()} isLoading={false} />);
+
+      expect(
+        screen.getByText(
+          'TWR and MWR are withheld because the history has gaps:',
+        ),
+      ).toBeInTheDocument();
+      const panel = screen.getByTestId('incomplete-data-details');
+      expect(panel).toHaveTextContent('PPK');
+      expect(panel).not.toHaveTextContent('sec-9');
+      expect(screen.getByRole('link', { name: 'PPK' })).toHaveAttribute(
+        'href',
+        '/securities/sec-9?tab=prices',
+      );
+    });
+
+    it('tells the reader to price the security, and names no filter that is not there', () => {
+      render(<PortfolioSummaryCard summary={withGaps()} isLoading={false} />);
+
+      expect(
+        screen.getByText(/Add the missing prices on each security/),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText(/with the account filter above/),
+      ).not.toBeInTheDocument();
+    });
+
+    it('offers the account filter where the screen has one', () => {
+      render(
+        <PortfolioSummaryCard
+          summary={withGaps()}
+          isLoading={false}
+          hasAccountFilter
+        />,
+      );
+
+      expect(
+        screen.getByText(
+          /leave those accounts out of the view with the account filter above/,
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it('names a missing rate and a cash account with no balance', () => {
+      render(
+        <PortfolioSummaryCard
+          summary={withGaps({
+            timeWeightedReturnReasons: ['missingRatePairs', 'incompleteCash'],
+            moneyWeightedReturnReasons: ['missingRatePairs'],
+            returnDiagnostics: {
+              since: '2025-06-14',
+              prices: [],
+              rates: [
+                { pair: 'USD->PLN', start: '2026-01-02', end: '2026-01-09' },
+              ],
+              cash: [
+                {
+                  accountId: 'acct-1',
+                  name: 'IKE account',
+                  start: '2026-01-02',
+                  end: '2026-01-02',
+                },
+              ],
+              truncated: { prices: false, rates: false, cash: false },
+            },
+          })}
+          isLoading={false}
+        />,
+      );
+
+      const panel = screen.getByTestId('incomplete-data-details');
+      expect(panel).toHaveTextContent('USD->PLN');
+      expect(panel).toHaveTextContent('IKE account');
+      expect(panel).not.toHaveTextContent('acct-1');
+    });
+
+    it('shows nothing extra when the window is merely too short to annualise', () => {
+      // Nothing is missing, so there is no repair to offer; the marker beside
+      // the figure is the whole answer.
+      render(
+        <PortfolioSummaryCard
+          summary={withGaps({
+            timeWeightedReturn: 1.4,
+            timeWeightedReturnReasons: [],
+            moneyWeightedReturnReasons: ['windowTooShort'],
+            returnDiagnostics: {
+              since: '2026-09-01',
+              prices: [],
+              rates: [],
+              cash: [],
+              truncated: { prices: false, rates: false, cash: false },
+            },
+          })}
+          isLoading={false}
+        />,
+      );
+
+      expect(screen.queryByTestId('return-diagnostics')).not.toBeInTheDocument();
+    });
+
+    it('shows nothing extra when a return is withheld with no ranges at all', () => {
+      render(
+        <PortfolioSummaryCard
+          summary={withGaps({
+            returnDiagnostics: {
+              since: '2025-06-14',
+              prices: [],
+              rates: [],
+              cash: [],
+              truncated: { prices: false, rates: false, cash: false },
+            },
+          })}
+          isLoading={false}
+        />,
+      );
+
+      expect(screen.queryByTestId('return-diagnostics')).not.toBeInTheDocument();
+    });
+
+    it('shows nothing extra for a payload that carries no diagnostics', () => {
+      // A rolling deploy's older backend: absent is no information, which must
+      // not render as an empty promise of a list.
+      render(
+        <PortfolioSummaryCard
+          summary={withGaps({ returnDiagnostics: undefined })}
+          isLoading={false}
+        />,
+      );
+
+      expect(screen.queryByTestId('return-diagnostics')).not.toBeInTheDocument();
+    });
+  });
+
+  it('explains what the money-weighted return weights, and what it leaves out', () => {
+    render(<PortfolioSummaryCard summary={makeSummary()} isLoading={false} />);
+    expect(
+      screen.getByText(
+        /Money-weighted return \(XIRR\) of your investments since the first transaction/,
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/Deposits, withdrawals and uninvested cash are left out/),
+    ).toBeInTheDocument();
+  });
+
+  it('warns in the Simple Return tooltip that a purchase moves it on its own', () => {
+    render(<PortfolioSummaryCard summary={makeSummary()} isLoading={false} />);
+    expect(
+      screen.getByText(/It ignores when money arrived, so it jumps on every purchase/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(/TWR and MWR do not have this jump/),
+    ).toBeInTheDocument();
+  });
+
+  it('renders N/A for CAGR when it is null, which is not a period figure', () => {
+    render(<PortfolioSummaryCard summary={makeSummary({ cagr: null })} isLoading={false} />);
     const naElements = screen.getAllByText('N/A');
     expect(naElements.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('says the return is since the first transaction and excludes cash', () => {
+    render(<PortfolioSummaryCard summary={makeSummary()} isLoading={false} />);
+    expect(
+      screen.getByText(/Time-weighted return of your investments since the first transaction/),
+    ).toBeInTheDocument();
   });
 
   it('renders info tooltip icons for all metrics', () => {
@@ -123,8 +373,9 @@ describe('PortfolioSummaryCard', () => {
     // is a button: a focusable span has the generic role, so screen readers
     // dropped its aria-label and announced a nameless tab stop.
     const tooltipIcons = container.querySelectorAll('button.cursor-help svg');
-    // Holdings Value, Cash Balance, Total Gain, Net Invested, Cost Basis, Gain/Loss, Simple Return, TWR, CAGR
-    expect(tooltipIcons.length).toBe(9);
+    // Holdings Value, Cash Balance, Total Gain, Net Invested, Cost Basis,
+    // Gain/Loss, Simple Return, TWR, MWR, CAGR
+    expect(tooltipIcons.length).toBe(10);
   });
 
   it('shows negative TWR with correct formatting', () => {
@@ -383,9 +634,8 @@ describe('PortfolioSummaryCard', () => {
         isLoading={false}
       />,
     );
-    const twrN_a = screen.getAllByText('N/A')[0];
-    // The sibling N/A span should be present; the parent div uses gray class
-    const twrContainer = twrN_a.closest('div[class*="text-"]');
+    const marker = screen.getByTestId('unknown-amount');
+    const twrContainer = marker.closest('div[class*="text-"]');
     expect(twrContainer?.className).toMatch(/text-gray-400/);
   });
 
@@ -506,6 +756,103 @@ describe('PortfolioSummaryCard', () => {
       expect(
         screen.queryByText('These figures are incomplete'),
       ).not.toBeInTheDocument();
+    });
+  });
+
+  describe('gain over the priced holdings (A26-M38)', () => {
+    // Priced A: value 100,000, cost 80,000. Unpriced B: cost 50,000. The server's
+    // gain is +20,000 / +25% over A; value less every cost read -30,000.
+    const partialSummary = (overrides?: Record<string, any>) =>
+      makeSummary({
+        totalPortfolioValue: 100000,
+        totalHoldingsValue: 100000,
+        totalCashValue: 0,
+        totalCostBasis: 130000,
+        gainCostBasis: 80000,
+        unpricedCostBasis: 50000,
+        totalGainLoss: 20000,
+        totalGainLossPercent: 25,
+        pricesComplete: false,
+        unpricedSecurityIds: ['sec-u'],
+        valuationComplete: false,
+        holdings: [{ securityId: 'sec-u', symbol: 'UNPRICED' }],
+        holdingsByAccount: [
+          {
+            accountId: 'a1',
+            currencyCode: 'CAD',
+            totalMarketValue: 100000,
+            totalCostBasis: 130000,
+            gainCostBasis: 80000,
+            unpricedCostBasis: 50000,
+            cashBalance: 0,
+            totalGainLoss: 20000,
+            totalGainLossPercent: 25,
+            netInvested: 100000,
+            holdings: [],
+            fxComplete: true,
+            missingRatePairs: [],
+            pricesComplete: false,
+            unpricedSecurityIds: ['sec-u'],
+            valuationComplete: false,
+          },
+        ],
+        ...overrides,
+      });
+
+    it('marks the gain and the simple return as partial and prints the server figure', () => {
+      render(<PortfolioSummaryCard summary={partialSummary()} isLoading={false} />);
+
+      expect(screen.queryByText('$-30000.00')).not.toBeInTheDocument();
+      expect(screen.queryByText('-$30000.00')).not.toBeInTheDocument();
+      const gain = screen.getByText('$20000.00');
+      expect(gain.closest('[data-testid="partial-total"]')).not.toBeNull();
+      const simpleReturn = screen.getByText('+25.00%');
+      expect(simpleReturn.closest('[data-testid="partial-total"]')).not.toBeNull();
+    });
+
+    it('reads the per-account gain, not value less cost, in the single foreign-account view', () => {
+      mockDefaultCurrency = 'CAD';
+      const summary = partialSummary({
+        holdingsByAccount: [
+          {
+            accountId: 'a1',
+            currencyCode: 'USD',
+            totalMarketValue: 100000,
+            totalCostBasis: 130000,
+            gainCostBasis: 80000,
+            unpricedCostBasis: 50000,
+            cashBalance: 0,
+            totalGainLoss: 20000,
+            totalGainLossPercent: 25,
+            netInvested: 100000,
+            holdings: [],
+            fxComplete: true,
+            missingRatePairs: [],
+            pricesComplete: false,
+            unpricedSecurityIds: ['sec-u'],
+            valuationComplete: false,
+          },
+        ],
+      });
+
+      render(
+        <PortfolioSummaryCard
+          summary={summary}
+          isLoading={false}
+          singleAccountCurrency="USD"
+        />,
+      );
+
+      expect(screen.queryByText('$-30000.00 USD')).not.toBeInTheDocument();
+      expect(screen.queryByText('-$30000.00 USD')).not.toBeInTheDocument();
+      expect(screen.getByText('$20000.00 USD')).toBeInTheDocument();
+      expect(screen.getByText('+25.00%')).toBeInTheDocument();
+    });
+
+    it('leaves a complete portfolio unmarked', () => {
+      render(<PortfolioSummaryCard summary={makeSummary()} isLoading={false} />);
+
+      expect(screen.queryByTestId('partial-total')).not.toBeInTheDocument();
     });
   });
 

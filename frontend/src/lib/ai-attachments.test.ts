@@ -4,6 +4,7 @@ import {
   kindForMediaType,
   validateFile,
   validateAddition,
+  assistantAcceptsFiles,
   fileToAttachment,
   MAX_ATTACHMENT_BYTES,
   MAX_ATTACHMENTS,
@@ -114,6 +115,61 @@ describe('ai-attachments', () => {
 
     it('allows an addition within limits', () => {
       expect(validateAddition([], [makeFile('a.png', 'image/png')])).toBeNull();
+    });
+  });
+
+  // The share review screen shows its "Send to AI Assistant" row from this
+  // answer, so every refusal below is a row that must not appear: an offer the
+  // chat would then refuse costs the user the press and the share.
+  describe('assistantAcceptsFiles', () => {
+    it('accepts every attachment type a share can carry', () => {
+      expect(
+        assistantAcceptsFiles([
+          makeFile('receipt.jpg', 'image/jpeg'),
+          makeFile('bill.pdf', 'application/pdf'),
+          makeFile('statement.csv', 'text/csv'),
+        ]),
+      ).toBe(true);
+    });
+
+    it('refuses the whole set when one file is a type it cannot read', () => {
+      expect(
+        assistantAcceptsFiles([
+          makeFile('statement.csv', 'text/csv'),
+          makeFile('statement.qif', 'application/x-qw'),
+        ]),
+      ).toBe(false);
+    });
+
+    // The share stash allows 10 files at 10 MB each; the assistant allows 5 at
+    // 5 MB. A share inside the stash's caps can still be outside these.
+    it('refuses more files than the assistant takes at once', () => {
+      const files = Array.from({ length: MAX_ATTACHMENTS + 1 }, (_, i) =>
+        makeFile(`page-${i}.png`, 'image/png'),
+      );
+      expect(assistantAcceptsFiles(files)).toBe(false);
+    });
+
+    it('refuses a file over the per-file cap', () => {
+      expect(
+        assistantAcceptsFiles([
+          makeFile('huge.png', 'image/png', MAX_ATTACHMENT_BYTES + 1),
+        ]),
+      ).toBe(false);
+    });
+
+    it('refuses a set over the total cap', () => {
+      const half = Math.ceil(MAX_TOTAL_ATTACHMENT_BYTES / 2);
+      expect(
+        assistantAcceptsFiles([
+          makeFile('a.png', 'image/png', half),
+          makeFile('b.png', 'image/png', half),
+        ]),
+      ).toBe(false);
+    });
+
+    it('refuses an empty set: there is nothing to send', () => {
+      expect(assistantAcceptsFiles([])).toBe(false);
     });
   });
 

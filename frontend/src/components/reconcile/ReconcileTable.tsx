@@ -15,6 +15,7 @@ import type { SortDirection } from '@/hooks/useSortableTable';
 import { classifyStaleRow, type StaleUnreconciledReason } from '@/lib/stale-reconciliation';
 import { usePayeeDisplay } from '@/hooks/usePayeeDisplay';
 import { useCompactMobileDates } from '@/store/dateDisplayStore';
+import { Th } from '@/components/ui/Table';
 import {
   groupReconcileRows,
   sortReconcileRows,
@@ -33,7 +34,12 @@ interface ReconcileTableProps {
   lastReconciledDate: string | null;
   /** Server-chosen date a row must precede to count as overdue. */
   overdueBefore: string;
-  formatCurrency: (amount: number | string | null | undefined) => string;
+  formatCurrency: (amount: number) => string;
+  /**
+   * The account currency's money precision the subtotals are summed at
+   * (`moneyDecimalsForCurrency`): four for fiat, a coin's eight.
+   */
+  moneyDecimals: number;
   onEdit: (transaction: Transaction) => void;
   onDelete: (transaction: Transaction) => void;
   onCycleStatus: (transaction: Transaction) => void;
@@ -80,6 +86,7 @@ export function ReconcileTable({
   lastReconciledDate,
   overdueBefore,
   formatCurrency,
+  moneyDecimals,
   onEdit,
   onDelete,
   onCycleStatus,
@@ -109,8 +116,9 @@ export function ReconcileTable({
       groupReconcileRows(
         sortReconcileRows(transactions, sortField, sortDirection, payeeDisplay),
         groupByFlow,
+        moneyDecimals,
       ),
-    [transactions, sortField, sortDirection, groupByFlow, payeeDisplay],
+    [transactions, sortField, sortDirection, groupByFlow, payeeDisplay, moneyDecimals],
   );
 
   const staleByRow = useMemo(() => {
@@ -159,9 +167,9 @@ export function ReconcileTable({
       <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
         <thead className="bg-gray-50 dark:bg-gray-700/50">
           <tr>
-            <th className="px-2 sm:px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-10">
+            <Th className="px-2 sm:px-4 w-10">
               <span className="sr-only">{t('list.colSelect')}</span>
-            </th>
+            </Th>
             <SortableHeader
               field="date"
               sortField={sortField}
@@ -232,9 +240,9 @@ export function ReconcileTable({
             >
               {t('list.colStatus')}
             </SortableHeader>
-            <th className="hidden sm:table-cell px-2 sm:px-4 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
+            <Th align="right" className="hidden sm:table-cell px-2 sm:px-4">
               <span className="sr-only">{t('list.colActions')}</span>
-            </th>
+            </Th>
           </tr>
         </thead>
         {groups.map((group) => (

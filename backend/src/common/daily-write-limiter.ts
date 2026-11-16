@@ -5,18 +5,39 @@
  * perform in a UTC day so a misbehaving model -- or a user spamming
  * confirmations -- cannot make an unbounded number of modifications.
  *
- * The store is in-memory: it resets on process restart and is not shared
- * across instances. That is an intentional, low-cost guardrail consistent with
- * the existing MCP limiter, not a hard security boundary.
+ * The count is a row in `auth_attempt_counters`, read and written through
+ * `AuthAttemptCounterService`, so every replica counts against the same number
+ * and a restart or a rollout does not hand anybody a fresh allowance. What it
+ * replaces was an array per process: N replicas meant N times the cap, and every
+ * deploy reset it. It is still a soft guardrail rather than a security
+ * boundary: `checkLimit` reads the count and the caller records after the write,
+ * so two concurrent requests near the cap can both pass the read. The cap bounds
+ * a runaway loop; it does not arbitrate a race.
+ *
+ * The window is fixed and ends at the next UTC midnight. The first write of the
+ * day creates (or restarts) the row with `window_expires_at` at that midnight and
+ * nothing moves it. The midnight itself and every comparison against it are
+ * computed by the database (`AuthAttemptCounterService.incrementUntilUtcMidnight`),
+ * never from this process's clock, so replicas agree about when the day turns
+ * however their clocks differ.
+ *
+ * The scope names the surface (`AI_WRITE_SCOPE`, `MCP_WRITE_SCOPE`); the two
+ * surfaces keep separate budgets, as they did in memory. Scopes are the contract
+ * between replicas: two processes must spell them the same way or they count
+ * different things. The key is the plain `userId` -- it is not a secret, the
+ * same choice the step-up scope makes on this RLS-exempt table.
  */
 
+import { Logger } from "@nestjs/common";
+
+import type { AuthAttemptCounterService } from "../auth/auth-attempt-counter.service";
 import { resolvePositiveInt } from "./env-number.util";
 
-export interface WriteOperation {
-  userId: string;
-  tool: string;
-  timestamp: number;
-}
+/** Counter scope for writes confirmed through the AI Assistant. */
+export const AI_WRITE_SCOPE = "ai-write";
+
+/** Counter scope for writes made through the MCP server tools. */
+export const MCP_WRITE_SCOPE = "mcp-write";
 
 /**
  * Resolve a daily write limit from a (possibly string) environment value,
@@ -30,26 +51,24 @@ export function resolveDailyWriteLimit(raw: unknown, fallback: number): number {
 }
 
 export class DailyWriteLimiter {
-  private readonly operations: WriteOperation[] = [];
+  private readonly logger = new Logger(DailyWriteLimiter.name);
 
-  constructor(private readonly dailyLimit: number) {}
+  constructor(
+    private readonly counters: AuthAttemptCounterService,
+    private readonly scope: string,
+    private readonly dailyLimit: number,
+  ) {}
 
   /**
-   * Check whether a user has remaining write quota for today.
-   * Returns { allowed: true } if under the limit, or { allowed: false }
-   * with the current count and limit if exceeded.
+   * Check whether a user has remaining write quota for today. A failure to
+   * read the count rejects, so the caller refuses before writing.
    */
-  checkLimit(userId: string): {
+  async checkLimit(userId: string): Promise<{
     allowed: boolean;
     currentCount: number;
     limit: number;
-  } {
-    this.pruneExpired();
-    const dayStart = this.getDayStart();
-    const currentCount = this.operations.filter(
-      (op) => op.userId === userId && op.timestamp >= dayStart,
-    ).length;
-
+  }> {
+    const currentCount = await this.counters.peek(this.scope, userId);
     return {
       allowed: currentCount < this.dailyLimit,
       currentCount,
@@ -58,38 +77,27 @@ export class DailyWriteLimiter {
   }
 
   /**
-   * Record a write operation for rate limiting purposes.
+   * Count `count` writes that have already been made.
+   *
+   * Called after the write has committed, so it never rejects: a counter the
+   * database could not update must not turn a write the user now has into an
+   * error the caller (or a model) would retry into a duplicate. The failure is
+   * logged and the day's count is short by what was lost -- the soft-guardrail
+   * trade this limiter has always made. `tool` names the operation in that log.
+   *
+   * One statement whatever `count` is (`incrementUntilUtcMidnight` adds it),
+   * so a bulk action costs one round trip and is counted whole or not at all.
    */
-  record(userId: string, tool: string): void {
-    this.operations.push({
-      userId,
-      tool,
-      timestamp: Date.now(),
-    });
-  }
-
-  /**
-   * Remove operations older than 24 hours to prevent unbounded memory growth.
-   */
-  private pruneExpired(): void {
-    const cutoff = Date.now() - 24 * 60 * 60 * 1000;
-    let i = 0;
-    while (
-      i < this.operations.length &&
-      this.operations[i].timestamp < cutoff
-    ) {
-      i++;
+  async record(userId: string, tool: string, count = 1): Promise<void> {
+    if (count <= 0) return;
+    try {
+      await this.counters.incrementUntilUtcMidnight(this.scope, userId, count);
+    } catch (err: unknown) {
+      this.logger.warn(
+        `Could not count ${tool} against the ${this.scope} daily limit: ${
+          err instanceof Error ? err.message : String(err)
+        }`,
+      );
     }
-    if (i > 0) {
-      this.operations.splice(0, i);
-    }
-  }
-
-  /**
-   * Get the start of the current UTC day in milliseconds.
-   */
-  private getDayStart(): number {
-    const now = new Date();
-    return Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
   }
 }

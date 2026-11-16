@@ -72,6 +72,14 @@ const result = (): SimulationResult => ({
 });
 
 const dollar = (n: number) => `$${n.toFixed(0)}`;
+/** Deterministic stand-in for `useNumberFormat()`'s bundle; see the module test. */
+const fmts = {
+  formatCurrency: dollar,
+  formatNumber: (n: number, d = 2) => n.toFixed(d),
+  formatPercent: (n: number, d = 2) => `${n.toFixed(d)}%`,
+  formatInstant: (iso: string) => `I(${iso})`,
+  neverLabel: 'Never',
+};
 
 describe('CompareMetricTable', () => {
   it('renders one column per scenario with metric rows from each group', () => {
@@ -93,7 +101,7 @@ describe('CompareMetricTable', () => {
     render(
       <CompareMetricTable
         columns={columns}
-        formatCurrency={dollar}
+        formatters={fmts}
         onRetry={vi.fn()}
         onRemove={vi.fn()}
         onRerun={vi.fn()}
@@ -135,7 +143,7 @@ describe('CompareMetricTable', () => {
     render(
       <CompareMetricTable
         columns={columns}
-        formatCurrency={dollar}
+        formatters={fmts}
         onRetry={onRetry}
         onRemove={vi.fn()}
         onRerun={vi.fn()}
@@ -168,7 +176,7 @@ describe('CompareMetricTable', () => {
     render(
       <CompareMetricTable
         columns={columns}
-        formatCurrency={dollar}
+        formatters={fmts}
         onRetry={vi.fn()}
         onRemove={vi.fn()}
         onRerun={vi.fn()}
@@ -198,7 +206,7 @@ describe('CompareMetricTable', () => {
     render(
       <CompareMetricTable
         columns={columns}
-        formatCurrency={dollar}
+        formatters={fmts}
         onRetry={vi.fn()}
         onRemove={onRemove}
         onRerun={vi.fn()}
@@ -232,7 +240,7 @@ describe('CompareMetricTable', () => {
     render(
       <CompareMetricTable
         columns={columns}
-        formatCurrency={dollar}
+        formatters={fmts}
         onRetry={vi.fn()}
         onRemove={vi.fn()}
         onRerun={onRerun}

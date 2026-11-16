@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useTranslations } from 'next-intl';
 import toast from 'react-hot-toast';
 import { Modal } from '@/components/ui/Modal';
+import { InfoTooltip } from '@/components/ui/InfoTooltip';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -143,13 +144,11 @@ export function SupportBackupModal({ isOpen, onClose }: SupportBackupModalProps)
   return (
     <Modal isOpen={isOpen} onClose={onClose} maxWidth="2xl">
       <div className="p-6 space-y-6">
-        <div>
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+        <div className="flex items-center gap-2">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
             {t('title')}
-          </h3>
-          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-            {t('howItWorks')}
-          </p>
+          </h2>
+          <InfoTooltip text={t('howItWorks')} usePortal />
         </div>
 
         {/* Sections */}

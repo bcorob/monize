@@ -7,6 +7,7 @@
     "filterAll": "Todas ({count})",
     "filterExpenses": "Gastos ({count})",
     "filterIncome": "Ingresos ({count})",
+    "typeFilterLabel": "Tipo",
     "modalTitleNew": "Nueva categoría",
     "modalTitleEdit": "Editar categoría",
     "countSingle": "1 categoría",
@@ -54,6 +55,12 @@
     "typeExpense": "Gasto",
     "typeIncome": "Ingreso",
     "typeInherited": "Tipo heredado de la principal",
+    "autoSignLabel": "Signo automático",
+    "autoSignOn": "Activado",
+    "autoSignOff": "Desactivado",
+    "autoSignInherit": "Heredar de la categoría principal",
+    "autoSignInheritedFrom": "Heredado de la categoría principal ({name}): actualmente {state}",
+    "autoSignHelp": "Si está activado, el importe que escribas se vuelve negativo en una categoría de gastos y positivo en una de ingresos. Desactívalo para mantener el signo exactamente como lo introduces.",
     "colourLabel": "Color",
     "colourInherit": "Heredar de la principal",
     "colourNone": "Sin color",
@@ -65,8 +72,8 @@
     "submitUpdate": "Actualizar categoría"
   },
   "list": {
-    "emptyHeading": "Sin categorías",
-    "emptyDescription": "Comienza creando una nueva categoría.",
+    "emptyHeading": "No se encontraron categorías",
+    "emptyDescription": "Ninguna categoría coincide con tu búsqueda o filtro actual.",
     "colName": "Nombre",
     "colType": "Tipo",
     "colCount": "Cantidad",
@@ -79,7 +86,7 @@
     "viewTransactionsTitle": "Ver transacciones en esta categoría"
   },
   "deleteDialog": {
-    "title": "¿Eliminar \"{name}\"?",
+    "title": "Eliminar \"{name}\"",
     "checkingUsage": "Verificando uso...",
     "usedBy": "Esta categoría es utilizada por {count, plural, one {# elemento} other {# elementos}} (transacciones y/o facturas y depósitos planificados).",
     "reassignLabel": "Reasignar a:",

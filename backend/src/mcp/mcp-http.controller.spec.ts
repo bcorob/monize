@@ -3,7 +3,11 @@ import { ConfigService } from "@nestjs/config";
 import { McpHttpController } from "./mcp-http.controller";
 import { McpServerService } from "./mcp-server.service";
 import { PatService } from "../auth/pat.service";
+import { PAT_SELF_AUTHENTICATED_KEY } from "../auth/pat-access/pat-access.decorator";
 import { OAuthProviderService } from "../oauth/oauth-provider.service";
+import { NodeStreamableHTTPServerTransport } from "@modelcontextprotocol/node";
+import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/server";
+import type { AuthInfo } from "@modelcontextprotocol/server";
 
 describe("McpHttpController", () => {
   let controller: McpHttpController;
@@ -50,6 +54,228 @@ describe("McpHttpController", () => {
 
   it("should be defined", () => {
     expect(controller).toBeDefined();
+  });
+
+  // A security scan reported the server answering 200 to an invalid token. The
+  // cause was the frontend proxy, which did not recognise a bearer-only request
+  // to the bare origin as MCP traffic and let the app shell answer it
+  // (frontend/src/proxy.ts). This endpoint has always refused these, on every
+  // verb -- so that claim is checked here rather than left as a comment.
+  it("is marked @PatSelfAuthenticated() so PatAccessGuard stands aside", () => {
+    expect(
+      Reflect.getMetadata(PAT_SELF_AUTHENTICATED_KEY, McpHttpController),
+    ).toBe(true);
+  });
+
+  describe("malformed and unknown Authorization headers", () => {
+    const cases: Array<[string, Record<string, string>]> = [
+      ["no Authorization header", {}],
+      ["a bare scheme", { authorization: "Bearer" }],
+      ["an empty token", { authorization: "Bearer " }],
+      ["a whitespace token", { authorization: "Bearer    " }],
+      ["the wrong scheme", { authorization: "Basic dXNlcjpwYXNz" }],
+      ["a lowercase scheme", { authorization: "bearer pat_whatever" }],
+      ["an unknown PAT", { authorization: "Bearer pat_does_not_exist" }],
+      ["an unknown OAuth token", { authorization: "Bearer eyJhbGciOiJIUzI1" }],
+      ["a token that is only punctuation", { authorization: "Bearer ...." }],
+    ];
+
+    const verbs: Array<["handlePost" | "handleGet" | "handleDelete", string]> =
+      [
+        ["handlePost", "POST"],
+        ["handleGet", "GET"],
+        ["handleDelete", "DELETE"],
+      ];
+
+    describe.each(verbs)("%s", (method, verb) => {
+      it.each(cases)(`refuses ${verb} with %s`, async (_label, headers) => {
+        patService.validateToken.mockRejectedValue(new Error("Invalid"));
+        oauthProviderService.validateAccessToken.mockResolvedValue(null);
+
+        const req = { headers, body: {} } as any;
+        const res = {
+          status: jest.fn().mockReturnThis(),
+          json: jest.fn(),
+          setHeader: jest.fn(),
+        } as any;
+
+        await controller[method](req, res);
+
+        expect(res.status).toHaveBeenCalledWith(401);
+        expect(res.json).toHaveBeenCalledWith(
+          expect.objectContaining({
+            error: expect.objectContaining({ message: "Unauthorized" }),
+          }),
+        );
+        // RFC 9728: the refusal names where to get a token, so a client can
+        // start the OAuth flow rather than guessing.
+        expect(res.setHeader).toHaveBeenCalledWith(
+          "WWW-Authenticate",
+          expect.stringContaining("resource_metadata="),
+        );
+      });
+    });
+  });
+
+  // One endpoint serves both revisions. The routing decision is the SDK's own
+  // predicate, and everything it does not classify as legacy must reach the
+  // modern handler -- that path owns the modern error answers, so a request
+  // sent to the sessionful transport instead would be refused in the wrong
+  // shape and never reach a tool.
+  describe("protocol era routing", () => {
+    const PAT = {
+      userId: "11111111-1111-4111-8111-111111111111",
+      scopes: "read",
+      tokenId: "tok-a",
+    };
+
+    function mockRes() {
+      return {
+        status: jest.fn().mockReturnThis(),
+        json: jest.fn(),
+        setHeader: jest.fn(),
+      } as any;
+    }
+
+    // The sessionful path hands the request to the real SDK transport, which
+    // writes to the Node response rather than through Express's helpers.
+    function mockNodeRes() {
+      return {
+        ...mockRes(),
+        writeHead: jest.fn().mockReturnThis(),
+        write: jest.fn().mockReturnValue(true),
+        end: jest.fn(),
+        on: jest.fn(),
+        once: jest.fn(),
+        removeListener: jest.fn(),
+        destroyed: false,
+        headersSent: false,
+      } as any;
+    }
+
+    let modernNode: jest.Mock;
+
+    beforeEach(() => {
+      patService.validateToken.mockResolvedValue(PAT);
+      modernNode = jest.fn().mockResolvedValue(undefined);
+      (controller as any).modernNode = modernNode;
+    });
+
+    it("serves a 2026-07-28 request from the modern handler, with its authInfo", async () => {
+      const body = {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/list",
+        params: {
+          _meta: { "io.modelcontextprotocol/protocolVersion": "2026-07-28" },
+        },
+      };
+      const req = {
+        method: "POST",
+        url: "/api/v1/mcp",
+        headers: {
+          authorization: "Bearer pat_test",
+          "content-type": "application/json",
+          "mcp-method": "tools/list",
+        },
+        body,
+      } as any;
+      const res = mockRes();
+
+      await controller.handlePost(req, res);
+
+      expect(modernNode).toHaveBeenCalledWith(req, res, body);
+      // The identity a handler reads is the credential on THIS request.
+      expect(req.auth).toMatchObject({
+        clientId: "pat:tok-a",
+        extra: expect.objectContaining({ userId: PAT.userId }),
+      });
+      // No session is created, looked up, or bound.
+      expect((controller as any).transports.size).toBe(0);
+      expect((controller as any).sessionUsers.size).toBe(0);
+    });
+
+    it("keeps a 2025-era initialize on the sessionful path", async () => {
+      const req = {
+        method: "POST",
+        url: "/api/v1/mcp",
+        headers: {
+          authorization: "Bearer pat_test",
+          "content-type": "application/json",
+        },
+        body: {
+          jsonrpc: "2.0",
+          id: 1,
+          method: "initialize",
+          params: { protocolVersion: "2025-06-18", capabilities: {} },
+        },
+      } as any;
+
+      await controller.handlePost(req, mockNodeRes());
+
+      expect(modernNode).not.toHaveBeenCalled();
+      // The factory takes no era -- the sessionful leg is identified by the
+      // fact that it built a server of its own rather than by an argument.
+      expect(mcpServerService.createServer).toHaveBeenCalledWith();
+    });
+
+    it("routes a 2025-era request carrying a session id to that session", async () => {
+      const sessionId = "live-session";
+      const handleRequest = jest.fn();
+      (controller as any).transports.set(sessionId, {
+        sessionId,
+        handleRequest,
+        close: jest.fn().mockResolvedValue(undefined),
+      });
+      (controller as any).servers.set(sessionId, {});
+      (controller as any).sessionUsers.set(sessionId, {
+        userId: PAT.userId,
+        scopes: "read",
+        credentialId: "pat:tok-a",
+      });
+      (controller as any).sessionCreatedAt.set(sessionId, Date.now());
+
+      const req = {
+        method: "POST",
+        url: "/api/v1/mcp",
+        headers: {
+          authorization: "Bearer pat_test",
+          "content-type": "application/json",
+          "mcp-session-id": sessionId,
+        },
+        body: { jsonrpc: "2.0", id: 2, method: "tools/list" },
+      } as any;
+
+      await controller.handlePost(req, mockRes());
+
+      expect(modernNode).not.toHaveBeenCalled();
+      expect(handleRequest).toHaveBeenCalled();
+    });
+
+    // An unbindable credential cannot be tied to a session or to a
+    // confirmation, so it is refused before either era serves it.
+    it("refuses an OAuth grant with no id", async () => {
+      patService.validateToken.mockRejectedValue(new Error("not a PAT"));
+      oauthProviderService.validateAccessToken.mockResolvedValue({
+        userId: PAT.userId,
+        scopes: "read",
+        grantId: undefined,
+      });
+
+      const req = {
+        method: "POST",
+        url: "/api/v1/mcp",
+        headers: { authorization: "Bearer oauth_token" },
+        body: {},
+      } as any;
+      const res = mockRes();
+
+      await controller.handlePost(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(modernNode).not.toHaveBeenCalled();
+      expect(req.auth).toBeUndefined();
+    });
   });
 
   describe("handlePost", () => {
@@ -281,7 +507,7 @@ describe("McpHttpController", () => {
       );
     });
 
-    it("should reject requests without session ID", async () => {
+    it("answers 405 when no session id is present", async () => {
       patService.validateToken.mockResolvedValue({
         userId: "11111111-1111-4111-8111-111111111111",
         scopes: "read",
@@ -299,7 +525,11 @@ describe("McpHttpController", () => {
 
       await controller.handleGet(req, res);
 
-      expect(res.status).toHaveBeenCalledWith(400);
+      // GET and DELETE are 2025-era session operations. Without a session id
+      // there is nothing to answer on either era: the 2026-07-28 revision has
+      // no standalone stream and no session to end.
+      expect(res.setHeader).toHaveBeenCalledWith("Allow", "POST");
+      expect(res.status).toHaveBeenCalledWith(405);
     });
 
     it("should reject requests with unknown session ID", async () => {
@@ -452,7 +682,7 @@ describe("McpHttpController", () => {
       );
     });
 
-    it("should reject requests without session ID", async () => {
+    it("answers 405 when no session id is present", async () => {
       patService.validateToken.mockResolvedValue({
         userId: "11111111-1111-4111-8111-111111111111",
         scopes: "read",
@@ -470,7 +700,11 @@ describe("McpHttpController", () => {
 
       await controller.handleDelete(req, res);
 
-      expect(res.status).toHaveBeenCalledWith(400);
+      // GET and DELETE are 2025-era session operations. Without a session id
+      // there is nothing to answer on either era: the 2026-07-28 revision has
+      // no standalone stream and no session to end.
+      expect(res.setHeader).toHaveBeenCalledWith("Allow", "POST");
+      expect(res.status).toHaveBeenCalledWith(405);
     });
 
     it("should return 404 for an expired session", async () => {
@@ -943,6 +1177,37 @@ describe("McpHttpController", () => {
       });
     });
 
+    it("serves an existing session's tools the scopes of the token presented now", async () => {
+      // INV-MCP-001 / MON-M04 (A26-S17-05): the session was opened with a
+      // write-scoped token; the same credential now carries read only. What the
+      // tools see is the `authInfo` the transport forwards from `req.auth`, so
+      // that is what must carry the narrowed scope when the request reaches the
+      // session -- not the scopes stored when the session was created.
+      const sessionId = "narrowed-tool-session";
+      let authAtDispatch: AuthInfo | undefined;
+      const handleRequest = seedSession(sessionId, {
+        userId: USER,
+        scopes: "read,write",
+        credentialId: "pat:tok-n",
+      });
+      handleRequest.mockImplementation(async (req: { auth?: AuthInfo }) => {
+        authAtDispatch = req.auth;
+      });
+      patService.validateToken.mockResolvedValue({
+        userId: USER,
+        scopes: "read",
+        tokenId: "tok-n",
+      });
+
+      await controller.handlePost(post(sessionId), makeRes());
+
+      expect(handleRequest).toHaveBeenCalledTimes(1);
+      expect(authAtDispatch?.scopes).toEqual(["read"]);
+      expect(authAtDispatch?.extra).toEqual(
+        expect.objectContaining({ userId: USER, credentialId: "pat:tok-n" }),
+      );
+    });
+
     it("accepts the same credential and still rejects another user's", async () => {
       const sessionId = "same-credential-session";
       const handleRequest = seedSession(sessionId, {
@@ -1080,6 +1345,62 @@ describe("McpHttpController", () => {
         scopes: "read",
         credentialId: "oauth:grant-9",
       });
+    });
+  });
+
+  /**
+   * M1 (`docs/specs/horizontal-scaling.md`, WP6) asked whether a 2025-era
+   * session can be re-created on another replica from a persisted
+   * `session_id -> user_id` row. It cannot, and these two SDK facts are why.
+   * They are pinned here rather than written down only in prose: an SDK upgrade
+   * that adds a session-restore seam should turn this red and send the reader
+   * back to M1's persisted variant, instead of leaving the sticky-routing
+   * requirement in `helm/README.md` standing on a limitation that has lapsed.
+   */
+  describe("a 2025-era session cannot be rehydrated on another replica", () => {
+    it("exposes sessionId as a getter, so a persisted id cannot be assigned", () => {
+      const transport = new NodeStreamableHTTPServerTransport({
+        sessionIdGenerator: () => "generated-session-id",
+      });
+      const descriptor = Object.getOwnPropertyDescriptor(
+        Object.getPrototypeOf(transport),
+        "sessionId",
+      );
+
+      expect(descriptor?.get).toBeDefined();
+      expect(descriptor?.set).toBeUndefined();
+      expect(() => {
+        (transport as unknown as { sessionId: string }).sessionId =
+          "rehydrated-from-a-row";
+      }).toThrow(TypeError);
+    });
+
+    // The Node transport wraps this one, and answers the same way; the web
+    // standard transport is driven here because it returns the `Response`
+    // itself, so the refusal can be read rather than inferred from a status.
+    it("refuses a known session id on a transport that has not seen initialize", async () => {
+      const transport = new WebStandardStreamableHTTPServerTransport({
+        sessionIdGenerator: () => "generated-session-id",
+      });
+      const body = { jsonrpc: "2.0", id: 1, method: "tools/list", params: {} };
+      const response = await transport.handleRequest(
+        new Request("https://app.monize.test/api/v1/mcp", {
+          method: "POST",
+          headers: {
+            accept: "application/json, text/event-stream",
+            "content-type": "application/json",
+            // The id a second replica would have read out of an `mcp_sessions` row.
+            "mcp-session-id": "generated-session-id",
+          },
+          body: JSON.stringify(body),
+        }),
+        { parsedBody: body },
+      );
+
+      // `_initialized` is private and only an `initialize` request sets it, so
+      // the replica holding the row still answers as an uninitialized server.
+      expect(response.status).toBe(400);
+      expect(await response.text()).toContain("Server not initialized");
     });
   });
 

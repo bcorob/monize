@@ -76,7 +76,10 @@
     "collapseAria": "Ẩn thông tin tài khoản",
     "showAccountNumber": "Hiển thị số tài khoản",
     "hideAccountNumber": "Ẩn số tài khoản",
-    "show": "Hiển thị thông tin tài khoản"
+    "show": "Hiển thị thông tin tài khoản",
+    "nextInstallment": "Kỳ trả góp tiếp theo",
+    "finalPayment": "Khoản thanh toán cuối",
+    "amountDueOn": "{amount}, đến hạn {date}"
   },
   "page": {
     "title": "Giao tác",
@@ -121,13 +124,19 @@
       "balance": "Số tiền còn lại",
       "attachments": "Tệp đính kèm",
       "status": "Trạng thái",
+      "statusHelp": "Chưa điều hoà, Đã xong hoặc Đã điều hoà là các bước để khớp với sao kê ngân hàng. Hủy bỏ huỷ một giao dịch nhưng vẫn giữ lại bản ghi của nó; giao dịch không còn làm thay đổi số dư tài khoản.",
       "actions": "Hành động"
+    },
+    "sort": {
+      "balanceHiddenHint": "Sắp xếp theo ngày để xem số dư luỹ kế",
+      "stripLabel": "Sắp xếp theo"
     },
     "dateDisplay": {
       "toggleLabel": "Ẩn năm",
       "toggleTitle": "Bỏ năm khỏi ngày để hiện được nhiều tên người nhận hơn"
     },
     "attachmentsCount": "{count, plural, other {# tệp đính kèm}}",
+    "warrantiesCount": "{count, plural, other {# bảo hành}}",
     "today": "Hôm nay",
     "export": {
       "button": "Xuất",
@@ -165,7 +174,6 @@
     },
     "row": {
       "viewPayeeTitle": "Xem chi tiết {name}",
-      "ref": "Tham chiếu: {number}",
       "investmentLabel": "Đầu tư",
       "linkedInvestmentTitle": "Xem trong Đầu tư",
       "filterByDate": "Lọc theo ngày \"{date}\"",
@@ -212,13 +220,13 @@
       "title": "Bộ lọc",
       "clear": "Xóa",
       "hide": "Ẩn",
-      "show": "Hiển thị"
+      "show": "Hiển thị bộ lọc"
     },
     "accounts": {
-      "label": "Hiển thị tài khoản:",
-      "all": "Tất cả",
-      "active": "Hoạt động",
-      "closed": "Đã đóng"
+      "label": "Hiển thị tài khoản",
+      "allCount": "Tất cả ({count})",
+      "activeCount": "Hoạt động ({count})",
+      "closedCount": "Đã đóng ({count})"
     },
     "fields": {
       "accounts": "Tài khoản",
@@ -251,7 +259,7 @@
       "statuses": "Tất cả trạng thái",
       "amountMin": "Tối thiểu",
       "amountMax": "Tối đa",
-      "search": "Tìm kiếm người nhận, danh mục, số tiền, thẻ, mô tả, số tham chiếu...",
+      "search": "Tìm kiếm, hoặc thử #10 hay payee:costco",
       "tagKeyValue": "ví dụ: usa"
     },
     "tagKeyNone": "Bất kỳ (không lọc theo khóa)",
@@ -312,7 +320,7 @@
     },
     "modal": {
       "title": "Cập nhật giao tác hàng loạt",
-      "subtitle": "Cập nhật {count, plural, one {# giao tác đã chọn} other {# giao tác đã chọn}}. Bật/tắt các trường bạn muốn thay đổi.",
+      "help": "Bật/tắt các trường bạn muốn thay đổi.",
       "submitLabel": "Cập nhật {count, plural, one {# giao tác} other {# giao tác}}",
       "payee": "Người nhận",
       "category": "Danh mục",
@@ -360,8 +368,9 @@
       "fromAccount": "Từ tài khoản",
       "toAccount": "Đến tài khoản",
       "transferAmount": "Số tiền chuyển",
-      "transferAmountWithCurrency": "Số tiền chuyển ({currency})",
-      "amountReceived": "Số tiền nhận ({currency})",
+      "amountReceivedLabel": "Số tiền nhận",
+      "transferAmountInCurrency": "Số tiền chuyển ({currency})",
+      "amountReceivedInCurrency": "Số tiền nhận ({currency})",
       "payeeOptional": "Người nhận (tùy chọn)",
       "categoryOptional": "Danh mục (Tùy chọn)"
     },
@@ -391,10 +400,16 @@
     "submitCreateAndNewDescription": "Lưu và bắt đầu mục mới, giữ nguyên tài khoản và ngày.",
     "submitOptions": "Chọn điều xảy ra sau khi tạo",
     "submitUpdate": "Cập nhật {mode}",
+    "submitConvert": "Chuyển đổi thành {mode}",
     "reconciledConfirm": {
       "title": "Chỉnh sửa giao dịch đã điều hoà?",
       "message": "Giao dịch này đã được điều hoà. Việc thay đổi sẽ ảnh hưởng đến một lần điều hoà đã hoàn tất. Bạn vẫn muốn lưu các thay đổi chứ?",
       "confirm": "Lưu thay đổi"
+    },
+    "counterpartConfirm": {
+      "title": "Chuyển đổi giao dịch chuyển khoản này?",
+      "message": "Phía bên kia của giao dịch chuyển khoản này đã được xác nhận hoặc đối soát. Chuyển đổi thành giao dịch sẽ xóa mục đó khỏi tài khoản kia và thay đổi số dư đã được đối chiếu với sao kê. Bạn có muốn tiếp tục?",
+      "confirm": "Vẫn chuyển đổi"
     },
     "modeLabel": {
       "transfer": "Chuyển khoản",
@@ -424,6 +439,8 @@
       "destinationRequired": "Vui lòng chọn tài khoản đích",
       "sameAccount": "Tài khoản nguồn và đích phải khác nhau",
       "negativeTransfer": "Số tiền chuyển không được là âm",
+      "convertedToTransfer": "Đã chuyển đổi thành chuyển khoản",
+      "convertedToTransaction": "Đã chuyển đổi thành giao dịch",
       "payeeCreated": "Người nhận \"{name}\" đã được tạo",
       "payeeCreateFailed": "Không thể tạo người nhận",
       "payeeReactivated": "Người nhận \"{name}\" đã được kích hoạt lại",
@@ -458,10 +475,20 @@
       },
       "feeCaption": "Bao gồm phí giao dịch nước ngoài {percent}% ({fee})."
     },
-    "jointSplitDisabled": "Chỉ chủ sở hữu mới có thể quản lý giao dịch tách trong tài khoản được chia sẻ"
+    "jointSplitDisabled": "Chỉ chủ sở hữu mới có thể quản lý giao dịch tách trong tài khoản được chia sẻ",
+    "warranties": {
+      "title": "Bảo hành",
+      "add": "Thêm bảo hành",
+      "expires": "Hết hạn {date}",
+      "loading": "Đang tải bảo hành",
+      "loadError": "Không thể tải các bảo hành của giao tác này.",
+      "empty": "Chưa có bảo hành nào"
+    },
+    "conversionLockedNote": "Giao dịch chuyển khoản này thuộc một giao dịch tách hoặc tài khoản của chủ sở hữu khác, nên ở đây chỉ có thể giữ là chuyển khoản. Hãy thay đổi từ phần tách hoặc xóa và tạo mục bạn muốn."
   },
   "splitEditor": {
     "header": "Chi tiết phần chia",
+    "headerTooltip": "Mỗi dòng có thể là một hạng mục, một khoản chuyển tiền sang tài khoản khác, hoặc một khoản đầu tư. Các dòng phải cộng lại bằng tổng số tiền giao dịch; Phân bổ đều và Phân bổ theo tỷ lệ sẽ chia phần còn lại cho bạn.",
     "distributeProportionally": "Phân bổ theo tỷ lệ",
     "distributeProportionallyTitle": "Phân bổ số tiền còn lại theo tỷ lệ dựa trên số tiền của mỗi phần",
     "distributeEvenly": "Phân bổ đều",
@@ -521,7 +548,7 @@
     "quantityPlaceholder": "Số lượng",
     "pricePlaceholder": "Giá",
     "commissionPlaceholder": "Hoa hồng",
-    "amountPlaceholder": "Số tiền ({currency})",
+    "amountOnlyPlaceholder": "Số tiền",
     "ratePlaceholder": "{to} cho 1 {from}",
     "ariaRate": "Tỷ giá ({to} cho 1 {from})",
     "rateHint": "Số lượng, giá và hoa hồng tính bằng {from}; tỷ giá này quy đổi tác động tiền mặt sang {to}.",
@@ -551,6 +578,7 @@
       "total": "Tổng",
       "transactions": "Giao tác",
       "tooltip": "{count, plural, one {# giao tác} other {# giao tác}}",
+      "partialNote": "Một số khoản không có tỷ giá và không được tính vào các tổng này.",
       "quarterLabel": "Q{quarter} {year}",
       "quarterTick": "Q{quarter} {year}",
       "granularityLabel": "Nhóm theo",
@@ -575,6 +603,11 @@
       "log": "Logarit",
       "autoTitle": "Tự động ({scale})",
       "scaleTitle": "Thang đo {label}"
+    },
+    "collapse": {
+      "hide": "Ẩn biểu đồ",
+      "show": "Hiện biểu đồ",
+      "hidden": "Biểu đồ đã ẩn"
     }
   },
   "toasts": {
@@ -597,5 +630,71 @@
     "title": "Chi tiêu theo {key}",
     "other": "Khác",
     "noData": "Không có chi tiêu được gắn thẻ để phân tích cho khóa này."
+  },
+  "searchSyntax": {
+    "open": "Cú pháp tìm kiếm",
+    "title": "Cú pháp tìm kiếm",
+    "fields": "Trường: payee, memo, cat, tag, account, ref, amount, date, status, is, has. Chọn một ví dụ để đưa vào ô tìm kiếm.",
+    "examples": {
+      "allWords": "Mỗi từ khớp ở đâu đó",
+      "phrase": "Đúng cụm từ này",
+      "exclude": "Loại trừ mọi thứ khớp với refund",
+      "fieldContains": "Người nhận chứa costco",
+      "fieldExact": "Người nhận đúng là Costco",
+      "reference": "Số séc hoặc số tham chiếu đúng 10",
+      "wildcard": "Tham chiếu bắt đầu bằng 10",
+      "amountOver": "Số tiền trên 100",
+      "amountRange": "Số tiền từ 50 đến 100",
+      "datePeriod": "Bất kỳ ngày nào trong tháng 3 năm 2026",
+      "isSplit": "Giao dịch tách",
+      "hasAttachment": "Có tệp đính kèm",
+      "hasWarranty": "Có bảo hành"
+    }
+  },
+  "searchInterpretation": {
+    "label": "Đang tìm:",
+    "negated": "không {phrase}",
+    "malformed": "{raw} (không hiểu, tìm như văn bản)",
+    "empty": "{raw} (trống, bỏ qua)",
+    "status": "Trạng thái là {value}",
+    "any": "“{value}” ở bất kỳ đâu",
+    "fields": {
+      "payee": "Người nhận",
+      "memo": "Ghi chú",
+      "cat": "Danh mục",
+      "tag": "Thẻ",
+      "account": "Tài khoản",
+      "ref": "Tham chiếu",
+      "amount": "Số tiền",
+      "date": "Ngày",
+      "status": "Trạng thái",
+      "is": "Loại",
+      "has": "Có"
+    },
+    "ops": {
+      "contains": "{field} chứa “{value}”",
+      "exact": "{field} là “{value}”",
+      "glob": "{field} khớp “{value}”",
+      "eq": "{field} là {value}",
+      "gt": "{field} trên {value}",
+      "gte": "{field} từ {value} trở lên",
+      "lt": "{field} dưới {value}",
+      "lte": "{field} từ {value} trở xuống",
+      "between": "{field} từ {value} đến {valueTo}"
+    },
+    "enum": {
+      "is": {
+        "transfer": "Chuyển khoản",
+        "split": "Giao dịch tách",
+        "uncategorized": "Chưa phân loại"
+      },
+      "has": {
+        "attachment": "Có tệp đính kèm",
+        "warranty": "Có bảo hành",
+        "ref": "Có số tham chiếu",
+        "memo": "Có ghi chú",
+        "tag": "Có thẻ"
+      }
+    }
   }
 }

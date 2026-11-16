@@ -83,8 +83,7 @@ export function createExportReader(
     params: unknown[],
   ): Promise<Record<string, unknown>[]> => {
     const rows = (await manager.query(sql, params)) as
-      | Record<string, unknown>[]
-      | undefined;
+      Record<string, unknown>[] | undefined;
     return rows ?? [];
   };
 

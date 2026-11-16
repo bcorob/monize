@@ -1,4 +1,17 @@
-import { JsonbHandlerName } from "./support-backup-jsonb";
+import { SHARED_RULES } from "./support-backup-rules.shared";
+import {
+  drop,
+  jsonb,
+  keep,
+  konst,
+  mask,
+  scale,
+  scaleQty,
+} from "./support-backup-rule-kinds";
+import { BUDGET_RULES } from "./support-backup-rules.budgets";
+import { LOAN_RULES } from "./support-backup-rules.loans";
+import { PLANNING_RULES } from "./support-backup-rules.planning";
+import { WARRANTY_RULES } from "./support-backup-rules.warranties";
 
 /**
  * Per-column de-identification rules for the support backup. This registry is
@@ -8,45 +21,26 @@ import { JsonbHandlerName } from "./support-backup-jsonb";
  * column this registry does not classify -- so a future migration cannot
  * silently start leaking a new field.
  */
-export type ColumnRule =
-  | { t: "keep" } // structure, dates, enums, flags, FKs, public reference values
-  | { t: "mask" } // free text / names: keep first+last 2 chars, star the middle
-  | { t: "drop" } // set to null (highest-risk free text, secrets, bulk blobs)
-  | { t: "const"; value: unknown } // fixed replacement for NOT NULL dropped fields
-  | { t: "scale" } // private money magnitude x M (4 dp)
-  | { t: "scaleQty" } // private quantity x M (8 dp)
-  | { t: "jsonb"; handler: JsonbHandlerName }; // per-key handler for a JSON blob
+// The rule kinds and their shorthands live in their own file so the registry
+// can be split without either half importing the other; re-exported here so
+// existing import sites are unchanged.
+export type { ColumnRule, TableRules } from "./support-backup-rule-kinds";
 
-const keep: ColumnRule = { t: "keep" };
-const mask: ColumnRule = { t: "mask" };
-const drop: ColumnRule = { t: "drop" };
-const scale: ColumnRule = { t: "scale" };
-const scaleQty: ColumnRule = { t: "scaleQty" };
-const konst = (value: unknown): ColumnRule => ({ t: "const", value });
-const jsonb = (handler: JsonbHandlerName): ColumnRule => ({
-  t: "jsonb",
-  handler,
-});
+import type { TableRules } from "./support-backup-rule-kinds";
 
-export type TableRules = Record<string, ColumnRule>;
-
-/**
- * Tables never written to a support backup regardless of section selection.
- * `ai_provider_configs` holds encrypted API keys and endpoint URLs with zero
- * diagnostic value for a finance bug, so it is dropped wholesale. The two
- * attachment tables carry user-uploaded receipts/documents: `attachment_blobs`
- * is raw file bytes (a NOT NULL BYTEA with no useful de-identified form) and
- * `transaction_attachments` is their metadata (filenames can embed PII), so
- * both are omitted from the de-identified support backup. Their columns are
- * intentionally absent from RULES below; the golden test skips them.
- */
-export const ALWAYS_EXCLUDED_TABLES: ReadonlySet<string> = new Set([
-  "ai_provider_configs",
-  "transaction_attachments",
-  "attachment_blobs",
-]);
+export { ALWAYS_EXCLUDED_TABLES } from "./support-backup-exclusions";
 
 export const RULES: Record<string, TableRules> = {
+  ...SHARED_RULES,
+  // How many Google Places requests a month cost, and nothing else: a user id
+  // (kept as an FK everywhere here), a YYYY-MM, and a counter. Nothing about
+  // it names a payee, so nothing needs masking -- and the count is exactly
+  // what a support case about a cap would be asking to see.
+  payee_lookup_usage: {
+    user_id: keep,
+    month: keep,
+    google_places_requests: keep,
+  },
   currencies: {
     code: keep,
     name: keep,
@@ -55,6 +49,27 @@ export const RULES: Record<string, TableRules> = {
     is_active: keep,
     created_by_user_id: keep,
     created_at: keep,
+    kind: keep,
+    // A public market ticker (`BTC-EUR`), not anything the user wrote.
+    quote_symbol: keep,
+  },
+  // A note is the user's own writing about their own day: whatever they put in
+  // it, a support copy has no use for the text and every reason not to carry
+  // it. Replaced whole, not masked -- a masked note would still say how long it
+  // was and which days carried one, which is the same disclosure made quieter.
+  //
+  // `konst`, not `drop`: the column is NOT NULL and
+  // `ck_calendar_day_notes_body_length` refuses an empty string, so a null (or
+  // a "") is a row no restore can insert, and a support backup restores through
+  // the same path as any other.
+  calendar_day_notes: {
+    id: keep,
+    user_id: keep,
+    note_date: keep,
+    end_date: keep,
+    body: konst("***"), // NOT NULL, CHECK char_length >= 1
+    created_at: keep,
+    updated_at: keep,
   },
   user_preferences: {
     user_id: keep,
@@ -65,7 +80,6 @@ export const RULES: Record<string, TableRules> = {
     color_theme: keep,
     timezone: konst("UTC"),
     notification_email: keep,
-    notification_browser: keep,
     two_factor_enabled: keep,
     getting_started_dismissed: keep,
     week_starts_on: keep,
@@ -74,6 +88,8 @@ export const RULES: Record<string, TableRules> = {
     favourite_report_ids: keep,
     dashboard_widgets: keep,
     dashboard_widget_config: keep,
+    hidden_table_columns: keep,
+    view_defaults: keep,
     show_created_at: keep,
     time_format: keep,
     preferred_exchanges: keep,
@@ -84,9 +100,12 @@ export const RULES: Record<string, TableRules> = {
     default_quote_provider: keep,
     recent_transactions_limit: keep,
     ai_bubble_enabled: keep,
+    ai_trivia_enabled: keep,
     lock_reconciled_transactions: keep,
+    payee_contact_lookup_enabled: keep,
     language: keep,
     last_client_timezone: drop, // location hint
+    default_map_provider: keep,
     created_at: keep,
     updated_at: keep,
   },
@@ -105,6 +124,7 @@ export const RULES: Record<string, TableRules> = {
     icon: keep,
     color: keep,
     is_income: keep,
+    auto_sign: keep,
     is_system: keep,
     created_at: keep,
   },
@@ -121,6 +141,15 @@ export const RULES: Record<string, TableRules> = {
     logo_content_type: drop,
     has_logo: konst(false),
     logo_fetched_at: drop,
+    // Contact details are direct personal data and name the payee outright,
+    // which is the whole point of masking the name.
+    address: drop,
+    email: drop,
+    phone: drop,
+    // A lookup's timestamp and source say when and how the (dropped) contact
+    // details were found; neither names the payee.
+    contact_lookup_at: keep,
+    contact_lookup_source: keep,
     is_active: keep,
     created_at: keep,
   },
@@ -145,6 +174,8 @@ export const RULES: Record<string, TableRules> = {
     updated_at: keep,
   },
   accounts: {
+    managed_purpose: drop,
+    shared_expense_group_id: drop,
     id: keep,
     user_id: keep,
     account_type: keep,
@@ -165,6 +196,10 @@ export const RULES: Record<string, TableRules> = {
     statement_settlement_day: keep,
     is_closed: keep,
     closed_date: keep,
+    low_balance_threshold: scale, // a money figure, scaled like every amount
+    high_balance_threshold: scale,
+    low_alert_armed: keep, // the crossing latch, a boolean
+    high_alert_armed: keep,
     is_favourite: keep,
     favourite_sort_order: keep,
     exclude_from_net_worth: keep,
@@ -183,12 +218,13 @@ export const RULES: Record<string, TableRules> = {
     asset_category_id: keep,
     date_acquired: keep,
     linked_loan_account_id: keep,
-    is_canadian_mortgage: keep,
-    is_variable_rate: keep,
+    mortgage_type: keep,
+    prepayment_mode: keep,
     term_months: keep,
     term_end_date: keep,
     amortization_months: keep,
     original_principal: scale,
+    payment_matching_rule_id: keep,
     created_at: keep,
     updated_at: keep,
   },
@@ -201,7 +237,52 @@ export const RULES: Record<string, TableRules> = {
     created_at: keep,
     updated_at: keep,
   },
+  transaction_rules: {
+    id: keep,
+    user_id: keep,
+    name: mask,
+    enabled: keep,
+    position: keep,
+    triggers: keep, // a subset of {create, import}
+    // Free-text match patterns (payee text, descriptions, memos) and the
+    // user's own review instructions, nested in documents that also carry the
+    // ids of accounts, payees, categories and tags. Both are NOT NULL, so they
+    // are replaced by an empty document rather than dropped; a rule restored
+    // from a support backup is invalid and skipped, never evaluated.
+    condition: konst({}),
+    actions: konst([]),
+    stop_processing: keep,
+    active_from: keep, // a date, the first day the rule applies to
+    active_to: keep, // a date, the last day the rule applies to
+    revision: keep,
+    created_at: keep,
+    updated_at: keep,
+  },
+  // A parser is the user's own extraction recipe for a merchant's emails: its
+  // name, the sender domains and subject words it matches, and the patterns
+  // (which quote the merchant's wording) are all free text about what the user
+  // buys and from whom. The payee id, the state and the dates are structure.
+  // `konst`, not `drop`, on the three NOT NULL columns, with values their own
+  // CHECKs accept (from_domains needs one entry); a parser restored from a
+  // support backup has an empty definition, which the reader treats as invalid
+  // and never evaluates.
+  email_receipt_parsers: {
+    id: keep,
+    user_id: keep,
+    name: mask,
+    payee_id: keep,
+    from_domains: konst(["example.invalid"]),
+    subject_contains: konst([]),
+    definition: konst({}),
+    status: keep,
+    source: keep,
+    approved_at: keep,
+    revision: keep,
+    created_at: keep,
+    updated_at: keep,
+  },
   transactions: {
+    shared_expense_posting_id: drop,
     id: keep,
     user_id: keep,
     account_id: keep,
@@ -222,6 +303,7 @@ export const RULES: Record<string, TableRules> = {
     parent_transaction_id: keep,
     is_transfer: keep,
     linked_transaction_id: keep,
+    external_id: drop, // the API caller's key, often a bank's own row id
     created_at: keep,
     updated_at: keep,
   },
@@ -252,6 +334,7 @@ export const RULES: Record<string, TableRules> = {
     original_currency_code: keep, // public reference value
     exchange_rate: keep, // public FX rate
     description: drop,
+    reference_number: drop,
     frequency: keep,
     next_due_date: keep,
     start_date: keep,
@@ -279,6 +362,8 @@ export const RULES: Record<string, TableRules> = {
     tag_ids: keep, // UUID array, covered by id remap
     created_at: keep,
     updated_at: keep,
+    amount_is_estimated: keep, // flag
+    custom_recurrence: keep, // weekdays, month days or MM-DD dates: structure
   },
   scheduled_transaction_splits: {
     id: keep,
@@ -315,18 +400,51 @@ export const RULES: Record<string, TableRules> = {
     updated_at: keep,
   },
   scheduled_transaction_postings: {
-    // Every column is structure or a date: which occurrence of which schedule
-    // was posted, and when. Nothing here names a payee, an amount or free text,
-    // so there is nothing to mask or drop.
+    // Structure and dates: which occurrence of which schedule was posted, when,
+    // by whom (the bill or a rule) and through which transaction. Nothing here
+    // names a payee or free text, so there is nothing to mask.
     id: keep,
     scheduled_transaction_id: keep,
     original_due_date: keep,
     posted_date: keep,
     created_at: keep,
+    transaction_id: keep,
+    source: keep, // 'post' | 'rule'
+    rule_id: keep,
+    // The settlement's pricing record carries the loan's debt and the
+    // installment's principal and interest as unscaled money strings; kept,
+    // it would disclose the magnitudes every scaled amount column hides.
+    // Nullable, and nothing reads it back but the settled-installments list.
+    pricing: drop,
   },
   scheduled_transaction_split_tags: {
     scheduled_transaction_split_id: keep,
     tag_id: keep,
+  },
+  // A payroll deduction rule is structure (which bill, which category, when
+  // it resets) plus two private amounts, scaled like every other one.
+  payroll_deduction_rules: {
+    id: keep,
+    user_id: keep,
+    scheduled_transaction_id: keep,
+    category_id: keep,
+    yearly_maximum: scale,
+    reset_period: keep,
+    reset_date: keep,
+    expected_per_paycheque: scale,
+    created_at: keep,
+    updated_at: keep,
+  },
+  // A rule's figures from one period on: structure plus the same two amounts.
+  payroll_deduction_rule_periods: {
+    id: keep,
+    user_id: keep,
+    rule_id: keep,
+    period_start: keep,
+    yearly_maximum: scale,
+    expected_per_paycheque: scale,
+    created_at: keep,
+    updated_at: keep,
   },
   securities: {
     id: keep,
@@ -340,6 +458,8 @@ export const RULES: Record<string, TableRules> = {
     is_active: keep,
     is_favourite: keep,
     skip_price_updates: keep,
+    price_alert_percent: keep,
+    price_chart_enabled: keep,
     sector: keep,
     industry: keep,
     sector_weightings: keep, // public weightings
@@ -356,7 +476,14 @@ export const RULES: Record<string, TableRules> = {
     website: drop, // a public URL names the instrument the masked symbol hides
     ir_website: drop,
     msn_instrument_id: drop, // would identify a masked ticker
+    quote_url: drop, // the quote page names the instrument the masked symbol hides
     historical_backfill_attempted_at: keep,
+    // The id is derived from the program, so keeping it would name the bond the
+    // masked symbol hides, and the copy's quantities are scaled by a fractional
+    // multiplier, which the bond engine refuses. The copy is not valued by the
+    // engine; any bond_engine price rows it carries stay as static prices.
+    bond_program_id: drop,
+    bond_auto_fetch: keep, // a flag, like is_favourite: it re-identifies nobody
     created_at: keep,
     updated_at: keep,
   },
@@ -381,7 +508,7 @@ export const RULES: Record<string, TableRules> = {
     document_type: keep, // a factsheet is a factsheet
     name: mask, // the user's own wording, and it can name them
     document_date: keep,
-    url: drop, // an address can identify the holder or the account it came from
+    url: konst(""), // NOT NULL; an address can identify the holder or the account it came from
     notes: drop, // free text
     created_at: keep,
     updated_at: keep,
@@ -416,102 +543,20 @@ export const RULES: Record<string, TableRules> = {
     // support backup that dropped it could not reproduce a VOID row's
     // exclusion from holdings and balances.
     status: keep,
+    // Derived from the series code, so keeping it would name the bond the masked
+    // symbol hides (the same reason securities.bond_program_id is dropped).
+    bond_instrument_id: drop,
     created_at: keep,
     updated_at: keep,
   },
-  loan_rate_changes: {
-    id: keep,
-    user_id: keep,
-    account_id: keep,
-    effective_date: keep,
-    annual_rate: keep, // public rate
-    new_payment_amount: scale,
-    source: keep,
-    note: drop,
-    created_at: keep,
-    updated_at: keep,
-  },
-  loan_scenarios: {
-    id: keep,
-    user_id: keep,
-    account_id: keep,
-    name: mask,
-    recurring_extra_amount: scale,
-    recurring_extra_mode: keep,
-    recurring_extra_frequency: keep,
-    recurring_extra_start_date: keep,
-    recurring_extra_end_date: keep,
-    target_monthly_payment: scale,
-    target_monthly_payment_mode: keep,
-    target_monthly_payment_start_date: keep,
-    target_monthly_payment_end_date: keep,
-    lump_sums: jsonb("lumpSums"),
-    created_at: keep,
-    updated_at: keep,
-  },
+  // The loan tables, in their own file (support-backup-rules.loans.ts),
+  // spread where they stood so the registry's order is unchanged.
+  ...LOAN_RULES,
   security_tags: { security_id: keep, tag_id: keep },
-  budgets: {
-    id: keep,
-    user_id: keep,
-    name: mask,
-    description: drop,
-    budget_type: keep,
-    period_start: keep,
-    period_end: keep,
-    base_income: scale,
-    income_linked: keep,
-    strategy: keep,
-    is_active: keep,
-    currency_code: keep,
-    config: keep, // inventoried: flags/percentages/UUIDs only, no amounts
-    created_at: keep,
-    updated_at: keep,
-  },
-  budget_categories: {
-    id: keep,
-    budget_id: keep,
-    category_id: keep,
-    transfer_account_id: keep,
-    is_transfer: keep,
-    category_group: keep,
-    amount: scale,
-    is_income: keep,
-    rollover_type: keep,
-    rollover_cap: scale,
-    flex_group: mask, // user-authored group name
-    alert_warn_percent: keep,
-    alert_critical_percent: keep,
-    notes: drop,
-    sort_order: keep,
-    created_at: keep,
-    updated_at: keep,
-  },
-  budget_periods: {
-    id: keep,
-    budget_id: keep,
-    period_start: keep,
-    period_end: keep,
-    actual_income: scale,
-    actual_expenses: scale,
-    total_budgeted: scale,
-    status: keep,
-    created_at: keep,
-    updated_at: keep,
-  },
-  budget_period_categories: {
-    id: keep,
-    budget_period_id: keep,
-    budget_category_id: keep,
-    category_id: keep,
-    budgeted_amount: scale,
-    rollover_in: scale,
-    actual_amount: scale,
-    effective_budget: scale,
-    rollover_out: scale,
-    created_at: keep,
-    updated_at: keep,
-  },
-  budget_alerts: {
+  // The budget tables, in their own file (support-backup-rules.budgets.ts),
+  // spread where they stood so the registry's order is unchanged.
+  ...BUDGET_RULES,
+  notifications: {
     id: keep,
     user_id: keep,
     budget_id: keep,
@@ -521,11 +566,63 @@ export const RULES: Record<string, TableRules> = {
     title: konst("***"), // NOT NULL
     message: konst("***"), // NOT NULL
     data: drop, // amounts/names in JSON; alerts regenerate anyway
+    // An in-app path, so at most an id this row already keeps elsewhere.
+    target: keep,
     is_read: keep,
     is_email_sent: keep,
     period_start: keep,
     created_at: keep,
     dismissed_at: keep,
+    // Machine fingerprint (alert type + affected user id + date bucket);
+    // the user id in it is the same identifier user_id already keeps.
+    dedupe_key: keep,
+  },
+  notification_preferences: {
+    user_id: keep,
+    category: keep, // a derived NotificationCategory value, not free text
+    email: keep, // report-mode email flag
+    email_notification: keep, // notification-mode email flag
+    throttle_minutes: keep, // an integer cooldown, not identifying
+    push: keep, // web push channel flag
+    unifiedpush: keep, // UnifiedPush channel flag
+    created_at: keep,
+    updated_at: keep,
+  },
+  notification_reminders: {
+    id: keep,
+    user_id: keep,
+    source_notification_id: keep, // an id this backup already keeps elsewhere
+    alert_type: keep,
+    severity: keep,
+    title: konst("***"), // free text template copy
+    message: konst("***"), // free text template copy
+    data: drop, // amounts/names in JSON, like notifications.data
+    // An in-app path, so at most an id this row already keeps elsewhere.
+    target: keep,
+    // Fingerprint base (a dedupe key or an alert type); the same shape as
+    // notifications.dedupe_key, which this classification keeps.
+    dedupe_base: keep,
+    repeat_mode: keep,
+    interval_minutes: keep,
+    next_fire_at: keep,
+    last_fired_at: keep,
+    fire_count: keep,
+    stopped_at: keep,
+    created_at: keep,
+    updated_at: keep,
+  },
+  notification_portfolio_state: {
+    user_id: keep,
+    move_alert_percent: keep, // the user's threshold, not identifying
+    baseline_value: scale, // a money figure -- scaled like every other amount
+    baseline_currency: keep, // an ISO currency code
+    baseline_captured_on: keep, // a date
+    // Derived per-security quantities and closes; dropped rather than scaled
+    // one by one. The producer replaces a baseline without them on its next
+    // run, so a restored support copy loses one day's comparison, nothing more.
+    baseline_positions: drop,
+    created_at: keep,
+    updated_at: keep,
   },
   custom_reports: {
     id: keep,
@@ -594,106 +691,12 @@ export const RULES: Record<string, TableRules> = {
     created_at: keep,
     updated_at: keep,
   },
-  monte_carlo_scenarios: {
-    id: keep,
-    user_id: keep,
-    name: mask,
-    description: drop,
-    account_ids: keep, // UUID array, remapped + scoped by closure
-    starting_value: scale,
-    use_current_balance: keep,
-    years_to_retirement: keep,
-    annual_contribution: scale,
-    contribution_growth_rate: keep, // rate
-    years_in_retirement: keep,
-    annual_withdrawal: scale,
-    expected_return: keep,
-    volatility: keep,
-    inflation_rate: keep,
-    show_real_values: keep,
-    use_historical_returns: keep,
-    simulation_count: keep,
-    target_value: scale,
-    random_seed: keep,
-    is_favourite: keep,
-    sort_order: keep,
-    last_run_at: keep,
-    created_at: keep,
-    updated_at: keep,
-  },
-  monte_carlo_cash_flows: {
-    id: keep,
-    scenario_id: keep,
-    name: mask,
-    amount: scale,
-    flow_type: keep,
-    start_year: keep,
-    end_year: keep,
-    inflation_adjust: keep,
-    sort_order: keep,
-    created_at: keep,
-    updated_at: keep,
-  },
-  gem_strategies: {
-    id: keep,
-    user_id: keep,
-    name: mask,
-    cadence: keep,
-    lookback_months: keep,
-    tax_rate_percent: keep, // a rate, not an amount
-    commission_amount: scale,
-    // The rules link and its label are free text the user types into the
-    // settings tab; a URL beside a masked scenario name re-identifies nothing
-    // useful for a bug report.
-    rules_source_url: drop,
-    rules_source_label: drop,
-    created_at: keep,
-    updated_at: keep,
-  },
-  gem_strategy_accounts: {
-    id: keep,
-    user_id: keep,
-    strategy_id: keep,
-    account_id: keep,
-    created_at: keep,
-  },
-  gem_strategy_assets: {
-    id: keep,
-    user_id: keep,
-    strategy_id: keep,
-    role: keep,
-    security_id: keep,
-    created_at: keep,
-    updated_at: keep,
-  },
-  gem_strategy_signals: {
-    id: keep,
-    user_id: keep,
-    strategy_id: keep,
-    evaluated_on: keep,
-    effective_from: keep,
-    state: keep,
-    target_role: keep,
-    target_security_id: keep,
-    target_weight_percent: keep, // a share, not an amount
-    momentum: jsonb("gemMomentum"),
-    spread_pp: keep, // percentage points
-    lead_pp: keep, // percentage points
-    previous_role: keep,
-    benchmark_role: keep,
-    // A hash of the strategy's own settings. It identifies nothing about the
-    // user, and dropping it would make every restored signal look stale and be
-    // recomputed on the first read.
-    config_fingerprint: keep,
-    // Which version of the evaluation code wrote the row. Structural, says
-    // nothing about the user, and dropping it defaulted every restored signal
-    // to version 1 -- which the reader then files as legacy history and leaves
-    // out of the report entirely.
-    algorithm_version: keep,
-    executed: keep,
-    executed_at: keep,
-    created_at: keep,
-  },
+  // The planning tables -- Monte Carlo scenarios and GEM strategies -- live in
+  // their own file (a separate area from the account core above), merged here
+  // so every import site and the golden test still read one RULES map.
+  ...PLANNING_RULES,
+  // The warranty tables, likewise in their own file.
+  ...WARRANTY_RULES,
 };
 
 /**
@@ -703,74 +706,15 @@ export const RULES: Record<string, TableRules> = {
  * reset via SECTION_NONFK_CLEANUP so the trimmed backup still restores.
  * Tables not owned by any section are always included (the account core).
  */
-export type SupportBackupSection =
-  | "investments"
-  | "scheduled"
-  | "budgets"
-  | "reports"
-  | "importMappings"
-  | "autoBackup";
-
-export const SECTION_TABLES: Record<SupportBackupSection, string[]> = {
-  investments: [
-    "securities",
-    "security_prices",
-    "security_documents",
-    "holdings",
-    "investment_transactions",
-    "security_tags",
-  ],
-  scheduled: [
-    "scheduled_transactions",
-    "scheduled_transaction_splits",
-    "scheduled_transaction_overrides",
-    "scheduled_transaction_postings",
-    "scheduled_transaction_split_tags",
-  ],
-  budgets: [
-    "budgets",
-    "budget_categories",
-    "budget_periods",
-    "budget_period_categories",
-    "budget_alerts",
-  ],
-  reports: [
-    "custom_reports",
-    "investment_reports",
-    "monte_carlo_scenarios",
-    "monte_carlo_cash_flows",
-    "gem_strategies",
-    "gem_strategy_accounts",
-    "gem_strategy_assets",
-    "gem_strategy_signals",
-  ],
-  importMappings: ["import_column_mappings"],
-  autoBackup: ["auto_backup_settings"],
-};
-
-/**
- * Cleanups a disabled section needs that the referential-integrity scrub can't
- * do on its own. The scrub already nulls/drops every real FK pointing at a
- * removed table, so those cases are NOT listed here (that would duplicate it).
- * What remains is non-FK references the scrub can't see: id arrays and JSONB
- * blobs. Today the only one is `favourite_report_ids` (a UUID text[] with no
- * FK), reset when the reports section is off.
- */
-export interface SectionCleanup {
-  table: string;
-  column: string;
-  resetTo: unknown;
-}
-
-export const SECTION_NONFK_CLEANUP: Partial<
-  Record<SupportBackupSection, SectionCleanup[]>
-> = {
-  reports: [
-    { table: "user_preferences", column: "favourite_report_ids", resetTo: [] },
-  ],
-};
-
-/** All tables owned by any section (i.e. not part of the always-in core). */
-export const SECTIONED_TABLES: ReadonlySet<string> = new Set(
-  Object.values(SECTION_TABLES).flat(),
-);
+// The section-to-tables mapping lives in its own file (a separate axis from the
+// per-column rules above); re-exported here so existing import sites are
+// unchanged.
+export {
+  SECTION_TABLES,
+  SECTION_NONFK_CLEANUP,
+  SECTIONED_TABLES,
+} from "./support-backup-sections";
+export type {
+  SupportBackupSection,
+  SectionCleanup,
+} from "./support-backup-sections";

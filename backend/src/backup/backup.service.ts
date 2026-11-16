@@ -4,6 +4,7 @@ import { User } from "../users/entities/user.entity";
 import { BackupExportService } from "./backup-export.service";
 import { BackupRestoreService } from "./backup-restore.service";
 import { resolveStoredBackupPassword } from "./backup-password.util";
+import { BackupEncryptionInput } from "./backup-key-wrap";
 import {
   BackupCompletenessReport,
   RestoreBackupInput,
@@ -40,9 +41,8 @@ export { RESTORABLE_TABLES };
  * question is always answered in the component that owns it, never half here.
  *
  * The one exception is `resolveStoredBackupPassword`, which is a free function
- * (`backup-password.util.ts`) called from two places that must not depend on each
- * other -- the auto-backup cron through this facade, and the restore's
- * decrypt-candidate list.
+ * (`backup-password.util.ts`) shared with the restore's decrypt-candidate list,
+ * which must not depend on this facade.
  */
 @Injectable()
 export class BackupService {
@@ -65,8 +65,11 @@ export class BackupService {
   }
 
   /**
-   * Resolves the password the auto-backup cron should use for encryption.
-   * Returns null when encryption is disabled or no password is stored.
+   * The legacy stored backup password of a user not yet converted to a wrapped
+   * backup key (docs/specs/backup-envelope-key-wrapping.md). The auto-backup
+   * cron asks `BackupEncryptionService.resolveBackupKey` instead, which also
+   * converts the row. Returns null when encryption is disabled or no legacy
+   * copy remains.
    */
   resolveStoredBackupPassword(user: User): string | null {
     return resolveStoredBackupPassword(user, this.encryption, this.logger);
@@ -80,9 +83,9 @@ export class BackupService {
    */
   exportToBuffer(
     userId: string,
-    encryptionPassword?: string,
+    encryption?: BackupEncryptionInput,
   ): Promise<{ buffer: Buffer; report: BackupCompletenessReport }> {
-    return this.exportService.exportToBuffer(userId, encryptionPassword);
+    return this.exportService.exportToBuffer(userId, encryption);
   }
 
   /** Streams a gzipped (or encrypted) backup to an express response. */

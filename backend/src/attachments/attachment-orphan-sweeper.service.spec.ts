@@ -8,6 +8,7 @@ import {
   ORPHAN_SWEEP_BATCH,
 } from "./attachment-orphan-sweeper.service";
 import { AttachmentBlobTombstone } from "./entities/attachment-blob-tombstone.entity";
+import { AttachmentStorageRegistry } from "./storage/attachment-storage.registry";
 import { AttachmentStorageProvider } from "./storage/attachment-storage.interface";
 
 jest.mock("../common/db/scoped-db");
@@ -71,11 +72,18 @@ describe("AttachmentOrphanSweeper", () => {
   const build = (providerName: string): void => {
     storage = {
       name: providerName,
+      addressable: true,
       save: jest.fn().mockResolvedValue(undefined),
       load: jest.fn(),
       delete: jest.fn().mockResolvedValue(undefined),
     } as jest.Mocked<AttachmentStorageProvider>;
-    sweeper = new AttachmentOrphanSweeper({} as DataSource, storage);
+    // The real registry over the double: resolving a provider by name is the
+    // behaviour under test in half of these cases, so a second implementation of
+    // it in the spec would be the one thing that cannot fail.
+    sweeper = new AttachmentOrphanSweeper(
+      {} as DataSource,
+      new AttachmentStorageRegistry(storage, [storage]),
+    );
   };
 
   beforeEach(() => {
@@ -295,6 +303,106 @@ describe("AttachmentOrphanSweeper", () => {
         String(call[0]).includes("DELETE FROM attachment_blob_tombstones"),
       );
       expect(retire?.[1]).toEqual(["t2"]);
+    });
+  });
+
+  describe("bytes a live attachment row still points at", () => {
+    /**
+     * The claim's other conditions are about writers this sweeper races. This one
+     * is about the premise -- "whose metadata is already gone" -- and it asks the
+     * metadata instead of trusting the protocol.
+     *
+     * It is what makes a stale intent harmless. The relocation pass records an
+     * intent for a key an attachment row ALREADY has, in the backend being moved
+     * to; left behind by a crash, that row would otherwise have the sweeper delete
+     * a migrated attachment's only copy once the lease expired. Nothing else in
+     * the claim can tell the difference, because by shape there is none.
+     */
+    it("is excluded by both claims", async () => {
+      tombstoneRepo.find.mockResolvedValue([
+        { id: "t1", storageKey: "k1", storageProvider: "s3" },
+      ]);
+
+      await sweeper.sweep();
+      await sweeper.sweepKey("k1");
+
+      const claims = statements().filter((sql) => sql.includes("SET swept_at"));
+      expect(claims).toHaveLength(2);
+      for (const claim of claims) {
+        expect(claim).toContain("NOT EXISTS");
+        expect(claim).toContain("FROM transaction_attachments ta");
+        expect(claim).toContain(
+          "ta.storage_provider = attachment_blob_tombstones.storage_provider",
+        );
+        expect(claim).toContain(
+          "ta.storage_key = attachment_blob_tombstones.storage_key",
+        );
+      }
+    });
+  });
+
+  describe("a backend other than the bound one", () => {
+    /** The active provider, plus the one a switch is moving away from. */
+    const buildPair = (): {
+      previous: jest.Mocked<AttachmentStorageProvider>;
+    } => {
+      const previous = {
+        name: "local",
+        addressable: true,
+        save: jest.fn(),
+        load: jest.fn(),
+        delete: jest.fn().mockResolvedValue(undefined),
+      } as jest.Mocked<AttachmentStorageProvider>;
+      sweeper = new AttachmentOrphanSweeper(
+        {} as DataSource,
+        new AttachmentStorageRegistry(storage, [storage, previous]),
+      );
+      return { previous };
+    };
+
+    it("deletes through the provider the tombstone names", async () => {
+      const { previous } = buildPair();
+
+      await sweeper.sweepKey("k1", "local");
+
+      // An attachment deleted before the relocation reached it left its bytes in
+      // the old backend; sweeping the active one would leave them there forever.
+      expect(previous.delete).toHaveBeenCalledWith("k1");
+      expect(storage.delete).not.toHaveBeenCalled();
+      expect(
+        statements().find((sql) => sql.includes("SET swept_at")),
+      ).toContain("storage_provider = $1");
+      const claim = managerQuery.mock.calls.find((call) =>
+        String(call[0]).includes("SET swept_at"),
+      );
+      expect(claim?.[1]?.[0]).toBe("local");
+    });
+
+    it("sweeps every addressable backend on the hourly pass", async () => {
+      const { previous } = buildPair();
+      tombstoneRepo.find.mockResolvedValue([
+        { id: "t1", storageKey: "k1", storageProvider: "s3" },
+      ]);
+
+      await sweeper.sweepOrphanedObjects();
+
+      const providers = tombstoneRepo.find.mock.calls.map(
+        (call) =>
+          (call[0] as { where: { storageProvider: string }[] }).where[0]
+            .storageProvider,
+      );
+      expect(providers).toEqual(["s3", "local"]);
+      expect(storage.delete).toHaveBeenCalledWith("k1");
+      expect(previous.delete).toHaveBeenCalledWith("k1");
+    });
+
+    it("leaves a tombstone whose backend this deployment cannot address", async () => {
+      // Its bytes are unreachable, so the record is the only thing that can still
+      // find them: dropping it would be throwing that away.
+      await sweeper.sweepKey("k1", "azure-blob");
+
+      expect(storage.delete).not.toHaveBeenCalled();
+      expect(statements()).toEqual([]);
     });
   });
 

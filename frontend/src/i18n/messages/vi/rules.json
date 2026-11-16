@@ -1,0 +1,618 @@
+{
+  "page": {
+    "title": "Quy tắc",
+    "subtitle": "Tự động điền thẻ, danh mục và người nhận khi một giao dịch được tạo hoặc nhập",
+    "createButton": "Tạo quy tắc",
+    "loading": "Đang tải quy tắc...",
+    "totalCount": "{count, plural, other {# quy tắc}}"
+  },
+  "empty": {
+    "title": "Chưa có quy tắc nào",
+    "body": "Quy tắc theo dõi các giao dịch mới và giao dịch đã nhập, rồi điền thẻ, danh mục hoặc người nhận khi điều kiện được thỏa mãn. Hãy tạo quy tắc đầu tiên để bắt đầu.",
+    "createButton": "Tạo quy tắc đầu tiên"
+  },
+  "error": {
+    "title": "Không thể tải quy tắc của bạn",
+    "body": "Không có gì được hiển thị vì yêu cầu thất bại, không phải vì bạn không có quy tắc nào. Hãy kiểm tra kết nối và thử lại.",
+    "retry": "Thử lại"
+  },
+  "list": {
+    "header": {
+      "order": "Thứ tự",
+      "enabled": "Bật",
+      "name": "Quy tắc",
+      "summary": "Tóm tắt",
+      "actions": "Thao tác"
+    },
+    "summary": "{trigger, select, create {Khi tạo} import {Khi nhập} both {Khi tạo hoặc nhập} other {Không có trình kích hoạt}} · {conditions, plural, =0 {Không có điều kiện} other {# điều kiện}} · {actions, plural, =0 {Không có hành động} other {# hành động}}",
+    "enabledLabel": "Bật {name}"
+  },
+  "actions": {
+    "moveUp": "Di chuyển lên",
+    "moveDown": "Di chuyển xuống",
+    "run": "Chạy trên các giao dịch hiện có",
+    "runInvalid": "Hãy sửa quy tắc trước khi chạy"
+  },
+  "invalid": {
+    "badge": "Không hợp lệ",
+    "tooltip": "Bị bỏ qua cho đến khi được sửa: {reasons}.",
+    "reasons": {
+      "referenceMissing": "một thẻ, người nhận, danh mục hoặc tài khoản mà quy tắc dùng không còn tồn tại",
+      "noActions": "quy tắc không có hành động nào",
+      "tooLarge": "các điều kiện quá lớn",
+      "duplicateAction": "quy tắc lặp lại một hành động chỉ được phép một lần",
+      "unreadable": "không thể đọc định nghĩa đã lưu",
+      "other": "định nghĩa không hợp lệ"
+    }
+  },
+  "duplicate": {
+    "name": "{name} (bản sao)"
+  },
+  "delete": {
+    "title": "Xóa quy tắc",
+    "message": "Bạn có chắc muốn xóa \"{name}\" không? Hành động này không thể hoàn tác."
+  },
+  "toasts": {
+    "enabled": "Đã bật quy tắc",
+    "disabled": "Đã tắt quy tắc",
+    "toggleFailed": "Không thể thay đổi quy tắc",
+    "deleted": "Đã xóa quy tắc",
+    "deleteFailed": "Không thể xóa quy tắc",
+    "duplicated": "Đã nhân bản quy tắc. Bản sao sẽ tắt cho đến khi bạn bật",
+    "duplicateFailed": "Không thể nhân bản quy tắc",
+    "reorderFailed": "Không thể thay đổi thứ tự quy tắc",
+    "listChanged": "Danh sách quy tắc đã thay đổi ở nơi khác và đã được tải lại. Hãy thử lại",
+    "loadFailed": "Không thể tải quy tắc"
+  },
+  "editor": {
+    "page": {
+      "newTitle": "Quy tắc mới",
+      "editTitle": "Chỉnh sửa quy tắc",
+      "subtitle": "Chọn thời điểm quy tắc chạy, giao dịch nào được áp dụng và quy tắc thay đổi điều gì",
+      "backToRules": "Quay lại Quy tắc",
+      "loading": "Đang tải quy tắc..."
+    },
+    "name": {
+      "label": "Tên",
+      "placeholder": "Ví dụ: Gắn thẻ các quán cà phê"
+    },
+    "enabled": {
+      "label": "Bật quy tắc"
+    },
+    "sections": {
+      "when": "Khi nào",
+      "if": "Nếu",
+      "then": "Thì"
+    },
+    "when": {
+      "description": "Chọn thời điểm quy tắc xem xét một giao dịch",
+      "created": "Một giao dịch được tạo",
+      "imported": "Một giao dịch được nhập",
+      "atLeastOne": "Giữ ít nhất một tùy chọn được chọn",
+      "stopProcessing": "Dừng xử lý các quy tắc khác",
+      "stopProcessingHelp": "Khi quy tắc này khớp với một giao dịch, các quy tắc đứng sau nó trong danh sách sẽ bị bỏ qua đối với giao dịch đó.",
+      "window": {
+        "title": "Hoạt động trong khoảng",
+        "help": "Quy tắc chỉ áp dụng cho các giao dịch có ngày nằm trong khoảng này: khi tạo hoặc nhập giao dịch, và khi thử hoặc chạy quy tắc. Để trống một ngày nếu không giới hạn.",
+        "from": "Ngày đầu",
+        "to": "Ngày cuối",
+        "backwards": "Ngày cuối không được trước ngày đầu",
+        "noLimit": "không giới hạn",
+        "words": "Chỉ áp dụng cho giao dịch có ngày từ {from} đến {to}"
+      }
+    },
+    "if": {
+      "description": "Các hành động chỉ chạy với những giao dịch khớp",
+      "everyTransaction": "Chưa có điều kiện nào, nên quy tắc này áp dụng cho mọi giao dịch."
+    },
+    "then": {
+      "description": "Các hành động chạy theo thứ tự này",
+      "empty": "Chưa có hành động nào. Hãy thêm ít nhất một hành động.",
+      "limit": "Một quy tắc có tối đa {max} hành động."
+    },
+    "group": {
+      "matchAll": "Tất cả những điều sau",
+      "matchAny": "Bất kỳ điều nào sau đây",
+      "matchLabel": "Khớp",
+      "not": "Đảo ngược nhóm",
+      "notHelp": "Nhóm bị đảo ngược sẽ khớp khi các điều kiện của nó không được thỏa mãn.",
+      "title": "Nhóm",
+      "addCondition": "+ Thêm điều kiện",
+      "addGroup": "+ Thêm nhóm",
+      "depthLimit": "Các nhóm chỉ có thể lồng nhau tối đa {max} cấp.",
+      "sizeLimit": "Đã đạt giới hạn số điều kiện.",
+      "empty": "Nhóm này trống."
+    },
+    "condition": {
+      "title": "Điều kiện",
+      "field": "Trường",
+      "operator": "Toán tử",
+      "value": "Giá trị"
+    },
+    "fields": {
+      "accountId": "Tài khoản",
+      "fromAccountId": "Từ tài khoản (chuyển khoản)",
+      "toAccountId": "Đến tài khoản (chuyển khoản)",
+      "type": "Loại",
+      "payeeId": "Người nhận",
+      "payeeText": "Văn bản người nhận như đã nhận",
+      "categoryId": "Danh mục",
+      "description": "Mô tả",
+      "amount": "Số tiền (có dấu)",
+      "absAmount": "Số tiền (không dấu)",
+      "currencyCode": "Tiền tệ",
+      "tagIds": "Thẻ",
+      "hasSplits": "Có chia nhỏ",
+      "referenceNumber": "Số tham chiếu",
+      "dayOfMonth": "Ngày trong tháng",
+      "weekday": "Ngày trong tuần",
+      "status": "Trạng thái",
+      "hasAttachment": "Có tệp đính kèm",
+      "date": "Ngày"
+    },
+    "operators": {
+      "eq": "là",
+      "neq": "không phải là",
+      "in": "là một trong",
+      "notIn": "không phải là một trong",
+      "isEmpty": "trống",
+      "contains": "chứa",
+      "startsWith": "bắt đầu bằng",
+      "matches": "khớp với mẫu",
+      "lt": "nhỏ hơn",
+      "lte": "tối đa là",
+      "gt": "lớn hơn",
+      "gte": "tối thiểu là",
+      "between": "nằm giữa",
+      "hasAny": "có bất kỳ thẻ nào trong",
+      "hasAll": "có tất cả thẻ trong",
+      "hasNone": "không có thẻ nào trong",
+      "inSubtree": "nằm trong hoặc dưới"
+    },
+    "types": {
+      "EXPENSE": "Chi tiêu",
+      "INCOME": "Thu nhập",
+      "TRANSFER": "Chuyển khoản"
+    },
+    "value": {
+      "account": "Chọn một tài khoản",
+      "accounts": "Chọn các tài khoản",
+      "payee": "Chọn một người nhận",
+      "payees": "Chọn các người nhận",
+      "category": "Chọn một danh mục",
+      "categories": "Chọn các danh mục",
+      "tags": "Chọn các thẻ",
+      "currency": "Chọn một loại tiền tệ",
+      "currencies": "Chọn các loại tiền tệ",
+      "types": "Chọn các loại",
+      "matchesHint": "Dùng * cho bất kỳ văn bản nào, ví dụ *cà phê*. Mẫu không có * chỉ khớp với toàn bộ văn bản. Dùng {capture} để giữ văn bản tại vị trí đó cho các hành động của quy tắc này, ví dụ {example}. Tên gồm chữ thường và chữ số, và một mẫu có thể giữ tối đa {max} văn bản.",
+      "amount": "Số tiền",
+      "from": "Từ",
+      "to": "Đến",
+      "yes": "Có",
+      "no": "Không",
+      "days": "Chọn ngày",
+      "weekdays": "Chọn ngày trong tuần",
+      "statuses": "Chọn trạng thái"
+    },
+    "action": {
+      "title": "Hành động",
+      "type": "Loại hành động",
+      "tags": "Thẻ",
+      "category": "Danh mục",
+      "payee": "Người nhận",
+      "instruction": "Hướng dẫn xem xét",
+      "instructionPlaceholder": "Ví dụ: chia khoản mua này theo hóa đơn",
+      "instructionHelp": "Quy tắc chỉ yêu cầu xem xét. Một người sẽ duyệt mọi thay đổi trước khi thực hiện.",
+      "onlyIfEmpty": "Chỉ khi trống",
+      "onlyIfEmptyHelp": "Khi bật, quy tắc chỉ điền danh mục hoặc người nhận nếu giao dịch chưa có. Quy tắc không thay thế giá trị đã đặt thủ công hoặc theo danh mục mặc định của người nhận. Hãy tắt để thay thế.",
+      "add": "+ Thêm hành động",
+      "reviewInbox": "Xem hộp thư xem xét",
+      "payeeTemplate": "Tên người nhận",
+      "descriptionTemplate": "Văn bản mô tả",
+      "templateHelp": "Văn bản thuần. Mỗi trình giữ chỗ trong dấu ngoặc nhọn được thay bằng văn bản từ giao dịch. Chọn một trình giữ chỗ bên dưới để chèn.",
+      "joinHelp": "Văn bản được nối vào mô tả hiện tại đúng như đã viết, nên hãy tự thêm khoảng trắng hoặc dấu phân cách bạn muốn.",
+      "placeholders": "Trình giữ chỗ",
+      "placeholdersHelp": "{payeeText} là văn bản người nhận như đã nhận được. {description} là mô tả tại thời điểm hành động này chạy. Các trình giữ chỗ còn lại là các phần bắt giữ được đặt tên trong các mẫu của quy tắc này.",
+      "insertPlaceholder": "Chèn {name}",
+      "unknownPlaceholders": "Quy tắc này chưa định nghĩa: {names}. Hãy chọn một trình giữ chỗ trong danh sách, hoặc bắt giữ nó ở một mẫu phía trên.",
+      "invalidPlaceholders": "Không phải trình giữ chỗ hợp lệ: {names}. Tên gồm chữ thường và chữ số.",
+      "createIfMissing": "Tạo người nhận nếu chưa có",
+      "createIfMissingHelp": "Khi bật, và không có người nhận nào khớp với tên (theo tên, bí danh hoặc khớp gần đúng), một người nhận mới sẽ được tạo. Người nhận do quy tắc tạo ra vẫn được giữ lại nếu bạn hoàn tác lần chạy.",
+      "onlyIfEmptyDescriptionHelp": "Khi bật, quy tắc chỉ ghi mô tả nếu giao dịch chưa có mô tả. Tắt để ghi mỗi lần.",
+      "mode": "Chế độ mô tả",
+      "modes": {
+        "replace": "Thay thế mô tả",
+        "append": "Thêm vào sau mô tả",
+        "prepend": "Thêm vào trước mô tả"
+      },
+      "convertHelp": "Khoản thu hoặc chi khớp trở thành một phía của giao dịch chuyển khoản. Phía còn lại được tạo trong tài khoản bạn chọn, tài khoản này phải dùng cùng loại tiền tệ.",
+      "direction": "Chiều",
+      "directionTo": "Chi: tiền chuyển sang tài khoản khác",
+      "directionFrom": "Thu: tiền đến từ tài khoản khác",
+      "clearCategory": "Xóa danh mục",
+      "clearCategoryHelp": "Giao dịch chuyển khoản không có danh mục. Tắt để giữ danh mục mà giao dịch đã có.",
+      "splitPayee": "Người nhận của giao dịch (tùy chọn)",
+      "splitHint": "Mỗi phần lấy số tiền từ một giá trị bắt được trong các mẫu ở trên, hoặc lấy phần còn lại. Các phần phải cộng lại bằng số tiền của giao dịch, nếu không quy tắc sẽ bỏ qua giao dịch đó.",
+      "splitNoCaptures": "Chưa có giá trị bắt nào được định nghĩa. Hãy đặt một tên trong dấu ngoặc nhọn ở một mẫu phía trên, ví dụ PRINCIPAL: {example}, để dùng làm số tiền ở đây.",
+      "partAmountPlaceholder": "Chọn số tiền...",
+      "partRest": "Phần còn lại",
+      "partAccount": "Tài khoản",
+      "partPayee": "Người nhận của phía còn lại (tùy chọn)",
+      "partsLimit": "Một giao dịch tách có tối đa {max} phần.",
+      "guideTitle": "Cách sử dụng",
+      "splitGuideHow": "Trong “Nếu”, thêm một điều kiện về văn bản người nhận hoặc mô tả với toán tử “khớp với mẫu”, rồi đặt tên trong dấu ngoặc nhọn ở vị trí các số tiền, ví dụ {first}. Mỗi tên trở thành một số tiền bạn có thể chọn cho một phần, hoặc chọn “Phần còn lại”. Các phần phải cộng lại bằng số tiền của giao dịch, nếu không quy tắc sẽ giữ nguyên giao dịch. Một phần có thể là danh mục hoặc chuyển khoản sang tài khoản khác (chuyển khoản làm thay đổi số dư của tài khoản đó).",
+      "splitGuideExampleTitle": "Ví dụ: một kỳ trả khoản vay",
+      "splitGuideBank": "Văn bản ngân hàng: GOC: 1200,50 LAI: 300,25 PHAT: 0,00",
+      "splitGuidePattern": "Mẫu: *GOC: {first} LAI: {second} PHAT*",
+      "splitGuidePart1": "Phần 1: {first} dưới dạng chuyển khoản sang tài khoản khoản vay",
+      "splitGuidePart2": "Phần 2: {second} dưới dạng danh mục “Khoản vay: Lãi”",
+      "splitGuideResult": "Kết quả cho -1500,75: -1200,50 được chuyển sang tài khoản khoản vay và -300,25 chi phí lãi.",
+      "splitGuideTip": "Mẹo: đặt ngày bắt đầu trong “Hoạt động trong khoảng” để không thay đổi các giao dịch cũ đã đối chiếu, và dùng bảng Kiểm tra trước khi lưu.",
+      "convertGuide": "Một khoản chi trở thành chuyển khoản sang tài khoản bạn chọn, và một khoản thu trở thành chuyển khoản từ tài khoản đó. Chỉ số dư của tài khoản kia thay đổi. Mẹo: dùng “Hoạt động trong khoảng” để không thay đổi các giao dịch cũ.",
+      "splitGuideName1": "goc",
+      "splitGuideName2": "lai",
+      "loanGuide": "Dùng mục này cho một khoản ghi nợ ngân hàng thanh toán một kỳ trả góp thế chấp hoặc khoản vay bằng một số tiền duy nhất. Trong “Nếu”, khớp khoản ghi nợ theo tài khoản, văn bản người nhận hoặc mô tả của nó. Giao dịch trở thành một giao dịch tách: phần gốc được chuyển sang tài khoản khoản vay và phần lãi được ghi vào danh mục lãi, cả hai đều được tính theo kỳ trả góp mà nó thanh toán. Gợi ý: tắt tự động đăng cho khoản thanh toán theo lịch của khoản vay này để kỳ trả góp không bị trả hai lần, và dùng bảng Thử trước khi lưu.",
+      "loan": {
+        "help": "Khoản ghi nợ khớp sẽ thanh toán kỳ trả góp tiếp theo của khoản vay, có kỳ đến hạn gần với ngày đó. Monize tự tính phần gốc và lãi cho kỳ đó; bạn không bao giờ phải nhập số tiền.",
+        "account": "Tài khoản khoản vay",
+        "accountPlaceholder": "Chọn một khoản thế chấp hoặc khoản vay...",
+        "noLoans": "Bạn không có tài khoản thế chấp hoặc khoản vay nào còn mở để thanh toán.",
+        "window": "Khoảng thời gian quanh ngày đến hạn",
+        "windowHelp": "Khoảng thời gian trước hoặc sau ngày đến hạn mà ngân hàng có thể thực hiện khoản thanh toán. Một khoản ghi nợ trong vòng số ngày này trước hoặc sau ngày đến hạn của một kỳ trả góp sẽ thanh toán kỳ đó; một khoản ghi nợ ngoài khoảng này được giữ nguyên.",
+        "daysBefore": "Số ngày trước ngày đến hạn",
+        "daysAfter": "Số ngày sau ngày đến hạn",
+        "excess": "Ghi nợ lớn hơn kỳ trả góp",
+        "excessPolicies": {
+          "extra_principal": "Trả phần chênh lệch như gốc trả thêm",
+          "refuse": "Giữ nguyên giao dịch"
+        },
+        "shortfall": "Ghi nợ nhỏ hơn kỳ trả góp",
+        "shortfallPolicies": {
+          "refuse": "Giữ nguyên giao dịch",
+          "interest_first": "Trả lãi trước, phần còn lại là gốc"
+        },
+        "policyNote": "Phần chênh lệch vài xu được dồn vào dòng lãi.",
+        "policyHelp": "Ngân hàng làm tròn từng phần riêng biệt, vì vậy một khoản ghi nợ trong phạm vi 5 đơn vị nhỏ nhất của đơn vị tiền tệ (0,05 với hầu hết các loại tiền) được coi là chính xác và dòng lãi nhận phần chênh lệch. Một phần chênh lệch lớn hơn sẽ theo một trong hai lựa chọn trên.",
+        "interestCategory": "Danh mục lãi (không bắt buộc)",
+        "interestCategoryPlaceholder": "Danh mục lãi riêng của khoản vay",
+        "autoPostTitle": "Khoản thanh toán theo lịch của khoản vay tự đăng",
+        "autoPostBody": "Tự động đăng đang được bật cho khoản thanh toán theo lịch của khoản vay này, vì vậy nó và khoản ghi nợ ngân hàng mà quy tắc này thanh toán sẽ cùng trả cho một kỳ trả góp. Hãy tắt tự động đăng trên khoản thanh toán theo lịch."
+      }
+    },
+    "actionTypes": {
+      "add_tags": "Thêm thẻ",
+      "remove_tags": "Xóa thẻ",
+      "set_category": "Đặt danh mục",
+      "set_payee": "Đặt người nhận",
+      "request_ai_review": "Yêu cầu AI xem xét",
+      "set_payee_from_text": "Đặt người nhận từ văn bản",
+      "set_description": "Đặt mô tả",
+      "convert_to_transfer": "Chuyển thành giao dịch chuyển khoản",
+      "split": "Tách giao dịch",
+      "settle_loan_installment": "Thanh toán một kỳ trả góp khoản vay"
+    },
+    "save": {
+      "button": "Lưu quy tắc",
+      "createdToast": "Đã tạo quy tắc",
+      "savedToast": "Đã lưu quy tắc",
+      "failedToast": "Không thể lưu quy tắc",
+      "summary": "Quy tắc chưa được lưu. Hãy sửa các mục được đánh dấu bên dưới rồi thử lại."
+    },
+    "loadError": {
+      "title": "Không thể tải quy tắc",
+      "body": "Không có gì được hiển thị vì yêu cầu thất bại, chứ không phải vì quy tắc trống. Hãy kiểm tra kết nối và thử lại.",
+      "lookupsBody": "Không thể tải danh sách tài khoản, người nhận, danh mục, thẻ và tiền tệ, nên không thể hiển thị quy tắc một cách an toàn. Hãy kiểm tra kết nối và thử lại.",
+      "notFound": "Quy tắc này không còn tồn tại. Có thể nó đã bị xóa.",
+      "retry": "Thử lại"
+    },
+    "invalid": {
+      "title": "Quy tắc này không thể chạy",
+      "repaired": "Một số phần của định nghĩa đã lưu không đọc được và đã bị xóa hoặc đặt lại ở đây. Hãy xem lại quy tắc trước khi lưu."
+    },
+    "conflict": {
+      "title": "Quy tắc này đã được thay đổi ở nơi khác",
+      "body": "Hãy tải lại để xem phiên bản mới nhất. Các thay đổi chưa lưu của bạn sẽ bị mất.",
+      "reload": "Tải lại"
+    },
+    "errors": {
+      "codes": {
+        "INVALID_SHAPE": "Phần này có dạng mà trình chỉnh sửa không hiểu.",
+        "UNKNOWN_KEY": "Phần này có một thiết lập không tồn tại.",
+        "UNKNOWN_FIELD": "Hãy chọn một trường.",
+        "UNKNOWN_ACTION": "Hãy chọn một hành động.",
+        "OPERATOR_NOT_ALLOWED": "Trường này không cho phép toán tử đó.",
+        "VALUE_REQUIRED": "Hãy nhập hoặc chọn một giá trị.",
+        "VALUE_NOT_ALLOWED": "Toán tử này không nhận giá trị.",
+        "VALUE_TYPE": "Giá trị không đúng loại đối với trường này.",
+        "VALUE_OUT_OF_RANGE": "Giá trị nằm ngoài phạm vi.",
+        "VALUE_TOO_LONG": "Văn bản quá dài.",
+        "VALUE_EMPTY": "Hãy nhập một đoạn văn bản.",
+        "INVALID_UUID": "Hãy chọn một mục từ danh sách.",
+        "INVALID_ENUM": "Hãy chọn một trong các giá trị được liệt kê.",
+        "INVALID_CURRENCY": "Hãy chọn một loại tiền tệ.",
+        "ARRAY_EMPTY": "Hãy chọn ít nhất một mục.",
+        "ARRAY_TOO_LARGE": "Đã chọn quá nhiều mục.",
+        "RANGE_ORDER": "Giá trị thứ nhất không được lớn hơn giá trị thứ hai.",
+        "MAX_DEPTH": "Các nhóm lồng nhau quá sâu. Giới hạn là {maxDepth} cấp.",
+        "MAX_LEAVES": "Có quá nhiều điều kiện. Giới hạn là {maxLeaves}.",
+        "MAX_NODES": "Có quá nhiều điều kiện và nhóm. Giới hạn là {maxNodes}.",
+        "NO_ACTIONS": "Hãy thêm ít nhất một hành động.",
+        "TOO_MANY_ACTIONS": "Có quá nhiều hành động. Giới hạn là {maxActions}.",
+        "DUPLICATE_ACTION": "Một quy tắc chỉ có thể có một lần xem xét bằng AI, một giao dịch chuyển khoản, tách hoặc thanh toán kỳ trả góp khoản vay, và một phần tách lấy phần còn lại.",
+        "CONFLICTING_ACTIONS": "Hành động chuyển khoản, tách hoặc thanh toán kỳ trả góp khoản vay không thể kết hợp với “Đặt danh mục”, và mỗi phần của nó có danh mục hoặc tài khoản.",
+        "INVALID_CAPTURE": "Tên phần bắt giữ gồm chữ thường và chữ số, bắt đầu bằng chữ cái và dài tối đa 20 ký tự.",
+        "TOO_MANY_CAPTURES": "Một mẫu có thể chứa tối đa 5 phần bắt giữ.",
+        "DUPLICATE_CAPTURE": "Mỗi tên phần bắt giữ chỉ được dùng một lần trong một quy tắc.",
+        "UNKNOWN_CAPTURE": "Mục này dùng một giá trị bắt mà không điều kiện nào của quy tắc này định nghĩa.",
+        "LOOKS_LIKE_REGEX": "Biểu thức chính quy không được hỗ trợ: | \\ và các lớp ngoặc vuông ngắn như [xy] được coi là ký tự thông thường, nên mẫu viết như regex không bao giờ khớp với ý định. Để khớp một trong nhiều văn bản, hãy thêm nhóm “Bất kỳ điều nào sau đây” và đặt vào đó một điều kiện cho mỗi văn bản.",
+        "PATTERN_WITHOUT_WILDCARD": "Không có * thì mẫu này phải bằng toàn bộ văn bản. Dùng toán tử “là” cho toàn bộ văn bản, “chứa” cho một phần, hoặc đặt * quanh văn bản, ví dụ *cà phê*.",
+        "REFERENCE_NOT_FOUND": "Một mục được chọn ở đây không còn tồn tại. Hãy chọn mục khác.",
+        "NAME_REQUIRED": "Hãy nhập tên cho quy tắc.",
+        "UNKNOWN": "Phần này không hợp lệ."
+      }
+    },
+    "run": {
+      "button": "Chạy trên các giao dịch hiện có",
+      "saveFirst": "Hãy lưu thay đổi để chạy quy tắc đã lưu."
+    },
+    "expression": {
+      "modeLabel": "Chế độ xem điều kiện",
+      "visual": "Trực quan",
+      "expression": "Biểu thức",
+      "label": "Biểu thức điều kiện",
+      "help": "Viết các điều kiện dưới dạng văn bản. Dùng && cho tất cả, || cho một trong số đó và !( ... ) để phủ định. Gọi các mục theo tên: account(\"Tên\"), payee(\"Tên\"), category(\"Cha: Con\") và tag(\"Tên\"). Dấu gạch dưới _ là một giá trị chưa được chọn. matchesGlob dùng * làm ký tự đại diện. Chỉ hỗ trợ cú pháp được đưa ra trong phần gợi ý.",
+      "blocked": "Hãy sửa biểu thức để quay lại chế độ Trực quan hoặc để lưu.",
+      "errorAt": "Dòng {line}, cột {column}: {message}",
+      "suggestions": "Gợi ý",
+      "errors": {
+        "tooLong": "Biểu thức quá dài. Giới hạn là {max} ký tự.",
+        "unexpectedChar": "Ký tự {char} không được hỗ trợ.",
+        "unterminatedString": "Văn bản này thiếu dấu ngoặc kép đóng.",
+        "invalidEscape": "Chuỗi thoát này không được hỗ trợ.",
+        "badNumber": "Đây không phải là số hợp lệ.",
+        "expectedExpression": "Ở đây cần một điều kiện.",
+        "expectedField": "Ở đây cần tên một trường.",
+        "expectedOperator": "Sau trường cần một toán tử hoặc một phương thức.",
+        "expectedValue": "Ở đây cần một giá trị.",
+        "expectedSymbol": "Ở đây cần {symbol}.",
+        "unexpectedToken": "Không mong đợi: {token}.",
+        "unsupported": "Phần này không được hỗ trợ. Chỉ dùng cú pháp được đưa ra trong phần gợi ý.",
+        "unknownField": "Trường không xác định: {name}.",
+        "unknownFunction": "Hàm hoặc phương thức không xác định: {name}.",
+        "operatorNotAllowed": "Trường {field} không thể dùng với {operator}.",
+        "wrongValueType": "{expected, select, text {Cần văn bản trong dấu ngoặc kép.} number {Cần một số.} boolean {Cần true hoặc false.} list {Cần một danh sách trong dấu ngoặc vuông.} account {Cần một tài khoản, ví dụ account(\"Tên\").} payee {Cần một người nhận, ví dụ payee(\"Tên\").} category {Cần một danh mục, ví dụ category(\"Cha: Con\").} tag {Cần một thẻ, ví dụ tag(\"Tên\").} other {Giá trị này sai loại.}}",
+        "invalidEnum": "Hãy dùng một trong các giá trị: {values}.",
+        "invalidCurrency": "Hãy dùng mã tiền tệ ba chữ cái trong dấu ngoặc kép, ví dụ \"CAD\".",
+        "valueTooLong": "Văn bản quá dài. Giới hạn là {max} ký tự.",
+        "listTooLong": "Danh sách quá dài. Giới hạn là {max} mục.",
+        "unknownEntity": "{kind, select, account {Không có tài khoản nào tên {name}.} payee {Không có người nhận nào tên {name}.} category {Không có danh mục nào tên {name}.} tag {Không có thẻ nào tên {name}.} other {Không có mục nào tên {name}.}}",
+        "ambiguousEntity": "{count} mục có tên {name}. Hãy thêm số thứ tự của mục bạn muốn, ví dụ {example}.",
+        "entityOrdinal": "Số của {name} phải từ 1 đến {count}.",
+        "maxDepth": "Các nhóm lồng nhau quá sâu. Giới hạn là {max} cấp.",
+        "maxLeaves": "Có quá nhiều điều kiện. Giới hạn là {max}.",
+        "maxNodes": "Có quá nhiều điều kiện và nhóm. Giới hạn là {max}.",
+        "tooNested": "Quá nhiều dấu ngoặc lồng nhau."
+      }
+    }
+  },
+  "test": {
+    "title": "Kiểm tra",
+    "description": "Thử quy tắc trên các giao dịch hiện có của bạn. Không có gì bị thay đổi.",
+    "button": "Kiểm tra quy tắc",
+    "again": "Kiểm tra lại",
+    "incomplete": "Hoàn thành các điều kiện và hành động ở trên để kiểm tra quy tắc.",
+    "idle": "Chọn các giao dịch để thử quy tắc, rồi chọn Kiểm tra quy tắc.",
+    "running": "Đang kiểm tra quy tắc...",
+    "failed": "Không thể hoàn tất kiểm tra. {message}",
+    "stale": "Quy tắc hoặc bộ lọc đã thay đổi kể từ kết quả này. Hãy kiểm tra lại để xem kết quả hiện tại."
+  },
+  "match": {
+    "button": "Kiểm tra quy tắc",
+    "buttonLabel": "Kiểm tra quy tắc: điều kiện",
+    "incomplete": "Hoàn thành các điều kiện ở trên để xem chúng khớp với những giao dịch nào.",
+    "windowBackwards": "Ngày hiệu lực kết thúc trước khi bắt đầu, nên không giao dịch nào có thể khớp.",
+    "summary": "{count, plural, =0 {Không có giao dịch khớp} other {# giao dịch khớp}}",
+    "summaryPending": "Giao dịch khớp",
+    "running": "Đang tìm giao dịch khớp...",
+    "failed": "Không thể tải các giao dịch khớp. {message}",
+    "empty": "Không có giao dịch hiện có nào khớp với các điều kiện này.",
+    "truncated": "Chỉ {scanned, number} giao dịch mới nhất được kiểm tra.",
+    "stale": "Các điều kiện đã thay đổi kể từ lần kiểm tra này. Chọn Kiểm tra quy tắc lần nữa để xem các kết quả khớp hiện tại."
+  },
+  "run": {
+    "title": "Chạy “{name}” trên các giao dịch hiện có",
+    "description": "Xem trước những gì quy tắc sẽ thay đổi, sau đó xác nhận. Bạn có thể hoàn tác lần chạy từ lịch sử hành động.",
+    "previewButton": "Xem trước",
+    "confirmButton": "Xác nhận và chạy",
+    "idle": "Chọn tài khoản và ngày, rồi chọn Xem trước. Không có gì thay đổi cho đến khi bạn xác nhận.",
+    "loadingPreview": "Đang tải bản xem trước...",
+    "previewFailed": "Không thể tải bản xem trước nên không thể chạy gì cả. {message}",
+    "stale": "Bộ lọc đã thay đổi kể từ bản xem trước này. Hãy xem trước lại trước khi chạy.",
+    "accountsLoading": "Đang tải tài khoản...",
+    "accountsFailed": "Không thể tải tài khoản của bạn nên bộ lọc không khả dụng.",
+    "retry": "Thử lại",
+    "summary": "{matched, plural, other {# giao dịch}} sẽ thay đổi trong số {scanned, plural, other {# giao dịch}} đã kiểm tra.",
+    "matchesNone": "Quy tắc này không khớp với giao dịch nào trong số đã kiểm tra ({scanned}). Hãy kiểm tra các điều kiện trước khi lưu. Mẫu không có * chỉ khớp với toàn bộ văn bản.",
+    "noChange": "{matched} trong số {scanned} giao dịch được kiểm tra khớp với điều kiện của quy tắc, nhưng sẽ không có gì thay đổi (ví dụ: chúng đã có giá trị và «chỉ khi trống» đang bật). Đây không phải là lỗi.",
+    "aiReview": "{count, plural, other {# giao dịch sẽ được đưa vào hàng đợi đánh giá AI}}. Yêu cầu được tạo khi bạn xác nhận.",
+    "truncated": "Có nhiều giao dịch khớp hơn giới hạn cho phép. Chỉ các giao dịch mới nhất được đưa vào. Hãy tăng giới hạn hoặc thu hẹp ngày để đưa phần còn lại vào.",
+    "truncatedOldest": "Có nhiều giao dịch khớp hơn giới hạn cho phép. Chỉ các giao dịch cũ nhất được đưa vào, vì quy tắc này thanh toán các kỳ trả góp khoản vay theo thứ tự ngày. Chạy lại sau lần chạy này để đưa vào phần còn lại.",
+    "noMatches": {
+      "title": "Không có giao dịch nào sẽ thay đổi",
+      "body": "Không giao dịch nào đã kiểm tra khớp với quy tắc, hoặc quy tắc sẽ không thay đổi gì ở chúng."
+    },
+    "table": {
+      "date": "Ngày",
+      "payee": "Người nhận",
+      "amount": "Số tiền",
+      "change": "Thay đổi dự kiến",
+      "noPayee": "Không có người nhận"
+    },
+    "skipped": {
+      "title": "{count, plural, other {# giao dịch}} được giữ nguyên",
+      "line": "{count, plural, other {# giao dịch}}: {reason}",
+      "missing": "Khoản vay còn thiếu: {inputs}."
+    },
+    "skipReasons": {
+      "reconciled_locked": "đã đối chiếu và bị khóa",
+      "transfer_leg_category": "là giao dịch chuyển khoản, không có danh mục",
+      "split_category": "đã được chia nhỏ nên danh mục thuộc về các phần chia",
+      "cross_owner_transfer_payee": "là chuyển khoản cho chủ sở hữu khác, người nhận của nó quy tắc này không được thay đổi",
+      "empty_render": "văn bản của một hành động bị trống đối với nó",
+      "payee_not_found": "không có người nhận nào mang tên mà quy tắc đã tạo, và quy tắc không tạo mới",
+      "other": "quy tắc không thể thay đổi nó",
+      "row_is_transfer_leg": "nó đã là giao dịch chuyển khoản",
+      "row_has_splits": "nó đã được tách",
+      "row_is_void": "nó đã bị hủy",
+      "zero_amount": "số tiền của nó bằng 0",
+      "transfer_direction_mismatch": "chiều chuyển khoản không khớp: khoản chi đi tới một tài khoản, khoản thu đến từ một tài khoản",
+      "transfer_same_account": "tài khoản chuyển khoản chính là tài khoản của giao dịch",
+      "transfer_account_unavailable": "tài khoản chuyển khoản không khả dụng (đã bị xóa hoặc không phải của bạn)",
+      "transfer_currency_mismatch": "tài khoản chuyển khoản dùng loại tiền tệ khác",
+      "split_amount_unparseable": "không đọc được một số tiền trong văn bản của nó thành số",
+      "split_sum_mismatch": "các phần cộng lại không bằng số tiền của nó",
+      "split_too_few_parts": "còn ít hơn hai phần sau khi bỏ các số tiền bằng 0",
+      "row_from_scheduled_posting": "nó đã được đăng từ khoản thanh toán theo lịch của khoản vay, khoản này đã thanh toán kỳ trả góp đó",
+      "row_is_income": "nó là một khoản thu, và chỉ khoản ghi nợ mới thanh toán một kỳ trả góp",
+      "loan_account_unavailable": "tài khoản khoản vay không khả dụng (đã bị xóa, đã đóng, không phải của bạn hoặc không phải một khoản thế chấp hay khoản vay)",
+      "loan_interest_booked_separately": "khoản vay này ghi nhận lãi thành các giao dịch riêng, nên một khoản thanh toán không thể gộp nó",
+      "loan_not_configured": "khoản vay còn thiếu những gì cần để tính giá cho một kỳ trả góp",
+      "no_installment_in_window": "không có kỳ trả góp nào của khoản vay đến hạn trong khoảng quanh ngày của nó",
+      "occurrence_already_posted": "kỳ trả góp đến hạn trong khoảng này đã được thanh toán",
+      "loan_debt_retired": "khoản vay này đã được trả hết",
+      "installment_amount_excess": "nó lớn hơn kỳ trả góp và quy tắc giữ nguyên các khoản ghi nợ lớn hơn",
+      "installment_amount_shortfall": "nó nhỏ hơn kỳ trả góp và quy tắc giữ nguyên các khoản ghi nợ nhỏ hơn"
+    },
+    "change": {
+      "category": "Danh mục: {before} → {after}",
+      "payee": "Người nhận: {before} → {after}",
+      "payeeNew": "Người nhận: {before} → {name} (mới)",
+      "tagsAdded": "Thẻ đã thêm: {tags}",
+      "tagsRemoved": "Thẻ đã gỡ: {tags}",
+      "none": "không có",
+      "unknown": "một mục đã bị xóa",
+      "payeeCreated": "{done, select, yes {Đã tạo người nhận mới: {name}} other {Sẽ tạo người nhận mới: {name}}}",
+      "description": "Mô tả: {before} → {after}",
+      "descriptionSet": "Đặt mô tả thành {value}",
+      "transfer": "{done, select, yes {Đã trở thành giao dịch chuyển khoản với {account}} other {Sẽ trở thành giao dịch chuyển khoản với {account}}}",
+      "split": "{done, select, yes {Đã được tách thành {count, plural, other {# phần}}} other {Sẽ được tách thành {count, plural, other {# phần}}}}",
+      "splitPart": "Phần {number}: {amount} {target}",
+      "splitPartMemo": ", ghi chú “{memo}”",
+      "splitToTransfer": "tới {account}",
+      "splitToTransferPayee": "tới {account}, người nhận {payee}",
+      "splitToCategory": "là {category}",
+      "splitUncategorised": "không có danh mục",
+      "loanSettlement": "{done, select, yes {Đã thanh toán} other {Thanh toán}} kỳ trả góp {number} của {account}, đến hạn {dueDate}: gốc {principal}, lãi {interest}{hasExtra, select, yes {, gốc trả thêm {extra}} other {}}. Nợ trước đó: {debtBefore}"
+    },
+    "filters": {
+      "accounts": "Tài khoản",
+      "allAccounts": "Tất cả tài khoản",
+      "startDate": "Từ",
+      "endDate": "Đến",
+      "backwards": "Ngày bắt đầu không được sau ngày kết thúc.",
+      "limit": "Số giao dịch mới nhất cần kiểm tra",
+      "help": "Chỉ các giao dịch mới nhất trong khoảng được kiểm tra, tối đa {max}."
+    },
+    "errors": {
+      "PREVIEW_CHANGED": "Các giao dịch hoặc quy tắc đã thay đổi kể từ bản xem trước. Hãy xem bản xem trước mới và chạy lại.",
+      "RUN_TOO_LARGE": "Lần chạy này thay đổi quá nhiều giao dịch để hoàn tác trong một bước. Hãy thu hẹp tài khoản hoặc ngày rồi thử lại.",
+      "INVALID_RULE": "Quy tắc này không hợp lệ nên không thể chạy. Hãy mở và sửa nó trước.",
+      "DATE_RANGE_INVALID": "Ngày bắt đầu không được sau ngày kết thúc.",
+      "draftInvalid": "Quy tắc chưa đầy đủ hoặc không hợp lệ. Hãy kiểm tra các điều kiện và hành động ở trên.",
+      "testFailed": "Đã xảy ra lỗi khi kiểm tra quy tắc.",
+      "previewFailed": "Đã xảy ra lỗi khi tải bản xem trước.",
+      "runFailed": "Không thể hoàn tất lần chạy. Hãy kiểm tra lịch sử hành động trước khi thử lại."
+    },
+    "toast": {
+      "done": "{count, plural, =0 {Không có giao dịch nào bị thay đổi} other {Đã thay đổi # giao dịch}}. Bạn có thể hoàn tác từ lịch sử hành động.",
+      "changedNoUndo": "{count, plural, other {Đã thay đổi # giao dịch}}.",
+      "aiReviewsQueued": "{count, plural, other {Đã đưa # giao dịch vào hàng đợi đánh giá AI}}.",
+      "aiReviewsAlreadyQueued": "{count, plural, other {# giao dịch đã có yêu cầu đánh giá AI đang mở, nên không có gì mới được đưa vào hàng đợi}}.",
+      "noChanges": "Không có giao dịch nào bị thay đổi."
+    },
+    "done": {
+      "summary": "{count, plural, =0 {Không có giao dịch nào bị thay đổi.} other {Đã thay đổi # giao dịch.}}",
+      "aiReviewsQueued": "{count, plural, other {Đã đưa # giao dịch vào hàng đợi đánh giá AI.}}",
+      "aiReviewsAlreadyQueued": "{count, plural, other {# giao dịch đã có yêu cầu đánh giá AI đang mở, nên không được đưa vào hàng đợi lần nữa.}}",
+      "undo": "Bạn có thể hoàn tác lần chạy từ lịch sử hành động."
+    },
+    "missingInputs": {
+      "scheduledPayment": "một khoản thanh toán theo lịch",
+      "managedTemplate": "một khoản thanh toán được tách thành gốc và lãi",
+      "scheduleCalendar": "một lịch thanh toán",
+      "interestCategory": "một danh mục lãi",
+      "amortizationMonths": "thời gian khấu hao",
+      "paymentStartDate": "ngày thanh toán đầu tiên",
+      "paymentFrequency": "tần suất thanh toán",
+      "originalPrincipal": "gốc ban đầu",
+      "rate": "lãi suất cho ngày đó",
+      "payment": "số tiền thanh toán",
+      "other": "một thiết lập của khoản vay"
+    }
+  },
+  "applications": {
+    "title": "Lịch sử",
+    "description": "Các giao dịch gần nhất mà quy tắc này đã thay đổi, mới nhất trước.",
+    "loading": "Đang tải lịch sử...",
+    "error": {
+      "title": "Không thể tải lịch sử",
+      "body": "Không hiển thị gì vì yêu cầu thất bại, không phải vì quy tắc chưa chạy. Hãy kiểm tra kết nối và thử lại.",
+      "retry": "Thử lại"
+    },
+    "empty": {
+      "title": "Quy tắc này chưa thay đổi gì",
+      "body": "Khi nó thay đổi một giao dịch, thay đổi sẽ được liệt kê ở đây."
+    },
+    "source": {
+      "create": "Đã tạo",
+      "import": "Đã nhập",
+      "manual": "Chạy thủ công",
+      "other": "Khác"
+    },
+    "table": {
+      "date": "Ngày",
+      "payee": "Người nhận",
+      "amount": "Số tiền",
+      "source": "Nguồn",
+      "change": "Thay đổi",
+      "appliedAt": "Đã áp dụng",
+      "open": "Mở giao dịch",
+      "noPayee": "Không có người nhận",
+      "view": "Xem"
+    }
+  },
+  "words": {
+    "everyTransaction": "Mọi giao dịch",
+    "group": {
+      "all": "Tất cả các điều sau:",
+      "any": "Bất kỳ điều nào sau đây:",
+      "notAll": "Không phải tất cả các điều sau:",
+      "notAny": "Không điều nào sau đây:"
+    },
+    "leaf": "{field} {operator} {value}",
+    "leafNoValue": "{field} {operator}",
+    "range": "{from} và {to}",
+    "text": "“{value}”",
+    "unknownCondition": "Một điều kiện mà phiên bản này không thể hiển thị",
+    "unknownAction": "Một hành động mà phiên bản này không thể hiển thị",
+    "action": {
+      "add_tags": "Thêm thẻ: {tags}",
+      "remove_tags": "Xóa thẻ: {tags}",
+      "set_category": "Đặt danh mục thành {name}{onlyIfEmpty, select, yes { (chỉ khi trống)} other {}}",
+      "set_payee": "Đặt người nhận thành {name}{onlyIfEmpty, select, yes { (chỉ khi trống)} other {}}",
+      "request_ai_review": "Yêu cầu AI xem xét: {instruction}",
+      "set_payee_from_text": "Đặt người nhận từ văn bản: “{template}”{createIfMissing, select, yes { (tạo mới nếu chưa có)} other {}}{onlyIfEmpty, select, yes { (chỉ khi trống)} other {}}",
+      "set_description": "Đặt mô tả ({mode, select, append {thêm vào sau} prepend {thêm vào trước} other {thay thế}}): “{template}”{onlyIfEmpty, select, yes { (chỉ khi trống)} other {}}",
+      "convert_to_transfer": "Chuyển thành chuyển khoản {direction, select, from {từ} other {đến}} {account}",
+      "split": "Tách thành: {parts}",
+      "settle_loan_installment": "Thanh toán kỳ trả góp của {account} bằng một khoản ghi nợ trong vòng {before, plural, other {# ngày}} trước hoặc {after, plural, other {# ngày}} sau ngày đến hạn; một khoản ghi nợ lớn hơn {excess, select, refuse {được giữ nguyên} other {trả gốc thêm}}, một khoản nhỏ hơn {shortfall, select, interest_first {trả lãi trước} other {được giữ nguyên}}"
+    },
+    "splitPart": {
+      "transfer": "{amount} đến {account}",
+      "category": "{amount} làm {category}",
+      "plain": "{amount}",
+      "rest": "phần còn lại"
+    }
+  }
+}

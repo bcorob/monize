@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
 import { useRouter } from 'next/navigation';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import '@/lib/zodConfig';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -83,7 +83,7 @@ export default function RegisterPage() {
     register,
     handleSubmit,
     formState: { errors },
-    watch,
+    control,
   } = useForm<RegisterFormData>({
     resolver: zodResolver(buildRegisterSchema(t, tc)),
   });
@@ -91,7 +91,7 @@ export default function RegisterPage() {
   // "Info from previous render" pattern (no setState in useEffect): when
   // the email field is edited after we surfaced the delegate prompt, the
   // prompt no longer applies, so drop it.
-  const watchedEmail = watch('email');
+  const watchedEmail = useWatch({ control, name: 'email' });
   const [trackedEmail, setTrackedEmail] = useState(watchedEmail);
   if (watchedEmail !== trackedEmail) {
     setTrackedEmail(watchedEmail);
@@ -254,6 +254,7 @@ export default function RegisterPage() {
             // Full document load so every layout segment re-renders in
             // the newly chosen language; a client-side push would reuse
             // the cached root layout (and its catalogs) in the old one.
+            // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- intentional full reload, not a client-side route change
             window.location.assign('/dashboard');
           } else {
             router.push('/dashboard');

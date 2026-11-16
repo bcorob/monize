@@ -1,0 +1,120 @@
+{
+  "page": {
+    "title": "KI-Prüfungseingang",
+    "subtitle": "Buchungen, die eine Regel von einer KI prüfen lassen wollte, Profil, die ein Assistent entwerfen sollte, und die Änderungen, die ein Assistent zur Freigabe vorschlägt."
+  },
+  "filter": {
+    "label": "Nach Status filtern",
+    "open": "Offen",
+    "pending": "Ausstehend",
+    "claimed": "In Prüfung",
+    "proposed": "Vorgeschlagen",
+    "applied": "Angewendet",
+    "rejected": "Abgelehnt",
+    "expired": "Abgelaufen"
+  },
+  "kindFilter": {
+    "label": "Nach Art filtern",
+    "all": "Alle",
+    "email_receipt": "E-Mail-Belege",
+    "transaction_review": "Regeln",
+    "option": "{label} ({count})"
+  },
+  "status": {
+    "pending": "Ausstehend",
+    "claimed": "In Prüfung",
+    "proposed": "Vorgeschlagen",
+    "applied": "Angewendet",
+    "rejected": "Abgelehnt",
+    "expired": "Abgelaufen"
+  },
+  "columns": {
+    "date": "Datum",
+    "request": "Anfrage",
+    "amount": "Betrag",
+    "status": "Status"
+  },
+  "row": {
+    "noPayee": "Kein Zahlungsempfänger",
+    "transactionMissing": "Diese Buchung existiert nicht mehr",
+    "rule": "Regel: {name}",
+    "manualRequest": "Manuell angefordert",
+    "trade": "{action, select, BUY {Kauf von {quantity} Anteilen {symbol}} SELL {Verkauf von {quantity} Anteilen {symbol}} DIVIDEND {Dividende von {symbol}} REINVEST {Reinvestition einer Dividende in {quantity} Anteile {symbol}} other {Handel mit {symbol}}}",
+    "receiptInstruction": {
+      "automatic": "Diese Buchung anhand der angehängten Bestell-E-Mail ergänzen: nach Positionen mit je einer Kategorie aufteilen oder die Beschreibung setzen.",
+      "chat": "Sie haben die Erkennung der angehängten Bestell-E-Mail angefordert: diese Buchung nach Produkten mit je einer Kategorie aufteilen oder die Beschreibung setzen.",
+      "categorize": "Jeder Position der angehängten Bestell-E-Mail, die keine Regel kategorisiert hat, eine Kategorie zuweisen und dann die Aufteilung dieser Buchung vorschlagen oder die Beschreibung setzen.",
+      "parsed": "Ein gespeicherter Parser hat die Bestell-E-Mail gelesen und schlägt diese Kategoriezeilen und diese Beschreibung für die Buchung vor.",
+      "trade": "Eine von einem gespeicherten Profil gelesene Handelsbestätigung schlägt diese Wertpapiertransaktion vor. Prüfe vor der Freigabe Konto, Wertpapier, Anteile und Summe bei deinem Broker.",
+      "tradeChat": "Du hast darum gebeten, die angehängte Handelsbestätigung zu erkennen: schlage die Wertpapiertransaktion vor, die sie meldet, einen Kauf, einen Verkauf, eine Bardividende oder eine reinvestierte Dividende."
+    },
+    "emailReceipt": "E-Mail-Beleg: {subject} von {sender}",
+    "emailReceiptForwarded": "E-Mail-Beleg: {subject} von {sender}, weitergeleitet von {forwarder}",
+    "emailReceiptMissing": "E-Mail-Beleg (die E-Mail wurde gelöscht)",
+    "parserDraft": "Profil-Entwurf aus {count, plural, one {# E-Mail} other {# E-Mails}} ({domain})",
+    "viewEmailReceipts": "E-Mail-Belege anzeigen",
+    "agentNote": "Hinweis des Assistenten: {reason}",
+    "dates": "Erstellt {created}, läuft ab {expires}",
+    "viewTransaction": "Buchung anzeigen",
+    "waitingForAgent": "Wartet auf einen KI-Agenten. <link>Verbinde in den Einstellungen einen KI-Anbieter</link> oder lass einen MCP-Client die Anfrage übernehmen.",
+    "parserDraftReady": "Profil-Entwurf bereit. <link>Teste und gib ihn in den Profil-Einstellungen frei</link>.",
+    "tradePending": "Ein Trade aus einer E-Mail, noch nicht gelesen",
+    "tradeEmail": "E-Mail mit Handelsbestätigung",
+    "parserDraftIds": "IDs der Profil-Entwürfe: {ids}"
+  },
+  "actions": {
+    "dismiss": "Verwerfen"
+  },
+  "proposal": {
+    "errorTitle": "Dieser Vorschlag kann nicht mehr angewendet werden"
+  },
+  "bulk": {
+    "selectRow": "{name} auswählen",
+    "selectAll": "Alle angezeigten Anfragen auswählen, die bestätigt oder gesendet werden können",
+    "approveSelected": "Ausgewählte freigeben ({count})",
+    "approveAllShown": "Alle angezeigten freigeben ({count})",
+    "summary": "{approved, plural, one {# Vorschlag} other {# Vorschläge}} angewendet, {failed, plural, one {# nicht angewendet} other {# nicht angewendet}}.",
+    "closeSummary": "Schließen",
+    "failure": "{name}: {reason}",
+    "noReason": "Es wurde kein Grund angegeben",
+    "unknownRequest": "Eine Anfrage",
+    "failed": "Die Vorschläge konnten nicht angewendet werden",
+    "dialog": {
+      "title": "{count, plural, one {# Vorschlag anwenden?} other {# Vorschläge anwenden?}}",
+      "message": "Jeder Vorschlag wird mit dem aktuellen Stand seiner Buchung abgeglichen und einzeln angewendet. Ein Vorschlag, der nicht mehr passt, wird übersprungen und gemeldet, die übrigen werden trotzdem angewendet. Die Vorschläge sollten vor der Freigabe geprüft werden.",
+      "confirm": "{count, plural, one {# Vorschlag anwenden} other {# Vorschläge anwenden}}"
+    }
+  },
+  "sendToAssistant": {
+    "button": "{count, plural, one {# offene Anfrage} other {# offene Anfragen}} an den KI-Assistenten senden",
+    "buttonSelected": "{count, plural, one {# ausgewählte Anfrage} other {# ausgewählte Anfragen}} an den KI-Assistenten senden",
+    "prompt": "Arbeite meine offenen KI-Prüfanfragen mit dem Tool ai_review_requests ab: liste sie auf, übernimm jede, befolge ihre Anweisung und reiche einen Vorschlag ein. Für eine Anfrage zu einem Profilentwurf erstelle das Profil stattdessen mit dem Tool email_receipt_parsers. Nichts wird geändert, bevor ich die Vorschläge im KI-Prüfeingang bestätige.",
+    "promptSelected": "Arbeite {count, plural, one {diese KI-Prüfanfrage} other {diese # KI-Prüfanfragen}} mit dem Tool ai_review_requests ab: {ids}. Übernimm jede über ihre ID, befolge ihre Anweisung und reiche einen Vorschlag ein. Für eine Anfrage zu einem Profilentwurf erstelle das Profil stattdessen mit dem Tool email_receipt_parsers. Lass die anderen Anfragen unberührt. Nichts wird geändert, bevor ich die Vorschläge im KI-Prüfeingang bestätige.",
+    "opened": "Der Chat wurde mit einer vorbereiteten Nachricht geöffnet. Lies sie und drücke auf Senden.",
+    "unavailable": "Der KI-Assistent kann gerade nicht antworten. Verbinde einen KI-Anbieter in den Einstellungen oder verbinde deinen MCP-Client. Die Anfragen warten weiter hier."
+  },
+  "dismissDialog": {
+    "title": "Diese Anfrage verwerfen?",
+    "message": "Niemand wird erneut gebeten, an dieser Anfrage zu arbeiten. Nichts, worum es dabei ging, wird geändert.",
+    "confirm": "Anfrage verwerfen"
+  },
+  "loading": "Prüfungsanfragen werden geladen...",
+  "error": {
+    "title": "Prüfungsanfragen konnten nicht geladen werden",
+    "body": "Die Liste wurde nicht geladen und ist daher möglicherweise nicht leer. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut.",
+    "retry": "Erneut versuchen"
+  },
+  "empty": {
+    "title": "Keine Prüfungsanfragen",
+    "body": "Anfragen erscheinen hier, wenn eine Regel mit der Aktion „KI-Prüfung anfordern“ auf eine Buchung zutrifft. Ein KI-Assistent oder ein MCP-Client wie der Relay-Agent arbeitet die Warteschlange ab und schlägt eine Änderung zur Freigabe vor.",
+    "filteredTitle": "Keine Anfragen mit diesem Status",
+    "filteredBody": "Wählen Sie einen anderen Status, um weitere Anfragen zu sehen."
+  },
+  "toasts": {
+    "approved": "Vorschlag angewendet",
+    "dismissed": "Anfrage verworfen",
+    "dismissFailed": "Die Anfrage konnte nicht verworfen werden",
+    "approveFailed": "Der Vorschlag konnte nicht angewendet werden",
+    "changed": "Diese Anfrage hat sich inzwischen geändert. Die Liste wurde neu geladen."
+  }
+}

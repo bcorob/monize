@@ -245,6 +245,23 @@ describe("migration-number references", () => {
     expect(migrationRefs("stored as 159 in round.util")).toEqual([]);
   });
 
+  it("reads a timestamp-prefixed migration as one number, never as its first four digits", () => {
+    // `\d{2,4}` alone would read a fourteen-digit timestamp as its first
+    // four digits and report a migration that does not exist; the timestamp
+    // form is tried first.
+    expect(migrationRefs("added by migration 20260905143000")).toEqual([
+      20260905143000,
+    ]);
+    expect(
+      migrationRefs("migrations 191 and 20260905143000 both touch it"),
+    ).toEqual([191, 20260905143000]);
+    expect(migrationRefs("sibling in 20260905143000.")).toEqual([
+      20260905143000,
+    ]);
+    // A digit run of neither width is not a migration number.
+    expect(migrationRefs("migration 12345 is not a form")).toEqual([]);
+  });
+
   it("resolves a referenced number against the migration filenames", () => {
     const migrations = buildMigrationIndex([
       "database/migrations/136_currency_global_liveness.sql",
@@ -253,6 +270,18 @@ describe("migration-number references", () => {
     expect(migrationProblem(136, migrations)).toBeNull();
     expect(migrationProblem(133, migrations)).toContain("does not exist");
     expect(migrationProblem(133, migrations)).toContain("133_*.sql");
+  });
+
+  it("indexes a timestamp-prefixed filename by its full numeric value", () => {
+    const migrations = buildMigrationIndex([
+      "database/migrations/191_payee_lookup_ai_enabled.sql",
+      "database/migrations/20260905143000_heal_something.sql",
+    ]);
+    expect(migrationProblem(20260905143000, migrations)).toBeNull();
+    expect(migrationProblem(191, migrations)).toBeNull();
+    expect(migrationProblem(20260905143001, migrations)).toContain(
+      "20260905143001_*.sql",
+    );
   });
 });
 

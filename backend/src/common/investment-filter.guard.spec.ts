@@ -132,10 +132,7 @@ describe("investment scope is decided in one place", () => {
  * that mentions both forms is not restricted to either.
  */
 type QueryShape =
-  | "transfer-only"
-  | "parent-identity"
-  | "split-aware"
-  | "parent-only";
+  "transfer-only" | "parent-identity" | "split-aware" | "parent-only";
 
 export function classifyLedgerQuery(query: string): {
   shape: QueryShape;

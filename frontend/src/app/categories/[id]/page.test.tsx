@@ -127,6 +127,8 @@ function categoryFixture(overrides: Partial<Category> = {}): Category {
     color: '#22c55e',
     effectiveColor: '#22c55e',
     effectiveIcon: null,
+    autoSign: null,
+    effectiveAutoSign: true,
     isIncome: false,
     isSystem: false,
     createdAt: '2024-01-15T00:00:00.000Z',
@@ -145,6 +147,8 @@ function categoryListFixture(): Category[] {
       color: null,
       effectiveColor: '#22c55e',
       effectiveIcon: null,
+      autoSign: null,
+      effectiveAutoSign: true,
     }),
     categoryFixture({ id: 'cat-2', name: 'Salary', isIncome: true }),
   ];

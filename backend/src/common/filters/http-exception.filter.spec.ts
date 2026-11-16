@@ -66,6 +66,27 @@ describe("GlobalExceptionFilter", () => {
     );
   });
 
+  it("forwards a structured errors list from an object response", () => {
+    const errors = [{ path: "actions[0]", code: "REFERENCE_NOT_FOUND" }];
+    const exception = new BadRequestException({
+      message: "Invalid rule",
+      errorCode: "INVALID_RULE",
+      errors,
+    });
+
+    filter.catch(exception, mockHost);
+
+    expect(mockResponse.json).toHaveBeenCalledWith(
+      expect.objectContaining({ message: "Invalid rule", errors }),
+    );
+  });
+
+  it("omits errors when the object response has none", () => {
+    filter.catch(new BadRequestException({ message: "Nope" }), mockHost);
+
+    expect(mockResponse.json.mock.calls[0][0]).not.toHaveProperty("errors");
+  });
+
   it("omits errorCode when the object response has none", () => {
     const exception = new ConflictException("Plain conflict");
 
@@ -73,6 +94,30 @@ describe("GlobalExceptionFilter", () => {
 
     const jsonCall = mockResponse.json.mock.calls[0][0];
     expect(jsonCall).not.toHaveProperty("errorCode");
+  });
+
+  it("forwards a numeric currentCount from an object response", () => {
+    filter.catch(
+      new ConflictException({ message: "Changed", currentCount: 12 }),
+      mockHost,
+    );
+
+    expect(mockResponse.json.mock.calls[0][0]).toMatchObject({
+      statusCode: 409,
+      message: "Changed",
+      currentCount: 12,
+    });
+  });
+
+  it("omits currentCount when it is absent or not a number", () => {
+    filter.catch(
+      new ConflictException({ message: "Changed", currentCount: "12" }),
+      mockHost,
+    );
+
+    expect(mockResponse.json.mock.calls[0][0]).not.toHaveProperty(
+      "currentCount",
+    );
   });
 
   it("returns structured response for NotFoundException", () => {

@@ -11,7 +11,7 @@
 -- exiting db-migrate and crash-looping the container. Role creation and grants
 -- live in backend/src/db-init.ts (task F1), which tolerates their absence.
 --
--- See docs/future-plans/row-level-security.md (Phase 3).
+-- See docs/specs/row-level-security.md (Phase 3).
 
 -- Identity GUCs, read fail-closed.
 --

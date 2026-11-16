@@ -1,0 +1,113 @@
+{
+  "landing": {
+    "title": "[XX-Taxes-XX]",
+    "subtitle": "[XX-Tools for the deductions and taxes that shape your pay-XX]",
+    "tools": {
+      "payrollDeductions": {
+        "title": "[XX-Payroll Deductions-XX]",
+        "description": "[XX-Set yearly maximums on deductions such as pension and employment insurance, and let the paycheque stop collecting them once the maximum is reached.-XX]"
+      }
+    }
+  },
+  "payroll": {
+    "title": "[XX-Payroll Deductions-XX]",
+    "subtitle": "[XX-Yearly maximums on the deduction lines of your payroll bill-XX]",
+    "backToTaxes": "[XX-Back to Taxes-XX]",
+    "newButton": "[XX-+ New Rule-XX]",
+    "loading": "[XX-Loading payroll deductions...-XX]",
+    "emptyState": {
+      "title": "[XX-No deduction rules yet-XX]",
+      "body": "[XX-Pick the scheduled bill that is your paycheque, choose its deduction categories and set a yearly maximum for each. The bill stops collecting a deduction once its maximum is reached and starts again on the reset date.-XX]",
+      "createButton": "[XX-Create Your First Rule-XX]"
+    },
+    "yearToDate": {
+      "show": "[XX-Show year-to-date-XX]",
+      "hide": "[XX-Hide year-to-date-XX]",
+      "title": "[XX-Paid this period-XX]",
+      "help": "[XX-What the category has collected in the period that contains today, across every account, in the bill's currency.-XX]",
+      "foreignRows": "[XX-{count, plural, one {# row} other {# rows}} in another currency not counted-XX]"
+    },
+    "previousPeriods": {
+      "show": "[XX-Show previous periods-XX]",
+      "hide": "[XX-Hide previous periods-XX]",
+      "title": "[XX-Previous Periods-XX]",
+      "help": "[XX-What each category collected in its past periods, across every account, in the bill's currency. The current period is in the year-to-date table.-XX]",
+      "loading": "[XX-Loading previous periods...-XX]",
+      "empty": "[XX-Nothing collected in an earlier period yet.-XX]",
+      "loadFailed": "[XX-Failed to load previous periods-XX]"
+    },
+    "list": {
+      "bill": "[XX-Bill-XX]",
+      "category": "[XX-Category-XX]",
+      "yearlyMaximum": "[XX-Yearly maximum-XX]",
+      "nextMaximum": "[XX-From {date}: {amount}-XX]",
+      "resetsOn": "[XX-Resets on-XX]",
+      "perPaycheque": "[XX-Per paycheque-XX]",
+      "period": "[XX-Period-XX]",
+      "paid": "[XX-Paid-XX]",
+      "remaining": "[XX-Remaining-XX]",
+      "actions": "[XX-Actions-XX]",
+      "fromLine": "[XX-From the bill's line-XX]",
+      "entered": "[XX-Entered-XX]",
+      "expectedMissing": "[XX-Expected amount needed-XX]",
+      "periodRange": "[XX-{start} to {end}-XX]"
+    },
+    "modal": {
+      "newTitle": "[XX-New Deduction Rule-XX]",
+      "editTitle": "[XX-Edit Deduction Rule-XX]"
+    },
+    "form": {
+      "billLabel": "[XX-Payroll scheduled bill-XX]",
+      "billPlaceholder": "[XX-Select the bill that is your paycheque-XX]",
+      "billHelp": "[XX-The scheduled deposit whose lines carry the deductions. Only bills that pay in more than they take out are offered, and only their deduction lines can be capped.-XX]",
+      "categoryLabel": "[XX-Deduction category {index}-XX]",
+      "categoryPlaceholder": "[XX-Select a deduction line-XX]",
+      "yearlyMaximumLabel": "[XX-Yearly maximum-XX]",
+      "yearlyMaximumHelp": "[XX-The most this category collects in one period, in the bill's currency. The line is reduced to what room is left, down to zero.-XX]",
+      "yearlyMaximumSuggested": "[XX-Estimated from what this category has already collected.-XX]",
+      "resetPeriodLabel": "[XX-Resets-XX]",
+      "resetDateLabel": "[XX-Reset date-XX]",
+      "resetDateHelp": "[XX-The count starts again on this day each year. Usually the first day of the year.-XX]",
+      "expectedLabel": "[XX-Expected per paycheque-XX]",
+      "expectedHelp": "[XX-The bill's line for this category is zero, so the forecast needs the amount each paycheque usually deducts.-XX]",
+      "expectedFromLine": "[XX-The bill's line deducts {amount} per paycheque.-XX]",
+      "expectedSuggested": "[XX-Suggested from the amount your transactions in this category most often show over the last year.-XX]",
+      "thisPeriod": "[XX-This period, {start} to {end}-XX]",
+      "nextPeriod": "[XX-Next period, from {date}-XX]",
+      "setNextPeriod": "[XX-Set the figures for the next period, from {date}-XX]",
+      "nextYearlyMaximumLabel": "[XX-Next period's maximum-XX]",
+      "nextYearlyMaximumHelp": "[XX-The maximum from the next reset on. Leave it empty to keep this period's maximum. This period's room and percentage do not change.-XX]",
+      "nextExpectedLabel": "[XX-Next period's expected per paycheque-XX]",
+      "nextExpectedHelp": "[XX-The amount each paycheque deducts from the next reset on. Leave it empty to keep this period's amount.-XX]",
+      "sameAsThisPeriod": "[XX-Same as this period-XX]",
+      "periods": {
+        "YEARLY": "[XX-Yearly-XX]"
+      },
+      "validation": {
+        "billRequired": "[XX-Choose the payroll bill-XX]",
+        "categoryRequired": "[XX-Choose a category-XX]",
+        "yearlyMaximumRequired": "[XX-Enter the yearly maximum-XX]",
+        "resetDateRequired": "[XX-Enter the reset date-XX]",
+        "expectedRequired": "[XX-Enter the expected amount per paycheque-XX]",
+        "categoryDuplicate": "[XX-This category is already in the list-XX]"
+      },
+      "categoriesLegend": "[XX-Deduction categories-XX]",
+      "addCategory": "[XX-+ Add another category-XX]",
+      "removeCategory": "[XX-Remove category {index}-XX]",
+      "noDeductionLines": "[XX-This bill has no deduction lines. Add the deductions as negative split lines on the bill first.-XX]"
+    },
+    "delete": {
+      "title": "[XX-Delete Deduction Rule-XX]",
+      "message": "[XX-Delete the {category} rule on {bill}? Posted transactions are not changed; the next paycheque posts its full line.-XX]"
+    },
+    "toasts": {
+      "created": "[XX-{count, plural, one {Deduction rule created} other {# deduction rules created}}-XX]",
+      "updated": "[XX-Deduction rule updated-XX]",
+      "deleted": "[XX-Deduction rule deleted-XX]",
+      "loadFailed": "[XX-Failed to load payroll deductions-XX]",
+      "createFailed": "[XX-Failed to create the deduction rule-XX]",
+      "updateFailed": "[XX-Failed to update the deduction rule-XX]",
+      "deleteFailed": "[XX-Failed to delete the deduction rule-XX]"
+    }
+  }
+}

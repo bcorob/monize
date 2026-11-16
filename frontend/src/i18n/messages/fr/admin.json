@@ -46,6 +46,8 @@
     "colProvider": "Fournisseur",
     "colStatus": "Statut",
     "colLastLogin": "Dernière connexion",
+    "colBackups": "Sauvegardes",
+    "colAttachments": "Pièces jointes",
     "colActions": "Actions",
     "youSuffix": "(vous)",
     "noEmail": "Aucun e-mail",
@@ -60,7 +62,22 @@
     "clickToDisable": "Cliquer pour désactiver",
     "clickToEnable": "Cliquer pour activer",
     "resetPassword": "Réinitialiser le mot de passe",
-    "noUsers": "Aucun utilisateur trouvé."
+    "resetTwoFactor": "Réinitialiser la 2FA",
+    "unlinkSso": "Dissocier le SSO",
+    "noUsers": "Aucun utilisateur trouvé.",
+    "storageLoading": "Chargement…",
+    "storageUnavailable": "Indisponible",
+    "storageUnavailableHint": "Impossible de charger l'utilisation du stockage. Rechargez la page pour réessayer.",
+    "storageUnknown": "Inconnu",
+    "storageUnknownStore": "L'espace de sauvegarde n'a pas pu être lu pour cet utilisateur, la taille est donc inconnue. Vérifiez l'emplacement des sauvegardes sur la page Sauvegardes.",
+    "storageNotReported": "Non communiqué",
+    "storageNotReportedHint": "Ce compte ne figurait pas dans le dernier relevé de stockage. Rechargez la page pour l'y inclure.",
+    "backupsOff": "Désactivé",
+    "backupsOffHint": "Les sauvegardes automatiques ne sont pas activées pour cet utilisateur et aucune n'est stockée.",
+    "backupScheduleOff": "Planification désactivée",
+    "backupScheduleOffHint": "Les sauvegardes automatiques sont désactivées ; ces fichiers sont ceux que la rétention n'a pas encore supprimés.",
+    "backupCount": "{count, plural, =0 {Aucune sauvegarde} one {# sauvegarde} other {# sauvegardes}}",
+    "attachmentCount": "{count, plural, =0 {Aucun fichier} one {# fichier} other {# fichiers}}"
   },
   "usersPage": {
     "title": "Gestion des utilisateurs",
@@ -81,7 +98,10 @@
       "loadFailed": "Échec du chargement des utilisateurs",
       "deleteFailed": "Échec de la suppression de l'utilisateur",
       "disableFailed": "Échec de la désactivation de l'utilisateur",
-      "resetFailed": "Échec de la réinitialisation du mot de passe"
+      "resetFailed": "Échec de la réinitialisation du mot de passe",
+      "twoFactorReset": "L'authentification à deux facteurs de {name} a été réinitialisée. Ses sessions ont été fermées.",
+      "resetTwoFactorFailed": "Échec de la réinitialisation de l'authentification à deux facteurs",
+      "unlinkSsoFailed": "Échec de la dissociation du SSO"
     },
     "dialogs": {
       "promoteTitle": "Promouvoir l'utilisateur ?",
@@ -96,6 +116,14 @@
       "resetTitle": "Réinitialiser le mot de passe ?",
       "resetMessage": "Cela va générer un nouveau mot de passe temporaire pour {name}. Il devra le modifier à la prochaine connexion.",
       "resetConfirm": "Réinitialiser le mot de passe",
+      "unlinkSsoTitle": "Dissocier le SSO ?",
+      "unlinkSsoMessage": "Cela convertit le compte de {name} en compte local. Une connexion SSO ultérieure avec la même adresse e-mail peut le lier à nouveau. Le système génère un mot de passe temporaire, et {name} devra le modifier à la prochaine connexion.",
+      "unlinkSsoConfirm": "Dissocier le SSO",
+      "unlinkSsoResultTitle": "SSO dissocié",
+      "unlinkSsoResultDesc": "Le compte de {name} est maintenant un compte local. Communiquez-lui ce mot de passe temporaire pour qu'il puisse se connecter.",
+      "resetTwoFactorTitle": "Réinitialiser l'authentification à deux facteurs ?",
+      "resetTwoFactorMessage": "Cela désactive l'authentification à deux facteurs de {name}, supprime ses codes de secours et ses appareils de confiance, et le déconnecte partout. Il pourra ensuite se connecter avec son mot de passe et reconfigurer la 2FA. À utiliser s'il a perdu son application d'authentification et ses codes de secours, ou après une modification de JWT_SECRET.",
+      "resetTwoFactorConfirm": "Réinitialiser la 2FA",
       "deleteTitle": "Supprimer l'utilisateur ?",
       "deleteMessage": "Voulez-vous vraiment supprimer {name} ? Cela supprimera définitivement son compte et toutes les données associées. Cette action est irréversible. S'il est le délégué d'un autre compte, ses propres données seront supprimées mais son accès sera conservé afin que la délégation reste fonctionnelle — il deviendra un utilisateur délégué uniquement.",
       "deleteConfirm": "Supprimer l'utilisateur",
@@ -103,6 +131,84 @@
       "tempPasswordTitleUpgraded": "Compte promu",
       "tempPasswordDescCreated": "Un mot de passe temporaire a été généré pour {name}. Communiquez-le lui pour se connecter.",
       "tempPasswordDescUpgraded": "Un utilisateur partagé existant a été promu en compte complet. Communiquez ce mot de passe temporaire à {name}."
+    }
+  },
+  "notificationsPage": {
+    "title": "Notifications",
+    "subtitle": "Canaux de distribution offerts par cette instance Monize, et l'identité push qui les sous-tend.",
+    "loading": "Chargement des paramètres de notification...",
+    "loadUnavailable": "Monize n'a pas pu lire les paramètres de notification depuis le serveur. Rechargez la page pour réessayer.",
+    "channelsHeading": "Canaux de distribution",
+    "identityHeading": "Identité Web Push",
+    "perAccountNote": "Les appareils, les notifications de test et les préférences appartiennent à chaque compte et se gèrent dans les Paramètres. Un administrateur configure l'instance et n'envoie jamais de notification à autrui, ni ne les voit.",
+    "channelState": {
+      "on": "Activé",
+      "off": "Désactivé",
+      "unconfigured": "Indisponible",
+      "unknown": "Inconnu"
+    },
+    "channels": {
+      "inApp": {
+        "name": "Notifications dans l'application",
+        "description": "La cloche dans l'en-tête. Toujours disponible et non désactivable : c'est là qu'une notification subsiste même si tous les autres canaux échouent."
+      },
+      "webPush": {
+        "name": "Push du navigateur",
+        "description": "Notifications distribuées sur téléphone ou ordinateur même lorsque Monize est fermé. Ne nécessite ni Firebase, ni compte Google Play ou Apple Developer.",
+        "toggleLabel": "Activer le push du navigateur pour cette instance",
+        "missingKeys": "Cette instance n'a pas de paire de clés push. Définissez ENCRYPTION_KEY et redémarrez : Monize génère la paire au démarrage suivant.",
+        "keyUnreadable": "Cette instance ne peut pas déchiffrer sa paire de clés push : rien n'est distribué. Effectuez la rotation ci-dessous pour rétablir le service.",
+        "serverKeyMissing": "Cette instance n'a pas d'ENCRYPTION_KEY, elle ne peut donc pas ouvrir la paire de cles push enregistree. Definissez ENCRYPTION_KEY dans le deploiement et redemarrez : la rotation ne peut pas aider tant que la cle manque."
+      },
+      "email": {
+        "name": "E-mail",
+        "description": "Rappels de factures, synthèses de budget et alertes système envoyés à l'adresse de chaque compte.",
+        "missingSmtp": "Aucun serveur de messagerie n'est configuré. Définissez les variables d'environnement SMTP pour activer l'e-mail.",
+        "statusUnavailable": "Monize n'a pas pu lire l'état du serveur de messagerie."
+      },
+      "ntfy": {
+        "name": "ntfy et UnifiedPush",
+        "description": "Les mêmes notifications push chiffrées, livrées à un distributeur UnifiedPush auto-hébergé (ntfy, NextPush) plutôt qu’à l’infrastructure de Google ou d’Apple. Il partage la paire de clés push et l’interrupteur de cette instance ; chaque personne enregistre son point de terminaison depuis son application UnifiedPush et active le canal dans les Paramètres.",
+        "followsWebPush": "Indisponible tant que le push du navigateur est désactivé ou que sa paire de clés est inutilisable — ce canal est livré avec la même paire de clés."
+      }
+    },
+    "identity": {
+      "fingerprintLabel": "Empreinte de la clé",
+      "generatedLabel": "Générée",
+      "devicesLabel": "Appareils enregistrés",
+      "deviceCounts": "{live} actifs, {disabled} retirés",
+      "rotateDescription": "La rotation remplace la paire de clés de cette instance. Tous les appareils enregistrés deviennent injoignables et devront réactiver le push : ne faites une rotation que si la clé a pu être exposée.",
+      "rotateButton": "Effectuer la rotation",
+      "rotatingButton": "Rotation...",
+      "missingEncryptionKey": "Cette instance n'a pas de paire de clés push, car ENCRYPTION_KEY n'est pas définie et la clé privée devrait être stockée en clair. Définissez-la et redémarrez : Monize génère la paire lui-même.",
+      "keyUnreadable": "Cette instance détient une paire de clés push qu'elle ne peut plus déchiffrer : rien n'est distribué. Cela arrive quand ENCRYPTION_KEY change sur une base en service, ou après la restauration d'une sauvegarde sur une autre instance. Effectuez une rotation pour rétablir le service ; chaque appareil se réenregistrera.",
+      "serverKeyMissing": "Aucune ENCRYPTION_KEY n'est definie pour cette instance, elle ne peut donc pas ouvrir la paire de cles push enregistree. La rotation n'aidera pas tant que la cle manque : definissez ENCRYPTION_KEY dans le deploiement et redemarrez, et les notifications push refonctionneront avec les appareils existants."
+    },
+    "dialogs": {
+      "rotateTitle": "Effectuer la rotation de la paire de clés push ?",
+      "rotateMessage": "{count, plural, =0 {Aucun appareil n'est encore enregistré, rien n'est perdu.} one {Un appareil enregistré cessera de recevoir des notifications tant que le push ne sera pas réactivé dans ce navigateur.} other {# appareils enregistrés cesseront de recevoir des notifications tant que le push ne sera pas réactivé dans chaque navigateur.}}",
+      "rotateConfirm": "Effectuer la rotation"
+    },
+    "toasts": {
+      "loadFailed": "Impossible de charger les paramètres de notification",
+      "pushEnabled": "Push du navigateur activé pour cette instance",
+      "pushDisabled": "Push du navigateur désactivé pour cette instance",
+      "pushToggleFailed": "Impossible de modifier le paramètre de push du navigateur",
+      "rotated": "{count, plural, =0 {Paire de clés renouvelée} one {Paire de clés renouvelée ; 1 appareil doit se réenregistrer} other {Paire de clés renouvelée ; # appareils doivent se réenregistrer}}",
+      "rotateFailed": "Impossible de renouveler la paire de clés"
+    }
+  },
+  "backupsPage": {
+    "title": "Sauvegardes",
+    "subtitle": "Fichiers de sauvegarde compressés et planifiés des données financières de chaque compte.",
+    "scope": {
+      "heading": "Pas une sauvegarde complète de la base de données",
+      "perUser": "Selon la planification ci-dessous, le serveur écrit un fichier de sauvegarde compressé des données financières de chaque compte et supprime les plus anciens selon la politique de rétention. Tous les comptes actifs sont couverts.",
+      "notFullDatabase": "Ce n'est pas un dump PostgreSQL : ni le schéma, ni la configuration du serveur, ni rien en dehors des données financières d'un compte n'est capturé. Pour la reprise après sinistre de l'instance entière, sauvegardez la base de données et le stockage des pièces jointes avec vos propres outils."
+    },
+    "demoRestricted": {
+      "heading": "Restreint en mode démo",
+      "body": "La configuration de la sauvegarde automatique est désactivée en mode démo."
     }
   }
 }

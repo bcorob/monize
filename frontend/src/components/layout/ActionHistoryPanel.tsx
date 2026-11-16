@@ -1,20 +1,30 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useSyncExternalStore } from 'react';
 import { useTranslations } from 'next-intl';
 import toast from 'react-hot-toast';
 import { useClickOutside } from '@/hooks/useClickOutside';
 import { actionHistoryApi, type ActionHistoryItem } from '@/lib/action-history';
 import { renderActionDescription } from '@/lib/action-history-format';
+import { useNumberFormat } from '@/hooks/useNumberFormat';
+import { useRelativeTime } from '@/hooks/useRelativeTime';
 import { clearAllCache } from '@/lib/apiCache';
-import { notifyUndoRedo, subscribeUndoRedo } from '@/lib/undoRedoSignal';
+import {
+  notifyUndoRedo,
+  subscribeUndoRedo,
+  subscribeUndoRefusal,
+  getUndoRefusal,
+  isUndoRefusal,
+  markUndoRefused,
+} from '@/lib/undoRedoSignal';
 import { createLogger } from '@/lib/logger';
+import { MENU_ENTER_CLASS, MENU_ORIGIN_RIGHT } from '@/components/ui/menu-motion';
 
 const logger = createLogger('ActionHistoryPanel');
 
 const KNOWN_ENTITY_TYPES = new Set([
   'transaction', 'transfer', 'investment_transaction', 'bulk_transaction',
-  'category', 'payee', 'tag', 'account', 'scheduled_transaction',
+  'category', 'payee', 'tag', 'account', 'scheduled_transaction', 'scheduled_posting',
   'security', 'budget', 'custom_report',
 ]);
 
@@ -25,44 +35,48 @@ function getEntityLabel(t: ReturnType<typeof useTranslations<'layout'>>, entityT
   return entityType;
 }
 
-function timeAgo(
-  t: ReturnType<typeof useTranslations<'layout'>>,
-  dateStr: string,
-): string {
-  const seconds = Math.floor(
-    (Date.now() - new Date(dateStr).getTime()) / 1000,
-  );
-  if (seconds < 60) return t('actionHistory.timeAgo.justNow');
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return t('actionHistory.timeAgo.minutes', { count: minutes });
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return t('actionHistory.timeAgo.hours', { count: hours });
-  const days = Math.floor(hours / 24);
-  return t('actionHistory.timeAgo.days', { count: days });
-}
-
 export function ActionHistoryPanel() {
   const t = useTranslations('layout');
+  const { formatCurrency } = useNumberFormat();
+  const formatRelativeTime = useRelativeTime();
   const [isOpen, setIsOpen] = useState(false);
   const [history, setHistory] = useState<ActionHistoryItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const pendingRef = useRef(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  const undoRefusal = useSyncExternalStore(subscribeUndoRefusal, getUndoRefusal, () => null);
   const canUndo = history.some((h) => !h.isUndone);
   const canRedo = history.some((h) => h.isUndone);
 
-  const fetchHistory = useCallback(async () => {
-    try {
-      setIsLoading(true);
-      const data = await actionHistoryApi.getHistory(20);
-      setHistory(data);
-    } catch {
-      // Silently fail
-    } finally {
-      setIsLoading(false);
-    }
+  // Opening the panel starts a read: show it as loading from this render on
+  // ("info from previous render"), not from the effect that fetches.
+  const [wasOpen, setWasOpen] = useState(isOpen);
+  if (wasOpen !== isOpen) {
+    setWasOpen(isOpen);
+    if (isOpen) setIsLoading(true);
+  }
+
+  // The writes live in the inner `run`, so they happen after the request, not during the effect.
+  const fetchHistory = useCallback(() => {
+    const run = async () => {
+      try {
+        const data = await actionHistoryApi.getHistory(20);
+        setHistory(data);
+      } catch {
+        // Silently fail
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    return run();
   }, []);
+
+  // Every read after the first shows the spinner too.
+  const refetchHistory = useCallback(() => {
+    setIsLoading(true);
+    return fetchHistory();
+  }, [fetchHistory]);
 
   // Fetch history when panel opens
   useEffect(() => {
@@ -74,8 +88,8 @@ export function ActionHistoryPanel() {
   // Refresh history when undo/redo happens via keyboard
   useEffect(() => {
     if (!isOpen) return;
-    return subscribeUndoRedo(() => fetchHistory());
-  }, [isOpen, fetchHistory]);
+    return subscribeUndoRedo(() => refetchHistory());
+  }, [isOpen, refetchHistory]);
 
   // Close on click outside
   useClickOutside(dropdownRef, () => setIsOpen(false));
@@ -87,19 +101,21 @@ export function ActionHistoryPanel() {
       const result = await actionHistoryApi.undo();
       toast.success(
         t('actionHistory.undonePrefix', {
-          description: renderActionDescription(t, result.action),
+          description: renderActionDescription(t, result.action, formatCurrency),
         }),
       );
       clearAllCache();
       notifyUndoRedo();
-      await fetchHistory();
+      await refetchHistory();
     } catch (error: any) {
       const status = error?.response?.status;
       const message = error?.response?.data?.message;
       if (status === 404) {
         toast.success(t('actionHistory.nothingToUndo'));
       } else if (status === 409) {
-        toast.error(message || t('actionHistory.cannotUndoDefault'));
+        const text = message || t('actionHistory.cannotUndoDefault');
+        if (isUndoRefusal(status, error?.response?.data?.errorCode)) markUndoRefused(text);
+        toast.error(text);
       } else {
         logger.error('Undo failed', error);
         toast.error(t('actionHistory.undoFailed'));
@@ -116,12 +132,12 @@ export function ActionHistoryPanel() {
       const result = await actionHistoryApi.redo();
       toast.success(
         t('actionHistory.redonePrefix', {
-          description: renderActionDescription(t, result.action),
+          description: renderActionDescription(t, result.action, formatCurrency),
         }),
       );
       clearAllCache();
       notifyUndoRedo();
-      await fetchHistory();
+      await refetchHistory();
     } catch (error: any) {
       const status = error?.response?.status;
       const message = error?.response?.data?.message;
@@ -169,7 +185,7 @@ export function ActionHistoryPanel() {
 
       {isOpen && (
         <div
-          className="fixed left-3 right-3 top-14 sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-96 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-50 flex flex-col max-h-[28rem]"
+          className={`fixed left-3 right-3 top-[calc(3.5rem+env(safe-area-inset-top))] sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 sm:w-96 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-xl z-50 flex flex-col max-h-[28rem] ${MENU_ENTER_CLASS} ${MENU_ORIGIN_RIGHT}`}
           data-testid="action-history-panel"
         >
           {/* Header */}
@@ -203,7 +219,9 @@ export function ActionHistoryPanel() {
           <div className="flex gap-2 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
             <button
               onClick={handleUndo}
-              disabled={!canUndo && history.length > 0}
+              disabled={(!canUndo && history.length > 0) || !!undoRefusal}
+              title={undoRefusal ?? undefined}
+              aria-describedby={undoRefusal ? 'undo-refusal-reason' : undefined}
               className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 text-sm font-medium rounded-md transition-colors bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-40 disabled:cursor-not-allowed"
               data-testid="undo-button"
             >
@@ -253,6 +271,12 @@ export function ActionHistoryPanel() {
             </button>
           </div>
 
+          {undoRefusal && (
+            <p id="undo-refusal-reason" className="sr-only">
+              {undoRefusal}
+            </p>
+          )}
+
           {/* History list */}
           <div className="overflow-y-auto flex-1">
             {isLoading && history.length === 0 ? (
@@ -282,14 +306,14 @@ export function ActionHistoryPanel() {
                             item.isUndone ? 'line-through' : ''
                           }`}
                         >
-                          {renderActionDescription(t, item)}
+                          {renderActionDescription(t, item, formatCurrency)}
                         </p>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
                             {getEntityLabel(t, item.entityType)}
                           </span>
                           <span className="text-xs text-gray-400 dark:text-gray-500">
-                            {timeAgo(t, item.createdAt)}
+                            {formatRelativeTime(item.createdAt)}
                           </span>
                         </div>
                       </div>

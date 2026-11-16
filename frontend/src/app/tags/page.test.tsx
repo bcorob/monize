@@ -137,14 +137,20 @@ vi.mock('@/components/tags/TagForm', () => ({
 
 const mockOnSort = vi.fn();
 vi.mock('@/components/tags/TagList', () => ({
-  TagList: ({ tags, onEdit, onDelete, onTagClick, onSort, sortField, sortDirection }: any) => {
+  // The list renders its own EmptyState; the stand-in exposes which one it was
+  // asked for and the page's create action (the copy is TagList.test.tsx's).
+  TagList: ({ tags, onEdit, onDelete, onTagClick, onSort, sortField, sortDirection, isFiltered, onCreate }: any) => {
     mockOnSort.mockImplementation((field: any) => onSort(field));
     return (
       <div data-testid="tag-list">
+        {tags.length === 0 && (
+          <div data-testid="tag-list-empty" data-filtered={String(!!isFiltered)}>
+            {onCreate && <button onClick={onCreate}>Create Your First Tag</button>}
+          </div>
+        )}
         <span data-testid="sort-info">{sortField} {sortDirection}</span>
         <button data-testid="sort-name" onClick={() => onSort('name')}>SortByName</button>
         <button data-testid="sort-count" onClick={() => onSort('count')}>SortByCount</button>
-        <button data-testid="sort-created" onClick={() => onSort('createdAt')}>SortByCreated</button>
         {tags.map((t: any) => (
           <div key={t.id} data-testid={`tag-${t.id}`}>
             {t.name}
@@ -192,9 +198,10 @@ vi.mock('@/components/layout/PageLayout', () => ({
 }));
 
 vi.mock('@/components/layout/PageHeader', () => ({
-  PageHeader: ({ title, subtitle, actions }: { title: string; subtitle?: string; actions?: React.ReactNode }) => (
+  PageHeader: ({ title, subtitle, actions, help }: { title: string; subtitle?: string; actions?: React.ReactNode; help?: string }) => (
     <div data-testid="page-header">
       <h1>{title}</h1>
+      {help && <a data-testid="help-link" data-help={help} href="#help">Help</a>}
       {subtitle && <p>{subtitle}</p>}
       {actions}
     </div>
@@ -264,11 +271,24 @@ describe('TagsPage', () => {
     });
   });
 
-  it('shows empty state when no tags exist', async () => {
+  it('asks the list for its first-run empty state when no tags exist', async () => {
     await renderPage();
-    await waitFor(() => {
-      expect(screen.getByText(/No tags yet/i)).toBeInTheDocument();
-    });
+    const empty = await screen.findByTestId('tag-list-empty');
+    expect(empty).toHaveAttribute('data-filtered', 'false');
+  });
+
+  it('asks the list for its no-match empty state when the search hides every tag', async () => {
+    mockGetAll.mockResolvedValue(mockTags);
+    await renderPage();
+    await waitFor(() => expect(screen.getByTestId('tag-tag-1')).toBeInTheDocument());
+    fireEvent.change(screen.getByPlaceholderText('Search tags...'), { target: { value: 'zzz' } });
+    const empty = await screen.findByTestId('tag-list-empty');
+    expect(empty).toHaveAttribute('data-filtered', 'true');
+  });
+
+  it('points the page header help at the Tags guide page', async () => {
+    await renderPage();
+    expect(screen.getByTestId('help-link')).toHaveAttribute('data-help', 'tags');
   });
 
   it('shows loading spinner while data is loading', async () => {
@@ -584,23 +604,13 @@ describe('TagsPage', () => {
     });
   });
 
-  it('switches to count sort with asc default', async () => {
+  it('switches to the transaction count sort with desc default', async () => {
     mockGetAll.mockResolvedValue(mockTags);
     await renderPage();
     await waitFor(() => expect(screen.getByTestId('tag-list')).toBeInTheDocument());
     fireEvent.click(screen.getByTestId('sort-count'));
     await waitFor(() => {
-      expect(screen.getByTestId('sort-info')).toHaveTextContent('count asc');
-    });
-  });
-
-  it('switches to createdAt sort with desc default', async () => {
-    mockGetAll.mockResolvedValue(mockTags);
-    await renderPage();
-    await waitFor(() => expect(screen.getByTestId('tag-list')).toBeInTheDocument());
-    fireEvent.click(screen.getByTestId('sort-created'));
-    await waitFor(() => {
-      expect(screen.getByTestId('sort-info')).toHaveTextContent('createdAt desc');
+      expect(screen.getByTestId('sort-info')).toHaveTextContent('count desc');
     });
   });
 });

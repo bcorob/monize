@@ -1,0 +1,100 @@
+{
+  "entry": {
+    "history": "{program}条款历史"
+  },
+  "offer": {
+    "loading": "正在加载在售债券...",
+    "loadFailed": "无法加载在售债券。",
+    "retry": "重试",
+    "empty": "今天没有在售的系列。",
+    "asOf": "截至 {date} 的在售情况。所有数字均指今天购买并持有至到期的一张债券。",
+    "comparisonNote": "年化收益率是用于比较不同期限产品的参考数字，并非收益承诺。",
+    "couponsNote": "息票不再投资：对于支付息票的债券，到期价值包含已支付的全部息票。",
+    "projected": "预测",
+    "projectedTitle": "该数字依据假设的基准值，而不仅是已公布的利率。",
+    "assumptions": {
+      "title": "假设",
+      "intro": "尚未开始的期间按这些基准值估值。修改其中一项，可查看它对每一行的影响。",
+      "label": "{benchmark}（%）",
+      "latest": "最近公布的值：{value}（{observation}）",
+      "reset": "使用最近公布的值",
+      "updating": "正在更新数字..."
+    },
+    "columns": {
+      "series": "系列",
+      "saleWindow": "在售",
+      "length": "期限",
+      "firstPeriodRate": "首期",
+      "rule": "利率",
+      "capitalization": "利息",
+      "redemption": "提前赎回",
+      "maturityValue": "到期价值",
+      "totalReturn": "总回报",
+      "annualizedReturn": "年化回报",
+      "terms": "条款"
+    },
+    "saleWindowValue": "{from}至{to}",
+    "lengthValue": "{months, plural, other {#个月}}",
+    "lengthDaysValue": "{days, plural, other {#天}}",
+    "rule": {
+      "fixed": "固定年利率 {rate}",
+      "benchmark": "{benchmark} + {addend}",
+      "floor": "基准下限 {floor}",
+      "daily": "每日：{benchmark} + {addend}",
+      "discount": "相对面值的折价"
+    },
+    "capitalization": {
+      "NONE": "每期支付",
+      "COMPOUND_AT_PERIOD_END": "每期期末计入本金"
+    },
+    "redemption": {
+      "none": "仅到期赎回",
+      "onDemand": "可随时申请",
+      "fee": "每张债券手续费 {amount}",
+      "forfeit": "当期已累计的利息将被扣除"
+    },
+    "couponsNotReinvested": "息票不再投资"
+  },
+  "history": {
+    "loading": "正在加载历史...",
+    "loadFailed": "无法加载历史。",
+    "retry": "重试",
+    "empty": "此产品尚未保存任何系列。",
+    "coverage": "目录涵盖 {from} 至 {to}。",
+    "rateChartTitle": "按发售月份的首期利率和利差",
+    "feeChartTitle": "按发售月份的提前赎回手续费",
+    "rate": "首期利率",
+    "rateChartNote": "对于固定利率债券，该线显示年利率。",
+    "addend": "利差或点差",
+    "fee": "提前赎回手续费",
+    "gapsNote": "没有已保存系列的月份在线上显示为断点，绝不用相邻月份推算出一个值。",
+    "missingTitle": "目录中缺失的月份（{count}）",
+    "noMissing": "在已保存的第一个和最后一个系列之间没有缺失的月份。",
+    "tableTitle": "所有已保存的系列",
+    "groupCount": "{count} 个系列",
+    "unknownYear": "销售日期未知",
+    "columns": {
+      "series": "系列",
+      "saleWindow": "在售",
+      "rate": "首期利率或年利率",
+      "addend": "利差或点差",
+      "fee": "提前赎回手续费",
+      "floor": "赎回金额下限",
+      "version": "条款版本",
+      "source": "来源"
+    },
+    "floor": {
+      "ALL_PERIODS": "每一期",
+      "FIRST_PERIOD": "仅首期"
+    },
+    "none": "无",
+    "held": "已持有"
+  },
+  "refreshProgress": {
+    "label": "正在刷新债券数据",
+    "offer": "正在检查当前发售…",
+    "series": "正在获取系列 {done}/{total}：{seriesCode}",
+    "historyComplete": "历史数据已完整",
+    "starting": "正在开始…"
+  }
+}

@@ -6,9 +6,10 @@ import toast from 'react-hot-toast';
 import { Modal } from '@/components/ui/Modal';
 import { UnsavedChangesDialog } from '@/components/ui/UnsavedChangesDialog';
 import { accountsApi } from '@/lib/accounts';
-import { Account } from '@/types/account';
+import { Account, MortgageType } from '@/types/account';
 import { showErrorToast } from '@/lib/errors';
 import { UseFormModalReturn } from '@/hooks/useFormModal';
+import type { AccountFormInitialValues } from '@/components/accounts/AccountForm';
 
 const AccountForm = dynamic(
   () => import('@/components/accounts/AccountForm').then((m) => m.AccountForm),
@@ -33,6 +34,17 @@ interface AccountFormModalProps {
   formModal: AccountFormModalState;
   /** Called after a successful create/update so the caller can refresh data. */
   onSaved: () => void;
+  /**
+   * Called after a successful create, once the form has closed, with the account
+   * that was made, for a caller that goes on to use it (linking a bank account).
+   * `onSaved` still runs first and takes no argument, so a refresh function that
+   * has parameters of its own is never handed an account by mistake.
+   */
+  onCreated?: (created: Account) => void;
+  /** Prefill for a new account (a bank account being linked); ignored on an edit. */
+  initialValues?: AccountFormInitialValues;
+  /** A detected mortgage type to set on the edit form as an unsaved change. */
+  preselectedMortgageType?: MortgageType;
 }
 
 /**
@@ -41,7 +53,13 @@ interface AccountFormModalProps {
  * edits an account -- the Accounts page and the Transactions account widget --
  * reuses the exact same form and behaviour.
  */
-export function AccountFormModal({ formModal, onSaved }: AccountFormModalProps) {
+export function AccountFormModal({
+  formModal,
+  onSaved,
+  onCreated,
+  initialValues,
+  preselectedMortgageType,
+}: AccountFormModalProps) {
   const t = useTranslations('accounts');
   const {
     showForm,
@@ -143,6 +161,7 @@ export function AccountFormModal({ formModal, onSaved }: AccountFormModalProps) 
         ...accountData
       } = cleanedData;
 
+      let created: Account | undefined;
       if (editingItem) {
         await accountsApi.update(editingItem.id, accountData);
         if (cashAccountId) {
@@ -154,11 +173,20 @@ export function AccountFormModal({ formModal, onSaved }: AccountFormModalProps) 
         }
         toast.success(t('toast.updateSuccess'));
       } else {
-        await accountsApi.create(accountData);
+        created = await accountsApi.create(accountData);
         toast.success(t('toast.createSuccess'));
+        // The account and its schedule are saved either way (decision 5 of
+        // docs/specs/loan-installment-settlement.md): a "Payment matching"
+        // rule the server could not build is reported here, never thrown, so
+        // the create-succeeded toast above still fires and this is a second,
+        // separate warning rather than a replacement for it.
+        if (created.paymentMatchingError) {
+          toast.error(created.paymentMatchingError.message);
+        }
       }
       close();
       onSaved();
+      if (created) onCreated?.(created);
     } catch (error) {
       showErrorToast(
         error,
@@ -174,18 +202,20 @@ export function AccountFormModal({ formModal, onSaved }: AccountFormModalProps) 
         isOpen={showForm}
         onClose={close}
         {...modalProps}
-        maxWidth="2xl"
-        className="p-6"
+        maxWidth="4xl"
+        className="p-6 !max-w-[55em]"
       >
         <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
           {isEditing ? t('page.editAccountModal') : t('page.newAccountModal')}
         </h2>
         <AccountForm
           account={editingItem}
+          initialValues={initialValues}
           onSubmit={handleFormSubmit}
           onCancel={close}
           onDirtyChange={setFormDirty}
           submitRef={formSubmitRef}
+          preselectedMortgageType={preselectedMortgageType}
         />
       </Modal>
       <UnsavedChangesDialog {...unsavedChangesDialog} />

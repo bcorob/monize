@@ -3,16 +3,14 @@
 import { ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
-import { gainLossColor } from '@/lib/format';
-import { withCurrencyCode } from '@/lib/security-detail';
+import { gainLossColor, withCurrencyCode } from '@/lib/format';
 import type { SecurityDetail } from '@/types/investment';
+import { Th } from '@/components/ui/Table';
 
 interface SecurityAccountsTableProps {
   detail: SecurityDetail;
 }
 
-const TH =
-  'px-3 py-2 text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400';
 const TD = 'px-3 py-2 text-sm whitespace-nowrap';
 
 /**
@@ -90,36 +88,27 @@ export function SecurityAccountsTable({ detail }: SecurityAccountsTableProps) {
         <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
           <thead className="bg-gray-50 dark:bg-gray-900">
             <tr>
-              <th scope="col" className={`${TH} text-left`}>
+              <Th scope="col" className="px-3 py-2">
                 {t('accounts.columns.account')}
-              </th>
-              <th
-                scope="col"
-                className={`${TH} hidden text-left sm:table-cell`}
-              >
+              </Th>
+              <Th scope="col" className="px-3 py-2 hidden sm:table-cell">
                 {t('accounts.columns.currency')}
-              </th>
-              <th scope="col" className={`${TH} text-right`}>
+              </Th>
+              <Th scope="col" align="right" className="px-3 py-2">
                 {t('accounts.columns.units')}
-              </th>
-              <th
-                scope="col"
-                className={`${TH} hidden text-right lg:table-cell`}
-              >
+              </Th>
+              <Th scope="col" align="right" className="px-3 py-2 hidden lg:table-cell">
                 {t('accounts.columns.avgCost')}
-              </th>
-              <th scope="col" className={`${TH} text-right`}>
+              </Th>
+              <Th scope="col" align="right" className="px-3 py-2">
                 {t('accounts.columns.marketValue')}
-              </th>
-              <th
-                scope="col"
-                className={`${TH} hidden text-right md:table-cell`}
-              >
+              </Th>
+              <Th scope="col" align="right" className="px-3 py-2 hidden md:table-cell">
                 {t('accounts.columns.costBasis')}
-              </th>
-              <th scope="col" className={`${TH} text-right`}>
+              </Th>
+              <Th scope="col" align="right" className="px-3 py-2">
                 {t('accounts.columns.unrealizedPl')}
-              </th>
+              </Th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-200 dark:divide-gray-700">

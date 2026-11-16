@@ -55,6 +55,7 @@ export const OIDC_REAUTH_PURPOSES = [
   "restore-backup",
   "import-wipe",
   "emergency-access",
+  "personal-access-token",
 ] as const;
 
 export type OidcReauthPurpose = (typeof OIDC_REAUTH_PURPOSES)[number];

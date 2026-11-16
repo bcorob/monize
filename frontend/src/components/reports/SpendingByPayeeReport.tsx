@@ -22,23 +22,49 @@ import { useReportData } from '@/hooks/useReportData';
 import { useSortableTable, compareValues } from '@/hooks/useSortableTable';
 import { DateRangeSelector } from '@/components/ui/DateRangeSelector';
 import { ChartViewToggle } from '@/components/ui/ChartViewToggle';
-import { chartColors, chartSeriesColor } from '@/lib/chart-colors';
-import { ExportDropdown } from '@/components/ui/ExportDropdown';
+import { chartSeriesColor } from '@/lib/chart-colors';
+import { ReportToolbarActions } from '@/components/reports/ReportToolbarActions';
 import { SortableHeader } from '@/components/ui/SortableHeader';
 import { ChartTooltipPanel } from '@/components/reports/ChartTooltip';
 import { ReportError } from '@/components/reports/ReportError';
+import { PartialTotal } from '@/components/ui/PartialTotal';
+import { reportTotal } from '@/lib/currency-total';
 import { exportToCsv } from '@/lib/csv-export';
 import type { ChartDatum } from '@/types/chart';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { CHART_GRID_PROPS_HORIZONTAL_BARS } from '@/lib/chart-style';
 
 type SpendingPayeeSortField = 'name' | 'value' | 'percentage';
 
 type ChartDataItem = ChartDatum & { id: string };
 
+interface SpendingPayeeTooltipProps {
+  active?: boolean;
+  payload?: Array<{ payload: { name: string; value: number } }>;
+  totalExpenses: number;
+  formatCurrency: (value: number) => string;
+  formatPercent: (value: number, decimals?: number) => string;
+}
+
+function SpendingPayeeTooltip({ active, payload, totalExpenses, formatCurrency, formatPercent }: SpendingPayeeTooltipProps) {
+  if (!active || !payload || !payload.length) return null;
+  const data = payload[0].payload;
+  const percentage = totalExpenses > 0 ? (data.value / totalExpenses) * 100 : 0;
+  return (
+    <ChartTooltipPanel>
+      <p className="font-medium text-gray-900 dark:text-gray-100">{data.name}</p>
+      <p className="text-gray-600 dark:text-gray-400">
+        {formatCurrency(data.value)} ({formatPercent(percentage, 1)})
+      </p>
+    </ChartTooltipPanel>
+  );
+}
+
 export function SpendingByPayeeReport() {
   const t = useTranslations('reports');
   const router = useRouter();
   const chartRef = useRef<HTMLDivElement>(null);
-  const { formatCurrencyCompact: formatCurrency, formatCurrencyAxis } = useNumberFormat();
+  const { formatCurrencyCompact: formatCurrency, formatCurrencyAxis, formatPercent, defaultCurrency } = useNumberFormat();
   const [viewType, setViewType] = useState<'bar' | 'table'>('bar');
   const { dateRange, setDateRange, startDate, setStartDate, endDate, setEndDate, resolvedRange, isValid } =
     useDateRange({ defaultRange: '3m' });
@@ -70,7 +96,12 @@ export function SpendingByPayeeReport() {
     [response],
   );
 
-  const totalExpenses = response?.totalSpending ?? 0;
+  // The server withholds `totalSpending` when a row could not be converted, so
+  // what is shown is the part that did convert, marked as a subtotal. It is also
+  // the denominator: percentages are shares of what is on screen.
+  const spendingTotal = reportTotal(response?.totalSpending ?? response?.knownSpending ?? 0, response);
+  const totalExpenses = spendingTotal.value;
+  const reportingCurrency = response?.currency ?? defaultCurrency;
 
   const sortedTableData = useMemo(() => {
     const sorted = [...chartData];
@@ -112,7 +143,7 @@ export function SpendingByPayeeReport() {
     ];
     const rows = sortedTableData.map((item) => {
       const percentage = totalExpenses > 0 ? (item.value / totalExpenses) * 100 : 0;
-      return [item.name, item.value, `${percentage.toFixed(2)}%`];
+      return [item.name, item.value, formatPercent(percentage, 2)];
     });
     exportToCsv('spending-by-payee', headers, rows);
   };
@@ -122,20 +153,6 @@ export function SpendingByPayeeReport() {
       const { start, end } = resolvedRange;
       router.push(`/transactions?payeeId=${payeeId}&startDate=${start}&endDate=${end}`);
     }
-  };
-
-  const CustomTooltip = ({ active, payload }: { active?: boolean; payload?: Array<{ payload: { name: string; value: number } }> }) => {
-    if (!active || !payload || !payload.length) return null;
-    const data = payload[0].payload;
-    const percentage = totalExpenses > 0 ? ((data.value / totalExpenses) * 100).toFixed(1) : '0';
-    return (
-      <ChartTooltipPanel>
-        <p className="font-medium text-gray-900 dark:text-gray-100">{data.name}</p>
-        <p className="text-gray-600 dark:text-gray-400">
-          {formatCurrency(data.value)} ({percentage}%)
-        </p>
-      </ChartTooltipPanel>
-    );
   };
 
   return (
@@ -159,12 +176,12 @@ export function SpendingByPayeeReport() {
               onChange={(v) => setViewType(v as 'bar' | 'table')}
               options={['bar', 'table']}
             />
-            <ExportDropdown
-              onExportPdf={handleExportPdf}
-              onExportCsv={handleExportCsv}
-              disabled={chartData.length === 0}
-            />
           </div>
+          <ReportToolbarActions
+            onExportPdf={handleExportPdf}
+            onExportCsv={handleExportCsv}
+            disabled={isLoading || !!error || chartData.length === 0}
+          />
         </div>
       </div>
 
@@ -180,9 +197,7 @@ export function SpendingByPayeeReport() {
             <Skeleton className="h-96 w-full" />
           </div>
         ) : chartData.length === 0 ? (
-          <p className="text-gray-500 dark:text-gray-400 text-center py-8">
-            {t('spendingByPayee.noData')}
-          </p>
+          <EmptyState title={t('spendingByPayee.noData')} />
         ) : viewType === 'table' ? (
           <>
             <div className="overflow-x-auto">
@@ -242,7 +257,7 @@ export function SpendingByPayeeReport() {
                           {formatCurrency(item.value)}
                         </td>
                         <td className="px-4 py-3 text-right text-sm text-gray-600 dark:text-gray-400">
-                          {percentage.toFixed(1)}%
+                          {formatPercent(percentage, 1)}
                         </td>
                       </tr>
                     );
@@ -254,7 +269,9 @@ export function SpendingByPayeeReport() {
                       {t('spendingByPayee.totalTopPayees', { count: chartData.length })}
                     </td>
                     <td className="px-4 py-3 text-right text-sm font-bold text-gray-900 dark:text-gray-100">
-                      {formatCurrency(totalExpenses)}
+                      <PartialTotal total={spendingTotal} displayCurrency={reportingCurrency}>
+                        {formatCurrency(totalExpenses)}
+                      </PartialTotal>
                     </td>
                     <td className="px-4 py-3 text-right text-sm font-bold text-gray-900 dark:text-gray-100">100%</td>
                   </tr>
@@ -267,13 +284,13 @@ export function SpendingByPayeeReport() {
             <div className="h-[500px]">
               <ResponsiveContainer width="100%" height="100%" minWidth={0}>
                 <BarChart data={chartData} layout="vertical" margin={{ left: 10, right: 10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+                  <CartesianGrid {...CHART_GRID_PROPS_HORIZONTAL_BARS} />
                   <XAxis
                     type="number"
                     tickFormatter={formatCurrencyAxis}
                   />
                   <YAxis type="category" dataKey="name" tick={{ fontSize: 11 }} width={90} />
-                  <Tooltip content={<CustomTooltip />} />
+                  <Tooltip content={<SpendingPayeeTooltip totalExpenses={totalExpenses} formatCurrency={formatCurrency} formatPercent={formatPercent} />} />
                   <Bar
                     dataKey="value"
                     cursor="pointer"
@@ -294,7 +311,9 @@ export function SpendingByPayeeReport() {
                 {t('spendingByPayee.totalTopPayees', { count: chartData.length })}
               </div>
               <div className="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                {formatCurrency(totalExpenses)}
+                <PartialTotal total={spendingTotal} displayCurrency={reportingCurrency}>
+                  {formatCurrency(totalExpenses)}
+                </PartialTotal>
               </div>
             </div>
           </>

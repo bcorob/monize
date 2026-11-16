@@ -71,4 +71,20 @@ export interface InvestmentReportResult {
   columns: string[];
   groups: InvestmentReportGroup[];
   rowCount: number;
+  /**
+   * False when a currency pair the rows needed had no admissible rate. The
+   * base-currency figures and every row's `portfolioPercent` are then partial,
+   * and the surface says so rather than leaving a total's caption over them.
+   */
+  fxComplete?: boolean;
+  /** `"SEK->USD"` for each pair that could not be resolved. */
+  missingPairs?: string[];
+  /**
+   * False when a held position had no price on or before the as-of date. The
+   * same figures are partial, and the repair is a price refresh rather than a
+   * rate: a surface reads both flags as `=== false` and names the cause it has.
+   */
+  pricesComplete?: boolean;
+  /** The symbol of each unpriced position. */
+  unpricedSymbols?: string[];
 }

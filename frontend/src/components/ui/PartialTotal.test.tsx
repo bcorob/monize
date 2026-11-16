@@ -66,7 +66,8 @@ describe('PartialTotal', () => {
 
     const trigger = screen.getByRole('button');
     await act(async () => {
-      fireEvent.mouseEnter(trigger);
+      // Hover is a mouse's pointerenter: a phone emulates mouseenter on a tap.
+      fireEvent.pointerEnter(trigger, { pointerType: 'mouse' });
     });
 
     const popover = screen.getByRole('tooltip');

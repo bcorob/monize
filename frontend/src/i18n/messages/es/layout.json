@@ -34,6 +34,12 @@
     "dismiss": "Cerrar",
     "dismissAriaLabel": "Cerrar notificación de actualización"
   },
+  "jwtSecretBanner": {
+    "label": "JWT_SECRET es débil.",
+    "detail": "Es un valor de ejemplo publicado o demasiado predecible, así que se pueden falsificar tokens de sesión. Genera uno seguro con <code>openssl rand -base64 32</code>. Cambiarlo hace que dejen de funcionar los códigos de las aplicaciones de autenticación y olvida los dispositivos de confianza: los usuarios inician sesión con un código de respaldo y vuelven a configurar la 2FA, y tú restableces la 2FA en <users>Gestión de usuarios</users> para quien no tenga uno. Consulta antes <code>docs/backend/modules-and-runtime.md</code> (Changing JWT_SECRET).",
+    "dismiss": "Cerrar",
+    "dismissAriaLabel": "Cerrar aviso de JWT_SECRET"
+  },
   "actionHistory": {
     "title": "Historial de acciones",
     "buttonAriaLabel": "Historial de acciones",
@@ -58,6 +64,7 @@
       "tag": "Etiqueta",
       "account": "Cuenta",
       "scheduled_transaction": "Programada",
+      "scheduled_posting": "Programada",
       "security": "Valor",
       "budget": "Presupuesto",
       "custom_report": "Informe"
@@ -79,7 +86,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "Reinversión de ganancias a largo plazo",
       "CAPITAL_GAIN_SHORT": "Ganancia de capital a corto plazo",
       "CAPITAL_GAIN_LONG": "Ganancia de capital a largo plazo",
-      "REDEEM": "Rescate de CD/bono"
+      "REDEEM": "Rescate de CD/bono",
+      "RETURN_OF_CAPITAL": "Devolución de capital"
     },
     "descriptions": {
       "createdAccount": "Cuenta \"{name}\" creada",
@@ -99,6 +107,7 @@
       "deletedInvestmentReport": "Informe de inversiones \"{name}\" eliminado",
       "createdPayee": "Beneficiario \"{name}\" creado",
       "updatedPayee": "Beneficiario \"{name}\" actualizado",
+      "lookedUpPayeeContact": "Se buscaron los datos de contacto del beneficiario \"{name}\"",
       "deletedPayee": "Beneficiario \"{name}\" eliminado",
       "createdReport": "Informe \"{name}\" creado",
       "updatedReport": "Informe \"{name}\" actualizado",
@@ -106,6 +115,7 @@
       "createdScheduledTransaction": "Transacción programada \"{name}\" creada",
       "updatedScheduledTransaction": "Transacción programada \"{name}\" actualizada",
       "deletedScheduledTransaction": "Transacción programada \"{name}\" eliminada",
+      "postedScheduledTransaction": "Transacción programada \"{name}\" registrada",
       "createdSecurity": "Valor \"{symbol}\" creado",
       "updatedSecurity": "Valor \"{symbol}\" actualizado",
       "deletedSecurity": "Valor \"{symbol}\" eliminado",
@@ -115,26 +125,23 @@
       "createdTransaction": "Transacción {payee} {amount} creada",
       "updatedTransaction": "Transacción {payee} {amount} actualizada",
       "deletedTransaction": "Transacción {payee} {amount} eliminada",
+      "convertedToTransfer": "Transacción {payee} {amount} convertida en transferencia",
+      "convertedToTransaction": "Transferencia {payee} {amount} convertida en transacción",
       "bulkUpdatedTransactions": "Actualización masiva de {count, plural, one {# transacción} other {# transacciones}}",
       "createdTransfer": "Transferencia {amount} de {from} a {to} creada",
       "createdInvestmentTransaction": "Transacción de {action} creada",
       "updatedInvestmentTransaction": "Transacción de {action} actualizada",
       "deletedInvestmentTransaction": "Transacción de {action} eliminada",
       "transferredSecurity": "Valor transferido entre cuentas",
-      "updatedSecurityTransfer": "Transferencia de valores actualizada"
-    },
-    "timeAgo": {
-      "justNow": "justo ahora",
-      "minutes": "hace {count} min",
-      "hours": "hace {count} h",
-      "days": "hace {count} d"
+      "updatedSecurityTransfer": "Transferencia de valores actualizada",
+      "ranTransactionRule": "Se ejecutó la regla «{name}» en {count, plural, one {# transacción} other {# transacciones}}"
     },
     "undonePrefix": "Deshecho: {description}",
     "redonePrefix": "Rehecho: {description}"
   },
   "pageHeader": {
-    "helpAriaLabel": "Abrir la wiki de Monize para obtener ayuda con esta sección",
-    "helpTooltip": "Abrir la wiki de Monize para obtener ayuda con esta sección"
+    "helpAriaLabel": "Ayuda sobre esta página",
+    "helpTooltip": "Ayuda sobre esta página"
   },
   "bootSplash": {
     "loading": "Cargando Monize",
@@ -145,5 +152,17 @@
     "title": "No se puede conectar",
     "message": "Monize no pudo conectar con el servidor. Comprueba tu conexión e inténtalo de nuevo.",
     "retry": "Reintentar"
+  },
+  "pushBanner": {
+    "enableTitle": "¿Activar las notificaciones?",
+    "enableBody": "Monize puede recordarte facturas y límites de presupuesto en este dispositivo, incluso con la aplicación cerrada. Tu navegador te pedirá permiso.",
+    "enableButton": "Activar",
+    "enabling": "Activando…",
+    "installIosTitle": "Añade Monize a la pantalla de inicio primero.",
+    "installIosBody": "En iPhone y iPad las notificaciones solo funcionan desde la aplicación instalada. Toca Compartir, luego Añadir a pantalla de inicio, y abre Monize desde ahí.",
+    "blockedTitle": "Las notificaciones están bloqueadas para Monize.",
+    "blockedBody": "Permítelas en la configuración del sitio de tu navegador para esta página. Monize no puede volver a preguntar por sí solo.",
+    "blockedIosBody": "Abre Ajustes de iOS, luego Notificaciones, luego Monize, y permítelas ahí. Si Monize no aparece, quítalo de la pantalla de inicio y vuelve a añadirlo.",
+    "dismiss": "Ahora no"
   }
 }

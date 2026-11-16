@@ -9,8 +9,10 @@ import {
   getPeriodsPerYear,
 } from '@/lib/loan-schedule';
 import { deriveLoanFigures } from '@/lib/loan-figures';
+import { compoundingFor, mortgageTypeOf } from '@/lib/mortgage-type';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useChartDateFormat } from '@/hooks/useChartDateFormat';
+import { useDateFormat } from '@/hooks/useDateFormat';
 import {
   SummaryCardGrid,
   SummaryCardItem,
@@ -27,6 +29,14 @@ interface LoanSummaryCardsProps {
    * loans that book interest separately holds only the principal part.
    */
   currentInstallment: number | null;
+  /**
+   * The due date `currentInstallment` is for, on a LINEAR or INTEREST_ONLY
+   * mortgage whose installment changes from one due date to the next
+   * (`CurrentLoanTerms.paymentDate`); null for an annuity's constant payment.
+   */
+  currentInstallmentDate?: string | null;
+  /** An INTEREST_ONLY mortgage's bullet (`CurrentLoanTerms.finalPayment`). */
+  finalPayment?: { amount: number; date: string } | null;
   /**
    * The rate in effect, resolved from the rate history the projection also uses
    * (`resolveCurrentLoanTerms`) -- NOT `account.interestRate`, which recording a
@@ -48,26 +58,27 @@ export function LoanSummaryCards({
   account,
   startingBalance,
   currentInstallment,
+  currentInstallmentDate = null,
+  finalPayment = null,
   currentAnnualRate,
   baseline,
 }: LoanSummaryCardsProps) {
   const t = useTranslations('accounts');
-  const { formatCurrency } = useNumberFormat();
+  const { formatCurrency, formatPercentTrimmed } = useNumberFormat();
   const formatChartDate = useChartDateFormat();
+  const { formatDate } = useDateFormat();
   const currency = account.currencyCode;
 
-  // The card is shown only for Canadian fixed-rate mortgages, where the
-  // semi-annual compounding the law requires makes the effective rate differ
-  // visibly from the quoted one -- and that branch is frequency-independent by
-  // law, so calling the shared `effectiveAnnualRate` changes no displayed
-  // number. It removes a third inline copy of the compounding convention
-  // (INV-LOAN-003) and nothing else: a DRY change, not a behaviour fix. The
-  // The frequency and both flags are passed rather than hardcoded, because they
-  // are the correct arguments if this card ever shows a non-Canadian mortgage.
-  // Hardcoding `true, false` beside a comment defending the frequency argument
-  // was the worst of both: widen the guard and the call takes the semi-annual
-  // branch for a US mortgage, on which the frequency is ignored anyway.
-  const isCanadianFixed = account.isCanadianMortgage && !account.isVariableRate;
+  // The card is shown only for a semi-annually compounded mortgage
+  // (`CANADIAN_FIXED`), where the compounding the law requires makes the
+  // effective rate differ visibly from the quoted one -- and that branch is
+  // frequency-independent by law, so calling the shared `effectiveAnnualRate`
+  // changes no displayed number. It removes a third inline copy of the
+  // compounding convention (INV-LOAN-003) and nothing else. The frequency and
+  // the type are passed rather than hardcoded, because they are the correct
+  // arguments if this card ever shows a mortgage of another compounding.
+  const mortgageType = mortgageTypeOf(account);
+  const isSemiAnnual = compoundingFor(mortgageType) === 'SEMI_ANNUAL';
   // Both halves of this line were changed independently and both are needed.
   // From upstream: derive through the shared `effectiveAnnualRate` rather than a
   // third inline copy of the compounding convention (INV-LOAN-003), and test
@@ -79,12 +90,11 @@ export function LoanSummaryCards({
   // card's own value directly below reads `currentAnnualRate`, so taking the
   // scalar here would also make the headline and its note disagree.
   const effectiveRate =
-    isCanadianFixed && currentAnnualRate != null
+    isSemiAnnual && currentAnnualRate != null
       ? effectiveAnnualRate(
           currentAnnualRate,
           getPeriodsPerYear((account.paymentFrequency ?? 'MONTHLY') as ScheduleFrequency),
-          account.isCanadianMortgage ?? false,
-          account.isVariableRate ?? false,
+          mortgageType,
         )
       : null;
 
@@ -106,6 +116,8 @@ export function LoanSummaryCards({
   const figures = deriveLoanFigures({
     currentBalance: account.currentBalance,
     currentInstallment,
+    currentInstallmentDate,
+    finalPayment,
     baseline,
   });
 
@@ -127,21 +139,48 @@ export function LoanSummaryCards({
       label: t('loanDetail.summary.interestRate'),
       value:
         currentAnnualRate != null
-          ? `${currentAnnualRate}%`
+          ? `${formatPercentTrimmed(currentAnnualRate)}`
           : t('loanDetail.summary.notSet'),
       note:
         effectiveRate != null
           ? t('loanDetail.summary.effectiveRate', { rate: effectiveRate.toFixed(3) })
           : undefined,
     },
-    {
-      label: t('loanDetail.summary.payment'),
-      value:
-        figures.currentPayment != null
-          ? formatCurrency(figures.currentPayment, currency)
-          : t('loanDetail.summary.notSet'),
-      note: frequencyLabel ?? undefined,
-    },
+    // A LINEAR or INTEREST_ONLY installment changes from one due date to the
+    // next, so it is captioned as the next one and dated rather than shown as
+    // a constant "Payment" (docs/specs/mortgage-types.md, section 5.6).
+    figures.currentPaymentDate != null
+      ? {
+          label: t('loanDetail.summary.nextInstallment'),
+          value:
+            figures.currentPayment != null
+              ? formatCurrency(figures.currentPayment, currency)
+              : t('loanDetail.summary.notSet'),
+          note: t('loanDetail.summary.dueOn', {
+            date: formatDate(figures.currentPaymentDate),
+          }),
+        }
+      : {
+          label: t('loanDetail.summary.payment'),
+          value:
+            figures.currentPayment != null
+              ? formatCurrency(figures.currentPayment, currency)
+              : t('loanDetail.summary.notSet'),
+          note: frequencyLabel ?? undefined,
+        },
+    // The bullet beside an interest-only installment, which otherwise
+    // understates what is owed by the whole principal.
+    ...(figures.finalPayment != null
+      ? [
+          {
+            label: t('loanDetail.summary.finalPayment'),
+            value: formatCurrency(figures.finalPayment.amount, currency),
+            note: t('loanDetail.summary.dueOn', {
+              date: formatDate(figures.finalPayment.date),
+            }),
+          },
+        ]
+      : []),
     {
       label: t('loanDetail.summary.estPayoff'),
       value: figures.isSettled

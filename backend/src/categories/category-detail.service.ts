@@ -2,8 +2,14 @@ import { Injectable } from "@nestjs/common";
 import { Brackets, DataSource, EntityManager } from "typeorm";
 import { withScopedDb } from "../common/db/scoped-db";
 import { roundMoney } from "../common/round.util";
+import {
+  loadCurrencyPlacesForRead,
+  moneyDecimalsForCode,
+} from "../common/currency-places.util";
 import { getAllCategoryIdsWithChildren } from "../common/category-tree.util";
+import { restrictToAccountScope } from "../delegation/delegate-account-scope.util";
 import { Account } from "../accounts/entities/account.entity";
+import { readAccountTotalsInReportingCurrency } from "../built-in-reports/account-breakdown-fx";
 import { Transaction } from "../transactions/entities/transaction.entity";
 import { Payee } from "../payees/entities/payee.entity";
 import { Category } from "./entities/category.entity";
@@ -66,6 +72,10 @@ function dateText(expression: string): string {
  * never reach this service: the controller's ParseUUIDPipe rejects them. And
  * `Account.assetCategoryId` points at an ordinary user category, so no special
  * exclusion exists or is needed here.
+ *
+ * `accountScope` narrows every transaction figure to those accounts (an acting
+ * delegate's READ grants, from `delegateReadableAccountScope`); `undefined`
+ * means the whole ledger, and an empty scope yields no transactions.
  */
 @Injectable()
 export class CategoryDetailService {
@@ -77,6 +87,7 @@ export class CategoryDetailService {
   async getDetail(
     userId: string,
     categoryId: string,
+    accountScope?: readonly string[],
   ): Promise<CategoryDetailDto> {
     // Validates ownership and existence (localized 404), loads children and
     // the effective (possibly inherited) colour.
@@ -89,13 +100,30 @@ export class CategoryDetailService {
         [categoryId],
       );
 
-      const [stats, accounts, largestTransaction, defaultCategoryForPayees] =
-        await Promise.all([
-          this.getStats(m, userId, subtreeIds, category),
-          this.getAccountBreakdown(m, userId, subtreeIds),
-          this.getLargestTransaction(m, userId, subtreeIds),
-          this.getDefaultCategoryPayees(m, userId, categoryId),
-        ]);
+      const stats = await this.getStats(
+        m,
+        userId,
+        subtreeIds,
+        category,
+        accountScope,
+      );
+      const accounts = await this.getAccountBreakdown(
+        m,
+        userId,
+        subtreeIds,
+        accountScope,
+      );
+      const largestTransaction = await this.getLargestTransaction(
+        m,
+        userId,
+        subtreeIds,
+        accountScope,
+      );
+      const defaultCategoryForPayees = await this.getDefaultCategoryPayees(
+        m,
+        userId,
+        categoryId,
+      );
 
       return {
         category,
@@ -124,8 +152,9 @@ export class CategoryDetailService {
     m: EntityManager,
     userId: string,
     subtreeIds: string[],
+    accountScope: readonly string[] | undefined,
   ) {
-    return realTransactionScope(
+    const scoped = realTransactionScope(
       m
         .createQueryBuilder(Transaction, "t")
         .leftJoin("t.splits", "split")
@@ -141,6 +170,7 @@ export class CategoryDetailService {
           }),
         ),
     );
+    return restrictToAccountScope(scoped, "t.account_id", accountScope);
   }
 
   private async getStats(
@@ -148,8 +178,14 @@ export class CategoryDetailService {
     userId: string,
     subtreeIds: string[],
     category: Category & { children?: Category[] },
+    accountScope: readonly string[] | undefined,
   ): Promise<CategoryDetailStats> {
-    const row = await this.subtreeTransactionQuery(m, userId, subtreeIds)
+    const row = await this.subtreeTransactionQuery(
+      m,
+      userId,
+      subtreeIds,
+      accountScope,
+    )
       .select("COUNT(DISTINCT t.id)", "count")
       .addSelect(dateText("MIN(t.transaction_date)"), "first")
       .addSelect(dateText("MAX(t.transaction_date)"), "last")
@@ -174,48 +210,34 @@ export class CategoryDetailService {
     m: EntityManager,
     userId: string,
     subtreeIds: string[],
+    accountScope: readonly string[] | undefined,
   ): Promise<CategoryAccountBreakdownRow[]> {
-    const rows = await this.subtreeTransactionQuery(m, userId, subtreeIds)
-      .innerJoin(Account, "account", "account.id = t.account_id")
-      .select("account.id", "accountId")
-      .addSelect("account.name", "accountName")
-      .addSelect("account.account_type", "accountType")
-      .addSelect("account.currency_code", "currencyCode")
-      .addSelect("COUNT(DISTINCT t.id)", "transactionCount")
-      .addSelect("SUM(COALESCE(split.amount, t.amount))", "total")
-      .addSelect(dateText("MAX(t.transaction_date)"), "lastTransactionDate")
-      .groupBy("account.id")
-      .addGroupBy("account.name")
-      .addGroupBy("account.account_type")
-      .addGroupBy("account.currency_code")
-      .orderBy("COUNT(DISTINCT t.id)", "DESC")
-      .getRawMany<{
-        accountId: string;
-        accountName: string;
-        accountType: string;
-        currencyCode: string;
-        transactionCount: string;
-        total: string;
-        lastTransactionDate: string | null;
-      }>();
-
-    return rows.map((row) => ({
-      accountId: row.accountId,
-      accountName: row.accountName,
-      accountType: row.accountType,
-      currencyCode: row.currencyCode,
-      transactionCount: parseInt(row.transactionCount, 10),
-      total: roundMoney(Number(row.total)),
-      lastTransactionDate: row.lastTransactionDate ?? null,
-    }));
+    return readAccountTotalsInReportingCurrency(
+      m,
+      userId,
+      this.subtreeTransactionQuery(
+        m,
+        userId,
+        subtreeIds,
+        accountScope,
+      ).innerJoin(Account, "account", "account.id = t.account_id"),
+      "COALESCE(split.amount, t.amount)",
+      "COUNT(DISTINCT t.id)",
+    );
   }
 
   private async getLargestTransaction(
     m: EntityManager,
     userId: string,
     subtreeIds: string[],
+    accountScope: readonly string[] | undefined,
   ): Promise<CategoryLargestTransaction | null> {
-    const row = await this.subtreeTransactionQuery(m, userId, subtreeIds)
+    const row = await this.subtreeTransactionQuery(
+      m,
+      userId,
+      subtreeIds,
+      accountScope,
+    )
       .innerJoin(Account, "account", "account.id = t.account_id")
       .leftJoin(Payee, "payee", "payee.id = t.payee_id")
       .select("t.id", "id")
@@ -244,10 +266,14 @@ export class CategoryDetailService {
       return null;
     }
 
+    const places = await loadCurrencyPlacesForRead(m, [row.currencyCode]);
     return {
       id: row.id,
       transactionDate: row.transactionDate,
-      amount: roundMoney(Number(row.amount)),
+      amount: roundMoney(
+        Number(row.amount),
+        moneyDecimalsForCode(places, row.currencyCode),
+      ),
       currencyCode: row.currencyCode,
       accountId: row.accountId,
       accountName: row.accountName,

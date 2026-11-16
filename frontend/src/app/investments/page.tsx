@@ -6,10 +6,13 @@ import dynamic from 'next/dynamic';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Modal } from '@/components/ui/Modal';
+import { transactionModalProps } from '@/components/transactions/transaction-modal';
 import { UnsavedChangesDialog } from '@/components/ui/UnsavedChangesDialog';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { PortfolioSummaryCard } from '@/components/investments/PortfolioSummaryCard';
+import { PortfolioPerformanceCard } from '@/components/investments/PortfolioPerformanceCard';
+import { UnlinkedTransfersCard } from '@/components/investments/UnlinkedTransfersCard';
 import { GroupedHoldingsList } from '@/components/investments/GroupedHoldingsList';
 import { AssetAllocationChart } from '@/components/investments/AssetAllocationChart';
 import { InvestmentTransactionList } from '@/components/investments/InvestmentTransactionList';
@@ -17,6 +20,7 @@ import { ListBottomPager } from '@/components/ui/ListBottomPager';
 import { NewTransactionButton } from '@/components/investments/NewTransactionButton';
 import { RefreshPricesButton } from '@/components/investments/RefreshPricesButton';
 import { InvestmentTransactionForm } from '@/components/investments/InvestmentTransactionForm';
+import { investmentTransactionModalProps } from '@/components/investments/investment-transaction-modal';
 import {
   CashFilterBar,
   CashFilterToggleButton,
@@ -27,8 +31,14 @@ import {
   INVESTMENT_CHART_REFRESH_EVENT,
 } from '@/components/investments/InvestmentValueChart';
 import { TransactionList } from '@/components/transactions/TransactionList';
+import { ViewModeToggle } from '@/components/ui/ViewModeToggle';
+import { useViewMode } from '@/store/viewModeStore';
+import { useFinancialToday } from '@/hooks/useFinancialToday';
+import { usePreferencesStore } from '@/store/preferencesStore';
 import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useInvestmentData } from '@/hooks/useInvestmentData';
+import { usePortfolioPeriodResults } from '@/hooks/usePortfolioPeriodResults';
+import { PORTFOLIO_PERIOD_PRESETS } from '@/types/net-worth';
 import { useBrokerageFilterOptions } from '@/hooks/useBrokerageFilterOptions';
 import { useOnUndoRedo } from '@/hooks/useOnUndoRedo';
 import { useOnAiAction } from '@/hooks/useOnAiAction';
@@ -41,8 +51,13 @@ import {
   type InvestmentTransactionView,
 } from '@/components/investments/InvestmentViewToggle';
 import { PAGE_SIZE } from '@/lib/constants';
+import { useMobileAddAction } from '@/store/mobileAddActionStore';
 
 const TransactionForm = dynamic(() => import('@/components/transactions/TransactionForm').then(m => m.TransactionForm), { ssr: false });
+
+// Calendar mode's whole tree, loaded only once a reader switches to it, so the
+// register's first paint carries none of it.
+const InvestmentCalendarView = dynamic(() => import('@/components/calendar/InvestmentCalendarView').then(m => m.InvestmentCalendarView), { ssr: false });
 
 
 export default function InvestmentsPage() {
@@ -71,6 +86,12 @@ function InvestmentsContent() {
   // the same data as an undo/redo, so refresh the same way.
   useOnAiAction(refreshAfterWrite);
   const [transactionView, setTransactionView] = useLocalStorage<InvestmentTransactionView>('monize-investments-transaction-view', 'brokerage');
+  const { view, setView } = useViewMode('investments');
+  const financialToday = useFinancialToday();
+  const weekStartsOn = (usePreferencesStore((s) => s.preferences?.weekStartsOn) ?? 1) as 0 | 1 | 2 | 3 | 4 | 5 | 6;
+  // The day a trade started from the calendar is filed under. Cleared by every
+  // other way of opening the form, so the remembered date keeps its usual job.
+  const [createOnDate, setCreateOnDate] = useState<string | undefined>(undefined);
   // Tracks whether the investment transaction form currently shows a currency
   // conversion section so the modal can be widened to fit it without scrolling.
   const [investmentFormNeedsConversion, setInvestmentFormNeedsConversion] = useState(false);
@@ -132,6 +153,34 @@ function InvestmentsContent() {
     await data.handleRefreshPrices(scope);
   }, [data]);
 
+  const handleNewInvestmentTransaction = useCallback(() => {
+    setCreateOnDate(undefined);
+    data.handleNewTransaction();
+  }, [data]);
+
+  const handleNewCashTransaction = useCallback(() => {
+    setCreateOnDate(undefined);
+    data.openCashCreate();
+  }, [data]);
+
+  // A day on the calendar starts a trade on that day: the brokerage register is
+  // the one the calendar's own "New" belongs to.
+  const handleCreateOnDay = useCallback((date: string) => {
+    setCreateOnDate(date);
+    data.handleNewTransaction();
+  }, [data]);
+
+  // Symbols for what the scope holds now, so the calendar can name a security a
+  // withheld value blames. The month's own rows name only what it traded, and an
+  // unpriced holding is usually one it did not.
+  const heldSecurityLabels = useMemo(() => {
+    const labels = new Map<string, string>();
+    for (const holding of data.portfolioSummary?.holdings ?? []) {
+      labels.set(holding.securityId, holding.symbol);
+    }
+    return labels;
+  }, [data.portfolioSummary]);
+
   const handleTransactionViewChange = (view: InvestmentTransactionView) => {
     setTransactionView(view);
     if (view === 'cash') {
@@ -163,6 +212,26 @@ function InvestmentsContent() {
     );
   }, [data.selectedAccountIds, data.selectableAccounts, tc, getAccountDisplayName]);
 
+  // One account in view reports in its own currency, everywhere on the page.
+  const singleAccountCurrency =
+    data.selectedAccountIds.length === 1
+      ? data.accounts.find(a => a.id === data.selectedAccountIds[0])?.currencyCode ?? null
+      : null;
+
+  // Asked once for the page: "Portfolio performance" lists every window, and
+  // the value chart's figures for any range the batch covers are the same
+  // answer. Two requests valued the same history twice, on the same event
+  // loop, at the same moment (#1888).
+  const periodResults = usePortfolioPeriodResults({
+    periods: PORTFOLIO_PERIOD_PRESETS.join(','),
+    accountIds:
+      data.selectedAccountIds.length > 0 ? data.selectedAccountIds.join(',') : undefined,
+    displayCurrency: singleAccountCurrency ?? undefined,
+    reloadKey: data.writeRefreshKey,
+  });
+
+  useMobileAddAction(t('page.newInvestmentTransaction'), handleNewInvestmentTransaction);
+
   return (
     <PageLayout>
       <main className="px-4 sm:px-6 lg:px-12 pt-6 pb-8">
@@ -170,7 +239,7 @@ function InvestmentsContent() {
           <PageHeader
             title={t('page.title')}
             subtitle={t('page.subtitle')}
-            helpUrl="https://github.com/kenlasko/monize/wiki/Investments"
+            help='investments'
             actions={
               <>
                 <div className="flex items-stretch gap-3 w-full sm:w-auto">
@@ -193,28 +262,32 @@ function InvestmentsContent() {
                   />
                 </div>
                 <NewTransactionButton
-                  onNewInvestment={data.handleNewTransaction}
-                  onNewCash={data.openCashCreate}
+                  onNewInvestment={handleNewInvestmentTransaction}
+                  onNewCash={handleNewCashTransaction}
                 />
               </>
             }
           />
 
-          {/* Summary and Allocation Row */}
+          {/* Summary and allocation, in one row: what the portfolio is worth
+              beside how it is spread. Below `lg` the two stack in that order. */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             <PortfolioSummaryCard
               summary={data.portfolioSummary}
-              isLoading={data.isLoading}
+              isLoading={data.isSummaryLoading}
               singleAccountCurrency={
                 data.selectedAccountIds.length === 1
                   ? data.accounts.find(a => a.id === data.selectedAccountIds[0])?.currencyCode ?? null
                   : null
               }
               titleSuffix={accountFilterLabel}
+              // The picker in the header above feeds this summary, so a
+              // withheld return may offer leaving an account out as a repair.
+              hasAccountFilter
             />
             <AssetAllocationChart
               allocation={data.portfolioSummary ? { allocation: data.portfolioSummary.allocation, totalValue: data.portfolioSummary.totalPortfolioValue } : null}
-              isLoading={data.isLoading}
+              isLoading={data.isSummaryLoading}
               singleAccountCurrency={
                 data.selectedAccountIds.length === 1
                   ? data.accounts.find(a => a.id === data.selectedAccountIds[0])?.currencyCode ?? null
@@ -227,17 +300,39 @@ function InvestmentsContent() {
             />
           </div>
 
-          {/* Portfolio Value Over Time */}
-          <div className="mb-6">
+          {/* The value series and what the investments earned from it, in one
+              row: the reader sees the shape of the portfolio's value beside
+              the trailing returns that shape produced. The right column is the
+              narrow one -- six label/figure rows need far less width than a
+              chart -- and below `lg` the two stack in that same order. */}
+          <div className="grid grid-cols-1 lg:grid-cols-[3fr_1fr] gap-6 mb-6">
             <InvestmentValueChart
               accountIds={data.selectedAccountIds}
               refreshKey={data.writeRefreshKey}
-              displayCurrency={
-                data.selectedAccountIds.length === 1
-                  ? data.accounts.find(a => a.id === data.selectedAccountIds[0])?.currencyCode ?? null
-                  : null
-              }
+              displayCurrency={singleAccountCurrency}
               titleSuffix={accountFilterLabel}
+              periodResults={periodResults}
+            />
+            {/* What the INVESTMENTS earned over each trailing period, with
+                deposits, withdrawals and idle cash taken out. */}
+            <PortfolioPerformanceCard
+              accountIds={data.selectedAccountIds}
+              reloadKey={data.writeRefreshKey}
+              displayCurrency={singleAccountCurrency}
+              periodResults={periodResults}
+            />
+          </div>
+
+          {/* A transfer entered twice, once per account, and never paired: the
+              receiving position cannot take the cost the sending one gave up,
+              so its basis reads unknown. Above the holdings because that is
+              the list the unknown shows up in. Renders nothing when there is
+              nothing to suggest. */}
+          <div className="mb-6 empty:mb-0">
+            <UnlinkedTransfersCard
+              accountIds={data.selectedAccountIds}
+              reloadKey={data.writeRefreshKey}
+              onLinked={data.refreshAfterWrite}
             />
           </div>
 
@@ -245,16 +340,46 @@ function InvestmentsContent() {
           <div className="mb-6">
             <GroupedHoldingsList
               holdingsByAccount={data.portfolioSummary?.holdingsByAccount || []}
-              isLoading={data.isLoading}
-              totalPortfolioValue={data.portfolioSummary?.totalPortfolioValue || 0}
+              isLoading={data.isSummaryLoading}
+              totalPortfolioValue={data.portfolioSummary?.totalPortfolioValue ?? null}
               valuationComplete={data.portfolioSummary?.valuationComplete}
               onSecurityClick={data.handleSecurityClick}
               onCashClick={data.handleCashClick}
             />
           </div>
 
+          {/* The two registers, or the month calendar standing in for both.
+              Everything above this point is the same either way. */}
+          {view === 'calendar' && (
+            <div>
+              <div className="mb-3 flex flex-wrap items-center gap-2">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                  {t('page.recentTransactions')}
+                </h3>
+              </div>
+              <InvestmentCalendarView
+                accounts={data.allAccounts.length > 0 ? data.allAccounts : data.accounts}
+                brokerageAccountIds={data.selectedAccountIds}
+                cashAccountIds={data.cashAccountIds}
+                heldSecurityLabels={heldSecurityLabels}
+                weekStartsOn={weekStartsOn}
+                today={financialToday}
+                displayCurrency={
+                  data.selectedAccountIds.length === 1
+                    ? data.accounts.find(a => a.id === data.selectedAccountIds[0])?.currencyCode ?? null
+                    : null
+                }
+                onEditInvestment={data.handleEditTransaction}
+                onEditCashTransaction={data.handleEditCashTransaction}
+                onCreateOnDay={handleCreateOnDay}
+                refreshKey={data.writeRefreshKey}
+                viewToggle={<ViewModeToggle value={view} onChange={setView} />}
+              />
+            </div>
+          )}
+
           {/* Brokerage Transactions */}
-          {transactionView === 'brokerage' && (
+          {view === 'table' && transactionView === 'brokerage' && (
             <>
               <div>
                 <InvestmentTransactionList
@@ -263,7 +388,6 @@ function InvestmentsContent() {
                   isLoading={data.isLoading}
                   onDelete={handleDeleteTransaction}
                   onEdit={data.handleEditTransaction}
-                  onNewTransaction={data.handleNewTransaction}
                   onStatusChanged={data.handleFormCreateAndNew}
                   filters={data.transactionFilters}
                   onFiltersChange={data.handleFiltersChange}
@@ -275,6 +399,7 @@ function InvestmentsContent() {
                       onChange={handleTransactionViewChange}
                     />
                   }
+                  viewModeToggle={<ViewModeToggle value={view} onChange={setView} />}
                   currentPage={data.currentPage}
                   totalPages={data.pagination?.totalPages ?? 1}
                   totalItems={data.pagination?.total ?? 0}
@@ -297,7 +422,7 @@ function InvestmentsContent() {
           )}
 
           {/* Cash Transactions */}
-          {transactionView === 'cash' && (
+          {view === 'table' && transactionView === 'cash' && (
             <>
             <div className="bg-white dark:bg-gray-800 shadow dark:shadow-gray-700/50 rounded-lg">
               <div className="px-3 pt-3 sm:px-4 sm:pt-4 flex flex-wrap justify-between items-center gap-2">
@@ -314,13 +439,10 @@ function InvestmentsContent() {
                   />
                 </div>
                 <div className="flex items-center gap-2 w-full sm:w-auto">
-                  <button onClick={data.openCashCreate} className="inline-flex items-center justify-center px-3 py-1.5 text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 sm:min-w-[14rem]">
-                    <span className="sm:hidden">{t('page.newCashTransactionShort')}</span>
-                    <span className="hidden sm:inline">{t('page.newCashTransaction')}</span>
-                  </button>
                   <CashFilterToggleButton
                     activeCount={data.activeCashFilterCount}
                     onClick={() => data.setShowCashFilters(!data.showCashFilters)}
+                    expanded={data.showCashFilters}
                   />
                 </div>
               </div>
@@ -340,6 +462,7 @@ function InvestmentsContent() {
               ) : (
                 <TransactionList
                   densityView="investments"
+                  viewToggle={<ViewModeToggle value={view} onChange={setView} />}
                   transactions={data.cashTransactions}
                   onEdit={data.handleEditCashTransaction}
                   onRefresh={data.refreshAfterWrite}
@@ -381,18 +504,15 @@ function InvestmentsContent() {
       <Modal
         isOpen={data.showTransactionForm}
         onClose={closeInvestmentTransactionModal}
-        maxWidth={investmentFormNeedsConversion ? '3xl' : 'xl'}
-        className="p-6"
-        {...data.modalProps}
-      >
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">
-          {data.editingTransaction ? t('page.editTransaction') : t('page.newInvestmentTransaction')}
-        </h2>
+        {...investmentTransactionModalProps(investmentFormNeedsConversion)}
+        {...data.modalProps} title={data.editingTransaction ? t('page.editTransaction') : t('page.newInvestmentTransaction')}>
         <InvestmentTransactionForm
+          key={`${data.editingTransaction?.id ?? 'new'}-${createOnDate ?? ''}`}
           accounts={data.accounts}
           allAccounts={data.allAccounts}
           transaction={data.editingTransaction}
           defaultAccountId={data.getSelectedBrokerageAccountId()}
+          defaultDate={createOnDate}
           onSuccess={handleInvestmentTransactionSuccess}
           onCreateAndNew={data.handleFormCreateAndNew}
           onCancel={closeInvestmentTransactionModal}
@@ -404,13 +524,11 @@ function InvestmentsContent() {
       <UnsavedChangesDialog {...data.unsavedChangesDialog} />
 
       {/* Cash Transaction Form Modal */}
-      <Modal isOpen={data.showCashForm} onClose={data.closeCash} maxWidth="6xl" className="p-6" {...data.cashModalProps}>
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">
-          {data.editingCashTransaction ? t('page.editTransaction') : t('page.newTransaction')}
-        </h2>
+      <Modal isOpen={data.showCashForm} onClose={data.closeCash} {...transactionModalProps} {...data.cashModalProps} title={data.editingCashTransaction ? t('page.editTransaction') : t('page.newTransaction')}>
         <TransactionForm
-          key={data.editingCashTransaction?.id || 'new-cash'}
+          key={`${data.editingCashTransaction?.id || 'new-cash'}-${createOnDate ?? ''}`}
           transaction={data.editingCashTransaction}
+          defaultDate={createOnDate}
           defaultAccountId={data.cashAccountIds.length > 0 ? data.cashAccountIds[0] : undefined}
           onSuccess={data.handleCashFormSuccess}
           onCreateAndNew={data.handleCashFormCreateAndNew}

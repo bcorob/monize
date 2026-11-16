@@ -60,7 +60,6 @@ const BASELINE: readonly string[] = [
   'import:mnyPassword.retryBody',
   'import:mnyReview.fileSummary',
   'import:toasts.mnySingleFileOnly',
-  'investments:transactionForm.transferCostNote',
   'settings:about.versionMismatch',
   'settings:supportBackup.howItWorks',
   'settings:supportBackup.confirmPasswordMessage',

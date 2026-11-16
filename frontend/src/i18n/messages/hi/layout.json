@@ -34,6 +34,12 @@
     "dismiss": "खारिज करें",
     "dismissAriaLabel": "अपडेट अधिसूचना खारिज करें"
   },
+  "jwtSecretBanner": {
+    "label": "JWT_SECRET कमज़ोर है।",
+    "detail": "यह एक प्रकाशित प्लेसहोल्डर है या बहुत अनुमान योग्य है, इसलिए सत्र टोकन जाली बनाए जा सकते हैं। <code>openssl rand -base64 32</code> से एक मज़बूत मान बनाएं। इसे बदलने से प्रमाणीकरक ऐप के कोड काम करना बंद कर देते हैं और विश्वसनीय डिवाइस भुला दिए जाते हैं: उपयोगकर्ता बैकअप कोड से साइन इन करके 2FA फिर से सेट करते हैं, और जिनके पास बैकअप कोड नहीं है उनके लिए आप <users>उपयोगकर्ता प्रबंधन</users> में 2FA रीसेट करते हैं। पहले <code>docs/backend/modules-and-runtime.md</code> (Changing JWT_SECRET) पढ़ें।",
+    "dismiss": "खारिज करें",
+    "dismissAriaLabel": "JWT_SECRET चेतावनी खारिज करें"
+  },
   "actionHistory": {
     "title": "क्रिया इतिहास",
     "buttonAriaLabel": "क्रिया इतिहास",
@@ -58,6 +64,7 @@
       "tag": "टैग",
       "account": "खाता",
       "scheduled_transaction": "अनुसूचित",
+      "scheduled_posting": "अनुसूचित",
       "security": "प्रतिभूति",
       "budget": "बजट",
       "custom_report": "रिपोर्ट"
@@ -79,7 +86,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "दीर्घकालिक पूंजी लाभ का पुनर्निवेश",
       "CAPITAL_GAIN_SHORT": "अल्पकालिक पूंजी लाभ",
       "CAPITAL_GAIN_LONG": "दीर्घकालिक पूंजी लाभ",
-      "REDEEM": "सीडी/बॉन्ड रिडीम करें"
+      "REDEEM": "सीडी/बॉन्ड रिडीम करें",
+      "RETURN_OF_CAPITAL": "पूंजी की वापसी"
     },
     "descriptions": {
       "createdAccount": "खाता \"{name}\" बनाया गया",
@@ -99,6 +107,7 @@
       "deletedInvestmentReport": "निवेश रिपोर्ट \"{name}\" हटाई गई",
       "createdPayee": "भुगतानकर्ता \"{name}\" बनाया गया",
       "updatedPayee": "भुगतानकर्ता \"{name}\" अपडेट हुआ",
+      "lookedUpPayeeContact": "प्राप्तकर्ता \"{name}\" के संपर्क विवरण खोजे गए",
       "deletedPayee": "भुगतानकर्ता \"{name}\" हटाया गया",
       "createdReport": "रिपोर्ट \"{name}\" बनाई गई",
       "updatedReport": "रिपोर्ट \"{name}\" अपडेट हुई",
@@ -106,6 +115,7 @@
       "createdScheduledTransaction": "अनुसूचित लेनदेन \"{name}\" बनाया गया",
       "updatedScheduledTransaction": "अनुसूचित लेनदेन \"{name}\" अपडेट हुआ",
       "deletedScheduledTransaction": "अनुसूचित लेनदेन \"{name}\" हटाया गया",
+      "postedScheduledTransaction": "अनुसूचित लेनदेन \"{name}\" पोस्ट किया गया",
       "createdSecurity": "प्रतिभूति \"{symbol}\" बनाई गई",
       "updatedSecurity": "प्रतिभूति \"{symbol}\" अपडेट हुई",
       "deletedSecurity": "प्रतिभूति \"{symbol}\" हटाई गई",
@@ -115,26 +125,23 @@
       "createdTransaction": "लेनदेन {payee} {amount} बनाया गया",
       "updatedTransaction": "लेनदेन {payee} {amount} अपडेट हुआ",
       "deletedTransaction": "लेनदेन {payee} {amount} हटाया गया",
+      "convertedToTransfer": "लेन-देन {payee} {amount} को स्थानांतरण में बदला गया",
+      "convertedToTransaction": "स्थानांतरण {payee} {amount} को लेन-देन में बदला गया",
       "bulkUpdatedTransactions": "{count, plural, one {# लेनदेन बल्क अपडेट किया गया} other {# लेनदेन बल्क अपडेट किए गए}}",
       "createdTransfer": "{from} से {to} को {amount} का स्थानांतरण बनाया गया",
       "createdInvestmentTransaction": "{action} लेनदेन बनाया गया",
       "updatedInvestmentTransaction": "{action} लेनदेन अपडेट हुआ",
       "deletedInvestmentTransaction": "{action} लेनदेन हटाया गया",
       "transferredSecurity": "खातों के बीच प्रतिभूति स्थानांतरित की गई",
-      "updatedSecurityTransfer": "प्रतिभूति स्थानांतरण अपडेट हुआ"
-    },
-    "timeAgo": {
-      "justNow": "अभी-अभी",
-      "minutes": "{count} मिनट पहले",
-      "hours": "{count} घंटे पहले",
-      "days": "{count} दिन पहले"
+      "updatedSecurityTransfer": "प्रतिभूति स्थानांतरण अपडेट हुआ",
+      "ranTransactionRule": "नियम “{name}” को {count, plural, one {# लेनदेन} other {# लेनदेन}} पर चलाया गया"
     },
     "undonePrefix": "पूर्ववत: {description}",
     "redonePrefix": "फिर से किया: {description}"
   },
   "pageHeader": {
-    "helpAriaLabel": "इस अनुभाग की सहायता के लिए Monize विकी खोलें",
-    "helpTooltip": "इस अनुभाग की सहायता के लिए Monize विकी खोलें"
+    "helpAriaLabel": "इस पेज के लिए सहायता",
+    "helpTooltip": "इस पेज के लिए सहायता"
   },
   "bootSplash": {
     "loading": "Monize लोड हो रहा है",
@@ -145,5 +152,17 @@
     "title": "कनेक्ट नहीं हो पा रहा",
     "message": "Monize सर्वर तक नहीं पहुंच सका। अपना कनेक्शन जांचें और पुनः प्रयास करें।",
     "retry": "पुनः प्रयास करें"
+  },
+  "pushBanner": {
+    "enableTitle": "सूचनाएं चालू करें?",
+    "enableBody": "ऐप बंद होने पर भी Monize इस डिवाइस पर बिल और बजट सीमाओं की याद दिला सकता है। आपका ब्राउज़र अनुमति मांगेगा।",
+    "enableButton": "चालू करें",
+    "enabling": "चालू कर रहे हैं…",
+    "installIosTitle": "पहले Monize को होम स्क्रीन पर जोड़ें।",
+    "installIosBody": "iPhone और iPad पर सूचनाएं केवल इंस्टॉल किए गए ऐप से काम करती हैं। शेयर पर टैप करें, फिर Add to Home Screen चुनें, और वहीं से Monize खोलें।",
+    "blockedTitle": "Monize के लिए सूचनाएं अवरोधित हैं।",
+    "blockedBody": "इस पेज के लिए अपने ब्राउज़र की साइट सेटिंग में इन्हें अनुमति दें। Monize स्वयं दोबारा नहीं पूछ सकता।",
+    "blockedIosBody": "iOS सेटिंग्स खोलें, फिर Notifications, फिर Monize, और वहां अनुमति दें। यदि Monize सूची में नहीं है, तो उसे होम स्क्रीन से हटाकर दोबारा जोड़ें।",
+    "dismiss": "अभी नहीं"
   }
 }

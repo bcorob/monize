@@ -34,6 +34,12 @@
     "dismiss": "Закрыть",
     "dismissAriaLabel": "Закрыть уведомление об обновлении"
   },
+  "jwtSecretBanner": {
+    "label": "JWT_SECRET ненадёжен.",
+    "detail": "Это опубликованное значение-заглушка или слишком предсказуемое значение, поэтому токены сессий можно подделать. Сгенерируйте надёжное значение командой <code>openssl rand -base64 32</code>. После его смены коды из приложений-аутентификаторов перестанут работать, а доверенные устройства будут забыты: пользователи входят с резервным кодом и заново настраивают 2FA, а тем, у кого его нет, вы сбрасываете 2FA в разделе <users>Управление пользователями</users>. Сначала прочитайте <code>docs/backend/modules-and-runtime.md</code> (Changing JWT_SECRET).",
+    "dismiss": "Закрыть",
+    "dismissAriaLabel": "Закрыть предупреждение о JWT_SECRET"
+  },
   "actionHistory": {
     "title": "История действий",
     "buttonAriaLabel": "История действий",
@@ -58,6 +64,7 @@
       "tag": "Тег",
       "account": "Счёт",
       "scheduled_transaction": "Запланированная",
+      "scheduled_posting": "Запланированная",
       "security": "Ценная бумага",
       "budget": "Бюджет",
       "custom_report": "Отчёт"
@@ -79,7 +86,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "Реинвестирование долгосрочного прироста капитала",
       "CAPITAL_GAIN_SHORT": "Краткосрочный прирост капитала",
       "CAPITAL_GAIN_LONG": "Долгосрочный прирост капитала",
-      "REDEEM": "Погашение CD/облигации"
+      "REDEEM": "Погашение CD/облигации",
+      "RETURN_OF_CAPITAL": "Возврат капитала"
     },
     "descriptions": {
       "createdAccount": "Создан счёт \"{name}\"",
@@ -99,6 +107,7 @@
       "deletedInvestmentReport": "Удалён инвестиционный отчёт \"{name}\"",
       "createdPayee": "Создан получатель \"{name}\"",
       "updatedPayee": "Обновлён получатель \"{name}\"",
+      "lookedUpPayeeContact": "Найдены контактные данные получателя «{name}»",
       "deletedPayee": "Удалён получатель \"{name}\"",
       "createdReport": "Создан отчёт \"{name}\"",
       "updatedReport": "Обновлён отчёт \"{name}\"",
@@ -106,6 +115,7 @@
       "createdScheduledTransaction": "Создана запланированная проводка \"{name}\"",
       "updatedScheduledTransaction": "Обновлена запланированная проводка \"{name}\"",
       "deletedScheduledTransaction": "Удалена запланированная проводка \"{name}\"",
+      "postedScheduledTransaction": "Проведена запланированная проводка \"{name}\"",
       "createdSecurity": "Создана ценная бумага \"{symbol}\"",
       "updatedSecurity": "Обновлена ценная бумага \"{symbol}\"",
       "deletedSecurity": "Удалена ценная бумага \"{symbol}\"",
@@ -115,26 +125,23 @@
       "createdTransaction": "Создана проводка {payee} {amount}",
       "updatedTransaction": "Обновлена проводка {payee} {amount}",
       "deletedTransaction": "Удалена проводка {payee} {amount}",
+      "convertedToTransfer": "Транзакция {payee} {amount} преобразована в перевод",
+      "convertedToTransaction": "Перевод {payee} {amount} преобразован в транзакцию",
       "bulkUpdatedTransactions": "{count, plural, one {Массово обновлена # проводка} other {Массово обновлено # проводок}}",
       "createdTransfer": "Создан перевод {amount} из {from} в {to}",
       "createdInvestmentTransaction": "Создана проводка {action}",
       "updatedInvestmentTransaction": "Обновлена проводка {action}",
       "deletedInvestmentTransaction": "Удалена проводка {action}",
       "transferredSecurity": "Ценная бумага перенесена между счетами",
-      "updatedSecurityTransfer": "Обновлён перевод ценной бумаги"
-    },
-    "timeAgo": {
-      "justNow": "только что",
-      "minutes": "{count} мин. назад",
-      "hours": "{count} ч. назад",
-      "days": "{count} дн. назад"
+      "updatedSecurityTransfer": "Обновлён перевод ценной бумаги",
+      "ranTransactionRule": "{count, plural, one {Правило «{name}» запущено для # проводки} few {Правило «{name}» запущено для # проводок} many {Правило «{name}» запущено для # проводок} other {Правило «{name}» запущено для # проводок}}"
     },
     "undonePrefix": "Отменено: {description}",
     "redonePrefix": "Повторено: {description}"
   },
   "pageHeader": {
-    "helpAriaLabel": "Открыть вики Monize для получения справки по этому разделу",
-    "helpTooltip": "Открыть вики Monize для получения справки по этому разделу"
+    "helpAriaLabel": "Помощь по этой странице",
+    "helpTooltip": "Помощь по этой странице"
   },
   "bootSplash": {
     "loading": "Загрузка Monize",
@@ -145,5 +152,17 @@
     "title": "Не удаётся подключиться",
     "message": "Monize не удалось связаться с сервером. Проверьте подключение и повторите попытку.",
     "retry": "Повторить"
+  },
+  "pushBanner": {
+    "enableTitle": "Включить уведомления?",
+    "enableBody": "Monize может напоминать на этом устройстве о счетах и лимитах бюджета, даже когда приложение закрыто. Браузер запросит разрешение.",
+    "enableButton": "Включить",
+    "enabling": "Включение…",
+    "installIosTitle": "Сначала добавьте Monize на домашний экран.",
+    "installIosBody": "На iPhone и iPad уведомления работают только из установленного приложения. Нажмите «Поделиться», затем «На экран «Домой»», и откройте Monize оттуда.",
+    "blockedTitle": "Уведомления для Monize заблокированы.",
+    "blockedBody": "Разрешите их в настройках сайта в браузере для этой страницы. Monize не может запросить их снова самостоятельно.",
+    "blockedIosBody": "Откройте «Настройки» iOS, затем «Уведомления», затем Monize, и разрешите их там. Если Monize нет в списке, удалите его с домашнего экрана и добавьте снова.",
+    "dismiss": "Не сейчас"
   }
 }

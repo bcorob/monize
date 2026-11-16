@@ -1,0 +1,81 @@
+{
+  "learnMore": "Pelajari lebih lanjut",
+  "howThisWorks": "Cara kerjanya",
+  "menu": {
+    "helpForPage": "Bantuan untuk halaman ini",
+    "search": "Cari bantuan",
+    "shortcuts": "Pintasan keyboard",
+    "takeTour": "Mulai tur",
+    "whatsNew": "Yang baru",
+    "shellMenu": "Menu aplikasi desktop",
+    "reportIssue": "Laporkan masalah",
+    "discussions": "Diskusi"
+  },
+  "shortcuts": {
+    "title": "Pintasan keyboard",
+    "palette": "Palet perintah",
+    "paletteKeys": "Ctrl/Cmd+K",
+    "search": "Cari bantuan",
+    "searchKeys": "?",
+    "undo": "Batalkan perubahan terakhir",
+    "undoKeys": "Ctrl/Cmd+Z",
+    "redo": "Ulangi",
+    "redoKeys": "Ctrl/Cmd+Shift+Z atau Ctrl/Cmd+Y",
+    "closeDialog": "Tutup dialog atau panel yang terbuka",
+    "closeDialogKeys": "Esc"
+  },
+  "panel": {
+    "title": "Bantuan",
+    "back": "Kembali",
+    "forward": "Maju",
+    "openOnline": "Buka di monize.net",
+    "pin": "Sematkan panel bantuan agar tetap terbuka saat Anda berpindah halaman",
+    "unpin": "Lepas sematan panel bantuan",
+    "expand": "Perbesar panel bantuan",
+    "collapse": "Perkecil panel bantuan",
+    "resize": "Ubah ukuran panel bantuan",
+    "resizeValue": "{width} piksel",
+    "close": "Tutup bantuan",
+    "englishOnly": "Panduan ini tersedia dalam bahasa Inggris.",
+    "loading": "Memuat bantuan",
+    "toc": {
+      "toggle": "Di halaman ini",
+      "label": "Bagian di halaman ini"
+    },
+    "error": {
+      "heading": "Bantuan tidak dapat dimuat",
+      "body": "Panduan tidak termuat. Coba lagi, atau baca halaman ini di monize.net.",
+      "retry": "Coba lagi"
+    },
+    "search": "Cari panduan",
+    "tour": {
+      "prompt": "Halaman ini memiliki tur berpemandu."
+    },
+    "version": "Panduan untuk Monize {version}",
+    "latestOnline": "Panduan terbaru ada di monize.net"
+  },
+  "search": {
+    "title": "Cari panduan",
+    "placeholder": "Cari panduan",
+    "ariaLabel": "Cari panduan",
+    "contextHeading": "Bantuan untuk layar ini",
+    "noResults": "Tidak ada hasil untuk \"{query}\"",
+    "error": "Pencarian gagal. Coba lagi.",
+    "hint": {
+      "navigate": "untuk menavigasi",
+      "select": "untuk memilih",
+      "close": "untuk menutup"
+    }
+  },
+  "markdown": {
+    "screenshot": "Tangkapan layar",
+    "viewScreenshot": "Lihat tangkapan layar di monize.net",
+    "callout": {
+      "note": "Catatan",
+      "tip": "Tips",
+      "important": "Penting",
+      "warning": "Peringatan",
+      "caution": "Perhatian"
+    }
+  }
+}

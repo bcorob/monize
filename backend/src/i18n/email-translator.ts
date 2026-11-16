@@ -1,10 +1,12 @@
 import { I18nService } from "nestjs-i18n";
 
 /**
- * Translator passed into the email template builders. Emails are rendered
- * outside any HTTP request (cron jobs, auth flows that fire-and-forget), so the
- * locale cannot come from the request context the way `tr()` resolves it --
- * it must be the recipient's stored preference. Each call supplies the English
+ * Translator for copy addressed to a specific person and composed outside any
+ * HTTP request -- email templates, and the body of a Web Push notification,
+ * which is built on the server for the same reason (cron jobs, auth flows that
+ * fire-and-forget, a background send). The locale cannot come from the request
+ * context the way `tr()` resolves it -- it must be the recipient's stored
+ * preference. Each call supplies the English
  * source as `fallback`; that value is returned when the catalogue has no entry
  * (every `en` send today) so email copy is always correct before a translator
  * has populated a locale. Interpolated values use `{{ name }}` placeholders.

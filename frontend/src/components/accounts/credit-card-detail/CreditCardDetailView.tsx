@@ -22,6 +22,7 @@ import {
   type BalanceForecastState,
 } from '../shared/balance-forecast-state';
 import { BalanceForecastUnavailable } from '@/components/accounts/shared/BalanceForecastUnavailable';
+import { useOverdueForecastMarkers } from '@/components/accounts/shared/useOverdueForecastMarkers';
 import type { GroupedTotal } from '@/types/transaction';
 import type { StatementCycle, InterestPaid } from '@/types/credit-card-detail';
 
@@ -122,6 +123,10 @@ export function CreditCardDetailView({ account }: CreditCardDetailViewProps) {
     [historicalBalances, forecast.points],
   );
 
+  // The overdue occurrences the projection applies on its first day, marked on the
+  // line so that day's drop has a cause (discussion #1784).
+  const overdueMarkers = useOverdueForecastMarkers(forecast);
+
   // Deep link into the register filtered to this card and category for the
   // current cycle window (uncategorised charges use the "uncategorized" token).
   const spendingRange = useMemo(() => {
@@ -167,6 +172,8 @@ export function CreditCardDetailView({ account }: CreditCardDetailViewProps) {
               accountName={account.name}
               isLiability
               hideTitle
+              markers={overdueMarkers}
+              markerSnap="later"
             />
           )}
         </div>

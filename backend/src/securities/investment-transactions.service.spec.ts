@@ -1,3 +1,4 @@
+import { UserPreference } from "../users/entities/user-preference.entity";
 import {
   createScopedDbMocks,
   DataSourceMock,
@@ -13,6 +14,7 @@ import {
   ConflictException,
 } from "@nestjs/common";
 import { InvestmentTransactionsService } from "./investment-transactions.service";
+import { INVESTMENT_REPLAY_ORDER } from "./investment-replay.util";
 import { UpdateInvestmentTransactionDto } from "./dto/update-investment-transaction.dto";
 import {
   InvestmentTransaction,
@@ -23,10 +25,11 @@ import {
   TransactionStatus,
 } from "../transactions/entities/transaction.entity";
 import { TransactionSplit } from "../transactions/entities/transaction-split.entity";
-import { AccountSubType } from "../accounts/entities/account.entity";
-import { isTransactionInFuture } from "../common/date-utils";
+import { Account, AccountSubType } from "../accounts/entities/account.entity";
+import { isTransactionInFuture, todayYMD } from "../common/date-utils";
 
 jest.mock("../common/date-utils", () => ({
+  ...jest.requireActual("../common/date-utils"),
   isTransactionInFuture: jest.fn().mockReturnValue(false),
 }));
 
@@ -37,6 +40,8 @@ describe("InvestmentTransactionsService", () => {
   let service: InvestmentTransactionsService;
   let investmentTransactionsRepository: Record<string, jest.Mock>;
   let transactionRepository: Record<string, jest.Mock>;
+  let transactionSplitRepository: Record<string, jest.Mock>;
+  let userPreferenceRepository: Record<string, jest.Mock>;
   let accountsService: Record<string, jest.Mock>;
   let portfolioCalculationService: Record<string, jest.Mock>;
   let transactionsService: Record<string, jest.Mock>;
@@ -46,9 +51,12 @@ describe("InvestmentTransactionsService", () => {
   let netWorthService: Record<string, jest.Mock>;
   let exchangeRateService: Record<string, jest.Mock>;
   let currenciesService: Record<string, jest.Mock>;
+  let bondHoldingsService: Record<string, jest.Mock>;
   let dataSource: DataSourceMock;
   let mockQueryRunner: Record<string, any>;
   let mockActionHistoryService: Record<string, jest.Mock>;
+  let findOneSpy: jest.SpyInstance;
+  let lockedInvestmentRows: (id: string) => Promise<unknown[]>;
 
   const userId = "user-1";
   const accountId = "account-1";
@@ -120,6 +128,7 @@ describe("InvestmentTransactionsService", () => {
     fundingAccount: null,
     transactionSplitId: null,
     transactionSplit: null,
+    bondInstrumentId: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -147,6 +156,7 @@ describe("InvestmentTransactionsService", () => {
     fundingAccount: null,
     transactionSplitId: null,
     transactionSplit: null,
+    bondInstrumentId: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -174,6 +184,7 @@ describe("InvestmentTransactionsService", () => {
     fundingAccount: null,
     transactionSplitId: null,
     transactionSplit: null,
+    bondInstrumentId: null,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
@@ -249,11 +260,11 @@ describe("InvestmentTransactionsService", () => {
     transactionsService = {};
 
     holdingsService = {
-      updateHolding: jest.fn().mockResolvedValue(undefined),
-      adjustQuantity: jest.fn().mockResolvedValue(undefined),
-      applySplit: jest.fn().mockResolvedValue(undefined),
-      reverseSplit: jest.fn().mockResolvedValue(undefined),
+      rebuildScopesFromTransactions: jest.fn().mockResolvedValue(undefined),
       findByAccountAndSecurity: jest.fn().mockResolvedValue(null),
+      // null: the ledger cannot say what the OUT leg released (the real method
+      // returns number | null).
+      releasedBasisPerShare: jest.fn().mockResolvedValue(null),
       removeAllForUser: jest.fn().mockResolvedValue(5),
       rebuildFromTransactions: jest.fn().mockResolvedValue({
         holdingsCreated: 0,
@@ -265,6 +276,7 @@ describe("InvestmentTransactionsService", () => {
     };
 
     securitiesService = {
+      recomputeBondPricesAfterWrite: jest.fn().mockResolvedValue(undefined),
       findOne: jest.fn().mockResolvedValue(mockSecurity),
       resolveBySymbolOrName: jest
         .fn()
@@ -282,8 +294,9 @@ describe("InvestmentTransactionsService", () => {
 
     exchangeRateService = {
       getLatestRate: jest.fn().mockResolvedValue(1),
-      // Default to "no dated rate stored" so tests exercise the getLatestRate
-      // fallback unless they opt into a dated rate explicitly.
+      // Default to "no dated rate stored": a cross-currency posting then has no
+      // rate unless a test opts into a dated one. `getLatestRate` is never part
+      // of the posting path; it stays mocked so a test can assert it is unused.
       getRateForDate: jest.fn().mockResolvedValue(null),
     };
 
@@ -346,11 +359,24 @@ describe("InvestmentTransactionsService", () => {
     portfolioCalculationService = {
       calculateRealizedGains: jest.fn().mockResolvedValue([]),
       calculateCapitalGainsByMonth: jest.fn().mockResolvedValue([]),
+      calculateCapitalGainsByDay: jest.fn().mockResolvedValue([]),
+    };
+
+    // The embedded-row status pass reads the parent's splits; default "this
+    // parent has none", which is what a non-investment split parent looks like.
+    transactionSplitRepository = { find: jest.fn().mockResolvedValue([]) };
+    userPreferenceRepository = {
+      findOne: jest.fn().mockResolvedValue({ defaultCurrency: "CAD" }),
     };
 
     const mocks = createScopedDbMocks([
       [InvestmentTransaction, investmentTransactionsRepository],
       [Transaction, transactionRepository],
+      [TransactionSplit, transactionSplitRepository],
+      [UserPreference, userPreferenceRepository],
+      // The register's linked cash accounts, read for each row's settlement
+      // currency when the page is stamped with its reporting rates.
+      [Account, { find: jest.fn().mockResolvedValue([]) }],
     ]);
     dataSource = mocks.dataSource;
     // Reuse the direct-manager behaviours the spec already defines.
@@ -368,30 +394,84 @@ describe("InvestmentTransactionsService", () => {
     // Deletes are conditional and each reversal is gated on what the database
     // actually removed, so the double reports a count.
     mocks.manager.delete = jest.fn().mockResolvedValue({ affected: 1 });
-    mocks.manager.query = jest.fn().mockImplementation(async (sql: string) => {
-      if (!String(sql).includes("FOR UPDATE")) return [];
-      const row = (await transactionRepository.findOne({})) as {
-        id?: string;
-        accountId?: string;
-        amount?: number;
-        transactionDate?: string;
-        status?: string | null;
-      } | null;
-      if (!row?.id) return [];
-      return [
-        {
-          id: row.id,
-          account_id: row.accountId,
-          amount: String(row.amount ?? 0),
-          transaction_date: row.transactionDate ?? null,
-          status: row.status ?? null,
-          is_split: false,
-          linked_transaction_id: null,
-          parent_transaction_id: null,
-        },
-      ];
-    });
+    mocks.manager.query = jest
+      .fn()
+      .mockImplementation(async (sql: string, params?: unknown[]) => {
+        if (!String(sql).includes("FOR UPDATE")) return [];
+        if (String(sql).includes("FROM investment_transactions")) {
+          return lockedInvestmentRows(String(params?.[0]));
+        }
+        const row = (await transactionRepository.findOne({})) as {
+          id?: string;
+          accountId?: string;
+          amount?: number;
+          transactionDate?: string;
+          status?: string | null;
+        } | null;
+        if (!row?.id) return [];
+        return [
+          {
+            id: row.id,
+            account_id: row.accountId,
+            amount: String(row.amount ?? 0),
+            transaction_date: row.transactionDate ?? null,
+            status: row.status ?? null,
+            is_split: false,
+            linked_transaction_id: null,
+            parent_transaction_id: null,
+          },
+        ];
+      });
     mockQueryRunner = { manager: mocks.manager };
+
+    /**
+     * `update()` and `remove()` row-lock the investment row they read and
+     * refuse a row that changed since (A26-H04). Unless a spec says otherwise
+     * the lock finds the row as the service last read it -- through `findOne`
+     * or the repository -- so nothing changed in between.
+     */
+    lockedInvestmentRows = async (id: string) => {
+      const reads = [
+        ...findOneSpy.mock.results,
+        ...investmentTransactionsRepository.findOne.mock.results,
+      ].reverse();
+      for (const read of reads) {
+        let row: Partial<InvestmentTransaction> | null | undefined;
+        try {
+          row = await read.value;
+        } catch {
+          continue;
+        }
+        if (row?.id !== id) continue;
+        return [
+          {
+            id: row.id,
+            account_id: row.accountId,
+            security_id: row.securityId ?? null,
+            funding_account_id: row.fundingAccountId ?? null,
+            transaction_id: row.transactionId ?? null,
+            transaction_split_id: row.transactionSplitId ?? null,
+            linked_transaction_id: row.linkedTransactionId ?? null,
+            action: row.action,
+            transaction_date: row.transactionDate,
+            quantity: row.quantity ?? null,
+            price: row.price ?? null,
+            commission: row.commission ?? null,
+            total_amount: row.totalAmount,
+            exchange_rate: row.exchangeRate,
+            status: row.status,
+          },
+        ];
+      }
+      return [];
+    };
+
+    // A bond redemption's split and the series an account holds; a spec that
+    // exercises them sets the answers.
+    bondHoldingsService = {
+      seriesHoldings: jest.fn().mockResolvedValue({ holdings: [] }),
+      redemptionSplit: jest.fn(),
+    };
 
     service = new InvestmentTransactionsService(
       dataSource as never,
@@ -405,7 +485,9 @@ describe("InvestmentTransactionsService", () => {
       mockActionHistoryService as never,
       exchangeRateService as never,
       currenciesService as never,
+      bondHoldingsService as never,
     );
+    findOneSpy = jest.spyOn(service, "findOne");
   });
 
   afterEach(() => {
@@ -441,6 +523,73 @@ describe("InvestmentTransactionsService", () => {
       );
     });
 
+    /**
+     * Invariant: INV-INTEREST-001 -- Interest names a bond or no security.
+     * Minimal mutation: delete the `assertInterestSecurityIsBond` call in
+     * `create`.
+     * Test that fails under it: the first one below -- interest is stored
+     * against a stock, where the form would have offered only bonds.
+     */
+    it("records its own history entry unless the caller records one (issue #2165)", async () => {
+      await service.create(userId, createBuyDto, { recordHistory: false });
+      expect(mockActionHistoryService.record).not.toHaveBeenCalled();
+
+      await service.create(userId, createBuyDto);
+      expect(mockActionHistoryService.record).toHaveBeenCalledWith(
+        userId,
+        expect.objectContaining({
+          entityType: "investment_transaction",
+          action: "create",
+        }),
+      );
+    });
+
+    it("refuses INTEREST against a security that is not a bond", async () => {
+      await expect(
+        service.create(userId, {
+          accountId,
+          securityId,
+          action: InvestmentAction.INTEREST,
+          transactionDate: "2025-01-15",
+          price: 12.5,
+        }),
+      ).rejects.toThrow(/only be recorded against a bond/);
+      expect(investmentTransactionsRepository.create).not.toHaveBeenCalled();
+    });
+
+    it("stores INTEREST against a bond", async () => {
+      securitiesService.findOne.mockResolvedValue({
+        ...mockSecurity,
+        securityType: "BOND",
+      });
+      await service.create(userId, {
+        accountId,
+        securityId,
+        action: InvestmentAction.INTEREST,
+        transactionDate: "2025-01-15",
+        price: 12.5,
+      });
+      expect(investmentTransactionsRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          action: InvestmentAction.INTEREST,
+          securityId,
+        }),
+      );
+    });
+
+    it("stores INTEREST with no security at account level", async () => {
+      await service.create(userId, {
+        accountId,
+        action: InvestmentAction.INTEREST,
+        transactionDate: "2025-01-15",
+        price: 12.5,
+      });
+      expect(investmentTransactionsRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ action: InvestmentAction.INTEREST }),
+      );
+      expect(securitiesService.findOne).not.toHaveBeenCalled();
+    });
+
     it("creates a BUY transaction with correct total amount", async () => {
       const result = await service.create(userId, createBuyDto);
 
@@ -461,6 +610,54 @@ describe("InvestmentTransactionsService", () => {
       expect(result).toEqual(mockBuyTransaction);
     });
 
+    it("runs the caller's beforeWrite hook first in the write's transaction, before any row is created", async () => {
+      const beforeWrite = jest.fn().mockResolvedValue(undefined);
+      await service.create(userId, createBuyDto, { beforeWrite });
+      expect(beforeWrite).toHaveBeenCalledTimes(1);
+      expect(beforeWrite.mock.invocationCallOrder[0]).toBeLessThan(
+        investmentTransactionsRepository.create.mock.invocationCallOrder[0],
+      );
+    });
+
+    it("writes nothing when the beforeWrite hook refuses", async () => {
+      const beforeWrite = jest
+        .fn()
+        .mockRejectedValue(new ConflictException("no longer open"));
+      await expect(
+        service.create(userId, createBuyDto, { beforeWrite }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(investmentTransactionsRepository.create).not.toHaveBeenCalled();
+      expect(investmentTransactionsRepository.save).not.toHaveBeenCalled();
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).not.toHaveBeenCalled();
+    });
+
+    it("recomputes the bond-engine prices of its security after the commit (R7)", async () => {
+      await service.create(userId, createBuyDto);
+      expect(
+        securitiesService.recomputeBondPricesAfterWrite,
+      ).toHaveBeenCalledWith(userId, [securityId]);
+      // After the write: the holdings were rebuilt first.
+      expect(
+        holdingsService.rebuildScopesFromTransactions.mock
+          .invocationCallOrder[0],
+      ).toBeLessThan(
+        securitiesService.recomputeBondPricesAfterWrite.mock
+          .invocationCallOrder[0],
+      );
+    });
+
+    it("does not recompute for a VOID row, which recorded nothing", async () => {
+      await service.create(userId, {
+        ...createBuyDto,
+        status: TransactionStatus.VOID,
+      });
+      expect(
+        securitiesService.recomputeBondPricesAfterWrite,
+      ).not.toHaveBeenCalled();
+    });
+
     it("updates holdings for a BUY transaction at the commission-inclusive unit cost", async () => {
       await service.create(userId, createBuyDto);
 
@@ -469,14 +666,12 @@ describe("InvestmentTransactionsService", () => {
       // 150.999 per share), so blending the raw price in here would report the
       // commission as gain on the eventual disposal until something happened to
       // trigger a recompute (FR-008).
-      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
         userId,
-        accountId,
-        securityId,
-        10,
-        150.999,
+        [{ accountId: accountId, securityId: securityId }],
         expect.anything(),
-        false,
       );
     });
 
@@ -563,14 +758,12 @@ describe("InvestmentTransactionsService", () => {
 
       await service.create(userId, sellDto);
 
-      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
         userId,
-        accountId,
-        securityId,
-        -5,
-        160,
+        [{ accountId: accountId, securityId: securityId }],
         expect.anything(),
-        false,
       );
     });
 
@@ -661,6 +854,39 @@ describe("InvestmentTransactionsService", () => {
         expect.objectContaining({
           amount: 25,
         }),
+      );
+    });
+
+    it("creates a positive cash transaction for RETURN_OF_CAPITAL (#1800)", async () => {
+      const rocDto = {
+        accountId,
+        securityId,
+        action: InvestmentAction.RETURN_OF_CAPITAL,
+        transactionDate: "2025-03-15",
+        totalAmount: 40,
+      };
+
+      const savedTx = {
+        ...mockDividendTransaction,
+        action: InvestmentAction.RETURN_OF_CAPITAL,
+        quantity: 0,
+        price: 40,
+        totalAmount: 40,
+      };
+      investmentTransactionsRepository.save.mockResolvedValue(savedTx);
+
+      const findOneQB = createMockQueryBuilder(savedTx);
+      investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+        findOneQB,
+      );
+
+      await service.create(userId, rocDto);
+
+      expect(investmentTransactionsRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ totalAmount: 40 }),
+      );
+      expect(transactionRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: 40 }),
       );
     });
 
@@ -775,14 +1001,12 @@ describe("InvestmentTransactionsService", () => {
 
       await service.create(userId, reinvestDto);
 
-      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
         userId,
-        accountId,
-        securityId,
-        2,
-        150,
+        [{ accountId: accountId, securityId: securityId }],
         expect.anything(),
-        false,
       );
       // No cash transaction for REINVEST
       expect(transactionRepository.create).not.toHaveBeenCalled();
@@ -822,14 +1046,12 @@ describe("InvestmentTransactionsService", () => {
 
       await service.create(userId, transferInDto);
 
-      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
         userId,
-        accountId,
-        securityId,
-        20,
-        100,
+        [{ accountId: accountId, securityId: securityId }],
         expect.anything(),
-        false,
       );
       expect(transactionRepository.create).not.toHaveBeenCalled();
     });
@@ -867,19 +1089,17 @@ describe("InvestmentTransactionsService", () => {
 
       await service.create(userId, transferOutDto);
 
-      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
         userId,
-        accountId,
-        securityId,
-        -10,
-        100,
+        [{ accountId: accountId, securityId: securityId }],
         expect.anything(),
-        false,
       );
       expect(transactionRepository.create).not.toHaveBeenCalled();
     });
 
-    it("creates an ADD_SHARES transaction using adjustQuantity", async () => {
+    it("creates an ADD_SHARES transaction that adds to the position", async () => {
       const addSharesDto = {
         accountId,
         securityId,
@@ -911,18 +1131,17 @@ describe("InvestmentTransactionsService", () => {
 
       await service.create(userId, addSharesDto);
 
-      expect(holdingsService.adjustQuantity).toHaveBeenCalledWith(
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
         userId,
-        accountId,
-        securityId,
-        5,
+        [{ accountId: accountId, securityId: securityId }],
         expect.anything(),
       );
-      expect(holdingsService.updateHolding).not.toHaveBeenCalled();
       expect(transactionRepository.create).not.toHaveBeenCalled();
     });
 
-    it("creates a REMOVE_SHARES transaction using adjustQuantity with negative delta", async () => {
+    it("creates a REMOVE_SHARES transaction that reduces the position", async () => {
       const removeSharesDto = {
         accountId,
         securityId,
@@ -954,11 +1173,11 @@ describe("InvestmentTransactionsService", () => {
 
       await service.create(userId, removeSharesDto);
 
-      expect(holdingsService.adjustQuantity).toHaveBeenCalledWith(
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
         userId,
-        accountId,
-        securityId,
-        -3,
+        [{ accountId: accountId, securityId: securityId }],
         expect.anything(),
       );
     });
@@ -1076,7 +1295,7 @@ describe("InvestmentTransactionsService", () => {
       );
     });
 
-    it("calls holdingsService.applySplit with the supplied ratio for SPLIT", async () => {
+    it("re-derives the position from the ledger for a SPLIT", async () => {
       accountsService.findOne.mockResolvedValue(mockInvestmentAccount);
       investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
         createMockQueryBuilder({ ...mockBuyTransaction, action: "SPLIT" }),
@@ -1091,14 +1310,14 @@ describe("InvestmentTransactionsService", () => {
 
       await service.create(userId, dto);
 
-      expect(holdingsService.applySplit).toHaveBeenCalledWith(
-        accountId,
-        securityId,
-        2,
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
+        userId,
+        [{ accountId: accountId, securityId: securityId }],
         expect.anything(),
       );
       // SPLIT must not write a cash transaction.
-      expect(holdingsService.updateHolding).not.toHaveBeenCalled();
     });
 
     it("rebuilds holdings from history after creating a SPLIT", async () => {
@@ -1149,10 +1368,11 @@ describe("InvestmentTransactionsService", () => {
 
       await service.create(userId, dto);
 
-      expect(holdingsService.applySplit).toHaveBeenCalledWith(
-        accountId,
-        securityId,
-        0.5,
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
+        userId,
+        [{ accountId: accountId, securityId: securityId }],
         expect.anything(),
       );
     });
@@ -1194,6 +1414,19 @@ describe("InvestmentTransactionsService", () => {
 
       await expect(service.create(userId, noSecDto)).rejects.toThrow(
         BadRequestException,
+      );
+    });
+
+    it("requires a securityId for RETURN_OF_CAPITAL: it reduces one security's basis", async () => {
+      const noSecDto = {
+        accountId,
+        action: InvestmentAction.RETURN_OF_CAPITAL,
+        transactionDate: "2025-03-15",
+        totalAmount: 40,
+      };
+
+      await expect(service.create(userId, noSecDto)).rejects.toThrow(
+        "Security ID is required for RETURN_OF_CAPITAL transactions",
       );
     });
 
@@ -1864,6 +2097,154 @@ describe("InvestmentTransactionsService", () => {
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
+    /**
+     * Invariant: INV-INTEREST-001 on edit -- a security the row is being given
+     * must be a bond, while an Interest row keeps the security it already
+     * carries (an import may store interest on any security).
+     * Minimal mutation: delete the `assertInterestSecurityIsBond` call in
+     * `update`, or drop its stored-row exemption.
+     * Tests that fail under it: the first two below for the deletion, the
+     * third for the exemption.
+     */
+    describe("interest on a bond (INV-INTEREST-001)", () => {
+      const storedInterest = {
+        ...mockBuyTransaction,
+        action: InvestmentAction.INTEREST,
+        quantity: null,
+        price: 30,
+        commission: 0,
+        totalAmount: 30,
+      };
+
+      it("refuses to give an Interest row a security that is not a bond", async () => {
+        investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+          createMockQueryBuilder({ ...storedInterest, securityId: null }),
+        );
+        await expect(
+          service.update(userId, transactionId, { securityId }),
+        ).rejects.toThrow(/only be recorded against a bond/);
+      });
+
+      it("refuses to turn a Dividend on a stock into Interest that keeps the stock", async () => {
+        investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+          createMockQueryBuilder({
+            ...storedInterest,
+            action: InvestmentAction.DIVIDEND,
+          }),
+        );
+        await expect(
+          service.update(userId, transactionId, {
+            action: InvestmentAction.INTEREST,
+          }),
+        ).rejects.toThrow(/only be recorded against a bond/);
+      });
+
+      it("still saves an Interest row that already carries a non-bond security", async () => {
+        investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+          createMockQueryBuilder(storedInterest),
+        );
+        await expect(
+          service.update(userId, transactionId, {
+            action: InvestmentAction.INTEREST,
+            securityId,
+            description: "Coupon",
+          }),
+        ).resolves.toBeDefined();
+      });
+
+      it("lets an Interest row drop its security", async () => {
+        investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+          createMockQueryBuilder(storedInterest),
+        );
+        await expect(
+          service.update(userId, transactionId, { securityId: null } as any),
+        ).resolves.toBeDefined();
+      });
+
+      it("lets an Interest row move to a bond", async () => {
+        investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+          createMockQueryBuilder({ ...storedInterest, securityId: null }),
+        );
+        securitiesService.findOne.mockResolvedValue({
+          ...mockSecurity,
+          securityType: "BOND",
+        });
+        await expect(
+          service.update(userId, transactionId, { securityId }),
+        ).resolves.toBeDefined();
+      });
+    });
+
+    /**
+     * Invariant: an edit moves a row only onto the caller's own security and
+     * account, as `create` checks (the M4 audit finding).
+     * Canonical adversarial input: another user's UUID on a row with no cash
+     * leg, where nothing else on the path looks the id up.
+     * Minimal mutation: delete the ownership lookups in `update`.
+     * Tests that fail under it: the first two below.
+     */
+    describe("ids from another user", () => {
+      const foreignSecurityId = "sec-of-another-user";
+      const foreignAccountId = "account-of-another-user";
+      const reinvest = {
+        ...mockBuyTransaction,
+        action: InvestmentAction.REINVEST,
+        fundingAccountId: null,
+      };
+
+      beforeEach(() => {
+        securitiesService.findOne.mockImplementation(
+          (_uid: string, sid: string) =>
+            sid === foreignSecurityId
+              ? Promise.reject(new NotFoundException("Security not found"))
+              : Promise.resolve(mockSecurity),
+        );
+        investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+          createMockQueryBuilder(reinvest),
+        );
+      });
+
+      it("refuses another user's security on a row with no cash leg, writing nothing", async () => {
+        await expect(
+          service.update(userId, transactionId, {
+            securityId: foreignSecurityId,
+            exchangeRate: 1,
+          }),
+        ).rejects.toBeInstanceOf(NotFoundException);
+        expect(securitiesService.findOne).toHaveBeenCalledWith(
+          userId,
+          foreignSecurityId,
+        );
+        expect(investmentTransactionsRepository.save).not.toHaveBeenCalled();
+        expect(
+          holdingsService.rebuildScopesFromTransactions,
+        ).not.toHaveBeenCalled();
+      });
+
+      it("refuses another user's account, writing nothing", async () => {
+        await expect(
+          service.update(userId, transactionId, {
+            accountId: foreignAccountId,
+          }),
+        ).rejects.toBeInstanceOf(NotFoundException);
+        expect(accountsService.findOne).toHaveBeenCalledWith(
+          userId,
+          foreignAccountId,
+        );
+        expect(investmentTransactionsRepository.save).not.toHaveBeenCalled();
+      });
+
+      it("does not look up a security or account the request resends unchanged", async () => {
+        await service.update(userId, transactionId, {
+          securityId: reinvest.securityId as string,
+          accountId: reinvest.accountId,
+          description: "renamed",
+        });
+        expect(securitiesService.findOne).not.toHaveBeenCalled();
+        expect(investmentTransactionsRepository.save).toHaveBeenCalled();
+      });
+    });
+
     it("still allows an unrelated edit on a row that has no price", async () => {
       // Rows written before the rule existed must stay correctable. Refusing
       // every edit would strand them with no way to fix anything at all, and
@@ -1957,6 +2338,27 @@ describe("InvestmentTransactionsService", () => {
       });
     });
 
+    it("recomputes the bond-engine prices of the old and the new security after the edit (R7)", async () => {
+      const existingTx = { ...mockBuyTransaction };
+      investmentTransactionsRepository.createQueryBuilder
+        .mockReturnValueOnce(createMockQueryBuilder(existingTx))
+        .mockReturnValueOnce(
+          createMockQueryBuilder({ ...existingTx, quantity: 20 }),
+        );
+      transactionRepository.findOne.mockResolvedValue({
+        id: cashTransactionId,
+        userId,
+        accountId: cashAccountId,
+        amount: -1509.99,
+      });
+
+      await service.update(userId, transactionId, { quantity: 20 });
+
+      expect(
+        securitiesService.recomputeBondPricesAfterWrite,
+      ).toHaveBeenCalledWith(userId, [securityId, securityId]);
+    });
+
     it("updates transaction fields and re-applies effects", async () => {
       // findOne returns existing BUY transaction
       const existingTx = { ...mockBuyTransaction };
@@ -1980,28 +2382,21 @@ describe("InvestmentTransactionsService", () => {
       await service.update(userId, transactionId, { quantity: 20 });
 
       // Should reverse the original effects first
-      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
         userId,
-        accountId,
-        securityId,
-        -10, // Reverse: remove original 10 shares
-        // The commissioned unit cost (10 * 150 + 9.99) / 10. Inert for this
-        // negative delta; read only if the reversal recreates a deleted
-        // holding row.
-        150.999,
+        [{ accountId: accountId, securityId: securityId }],
         expect.anything(),
-        true,
       );
 
       // Then apply new effects
-      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
         userId,
-        accountId,
-        securityId,
-        expect.any(Number), // New quantity applied
-        expect.any(Number),
+        [{ accountId: accountId, securityId: securityId }],
         expect.anything(),
-        true,
       );
     });
 
@@ -2161,6 +2556,105 @@ describe("InvestmentTransactionsService", () => {
       expect(investmentTransactionsRepository.save).toHaveBeenCalledWith(
         expect.objectContaining({
           totalAmount: 1500,
+        }),
+      );
+    });
+
+    /**
+     * Invariant: a change is a value difference, not a field being present
+     * (AGENTS.md, "Financial math"), and the stored executed total is the fact.
+     * Canonical adversarial input: the transaction form's own payload, which
+     * resends quantity, price, commission and action unchanged on an edit that
+     * only touches the description.
+     * Minimal mutation: key the re-derivation on `!== undefined` again.
+     * Test that fails under it: this one -- the stored 1510.5000 comes back as
+     * 10 x 150 + 9.99 = 1509.99, because the price is a rounded quotient.
+     */
+    it("keeps the stored total when a resent edit changes only the description", async () => {
+      const existingTx = { ...mockBuyTransaction, totalAmount: 1510.5 };
+      const firstFindQB = createMockQueryBuilder(existingTx);
+      const secondFindQB = createMockQueryBuilder({ ...existingTx });
+
+      investmentTransactionsRepository.createQueryBuilder
+        .mockReturnValueOnce(firstFindQB)
+        .mockReturnValueOnce(secondFindQB);
+
+      transactionRepository.findOne.mockResolvedValue({
+        id: cashTransactionId,
+        userId,
+        accountId: cashAccountId,
+        amount: -1510.5,
+      });
+
+      await service.update(userId, transactionId, {
+        action: InvestmentAction.BUY,
+        quantity: 10,
+        price: 150,
+        commission: 9.99,
+        description: "Updated",
+      });
+
+      expect(investmentTransactionsRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ totalAmount: 1510.5 }),
+      );
+    });
+
+    it("re-derives the total from the price when the quantity changes", async () => {
+      const existingTx = { ...mockBuyTransaction, totalAmount: 1510.5 };
+      const firstFindQB = createMockQueryBuilder(existingTx);
+      const secondFindQB = createMockQueryBuilder({ ...existingTx });
+
+      investmentTransactionsRepository.createQueryBuilder
+        .mockReturnValueOnce(firstFindQB)
+        .mockReturnValueOnce(secondFindQB);
+
+      transactionRepository.findOne.mockResolvedValue({
+        id: cashTransactionId,
+        userId,
+        accountId: cashAccountId,
+        amount: -1510.5,
+      });
+
+      await service.update(userId, transactionId, {
+        quantity: 20,
+        price: 150,
+        commission: 9.99,
+      });
+
+      // 20 x 150 + 9.99
+      expect(investmentTransactionsRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({ totalAmount: 3009.99 }),
+      );
+    });
+
+    it("takes a supplied total as the fact and derives the price from it", async () => {
+      const existingTx = { ...mockBuyTransaction };
+      const firstFindQB = createMockQueryBuilder(existingTx);
+      const secondFindQB = createMockQueryBuilder({ ...existingTx });
+
+      investmentTransactionsRepository.createQueryBuilder
+        .mockReturnValueOnce(firstFindQB)
+        .mockReturnValueOnce(secondFindQB);
+
+      transactionRepository.findOne.mockResolvedValue({
+        id: cashTransactionId,
+        userId,
+        accountId: cashAccountId,
+        amount: -1509.99,
+      });
+
+      await service.update(userId, transactionId, {
+        quantity: 10,
+        price: 150,
+        commission: 9.99,
+        totalAmount: 1520.91,
+      });
+
+      expect(investmentTransactionsRepository.save).toHaveBeenCalledWith(
+        expect.objectContaining({
+          totalAmount: 1520.91,
+          // (1520.91 - 9.99) / 10
+          price: 151.092,
         }),
       );
     });
@@ -2498,14 +2992,16 @@ describe("InvestmentTransactionsService", () => {
           return Promise.resolve(mockSecurity);
         },
       );
-      exchangeRateService.getLatestRate.mockResolvedValue(1.08);
+      exchangeRateService.getRateForDate.mockResolvedValue(1.08);
 
       await service.update(userId, transactionId, { securityId: "sec-eur" });
 
-      expect(exchangeRateService.getLatestRate).toHaveBeenCalledWith(
+      expect(exchangeRateService.getRateForDate).toHaveBeenCalledWith(
         "EUR",
         "USD",
+        expect.anything(),
       );
+      expect(exchangeRateService.getLatestRate).not.toHaveBeenCalled();
       expect(investmentTransactionsRepository.save).toHaveBeenCalledWith(
         expect.objectContaining({
           exchangeRate: 1.08,
@@ -2521,6 +3017,20 @@ describe("InvestmentTransactionsService", () => {
         if (aid === cashAccountId) return Promise.resolve(mockCashAccount);
         return Promise.reject(new NotFoundException("Account not found"));
       });
+    });
+
+    it("recomputes the bond-engine prices of its security after the delete (R7)", async () => {
+      const mockQB = createMockQueryBuilder({ ...mockBuyTransaction });
+      investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+        mockQB,
+      );
+      transactionRepository.findOne.mockResolvedValue(null);
+
+      await service.remove(userId, transactionId);
+
+      expect(
+        securitiesService.recomputeBondPricesAfterWrite,
+      ).toHaveBeenCalledWith(userId, [securityId]);
     });
 
     it("reverses effects and deletes the transaction", async () => {
@@ -2539,18 +3049,15 @@ describe("InvestmentTransactionsService", () => {
 
       await service.remove(userId, transactionId);
 
-      // Should reverse BUY holdings (remove shares). The unit cost argument
-      // is inert for a negative delta (updateHolding blends prices only for
-      // positive ones); it is read only when the reversal has to recreate a
-      // deleted holding row, where it must be the commissioned figure.
-      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
+      // The position is re-derived from the ledger the row has just left --
+      // not from the stored figure minus this row's delta, which is what made
+      // deleting a back-dated trade converge on the wrong average cost.
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
         userId,
-        accountId,
-        securityId,
-        -10,
-        150.999,
+        [{ accountId: accountId, securityId: securityId }],
         expect.anything(),
-        true,
       );
 
       // Should delete cash transaction and reverse balance
@@ -2584,14 +3091,12 @@ describe("InvestmentTransactionsService", () => {
       await service.remove(userId, tx.id);
 
       // Should reverse SELL: add shares back
-      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
         userId,
-        accountId,
-        securityId,
-        5, // Add back the sold shares
-        160,
+        [{ accountId: accountId, securityId: securityId }],
         expect.anything(),
-        true,
       );
     });
 
@@ -2611,15 +3116,12 @@ describe("InvestmentTransactionsService", () => {
 
       await service.remove(userId, reinvestTx.id);
 
-      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
         userId,
-        accountId,
-        securityId,
-        -3,
-        // (3 * 150 + 9.99) / 3
-        153.33,
+        [{ accountId: accountId, securityId: securityId }],
         expect.anything(),
-        true,
       );
     });
 
@@ -2639,15 +3141,12 @@ describe("InvestmentTransactionsService", () => {
 
       await service.remove(userId, transferInTx.id);
 
-      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
         userId,
-        accountId,
-        securityId,
-        -20,
-        // (20 * 100 + 9.99) / 20
-        100.4995,
+        [{ accountId: accountId, securityId: securityId }],
         expect.anything(),
-        true,
       );
     });
 
@@ -2667,14 +3166,12 @@ describe("InvestmentTransactionsService", () => {
 
       await service.remove(userId, transferOutTx.id);
 
-      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
         userId,
-        accountId,
-        securityId,
-        10,
-        100,
+        [{ accountId: accountId, securityId: securityId }],
         expect.anything(),
-        true,
       );
     });
 
@@ -2694,11 +3191,11 @@ describe("InvestmentTransactionsService", () => {
 
       await service.remove(userId, addSharesTx.id);
 
-      expect(holdingsService.adjustQuantity).toHaveBeenCalledWith(
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
         userId,
-        accountId,
-        securityId,
-        -5,
+        [{ accountId: accountId, securityId: securityId }],
         expect.anything(),
       );
     });
@@ -2719,16 +3216,16 @@ describe("InvestmentTransactionsService", () => {
 
       await service.remove(userId, removeSharesTx.id);
 
-      expect(holdingsService.adjustQuantity).toHaveBeenCalledWith(
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
         userId,
-        accountId,
-        securityId,
-        3,
+        [{ accountId: accountId, securityId: securityId }],
         expect.anything(),
       );
     });
 
-    it("reverses SPLIT by calling reverseSplit on holdings", async () => {
+    it("re-derives the position after removing an embedded SPLIT", async () => {
       const splitTx = {
         ...mockBuyTransaction,
         id: "inv-tx-split",
@@ -2744,14 +3241,14 @@ describe("InvestmentTransactionsService", () => {
 
       await service.remove(userId, splitTx.id);
 
-      expect(holdingsService.reverseSplit).toHaveBeenCalledWith(
-        accountId,
-        securityId,
-        2,
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
+        userId,
+        [{ accountId: accountId, securityId: securityId }],
         expect.anything(),
       );
-      // Reversing a SPLIT must NOT remove cash transactions or call updateHolding.
-      expect(holdingsService.updateHolding).not.toHaveBeenCalled();
+      // Reversing a SPLIT must NOT remove cash transactions.
       // Rebuild holdings from history so any incremental drift from the
       // original (possibly buggy) apply is corrected.
       expect(holdingsService.rebuildFromTransactions).toHaveBeenCalledWith(
@@ -2920,9 +3417,16 @@ describe("InvestmentTransactionsService", () => {
         userId,
       });
       expect(investmentTransactionsRepository.remove).toHaveBeenCalledWith(tx);
-      // ...but nothing is reversed, because nothing was contributed.
-      expect(holdingsService.updateHolding).not.toHaveBeenCalled();
-      expect(holdingsService.adjustQuantity).not.toHaveBeenCalled();
+      // ...and the position is re-derived from what is left of the ledger.
+      // That a VOID row contributed nothing is the rebuild's filter, covered
+      // in holdings.service.spec.ts, not a delta this seam declines to apply.
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
+        userId,
+        [{ accountId, securityId }],
+        expect.anything(),
+      );
       expect(accountsService.updateBalance).not.toHaveBeenCalled();
     });
   });
@@ -2974,6 +3478,18 @@ describe("InvestmentTransactionsService", () => {
       mockQueryRunner.manager.query.mockImplementation(
         async (sql: string, params?: unknown[]) => {
           const text = String(sql);
+          // The unlocked scope read that feeds the advisory lock: the row's
+          // own account and its linked transfer leg's.
+          if (text.includes("SELECT DISTINCT account_id")) {
+            const self = invRows.find((row) => row.id === params?.[0]);
+            const legId = self?.linked_transaction_id ?? null;
+            const rows = invRows.filter(
+              (row) => row.id === params?.[0] || row.id === legId,
+            );
+            return [...new Set(rows.map((row) => row.account_id))].map(
+              (account_id) => ({ account_id }),
+            );
+          }
           if (!text.includes("FOR UPDATE")) return [];
           const rows = text.includes("FROM investment_transactions")
             ? invRows
@@ -2995,6 +3511,68 @@ describe("InvestmentTransactionsService", () => {
       );
     });
 
+    /**
+     * Advisory locks are taken before row locks (`common/db/locks.ts`).
+     * `updateStatus` reached the holdings advisory lock only inside the
+     * rebuild at the end, by which time `applyVoidTransitionToMirrorLeg` had
+     * already row-locked `accounts` for the cash leg -- the opposite order
+     * from create/update/remove, so two concurrent writers of one account
+     * deadlock (40P01).
+     */
+    it("recomputes the bond-engine prices of the security whose row crossed the VOID boundary (R7)", async () => {
+      stageLocks([invLockRow()], [cashLockRow()]);
+
+      await service.updateStatus(userId, transactionId, TransactionStatus.VOID);
+
+      expect(
+        securitiesService.recomputeBondPricesAfterWrite,
+      ).toHaveBeenCalledWith(userId, [securityId]);
+    });
+
+    it("takes the holdings advisory lock before its first row lock", async () => {
+      stageLocks([invLockRow()], [cashLockRow()]);
+
+      await service.updateStatus(userId, transactionId, TransactionStatus.VOID);
+
+      const calls = mockQueryRunner.manager.query.mock.calls as unknown[][];
+      const advisory = calls.findIndex(([sql]) =>
+        String(sql).includes("pg_advisory_xact_lock"),
+      );
+      const firstRowLock = calls.findIndex(([sql]) =>
+        String(sql).includes("FOR UPDATE"),
+      );
+      expect(advisory).toBeGreaterThanOrEqual(0);
+      expect(firstRowLock).toBeGreaterThanOrEqual(0);
+      expect(advisory).toBeLessThan(firstRowLock);
+    });
+
+    /** The scope covers the transfer leg that crosses the boundary with it. */
+    it("locks both legs' accounts when a linked transfer leg crosses too", async () => {
+      stageLocks(
+        [
+          invLockRow({ linked_transaction_id: "inv-tx-2" }),
+          invLockRow({
+            id: "inv-tx-2",
+            account_id: "other-brokerage",
+            linked_transaction_id: transactionId,
+            transaction_id: null,
+          }),
+        ],
+        [cashLockRow()],
+      );
+
+      await service.updateStatus(userId, transactionId, TransactionStatus.VOID);
+
+      const advisoryIds = (
+        mockQueryRunner.manager.query.mock.calls as unknown[][]
+      )
+        .filter(([sql]) => String(sql).includes("pg_advisory_xact_lock"))
+        .map(([, params]) => (params as unknown[])[1]);
+      expect(advisoryIds).toEqual(
+        [accountId, "other-brokerage"].sort((a, b) => (a < b ? -1 : 1)),
+      );
+    });
+
     it("UNRECONCILED -> CLEARED updates only the column (presentational)", async () => {
       stageLocks([invLockRow({ status: TransactionStatus.UNRECONCILED })]);
 
@@ -3009,8 +3587,9 @@ describe("InvestmentTransactionsService", () => {
         { status: TransactionStatus.CLEARED },
       );
       // Only crossing the VOID boundary moves shares or money.
-      expect(holdingsService.updateHolding).not.toHaveBeenCalled();
-      expect(holdingsService.adjustQuantity).not.toHaveBeenCalled();
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).not.toHaveBeenCalled();
       expect(accountsService.updateBalance).not.toHaveBeenCalled();
       expect(
         holdingsService.validateNoNegativeHoldingsHistory,
@@ -3024,14 +3603,12 @@ describe("InvestmentTransactionsService", () => {
 
       // Holdings reversal at the row's stored quantities (unit cost is the
       // commissioned figure, as everywhere else).
-      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
         userId,
-        accountId,
-        securityId,
-        -10,
-        150.999,
+        [{ accountId: accountId, securityId: securityId }],
         expect.anything(),
-        true,
       );
       expect(investmentTransactionsRepository.update).toHaveBeenCalledWith(
         transactionId,
@@ -3054,7 +3631,7 @@ describe("InvestmentTransactionsService", () => {
       ).toHaveBeenCalled();
     });
 
-    it("VOID -> CLEARED applies the holdings and debits the cash leg", async () => {
+    it("VOID -> CLEARED applies the holdings and resets the cash leg to UNRECONCILED (#2071)", async () => {
       stageLocks(
         [invLockRow({ status: TransactionStatus.VOID })],
         [cashLockRow({ status: TransactionStatus.VOID })],
@@ -3066,19 +3643,21 @@ describe("InvestmentTransactionsService", () => {
         TransactionStatus.CLEARED,
       );
 
-      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
         userId,
-        accountId,
-        securityId,
-        10,
-        150.999,
+        [{ accountId: accountId, securityId: securityId }],
         expect.anything(),
-        true,
       );
+      // Only VOID-ness is shared with the cash leg, the same rule as a
+      // transfer's mirror leg (INV-TRANSFER-001): the cash row returns to its
+      // own per-ledger UNRECONCILED rather than inheriting the trade's CLEARED,
+      // with no reconciled date behind it.
       expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
         Transaction,
         cashTransactionId,
-        { status: TransactionStatus.CLEARED },
+        { status: TransactionStatus.UNRECONCILED, reconciledDate: null },
       );
       // Un-voiding a BUY takes the purchase money back out of the cash account.
       expect(accountsService.updateBalance).toHaveBeenCalledWith(
@@ -3098,7 +3677,9 @@ describe("InvestmentTransactionsService", () => {
 
       expect(investmentTransactionsRepository.update).not.toHaveBeenCalled();
       expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
-      expect(holdingsService.updateHolding).not.toHaveBeenCalled();
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).not.toHaveBeenCalled();
       expect(accountsService.updateBalance).not.toHaveBeenCalled();
     });
 
@@ -3118,7 +3699,33 @@ describe("InvestmentTransactionsService", () => {
 
       expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
       expect(investmentTransactionsRepository.update).not.toHaveBeenCalled();
-      expect(holdingsService.updateHolding).not.toHaveBeenCalled();
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).not.toHaveBeenCalled();
+      expect(accountsService.updateBalance).not.toHaveBeenCalled();
+    });
+
+    it("refuses a VOID whose cash leg is reconciled under the strict lock, writing nothing (#2072)", async () => {
+      // The trade's cash row crosses the VOID boundary with it, so a
+      // reconciled cash row answers the lock before the trade is reversed.
+      userPreferenceRepository.findOne.mockResolvedValue({
+        defaultCurrency: "CAD",
+        lockReconciledTransactions: true,
+      });
+      stageLocks(
+        [invLockRow({ status: TransactionStatus.CLEARED })],
+        [cashLockRow({ status: TransactionStatus.RECONCILED })],
+      );
+
+      await expect(
+        service.updateStatus(userId, transactionId, TransactionStatus.VOID),
+      ).rejects.toThrow(ConflictException);
+
+      expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+      expect(investmentTransactionsRepository.update).not.toHaveBeenCalled();
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).not.toHaveBeenCalled();
       expect(accountsService.updateBalance).not.toHaveBeenCalled();
     });
 
@@ -3183,25 +3790,17 @@ describe("InvestmentTransactionsService", () => {
         linkedLegId,
         { status: TransactionStatus.VOID },
       );
-      // Reversing a TRANSFER_OUT returns the shares to the source; reversing
-      // the TRANSFER_IN removes them from the destination.
-      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
+      // Two rows describing one movement of shares cross the boundary
+      // together, so both positions are re-derived in one call.
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
         userId,
-        accountId,
-        securityId,
-        10,
+        [
+          { accountId: accountId, securityId: securityId },
+          { accountId: "account-2", securityId: securityId },
+        ],
         expect.anything(),
-        expect.anything(),
-        true,
-      );
-      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
-        userId,
-        "account-2",
-        securityId,
-        -10,
-        expect.anything(),
-        expect.anything(),
-        true,
       );
       expect(accountsService.updateBalance).not.toHaveBeenCalled();
     });
@@ -3218,14 +3817,12 @@ describe("InvestmentTransactionsService", () => {
 
       await service.updateStatus(userId, transactionId, TransactionStatus.VOID);
 
-      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
         userId,
-        accountId,
-        securityId,
-        -10,
-        150.999,
+        [{ accountId: accountId, securityId: securityId }],
         expect.anything(),
-        true,
       );
       expect(mockQueryRunner.manager.update).not.toHaveBeenCalledWith(
         Transaction,
@@ -3233,6 +3830,36 @@ describe("InvestmentTransactionsService", () => {
         expect.anything(),
       );
       expect(accountsService.updateBalance).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("applyParentStatusToEmbeddedRows", () => {
+    /**
+     * The split parent's status change row-locks `accounts` for the parent's
+     * own balance; this pass rebuilds the embedded rows' positions under the
+     * holdings advisory lock. Taking that lock only inside the rebuild put the
+     * two in the opposite order from an investment write (40P01), so the lock
+     * is this method's own first statement as well as its callers'.
+     */
+    it("takes the holdings advisory lock before it touches a row", async () => {
+      mockQueryRunner.manager.query.mockImplementation(async (sql: string) =>
+        String(sql).includes("SELECT DISTINCT it.account_id")
+          ? [{ account_id: accountId }]
+          : [],
+      );
+
+      await service.applyParentStatusToEmbeddedRows(
+        mockQueryRunner.manager as never,
+        userId,
+        "parent-tx-1",
+        TransactionStatus.VOID,
+      );
+
+      const advisory = (
+        mockQueryRunner.manager.query.mock.calls as unknown[][]
+      ).filter(([sql]) => String(sql).includes("pg_advisory_xact_lock"));
+      expect(advisory).toHaveLength(1);
+      expect((advisory[0][1] as unknown[])[1]).toBe(accountId);
     });
   });
 
@@ -3272,7 +3899,8 @@ describe("InvestmentTransactionsService", () => {
       expect(investmentTransactionsRepository.create).toHaveBeenCalledWith(
         expect.objectContaining({ status: TransactionStatus.VOID }),
       );
-      expect(holdingsService.updateHolding).not.toHaveBeenCalled();
+      // The VOID row's exclusion is the rebuild's status filter, not a
+      // holdings write this path declines to make.
       // The cash leg is still created -- the event stays visible in the cash
       // ledger -- but carries VOID and moves nothing.
       expect(transactionRepository.create).toHaveBeenCalledWith(
@@ -3346,6 +3974,56 @@ describe("InvestmentTransactionsService", () => {
         totalCapitalGains: 500,
         totalCommissions: 19.98,
       });
+    });
+
+    it("counts a reinvested distribution in the total of its kind", async () => {
+      // As the app writes a reinvest: quantity and price, no total.
+      const transactions = [
+        {
+          id: "inv-tx-1",
+          userId,
+          action: InvestmentAction.DIVIDEND,
+          totalAmount: 25,
+          commission: 0,
+        },
+        {
+          id: "inv-tx-2",
+          userId,
+          action: InvestmentAction.REINVEST,
+          quantity: 2,
+          price: 30,
+          totalAmount: 0,
+          commission: 0,
+        },
+        {
+          id: "inv-tx-3",
+          userId,
+          action: InvestmentAction.REINVEST_INTEREST,
+          quantity: 1,
+          price: 4,
+          totalAmount: 0,
+          commission: 0,
+        },
+        {
+          id: "inv-tx-4",
+          userId,
+          action: InvestmentAction.REINVEST_CAPITAL_GAIN_SHORT,
+          quantity: 1,
+          price: 7.5,
+          totalAmount: 0,
+          commission: 0,
+        },
+      ];
+      const mockQB = createMockQueryBuilder(transactions, transactions.length);
+      investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+        mockQB,
+      );
+
+      const result = await service.getSummary(userId);
+
+      expect(result.totalDividends).toBe(85);
+      expect(result.totalInterest).toBe(4);
+      expect(result.totalCapitalGains).toBe(7.5);
     });
 
     it("returns zero values when no transactions exist", async () => {
@@ -3450,9 +4128,74 @@ describe("InvestmentTransactionsService", () => {
         price: 160,
         commission: 9.99,
         totalAmount: 790.01,
+        incomeAmount: 0,
+        incomeCurrency: mockSecurity.currencyCode,
         currency: "USD",
         description: "Sell AAPL",
       });
+      expect(result.incomeByCurrency).toEqual({
+        [mockSecurity.currencyCode]: 25,
+      });
+    });
+
+    it("counts a reinvested distribution as income, though it stores no total", async () => {
+      // Discussion #1670: "what dividends did I receive" summed totalAmount,
+      // and a reinvest created in the app stores 0 there.
+      const reinvest = {
+        ...dividend,
+        id: "inv-tx-reinvest",
+        action: InvestmentAction.REINVEST,
+        quantity: 2,
+        price: 12.5,
+        totalAmount: 0,
+      };
+      const rows = [reinvest, dividend, buy];
+      const mockQB = createMockQueryBuilder(rows, rows.length);
+      investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+        mockQB,
+      );
+
+      const result = await service.getLlmInvestmentTransactions(userId, {
+        groupBy: "action",
+      });
+
+      expect(result.incomeByCurrency).toEqual({
+        [mockSecurity.currencyCode]: 50,
+      });
+      expect(result.transactions[0]).toMatchObject({
+        action: "REINVEST",
+        totalAmount: 0,
+        incomeAmount: 25,
+      });
+      expect(
+        result.groups?.find((group) => group.key === "REINVEST")
+          ?.incomeByCurrency,
+      ).toEqual({ [mockSecurity.currencyCode]: 25 });
+      expect(
+        result.groups?.find((group) => group.key === "BUY")?.incomeByCurrency,
+      ).toEqual({});
+    });
+
+    it("keeps income in different currencies apart rather than adding it", async () => {
+      const cadDividend = {
+        ...dividend,
+        id: "inv-tx-cad",
+        totalAmount: 40,
+        security: { ...mockSecurity, id: "sec-cad", currencyCode: "CAD" },
+      };
+      const usdDividend = {
+        ...dividend,
+        security: { ...mockSecurity, currencyCode: "USD" },
+      };
+      const rows = [cadDividend, usdDividend];
+      const mockQB = createMockQueryBuilder(rows, rows.length);
+      investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+        mockQB,
+      );
+
+      const result = await service.getLlmInvestmentTransactions(userId, {});
+
+      expect(result.incomeByCurrency).toEqual({ CAD: 40, USD: 25 });
     });
 
     it("applies date, symbol, action and accountId filters", async () => {
@@ -3640,6 +4383,10 @@ describe("InvestmentTransactionsService", () => {
   });
 
   describe("getLlmCapitalGains", () => {
+    /**
+     * A fold entry. Its reporting-currency figures are its own (a CAD entry
+     * read in CAD) unless `inReporting` names others, as the fold states them.
+     */
     const makeEntry = (
       overrides: Partial<{
         month: string;
@@ -3651,29 +4398,88 @@ describe("InvestmentTransactionsService", () => {
         securityName: string | null;
         startValue: number;
         endValue: number;
-        realizedGain: number;
+        realizedGain: number | null;
+        realizedGainComplete: boolean;
+        realizedGainKnownSubtotal: number | null;
         unrealizedGain: number;
         totalCapitalGain: number;
       }>,
-    ) => ({
-      month: "2024-06",
-      accountId: "acc-1",
-      accountName: "TFSA",
-      accountCurrencyCode: "CAD",
-      securityId: "sec-1",
-      symbol: "AAA",
-      securityName: "Alpha",
-      securityCurrencyCode: "CAD",
-      startQuantity: 10,
-      endQuantity: 10,
-      startValue: 1000,
-      endValue: 1100,
-      buys: 0,
-      sells: 0,
-      realizedGain: 0,
-      unrealizedGain: 100,
-      totalCapitalGain: 100,
-      ...overrides,
+      inReporting: Record<string, unknown> = {},
+    ) => {
+      const entry = {
+        month: "2024-06",
+        accountId: "acc-1",
+        accountName: "TFSA",
+        accountCurrencyCode: "CAD",
+        securityId: "sec-1",
+        symbol: "AAA",
+        securityName: "Alpha",
+        securityCurrencyCode: "CAD",
+        startQuantity: 10,
+        endQuantity: 10,
+        startValue: 1000,
+        endValue: 1100,
+        buys: 0,
+        sells: 0,
+        realizedGain: 0 as number | null,
+        realizedGainComplete: true,
+        realizedGainKnownSubtotal: null as number | null,
+        unrealizedGain: 100,
+        totalCapitalGain: 100,
+        ...overrides,
+      };
+      return {
+        ...entry,
+        inReportingCurrency: {
+          currency: "CAD",
+          startValue: entry.startValue,
+          endValue: entry.endValue,
+          realizedGain: entry.realizedGain,
+          realizedGainKnownSubtotal:
+            entry.realizedGain ?? entry.realizedGainKnownSubtotal ?? 0,
+          unrealizedGain: entry.unrealizedGain,
+          totalCapitalGain: entry.totalCapitalGain,
+          missingRatePairs: [] as string[],
+          ...inReporting,
+        },
+      };
+    };
+
+    it("names the known part when a month's realized gain rests on an unknown basis", async () => {
+      const raw = [
+        makeEntry({ month: "2024-06", realizedGain: 40 }),
+        makeEntry({
+          month: "2024-07",
+          realizedGain: null,
+          realizedGainComplete: false,
+          realizedGainKnownSubtotal: 15,
+        }),
+      ];
+      (
+        portfolioCalculationService.calculateCapitalGainsByMonth as jest.Mock
+      ).mockResolvedValue(raw);
+
+      const result = await service.getLlmCapitalGains(userId, {
+        startDate: "2024-06-01",
+        endDate: "2024-07-31",
+      });
+
+      expect(result.totals).toMatchObject({
+        realizedGain: null,
+        realizedGainComplete: false,
+        realizedGainKnownSubtotal: 55,
+      });
+      const [june, july] = result.entries;
+      expect(june).toMatchObject({
+        realizedGain: 40,
+        realizedGainComplete: true,
+        realizedGainKnownSubtotal: null,
+      });
+      expect(july).toMatchObject({
+        realizedGain: null,
+        realizedGainComplete: false,
+        realizedGainKnownSubtotal: 15,
+      });
     });
 
     it("aggregates the raw per-(account,security,month) rows into monthly buckets by default", async () => {
@@ -3785,17 +4591,26 @@ describe("InvestmentTransactionsService", () => {
       expect(result.entries[1].totalCapitalGain).toBe(-50);
     });
 
-    it("flags mixed currencies with a null currency on the bucket", async () => {
+    it("sums each entry's reporting-currency figures, never adding CAD to USD", async () => {
       (
         portfolioCalculationService.calculateCapitalGainsByMonth as jest.Mock
       ).mockResolvedValue([
-        makeEntry({ accountCurrencyCode: "CAD", totalCapitalGain: 100 }),
         makeEntry({
-          accountCurrencyCode: "USD",
-          totalCapitalGain: 50,
-          symbol: "USS",
-          securityId: "sec-us",
+          accountCurrencyCode: "CAD",
+          totalCapitalGain: 100,
+          unrealizedGain: 100,
         }),
+        // 50 USD, which the fold states as 75 CAD.
+        makeEntry(
+          {
+            accountCurrencyCode: "USD",
+            totalCapitalGain: 50,
+            unrealizedGain: 50,
+            symbol: "USS",
+            securityId: "sec-us",
+          },
+          { totalCapitalGain: 75, unrealizedGain: 75 },
+        ),
       ]);
 
       const result = await service.getLlmCapitalGains(userId, {
@@ -3803,8 +4618,106 @@ describe("InvestmentTransactionsService", () => {
         endDate: "2024-06-30",
       });
 
-      expect(result.entries).toHaveLength(1); // single month bucket
-      expect(result.entries[0].currency).toBeNull();
+      expect(result.entries).toHaveLength(1);
+      expect(result.entries[0].currency).toBe("CAD");
+      expect(result.totals.totalCapitalGain).toBe(175);
+      expect(result.totals.fxComplete).toBe(true);
+      expect(result.totals.missingRatePairs).toEqual([]);
+    });
+
+    it("withholds the total and names the pair when a rate is missing", async () => {
+      (
+        portfolioCalculationService.calculateCapitalGainsByMonth as jest.Mock
+      ).mockResolvedValue([
+        makeEntry({ accountCurrencyCode: "CAD", totalCapitalGain: 100 }),
+        makeEntry(
+          {
+            accountCurrencyCode: "USD",
+            totalCapitalGain: 50,
+            symbol: "USS",
+            securityId: "sec-us",
+          },
+          {
+            startValue: null,
+            endValue: null,
+            unrealizedGain: null,
+            totalCapitalGain: null,
+            missingRatePairs: ["USD->CAD"],
+          },
+        ),
+      ]);
+
+      const result = await service.getLlmCapitalGains(userId, {
+        startDate: "2024-06-01",
+        endDate: "2024-06-30",
+      });
+
+      expect(result.totals.totalCapitalGain).toBeNull();
+      expect(result.totals.unrealizedGain).toBeNull();
+      expect(result.totals.fxComplete).toBe(false);
+      expect(result.totals.missingRatePairs).toEqual(["USD->CAD"]);
+      expect(result.entries[0].totalCapitalGain).toBeNull();
+    });
+
+    it("gives each report entry the fold's own reporting-currency figures (issue #2130)", async () => {
+      const usd = makeEntry(
+        {
+          accountCurrencyCode: "USD",
+          totalCapitalGain: 50,
+          realizedGain: 100,
+          symbol: "USS",
+          securityId: "sec-us",
+        },
+        { totalCapitalGain: 70, realizedGain: 190 },
+      );
+      (
+        portfolioCalculationService.calculateCapitalGainsByMonth as jest.Mock
+      ).mockResolvedValue([usd]);
+      (
+        portfolioCalculationService.calculateCapitalGainsByDay as jest.Mock
+      ).mockResolvedValue([usd]);
+
+      const opts = { startDate: "2024-06-01", endDate: "2024-06-30" };
+      const [byMonth] = await service.getCapitalGainsByMonth(userId, opts);
+      const [byDay] = await service.getCapitalGainsByDay(userId, opts);
+
+      // The sale's gain as Realized Gains states it, never 100 USD at the
+      // period's rate.
+      for (const entry of [byMonth, byDay]) {
+        expect(entry.inReportingCurrency).toMatchObject({
+          currency: "CAD",
+          realizedGain: 190,
+          totalCapitalGain: 70,
+        });
+      }
+      // No conversion of its own: no rate history is read here.
+      expect(mockQueryRunner.manager.query).not.toHaveBeenCalled();
+    });
+
+    it("passes the pair a report entry lacks through to the reader", async () => {
+      (
+        portfolioCalculationService.calculateCapitalGainsByMonth as jest.Mock
+      ).mockResolvedValue([
+        makeEntry(
+          {
+            accountCurrencyCode: "USD",
+            totalCapitalGain: 50,
+            symbol: "USS",
+            securityId: "sec-us",
+          },
+          { totalCapitalGain: null, missingRatePairs: ["USD->CAD"] },
+        ),
+      ]);
+
+      const [entry] = await service.getCapitalGainsByMonth(userId, {
+        startDate: "2024-06-01",
+        endDate: "2024-06-30",
+      });
+
+      expect(entry.inReportingCurrency).toMatchObject({
+        totalCapitalGain: null,
+        missingRatePairs: ["USD->CAD"],
+      });
     });
 
     it("filters by symbol (case-insensitive) before aggregating", async () => {
@@ -3934,6 +4847,13 @@ describe("InvestmentTransactionsService", () => {
         holdingsDeleted: 5,
         accountsReset: 2,
       });
+      // No lots are left on any linked bond: its engine rows go (R7).
+      expect(
+        securitiesService.recomputeBondPricesAfterWrite,
+      ).toHaveBeenCalledWith(userId, [
+        mockBuyTransaction.securityId,
+        mockSellTransaction.securityId,
+      ]);
     });
 
     it("handles zero transactions gracefully", async () => {
@@ -4059,6 +4979,34 @@ describe("InvestmentTransactionsService", () => {
       );
     });
 
+    /**
+     * Invariant: the executed total is the fact; the per-share price is
+     * derived from it (`docs/financial-semantics.md` section 4).
+     * Canonical adversarial input: a sale whose total does not divide into a
+     * two-decimal price -- 141 shares for 820.91.
+     * Minimal mutation: resolve the amounts from `price` alone.
+     * Test that fails under it: this one -- the row stores 141 x 5.82 =
+     * 820.62, and the realized-gains report is 0.29 light before FX.
+     */
+    it("stores a supplied total as given and derives the price from it", async () => {
+      await service.create(userId, {
+        accountId,
+        securityId,
+        action: InvestmentAction.SELL,
+        transactionDate: "2025-01-15",
+        quantity: 141,
+        price: 5.82,
+        totalAmount: 820.91,
+      });
+
+      expect(investmentTransactionsRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          totalAmount: 820.91,
+          price: 5.8220567376,
+        }),
+      );
+    });
+
     it("REMOVE_SHARES: totalAmount = 0", async () => {
       await service.create(userId, {
         accountId,
@@ -4175,7 +5123,7 @@ describe("InvestmentTransactionsService", () => {
 
     it("returns the resolved rate for a cross-currency pair", async () => {
       crossCurrency();
-      exchangeRateService.getLatestRate.mockResolvedValue(1.35);
+      exchangeRateService.getRateForDate.mockResolvedValue(1.35);
 
       const rate = await service.resolveCashExchangeRateOrNull(
         userId,
@@ -4186,6 +5134,13 @@ describe("InvestmentTransactionsService", () => {
         undefined,
       );
       expect(rate).toBe(1.35);
+      // No date means today, answered by the dated path, never the latest row.
+      expect(exchangeRateService.getRateForDate).toHaveBeenCalledWith(
+        "EUR",
+        "CAD",
+        todayYMD(),
+      );
+      expect(exchangeRateService.getLatestRate).not.toHaveBeenCalled();
     });
 
     it("uses the date-aware (provider-capable) path when a date is supplied", async () => {
@@ -4695,7 +5650,7 @@ describe("InvestmentTransactionsService", () => {
       expect(exchangeRateService.getLatestRate).not.toHaveBeenCalled();
     });
 
-    it("converts cash amount using the latest market rate when currencies differ", async () => {
+    it("converts cash amount using the rate for the transaction date when currencies differ", async () => {
       // USD security bought inside a CAD brokerage/cash account
       const cadCashAccount = { ...mockCashAccount, currencyCode: "CAD" };
       const cadInvestmentAccount = {
@@ -4709,7 +5664,7 @@ describe("InvestmentTransactionsService", () => {
           return Promise.reject(new NotFoundException("Account not found"));
         },
       );
-      exchangeRateService.getLatestRate.mockResolvedValue(1.365);
+      exchangeRateService.getRateForDate.mockResolvedValue(1.365);
 
       await service.create(userId, {
         accountId,
@@ -4720,11 +5675,14 @@ describe("InvestmentTransactionsService", () => {
         price: 100,
       });
 
-      // Market rate lookup should happen in the security->cash direction
-      expect(exchangeRateService.getLatestRate).toHaveBeenCalledWith(
+      // Market rate lookup should happen in the security->cash direction, on the
+      // transaction's own date
+      expect(exchangeRateService.getRateForDate).toHaveBeenCalledWith(
         "USD",
         "CAD",
+        "2025-01-15",
       );
+      expect(exchangeRateService.getLatestRate).not.toHaveBeenCalled();
 
       // Investment transaction keeps the source-currency amount but stores the rate
       expect(investmentTransactionsRepository.create).toHaveBeenCalledWith(
@@ -4752,9 +5710,10 @@ describe("InvestmentTransactionsService", () => {
 
     it("rejects a cross-currency buy when no exchange rate can be determined (issue #744)", async () => {
       // USD security funded from a CAD cash account, with neither a dated rate
-      // nor a latest snapshot available. Previously this silently posted at
-      // rate 1.0 and corrupted the cash balance; now it must reject so the
-      // caller can supply an explicit exchangeRate.
+      // nor anything else. Previously this silently posted at rate 1.0 and
+      // corrupted the cash balance; now it must reject so the caller can supply
+      // an explicit exchangeRate. A latest stored snapshot is not a fallback: a
+      // back-dated trade priced at today's rate is the wrong rate, not a rate.
       const cadCashAccount = { ...mockCashAccount, currencyCode: "CAD" };
       const cadInvestmentAccount = {
         ...mockInvestmentAccount,
@@ -4768,7 +5727,8 @@ describe("InvestmentTransactionsService", () => {
         },
       );
       exchangeRateService.getRateForDate.mockResolvedValue(null);
-      exchangeRateService.getLatestRate.mockResolvedValue(null);
+      // A snapshot exists, and must not be reached for.
+      exchangeRateService.getLatestRate.mockResolvedValue(1.99);
 
       await expect(
         service.create(userId, {
@@ -4781,7 +5741,71 @@ describe("InvestmentTransactionsService", () => {
         }),
       ).rejects.toBeInstanceOf(BadRequestException);
 
+      expect(exchangeRateService.getLatestRate).not.toHaveBeenCalled();
       expect(investmentTransactionsRepository.create).not.toHaveBeenCalled();
+      expect(transactionRepository.create).not.toHaveBeenCalled();
+    });
+
+    it("prices a posting with no transaction date at today's rate for date, never the latest snapshot", async () => {
+      const cadCashAccount = { ...mockCashAccount, currencyCode: "CAD" };
+      const cadInvestmentAccount = {
+        ...mockInvestmentAccount,
+        currencyCode: "CAD",
+      };
+      accountsService.findOne.mockImplementation(
+        (_uid: string, aid: string) => {
+          if (aid === accountId) return Promise.resolve(cadInvestmentAccount);
+          if (aid === cashAccountId) return Promise.resolve(cadCashAccount);
+          return Promise.reject(new NotFoundException("Account not found"));
+        },
+      );
+      exchangeRateService.getRateForDate.mockResolvedValue(null);
+      exchangeRateService.getLatestRate.mockResolvedValue(1.99);
+
+      const rate = await service.resolveCashExchangeRateOrNull(
+        userId,
+        accountId,
+        cashAccountId,
+        securityId,
+        undefined,
+      );
+
+      expect(rate).toBeNull();
+      expect(exchangeRateService.getRateForDate).toHaveBeenCalledWith(
+        "USD",
+        "CAD",
+        todayYMD(),
+      );
+      expect(exchangeRateService.getLatestRate).not.toHaveBeenCalled();
+    });
+
+    it("answers null from the forecast variant when no rate exists for the date", async () => {
+      const cadCashAccount = { ...mockCashAccount, currencyCode: "CAD" };
+      const cadInvestmentAccount = {
+        ...mockInvestmentAccount,
+        currencyCode: "CAD",
+      };
+      accountsService.findOne.mockImplementation(
+        (_uid: string, aid: string) => {
+          if (aid === accountId) return Promise.resolve(cadInvestmentAccount);
+          if (aid === cashAccountId) return Promise.resolve(cadCashAccount);
+          return Promise.reject(new NotFoundException("Account not found"));
+        },
+      );
+      exchangeRateService.getRateForDate.mockResolvedValue(null);
+      exchangeRateService.getLatestRate.mockResolvedValue(1.99);
+
+      const rate = await service.resolveCashExchangeRateOrNull(
+        userId,
+        accountId,
+        cashAccountId,
+        securityId,
+        undefined,
+        "2025-01-15",
+      );
+
+      expect(rate).toBeNull();
+      expect(exchangeRateService.getLatestRate).not.toHaveBeenCalled();
     });
 
     it("uses the rate for the transaction date when available (issue #744)", async () => {
@@ -4878,7 +5902,7 @@ describe("InvestmentTransactionsService", () => {
           return Promise.reject(new NotFoundException("Account not found"));
         },
       );
-      exchangeRateService.getLatestRate.mockResolvedValue(1.3);
+      exchangeRateService.getRateForDate.mockResolvedValue(1.3);
 
       await service.create(userId, {
         accountId,
@@ -4917,7 +5941,7 @@ describe("InvestmentTransactionsService", () => {
           return Promise.reject(new NotFoundException("Account not found"));
         },
       );
-      exchangeRateService.getLatestRate.mockResolvedValue(1.4);
+      exchangeRateService.getRateForDate.mockResolvedValue(1.4);
 
       await service.create(userId, {
         accountId,
@@ -5078,7 +6102,7 @@ describe("InvestmentTransactionsService", () => {
       });
     });
 
-    it("does NOT update holdings for a future-dated BUY transaction", async () => {
+    it("re-derives the position for a future-dated BUY, which the cutoff excludes", async () => {
       const savedTx = {
         ...mockBuyTransaction,
         transactionDate: "2027-06-15",
@@ -5092,7 +6116,16 @@ describe("InvestmentTransactionsService", () => {
 
       await service.create(userId, createBuyDto);
 
-      expect(holdingsService.updateHolding).not.toHaveBeenCalled();
+      // The row is future-dated, so `transaction_date <= cutoff` leaves it out
+      // of the replay -- the exclusion is the rebuild's, and is covered in
+      // holdings.service.spec.ts. What this path owes is the request.
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
+        userId,
+        [{ accountId, securityId }],
+        expect.anything(),
+      );
     });
 
     it("does NOT create a cash transaction for a future-dated BUY", async () => {
@@ -5116,7 +6149,7 @@ describe("InvestmentTransactionsService", () => {
       expect(accountsService.updateBalance).not.toHaveBeenCalled();
     });
 
-    it("does NOT update holdings for a future-dated SELL transaction", async () => {
+    it("re-derives the position for a future-dated SELL, which the cutoff excludes", async () => {
       const sellDto = {
         accountId,
         securityId,
@@ -5140,12 +6173,12 @@ describe("InvestmentTransactionsService", () => {
 
       await service.create(userId, sellDto);
 
-      expect(holdingsService.updateHolding).not.toHaveBeenCalled();
+      expect(holdingsService.rebuildScopesFromTransactions).toHaveBeenCalled();
       // The cash side IS created so the user sees the projected proceeds.
       expect(transactionRepository.create).toHaveBeenCalled();
     });
 
-    it("does NOT touch holdings when deleting a future-dated transaction", async () => {
+    it("re-derives the position when deleting a future-dated transaction", async () => {
       const futureTx = {
         ...mockBuyTransaction,
         transactionDate: "2027-06-15",
@@ -5158,8 +6191,7 @@ describe("InvestmentTransactionsService", () => {
 
       await service.remove(userId, transactionId);
 
-      expect(holdingsService.updateHolding).not.toHaveBeenCalled();
-      expect(holdingsService.adjustQuantity).not.toHaveBeenCalled();
+      expect(holdingsService.rebuildScopesFromTransactions).toHaveBeenCalled();
       expect(accountsService.updateBalance).not.toHaveBeenCalled();
       // The linked cash transaction (which was created with the future date)
       // is torn down with the investment row.
@@ -5215,6 +6247,7 @@ describe("InvestmentTransactionsService", () => {
         userId,
         totalAmount: 1500,
         commission: 0,
+        exchangeRate: 1,
         fundingAccountId: null,
         transactionId: "cash-tx-1",
         account: mockInvestmentAccount,
@@ -5265,6 +6298,7 @@ describe("InvestmentTransactionsService", () => {
         price: 150,
         totalAmount: 1500,
         commission: 0,
+        exchangeRate: 1,
         fundingAccountId: null,
         transactionId: null,
         account: mockInvestmentAccount,
@@ -5295,6 +6329,7 @@ describe("InvestmentTransactionsService", () => {
         price: 150,
         totalAmount: 1500,
         commission: 0,
+        exchangeRate: 1,
         fundingAccountId: null,
         transactionId: null,
         account: mockInvestmentAccount,
@@ -5324,6 +6359,7 @@ describe("InvestmentTransactionsService", () => {
         price: 150,
         totalAmount: 1500,
         commission: 0,
+        exchangeRate: 1,
         fundingAccountId: null,
         transactionId: "cash-tx-1",
         account: mockInvestmentAccount,
@@ -5353,6 +6389,219 @@ describe("InvestmentTransactionsService", () => {
       // Rolled back inside the scoped transaction, so nothing was recorded.
       expect(dataSource.transaction).toHaveBeenCalled();
       expect(mockActionHistoryService.record).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Advisory locks are taken before row locks (`common/db/locks.ts`). A
+     * ledger write that took the holdings advisory lock only inside the
+     * rebuild at the end had already row-locked `accounts` for its cash
+     * effects -- the opposite order from a split status change, which takes
+     * the advisory lock first and then row-locks the legs, so two concurrent
+     * writers of one account can deadlock (40P01).
+     */
+    const lockOrder = (): number => {
+      const calls = mockQueryRunner.manager.query.mock.calls as unknown[][];
+      const index = calls.findIndex(([sql]) =>
+        String(sql).includes("pg_advisory_xact_lock"),
+      );
+      expect(index).toBeGreaterThanOrEqual(0);
+      return mockQueryRunner.manager.query.mock.invocationCallOrder[index];
+    };
+
+    /** When the transaction first touched a row lock or wrote anything. */
+    const firstRowTouchOrder = (): number =>
+      Math.min(
+        ...[
+          ...mockQueryRunner.manager.save.mock.invocationCallOrder,
+          ...accountsService.updateBalance.mock.invocationCallOrder,
+          ...mockQueryRunner.manager.remove.mock.invocationCallOrder,
+          ...(mockQueryRunner.manager.query.mock.calls as unknown[][])
+            .map(([sql], i) =>
+              String(sql).includes("FOR UPDATE")
+                ? mockQueryRunner.manager.query.mock.invocationCallOrder[i]
+                : Number.POSITIVE_INFINITY,
+            )
+            .filter((n) => Number.isFinite(n)),
+          Number.POSITIVE_INFINITY,
+        ],
+      );
+
+    it("create takes the holdings advisory lock before its first row lock or write", async () => {
+      const savedTx = {
+        id: "inv-tx-1",
+        ...createBuyDto,
+        userId,
+        totalAmount: 1500,
+        commission: 0,
+        exchangeRate: 1,
+        fundingAccountId: null,
+        transactionId: "cash-tx-1",
+        account: mockInvestmentAccount,
+        security: mockSecurity,
+      };
+      investmentTransactionsRepository.save.mockResolvedValue(savedTx);
+      investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder(savedTx),
+      );
+
+      await service.create(userId, createBuyDto);
+
+      expect(lockOrder()).toBeLessThan(firstRowTouchOrder());
+    });
+
+    it("remove takes the holdings advisory lock before its first row lock or write", async () => {
+      const existingTx = {
+        id: "inv-tx-1",
+        userId,
+        accountId,
+        securityId,
+        action: InvestmentAction.BUY,
+        transactionDate: "2025-01-15",
+        quantity: 10,
+        price: 150,
+        totalAmount: 1500,
+        commission: 0,
+        exchangeRate: 1,
+        fundingAccountId: null,
+        transactionId: null,
+        account: mockInvestmentAccount,
+        security: mockSecurity,
+      };
+      investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder(existingTx),
+      );
+
+      await service.remove(userId, "inv-tx-1");
+
+      expect(lockOrder()).toBeLessThan(firstRowTouchOrder());
+    });
+
+    /**
+     * A26-H04: the row the edit or delete decides from is the one under its
+     * own lock. A cash leg replaced by a concurrent edit (or a row a
+     * concurrent delete removed) is refused before anything is written.
+     */
+    it("update refuses with 409, writing nothing, when the row's cash leg changed since the read", async () => {
+      investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder(mockBuyTransaction),
+      );
+      lockedInvestmentRows = async (id: string) => [
+        {
+          id,
+          account_id: accountId,
+          security_id: securityId,
+          funding_account_id: null,
+          transaction_id: "cash-tx-replaced",
+          transaction_split_id: null,
+          linked_transaction_id: null,
+          action: InvestmentAction.BUY,
+          transaction_date: "2025-01-15",
+          quantity: "10",
+          price: "150",
+          commission: "9.99",
+          total_amount: "1509.99",
+          exchange_rate: "1",
+          status: TransactionStatus.CLEARED,
+        },
+      ];
+
+      await expect(
+        service.update(userId, transactionId, { price: 160 }),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      expect(mockQueryRunner.manager.save).not.toHaveBeenCalled();
+      expect(mockQueryRunner.manager.delete).not.toHaveBeenCalled();
+      expect(investmentTransactionsRepository.update).not.toHaveBeenCalled();
+    });
+
+    it("remove refuses with 404, writing nothing, when the row was deleted since the read", async () => {
+      investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder(mockBuyTransaction),
+      );
+      lockedInvestmentRows = async () => [];
+
+      await expect(
+        service.remove(userId, transactionId),
+      ).rejects.toBeInstanceOf(NotFoundException);
+
+      expect(mockQueryRunner.manager.delete).not.toHaveBeenCalled();
+      expect(investmentTransactionsRepository.remove).not.toHaveBeenCalled();
+      expect(mockActionHistoryService.record).not.toHaveBeenCalled();
+    });
+
+    it("update takes the holdings advisory lock before its first row lock or write", async () => {
+      const existingTx = {
+        id: "inv-tx-1",
+        userId,
+        accountId,
+        securityId,
+        action: InvestmentAction.BUY,
+        transactionDate: "2025-01-15",
+        quantity: 10,
+        price: 150,
+        totalAmount: 1500,
+        commission: 0,
+        exchangeRate: 1,
+        fundingAccountId: null,
+        transactionId: null,
+        account: mockInvestmentAccount,
+        security: mockSecurity,
+      };
+      investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder(existingTx),
+      );
+      investmentTransactionsRepository.save.mockResolvedValue(existingTx);
+
+      await service.update(userId, "inv-tx-1", { quantity: 20 });
+
+      expect(lockOrder()).toBeLessThan(firstRowTouchOrder());
+    });
+
+    /**
+     * The rebuild is the ledger write's own last statement, not a follow-up:
+     * dispatched after the commit it would read a ledger another writer had
+     * already changed, and the position would be written from outside the
+     * lock the write took.
+     */
+    it("rebuilds the position on the transaction's own manager, before the transaction returns", async () => {
+      const savedTx = {
+        id: "inv-tx-1",
+        ...createBuyDto,
+        userId,
+        totalAmount: 1500,
+        commission: 0,
+        exchangeRate: 1,
+        fundingAccountId: null,
+        transactionId: "cash-tx-1",
+        account: mockInvestmentAccount,
+        security: mockSecurity,
+      };
+      investmentTransactionsRepository.save.mockResolvedValue(savedTx);
+      investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder(savedTx),
+      );
+
+      let rebuiltBeforeReturn = false;
+      dataSource.transaction.mockImplementation(async (...args: unknown[]) => {
+        const fn = (typeof args[0] === "function" ? args[0] : args[1]) as (
+          m: unknown,
+        ) => Promise<unknown>;
+        const result = await fn(mockQueryRunner.manager);
+        rebuiltBeforeReturn =
+          holdingsService.rebuildScopesFromTransactions.mock.calls.length > 0;
+        return result;
+      });
+
+      await service.create(userId, createBuyDto);
+
+      expect(rebuiltBeforeReturn).toBe(true);
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
+        userId,
+        [{ accountId, securityId }],
+        mockQueryRunner.manager,
+      );
     });
   });
 
@@ -5499,14 +6748,12 @@ describe("InvestmentTransactionsService", () => {
           entity && entity.constructor && entity.constructor.name === "Object",
       );
       expect(transactionSaves.length).toBeGreaterThan(0); // saved the InvestmentTransaction
-      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
         userId,
-        accountId,
-        securityId,
-        75,
-        10,
-        mockQueryRunner.manager,
-        false,
+        [{ accountId: accountId, securityId: securityId }],
+        expect.anything(),
       );
       // The embedded path should never invoke the cash-side balance update
       // for a cash account (only holdings updates).
@@ -5629,8 +6876,8 @@ describe("InvestmentTransactionsService", () => {
         },
       );
 
-      // No holdings update for DIVIDEND, no cash transaction either
-      expect(holdingsService.updateHolding).not.toHaveBeenCalled();
+      // No cash transaction either. A DIVIDEND moves no shares, which is the
+      // replay reducer's answer, not something this seam decides.
       expect(accountsService.updateBalance).not.toHaveBeenCalled();
       expect(created).toBeDefined();
       expect(mockQueryRunner.manager.create).toHaveBeenCalledWith(
@@ -5664,14 +6911,12 @@ describe("InvestmentTransactionsService", () => {
         },
       );
 
-      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
         userId,
-        accountId,
-        securityId,
-        -10,
-        50,
-        mockQueryRunner.manager,
-        false,
+        [{ accountId: accountId, securityId: securityId }],
+        expect.anything(),
       );
       // Cash side suppressed
       expect(accountsService.updateBalance).not.toHaveBeenCalled();
@@ -5744,21 +6989,23 @@ describe("InvestmentTransactionsService", () => {
       // delta from the same stale amount (audit P4-003).
       mockQueryRunner.manager.query = jest
         .fn()
-        .mockImplementation(async (sql: string) =>
-          String(sql).includes("FOR UPDATE")
-            ? [
-                {
-                  id: parentTx.id,
-                  account_id: parentTx.accountId,
-                  amount: String(parentTx.amount),
-                  transaction_date: parentTx.transactionDate,
-                  status: null,
-                  is_split: true,
-                  linked_transaction_id: null,
-                  parent_transaction_id: null,
-                },
-              ]
-            : [],
+        .mockImplementation(async (sql: string, params?: unknown[]) =>
+          String(sql).includes("FROM investment_transactions")
+            ? lockedInvestmentRows(String(params?.[0]))
+            : String(sql).includes("FOR UPDATE")
+              ? [
+                  {
+                    id: parentTx.id,
+                    account_id: parentTx.accountId,
+                    amount: String(parentTx.amount),
+                    transaction_date: parentTx.transactionDate,
+                    status: null,
+                    is_split: true,
+                    linked_transaction_id: null,
+                    parent_transaction_id: null,
+                  },
+                ]
+              : [],
         );
 
       return { split, incomeSplit, parentTx };
@@ -5929,14 +7176,12 @@ describe("InvestmentTransactionsService", () => {
       );
 
       // Reverse-of-BUY decrements holdings by qty
-      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
         userId,
-        accountId,
-        securityId,
-        -5,
-        10,
-        mockQueryRunner.manager,
-        true,
+        [{ accountId: accountId, securityId: securityId }],
+        expect.anything(),
       );
       expect(mockQueryRunner.manager.remove).toHaveBeenCalledWith(embedded);
     });
@@ -5980,29 +7225,32 @@ describe("InvestmentTransactionsService", () => {
     it("creates both legs and moves holdings at the supplied cost basis", async () => {
       const result = await service.transferSecurity(userId, transferDto);
 
-      // TRANSFER_OUT draws down the source at cost basis.
-      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
+      // Both legs carry the per-share cost basis into the ledger, and both
+      // positions are then re-derived from it in one call.
+      const legPrices = mockQueryRunner.manager.create.mock.calls
+        .filter(([entity]: any[]) => entity === InvestmentTransaction)
+        .map(([, data]: any[]) => data.price);
+      expect(legPrices).toEqual([1.67, 1.67]);
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
         userId,
-        accountId,
-        securityId,
-        -100,
-        1.67,
-        mockQueryRunner.manager,
-        false,
-      );
-      // TRANSFER_IN adds to the destination at the same per-share cost.
-      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
-        userId,
-        toAccountId,
-        securityId,
-        100,
-        1.67,
-        mockQueryRunner.manager,
-        false,
+        [
+          { accountId, securityId },
+          { accountId: toAccountId, securityId },
+        ],
+        expect.anything(),
       );
       expect(dataSource.transaction).toHaveBeenCalled();
       expect(result).toHaveProperty("transferOut");
       expect(result).toHaveProperty("transferIn");
+    });
+
+    it("recomputes the bond-engine prices of the security after the transfer (R7)", async () => {
+      await service.transferSecurity(userId, transferDto);
+      expect(
+        securitiesService.recomputeBondPricesAfterWrite,
+      ).toHaveBeenCalledWith(userId, [securityId]);
     });
 
     it("does not create any cash transaction", async () => {
@@ -6088,59 +7336,78 @@ describe("InvestmentTransactionsService", () => {
         costPerShare: 0,
       });
 
-      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
+      const zeroLegPrices = mockQueryRunner.manager.create.mock.calls
+        .filter(([entity]: any[]) => entity === InvestmentTransaction)
+        .map(([, data]: any[]) => data.price);
+      expect(zeroLegPrices).toEqual([0, 0]);
+      expect(
+        holdingsService.rebuildScopesFromTransactions,
+      ).toHaveBeenCalledWith(
         userId,
-        accountId,
-        securityId,
-        -100,
-        0,
-        mockQueryRunner.manager,
-        false,
-      );
-      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
-        userId,
-        toAccountId,
-        securityId,
-        100,
-        0,
-        mockQueryRunner.manager,
-        false,
+        [
+          { accountId, securityId },
+          { accountId: toAccountId, securityId },
+        ],
+        expect.anything(),
       );
       expect(dataSource.transaction).toHaveBeenCalled();
     });
 
-    it("carries the source holding's average cost, ignoring the client value", async () => {
-      // The server is authoritative: when the source holds the security, both
-      // legs use its real blended average cost (here 4.25) so basis is
-      // conserved -- a stale/zero client costPerShare cannot poison it.
-      holdingsService.findByAccountAndSecurity.mockResolvedValue({
-        quantity: 200,
-        averageCost: 4.25,
-      } as any);
+    it("carries the basis the ledger says the OUT leg releases, ignoring the client value (A26-M22)", async () => {
+      // The server is authoritative: both legs take what the source position
+      // released at the transfer's own date (here 4.25 a share), read from the
+      // ledger under the lock -- a stale/zero client costPerShare cannot poison
+      // it, and neither can today's stored average.
+      holdingsService.releasedBasisPerShare.mockResolvedValue(4.25);
 
       await service.transferSecurity(userId, {
         ...transferDto,
         costPerShare: 0,
       });
 
-      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
-        userId,
-        accountId,
-        securityId,
-        -100,
-        4.25,
-        mockQueryRunner.manager,
-        false,
+      const created = mockQueryRunner.manager.create.mock.calls
+        .filter(([entity]: any[]) => entity === InvestmentTransaction)
+        .map(([, data]: any[]) => data);
+      // The IN leg is written at the carried figure; the OUT leg is corrected
+      // by an update once the ledger has been read with it in.
+      expect(created[1].price).toBe(4.25);
+      const priceUpdates = mockQueryRunner.manager.update.mock.calls.filter(
+        (c: any[]) => c[0] === InvestmentTransaction && c[2] && "price" in c[2],
       );
-      expect(holdingsService.updateHolding).toHaveBeenCalledWith(
+      expect(priceUpdates).toHaveLength(1);
+      expect(priceUpdates[0][2]).toEqual({ price: 4.25 });
+      expect(holdingsService.releasedBasisPerShare).toHaveBeenCalledWith(
         userId,
-        toAccountId,
         securityId,
-        100,
-        4.25,
+        expect.anything(),
         mockQueryRunner.manager,
-        false,
       );
+    });
+
+    it("rounds the carried basis at the investment price scale, not 6 places", async () => {
+      holdingsService.releasedBasisPerShare.mockResolvedValue(1 / 3);
+
+      await service.transferSecurity(userId, transferDto);
+
+      const created = mockQueryRunner.manager.create.mock.calls
+        .filter(([entity]: any[]) => entity === InvestmentTransaction)
+        .map(([, data]: any[]) => data);
+      expect(created[1].price).toBe(0.3333333333);
+    });
+
+    it("no longer reads the stored holding, and keeps the client figure when the ledger cannot say", async () => {
+      holdingsService.findByAccountAndSecurity.mockResolvedValue({
+        quantity: 200,
+        averageCost: 4.25,
+      } as any);
+
+      await service.transferSecurity(userId, transferDto);
+
+      expect(holdingsService.findByAccountAndSecurity).not.toHaveBeenCalled();
+      const created = mockQueryRunner.manager.create.mock.calls
+        .filter(([entity]: any[]) => entity === InvestmentTransaction)
+        .map(([, data]: any[]) => data.price);
+      expect(created).toEqual([1.67, 1.67]);
     });
 
     it("rejects transferring into a non-brokerage (cash sleeve) account", async () => {
@@ -6252,8 +7519,11 @@ describe("InvestmentTransactionsService", () => {
 
       await service.update(userId, "leg-out", { quantity: 50 });
 
-      // Both legs reversed (add/remove) and reapplied -> 4 holding updates.
-      expect(holdingsService.updateHolding).toHaveBeenCalled();
+      // A transfer edit re-derives both accounts from the ledger in the
+      // caller's transaction.
+      expect(
+        holdingsService.rebuildAccountsFromTransactions,
+      ).toHaveBeenCalled();
       // Both legs saved.
       const savedActions = mockQueryRunner.manager.save.mock.calls
         .map((c: any[]) => c[0]?.action)
@@ -6263,6 +7533,99 @@ describe("InvestmentTransactionsService", () => {
       // Edit propagated to the linked leg too.
       expect(inLeg.quantity).toBe(50);
       expect(dataSource.transaction).toHaveBeenCalled();
+    });
+
+    it("update ignores a price the client sends and writes the carried basis on both legs (A26-M22)", async () => {
+      const { outLeg, inLeg } = makeLegs();
+      investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder(outLeg),
+      );
+      investmentTransactionsRepository.findOne.mockResolvedValue(inLeg);
+      holdingsService.releasedBasisPerShare.mockResolvedValue(150);
+
+      await service.update(userId, "leg-out", { price: 999 } as any);
+
+      expect(holdingsService.releasedBasisPerShare).toHaveBeenCalledWith(
+        userId,
+        securityId,
+        "leg-out",
+        mockQueryRunner.manager,
+      );
+      const priceUpdates = mockQueryRunner.manager.update.mock.calls.filter(
+        (c: any[]) => c[0] === InvestmentTransaction && c[2] && "price" in c[2],
+      );
+      expect(priceUpdates).toEqual([
+        [InvestmentTransaction, ["leg-out", "leg-in"], { price: 150 }],
+      ]);
+      expect(outLeg.price).toBe(150);
+      expect(inLeg.price).toBe(150);
+      // The carried basis is in the ledger before the rebuild reads it.
+      const updateOrder =
+        mockQueryRunner.manager.update.mock.invocationCallOrder[
+          mockQueryRunner.manager.update.mock.calls.indexOf(priceUpdates[0])
+        ];
+      expect(updateOrder).toBeLessThan(
+        holdingsService.rebuildAccountsFromTransactions.mock
+          .invocationCallOrder[0],
+      );
+    });
+
+    it("update keeps the stored price, not the client's, when the ledger cannot say what the OUT leg releases", async () => {
+      const { outLeg, inLeg } = makeLegs();
+      investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder(outLeg),
+      );
+      investmentTransactionsRepository.findOne.mockResolvedValue(inLeg);
+
+      await service.update(userId, "leg-out", { price: 999 } as any);
+
+      expect(outLeg.price).toBe(1.67);
+      expect(inLeg.price).toBe(1.67);
+    });
+
+    it("update keeps the stored series of both legs when the edit changes neither it, the security nor the date (INV-BOND-007)", async () => {
+      const STORED = "22222222-2222-5222-8222-222222222222";
+      const original = mockQueryRunner.manager.query.getMockImplementation();
+      mockQueryRunner.manager.query.mockImplementation(
+        async (sql: string, params?: unknown[]) => {
+          const text = String(sql);
+          if (text.includes("s.bond_program_id AS id")) {
+            return [{ id: "prog-1", program_code: "EDO" }];
+          }
+          if (text.includes("bond_auto_fetch")) {
+            return [
+              {
+                id: securityId,
+                user_id: userId,
+                symbol: "EDO",
+                currency_code: "PLN",
+                bond_program_id: "prog-1",
+                bond_auto_fetch: false,
+              },
+            ];
+          }
+          if (text.includes("counterpart_account_id")) return [];
+          // The program holds no such series any more: only the rule that
+          // keeps an unchanged stored value lets it through.
+          if (text.includes("id = $1::uuid AND bond_program_id")) return [];
+          return original ? original(sql, params) : [];
+        },
+      );
+      const { outLeg, inLeg } = makeLegs();
+      outLeg.bondInstrumentId = STORED;
+      inLeg.bondInstrumentId = STORED;
+      investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder(outLeg),
+      );
+      investmentTransactionsRepository.findOne.mockResolvedValue(inLeg);
+
+      await service.update(userId, "leg-out", {
+        quantity: 50,
+        bondInstrumentId: STORED,
+      });
+
+      expect(outLeg.bondInstrumentId).toBe(STORED);
+      expect(inLeg.bondInstrumentId).toBe(STORED);
     });
 
     it("update rejects changing the transfer direction", async () => {
@@ -6454,9 +7817,7 @@ describe("InvestmentTransactionsService", () => {
       await service.getSecurityTransactionHistory(userId, securityId);
 
       expect(investmentTransactionsRepository.find).toHaveBeenCalledWith(
-        expect.objectContaining({
-          order: { transactionDate: "ASC", createdAt: "ASC" },
-        }),
+        expect.objectContaining({ order: INVESTMENT_REPLAY_ORDER }),
       );
     });
 
@@ -6590,6 +7951,83 @@ describe("InvestmentTransactionsService", () => {
     });
   });
 
+  /**
+   * A26-L18: the email-receipt pipeline builds a trade card's preview inside
+   * the receipt's transaction, with its row lock held. There the preview reads
+   * only stored rates; a provider call would hold the lock and a pooled
+   * connection for its response time.
+   */
+  describe("previewCreateInvestmentTransaction inside a caller's transaction", () => {
+    const scopedDb = jest.requireMock("../common/db/scoped-db") as {
+      getActiveScopedManager: jest.Mock;
+    };
+
+    beforeEach(() => {
+      accountsService.findOne.mockImplementation(
+        (_uid: string, aid: string) => {
+          if (aid === accountId)
+            return Promise.resolve({
+              ...mockInvestmentAccount,
+              currencyCode: "CAD",
+            });
+          if (aid === cashAccountId)
+            return Promise.resolve({ ...mockCashAccount, currencyCode: "CAD" });
+          return Promise.reject(new NotFoundException("Account not found"));
+        },
+      );
+      securitiesService.resolveBySymbolOrName.mockResolvedValue({
+        match: mockSecurity,
+        candidates: [],
+      });
+      securitiesService.findOne.mockResolvedValue(mockSecurity);
+      exchangeRateService.getRateForDate.mockResolvedValue(1.37);
+    });
+
+    const preview = () =>
+      service.previewCreateInvestmentTransaction(userId, {
+        accountId,
+        action: InvestmentAction.BUY,
+        transactionDate: "2026-10-15",
+        securityQuery: "AAPL",
+        quantity: 10,
+        price: 100,
+      });
+
+    it("reads only stored rates, never the provider", async () => {
+      scopedDb.getActiveScopedManager.mockReturnValue({});
+      try {
+        await preview();
+      } finally {
+        scopedDb.getActiveScopedManager.mockReturnValue(undefined);
+      }
+      expect(exchangeRateService.getRateForDate).toHaveBeenCalledWith(
+        "USD",
+        "CAD",
+        "2026-10-15",
+        { fetchMissing: false },
+      );
+    });
+
+    it("refuses by name when no stored rate answers", async () => {
+      scopedDb.getActiveScopedManager.mockReturnValue({});
+      exchangeRateService.getRateForDate.mockResolvedValue(null);
+      try {
+        await expect(preview()).rejects.toBeInstanceOf(BadRequestException);
+      } finally {
+        scopedDb.getActiveScopedManager.mockReturnValue(undefined);
+      }
+    });
+
+    it("still fetches for a request-scoped preview", async () => {
+      await preview();
+      expect(exchangeRateService.getRateForDate).toHaveBeenCalledWith(
+        "USD",
+        "CAD",
+        "2026-10-15",
+      );
+    });
+  });
+
   describe("previewCreateInvestmentTransaction", () => {
     beforeEach(() => {
       accountsService.findOne.mockImplementation(
@@ -6668,11 +8106,14 @@ describe("InvestmentTransactionsService", () => {
         transactionDate: "2026-01-15",
         securityQuery: "AAPL",
         quantity: 1.123456789,
-        price: 2.1234567,
+        price: 2.12345678901,
         commission: 0.12345,
       });
       expect(preview.quantity).toBe(1.12345679);
-      expect(preview.price).toBe(2.123457);
+      // The price column is NUMERIC(24,10). A preview that narrowed it to six
+      // showed a figure the commit would not store, and a price derived from
+      // an executed total needs all ten.
+      expect(preview.price).toBe(2.123456789);
       expect(preview.commission).toBe(0.1235);
     });
 
@@ -6715,7 +8156,7 @@ describe("InvestmentTransactionsService", () => {
         match: { ...mockSecurity, currencyCode: "EUR" },
         candidates: [],
       });
-      exchangeRateService.getLatestRate.mockResolvedValue(1.1);
+      exchangeRateService.getRateForDate.mockResolvedValue(1.1);
 
       const preview = await service.previewCreateInvestmentTransaction(userId, {
         accountId,
@@ -6874,6 +8315,111 @@ describe("InvestmentTransactionsService", () => {
       await expect(
         service.previewUpdateInvestmentTransaction(userId, transactionId, {}),
       ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    /**
+     * A26-M20 (INV-FX-002): a SELL of 141 USD shares from a CAD brokerage,
+     * entered at its statement total 820.91 USD and the broker's settlement
+     * rate 1.40 (cash +1,149.27 CAD); today's USD/CAD is 1.37. The MCP and
+     * assistant adapters commit `preview.exchangeRate` as the DTO's rate, so a
+     * description-only edit that re-resolved it wrote 1.37 and moved the cash
+     * leg to +1,124.65.
+     */
+    describe("the row's own exchange rate", () => {
+      const usdSecurity = {
+        ...mockSecurity,
+        id: "sec-usd",
+        currencyCode: "USD",
+      };
+      const otherUsdSecurity = {
+        ...mockSecurity,
+        id: "sec-usd-2",
+        symbol: "MSFT",
+        currencyCode: "USD",
+      };
+      const settlementSell = {
+        ...mockBuyTransaction,
+        action: InvestmentAction.SELL,
+        securityId: usdSecurity.id,
+        security: usdSecurity as any,
+        quantity: 141,
+        price: 5.8220567376,
+        commission: 0,
+        totalAmount: 820.91,
+        exchangeRate: 1.4,
+      };
+
+      beforeEach(() => {
+        accountsService.findOne.mockImplementation(
+          (_uid: string, aid: string) => {
+            if (aid === accountId)
+              return Promise.resolve({
+                ...mockInvestmentAccount,
+                currencyCode: "CAD",
+              });
+            if (aid === cashAccountId)
+              return Promise.resolve({
+                ...mockCashAccount,
+                currencyCode: "CAD",
+              });
+            return Promise.reject(new NotFoundException("Account not found"));
+          },
+        );
+        securitiesService.findOne.mockImplementation(
+          (_uid: string, sid: string) =>
+            Promise.resolve(
+              sid === otherUsdSecurity.id ? otherUsdSecurity : usdSecurity,
+            ),
+        );
+        securitiesService.resolveBySymbolOrName.mockImplementation(
+          (_uid: string, query: string) =>
+            Promise.resolve({
+              match: query === "MSFT" ? otherUsdSecurity : usdSecurity,
+              candidates: [],
+            }),
+        );
+        investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+          createMockQueryBuilder(settlementSell),
+        );
+        exchangeRateService.getRateForDate.mockResolvedValue(1.37);
+      });
+
+      it("keeps the stored rate and cash on a description-only edit", async () => {
+        const preview = await service.previewUpdateInvestmentTransaction(
+          userId,
+          transactionId,
+          { description: "renamed" },
+        );
+
+        expect(preview.exchangeRate).toBe(1.4);
+        expect(preview.cashAmount).toBe(1149.27);
+        expect(exchangeRateService.getRateForDate).not.toHaveBeenCalled();
+      });
+
+      it("takes a rate the edit names", async () => {
+        const preview = await service.previewUpdateInvestmentTransaction(
+          userId,
+          transactionId,
+          { exchangeRate: 1.39 },
+        );
+
+        expect(preview.exchangeRate).toBe(1.39);
+      });
+
+      it("re-resolves the rate for the new pair when the security changes", async () => {
+        const preview = await service.previewUpdateInvestmentTransaction(
+          userId,
+          transactionId,
+          { securityQuery: "MSFT" },
+        );
+
+        expect(preview.exchangeRate).toBe(1.37);
+        expect(exchangeRateService.getRateForDate).toHaveBeenCalledWith(
+          "USD",
+          "CAD",
+          settlementSell.transactionDate,
+        );
+      });
     });
   });
 
@@ -7227,6 +8773,26 @@ describe("InvestmentTransactionsService", () => {
       expect(createSpy).toHaveBeenCalledTimes(2);
       expect(result.created.map((t) => t.id)).toEqual(["inv-1", "inv-2"]);
       expect(result.skipped).toEqual([]);
+    });
+
+    it("recomputes the bond-engine prices once per security after the whole batch, not once per row (R7)", async () => {
+      const createSpy = jest
+        .spyOn(service, "create")
+        .mockResolvedValueOnce({ id: "inv-1", securityId: "s1" } as never)
+        .mockResolvedValueOnce({ id: "inv-2", securityId: "s1" } as never)
+        .mockResolvedValueOnce({ id: "inv-3", securityId: "s2" } as never);
+
+      await service.createBulk(userId, [dto(), dto(), dto()]);
+
+      for (const call of createSpy.mock.calls) {
+        expect(call[2]).toEqual({ deferBondRecompute: true });
+      }
+      expect(
+        securitiesService.recomputeBondPricesAfterWrite,
+      ).toHaveBeenCalledTimes(1);
+      expect(
+        securitiesService.recomputeBondPricesAfterWrite,
+      ).toHaveBeenCalledWith(userId, ["s1", "s1", "s2"]);
     });
 
     it("isolates a failing row into skipped without aborting the rest", async () => {
@@ -7599,7 +9165,9 @@ describe("InvestmentTransactionsService", () => {
         expect(investmentTransactionsRepository.remove).not.toHaveBeenCalled();
         expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
         expect(accountsService.updateBalance).not.toHaveBeenCalled();
-        expect(holdingsService.updateHolding).not.toHaveBeenCalled();
+        expect(
+          holdingsService.rebuildScopesFromTransactions,
+        ).not.toHaveBeenCalled();
         expect(mockActionHistoryService.record).not.toHaveBeenCalled();
       });
 
@@ -7631,6 +9199,1473 @@ describe("InvestmentTransactionsService", () => {
           cashAccountId,
           -10062.5,
         );
+      });
+    });
+  });
+
+  /**
+   * INV-BOND-007: every share-moving row of a program-linked security names a
+   * series of that program, resolved by `resolveTransactionSeries` inside the
+   * write's own transaction and before anything is written.
+   * Canonical adversarial input: a rejected command reintroduced through a
+   * second entry point -- so each write path of the service is driven.
+   * Minimal mutation: delete the `resolveTransactionSeries` call of one path.
+   */
+  describe("the bond series of a share-moving row (INV-BOND-007)", () => {
+    const PROGRAM = "prog-1";
+    const SERIES_ON_SALE = "11111111-1111-5111-8111-111111111111";
+    const OTHER_SERIES = "22222222-2222-5222-8222-222222222222";
+    const buyDto = {
+      accountId,
+      securityId,
+      action: InvestmentAction.BUY,
+      transactionDate: "2026-10-15",
+      quantity: 10,
+      price: 100,
+      commission: 0,
+    };
+
+    /** Answers the resolver's statements; everything else as the harness does. */
+    /** A row of the bond ledger query (`loadBondLedger`). */
+    const ledgerRow = (
+      over: Partial<{
+        id: string;
+        action: string;
+        tx_date: string;
+        quantity: string;
+        account_id: string;
+        bond_instrument_id: string | null;
+      }>,
+    ) => ({
+      id: "row-x",
+      action: "BUY",
+      status: "UNRECONCILED",
+      tx_date: "2026-01-10",
+      quantity: "10",
+      account_id: accountId,
+      bond_instrument_id: SERIES_ON_SALE,
+      counterpart_account_id: null,
+      ...over,
+    });
+
+    /**
+     * Answers the resolver's statements and the write guard's ledger reads;
+     * everything else as the harness does. `ledgers` are the answers of
+     * successive ledger reads (the guard reads it before the mutation and again
+     * after it); the last repeats.
+     */
+    const bondDatabase = (opts: {
+      linked?: boolean;
+      inProgram?: string[];
+      onSale?: string[];
+      ledgers?: Array<Array<ReturnType<typeof ledgerRow>>>;
+      /**
+       * The answers of successive reads of the price band
+       * (`findQuantitiesNotBonds`: the rows outside it); the last repeats,
+       * none at all means no row is out of band.
+       */
+      band?: Array<Array<{ id: string; price: string; face: string }>>;
+    }) => {
+      const original = mockQueryRunner.manager.query.getMockImplementation();
+      let ledgerReads = 0;
+      let bandReads = 0;
+      mockQueryRunner.manager.query.mockImplementation(
+        async (sql: string, params?: unknown[]) => {
+          const text = String(sql);
+          if (text.includes("bond_auto_fetch")) {
+            return [
+              {
+                id: securityId,
+                user_id: userId,
+                symbol: "EDO",
+                currency_code: "PLN",
+                bond_program_id: opts.linked === false ? null : PROGRAM,
+                bond_auto_fetch: false,
+              },
+            ];
+          }
+          if (text.includes("t.price IS NOT NULL")) {
+            const all = opts.band ?? [[]];
+            const rows = all[Math.min(bandReads, all.length - 1)];
+            bandReads += 1;
+            return rows;
+          }
+          if (text.includes("FROM bond_programs WHERE id")) {
+            return [
+              {
+                issuer_country_code: "PL",
+                issuer_code: "PL_MF",
+                program_code: "EDO",
+              },
+            ];
+          }
+          if (text.includes("counterpart_account_id")) {
+            const all = opts.ledgers ?? [[]];
+            const rows = all[Math.min(ledgerReads, all.length - 1)];
+            ledgerReads += 1;
+            return rows;
+          }
+          if (text.includes("s.bond_program_id AS id")) {
+            return [
+              opts.linked === false
+                ? { id: null, program_code: null }
+                : { id: PROGRAM, program_code: "EDO" },
+            ];
+          }
+          if (text.includes("id = $1::uuid AND bond_program_id")) {
+            return (opts.inProgram ?? []).includes(String(params?.[0]))
+              ? [{ "?column?": 1 }]
+              : [];
+          }
+          if (text.includes("saleWindow")) {
+            return (opts.onSale ?? []).map((id) => ({ id }));
+          }
+          if (text.includes("SELECT series_code")) {
+            return [{ series_code: "EDO1036" }];
+          }
+          return original ? original(sql, params) : [];
+        },
+      );
+    };
+    const created = () =>
+      mockQueryRunner.manager.create.mock.calls
+        .filter(([entity]: any[]) => entity === InvestmentTransaction)
+        .map(([, data]: any[]) => data);
+
+    beforeEach(() => {
+      accountsService.findOne.mockImplementation((_u: string, aid: string) => {
+        if (aid === accountId) return Promise.resolve(mockInvestmentAccount);
+        if (aid === cashAccountId) return Promise.resolve(mockCashAccount);
+        return Promise.reject(new NotFoundException("Account not found"));
+      });
+      investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder(mockBuyTransaction),
+      );
+    });
+
+    describe("create (also bulk, AI and MCP, which commit through it)", () => {
+      it("infers the series on sale on the date and stores it", async () => {
+        bondDatabase({ onSale: [SERIES_ON_SALE] });
+        await service.create(userId, buyDto);
+        expect(created()[0]).toMatchObject({
+          bondInstrumentId: SERIES_ON_SALE,
+        });
+      });
+
+      it("stores a series of the program that is named, whatever is on sale", async () => {
+        bondDatabase({ inProgram: [OTHER_SERIES], onSale: [SERIES_ON_SALE] });
+        await service.create(userId, {
+          ...buyDto,
+          bondInstrumentId: OTHER_SERIES,
+        });
+        expect(created()[0]).toMatchObject({ bondInstrumentId: OTHER_SERIES });
+      });
+
+      it("refuses a series of another program before anything is written", async () => {
+        bondDatabase({ inProgram: [], onSale: [SERIES_ON_SALE] });
+        await expect(
+          service.create(userId, { ...buyDto, bondInstrumentId: OTHER_SERIES }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(created()).toEqual([]);
+        expect(mockQueryRunner.manager.save).not.toHaveBeenCalled();
+        expect(
+          holdingsService.rebuildScopesFromTransactions,
+        ).not.toHaveBeenCalled();
+        expect(
+          securitiesService.recomputeBondPricesAfterWrite,
+        ).not.toHaveBeenCalled();
+      });
+
+      it("refuses an acquisition no stored series covers (SERIES_NOT_DETERMINED), naming the date, before anything is written", async () => {
+        bondDatabase({ onSale: [] });
+        await expect(service.create(userId, buyDto)).rejects.toThrow(
+          /2026-10-15/,
+        );
+        expect(created()).toEqual([]);
+        expect(mockQueryRunner.manager.save).not.toHaveBeenCalled();
+      });
+
+      it("does not guess when two stored series were on sale", async () => {
+        bondDatabase({ onSale: [SERIES_ON_SALE, OTHER_SERIES] });
+        await expect(service.create(userId, buyDto)).rejects.toBeInstanceOf(
+          BadRequestException,
+        );
+        expect(created()).toEqual([]);
+      });
+
+      it("leaves a removal without a series when none is named, and checks one that is", async () => {
+        bondDatabase({ inProgram: [SERIES_ON_SALE], onSale: [] });
+        await service.create(userId, {
+          ...buyDto,
+          action: InvestmentAction.SELL,
+        });
+        expect(created()[0]).toMatchObject({ bondInstrumentId: null });
+
+        mockQueryRunner.manager.create.mockClear();
+        await service.create(userId, {
+          ...buyDto,
+          action: InvestmentAction.SELL,
+          bondInstrumentId: SERIES_ON_SALE,
+        });
+        expect(created()[0]).toMatchObject({
+          bondInstrumentId: SERIES_ON_SALE,
+        });
+
+        await expect(
+          service.create(userId, {
+            ...buyDto,
+            action: InvestmentAction.SELL,
+            bondInstrumentId: OTHER_SERIES,
+          }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+      });
+
+      it("never sets a series on a security that is not linked to a program, and refuses one that is named", async () => {
+        bondDatabase({ linked: false, onSale: [SERIES_ON_SALE] });
+        await service.create(userId, buyDto);
+        expect(created()[0]).toMatchObject({ bondInstrumentId: null });
+
+        mockQueryRunner.manager.create.mockClear();
+        await expect(
+          service.create(userId, { ...buyDto, bondInstrumentId: OTHER_SERIES }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(created()).toEqual([]);
+      });
+
+      it("refuses a SELL naming a series the account does not hold enough of (REMOVAL_EXCEEDS_SERIES), after the mutation, so nothing commits", async () => {
+        const buy = ledgerRow({ id: "b1", quantity: "5" });
+        const sell = ledgerRow({
+          id: "written-1",
+          action: "SELL",
+          tx_date: "2026-10-15",
+          quantity: "10",
+        });
+        bondDatabase({
+          inProgram: [SERIES_ON_SALE],
+          ledgers: [[buy], [buy, sell]],
+        });
+        mockQueryRunner.manager.save.mockImplementationOnce(
+          async (data: object) => ({ ...data, id: "written-1" }),
+        );
+        const attempt = service.create(userId, {
+          ...buyDto,
+          action: InvestmentAction.SELL,
+          bondInstrumentId: SERIES_ON_SALE,
+        });
+        await expect(attempt).rejects.toMatchObject({
+          response: { errorCode: "REMOVAL_EXCEEDS_SERIES" },
+        });
+        await expect(attempt).rejects.toBeInstanceOf(BadRequestException);
+        // The check ran inside the write's transaction, after the mutation;
+        // the throw rolls the scoped transaction back, so nothing after it ran.
+        expect(mockQueryRunner.manager.save).toHaveBeenCalled();
+        expect(
+          securitiesService.recomputeBondPricesAfterWrite,
+        ).not.toHaveBeenCalled();
+        expect(mockActionHistoryService.record).not.toHaveBeenCalled();
+      });
+
+      it("refuses a SELL that names no series when it removes more bonds than the account holds (OVER_REMOVAL)", async () => {
+        const buy = ledgerRow({ id: "b1", quantity: "5" });
+        const sell = ledgerRow({
+          id: "written-1",
+          action: "SELL",
+          tx_date: "2026-10-15",
+          quantity: "10",
+          bond_instrument_id: null,
+        });
+        bondDatabase({ ledgers: [[buy], [buy, sell]] });
+        await expect(
+          service.create(userId, { ...buyDto, action: InvestmentAction.SELL }),
+        ).rejects.toMatchObject({ response: { errorCode: "OVER_REMOVAL" } });
+      });
+
+      it("is not blocked by a removal problem that already existed about another row, but is when the refusal names the written row", async () => {
+        const buy = ledgerRow({ id: "b1", quantity: "5" });
+        const oldSell = ledgerRow({
+          id: "old",
+          action: "SELL",
+          tx_date: "2026-03-01",
+          quantity: "9",
+          bond_instrument_id: null,
+        });
+        bondDatabase({
+          onSale: [SERIES_ON_SALE],
+          ledgers: [
+            [buy, oldSell],
+            [buy, oldSell],
+          ],
+        });
+        await expect(service.create(userId, buyDto)).resolves.toBeDefined();
+
+        // The same old refusal, but now the written row is the one refused.
+        const written = ledgerRow({
+          id: "written-1",
+          action: "SELL",
+          tx_date: "2026-02-01",
+          quantity: "9",
+          bond_instrument_id: null,
+        });
+        bondDatabase({
+          onSale: [SERIES_ON_SALE],
+          ledgers: [
+            [buy, oldSell],
+            [buy, written, oldSell],
+          ],
+        });
+        mockQueryRunner.manager.save.mockImplementationOnce(
+          async (data: object) => ({ ...data, id: "written-1" }),
+        );
+        await expect(service.create(userId, buyDto)).rejects.toMatchObject({
+          response: { errorCode: "OVER_REMOVAL" },
+        });
+      });
+
+      it("refuses an ADD_SHARES or an unpaired TRANSFER_IN that names no series (SERIES_REQUIRED), never inferring one from the date", async () => {
+        bondDatabase({ onSale: [SERIES_ON_SALE] });
+        for (const action of [
+          InvestmentAction.ADD_SHARES,
+          InvestmentAction.TRANSFER_IN,
+        ]) {
+          await expect(
+            service.create(userId, { ...buyDto, action, price: undefined }),
+          ).rejects.toMatchObject({
+            response: { errorCode: "SERIES_REQUIRED" },
+          });
+        }
+        expect(created()).toEqual([]);
+
+        // Named, they are accepted.
+        bondDatabase({ inProgram: [OTHER_SERIES], onSale: [SERIES_ON_SALE] });
+        await service.create(userId, {
+          ...buyDto,
+          action: InvestmentAction.ADD_SHARES,
+          price: undefined,
+          bondInstrumentId: OTHER_SERIES,
+        });
+        expect(created()[0]).toMatchObject({ bondInstrumentId: OTHER_SERIES });
+      });
+
+      it("refuses a series on a cash action", async () => {
+        bondDatabase({ inProgram: [SERIES_ON_SALE] });
+        await expect(
+          service.create(userId, {
+            accountId,
+            securityId,
+            action: InvestmentAction.DIVIDEND,
+            transactionDate: "2026-10-15",
+            price: 5,
+            bondInstrumentId: SERIES_ON_SALE,
+          }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+      });
+    });
+
+    describe("update", () => {
+      it("refuses a series of another program before the reversal writes anything", async () => {
+        bondDatabase({ inProgram: [] });
+        await expect(
+          service.update(userId, transactionId, {
+            bondInstrumentId: OTHER_SERIES,
+          }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(mockQueryRunner.manager.save).not.toHaveBeenCalled();
+        expect(accountsService.updateBalance).not.toHaveBeenCalled();
+      });
+
+      it("keeps the stored series as it is when the edit changes neither it, the security, the action nor the date, even if the program no longer holds it", async () => {
+        bondDatabase({ inProgram: [], onSale: [SERIES_ON_SALE] });
+        investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+          createMockQueryBuilder({
+            ...mockBuyTransaction,
+            bondInstrumentId: OTHER_SERIES,
+          }),
+        );
+        await service.update(userId, transactionId, {
+          description: "renamed",
+          bondInstrumentId: OTHER_SERIES,
+        });
+        // Not a request (the value is unchanged), so it is neither refused nor
+        // re-resolved: the stored value stays as it is.
+        expect(mockQueryRunner.manager.save).toHaveBeenCalledWith(
+          expect.objectContaining({ bondInstrumentId: OTHER_SERIES }),
+        );
+      });
+
+      it("keeps a NULL series of a legacy row on an unrelated edit instead of asking for a series (a BUY with none on sale, an ADD_SHARES)", async () => {
+        bondDatabase({ onSale: [] });
+        for (const action of [
+          InvestmentAction.BUY,
+          InvestmentAction.ADD_SHARES,
+        ]) {
+          mockQueryRunner.manager.save.mockClear();
+          investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+            createMockQueryBuilder({
+              ...mockBuyTransaction,
+              action,
+              bondInstrumentId: null,
+            }),
+          );
+          await service.update(userId, transactionId, {
+            description: "renamed",
+            action,
+            transactionDate: mockBuyTransaction.transactionDate,
+          });
+          expect(mockQueryRunner.manager.save).toHaveBeenCalledWith(
+            expect.objectContaining({ bondInstrumentId: null }),
+          );
+        }
+      });
+
+      it("resolves the series again when the date changes (a BUY with none on the new date is refused before any write)", async () => {
+        bondDatabase({ onSale: [] });
+        await expect(
+          service.update(userId, transactionId, {
+            transactionDate: "2025-02-20",
+          }),
+        ).rejects.toThrow(/2025-02-20/);
+        expect(mockQueryRunner.manager.save).not.toHaveBeenCalled();
+      });
+
+      it("asks for the series when an edit turns the row into an ADD_SHARES that has none (SERIES_REQUIRED)", async () => {
+        bondDatabase({ onSale: [SERIES_ON_SALE] });
+        await expect(
+          service.update(userId, transactionId, {
+            action: InvestmentAction.ADD_SHARES,
+          }),
+        ).rejects.toMatchObject({
+          response: { errorCode: "SERIES_REQUIRED" },
+        });
+        expect(mockQueryRunner.manager.save).not.toHaveBeenCalled();
+      });
+
+      it("refuses an edit after which a removal naming a series is not covered (REMOVAL_EXCEEDS_SERIES), and an unrelated edit is not blocked by an old refusal", async () => {
+        const buy = ledgerRow({ id: "b1", quantity: "10" });
+        const sell = ledgerRow({
+          id: transactionId,
+          action: "SELL",
+          tx_date: "2026-02-01",
+          quantity: "8",
+        });
+        // Derivable before; after the edit the BUY holds fewer than the SELL.
+        bondDatabase({
+          ledgers: [
+            [buy, sell],
+            [{ ...buy, quantity: "5" }, sell],
+          ],
+        });
+        await expect(
+          service.update(userId, transactionId, { quantity: 5 }),
+        ).rejects.toMatchObject({
+          response: { errorCode: "REMOVAL_EXCEEDS_SERIES" },
+        });
+
+        // A refusal that already existed about another row blocks nothing.
+        const oldSell = ledgerRow({
+          id: "old",
+          action: "SELL",
+          tx_date: "2026-03-01",
+          quantity: "99",
+        });
+        bondDatabase({ ledgers: [[buy, oldSell]] });
+        await expect(
+          service.update(userId, transactionId, { description: "renamed" }),
+        ).resolves.toBeDefined();
+      });
+
+      it("stores a newly named series of the program", async () => {
+        bondDatabase({ inProgram: [OTHER_SERIES] });
+        await service.update(userId, transactionId, {
+          bondInstrumentId: OTHER_SERIES,
+        });
+        expect(mockQueryRunner.manager.save).toHaveBeenCalledWith(
+          expect.objectContaining({ bondInstrumentId: OTHER_SERIES }),
+        );
+      });
+    });
+
+    describe("remove and void (an acquisition leaving a later removal uncovered)", () => {
+      const buy = () => ledgerRow({ id: transactionId, quantity: "10" });
+      const sell = (series: string | null) =>
+        ledgerRow({
+          id: "s1",
+          action: "SELL",
+          tx_date: "2026-02-01",
+          quantity: "8",
+          bond_instrument_id: series,
+        });
+
+      it("refuses deleting a purchase a later SELL of its series depends on (REMOVAL_EXCEEDS_SERIES), after the mutation, so the delete rolls back", async () => {
+        bondDatabase({
+          ledgers: [[buy(), sell(SERIES_ON_SALE)], [sell(SERIES_ON_SALE)]],
+        });
+        await expect(
+          service.remove(userId, transactionId),
+        ).rejects.toMatchObject({
+          response: { errorCode: "REMOVAL_EXCEEDS_SERIES" },
+        });
+        expect(mockQueryRunner.manager.remove).toHaveBeenCalled();
+        expect(mockActionHistoryService.record).not.toHaveBeenCalled();
+        expect(
+          securitiesService.recomputeBondPricesAfterWrite,
+        ).not.toHaveBeenCalled();
+      });
+
+      it("refuses it as OVER_REMOVAL when the SELL names no series, and allows a delete nothing depends on", async () => {
+        bondDatabase({ ledgers: [[buy(), sell(null)], [sell(null)]] });
+        await expect(
+          service.remove(userId, transactionId),
+        ).rejects.toMatchObject({
+          response: { errorCode: "OVER_REMOVAL" },
+        });
+        bondDatabase({ ledgers: [[buy()], []] });
+        await expect(
+          service.remove(userId, transactionId),
+        ).resolves.toBeUndefined();
+      });
+
+      it("is not blocked by an older removal problem that was already there", async () => {
+        const old = [sell(null)];
+        bondDatabase({ ledgers: [old, old] });
+        await expect(
+          service.remove(userId, transactionId),
+        ).resolves.toBeUndefined();
+      });
+
+      it("refuses voiding such a purchase (updateStatus) under the same rule", async () => {
+        bondDatabase({
+          ledgers: [[buy(), sell(SERIES_ON_SALE)], [sell(SERIES_ON_SALE)]],
+        });
+        const bondQuery =
+          mockQueryRunner.manager.query.getMockImplementation()!;
+        mockQueryRunner.manager.query.mockImplementation(
+          async (sql: string, params?: unknown[]) =>
+            /FOR UPDATE/i.test(String(sql)) &&
+            /investment_transactions/i.test(String(sql))
+              ? [
+                  {
+                    id: transactionId,
+                    account_id: accountId,
+                    security_id: securityId,
+                    funding_account_id: null,
+                    transaction_id: null,
+                    transaction_split_id: null,
+                    linked_transaction_id: null,
+                    action: InvestmentAction.BUY,
+                    transaction_date: "2026-01-10",
+                    quantity: "10",
+                    price: "100",
+                    commission: "0",
+                    total_amount: "1000",
+                    exchange_rate: "1",
+                    status: TransactionStatus.CLEARED,
+                  },
+                ]
+              : bondQuery(sql, params),
+        );
+        await expect(
+          service.updateStatus(userId, transactionId, TransactionStatus.VOID),
+        ).rejects.toMatchObject({
+          response: { errorCode: "REMOVAL_EXCEEDS_SERIES" },
+        });
+      });
+    });
+
+    describe("transferSecurity", () => {
+      const toAccountId = "account-2";
+      beforeEach(() => {
+        accountsService.findOne.mockImplementation((_u: string, aid: string) =>
+          Promise.resolve(
+            aid === toAccountId
+              ? {
+                  id: toAccountId,
+                  userId,
+                  accountType: "INVESTMENT",
+                  accountSubType: AccountSubType.INVESTMENT_BROKERAGE,
+                  currencyCode: "USD",
+                  name: "B",
+                }
+              : mockInvestmentAccount,
+          ),
+        );
+      });
+      const transferDto = {
+        fromAccountId: accountId,
+        toAccountId,
+        securityId,
+        transactionDate: "2026-11-01",
+        quantity: 5,
+        costPerShare: 100,
+      };
+
+      it("stores a named series on both legs, and none when none is named (FIFO across series)", async () => {
+        bondDatabase({ inProgram: [OTHER_SERIES] });
+        await service.transferSecurity(userId, {
+          ...transferDto,
+          bondInstrumentId: OTHER_SERIES,
+        });
+        expect(created().map((leg: any) => leg.bondInstrumentId)).toEqual([
+          OTHER_SERIES,
+          OTHER_SERIES,
+        ]);
+
+        mockQueryRunner.manager.create.mockClear();
+        await service.transferSecurity(userId, transferDto);
+        expect(created().map((leg: any) => leg.bondInstrumentId)).toEqual([
+          null,
+          null,
+        ]);
+      });
+
+      it("refuses a transfer after which the source does not hold enough of the series (REMOVAL_EXCEEDS_SERIES)", async () => {
+        const buy = ledgerRow({ id: "b1", quantity: "3" });
+        const out = ledgerRow({
+          id: "out-1",
+          action: "TRANSFER_OUT",
+          tx_date: "2026-11-01",
+          quantity: "5",
+          counterpart_account_id: toAccountId,
+        } as never);
+        bondDatabase({
+          inProgram: [SERIES_ON_SALE],
+          ledgers: [[buy], [buy, out]],
+        });
+        await expect(
+          service.transferSecurity(userId, {
+            ...transferDto,
+            bondInstrumentId: SERIES_ON_SALE,
+          }),
+        ).rejects.toMatchObject({
+          response: { errorCode: "REMOVAL_EXCEEDS_SERIES" },
+        });
+      });
+
+      it("refuses a series of another program before either leg is written", async () => {
+        bondDatabase({ inProgram: [] });
+        await expect(
+          service.transferSecurity(userId, {
+            ...transferDto,
+            bondInstrumentId: OTHER_SERIES,
+          }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(created()).toEqual([]);
+      });
+    });
+
+    describe("a transaction embedded in a split", () => {
+      it("infers the series from the parent's date", async () => {
+        bondDatabase({ onSale: [SERIES_ON_SALE] });
+        accountsService.findOne.mockResolvedValue(mockInvestmentAccount);
+        securitiesService.findOne.mockResolvedValue(mockSecurity);
+        await service.createEmbeddedForSplit(
+          mockQueryRunner.manager as never,
+          userId,
+          "2026-10-15",
+          "split-1",
+          accountId,
+          cashAccountId,
+          {
+            action: InvestmentAction.BUY,
+            securityId,
+            quantity: 10,
+            price: 100,
+            commission: 0,
+          },
+        );
+        expect(created().at(-1)).toMatchObject({
+          bondInstrumentId: SERIES_ON_SALE,
+        });
+      });
+
+      it("keeps the series its predecessor carried, NULL included, when the incoming split names none and none is on sale (a parent-only edit)", async () => {
+        bondDatabase({ onSale: [] });
+        accountsService.findOne.mockResolvedValue(mockInvestmentAccount);
+        securitiesService.findOne.mockResolvedValue(mockSecurity);
+        const dto = {
+          action: InvestmentAction.BUY,
+          securityId,
+          quantity: 10,
+          price: 100,
+          commission: 0,
+        };
+        for (const carried of [null, OTHER_SERIES]) {
+          await service.createEmbeddedForSplit(
+            mockQueryRunner.manager as never,
+            userId,
+            "2026-10-15",
+            "split-1",
+            accountId,
+            cashAccountId,
+            dto,
+            undefined,
+            undefined,
+            { bondInstrumentId: carried },
+          );
+          expect(created().at(-1)).toMatchObject({ bondInstrumentId: carried });
+        }
+      });
+
+      it("takes a series the incoming split names over the carried one", async () => {
+        bondDatabase({ inProgram: [SERIES_ON_SALE], onSale: [] });
+        accountsService.findOne.mockResolvedValue(mockInvestmentAccount);
+        securitiesService.findOne.mockResolvedValue(mockSecurity);
+        await service.createEmbeddedForSplit(
+          mockQueryRunner.manager as never,
+          userId,
+          "2026-10-15",
+          "split-1",
+          accountId,
+          cashAccountId,
+          {
+            action: InvestmentAction.BUY,
+            securityId,
+            quantity: 10,
+            price: 100,
+            commission: 0,
+            bondInstrumentId: SERIES_ON_SALE,
+          },
+          undefined,
+          undefined,
+          { bondInstrumentId: null },
+        );
+        expect(created().at(-1)).toMatchObject({
+          bondInstrumentId: SERIES_ON_SALE,
+        });
+      });
+
+      it("refuses before the row is written when no series covers the date", async () => {
+        bondDatabase({ onSale: [] });
+        accountsService.findOne.mockResolvedValue(mockInvestmentAccount);
+        securitiesService.findOne.mockResolvedValue(mockSecurity);
+        await expect(
+          service.createEmbeddedForSplit(
+            mockQueryRunner.manager as never,
+            userId,
+            "2026-10-15",
+            "split-1",
+            accountId,
+            cashAccountId,
+            {
+              action: InvestmentAction.BUY,
+              securityId,
+              quantity: 10,
+              price: 100,
+              commission: 0,
+            },
+          ),
+        ).rejects.toBeInstanceOf(BadRequestException);
+        expect(mockQueryRunner.manager.save).not.toHaveBeenCalled();
+      });
+    });
+
+    describe("the preview of the AI assistant and MCP", () => {
+      beforeEach(() => {
+        securitiesService.resolveBySymbolOrName.mockResolvedValue({
+          match: mockSecurity,
+          candidates: [],
+        });
+        securitiesService.findOne.mockResolvedValue(mockSecurity);
+      });
+      const previewInput = {
+        accountId,
+        action: InvestmentAction.BUY,
+        transactionDate: "2026-10-15",
+        securityQuery: "AAPL",
+        quantity: 10,
+        price: 100,
+      };
+
+      it("shows the series the commit will store, inferred from the date", async () => {
+        bondDatabase({ onSale: [SERIES_ON_SALE] });
+        await expect(
+          service.previewCreateInvestmentTransaction(userId, previewInput),
+        ).resolves.toMatchObject({
+          bondInstrumentId: SERIES_ON_SALE,
+          bondSeriesCode: "EDO1036",
+        });
+      });
+
+      it("resolves a series code within the program, and refuses one it does not hold", async () => {
+        bondDatabase({ inProgram: [SERIES_ON_SALE] });
+        const original = mockQueryRunner.manager.query.getMockImplementation()!;
+        mockQueryRunner.manager.query.mockImplementation(
+          async (sql: string, params?: unknown[]) =>
+            String(sql).includes("UPPER(series_code) = UPPER($2)")
+              ? params?.[1] === "EDO1036"
+                ? [{ id: SERIES_ON_SALE }]
+                : []
+              : original(sql, params),
+        );
+        await expect(
+          service.previewCreateInvestmentTransaction(userId, {
+            ...previewInput,
+            bondSeriesCode: "EDO9999",
+          }),
+        ).rejects.toBeInstanceOf(BadRequestException);
+
+        await expect(
+          service.previewCreateInvestmentTransaction(userId, {
+            ...previewInput,
+            bondSeriesCode: "EDO1036",
+          }),
+        ).resolves.toMatchObject({ bondInstrumentId: SERIES_ON_SALE });
+        await expect(
+          service.previewCreateInvestmentTransaction(userId, {
+            ...previewInput,
+            bondSeriesCode: "COI1030",
+          }),
+        ).rejects.toThrow(/COI1030/);
+      });
+
+      it("refuses what the commit would refuse: no series covers the date", async () => {
+        bondDatabase({ onSale: [] });
+        await expect(
+          service.previewCreateInvestmentTransaction(userId, previewInput),
+        ).rejects.toBeInstanceOf(BadRequestException);
+      });
+
+      it("shows no series for a security that is not linked", async () => {
+        bondDatabase({ linked: false });
+        await expect(
+          service.previewCreateInvestmentTransaction(userId, previewInput),
+        ).resolves.toMatchObject({
+          bondInstrumentId: null,
+          bondSeriesCode: null,
+        });
+      });
+    });
+
+    describe("the preview of an edit of a legacy row with no stored series (L4)", () => {
+      beforeEach(() => {
+        securitiesService.resolveBySymbolOrName.mockResolvedValue({
+          match: mockSecurity,
+          candidates: [],
+        });
+        securitiesService.findOne.mockResolvedValue(mockSecurity);
+      });
+      const legacy = (action: InvestmentAction) =>
+        investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+          createMockQueryBuilder({
+            ...mockBuyTransaction,
+            action,
+            bondInstrumentId: null,
+          }),
+        );
+
+      it.each([InvestmentAction.ADD_SHARES, InvestmentAction.BUY])(
+        "keeps the NULL series of a %s on a description-only edit instead of refusing it, as update() does",
+        async (action) => {
+          bondDatabase({ onSale: [] });
+          legacy(action);
+          await expect(
+            service.previewUpdateInvestmentTransaction(userId, transactionId, {
+              description: "renamed",
+            }),
+          ).resolves.toMatchObject({
+            bondInstrumentId: null,
+            bondSeriesCode: null,
+            description: "renamed",
+          });
+        },
+      );
+
+      it("still resolves the series when the edit changes the date, the action or names a series", async () => {
+        bondDatabase({ onSale: [] });
+        legacy(InvestmentAction.BUY);
+        await expect(
+          service.previewUpdateInvestmentTransaction(userId, transactionId, {
+            transactionDate: "2025-02-20",
+          }),
+        ).rejects.toMatchObject({
+          response: { errorCode: "SERIES_NOT_DETERMINED" },
+        });
+        legacy(InvestmentAction.BUY);
+        await expect(
+          service.previewUpdateInvestmentTransaction(userId, transactionId, {
+            action: InvestmentAction.ADD_SHARES,
+          }),
+        ).rejects.toMatchObject({
+          response: { errorCode: "SERIES_REQUIRED" },
+        });
+      });
+    });
+
+    /**
+     * INV-BOND-009: a bond-linked REDEEM through the assistant or MCP is split
+     * into returned principal and interest by the server, never left to the
+     * caller to book as a capital gain.
+     */
+    describe("the redemption split of a bond REDEEM in the preview (INV-BOND-009)", () => {
+      const EDO0423 = "33333333-3333-5333-8333-333333333333";
+      // 10 x EDO0423 redeemed at maturity: 147.05 per bond, i.e. 100.00 of
+      // principal and 47.05 of interest each.
+      const AT_MATURITY = {
+        date: "2023-04-01",
+        quantity: 10,
+        principal: "1000.00",
+        grossInterest: "470.50",
+        deduction: "0.00",
+        interest: "470.50",
+        principalReturned: "1000.00",
+        payout: "1470.50",
+        refusal: null,
+      };
+      const redeem = {
+        accountId,
+        action: InvestmentAction.REDEEM,
+        transactionDate: "2023-04-01",
+        securityQuery: "AAPL",
+        quantity: 10,
+      };
+
+      beforeEach(() => {
+        securitiesService.resolveBySymbolOrName.mockResolvedValue({
+          match: mockSecurity,
+          candidates: [],
+        });
+        securitiesService.findOne.mockResolvedValue(mockSecurity);
+        bondDatabase({});
+        bondHoldingsService.seriesHoldings.mockResolvedValue({
+          holdings: [
+            { instrumentId: EDO0423, seriesCode: "EDO0423", quantity: 10 },
+          ],
+        });
+        bondHoldingsService.redemptionSplit.mockResolvedValue(AT_MATURITY);
+      });
+
+      it("fills price 100.00 and accrued interest 470.50 when the caller gave neither, and names the series the split was worked out for", async () => {
+        const preview = await service.previewCreateInvestmentTransaction(
+          userId,
+          redeem,
+        );
+        expect(bondHoldingsService.redemptionSplit).toHaveBeenCalledWith(
+          userId,
+          securityId,
+          accountId,
+          EDO0423,
+          "2023-04-01",
+          10,
+          undefined,
+        );
+        expect(preview).toMatchObject({
+          price: 100,
+          accruedInterest: 470.5,
+          totalAmount: 1000,
+          // The one cash row is the payout.
+          cashAmount: 1470.5,
+          bondInstrumentId: EDO0423,
+          bondSeriesCode: "EDO0423",
+          redemptionSplit: {
+            principal: 1000,
+            interest: 470.5,
+            deduction: 0,
+            payout: 1470.5,
+            outcome: "filled",
+          },
+        });
+      });
+
+      it("splits a price that is the whole payout per bond (147.05) instead of booking its interest as a gain", async () => {
+        const preview = await service.previewCreateInvestmentTransaction(
+          userId,
+          { ...redeem, price: 147.05 },
+        );
+        expect(preview).toMatchObject({
+          price: 100,
+          accruedInterest: 470.5,
+          totalAmount: 1000,
+          cashAmount: 1470.5,
+        });
+        expect(preview.redemptionSplit?.outcome).toBe("filled");
+
+        // The same payout stated as an executed total.
+        const byTotal = await service.previewCreateInvestmentTransaction(
+          userId,
+          { ...redeem, totalAmount: 1470.5 },
+        );
+        expect(byTotal).toMatchObject({
+          price: 100,
+          accruedInterest: 470.5,
+          totalAmount: 1000,
+        });
+      });
+
+      it("fills only the price when the caller gave the interest", async () => {
+        const preview = await service.previewCreateInvestmentTransaction(
+          userId,
+          { ...redeem, accruedInterest: 470.5 },
+        );
+        expect(preview).toMatchObject({ price: 100, accruedInterest: 470.5 });
+        expect(preview.redemptionSplit?.outcome).toBe("filled");
+      });
+
+      it("keeps both figures the caller gave and flags a difference from the split instead of overriding", async () => {
+        const matching = await service.previewCreateInvestmentTransaction(
+          userId,
+          { ...redeem, price: 100, accruedInterest: 470.5 },
+        );
+        expect(matching.redemptionSplit?.outcome).toBe("matches");
+
+        const differing = await service.previewCreateInvestmentTransaction(
+          userId,
+          { ...redeem, price: 100, accruedInterest: 400 },
+        );
+        expect(differing).toMatchObject({
+          price: 100,
+          accruedInterest: 400,
+          cashAmount: 1400,
+          redemptionSplit: {
+            interest: 470.5,
+            payout: 1470.5,
+            outcome: "differs",
+          },
+        });
+
+        // A price that is not the payout, with no interest: kept, flagged.
+        const principalOnly = await service.previewCreateInvestmentTransaction(
+          userId,
+          { ...redeem, price: 100 },
+        );
+        expect(principalOnly).toMatchObject({
+          price: 100,
+          accruedInterest: 0,
+          redemptionSplit: { outcome: "differs" },
+        });
+      });
+
+      it("refuses the preview when the split cannot be worked out, guessing nothing", async () => {
+        bondHoldingsService.redemptionSplit.mockResolvedValue({
+          ...AT_MATURITY,
+          interest: null,
+          grossInterest: null,
+          principalReturned: null,
+          payout: null,
+          refusal: "RATE_UNKNOWN",
+        });
+        await expect(
+          service.previewCreateInvestmentTransaction(userId, redeem),
+        ).rejects.toMatchObject({
+          response: { errorCode: "RATE_UNKNOWN" },
+        });
+        // Both figures stated: the split is only a comparison, so no refusal.
+        await expect(
+          service.previewCreateInvestmentTransaction(userId, {
+            ...redeem,
+            price: 100,
+            accruedInterest: 470.5,
+          }),
+        ).resolves.toMatchObject({
+          price: 100,
+          accruedInterest: 470.5,
+          redemptionSplit: null,
+        });
+      });
+
+      it("asks for the series when the account holds none or several, unless both figures were given", async () => {
+        bondHoldingsService.seriesHoldings.mockResolvedValue({
+          holdings: [
+            { instrumentId: EDO0423, seriesCode: "EDO0423", quantity: 5 },
+            { instrumentId: OTHER_SERIES, seriesCode: "EDO0523", quantity: 5 },
+          ],
+        });
+        await expect(
+          service.previewCreateInvestmentTransaction(userId, redeem),
+        ).rejects.toMatchObject({
+          response: { errorCode: "REDEEM_SERIES_REQUIRED" },
+        });
+        expect(bondHoldingsService.redemptionSplit).not.toHaveBeenCalled();
+        await expect(
+          service.previewCreateInvestmentTransaction(userId, {
+            ...redeem,
+            price: 100,
+            accruedInterest: 470.5,
+          }),
+        ).resolves.toMatchObject({ redemptionSplit: null });
+      });
+
+      it("takes the split of the series the caller named, whatever else the account holds", async () => {
+        bondDatabase({ inProgram: [EDO0423] });
+        const original = mockQueryRunner.manager.query.getMockImplementation()!;
+        mockQueryRunner.manager.query.mockImplementation(
+          async (sql: string, params?: unknown[]) =>
+            String(sql).includes("UPPER(series_code) = UPPER($2)")
+              ? [{ id: EDO0423 }]
+              : original(sql, params),
+        );
+        const preview = await service.previewCreateInvestmentTransaction(
+          userId,
+          { ...redeem, bondSeriesCode: "EDO0423" },
+        );
+        expect(bondHoldingsService.seriesHoldings).not.toHaveBeenCalled();
+        expect(bondHoldingsService.redemptionSplit).toHaveBeenCalledWith(
+          userId,
+          securityId,
+          accountId,
+          EDO0423,
+          "2023-04-01",
+          10,
+          undefined,
+        );
+        expect(preview).toMatchObject({ price: 100, accruedInterest: 470.5 });
+      });
+
+      it("leaves a security that is not linked to a bond program alone", async () => {
+        bondDatabase({ linked: false });
+        const preview = await service.previewCreateInvestmentTransaction(
+          userId,
+          { ...redeem, price: 100 },
+        );
+        expect(bondHoldingsService.redemptionSplit).not.toHaveBeenCalled();
+        expect(preview).toMatchObject({
+          price: 100,
+          accruedInterest: 0,
+          redemptionSplit: null,
+        });
+      });
+
+      it("works the split of an edit without the row being edited, keeps its stored series and pins none", async () => {
+        investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+          createMockQueryBuilder({
+            ...mockBuyTransaction,
+            action: InvestmentAction.REDEEM,
+            quantity: 10,
+            price: 100,
+            transactionDate: "2023-04-01",
+            bondInstrumentId: null,
+          }),
+        );
+        const preview = await service.previewUpdateInvestmentTransaction(
+          userId,
+          transactionId,
+          { description: "renamed" },
+        );
+        expect(bondHoldingsService.redemptionSplit).toHaveBeenCalledWith(
+          userId,
+          securityId,
+          accountId,
+          EDO0423,
+          "2023-04-01",
+          10,
+          transactionId,
+        );
+        // The stored row books the interest as a gain: the card says so.
+        expect(preview).toMatchObject({
+          bondInstrumentId: null,
+          price: 100,
+          accruedInterest: 0,
+          redemptionSplit: { interest: 470.5, outcome: "differs" },
+        });
+      });
+
+      it("splits a REST create that states no accrued interest instead of booking it as a gain", async () => {
+        await service.create(userId, {
+          accountId,
+          securityId,
+          action: InvestmentAction.REDEEM,
+          transactionDate: "2023-04-01",
+          quantity: 10,
+          price: 147.05,
+        });
+        expect(bondHoldingsService.redemptionSplit).toHaveBeenCalled();
+        expect(created()[0]).toMatchObject({
+          action: InvestmentAction.REDEEM,
+          price: 100,
+          totalAmount: 1000,
+        });
+        // The one cash row is the payout: principal plus the split's interest.
+        expect(accountsService.updateBalance).toHaveBeenCalledWith(
+          cashAccountId,
+          1470.5,
+        );
+      });
+
+      it("splits a REST edit that changes a redemption's price and states no accrued interest", async () => {
+        investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+          createMockQueryBuilder({
+            ...mockBuyTransaction,
+            action: InvestmentAction.REDEEM,
+            quantity: 10,
+            price: 100,
+            totalAmount: 1000,
+            transactionDate: "2023-04-01",
+            bondInstrumentId: null,
+          }),
+        );
+        await service.update(userId, transactionId, { price: 147.05 });
+        expect(bondHoldingsService.redemptionSplit).toHaveBeenCalledWith(
+          userId,
+          securityId,
+          accountId,
+          EDO0423,
+          "2023-04-01",
+          10,
+          transactionId,
+        );
+        expect(mockQueryRunner.manager.save).toHaveBeenCalledWith(
+          expect.objectContaining({ price: 100, totalAmount: 990.01 }),
+        );
+      });
+
+      it("refuses a REST create whose split is refused, writing nothing", async () => {
+        bondHoldingsService.redemptionSplit.mockResolvedValue({
+          ...AT_MATURITY,
+          interest: null,
+          grossInterest: null,
+          principalReturned: null,
+          payout: null,
+          refusal: "RATE_UNKNOWN",
+        });
+        await expect(
+          service.create(userId, {
+            accountId,
+            securityId,
+            action: InvestmentAction.REDEEM,
+            transactionDate: "2023-04-01",
+            quantity: 10,
+            price: 147.05,
+          }),
+        ).rejects.toMatchObject({ response: { errorCode: "RATE_UNKNOWN" } });
+        expect(created()).toEqual([]);
+      });
+
+      it("keeps the stated figures of a REST create that names no series when the account holds several", async () => {
+        bondHoldingsService.seriesHoldings.mockResolvedValue({
+          holdings: [
+            { instrumentId: EDO0423, seriesCode: "EDO0423", quantity: 5 },
+            { instrumentId: OTHER_SERIES, seriesCode: "EDO0523", quantity: 5 },
+          ],
+        });
+        await service.create(userId, {
+          accountId,
+          securityId,
+          action: InvestmentAction.REDEEM,
+          transactionDate: "2023-04-01",
+          quantity: 10,
+          price: 147.05,
+        });
+        expect(bondHoldingsService.redemptionSplit).not.toHaveBeenCalled();
+        expect(created()[0]).toMatchObject({
+          action: InvestmentAction.REDEEM,
+          price: 147.05,
+        });
+      });
+
+      it("splits a REST edit of the quantity again instead of keeping the interest stored for the old quantity", async () => {
+        const companion = {
+          id: "inv-tx-interest",
+          userId,
+          action: InvestmentAction.INTEREST,
+          linkedTransactionId: transactionId,
+          totalAmount: 470.5,
+          price: 470.5,
+        };
+        investmentTransactionsRepository.createQueryBuilder.mockReturnValue(
+          createMockQueryBuilder({
+            ...mockBuyTransaction,
+            action: InvestmentAction.REDEEM,
+            quantity: 10,
+            price: 100,
+            totalAmount: 1000,
+            transactionDate: "2023-04-01",
+            bondInstrumentId: EDO0423,
+            linkedTransactionId: companion.id,
+          }),
+        );
+        investmentTransactionsRepository.findOne.mockResolvedValue(companion);
+        bondHoldingsService.redemptionSplit.mockResolvedValue({
+          ...AT_MATURITY,
+          quantity: 5,
+          principal: "500.00",
+          grossInterest: "235.25",
+          interest: "235.25",
+          principalReturned: "500.00",
+          payout: "735.25",
+        });
+        await service.update(userId, transactionId, { quantity: 5 });
+        expect(bondHoldingsService.redemptionSplit).toHaveBeenCalledWith(
+          userId,
+          securityId,
+          accountId,
+          EDO0423,
+          "2023-04-01",
+          5,
+          transactionId,
+        );
+        expect(mockQueryRunner.manager.save).toHaveBeenCalledWith(
+          expect.objectContaining({
+            id: transactionId,
+            price: 100,
+            totalAmount: 490.01,
+          }),
+        );
+        // Proceeds plus the new interest, not the old 470.50.
+        expect(mockQueryRunner.manager.save).toHaveBeenCalledWith(
+          expect.objectContaining({ amount: 725.26 }),
+        );
+      });
+    });
+
+    /**
+     * INV-BOND-007 (M1): a split parent's deletion, void and replacement reach
+     * the lots through the embedded rows. The guard runs there too, so the whole
+     * parent operation rolls back; a replacement verifies once after the
+     * recreation.
+     */
+    describe("split-embedded rows (M1)", () => {
+      const embedded: any = {
+        id: "emb-1",
+        userId,
+        accountId,
+        securityId,
+        action: InvestmentAction.BUY,
+        quantity: 10,
+        price: 100,
+        commission: 0,
+        totalAmount: 1000,
+        exchangeRate: 1,
+        transactionDate: "2026-01-10",
+        transactionId: null,
+        transactionSplitId: "split-1",
+      };
+      const buyRow = ledgerRow({ id: "emb-1" });
+      const laterSell = ledgerRow({
+        id: "sell-1",
+        action: "SELL",
+        tx_date: "2026-02-01",
+        bond_instrument_id: SERIES_ON_SALE,
+      });
+
+      it("reverseAndRemoveEmbedded refuses removing a purchase a later SELL of its series depends on (REMOVAL_EXCEEDS_SERIES), after the removal, so the parent operation rolls back", async () => {
+        bondDatabase({
+          ledgers: [[buyRow, laterSell], [laterSell]],
+        });
+        const touched = new Set<string>();
+        await expect(
+          service.reverseAndRemoveEmbedded(
+            mockQueryRunner.manager as any,
+            userId,
+            embedded,
+            { touchedSecurityIds: touched },
+          ),
+        ).rejects.toMatchObject({
+          response: { errorCode: "REMOVAL_EXCEEDS_SERIES" },
+        });
+        expect(mockQueryRunner.manager.remove).toHaveBeenCalledWith(embedded);
+        expect(
+          holdingsService.rebuildScopesFromTransactions,
+        ).toHaveBeenCalled();
+      });
+
+      it("reverseAndRemoveEmbedded removes what nothing depends on and reports the security for the post-commit recompute", async () => {
+        bondDatabase({ ledgers: [[buyRow], []] });
+        const touched = new Set<string>();
+        await service.reverseAndRemoveEmbedded(
+          mockQueryRunner.manager as any,
+          userId,
+          embedded,
+          { touchedSecurityIds: touched },
+        );
+        expect([...touched]).toEqual([securityId]);
+      });
+
+      it("reverseAndRemoveEmbedded leaves the verdict to a caller's own guard (a replacement recreates the row first)", async () => {
+        bondDatabase({ ledgers: [[buyRow, laterSell], [laterSell]] });
+        const callerGuard = {
+          track: jest.fn(),
+          verify: jest.fn(),
+        };
+        await service.reverseAndRemoveEmbedded(
+          mockQueryRunner.manager as any,
+          userId,
+          embedded,
+          { bondGuard: callerGuard },
+        );
+        expect(callerGuard.verify).not.toHaveBeenCalled();
+      });
+
+      it("applyParentStatusToEmbeddedRows refuses voiding an embedded purchase a later SELL depends on (REMOVAL_EXCEEDS_SERIES)", async () => {
+        transactionSplitRepository.find.mockResolvedValue([
+          { id: "split-1", kind: "investment" },
+        ]);
+        investmentTransactionsRepository.find.mockResolvedValue([
+          { ...embedded, status: TransactionStatus.UNRECONCILED },
+        ]);
+        bondDatabase({ ledgers: [[buyRow, laterSell], [laterSell]] });
+        await expect(
+          service.applyParentStatusToEmbeddedRows(
+            mockQueryRunner.manager as any,
+            userId,
+            "parent-1",
+            TransactionStatus.VOID,
+          ),
+        ).rejects.toMatchObject({
+          response: { errorCode: "REMOVAL_EXCEEDS_SERIES" },
+        });
+      });
+
+      it("applyParentStatusToEmbeddedRows reports the security of a row that crossed the boundary, and says nothing of one that did not", async () => {
+        transactionSplitRepository.find.mockResolvedValue([
+          { id: "split-1", kind: "investment" },
+        ]);
+        investmentTransactionsRepository.find.mockResolvedValue([
+          { ...embedded, status: TransactionStatus.UNRECONCILED },
+        ]);
+        bondDatabase({ ledgers: [[buyRow], []] });
+        const touched = new Set<string>();
+        await service.applyParentStatusToEmbeddedRows(
+          mockQueryRunner.manager as any,
+          userId,
+          "parent-1",
+          TransactionStatus.VOID,
+          touched,
+        );
+        expect([...touched]).toEqual([securityId]);
+
+        const idle = new Set<string>();
+        investmentTransactionsRepository.find.mockResolvedValue([
+          { ...embedded, status: TransactionStatus.VOID },
+        ]);
+        await service.applyParentStatusToEmbeddedRows(
+          mockQueryRunner.manager as any,
+          userId,
+          "parent-1",
+          TransactionStatus.VOID,
+          idle,
+        );
+        expect(idle.size).toBe(0);
+      });
+
+      it("applyParentStatusToEmbeddedRows refuses un-voiding a row whose price is not a price per bond (QUANTITY_NOT_BONDS)", async () => {
+        transactionSplitRepository.find.mockResolvedValue([
+          { id: "split-1", kind: "investment" },
+        ]);
+        investmentTransactionsRepository.find.mockResolvedValue([
+          { ...embedded, price: 1, status: TransactionStatus.VOID },
+        ]);
+        bondDatabase({
+          band: [[], [{ id: "emb-1", price: "1.0000", face: "100.00" }]],
+        });
+        await expect(
+          service.applyParentStatusToEmbeddedRows(
+            mockQueryRunner.manager as any,
+            userId,
+            "parent-1",
+            TransactionStatus.UNRECONCILED,
+          ),
+        ).rejects.toMatchObject({
+          response: { errorCode: "QUANTITY_NOT_BONDS" },
+        });
+      });
+
+      it("recomputeBondPricesAfterSplitWrite dispatches the engine recompute for the ids, and nothing for none", async () => {
+        await service.recomputeBondPricesAfterSplitWrite(userId, []);
+        expect(
+          securitiesService.recomputeBondPricesAfterWrite,
+        ).not.toHaveBeenCalled();
+        await service.recomputeBondPricesAfterSplitWrite(userId, [securityId]);
+        expect(
+          securitiesService.recomputeBondPricesAfterWrite,
+        ).toHaveBeenCalledWith(userId, [securityId]);
       });
     });
   });

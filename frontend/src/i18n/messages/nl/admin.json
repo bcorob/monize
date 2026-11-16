@@ -46,6 +46,8 @@
     "colProvider": "Provider",
     "colStatus": "Status",
     "colLastLogin": "Laatste inlog",
+    "colBackups": "Back-ups",
+    "colAttachments": "Bijlagen",
     "colActions": "Acties",
     "youSuffix": "(jij)",
     "noEmail": "Geen e-mail",
@@ -60,7 +62,22 @@
     "clickToDisable": "Klik om uit te schakelen",
     "clickToEnable": "Klik om in te schakelen",
     "resetPassword": "Wachtwoord opnieuw instellen",
-    "noUsers": "Geen gebruikers gevonden."
+    "resetTwoFactor": "2FA opnieuw instellen",
+    "unlinkSso": "SSO ontkoppelen",
+    "noUsers": "Geen gebruikers gevonden.",
+    "storageLoading": "Laden…",
+    "storageUnavailable": "Niet beschikbaar",
+    "storageUnavailableHint": "Het opslaggebruik kon niet worden geladen. Herlaad de pagina om het opnieuw te proberen.",
+    "storageUnknown": "Onbekend",
+    "storageUnknownStore": "De back-upopslag kon voor deze gebruiker niet worden gelezen, dus de omvang is onbekend. Controleer de back-uplocatie op de pagina Back-ups.",
+    "storageNotReported": "Niet gemeld",
+    "storageNotReportedHint": "Dit account zat niet in de laatste opslagmeting. Herlaad de pagina om het mee te nemen.",
+    "backupsOff": "Uit",
+    "backupsOffHint": "Automatische back-ups staan niet aan voor deze gebruiker en er zijn er geen opgeslagen.",
+    "backupScheduleOff": "Schema uit",
+    "backupScheduleOffHint": "Automatische back-ups staan uit; deze bestanden zijn wat het bewaarbeleid nog niet heeft verwijderd.",
+    "backupCount": "{count, plural, =0 {Geen back-ups} one {# back-up} other {# back-ups}}",
+    "attachmentCount": "{count, plural, =0 {Geen bestanden} one {# bestand} other {# bestanden}}"
   },
   "usersPage": {
     "title": "Gebruikersbeheer",
@@ -81,7 +98,10 @@
       "loadFailed": "Gebruikers laden mislukt",
       "deleteFailed": "Gebruiker verwijderen mislukt",
       "disableFailed": "Gebruiker uitschakelen mislukt",
-      "resetFailed": "Wachtwoord opnieuw instellen mislukt"
+      "resetFailed": "Wachtwoord opnieuw instellen mislukt",
+      "twoFactorReset": "De tweestapsverificatie van {name} is opnieuw ingesteld. Ze zijn afgemeld.",
+      "resetTwoFactorFailed": "Tweestapsverificatie opnieuw instellen mislukt",
+      "unlinkSsoFailed": "SSO ontkoppelen mislukt"
     },
     "dialogs": {
       "promoteTitle": "Gebruiker promoveren?",
@@ -96,6 +116,14 @@
       "resetTitle": "Wachtwoord opnieuw instellen?",
       "resetMessage": "Er wordt een nieuw tijdelijk wachtwoord gegenereerd voor {name}. Ze moeten het bij de volgende inlog wijzigen.",
       "resetConfirm": "Wachtwoord opnieuw instellen",
+      "unlinkSsoTitle": "SSO ontkoppelen?",
+      "unlinkSsoMessage": "Hiermee wordt het account van {name} omgezet naar een lokaal account. Een latere SSO-aanmelding met hetzelfde e-mailadres kan het opnieuw koppelen. Het systeem maakt een tijdelijk wachtwoord aan en {name} moet het bij de volgende inlog wijzigen.",
+      "unlinkSsoConfirm": "SSO ontkoppelen",
+      "unlinkSsoResultTitle": "SSO ontkoppeld",
+      "unlinkSsoResultDesc": "Het account van {name} is nu een lokaal account. Deel dit tijdelijke wachtwoord met de gebruiker zodat die kan inloggen.",
+      "resetTwoFactorTitle": "Tweestapsverificatie opnieuw instellen?",
+      "resetTwoFactorMessage": "Hiermee wordt de tweestapsverificatie van {name} uitgeschakeld, worden hun back-upcodes en vertrouwde apparaten verwijderd en worden ze overal afgemeld. Daarna kunnen ze inloggen met hun wachtwoord en 2FA opnieuw instellen. Gebruik dit als ze hun authenticator-app en back-upcodes kwijt zijn, of nadat JWT_SECRET is gewijzigd.",
+      "resetTwoFactorConfirm": "2FA opnieuw instellen",
       "deleteTitle": "Gebruiker verwijderen?",
       "deleteMessage": "Weet je zeker dat je {name} wilt verwijderen? Hiermee wordt het account en alle bijbehorende gegevens permanent verwijderd. Dit kan niet ongedaan worden gemaakt. Als ze gedelegeerde zijn van een ander account, worden hun eigen gegevens verwijderd maar blijft de login bewaard zodat de delegatie werkt — ze worden dan een gebruiker met uitsluitend gedelegeerde toegang.",
       "deleteConfirm": "Gebruiker verwijderen",
@@ -103,6 +131,84 @@
       "tempPasswordTitleUpgraded": "Account bijgewerkt",
       "tempPasswordDescCreated": "Er is een tijdelijk wachtwoord gegenereerd voor {name}. Deel dit met hen om in te loggen.",
       "tempPasswordDescUpgraded": "Een bestaande gedeelde gebruiker is omgezet naar een volledig account. Deel dit tijdelijke wachtwoord met {name}."
+    }
+  },
+  "notificationsPage": {
+    "title": "Meldingen",
+    "subtitle": "Bezorgkanalen die deze Monize-instantie biedt, en de push-identiteit erachter.",
+    "loading": "Meldingsinstellingen laden...",
+    "loadUnavailable": "Monize kon de meldingsinstellingen niet van de server lezen. Herlaad de pagina om het opnieuw te proberen.",
+    "channelsHeading": "Bezorgkanalen",
+    "identityHeading": "Web Push-identiteit",
+    "perAccountNote": "Apparaten, testmeldingen en meldingsvoorkeuren horen bij elk account en worden beheerd in Instellingen. Een beheerder configureert de instantie en verstuurt of ziet nooit de meldingen van iemand anders.",
+    "channelState": {
+      "on": "Aan",
+      "off": "Uit",
+      "unconfigured": "Niet beschikbaar",
+      "unknown": "Onbekend"
+    },
+    "channels": {
+      "inApp": {
+        "name": "Meldingen in de app",
+        "description": "De bel in de kopregel. Altijd beschikbaar en niet uit te schakelen: hier blijft een melding staan, ook als elk ander kanaal faalt."
+      },
+      "webPush": {
+        "name": "Browserpush",
+        "description": "Meldingen op telefoon of desktop, ook als Monize gesloten is. Vereist geen Firebase, Google Play- of Apple Developer-account.",
+        "toggleLabel": "Browserpush inschakelen voor deze instantie",
+        "missingKeys": "Deze instantie heeft geen pushsleutelpaar. Stel ENCRYPTION_KEY in en start opnieuw: Monize genereert het paar bij de volgende start zelf.",
+        "keyUnreadable": "Deze instantie kan haar opgeslagen pushsleutelpaar niet ontsleutelen, dus er wordt niets bezorgd. Vervang het sleutelpaar hieronder om te herstellen.",
+        "serverKeyMissing": "Deze instantie heeft geen ENCRYPTION_KEY en kan het opgeslagen push-sleutelpaar dus niet openen. Stel ENCRYPTION_KEY in de deployment in en start opnieuw op — roteren helpt niet zolang de sleutel ontbreekt."
+      },
+      "email": {
+        "name": "E-mail",
+        "description": "Factuurherinneringen, budgetsamenvattingen en systeemwaarschuwingen naar het e-mailadres van elk account.",
+        "missingSmtp": "Er is geen mailserver geconfigureerd. Stel de SMTP-omgevingsvariabelen in om e-mail in te schakelen.",
+        "statusUnavailable": "Monize kon de status van de mailserver niet lezen."
+      },
+      "ntfy": {
+        "name": "ntfy en UnifiedPush",
+        "description": "Dezelfde versleutelde push, bezorgd via een zelf gehoste UnifiedPush-distributor (ntfy, NextPush) in plaats van de infrastructuur van Google of Apple. Het kanaal deelt het push-sleutelpaar en de schakelaar van deze instantie; iedereen registreert het eigen endpoint vanuit de UnifiedPush-app en zet het kanaal aan in Instellingen.",
+        "followsWebPush": "Niet beschikbaar zolang browserpush uit staat of het sleutelpaar niet gebruikt kan worden — dit kanaal wordt met hetzelfde sleutelpaar bezorgd."
+      }
+    },
+    "identity": {
+      "fingerprintLabel": "Sleutelvingerafdruk",
+      "generatedLabel": "Gegenereerd",
+      "devicesLabel": "Geregistreerde apparaten",
+      "deviceCounts": "{live} actief, {disabled} stopgezet",
+      "rotateDescription": "Vervangen wisselt het sleutelpaar van deze instantie. Elk geregistreerd apparaat is daarna onbereikbaar en moet push opnieuw inschakelen; vervang dus alleen als de sleutel mogelijk is gelekt.",
+      "rotateButton": "Sleutelpaar vervangen",
+      "rotatingButton": "Vervangen...",
+      "missingEncryptionKey": "Deze instantie heeft geen pushsleutelpaar, omdat ENCRYPTION_KEY niet is ingesteld en de privésleutel onversleuteld opgeslagen zou moeten worden. Stel de variabele in en start opnieuw: Monize genereert het paar zelf.",
+      "keyUnreadable": "Deze instantie heeft een pushsleutelpaar dat ze niet meer kan ontsleutelen, dus er wordt niets bezorgd. Dat gebeurt als ENCRYPTION_KEY verandert bij een draaiende database, of als een back-up op een andere instantie wordt teruggezet. Vervang het sleutelpaar om te herstellen; elk apparaat registreert zich opnieuw.",
+      "serverKeyMissing": "Voor deze instantie is geen ENCRYPTION_KEY ingesteld, waardoor het opgeslagen push-sleutelpaar niet geopend kan worden. Roteren helpt niet zolang de sleutel ontbreekt: stel ENCRYPTION_KEY in de deployment in en start opnieuw op, dan werkt push weer met de bestaande apparaten."
+    },
+    "dialogs": {
+      "rotateTitle": "Pushsleutelpaar vervangen?",
+      "rotateMessage": "{count, plural, =0 {Er is nog geen apparaat geregistreerd, dus er gaat niets verloren.} one {Eén geregistreerd apparaat ontvangt geen meldingen meer totdat push in die browser opnieuw wordt ingeschakeld.} other {# geregistreerde apparaten ontvangen geen meldingen meer totdat push in elke browser opnieuw wordt ingeschakeld.}}",
+      "rotateConfirm": "Vervangen"
+    },
+    "toasts": {
+      "loadFailed": "Kon de meldingsinstellingen niet laden",
+      "pushEnabled": "Browserpush ingeschakeld voor deze instantie",
+      "pushDisabled": "Browserpush uitgeschakeld voor deze instantie",
+      "pushToggleFailed": "Kon de browserpush-instelling niet wijzigen",
+      "rotated": "{count, plural, =0 {Sleutelpaar vervangen} one {Sleutelpaar vervangen; 1 apparaat moet zich opnieuw registreren} other {Sleutelpaar vervangen; # apparaten moeten zich opnieuw registreren}}",
+      "rotateFailed": "Kon het sleutelpaar niet vervangen"
+    }
+  },
+  "backupsPage": {
+    "title": "Back-ups",
+    "subtitle": "Geplande, gecomprimeerde back-upbestanden van de financiële gegevens van elk account.",
+    "scope": {
+      "heading": "Geen volledige databaseback-up",
+      "perUser": "Volgens het schema hieronder schrijft de server een gecomprimeerd back-upbestand van de financiële gegevens van elk account en ruimt oudere op volgens het bewaarbeleid. Alle actieve accounts vallen eronder.",
+      "notFullDatabase": "Het is geen PostgreSQL-dump: het schema, de serverconfiguratie en alles buiten de financiële gegevens van een account worden niet vastgelegd. Maak voor noodherstel van de hele instantie met uw eigen hulpmiddelen een back-up van de database en de bijlageopslag."
+    },
+    "demoRestricted": {
+      "heading": "Beperkt in demomodus",
+      "body": "De configuratie van de automatische back-up is uitgeschakeld in de demomodus."
     }
   }
 }

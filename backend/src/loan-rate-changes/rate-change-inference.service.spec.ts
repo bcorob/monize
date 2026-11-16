@@ -3,7 +3,10 @@ import { RateChangeInferenceService } from "./rate-change-inference.service";
 import { LoanRateChange } from "./entities/loan-rate-change.entity";
 import { Account, AccountType } from "../accounts/entities/account.entity";
 import { Transaction } from "../transactions/entities/transaction.entity";
-import type { PaymentRecord } from "../accounts/loan-payment-detector.service";
+import {
+  LoanPaymentDetectorService,
+  type PaymentRecord,
+} from "../accounts/loan-payment-detector.service";
 import {
   createScopedDbMocks,
   ManagerMock,
@@ -113,8 +116,7 @@ describe("RateChangeInferenceService", () => {
       interestRate: 5.5,
       paymentAmount: 2500,
       paymentFrequency: "MONTHLY",
-      isCanadianMortgage: false,
-      isVariableRate: true,
+      mortgageType: "ANNUITY",
       isClosed: true,
       scheduledTransactionId: null,
       ...overrides,
@@ -147,6 +149,16 @@ describe("RateChangeInferenceService", () => {
         .mockImplementation((_userId, _account, records) => records),
       buildRunningBalanceMap: jest.fn().mockReturnValue(new Map()),
     };
+    // The real pairing over the mocked steps, so each case still drives (and
+    // asserts) the individual calls the shared method makes.
+    detector.buildInstallmentHistory = jest
+      .fn()
+      .mockImplementation((...args: [string, Account, Transaction[]]) =>
+        LoanPaymentDetectorService.prototype.buildInstallmentHistory.apply(
+          detector as never,
+          args,
+        ),
+      );
 
     rateChangesService = {
       verifyLoanAccount: jest.fn().mockResolvedValue(makeAccount()),
@@ -272,7 +284,7 @@ describe("RateChangeInferenceService", () => {
 
   it("recovers the quoted rate for Canadian semi-annual compounding", async () => {
     rateChangesService.verifyLoanAccount.mockResolvedValue(
-      makeAccount({ isCanadianMortgage: true, isVariableRate: false }),
+      makeAccount({ mortgageType: "CANADIAN_FIXED" }),
     );
     const { records, balanceMap } = generateHistory(
       400000,
@@ -285,6 +297,46 @@ describe("RateChangeInferenceService", () => {
 
     const initial = createdRows()[0];
     expect(Math.abs(initial.annualRate - 5.5)).toBeLessThanOrEqual(0.05);
+  });
+
+  it("annualizes an ANNUITY mortgage by day count", async () => {
+    // docs/specs/mortgage-types.md table 4.2, last row: a Canadian
+    // variable-rate account is ANNUITY, so its observed rate is scaled by the
+    // days the period spans, like every other nominal mortgage.
+    rateChangesService.verifyLoanAccount.mockResolvedValue(
+      makeAccount({ mortgageType: "ANNUITY" }),
+    );
+    const { records, balanceMap } = generateHistory(400000, [
+      { annualRate: 5.5, payments: 24, paymentAmount: 2500 },
+    ]);
+    setHistory(records, balanceMap);
+
+    await service.detectAndPersist(userId, accountId);
+
+    const rows = createdRows();
+    expect(rows).toHaveLength(1);
+    expect(Math.abs(rows[0].annualRate - 5.5)).toBeLessThanOrEqual(0.01);
+  });
+
+  it("annualizes a non-mortgage as ANNUITY, ignoring a stale stored type", async () => {
+    // Only a mortgage has a type; a CANADIAN_FIXED left on a LOAN by an older
+    // edit must not switch its inference to the semi-annual inversion.
+    rateChangesService.verifyLoanAccount.mockResolvedValue(
+      makeAccount({
+        accountType: AccountType.LOAN,
+        mortgageType: "CANADIAN_FIXED",
+      }),
+    );
+    const { records, balanceMap } = generateHistory(400000, [
+      { annualRate: 5.5, payments: 24, paymentAmount: 2500 },
+    ]);
+    setHistory(records, balanceMap);
+
+    await service.detectAndPersist(userId, accountId);
+
+    expect(Math.abs(createdRows()[0].annualRate - 5.5)).toBeLessThanOrEqual(
+      0.01,
+    );
   });
 
   it("records the new payment when it steps together with the rate", async () => {
@@ -302,6 +354,32 @@ describe("RateChangeInferenceService", () => {
       newPaymentAmount: 2750,
     });
   });
+
+  it.each(["LINEAR", "INTEREST_ONLY"] as const)(
+    "records no payment for a %s mortgage, cutting segments on the rate alone",
+    async (mortgageType) => {
+      // docs/specs/mortgage-types.md section 5.3: the method states every
+      // installment, so an observed payment on the rate row would be a second,
+      // conflicting answer. The rates still annualize by day count.
+      rateChangesService.verifyLoanAccount.mockResolvedValue(
+        makeAccount({ mortgageType, paymentAmount: null }),
+      );
+      const { records, balanceMap } = generateHistory(400000, [
+        { annualRate: 5.5, payments: 12, paymentAmount: 2500 },
+        { annualRate: 6.5, payments: 12, paymentAmount: 2750 },
+      ]);
+      setHistory(records, balanceMap);
+
+      await service.detectAndPersist(userId, accountId);
+
+      const rows = createdRows();
+      expect(rows.map((row) => [row.source, row.annualRate])).toEqual([
+        ["initial", 5.5],
+        ["inferred", 6.5],
+      ]);
+      expect(rows.every((row) => row.newPaymentAmount === null)).toBe(true);
+    },
+  );
 
   it("ignores a single outlier payment instead of opening a segment", async () => {
     const { records, balanceMap } = generateHistory(400000, [

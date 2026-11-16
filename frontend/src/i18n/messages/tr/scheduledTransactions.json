@@ -6,7 +6,7 @@
       "category": "Kategori",
       "amount": "Miktar",
       "schedule": "Program",
-      "auto": "Otomatik",
+      "auto": "Otomatik kayıt",
       "actions": "İşlemler"
     },
     "empty": {
@@ -22,8 +22,9 @@
     "modifiedBadge": "{count} değiştirildi",
     "modifiedTitle": "{count, plural, one {# yaklaşan tekrar değiştirildi} other {# yaklaşan tekrar değiştirildi}}",
     "modifiedAmountTitle": "Bir sonraki tekrar için değiştirildi",
+    "modifiedDateTitle": "Bu gerçekleşme için tarih değiştirildi",
+    "splitBadge": "Bölünmüş ({count})",
     "autoPostBadge": "Açık",
-    "autoPostTitle": "Vadesi geldiğinde otomatik kaydedilir",
     "inactiveSuffix": " — Pasif",
     "actionTitles": {
       "post": "İşlemi kaydet",
@@ -62,7 +63,8 @@
       "skipFailed": "Tekrar atlanamadı",
       "deleteFailed": "Silinemedi"
     },
-    "foreignAmountTitle": "Alacaklının tahsil ettiği tutar, kendi para biriminde"
+    "foreignAmountTitle": "Alacaklının tahsil ettiği tutar, kendi para biriminde",
+    "estimatedLabel": "Tahmini"
   },
   "filters": {
     "label": "Filtreler",
@@ -74,9 +76,7 @@
     "accountsLabel": "Hesaplar",
     "accountsPlaceholder": "Tüm hesaplar",
     "categoriesLabel": "Kategoriler",
-    "categoriesPlaceholder": "Tüm kategoriler",
-    "collapseAriaLabel": "Filtreleri daralt",
-    "expandAriaLabel": "Filtreleri genişlet"
+    "categoriesPlaceholder": "Tüm kategoriler"
   },
   "postDialog": {
     "title": "İşlemi Kaydet",
@@ -114,7 +114,8 @@
       "totalAmountRequired": "Toplam tutar zorunludur",
       "splitsMinimum": "Bölünmüş işlemler için en az 2 bölüm gereklidir",
       "splitsTotal": "Bölüm tutarları işlem tutarına eşit olmalıdır",
-      "fxRateUnavailable": "Bu tarih için {from} biriminden {to} birimine döviz kuru yok."
+      "fxRateUnavailable": "Bu tarih için {from} biriminden {to} birimine döviz kuru yok.",
+      "estimateUnknown": "Bu tekrarın tahmini tutarı bilinmiyor. Kaydetmek için tutarı girin."
     },
     "latestPlaceholder": "En güncel: {price}",
     "descriptionPlaceholder": "Açıklama...",
@@ -127,18 +128,40 @@
       "noRateWarning": "{date} tarihinde {from} biriminden {to} birimine döviz kuru bulunamadı. Başka bir tarih seçin veya kurları yenileyin.",
       "feeCaption": "%{percent} yurt dışı işlem ücreti ({fee}) içerir.",
       "totalInCurrency": "{currency} cinsinden toplam"
-    }
+    },
+    "estimatedHint": "Bu tutar bir tahmindir; gerçekte ödediğiniz tutarla değiştirin. {detail}"
   },
   "occurrencePicker": {
     "title": "Tekrar Tarihi Seçin",
-    "description": "Hangi \"{name}\" tekrarını değiştireceğinizi seçin:",
+    "description": "Hangi \"{name}\" tekrarını değiştireceğinizi seçin. Burada birini değiştirmek yalnızca o tarihi geçersiz kılar; diğer her tekrar programı takip etmeye devam eder. <guide>Daha fazla bilgi</guide>.",
     "modifiedBadge": "Değiştirildi",
     "nextDueBadge": "Sonraki Vade",
     "dateMoved": "Tarih {date} tarihinden taşındı",
     "amountChange": "Tutar: {amount}",
     "categoryChange": "Kategori: {category}",
     "noteChange": "Not: {note}",
-    "splitModified": "Bölüm değiştirildi"
+    "splitModified": "Bölüm değiştirildi",
+    "estimatedAmount": "Tahmini: {amount}",
+    "estimateUnknown": "Tahmin bilinmiyor"
+  },
+  "loanOccurrence": {
+    "loading": "Her taksitin ödemesi hesaplanıyor.",
+    "loadFailed": "Her taksitin ödemesi yüklenemedi.",
+    "retry": "Yeniden dene",
+    "amountUnknown": "Ödeme bilinmiyor",
+    "notProjected": "Ödeme bu kadar ileri için hesaplanmadı",
+    "paymentChangesBadge": "Ödeme değişiyor",
+    "editorUnknown": "Bu taksitin ödemesi hesaplanamıyor, bu yüzden tutar boş. {reason}",
+    "editorLinesUnknown": "Bu taksitin anapara ve faiz dağılımı hesaplanamıyor, bu yüzden satırlar planlamanın satırlarıyla başlıyor. {reason}",
+    "amountRequired": "Kaydetmeden önce bu taksitin tutarını girin.",
+    "missing": {
+      "rate": "{date} için kayıtlı faiz oranı yok. Bunu kredinin faiz geçmişine ekleyin.",
+      "cadence": "Kredinin ödeme sıklığı ({frequency}) hesaplanamıyor. Kredinin ödeme sıklığını kontrol edin.",
+      "overrideLines": "Bu taksitin satırları anapara, faiz ve ek anapara değil. Satırlarını düzenleyin.",
+      "overrideOnSettledDebt": "Kredi bu tarihe kadar kapanmış, bu yüzden bu taksitin tutarı anapara ve faize bölünemiyor. Taksiti düzenleyin veya sıfırlayın.",
+      "earlierOccurrence": "Ödemesi hesaplanamayan {date} taksitine bağlıdır.",
+      "unknown": "Neden belirtilmedi."
+    }
   },
   "overrideEditor": {
     "title": "Tekrarı Düzenle",
@@ -179,7 +202,9 @@
       "quantityRequired": "Miktar sıfırdan büyük olmalıdır",
       "priceRequired": "Fiyat sıfırdan büyük olmalıdır",
       "totalAmountRequired": "Toplam tutar zorunludur"
-    }
+    },
+    "estimatedHint": "Bu tutar bu tekrarın tahminidir. Olduğu gibi bırakırsanız yeni ödemeler geldikçe bu tekrar tahmini izlemeye devam eder. {detail}",
+    "keepEstimate": "Yeni ödemeler tahmini değiştirse bile bu tutarı koru"
   },
   "form": {
     "tabs": {
@@ -205,7 +230,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "Uzun Vadeli Kazancı Yeniden Yatır",
       "CAPITAL_GAIN_SHORT": "Kısa Vadeli Sermaye Kazancı",
       "CAPITAL_GAIN_LONG": "Uzun Vadeli Sermaye Kazancı",
-      "REDEEM": "CD/Tahvil İtfası"
+      "REDEEM": "CD/Tahvil İtfası",
+      "RETURN_OF_CAPITAL": "Sermaye İadesi"
     },
     "submitCreate": "Oluştur",
     "submitUpdate": "Güncelle",
@@ -237,7 +263,7 @@
     "toAccountLabel": "Alıcı Hesap",
     "toAccountPlaceholder": "Hedef hesap seçin...",
     "transferAmountLabel": "Transfer Tutarı",
-    "transferCategoryLabel": "Kategori (İsteğe bağlı)",
+    "transferCategoryLabel": "Kategori (isteğe bağlı)",
     "transferCategoryNote": "İsteğe bağlı: Bu transferi kategorilendirin (ör. düzenli bir yatırım katkısı) ki aylık kategori dökümünde görünsün. Gelir veya gider olarak sayılmaz.",
     "actionLabel": "İşlem",
     "securityLabel": "Menkul Kıymet",
@@ -248,6 +274,7 @@
     "commissionLabel": "Komisyon",
     "totalValueLabel": "Toplam Değer",
     "fundingAccountLabel": "Finansman Hesabı (isteğe bağlı)",
+    "fundingAccountTooltip": "Bu planın nakdinin gerçekten karşılandığı hesap, yukarıdaki aracı kurum hesabı değil: nakit akışı tahmininin borçlandırdığı veya alacaklandırdığı hesap. Aracı kurumun kendi nakit hesabını kullanmak için boş bırakın.",
     "fundingAccountPlaceholder": "Aracılık nakdini kullan (varsayılan)",
     "fundingAccountHelp": "Varsayılan olarak yatırım hesabının nakit tarafını kullanır. Katkı+alım modellemek için başka hesap seçin.",
     "endConditionTitle": "Bitiş Koşulu (isteğe bağlı)",
@@ -282,14 +309,21 @@
       "quantityRequired": "Miktar sıfırdan büyük olmalıdır",
       "priceRequired": "Fiyat sıfırdan büyük olmalıdır",
       "totalAmountRequired": "Bu işlem için toplam tutar zorunludur",
-      "fxRateRequired": "Kaydetmeden önce seçilen para biriminde bir tutar girin. Henüz kullanılabilir bir döviz kuru yok."
+      "fxRateRequired": "Kaydetmeden önce seçilen para biriminde bir tutar girin. Henüz kullanılabilir bir döviz kuru yok.",
+      "estimateNeedsPayeeAndCategory": "Tutarın tahmin edileceği bir alıcı ve kategori seçin."
     },
     "fx": {
       "amountInCurrency": "{currency} cinsinden tutar",
       "estimateCaption": "Yaklaşık {total}, 1 {from} = {rate} {to} kurundan.",
       "noRateWarning": "{from} biriminden {to} birimine döviz kuru bulunamadı. Başka bir para birimi seçin veya tutarı {to} cinsinden girin.",
       "feeCaption": "%{percent} yurt dışı işlem ücreti ({fee}) içerir."
-    }
+    },
+    "estimateLabel": "Tahmin et",
+    "estimateTooltip": "Her tekrarın tutarını, bu kategoride bu alıcıya son 24 ayda yapılan ödemelerden ay ay hesaplayın; böylece bazı aylarda daha pahalı olan bir fatura öyle tahmin edilir. Herhangi bir tekrarı yine değiştirebilir ve tutarı kaydederken onaylarsınız.",
+    "estimateTooltipTransfer": "Her tekrarın tutarını bu hesaba son 24 ayda yapılan transferlerden hesaplayın. Hesabın borcu daha fazlaysa ödeme buna göre artırılır: hesap kesim ve son ödeme günü girilmiş bir kredi kartında kapanan ekstrenin ödemesi ve açık dönemin ödemesi, aksi halde bir sonraki ödeme. Herhangi bir tekrarı yine de değiştirebilir ve tutarı kaydederken onaylarsınız.",
+    "estimateDelegateDisabled": "Tahmini yalnızca sahibi açıp kapatabilir: tahmin, sahibin tüm hesaplarındaki ödemeleri okur.",
+    "estimatedAmountNote": "Ödeme geçmişinden otomatik hesaplanır. {detail}",
+    "autoPostDisabledEstimate": "Tahmini tutar kaydederken onaylanır, bu yüzden otomatik olarak kaydedilmez."
   },
   "postTransaction": {
     "minSplits": "Bölünmüş işlemler için en az 2 bölüm gereklidir",
@@ -308,10 +342,83 @@
     "EVERY4MONTHS": "Her 4 Ayda Bir",
     "SEMIANNUAL": "Yılda İki Kez",
     "YEARLY": "Yıllık",
-    "EVERY2YEARS": "Her 2 Yılda Bir"
+    "EVERY2YEARS": "Her 2 Yılda Bir",
+    "CUSTOM": "Özel"
+  },
+  "customRecurrence": {
+    "title": "Tekrar",
+    "unitLabel": "Tekrar türü",
+    "units": {
+      "WEEK": "Haftalık",
+      "MONTH": "Aylık",
+      "YEAR": "Yıllık"
+    },
+    "every": "Her",
+    "intervalLabel": "Her şu sürede tekrarla",
+    "unitSuffix": {
+      "WEEK": "{interval, plural, one {hafta, günler:} other {hafta, günler:}}",
+      "MONTH": "{interval, plural, one {ay, günler:} other {ay, günler:}}",
+      "YEAR": "{interval, plural, one {yıl, tarihler:} other {yıl, tarihler:}}"
+    },
+    "weekdaysLabel": "Haftanın günleri",
+    "monthDaysLabel": "Ayın günleri",
+    "lastDayChip": "Son gün",
+    "lastDay": "son gün",
+    "dayOfMonth": "{day, selectordinal, other {#.}}",
+    "monthHint": "Kısa bir ayın sonunu aşan gün, o ayın son gününe denk gelir ve aynı tarihe düşen iki gün yalnızca bir kez işlenir.",
+    "datesLabel": "Yılın tarihleri",
+    "monthLabel": "Ay",
+    "dayLabel": "Gün",
+    "addDate": "Tarih ekle",
+    "removeDate": "{date} tarihini kaldır",
+    "yearHint": "29 Şubat, bu günün olmadığı yıllarda 28 Şubat'a denk gelir.",
+    "summary": {
+      "WEEK": "{interval, plural, one {Her hafta: {days}} other {Her # haftada bir: {days}}}",
+      "MONTH": "{interval, plural, one {Her ay: {days}} other {Her # ayda bir: {days}}}",
+      "YEAR": "{interval, plural, one {Her yıl: {days}} other {Her # yılda bir: {days}}}"
+    },
+    "errors": {
+      "noDays": {
+        "WEEK": "Haftanın en az bir gününü seçin.",
+        "MONTH": "Ayın en az bir gününü seçin.",
+        "YEAR": "En az bir tarih ekleyin."
+      },
+      "interval": "1 ile 12 arasında bir sayı girin.",
+      "invalid": "Bu desen kaydedilemiyor. Günleri yeniden seçin."
+    },
+    "firstOccurrence": "İlk tekrar: {date}",
+    "nextOccurrence": "Sonraki tekrar: {date}",
+    "nextOccurrenceOffPattern": "Sonraki tekrar: {date}. Bu tarih desenin dışında; sonraki tekrarlar desene uyar.",
+    "orphanWarning": "{count, plural, one {Düzenlenen # tekrar ({dates}) artık bu desene uymuyor ve kaydettiğinizde kaldırılacak.} other {Düzenlenen # tekrar ({dates}) artık bu desene uymuyor ve kaydettiğinizde kaldırılacak.}}",
+    "notForLoan": "Bir kredi veya konut kredisi ödemesi özel sıklık kullanamaz; sabit bir sıklık seçin.",
+    "notForPayroll": "Kesinti sınırı olan bir bordro faturası özel sıklık kullanamaz; sabit bir sıklık seçin."
   },
   "validation": {
     "nameRequired": "Ad zorunludur",
     "dueDateRequired": "Vade tarihi zorunludur"
+  },
+  "estimate": {
+    "thePayee": "bu alıcı",
+    "theAccount": "hesap",
+    "theCategory": "bu kategori",
+    "basis": "{count, plural, other {# ödeme}} üzerinden tahmin edildi, en sonuncusu {date}.",
+    "basisWithGrowth": "{count, plural, other {# ödeme}} üzerinden tahmin edildi, en sonuncusu {date}, yıllık {growth} değişimle.",
+    "basisYear": "Son 12 aydaki {count, plural, other {# ödemenin}} ortalaması, en sonuncusu {date}.",
+    "basisRecent": "En son {count, plural, other {# ödemenin}} ortalaması, en sonuncusu {date}.",
+    "basisRecentWithGrowth": "En son {count, plural, other {# ödemenin}} ortalaması, en sonuncusu {date}, yıllık {growth} değişimle.",
+    "basisSeasonal": "En son {count, plural, other {# ödemenin}} ortalaması, her ayın mevsimine göre ayarlanmış, en sonuncusu {date}.",
+    "basisSeasonalWithGrowth": "En son {count, plural, other {# ödemenin}} ortalaması, her ayın mevsimine göre ayarlanmış, en sonuncusu {date}, yıllık {growth} değişimle.",
+    "basisWithheld": "Alıcının ve kategorinin ödeme geçmişinden tahmin edildi.",
+    "basisWithheldTransfer": "{account} hesabına yapılan transferlerin geçmişinden tahmin edildi.",
+    "raisedToBalance": "Bu ödemede {account} hesabının borcunu karşılayacak şekilde artırıldı.",
+    "basisAndRaise": "{basis} {raised}",
+    "noHistoryTransfer": "Son {months} ayda bu hesaptan {account} hesabına transfer yok, bu yüzden tutar bilinmiyor. Her tekrarın tutarını girin veya bir transfer kaydedin.",
+    "missingRateTransfer": "Geçmiş bir transferi veya {account} hesabının borcunu çevirmek için {from} - {to} döviz kuru yok, bu yüzden tutar bilinmiyor. Kuru Para Birimleri sayfasından ekleyin.",
+    "noBasisTransfer": "Tutarı o hesaba yapılan transferlerden tahmin etmek için hedef hesabı seçin.",
+    "pendingTransfer": "Tutar bu hesaba yapılan transferlerden ve hesabın borcundan hesaplanır.",
+    "noHistory": "Son {months} ayda {category} kategorisinde {payee} alıcısına ödeme yok, bu yüzden tutar bilinmiyor. Her tekrarın tutarını girin veya bir ödeme kaydedin.",
+    "missingRate": "Geçmiş bir ödemeyi çevirmek için {from} - {to} döviz kuru yok, bu yüzden tutar bilinmiyor. Kuru Para Birimleri sayfasından ekleyin.",
+    "noBasis": "Tutarı ödeme geçmişinden tahmin etmek için bir alıcı ve kategori seçin.",
+    "pending": "Tutar, alıcının ve kategorinin ödeme geçmişinden hesaplanır."
   }
 }

@@ -151,6 +151,9 @@ export const RELEASE_1_13_FOREIGN_CURRENCY_TOUR: TourDefinition = {
       route: '/accounts',
       anchorId: null,
       unobtrusive: true,
+      // Same collision as the introduction tour's account-detail prompt: the
+      // right-hand corner puts the card over the row actions this step names.
+      placement: 'left',
       advance: { type: 'route', route: '/accounts/' },
     },
     {

@@ -1,12 +1,21 @@
+import { NotFoundException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { ModuleRef } from "@nestjs/core";
+import { JwtService } from "@nestjs/jwt";
+import * as bcrypt from "bcryptjs";
+import type { Response } from "express";
 import { I18nService } from "nestjs-i18n";
 import { DataSource } from "typeorm";
 
 import { EncryptionService } from "../../src/common/encryption/encryption.service";
+import { AuthService } from "@/auth/auth.service";
 import { hashToken } from "@/auth/crypto.util";
+import { PasswordBreachService } from "@/auth/password-breach.service";
+import { TokenService } from "@/auth/token.service";
 import { affectedRowCount, returnedRows } from "@/common/db/query-result";
 import { withUserContext } from "@/common/db/with-context";
 import { JobClaimService } from "@/common/jobs/job-claim.service";
+import { EmergencyAccessClaimController } from "@/emergency-access/emergency-access-claim.controller";
 import { EmergencyAccessMonitorService } from "@/emergency-access/emergency-access-monitor.service";
 import { EmergencyAccessService } from "@/emergency-access/emergency-access.service";
 import { EmailService } from "@/notifications/email.service";
@@ -17,6 +26,7 @@ import {
   createTestUserDirect,
 } from "../helpers/integration-setup";
 import { applyRlsPolicies } from "../helpers/rls-setup";
+import { raceTwo } from "../helpers/race";
 
 /**
  * Two complete emergency-access grant cycles, and every path that re-arms
@@ -43,6 +53,7 @@ describe("emergency access across grant cycles", () => {
   let dataSource: DataSource;
   let monitor: EmergencyAccessMonitorService;
   let settingsService: EmergencyAccessService;
+  let claimController: EmergencyAccessClaimController;
   let sent: { to: string; subject: string; html: string }[];
   let owner: string;
 
@@ -75,6 +86,10 @@ describe("emergency access across grant cycles", () => {
         ? "integration-test-key-of-at-least-32-chars"
         : fallback,
   } as unknown as ConfigService);
+
+  /** The two things `complete` calls on the response; nothing else is read. */
+  const fakeResponse = (): Response =>
+    ({ cookie: () => undefined, json: () => undefined }) as unknown as Response;
 
   /** Move the owner's last activity, which is what the sweep measures. */
   const lastSeenDaysAgo = async (days: number): Promise<void> => {
@@ -174,6 +189,24 @@ describe("emergency access across grant cycles", () => {
       encryption,
       emailDouble,
       dataSource,
+    );
+    // Real token service and database; stubbed only what reaches outside it: the
+    // breach lookup (a network call), the OAuth revoker (resolved through the
+    // module ref, absent here) and the CSRF key.
+    claimController = new EmergencyAccessClaimController(
+      dataSource,
+      new TokenService(
+        new JwtService({ secret: "claim-race-test-secret-of-32-chars-x" }),
+        dataSource,
+        configDouble,
+      ),
+      { getCsrfKey: () => "claim-race-csrf-key" } as unknown as AuthService,
+      { isBreached: async () => false } as unknown as PasswordBreachService,
+      encryption,
+      configDouble,
+      {
+        get: () => ({ revokeAllForUser: async () => undefined }),
+      } as unknown as ModuleRef,
     );
   });
 
@@ -482,36 +515,87 @@ describe("emergency access across grant cycles", () => {
   });
 
   it("honours a delivered claim token exactly once", async () => {
-    // The single-use property (audit P4-007) against a real database rather than
-    // by inspecting the statement's text. Two callers race for one live token: the
-    // predicates are re-evaluated after the row lock, so exactly one gets a row
-    // back and every other is refused before a credential is touched. Asserting
-    // that the SQL *contains* `claim_token_used_at IS NULL` cannot tell a working
-    // conditional update from a `findOne` followed by a save.
+    // The single-use property (audit P4-007; A26-S02-12, INV-CLAIM-001) through
+    // the real `EmergencyAccessClaimController.complete`, not a copy of its SQL:
+    // a transcription of the consume statement keeps passing after the
+    // controller's own predicate is deleted.
+    //
+    // Two claimants hold the same delivered link and submit DIFFERENT new
+    // passwords on separate connections. Both pass the cheap `findValidContact`
+    // pre-check (the token is still live) and both spend their own bcrypt hash,
+    // so both reach the consume UPDATE. The loser blocks on the winner's row
+    // lock; PostgreSQL re-evaluates `claim_token_used_at IS NULL` and
+    // `claim_token_hash = $1` against the committed row, so it gets no row back
+    // and is refused (404) before any credential is written. The password
+    // assertion tells "refused" from "ran too": with both admitted the stored
+    // hash is whichever wrote last.
+    //
+    // Catches: removing BOTH `AND claim_token_used_at IS NULL` from the WHERE and
+    // `claim_token_hash = NULL,` from the SET of the controller's consume UPDATE
+    // (either alone is still serialized by the other).
     const { token } = await runInactivityGrant();
-    const consume = (): Promise<unknown> =>
-      dataSource.query(
-        `UPDATE emergency_access_contacts
-            SET claim_token_used_at = CURRENT_TIMESTAMP,
-                claim_token_hash = NULL,
-                claim_token_ciphertext = NULL,
-                claim_voided_reason = NULL
-          WHERE claim_token_hash = $1
-            AND claim_token_used_at IS NULL
-            AND claim_token_expires_at IS NOT NULL
-            AND claim_token_expires_at >= CURRENT_TIMESTAMP
-          RETURNING id, owner_user_id`,
-        [hashToken(token)],
-      );
+    const PASSWORD_A = "Winner-or-loser-A-1!aA";
+    const PASSWORD_B = "Winner-or-loser-B-2!bB";
 
-    const winners = (await Promise.all([consume(), consume()])).map(
-      (result) => returnedRows(result).length,
+    const claim = (newPassword: string): Promise<void> =>
+      claimController.complete({ token, newPassword }, fakeResponse());
+
+    const outcome = await raceTwo(
+      dataSource,
+      () => claim(PASSWORD_A),
+      () => claim(PASSWORD_B),
     );
 
-    expect(winners.filter((count) => count === 1)).toHaveLength(1);
-    expect(winners.filter((count) => count === 0)).toHaveLength(1);
-    expect((await contactRow()).claim_token_used_at).not.toBeNull();
-  });
+    expect(outcome.fulfilled).toBe(1);
+    expect(outcome.reasons).toHaveLength(1);
+    expect(outcome.reasons[0]).toBeInstanceOf(NotFoundException);
+
+    const aWon = outcome.a.status === "fulfilled";
+    const [{ password_hash: stored }]: { password_hash: string }[] =
+      await dataSource.query(`SELECT password_hash FROM users WHERE id = $1`, [
+        owner,
+      ]);
+    expect(await bcrypt.compare(aWon ? PASSWORD_A : PASSWORD_B, stored)).toBe(
+      true,
+    );
+    expect(await bcrypt.compare(aWon ? PASSWORD_B : PASSWORD_A, stored)).toBe(
+      false,
+    );
+
+    const contact = await contactRow();
+    expect(contact.claim_token_used_at).not.toBeNull();
+    expect(contact.claim_token_hash).toBeNull();
+  }, 60_000);
+
+  it("refuses a delivered link once the owner is back, before the daily cron voids it", async () => {
+    const { token } = await runInactivityGrant();
+    const [{ password_hash: before }]: { password_hash: string }[] =
+      await dataSource.query(`SELECT password_hash FROM users WHERE id = $1`, [
+        owner,
+      ]);
+
+    // The owner signs in again; the monitor has NOT run, so the link is still stored.
+    await lastSeenDaysAgo(0);
+
+    await expect(claimController.preview({ token })).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    await expect(
+      claimController.complete(
+        { token, newPassword: "Too-late-for-this-1!aA" },
+        fakeResponse(),
+      ),
+    ).rejects.toBeInstanceOf(NotFoundException);
+
+    const [{ password_hash: after }]: { password_hash: string }[] =
+      await dataSource.query(`SELECT password_hash FROM users WHERE id = $1`, [
+        owner,
+      ]);
+    expect(after).toBe(before);
+    const contact = await contactRow();
+    expect(contact.claim_token_used_at).toBeNull();
+    expect(contact.claim_token_hash).toBe(hashToken(token));
+  }, 60_000);
 
   describe("during a rolling deployment", () => {
     /**

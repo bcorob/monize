@@ -4,6 +4,7 @@
     "subtitle": "Gestisci le valute utilizzate nei tuoi conti e titoli",
     "refreshRates": "Aggiorna tassi",
     "refreshing": "Aggiornamento...",
+    "statusFilterLabel": "Stato",
     "newCurrency": "+ Nuova valuta",
     "searchPlaceholder": "Cerca per codice o nome...",
     "statusAll": "Tutte ({count})",
@@ -13,6 +14,15 @@
     "modalTitleNew": "Nuova valuta",
     "loading": "Caricamento valute...",
     "count": "{count, plural, one {# valuta} other {# valute}}",
+    "providers": {
+      "line": "Tassi da {providers}",
+      "separator": ", poi ",
+      "names": {
+        "frankfurter": "Frankfurter (tassi di riferimento BCE)",
+        "yahoo": "Yahoo Finance",
+        "crypto": "Coppie cripto (Yahoo)"
+      }
+    },
     "toasts": {
       "loadFailed": "Caricamento valute non riuscito",
       "updated": "Valuta aggiornata con successo",
@@ -24,6 +34,7 @@
       "statusFailed": "Aggiornamento stato valuta non riuscito",
       "ratesRefreshed": "Tassi di cambio aggiornati: {updated} coppie aggiornate",
       "ratesRefreshedWithFailed": "Tassi di cambio aggiornati: {updated} aggiornati, {failed} non riusciti",
+      "ratesAllFailed": "Impossibile recuperare i tassi di cambio; il fornitore non ha risposto",
       "ratesFailed": "Aggiornamento tassi di cambio non riuscito"
     },
     "summary": {
@@ -44,6 +55,8 @@
       "actions": "Azioni"
     },
     "defaultBadge": "Predefinita",
+    "cryptoBadge": "Cripto",
+    "noPriceSymbol": "Nessun simbolo di prezzo",
     "statusBadge": {
       "active": "Attiva",
       "activeShort": "Att",
@@ -61,9 +74,10 @@
       "activate": "Attiva",
       "deleteCurrency": "Elimina valuta"
     },
-    "usageTooltip": "{accounts} conto/i, {securities} titolo/i",
     "usageAccounts": "{count, plural, one {# conto} other {# conti}}",
     "usageSecurities": "{count, plural, one {# titolo} other {# titoli}}",
+    "rateHelp": "Quanto vale un'unità di ogni valuta in {currency}.",
+    "rateMissing": "Nessun tasso di cambio memorizzato per {from} a {to}.",
     "empty": {
       "title": "Nessuna valuta",
       "subtitle": "Inizia aggiungendo una valuta."
@@ -88,6 +102,20 @@
     "symbolLabel": "Simbolo",
     "symbolPlaceholder": "es. $, €, £, ¥",
     "decimalPlacesLabel": "Cifre decimali",
+    "kindLabel": "Tipo",
+    "kindOptions": {
+      "fiat": "Valuta fiat",
+      "crypto": "Criptovaluta"
+    },
+    "kindLocked": "{code} è in uso, quindi il suo tipo non può essere modificato.",
+    "quoteSymbolLabel": "Simbolo di prezzo (facoltativo)",
+    "quoteSymbolPlaceholder": "es. BTC-EUR",
+    "quoteSymbolHelp": "Il simbolo di Yahoo Finance da cui si ricava il prezzo della moneta: il suo ticker, un trattino e la valuta in cui è quotata, come BTC-EUR. I tassi di cambio della moneta vengono recuperati tramite questo simbolo.",
+    "verifyButton": "Verifica",
+    "quoteSymbolPricedIn": "Quotata in {currency}",
+    "quoteSymbolMissing": "Senza un simbolo di prezzo la valuta non ha un tasso di cambio.",
+    "quoteSymbolNotCrypto": "{symbol} non è una criptovaluta. Inserisci la coppia di una moneta, come BTC-EUR.",
+    "quoteSymbolNotFound": "Nessuna criptovaluta trovata per {symbol}",
     "lookupButton": "Cerca",
     "lookingUp": "Ricerca in corso...",
     "clearButton": "Cancella",
@@ -99,9 +127,14 @@
       "found": "Trovato: {details}",
       "notFound": "Nessuna valuta trovata per \"{query}\"",
       "lookupFailed": "Ricerca non riuscita - riprova",
-      "reactivateFailed": "Impossibile riattivare la valuta"
+      "reactivateFailed": "Impossibile riattivare la valuta",
+      "verifyEmpty": "Inserisci un simbolo di prezzo come BTC-EUR da verificare",
+      "verifyFailed": "Impossibile verificare il simbolo di prezzo"
     },
     "inactiveNotice": "{code} è già nella tua lista, ma non è attiva.",
+    "nonIsoNotice": "{code} non è un codice valuta standard. Se è una criptovaluta, imposta il suo tipo su Criptovaluta. <guide>Leggi di più sulle criptovalute nella guida utente</guide>.",
+    "switchToCrypto": "Usa Criptovaluta",
+    "cryptoPrecisionNotice": "Gli importi in una criptovaluta sono mantenuti con un massimo di otto cifre decimali, la precisione con cui vengono memorizzati, quindi non è possibile inserire una commissione inferiore a {smallest}. <guide>Scopri come registrare le commissioni del portafoglio</guide>.",
     "reactivateButton": "Riattiva {code}",
     "reactivating": "Riattivazione..."
   },
@@ -110,6 +143,53 @@
     "nameRequired": "Il nome è obbligatorio",
     "nameMax": "Il nome deve contenere al massimo 100 caratteri",
     "symbolRequired": "Il simbolo è obbligatorio",
-    "symbolMax": "Il simbolo deve contenere al massimo 10 caratteri"
+    "symbolMax": "Il simbolo deve contenere al massimo 10 caratteri",
+    "quoteSymbolMax": "Il simbolo di prezzo deve contenere al massimo 20 caratteri",
+    "quoteSymbolRequiresCrypto": "Solo una criptovaluta ha un simbolo di prezzo",
+    "quoteSymbolNotAPair": "Inserisci una coppia come BTC-EUR: la moneta, un trattino e un codice valuta di tre lettere"
+  },
+  "rateHistory": {
+    "title": "Storico dei tassi",
+    "stored": "Storico memorizzato: da {start} a {end} ({count} osservazioni)",
+    "none": "Nessuno storico memorizzato per {pair}",
+    "loading": "Verifica dello storico dei tassi memorizzato...",
+    "loadFailed": "Impossibile leggere lo storico dei tassi memorizzato",
+    "fillGaps": "Colma le lacune dello storico",
+    "filling": "Recupero dei tassi mancanti...",
+    "fillGapsTitle": "Recupera i tassi giornalieri che mancano ai tuoi report, dalla prima data in cui i tuoi dati usano {code} fino a oggi.",
+    "hint": "I report con data anteriore al primo tasso memorizzato non possono convertire {pair}.",
+    "list": {
+      "heading": "Tassi memorizzati",
+      "invertedHelp": "Un tasso contrassegnato come (invertito) è il reciproco di ciò che Monize ha effettivamente memorizzato per questa coppia, non un'osservazione diversa.",
+      "direction": "Mostrato come {to} per 1 {from}.",
+      "loading": "Caricamento dei tassi memorizzati...",
+      "loadFailed": "Impossibile leggere i tassi memorizzati",
+      "empty": "Nessun tasso memorizzato da elencare",
+      "truncated": "Sono mostrati i {count} tassi memorizzati più recenti; i più vecchi non sono elencati.",
+      "inverted": "invertito",
+      "unknownRate": "Sconosciuto",
+      "columns": {
+        "date": "Data",
+        "rate": "Tasso",
+        "source": "Origine"
+      },
+      "sources": {
+        "yahooFinance": "Yahoo Finance",
+        "frankfurter": "Frankfurter (BCE)",
+        "mnyImport": "Importazione Money",
+        "yahooCrypto": "Coppie cripto (Yahoo)",
+        "unknown": "Sconosciuto"
+      }
+    },
+    "toasts": {
+      "filled": "Aggiunti {count} tassi; lo storico ora inizia il {start}",
+      "partial": "{count} tassi memorizzati; lo storico ora inizia il {start}. Restano {windows} lacune da recuperare, premi di nuovo per continuare.",
+      "moreToFetch": "Questa volta non è stato memorizzato alcun tasso; restano {windows} lacune da recuperare, premi di nuovo per continuare.",
+      "noGaps": "{pair} ha già un tasso giornaliero per ogni data richiesta dai suoi report",
+      "noNewRates": "Nessun nuovo tasso è stato memorizzato per {pair}",
+      "unused": "Nessuno dei tuoi conti, titoli o movimenti usa {code}, quindi non ci sono tassi da recuperare",
+      "providerFloor": "Il fornitore non ha tassi per {pair} prima del {date}",
+      "failed": "Impossibile colmare lo storico dei tassi"
+    }
   }
 }

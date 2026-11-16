@@ -1,0 +1,238 @@
+# Two backends, two frontends, one PostgreSQL, behind a reverse proxy.
+#
+# An EXAMPLE of CLUSTER_MODE=multi on one host, not a production reference --
+# docker-compose.prod.yml is that, and stays the single-replica one. What this
+# file is for is showing that the mode needs nothing new: the same image, the
+# same database, the same variables, plus a proxy because two frontends cannot
+# both own a port.
+#
+# What multi changes inside the backend: rate-limit counters, single-use claims
+# and the AI relay's queue live in PostgreSQL rather than in each process, and
+# replicas wake each other with LISTEN/NOTIFY over one extra connection each.
+# There is no second datastore here for exactly that reason.
+#
+#   docker compose -f docker-compose.ha.yml up -d --wait
+#   docker compose -f docker-compose.ha.yml stop backend   # both replicas
+#
+# Killing ONE backend replica leaves the application usable, but not instantly
+# and not invisibly. Docker's embedded DNS round-robins the `backend` service
+# name across the containers that exist, and it does NOT remove one whose
+# healthcheck is failing: a stopped replica is removed when the container
+# stops, while a container that is up and unhealthy keeps receiving its share
+# of requests. Each frontend also resolves the name per request and caches
+# briefly, so expect a window of errors rather than a clean failover. That is a
+# property of this example, not of `multi`: a real deployment puts a load
+# balancer that reads readiness in front (Kubernetes Services do, which is what
+# helm/ chooses), and `/api/v1/health/ready` is what it reads.
+#
+# Two more differences from docker-compose.prod.yml worth knowing before
+# copying anything out of this file:
+#
+#   * Backups are a NAMED VOLUME here, not the bind mount prod uses. Both
+#     replicas must mount the same directory, which a named volume makes
+#     explicit on one host; a bind mount would work equally well here and is
+#     what a real deployment usually wants. If you are adapting prod, the
+#     backups do not move with the file -- copy them, or point both replicas at
+#     the existing bind mount.
+#   * DEMO_MODE seeds on boot, and both replicas run the seeder at once. That
+#     is safe -- `backend/src/database/seed.ts` holds the database-lifecycle
+#     advisory lock across the whole seed, and the follower re-asks on the
+#     connection holding the lock and exits 0 on the winner's demo user -- but
+#     it is serial: the second replica waits out the first one's seed before it
+#     starts, so the first `up --wait` of a demo stack takes about twice as long
+#     as one replica would. That lock is a session lock, which is another thing
+#     a transaction-mode pooler between here and PostgreSQL would break.
+#
+# Requires the same .env as docker-compose.prod.yml, plus PROXY_PORT for the
+# proxy below (the two frontend replicas cannot both publish FRONTEND_PORT).
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    # No container_name anywhere in this file: it must be unique per container,
+    # so it is exactly the setting that makes `deploy.replicas` impossible.
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - monize-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    image: ghcr.io/kenlasko/monize-backend:latest
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      replicas: 2
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: ${BACKEND_PORT:-3000}
+      # Straight at postgres, which is what multi needs: every replica holds one
+      # LISTEN open for cross-replica wake-ups, and a transaction-mode pooler
+      # would accept the connection and silently drop the subscription. The
+      # backend refuses to boot if it cannot hold the LISTEN.
+      DATABASE_HOST: postgres
+      DATABASE_PORT: 5432
+      DATABASE_NAME: ${POSTGRES_DB}
+      DATABASE_USER: ${POSTGRES_USER}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD}
+      RLS_MODE: ${RLS_MODE:-off}
+      DATABASE_APP_USER: ${DATABASE_APP_USER:-monize_app}
+      DATABASE_APP_PASSWORD: ${DATABASE_APP_PASSWORD:-}
+      # The mode itself. Without it these two replicas would each enforce their
+      # own rate limits and neither would see the other's relay prompts.
+      CLUSTER_MODE: multi
+      # Attachment bytes in PostgreSQL, which is cluster-safe by construction:
+      # both replicas read the same rows. The `local` provider would need a
+      # shared volume and ATTACHMENT_SHARED_VOLUME=true beside it.
+      ATTACHMENT_STORAGE_PROVIDER: database
+      # Backups go to a named volume both replicas mount. On one host that is
+      # shared by definition, which is what makes this assertion true rather
+      # than merely stated; on Kubernetes it means ReadWriteMany. multi refuses
+      # to boot without the assertion, because no process can see from inside
+      # whether its mount point is the same directory another replica sees.
+      BACKUP_CONTAINER_DIR: /data/backups
+      BACKUP_SHARED_VOLUME: "true"
+      # Required (the same value on both replicas): the backend refuses to start without a JWT_SECRET of at least
+      # 32 characters, and warns (log, admin alert, banner) when it is a known
+      # placeholder or predictable. Generate one with `openssl rand -base64 32`
+      # and keep it stable: changing it makes stored authenticator (TOTP)
+      # secrets unreadable, so 2FA users must sign in with a backup code or have
+      # an admin reset their 2FA. See docs/backend/modules-and-runtime.md,
+      # "Changing JWT_SECRET".
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-15m}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL}
+      CORS_ORIGIN: ${CORS_ORIGIN:-${PUBLIC_APP_URL}}
+      MSN_API_KEY: ${MSN_API_KEY}
+      LOCAL_AUTH_ENABLED: ${LOCAL_AUTH_ENABLED:-true}
+      REGISTRATION_ENABLED: ${REGISTRATION_ENABLED:-true}
+      FORCE_2FA: ${FORCE_2FA:-false}
+      AUTH_BRAND_PANEL: ${AUTH_BRAND_PANEL:-true}
+      REMEMBER_ME_DAYS: ${REMEMBER_ME_DAYS:-30}
+      UNIFIEDPUSH_PRIVATE_ENDPOINTS: ${UNIFIEDPUSH_PRIVATE_ENDPOINTS:-}
+      NOTIFICATION_REMINDER_CLAIM_BATCH: ${NOTIFICATION_REMINDER_CLAIM_BATCH:-}
+      NOTIFICATION_REMINDER_REEMIT_CONCURRENCY: ${NOTIFICATION_REMINDER_REEMIT_CONCURRENCY:-}
+      DEMO_MODE: ${DEMO_MODE:-false}
+      OIDC_ISSUER_URL: ${OIDC_ISSUER_URL:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_CALLBACK_URL: ${OIDC_CALLBACK_URL:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      # Required: the backend refuses to start without an ENCRYPTION_KEY of at
+      # least 32 characters (`openssl rand -hex 32`). It encrypts everything
+      # stored encrypted at rest (AI provider keys, emergency-access
+      # credentials, the automatic-backup data keys). Keep it stable once set:
+      # rotating it makes what is stored unreadable. AI_ENCRYPTION_KEY is the
+      # former name and is still accepted, so an existing .env keeps working --
+      # pass both and let the backend choose.
+      # Both replicas need the same key or one of them cannot read what the
+      # other encrypted. Nothing about multi changes that; it just makes a
+      # mismatch visible immediately instead of after a restore.
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-}
+      AI_ENCRYPTION_KEY: ${AI_ENCRYPTION_KEY:-}
+      AI_DEFAULT_PROVIDER: ${AI_DEFAULT_PROVIDER:-}
+      AI_DEFAULT_MODEL: ${AI_DEFAULT_MODEL:-}
+      AI_DEFAULT_API_KEY: ${AI_DEFAULT_API_KEY:-}
+      AI_DEFAULT_BASE_URL: ${AI_DEFAULT_BASE_URL:-}
+      DISABLE_HTTPS_HEADERS: ${DISABLE_HTTPS_HEADERS:-false}
+    volumes:
+      # A named volume rather than a host bind: both replicas mount the same
+      # one, which is the whole point. A bind would work here too on one host;
+      # the named volume makes the sharing explicit.
+      - backups:/data/backups
+    networks:
+      - monize-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:' + (process.env.PORT || 3000) + '/api/v1/health/ready').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    image: ghcr.io/kenlasko/monize-frontend:latest
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    deploy:
+      replicas: 2
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: ${FRONTEND_PORT:-3000}
+      # The service name, not a replica: Docker's DNS returns every healthy
+      # backend for it, so each frontend request can land on either one. That is
+      # the no-session-affinity load balancing the mode exists to survive.
+      INTERNAL_API_URL: http://backend:${BACKEND_PORT:-3000}
+      PUBLIC_APP_URL: ${PUBLIC_APP_URL}
+      DISABLE_HTTPS_HEADERS: ${DISABLE_HTTPS_HEADERS:-false}
+    # No ports: two replicas cannot both publish one host port. The proxy below
+    # is the single entry point.
+    networks:
+      - monize-network
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://localhost:' + (process.env.PORT || 3000) + '/api/v1/health/live').then(r => { if (!r.ok) process.exit(1) }).catch(() => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # The single entry point, standing in for whatever terminates TLS in a real
+  # deployment. Caddy because its whole configuration here is two lines and it
+  # resolves the `frontend` service name on every request, so a replica that
+  # comes back after a restart is used without reloading the proxy.
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      frontend:
+        condition: service_healthy
+    command: >-
+      caddy reverse-proxy --from :80
+      --to http://frontend:${FRONTEND_PORT:-3000}
+    ports:
+      - "${PROXY_PORT:-3000}:80"
+    networks:
+      - monize-network
+
+networks:
+  monize-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+    driver: local
+  # Shared by both backend replicas: the hourly backup job runs on whichever
+  # replica wins its claim, and a restore is served by whichever replica takes
+  # the request. BACKUP_SHARED_VOLUME=true above is the assertion that these
+  # are the same files.
+  backups:
+    driver: local

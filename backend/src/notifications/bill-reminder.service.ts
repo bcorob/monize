@@ -10,8 +10,11 @@ import { todayYMD } from "../common/date-utils";
 import { reminderWindowThrough } from "../scheduled-transactions/reminder-window";
 import { UserPreference } from "../users/entities/user-preference.entity";
 import { User } from "../users/entities/user.entity";
+import { NotificationCategory } from "../notification-center/entities/notification.entity";
+import { NotificationPreferenceService } from "../notification-center/notification-preference.service";
 import { EmailService } from "./email.service";
 import { billReminderTemplate } from "./email-templates";
+import { numberFormatterFor } from "../common/number-locale.util";
 import { emailTranslator } from "../i18n/email-translator";
 import { DEFAULT_LOCALE } from "../i18n/config";
 import { withSystemContext, withUserContext } from "../common/db/with-context";
@@ -52,6 +55,7 @@ export class BillReminderService {
     // or a private copy of the override rules (issue #1247).
     @Inject(forwardRef(() => ScheduledOccurrenceService))
     private readonly occurrences: ScheduledOccurrenceService,
+    private readonly notificationPreferences: NotificationPreferenceService,
   ) {}
 
   /**
@@ -131,11 +135,24 @@ export class BillReminderService {
       // nullable column (null is "due today only") and the ceiling. A raw
       // `addDaysYMD` on an unbounded value produced "NaN-NaN-NaN", and the
       // expander's text comparison read that as "every bill is due today".
-      const due = expandOccurrenceSlots(bill, bill.overrides ?? [], {
-        from: todayStr,
-        through: reminderWindowThrough(todayStr, bill.reminderDaysBefore),
-        maxOccurrences: 1,
-      });
+      //
+      // Each bill on its own: this pass spans every user, so one row that
+      // cannot be expanded is logged and passed over rather than ending the run
+      // for everybody (backend/CLAUDE.md, per-user isolation).
+      let due: readonly unknown[];
+      try {
+        due = expandOccurrenceSlots(bill, bill.overrides ?? [], {
+          from: todayStr,
+          through: reminderWindowThrough(todayStr, bill.reminderDaysBefore),
+          maxOccurrences: 1,
+        });
+      } catch (error) {
+        this.logger.warn(
+          `Bill reminder skipped scheduled transaction ${bill.id}: ` +
+            `${error instanceof Error ? error.message : String(error)}`,
+        );
+        continue;
+      }
       if (due.length > 0) {
         const existing = billsByUser.get(bill.userId) || [];
         existing.push(bill);
@@ -168,9 +185,20 @@ export class BillReminderService {
       // reminder was sent to anybody. Wrapping the body is what makes the claim,
       // the delivery record and the release share one identity with the reads
       // between them.
-      const sent = await withUserContext(userId, () =>
-        this.deliverForUser(userId, bills, appUrl, todayStr),
-      );
+      //
+      // The claim and delivery checks run before `deliverForUser`'s own catch,
+      // so one user's failure there is caught here and the loop moves on.
+      let sent = false;
+      try {
+        sent = await withUserContext(userId, () =>
+          this.deliverForUser(userId, bills, appUrl, todayStr),
+        );
+      } catch (error) {
+        this.logger.error(
+          `Bill reminder failed for user ${userId}`,
+          error instanceof Error ? error.stack : error,
+        );
+      }
       if (sent) sentCount++;
       else skipCount++;
     }
@@ -243,17 +271,24 @@ export class BillReminderService {
     }
 
     try {
-      // Check if user has email notifications enabled.
-      // RLS (task C2): per-user reads run under the user's own context.
-      const prefs = await withScopedDb(this.dataSource, (manager) =>
-        manager.getRepository(UserPreference).findOne({
-          where: { userId },
-        }),
+      // A bill reminder is the PAYMENTS category. Email is gated by the
+      // per-category matrix and the global email master switch together, and
+      // the resolver reads both. RLS (task C2): this per-user body already runs
+      // under the user's own context, and the resolver's nested withScopedDb
+      // joins it.
+      const emailEnabled = await this.notificationPreferences.resolveEmail(
+        userId,
+        NotificationCategory.PAYMENTS,
       );
-      if (prefs && !prefs.notificationEmail) {
+      if (!emailEnabled) {
         await this.releaseClaim(userId, claimKey, leaseToken);
         return false;
       }
+
+      // The user's stored locale for the reminder copy, composed off-request.
+      const prefs = await withScopedDb(this.dataSource, (manager) =>
+        manager.getRepository(UserPreference).findOne({ where: { userId } }),
+      );
 
       const user = await withScopedDb(this.dataSource, (manager) =>
         manager.getRepository(User).findOne({ where: { id: userId } }),
@@ -310,6 +345,8 @@ export class BillReminderService {
             occurrence.directionAmount === null
               ? null
               : occurrence.directionAmount > 0,
+          // Labelled in the email as an estimate (issue #2096).
+          estimated: occurrence.estimated,
         };
       });
 
@@ -356,11 +393,15 @@ export class BillReminderService {
 
       const lang = prefs?.language || DEFAULT_LOCALE;
       const t = emailTranslator(this.i18n, lang);
+      // The amounts follow the recipient's number locale, not the server's:
+      // translated copy around an `en-US` figure is the defect in issue #1316.
+      const n = numberFormatterFor(prefs?.numberFormat, prefs?.language);
       const html = billReminderTemplate(
         user.firstName || "",
         billData,
         appUrl,
         t,
+        n,
       );
       // Counted from what the email actually lists, not from what phase one
       // selected: the two can differ, and the subject is a claim about the body.

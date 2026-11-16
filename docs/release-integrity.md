@@ -49,7 +49,7 @@ silently becoming three. Only an explicit inventory catches partial loss.
 `backend/package.json` runs integration tests as:
 
 ```json
-"test:integration": "jest --config ./test/jest-e2e.json --testPathPatterns=\"test/integration/.*\\.spec\\.ts$\" --runInBand",
+"test:integration": "jest --config ./test/jest-integration.json --runInBand",
 ```
 
 It previously carried an unconditional `--passWithNoTests` under 21 suites --
@@ -73,10 +73,10 @@ to one the pipeline enforces. No runner carries such a flag today either:
 fails by default when it discovers no spec files.
 
 REL-002 is still owed. The same guard asserts that the 35 suites tracked under
-`backend/test/integration/` are all discoverable by `test/jest-e2e.json`, which
+`backend/test/integration/` are all discoverable by `test/jest-integration.json`, which
 catches a config that stops matching a class of specs; it does not assert what
-the runner actually executed, and the CLI `--testPathPatterns` filter sits
-outside the model. A shrinking suite that is genuinely deleted still passes.
+the runner actually executed. The script carries no `--testPathPatterns` any
+more, so no filter sits outside the model. A shrinking suite that is genuinely deleted still passes.
 
 ## 2. The tested revision and the released revision must be the same
 
@@ -209,6 +209,8 @@ does not.
 | Workflows themselves are scanned | `zizmor-scan`, SARIF uploaded | Workflow security is machine-checked rather than reviewed by eye |
 | Schema drift is a required gate | `schema-drift` running `scripts/verify-schema.sh` | Gates both the release and preview publish paths, and reproduces locally with only Docker |
 | Bearer scan exceptions expire | `bearer-exceptions-review.yml` | A suppression with a `review-by` date that lapses opens an issue, so exceptions cannot become permanent silently |
+| The registry has a retention rule, and its destructive predicate is tested | `scripts/prune-ghcr-untagged.sh` classifying through `scripts/lib/ghcr-version-class.jq`, checked by `scripts/ghcr-version-class.test.mjs` | A tag nothing ever deletes is a tag that accumulates: 481 retired per-PR tags reached ~17.7 GB, three quarters of the footprint, because the sweep only removed untagged versions. One version can carry several tags, so the rule "prunable only when EVERY tag is a per-PR tag" is what stops the sweep unpublishing `:latest` beside a `pr-` tag on the same digest, and it is a unit test rather than a comment |
+| Published images refresh their base OS packages | `apk upgrade` in each Dockerfile's `production` stage, scanned by `frontend/src/test/dockerfile-os-upgrade.test.ts` | `node:24-alpine` is rebuilt on Node's cadence, not Alpine's, so a base tag lags every OpenSSL advisory until upstream rebuilds. Upgrading at build time clears the class rather than the CVEs open on any one day |
 
 The last two are the model this whole document is arguing for: a rule with an
 expiry date and a job that enforces it, rather than a paragraph asking people to

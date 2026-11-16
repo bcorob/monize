@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@/test/render';
-import { UserManagementTable } from './UserManagementTable';
+import { AdminStorageState, UserManagementTable } from './UserManagementTable';
+import { AdminUserStorage } from '@/lib/admin';
+
+const mobileState = vi.hoisted(() => ({ isMobile: false }));
+vi.mock('@/hooks/useIsMobile', () => ({
+  useIsMobile: () => mobileState.isMobile,
+}));
 
 vi.mock('@/hooks/useDateFormat', () => ({
   useDateFormat: () => ({ dateFormat: 'browser', datePattern: 'YYYY-MM-DD', formatDate: (d: Date) => d.toISOString().slice(0, 10) }),
@@ -10,6 +16,8 @@ describe('UserManagementTable', () => {
   const onChangeRole = vi.fn();
   const onToggleStatus = vi.fn();
   const onResetPassword = vi.fn();
+  const onResetTwoFactor = vi.fn();
+  const onUnlinkSso = vi.fn();
   const onDeleteUser = vi.fn();
 
   const users = [
@@ -30,17 +38,38 @@ describe('UserManagementTable', () => {
     },
   ] as any[];
 
+  /** A loaded reading, with each user's row overridable per test. */
+  const readingOf = (...rows: AdminUserStorage[]): AdminStorageState => ({
+    status: 'ready',
+    byUser: new Map(rows.map((row) => [row.userId, row])),
+  });
+
+  const storedFor = (
+    userId: string,
+    overrides: Partial<AdminUserStorage> = {},
+  ): AdminUserStorage => ({
+    userId,
+    backups: { enabled: true, artifacts: 2, bytes: 3_145_728 },
+    attachments: { files: 4, bytes: 1_048_576 },
+    ...overrides,
+  });
+
   const defaultProps = {
     users,
+    storage: readingOf(storedFor('u1'), storedFor('u2'), storedFor('u3')),
     currentUserId: 'u1',
     onChangeRole,
     onToggleStatus,
     onResetPassword,
+    onUnlinkSso,
+    onResetTwoFactor,
     onDeleteUser,
   };
 
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
+    mobileState.isMobile = false;
   });
 
   it('renders table with user data', () => {
@@ -55,7 +84,8 @@ describe('UserManagementTable', () => {
     render(<UserManagementTable {...defaultProps} />);
     // "User" also appears in role dropdown options, so check within thead
     const headerRow = screen.getAllByRole('columnheader');
-    const headerTexts = headerRow.map(h => h.textContent);
+    // Drop the sort glyphs the sortable headers carry.
+    const headerTexts = headerRow.map(h => h.textContent?.replace(/[\u2191\u2193\u2195]/g, ''));
     expect(headerTexts).toContain('User');
     expect(headerTexts).toContain('Role');
     expect(headerTexts).toContain('Provider');
@@ -90,8 +120,8 @@ describe('UserManagementTable', () => {
   it('shows Delete button for non-self users and calls onDeleteUser', () => {
     render(<UserManagementTable {...defaultProps} />);
     const deleteButtons = screen.getAllByText('Delete');
-    expect(deleteButtons).toHaveLength(2); // u2 and u3
-    fireEvent.click(deleteButtons[0]);
+    expect(deleteButtons).toHaveLength(2); // u3 and u2, in name order
+    fireEvent.click(deleteButtons[1]);
     expect(onDeleteUser).toHaveBeenCalledWith(expect.objectContaining({ id: 'u2' }));
   });
 
@@ -102,6 +132,36 @@ describe('UserManagementTable', () => {
     expect(resetButtons).toHaveLength(1);
     fireEvent.click(resetButtons[0]);
     expect(onResetPassword).toHaveBeenCalledWith(expect.objectContaining({ id: 'u3' }));
+  });
+
+  it('offers Reset 2FA for every other user and never for the admin themself', () => {
+    render(<UserManagementTable {...defaultProps} />);
+    // The list carries no 2FA state, so the action is offered for both other
+    // users; the server refuses one with none, and the page reports it.
+    const resetTwoFactorButtons = screen.getAllByText('Reset 2FA');
+    expect(resetTwoFactorButtons).toHaveLength(2);
+    fireEvent.click(resetTwoFactorButtons[0]);
+    expect(onResetTwoFactor).toHaveBeenCalledWith(expect.objectContaining({ id: 'u3' }));
+  });
+
+  it('offers Reset Password for an SSO row with a password only while SSO password login is on', () => {
+    const ssoWithPassword = users.map((u) => (u.id === 'u2' ? { ...u, hasPassword: true } : u));
+    const { rerender } = render(<UserManagementTable {...defaultProps} users={ssoWithPassword} />);
+    expect(screen.getAllByText('Reset Password')).toHaveLength(1); // u3 only
+    rerender(<UserManagementTable {...defaultProps} users={ssoWithPassword} oidcPasswordLogin />);
+    expect(screen.getAllByText('Reset Password')).toHaveLength(2);
+  });
+
+  it('offers Unlink SSO only for SSO users other than the admin themself', () => {
+    const { rerender } = render(<UserManagementTable {...defaultProps} />);
+    const buttons = screen.getAllByText('Unlink SSO');
+    expect(buttons).toHaveLength(1); // u2 is the only oidc row
+    fireEvent.click(buttons[0]);
+    expect(onUnlinkSso).toHaveBeenCalledWith(expect.objectContaining({ id: 'u2' }));
+
+    // An SSO admin looking at their own row gets no action.
+    rerender(<UserManagementTable {...defaultProps} currentUserId="u2" />);
+    expect(screen.queryByText('Unlink SSO')).not.toBeInTheDocument();
   });
 
   it('does not show actions for current user (self)', () => {
@@ -122,7 +182,7 @@ describe('UserManagementTable', () => {
   it('calls onChangeRole when role select is changed', () => {
     render(<UserManagementTable {...defaultProps} />);
     const selects = screen.getAllByRole('combobox');
-    fireEvent.change(selects[0], { target: { value: 'admin' } });
+    fireEvent.change(selects[1], { target: { value: 'admin' } });
     expect(onChangeRole).toHaveBeenCalledWith(expect.objectContaining({ id: 'u2' }), 'admin');
   });
 
@@ -178,10 +238,182 @@ describe('UserManagementTable', () => {
     expect(screen.getByText('No email')).toBeInTheDocument();
   });
 
-  it('sorts users by creation date ascending', () => {
+  describe('storage columns', () => {
+    const soloUser = [users[1]] as any[];
+
+    it('shows a size and what it covers for each figure', () => {
+      render(
+        <UserManagementTable
+          {...defaultProps}
+          users={soloUser}
+          storage={readingOf(storedFor('u2'))}
+        />,
+      );
+
+      expect(screen.getByText('3.0 MB')).toBeInTheDocument();
+      expect(screen.getByText('2 backups')).toBeInTheDocument();
+      expect(screen.getByText('1.0 MB')).toBeInTheDocument();
+      expect(screen.getByText('4 files')).toBeInTheDocument();
+    });
+
+    it('renders a store it could not read as unknown, never as zero', () => {
+      render(
+        <UserManagementTable
+          {...defaultProps}
+          users={soloUser}
+          storage={readingOf(
+            storedFor('u2', {
+              backups: { enabled: true, artifacts: null, bytes: null },
+            }),
+          )}
+        />,
+      );
+
+      const unknown = screen.getByText('Unknown');
+      expect(unknown).toBeInTheDocument();
+      // The reason travels with the refusal: a bare "Unknown" is a dead end.
+      expect(unknown).toHaveAttribute(
+        'title',
+        expect.stringContaining('backup store could not be read'),
+      );
+      expect(screen.queryByText('0 byte')).not.toBeInTheDocument();
+    });
+
+    it('distinguishes a user with no backups from one whose store is unreadable', () => {
+      render(
+        <UserManagementTable
+          {...defaultProps}
+          users={soloUser}
+          storage={readingOf(
+            storedFor('u2', {
+              backups: { enabled: false, artifacts: 0, bytes: 0 },
+              attachments: { files: 0, bytes: 0 },
+            }),
+          )}
+        />,
+      );
+
+      expect(screen.getByText('Off')).toBeInTheDocument();
+      expect(screen.queryByText('Unknown')).not.toBeInTheDocument();
+      // An account that stores no attachments genuinely stores zero.
+      expect(screen.getByText('0 byte')).toBeInTheDocument();
+      expect(screen.getByText('No files')).toBeInTheDocument();
+    });
+
+    it('still reports the bytes of a user whose schedule is switched off', () => {
+      render(
+        <UserManagementTable
+          {...defaultProps}
+          users={soloUser}
+          storage={readingOf(
+            storedFor('u2', {
+              backups: { enabled: false, artifacts: 2, bytes: 3_145_728 },
+            }),
+          )}
+        />,
+      );
+
+      expect(screen.getByText('3.0 MB')).toBeInTheDocument();
+      expect(screen.getByText('Schedule off')).toBeInTheDocument();
+    });
+
+    it('says the figures are still loading rather than showing a blank cell', () => {
+      render(
+        <UserManagementTable
+          {...defaultProps}
+          users={soloUser}
+          storage={{ status: 'loading' }}
+        />,
+      );
+
+      expect(screen.getAllByText('Loading\u2026')).toHaveLength(2);
+    });
+
+    it('says the reading failed, and what to do, when the request did', () => {
+      render(
+        <UserManagementTable
+          {...defaultProps}
+          users={soloUser}
+          storage={{ status: 'error' }}
+        />,
+      );
+
+      const cells = screen.getAllByText('Unavailable');
+      expect(cells).toHaveLength(2);
+      expect(cells[0]).toHaveAttribute(
+        'title',
+        expect.stringContaining('Reload the page'),
+      );
+    });
+
+    it('marks a user the reading did not cover instead of billing them zero', () => {
+      render(
+        <UserManagementTable
+          {...defaultProps}
+          users={soloUser}
+          storage={readingOf()}
+        />,
+      );
+
+      const unknown = screen.getAllByText('Not reported');
+      expect(unknown).toHaveLength(2);
+      expect(unknown[0]).toHaveAttribute(
+        'title',
+        expect.stringContaining('last storage reading'),
+      );
+    });
+  });
+
+  it('sorts users by name by default and says so on the header', () => {
     render(<UserManagementTable {...defaultProps} />);
     const rows = screen.getAllByRole('row');
-    // First data row should be Admin User (earliest createdAt)
     expect(rows[1]).toHaveTextContent('Admin User');
+    expect(rows[2]).toHaveTextContent('Jane Smith');
+    expect(rows[3]).toHaveTextContent('John Doe');
+    expect(screen.getByRole('columnheader', { name: /^User/ })).toHaveAttribute(
+      'aria-sort',
+      'ascending',
+    );
+  });
+
+  it('sorts by a column from its header button, and reverses on a second press', () => {
+    render(<UserManagementTable {...defaultProps} />);
+    fireEvent.click(screen.getByRole('button', { name: /^Last Login/ }));
+
+    let rows = screen.getAllByRole('row');
+    // Never signed in sorts as the oldest login.
+    expect(rows[1]).toHaveTextContent('John Doe');
+    expect(rows[3]).toHaveTextContent('Admin User');
+    expect(screen.getByRole('columnheader', { name: /^Last Login/ })).toHaveAttribute(
+      'aria-sort',
+      'ascending',
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: /^Last Login/ }));
+    rows = screen.getAllByRole('row');
+    expect(rows[1]).toHaveTextContent('Admin User');
+    expect(screen.getByRole('columnheader', { name: /^Last Login/ })).toHaveAttribute(
+      'aria-sort',
+      'descending',
+    );
+  });
+
+  it('shows each user as one card on a phone, with every column and a sort header', () => {
+    mobileState.isMobile = true;
+    render(<UserManagementTable {...defaultProps} />);
+
+    // One header cell holding every sortable field, and one cell per user.
+    expect(screen.getAllByRole('columnheader')).toHaveLength(1);
+    expect(screen.getByRole('columnheader')).toHaveAttribute('aria-sort', 'ascending');
+    const rows = screen.getAllByRole('row');
+    expect(rows).toHaveLength(4);
+    for (const row of rows.slice(1)) {
+      expect(row.querySelectorAll('td')).toHaveLength(1);
+    }
+    // The card keeps the figures and the actions the table would have shown.
+    expect(screen.getAllByText('Backups').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('3.0 MB')).toHaveLength(3);
+    expect(screen.getAllByText('Reset 2FA')).toHaveLength(2);
+    expect(screen.getAllByRole('combobox', { name: 'Role' })).toHaveLength(2);
   });
 });

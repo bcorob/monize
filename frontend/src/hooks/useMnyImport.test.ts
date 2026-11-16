@@ -64,6 +64,8 @@ function preview(overrides: Partial<MnyPreview> = {}): MnyPreview {
       payeesInFile: 2,
       categoriesToCreate: 1,
       categoriesInFile: 2,
+      tagsToCreate: 0,
+      tagsInFile: 0,
       transactionsToCreate: 15,
       transfersToLink: 0,
       transactionsSkipped: 0,

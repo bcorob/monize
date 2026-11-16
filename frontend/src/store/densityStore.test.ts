@@ -1,16 +1,22 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { act, renderHook } from '@/test/render';
 import {
   useDensityStore,
+  useDensityPreference,
+  resolveDensity,
   migrateLegacyDensity,
   LEGACY_DENSITY_KEYS,
   DENSITY_STORAGE_KEY,
   DENSITY_VIEWS,
 } from './densityStore';
+import { usePreferencesStore } from './preferencesStore';
+import type { UserPreferences } from '@/types/auth';
 
 describe('densityStore', () => {
   beforeEach(() => {
     window.localStorage.clear();
     useDensityStore.setState({ densities: {} });
+    usePreferencesStore.setState({ preferences: null });
   });
 
   describe('per-view levels', () => {
@@ -160,6 +166,65 @@ describe('densityStore', () => {
       useDensityStore.getState().cycleDensity('tags');
 
       expect(useDensityStore.getState().densities.tags).toBe('dense');
+    });
+  });
+
+  describe('the account default', () => {
+    const setAccountDefault = (viewDefaults: unknown) =>
+      usePreferencesStore.setState({
+        preferences: { viewDefaults } as unknown as UserPreferences,
+      });
+
+    it.each([
+      [undefined, undefined, 'normal'],
+      [undefined, 'compact', 'compact'],
+      ['dense', 'compact', 'dense'],
+      ['normal', 'dense', 'normal'],
+    ] as const)('resolves browser %s over account %s to %s', (local, account, expected) => {
+      expect(resolveDensity(local, account)).toBe(expected);
+    });
+
+    it('shows the account default on a view this browser has saved nothing for', () => {
+      setAccountDefault({ density: 'compact' });
+      const { result } = renderHook(() => useDensityPreference('payees'));
+      expect(result.current.density).toBe('compact');
+    });
+
+    it("keeps this browser's saved level over the account default", () => {
+      setAccountDefault({ density: 'compact' });
+      useDensityStore.getState().setDensity('payees', 'dense');
+      const { result } = renderHook(() => useDensityPreference('payees'));
+      expect(result.current.density).toBe('dense');
+    });
+
+    it('ignores a malformed account default', () => {
+      setAccountDefault({ density: 'gigantic' });
+      const { result } = renderHook(() => useDensityPreference('payees'));
+      expect(result.current.density).toBe('normal');
+    });
+
+    it('cycles from the level on screen, not from the built-in one', () => {
+      // At a compact account default the first press must go to dense; cycling
+      // from the built-in normal would land on compact and look like a no-op.
+      setAccountDefault({ density: 'compact' });
+      const { result } = renderHook(() => useDensityPreference('payees'));
+
+      act(() => result.current.cycleDensity());
+
+      expect(result.current.density).toBe('dense');
+      expect(useDensityStore.getState().densities.payees).toBe('dense');
+    });
+
+    it('applies again once the saved levels are cleared', () => {
+      setAccountDefault({ density: 'dense' });
+      useDensityStore.getState().setDensity('payees', 'normal');
+      const { result } = renderHook(() => useDensityPreference('payees'));
+      expect(result.current.density).toBe('normal');
+
+      act(() => useDensityStore.getState().clearDensities());
+
+      expect(useDensityStore.getState().densities).toEqual({});
+      expect(result.current.density).toBe('dense');
     });
   });
 });

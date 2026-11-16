@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 
 /**
- * Guard for `frontend/CLAUDE.md`'s rule that the investment price / quantity /
+ * Guard for `docs/frontend/financial-figures.md`'s rule that the investment price / quantity /
  * total fold lives in exactly one place -- `lib/investmentFold.ts` -- so the
  * surfaces that fill those fields (the two scheduled-transaction dialogs and the
  * schedule form) cannot drift on the arithmetic. Modelled on the backend's

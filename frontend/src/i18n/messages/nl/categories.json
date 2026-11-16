@@ -7,6 +7,7 @@
     "filterAll": "Alle ({count})",
     "filterExpenses": "Uitgaven ({count})",
     "filterIncome": "Inkomsten ({count})",
+    "typeFilterLabel": "Type",
     "modalTitleNew": "Nieuwe categorie",
     "modalTitleEdit": "Categorie bewerken",
     "countSingle": "1 categorie",
@@ -54,6 +55,12 @@
     "typeExpense": "Uitgaven",
     "typeIncome": "Inkomsten",
     "typeInherited": "Type overgenomen van bovenliggende",
+    "autoSignLabel": "Automatisch teken",
+    "autoSignOn": "Aan",
+    "autoSignOff": "Uit",
+    "autoSignInherit": "Overnemen van bovenliggende categorie",
+    "autoSignInheritedFrom": "Overgenomen van bovenliggende categorie ({name}): momenteel {state}",
+    "autoSignHelp": "Indien aan, wordt een ingevoerd bedrag negatief bij een uitgavencategorie en positief bij een inkomstencategorie. Zet uit om het teken precies te houden zoals u het invoert.",
     "colourLabel": "Kleur",
     "colourInherit": "Overnemen van bovenliggende",
     "colourNone": "Geen kleur",
@@ -65,8 +72,8 @@
     "submitUpdate": "Categorie bijwerken"
   },
   "list": {
-    "emptyHeading": "Geen categorieën",
-    "emptyDescription": "Begin door een nieuwe categorie aan te maken.",
+    "emptyHeading": "Geen categorieën gevonden",
+    "emptyDescription": "Geen categorieën komen overeen met je huidige zoekopdracht of filter.",
     "colName": "Naam",
     "colType": "Type",
     "colCount": "Aantal",
@@ -79,7 +86,7 @@
     "viewTransactionsTitle": "Transacties in deze categorie bekijken"
   },
   "deleteDialog": {
-    "title": "Verwijder \"{name}\"?",
+    "title": "\"{name}\" verwijderen",
     "checkingUsage": "Gebruik controleren...",
     "usedBy": "Deze categorie wordt gebruikt door {count, plural, one {# item} other {# items}} (transacties en/of geplande rekeningen & stortingen).",
     "reassignLabel": "Opnieuw toewijzen aan:",

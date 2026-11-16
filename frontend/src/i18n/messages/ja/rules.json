@@ -1,0 +1,618 @@
+{
+  "page": {
+    "title": "ルール",
+    "subtitle": "取引の作成時やインポート時に、タグ、カテゴリ、支払先を自動で入力します",
+    "createButton": "ルールを作成",
+    "loading": "ルールを読み込み中...",
+    "totalCount": "{count, plural, other {# 件のルール}}"
+  },
+  "empty": {
+    "title": "ルールはまだありません",
+    "body": "ルールは新しい取引やインポートされた取引を監視し、条件に一致したときにタグ、カテゴリ、支払先を入力します。最初のルールを作成して始めましょう。",
+    "createButton": "最初のルールを作成"
+  },
+  "error": {
+    "title": "ルールを読み込めませんでした",
+    "body": "ルールがないからではなく、リクエストが失敗したため何も表示されていません。接続を確認してもう一度お試しください。",
+    "retry": "再試行"
+  },
+  "list": {
+    "header": {
+      "order": "順序",
+      "enabled": "有効",
+      "name": "ルール",
+      "summary": "概要",
+      "actions": "操作"
+    },
+    "summary": "{trigger, select, create {作成時} import {インポート時} both {作成時またはインポート時} other {トリガーなし}} · {conditions, plural, =0 {条件なし} other {# 件の条件}} · {actions, plural, =0 {アクションなし} other {# 件のアクション}}",
+    "enabledLabel": "{name} を有効にする"
+  },
+  "actions": {
+    "moveUp": "上へ移動",
+    "moveDown": "下へ移動",
+    "run": "既存の取引に対して実行",
+    "runInvalid": "実行する前にルールを修復してください"
+  },
+  "invalid": {
+    "badge": "無効",
+    "tooltip": "修正されるまでスキップされます: {reasons}。",
+    "reasons": {
+      "referenceMissing": "使用しているタグ、支払先、カテゴリ、または口座が存在しません",
+      "noActions": "アクションがありません",
+      "tooLarge": "条件が大きすぎます",
+      "duplicateAction": "1 回だけ許可されているアクションが繰り返されています",
+      "unreadable": "保存された定義を読み取れません",
+      "other": "定義が正しくありません"
+    }
+  },
+  "duplicate": {
+    "name": "{name}（コピー）"
+  },
+  "delete": {
+    "title": "ルールを削除",
+    "message": "「{name}」を削除してもよろしいですか？この操作は元に戻せません。"
+  },
+  "toasts": {
+    "enabled": "ルールを有効にしました",
+    "disabled": "ルールを無効にしました",
+    "toggleFailed": "ルールを変更できませんでした",
+    "deleted": "ルールを削除しました",
+    "deleteFailed": "ルールを削除できませんでした",
+    "duplicated": "ルールを複製しました。コピーは有効にするまでオフです",
+    "duplicateFailed": "ルールを複製できませんでした",
+    "reorderFailed": "ルールの順序を変更できませんでした",
+    "listChanged": "ルールの一覧が別の場所で変更されたため、再読み込みしました。もう一度お試しください",
+    "loadFailed": "ルールを読み込めませんでした"
+  },
+  "editor": {
+    "page": {
+      "newTitle": "新しいルール",
+      "editTitle": "ルールを編集",
+      "subtitle": "ルールを実行するタイミング、対象となる取引、変更する内容を選択します",
+      "backToRules": "ルールに戻る",
+      "loading": "ルールを読み込み中..."
+    },
+    "name": {
+      "label": "名前",
+      "placeholder": "例：カフェにタグを付ける"
+    },
+    "enabled": {
+      "label": "ルールを有効にする"
+    },
+    "sections": {
+      "when": "いつ",
+      "if": "もし",
+      "then": "そのとき"
+    },
+    "when": {
+      "description": "ルールが取引を確認するタイミングを選択します",
+      "created": "取引が作成されたとき",
+      "imported": "取引がインポートされたとき",
+      "atLeastOne": "少なくとも1つのオプションを選択したままにしてください",
+      "stopProcessing": "ほかのルールの処理を停止",
+      "stopProcessingHelp": "このルールが取引に一致した場合、一覧でこのルールより後にあるルールは、その取引についてはスキップされます。",
+      "window": {
+        "title": "有効期間",
+        "help": "このルールは、日付がこの期間内の取引にのみ適用されます（作成時・インポート時、およびルールのテスト・実行時）。日付を空にすると制限なしになります。",
+        "from": "開始日",
+        "to": "終了日",
+        "backwards": "終了日は開始日より前にできません",
+        "noLimit": "制限なし",
+        "words": "{from} から {to} までの日付の取引のみ"
+      }
+    },
+    "if": {
+      "description": "アクションは一致する取引にのみ実行されます",
+      "everyTransaction": "条件がまだないため、このルールはすべての取引に適用されます。"
+    },
+    "then": {
+      "description": "アクションはこの順に実行されます",
+      "empty": "アクションがまだありません。少なくとも1つ追加してください。",
+      "limit": "1つのルールに設定できるアクションは最大{max}件です。"
+    },
+    "group": {
+      "matchAll": "次のすべて",
+      "matchAny": "次のいずれか",
+      "matchLabel": "一致条件",
+      "not": "グループを否定",
+      "notHelp": "否定したグループは、その条件を満たさないときに一致します。",
+      "title": "グループ",
+      "addCondition": "+ 条件を追加",
+      "addGroup": "+ グループを追加",
+      "depthLimit": "グループのネストは最大{max}階層までです。",
+      "sizeLimit": "条件数の上限に達しました。",
+      "empty": "このグループは空です。"
+    },
+    "condition": {
+      "title": "条件",
+      "field": "項目",
+      "operator": "演算子",
+      "value": "値"
+    },
+    "fields": {
+      "accountId": "口座",
+      "fromAccountId": "振替元口座（振替）",
+      "toAccountId": "振替先口座（振替）",
+      "type": "種類",
+      "payeeId": "支払先",
+      "payeeText": "受信したままの支払先テキスト",
+      "categoryId": "カテゴリ",
+      "description": "説明",
+      "amount": "金額（符号あり）",
+      "absAmount": "金額（符号なし）",
+      "currencyCode": "通貨",
+      "tagIds": "タグ",
+      "hasSplits": "分割あり",
+      "referenceNumber": "参照番号",
+      "dayOfMonth": "月の日",
+      "weekday": "曜日",
+      "status": "状態",
+      "hasAttachment": "添付ファイルあり",
+      "date": "日付"
+    },
+    "operators": {
+      "eq": "である",
+      "neq": "ではない",
+      "in": "のいずれかである",
+      "notIn": "のいずれでもない",
+      "isEmpty": "が空である",
+      "contains": "を含む",
+      "startsWith": "で始まる",
+      "matches": "パターンに一致する",
+      "lt": "より小さい",
+      "lte": "以下である",
+      "gt": "より大きい",
+      "gte": "以上である",
+      "between": "の間である",
+      "hasAny": "のいずれかを持つ",
+      "hasAll": "のすべてを持つ",
+      "hasNone": "のいずれも持たない",
+      "inSubtree": "に含まれる（下位を含む）"
+    },
+    "types": {
+      "EXPENSE": "支出",
+      "INCOME": "収入",
+      "TRANSFER": "振替"
+    },
+    "value": {
+      "account": "口座を選択",
+      "accounts": "口座を選択",
+      "payee": "支払先を選択",
+      "payees": "支払先を選択",
+      "category": "カテゴリを選択",
+      "categories": "カテゴリを選択",
+      "tags": "タグを選択",
+      "currency": "通貨を選択",
+      "currencies": "通貨を選択",
+      "types": "種類を選択",
+      "matchesHint": "任意のテキストには * を使います。例: *コーヒー*。 * のないパターンはテキスト全体にのみ一致します。このルールのアクションのためにその位置のテキストを保持するには {capture} を使います。例: {example}。名前は小文字の英字と数字で、1つのパターンで最大 {max} 個のテキストを保持できます。",
+      "amount": "金額",
+      "from": "から",
+      "to": "まで",
+      "yes": "はい",
+      "no": "いいえ",
+      "days": "日を選択",
+      "weekdays": "曜日を選択",
+      "statuses": "ステータスを選択"
+    },
+    "action": {
+      "title": "アクション",
+      "type": "アクションの種類",
+      "tags": "タグ",
+      "category": "カテゴリ",
+      "payee": "支払先",
+      "instruction": "確認の指示",
+      "instructionPlaceholder": "例：この購入をレシートに従って分割する",
+      "instructionHelp": "ルールはレビューを依頼するだけです。変更は、実行される前に必ず人が承認します。",
+      "onlyIfEmpty": "空の場合のみ",
+      "onlyIfEmptyHelp": "オンにすると、取引にカテゴリまたは支払先がない場合にのみルールが入力します。手動で設定した値や、支払先の既定のカテゴリで設定された値は置き換えません。置き換えるにはオフにしてください。",
+      "add": "+ アクションを追加",
+      "reviewInbox": "レビュー受信箱を見る",
+      "payeeTemplate": "支払先の名前",
+      "descriptionTemplate": "説明のテキスト",
+      "templateHelp": "プレーンテキストです。波かっこで囲んだプレースホルダーは、取引のテキストに置き換えられます。挿入するには、下のプレースホルダーを選択してください。",
+      "joinHelp": "テキストは書いたとおりに現在の説明へ連結されるため、必要なスペースや区切り文字を含めてください。",
+      "placeholders": "プレースホルダー",
+      "placeholdersHelp": "{payeeText} は受信したままの支払先テキストです。{description} はこのアクションの実行時点の説明です。ほかのプレースホルダーは、このルールのパターンで名前を付けたキャプチャです。",
+      "insertPlaceholder": "{name} を挿入",
+      "unknownPlaceholders": "このルールでは定義されていません: {names}。一覧からプレースホルダーを選ぶか、上のパターンでキャプチャしてください。",
+      "invalidPlaceholders": "有効なプレースホルダーではありません: {names}。名前は小文字の英字と数字です。",
+      "createIfMissing": "支払先がなければ作成する",
+      "createIfMissingHelp": "オンにすると、名前(名前、エイリアス、近い一致)に合う支払先がない場合に新しい支払先を作成します。ルールが作成した支払先は、実行を元に戻しても残ります。",
+      "onlyIfEmptyDescriptionHelp": "オンにすると、取引に説明がない場合にのみルールが説明を書き込みます。毎回書き込むにはオフにします。",
+      "mode": "説明の書き込み方",
+      "modes": {
+        "replace": "説明を置き換える",
+        "append": "説明の後ろに追加",
+        "prepend": "説明の前に追加"
+      },
+      "convertHelp": "一致した収入または支出が振替の片側になります。もう片側は、選択した口座(同じ通貨の口座)に作成されます。",
+      "direction": "方向",
+      "directionTo": "支出: お金が別の口座へ移ります",
+      "directionFrom": "収入: お金が別の口座から入ります",
+      "clearCategory": "カテゴリを消去",
+      "clearCategoryHelp": "振替にはカテゴリがありません。取引がすでに持っているカテゴリを残す場合はオフにします。",
+      "splitPayee": "取引の支払先(任意)",
+      "splitHint": "各パーツの金額は、上のパターンのキャプチャから取るか、残りになります。パーツの合計が取引の金額と一致しない場合、ルールはその取引を変更しません。",
+      "splitNoCaptures": "キャプチャがまだ定義されていません。上のパターンで名前を波括弧で囲む(例: PRINCIPAL: {example})と、ここで金額として使えます。",
+      "partAmountPlaceholder": "金額を選択...",
+      "partRest": "残り",
+      "partAccount": "口座",
+      "partPayee": "もう片側の支払先(任意)",
+      "partsLimit": "分割は最大 {max} パーツまでです。",
+      "guideTitle": "使い方",
+      "splitGuideHow": "「もし」で、取引先テキストまたは説明に対する条件を、演算子「パターンに一致する」で追加し、金額の位置に波括弧で名前を入れます。例: {first}。各名前は、パーツに選べる金額になります。「残り」も選べます。パーツの合計は取引金額と一致する必要があり、一致しない場合、ルールは取引を変更しません。パーツには、カテゴリまたは別の口座への振替を指定できます(振替ではその口座の残高が動きます)。",
+      "splitGuideExampleTitle": "例: ローンの返済",
+      "splitGuideBank": "銀行のテキスト: 元金: 1200.50 利息: 300.25 違約金: 0.00",
+      "splitGuidePattern": "パターン: *元金: {first} 利息: {second} 違約金*",
+      "splitGuidePart1": "パーツ1: {first} をローン口座への振替にする",
+      "splitGuidePart2": "パーツ2: {second} をカテゴリ「ローン: 利息」にする",
+      "splitGuideResult": "-1500.75 の場合の結果: -1200.50 がローン口座へ振り替えられ、-300.25 が利息の支出になります。",
+      "splitGuideTip": "ヒント: 照合済みの古い取引が変更されないよう、「有効期間」に開始日を設定し、保存前にテストパネルで確認してください。",
+      "convertGuide": "支出は選んだ口座への振替になり、収入はその口座からの振替になります。変更されるのは相手口座の残高だけです。ヒント: 古い取引が変更されないよう「有効期間」を使ってください。",
+      "splitGuideName1": "gankin",
+      "splitGuideName2": "risoku",
+      "loanGuide": "住宅ローンまたはローンの返済を一括で支払う銀行の引き落としに使います。「もし」では、口座、支払先テキストまたは説明で引き落としを照合してください。取引は分割になります: 元金はローン口座への振替、利息は利息カテゴリになり、どちらもその返済に応じた金額になります。ヒント: 返済が二重に支払われないよう、ローンの予定支払いの自動記帳をオフにし、保存前にテストパネルで確認してください。",
+      "loan": {
+        "help": "照合された引き落としは、その日付の近くに期日があるローンの次の返済に当てられます。Monize がその返済の元金と利息を計算するため、金額を入力する必要はありません。",
+        "account": "ローン口座",
+        "accountPlaceholder": "住宅ローンまたはローンを選択...",
+        "noLoans": "返済できる未決済の住宅ローンまたはローン口座がありません。",
+        "window": "期日の許容範囲",
+        "windowHelp": "銀行が支払いを行える、期日からの許容範囲です。返済の期日の前後、この日数以内の引き落としはその返済に当てられます。範囲外の引き落としは変更されません。",
+        "daysBefore": "期日より前の日数",
+        "daysAfter": "期日より後の日数",
+        "excess": "返済額を上回る引き落とし",
+        "excessPolicies": {
+          "extra_principal": "差額を追加の元金として支払う",
+          "refuse": "取引を変更しない"
+        },
+        "shortfall": "返済額を下回る引き落とし",
+        "shortfallPolicies": {
+          "refuse": "取引を変更しない",
+          "interest_first": "まず利息を支払い、残りを元金とする"
+        },
+        "policyNote": "数銭程度の差額は利息の行で吸収されます。",
+        "policyHelp": "銀行は各部分を別々に四捨五入するため、通貨の最小単位の5倍以内（多くの通貨で0.05）の引き落としは正確な額として扱われ、差額は利息の行に反映されます。それより大きな差額には上記の2つの選択が適用されます。",
+        "interestCategory": "利息カテゴリ（任意）",
+        "interestCategoryPlaceholder": "ローン自体の利息カテゴリ",
+        "autoPostTitle": "ローンの予定支払いが自動で記帳されます",
+        "autoPostBody": "このローンの予定支払いは自動記帳が有効なため、それとこのルールが処理する銀行の引き落としの両方が同じ返済に当てられてしまいます。予定支払いの自動記帳をオフにしてください。"
+      }
+    },
+    "actionTypes": {
+      "add_tags": "タグを追加",
+      "remove_tags": "タグを削除",
+      "set_category": "カテゴリを設定",
+      "set_payee": "支払先を設定",
+      "request_ai_review": "AIレビューを依頼",
+      "set_payee_from_text": "テキストから支払先を設定",
+      "set_description": "説明を設定",
+      "convert_to_transfer": "振替に変換",
+      "split": "取引を分割",
+      "settle_loan_installment": "ローンの返済を処理"
+    },
+    "save": {
+      "button": "ルールを保存",
+      "createdToast": "ルールを作成しました",
+      "savedToast": "ルールを保存しました",
+      "failedToast": "ルールを保存できませんでした",
+      "summary": "ルールは保存されませんでした。下に示された項目を修正して、もう一度お試しください。"
+    },
+    "loadError": {
+      "title": "ルールを読み込めませんでした",
+      "body": "ルールが空だからではなく、リクエストが失敗したため何も表示されていません。接続を確認して、もう一度お試しください。",
+      "lookupsBody": "口座、支払先、カテゴリ、タグ、通貨の一覧を読み込めなかったため、ルールを安全に表示できません。接続を確認して、もう一度お試しください。",
+      "notFound": "このルールは存在しません。削除された可能性があります。",
+      "retry": "再試行"
+    },
+    "invalid": {
+      "title": "このルールは実行できません",
+      "repaired": "保存された定義の一部を読み取れなかったため、ここでは削除またはリセットされています。保存する前にルールを確認してください。"
+    },
+    "conflict": {
+      "title": "このルールはほかの場所で変更されました",
+      "body": "最新の版を表示するには再読み込みしてください。未保存の編集内容は失われます。",
+      "reload": "再読み込み"
+    },
+    "errors": {
+      "codes": {
+        "INVALID_SHAPE": "この部分はエディターが解釈できない形式です。",
+        "UNKNOWN_KEY": "この部分に存在しない設定があります。",
+        "UNKNOWN_FIELD": "項目を選択してください。",
+        "UNKNOWN_ACTION": "アクションを選択してください。",
+        "OPERATOR_NOT_ALLOWED": "この項目ではその演算子は使用できません。",
+        "VALUE_REQUIRED": "値を入力または選択してください。",
+        "VALUE_NOT_ALLOWED": "この演算子には値を指定できません。",
+        "VALUE_TYPE": "この項目に適さない種類の値です。",
+        "VALUE_OUT_OF_RANGE": "値が範囲外です。",
+        "VALUE_TOO_LONG": "テキストが長すぎます。",
+        "VALUE_EMPTY": "テキストを入力してください。",
+        "INVALID_UUID": "一覧から項目を選択してください。",
+        "INVALID_ENUM": "表示されている値のいずれかを選択してください。",
+        "INVALID_CURRENCY": "通貨を選択してください。",
+        "ARRAY_EMPTY": "少なくとも1つ選択してください。",
+        "ARRAY_TOO_LARGE": "選択した項目が多すぎます。",
+        "RANGE_ORDER": "最初の値は2番目の値以下にしてください。",
+        "MAX_DEPTH": "グループのネストが深すぎます。上限は{maxDepth}階層です。",
+        "MAX_LEAVES": "条件が多すぎます。上限は{maxLeaves}件です。",
+        "MAX_NODES": "条件とグループが多すぎます。上限は{maxNodes}件です。",
+        "NO_ACTIONS": "アクションを少なくとも1つ追加してください。",
+        "TOO_MANY_ACTIONS": "アクションが多すぎます。上限は{maxActions}件です。",
+        "DUPLICATE_ACTION": "1 つのルールに指定できるのは、AI レビュー 1 つ、振替、分割またはローンの返済処理のうち 1 つ、残りを取る分割パーツ 1 つまでです。",
+        "CONFLICTING_ACTIONS": "振替、分割またはローンの返済処理のアクションは「カテゴリを設定」と組み合わせられず、分割の各パートにはカテゴリまたは口座のいずれかが設定されます。",
+        "INVALID_CAPTURE": "キャプチャ名は小文字の英字と数字で、英字から始め、20文字以内にしてください。",
+        "TOO_MANY_CAPTURES": "1つのパターンに含められるキャプチャは最大5つです。",
+        "DUPLICATE_CAPTURE": "キャプチャ名は1つのルール内で1回だけ使えます。",
+        "UNKNOWN_CAPTURE": "このルールのどの条件も定義していないキャプチャを使用しています。",
+        "LOOKS_LIKE_REGEX": "正規表現には対応していません。| \\ と [xy] のような短い角括弧クラスは通常の文字として扱われるため、正規表現として書いたパターンは意図したものに一致しません。複数のテキストのいずれかに一致させるには、「次のいずれか」のグループを追加し、テキストごとに条件を1つ入れてください。",
+        "PATTERN_WITHOUT_WILDCARD": "* がない場合、このパターンはテキスト全体と一致する必要があります。テキスト全体には「である」、一部には「を含む」を使うか、テキストを * で囲んでください。例: *コーヒー*",
+        "REFERENCE_NOT_FOUND": "ここで選択した項目は存在しなくなりました。別の項目を選択してください。",
+        "NAME_REQUIRED": "ルールの名前を入力してください。",
+        "UNKNOWN": "この部分は無効です。"
+      }
+    },
+    "run": {
+      "button": "既存の取引に対して実行",
+      "saveFirst": "保存済みのルールを実行するには、変更を保存してください。"
+    },
+    "expression": {
+      "modeLabel": "条件の表示",
+      "visual": "ビジュアル",
+      "expression": "式",
+      "label": "条件式",
+      "help": "条件をテキストで記述します。すべてに一致するなら &&、いずれかに一致するなら ||、否定には !( ... ) を使います。項目は名前で指定します: account(\"名前\")、payee(\"名前\")、category(\"親: 子\")、tag(\"名前\")。アンダースコア _ は、まだ選択していない値を表します。matchesGlob は * をワイルドカードとして使います。候補に表示される構文のみ使用できます。",
+      "blocked": "ビジュアル表示に戻すか保存するには、式を修正してください。",
+      "errorAt": "{line} 行目、{column} 列目: {message}",
+      "suggestions": "候補",
+      "errors": {
+        "tooLong": "式が長すぎます。上限は {max} 文字です。",
+        "unexpectedChar": "文字 {char} は使用できません。",
+        "unterminatedString": "このテキストに閉じの引用符がありません。",
+        "invalidEscape": "このエスケープシーケンスは使用できません。",
+        "badNumber": "有効な数値ではありません。",
+        "expectedExpression": "ここには条件が必要です。",
+        "expectedField": "ここにはフィールド名が必要です。",
+        "expectedOperator": "フィールドの後には演算子またはメソッドが必要です。",
+        "expectedValue": "ここには値が必要です。",
+        "expectedSymbol": "ここには {symbol} が必要です。",
+        "unexpectedToken": "予期しない要素です: {token}。",
+        "unsupported": "この部分は使用できません。候補に表示される構文のみ使用してください。",
+        "unknownField": "不明なフィールド {name} です。",
+        "unknownFunction": "不明な関数またはメソッド {name} です。",
+        "operatorNotAllowed": "フィールド {field} は {operator} と併用できません。",
+        "wrongValueType": "{expected, select, text {引用符で囲んだテキストが必要です。} number {数値が必要です。} boolean {true または false が必要です。} list {角かっこで囲んだリストが必要です。} account {口座が必要です。例: account(\"名前\")。} payee {支払先が必要です。例: payee(\"名前\")。} category {カテゴリが必要です。例: category(\"親: 子\")。} tag {タグが必要です。例: tag(\"名前\")。} other {この値の種類が正しくありません。}}",
+        "invalidEnum": "次のいずれかを使用してください: {values}。",
+        "invalidCurrency": "引用符で囲んだ 3 文字の通貨コードを使用してください。例: \"CAD\"。",
+        "valueTooLong": "テキストが長すぎます。上限は {max} 文字です。",
+        "listTooLong": "リストが長すぎます。上限は {max} 件です。",
+        "unknownEntity": "{kind, select, account {{name} という名前の口座はありません。} payee {{name} という名前の支払先はありません。} category {{name} という名前のカテゴリはありません。} tag {{name} という名前のタグはありません。} other {{name} という名前の項目はありません。}}",
+        "ambiguousEntity": "{count} 件の項目が {name} という名前です。目的の項目の番号を追加してください。例: {example}。",
+        "entityOrdinal": "{name} の番号は 1 から {count} までにしてください。",
+        "maxDepth": "グループの入れ子が深すぎます。上限は {max} 階層です。",
+        "maxLeaves": "条件が多すぎます。上限は {max} です。",
+        "maxNodes": "条件とグループが多すぎます。上限は {max} です。",
+        "tooNested": "入れ子のかっこが多すぎます。"
+      }
+    }
+  },
+  "test": {
+    "title": "テスト",
+    "description": "既存の取引でルールを試します。何も変更されません。",
+    "button": "ルールをテスト",
+    "again": "もう一度テスト",
+    "incomplete": "ルールをテストするには、上の条件とアクションを完成させてください。",
+    "idle": "ルールを試す取引を選び、「ルールをテスト」を選択してください。",
+    "running": "ルールをテスト中...",
+    "failed": "テストを完了できませんでした。{message}",
+    "stale": "この結果の後でルールまたはフィルターが変更されました。最新の結果を見るには、もう一度テストしてください。"
+  },
+  "match": {
+    "button": "ルールをテスト",
+    "buttonLabel": "ルールをテスト: 条件",
+    "incomplete": "上の条件を完成させると、一致する取引を確認できます。",
+    "windowBackwards": "有効期間の終了日が開始日より前のため、一致する取引はありません。",
+    "summary": "{count, plural, =0 {一致する取引はありません} other {一致する取引: # 件}}",
+    "summaryPending": "一致する取引",
+    "running": "一致する取引を検索しています...",
+    "failed": "一致する取引を読み込めませんでした。{message}",
+    "empty": "この条件に一致する既存の取引はありません。",
+    "truncated": "最新の {scanned, number} 件の取引のみを確認しました。",
+    "stale": "このテストの後に条件が変更されました。現在の一致を確認するには、もう一度「ルールをテスト」を選択してください。"
+  },
+  "run": {
+    "title": "「{name}」を既存の取引に対して実行",
+    "description": "ルールによる変更内容をプレビューしてから確定してください。実行は操作履歴から元に戻せます。",
+    "previewButton": "プレビュー",
+    "confirmButton": "確定して実行",
+    "idle": "口座と日付を選び、「プレビュー」を選択してください。確定するまで何も変更されません。",
+    "loadingPreview": "プレビューを読み込み中...",
+    "previewFailed": "プレビューを読み込めなかったため、何も実行できません。{message}",
+    "stale": "このプレビューの後でフィルターが変更されました。実行する前にもう一度プレビューしてください。",
+    "accountsLoading": "口座を読み込み中...",
+    "accountsFailed": "口座を読み込めなかったため、フィルターを利用できません。",
+    "retry": "再試行",
+    "summary": "確認した {scanned, plural, other {# 件}}の取引のうち、{matched, plural, other {# 件}}が変更されます。",
+    "matchesNone": "このルールは確認したどの取引にも一致しません（{scanned} 件）。保存する前に条件を確認してください。* のないパターンはテキスト全体にのみ一致します。",
+    "noChange": "確認した {scanned} 件の取引のうち {matched} 件がルールの条件に一致しますが、何も変更されません（たとえば、すでに値が設定されていて「空の場合のみ」が有効な場合）。エラーではありません。",
+    "aiReview": "{count, plural, other {# 件の取引が AI レビューのキューに追加されます}}。リクエストは確定時に作成されます。",
+    "truncated": "上限を超える数の取引が一致しました。最新のものだけが含まれています。残りを含めるには、上限を上げるか日付を絞り込んでください。",
+    "truncatedOldest": "一致した取引が上限を超えました。このルールはローンの返済を日付順に処理するため、最も古いものだけが含まれます。残りを含めるには、この実行の後にもう一度実行してください。",
+    "noMatches": {
+      "title": "変更される取引はありません",
+      "body": "確認した取引のどれもルールに一致しないか、ルールによる変更がありません。"
+    },
+    "table": {
+      "date": "日付",
+      "payee": "支払先",
+      "amount": "金額",
+      "change": "予定される変更",
+      "noPayee": "支払先なし"
+    },
+    "skipped": {
+      "title": "{count, plural, other {# 件}}の取引は変更されません",
+      "line": "{count, plural, other {# 件}}の取引: {reason}",
+      "missing": "ローンに不足している設定: {inputs}。"
+    },
+    "skipReasons": {
+      "reconciled_locked": "照合済みでロックされています",
+      "transfer_leg_category": "振替であり、カテゴリがありません",
+      "split_category": "分割されているため、カテゴリは分割行に属します",
+      "cross_owner_transfer_payee": "他の所有者への振替で、その支払先はこのルールでは変更できません",
+      "empty_render": "アクションのテキストが空になったため",
+      "payee_not_found": "ルールが作った名前の支払先がなく、ルールは作成しないため",
+      "other": "ルールでは変更できません",
+      "row_is_transfer_leg": "すでに振替です",
+      "row_has_splits": "すでに分割されています",
+      "row_is_void": "無効になっています",
+      "zero_amount": "金額がゼロです",
+      "transfer_direction_mismatch": "振替の方向が合いません: 支出は口座へ、収入は口座から入ります",
+      "transfer_same_account": "振替先の口座が取引自身の口座です",
+      "transfer_account_unavailable": "振替先の口座は利用できません(削除済み、またはあなたのものではありません)",
+      "transfer_currency_mismatch": "振替先の口座の通貨が異なります",
+      "split_amount_unparseable": "テキスト内の金額を数値として読み取れませんでした",
+      "split_sum_mismatch": "パーツの合計が金額と一致しません",
+      "split_too_few_parts": "ゼロの金額を除くとパーツが 2 つ未満になります",
+      "row_from_scheduled_posting": "ローンの予定支払いから記帳され、その返済はすでに支払われているため",
+      "row_is_income": "収入であり、返済を支払えるのは引き落としのみであるため",
+      "loan_account_unavailable": "ローン口座を利用できないため（削除された、解約された、自分のものではない、または住宅ローンやローンではない）",
+      "loan_interest_booked_separately": "このローンは利息を別の取引として記帳するため、支払いに利息を含められないため",
+      "loan_not_configured": "返済額を計算するために必要な設定がローンに不足しているため",
+      "no_installment_in_window": "その日付の許容範囲内に期日があるローンの返済がないため",
+      "occurrence_already_posted": "許容範囲内で期日となる返済はすでに支払われているため",
+      "loan_debt_retired": "ローンはすでに完済されているため",
+      "installment_amount_excess": "返済額より多く、このルールはより大きい引き落としを変更しないため",
+      "installment_amount_shortfall": "返済額より少なく、このルールはより小さい引き落としを変更しないため"
+    },
+    "change": {
+      "category": "カテゴリ: {before} → {after}",
+      "payee": "支払先: {before} → {after}",
+      "payeeNew": "支払先: {before} → {name} (新規)",
+      "tagsAdded": "追加したタグ: {tags}",
+      "tagsRemoved": "外したタグ: {tags}",
+      "none": "なし",
+      "unknown": "削除された項目",
+      "payeeCreated": "{done, select, yes {新しい支払先を作成しました: {name}} other {新しい支払先を作成します: {name}}}",
+      "description": "説明: {before} → {after}",
+      "descriptionSet": "説明を{value}に設定",
+      "transfer": "{done, select, yes {{account} との振替になりました} other {{account} との振替になります}}",
+      "split": "{done, select, yes {{count, plural, other {# 個}}のパーツに分割されました} other {{count, plural, other {# 個}}のパーツに分割されます}}",
+      "splitPart": "パーツ {number}: {amount} {target}",
+      "splitPartMemo": "、メモ「{memo}」",
+      "splitToTransfer": "{account} へ",
+      "splitToTransferPayee": "{account} へ、支払先 {payee}",
+      "splitToCategory": "{category} として",
+      "splitUncategorised": "カテゴリなし",
+      "loanSettlement": "{done, select, yes {{account}の第{number}回の返済を処理しました} other {{account}の第{number}回の返済を処理します}}（期日 {dueDate}）: 元金 {principal}、利息 {interest}{hasExtra, select, yes {、追加の元金 {extra}} other {}}。返済前の残高: {debtBefore}"
+    },
+    "filters": {
+      "accounts": "口座",
+      "allAccounts": "すべての口座",
+      "startDate": "開始",
+      "endDate": "終了",
+      "backwards": "開始日は終了日より後にできません。",
+      "limit": "確認する最新の取引数",
+      "help": "範囲内の最新の取引のみを、最大 {max} 件まで確認します。"
+    },
+    "errors": {
+      "PREVIEW_CHANGED": "プレビューの後で取引またはルールが変更されました。新しいプレビューを確認して、もう一度実行してください。",
+      "RUN_TOO_LARGE": "この実行は変更する取引が多すぎて、1 回で元に戻せません。口座または日付を絞り込んで、もう一度お試しください。",
+      "INVALID_RULE": "このルールは有効でないため実行できません。先にルールを開いて修復してください。",
+      "DATE_RANGE_INVALID": "開始日は終了日より後にできません。",
+      "draftInvalid": "ルールが未完成か無効です。上の条件とアクションを確認してください。",
+      "testFailed": "ルールのテスト中に問題が発生しました。",
+      "previewFailed": "プレビューの読み込み中に問題が発生しました。",
+      "runFailed": "実行を完了できませんでした。再試行する前に操作履歴を確認してください。"
+    },
+    "toast": {
+      "done": "{count, plural, =0 {変更された取引はありません} other {# 件の取引を変更しました}}。操作履歴から元に戻せます。",
+      "changedNoUndo": "{count, plural, other {# 件の取引を変更しました}}。",
+      "aiReviewsQueued": "{count, plural, other {# 件の取引を AI レビューのキューに追加しました}}。",
+      "aiReviewsAlreadyQueued": "{count, plural, other {# 件の取引にはすでに未処理の AI レビュー依頼があるため、新たにキューへ追加されたものはありません}}。",
+      "noChanges": "変更された取引はありません。"
+    },
+    "done": {
+      "summary": "{count, plural, =0 {変更された取引はありません。} other {# 件の取引を変更しました。}}",
+      "aiReviewsQueued": "{count, plural, other {# 件の取引を AI レビューのキューに追加しました。}}",
+      "aiReviewsAlreadyQueued": "{count, plural, other {# 件の取引にはすでに未完了の AI レビューリクエストがあるため、再度追加しませんでした。}}",
+      "undo": "実行は操作履歴から元に戻せます。"
+    },
+    "missingInputs": {
+      "scheduledPayment": "予定支払い",
+      "managedTemplate": "元金と利息に分割された支払い",
+      "scheduleCalendar": "支払いスケジュール",
+      "interestCategory": "利息カテゴリ",
+      "amortizationMonths": "償却期間",
+      "paymentStartDate": "初回支払日",
+      "paymentFrequency": "支払い頻度",
+      "originalPrincipal": "当初借入額",
+      "rate": "その日付の金利",
+      "payment": "支払い金額",
+      "other": "ローンの設定"
+    }
+  },
+  "applications": {
+    "title": "履歴",
+    "description": "このルールが変更した最新の取引を、新しい順に表示します。",
+    "loading": "履歴を読み込み中...",
+    "error": {
+      "title": "履歴を読み込めませんでした",
+      "body": "リクエストが失敗したため何も表示されていません。ルールが未実行だからではありません。接続を確認して、もう一度お試しください。",
+      "retry": "再試行"
+    },
+    "empty": {
+      "title": "このルールはまだ何も変更していません",
+      "body": "取引を変更すると、その変更がここに表示されます。"
+    },
+    "source": {
+      "create": "作成時",
+      "import": "インポート時",
+      "manual": "手動実行",
+      "other": "その他"
+    },
+    "table": {
+      "date": "日付",
+      "payee": "支払先",
+      "amount": "金額",
+      "source": "ソース",
+      "change": "変更",
+      "appliedAt": "適用日時",
+      "open": "取引を開く",
+      "noPayee": "支払先なし",
+      "view": "表示"
+    }
+  },
+  "words": {
+    "everyTransaction": "すべての取引",
+    "group": {
+      "all": "次のすべて:",
+      "any": "次のいずれか:",
+      "notAll": "次のすべてではない:",
+      "notAny": "次のいずれでもない:"
+    },
+    "leaf": "{field} {operator} {value}",
+    "leafNoValue": "{field} {operator}",
+    "range": "{from} から {to}",
+    "text": "「{value}」",
+    "unknownCondition": "このバージョンでは表示できない条件",
+    "unknownAction": "このバージョンでは表示できない操作",
+    "action": {
+      "add_tags": "タグを追加: {tags}",
+      "remove_tags": "タグを削除: {tags}",
+      "set_category": "カテゴリを {name} に設定{onlyIfEmpty, select, yes {（空の場合のみ）} other {}}",
+      "set_payee": "支払先を {name} に設定{onlyIfEmpty, select, yes {（空の場合のみ）} other {}}",
+      "request_ai_review": "AIレビューを依頼: {instruction}",
+      "set_payee_from_text": "テキストから支払先を設定：「{template}」{createIfMissing, select, yes {（なければ作成）} other {}}{onlyIfEmpty, select, yes {（空の場合のみ）} other {}}",
+      "set_description": "説明を設定（{mode, select, append {後ろに追加} prepend {前に追加} other {置換}}）：「{template}」{onlyIfEmpty, select, yes {（空の場合のみ）} other {}}",
+      "convert_to_transfer": "{account}{direction, select, from {から} other {へ}}の振替に変換",
+      "split": "次に分割: {parts}",
+      "settle_loan_installment": "{account}の期日の前は{before, plural, other {#日}}まで、後は{after, plural, other {#日}}までの引き落としで返済を処理します。これより多い引き落としは{excess, select, refuse {変更されません} other {差額が追加の元金になります}}。これより少ない引き落としは{shortfall, select, interest_first {まず利息が支払われます} other {変更されません}}"
+    },
+    "splitPart": {
+      "transfer": "{amount} を {account} へ",
+      "category": "{amount} を {category} として",
+      "plain": "{amount}",
+      "rest": "残り"
+    }
+  }
+}

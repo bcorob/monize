@@ -1,0 +1,113 @@
+{
+  "landing": {
+    "title": "Taxes",
+    "subtitle": "Tools for the deductions and taxes that shape your pay",
+    "tools": {
+      "payrollDeductions": {
+        "title": "Payroll Deductions",
+        "description": "Set yearly maximums on deductions such as pension and employment insurance, and let the paycheque stop collecting them once the maximum is reached."
+      }
+    }
+  },
+  "payroll": {
+    "title": "Payroll Deductions",
+    "subtitle": "Yearly maximums on the deduction lines of your payroll bill",
+    "backToTaxes": "Back to Taxes",
+    "newButton": "+ New Rule",
+    "loading": "Loading payroll deductions...",
+    "emptyState": {
+      "title": "No deduction rules yet",
+      "body": "Pick the scheduled bill that is your paycheque, choose its deduction categories and set a yearly maximum for each. The bill stops collecting a deduction once its maximum is reached and starts again on the reset date.",
+      "createButton": "Create Your First Rule"
+    },
+    "yearToDate": {
+      "show": "Show year-to-date",
+      "hide": "Hide year-to-date",
+      "title": "Paid this period",
+      "help": "What the category has collected in the period that contains today, across every account, in the bill's currency.",
+      "foreignRows": "{count, plural, one {# row} other {# rows}} in another currency not counted"
+    },
+    "previousPeriods": {
+      "show": "Show previous periods",
+      "hide": "Hide previous periods",
+      "title": "Previous Periods",
+      "help": "What each category collected in its past periods, across every account, in the bill's currency. The current period is in the year-to-date table.",
+      "loading": "Loading previous periods...",
+      "empty": "Nothing collected in an earlier period yet.",
+      "loadFailed": "Failed to load previous periods"
+    },
+    "list": {
+      "bill": "Bill",
+      "category": "Category",
+      "yearlyMaximum": "Yearly maximum",
+      "nextMaximum": "From {date}: {amount}",
+      "resetsOn": "Resets on",
+      "perPaycheque": "Per paycheque",
+      "period": "Period",
+      "paid": "Paid",
+      "remaining": "Remaining",
+      "actions": "Actions",
+      "fromLine": "From the bill's line",
+      "entered": "Entered",
+      "expectedMissing": "Expected amount needed",
+      "periodRange": "{start} to {end}"
+    },
+    "modal": {
+      "newTitle": "New Deduction Rule",
+      "editTitle": "Edit Deduction Rule"
+    },
+    "form": {
+      "billLabel": "Payroll scheduled bill",
+      "billPlaceholder": "Select the bill that is your paycheque",
+      "billHelp": "The scheduled deposit whose lines carry the deductions. Only bills that pay in more than they take out are offered, and only their deduction lines can be capped.",
+      "categoryLabel": "Deduction category {index}",
+      "categoryPlaceholder": "Select a deduction line",
+      "yearlyMaximumLabel": "Yearly maximum",
+      "yearlyMaximumHelp": "The most this category collects in one period, in the bill's currency. The line is reduced to what room is left, down to zero.",
+      "yearlyMaximumSuggested": "Estimated from what this category has already collected.",
+      "resetPeriodLabel": "Resets",
+      "resetDateLabel": "Reset date",
+      "resetDateHelp": "The count starts again on this day each year. Usually the first day of the year.",
+      "expectedLabel": "Expected per paycheque",
+      "expectedHelp": "The bill's line for this category is zero, so the forecast needs the amount each paycheque usually deducts.",
+      "expectedFromLine": "The bill's line deducts {amount} per paycheque.",
+      "expectedSuggested": "Suggested from the amount your transactions in this category most often show over the last year.",
+      "thisPeriod": "This period, {start} to {end}",
+      "nextPeriod": "Next period, from {date}",
+      "setNextPeriod": "Set the figures for the next period, from {date}",
+      "nextYearlyMaximumLabel": "Next period's maximum",
+      "nextYearlyMaximumHelp": "The maximum from the next reset on. Leave it empty to keep this period's maximum. This period's room and percentage do not change.",
+      "nextExpectedLabel": "Next period's expected per paycheque",
+      "nextExpectedHelp": "The amount each paycheque deducts from the next reset on. Leave it empty to keep this period's amount.",
+      "sameAsThisPeriod": "Same as this period",
+      "periods": {
+        "YEARLY": "Yearly"
+      },
+      "validation": {
+        "billRequired": "Choose the payroll bill",
+        "categoryRequired": "Choose a category",
+        "yearlyMaximumRequired": "Enter the yearly maximum",
+        "resetDateRequired": "Enter the reset date",
+        "expectedRequired": "Enter the expected amount per paycheque",
+        "categoryDuplicate": "This category is already in the list"
+      },
+      "categoriesLegend": "Deduction categories",
+      "addCategory": "+ Add another category",
+      "removeCategory": "Remove category {index}",
+      "noDeductionLines": "This bill has no deduction lines. Add the deductions as negative split lines on the bill first."
+    },
+    "delete": {
+      "title": "Delete Deduction Rule",
+      "message": "Delete the {category} rule on {bill}? Posted transactions are not changed; the next paycheque posts its full line."
+    },
+    "toasts": {
+      "created": "{count, plural, one {Deduction rule created} other {# deduction rules created}}",
+      "updated": "Deduction rule updated",
+      "deleted": "Deduction rule deleted",
+      "loadFailed": "Failed to load payroll deductions",
+      "createFailed": "Failed to create the deduction rule",
+      "updateFailed": "Failed to update the deduction rule",
+      "deleteFailed": "Failed to delete the deduction rule"
+    }
+  }
+}

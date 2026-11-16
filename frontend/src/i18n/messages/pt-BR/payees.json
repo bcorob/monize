@@ -8,9 +8,11 @@
     "autoMergePayees": "Mesclar beneficiários automaticamente",
     "newPayee": "+ Novo Beneficiário",
     "searchPlaceholder": "Pesquisar beneficiários...",
+    "statusFilterLabel": "Status",
     "statusAll": "Todos ({count})",
     "statusActive": "Ativos ({count})",
     "statusInactive": "Inativos ({count})",
+    "categoryFilterLabel": "Categoria Padrão",
     "categoryFilterAll": "Todos os beneficiários ({count})",
     "categoryFilterNoCategory": "Sem categoria padrão ({count})",
     "categoryFilterUncategorized": "Trans. sem categoria ({count})",
@@ -34,7 +36,8 @@
       "inactive": "Inativos",
       "withoutCategory": "Sem Categoria"
     },
-    "applyDefaultCategories": "Aplicar categorias padrão"
+    "applyDefaultCategories": "Aplicar categorias padrão",
+    "lookupSettings": "Configurações de busca de favorecidos"
   },
   "list": {
     "columns": {
@@ -82,13 +85,27 @@
     "categoryLabel": "Categoria Padrão",
     "notesLabel": "Notas (opcional)",
     "websiteLabel": "Site",
+    "addressLabel": "Endereço",
+    "emailLabel": "E-mail",
+    "phoneLabel": "Telefone",
     "submitCreate": "Criar Beneficiário",
     "submitUpdate": "Atualizar Beneficiário",
     "applyCategoryLabel": "Aplicar esta categoria às transações existentes",
     "applyCategoryNone": "Não alterar as transações existentes",
     "applyCategoryUncategorized": "Apenas transações sem categoria ({count})",
     "applyCategoryAll": "Todas as transações ({count})",
-    "applyCategoryHelp": "As transferências e as transações divididas nunca são alteradas."
+    "applyCategoryHelp": "As transferências e as transações divididas nunca são alteradas.",
+    "lookup": {
+      "button": "Buscar dados",
+      "searching": "Buscando dados de contato...",
+      "suggested": "Sugerido pela busca:",
+      "replaced": "Substituído pela busca:",
+      "clear": "Desfazer as alterações da busca",
+      "nothingFound": "Nenhum dado de contato público foi encontrado para este nome.",
+      "noProvider": "Configure uma fonte nas <link>configurações de busca de favorecidos</link> para encontrar dados de contato.",
+      "failed": "Não foi possível concluir a busca. Tente novamente mais tarde.",
+      "quotaExceeded": "As buscas do Google Places deste mês acabaram. Aumente o limite nas <link>configurações de busca de favorecidos</link> ou espere até o próximo mês."
+    }
   },
   "merge": {
     "title": "Unir Beneficiário",
@@ -112,7 +129,6 @@
   },
   "categoryAutoAssign": {
     "title": "Atribuir Categorias Padrão Automaticamente",
-    "howItWorksTitle": "Como funciona",
     "howItWorksBody": "Esta funcionalidade analisa o histórico de transações para sugerir categorias padrão para os beneficiários. Verifica qual a categoria mais utilizada para cada beneficiário e sugere a sua atribuição como categoria padrão para futuras transações. É sempre possível substituir a categoria padrão.",
     "minTransactionsLabel": "Transações Mínimas: {count}",
     "minTransactionsHelp": "Considerar apenas beneficiários com pelo menos este número de transações",
@@ -133,6 +149,7 @@
       "line2": "Tente ajustar as configurações acima."
     },
     "columns": {
+      "assign": "Atribuir",
       "payee": "Beneficiário",
       "suggestedCategory": "Categoria Sugerida",
       "match": "Correspondência"
@@ -150,7 +167,6 @@
   },
   "autoMerge": {
     "title": "Mesclar beneficiários automaticamente",
-    "howItWorksTitle": "Como funciona",
     "howItWorksBody": "Este recurso examina seus beneficiários e agrupa variantes em que um nome estende outro - por exemplo, \"Lidl\", \"LIDL sp. z o.o.\" e \"LIDL WARSZAWA 0421\" se baseiam em \"Lidl\". Cada grupo é mesclado em um único beneficiário canônico e um alias com curinga (como \"*LIDL*\") é criado para que as importações futuras sejam correspondidas automaticamente. Beneficiários que apenas compartilham uma palavra comum (como \"Royal Electric\" e \"Royal City Nursery\") permanecem separados. Revise e ajuste cada grupo antes de aplicar.",
     "backupRecommendation": "Recomendado: crie um <link>backup</link> antes de fazer alterações.",
     "minGroupSizeLabel": "Tamanho mínimo do grupo: {count}",
@@ -210,7 +226,6 @@
   },
   "deactivateUnused": {
     "title": "Desativar Beneficiários Não Utilizados",
-    "howItWorksTitle": "Como funciona",
     "howItWorksBody": "Esta funcionalidade encontra beneficiários raramente utilizados e desativa-os. Os beneficiários desativados não aparecem nas listas de beneficiários ao criar transações, mas as suas transações históricas são preservadas. É possível reativar um beneficiário a qualquer momento a partir da lista de beneficiários.",
     "maxTransactionsLabel": "{count, plural, one {# ou menos transação} other {# ou menos transações}}",
     "maxTransactionsHelp": "Incluir apenas beneficiários com este número de transações ou menos",
@@ -228,6 +243,7 @@
       "line2": "Tente ajustar as configurações acima."
     },
     "columns": {
+      "deactivate": "Desativar",
       "payee": "Beneficiário",
       "transactions": "Transações",
       "lastUsed": "Último Uso"
@@ -243,7 +259,7 @@
     }
   },
   "reactivate": {
-    "title": "Reativar Beneficiário?",
+    "title": "Reativar Beneficiário",
     "message": "O beneficiário \"{name}\" foi desativado anteriormente. Deseja reativá-lo para que apareça novamente nas listas de beneficiários?",
     "keepInactiveButton": "Não, Manter Inativo",
     "reactivateButton": "Reativar",
@@ -252,7 +268,7 @@
   "aliases": {
     "heading": "Aliases",
     "description": "Os aliases associam nomes de beneficiários importados a este beneficiário. Use * como caractere curinga (ex: \"STARBUCKS*\"). Sem distinção entre maiúsculas e minúsculas.",
-    "loading": "Carregando...",
+    "loading": "Carregando aliases...",
     "noAliases": "Sem aliases configurados",
     "removeTitle": "Remover alias",
     "removeButton": "Remover",
@@ -270,7 +286,10 @@
   },
   "selectCategoryPlaceholder": "Selecionar categoria...",
   "validation": {
-    "nameRequired": "O nome do beneficiário é obrigatório"
+    "nameRequired": "O nome do beneficiário é obrigatório",
+    "emailInvalid": "Informe um endereço de e-mail válido",
+    "phoneInvalid": "Informe um número de telefone válido",
+    "phoneNeedsCountryCode": "Adicione o código do país, por exemplo +1 206 448 8762"
   },
   "defaultCategoryBackfill": {
     "allConfirmTitle": "Aplicar categorias padrão?",

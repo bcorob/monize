@@ -25,7 +25,7 @@ describe("buildDefaultPreferences", () => {
     const prefs = buildDefaultPreferences("user-1");
     expect(prefs.defaultCurrency).toBe("USD");
     expect(prefs.notificationEmail).toBe(true);
-    expect(prefs.notificationBrowser).toBe(true);
+    expect(prefs).not.toHaveProperty("notificationBrowser");
     expect(prefs.twoFactorEnabled).toBe(false);
     expect(prefs.gettingStartedDismissed).toBe(false);
     expect(prefs.favouriteReportIds).toEqual([]);

@@ -12,14 +12,17 @@ vi.mock('@/lib/pdf-export', () => ({
   exportToPdf: (...args: any[]) => mockExportToPdf(...args),
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (n: number) => `$${n.toFixed(2)}`,
-    formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
-    defaultCurrency: 'CAD',
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (n: number) => `$${n.toFixed(2)}`,
+      formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
+      defaultCurrency: 'CAD',
+    }),
+  };
+});
 const mockGetTaxSummary = vi.fn();
 
 vi.mock('@/lib/built-in-reports', () => ({
@@ -138,7 +141,7 @@ describe('TaxSummaryReport', () => {
     mockGetTaxSummary.mockRejectedValue(new Error('Network error'));
     render(<TaxSummaryReport />);
     await waitFor(() => {
-      expect(screen.getByText('Try again')).toBeInTheDocument();
+      expect(screen.getByText('Try Again')).toBeInTheDocument();
     });
   });
 
@@ -177,5 +180,57 @@ describe('TaxSummaryReport', () => {
       fireEvent.click(pdfBtn);
       await waitFor(() => expect(mockExportToPdf).toHaveBeenCalled());
     }
+  });
+
+  it('marks every headline total a subtotal and never shows a null as 0.00', async () => {
+    mockGetTaxSummary.mockResolvedValue({
+      incomeBySource: [{ name: 'Employment', total: 50 }],
+      deductibleExpenses: [{ name: 'Medical', total: 50 }],
+      allExpenses: [{ name: 'Groceries', total: 50 }],
+      totals: {
+        income: null,
+        expenses: null,
+        deductible: null,
+        knownIncome: 50,
+        knownExpenses: 50,
+        knownDeductible: 50,
+      },
+      currency: 'CAD',
+      missingCurrencies: ['JPY'],
+      excludedCount: 1,
+    });
+    render(<TaxSummaryReport />);
+    await waitFor(() => expect(screen.getAllByTestId('partial-total').length).toBeGreaterThan(0));
+    // Three cards plus the three section footers.
+    expect(screen.getAllByTestId('partial-total')).toHaveLength(6);
+    expect(screen.getAllByText('$50.00', { selector: 'span, div' }).length).toBeGreaterThan(0);
+    expect(screen.queryByText('$0.00')).not.toBeInTheDocument();
+  });
+
+  it('exports the known figure labelled as partial, never a bare total', async () => {
+    mockGetTaxSummary.mockResolvedValue({
+      incomeBySource: [{ name: 'Employment', total: 50 }],
+      deductibleExpenses: [],
+      allExpenses: [],
+      totals: {
+        income: null,
+        expenses: null,
+        deductible: null,
+        knownIncome: 50,
+        knownExpenses: 0,
+        knownDeductible: 0,
+      },
+      currency: 'CAD',
+      missingCurrencies: ['JPY'],
+      excludedCount: 1,
+    });
+    render(<TaxSummaryReport />);
+    await waitFor(() => expect(screen.getAllByTestId('partial-total').length).toBeGreaterThan(0));
+    fireEvent.click(screen.getByRole('button', { name: /export/i }));
+    fireEvent.click(screen.getByText(/CSV/i));
+    const rows = mockExportToCsv.mock.calls[0][2] as unknown[][];
+    const totalIncomeRow = rows.find((r) => r[0] === 'Totals' && /income/i.test(String(r[1])));
+    expect(totalIncomeRow?.[1]).toMatch(/partial/i);
+    expect(totalIncomeRow?.[2]).toBe(50);
   });
 });

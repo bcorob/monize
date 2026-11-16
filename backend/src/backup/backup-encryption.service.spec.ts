@@ -6,18 +6,56 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import * as bcrypt from "bcryptjs";
-import { BackupEncryptionService } from "./backup-encryption.service";
+import { Readable } from "stream";
+import { pipeline } from "stream/promises";
+import {
+  BackupEncryptionService,
+  BackupKeyResolution,
+} from "./backup-encryption.service";
 import { User } from "../users/entities/user.entity";
 import { EncryptionService } from "../common/encryption/encryption.service";
 import { PasswordBreachService } from "../auth/password-breach.service";
 import { ConfigService } from "@nestjs/config";
 import { createScopedDbMocks } from "../test-helpers/scoped-db-testing";
+import {
+  createKeyWrappedEncryptStream,
+  createWrappedBackupKey,
+  loginPasswordRef,
+  unwrapBackupKey,
+  WrappedBackupKey,
+} from "./backup-key-wrap";
+import { decryptBackup } from "./backup-crypto.util";
 
 jest.mock("../common/db/scoped-db", () =>
   jest.requireActual("../test-helpers/scoped-db-testing").scopedDbMockModule(),
 );
 
 jest.mock("bcryptjs");
+
+/** The columns `storeBackupKey` writes, as a spec reads them back off `update`. */
+interface StoredKeyColumns {
+  backupKeyEnc: string;
+  backupKeyWrap: string;
+  backupKeyPasswordRef: string | null;
+  backupPasswordEnc: null;
+  backupEncryptionEnabled: true;
+}
+
+/** Encrypt `payload` exactly as the automatic backup does, under a stored key. */
+async function sealUnder(
+  key: WrappedBackupKey,
+  payload: Buffer,
+): Promise<Buffer> {
+  const chunks: Buffer[] = [];
+  await pipeline(
+    Readable.from([payload]),
+    createKeyWrappedEncryptStream(key),
+    async (source: AsyncIterable<Buffer>) => {
+      for await (const chunk of source) chunks.push(chunk);
+    },
+  );
+  return Buffer.concat(chunks);
+}
 
 describe("BackupEncryptionService", () => {
   let service: BackupEncryptionService;
@@ -27,16 +65,72 @@ describe("BackupEncryptionService", () => {
   let scopedDataSource: { transaction: jest.Mock };
 
   const userId = "user-1";
+  const hash = "bcrypt-hash";
 
   function makeUser(overrides: Partial<User> = {}): User {
     return {
       id: userId,
       authProvider: "local",
-      passwordHash: "bcrypt-hash",
+      passwordHash: hash,
       backupEncryptionEnabled: false,
       backupPasswordEnc: null,
+      backupKeyEnc: null,
+      backupKeyWrap: null,
+      backupKeyPasswordRef: null,
       ...overrides,
     } as User;
+  }
+
+  /** The row as `storeBackupKey` leaves it, for a key wrapped under `password`. */
+  async function keyedUser(
+    password: string,
+    boundHash: string | null,
+    overrides: Partial<User> = {},
+  ): Promise<{ user: User; key: WrappedBackupKey }> {
+    const key = await createWrappedBackupKey(password);
+    const user = makeUser({
+      backupEncryptionEnabled: true,
+      backupKeyEnc: `enc:${key.dataKey.toString("base64")}`,
+      backupKeyWrap: key.wrap.toString("base64"),
+      backupKeyPasswordRef: boundHash ? loginPasswordRef(boundHash) : null,
+      ...overrides,
+    });
+    return { user, key };
+  }
+
+  /** The single `update` call's criteria and values. */
+  function onlyUpdate(): [Record<string, unknown>, StoredKeyColumns] {
+    expect(usersRepo.update).toHaveBeenCalledTimes(1);
+    return usersRepo.update.mock.calls[0] as [
+      Record<string, unknown>,
+      StoredKeyColumns,
+    ];
+  }
+
+  /**
+   * The finding this suite exists to hold: nothing stored decrypts to the
+   * password. The retired column is cleared, no column contains it, the one
+   * ciphertext the server can open holds a random 32-byte key, and the wrap
+   * gives that key back only to the password.
+   */
+  async function expectNoRecoverablePassword(
+    stored: StoredKeyColumns,
+    password: string,
+  ): Promise<Buffer> {
+    expect(stored.backupPasswordEnc).toBeNull();
+    for (const value of Object.values(stored)) {
+      expect(String(value)).not.toContain(password);
+    }
+    const serverReadable = encryption.decrypt(stored.backupKeyEnc) as string;
+    expect(serverReadable).not.toBe(password);
+    const dataKey = Buffer.from(serverReadable, "base64");
+    expect(dataKey).toHaveLength(32);
+    const unwrapped = await unwrapBackupKey(
+      Buffer.from(stored.backupKeyWrap, "base64"),
+      password,
+    );
+    expect(unwrapped.equals(dataKey)).toBe(true);
+    return dataKey;
   }
 
   beforeEach(async () => {
@@ -79,8 +173,8 @@ describe("BackupEncryptionService", () => {
       usersRepo.findOne.mockResolvedValue(
         makeUser({ backupEncryptionEnabled: true }),
       );
-      // Their password is recaptured at every login, so Settings offers them
-      // nothing to change.
+      // Their key is re-made under the login password at sign-in, so Settings
+      // offers them nothing to change.
       expect(await service.getStatus(userId)).toEqual({
         enabled: true,
         manageable: false,
@@ -98,6 +192,20 @@ describe("BackupEncryptionService", () => {
         manageable: true,
         method: "backup-password",
         available: true,
+      });
+    });
+
+    it("reports an SSO account whose key is wrapped under the login password as login-password", async () => {
+      usersRepo.findOne.mockResolvedValue(
+        makeUser({
+          authProvider: "oidc",
+          backupEncryptionEnabled: true,
+          backupKeyPasswordRef: loginPasswordRef(hash),
+        }),
+      );
+      expect(await service.getStatus(userId)).toMatchObject({
+        manageable: true,
+        method: "login-password",
       });
     });
 
@@ -126,33 +234,30 @@ describe("BackupEncryptionService", () => {
   });
 
   describe("enableWithLoginPassword", () => {
-    it("stores the confirmed login password and turns encryption on", async () => {
+    it("wraps a key under the confirmed login password and turns encryption on", async () => {
       // The path that rescues a session older than the deploy which shipped the
-      // capture: nothing else would ask this user for their password again, so
-      // their backups would stay plaintext for the life of the session.
+      // sign-in wrap: nothing else would ask this user for their password
+      // again, so their backups would stay plaintext for the life of the
+      // session.
       usersRepo.findOne.mockResolvedValue(makeUser());
       (bcrypt.compare as jest.Mock).mockResolvedValue(true);
 
       await service.enableWithLoginPassword(userId, "hunter2hunter2");
 
-      expect(bcrypt.compare).toHaveBeenCalledWith(
-        "hunter2hunter2",
-        "bcrypt-hash",
-      );
+      expect(bcrypt.compare).toHaveBeenCalledWith("hunter2hunter2", hash);
       expect(usersRepo.save).not.toHaveBeenCalled();
-      expect(usersRepo.update).toHaveBeenCalledWith(
-        { id: userId },
-        {
-          backupPasswordEnc: "enc:hunter2hunter2",
-          backupEncryptionEnabled: true,
-        },
-      );
+      const [criteria, stored] = onlyUpdate();
+      // Only while the hash just compared is still the account's.
+      expect(criteria).toEqual({ id: userId, passwordHash: hash });
+      expect(stored.backupEncryptionEnabled).toBe(true);
+      expect(stored.backupKeyPasswordRef).toBe(loginPasswordRef(hash));
+      await expectNoRecoverablePassword(stored, "hunter2hunter2");
     });
 
     it("refuses a password that is not the account's, and writes nothing", async () => {
-      // Storing an unverified string would encrypt every future backup under a
-      // password the user only thinks they know -- a file that looks like a
-      // backup and never opens.
+      // Wrapping under an unverified string would encrypt every future backup
+      // under a password the user only thinks they know -- a file that looks
+      // like a backup and never opens.
       usersRepo.findOne.mockResolvedValue(makeUser());
       (bcrypt.compare as jest.Mock).mockResolvedValue(false);
 
@@ -162,6 +267,16 @@ describe("BackupEncryptionService", () => {
 
       expect(usersRepo.update).not.toHaveBeenCalled();
       expect(encryption.encrypt).not.toHaveBeenCalled();
+    });
+
+    it("refuses when the password changed under the write", async () => {
+      usersRepo.findOne.mockResolvedValue(makeUser());
+      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+      usersRepo.update.mockResolvedValue({ affected: 0 });
+
+      await expect(
+        service.enableWithLoginPassword(userId, "hunter2hunter2"),
+      ).rejects.toThrow(UnauthorizedException);
     });
 
     it("refuses an OIDC account, which has no login password of ours", async () => {
@@ -197,49 +312,25 @@ describe("BackupEncryptionService", () => {
     });
   });
 
-  describe("rememberLoginPassword", () => {
-    it("stores the encrypted password and turns encryption on", async () => {
+  describe("rewrapBackupKey", () => {
+    it("wraps a key under the password without storing anything that decrypts to it", async () => {
       usersRepo.findOne.mockResolvedValue(makeUser());
 
-      await service.rememberLoginPassword(userId, "hunter2hunter2");
+      await service.rewrapBackupKey(userId, "hunter2hunter2", hash);
 
-      expect(encryption.encrypt).toHaveBeenCalledWith("hunter2hunter2");
       // A targeted update, not a full-entity save. `save` on a loaded entity
       // writes every column from the snapshot, so it silently reverted any
       // concurrent change to the users row -- `last_activity_at`, a lockout
       // counter, an admin disabling the account.
       expect(usersRepo.save).not.toHaveBeenCalled();
-      expect(usersRepo.update).toHaveBeenCalledWith(
-        { id: userId },
-        {
-          backupPasswordEnc: "enc:hunter2hunter2",
-          backupEncryptionEnabled: true,
-        },
-      );
+      const [criteria, stored] = onlyUpdate();
+      expect(criteria).toEqual({ id: userId, passwordHash: hash });
+      expect(stored.backupKeyPasswordRef).toBe(loginPasswordRef(hash));
+      expect(encryption.encrypt).not.toHaveBeenCalledWith("hunter2hunter2");
+      await expectNoRecoverablePassword(stored, "hunter2hunter2");
     });
 
-    it("replaces a stored copy that no longer matches", async () => {
-      usersRepo.findOne.mockResolvedValue(
-        makeUser({
-          backupEncryptionEnabled: true,
-          backupPasswordEnc: "enc:old-password",
-        }),
-      );
-
-      await service.rememberLoginPassword(userId, "new-password");
-
-      // This runs during a password change, which writes `password_hash` on
-      // the same row. A full-entity save from the snapshot read a moment
-      // earlier could put the old hash back -- only the columns this feature
-      // owns are written.
-      expect(usersRepo.save).not.toHaveBeenCalled();
-      expect(usersRepo.update).toHaveBeenCalledWith(
-        { id: userId },
-        expect.objectContaining({ backupPasswordEnc: "enc:new-password" }),
-      );
-    });
-
-    it("refreshes the stored copy even when it already matches", async () => {
+    it("converts a row still holding the retired password copy, clearing it", async () => {
       usersRepo.findOne.mockResolvedValue(
         makeUser({
           backupEncryptionEnabled: true,
@@ -247,18 +338,68 @@ describe("BackupEncryptionService", () => {
         }),
       );
 
-      await service.rememberLoginPassword(userId, "hunter2hunter2");
+      await service.rewrapBackupKey(userId, "hunter2hunter2", hash);
 
-      // Deliberately unconditional. Reading the stored copy back to compare it
-      // means decrypting a secret and matching it against the supplied one,
-      // which is a timing side channel with `===` (CWE-208) and an insecure
-      // password hash with a digest -- both were flagged, and neither bought
-      // anything, since every caller writes this row regardless.
-      expect(usersRepo.update).toHaveBeenCalledWith(
-        { id: userId },
-        expect.objectContaining({ backupPasswordEnc: "enc:hunter2hunter2" }),
-      );
-      expect(encryption.decrypt).not.toHaveBeenCalled();
+      const [, stored] = onlyUpdate();
+      await expectNoRecoverablePassword(stored, "hunter2hunter2");
+    });
+
+    it("re-wraps an SSO account's key after it changes the password it kept", async () => {
+      const { user } = await keyedUser("old-p4ssw0rd", "old-hash", {
+        authProvider: "oidc",
+        passwordHash: "new-hash",
+      });
+      usersRepo.findOne.mockResolvedValue(user);
+
+      await service.rewrapBackupKey(userId, "new-password", "new-hash");
+
+      const [criteria, stored] = onlyUpdate();
+      expect(criteria).toEqual({ id: userId, passwordHash: "new-hash" });
+      expect(stored.backupKeyPasswordRef).toBe(loginPasswordRef("new-hash"));
+    });
+
+    it("leaves an SSO account's dedicated-password wrap alone", async () => {
+      const { user } = await keyedUser("dedicated-p4ss", null, {
+        authProvider: "oidc",
+      });
+      usersRepo.findOne.mockResolvedValue(user);
+
+      await service.rewrapBackupKey(userId, "login-password", hash);
+
+      expect(usersRepo.update).not.toHaveBeenCalled();
+    });
+
+    it("re-wraps under a fresh key after a password change", async () => {
+      const { user, key } = await keyedUser("old-p4ssw0rd", "old-hash", {
+        passwordHash: "new-hash",
+      });
+      usersRepo.findOne.mockResolvedValue(user);
+
+      await service.rewrapBackupKey(userId, "new-password", "new-hash");
+
+      const [criteria, stored] = onlyUpdate();
+      expect(criteria).toEqual({ id: userId, passwordHash: "new-hash" });
+      expect(stored.backupKeyPasswordRef).toBe(loginPasswordRef("new-hash"));
+      const dataKey = await expectNoRecoverablePassword(stored, "new-password");
+      // A fresh key, so the old password together with an old file cannot open
+      // what is written from now on.
+      expect(dataKey.equals(key.dataKey)).toBe(false);
+      await expect(
+        unwrapBackupKey(
+          Buffer.from(stored.backupKeyWrap, "base64"),
+          "old-p4ssw0rd",
+        ),
+      ).rejects.toThrow();
+    });
+
+    it("writes nothing on a sign-in whose wrap is already current", async () => {
+      // Skipping is what keeps ~100ms of scrypt off every login.
+      const { user } = await keyedUser("hunter2hunter2", hash);
+      usersRepo.findOne.mockResolvedValue(user);
+
+      await service.rewrapBackupKey(userId, "hunter2hunter2", hash);
+
+      expect(usersRepo.update).not.toHaveBeenCalled();
     });
 
     it("stores nothing for an OIDC account", async () => {
@@ -266,9 +407,34 @@ describe("BackupEncryptionService", () => {
         makeUser({ authProvider: "oidc", passwordHash: null }),
       );
 
-      await service.rememberLoginPassword(userId, "hunter2hunter2");
+      await service.rewrapBackupKey(userId, "hunter2hunter2", hash);
 
       expect(usersRepo.save).not.toHaveBeenCalled();
+      expect(usersRepo.update).not.toHaveBeenCalled();
+    });
+
+    it("stores nothing for an SSO account that kept its password but has no wrap", async () => {
+      usersRepo.findOne.mockResolvedValue(
+        makeUser({ authProvider: "oidc", passwordHash: hash }),
+      );
+
+      await service.rewrapBackupKey(userId, "hunter2hunter2", hash);
+
+      expect(usersRepo.update).not.toHaveBeenCalled();
+    });
+
+    it("leaves an SSO account's legacy dedicated backupPasswordEnc alone", async () => {
+      usersRepo.findOne.mockResolvedValue(
+        makeUser({
+          authProvider: "oidc",
+          passwordHash: hash,
+          backupEncryptionEnabled: true,
+          backupPasswordEnc: "enc:dedicated",
+        }),
+      );
+
+      await service.rewrapBackupKey(userId, "hunter2hunter2", hash);
+
       expect(usersRepo.update).not.toHaveBeenCalled();
     });
 
@@ -276,7 +442,7 @@ describe("BackupEncryptionService", () => {
       encryption.isConfigured.mockReturnValue(false);
       usersRepo.findOne.mockResolvedValue(makeUser());
 
-      await service.rememberLoginPassword(userId, "hunter2hunter2");
+      await service.rewrapBackupKey(userId, "hunter2hunter2", hash);
 
       expect(usersRepo.save).not.toHaveBeenCalled();
       expect(usersRepo.update).not.toHaveBeenCalled();
@@ -285,7 +451,7 @@ describe("BackupEncryptionService", () => {
     it("stores nothing for a user that no longer exists", async () => {
       usersRepo.findOne.mockResolvedValue(null);
 
-      await service.rememberLoginPassword(userId, "hunter2hunter2");
+      await service.rewrapBackupKey(userId, "hunter2hunter2", hash);
 
       expect(usersRepo.update).not.toHaveBeenCalled();
     });
@@ -295,91 +461,216 @@ describe("BackupEncryptionService", () => {
       usersRepo.update.mockRejectedValue(new Error("db down"));
 
       await expect(
-        service.rememberLoginPassword(userId, "hunter2hunter2"),
+        service.rewrapBackupKey(userId, "hunter2hunter2", hash),
       ).resolves.toBeUndefined();
     });
   });
 
-  describe("resolveBackupPassword", () => {
+  describe("resolveBackupKey", () => {
+    const payload = Buffer.from("gzipped backup payload");
+
+    async function sealedWith(resolution: BackupKeyResolution) {
+      expect(resolution.status).toBe("key");
+      if (resolution.status !== "key") throw new Error("unreachable");
+      return sealUnder(resolution.key, payload);
+    }
+
     it("returns 'none' when nothing is stored", async () => {
-      expect(await service.resolveBackupPassword(makeUser())).toEqual({
+      expect(await service.resolveBackupKey(makeUser())).toEqual({
         status: "none",
       });
     });
 
-    it("returns the password when it still matches the login password", async () => {
-      (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+    it("hands the cron a key that encrypts without the password, and the file opens with it", async () => {
+      const { user } = await keyedUser("hunter2hunter2", hash);
 
-      const result = await service.resolveBackupPassword(
-        makeUser({
-          backupEncryptionEnabled: true,
-          backupPasswordEnc: "enc:hunter2hunter2",
-        }),
-      );
+      const resolution = await service.resolveBackupKey(user);
 
-      expect(result).toEqual({
-        status: "password",
-        password: "hunter2hunter2",
+      // No password anywhere in the resolution; the envelope opens with it.
+      expect(JSON.stringify(resolution)).not.toContain("hunter2hunter2");
+      const envelope = await sealedWith(resolution);
+      expect(
+        (await decryptBackup(envelope, "hunter2hunter2")).equals(payload),
+      ).toBe(true);
+      await expect(decryptBackup(envelope, "wrong-password")).rejects.toThrow();
+      expect(bcrypt.compare).not.toHaveBeenCalled();
+      expect(usersRepo.update).not.toHaveBeenCalled();
+    });
+
+    it("uses an OIDC dedicated-password key, which has no login hash to go stale against", async () => {
+      const { user } = await keyedUser("dedicated-p4ssw0rd", null, {
+        authProvider: "oidc",
+        passwordHash: null,
+      });
+
+      const envelope = await sealedWith(await service.resolveBackupKey(user));
+
+      expect(
+        (await decryptBackup(envelope, "dedicated-p4ssw0rd")).equals(payload),
+      ).toBe(true);
+    });
+
+    it("drops a key wrapped under a password the user has since changed", async () => {
+      // A reset link, an admin or an emergency claim changed the hash without
+      // re-wrapping. A backup under the old password is a file the user cannot
+      // open; better an unencrypted one until the next sign-in.
+      const { user } = await keyedUser("old-p4ssw0rd", "old-hash", {
+        passwordHash: "new-hash",
+      });
+
+      expect(await service.resolveBackupKey(user)).toEqual({ status: "none" });
+      const [criteria, cleared] = usersRepo.update.mock.calls[0];
+      // Only if the stale wrap is still the one there: a sign-in that has just
+      // written a fresh key must not be wiped.
+      expect(criteria).toEqual({
+        id: userId,
+        backupKeyWrap: user.backupKeyWrap,
+      });
+      expect(cleared).toEqual({
+        backupEncryptionEnabled: false,
+        backupPasswordEnc: null,
+        backupKeyEnc: null,
+        backupKeyWrap: null,
+        backupKeyPasswordRef: null,
       });
     });
 
-    it("drops a stale copy rather than encrypting with a password the user has changed", async () => {
-      (bcrypt.compare as jest.Mock).mockResolvedValue(false);
-      usersRepo.findOne.mockResolvedValue(
-        makeUser({
-          backupEncryptionEnabled: true,
-          backupPasswordEnc: "enc:old-password",
-        }),
-      );
-
-      const result = await service.resolveBackupPassword(
-        makeUser({
-          backupEncryptionEnabled: true,
-          backupPasswordEnc: "enc:old-password",
-        }),
-      );
-
-      // A backup encrypted with a forgotten password is a file the user
-      // cannot open; better an unencrypted one until the next sign-in.
-      expect(result).toEqual({ status: "none" });
-      expect(usersRepo.update).toHaveBeenCalledWith(
-        { id: userId },
-        {
-          backupEncryptionEnabled: false,
-          backupPasswordEnc: null,
-        },
-      );
-    });
-
-    it("reports 'unrecoverable' when the stored copy cannot be decrypted", async () => {
+    it("reports 'unrecoverable' when the stored key cannot be decrypted", async () => {
+      const { user } = await keyedUser("hunter2hunter2", hash);
       encryption.decrypt.mockImplementation(() => {
         throw new Error("bad key");
       });
 
-      const result = await service.resolveBackupPassword(
-        makeUser({
-          backupEncryptionEnabled: true,
-          backupPasswordEnc: "enc:unreadable",
-        }),
-      );
-
       // Distinct from "none": the caller must refuse rather than silently
       // writing plaintext where it used to write ciphertext.
-      expect(result).toEqual({ status: "unrecoverable" });
+      expect(await service.resolveBackupKey(user)).toEqual({
+        status: "unrecoverable",
+      });
     });
 
-    it("skips the login-password check for an OIDC account", async () => {
-      const result = await service.resolveBackupPassword(
-        makeUser({
+    it("reports 'unrecoverable' for a malformed stored key", async () => {
+      const { user } = await keyedUser("hunter2hunter2", hash, {
+        backupKeyWrap: "not base64 at all!",
+      });
+
+      expect(await service.resolveBackupKey(user)).toEqual({
+        status: "unrecoverable",
+      });
+    });
+
+    describe("a row still holding the retired password copy", () => {
+      it("still gets an encrypted backup, opened by the same password, and is converted", async () => {
+        (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+        const user = makeUser({
+          backupEncryptionEnabled: true,
+          backupPasswordEnc: "enc:hunter2hunter2",
+        });
+
+        const resolution = await service.resolveBackupKey(user);
+
+        // Behaves as before for the user: encrypted, and their password opens it.
+        const envelope = await sealedWith(resolution);
+        expect(
+          (await decryptBackup(envelope, "hunter2hunter2")).equals(payload),
+        ).toBe(true);
+        // ...and the recoverable copy is gone, conditional on it being the one read.
+        const [criteria, stored] = onlyUpdate();
+        expect(criteria).toEqual({
+          id: userId,
+          passwordHash: hash,
+          backupPasswordEnc: "enc:hunter2hunter2",
+        });
+        await expectNoRecoverablePassword(stored, "hunter2hunter2");
+      });
+
+      it("converts an OIDC dedicated password without a login-hash check", async () => {
+        const user = makeUser({
           authProvider: "oidc",
           passwordHash: null,
           backupEncryptionEnabled: true,
-          backupPasswordEnc: "enc:dedicated",
-        }),
-      );
+          backupPasswordEnc: "enc:dedicated-p4ssw0rd",
+        });
 
-      expect(result).toEqual({ status: "password", password: "dedicated" });
-      expect(bcrypt.compare).not.toHaveBeenCalled();
+        const envelope = await sealedWith(await service.resolveBackupKey(user));
+
+        expect(bcrypt.compare).not.toHaveBeenCalled();
+        expect(
+          (await decryptBackup(envelope, "dedicated-p4ssw0rd")).equals(payload),
+        ).toBe(true);
+        const [criteria, stored] = onlyUpdate();
+        expect(criteria).toEqual({
+          id: userId,
+          backupPasswordEnc: "enc:dedicated-p4ssw0rd",
+        });
+        expect(stored.backupKeyPasswordRef).toBeNull();
+        await expectNoRecoverablePassword(stored, "dedicated-p4ssw0rd");
+      });
+
+      it("still encrypts this backup when the conversion write fails", async () => {
+        (bcrypt.compare as jest.Mock).mockResolvedValue(true);
+        usersRepo.update.mockRejectedValue(new Error("db down"));
+
+        const resolution = await service.resolveBackupKey(
+          makeUser({
+            backupEncryptionEnabled: true,
+            backupPasswordEnc: "enc:hunter2hunter2",
+          }),
+        );
+
+        const envelope = await sealedWith(resolution);
+        expect(
+          (await decryptBackup(envelope, "hunter2hunter2")).equals(payload),
+        ).toBe(true);
+      });
+
+      it("drops a copy that no longer matches the login password", async () => {
+        (bcrypt.compare as jest.Mock).mockResolvedValue(false);
+
+        const result = await service.resolveBackupKey(
+          makeUser({
+            backupEncryptionEnabled: true,
+            backupPasswordEnc: "enc:old-p4ssw0rd",
+          }),
+        );
+
+        expect(result).toEqual({ status: "none" });
+        expect(usersRepo.update).toHaveBeenCalledWith(
+          { id: userId, backupPasswordEnc: "enc:old-p4ssw0rd" },
+          expect.objectContaining({
+            backupEncryptionEnabled: false,
+            backupPasswordEnc: null,
+          }),
+        );
+      });
+
+      it("reports 'unrecoverable' when the copy cannot be decrypted", async () => {
+        encryption.decrypt.mockImplementation(() => {
+          throw new Error("bad key");
+        });
+
+        expect(
+          await service.resolveBackupKey(
+            makeUser({
+              backupEncryptionEnabled: true,
+              backupPasswordEnc: "enc:unreadable",
+            }),
+          ),
+        ).toEqual({ status: "unrecoverable" });
+      });
+
+      it("clears a copy left beside a current key", async () => {
+        // A previous release's sign-in during a rolling deploy writes the copy
+        // again; the key is current, so the copy is simply removed.
+        const { user } = await keyedUser("hunter2hunter2", hash, {
+          backupPasswordEnc: "enc:hunter2hunter2",
+        });
+
+        expect((await service.resolveBackupKey(user)).status).toBe("key");
+        expect(usersRepo.update).toHaveBeenCalledWith(
+          { id: userId, backupPasswordEnc: "enc:hunter2hunter2" },
+          { backupPasswordEnc: null },
+        );
+      });
     });
   });
 
@@ -392,23 +683,20 @@ describe("BackupEncryptionService", () => {
       });
     }
 
-    it("stores the dedicated password and turns encryption on", async () => {
+    it("wraps a key under the dedicated password and turns encryption on", async () => {
       usersRepo.findOne.mockResolvedValue(oidcUser());
 
       await service.setBackupPasswordForOidcUser(userId, "a-strong-password");
 
-      // Targeted update of the two owned columns, never a full-entity save.
+      // Targeted update of the owned columns, never a full-entity save.
       expect(usersRepo.save).not.toHaveBeenCalled();
-      expect(usersRepo.update).toHaveBeenCalledWith(
-        { id: userId },
-        {
-          backupPasswordEnc: "enc:a-strong-password",
-          backupEncryptionEnabled: true,
-        },
-      );
+      const [criteria, stored] = onlyUpdate();
+      expect(criteria).toEqual({ id: userId });
+      expect(stored.backupKeyPasswordRef).toBeNull();
+      await expectNoRecoverablePassword(stored, "a-strong-password");
     });
 
-    it("replaces an existing dedicated password", async () => {
+    it("replaces an existing dedicated password, clearing a retired copy", async () => {
       usersRepo.findOne.mockResolvedValue(
         oidcUser({
           backupEncryptionEnabled: true,
@@ -418,19 +706,15 @@ describe("BackupEncryptionService", () => {
 
       await service.setBackupPasswordForOidcUser(userId, "new-backup-password");
 
-      expect(usersRepo.update).toHaveBeenCalledWith(
-        { id: userId },
-        expect.objectContaining({
-          backupPasswordEnc: "enc:new-backup-password",
-        }),
-      );
+      const [, stored] = onlyUpdate();
+      await expectNoRecoverablePassword(stored, "new-backup-password");
     });
 
     it("refuses a local-auth account", async () => {
       usersRepo.findOne.mockResolvedValue(makeUser());
 
-      // Their copy is recaptured at the next login, so accepting this would
-      // store a password that is about to be overwritten.
+      // Their key is re-made at the next login, so accepting this would store
+      // something that is about to be overwritten.
       await expect(
         service.setBackupPasswordForOidcUser(userId, "a-strong-password"),
       ).rejects.toThrow(BadRequestException);
@@ -465,14 +749,14 @@ describe("BackupEncryptionService", () => {
 
       await expect(
         service.setBackupPasswordForOidcUser(userId, "a-strong-password"),
-      ).rejects.toThrow(/JWT_SECRET/);
+      ).rejects.toThrow(/ENCRYPTION_KEY/);
       expect(usersRepo.save).not.toHaveBeenCalled();
       expect(usersRepo.update).not.toHaveBeenCalled();
     });
   });
 
   describe("disableForOidcUser", () => {
-    it("clears the stored password", async () => {
+    it("clears the stored key and any retired copy", async () => {
       usersRepo.findOne.mockResolvedValue(
         makeUser({
           authProvider: "oidc",
@@ -490,20 +774,20 @@ describe("BackupEncryptionService", () => {
         {
           backupEncryptionEnabled: false,
           backupPasswordEnc: null,
+          backupKeyEnc: null,
+          backupKeyWrap: null,
+          backupKeyPasswordRef: null,
         },
       );
     });
 
     it("refuses a local-auth account", async () => {
       usersRepo.findOne.mockResolvedValue(
-        makeUser({
-          backupEncryptionEnabled: true,
-          backupPasswordEnc: "enc:hunter2hunter2",
-        }),
+        makeUser({ backupEncryptionEnabled: true }),
       );
 
-      // "Disabled" would be a lie: the next sign-in captures the password
-      // again and turns it straight back on.
+      // "Disabled" would be a lie: the next sign-in wraps a key again and
+      // turns it straight back on.
       await expect(service.disableForOidcUser(userId)).rejects.toThrow(
         BadRequestException,
       );
@@ -512,16 +796,13 @@ describe("BackupEncryptionService", () => {
     });
   });
 
-  describe("forgetStoredPassword", () => {
-    it("clears the stored copy", async () => {
+  describe("forgetBackupKey", () => {
+    it("clears the stored key", async () => {
       usersRepo.findOne.mockResolvedValue(
-        makeUser({
-          backupEncryptionEnabled: true,
-          backupPasswordEnc: "enc:whatever",
-        }),
+        makeUser({ backupEncryptionEnabled: true, backupKeyEnc: "enc:k" }),
       );
 
-      await service.forgetStoredPassword(userId);
+      await service.forgetBackupKey(userId);
 
       expect(usersRepo.save).not.toHaveBeenCalled();
       expect(usersRepo.update).toHaveBeenCalledWith(
@@ -529,15 +810,16 @@ describe("BackupEncryptionService", () => {
         {
           backupEncryptionEnabled: false,
           backupPasswordEnc: null,
+          backupKeyEnc: null,
+          backupKeyWrap: null,
+          backupKeyPasswordRef: null,
         },
       );
     });
 
     it("is a no-op for a user that no longer exists", async () => {
       usersRepo.findOne.mockResolvedValue(null);
-      await expect(
-        service.forgetStoredPassword(userId),
-      ).resolves.toBeUndefined();
+      await expect(service.forgetBackupKey(userId)).resolves.toBeUndefined();
       expect(usersRepo.save).not.toHaveBeenCalled();
       expect(usersRepo.update).not.toHaveBeenCalled();
     });
@@ -547,7 +829,9 @@ describe("BackupEncryptionService", () => {
    * Each of these methods used to read the users row in one transaction and
    * write it back in another, which is the read-modify-write the project's
    * transaction rule exists to forbid: between the two, any concurrent change
-   * to the row was lost.
+   * to the row was lost. `rewrapBackupKey` is deliberately not here: its read
+   * is only the skip, and its guard is the `password_hash` in the update's
+   * `WHERE` (asserted above).
    */
   describe("read and write share one transaction", () => {
     it.each([
@@ -565,22 +849,17 @@ describe("BackupEncryptionService", () => {
             authProvider: "oidc",
             passwordHash: null,
             backupEncryptionEnabled: true,
-            backupPasswordEnc: "enc:dedicated",
           }),
       ],
       [
-        "rememberLoginPassword",
-        () => service.rememberLoginPassword(userId, "new-password"),
+        "enableWithLoginPassword",
+        () => service.enableWithLoginPassword(userId, "hunter2hunter2"),
+        () => makeUser(),
+      ],
+      [
+        "forgetBackupKey",
+        () => service.forgetBackupKey(userId),
         () => makeUser({ backupEncryptionEnabled: true }),
-      ],
-      [
-        "forgetStoredPassword",
-        () => service.forgetStoredPassword(userId),
-        () =>
-          makeUser({
-            backupEncryptionEnabled: true,
-            backupPasswordEnc: "enc:whatever",
-          }),
       ],
     ])("%s", async (_name, run, user) => {
       usersRepo.findOne.mockResolvedValue(user());
@@ -610,7 +889,7 @@ describe("BackupEncryptionService", () => {
  *
  * Both variable names are exercised, because both are live: a new deployment
  * sets `ENCRYPTION_KEY`, and one that predates the rename keeps its
- * `AI_ENCRYPTION_KEY` and must go on capturing without re-keying a column.
+ * `AI_ENCRYPTION_KEY` and must go on encrypting without re-keying a column.
  */
 describe.each([
   ["ENCRYPTION_KEY", "e".repeat(40)],
@@ -619,6 +898,18 @@ describe.each([
   const userId = "user-1";
   let service: BackupEncryptionService;
   let usersRepo: Record<string, jest.Mock>;
+  let encryption: EncryptionService;
+
+  const baseUser = {
+    id: userId,
+    authProvider: "local",
+    passwordHash: "bcrypt-hash",
+    backupEncryptionEnabled: false,
+    backupPasswordEnc: null,
+    backupKeyEnc: null,
+    backupKeyWrap: null,
+    backupKeyPasswordRef: null,
+  } as User;
 
   beforeEach(async () => {
     usersRepo = {
@@ -651,49 +942,37 @@ describe.each([
     }).compile();
 
     service = module.get(BackupEncryptionService);
+    encryption = module.get(EncryptionService);
   });
 
-  it("captures the login password, and resolves it back for the cron", async () => {
-    usersRepo.findOne.mockResolvedValue({
-      id: userId,
-      authProvider: "local",
-      passwordHash: "bcrypt-hash",
-      backupEncryptionEnabled: false,
-      backupPasswordEnc: null,
-    } as User);
+  it("wraps a key at sign-in that the cron can use and the password opens, with no password stored", async () => {
+    usersRepo.findOne.mockResolvedValue(baseUser);
 
-    await service.rememberLoginPassword(userId, "hunter2hunter2");
+    await service.rewrapBackupKey(userId, "hunter2hunter2", "bcrypt-hash");
 
     expect(usersRepo.update).toHaveBeenCalledTimes(1);
-    const stored = usersRepo.update.mock.calls[0][1] as {
-      backupPasswordEnc: string;
-      backupEncryptionEnabled: boolean;
-    };
+    const stored = usersRepo.update.mock.calls[0][1] as StoredKeyColumns;
     expect(stored.backupEncryptionEnabled).toBe(true);
-    // Ciphertext, not the password -- and it opens again on the way to the cron,
-    // which is the half that decides whether the backup is encrypted.
-    expect(stored.backupPasswordEnc).not.toContain("hunter2hunter2");
+    expect(stored.backupPasswordEnc).toBeNull();
+    // What the server can open with its own key is a random data key, not the
+    // password -- the property a database dump plus the environment tests.
+    expect(encryption.decrypt(stored.backupKeyEnc)).not.toBe("hunter2hunter2");
 
-    (bcrypt.compare as jest.Mock).mockResolvedValue(true);
-    await expect(
-      service.resolveBackupPassword({
-        id: userId,
-        authProvider: "local",
-        passwordHash: "bcrypt-hash",
-        backupEncryptionEnabled: true,
-        backupPasswordEnc: stored.backupPasswordEnc,
-      } as User),
-    ).resolves.toEqual({ status: "password", password: "hunter2hunter2" });
+    const resolution = await service.resolveBackupKey({
+      ...baseUser,
+      ...stored,
+    } as User);
+    expect(resolution.status).toBe("key");
+    if (resolution.status !== "key") return;
+    const payload = Buffer.from("payload");
+    const envelope = await sealUnder(resolution.key, payload);
+    expect(
+      (await decryptBackup(envelope, "hunter2hunter2")).equals(payload),
+    ).toBe(true);
   });
 
   it("reports encryption as available in the status the screen renders", async () => {
-    usersRepo.findOne.mockResolvedValue({
-      id: userId,
-      authProvider: "local",
-      passwordHash: "bcrypt-hash",
-      backupEncryptionEnabled: false,
-      backupPasswordEnc: null,
-    } as User);
+    usersRepo.findOne.mockResolvedValue(baseUser);
 
     expect(await service.getStatus(userId)).toMatchObject({ available: true });
   });

@@ -5,6 +5,13 @@
     "cash": "Contant",
     "brokerage": "Effecten"
   },
+  "oauthConsent": {
+    "destinationLabel": "Als je toegang verleent, stuurt Monize de autorisatie naar:",
+    "destinationUnknown": "Monize kon niet bepalen waar deze autorisatie naartoe zou worden gestuurd. Verleen geen toegang.",
+    "unverifiedNotice": "Deze applicatie heeft zichzelf bij deze Monize-server geregistreerd en Monize heeft niet gecontroleerd wie haar beheert; haar naam is wat ze zichzelf heeft gegeven. Verleen alleen toegang als je deze verbinding zelf vanuit die applicatie hebt gestart en het bovenstaande adres bij die applicatie hoort.",
+    "claimedWebsite": "Door de applicatie opgegeven website: {{ website }}",
+    "websiteMismatch": "De applicatie zegt dat haar website {{ website }} is, maar de autorisatie wordt naar een ander adres gestuurd."
+  },
   "import": {
     "voidedTransactionNote": "Ongeldig gemaakt in de bron; het oorspronkelijke bedrag ontbrak in de export en is als nul geïmporteerd."
   },
@@ -17,5 +24,20 @@
       "stalled": "Ik bleef zeggen dat ik verder zou werken in plaats van af te ronden, dus dit antwoord is gebaseerd op de gegevens die ik voor het stoppen heb verzameld."
     },
     "synthesisFailed": "Ik heb gegevens voor deze vraag verzameld, maar kon de analyse niet afronden, dus ik heb geen betrouwbaar antwoord. Probeer iets specifiekers te vragen."
+  },
+  "bankSync": {
+    "operationTypes": {
+      "cardPayment": "Kaartbetaling",
+      "transferIn": "Inkomende overboeking",
+      "transferOut": "Uitgaande overboeking",
+      "mobilePayment": "Mobiele betaling",
+      "cashWithdrawal": "Geldopname",
+      "cashWithdrawalBlik": "Geldopname (BLIK)",
+      "mobilePaymentRefund": "Terugbetaling mobiele betaling",
+      "standingOrder": "Doorlopende opdracht",
+      "cashback": "Cashback",
+      "loanRepayment": "Aflossing lening",
+      "creditCardRepayment": "Creditcardaflossing"
+    }
   }
 }

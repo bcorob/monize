@@ -1,0 +1,236 @@
+{
+  "manifest": "edo1036",
+  "cases": [
+    {
+      "id": "E5",
+      "description": "EDO1036 early, period 1, below floor (99.67 -> 100.00)",
+      "lot": {
+        "purchaseDate": "2026-10-01",
+        "quantity": 1
+      },
+      "asOf": "2027-04-01",
+      "expect": {
+        "earlyRedemptionValue": "100.00"
+      }
+    },
+    {
+      "id": "E6",
+      "description": "EDO1036 early, period 2, r2 = 4.90% (hypothetical)",
+      "lot": {
+        "purchaseDate": "2026-10-01",
+        "quantity": 1
+      },
+      "asOf": "2028-04-01",
+      "announcedRates": {
+        "2": "0.0490"
+      },
+      "expect": {
+        "earlyRedemptionValue": "104.93",
+        "currentPeriod": {
+          "index": 2,
+          "annualRate": "0.0490",
+          "rateSource": "ANNOUNCED"
+        }
+      }
+    },
+    {
+      "id": "E7",
+      "description": "EDO1036 maturity, r2..r10 = 4.90% (hypothetical)",
+      "lot": {
+        "purchaseDate": "2026-10-01",
+        "quantity": 1
+      },
+      "asOf": "2026-10-10",
+      "announcedRates": {
+        "2": "0.0490",
+        "3": "0.0490",
+        "4": "0.0490",
+        "5": "0.0490",
+        "6": "0.0490",
+        "7": "0.0490",
+        "8": "0.0490",
+        "9": "0.0490",
+        "10": "0.0490"
+      },
+      "expect": {
+        "maturityValueKnown": "162.04"
+      }
+    },
+    {
+      "id": "E6-R3",
+      "description": "EDO1036 early, period 3, day 1: base 110.51215 is not rounded (a rounded 110.51 would give 107.52 / 110.52)",
+      "lot": {
+        "purchaseDate": "2026-10-01",
+        "quantity": 1
+      },
+      "asOf": "2028-10-02",
+      "announcedRates": {
+        "2": "0.0490",
+        "3": "0.0490"
+      },
+      "expect": {
+        "grossValue": "110.53",
+        "earlyRedemptionValue": "107.53",
+        "currentPeriod": {
+          "index": 3,
+          "annualRate": "0.0490",
+          "rateSource": "ANNOUNCED"
+        }
+      }
+    },
+    {
+      "id": "EDO-SW1",
+      "description": "EDO1036 bought after the sale window closed (2026-10-31): refused, no figure",
+      "lot": {
+        "purchaseDate": "2026-11-02",
+        "quantity": 1
+      },
+      "asOf": "2026-11-02",
+      "expect": {
+        "status": "REFUSED",
+        "refusal": {
+          "code": "PURCHASE_OUTSIDE_SALE_WINDOW",
+          "params": {
+            "from": "2026-10-01",
+            "to": "2026-10-31",
+            "purchaseDate": "2026-11-02"
+          }
+        },
+        "grossValue": null,
+        "principal": null,
+        "valuationComplete": false
+      }
+    },
+    {
+      "id": "EDO-A1",
+      "description": "EDO1036 period 1, a = 182, ACT = 365: accrued 2.67, rate 5.35% from the terms",
+      "lot": {
+        "purchaseDate": "2026-10-01",
+        "quantity": 1
+      },
+      "asOf": "2027-04-01",
+      "expect": {
+        "accruedInterest": "2.67",
+        "grossValue": "102.67",
+        "currentPeriod": {
+          "index": 1,
+          "annualRate": "0.0535",
+          "rateSource": "TERMS"
+        }
+      }
+    },
+    {
+      "id": "EDO-A2",
+      "description": "EDO1036 period 2, a = 183, ACT = 366 on the base 105.35: accrued 7.93 (r2 = 4.90% hypothetical)",
+      "lot": {
+        "purchaseDate": "2026-10-01",
+        "quantity": 1
+      },
+      "asOf": "2028-04-01",
+      "announcedRates": {
+        "2": "0.0490"
+      },
+      "expect": {
+        "accruedInterest": "7.93",
+        "grossValue": "107.93",
+        "currentPeriod": {
+          "index": 2,
+          "annualRate": "0.0490",
+          "rateSource": "ANNOUNCED"
+        }
+      }
+    },
+    {
+      "id": "EDO-DER-1",
+      "description": "EDO1036 period 2 derived: CPI of 2027-08 (3.40%) + 2.00% margin = 5.40%; 2027-07 and 2027-09 are decoys (hypothetical CPI)",
+      "lot": {
+        "purchaseDate": "2026-10-01",
+        "quantity": 1
+      },
+      "asOf": "2028-04-01",
+      "hypothetical": true,
+      "benchmarks": {
+        "PL_CPI_GUS_YOY": {
+          "kind": "MONTHLY",
+          "publisher": "GUS",
+          "hypothetical": true,
+          "source": "hypothetical values; only the month 2027-08 is the one the M-2 rule reads, the neighbours are decoys",
+          "values": {
+            "2027-07": "0.0100",
+            "2027-08": "0.0340",
+            "2027-09": "0.0900"
+          }
+        }
+      },
+      "expect": {
+        "accruedInterest": "8.19",
+        "grossValue": "108.19",
+        "earlyRedemptionValue": "105.19",
+        "currentPeriod": {
+          "index": 2,
+          "annualRate": "0.0540",
+          "rateSource": "DERIVED"
+        }
+      },
+      "expectedRates": {
+        "2": {
+          "annualRate": "0.0540",
+          "rateSource": "DERIVED",
+          "addend": "0.0200",
+          "benchmark": {
+            "benchmarkId": "PL_CPI_GUS_YOY",
+            "observation": "2027-08",
+            "value": "0.0340",
+            "flooredValue": "0.0340"
+          }
+        }
+      }
+    },
+    {
+      "id": "EDO-DER-2",
+      "description": "EDO1036 period 2 derived with negative CPI: floor 0 + 2.00% margin = 2.00% (hypothetical CPI -0.20%)",
+      "lot": {
+        "purchaseDate": "2026-10-01",
+        "quantity": 1
+      },
+      "asOf": "2028-04-01",
+      "hypothetical": true,
+      "benchmarks": {
+        "PL_CPI_GUS_YOY": {
+          "kind": "MONTHLY",
+          "publisher": "GUS",
+          "hypothetical": true,
+          "source": "hypothetical values; only the month 2027-08 is the one the M-2 rule reads, the neighbours are decoys",
+          "values": {
+            "2027-07": "0.0100",
+            "2027-08": "-0.0020",
+            "2027-09": "0.0900"
+          }
+        }
+      },
+      "expect": {
+        "accruedInterest": "6.40",
+        "grossValue": "106.40",
+        "earlyRedemptionValue": "103.40",
+        "currentPeriod": {
+          "index": 2,
+          "annualRate": "0.0200",
+          "rateSource": "DERIVED"
+        }
+      },
+      "expectedRates": {
+        "2": {
+          "annualRate": "0.0200",
+          "rateSource": "DERIVED",
+          "addend": "0.0200",
+          "benchmark": {
+            "benchmarkId": "PL_CPI_GUS_YOY",
+            "observation": "2027-08",
+            "value": "-0.0020",
+            "flooredValue": "0.0000"
+          }
+        }
+      }
+    }
+  ]
+}

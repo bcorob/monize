@@ -1,5 +1,6 @@
 import { Page, expect } from '@playwright/test';
 import { randomBytes } from 'crypto';
+import { E2E_DEFAULT_PASSWORD } from './credentials';
 
 const uniqueId = () => Date.now().toString(36) + randomBytes(3).toString('hex');
 
@@ -8,7 +9,7 @@ export async function registerUser(
   options?: { email?: string; password?: string; firstName?: string; lastName?: string },
 ) {
   const email = options?.email || `e2e-${uniqueId()}@test.example.com`;
-  const password = options?.password || 'E2eTestPass123!';
+  const password = options?.password || E2E_DEFAULT_PASSWORD;
   const firstName = options?.firstName || 'E2E';
   const lastName = options?.lastName || 'Tester';
 

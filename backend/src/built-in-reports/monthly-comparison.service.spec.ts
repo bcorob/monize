@@ -8,6 +8,12 @@ import { ReportCurrencyService } from "./report-currency.service";
 import { NetWorthService } from "../net-worth/net-worth.service";
 import { PortfolioService } from "../securities/portfolio.service";
 import {
+  PortfolioPeriodResult,
+  PortfolioPeriodResultService,
+} from "../net-worth/portfolio-period-result.service";
+import { UserPreference } from "../users/entities/user-preference.entity";
+import { todayYMD } from "../common/date-utils";
+import {
   Account,
   AccountType,
   AccountSubType,
@@ -26,12 +32,12 @@ const mockUserId = "user-1";
 const mockMonth = "2026-01";
 
 const mockIncomeVsExpensesCurrentResponse = {
-  data: [{ month: "2026-01", income: 5000, expenses: 3000, net: 2000 }],
+  data: [{ period: "2026-01", income: 5000, expenses: 3000, net: 2000 }],
   totals: { income: 5000, expenses: 3000, net: 2000 },
 };
 
 const mockIncomeVsExpensesPreviousResponse = {
-  data: [{ month: "2025-12", income: 4500, expenses: 3500, net: 1000 }],
+  data: [{ period: "2025-12", income: 4500, expenses: 3500, net: 1000 }],
   totals: { income: 4500, expenses: 3500, net: 1000 },
 };
 
@@ -101,11 +107,42 @@ const mockPreviousSpending = {
   totalSpending: 2750,
 };
 
+const completeMonth = {
+  fxComplete: true,
+  missingRatePairs: [] as string[],
+  assetsFxComplete: true,
+  liabilitiesFxComplete: true,
+};
+
 const mockNetWorthHistory = [
-  { month: "2025-02-01", assets: 50000, liabilities: 10000, netWorth: 40000 },
-  { month: "2025-03-01", assets: 51000, liabilities: 10000, netWorth: 41000 },
-  { month: "2025-12-01", assets: 60000, liabilities: 10000, netWorth: 50000 },
-  { month: "2026-01-01", assets: 62000, liabilities: 10000, netWorth: 52000 },
+  {
+    month: "2025-02-01",
+    assets: 50000,
+    liabilities: 10000,
+    netWorth: 40000,
+    ...completeMonth,
+  },
+  {
+    month: "2025-03-01",
+    assets: 51000,
+    liabilities: 10000,
+    netWorth: 41000,
+    ...completeMonth,
+  },
+  {
+    month: "2025-12-01",
+    assets: 60000,
+    liabilities: 10000,
+    netWorth: 50000,
+    ...completeMonth,
+  },
+  {
+    month: "2026-01-01",
+    assets: 62000,
+    liabilities: 10000,
+    netWorth: 52000,
+    ...completeMonth,
+  },
 ];
 
 const mockTopMovers = [
@@ -130,7 +167,9 @@ describe("MonthlyComparisonService", () => {
   let mockCurrencyService: Record<string, jest.Mock>;
   let mockNetWorthService: Record<string, jest.Mock>;
   let mockPortfolioService: Record<string, jest.Mock>;
+  let mockPeriodResultService: Record<string, jest.Mock>;
   let mockAccountsRepo: Record<string, jest.Mock>;
+  let mockUserPreferenceRepo: Record<string, jest.Mock>;
   let mockDataSource: Record<string, jest.Mock>;
 
   beforeEach(async () => {
@@ -149,15 +188,30 @@ describe("MonthlyComparisonService", () => {
     mockPortfolioService = {
       getMonthOverMonthMovers: jest.fn(),
     };
+    mockPeriodResultService = {
+      getPeriodResult: jest.fn(),
+    };
     mockAccountsRepo = {
       find: jest.fn().mockResolvedValue([]),
+    };
+    // The generated notes are addressed to this user, so the service reads
+    // their number-format preference to render the figures in it (issue #1316).
+    mockUserPreferenceRepo = {
+      findOne: jest.fn().mockResolvedValue({
+        userId: mockUserId,
+        numberFormat: "en-US",
+        language: "en",
+      }),
     };
     // The snapshot query now runs through the scoped transaction's manager;
     // the spec keeps asserting against this mock.
     mockDataSource = { query: jest.fn().mockResolvedValue([]) };
 
     ({ manager: scopedManager, dataSource: scopedDataSource } =
-      createScopedDbMocks([[Account, mockAccountsRepo as never]]));
+      createScopedDbMocks([
+        [Account, mockAccountsRepo as never],
+        [UserPreference, mockUserPreferenceRepo as never],
+      ]));
     scopedManager.query.mockImplementation((sql: string, params?: unknown[]) =>
       mockDataSource.query(sql, params),
     );
@@ -170,6 +224,10 @@ describe("MonthlyComparisonService", () => {
         { provide: ReportCurrencyService, useValue: mockCurrencyService },
         { provide: NetWorthService, useValue: mockNetWorthService },
         { provide: PortfolioService, useValue: mockPortfolioService },
+        {
+          provide: PortfolioPeriodResultService,
+          useValue: mockPeriodResultService,
+        },
         { provide: getRepositoryToken(Account), useValue: mockAccountsRepo },
         { provide: DataSource, useValue: scopedDataSource },
       ],
@@ -310,6 +368,44 @@ describe("MonthlyComparisonService", () => {
       expect(result.netWorth.previousNetWorth).toBe(50000);
       expect(result.netWorth.netWorthChange).toBe(2000);
       expect(result.netWorth.netWorthChangePercent).toBe(4);
+      expect(result.netWorth.knownCurrentNetWorth).toBe(52000);
+      expect(result.netWorth.knownPreviousNetWorth).toBe(50000);
+      expect(result.netWorth.fxComplete).toBe(true);
+      expect(result.netWorth.missingRatePairs).toEqual([]);
+      expect(result.netWorth.monthlyHistory[0]).toEqual({
+        month: "2025-02-01",
+        netWorth: 40000,
+        fxComplete: true,
+        missingRatePairs: [],
+      });
+    });
+
+    it("withholds the net worth and its change when one compared month has no rate", async () => {
+      mockNetWorthService.getMonthlyNetWorth.mockResolvedValue([
+        mockNetWorthHistory[2],
+        {
+          ...mockNetWorthHistory[3],
+          fxComplete: false,
+          missingRatePairs: ["ZZZ->USD"],
+          assetsFxComplete: false,
+        },
+      ]);
+
+      const result = await service.getMonthlyComparison(mockUserId, mockMonth);
+
+      expect(result.netWorth.currentNetWorth).toBeNull();
+      expect(result.netWorth.knownCurrentNetWorth).toBe(52000);
+      expect(result.netWorth.previousNetWorth).toBe(50000);
+      expect(result.netWorth.knownPreviousNetWorth).toBe(50000);
+      expect(result.netWorth.netWorthChange).toBeNull();
+      expect(result.netWorth.netWorthChangePercent).toBeNull();
+      expect(result.netWorth.fxComplete).toBe(false);
+      expect(result.netWorth.missingRatePairs).toEqual(["ZZZ->USD"]);
+      // The history point keeps its own flags.
+      expect(result.netWorth.monthlyHistory[1]).toMatchObject({
+        fxComplete: false,
+        missingRatePairs: ["ZZZ->USD"],
+      });
     });
 
     it("maps top movers correctly", async () => {
@@ -346,13 +442,13 @@ describe("MonthlyComparisonService", () => {
         mockUserId,
         "2026-01-01",
         "2026-01-31",
-        false,
+        { rollupToParent: false },
       );
       expect(mockSpendingReports.getSpendingByCategory).toHaveBeenCalledWith(
         mockUserId,
         "2025-12-01",
         "2025-12-31",
-        false,
+        { rollupToParent: false },
       );
     });
 
@@ -381,11 +477,11 @@ describe("MonthlyComparisonService", () => {
     it("handles zero values without division errors", async () => {
       mockIncomeReports.getIncomeVsExpenses
         .mockResolvedValueOnce({
-          data: [{ month: "2026-01", income: 0, expenses: 0, net: 0 }],
+          data: [{ period: "2026-01", income: 0, expenses: 0, net: 0 }],
           totals: { income: 0, expenses: 0, net: 0 },
         })
         .mockResolvedValueOnce({
-          data: [{ month: "2025-12", income: 0, expenses: 0, net: 0 }],
+          data: [{ period: "2025-12", income: 0, expenses: 0, net: 0 }],
           totals: { income: 0, expenses: 0, net: 0 },
         });
       mockSpendingReports.getSpendingByCategory
@@ -447,74 +543,254 @@ describe("MonthlyComparisonService", () => {
       expect(result.previousMonthLabel).toContain("2025");
     });
 
-    it("computes investment performance from account snapshots", async () => {
-      mockIncomeReports.getIncomeVsExpenses
-        .mockResolvedValueOnce({
-          data: [],
-          totals: { income: 0, expenses: 0, net: 0 },
-        })
-        .mockResolvedValueOnce({
+    describe("investment performance", () => {
+      const brokerage = (id: string, name: string) => ({
+        id,
+        userId: mockUserId,
+        accountType: AccountType.INVESTMENT,
+        accountSubType: AccountSubType.INVESTMENT_BROKERAGE,
+        isClosed: false,
+        name,
+      });
+
+      // Only the fields the report reads; the rest of the payload is the
+      // period service's own concern and has its own suite.
+      const periodResult = (
+        overrides: Partial<PortfolioPeriodResult> = {},
+      ): PortfolioPeriodResult =>
+        ({
+          currency: "CAD",
+          startDate: "2025-01-31",
+          endDate: "2026-01-31",
+          investedValueStart: 1000,
+          investedValueEnd: 1100,
+          investmentPnl: 100,
+          investmentReturnPercent: 10,
+          investedReasons: [],
+          ...overrides,
+        }) as PortfolioPeriodResult;
+
+      beforeEach(() => {
+        mockIncomeReports.getIncomeVsExpenses.mockResolvedValue({
           data: [],
           totals: { income: 0, expenses: 0, net: 0 },
         });
-      mockSpendingReports.getSpendingByCategory
-        .mockResolvedValueOnce({ data: [], totalSpending: 0 })
-        .mockResolvedValueOnce({ data: [], totalSpending: 0 });
-      mockNetWorthService.getMonthlyNetWorth.mockResolvedValue([]);
-      mockPortfolioService.getMonthOverMonthMovers.mockResolvedValue([]);
+        mockSpendingReports.getSpendingByCategory.mockResolvedValue({
+          data: [],
+          totalSpending: 0,
+        });
+        mockNetWorthService.getMonthlyNetWorth.mockResolvedValue([]);
+        mockPortfolioService.getMonthOverMonthMovers.mockResolvedValue([]);
+      });
 
-      // Mock investment accounts
-      mockAccountsRepo.find.mockResolvedValue([
-        {
-          id: "acc-1",
-          userId: mockUserId,
-          accountType: AccountType.INVESTMENT,
-          accountSubType: AccountSubType.INVESTMENT_BROKERAGE,
-          isClosed: false,
-          name: "My Brokerage",
-        },
-      ]);
+      it("reports the invested part's trailing-year return, not a ratio of month-end balances", async () => {
+        // The defect: an account holding $500 of shares a year ago that was
+        // then funded with $22,000 of purchases read (22500/500)^(12/12)-1 =
+        // 4400% "annualized return". The purchases are capital, not earnings,
+        // so the figure is the period service's time-weighted return.
+        mockAccountsRepo.find.mockResolvedValue([
+          brokerage("acc-1", "My RRSP - Brokerage"),
+        ]);
+        mockDataSource.query.mockResolvedValue([
+          {
+            account_id: "acc-1",
+            month: "2025-01-01",
+            balance: 0,
+            market_value: 500,
+            name: "My RRSP - Brokerage",
+            account_sub_type: "INVESTMENT_BROKERAGE",
+          },
+          {
+            account_id: "acc-1",
+            month: "2026-01-01",
+            balance: 0,
+            market_value: 22500,
+            name: "My RRSP - Brokerage",
+            account_sub_type: "INVESTMENT_BROKERAGE",
+          },
+        ]);
+        mockPeriodResultService.getPeriodResult.mockResolvedValue(
+          periodResult({
+            investedValueStart: 500,
+            investedValueEnd: 22500,
+            investmentPnl: 812.34567,
+            investmentReturnPercent: 7.4567,
+          }),
+        );
 
-      // Mock monthly snapshots
-      mockDataSource.query.mockResolvedValue([
-        {
-          account_id: "acc-1",
-          month: "2025-02-01",
-          balance: 0,
-          market_value: 10000,
-          name: "My Brokerage",
-          account_sub_type: "INVESTMENT_BROKERAGE",
-        },
-        {
-          account_id: "acc-1",
-          month: "2026-01-01",
-          balance: 0,
-          market_value: 12000,
-          name: "My Brokerage",
-          account_sub_type: "INVESTMENT_BROKERAGE",
-        },
-      ]);
+        const result = await service.getMonthlyComparison(
+          mockUserId,
+          "2026-01",
+        );
 
-      const result = await service.getMonthlyComparison(mockUserId, "2026-01");
+        expect(mockPeriodResultService.getPeriodResult).toHaveBeenCalledWith(
+          mockUserId,
+          {
+            period: "1y",
+            endDate: "2026-01-31",
+            accountIds: ["acc-1"],
+            displayCurrency: "CAD",
+          },
+        );
+        expect(result.investments.accountPerformance).toEqual([
+          {
+            accountId: "acc-1",
+            accountName: "My RRSP",
+            currentValue: 22500,
+            startValue: 500,
+            investmentPnl: 812.3457,
+            returnPercent: 7.46,
+            returnReasons: [],
+            periodStart: "2025-01-31",
+            periodEnd: "2026-01-31",
+          },
+        ]);
+        // The month-end balance snapshots are no longer read at all.
+        const sqls = mockDataSource.query.mock.calls.map((c) => String(c[0]));
+        expect(
+          sqls.some((sql) => sql.includes("monthly_account_balances")),
+        ).toBe(false);
+      });
 
-      expect(result.investments.accountPerformance.length).toBe(1);
-      expect(result.investments.accountPerformance[0].accountId).toBe("acc-1");
-      expect(result.investments.accountPerformance[0].startValue).toBe(10000);
-      expect(result.investments.accountPerformance[0].currentValue).toBe(12000);
-      // Annualized: ((12000/10000)^(12/1) - 1) * 100
-      expect(
-        result.investments.accountPerformance[0].annualizedReturn,
-      ).toBeGreaterThan(0);
+      it("never measures past today when the report month is still running", async () => {
+        const today = todayYMD();
+        const nextYear = Number(today.slice(0, 4)) + 1;
+        mockAccountsRepo.find.mockResolvedValue([brokerage("acc-1", "A")]);
+        mockPeriodResultService.getPeriodResult.mockResolvedValue(
+          periodResult(),
+        );
+
+        await service.getMonthlyComparison(mockUserId, `${nextYear}-06`);
+
+        const [, opts] = mockPeriodResultService.getPeriodResult.mock.calls[0];
+        expect(opts.endDate <= today).toBe(true);
+      });
+
+      it("carries a withheld return as null with the server's reasons, never as zero", async () => {
+        mockAccountsRepo.find.mockResolvedValue([brokerage("acc-1", "A")]);
+        mockPeriodResultService.getPeriodResult.mockResolvedValue(
+          periodResult({
+            investedValueEnd: null,
+            investmentPnl: null,
+            investmentReturnPercent: null,
+            investedReasons: ["incompletePrices"],
+          }),
+        );
+
+        const result = await service.getMonthlyComparison(
+          mockUserId,
+          "2026-01",
+        );
+
+        const [row] = result.investments.accountPerformance;
+        expect(row.returnPercent).toBeNull();
+        expect(row.currentValue).toBeNull();
+        expect(row.investmentPnl).toBeNull();
+        expect(row.returnReasons).toEqual(["incompletePrices"]);
+      });
+
+      it("leaves out an account with no history in the window or nothing ever held", async () => {
+        mockAccountsRepo.find.mockResolvedValue([
+          brokerage("acc-empty", "Empty"),
+          brokerage("acc-new", "Not yet funded"),
+          brokerage("acc-1", "Held"),
+        ]);
+        mockPeriodResultService.getPeriodResult.mockImplementation(
+          (_userId: string, opts: { accountIds: string[] }) => {
+            if (opts.accountIds[0] === "acc-empty") {
+              return Promise.resolve(
+                periodResult({
+                  investedValueStart: null,
+                  investedValueEnd: null,
+                  investmentPnl: null,
+                  investmentReturnPercent: null,
+                  investedReasons: ["noValueSeries"],
+                }),
+              );
+            }
+            if (opts.accountIds[0] === "acc-new") {
+              return Promise.resolve(
+                periodResult({
+                  investedValueStart: 0,
+                  investedValueEnd: 0,
+                  investmentPnl: 0,
+                  investmentReturnPercent: 0,
+                }),
+              );
+            }
+            return Promise.resolve(periodResult());
+          },
+        );
+
+        const result = await service.getMonthlyComparison(
+          mockUserId,
+          "2026-01",
+        );
+
+        expect(
+          result.investments.accountPerformance.map((a) => a.accountId),
+        ).toEqual(["acc-1"]);
+      });
+
+      it("sorts by value, largest first, with an unknown value last", async () => {
+        mockAccountsRepo.find.mockResolvedValue([
+          brokerage("acc-unknown", "Unknown"),
+          brokerage("acc-small", "Small"),
+          brokerage("acc-big", "Big"),
+        ]);
+        const values: Record<string, number | null> = {
+          "acc-unknown": null,
+          "acc-small": 100,
+          "acc-big": 5000,
+        };
+        mockPeriodResultService.getPeriodResult.mockImplementation(
+          (_userId: string, opts: { accountIds: string[] }) =>
+            Promise.resolve(
+              periodResult({ investedValueEnd: values[opts.accountIds[0]] }),
+            ),
+        );
+
+        const result = await service.getMonthlyComparison(
+          mockUserId,
+          "2026-01",
+        );
+
+        expect(
+          result.investments.accountPerformance.map((a) => a.accountId),
+        ).toEqual(["acc-big", "acc-small", "acc-unknown"]);
+      });
+
+      it("does not measure a linked cash account on its own", async () => {
+        mockAccountsRepo.find.mockResolvedValue([
+          brokerage("acc-1", "A - Brokerage"),
+          {
+            ...brokerage("acc-cash", "A"),
+            accountSubType: AccountSubType.INVESTMENT_CASH,
+          },
+        ]);
+        mockPeriodResultService.getPeriodResult.mockResolvedValue(
+          periodResult(),
+        );
+
+        await service.getMonthlyComparison(mockUserId, "2026-01");
+
+        expect(mockPeriodResultService.getPeriodResult).toHaveBeenCalledTimes(
+          1,
+        );
+        expect(
+          mockPeriodResultService.getPeriodResult.mock.calls[0][1].accountIds,
+        ).toEqual(["acc-1"]);
+      });
     });
 
     it("percent change returns 100 when previous is 0 and current is non-zero", async () => {
       mockIncomeReports.getIncomeVsExpenses
         .mockResolvedValueOnce({
-          data: [{ month: "2026-01", income: 1000, expenses: 0, net: 1000 }],
+          data: [{ period: "2026-01", income: 1000, expenses: 0, net: 1000 }],
           totals: { income: 1000, expenses: 0, net: 1000 },
         })
         .mockResolvedValueOnce({
-          data: [{ month: "2025-12", income: 0, expenses: 0, net: 0 }],
+          data: [{ period: "2025-12", income: 0, expenses: 0, net: 0 }],
           totals: { income: 0, expenses: 0, net: 0 },
         });
       mockSpendingReports.getSpendingByCategory

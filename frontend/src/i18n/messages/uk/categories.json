@@ -7,6 +7,7 @@
     "filterAll": "Всі ({count})",
     "filterExpenses": "Витрати ({count})",
     "filterIncome": "Доходи ({count})",
+    "typeFilterLabel": "Тип",
     "modalTitleNew": "Нова категорія",
     "modalTitleEdit": "Редагувати категорію",
     "countSingle": "1 категорія",
@@ -54,6 +55,12 @@
     "typeExpense": "Витрата",
     "typeIncome": "Дохід",
     "typeInherited": "Тип успадкований від батьківської",
+    "autoSignLabel": "Автоматичний знак",
+    "autoSignOn": "Увімк.",
+    "autoSignOff": "Вимк.",
+    "autoSignInherit": "Успадковувати від батьківської",
+    "autoSignInheritedFrom": "Успадковано від батьківської категорії ({name}): зараз {state}",
+    "autoSignHelp": "Якщо увімкнено, введена сума стає від'ємною для категорії витрат і додатною для категорії доходів. Вимкніть, щоб зберігати знак саме таким, як ви його вводите.",
     "colourLabel": "Колір",
     "colourInherit": "Успадкувати від батьківської",
     "colourNone": "Без кольору",
@@ -65,8 +72,8 @@
     "submitUpdate": "Оновити категорію"
   },
   "list": {
-    "emptyHeading": "Немає категорій",
-    "emptyDescription": "Почніть зі створення нової категорії.",
+    "emptyHeading": "Категорій не знайдено",
+    "emptyDescription": "Жодна категорія не відповідає поточному пошуку чи фільтру.",
     "colName": "Назва",
     "colType": "Тип",
     "colCount": "Кількість",
@@ -79,7 +86,7 @@
     "viewTransactionsTitle": "Переглянути транзакції в цій категорії"
   },
   "deleteDialog": {
-    "title": "Видалити \"{name}\"?",
+    "title": "Видалити \"{name}\"",
     "checkingUsage": "Перевірка використання...",
     "usedBy": "Ця категорія використовується в {count, plural, one {# елементі} other {# елементах}} (транзакції та/або заплановані рахунки й депозити).",
     "reassignLabel": "Перепризначити на:",

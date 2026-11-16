@@ -14,10 +14,12 @@ import { TransactionStatus, BulkUpdateData, BulkUpdateResult } from '@/types/tra
 import { Category } from '@/types/category';
 import { Payee } from '@/types/payee';
 import { Tag } from '@/types/tag';
+import { useTagPickerOptions } from '@/hooks/useTagPickerOptions';
 import { categoriesApi } from '@/lib/categories';
 import { payeesApi } from '@/lib/payees';
 import { tagsApi } from '@/lib/tags';
 import { buildCategoryTree } from '@/lib/categoryUtils';
+import { TRANSACTION_NOTE_MAX_LENGTH } from '@/lib/transaction-note';
 
 interface BulkUpdateModalProps {
   isOpen: boolean;
@@ -35,7 +37,7 @@ const bulkUpdateSchema = z.object({
   payeeId: z.string(),
   payeeName: z.string().max(255),
   categoryId: z.string(),
-  description: z.string().max(500),
+  description: z.string().max(TRANSACTION_NOTE_MAX_LENGTH),
   status: z.nativeEnum(TransactionStatus),
   tagIds: z.array(z.string()),
 });
@@ -126,19 +128,14 @@ export function BulkUpdateModal({
     { value: TransactionStatus.VOID, label: t('bulk.modal.statusOptions.void') },
   ];
 
-  const tagOptions = useMemo(() =>
-    [...tags]
-      .sort((a, b) => a.name.localeCompare(b.name))
-      .map(tag => ({
-        value: tag.id,
-        label: tag.name,
-      })), [tags]);
 
   const enablePayee = useWatch({ control, name: 'enablePayee' });
   const enableCategory = useWatch({ control, name: 'enableCategory' });
   const enableDescription = useWatch({ control, name: 'enableDescription' });
   const enableStatus = useWatch({ control, name: 'enableStatus' });
   const enableTags = useWatch({ control, name: 'enableTags' });
+  // Usage is only asked for once the Tags field is switched on.
+  const { tagOptions } = useTagPickerOptions(tags, isOpen && !!enableTags);
 
   const hasAnyEnabled =
     enablePayee || enableCategory || enableDescription || enableStatus || enableTags;
@@ -189,13 +186,15 @@ export function BulkUpdateModal({
   const showSplitNote = enableCategory;
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} maxWidth="lg" className="p-6" allowOverflow>
-      <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-1">
-        {t('bulk.modal.title')}
-      </h2>
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-        {t('bulk.modal.subtitle', { count: selectionCount })}
-      </p>
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      maxWidth="lg"
+      className="p-6"
+      allowOverflow
+      title={t('bulk.modal.title')}
+      description={t('bulk.modal.help')}
+    >
 
       <form onSubmit={handleSubmit(submit)}>
         <div className="space-y-4">
@@ -258,6 +257,7 @@ export function BulkUpdateModal({
               {...register('description')}
               placeholder={t('bulk.modal.descriptionPlaceholder')}
               rows={2}
+              maxLength={TRANSACTION_NOTE_MAX_LENGTH}
               className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-gray-100 placeholder:text-gray-400 dark:placeholder:text-gray-500 focus:ring-1 focus:ring-blue-500 focus:border-blue-500 focus:outline-none"
             />
           </TogglableField>

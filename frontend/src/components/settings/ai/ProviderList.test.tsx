@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@/test/render';
+import { render, screen, fireEvent, waitFor, within } from '@/test/render';
 import { ProviderList } from './ProviderList';
 import type { AiProviderConfig } from '@/types/ai';
 
@@ -93,11 +93,18 @@ describe('ProviderList', () => {
     expect(screen.getByRole('button', { name: /add provider/i })).toBeInTheDocument();
   });
 
-  it('calls delete and refreshes on Delete click', async () => {
+  it('asks before deleting, then deletes and refreshes on confirm', async () => {
     mockDeleteConfig.mockResolvedValueOnce(undefined);
 
     render(<ProviderList configs={[mockConfig]} encryptionAvailable={true} onConfigsChanged={onConfigsChanged} />);
     fireEvent.click(screen.getByRole('button', { name: /delete/i }));
+
+    // One click only opens the confirmation; nothing is deleted yet.
+    const dialog = screen.getByTestId('modal');
+    expect(within(dialog).getByText('Delete AI Provider')).toBeInTheDocument();
+    expect(mockDeleteConfig).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => {
       expect(mockDeleteConfig).toHaveBeenCalledWith('config-1');
@@ -304,6 +311,15 @@ describe('ProviderList', () => {
     });
   });
 
+  it('does not delete when the confirmation is cancelled', () => {
+    render(<ProviderList configs={[mockConfig]} encryptionAvailable={true} onConfigsChanged={onConfigsChanged} />);
+    fireEvent.click(screen.getByRole('button', { name: /delete/i }));
+    fireEvent.click(within(screen.getByTestId('modal')).getByRole('button', { name: 'Cancel' }));
+
+    expect(screen.queryByTestId('modal')).not.toBeInTheDocument();
+    expect(mockDeleteConfig).not.toHaveBeenCalled();
+  });
+
   it('shows error toast when delete fails', async () => {
     mockDeleteConfig.mockRejectedValueOnce(new Error('server error'));
 
@@ -312,6 +328,7 @@ describe('ProviderList', () => {
     );
 
     fireEvent.click(screen.getByRole('button', { name: /delete/i }));
+    fireEvent.click(within(screen.getByTestId('modal')).getByRole('button', { name: 'Delete' }));
 
     await waitFor(() => {
       expect(mockToastError).toHaveBeenCalledWith('Failed to delete provider');

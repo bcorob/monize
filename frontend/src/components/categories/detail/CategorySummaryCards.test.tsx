@@ -8,7 +8,7 @@ import type { Category, CategoryDetail } from '@/types/category';
 
 const strategy: DisplayCurrencyStrategy = {
   displayCurrency: 'CAD',
-  toDisplay: (amount) => amount,
+  converted: false,
 };
 
 function category(overrides: Partial<Category> = {}): Category {
@@ -24,6 +24,8 @@ function category(overrides: Partial<Category> = {}): Category {
     color: null,
     effectiveColor: null,
     effectiveIcon: null,
+    autoSign: null,
+    effectiveAutoSign: true,
     isIncome: false,
     isSystem: false,
     createdAt: '2024-01-15T00:00:00.000Z',
@@ -164,6 +166,18 @@ describe('CategorySummaryCards', () => {
     });
     // 600 over Jan..Mar is three elapsed months, not two populated ones.
     expect(screen.getByText(/200\.00/)).toBeInTheDocument();
+  });
+
+  it('withholds the monthly average while a month has no exchange rate', () => {
+    renderCards({
+      monthlyTotals: [
+        { month: '2026-01', total: -300, count: 3 },
+        { month: '2026-02', total: null, knownSubtotal: -50, count: 1 },
+      ],
+    });
+    const card = screen.getByText('Monthly Average').closest('article');
+    expect(card?.textContent).toContain('—');
+    expect(card?.textContent).toContain('Some months have no exchange rate');
   });
 
   it('shows an em dash instead of an average when there is no history', () => {

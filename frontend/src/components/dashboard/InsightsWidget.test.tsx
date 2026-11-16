@@ -45,7 +45,7 @@ describe('InsightsWidget', () => {
     expect(screen.getByText('Spending Insights')).toBeInTheDocument();
   });
 
-  it('renders insights and navigates on click', async () => {
+  it('renders insights and links the title to Insights', async () => {
     getInsightsMock.mockResolvedValue({ insights: sampleInsights });
     await renderWidget(false);
 
@@ -55,15 +55,10 @@ describe('InsightsWidget', () => {
     expect(screen.queryByText('Insight 4')).not.toBeInTheDocument();
     expect(screen.getByText('3 active')).toBeInTheDocument();
 
-    await act(async () => {
-      fireEvent.click(screen.getByText('Spending Insights'));
-    });
-    expect(pushMock).toHaveBeenCalledWith('/insights');
-
-    await act(async () => {
-      fireEvent.click(screen.getByText('View all insights'));
-    });
-    expect(pushMock).toHaveBeenCalledTimes(2);
+    expect(screen.getByRole('link', { name: 'Spending Insights' })).toHaveAttribute(
+      'href',
+      '/insights',
+    );
   });
 
   it('renders empty state when no insights', async () => {

@@ -1,8 +1,87 @@
 {
   "page": {
-    "welcomePrefix": "Ласкаво просимо",
-    "welcomeWithName": "Ласкаво просимо, {name}!",
-    "subtitle": "Ось ваш фінансовий огляд"
+    "greeting": {
+      "morning": "Доброго ранку",
+      "morningWithName": "Доброго ранку, {name}",
+      "afternoon": "Добрий день",
+      "afternoonWithName": "Добрий день, {name}",
+      "evening": "Добрий вечір",
+      "eveningWithName": "Добрий вечір, {name}"
+    }
+  },
+  "hero": {
+    "label": "Підсумок чистих активів",
+    "netWorth": "Чисті активи",
+    "changeThisMonth": "<dir>{direction, select, up {Зростання на} other {Зниження на}}</dir> {amount} цього місяця",
+    "changeThisMonthWithPercent": "<dir>{direction, select, up {Зростання на} other {Зниження на}}</dir> {amount} · {percent} цього місяця",
+    "assets": "<strong><value></value></strong> активів",
+    "liabilities": "<strong><value></value></strong> зобов’язань",
+    "invested": "<strong><value></value></strong> інвестовано",
+    "investedUnpriced": "Немає поточної ціни для {symbols}, тож ці позиції не враховано. Оновіть ціни на сторінці «Інвестиції» або додайте ціну в історії цін папера.",
+    "portfolioLabel": "Підсумок портфеля",
+    "portfolioValueFor": "Вартість портфеля <names>({accounts})</names>",
+    "portfolioEmpty": "Ще немає інвестиційних рахунків. Додайте рахунок, щоб бачити тут портфель.",
+    "portfolioLoadFailed": "Не вдалося завантажити портфель. Перезавантажте панель і спробуйте знову.",
+    "portfolioChangeFailed": "Не вдалося завантажити зміну за цей період. Перезавантажте панель і спробуйте знову.",
+    "changeOverWindow": "<dir>{direction, select, up {Зростання на} other {Зниження на}}</dir> {amount} · {window}",
+    "holdings": "<strong><value></value></strong> у позиціях",
+    "cash": "<strong><value></value></strong> грошових коштів",
+    "metricLine": "<strong><value></value></strong> {metric}",
+    "metricNames": {
+      "simpleReturn": "Проста прибутковість",
+      "twr": "TWR",
+      "mwr": "MWR",
+      "cagr": "CAGR"
+    },
+    "showSet": "Показати: {name}",
+    "cycleControls": "Виберіть, що показує головний блок",
+    "cagrUnavailable": "Для CAGR потрібна щонайменше річна історія інвестицій на цих рахунках і поповнення більші за зняття.",
+    "intradayUnavailable": "Для деяких позицій немає внутрішньоденних цін, тож денний графік побудувати не можна. Виберіть довший період у налаштуваннях."
+  },
+  "trivia": {
+    "title": "Цікавинки",
+    "position": "{index} із {total}",
+    "previous": "Попередня цікавинка",
+    "next": "Наступна цікавинка",
+    "empty": "Цікавинки з’являться тут, коли назбирається достатньо історії: два місяці чистих активів, інвестиції з ціною, кілька місяців витрат і доходів або гарантії, які ви відстежуєте. Список оновлюється щоранку.",
+    "off": "Цікавинки від AI вимкнено. Увімкніть їх у розділі <link>Налаштування AI</link>.",
+    "topics": {
+      "netWorth": "Чисті активи",
+      "investments": "Інвестиції",
+      "spending": "Витрати",
+      "income": "Доходи",
+      "activity": "Ваші записи",
+      "warranties": "Гарантії"
+    },
+    "aiGenerated": "Текст створено ШІ на основі ваших даних",
+    "facts": {
+      "netWorthSinceStart": "У {startMonth} ваші чисті активи становили {startAmount}. Відтоді вони зросли на {startGain}, тобто приблизно у {startMultiple} раза.",
+      "netWorthBiggestJump": "{jumpMonth} став вашим найбільшим стрибком за один місяць. Чисті активи зросли на {jumpAmount}: з {jumpFrom} у {jumpPreviousMonth} до {jumpTo}.",
+      "netWorthHighPoint": "Ваш пік становив {peakAmount} у {peakMonth}. Зараз ви на {peakBelow} нижче.",
+      "netWorthAtHighPoint": "Ви на піку: чисті активи ніколи не були вищими за {currentHigh}.",
+      "netWorthBiggestDip": "Ваше найбільше падіння знизило чисті активи з {dipFromAmount} у {dipFromMonth} до {dipToAmount} у {dipToMonth}, тобто на {dipPercent}.",
+      "netWorthBiggestDipRecovered": "Ваше найбільше падіння знизило чисті активи з {dipFromAmount} у {dipFromMonth} до {dipToAmount} у {dipToMonth}. До {dipRecoveredMonth} ви відновилися.",
+      "netWorthLargestAsset": "{assetName} коштує {assetValue}, це {assetPercent} ваших активів.",
+      "investmentsShareOfAssets": "Ваші інвестиції коштують {investmentsValue}, це {investmentsPercent} ваших активів.",
+      "investmentsGain": "Ваші інвестиції зросли на {gainAmount} ({gainPercent}) відносно базової вартості {gainCostBasis}.",
+      "investmentsLoss": "Ваші інвестиції впали на {gainAmount} ({gainPercent}) відносно базової вартості {gainCostBasis}.",
+      "investmentsCagr": "Річна дохідність ваших інвестицій становить близько {cagrPercent} (CAGR).",
+      "investmentsBiggestHolding": "Ваша найбільша позиція: {holdingSymbol}, приблизно {holdingPercent} портфеля ({holdingValue} у {holdingAccounts}).",
+      "investmentsBestPerformer": "Найкращий результат у {bestSymbol}: зростання на {bestPercent}. Купівля коштувала {bestCost}, зараз це {bestValue}.",
+      "investmentsForeignAccount": "Ваш рахунок {foreignName} ведеться у валюті {foreignCurrency}. Активи на {foreignBalance} за курсом близько {foreignRate} дорівнюють {foreignConverted}.",
+      "investmentsLargestAccount": "Ваш найбільший інвестиційний рахунок: {largestName}, {largestValue}.",
+      "spendingTopCategory": "За останні дванадцять місяців найбільше ваших витрат припало на «{topCategoryName}»: {topCategoryAmount}, або {topCategoryPercent}.",
+      "spendingTopPayee": "За останні дванадцять місяців найбільше ви витратили в одержувача «{topPayeeName}»: {topPayeeAmount}.",
+      "spendingBiggestMonth": "{biggestSpendMonth} став вашим найвитратнішим місяцем з останніх дванадцяти: {biggestSpendAmount}.",
+      "incomeKeptShare": "За останні дванадцять місяців ви зберегли {keptAmount} із надходжень, це {keptPercent} вашого доходу.",
+      "incomeSurplusMonths": "Місяці з останніх {windowMonths}, у які надійшло більше, ніж витрачено: {surplusMonths}.",
+      "incomeTopSource": "{topSourceName} приніс {topSourcePercent} вашого доходу за останні дванадцять місяців.",
+      "activityTransactions": "Транзакцій у ваших реєстрах: {transactionCount}, починаючи з {firstTransactionMonth}.",
+      "activityPayees": "Одержувачів платежів у Monize: {payeeCount}. Категорій: {categoryCount}.",
+      "activityScheduled": "Запланованих транзакцій, які Monize відстежує для вас: {scheduledCount}.",
+      "warrantiesCovered": "Гарантії, які ви відстежуєте і які ще діють: {warrantyCount}.",
+      "warrantiesNextExpiry": "Наступна гарантія, термін дії якої спливає, це {nextWarrantyName}, у {nextWarrantyMonth}."
+    }
   },
   "favouriteAccounts": {
     "title": "Обрані рахунки",
@@ -21,12 +100,10 @@
   "upcomingBills": {
     "title": "Майбутні рахунки та надходження",
     "empty": "Немає прострочених або майбутніх рахунків, надходжень чи переказів у межах їхніх вікон нагадувань.",
-    "perReminderSettings": "Відповідно до налаштувань нагадувань",
     "postTransaction": "Провести цю транзакцію",
     "manual": "Вручну",
-    "manualTitle": "Потребує ручного проведення",
     "negativeBalanceWarning": "Ця транзакція призведе до від'ємного балансу рахунку",
-    "viewAll": "Переглянути всі рахунки та надходження",
+    "negativeBalanceLegend": "Опускає баланс рахунку нижче нуля",
     "moreItems": "+{count} ще",
     "overdue": "Прострочено",
     "today": "Сьогодні",
@@ -38,7 +115,23 @@
       "transfer": "Переказ",
       "reminder": "Нагадування",
       "unknown": "Невідомо"
-    }
+    },
+    "scope": {
+      "dueSoon": "Скоро до сплати",
+      "all": "Усі майбутні"
+    },
+    "viewLabel": "Вигляд",
+    "viewList": "Список",
+    "viewCalendar": "Календар",
+    "previousMonth": "Попередній місяць",
+    "nextMonth": "Наступний місяць",
+    "emptyAll": "Немає запланованих активних рахунків, надходжень або переказів.",
+    "estimated": "Оцінка"
+  },
+  "cashFlowForecast": {
+    "title": "Прогноз грошових потоків",
+    "period": "Період прогнозу",
+    "loadFailed": "Не вдалося завантажити транзакції, датовані пізніше сьогоднішнього дня, тому прогноз неможливо показати. Перезавантажте панель, щоб спробувати ще раз."
   },
   "gettingStarted": {
     "title": "Початок роботи",
@@ -76,8 +169,12 @@
     "title": "Аналіз витрат",
     "empty": "Немає доступних аналізів. Відвідайте сторінку аналізу, щоб створити перший звіт.",
     "goToInsights": "Перейти до аналізу",
-    "viewAll": "Переглянути всі аналізи",
     "activeCount": "{count} активних"
+  },
+  "warrantiesExpiring": {
+    "title": "Гарантії, що скоро закінчуються",
+    "empty": "Найближчі 30 днів нічого не закінчується",
+    "loadFailed": "Не вдалося завантажити гарантії, що закінчуються. Перезавантажте панель, щоб спробувати ще раз."
   },
   "topMovers": {
     "title": "Найбільші зміни",
@@ -88,13 +185,20 @@
       "noLosers": "Сьогодні немає падіння."
     },
     "dailyChange": "Денна зміна",
+    "dailyChangeOn": "Денна зміна · {date}",
     "openPriceHistory": "Історія ціни: {symbol}",
     "refreshPrices": "Оновити ціни",
     "viewPortfolio": "Переглянути портфель",
     "filter": {
-      "all": "Всі",
-      "gainers": "Зростання",
-      "losers": "Падіння"
+      "all": "Всі ({count})",
+      "gainers": "Зростання ({count})",
+      "losers": "Падіння ({count})",
+      "label": "Напрямок"
+    },
+    "metric": {
+      "label": "Показати",
+      "price": "Ціна",
+      "holdings": "Активи"
     }
   },
   "favouriteSecurities": {
@@ -102,15 +206,17 @@
     "empty": "Ще немає обраних цінних паперів. Відвідайте <securitiesLink>сторінку цінних паперів</securitiesLink> та позначте зірочкою ті, які хочете відстежувати тут.",
     "noPriceYet": "Ціна ще відсутня",
     "dailyChange": "Денна зміна",
+    "dailyChangeOn": "Денна зміна · {date}",
     "openPriceHistory": "Історія ціни: {symbol}",
-    "refreshPrices": "Оновити ціни",
-    "manage": "Керувати цінними паперами"
+    "refreshPrices": "Оновити ціни"
   },
   "netWorth": {
     "title": "Чисті активи",
     "empty": "Даних про чисті активи ще немає.",
-    "past12Months": "Останні 12 місяців",
-    "viewReport": "Переглянути повний звіт"
+    "barStyle": "Стиль стовпців",
+    "barStyleNetWorth": "Чисті активи",
+    "barStyleAccountType": "За типом рахунку",
+    "loadFailed": "Не вдалося завантажити історію чистих активів. Перезавантажте панель, щоб спробувати ще раз."
   },
   "assetsVsLiabilities": {
     "title": "Активи проти зобов'язань",
@@ -118,14 +224,22 @@
     "current": "Поточне",
     "netWorthLabel": "Чисті активи",
     "assets": "Активи",
-    "liabilities": "Зобов'язання"
+    "liabilities": "Зобов'язання",
+    "partialName": "{name} (неповні)",
+    "viewCallouts": "Підписи",
+    "viewLegend": "Умовні позначення"
   },
   "expensesPieChart": {
     "title": "Витрати за категоріями",
     "empty": "Немає даних про витрати за цей період.",
     "total": "Всього",
     "uncategorized": "Без категорії",
-    "other": "Інше"
+    "other": "Інше",
+    "insideOther": "{count, plural, one {# категорія в Іншому} few {# категорії в Іншому} many {# категорій в Іншому} other {# категорій в Іншому}}",
+    "topLevelOnly": "Категорії верхнього рівня",
+    "topLevelOnlyHint": "Враховувати підкатегорії в батьківській категорії",
+    "viewCallouts": "Підписи",
+    "viewLegend": "Умовні позначення"
   },
   "incomeExpenses": {
     "title": "Доходи проти витрат",
@@ -135,18 +249,85 @@
   },
   "customize": {
     "button": "Налаштувати",
-    "title": "Налаштування панелі",
-    "description": "Макет нижче відповідає вашій інформаційній панелі: віджети розташовуються зліва направо, по два в рядку на великих екранах.",
     "moveEarlier": "Перемістити {name} вперед",
     "moveLater": "Перемістити {name} назад",
-    "dragToReorder": "Перетягуйте віджети, щоб змінити їхнє розташування, або використовуйте кнопки зі стрілками.",
-    "hiddenWidgets": "Приховані віджети",
-    "hide": "Приховати {name}",
-    "show": "Показати {name}",
     "atLeastOne": "Виберіть принаймні один віджет для панелі.",
     "reset": "Скинути до типових",
     "toasts": {
       "saveFailed": "Не вдалося зберегти макет панелі"
+    },
+    "hero": {
+      "title": "Шапка панелі",
+      "description": "Перші цифри та графік під привітанням: ваші чисті активи, ваш портфель або «Авто», яке щохвилини перемикає їх.",
+      "show": "Показувати шапку панелі",
+      "range": "Графік",
+      "set": "Показувати",
+      "sets": {
+        "auto": "Авто",
+        "netWorth": "Чисті активи",
+        "portfolio": "Вартість портфеля"
+      },
+      "metric": "Показник",
+      "metrics": {
+        "simpleReturn": "Проста прибутковість",
+        "twr": "TWR",
+        "mwr": "MWR",
+        "cagr": "CAGR"
+      }
+    }
+  },
+  "edit": {
+    "barLabel": "Розташувати панель",
+    "addWidget": "Додати віджет",
+    "heroSettings": "Налаштування шапки",
+    "done": "Готово",
+    "phoneNote": "Розміри віджетів застосовуються на ширших екранах.",
+    "remove": "Видалити {name}",
+    "grip": "Перемістити {name}",
+    "gripHint": "Перетягніть, щоб перемістити {name}, або натискайте клавіші зі стрілками",
+    "moved": "{name} переміщено на позицію {position} з {count}",
+    "removed": "{name}: видалено",
+    "added": "{name}: додано",
+    "resized": "{name}: тепер {size}",
+    "resizedBoth": "{name}: тепер {width} і {height}",
+    "twoChanges": "{first}. {second}",
+    "placeholder": "З’явиться на панелі, щойно буде що показати.",
+    "addTitle": "Додати віджет",
+    "addDescription": "Доданий віджет потрапляє в кінець панелі. Нічого не збережеться, доки ви не виберете «Готово».",
+    "addEmpty": "Усі віджети вже на вашій панелі",
+    "addToSpace": "Додати віджет у це місце ({width})",
+    "addSlotDescription": "Показано лише віджети, які вміщуються в це місце, і вибраний віджет займе його. Нічого не збережеться, доки ви не виберете «Готово».",
+    "addSlotEmpty": "Жоден прихований віджет не вміщується в це місце. Перетягніть віджет сюди, щоб перемістити його.",
+    "resize": "Змінити розмір: {name}",
+    "resizeHint": "Перетягніть, щоб змінити розмір: {name}, або натискайте клавіші зі стрілками",
+    "widthLabel": "Ширина",
+    "heightLabel": "Висота",
+    "presetName": "{short}, {name}",
+    "widthOf": "Ширина: {name}",
+    "heightOf": "Висота: {name}",
+    "widthShort": {
+      "third": "1/3",
+      "half": "1/2",
+      "twoThirds": "2/3",
+      "full": "Повна"
+    },
+    "widthName": {
+      "third": "Одна третина ширини",
+      "half": "Половина ширини",
+      "twoThirds": "Дві третини ширини",
+      "full": "Повна ширина"
+    },
+    "heightShort": {
+      "auto": "Авто",
+      "compact": "S",
+      "standard": "M",
+      "tall": "L"
+    },
+    "heightName": {
+      "auto": "Автоматична висота",
+      "compact": "Компактна висота",
+      "standard": "Стандартна висота",
+      "tall": "Велика висота"
     }
   },
   "favouriteReports": {
@@ -156,22 +337,28 @@
   },
   "widgets": {
     "configure": "Налаштувати {name}",
+    "asOf": "станом на {date}",
     "done": "Готово",
     "configSaveFailed": "Не вдалося зберегти налаштування віджета. Будь ласка, спробуйте ще раз.",
     "timeframe": "Часовий проміжок",
     "accounts": "Рахунки",
     "chartType": "Тип діаграми",
     "view": "Вигляд",
+    "viewCalloutsHint": "Підписам потрібен ширший екран. Де вони не вміщуються, показуються умовні позначення.",
     "displayName": "Відображуване ім'я",
     "description": "Опис",
     "descriptionPlaceholder": "Додайте необов’язковий опис",
     "rangeLabels": {
+      "1d": "1D",
+      "1w": "1Т",
+      "mtd": "З поч. міс.",
       "1m": "1M",
       "3m": "3M",
       "6m": "6M",
       "1y": "1Y",
       "2y": "2Y",
       "5y": "5Y",
+      "10y": "10Y",
       "ytd": "YTD",
       "all": "Всі"
     }
@@ -179,7 +366,10 @@
   "portfolioValue": {
     "title": "Вартість портфеля",
     "empty": "Ще немає інвестиційної історії для відображення.",
-    "refresh": "Оновити поточну вартість"
+    "refresh": "Оновити поточну вартість",
+    "investmentResult": "Результат інвестування",
+    "periodBreakdownInvestedTooltip": "Вартість цінних паперів за цей період змінилася на {valueChange}. З них {netInvested} становили вкладення за вирахуванням продажів, а виплати дивідендів і відсотків становили {income}. Виплата, реінвестована в акції, враховується в обох сумах. Сума вище показує дохід самих інвестицій, без урахування неінвестованих коштів.",
+    "notAvailable": "Н/Д"
   },
   "spendingByPayee": {
     "title": "Витрати за одержувачами",
@@ -225,14 +415,19 @@
       "MUTUAL_FUND": "Пайові фонди",
       "BOND": "Облігації",
       "CASH": "Готівка"
-    }
+    },
+    "viewType": "Тип паперу",
+    "viewAssetClass": "Клас активів",
+    "otherAssetClasses": "Інше",
+    "emptyAssetClass": "Розподіл за класами активів поки недоступний."
   },
   "geographicAllocation": {
     "title": "Географічний розподіл",
     "empty": "Немає позицій для відображення.",
     "viewRegion": "Регіон",
     "viewExchange": "Біржа",
-    "viewCountry": "Країна"
+    "viewCountry": "Країна",
+    "listingBasisNote": "Згруповано за біржею лістингу кожної позиції. Перемкніться на Країну, щоб зазирнути всередину фондів."
   },
   "recurringExpenses": {
     "title": "Основні регулярні витрати",
@@ -240,7 +435,9 @@
     "minOccurrences": "Мінімальна кількість повторень",
     "minOccurrencesOption": "{count} або більше",
     "occurrences": "{count} повторень",
-    "monthlyEstimate": "Місячна оцінка"
+    "monthlyEstimate": "Місячна оцінка",
+    "viewCallouts": "Підписи",
+    "viewLegend": "Умовні позначення"
   },
   "weekendVsWeekday": {
     "title": "Витрати у вихідні проти будніх",
@@ -249,5 +446,14 @@
     "weekdayLabel": "Будні",
     "viewOverview": "Огляд",
     "viewByDay": "За днем"
+  },
+  "cashFlowSankey": {
+    "title": "Діаграма Сенкі грошових потоків",
+    "empty": "За цей період немає доходів, витрат чи переказів.",
+    "depth": "Деталізація",
+    "depthCategories": "Категорії",
+    "depthSubcategories": "Підкатегорії",
+    "viewDiagram": "Діаграма",
+    "viewTable": "Таблиця"
   }
 }

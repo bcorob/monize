@@ -8,6 +8,10 @@ import { DataSource, In } from "typeorm";
 import { withScopedDb } from "../common/db/scoped-db";
 import { withSystemContext } from "../common/db/with-context";
 import { roundMoney } from "../common/round.util";
+import {
+  loadCurrencyPlacesForRead,
+  moneyDecimalsForCode,
+} from "../common/currency-places.util";
 import { todayYMD } from "../common/date-utils";
 import { tr } from "../i18n/translate";
 import { Account } from "../accounts/entities/account.entity";
@@ -199,11 +203,11 @@ export class JointAccountsService {
     const exclusions = await this.getNetWorthExclusions(realUserId);
     const today = todayYMD();
 
-    const [futureSums, currentSums] = await withScopedDb(
+    const [futureSums, currentSums, places] = await withScopedDb(
       this.dataSource,
-      (manager) =>
-        Promise.all([
-          manager.query(
+      async (manager) => {
+        const future: Array<{ accountId: string; futureSum: string }> =
+          await manager.query(
             `SELECT t.account_id as "accountId",
                 COALESCE(SUM(t.amount), 0) as "futureSum"
              FROM transactions t
@@ -212,8 +216,9 @@ export class JointAccountsService {
                AND ${LEDGER_MOVEMENT_PREDICATE}
              GROUP BY t.account_id`,
             [accountIds, today],
-          ) as Promise<Array<{ accountId: string; futureSum: string }>>,
-          manager.query(
+          );
+        const current: Array<{ accountId: string; currentBalance: string }> =
+          await manager.query(
             `SELECT a.id as "accountId",
                 COALESCE(a.opening_balance, 0) + COALESCE(SUM(t.amount), 0) as "currentBalance"
              FROM accounts a
@@ -223,16 +228,29 @@ export class JointAccountsService {
              WHERE a.id = ANY($1)
              GROUP BY a.id, a.opening_balance`,
             [accountIds, today],
-          ) as Promise<Array<{ accountId: string; currentBalance: string }>>,
-        ]),
+          );
+        // Each account's sums are in its own currency, rounded at its
+        // precision; the currencies are read once for the whole list.
+        const currencyPlaces = await loadCurrencyPlacesForRead(
+          manager,
+          accounts.map((a) => a.currencyCode),
+        );
+        return [future, current, currencyPlaces] as const;
+      },
+    );
+    const decimalsOf = new Map(
+      accounts.map((a) => [a.id, moneyDecimalsForCode(places, a.currencyCode)]),
     );
     const futureSumMap = new Map(
-      futureSums.map((r) => [r.accountId, roundMoney(Number(r.futureSum))]),
+      futureSums.map((r) => [
+        r.accountId,
+        roundMoney(Number(r.futureSum), decimalsOf.get(r.accountId)),
+      ]),
     );
     const currentBalanceMap = new Map(
       currentSums.map((r) => [
         r.accountId,
-        roundMoney(Number(r.currentBalance)),
+        roundMoney(Number(r.currentBalance), decimalsOf.get(r.accountId)),
       ]),
     );
 
@@ -463,27 +481,27 @@ export class JointAccountsService {
     // delegation-scoped read arms cover these tables under enforcement.
     const [categories, payees] = await withScopedDb(
       this.dataSource,
-      (manager) =>
-        Promise.all([
-          manager.getRepository(Category).find({
-            where: { userId: access.ownerUserId },
-            select: [
-              "id",
-              "name",
-              "parentId",
-              "icon",
-              "color",
-              "isIncome",
-              "isSystem",
-            ],
-            order: { name: "ASC" },
-          }),
-          manager.getRepository(Payee).find({
-            where: { userId: access.ownerUserId, isActive: true },
-            select: ["id", "name", "defaultCategoryId"],
-            order: { name: "ASC" },
-          }),
-        ]),
+      async (manager) => {
+        const ownerCategories = await manager.getRepository(Category).find({
+          where: { userId: access.ownerUserId },
+          select: [
+            "id",
+            "name",
+            "parentId",
+            "icon",
+            "color",
+            "isIncome",
+            "isSystem",
+          ],
+          order: { name: "ASC" },
+        });
+        const ownerPayees = await manager.getRepository(Payee).find({
+          where: { userId: access.ownerUserId, isActive: true },
+          select: ["id", "name", "defaultCategoryId"],
+          order: { name: "ASC" },
+        });
+        return [ownerCategories, ownerPayees] as const;
+      },
     );
 
     return {

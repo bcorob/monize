@@ -3,6 +3,10 @@ import { Cron } from "@nestjs/schedule";
 import { DataSource, EntityManager } from "typeorm";
 import { withScopedDb } from "../common/db/scoped-db";
 import { withSystemContext } from "../common/db/with-context";
+import {
+  FetchSyncJob,
+  FetchSyncService,
+} from "../common/jobs/fetch-sync.service";
 import { todayYMD } from "../common/date-utils";
 import {
   PRICE_WINDOW_LEAD_DAYS,
@@ -139,7 +143,16 @@ export class MarketIndexService implements OnApplicationBootstrap {
     private dataSource: DataSource,
     private yahooFinanceService: YahooFinanceService,
     private readonly health: ProviderHealthService,
+    private readonly fetchSync: FetchSyncService,
   ) {}
+
+  /**
+   * How long one replica holds the index fetch.
+   *
+   * Longer than a refresh of 24 indexes takes and far shorter than the daily
+   * interval, so a replica killed mid-fetch never blocks the next tick.
+   */
+  private readonly FETCH_LEASE_MS = 20 * 60 * 1000;
 
   /**
    * The catalog with the stored coverage per index, so the picker can grey out
@@ -359,8 +372,16 @@ export class MarketIndexService implements OnApplicationBootstrap {
    * loop is not.
    */
   onApplicationBootstrap(): void {
+    // The lease covers the warm-up as well as the cron: a rollout of N pods is
+    // exactly the case where N identical provider bursts are least welcome, and
+    // the per-index cooldown `respectCooldown` applies is a different question
+    // (how often ONE index is worth re-asking for, not which replica asks).
     void withSystemContext(() =>
-      this.refreshAll({ respectCooldown: true }),
+      this.fetchSync.withLease(
+        FetchSyncJob.MarketIndexes,
+        this.FETCH_LEASE_MS,
+        () => this.refreshAll({ respectCooldown: true }),
+      ),
     ).catch((error) => {
       const message = error instanceof Error ? error.message : String(error);
       this.logger.warn(`Initial market index refresh failed: ${message}`);
@@ -373,11 +394,20 @@ export class MarketIndexService implements OnApplicationBootstrap {
    * same instant.
    *
    * Cross-user work with no request behind it, so it seeds its own system
-   * context (`backend/CLAUDE.md`, cron section).
+   * context (`docs/backend/cron-and-background-work.md`).
    */
   @Cron("10 17 * * 1-5", { timeZone: "America/New_York" })
   async scheduledRefresh(): Promise<void> {
-    await withSystemContext(() => this.refreshAll());
+    // One replica per tick fetches (task C2). The index upserts are idempotent,
+    // so the lease is a cost control; a lost one is a debug line and never
+    // blocks the next tick.
+    await withSystemContext(() =>
+      this.fetchSync.withLease(
+        FetchSyncJob.MarketIndexes,
+        this.FETCH_LEASE_MS,
+        () => this.refreshAll(),
+      ),
+    );
   }
 
   /**
@@ -439,7 +469,7 @@ export class MarketIndexService implements OnApplicationBootstrap {
   ): Promise<void> {
     try {
       const chunks: Array<{ start: string; end: string }> = [];
-      for (let start = from; start <= to; ) {
+      for (let start = from; start <= to;) {
         const end = addDays(start, FETCH_CHUNK_DAYS - 1);
         chunks.push({ start, end: end < to ? end : to });
         start = addDays(end, 1);
@@ -732,11 +762,22 @@ export class MarketIndexService implements OnApplicationBootstrap {
    * `SecurityPriceService.bulkUpsertPrices` does it: a later provider that
    * supplies no adjusted close must not erase one an earlier fetch stored, or
    * the series' basis silently flips from adjusted to raw between two reads.
+   *
+   * One bar per index and date: the provider can answer the same session twice
+   * (the last bar of a window repeated as the live one), and PostgreSQL refuses
+   * an `ON CONFLICT DO UPDATE` that would update one row twice in a command
+   * (SQLSTATE 21000), which failed the whole index's refresh. The later bar wins,
+   * as the later fetch does across two commands.
    */
   private async bulkUpsert(rows: readonly UpsertRow[]): Promise<void> {
+    const unique = [
+      ...new Map(
+        rows.map((row) => [`${row.indexCode}|${row.priceDate}`, row] as const),
+      ).values(),
+    ];
     const BATCH = 500;
-    for (let offset = 0; offset < rows.length; offset += BATCH) {
-      const batch = rows.slice(offset, offset + BATCH);
+    for (let offset = 0; offset < unique.length; offset += BATCH) {
+      const batch = unique.slice(offset, offset + BATCH);
       const values: unknown[] = [];
       const tuples = batch.map((row, i) => {
         const base = i * 5;

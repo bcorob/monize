@@ -330,14 +330,13 @@
       "fillMissingDone": "{count, plural, other {#銘柄を追加しました}}。価格を読み込んで最初のシグナルを計算するには設定を保存してください。",
       "fillMissingError": "推奨銘柄を追加できませんでした。",
       "lookbackMonths": "モメンタム期間（月）",
-      "taxRatePercent": "税率（%）",
-      "commissionAmount": "1取引あたりの手数料",
+      "taxRatePercent": "税率（任意）",
+      "commissionAmount": "1取引あたりの手数料（任意）",
       "rulesSourceUrl": "従っているルールへのリンク",
       "rulesSourceUrlPlaceholder": "https://example.com/dual-momentum",
       "rulesSourceLabel": "そのリンクに表示する文字列",
       "rulesSourceLabelPlaceholder": "example.com",
       "rulesSourceHint": "どちらも任意で、計算には一切影響しません。この戦略が従うルールが書かれている場所（記事、書籍のページ、自分のメモなど）へのリンクをレポートのフッターに表示し、後からどの版に合わせて設定したかを確認できるようにします。",
-      "optional": "任意",
       "save": "設定を保存",
       "saved": "戦略の設定を保存しました。",
       "saveError": "戦略の設定を保存できませんでした。",
@@ -358,7 +357,9 @@
       "NO_POSITION": "戦略口座に銘柄がありません。",
       "FIRST_RUN": "この戦略はまだ評価されていません。最初のシグナルは次回の予定評価後に表示されます。",
       "STALE_PRICES": "このレポートの基となる価格の一部が最新ではないため、更新後に判定が変わる可能性があります。最も古い、または欠落しているのは次の銘柄です:",
-      "CALCULATION_FAILED": "利用可能なデータではシグナルを計算できませんでした。"
+      "CALCULATION_FAILED": "利用可能なデータではシグナルを計算できませんでした。",
+      "SHORT_HISTORY": "現在の期間を評価するのに十分な価格履歴がありません。これらのロールには {from} まで遡る価格が必要です:",
+      "shortHistoryFix": "これらの各銘柄を開いて「価格履歴をもう1年追加」を使用し、その後このレポートを再度開いてください。"
     },
     "footer": {
       "pastResults": "過去の実績は将来のリターンを保証しません。",

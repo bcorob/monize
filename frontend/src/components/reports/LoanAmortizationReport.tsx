@@ -21,13 +21,17 @@ import {
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useFinancialToday } from '@/hooks/useFinancialToday';
 import { exportToCsv } from '@/lib/csv-export';
-import { ExportDropdown } from '@/components/ui/ExportDropdown';
+import { ReportToolbarActions } from '@/components/reports/ReportToolbarActions';
+import { LabelSpacer } from '@/components/ui/LabelSpacer';
 import { SortableHeader } from '@/components/ui/SortableHeader';
 import { useSortableTable, compareValues } from '@/hooks/useSortableTable';
 import { useReportData } from '@/hooks/useReportData';
 import { usePersistedAccountId } from '@/hooks/usePersistedAccountFilter';
 import { ReportError } from '@/components/reports/ReportError';
 import { useTranslations } from 'next-intl';
+import { useDateFormat } from '@/hooks/useDateFormat';
+import { useChartDateFormat } from '@/hooks/useChartDateFormat';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 
 type AmortizationSortField = 'paymentNumber' | 'date' | 'payment' | 'principal' | 'interest' | 'balance';
@@ -50,7 +54,9 @@ const NO_RATE_CHANGES: LoanRateChange[] = [];
 
 export function LoanAmortizationReport() {
   const t = useTranslations('reports');
-  const { formatCurrency } = useNumberFormat();
+  const { formatDate } = useDateFormat();
+  const formatChartDate = useChartDateFormat();
+  const { formatCurrency, formatPercentTrimmed } = useNumberFormat();
 
   const friendlyAccountType = (type: string): string => {
     switch (type) {
@@ -184,7 +190,8 @@ export function LoanAmortizationReport() {
 
   // One derivation, shared by the schedule and the terms shown above it. It was
   // computed twice per render, which is both wasted work over the whole ledger
-  // and two chances for the two to disagree.
+  // and two chances for the two to disagree. `todayYmd` keeps VOID and
+  // future-dated rows out of it (A26-M28).
   const history = useMemo(
     () =>
       selectedAccount
@@ -193,9 +200,10 @@ export function LoanAmortizationReport() {
             transactions,
             rateChanges,
             interestTransactions,
+            todayYmd,
           )
         : null,
-    [selectedAccount, transactions, rateChanges, interestTransactions],
+    [selectedAccount, transactions, rateChanges, interestTransactions, todayYmd],
   );
 
   // Build payment history from actual transactions + projected future payments.
@@ -267,7 +275,7 @@ export function LoanAmortizationReport() {
             projectionAnchor,
             todayYmd,
           )
-        : { annualRate: null, payment: null },
+        : { annualRate: null, payment: null, paymentDate: null, finalPayment: null },
     [selectedAccount, history, rateChanges, projectionAnchor, todayYmd],
   );
 
@@ -282,14 +290,16 @@ export function LoanAmortizationReport() {
   const hasProjection = useMemo(() => paymentHistory.some((r) => r.isProjected), [paymentHistory]);
 
   const summary = useMemo(() => {
-    if (paymentHistory.length === 0 || !selectedAccount) return null;
+    if (paymentHistory.length === 0 || !selectedAccount || !history) return null;
 
     const totalInterest = paymentHistory.reduce((sum, row) => sum + row.interest, 0);
     const totalPrincipal = paymentHistory.reduce((sum, row) => sum + row.principal, 0);
     const totalPaymentAmount = paymentHistory.reduce((sum, row) => sum + row.payment, 0);
     const lastRow = paymentHistory[paymentHistory.length - 1];
-    const currentBalance = Math.abs(selectedAccount.currentBalance);
-    const originalBalance = Math.abs(selectedAccount.openingBalance) || (totalPrincipal + currentBalance);
+    // The history's own figure, not `totalPrincipal + currentBalance`: that sum
+    // includes the PROJECTED principal and counts the balance twice (A26-L25).
+    const originalBalance =
+      Math.abs(selectedAccount.openingBalance) || history.startingBalance;
 
     return {
       totalPayments: totalPaymentAmount,
@@ -306,7 +316,7 @@ export function LoanAmortizationReport() {
        *  interest over a projection that never reached payoff. */
       hasLifetimeTotal: !hasProjection || projectionPaidOff,
     };
-  }, [paymentHistory, selectedAccount, historicalCount, hasProjection, projectionPaidOff]);
+  }, [paymentHistory, selectedAccount, history, historicalCount, hasProjection, projectionPaidOff]);
 
   // See DebtPayoffTimelineReport: the caption names what the figure is, and an
   // interest total over a projection that never paid off is not a lifetime one.
@@ -350,12 +360,12 @@ export function LoanAmortizationReport() {
       cards.push(
         { label: t('loanAmortization.currentBalance'), value: formatCurrency(Math.abs(selectedAccount.currentBalance), currency), color: '#dc2626' },
         { label: t('loanAmortization.originalAmount'), value: formatCurrency(summary?.originalBalance || Math.abs(selectedAccount.openingBalance), currency), color: '#111827' },
-        { label: t('loanAmortization.interestRate'), value: currentTerms.annualRate != null ? `${currentTerms.annualRate}%` : t('loanAmortization.notSet'), color: '#111827' },
+        { label: t('loanAmortization.interestRate'), value: currentTerms.annualRate != null ? `${formatPercentTrimmed(currentTerms.annualRate)}` : t('loanAmortization.notSet'), color: '#111827' },
         { label: interestLabel(summary), value: formatCurrency(summary?.totalInterest || 0, currency), color: '#ea580c' },
         { label: t('loanAmortization.paymentsMade'), value: String(historicalCount), color: '#16a34a' },
       );
       if (summary?.projectedPayoffDate) {
-        cards.push({ label: t('loanAmortization.estPayoff'), value: format(parseISO(summary.projectedPayoffDate), 'MMM yyyy'), color: '#9333ea' });
+        cards.push({ label: t('loanAmortization.estPayoff'), value: formatChartDate(summary.projectedPayoffDate, 'MMM yyyy'), color: '#9333ea' });
       }
     }
     await exportToPdf({
@@ -448,9 +458,7 @@ export function LoanAmortizationReport() {
   if (accounts.length === 0) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6">
-        <p className="text-gray-500 dark:text-gray-400 text-center py-8">
-          {t('loanAmortization.empty')}
-        </p>
+        <EmptyState title={t('loanAmortization.empty')} />
       </div>
     );
   }
@@ -479,8 +487,28 @@ export function LoanAmortizationReport() {
                 ))}
             </select>
           </div>
-          <div className="ml-auto">
-            <ExportDropdown onExportCsv={handleExportCsv} onExportPdf={handleExportPdf} />
+          {/* The export stands beside a LABELLED field, so from `sm` up it is
+              the height of the field, not of the field plus its label: reserve
+              the label's own space above it and let the actions row stretch
+              into what is left, rather than matching the select's padding with
+              a figure that drifts the next time either control's type scale
+              changes. Below `sm` the spacer collapses with the row. */}
+          <div className="flex w-full flex-col sm:ml-auto sm:w-auto">
+            {/* The reserved label space is the desktop's alone: on a phone the
+                export is a row of its own and has no field beside it. */}
+            <div className="hidden sm:block">
+              <LabelSpacer />
+            </div>
+            <ReportToolbarActions
+              onExportCsv={handleExportCsv}
+              onExportPdf={handleExportPdf}
+              // The schedule is drawn from the history, so an export while it is
+              // loading or failed would write an empty one (A26-S15-08); a failed
+              // load also keeps the previous loan's rows in the hook, figures that
+              // are not this loan's.
+              disabled={historyLoading || historyError != null}
+              className="sm:flex-1"
+            />
           </div>
         </div>
       </div>
@@ -514,7 +542,7 @@ export function LoanAmortizationReport() {
             <div className="text-sm text-gray-500 dark:text-gray-400">{t('loanAmortization.interestRate')}</div>
             <div className="text-lg font-bold text-gray-900 dark:text-gray-100">
               {currentTerms.annualRate != null
-                ? `${currentTerms.annualRate}%`
+                ? `${formatPercentTrimmed(currentTerms.annualRate)}`
                 : t('loanAmortization.notSet')}
             </div>
           </div>
@@ -536,7 +564,7 @@ export function LoanAmortizationReport() {
             <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4">
               <div className="text-sm text-gray-500 dark:text-gray-400">{t('loanAmortization.estPayoff')}</div>
               <div className="text-lg font-bold text-purple-600 dark:text-purple-400">
-                {format(parseISO(summary.projectedPayoffDate), 'MMM yyyy')}
+                {formatChartDate(summary.projectedPayoffDate, 'MMM yyyy')}
               </div>
             </div>
           )}
@@ -561,12 +589,38 @@ export function LoanAmortizationReport() {
                   : t('loanAmortization.notSet')}
               </p>
             </div>
-            <div>
-              <span className="text-gray-500 dark:text-gray-400">{t('loanAmortization.paymentAmount')}</span>
-              <p className="font-medium text-gray-900 dark:text-gray-100">
-                {currentTerms.payment ? formatCurrency(currentTerms.payment) : t('loanAmortization.notSet')}
-              </p>
-            </div>
+            {/* A LINEAR or INTEREST_ONLY installment changes from one due
+                date to the next: it is the next one, with its date, and an
+                interest-only mortgage's bullet stands beside it. */}
+            {currentTerms.payment && currentTerms.paymentDate ? (
+              <div>
+                <span className="text-gray-500 dark:text-gray-400">{t('loanAmortization.nextInstallment')}</span>
+                <p className="font-medium text-gray-900 dark:text-gray-100">
+                  {t('loanAmortization.amountDueOn', {
+                    amount: formatCurrency(currentTerms.payment),
+                    date: formatDate(currentTerms.paymentDate),
+                  })}
+                </p>
+              </div>
+            ) : (
+              <div>
+                <span className="text-gray-500 dark:text-gray-400">{t('loanAmortization.paymentAmount')}</span>
+                <p className="font-medium text-gray-900 dark:text-gray-100">
+                  {currentTerms.payment ? formatCurrency(currentTerms.payment) : t('loanAmortization.notSet')}
+                </p>
+              </div>
+            )}
+            {currentTerms.finalPayment && (
+              <div>
+                <span className="text-gray-500 dark:text-gray-400">{t('loanAmortization.finalPayment')}</span>
+                <p className="font-medium text-gray-900 dark:text-gray-100">
+                  {t('loanAmortization.amountDueOn', {
+                    amount: formatCurrency(currentTerms.finalPayment.amount),
+                    date: formatDate(currentTerms.finalPayment.date),
+                  })}
+                </p>
+              </div>
+            )}
             <div>
               <span className="text-gray-500 dark:text-gray-400">{t('loanAmortization.status')}</span>
               <p className="font-medium text-gray-900 dark:text-gray-100">
@@ -688,7 +742,7 @@ export function LoanAmortizationReport() {
                             {row.paymentNumber}
                           </td>
                           <td className="px-4 py-3 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                            {format(parseISO(row.date), 'MMM d, yyyy')}
+                            {formatDate(row.date)}
                             {row.isProjected && (
                               <span className="ml-1.5 text-xs text-blue-500 dark:text-blue-400">*</span>
                             )}

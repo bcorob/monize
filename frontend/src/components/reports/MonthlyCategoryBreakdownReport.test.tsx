@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@/test/render';
 import { MonthlyCategoryBreakdownReport } from './MonthlyCategoryBreakdownReport';
 
@@ -7,12 +7,16 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (n: number) => `$${n.toFixed(2)}`,
-    defaultCurrency: 'USD',
-  }),
-}));
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (n: number) => `$${n.toFixed(2)}`,
+      defaultCurrency: 'USD',
+    }),
+  };
+});
 
 // Deterministic month formatting (the real hook is locale-dependent for the
 // 'browser' default). Renders YYYY-MM as MM/YYYY so headers are assertable.
@@ -65,6 +69,15 @@ vi.mock('@/lib/built-in-reports', () => ({
     getMonthlyCategoryBreakdown: (...args: unknown[]) =>
       mockGetMonthlyCategoryBreakdown(...args),
   },
+}));
+
+// The account filter and the tag controls read these on mount; the report is
+// the unchanged one while no key is chosen.
+vi.mock('@/lib/accounts', () => ({
+  accountsApi: { getAll: () => Promise.resolve([]) },
+}));
+vi.mock('@/lib/tags', () => ({
+  tagsApi: { getAll: () => Promise.resolve([]) },
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -194,9 +207,11 @@ describe('MonthlyCategoryBreakdownReport', () => {
 
     // Parent section header for the expense group.
     expect(screen.getAllByText('Food & Dining').length).toBeGreaterThan(0);
-    // Parentless income category collects into the "Other income" section.
-    expect(screen.getByText('Salary')).toBeInTheDocument();
-    expect(screen.getAllByText('Other income').length).toBeGreaterThan(0);
+    // A top-level income category with no subcategories is a line of its
+    // own (in the detail and in the Summary recap), not an "Other income"
+    // section.
+    expect(screen.getAllByText('Salary')).toHaveLength(2);
+    expect(screen.queryByText('Other income')).not.toBeInTheDocument();
 
     // Top-level group headers separate income from expenses.
     expect(screen.getByText('Income')).toBeInTheDocument();
@@ -640,7 +655,7 @@ describe('MonthlyCategoryBreakdownReport', () => {
     render(<MonthlyCategoryBreakdownReport />);
 
     await waitFor(() => {
-      expect(screen.getByText('Salary')).toBeInTheDocument();
+      expect(screen.getAllByText('Salary').length).toBeGreaterThan(0);
     });
 
     // By default the current (in-progress) month column is hidden, so its
@@ -732,8 +747,8 @@ describe('MonthlyCategoryBreakdownReport', () => {
         expect(screen.getByText('From Chequing')).toBeInTheDocument();
       });
 
-      // Subcategory name cell.
-      const salaryCell = screen.getByText('Salary').closest('td');
+      // Category name cell (the detail row, ahead of the Summary recap).
+      const salaryCell = screen.getAllByText('Salary')[0].closest('td');
       expect(salaryCell?.className).toContain('group-hover:bg-gray-50');
       const salaryRow = salaryCell?.closest('tr');
       expect(salaryRow?.className).toContain('group');
@@ -795,5 +810,251 @@ describe('MonthlyCategoryBreakdownReport', () => {
         expect(row?.className).toContain('hover:bg-gray-100');
       });
     });
+  });
+
+  // A month-columnar report cannot fit a phone, and the sticky category column
+  // is the width the months are missing. Dragging it sideways slides it out of
+  // view and moves its right edge by the same amount, so the months take
+  // exactly the width the names give up.
+  describe('phone: collapsing the category column', () => {
+    const PHONE_QUERY = '(max-width: 639px)';
+    const FULL_WIDTH = 116;
+    const MAX_OFFSET = FULL_WIDTH - 28; // never past the grabbable stub
+
+    const setPhone = (isPhone: boolean) => {
+      vi.mocked(window.matchMedia).mockImplementation(
+        (query: string) =>
+          ({
+            matches: isPhone && query === PHONE_QUERY,
+            media: query,
+            onchange: null,
+            addListener: vi.fn(),
+            removeListener: vi.fn(),
+            addEventListener: vi.fn(),
+            removeEventListener: vi.fn(),
+            dispatchEvent: vi.fn(),
+          }) as unknown as MediaQueryList,
+      );
+    };
+
+    afterEach(() => {
+      unmountPrevious = null;
+      setPhone(false);
+    });
+
+    // jsdom ships no PointerEvent, so the gesture is replayed with MouseEvents
+    // carrying the pointer type names React dispatches on.
+    const pointer = (type: string, target: Element, clientX: number) => {
+      const event = new MouseEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        clientX,
+      });
+      Object.defineProperty(event, 'pointerId', { value: 1 });
+      target.dispatchEvent(event);
+    };
+
+    const scroller = (container: HTMLElement) =>
+      container.querySelector('.overflow-x-auto') as HTMLElement;
+
+    let unmountPrevious: (() => void) | null = null;
+    const renderPhoneReport = async () => {
+      // Leaving an earlier render mounted would let `getByText` resolve against
+      // it, so a remount test would assert on the wrong tree.
+      unmountPrevious?.();
+      setPhone(true);
+      mockGetMonthlyCategoryBreakdown.mockResolvedValue(sampleResponse);
+      const { container, unmount } = render(<MonthlyCategoryBreakdownReport />);
+      unmountPrevious = unmount;
+      await waitFor(() => {
+        expect(screen.getByText('Groceries')).toBeInTheDocument();
+      });
+      return container;
+    };
+
+    const drag = async (container: HTMLElement, from: number, to: number) => {
+      const cell = screen.getByText('Groceries').closest('td') as HTMLElement;
+      await act(async () => {
+        pointer('pointerdown', cell, from);
+        pointer('pointermove', cell, to);
+        pointer('pointerup', cell, to);
+      });
+    };
+
+    it('narrows the column by exactly what it slides out of view', async () => {
+      const container = await renderPhoneReport();
+      const el = scroller(container);
+      expect(el.style.getPropertyValue('--mcb-name-off')).toBe('0px');
+
+      await drag(container, 100, 60); // dragged 40px to the left
+
+      expect(el.style.getPropertyValue('--mcb-name-off')).toBe('40px');
+      expect(el.style.getPropertyValue('--mcb-name-w')).toBe(
+        `${FULL_WIDTH - 40}px`,
+      );
+      // The wrap width never moves, so the names do not reflow mid-drag.
+      expect(el.style.getPropertyValue('--mcb-name-full')).toBe(
+        `${FULL_WIDTH}px`,
+      );
+    });
+
+    it('stops at a grabbable stub instead of collapsing to nothing', async () => {
+      const container = await renderPhoneReport();
+
+      await drag(container, 300, 0); // far past the full width
+
+      expect(scroller(container).style.getPropertyValue('--mcb-name-off')).toBe(
+        `${MAX_OFFSET}px`,
+      );
+    });
+
+    it('remembers the offset across a remount', async () => {
+      const container = await renderPhoneReport();
+      await drag(container, 100, 70);
+      expect(
+        JSON.parse(
+          window.localStorage.getItem(
+            'monize-reports-monthly-category-breakdown-name-offset',
+          ) as string,
+        ),
+      ).toBe(30);
+
+      const second = await renderPhoneReport();
+      expect(scroller(second).style.getPropertyValue('--mcb-name-off')).toBe(
+        '30px',
+      );
+    });
+
+    it('still drills down on a tap that never became a drag', async () => {
+      await renderPhoneReport();
+      const name = screen.getByText('Groceries');
+      const cell = name.closest('td') as HTMLElement;
+
+      await act(async () => {
+        pointer('pointerdown', cell, 100);
+        pointer('pointermove', cell, 102); // under the 4px threshold
+        pointer('pointerup', cell, 102);
+        fireEvent.click(name);
+      });
+
+      expect(mockPush).toHaveBeenCalled();
+    });
+
+    it('does not drill down on the click that ends a drag', async () => {
+      const container = await renderPhoneReport();
+      const name = screen.getByText('Groceries');
+
+      await drag(container, 100, 40);
+      await act(async () => {
+        fireEvent.click(name);
+      });
+      expect(mockPush).not.toHaveBeenCalled();
+
+      // The suppression is spent on that one click, not latched.
+      await act(async () => {
+        fireEvent.click(name);
+      });
+      expect(mockPush).toHaveBeenCalled();
+    });
+
+    it('does not swallow a later click when the drag produced none', async () => {
+      const container = await renderPhoneReport();
+      const cell = screen.getByText('Groceries').closest('td') as HTMLElement;
+
+      // A drag released outside the cell arms the suppression but never spends
+      // it, because no click follows; the next gesture must still work.
+      await act(async () => {
+        pointer('pointerdown', cell, 100);
+        pointer('pointermove', cell, 40);
+        pointer('pointerup', scroller(container), 40);
+      });
+      expect(mockPush).not.toHaveBeenCalled();
+
+      await act(async () => {
+        pointer('pointerdown', cell, 100);
+        pointer('pointerup', cell, 100);
+        fireEvent.click(screen.getByText('Groceries'));
+      });
+      expect(mockPush).toHaveBeenCalled();
+    });
+
+    it('leaves the column alone above the phone breakpoint', async () => {
+      setPhone(false);
+      mockGetMonthlyCategoryBreakdown.mockResolvedValue(sampleResponse);
+      const { container } = render(<MonthlyCategoryBreakdownReport />);
+      await waitFor(() => {
+        expect(screen.getByText('Groceries')).toBeInTheDocument();
+      });
+
+      await drag(container, 100, 20);
+
+      expect(scroller(container).style.getPropertyValue('--mcb-name-off')).toBe(
+        '0px',
+      );
+    });
+  });
+
+  it('names the currencies left out of the figures when a rate is missing', async () => {
+    mockGetMonthlyCategoryBreakdown.mockResolvedValue({
+      ...sampleResponse,
+      missingCurrencies: ['JPY'],
+      excludedCount: 2,
+    });
+    render(<MonthlyCategoryBreakdownReport />);
+    const notice = await screen.findByTestId('partial-data-notice');
+    expect(notice).toHaveTextContent('JPY');
+    expect(notice).toHaveTextContent('USD');
+  });
+
+  it('shows no partial-data note when every row converted', async () => {
+    mockGetMonthlyCategoryBreakdown.mockResolvedValue({
+      ...sampleResponse,
+      missingCurrencies: [],
+      excludedCount: 0,
+    });
+    render(<MonthlyCategoryBreakdownReport />);
+    await screen.findByText('Groceries');
+    expect(screen.queryByTestId('partial-data-notice')).not.toBeInTheDocument();
+  });
+});
+
+describe('MonthlyCategoryBreakdownReport: a reload is not the previous answer', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockIsValid = true;
+    mockResolvedRange.start = '2025-01-01';
+    mockResolvedRange.end = '2025-06-30';
+    window.localStorage.clear();
+  });
+
+  async function loadThenChangeRange(next: () => unknown) {
+    mockGetMonthlyCategoryBreakdown.mockResolvedValue(sampleResponse);
+    let view!: ReturnType<typeof render>;
+    await act(async () => {
+      view = render(<MonthlyCategoryBreakdownReport />);
+    });
+    await screen.findByText('Groceries');
+    expect(screen.getByTitle('Export CSV')).toBeEnabled();
+
+    mockGetMonthlyCategoryBreakdown.mockImplementation(next);
+    mockResolvedRange.end = '2025-07-31';
+    await act(async () => {
+      view.rerender(<MonthlyCategoryBreakdownReport />);
+    });
+    await waitFor(() =>
+      expect(mockGetMonthlyCategoryBreakdown).toHaveBeenLastCalledWith(
+        expect.objectContaining({ endDate: '2025-07-31' }),
+      ),
+    );
+  }
+
+  it('disables the export while the next request has failed', async () => {
+    await loadThenChangeRange(() => Promise.reject(new Error('500')));
+    expect(screen.getByTitle('Export CSV')).toBeDisabled();
+  });
+
+  it('disables the export while the next request is pending', async () => {
+    await loadThenChangeRange(() => new Promise(() => {}));
+    expect(screen.getByTitle('Export CSV')).toBeDisabled();
   });
 });

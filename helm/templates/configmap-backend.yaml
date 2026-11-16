@@ -12,6 +12,23 @@ data:
   # Database
   DATABASE_HOST: {{ .Values.backend.database.DATABASE_HOST | quote }}
   DATABASE_NAME: {{ .Values.backend.database.DATABASE_NAME | quote }}
+  # Horizontal scaling. In multi the backend keeps rate limits, single-use
+  # claims and the relay on rows, and wakes other replicas over LISTEN/NOTIFY --
+  # so DATABASE_HOST above must reach a PostgreSQL session, not a
+  # transaction-mode pooler. The two assertions are the operator stating that
+  # the attachment and backup directories are mounted by every replica; nothing
+  # inside a container can observe that, and multi refuses to boot without them.
+  # They are tested for the exact value "true" rather than for truthiness: the
+  # string "false" is truthy in a template, and emitting BACKUP_SHARED_VOLUME=true
+  # because somebody quoted the value would convert that boot refusal into two
+  # replicas writing backups to two different disks and each seeing half.
+  CLUSTER_MODE: {{ .Values.cluster.mode | quote }}
+  {{- if eq (include "monize.isTrue" .Values.cluster.attachmentSharedVolume) "true" }}
+  ATTACHMENT_SHARED_VOLUME: "true"
+  {{- end }}
+  {{- if eq (include "monize.isTrue" .Values.cluster.backupSharedVolume) "true" }}
+  BACKUP_SHARED_VOLUME: "true"
+  {{- end }}
   # Row-Level Security (mode + runtime role name; password lives in the DB Secret)
   RLS_MODE: {{ .Values.backend.rls.RLS_MODE | default "off" | quote }}
   DATABASE_APP_USER: {{ .Values.backend.rls.DATABASE_APP_USER | default "monize_app" | quote }}

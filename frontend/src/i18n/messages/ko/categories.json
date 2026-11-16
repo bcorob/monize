@@ -7,6 +7,7 @@
     "filterAll": "전체 ({count})",
     "filterExpenses": "지출 ({count})",
     "filterIncome": "수입 ({count})",
+    "typeFilterLabel": "유형",
     "modalTitleNew": "새 카테고리",
     "modalTitleEdit": "카테고리 편집",
     "countSingle": "카테고리 1개",
@@ -54,6 +55,12 @@
     "typeExpense": "지출",
     "typeIncome": "수입",
     "typeInherited": "상위에서 유형 상속",
+    "autoSignLabel": "자동 부호",
+    "autoSignOn": "켜짐",
+    "autoSignOff": "꺼짐",
+    "autoSignInherit": "상위 카테고리에서 상속",
+    "autoSignInheritedFrom": "상위 카테고리({name})에서 상속됨: 현재 {state}",
+    "autoSignHelp": "켜면 입력한 금액이 지출 카테고리에서는 음수, 수입 카테고리에서는 양수로 바뀝니다. 입력한 부호를 그대로 유지하려면 끄세요.",
     "colourLabel": "색상",
     "colourInherit": "상위에서 상속",
     "colourNone": "색상 없음",
@@ -65,8 +72,8 @@
     "submitUpdate": "카테고리 업데이트"
   },
   "list": {
-    "emptyHeading": "카테고리 없음",
-    "emptyDescription": "새 카테고리를 만들어 시작하세요.",
+    "emptyHeading": "카테고리를 찾을 수 없음",
+    "emptyDescription": "현재 검색어 또는 필터와 일치하는 카테고리가 없습니다.",
     "colName": "이름",
     "colType": "유형",
     "colCount": "개수",
@@ -79,7 +86,7 @@
     "viewTransactionsTitle": "이 카테고리의 거래 보기"
   },
   "deleteDialog": {
-    "title": "\"{name}\" 삭제?",
+    "title": "\"{name}\" 삭제",
     "checkingUsage": "사용 여부 확인 중...",
     "usedBy": "이 카테고리는 {count, plural, one {# 항목} other {# 항목}}(거래 및/또는 예정된 청구서 및 입금)에서 사용 중입니다.",
     "reassignLabel": "재할당:",

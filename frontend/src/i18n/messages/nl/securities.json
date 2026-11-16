@@ -3,6 +3,7 @@
     "noneToUpdate": "Geen waardepapieren om bij te werken",
     "updated": "{count, plural, one {# koers bijgewerkt} other {# koersen bijgewerkt}}",
     "partialFailure": "Koersen bijgewerkt: {updated} geslaagd, {failed} mislukt{symbols}",
+    "partialFailureWithReasons": "Koersen bijgewerkt: {updated} geslaagd, {failed} mislukt{symbols}\n{reasons}",
     "failed": "Koersen vernieuwen mislukt"
   },
   "page": {
@@ -10,6 +11,7 @@
     "subtitle": "Beheer je aandelen, ETF's, beleggingsfondsen en andere waardepapieren",
     "newSecurity": "+ Nieuw waardepapier",
     "searchPlaceholder": "Zoek op symbool of naam...",
+    "statusFilterLabel": "Status",
     "statusAll": "Alle ({count})",
     "statusActive": "Actief ({count})",
     "statusInactive": "Inactief ({count})",
@@ -49,6 +51,7 @@
       "name": "Naam",
       "type": "Type",
       "shares": "Aandelen",
+      "value": "Waarde",
       "exchange": "Beurs",
       "currency": "Valuta",
       "provider": "Provider",
@@ -63,12 +66,10 @@
       "inactive": "Inactief",
       "inactiveShort": "Ina"
     },
-    "providerTitle": {
-      "override": "Provider-uitzondering per waardepapier",
-      "inherited": "Overgenomen van jouw standaard koersprovidervoorkeur"
-    },
+    "providerInherited": "{provider} (standaard)",
     "columnTitles": {
       "shares": "Huidig aandelenbestand over alle rekeningen",
+      "value": "Aandelen over alle rekeningen tegen de meest recente koers, in de valuta van het effect zelf",
       "source": "Bron van de meest recente koers"
     },
     "actions": {
@@ -115,7 +116,11 @@
     "exchangeLabel": "Beurs",
     "currencyLabel": "Valuta",
     "currencyNotConfigured": "{code} — niet in uw valuta's",
+    "currencyPlaceholder": "Selecteer valuta...",
+    "currencyNotReported": "De aanbieder heeft de valuta van deze coin niet doorgegeven. Kies de fiatvaluta waarin deze wordt genoteerd.",
     "quoteProviderLabel": "Koersprovider",
+    "skipPriceUpdatesLabel": "Automatische koersupdates uitschakelen",
+    "skipPriceUpdatesHelp": "Monize haalt geen koersen op voor dit effect. Gebruik dit voor een effect dat geen enkele aanbieder kan noteren; koersen die u zelf invoert tellen nog steeds mee. Een andere koersaanbieder of MSN-instrument-ID kiezen zet de updates weer aan.",
     "msnIdLabel": "MSN-instrument-ID (geavanceerd)",
     "lookupProviderAriaLabel": "Provider opzoeken",
     "lookupButton": "Opzoeken",
@@ -139,7 +144,11 @@
     "providers": {
       "auto": "Auto",
       "yahoo": "Yahoo",
-      "msn": "MSN"
+      "msn": "MSN",
+      "lse": "LSE",
+      "deutsche_boerse": "Deutsche Börse",
+      "bond_engine": "Obligatie-engine",
+      "html_table": "Tabel op webpagina"
     },
     "types": {
       "select": "Selecteer type...",
@@ -189,16 +198,50 @@
       "deleteConfirm": "Verwijderen",
       "deleteSuccess": "Beleggingscategorie \"{name}\" verwijderd",
       "deleteFailed": "Kan beleggingscategorie \"{name}\" niet verwijderen"
+    },
+    "bondFetchAction": "{code} ophalen bij de officiële bron",
+    "bondFetching": "{code} wordt opgehaald bij de uitgever, samen met de referentierentes. Dit kan tot een minuut duren.",
+    "bondFetchFailed": "De reeks kon niet worden opgehaald.",
+    "bondCurrencyLocked": "Dit effect is gekoppeld aan een obligatiesoort in {linkedCurrency}. Zet de valuta terug op {linkedCurrency} of ontkoppel eerst de obligatiesoort (ontkoppelen verwijdert de berekende koersen).",
+    "bondProgramLabel": "Obligatiesoort",
+    "bondProgramNone": "Niet gekoppeld",
+    "bondProgramCurrent": "Gekoppelde obligatiesoort",
+    "bondProgramLoading": "Obligatiesoorten laden...",
+    "bondProgramLoadFailed": "De obligatiesoorten konden niet worden geladen, dus er kan nog geen obligatiesoort worden gekoppeld.",
+    "bondProgramRetry": "Opnieuw proberen",
+    "bondNoPrograms": "De obligatiecatalogus bevat nog geen obligatiesoort.",
+    "bondAutoFetchLabel": "Nieuwe series van deze obligatiesoort automatisch ophalen",
+    "bondAutoFetchHelp": "Indien ingeschakeld leest Monize elke dag nieuwe series van deze obligatiesoort uit de officiële bron, zodat u een aankoop kunt vastleggen zonder de serie eerst op te halen.",
+    "bondCountryLabel": "Land",
+    "bondCountryOther": "Overig",
+    "bondCountryOtherInfo": "Ondersteuning voor obligaties van andere landen kan worden aangevraagd op de <link>GitHub van het project</link>.",
+    "quoteTable": {
+      "urlLabel": "Webpagina met koerstabel",
+      "urlHelp": "De pagina heeft een tabel nodig waarvan de kop een datumkolom en een slotkoerskolom heeft.",
+      "test": "Testen",
+      "previewFailed": "De pagina kon niet worden gelezen.",
+      "summary": "{count, plural, one {# dag} other {# dagen}} van {first} tot {last}",
+      "columns": "Gebruikte kolommen: {columns}",
+      "currency": "Valuta op de pagina: {currency}",
+      "noCurrency": "De pagina noemt geen valuta; koersen worden opgeslagen in de valuta van het effect.",
+      "skipped": "{count, plural, one {# onleesbare rij overgeslagen} other {# onleesbare rijen overgeslagen}}",
+      "headers": {
+        "date": "Datum",
+        "open": "Open",
+        "high": "Hoog",
+        "low": "Laag",
+        "close": "Slot",
+        "volume": "Volume"
+      }
     }
   },
   "priceForm": {
     "dateLabel": "Datum",
     "closePriceLabel": "Slotkoers",
-    "openPriceLabel": "Openingskoers",
-    "highPriceLabel": "Hoogste koers",
-    "lowPriceLabel": "Laagste koers",
-    "volumeLabel": "Volume",
-    "optionalPlaceholder": "Optioneel",
+    "openPriceLabel": "Openingskoers (optioneel)",
+    "highPriceLabel": "Hoogste koers (optioneel)",
+    "lowPriceLabel": "Laagste koers (optioneel)",
+    "volumeLabel": "Volume (optioneel)",
     "submitCreate": "Koers toevoegen",
     "submitUpdate": "Koers bijwerken"
   },
@@ -246,7 +289,9 @@
     },
     "collapseAll": "Alles inklappen",
     "expandAll": "Alles uitklappen",
-    "groupCount": "{count} koers(en)"
+    "groupCount": "{count} koers(en)",
+    "addYearButton": "Nog een jaar historie toevoegen",
+    "addYearTitle": "Nog een jaar historische koersen ophalen bij de aanbieder"
   },
   "transactionHistory": {
     "accountLabel": "Rekening",
@@ -284,7 +329,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "Langetermijnwinst herbeleggen",
       "CAPITAL_GAIN_SHORT": "Kortetermijnkapitaalwinst",
       "CAPITAL_GAIN_LONG": "Langetermijnkapitaalwinst",
-      "REDEEM": "CD/obligatie aflossen"
+      "REDEEM": "CD/obligatie aflossen",
+      "RETURN_OF_CAPITAL": "Kapitaalterugbetaling"
     },
     "toasts": {
       "loadHistoryFailed": "Historie laden mislukt",
@@ -333,11 +379,20 @@
     "nameRequired": "Naam is verplicht",
     "nameMax": "Naam mag maximaal 255 tekens bevatten",
     "currencyRequired": "Valuta is verplicht",
-    "descriptionMax": "De omschrijving mag maximaal 5000 tekens bevatten"
+    "bondProgramRequired": "Obligatiesoort is verplicht",
+    "descriptionMax": "De omschrijving mag maximaal 5000 tekens bevatten",
+    "quoteUrlRequired": "Voer de pagina met de koerstabel in.",
+    "quoteUrlInvalid": "Voer een volledig adres in dat begint met http:// of https://."
   },
   "priceValidation": {
     "dateRequired": "Datum is verplicht",
     "priceRequired": "Koers is verplicht",
     "priceNonNegative": "Koers moet een niet-negatief getal zijn"
+  },
+  "priceAlert": {
+    "label": "Melding bij koerswijziging (%)",
+    "help": "Laat leeg om uit te schakelen. Meldt stijgingen of dalingen sinds de vorige beschikbare sessie, maximaal eenmaal per effect per UTC-dag.",
+    "range": "Voer een percentage van 0,1 tot 1000 in.",
+    "chartLabel": "Grafiek toevoegen aan koersmeldingen"
   }
 }

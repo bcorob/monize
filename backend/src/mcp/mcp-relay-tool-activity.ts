@@ -1,7 +1,7 @@
-import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import type { UserContextResolver } from "./mcp-context";
+import type { McpServer, ServerContext } from "@modelcontextprotocol/server";
+import { callerKey, resolveUserContext } from "./mcp-context";
 import type { AiRelayService } from "../ai/relay/ai-relay.service";
-import { withMcpSession } from "./mcp-session-context";
+import { withMcpCaller } from "./mcp-session-context";
 
 // Relay control tools are infrastructure (the long-poll and answer channel),
 // not work the user should see as progress.
@@ -13,7 +13,7 @@ export const RELAY_CONTROL_TOOLS = new Set([
 
 type ToolHandler = (
   args: unknown,
-  extra: { sessionId?: string },
+  ctx: ServerContext,
 ) => unknown | Promise<unknown>;
 
 /**
@@ -24,32 +24,38 @@ type ToolHandler = (
  * calls reach us -- so surfacing them gives the web chat live "Looking up ..."
  * progress automatically. Outside relay context `reportToolActivity` finds no
  * in-flight prompt and is a no-op.
+ *
+ * The `result` report is awaited inside a `finally`, where a throw would
+ * replace the handler's own return value or mask its error -- so a successful
+ * write would surface to the agent as a failure it then retries.
+ * `reportToolActivity` therefore swallows its own failures by contract
+ * (`ai-relay.service.ts`); this call site depends on that and must not be
+ * changed to a bare call that leaves a rejection unhandled instead.
  */
 export function wrapToolHandlerForRelay(
   name: string,
   handler: ToolHandler,
-  resolve: UserContextResolver,
   relayService: AiRelayService,
 ): ToolHandler {
-  return async (args, extra) => {
-    const sessionId = extra?.sessionId;
-    const userId = resolve(sessionId)?.userId;
-    // Every tool handler runs inside its session's ambient context, so a write
-    // deep inside one can tell whether it is serving this session's relay turn
+  return async (args, ctx) => {
+    const key = callerKey(ctx);
+    const userId = resolveUserContext(ctx)?.userId;
+    // Every tool handler runs inside its caller's ambient context, so a write
+    // deep inside one can tell whether it is serving this caller's relay turn
     // or is a direct MCP client's own call (see mcp-session-context.ts).
-    return withMcpSession(sessionId, async () => {
+    return withMcpCaller(key, async () => {
       if (userId) {
-        relayService.reportToolActivity(
+        await relayService.reportToolActivity(
           userId,
           name,
           "start",
           false,
-          sessionId,
+          key,
         );
       }
       let isError = false;
       try {
-        const result = await handler(args, extra);
+        const result = await handler(args, ctx);
         isError = Boolean(
           (result as { isError?: boolean } | undefined)?.isError,
         );
@@ -59,12 +65,12 @@ export function wrapToolHandlerForRelay(
         throw err;
       } finally {
         if (userId) {
-          relayService.reportToolActivity(
+          await relayService.reportToolActivity(
             userId,
             name,
             "result",
             isError,
-            sessionId,
+            key,
           );
         }
       }
@@ -79,7 +85,6 @@ export function wrapToolHandlerForRelay(
  */
 export function installRelayToolActivity(
   server: McpServer,
-  resolve: UserContextResolver,
   relayService: AiRelayService,
 ): void {
   const baseRegister = server.registerTool.bind(server) as (
@@ -99,7 +104,7 @@ export function installRelayToolActivity(
     return baseRegister(
       name,
       config,
-      wrapToolHandlerForRelay(name, handler, resolve, relayService),
+      wrapToolHandlerForRelay(name, handler, relayService),
     );
   };
 }

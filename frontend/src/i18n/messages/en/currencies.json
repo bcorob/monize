@@ -4,6 +4,7 @@
     "subtitle": "Manage currencies used across your accounts and securities",
     "refreshRates": "Refresh Rates",
     "refreshing": "Refreshing...",
+    "statusFilterLabel": "Status",
     "newCurrency": "+ New Currency",
     "searchPlaceholder": "Search by code or name...",
     "statusAll": "All ({count})",
@@ -13,6 +14,15 @@
     "modalTitleNew": "New Currency",
     "loading": "Loading currencies...",
     "count": "{count, plural, one {# currency} other {# currencies}}",
+    "providers": {
+      "line": "Rates from {providers}",
+      "separator": ", then ",
+      "names": {
+        "frankfurter": "Frankfurter (ECB reference rates)",
+        "yahoo": "Yahoo Finance",
+        "crypto": "Crypto pairs (Yahoo)"
+      }
+    },
     "toasts": {
       "loadFailed": "Failed to load currencies",
       "updated": "Currency updated successfully",
@@ -24,6 +34,7 @@
       "statusFailed": "Failed to update currency status",
       "ratesRefreshed": "Exchange rates refreshed: {updated} pairs updated",
       "ratesRefreshedWithFailed": "Exchange rates refreshed: {updated} updated, {failed} failed",
+      "ratesAllFailed": "No exchange rates could be fetched; the provider did not answer",
       "ratesFailed": "Failed to refresh exchange rates"
     },
     "summary": {
@@ -44,6 +55,8 @@
       "actions": "Actions"
     },
     "defaultBadge": "Default",
+    "cryptoBadge": "Crypto",
+    "noPriceSymbol": "No price symbol",
     "statusBadge": {
       "active": "Active",
       "activeShort": "Act",
@@ -61,9 +74,10 @@
       "activate": "Activate",
       "deleteCurrency": "Delete Currency"
     },
-    "usageTooltip": "{accounts} account(s), {securities} security/ies",
     "usageAccounts": "{count, plural, one {# acct} other {# accts}}",
     "usageSecurities": "{count, plural, one {# sec} other {# secs}}",
+    "rateHelp": "What one unit of each currency is worth in {currency}.",
+    "rateMissing": "No stored exchange rate for {from} to {to}.",
     "empty": {
       "title": "No currencies",
       "subtitle": "Get started by adding a currency."
@@ -88,6 +102,20 @@
     "symbolLabel": "Symbol",
     "symbolPlaceholder": "e.g., $, €, £, ¥",
     "decimalPlacesLabel": "Decimal Places",
+    "kindLabel": "Kind",
+    "kindOptions": {
+      "fiat": "Fiat Currency",
+      "crypto": "Cryptocurrency"
+    },
+    "kindLocked": "{code} is in use, so its kind cannot change.",
+    "quoteSymbolLabel": "Price Symbol (optional)",
+    "quoteSymbolPlaceholder": "e.g. BTC-EUR",
+    "quoteSymbolHelp": "The Yahoo Finance symbol the coin is priced from: its ticker, a hyphen and the currency it is quoted in, such as BTC-EUR. Exchange rates for the coin are fetched through it.",
+    "verifyButton": "Verify",
+    "quoteSymbolPricedIn": "Priced in {currency}",
+    "quoteSymbolMissing": "Without a price symbol the currency has no exchange rate.",
+    "quoteSymbolNotCrypto": "{symbol} is not a cryptocurrency. Enter a coin's pair, such as BTC-EUR.",
+    "quoteSymbolNotFound": "No cryptocurrency found for {symbol}",
     "lookupButton": "Lookup",
     "lookingUp": "Looking up...",
     "clearButton": "Clear",
@@ -95,6 +123,9 @@
     "submitCreate": "Create Currency",
     "submitUpdate": "Update Currency",
     "inactiveNotice": "{code} is already in your list but inactive.",
+    "nonIsoNotice": "{code} is not a standard currency code. If it is a cryptocurrency, set its kind to Cryptocurrency. <guide>Read about cryptocurrencies in the user guide</guide>.",
+    "switchToCrypto": "Use Cryptocurrency",
+    "cryptoPrecisionNotice": "Amounts in a cryptocurrency are kept to up to eight decimal places, the precision they are stored at, so a fee smaller than {smallest} cannot be entered. <guide>See how to record wallet fees</guide>.",
     "reactivateButton": "Reactivate {code}",
     "reactivating": "Reactivating...",
     "toasts": {
@@ -102,7 +133,9 @@
       "found": "Found: {details}",
       "notFound": "No currency found for \"{query}\"",
       "lookupFailed": "Lookup failed - please try again",
-      "reactivateFailed": "Failed to reactivate currency"
+      "reactivateFailed": "Failed to reactivate currency",
+      "verifyEmpty": "Enter a price symbol such as BTC-EUR to verify",
+      "verifyFailed": "Failed to verify the price symbol"
     }
   },
   "validation": {
@@ -110,6 +143,53 @@
     "nameRequired": "Name is required",
     "nameMax": "Name must be 100 characters or less",
     "symbolRequired": "Symbol is required",
-    "symbolMax": "Symbol must be 10 characters or less"
+    "symbolMax": "Symbol must be 10 characters or less",
+    "quoteSymbolMax": "Price symbol must be 20 characters or less",
+    "quoteSymbolRequiresCrypto": "Only a cryptocurrency has a price symbol",
+    "quoteSymbolNotAPair": "Enter a pair such as BTC-EUR: the coin, a hyphen and a three-letter currency code"
+  },
+  "rateHistory": {
+    "title": "Rate history",
+    "stored": "Stored history: {start} to {end} ({count} observations)",
+    "none": "No stored history for {pair}",
+    "loading": "Checking stored rate history...",
+    "loadFailed": "Could not read the stored rate history",
+    "fillGaps": "Fill gaps in rate history",
+    "filling": "Fetching missing rates...",
+    "fillGapsTitle": "Fetches the daily rates your reports are missing, from the first date your data uses {code} up to today.",
+    "hint": "Reports dated before the first stored rate cannot convert {pair}.",
+    "list": {
+      "heading": "Stored rates",
+      "invertedHelp": "A rate marked (inverted) is the reciprocal of what Monize actually stored for this pair, not a different observation.",
+      "direction": "Shown as {to} per 1 {from}.",
+      "loading": "Loading stored rates...",
+      "loadFailed": "Could not read the stored rates",
+      "empty": "No stored rates to list",
+      "truncated": "Showing the {count} most recent stored rates; older ones are not listed.",
+      "inverted": "inverted",
+      "unknownRate": "Unknown",
+      "columns": {
+        "date": "Date",
+        "rate": "Rate",
+        "source": "Source"
+      },
+      "sources": {
+        "yahooFinance": "Yahoo Finance",
+        "frankfurter": "Frankfurter (ECB)",
+        "mnyImport": "Money import",
+        "yahooCrypto": "Crypto pairs (Yahoo)",
+        "unknown": "Unknown"
+      }
+    },
+    "toasts": {
+      "filled": "Stored {count} rates; history now starts {start}",
+      "partial": "Stored {count} rates; history now starts {start}. {windows} more gaps to fetch, press again to continue.",
+      "moreToFetch": "No rates were stored this time; {windows} gaps are still to fetch, press again to continue.",
+      "noGaps": "{pair} already has a daily rate for every date your reports need",
+      "noNewRates": "No new rates were stored for {pair}",
+      "unused": "No account, holding or transaction of yours uses {code}, so there are no rates to fetch",
+      "providerFloor": "The provider has no rates for {pair} before {date}",
+      "failed": "Could not fill the rate history"
+    }
   }
 }

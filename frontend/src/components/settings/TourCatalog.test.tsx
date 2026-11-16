@@ -30,7 +30,8 @@ vi.mock('@/hooks/useTourRequirements', () => ({
 
 import { TourCatalog } from './TourCatalog';
 import { useTourStore } from '@/store/tourStore';
-import { ALL_TOURS } from '@/lib/tours/registry';
+import { ALL_TOURS, INTRO_TOUR } from '@/lib/tours/registry';
+import { tourStepCount } from '@/lib/tours/catalog';
 
 const INTRO_TITLE = 'Introduction to Monize';
 const FX_TITLE = 'Foreign currency transactions';
@@ -41,6 +42,7 @@ beforeEach(() => {
   requirements.mockReturnValue({
     transactionEntry: true,
     securitiesExist: true,
+    ownerView: true,
   });
   useTourStore.setState({
     active: null,
@@ -102,6 +104,7 @@ describe('TourCatalog', () => {
     requirements.mockReturnValue({
       transactionEntry: true,
       securitiesExist: false,
+      ownerView: true,
     });
     render(<TourCatalog />);
 
@@ -147,9 +150,12 @@ describe('TourCatalog', () => {
     });
     render(<TourCatalog />);
 
-    // Evergreen: no release line.
+    // Evergreen: no release line. The count is derived, so adding a step to
+    // the introduction does not make this a stale literal to chase.
     expect(
-      within(rowFor(INTRO_TITLE)).getByText('15 steps · Viewed'),
+      within(rowFor(INTRO_TITLE)).getByText(
+        `${tourStepCount(INTRO_TOUR)} steps · Viewed`,
+      ),
     ).toBeInTheDocument();
     expect(
       within(rowFor("What's New digest")).getByText(

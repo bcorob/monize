@@ -39,6 +39,33 @@ export interface RestoreStep {
 }
 
 /**
+ * User-scoped tables the restore deliberately does NOT clear before inserting,
+ * each with the reason it is an exception.
+ *
+ * Not clearing is normally a bug: the insert is `ON CONFLICT DO NOTHING`, so
+ * an uncleared table keeps whatever the destination already had and silently
+ * drops the archive's rows -- restore-over-existing stops reproducing the
+ * artifact, which is how `notification_preferences` once shipped. The guard in
+ * `restore-plan.spec.ts` fails any user-scoped table missing its `DELETE`, and
+ * reads this map so that an accidental omission still fails while a decided
+ * one is on the record with its argument.
+ *
+ * The bar for an entry: the table is not user CONTENT but a record of
+ * something already spent or already done, where the destination's own row is
+ * the more truthful of the two and losing the archive's is the safe outcome.
+ */
+export const PRESERVED_ON_RESTORE: ReadonlyMap<string, string> = new Map([
+  [
+    "payee_lookup_usage",
+    "Google Places requests already spent this month against the user's own " +
+      "key. A machine with no row takes the archive's count, which is what " +
+      "carries a month's spend to a new machine; a machine that has one keeps " +
+      "it, so no restore can lower a live count and hand back quota that " +
+      "Google has already billed for.",
+  ],
+]);
+
+/**
  * FK-safe insertion order. A table may only appear after every table it
  * references, unless the referencing column is listed in
  * `DEFERRED_FK_COLUMNS` and repaired by `DEFERRED_FK_REPAIRS`.
@@ -53,12 +80,58 @@ export const RESTORE_PLAN: ReadonlyArray<RestoreStep> = [
     countKey: "userCurrencyPreferences",
     scopeToUser: true,
   },
+  // No foreign key but `users`, so it can restore as early as its owner exists.
+  {
+    table: "calendar_day_notes",
+    countKey: "calendarDayNotes",
+    scopeToUser: true,
+  },
   { table: "categories", countKey: "categories", scopeToUser: true },
   { table: "payees", countKey: "payees", scopeToUser: true },
   { table: "payee_aliases", countKey: "payeeAliases", scopeToUser: true },
   { table: "institutions", countKey: "institutions", scopeToUser: true },
+  { table: "shared_groups", countKey: "sharedGroups", scopeToUser: false },
+  {
+    table: "shared_participants",
+    countKey: "sharedParticipants",
+    scopeToUser: false,
+  },
+  { table: "shared_entries", countKey: "sharedEntries", scopeToUser: false },
+  {
+    table: "shared_allocations",
+    countKey: "sharedAllocations",
+    scopeToUser: false,
+  },
+  { table: "shared_activity", countKey: "sharedActivity", scopeToUser: false },
+  { table: "shared_people", countKey: "sharedPeople", scopeToUser: true },
+  {
+    table: "shared_person_links",
+    countKey: "sharedPersonLinks",
+    scopeToUser: true,
+  },
   { table: "accounts", countKey: "accounts", scopeToUser: true },
+  {
+    table: "shared_integrations",
+    countKey: "sharedIntegrations",
+    scopeToUser: true,
+  },
+  { table: "shared_postings", countKey: "sharedPostings", scopeToUser: true },
   { table: "tags", countKey: "tags", scopeToUser: true },
+  {
+    // Only references users(id): the account, payee, category and tag ids a
+    // rule names are inside its JSONB, rewritten by the restore's id remap.
+    table: "transaction_rules",
+    countKey: "transactionRules",
+    scopeToUser: true,
+  },
+  {
+    // After `payees`, which it references (nullable, ON DELETE SET NULL). The
+    // category ids a definition names are inside its JSONB, rewritten by the
+    // restore's id remap.
+    table: "email_receipt_parsers",
+    countKey: "emailReceiptParsers",
+    scopeToUser: true,
+  },
   {
     table: "scheduled_transactions",
     countKey: "scheduledTransactions",
@@ -72,13 +145,6 @@ export const RESTORE_PLAN: ReadonlyArray<RestoreStep> = [
   {
     table: "scheduled_transaction_overrides",
     countKey: "scheduledTransactionOverrides",
-    scopeToUser: false,
-  },
-  {
-    // After `scheduled_transactions`, which it references. No user_id column of
-    // its own -- ownership comes through the schedule, like the two above.
-    table: "scheduled_transaction_postings",
-    countKey: "scheduledTransactionPostings",
     scopeToUser: false,
   },
   {
@@ -97,10 +163,47 @@ export const RESTORE_PLAN: ReadonlyArray<RestoreStep> = [
   { table: "security_tags", countKey: "securityTags", scopeToUser: false },
   { table: "transactions", countKey: "transactions", scopeToUser: true },
   {
+    table: "shared_ledger_links",
+    countKey: "sharedLedgerLinks",
+    scopeToUser: true,
+  },
+  {
+    // After `transactions`, the latest of the three tables it references
+    // (`scheduled_transactions`, `transaction_rules`, and the transaction that
+    // paid the occurrence). No user_id column of its own -- ownership comes
+    // through the schedule, like the scheduled tables above.
+    table: "scheduled_transaction_postings",
+    countKey: "scheduledTransactionPostings",
+    scopeToUser: false,
+  },
+  {
+    // After `scheduled_transactions` and `categories`, both of which it
+    // references (NOT NULL, ON DELETE CASCADE).
+    table: "payroll_deduction_rules",
+    countKey: "payrollDeductionRules",
+    scopeToUser: true,
+  },
+  {
+    // After `payroll_deduction_rules`, which it references (NOT NULL,
+    // ON DELETE CASCADE).
+    table: "payroll_deduction_rule_periods",
+    countKey: "payrollDeductionRulePeriods",
+    scopeToUser: true,
+  },
+  {
     table: "transaction_splits",
     countKey: "transactionSplits",
     scopeToUser: false,
   },
+  {
+    // After `transactions` and `payees`, which it references (both nullable,
+    // ON DELETE SET NULL), and before `transaction_attachments`, whose rows can
+    // name a warranty as their parent.
+    table: "warranties",
+    countKey: "warranties",
+    scopeToUser: true,
+  },
+  { table: "warranty_claims", countKey: "warrantyClaims", scopeToUser: true },
   {
     table: "transaction_attachments",
     countKey: "transactionAttachments",
@@ -134,8 +237,21 @@ export const RESTORE_PLAN: ReadonlyArray<RestoreStep> = [
     countKey: "loanRateChanges",
     scopeToUser: true,
   },
+  {
+    // After `accounts` and `categories`, both of which it references
+    // (NOT NULL, ON DELETE CASCADE).
+    table: "loan_fees",
+    countKey: "loanFees",
+    scopeToUser: true,
+  },
   { table: "loan_scenarios", countKey: "loanScenarios", scopeToUser: true },
   { table: "budgets", countKey: "budgets", scopeToUser: true },
+  {
+    // Before budget_categories: a line's bucket_id references it.
+    table: "budget_buckets",
+    countKey: "budgetBuckets",
+    scopeToUser: false,
+  },
   {
     table: "budget_categories",
     countKey: "budgetCategories",
@@ -147,7 +263,31 @@ export const RESTORE_PLAN: ReadonlyArray<RestoreStep> = [
     countKey: "budgetPeriodCategories",
     scopeToUser: false,
   },
-  { table: "budget_alerts", countKey: "budgetAlerts", scopeToUser: true },
+  {
+    // After budget_periods and budget_buckets, both of which it references.
+    table: "budget_period_buckets",
+    countKey: "budgetPeriodBuckets",
+    scopeToUser: false,
+  },
+  { table: "notifications", countKey: "notifications", scopeToUser: true },
+  {
+    table: "notification_preferences",
+    countKey: "notificationPreferences",
+    scopeToUser: true,
+  },
+  {
+    // After notifications: source_notification_id references notifications(id).
+    table: "notification_reminders",
+    countKey: "notificationReminders",
+    scopeToUser: true,
+  },
+  {
+    // Only references users(id); one row per user (the portfolio-movement
+    // baseline + threshold).
+    table: "notification_portfolio_state",
+    countKey: "notificationPortfolioState",
+    scopeToUser: true,
+  },
   { table: "custom_reports", countKey: "customReports", scopeToUser: true },
   {
     table: "investment_reports",
@@ -172,6 +312,22 @@ export const RESTORE_PLAN: ReadonlyArray<RestoreStep> = [
   {
     table: "ai_provider_configs",
     countKey: "aiProviderConfigs",
+    scopeToUser: true,
+  },
+  {
+    table: "payee_lookup_settings",
+    countKey: "payeeLookupSettings",
+    scopeToUser: true,
+  },
+  {
+    // The user's own Google Places month counters. Unlike every other step
+    // here, the restore does not clear this table first: the generic insert's
+    // ON CONFLICT DO NOTHING then means a machine with no row takes the
+    // archive's count (the migration this exists for) while a machine that
+    // already has one keeps its own, so a restore can never lower a live
+    // count and hand back quota the key has already spent.
+    table: "payee_lookup_usage",
+    countKey: "payeeLookupUsage",
     scopeToUser: true,
   },
   {
@@ -213,6 +369,28 @@ export const RESTORABLE_TABLES: ReadonlySet<string> = new Set(
 );
 
 /**
+ * The conflict arbiter `insertRows` names for a table that carries a
+ * `DEFERRABLE` unique constraint, as a column list.
+ *
+ * Why: the generic insert is `ON CONFLICT DO NOTHING`, and PostgreSQL refuses
+ * that statement outright on a table with a deferrable unique constraint ("ON
+ * CONFLICT does not support deferrable unique constraints/exclusion
+ * constraints as arbiters"), so a backup carrying even one row of such a table
+ * aborted the whole restore. Naming the primary key keeps the skip-on-duplicate
+ * behaviour for the row's identity and leaves the deferred constraint to be
+ * checked at commit, as it is for every other write. `restore-plan.spec.ts`
+ * fails a restored table with a deferrable constraint that has no entry here.
+ */
+export const CONFLICT_ARBITER_COLUMNS: Readonly<
+  Record<string, readonly string[]>
+> = {
+  // uq_transaction_rules_user_position is DEFERRABLE INITIALLY DEFERRED so a
+  // reorder can swap positions inside one transaction.
+  transaction_rules: ["id"],
+  shared_entries: ["id"],
+};
+
+/**
  * Columns stripped on insert because they reference a row that does not exist
  * yet -- a forward reference to a later table, or a reference into the row's
  * own table. Every entry here must be repaired by `DEFERRED_FK_REPAIRS`.
@@ -232,12 +410,17 @@ export const DEFERRED_FK_COLUMNS: Readonly<Record<string, readonly string[]>> =
       "principal_category_id",
       "interest_category_id",
       "asset_category_id",
+      // Forward: transaction_rules restores after accounts.
+      "payment_matching_rule_id",
       // Deferred so that legacy backups (taken before institutions were
       // included in the export) restore without violating fk_accounts_institution.
       // Phase 3 only re-applies it when the referenced institution exists.
       "institution_id",
     ],
     transactions: ["linked_transaction_id", "parent_transaction_id"],
+    // Self-referential: a scan pair's original points at the visible
+    // attachment, and the export's ORDER BY id can put the original first.
+    transaction_attachments: ["original_of_attachment_id"],
     payees: ["default_category_id"],
     // Scheduled transactions/splits are inserted before securities, so their
     // forward reference to securities(id) is deferred to Phase 3.
@@ -255,10 +438,20 @@ export interface DeferredFkRepair {
   column: string;
   /**
    * When set, the UPDATE only applies if a row with the referenced id exists in
-   * this table. Used for `institution_id` so legacy backups that predate
-   * institution export leave the column NULL instead of failing.
+   * this table AND belongs to the restoring user. Used for `institution_id` so
+   * legacy backups that predate institution export leave the column NULL
+   * instead of failing. Must name a table with a `user_id` column.
    */
   requireReferencedTable?: string;
+  /**
+   * For a table with no `user_id` of its own: the column and user-scoped parent
+   * table that say whose row it is. Every repair UPDATE is confined to rows the
+   * restoring user owns -- `user_id = $3` directly, or through this parent --
+   * so no id in the file, however it got there, can make Phase 3 write another
+   * user's row. `restore-plan.spec.ts` fails a repair on a non-user-scoped
+   * table that does not declare one.
+   */
+  ownedThrough?: { column: string; table: string };
 }
 
 /**
@@ -280,10 +473,19 @@ export const DEFERRED_FK_REPAIRS: ReadonlyArray<DeferredFkRepair> = [
   { table: "accounts", column: "principal_category_id" },
   { table: "accounts", column: "interest_category_id" },
   { table: "accounts", column: "asset_category_id" },
+  { table: "accounts", column: "payment_matching_rule_id" },
   { table: "transactions", column: "linked_transaction_id" },
   { table: "transactions", column: "parent_transaction_id" },
+  { table: "transaction_attachments", column: "original_of_attachment_id" },
   { table: "investment_transactions", column: "linked_transaction_id" },
   { table: "payees", column: "default_category_id" },
   { table: "scheduled_transactions", column: "investment_security_id" },
-  { table: "scheduled_transaction_splits", column: "investment_security_id" },
+  {
+    table: "scheduled_transaction_splits",
+    column: "investment_security_id",
+    ownedThrough: {
+      column: "scheduled_transaction_id",
+      table: "scheduled_transactions",
+    },
+  },
 ];

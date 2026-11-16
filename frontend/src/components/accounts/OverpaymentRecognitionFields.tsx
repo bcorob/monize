@@ -21,6 +21,8 @@ interface OverpaymentRecognitionFieldsProps {
   /** Where this loan's interest is booked, so the schedule/detection find it. */
   selectedInterestCategoryId: string;
   onInterestCategoryChange: (categoryId: string) => void;
+  /** Marks the interest category as required: a create has no default for it. */
+  interestCategoryRequired?: boolean;
   /** How this loan records interest, so rate detection reads it correctly. */
   interestBookingMode: InterestBookingMode;
   onInterestBookingModeChange: (mode: InterestBookingMode) => void;
@@ -45,6 +47,7 @@ export function OverpaymentRecognitionFields({
   categories,
   selectedInterestCategoryId,
   onInterestCategoryChange,
+  interestCategoryRequired = false,
   interestBookingMode,
   onInterestBookingModeChange,
   selectedOverpaymentCategoryId,
@@ -114,7 +117,9 @@ export function OverpaymentRecognitionFields({
       <LoanBookingHelp />
 
       <Combobox
-        label={t('mortgageFields.interestCategory')}
+        label={t(
+          interestCategoryRequired ? 'mortgageFields.interestCategoryRequired' : 'mortgageFields.interestCategory',
+        )}
         placeholder={t('mortgageFields.selectCategory')}
         options={categoryOptions}
         value={selectedInterestCategoryId}

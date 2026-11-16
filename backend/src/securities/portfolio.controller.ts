@@ -19,10 +19,16 @@ import { PortfolioService } from "./portfolio.service";
 import { SectorWeightingService } from "./sector-weighting.service";
 import { IntradayValueQueryDto } from "./dto/intraday-value.dto";
 import {
+  DailyMovementDetailQueryDto,
+  DailyMovementsQueryDto,
+} from "./dto/daily-movements-query.dto";
+import { DailyMovementService } from "./daily-movement.service";
+import {
   AllowDelegate,
   DelegateRequiresSection,
 } from "../delegation/decorators/delegate-access.decorator";
 import { DelegationService } from "../delegation/delegation.service";
+import { AllowPat } from "../auth/pat-access/pat-access.decorator";
 
 // A UUID that cannot match any real account: forces a naturally-empty,
 // correctly-shaped result for an acting delegate with no readable accounts
@@ -30,6 +36,7 @@ import { DelegationService } from "../delegation/delegation.service";
 const NO_READABLE_ACCOUNT = "00000000-0000-0000-0000-000000000000";
 
 @ApiTags("Portfolio")
+@AllowPat()
 @Controller("portfolio")
 @UseGuards(AuthGuard("jwt"))
 @ApiBearerAuth()
@@ -41,6 +48,7 @@ export class PortfolioController {
     private readonly portfolioService: PortfolioService,
     private readonly sectorWeightingService: SectorWeightingService,
     private readonly delegationService: DelegationService,
+    private readonly dailyMovementService: DailyMovementService,
   ) {}
 
   /**
@@ -108,6 +116,32 @@ export class PortfolioController {
     );
   }
 
+  @Get("valuation")
+  @AllowDelegate()
+  @DelegateRequiresSection("investments")
+  @ApiOperation({
+    summary:
+      "Get the portfolio's current value and holdings, without the since-inception returns",
+  })
+  @ApiQuery({
+    name: "accountIds",
+    required: false,
+    description:
+      "Comma-separated account IDs to filter by (will include linked pairs)",
+  })
+  @ApiResponse({
+    status: 200,
+    description: "Portfolio valuation retrieved successfully",
+  })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
+  async getValuation(@Request() req, @Query("accountIds") accountIds?: string) {
+    const ids = this.parseUuidList(accountIds, "account");
+    return this.portfolioService.getPortfolioValuation(
+      req.user.id,
+      await this.scopeIds(req, ids),
+    );
+  }
+
   @Get("allocation")
   @AllowDelegate()
   @DelegateRequiresSection("investments")
@@ -170,10 +204,9 @@ export class PortfolioController {
   @AllowDelegate()
   @DelegateRequiresSection("investments")
   @ApiOperation({
-    summary:
-      "List the KEY:VALUE tag keys present on the portfolio's securities",
+    summary: "Describe the tags present on the portfolio's securities",
     description:
-      "Distinct, case-folded, sorted keys (e.g. `country`, `sector`) so the UI can offer an aggregate-by-key chart.",
+      "`keys`: distinct, case-folded, sorted KEY:VALUE keys (e.g. `country`, `sector`) so the UI can offer an aggregate-by-key chart. `hasTaggedHoldings`: whether any held security carries a tag at all, which is what decides whether the plain by-tag grouping is offered, since a portfolio tagged only with plain labels has no keys. Answered from the holdings and their tags, without valuing the portfolio.",
   })
   @ApiQuery({ name: "accountIds", required: false })
   @ApiResponse({ status: 200, description: "Tag keys retrieved successfully" })
@@ -183,7 +216,7 @@ export class PortfolioController {
     @Query("accountIds") accountIds?: string,
   ) {
     const ids = this.parseUuidList(accountIds, "account");
-    return this.portfolioService.getPortfolioTagKeys(
+    return this.portfolioService.getPortfolioTagSummary(
       req.user.id,
       await this.scopeIds(req, ids),
     );
@@ -419,6 +452,61 @@ export class PortfolioController {
       req.user.id,
       await this.scopeIds(req, aIds),
       sIds,
+    );
+  }
+
+  /**
+   * Declared before `daily-movements` would be able to swallow it is not a
+   * concern here (neither takes a path parameter), but the detail route is
+   * nested under the month route's path, so it is declared first.
+   */
+  @Get("daily-movements/detail")
+  @AllowDelegate()
+  @DelegateRequiresSection("investments")
+  @ApiOperation({
+    summary: "Break one day's portfolio movement down by security",
+    description:
+      "The securities that rose and fell on the day, the count that did not " +
+      "move, and the remainder the per-security closes do not explain (a " +
+      "dividend, a position first priced that day, cash interest).",
+  })
+  @ApiResponse({ status: 200, description: "Day breakdown computed" })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
+  async getDailyMovementDetail(
+    @Request() req,
+    @Query() query: DailyMovementDetailQueryDto,
+  ) {
+    return this.dailyMovementService.getDailyMovementDetail(
+      req.user.id,
+      query.date,
+      await this.scopeIds(req, query.accountIds),
+      query.displayCurrency,
+    );
+  }
+
+  @Get("daily-movements")
+  @AllowDelegate()
+  @DelegateRequiresSection("investments")
+  @ApiOperation({
+    summary: "Get the portfolio's market movement for each day of a range",
+    description:
+      "MV(d) - MV(d-1) - the day's external cash flow, so a deposit is not a " +
+      "gain and a dividend is not a loss. Days after the server's today are " +
+      "not evaluated; a day with no close for any held security is blank " +
+      "rather than zero.",
+  })
+  @ApiResponse({ status: 200, description: "Daily movements computed" })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
+  async getDailyMovements(
+    @Request() req,
+    @Query() query: DailyMovementsQueryDto,
+  ) {
+    return this.dailyMovementService.getDailyMovements(
+      req.user.id,
+      query.startDate,
+      query.endDate,
+      await this.scopeIds(req, query.accountIds),
+      query.displayCurrency,
     );
   }
 }

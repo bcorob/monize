@@ -3,6 +3,7 @@ import { join } from "path";
 import { gitListFiles } from "./repo-tree.util";
 import {
   ACCOUNT_BALANCE_AS_OF_SQL,
+  ACCOUNT_BALANCES_AS_OF_DATES_SQL,
   LEDGER_EXCLUDES_VOID,
   LEDGER_MOVEMENT_PREDICATE,
   LEDGER_TOP_LEVEL_ONLY,
@@ -32,7 +33,7 @@ const SOURCE_ROOT = join(__dirname, "..");
  * Reports are deliberately NOT in scope. A report asking which rows to count
  * is asking a different question with a different answer -- several read split
  * *children* on purpose, because a parent's amount is not the cash meaning of
- * its lines (root CLAUDE.md, "A report that reads only the parent row cannot
+ * its lines (INV-REPORT-001 in docs/system-invariants.md, "A report that reads only the parent row cannot
  * exclude a line, so it excludes an amount"). That family has its own single
  * source in `common/investment-filter.util.ts` and its own guard; folding the
  * two together would make one of them wrong.
@@ -121,5 +122,12 @@ describe("as-of ledger balance SQL", () => {
     expect(LEDGER_MOVEMENT_PREDICATE).toContain(LEDGER_EXCLUDES_VOID);
     expect(LEDGER_MOVEMENT_PREDICATE).toContain(LEDGER_TOP_LEVEL_ONLY);
     expect(ACCOUNT_BALANCE_AS_OF_SQL).toContain(LEDGER_MOVEMENT_PREDICATE);
+  });
+
+  it("bounds the many-dates query by the same join at each unnested date", () => {
+    expect(ACCOUNT_BALANCES_AS_OF_DATES_SQL).toContain(
+      ledgerBalanceJoin("d.as_of"),
+    );
+    expect(ACCOUNT_BALANCES_AS_OF_DATES_SQL).toContain("unnest($3::date[])");
   });
 });

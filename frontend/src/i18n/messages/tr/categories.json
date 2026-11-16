@@ -7,6 +7,7 @@
     "filterAll": "Tümü ({count})",
     "filterExpenses": "Giderler ({count})",
     "filterIncome": "Gelirler ({count})",
+    "typeFilterLabel": "Tür",
     "modalTitleNew": "Yeni Kategori",
     "modalTitleEdit": "Kategoriyi Düzenle",
     "countSingle": "1 kategori",
@@ -54,6 +55,12 @@
     "typeExpense": "Gider",
     "typeIncome": "Gelir",
     "typeInherited": "Tür üst kategoriden devralındı",
+    "autoSignLabel": "Otomatik işaret",
+    "autoSignOn": "Açık",
+    "autoSignOff": "Kapalı",
+    "autoSignInherit": "Üst kategoriden devral",
+    "autoSignInheritedFrom": "Üst kategoriden devralındı ({name}): şu anda {state}",
+    "autoSignHelp": "Açık olduğunda, yazdığınız tutar gider kategorisinde negatif, gelir kategorisinde pozitif yapılır. İşareti tam girdiğiniz gibi korumak için kapatın.",
     "colourLabel": "Renk",
     "colourInherit": "Üst kategoriden devral",
     "colourNone": "Renk yok",
@@ -65,8 +72,8 @@
     "submitUpdate": "Kategoriyi Güncelle"
   },
   "list": {
-    "emptyHeading": "Kategori yok",
-    "emptyDescription": "Yeni bir kategori oluşturarak başlayın.",
+    "emptyHeading": "Kategori bulunamadı",
+    "emptyDescription": "Geçerli arama veya filtreyle eşleşen kategori yok.",
     "colName": "Ad",
     "colType": "Tür",
     "colCount": "Sayı",
@@ -79,7 +86,7 @@
     "viewTransactionsTitle": "Bu kategorideki işlemleri görüntüle"
   },
   "deleteDialog": {
-    "title": "\"{name}\" silinsin mi?",
+    "title": "\"{name}\" kategorisini sil",
     "checkingUsage": "Kullanım kontrol ediliyor...",
     "usedBy": "Bu kategori {count, plural, one {# öğe} other {# öğe}} tarafından kullanılıyor (işlemler ve/veya zamanlanmış faturalar ve mevduatlar).",
     "reassignLabel": "Yeniden ata:",

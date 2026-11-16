@@ -2,9 +2,14 @@
 
 import Link from 'next/link';
 import { useTranslations } from 'next-intl';
+import { splitTagChangeText } from '@/components/ai/split-tag-change-text';
+import { foreignEntryText } from '@/components/ai/foreign-entry-text';
+import { FX_RATE_DISPLAY_DECIMALS } from '@/lib/format';
 import { Button } from '@/components/ui/Button';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import type { PendingAction, PendingActionPreviewRow } from '@/types/ai';
+import { formatPhoneForDisplay } from '@/lib/phone-number';
+import { RuleEffectsLines } from '@/components/ai/RuleEffectsLines';
 
 interface BulkConfirmationCardProps {
   action: PendingAction;
@@ -25,7 +30,7 @@ export function BulkConfirmationCard({
   onCancel,
 }: BulkConfirmationCardProps) {
   const t = useTranslations('ai');
-  const { formatCurrency, formatCurrencyPrecise, formatQuantity } =
+  const { formatCurrency, formatCurrencyPrecise, formatQuantity, formatNumber } =
     useNumberFormat();
   const { preview, type, status } = action;
   // The generic batch envelope carries the operation on the (verbatim)
@@ -49,13 +54,24 @@ export function BulkConfirmationCard({
     batchOp === 'create_security' ||
     batchOp === 'update_security' ||
     batchOp === 'delete_security';
+  const isTag =
+    batchOp === 'create_tag' ||
+    batchOp === 'update_tag' ||
+    batchOp === 'delete_tag';
 
   const rows = preview.rows ?? [];
   const validCount = rows.filter((r) => r.status === 'ok').length;
   const flaggedCount = rows.length - validCount;
 
-  const title =
-    batchOp === 'update_investment'
+  const tagTitle =
+    batchOp === 'create_tag'
+      ? t('confirmAction.createTagsTitle')
+      : batchOp === 'update_tag'
+        ? t('confirmAction.updateTagsTitle')
+        : t('confirmAction.deleteTagsTitle');
+  const title = isTag
+    ? tagTitle
+    : batchOp === 'update_investment'
       ? t('confirmAction.updateInvestmentTransactionsTitle')
       : batchOp === 'delete_investment'
         ? t('confirmAction.deleteInvestmentTransactionsTitle')
@@ -87,13 +103,22 @@ export function BulkConfirmationCard({
       ? { href: '/payees', label: t('confirmAction.viewPayees') }
       : isSecurity
         ? { href: '/securities', label: t('confirmAction.viewSecurities') }
+        : isTag
+          ? { href: '/tags', label: t('confirmAction.viewTags') }
         : { href: '/transactions', label: t('confirmAction.viewTransaction') };
 
   // On success, prefer the server's actual affected count; fall back to the
   // number of valid rows the card displayed.
   const createdCount = action.resultCount ?? validCount;
-  const successMessage =
-    batchOp === 'update_investment'
+  const tagSuccess =
+    batchOp === 'create_tag'
+      ? t('confirmAction.createdTags', { count: createdCount })
+      : batchOp === 'update_tag'
+        ? t('confirmAction.updatedTags', { count: createdCount })
+        : t('confirmAction.deletedTags', { count: createdCount });
+  const successMessage = isTag
+    ? tagSuccess
+    : batchOp === 'update_investment'
       ? t('confirmAction.updatedInvestmentTransactions', { count: createdCount })
       : batchOp === 'delete_investment'
         ? t('confirmAction.deletedInvestmentTransactions', {
@@ -146,7 +171,13 @@ export function BulkConfirmationCard({
           )
         : '';
       const symbol = row.symbol ?? '';
-      const primary = [date, [actionLabel, symbol].filter(Boolean).join(' ')]
+      const series = row.bondSeriesCode
+        ? `${t('confirmAction.bondSeries')} ${row.bondSeriesCode}`
+        : '';
+      const primary = [
+        date,
+        [actionLabel, symbol, series].filter(Boolean).join(' '),
+      ]
         .filter(Boolean)
         .join(' · ');
       const parts: string[] = [];
@@ -161,6 +192,17 @@ export function BulkConfirmationCard({
         parts.push(
           formatCurrency(row.totalAmount, row.securityCurrency ?? undefined),
         );
+      }
+      if (row.accruedInterest) {
+        parts.push(
+          `${t('confirmAction.accruedInterest')} ${formatCurrency(
+            row.accruedInterest,
+            row.securityCurrency ?? undefined,
+          )}`,
+        );
+      }
+      if (row.bondRedemptionSplit?.outcome === 'differs') {
+        parts.push(t('confirmAction.redemptionSplitDiffers'));
       }
       return { primary, secondary: parts.join(' · ') };
     }
@@ -191,12 +233,49 @@ export function BulkConfirmationCard({
       return { primary, secondary: parts.join(' · ') };
     }
     if (isPayee) {
-      // The row has two slots, so the category and the website share the
-      // second one rather than the website going unshown.
+      // The row has two slots, so the category and every optional field share
+      // the second one. The address is included and goes last, so the one value
+      // long enough to wrap does it at the end rather than in the middle.
+      //
+      // The two groups have different contracts and cannot be formatted the
+      // same way. `categoryName` is always resolved, so its null means "this
+      // payee has no default category" and is simply left out. The optional
+      // fields distinguish undefined (the edit does not touch this field) from
+      // null (the edit clears it), and a cleared field has to say so: dropping
+      // it on truthiness renders a deletion as blank space, so the user
+      // approves a change the card never showed them. The individual card draws
+      // the same distinction -- and in bulk mode this row is the only card
+      // there is.
+      const optional = [
+        row.website,
+        row.email,
+        // Displayed, never the stored E.164. `undefined` still means "this edit
+        // does not touch the field" and `null` still means "cleared", so the
+        // formatter is applied only to a value that is actually there.
+        row.phone == null ? row.phone : formatPhoneForDisplay(row.phone),
+        row.address,
+      ]
+        .filter((value) => value !== undefined)
+        .map((value) => value || t('confirmAction.none'));
       return {
         primary: row.name || '',
-        secondary: [row.categoryName, row.website].filter(Boolean).join(' · '),
+        secondary: [row.categoryName, ...optional].filter(Boolean).join(' · '),
       };
+    }
+    if (isTag) {
+      // The tag after the action, and what the action does to it: a rename
+      // names the tag it renames, a colour or icon shows only when set, and a
+      // deletion says how many rows lose the tag.
+      const parts: string[] = [];
+      if (row.previousName)
+        parts.push(t('confirmAction.tagRenamedFrom', { name: row.previousName }));
+      if (row.tagColor !== undefined)
+        parts.push(`${t('confirmAction.tagColor')}: ${row.tagColor || t('confirmAction.none')}`);
+      if (row.tagIcon !== undefined)
+        parts.push(`${t('confirmAction.tagIcon')}: ${row.tagIcon || t('confirmAction.none')}`);
+      if (row.tagCarriedCount !== undefined)
+        parts.push(t('confirmAction.tagCarriedCount', { count: row.tagCarriedCount }));
+      return { primary: row.name || '', secondary: parts.join(' · ') };
     }
     if (isSecurity) {
       return {
@@ -221,11 +300,54 @@ export function BulkConfirmationCard({
               `${split.categoryName ?? t('confirmAction.uncategorized')} ${formatCurrency(
                 split.amount,
                 row.currencyCode,
-              )}`,
+              )}${
+                split.tagNames && split.tagNames.length > 0
+                  ? ` (${t('confirmAction.splitLineTags', { tags: split.tagNames.join(', ') })})`
+                  : ''
+              }`,
           )
           .join(' + '),
       );
     }
+    // Entered in another currency: what was paid and at which rate.
+    const foreignEntry = foreignEntryText(row, row.currencyCode, t, {
+      currency: formatCurrency,
+      rate: (rate) => formatNumber(rate, FX_RATE_DISPLAY_DECIMALS),
+    });
+    if (foreignEntry && 'cleared' in foreignEntry) {
+      parts.push(t('confirmAction.fxClearedBulk'));
+    } else if (foreignEntry) {
+      parts.push(
+        foreignEntry.rate
+          ? t('confirmAction.fxPaidAtBulk', { paid: foreignEntry.paid, rate: foreignEntry.rate })
+          : t('confirmAction.fxPaidBulk', { paid: foreignEntry.paid }),
+      );
+    }
+    // The tags the row adds and removes; its other tags stay.
+    if (row.tagNames && row.tagNames.length > 0) {
+      parts.push(
+        t('confirmAction.bulkTagsAdded', {
+          tags: row.tagNames
+            .map((name) =>
+              row.newTagNames?.includes(name) ? `${name} ${t('confirmAction.newTag')}` : name,
+            )
+            .join(', '),
+        }),
+      );
+    }
+    if (row.removeTagNames && row.removeTagNames.length > 0) {
+      parts.push(
+        t('confirmAction.bulkTagsRemoved', {
+          tags: row.removeTagNames.join(', '),
+        }),
+      );
+    }
+    // The tags the row changes on existing split lines, line by line.
+    row.splitTagChanges?.forEach((line) => {
+      parts.push(
+        splitTagChangeText(line, t, (amount) => formatCurrency(amount, row.currencyCode)),
+      );
+    });
     return { primary, secondary: parts.join(' · ') };
   }
 
@@ -271,6 +393,10 @@ export function BulkConfirmationCard({
                 <div className="text-xs text-gray-500 dark:text-gray-400">
                   {secondary}
                 </div>
+              )}
+              {!isError && (
+                // A transfer or split the rules add moves another account's balance: never hidden.
+                <RuleEffectsLines effects={row.ruleEffects} currencyCode={row.currencyCode} />
               )}
               {isError && row.error && (
                 <div className="text-xs text-amber-700 dark:text-amber-400">

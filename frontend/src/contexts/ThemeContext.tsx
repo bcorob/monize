@@ -8,6 +8,7 @@ import {
   RESOLVED_THEME_COOKIE,
   bootPageColor,
 } from '@/lib/pwa-theme';
+import { preferenceCookieAttributes } from '@/lib/preference-cookie';
 
 type Theme = 'light' | 'dark' | 'system';
 
@@ -90,10 +91,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     } else {
       root.classList.remove('dark');
     }
-    Cookies.set(RESOLVED_THEME_COOKIE, resolvedTheme, {
-      sameSite: 'lax',
-      expires: 365,
-    });
+    Cookies.set(RESOLVED_THEME_COOKIE, resolvedTheme, preferenceCookieAttributes());
   }, [resolvedTheme, mounted]);
 
   // Apply data-theme attribute to html element ('default' = no attribute),
@@ -108,10 +106,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     } else {
       root.setAttribute('data-theme', colorTheme);
     }
-    Cookies.set(COLOR_THEME_COOKIE, colorTheme, {
-      sameSite: 'lax',
-      expires: 365,
-    });
+    Cookies.set(COLOR_THEME_COOKIE, colorTheme, preferenceCookieAttributes());
   }, [colorTheme, mounted]);
 
   // Keep the theme-color meta on the active palette's page colour so the

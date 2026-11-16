@@ -5,7 +5,8 @@ import { DateInput } from '@/components/ui/DateInput';
 import { Select } from '@/components/ui/Select';
 import { MultiSelect, type MultiSelectOption } from '@/components/ui/MultiSelect';
 import { ChartViewToggle } from '@/components/ui/ChartViewToggle';
-import { ExportDropdown } from '@/components/ui/ExportDropdown';
+import { ReportToolbarActions } from '@/components/reports/ReportToolbarActions';
+import { LabelSpacer } from '@/components/ui/LabelSpacer';
 import {
   GROUP_BY_OPTIONS,
   SORT_BY_OPTIONS,
@@ -40,25 +41,6 @@ interface Props {
 }
 
 const SCOPES: BalanceScope[] = ['all', 'assets', 'liabilities'];
-
-/**
- * The space a `Select` gives its label, reserved above a control that has none.
- *
- * A button standing beside a labelled field is the height of the *field*, not
- * of the field plus its label. Reserving the label's own space above it means
- * what is left to stretch into is exactly the input's height, with no magic
- * number that a font or padding change would silently invalidate --
- * `self-stretch` alone measures from the top of the label and stands a label
- * taller. Both the sort-direction toggle and the view/export group need it, so
- * the rule lives in one place rather than being written out twice.
- */
-function LabelSpacer() {
-  return (
-    <span aria-hidden="true" className="mb-1 block text-sm font-medium">
-      {'\u00a0'}
-    </span>
-  );
-}
 
 /**
  * The report's toolbar: the date the balances are measured at, what is
@@ -165,24 +147,28 @@ export function AccountBalancesControls({
           </div>
         </div>
         {/* The view toggle and the export button are controls on a row of
-            labelled fields, so they take the fields' height the same way the
-            sort-direction button does: the label's space is reserved above
-            them, and what is left is stretched into. They were previously a
-            hand-rolled pair of icon buttons centred against the row, which
-            stood short of every field beside them -- `ChartViewToggle` is the
-            component 19 other surfaces use for exactly this. */}
+            labelled fields, so from `sm` up they take the fields' height the
+            same way the sort-direction button does: the label's space is
+            reserved above them, and what is left is stretched into. They were
+            previously a hand-rolled pair of icon buttons centred against the
+            row, which stood short of every field beside them --
+            `ChartViewToggle` is the component 19 other surfaces use for exactly
+            this. On a phone there is no field beside them, so the reserved
+            space goes and the export takes a line of its own. */}
         <div className="flex flex-col">
-          <LabelSpacer />
-          <div className="flex flex-1 items-stretch gap-2">
+          <div className="hidden sm:block">
+            <LabelSpacer />
+          </div>
+          <div className="flex flex-1 flex-wrap items-stretch gap-2">
             <ChartViewToggle
               value={viewMode === 'chart' ? 'pie' : 'table'}
               onChange={(view) => onViewModeChange(view === 'pie' ? 'chart' : 'table')}
               options={['table', 'pie']}
             />
-            <ExportDropdown
+            <ReportToolbarActions
               onExportPdf={onExportPdf}
               onExportCsv={onExportCsv}
-              className="h-full"
+              className="sm:ml-0"
             />
           </div>
         </div>

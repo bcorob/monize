@@ -42,7 +42,7 @@ describe('GettingStarted', () => {
 
   it('calls updatePreferences on dismiss', () => {
     render(<GettingStarted />);
-    const dismissBtn = screen.getByTitle('Dismiss');
+    const dismissBtn = screen.getByRole('button', { name: 'Dismiss' });
     fireEvent.click(dismissBtn);
     expect(mockUpdatePreferences).toHaveBeenCalledWith({ gettingStartedDismissed: true });
   });

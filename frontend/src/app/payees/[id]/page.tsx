@@ -38,6 +38,7 @@ import {
   buildDisplayCurrencyStrategy,
   summarizeInDisplayCurrency,
   aggregateGroupedTotals,
+  inDisplayCurrency,
 } from '@/components/transactions/widget-shared';
 import type { Payee, PayeeDetail, UpdatePayeeData } from '@/types/payee';
 import type { PayeeFormSubmitData } from '@/components/payees/PayeeForm';
@@ -148,7 +149,7 @@ function PayeeDetailContent() {
   const searchParams = useSearchParams();
   const payeeId = params.id as string;
 
-  const { convertToDefault, defaultCurrency } = useExchangeRates();
+  const { defaultCurrency } = useExchangeRates();
 
   const [detail, setDetail] = useState<PayeeDetail | null>(null);
   const [analytics, setAnalytics] = useState<PayeeAnalytics | null>(null);
@@ -180,97 +181,115 @@ function PayeeDetailContent() {
     formSubmitRef,
   } = useFormModal<Payee>();
 
-  const loadData = useCallback(async () => {
+  // Switching payees shows the spinner again; set during render rather than in
+  // the effect that loads the new one.
+  const [loadingId, setLoadingId] = useState(payeeId);
+  if (loadingId !== payeeId) {
+    setLoadingId(payeeId);
     setIsLoading(true);
     setError(null);
-    try {
-      // The detail is the page; the analytics feed the cards and panels, so a
-      // failure in any of them costs its panel, never the page.
-      const detailData = await payeesApi.getDetail(payeeId);
+  }
 
-      const today = isoDaysAgo(0);
-      const yearAgo = isoDaysAgo(365);
-      const thisYearStart = `${today.slice(0, 4)}-01-01`;
-      const lastYearStart = `${Number(today.slice(0, 4)) - 1}-01-01`;
-      const lastYearSameDate = `${Number(today.slice(0, 4)) - 1}${today.slice(4)}`;
+  // The mount / payee-switch load: the state already says loading.
+  const fetchData = useCallback(() => {
+    // Writes live in `run` so they land after the request, not during the effect.
+    const run = async () => {
+      try {
+        // The detail is the page; the analytics feed the cards and panels, so a
+        // failure in any of them costs its panel, never the page.
+        const detailData = await payeesApi.getDetail(payeeId);
 
-      const [
-        lifetimeSummary,
-        thisYearSummary,
-        lastYearSummary,
-        monthlyTotals,
-        categoryTotals,
-        categoryTotalsAllTime,
-        recurringCharges,
-      ] = await Promise.all([
-        transactionsApi.getSummary({ payeeIds: [payeeId] }).catch((err) => {
-          logger.error(err);
-          return null;
-        }),
-        transactionsApi
-          .getSummary({ payeeIds: [payeeId], startDate: thisYearStart, endDate: today })
-          .catch(() => null),
-        transactionsApi
-          .getSummary({
-            payeeIds: [payeeId],
-            startDate: lastYearStart,
-            endDate: lastYearSameDate,
-          })
-          .catch(() => null),
-        // No date range: the chart covers the payee's whole history, and its
-        // own granularity control buckets by quarter or year once that history
-        // outgrows monthly bars. A window here would silently hide the years
-        // before it, which is the opposite of what a detail page is for.
-        transactionsApi
-          .getMonthlyTotals({ payeeIds: [payeeId] })
-          .catch(() => [] as MonthlyTotal[]),
-        transactionsApi
-          .getGroupedTotals({
-            groupBy: 'category',
-            payeeIds: [payeeId],
-            startDate: yearAgo,
-            endDate: today,
-            limit: 25,
-          })
-          .catch(() => [] as GroupedTotal[]),
-        // Both ranges are fetched up front so the Top Categories toggle is
-        // instant. They are two cheap grouped queries, and switching range is a
-        // comparison -- putting a spinner between the two halves of it would
-        // make the comparison harder than the request is expensive.
-        transactionsApi
-          .getGroupedTotals({
-            groupBy: 'category',
-            payeeIds: [payeeId],
-            limit: 25,
-          })
-          .catch(() => [] as GroupedTotal[]),
-        transactionsApi
-          .getRecurringCharges({ payeeIds: [payeeId], startDate: yearAgo, endDate: today })
-          .catch(() => [] as RecurringChargeInfo[]),
-      ]);
+        const today = isoDaysAgo(0);
+        const yearAgo = isoDaysAgo(365);
+        const thisYearStart = `${today.slice(0, 4)}-01-01`;
+        const lastYearStart = `${Number(today.slice(0, 4)) - 1}-01-01`;
+        const lastYearSameDate = `${Number(today.slice(0, 4)) - 1}${today.slice(4)}`;
 
-      setDetail(detailData);
-      setAnalytics({
-        lifetimeSummary,
-        thisYearSummary,
-        lastYearSummary,
-        monthlyTotals,
-        categoryTotals,
-        categoryTotalsAllTime,
-        recurringCharges,
-      });
-      setRefreshKey((key) => key + 1);
-    } catch (err) {
-      logger.error(err);
-      setError(getErrorMessage(err, t('loadFailed')));
-    } finally {
-      setIsLoading(false);
-    }
+        const [
+          lifetimeSummary,
+          thisYearSummary,
+          lastYearSummary,
+          monthlyTotals,
+          categoryTotals,
+          categoryTotalsAllTime,
+          recurringCharges,
+        ] = await Promise.all([
+          transactionsApi.getSummary({ payeeIds: [payeeId] }).catch((err) => {
+            logger.error(err);
+            return null;
+          }),
+          transactionsApi
+            .getSummary({ payeeIds: [payeeId], startDate: thisYearStart, endDate: today })
+            .catch(() => null),
+          transactionsApi
+            .getSummary({
+              payeeIds: [payeeId],
+              startDate: lastYearStart,
+              endDate: lastYearSameDate,
+            })
+            .catch(() => null),
+          // No date range: the chart covers the payee's whole history, and its
+          // own granularity control buckets by quarter or year once that history
+          // outgrows monthly bars. A window here would silently hide the years
+          // before it, which is the opposite of what a detail page is for.
+          transactionsApi
+            .getMonthlyTotals({ payeeIds: [payeeId] })
+            .catch(() => [] as MonthlyTotal[]),
+          transactionsApi
+            .getGroupedTotals({
+              groupBy: 'category',
+              payeeIds: [payeeId],
+              startDate: yearAgo,
+              endDate: today,
+              limit: 25,
+            })
+            .catch(() => [] as GroupedTotal[]),
+          // Both ranges are fetched up front so the Top Categories toggle is
+          // instant. They are two cheap grouped queries, and switching range is a
+          // comparison -- putting a spinner between the two halves of it would
+          // make the comparison harder than the request is expensive.
+          transactionsApi
+            .getGroupedTotals({
+              groupBy: 'category',
+              payeeIds: [payeeId],
+              limit: 25,
+            })
+            .catch(() => [] as GroupedTotal[]),
+          transactionsApi
+            .getRecurringCharges({ payeeIds: [payeeId], startDate: yearAgo, endDate: today })
+            .catch(() => [] as RecurringChargeInfo[]),
+        ]);
+
+        setDetail(detailData);
+        setAnalytics({
+          lifetimeSummary,
+          thisYearSummary,
+          lastYearSummary,
+          monthlyTotals,
+          categoryTotals,
+          categoryTotalsAllTime,
+          recurringCharges,
+        });
+        setRefreshKey((key) => key + 1);
+      } catch (err) {
+        logger.error(err);
+        setError(getErrorMessage(err, t('loadFailed')));
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    return run();
   }, [payeeId, t]);
 
+  const loadData = useCallback(() => {
+    setIsLoading(true);
+    setError(null);
+    return fetchData();
+  }, [fetchData]);
+
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    fetchData();
+  }, [fetchData]);
 
   // Supporting data, loaded once: the switcher and merge dialog need the payee
   // list, the edit form needs categories, the recurring panel the schedules.
@@ -313,9 +332,8 @@ function PayeeDetailContent() {
       buildDisplayCurrencyStrategy(
         analytics?.lifetimeSummary ?? null,
         defaultCurrency,
-        convertToDefault,
       ),
-    [analytics?.lifetimeSummary, defaultCurrency, convertToDefault],
+    [analytics?.lifetimeSummary, defaultCurrency],
   );
 
   const isMultiCurrency =
@@ -350,6 +368,7 @@ function PayeeDetailContent() {
           cadence: best.frequency,
           amount: best.currentAmount,
           previousAmount: best.previousAmount,
+          currencyCode: best.currencyCode,
         }
       : null;
   }, [analytics?.recurringCharges]);
@@ -367,7 +386,7 @@ function PayeeDetailContent() {
         : (analytics?.categoryTotals ?? []);
     // A row whose total could not be converted is dropped rather than drawn: a
     // bar has no way to say "unknown", and a zero-width one reads as a measured
-    // zero (frontend/CLAUDE.md). Count the dropped rows so the panel marks the
+    // zero (docs/frontend/financial-figures.md). Count the dropped rows so the panel marks the
     // bars as a subtotal.
     const aggregated = aggregateGroupedTotals(source, currencyStrategy);
     const rows = aggregated
@@ -396,7 +415,7 @@ function PayeeDetailContent() {
         id: row.accountId,
         name: row.accountName,
         currencyCode: currencyStrategy.displayCurrency,
-        total: currencyStrategy.toDisplay(row.total, row.currencyCode),
+        total: inDisplayCurrency(currencyStrategy, row),
         count: row.transactionCount,
       }))
       // Same reasoning as the category panel: no rate, no bar.
@@ -641,7 +660,10 @@ function PayeeDetailContent() {
                     onSelectDate={(date) =>
                       goToRegister({ startDate: date, endDate: date })
                     }
-                    onSelectAccount={(accountId) => router.push(`/accounts/${accountId}`)}
+                    onSelectAccount={(accountId) =>
+                      router.push(`/accounts/${accountId}`)
+                    }
+                    onContactLookedUp={loadData}
                   />
                 </div>
 
@@ -711,7 +733,6 @@ function PayeeDetailContent() {
                   <PayeeRecurringPanel
                     charges={analytics?.recurringCharges ?? []}
                     nextBill={nextBill}
-                    currencyStrategy={currencyStrategy}
                     isLoading={false}
                   />
                   <PayeeSeasonalityPanel

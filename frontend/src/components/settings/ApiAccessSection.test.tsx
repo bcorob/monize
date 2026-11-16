@@ -7,7 +7,26 @@ vi.mock('@/lib/auth', () => ({
     getTokens: vi.fn().mockResolvedValue([]),
     createToken: vi.fn(),
     revokeToken: vi.fn(),
+    getSelfProfile: vi.fn(),
+    beginOidcReauth: vi.fn(),
   },
+}));
+
+vi.mock('@/lib/api', () => ({
+  default: { post: vi.fn() },
+}));
+
+// The real modal verifies against the server; this stand-in shows which
+// purpose it was opened for and lets a test finish or cancel the step-up.
+vi.mock('@/components/auth/StepUpAuthModal', () => ({
+  StepUpAuthModal: ({ isOpen, purpose, onVerified, onClose }: any) =>
+    isOpen ? (
+      <div data-testid="step-up-modal">
+        <span>{purpose}</span>
+        <button onClick={() => onVerified?.()}>Confirm step-up</button>
+        <button onClick={onClose}>Dismiss step-up</button>
+      </div>
+    ) : null,
 }));
 
 vi.mock('@/lib/errors', () => ({
@@ -33,7 +52,12 @@ vi.mock('@/components/ui/ConfirmDialog', () => ({
 }));
 
 import { authApi } from '@/lib/auth';
+import apiClient from '@/lib/api';
+import { useStepUpTokenStore } from '@/lib/stepUpToken';
 import toast from 'react-hot-toast';
+
+const STEP_UP_PURPOSE = 'personal-access-token';
+const inFiveMinutes = () => new Date(Date.now() + 5 * 60 * 1000).toISOString();
 
 const mockToken = {
   id: 'tok-1',
@@ -64,7 +88,16 @@ function getFormSubmitButton() {
 describe('ApiAccessSection', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    sessionStorage.clear();
     (authApi.getTokens as any).mockResolvedValue([]);
+    (authApi.getSelfProfile as any).mockResolvedValue({
+      id: 'user-1',
+      authProvider: 'local',
+      hasPassword: true,
+    });
+    // Most tests are about the form, not the second factor: start verified.
+    useStepUpTokenStore.getState().clearAll();
+    useStepUpTokenStore.getState().set(STEP_UP_PURPOSE, 'step-up-jwt', inFiveMinutes());
   });
 
   it('renders the section heading and description', async () => {
@@ -84,6 +117,19 @@ describe('ApiAccessSection', () => {
     });
     expect(screen.getByDisplayValue(/\/api\/v1\/mcp$/)).toBeInTheDocument();
     expect(screen.getByText(/Use this URL when configuring MCP clients/)).toBeInTheDocument();
+  });
+
+  it('reads when a token was last used through the locale-aware relative time', async () => {
+    const threeDaysAgo = new Date(Date.now() - 3 * 86_400_000).toISOString();
+    (authApi.getTokens as any).mockResolvedValue([
+      { ...mockToken, lastUsedAt: threeDaysAgo },
+      { ...mockToken, id: 'tok-2', name: 'Unused', lastUsedAt: null },
+    ]);
+    render(<ApiAccessSection />);
+
+    // Intl.RelativeTimeFormat's wording, not a catalog "{count} days ago".
+    expect(await screen.findByText(/Last used\s+3 days ago/)).toBeInTheDocument();
+    expect(screen.getByText(/Last used\s+Never/)).toBeInTheDocument();
   });
 
   it('renders the Create Token button', async () => {
@@ -225,7 +271,189 @@ describe('ApiAccessSection', () => {
           name: 'Test Token',
           scopes: 'read,write',
         }),
+        'step-up-jwt',
       );
+    });
+  });
+
+  it('defaults the expiry to 90 days', async () => {
+    (authApi.createToken as any).mockResolvedValue({ ...mockToken, token: 'pat_x' });
+
+    render(<ApiAccessSection />);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Create Token' })).toBeInTheDocument();
+    });
+    await openCreateModal();
+    expect(screen.getByRole('combobox')).toHaveValue('90');
+
+    fireEvent.change(screen.getByLabelText('Token Name'), { target: { value: 'CLI' } });
+    fireEvent.click(getFormSubmitButton());
+
+    await waitFor(() => {
+      expect(authApi.createToken).toHaveBeenCalled();
+    });
+    const sent = (authApi.createToken as any).mock.calls[0][0];
+    const days = (new Date(sent.expiresAt).getTime() - Date.now()) / (24 * 60 * 60 * 1000);
+    expect(days).toBeGreaterThan(89);
+    expect(days).toBeLessThan(91);
+  });
+
+  it('sends expiresAt null when no expiration is chosen', async () => {
+    (authApi.createToken as any).mockResolvedValue({ ...mockToken, token: 'pat_x' });
+
+    render(<ApiAccessSection />);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Create Token' })).toBeInTheDocument();
+    });
+    await openCreateModal();
+    fireEvent.change(screen.getByLabelText('Token Name'), { target: { value: 'CLI' } });
+    fireEvent.change(screen.getByRole('combobox'), { target: { value: '' } });
+    fireEvent.click(getFormSubmitButton());
+
+    await waitFor(() => {
+      expect(authApi.createToken).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'CLI', expiresAt: null }),
+        'step-up-jwt',
+      );
+    });
+  });
+
+  it('sends the step-up token with the create request', async () => {
+    (authApi.createToken as any).mockResolvedValue({ ...mockToken, token: 'pat_x' });
+
+    render(<ApiAccessSection />);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Create Token' })).toBeInTheDocument();
+    });
+    await openCreateModal();
+    fireEvent.change(screen.getByLabelText('Token Name'), { target: { value: 'CLI' } });
+    fireEvent.click(getFormSubmitButton());
+
+    await waitFor(() => {
+      expect(authApi.createToken).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'CLI', scopes: 'read' }),
+        'step-up-jwt',
+      );
+    });
+  });
+
+  it('asks for step-up before creating a token, then creates it', async () => {
+    // A PAT outlives the session that mints it, so the server refuses to mint
+    // one on the session alone; the form must re-verify first.
+    useStepUpTokenStore.getState().clearAll();
+    (authApi.createToken as any).mockResolvedValue({ ...mockToken, token: 'pat_after_step_up' });
+
+    render(<ApiAccessSection />);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Create Token' })).toBeInTheDocument();
+    });
+    await openCreateModal();
+    fireEvent.change(screen.getByLabelText('Token Name'), { target: { value: 'CLI' } });
+    fireEvent.click(getFormSubmitButton());
+
+    await waitFor(() => {
+      expect(screen.getByTestId('step-up-modal')).toHaveTextContent(STEP_UP_PURPOSE);
+    });
+    expect(authApi.createToken).not.toHaveBeenCalled();
+
+    // What the real modal does on success: store the token, then report back.
+    useStepUpTokenStore.getState().set(STEP_UP_PURPOSE, 'fresh-step-up', inFiveMinutes());
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm step-up' }));
+
+    await waitFor(() => {
+      expect(authApi.createToken).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'CLI', scopes: 'read' }),
+        'fresh-step-up',
+      );
+    });
+    await waitFor(() => {
+      expect(screen.getByDisplayValue('pat_after_step_up')).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId('step-up-modal')).not.toBeInTheDocument();
+  });
+
+  it('creates nothing when the step-up is dismissed', async () => {
+    useStepUpTokenStore.getState().clearAll();
+
+    render(<ApiAccessSection />);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Create Token' })).toBeInTheDocument();
+    });
+    await openCreateModal();
+    fireEvent.change(screen.getByLabelText('Token Name'), { target: { value: 'CLI' } });
+    fireEvent.click(getFormSubmitButton());
+    await waitFor(() => {
+      expect(screen.getByTestId('step-up-modal')).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss step-up' }));
+
+    await waitFor(() => {
+      expect(screen.queryByTestId('step-up-modal')).not.toBeInTheDocument();
+    });
+    expect(authApi.createToken).not.toHaveBeenCalled();
+  });
+
+  it('asks again when the server says the step-up expired', async () => {
+    (authApi.createToken as any).mockRejectedValue({
+      response: { data: { code: 'STEP_UP_EXPIRED', purpose: STEP_UP_PURPOSE } },
+    });
+
+    render(<ApiAccessSection />);
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: 'Create Token' })).toBeInTheDocument();
+    });
+    await openCreateModal();
+    fireEvent.change(screen.getByLabelText('Token Name'), { target: { value: 'CLI' } });
+    fireEvent.click(getFormSubmitButton());
+
+    await waitFor(() => {
+      expect(screen.getByTestId('step-up-modal')).toBeInTheDocument();
+    });
+    expect(useStepUpTokenStore.getState().getValid(STEP_UP_PURPOSE)).toBeNull();
+    expect(toast.error).not.toHaveBeenCalled();
+  });
+
+  it('finishes an identity-provider step-up and reopens the form as it was', async () => {
+    useStepUpTokenStore.getState().clearAll();
+    sessionStorage.setItem(
+      'stepUpOidcPending',
+      JSON.stringify({
+        purpose: STEP_UP_PURPOSE,
+        payload: { name: 'Claude', expiryDays: '30', scopes: ['read', 'write'] },
+      }),
+    );
+    sessionStorage.setItem('oidcReauthArtifact', 'reauth-artifact');
+    (apiClient.post as any).mockResolvedValue({
+      data: { stepUpToken: 'oidc-step-up', expiresAt: inFiveMinutes() },
+    });
+
+    render(<ApiAccessSection />);
+
+    await waitFor(() => {
+      expect(apiClient.post).toHaveBeenCalledWith('/auth/step-up', {
+        purpose: STEP_UP_PURPOSE,
+        oidcReauthToken: 'reauth-artifact',
+      });
+    });
+    await waitFor(() => {
+      expect(screen.getByLabelText('Token Name')).toHaveValue('Claude');
+    });
+    expect(screen.getByRole('checkbox', { name: /Write/ })).toBeChecked();
+    expect(useStepUpTokenStore.getState().getValid(STEP_UP_PURPOSE)).toBe('oidc-step-up');
+  });
+
+  it('says so when the identity-provider step-up cannot be confirmed', async () => {
+    sessionStorage.setItem(
+      'stepUpOidcPending',
+      JSON.stringify({ purpose: STEP_UP_PURPOSE }),
+    );
+    (apiClient.post as any).mockRejectedValue(new Error('spent'));
+
+    render(<ApiAccessSection />);
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('Failed to confirm re-authentication');
     });
   });
 

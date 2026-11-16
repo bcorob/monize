@@ -229,42 +229,61 @@ CREATE POLICY scheduled_transaction_postings_isolation ON scheduled_transaction_
 -- `budget_alerts`.
 --
 -- Re-runnable: after the first pass no fingerprint has two rows.
-DELETE FROM budget_alerts
- WHERE id IN (
-   SELECT id
-     FROM (
-       SELECT id,
-              ROW_NUMBER() OVER (
-                PARTITION BY budget_id,
-                             period_start,
-                             alert_type,
-                             COALESCE(budget_category_id, '00000000-0000-0000-0000-000000000000'::uuid),
-                             severity
-                ORDER BY (dismissed_at IS NOT NULL) DESC,
-                         COALESCE(is_read, false) DESC,
-                         COALESCE(is_email_sent, false) DESC,
-                         created_at ASC NULLS LAST,
-                         id ASC
-              ) AS rn
-         FROM budget_alerts
-     ) ranked
-    WHERE rn > 1
- );
+--
+-- Guarded on the table's existence because migration 179 renames budget_alerts
+-- to `notifications`. A database old enough to need this repair still calls it
+-- budget_alerts and runs the body exactly as it always did; one that has already
+-- reached 179 -- a fresh install built from schema.sql, and the replay CI runs
+-- on top of it -- has nothing here to repair, and the statements would fail on a
+-- table that no longer exists. PL/pgSQL plans a statement only when it is
+-- reached, which is what makes the guard work at all: naming a missing table
+-- outside a DO block is a parse error, not a skipped branch.
+DO $migration_140_alerts$
+BEGIN
+    IF to_regclass('public.budget_alerts') IS NULL THEN
+        RAISE NOTICE
+            'budget_alerts has been renamed to notifications (migration 179); skipping the alert repair';
+        RETURN;
+    END IF;
 
--- deduplicateAlerts() drops a candidate matching an existing (alert_type,
--- budget_category_id) unless its severity is strictly higher -- so severity
--- belongs in the key, and an escalation is still allowed to insert. COALESCE
--- because a budget-wide alert has a NULL category, and NULL never equals NULL
--- in a unique index: without it the budget-wide alerts -- flex group, income
--- shortfall, positive milestone -- would be exactly the ones left unguarded.
-CREATE UNIQUE INDEX IF NOT EXISTS idx_budget_alerts_fingerprint
-    ON budget_alerts(
-        budget_id,
-        period_start,
-        alert_type,
-        COALESCE(budget_category_id, '00000000-0000-0000-0000-000000000000'::uuid),
-        severity
-    );
+    DELETE FROM budget_alerts
+     WHERE id IN (
+       SELECT id
+         FROM (
+           SELECT id,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY budget_id,
+                                 period_start,
+                                 alert_type,
+                                 COALESCE(budget_category_id, '00000000-0000-0000-0000-000000000000'::uuid),
+                                 severity
+                    ORDER BY (dismissed_at IS NOT NULL) DESC,
+                             COALESCE(is_read, false) DESC,
+                             COALESCE(is_email_sent, false) DESC,
+                             created_at ASC NULLS LAST,
+                             id ASC
+                  ) AS rn
+             FROM budget_alerts
+         ) ranked
+        WHERE rn > 1
+     );
+
+    -- deduplicateAlerts() drops a candidate matching an existing (alert_type,
+    -- budget_category_id) unless its severity is strictly higher -- so severity
+    -- belongs in the key, and an escalation is still allowed to insert. COALESCE
+    -- because a budget-wide alert has a NULL category, and NULL never equals NULL
+    -- in a unique index: without it the budget-wide alerts -- flex group, income
+    -- shortfall, positive milestone -- would be exactly the ones left unguarded.
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_budget_alerts_fingerprint
+        ON budget_alerts(
+            budget_id,
+            period_start,
+            alert_type,
+            COALESCE(budget_category_id, '00000000-0000-0000-0000-000000000000'::uuid),
+            severity
+        );
+END
+$migration_140_alerts$;
 
 -- ---------------------------------------------------------------------------
 -- 5. transaction_attachments

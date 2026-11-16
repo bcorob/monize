@@ -148,4 +148,37 @@ describe('addSummaryCardsToPdf', () => {
     // Third card at x = 14 + 2*(cardWidth + 4)
     expect(calls[2][0]).toBeCloseTo(14 + 2 * (cardWidth + 4));
   });
+
+  describe('a card note', () => {
+    function docWithSplit() {
+      const d = createMockDoc() as unknown as Record<string, unknown>;
+      d.splitTextToSize = vi.fn((text: string) => [text]);
+      return d as unknown as jsPDF;
+    }
+
+    it('prints the note under the value and grows every card by the same strip', () => {
+      const withNote = docWithSplit();
+      const after = addSummaryCardsToPdf(
+        withNote,
+        [{ label: 'Net Worth', value: '$1', note: 'Partial total' }, { label: 'Change', value: '$2' }],
+        { startY: 30, pageWidth: 297, margin: 14 },
+      );
+      const plain = addSummaryCardsToPdf(
+        createMockDoc(),
+        [{ label: 'Net Worth', value: '$1' }, { label: 'Change', value: '$2' }],
+        { startY: 30, pageWidth: 297, margin: 14 },
+      );
+      expect(withNote.text).toHaveBeenCalledWith(['Partial total'], expect.any(Number), expect.any(Number));
+      expect(after).toBeGreaterThan(plain);
+      const heights = (withNote.roundedRect as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[3]);
+      expect(new Set(heights).size).toBe(1);
+    });
+
+    it('leaves a row without notes laid out as before', () => {
+      const d = createMockDoc();
+      addSummaryCardsToPdf(d, [{ label: 'A', value: '1' }], { startY: 30, pageWidth: 297, margin: 14 });
+      expect((d.roundedRect as ReturnType<typeof vi.fn>).mock.calls[0][3]).toBe(18);
+      expect(d.text).toHaveBeenCalledTimes(2);
+    });
+  });
 });

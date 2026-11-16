@@ -35,10 +35,10 @@ import { lockAccountsForBalanceWrite } from "@/common/db/locks";
  * of PostgreSQL and a mock cannot demonstrate it
  * (`docs/verification-contract.md`).
  *
- * **What this suite reaches, and what it does not.** The integration harness
- * replaces `ScheduledTransactionsModule` with a stub to break a require cycle,
- * so the real `ScheduledTransactionsService.post()` cannot be constructed here.
- * This suite therefore proves the *protocol*: that holding the pricing lock
+ * **What this suite reaches, and what it does not.** This suite was written
+ * while the integration harness replaced `ScheduledTransactionsModule` with a
+ * stub, so it does not call the real `ScheduledTransactionsService.post()`
+ * (the harness now builds the real module). It proves the *protocol*: that holding the pricing lock
  * across the debt read forces a real, production-path ledger write to queue
  * behind it. That the posting path actually takes that lock before it prices is
  * held by `pricing-lock.guard.spec.ts`, which scans the posting source. Neither

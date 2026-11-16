@@ -4,32 +4,45 @@ import { useState, useRef, useEffect } from 'react';
 import { useTranslations } from 'next-intl';
 import { useClickOutside } from '@/hooks/useClickOutside';
 import { useHideOnScroll } from '@/hooks/useHideOnScroll';
+import { useHasMobileTabBar } from '@/hooks/useIsMobile';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/authStore';
+import { holdPushForSignOut } from '@/lib/push';
 import { authApi } from '@/lib/auth';
 import { isNavSectionActive } from '@/lib/nav-section';
-import { markLogoutIncomplete, clearLogoutIncomplete } from '@/lib/logout-state';
+import {
+  beginSignOut,
+  markLogoutIncomplete,
+  clearLogoutIncomplete,
+} from '@/lib/logout-state';
 import Image from 'next/image';
 import { Button } from '@/components/ui/Button';
-import { BudgetAlertBadge } from '@/components/budgets/BudgetAlertBadge';
+import { NotificationBell } from '@/components/notifications/NotificationBell';
 import { ActionHistoryPanel } from '@/components/layout/ActionHistoryPanel';
+import { HelpMenu } from '@/components/layout/HelpMenu';
 import { MobileNavDrawer } from '@/components/layout/MobileNavDrawer';
+import { CollapsedHeaderTitleView } from '@/components/layout/CollapsedHeaderTitleView';
+import { useMobileChromeStore } from '@/store/mobileChromeStore';
+import { useHelpMenuEntries } from '@/hooks/useHelpMenuEntries';
 import { TOUR_ANCHORS, tourAnchor } from '@/lib/tours/anchors';
 import { useTourOpensToolsMenu } from '@/store/tourStore';
+import { navigateToTransactionSearch } from '@/hooks/useTransactionFilters';
+import { useVisibleNavLinks } from '@/hooks/useVisibleNavLinks';
 import {
-  HEADER_SEARCH_EVENT,
-  clearTransactionFilterStorage,
-  type HeaderSearchEventDetail,
-} from '@/hooks/useTransactionFilters';
-import { NAV_LINKS, TOOLS_LINKS, AI_LINKS, NAV_ICONS } from '@/lib/nav-links';
+  TOOLS_LINKS,
+  ADMIN_LINKS,
+  NAV_ICONS,
+} from '@/lib/nav-links';
 import toast from 'react-hot-toast';
+import { SearchSyntaxHelp } from '@/components/transactions/SearchSyntaxHelp';
+import { ChevronDownIcon } from '@heroicons/react/24/outline';
+import { MENU_ENTER_CLASS, MENU_ORIGIN_LEFT } from '@/components/ui/menu-motion';
 
 // Labels are translation keys in the `navigation` namespace, resolved at
 // render time. The href doubles as the route, the active-state match, and
 // the icon lookup; the arrays and NAV_ICONS live together in lib/nav-links.
-const navLinks = NAV_LINKS;
 const toolsLinks = TOOLS_LINKS;
-const aiLinks = AI_LINKS;
+const adminLinks = ADMIN_LINKS;
 
 /** Leading icon on a dropdown/menu row; the top-bar pills stay text-only. */
 function NavItemIcon({ href, active }: { href: string; active: boolean }) {
@@ -57,75 +70,58 @@ const NAV_TOUR_ANCHORS: Record<string, { 'data-tour-id': string }> = {
   '/reports': tourAnchor(TOUR_ANCHORS.navReports),
 };
 
+// The Tools menu's own entries a tour points at, keyed by route. Same rule as
+// above: attached here and nowhere else.
+const TOOLS_TOUR_ANCHORS: Record<string, { 'data-tour-id': string }> = {
+  '/rules': tourAnchor(TOUR_ANCHORS.navRules),
+  '/warranties': tourAnchor(TOUR_ANCHORS.navWarranties),
+  '/taxes': tourAnchor(TOUR_ANCHORS.navTaxes),
+  '/shared-expenses': tourAnchor(TOUR_ANCHORS.navSharedExpenses),
+};
+
 export function AppHeader() {
   const t = useTranslations('navigation');
   const router = useRouter();
   const pathname = usePathname();
   const user = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
-  const actingAsUserId = useAuthStore((s) => s.actingAsUserId);
-  const delegateCapabilities = useAuthStore((s) => s.delegateCapabilities);
-  const delegateSections = useAuthStore((s) => s.delegateSections);
-  const isDelegateView = !!actingAsUserId;
-  // A delegate sees a top-nav entry only if it is reachable: granted
-  // sections (bills/investments/budgets/reports) plus Transactions when
-  // they can read any non-investment account (delegateSections.transactions,
-  // derived server-side). Accounts stays per-account scoped and hidden from
-  // the section nav; the dashboard remains the delegate's landing page.
-  const navSectionByHref: Record<
-    string,
-    'bills' | 'investments' | 'budgets' | 'reports' | 'transactions' | 'accounts'
-  > = {
-    '/accounts': 'accounts',
-    '/transactions': 'transactions',
-    '/bills': 'bills',
-    '/investments': 'investments',
-    '/budgets': 'budgets',
-    '/reports': 'reports',
-  };
-  const visibleNavLinks = isDelegateView
-    ? navLinks.filter((l) => {
-        const sec = navSectionByHref[l.href];
-        return !!sec && !!delegateSections?.[sec];
-      })
-    : navLinks;
-  const showAiMenu = !isDelegateView || !!delegateSections?.ai;
-  // A delegate sees only the Tools sections they were granted manage
-  // capability for (payees/categories/tags). Everyone else sees all.
-  const toolsCapabilityByHref: Record<
-    string,
-    'payees' | 'categories' | 'tags'
-  > = {
-    '/categories': 'categories',
-    '/payees': 'payees',
-    '/tags': 'tags',
-  };
-  const visibleToolsLinks = isDelegateView
-    ? toolsLinks.filter((l) => {
-        const cap = toolsCapabilityByHref[l.href];
-        if (!cap) return false;
-        const r = delegateCapabilities?.[cap];
-        return !!r && (r.create || r.edit || r.delete);
-      })
-    : toolsLinks;
+  const {
+    isDelegateView,
+    visibleNavLinks,
+    visibleToolsLinks,
+    visibleAiLinks,
+    showAiMenu,
+  } = useVisibleNavLinks();
+  const helpEntries = useHelpMenuEntries();
   const [toolsOpen, setToolsOpen] = useState(false);
   // A tour step can ask for the menu to be open so it can describe what is
   // inside; that wins over local state (and over a click-outside close).
   const tourOpensTools = useTourOpensToolsMenu();
   const toolsExpanded = toolsOpen || tourOpensTools;
   const [aiOpen, setAiOpen] = useState(false);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
+  // Opened by the tab bar's More; drawn here, beside what it needs.
+  const mobileMenuOpen = useMobileChromeStore((s) => s.drawerOpen);
+  const setMobileMenuOpen = useMobileChromeStore((s) => s.setDrawerOpen);
+  const collapsedTitle = useMobileChromeStore((s) => s.collapsedTitle);
+  const hasTabBar = useHasMobileTabBar();
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const toolsRef = useRef<HTMLDivElement>(null);
+  const adminRef = useRef<HTMLDivElement>(null);
   const aiRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  // The syntax help renders through a portal, so a press inside it is not
+  // inside `searchRef`; it is named here so choosing an example keeps the
+  // search open.
+  const searchHelpRef = useRef<HTMLDivElement>(null);
 
   // Close dropdowns when clicking outside
   useClickOutside(toolsRef, () => setToolsOpen(false));
   useClickOutside(aiRef, () => setAiOpen(false));
-  useClickOutside(searchRef, () => setSearchOpen(false));
+  useClickOutside(adminRef, () => setAdminOpen(false));
+  useClickOutside([searchRef, searchHelpRef], () => setSearchOpen(false));
 
   // Focus the search input as it slides open.
   useEffect(() => {
@@ -137,18 +133,14 @@ export function AppHeader() {
   const submitSearch = () => {
     const term = searchTerm.trim();
     if (!term) return;
-    // Wipe persisted filters so the hook initializes clean (including
-    // `accountStatus`, which is not represented in the URL).
-    clearTransactionFilterStorage();
-    // Notify a mounted Transactions page to reset and apply the term.
-    const detail: HeaderSearchEventDetail = { term };
-    window.dispatchEvent(new CustomEvent(HEADER_SEARCH_EVENT, { detail }));
-    router.push(`/transactions?search=${encodeURIComponent(term)}`);
+    navigateToTransactionSearch(term, router.push);
     setSearchOpen(false);
     setSearchTerm('');
   };
 
-  const handleSearchKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleSearchKeyDown = (
+    event: React.KeyboardEvent<HTMLInputElement>,
+  ) => {
     if (event.key === 'Enter') {
       event.preventDefault();
       submitSearch();
@@ -159,21 +151,26 @@ export function AppHeader() {
     }
   };
 
-  // Close mobile menu on route change (setState during render pattern)
-  const [prevPathname, setPrevPathname] = useState(pathname);
-  if (pathname !== prevPathname) {
-    setPrevPathname(pathname);
+  // Close the drawer on route change, the Back button's included.
+  useEffect(() => {
     setMobileMenuOpen(false);
-  }
+  }, [pathname, setMobileMenuOpen]);
 
-  const isToolsActive = toolsLinks.some((link) => isNavSectionActive(pathname, link.href));
-  const isAiActive = aiLinks.some((link) => isNavSectionActive(pathname, link.href));
+  const isToolsActive = toolsLinks.some((link) =>
+    isNavSectionActive(pathname, link.href),
+  );
+  const isAiActive = visibleAiLinks.some((link) =>
+    isNavSectionActive(pathname, link.href),
+  );
 
   // Slide the header out of view when scrolling down, back in when scrolling up,
   // moving it in lockstep with the scroll position. Keep it pinned while any
   // menu or the search field is open so the open surface never scrolls away.
-  const { ref: headerRef, offset: scrollOffset } = useHideOnScroll<HTMLElement>();
-  const anyMenuOpen = mobileMenuOpen || searchOpen || toolsExpanded || aiOpen;
+  // Below `xl` it stays put: the page's title collapses into it.
+  const { ref: headerRef, offset: scrollOffset } =
+    useHideOnScroll<HTMLElement>(!hasTabBar);
+  const anyMenuOpen =
+    mobileMenuOpen || searchOpen || toolsExpanded || aiOpen || adminOpen;
   const headerOffset = anyMenuOpen ? 0 : scrollOffset;
 
   // Publish how far the header is currently slid up so sticky sub-navigation
@@ -188,6 +185,29 @@ export function AppHeader() {
   }, [headerOffset]);
 
   const handleLogout = async () => {
+    // Deliberately here rather than in the store's `logout()`, which the 401
+    // interceptor and the rehydrate error path also call: a session that merely
+    // expired is not somebody handing the browser over, and touching push on it
+    // would make every timeout cost the user their notifications. This is the
+    // one place someone chose to leave. The push subscription is scoped to the
+    // origin, not the session, so left delivering, the departing account's
+    // notifications would keep arriving on a browser the next person is using.
+    //
+    // So the server HOLDS this browser's row: nothing is delivered to it, and
+    // the same account signing in here again resumes push with no prompt
+    // (`usePushResumeOnSignIn`). The browser keeps its subscription only once
+    // the server has confirmed the hold; any other outcome (an error, an older
+    // backend, a delegate session) falls back to releasing both halves, the
+    // row and the subscription, as account deletion always does.
+    //
+    // Before `authApi.logout()`, because holding or deleting the server row
+    // needs the session that is ending -- and under its own short bound,
+    // because the cleanup is best effort and revoking the session is not.
+    //
+    // First of all, so no 401 from the page still mounted here can start a
+    // competing redirect to /login once the session is gone.
+    beginSignOut();
+    await holdPushForSignOut();
     try {
       await authApi.logout();
       clearLogoutIncomplete();
@@ -202,7 +222,10 @@ export function AppHeader() {
       // Record it, warn, and let the login screen offer the retry.
       markLogoutIncomplete();
       logout();
-      toast.error(t('logoutNotConfirmed'), { duration: 12_000, id: 'logout-failed' });
+      toast.error(t('logoutNotConfirmed'), {
+        duration: 12_000,
+        id: 'logout-failed',
+      });
       router.push('/login');
     }
   };
@@ -213,31 +236,37 @@ export function AppHeader() {
       style={{ transform: `translateY(-${headerOffset}px)` }}
       // No transition while scrolling so the header tracks the scroll speed 1:1;
       // a short transition only when a menu forces it back into view.
-      className={`sticky top-0 z-40 bg-white dark:bg-gray-800 shadow dark:shadow-gray-700/50 ${
+      //
+      // Glass: where the browser can blur what scrolls underneath, the bar is
+      // translucent over a backdrop blur, edged by a hairline instead of a drop
+      // shadow; elsewhere it stays the solid card colour, never a see-through
+      // bar over unblurred content. Both colours are on the ramp, so every
+      // palette tints it. The inline transform already makes the header the
+      // containing block for its fixed children, so the blur changes nothing
+      // about where the history and notification panels open.
+      // Reaches up through the body's safe-area padding and pads itself instead,
+      // so once pinned its controls clear the status bar of an installed app.
+      className={`sticky top-0 z-40 mt-[calc(env(safe-area-inset-top)*-1)] pt-[env(safe-area-inset-top)] bg-white dark:bg-gray-800 supports-[backdrop-filter]:bg-white/75 supports-[backdrop-filter]:dark:bg-gray-800/70 supports-[backdrop-filter]:backdrop-blur-md supports-[backdrop-filter]:backdrop-saturate-150 border-b border-gray-200/80 dark:border-white/5 ${
         anyMenuOpen ? 'transition-transform duration-200 ease-out' : ''
       }`}
     >
       <div className="px-4 sm:px-6 lg:px-12">
         <div className="flex justify-between h-16">
-          <div className="flex items-center">
-            {/* Mobile hamburger menu button */}
-            <div className="xl:hidden">
+          <div className="flex items-center max-xl:min-w-0 max-xl:flex-1 max-xl:pr-2">
+            {collapsedTitle ? (
+              <CollapsedHeaderTitleView content={collapsedTitle} />
+            ) : (
               <button
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                className="p-2 mr-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md"
-                aria-label={t('toggleMenu')}
+                type="button"
+                onClick={() => router.push('/settings')}
+                aria-label={t('settings')}
+                data-testid="mobile-avatar"
+                className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-blue-600 text-sm font-semibold text-white sm:hidden"
               >
-                {mobileMenuOpen ? (
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                ) : (
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-                  </svg>
-                )}
+                {Array.from(user?.firstName || user?.email || '?')[0].toUpperCase()}
               </button>
-
+            )}
+            <div className="xl:hidden">
               {/* Mobile navigation drawer (slides in from the left).
                   Delegates land on a Security-only Settings view that manages
                   their OWN credentials. */}
@@ -252,11 +281,15 @@ export function AppHeader() {
                   setMobileMenuOpen(false);
                   router.push(href);
                 }}
+                onLogout={() => {
+                  setMobileMenuOpen(false);
+                  void handleLogout();
+                }}
                 navLinks={visibleNavLinks.map((l) => ({
                   href: l.href,
                   label: t(l.labelKey),
                 }))}
-                aiLinks={aiLinks.map((l) => ({
+                aiLinks={visibleAiLinks.map((l) => ({
                   href: l.href,
                   label: t(l.labelKey),
                 }))}
@@ -267,6 +300,7 @@ export function AppHeader() {
                   badge: l.badge,
                 }))}
                 showAdmin={!isDelegateView && user?.role === 'admin'}
+                helpEntries={helpEntries}
               />
             </div>
 
@@ -274,163 +308,200 @@ export function AppHeader() {
               onClick={() => router.push('/dashboard')}
               className="hidden xl:flex items-center gap-2 text-2xl font-bold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
             >
-              <Image src="/icons/monize-logo-transparent.svg" alt="Monize" width={32} height={32} className="rounded" priority />
+              <Image
+                src="/icons/monize-logo-transparent.svg"
+                alt="Monize"
+                width={32}
+                height={32}
+                className="rounded"
+                priority
+              />
               <span className="hidden xl:inline">Monize</span>
             </button>
             {(!isDelegateView ||
               visibleNavLinks.length > 0 ||
               visibleToolsLinks.length > 0 ||
               showAiMenu) && (
-            <nav className="hidden xl:ml-8 xl:flex xl:items-center xl:space-x-4">
-              {visibleNavLinks.map((link) => (
-                <button
-                  key={link.href}
-                  {...NAV_TOUR_ANCHORS[link.href]}
-                  onClick={() => router.push(link.href)}
-                  className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                    isNavSectionActive(pathname, link.href)
-                      ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200'
-                      : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  {t(link.labelKey)}
-                </button>
-              ))}
-
-              {showAiMenu && (
-              <>
-              {/* AI Dropdown */}
-              <div className="relative" ref={aiRef}>
-                <button
-                  onClick={() => setAiOpen(!aiOpen)}
-                  className={`px-3 py-2 text-sm font-medium rounded-md transition-colors inline-flex items-center gap-1 ${
-                    isAiActive
-                      ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200'
-                      : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  {t('ai')}
-                  <svg
-                    className={`w-4 h-4 transition-transform ${aiOpen ? 'rotate-180' : ''}`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
+              <nav className="hidden xl:ml-8 xl:flex xl:items-center xl:space-x-4">
+                {visibleNavLinks.map((link) => (
+                  <button
+                    key={link.href}
+                    {...NAV_TOUR_ANCHORS[link.href]}
+                    onClick={() => router.push(link.href)}
+                    className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
+                      isNavSectionActive(pathname, link.href)
+                        ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200'
+                        : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700'
+                    }`}
                   >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
+                    {t(link.labelKey)}
+                  </button>
+                ))}
 
-                {aiOpen && (
-                  <div className="absolute left-0 mt-1 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg dark:shadow-gray-700/50 border border-gray-200 dark:border-gray-700 z-50">
-                    <div className="py-1">
-                      {aiLinks.map((link) => {
-                        const active = isNavSectionActive(pathname, link.href);
-                        return (
-                          <button
-                            key={link.href}
-                            onClick={() => {
-                              router.push(link.href);
-                              setAiOpen(false);
-                            }}
-                            className={`flex w-full items-center gap-2.5 text-left px-4 py-2 text-sm transition-colors ${
-                              active
-                                ? 'bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-200'
-                                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                            }`}
-                          >
-                            <NavItemIcon href={link.href} active={active} />
-                            {t(link.labelKey)}
-                          </button>
-                        );
-                      })}
+                {showAiMenu && (
+                  <>
+                    {/* AI Dropdown */}
+                    <div className="relative" ref={aiRef}>
+                      <button
+                        onClick={() => setAiOpen(!aiOpen)}
+                        className={`px-3 py-2 text-sm font-medium rounded-md transition-colors inline-flex items-center gap-1 ${
+                          isAiActive
+                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200'
+                            : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        {t('ai')}
+                        <ChevronDownIcon className={`w-4 h-4 transition-transform ${aiOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+                      </button>
+
+                      {aiOpen && (
+                        <div className={`absolute left-0 mt-1 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg dark:shadow-gray-700/50 border border-gray-200 dark:border-gray-700 z-50 ${MENU_ENTER_CLASS} ${MENU_ORIGIN_LEFT}`}>
+                          <div className="py-1">
+                            {visibleAiLinks.map((link) => {
+                              const active = isNavSectionActive(
+                                pathname,
+                                link.href,
+                              );
+                              return (
+                                <button
+                                  key={link.href}
+                                  onClick={() => {
+                                    router.push(link.href);
+                                    setAiOpen(false);
+                                  }}
+                                  className={`flex w-full items-center gap-2.5 text-left px-4 py-2 text-sm transition-colors ${
+                                    active
+                                      ? 'bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-200'
+                                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                  }`}
+                                >
+                                  <NavItemIcon
+                                    href={link.href}
+                                    active={active}
+                                  />
+                                  {t(link.labelKey)}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
+                  </>
+                )}
+
+                {visibleToolsLinks.length > 0 && (
+                  <>
+                    {/* Tools Dropdown */}
+                    <div className="relative" ref={toolsRef}>
+                      <button
+                        {...tourAnchor(TOUR_ANCHORS.navTools)}
+                        onClick={() => setToolsOpen(!toolsOpen)}
+                        className={`px-3 py-2 text-sm font-medium rounded-md transition-colors inline-flex items-center gap-1 ${
+                          isToolsActive
+                            ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200'
+                            : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700'
+                        }`}
+                      >
+                        {t('tools')}
+                        <ChevronDownIcon className={`w-4 h-4 transition-transform ${toolsExpanded ? 'rotate-180' : ''}`} aria-hidden="true" />
+                      </button>
+
+                      {toolsExpanded && (
+                        <div
+                          {...tourAnchor(TOUR_ANCHORS.navToolsMenu)}
+                          className={`absolute left-0 mt-1 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg dark:shadow-gray-700/50 border border-gray-200 dark:border-gray-700 z-50 ${MENU_ENTER_CLASS} ${MENU_ORIGIN_LEFT}`}
+                        >
+                          <div className="py-1">
+                            {visibleToolsLinks.map((link) => {
+                              const active = isNavSectionActive(
+                                pathname,
+                                link.href,
+                              );
+                              return (
+                                <button
+                                  key={link.href}
+                                  {...TOOLS_TOUR_ANCHORS[link.href]}
+                                  onClick={() => {
+                                    router.push(link.href);
+                                    setToolsOpen(false);
+                                  }}
+                                  className={`flex w-full items-center gap-2.5 text-left px-4 py-2 text-sm transition-colors ${
+                                    active
+                                      ? 'bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-200'
+                                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                  }`}
+                                >
+                                  <NavItemIcon
+                                    href={link.href}
+                                    active={active}
+                                  />
+                                  {t(link.labelKey)}
+                                  {link.badge && (
+                                    <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                                      {link.badge}
+                                    </span>
+                                  )}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                {/* Admin menu - only visible to admins */}
+                {!isDelegateView && user?.role === 'admin' && (
+                  <div className="relative" ref={adminRef}>
+                    <button
+                      onClick={() => setAdminOpen(!adminOpen)}
+                      className={`px-3 py-2 text-sm font-medium rounded-md transition-colors inline-flex items-center gap-1 ${
+                        pathname.startsWith('/admin')
+                          ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200'
+                          : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700'
+                      }`}
+                    >
+                      {t('admin')}
+                      <ChevronDownIcon className={`w-4 h-4 transition-transform ${adminOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
+                    </button>
+
+                    {adminOpen && (
+                      <div className={`absolute left-0 mt-1 w-56 bg-white dark:bg-gray-800 rounded-md shadow-lg dark:shadow-gray-700/50 border border-gray-200 dark:border-gray-700 z-50 ${MENU_ENTER_CLASS} ${MENU_ORIGIN_LEFT}`}>
+                        <div className="py-1">
+                          {adminLinks.map((link) => {
+                            const active = isNavSectionActive(
+                              pathname,
+                              link.href,
+                            );
+                            return (
+                              <button
+                                key={link.href}
+                                onClick={() => {
+                                  router.push(link.href);
+                                  setAdminOpen(false);
+                                }}
+                                className={`flex w-full items-center gap-2.5 text-left px-4 py-2 text-sm transition-colors ${
+                                  active
+                                    ? 'bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-200'
+                                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+                                }`}
+                              >
+                                <NavItemIcon href={link.href} active={active} />
+                                {t(link.labelKey)}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
-
-              </>
-              )}
-
-              {visibleToolsLinks.length > 0 && (
-              <>
-              {/* Tools Dropdown */}
-              <div className="relative" ref={toolsRef}>
-                <button
-                  {...tourAnchor(TOUR_ANCHORS.navTools)}
-                  onClick={() => setToolsOpen(!toolsOpen)}
-                  className={`px-3 py-2 text-sm font-medium rounded-md transition-colors inline-flex items-center gap-1 ${
-                    isToolsActive
-                      ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200'
-                      : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  {t('tools')}
-                  <svg
-                    className={`w-4 h-4 transition-transform ${toolsExpanded ? 'rotate-180' : ''}`}
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-
-                {toolsExpanded && (
-                  <div
-                    {...tourAnchor(TOUR_ANCHORS.navToolsMenu)}
-                    className="absolute left-0 mt-1 w-48 bg-white dark:bg-gray-800 rounded-md shadow-lg dark:shadow-gray-700/50 border border-gray-200 dark:border-gray-700 z-50"
-                  >
-                    <div className="py-1">
-                      {visibleToolsLinks.map((link) => {
-                        const active = isNavSectionActive(pathname, link.href);
-                        return (
-                          <button
-                            key={link.href}
-                            onClick={() => {
-                              router.push(link.href);
-                              setToolsOpen(false);
-                            }}
-                            className={`flex w-full items-center gap-2.5 text-left px-4 py-2 text-sm transition-colors ${
-                              active
-                                ? 'bg-blue-50 dark:bg-blue-900/50 text-blue-700 dark:text-blue-200'
-                                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-                            }`}
-                          >
-                            <NavItemIcon href={link.href} active={active} />
-                            {t(link.labelKey)}
-                            {link.badge && (
-                              <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
-                                {link.badge}
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              </>
-              )}
-
-              {/* Admin link - only visible to admins */}
-              {!isDelegateView && user?.role === 'admin' && (
-                <button
-                  onClick={() => router.push('/admin/users')}
-                  className={`px-3 py-2 text-sm font-medium rounded-md transition-colors ${
-                    pathname.startsWith('/admin')
-                      ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200'
-                      : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  {t('admin')}
-                </button>
-              )}
-            </nav>
+              </nav>
             )}
           </div>
-          <div className="flex items-center space-x-1 sm:space-x-4">
+          <div className="flex max-xl:flex-shrink-0 items-center space-x-1 sm:space-x-4 xl:space-x-1 2xl:space-x-4">
             <div className="relative" ref={searchRef}>
               <div className="flex items-center">
                 <input
@@ -445,10 +516,19 @@ export function AppHeader() {
                   tabIndex={searchOpen ? 0 : -1}
                   className={`overflow-hidden transition-all duration-200 ease-out rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-sm text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                     searchOpen
-                      ? 'w-44 sm:w-64 px-3 py-1.5 mr-1 opacity-100'
-                      : 'w-0 px-0 py-1.5 border-transparent opacity-0 pointer-events-none'
+                      ? 'w-44! sm:w-64! px-3 py-1.5 mr-1 opacity-100'
+                      : 'w-0! px-0! py-1.5 border-transparent opacity-0 pointer-events-none'
                   }`}
                 />
+                {searchOpen && (
+                  <SearchSyntaxHelp
+                    popoverRef={searchHelpRef}
+                    onExample={(example) => {
+                      setSearchTerm(example);
+                      searchInputRef.current?.focus();
+                    }}
+                  />
+                )}
                 <button
                   type="button"
                   onClick={() => {
@@ -458,7 +538,9 @@ export function AppHeader() {
                       setSearchOpen(true);
                     }
                   }}
-                  aria-label={searchOpen ? t('search.submit') : t('search.open')}
+                  aria-label={
+                    searchOpen ? t('search.submit') : t('search.open')
+                  }
                   title={t('search.label')}
                   className="p-2 rounded-md text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700"
                 >
@@ -480,7 +562,11 @@ export function AppHeader() {
               </div>
             </div>
             <ActionHistoryPanel />
-            <BudgetAlertBadge />
+            <NotificationBell />
+            {/* Help, Settings and Log out live under More on a phone. */}
+            <div className="max-sm:hidden">
+              <HelpMenu entries={helpEntries} />
+            </div>
             {/* The reconciliation reminder badge is deliberately not mounted
                 here for now: the reminder is kept off the header until
                 reconciliation is a more established habit. The component and
@@ -488,7 +574,7 @@ export function AppHeader() {
             <button
               {...tourAnchor(TOUR_ANCHORS.navSettings)}
               onClick={() => router.push('/settings')}
-              className={`flex items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+              className={`flex max-sm:hidden items-center gap-2 px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
                 pathname === '/settings'
                   ? 'bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-200'
                   : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700'
@@ -514,12 +600,22 @@ export function AppHeader() {
                   d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"
                 />
               </svg>
-              <span className="hidden sm:inline">{user?.firstName || user?.email}</span>
+              {/* Hidden again from xl, where the nav links (also xl:flex) start
+                  competing for the same row: at 1280px -- the default E2E
+                  viewport and a common laptop width -- the row was already as
+                  wide as the plan's own "watch out" warned, and the header's
+                  shell clips rather than scrolls (SwipeShell's
+                  overflow-x-clip), so an overflowing Logout button is
+                  unclickable, not just unreachable without a scroll. */}
+              <span className="hidden sm:inline xl:hidden 2xl:inline">
+                {user?.firstName || user?.email}
+              </span>
             </button>
             <Button
               variant="outline"
               size="sm"
               onClick={handleLogout}
+              className="max-sm:hidden"
               title={t('logout')}
               aria-label={t('logout')}
             >

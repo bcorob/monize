@@ -26,6 +26,11 @@ export const MNY_WARNING_CODES = [
   "categoryTypeInferred",
   /** A payee named `#`, `*` or blank: Money's degenerate rows, never imported. */
   "degeneratePayeeSkipped",
+  /**
+   * `TRN.lHcls1` / `lHcls2` named a handle that is not a classification item
+   * in `CAT`, so the row imports without that tag.
+   */
+  "unknownClassificationItem",
   /** A `TRN` row with no account, or a date outside the representable range. */
   "unusableTransaction",
   /** A `TRN_XFER` side whose counterpart is missing or excluded from the import. */
@@ -51,6 +56,11 @@ export const MNY_WARNING_CODES = [
   "generatedSecuritySymbol",
   /** `TRN.act` held a code outside the known set; the investment row is skipped. */
   "unknownInvestmentAction",
+  /**
+   * A Money 97-99 employee stock option grant, vesting or expiry. It moves no
+   * cash and no shares, and Monize has no model for an unexercised option.
+   */
+  "stockOptionNotImported",
   /** The row was mapped through an action whose meaning is inferred, not observed. */
   "unconfirmedInvestmentAction",
   /** A security-carrying `TRN` row with no `TRN_INV` detail and no way to infer one. */
@@ -76,6 +86,25 @@ export const MNY_WARNING_CODES = [
    * escrow, typically), so its interest category was left for the user to set.
    */
   "loanInterestCategoryUnclear",
+  /**
+   * A bank-to-investment transfer whose investment side Money recorded with a
+   * different amount than the bank side, in the same currency. The synthesized
+   * cash-sleeve row mirrors the bank side; this compares it with Money's own
+   * far row, which the expected-balance check (a sum of the mapped rows) cannot.
+   */
+  "transferAmountMismatch",
+  /**
+   * A trade of a security quoted in another currency than its account, for a
+   * pair and date the file has no usable exchange rate for. The figures were
+   * stored in the account's currency with rate 1, not converted.
+   */
+  "crossCurrencyTradeUnconverted",
+  /**
+   * A trade of a security quoted in another currency than its account, which
+   * the file had no rate for, converted at the market rate for its date from
+   * Monize's rate history and provider instead.
+   */
+  "crossCurrencyTradeMarketRate",
 ] as const;
 
 export type MnyWarningCode = (typeof MNY_WARNING_CODES)[number];

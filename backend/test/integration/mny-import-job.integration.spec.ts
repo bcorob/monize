@@ -7,12 +7,17 @@ import { DataSource } from "typeorm";
 import { ImportJob } from "@/import/mny/entities/import-job.entity";
 import { ImportStagedFile } from "@/import/mny/entities/import-staged-file.entity";
 import {
+  JOB_COMMITTED_FAILED_ERROR_KEY,
+  JOB_COMMITTED_STALLED_ERROR_KEY,
   JOB_STALLED_ERROR_KEY,
   MnyJobFencedError,
   MnyImportJobService,
 } from "@/import/mny/mny-import-job.service";
 import { MnyStagingService } from "@/import/mny/mny-staging.service";
-import { MnyPasswordIncorrectError } from "@/import/mny/mny-errors";
+import {
+  MnyAlreadyImportedError,
+  MnyPasswordIncorrectError,
+} from "@/import/mny/mny-errors";
 import { DEFAULT_MNY_IMPORT_OPTIONS } from "@/import/mny/model/mny-import-options";
 import { MnyImportResult } from "@/import/mny/model/mny-import-job";
 import { withSystemContext, withUserContext } from "@/common/db/with-context";
@@ -46,6 +51,8 @@ describe("MnyImportJobService (integration)", () => {
     accountsCreated: 0,
     payeesCreated: 0,
     categoriesCreated: 0,
+    tagsCreated: 0,
+    tagLinksApplied: 0,
     transactionsCreated: 0,
     splitsCreated: 0,
     transfersLinked: 0,
@@ -58,6 +65,7 @@ describe("MnyImportJobService (integration)", () => {
       accounts: 0,
       payees: 0,
       categories: 0,
+      tags: 0,
       transactions: 0,
       bills: 0,
     },
@@ -503,6 +511,207 @@ describe("MnyImportJobService (integration)", () => {
         errorDetail: "connection terminated",
       });
       expect(job!.stagedFileId).not.toBeNull();
+    });
+  });
+
+  /**
+   * A run whose rows committed, on a real row (audit A26-H08, A26-S09-02).
+   *
+   * The guards below were held only by SQL-text assertions on a mocked query:
+   * dropping `AND data_committed = false` from `fail()` left every suite green,
+   * and the wizard's own Retry then imported the file a second time.
+   */
+  describe("a run that committed before it failed", () => {
+    /** Claims, checkpoints and completes a job over `bytes`, as a run does. */
+    async function committedJob(bytes = "bytes"): Promise<string> {
+      const staged = await asUser(userA, () =>
+        staging.stage(userA, {
+          filename: "money.mny",
+          data: Buffer.from(bytes),
+        }),
+      );
+      const job = await asUser(userA, () =>
+        jobs.create(userA, staged.id, DEFAULT_MNY_IMPORT_OPTIONS),
+      );
+      await asUser(userA, () =>
+        jobs.runClaimed(userA, job.id, async (context) => {
+          await withScopedDb(dataSource, (m) =>
+            jobs.markDataCommitted(m, context.jobId, context.attemptToken),
+          );
+          return EMPTY_RESULT;
+        }),
+      );
+      return job.id;
+    }
+
+    it("reports a failure after the checkpoint as committed, never retryable", async () => {
+      const jobId = await newJob();
+
+      await asUser(userA, () =>
+        jobs.runClaimed(userA, jobId, async (context) => {
+          await withScopedDb(dataSource, (m) =>
+            jobs.markDataCommitted(m, context.jobId, context.attemptToken),
+          );
+          throw new Error("verification read failed");
+        }),
+      );
+
+      const job = await asUser(userA, () => jobs.findOne(userA, jobId));
+      expect(job).toMatchObject({
+        status: "failed",
+        dataCommitted: true,
+        retryable: false,
+        errorKey: JOB_COMMITTED_FAILED_ERROR_KEY,
+      });
+      expect(job!.errorDetail).toContain("verification read failed");
+      expect(job!.errorDetail).toContain("not safe to repeat");
+    });
+
+    it("reaps a committed stale job non-retryable, with the committed key", async () => {
+      const jobId = await newJob();
+      const token = await asUser(userA, () => jobs.claim(jobId));
+      await asUser(userA, () =>
+        withScopedDb(dataSource, (m) =>
+          jobs.markDataCommitted(m, jobId, token!),
+        ),
+      );
+      await dataSource.query(
+        `UPDATE import_jobs
+            SET heartbeat_at = CURRENT_TIMESTAMP - INTERVAL '1 hour'
+          WHERE id = $1`,
+        [jobId],
+      );
+
+      await withSystemContext(() => jobs.reapStaleJobs());
+
+      const job = await asUser(userA, () => jobs.findOne(userA, jobId));
+      expect(job).toMatchObject({
+        status: "failed",
+        dataCommitted: true,
+        retryable: false,
+        errorKey: JOB_COMMITTED_STALLED_ERROR_KEY,
+      });
+    });
+
+    it("keys the committed job on its staged file's digest", async () => {
+      const jobId = await committedJob();
+
+      const [row] = await dataSource.query(
+        `SELECT j.content_sha256 = f.sha256 AS keyed
+           FROM import_jobs j JOIN import_staged_files f ON f.id = j.staged_file_id
+          WHERE j.id = $1`,
+        [jobId],
+      );
+      expect(row.keyed).toBe(true);
+    });
+
+    it("refuses a start over the same bytes, naming the earlier import", async () => {
+      const earlier = await committedJob();
+      const again = await asUser(userA, () =>
+        staging.stage(userA, {
+          filename: "money-again.mny",
+          data: Buffer.from("bytes"),
+        }),
+      );
+
+      const refusal = asUser(userA, () =>
+        jobs.create(userA, again.id, DEFAULT_MNY_IMPORT_OPTIONS),
+      );
+      await expect(refusal).rejects.toBeInstanceOf(ConflictException);
+      await expect(refusal).rejects.toThrow(earlier);
+      expect(
+        await dataSource.getRepository(ImportJob).count({
+          where: { userId: userA },
+        }),
+      ).toBe(1);
+    });
+
+    it("lets different bytes, and another user's same bytes, through", async () => {
+      await committedJob();
+      const other = await asUser(userA, () =>
+        staging.stage(userA, {
+          filename: "other.mny",
+          data: Buffer.from("other bytes"),
+        }),
+      );
+      await expect(
+        asUser(userA, () =>
+          jobs.create(userA, other.id, DEFAULT_MNY_IMPORT_OPTIONS),
+        ),
+      ).resolves.toMatchObject({ status: "pending" });
+
+      await expect(newJob(userB)).resolves.toEqual(expect.any(String));
+    });
+
+    it("lets a start that replaces existing data through, and its release frees the key", async () => {
+      await committedJob();
+      const again = await asUser(userA, () =>
+        staging.stage(userA, {
+          filename: "money-again.mny",
+          data: Buffer.from("bytes"),
+        }),
+      );
+
+      const job = await asUser(userA, () =>
+        jobs.create(userA, again.id, {
+          ...DEFAULT_MNY_IMPORT_OPTIONS,
+          wipeExistingData: true,
+        }),
+      );
+      await asUser(userA, () => jobs.releaseCommittedContent(userA));
+      const token = await asUser(userA, () => jobs.claim(job.id));
+      await asUser(userA, () =>
+        withScopedDb(dataSource, (m) =>
+          jobs.markDataCommitted(m, job.id, token!),
+        ),
+      );
+
+      const keyed = await dataSource.query(
+        `SELECT id FROM import_jobs
+          WHERE user_id = $1 AND content_sha256 IS NOT NULL`,
+        [userA],
+      );
+      expect(keyed.map((row: { id: string }) => row.id)).toEqual([job.id]);
+    });
+
+    it("refuses a second commit of the same bytes and rolls its rows back", async () => {
+      await committedJob();
+      // Past the start-time refusal (a wipe-flagged start), with the key never
+      // released: the unique index is what still stands.
+      const again = await asUser(userA, () =>
+        staging.stage(userA, {
+          filename: "money-again.mny",
+          data: Buffer.from("bytes"),
+        }),
+      );
+      const job = await asUser(userA, () =>
+        jobs.create(userA, again.id, {
+          ...DEFAULT_MNY_IMPORT_OPTIONS,
+          wipeExistingData: true,
+        }),
+      );
+      const token = await asUser(userA, () => jobs.claim(job.id));
+      const marker = "Payee written by a duplicate import";
+
+      await expect(
+        asUser(userA, () =>
+          withScopedDb(dataSource, async (m) => {
+            await m.query(
+              `INSERT INTO payees (user_id, name) VALUES ($1, $2)`,
+              [userA, marker],
+            );
+            await jobs.markDataCommitted(m, job.id, token!);
+          }),
+        ),
+      ).rejects.toBeInstanceOf(MnyAlreadyImportedError);
+
+      const [{ count }] = await dataSource.query(
+        `SELECT COUNT(*)::int AS count FROM payees WHERE name = $1`,
+        [marker],
+      );
+      expect(count).toBe(0);
+      const row = await asUser(userA, () => jobs.findOne(userA, job.id));
+      expect(row!.dataCommitted).toBe(false);
     });
   });
 

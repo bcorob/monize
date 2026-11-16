@@ -130,7 +130,7 @@ describe('a resolved 0% rate is a rate', () => {
       'value: currentTerms.annualRate != null ? render() : notSet,',
       '    isCanadianFixed && currentAnnualRate != null',
       'const rate = currentAnnualRate ?? Number(account.interestRate);',
-      'annualRate: round4(currentAnnualRate),',
+      'annualRate: roundToDecimals(currentAnnualRate, 4),',
       'currentAnnualRate={currentTerms.annualRate}',
       'if (currentAnnualRate == null) return null;',
     ];

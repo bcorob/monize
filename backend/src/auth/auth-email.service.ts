@@ -1,57 +1,67 @@
+import { Injectable, BadRequestException, Logger } from "@nestjs/common";
+import { ModuleRef } from "@nestjs/core";
 import {
-  Injectable,
-  BadRequestException,
-  Logger,
-  OnModuleDestroy,
-} from "@nestjs/common";
-import { DataSource, EntityTarget, ObjectLiteral, Repository } from "typeorm";
+  DataSource,
+  EntityTarget,
+  MoreThan,
+  ObjectLiteral,
+  Repository,
+} from "typeorm";
+import { ConfigService } from "@nestjs/config";
 import { withScopedDb } from "../common/db/scoped-db";
 import * as bcrypt from "bcryptjs";
 import * as crypto from "crypto";
 
 import { User } from "../users/entities/user.entity";
-import { TrustedDevice } from "../users/entities/trusted-device.entity";
 import { hashToken } from "./crypto.util";
 import { PasswordBreachService } from "./password-breach.service";
+import {
+  localPasswordUsable,
+  oidcPasswordLoginAllowed,
+} from "./oidc/oidc-password-login";
 import { tr } from "../i18n/translate";
 import { TokenService } from "./token.service";
+import { AuthAttemptCounterService } from "./auth-attempt-counter.service";
+import {
+  emailInUseConflict,
+  isUniqueViolation,
+} from "../users/email-change.util";
+import {
+  revokeOAuthGrantsAfterCommit,
+  revokeStandingCredentials,
+} from "./credential-revocation";
+
+/**
+ * `auth_attempt_counters.scope` for the two per-email throttles.
+ *
+ * The key is `sha256(lowercased, trimmed email)`. The table has no owner column
+ * and is RLS-exempt, so a plaintext key would make it a directory of who has
+ * asked for a password reset -- which is precisely the enumeration these two
+ * endpoints answer generically to avoid.
+ */
+export const FORGOT_PASSWORD_SCOPE = "forgot-password";
+export const VERIFICATION_EMAIL_SCOPE = "verification-email";
 
 @Injectable()
-export class AuthEmailService implements OnModuleDestroy {
+export class AuthEmailService {
   private readonly logger = new Logger(AuthEmailService.name);
 
   // M7: Per-email rate limiting for forgot-password
-  private readonly forgotPasswordAttempts = new Map<
-    string,
-    { count: number; windowStart: number }
-  >();
   private readonly FORGOT_PASSWORD_EMAIL_LIMIT = 3;
   private readonly FORGOT_PASSWORD_EMAIL_WINDOW_MS = 60 * 60 * 1000; // 1 hour
   // Per-email rate limiting for resending the verification email. Shares the
   // same window/limit shape as forgot-password to throttle abuse.
-  private readonly verificationEmailAttempts = new Map<
-    string,
-    { count: number; windowStart: number }
-  >();
   private readonly VERIFICATION_EMAIL_LIMIT = 3;
   private readonly VERIFICATION_EMAIL_WINDOW_MS = 60 * 60 * 1000; // 1 hour
-  private readonly cleanupInterval: ReturnType<typeof setInterval>;
 
   constructor(
     private readonly dataSource: DataSource,
     private passwordBreachService: PasswordBreachService,
     private tokenService: TokenService,
-  ) {
-    // Periodically prune expired entries to prevent unbounded memory growth.
-    // unref() ensures the timer does not prevent Node.js process shutdown.
-    this.cleanupInterval = setInterval(
-      () => this.cleanupExpiredAttempts(),
-      this.FORGOT_PASSWORD_EMAIL_WINDOW_MS,
-    );
-    if (this.cleanupInterval.unref) {
-      this.cleanupInterval.unref();
-    }
-  }
+    private readonly attemptCounters: AuthAttemptCounterService,
+    private readonly moduleRef: ModuleRef,
+    private readonly configService: ConfigService,
+  ) {}
 
   /**
    * One repository call in its own short scoped transaction -- the RLS-era
@@ -68,22 +78,31 @@ export class AuthEmailService implements OnModuleDestroy {
     );
   }
 
-  onModuleDestroy() {
-    clearInterval(this.cleanupInterval);
-  }
-
-  private cleanupExpiredAttempts(): void {
-    const now = Date.now();
-    for (const [email, record] of this.forgotPasswordAttempts) {
-      if (now - record.windowStart > this.FORGOT_PASSWORD_EMAIL_WINDOW_MS) {
-        this.forgotPasswordAttempts.delete(email);
-      }
-    }
-    for (const [email, record] of this.verificationEmailAttempts) {
-      if (now - record.windowStart > this.VERIFICATION_EMAIL_WINDOW_MS) {
-        this.verificationEmailAttempts.delete(email);
-      }
-    }
+  /**
+   * Count this address's use of one throttled endpoint and say whether it may
+   * proceed.
+   *
+   * One statement decides it, so N replicas enforce one limit and a restart no
+   * longer hands the sender a fresh three. The window is not extended by a
+   * refused attempt: `increment` keeps `window_expires_at` as the first attempt
+   * set it, which is the behaviour the `windowStart` field had.
+   */
+  private async withinEmailLimit(
+    scope: string,
+    email: string,
+    limit: number,
+    windowMs: number,
+  ): Promise<boolean> {
+    const { count } = await this.attemptCounters.increment(
+      scope,
+      hashToken(email.toLowerCase().trim()),
+      windowMs,
+      // "fixed", which is what the `windowStart` field did: a refused send does
+      // not push the window out, so three sends per hour stays three sends per
+      // hour however they are spaced.
+      "fixed",
+    );
+    return count <= limit;
   }
 
   async generateResetToken(
@@ -95,7 +114,12 @@ export class AuthEmailService implements OnModuleDestroy {
       }),
     );
 
-    if (!user || !user.passwordHash) return null;
+    if (
+      !user ||
+      !localPasswordUsable(user, oidcPasswordLoginAllowed(this.configService))
+    ) {
+      return null;
+    }
 
     const rawResetToken = crypto.randomBytes(32).toString("hex");
     const resetTokenExpiry = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
@@ -126,67 +150,68 @@ export class AuthEmailService implements OnModuleDestroy {
     const saltRounds = 12;
     const passwordHash = await bcrypt.hash(newPassword, saltRounds);
 
-    // M11: Atomic UPDATE...WHERE to prevent TOCTOU race condition.
-    const result = await this.scoped(User, (repo) =>
-      repo
+    // M11: Atomic UPDATE...WHERE to prevent TOCTOU race condition. The
+    // standing credentials go in the same transaction, so an invalid token
+    // revokes nothing and a committed reset cannot leave a PAT or a trusted
+    // device behind it (`credential-revocation.ts`).
+    // A token minted before SSO sign-in was restricted is refused like an
+    // invalid one: the policy `generateResetToken` applies at issue time.
+    const oidcAllowed = oidcPasswordLoginAllowed(this.configService);
+    const userId = await withScopedDb(this.dataSource, async (manager) => {
+      const result = await manager
+        .getRepository(User)
         .createQueryBuilder()
         .update(User)
         .set({
           passwordHash,
           resetToken: null,
           resetTokenExpiry: null,
+          // Proving control of the mailbox is the recovery path out of a
+          // lockout: without this, anyone who knew the address could keep the
+          // owner locked out by failing a password once per lock window.
+          failedLoginAttempts: 0,
+          lockedUntil: null,
         })
         .where("resetToken = :hashedToken", { hashedToken })
-        .andWhere("resetTokenExpiry > :now", { now: new Date() })
+        .andWhere(
+          "resetTokenExpiry > :now AND (authProvider <> 'oidc' OR :oidcAllowed = true)",
+          { now: new Date(), oidcAllowed },
+        )
         .returning("id")
-        .execute(),
-    );
+        .execute();
 
-    if (!result.affected || result.affected === 0) {
-      throw new BadRequestException(
-        tr(
-          "errors.auth.invalidOrExpiredResetToken",
-          "Invalid or expired reset token",
-        ),
-      );
-    }
+      if (!result.affected || result.affected === 0) {
+        throw new BadRequestException(
+          tr(
+            "errors.auth.invalidOrExpiredResetToken",
+            "Invalid or expired reset token",
+          ),
+        );
+      }
 
-    // Revoke all refresh tokens to force re-login on all devices
-    const userId = result.raw?.[0]?.id;
+      const id: string | undefined = result.raw?.[0]?.id;
+      if (id) {
+        await revokeStandingCredentials(manager, id);
+      }
+      return id;
+    });
+
+    // After the commit: every session on every device, then the OAuth grants
+    // an MCP client holds -- a reset that left either live would hand the
+    // account straight back to whoever the owner was locking out.
     if (userId) {
       await this.tokenService.revokeAllUserRefreshTokens(userId);
-      // SECURITY: Revoke trusted devices so a stolen trusted-device cookie
-      // cannot bypass 2FA after a password reset.
-      await this.scoped(TrustedDevice, (repo) => repo.delete({ userId }));
+      await revokeOAuthGrantsAfterCommit(this.moduleRef, userId, this.logger);
     }
   }
 
-  checkForgotPasswordEmailLimit(email: string): boolean {
-    const normalizedEmail = email.toLowerCase().trim();
-    const now = Date.now();
-    const record = this.forgotPasswordAttempts.get(normalizedEmail);
-
-    if (record) {
-      if (now - record.windowStart > this.FORGOT_PASSWORD_EMAIL_WINDOW_MS) {
-        // Window expired, reset
-        this.forgotPasswordAttempts.set(normalizedEmail, {
-          count: 1,
-          windowStart: now,
-        });
-        return true;
-      }
-      if (record.count >= this.FORGOT_PASSWORD_EMAIL_LIMIT) {
-        return false;
-      }
-      record.count += 1;
-      return true;
-    }
-
-    this.forgotPasswordAttempts.set(normalizedEmail, {
-      count: 1,
-      windowStart: now,
-    });
-    return true;
+  checkForgotPasswordEmailLimit(email: string): Promise<boolean> {
+    return this.withinEmailLimit(
+      FORGOT_PASSWORD_SCOPE,
+      email,
+      this.FORGOT_PASSWORD_EMAIL_LIMIT,
+      this.FORGOT_PASSWORD_EMAIL_WINDOW_MS,
+    );
   }
 
   /**
@@ -250,31 +275,77 @@ export class AuthEmailService implements OnModuleDestroy {
     }
   }
 
-  checkVerificationEmailLimit(email: string): boolean {
-    const normalizedEmail = email.toLowerCase().trim();
-    const now = Date.now();
-    const record = this.verificationEmailAttempts.get(normalizedEmail);
+  /**
+   * Apply the self-service email change owning `token` (staged by
+   * `EmailChangeService` when the change was requested).
+   *
+   * One transaction: find the live pending change, refuse when another account
+   * already holds the address, then the conditional UPDATE, which is what makes
+   * the link single-use -- it matches only while the stored hash and expiry are
+   * still those the lookup saw, so a second click, a newer request that
+   * replaced the token, or an expired link all update nothing. The unique index
+   * on `users.email` decides a race the in-transaction check cannot see, and is
+   * answered as the same 409, never a 500. Other sessions are signed out after
+   * the commit, as a password reset does.
+   */
+  async confirmEmailChange(token: string): Promise<void> {
+    const hashedToken = hashToken(token);
+    const invalid = () =>
+      new BadRequestException(
+        tr(
+          "errors.auth.invalidOrExpiredEmailChangeToken",
+          "Invalid or expired email change link",
+        ),
+      );
 
-    if (record) {
-      if (now - record.windowStart > this.VERIFICATION_EMAIL_WINDOW_MS) {
-        // Window expired, reset
-        this.verificationEmailAttempts.set(normalizedEmail, {
-          count: 1,
-          windowStart: now,
+    let userId: string;
+    try {
+      userId = await withScopedDb(this.dataSource, async (manager) => {
+        const repo = manager.getRepository(User);
+        const now = new Date();
+        const pending = await repo.findOne({
+          where: {
+            emailChangeToken: hashedToken,
+            emailChangeTokenExpiry: MoreThan(now),
+          },
         });
-        return true;
-      }
-      if (record.count >= this.VERIFICATION_EMAIL_LIMIT) {
-        return false;
-      }
-      record.count += 1;
-      return true;
+        if (!pending || !pending.pendingEmail) throw invalid();
+        const newEmail = pending.pendingEmail;
+
+        const holder = await repo.findOne({ where: { email: newEmail } });
+        if (holder && holder.id !== pending.id) throw emailInUseConflict();
+
+        const result = await repo
+          .createQueryBuilder()
+          .update(User)
+          .set({
+            email: newEmail,
+            emailVerified: true,
+            pendingEmail: null,
+            emailChangeToken: null,
+            emailChangeTokenExpiry: null,
+          })
+          .where("id = :id", { id: pending.id })
+          .andWhere("emailChangeToken = :hashedToken", { hashedToken })
+          .andWhere("emailChangeTokenExpiry > :now", { now })
+          .execute();
+        if (!result.affected) throw invalid();
+        return pending.id;
+      });
+    } catch (error) {
+      if (isUniqueViolation(error)) throw emailInUseConflict();
+      throw error;
     }
 
-    this.verificationEmailAttempts.set(normalizedEmail, {
-      count: 1,
-      windowStart: now,
-    });
-    return true;
+    await this.tokenService.revokeAllUserRefreshTokens(userId);
+  }
+
+  checkVerificationEmailLimit(email: string): Promise<boolean> {
+    return this.withinEmailLimit(
+      VERIFICATION_EMAIL_SCOPE,
+      email,
+      this.VERIFICATION_EMAIL_LIMIT,
+      this.VERIFICATION_EMAIL_WINDOW_MS,
+    );
   }
 }

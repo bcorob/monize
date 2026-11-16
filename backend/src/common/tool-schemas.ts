@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { formatDateYMDLocal } from "./date-utils";
 
 /**
  * Shared Zod primitives for tool inputs exposed to LLMs, used by both
@@ -8,6 +9,55 @@ import { z } from "zod";
  * between the two surfaces — the same normalization rules apply
  * regardless of which surface the model is talking to.
  */
+
+/**
+ * A number a model may have written as a string.
+ *
+ * `limit: "10"` is what an LLM emits often enough that rejecting it is a defect,
+ * not strictness: the MCP SDK validated `list_payees` against a bare
+ * `z.number()` and answered -32602 "expected number, received string" for a
+ * perfectly clear request.
+ *
+ * It is deliberately NOT `z.coerce.number()`, which is `Number(value)` and so
+ * reads `""`, `"   "`, `null` and `[]` as **0** -- an unknown arriving as a
+ * measured zero, which on `minAmount` silently filters at zero and on an
+ * `amount` would post a transaction for nothing. Only a non-empty numeric
+ * string is converted; everything else is left for `z.number()` to refuse.
+ *
+ * Pass the bounds as the inner schema (`numberArg(z.number().int().min(1))`):
+ * the constraints belong to the number, and the result serializes to exactly
+ * the JSON Schema the bare form would, so tolerance costs no `tools/list` bytes.
+ */
+export const numberArg = (inner: z.ZodNumber = z.number()) =>
+  z.preprocess(
+    (value) =>
+      typeof value === "string" && value.trim() !== "" ? Number(value) : value,
+    inner,
+  );
+
+/**
+ * A boolean a model may have written as a string.
+ *
+ * Same defect, same fix, and `z.coerce.boolean()` is likewise the wrong tool: it
+ * is `Boolean(value)`, so it reads "false" as TRUE -- the one input a caller
+ * most needs it to get right (`hasEmail: "false"` is how you ask which payees
+ * are missing one). This maps the two literal strings and leaves everything else
+ * to `z.boolean()`, so "yes" and 1 are still refused, and it serializes to a
+ * plain `{"type": "boolean"}` where a union would emit an `anyOf`.
+ */
+export const booleanArg = () =>
+  z.preprocess(
+    (value) => (value === "true" ? true : value === "false" ? false : value),
+    z.boolean(),
+  );
+
+/**
+ * A bond series code (`EDO1036`) a model names on an investment row: trimmed,
+ * never empty (an empty string would read as "no series named" and silently
+ * fall back to inference), at most 40 characters. One schema for the assistant
+ * and the MCP server.
+ */
+export const bondSeriesCodeSchema = z.string().trim().min(1).max(40);
 
 const isoDateRegex = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -70,19 +120,6 @@ export const DEFAULT_LOOKBACK_DAYS = 30;
 export const DEFAULT_TOP_N = 10;
 
 /**
- * Format a local Date as YYYY-MM-DD using local-time components.
- * Defaults work with calendar dates from the server's perspective,
- * so local components avoid an off-by-one shift that UTC formatting
- * would introduce in non-UTC timezones.
- */
-function localYMD(date: Date): string {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, "0");
-  const d = String(date.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-/**
  * Return a {startDate, endDate} pair covering the last `lookbackDays`
  * days (inclusive of today). Used when the model omits a date range.
  */
@@ -92,7 +129,10 @@ export function getDefaultDateRange(
   const end = new Date();
   const start = new Date();
   start.setDate(start.getDate() - lookbackDays);
-  return { startDate: localYMD(start), endDate: localYMD(end) };
+  return {
+    startDate: formatDateYMDLocal(start),
+    endDate: formatDateYMDLocal(end),
+  };
 }
 
 export interface ComparePeriods {
@@ -115,10 +155,10 @@ export function getDefaultComparePeriods(): ComparePeriods {
   // Day 0 of the current month = last day of the previous month
   const prevEnd = new Date(now.getFullYear(), now.getMonth(), 0);
   return {
-    period1Start: localYMD(prevStart),
-    period1End: localYMD(prevEnd),
-    period2Start: localYMD(currentStart),
-    period2End: localYMD(now),
+    period1Start: formatDateYMDLocal(prevStart),
+    period1End: formatDateYMDLocal(prevEnd),
+    period2Start: formatDateYMDLocal(currentStart),
+    period2End: formatDateYMDLocal(now),
   };
 }
 

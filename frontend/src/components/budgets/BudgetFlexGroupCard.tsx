@@ -4,6 +4,7 @@ import { useTranslations } from 'next-intl';
 import { BudgetProgressBar } from './BudgetProgressBar';
 import type { CategoryBreakdown, BudgetCategory } from '@/types/budget';
 
+import { useNumberFormat } from '@/hooks/useNumberFormat';
 interface FlexGroupData {
   name: string;
   totalBudgeted: number;
@@ -75,6 +76,7 @@ export function BudgetFlexGroupCard({
   formatCurrency,
 }: BudgetFlexGroupCardProps) {
   const t = useTranslations('budgets');
+  const { formatPercentTrimmed } = useNumberFormat();
   const flexGroups = computeFlexGroups(categories, budgetCategories);
 
   if (flexGroups.length === 0) {
@@ -95,7 +97,7 @@ export function BudgetFlexGroupCard({
               </span>
               <span className="text-sm text-gray-600 dark:text-gray-300">
                 {formatCurrency(group.totalSpent)} / {formatCurrency(group.totalBudgeted)}{' '}
-                ({Math.round(group.percentUsed)}%)
+                ({formatPercentTrimmed(Math.round(group.percentUsed))})
               </span>
             </div>
             <BudgetProgressBar percentUsed={group.percentUsed} />

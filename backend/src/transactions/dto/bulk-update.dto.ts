@@ -17,6 +17,7 @@ import { Type } from "class-transformer";
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import { TransactionStatus } from "../entities/transaction.entity";
 import { SanitizeHtml } from "../../common/decorators/sanitize-html.decorator";
+import { TRANSACTION_NOTE_MAX_LENGTH } from "../../common/transaction-note";
 
 export class BulkUpdateFilterDto {
   @ApiPropertyOptional({ description: "Filter by account IDs" })
@@ -133,7 +134,7 @@ export class BulkUpdateDto {
   @ApiPropertyOptional({ description: "Set description (null to clear)" })
   @IsOptional()
   @IsString()
-  @MaxLength(500)
+  @MaxLength(TRANSACTION_NOTE_MAX_LENGTH)
   @SanitizeHtml()
   description?: string | null;
 

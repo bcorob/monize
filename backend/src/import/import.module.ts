@@ -9,11 +9,14 @@ import { MnyImportJobService } from "./mny/mny-import-job.service";
 import { MnyImportService } from "./mny/mny-import.service";
 import { ImportPostProcessingService } from "./import-post-processing.service";
 import { MnyParserService } from "./mny/mny-parser.service";
+import { MnyMarketRateService } from "./mny/mny-market-rates.service";
 import { MnyStagingService } from "./mny/mny-staging.service";
 import { NetWorthModule } from "../net-worth/net-worth.module";
 import { SecuritiesModule } from "../securities/securities.module";
 import { CurrenciesModule } from "../currencies/currencies.module";
 import { UsersModule } from "../users/users.module";
+import { TransactionRulesModule } from "../transaction-rules/transaction-rules.module";
+import { TagsModule } from "../tags/tags.module";
 
 @Module({
   imports: [
@@ -21,6 +24,8 @@ import { UsersModule } from "../users/users.module";
     forwardRef(() => SecuritiesModule),
     forwardRef(() => CurrenciesModule),
     forwardRef(() => UsersModule),
+    TransactionRulesModule,
+    TagsModule,
   ],
   controllers: [ImportController, MnyImportController],
   providers: [
@@ -31,6 +36,7 @@ import { UsersModule } from "../users/users.module";
     ImportRegularProcessorService,
     MnyStagingService,
     MnyParserService,
+    MnyMarketRateService,
     MnyImportJobService,
     MnyImportService,
   ],
@@ -38,6 +44,7 @@ import { UsersModule } from "../users/users.module";
     ImportService,
     MnyStagingService,
     MnyParserService,
+    MnyMarketRateService,
     MnyImportJobService,
     MnyImportService,
   ],

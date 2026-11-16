@@ -28,29 +28,59 @@ describe('transactionsApi', () => {
   it('getAll converts accountIds array to comma-separated', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({ data: { items: [], total: 0 } });
     await transactionsApi.getAll({ accountIds: ['a1', 'a2'] });
-    const params = vi.mocked(apiClient.get).mock.calls[0][1]!.params;
+    const params = vi.mocked(apiClient.get).mock.calls[0][1]!.params as Record<string, unknown>;
     expect(params.accountIds).toBe('a1,a2');
   });
 
   it('getAll uses accountId when accountIds is empty', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({ data: { items: [], total: 0 } });
     await transactionsApi.getAll({ accountId: 'a1', accountIds: [] });
-    const params = vi.mocked(apiClient.get).mock.calls[0][1]!.params;
+    const params = vi.mocked(apiClient.get).mock.calls[0][1]!.params as Record<string, unknown>;
     expect(params.accountId).toBe('a1');
   });
 
   it('getAll converts categoryIds array', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({ data: { items: [], total: 0 } });
     await transactionsApi.getAll({ categoryIds: ['c1', 'c2'] });
-    const params = vi.mocked(apiClient.get).mock.calls[0][1]!.params;
+    const params = vi.mocked(apiClient.get).mock.calls[0][1]!.params as Record<string, unknown>;
     expect(params.categoryIds).toBe('c1,c2');
   });
 
   it('getAll converts payeeIds array', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({ data: { items: [], total: 0 } });
     await transactionsApi.getAll({ payeeIds: ['p1', 'p2'] });
-    const params = vi.mocked(apiClient.get).mock.calls[0][1]!.params;
+    const params = vi.mocked(apiClient.get).mock.calls[0][1]!.params as Record<string, unknown>;
     expect(params.payeeIds).toBe('p1,p2');
+  });
+
+  describe('getAllForExport', () => {
+    it('asks /transactions/export once, with the filters and no paging', async () => {
+      const rows = [{ id: 'tx-1' }, { id: 'tx-2' }];
+      vi.mocked(apiClient.get).mockResolvedValue({ data: { data: rows } });
+
+      const result = await transactionsApi.getAllForExport({
+        accountIds: ['a1', 'a2'],
+        startDate: '2026-01-01',
+        statuses: ['CLEARED', 'VOID'] as any,
+        hasAttachments: false,
+      });
+
+      expect(result).toEqual(rows);
+      expect(apiClient.get).toHaveBeenCalledTimes(1);
+      const [url, config] = vi.mocked(apiClient.get).mock.calls[0];
+      expect(url).toBe('/transactions/export');
+      const params = config!.params as Record<string, unknown>;
+      expect(params).toMatchObject({
+        accountIds: 'a1,a2',
+        startDate: '2026-01-01',
+        statuses: 'CLEARED,VOID',
+        hasAttachments: false,
+      });
+      expect(params).not.toHaveProperty('page');
+      expect(params).not.toHaveProperty('limit');
+      // The whole register in one response needs longer than a page does.
+      expect(config!.timeout).toBeGreaterThan(60000);
+    });
   });
 
   describe('getAllPages', () => {
@@ -74,7 +104,7 @@ describe('transactionsApi', () => {
       const result = await transactionsApi.getAllPages();
       expect(result.map((t) => (t as { id: string }).id)).toEqual(['t1', 't2', 't3']);
       expect(apiClient.get).toHaveBeenCalledTimes(2);
-      const secondCall = vi.mocked(apiClient.get).mock.calls[1][1]!.params;
+      const secondCall = vi.mocked(apiClient.get).mock.calls[1][1]!.params as Record<string, unknown>;
       expect(secondCall.page).toBe(2);
       expect(secondCall.limit).toBe(200);
     });
@@ -88,7 +118,7 @@ describe('transactionsApi', () => {
         endDate: '2026-01-31',
         pageSize: 50,
       });
-      const params = vi.mocked(apiClient.get).mock.calls[0][1]!.params;
+      const params = vi.mocked(apiClient.get).mock.calls[0][1]!.params as Record<string, unknown>;
       expect(params.startDate).toBe('2026-01-01');
       expect(params.endDate).toBe('2026-01-31');
       expect(params.limit).toBe(50);
@@ -157,7 +187,7 @@ describe('transactionsApi', () => {
   it('getSummary fetches /transactions/summary with array params', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({ data: { total: 500 } });
     await transactionsApi.getSummary({ accountIds: ['a1'], categoryIds: ['c1'], payeeIds: ['p1'] });
-    const params = vi.mocked(apiClient.get).mock.calls[0][1]!.params;
+    const params = vi.mocked(apiClient.get).mock.calls[0][1]!.params as Record<string, unknown>;
     expect(params.accountIds).toBe('a1');
     expect(params.categoryIds).toBe('c1');
     expect(params.payeeIds).toBe('p1');
@@ -166,7 +196,7 @@ describe('transactionsApi', () => {
   it('getSummary uses singular ids as fallback', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({ data: { total: 500 } });
     await transactionsApi.getSummary({ accountId: 'a1', categoryId: 'c1', payeeId: 'p1' });
-    const params = vi.mocked(apiClient.get).mock.calls[0][1]!.params;
+    const params = vi.mocked(apiClient.get).mock.calls[0][1]!.params as Record<string, unknown>;
     expect(params.accountId).toBe('a1');
     expect(params.categoryId).toBe('c1');
     expect(params.payeeId).toBe('p1');
@@ -182,7 +212,7 @@ describe('transactionsApi', () => {
       endDate: '2025-12-31',
       search: 'test',
     });
-    const params = vi.mocked(apiClient.get).mock.calls[0][1]!.params;
+    const params = vi.mocked(apiClient.get).mock.calls[0][1]!.params as Record<string, unknown>;
     expect(params.accountIds).toBe('a1');
     expect(params.categoryIds).toBe('c1,uncategorized');
     expect(params.payeeIds).toBe('p1');
@@ -194,7 +224,7 @@ describe('transactionsApi', () => {
   it('getMonthlyTotals omits empty arrays from params', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({ data: [] });
     await transactionsApi.getMonthlyTotals({});
-    const params = vi.mocked(apiClient.get).mock.calls[0][1]!.params;
+    const params = vi.mocked(apiClient.get).mock.calls[0][1]!.params as Record<string, unknown>;
     expect(params.accountIds).toBeUndefined();
     expect(params.categoryIds).toBeUndefined();
     expect(params.payeeIds).toBeUndefined();
@@ -244,6 +274,23 @@ describe('transactionsApi', () => {
     expect(apiClient.delete).toHaveBeenCalledWith('/transactions/tx-1/transfer');
   });
 
+  it('convertToTransfer posts to /transactions/:id/convert-to-transfer', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { fromTransaction: {}, toTransaction: {} } });
+    await transactionsApi.convertToTransfer('tx-1', { amount: 100 } as any);
+    expect(apiClient.post).toHaveBeenCalledWith('/transactions/tx-1/convert-to-transfer', {
+      amount: 100,
+    });
+  });
+
+  it('convertToTransaction posts to /transactions/:id/convert-to-transaction', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { id: 'tx-1' } });
+    const result = await transactionsApi.convertToTransaction('tx-1', { amount: -100 } as any);
+    expect(apiClient.post).toHaveBeenCalledWith('/transactions/tx-1/convert-to-transaction', {
+      amount: -100,
+    });
+    expect(result.id).toBe('tx-1');
+  });
+
   it('updateTransfer patches /transactions/:id/transfer', async () => {
     vi.mocked(apiClient.patch).mockResolvedValue({ data: { from: {}, to: {} } });
     await transactionsApi.updateTransfer('tx-1', { amount: 200 } as any);
@@ -270,7 +317,7 @@ describe('transactionsApi', () => {
   it('getAll forwards tagIds as comma-separated string', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({ data: { items: [], total: 0 } });
     await transactionsApi.getAll({ tagIds: ['t1', 't2'] });
-    const params = vi.mocked(apiClient.get).mock.calls[0][1]!.params;
+    const params = vi.mocked(apiClient.get).mock.calls[0][1]!.params as Record<string, unknown>;
     expect(params.tagIds).toBe('t1,t2');
   });
 
@@ -285,7 +332,7 @@ describe('transactionsApi', () => {
   it('getRecent forwards payeeId and limit', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({ data: [] });
     await transactionsApi.getRecent({ limit: 10, payeeId: 'p-1' });
-    const params = vi.mocked(apiClient.get).mock.calls[0][1]!.params;
+    const params = vi.mocked(apiClient.get).mock.calls[0][1]!.params as Record<string, unknown>;
     expect(params.limit).toBe(10);
     expect(params.payeeId).toBe('p-1');
   });
@@ -293,14 +340,14 @@ describe('transactionsApi', () => {
   it('getRecent forwards payeeName', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({ data: [] });
     await transactionsApi.getRecent({ payeeName: 'Coffee' });
-    const params = vi.mocked(apiClient.get).mock.calls[0][1]!.params;
+    const params = vi.mocked(apiClient.get).mock.calls[0][1]!.params as Record<string, unknown>;
     expect(params.payeeName).toBe('Coffee');
   });
 
   it('getSummary uses tagIds', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({ data: {} });
     await transactionsApi.getSummary({ tagIds: ['t1'] });
-    const params = vi.mocked(apiClient.get).mock.calls[0][1]!.params;
+    const params = vi.mocked(apiClient.get).mock.calls[0][1]!.params as Record<string, unknown>;
     expect(params.tagIds).toBe('t1');
   });
 

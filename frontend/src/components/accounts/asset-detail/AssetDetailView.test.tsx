@@ -3,13 +3,16 @@ import { render, screen, act, waitFor } from '@/test/render';
 import { AssetDetailView } from './AssetDetailView';
 import type { Account } from '@/types/account';
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (a: number) => `$${a.toFixed(2)}`,
-    formatPercent: (a: number) => `${a.toFixed(2)}%`,
-  }),
-}));
-vi.mock('@/hooks/useDateFormat', () => ({
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (a: number) => `$${a.toFixed(2)}`,
+      formatPercent: (a: number) => `${a.toFixed(2)}%`,
+    }),
+  };
+});vi.mock('@/hooks/useDateFormat', () => ({
   useDateFormat: () => ({ dateFormat: 'browser', datePattern: 'YYYY-MM-DD', formatDate: (d: Date) => `${d.getFullYear()}` }),
 }));
 vi.mock('@/components/transactions/BalanceHistoryChart', () => ({

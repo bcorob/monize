@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import {
   monteCarloApi,
   CashFlow,
+  MAX_CASH_FLOWS,
   MonteCarloScenario,
   MonteCarloScenarioInputs,
   SimulationResult,
@@ -289,20 +290,24 @@ export function useMonteCarloScenarios() {
   }, []);
 
   const addCashFlow = useCallback(() => {
-    setForm((prev) => ({
-      ...prev,
-      cashFlows: [
-        ...prev.cashFlows,
-        {
-          name: '',
-          amount: 0,
-          flowType: 'ONE_TIME',
-          startYear: 1,
-          endYear: null,
-          inflationAdjust: true,
-        },
-      ],
-    }));
+    setForm((prev) => {
+      // The server refuses a scenario with more rows than this.
+      if (prev.cashFlows.length >= MAX_CASH_FLOWS) return prev;
+      return {
+        ...prev,
+        cashFlows: [
+          ...prev.cashFlows,
+          {
+            name: '',
+            amount: 0,
+            flowType: 'ONE_TIME',
+            startYear: 1,
+            endYear: null,
+            inflationAdjust: true,
+          },
+        ],
+      };
+    });
   }, []);
 
   const updateCashFlow = useCallback(

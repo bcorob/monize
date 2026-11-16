@@ -1,0 +1,120 @@
+{
+  "view": {
+    "label": "Görünüm",
+    "table": "Tablo",
+    "calendar": "Takvim"
+  },
+  "grid": {
+    "label": "Ay"
+  },
+  "toolbar": {
+    "layers": "Katmanlar"
+  },
+  "layers": {
+    "transactions": "İşlemler",
+    "balances": "Bakiyeler",
+    "values": "Değerler",
+    "dailyChange": "Günlük değişim"
+  },
+  "legend": {
+    "label": "Gösterge",
+    "scheduled": "Planlanmış"
+  },
+  "chip": {
+    "noPayee": "Alacaklı yok",
+    "overdue": "Gecikmiş",
+    "scheduled": "Planlanmış",
+    "noSymbol": "Sembol yok"
+  },
+  "day": {
+    "itemCount": "{count, plural, other {# öğe}}",
+    "moreChips": "+{count} daha",
+    "newTransaction": "Bu güne yeni işlem",
+    "noItems": "Bu günde bir şey yok.",
+    "scheduledHint": "Planlanmış. Değiştirmek için Faturalar ve Yatırımlar'ı açın.",
+    "newInvestmentTransaction": "Bu güne yeni yatırım işlemi"
+  },
+  "banner": {
+    "title": "Bazı tutarlar gösterilmiyor",
+    "rowCap": "Bu ay {count} işlem içeriyor, bir takvimin gösterebileceği {limit} işlemden fazla. Görmek için filtreleri daraltın.",
+    "scheduledUnavailable": "Bu ayin planlanmis ogeleri yuklenemedi. Gosterilen satirlar eksiksiz; planlanmis olanlar eksik.",
+    "scheduledTruncated": "Bazi planlanmis ogeler bu kadar ileride gosterilmez. Hepsini gormek icin bugune yaklasin.",
+    "balancesScopeEmpty": "Kapsamda hesap yok, bu yüzden gösterilecek bakiye de yok. Filtrelerden bir hesap seçin.",
+    "balancesMissingRates": "Bu ayın bazı günlerinde {pairs} için döviz kuru bulunmuyor, bu yüzden o toplamlar gösterilmiyor. Para Birimleri'ni açıp kurları yenileyin.",
+    "balancesForecastGaps": "Tahmini bakiye gösterilmiyor, çünkü şu planlı kalemler henüz fiyatlanamıyor: {schedules}.",
+    "balancesForecastWithheld": "Tahmini bakiye gösterilmiyor: en az bir planlı kalem henüz fiyatlanamıyor ve nedeni bildirilmedi.",
+    "balancesUnforecastable": "{count, plural, one {Kapsamdaki # hesabın kendi tahmini yok, bu yüzden tahmini toplamlar gösterilmiyor.} other {Kapsamdaki # hesabın kendi tahmini yok, bu yüzden tahmini toplamlar gösterilmiyor.}}",
+    "valuesUnpriced": "Bu ayın bazı günlerinde {securities} için fiyat bulunmuyor, bu yüzden o değerler gösterilmiyor. Menkul kıymetin fiyat geçmişine bir fiyat ekleyin veya fiyatları yenileyin.",
+    "valuesMissingRates": "Bu ayın bazı günlerinde {pairs} için döviz kuru bulunmuyor, bu yüzden o değerler gösterilmiyor. Para Birimleri'ni açıp kurları yenileyin.",
+    "notesUnavailable": "Bu ay için notlarınız yüklenemedi. Yazdığınız notlar hâlâ saklanıyor."
+  },
+  "errors": {
+    "monthFailed": "Bu ay yüklenemedi.",
+    "balancesFailed": "Bu ayın bakiyeleri yüklenemedi.",
+    "valuesFailed": "Bu ayın portföy değerleri yüklenemedi.",
+    "movementsFailed": "Bu ayın günlük değişimleri yüklenemedi.",
+    "movementDetailFailed": "Bu günün dökümü yüklenemedi."
+  },
+  "balance": {
+    "actualTitle": "Gün sonu bakiyesi",
+    "projectedTitle": "Tahmini bakiye",
+    "projected": "Tahmini",
+    "projectedHint": "Bugünün gün sonu bakiyesi ve bu güne kadar vadesi gelen tüm planlı kalemler üzerinden hesaplandı.",
+    "projectedFromItems": "Bugünün gün sonu bakiyesi ve bu güne kadar vadesi gelen tüm planlı kalemler üzerinden hesaplandı; aşağıda listelenenler de dahil.",
+    "partial": "Kısmi: kapsamın {amount} kadarı hesaplanabildi, geri kalanı hesaplanamadı, bu yüzden toplam gösterilmiyor.",
+    "missingRates": "Bu tutarın fiyatlandığı gün için {pairs} kuru yok. Para Birimleri'ni açıp kurları yenileyin.",
+    "unforecastable": "{count, plural, one {Kapsamdaki # hesabın kendi tahmini yok, bu yüzden tahmini toplam gösterilmiyor.} other {Kapsamdaki # hesabın kendi tahmini yok, bu yüzden tahmini toplam gösterilmiyor.}}"
+  },
+  "value": {
+    "title": "Portföy değeri",
+    "unpriced": "Bu günde {securities} için fiyat bulunmuyor, bu yüzden değer gösterilmiyor. Menkul kıymetin fiyat geçmişine bir fiyat ekleyin veya fiyatları yenileyin.",
+    "missingRates": "Bu günde {pairs} için döviz kuru yok, bu yüzden değer gösterilmiyor. Para Birimleri'ni açıp kurları yenileyin."
+  },
+  "change": {
+    "openDetail": "Bu gün neyin hareket ettiğini göster",
+    "detailTitle": "{date} tarihinde hareket edenler",
+    "headline": "Piyasa hareketi",
+    "headlineValue": "{amount} ({percent})",
+    "gains": "Kazançlar",
+    "losses": "Kayıplar",
+    "unchanged": "{count, plural, one {# menkul kıymet değişmeden kapandı.} other {# menkul kıymet değişmeden kapandı.}}",
+    "remainder": "Nakit, dağıtımlar ve işlemler",
+    "row": "{quantity} adet, {from} değerinden {to} {currency} değerine",
+    "reasons": {
+      "notTradingDay": "Bu günde elde tutulan hiçbir menkul kıymet fiyatlanmadı, bu yüzden raporlanacak bir seans yok.",
+      "unpricedHolding": "Bir pozisyonun bu günde veya bir önceki günde fiyatı yoktu, bu yüzden hareket bilinmiyor.",
+      "missingRate": "Bir döviz kuru eksikti, bu yüzden hareket dönüştürülemedi.",
+      "flowIncomplete": "Bu güne ait bir yatırma veya çekme dönüştürülemedi, bu yüzden hareket ondan ayrılamıyor.",
+      "cashIncomplete": "Bir nakit hesap bu gün için bakiye bildirmedi, bu yüzden günün değeri eksik ve hareket bilinmiyor.",
+      "noPriorValue": "Bu günü karşılaştıracak daha önceki bir değer yok.",
+      "zeroBaseline": "Portföy bir önceki gün boştu, bu yüzden hesaplanacak bir yüzde yok."
+    }
+  },
+  "notes": {
+    "title": "Not",
+    "add": "Not ekle",
+    "saveFailed": "Not kaydedilemedi. Yeniden deneyin.",
+    "deleteFailed": "Not silinemedi. Yeniden deneyin.",
+    "deleteTitle": "Bu not silinsin mi?",
+    "deleteMessage": "Bu gündeki not kaldırılır. Bu geri alınamaz.",
+    "discardTitle": "Bu not atılsın mı?",
+    "discardMessage": "Yazdığınız not kaydedilmedi. Bu günden ayrılmak notu atar.",
+    "discardConfirm": "At",
+    "startDate": "İlk gün",
+    "endDate": "Son gün",
+    "spanRange": "{start} - {end}",
+    "spanCount": "{count, plural, one {# gün} other {# gün}}",
+    "spanBackwards": "Son gün, ilk günden önce olamaz.",
+    "spanTooLong": "Bir not en fazla {days} günü kapsayabilir.",
+    "spanMissesDay": "Seçtiğiniz günler, bu notu yazdığınız günü içermiyor.",
+    "deleteSpanMessage": "{count, plural, one {Bu gündeki not kaldırılacak. Bu geri alınamaz.} other {Bu not # günü kapsıyor ve hepsi temizlenecek. Bu geri alınamaz.}}"
+  },
+  "monthPicker": {
+    "title": "Başka bir aya git",
+    "typeLabel": "Bir ay veya yıl yazın",
+    "placeholder": "örn. Mar 1998, 1998-03, 3/1998",
+    "unreadable": "Bunu bir ay olarak okuyamıyoruz. Bir yıl, bir ay adı veya 1998-03 deneyin.",
+    "previousYear": "Önceki yıl",
+    "nextYear": "Sonraki yıl"
+  }
+}

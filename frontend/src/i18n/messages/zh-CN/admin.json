@@ -46,6 +46,8 @@
     "colProvider": "提供商",
     "colStatus": "状态",
     "colLastLogin": "最后登录",
+    "colBackups": "备份",
+    "colAttachments": "附件",
     "colActions": "操作",
     "youSuffix": "（您）",
     "noEmail": "无电子邮件",
@@ -60,7 +62,22 @@
     "clickToDisable": "点击禁用",
     "clickToEnable": "点击启用",
     "resetPassword": "重置密码",
-    "noUsers": "未找到用户。"
+    "resetTwoFactor": "重置 2FA",
+    "unlinkSso": "解除 SSO 绑定",
+    "noUsers": "未找到用户。",
+    "storageLoading": "加载中…",
+    "storageUnavailable": "不可用",
+    "storageUnavailableHint": "无法加载存储用量。请重新加载页面后重试。",
+    "storageUnknown": "未知",
+    "storageUnknownStore": "无法读取该用户的备份存储，因此大小未知。请在“备份”页面检查备份位置。",
+    "storageNotReported": "未统计",
+    "storageNotReportedHint": "该账户不在最近一次存储统计中。请重新加载页面以将其纳入。",
+    "backupsOff": "已关闭",
+    "backupsOffHint": "该用户未启用自动备份，也没有已保存的备份。",
+    "backupScheduleOff": "计划已关闭",
+    "backupScheduleOffHint": "自动备份已关闭；这些文件是保留策略尚未删除的部分。",
+    "backupCount": "{count, plural, =0 {没有备份} one {# 个备份} other {# 个备份}}",
+    "attachmentCount": "{count, plural, =0 {没有文件} one {# 个文件} other {# 个文件}}"
   },
   "usersPage": {
     "title": "用户管理",
@@ -81,7 +98,10 @@
       "loadFailed": "加载用户失败",
       "deleteFailed": "删除用户失败",
       "disableFailed": "禁用用户失败",
-      "resetFailed": "重置密码失败"
+      "resetFailed": "重置密码失败",
+      "twoFactorReset": "已重置 {name} 的双重身份验证。该用户已退出登录。",
+      "resetTwoFactorFailed": "重置双重身份验证失败",
+      "unlinkSsoFailed": "解除 SSO 绑定失败"
     },
     "dialogs": {
       "promoteTitle": "提升用户权限？",
@@ -96,6 +116,14 @@
       "resetTitle": "重置密码？",
       "resetMessage": "这将为 {name} 生成新的临时密码。他们下次登录时将被要求更改密码。",
       "resetConfirm": "重置密码",
+      "unlinkSsoTitle": "解除 SSO 绑定？",
+      "unlinkSsoMessage": "这将把 {name} 的账户转换为本地账户。之后使用相同电子邮件地址通过 SSO 登录，可再次关联该账户。系统会生成临时密码，{name} 下次登录时必须更改密码。",
+      "unlinkSsoConfirm": "解除 SSO 绑定",
+      "unlinkSsoResultTitle": "SSO 绑定已解除",
+      "unlinkSsoResultDesc": "{name} 的账户现在是本地账户。请将此临时密码告知对方，以便其登录。",
+      "resetTwoFactorTitle": "重置双重身份验证？",
+      "resetTwoFactorMessage": "这将关闭 {name} 的双重身份验证，删除其备用码和受信任设备，并使其在所有位置退出登录。之后，该用户可以使用密码登录并重新设置 2FA。适用于用户丢失了身份验证器应用和备用码，或更改 JWT_SECRET 之后的情况。",
+      "resetTwoFactorConfirm": "重置 2FA",
       "deleteTitle": "删除用户？",
       "deleteMessage": "您确定要删除 {name} 吗？这将永久删除其账户及所有相关数据。此操作无法撤销。如果他们是另一账户的委托人，其自有数据将被删除，但登录凭据将保留以维持委托关系——他们将成为仅委托用户。",
       "deleteConfirm": "删除用户",
@@ -103,6 +131,84 @@
       "tempPasswordTitleUpgraded": "账户已升级",
       "tempPasswordDescCreated": "已为 {name} 生成临时密码。请将其分享给他们以供登录使用。",
       "tempPasswordDescUpgraded": "现有共享用户已升级为完整账户。请将此临时密码分享给 {name}。"
+    }
+  },
+  "notificationsPage": {
+    "title": "通知",
+    "subtitle": "此 Monize 实例提供的投递渠道，以及其背后的推送身份。",
+    "loading": "正在加载通知设置...",
+    "loadUnavailable": "Monize 无法从服务器读取通知设置。请重新加载页面后重试。",
+    "channelsHeading": "投递渠道",
+    "identityHeading": "Web Push 身份",
+    "perAccountNote": "设备、测试通知和通知偏好属于各个账户，在“设置”中管理。管理员只配置实例，绝不会发送或查看他人的通知。",
+    "channelState": {
+      "on": "已开启",
+      "off": "已关闭",
+      "unconfigured": "不可用",
+      "unknown": "未知"
+    },
+    "channels": {
+      "inApp": {
+        "name": "应用内通知",
+        "description": "顶栏的铃铛。始终可用且无法关闭：即使其他所有渠道都失败，通知仍然留在这里。"
+      },
+      "webPush": {
+        "name": "浏览器推送",
+        "description": "即使 Monize 已关闭，也能把通知送到手机或桌面。无需 Firebase、Google Play 或 Apple Developer 账户。",
+        "toggleLabel": "为此实例启用浏览器推送",
+        "missingKeys": "此实例没有推送密钥对。请设置 ENCRYPTION_KEY 并重启：Monize 会在下次启动时自行生成密钥对。",
+        "keyUnreadable": "此实例无法解密已存储的推送密钥对，因此无法投递任何通知。请在下方轮换密钥对以恢复。",
+        "serverKeyMissing": "此实例没有 ENCRYPTION_KEY，因此无法打开已存储的推送密钥对。请在部署中设置 ENCRYPTION_KEY 并重启 — 缺少密钥时轮换无法解决问题。"
+      },
+      "email": {
+        "name": "电子邮件",
+        "description": "账单提醒、预算摘要和系统警报发送到每个账户的邮箱地址。",
+        "missingSmtp": "尚未配置邮件服务器。请设置 SMTP 环境变量以启用电子邮件。",
+        "statusUnavailable": "Monize 无法读取邮件服务器状态。"
+      },
+      "ntfy": {
+        "name": "ntfy 与 UnifiedPush",
+        "description": "同样的加密推送，投递到自托管的 UnifiedPush 分发器（ntfy、NextPush），而不是 Google 或 Apple 的基础设施。它与本实例共用推送密钥对和开关；每个人在自己的 UnifiedPush 应用中注册端点，并在设置中开启该通道。",
+        "followsWebPush": "浏览器推送关闭或其密钥对无法使用时不可用 — 此通道使用同一密钥对投递。"
+      }
+    },
+    "identity": {
+      "fingerprintLabel": "密钥指纹",
+      "generatedLabel": "生成时间",
+      "devicesLabel": "已注册设备",
+      "deviceCounts": "{live} 台活跃，{disabled} 台已停用",
+      "rotateDescription": "轮换会替换此实例的密钥对。所有已注册设备将无法送达，需要重新启用推送，因此仅在密钥可能泄露时才轮换。",
+      "rotateButton": "轮换密钥对",
+      "rotatingButton": "正在轮换...",
+      "missingEncryptionKey": "由于未设置 ENCRYPTION_KEY，私钥将不得不明文存储，因此此实例没有推送密钥对。设置后重启，Monize 会自行生成密钥对。",
+      "keyUnreadable": "此实例持有一个已无法解密的推送密钥对，因此无法投递任何通知。这通常发生在数据库运行期间更改了 ENCRYPTION_KEY，或将备份还原到了另一个实例。轮换密钥对即可恢复，所有设备将重新注册。",
+      "serverKeyMissing": "此实例未设置 ENCRYPTION_KEY，因此无法打开已存储的推送密钥对。缺少密钥时轮换无济于事：请在部署中设置 ENCRYPTION_KEY 并重启，推送即可继续使用现有设备。"
+    },
+    "dialogs": {
+      "rotateTitle": "要轮换推送密钥对吗？",
+      "rotateMessage": "{count, plural, =0 {尚未注册任何设备，不会有任何损失。} other {# 台已注册设备将停止接收通知，直到在各自的浏览器中重新启用推送。}}",
+      "rotateConfirm": "轮换"
+    },
+    "toasts": {
+      "loadFailed": "无法加载通知设置",
+      "pushEnabled": "已为此实例启用浏览器推送",
+      "pushDisabled": "已为此实例关闭浏览器推送",
+      "pushToggleFailed": "无法更改浏览器推送设置",
+      "rotated": "{count, plural, =0 {已轮换密钥对} other {已轮换密钥对；# 台设备需要重新注册}}",
+      "rotateFailed": "无法轮换密钥对"
+    }
+  },
+  "backupsPage": {
+    "title": "备份",
+    "subtitle": "按计划生成的压缩备份文件，包含每个账户自己的财务记录。",
+    "scope": {
+      "heading": "这不是完整的数据库备份",
+      "perUser": "按照下方的计划，服务器会为每个账户写入一个包含其自身财务记录的压缩备份文件，并按保留策略清理较旧的文件。所有启用中的账户均在范围内。",
+      "notFullDatabase": "这不是 PostgreSQL 转储：它不包含数据库结构、服务器配置，也不包含账户财务记录之外的任何内容。若要对整个实例做灾难恢复，请使用你自己的工具单独备份数据库和附件存储。"
+    },
+    "demoRestricted": {
+      "heading": "在演示模式下受限",
+      "body": "在演示模式下，自动备份配置已禁用。"
     }
   }
 }

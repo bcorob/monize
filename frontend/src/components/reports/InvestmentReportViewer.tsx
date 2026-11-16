@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/Button';
 import { DateInput } from '@/components/ui/DateInput';
 import { MultiSelect } from '@/components/ui/MultiSelect';
 import { SortableHeader } from '@/components/ui/SortableHeader';
-import { RefreshPricesButton } from '@/components/reports/RefreshPricesButton';
+import { ReportToolbarActions } from '@/components/reports/ReportToolbarActions';
 import { investmentReportsApi } from '@/lib/investment-reports';
 import { accountsApi } from '@/lib/accounts';
 import { Account } from '@/types/account';
@@ -29,6 +29,9 @@ import { createLogger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errors';
 import { useTranslations } from 'next-intl';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { PartialTotal } from '@/components/ui/PartialTotal';
+import type { ConvertedTotal } from '@/lib/currency-total';
+import { SEGMENTED_GROUP_CLASS, segmentClass } from '@/components/ui/segmented-control';
 
 const logger = createLogger('InvestmentReportViewer');
 
@@ -48,13 +51,16 @@ export function InvestmentReportViewer({ reportId }: InvestmentReportViewerProps
   const t = useTranslations('reports');
   const tc = useTranslations('common');
   const router = useRouter();
-  const { formatNumber, formatPercent, formatCurrency } = useNumberFormat();
+  const { formatNumber, formatPercent, formatCurrency, formatQuantity } = useNumberFormat();
   const { formatDate } = useDateFormat();
   const [report, setReport] = useState<InvestmentReport | null>(null);
   const [result, setResult] = useState<InvestmentReportResult | null>(null);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isExecuting, setIsExecuting] = useState(false);
+  // The last run failed. `result` keeps the run before it, which is not this
+  // selection's answer, so it is not exportable.
+  const [runFailed, setRunFailed] = useState(false);
   const [asOfOverride, setAsOfOverride] = useState('');
   // View-time account override. Seeded from the report's saved config (below,
   // once the report loads) but freely changeable without persisting.
@@ -94,21 +100,52 @@ export function InvestmentReportViewer({ reportId }: InvestmentReportViewerProps
     }
   }, [reportId, t]);
 
-  const executeReport = useCallback(async () => {
-    setIsExecuting(true);
-    try {
-      const data = await investmentReportsApi.execute(reportId, {
-        ...(asOfOverride ? { asOfDate: asOfOverride } : {}),
-        accountIds: selectedAccountIds,
-      });
-      setResult(data);
-    } catch (error) {
-      toast.error(getErrorMessage(error, t('investmentReportViewer.toasts.runFailed')));
-      logger.error(error);
-    } finally {
-      setIsExecuting(false);
-    }
+  // The inputs the report last ran for. When they change, the "becomes
+  // executing" transition happens here, during render, rather than from inside
+  // the effect that sends the request.
+  const [executeInputs, setExecuteInputs] = useState({
+    reportId,
+    report,
+    asOfOverride,
+    selectedAccountIds,
+  });
+  if (
+    executeInputs.reportId !== reportId ||
+    executeInputs.report !== report ||
+    executeInputs.asOfOverride !== asOfOverride ||
+    executeInputs.selectedAccountIds !== selectedAccountIds
+  ) {
+    setExecuteInputs({ reportId, report, asOfOverride, selectedAccountIds });
+    if (report) setIsExecuting(true);
+  }
+
+  const runReport = useCallback(() => {
+    // The state writes live in this inner function so they run once the
+    // request settles, never synchronously inside the effect that calls this.
+    const run = async () => {
+      try {
+        const data = await investmentReportsApi.execute(reportId, {
+          ...(asOfOverride ? { asOfDate: asOfOverride } : {}),
+          accountIds: selectedAccountIds,
+        });
+        setResult(data);
+        setRunFailed(false);
+      } catch (error) {
+        setRunFailed(true);
+        toast.error(getErrorMessage(error, t('investmentReportViewer.toasts.runFailed')));
+        logger.error(error);
+      } finally {
+        setIsExecuting(false);
+      }
+    };
+    return run();
   }, [reportId, asOfOverride, selectedAccountIds, t]);
+
+  // Every run other than the automatic one shows the spinner itself.
+  const executeReport = useCallback(() => {
+    setIsExecuting(true);
+    return runReport();
+  }, [runReport]);
 
   useEffect(() => {
     const init = async () => {
@@ -136,8 +173,8 @@ export function InvestmentReportViewer({ reportId }: InvestmentReportViewerProps
 
   useEffect(() => {
     if (!report) return;
-    executeReport();
-  }, [report, executeReport]);
+    runReport();
+  }, [report, runReport]);
 
   const formatCell = (
     value: InvestmentCellValue,
@@ -169,7 +206,7 @@ export function InvestmentReportViewer({ reportId }: InvestmentReportViewerProps
       case 'percent':
         return formatPercent(Number(value), 2);
       case 'shares':
-        return Number(value).toLocaleString(undefined, { maximumFractionDigits: 4 });
+        return formatQuantity(Number(value));
       case 'date':
         return formatDate(String(value));
       default:
@@ -244,6 +281,23 @@ export function InvestmentReportViewer({ reportId }: InvestmentReportViewerProps
 
   const columns = result?.columns ?? [];
 
+  // `=== false` on purpose: an absent flag is no information, not a claim that
+  // every pair resolved.
+  const fxPartial = result?.fxComplete === false;
+  const missingPairs = result?.missingPairs ?? [];
+  // The other cause of the same blanks, and a different repair: an unpriced
+  // holding withholds the denominator exactly as a missing rate does, so it is
+  // named on its own rather than under the exchange-rate caption.
+  const pricesPartial = result?.pricesComplete === false;
+  const unpricedSymbols = result?.unpricedSymbols ?? [];
+  // The pairs the server refused, in the shape PartialTotal explains: each
+  // pair's source currency is the one with no rate to the base currency.
+  const fxGap: ConvertedTotal = {
+    value: 0,
+    missingCurrencies: missingPairs.map((pair) => pair.split('->')[0]),
+    excludedCount: missingPairs.length,
+  };
+
   return (
     <div className="space-y-6">
       <ReportDetailHeader
@@ -289,43 +343,38 @@ export function InvestmentReportViewer({ reportId }: InvestmentReportViewerProps
               <span className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 {t('investmentReportViewer.currencyLabel')}
               </span>
-              <div className="inline-flex rounded-md border border-gray-300 dark:border-gray-600 overflow-hidden">
+              <div
+                className={SEGMENTED_GROUP_CLASS}
+                role="group"
+                aria-label={t('investmentReportViewer.currencyLabel')}
+              >
                 <button
                   type="button"
                   onClick={() => setCurrencyMode('native')}
-                  className={`px-3 py-2 text-sm transition-colors ${
-                    currencyMode === 'native'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300'
-                  }`}
+                  aria-pressed={currencyMode === 'native'}
+                  className={segmentClass(currencyMode === 'native')}
                 >
                   {t('investmentReportViewer.currencyNative')}
                 </button>
                 <button
                   type="button"
                   onClick={() => setCurrencyMode('base')}
-                  className={`px-3 py-2 text-sm border-l border-gray-300 dark:border-gray-600 transition-colors ${
-                    currencyMode === 'base'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300'
-                  }`}
+                  aria-pressed={currencyMode === 'base'}
+                  className={segmentClass(currencyMode === 'base')}
                 >
                   {result?.baseCurrency || 'Base'}
                 </button>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            <RefreshPricesButton onRefreshComplete={executeReport} />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleExportCsv}
-              disabled={!result || result.rowCount === 0}
-            >
-              {t('investmentReportViewer.exportCsv')}
-            </Button>
-          </div>
+          {/* CSV only: a custom report is rows, and the viewer draws no chart
+              to put in a PDF. */}
+          <ReportToolbarActions
+            onRefreshComplete={executeReport}
+            onExportCsv={handleExportCsv}
+            disabled={isExecuting || runFailed || !result || result.rowCount === 0}
+            className="sm:self-auto"
+          />
         </div>
         <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
           {asOfOverride ? (
@@ -344,6 +393,28 @@ export function InvestmentReportViewer({ reportId }: InvestmentReportViewerProps
             ? t('investmentReportViewer.baseNote', { currency: result.baseCurrency })
             : t('investmentReportViewer.nativeNote')}
         </p>
+        {/* A withheld figure is relabelled where it is read, not only logged on
+            the server: one unresolvable pair blanks every row's % of portfolio,
+            and without this the blanks read as zero. Marked through the same
+            PartialTotal the other reports use, so the marker names the pairs. */}
+        {fxPartial && result && (
+          <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+            <PartialTotal total={fxGap} displayCurrency={result.baseCurrency}>
+              {t('investmentReportViewer.partialFxNote', {
+                pairs: (result.missingPairs ?? []).join(', '),
+              })}
+            </PartialTotal>
+          </p>
+        )}
+        {/* Both causes are shown when both apply: naming one makes the reader
+            fix it and watch nothing change. */}
+        {pricesPartial && result && (
+          <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+            {t('investmentReportViewer.partialPriceNote', {
+              symbols: unpricedSymbols.join(', '),
+            })}
+          </p>
+        )}
       </div>
 
       {/* Results */}

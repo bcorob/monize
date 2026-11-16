@@ -7,6 +7,7 @@
     "filterAll": "[XX-All ({count})-XX]",
     "filterExpenses": "[XX-Expenses ({count})-XX]",
     "filterIncome": "[XX-Income ({count})-XX]",
+    "typeFilterLabel": "[XX-Type-XX]",
     "modalTitleNew": "[XX-New Category-XX]",
     "modalTitleEdit": "[XX-Edit Category-XX]",
     "countSingle": "[XX-1 category-XX]",
@@ -54,6 +55,12 @@
     "typeExpense": "[XX-Expense-XX]",
     "typeIncome": "[XX-Income-XX]",
     "typeInherited": "[XX-Type inherited from parent-XX]",
+    "autoSignLabel": "[XX-Automatic sign-XX]",
+    "autoSignOn": "[XX-Enabled-XX]",
+    "autoSignOff": "[XX-Disabled-XX]",
+    "autoSignInherit": "[XX-Inherit from parent-XX]",
+    "autoSignInheritedFrom": "[XX-Inherited from parent ({name}): currently {state}-XX]",
+    "autoSignHelp": "[XX-When enabled, an amount you type is made negative for an expense category and positive for an income category. Turn off to keep the sign exactly as you enter it.-XX]",
     "colourLabel": "[XX-Colour-XX]",
     "colourInherit": "[XX-Inherit from parent-XX]",
     "colourNone": "[XX-No colour-XX]",
@@ -65,8 +72,8 @@
     "submitUpdate": "[XX-Update Category-XX]"
   },
   "list": {
-    "emptyHeading": "[XX-No categories-XX]",
-    "emptyDescription": "[XX-Get started by creating a new category.-XX]",
+    "emptyHeading": "[XX-No categories found-XX]",
+    "emptyDescription": "[XX-No categories match your current search or filter.-XX]",
     "colName": "[XX-Name-XX]",
     "colType": "[XX-Type-XX]",
     "colCount": "[XX-Count-XX]",
@@ -79,7 +86,7 @@
     "viewTransactionsTitle": "[XX-View transactions in this category-XX]"
   },
   "deleteDialog": {
-    "title": "[XX-Delete \"{name}\"?-XX]",
+    "title": "[XX-Delete \"{name}\"-XX]",
     "checkingUsage": "[XX-Checking usage...-XX]",
     "usedBy": "[XX-This category is used by {count, plural, one {# item} other {# items}} (transactions and/or scheduled bills & deposits).-XX]",
     "reassignLabel": "[XX-Reassign to:-XX]",

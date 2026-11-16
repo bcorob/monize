@@ -3,10 +3,14 @@ import { render, screen } from '@/test/render';
 import { CashFlowMiniReport } from './CashFlowMiniReport';
 import type { MonthlyTotal } from '@/types/transaction';
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({ formatCurrency: (a: number) => `$${a.toFixed(2)}` }),
-}));
+const formatCurrencyMock = vi.hoisted(() => vi.fn((a: number) => `$${a.toFixed(2)}`));
 
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({ ...numberFormatMockDefaults(), formatCurrency: formatCurrencyMock }),
+  };
+});
 const monthly: MonthlyTotal[] = [
   { month: '2026-05', total: -200, count: 4 },
   { month: '2026-06', total: 500, count: 3 },
@@ -31,5 +35,32 @@ describe('CashFlowMiniReport', () => {
       <CashFlowMiniReport monthly={monthly} currencyCode="CAD" isLoading={true} />,
     );
     expect(container.querySelector('.animate-pulse')).toBeInTheDocument();
+  });
+
+  it('formats with the currency the response names, not the account currency', () => {
+    formatCurrencyMock.mockClear();
+    render(
+      <CashFlowMiniReport
+        monthly={[{ month: '2026-05', currency: 'USD', total: -200, count: 4 }]}
+        currencyCode="EUR"
+        isLoading={false}
+      />,
+    );
+    expect(formatCurrencyMock).toHaveBeenCalledWith(-200, 'USD');
+  });
+
+  it('shows a dash, not zero, for a month whose total is unknown', () => {
+    render(
+      <CashFlowMiniReport
+        monthly={[
+          { month: '2026-05', total: null, knownSubtotal: -10, count: 4 },
+          { month: '2026-06', total: 500, count: 3 },
+        ]}
+        currencyCode="CAD"
+        isLoading={false}
+      />,
+    );
+    expect(screen.getByText('-')).toBeInTheDocument();
+    expect(screen.queryByText('$0.00')).not.toBeInTheDocument();
   });
 });

@@ -81,13 +81,16 @@ vi.mock('@/hooks/useIsMobile', () => ({
 const mockFormatCurrency = vi.fn((n: number) => `$${n.toFixed(2)}`);
 const mockFormatCurrencyAxis = vi.fn((n: number) => `$${n}`);
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: mockFormatCurrency,
-    formatCurrencyAxis: mockFormatCurrencyAxis,
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: mockFormatCurrency,
+      formatCurrencyAxis: mockFormatCurrencyAxis,
+    }),
+  };
+});
 describe('CategoryPayeeBarChart', () => {
   beforeEach(() => {
     // Reset to default USD-like 2-decimal behaviour before each test
@@ -114,6 +117,23 @@ describe('CategoryPayeeBarChart', () => {
     render(<CategoryPayeeBarChart data={[]} isLoading={true} />);
     expect(screen.getByText('Monthly Totals')).toBeInTheDocument();
     expect(document.querySelector('.animate-pulse')).toBeInTheDocument();
+  });
+
+  it('offers the fold button in every state, only where the page asks for it', () => {
+    const onCollapse = vi.fn();
+    const data = buildMonths(3);
+    const { rerender } = render(<CategoryPayeeBarChart data={data} isLoading={false} />);
+    expect(screen.queryByRole('button', { name: 'Hide chart' })).not.toBeInTheDocument();
+
+    for (const props of [
+      { data: [], isLoading: true },
+      { data: [], isLoading: false },
+      { data, isLoading: false },
+    ]) {
+      rerender(<CategoryPayeeBarChart {...props} onCollapse={onCollapse} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Hide chart' }));
+    }
+    expect(onCollapse).toHaveBeenCalledTimes(3);
   });
 
   it('shows empty state when no data', () => {
@@ -258,6 +278,24 @@ describe('CategoryPayeeBarChart', () => {
     expect(screen.getByText('$-1000.00')).toBeInTheDocument();
     // Transaction count = 15
     expect(screen.getByText('15')).toBeInTheDocument();
+  });
+
+  it('marks the figures partial when a month has no exchange rate', () => {
+    render(
+      <CategoryPayeeBarChart
+        data={[
+          { month: '2025-01', total: -600, count: 10 },
+          { month: '2025-02', total: null, knownSubtotal: -400, count: 5 },
+        ]}
+        isLoading={false}
+      />
+    );
+
+    // The converted part still counts; the footer says it is not the whole.
+    expect(screen.getByText('$-1000.00 *')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Some amounts have no exchange rate/),
+    ).toBeInTheDocument();
   });
 
   it('shows correct summary for positive totals', () => {

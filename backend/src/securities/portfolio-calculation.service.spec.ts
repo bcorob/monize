@@ -1,5 +1,3 @@
-import { readFileSync } from "fs";
-import { join } from "path";
 import {
   CategorisedAccounts,
   PortfolioCalculationService,
@@ -12,8 +10,10 @@ import {
 } from "./entities/investment-transaction.entity";
 import { Account, AccountSubType } from "../accounts/entities/account.entity";
 import { HoldingWithMarketValue } from "./portfolio.service";
+import { SecurityValueByAccount } from "../bonds/bond-valuation.service";
 import { createScopedDbMocks } from "../test-helpers/scoped-db-testing";
-import { applyActionToQuantity } from "./investment-replay.util";
+import { UserPreference } from "../users/entities/user-preference.entity";
+import { rateIndexOf } from "../test-helpers/report-rate-testing";
 
 jest.mock("../common/db/scoped-db", () =>
   jest.requireActual("../test-helpers/scoped-db-testing").scopedDbMockModule(),
@@ -28,14 +28,27 @@ function buildService(
   repos: Array<[unknown, Record<string, jest.Mock>]>,
   exchangeRateService: unknown,
   rawQuery?: jest.Mock,
+  bondValuation: unknown = { valueByAccount: jest.fn() },
 ): PortfolioCalculationService {
-  const { manager, dataSource } = createScopedDbMocks(repos as never);
+  // The reader reports in CAD, the fixtures' account currency, unless a case
+  // registers a preference of its own.
+  const withPreference = repos.some(([entity]) => entity === UserPreference)
+    ? repos
+    : [
+        ...repos,
+        [
+          UserPreference,
+          { findOne: jest.fn().mockResolvedValue({ defaultCurrency: "CAD" }) },
+        ] as [unknown, Record<string, jest.Mock>],
+      ];
+  const { manager, dataSource } = createScopedDbMocks(withPreference as never);
   manager.query.mockImplementation((sql: string, params?: unknown[]) =>
     rawQuery ? rawQuery(sql, params) : Promise.resolve([]),
   );
   return new PortfolioCalculationService(
     dataSource as never,
     exchangeRateService as never,
+    bondValuation as never,
   );
 }
 
@@ -113,6 +126,170 @@ describe("PortfolioCalculationService.calculateRealizedGains", () => {
     expect(sell.costBasis).toBe(5000);
     expect(sell.proceeds).toBe(5990); // net of commission
     expect(sell.realizedGain).toBe(990); // 5990 - 5000
+  });
+
+  describe("a position holding shares of unknown cost", () => {
+    const addShares = makeTx({
+      id: "add",
+      action: InvestmentAction.ADD_SHARES,
+      transactionDate: "2024-01-05",
+      quantity: 10,
+      price: null as never,
+      totalAmount: 0,
+    });
+    const buy = (id: string, date: string) =>
+      makeTx({
+        id,
+        action: InvestmentAction.BUY,
+        transactionDate: date,
+        quantity: 10,
+        price: 100,
+        totalAmount: 1000,
+      });
+    const sell = (id: string, date: string, quantity: number, total: number) =>
+      makeTx({
+        id,
+        action: InvestmentAction.SELL,
+        transactionDate: date,
+        quantity,
+        price: total / quantity,
+        totalAmount: total,
+      });
+
+    it("reports a sale's cost and gain as unknown, with the proceeds still known", async () => {
+      // 10 shares of unknown cost plus 10 bought for 1,000: selling all 20 for
+      // 3,000 would read as a 2,000 gain against a 1,000 basis that is only
+      // the priced half.
+      txRepo.find.mockResolvedValue([
+        addShares,
+        buy("buy", "2024-02-01"),
+        sell("sell", "2024-03-01", 20, 3000),
+      ]);
+
+      const result = await service.calculateRealizedGains(userId);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toMatchObject({
+        transactionId: "sell",
+        proceeds: 3000,
+        costBasis: null,
+        realizedGain: null,
+      });
+    });
+
+    it("knows the basis again once the position has gone back to zero", async () => {
+      txRepo.find.mockResolvedValue([
+        addShares,
+        sell("sell-1", "2024-02-01", 10, 1200),
+        buy("buy", "2024-03-01"),
+        sell("sell-2", "2024-04-01", 10, 1500),
+      ]);
+
+      const result = await service.calculateRealizedGains(userId);
+
+      expect(result.map((r) => r.realizedGain)).toEqual([null, 500]);
+      expect(result[1].costBasis).toBe(1000);
+    });
+  });
+
+  it("measures a later sale against the basis a return of capital left (#1800)", async () => {
+    // Buy 100 @ 50 = 5,000; 1,000 of capital returned leaves 4,000 of basis;
+    // selling all 100 for 6,000 realizes 2,000, not 1,000.
+    txRepo.find.mockResolvedValue([
+      makeTx({
+        id: "buy",
+        action: InvestmentAction.BUY,
+        transactionDate: "2024-01-10",
+        quantity: 100,
+        price: 50,
+        totalAmount: 5000,
+      }),
+      makeTx({
+        id: "roc",
+        action: InvestmentAction.RETURN_OF_CAPITAL,
+        transactionDate: "2024-03-10",
+        quantity: null as never,
+        price: null as never,
+        totalAmount: 1000,
+      }),
+      makeTx({
+        id: "sell",
+        action: InvestmentAction.SELL,
+        transactionDate: "2024-06-10",
+        quantity: 100,
+        price: 60,
+        totalAmount: 6000,
+      }),
+    ]);
+
+    const result = await service.calculateRealizedGains(userId);
+
+    // Within the basis, the distribution realizes nothing on its own.
+    expect(result.map((r) => r.transactionId)).toEqual(["sell"]);
+    expect(result[0].action).toBe(InvestmentAction.SELL);
+    expect(result[0].costBasis).toBe(4000);
+    expect(result[0].realizedGain).toBe(2000);
+  });
+
+  it("does not convert a return of capital at par when its stored rate is 0", async () => {
+    // A 0 rate cannot convert the distribution, so it is not taken off the
+    // basis at 1:1 -- the same as an unpriced acquisition, which this replay
+    // leaves out of the basis rather than guessing.
+    txRepo.find.mockResolvedValue([
+      makeTx({
+        id: "buy",
+        action: InvestmentAction.BUY,
+        transactionDate: "2024-01-10",
+        quantity: 10,
+        price: 50,
+        totalAmount: 500,
+      }),
+      makeTx({
+        id: "roc",
+        action: InvestmentAction.RETURN_OF_CAPITAL,
+        transactionDate: "2024-03-10",
+        totalAmount: 700,
+        exchangeRate: 0,
+      }),
+    ]);
+
+    const result = await service.calculateRealizedGains(userId);
+
+    // At par it would have realized 200 beyond the 500 basis.
+    expect(result).toEqual([]);
+  });
+
+  it("realizes the part of a return of capital the basis cannot absorb", async () => {
+    // 10 shares that cost 500 receive 700: the basis stops at zero and the
+    // 200 beyond it is a gain on the distribution's date, with no shares sold.
+    txRepo.find.mockResolvedValue([
+      makeTx({
+        id: "buy",
+        action: InvestmentAction.BUY,
+        transactionDate: "2024-01-10",
+        quantity: 10,
+        price: 50,
+        totalAmount: 500,
+      }),
+      makeTx({
+        id: "roc",
+        action: InvestmentAction.RETURN_OF_CAPITAL,
+        transactionDate: "2024-03-10",
+        totalAmount: 700,
+      }),
+    ]);
+
+    const result = await service.calculateRealizedGains(userId);
+
+    expect(result).toHaveLength(1);
+    expect(result[0]).toMatchObject({
+      transactionId: "roc",
+      action: InvestmentAction.RETURN_OF_CAPITAL,
+      quantity: 0,
+      proceeds: 700,
+      costBasis: 500,
+      realizedGain: 200,
+    });
   });
 
   it("averages cost across multiple BUYs before a partial SELL", async () => {
@@ -268,8 +445,10 @@ describe("PortfolioCalculationService.calculateRealizedGains", () => {
 
     const result = await service.calculateRealizedGains(userId);
     // The shares still joined the position, so the sale is still reported --
-    // but no cost was invented for them.
-    expect(result[0].costBasis).toBe(0);
+    // but no cost was invented for them, and the gain is unknown, not 1,100.
+    expect(result[0].proceeds).toBe(1100);
+    expect(result[0].costBasis).toBeNull();
+    expect(result[0].realizedGain).toBeNull();
   });
 
   it("multiplies the position by a split ratio when relieving basis", async () => {
@@ -367,7 +546,7 @@ describe("PortfolioCalculationService.calculateRealizedGains", () => {
     expect(result[0].realizedGain).toBe(725); // 2025 - 1300
   });
 
-  it("returns zero realized gain when a SELL has no prior position", async () => {
+  it("reports an unknown gain when a SELL has no prior position", async () => {
     txRepo.find.mockResolvedValue([
       makeTx({
         id: "orphan-sell",
@@ -381,9 +560,174 @@ describe("PortfolioCalculationService.calculateRealizedGains", () => {
 
     const result = await service.calculateRealizedGains(userId);
     expect(result).toHaveLength(1);
-    expect(result[0].costBasis).toBe(0);
+    // Shares that were never recorded as bought have no known cost: the
+    // whole 500 is not a gain, it is a gain that cannot be stated.
+    expect(result[0].costBasis).toBeNull();
     expect(result[0].proceeds).toBe(500);
-    expect(result[0].realizedGain).toBe(500);
+    expect(result[0].realizedGain).toBeNull();
+    expect(result[0].basisGap).toBe("quantity_only_action");
+  });
+
+  it("takes the whole sale off the quantity and marks the oversold part unknown", async () => {
+    txRepo.find.mockResolvedValue([
+      makeTx({
+        id: "buy",
+        action: InvestmentAction.BUY,
+        transactionDate: "2024-01-01",
+        quantity: 5,
+        price: 10,
+        totalAmount: 50,
+      }),
+      makeTx({
+        id: "oversell",
+        action: InvestmentAction.SELL,
+        transactionDate: "2024-06-01",
+        quantity: 8,
+        price: 20,
+        totalAmount: 160,
+      }),
+    ]);
+
+    const result = await service.calculateRealizedGains(userId);
+    expect(result).toHaveLength(1);
+    expect(result[0].realizedGain).toBeNull();
+    expect(result[0].basisGap).toBe("quantity_only_action");
+  });
+
+  describe("a transferred-in lot (A26-M21)", () => {
+    const destinationId = "acct-2";
+    const transferAt = new Date("2024-02-10T12:00:00Z");
+    const cadAccount = (id: string) => ({
+      id,
+      name: id,
+      currencyCode: "CAD",
+    });
+
+    // USD security bought in CAD account A at 1.37, moved to CAD account B
+    // (carried per-share figure 100, rate 1 -- what transferSecurity writes),
+    // sold in B at 1.37.
+    const buyInA = () =>
+      makeTx({
+        id: "buy",
+        action: InvestmentAction.BUY,
+        transactionDate: "2024-01-10",
+        quantity: 10,
+        price: 100,
+        totalAmount: 1000,
+        exchangeRate: 1.37,
+      });
+    const outInA = () =>
+      makeTx({
+        id: "out",
+        action: InvestmentAction.TRANSFER_OUT,
+        transactionDate: "2024-02-10",
+        createdAt: transferAt,
+        quantity: 10,
+        price: 100,
+        linkedTransactionId: "in",
+      });
+    const inInB = (currencyCode = "CAD") =>
+      makeTx({
+        id: "in",
+        accountId: destinationId,
+        action: InvestmentAction.TRANSFER_IN,
+        transactionDate: "2024-02-10",
+        createdAt: transferAt,
+        quantity: 10,
+        price: 100,
+        linkedTransactionId: "out",
+        account: { ...cadAccount(destinationId), currencyCode } as never,
+      });
+    const sellInB = () =>
+      makeTx({
+        id: "sell",
+        accountId: destinationId,
+        action: InvestmentAction.SELL,
+        transactionDate: "2024-03-10",
+        quantity: 10,
+        price: 140,
+        totalAmount: 1400,
+        exchangeRate: 1.37,
+        account: cadAccount(destinationId) as never,
+      });
+
+    it("is sold against the account-currency basis the OUT leg released, not the carried figure at rate 1", async () => {
+      // The IN leg is listed first: the two legs share `created_at`.
+      txRepo.find.mockResolvedValue([buyInA(), inInB(), outInA(), sellInB()]);
+
+      const result = await service.calculateRealizedGains(userId);
+
+      expect(result).toHaveLength(1);
+      // 10 x 140 x 1.37 = 1,918 of proceeds against 10 x 100 x 1.37 = 1,370.
+      expect(result[0].costBasis).toBe(1370);
+      expect(result[0].realizedGain).toBe(548);
+    });
+
+    it("keeps the carried basis when the caller asks only about the destination", async () => {
+      txRepo.find.mockResolvedValue([buyInA(), outInA(), inInB(), sellInB()]);
+
+      const result = await service.calculateRealizedGains(userId, {
+        accountIds: [destinationId],
+      });
+
+      // The source's rows are read for the replay and only the results are
+      // filtered, so the query itself carries no account filter.
+      expect(txRepo.find.mock.calls[0][0].where).not.toHaveProperty(
+        "accountId",
+      );
+      expect(result).toHaveLength(1);
+      expect(result[0].accountId).toBe(destinationId);
+      expect(result[0].realizedGain).toBe(548);
+    });
+
+    it("carries nothing from a source whose basis holds an unpriced lot", async () => {
+      // An unpriced BUY makes the source's basis a subtotal: carrying it would
+      // report a confident cost for shares the ledger never priced.
+      const unpriced = makeTx({
+        id: "unpriced",
+        action: InvestmentAction.BUY,
+        transactionDate: "2024-01-11",
+        quantity: 5,
+        price: null as never,
+        totalAmount: 0,
+        exchangeRate: 1.37,
+      });
+      txRepo.find.mockResolvedValue([
+        buyInA(),
+        unpriced,
+        outInA(),
+        inInB(),
+        sellInB(),
+      ]);
+
+      const result = await service.calculateRealizedGains(userId);
+
+      // The IN leg's own row: 10 x 100 at rate 1.
+      expect(result[0].costBasis).toBe(1000);
+    });
+
+    it("falls back to the leg's own price when the two accounts differ in currency (residual)", async () => {
+      txRepo.find.mockResolvedValue([
+        buyInA(),
+        outInA(),
+        inInB("USD"),
+        sellInB(),
+      ]);
+
+      const result = await service.calculateRealizedGains(userId);
+
+      // The leg's own 10 x 100 x 1 -- the pre-existing behaviour, named as the
+      // residual rather than guessed at.
+      expect(result[0].costBasis).toBe(1000);
+    });
+
+    it("falls back to the leg's own price when the OUT leg is not in the rows", async () => {
+      txRepo.find.mockResolvedValue([inInB(), sellInB()]);
+
+      const result = await service.calculateRealizedGains(userId);
+
+      expect(result[0].costBasis).toBe(1000);
+    });
   });
 });
 
@@ -391,7 +735,10 @@ describe("PortfolioCalculationService.calculateCapitalGainsByMonth", () => {
   let service: PortfolioCalculationService;
   let txRepo: { find: jest.Mock };
   let priceRepo: { query: jest.Mock };
-  let exchangeRateService: { getLatestRate: jest.Mock };
+  let exchangeRateService: {
+    resolveStoredRate: jest.Mock;
+    getRateIndex: jest.Mock;
+  };
 
   const userId = "user-1";
   const accountId = "acct-1";
@@ -441,7 +788,11 @@ describe("PortfolioCalculationService.calculateCapitalGainsByMonth", () => {
   beforeEach(() => {
     txRepo = { find: jest.fn() };
     priceRepo = { query: jest.fn().mockResolvedValue([]) };
-    exchangeRateService = { getLatestRate: jest.fn().mockResolvedValue(null) };
+    exchangeRateService = {
+      resolveStoredRate: storedRateDouble(),
+      // The reporting-currency replay's bulk read: no stored history.
+      getRateIndex: jest.fn().mockResolvedValue(new Map()),
+    };
     service = buildService(
       [[InvestmentTransaction, txRepo as never]],
       exchangeRateService,
@@ -493,6 +844,127 @@ describe("PortfolioCalculationService.calculateCapitalGainsByMonth", () => {
     // Feb: (60*100) - (55*100) = +500
     expect(feb.totalCapitalGain).toBe(500);
     expect(feb.unrealizedGain).toBe(500);
+  });
+
+  it("nets a return of capital against the price it lowered (#1800)", async () => {
+    // 100 shares bought at 50; in January the fund pays back 2 a share (200)
+    // and its price falls from 50 to 48 by exactly that. Nothing was gained
+    // or lost: the 200 is capital coming back, and the basis falls with it.
+    txRepo.find.mockResolvedValue([
+      makeTx({
+        id: "buy",
+        action: InvestmentAction.BUY,
+        transactionDate: "2023-12-15",
+        quantity: 100,
+        price: 50,
+        totalAmount: 5000,
+      }),
+      makeTx({
+        id: "roc",
+        action: InvestmentAction.RETURN_OF_CAPITAL,
+        transactionDate: "2024-01-15",
+        totalAmount: 200,
+      }),
+    ]);
+    priceRepo.query.mockResolvedValue(
+      priceRows([
+        { date: "2023-12-31", price: 50 },
+        { date: "2024-01-31", price: 48 },
+      ]),
+    );
+
+    const result = await service.calculateCapitalGainsByMonth(userId, {
+      startDate: "2024-01-01",
+      endDate: "2024-01-31",
+    });
+
+    const jan = result.find((r) => r.month === "2024-01")!;
+    expect(jan.sells).toBe(200);
+    expect(jan.totalCapitalGain).toBe(0);
+    expect(jan.realizedGain).toBe(0);
+    expect(jan.unrealizedGain).toBe(0);
+  });
+
+  it("reports the period unknown when a return of capital's stored rate is 0, never converting it at par", async () => {
+    // `Number(rate) || 1` would turn the 0 into 1 and report a confident
+    // figure; a rate that cannot convert is unknown (AGENTS.md: rate 1 means
+    // same currency, never no rate found).
+    txRepo.find.mockResolvedValue([
+      makeTx({
+        id: "buy",
+        action: InvestmentAction.BUY,
+        transactionDate: "2023-12-15",
+        quantity: 100,
+        price: 50,
+        totalAmount: 5000,
+      }),
+      makeTx({
+        id: "roc",
+        action: InvestmentAction.RETURN_OF_CAPITAL,
+        transactionDate: "2024-01-15",
+        totalAmount: 200,
+        exchangeRate: 0,
+      }),
+    ]);
+    priceRepo.query.mockResolvedValue(
+      priceRows([
+        { date: "2023-12-31", price: 50 },
+        { date: "2024-01-31", price: 48 },
+      ]),
+    );
+
+    const result = await service.calculateCapitalGainsByMonth(userId, {
+      startDate: "2024-01-01",
+      endDate: "2024-01-31",
+    });
+
+    const jan = result.find((r) => r.month === "2024-01")!;
+    expect(jan.totalCapitalGain).toBeNull();
+    expect(jan.realizedGain).toBeNull();
+    expect(jan.unrealizedGain).toBeNull();
+  });
+
+  it("carries a return of capital from before the window into the basis a sale in it is measured against", async () => {
+    // Buy 100 @ 50 and get 1,000 back, both before January: the basis entering
+    // the window is 4,000, so selling all 100 for 6,000 realizes 2,000.
+    txRepo.find.mockResolvedValue([
+      makeTx({
+        id: "buy",
+        action: InvestmentAction.BUY,
+        transactionDate: "2023-11-15",
+        quantity: 100,
+        price: 50,
+        totalAmount: 5000,
+      }),
+      makeTx({
+        id: "roc",
+        action: InvestmentAction.RETURN_OF_CAPITAL,
+        transactionDate: "2023-12-15",
+        totalAmount: 1000,
+      }),
+      makeTx({
+        id: "sell",
+        action: InvestmentAction.SELL,
+        transactionDate: "2024-01-20",
+        quantity: 100,
+        price: 60,
+        totalAmount: 6000,
+      }),
+    ]);
+    priceRepo.query.mockResolvedValue(
+      priceRows([
+        { date: "2023-12-31", price: 55 },
+        { date: "2024-01-31", price: 60 },
+      ]),
+    );
+
+    const result = await service.calculateCapitalGainsByMonth(userId, {
+      startDate: "2024-01-01",
+      endDate: "2024-01-31",
+    });
+
+    const jan = result.find((r) => r.month === "2024-01")!;
+    expect(jan.realizedGain).toBe(2000);
   });
 
   it("reports gains as unknown when the basis carries an unpriced acquisition", async () => {
@@ -606,7 +1078,7 @@ describe("PortfolioCalculationService.calculateCapitalGainsByMonth", () => {
     //
     // The rate used to fall back to 1, which valued 100 USD shares as 100 CAD
     // and produced a confident gain figure from an arbitrary conversion.
-    exchangeRateService.getLatestRate.mockResolvedValue(null);
+    exchangeRateService.resolveStoredRate = storedRateDouble();
     txRepo.find.mockResolvedValue([
       makeTx({
         id: "buy",
@@ -646,10 +1118,75 @@ describe("PortfolioCalculationService.calculateCapitalGainsByMonth", () => {
     expect(jan.realizedGain).toBe(0);
   });
 
+  it("resolves an unrated pair once per boundary date, however many securities carry it", async () => {
+    // The cache held only found rates, so a refusal was re-resolved (and
+    // re-warned) for every security group in that currency. An absence is an
+    // answer and is cached like one. The cache is now keyed by boundary date
+    // too (the fold values each boundary at that date's FX, P5), so the pair is
+    // resolved once PER DISTINCT boundary date -- here the two January
+    // boundaries, 2023-12-31 and 2024-01-31 -- and shared across both security
+    // groups rather than re-resolved four times.
+    exchangeRateService.resolveStoredRate = storedRateDouble();
+    txRepo.find.mockResolvedValue([
+      makeTx({
+        id: "buy-a",
+        securityId: "sec-a",
+        action: InvestmentAction.BUY,
+        transactionDate: "2023-12-15",
+        quantity: 100,
+        price: 50,
+        totalAmount: 5000,
+        security: {
+          id: "sec-a",
+          symbol: "AAA",
+          name: "AAA Corp",
+          currencyCode: "USD",
+        },
+      } as never),
+      makeTx({
+        id: "buy-b",
+        securityId: "sec-b",
+        action: InvestmentAction.BUY,
+        transactionDate: "2023-12-16",
+        quantity: 50,
+        price: 20,
+        totalAmount: 1000,
+        security: {
+          id: "sec-b",
+          symbol: "BBB",
+          name: "BBB Corp",
+          currencyCode: "USD",
+        },
+      } as never),
+    ]);
+    priceRepo.query.mockResolvedValue(
+      priceRows([
+        { date: "2023-12-31", price: 50, securityId: "sec-a" },
+        { date: "2024-01-31", price: 55, securityId: "sec-a" },
+        { date: "2023-12-31", price: 20, securityId: "sec-b" },
+        { date: "2024-01-31", price: 22, securityId: "sec-b" },
+      ]),
+    );
+
+    await service.calculateCapitalGainsByMonth(userId, {
+      startDate: "2024-01-01",
+      endDate: "2024-01-31",
+    });
+
+    const usdCad = exchangeRateService.resolveStoredRate.mock.calls.filter(
+      (call: unknown[]) => call[0] === "USD" && call[1] === "CAD",
+    );
+    // Two distinct boundary dates, each resolved once -- not four times (two
+    // securities * two dates), which is what dropping the cache would cost.
+    const distinctDates = new Set(usdCad.map((call: unknown[]) => call[2]));
+    expect(distinctDates).toEqual(new Set(["2023-12-31", "2024-01-31"]));
+    expect(usdCad).toHaveLength(2);
+  });
+
   it("still computes gains when the security and account share a currency", async () => {
     // The same-currency path must not be caught by the missing-rate handling:
     // rate 1 is correct here because the codes are equal, and no lookup happens.
-    exchangeRateService.getLatestRate.mockResolvedValue(null);
+    exchangeRateService.resolveStoredRate = storedRateDouble();
     txRepo.find.mockResolvedValue([
       makeTx({
         id: "buy",
@@ -675,6 +1212,194 @@ describe("PortfolioCalculationService.calculateCapitalGainsByMonth", () => {
     expect(result[0].totalCapitalGain).toBe(500);
     expect(result[0].startValue).toBe(5000);
     expect(result[0].endValue).toBe(5500);
+    // An account in the reporting currency states its own figures there.
+    expect(result[0].inReportingCurrency).toEqual({
+      currency: "CAD",
+      startValue: 5000,
+      endValue: 5500,
+      realizedGain: 0,
+      realizedGainKnownSubtotal: 0,
+      unrealizedGain: 500,
+      totalCapitalGain: 500,
+      missingRatePairs: [],
+    });
+  });
+
+  it("values each boundary at that boundary's own accepted FX, not today's (P5)", async () => {
+    // 10 units of a USD security held in a PLN account, no trades, price flat at
+    // 100 USD. USD/PLN was 4.0 on the period's start boundary (2023-12-31) and
+    // 5.0 on its end boundary (2024-01-31), so the PLN value moved
+    // 10*100*4 = 4,000 -> 10*100*5 = 5,000: a +1,000 change that is purely the
+    // currency's. The old fold resolved USD->PLN ONCE, at todayYMD() in live
+    // mode, and multiplied that single rate into both ends, reporting a flat
+    // price as a flat value (0) and hiding the FX move entirely.
+    const byDate: Record<string, number> = {
+      "2023-12-31": 4.0,
+      "2024-01-31": 5.0,
+    };
+    exchangeRateService.resolveStoredRate = jest.fn(
+      async (from: string, to: string, onDate: string) => {
+        if (from === to) return resolutionFor(1);
+        if (from === "USD" && to === "PLN") {
+          // Any date the fold did not ask for -- notably today, which the old
+          // code used for both ends -- resolves to a distinct rate so the old
+          // single-rate behaviour reports a change of 0.
+          return resolutionFor(byDate[onDate] ?? 4.5);
+        }
+        return resolutionFor(null);
+      },
+    );
+    txRepo.find.mockResolvedValue([
+      makeTx({
+        id: "buy",
+        action: InvestmentAction.BUY,
+        transactionDate: "2023-12-15",
+        quantity: 10,
+        price: 100,
+        totalAmount: 1000,
+        account: { id: accountId, name: "Brokerage", currencyCode: "PLN" },
+        security: {
+          id: securityId,
+          symbol: "ABC",
+          name: "ABC Corp",
+          currencyCode: "USD",
+        },
+      } as never),
+    ]);
+    priceRepo.query.mockResolvedValue(
+      priceRows([
+        { date: "2023-12-31", price: 100 },
+        { date: "2024-01-31", price: 100 },
+      ]),
+    );
+
+    const result = await service.calculateCapitalGainsByMonth(userId, {
+      startDate: "2024-01-01",
+      endDate: "2024-01-31",
+    });
+
+    expect(result).toHaveLength(1);
+    const jan = result[0];
+    expect(jan.startValue).toBe(4000);
+    expect(jan.endValue).toBe(5000);
+    // +1,000, the currency's move on a flat price -- NOT 0 (one rate for both
+    // ends) and NOT a figure using either boundary's rate for both.
+    expect(jan.totalCapitalGain).toBe(1000);
+    expect(jan.unrealizedGain).toBe(1000);
+
+    // The two ends were resolved at their own dates, in historical (non-live)
+    // mode, never at todayYMD().
+    expect(exchangeRateService.resolveStoredRate).toHaveBeenCalledWith(
+      "USD",
+      "PLN",
+      "2023-12-31",
+      { mode: "historical" },
+    );
+    expect(exchangeRateService.resolveStoredRate).toHaveBeenCalledWith(
+      "USD",
+      "PLN",
+      "2024-01-31",
+      { mode: "historical" },
+    );
+  });
+
+  it("withholds the period when a held position has no price on a boundary it spans (P5)", async () => {
+    // 10 units held across January in a same-currency account, but the security
+    // has no stored close on or before either boundary. Its market value is then
+    // UNKNOWN, so both boundary values and the gain are withheld (null). The old
+    // `lookupPrice(...) ?? 0` valued the held position at zero and reported a
+    // confident 0 gain.
+    txRepo.find.mockResolvedValue([
+      makeTx({
+        id: "buy",
+        action: InvestmentAction.BUY,
+        transactionDate: "2023-12-15",
+        quantity: 10,
+        price: 100,
+        totalAmount: 1000,
+      }),
+    ]);
+    // No prices at all for the security.
+    priceRepo.query.mockResolvedValue(priceRows([]));
+
+    const result = await service.calculateCapitalGainsByMonth(userId, {
+      startDate: "2024-01-01",
+      endDate: "2024-01-31",
+    });
+
+    expect(result).toHaveLength(1);
+    const jan = result[0];
+    expect(jan.startQuantity).toBe(10);
+    expect(jan.endQuantity).toBe(10);
+    expect(jan.startValue).toBeNull();
+    expect(jan.endValue).toBeNull();
+    expect(jan.totalCapitalGain).toBeNull();
+    expect(jan.unrealizedGain).toBeNull();
+  });
+
+  it("values a closed (zero-quantity) boundary at 0 without needing a rate (P5)", async () => {
+    // A full round-trip within January of a USD security in a PLN account with
+    // NO USD/PLN rate available in either direction. The position is zero at both
+    // period boundaries, so each boundary value is a genuine zero that needs no
+    // rate; the realized figures come from each transaction's own stored rate.
+    // The old fold resolved the pair once, got null, and withheld the boundary
+    // values even though the position was empty at both ends.
+    exchangeRateService.resolveStoredRate = jest.fn(
+      async (from: string, to: string) => resolutionFor(from === to ? 1 : null),
+    );
+    txRepo.find.mockResolvedValue([
+      makeTx({
+        id: "buy",
+        action: InvestmentAction.BUY,
+        transactionDate: "2024-01-10",
+        quantity: 10,
+        price: 100,
+        totalAmount: 1000,
+        exchangeRate: 4,
+        account: { id: accountId, name: "Brokerage", currencyCode: "PLN" },
+        security: {
+          id: securityId,
+          symbol: "ABC",
+          name: "ABC Corp",
+          currencyCode: "USD",
+        },
+      } as never),
+      makeTx({
+        id: "sell",
+        action: InvestmentAction.SELL,
+        transactionDate: "2024-01-20",
+        quantity: 10,
+        price: 110,
+        totalAmount: 1100,
+        exchangeRate: 4,
+        account: { id: accountId, name: "Brokerage", currencyCode: "PLN" },
+        security: {
+          id: securityId,
+          symbol: "ABC",
+          name: "ABC Corp",
+          currencyCode: "USD",
+        },
+      } as never),
+    ]);
+    priceRepo.query.mockResolvedValue(
+      priceRows([
+        { date: "2023-12-31", price: 100 },
+        { date: "2024-01-31", price: 110 },
+      ]),
+    );
+
+    const result = await service.calculateCapitalGainsByMonth(userId, {
+      startDate: "2024-01-01",
+      endDate: "2024-01-31",
+    });
+
+    expect(result).toHaveLength(1);
+    const jan = result[0];
+    expect(jan.startQuantity).toBe(0);
+    expect(jan.endQuantity).toBe(0);
+    // A zero position is worth zero on any date and needs no rate.
+    expect(jan.startValue).toBe(0);
+    expect(jan.endValue).toBe(0);
   });
 
   it("decomposes a SELL month into realized + unrealized capital gains", async () => {
@@ -836,13 +1561,156 @@ describe("PortfolioCalculationService.calculateCapitalGainsByMonth", () => {
     });
     expect(result).toEqual([]);
   });
+
+  describe("a transferred-in lot (A26-M21)", () => {
+    const destinationId = "acct-2";
+    const transferAt = new Date("2024-02-10T12:00:00Z");
+    const accountB = { id: destinationId, name: "B", currencyCode: "CAD" };
+
+    const rows = () => [
+      // The destination group is listed first, so it is folded before its
+      // source group: the carry cannot depend on group order.
+      makeTx({
+        id: "in",
+        accountId: destinationId,
+        action: InvestmentAction.TRANSFER_IN,
+        transactionDate: "2024-02-10",
+        createdAt: transferAt,
+        quantity: 10,
+        price: 100,
+        linkedTransactionId: "out",
+        account: accountB as never,
+      }),
+      makeTx({
+        id: "buy",
+        action: InvestmentAction.BUY,
+        transactionDate: "2024-01-10",
+        quantity: 10,
+        price: 100,
+        totalAmount: 1000,
+        exchangeRate: 1.37,
+      }),
+      makeTx({
+        id: "out",
+        action: InvestmentAction.TRANSFER_OUT,
+        transactionDate: "2024-02-10",
+        createdAt: transferAt,
+        quantity: 10,
+        price: 100,
+        linkedTransactionId: "in",
+      }),
+      makeTx({
+        id: "sell",
+        accountId: destinationId,
+        action: InvestmentAction.SELL,
+        transactionDate: "2024-03-10",
+        quantity: 10,
+        price: 140,
+        totalAmount: 1400,
+        exchangeRate: 1.37,
+        account: accountB as never,
+      }),
+    ];
+
+    it("reports the sale against the carried account-currency basis", async () => {
+      txRepo.find.mockResolvedValue(rows());
+
+      const result = await service.calculateCapitalGainsByMonth(userId, {
+        startDate: "2024-01-01",
+        endDate: "2024-04-30",
+      });
+
+      const march = result.find(
+        (r) => r.accountId === destinationId && r.month === "2024-03",
+      )!;
+      // 1,918 of proceeds against 1,370 -- not against 1,000.
+      expect(march.realizedGain).toBe(548);
+      const february = result.find(
+        (r) => r.accountId === destinationId && r.month === "2024-02",
+      )!;
+      // The transfer leg is a flow at market value (unpriced here: unknown),
+      // never the carried basis booked as a purchase.
+      expect(february.buys).toBe(0);
+      expect(february.totalCapitalGain).toBeNull();
+    });
+
+    it("leaves both accounts' capital gain unchanged by a transfer", async () => {
+      // 10 shares, basis 80, price 100 throughout, moved A -> B.
+      txRepo.find.mockResolvedValue([
+        makeTx({
+          id: "buy",
+          action: InvestmentAction.BUY,
+          transactionDate: "2024-01-10",
+          quantity: 10,
+          price: 80,
+          totalAmount: 800,
+        }),
+        makeTx({
+          id: "out",
+          action: InvestmentAction.TRANSFER_OUT,
+          transactionDate: "2024-02-10",
+          createdAt: transferAt,
+          quantity: 10,
+          price: 80,
+          linkedTransactionId: "in",
+        }),
+        makeTx({
+          id: "in",
+          accountId: destinationId,
+          action: InvestmentAction.TRANSFER_IN,
+          transactionDate: "2024-02-10",
+          createdAt: transferAt,
+          quantity: 10,
+          price: 80,
+          linkedTransactionId: "out",
+          account: accountB as never,
+        }),
+      ]);
+      priceRepo.query.mockResolvedValue(
+        priceRows([
+          { date: "2024-01-31", price: 100 },
+          { date: "2024-02-29", price: 100 },
+        ]),
+      );
+
+      const result = await service.calculateCapitalGainsByMonth(userId, {
+        startDate: "2024-02-01",
+        endDate: "2024-02-29",
+      });
+
+      const a = result.find((r) => r.accountId === accountId)!;
+      const b = result.find((r) => r.accountId === destinationId)!;
+      expect(a.totalCapitalGain).toBe(0);
+      expect(b.totalCapitalGain).toBe(0);
+    });
+
+    it("keeps the carried basis when only the destination is requested", async () => {
+      txRepo.find.mockResolvedValue(rows());
+
+      const result = await service.calculateCapitalGainsByMonth(userId, {
+        accountIds: [destinationId],
+        startDate: "2024-01-01",
+        endDate: "2024-04-30",
+      });
+
+      expect(txRepo.find.mock.calls[0][0].where).not.toHaveProperty(
+        "accountId",
+      );
+      expect(result.every((r) => r.accountId === destinationId)).toBe(true);
+      const march = result.find((r) => r.month === "2024-03")!;
+      expect(march.realizedGain).toBe(548);
+    });
+  });
 });
 
 describe("PortfolioCalculationService.calculateCapitalGainsByDay", () => {
   let service: PortfolioCalculationService;
   let txRepo: { find: jest.Mock };
   let priceRepo: { query: jest.Mock };
-  let exchangeRateService: { getLatestRate: jest.Mock };
+  let exchangeRateService: {
+    resolveStoredRate: jest.Mock;
+    getRateIndex: jest.Mock;
+  };
 
   const userId = "user-1";
   const accountId = "acct-1";
@@ -890,7 +1758,11 @@ describe("PortfolioCalculationService.calculateCapitalGainsByDay", () => {
   beforeEach(() => {
     txRepo = { find: jest.fn() };
     priceRepo = { query: jest.fn().mockResolvedValue([]) };
-    exchangeRateService = { getLatestRate: jest.fn().mockResolvedValue(null) };
+    exchangeRateService = {
+      resolveStoredRate: storedRateDouble(),
+      // The reporting-currency replay's bulk read: no stored history.
+      getRateIndex: jest.fn().mockResolvedValue(new Map()),
+    };
     service = buildService(
       [[InvestmentTransaction, txRepo as never]],
       exchangeRateService,
@@ -1057,6 +1929,755 @@ describe("PortfolioCalculationService.calculateCapitalGainsByDay", () => {
   });
 });
 
+describe("one replay behind realized gains, lots and the capital-gains periods (#1859)", () => {
+  const userId = "user-1";
+  const brokerage = "acct-1";
+  const usdChequing = "chq-usd";
+  const cadChequing = "chq-cad";
+  const securityId = "sec-1";
+
+  const account = (id: string, currencyCode: string, name = id) =>
+    ({ id, name, currencyCode }) as Partial<Account>;
+
+  const makeTx = (
+    overrides: Partial<InvestmentTransaction> & {
+      accountCurrency?: string;
+      securityCurrency?: string;
+    },
+  ) => {
+    const {
+      accountCurrency = "CAD",
+      securityCurrency = "CAD",
+      ...rest
+    } = overrides;
+    return {
+      id: "tx",
+      userId,
+      accountId: brokerage,
+      securityId,
+      action: InvestmentAction.BUY,
+      transactionDate: "2024-01-01",
+      quantity: 0,
+      price: 0,
+      commission: 0,
+      totalAmount: 0,
+      exchangeRate: 1,
+      fundingAccountId: null,
+      description: null,
+      createdAt: new Date("2024-01-01"),
+      updatedAt: new Date("2024-01-01"),
+      account: account(brokerage, accountCurrency, "Brokerage"),
+      security: {
+        id: securityId,
+        symbol: "ABC",
+        name: "ABC Corp",
+        currencyCode: securityCurrency,
+      },
+      ...rest,
+    } as unknown as InvestmentTransaction;
+  };
+
+  const accounts = (accountCurrency: string) => [
+    {
+      id: brokerage,
+      currencyCode: accountCurrency,
+      accountSubType: AccountSubType.INVESTMENT_BROKERAGE,
+      linkedAccountId: null,
+    },
+    {
+      id: usdChequing,
+      currencyCode: "USD",
+      accountSubType: AccountSubType.INVESTMENT_CASH,
+      linkedAccountId: null,
+    },
+    {
+      id: cadChequing,
+      currencyCode: "CAD",
+      accountSubType: AccountSubType.INVESTMENT_CASH,
+      linkedAccountId: null,
+    },
+  ];
+
+  const build = (
+    transactions: InvestmentTransaction[],
+    opts: {
+      accountCurrency?: string;
+      rates?: Record<string, number | null>;
+      prices?: Array<{ date: string; price: number }>;
+      /** The reader's reporting currency; the account's unless named. */
+      reportingCurrency?: string;
+    } = {},
+  ) => {
+    const txRepo = { find: jest.fn().mockResolvedValue(transactions) };
+    const preferenceRepo = {
+      findOne: jest.fn().mockResolvedValue({
+        defaultCurrency:
+          opts.reportingCurrency ?? opts.accountCurrency ?? "CAD",
+      }),
+    };
+    const known = accounts(opts.accountCurrency ?? "CAD");
+    const accountRepo = {
+      find: jest.fn(({ where }: { where: { id: { _value: string[] } } }) =>
+        Promise.resolve(known.filter((a) => where.id._value.includes(a.id))),
+      ),
+    };
+    const resolveStoredRate = storedRateDouble(opts.rates);
+    // The bulk read the reporting-currency replay makes: each rate observed on
+    // the first day the lookups need.
+    const getRateIndex = jest.fn(
+      async (_currencies: ReadonlySet<string>, _to: string, start: string) =>
+        rateIndexOf(
+          Object.entries(opts.rates ?? {})
+            .filter(([, rate]) => rate !== null)
+            .map(([pair, rate]) => {
+              const [fromCurrency, toCurrency] = pair.split("->");
+              return {
+                fromCurrency,
+                toCurrency,
+                rate: rate as number,
+                rateDate: start,
+              };
+            }),
+        ),
+    );
+    const priceQuery = jest.fn().mockResolvedValue(
+      (opts.prices ?? []).map((r) => ({
+        security_id: securityId,
+        price_date: r.date,
+        close_price: String(r.price),
+      })),
+    );
+    const service = buildService(
+      [
+        [InvestmentTransaction, txRepo],
+        [Account, accountRepo],
+        [UserPreference, preferenceRepo],
+      ],
+      { resolveStoredRate, getRateIndex },
+      priceQuery,
+    );
+    return { service, resolveStoredRate, getRateIndex };
+  };
+
+  const addUnpriced = (overrides: Partial<InvestmentTransaction> = {}) =>
+    makeTx({
+      id: "add",
+      action: InvestmentAction.ADD_SHARES,
+      transactionDate: "2023-12-05",
+      quantity: 100,
+      price: null as never,
+      ...overrides,
+    });
+  const buy100 = (overrides: Partial<InvestmentTransaction> = {}) =>
+    makeTx({
+      id: "buy",
+      action: InvestmentAction.BUY,
+      transactionDate: "2024-01-10",
+      quantity: 100,
+      price: 50,
+      totalAmount: 5000,
+      ...overrides,
+    });
+  const sell100 = (overrides: Partial<InvestmentTransaction> = {}) =>
+    makeTx({
+      id: "sell",
+      action: InvestmentAction.SELL,
+      transactionDate: "2024-02-10",
+      quantity: 100,
+      price: 60,
+      totalAmount: 6000,
+      ...overrides,
+    });
+
+  describe("shares added with no cost (example 1)", () => {
+    const history = () => [addUnpriced(), buy100(), sell100()];
+
+    it("realized gains: the sale's cost and gain are unknown, its proceeds are not", async () => {
+      const { service } = build(history());
+
+      const [sale] = await service.calculateRealizedGains(userId);
+
+      expect(sale).toMatchObject({
+        proceeds: 6000,
+        costBasis: null,
+        realizedGain: null,
+        basisGap: "quantity_only_action",
+      });
+    });
+
+    it("by period: the sale's month has no realized gain, a flag and a known subtotal of zero", async () => {
+      // ADD 100 (no cost) + BUY 100 @ 50 + SELL 100 @ 60 used to report a
+      // realized gain of 3,500 here: the average of the priced half only.
+      const { service } = build(history(), {
+        prices: [
+          { date: "2023-12-31", price: 50 },
+          { date: "2024-01-31", price: 55 },
+          { date: "2024-02-29", price: 60 },
+        ],
+      });
+
+      const result = await service.calculateCapitalGainsByMonth(userId, {
+        startDate: "2024-01-01",
+        endDate: "2024-02-29",
+      });
+
+      const jan = result.find((r) => r.month === "2024-01")!;
+      const feb = result.find((r) => r.month === "2024-02")!;
+      expect(jan).toMatchObject({
+        realizedGain: 0,
+        realizedGainComplete: true,
+        realizedGainKnownSubtotal: null,
+        totalCapitalGain: 1000,
+      });
+      expect(feb).toMatchObject({
+        sells: 6000,
+        realizedGain: null,
+        realizedGainComplete: false,
+        realizedGainKnownSubtotal: 0,
+        unrealizedGain: null,
+      });
+    });
+
+    it("by period: the known part is the sales on a known basis, and the unknown lot clears when the position closes", async () => {
+      const { service } = build(
+        [
+          addUnpriced({ quantity: 10 }),
+          sell100({
+            id: "sell-1",
+            transactionDate: "2024-01-10",
+            quantity: 10,
+            totalAmount: 600,
+          }),
+          buy100({
+            id: "buy-2",
+            transactionDate: "2024-02-01",
+            quantity: 10,
+            totalAmount: 500,
+          }),
+          sell100({
+            id: "sell-2",
+            transactionDate: "2024-02-10",
+            quantity: 5,
+            totalAmount: 300,
+          }),
+          sell100({
+            id: "sell-3",
+            transactionDate: "2024-02-11",
+            quantity: 5,
+            totalAmount: 300,
+          }),
+        ],
+        { prices: [{ date: "2024-02-29", price: 60 }] },
+      );
+
+      const result = await service.calculateCapitalGainsByMonth(userId, {
+        startDate: "2024-01-01",
+        endDate: "2024-02-29",
+      });
+
+      const jan = result.find((r) => r.month === "2024-01")!;
+      const feb = result.find((r) => r.month === "2024-02")!;
+      expect(jan.realizedGain).toBeNull();
+      // 500 for 10 shares: 5 sold for 300 and 5 for 300 realize 50 and 50.
+      expect(feb).toMatchObject({
+        realizedGain: 50 + 50,
+        realizedGainComplete: true,
+        realizedGainKnownSubtotal: null,
+      });
+    });
+
+    it("by period: shares added in the period make its total capital gain unknown", async () => {
+      const { service } = build(
+        [
+          buy100({ transactionDate: "2023-12-10" }),
+          addUnpriced({ transactionDate: "2024-01-15", quantity: 10 }),
+        ],
+        {
+          prices: [
+            { date: "2023-12-31", price: 50 },
+            { date: "2024-01-31", price: 60 },
+          ],
+        },
+      );
+
+      const [jan] = await service.calculateCapitalGainsByMonth(userId, {
+        startDate: "2024-01-01",
+        endDate: "2024-01-31",
+      });
+
+      // The 10 free shares are in the end value and nowhere in `buys`.
+      expect(jan).toMatchObject({
+        endQuantity: 110,
+        totalCapitalGain: null,
+        unrealizedGain: null,
+      });
+    });
+
+    it("by period: shares removed in the period make its total capital gain unknown", async () => {
+      const { service } = build(
+        [
+          buy100({ transactionDate: "2023-12-10" }),
+          makeTx({
+            id: "remove",
+            action: InvestmentAction.REMOVE_SHARES,
+            transactionDate: "2024-01-15",
+            quantity: 10,
+          }),
+        ],
+        {
+          prices: [
+            { date: "2023-12-31", price: 50 },
+            { date: "2024-01-31", price: 60 },
+          ],
+        },
+      );
+
+      const [jan] = await service.calculateCapitalGainsByMonth(userId, {
+        startDate: "2024-01-01",
+        endDate: "2024-01-31",
+      });
+
+      expect(jan).toMatchObject({ endQuantity: 90, totalCapitalGain: null });
+    });
+  });
+
+  describe("a basis in another currency than the proceeds (examples 3 to 6)", () => {
+    // A CAD brokerage holds a USD security. The BUY is funded from USD chequing
+    // (the row's rate is 1, into USD); the SELL settles into the brokerage's own
+    // CAD at 1.35.
+    const usdBuy = (
+      overrides: Partial<InvestmentTransaction> & {
+        accountCurrency?: string;
+      } = {},
+    ) =>
+      makeTx({
+        id: "buy",
+        securityCurrency: "USD",
+        action: InvestmentAction.BUY,
+        transactionDate: "2024-01-10",
+        quantity: 10,
+        price: 100,
+        totalAmount: 1000,
+        exchangeRate: 1,
+        fundingAccountId: usdChequing,
+        ...overrides,
+      });
+    const cadSell = (
+      overrides: Partial<InvestmentTransaction> & {
+        accountCurrency?: string;
+      } = {},
+    ) =>
+      makeTx({
+        id: "sell",
+        securityCurrency: "USD",
+        action: InvestmentAction.SELL,
+        transactionDate: "2024-02-10",
+        quantity: 10,
+        price: 110,
+        totalAmount: 1100,
+        exchangeRate: 1.35,
+        ...overrides,
+      });
+
+    it("converts the USD basis at the rate on the purchase date, not subtracting USD from CAD", async () => {
+      const { service, resolveStoredRate } = build([usdBuy(), cadSell()], {
+        rates: { "USD->CAD": 1.35 },
+      });
+
+      const [sale] = await service.calculateRealizedGains(userId);
+
+      // 1,485 CAD of proceeds against 1,000 USD x 1.35 = 1,350 CAD; it read 485.
+      expect(sale).toMatchObject({
+        proceeds: 1485,
+        costBasis: 1350,
+        realizedGain: 135,
+        basisGap: null,
+      });
+      expect(resolveStoredRate).toHaveBeenCalledWith(
+        "USD",
+        "CAD",
+        "2024-01-10",
+        { mode: "historical" },
+      );
+    });
+
+    it("keeps the currency move on the cost in the gain", async () => {
+      const { service } = build([usdBuy(), cadSell()], {
+        rates: { "USD->CAD": 1.3 },
+      });
+
+      const [sale] = await service.calculateRealizedGains(userId);
+
+      expect(sale).toMatchObject({ costBasis: 1300, realizedGain: 185 });
+    });
+
+    it("reports the gain unknown, naming mixed_basis_currency, when no rate converts the basis", async () => {
+      const { service } = build([usdBuy(), cadSell()]);
+
+      const [sale] = await service.calculateRealizedGains(userId);
+
+      expect(sale).toMatchObject({
+        proceeds: 1485,
+        costBasis: null,
+        realizedGain: null,
+        basisGap: "mixed_basis_currency",
+      });
+    });
+
+    it("reports the gain unknown when the sale's stored rate cannot convert it, never at par", async () => {
+      const { service } = build([usdBuy(), cadSell({ exchangeRate: 0 })], {
+        rates: { "USD->CAD": 1.35 },
+      });
+
+      const [sale] = await service.calculateRealizedGains(userId);
+
+      expect(sale).toMatchObject({
+        costBasis: null,
+        realizedGain: null,
+        basisGap: "mixed_basis_currency",
+      });
+    });
+
+    it("by period: buys are in the account's currency", async () => {
+      const { service } = build([usdBuy()], {
+        rates: { "USD->CAD": 1.35 },
+        prices: [{ date: "2024-01-31", price: 110 }],
+      });
+
+      const [jan] = await service.calculateCapitalGainsByMonth(userId, {
+        startDate: "2024-01-01",
+        endDate: "2024-01-31",
+      });
+
+      // 10 x 110 x 1.35 = 1,485 of value against 1,350 spent: 135. With the
+      // purchase left in USD it read 485.
+      expect(jan).toMatchObject({ buys: 1350, totalCapitalGain: 135 });
+    });
+
+    it("by period: a basis that cannot be converted makes the total unknown, not 485", async () => {
+      const { service } = build([usdBuy()], {
+        prices: [{ date: "2024-01-31", price: 110 }],
+      });
+
+      const result = await service.calculateCapitalGainsByMonth(userId, {
+        startDate: "2024-01-01",
+        endDate: "2024-01-31",
+      });
+
+      // The end value needs the same missing rate; either way nothing is stated.
+      expect(result[0].totalCapitalGain).toBeNull();
+    });
+
+    it("uses the row's own amounts, and no market rate, when the account holds the security's currency", async () => {
+      // A USD brokerage, a USD security, bought with CAD at 1.35 (CAD 1,350) and
+      // sold into USD: the basis is the USD the row names, 1,000.
+      const { service, resolveStoredRate } = build(
+        [
+          usdBuy({
+            accountCurrency: "USD",
+            exchangeRate: 1.35,
+            fundingAccountId: cadChequing,
+          }),
+          cadSell({ accountCurrency: "USD", exchangeRate: 1 }),
+        ],
+        { accountCurrency: "USD" },
+      );
+
+      const [sale] = await service.calculateRealizedGains(userId);
+
+      expect(sale).toMatchObject({ costBasis: 1000, realizedGain: 100 });
+      expect(resolveStoredRate).not.toHaveBeenCalled();
+    });
+
+    it("names the pair a sale's reporting-currency figures lack (issue #2106)", async () => {
+      const { service } = build(
+        [
+          usdBuy({
+            accountCurrency: "USD",
+            exchangeRate: 1.35,
+            fundingAccountId: cadChequing,
+          }),
+          cadSell({ accountCurrency: "USD", exchangeRate: 1 }),
+        ],
+        { accountCurrency: "USD", reportingCurrency: "CAD", rates: {} },
+      );
+
+      const [sale] = await service.calculateRealizedGains(userId);
+
+      expect(sale.inReportingCurrency).toMatchObject({
+        proceeds: null,
+        realizedGain: null,
+        missingRatePairs: ["USD->CAD"],
+      });
+    });
+
+    it("reads a stored 1 across two currencies as no rate in the reporting replay", async () => {
+      // Bought with CAD at the column's default 1 (not a rate anybody struck):
+      // the basis in EUR is the USD it cost at the market's 0.90, as the row
+      // factors read it, not 1,000 "CAD" at 0.60.
+      const { service } = build(
+        [
+          usdBuy({
+            accountCurrency: "CAD",
+            exchangeRate: 1,
+            fundingAccountId: cadChequing,
+          }),
+          cadSell({ accountCurrency: "CAD", exchangeRate: 1.35 }),
+        ],
+        {
+          accountCurrency: "CAD",
+          reportingCurrency: "EUR",
+          rates: { "USD->EUR": 0.9, "CAD->EUR": 0.6 },
+        },
+      );
+
+      const [sale] = await service.calculateRealizedGains(userId);
+
+      expect(sale.inReportingCurrency).toMatchObject({
+        currency: "EUR",
+        costBasis: 900,
+        proceeds: 891,
+      });
+    });
+
+    it("states the gain in the reporting currency at each row's own date (issue #2106)", async () => {
+      // A USD account read in CAD: the basis is the CAD the buy cost (1,350 at
+      // its own 1.35), the proceeds are 1,100 USD at the sale day's 1.40.
+      const { service, getRateIndex } = build(
+        [
+          usdBuy({
+            accountCurrency: "USD",
+            exchangeRate: 1.35,
+            fundingAccountId: cadChequing,
+          }),
+          cadSell({ accountCurrency: "USD", exchangeRate: 1 }),
+        ],
+        {
+          accountCurrency: "USD",
+          reportingCurrency: "CAD",
+          rates: { "USD->CAD": 1.4 },
+        },
+      );
+
+      const [sale] = await service.calculateRealizedGains(userId);
+
+      expect(sale).toMatchObject({ costBasis: 1000, realizedGain: 100 });
+      expect(sale.inReportingCurrency).toEqual({
+        currency: "CAD",
+        proceeds: 1540,
+        costBasis: 1350,
+        realizedGain: 190,
+        missingRatePairs: [],
+      });
+      // One bulk read for the sale's own day, never a lookup per row.
+      expect(getRateIndex).toHaveBeenCalledWith(
+        new Set(["USD"]),
+        "CAD",
+        "2024-02-10",
+        "2024-02-10",
+      );
+    });
+
+    it("states a sale's gain alike in Realized Gains and the capital-gains fold (issue #2130)", async () => {
+      // The same USD account read in CAD. The capital-gain entry used to
+      // convert February's account-currency figures at the month's rate
+      // (100 USD x 1.40 = 140), while Realized Gains replays the sale against
+      // the buy's own rate (1,540 - 1,350 = 190).
+      const { service, getRateIndex } = build(
+        [
+          usdBuy({
+            accountCurrency: "USD",
+            exchangeRate: 1.35,
+            fundingAccountId: cadChequing,
+          }),
+          cadSell({ accountCurrency: "USD", exchangeRate: 1 }),
+        ],
+        {
+          accountCurrency: "USD",
+          reportingCurrency: "CAD",
+          rates: { "USD->CAD": 1.4 },
+          prices: [{ date: "2024-01-31", price: 105 }],
+        },
+      );
+
+      const [sale] = await service.calculateRealizedGains(userId);
+      const entries = await service.calculateCapitalGainsByMonth(userId, {
+        startDate: "2024-02-01",
+        endDate: "2024-02-29",
+      });
+
+      expect(entries).toHaveLength(1);
+      const [feb] = entries;
+      expect(feb).toMatchObject({
+        startValue: 1050,
+        sells: 1100,
+        realizedGain: 100,
+        totalCapitalGain: 50,
+        unrealizedGain: -50,
+      });
+      // The fold in CAD: 10 x 105 at 1.40 opens the month, the sale brings in
+      // 1,540, and the gain is Realized Gains' own.
+      expect(feb.inReportingCurrency).toEqual({
+        currency: "CAD",
+        startValue: 1470,
+        endValue: 0,
+        realizedGain: 190,
+        realizedGainKnownSubtotal: 190,
+        totalCapitalGain: 70,
+        unrealizedGain: -120,
+        missingRatePairs: [],
+      });
+      expect(feb.inReportingCurrency.realizedGain).toBe(
+        sale.inReportingCurrency.realizedGain,
+      );
+      // The reporting boundaries' rates load in one read for the window.
+      expect(getRateIndex).toHaveBeenCalledWith(
+        new Set(["USD"]),
+        "CAD",
+        "2024-01-31",
+        "2024-02-29",
+      );
+    });
+
+    it("keeps a return of capital on a basis of unknown cost unknown in the reporting currency too", async () => {
+      // Priced shares, then shares with no cost (a gap in the basis), then a
+      // return of capital the basis absorbs: unknown in USD, so unknown in CAD.
+      const usd = { accountCurrency: "USD", securityCurrency: "USD" };
+      const { service } = build(
+        [
+          makeTx({
+            id: "buy",
+            transactionDate: "2024-01-10",
+            quantity: 10,
+            price: 100,
+            totalAmount: 1000,
+            ...usd,
+          }),
+          addUnpriced({ transactionDate: "2024-01-12", quantity: 5, ...usd }),
+          makeTx({
+            id: "roc",
+            action: InvestmentAction.RETURN_OF_CAPITAL,
+            transactionDate: "2024-02-10",
+            quantity: null as never,
+            price: null as never,
+            totalAmount: 100,
+            ...usd,
+          }),
+        ],
+        {
+          accountCurrency: "USD",
+          reportingCurrency: "CAD",
+          rates: { "USD->CAD": 1.4 },
+        },
+      );
+
+      const [feb] = await service.calculateCapitalGainsByMonth(userId, {
+        startDate: "2024-02-01",
+        endDate: "2024-02-29",
+      });
+
+      expect(feb.realizedGain).toBeNull();
+      expect(feb.inReportingCurrency.realizedGain).toBeNull();
+    });
+
+    it("names the pair a capital-gain entry lacks in the reporting currency", async () => {
+      const { service } = build(
+        [
+          usdBuy({ accountCurrency: "USD" }),
+          cadSell({ accountCurrency: "USD", exchangeRate: 1 }),
+        ],
+        {
+          accountCurrency: "USD",
+          reportingCurrency: "CAD",
+          prices: [{ date: "2024-01-31", price: 105 }],
+        },
+      );
+
+      const [feb] = await service.calculateCapitalGainsByMonth(userId, {
+        startDate: "2024-02-01",
+        endDate: "2024-02-29",
+      });
+
+      // Known in USD, unknown in CAD for want of USD->CAD.
+      expect(feb.realizedGain).toBe(100);
+      expect(feb.inReportingCurrency).toMatchObject({
+        startValue: null,
+        realizedGain: null,
+        totalCapitalGain: null,
+        missingRatePairs: ["USD->CAD"],
+      });
+    });
+  });
+
+  describe("one basis through all three reports", () => {
+    // BUY 10 @ 100 with 10 of commission (1,010), 100 of capital returned (910),
+    // SELL 5 for 600.
+    const history = () => [
+      makeTx({
+        id: "buy",
+        quantity: 10,
+        price: 100,
+        commission: 10,
+        totalAmount: 1010,
+      }),
+      makeTx({
+        id: "roc",
+        action: InvestmentAction.RETURN_OF_CAPITAL,
+        transactionDate: "2024-01-20",
+        quantity: null as never,
+        price: null as never,
+        totalAmount: 100,
+      }),
+      makeTx({
+        id: "sell",
+        action: InvestmentAction.SELL,
+        transactionDate: "2024-01-25",
+        quantity: 5,
+        price: 120,
+        totalAmount: 600,
+      }),
+    ];
+
+    it("relieves the same basis in realized gains and the lots, commission and return of capital included", async () => {
+      const { service } = build(history());
+
+      const sales = await service.calculateRealizedGains(userId);
+      const sale = sales.find((r) => r.transactionId === "sell")!;
+      const lots = await service.calculateCostBasisLotsInAccountCurrency(
+        userId,
+        [brokerage],
+      );
+
+      // 1,010 less 100 is 910: 455 relieved by the sale, 455 left.
+      expect(sale.costBasis).toBe(455);
+      expect(lots.get(`${brokerage}:${securityId}`)?.costBasis).toBe(455);
+      expect(
+        sale.costBasis! + lots.get(`${brokerage}:${securityId}`)!.costBasis,
+      ).toBe(910);
+    });
+
+    it("realizes the same gain by period as per sale", async () => {
+      const { service } = build(history(), {
+        prices: [
+          { date: "2023-12-31", price: 100 },
+          { date: "2024-01-31", price: 110 },
+        ],
+      });
+
+      const [sale] = (await service.calculateRealizedGains(userId)).filter(
+        (r) => r.transactionId === "sell",
+      );
+      const [jan] = await service.calculateCapitalGainsByMonth(userId, {
+        startDate: "2024-01-01",
+        endDate: "2024-01-31",
+      });
+
+      expect(sale.realizedGain).toBe(145);
+      expect(jan.realizedGain).toBe(sale.realizedGain);
+    });
+  });
+});
+
 describe("PortfolioCalculationService.primeLiveRates", () => {
   let service: PortfolioCalculationService;
   let holdingsRepo: { createQueryBuilder: jest.Mock };
@@ -1130,6 +2751,47 @@ describe("PortfolioCalculationService.primeLiveRates", () => {
     expect(rateCache.has("USD->CAD")).toBe(false);
   });
 
+  /**
+   * Issue #1390, the consequence chain. With the provider down and the only
+   * stored observation past the age bound, `getLiveRate` answers `null` (the
+   * bound itself is proven in `exchange-rate.service.spec.ts`), so nothing is
+   * seeded here and `convertToDefault` refuses the same pair through the same
+   * door. The figure that reaches the caller is a subtotal that says so, rather
+   * than a total built on a nine-month-old rate.
+   */
+  it("leaves a refused pair out of the cash total instead of valuing it at a stale rate", async () => {
+    rawCurrencies = [];
+    exchangeRateService.getLiveRate.mockResolvedValue(null);
+    const withStored = {
+      getLiveRate: exchangeRateService.getLiveRate,
+      resolveStoredRate: storedRateDouble(),
+    };
+    const cashService = buildService([[Holding, holdingsRepo]], withStored);
+    const rateCache = new Map<string, number | null>();
+
+    const accounts = [
+      { id: "usd", currencyCode: "USD", currentBalance: 1000 } as Account,
+      { id: "cad", currencyCode: "CAD", currentBalance: 250 } as Account,
+    ];
+    await cashService.primeLiveRates(rateCache, accounts, [], "CAD");
+    // Nothing seeded: priming leaves the pair for the door to refuse.
+    expect(rateCache.has("USD->CAD")).toBe(false);
+
+    const cash = await cashService.computeTotalCashValue(
+      accounts,
+      new Map<string, number>(),
+      "CAD",
+      rateCache,
+    );
+
+    // The refusal is cached as an absence, never as a number.
+    expect(rateCache.get("USD->CAD")).toBeNull();
+    expect(cash.fxComplete).toBe(false);
+    expect(cash.missingRatePairs).toEqual(["USD->CAD"]);
+    // The CAD balance still converts; the subtotal carries what is known.
+    expect(cash.total).toBe(250);
+  });
+
   it("does not query holdings when there are no holdings accounts", async () => {
     exchangeRateService.getLiveRate.mockResolvedValue(1.37);
     const rateCache = new Map<string, number>();
@@ -1141,12 +2803,93 @@ describe("PortfolioCalculationService.primeLiveRates", () => {
   });
 });
 
+/**
+ * `ExchangeRateService.resolveStoredRate` as the real one answers: the stored
+ * observation for a pair, or an `unknown` resolution naming why there is none.
+ * A double that returned a bare number could not express the second, which is
+ * the half the callers branch on.
+ */
+/**
+ * The `FxRateResolution` shape `resolveStoredRate` returns for a single rate:
+ * `resolved` with the number, or `unknown` naming why there is none. Used by the
+ * date-aware doubles that assert the capital-gains fold resolves each boundary
+ * at that boundary's own date.
+ */
+function resolutionFor(rate: number | null) {
+  if (rate === null || !(rate > 0)) {
+    return {
+      status: "unknown",
+      rate: null,
+      observedRate: null,
+      observedOn: null,
+      direction: null,
+      ageDays: null,
+      reason: "no_observation",
+    };
+  }
+  return {
+    status: "resolved",
+    rate,
+    observedRate: rate,
+    observedOn: null,
+    direction: "direct",
+    ageDays: 0,
+    reason: null,
+  };
+}
+
+function storedRateDouble(
+  rates: Record<string, number | null> = {},
+): jest.Mock {
+  return jest.fn(async (from: string, to: string) => {
+    if (from === to) {
+      return {
+        status: "same_currency",
+        rate: 1,
+        observedRate: 1,
+        observedOn: null,
+        direction: "identity",
+        ageDays: 0,
+        reason: null,
+      };
+    }
+    const direct = rates[`${from}->${to}`];
+    const inverse = rates[`${to}->${from}`];
+    const rate =
+      direct != null && direct > 0
+        ? direct
+        : inverse != null && inverse > 0
+          ? 1 / inverse
+          : null;
+    if (rate === null) {
+      return {
+        status: "unknown",
+        rate: null,
+        observedRate: null,
+        observedOn: null,
+        direction: null,
+        ageDays: null,
+        reason: "no_observation",
+      };
+    }
+    return {
+      status: "resolved",
+      rate,
+      observedRate: direct != null && direct > 0 ? direct : inverse,
+      observedOn: "2026-06-15",
+      direction: direct != null && direct > 0 ? "direct" : "inverse",
+      ageDays: 0,
+      reason: null,
+    };
+  });
+}
+
 describe("PortfolioCalculationService.convertToDefault", () => {
   let service: PortfolioCalculationService;
-  let exchangeRateService: { getLatestRate: jest.Mock };
+  let exchangeRateService: { resolveStoredRate: jest.Mock };
 
   beforeEach(() => {
-    exchangeRateService = { getLatestRate: jest.fn().mockResolvedValue(null) };
+    exchangeRateService = { resolveStoredRate: storedRateDouble() };
     service = buildService([], exchangeRateService);
   });
 
@@ -1163,7 +2906,7 @@ describe("PortfolioCalculationService.convertToDefault", () => {
     );
 
     expect(result).toBe(0);
-    expect(exchangeRateService.getLatestRate).not.toHaveBeenCalled();
+    expect(exchangeRateService.resolveStoredRate).not.toHaveBeenCalled();
   });
 
   it("still reports a non-zero amount with no rate as unknown", async () => {
@@ -1187,8 +2930,8 @@ describe("PortfolioCalculationService.convertToDefault", () => {
     expect(await service.convertToDefault(250, "EUR", "CAD", cache)).toBeNull();
     expect(await service.convertToDefault(999, "EUR", "CAD", cache)).toBeNull();
 
-    // Direct + inverse for the first call only; the cached null answers the rest.
-    expect(exchangeRateService.getLatestRate).toHaveBeenCalledTimes(2);
+    // One resolution for the first call only; the cached null answers the rest.
+    expect(exchangeRateService.resolveStoredRate).toHaveBeenCalledTimes(1);
   });
 
   it("a cached absence does not shadow the zero shortcut", async () => {
@@ -1242,8 +2985,10 @@ describe("PortfolioCalculationService daily rate index", () => {
       );
 
       expect([...index.keys()].sort()).toEqual(["CAD->USD", "USD->CAD"]);
+      // One age bound before the window opens, so a bar's rate does not
+      // change when the chart around it is widened (issue #1390).
       expect(exchangeRateService.getRateHistory).toHaveBeenCalledWith(
-        "2026-05-20",
+        "2026-04-05",
         "2026-06-04",
       );
     });
@@ -1298,7 +3043,12 @@ describe("PortfolioCalculationService daily rate index", () => {
       );
     });
 
-    it("falls back to the earliest known rate when the date precedes all history", async () => {
+    /**
+     * Was: "falls back to the earliest known rate when the date precedes all
+     * history". Issue #1390: a bar is never valued at a rate struck after it,
+     * and a rate older than the age bound is not that bar's rate either.
+     */
+    it("is undefined for a date the whole loaded history postdates", async () => {
       exchangeRateService.getRateHistory.mockResolvedValue([
         rate("USD", "CAD", 1.4, "2026-06-01"),
       ]);
@@ -1309,9 +3059,25 @@ describe("PortfolioCalculationService daily rate index", () => {
         "2026-06-04",
       );
 
-      expect(service.resolveDailyRate(index, "USD", "CAD", "2026-05-15")).toBe(
-        1.4,
+      expect(
+        service.resolveDailyRate(index, "USD", "CAD", "2026-05-15"),
+      ).toBeUndefined();
+    });
+
+    it("is undefined once the newest loaded rate is past the age bound", async () => {
+      exchangeRateService.getRateHistory.mockResolvedValue([
+        rate("USD", "CAD", 1.4, "2026-06-01"),
+      ]);
+      const index = await service.buildDailyRateIndex(
+        ["USD"],
+        "CAD",
+        "2026-05-20",
+        "2026-09-04",
       );
+
+      expect(
+        service.resolveDailyRate(index, "USD", "CAD", "2026-09-01"),
+      ).toBeUndefined();
     });
 
     it("inverts the reverse pair when only that direction is stored", async () => {
@@ -1946,6 +3712,44 @@ describe("PortfolioCalculationService.calculateCostBasisLotsInAccountCurrency", 
     expect(replayed.get("acct-1:sec-a")?.costBasis).toBe(4020);
   });
 
+  /**
+   * Invariant: a return of capital comes off the basis at the rate it settled
+   * at, and never below zero (issue #1800).
+   * Minimal mutation: drop the RETURN_OF_CAPITAL branch.
+   * Test that fails under it: this one -- the basis comes back 4,020.
+   */
+  it("takes a return of capital off the basis at its own rate", async () => {
+    const replayed = await lots([
+      {
+        accountId: "acct-1",
+        securityId: "sec-a",
+        action: InvestmentAction.BUY,
+        quantity: 10,
+        price: 100,
+        commission: 5,
+        exchangeRate: 4,
+      } as InvestmentTransaction,
+      {
+        accountId: "acct-1",
+        securityId: "sec-a",
+        action: InvestmentAction.RETURN_OF_CAPITAL,
+        quantity: null,
+        price: null,
+        totalAmount: 50,
+        exchangeRate: 4,
+      } as unknown as InvestmentTransaction,
+    ]);
+
+    // 4,020 less 50 x 4; the ten shares stay.
+    expect(replayed.get("acct-1:sec-a")).toEqual({
+      quantity: 10,
+      costBasis: 3820,
+      currencyCode: "USD",
+      basisKnown: true,
+      basisGap: null,
+    });
+  });
+
   it("reports the quantity the history accounts for", async () => {
     const replayed = await lots([
       {
@@ -2227,6 +4031,38 @@ describe("PortfolioCalculationService.calculateCostBasisLotsInAccountCurrency", 
         costBasis: 900,
         currencyCode: "EUR",
         basisKnown: true,
+      });
+    });
+
+    it("leaves the basis unknown when a return of capital settled in another currency", async () => {
+      // The basis is in EUR (the linked cash account); the distribution paid
+      // into a USD account, converted at a USD rate. Subtracting it from a
+      // EUR basis would mix two currencies, so the basis is a gap instead.
+      const replayed = await lots(
+        [
+          buy(),
+          {
+            accountId: "acct-1",
+            securityId: "sec-a",
+            action: InvestmentAction.RETURN_OF_CAPITAL,
+            quantity: null,
+            price: null,
+            totalAmount: 50,
+            exchangeRate: 1.1,
+            fundingAccountId: "fund-usd",
+          } as unknown as InvestmentTransaction,
+        ],
+        [
+          brokerage("cash-eur", "PLN"),
+          { id: "cash-eur", currencyCode: "EUR", linkedAccountId: null },
+          { id: "fund-usd", currencyCode: "USD", linkedAccountId: null },
+        ],
+      );
+
+      expect(replayed.get("acct-1:sec-a")).toMatchObject({
+        costBasis: 900,
+        basisKnown: false,
+        basisGap: "mixed_basis_currency",
       });
     });
 
@@ -2654,7 +4490,7 @@ describe("PortfolioCalculationService.calculateHoldingsWithValues", () => {
         [InvestmentTransaction, txRepo],
         [Account, accountRepo],
       ],
-      { getLatestRate: jest.fn().mockResolvedValue(1) },
+      { resolveStoredRate: storedRateDouble() },
     );
     jest
       .spyOn(service, "calculateCostBasisLotsInAccountCurrency")
@@ -2677,12 +4513,268 @@ describe("PortfolioCalculationService.calculateHoldingsWithValues", () => {
     ...over,
   });
 
+  it("states a foreign account's cost in the reporting currency at each purchase's date (issue #2106)", async () => {
+    // 900 PLN bought on 2024-01-10 when a zloty was 0.30 CAD; today it is
+    // 0.40. The cost in CAD is what the shares cost then: 270, not 360.
+    const holdingRepo = { find: jest.fn().mockResolvedValue([holdingRow]) };
+    const buy = {
+      id: "buy",
+      userId,
+      accountId: "acct-1",
+      securityId: "sec-a",
+      action: InvestmentAction.BUY,
+      transactionDate: "2024-01-10",
+      quantity: 10,
+      price: 90,
+      commission: 0,
+      totalAmount: 900,
+      exchangeRate: 1,
+      account: { id: "acct-1", currencyCode: "PLN" },
+      security: { id: "sec-a", currencyCode: "PLN" },
+    } as unknown as InvestmentTransaction;
+    const txRepo = { find: jest.fn().mockResolvedValue([buy]) };
+    const accountRepo = { find: jest.fn().mockResolvedValue([]) };
+    // Today's live rate is 0.40; the stored history holds 0.30 on the day.
+    const resolveStoredRate = jest.fn(async (from: string, to: string) =>
+      from === to
+        ? { status: "same_currency", rate: 1 }
+        : { status: "resolved", rate: 0.4 },
+    );
+    const getRateIndex = jest.fn(async () =>
+      rateIndexOf([
+        {
+          fromCurrency: "PLN",
+          toCurrency: "CAD",
+          rate: 0.3,
+          rateDate: "2024-01-10",
+        },
+      ]),
+    );
+    const service = buildService(
+      [
+        [Holding, holdingRepo],
+        [InvestmentTransaction, txRepo],
+        [Account, accountRepo],
+      ],
+      { resolveStoredRate, getRateIndex },
+    );
+    jest
+      .spyOn(service, "calculateCostBasisLotsInAccountCurrency")
+      .mockResolvedValue(new Map([["acct-1:sec-a", lot()]]));
+
+    const result = await service.calculateHoldingsWithValues(
+      userId,
+      ["acct-1"],
+      "CAD",
+      new Map(),
+      async () => new Map([["sec-a", 100]]),
+    );
+
+    expect(result.holdingsWithValues[0].costBasisAccountCurrency).toBe(900);
+    expect(result.totalCostBasis).toBe(270);
+    // The value is today's: 1,000 PLN at 0.40.
+    expect(result.holdingsWithValues[0].marketValueDefaultCurrency).toBe(400);
+  });
+
+  it("reads the history once for both the account and the reporting cost (issue #2130)", async () => {
+    const holdingRepo = { find: jest.fn().mockResolvedValue([holdingRow]) };
+    const buy = {
+      id: "buy",
+      userId,
+      accountId: "acct-1",
+      securityId: "sec-a",
+      action: InvestmentAction.BUY,
+      transactionDate: "2024-01-10",
+      quantity: 10,
+      price: 90,
+      commission: 0,
+      totalAmount: 900,
+      exchangeRate: 1,
+      account: { id: "acct-1", currencyCode: "PLN" },
+      security: { id: "sec-a", currencyCode: "PLN" },
+    } as unknown as InvestmentTransaction;
+    const txRepo = { find: jest.fn().mockResolvedValue([buy]) };
+    const accountRepo = {
+      find: jest
+        .fn()
+        .mockResolvedValue([{ id: "acct-1", currencyCode: "PLN" }]),
+    };
+    const getRateIndex = jest.fn(async () =>
+      rateIndexOf([
+        {
+          fromCurrency: "PLN",
+          toCurrency: "CAD",
+          rate: 0.3,
+          rateDate: "2024-01-10",
+        },
+      ]),
+    );
+    const service = buildService(
+      [
+        [Holding, holdingRepo],
+        [InvestmentTransaction, txRepo],
+        [Account, accountRepo],
+      ],
+      { resolveStoredRate: storedRateDouble(), getRateIndex },
+    );
+
+    const result = await service.calculateHoldingsWithValues(
+      userId,
+      ["acct-1"],
+      "CAD",
+      new Map(),
+      async () => new Map([["sec-a", 100]]),
+    );
+
+    // The account-currency lots and the dated reporting-currency replay both
+    // read the one history.
+    expect(result.holdingsWithValues[0].costBasisAccountCurrency).toBe(900);
+    expect(result.totalCostBasis).toBe(270);
+    expect(txRepo.find).toHaveBeenCalledTimes(1);
+    expect(txRepo.find).toHaveBeenCalledWith(
+      expect.objectContaining({ relations: ["security", "account"] }),
+    );
+  });
+
+  it("withholds a cost with no rate on its purchase date and names that pair (issue #2106)", async () => {
+    const holdingRepo = { find: jest.fn().mockResolvedValue([holdingRow]) };
+    const buy = {
+      id: "buy",
+      userId,
+      accountId: "acct-1",
+      securityId: "sec-a",
+      action: InvestmentAction.BUY,
+      transactionDate: "2024-01-10",
+      quantity: 10,
+      price: 90,
+      commission: 0,
+      totalAmount: 900,
+      exchangeRate: 1,
+      account: { id: "acct-1", currencyCode: "PLN" },
+      security: { id: "sec-a", currencyCode: "PLN" },
+    } as unknown as InvestmentTransaction;
+    const resolveStoredRate = jest.fn(async (from: string, to: string) =>
+      from === to
+        ? { status: "same_currency", rate: 1 }
+        : { status: "resolved", rate: 0.4 },
+    );
+    // No stored rate for the purchase date.
+    const getRateIndex = jest.fn(async () => new Map());
+    const service = buildService(
+      [
+        [Holding, holdingRepo],
+        [InvestmentTransaction, { find: jest.fn().mockResolvedValue([buy]) }],
+        [Account, { find: jest.fn().mockResolvedValue([]) }],
+      ],
+      { resolveStoredRate, getRateIndex },
+    );
+    jest
+      .spyOn(service, "calculateCostBasisLotsInAccountCurrency")
+      .mockResolvedValue(new Map([["acct-1:sec-a", lot()]]));
+
+    const result = await service.calculateHoldingsWithValues(
+      userId,
+      ["acct-1"],
+      "CAD",
+      new Map(),
+      async () => new Map([["sec-a", 100]]),
+    );
+
+    // Not 900 at today's 0.40: unknown, with the pair the purchase needed.
+    expect(result.totalCostBasis).toBe(0);
+    expect(result.missingRatePairs).toContain("PLN->CAD");
+    expect(result.fxComplete).toBe(false);
+  });
+
+  it("withholds a transferred-in cost whose source lacked a rate, never at today's rate", async () => {
+    const holdingRepo = { find: jest.fn().mockResolvedValue([holdingRow]) };
+    const tx = (over: Record<string, unknown>) =>
+      ({
+        userId,
+        securityId: "sec-a",
+        quantity: 10,
+        price: 90,
+        commission: 0,
+        totalAmount: 900,
+        exchangeRate: 1,
+        security: { id: "sec-a", currencyCode: "PLN" },
+        ...over,
+      }) as unknown as InvestmentTransaction;
+    // Bought in one PLN account on a day with no stored PLN->CAD rate, then
+    // moved in kind to the account that holds it now.
+    const rows = [
+      tx({
+        id: "buy",
+        accountId: "acct-src",
+        action: InvestmentAction.BUY,
+        transactionDate: "2024-01-10",
+        account: { id: "acct-src", currencyCode: "PLN" },
+      }),
+      tx({
+        id: "out",
+        accountId: "acct-src",
+        action: InvestmentAction.TRANSFER_OUT,
+        transactionDate: "2024-02-01",
+        account: { id: "acct-src", currencyCode: "PLN" },
+      }),
+      tx({
+        id: "in",
+        accountId: "acct-1",
+        action: InvestmentAction.TRANSFER_IN,
+        linkedTransactionId: "out",
+        transactionDate: "2024-02-01",
+        account: { id: "acct-1", currencyCode: "PLN" },
+      }),
+    ];
+    const resolveStoredRate = jest.fn(async (from: string, to: string) =>
+      from === to
+        ? { status: "same_currency", rate: 1 }
+        : { status: "resolved", rate: 0.4 },
+    );
+    const service = buildService(
+      [
+        [Holding, holdingRepo],
+        [InvestmentTransaction, { find: jest.fn().mockResolvedValue(rows) }],
+        [Account, { find: jest.fn().mockResolvedValue([]) }],
+      ],
+      { resolveStoredRate, getRateIndex: jest.fn(async () => new Map()) },
+    );
+    jest
+      .spyOn(service, "calculateCostBasisLotsInAccountCurrency")
+      .mockResolvedValue(new Map([["acct-1:sec-a", lot()]]));
+
+    const result = await service.calculateHoldingsWithValues(
+      userId,
+      ["acct-1"],
+      "CAD",
+      new Map(),
+      async () => new Map([["sec-a", 100]]),
+    );
+
+    // Not 900 PLN at today's 0.40: unknown, naming the source's pair.
+    expect(result.totalCostBasis).toBe(0);
+    expect(result.missingRatePairs).toContain("PLN->CAD");
+    expect(result.fxComplete).toBe(false);
+  });
+
   it("uses a replayed basis that is known and in the account's currency", async () => {
     const result = await valuation(lot());
 
     // The replay's 900 PLN, not the stored 10 x 30 = 300.
     expect(result.holdingsWithValues[0].costBasisAccountCurrency).toBe(900);
     expect(result.totalCostBasis).toBe(900);
+  });
+
+  it("carries the market value in the account and reporting currencies from one snapshot (P9)", async () => {
+    // Price 50 x 10 = 500, all in PLN here, so both converted figures equal the
+    // market value and neither is null: the row now carries the value the
+    // client used to re-derive with a second, drifting client-side rate.
+    const result = await valuation(lot());
+
+    const h = result.holdingsWithValues[0];
+    expect(h.marketValue).toBe(500);
+    expect(h.marketValueAccountCurrency).toBe(500);
+    expect(h.marketValueDefaultCurrency).toBe(500);
   });
 
   it("ignores a basis denominated in another currency", async () => {
@@ -2758,7 +4850,7 @@ describe("PortfolioCalculationService.calculateHoldingsWithValues", () => {
         [InvestmentTransaction, txRepo],
         [Account, accountRepo],
       ],
-      { getLatestRate: jest.fn().mockResolvedValue(null) },
+      { resolveStoredRate: storedRateDouble() },
     );
     jest
       .spyOn(service, "calculateCostBasisLotsInAccountCurrency")
@@ -2816,243 +4908,574 @@ describe("PortfolioCalculationService.calculateHoldingsWithValues", () => {
   });
 });
 
-describe("PortfolioCalculationService.calculateTWR", () => {
+/**
+ * Invariant: a gain is the value of the holdings that joined the value total
+ * less the cost of THOSE SAME holdings (audit A26-M38). Canonical adversarial
+ * input: one priced and one unpriced holding. Minimal mutation: subtract
+ * `totalCostBasis` (every holding's cost) from `totalHoldingsValue` again.
+ * Test that fails under it: the first of these.
+ */
+describe("PortfolioCalculationService gain over the priced holdings (A26-M38)", () => {
   const userId = "user-1";
 
-  const buys = (currencyCode: string) => [
-    {
-      id: "tx-1",
-      userId,
-      accountId: "acct-1",
-      securityId: "sec-a",
-      security: { id: "sec-a", currencyCode },
-      action: InvestmentAction.BUY,
-      transactionDate: "2024-01-02",
-      quantity: 10,
-      price: 10,
-      createdAt: new Date("2024-01-02"),
+  const row = (
+    id: string,
+    securityId: string,
+    quantity: number,
+    averageCost: number,
+    currencyCode = "PLN",
+  ) => ({
+    id,
+    accountId: "acct-1",
+    securityId,
+    quantity,
+    averageCost,
+    security: {
+      id: securityId,
+      symbol: securityId.toUpperCase(),
+      name: securityId,
+      securityType: "STOCK",
+      currencyCode,
     },
-    {
-      id: "tx-2",
-      userId,
-      accountId: "acct-1",
-      securityId: "sec-a",
-      security: { id: "sec-a", currencyCode },
-      action: InvestmentAction.BUY,
-      transactionDate: "2024-02-02",
-      quantity: 10,
-      price: 12,
-      createdAt: new Date("2024-02-02"),
-    },
-  ];
+    account: { id: "acct-1", currencyCode: "PLN" },
+  });
 
-  const runTwr = async (currencyCode: string, latestRate: number | null) => {
-    const txRepo = { find: jest.fn().mockResolvedValue(buys(currencyCode)) };
-    const service = buildService([[InvestmentTransaction, txRepo]], {
-      getLatestRate: jest.fn().mockResolvedValue(latestRate),
-    });
-    jest.spyOn(service, "getAllPricesForSecurities").mockResolvedValue(
-      new Map([
-        [
-          "sec-a",
-          [
-            { date: "2024-01-02", price: 10 },
-            { date: "2024-02-02", price: 12 },
-          ],
-        ],
-      ]),
+  const run = async (
+    rows: ReturnType<typeof row>[],
+    prices: Array<[string, number]>,
+  ) => {
+    const service = buildService(
+      [
+        [Holding, { find: jest.fn().mockResolvedValue(rows) }],
+        [InvestmentTransaction, { find: jest.fn().mockResolvedValue([]) }],
+        [Account, { find: jest.fn().mockResolvedValue([]) }],
+      ],
+      { resolveStoredRate: storedRateDouble() },
     );
-    return service.calculateTWR(
+    jest
+      .spyOn(service, "calculateCostBasisLotsInAccountCurrency")
+      .mockResolvedValue(new Map());
+    return service.calculateHoldingsWithValues(
       userId,
       ["acct-1"],
-      "USD",
+      "PLN",
       new Map(),
-      async () => new Map([["sec-a", 15]]),
+      async () => new Map(prices),
     );
   };
 
-  it("computes a chained return when every period value converts", async () => {
-    const twr = await runTwr("USD", 1);
-
-    // 100 -> 120 at the second buy (factor 1.2), 240 -> 300 today (1.25):
-    // chained (1.2 * 1.25) - 1 = 50%.
-    expect(twr).toBeCloseTo(50, 5);
-  });
-
-  it("returns null when a period value omitted an unconvertible position", async () => {
-    // EUR security, USD reporting, no EUR->USD rate. Every period value is
-    // then a knownSubtotal that silently omitted the position, and unlike the
-    // summary's totals the chained ratio carries no missingRatePairs field a
-    // consumer could check -- so the only honest answer is unknown, the same
-    // treatment CAGR gets from its completeness gate.
-    const twr = await runTwr("EUR", null);
-
-    expect(twr).toBeNull();
-  });
-
-  const runSplitTwr = async (latestPrice: number) => {
-    const txRepo = {
-      find: jest.fn().mockResolvedValue([
-        {
-          id: "b1",
-          userId,
-          accountId: "acct-1",
-          securityId: "sec-a",
-          security: { id: "sec-a", currencyCode: "USD" },
-          action: InvestmentAction.BUY,
-          transactionDate: "2024-01-01",
-          quantity: 100,
-          price: 10,
-          createdAt: new Date("2024-01-01"),
-        },
-        {
-          id: "s1",
-          userId,
-          accountId: "acct-1",
-          securityId: "sec-a",
-          security: { id: "sec-a", currencyCode: "USD" },
-          action: InvestmentAction.SPLIT,
-          transactionDate: "2024-02-01",
-          quantity: 2,
-          createdAt: new Date("2024-02-01"),
-        },
-      ]),
-    };
-    const service = buildService([[InvestmentTransaction, txRepo]], {
-      getLatestRate: jest.fn().mockResolvedValue(1),
-    });
-    jest.spyOn(service, "getAllPricesForSecurities").mockResolvedValue(
-      new Map([
-        [
-          "sec-a",
-          [
-            { date: "2024-01-01", price: 10 },
-            { date: "2024-02-01", price: 10 },
-          ],
-        ],
-      ]),
+  it("keeps an unpriced holding's cost out of the gain and reports it apart", async () => {
+    // A: 1000 x 100 = 100,000 value, 1000 x 80 = 80,000 cost. B: no price, 50,000 cost.
+    const result = await run(
+      [row("h-a", "sec-a", 1000, 80), row("h-b", "sec-b", 500, 100)],
+      [["sec-a", 100]],
     );
-    return service.calculateTWR(
+
+    expect(result.totalHoldingsValue).toBe(100000);
+    expect(result.totalCostBasis).toBe(130000);
+    expect(result.gainMarketValue).toBe(100000);
+    expect(result.gainCostBasis).toBe(80000);
+    expect(result.unpricedCostBasis).toBe(50000);
+    expect(result.pricesComplete).toBe(false);
+  });
+
+  it("leaves a holding whose cost did not convert out of both sides of the gain", async () => {
+    // B is USD in a PLN account with no USD->PLN rate: its value does not join
+    // the value total either, so neither side of the gain carries it.
+    const result = await run(
+      [row("h-a", "sec-a", 1000, 80), row("h-b", "sec-b", 10, 5, "USD")],
+      [
+        ["sec-a", 100],
+        ["sec-b", 7],
+      ],
+    );
+
+    expect(result.gainMarketValue).toBe(100000);
+    expect(result.gainCostBasis).toBe(80000);
+    expect(result.unpricedCostBasis).toBe(0);
+    expect(result.missingRatePairs).toContain("USD->PLN");
+  });
+
+  it("leaves a complete portfolio's gain as value less cost", async () => {
+    const result = await run(
+      [row("h-a", "sec-a", 1000, 80), row("h-b", "sec-b", 500, 100)],
+      [
+        ["sec-a", 100],
+        ["sec-b", 120],
+      ],
+    );
+
+    expect(result.gainMarketValue).toBe(result.totalHoldingsValue);
+    expect(result.gainCostBasis).toBe(result.totalCostBasis);
+    expect(result.unpricedCostBasis).toBe(0);
+    expect(result.pricesComplete).toBe(true);
+  });
+
+  describe("per account", () => {
+    const account = {
+      id: "acct-1",
+      name: "acct-1",
+      currencyCode: "CAD",
+      currentBalance: 0,
+      accountSubType: AccountSubType.INVESTMENT_BROKERAGE,
+      linkedAccountId: null,
+    } as unknown as Account;
+
+    const held = (
+      id: string,
+      marketValue: number | null,
+      cost: number,
+    ): HoldingWithMarketValue =>
+      ({
+        id,
+        accountId: "acct-1",
+        securityId: `sec-${id}`,
+        symbol: id,
+        name: id,
+        securityType: "STOCK",
+        currencyCode: "CAD",
+        quantity: 1,
+        averageCost: cost,
+        costBasis: cost,
+        costBasisAccountCurrency: cost,
+        currentPrice: marketValue,
+        marketValue,
+        gainLoss: null,
+        gainLossPercent: null,
+      }) as HoldingWithMarketValue;
+
+    const build = async (holdings: HoldingWithMarketValue[]) => {
+      const [result] = await buildService([], {}).buildHoldingsByAccount(
+        {
+          cashAccounts: [],
+          brokerageAccounts: [account],
+          standaloneAccounts: [],
+          holdingsAccountIds: [],
+        },
+        holdings,
+        new Map<string, number>(),
+        new Map(),
+        new Map<string, number>(),
+      );
+      return result;
+    };
+
+    it("takes the account's gain over its priced holdings only", async () => {
+      const result = await build([
+        held("a", 100000, 80000),
+        held("b", null, 50000),
+      ]);
+
+      expect(result.totalGainLoss).toBe(20000);
+      expect(result.totalGainLossPercent).toBe(25);
+      expect(result.gainCostBasis).toBe(80000);
+      expect(result.unpricedCostBasis).toBe(50000);
+      expect(result.totalCostBasis).toBe(130000);
+      expect(result.valuationComplete).toBe(false);
+    });
+
+    it("leaves a complete account unchanged", async () => {
+      const result = await build([
+        held("a", 100000, 80000),
+        held("b", 40000, 50000),
+      ]);
+
+      expect(result.totalGainLoss).toBe(10000);
+      expect(result.gainCostBasis).toBe(130000);
+      expect(result.unpricedCostBasis).toBe(0);
+      expect(result.valuationComplete).toBe(true);
+    });
+
+    it("reports a zero percent over a zero matched cost", async () => {
+      const result = await build([held("b", null, 50000)]);
+
+      expect(result.totalGainLoss).toBe(0);
+      expect(result.totalGainLossPercent).toBe(0);
+      expect(result.gainCostBasis).toBe(0);
+      expect(result.unpricedCostBasis).toBe(50000);
+    });
+  });
+});
+
+/**
+ * Invariant: a bond-linked holding is worth its own account's lots, never
+ * quantity x the program-wide blend (bond-program-securities.md 2.4, audit H2).
+ * Minimal mutation: price a linked holding as `quantity x priceMap.get(...)`.
+ * Test that fails under it: the two-account case (1177.40 each instead of
+ * 1354.00 and 1000.80).
+ */
+describe("PortfolioCalculationService.calculateHoldingsWithValues (bond-linked)", () => {
+  const userId = "user-1";
+  const BLEND = 117.74;
+
+  const holdingOf = (
+    id: string,
+    accountId: string,
+    securityId: string,
+    over: { quantity?: number; linked?: boolean } = {},
+  ) => ({
+    id,
+    accountId,
+    securityId,
+    quantity: over.quantity ?? 10,
+    averageCost: 100,
+    security: {
+      id: securityId,
+      symbol: securityId.toUpperCase(),
+      name: securityId,
+      securityType: "BOND",
+      currencyCode: "PLN",
+      bondProgramId: over.linked === false ? null : "prog-1",
+    },
+    account: { id: accountId, currencyCode: "PLN" },
+  });
+
+  const byAccount = (
+    entries: Array<[string, number, string | null]>,
+  ): SecurityValueByAccount => ({
+    asOf: "2026-10-13",
+    accounts: new Map(
+      entries.map(([accountId, quantity, grossValue]) => [
+        accountId,
+        { quantity, grossValue, marketPriceRequired: false },
+      ]),
+    ),
+  });
+
+  const run = async (
+    holdings: ReturnType<typeof holdingOf>[],
+    valueByAccount: jest.Mock,
+    prices: Array<[string, number]> = holdings.map(
+      (h) => [h.securityId, BLEND] as [string, number],
+    ),
+  ) => {
+    const service = buildService(
+      [
+        [Holding, { find: jest.fn().mockResolvedValue(holdings) }],
+        [InvestmentTransaction, { find: jest.fn().mockResolvedValue([]) }],
+        [Account, { find: jest.fn().mockResolvedValue([]) }],
+      ],
+      { resolveStoredRate: storedRateDouble() },
+      undefined,
+      { valueByAccount },
+    );
+    jest
+      .spyOn(service, "calculateCostBasisLotsInAccountCurrency")
+      .mockResolvedValue(new Map());
+    return service.calculateHoldingsWithValues(
       userId,
-      ["acct-1"],
-      "USD",
+      ["ike", "reg"],
+      "PLN",
       new Map(),
-      async () => new Map([["sec-a", latestPrice]]),
+      async () => new Map(prices),
     );
   };
 
-  // The behavioural half. TWR chains price ratios and resets the running value
-  // after each date's transactions, so within every sub-period the share count
-  // is constant and divides out of V(t)/V(t-1) = P(t)/P(t-1): a correct walk
-  // returns the security's price return whatever the absolute count. That
-  // invariance is why an *ignored* split is not visible to a normal-holdings
-  // TWR -- 100 shares and 200 shares give the identical ratio -- and why the
-  // net-worth history, which reports absolute value, is where the 2-for-1 ->
-  // 200-share arithmetic is pinned (see net-worth.service.spec.ts). What this
-  // case does pin is the *timing*: the split has to fold in AFTER the factor for
-  // its own date is taken against the pre-split count. Fold it before, and the
-  // boundary factor doubles. BUY 100 @ 10, steady at 10 across the split, latest
-  // 12 -> a clean +20%; applying the split a step early would report +140%.
-  it("returns the price return through a split, not a share-count jump", async () => {
-    expect(await runSplitTwr(12)).toBeCloseTo(20, 5);
-  });
-
-  it("is flat when price is unchanged across the split", async () => {
-    expect(await runSplitTwr(10)).toBeCloseTo(0, 5);
-  });
-
-  // Where the ignored split DOES move a single-security TWR: a sale that only
-  // the post-split count can cover. BUY 100 @ 10, 2-for-1 split, SELL 150 @ 10
-  // -- valid against the 200 shares the split produces, an oversell against the
-  // 100 the old walk kept. Prices hold at 10 so no split-date price artifact
-  // enters, then the last close is 12. The correct walk holds 50 shares into
-  // that +20% final period; the old walk drives holdings to -50, whose negative
-  // value trips the `previousValue > 0` gate and drops the final factor, so it
-  // reports 0% and silently loses the gain. This is the arithmetic pin the
-  // value-invariant cases above cannot provide.
-  it("keeps the post-split count through an oversell so the final gain counts", async () => {
-    const txRepo = {
-      find: jest.fn().mockResolvedValue([
-        {
-          id: "b1",
-          userId,
-          accountId: "acct-1",
-          securityId: "sec-a",
-          security: { id: "sec-a", currencyCode: "USD" },
-          action: InvestmentAction.BUY,
-          transactionDate: "2024-01-01",
-          quantity: 100,
-          price: 10,
-          createdAt: new Date("2024-01-01"),
-        },
-        {
-          id: "s1",
-          userId,
-          accountId: "acct-1",
-          securityId: "sec-a",
-          security: { id: "sec-a", currencyCode: "USD" },
-          action: InvestmentAction.SPLIT,
-          transactionDate: "2024-02-01",
-          quantity: 2,
-          createdAt: new Date("2024-02-01"),
-        },
-        {
-          id: "sell1",
-          userId,
-          accountId: "acct-1",
-          securityId: "sec-a",
-          security: { id: "sec-a", currencyCode: "USD" },
-          action: InvestmentAction.SELL,
-          transactionDate: "2024-03-01",
-          quantity: 150,
-          price: 10,
-          createdAt: new Date("2024-03-01"),
-        },
-      ]),
-    };
-    const service = buildService([[InvestmentTransaction, txRepo]], {
-      getLatestRate: jest.fn().mockResolvedValue(1),
-    });
-    jest.spyOn(service, "getAllPricesForSecurities").mockResolvedValue(
-      new Map([
-        [
-          "sec-a",
-          [
-            { date: "2024-01-01", price: 10 },
-            { date: "2024-02-01", price: 10 },
-            { date: "2024-03-01", price: 10 },
-          ],
-        ],
+  it("values each account by its own lots, not by the blend", async () => {
+    const valueByAccount = jest.fn().mockResolvedValue(
+      byAccount([
+        ["ike", 10, "1354.00"],
+        ["reg", 10, "1000.80"],
       ]),
     );
-    const twr = await service.calculateTWR(
-      userId,
+
+    const result = await run(
+      [holdingOf("h-1", "ike", "edo"), holdingOf("h-2", "reg", "edo")],
+      valueByAccount,
+    );
+
+    const [ike, reg] = result.holdingsWithValues;
+    expect(ike.marketValue).toBe(1354);
+    expect(ike.currentPrice).toBe(135.4);
+    expect(ike.gainLoss).toBe(354);
+    expect(reg.marketValue).toBe(1000.8);
+    expect(reg.currentPrice).toBe(100.08);
+    expect(reg.gainLoss).toBeCloseTo(0.8, 10);
+    expect(result.totalHoldingsValue).toBeCloseTo(2354.8, 10);
+    expect(result.pricesComplete).toBe(true);
+    // One valuation for the security, not one per holding.
+    expect(valueByAccount).toHaveBeenCalledTimes(1);
+    expect(valueByAccount).toHaveBeenCalledWith(userId, "edo", undefined);
+  });
+
+  it("leaves an account with an unknown lot unpriced and the total a subtotal", async () => {
+    const result = await run(
+      [holdingOf("h-1", "ike", "edo"), holdingOf("h-2", "reg", "edo")],
+      jest.fn().mockResolvedValue(
+        byAccount([
+          ["ike", 10, null],
+          ["reg", 10, "1000.80"],
+        ]),
+      ),
+    );
+
+    const [ike, reg] = result.holdingsWithValues;
+    expect(ike.marketValue).toBeNull();
+    expect(ike.currentPrice).toBeNull();
+    expect(ike.gainLoss).toBeNull();
+    expect(reg.marketValue).toBe(1000.8);
+    expect(result.pricesComplete).toBe(false);
+    expect(result.unpricedSecurityIds).toEqual(["edo"]);
+    expect(result.totalHoldingsValue).toBe(1000.8);
+  });
+
+  it("leaves every holding unpriced when the lots are unknowable", async () => {
+    const result = await run(
+      [holdingOf("h-1", "ike", "edo")],
+      jest.fn().mockResolvedValue({ asOf: "2026-10-13", accounts: null }),
+    );
+
+    expect(result.holdingsWithValues[0].marketValue).toBeNull();
+    expect(result.pricesComplete).toBe(false);
+  });
+
+  it("never prices a different quantity than the holding's", async () => {
+    const result = await run(
+      [holdingOf("h-1", "ike", "edo", { quantity: 10 })],
+      jest.fn().mockResolvedValue(byAccount([["ike", 8, "1083.20"]])),
+    );
+
+    expect(result.holdingsWithValues[0].marketValue).toBeNull();
+    expect(result.unpricedSecurityIds).toEqual(["edo"]);
+  });
+
+  it("leaves a holding with no lots in its account unpriced", async () => {
+    const result = await run(
+      [holdingOf("h-1", "ike", "edo")],
+      jest.fn().mockResolvedValue(byAccount([["reg", 10, "1000.80"]])),
+    );
+
+    expect(result.holdingsWithValues[0].marketValue).toBeNull();
+  });
+
+  it("prices the other holdings when one security's valuation throws", async () => {
+    const valueByAccount = jest.fn().mockImplementation(async (_u, id) => {
+      if (id === "edo") throw new Error("boom");
+      return byAccount([["ike", 10, "1000.00"]]);
+    });
+
+    const result = await run(
+      [
+        holdingOf("h-1", "ike", "edo"),
+        holdingOf("h-2", "ike", "tos"),
+        holdingOf("h-3", "ike", "stock", { linked: false }),
+      ],
+      valueByAccount,
+      [
+        ["edo", BLEND],
+        ["tos", BLEND],
+        ["stock", 50],
+      ],
+    );
+
+    const [edo, tos, stock] = result.holdingsWithValues;
+    expect(edo.marketValue).toBeNull();
+    expect(tos.marketValue).toBe(1000);
+    expect(stock.marketValue).toBe(500);
+    expect(result.unpricedSecurityIds).toEqual(["edo"]);
+    expect(result.pricesComplete).toBe(false);
+  });
+
+  describe("a marketable coupon security is the person's price, never the engine's par (INV-BOND-005)", () => {
+    const marketable = (grossValue: string | null): SecurityValueByAccount => ({
+      asOf: "2026-10-13",
+      accounts: new Map([
+        ["ike", { quantity: 10, grossValue, marketPriceRequired: true }],
+      ]),
+    });
+
+    it("values 10 bonds at the person's price 98.75 as 987.5, not the par 1000.00", async () => {
+      const result = await run(
+        [holdingOf("h-1", "ike", "note")],
+        jest.fn().mockResolvedValue(marketable("1000.00")),
+        [["note", 98.75]],
+      );
+
+      const [note] = result.holdingsWithValues;
+      expect(note.marketValue).toBe(987.5);
+      expect(note.currentPrice).toBe(98.75);
+      expect(result.pricesComplete).toBe(true);
+    });
+
+    it("leaves it unpriced when the person has entered no price", async () => {
+      const result = await run(
+        [holdingOf("h-1", "ike", "note")],
+        jest.fn().mockResolvedValue(marketable("1000.00")),
+        [],
+      );
+
+      const [note] = result.holdingsWithValues;
+      expect(note.marketValue).toBeNull();
+      expect(note.currentPrice).toBeNull();
+      expect(result.pricesComplete).toBe(false);
+      expect(result.unpricedSecurityIds).toEqual(["note"]);
+      expect(result.totalHoldingsValue).toBe(0);
+    });
+  });
+
+  it("leaves a non-bond security on quantity x price and never values it as a bond", async () => {
+    const valueByAccount = jest.fn();
+
+    const result = await run(
+      [holdingOf("h-1", "ike", "stock", { linked: false })],
+      valueByAccount,
+      [["stock", 50]],
+    );
+
+    expect(result.holdingsWithValues[0].marketValue).toBe(500);
+    expect(valueByAccount).not.toHaveBeenCalled();
+  });
+});
+
+describe("PortfolioCalculationService.computeInvestmentFlows", () => {
+  it("counts a return of capital with the sale proceeds, not with income (#1800)", async () => {
+    // Net invested is cash + buys - sells - income. A return of capital puts
+    // cash in the sleeve that no deposit put there, and it is capital coming
+    // back, not earnings: it belongs with the proceeds.
+    const rawQuery = jest
+      .fn()
+      .mockResolvedValue([
+        { account_id: "acct-1", buys: "1000", sells: "250", income: "40" },
+      ]);
+    const service = buildService([], {}, rawQuery);
+
+    const flows = await service.computeInvestmentFlows("user-1", ["acct-1"]);
+
+    const params = rawQuery.mock.calls[0][1] as unknown[];
+    expect(params[2]).toEqual(
+      expect.arrayContaining([
+        InvestmentAction.SELL,
+        InvestmentAction.REDEEM,
+        InvestmentAction.RETURN_OF_CAPITAL,
+      ]),
+    );
+    expect(params[3]).not.toContain(InvestmentAction.RETURN_OF_CAPITAL);
+    expect(flows.get("acct-1")).toEqual({ buys: 1000, sells: 250, income: 40 });
+  });
+});
+
+describe("PortfolioCalculationService.computeNetInvestmentFlowsInReporting (issue #2106)", () => {
+  const flowsQuery = (rows: unknown[], rates: unknown[] = []) =>
+    jest.fn((sql: string) =>
+      Promise.resolve(/WITH pairs AS/.test(sql) ? rates : rows),
+    );
+
+  it("takes a USD trade's own amount for a USD reader, not its CAD cash at the market rate", async () => {
+    // 1,000 USD bought from a CAD brokerage at its own 1.35 (1,350 CAD).
+    const service = buildService(
+      [],
+      {},
+      flowsQuery([
+        {
+          account_id: "acct-1",
+          tx_date: "2025-03-04",
+          amount_currency: "USD",
+          settlement_currency: "CAD",
+          exchange_rate: "1.35",
+          flow: "1000",
+        },
+      ]),
+    );
+
+    const flows = await service.computeNetInvestmentFlowsInReporting(
+      "user-1",
       ["acct-1"],
       "USD",
-      new Map(),
-      async () => new Map([["sec-a", 12]]),
     );
-    // 50 shares x (12/10) over the final period; the old ignored-split walk
-    // reports 0% here.
-    expect(twr).toBeCloseTo(20, 5);
+
+    expect(flows.get("acct-1")).toBe(1000);
   });
 
-  // The mechanical half, kept as a cheap secondary guard alongside the oversell
-  // case above: a source pin catches a re-introduction wherever a future price
-  // path happens not to cross a holdings sign change.
-  // `investment-replay.guard.spec.ts` only flags a hand-rolled SPLIT *case*;
-  // this walk omitted SPLIT through a comment instead.
-  it("folds the split through the shared reducer rather than deciding inline", () => {
-    expect(applyActionToQuantity(100, InvestmentAction.SPLIT, 2)).toBe(200);
+  it("carries the own rate onward at the market rate on the row's date", async () => {
+    const service = buildService(
+      [],
+      {},
+      flowsQuery(
+        [
+          {
+            account_id: "acct-1",
+            tx_date: "2025-03-04",
+            amount_currency: "USD",
+            settlement_currency: "CAD",
+            exchange_rate: "1.35",
+            flow: "1000",
+          },
+        ],
+        [
+          {
+            from_currency: "CAD",
+            to_currency: "EUR",
+            rate: "0.7",
+            rate_date: "2025-03-03",
+          },
+        ],
+      ),
+    );
 
-    const source = readFileSync(
-      join(__dirname, "portfolio-calculation.service.ts"),
-      "utf8",
+    const flows = await service.computeNetInvestmentFlowsInReporting(
+      "user-1",
+      ["acct-1"],
+      "EUR",
     );
-    const walk = source.slice(source.indexOf("async calculateTWR("));
-    expect(walk).toContain("applyActionToQuantity(current, tx.action, qty)");
-    expect(walk).not.toContain(
-      "DIVIDEND, INTEREST, CAPITAL_GAIN, SPLIT: no quantity change",
+
+    // 1,000 USD -> 1,350 CAD at its own rate -> 945 EUR at that day's 0.70.
+    expect(flows.get("acct-1")).toBe(945);
+  });
+
+  it.each([
+    ["before", ["JPY", "USD"]],
+    ["after", ["USD", "JPY"]],
+  ])(
+    "stays unknown when the row no rate reaches comes %s one that converts",
+    async (_order, currencies) => {
+      const service = buildService(
+        [],
+        {},
+        flowsQuery(
+          currencies.map((code) => ({
+            account_id: "acct-1",
+            tx_date: "2025-03-04",
+            amount_currency: code,
+            settlement_currency: code,
+            exchange_rate: "1",
+            flow: "1000",
+          })),
+        ),
+      );
+
+      const flows = await service.computeNetInvestmentFlowsInReporting(
+        "user-1",
+        ["acct-1"],
+        "USD",
+      );
+
+      expect(flows.get("acct-1")).toBeNull();
+    },
+  );
+
+  it("is unknown for an account with a row no rate reaches, and zero with no rows", async () => {
+    const service = buildService(
+      [],
+      {},
+      flowsQuery([
+        {
+          account_id: "acct-1",
+          tx_date: "2025-03-04",
+          amount_currency: "JPY",
+          settlement_currency: "JPY",
+          exchange_rate: "1",
+          flow: "100000",
+        },
+      ]),
     );
+
+    const flows = await service.computeNetInvestmentFlowsInReporting(
+      "user-1",
+      ["acct-1", "acct-2"],
+      "USD",
+    );
+
+    expect(flows.get("acct-1")).toBeNull();
+    expect(flows.get("acct-2")).toBe(0);
   });
 });

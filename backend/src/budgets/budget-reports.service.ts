@@ -2,7 +2,10 @@ import { Injectable, Logger } from "@nestjs/common";
 import { BudgetTrendReportsService } from "./budget-trend-reports.service";
 import { BudgetHealthReportsService } from "./budget-health-reports.service";
 import { BudgetActivityReportsService } from "./budget-activity-reports.service";
+import { BudgetBucketReportsService } from "./budget-bucket-reports.service";
+import type { BudgetBucketStatusResult } from "./budget-bucket-reports.service";
 import { BudgetsService } from "./budgets.service";
+import { BudgetStrategy } from "./entities/budget.entity";
 import {
   getCurrentMonthPeriodDates,
   getPreviousMonthPeriodDates,
@@ -10,15 +13,26 @@ import {
 } from "./budget-date.utils";
 
 export interface BudgetTrendPoint {
-  month: string;
+  monthKey: string;
   budgeted: number;
   actual: number;
   variance: number;
   percentUsed: number;
+  /**
+   * `false` when a row of a live month had no rate to the budget currency:
+   * `actual` is then the converted part. Absent on a closed period, whose
+   * frozen actuals carry no completeness (residual of A26-H12).
+   */
+  valuationComplete?: boolean;
+  /**
+   * `"JPY->CAD"` for each pair with no rate behind a partial figure; empty
+   * while complete, absent where `valuationComplete` is.
+   */
+  missingRatePairs?: string[];
 }
 
 export interface CategoryTrendPoint {
-  month: string;
+  monthKey: string;
   categoryId: string;
   categoryName: string;
   budgeted: number;
@@ -31,11 +45,14 @@ export interface CategoryTrendSeries {
   categoryId: string;
   categoryName: string;
   data: Array<{
-    month: string;
+    monthKey: string;
     budgeted: number;
     actual: number;
     variance: number;
     percentUsed: number;
+    /** As `BudgetTrendPoint.valuationComplete` and `missingRatePairs`. */
+    valuationComplete?: boolean;
+    missingRatePairs?: string[];
   }>;
 }
 
@@ -68,6 +85,8 @@ export interface SeasonalPattern {
   }>;
   highMonths: number[];
   typicalMonthlySpend: number;
+  /** `false` when a row had no rate to the budget currency: figures are subtotals. */
+  valuationComplete: boolean;
 }
 
 export interface FlexGroupStatusResult {
@@ -86,15 +105,24 @@ export interface FlexGroupStatusResult {
 }
 
 export interface SavingsRatePoint {
-  month: string;
+  /**
+   * The month as structure (`YYYY-MM`), not as a label. A server-formatted
+   * `Mmm YYYY` shipped English to every locale and, being a label, sorted
+   * alphabetically at the client -- Apr, Aug, Dec, Feb... The client renders
+   * this through its own date preference and orders on the key.
+   */
+  monthKey: string;
   income: number;
   expenses: number;
   savings: number;
   savingsRate: number;
+  /** `false` when a row of the month had no rate: the figures are subtotals. */
+  valuationComplete: boolean;
 }
 
 export interface HealthScoreHistoryPoint {
-  month: string;
+  /** `YYYY-MM` -- see `SavingsRatePoint.monthKey`. */
+  monthKey: string;
   score: number;
   label: string;
 }
@@ -141,6 +169,23 @@ export interface LlmBudgetStatusResult {
     score: number;
     label: string;
   };
+  /**
+   * Present only for a BUCKET budget with at least one bucket; the current
+   * period, taken verbatim from the bucket status service (INV-BUDGET-001).
+   * `null` is "unknown" (a PERCENT target with no known income), never 0.
+   */
+  buckets?: Array<{
+    name: string;
+    targetType: string;
+    targetValue: number;
+    allocated: number | null;
+    carriedIn: number;
+    spent: number;
+    available: number | null;
+    percentUsed: number | null;
+  }>;
+  bucketIncome?: number | null;
+  unallocated?: number | null;
 }
 
 export interface LlmBudgetStatusError {
@@ -157,6 +202,7 @@ export class BudgetReportsService {
     private readonly healthReports: BudgetHealthReportsService,
     private readonly activityReports: BudgetActivityReportsService,
     private readonly budgetsService: BudgetsService,
+    private readonly bucketReports: BudgetBucketReportsService,
   ) {}
 
   getTrend(
@@ -222,6 +268,13 @@ export class BudgetReportsService {
     return this.activityReports.getFlexGroupStatus(userId, budgetId);
   }
 
+  getBucketStatus(
+    userId: string,
+    budgetId: string,
+  ): Promise<BudgetBucketStatusResult> {
+    return this.bucketReports.getBucketStatus(userId, budgetId);
+  }
+
   /**
    * Budget status shaped for LLM tools. Shared by the AI Assistant's
    * `get_budget_status` tool and the MCP server's matching tool so both
@@ -268,8 +321,7 @@ export class BudgetReportsService {
       return { error: "Failed to retrieve budget summary" };
     }
 
-    let velocity: Awaited<ReturnType<BudgetsService["getVelocity"]>> | null =
-      null;
+    let velocity: Awaited<ReturnType<BudgetsService["getVelocity"]>> | null;
     try {
       velocity = await this.budgetsService.getVelocity(userId, budget.id);
     } catch (err) {
@@ -279,7 +331,7 @@ export class BudgetReportsService {
       velocity = null;
     }
 
-    let healthScore: HealthScoreResult | null = null;
+    let healthScore: HealthScoreResult | null;
     try {
       healthScore = await this.getHealthScore(userId, budget.id);
     } catch (err) {
@@ -287,6 +339,20 @@ export class BudgetReportsService {
         `Failed to compute budget health score for ${budget.id}: ${err instanceof Error ? err.message : err}`,
       );
       healthScore = null;
+    }
+
+    let bucketStatus: BudgetBucketStatusResult | null = null;
+    if (budget.strategy === BudgetStrategy.BUCKET) {
+      try {
+        bucketStatus = await this.bucketReports.getBucketStatus(
+          userId,
+          budget.id,
+        );
+      } catch (err) {
+        this.logger.warn(
+          `Failed to compute bucket status for ${budget.id}: ${err instanceof Error ? err.message : err}`,
+        );
+      }
     }
 
     const overBudgetCategories = summary.categoryBreakdown
@@ -340,6 +406,21 @@ export class BudgetReportsService {
         score: healthScore.score,
         label: healthScore.label,
       };
+    }
+
+    if (bucketStatus && bucketStatus.buckets.length > 0) {
+      result.buckets = bucketStatus.buckets.map((b) => ({
+        name: b.name,
+        targetType: b.targetType,
+        targetValue: b.targetValue,
+        allocated: b.allocated,
+        carriedIn: b.carriedIn,
+        spent: b.spent,
+        available: b.available,
+        percentUsed: b.percentUsed,
+      }));
+      result.bucketIncome = bucketStatus.income;
+      result.unallocated = bucketStatus.unallocated;
     }
 
     return result;

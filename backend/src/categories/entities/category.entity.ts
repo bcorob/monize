@@ -48,6 +48,9 @@ export class Category {
   @Column({ name: "is_income", default: false })
   isIncome: boolean;
 
+  @Column({ name: "auto_sign", type: "boolean", nullable: true })
+  autoSign: boolean | null;
+
   @Column({ name: "is_system", default: false })
   isSystem: boolean;
 

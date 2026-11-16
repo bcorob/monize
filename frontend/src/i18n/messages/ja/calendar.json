@@ -1,0 +1,120 @@
+{
+  "view": {
+    "label": "表示形式",
+    "table": "テーブル",
+    "calendar": "カレンダー"
+  },
+  "grid": {
+    "label": "月"
+  },
+  "toolbar": {
+    "layers": "レイヤー"
+  },
+  "layers": {
+    "transactions": "取引",
+    "balances": "残高",
+    "values": "評価額",
+    "dailyChange": "日次変動"
+  },
+  "legend": {
+    "label": "凡例",
+    "scheduled": "予定"
+  },
+  "chip": {
+    "noPayee": "支払先なし",
+    "overdue": "期限超過",
+    "scheduled": "予定",
+    "noSymbol": "シンボルなし"
+  },
+  "day": {
+    "itemCount": "{count, plural, other {#件}}",
+    "moreChips": "他{count}件",
+    "newTransaction": "この日に新規取引",
+    "noItems": "この日は何もありません。",
+    "scheduledHint": "予定です。変更するには請求と入金を開いてください。",
+    "newInvestmentTransaction": "この日に新規投資取引"
+  },
+  "banner": {
+    "title": "一部の数値は表示されていません",
+    "rowCap": "この月には{count}件の取引があり、カレンダーが表示できる{limit}件を超えています。フィルターを絞り込んで確認してください。",
+    "scheduledUnavailable": "今月の予定項目を読み込めませんでした。表示中の行は完全ですが、予定項目がありません。",
+    "scheduledTruncated": "これより先の予定項目の一部は表示されません。すべてを見るには今日に近づけてください。",
+    "balancesScopeEmpty": "対象となる口座がないため、表示する残高がありません。フィルターで口座を選択してください。",
+    "balancesMissingRates": "今月の一部の日について {pairs} の為替レートがないため、その合計は表示されません。通貨を開いてレートを更新してください。",
+    "balancesForecastGaps": "次の予定項目をまだ評価できないため、予測残高は表示されません: {schedules}。",
+    "balancesForecastWithheld": "予測残高は表示されません。少なくとも 1 件の予定項目をまだ評価できず、理由も報告されていません。",
+    "balancesUnforecastable": "{count, plural, other {対象の口座 # 件に固有の予測がないため、予測合計は表示されません。}}",
+    "valuesUnpriced": "今月の一部の日について {securities} の価格がないため、その評価額は表示されません。銘柄の価格履歴に価格を追加するか、価格を更新してください。",
+    "valuesMissingRates": "今月の一部の日について {pairs} の為替レートがないため、その評価額は表示されません。通貨を開いてレートを更新してください。",
+    "notesUnavailable": "今月のメモを読み込めませんでした。書いたメモは保存されたままです。"
+  },
+  "errors": {
+    "monthFailed": "この月を読み込めませんでした。",
+    "balancesFailed": "今月の残高を読み込めませんでした。",
+    "valuesFailed": "今月のポートフォリオ評価額を読み込めませんでした。",
+    "movementsFailed": "今月の日次変動を読み込めませんでした。",
+    "movementDetailFailed": "この日の内訳を読み込めませんでした。"
+  },
+  "balance": {
+    "actualTitle": "日末の残高",
+    "projectedTitle": "予測残高",
+    "projected": "予測",
+    "projectedHint": "本日末の残高と、この日までに予定されているすべての項目から予測しています。",
+    "projectedFromItems": "本日末の残高と、この日までに予定されているすべての項目（下に表示のものを含む）から予測しています。",
+    "partial": "一部のみ: 対象のうち {amount} は算出できましたが、残りは算出できないため、合計は表示されません。",
+    "missingRates": "この金額の基準日について {pairs} の為替レートがありません。通貨を開いてレートを更新してください。",
+    "unforecastable": "{count, plural, other {対象の口座 # 件に固有の予測がないため、予測合計は表示されません。}}"
+  },
+  "value": {
+    "title": "ポートフォリオ評価額",
+    "unpriced": "この日の {securities} の価格がないため、評価額は表示されません。銘柄の価格履歴に価格を追加するか、価格を更新してください。",
+    "missingRates": "この日の {pairs} の為替レートがないため、評価額は表示されません。通貨を開いてレートを更新してください。"
+  },
+  "change": {
+    "openDetail": "この日の変動内訳を表示",
+    "detailTitle": "{date} の変動",
+    "headline": "市場の変動",
+    "headlineValue": "{amount}（{percent}）",
+    "gains": "値上がり",
+    "losses": "値下がり",
+    "unchanged": "{count, plural, other {# 銘柄が変わらずで終了しました。}}",
+    "remainder": "現金・分配金・取引",
+    "row": "{quantity} 口、{from} から {to} {currency}",
+    "reasons": {
+      "notTradingDay": "この日は保有銘柄の価格が付かなかったため、報告する取引セッションがありません。",
+      "unpricedHolding": "この日または前日に価格のない保有があるため、変動は不明です。",
+      "missingRate": "為替レートが不足していたため、変動を換算できませんでした。",
+      "flowIncomplete": "この日の入金または出金を換算できなかったため、変動をそれと切り離せません。",
+      "cashIncomplete": "現金口座がこの日の残高を報告しなかったため、その日の評価額は不完全であり、変動は不明です。",
+      "noPriorValue": "この日と比較できる以前の評価額がありません。",
+      "zeroBaseline": "前日はポートフォリオが空だったため、算出できる割合がありません。"
+    }
+  },
+  "notes": {
+    "title": "メモ",
+    "add": "メモを追加",
+    "saveFailed": "メモを保存できませんでした。もう一度お試しください。",
+    "deleteFailed": "メモを削除できませんでした。もう一度お試しください。",
+    "deleteTitle": "このメモを削除しますか？",
+    "deleteMessage": "この日のメモが削除されます。元に戻すことはできません。",
+    "discardTitle": "このメモを破棄しますか？",
+    "discardMessage": "作成中のメモは保存されていません。この日から移動すると破棄されます。",
+    "discardConfirm": "破棄",
+    "startDate": "開始日",
+    "endDate": "終了日",
+    "spanRange": "{start} 〜 {end}",
+    "spanCount": "{count, plural, other {#日間}}",
+    "spanBackwards": "終了日を開始日より前にはできません。",
+    "spanTooLong": "1件のメモが対象にできるのは最大 {days} 日です。",
+    "spanMissesDay": "選択した期間に、このメモを書いている日が含まれていません。",
+    "deleteSpanMessage": "{count, plural, other {このメモは#日間にわたっており、そのすべてが削除されます。元に戻すことはできません。}}"
+  },
+  "monthPicker": {
+    "title": "別の月へ移動",
+    "typeLabel": "月または年を入力",
+    "placeholder": "例: 3月 1998、1998-03、3/1998",
+    "unreadable": "月として読み取れませんでした。年、月の名前、または 1998-03 をお試しください。",
+    "previousYear": "前の年",
+    "nextYear": "次の年"
+  }
+}

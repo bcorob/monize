@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor, fireEvent, act } from '@/test/render';
 import { UpcomingBillsReport } from './UpcomingBillsReport';
+import { formatDate } from '@/lib/utils';
 
 // Capture the push mock so tests can assert on it
 const mockPush = vi.fn();
@@ -10,15 +11,21 @@ vi.mock('next/navigation', () => ({
   useSearchParams: () => new URLSearchParams(),
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
-    formatCurrency: (n: number) => `$${n.toFixed(2)}`,
-    defaultCurrency: 'CAD',
-  }),
-}));
-
-vi.mock('@/lib/utils', () => ({
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
+      formatCurrency: (n: number) => `$${n.toFixed(2)}`,
+      defaultCurrency: 'CAD',
+    }),
+  };
+});
+// Partial mock: the report's date parsing is pinned here, but `cn` and the
+// rest of the module are the real ones -- the components in this tree use them.
+vi.mock('@/lib/utils', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/utils')>()),
   parseLocalDate: (d: string) => new Date(d + 'T00:00:00'),
 }));
 
@@ -548,6 +555,20 @@ describe('UpcomingBillsReport', () => {
       });
     });
 
+    it('labels an estimated occurrence as one (issue #2096)', async () => {
+      const st = makeTransaction({ nextDueDate: '2026-02-15', frequency: 'MONTHLY' });
+      mockGetAll.mockResolvedValue([st]);
+      mockGetOccurrences.mockResolvedValue([
+        { ...occurrencesFrom([st])[0], estimated: true },
+      ]);
+      render(<UpcomingBillsReport />);
+      await waitFor(() => expect(screen.getByText('List')).toBeInTheDocument());
+      fireEvent.click(screen.getByText('List'));
+      await waitFor(() => {
+        expect(screen.getByText('Estimated')).toBeInTheDocument();
+      });
+    });
+
     it('does not invent occurrences the server did not send', async () => {
       const st = makeTransaction({ nextDueDate: '2026-02-15', frequency: 'DAILY' });
       mockGetAll.mockResolvedValue([st]);
@@ -595,9 +616,10 @@ describe('UpcomingBillsReport', () => {
         expect(screen.getAllByText('$675').length).toBeGreaterThan(0);
       });
       expect(screen.getByText('$1350')).toBeInTheDocument();
-      // The moved date, not the recurrence slot it replaced.
-      expect(screen.getByText('Feb 20, 2026')).toBeInTheDocument();
-      expect(screen.queryByText('Feb 15, 2026')).not.toBeInTheDocument();
+      // The moved date, not the recurrence slot it replaced, in the reader's
+      // own date format.
+      expect(screen.getByText(formatDate('2026-02-20'))).toBeInTheDocument();
+      expect(screen.queryByText(formatDate('2026-02-15'))).not.toBeInTheDocument();
       // February's total is the overridden 675, not the template's 1350.
       const thisMonthCard = screen.getByText('This Month').parentElement!;
       expect(thisMonthCard).toHaveTextContent('$675');
@@ -778,7 +800,7 @@ describe('UpcomingBillsReport', () => {
       render(<UpcomingBillsReport />);
       // Should not throw; should render the shared error panel instead of an empty report.
       await waitFor(() => {
-        expect(screen.getByText('Try again')).toBeInTheDocument();
+        expect(screen.getByText('Try Again')).toBeInTheDocument();
       });
     });
   });

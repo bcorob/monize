@@ -7,6 +7,7 @@
     "filterAll": "Toutes ({count})",
     "filterExpenses": "Dépenses ({count})",
     "filterIncome": "Revenus ({count})",
+    "typeFilterLabel": "Type",
     "modalTitleNew": "Nouvelle catégorie",
     "modalTitleEdit": "Modifier la catégorie",
     "countSingle": "1 catégorie",
@@ -54,6 +55,12 @@
     "typeExpense": "Dépense",
     "typeIncome": "Revenu",
     "typeInherited": "Type hérité du parent",
+    "autoSignLabel": "Signe automatique",
+    "autoSignOn": "Activé",
+    "autoSignOff": "Désactivé",
+    "autoSignInherit": "Hériter du parent",
+    "autoSignInheritedFrom": "Hérité du parent ({name}) : actuellement {state}",
+    "autoSignHelp": "Lorsque cette option est activée, un montant saisi devient négatif pour une catégorie de dépenses et positif pour une catégorie de revenus. Désactivez-la pour conserver le signe exactement tel que vous le saisissez.",
     "colourLabel": "Couleur",
     "colourInherit": "Hériter du parent",
     "colourNone": "Aucune couleur",
@@ -65,8 +72,8 @@
     "submitUpdate": "Mettre à jour la catégorie"
   },
   "list": {
-    "emptyHeading": "Aucune catégorie",
-    "emptyDescription": "Commencez par créer une nouvelle catégorie.",
+    "emptyHeading": "Aucune catégorie trouvée",
+    "emptyDescription": "Aucune catégorie ne correspond à votre recherche ou à votre filtre actuel.",
     "colName": "Nom",
     "colType": "Type",
     "colCount": "Nombre",
@@ -79,7 +86,7 @@
     "viewTransactionsTitle": "Voir les transactions de cette catégorie"
   },
   "deleteDialog": {
-    "title": "Supprimer « {name} » ?",
+    "title": "Supprimer « {name} »",
     "checkingUsage": "Vérification de l'utilisation...",
     "usedBy": "Cette catégorie est utilisée par {count, plural, one {# élément} other {# éléments}} (transactions et/ou factures et dépôts récurrents).",
     "reassignLabel": "Réaffecter à :",

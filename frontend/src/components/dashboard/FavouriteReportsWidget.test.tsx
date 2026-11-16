@@ -127,11 +127,11 @@ describe('FavouriteReportsWidget', () => {
     expect(screen.getByText('Net Worth Over Time')).toBeInTheDocument();
   });
 
-  it('navigates to the Reports page from the title', async () => {
+  it('links the title to the Reports page', async () => {
     await renderWidget();
-    await act(async () => {
-      fireEvent.click(screen.getByText('Favourite Reports'));
-    });
-    expect(pushMock).toHaveBeenCalledWith('/reports');
+    expect(screen.getByRole('link', { name: 'Favourite Reports' })).toHaveAttribute(
+      'href',
+      '/reports',
+    );
   });
 });

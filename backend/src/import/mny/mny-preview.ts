@@ -73,6 +73,10 @@ export interface MnyPreviewCounts {
   readonly payeesInFile: number;
   readonly categoriesToCreate: number;
   readonly categoriesInFile: number;
+  /** Tags Money's classification items become; referenced items only. */
+  readonly tagsToCreate: number;
+  /** Classification items the file defines. 0 for a file with no classifications. */
+  readonly tagsInFile: number;
   readonly transactionsToCreate: number;
   readonly transfersToLink: number;
   readonly transactionsSkipped: number;
@@ -183,6 +187,8 @@ export function buildPreview(input: BuildPreviewInput): MnyPreview {
       payeesInFile: parsed.fileCounts.payees,
       categoriesToCreate: parsed.categories.categories.length,
       categoriesInFile: parsed.fileCounts.categories,
+      tagsToCreate: parsed.tags.tags.length,
+      tagsInFile: parsed.tags.inFile,
       transactionsToCreate: parsed.transactions.transactions.length,
       transfersToLink: parsed.transactions.transfersLinked,
       transactionsSkipped: parsed.transactions.skipped,

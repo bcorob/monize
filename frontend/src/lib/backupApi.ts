@@ -3,6 +3,7 @@ import { clearAllCache } from './apiCache';
 import { filenameFromContentDisposition } from './download';
 import {
   AutoBackupCapability,
+  AutoBackupRunResult,
   AutoBackupSettings,
   UpdateAutoBackupSettingsData,
 } from '@/types/auth';
@@ -58,6 +59,46 @@ export interface RestoreResult {
    * deducted from it. Absent when none.
    */
   unusableAiProviderKeys?: number;
+  /**
+   * Securities restored unlinked from their bond instrument because this
+   * server's catalog does not carry it (or carries it in another currency). The
+   * rows were written, so this stays outside `restored`; the user has to link
+   * them again. `symbols` is capped by the server (50), so it can be shorter
+   * than `count`. Absent when none.
+   */
+  unlinkedBondSecurities?: { count: number; symbols: string[] };
+  /**
+   * Bond transactions restored without their series because this server's
+   * catalog does not carry it. The rows were written, so this stays outside
+   * `restored`. Rows whose series could not be obtained keep no series.
+   * Absent when none.
+   */
+  unlinkedBondSeries?: { count: number };
+  /**
+   * The bond series the backup names that the restore could not get from the
+   * official source, with why. `series` is capped by the server (50), so it can
+   * be shorter than `count`. Outside `restored`. Absent when none.
+   */
+  unrecoveredBondSeries?: {
+    count: number;
+    series: { issuerCountryCode: string; seriesCode: string; reason: string }[];
+  };
+  /**
+   * Restored rows whose currency's kind on this server disagrees with them: an
+   * account whose type and currency kind disagree, a security priced in a
+   * cryptocurrency, a cryptocurrency as the reporting currency. The rows were
+   * written; the user repairs them. `accounts` (names) and `securities`
+   * (symbols) are capped by the server (50), so they can be shorter than
+   * `accountCount` / `securityCount`. Outside `restored`. Absent when nothing
+   * disagrees.
+   */
+  currencyKindMismatches?: {
+    accounts: string[];
+    accountCount: number;
+    securities: string[];
+    securityCount: number;
+    defaultCurrency: string | null;
+  };
 }
 
 export type SupportBackupSection =
@@ -151,6 +192,126 @@ async function normalizeBlobError(error: unknown): Promise<never> {
     }
   }
   throw error;
+}
+
+/**
+ * One automatic backup the server is holding for this user.
+ *
+ * `modifiedAt` is the file's own modification time on the server rather than
+ * the date inside its name: the name says which recovery point the artifact is
+ * and which retention tier keeps it, and a promoted weekly or monthly copy has
+ * the two disagree. What the reader is choosing between is files.
+ */
+export interface StoredBackup {
+  filename: string;
+  /** ISO-8601 modification time of the file on the server. */
+  modifiedAt: string;
+  /** Size in bytes. */
+  size: number;
+  /** True for an encrypted Monize envelope, which needs its password to restore. */
+  encrypted: boolean;
+  /**
+   * The newest off-site copy status for each destination this artifact has
+   * off-site rows for. Present only when the artifact has any such row, and a
+   * destination key is present only when that destination has a status for it.
+   * A destination with no key here has no status for this artifact, and its
+   * icon is not drawn. `null` is never a licence to guess a copy happened.
+   */
+  offsite?: {
+    s3?: BackupOffsiteUploadStatus;
+    email?: BackupOffsiteUploadStatus;
+  };
+}
+
+/**
+ * The listing, plus whether this user's automatic-backup schedule is armed.
+ *
+ * The schedule itself is configured on an admin-only endpoint, so a
+ * non-administrator cannot read it -- and they are exactly the people who need
+ * to know whether anything is backing their data up. The answer travels with
+ * the files it explains.
+ */
+export interface StoredBackupsReport {
+  enabled: boolean;
+  backups: StoredBackup[];
+}
+
+/** Which S3 destination a user's completed backups are copied to. */
+export type BackupOffsiteS3Mode = 'off' | 'deployment' | 'own';
+
+/** One configured target kind. A user may hold both at once (3-2-1). */
+export type BackupOffsiteDestination = 's3' | 'email';
+
+/**
+ * Where one off-machine copy has got to.
+ *
+ * Mirrors the backend's `BackupOffsiteUploadStatus`. `pending`/`uploading` are
+ * in flight, `uploaded` is verified, `failed` is retried by the reaper,
+ * `conflict` is a key already holding different bytes, and the two `skipped-*`
+ * values are copies deliberately not made.
+ */
+export type BackupOffsiteUploadStatus =
+  | 'pending'
+  | 'uploading'
+  | 'uploaded'
+  | 'failed'
+  | 'conflict'
+  | 'skipped-unencrypted'
+  | 'skipped-too-large';
+
+/**
+ * The caller's off-machine destinations, as the server is willing to describe
+ * them.
+ *
+ * The two stored credentials are **write-only**: the server reports whether
+ * each one is set and never its value, so `s3AccessKeyIdSet` /
+ * `s3SecretAccessKeySet` are the whole of what a form can know about them.
+ * `deploymentS3Available` and `encryptionConfigured` are facts about the
+ * deployment rather than the row, and they are here so the surface can say what
+ * this server can do before the user fills anything in.
+ */
+export interface BackupOffsiteSettingsView {
+  s3Mode: BackupOffsiteS3Mode;
+  s3Bucket: string | null;
+  s3Region: string | null;
+  s3Prefix: string | null;
+  s3Endpoint: string | null;
+  s3ForcePathStyle: boolean;
+  /** Whether an access key id is stored. Never its value. */
+  s3AccessKeyIdSet: boolean;
+  /** Whether a secret access key is stored. Never its value. */
+  s3SecretAccessKeySet: boolean;
+  emailEnabled: boolean;
+  emailTo: string | null;
+  /** Whether this deployment has a bucket of its own to offer. */
+  deploymentS3Available: boolean;
+  /** Whether this deployment can store a credential at all (ENCRYPTION_KEY). */
+  encryptionConfigured: boolean;
+}
+
+/**
+ * A change to those destinations. Every field is optional and the server
+ * applies only the ones present, so a caller sends what moved and nothing else.
+ *
+ * A blank credential string means "the form left this alone", never "forget the
+ * stored one" -- the value is never rendered back, so the input is empty on
+ * every load and an empty-means-clear reading would wipe a working destination
+ * on the next unrelated save. `clearS3Credentials` is the instruction to forget.
+ */
+export interface UpdateBackupOffsiteSettingsData {
+  s3Mode?: BackupOffsiteS3Mode;
+  s3Bucket?: string | null;
+  s3Region?: string | null;
+  s3Prefix?: string | null;
+  s3Endpoint?: string | null;
+  s3ForcePathStyle?: boolean;
+  /** Write-only; the server stores it encrypted and never returns it. */
+  s3AccessKeyId?: string;
+  /** Write-only; the server stores it encrypted and never returns it. */
+  s3SecretAccessKey?: string;
+  clearS3Credentials?: boolean;
+  emailEnabled?: boolean;
+  emailTo?: string | null;
 }
 
 export interface BackupEncryptionStatus {
@@ -355,6 +516,69 @@ export const backupApi = {
     return response.data;
   },
 
+  /**
+   * The automatic backups the server is holding for this user, newest first.
+   *
+   * Open to every signed-in account even though the schedule behind it is
+   * admin-only: the files are the caller's own data, and a user who cannot
+   * change the policy still has to be able to take and restore what it produced
+   * for them.
+   */
+  listStoredBackups: async (): Promise<StoredBackupsReport> => {
+    const response = await apiClient.get<StoredBackupsReport>(
+      '/backup/stored-backups',
+    );
+    return response.data;
+  },
+
+  /**
+   * One stored backup's bytes, as the file the server has on disk.
+   *
+   * Returned as a `File` rather than a `Blob` so it can go straight into
+   * `restoreBackup`, which reads the extension to decide whether the body is
+   * already compressed or an encrypted envelope -- the same decision it makes
+   * for a file the user picked themselves.
+   */
+  downloadStoredBackup: async (filename: string): Promise<File> => {
+    try {
+      const response = await apiClient.get(
+        `/backup/stored-backups/${encodeURIComponent(filename)}`,
+        { responseType: 'blob', timeout: 120000 },
+      );
+      return new File([response.data], filename);
+    } catch (error) {
+      return normalizeBlobError(error);
+    }
+  },
+
+  /**
+   * The caller's own off-machine destinations. Open to every signed-in account:
+   * a destination is a decision about this user's own data leaving the machine,
+   * not an operator setting like the schedule behind it.
+   */
+  getOffsiteSettings: async (): Promise<BackupOffsiteSettingsView> => {
+    const response = await apiClient.get<BackupOffsiteSettingsView>(
+      '/backup/offsite-settings',
+    );
+    return response.data;
+  },
+
+  /**
+   * Change one or more destinations. The server refuses (400) a destination it
+   * could not actually use -- no deployment bucket, an incomplete own bucket, no
+   * encryption key, email on with no address -- and names what to change, so the
+   * caller shows that message rather than a generic failure.
+   */
+  updateOffsiteSettings: async (
+    data: UpdateBackupOffsiteSettingsData,
+  ): Promise<BackupOffsiteSettingsView> => {
+    const response = await apiClient.patch<BackupOffsiteSettingsView>(
+      '/backup/offsite-settings',
+      data,
+    );
+    return response.data;
+  },
+
   getEncryptionStatus: async (): Promise<BackupEncryptionStatus> => {
     const response = await apiClient.get<BackupEncryptionStatus>(
       '/backup/encryption',
@@ -433,8 +657,15 @@ export const backupApi = {
     return response.data;
   },
 
-  runAutoBackup: async (): Promise<{ message: string; filename: string }> => {
-    const response = await apiClient.post<{ message: string; filename: string }>(
+  /**
+   * Back up every account on the deployment now.
+   *
+   * A fan-out, so the result counts accounts. `filename` is present only for
+   * the artifact written for the account that pressed the button -- one
+   * filename cannot describe a run over twelve accounts.
+   */
+  runAutoBackup: async (): Promise<AutoBackupRunResult> => {
+    const response = await apiClient.post<AutoBackupRunResult>(
       '/backup/run-auto-backup',
     );
     return response.data;

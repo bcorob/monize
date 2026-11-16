@@ -13,6 +13,8 @@ vi.mock('react-hot-toast', () => ({
 }));
 
 import { delegationApi } from '@/lib/delegation';
+import { INTRADAY_CACHE_PREFIX } from '@/components/investments/portfolio-chart-utils';
+import { LAST_TRANSACTION_DATE_KEY } from '@/lib/lastTransactionDate';
 
 const state: {
   isAuthenticated: boolean;
@@ -121,6 +123,78 @@ describe('DelegationBanner', () => {
     // Reload in place rather than bouncing to /dashboard so the
     // delegate stays on whatever page they were already viewing.
     expect(reloadMock).toHaveBeenCalledTimes(1);
+  });
+
+  // INV-SHARE-003: the reload keeps sessionStorage, so the owner's series
+  // would otherwise be drawn under the delegate's own context.
+  it('clears identity-scoped session storage before the reload', async () => {
+    state.availableContexts = [
+      { userId: 'u1', label: 'Me', isSelf: true, ownerHas2FA: false },
+      { userId: 'o1', label: 'Owner One', isSelf: false, ownerHas2FA: false },
+    ];
+    vi.mocked(delegationApi.getContexts).mockResolvedValue({
+      capabilities: null,
+      sections: null,
+      actingAsUserId: null,
+      contexts: state.availableContexts,
+    });
+    const intradayKey = `${INTRADAY_CACHE_PREFIX}u:u1|a:self|1d||USD`;
+    window.sessionStorage.setItem(intradayKey, '{"fetchedAt":1}');
+    window.sessionStorage.setItem(LAST_TRANSACTION_DATE_KEY, '{"savedAt":1}');
+    let presentAtReload: [string | null, string | null] | null = null;
+    reloadMock.mockImplementation(() => {
+      presentAtReload = [
+        window.sessionStorage.getItem(intradayKey),
+        window.sessionStorage.getItem(LAST_TRANSACTION_DATE_KEY),
+      ];
+    });
+    vi.mocked(delegationApi.switchContext).mockResolvedValue({
+      actingAsUserId: 'o1',
+    });
+
+    await act(async () => {
+      render(<DelegationBanner />);
+    });
+    await screen.findByText(/Viewing:/);
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Switch account'), {
+        target: { value: 'o1' },
+      });
+    });
+
+    await waitFor(() => expect(reloadMock).toHaveBeenCalledTimes(1));
+    expect(presentAtReload).toEqual([null, null]);
+  });
+
+  it('keeps identity-scoped session storage when the switch is refused', async () => {
+    state.availableContexts = [
+      { userId: 'u1', label: 'Me', isSelf: true, ownerHas2FA: false },
+      { userId: 'o1', label: 'Owner', isSelf: false, ownerHas2FA: true },
+    ];
+    vi.mocked(delegationApi.getContexts).mockResolvedValue({
+      capabilities: null,
+      sections: null,
+      actingAsUserId: null,
+      contexts: state.availableContexts,
+    });
+    vi.mocked(delegationApi.switchContext).mockRejectedValue({
+      response: { data: { message: 'DELEGATE_2FA_REQUIRED' } },
+    });
+    const key = `${INTRADAY_CACHE_PREFIX}u:u1|a:self|1d||USD`;
+    window.sessionStorage.setItem(key, 'x');
+
+    await act(async () => {
+      render(<DelegationBanner />);
+    });
+    await screen.findByText(/Viewing:/);
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Switch account'), {
+        target: { value: 'o1' },
+      });
+    });
+
+    await waitFor(() => expect(delegationApi.switchContext).toHaveBeenCalled());
+    expect(window.sessionStorage.getItem(key)).toBe('x');
   });
 
   it('auto-picks the only owner context for a pure delegate', async () => {

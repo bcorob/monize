@@ -1,9 +1,17 @@
 import { escapeHtml } from "../common/escape-html.util";
+import { tr } from "../i18n/translate";
+import { describeRedirectTarget, hostOf } from "./redirect-target";
 
 interface ConsentParams {
   uid: string;
   clientName: string;
   clientUri: string | null;
+  /**
+   * The redirect_uri of THIS authorization request, from the interaction's
+   * params (which the provider has already matched against the client's
+   * registered list). Never the client's metadata: that is self-asserted.
+   */
+  redirectUri: string | null;
   userEmail: string;
   scopes: string[];
   resource: string;
@@ -23,7 +31,15 @@ const SCOPE_LABELS: Record<string, { title: string; description: string }> = {
 };
 
 export function renderConsentPage(params: ConsentParams): string {
-  const { uid, clientName, clientUri, userEmail, scopes, resource } = params;
+  const {
+    uid,
+    clientName,
+    clientUri,
+    redirectUri,
+    userEmail,
+    scopes,
+    resource,
+  } = params;
 
   // Scopes are shown as a read-only list, not toggles: the OAuth client fixes
   // the requested scope set, and node-oidc-provider re-prompts indefinitely if
@@ -45,9 +61,49 @@ export function renderConsentPage(params: ConsentParams): string {
     })
     .join("\n");
 
-  const clientLink = clientUri
-    ? `<a href="${escapeHtml(clientUri)}" target="_blank" rel="noopener noreferrer">${escapeHtml(clientName)}</a>`
-    : escapeHtml(clientName);
+  // Clients register themselves (open Dynamic Client Registration), so the
+  // name and client_uri are whatever the registrant typed. The one fact this
+  // page can vouch for is where the authorization code will be delivered: the
+  // redirect_uri of this request. Show its origin prominently, and never let
+  // the self-asserted client_uri pose as that destination: it is plain text,
+  // and it is flagged when its host differs from the redirect host.
+  const clientLabel = escapeHtml(clientName);
+  const destination = describeRedirectTarget(redirectUri);
+  const destinationBlock = destination
+    ? `<div class="destination">
+      <p>${escapeHtml(tr("common.oauthConsent.destinationLabel", "If you allow access, Monize will send the authorization to:"))}</p>
+      <p class="origin">${escapeHtml(destination)}</p>
+    </div>`
+    : `<div class="destination warning">
+      <p>${escapeHtml(tr("common.oauthConsent.destinationUnknown", "Monize could not determine where this authorization would be sent. Do not allow access."))}</p>
+    </div>`;
+
+  const clientUriHost = hostOf(clientUri);
+  let clientUriBlock = "";
+  if (clientUri && clientUriHost && clientUriHost === hostOf(redirectUri)) {
+    clientUriBlock = `<p class="claimed">${escapeHtml(
+      tr(
+        "common.oauthConsent.claimedWebsite",
+        `Website stated by the application: ${clientUri}`,
+        { website: clientUri },
+      ),
+    )}</p>`;
+  } else if (clientUri) {
+    clientUriBlock = `<p class="notice mismatch">${escapeHtml(
+      tr(
+        "common.oauthConsent.websiteMismatch",
+        `The application says its website is ${clientUri}, but the authorization will be sent to a different address.`,
+        { website: clientUri },
+      ),
+    )}</p>`;
+  }
+
+  const unverifiedNotice = escapeHtml(
+    tr(
+      "common.oauthConsent.unverifiedNotice",
+      "This application registered itself with this Monize server, and Monize has not verified who operates it; its name is whatever it chose to call itself. Only allow access if you started this connection yourself from that application and the address above belongs to it.",
+    ),
+  );
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -55,7 +111,7 @@ export function renderConsentPage(params: ConsentParams): string {
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <meta name="robots" content="noindex" />
-<title>Authorize ${escapeHtml(clientName)} — Monize</title>
+<title>Authorize ${clientLabel} — Monize</title>
 <style>
   :root {
     --primary: #0284c7;
@@ -68,6 +124,9 @@ export function renderConsentPage(params: ConsentParams): string {
     --meta-bg: #f1f5f9;
     --secondary-bg: #ffffff;
     --secondary-hover: #f1f5f9;
+    --warn-bg: #fffbeb;
+    --warn-border: #f59e0b;
+    --warn-text: #78350f;
   }
   /* Track the OS-level theme. The wider Monize app supports an explicit
      three-way (light / dark / system) preference, but the consent page
@@ -86,6 +145,9 @@ export function renderConsentPage(params: ConsentParams): string {
       --meta-bg: #111827;
       --secondary-bg: #1f2937;
       --secondary-hover: #374151;
+      --warn-bg: #422006;
+      --warn-border: #d97706;
+      --warn-text: #fde68a;
     }
   }
   * { box-sizing: border-box; }
@@ -144,6 +206,34 @@ export function renderConsentPage(params: ConsentParams): string {
   button.primary:hover { background: var(--primary-hover); }
   button.secondary { background: var(--secondary-bg); color: var(--text); border: 1px solid var(--border); }
   button.secondary:hover { background: var(--secondary-hover); }
+  .destination {
+    border: 2px solid var(--primary);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-bottom: 12px;
+    font-size: 13px;
+  }
+  .destination p { margin: 0; }
+  .destination .origin {
+    margin-top: 6px;
+    font-size: 16px;
+    font-weight: 700;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    word-break: break-all;
+  }
+  .warning, .notice {
+    border: 1px solid var(--warn-border);
+    background: var(--warn-bg);
+    color: var(--warn-text);
+  }
+  .notice {
+    border-radius: 8px;
+    padding: 10px 12px;
+    font-size: 13px;
+    margin: 0 0 12px;
+    word-break: break-word;
+  }
+  .claimed { font-size: 12px; color: var(--muted); margin: 0 0 12px; word-break: break-all; }
   .user { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
   .brand { font-size: 14px; font-weight: 600; color: var(--primary); margin-bottom: 16px; }
 </style>
@@ -151,8 +241,11 @@ export function renderConsentPage(params: ConsentParams): string {
 <body>
   <main class="card">
     <div class="brand">Monize</div>
-    <h1>Authorize ${clientLink}</h1>
-    <p class="subtitle">${clientLink} is requesting access to your Monize account.</p>
+    <h1>Authorize ${clientLabel}</h1>
+    <p class="subtitle">${clientLabel} is requesting access to your Monize account.</p>
+    ${destinationBlock}
+    <p class="notice">${unverifiedNotice}</p>
+    ${clientUriBlock}
     <p class="user">Signed in as <strong>${escapeHtml(userEmail)}</strong></p>
 
     <form method="POST" action="/api/v1/oauth-consent/${escapeHtml(uid)}/confirm" autocomplete="off">

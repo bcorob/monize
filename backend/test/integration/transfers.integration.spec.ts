@@ -136,6 +136,136 @@ describe("TransactionsService transfers (integration)", () => {
     });
   });
 
+  /**
+   * The generic row update is not a transfer route (A26-M10, MON-H11 server
+   * residual). A transfer leg's amount, account, date or rate is a property of
+   * the PAIR, so `update()` refuses a change to it on one leg rather than
+   * writing that leg alone; presentational fields, and an unchanged figure
+   * re-sent by a form, stay accepted.
+   */
+  describe("update() on a transfer leg", () => {
+    const amounts = async (ids: string[]) => {
+      const rows = await dataSource.manager.find(Transaction, {
+        where: ids.map((id) => ({ id })),
+      });
+      return Object.fromEntries(rows.map((r) => [r.id, Number(r.amount)]));
+    };
+    const balances = async () => {
+      const from = await dataSource.manager.findOne(Account, {
+        where: { id: fromAccountId },
+      });
+      const to = await dataSource.manager.findOne(Account, {
+        where: { id: toAccountId },
+      });
+      return [Number(from!.currentBalance), Number(to!.currentBalance)];
+    };
+    const createPair = () =>
+      withUserContext(userId, () =>
+        service.createTransfer(userId, {
+          fromAccountId,
+          toAccountId,
+          transactionDate: "2026-01-15",
+          amount: 100,
+          fromCurrencyCode: "USD",
+        }),
+      );
+
+    it.each(["fromTransaction", "toTransaction"] as const)(
+      "refuses an amount change on the %s leg and writes nothing",
+      async (leg) => {
+        const pair = await createPair();
+        const ids = [pair.fromTransaction.id, pair.toTransaction.id];
+
+        await expect(
+          withUserContext(userId, () =>
+            service.update(userId, pair[leg].id, { amount: 150 }),
+          ),
+        ).rejects.toThrow(/Transfers can't be edited here/);
+
+        expect(await amounts(ids)).toEqual({ [ids[0]]: -100, [ids[1]]: 100 });
+        expect(await balances()).toEqual([4900, 2100]);
+      },
+    );
+
+    it("refuses moving one leg to another account", async () => {
+      const pair = await createPair();
+      const other = await createTestAccount(dataSource, userId, {
+        name: "Other",
+        openingBalance: 0,
+        currentBalance: 0,
+      });
+
+      await expect(
+        withUserContext(userId, () =>
+          service.update(userId, pair.toTransaction.id, {
+            accountId: other.id,
+          }),
+        ),
+      ).rejects.toThrow(/Transfers can't be edited here/);
+
+      const leg = await dataSource.manager.findOne(Transaction, {
+        where: { id: pair.toTransaction.id },
+      });
+      expect(leg!.accountId).toBe(toAccountId);
+    });
+
+    it("refuses an amount change on a split-transfer leg", async () => {
+      const parentId = "ffffffff-0000-4000-8000-0000000000a1";
+      const legId = "00000000-0000-4000-8000-0000000000a1";
+      await dataSource.query(
+        `INSERT INTO transactions
+           (id, user_id, account_id, transaction_date, amount, currency_code,
+            exchange_rate, is_split, is_transfer, status)
+         VALUES ($1, $2, $3, DATE '2026-01-15', -100, 'USD', 1, true, false,
+                 'UNRECONCILED')`,
+        [parentId, userId, fromAccountId],
+      );
+      await dataSource.query(
+        `INSERT INTO transactions
+           (id, user_id, account_id, transaction_date, amount, currency_code,
+            exchange_rate, is_split, is_transfer, status, linked_transaction_id)
+         VALUES ($1, $2, $3, DATE '2026-01-15', 100, 'USD', 1, false, true,
+                 'UNRECONCILED', $4)`,
+        [legId, userId, toAccountId, parentId],
+      );
+      await dataSource.query(
+        `INSERT INTO transaction_splits
+           (id, transaction_id, kind, amount, transfer_account_id,
+            linked_transaction_id)
+         VALUES ($1, $2, 'transfer', -100, $3, $4)`,
+        ["aaaaaaaa-1111-4000-8000-0000000000a1", parentId, toAccountId, legId],
+      );
+
+      await expect(
+        withUserContext(userId, () =>
+          service.update(userId, legId, { amount: 150 }),
+        ),
+      ).rejects.toThrow(/Transfers can't be edited here/);
+
+      expect(await amounts([parentId, legId])).toEqual({
+        [parentId]: -100,
+        [legId]: 100,
+      });
+    });
+
+    it("accepts a description edit that re-sends the unchanged figures", async () => {
+      const pair = await createPair();
+
+      const saved = await withUserContext(userId, () =>
+        service.update(userId, pair.toTransaction.id, {
+          amount: 100,
+          accountId: toAccountId,
+          transactionDate: "2026-01-15",
+          exchangeRate: 1,
+          description: "Rent float",
+        }),
+      );
+
+      expect(saved.description).toBe("Rent float");
+      expect(await balances()).toEqual([4900, 2100]);
+    });
+  });
+
   describe("removeTransfer()", () => {
     it("should delete both transactions and reverse both balances", async () => {
       const result = await withUserContext(userId, () =>
@@ -215,7 +345,7 @@ describe("TransactionsService transfers (integration)", () => {
         `INSERT INTO transaction_splits
            (id, transaction_id, kind, amount, transfer_account_id,
             linked_transaction_id)
-         VALUES ($1, $2, 'TRANSFER', -100, $3, $4)`,
+         VALUES ($1, $2, 'transfer', -100, $3, $4)`,
         [SPLIT_ID, PARENT_ID, toAccountId, LEG_ID],
       );
     });
@@ -274,7 +404,7 @@ describe("TransactionsService transfers (integration)", () => {
             `INSERT INTO transaction_splits
                (id, transaction_id, kind, amount, transfer_account_id,
                 linked_transaction_id)
-             VALUES ($1, $2, 'TRANSFER', -100, $3, $4)`,
+             VALUES ($1, $2, 'transfer', -100, $3, $4)`,
             [SPLIT_ID, PARENT_ID, toAccountId, LEG_ID],
           );
         }

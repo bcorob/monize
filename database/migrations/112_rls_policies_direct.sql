@@ -22,7 +22,7 @@
 -- NULL (not true), and the row is filtered out. Missing context yields zero
 -- rows, never an open door.
 --
--- See docs/future-plans/row-level-security.md (Phase 3).
+-- See docs/specs/row-level-security.md (Phase 3).
 
 -- ---------------------------------------------------------------------------
 -- Group A: keyed by the EFFECTIVE user (26 tables)
@@ -72,6 +72,22 @@ DECLARE
     ];
 BEGIN
     FOREACH t IN ARRAY direct_tables LOOP
+        -- A name in this list can be renamed by a later migration, and this file
+        -- is replayed on top of schema.sql on every boot and in CI -- where the
+        -- old name is simply gone and the format() below would abort the whole
+        -- replay. budget_alerts became notifications in migration 179, which
+        -- re-creates this exact policy under the new name, so skipping is not a
+        -- policy left off: on a database old enough for the old name to still be
+        -- here, the loop runs as it always did.
+        --
+        -- What this gives up is a typo in the array above failing loudly. The
+        -- array is a frozen historical list, and the other loud failure -- the
+        -- policy expression below being validated against the table, so one
+        -- without a user_id column is rejected -- is untouched.
+        IF to_regclass('public.' || t) IS NULL THEN
+            RAISE NOTICE 'table % no longer exists under that name -- skipping its policy', t;
+            CONTINUE;
+        END IF;
         EXECUTE format('DROP POLICY IF EXISTS %I ON %I', t || '_isolation', t);
         EXECUTE format(
             'CREATE POLICY %I ON %I

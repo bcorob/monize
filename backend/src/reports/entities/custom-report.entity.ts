@@ -67,6 +67,8 @@ export enum TableColumn {
   MEMO = "MEMO",
   CATEGORY = "CATEGORY",
   ACCOUNT = "ACCOUNT",
+  ACCOUNT_AMOUNT = "ACCOUNT_AMOUNT",
+  ORIGINAL_AMOUNT = "ORIGINAL_AMOUNT",
 }
 
 // Sort direction

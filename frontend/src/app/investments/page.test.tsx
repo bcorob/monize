@@ -225,7 +225,8 @@ vi.mock('@/components/layout/PageLayout', () => ({
   PageLayout: ({ children }: { children: React.ReactNode }) => <div data-testid="page-layout">{children}</div>,
 }));
 
-vi.mock('@/components/ui/Button', () => ({
+vi.mock('@/components/ui/Button', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/components/ui/Button')>()),
   Button: ({ children, onClick, disabled, ...rest }: any) => (
     <button onClick={onClick} disabled={disabled} {...rest}>{children}</button>
   ),
@@ -300,7 +301,7 @@ vi.mock('@/components/investments/InvestmentTransactionList', () => ({
           <button data-testid={`edit-${t.id}`} onClick={() => onEdit(t)}>Edit</button>
         </div>
       ))}
-      <button data-testid="new-tx-btn" onClick={onNewTransaction}>New</button>
+      {onNewTransaction && <button data-testid="new-tx-btn" onClick={onNewTransaction}>New</button>}
       <button data-testid="clear-filters" onClick={() => onFiltersChange({})}>Clear Filters</button>
       <button data-testid="set-symbol-filter" onClick={() => onFiltersChange({ symbol: 'AAPL' })}>Filter AAPL</button>
       {filters?.symbol && <span data-testid="symbol-filter">{filters.symbol}</span>}
@@ -311,7 +312,7 @@ vi.mock('@/components/investments/InvestmentTransactionList', () => ({
 vi.mock('@/components/transactions/TransactionList', () => ({
   // `onRefresh` is how the real list reports a row it has already deleted (and
   // any other write it owns), so the mock's Delete button raises exactly that
-  // and nothing else -- see the delete-contract note in frontend/CLAUDE.md.
+  // and nothing else -- see the delete-contract note in docs/frontend/tables-and-registers.md.
   TransactionList: ({ transactions, onEdit, onRefresh, showToolbar, startingBalance, isSingleAccountView }: any) => (
     <div data-testid="cash-transaction-list">
       <span>{transactions.length} cash transactions</span>
@@ -340,11 +341,35 @@ vi.mock('@/components/investments/InvestmentTransactionForm', () => ({
   InvestmentTransactionForm: () => <div data-testid="transaction-form">Form</div>,
 }));
 
+// The page asks for the "Portfolio performance" batch once and hands the one
+// answer to the card and to the value chart (#1888).
+const mockPeriodResults = vi.hoisted(() => ({
+  results: { currency: 'CAD', asOf: '2026-10-27', periods: {} },
+  status: 'ready' as const,
+}));
+const mockUsePortfolioPeriodResults = vi.hoisted(() =>
+  vi.fn((_options: unknown) => mockPeriodResults),
+);
+vi.mock('@/hooks/usePortfolioPeriodResults', () => ({
+  usePortfolioPeriodResults: mockUsePortfolioPeriodResults,
+}));
+
+vi.mock('@/components/investments/PortfolioPerformanceCard', () => ({
+  PortfolioPerformanceCard: ({ accountIds, reloadKey, periodResults }: any) => (
+    <div data-testid="portfolio-performance">
+      {accountIds?.length > 0 ? `Filtered: ${accountIds.join(',')}` : 'All accounts'}
+      <span data-testid="performance-reload-key">{String(reloadKey ?? '')}</span>
+      <span data-testid="performance-shared">{String(periodResults === mockPeriodResults)}</span>
+    </div>
+  ),
+}));
+
 vi.mock('@/components/investments/InvestmentValueChart', () => ({
-  InvestmentValueChart: ({ accountIds, refreshKey }: any) => (
+  InvestmentValueChart: ({ accountIds, refreshKey, periodResults }: any) => (
     <div data-testid="value-chart">
       {accountIds?.length > 0 ? `Filtered: ${accountIds.join(',')}` : 'All accounts'}
       <span data-testid="value-chart-refresh-key">{String(refreshKey ?? '')}</span>
+      <span data-testid="value-chart-shared">{String(periodResults === mockPeriodResults)}</span>
     </div>
   ),
   INVESTMENT_CHART_REFRESH_EVENT: 'monize:investment-chart-refresh',
@@ -415,6 +440,12 @@ describe('InvestmentsPage', () => {
       });
     });
 
+    it('no longer links to the Treasury bonds page (it lives under Securities)', async () => {
+      await renderPage();
+      await screen.findByText('Investments');
+      expect(screen.queryByRole('link', { name: 'Treasury bonds' })).not.toBeInTheDocument();
+    });
+
     it('renders within page layout', async () => {
       await renderPage();
       await waitFor(() => {
@@ -434,6 +465,48 @@ describe('InvestmentsPage', () => {
       await waitFor(() => {
         expect(screen.getByTestId('asset-allocation-chart')).toBeInTheDocument();
       });
+    });
+
+    /**
+     * The hierarchy the page reads in: what the portfolio is worth beside how
+     * it is spread, then the value series beside what the investments earned
+     * from it. Each pair shares ONE grid row, so the reader compares them side
+     * by side instead of scrolling past one to reach the other.
+     */
+    it('pairs summary with allocation, and the value chart with performance', async () => {
+      await renderPage();
+      await waitFor(() => {
+        expect(screen.getByTestId('portfolio-performance')).toBeInTheDocument();
+      });
+
+      const summary = screen.getByTestId('portfolio-summary');
+      const allocation = screen.getByTestId('asset-allocation-chart');
+      const chart = screen.getByTestId('value-chart');
+      const performance = screen.getByTestId('portfolio-performance');
+      expect(
+        summary.compareDocumentPosition(allocation) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(
+        allocation.compareDocumentPosition(chart) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+      expect(
+        chart.compareDocumentPosition(performance) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+
+      // Two grid containers, not four stacked rows. jsdom computes no layout,
+      // so the shared parent and its track list are what can be asserted; the
+      // performance card is the narrow right-hand column beside the chart.
+      const topRow = summary.parentElement!;
+      expect(allocation.parentElement).toBe(topRow);
+      expect(topRow.className).toContain('lg:grid-cols-2');
+
+      const chartRow = chart.parentElement!;
+      expect(performance.parentElement).toBe(chartRow);
+      expect(chartRow).not.toBe(topRow);
+      expect(chartRow.className).toContain('lg:grid-cols-[3fr_1fr]');
     });
 
     it('renders investment value chart', async () => {
@@ -514,6 +587,21 @@ describe('InvestmentsPage', () => {
       });
     });
 
+    it('asks for the performance batch once and hands it to the card and the chart', async () => {
+      await renderPage();
+      await waitFor(() => {
+        expect(screen.getByTestId('performance-shared')).toHaveTextContent('true');
+        expect(screen.getByTestId('value-chart-shared')).toHaveTextContent('true');
+      });
+      expect(mockUsePortfolioPeriodResults).toHaveBeenCalledWith(
+        expect.objectContaining({
+          periods: '1d,1w,1m,3m,ytd,1y,2y,5y,10y,all',
+          accountIds: undefined,
+          displayCurrency: undefined,
+        }),
+      );
+    });
+
     it('handles portfolio summary load failure gracefully', async () => {
       mockGetPortfolioSummary.mockRejectedValue(new Error('Failed'));
       await renderPage();
@@ -559,6 +647,29 @@ describe('InvestmentsPage', () => {
       await waitFor(() => {
         // sec-3 (qty=0) should be excluded, only sec-1 and sec-2
         expect(mockRefreshSelectedPrices).toHaveBeenCalledWith(['sec-1', 'sec-2']);
+      });
+    });
+
+    // Issue #1617: the chart and the period-result cards fetch their own
+    // figures and only re-ask when this key moves, so a refresh that left it
+    // alone kept the pre-refresh Value change and Portfolio performance on
+    // screen until a full page reload.
+    it('bumps the chart and performance card reload keys after a price refresh', async () => {
+      mockRefreshSelectedPrices.mockResolvedValue({
+        updated: 2, failed: 0, results: [], lastUpdated: '2026-02-14T12:00:00Z',
+      });
+      await renderPage();
+      await waitFor(() => expect(screen.getByText(/Refresh/)).toBeInTheDocument());
+      const chartKeyBefore = screen.getByTestId('value-chart-refresh-key').textContent;
+      const performanceKeyBefore = screen.getByTestId('performance-reload-key').textContent;
+
+      await act(async () => {
+        fireEvent.click(screen.getByText(/Refresh/));
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId('value-chart-refresh-key').textContent).not.toBe(chartKeyBefore);
+        expect(screen.getByTestId('performance-reload-key').textContent).not.toBe(performanceKeyBefore);
       });
     });
 
@@ -877,15 +988,12 @@ describe('InvestmentsPage', () => {
   });
 
   describe('New Transaction from list', () => {
-    it('opens create form when new transaction button clicked in list', async () => {
+    it('offers no second New button in the list: the PageHeader one is the only primary', async () => {
       await renderPage();
       await waitFor(() => {
-        expect(screen.getByTestId('new-tx-btn')).toBeInTheDocument();
+        expect(screen.getByTestId('transaction-list')).toBeInTheDocument();
       });
-
-      fireEvent.click(screen.getByTestId('new-tx-btn'));
-
-      expect(mockOpenCreate).toHaveBeenCalled();
+      expect(screen.queryByTestId('new-tx-btn')).not.toBeInTheDocument();
     });
   });
 

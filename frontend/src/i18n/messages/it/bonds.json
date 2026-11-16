@@ -1,0 +1,100 @@
+{
+  "entry": {
+    "history": "Storico delle condizioni di {program}"
+  },
+  "offer": {
+    "loading": "Caricamento delle obbligazioni in vendita...",
+    "loadFailed": "Impossibile caricare le obbligazioni in vendita.",
+    "retry": "Riprova",
+    "empty": "Oggi nessuna serie è in vendita.",
+    "asOf": "In vendita il {date}. Ogni cifra si riferisce a un'obbligazione acquistata oggi e tenuta fino alla scadenza.",
+    "comparisonNote": "Il rendimento annualizzato è una cifra di confronto tra prodotti di durata diversa, non una promessa di guadagno.",
+    "couponsNote": "Cedole non reinvestite: per un'obbligazione che paga cedole, il valore a scadenza somma tutte le cedole pagate.",
+    "projected": "Proiettato",
+    "projectedTitle": "Questa cifra si basa su un valore di riferimento ipotizzato, non solo su tassi pubblicati.",
+    "assumptions": {
+      "title": "Ipotesi",
+      "intro": "I periodi che non sono ancora iniziati sono valutati con questi valori di riferimento. Modificane uno per vedere l'effetto su ogni riga.",
+      "label": "{benchmark} (%)",
+      "latest": "Ultimo valore pubblicato: {value} ({observation})",
+      "reset": "Usa gli ultimi valori pubblicati",
+      "updating": "Aggiornamento delle cifre..."
+    },
+    "columns": {
+      "series": "Serie",
+      "saleWindow": "In vendita",
+      "length": "Durata",
+      "firstPeriodRate": "Primo periodo",
+      "rule": "Tasso",
+      "capitalization": "Interessi",
+      "redemption": "Rimborso anticipato",
+      "maturityValue": "Valore a scadenza",
+      "totalReturn": "Rendimento totale",
+      "annualizedReturn": "Rendimento annualizzato",
+      "terms": "Condizioni"
+    },
+    "saleWindowValue": "Dal {from} al {to}",
+    "lengthValue": "{months, plural, one {# mese} other {# mesi}}",
+    "lengthDaysValue": "{days, plural, one {# giorno} other {# giorni}}",
+    "rule": {
+      "fixed": "Fisso {rate} annuo",
+      "benchmark": "{benchmark} + {addend}",
+      "floor": "Minimo del parametro {floor}",
+      "daily": "Giornaliero: {benchmark} + {addend}",
+      "discount": "Sconto sul valore nominale"
+    },
+    "capitalization": {
+      "NONE": "Pagati a ogni periodo",
+      "COMPOUND_AT_PERIOD_END": "Capitalizzati alla fine di ogni periodo"
+    },
+    "redemption": {
+      "none": "Solo a scadenza",
+      "onDemand": "A richiesta",
+      "fee": "Commissione di {amount} per obbligazione",
+      "forfeit": "Gli interessi maturati nel periodo vengono persi"
+    },
+    "couponsNotReinvested": "Cedole non reinvestite"
+  },
+  "history": {
+    "loading": "Caricamento dello storico...",
+    "loadFailed": "Impossibile caricare lo storico.",
+    "retry": "Riprova",
+    "empty": "Non è ancora salvata alcuna serie di questo prodotto.",
+    "coverage": "Il catalogo copre da {from} a {to}.",
+    "rateChartTitle": "Tasso del primo periodo e margine per mese di vendita",
+    "feeChartTitle": "Commissione di rimborso anticipato per mese di vendita",
+    "rate": "Tasso del primo periodo",
+    "rateChartNote": "Per le obbligazioni a tasso fisso la linea mostra il tasso annuo.",
+    "addend": "Margine o spread",
+    "fee": "Commissione di rimborso anticipato",
+    "gapsNote": "Un mese senza serie salvata è un'interruzione della linea, mai un valore ricavato dai mesi vicini.",
+    "missingTitle": "Mesi mancanti dal catalogo ({count})",
+    "noMissing": "Tra la prima e l'ultima serie salvata non manca alcun mese.",
+    "tableTitle": "Tutte le serie salvate",
+    "groupCount": "{count} serie",
+    "unknownYear": "Data di vendita sconosciuta",
+    "columns": {
+      "series": "Serie",
+      "saleWindow": "In vendita",
+      "rate": "Tasso del primo periodo o tasso annuo",
+      "addend": "Margine o spread",
+      "fee": "Commissione di rimborso anticipato",
+      "floor": "Minimo dell'importo rimborsato",
+      "version": "Versione delle condizioni",
+      "source": "Fonte"
+    },
+    "floor": {
+      "ALL_PERIODS": "Ogni periodo",
+      "FIRST_PERIOD": "Solo il primo periodo"
+    },
+    "none": "Nessuno",
+    "held": "Posseduta"
+  },
+  "refreshProgress": {
+    "label": "Aggiornamento dei dati dell'obbligazione",
+    "offer": "Verifica dell'offerta attuale…",
+    "series": "Recupero della serie {done} di {total}: {seriesCode}",
+    "historyComplete": "Lo storico è completo",
+    "starting": "Avvio…"
+  }
+}

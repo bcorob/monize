@@ -18,38 +18,102 @@ import {
 import { builtInReportsApi } from "@/lib/built-in-reports";
 import { YearData } from "@/types/built-in-reports";
 import { useNumberFormat } from "@/hooks/useNumberFormat";
+import { useChartDateFormat } from "@/hooks/useChartDateFormat";
 import { useSortableTable, compareValues } from "@/hooks/useSortableTable";
-import { chartColors, chartSeriesColor } from "@/lib/chart-colors";
+import { chartSeriesColor } from "@/lib/chart-colors";
 import { resolvePdfColor } from "@/components/reports/resolve-pdf-color";
+import { ReportToolbarActions } from '@/components/reports/ReportToolbarActions';
 import { ChartViewToggle } from "@/components/ui/ChartViewToggle";
-import { ExportDropdown } from "@/components/ui/ExportDropdown";
 import { SortableHeader } from "@/components/ui/SortableHeader";
+import { TH_CLASS, Th } from "@/components/ui/Table";
 import { exportToCsv } from "@/lib/csv-export";
 import { useReportData } from "@/hooks/useReportData";
 import { ReportError } from "@/components/reports/ReportError";
+import { PartialDataNotice } from "@/components/reports/PartialDataNotice";
+import { PartialTotal } from "@/components/ui/PartialTotal";
+import { UnknownAmount } from "@/components/ui/UnknownAmount";
+import { reportTotal, type ConvertedTotal } from "@/lib/currency-total";
+import { CHART_GRID_PROPS, CHART_TOOLTIP_CLASS } from '@/lib/chart-style';
 
 type YearOverYearSortField = string; // 'name' or any year as a string
 
-const MONTH_NAMES = [
-  "Jan",
-  "Feb",
-  "Mar",
-  "Apr",
-  "May",
-  "Jun",
-  "Jul",
-  "Aug",
-  "Sep",
-  "Oct",
-  "Nov",
-  "Dec",
-];
+type YearMetric = "income" | "expenses" | "savings";
+
+/** The `known*` sibling the server sends beside each year total. */
+const KNOWN_FIELD = {
+  income: "knownIncome",
+  expenses: "knownExpenses",
+  savings: "knownSavings",
+} as const;
+
+/**
+ * One year's figure for one metric: the part that converted, whether the server
+ * knew the whole, and what to mark it with. A year's total is `null` when a row
+ * of THAT year could not be converted, and another year's gap does not blank
+ * it -- so a change between two years is a number only when both are known.
+ */
+interface YearMetricTotal {
+  /** False when the server withheld the total (`null`). */
+  known: boolean;
+  total: ConvertedTotal;
+}
+
+/**
+ * The transactions range a clicked month bar links to, or `null` when the datum
+ * does not name a month.
+ *
+ * `payload` is optional on recharts' `BarRectangleItem`, so a click can arrive
+ * without one and `Number(undefined)` is NaN -- which passes a bare
+ * `< 0 || > 11` range check and makes `new Date(year, NaN, 1)` an Invalid Date
+ * that `format` throws on. `Number.isInteger` rejects it. Exported because the
+ * throw happens inside a React event handler, where the test harness swallows
+ * it: only a direct call can hold this rule.
+ */
+export function monthClickRange(
+  year: number,
+  monthIndex: number,
+): { startDate: string; endDate: string } | null {
+  if (!Number.isInteger(monthIndex) || monthIndex < 0 || monthIndex > 11) {
+    return null;
+  }
+  return {
+    startDate: `${year}-${String(monthIndex + 1).padStart(2, "0")}-01`,
+    endDate: format(endOfMonth(new Date(year, monthIndex, 1)), "yyyy-MM-dd"),
+  };
+}
+
+interface YearOverYearTooltipProps {
+  active?: boolean;
+  payload?: Array<{ name: string; value: number; color: string }>;
+  label?: string;
+  formatCurrency: (value: number) => string;
+}
+
+function YearOverYearTooltip({ active, payload, label, formatCurrency }: YearOverYearTooltipProps) {
+  if (active && payload && payload.length) {
+    return (
+      <div className={CHART_TOOLTIP_CLASS}>
+        <p className="font-medium text-gray-900 dark:text-gray-100 mb-1">
+          {label}
+        </p>
+        {payload.map((entry, index) => (
+          <p key={index} className="text-sm" style={{ color: entry.color }}>
+            {entry.name}: {formatCurrency(entry.value)}
+          </p>
+        ))}
+      </div>
+    );
+  }
+  return null;
+}
 
 export function YearOverYearReport() {
   const t = useTranslations('reports');
   const router = useRouter();
-  const { formatCurrencyCompact: formatCurrency, formatCurrencyAxis, formatSignedPercent } =
+  const { formatCurrencyCompact: formatCurrency, formatCurrencyAxis, formatSignedPercent, defaultCurrency } =
     useNumberFormat();
+  const tCommon = useTranslations('common');
+  const formatChartDate = useChartDateFormat();
   const chartRef = useRef<HTMLDivElement>(null);
   const [yearsToCompare, setYearsToCompare] = useState(2);
   const [metric, setMetric] = useState<"expenses" | "income" | "savings">(
@@ -71,9 +135,10 @@ export function YearOverYearReport() {
   const years = useMemo(() => yearData.map((yd) => yd.year), [yearData]);
 
   const chartData = useMemo(() => {
-    return MONTH_NAMES.map((monthName, monthIndex) => {
-      const data: { name: string; [key: string]: number | string } = {
-        name: monthName,
+    return Array.from({ length: 12 }, (_, monthIndex) => {
+      const data: { name: string; monthIndex: number; [key: string]: number | string } = {
+        name: formatChartDate(new Date(2000, monthIndex, 1), 'MMM'),
+        monthIndex,
       };
 
       yearData.forEach((yd) => {
@@ -87,7 +152,7 @@ export function YearOverYearReport() {
 
       return data;
     });
-  }, [yearData, metric]);
+  }, [yearData, metric, formatChartDate]);
 
   const sortedTableData = useMemo(() => {
     const sorted = [...chartData];
@@ -95,9 +160,7 @@ export function YearOverYearReport() {
       let comparison = 0;
       if (sortField === 'name') {
         // Default to calendar order for the month column
-        const ai = MONTH_NAMES.indexOf(a.name);
-        const bi = MONTH_NAMES.indexOf(b.name);
-        comparison = compareValues(ai, bi);
+        comparison = compareValues(a.monthIndex, b.monthIndex);
       } else {
         comparison = compareValues(a[sortField] as number, b[sortField] as number);
       }
@@ -107,31 +170,44 @@ export function YearOverYearReport() {
   }, [chartData, sortField, sortDirection]);
 
   const yearTotals = useMemo(() => {
-    const totals: Record<
-      number,
-      { income: number; expenses: number; savings: number }
-    > = {};
+    const totals: Record<number, Record<YearMetric, YearMetricTotal>> = {};
+    const metricOf = (yd: YearData, m: YearMetric): YearMetricTotal => {
+      const exact = yd.totals[m];
+      // A total the server withheld is shown as the part that converted, marked
+      // with the response's own gaps; a total it sent is complete.
+      return exact === null
+        ? { known: false, total: reportTotal(yd.totals[KNOWN_FIELD[m]], response) }
+        : { known: true, total: { value: exact, missingCurrencies: [], excludedCount: 0 } };
+    };
 
     yearData.forEach((yd) => {
       totals[yd.year] = {
-        income: yd.totals.income,
-        expenses: yd.totals.expenses,
-        savings: yd.totals.savings,
+        income: metricOf(yd, "income"),
+        expenses: metricOf(yd, "expenses"),
+        savings: metricOf(yd, "savings"),
       };
     });
 
     return totals;
-  }, [yearData]);
+  }, [yearData, response]);
+  const reportingCurrency = response?.currency ?? defaultCurrency;
+  const valueOf = (year: number, m: YearMetric) => yearTotals[year]?.[m].total.value ?? 0;
+  const totalOf = (year: number, m: YearMetric): ConvertedTotal =>
+    yearTotals[year]?.[m].total ?? { value: 0, missingCurrencies: [], excludedCount: 0 };
+  const isKnown = (year: number, m: YearMetric) => yearTotals[year]?.[m].known ?? true;
+  // A figure in a file or an image has no tooltip, so the text itself carries
+  // the marker.
+  const moneyText = (year: number, m: YearMetric) =>
+    isKnown(year, m)
+      ? formatCurrency(valueOf(year, m))
+      : `${formatCurrency(valueOf(year, m))} ${tCommon("partialTotal.srSuffix")}`;
 
-  const handleBarClick = (year: number, data: { name: string }) => {
-    const monthIndex = MONTH_NAMES.indexOf(data.name);
-    if (monthIndex === -1) return;
-    const startDate = `${year}-${String(monthIndex + 1).padStart(2, "0")}-01`;
-    const lastDay = format(
-      endOfMonth(new Date(year, monthIndex, 1)),
-      "yyyy-MM-dd",
+  const handleBarClick = (year: number, monthIndex: number) => {
+    const range = monthClickRange(year, monthIndex);
+    if (!range) return;
+    router.push(
+      `/transactions?startDate=${range.startDate}&endDate=${range.endDate}`,
     );
-    router.push(`/transactions?startDate=${startDate}&endDate=${lastDay}`);
   };
 
   const handleExportPdf = async () => {
@@ -139,7 +215,7 @@ export function YearOverYearReport() {
 
     const cards = years.map((year, index) => ({
       label: String(year),
-      value: formatCurrency(yearTotals[year]?.[metric] || 0),
+      value: moneyText(year, metric),
       color: resolvePdfColor(chartSeriesColor(index)),
     }));
 
@@ -148,8 +224,10 @@ export function YearOverYearReport() {
     const tableRows = (["income", "expenses", "savings"] as const).map((m) => {
       const label = t(`yearOverYear.${m}`);
       const cells = years.slice(1).map((_year, index) => {
-        const prevValue = yearTotals[years[index]]?.[m] || 0;
-        const currValue = yearTotals[_year]?.[m] || 0;
+        // The change between two years is a number only when both are known.
+        if (!isKnown(years[index], m) || !isKnown(_year, m)) return tCommon("unknownAmount.marker");
+        const prevValue = valueOf(years[index], m);
+        const currValue = valueOf(_year, m);
         const change = currValue - prevValue;
         const changePercent = prevValue !== 0 ? (change / Math.abs(prevValue)) * 100 : 0;
         return `${change >= 0 ? "+" : ""}${formatCurrency(change)} (${formatSignedPercent(changePercent, 1)})`;
@@ -161,9 +239,9 @@ export function YearOverYearReport() {
     const summaryHeaders = [t('yearOverYear.pdfColYear'), t('yearOverYear.pdfColIncome'), t('yearOverYear.pdfColExpenses'), t('yearOverYear.pdfColNet')];
     const summaryRows = years.map((year) => [
       String(year),
-      formatCurrency(yearTotals[year]?.income || 0),
-      formatCurrency(yearTotals[year]?.expenses || 0),
-      formatCurrency(yearTotals[year]?.savings || 0),
+      moneyText(year, "income"),
+      moneyText(year, "expenses"),
+      moneyText(year, "savings"),
     ]);
 
     await exportToPdf({
@@ -188,32 +266,6 @@ export function YearOverYearReport() {
       ...years.map((year) => Number(row[year]) || 0),
     ]);
     exportToCsv(`year-over-year-${metric}`, headers, rows);
-  };
-
-  const CustomTooltip = ({
-    active,
-    payload,
-    label,
-  }: {
-    active?: boolean;
-    payload?: Array<{ name: string; value: number; color: string }>;
-    label?: string;
-  }) => {
-    if (active && payload && payload.length) {
-      return (
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3">
-          <p className="font-medium text-gray-900 dark:text-gray-100 mb-1">
-            {label}
-          </p>
-          {payload.map((entry, index) => (
-            <p key={index} className="text-sm" style={{ color: entry.color }}>
-              {entry.name}: {formatCurrency(entry.value)}
-            </p>
-          ))}
-        </div>
-      );
-    }
-    return null;
   };
 
   if (error) {
@@ -274,20 +326,30 @@ export function YearOverYearReport() {
               </button>
             ))}
           </div>
-          <div className="ml-auto flex items-center gap-3">
+          {/* `ml-auto` from `sm` up only. On a phone the groups wrap onto
+              lines of their own, and pushing this one to the right edge left it
+              hanging under two left-aligned rows; on one line it is still the
+              trailing group. */}
+          <div className="flex items-center gap-3 sm:ml-auto">
             <ChartViewToggle
               value={viewType}
               onChange={(v) => setViewType(v as 'bar' | 'table')}
               options={['bar', 'table']}
             />
-            <ExportDropdown
-              onExportPdf={handleExportPdf}
-              onExportCsv={handleExportCsv}
-              disabled={chartData.length === 0}
-            />
           </div>
+          <ReportToolbarActions
+            onExportPdf={handleExportPdf}
+            onExportCsv={handleExportCsv}
+            disabled={chartData.length === 0}
+          />
         </div>
       </div>
+
+      <PartialDataNotice
+        missingCurrencies={response?.missingCurrencies ?? []}
+        excludedCount={response?.excludedCount ?? 0}
+        displayCurrency={reportingCurrency}
+      />
 
       {/* Year Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
@@ -306,7 +368,9 @@ export function YearOverYearReport() {
               <div className="flex justify-between">
                 <span className="text-gray-500 dark:text-gray-400">{t('yearOverYear.income')}</span>
                 <span className="text-green-600 dark:text-green-400">
-                  {formatCurrency(yearTotals[year]?.income || 0)}
+                  <PartialTotal total={totalOf(year, "income")} displayCurrency={reportingCurrency}>
+                    {formatCurrency(valueOf(year, "income"))}
+                  </PartialTotal>
                 </span>
               </div>
               <div className="flex justify-between">
@@ -314,19 +378,23 @@ export function YearOverYearReport() {
                   {t('yearOverYear.expenses')}
                 </span>
                 <span className="text-red-600 dark:text-red-400">
-                  {formatCurrency(yearTotals[year]?.expenses || 0)}
+                  <PartialTotal total={totalOf(year, "expenses")} displayCurrency={reportingCurrency}>
+                    {formatCurrency(valueOf(year, "expenses"))}
+                  </PartialTotal>
                 </span>
               </div>
               <div className="flex justify-between pt-1 border-t border-gray-200 dark:border-gray-700">
                 <span className="text-gray-500 dark:text-gray-400">{t('yearOverYear.net')}</span>
                 <span
                   className={
-                    (yearTotals[year]?.savings || 0) >= 0
+                    valueOf(year, "savings") >= 0
                       ? "text-blue-600 dark:text-blue-400"
                       : "text-orange-600 dark:text-orange-400"
                   }
                 >
-                  {formatCurrency(yearTotals[year]?.savings || 0)}
+                  <PartialTotal total={totalOf(year, "savings")} displayCurrency={reportingCurrency}>
+                    {formatCurrency(valueOf(year, "savings"))}
+                  </PartialTotal>
                 </span>
               </div>
             </div>
@@ -349,7 +417,7 @@ export function YearOverYearReport() {
                     sortField={sortField}
                     sortDirection={sortDirection}
                     onSort={handleSort}
-                    className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
+                    className={TH_CLASS}
                   >
                     {t('yearOverYear.colMonth')}
                   </SortableHeader>
@@ -361,7 +429,7 @@ export function YearOverYearReport() {
                       sortDirection={sortDirection}
                       onSort={handleSort}
                       align="right"
-                      className="px-4 py-3 text-xs font-medium text-gray-500 dark:text-gray-400 uppercase"
+                      className={TH_CLASS}
                     >
                       <span style={{ color: chartSeriesColor(index) }}>{year}</span>
                     </SortableHeader>
@@ -370,7 +438,7 @@ export function YearOverYearReport() {
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
                 {sortedTableData.map((row) => (
-                  <tr key={row.name} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
+                  <tr key={row.monthIndex} className="hover:bg-gray-50 dark:hover:bg-gray-700/50">
                     <td className="px-4 py-3 text-sm font-medium text-gray-900 dark:text-gray-100">
                       {row.name}
                     </td>
@@ -380,7 +448,7 @@ export function YearOverYearReport() {
                         <td
                           key={year}
                           className="px-4 py-3 text-right text-sm text-gray-900 dark:text-gray-100 cursor-pointer"
-                          onClick={() => handleBarClick(year, { name: row.name })}
+                          onClick={() => handleBarClick(year, row.monthIndex)}
                         >
                           {formatCurrency(value)}
                         </td>
@@ -394,7 +462,9 @@ export function YearOverYearReport() {
                   <td className="px-4 py-3 text-sm font-bold text-gray-900 dark:text-gray-100">{t('yearOverYear.total')}</td>
                   {years.map((year) => (
                     <td key={year} className="px-4 py-3 text-right text-sm font-bold text-gray-900 dark:text-gray-100">
-                      {formatCurrency(yearTotals[year]?.[metric] || 0)}
+                      <PartialTotal total={totalOf(year, metric)} displayCurrency={reportingCurrency}>
+                        {formatCurrency(valueOf(year, metric))}
+                      </PartialTotal>
                     </td>
                   ))}
                 </tr>
@@ -408,13 +478,13 @@ export function YearOverYearReport() {
                 data={chartData}
                 margin={{ top: 20, right: 10, left: 0, bottom: 5 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} />
+                <CartesianGrid {...CHART_GRID_PROPS} />
                 <XAxis dataKey="name" tick={{ fontSize: 12 }} />
                 <YAxis
                   tickFormatter={formatCurrencyAxis}
                   tick={{ fontSize: 12 }}
                 />
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip content={<YearOverYearTooltip formatCurrency={formatCurrency} />} />
                 <Legend />
                 {years.map((year, index) => (
                   <Bar
@@ -425,7 +495,7 @@ export function YearOverYearReport() {
                     name={`${year}`}
                     cursor="pointer"
                     onClick={(data) =>
-                      handleBarClick(year, { name: data.name ?? '' })
+                      handleBarClick(year, Number(data.payload?.monthIndex))
                     }
                   />
                 ))}
@@ -445,16 +515,11 @@ export function YearOverYearReport() {
             <table className="min-w-full">
               <thead>
                 <tr className="border-b border-gray-200 dark:border-gray-700">
-                  <th className="py-2 px-4 text-left text-sm font-medium text-gray-500 dark:text-gray-400">
-                    {t('yearOverYear.colMetric')}
-                  </th>
+                  <Th>{t('yearOverYear.colMetric')}</Th>
                   {years.slice(1).map((year, index) => (
-                    <th
-                      key={year}
-                      className="py-2 px-4 text-right text-sm font-medium text-gray-500 dark:text-gray-400"
-                    >
+                    <Th key={year} align="right">
                       {t('yearOverYear.yearsCompare', { prevYear: years[index], year })}
-                    </th>
+                    </Th>
                   ))}
                 </tr>
               </thead>
@@ -469,8 +534,18 @@ export function YearOverYearReport() {
                     </td>
                     {years.slice(1).map((year, index) => {
                       const prevYear = years[index];
-                      const prevValue = yearTotals[prevYear]?.[m] || 0;
-                      const currValue = yearTotals[year]?.[m] || 0;
+                      // The change over a year whose total is unknown is not a
+                      // number: the known parts of two years differ by what each
+                      // left out, not by what the reader earned or spent.
+                      if (!isKnown(prevYear, m) || !isKnown(year, m)) {
+                        return (
+                          <td key={year} className="py-3 px-4 text-right">
+                            <UnknownAmount reason="displayFx" />
+                          </td>
+                        );
+                      }
+                      const prevValue = valueOf(prevYear, m);
+                      const currValue = valueOf(year, m);
                       const change = currValue - prevValue;
                       const changePercent =
                         prevValue !== 0

@@ -5,6 +5,13 @@
     "cash": "Espèces",
     "brokerage": "Courtage"
   },
+  "oauthConsent": {
+    "destinationLabel": "Si vous autorisez l'accès, Monize enverra l'autorisation à :",
+    "destinationUnknown": "Monize n'a pas pu déterminer où cette autorisation serait envoyée. N'autorisez pas l'accès.",
+    "unverifiedNotice": "Cette application s'est enregistrée elle-même auprès de ce serveur Monize, et Monize n'a pas vérifié qui l'exploite ; son nom est celui qu'elle a choisi de se donner. N'autorisez l'accès que si vous avez vous-même lancé cette connexion depuis cette application et que l'adresse ci-dessus lui appartient.",
+    "claimedWebsite": "Site web déclaré par l'application : {{ website }}",
+    "websiteMismatch": "L'application indique que son site web est {{ website }}, mais l'autorisation sera envoyée à une autre adresse."
+  },
   "import": {
     "voidedTransactionNote": "Annulée dans la source ; le montant d'origine a été omis de l'exportation et importé comme zéro."
   },
@@ -17,5 +24,20 @@
       "stalled": "J'ai répété que j'allais continuer au lieu de terminer ; cette réponse repose donc sur les données recueillies avant l'arrêt."
     },
     "synthesisFailed": "J'ai recueilli des données pour cette question, mais je n'ai pas pu terminer l'analyse : je n'ai donc pas de réponse fiable. Essayez de poser une question plus précise."
+  },
+  "bankSync": {
+    "operationTypes": {
+      "cardPayment": "Paiement par carte",
+      "transferIn": "Virement entrant",
+      "transferOut": "Virement sortant",
+      "mobilePayment": "Paiement mobile",
+      "cashWithdrawal": "Retrait d'espèces",
+      "cashWithdrawalBlik": "Retrait d'espèces (BLIK)",
+      "mobilePaymentRefund": "Remboursement de paiement mobile",
+      "standingOrder": "Ordre permanent",
+      "cashback": "Cashback",
+      "loanRepayment": "Remboursement de prêt",
+      "creditCardRepayment": "Remboursement de carte de crédit"
+    }
   }
 }

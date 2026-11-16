@@ -1,5 +1,21 @@
 import { Injectable } from "@nestjs/common";
+import {
+  CreateTagPreview,
+  DeleteTagPreview,
+  UpdateTagPreview,
+  tagPreviewRow,
+} from "../../tags/tag-tool-prep.service";
+import {
+  splitTagChangeDisplayFields,
+  splitTagChangeWriteFields,
+  tagChangeDisplayFields,
+  tagChangeWriteFields,
+} from "../../tags/tag-change.util";
 import { randomUUID } from "crypto";
+import {
+  foreignEntryDisplayFields,
+  foreignEntryWriteFields,
+} from "../../transactions/foreign-entry-preview";
 import {
   AiActionSigningService,
   AI_ACTION_TTL_MS,
@@ -16,6 +32,9 @@ import {
   CreatePayeeDescriptor,
   UpdatePayeeDescriptor,
   DeletePayeeDescriptor,
+  CreateTagDescriptor,
+  UpdateTagDescriptor,
+  DeleteTagDescriptor,
   CreateSecurityDescriptor,
   UpdateSecurityDescriptor,
   DeleteSecurityDescriptor,
@@ -32,8 +51,21 @@ import {
   toSplitRowDescriptor,
   toSplitPreview,
   AiActionAttachmentPreview,
+  AiActionEnvelope,
+  AiActionRuleState,
+  CreateTransactionRuleDescriptor,
+  DeleteTransactionRuleDescriptor,
+  RuleDefinitionDescriptor,
+  RunTransactionRuleDescriptor,
+  UpdateTransactionRuleDescriptor,
   AttachmentRefDescriptor,
 } from "./ai-action.types";
+import type {
+  CreateRulePreview,
+  DeleteRulePreview,
+  RunRulePreview,
+  UpdateRulePreview,
+} from "../../transaction-rules/rule-tool-prep.service";
 import {
   CategorizeTransactionPreview,
   CreateTransactionPreview,
@@ -59,6 +91,20 @@ import {
   UpdateSecurityPreview,
   DeleteSecurityPreview,
 } from "../../securities/securities.service";
+
+/** The rule a descriptor carries: a copy, so a later edit of the preview cannot reach a signed value. */
+function toRuleDescriptor(rule: AiActionRuleState): RuleDefinitionDescriptor {
+  return {
+    name: rule.name,
+    enabled: rule.enabled,
+    triggers: [...rule.triggers],
+    condition: rule.condition,
+    actions: [...rule.actions],
+    stopProcessing: rule.stopProcessing,
+    activeFrom: rule.activeFrom,
+    activeTo: rule.activeTo,
+  };
+}
 
 /** Map an attachment ref to its display-only confirmation-card shape. */
 function toAttachmentPreview(
@@ -89,6 +135,8 @@ export function transactionPreviewRow(
     payeeWillBeCreated: preview.payeeWillBeCreated,
     categoryName: preview.categoryName,
     description: preview.description,
+    ...foreignEntryDisplayFields(preview),
+    ...(preview.ruleEffects ? { ruleEffects: preview.ruleEffects } : {}),
   };
 }
 
@@ -101,6 +149,9 @@ export function payeePreviewRow(
     name: preview.name,
     categoryName: preview.defaultCategoryName,
     website: preview.website,
+    address: preview.address,
+    email: preview.email,
+    phone: preview.phone,
   };
 }
 
@@ -136,6 +187,9 @@ export function investmentPreviewRow(
     cashCurrency: preview.cashCurrency,
     cashAmount: preview.cashAmount,
     description: preview.description,
+    accruedInterest: preview.accruedInterest,
+    bondSeriesCode: preview.bondSeriesCode,
+    bondRedemptionSplit: preview.redemptionSplit,
   };
 }
 
@@ -161,6 +215,9 @@ export function transferPreviewRow(
     payeeName: preview.payeeName,
     payeeWillBeCreated: preview.payeeWillBeCreated,
     categoryName: preview.categoryName,
+    ...("ruleEffects" in preview && preview.ruleEffects
+      ? { ruleEffects: preview.ruleEffects }
+      : {}),
   };
 }
 
@@ -179,7 +236,12 @@ export function transferPreviewRow(
 export class AiActionBuilderService {
   constructor(private readonly signingService: AiActionSigningService) {}
 
-  private newEnvelope(): { actionId: string; expiresAt: number } {
+  /**
+   * The per-build half of a descriptor. Typed as `AiActionEnvelope` so a new
+   * field minted here must be added to `AI_ACTION_ENVELOPE_FIELDS`, which is
+   * what the MCP confirmation fingerprint leaves out (see that constant).
+   */
+  private newEnvelope(): AiActionEnvelope {
     return {
       actionId: randomUUID(),
       expiresAt: Date.now() + AI_ACTION_TTL_MS,
@@ -208,6 +270,7 @@ export class AiActionBuilderService {
       categoryId: splits ? null : preview.categoryId,
       description: preview.description,
       currencyCode: preview.currencyCode,
+      ...foreignEntryWriteFields(preview),
       ...(splits ? { splits: splits.map(toSplitRowDescriptor) } : {}),
       ...(attachments?.length ? { attachments } : {}),
     };
@@ -226,6 +289,8 @@ export class AiActionBuilderService {
         payeeWillBeCreated: preview.payeeWillBeCreated,
         categoryName: preview.categoryName,
         description: preview.description,
+        ...foreignEntryDisplayFields(preview),
+        ...(preview.ruleEffects ? { ruleEffects: preview.ruleEffects } : {}),
         ...(splits ? { splits: splits.map(toSplitPreview) } : {}),
         ...(attachments?.length
           ? { attachments: attachments.map(toAttachmentPreview) }
@@ -279,6 +344,17 @@ export class AiActionBuilderService {
       name: preview.name,
       defaultCategoryId: preview.defaultCategoryId,
       website: preview.website,
+      address: preview.address,
+      email: preview.email,
+      phone: preview.phone,
+      ...(preview.contactLookup
+        ? {
+            contactLookup: {
+              source: preview.contactLookup.source,
+              attemptedAt: preview.contactLookup.attemptedAt.toISOString(),
+            },
+          }
+        : {}),
     };
     return {
       actionId,
@@ -290,6 +366,12 @@ export class AiActionBuilderService {
         name: preview.name,
         categoryName: preview.defaultCategoryName,
         website: preview.website,
+        address: preview.address,
+        email: preview.email,
+        ...(preview.contactLookup?.source
+          ? { contactLookupSource: preview.contactLookup.source }
+          : {}),
+        phone: preview.phone,
       },
     };
   }
@@ -308,6 +390,9 @@ export class AiActionBuilderService {
       name: preview.name,
       defaultCategoryId: preview.defaultCategoryId,
       website: preview.website,
+      address: preview.address,
+      email: preview.email,
+      phone: preview.phone,
     };
     return {
       actionId,
@@ -319,6 +404,9 @@ export class AiActionBuilderService {
         name: preview.name,
         categoryName: preview.defaultCategoryName,
         website: preview.website,
+        address: preview.address,
+        email: preview.email,
+        phone: preview.phone,
       },
     };
   }
@@ -344,6 +432,48 @@ export class AiActionBuilderService {
       preview: {
         name: preview.name,
       },
+    };
+  }
+
+  /**
+   * One tag card (create_tag / update_tag / delete_tag). The descriptor carries
+   * exactly what the write sets -- an edit only the fields it changes -- and the
+   * card shows the same through `tagPreviewRow`.
+   */
+  buildTagAction(
+    userId: string,
+    preview: CreateTagPreview | UpdateTagPreview | DeleteTagPreview,
+  ): PendingAiAction {
+    const { actionId, expiresAt } = this.newEnvelope();
+    const envelope = { userId, actionId, expiresAt };
+    const descriptor:
+      CreateTagDescriptor | UpdateTagDescriptor | DeleteTagDescriptor =
+      "carriedCount" in preview
+        ? { ...envelope, type: "delete_tag", tagId: preview.tagId }
+        : "tagId" in preview
+          ? {
+              ...envelope,
+              type: "update_tag",
+              tagId: preview.tagId,
+              ...(preview.name !== undefined ? { name: preview.name } : {}),
+              ...(preview.color !== undefined ? { color: preview.color } : {}),
+              ...(preview.icon !== undefined ? { icon: preview.icon } : {}),
+            }
+          : {
+              ...envelope,
+              type: "create_tag",
+              name: preview.name,
+              color: preview.color,
+              icon: preview.icon,
+            };
+    const { status: _status, ...display } = tagPreviewRow(preview);
+    return {
+      actionId,
+      type: descriptor.type,
+      expiresAt,
+      descriptor,
+      signature: this.signingService.sign(descriptor),
+      preview: display,
     };
   }
 
@@ -446,6 +576,10 @@ export class AiActionBuilderService {
   buildCreateInvestmentTransaction(
     userId: string,
     preview: CreateInvestmentTransactionPreview,
+    options: {
+      aiReviewRequestId?: string;
+      scheduled?: { id: string; name: string; dueDate: string };
+    } = {},
   ): PendingAiAction {
     const { actionId, expiresAt } = this.newEnvelope();
     const descriptor: CreateInvestmentTransactionDescriptor = {
@@ -461,8 +595,22 @@ export class AiActionBuilderService {
       quantity: preview.quantity,
       price: preview.price,
       commission: preview.commission,
+      accruedInterest: preview.accruedInterest,
       exchangeRate: preview.exchangeRate,
       description: preview.description,
+      bondInstrumentId: preview.bondInstrumentId,
+      ...(options.aiReviewRequestId
+        ? {
+            aiReviewRequestId: options.aiReviewRequestId,
+            totalAmount: preview.totalAmount,
+          }
+        : {}),
+      ...(options.scheduled
+        ? {
+            scheduledTransactionId: options.scheduled.id,
+            scheduledDueDate: options.scheduled.dueDate,
+          }
+        : {}),
     };
     return {
       actionId,
@@ -485,6 +633,15 @@ export class AiActionBuilderService {
         cashCurrency: preview.cashCurrency,
         cashAmount: preview.cashAmount,
         description: preview.description,
+        accruedInterest: preview.accruedInterest,
+        bondSeriesCode: preview.bondSeriesCode,
+        bondRedemptionSplit: preview.redemptionSplit,
+        ...(options.scheduled
+          ? {
+              scheduledName: options.scheduled.name,
+              scheduledDueDate: options.scheduled.dueDate,
+            }
+          : {}),
       },
     };
   }
@@ -494,6 +651,7 @@ export class AiActionBuilderService {
     preview: UpdateTransactionPreview,
     splits?: ResolvedSplitLine[],
     attachments?: AttachmentRefDescriptor[],
+    options: { aiReviewRequestId?: string } = {},
   ): PendingAiAction {
     const { actionId, expiresAt } = this.newEnvelope();
     const descriptor: UpdateTransactionDescriptor = {
@@ -512,8 +670,18 @@ export class AiActionBuilderService {
       categoryId: splits ? null : preview.categoryId,
       description: preview.description,
       currencyCode: preview.currencyCode,
+      ...foreignEntryWriteFields(preview),
       ...(splits ? { splits: splits.map(toSplitRowDescriptor) } : {}),
       ...(attachments?.length ? { attachments } : {}),
+      ...tagChangeWriteFields(preview),
+      ...splitTagChangeWriteFields(preview),
+      ...(preview.tagsOnly ? { tagsOnly: true as const } : {}),
+      ...(preview.referenceNumber === undefined
+        ? {}
+        : { referenceNumber: preview.referenceNumber }),
+      ...(options.aiReviewRequestId
+        ? { aiReviewRequestId: options.aiReviewRequestId }
+        : {}),
     };
     return {
       actionId,
@@ -529,12 +697,21 @@ export class AiActionBuilderService {
         payeeName: preview.payeeName,
         payeeWillBeCreated: preview.payeeWillBeCreated,
         categoryName: preview.categoryName,
+        ...(preview.categorySource === "ai" && !splits
+          ? { categorySource: "ai" as const }
+          : {}),
         description: preview.description,
         isReconciled: preview.isReconciled,
+        ...foreignEntryDisplayFields(preview),
         ...(splits ? { splits: splits.map(toSplitPreview) } : {}),
         ...(attachments?.length
           ? { attachments: attachments.map(toAttachmentPreview) }
           : {}),
+        ...tagChangeDisplayFields(preview),
+        ...splitTagChangeDisplayFields(preview),
+        ...(preview.referenceNumber === undefined
+          ? {}
+          : { referenceNumber: preview.referenceNumber }),
       },
     };
   }
@@ -589,8 +766,10 @@ export class AiActionBuilderService {
       quantity: preview.quantity,
       price: preview.price,
       commission: preview.commission,
+      accruedInterest: preview.accruedInterest,
       exchangeRate: preview.exchangeRate,
       description: preview.description,
+      bondInstrumentId: preview.bondInstrumentId,
     };
     return {
       actionId,
@@ -613,6 +792,9 @@ export class AiActionBuilderService {
         cashCurrency: preview.cashCurrency,
         cashAmount: preview.cashAmount,
         description: preview.description,
+        accruedInterest: preview.accruedInterest,
+        bondSeriesCode: preview.bondSeriesCode,
+        bondRedemptionSplit: preview.redemptionSplit,
       },
     };
   }
@@ -678,6 +860,7 @@ export class AiActionBuilderService {
         categoryId: preview.categoryId,
         description: preview.description,
         currencyCode: preview.currencyCode,
+        ...foreignEntryWriteFields(preview),
       })),
     };
     return {
@@ -715,8 +898,10 @@ export class AiActionBuilderService {
         quantity: preview.quantity,
         price: preview.price,
         commission: preview.commission,
+        accruedInterest: preview.accruedInterest,
         exchangeRate: preview.exchangeRate,
         description: preview.description,
+        bondInstrumentId: preview.bondInstrumentId,
       })),
     };
     return {
@@ -772,6 +957,7 @@ export class AiActionBuilderService {
         payeeName: preview.payeeName,
         payeeWillBeCreated: preview.payeeWillBeCreated,
         categoryName: preview.categoryName,
+        ...(preview.ruleEffects ? { ruleEffects: preview.ruleEffects } : {}),
       },
     };
   }
@@ -798,6 +984,8 @@ export class AiActionBuilderService {
       payeeName: preview.payeeName,
       createPayee: preview.payeeWillBeCreated,
       categoryId: preview.categoryId,
+      ...tagChangeWriteFields(preview),
+      ...(preview.tagsOnly ? { tagsOnly: true as const } : {}),
     };
     return {
       actionId,
@@ -818,6 +1006,7 @@ export class AiActionBuilderService {
         payeeName: preview.payeeName,
         payeeWillBeCreated: preview.payeeWillBeCreated,
         categoryName: preview.categoryName,
+        ...tagChangeDisplayFields(preview),
       },
     };
   }
@@ -887,5 +1076,138 @@ export class AiActionBuilderService {
       rows,
       previewRows,
     );
+  }
+  /**
+   * The four rule builders take a preview produced by
+   * `TransactionRuleToolPrepService`, which has already resolved every name to
+   * an id, validated the definition and run the test. The descriptor carries
+   * the ids and, where the commit needs one, the expectation it must still find
+   * (an update's revision, a run's plan fingerprint); the card carries the same
+   * rule with the names of its ids, which the client renders in words.
+   */
+  buildCreateTransactionRule(
+    userId: string,
+    preview: CreateRulePreview,
+  ): PendingAiAction {
+    const { actionId, expiresAt } = this.newEnvelope();
+    const descriptor: CreateTransactionRuleDescriptor = {
+      type: "create_transaction_rule",
+      userId,
+      actionId,
+      expiresAt,
+      rule: toRuleDescriptor(preview.rule),
+    };
+    return {
+      actionId,
+      type: "create_transaction_rule",
+      expiresAt,
+      descriptor,
+      signature: this.signingService.sign(descriptor),
+      preview: {
+        rule: {
+          ...preview.rule,
+          labels: preview.labels,
+          test: preview.test,
+        },
+      },
+    };
+  }
+
+  buildUpdateTransactionRule(
+    userId: string,
+    preview: UpdateRulePreview,
+  ): PendingAiAction {
+    const { actionId, expiresAt } = this.newEnvelope();
+    const descriptor: UpdateTransactionRuleDescriptor = {
+      type: "update_transaction_rule",
+      userId,
+      actionId,
+      expiresAt,
+      ruleId: preview.ruleId,
+      expectedRevision: preview.expectedRevision,
+      rule: toRuleDescriptor(preview.rule),
+    };
+    return {
+      actionId,
+      type: "update_transaction_rule",
+      expiresAt,
+      descriptor,
+      signature: this.signingService.sign(descriptor),
+      preview: {
+        rule: {
+          ...preview.rule,
+          labels: preview.labels,
+          current: preview.current,
+          ...(preview.test ? { test: preview.test } : {}),
+        },
+      },
+    };
+  }
+
+  buildDeleteTransactionRule(
+    userId: string,
+    preview: DeleteRulePreview,
+  ): PendingAiAction {
+    const { actionId, expiresAt } = this.newEnvelope();
+    const descriptor: DeleteTransactionRuleDescriptor = {
+      type: "delete_transaction_rule",
+      userId,
+      actionId,
+      expiresAt,
+      ruleId: preview.ruleId,
+      expectedRevision: preview.expectedRevision,
+    };
+    return {
+      actionId,
+      type: "delete_transaction_rule",
+      expiresAt,
+      descriptor,
+      signature: this.signingService.sign(descriptor),
+      preview: { rule: { ...preview.rule, labels: preview.labels } },
+    };
+  }
+
+  buildRunTransactionRule(
+    userId: string,
+    preview: RunRulePreview,
+  ): PendingAiAction {
+    const { actionId, expiresAt } = this.newEnvelope();
+    const descriptor: RunTransactionRuleDescriptor = {
+      type: "run_transaction_rule",
+      userId,
+      actionId,
+      expiresAt,
+      ruleId: preview.ruleId,
+      filters: {
+        ...(preview.filters.accountIds
+          ? { accountIds: [...preview.filters.accountIds] }
+          : {}),
+        ...(preview.filters.startDate
+          ? { startDate: preview.filters.startDate }
+          : {}),
+        ...(preview.filters.endDate
+          ? { endDate: preview.filters.endDate }
+          : {}),
+        ...(preview.filters.limit !== undefined
+          ? { limit: preview.filters.limit }
+          : {}),
+      },
+      fingerprint: preview.fingerprint,
+    };
+    return {
+      actionId,
+      type: "run_transaction_rule",
+      expiresAt,
+      descriptor,
+      signature: this.signingService.sign(descriptor),
+      preview: {
+        rule: {
+          ...preview.rule,
+          labels: preview.labels,
+          filters: preview.filters,
+          test: preview.test,
+        },
+      },
+    };
   }
 }

@@ -11,6 +11,7 @@ import {
   ATTACHMENT_STORAGE_PROVIDER,
   AttachmentStorageProvider,
 } from "../attachments/storage/attachment-storage.interface";
+import { AttachmentStorageRegistry } from "../attachments/storage/attachment-storage.registry";
 import { resolveConfiguredBackupLimit } from "./backup-limits";
 import { attachmentBytesConsistent } from "./attachment-integrity.util";
 import { BACKUP_VERSION, BackupCompletenessReport } from "./backup-format";
@@ -23,7 +24,10 @@ import {
 } from "./export-attachments";
 import { ExportBufferSink } from "./export-buffer-sink";
 import { collectExportTables, exportJsonChunks } from "./export-json-stream";
+import { readBondCatalogIdentity } from "./export-bond-catalog";
+import { readProducedBy } from "./export-produced-by";
 import { ExportWriter, RESPONSE_CLOSED_MESSAGE } from "./export-writer";
+import { BackupEncryptionInput } from "./backup-key-wrap";
 import {
   buildExportTableQueries,
   ExportTableQuery,
@@ -85,8 +89,21 @@ export class BackupExportService {
     private readonly dataSource: DataSource,
     @Inject(ATTACHMENT_STORAGE_PROVIDER)
     private readonly attachmentStorage: AttachmentStorageProvider,
+    private readonly attachmentStores: AttachmentStorageRegistry,
     private readonly aiEncryption: EncryptionService,
   ) {}
+
+  /**
+   * Whether an attachment row's own backend is one this export can read.
+   *
+   * The export reads each object through the provider the ROW names, not the
+   * bound one: a deployment part-way through a storage switch holds some
+   * attachments in each, and both are readable. `database` is excluded because
+   * its bytes already travel in `attachment_blobs`.
+   */
+  private readonly canReadExternally = (providerName: string): boolean =>
+    providerName !== "database" &&
+    this.attachmentStores.resolve(providerName) !== null;
 
   /** Ceiling on the artifact a buffered export may accumulate. */
   get exportBufferLimitBytes(): number {
@@ -147,7 +164,7 @@ export class BackupExportService {
   private getTableQueries(audit?: AttachmentAudit): ExportTableQuery[] {
     return buildExportTableQueries(
       externalAttachmentRows(
-        this.attachmentStorage.name,
+        this.canReadExternally,
         (id, row) => this.readAttachmentObject(id, row),
         {
           only: audit?.carriedExternalIds,
@@ -177,7 +194,7 @@ export class BackupExportService {
    */
   async exportToBuffer(
     userId: string,
-    encryptionPassword?: string,
+    encryption?: BackupEncryptionInput,
   ): Promise<{ buffer: Buffer; report: BackupCompletenessReport }> {
     const limit = this.exportBufferLimitBytes;
     const sink = new ExportBufferSink(
@@ -192,7 +209,7 @@ export class BackupExportService {
         ),
     );
 
-    const report = await this.writeExport(userId, sink, encryptionPassword, {
+    const report = await this.writeExport(userId, sink, encryption, {
       onChunkTable: (table) => sink.noteTable(table),
     });
     return { buffer: sink.toBuffer(), report };
@@ -239,13 +256,13 @@ export class BackupExportService {
   private async writeExport(
     userId: string,
     target: Writable,
-    encryptionPassword: string | undefined,
+    encryption: BackupEncryptionInput | undefined,
     hooks: {
       onReport?: (report: BackupCompletenessReport) => void;
       onChunkTable?: (table: string | null) => void;
     },
   ): Promise<BackupCompletenessReport> {
-    const writer = await ExportWriter.create(target, encryptionPassword);
+    const writer = await ExportWriter.create(target, encryption);
     const onTargetClose = (): void => {
       if (!target.writableFinished) {
         writer.abort(new Error(RESPONSE_CLOSED_MESSAGE));
@@ -272,6 +289,14 @@ export class BackupExportService {
           // the headers, the filename and the return value carry, so the four
           // cannot disagree about one artifact.
           completeness: audit.report,
+          // The identity of the bond series the rows name, so a restore onto a
+          // deployment without them can fetch them from the official source.
+          members: async (r) => ({
+            bondCatalog: await readBondCatalogIdentity(r),
+            // Which schema wrote the rows, so a restore can tell an old meaning
+            // from a deliberate new value (restore-legacy-normalizations.ts).
+            producedBy: await readProducedBy(r),
+          }),
         });
         for await (const chunk of chunks) {
           hooks.onChunkTable?.(chunk.table);
@@ -467,8 +492,10 @@ export class BackupExportService {
     reader: ExportReader,
   ): Promise<AttachmentAudit> {
     const provider = this.attachmentStorage.name;
-    const audit = await auditAttachments(reader, provider, (id, row) =>
-      this.readAttachmentObject(id, row),
+    const audit = await auditAttachments(
+      reader,
+      this.canReadExternally,
+      (id, row) => this.readAttachmentObject(id, row),
     );
 
     if (audit.unreadable > 0) {
@@ -521,9 +548,16 @@ export class BackupExportService {
     id: string,
     row: Record<string, unknown>,
   ): Promise<AttachmentReadResult> {
+    // The row's backend, not the bound one. Asking the bound provider for a key
+    // it never wrote is a 404 the export would report as unreadable -- an
+    // artifact incomplete by every attachment a storage switch has not moved yet.
+    const store = this.attachmentStores.resolve(
+      String(row.storage_provider ?? "database"),
+    );
+    if (!store) return { status: "unreadable" };
     let bytes: Buffer;
     try {
-      bytes = await this.attachmentStorage.load(id);
+      bytes = await store.load(id);
     } catch {
       return { status: "unreadable" };
     }

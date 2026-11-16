@@ -6,7 +6,7 @@
       "category": "Categorie",
       "amount": "Bedrag",
       "schedule": "Schema",
-      "auto": "Auto",
+      "auto": "Automatisch boeken",
       "actions": "Acties"
     },
     "empty": {
@@ -22,8 +22,9 @@
     "modifiedBadge": "{count} gewijzigd",
     "modifiedTitle": "{count, plural, one {# aankomende herhaling gewijzigd} other {# aankomende herhalingen gewijzigd}}",
     "modifiedAmountTitle": "Gewijzigd voor volgende herhaling",
+    "modifiedDateTitle": "Datum gewijzigd voor deze gebeurtenis",
+    "splitBadge": "Splitsing ({count})",
     "autoPostBadge": "Aan",
-    "autoPostTitle": "Wordt automatisch geboekt op vervaldatum",
     "inactiveSuffix": " — Inactief",
     "actionTitles": {
       "post": "Transactie boeken",
@@ -62,7 +63,8 @@
       "skipFailed": "Herhaling overslaan mislukt",
       "deleteFailed": "Verwijderen mislukt"
     },
-    "foreignAmountTitle": "Het bedrag dat de begunstigde in rekening brengt, in de eigen valuta"
+    "foreignAmountTitle": "Het bedrag dat de begunstigde in rekening brengt, in de eigen valuta",
+    "estimatedLabel": "Geschat"
   },
   "filters": {
     "label": "Filters",
@@ -74,9 +76,7 @@
     "accountsLabel": "Rekeningen",
     "accountsPlaceholder": "Alle rekeningen",
     "categoriesLabel": "Categorieën",
-    "categoriesPlaceholder": "Alle categorieën",
-    "collapseAriaLabel": "Filters inklappen",
-    "expandAriaLabel": "Filters uitklappen"
+    "categoriesPlaceholder": "Alle categorieën"
   },
   "postDialog": {
     "title": "Transactie boeken",
@@ -114,7 +114,8 @@
       "totalAmountRequired": "Totaalbedrag is verplicht",
       "splitsMinimum": "Gesplitste transacties vereisen minimaal 2 splitsingen",
       "splitsTotal": "Splitsingsbedragen moeten gelijk zijn aan het transactiebedrag",
-      "fxRateUnavailable": "Er is voor deze datum geen wisselkoers beschikbaar voor {from} naar {to}."
+      "fxRateUnavailable": "Er is voor deze datum geen wisselkoers beschikbaar voor {from} naar {to}.",
+      "estimateUnknown": "Het geschatte bedrag van deze keer is onbekend. Voer het bedrag in om het te boeken."
     },
     "latestPlaceholder": "Laatste: {price}",
     "descriptionPlaceholder": "Beschrijving...",
@@ -127,18 +128,40 @@
       "noRateWarning": "Geen wisselkoers gevonden voor {from} naar {to} op {date}. Kies een andere datum of vernieuw de koersen.",
       "feeCaption": "Inclusief {percent}% kosten voor buitenlandse transactie ({fee}).",
       "totalInCurrency": "Totaal in {currency}"
-    }
+    },
+    "estimatedHint": "Dit bedrag is een schatting; wijzig het in wat u werkelijk hebt betaald. {detail}"
   },
   "occurrencePicker": {
     "title": "Herhalingsdatum selecteren",
-    "description": "Kies welke herhaling van \"{name}\" je wilt wijzigen:",
+    "description": "Kies welke herhaling van \"{name}\" je wilt wijzigen. Het wijzigen van één herhaling hier overschrijft alleen die datum; elke andere herhaling blijft de planning volgen. <guide>Meer informatie</guide>.",
     "modifiedBadge": "Gewijzigd",
     "nextDueBadge": "Volgende vervaldatum",
     "dateMoved": "Datum verplaatst van {date}",
     "amountChange": "Bedrag: {amount}",
     "categoryChange": "Categorie: {category}",
     "noteChange": "Notitie: {note}",
-    "splitModified": "Splitsing gewijzigd"
+    "splitModified": "Splitsing gewijzigd",
+    "estimatedAmount": "Geschat: {amount}",
+    "estimateUnknown": "Schatting onbekend"
+  },
+  "loanOccurrence": {
+    "loading": "De betaling van elke termijn wordt berekend.",
+    "loadFailed": "De betaling van elke termijn kon niet worden geladen.",
+    "retry": "Opnieuw proberen",
+    "amountUnknown": "Betaling onbekend",
+    "notProjected": "Betaling zo ver vooruit niet berekend",
+    "paymentChangesBadge": "Betaling verandert",
+    "editorUnknown": "De betaling van deze termijn kan niet worden berekend, dus het bedrag is leeg. {reason}",
+    "editorLinesUnknown": "De verdeling van deze termijn over aflossing en rente kan niet worden berekend, dus de regels beginnen bij die van de planning. {reason}",
+    "amountRequired": "Voer het bedrag van deze termijn in voordat u opslaat.",
+    "missing": {
+      "rate": "Er is geen rente vastgelegd voor {date}. Voeg die toe aan de rentegeschiedenis van de lening.",
+      "cadence": "De betalingsfrequentie van de lening ({frequency}) kan niet worden berekend. Controleer de betalingsfrequentie van de lening.",
+      "overrideLines": "De regels van deze termijn zijn niet aflossing, rente en extra aflossing. Bewerk de regels.",
+      "overrideOnSettledDebt": "De lening is op deze datum afgelost, dus het bedrag van deze termijn kan niet worden verdeeld over aflossing en rente. Bewerk of herstel de termijn.",
+      "earlierOccurrence": "Het hangt af van de termijn van {date}, waarvan de betaling niet kan worden berekend.",
+      "unknown": "Er is geen reden opgegeven."
+    }
   },
   "overrideEditor": {
     "title": "Herhaling bewerken",
@@ -179,7 +202,9 @@
       "quantityRequired": "Hoeveelheid moet groter zijn dan nul",
       "priceRequired": "Koers moet groter zijn dan nul",
       "totalAmountRequired": "Totaalbedrag is verplicht"
-    }
+    },
+    "estimatedHint": "Dit bedrag is de schatting voor deze keer. Laat het zoals het is en deze keer blijft de schatting volgen naarmate er nieuwe betalingen binnenkomen. {detail}",
+    "keepEstimate": "Dit bedrag behouden, ook als nieuwe betalingen de schatting veranderen"
   },
   "form": {
     "tabs": {
@@ -205,7 +230,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "Langetermijnwinst herbeleggen",
       "CAPITAL_GAIN_SHORT": "Kortetermijnkapitaalwinst",
       "CAPITAL_GAIN_LONG": "Langetermijnkapitaalwinst",
-      "REDEEM": "CD/obligatie aflossen"
+      "REDEEM": "CD/obligatie aflossen",
+      "RETURN_OF_CAPITAL": "Kapitaalterugbetaling"
     },
     "submitCreate": "Aanmaken",
     "submitUpdate": "Bijwerken",
@@ -248,6 +274,7 @@
     "commissionLabel": "Commissie",
     "totalValueLabel": "Totaalwaarde",
     "fundingAccountLabel": "Financieringsrekening (optioneel)",
+    "fundingAccountTooltip": "De rekening waarop het geld van deze planning daadwerkelijk wordt verrekend, niet de beleggingsrekening hierboven: degene die de kasstroomprognose belast of crediteert. Laat leeg om de eigen kasrekening van de beleggingsrekening te gebruiken.",
     "fundingAccountPlaceholder": "Gebruik brokeragekassaldo (standaard)",
     "fundingAccountHelp": "Standaard de kassijde van de beleggingsrekening. Kies een andere rekening voor bijdrage + aankoop.",
     "endConditionTitle": "Einddatum (optioneel)",
@@ -282,14 +309,21 @@
       "quantityRequired": "Hoeveelheid moet groter zijn dan nul",
       "priceRequired": "Koers moet groter zijn dan nul",
       "totalAmountRequired": "Totaalbedrag is verplicht voor deze actie",
-      "fxRateRequired": "Voer een bedrag in de gekozen valuta in voordat je opslaat. Er is nog geen wisselkoers beschikbaar."
+      "fxRateRequired": "Voer een bedrag in de gekozen valuta in voordat je opslaat. Er is nog geen wisselkoers beschikbaar.",
+      "estimateNeedsPayeeAndCategory": "Kies een begunstigde en een categorie om het bedrag uit te schatten."
     },
     "fx": {
       "amountInCurrency": "Bedrag in {currency}",
       "estimateCaption": "Ongeveer {total} bij 1 {from} = {rate} {to}.",
       "noRateWarning": "Geen wisselkoers gevonden voor {from} naar {to}. Kies een andere valuta of voer het bedrag in {to} in.",
       "feeCaption": "Inclusief {percent}% kosten voor buitenlandse transactie ({fee})."
-    }
+    },
+    "estimateLabel": "Schatten",
+    "estimateTooltip": "Het bedrag van elke keer berekenen uit de betalingen van de afgelopen 24 maanden aan deze begunstigde in deze categorie, maand voor maand, zodat een rekening die in sommige maanden meer kost zo wordt voorspeld. U kunt elke keer nog steeds wijzigen en u bevestigt het bedrag bij het boeken.",
+    "estimateTooltipTransfer": "Het bedrag van elke keer berekenen uit de overboekingen van de afgelopen 24 maanden naar deze rekening. Is de rekening meer verschuldigd, dan wordt de betaling daarop verhoogd: bij een creditcard met afsluit- en vervaldag de betaling voor het afgesloten overzicht en die voor de lopende cyclus, anders de volgende betaling. U kunt elke keer nog steeds wijzigen en bevestigt het bedrag bij het boeken.",
+    "estimateDelegateDisabled": "Alleen de eigenaar kan de schatting aan- of uitzetten: die leest de betalingen in alle rekeningen van de eigenaar.",
+    "estimatedAmountNote": "Automatisch berekend uit de betalingsgeschiedenis. {detail}",
+    "autoPostDisabledEstimate": "Een geschat bedrag bevestigt u bij het boeken, dus het wordt niet automatisch geboekt."
   },
   "postTransaction": {
     "minSplits": "Gesplitste transacties vereisen minimaal 2 splitsingen",
@@ -308,10 +342,83 @@
     "EVERY4MONTHS": "Elke 4 maanden",
     "SEMIANNUAL": "Twee keer per jaar",
     "YEARLY": "Jaarlijks",
-    "EVERY2YEARS": "Elke 2 jaar"
+    "EVERY2YEARS": "Elke 2 jaar",
+    "CUSTOM": "Aangepast"
+  },
+  "customRecurrence": {
+    "title": "Herhaalt",
+    "unitLabel": "Herhalen per",
+    "units": {
+      "WEEK": "Wekelijks",
+      "MONTH": "Maandelijks",
+      "YEAR": "Jaarlijks"
+    },
+    "every": "Elke",
+    "intervalLabel": "Herhaal elke",
+    "unitSuffix": {
+      "WEEK": "{interval, plural, one {week op} other {weken op}}",
+      "MONTH": "{interval, plural, one {maand op} other {maanden op}}",
+      "YEAR": "{interval, plural, one {jaar op} other {jaar op}}"
+    },
+    "weekdaysLabel": "Dagen van de week",
+    "monthDaysLabel": "Dagen van de maand",
+    "lastDayChip": "Laatste dag",
+    "lastDay": "laatste dag",
+    "dayOfMonth": "{day, selectordinal, other {#e}}",
+    "monthHint": "Een dag na het einde van een korte maand valt op de laatste dag ervan, en twee dagen die op dezelfde datum vallen worden maar één keer geboekt.",
+    "datesLabel": "Datums van het jaar",
+    "monthLabel": "Maand",
+    "dayLabel": "Dag",
+    "addDate": "Datum toevoegen",
+    "removeDate": "{date} verwijderen",
+    "yearHint": "29 februari valt op 28 februari in jaren zonder deze dag.",
+    "summary": {
+      "WEEK": "{interval, plural, one {Elke week op {days}} other {Elke # weken op {days}}}",
+      "MONTH": "{interval, plural, one {Elke maand op de {days}} other {Elke # maanden op de {days}}}",
+      "YEAR": "{interval, plural, one {Elk jaar op {days}} other {Elke # jaar op {days}}}"
+    },
+    "errors": {
+      "noDays": {
+        "WEEK": "Kies minstens één dag van de week.",
+        "MONTH": "Kies minstens één dag van de maand.",
+        "YEAR": "Voeg minstens één datum toe."
+      },
+      "interval": "Voer een getal van 1 tot 12 in.",
+      "invalid": "Dit patroon kan niet worden opgeslagen. Kies de dagen opnieuw."
+    },
+    "firstOccurrence": "Eerste herhaling: {date}",
+    "nextOccurrence": "Volgende herhaling: {date}",
+    "nextOccurrenceOffPattern": "Volgende herhaling: {date}. Deze datum valt buiten het patroon; latere herhalingen volgen het.",
+    "orphanWarning": "{count, plural, one {# bewerkte herhaling ({dates}) valt niet meer binnen dit patroon en wordt verwijderd wanneer je opslaat.} other {# bewerkte herhalingen ({dates}) vallen niet meer binnen dit patroon en worden verwijderd wanneer je opslaat.}}",
+    "notForLoan": "Een lening- of hypotheekbetaling kan geen aangepaste frequentie gebruiken; kies een vaste frequentie.",
+    "notForPayroll": "Een loonbetaling met inhoudingslimieten kan geen aangepaste frequentie gebruiken; kies een vaste frequentie."
   },
   "validation": {
     "nameRequired": "Naam is verplicht",
     "dueDateRequired": "Vervaldatum is verplicht"
+  },
+  "estimate": {
+    "thePayee": "deze begunstigde",
+    "theAccount": "de rekening",
+    "theCategory": "deze categorie",
+    "basis": "Geschat uit {count, plural, one {# betaling} other {# betalingen}}, de laatste op {date}.",
+    "basisWithGrowth": "Geschat uit {count, plural, one {# betaling} other {# betalingen}}, de laatste op {date}, met een verandering van {growth} ten opzichte van vorig jaar.",
+    "basisYear": "Gemiddelde van {count, plural, one {# betaling} other {# betalingen}} in de afgelopen 12 maanden, de laatste op {date}.",
+    "basisRecent": "Gemiddelde van {count, plural, one {de laatste betaling} other {de laatste # betalingen}}, de laatste op {date}.",
+    "basisRecentWithGrowth": "Gemiddelde van {count, plural, one {de laatste betaling} other {de laatste # betalingen}}, de laatste op {date}, met een verandering van {growth} ten opzichte van vorig jaar.",
+    "basisSeasonal": "Gemiddelde van {count, plural, one {de laatste betaling} other {de laatste # betalingen}}, aangepast aan het seizoen van elke maand, de laatste op {date}.",
+    "basisSeasonalWithGrowth": "Gemiddelde van {count, plural, one {de laatste betaling} other {de laatste # betalingen}}, aangepast aan het seizoen van elke maand, de laatste op {date}, met een verandering van {growth} ten opzichte van vorig jaar.",
+    "basisWithheld": "Geschat uit de betalingsgeschiedenis van de begunstigde en de categorie.",
+    "basisWithheldTransfer": "Geschat uit de geschiedenis van overboekingen naar {account}.",
+    "raisedToBalance": "Verhoogd om te dekken wat {account} voor deze betaling verschuldigd is.",
+    "basisAndRaise": "{basis} {raised}",
+    "noHistoryTransfer": "Geen overboekingen van deze rekening naar {account} in de afgelopen {months} maanden, dus het bedrag is onbekend. Voer het bedrag van elke keer in, of leg een overboeking vast.",
+    "missingRateTransfer": "Geen wisselkoers van {from} naar {to} om een eerdere overboeking of wat {account} verschuldigd is om te rekenen, dus het bedrag is onbekend. Voeg de koers toe op de pagina Valuta's.",
+    "noBasisTransfer": "Kies de bestemmingsrekening om het bedrag te schatten uit de overboekingen daarnaartoe.",
+    "pendingTransfer": "Het bedrag wordt berekend uit de overboekingen naar deze rekening en wat zij verschuldigd is.",
+    "noHistory": "Geen betalingen aan {payee} in {category} in de afgelopen {months} maanden, dus het bedrag is onbekend. Voer het bedrag van elke keer in, of leg een betaling vast.",
+    "missingRate": "Geen wisselkoers van {from} naar {to} om een eerdere betaling om te rekenen, dus het bedrag is onbekend. Voeg de koers toe op de pagina Valuta's.",
+    "noBasis": "Kies een begunstigde en een categorie om het bedrag uit hun betalingsgeschiedenis te schatten.",
+    "pending": "Het bedrag wordt berekend uit de betalingsgeschiedenis van de begunstigde en de categorie."
   }
 }

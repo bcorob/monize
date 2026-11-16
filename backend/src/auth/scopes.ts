@@ -11,7 +11,7 @@
  *
  * `read` and `write` are the whole set. A PAT presents them bare; an OAuth client
  * presents them resource-prefixed (`monize:read`) and `OAuthProviderService`
- * strips the prefix, so both surfaces reach `requireScope` and `PatScopeGuard`
+ * strips the prefix, so both surfaces reach `requireScope`
  * with the same strings. Adding a scope means adding it here and to
  * `frontend/src/components/settings/ApiAccessSection.tsx`; `scopes.spec.ts`
  * checks that every consumer in this repository agrees.
@@ -43,4 +43,15 @@ export function apiScopesList(): string {
 /** True when `scope` is part of the supported vocabulary. */
 export function isApiScope(scope: string): scope is ApiScope {
   return (API_SCOPES as readonly string[]).includes(scope);
+}
+
+/**
+ * True when a stored comma-separated scope list holds `required`.
+ *
+ * Exact membership, on every surface: `write` does not imply `read`, so a
+ * token meant to do both carries both. The MCP transport and the REST
+ * `PatAccessGuard` both answer from here.
+ */
+export function hasApiScope(scopes: string, required: string): boolean {
+  return scopes.split(",").includes(required);
 }

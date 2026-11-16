@@ -1,0 +1,120 @@
+{
+  "view": {
+    "label": "보기",
+    "table": "표",
+    "calendar": "달력"
+  },
+  "grid": {
+    "label": "월"
+  },
+  "toolbar": {
+    "layers": "레이어"
+  },
+  "layers": {
+    "transactions": "거래",
+    "balances": "잔액",
+    "values": "평가액",
+    "dailyChange": "일간 변동"
+  },
+  "legend": {
+    "label": "범례",
+    "scheduled": "예정"
+  },
+  "chip": {
+    "noPayee": "수취인 없음",
+    "overdue": "연체",
+    "scheduled": "예정",
+    "noSymbol": "종목 코드 없음"
+  },
+  "day": {
+    "itemCount": "{count, plural, other {#개 항목}}",
+    "moreChips": "+{count}개 더",
+    "newTransaction": "이 날짜에 새 거래",
+    "noItems": "이 날짜에는 아무것도 없습니다.",
+    "scheduledHint": "예정된 항목입니다. 변경하려면 청구서 및 입금을 여세요.",
+    "newInvestmentTransaction": "이 날짜에 새 투자 거래"
+  },
+  "banner": {
+    "title": "일부 수치가 표시되지 않습니다",
+    "rowCap": "이번 달에는 거래가 {count}건 있어 캘린더가 표시할 수 있는 {limit}건을 넘습니다. 필터를 좁혀서 확인하세요.",
+    "scheduledUnavailable": "이번 달의 예정 항목을 불러오지 못했습니다. 표시된 항목은 완전하지만 예정 항목이 빠졌습니다.",
+    "scheduledTruncated": "이보다 먼 미래의 일부 예정 항목은 표시되지 않습니다. 모두 보려면 오늘에 가까이 이동하세요.",
+    "balancesScopeEmpty": "대상 계좌가 없어 표시할 잔액이 없습니다. 필터에서 계좌를 선택하세요.",
+    "balancesMissingRates": "이번 달 일부 날짜에 {pairs} 환율이 없어 해당 합계는 표시되지 않습니다. 통화를 열고 환율을 새로 고치세요.",
+    "balancesForecastGaps": "다음 예약 항목을 아직 평가할 수 없어 예상 잔액을 표시하지 않습니다: {schedules}.",
+    "balancesForecastWithheld": "예상 잔액을 표시하지 않습니다. 예약 항목 중 하나 이상을 아직 평가할 수 없으며 사유도 보고되지 않았습니다.",
+    "balancesUnforecastable": "{count, plural, other {대상 계좌 #개에 자체 예측이 없어 예상 합계를 표시하지 않습니다.}}",
+    "valuesUnpriced": "이번 달 일부 날짜에 {securities}의 가격이 없어 해당 평가액은 표시되지 않습니다. 종목의 가격 기록에 가격을 추가하거나 가격을 새로 고치세요.",
+    "valuesMissingRates": "이번 달 일부 날짜에 {pairs} 환율이 없어 해당 평가액은 표시되지 않습니다. 통화를 열고 환율을 새로 고치세요.",
+    "notesUnavailable": "이번 달 메모를 불러오지 못했습니다. 작성한 메모는 그대로 저장되어 있습니다."
+  },
+  "errors": {
+    "monthFailed": "이 달을 불러오지 못했습니다.",
+    "balancesFailed": "이번 달 잔액을 불러오지 못했습니다.",
+    "valuesFailed": "이번 달 포트폴리오 평가액을 불러오지 못했습니다.",
+    "movementsFailed": "이번 달 일간 변동을 불러오지 못했습니다.",
+    "movementDetailFailed": "이 날짜의 세부 내역을 불러오지 못했습니다."
+  },
+  "balance": {
+    "actualTitle": "당일 마감 잔액",
+    "projectedTitle": "예상 잔액",
+    "projected": "예상",
+    "projectedHint": "오늘 마감 잔액과 이 날짜까지 예정된 모든 항목으로 계산했습니다.",
+    "projectedFromItems": "오늘 마감 잔액과 이 날짜까지 예정된 모든 항목(아래 목록 포함)으로 계산했습니다.",
+    "partial": "일부만: 대상 중 {amount}는 계산할 수 있었지만 나머지는 계산할 수 없어 합계를 표시하지 않습니다.",
+    "missingRates": "이 금액의 기준일에 {pairs} 환율이 없습니다. 통화를 열고 환율을 새로 고치세요.",
+    "unforecastable": "{count, plural, other {대상 계좌 #개에 자체 예측이 없어 예상 합계를 표시하지 않습니다.}}"
+  },
+  "value": {
+    "title": "포트폴리오 평가액",
+    "unpriced": "이 날짜에 {securities}의 가격이 없어 평가액을 표시하지 않습니다. 종목의 가격 기록에 가격을 추가하거나 가격을 새로 고치세요.",
+    "missingRates": "이 날짜에 {pairs} 환율이 없어 평가액을 표시하지 않습니다. 통화를 열고 환율을 새로 고치세요."
+  },
+  "change": {
+    "openDetail": "이 날짜의 변동 내역 보기",
+    "detailTitle": "{date}의 변동",
+    "headline": "시장 변동",
+    "headlineValue": "{amount} ({percent})",
+    "gains": "상승",
+    "losses": "하락",
+    "unchanged": "{count, plural, other {#개 종목이 보합으로 마감했습니다.}}",
+    "remainder": "현금, 분배금 및 거래",
+    "row": "{quantity}주, {from}에서 {to} {currency}",
+    "reasons": {
+      "notTradingDay": "이 날짜에는 보유 종목에 가격이 없어 보고할 거래일이 없습니다.",
+      "unpricedHolding": "이 날짜 또는 전날에 가격이 없는 보유가 있어 변동을 알 수 없습니다.",
+      "missingRate": "환율이 없어 변동을 환산하지 못했습니다.",
+      "flowIncomplete": "이 날짜의 입금 또는 출금을 환산하지 못해 변동을 그것과 분리할 수 없습니다.",
+      "cashIncomplete": "현금 계정이 이 날짜의 잔액을 보고하지 않아 해당 일의 평가액이 불완전하며 변동을 알 수 없습니다.",
+      "noPriorValue": "이 날짜와 비교할 이전 평가액이 없습니다.",
+      "zeroBaseline": "전날 포트폴리오가 비어 있어 계산할 비율이 없습니다."
+    }
+  },
+  "notes": {
+    "title": "메모",
+    "add": "메모 추가",
+    "saveFailed": "메모를 저장하지 못했습니다. 다시 시도하세요.",
+    "deleteFailed": "메모를 삭제하지 못했습니다. 다시 시도하세요.",
+    "deleteTitle": "이 메모를 삭제할까요?",
+    "deleteMessage": "이 날짜의 메모가 삭제됩니다. 되돌릴 수 없습니다.",
+    "discardTitle": "이 메모를 버릴까요?",
+    "discardMessage": "작성 중인 메모가 저장되지 않았습니다. 이 날짜를 떠나면 메모가 사라집니다.",
+    "discardConfirm": "버리기",
+    "startDate": "시작일",
+    "endDate": "종료일",
+    "spanRange": "{start} ~ {end}",
+    "spanCount": "{count, plural, other {#일}}",
+    "spanBackwards": "종료일은 시작일보다 앞설 수 없습니다.",
+    "spanTooLong": "메모는 최대 {days}일까지 걸칠 수 있습니다.",
+    "spanMissesDay": "선택한 기간에 이 메모를 작성 중인 날짜가 포함되어 있지 않습니다.",
+    "deleteSpanMessage": "{count, plural, other {이 메모는 #일에 걸쳐 있으며 모두 지워집니다. 되돌릴 수 없습니다.}}"
+  },
+  "monthPicker": {
+    "title": "다른 달로 이동",
+    "typeLabel": "월 또는 연도를 입력하세요",
+    "placeholder": "예: 3월 1998, 1998-03, 3/1998",
+    "unreadable": "월로 읽을 수 없습니다. 연도, 월 이름 또는 1998-03을 입력해 보세요.",
+    "previousYear": "이전 해",
+    "nextYear": "다음 해"
+  }
+}

@@ -8,18 +8,35 @@ import { getIconComponent } from '@/components/ui/IconPicker';
 import { HOVER_ROW_ON_PAGE } from '@/components/ui/Card';
 import { CategoryPill } from '@/components/transactions/CategoryPill';
 import { registerDateColumnPadding } from '@/components/transactions/register-date-columns';
+import {
+  registerColumnClass,
+  REGISTER_DESCRIPTION_CELL_FLEX,
+  REGISTER_PAYEE_CELL_FLOOR,
+  REGISTER_PAYEE_NAME_CAP,
+  registerPayeeLayout,
+} from '@/components/transactions/register-columns';
 import { PayeeLogo } from '@/components/payees/PayeeLogo';
 import { Transaction, TransactionSplit, TransactionStatus } from '@/types/transaction';
 import { StatusCellButton } from '@/components/transactions/StatusCellButton';
 import { CategoryBudgetStatus } from '@/types/budget';
 import { DensityLevel } from '@/hooks/useTableDensity';
 import { HIGHLIGHT_FLASH, HIGHLIGHT_FLASH_CELL } from '@/hooks/useHighlightTarget';
-import { formatAmountWithCommas, getDecimalPlacesForCurrency } from '@/lib/format';
+import { getDecimalPlacesForCurrency } from '@/lib/format';
 import { foreignTransactionFee } from '@/lib/fx-fees';
 import { transferDirection } from '@/lib/transfer-label';
 import { usePayeeDisplay } from '@/hooks/usePayeeDisplay';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
-import type { StaleUnreconciledReason } from '@/lib/stale-reconciliation';
+import { useLocalizedAmount } from '@/hooks/useLocalizedAmount';
+import { LinkifiedText } from '@/components/ui/LinkifiedText';
+import { WarrantyBadge, rowHasWarranties } from '@/components/transactions/WarrantyBadge';
+import { CalendarIcon, ChevronDownIcon, DocumentDuplicateIcon, PaperClipIcon } from '@heroicons/react/24/outline';
+import { Badge } from '@/components/ui/Badge';
+
+/**
+ * The default for `hidden`: nothing hidden. A module constant so a caller
+ * that omits the prop hands the memoised row the same reference every render.
+ */
+const NO_HIDDEN_COLUMNS: ReadonlySet<string> = new Set();
 
 const INVESTMENT_ACTION_LABELS: Record<string, string> = {
   BUY: 'Buy',
@@ -33,6 +50,7 @@ const INVESTMENT_ACTION_LABELS: Record<string, string> = {
   REINVEST: 'Reinvest',
   ADD_SHARES: 'Add Shares',
   REMOVE_SHARES: 'Remove Shares',
+  RETURN_OF_CAPITAL: 'Return of Capital',
 };
 
 function describeInvestmentSplit(split: TransactionSplit, uncategorizedLabel: string): string {
@@ -43,12 +61,42 @@ function describeInvestmentSplit(split: TransactionSplit, uncategorizedLabel: st
   return symbol ? `${action}: ${symbol}` : action;
 }
 
-function CopyDropdown({ density, onDuplicate, onScheduleRecurring }: {
+/**
+ * The paperclip and count a row with attachments shows. One rendering for
+ * the tier table's Attachments column and the phone card, so the two cannot
+ * drift; the caller decides whether a row has anything to show (the tier cell
+ * prints a dash for none, the card prints nothing at all).
+ */
+function AttachmentBadge({ count }: { count: number }) {
+  const t = useTranslations('transactions');
+  return (
+    <span
+      data-testid="attachment-badge"
+      className="inline-flex items-center gap-1 text-gray-600 dark:text-gray-300"
+      role="img"
+      aria-label={t('list.attachmentsCount', { count })}
+    >
+      <PaperClipIcon className="w-3.5 h-3.5" aria-hidden="true" />
+      {count}
+    </span>
+  );
+}
+
+/** Keep the portalled share action from opening the row's editor or action sheet. */
+const STOP_ROW_PRESS = {
+  onMouseDown: (e: React.MouseEvent) => e.stopPropagation(),
+  onTouchStart: (e: React.TouchEvent) => e.stopPropagation(),
+  onContextMenu: (e: React.MouseEvent) => e.stopPropagation(),
+};
+
+function CopyDropdown({ density, onDuplicate, onScheduleRecurring, onShareExpense }: {
   density: DensityLevel;
   onDuplicate?: () => void;
   onScheduleRecurring?: () => void;
+  onShareExpense?: () => void;
 }) {
   const t = useTranslations('transactions');
+  const ts = useTranslations('sharedExpenses');
   const [isOpen, setIsOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -72,7 +120,7 @@ function CopyDropdown({ density, onDuplicate, onScheduleRecurring }: {
   }, [isOpen, updatePosition]);
 
   // If only one action is available, render a simple button
-  if (onDuplicate && !onScheduleRecurring) {
+  if (onDuplicate && !onScheduleRecurring && !onShareExpense) {
     return (
       <button
         onClick={(e) => { e.stopPropagation(); onDuplicate(); }}
@@ -80,9 +128,7 @@ function CopyDropdown({ density, onDuplicate, onScheduleRecurring }: {
         title={t('row.copyOptions.duplicateTitle')}
       >
         {density === 'dense' ? (
-          <svg className="w-3.5 h-3.5 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-          </svg>
+          <DocumentDuplicateIcon className="w-3.5 h-3.5 inline" aria-hidden="true" />
         ) : t('row.copyOptions.copy')}
       </button>
     );
@@ -97,15 +143,11 @@ function CopyDropdown({ density, onDuplicate, onScheduleRecurring }: {
         title={t('row.copyOptions.title')}
       >
         {density === 'dense' ? (
-          <svg className="w-3.5 h-3.5 inline" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-          </svg>
+          <DocumentDuplicateIcon className="w-3.5 h-3.5 inline" aria-hidden="true" />
         ) : (
           <span className="inline-flex items-center gap-0.5">
             {t('row.copyOptions.copy')}
-            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-            </svg>
+            <ChevronDownIcon className="w-3 h-3" aria-hidden="true" />
           </span>
         )}
       </button>
@@ -116,9 +158,7 @@ function CopyDropdown({ density, onDuplicate, onScheduleRecurring }: {
               onClick={(e) => { e.stopPropagation(); setIsOpen(false); onDuplicate(); }}
               className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
             >
-              <svg className="w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
+              <DocumentDuplicateIcon className="w-4 h-4 text-gray-400" aria-hidden="true" />
               {t('row.copyOptions.duplicate')}
             </button>
           )}
@@ -127,10 +167,17 @@ function CopyDropdown({ density, onDuplicate, onScheduleRecurring }: {
               onClick={(e) => { e.stopPropagation(); setIsOpen(false); onScheduleRecurring(); }}
               className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2 whitespace-nowrap"
             >
-              <svg className="w-4 h-4 shrink-0 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-              </svg>
+              <CalendarIcon className="w-4 h-4 shrink-0 text-gray-400" aria-hidden="true" />
               {t('row.copyOptions.scheduleRecurring')}
+            </button>
+          )}
+          {onShareExpense && (
+            <button
+              onClick={(event) => { event.stopPropagation(); setIsOpen(false); onShareExpense(); }}
+              {...STOP_ROW_PRESS}
+              className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 whitespace-nowrap"
+            >
+              {ts('splitWithPeople')}
             </button>
           )}
         </div>,
@@ -146,6 +193,13 @@ export interface TransactionRowProps {
   density: DensityLevel;
   cellPadding: string;
   isSingleAccountView: boolean;
+  /**
+   * Render the row as a wrapped two-line card instead of the tier table's
+   * cells. The list sets it for phones at Normal density only (Model B: on a
+   * phone the density toggle picks the layout); every other width and level
+   * renders the tier row below, unchanged.
+   */
+  wrapped?: boolean;
   showRunningBalance?: boolean;
   runningBalance: number | undefined;
   /** When set, a filter has reduced which splits are visible.  Show this
@@ -154,10 +208,10 @@ export interface TransactionRowProps {
   isDeleting: boolean;
   formatDate: (date: string) => string;
   /**
-   * Drop the year from the date below the `sm` breakpoint, handing the freed
-   * width to the payee. Both formats are rendered and CSS picks one, so wider
-   * screens keep the full date whatever the flag says. The long-press action
-   * sheet still shows the full date, so the year stays reachable.
+   * Drop the year from the Date column, at every width. On phones this hands
+   * the freed width to the payee; on wider screens it is simply the user's
+   * chosen date view. The long-press action sheet still shows the full date,
+   * so the year stays reachable.
    */
   compactDates?: boolean;
   /** Day and month in the user's own ordering (useDateFormat's formatDateWithoutYear). */
@@ -180,6 +234,7 @@ export interface TransactionRowProps {
   onEdit?: (transaction: Transaction) => void;
   onDuplicate?: (transaction: Transaction) => void;
   onScheduleRecurring?: (transaction: Transaction) => void;
+  onShareExpense?: (transaction: Transaction) => void;
   onDeleteClick: (transaction: Transaction) => void;
   isSelected?: boolean;
   selectionMode?: boolean;
@@ -194,12 +249,15 @@ export interface TransactionRowProps {
   /** Render the foreign-currency columns (paid currency, paid amount, fee paid). */
   showFxColumns?: boolean;
   /**
-   * Why this row is overdue for reconciliation, from `classifyStaleRow`.
-   * Undefined means either "not stale" or "no information" -- the caller only
-   * supplies it for accounts the user actually reconciles, and a page that
-   * could not load that context supplies it for none.
+   * The register's hidden columns (`useHiddenColumns('transactions').hidden`,
+   * read once by the list and passed down as the set itself, which keeps its
+   * reference while the preference is unchanged so this memoised row is not
+   * re-rendered by a fresh callback). A hidden column's cell is absent from
+   * the DOM at every width -- never hidden by a class -- in the tier row and
+   * the phone card alike; the width tiers go on deciding whether what is left
+   * fits. Omitted means nothing hidden.
    */
-  staleReason?: StaleUnreconciledReason;
+  hidden?: ReadonlySet<string>;
 }
 
 export const TransactionRow = memo(function TransactionRow({
@@ -208,6 +266,7 @@ export const TransactionRow = memo(function TransactionRow({
   density,
   cellPadding,
   isSingleAccountView,
+  wrapped = false,
   showRunningBalance = isSingleAccountView,
   runningBalance,
   displayAmount,
@@ -232,6 +291,7 @@ export const TransactionRow = memo(function TransactionRow({
   onEdit,
   onDuplicate,
   onScheduleRecurring,
+  onShareExpense,
   onDeleteClick,
   isSelected,
   selectionMode,
@@ -242,16 +302,20 @@ export const TransactionRow = memo(function TransactionRow({
   isFuture,
   isHighlighted,
   showFxColumns = false,
-  staleReason,
+  hidden = NO_HIDDEN_COLUMNS,
 }: TransactionRowProps) {
   const compactPadding = registerDateColumnPadding(compactDates);
+  // True for every column not hidden, structural ones included; the register
+  // column guard reads the `isVisible('<id>') &&` gates out of this file.
+  const isVisible = (id: string) => !hidden.has(id);
+  const payeeLayout = registerPayeeLayout(density);
   const t = useTranslations('transactions');
   const tc = useTranslations('common');
-  // The reconciliation chips live in the reconcile catalog so the register and
-  // the reconcile table say the same thing about the same row.
-  const tr = useTranslations('reconcile');
-  const { formatCurrency } = useNumberFormat();
+  const { formatCurrency, formatPercent } = useNumberFormat();
+  // Read-only amounts, grouped in the user's number locale (en-US unchanged).
+  const formatAmountLocal = useLocalizedAmount();
   const isVoid = transaction.status === TransactionStatus.VOID;
+  const hasWarranties = rowHasWarranties(transaction);
 
   // When this row is the deep-link target, scroll it into view once it mounts
   // so the user lands on it rather than hunting through the page.
@@ -280,6 +344,281 @@ export const TransactionRow = memo(function TransactionRow({
     ? (categoryIconMap?.get(transaction.category.id) ?? transaction.category.icon)
     : null;
 
+  // Phone + Normal density: one wrapped card per row instead of the tier
+  // table's cells (see the `wrapped` prop). It is a LAYOUT mode, not a
+  // different set of facts -- every value below is the same value the tier
+  // branch renders, from the same helper. Edit/Copy/Delete are deliberately
+  // absent: on a phone those live in the long-press action sheet the same
+  // handlers below open. Description, Ref # and the three FX columns are left
+  // out to keep the card to two lines -- three when the row carries tags,
+  // which take a line of their own under the category. Attachments keep
+  // their place left of the category, but only on a row that has some.
+  if (wrapped) {
+    return (
+      <tr
+        ref={rowRef}
+        onClick={() => onRowClick(transaction)}
+        onContextMenu={(e) => onContextMenu(transaction, e)}
+        onMouseDown={(e) => onLongPressStart(transaction, e)}
+        onMouseUp={onLongPressEnd}
+        onMouseLeave={onLongPressEnd}
+        onTouchStart={(e) => onLongPressStartTouch(transaction, e)}
+        onTouchMove={onTouchMove}
+        onTouchEnd={onLongPressEnd}
+        onTouchCancel={onLongPressEnd}
+        className={`group ${HOVER_ROW_ON_PAGE} select-none touch-manipulation bg-white dark:bg-gray-900 ${isVoid ? 'opacity-50' : ''} ${isFuture && !isVoid ? 'opacity-60' : ''} ${onEdit ? 'cursor-pointer' : ''} ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : ''} ${isHighlighted ? HIGHLIGHT_FLASH : ''}`}
+      >
+        <td className="p-0">
+          <div className="px-4 py-3 grid grid-cols-[auto_minmax(0,1fr)_auto] gap-x-3 gap-y-1.5 items-start">
+            <div className="flex items-center gap-2">
+              {selectionMode && (
+                <span onClick={(e) => e.stopPropagation()}>
+                  <input
+                    type="checkbox"
+                    checked={isSelected || false}
+                    onChange={() => onToggleSelection?.()}
+                    className="rounded border-gray-300 dark:border-gray-600 text-blue-600 focus:ring-blue-500 h-4 w-4 cursor-pointer"
+                  />
+                </span>
+              )}
+              <span
+                className={`flex items-center gap-1.5 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 ${isVoid ? 'line-through' : ''}`}
+              >
+                {compactDates && formatCompactDate ? (
+                  <span title={formatDate(transaction.transactionDate)}>
+                    {formatCompactDate(transaction.transactionDate)}
+                  </span>
+                ) : (
+                  formatDate(transaction.transactionDate)
+                )}
+              </span>
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2 min-w-0">
+                {/* The card has room for the brand badge at every phone width,
+                    so unlike the tier cell it is not dropped here. */}
+                {payeeLabel && (
+                  <PayeeLogo payee={transaction.payee} name={payeeLabel} size={20} />
+                )}
+                {transaction.payeeId && onPayeeClick ? (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); onPayeeClick(transaction.payeeId!); }}
+                    className={`text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline block truncate text-left ${isVoid ? 'line-through' : ''}`}
+                    title={t('list.row.viewPayeeTitle', { name: payeeLabel ?? '' })}
+                  >
+                    {payeeLabel || '-'}
+                  </button>
+                ) : (
+                  <div
+                    className={`text-sm font-medium text-gray-900 dark:text-gray-100 truncate ${isVoid ? 'line-through' : ''}`}
+                    title={payeeLabel || undefined}
+                  >
+                    {payeeLabel || '-'}
+                  </div>
+                )}
+              </div>
+            </div>
+            <div
+              className={`text-right whitespace-nowrap text-sm font-medium ${isVoid ? 'line-through' : ''}`}
+            >
+              {displayAmount !== undefined ? (
+                <span className="inline-flex flex-col items-end">
+                  <span className="inline-flex items-center gap-1 justify-end">
+                  {formatAmount(displayAmount, transaction.currencyCode)}
+                  <span className="text-purple-500 dark:text-purple-400 text-xs font-normal">*</span>
+                  </span>
+                  {/* What the asterisk means is written out, not left to a hover-only title. */}
+                  <span className="text-xs font-normal text-gray-500 dark:text-gray-400">
+                  {t('list.row.filteredAmountTitle', { amount: formatAmountLocal(Math.abs(transaction.amount), getDecimalPlacesForCurrency(transaction.currencyCode)) })}
+                  </span>
+                </span>
+              ) : (
+                formatAmount(transaction.amount, transaction.currencyCode)
+              )}
+              {!showFxColumns &&
+                transaction.originalCurrencyCode &&
+                transaction.originalAmount !== null && (
+                  <div className="text-xs font-normal text-gray-500 dark:text-gray-400">
+                    {transaction.originalCurrencyCode}{' '}
+                    {formatAmountLocal(
+                      Math.abs(Number(transaction.originalAmount)),
+                      getDecimalPlacesForCurrency(transaction.originalCurrencyCode),
+                    )}
+                  </div>
+                )}
+            </div>
+            <div className="col-span-3 flex flex-wrap items-center gap-1.5">
+              {/* Structural, not responsive, exactly as in the tier row: a
+                  single-account page never repeats its own title. */}
+              {!isSingleAccountView && (
+                <span className="text-xs text-gray-500 dark:text-gray-400">
+                  {transaction.account?.name || '-'}
+                </span>
+              )}
+              {/* Attachments, and the warranty shield beside them, sit left
+                  of the category, as the tier table's column does (both under
+                  the Attachments column's gate). A row with neither renders
+                  nothing here -- not the tier cell's dash, and no empty
+                  element either -- so the category stays flush to the card's
+                  left edge. */}
+              {isVisible('attachments') && (
+                <>
+                  {transaction.attachmentCount && transaction.attachmentCount > 0 ? (
+                    <AttachmentBadge count={transaction.attachmentCount} />
+                  ) : null}
+                  {hasWarranties ? <WarrantyBadge count={transaction.warrantyCount!} /> : null}
+                </>
+              )}
+              {transaction.linkedInvestmentTransactionId ? (
+                // No `title` here, unlike the tier cell: a hover tooltip is
+                // unreachable on a phone, and the pill's own label already
+                // says what it says.
+                <Badge variant="green">{t('list.row.investmentLabel')}</Badge>
+              ) : transaction.isTransfer ? (
+                <>
+                  {transaction.category && (
+                    <CategoryPill
+                      name={transaction.category.name}
+                      color={categoryColor}
+                      icon={categoryIcon}
+                      density={density}
+                      maxWidthClass="max-w-[160px]"
+                      title={
+                        onCategoryClick
+                          ? t('list.row.filterByCategory', { name: transaction.category.name })
+                          : undefined
+                      }
+                      onClick={
+                        onCategoryClick
+                          ? (e) => { e.stopPropagation(); onCategoryClick(transaction.category!.id); }
+                          : undefined
+                      }
+                    />
+                  )}
+                  {onTransferClick && transaction.linkedTransaction?.account?.id && transaction.linkedTransactionId ? (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onTransferClick(transaction.linkedTransaction!.account!.id, transaction.linkedTransactionId!);
+                      }}
+                      className="inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 truncate max-w-[160px] hover:bg-blue-200 dark:hover:bg-blue-800 transition-colors px-2 py-1"
+                      title={t('list.row.transferTitle', { direction: transferDirection(transaction.amount), name: transaction.linkedTransaction.account.name })}
+                    >
+                      {transferDirection(transaction.amount) === 'to'
+                        ? `\u2192 ${transaction.linkedTransaction.account.name}`
+                        : `${transaction.linkedTransaction.account.name} \u2192`}
+                    </button>
+                  ) : (
+                    <span
+                      className="inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 truncate max-w-[160px] px-2 py-1"
+                      title={transaction.linkedTransaction?.account?.name
+                        ? t('list.row.transferTitle', { direction: transferDirection(transaction.amount), name: transaction.linkedTransaction.account.name })
+                        : t('list.row.transfer')}
+                    >
+                      {transaction.linkedTransaction?.account?.name
+                        ? (transferDirection(transaction.amount) === 'to'
+                            ? `\u2192 ${transaction.linkedTransaction.account.name}`
+                            : `${transaction.linkedTransaction.account.name} \u2192`)
+                        : t('list.row.transfer')}
+                    </span>
+                  )}
+                </>
+              ) : transaction.isSplit ? (
+                <span className="inline-flex text-xs leading-5 font-semibold rounded-full bg-purple-100 dark:bg-purple-900 text-purple-800 dark:text-purple-200 px-2 py-1">
+                  {t('list.row.split')}{transaction.splits ? ` (${transaction.splits.length})` : ''}
+                </span>
+              ) : transaction.category ? (
+                <CategoryPill
+                  name={transaction.category.name}
+                  color={categoryColor}
+                  icon={categoryIcon}
+                  density={density}
+                  title={
+                    onCategoryClick
+                      ? t('list.row.filterByCategory', { name: transaction.category.name })
+                      : undefined
+                  }
+                  onClick={
+                    onCategoryClick
+                      ? (e) => { e.stopPropagation(); onCategoryClick(transaction.category!.id); }
+                      : undefined
+                  }
+                />
+              ) : null}
+              <span className="ml-auto flex items-center gap-2">
+                {/* StatusCellButton stops the click itself, so it needs no
+                    wrapper here -- the tier branch mounts it bare too. */}
+                {isVisible('status') && (
+                  <StatusCellButton
+                    status={transaction.status}
+                    dense={false}
+                    onCycle={() => onCycleStatus(transaction)}
+                  />
+                )}
+                {showRunningBalance && (
+                  <span className="text-right whitespace-nowrap text-sm font-medium">
+                    <span className="block text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500 leading-tight">
+                      {t('list.header.balance')}
+                    </span>
+                    {runningBalance !== undefined
+                      ? formatBalance(runningBalance, transaction.currencyCode)
+                      : '-'}
+                  </span>
+                )}
+              </span>
+            </div>
+            {/* Line 3, only when the row carries tags: under the category
+                rather than beside it. Inline after the category, one tag was
+                enough to push the status and balance onto a line of their
+                own, so the card grew a line anyway -- with the pills and the
+                figures interleaved. On their own line the tags wrap among
+                themselves and line 2 keeps its shape. */}
+            {isVisible('tags') && transaction.tags && transaction.tags.length > 0 && (
+              <div className="col-span-3 flex flex-wrap items-center gap-1.5">
+                {transaction.tags.map((tag) => onTagClick ? (
+                  <button
+                    key={tag.id}
+                    onClick={(e) => { e.stopPropagation(); onTagClick(tag.id); }}
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium hover:opacity-80 transition-opacity"
+                    style={{
+                      backgroundColor: tag.color ? `${tag.color}20` : '#9ca3af20',
+                      color: tag.color || '#6b7280',
+                    }}
+                    title={t('list.row.filterByTag', { name: tag.name })}
+                  >
+                    {tag.icon && (
+                      <span className="w-3 h-3 flex-shrink-0 [&>svg]:w-3 [&>svg]:h-3">
+                        {getIconComponent(tag.icon)}
+                      </span>
+                    )}
+                    {tag.name}
+                  </button>
+                ) : (
+                  <span
+                    key={tag.id}
+                    className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium"
+                    style={{
+                      backgroundColor: tag.color ? `${tag.color}20` : '#9ca3af20',
+                      color: tag.color || '#6b7280',
+                    }}
+                    title={tag.name}
+                  >
+                    {tag.icon && (
+                      <span className="w-3 h-3 flex-shrink-0 [&>svg]:w-3 [&>svg]:h-3">
+                        {getIconComponent(tag.icon)}
+                      </span>
+                    )}
+                    {tag.name}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </td>
+      </tr>
+    );
+  }
+
   return (
     <tr
       ref={rowRef}
@@ -307,38 +646,36 @@ export const TransactionRow = memo(function TransactionRow({
       <td className={`${cellPadding} ${compactPadding.date} whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 ${isVoid ? 'line-through' : ''}`}>
         <span className={`flex items-center gap-1.5 ${isVoid ? 'line-through' : ''}`}>
           {compactDates && formatCompactDate ? (
-            <>
-              <span className="sm:hidden">{formatCompactDate(transaction.transactionDate)}</span>
-              <span className="hidden sm:inline">{formatDate(transaction.transactionDate)}</span>
-            </>
+            // The full date stays reachable without leaving the row: on
+            // hover here, and in the long-press action sheet.
+            <span title={formatDate(transaction.transactionDate)}>
+              {formatCompactDate(transaction.transactionDate)}
+            </span>
           ) : (
             formatDate(transaction.transactionDate)
           )}
-          {staleReason && (
-            <span
-              data-testid="stale-reconciliation-chip"
-              data-stale={staleReason}
-              className="inline-flex items-center rounded-full bg-amber-200 dark:bg-amber-800 px-1.5 py-0.5 text-[10px] font-medium text-amber-900 dark:text-amber-100"
-              title={
-                staleReason === 'missed'
-                  ? tr('stale.missedTooltip')
-                  : tr('stale.overdueTooltip')
-              }
-            >
-              {staleReason === 'missed' ? tr('stale.missedChip') : tr('stale.overdueChip')}
-            </span>
-          )}
         </span>
       </td>
-      <td className={`${cellPadding} whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 ${isVoid ? 'line-through' : ''} hidden lg:table-cell`}>
-        {transaction.account?.name || '-'}
-      </td>
+      {/* Structural, not responsive: a single-account page omits the Account
+          column entirely (see register-columns.ts). */}
+      {!isSingleAccountView && (
+        <td className={`${cellPadding} whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 ${isVoid ? 'line-through' : ''} ${registerColumnClass('account')}`}>
+          {transaction.account?.name || '-'}
+        </td>
+      )}
       {/* Two things give the payee room when the year is hidden: this
           phone-width cap widens, and the inset between this column and the
-          date closes (registerDateColumnPadding). It stays a cap, with
-          truncate below, so a long payee cannot push Amount off screen. */}
-      <td className={`${cellPadding} ${compactPadding.payee} ${compactDates ? 'max-w-[160px]' : 'max-w-[100px]'} sm:max-w-none overflow-hidden`}>
-        <div className="flex items-center gap-2 min-w-0">
+          date closes (registerDateColumnPadding). It stays a cap, with the
+          name wrapping or truncating below, so a long payee cannot push
+          Amount off screen.
+          REGISTER_PAYEE_CELL_FLOOR is the other half: Description's w-full is
+          a claim on the whole table settled against this column's content, so
+          without a floor a filtered register hands Description the width the
+          payee was using (see register-columns.ts). */}
+      <td className={`${cellPadding} ${compactPadding.payee} ${compactDates ? 'max-w-[160px]' : 'max-w-[100px]'} sm:max-w-none ${REGISTER_PAYEE_CELL_FLOOR} overflow-hidden`}>
+        {/* Normal wraps a long payee, Compact and Dense ellipsize it; neither
+            lets it push Amount off screen (registerPayeeLayout). */}
+        <div className={payeeLayout.container}>
           {/* Brand badge beside the name, never inside the button: the button's
               text is the payee name, and a decorative glyph in it changes what
               every textContent assertion reads. Hidden at dense, where the row
@@ -355,34 +692,24 @@ export const TransactionRow = memo(function TransactionRow({
           {transaction.payeeId && onPayeeClick ? (
             <button
               onClick={(e) => { e.stopPropagation(); onPayeeClick(transaction.payeeId!); }}
-              className={`text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline block truncate sm:max-w-[280px] text-left ${isVoid ? 'line-through' : ''}`}
+              className={`text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline block ${payeeLayout.name} ${REGISTER_PAYEE_NAME_CAP} text-left ${isVoid ? 'line-through' : ''}`}
               title={t('list.row.viewPayeeTitle', { name: payeeLabel ?? '' })}
             >
               {payeeLabel || '-'}
             </button>
           ) : (
             <div
-              className={`text-sm font-medium text-gray-900 dark:text-gray-100 truncate sm:max-w-[280px] ${isVoid ? 'line-through' : ''}`}
+              className={`text-sm font-medium text-gray-900 dark:text-gray-100 ${payeeLayout.name} ${REGISTER_PAYEE_NAME_CAP} ${isVoid ? 'line-through' : ''}`}
               title={payeeLabel || undefined}
             >
               {payeeLabel || '-'}
             </div>
           )}
         </div>
-        {density === 'normal' && transaction.referenceNumber && (
-          <div className="text-xs text-gray-500 dark:text-gray-400">
-            {t('list.row.ref', { number: transaction.referenceNumber })}
-          </div>
-        )}
       </td>
-      <td className={`${cellPadding} ${density !== 'normal' ? 'whitespace-nowrap' : ''} hidden min-[900px]:table-cell`}>
+      <td className={`${cellPadding} ${density !== 'normal' ? 'whitespace-nowrap' : ''} ${registerColumnClass('category')}`}>
         {transaction.linkedInvestmentTransactionId ? (
-          <span
-            className={`inline-flex text-xs leading-5 font-semibold rounded-full bg-emerald-100 dark:bg-emerald-900 text-emerald-800 dark:text-emerald-200 ${density === 'dense' ? 'px-1.5 py-0.5' : 'px-2 py-1'}`}
-            title="This transaction is linked to an investment transaction"
-          >
-            {t('list.row.investmentLabel')}
-          </span>
+          <Badge variant="green">{t('list.row.investmentLabel')}</Badge>
         ) : transaction.isTransfer ? (
           // A transfer shows where the money moved (the linked-account arrow
           // chip). When it also carries a spending category (e.g. a monthly
@@ -453,14 +780,14 @@ export const TransactionRow = memo(function TransactionRow({
                       <span className="text-blue-600 dark:text-blue-400">
                         {transferDirection(split.amount) === 'to'
                           ? `\u2192 ${split.transferAccount.name}`
-                          : `${split.transferAccount.name} \u2192`}: {formatAmountWithCommas(Math.abs(Number(split.amount)), getDecimalPlacesForCurrency(transaction.currencyCode))}
+                          : `${split.transferAccount.name} \u2192`}: {formatCurrency(Math.abs(Number(split.amount)), transaction.currencyCode)}
                       </span>
                     ) : split.investmentTransaction ? (
-                      <span className="text-emerald-600 dark:text-emerald-400">
-                        {describeInvestmentSplit(split, t('list.row.uncategorized'))}: {formatAmountWithCommas(Math.abs(Number(split.amount)), getDecimalPlacesForCurrency(transaction.currencyCode))}
+                      <span className="text-green-600 dark:text-green-400">
+                        {describeInvestmentSplit(split, t('list.row.uncategorized'))}: {formatCurrency(Math.abs(Number(split.amount)), transaction.currencyCode)}
                       </span>
                     ) : (
-                      <>{split.category?.name || t('list.row.uncategorized')}: {formatAmountWithCommas(Math.abs(Number(split.amount)), getDecimalPlacesForCurrency(transaction.currencyCode))}</>
+                      <>{split.category?.name || t('list.row.uncategorized')}: {formatCurrency(Math.abs(Number(split.amount)), transaction.currencyCode)}</>
                     )}
                   </div>
                 ))}
@@ -484,9 +811,9 @@ export const TransactionRow = memo(function TransactionRow({
                 }`}
                 title={
                   budgetStatus.percentUsed > 100
-                    ? `Over budget: ${budgetStatus.percentUsed.toFixed(0)}% used (${formatCurrency(budgetStatus.spent, transaction.currencyCode)} / ${formatCurrency(budgetStatus.budgeted, transaction.currencyCode)})`
+                    ? `Over budget: ${formatPercent(budgetStatus.percentUsed, 0)} used (${formatCurrency(budgetStatus.spent, transaction.currencyCode)} / ${formatCurrency(budgetStatus.budgeted, transaction.currencyCode)})`
                     : budgetStatus.percentUsed >= 80
-                      ? `Approaching limit: ${budgetStatus.percentUsed.toFixed(0)}% used (${formatCurrency(budgetStatus.remaining, transaction.currencyCode)} remaining)`
+                      ? `Approaching limit: ${formatPercent(budgetStatus.percentUsed, 0)} used (${formatCurrency(budgetStatus.remaining, transaction.currencyCode)} remaining)`
                       : undefined
                 }
               />
@@ -518,23 +845,35 @@ export const TransactionRow = memo(function TransactionRow({
           <span className="text-sm text-gray-400 dark:text-gray-500">-</span>
         )}
       </td>
-      <td className={`${cellPadding} text-sm text-gray-500 dark:text-gray-400 hidden 2xl:table-cell`}>
-        <div
-          className={`truncate max-w-[320px] ${isVoid ? 'line-through' : ''}`}
-          title={transaction.description || undefined}
-        >
-          {transaction.description || '-'}
-        </div>
-      </td>
-      <td className={`${cellPadding} text-sm text-gray-500 dark:text-gray-400 hidden 2xl:table-cell`}>
-        <div
-          className={`truncate max-w-[160px] ${isVoid ? 'line-through' : ''}`}
-          title={transaction.referenceNumber || undefined}
-        >
-          {transaction.referenceNumber || '-'}
-        </div>
-      </td>
-      <td className={`${cellPadding} text-sm hidden xl:table-cell`}>
+      {/* The column that yields: it takes whatever width the content-sized
+          columns leave and shrinks first when there is none, so its arrival
+          can never push Status off the visible edge of the register. */}
+      {isVisible('description') && (
+        <td className={`${cellPadding} text-sm text-gray-500 dark:text-gray-400 ${registerColumnClass('description')} ${REGISTER_DESCRIPTION_CELL_FLEX}`}>
+          <div
+            className={`truncate ${isVoid ? 'line-through' : ''}`}
+            title={transaction.description || undefined}
+          >
+            {transaction.description ? (
+              <LinkifiedText text={transaction.description} />
+            ) : (
+              '-'
+            )}
+          </div>
+        </td>
+      )}
+      {isVisible('refNumber') && (
+        <td className={`${cellPadding} text-sm text-gray-500 dark:text-gray-400 ${registerColumnClass('refNumber')}`}>
+          <div
+            className={`truncate max-w-[160px] ${isVoid ? 'line-through' : ''}`}
+            title={transaction.referenceNumber || undefined}
+          >
+            {transaction.referenceNumber || '-'}
+          </div>
+        </td>
+      )}
+      {isVisible('tags') && (
+      <td className={`${cellPadding} text-sm ${registerColumnClass('tags')}`}>
         {transaction.tags && transaction.tags.length > 0 ? (
           <div className="flex flex-wrap gap-1">
             {transaction.tags.map((tag) => onTagClick ? (
@@ -578,26 +917,34 @@ export const TransactionRow = memo(function TransactionRow({
           <span className="text-gray-400 dark:text-gray-500">-</span>
         )}
       </td>
-      <td className={`${cellPadding} whitespace-nowrap text-center text-sm hidden min-[900px]:table-cell`}>
-        {transaction.attachmentCount && transaction.attachmentCount > 0 ? (
-          <span className="inline-flex items-center gap-1 text-gray-600 dark:text-gray-300" title={t('list.attachmentsCount', { count: transaction.attachmentCount })}>
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-            </svg>
-            {transaction.attachmentCount}
-          </span>
-        ) : (
-          <span className="text-gray-400 dark:text-gray-500">-</span>
-        )}
-      </td>
+      )}
+      {isVisible('attachments') && (
+        <td className={`${cellPadding} whitespace-nowrap text-center text-sm ${registerColumnClass('attachments')}`}>
+          {hasWarranties ? (
+            <span className="inline-flex items-center gap-2">
+              {transaction.attachmentCount && transaction.attachmentCount > 0 ? (
+                <AttachmentBadge count={transaction.attachmentCount} />
+              ) : null}
+              <WarrantyBadge count={transaction.warrantyCount!} />
+            </span>
+          ) : transaction.attachmentCount && transaction.attachmentCount > 0 ? (
+            <AttachmentBadge count={transaction.attachmentCount} />
+          ) : (
+            <span className="text-gray-400 dark:text-gray-500">-</span>
+          )}
+        </td>
+      )}
       <td className={`${cellPadding} whitespace-nowrap text-sm font-medium text-right ${isVoid ? 'line-through' : ''}`}>
         {displayAmount !== undefined ? (
-          <span
-            title={t('list.row.filteredAmountTitle', { amount: formatAmountWithCommas(Math.abs(transaction.amount), getDecimalPlacesForCurrency(transaction.currencyCode)) })}
-            className="inline-flex items-center gap-1 justify-end"
-          >
+          <span className="inline-flex flex-col items-end">
+            <span className="inline-flex items-center gap-1 justify-end">
             {formatAmount(displayAmount, transaction.currencyCode)}
             <span className="text-purple-500 dark:text-purple-400 text-xs font-normal">*</span>
+            </span>
+            {/* What the asterisk means is written out, not left to a hover-only title. */}
+            <span className="text-xs font-normal text-gray-500 dark:text-gray-400">
+            {t('list.row.filteredAmountTitle', { amount: formatAmountLocal(Math.abs(transaction.amount), getDecimalPlacesForCurrency(transaction.currencyCode)) })}
+            </span>
           </span>
         ) : (
           formatAmount(transaction.amount, transaction.currencyCode)
@@ -607,7 +954,7 @@ export const TransactionRow = memo(function TransactionRow({
           transaction.originalAmount !== null && (
             <div className="text-xs font-normal text-gray-500 dark:text-gray-400">
               {transaction.originalCurrencyCode}{' '}
-              {formatAmountWithCommas(
+              {formatAmountLocal(
                 Math.abs(Number(transaction.originalAmount)),
                 getDecimalPlacesForCurrency(transaction.originalCurrencyCode),
               )}
@@ -645,19 +992,21 @@ export const TransactionRow = memo(function TransactionRow({
             : '-'}
         </td>
       )}
-      <td className={`${cellPadding} whitespace-nowrap text-center hidden min-[1400px]:table-cell`}>
-        <StatusCellButton
-          status={transaction.status}
-          dense={density === 'dense'}
-          onCycle={() => onCycleStatus(transaction)}
-        />
-      </td>
-      <td className={`${cellPadding} whitespace-nowrap text-right text-sm font-medium space-x-2 hidden min-[480px]:table-cell sticky right-0 ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : density !== 'normal' && index % 2 === 1 ? 'bg-gray-50 dark:bg-table-stripe-dark' : 'bg-white dark:bg-gray-900'} group-hover:bg-gray-100 dark:group-hover:bg-gray-800 ${isHighlighted ? HIGHLIGHT_FLASH_CELL : ''}`}>
+      {isVisible('status') && (
+        <td className={`${cellPadding} whitespace-nowrap text-center ${registerColumnClass('status')}`}>
+          <StatusCellButton
+            status={transaction.status}
+            dense={density === 'dense'}
+            onCycle={() => onCycleStatus(transaction)}
+          />
+        </td>
+      )}
+      <td className={`${cellPadding} whitespace-nowrap text-right text-sm font-medium space-x-2 ${registerColumnClass('actions')} sticky right-0 ${isSelected ? 'bg-blue-50 dark:bg-blue-900/20' : density !== 'normal' && index % 2 === 1 ? 'bg-gray-50 dark:bg-table-stripe-dark' : 'bg-white dark:bg-gray-900'} group-hover:bg-gray-100 dark:group-hover:bg-gray-800 ${isHighlighted ? HIGHLIGHT_FLASH_CELL : ''}`}>
         {onEdit && (
           <button
             onClick={(e) => { e.stopPropagation(); onEdit(transaction); }}
             className={transaction.linkedInvestmentTransactionId
-              ? "text-emerald-600 hover:text-emerald-900 dark:text-emerald-400 dark:hover:text-emerald-300"
+              ? "text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300"
               : "text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300"
             }
             title={transaction.linkedInvestmentTransactionId ? t('list.row.linkedInvestmentTitle') : undefined}
@@ -667,9 +1016,10 @@ export const TransactionRow = memo(function TransactionRow({
               : (density === 'dense' ? '\u270E' : tc('edit'))}
           </button>
         )}
-        {!transaction.linkedInvestmentTransactionId && (onDuplicate || onScheduleRecurring) && (
+        {!transaction.linkedInvestmentTransactionId && (onDuplicate || onScheduleRecurring || onShareExpense) && (
           <CopyDropdown
             density={density}
+            onShareExpense={onShareExpense ? () => onShareExpense(transaction) : undefined}
             onDuplicate={onDuplicate ? () => onDuplicate(transaction) : undefined}
             onScheduleRecurring={onScheduleRecurring ? () => onScheduleRecurring(transaction) : undefined}
           />

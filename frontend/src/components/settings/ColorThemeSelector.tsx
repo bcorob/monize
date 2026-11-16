@@ -18,8 +18,9 @@ interface ColorThemeSelectorProps {
 /**
  * Colour theme (palette) picker that applies and persists the choice
  * immediately, mirroring the ThemeSelector. The change is reflected in the
- * app right away (via the theme context) and saved to the server without
- * waiting for "Save Preferences".
+ * app right away (via the theme context) and saved to the server by this
+ * component itself, which is why `PreferencesSection` leaves this field out of
+ * its own save-on-change plumbing rather than saving it twice.
  *
  * Each option draws its own palette rather than naming it, because the names
  * do not say what the themes look like and a list of fifteen of them asks the

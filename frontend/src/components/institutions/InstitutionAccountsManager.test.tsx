@@ -71,6 +71,32 @@ async function renderManager(onChanged = vi.fn(), onClose = vi.fn()) {
 describe('InstitutionAccountsManager', () => {
   beforeEach(() => vi.clearAllMocks());
 
+  it('is named by its Modal title alone, the logo not repeating the name', async () => {
+    vi.mocked(institutionsApi.getAccounts).mockResolvedValue([]);
+    vi.mocked(accountsApi.getAll).mockResolvedValue([]);
+    await act(async () => {
+      render(
+        <InstitutionAccountsManager
+          institution={{ ...institution, hasLogo: true }}
+          isOpen
+          onClose={vi.fn()}
+        />,
+      );
+    });
+    const dialog = screen.getByRole('dialog', { name: 'Accounts at TD' });
+    // Space separates the add field from the list, not a full-width rule.
+    expect(dialog.querySelector('.border-t')).toBeNull();
+  });
+
+  it('offers Done while the accounts are still loading', async () => {
+    vi.mocked(institutionsApi.getAccounts).mockReturnValue(new Promise(() => {}));
+    vi.mocked(accountsApi.getAll).mockReturnValue(new Promise(() => {}));
+    const { onClose } = await renderManager();
+    expect(screen.getByText('Loading accounts...')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(onClose).toHaveBeenCalled();
+  });
+
   it('lists the accounts assigned to the institution', async () => {
     vi.mocked(institutionsApi.getAccounts).mockResolvedValue([
       account('a-1', 'Chequing'),

@@ -568,7 +568,7 @@ CREATE TABLE securities (
     sector_data_updated_at TIMESTAMP, -- cache staleness check
     website VARCHAR(2048),           -- issuer/product page; auto-filled from Yahoo for shares
     ir_website VARCHAR(2048),        -- investor-relations page; manual, no provider supplies it
-    quote_provider VARCHAR(20),      -- per-security provider override: 'yahoo' | 'msn' | NULL = user default
+    quote_provider VARCHAR(20),      -- per-security provider override: 'yahoo' | 'msn' | 'lse' | 'deutsche_boerse' | NULL = user default
     msn_instrument_id VARCHAR(50),   -- cached MSN Financial Instrument ID (SecId)
     historical_backfill_attempted_at TIMESTAMP, -- last time we asked the provider for a multi-year backfill
     market_timezone VARCHAR(64),     -- IANA zone the instrument trades in, from the provider (e.g. America/New_York)
@@ -578,7 +578,7 @@ CREATE TABLE securities (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE(user_id, symbol),
     CONSTRAINT securities_quote_provider_check
-      CHECK (quote_provider IS NULL OR quote_provider IN ('yahoo','msn'))
+      CHECK (quote_provider IS NULL OR quote_provider IN ('yahoo','msn','lse','deutsche_boerse'))
 );
 
 CREATE INDEX idx_securities_user_id ON securities(user_id);
@@ -920,7 +920,7 @@ CREATE TABLE user_preferences (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT user_preferences_default_quote_provider_check
-      CHECK (default_quote_provider IN ('yahoo','msn')),
+      CHECK (default_quote_provider IN ('yahoo','msn','lse','deutsche_boerse')),
     CONSTRAINT user_preferences_recent_transactions_limit_check
       CHECK (recent_transactions_limit BETWEEN 1 AND 20)
 );
@@ -1167,7 +1167,7 @@ CREATE INDEX idx_investment_reports_user_id ON investment_reports(user_id);
 CREATE INDEX idx_investment_reports_user_favourite ON investment_reports(user_id, is_favourite);
 CREATE INDEX idx_investment_reports_user_sort ON investment_reports(user_id, sort_order);
 
--- Row-Level Security identity helpers (see docs/future-plans/row-level-security.md).
+-- Row-Level Security identity helpers (see docs/specs/row-level-security.md).
 --
 -- app.current_user_id -- effective user (the owner when a delegate is acting).
 -- app.real_user_id    -- authenticated identity (the delegate while acting);

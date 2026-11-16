@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { StrictMode } from 'react';
 import { render, screen, fireEvent, act, waitFor } from '@/test/render';
 import { renderHook } from '@testing-library/react';
-import { NextIntlClientProvider } from 'next-intl';
 import {
   CashFilterBar,
   CashFilterToggleButton,
@@ -11,8 +10,6 @@ import {
   useCashFilterOptions,
 } from './CashRegisterFilters';
 import { transactionsApi } from '@/lib/transactions';
-import investmentsNs from '@/i18n/messages/en/investments.json';
-import commonNs from '@/i18n/messages/en/common.json';
 
 vi.mock('@/lib/transactions', () => ({
   transactionsApi: { getRegisterFilterOptions: vi.fn() },
@@ -33,14 +30,7 @@ const OPTIONS = {
 };
 
 function renderWithMessages(ui: React.ReactElement) {
-  return render(
-    <NextIntlClientProvider
-      locale="en"
-      messages={{ investments: investmentsNs, common: commonNs }}
-    >
-      {ui}
-    </NextIntlClientProvider>,
-  );
+  return render(ui);
 }
 
 describe('countActiveCashFilters', () => {

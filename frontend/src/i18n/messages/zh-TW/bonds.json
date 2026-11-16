@@ -1,0 +1,100 @@
+{
+  "entry": {
+    "history": "{program}條款歷史"
+  },
+  "offer": {
+    "loading": "正在載入在售債券...",
+    "loadFailed": "無法載入在售債券。",
+    "retry": "重試",
+    "empty": "今天沒有在售的系列。",
+    "asOf": "截至 {date} 的在售情況。所有數字均指今天購買並持有至到期的一張債券。",
+    "comparisonNote": "年化報酬率是用於比較不同期限產品的參考數字，並非獲利承諾。",
+    "couponsNote": "票息不再投資：對於支付票息的債券，到期價值包含已支付的全部票息。",
+    "projected": "預測",
+    "projectedTitle": "此數字依據假設的基準值，而不僅是已公布的利率。",
+    "assumptions": {
+      "title": "假設",
+      "intro": "尚未開始的期間按這些基準值估值。修改其中一項，即可查看它對每一列的影響。",
+      "label": "{benchmark}（%）",
+      "latest": "最近公布的值：{value}（{observation}）",
+      "reset": "使用最近公布的值",
+      "updating": "正在更新數字..."
+    },
+    "columns": {
+      "series": "系列",
+      "saleWindow": "在售",
+      "length": "期限",
+      "firstPeriodRate": "首期",
+      "rule": "利率",
+      "capitalization": "利息",
+      "redemption": "提前贖回",
+      "maturityValue": "到期價值",
+      "totalReturn": "總報酬",
+      "annualizedReturn": "年化報酬",
+      "terms": "條款"
+    },
+    "saleWindowValue": "{from}至{to}",
+    "lengthValue": "{months, plural, other {#個月}}",
+    "lengthDaysValue": "{days, plural, other {#天}}",
+    "rule": {
+      "fixed": "固定年利率 {rate}",
+      "benchmark": "{benchmark} + {addend}",
+      "floor": "基準下限 {floor}",
+      "daily": "每日：{benchmark} + {addend}",
+      "discount": "相對面值的折價"
+    },
+    "capitalization": {
+      "NONE": "每期支付",
+      "COMPOUND_AT_PERIOD_END": "每期期末計入本金"
+    },
+    "redemption": {
+      "none": "僅到期贖回",
+      "onDemand": "可隨時申請",
+      "fee": "每張債券手續費 {amount}",
+      "forfeit": "當期已累計的利息將被扣除"
+    },
+    "couponsNotReinvested": "票息不再投資"
+  },
+  "history": {
+    "loading": "正在載入歷史...",
+    "loadFailed": "無法載入歷史。",
+    "retry": "重試",
+    "empty": "此產品尚未儲存任何系列。",
+    "coverage": "目錄涵蓋 {from} 至 {to}。",
+    "rateChartTitle": "依發售月份的首期利率與利差",
+    "feeChartTitle": "依發售月份的提前贖回手續費",
+    "rate": "首期利率",
+    "rateChartNote": "對於固定利率債券，該線顯示年利率。",
+    "addend": "利差或點差",
+    "fee": "提前贖回手續費",
+    "gapsNote": "沒有已儲存系列的月份在線上顯示為斷點，絕不用相鄰月份推算出一個值。",
+    "missingTitle": "目錄中缺少的月份（{count}）",
+    "noMissing": "在已儲存的第一個與最後一個系列之間沒有缺少的月份。",
+    "tableTitle": "所有已儲存的系列",
+    "groupCount": "{count} 個系列",
+    "unknownYear": "銷售日期未知",
+    "columns": {
+      "series": "系列",
+      "saleWindow": "在售",
+      "rate": "首期利率或年利率",
+      "addend": "利差或點差",
+      "fee": "提前贖回手續費",
+      "floor": "贖回金額下限",
+      "version": "條款版本",
+      "source": "來源"
+    },
+    "floor": {
+      "ALL_PERIODS": "每一期",
+      "FIRST_PERIOD": "僅首期"
+    },
+    "none": "無",
+    "held": "已持有"
+  },
+  "refreshProgress": {
+    "label": "正在重新整理債券資料",
+    "offer": "正在檢查目前的發售…",
+    "series": "正在取得系列 {done}/{total}：{seriesCode}",
+    "historyComplete": "歷史資料已完整",
+    "starting": "正在開始…"
+  }
+}

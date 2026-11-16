@@ -34,6 +34,12 @@
     "dismiss": "Zamknij",
     "dismissAriaLabel": "Zamknij powiadomienie o aktualizacji"
   },
+  "jwtSecretBanner": {
+    "label": "JWT_SECRET jest słaby.",
+    "detail": "To opublikowana wartość przykładowa lub jest zbyt łatwy do odgadnięcia, więc tokeny sesji można sfałszować. Wygeneruj silną wartość poleceniem <code>openssl rand -base64 32</code>. Zmiana sprawi, że kody z aplikacji uwierzytelniających przestaną działać, a zaufane urządzenia zostaną zapomniane: użytkownicy logują się kodem zapasowym i ponownie konfigurują 2FA, a tym, którzy go nie mają, resetujesz 2FA w <users>Zarządzaniu użytkownikami</users>. Najpierw przeczytaj <code>docs/backend/modules-and-runtime.md</code> (Changing JWT_SECRET).",
+    "dismiss": "Zamknij",
+    "dismissAriaLabel": "Zamknij ostrzeżenie o JWT_SECRET"
+  },
   "actionHistory": {
     "title": "Historia akcji",
     "buttonAriaLabel": "Historia akcji",
@@ -58,6 +64,7 @@
       "tag": "Tag",
       "account": "Konto",
       "scheduled_transaction": "Zaplanowana",
+      "scheduled_posting": "Zaplanowana",
       "security": "Papier wartościowy",
       "budget": "Budżet",
       "custom_report": "Raport"
@@ -79,7 +86,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "Reinwestycja długoterminowych zysków kapitałowych",
       "CAPITAL_GAIN_SHORT": "Krótkoterminowy zysk kapitałowy",
       "CAPITAL_GAIN_LONG": "Długoterminowy zysk kapitałowy",
-      "REDEEM": "Wykup CD/obligacji"
+      "REDEEM": "Wykup CD/obligacji",
+      "RETURN_OF_CAPITAL": "Zwrot kapitału"
     },
     "descriptions": {
       "createdAccount": "Utworzono konto \"{name}\"",
@@ -99,6 +107,7 @@
       "deletedInvestmentReport": "Usunięto raport inwestycyjny \"{name}\"",
       "createdPayee": "Utworzono odbiorcę \"{name}\"",
       "updatedPayee": "Zaktualizowano odbiorcę \"{name}\"",
+      "lookedUpPayeeContact": "Wyszukano dane kontaktowe odbiorcy „{name}”",
       "deletedPayee": "Usunięto odbiorcę \"{name}\"",
       "createdReport": "Utworzono raport \"{name}\"",
       "updatedReport": "Zaktualizowano raport \"{name}\"",
@@ -106,6 +115,7 @@
       "createdScheduledTransaction": "Utworzono zaplanowaną transakcję \"{name}\"",
       "updatedScheduledTransaction": "Zaktualizowano zaplanowaną transakcję \"{name}\"",
       "deletedScheduledTransaction": "Usunięto zaplanowaną transakcję \"{name}\"",
+      "postedScheduledTransaction": "Zaksięgowano zaplanowaną transakcję \"{name}\"",
       "createdSecurity": "Utworzono papier wartościowy \"{symbol}\"",
       "updatedSecurity": "Zaktualizowano papier wartościowy \"{symbol}\"",
       "deletedSecurity": "Usunięto papier wartościowy \"{symbol}\"",
@@ -115,26 +125,23 @@
       "createdTransaction": "Utworzono transakcję {payee} {amount}",
       "updatedTransaction": "Zaktualizowano transakcję {payee} {amount}",
       "deletedTransaction": "Usunięto transakcję {payee} {amount}",
+      "convertedToTransfer": "Transakcja {payee} {amount} przekonwertowana na przelew",
+      "convertedToTransaction": "Przelew {payee} {amount} przekonwertowany na transakcję",
       "bulkUpdatedTransactions": "Zbiorczo zaktualizowano {count, plural, one {# transakcję} few {# transakcje} many {# transakcji} other {# transakcji}}",
       "createdTransfer": "Utworzono przelew {amount} z {from} do {to}",
       "createdInvestmentTransaction": "Utworzono transakcję {action}",
       "updatedInvestmentTransaction": "Zaktualizowano transakcję {action}",
       "deletedInvestmentTransaction": "Usunięto transakcję {action}",
       "transferredSecurity": "Przeniesiono papier wartościowy między kontami",
-      "updatedSecurityTransfer": "Zaktualizowano transfer papierów wartościowych"
-    },
-    "timeAgo": {
-      "justNow": "przed chwilą",
-      "minutes": "{count} min temu",
-      "hours": "{count} godz. temu",
-      "days": "{count} dni temu"
+      "updatedSecurityTransfer": "Zaktualizowano transfer papierów wartościowych",
+      "ranTransactionRule": "Uruchomiono regułę „{name}” dla {count, plural, one {# transakcji} few {# transakcji} many {# transakcji} other {# transakcji}}"
     },
     "undonePrefix": "Cofnięto: {description}",
     "redonePrefix": "Ponowiono: {description}"
   },
   "pageHeader": {
-    "helpAriaLabel": "Otwórz wiki Monize, aby uzyskać pomoc dotyczącą tej sekcji",
-    "helpTooltip": "Otwórz wiki Monize, aby uzyskać pomoc dotyczącą tej sekcji"
+    "helpAriaLabel": "Pomoc dotycząca tej strony",
+    "helpTooltip": "Pomoc dotycząca tej strony"
   },
   "bootSplash": {
     "loading": "Ładowanie Monize",
@@ -145,5 +152,17 @@
     "title": "Nie można się połączyć",
     "message": "Monize nie może połączyć się z serwerem. Sprawdź swoje połączenie i spróbuj ponownie.",
     "retry": "Spróbuj ponownie"
+  },
+  "pushBanner": {
+    "enableTitle": "Włączyć powiadomienia?",
+    "enableBody": "Monize może przypominać na tym urządzeniu o rachunkach i limitach budżetu, także gdy aplikacja jest zamknięta. Przeglądarka poprosi o zgodę.",
+    "enableButton": "Włącz",
+    "enabling": "Włączanie…",
+    "installIosTitle": "Najpierw dodaj Monize do ekranu głównego.",
+    "installIosBody": "Na iPhonie i iPadzie powiadomienia działają tylko z zainstalowanej aplikacji. Dotknij Udostępnij, potem Dodaj do ekranu głównego, i otwórz Monize stamtąd.",
+    "blockedTitle": "Powiadomienia dla Monize są zablokowane.",
+    "blockedBody": "Zezwól na nie w ustawieniach witryny w przeglądarce dla tej strony. Monize nie może zapytać ponownie samo z siebie.",
+    "blockedIosBody": "Otwórz Ustawienia iOS, potem Powiadomienia, potem Monize, i zezwól tam. Jeśli Monize nie ma na liście, usuń je z ekranu głównego i dodaj ponownie.",
+    "dismiss": "Nie teraz"
   }
 }

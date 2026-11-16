@@ -1,0 +1,100 @@
+{
+  "entry": {
+    "history": "Historique des conditions {program}"
+  },
+  "offer": {
+    "loading": "Chargement des obligations en vente...",
+    "loadFailed": "Impossible de charger les obligations en vente.",
+    "retry": "Réessayer",
+    "empty": "Aucune série n'est en vente aujourd'hui.",
+    "asOf": "En vente le {date}. Chaque chiffre concerne une obligation achetée aujourd'hui et conservée jusqu'à l'échéance.",
+    "comparisonNote": "Le rendement annualisé est un chiffre de comparaison entre produits de durées différentes, pas une promesse de gain.",
+    "couponsNote": "Coupons non réinvestis : pour une obligation à coupons, la valeur à l'échéance additionne tous les coupons versés.",
+    "projected": "Projeté",
+    "projectedTitle": "Ce chiffre repose sur une valeur de référence supposée, et pas uniquement sur des taux publiés.",
+    "assumptions": {
+      "title": "Hypothèses",
+      "intro": "Les périodes qui n'ont pas commencé sont valorisées avec ces valeurs de référence. Modifiez-en une pour voir son effet sur chaque ligne.",
+      "label": "{benchmark} (%)",
+      "latest": "Dernière valeur publiée : {value} ({observation})",
+      "reset": "Utiliser les dernières valeurs publiées",
+      "updating": "Mise à jour des chiffres..."
+    },
+    "columns": {
+      "series": "Série",
+      "saleWindow": "En vente",
+      "length": "Durée",
+      "firstPeriodRate": "Première période",
+      "rule": "Taux",
+      "capitalization": "Intérêts",
+      "redemption": "Remboursement anticipé",
+      "maturityValue": "Valeur à l'échéance",
+      "totalReturn": "Rendement total",
+      "annualizedReturn": "Rendement annualisé",
+      "terms": "Conditions"
+    },
+    "saleWindowValue": "Du {from} au {to}",
+    "lengthValue": "{months, plural, one {# mois} other {# mois}}",
+    "lengthDaysValue": "{days, plural, one {# jour} other {# jours}}",
+    "rule": {
+      "fixed": "Fixe {rate} par an",
+      "benchmark": "{benchmark} + {addend}",
+      "floor": "Plancher de la référence {floor}",
+      "daily": "Quotidien : {benchmark} + {addend}",
+      "discount": "Décote par rapport à la valeur nominale"
+    },
+    "capitalization": {
+      "NONE": "Versés à chaque période",
+      "COMPOUND_AT_PERIOD_END": "Capitalisés à la fin de chaque période"
+    },
+    "redemption": {
+      "none": "À l'échéance uniquement",
+      "onDemand": "À la demande",
+      "fee": "Frais de {amount} par obligation",
+      "forfeit": "Les intérêts courus de la période sont perdus"
+    },
+    "couponsNotReinvested": "Coupons non réinvestis"
+  },
+  "history": {
+    "loading": "Chargement de l'historique...",
+    "loadFailed": "Impossible de charger l'historique.",
+    "retry": "Réessayer",
+    "empty": "Aucune série de ce produit n'est encore enregistrée.",
+    "coverage": "Le catalogue couvre de {from} à {to}.",
+    "rateChartTitle": "Taux de la première période et marge par mois de vente",
+    "feeChartTitle": "Frais de remboursement anticipé par mois de vente",
+    "rate": "Taux de la première période",
+    "rateChartNote": "Pour les obligations à taux fixe, la courbe indique le taux annuel.",
+    "addend": "Marge ou écart",
+    "fee": "Frais de remboursement anticipé",
+    "gapsNote": "Un mois sans série enregistrée est une rupture de la ligne, jamais une valeur déduite des mois voisins.",
+    "missingTitle": "Mois absents du catalogue ({count})",
+    "noMissing": "Aucun mois ne manque entre la première et la dernière série enregistrée.",
+    "tableTitle": "Toutes les séries enregistrées",
+    "groupCount": "{count} série(s)",
+    "unknownYear": "Date de vente inconnue",
+    "columns": {
+      "series": "Série",
+      "saleWindow": "En vente",
+      "rate": "Taux de la première période ou taux annuel",
+      "addend": "Marge ou écart",
+      "fee": "Frais de remboursement anticipé",
+      "floor": "Plancher du produit du remboursement",
+      "version": "Version des conditions",
+      "source": "Source"
+    },
+    "floor": {
+      "ALL_PERIODS": "Toutes les périodes",
+      "FIRST_PERIOD": "Première période seulement"
+    },
+    "none": "Aucun",
+    "held": "Détenue"
+  },
+  "refreshProgress": {
+    "label": "Actualisation des données de l'obligation",
+    "offer": "Vérification de l'offre actuelle…",
+    "series": "Récupération de la série {done} sur {total} : {seriesCode}",
+    "historyComplete": "L'historique est complet",
+    "starting": "Démarrage…"
+  }
+}

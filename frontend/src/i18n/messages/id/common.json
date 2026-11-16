@@ -10,6 +10,8 @@
     "versionLabel": "Versi {version}",
     "expandAll": "Perluas semua",
     "collapseAll": "Ciutkan semua",
+    "changeCount": "{count, plural, other {# perubahan}}",
+    "otherSections": "Perbaikan dan detail",
     "viewFullNotes": "Lihat catatan rilis lengkap",
     "dontShowAgain": "Jangan tampilkan lagi",
     "showNextLogin": "Tampilkan saat masuk berikutnya",
@@ -38,6 +40,14 @@
     "scheduleRecurring": "Jadwalkan sebagai Berulang",
     "more": "Tindakan Lainnya"
   },
+  "columns": {
+    "button": "Kolom",
+    "buttonWithHidden": "Kolom, {count} disembunyikan",
+    "menuLabel": "Tampilkan atau sembunyikan kolom",
+    "showAll": "Tampilkan semua",
+    "hideColumn": "Sembunyikan kolom",
+    "sheetSubtitle": "Tampilkan kembali dari menu Kolom."
+  },
   "loading": "Memuat...",
   "pagination": {
     "showing": "Menampilkan",
@@ -60,6 +70,7 @@
   },
   "exportDropdown": {
     "export": "Ekspor",
+    "exportCsv": "Ekspor CSV",
     "exporting": "Mengekspor...",
     "exportPdf": "Ekspor PDF",
     "exportReport": "Ekspor laporan",
@@ -88,6 +99,7 @@
     "stackedChart": "Batang Bertumpuk 100%",
     "lineChart": "Diagram Garis",
     "areaChart": "Diagram Area",
+    "sankeyChart": "Diagram Aliran",
     "table": "Tabel"
   },
   "formActions": {
@@ -118,8 +130,15 @@
     "search": "Cari...",
     "selectAll": "Pilih Semua",
     "clear": "Hapus",
+    "clearSearch": "Hapus pencarian",
     "noOptions": "Tidak ada opsi ditemukan",
     "selectedCount": "{count} dipilih"
+  },
+  "categoryFilter": {
+    "uncategorized": "Belum Dikategorikan",
+    "transfers": "Transfer",
+    "allIncome": "Semua kategori pendapatan",
+    "allExpenses": "Semua kategori pengeluaran"
   },
   "combobox": {
     "createOption": "Buat \"{value}\"",
@@ -137,6 +156,7 @@
   },
   "dateInput": {
     "shortcutsTitle": "Pintasan keyboard",
+    "openPicker": "Buka pemilih tanggal",
     "today": "Hari ini",
     "firstDayOfYear": "Hari pertama tahun ini",
     "lastDayOfYear": "Hari terakhir tahun ini",
@@ -158,6 +178,7 @@
     "CASH": "Tunai",
     "LINE_OF_CREDIT": "Kredit Talangan",
     "ASSET": "Aset",
+    "CRYPTO": "Dompet Kripto",
     "OTHER": "Lainnya"
   },
   "accountFilter": {
@@ -241,12 +262,20 @@
     "marker": "—",
     "srLabel": "Jumlah tidak tersedia",
     "scheduledFx": "Jumlah saat ini tidak dapat ditentukan: tidak ada nilai tukar yang tersedia untuk pasangan mata uang penyelesaian item terjadwal ini. Jumlah yang tersimpan dihitung dengan kurs lama, sehingga tidak ditampilkan.",
-    "displayFx": "Angka ini tidak dapat ditampilkan di sini: jumlahnya diketahui, tetapi tidak ada nilai tukar yang tersedia untuk mengonversinya ke mata uang total ini. Segarkan kurs Anda di halaman Mata Uang."
+    "displayFx": "Angka ini tidak dapat ditampilkan di sini: jumlahnya diketahui, tetapi tidak ada nilai tukar yang tersedia untuk mengonversinya ke mata uang total ini. Segarkan kurs Anda di halaman Mata Uang.",
+    "noCashBalance": "Nilai ini tidak dapat dihitung: sebuah akun kas dalam tampilan ini tidak melaporkan saldo untuk hari ini, jadi isinya tidak diketahui, bukan nol. Muat ulang laporan; jika masih terjadi, saldo hari itu tidak dapat dihitung dan hal ini layak dilaporkan.",
+    "noPrice": "Nilai ini tidak dapat dihitung: jumlah saham yang dimiliki diketahui, tetapi efek ini tidak memiliki harga untuk menilainya. Segarkan harga, atau tambahkan satu secara manual di riwayat harga efek tersebut.",
+    "noBaseline": "Angka ini tidak dapat dihitung: ini adalah perbandingan, dan tidak ada nilai sebelumnya untuk dibandingkan. Tidak ada yang hilang, jadi tidak ada yang perlu ditambahkan.",
+    "staleQuote": "Perubahan hari ini tidak dapat dihitung: harga terbaru efek ini lebih lama daripada sesi perdagangan terakhir, sehingga perubahan apa pun darinya adalah perubahan hari sebelumnya. Segarkan harga, atau periksa penyedia kuotasi efek tersebut.",
+    "unknownCurrency": "Jumlah ini tidak dapat ditampilkan: catatan tidak menyebutkan sekuritas apa pun, sehingga mata uang angka ini tidak diketahui. Buka transaksi dan berikan sekuritas agar jumlahnya dapat diberi label."
   },
   "density": {
     "title": "Ubah kepadatan baris",
     "normal": "Normal",
     "compact": "Kompak",
     "dense": "Padat"
+  },
+  "scheduledOverdue": {
+    "included": "Termasuk {count, plural, one {# transaksi terjadwal lewat jatuh tempo} other {# transaksi terjadwal lewat jatuh tempo}}"
   }
 }

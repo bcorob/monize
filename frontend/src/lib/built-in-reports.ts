@@ -11,20 +11,53 @@ import {
   SpendingAnomaliesResponse,
   TaxSummaryResponse,
   RecurringExpensesResponse,
+  RecurringExpenseRange,
   BillPaymentHistoryResponse,
   UncategorizedTransactionsResponse,
   DuplicateTransactionsResponse,
   MonthlyCategoryBreakdownResponse,
+  SpendingByCategoryParams,
+  IncomeVsExpensesParams,
+  CashFlowParams,
+  CashFlowSankeyParams,
+  CashFlowSankeyResponse,
+  IncomeBySourceParams,
+  MonthlyCategoryBreakdownParams,
 } from '@/types/built-in-reports';
 import { MonthlyComparisonResponse } from '@/types/monthly-comparison';
 
+/**
+ * The server takes each account-id list (the filter, and the tagged-transfer
+ * boundary of spec 10.8.1) as one comma-separated value; an empty list means
+ * "none given", so it is left off entirely.
+ */
+function serializeAccountIds<
+  T extends { accountIds?: string[]; transferScopeAccountIds?: string[] },
+>(
+  params: T,
+): Omit<T, 'accountIds' | 'transferScopeAccountIds'> & {
+  accountIds?: string;
+  transferScopeAccountIds?: string;
+} {
+  const { accountIds, transferScopeAccountIds, ...rest } = params;
+  return {
+    ...rest,
+    ...(accountIds && accountIds.length > 0
+      ? { accountIds: accountIds.join(',') }
+      : {}),
+    ...(transferScopeAccountIds && transferScopeAccountIds.length > 0
+      ? { transferScopeAccountIds: transferScopeAccountIds.join(',') }
+      : {}),
+  };
+}
+
 export const builtInReportsApi = {
   getSpendingByCategory: async (
-    params: ReportQueryParams,
+    params: SpendingByCategoryParams,
   ): Promise<SpendingByCategoryResponse> => {
     const response = await apiClient.get<SpendingByCategoryResponse>(
       '/built-in-reports/spending-by-category',
-      { params },
+      { params: serializeAccountIds(params) },
     );
     return response.data;
   },
@@ -40,11 +73,11 @@ export const builtInReportsApi = {
   },
 
   getIncomeBySource: async (
-    params: ReportQueryParams,
+    params: IncomeBySourceParams,
   ): Promise<IncomeBySourceResponse> => {
     const response = await apiClient.get<IncomeBySourceResponse>(
       '/built-in-reports/income-by-source',
-      { params },
+      { params: serializeAccountIds(params) },
     );
     return response.data;
   },
@@ -60,21 +93,21 @@ export const builtInReportsApi = {
   },
 
   getIncomeVsExpenses: async (
-    params: ReportQueryParams,
+    params: IncomeVsExpensesParams,
   ): Promise<IncomeVsExpensesResponse> => {
     const response = await apiClient.get<IncomeVsExpensesResponse>(
       '/built-in-reports/income-vs-expenses',
-      { params },
+      { params: serializeAccountIds(params) },
     );
     return response.data;
   },
 
   getCashFlow: async (
-    params: ReportQueryParams,
+    params: CashFlowParams,
   ): Promise<IncomeVsExpensesResponse> => {
     const response = await apiClient.get<IncomeVsExpensesResponse>(
       '/built-in-reports/cash-flow',
-      { params },
+      { params: serializeAccountIds(params) },
     );
     return response.data;
   },
@@ -121,10 +154,11 @@ export const builtInReportsApi = {
 
   getRecurringExpenses: async (
     minOccurrences: number = 3,
+    range?: RecurringExpenseRange,
   ): Promise<RecurringExpensesResponse> => {
     const response = await apiClient.get<RecurringExpensesResponse>(
       '/built-in-reports/recurring-expenses',
-      { params: { minOccurrences } },
+      { params: range ? { minOccurrences, range } : { minOccurrences } },
     );
     return response.data;
   },
@@ -169,12 +203,32 @@ export const builtInReportsApi = {
     return response.data;
   },
 
+  getCashFlowSankey: async (
+    params: CashFlowSankeyParams,
+  ): Promise<CashFlowSankeyResponse> => {
+    const { accountIds, ...rest } = params;
+    const response = await apiClient.get<CashFlowSankeyResponse>(
+      '/built-in-reports/cash-flow-sankey',
+      {
+        // One comma-separated value; an empty scope means the server's default
+        // cash-flow accounts, so it is left off entirely.
+        params: {
+          ...rest,
+          ...(accountIds && accountIds.length > 0
+            ? { accountIds: accountIds.join(',') }
+            : {}),
+        },
+      },
+    );
+    return response.data;
+  },
+
   getMonthlyCategoryBreakdown: async (
-    params: ReportQueryParams,
+    params: MonthlyCategoryBreakdownParams,
   ): Promise<MonthlyCategoryBreakdownResponse> => {
     const response = await apiClient.get<MonthlyCategoryBreakdownResponse>(
       '/built-in-reports/monthly-category-breakdown',
-      { params },
+      { params: serializeAccountIds(params) },
     );
     return response.data;
   },

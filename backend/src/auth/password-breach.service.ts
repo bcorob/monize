@@ -15,9 +15,15 @@ export class PasswordBreachService {
       // password itself and the remaining 35 hex chars of the hash never
       // leave the process. This is a known-safe use of SHA-1.
       // bearer:disable javascript_lang_weak_hash_sha1
-      // codeql[js/insufficient-password-hash]
       const sha1 = crypto
         .createHash("sha1")
+        // CodeQL reports js/insufficient-password-hash on the `.update(password)`
+        // call, and a suppression annotation covers only the line directly
+        // below it. CodeQL default setup does not run the alert-suppression
+        // query, so the open alert has to be dismissed as a false positive on
+        // the Security tab; the annotation is placed where it takes effect the day
+        // that query runs (docs/backend/modules-and-runtime.md, CodeQL suppressions).
+        // codeql[js/insufficient-password-hash]
         .update(password)
         .digest("hex")
         .toUpperCase();

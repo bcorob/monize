@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 import { useForm, Controller } from 'react-hook-form';
-import { toast } from 'react-hot-toast';
+import toast from 'react-hot-toast';
 import '@/lib/zodConfig';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -273,7 +273,7 @@ export function ProviderConfigForm({ isOpen, onClose, onSubmit, editConfig }: Pr
   return (
     <Modal isOpen={isOpen} onClose={onClose} maxWidth="4xl">
       <form onSubmit={handleSubmit(onFormSubmit)} className="p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
           {editConfig ? t('editTitle') : t('addTitle')}
         </h2>
 
@@ -383,16 +383,21 @@ export function ProviderConfigForm({ isOpen, onClose, onSubmit, editConfig }: Pr
           )}
 
           {needsBaseUrl && (
-            <Input
-              label={t('baseUrlLabel')}
-              {...register('baseUrl')}
-              error={errors.baseUrl?.message}
-              placeholder={
-                provider === 'ollama'
-                  ? 'http://localhost:11434'
-                  : 'https://api.example.com/v1'
-              }
-            />
+            <div>
+              <Input
+                label={t('baseUrlLabel')}
+                {...register('baseUrl')}
+                error={errors.baseUrl?.message}
+                placeholder={
+                  provider === 'ollama'
+                    ? 'http://localhost:11434'
+                    : 'https://api.example.com/v1'
+                }
+              />
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                {t('baseUrlPrivateNote')}
+              </p>
+            </div>
           )}
 
           <Controller

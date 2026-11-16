@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@/test/render';
 import { ScheduledTransactionList } from './ScheduledTransactionList';
 import toast from 'react-hot-toast';
+import { AxiosError, AxiosHeaders } from 'axios';
 import { useDensityStore } from '@/store/densityStore';
 
 vi.mock('react-hot-toast', () => ({
@@ -15,12 +16,15 @@ vi.mock('@/hooks/useDateFormat', () => ({
   useDateFormat: () => ({ dateFormat: 'browser', datePattern: 'YYYY-MM-DD', formatDate: (d: string) => d }),
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (n: number, _c?: string) => `$${n.toFixed(2)}`,
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (n: number, _c?: string) => `$${n.toFixed(2)}`,
+    }),
+  };
+});
 const mockPost = vi.fn().mockResolvedValue({});
 const mockSkip = vi.fn().mockResolvedValue({});
 const mockDelete = vi.fn().mockResolvedValue({});
@@ -119,7 +123,7 @@ describe('ScheduledTransactionList', () => {
     expect(screen.getByText('Category')).toBeInTheDocument();
     expect(screen.getByText('Amount')).toBeInTheDocument();
     expect(screen.getByText('Schedule')).toBeInTheDocument();
-    expect(screen.getByText('Auto')).toBeInTheDocument();
+    expect(screen.getByText('Auto-Post')).toBeInTheDocument();
     expect(screen.getByText('Actions')).toBeInTheDocument();
   });
 
@@ -396,6 +400,26 @@ describe('ScheduledTransactionList', () => {
     expect(screen.getByText('Weekly')).toBeInTheDocument();
   });
 
+  it('describes a Custom schedule by its rule rather than the word Custom', () => {
+    const transactions = [
+      createTransaction({
+        frequency: 'CUSTOM',
+        customRecurrence: { unit: 'WEEK', interval: 1, weekdays: [1, 3, 5], weekStartsOn: 1 },
+      }),
+    ];
+    render(<ScheduledTransactionList transactions={transactions} />);
+    // The desktop schedule cell and the phone line under the name.
+    expect(screen.getAllByText(/Every week on Mon, Wed, and Fri/).length).toBeGreaterThan(0);
+    expect(screen.queryByText('Custom')).not.toBeInTheDocument();
+  });
+
+  it('falls back to the word Custom for a Custom schedule without a usable rule', () => {
+    const transactions = [createTransaction({ frequency: 'CUSTOM', customRecurrence: null })];
+    render(<ScheduledTransactionList transactions={transactions} />);
+    expect(screen.getAllByText(/Custom/).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/frequency\.CUSTOM/)).not.toBeInTheDocument();
+  });
+
   it('displays occurrences remaining count', () => {
     const transactions = [createTransaction({ occurrencesRemaining: 5 })];
     render(<ScheduledTransactionList transactions={transactions} />);
@@ -442,6 +466,136 @@ describe('ScheduledTransactionList', () => {
     const transactions = [createTransaction({ autoPost: true })];
     render(<ScheduledTransactionList transactions={transactions} />);
     expect(screen.getByText('On')).toBeInTheDocument();
+    // The column's own name says what "On" means ("Auto-Post: On"), in both
+    // layouts; the chip no longer carries a hover-only `title` for it.
+    expect(screen.getByText('On')).not.toHaveAttribute('title');
+    expect(screen.getByText('Auto-Post')).toBeInTheDocument();
+  });
+
+  it('explains a re-priced next occurrence beside its amount, not in a title', () => {
+    const transactions = [createTransaction({
+      amount: -15.99,
+      nextOverride: { amount: -19.99, overrideDate: null },
+    })];
+    render(<ScheduledTransactionList transactions={transactions} />);
+    expect(screen.getByRole('button', { name: 'Modified for next occurrence' })).toBeInTheDocument();
+    expect(document.querySelector('[title="Modified for next occurrence"]')).toBeNull();
+  });
+
+  // Issue #2096: the next occurrence's estimate is labelled as one, with where
+  // it comes from behind the info button.
+  it('labels an estimated amount and says where it comes from', () => {
+    const transactions = [createTransaction({
+      amount: -999,
+      effectiveAmount: -180,
+      effectiveAmountComplete: true,
+      amountIsEstimated: true,
+      payeeName: 'Gas Co',
+      amountEstimate: {
+        status: 'estimated',
+        currencyCode: 'CAD',
+        months: {},
+        paymentCount: 9,
+        latestPaymentDate: '2025-02-10',
+        growthRate: null,
+        historyMonths: 24,
+        missingPair: null,
+      },
+    })];
+    render(<ScheduledTransactionList transactions={transactions} />);
+    expect(screen.getAllByText('Estimated').length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByRole('button', { name: /Estimated from 9 payments/ }).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('says only where the estimate comes from when the payment count is withheld', () => {
+    const transactions = [createTransaction({
+      amountIsEstimated: true,
+      effectiveAmount: -180,
+      effectiveAmountComplete: true,
+      amountEstimate: {
+        status: 'estimated',
+        currencyCode: 'CAD',
+        months: {},
+        paymentCount: null,
+        latestPaymentDate: null,
+        growthRate: null,
+        historyMonths: 24,
+        missingPair: null,
+      },
+    })];
+    render(<ScheduledTransactionList transactions={transactions} />);
+    expect(
+      screen.getAllByRole('button', {
+        name: "Estimated from the payee and category's payment history.",
+      }).length,
+    ).toBeGreaterThan(0);
+  });
+
+  // Issue #2164: an estimated transfer names its destination, and says when
+  // what that account owes raised the next payment.
+  it("says an estimated transfer's next payment was raised to what its destination owes", () => {
+    const transactions = [createTransaction({
+      isTransfer: true,
+      transferAccountId: 'card-1',
+      transferAccount: { id: 'card-1', name: 'Visa' } as never,
+      nextDueDate: '2025-02-26',
+      amountIsEstimated: true,
+      effectiveAmount: -2700,
+      effectiveAmountComplete: true,
+      amountEstimate: {
+        status: 'estimated',
+        currencyCode: 'CAD',
+        months: { '2025-02': { amount: -2000, basis: 'recent' } },
+        paymentCount: null,
+        latestPaymentDate: null,
+        growthRate: null,
+        historyMonths: 24,
+        missingPair: null,
+        floors: [
+          {
+            after: '2025-02-05',
+            through: '2025-03-05',
+            months: { '2025-02': { amount: -2700, basis: 'balance' } },
+          },
+        ],
+      },
+    })];
+    render(<ScheduledTransactionList transactions={transactions} />);
+    expect(
+      screen.getAllByRole('button', {
+        name: 'Estimated from the history of transfers to Visa. Raised to cover what Visa owes for this payment.',
+      }).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('shows a moved occurrence at its own month estimate, not as modified', () => {
+    const transactions = [createTransaction({
+      amountIsEstimated: true,
+      effectiveAmount: -242,
+      effectiveAmountComplete: true,
+      nextOverride: {
+        amount: null,
+        isSplit: null,
+        overrideDate: '2026-11-28',
+        effectiveAmount: -180,
+        effectiveAmountComplete: true,
+      },
+      amountEstimate: null,
+    })];
+    render(<ScheduledTransactionList transactions={transactions} />);
+    expect(screen.queryByRole('button', { name: 'Modified for next occurrence' })).toBeNull();
+    expect(screen.getAllByText('Estimated').length).toBeGreaterThan(0);
+  });
+
+  it('does not label an amount an override states', () => {
+    const transactions = [createTransaction({
+      amountIsEstimated: true,
+      nextOverride: { amount: -250, overrideDate: null },
+    })];
+    render(<ScheduledTransactionList transactions={transactions} />);
+    expect(screen.queryByText('Estimated')).not.toBeInTheDocument();
   });
 
   it('shows dash when autoPost is false', () => {
@@ -497,7 +651,12 @@ describe('ScheduledTransactionList', () => {
     render(<ScheduledTransactionList transactions={transactions} />);
     // Both dates should be shown
     expect(screen.getByText('2025-03-01')).toBeInTheDocument();
-    expect(screen.getByText('2025-03-05')).toBeInTheDocument();
+    // What the pair means is an InfoTooltip a phone and a keyboard reach, not a
+    // hover-only `title` on the date.
+    expect(screen.getByText('2025-03-05')).not.toHaveAttribute('title');
+    expect(
+      screen.getByRole('button', { name: 'Date modified for this occurrence' }),
+    ).toBeInTheDocument();
   });
 
   // --- Action buttons ---
@@ -652,6 +811,24 @@ describe('ScheduledTransactionList', () => {
     });
   });
 
+  it('does not refresh the list when an action fails', async () => {
+    // A refetch is a claim that the ledger moved. Before the row actions were
+    // extracted, the rejected `await` skipped `onRefresh` by leaving the try
+    // block; now `runScheduledAction` reports the outcome and the caller checks
+    // it, so the invariant lives in a returned boolean nothing was asserting.
+    mockDelete.mockRejectedValueOnce(new Error('Delete failed'));
+    const onRefresh = vi.fn();
+    render(<ScheduledTransactionList transactions={[createTransaction()]} onRefresh={onRefresh} />);
+
+    fireEvent.click(screen.getByTitle('Delete'));
+    fireEvent.click(screen.getByText('Delete'));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('Failed to delete');
+    });
+    expect(onRefresh).not.toHaveBeenCalled();
+  });
+
   // --- Post with confirmation ---
   it('opens confirm dialog when post button is clicked (no onPost prop)', () => {
     const transactions = [createTransaction()];
@@ -672,7 +849,10 @@ describe('ScheduledTransactionList', () => {
     fireEvent.click(screen.getByText('Post'));
 
     await waitFor(() => {
-      expect(mockPost).toHaveBeenCalledWith(transaction.id);
+      expect(mockPost).toHaveBeenCalledWith(transaction.id, {
+        expectedOccurrenceDate: transaction.nextDueDate,
+        expectedOverrideId: null,
+      });
     });
 
     await waitFor(() => {
@@ -725,7 +905,10 @@ describe('ScheduledTransactionList', () => {
     fireEvent.click(screen.getByText('Skip'));
 
     await waitFor(() => {
-      expect(mockSkip).toHaveBeenCalledWith(transaction.id);
+      expect(mockSkip).toHaveBeenCalledWith(transaction.id, {
+        expectedOccurrenceDate: transaction.nextDueDate,
+        expectedOverrideId: null,
+      });
     });
 
     await waitFor(() => {
@@ -744,6 +927,105 @@ describe('ScheduledTransactionList', () => {
     await waitFor(() => {
       expect(toast.error).toHaveBeenCalledWith('Failed to skip occurrence');
     });
+  });
+
+  // --- The occurrence pin and a stale row (A26-S08-01) ---
+  const conflict = (message: string) =>
+    new AxiosError('Conflict', 'ERR_BAD_REQUEST', undefined, undefined, {
+      status: 409,
+      statusText: 'Conflict',
+      data: { message },
+      headers: {},
+      config: { headers: new AxiosHeaders() },
+    });
+
+  it('posts the override date and id when an override moved the occurrence', async () => {
+    const slot = futureDate(15);
+    const moved = futureDate(18);
+    const transaction = createTransaction({
+      nextDueDate: slot,
+      nextOverride: { id: 'ovr-1', originalDate: slot, overrideDate: moved },
+    });
+    render(<ScheduledTransactionList transactions={[transaction]} />);
+
+    fireEvent.click(screen.getByTitle('Post Transaction'));
+    fireEvent.click(screen.getByText('Post'));
+
+    await waitFor(() => {
+      expect(mockPost).toHaveBeenCalledWith('s1', {
+        expectedOccurrenceDate: moved,
+        expectedOverrideId: 'ovr-1',
+      });
+    });
+  });
+
+  it('skips with the override date and id when an override moved the occurrence', async () => {
+    const slot = futureDate(15);
+    const moved = futureDate(18);
+    const transaction = createTransaction({
+      nextDueDate: slot,
+      nextOverride: { id: 'ovr-1', originalDate: slot, overrideDate: moved },
+    });
+    render(<ScheduledTransactionList transactions={[transaction]} />);
+
+    fireEvent.click(screen.getByTitle('Skip Occurrence'));
+    fireEvent.click(screen.getByText('Skip'));
+
+    await waitFor(() => {
+      expect(mockSkip).toHaveBeenCalledWith('s1', {
+        expectedOccurrenceDate: moved,
+        expectedOverrideId: 'ovr-1',
+      });
+    });
+  });
+
+  it('refreshes the stale list when the server refuses a post with 409, and still shows the error', async () => {
+    mockPost.mockRejectedValueOnce(conflict('changed'));
+    const onRefresh = vi.fn();
+    render(<ScheduledTransactionList transactions={[createTransaction()]} onRefresh={onRefresh} />);
+
+    fireEvent.click(screen.getByTitle('Post Transaction'));
+    fireEvent.click(screen.getByText('Post'));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('Failed to post transaction');
+    });
+    expect(toast.success).not.toHaveBeenCalled();
+    await waitFor(() => expect(onRefresh).toHaveBeenCalledTimes(1));
+  });
+
+  it('refreshes the stale list when the server refuses a skip with 409', async () => {
+    mockSkip.mockRejectedValueOnce(conflict('changed'));
+    const onRefresh = vi.fn();
+    render(<ScheduledTransactionList transactions={[createTransaction()]} onRefresh={onRefresh} />);
+
+    fireEvent.click(screen.getByTitle('Skip Occurrence'));
+    fireEvent.click(screen.getByText('Skip'));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('Failed to skip occurrence');
+    });
+    await waitFor(() => expect(onRefresh).toHaveBeenCalledTimes(1));
+  });
+
+  it('does not refresh when a post fails with an error other than 409', async () => {
+    mockPost.mockRejectedValueOnce(new AxiosError('Server', 'ERR_BAD_RESPONSE', undefined, undefined, {
+      status: 500,
+      statusText: 'Server Error',
+      data: {},
+      headers: {},
+      config: { headers: new AxiosHeaders() },
+    }));
+    const onRefresh = vi.fn();
+    render(<ScheduledTransactionList transactions={[createTransaction()]} onRefresh={onRefresh} />);
+
+    fireEvent.click(screen.getByTitle('Post Transaction'));
+    fireEvent.click(screen.getByText('Post'));
+
+    await waitFor(() => {
+      expect(toast.error).toHaveBeenCalledWith('Failed to post transaction');
+    });
+    expect(onRefresh).not.toHaveBeenCalled();
   });
 
   // --- Category with color ---
@@ -1099,14 +1381,16 @@ describe('ScheduledTransactionList', () => {
     const transactions = [createTransaction({ overrideCount: 1 })];
     render(<ScheduledTransactionList transactions={transactions} />);
     const badge = screen.getByText('1 modified');
-    expect(badge.title).toContain('1 upcoming occurrence modified');
+    expect(badge).not.toHaveAttribute('title');
+    expect(screen.getByRole('button', { name: '1 upcoming occurrence modified' })).toBeInTheDocument();
   });
 
   it('shows plural modified text for overrideCount > 1', () => {
     const transactions = [createTransaction({ overrideCount: 2 })];
     render(<ScheduledTransactionList transactions={transactions} />);
     const badge = screen.getByText('2 modified');
-    expect(badge.title).toContain('2 upcoming occurrences modified');
+    expect(badge).not.toHaveAttribute('title');
+    expect(screen.getByRole('button', { name: '2 upcoming occurrences modified' })).toBeInTheDocument();
   });
 });
 
@@ -1129,6 +1413,12 @@ describe('ScheduledTransactionList - foreign currency', () => {
 
     expect(screen.getByText('-$54.61')).toBeInTheDocument();
     expect(screen.getByText('USD 40.00')).toBeInTheDocument();
+    // What the second figure is: an InfoTooltip beside it, not a hover-only
+    // `title` a phone never shows.
+    expect(screen.getByText('USD 40.00').closest('[title]')).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'The amount the biller charges, in its own currency' }),
+    ).toBeInTheDocument();
   });
 
   it('shows no second line for an ordinary schedule', () => {

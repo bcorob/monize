@@ -1,0 +1,120 @@
+{
+  "view": {
+    "label": "Weergave",
+    "table": "Tabel",
+    "calendar": "Kalender"
+  },
+  "grid": {
+    "label": "Maand"
+  },
+  "toolbar": {
+    "layers": "Lagen"
+  },
+  "layers": {
+    "transactions": "Transacties",
+    "balances": "Saldi",
+    "values": "Waarden",
+    "dailyChange": "Dagelijkse verandering"
+  },
+  "legend": {
+    "label": "Legenda",
+    "scheduled": "Gepland"
+  },
+  "chip": {
+    "noPayee": "Geen begunstigde",
+    "overdue": "Achterstallig",
+    "scheduled": "Gepland",
+    "noSymbol": "Geen symbool"
+  },
+  "day": {
+    "itemCount": "{count, plural, one {# item} other {# items}}",
+    "moreChips": "+{count} meer",
+    "newTransaction": "Nieuwe transactie op deze dag",
+    "noItems": "Niets op deze dag.",
+    "scheduledHint": "Gepland. Open Rekeningen & stortingen om het te wijzigen.",
+    "newInvestmentTransaction": "Nieuwe beleggingstransactie op deze dag"
+  },
+  "banner": {
+    "title": "Sommige bedragen worden niet getoond",
+    "rowCap": "Deze maand bevat {count} transacties, meer dan de {limit} die een kalender kan tonen. Beperk de filters om ze te zien.",
+    "scheduledUnavailable": "Geplande items voor deze maand konden niet worden geladen. De getoonde regels zijn volledig; de geplande ontbreken.",
+    "scheduledTruncated": "Sommige geplande items worden zo ver vooruit niet getoond. Ga dichter naar vandaag om ze allemaal te zien.",
+    "balancesScopeEmpty": "Er zijn geen rekeningen geselecteerd, dus er is geen saldo om te tonen. Kies een rekening in de filters.",
+    "balancesMissingRates": "Voor {pairs} is op sommige dagen van deze maand geen wisselkoers beschikbaar, dus die totalen worden niet getoond. Open Valuta's en ververs de koersen.",
+    "balancesForecastGaps": "Het verwachte saldo wordt achtergehouden omdat deze geplande items nog niet kunnen worden gewaardeerd: {schedules}.",
+    "balancesForecastWithheld": "Het verwachte saldo wordt achtergehouden: minstens één gepland item kan nog niet worden gewaardeerd en de reden is niet gemeld.",
+    "balancesUnforecastable": "{count, plural, one {# geselecteerde rekening heeft geen eigen prognose, dus verwachte totalen worden achtergehouden.} other {# geselecteerde rekeningen hebben geen eigen prognose, dus verwachte totalen worden achtergehouden.}}",
+    "valuesUnpriced": "Voor {securities} is op sommige dagen van deze maand geen koers beschikbaar, dus die waarden worden niet getoond. Voeg een koers toe in de koershistorie van het effect of ververs de koersen.",
+    "valuesMissingRates": "Voor {pairs} is op sommige dagen van deze maand geen wisselkoers beschikbaar, dus die waarden worden niet getoond. Open Valuta's en ververs de koersen.",
+    "notesUnavailable": "Je notities konden voor deze maand niet worden geladen. Notities die je hebt geschreven zijn nog steeds opgeslagen."
+  },
+  "errors": {
+    "monthFailed": "Deze maand kon niet worden geladen.",
+    "balancesFailed": "Saldi konden voor deze maand niet worden geladen.",
+    "valuesFailed": "Portefeuillewaarden konden voor deze maand niet worden geladen.",
+    "movementsFailed": "Dagelijkse veranderingen konden voor deze maand niet worden geladen.",
+    "movementDetailFailed": "De uitsplitsing van deze dag kon niet worden geladen."
+  },
+  "balance": {
+    "actualTitle": "Saldo aan het einde van de dag",
+    "projectedTitle": "Verwacht saldo",
+    "projected": "Verwacht",
+    "projectedHint": "Berekend vanaf het saldo aan het einde van vandaag en elk gepland item dat tot deze dag vervalt.",
+    "projectedFromItems": "Berekend vanaf het saldo aan het einde van vandaag en elk gepland item dat tot deze dag vervalt, inclusief de items hieronder.",
+    "partial": "Gedeeltelijk: {amount} van de selectie kon worden berekend; de rest niet, dus er wordt geen totaal getoond.",
+    "missingRates": "Geen wisselkoers voor {pairs} op de dag waarop dit bedrag betrekking heeft. Open Valuta's en ververs de koersen.",
+    "unforecastable": "{count, plural, one {# geselecteerde rekening heeft geen eigen prognose, dus het verwachte totaal wordt achtergehouden.} other {# geselecteerde rekeningen hebben geen eigen prognose, dus het verwachte totaal wordt achtergehouden.}}"
+  },
+  "value": {
+    "title": "Portefeuillewaarde",
+    "unpriced": "Voor {securities} is op deze dag geen koers beschikbaar, dus de waarde wordt niet getoond. Voeg een koers toe in de koershistorie van het effect of ververs de koersen.",
+    "missingRates": "Geen wisselkoers voor {pairs} op deze dag, dus de waarde wordt niet getoond. Open Valuta's en ververs de koersen."
+  },
+  "change": {
+    "openDetail": "Laat zien wat er op deze dag bewoog",
+    "detailTitle": "Wat er bewoog op {date}",
+    "headline": "Marktbeweging",
+    "headlineValue": "{amount} ({percent})",
+    "gains": "Winsten",
+    "losses": "Verliezen",
+    "unchanged": "{count, plural, one {# effect sloot onveranderd.} other {# effecten sloten onveranderd.}}",
+    "remainder": "Contanten, uitkeringen en transacties",
+    "row": "{quantity} stukken, {from} naar {to} {currency}",
+    "reasons": {
+      "notTradingDay": "Geen enkel aangehouden effect had een koers op deze dag, dus er was geen handelsdag om te melden.",
+      "unpricedHolding": "Een positie had geen koers op deze dag of de dag ervoor, dus de beweging is onbekend.",
+      "missingRate": "Er ontbrak een wisselkoers, dus de beweging kon niet worden omgerekend.",
+      "flowIncomplete": "Een storting of opname op deze dag kon niet worden omgerekend, dus de beweging kan er niet van worden gescheiden.",
+      "cashIncomplete": "Een liquide rekening heeft voor deze dag geen saldo gemeld, dus de waarde van de dag is onvolledig en de beweging is onbekend.",
+      "noPriorValue": "Er is geen eerdere waarde om deze dag mee te vergelijken.",
+      "zeroBaseline": "De portefeuille was de dag ervoor leeg, dus er is geen percentage te berekenen."
+    }
+  },
+  "notes": {
+    "title": "Notitie",
+    "add": "Notitie toevoegen",
+    "saveFailed": "De notitie kon niet worden opgeslagen. Probeer het opnieuw.",
+    "deleteFailed": "De notitie kon niet worden verwijderd. Probeer het opnieuw.",
+    "deleteTitle": "Deze notitie verwijderen?",
+    "deleteMessage": "De notitie op deze dag wordt verwijderd. Dit kan niet ongedaan worden gemaakt.",
+    "discardTitle": "Deze notitie weggooien?",
+    "discardMessage": "De notitie die je schrijft is niet opgeslagen. Deze dag verlaten gooit hem weg.",
+    "discardConfirm": "Weggooien",
+    "startDate": "Eerste dag",
+    "endDate": "Laatste dag",
+    "spanRange": "{start} tot en met {end}",
+    "spanCount": "{count, plural, one {# dag} other {# dagen}}",
+    "spanBackwards": "De laatste dag kan niet voor de eerste liggen.",
+    "spanTooLong": "Een notitie kan maximaal {days} dagen beslaan.",
+    "spanMissesDay": "De gekozen dagen bevatten niet de dag waarop u deze notitie schrijft.",
+    "deleteSpanMessage": "{count, plural, one {De notitie op deze dag wordt verwijderd. Dit kan niet ongedaan worden gemaakt.} other {Deze notitie beslaat # dagen en die worden allemaal gewist. Dit kan niet ongedaan worden gemaakt.}}"
+  },
+  "monthPicker": {
+    "title": "Naar een andere maand",
+    "typeLabel": "Typ een maand of een jaar",
+    "placeholder": "bijv. mrt 1998, 1998-03, 3/1998",
+    "unreadable": "Dat kunnen we niet als maand lezen. Probeer een jaar, een maandnaam of 1998-03.",
+    "previousYear": "Vorig jaar",
+    "nextYear": "Volgend jaar"
+  }
+}

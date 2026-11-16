@@ -80,14 +80,17 @@ const mockFormatCurrency = vi.fn((n: number, _code?: string) => `$${n.toFixed(2)
 const mockFormatCurrencyAxis = vi.fn((n: number, _code?: string) => `$${n}`);
 const mockFormatCurrencyFlag = vi.fn((n: number, _code?: string) => `$${n}`);
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: mockFormatCurrency,
-    formatCurrencyAxis: mockFormatCurrencyAxis,
-    formatCurrencyFlag: mockFormatCurrencyFlag,
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: mockFormatCurrency,
+      formatCurrencyAxis: mockFormatCurrencyAxis,
+      formatCurrencyFlag: mockFormatCurrencyFlag,
+    }),
+  };
+});
 const mockConvertToDefault = vi.fn((amount: number, _currency: string) => amount * 1.35);
 
 vi.mock('@/hooks/useExchangeRates', () => ({
@@ -119,7 +122,11 @@ const mockGetForecastSummary = vi.fn().mockReturnValue({
   goesNegative: false,
 });
 
-vi.mock('@/lib/forecast', () => ({
+// The builders are mocked; the tooltip's overdue count is the real helper, so
+// a point the mocks hand over is counted the way the chart counts it.
+vi.mock('@/lib/forecast', async (importOriginal) => ({
+  countOverdueOccurrences: (await importOriginal<typeof import('@/lib/forecast')>())
+    .countOverdueOccurrences,
   buildForecast: (...args: any[]) => mockBuildForecast(...args),
   buildMultiAccountForecast: (...args: any[]) => mockBuildMultiAccountForecast(...args),
   getForecastSummary: (...args: any[]) => mockGetForecastSummary(...args),
@@ -659,6 +666,73 @@ describe('CashFlowForecastChart', () => {
    * ordinary-looking projection understated by a whole account, with nothing on
    * screen to say so.
    */
+  // Issue #2096: an unknown history estimate withholds the line like a missing
+  // rate, but names the bill and why, since there is no rate to add.
+  describe('when an estimate is unknown', () => {
+    it('names the bill and the reason instead of drawing a line', () => {
+      mockBuildForecast.mockReturnValue({
+        points: [],
+        missingCurrencies: [],
+        unknownEstimates: ['st-heat'],
+      });
+      render(
+        <CashFlowForecastChart
+          accounts={[makeAccount()] as any}
+          scheduledTransactions={[
+            {
+              id: 'st-heat',
+              name: 'Heating',
+              payeeName: 'Gas Co',
+              payee: null,
+              category: { id: 'cat-1', name: 'Utilities' },
+              amountIsEstimated: true,
+              amountEstimate: {
+                status: 'no-history',
+                currencyCode: 'CAD',
+                months: {},
+                paymentCount: 0,
+                latestPaymentDate: null,
+                growthRate: null,
+                historyMonths: 24,
+                missingPair: null,
+              },
+            } as any,
+          ]}
+          isLoading={false}
+        />,
+      );
+
+      const alert = screen.getByRole('alert');
+      expect(alert).toHaveTextContent('the estimated amount of a bill in it is unknown');
+      expect(alert).toHaveTextContent(
+        'Heating: No payments to Gas Co in Utilities in the last 24 months',
+      );
+      expect(alert).not.toHaveTextContent('no exchange rate is available');
+    });
+
+    it('marks an estimated occurrence in the tooltip', () => {
+      charts.tooltipPoint = {
+        date: '2025-01-15',
+        balance: 800,
+        transactions: [{ name: 'Heating', amount: -200, estimated: true }],
+      };
+      mockBuildForecast.mockReturnValue(
+        forecastOf([
+          { date: '2025-01-15', balance: 800, transactions: [{ name: 'Heating', amount: -200, estimated: true }] },
+        ]),
+      );
+      render(
+        <CashFlowForecastChart
+          scheduledTransactions={[{} as any]}
+          accounts={[makeAccount()]}
+          isLoading={false}
+        />,
+      );
+
+      expect(screen.getByText('(estimated)')).toBeInTheDocument();
+    });
+  });
+
   describe('when a rate is missing', () => {
     it('says so instead of drawing a line', () => {
       mockBuildForecast.mockReturnValue(forecastOf([], ['EUR']));
@@ -824,6 +898,60 @@ describe('CashFlowForecastChart', () => {
       expect(
         within(screen.getByTestId('tooltip')).getByText('Bill (Checking)'),
       ).toBeInTheDocument();
+    });
+
+    // Discussion #1784: overdue occurrences land on the first day, and the
+    // tooltip says how many, so the drop has a visible cause.
+    describe('overdue occurrences on the hovered day', () => {
+      const overduePoint = (transactions: any[]) => ({
+        date: '2025-01-15',
+        balance: 1300,
+        balances: { a1: 800, a2: 500 },
+        transactions,
+      });
+
+      it('says one overdue scheduled transaction, in the singular', () => {
+        charts.tooltipPoint = overduePoint([
+          { name: 'Rent', amount: -200, accountId: 'a1', scheduledTransactionId: 's1', overdueOriginalDate: '2025-01-10' },
+          { name: 'Pay', amount: 300, accountId: 'a1', scheduledTransactionId: 's2' },
+        ]);
+        renderWithBothSelected();
+        expect(
+          within(screen.getByTestId('tooltip')).getByText('Includes 1 overdue scheduled transaction'),
+        ).toBeInTheDocument();
+      });
+
+      it('counts each overdue occurrence, in the plural', () => {
+        charts.tooltipPoint = overduePoint([
+          { name: 'Rent', amount: -200, accountId: 'a1', scheduledTransactionId: 's1', overdueOriginalDate: '2025-01-01' },
+          { name: 'Rent', amount: -200, accountId: 'a1', scheduledTransactionId: 's1', overdueOriginalDate: '2025-01-08' },
+        ]);
+        renderWithBothSelected();
+        expect(
+          within(screen.getByTestId('tooltip')).getByText('Includes 2 overdue scheduled transactions'),
+        ).toBeInTheDocument();
+      });
+
+      it('counts an overdue transfer between two selected accounts once', () => {
+        charts.tooltipPoint = overduePoint([
+          { name: 'Move', amount: -100, accountId: 'a1', scheduledTransactionId: 't1', overdueOriginalDate: '2025-01-10' },
+          { name: 'Move', amount: 100, accountId: 'a2', scheduledTransactionId: 't1', overdueOriginalDate: '2025-01-10' },
+        ]);
+        renderWithBothSelected();
+        expect(
+          within(screen.getByTestId('tooltip')).getByText('Includes 1 overdue scheduled transaction'),
+        ).toBeInTheDocument();
+      });
+
+      it('says nothing when no hovered transaction is overdue', () => {
+        charts.tooltipPoint = overduePoint([
+          { name: 'Bill', amount: -200, accountId: 'a1', scheduledTransactionId: 's1' },
+        ]);
+        renderWithBothSelected();
+        expect(
+          within(screen.getByTestId('tooltip')).queryByText(/overdue/),
+        ).not.toBeInTheDocument();
+      });
     });
 
     it('builds the forecast from the picker order, not the click order', () => {
@@ -1024,6 +1152,55 @@ describe('CashFlowForecastChart', () => {
         expect.anything(),
         undefined,
       );
+    });
+  });
+
+  describe('hiding the chart', () => {
+    const renderChart = (isLoading = false) =>
+      render(
+        <CashFlowForecastChart scheduledTransactions={[]} accounts={[]} isLoading={isLoading} />
+      );
+
+    it('folds into the strip and remembers the choice in localStorage', () => {
+      renderChart();
+      fireEvent.click(screen.getByRole('button', { name: 'Hide chart' }));
+
+      expect(screen.getByTestId('chart-collapsed-strip')).toBeInTheDocument();
+      expect(screen.queryByText('Cash Flow Forecast')).not.toBeInTheDocument();
+      expect(localStorage.getItem('cashFlowForecast.collapsed')).toBe('true');
+    });
+
+    it('starts folded when this browser saved that choice', () => {
+      localStorage.setItem('cashFlowForecast.collapsed', 'true');
+      renderChart();
+
+      expect(screen.getByTestId('chart-collapsed-strip')).toBeInTheDocument();
+      expect(screen.queryByText('1M')).not.toBeInTheDocument();
+    });
+
+    it('restores the chart from the strip and remembers that too', () => {
+      localStorage.setItem('cashFlowForecast.collapsed', 'true');
+      renderChart();
+      fireEvent.click(screen.getByTestId('chart-collapsed-strip'));
+
+      expect(screen.getByText('Cash Flow Forecast')).toBeInTheDocument();
+      expect(screen.queryByTestId('chart-collapsed-strip')).not.toBeInTheDocument();
+      expect(localStorage.getItem('cashFlowForecast.collapsed')).toBe('false');
+    });
+
+    it('reads a stored value that is not a boolean as open', () => {
+      localStorage.setItem('cashFlowForecast.collapsed', '"yes"');
+      renderChart();
+
+      expect(screen.getByText('Cash Flow Forecast')).toBeInTheDocument();
+      expect(screen.queryByTestId('chart-collapsed-strip')).not.toBeInTheDocument();
+    });
+
+    it('offers the hide button while the forecast is loading', () => {
+      renderChart(true);
+      fireEvent.click(screen.getByRole('button', { name: 'Hide chart' }));
+
+      expect(screen.getByTestId('chart-collapsed-strip')).toBeInTheDocument();
     });
   });
 });

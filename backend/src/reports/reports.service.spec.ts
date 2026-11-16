@@ -17,8 +17,12 @@ import {
 import { Transaction } from "../transactions/entities/transaction.entity";
 import { Category } from "../categories/entities/category.entity";
 import { Payee } from "../payees/entities/payee.entity";
+import { UserPreference } from "../users/entities/user-preference.entity";
 import { BudgetsService } from "../budgets/budgets.service";
 import { ActionHistoryService } from "../action-history/action-history.service";
+import { ReportCurrencyService } from "../built-in-reports/report-currency.service";
+import { ExchangeRateService } from "../currencies/exchange-rate.service";
+import { rateIndexOf } from "../test-helpers/report-rate-testing";
 import {
   createScopedDbMocks,
   DataSourceMock,
@@ -35,7 +39,13 @@ describe("ReportsService", () => {
   let transactionsRepository: Record<string, jest.Mock>;
   let categoriesRepository: Record<string, jest.Mock>;
   let payeesRepository: Record<string, jest.Mock>;
+  let userPreferencesRepository: Record<string, jest.Mock>;
   let mockActionHistoryService: Record<string, jest.Mock>;
+  let mockCurrencyService: jest.Mocked<
+    Pick<ReportCurrencyService, "getDefaultCurrency" | "buildConverter">
+  >;
+  /** `"FROM->TO"` -> a stored rate, observed on the first day the rows need. */
+  let storedRates: Map<string, number>;
 
   const defaultConfig: ReportConfig = {
     metric: MetricType.TOTAL_AMOUNT,
@@ -72,6 +82,7 @@ describe("ReportsService", () => {
     icon: null,
     color: "#22c55e",
     isIncome: false,
+    autoSign: null,
     isSystem: false,
     createdAt: new Date("2025-01-01"),
   };
@@ -87,6 +98,11 @@ describe("ReportsService", () => {
     logoContentType: null,
     hasLogo: false,
     logoFetchedAt: null,
+    address: null,
+    email: null,
+    phone: null,
+    contactLookupAt: null,
+    contactLookupSource: null,
     isActive: true,
     defaultCategory: null as any,
     createdAt: new Date("2025-01-01"),
@@ -124,13 +140,20 @@ describe("ReportsService", () => {
       ...overrides,
     }) as unknown as Transaction;
 
+  // What the search door applied inside a filter-group Brackets.
+  let innerAndWhereCalls: unknown[][] = [];
+
   const createMockInnerQb = () => {
     const inner = {} as Record<string, jest.Mock>;
     const handleArg = (arg: any) => {
       if (arg && arg.whereFactory) {
-        const nestedQb = {
+        const nestedQb: Record<string, jest.Mock> = {
           where: jest.fn().mockReturnThis(),
           orWhere: jest.fn().mockReturnThis(),
+          andWhere: jest.fn().mockImplementation((...args: unknown[]) => {
+            innerAndWhereCalls.push(args);
+            return nestedQb;
+          }),
         };
         arg.whereFactory(nestedQb);
       }
@@ -138,6 +161,10 @@ describe("ReportsService", () => {
     };
     inner.where = jest.fn().mockImplementation(handleArg);
     inner.orWhere = jest.fn().mockImplementation(handleArg);
+    inner.andWhere = jest.fn().mockImplementation((...args: unknown[]) => {
+      innerAndWhereCalls.push(args);
+      return inner;
+    });
     return inner;
   };
 
@@ -157,6 +184,7 @@ describe("ReportsService", () => {
     });
     qb.orWhere = jest.fn().mockReturnValue(qb);
     qb.orderBy = jest.fn().mockReturnValue(qb);
+    qb.addOrderBy = jest.fn().mockReturnValue(qb);
     qb.take = jest.fn().mockReturnValue(qb);
     qb.getMany = jest.fn().mockResolvedValue([]);
     // Apply overrides last
@@ -167,6 +195,7 @@ describe("ReportsService", () => {
   };
 
   beforeEach(async () => {
+    innerAndWhereCalls = [];
     reportsRepository = {
       create: jest
         .fn()
@@ -189,8 +218,41 @@ describe("ReportsService", () => {
       find: jest.fn().mockResolvedValue([]),
     };
 
+    // The search door reads the user's number and date formats.
+    userPreferencesRepository = {
+      findOne: jest.fn().mockResolvedValue(null),
+    };
+
     mockActionHistoryService = {
       record: jest.fn().mockResolvedValue(null),
+    };
+
+    // The real conversion door over supplied rates, so a mock cannot answer a
+    // shape the real service cannot produce. Each rate is observed on the first
+    // day the converted rows need, so it is admissible for every one of them.
+    storedRates = new Map();
+    const rateHistory = {
+      getRateIndex: jest.fn(
+        async (_currencies: ReadonlySet<string>, _to: string, start: string) =>
+          rateIndexOf(
+            [...storedRates].map(([pair, rate]) => {
+              const [fromCurrency, toCurrency] = pair.split("->");
+              return { fromCurrency, toCurrency, rate, rateDate: start };
+            }),
+          ),
+      ),
+    };
+    const realCurrencyService = new ReportCurrencyService(
+      {} as DataSource,
+      rateHistory as unknown as ExchangeRateService,
+    );
+    mockCurrencyService = {
+      getDefaultCurrency: jest.fn().mockResolvedValue("USD"),
+      buildConverter: jest
+        .fn()
+        .mockImplementation((rows, currency) =>
+          realCurrencyService.buildConverter(rows, currency),
+        ),
     };
 
     ({ dataSource: scopedDataSource } = createScopedDbMocks([
@@ -198,6 +260,7 @@ describe("ReportsService", () => {
       [Transaction, transactionsRepository as never],
       [Category, categoriesRepository as never],
       [Payee, payeesRepository as never],
+      [UserPreference, userPreferencesRepository as never],
     ]));
 
     const module: TestingModule = await Test.createTestingModule({
@@ -227,6 +290,7 @@ describe("ReportsService", () => {
           provide: ActionHistoryService,
           useValue: mockActionHistoryService,
         },
+        { provide: ReportCurrencyService, useValue: mockCurrencyService },
         { provide: DataSource, useValue: scopedDataSource },
       ],
     }).compile();
@@ -700,7 +764,12 @@ describe("ReportsService", () => {
       expect(result.reportId).toBe("report-1");
       expect(result.name).toBe("Monthly Expenses");
       expect(result.data).toEqual([]);
-      expect(result.summary).toEqual({ total: 0, count: 0, average: 0 });
+      expect(result.summary).toEqual({
+        total: 0,
+        knownTotal: 0,
+        count: 0,
+        average: 0,
+      });
     });
 
     it("returns correct report metadata", async () => {
@@ -911,6 +980,106 @@ describe("ReportsService", () => {
         expect(result.data[1].memo).toBe("Cleaning supplies");
       });
 
+      // Discussion #1978: a BOTH list keeps each row's own sign, and its
+      // headline is the signed net of the listed rows.
+      it("keeps each row's sign in a BOTH list and nets the headline", async () => {
+        const transactions = [
+          createMockTransaction({ id: "tx-1", amount: 1000 }),
+          createMockTransaction({ id: "tx-2", amount: -300 }),
+          // A refund in an expense category stays positive.
+          createMockTransaction({ id: "tx-3", amount: 30 }),
+          createMockTransaction({
+            id: "tx-4",
+            amount: 440,
+            isSplit: true,
+            splits: [
+              { id: "split-1", amount: -60, memo: "Fee" } as any,
+              { id: "split-2", amount: 500, memo: "Rebate" } as any,
+            ],
+          }),
+        ];
+        setupExecuteMocks(
+          {
+            groupBy: GroupByType.NONE,
+            config: {
+              ...defaultConfig,
+              metric: MetricType.NONE,
+              direction: DirectionFilter.BOTH,
+            },
+          },
+          transactions,
+        );
+
+        const result = await service.execute("user-1", "report-1");
+
+        expect(result.data.map((d) => d.value)).toEqual([
+          1000, -300, 30, -60, 500,
+        ]);
+        expect(result.summary.total).toBe(1170);
+      });
+
+      it("nets both legs of an in-scope transfer to zero in a BOTH list", async () => {
+        const transactions = [
+          createMockTransaction({
+            id: "tx-out",
+            amount: -500,
+            isTransfer: true,
+            categoryId: null,
+            category: null,
+          }),
+          createMockTransaction({
+            id: "tx-in",
+            amount: 500,
+            isTransfer: true,
+            accountId: "acc-2",
+            account: { id: "acc-2", name: "Savings" } as any,
+            categoryId: null,
+            category: null,
+          }),
+        ];
+        setupExecuteMocks(
+          {
+            groupBy: GroupByType.NONE,
+            config: {
+              ...defaultConfig,
+              metric: MetricType.NONE,
+              direction: DirectionFilter.BOTH,
+              includeTransfers: true,
+            },
+          },
+          transactions,
+        );
+
+        const result = await service.execute("user-1", "report-1");
+
+        expect(result.data.map((d) => d.value)).toEqual([-500, 500]);
+        expect(result.summary.total).toBe(0);
+      });
+
+      it("still lists magnitudes when the list has one direction", async () => {
+        const transactions = [
+          createMockTransaction({ id: "tx-1", amount: -300 }),
+          createMockTransaction({
+            id: "tx-2",
+            amount: -100,
+            isSplit: true,
+            splits: [{ id: "split-1", amount: -100, memo: "Food" } as any],
+          }),
+        ];
+        setupExecuteMocks(
+          {
+            groupBy: GroupByType.NONE,
+            config: { ...defaultConfig, metric: MetricType.NONE },
+          },
+          transactions,
+        );
+
+        const result = await service.execute("user-1", "report-1");
+
+        expect(result.data.map((d) => d.value)).toEqual([300, 100]);
+        expect(result.summary.total).toBe(400);
+      });
+
       it("renders category as 'Parent: Child' for subcategories on individual transactions", async () => {
         const parentCategory = {
           ...mockCategory,
@@ -993,8 +1162,10 @@ describe("ReportsService", () => {
         const result = await service.execute("user-1", "report-1");
 
         expect(result.data).toHaveLength(1);
-        expect(result.data[0].value).toBe(100); // abs(-60) + abs(-40)
-        expect(result.data[0].count).toBe(2);
+        expect(result.data[0].value).toBe(100); // -(-60 + -40)
+        // A transaction counts once per group (audit A26-M33); the two lines
+        // are one unit when the report is not grouped by category.
+        expect(result.data[0].count).toBe(1);
       });
     });
 
@@ -1661,6 +1832,115 @@ describe("ReportsService", () => {
         expect(result.summary.average).toBe(50);
       });
 
+      it("summarises the average metric over every row, not the sum of group averages", async () => {
+        const transactions = [
+          createMockTransaction({
+            id: "tx-1",
+            categoryId: "cat-1",
+            amount: -10,
+          }),
+          createMockTransaction({
+            id: "tx-2",
+            categoryId: "cat-1",
+            amount: -20,
+          }),
+          createMockTransaction({
+            id: "tx-3",
+            categoryId: "cat-1",
+            amount: -30,
+          }),
+          createMockTransaction({
+            id: "tx-4",
+            categoryId: "cat-2",
+            amount: -100,
+          }),
+        ];
+        setupExecuteMocks(
+          {
+            groupBy: GroupByType.CATEGORY,
+            config: { ...defaultConfig, metric: MetricType.AVERAGE },
+          },
+          transactions,
+        );
+        categoriesRepository.find.mockResolvedValue([
+          mockCategory,
+          { ...mockCategory, id: "cat-2", name: "Dining" },
+        ]);
+
+        const result = await service.execute("user-1", "report-1");
+
+        // Group means are 20 and 100 (sum 120); the mean of the four rows is 40.
+        expect(result.summary.total).toBe(40);
+        expect(result.summary.average).toBe(40);
+        expect(result.summary.count).toBe(4);
+      });
+
+      it("withholds the total and flags the report when the row limit cut the read", async () => {
+        const rows = Array.from({ length: 50001 }, (_, i) =>
+          createMockTransaction({ id: `tx-${i}`, amount: -1 }),
+        );
+        const { qb } = setupExecuteMocks(
+          {
+            groupBy: GroupByType.NONE,
+            config: { ...defaultConfig, metric: MetricType.TOTAL_AMOUNT },
+          },
+          rows,
+        );
+
+        const result = await service.execute("user-1", "report-1");
+
+        expect(qb.take).toHaveBeenCalledWith(50001);
+        expect(result.truncated).toBe(true);
+        expect(result.summary.total).toBeNull();
+        expect(result.summary.average).toBeNull();
+        expect(result.summary.knownTotal).toBe(50000);
+      });
+
+      // A both-direction list reads in date order (discussion #1978); within
+      // one date it follows the register, never the arbitrary order of a bare
+      // date sort (applyRegisterOrder).
+      it("reads the rows in the register's order", async () => {
+        const { qb } = setupExecuteMocks(
+          {
+            groupBy: GroupByType.NONE,
+            config: {
+              ...defaultConfig,
+              metric: MetricType.NONE,
+              direction: DirectionFilter.BOTH,
+            },
+          },
+          [],
+        );
+
+        await service.execute("user-1", "report-1");
+
+        expect(qb.orderBy).toHaveBeenCalledWith(
+          "transaction.transactionDate",
+          "ASC",
+          undefined,
+        );
+        expect(qb.addOrderBy.mock.calls).toEqual([
+          ["transaction.createdAt", "ASC"],
+          ["transaction.amount", "DESC"],
+          ["transaction.id", "ASC"],
+        ]);
+      });
+
+      it("is not truncated when the rows fit the limit", async () => {
+        setupExecuteMocks(
+          {
+            groupBy: GroupByType.NONE,
+            config: { ...defaultConfig, metric: MetricType.TOTAL_AMOUNT },
+          },
+          [createMockTransaction({ id: "tx-1", amount: -5 })],
+        );
+
+        const result = await service.execute("user-1", "report-1");
+
+        expect(result.truncated).toBe(false);
+        expect(result.summary.total).toBe(5);
+      });
+
       it("returns zero summary when no data", async () => {
         setupExecuteMocks({
           groupBy: GroupByType.NONE,
@@ -1669,15 +1949,960 @@ describe("ReportsService", () => {
 
         const result = await service.execute("user-1", "report-1");
 
-        expect(result.summary).toEqual({ total: 0, count: 0, average: 0 });
+        expect(result.summary).toEqual({
+          total: 0,
+          knownTotal: 0,
+          count: 0,
+          average: 0,
+        });
+      });
+    });
+
+    describe("currency conversion (INV-FX-001)", () => {
+      const cad = (id: string, amount: number, extra = {}) =>
+        createMockTransaction({
+          id,
+          amount,
+          currencyCode: "CAD",
+          ...extra,
+        });
+      const jpy = (id: string, amount: number, extra = {}) =>
+        createMockTransaction({
+          id,
+          amount,
+          currencyCode: "JPY",
+          ...extra,
+        });
+
+      beforeEach(() => {
+        mockCurrencyService.getDefaultCurrency.mockResolvedValue("CAD");
+      });
+
+      const run = async (
+        groupBy: GroupByType,
+        transactions: Transaction[],
+        metric: MetricType = MetricType.TOTAL_AMOUNT,
+      ) => {
+        setupExecuteMocks(
+          { groupBy, config: { ...defaultConfig, metric } },
+          transactions,
+        );
+        categoriesRepository.find.mockResolvedValue([mockCategory]);
+        return service.execute("user-1", "report-1");
+      };
+
+      const groceries = [cad("tx-1", -200), jpy("tx-2", -10000)];
+
+      describe("with a rate", () => {
+        beforeEach(() => storedRates.set("JPY->CAD", 0.009));
+
+        it("converts each row before summing, by category", async () => {
+          const result = await run(GroupByType.CATEGORY, groceries);
+
+          expect(result.data).toHaveLength(1);
+          expect(result.data[0].label).toBe("Groceries");
+          expect(result.data[0].value).toBe(290);
+          expect(result.data[0].count).toBe(2);
+          expect(result.summary.total).toBe(290);
+          expect(result.summary.knownTotal).toBe(290);
+          expect(result.currency).toBe("CAD");
+          expect(result.missingCurrencies).toEqual([]);
+          expect(result.excludedCount).toBe(0);
+        });
+
+        it("converts through the inverse pair when only it is stored", async () => {
+          storedRates.clear();
+          storedRates.set("CAD->JPY", 1000 / 9);
+
+          const result = await run(GroupByType.CATEGORY, groceries);
+
+          expect(result.summary.total).toBeCloseTo(290, 2);
+        });
+
+        it("converts with no grouping", async () => {
+          const result = await run(GroupByType.NONE, groceries);
+
+          expect(result.data[0].value).toBe(290);
+          expect(result.summary.total).toBe(290);
+        });
+
+        it("converts each row of the no-aggregation listing", async () => {
+          const result = await run(
+            GroupByType.NONE,
+            groceries,
+            MetricType.NONE,
+          );
+
+          expect(result.data.map((d) => d.value).sort()).toEqual([200, 90]);
+          expect(result.summary.total).toBe(290);
+        });
+
+        it("lists each row's own amount in its account's currency beside the converted value", async () => {
+          const result = await run(
+            GroupByType.NONE,
+            groceries,
+            MetricType.NONE,
+          );
+
+          const byId = new Map(result.data.map((d) => [d.id, d]));
+          expect(byId.get("tx-1")).toMatchObject({
+            value: 200,
+            accountAmount: 200,
+            accountCurrency: "CAD",
+          });
+          expect(byId.get("tx-2")).toMatchObject({
+            value: 90,
+            accountAmount: 10000,
+            accountCurrency: "JPY",
+          });
+        });
+
+        it("signs the account-currency amount as it signs the value in a both-direction list", async () => {
+          setupExecuteMocks(
+            {
+              groupBy: GroupByType.NONE,
+              config: {
+                ...defaultConfig,
+                metric: MetricType.NONE,
+                direction: DirectionFilter.BOTH,
+              },
+            },
+            [jpy("tx-out", -10000), jpy("tx-in", 5000)],
+          );
+
+          const result = await service.execute("user-1", "report-1");
+
+          const byId = new Map(result.data.map((d) => [d.id, d]));
+          expect(byId.get("tx-out")).toMatchObject({
+            value: -90,
+            accountAmount: -10000,
+            accountCurrency: "JPY",
+          });
+          expect(byId.get("tx-in")).toMatchObject({
+            value: 45,
+            accountAmount: 5000,
+            accountCurrency: "JPY",
+          });
+        });
+
+        it("gives each split line its own account-currency amount", async () => {
+          const split = jpy("tx-split", -10000, {
+            isSplit: true,
+            splits: [
+              {
+                id: "s-1",
+                transactionId: "tx-split",
+                amount: -6000,
+                memo: "Rice",
+                category: mockCategory,
+              } as any,
+              {
+                id: "s-2",
+                transactionId: "tx-split",
+                amount: -4000,
+                memo: "Tea",
+                category: mockCategory,
+              } as any,
+            ],
+          });
+
+          const result = await run(GroupByType.NONE, [split], MetricType.NONE);
+
+          expect(
+            result.data.map((d) => [
+              d.memo,
+              d.accountAmount,
+              d.accountCurrency,
+            ]),
+          ).toEqual([
+            ["Rice", 6000, "JPY"],
+            ["Tea", 4000, "JPY"],
+          ]);
+        });
+
+        it("sorts the account-currency column by currency, then by amount within one", async () => {
+          setupExecuteMocks(
+            {
+              groupBy: GroupByType.NONE,
+              config: {
+                ...defaultConfig,
+                metric: MetricType.NONE,
+                sortBy: TableColumn.ACCOUNT_AMOUNT,
+                sortDirection: SortDirection.ASC,
+              },
+            },
+            [
+              jpy("j-big", -10000),
+              cad("c-big", -200),
+              jpy("j-small", -500),
+              cad("c-small", -5),
+            ],
+          );
+
+          const result = await service.execute("user-1", "report-1");
+
+          expect(result.data.map((d) => d.id)).toEqual([
+            "c-small",
+            "c-big",
+            "j-small",
+            "j-big",
+          ]);
+        });
+
+        describe("the original-currency amount", () => {
+          // Paid 100 EUR from the CAD account: 150 CAD charged.
+          const euroEntry = (id: string, amount: number, original: number) =>
+            cad(id, amount, {
+              originalAmount: original,
+              originalCurrencyCode: "EUR",
+              exchangeRate: 1.5,
+            });
+
+          it("lists what a foreign-currency entry was entered as, and nothing on an ordinary row", async () => {
+            const result = await run(
+              GroupByType.NONE,
+              [euroEntry("tx-eur", -150, -100), cad("tx-cad", -200)],
+              MetricType.NONE,
+            );
+
+            const byId = new Map(result.data.map((d) => [d.id, d]));
+            expect(byId.get("tx-eur")).toMatchObject({
+              value: 150,
+              accountAmount: 150,
+              accountCurrency: "CAD",
+              originalAmount: 100,
+              originalCurrency: "EUR",
+            });
+            expect(byId.get("tx-cad")).not.toHaveProperty("originalAmount");
+            expect(byId.get("tx-cad")).not.toHaveProperty("originalCurrency");
+          });
+
+          it("signs the original amount as it signs the value in a both-direction list", async () => {
+            setupExecuteMocks(
+              {
+                groupBy: GroupByType.NONE,
+                config: {
+                  ...defaultConfig,
+                  metric: MetricType.NONE,
+                  direction: DirectionFilter.BOTH,
+                },
+              },
+              [euroEntry("tx-out", -150, -100), euroEntry("tx-in", 75, 50)],
+            );
+
+            const result = await service.execute("user-1", "report-1");
+
+            const byId = new Map(result.data.map((d) => [d.id, d]));
+            expect(byId.get("tx-out")).toMatchObject({
+              value: -150,
+              originalAmount: -100,
+              originalCurrency: "EUR",
+            });
+            expect(byId.get("tx-in")).toMatchObject({
+              value: 75,
+              originalAmount: 50,
+              originalCurrency: "EUR",
+            });
+          });
+
+          it("gives a split line no original amount: only the whole transaction was entered in it", async () => {
+            const split = euroEntry("tx-split", -150, -100);
+            const result = await run(
+              GroupByType.NONE,
+              [
+                {
+                  ...split,
+                  isSplit: true,
+                  splits: [
+                    {
+                      id: "s-1",
+                      transactionId: "tx-split",
+                      amount: -90,
+                      memo: "Hotel",
+                      category: mockCategory,
+                    } as any,
+                    {
+                      id: "s-2",
+                      transactionId: "tx-split",
+                      amount: -60,
+                      memo: "Meals",
+                      category: mockCategory,
+                    } as any,
+                  ],
+                } as Transaction,
+              ],
+              MetricType.NONE,
+            );
+
+            expect(result.data).toHaveLength(2);
+            for (const line of result.data) {
+              expect(line).not.toHaveProperty("originalAmount");
+              expect(line).not.toHaveProperty("originalCurrency");
+            }
+          });
+
+          it("sorts the original-currency column by currency, then by amount within one", async () => {
+            setupExecuteMocks(
+              {
+                groupBy: GroupByType.NONE,
+                config: {
+                  ...defaultConfig,
+                  metric: MetricType.NONE,
+                  sortBy: TableColumn.ORIGINAL_AMOUNT,
+                  sortDirection: SortDirection.ASC,
+                },
+              },
+              [
+                cad("usd-big", -300, {
+                  originalAmount: -220,
+                  originalCurrencyCode: "USD",
+                }),
+                euroEntry("eur-big", -150, -100),
+                cad("plain", -40),
+                euroEntry("eur-small", -15, -10),
+              ],
+            );
+
+            const result = await service.execute("user-1", "report-1");
+
+            expect(result.data.map((d) => d.id)).toEqual([
+              "plain",
+              "eur-small",
+              "eur-big",
+              "usd-big",
+            ]);
+          });
+        });
+
+        it("converts by payee", async () => {
+          const result = await run(GroupByType.PAYEE, groceries);
+
+          expect(result.data[0].value).toBe(290);
+          expect(result.summary.total).toBe(290);
+        });
+
+        it("converts by tag", async () => {
+          const tag = { id: "tag-1", name: "Food", color: null };
+          const result = await run(
+            GroupByType.TAG,
+            groceries.map((t) => ({ ...t, tags: [tag] }) as Transaction),
+          );
+
+          expect(result.data[0].value).toBe(290);
+          expect(result.summary.total).toBe(290);
+        });
+
+        it("converts by month", async () => {
+          const result = await run(GroupByType.MONTH, groceries);
+
+          expect(result.data).toHaveLength(1);
+          expect(result.data[0].value).toBe(290);
+          expect(result.summary.total).toBe(290);
+        });
+
+        it("averages converted amounts", async () => {
+          const result = await run(
+            GroupByType.CATEGORY,
+            groceries,
+            MetricType.AVERAGE,
+          );
+
+          expect(result.data[0].value).toBe(145);
+        });
+
+        it("converts the lines of a split transaction", async () => {
+          const split = jpy("tx-3", -10000, {
+            isSplit: true,
+            splits: [
+              { id: "s1", amount: -10000, categoryId: "cat-1", tags: [] },
+            ],
+          });
+          const result = await run(GroupByType.CATEGORY, [split]);
+
+          expect(result.summary.total).toBe(90);
+        });
+      });
+
+      describe("without a rate", () => {
+        it("withholds the total and names the currency, by category", async () => {
+          const result = await run(GroupByType.CATEGORY, groceries);
+
+          expect(result.data).toHaveLength(1);
+          expect(result.data[0].value).toBe(200);
+          expect(result.summary.total).toBeNull();
+          expect(result.summary.knownTotal).toBe(200);
+          expect(result.missingCurrencies).toEqual(["JPY"]);
+          expect(result.excludedCount).toBe(1);
+          expect(result.currency).toBe("CAD");
+        });
+
+        it("withholds the total with no grouping", async () => {
+          const result = await run(GroupByType.NONE, groceries);
+
+          expect(result.data[0].value).toBe(200);
+          expect(result.data[0].count).toBe(1);
+          expect(result.summary.total).toBeNull();
+          expect(result.summary.knownTotal).toBe(200);
+        });
+
+        it("leaves the unconverted row out of the listing", async () => {
+          const result = await run(
+            GroupByType.NONE,
+            groceries,
+            MetricType.NONE,
+          );
+
+          expect(result.data).toHaveLength(1);
+          expect(result.data[0].value).toBe(200);
+          expect(result.summary.total).toBeNull();
+          expect(result.excludedCount).toBe(1);
+        });
+
+        it("withholds the total by payee", async () => {
+          const result = await run(GroupByType.PAYEE, groceries);
+
+          expect(result.data[0].value).toBe(200);
+          expect(result.summary.total).toBeNull();
+          expect(result.missingCurrencies).toEqual(["JPY"]);
+        });
+
+        it("withholds the total by tag, counting a row once", async () => {
+          const tags = [
+            { id: "tag-1", name: "A", color: null },
+            { id: "tag-2", name: "B", color: null },
+          ];
+          const result = await run(GroupByType.TAG, [
+            cad("tx-1", -200),
+            jpy("tx-2", -10000, { tags }),
+          ]);
+
+          expect(result.summary.total).toBeNull();
+          expect(result.excludedCount).toBe(1);
+          expect(result.missingCurrencies).toEqual(["JPY"]);
+        });
+
+        it("withholds the total by month", async () => {
+          const result = await run(GroupByType.MONTH, groceries);
+
+          expect(result.data[0].value).toBe(200);
+          expect(result.summary.total).toBeNull();
+          expect(result.summary.knownTotal).toBe(200);
+        });
+
+        it("counts every row for the count metric", async () => {
+          const result = await run(
+            GroupByType.CATEGORY,
+            groceries,
+            MetricType.COUNT,
+          );
+
+          expect(result.data[0].value).toBe(2);
+          expect(result.summary.total).toBe(2);
+        });
+
+        it("leaves a group's currency part out whole when one of its days has no rate (issue #2130)", async () => {
+          // The rate is observed on 2025-01-10, so the refund struck in December
+          // is past FX_MAX_RATE_AGE_DAYS and has none. Keeping the January debit
+          // alone would read 290: a debit in, its refund out.
+          storedRates.set("JPY->CAD", 0.009);
+          const result = await run(GroupByType.CATEGORY, [
+            cad("tx-1", -200),
+            jpy("tx-2", -10000, { transactionDate: "2025-01-10" }),
+            jpy("tx-3", 5000, { transactionDate: "2025-12-20" }),
+          ]);
+
+          expect(result.data).toHaveLength(1);
+          expect(result.data[0].value).toBe(200);
+          expect(result.data[0].count).toBe(1);
+          expect(result.summary.total).toBeNull();
+          expect(result.summary.knownTotal).toBe(200);
+          expect(result.missingCurrencies).toEqual(["JPY"]);
+          // The refund with no rate, and the debit that left with it.
+          expect(result.excludedCount).toBe(2);
+        });
+
+        it("leaves a zero amount in without a rate", async () => {
+          const result = await run(GroupByType.CATEGORY, [
+            cad("tx-1", -200),
+            jpy("tx-2", 0),
+          ]);
+
+          expect(result.summary.total).toBe(200);
+          expect(result.excludedCount).toBe(0);
+        });
+      });
+
+      it("reports an empty result as zero, not unknown", async () => {
+        const result = await run(GroupByType.CATEGORY, []);
+
+        expect(result.summary.total).toBe(0);
+        expect(result.summary.knownTotal).toBe(0);
+        expect(result.missingCurrencies).toEqual([]);
+        expect(result.excludedCount).toBe(0);
+      });
+
+      it("converts a row at its own settled rate, not the market's (issue #2106)", async () => {
+        // Bought in CAD on a USD card: 75 USD at 0.75 USD per CAD is 100 CAD,
+        // whatever the market rate is now.
+        storedRates.set("USD->CAD", 1.5);
+        const settled = createMockTransaction({
+          id: "tx-1",
+          amount: -75,
+          currencyCode: "USD",
+          originalCurrencyCode: "CAD",
+          exchangeRate: 0.75,
+        });
+
+        const result = await run(GroupByType.CATEGORY, [settled]);
+
+        expect(result.summary.total).toBe(100);
+      });
+
+      it("loads the rate history from the earliest foreign row's date (issue #2106)", async () => {
+        storedRates.set("JPY->CAD", 0.009);
+        await run(GroupByType.CATEGORY, [
+          cad("tx-1", -200),
+          jpy("tx-2", -10000, { transactionDate: "2025-03-02" }),
+          jpy("tx-3", -10000, { transactionDate: "2025-02-10" }),
+        ]);
+
+        const [rows, currency] =
+          mockCurrencyService.buildConverter.mock.calls[0];
+        expect(currency).toBe("CAD");
+        expect(rows).toEqual([
+          { currency_code: "CAD", tx_date: null, own_rate: null },
+          { currency_code: "JPY", tx_date: "2025-03-02", own_rate: null },
+          { currency_code: "JPY", tx_date: "2025-02-10", own_rate: null },
+        ]);
+      });
+
+      it("needs no rate for the reporting currency itself", async () => {
+        const result = await run(GroupByType.CATEGORY, [cad("tx-1", -200)]);
+
+        expect(result.summary.total).toBe(200);
+      });
+
+      it("resolves the currency and rates once per execution", async () => {
+        storedRates.set("JPY->CAD", 0.009);
+        await run(GroupByType.CATEGORY, groceries);
+
+        expect(mockCurrencyService.getDefaultCurrency).toHaveBeenCalledTimes(1);
+        expect(mockCurrencyService.buildConverter).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    describe("transfer legs convert at the amounts moved (discussion #2139)", () => {
+      // 100 USD sent from acc-usd arrived as 90 EUR in acc-eur. The market
+      // rate on the day is deliberately another figure (0.80 EUR per USD).
+      const outLeg = (extra: Partial<Transaction> = {}) =>
+        createMockTransaction({
+          id: "tx-out",
+          accountId: "acc-usd",
+          account: { id: "acc-usd", name: "US Chequing" } as never,
+          amount: -100,
+          currencyCode: "USD",
+          exchangeRate: 1,
+          isTransfer: true,
+          categoryId: null,
+          category: null,
+          linkedTransactionId: "tx-in",
+          linkedTransaction: {
+            id: "tx-in",
+            amount: 90,
+            currencyCode: "EUR",
+            exchangeRate: 0.9,
+            isSplit: false,
+            linkedTransactionId: "tx-out",
+            account: { id: "acc-eur", name: "Euro Savings" },
+          } as never,
+          ...extra,
+        });
+      const inLeg = (extra: Partial<Transaction> = {}) =>
+        createMockTransaction({
+          id: "tx-in",
+          accountId: "acc-eur",
+          account: { id: "acc-eur", name: "Euro Savings" } as never,
+          amount: 90,
+          currencyCode: "EUR",
+          exchangeRate: 0.9,
+          isTransfer: true,
+          categoryId: null,
+          category: null,
+          linkedTransactionId: "tx-out",
+          linkedTransaction: {
+            id: "tx-out",
+            amount: -100,
+            currencyCode: "USD",
+            exchangeRate: 1,
+            isSplit: false,
+            linkedTransactionId: "tx-in",
+            account: { id: "acc-usd", name: "US Chequing" },
+          } as never,
+          ...extra,
+        });
+
+      const run = async (
+        reporting: string,
+        transactions: Transaction[],
+        config: Partial<ReportConfig> = {},
+        groupBy: GroupByType = GroupByType.NONE,
+      ) => {
+        mockCurrencyService.getDefaultCurrency.mockResolvedValue(reporting);
+        setupExecuteMocks(
+          {
+            groupBy,
+            config: {
+              ...defaultConfig,
+              metric: MetricType.NONE,
+              direction: DirectionFilter.BOTH,
+              includeTransfers: true,
+              ...config,
+            },
+          },
+          transactions,
+        );
+        return service.execute("user-1", "report-1");
+      };
+
+      it("converts the outgoing leg alone at what arrived, not the market rate", async () => {
+        storedRates.set("USD->EUR", 0.8);
+
+        const result = await run("EUR", [outLeg()]);
+
+        expect(result.data).toHaveLength(1);
+        expect(result.data[0].id).toBe("tx-out");
+        expect(result.data[0].value).toBe(-90);
+        expect(result.data[0].count).toBe(1);
+        expect(result.missingCurrencies).toEqual([]);
+        expect(result.excludedCount).toBe(0);
+      });
+
+      it("converts the incoming leg alone at what was sent, in the reverse direction", async () => {
+        storedRates.set("EUR->USD", 1.25);
+
+        const result = await run("USD", [inLeg()]);
+
+        expect(result.data.map((d) => [d.id, d.value])).toEqual([
+          ["tx-in", 100],
+        ]);
+      });
+
+      it("converts with no rate on file, and asks the history for none", async () => {
+        const result = await run("EUR", [outLeg()]);
+
+        expect(result.data[0].value).toBe(-90);
+        expect(result.missingCurrencies).toEqual([]);
+        expect(result.excludedCount).toBe(0);
+        expect(mockCurrencyService.buildConverter).toHaveBeenCalledWith(
+          [],
+          "EUR",
+        );
+      });
+
+      it("sums the leg at what arrived in an aggregate", async () => {
+        storedRates.set("USD->EUR", 0.8);
+
+        const result = await run(
+          "EUR",
+          [outLeg()],
+          {
+            metric: MetricType.TOTAL_AMOUNT,
+            direction: DirectionFilter.EXPENSES_ONLY,
+          },
+          GroupByType.MONTH,
+        );
+
+        expect(result.data.map((d) => d.value)).toEqual([90]);
+        expect(result.summary.total).toBe(90);
+      });
+
+      it("nets both legs of an in-scope pair to zero", async () => {
+        storedRates.set("USD->EUR", 0.8);
+
+        const result = await run("EUR", [outLeg(), inLeg()]);
+
+        expect(result.data.map((d) => [d.id, d.value])).toEqual([
+          ["tx-out", -90],
+          ["tx-in", 90],
+        ]);
+        expect(result.data.reduce((sum, d) => sum + d.value, 0)).toBe(0);
+      });
+
+      it("answers the posted amounts when they disagree with the stored rate", async () => {
+        // An explicit destination amount is stored as given; the incoming
+        // leg's rate says 0.85, but 90 EUR is what arrived.
+        const result = await run("EUR", [
+          outLeg({
+            linkedTransaction: {
+              id: "tx-in",
+              amount: 90,
+              currencyCode: "EUR",
+              exchangeRate: 0.85,
+              isSplit: false,
+              linkedTransactionId: "tx-out",
+            } as never,
+          }),
+        ]);
+
+        expect(result.data[0].value).toBe(-90);
+      });
+
+      it("falls back to the market rate when the counterpart is not readable", async () => {
+        // A cross-owner counterpart is never hydrated by the fetch.
+        storedRates.set("USD->EUR", 0.8);
+
+        const result = await run("EUR", [outLeg({ linkedTransaction: null })]);
+
+        expect(result.data[0].value).toBe(-80);
+      });
+
+      it("records the gap when neither the counterpart nor a rate answers", async () => {
+        const result = await run("EUR", [outLeg({ linkedTransaction: null })]);
+
+        expect(result.data).toEqual([]);
+        expect(result.missingCurrencies).toEqual(["USD"]);
+        expect(result.excludedCount).toBe(1);
+      });
+
+      it("does not trust a link that does not point back", async () => {
+        storedRates.set("USD->EUR", 0.8);
+
+        const result = await run("EUR", [
+          outLeg({
+            linkedTransaction: {
+              id: "tx-in",
+              amount: 90,
+              currencyCode: "EUR",
+              isSplit: false,
+              linkedTransactionId: "tx-other",
+            } as never,
+          }),
+        ]);
+
+        expect(result.data[0].value).toBe(-80);
+      });
+
+      it("takes the market rate when neither leg is in the reporting currency", async () => {
+        storedRates.set("USD->CAD", 1.4);
+
+        const result = await run("CAD", [outLeg()]);
+
+        expect(result.data[0].value).toBe(-140);
+      });
+
+      it("converts a split's transfer line at what its counterpart received", async () => {
+        storedRates.set("USD->EUR", 0.8);
+        const parent = createMockTransaction({
+          id: "tx-split",
+          amount: -160,
+          currencyCode: "USD",
+          isSplit: true,
+          splits: [
+            {
+              id: "s-groceries",
+              amount: -60,
+              categoryId: "cat-1",
+              transferAccountId: null,
+              tags: [],
+            },
+            {
+              id: "s-transfer",
+              amount: -100,
+              categoryId: null,
+              transferAccountId: "acc-eur",
+              linkedTransactionId: "tx-in",
+              linkedTransaction: {
+                id: "tx-in",
+                amount: 90,
+                currencyCode: "EUR",
+                isSplit: false,
+                linkedTransactionId: "tx-split",
+              },
+              tags: [],
+            },
+          ] as never,
+        });
+
+        const result = await run("EUR", [parent]);
+
+        expect(result.data.map((d) => d.value)).toEqual([-48, -90]);
+      });
+
+      it("converts a split transfer's counterpart at its own line, not the parent's amount", async () => {
+        storedRates.set("EUR->USD", 1.25);
+        const counterpart = inLeg({
+          linkedTransactionId: "tx-split",
+          linkedTransaction: {
+            id: "tx-split",
+            amount: -160,
+            currencyCode: "USD",
+            isSplit: true,
+            linkedTransactionId: null,
+            splits: [
+              {
+                id: "s-transfer",
+                amount: -100,
+                transferAccountId: "acc-eur",
+                linkedTransactionId: "tx-in",
+              },
+            ],
+          } as never,
+        });
+
+        const result = await run("USD", [counterpart]);
+
+        expect(result.data[0].value).toBe(100);
+      });
+
+      it("hydrates the counterpart's side regardless of the report's filters", async () => {
+        const { qb } = setupExecuteMocks(
+          {
+            groupBy: GroupByType.NONE,
+            filters: { accountIds: ["acc-usd"] },
+            config: { ...defaultConfig, includeTransfers: true },
+          },
+          [],
+        );
+
+        await service.execute("user-1", "report-1");
+
+        expect(qb.leftJoinAndSelect).toHaveBeenCalledWith(
+          "linkedTransaction.splits",
+          "linkedSplits",
+          "linkedSplits.linkedTransactionId = transaction.id",
+        );
+        expect(qb.leftJoinAndSelect).toHaveBeenCalledWith(
+          "splits.linkedTransaction",
+          "splitLinkedTransaction",
+          "splitLinkedTransaction.userId = transaction.userId",
+        );
+      });
+    });
+
+    describe("signed category sums (audit A26-M33)", () => {
+      const refundRows = () => [
+        createMockTransaction({
+          id: "tx-1",
+          categoryId: "cat-1",
+          amount: -100,
+        }),
+        createMockTransaction({
+          id: "tx-2",
+          categoryId: "cat-1",
+          amount: 30,
+        }),
+        createMockTransaction({
+          id: "tx-3",
+          categoryId: "cat-salary",
+          amount: 5000,
+        }),
+      ];
+
+      it("nets a refund within its category for EXPENSES_ONLY (A26-S16-05)", async () => {
+        setupExecuteMocks(
+          { groupBy: GroupByType.CATEGORY, config: { ...defaultConfig } },
+          refundRows(),
+        );
+
+        const result = await service.execute("user-1", "report-1");
+
+        // Salary is income: it is not a row of an expense report, and it does
+        // not cancel anything in Groceries.
+        expect(result.data).toEqual([
+          expect.objectContaining({ id: "cat-1", value: 70, count: 2 }),
+        ]);
+      });
+
+      it("reports the magnitude of each category's net for BOTH", async () => {
+        setupExecuteMocks(
+          {
+            groupBy: GroupByType.CATEGORY,
+            config: { ...defaultConfig, direction: DirectionFilter.BOTH },
+          },
+          refundRows(),
+        );
+
+        const result = await service.execute("user-1", "report-1");
+
+        expect(result.data.find((d) => d.id === "cat-1")?.value).toBe(70);
+        expect(result.data.find((d) => d.id === "cat-salary")?.value).toBe(
+          5000,
+        );
+      });
+
+      it("nets within each category, never across two, under a month group", async () => {
+        setupExecuteMocks(
+          { groupBy: GroupByType.MONTH, config: { ...defaultConfig } },
+          refundRows(),
+        );
+
+        const result = await service.execute("user-1", "report-1");
+
+        expect(result.data).toHaveLength(1);
+        expect(result.data[0].value).toBe(70);
+        expect(result.data[0].count).toBe(2);
+      });
+
+      it("does not net a transfer pair: each leg is its own cell", async () => {
+        setupExecuteMocks(
+          {
+            groupBy: GroupByType.NONE,
+            config: { ...defaultConfig, includeTransfers: true },
+          },
+          [
+            createMockTransaction({
+              id: "tx-out",
+              amount: -200,
+              isTransfer: true,
+              categoryId: null,
+            }),
+            createMockTransaction({
+              id: "tx-in",
+              amount: 200,
+              isTransfer: true,
+              categoryId: null,
+            }),
+          ],
+        );
+
+        const result = await service.execute("user-1", "report-1");
+
+        expect(result.data).toEqual([
+          expect.objectContaining({ id: "total", value: 200 }),
+        ]);
       });
     });
 
     describe("query builder filter application", () => {
-      it("applies direction filter for EXPENSES_ONLY", async () => {
+      it("does not apply the direction filter to a total report, which nets both signs (audit A26-M33)", async () => {
+        for (const direction of [
+          DirectionFilter.EXPENSES_ONLY,
+          DirectionFilter.INCOME_ONLY,
+        ]) {
+          const { qb } = setupExecuteMocks({
+            config: { ...defaultConfig, direction },
+          });
+
+          await service.execute("user-1", "report-1");
+
+          const andWhereCalls = qb.andWhere.mock.calls.map(
+            (c: unknown[]) => c[0],
+          );
+          expect(andWhereCalls).not.toContain(
+            "(transaction.isSplit = true OR transaction.amount < 0)",
+          );
+          expect(andWhereCalls).not.toContain(
+            "(transaction.isSplit = true OR transaction.amount > 0)",
+          );
+        }
+      });
+
+      it("applies direction filter for EXPENSES_ONLY on the NONE metric", async () => {
         const { qb } = setupExecuteMocks({
+          groupBy: GroupByType.NONE,
           config: {
             ...defaultConfig,
+            metric: MetricType.NONE,
             direction: DirectionFilter.EXPENSES_ONLY,
           },
         });
@@ -1694,10 +2919,12 @@ describe("ReportsService", () => {
         );
       });
 
-      it("applies direction filter for INCOME_ONLY", async () => {
+      it("applies direction filter for INCOME_ONLY on the NONE metric", async () => {
         const { qb } = setupExecuteMocks({
+          groupBy: GroupByType.NONE,
           config: {
             ...defaultConfig,
+            metric: MetricType.NONE,
             direction: DirectionFilter.INCOME_ONLY,
           },
         });
@@ -1958,10 +3185,28 @@ describe("ReportsService", () => {
 
         await service.execute("user-1", "report-1");
 
-        expect(qb.andWhere).toHaveBeenCalledWith(
-          "(LOWER(transaction.payeeName) LIKE :searchTerm OR LOWER(transaction.description) LIKE :searchTerm)",
-          { searchTerm: "%coffee%" },
+        // Through the one search door (audit A26-L12): the clause carries the
+        // door's parameter prefix and the bound value is escaped, not hand-built.
+        const searchCall = qb.andWhere.mock.calls.find(
+          (c: unknown[]) => typeof c[0] === "string" && c[0].includes("rsrch"),
         );
+        expect(searchCall).toBeDefined();
+        expect(searchCall![0]).not.toContain("LIKE :searchTerm");
+        expect(Object.values(searchCall![1] as object)).toContain("%coffee%");
+      });
+
+      it("binds a % in the legacy searchText as a literal (audit A26-L12)", async () => {
+        const { qb } = setupExecuteMocks({
+          filters: { searchText: "50%" },
+          config: { ...defaultConfig },
+        });
+
+        await service.execute("user-1", "report-1");
+
+        const searchCall = qb.andWhere.mock.calls.find(
+          (c: unknown[]) => typeof c[0] === "string" && c[0].includes("rsrch"),
+        );
+        expect(Object.values(searchCall![1] as object)).toContain("%50\\%%");
       });
 
       it("does not apply searchText filter when empty/whitespace", async () => {
@@ -1975,9 +3220,11 @@ describe("ReportsService", () => {
         const andWhereCalls = qb.andWhere.mock.calls.map(
           (c: unknown[]) => c[0],
         );
-        expect(andWhereCalls).not.toContain(
-          expect.stringContaining("LIKE :searchTerm"),
-        );
+        expect(
+          andWhereCalls.some(
+            (c: unknown) => typeof c === "string" && c.includes("rsrch"),
+          ),
+        ).toBe(false);
       });
 
       it("applies filterGroups instead of legacy filters when present", async () => {
@@ -2165,6 +3412,25 @@ describe("ReportsService", () => {
 
         const result = await service.execute("user-1", "report-1");
         expect(result).toBeDefined();
+        // Through the search door (audit A26-L12), with the condition's own prefix.
+        expect(innerAndWhereCalls).toHaveLength(1);
+        expect(innerAndWhereCalls[0][0]).toContain("rsrch_g0_c0_");
+        expect(Object.values(innerAndWhereCalls[0][1] as object)).toContain(
+          "%coffee%",
+        );
+      });
+
+      it("adds no condition for a blank filterGroups text value", async () => {
+        setupExecuteMocks({
+          filters: {
+            filterGroups: [{ conditions: [{ field: "text", value: "  " }] }],
+          },
+          config: { ...defaultConfig },
+        });
+
+        await service.execute("user-1", "report-1");
+
+        expect(innerAndWhereCalls).toHaveLength(0);
       });
 
       it("applies filterGroups with text field as array", async () => {
@@ -2394,15 +3660,35 @@ describe("ReportsService", () => {
         setupExecuteMocks(
           {
             groupBy: GroupByType.NONE,
-            config: { ...defaultConfig, metric: MetricType.TOTAL_AMOUNT },
+            config: {
+              ...defaultConfig,
+              metric: MetricType.TOTAL_AMOUNT,
+              direction: DirectionFilter.BOTH,
+            },
           },
           transactions,
         );
 
         const result = await service.execute("user-1", "report-1");
 
+        // A26-M33: a zero net is not net spending, so EXPENSES_ONLY drops it;
+        // BOTH keeps every category's magnitude, zero included.
         expect(result.data).toHaveLength(1);
         expect(result.data[0].value).toBe(0);
+      });
+
+      it("drops a zero-net row from an expense report (audit A26-M33)", async () => {
+        setupExecuteMocks(
+          {
+            groupBy: GroupByType.NONE,
+            config: { ...defaultConfig, metric: MetricType.TOTAL_AMOUNT },
+          },
+          [createMockTransaction({ id: "tx-1", amount: 0 })],
+        );
+
+        const result = await service.execute("user-1", "report-1");
+
+        expect(result.data).toEqual([]);
       });
 
       it("handles positive amounts (income) with abs value", async () => {
@@ -2648,12 +3934,14 @@ describe("ReportsService", () => {
           createMockTransaction({
             id: "tx-1",
             amount: -100,
+            isSplit: true,
             tags: [
               { id: "tag-1", name: "Essentials", color: "#ff0000" },
             ] as any,
             splits: [
               {
                 id: "split-1",
+                amount: -100,
                 tags: [
                   { id: "tag-1", name: "Essentials", color: "#ff0000" },
                   { id: "tag-2", name: "Luxury", color: "#0000ff" },
@@ -2738,10 +4026,12 @@ describe("ReportsService", () => {
           createMockTransaction({
             id: "tx-1",
             amount: -100,
+            isSplit: true,
             tags: [],
             splits: [
               {
                 id: "split-1",
+                amount: -100,
                 tags: [{ id: "tag-3", name: "SplitOnly", color: "#aaa" }],
               },
             ] as any,
@@ -2759,6 +4049,69 @@ describe("ReportsService", () => {
 
         expect(result.data).toHaveLength(1);
         expect(result.data[0].label).toBe("SplitOnly");
+      });
+    });
+
+    describe("groupBy TAG, split lines", () => {
+      it("keeps a line out of a tag only a sibling line carries", async () => {
+        const vacation = { id: "tag-v", name: "Vacation", color: null };
+        const transactions = [
+          createMockTransaction({
+            id: "tx-1",
+            amount: -100,
+            isSplit: true,
+            tags: [],
+            splits: [
+              {
+                id: "s1",
+                amount: -30,
+                categoryId: "cat-1",
+                tags: [vacation],
+              },
+              { id: "s2", amount: -70, categoryId: "cat-2", tags: [] },
+            ] as any,
+          }),
+        ];
+        setupExecuteMocks(
+          {
+            groupBy: GroupByType.TAG,
+            config: { ...defaultConfig, metric: MetricType.TOTAL_AMOUNT },
+          },
+          transactions,
+        );
+
+        const result = await service.execute("user-1", "report-1");
+
+        expect(result.data.find((d) => d.label === "Vacation")!.value).toBe(30);
+        expect(result.data.find((d) => d.label === "Untagged")!.value).toBe(70);
+      });
+
+      it("files every line under the parent's tags as well as its own", async () => {
+        const trip = { id: "tag-t", name: "Trip", color: null };
+        const transactions = [
+          createMockTransaction({
+            id: "tx-1",
+            amount: -100,
+            isSplit: true,
+            tags: [trip] as any,
+            splits: [
+              { id: "s1", amount: -30, categoryId: "cat-1", tags: [] },
+              { id: "s2", amount: -70, categoryId: "cat-2", tags: [] },
+            ] as any,
+          }),
+        ];
+        setupExecuteMocks(
+          {
+            groupBy: GroupByType.TAG,
+            config: { ...defaultConfig, metric: MetricType.TOTAL_AMOUNT },
+          },
+          transactions,
+        );
+
+        const result = await service.execute("user-1", "report-1");
+
+        expect(result.data).toHaveLength(1);
+        expect(result.data[0]).toMatchObject({ label: "Trip", value: 100 });
       });
     });
 
@@ -2785,6 +4138,7 @@ describe("ReportsService", () => {
         setupExecuteMocks(
           {
             groupBy: GroupByType.CATEGORY,
+            timeframeType: TimeframeType.LAST_MONTH,
             config: {
               ...defaultConfig,
               metric: MetricType.BUDGET_VARIANCE,
@@ -2799,6 +4153,7 @@ describe("ReportsService", () => {
         ]);
         budgetsService.findOne.mockResolvedValue({
           id: "budget-1",
+          currencyCode: "USD",
           categories: [{ categoryId: "cat-1", amount: 100, isIncome: false }],
         });
 
@@ -2812,6 +4167,58 @@ describe("ReportsService", () => {
         expect(groceries!.actual).toBe(80);
       });
 
+      it.each([
+        ["ANNUAL", undefined, "2025-01-01", "2025-12-31", 6000],
+        ["ANNUAL", undefined, "2025-03-01", "2025-03-31", 500],
+        ["MONTHLY", undefined, "2025-01-01", "2025-12-31", 72000],
+        // 10 of April's 30 days is a third of a month, not a whole one.
+        ["MONTHLY", undefined, "2025-04-01", "2025-04-10", 2000],
+        // All of January plus 14 of February's 28 days is 1.5 months, not 1.
+        ["MONTHLY", undefined, "2025-01-01", "2025-02-14", 9000],
+        ["PAY_PERIOD", "BIWEEKLY", "2025-01-01", "2025-12-31", 156000],
+      ])(
+        "converts a %s (%s) budget amount of 6000 over %s..%s to %s",
+        async (budgetType, payFrequency, start, end, expected) => {
+          setupExecuteMocks(
+            {
+              groupBy: GroupByType.CATEGORY,
+              timeframeType: TimeframeType.CUSTOM,
+              config: {
+                ...defaultConfig,
+                metric: MetricType.BUDGET_VARIANCE,
+                customStartDate: start,
+                customEndDate: end,
+              },
+            },
+            [
+              createMockTransaction({
+                id: "tx-1",
+                categoryId: "cat-1",
+                amount: -80,
+              }),
+            ],
+          );
+          categoriesRepository.find.mockResolvedValue([mockCategory]);
+          budgetsService.findAll.mockResolvedValue([
+            { id: "budget-1", isActive: true },
+          ]);
+          budgetsService.findOne.mockResolvedValue({
+            id: "budget-1",
+            currencyCode: "USD",
+            budgetType,
+            config: payFrequency ? { payFrequency } : {},
+            categories: [
+              { categoryId: "cat-1", amount: 6000, isIncome: false },
+            ],
+          });
+
+          const result = await service.execute("user-1", "report-1");
+
+          const groceries = result.data.find((d) => d.label === "Groceries");
+          expect(groceries!.budgeted).toBe(expected);
+        },
+      );
+
       it("falls back to first budget when no active budget exists", async () => {
         const transactions = [
           createMockTransaction({
@@ -2823,6 +4230,7 @@ describe("ReportsService", () => {
         setupExecuteMocks(
           {
             groupBy: GroupByType.CATEGORY,
+            timeframeType: TimeframeType.LAST_MONTH,
             config: {
               ...defaultConfig,
               metric: MetricType.BUDGET_VARIANCE,
@@ -2837,6 +4245,7 @@ describe("ReportsService", () => {
         ]);
         budgetsService.findOne.mockResolvedValue({
           id: "budget-1",
+          currencyCode: "USD",
           categories: [{ categoryId: "cat-1", amount: 200, isIncome: false }],
         });
 
@@ -2857,6 +4266,7 @@ describe("ReportsService", () => {
         setupExecuteMocks(
           {
             groupBy: GroupByType.CATEGORY,
+            timeframeType: TimeframeType.LAST_MONTH,
             config: {
               ...defaultConfig,
               metric: MetricType.BUDGET_VARIANCE,
@@ -2888,6 +4298,7 @@ describe("ReportsService", () => {
         setupExecuteMocks(
           {
             groupBy: GroupByType.CATEGORY,
+            timeframeType: TimeframeType.LAST_MONTH,
             config: {
               ...defaultConfig,
               metric: MetricType.BUDGET_VARIANCE,
@@ -2918,6 +4329,7 @@ describe("ReportsService", () => {
         setupExecuteMocks(
           {
             groupBy: GroupByType.CATEGORY,
+            timeframeType: TimeframeType.LAST_MONTH,
             config: {
               ...defaultConfig,
               metric: MetricType.BUDGET_VARIANCE,
@@ -2932,6 +4344,7 @@ describe("ReportsService", () => {
         ]);
         budgetsService.findOne.mockResolvedValue({
           id: "budget-1",
+          currencyCode: "USD",
           categories: [{ categoryId: "cat-1", amount: 100, isIncome: true }],
         });
 
@@ -2968,8 +4381,188 @@ describe("ReportsService", () => {
         // budgetsService should not be called
         expect(budgetsService.findAll).not.toHaveBeenCalled();
       });
-    });
+      const budgetOf = (
+        categories: Array<Record<string, unknown>>,
+        currencyCode = "USD",
+      ) => {
+        budgetsService.findAll.mockResolvedValue([
+          { id: "budget-1", isActive: true },
+        ]);
+        budgetsService.findOne.mockResolvedValue({
+          id: "budget-1",
+          currencyCode,
+          categories,
+        });
+      };
 
+      it("scales the monthly budget to the months of the report window", async () => {
+        setupExecuteMocks(
+          {
+            groupBy: GroupByType.CATEGORY,
+            timeframeType: TimeframeType.CUSTOM,
+            config: {
+              ...defaultConfig,
+              metric: MetricType.BUDGET_VARIANCE,
+              customStartDate: "2025-01-01",
+              customEndDate: "2025-03-31",
+            },
+          },
+          [
+            createMockTransaction({
+              id: "tx-1",
+              categoryId: "cat-1",
+              amount: -250,
+            }),
+          ],
+        );
+        categoriesRepository.find.mockResolvedValue([mockCategory]);
+        budgetOf([{ categoryId: "cat-1", amount: 100, isIncome: false }]);
+
+        const result = await service.execute("user-1", "report-1");
+
+        const groceries = result.data.find((d) => d.label === "Groceries");
+        // 3 months x 100 = 300 budgeted; 250 spent is 50 under
+        expect(groceries!.budgeted).toBe(300);
+        expect(groceries!.value).toBe(-50);
+      });
+
+      it("lists a budgeted category with no spending as a full under-spend", async () => {
+        setupExecuteMocks(
+          {
+            groupBy: GroupByType.CATEGORY,
+            timeframeType: TimeframeType.LAST_MONTH,
+            config: { ...defaultConfig, metric: MetricType.BUDGET_VARIANCE },
+          },
+          [
+            createMockTransaction({
+              id: "tx-1",
+              categoryId: "cat-1",
+              amount: -80,
+            }),
+          ],
+        );
+        categoriesRepository.find.mockResolvedValue([
+          mockCategory,
+          { ...mockCategory, id: "cat-2", name: "Dining" },
+        ]);
+        budgetOf([
+          { categoryId: "cat-1", amount: 100, isIncome: false },
+          { categoryId: "cat-2", amount: 60, isIncome: false },
+        ]);
+
+        const result = await service.execute("user-1", "report-1");
+
+        const dining = result.data.find((d) => d.label === "Dining");
+        expect(dining).toMatchObject({
+          value: -60,
+          budgeted: 60,
+          actual: 0,
+          count: 0,
+        });
+        // The empty row adds no transaction to the headline count.
+        expect(result.summary.count).toBe(1);
+      });
+
+      describe("zero-actual rows under report filters", () => {
+        const run = async (filters: Record<string, unknown>) => {
+          setupExecuteMocks(
+            {
+              groupBy: GroupByType.CATEGORY,
+              timeframeType: TimeframeType.LAST_MONTH,
+              config: { ...defaultConfig, metric: MetricType.BUDGET_VARIANCE },
+              filters,
+            },
+            [
+              createMockTransaction({
+                id: "tx-1",
+                categoryId: "cat-1",
+                amount: -80,
+              }),
+            ],
+          );
+          categoriesRepository.find.mockResolvedValue([
+            mockCategory,
+            { ...mockCategory, id: "cat-2", name: "Dining" },
+            { ...mockCategory, id: "cat-3", name: "Fuel" },
+          ]);
+          budgetOf([
+            { categoryId: "cat-1", amount: 100, isIncome: false },
+            { categoryId: "cat-2", amount: 60, isIncome: false },
+            { categoryId: "cat-3", amount: 40, isIncome: false },
+          ]);
+          return service.execute("user-1", "report-1");
+        };
+        const labels = (r: { data: { label: string }[] }) =>
+          r.data.map((d) => d.label).sort();
+
+        it("adds zero rows only for budgeted categories inside the category filter", async () => {
+          const result = await run({ categoryIds: ["cat-1", "cat-2"] });
+          expect(labels(result)).toEqual(["Dining", "Groceries"]);
+        });
+
+        it.each([
+          ["account", { accountIds: ["acc-1"] }],
+          ["payee", { payeeIds: ["payee-1"] }],
+          ["search", { searchText: "market" }],
+        ])("adds no zero rows under an %s filter", async (_n, filters) => {
+          const result = await run(filters);
+          expect(labels(result)).toEqual(["Groceries"]);
+        });
+      });
+
+      it("converts a foreign-currency budget into the reporting currency", async () => {
+        storedRates.set("EUR->USD", 2);
+        setupExecuteMocks(
+          {
+            groupBy: GroupByType.CATEGORY,
+            timeframeType: TimeframeType.LAST_MONTH,
+            config: { ...defaultConfig, metric: MetricType.BUDGET_VARIANCE },
+          },
+          [
+            createMockTransaction({
+              id: "tx-1",
+              categoryId: "cat-1",
+              amount: -80,
+            }),
+          ],
+        );
+        categoriesRepository.find.mockResolvedValue([mockCategory]);
+        budgetOf([{ categoryId: "cat-1", amount: 50, isIncome: false }], "EUR");
+
+        const result = await service.execute("user-1", "report-1");
+
+        const groceries = result.data.find((d) => d.label === "Groceries");
+        expect(groceries!.budgeted).toBe(100);
+        expect(groceries!.value).toBe(-20);
+      });
+
+      it("leaves a budget with no rate unenriched and withholds the total", async () => {
+        setupExecuteMocks(
+          {
+            groupBy: GroupByType.CATEGORY,
+            timeframeType: TimeframeType.LAST_MONTH,
+            config: { ...defaultConfig, metric: MetricType.BUDGET_VARIANCE },
+          },
+          [
+            createMockTransaction({
+              id: "tx-1",
+              categoryId: "cat-1",
+              amount: -80,
+            }),
+          ],
+        );
+        categoriesRepository.find.mockResolvedValue([mockCategory]);
+        budgetOf([{ categoryId: "cat-1", amount: 50, isIncome: false }], "JPY");
+
+        const result = await service.execute("user-1", "report-1");
+
+        const groceries = result.data.find((d) => d.label === "Groceries");
+        expect(groceries!.budgeted).toBeUndefined();
+        expect(groceries!.value).toBe(80);
+        expect(result.summary.total).toBeNull();
+        expect(result.missingCurrencies).toEqual(["JPY"]);
+      });
+    });
     describe("additional sorting columns", () => {
       it("sorts by PERCENTAGE column", async () => {
         const transactions = [

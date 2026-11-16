@@ -7,11 +7,8 @@ import {
   MappedBills,
   MappedSecurities,
 } from "../model/mny-import-model";
-import {
-  MnyFrequencyMapping,
-  mapFrequency,
-  mapInvestmentAction,
-} from "../model/mny-model";
+import { MnyFrequencyMapping, mapFrequency } from "../model/mny-model";
+import { mapInvestmentAction } from "../model/mny-actions";
 import {
   FrequencyType,
   calculateNextDueDate,
@@ -19,6 +16,7 @@ import {
 import { CADENCE_DAYS, inferFrequencyFromDueDates } from "./bill-cadence";
 import { MnyBill, MnyPayee, MnyTransaction } from "../model/mny-rows";
 import { MnyWarning } from "../model/mny-warnings";
+import { transactionTagHandles } from "./map-classifications";
 import { isDegeneratePayeeName } from "./map-reference";
 import { MnyBillData } from "../tables/read-bills";
 import { MnyInvestmentData } from "../tables/read-investments";
@@ -366,7 +364,10 @@ function mapInvestmentTemplate(
   if (!context.input.securities.byHandle.has(securityHandle)) {
     return null;
   }
-  const action = mapInvestmentAction(template.action);
+  const action = mapInvestmentAction(
+    template.action,
+    context.input.transactions.format,
+  );
   if (action === null) {
     return null;
   }
@@ -553,6 +554,7 @@ function mapOne(
     transferAccountKey,
     investment,
     splits,
+    tagHandles: transactionTagHandles(template),
   };
 }
 
@@ -679,8 +681,10 @@ export function mapBills(input: MapBillsInput): MappedBills {
 export function billReferences(bills: readonly MappedBill[]): {
   payees: ReadonlySet<number>;
   categories: ReadonlySet<number>;
+  tags: ReadonlySet<number>;
 } {
   return {
+    tags: new Set(bills.flatMap((bill) => bill.tagHandles)),
     payees: new Set(
       bills
         .map((bill) => bill.payeeHandle)

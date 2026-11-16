@@ -2,6 +2,9 @@ import { ScheduledTransaction } from '@/types/scheduled-transaction';
 import { Payee } from '@/types/payee';
 import { Account } from '@/types/account';
 
+/** Which kind of schedule the list shows: every one, bills only, or deposits only. */
+export type BillsTypeFilter = 'all' | 'bills' | 'deposits';
+
 export interface BillsFilterState {
   nameSearch: string;
   selectedPayeeIds: string[];
@@ -41,8 +44,9 @@ export function derivePayeesFromScheduledTransactions(
  * Mirrors the Transactions category filter semantics (TransactionSearchUtil):
  * real category IDs match the top-level category or any split; the special
  * "uncategorized" pseudo-ID matches records with no category that are neither
- * transfers nor splits; "transfer" matches transfer records. The selected
- * conditions are OR-ed together.
+ * transfers nor splits; "transfer" matches transfer records; "income" and
+ * "expense" match a record whose category, or any split's category, is of
+ * that type. The selected conditions are OR-ed together.
  */
 function scheduledTransactionMatchesCategories(
   t: ScheduledTransaction,
@@ -51,9 +55,12 @@ function scheduledTransactionMatchesCategories(
   const realIds: string[] = [];
   let wantUncategorized = false;
   let wantTransfer = false;
+  const wantTypes: boolean[] = [];
   for (const id of selectedCategoryIds) {
     if (id === 'uncategorized') wantUncategorized = true;
     else if (id === 'transfer') wantTransfer = true;
+    else if (id === 'income') wantTypes.push(true);
+    else if (id === 'expense') wantTypes.push(false);
     else realIds.push(id);
   }
 
@@ -63,6 +70,13 @@ function scheduledTransactionMatchesCategories(
       (sp) => !!sp.categoryId && realIds.includes(sp.categoryId),
     );
     if (topMatch || splitMatch) return true;
+  }
+  if (wantTypes.length > 0) {
+    const isIncome = (c: { isIncome: boolean } | null | undefined) =>
+      c ? wantTypes.includes(c.isIncome) : false;
+    if (isIncome(t.category) || (t.splits || []).some((sp) => isIncome(sp.category))) {
+      return true;
+    }
   }
   if (wantUncategorized && t.categoryId == null && !t.isTransfer && !t.isSplit) {
     return true;

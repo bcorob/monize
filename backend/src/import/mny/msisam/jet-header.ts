@@ -3,6 +3,7 @@ import {
   MnyNotAMoneyFileError,
   MnyUnsupportedVersionError,
 } from "../mny-errors";
+import { MnyFileFormat } from "../model/mny-money99";
 
 /**
  * Jet 4 / MSISAM database-definition page (page 0) decoding.
@@ -39,7 +40,10 @@ export const MSISAM_ENGINE_NAME = "MSISAM Database";
 /** Engine-name string of a plain Access database. */
 export const JET_ENGINE_NAME = "Standard Jet DB";
 
-/** Version byte of Jet 3 files -- Money 97/98, not supported. */
+/**
+ * Version byte of Jet 3 files. Money 97-99 write a plain, unencrypted Jet 3
+ * database under the Access engine name; `mdb-reader` reads it directly.
+ */
 export const VERSION_JET3 = 0x00;
 /** Version byte of Jet 4 files -- Money 2001 through Money Plus Sunset. */
 export const VERSION_JET4 = 0x01;
@@ -66,8 +70,11 @@ export const HEADER_MASK = Buffer.from([
   0xc7, 0x46, 0xa1, 0x78, 0x16, 0x0c, 0xed, 0xe9, 0x2d, 0x62, 0xd4,
 ]);
 
-/** Which of the two MSISAM key-derivation schemes a file uses. */
-export type MsisamEncryptionScheme = "new-sha1" | "new-md5" | "old";
+/**
+ * Which of the two MSISAM key-derivation schemes a file uses, or `none` for a
+ * Money 97-99 file, which is not MSISAM-encrypted at all.
+ */
+export type MsisamEncryptionScheme = "new-sha1" | "new-md5" | "old" | "none";
 
 export interface MnyFileHeader {
   /** Engine-name string at offset 0x04, e.g. "MSISAM Database". */
@@ -78,6 +85,8 @@ export interface MnyFileHeader {
   readonly encryptionFlags: number;
   /** Key-derivation scheme implied by the flags. */
   readonly scheme: MsisamEncryptionScheme;
+  /** `jet3` for Money 97-99, `msisam` for Money 2001 onwards. */
+  readonly format: MnyFileFormat;
   /** De-masked copy of page 0. Every crypto offset is read from this. */
   readonly page: Buffer;
 }
@@ -118,12 +127,31 @@ function schemeFor(encryptionFlags: number): MsisamEncryptionScheme {
  * Parses and validates the header page of a `.mny` file.
  *
  * @throws MnyFileTruncatedError when the file is shorter than one page
- * @throws MnyNotAMoneyFileError when the engine name is not MSISAM
- * @throws MnyUnsupportedVersionError for Jet 3 (Money 97/98) files
+ * A Money 97-99 file carries the plain Access engine name and the Jet 3
+ * version byte, exactly as an Access 97 `.mdb` does; `openMnyFile` tells the
+ * two apart by Money's tables once the file is open.
+ *
+ * @throws MnyNotAMoneyFileError when the engine name is neither MSISAM nor a
+ *   Jet 3 Access database
+ * @throws MnyUnsupportedVersionError for an MSISAM file that is not Jet 4
  */
 export function readMnyFileHeader(file: Buffer): MnyFileHeader {
   const page = demaskHeaderPage(file);
   const engineName = readEngineName(page);
+
+  if (
+    engineName === JET_ENGINE_NAME &&
+    page[OFFSET_VERSION_BYTE] === VERSION_JET3
+  ) {
+    return {
+      engineName,
+      versionByte: VERSION_JET3,
+      encryptionFlags: 0,
+      scheme: "none",
+      format: "jet3",
+      page,
+    };
+  }
 
   if (engineName !== MSISAM_ENGINE_NAME) {
     throw new MnyNotAMoneyFileError(engineName);
@@ -141,6 +169,7 @@ export function readMnyFileHeader(file: Buffer): MnyFileHeader {
     versionByte,
     encryptionFlags,
     scheme: schemeFor(encryptionFlags),
+    format: "msisam",
     page,
   };
 }

@@ -189,7 +189,13 @@ export class InvestmentReportsService {
       report.groupBy !== InvestmentGroupBy.ACCOUNT &&
       report.config.mergeAccounts === true;
 
-    const holdings = await this.dataService.computeHoldings(
+    const {
+      rows: holdings,
+      fxComplete,
+      missingPairs,
+      pricesComplete,
+      unpricedSymbols,
+    } = await this.dataService.computeHoldings(
       userId,
       accountIds,
       asOfDate,
@@ -221,6 +227,16 @@ export class InvestmentReportsService {
       columns,
       groups,
       rowCount,
+      // The conversion gap travels to the consumer, not only to the log: a
+      // pair the rate door refused blanks every row's % of portfolio, and a
+      // reader who is not told that reads the blanks as zero.
+      fxComplete,
+      missingPairs,
+      // A missing price withholds the same denominator as a missing rate and
+      // is a different repair, so it travels as its own cause rather than
+      // borrowing `fxComplete`.
+      pricesComplete,
+      unpricedSymbols,
     };
   }
 

@@ -3,6 +3,8 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import { AxiosError } from 'axios';
 import { User } from '@/types/auth';
 import { clearAllCache } from '@/lib/apiCache';
+import { endSignOut } from '@/lib/logout-state';
+import { clearIdentityScopedSessionStorage } from '@/lib/identity-session-storage';
 import { markWhatsNewPendingForLogin } from './whatsNewStore';
 import type {
   DelegateContext,
@@ -80,6 +82,9 @@ export const useAuthStore = create<AuthState>()(
         // rehydrates isAuthenticated from localStorage without coming through
         // here, which is exactly why the digest used to reappear on every one.
         markWhatsNewPendingForLogin();
+        // A sign-out earlier in this tab suppressed 401 recovery; this session
+        // needs it back.
+        endSignOut();
         // Backend sets httpOnly cookies; we only track auth state in Zustand
         set({
           user,
@@ -93,9 +98,23 @@ export const useAuthStore = create<AuthState>()(
       logout: () => {
         // Backend clears httpOnly cookies via /auth/logout; we only clear Zustand state
         clearAllCache();
+        // SECURITY: sessionStorage holds the intraday portfolio series and the
+        // remembered entry date/currency; the next identity on this tab must
+        // not be drawn them (INV-SHARE-003).
+        clearIdentityScopedSessionStorage();
+        // SECURITY: A share is one account's document. Drop the stash so the
+        // next account to sign in on this device does not find it waiting.
+        import('@/lib/share-inbox').then(({ clearShareInbox }) => {
+          void clearShareInbox();
+        });
         // SECURITY: Clear preferences store to remove userId from localStorage
         import('@/store/preferencesStore').then(({ usePreferencesStore }) => {
           usePreferencesStore.getState().clearPreferences();
+        });
+        // SECURITY: The header logout navigates without a reload, so the chat
+        // held in memory (and re-persisted by the store) outlives the session.
+        import('@/store/aiChatStore').then(({ useAiChatStore }) => {
+          useAiChatStore.getState().clear();
         });
         // SECURITY: Clear AI chat history so conversations don't leak across accounts
         try {
@@ -142,51 +161,60 @@ export const useAuthStore = create<AuthState>()(
           // nav visibility) would otherwise see actingAsUserId=null for one
           // render and flash the wrong page before the contexts request
           // settles.
-          Promise.all([
-            import('@/lib/auth'),
-            import('@/lib/delegation'),
-          ]).then(([{ authApi }, { delegationApi }]) => {
-            Promise.all([
-              authApi.getProfile(),
-              // Contexts is best-effort: a normal user with no delegations
-              // still gets a successful empty payload. Treat any failure
-              // here as "no delegation context" rather than blocking login
-              // restoration.
-              delegationApi.getContexts().catch(() => null),
-            ]).then(([user, contexts]) => {
-              state.setUser(user as User);
-              if (contexts) {
-                state.setDelegation(
-                  contexts.actingAsUserId,
-                  contexts.contexts,
-                  contexts.capabilities,
-                  contexts.sections,
-                );
-              }
-              state.setHasHydrated(true);
-            }).catch((error: unknown) => {
-              const status = error instanceof AxiosError ? error.response?.status : undefined;
-              if (status === 502 || (error instanceof AxiosError && !error.response)) {
-                // Backend unreachable -- keep isAuthenticated from localStorage so the app
-                // shell renders with the BackendDownBanner visible. This is safe because:
-                // (a) all API calls fail with 502 during downtime (no data access)
-                // (b) window.location.reload() on recovery forces full re-auth via getProfile()
-                // (c) if JWT/refresh token expired, the 401 interceptor triggers logout
-                import('@/store/connectionStore').then(({ useConnectionStore }) => {
-                  useConnectionStore.getState().setBackendDown();
+          Promise.all([import('@/lib/auth'), import('@/lib/delegation')]).then(
+            ([{ authApi }, { delegationApi }]) => {
+              Promise.all([
+                authApi.getProfile(),
+                // Contexts is best-effort: a normal user with no delegations
+                // still gets a successful empty payload. Treat any failure
+                // here as "no delegation context" rather than blocking login
+                // restoration.
+                delegationApi.getContexts().catch(() => null),
+              ])
+                .then(([user, contexts]) => {
+                  state.setUser(user as User);
+                  if (contexts) {
+                    state.setDelegation(
+                      contexts.actingAsUserId,
+                      contexts.contexts,
+                      contexts.capabilities,
+                      contexts.sections,
+                    );
+                  }
+                  state.setHasHydrated(true);
+                })
+                .catch((error: unknown) => {
+                  const status =
+                    error instanceof AxiosError
+                      ? error.response?.status
+                      : undefined;
+                  if (
+                    status === 502 ||
+                    (error instanceof AxiosError && !error.response)
+                  ) {
+                    // Backend unreachable -- keep isAuthenticated from localStorage so the app
+                    // shell renders with the BackendDownBanner visible. This is safe because:
+                    // (a) all API calls fail with 502 during downtime (no data access)
+                    // (b) window.location.reload() on recovery forces full re-auth via getProfile()
+                    // (c) if JWT/refresh token expired, the 401 interceptor triggers logout
+                    import('@/store/connectionStore').then(
+                      ({ useConnectionStore }) => {
+                        useConnectionStore.getState().setBackendDown();
+                      },
+                    );
+                    state.setHasHydrated(true);
+                  } else {
+                    // Genuine auth failure (401, etc.) — log out
+                    state.logout();
+                    state.setHasHydrated(true);
+                  }
                 });
-                state.setHasHydrated(true);
-              } else {
-                // Genuine auth failure (401, etc.) — log out
-                state.logout();
-                state.setHasHydrated(true);
-              }
-            });
-          });
+            },
+          );
         } else {
           state?.setHasHydrated(true);
         }
       },
-    }
-  )
+    },
+  ),
 );

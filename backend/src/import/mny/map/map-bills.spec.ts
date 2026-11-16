@@ -473,6 +473,30 @@ describe("mapBills", () => {
       });
     });
 
+    it("carries the template's classification as the schedule's tag handles", () => {
+      const result = mapBills(
+        input({
+          bills: billData({
+            bills: [
+              mnyBill({
+                handle: 7,
+                nextDue: shiftIsoDate(AS_OF, 3),
+                templateTransaction: 500,
+              }),
+            ],
+          }),
+          transactions: transactionData({
+            transactions: [
+              template({ handle: 500, account: 1, classification1: 552 }),
+            ],
+          }),
+        }),
+      );
+
+      expect(result.bills[0].tagHandles).toEqual([552]);
+      expect([...billReferences(result.bills).tags]).toEqual([552]);
+    });
+
     it("falls back to the template memo, then a generated name", () => {
       const result = mapBills(
         input({

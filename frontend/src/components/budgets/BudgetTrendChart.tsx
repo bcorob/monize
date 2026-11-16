@@ -12,15 +12,14 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { chartColors } from '@/lib/chart-colors';
-
-interface TrendDataPoint {
-  month: string;
-  budgeted: number;
-  actual: number;
-}
+import { useChartMonthFormat } from '@/hooks/useChartMonthFormat';
+import type { BudgetTrendPoint } from '@/types/budget';
+import { CHART_GRID_PROPS, CHART_TOOLTIP_CLASS } from '@/lib/chart-style';
+import { ChartActiveDot } from '@/components/ui/ChartActiveDot';
+import { BudgetTrendPartialNote } from './PartialTrendFigure';
 
 interface BudgetTrendChartProps {
-  data: TrendDataPoint[];
+  data: BudgetTrendPoint[];
   formatCurrency: (amount: number) => string;
 }
 
@@ -31,20 +30,29 @@ function CustomTooltip({
   formatCurrency,
   budgetedLabel,
   actualLabel,
+  formatChartMonth,
 }: {
   active?: boolean;
-  payload?: Array<{ value: number; dataKey: string; color: string }>;
+  payload?: Array<{
+    value: number;
+    dataKey: string;
+    color: string;
+    payload?: BudgetTrendPoint;
+  }>;
   label?: string;
   formatCurrency: (amount: number) => string;
   budgetedLabel: string;
   actualLabel: string;
+  formatChartMonth: (monthKey: string) => string;
 }) {
+  const tReports = useTranslations('reports');
   if (!active || !payload || payload.length === 0) return null;
+  const partialLabel = tReports('partialData.pdfSuffix');
 
   return (
-    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3">
+    <div className={CHART_TOOLTIP_CLASS}>
       <p className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-1">
-        {label}
+        {formatChartMonth(String(label))}
       </p>
       {payload.map((entry) => (
         <p
@@ -54,6 +62,15 @@ function CustomTooltip({
         >
           {entry.dataKey === 'budgeted' ? budgetedLabel : actualLabel}:{' '}
           {formatCurrency(entry.value)}
+          {/* A partial month's actual is its converted part; the note under
+              the chart says what is missing. */}
+          {entry.dataKey === 'actual' &&
+            entry.payload?.valuationComplete === false && (
+              <span className="text-amber-600 dark:text-amber-400">
+                {' '}
+                {partialLabel}
+              </span>
+            )}
         </p>
       ))}
     </div>
@@ -65,6 +82,11 @@ export function BudgetTrendChart({
   formatCurrency,
 }: BudgetTrendChartProps) {
   const t = useTranslations('budgets');
+  // A month marker on a CHART localizes the month name (`Jan 2026`), the way
+  // every other chart in the app does. `useDateFormat().formatMonth` follows
+  // the date-format preference instead, which renders most preferences as a
+  // numeric `01/2026` -- right for a table's month column, wrong for an axis.
+  const formatChartMonth = useChartMonthFormat();
   const budgetedLabel = t('trendChart.budgeted');
   const actualLabel = t('trendChart.actual');
 
@@ -89,11 +111,12 @@ export function BudgetTrendChart({
       <div className="h-64">
         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
           <LineChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
+            <CartesianGrid {...CHART_GRID_PROPS} />
             <XAxis
-              dataKey="month"
+              dataKey="monthKey"
               tick={{ fontSize: 12 }}
               className="text-gray-500"
+              tickFormatter={(value: string) => formatChartMonth(value)}
             />
             <YAxis
               tick={{ fontSize: 12 }}
@@ -102,11 +125,17 @@ export function BudgetTrendChart({
             />
             <Tooltip
               content={
-                <CustomTooltip formatCurrency={formatCurrency} budgetedLabel={budgetedLabel} actualLabel={actualLabel} />
+                <CustomTooltip
+                  formatCurrency={formatCurrency}
+                  formatChartMonth={formatChartMonth}
+                  budgetedLabel={budgetedLabel}
+                  actualLabel={actualLabel}
+                />
               }
             />
             <Legend />
             <Line
+              activeDot={ChartActiveDot}
               type="monotone"
               dataKey="budgeted"
               stroke={chartColors.primary}
@@ -116,6 +145,7 @@ export function BudgetTrendChart({
               name={budgetedLabel}
             />
             <Line
+              activeDot={ChartActiveDot}
               type="monotone"
               dataKey="actual"
               stroke={chartColors.income}
@@ -126,6 +156,7 @@ export function BudgetTrendChart({
           </LineChart>
         </ResponsiveContainer>
       </div>
+      <BudgetTrendPartialNote points={data} />
     </div>
   );
 }

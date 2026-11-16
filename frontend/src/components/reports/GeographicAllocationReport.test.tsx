@@ -6,14 +6,17 @@ vi.mock('@/lib/pdf-export', () => ({
   exportToPdf: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
-    formatCurrency: (n: number) => `$${n.toFixed(2)}`,
-    formatCurrencyAxis: (n: number) => `$${n}`,
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
+      formatCurrency: (n: number) => `$${n.toFixed(2)}`,
+      formatCurrencyAxis: (n: number) => `$${n}`,
+    }),
+  };
+});
 vi.mock('@/hooks/useExchangeRates', () => ({
   useExchangeRates: () => ({
     defaultCurrency: 'CAD',
@@ -366,22 +369,33 @@ describe('GeographicAllocationReport', () => {
       if (!__ths[__i]) break;
       await act(async () => { fireEvent.click(__ths[__i]); });
     }
-    // Switch to Exchange view by clicking the toggle button (text: Exchange).
-    const exchangeBtns = screen.queryAllByRole('button', { name: 'Exchange' });
-    if (exchangeBtns.length > 0) {
-      await act(async () => { fireEvent.click(exchangeBtns[0]); });
-      await waitFor(() => expect(container.querySelector('table')).toBeInTheDocument());
-      const __exHeaderCount = container.querySelectorAll('table thead th').length;
-      for (let __i = 0; __i < __exHeaderCount; __i += 1) {
-        const __ths = container.querySelectorAll('table thead th');
-        if (!__ths[__i]) break;
-        await act(async () => { fireEvent.click(__ths[__i]); });
-      }
-      for (let __i = 0; __i < __exHeaderCount; __i += 1) {
-        const __ths = container.querySelectorAll('table thead th');
-        if (!__ths[__i]) break;
-        await act(async () => { fireEvent.click(__ths[__i]); });
-      }
+    // Switch to the exchange view. The toggle's accessible name is "By
+    // Exchange" (`geographicAllocation.viewByExchange`); this looked for
+    // "Exchange", found nothing, and the whole exchange half of the test sat
+    // behind `if (exchangeBtns.length > 0)` and never ran. So it is addressed
+    // with `getByRole` rather than `queryAllByRole` + a length test: a locator
+    // that stops matching must fail this test, not silently skip it.
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'By Exchange' }));
+    });
+    // Wait for the exchange table itself, not for "a table": the region table
+    // is already on screen, so a bare `querySelector('table')` resolves
+    // immediately whether the view switched or not.
+    await waitFor(() =>
+      expect(screen.getByText('Exchange Allocation')).toBeInTheDocument(),
+    );
+    // The exchange table is a different column set, so it has its own headers.
+    const __exHeaderCount = container.querySelectorAll('table thead th').length;
+    expect(__exHeaderCount).toBeGreaterThan(0);
+    for (let __i = 0; __i < __exHeaderCount; __i += 1) {
+      const __ths = container.querySelectorAll('table thead th');
+      if (!__ths[__i]) break;
+      await act(async () => { fireEvent.click(__ths[__i]); });
+    }
+    for (let __i = 0; __i < __exHeaderCount; __i += 1) {
+      const __ths = container.querySelectorAll('table thead th');
+      if (!__ths[__i]) break;
+      await act(async () => { fireEvent.click(__ths[__i]); });
     }
   });
 
@@ -430,5 +444,93 @@ describe('GeographicAllocationReport', () => {
     await waitFor(() => {
       expect(mockGetPortfolioSummary).toHaveBeenCalledWith(['acc-1']);
     });
+  });
+});
+
+describe('GeographicAllocationReport: the country view owns its own request', () => {
+  const countryAnswer = {
+    items: [
+      { country: 'United States', directValue: 0, etfValue: 600, totalValue: 600, percentage: 60 },
+    ],
+    totalPortfolioValue: 1000,
+    totalDirectValue: 0,
+    totalEtfValue: 600,
+    unclassifiedValue: 400,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockGetPortfolioSummary.mockResolvedValue({ holdings: mockHoldings });
+    mockGetInvestmentAccounts.mockResolvedValue(mockAccounts);
+    mockGetSecurities.mockResolvedValue(mockSecurities);
+  });
+
+  async function openCountryView() {
+    await act(async () => {
+      render(<GeographicAllocationReport />);
+    });
+    await screen.findByText('By Country');
+    await act(async () => {
+      fireEvent.click(screen.getByText('By Country'));
+    });
+  }
+
+  it('shows the error with a retry, not an empty table totalling zero, when the country request failed', async () => {
+    mockGetCountryWeightings.mockRejectedValue(new Error('500'));
+    await openCountryView();
+
+    expect(await screen.findByText('Try Again')).toBeInTheDocument();
+    expect(screen.queryByText('100%')).not.toBeInTheDocument();
+    expect(screen.queryByText('$0.00')).not.toBeInTheDocument();
+    expect(screen.queryByText('Country Allocation (look-through)')).not.toBeInTheDocument();
+    expect(screen.getByTitle('Export PDF')).toBeDisabled();
+
+    mockGetCountryWeightings.mockResolvedValue(countryAnswer);
+    await act(async () => {
+      fireEvent.click(screen.getByText('Try Again'));
+    });
+    expect(await screen.findByText('Country Allocation (look-through)')).toBeInTheDocument();
+    expect(screen.getByTitle('Export PDF')).toBeEnabled();
+  });
+
+  it('shows a loading state, and no export, while the country request is pending', async () => {
+    mockGetCountryWeightings.mockReturnValue(new Promise(() => {}));
+    await openCountryView();
+
+    expect(document.querySelector('.animate-pulse')).toBeTruthy();
+    expect(screen.queryByText('100%')).not.toBeInTheDocument();
+    expect(screen.queryByText('Country Allocation (look-through)')).not.toBeInTheDocument();
+    expect(screen.getByTitle('Export PDF')).toBeDisabled();
+  });
+
+  it('keeps the region view and its export when only the country request failed', async () => {
+    mockGetCountryWeightings.mockRejectedValue(new Error('500'));
+    await act(async () => {
+      render(<GeographicAllocationReport />);
+    });
+    await screen.findByText('By Country');
+    expect(screen.getByTitle('Export PDF')).toBeEnabled();
+    expect(screen.queryByText('Try Again')).not.toBeInTheDocument();
+  });
+
+  it('prints the screen card figure as the PDF Total Portfolio in the country view', async () => {
+    const { exportToPdf } = await import('@/lib/pdf-export');
+    (exportToPdf as ReturnType<typeof vi.fn>).mockClear();
+    mockGetCountryWeightings.mockResolvedValue(countryAnswer);
+    await openCountryView();
+    await screen.findByText('Country Allocation (look-through)');
+
+    // The card on screen, read before the export so the two are compared.
+    const screenCard = screen.getByText('Total Portfolio').nextElementSibling!.textContent;
+
+    await act(async () => {
+      fireEvent.click(screen.getByTitle('Export PDF'));
+    });
+
+    const call = (exportToPdf as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    // The holdings total (1800 + 2800), not the look-through aggregate (1000).
+    expect(call.summaryCards[0].label).toBe('Total Portfolio');
+    expect(call.summaryCards[0].value).toBe(screenCard);
+    expect(screenCard).toContain('4600');
   });
 });

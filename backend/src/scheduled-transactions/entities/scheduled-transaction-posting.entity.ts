@@ -1,4 +1,5 @@
 import {
+  Check,
   Column,
   CreateDateColumn,
   Entity,
@@ -7,7 +8,17 @@ import {
   ManyToOne,
   PrimaryGeneratedColumn,
 } from "typeorm";
+import { Transaction } from "../../transactions/entities/transaction.entity";
+import { TransactionRule } from "../../transaction-rules/transaction-rule.entity";
 import { ScheduledTransaction } from "./scheduled-transaction.entity";
+
+/**
+ * Who claimed an occurrence: the bill's own `post()` or a rule's
+ * `settle_loan_installment` action. The one list; `chk_stp_source` in
+ * `database/schema.sql` is compared against it in both directions.
+ */
+export const SCHEDULED_POSTING_SOURCES = ["post", "rule"] as const;
+export type ScheduledPostingSource = (typeof SCHEDULED_POSTING_SOURCES)[number];
 
 /**
  * One posted occurrence of a scheduled transaction.
@@ -28,6 +39,15 @@ import { ScheduledTransaction } from "./scheduled-transaction.entity";
  */
 @Entity("scheduled_transaction_postings")
 @Index(["scheduledTransactionId", "originalDueDate"], { unique: true })
+@Index("idx_stp_transaction", ["transactionId"], {
+  unique: true,
+  where: "transaction_id IS NOT NULL",
+})
+@Check("chk_stp_source", "source IN ('post', 'rule')")
+@Check(
+  "chk_stp_rule_claim_transaction",
+  "source = 'post' OR transaction_id IS NOT NULL",
+)
 export class ScheduledTransactionPosting {
   @PrimaryGeneratedColumn("uuid")
   id: string;
@@ -71,4 +91,32 @@ export class ScheduledTransactionPosting {
 
   @CreateDateColumn({ name: "created_at" })
   createdAt: Date;
+
+  /**
+   * The transaction that paid the occurrence (docs/specs/
+   * loan-installment-settlement.md 5.2). Deleting it deletes the claim; at
+   * most one claim names a transaction (`idx_stp_transaction`). Null for a
+   * post that wrote no money and for every row written before the writer.
+   */
+  @Column({ type: "uuid", name: "transaction_id", nullable: true })
+  transactionId: string | null;
+
+  @ManyToOne(() => Transaction, { nullable: true, onDelete: "CASCADE" })
+  @JoinColumn({ name: "transaction_id" })
+  transaction?: Transaction | null;
+
+  @Column({ type: "varchar", length: 16, default: "post" })
+  source: ScheduledPostingSource;
+
+  /** The rule whose action settled the occurrence; null for `post`. */
+  @Column({ type: "uuid", name: "rule_id", nullable: true })
+  ruleId: string | null;
+
+  @ManyToOne(() => TransactionRule, { nullable: true, onDelete: "SET NULL" })
+  @JoinColumn({ name: "rule_id" })
+  rule?: TransactionRule | null;
+
+  /** The settlement's pricing record (spec 5.3); null for `post`. */
+  @Column({ type: "jsonb", nullable: true })
+  pricing: Record<string, unknown> | null;
 }

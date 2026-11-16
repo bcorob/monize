@@ -1,9 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import apiClient from './api';
 import { payeesApi } from './payees';
+import { invalidateCache, setCache, getCached, clearAllCache } from './apiCache';
 
 vi.mock('./api', () => ({
   default: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
+}));
+vi.mock('./apiCache', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./apiCache')>()),
+  invalidateCache: vi.fn(),
 }));
 
 describe('payeesApi', () => {
@@ -211,5 +216,80 @@ describe('payeesApi', () => {
       sourceId: 'p-1',
       targetId: 'p-2',
     });
+  });
+
+  it('lookupContact posts the name to /payees/lookup-contact with the abort signal', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({
+      data: { reason: 'none', suggestion: null },
+    });
+    const controller = new AbortController();
+    const result = await payeesApi.lookupContact('Acme', undefined, controller.signal);
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/payees/lookup-contact',
+      { name: 'Acme' },
+      { signal: controller.signal },
+    );
+    expect(result.reason).toBe('none');
+  });
+
+  it('lookupContact sends the context the caller already holds beside the name', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({
+      data: { reason: 'none', suggestion: null },
+    });
+    await payeesApi.lookupContact('Acme', { address: 'Toronto', notes: 'the Dundas branch' });
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/payees/lookup-contact',
+      { name: 'Acme', address: 'Toronto', notes: 'the Dundas branch' },
+      { signal: undefined },
+    );
+  });
+
+  it('lookupContactForPayee posts to /payees/:id/lookup-contact and drops no cache', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({
+      data: { reason: 'ok', suggestions: [{ label: null, phone: '+1 416 555 0100' }] },
+    });
+    const result = await payeesApi.lookupContactForPayee('p-1');
+    expect(apiClient.post).toHaveBeenCalledWith('/payees/p-1/lookup-contact');
+    expect(result.suggestions).toHaveLength(1);
+    // Nothing was written, so nothing cached is stale.
+    expect(invalidateCache).not.toHaveBeenCalledWith('payees:');
+  });
+});
+
+describe('payeesApi recategorising writes drop budget caches (INV-CACHE-001)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearAllCache();
+    setCache('budgets:dashboard', { id: 'b' });
+  });
+
+  it('applyCategorySuggestions drops budgets:dashboard when transactions were backfilled', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({
+      data: { updated: 1, transactionsBackfilled: 2 },
+    });
+    await payeesApi.applyCategorySuggestions([{ payeeId: 'p-1', categoryId: 'c-1' }]);
+    expect(getCached('budgets:dashboard')).toBeUndefined();
+  });
+
+  it('applyCategorySuggestions leaves budgets:dashboard when none were backfilled', async () => {
+    vi.mocked(apiClient.post).mockResolvedValue({
+      data: { updated: 1, transactionsBackfilled: 0 },
+    });
+    await payeesApi.applyCategorySuggestions([{ payeeId: 'p-1', categoryId: 'c-1' }]);
+    expect(getCached('budgets:dashboard')).toEqual({ id: 'b' });
+  });
+
+  it('update drops budgets:dashboard when it categorised transactions', async () => {
+    vi.mocked(apiClient.patch).mockResolvedValue({
+      data: { id: 'p-1', transactionsCategorized: 3 },
+    });
+    await payeesApi.update('p-1', { defaultCategoryId: 'c-1' } as any);
+    expect(getCached('budgets:dashboard')).toBeUndefined();
+  });
+
+  it('update leaves budgets:dashboard when it categorised nothing', async () => {
+    vi.mocked(apiClient.patch).mockResolvedValue({ data: { id: 'p-1' } });
+    await payeesApi.update('p-1', { name: 'X' } as any);
+    expect(getCached('budgets:dashboard')).toEqual({ id: 'b' });
   });
 });

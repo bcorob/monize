@@ -1,32 +1,46 @@
-import { Injectable, Logger } from "@nestjs/common";
-import { randomUUID } from "crypto";
+import { Inject, Injectable, Logger, Optional } from "@nestjs/common";
+import { DataSource, EntityManager } from "typeorm";
+
 import {
   RelayAttachmentRef,
   RelayClaimedPrompt,
   RelayResponse,
   RelayServerEvent,
+  RelayStreamOptions,
   RelayTunnelState,
   RelayTunnelStatus,
 } from "./ai-relay.types";
 import { RelayAttachmentStore } from "./relay-attachment.store";
-import { AttachmentDto } from "../query/dto/ai-query.dto";
+import { RelayStreamRegistry } from "./relay-stream.registry";
+import {
+  RelayAnswerPayload,
+  RelayPromptPayload,
+  RelayPromptStatus,
+} from "./entities/ai-relay-prompt.entity";
 import { PendingAiAction } from "../actions/ai-action.types";
+import { EVENT_BUS, EventBus } from "../../common/events/event-bus.interface";
+import { WakeSignal } from "../../common/events/wake-signal";
+import { returnedRows } from "../../common/db/query-result";
+import {
+  runOutsideActiveScopedManager,
+  withScopedDb,
+} from "../../common/db/scoped-db";
 
 /**
  * How long a queued (never-claimed) prompt waits for ANY agent to pick it up
  * before the browser gives up. Keeps an offline agent from hanging the browser
  * forever. This is the only deadline that applies before a claim; once an agent
- * claims the prompt the idle timer below takes over.
+ * claims the prompt the idle window below takes over.
  */
 const QUEUE_WAIT_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
  * Once an agent has claimed a prompt, how long it may go completely silent (no
- * poll, progress, or tool activity) before the browser gives up on it. Reset by
- * every liveness signal, so a slow-but-alive agent that keeps reporting stays
- * connected indefinitely (up to HARD_WAIT_MS). A blip in the agent's own API
- * connection is what trips this -- and the late-answer buffer still preserves
- * the answer if the agent recovers and posts late.
+ * poll, progress, or tool activity) before the browser gives up on it. Pushed
+ * out by every liveness signal, so a slow-but-alive agent that keeps reporting
+ * stays connected indefinitely (up to HARD_WAIT_MS). A blip in the agent's own
+ * API connection is what trips this -- and a late answer is still accepted if
+ * the agent recovers and posts within BUFFER_TTL_MS of the deadline.
  *
  * Sized to outlast the agent's own quiet phases: composing a large tool-call
  * payload (e.g. a 40-item bulk write) is invisible to us -- no poll, progress,
@@ -46,18 +60,12 @@ const IDLE_TIMEOUT_MS = 180 * 1000; // 3 minutes of silence after a claim
 const HARD_WAIT_MS = 20 * 60 * 1000; // 20 minutes
 
 /**
- * How long a late answer (one posted after the browser stream already gave up
- * or disconnected) is retained so the browser can pick it up via the pickup
- * endpoint. Pruned after this.
+ * Grace after a claimed turn's deadline during which the agent's answer is
+ * still accepted and a confirmation card still counts as belonging to that
+ * turn. The browser has given up by then; the answer lands on the row and is
+ * served by the pickup endpoint instead of the stream.
  */
-const BUFFER_TTL_MS = 10 * 60 * 1000; // 10 minutes
-
-/**
- * Cap on buffered late answers retained per user. Bounds memory if an agent
- * keeps answering prompts whose browsers have all gone away. Oldest entries are
- * evicted first.
- */
-const MAX_BUFFERED_PER_USER = 20;
+export const BUFFER_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
 /**
  * How long a single `get_next_prompt` long-poll parks before returning empty.
@@ -65,6 +73,27 @@ const MAX_BUFFERED_PER_USER = 20;
  * again, so this just bounds one HTTP round-trip.
  */
 const POLL_PARK_MS = 25 * 1000; // 25 seconds
+
+/**
+ * Overrides POLL_PARK_MS. Nothing in the application provides it; a test that
+ * needs an empty poll to come back sooner passes a shorter park, because the
+ * real one keeps a database-backed spec waiting 25 seconds per empty poll.
+ */
+export const RELAY_POLL_PARK_MS = Symbol("RELAY_POLL_PARK_MS");
+
+/**
+ * How long a parked waiter goes without re-reading its row when no wake-up
+ * arrives.
+ *
+ * A bus message is a hint and can be lost outright, so the wake-up only ever
+ * shortens this wait -- it never replaces it. Five seconds is the most latency
+ * a dropped message may cost, at the price of one primary-key read per open
+ * chat per interval.
+ */
+const WAKE_POLL_INTERVAL_MS = 5 * 1000;
+
+/** `waitForPrompt` result: the credential never held the user's chat. */
+export const RELAY_POLL_REFUSED = "refused" as const;
 
 /**
  * An agent counts as "connected" if it polled within this window. Slightly
@@ -97,6 +126,20 @@ export const INACTIVITY_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 const MAX_HISTORY_TURNS = 10;
 const MAX_HISTORY_CHARS = 12000;
 const HISTORY_TRUNCATION_MARKER = " … [truncated]";
+
+/** The per-user wake-up channel on the `EventBus`. Carries ids, never payloads. */
+export function relayChannel(userId: string): string {
+  return `relay:${userId}`;
+}
+
+/**
+ * `expires_at` arithmetic, always in the database's clock rather than this
+ * process's: two replicas disagreeing about "now" by a few seconds must not
+ * disagree about whether a turn is still live.
+ */
+function msInterval(param: string): string {
+  return `(${param}::numeric / 1000 * INTERVAL '1 second')`;
+}
 
 /**
  * Trim a conversation history to the most recent turns within the char budget,
@@ -133,258 +176,150 @@ export function trimRelayHistory(
   return kept.reverse();
 }
 
-interface PendingPrompt {
-  id: string;
-  prompt: string;
-  history: Array<{ role: "user" | "assistant"; content: string }>;
-  resolve: (response: RelayResponse) => void;
-  reject: (err: Error) => void;
-  /**
-   * Browser-side timeout handle; cleared/rescheduled as liveness arrives and
-   * cleared once the prompt settles. While the prompt is queued it counts down
-   * QUEUE_WAIT_MS; once claimed it becomes the idle timer (IDLE_TIMEOUT_MS),
-   * rescheduled by every liveness signal up to the hard deadline.
-   */
-  timer: ReturnType<typeof setTimeout>;
-  settled: boolean;
-  /** True once an agent has claimed this prompt via get_next_prompt. */
-  claimed: boolean;
-  /**
-   * MCP session id of the agent that claimed this prompt. A relay turn belongs
-   * to ONE session: writes, tool activity and liveness from any other session
-   * (a direct MCP client the same user has open) are not part of this turn and
-   * must not steer it. Undefined only for a claim made without a session id,
-   * which the MCP tool layer cannot produce (`resolve(extra.sessionId)` is what
-   * yields the user in the first place) -- it occurs in tests, where strict
-   * equality against another `undefined` keeps the unbound behaviour.
-   *
-   * Adopted on a later liveness signal that carries a different session (see
-   * `adoptSession`), so an agent that reconnects mid-prompt keeps its turn.
-   */
-  claimedBy?: string;
-  /**
-   * Refs to attachments the user uploaded with this prompt (bytes live in the
-   * RelayAttachmentStore). Passed to the agent on claim and released once the
-   * prompt definitively settles; the store's TTL is the backstop.
-   */
-  attachments: RelayAttachmentRef[];
-  /**
-   * Absolute backstop (epoch ms) computed at claim time; the idle timer never
-   * schedules past this, so a perpetually-chatty-but-stuck agent still loses the
-   * browser at HARD_WAIT_MS.
-   */
-  hardDeadline: number;
-  /**
-   * Pushes an intermediate SSE event to the browser stream still parked on this
-   * prompt. Used to deliver a write-confirmation card (`pending_action`) while
-   * the agent is working, so the user approves it in the web chat instead of in
-   * their MCP client. Undefined for callers that do not stream (e.g. tests).
-   */
-  emit?: (event: RelayServerEvent) => void;
-}
-
-interface Waiter {
-  resolve: (prompt: RelayClaimedPrompt | null) => void;
-  timer: ReturnType<typeof setTimeout>;
-  /** MCP session of the parked agent; becomes the claim's owning session. */
-  sessionId?: string;
-}
-
-/** A late agent answer held for pickup after the browser stream gave up. */
-interface BufferedResponse {
-  text: string;
-  /** Epoch ms the answer was posted; used for TTL pruning and LRU eviction. */
-  at: number;
+/** The turn as the browser's waiter sees it on each re-read. */
+interface PromptStateRow {
+  status: RelayPromptStatus;
+  answer: RelayAnswerPayload | null;
+  prompt: RelayPromptPayload;
+  claimed_at: Date | null;
+  expired: boolean;
+  remaining_ms: string | number;
 }
 
 /**
- * A prompt that was claimed and then timed out before `post_response` arrived.
- * Carries the claiming session so a late confirmation card is recognised as
- * belonging to THAT agent's turn and not to some other session's write, and the
- * timestamp so the marker stops counting as a live turn once it is older than
- * the buffer would have retained the answer.
- */
-interface LateMarker {
-  userId: string;
-  at: number;
-  sessionId?: string;
-}
-
-/**
- * A write-confirmation card emitted by an agent after the browser stream had
- * already given up (idle timeout while the agent composed a large tool call).
- * Held for pickup so the user still sees and can approve it -- mirrors the
- * late-answer buffer above, keyed by the action's own id.
- */
-interface BufferedAction {
-  action: PendingAiAction;
-  /** Epoch ms the card was emitted; used for TTL pruning and LRU eviction. */
-  at: number;
-}
-
-/**
- * In-memory broker between the browser chat and the user's MCP agent.
+ * Broker between the browser chat and the user's MCP agent.
  *
- * State is per-process (single backend instance): a multi-replica deployment
- * would need a shared backplane (e.g. Redis pub/sub) instead of these maps. The
- * relay never touches financial data itself -- it only routes prompts and
+ * The queue is rows, not process memory. The browser inserts a `pending`
+ * `ai_relay_prompts` row and parks; the agent's long-poll claims one with a
+ * conditional `UPDATE` under `FOR UPDATE SKIP LOCKED`, so two sessions of the
+ * credential serving the chat get different prompts (another credential
+ * claims nothing, `holdChat`) and the loser of a double `post_response` is
+ * refused by the database rather than by a read it had already passed
+ * (INV-HA-005). A wake-up on the `EVENT_BUS` only shortens the wait: it carries
+ * ids, never the prompt or the answer, and every waiter re-reads its row on a
+ * slow timer in case the message was lost.
+ *
+ * The relay never touches financial data itself -- it only routes prompts and
  * answers; the agent does the work through the existing MCP tools.
  */
 @Injectable()
 export class AiRelayService {
   private readonly logger = new Logger(AiRelayService.name);
 
-  constructor(private readonly attachmentStore: RelayAttachmentStore) {}
-
-  /** Prompts enqueued by the browser, not yet claimed by an agent (FIFO). */
-  private readonly pending = new Map<string, PendingPrompt[]>();
-  /** Prompts claimed by an agent, awaiting `post_response`, keyed by promptId. */
-  private readonly inFlight = new Map<
-    string,
-    { userId: string; prompt: PendingPrompt }
-  >();
-  /** Agents parked on `get_next_prompt`, awaiting a prompt to hand off. */
-  private readonly waiters = new Map<string, Waiter[]>();
-  /** Last time each user's agent polled, for connection liveness. */
-  private readonly lastPollAt = new Map<string, number>();
-  /**
-   * When the current idle (no-prompt) streak began for a user, set on the first
-   * empty poll and reset on any prompt. Drives the inactivity disconnect.
-   */
-  private readonly idleSince = new Map<string, number>();
-  /**
-   * Users whose agent was told to stop after INACTIVITY_TIMEOUT_MS of no prompts.
-   * Surfaced in the tunnel status so the chat shows an "idle disconnected" notice
-   * until the user reconnects (the agent polls again) or sends a new prompt.
-   */
-  private readonly idleDisconnectedAt = new Map<string, number>();
-  /**
-   * Late answers whose browser stream already gave up or disconnected, keyed by
-   * userId then promptId. The browser picks them up via takeBufferedResponse so
-   * an agent that recovers from a connection blip never loses its work.
-   */
-  private readonly buffered = new Map<string, Map<string, BufferedResponse>>();
-  /**
-   * Prompts that were claimed by an agent and then timed out (idle/hard) before
-   * `post_response` arrived, keyed by promptId. Removed from `inFlight` so the
-   * tunnel no longer reads "busy", but remembered here (with the owning userId)
-   * so a late `post_response` is recognised and buffered instead of dropped.
-   * Entries are evicted when the answer arrives, or after BUFFER_TTL_MS since
-   * there is no point waiting longer than the buffer would retain the answer.
-   */
-  private readonly awaitingLate = new Map<string, LateMarker>();
-  /**
-   * Write-confirmation cards emitted after the browser stream gave up, keyed by
-   * userId then actionId. The browser drains them via the pickup endpoint so a
-   * card composed slowly (idle timeout fired) is still shown and approvable
-   * rather than being silently lost or auto-declined (#793).
-   */
-  private readonly bufferedActions = new Map<
-    string,
-    Map<string, BufferedAction>
-  >();
+  constructor(
+    private readonly dataSource: DataSource,
+    private readonly attachmentStore: RelayAttachmentStore,
+    private readonly streams: RelayStreamRegistry,
+    @Inject(EVENT_BUS) private readonly bus: EventBus,
+    @Optional()
+    @Inject(RELAY_POLL_PARK_MS)
+    private readonly pollParkMs: number = POLL_PARK_MS,
+  ) {}
 
   /**
    * Enqueue a prompt from the browser and resolve when the agent answers.
-   * If an agent is already parked, the prompt is handed off immediately;
-   * otherwise it waits in the queue until claimed (or the browser times out).
    *
-   * `onEnqueued` (if given) is invoked synchronously with the generated
-   * promptId before the promise settles, so the browser stream can tell the
-   * client its id up front and later pick up a late answer for it.
+   * The row is inserted and committed before this parks, so an agent polling any
+   * replica can claim it; the wake-up is published after that commit, never
+   * inside it. `options.onEnqueued` is invoked with the row's id as soon as it
+   * exists, so the browser stream can tell the client its id up front and later
+   * pick up a late answer for it.
    */
-  enqueuePrompt(
+  async enqueuePrompt(
     userId: string,
     prompt: string,
     history: Array<{ role: "user" | "assistant"; content: string }>,
-    emit?: (event: RelayServerEvent) => void,
-    onEnqueued?: (promptId: string) => void,
-    attachments?: AttachmentDto[],
+    options: RelayStreamOptions = {},
   ): Promise<RelayResponse> {
     // Validate and persist any attachments up front so a bad upload rejects the
-    // request synchronously (the controller maps the thrown BadRequestException
-    // to an error SSE event) before the prompt is ever queued.
-    const attachmentRefs = this.attachmentStore.store(
+    // request before the prompt is ever queued (the controller maps the thrown
+    // BadRequestException to an error SSE event).
+    const attachments = await this.attachmentStore.store(
       userId,
-      attachments ?? [],
+      options.attachments ?? [],
     );
     // A new prompt is activity: restart the inactivity clock and clear any
     // prior idle-disconnect notice so the chat shows the live state again.
-    this.idleSince.delete(userId);
-    this.idleDisconnectedAt.delete(userId);
-    return new Promise<RelayResponse>((resolve, reject) => {
-      const entry: PendingPrompt = {
-        id: randomUUID(),
-        prompt,
-        // Bound the history handed to the agent: get_next_prompt returns it on
-        // every prompt, so an unbounded conversation bloats the agent's context.
-        history: trimRelayHistory(history),
-        resolve,
-        reject,
-        settled: false,
-        claimed: false,
-        hardDeadline: 0,
-        attachments: attachmentRefs,
-        emit,
-        // Queued prompts count down the queue wait; once an agent claims this
-        // prompt, claim() swaps in the idle timer.
-        timer: setTimeout(() => {
-          this.settleTimeout(userId, entry);
-        }, QUEUE_WAIT_MS),
-      };
+    await this.markActivity(userId);
 
-      onEnqueued?.(entry.id);
+    const payload: RelayPromptPayload = {
+      prompt,
+      // Bound the history handed to the agent: get_next_prompt returns it on
+      // every prompt, so an unbounded conversation bloats the agent's context.
+      history: trimRelayHistory(history),
+      ...(attachments.length > 0 ? { attachments } : {}),
+    };
+    const promptId = await this.insertPrompt(userId, payload);
+    // After the insert's transaction committed: a wake-up published inside it
+    // would send an agent looking for a row that may never exist.
+    await this.publishWake(userId, promptId);
+    options.onEnqueued?.(promptId);
 
-      const waiter = this.takeWaiter(userId);
-      if (waiter) {
-        this.handOff(userId, entry, waiter);
-        return;
-      }
-
-      const queue = this.pending.get(userId) ?? [];
-      this.pending.set(userId, [...queue, entry]);
-    });
+    const release = options.emit
+      ? this.streams.register(promptId, userId, options.emit)
+      : undefined;
+    try {
+      return await this.awaitAnswer(userId, promptId, attachments, options);
+    } finally {
+      release?.();
+    }
   }
 
   /**
-   * Called by the `get_next_prompt` MCP tool. Returns the next queued prompt
-   * for the user, or parks until one arrives or the poll window elapses (then
+   * Called by the `get_next_prompt` MCP tool. Claims the next queued prompt for
+   * the user, or parks until one arrives or the poll window elapses (then
    * returns null so the agent polls again).
+   *
+   * `credentialId` is the credential presented on this request. Only the one
+   * credential serving the user's chat claims anything (`claimNextPrompt`); a
+   * poll from any other credential of the same user parks and comes back
+   * `RELAY_POLL_REFUSED` (never recorded as a poll, so it cannot make the chat
+   * read "listening"), while the holder's empty poll is `null`.
    */
-  waitForPrompt(
+  async waitForPrompt(
     userId: string,
-    sessionId?: string,
-  ): Promise<RelayClaimedPrompt | null> {
-    this.lastPollAt.set(userId, Date.now());
-    // The agent is polling, so it is connected: clear any stale idle-disconnect
-    // notice (e.g. it just reconnected after a quiet spell).
-    this.idleDisconnectedAt.delete(userId);
+    sessionId: string | undefined,
+    credentialId: string,
+  ): Promise<RelayClaimedPrompt | null | typeof RELAY_POLL_REFUSED> {
     // A poll proves THIS agent is alive: keep the prompt it is mid-task on from
-    // tripping the idle timer. Scoped to its own session -- another session's
+    // tripping the idle window. Scoped to its own session -- another session's
     // traffic says nothing about whether this agent is still working.
-    this.bumpInFlight(userId, sessionId);
+    await this.bumpLiveness(userId, sessionId);
 
-    const queue = this.pending.get(userId) ?? [];
-    const [next, ...rest] = queue;
-    if (next) {
-      this.pending.set(userId, rest);
-      // Claiming a prompt is activity: restart the inactivity clock.
-      this.idleSince.delete(userId);
-      return Promise.resolve(this.claim(userId, next, sessionId));
+    // The agent is polling, so it is connected, and any stale idle-disconnect
+    // notice goes with it. Only a poll that held the chat says so: a refused
+    // credential polling must not make the status read "listening".
+    let held = false;
+    const attempt = async (): Promise<RelayClaimedPrompt | null> => {
+      const r = await this.claimNextPrompt(userId, sessionId, credentialId);
+      if (r.held && !held) {
+        held = true;
+        await this.recordPoll(userId);
+      }
+      return r.prompt;
+    };
+
+    const first = await attempt();
+    if (first) return first;
+
+    const signal = new WakeSignal();
+    const unsubscribe = this.bus.subscribe(relayChannel(userId), () =>
+      signal.signal(),
+    );
+    try {
+      const parkUntil = Date.now() + this.pollParkMs;
+      for (;;) {
+        const remaining = parkUntil - Date.now();
+        if (remaining <= 0) return held ? null : RELAY_POLL_REFUSED;
+        await signal.wait(Math.min(remaining, WAKE_POLL_INTERVAL_MS));
+        // A wake-up is a hint: the prompt it announced may have been claimed by
+        // another agent in between, so the claim decides, never the message.
+        const claimed = await attempt();
+        if (claimed) return claimed;
+      }
+    } finally {
+      unsubscribe();
     }
-
-    return new Promise<RelayClaimedPrompt | null>((resolve) => {
-      const waiter: Waiter = {
-        resolve,
-        sessionId,
-        timer: setTimeout(() => {
-          this.removeWaiter(userId, waiter);
-          resolve(null);
-        }, POLL_PARK_MS),
-      };
-      const list = this.waiters.get(userId) ?? [];
-      this.waiters.set(userId, [...list, waiter]);
-    });
   }
 
   /**
@@ -395,139 +330,91 @@ export class AiRelayService {
    * it), telling the tool to instruct the agent to exit rather than keep
    * polling. The clock is reset by enqueuePrompt and by claiming a prompt, so an
    * active conversation never trips it.
+   *
+   * Start, elapse and disconnect are one upsert: a read followed by a write
+   * would let two replicas serving the same agent's polls each start the clock
+   * and neither finish it.
    */
-  shouldStopForIdle(userId: string): boolean {
-    const since = this.idleSince.get(userId);
-    if (since === undefined) {
-      this.idleSince.set(userId, Date.now());
-      return false;
-    }
-    if (Date.now() - since >= INACTIVITY_TIMEOUT_MS) {
-      this.idleSince.delete(userId);
-      this.idleDisconnectedAt.set(userId, Date.now());
+  async shouldStopForIdle(userId: string): Promise<boolean> {
+    const [row] = returnedRows<{ stop: boolean }>(
+      await this.relayQuery(
+        `INSERT INTO ai_relay_agents (user_id, idle_since)
+         VALUES ($1, CURRENT_TIMESTAMP)
+         ON CONFLICT (user_id) DO UPDATE
+            SET idle_since = CASE
+                  WHEN ai_relay_agents.idle_since IS NULL
+                    THEN CURRENT_TIMESTAMP
+                  WHEN ai_relay_agents.idle_since + ${msInterval("$2")}
+                       <= CURRENT_TIMESTAMP
+                    THEN NULL
+                  ELSE ai_relay_agents.idle_since
+                END,
+                idle_disconnected_at = CASE
+                  WHEN ai_relay_agents.idle_since IS NOT NULL
+                   AND ai_relay_agents.idle_since + ${msInterval("$2")}
+                       <= CURRENT_TIMESTAMP
+                    THEN CURRENT_TIMESTAMP
+                  ELSE ai_relay_agents.idle_disconnected_at
+                END
+         RETURNING (idle_disconnected_at IS NOT NULL) AS stop`,
+        [userId, INACTIVITY_TIMEOUT_MS],
+      ),
+    );
+    // Every poll clears the notice before this runs, so a non-null value here
+    // is the one this statement just wrote.
+    const stop = row?.stop === true;
+    if (stop) {
       this.logger.log(
         `Relay agent for user ${userId} idle ${INACTIVITY_TIMEOUT_MS}ms; ` +
           `signalling stop`,
       );
-      return true;
     }
-    return false;
+    return stop;
   }
 
   /**
-   * Called by the `post_response` MCP tool. Delivers the agent's answer to the
-   * waiting browser request when one is still parked. If the browser already
-   * gave up (idle/hard timeout) or its stream is gone, the answer is NOT
-   * dropped: it is buffered for pickup so a recovered agent never loses its
-   * work. Returns true whenever the answer was accepted (delivered or buffered)
-   * and is idempotent -- a second post for the same promptId is a no-op true.
+   * Called by the `post_response` MCP tool. Moves the row from `claimed` to
+   * `answered` in one conditional `UPDATE`, then publishes a wake-up so the
+   * replica holding the browser's stream re-reads it.
    *
-   * Returns false only for an unknown or foreign promptId (never seen, or it
-   * belongs to another user).
+   * The answer is never dropped when the browser has already given up: the row
+   * keeps it until the pickup endpoint takes it, or the sweeper's TTL does.
+   * Returns false when the `UPDATE` matched nothing -- an unknown or foreign
+   * promptId, a turn nobody claimed, one another credential claimed, one
+   * already answered, or one whose grace after the deadline has run out.
    */
-  postResponse(userId: string, promptId: string, text: string): boolean {
-    this.lastPollAt.set(userId, Date.now());
-
-    const record = this.inFlight.get(promptId);
-    if (record && record.userId === userId) {
-      this.inFlight.delete(promptId);
-      const { prompt } = record;
-      // Still parked: deliver straight to the waiting browser stream.
-      prompt.settled = true;
-      clearTimeout(prompt.timer);
-      this.releaseAttachments(userId, prompt);
-      prompt.resolve({ text });
-      return true;
-    }
-
-    // Not in flight. It may have timed out while claimed (the agent's API
-    // blipped): preserve the late answer for pickup instead of dropping it.
-    const late = this.awaitingLate.get(promptId);
-    if (late && late.userId === userId) {
-      this.awaitingLate.delete(promptId);
-      this.bufferResponse(userId, promptId, text);
-      return true;
-    }
-
-    // A late answer may already be buffered for this prompt (a duplicate post):
-    // keep the first one and treat the repeat as an idempotent no-op success.
-    const userBuffer = this.buffered.get(userId);
-    if (userBuffer?.has(promptId)) {
-      return true;
-    }
-
-    // Unknown or foreign promptId, or a duplicate post after the first was
-    // delivered to a live stream (no longer tracked anywhere).
-    return false;
-  }
-
-  /**
-   * Hand a buffered late answer to the browser and remove it. Returns null if
-   * nothing is buffered for this prompt (expired, already picked up, or never
-   * buffered). Prunes expired entries on access.
-   */
-  takeBufferedResponse(userId: string, promptId: string): RelayResponse | null {
-    this.pruneBuffer(userId);
-    const userBuffer = this.buffered.get(userId);
-    const entry = userBuffer?.get(promptId);
-    if (!entry) {
-      return null;
-    }
-    userBuffer!.delete(promptId);
-    if (userBuffer!.size === 0) {
-      this.buffered.delete(userId);
-    }
-    return { text: entry.text };
-  }
-
-  /** Store a late answer for pickup, enforcing TTL and the per-user cap. */
-  private bufferResponse(userId: string, promptId: string, text: string): void {
-    this.pruneBuffer(userId);
-    const existing =
-      this.buffered.get(userId) ?? new Map<string, BufferedResponse>();
-    // Build the next map immutably from the existing entries plus this one.
-    const next = new Map(existing);
-    next.set(promptId, { text, at: Date.now() });
-    // Evict oldest entries (by post time) until within the per-user cap.
-    if (next.size > MAX_BUFFERED_PER_USER) {
-      const ordered = [...next.entries()].sort((a, b) => a[1].at - b[1].at);
-      const trimmed = ordered.slice(next.size - MAX_BUFFERED_PER_USER);
-      this.buffered.set(userId, new Map(trimmed));
-    } else {
-      this.buffered.set(userId, next);
-    }
-    this.logger.warn(
-      `Relay prompt ${promptId} for user ${userId} answered late; buffered for pickup`,
+  async postResponse(
+    userId: string,
+    promptId: string,
+    text: string,
+    credentialId: string,
+  ): Promise<boolean> {
+    const answered = await this.writeAnswer(
+      userId,
+      promptId,
+      { text },
+      credentialId,
     );
+    if (!answered) {
+      return false;
+    }
+    // Only the credential that owns the turn is plainly alive and back; a
+    // refused post must not make the status read "listening".
+    await this.recordPoll(userId);
+    await this.publishWake(userId, promptId);
+    return true;
   }
 
   /**
-   * Drop late-answer markers older than the buffer TTL: there is no point
-   * holding an inFlight-timeout marker longer than the answer would survive once
-   * buffered. Keeps the map from growing if agents never return.
+   * Hand the browser an answer that landed after its stream gave up, and close
+   * the turn out. Returns null when there is nothing to hand over: the turn is
+   * still running, was never answered, or has already been picked up.
    */
-  private pruneAwaitingLate(): void {
-    const cutoff = Date.now() - BUFFER_TTL_MS;
-    for (const [promptId, marker] of this.awaitingLate) {
-      if (marker.at < cutoff) {
-        this.awaitingLate.delete(promptId);
-      }
-    }
-  }
-
-  /** Drop expired buffered answers for a user; clean up the empty bucket. */
-  private pruneBuffer(userId: string): void {
-    const userBuffer = this.buffered.get(userId);
-    if (!userBuffer) {
-      return;
-    }
-    const cutoff = Date.now() - BUFFER_TTL_MS;
-    const live = [...userBuffer.entries()].filter(([, v]) => v.at >= cutoff);
-    if (live.length === 0) {
-      this.buffered.delete(userId);
-    } else if (live.length !== userBuffer.size) {
-      this.buffered.set(userId, new Map(live));
-    }
+  async takeBufferedResponse(
+    userId: string,
+    promptId: string,
+  ): Promise<RelayResponse | null> {
+    return this.consumeAnswer(userId, promptId);
   }
 
   /**
@@ -536,58 +423,37 @@ export class AiRelayService {
    * event -- the same live-narration channel the native AI Assistant uses -- so
    * the user sees what the agent is doing ("looking up the category...",
    * "sending the confirmation card...") instead of a static spinner. Returns
-   * false if the prompt is unknown, already settled, or has no stream.
+   * false if the prompt is unknown, already settled, or has no stream here.
    */
-  reportProgress(
+  async reportProgress(
     userId: string,
     promptId: string,
     text: string,
-    sessionId?: string,
-  ): boolean {
-    this.lastPollAt.set(userId, Date.now());
-    const record = this.inFlight.get(promptId);
-    if (!record || record.userId !== userId) {
+    sessionId: string | undefined,
+    credentialId: string,
+  ): Promise<boolean> {
+    // A reconnected agent's new session is adopted here rather than locked out
+    // -- but only by the credential that claimed the turn: knowing the
+    // promptId proves nothing about who is asking. The same statement counts
+    // the call as liveness.
+    const owned = await this.adoptAndBump(
+      userId,
+      promptId,
+      sessionId,
+      credentialId,
+    );
+    if (!owned) {
       return false;
     }
-    const { prompt } = record;
-    // Knowing the promptId is what proves this caller owns the turn, so a
-    // reconnected agent's new session is adopted here rather than locked out.
-    this.adoptSession(prompt, sessionId);
-    // Progress is liveness: keep the idle timer from firing mid-task.
-    this.scheduleIdleTimeout(userId, prompt);
-    if (prompt.settled || !prompt.emit) {
-      return false;
-    }
+    // Recorded only for the owning credential, as in postResponse.
+    await this.recordPoll(userId);
     // The browser accumulates assistant_text into one live-narration block
     // (rendered whitespace-pre-wrap), so terminate each discrete update with a
     // newline to keep sequential progress lines from running together.
-    prompt.emit({ type: "assistant_text", text: `${text}\n` });
-    return true;
-  }
-
-  /**
-   * Emit an interim SSE event to the browser parked on this user's in-flight
-   * relay prompt. Returns true if delivered, false if the user has no active
-   * prompt (or its stream is gone). Shared by the progress, tool-activity, and
-   * pending-action emitters.
-   */
-  private emitToInFlight(
-    userId: string,
-    event: RelayServerEvent,
-    sessionId?: string,
-  ): boolean {
-    for (const record of this.inFlight.values()) {
-      if (record.userId !== userId || record.prompt.claimedBy !== sessionId) {
-        continue;
-      }
-      const { prompt } = record;
-      if (prompt.settled || !prompt.emit) {
-        return false;
-      }
-      prompt.emit(event);
-      return true;
-    }
-    return false;
+    return this.streams.emit(userId, promptId, {
+      type: "assistant_text",
+      text: `${text}\n`,
+    });
   }
 
   /**
@@ -597,27 +463,44 @@ export class AiRelayService {
    * every Monize tool the agent invokes while handling a relayed prompt, so the
    * user sees real-time progress without the agent having to narrate explicitly.
    */
-  reportToolActivity(
+  async reportToolActivity(
     userId: string,
     toolName: string,
     phase: "start" | "result",
     isError = false,
     sessionId?: string,
-  ): void {
-    // Deliberately does NOT stamp lastPollAt, and everything below is scoped to
+  ): Promise<void> {
+    // Deliberately does NOT record a poll, and everything below is scoped to
     // the CALLING session: every MCP data tool call lands here, including calls
     // from a direct MCP client (Claude Desktop) that has nothing to do with the
     // relay. Treating that traffic as this user's relay liveness kept an
-    // abandoned relay prompt's idle timer alive indefinitely, so the dead turn
-    // stayed in `inFlight` and captured every later direct write's confirmation
-    // card -- and mirrored the direct client's tool chips into a web chat
-    // nobody was watching.
-    this.bumpInFlight(userId, sessionId);
-    const event: RelayServerEvent =
-      phase === "start"
-        ? { type: "tool_start", name: toolName }
-        : { type: "tool_result", name: toolName, isError };
-    this.emitToInFlight(userId, event, sessionId);
+    // abandoned relay prompt alive indefinitely, so the dead turn stayed
+    // claimed and captured every later direct write's confirmation card -- and
+    // mirrored the direct client's tool chips into a web chat nobody was
+    // watching.
+    try {
+      const promptId = await this.bumpLiveness(userId, sessionId);
+      if (!promptId) {
+        return;
+      }
+      const event: RelayServerEvent =
+        phase === "start"
+          ? { type: "tool_start", name: toolName }
+          : { type: "tool_result", name: toolName, isError };
+      this.streams.emit(userId, promptId, event);
+    } catch (error) {
+      // Never throws, because of where it is called from: the MCP wrapper
+      // reports the `result` phase in a `finally`, and a throw there replaces
+      // the tool's own outcome. A liveness UPDATE that fails after a write tool
+      // committed would tell the agent its write failed, and the agent's
+      // documented response to an error is to retry -- which would write twice.
+      // A missing progress chip is the right price.
+      this.logger.warn(
+        `Relay tool activity for user ${userId} was not recorded: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 
   /**
@@ -639,292 +522,681 @@ export class AiRelayService {
    * through to an MCP-client elicitation the web-chat user could not answer, and
    * it surfaced as a decline.
    */
-  emitPendingAction(
+  async emitPendingAction(
     userId: string,
     action: PendingAiAction,
     sessionId?: string,
-  ): boolean {
-    if (
-      this.emitToInFlight(userId, { type: "pending_action", action }, sessionId)
-    ) {
+  ): Promise<boolean> {
+    // A turn this session claimed and has not finished -- including one whose
+    // deadline has passed but whose grace has not, which is exactly the case
+    // where the browser gave up while the agent composed this call.
+    const turn = await this.findSessionTurn(userId, sessionId);
+    if (!turn) {
+      return false;
+    }
+    if (this.streams.emit(userId, turn, { type: "pending_action", action })) {
       return true;
     }
-    // No live stream. If THIS session has a relay turn in progress (or one that
-    // just timed out), the stream was almost certainly killed by the idle
-    // timeout while the agent composed this call -- buffer the card for pickup
-    // rather than telling the caller this is not a relay context.
-    if (this.hasRelayTurn(userId, sessionId)) {
-      this.bufferAction(userId, action);
-      return true;
-    }
-    return false;
+    await this.bufferAction(userId, action);
+    return true;
   }
 
   /**
    * Drain any buffered confirmation cards for a user, removing them. Returns an
-   * empty array when none are buffered (expired, already picked up, or never
-   * buffered). Prunes expired entries on access.
+   * empty array when none are waiting (expired, already picked up, or never
+   * buffered). The drain takes expired rows with it and returns only the live
+   * ones, so a card nobody came back for cannot be shown late.
    */
-  takeBufferedActions(userId: string): PendingAiAction[] {
-    this.pruneActionBuffer(userId);
-    const userBuffer = this.bufferedActions.get(userId);
-    if (!userBuffer || userBuffer.size === 0) {
-      return [];
+  async takeBufferedActions(userId: string): Promise<PendingAiAction[]> {
+    const rows = returnedRows<{ card: PendingAiAction }>(
+      await this.relayQuery(
+        `WITH drained AS (
+           DELETE FROM ai_relay_actions
+            WHERE user_id = $1
+           RETURNING card, created_at, expires_at
+         )
+         SELECT card FROM drained
+          WHERE expires_at > CURRENT_TIMESTAMP
+          ORDER BY created_at`,
+        [userId],
+      ),
+    );
+    return rows.map((r) => r.card);
+  }
+
+  /** Tunnel status for the chat indicator. One query, indexed by `user_id`. */
+  async getStatus(userId: string): Promise<RelayTunnelStatus> {
+    const [row] = returnedRows<{
+      queued: string;
+      in_flight: string;
+      connected: boolean;
+      idle_disconnected: boolean;
+    }>(
+      await this.relayQuery(
+        `SELECT COALESCE(p.queued, 0) AS queued,
+                COALESCE(p.in_flight, 0) AS in_flight,
+                COALESCE(
+                  a.last_poll_at > CURRENT_TIMESTAMP - ${msInterval("$2")},
+                  false
+                ) AS connected,
+                (a.idle_disconnected_at IS NOT NULL) AS idle_disconnected
+           FROM (SELECT $1::uuid AS user_id) u
+           LEFT JOIN LATERAL (
+             SELECT COUNT(*) FILTER (WHERE status = 'pending') AS queued,
+                    COUNT(*) FILTER (WHERE status = 'claimed') AS in_flight
+               FROM ai_relay_prompts
+              WHERE user_id = u.user_id
+                AND expires_at > CURRENT_TIMESTAMP
+           ) p ON TRUE
+           LEFT JOIN ai_relay_agents a ON a.user_id = u.user_id`,
+        [userId, CONNECTED_WINDOW_MS],
+      ),
+    );
+    const state: RelayTunnelState =
+      Number(row?.in_flight ?? 0) > 0
+        ? "busy"
+        : row?.connected
+          ? "listening"
+          : "offline";
+    return {
+      state,
+      queued: Number(row?.queued ?? 0),
+      // Present only between an inactivity stop and the user reconnecting (agent
+      // polls again) or sending a new prompt, so the chat can explain it.
+      ...(row?.idle_disconnected ? { idleDisconnected: true } : {}),
+    };
+  }
+
+  // ---------------------------------------------------------------- the rows
+
+  /**
+   * Park until this turn is answered or its deadline passes, re-reading the row
+   * on every wake-up and on a slow timer besides.
+   *
+   * The deadline is the row's own `expires_at`, which the agent's liveness
+   * pushes out, so a slow-but-alive agent keeps the browser; a lost wake-up
+   * costs one poll interval and nothing else.
+   */
+  private async awaitAnswer(
+    userId: string,
+    promptId: string,
+    attachments: RelayAttachmentRef[],
+    options: RelayStreamOptions,
+  ): Promise<RelayResponse> {
+    const signal = new WakeSignal();
+    const unsubscribe = this.bus.subscribe(relayChannel(userId), () =>
+      signal.signal(),
+    );
+    // A closed socket wakes the waiter the same way an answer does, so it stops
+    // at once instead of sitting out the rest of its poll interval first.
+    const onClose = () => signal.signal();
+    options.signal?.addEventListener("abort", onClose);
+    try {
+      for (;;) {
+        if (options.signal?.aborted) {
+          // The socket is gone. The row stays exactly as it is: the agent may
+          // still answer it, and the pickup endpoint serves that answer when
+          // the browser comes back.
+          throw new RelayStreamClosedError(promptId);
+        }
+        const row = await this.readPrompt(userId, promptId);
+        if (!row) {
+          // The row is gone (the user was deleted, or the sweeper reclaimed it
+          // long after the deadline). Nothing is coming.
+          throw new RelayTimeoutError("no_agent", promptId);
+        }
+        if (row.status === "answered") {
+          // The conditional UPDATE is the exactly-once gate, so its result is
+          // the answer. Zero rows means the pickup endpoint took it first --
+          // the same browser, the same text -- so hand that over rather than
+          // looping round to read `expired` and report that the agent went
+          // quiet after it had plainly answered.
+          const consumed = await this.consumeAnswer(userId, promptId);
+          await this.releaseAttachments(userId, attachments);
+          return consumed ?? { text: row.answer?.text ?? "" };
+        }
+        if (row.status === "expired" || row.expired) {
+          await this.settleExpired(userId, promptId, row, attachments);
+        }
+        await signal.wait(
+          Math.min(WAKE_POLL_INTERVAL_MS, Number(row.remaining_ms)),
+        );
+      }
+    } finally {
+      options.signal?.removeEventListener("abort", onClose);
+      unsubscribe();
     }
-    const actions = [...userBuffer.values()]
-      .sort((a, b) => a.at - b.at)
-      .map((entry) => entry.action);
-    this.bufferedActions.delete(userId);
-    return actions;
+  }
+
+  /** Give up on a turn whose deadline passed, with the reason the copy needs. */
+  private async settleExpired(
+    userId: string,
+    promptId: string,
+    row: PromptStateRow,
+    attachments: RelayAttachmentRef[],
+  ): Promise<never> {
+    // Distinguish "an agent took it then went quiet" from "no agent ever picked
+    // it up": the controller maps the two to different user-facing copy, and a
+    // claimed turn's answer is still recoverable via the pickup endpoint if the
+    // agent comes back and posts within the grace window.
+    if (row.claimed_at) {
+      this.logger.warn(
+        `Relay prompt ${promptId} for user ${userId} went quiet after claim; ` +
+          `browser gave up (a late answer is still accepted)`,
+      );
+      throw new RelayTimeoutError("disconnected", promptId);
+    }
+    // Never claimed: no agent will ever read these attachments, so release them
+    // now instead of waiting for the TTL.
+    await this.releaseAttachments(userId, attachments);
+    this.logger.warn(
+      `Relay prompt ${promptId} for user ${userId} timed out with no agent response`,
+    );
+    throw new RelayTimeoutError("no_agent", promptId);
+  }
+
+  /** Insert the turn as `pending` and return the id the database minted. */
+  private async insertPrompt(
+    userId: string,
+    payload: RelayPromptPayload,
+  ): Promise<string> {
+    const [row] = returnedRows<{ id: string }>(
+      await this.relayQuery(
+        `INSERT INTO ai_relay_prompts (user_id, prompt, expires_at)
+         VALUES ($1, $2::jsonb, CURRENT_TIMESTAMP + ${msInterval("$3")})
+         RETURNING id`,
+        [userId, JSON.stringify(payload), QUEUE_WAIT_MS],
+      ),
+    );
+    return row.id;
+  }
+
+  /** Re-read the turn's state. JSONB comes back as an object; never parsed. */
+  private async readPrompt(
+    userId: string,
+    promptId: string,
+  ): Promise<PromptStateRow | undefined> {
+    const [row] = returnedRows<PromptStateRow>(
+      await this.relayQuery(
+        `SELECT status, answer, prompt, claimed_at,
+                (expires_at <= CURRENT_TIMESTAMP) AS expired,
+                CEIL(
+                  EXTRACT(EPOCH FROM (expires_at - CURRENT_TIMESTAMP)) * 1000
+                )::bigint AS remaining_ms
+           FROM ai_relay_prompts
+          WHERE id = $1 AND user_id = $2`,
+        [promptId, userId],
+      ),
+    );
+    return row;
   }
 
   /**
-   * Whether THIS session is currently (or was just now) handling a relay
-   * prompt: an in-flight prompt it claimed, or one of its claims that timed out
-   * and is still within the window a late answer would be retained. Used to
-   * decide whether a card with no live stream belongs to a relay turn (buffer
-   * it) or to a direct MCP client (let the caller elicit).
+   * Take the oldest live `pending` turn for this user, if any.
+   *
+   * `FOR UPDATE SKIP LOCKED` is what makes two agents polling one user claim
+   * different prompts instead of queueing on the same row, and the `UPDATE`'s
+   * own `AND status = 'pending'` is what makes exactly one of them win
+   * (INV-HA-005). The lock alone would do it today -- a concurrent claimer
+   * skips a locked row, and `SELECT ... FOR UPDATE` re-checks its qual against
+   * the updated tuple -- but then the invariant would rest on a mechanism this
+   * statement does not name, and the next edit to the CTE would quietly remove
+   * it.
+   */
+  private async claimNextPrompt(
+    userId: string,
+    sessionId: string | undefined,
+    credentialId: string,
+  ): Promise<{ held: boolean; prompt: RelayClaimedPrompt | null }> {
+    // The claim and the inactivity reset commit together. A second transaction
+    // for the clock could fail after the claim was durable, and the agent would
+    // never learn the promptId of a prompt now marked `claimed` -- the browser
+    // would wait out the idle window to be told its assistant went quiet. Here
+    // a failed clock write rolls the claim back and the next poll takes it.
+    const { held, rows } = await this.relayTransaction(async (manager) => {
+      if (!(await this.holdChat(manager, userId, credentialId))) {
+        return { held: false, rows: [] };
+      }
+      const claimed = returnedRows<{ id: string; prompt: RelayPromptPayload }>(
+        await manager.query(
+          `WITH next AS (
+             SELECT id AS next_id
+               FROM ai_relay_prompts
+              WHERE user_id = $1
+                AND status = 'pending'
+                AND expires_at > CURRENT_TIMESTAMP
+              ORDER BY created_at
+              LIMIT 1
+              FOR UPDATE SKIP LOCKED
+           )
+           UPDATE ai_relay_prompts
+              SET status = 'claimed',
+                  claimed_at = CURRENT_TIMESTAMP,
+                  claimed_by = $2,
+                  claimed_credential = $4,
+                  expires_at = CURRENT_TIMESTAMP + ${msInterval("$3")}
+             FROM next
+            WHERE ai_relay_prompts.id = next.next_id
+              AND ai_relay_prompts.status = 'pending'
+           RETURNING id, prompt`,
+          [userId, sessionId ?? null, IDLE_TIMEOUT_MS, credentialId],
+        ),
+      );
+      if (claimed.length > 0) {
+        // Claiming a prompt is activity: restart the inactivity clock.
+        await this.markActivity(userId, manager);
+      }
+      return { held: true, rows: claimed };
+    });
+    const [row] = rows;
+    if (!row) return { held, prompt: null };
+    const prompt: RelayClaimedPrompt = {
+      promptId: row.id,
+      prompt: row.prompt.prompt,
+      history: row.prompt.history,
+      ...(row.prompt.attachments?.length
+        ? { attachments: row.prompt.attachments }
+        : {}),
+    };
+    return { held, prompt };
+  }
+
+  /**
+   * Take or keep the user's chat for this credential; false when another
+   * credential holds it.
+   *
+   * Any credential of the user can call `get_next_prompt`, and a prompt is
+   * addressed to the user, not to an agent -- so without this, whichever
+   * credential polled first read the prompt and its history and answered it
+   * in the web chat as the user's own assistant (#2176). One credential holds
+   * the chat at a time. Another takes it over only once the holder has not
+   * asked for work within CONNECTED_WINDOW_MS AND has no turn in flight or
+   * just answered; a holder parked on `get_next_prompt` re-asks every
+   * WAKE_POLL_INTERVAL_MS, so it never lapses while connected. "In flight"
+   * is the turn's live deadline, not the late-answer grace: an agent that died
+   * mid-turn gives the chat up once the browser has given up on it, and its
+   * late answer is still accepted from its own credential.
+   *
+   * The upsert locks the user's `ai_relay_agents` row until the caller's
+   * transaction commits, including when its `WHERE` refuses the update, so a
+   * takeover and the holder's claim serialise on that row lock. The takeover
+   * test reads `agent_seen_at` from the row version it locked; the turn
+   * subquery reads the statement's snapshot, which can miss a claim that
+   * committed while this waited -- but that claim also refreshed
+   * `agent_seen_at` under the same lock, which already refuses the takeover.
+   */
+  private async holdChat(
+    manager: EntityManager,
+    userId: string,
+    credentialId: string,
+  ): Promise<boolean> {
+    const held = returnedRows<{ user_id: string }>(
+      await manager.query(
+        `INSERT INTO ai_relay_agents (user_id, agent_credential, agent_seen_at)
+         VALUES ($1, $2, CURRENT_TIMESTAMP)
+         ON CONFLICT (user_id) DO UPDATE
+            SET agent_credential = EXCLUDED.agent_credential,
+                agent_seen_at = CURRENT_TIMESTAMP
+          WHERE ai_relay_agents.agent_credential IS NULL
+             OR ai_relay_agents.agent_credential = EXCLUDED.agent_credential
+             OR (
+                  ai_relay_agents.agent_seen_at
+                    + ${msInterval("$3")} <= CURRENT_TIMESTAMP
+                  AND NOT EXISTS (
+                    SELECT 1
+                      FROM ai_relay_prompts p
+                     WHERE p.user_id = ai_relay_agents.user_id
+                       AND p.claimed_credential
+                           = ai_relay_agents.agent_credential
+                       AND (
+                             (p.status = 'claimed'
+                              AND p.expires_at > CURRENT_TIMESTAMP)
+                          OR p.answered_at + ${msInterval("$3")}
+                                  > CURRENT_TIMESTAMP
+                           )
+                  )
+                )
+         RETURNING user_id`,
+        [userId, credentialId, CONNECTED_WINDOW_MS],
+      ),
+    );
+    return held.length > 0;
+  }
+
+  /**
+   * Record the answer. Conditional on `claimed`, so a second post -- or one for
+   * a turn the sweeper already expired -- matches nothing and is refused. And
+   * conditional on the credential that claimed the turn, so another credential
+   * of the same user holding the promptId cannot overwrite a live turn (#2176).
+   */
+  private async writeAnswer(
+    userId: string,
+    promptId: string,
+    answer: RelayAnswerPayload,
+    credentialId: string,
+  ): Promise<boolean> {
+    const rows = returnedRows<{ id: string }>(
+      await this.relayQuery(
+        `UPDATE ai_relay_prompts
+            SET status = 'answered',
+                answer = $3::jsonb,
+                answered_at = CURRENT_TIMESTAMP
+          WHERE id = $1
+            AND user_id = $2
+            AND status = 'claimed'
+            AND claimed_credential = $5
+            AND expires_at + ${msInterval("$4")} > CURRENT_TIMESTAMP
+         RETURNING id`,
+        [promptId, userId, JSON.stringify(answer), BUFFER_TTL_MS, credentialId],
+      ),
+    );
+    return rows.length > 0;
+  }
+
+  /**
+   * Hand the answer over exactly once. The turn ends here: `expired` is what
+   * "the browser has this" looks like on the row, and the sweeper deletes it.
+   */
+  private async consumeAnswer(
+    userId: string,
+    promptId: string,
+  ): Promise<RelayResponse | null> {
+    const [row] = returnedRows<{ answer: RelayAnswerPayload | null }>(
+      await this.relayQuery(
+        `UPDATE ai_relay_prompts
+            SET status = 'expired'
+          WHERE id = $1 AND user_id = $2 AND status = 'answered'
+         RETURNING answer`,
+        [promptId, userId],
+      ),
+    );
+    return row ? { text: row.answer?.text ?? "" } : null;
+  }
+
+  /**
+   * Push this session's claimed turn's deadline out and return its id.
+   *
+   * The clamp against `claimed_at + HARD_WAIT_MS` is the backstop: a
+   * perpetually-chatty-but-stuck agent still loses the browser. A turn already
+   * past its deadline is not revived -- `expires_at > CURRENT_TIMESTAMP` is
+   * what keeps liveness from resurrecting a turn the browser has given up on.
+   */
+  private async bumpLiveness(
+    userId: string,
+    sessionId?: string,
+  ): Promise<string | null> {
+    const rows = returnedRows<{ id: string; claimed_at: Date }>(
+      await this.relayQuery(
+        `UPDATE ai_relay_prompts
+            SET expires_at = LEAST(
+                  CURRENT_TIMESTAMP + ${msInterval("$3")},
+                  claimed_at + ${msInterval("$4")}
+                )
+          WHERE user_id = $1
+            AND status = 'claimed'
+            AND claimed_by IS NOT DISTINCT FROM $2
+            AND expires_at > CURRENT_TIMESTAMP
+         RETURNING id, claimed_at`,
+        [userId, sessionId ?? null, IDLE_TIMEOUT_MS, HARD_WAIT_MS],
+      ),
+    );
+    // Nothing stops an agent claiming a second prompt while still working the
+    // first, and an UPDATE's RETURNING has no order -- so taking the first row
+    // would route this call's tool chip to whichever turn the executor happened
+    // to emit. Every live turn of this session is kept alive; the newest is the
+    // one the caller is working, the same choice `findSessionTurn` makes.
+    const newest = rows.reduce<{ id: string; claimed_at: Date } | null>(
+      (best, row) =>
+        !best || new Date(row.claimed_at) > new Date(best.claimed_at)
+          ? row
+          : best,
+      null,
+    );
+    return newest?.id ?? null;
+  }
+
+  /**
+   * Bind this turn to the calling session and count the call as liveness.
+   *
+   * An agent that reconnected mid-turn arrives with a fresh MCP session id;
+   * without the adoption its own later writes would look like a different
+   * session's and confirm in the wrong place. Only a session of the credential
+   * that claimed the turn may adopt it: the transport ties every session to the
+   * credential that opened it, so this is the same agent reconnecting, never
+   * another client of the same user.
+   */
+  private async adoptAndBump(
+    userId: string,
+    promptId: string,
+    sessionId: string | undefined,
+    credentialId: string,
+  ): Promise<boolean> {
+    const rows = returnedRows<{ id: string }>(
+      await this.relayQuery(
+        `UPDATE ai_relay_prompts
+            SET claimed_by = COALESCE($3, claimed_by),
+                expires_at = LEAST(
+                  CURRENT_TIMESTAMP + ${msInterval("$4")},
+                  claimed_at + ${msInterval("$5")}
+                )
+          WHERE id = $1
+            AND user_id = $2
+            AND status = 'claimed'
+            AND claimed_credential = $6
+            AND expires_at > CURRENT_TIMESTAMP
+         RETURNING id`,
+        [
+          promptId,
+          userId,
+          sessionId ?? null,
+          IDLE_TIMEOUT_MS,
+          HARD_WAIT_MS,
+          credentialId,
+        ],
+      ),
+    );
+    return rows.length > 0;
+  }
+
+  /**
+   * The turn this session is handling, or has just lost the browser for.
    *
    * Three things this deliberately is NOT:
    *  - not connection liveness. An agent merely parked on `get_next_prompt`
-   *    has no prompt to be writing for, so a write arriving then is a direct
-   *    client's and must confirm there.
+   *    has claimed nothing, so a write arriving then is a direct client's and
+   *    must confirm there.
    *  - not user-wide. A relay turn belongs to the session that claimed it;
    *    another session's write is not part of it. Matching on userId alone let
    *    one abandoned web-chat turn capture every direct write the same user
    *    made afterwards.
-   *  - not unbounded in time. A late marker only stands in for a live turn for
-   *    as long as the answer buffer would have held the answer; past that the
-   *    turn is over, and an expired marker must not answer for it.
+   *  - not unbounded in time. A turn past its deadline stands in for a live one
+   *    only for as long as its answer would still be accepted.
+   *
+   * `IS NOT DISTINCT FROM` rather than `=` so a claim made without a caller key
+   * is matched by a later call that also has none. The MCP tool layer cannot
+   * produce that state -- `callerKey` falls back to the credential id, and the
+   * relay tools refuse a request with no user context at all -- so it occurs
+   * only in tests, where the unbound behaviour is what keeps them honest about
+   * ordering. A plain `=` would silently never match a NULL and take liveness
+   * with it; tightening this means making `claimNextPrompt` refuse a keyless
+   * claim in the same change.
    */
-  private hasRelayTurn(userId: string, sessionId?: string): boolean {
-    for (const record of this.inFlight.values()) {
-      if (record.userId === userId && record.prompt.claimedBy === sessionId) {
-        return true;
-      }
-    }
-    this.pruneAwaitingLate();
-    const cutoff = Date.now() - BUFFER_TTL_MS;
-    for (const marker of this.awaitingLate.values()) {
-      if (
-        marker.userId === userId &&
-        marker.sessionId === sessionId &&
-        marker.at >= cutoff
-      ) {
-        return true;
-      }
-    }
-    return false;
-  }
-
-  /** Store a late confirmation card for pickup, enforcing TTL and the per-user cap. */
-  private bufferAction(userId: string, action: PendingAiAction): void {
-    this.pruneActionBuffer(userId);
-    const existing =
-      this.bufferedActions.get(userId) ?? new Map<string, BufferedAction>();
-    const next = new Map(existing);
-    next.set(action.actionId, { action, at: Date.now() });
-    // Evict oldest entries (by emit time) until within the per-user cap.
-    if (next.size > MAX_BUFFERED_PER_USER) {
-      const ordered = [...next.entries()].sort((a, b) => a[1].at - b[1].at);
-      const trimmed = ordered.slice(next.size - MAX_BUFFERED_PER_USER);
-      this.bufferedActions.set(userId, new Map(trimmed));
-    } else {
-      this.bufferedActions.set(userId, next);
-    }
-    this.logger.warn(
-      `Relay confirmation card ${action.actionId} for user ${userId} emitted ` +
-        `after the stream gave up; buffered for pickup`,
-    );
-  }
-
-  /** Drop expired buffered cards for a user; clean up the empty bucket. */
-  private pruneActionBuffer(userId: string): void {
-    const userBuffer = this.bufferedActions.get(userId);
-    if (!userBuffer) {
-      return;
-    }
-    const cutoff = Date.now() - BUFFER_TTL_MS;
-    const live = [...userBuffer.entries()].filter(([, v]) => v.at >= cutoff);
-    if (live.length === 0) {
-      this.bufferedActions.delete(userId);
-    } else if (live.length !== userBuffer.size) {
-      this.bufferedActions.set(userId, new Map(live));
-    }
-  }
-
-  /** Tunnel status for the chat indicator. */
-  getStatus(userId: string): RelayTunnelStatus {
-    return {
-      state: this.computeState(userId),
-      queued: (this.pending.get(userId) ?? []).length,
-      // Present only between an inactivity stop and the user reconnecting (agent
-      // polls again) or sending a new prompt, so the chat can explain it.
-      ...(this.idleDisconnectedAt.has(userId)
-        ? { idleDisconnected: true }
-        : {}),
-    };
-  }
-
-  private computeState(userId: string): RelayTunnelState {
-    const hasInFlight = [...this.inFlight.values()].some(
-      (r) => r.userId === userId,
-    );
-    if (hasInFlight) {
-      return "busy";
-    }
-    const parked = (this.waiters.get(userId) ?? []).length > 0;
-    const last = this.lastPollAt.get(userId) ?? 0;
-    const recent = Date.now() - last < CONNECTED_WINDOW_MS;
-    return parked || recent ? "listening" : "offline";
-  }
-
-  private claim(
+  private async findSessionTurn(
     userId: string,
-    entry: PendingPrompt,
     sessionId?: string,
-  ): RelayClaimedPrompt {
-    this.inFlight.set(entry.id, { userId, prompt: entry });
-    // The prompt is now an agent's responsibility: switch from the queue wait to
-    // the idle timer and arm the hard backstop. The claim itself counts as
-    // liveness, so the idle window starts fresh here.
-    entry.claimed = true;
-    entry.claimedBy = sessionId;
-    entry.hardDeadline = Date.now() + HARD_WAIT_MS;
-    this.scheduleIdleTimeout(userId, entry);
-    return {
-      promptId: entry.id,
-      prompt: entry.prompt,
-      history: entry.history,
-      ...(entry.attachments.length > 0
-        ? { attachments: entry.attachments }
-        : {}),
-    };
+  ): Promise<string | null> {
+    const [row] = returnedRows<{ id: string }>(
+      await this.relayQuery(
+        `SELECT id
+           FROM ai_relay_prompts
+          WHERE user_id = $1
+            AND status = 'claimed'
+            AND claimed_by IS NOT DISTINCT FROM $2
+            AND expires_at + ${msInterval("$3")} > CURRENT_TIMESTAMP
+          ORDER BY claimed_at DESC
+          LIMIT 1`,
+        [userId, sessionId ?? null, BUFFER_TTL_MS],
+      ),
+    );
+    return row?.id ?? null;
   }
 
   /**
-   * (Re)arm the in-flight idle timer for a claimed prompt. Clears any prior
-   * timer and schedules a fresh IDLE_TIMEOUT_MS, clamped so it never fires past
-   * the hard deadline. Called on claim and on every subsequent liveness signal.
+   * Every relay statement runs in its own short transaction, outside whatever
+   * transaction the caller happens to be in.
+   *
+   * Both halves matter. A queued prompt has to be visible to an agent polling a
+   * different replica the moment `enqueuePrompt` parks, and a row written inside
+   * the caller's transaction is not. And a waiter parks for minutes: joining an
+   * ambient transaction would hold that connection, and its snapshot, for the
+   * whole wait.
    */
-  private scheduleIdleTimeout(userId: string, entry: PendingPrompt): void {
-    if (entry.settled) {
-      return;
-    }
-    clearTimeout(entry.timer);
-    const remaining = entry.hardDeadline - Date.now();
-    const delay = Math.max(0, Math.min(IDLE_TIMEOUT_MS, remaining));
-    entry.timer = setTimeout(() => {
-      this.settleTimeout(userId, entry);
-    }, delay);
+  private relayQuery(sql: string, params: unknown[]): Promise<unknown> {
+    return this.relayTransaction((manager) => manager.query(sql, params));
   }
 
   /**
-   * Reset the idle timer for whichever in-flight prompt this user's agent owns.
-   * Called from every liveness signal (poll, progress, tool activity) so a slow
-   * but alive agent is not timed out mid-task.
+   * Several statements in one such transaction, for the one case that needs it:
+   * a claim and the clock reset that goes with it must not be able to half
+   * happen.
    */
-  private bumpInFlight(userId: string, sessionId?: string): void {
-    for (const record of this.inFlight.values()) {
-      if (
-        record.userId === userId &&
-        record.prompt.claimedBy === sessionId &&
-        !record.prompt.settled
-      ) {
-        this.scheduleIdleTimeout(userId, record.prompt);
-      }
-    }
-  }
-
-  /**
-   * Adopt a new session for a prompt whose owner proved itself by knowing the
-   * (unguessable) promptId -- an agent that reconnected mid-turn arrives with a
-   * fresh MCP session id. Without this its own later writes would look like a
-   * different session's and confirm in the wrong place.
-   */
-  private adoptSession(prompt: PendingPrompt, sessionId?: string): void {
-    if (sessionId !== undefined) {
-      prompt.claimedBy = sessionId;
-    }
-  }
-
-  private handOff(userId: string, entry: PendingPrompt, waiter: Waiter): void {
-    clearTimeout(waiter.timer);
-    waiter.resolve(this.claim(userId, entry, waiter.sessionId));
-  }
-
-  private takeWaiter(userId: string): Waiter | undefined {
-    const list = this.waiters.get(userId) ?? [];
-    const [first, ...rest] = list;
-    if (!first) {
-      return undefined;
-    }
-    this.waiters.set(userId, rest);
-    return first;
-  }
-
-  private removeWaiter(userId: string, waiter: Waiter): void {
-    const list = this.waiters.get(userId) ?? [];
-    this.waiters.set(
-      userId,
-      list.filter((w) => w !== waiter),
+  private relayTransaction<T>(
+    fn: (manager: EntityManager) => Promise<T>,
+  ): Promise<T> {
+    return runOutsideActiveScopedManager(() =>
+      withScopedDb(this.dataSource, fn),
     );
   }
 
-  private settleTimeout(userId: string, entry: PendingPrompt): void {
-    if (entry.settled) {
-      return;
-    }
-    entry.settled = true;
-    // Drop it from whichever structure still holds it.
-    this.inFlight.delete(entry.id);
-    const queue = this.pending.get(userId) ?? [];
-    if (queue.includes(entry)) {
-      this.pending.set(
-        userId,
-        queue.filter((p) => p !== entry),
-      );
-    }
-    // Distinguish "an agent took it then went quiet/disconnected" from "no agent
-    // ever picked it up": the controller maps the two to different user-facing
-    // copy, and a claimed prompt's answer is still recoverable via the buffer if
-    // the agent comes back and posts.
-    if (entry.claimed) {
-      // Remember this prompt so a late post_response is still recognised and
-      // buffered for pickup. Prune stale markers while we are here. Keep the
-      // attachments around (TTL bounds them) in case the recovered agent
-      // re-reads them before posting its late answer.
-      this.pruneAwaitingLate();
-      this.awaitingLate.set(entry.id, {
-        userId,
-        at: Date.now(),
-        sessionId: entry.claimedBy,
-      });
+  /**
+   * Wake every replica holding a stream or a poll for this user.
+   *
+   * Never throws. The row is already committed by the time this runs, and a
+   * wake-up is a hint: every waiter re-reads on its own timer, so a bus that is
+   * unreachable costs one poll interval of latency and nothing else. Letting it
+   * throw would report a failure for work that is durably done -- an agent told
+   * `delivered:false` for an answer the database is holding retries a turn it
+   * has already finished, and a browser is shown a timeout for a prompt that is
+   * live in the queue.
+   */
+  private async publishWake(userId: string, promptId: string): Promise<void> {
+    try {
+      // Ids only: the payload crosses replicas outside RLS, and the recipient
+      // reads the row back under its own scope.
+      await this.bus.publish(relayChannel(userId), { userId, promptId });
+    } catch (error) {
       this.logger.warn(
-        `Relay prompt ${entry.id} for user ${userId} went quiet after claim; ` +
-          `browser gave up (late answer can still be buffered)`,
+        `Relay wake-up for user ${userId} was not published; waiters fall back ` +
+          `to their own poll: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
       );
-      entry.reject(new RelayTimeoutError("disconnected", entry.id));
-    } else {
-      // Never claimed: no agent will ever read these attachments, so release
-      // them now instead of waiting for the TTL.
-      this.releaseAttachments(userId, entry);
-      this.logger.warn(
-        `Relay prompt ${entry.id} for user ${userId} timed out with no agent response`,
-      );
-      entry.reject(new RelayTimeoutError("no_agent", entry.id));
     }
   }
 
-  /** Eagerly drop a settled prompt's attachments from the store (TTL backstop). */
-  private releaseAttachments(userId: string, prompt: PendingPrompt): void {
-    if (prompt.attachments.length === 0) {
+  // --------------------------------------------------- the agent's liveness
+
+  /**
+   * Record that this user's agent is polling.
+   *
+   * Progress, not business data: the row says whether the tunnel indicator
+   * reads offline, listening or busy, and nothing financial reads it. A poll
+   * also clears any idle-disconnect notice -- the agent is plainly back.
+   */
+  private async recordPoll(userId: string): Promise<void> {
+    await this.relayQuery(
+      `INSERT INTO ai_relay_agents (user_id, last_poll_at)
+       VALUES ($1, CURRENT_TIMESTAMP)
+       ON CONFLICT (user_id) DO UPDATE
+          SET last_poll_at = CURRENT_TIMESTAMP,
+              idle_disconnected_at = NULL`,
+      [userId],
+    );
+  }
+
+  /**
+   * Record that the conversation is alive: a new prompt, or an agent claiming
+   * one. Restarts the inactivity clock and clears the disconnect notice, so the
+   * chat shows the live state again.
+   */
+  private async markActivity(
+    userId: string,
+    manager?: EntityManager,
+  ): Promise<void> {
+    const sql = `INSERT INTO ai_relay_agents (user_id)
+       VALUES ($1)
+       ON CONFLICT (user_id) DO UPDATE
+          SET idle_since = NULL,
+              idle_disconnected_at = NULL`;
+    // A caller already inside a relay transaction passes its manager, so the
+    // reset commits with whatever it accompanies.
+    if (manager) {
+      await manager.query(sql, [userId]);
       return;
     }
-    this.attachmentStore.releaseForPrompt(
-      userId,
-      prompt.attachments.map((a) => a.id),
+    await this.relayQuery(sql, [userId]);
+  }
+
+  // ------------------------------------------------------- the action buffer
+
+  /**
+   * Keep a late confirmation card for pickup.
+   *
+   * `DO NOTHING` because the descriptor's id is the card's identity: a repeat
+   * of the same card is the same card, and the first one written is the one the
+   * browser will approve. Bounded by `expires_at` and the sweeper rather than by
+   * a per-user cap -- a row costs nothing to hold, and only an agent that holds
+   * a claimed turn can write one.
+   */
+  private async bufferAction(
+    userId: string,
+    action: PendingAiAction,
+  ): Promise<void> {
+    const inserted = returnedRows<{ id: string }>(
+      await this.relayQuery(
+        `INSERT INTO ai_relay_actions (user_id, id, card, expires_at)
+         VALUES ($1, $2, $3::jsonb, CURRENT_TIMESTAMP + ${msInterval("$4")})
+         ON CONFLICT (user_id, id) DO NOTHING
+         RETURNING id`,
+        [userId, action.actionId, JSON.stringify(action), BUFFER_TTL_MS],
+      ),
     );
+    // `RETURNING` is what tells the two cases apart: without it a conflict and
+    // an insert both report nothing, and the line below would announce a
+    // buffered card every time an agent re-emitted one already waiting.
+    if (inserted.length > 0) {
+      this.logger.warn(
+        `Relay confirmation card ${action.actionId} for user ${userId} emitted ` +
+          `after the stream gave up; buffered for pickup`,
+      );
+    }
+  }
+
+  /** Eagerly drop a settled turn's attachments from the store (TTL backstop). */
+  private async releaseAttachments(
+    userId: string,
+    attachments: RelayAttachmentRef[],
+  ): Promise<void> {
+    if (attachments.length === 0) {
+      return;
+    }
+    try {
+      await this.attachmentStore.releaseForPrompt(
+        userId,
+        attachments.map((a) => a.id),
+      );
+    } catch (error) {
+      // The TTL and the sweep are the backstop, which is the whole reason this
+      // is eager rather than required. Letting it throw would replace the
+      // answer this turn just produced -- already consumed, so unrecoverable --
+      // with an error, or replace a precise timeout reason with a generic one.
+      this.logger.warn(
+        `Relay attachments for user ${userId} were not released early; the ` +
+          `sweep will take them: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+      );
+    }
   }
 }
 
@@ -945,5 +1217,20 @@ export class RelayTimeoutError extends Error {
         : "AI relay timed out: no response from your assistant",
     );
     this.name = "RelayTimeoutError";
+  }
+}
+
+/**
+ * Thrown when the browser's socket closed while its turn was still running.
+ *
+ * Not a failure of the turn: the row is left exactly as it was, so the agent
+ * may still answer it and the pickup endpoint serves that answer when the
+ * browser returns. It exists so the waiter stops immediately instead of holding
+ * a connection and a poll for a socket that is gone.
+ */
+export class RelayStreamClosedError extends Error {
+  constructor(readonly promptId: string) {
+    super("AI relay: the browser stream closed before the answer arrived");
+    this.name = "RelayStreamClosedError";
   }
 }

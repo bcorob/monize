@@ -18,6 +18,7 @@ import {
 import { detectBrowserCurrency, FALLBACK_CURRENCY } from '@/lib/locale-currency';
 import { getErrorMessage } from '@/lib/errors';
 import { createLogger } from '@/lib/logger';
+import { preferenceCookieAttributes } from '@/lib/preference-cookie';
 
 const logger = createLogger('OnboardingPreferences');
 
@@ -104,7 +105,7 @@ export function OnboardingPreferences({
         defaultCurrency,
       });
       updatePreferencesStore(updated);
-      Cookies.set(LOCALE_COOKIE, language, { sameSite: 'lax', expires: 365 });
+      Cookies.set(LOCALE_COOKIE, language, preferenceCookieAttributes());
       onComplete({ localeChanged: language !== activeLocale });
     } catch (error) {
       toast.error(getErrorMessage(error, t('saveFailed')));

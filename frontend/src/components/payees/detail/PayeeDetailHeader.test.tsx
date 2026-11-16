@@ -15,6 +15,11 @@ function payee(overrides: Partial<Payee> = {}): Payee {
     website: null,
     hasLogo: false,
     logoFetchedAt: null,
+    contactLookupAt: null,
+    contactLookupSource: null,
+    address: null,
+    email: null,
+    phone: null,
     isActive: true,
     createdAt: '2024-01-15T00:00:00.000Z',
     ...overrides,
@@ -49,6 +54,11 @@ describe('PayeeDetailHeader', () => {
   it('shows the payee name', () => {
     renderHeader();
     expect(screen.getByRole('heading', { name: 'Starbucks' })).toBeInTheDocument();
+  });
+
+  it('has no link to the shared people page', () => {
+    renderHeader();
+    expect(screen.queryByRole('link', { name: 'People linked to this payee' })).toBeNull();
   });
 
   it('fires the action callbacks', () => {
@@ -99,19 +109,26 @@ describe('PayeeDetailHeader', () => {
 
     it('shows no icon when the payee has no website', () => {
       renderHeader();
-      expect(screen.queryByRole('link')).toBeNull();
+      expect(
+        screen.queryByRole('link', { name: "Open Starbucks's website in a new tab" }),
+      ).toBeNull();
     });
 
     it('refuses to link a stored address that is not http(s)', () => {
       // A javascript: href runs on click, so an unchecked stored string must
       // never reach one -- rows predate the normaliser and imports bypass it.
       renderHeader({ website: 'javascript:alert(1)' });
-      expect(screen.queryByRole('link')).toBeNull();
+      expect(
+        screen.queryByRole('link', { name: "Open Starbucks's website in a new tab" }),
+      ).toBeNull();
+      expect(screen.queryAllByRole('link')).toHaveLength(0);
     });
 
     it('keeps an explicit http address rather than showing nothing', () => {
       renderHeader({ website: 'http://corner.example' });
-      expect(screen.getByRole('link')).toHaveAttribute(
+      expect(
+        screen.getByRole('link', { name: "Open Starbucks's website in a new tab" }),
+      ).toHaveAttribute(
         'href',
         'http://corner.example',
       );

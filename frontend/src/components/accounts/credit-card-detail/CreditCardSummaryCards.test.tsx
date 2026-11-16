@@ -3,10 +3,12 @@ import { render, screen } from '@/test/render';
 import { CreditCardSummaryCards } from './CreditCardSummaryCards';
 import type { Account } from '@/types/account';
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({ formatCurrency: (a: number) => `$${a.toFixed(2)}` }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({ ...numberFormatMockDefaults(), formatCurrency: (a: number) => `$${a.toFixed(2)}` }),
+  };
+});
 function makeAccount(overrides: Partial<Account> = {}): Account {
   return {
     id: 'cc-1',

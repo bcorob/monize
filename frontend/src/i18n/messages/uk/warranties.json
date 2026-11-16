@@ -1,0 +1,321 @@
+{
+  "page": {
+    "title": "Гарантії",
+    "subtitle": "Що ви купили, коли закінчується гарантія і хто продавець",
+    "newButton": "Додати гарантію",
+    "exportButton": "Експорт у CSV",
+    "importButton": "Імпорт із CSV",
+    "loading": "Завантаження гарантій...",
+    "loadFailed": "Не вдалося завантажити ваші гарантії.",
+    "retry": "Спробувати ще раз",
+    "summary": {
+      "active": "Чинні",
+      "expiring": "Скоро закінчуються",
+      "expired": "Закінчені",
+      "lifetime": "Довічні",
+      "unavailable": "Не завантажено",
+      "expiringHint": "Протягом {days} дн."
+    },
+    "filters": {
+      "label": "Фільтр за статусом",
+      "all": "Усі",
+      "expiring": "Закінчуються",
+      "active": "Чинні",
+      "expired": "Закінчені",
+      "lifetime": "Довічні",
+      "counted": {
+        "all": "Усі ({count})",
+        "expiring": "Закінчуються ({count})",
+        "active": "Чинні ({count})",
+        "expired": "Закінчені ({count})",
+        "lifetime": "Довічні ({count})"
+      }
+    },
+    "search": {
+      "label": "Пошук гарантій",
+      "placeholder": "Пошук за назвою, продавцем, моделлю або серійним номером"
+    },
+    "archivedToggle": "Показати архівні",
+    "transactionChip": {
+      "label": "Гарантії однієї транзакції",
+      "clear": "Показати всі гарантії"
+    },
+    "pager": {
+      "itemName": "гарантій",
+      "total": "{count, plural, one {{total} гарантія} few {{total} гарантії} many {{total} гарантій} other {{total} гарантії}}"
+    },
+    "empty": {
+      "title": "Гарантій ще немає",
+      "description": "Додайте гарантію, щоб знати, коли вона закінчується.",
+      "filteredTitle": "Немає відповідних гарантій",
+      "filteredDescription": "Виберіть інший статус або очистьте пошук.",
+      "archivedTitle": "Немає архівних гарантій"
+    },
+    "modal": {
+      "newTitle": "Нова гарантія",
+      "editTitle": "Редагувати гарантію"
+    },
+    "delete": {
+      "title": "Видалити гарантію",
+      "message": "Видалити «{name}»? Її звернення та документи буде видалено разом із нею. Цю дію не можна скасувати."
+    },
+    "toasts": {
+      "created": "Гарантію додано",
+      "updated": "Гарантію оновлено",
+      "deleted": "Гарантію видалено",
+      "archived": "Гарантію переміщено в архів",
+      "unarchived": "Гарантію відновлено",
+      "createFailed": "Не вдалося додати гарантію",
+      "updateFailed": "Не вдалося оновити гарантію",
+      "deleteFailed": "Не вдалося видалити гарантію",
+      "archiveFailed": "Не вдалося перемістити гарантію в архів",
+      "unarchiveFailed": "Не вдалося відновити гарантію",
+      "prefillFailed": "Не вдалося завантажити цю транзакцію, тому форма гарантії порожня",
+      "exported": "{count, plural, one {Експортовано {shown} гарантію} few {Експортовано {shown} гарантії} many {Експортовано {shown} гарантій} other {Експортовано {shown} гарантії}}",
+      "exportFailed": "Не вдалося експортувати гарантії"
+    }
+  },
+  "status": {
+    "lifetime": "Довічна",
+    "active": "Чинна",
+    "expiring": "Скоро закінчується",
+    "expired": "Закінчилася"
+  },
+  "daysLeft": {
+    "left": "{count, plural, one {Залишився {days} день} few {Залишилося {days} дні} many {Залишилося {days} днів} other {Залишилося {days} дня}}",
+    "today": "Закінчується сьогодні",
+    "ago": "{count, plural, one {Закінчилася {days} день тому} few {Закінчилася {days} дні тому} many {Закінчилася {days} днів тому} other {Закінчилася {days} дня тому}}",
+    "leftYears": "Залишилося: {yearsCount, plural, one {{years} рік} few {{years} роки} many {{years} років} other {{years} року}}, {daysCount, plural, one {{days} день} few {{days} дні} many {{days} днів} other {{days} дня}}",
+    "agoYears": "Закінчилася: {yearsCount, plural, one {{years} рік} few {{years} роки} many {{years} років} other {{years} року}}, {daysCount, plural, one {{days} день} few {{days} дні} many {{days} днів} other {{days} дня}} тому"
+  },
+  "kind": {
+    "manufacturer": "Від виробника",
+    "extended": "Розширена",
+    "store": "Від магазину",
+    "other": "Інша"
+  },
+  "list": {
+    "columns": {
+      "name": "Назва",
+      "status": "Статус",
+      "expiresOn": "Закінчується",
+      "purchaseDate": "Куплено",
+      "price": "Ціна",
+      "documents": "Документи",
+      "claims": "Відкриті звернення",
+      "actions": "Дії"
+    },
+    "sortLabel": "Сортувати за",
+    "lifetime": "Довічна",
+    "noPrice": "Немає",
+    "actions": {
+      "archive": "В архів",
+      "unarchive": "З архіву"
+    }
+  },
+  "form": {
+    "nameLabel": "Назва",
+    "namePlaceholder": "Що ви купили",
+    "vendorLabel": "Продавець",
+    "vendorPlaceholder": "Виберіть або введіть продавця",
+    "modelLabel": "Номер моделі",
+    "serialsLabel": "Серійні номери",
+    "serialLabel": "Серійний номер {index}",
+    "addSerial": "Додати серійний номер",
+    "removeSerial": "Видалити серійний номер {index}",
+    "serialsLimit": "Не більше {max} серійних номерів",
+    "kindLabel": "Тип гарантії",
+    "purchaseDateLabel": "Дата покупки",
+    "expiry": {
+      "label": "Закінчення гарантії",
+      "date": "У певну дату",
+      "duration": "Через певний строк",
+      "lifetime": "Ніколи",
+      "expiresOnLabel": "Закінчується",
+      "years": "Років",
+      "months": "Місяців",
+      "days": "Днів",
+      "computed": "Закінчується {date}",
+      "needsPurchaseDate": "Введіть дату покупки, щоб обчислити дату закінчення",
+      "lifetimeHint": "Довічна гарантія не має дати закінчення й нагадування"
+    },
+    "priceLabel": "Ціна покупки",
+    "productUrlLabel": "Сторінка товару",
+    "productUrlPlaceholder": "https://",
+    "notesLabel": "Нотатки",
+    "submitCreate": "Додати гарантію",
+    "submitUpdate": "Зберегти зміни"
+  },
+  "validation": {
+    "nameRequired": "Введіть назву",
+    "nameTooLong": "Не більше 200 символів",
+    "vendorTooLong": "Не більше 200 символів",
+    "modelTooLong": "Не більше 100 символів",
+    "serialTooLong": "Не більше 100 символів у кожному серійному номері",
+    "serialsTooMany": "Не більше 10 серійних номерів",
+    "purchaseDateRequired": "Введіть дату покупки",
+    "expiresOnRequired": "Введіть дату закінчення гарантії",
+    "expiresBeforePurchase": "Гарантія не може закінчитися раніше за дату покупки",
+    "durationRequired": "Введіть строк, більший за нуль",
+    "priceNegative": "Ціна не може бути від'ємною",
+    "priceNeedsCurrency": "Виберіть валюту ціни",
+    "urlInvalid": "Введіть веб-адресу, що починається з http:// або https://",
+    "urlTooLong": "Не більше 500 символів",
+    "notesTooLong": "Не більше 2000 символів"
+  },
+  "detail": {
+    "back": "Назад до гарантій",
+    "loading": "Завантаження гарантії...",
+    "loadFailed": "Не вдалося завантажити цю гарантію.",
+    "notFound": "Цю гарантію не знайдено.",
+    "retry": "Спробувати ще раз",
+    "archivedBadge": "В архіві",
+    "switcher": {
+      "trigger": "Перемкнути гарантію",
+      "placeholder": "Фільтр гарантій...",
+      "noMatches": "Немає відповідних гарантій"
+    },
+    "summary": {
+      "expires": "Закінчується",
+      "purchased": "Куплено",
+      "price": "Ціна покупки",
+      "openClaims": "Відкриті звернення"
+    },
+    "card": {
+      "title": "Відомості",
+      "kind": "Тип гарантії",
+      "vendor": "Продавець",
+      "serialNumbers": "Серійні номери",
+      "model": "Номер моделі",
+      "productUrl": "Сторінка товару",
+      "notes": "Нотатки",
+      "none": "Немає",
+      "lifetime": "Довічна"
+    },
+    "transaction": {
+      "title": "Покупка",
+      "edit": "Редагувати покупку від {date}: {payee}, {amount}",
+      "viewInRegister": "Переглянути в журналі",
+      "loadFailed": "Не вдалося завантажити покупку",
+      "dateInAccount": "{date} · {account}",
+      "none": "Немає пов'язаної транзакції",
+      "unreadable": "Покупка на рахунку, до якого у вас немає доступу на читання.",
+      "noPayee": "Без одержувача"
+    }
+  },
+  "documents": {
+    "title": "Документи",
+    "empty": "Документів ще немає",
+    "pendingHint": "Документи буде завантажено після збереження гарантії.",
+    "tooMany": "Не більше {max} документів на гарантію",
+    "uploadFailedAfterCreate": "Гарантію додано, але не вдалося завантажити {count, plural, one {цей документ} few {ці документи} many {ці документи} other {ці документи}}: {names}. Додайте {count, plural, one {його} few {їх} many {їх} other {їх}} у розділі «Документи» гарантії.",
+    "kindFor": "Тип документа для {name}",
+    "kindUpdateFailed": "Не вдалося змінити тип документа",
+    "addExisting": "Додати наявний",
+    "addExistingTitle": "Додати наявний документ",
+    "addExistingHelp": "Виберіть файл, який ви вже завантажили до транзакції або до іншої гарантії. До цієї гарантії буде додано копію; оригінал залишиться на місці.",
+    "addExistingFrom": "Де документ зараз",
+    "fromTransaction": "Транзакція",
+    "fromWarranty": "Інша гарантія",
+    "addExistingDocument": "Документ",
+    "addExistingKind": "Тип документа для цієї гарантії",
+    "addExistingNone": "Тут немає документів для додавання.",
+    "addExistingLoadFailed": "Не вдалося завантажити документи. Спробуйте ще раз.",
+    "addExistingFailed": "Не вдалося додати документ",
+    "addExistingSubmit": "Додати документ",
+    "choose": "Вибрати…",
+    "preview": "Перегляд",
+    "kinds": {
+      "receipt": "Чек",
+      "manual": "Інструкція",
+      "photo": "Фото",
+      "warranty": "Гарантія",
+      "other": "Інше"
+    }
+  },
+  "claims": {
+    "title": "Гарантійні звернення",
+    "add": "Додати звернення",
+    "empty": "Звернень ще немає",
+    "loading": "Завантаження звернень...",
+    "loadFailed": "Не вдалося завантажити звернення.",
+    "retry": "Спробувати ще раз",
+    "statuses": {
+      "open": "Відкрите",
+      "approved": "Схвалене",
+      "denied": "Відхилене",
+      "resolved": "Вирішене"
+    },
+    "claimedOn": "Подано {date}",
+    "resolvedOnLine": "Закрито {date}",
+    "resolutionLine": "Результат: {text}",
+    "modal": {
+      "newTitle": "Нове звернення",
+      "editTitle": "Редагувати звернення"
+    },
+    "form": {
+      "claimDateLabel": "Дата звернення",
+      "statusLabel": "Статус",
+      "descriptionLabel": "Опис",
+      "resolutionLabel": "Результат",
+      "resolvedOnLabel": "Дата закриття",
+      "resolvedOnHint": "Лише для вирішеного або відхиленого звернення",
+      "submitCreate": "Додати звернення",
+      "submitUpdate": "Зберегти зміни"
+    },
+    "validation": {
+      "claimDateRequired": "Введіть дату звернення",
+      "resolvedOnBeforeClaim": "Звернення не можна закрити раніше, ніж його подано",
+      "textTooLong": "Не більше 2000 символів"
+    },
+    "delete": {
+      "title": "Видалити звернення",
+      "message": "Видалити звернення від {date}? Цю дію не можна скасувати."
+    },
+    "toasts": {
+      "created": "Звернення додано",
+      "updated": "Звернення оновлено",
+      "deleted": "Звернення видалено",
+      "createFailed": "Не вдалося додати звернення",
+      "updateFailed": "Не вдалося оновити звернення",
+      "deleteFailed": "Не вдалося видалити звернення"
+    }
+  },
+  "import": {
+    "title": "Імпорт гарантій із CSV",
+    "description": "CSV-файл зі стовпцями Warracker, наприклад експорт із Warracker або з цієї сторінки. Ви побачите кожен рядок, перш ніж щось буде збережено.",
+    "fileLabel": "CSV-файл",
+    "chooseFile": "Вибрати файл",
+    "noFileChosen": "Файл не вибрано",
+    "checking": "Перевірка файлу...",
+    "previewFailed": "Не вдалося перевірити файл",
+    "summary": "{count, plural, one {Можна імпортувати {valid} з {total} рядка.} few {Можна імпортувати {valid} з {total} рядків.} many {Можна імпортувати {valid} з {total} рядків.} other {Можна імпортувати {valid} з {total} рядка.}}",
+    "invalidSummary": "{count, plural, one {{shown} рядок недійсний, і його не можна імпортувати в такому вигляді.} few {{shown} рядки недійсні, і їх не можна імпортувати в такому вигляді.} many {{shown} рядків недійсні, і їх не можна імпортувати в такому вигляді.} other {{shown} рядка недійсні, і їх не можна імпортувати в такому вигляді.}}",
+    "skipInvalid": "Пропустити недійсні рядки й імпортувати решту",
+    "nothingToImport": "Виправте файл і виберіть його знову.",
+    "skippedColumns": "Неімпортовані стовпці:",
+    "columns": {
+      "line": "Рядок",
+      "name": "Назва",
+      "expires": "Закінчується",
+      "outcome": "Результат",
+      "problems": "Проблеми"
+    },
+    "outcome": {
+      "valid": "Готово",
+      "invalid": "Недійсний",
+      "created": "Імпортовано"
+    },
+    "unnamed": "(без назви)",
+    "noExpiry": "Не задано",
+    "lifetime": "Довічна",
+    "errorItem": "Помилка: {message}",
+    "warningItem": "Примітка: {message}",
+    "submit": "Імпортувати",
+    "submitCount": "{count, plural, one {Імпортувати {shown} гарантію} few {Імпортувати {shown} гарантії} many {Імпортувати {shown} гарантій} other {Імпортувати {shown} гарантії}}",
+    "toasts": {
+      "imported": "{count, plural, one {Імпортовано {shown} гарантію} few {Імпортовано {shown} гарантії} many {Імпортовано {shown} гарантій} other {Імпортовано {shown} гарантії}}",
+      "failed": "Не вдалося імпортувати гарантії"
+    }
+  }
+}

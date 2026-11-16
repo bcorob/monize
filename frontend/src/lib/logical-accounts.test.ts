@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
   buildLogicalAccounts,
   toLogicalAccountPortfolio,
+  holdingsValuationIncomplete,
   formatAccountOptionLabel,
   LogicalAccountPortfolio,
 } from './logical-accounts';
@@ -52,9 +53,11 @@ function pair(base: string, over: { cash?: Partial<Account> } = {}) {
 const portfolio = (
   marketValues: Record<string, number>,
   unpriced: Record<string, number> = {},
+  incomplete: string[] = [],
 ): LogicalAccountPortfolio => ({
   marketValues: new Map(Object.entries(marketValues)),
   unpricedCounts: new Map(Object.entries(unpriced)),
+  incompleteAccountIds: new Set(incomplete),
 });
 
 describe('buildLogicalAccounts', () => {
@@ -173,6 +176,36 @@ describe('buildLogicalAccounts', () => {
   });
 
   describe('combinedValue', () => {
+    // valuationComplete covers a missing exchange rate with every price present,
+    // which unpricedHoldingsCount (a count of prices) cannot see.
+    it('is unknown when valuationComplete is false, though every holding is priced', () => {
+      const [brokerage, cash] = pair('TFSA', {
+        cash: { currentBalance: 3500 },
+      });
+
+      const [result] = buildLogicalAccounts(
+        [brokerage, cash],
+        strip,
+        portfolio({ 'TFSA-brok': 9000 }, { 'TFSA-brok': 0 }, ['TFSA-brok']),
+      );
+
+      expect(result.combinedValue).toBeNull();
+    });
+
+    it('stays known for a complete account beside an incomplete one', () => {
+      const [b1, c1] = pair('A', { cash: { currentBalance: 10 } });
+      const [b2, c2] = pair('B', { cash: { currentBalance: 20 } });
+
+      const [a, b] = buildLogicalAccounts(
+        [b1, c1, b2, c2],
+        strip,
+        portfolio({ 'A-brok': 100, 'B-brok': 200 }, {}, ['B-brok']),
+      );
+
+      expect(a.combinedValue).toBe(110);
+      expect(b.combinedValue).toBeNull();
+    });
+
     it('adds market value to the cash half balance for a pair', () => {
       const [brokerage, cash] = pair('TFSA', {
         cash: { currentBalance: 3500 },
@@ -362,6 +395,39 @@ describe('toLogicalAccountPortfolio', () => {
     expect(result?.marketValues.get('b')).toBe(20);
     expect(result?.unpricedCounts.get('b')).toBe(3);
     expect(result?.unpricedCounts.get('a')).toBe(0);
+  });
+});
+
+describe('toLogicalAccountPortfolio completeness', () => {
+  it('records an account whose valuationComplete is false, with every price present', () => {
+    const result = toLogicalAccountPortfolio([
+      { accountId: 'a', totalMarketValue: 10, unpricedHoldingsCount: 0, valuationComplete: true },
+      { accountId: 'b', totalMarketValue: 20, unpricedHoldingsCount: 0, valuationComplete: false },
+      { accountId: 'c', totalMarketValue: 30, unpricedHoldingsCount: 0 },
+    ]);
+
+    expect(result?.incompleteAccountIds?.has('b')).toBe(true);
+    // Absent is no information, not incomplete.
+    expect(result?.incompleteAccountIds?.has('c')).toBe(false);
+    expect(result?.incompleteAccountIds?.has('a')).toBe(false);
+  });
+
+  it('records an account with an unpriced holding even where the flag is absent', () => {
+    const result = toLogicalAccountPortfolio([
+      { accountId: 'a', totalMarketValue: 10, unpricedHoldingsCount: 2 },
+    ]);
+    expect(result?.incompleteAccountIds?.has('a')).toBe(true);
+  });
+});
+
+describe('holdingsValuationIncomplete', () => {
+  it('is true for an unpriced count, an incomplete id, and neither otherwise', () => {
+    const counts = new Map([['p', 1], ['q', 0]]);
+    const ids = new Set(['q']);
+    expect(holdingsValuationIncomplete('p', counts, ids)).toBe(true);
+    expect(holdingsValuationIncomplete('q', counts, ids)).toBe(true);
+    expect(holdingsValuationIncomplete('r', counts, ids)).toBe(false);
+    expect(holdingsValuationIncomplete('r', undefined, undefined)).toBe(false);
   });
 });
 

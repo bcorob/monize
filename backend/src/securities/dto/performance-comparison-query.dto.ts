@@ -11,16 +11,7 @@ import {
 import { Transform } from "class-transformer";
 import { ApiPropertyOptional } from "@nestjs/swagger";
 import { MARKET_INDEX_CODES } from "../market-indexes";
-
-/** A comma-separated query parameter, as a trimmed non-empty array. */
-function csv({ value }: { value: unknown }): unknown {
-  if (Array.isArray(value)) return value;
-  if (typeof value !== "string") return value;
-  return value
-    .split(",")
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0);
-}
+import { splitCsv } from "../../common/helpers/split-csv";
 
 export class PerformanceComparisonQueryDto {
   @ApiPropertyOptional({
@@ -28,7 +19,7 @@ export class PerformanceComparisonQueryDto {
     type: [String],
   })
   @IsOptional()
-  @Transform(csv)
+  @Transform(splitCsv)
   @IsArray()
   // An unbounded array turns the per-instrument price load into a
   // denial-of-service lever, and `common/array-bound-dto.spec.ts` fails on a new
@@ -42,7 +33,7 @@ export class PerformanceComparisonQueryDto {
     type: [String],
   })
   @IsOptional()
-  @Transform(csv)
+  @Transform(splitCsv)
   @IsArray()
   @ArrayMaxSize(5)
   @IsIn(MARKET_INDEX_CODES, { each: true })
@@ -52,7 +43,7 @@ export class PerformanceComparisonQueryDto {
    * `@ValidateIf` rather than `@IsOptional` alone: a range control the user
    * left on a preset sends `startDate=""`, and `@IsOptional` waives validation
    * for `undefined` and `null` only -- so the format check would run on the
-   * empty string and reject the whole request (`backend/CLAUDE.md`, DTO
+   * empty string and reject the whole request (`docs/backend/entities-and-dtos.md`, DTO
    * conventions).
    */
   @ApiPropertyOptional({ description: "Window start (YYYY-MM-DD)" })

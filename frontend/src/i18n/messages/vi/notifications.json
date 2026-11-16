@@ -1,0 +1,287 @@
+{
+  "title": "Thông báo",
+  "unread": "{count} chưa đọc",
+  "markAllRead": "Đánh dấu tất cả đã đọc",
+  "loading": "Đang tải thông báo...",
+  "empty": "Không có thông báo",
+  "undo": "Hoàn tác",
+  "buttonTitle": "Thông báo",
+  "buttonAriaLabel": "Thông báo",
+  "dismissAriaLabel": "Bỏ qua thông báo",
+  "closeAriaLabel": "Đóng thông báo",
+  "emptyFiltered": "Không có thông báo nào khớp với bộ lọc hiện tại",
+  "deleteAll": "Xóa tất cả",
+  "deleteAllConfirmTitle": "Xóa thông báo",
+  "deleteAllConfirmMessageAll": "Xóa tất cả thông báo? Không thể hoàn tác.",
+  "deleteAllConfirmMessageFiltered": "Xóa mọi thông báo khớp với bộ lọc hiện tại, kể cả những thông báo không hiển thị? Không thể hoàn tác.",
+  "deleted": "{count, plural, other {Đã xóa # thông báo}}",
+  "deleteFailed": "Không thể xóa thông báo",
+  "filter": {
+    "financial": "Tài chính",
+    "system": "Hệ thống"
+  },
+  "severity": {
+    "critical": "Nghiêm trọng",
+    "warning": "Cảnh báo",
+    "success": "Tin vui",
+    "info": "Thông tin"
+  },
+  "reminder": {
+    "remindAriaLabel": "Nhắc tôi về việc này",
+    "stopAriaLabel": "Dừng lời nhắc này",
+    "stopped": "Đã dừng lời nhắc",
+    "stopFailed": "Không thể dừng lời nhắc",
+    "created": "Đã đặt lời nhắc",
+    "createFailed": "Không thể đặt lời nhắc",
+    "dialogTitle": "Nhắc tôi",
+    "dialogDescription": "Nhận lại thông báo này sau cho đến khi bạn xử lý.",
+    "modeLabel": "Tần suất",
+    "modeRepeat": "Lặp lại cho đến khi tôi dừng",
+    "modeOnce": "Chỉ một lần nữa",
+    "intervalLabelRepeat": "Nhắc tôi mỗi",
+    "intervalLabelOnce": "Nhắc tôi sau",
+    "durationMinutes": "{minutes, plural, other {# phút}}",
+    "durationHours": "{hours, plural, other {# giờ}}",
+    "cancel": "Hủy",
+    "confirm": "Đặt lời nhắc",
+    "pageTitle": "Lời nhắc đang hoạt động",
+    "empty": "Không có lời nhắc đang hoạt động",
+    "loadFailed": "Không thể tải lời nhắc",
+    "retry": "Thử lại",
+    "nextFire": "Lời nhắc tiếp theo: {date}",
+    "openTarget": "Mở trang liên quan",
+    "delegateUnavailable": "Chuyển về tài khoản của bạn để quản lý lời nhắc."
+  },
+  "billDue": {
+    "titleOverdue": "{payee} đã quá hạn",
+    "titleToday": "{payee} đến hạn hôm nay",
+    "titleTomorrow": "{payee} đến hạn ngày mai",
+    "titleInDays": "{payee} đến hạn sau {days} ngày",
+    "amountDue": "{amount} đến hạn vào {date}",
+    "amountUnavailable": "Không có số tiền (không có tỷ giá hiện tại), đến hạn vào {date}"
+  },
+  "gemSignal": {
+    "riskTitle": "{strategy} đã chuyển sang {state}",
+    "riskMessage": "Chiến lược GEM \"{strategy}\" của bạn đã thay đổi từ {fromState} sang {toState}. Mở để xem lại khuyến nghị.",
+    "allocationTitle": "{strategy} đã thay đổi mục tiêu",
+    "allocationMessage": "Chiến lược GEM \"{strategy}\" của bạn hiện nhắm đến {target}. Mở để xem lại khuyến nghị.",
+    "riskOn": "risk-on",
+    "riskOff": "risk-off"
+  },
+  "bond": {
+    "maturitySoonTitle": "{series} đáo hạn vào {date}",
+    "maturitySoonMessage": "{quantity} × {series} đáo hạn vào {date}. {payout}",
+    "interestTitle": "{series}: trả lãi vào {date}",
+    "interestMessage": "{quantity} × {series} trả {amount} tiền lãi vào {date}. Hãy ghi nhận trên trang chứng khoán nếu khoản này chưa có trong tài khoản của bạn.",
+    "interestMessageUnknown": "{quantity} × {series} trả lãi vào {date}. Số tiền chưa được biết: lãi suất mà nó phụ thuộc chưa được công bố.",
+    "rateResetTitle": "{series}: kỳ tính lãi mới",
+    "rateResetMessage": "{series} bước vào kỳ {period} vào {date} với lãi suất {rate} một năm.",
+    "unbookedTitle": "{series}: đã đáo hạn, chưa ghi nhận thanh toán",
+    "unbookedMessage": "{quantity} × {series} đã đáo hạn vào {date} và chưa có khoản thanh toán nào được ghi nhận. {payout} Hãy ghi nhận khoản thanh toán trên trang chứng khoán.",
+    "payoutKnown": "Số tiền nhận được là {payout}.",
+    "payoutUnknown": "Số tiền nhận được chưa được biết: {reason}.",
+    "reason": {
+      "RATE_UNKNOWN": "lãi suất mà nó phụ thuộc chưa được công bố",
+      "TERMS_INCOMPLETE": "điều khoản của đợt phát hành chưa đầy đủ",
+      "PURCHASE_OUTSIDE_SALE_WINDOW": "ngày mua nằm ngoài thời gian bán của đợt phát hành",
+      "PURCHASE_AFTER_MATURITY": "ngày mua trùng hoặc sau ngày đáo hạn của chuỗi",
+      "other": "không thể tính từ dữ liệu đã lưu"
+    },
+    "benchmarkTitle": "{benchmark}: quan sát mới {observation}",
+    "benchmarkIntro": "{publisher} đã công bố {benchmark} cho {observation}: {value}.",
+    "benchmarkSeries": "{series}: kỳ từ {date} với lãi suất {rate} một năm.",
+    "benchmarkSeriesProjected": "{series}: kỳ từ {date} với lãi suất dự kiến {rate} một năm.",
+    "benchmarkSeriesUnknown": "{series}: kỳ từ {date}, lãi suất chưa được biết.",
+    "benchmarkMore": "Và {more} đợt khác.",
+    "missingTitle": "Chưa biết các số liệu trái phiếu",
+    "missingMessage": "Một số số liệu trái phiếu không thể tính được. {causes}",
+    "cause": {
+      "observation": "Quan sát {observation} của {benchmark} ({publisher}) chưa được lưu: chưa được công bố, hoặc nguồn dữ liệu chưa được tải lại kể từ đó. Hãy làm mới trên trang trái phiếu.",
+      "observationNoPublisher": "Quan sát {observation} của {benchmark} chưa được lưu: chưa được công bố, hoặc nguồn dữ liệu chưa được tải lại kể từ đó. Hãy làm mới trên trang trái phiếu.",
+      "terms": "Điều khoản của {series} chưa đầy đủ. Hãy làm mới đợt phát hành trên trang trái phiếu.",
+      "purchase": "Lần mua {series} vào {date} nằm ngoài thời gian bán ({from} đến {to}). Hãy sửa ngày mua.",
+      "purchaseAfterMaturity": "Việc mua {series} vào {date} trùng hoặc sau ngày đáo hạn ({maturity}). Hãy sửa ngày mua.",
+      "lots": "Không thể suy ra các lô từ sổ cái ({code}). Hãy sửa sổ cái.",
+      "lotsRow": "{action} ngày {date}: không thể suy ra các lô ({code}). Hãy sửa giao dịch.",
+      "lotsRowSeries": "{action} ngày {date}: chưa gán series ({code}). Hãy chọn series trong giao dịch đó.",
+      "lotsRowRemoval": "{action} ngày {date}: rút nhiều hơn số tài khoản đang giữ của series đó ({code}). Hãy sửa giao dịch."
+    },
+    "action": {
+      "BUY": "Mua",
+      "SELL": "Bán",
+      "REINVEST": "Tái đầu tư",
+      "ADD_SHARES": "Thêm cổ phần",
+      "REMOVE_SHARES": "Bớt cổ phần",
+      "SPLIT": "Chia tách (split)",
+      "TRANSFER_IN": "Chuyển vào",
+      "TRANSFER_OUT": "Chuyển ra",
+      "other": "Giao dịch"
+    },
+    "benchmarks": {
+      "PL_CPI_GUS_YOY": "CPI, 12 tháng (GUS)",
+      "PL_NBP_REFERENCE": "Lãi suất tham chiếu NBP",
+      "US_CPI_U_NSA": "CPI-U, tất cả các mục, không điều chỉnh theo mùa (BLS)",
+      "US_TBILL_13W_MMY": "Lợi suất tín phiếu Kho bạc 13 tuần"
+    }
+  },
+  "portfolioMovement": {
+    "titleUp": "Đầu tư tăng {percent}%",
+    "titleDown": "Đầu tư giảm {percent}%",
+    "messageUp": "Các khoản đầu tư của bạn tăng {percent}% từ {from} đến {to}, không tính nạp và rút tiền. Mở để xem lại.",
+    "messageDown": "Các khoản đầu tư của bạn giảm {percent}% từ {from} đến {to}, không tính nạp và rút tiền. Mở để xem lại."
+  },
+  "balanceThreshold": {
+    "titleLow": "{account} dưới ngưỡng của bạn",
+    "titleHigh": "{account} trên ngưỡng của bạn",
+    "messageLow": "{account} đã giảm xuống {balance}, dưới ngưỡng {threshold} của bạn.",
+    "messageHigh": "{account} đã tăng lên {balance}, trên ngưỡng {threshold} của bạn."
+  },
+  "system": {
+    "backupFailed": {
+      "title": "Sao lưu tự động thất bại",
+      "message": "Sao lưu tự động cho {user} đã thất bại: {error}"
+    },
+    "backupPartial": {
+      "title": "Sao lưu tự động chưa hoàn chỉnh",
+      "messageAttachments": "Bản sao lưu cho {user} đã được ghi, nhưng không thể đưa vào {missing} trong số {expected} tệp đính kèm và {inconsistent} tệp không khớp với siêu dữ liệu của chúng. Các bản sao lưu đầy đủ đã được giữ nguyên.",
+      "messagePromotion": "Bản sao lưu hằng ngày cho {user} đã thành công, nhưng không thể ghi bản sao hằng tuần hoặc hằng tháng: {error}",
+      "messageRetention": "Bản sao lưu cho {user} đã thành công, nhưng không thể dọn dẹp các tệp sao lưu cũ: {error}"
+    },
+    "encryptionKeyMissing": {
+      "title": "Chưa cấu hình khóa mã hóa",
+      "message": "ENCRYPTION_KEY chưa được đặt, nên các bản sao lưu được ghi không mã hóa và không thể lưu trữ thông tin bí mật. Phiên bản tương lai sẽ không khởi động nếu thiếu khóa này."
+    },
+    "jwtSecretWeak": {
+      "title": "JWT_SECRET yếu",
+      "message": "JWT_SECRET là giá trị mẫu đã được công bố hoặc quá dễ đoán, nên token phiên có thể bị giả mạo. Hãy tạo một giá trị mạnh (openssl rand -base64 32). Việc thay đổi sẽ khiến mã từ ứng dụng xác thực không còn dùng được và quên các thiết bị đáng tin cậy: người dùng đăng nhập bằng mã dự phòng rồi thiết lập lại 2FA, còn với những ai không có mã dự phòng, bạn đặt lại 2FA trong Quản lý người dùng. Hãy đọc trước docs/backend/modules-and-runtime.md (Changing JWT_SECRET)."
+    },
+    "smtpFailure": {
+      "title": "Gửi email đang thất bại",
+      "message": "Monize không thể gửi email: {error}. Thông báo và lời nhắc không được gửi đi."
+    },
+    "providerOutage": {
+      "title": "{provider} không phản hồi",
+      "message": "Dữ liệu thị trường từ {provider} hiện không khả dụng. Giá và dữ liệu chỉ số có thể lỗi thời cho đến khi nhà cung cấp phản hồi trở lại."
+    },
+    "providerRecovered": {
+      "title": "{provider} đã phản hồi trở lại",
+      "message": "Sự cố đã kết thúc và dữ liệu thị trường từ {provider} đang được cập nhật trở lại."
+    },
+    "scheduledPostFailed": {
+      "title": "Không thể ghi nhận {name}",
+      "message": "Giao dịch định kỳ của bạn đến hạn {date} đã không được ghi nhận tự động: {error}. Bạn có thể ghi nhận thủ công trong mục Hóa đơn & Tiền gửi."
+    }
+  },
+  "priceMovement": {
+    "title": "Cảnh báo biến động giá: {symbol} ({percent}%)",
+    "message": "{symbol}: {percent}% so với phiên có dữ liệu trước đó."
+  },
+  "bankSync": {
+    "expiringTitleToday": "{institution}: quyền truy cập ngân hàng kết thúc hôm nay",
+    "expiringTitleOneDay": "{institution}: quyền truy cập ngân hàng kết thúc trong vòng 1 ngày",
+    "expiringTitleDays": "{institution}: quyền truy cập ngân hàng kết thúc trong vòng {days} ngày",
+    "expiringMessage": "Sự đồng ý của bạn cho Monize đọc {institution} sẽ kết thúc vào {date}. Hãy gia hạn kết nối trong Monize để tiếp tục đồng bộ.",
+    "expiredTitle": "{institution}: quyền truy cập ngân hàng đã kết thúc",
+    "expiredMessage": "Sự đồng ý của bạn cho Monize đọc {institution} đã kết thúc. Hãy gia hạn kết nối trong Monize để đồng bộ trở lại.",
+    "failedTitle": "{institution}: đồng bộ thất bại",
+    "failedMessage": "Đồng bộ hằng ngày của {institution} đã thất bại với: {accounts}. Mở cài đặt đồng bộ ngân hàng để xem lý do.",
+    "failedCredentialsMessage": "Không thể bắt đầu đồng bộ hằng ngày của {institution} vì thông tin xác thực đồng bộ ngân hàng bị thiếu hoặc bị từ chối. Hãy kiểm tra chúng trong cài đặt đồng bộ ngân hàng.",
+    "unnamedAccount": "một tài khoản",
+    "importedTitle": "{institution}: đã nhập giao dịch mới",
+    "importedMessage": "Các giao dịch được nhập từ {institution} bởi đồng bộ hằng ngày: {imported}.",
+    "importedNoneTitle": "{institution}: không có giao dịch mới",
+    "importedNoneMessage": "Đồng bộ hằng ngày của {institution} không tìm thấy giao dịch mới."
+  },
+  "emailReceiptsAttention": {
+    "title": "Biên lai email cần chú ý",
+    "message": "Hộp inbox biên lai của bạn chứa {noParser} không có profil và {parseFailed} mà profil của họ không nhận dạng được. Mở để xem xét."
+  },
+  "aiReview": {
+    "readyTitle": "Đề xuất AI đang chờ bạn phê duyệt",
+    "readyMessage": "{count, plural, other {# đề xuất AI}} đang chờ bạn phê duyệt, trong đó {added} đề xuất mới. Mở hộp thư xem xét AI để phê duyệt hoặc bỏ qua.",
+    "expiringTitle": "Đề xuất AI sắp hết hạn",
+    "expiringMessage": "{count, plural, other {# đề xuất AI}} sắp hết hạn. Đề xuất đầu tiên hết hạn vào {date}. Mở hộp thư xem xét AI để phê duyệt hoặc bỏ qua."
+  },
+  "warranty": {
+    "expiringTitle": "{name}: bảo hành hết hạn trong {days, plural, other {# ngày}}",
+    "expiringMessage": "Bảo hành của {name} hết hạn vào {date}. Mở để xem tài liệu hoặc ghi lại yêu cầu bảo hành.",
+    "todayTitle": "{name}: bảo hành hết hạn hôm nay",
+    "todayMessage": "Bảo hành của {name} hết hạn hôm nay, {date}. Mở để xem tài liệu hoặc ghi lại yêu cầu bảo hành."
+  },
+  "security": {
+    "oauthTitle": "Ứng dụng mới đã kết nối: {clientName}",
+    "oauthMessage": "Ứng dụng {clientName} vừa được cấp quyền truy cập vào tài khoản Monize của bạn. Nếu không phải bạn, hãy đổi mật khẩu ngay: thao tác này thu hồi quyền truy cập của mọi ứng dụng đã kết nối.",
+    "relayTitle": "Một kết nối mới đã trả lời cuộc trò chuyện AI của bạn",
+    "relayMessage": "Một kết nối chưa từng trả lời cuộc trò chuyện AI Monize của bạn vừa nhận một câu lệnh. Nếu bạn không kết nối trợ lý này, hãy đổi mật khẩu."
+  },
+  "payrollDeduction": {
+    "resetTitle": "{category}: xác nhận mức tối đa cho năm tới",
+    "resetMessage": "Khoản khấu trừ {category} trên {bill} sẽ đặt lại vào {date}. Hãy cập nhật mức tối đa hằng năm nếu thay đổi; nếu không, {amount} sẽ áp dụng lại."
+  },
+  "shared": {
+    "title": "Chi phí chung",
+    "message": "Một nhóm chung có cập nhật. Mở Monize để xem lại."
+  },
+  "native": {
+    "payments": {
+      "title": "Nhắc nhở thanh toán",
+      "body": "Một hóa đơn hoặc khoản thanh toán đã lên lịch cần bạn chú ý. Mở Monize để xem chi tiết."
+    },
+    "budgets": {
+      "title": "Cảnh báo ngân sách",
+      "body": "Một trong các ngân sách của bạn cần được chú ý. Mở Monize để xem chi tiết."
+    },
+    "system": {
+      "title": "Thông báo hệ thống",
+      "body": "Monize có một thông báo hệ thống cho bạn. Mở ứng dụng để xem chi tiết."
+    },
+    "balances": {
+      "title": "Cảnh báo số dư",
+      "body": "Số dư của một tài khoản đã vượt ngưỡng bạn đặt. Mở Monize để xem chi tiết."
+    },
+    "investments": {
+      "title": "Biến động đầu tư",
+      "body": "Các khoản đầu tư của bạn có biến động hôm nay. Mở Monize để xem chi tiết."
+    },
+    "strategies": {
+      "title": "Tín hiệu chiến lược",
+      "body": "Một trong các chiến lược của bạn đã thay đổi khuyến nghị. Mở Monize để xem chi tiết."
+    },
+    "bank_sync": {
+      "title": "Kết nối ngân hàng",
+      "body": "Một kết nối ngân hàng cần được chú ý. Mở Monize để xem chi tiết."
+    },
+    "bank_sync_activity": {
+      "title": "Đồng bộ ngân hàng",
+      "body": "Đồng bộ ngân hàng của bạn có tin mới. Mở Monize để xem chi tiết."
+    },
+    "email_receipts": {
+      "title": "Biên lai email cần chú ý",
+      "body": "Một số email trong hộp inbox biên lai của bạn cần profil hoặc sửa chữa. Mở Monize để biết chi tiết."
+    },
+    "bonds": {
+      "title": "Thông báo trái phiếu",
+      "body": "Một trong các trái phiếu của bạn có tin mới. Mở Monize để xem chi tiết."
+    },
+    "ai_review": {
+      "title": "Đề xuất xem xét của AI",
+      "body": "Một số đề xuất xem xét của AI đang chờ quyết định của bạn. Mở Monize để xem chi tiết."
+    },
+    "warranties": {
+      "title": "Nhắc nhở bảo hành",
+      "body": "Một trong các bảo hành của bạn sắp hết hạn. Mở Monize để xem chi tiết."
+    },
+    "shared_expenses": {
+      "title": "Chi phí chung",
+      "body": "Một nhóm chung có cập nhật. Mở Monize để xem lại."
+    },
+    "security": {
+      "title": "Thông báo bảo mật",
+      "body": "Có thay đổi về những người có thể truy cập tài khoản Monize của bạn. Mở Monize để xem chi tiết."
+    },
+    "fallback": {
+      "title": "Monize",
+      "body": "Bạn có một thông báo mới trong Monize."
+    }
+  }
+}

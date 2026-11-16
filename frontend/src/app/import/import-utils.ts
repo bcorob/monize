@@ -1,4 +1,4 @@
-import { ParsedQifResponse } from '@/lib/import';
+import { ImportSkippedRow, ParsedQifResponse } from '@/lib/import';
 export { formatAccountType, isInvestmentBrokerageAccount } from '@/lib/account-utils';
 
 /**
@@ -33,6 +33,7 @@ export interface BulkImportResult {
     accountName: string;
     imported: number;
     skipped: number;
+    skippedRows?: ImportSkippedRow[];
     errors: number;
     errorMessages: string[];
     loanAccountsNeedingSetup?: Array<{
@@ -77,6 +78,7 @@ export const ACCOUNT_TYPE_OPTIONS = [
   { value: 'MORTGAGE', label: 'Mortgage' },
   { value: 'CASH', label: 'Cash' },
   { value: 'ASSET', label: 'Asset' },
+  { value: 'CRYPTO', label: 'Crypto Wallet' },
   { value: 'OTHER', label: 'Other' },
 ];
 

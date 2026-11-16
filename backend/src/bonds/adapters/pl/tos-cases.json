@@ -1,0 +1,153 @@
+{
+  "manifest": "tos1029",
+  "cases": [
+    {
+      "id": "E1-N1",
+      "description": "TOS1029 N1 = 104.40 (base of period 2)",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2027-10-20",
+      "expect": {
+        "principal": "104.40"
+      }
+    },
+    {
+      "id": "E1-N2",
+      "description": "TOS1029 N2 = 108.99 (base of period 3)",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2028-10-20",
+      "expect": {
+        "principal": "108.99"
+      }
+    },
+    {
+      "id": "E1-W",
+      "description": "TOS1029 maturity value W = 113.79",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2026-10-20",
+      "expect": {
+        "maturityValueKnown": "113.79",
+        "maturityValueProjected": null
+      },
+      "knownCashflows": [
+        {
+          "date": "2029-10-15",
+          "type": "PRINCIPAL",
+          "amount": "113.79",
+          "status": "KNOWN",
+          "period": 3
+        }
+      ]
+    },
+    {
+      "id": "E2",
+      "description": "TOS1029 early, period 1",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2027-04-15",
+      "expect": {
+        "earlyRedemptionValue": "101.19",
+        "earlyRedemptionRefusal": null
+      }
+    },
+    {
+      "id": "E3",
+      "description": "TOS1029 early, period 1, below floor (99.12 -> 100.00)",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2026-10-25",
+      "expect": {
+        "earlyRedemptionValue": "100.00"
+      }
+    },
+    {
+      "id": "E4",
+      "description": "TOS1029 early, period 2",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2028-01-15",
+      "expect": {
+        "earlyRedemptionValue": "104.55"
+      }
+    },
+    {
+      "id": "E16",
+      "description": "E2 with quantity 25",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 25
+      },
+      "asOf": "2027-04-15",
+      "expect": {
+        "earlyRedemptionValue": "2529.75",
+        "quantity": 25
+      }
+    },
+    {
+      "id": "E1-R3",
+      "description": "TOS1029 early, period 3, day 1: base N2 rounded to 108.99 (unrounded 108.9936 would give 108.01 / 109.01)",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2028-10-16",
+      "expect": {
+        "principal": "108.99",
+        "grossValue": "109.00",
+        "earlyRedemptionValue": "108.00"
+      }
+    },
+    {
+      "id": "TOS-A1",
+      "description": "TOS1029 period 1, a = 182, ACT = 365: accrued 2.19, rate 4.40% from the terms",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2027-04-15",
+      "expect": {
+        "accruedInterest": "2.19",
+        "grossValue": "102.19",
+        "earlyRedemptionValue": "101.19",
+        "currentPeriod": {
+          "index": 1,
+          "annualRate": "0.0440",
+          "rateSource": "TERMS"
+        }
+      }
+    },
+    {
+      "id": "TOS-A2",
+      "description": "TOS1029 period 2, a = 92, ACT = 366 on N1 = 104.40: accrued 5.55 (grossValue 105.55)",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2028-01-15",
+      "expect": {
+        "accruedInterest": "5.55",
+        "grossValue": "105.55",
+        "earlyRedemptionValue": "104.55",
+        "currentPeriod": {
+          "index": 2,
+          "annualRate": "0.0440",
+          "rateSource": "TERMS"
+        }
+      }
+    }
+  ]
+}

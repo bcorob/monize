@@ -34,19 +34,22 @@
   },
   "page": {
     "title": "匯入交易",
-    "subtitle": "從 QIF、OFX/QFX 或 CSV 檔案匯入交易，或整份匯入 Microsoft Money (.mny) 檔案"
+    "subtitle": "從 QIF/QMTF、OFX/QFX 或 CSV 檔案匯入交易，或整份匯入 Microsoft Money (.mny) 檔案"
   },
   "upload": {
     "heading": "上傳交易檔案",
-    "instructions": "選取一個或多個檔案進行匯入。支援格式：QIF、OFX/QFX、CSV 和 Microsoft Money (.mny)。\n您可以選取多個相同類型的檔案以進行批次匯入。請一次匯入一個 Microsoft Money 檔案——一個 .mny 檔案包含完整的帳務資料。",
+    "instructions": "選取一個或多個檔案進行匯入。支援格式：QIF/QMTF、OFX/QFX、CSV 和 Microsoft Money (.mny)。\n您可以選取多個相同類型的檔案以進行批次匯入。請一次匯入一個 Microsoft Money 檔案——一個 .mny 檔案包含完整的帳務資料。",
     "importingTo": "匯入至：",
     "clickToSelect": "點擊以選取檔案",
+    "orDragAndDrop": "或將檔案拖放到此處",
+    "dropToImport": "放開以匯入",
+    "unsupportedDrop": "無法匯入下列檔案：{names}。請使用 QIF/QMTF、OFX、QFX、CSV 或 Microsoft Money (.mny) 檔案。",
     "processing": "處理中...",
-    "acceptedFormats": "QIF、OFX、QFX、CSV 或 Microsoft Money (.mny)",
+    "acceptedFormats": "QIF/QMTF、OFX、QFX、CSV 或 Microsoft Money (.mny)",
     "mnyFailedHeading": "無法開啟這個 Microsoft Money 檔案",
-    "wikiNotice": {
+    "docsNotice": {
       "title": "匯入之前",
-      "body": "在匯入任何內容之前，請先閱讀 wiki 中的 <money>Importing from Microsoft Money</money> 或 <quicken>Importing from Quicken</quicken> 一節。"
+      "body": "在匯入任何內容之前，請先閱讀說明文件中的 <money>Importing from Microsoft Money</money> 或 <quicken>Importing from Quicken</quicken> 一節。OFX/QFX 和 QIF 檔案各有各自的特殊之處——請參閱 <ofx>Importing OFX/QFX Files</ofx> 與 <qif>Importing Quicken QIF Files</qif>。"
     }
   },
   "selectAccount": {
@@ -78,23 +81,25 @@
     "heading": "CSV 欄位對應",
     "description": "將 CSV 欄位對應至交易欄位。預覽下方資料並設定對應。",
     "firstRowIsHeader": "第一列為標題",
-    "delimiterLabel": "分隔符號：",
-    "dateFormatLabel": "日期格式：",
+    "delimiterLabel": "分隔符號",
+    "dateFormatLabel": "日期格式",
     "customOption": "自訂...",
     "customPlaceholder": "例如：DD.MM.YYYY",
     "dataPreview": "資料預覽",
     "columnMappingTitle": "欄位對應",
-    "dateField": "日期 *",
+    "columnMappingHelp": "將每個 CSV 欄位對應到一個交易欄位。日期、金額類型，以及金額或借方/貸方二者之一皆為必填；其餘為選填。",
+    "dateField": "日期",
     "amountTypeField": "金額類型",
     "singleAmountOption": "單一金額欄",
     "splitAmountOption": "分開借/貸",
-    "amountField": "金額 *",
+    "amountField": "金額",
     "signField": "正負號",
+    "signFieldHelp": "金額正負號的讀取方式：「保持原樣」將正數視為存入，「反轉」將正數視為支出（適用於信用卡帳單中扣款顯示為正數的情況），而交易類型欄位則依其自身的值而非正負號來決定方向。",
     "signNormal": "原樣（正數 = 存款）",
     "signReverse": "反轉（正數 = 提款）",
     "signTypeColumn": "使用交易類型欄",
-    "debitField": "借方 *",
-    "creditField": "貸方 *",
+    "debitField": "借方",
+    "creditField": "貸方",
     "typeColumnTitle": "交易類型欄",
     "typeColumnDescription": "選擇指示每列為收入、支出或轉帳的欄位。",
     "valuesFound": "找到的值：{values}",
@@ -137,8 +142,8 @@
     "kindBanking": "銀行交易",
     "kindInvestment": "投資交易",
     "investmentModeHint": "各列依操作欄分類。未比對到的操作值會以連結現金科目的現金存入或提出方式匯入。",
-    "actionField": "操作 *",
-    "securityField": "證券（代號或名稱） *",
+    "actionField": "操作",
+    "securityField": "證券（代號或名稱）",
     "quantityField": "數量",
     "priceField": "價格",
     "commissionField": "手續費",
@@ -278,6 +283,15 @@
       "missingSplitRatio": "分割缺少比例"
     },
     "rejectedGoBack": "返回欄位對應步驟以調整欄位或操作關鍵字。",
+    "unreadableDatesNotice": "{count, plural, other {# 列}}的日期無法依 {format} 讀取，將不會匯入：",
+    "unreadableDateRow": "第 {line} 列：「{rawDate}」",
+    "missingDateRow": "第 {line} 列：無日期",
+    "unreadableDatesMore": "...以及另外 {count} 列",
+    "unreadableDatesGoBack": "如果檔案中的日期採用其他順序，請返回欄位對應步驟並選擇檔案使用的日期格式。",
+    "unreadableAmountsNotice": "{count, plural, other {# 列}}的金額無法讀取，將不會匯入：",
+    "unreadableAmountRow": "第 {line} 列：「{rawAmount}」",
+    "unreadableAmountsMore": "...以及另外 {count} 列",
+    "unreadableAmountsGoBack": "請檢查金額欄是否對應正確，或在檔案中更正這些列後重新匯入。",
     "importButton": "匯入交易"
   },
   "complete": {
@@ -287,7 +301,7 @@
     "totalImported": "總匯入數：",
     "totalImportedSuffix": "筆交易",
     "totalSkipped": "總略過數：",
-    "totalSkippedSuffix": "筆重複轉帳",
+    "totalSkippedSuffix": "筆交易",
     "totalErrors": "總錯誤數：",
     "categoriesCreated": "已建立的類別：",
     "accountsCreated": "已建立的科目：",
@@ -299,17 +313,36 @@
     "imported": "已匯入：",
     "importedSuffix": "筆交易",
     "skipped": "已略過：",
-    "skippedSuffix": "筆重複轉帳",
+    "skippedSuffix": "筆交易",
     "errors": "錯誤：",
     "errorsLabel": "錯誤：",
     "andMoreErrors": "...以及另外 {count} 個錯誤",
+    "skippedRowsHeading": "已略過的列：",
+    "skippedRow": "{date}：{amount}，{payee}（{reason}）",
+    "skippedRowNoPayee": "{date}：{amount}（{reason}）",
+    "skipReasonAlreadyImported": "已匯入",
+    "skipReasonDuplicateTransfer": "轉帳已記錄",
+    "skipReasonUnreadableDate": "無法讀取日期",
+    "skipReasonNoDate": "無日期",
+    "skipReasonUnreadableAmount": "無法讀取金額",
+    "skippedRowRawAmount": "「{rawAmount}」",
+    "skipReasonMissingSecurity": "缺少證券",
+    "skipReasonMissingQuantity": "缺少數量",
+    "skipReasonMissingAmount": "缺少金額",
+    "skipReasonMissingProceeds": "賣出缺少價格或成交金額",
+    "skipReasonMissingSplitRatio": "分割缺少比例",
+    "skippedRowLineDate": "第 {line} 列，「{rawDate}」",
+    "skippedRowLine": "第 {line} 列",
+    "skippedRowLineAt": "第 {line} 列，{date}",
+    "andMoreSkipped": "...以及另外 {count} 列已略過",
     "loanSetupHeading": "設定定期還款",
     "loanSetupDescription": "以下貸款/抵押貸款科目已匯入但尚未設定排程還款。請設定定期還款以繼續追蹤您的貸款進度。",
     "setUpPayments": "設定還款",
     "scheduledPaymentsConfigured": "已為 {count} 個科目{plural}設定排程還款。",
     "viewInvestments": "查看投資",
     "viewTransactions": "查看交易",
-    "importMoreFiles": "匯入更多檔案"
+    "importMoreFiles": "匯入更多檔案",
+    "bondRowsWithoutSeries": "{count, plural, other {有 # 筆債券買入在沒有系列的情況下匯入。請在該證券的債券批次中選擇系列。}}"
   },
   "multiAccountReview": {
     "heading": "多科目 QIF 匯入",
@@ -327,7 +360,10 @@
     "securitiesNotice": "此檔案包含 {count} 種證券{plural}，需在匯入前進行對應。",
     "nextMapSecurities": "下一步：對應證券",
     "importAll": "全部匯入",
-    "transactionCount": "{count} 筆交易{plural}"
+    "transactionCount": "{count} 筆交易{plural}",
+    "chooseAccountType": "選擇類型",
+    "accountTypeFor": "{name} 的科目類型",
+    "accountTypesNeeded": "檔案未說明 {count, plural, other {# 個科目}}的類型。匯入前請為每個科目選擇類型。"
   },
   "navigation": {
     "back": "上一步",
@@ -344,6 +380,7 @@
     "heading": "檢查您的 Microsoft Money 檔案",
     "fileSummary": "{filename} -- {era}，基準貨幣 {currency}。下面的餘額是依檔案本身計算的，因此您可以在匯入前與 Money 核對。",
     "era": {
+      "money99": "Money 97-99 格式",
       "money2001": "Money 2001 格式",
       "money2002": "Money 2002 格式",
       "moneyPlus": "Money Plus / Sunset 格式",
@@ -355,6 +392,7 @@
       "transfersLinked": "已連結 {count} 筆轉帳",
       "payees": "收款人",
       "categories": "類別",
+      "tags": "來自分類的標籤",
       "accounts": "帳戶",
       "securities": "證券",
       "investments": "投資交易",
@@ -395,7 +433,7 @@
       "importPrices": "匯入價格歷史",
       "importPricesHint": "Money 自己記錄的每檔證券逐日價值。若您想從目前報價開始，請關閉此項。",
       "importExchangeRates": "匯入匯率",
-      "importExchangeRatesHint": "檔案中各幣別之間的歷史匯率，讓過去的外幣交易依 Money 當時的方式換算。",
+      "importExchangeRatesHint": "檔案中各幣別之間的歷史匯率，僅用於 Monize 尚無匯率的日期。已儲存的匯率絕不會被取代。",
       "wipeExistingData": "從零開始：先刪除我現有的 Monize 資料",
       "wipeExistingDataHint": "匯入前執行與設定中相同的「刪除我的資料」操作。系統會要求確認。保持關閉可將 Money 檔案加入現有資料中。"
     },
@@ -424,7 +462,7 @@
     }
   },
   "mnyWipe": {
-    "heading": "先刪除你現有的資料嗎？",
+    "heading": "刪除現有資料",
     "body": "這會在匯入開始前執行與設定 -> 危險區域中相同的「刪除我的資料」操作。它會刪除：",
     "removes": {
       "transactions": "所有交易及其拆分",
@@ -434,8 +472,8 @@
       "budgets": "所有預算、自訂報表、標籤和匯入對應"
     },
     "irreversible": "此操作無法復原。如果隨後匯入失敗，已刪除的資料不會恢復。",
-    "typeToConfirm": "輸入 {word} 以確認：",
-    "passwordLabel": "輸入你的密碼：",
+    "typeToConfirm": "輸入 {word} 以確認",
+    "passwordLabel": "密碼",
     "oidcNote": "你的身分提供者已確認此工作階段，因此無需輸入密碼。",
     "confirm": "刪除我的資料並匯入"
   },
@@ -455,7 +493,8 @@
     },
     "failedHeading": "匯入未完成",
     "retry": "重試",
-    "startOver": "重新開始"
+    "startOver": "重新開始",
+    "learnMore": "瞭解詳情"
   },
   "mnyComplete": {
     "heading": "匯入完成",
@@ -469,6 +508,7 @@
       "splits": "拆分明細",
       "payees": "收款人",
       "categories": "類別",
+      "taggedRows": "依分類加上標籤的列",
       "securities": "證券",
       "investments": "投資交易",
       "prices": "價格",
@@ -492,7 +532,8 @@
     },
     "warningsHeading": "關於本次匯入的說明",
     "downloadReport": "下載報告",
-    "done": "完成"
+    "done": "完成",
+    "bondRowsWithoutSeries": "{count, plural, other {有 # 筆債券買入在沒有系列的情況下匯入。請在該證券的債券批次中選擇系列。}}"
   },
   "mnyWarnings": {
     "missingTable": "此 Money 版本缺少匯入所需的 {count, plural, other {# 個表格}}。",
@@ -503,6 +544,7 @@
     "categoryFlattened": "{count, plural, other {# 個類別}}層級超過兩層，已併入其上層類別。",
     "categoryTypeInferred": "{count, plural, other {# 個類別}}缺少 Money 的收入標記，收入或支出依類別樹推斷。",
     "degeneratePayeeSkipped": "已略過 Money 內部保留的 {count, plural, other {# 個佔位收款人}}。",
+    "unknownClassificationItem": "{count, plural, one {# 筆交易} other {# 筆交易}}引用了檔案中未定義的分類項目，已在沒有該標籤的情況下匯入。",
     "unusableTransaction": "{count, plural, other {# 筆交易}}沒有帳戶或可用日期，已略過。",
     "orphanedTransferSide": "{count, plural, other {# 筆轉帳}}在檔案中缺少對應的另一方，已略過。",
     "orphanedSplit": "{count, plural, other {# 列拆分明細}}沒有對應的上層交易，已略過。",
@@ -512,6 +554,7 @@
     "duplicateSecuritySymbol": "{count, plural, other {# 檔證券}}與另一檔共用代號；為維持區分，較晚者已重新命名。",
     "generatedSecuritySymbol": "{count, plural, other {# 檔證券}}在 Money 中沒有代號，因此產生了預留代號，並維持價格更新為關閉。",
     "unknownInvestmentAction": "{count, plural, other {# 筆投資交易}}使用了 Monize 無法辨識的動作，已略過。",
+    "stockOptionNotImported": "{count, plural, other {# 個員工股票選擇權事件}}（授予、既得與到期）既不涉及現金也不涉及股份，未匯入。",
     "unconfirmedInvestmentAction": "{count, plural, other {# 筆投資交易}}使用了語意靠推斷而非有文件佐證的 Money 動作，請與 Money 核對。",
     "missingInvestmentDetail": "{count, plural, other {# 筆投資交易}}在檔案中沒有股數明細，僅依其現金金額匯入。",
     "investmentAccountMismatch": "{count, plural, other {# 筆投資交易}}位於非投資帳戶中，已略過。",
@@ -521,6 +564,9 @@
     "unusableBill": "{count, plural, other {# 個定期帳單}}沒有帳戶、可用日期或可辨識的重複週期，已略過。",
     "billFrequencyApproximated": "{count, plural, other {# 個定期帳單}}使用了 Monize 無法精確表達的重複間隔，因此採用了最接近的較短間隔。",
     "loanInterestCategoryUnclear": "{count, plural, other {# 筆貸款還款}}包含了本金以外的多個類別，因此貸款的利息類別未設定。請檢查還款是否包含代管款項（escrow），並在匯入後設定利息類別。",
+    "transferAmountMismatch": "{count, plural, other {# 筆轉入投資帳戶的轉帳}}在投資一側記錄的金額與銀行一側不同。投資一側已依記錄的金額匯入。",
+    "crossCurrencyTradeUnconverted": "{count, plural, other {# 筆以其他貨幣計價的證券交易}}已依帳戶貨幣儲存，因為檔案和匯率提供者都沒有該貨幣對在交易日期前後的匯率。請新增匯率，然後更正每筆交易的價格。",
+    "crossCurrencyTradeMarketRate": "{count, plural, other {# 筆以其他貨幣計價的證券交易}}已依交易日期的市場匯率換算，因為檔案中沒有該日期前後的匯率。請對照您的紀錄核對每筆交易的價格。",
     "showTransactions": "顯示{count, plural, other {# 筆交易}}",
     "hideTransactions": "隱藏交易",
     "reviewInMoney": "請在 Microsoft Money 中開啟這些交易進行核對或更正，然後重新匯出並匯入。",
@@ -539,12 +585,89 @@
     "mnyImportFailed": "匯入過程中發生問題。沒有儲存任何內容 -- 您可以重試。",
     "mnyJobStalled": "匯入已停止回應，很可能是伺服器重新啟動所致。您上傳的檔案仍在，重試是安全的。",
     "mnyJobStalledAfterCommit": "匯入在已儲存您的資料之後停止回應，很可能是伺服器重新啟動所致。匯入的記錄已在您的帳戶中，再次匯入同一檔案會造成重複。請先檢查帳戶，再匯入其他檔案。",
+    "mnyImportFailedAfterCommit": "匯入已儲存您的資料,但之後的一個步驟失敗了。匯入的紀錄已在您的帳戶中,再次匯入同一檔案會造成重複。在匯入其他內容之前,請先檢查您的帳戶。",
+    "mnyAlreadyImported": "此檔案已匯入您的帳戶,再次匯入會使其紀錄重複。如需取代,請重新開始並選擇取代現有資料。",
     "mnyStagedFileMissing": "上傳的 Money 檔案已無法使用，請重新上傳。",
     "mnyFileTruncated": "這個 Money 檔案似乎不完整，上傳可能被中斷。",
     "mnyNotAMoneyFile": "這個檔案不是 Microsoft Money (.mny) 檔案。",
-    "mnyUnsupportedVersion": "這個檔案由 Money 97 或 98 建立。請先以免費的 Money Plus Sunset 版本開啟並儲存一次，然後匯入結果。",
+    "mnyUnsupportedVersion": "這個檔案由 Monize 無法讀取的 Microsoft Money 版本建立。請先以免費的 Money Plus Sunset 版本開啟並儲存一次，然後匯入結果。",
     "mnyPasswordRequired": "這個 Money 檔案受密碼保護。",
     "mnyPasswordIncorrect": "這個密碼無法開啟 Money 檔案。",
     "mnyUnreadableDatabase": "這個 Money 檔案已解密，但無法讀取其內容，檔案可能已損壞。"
+  },
+  "preview": {
+    "choice": {
+      "legend": "{payee} 不匯入時如何處理",
+      "skip": "暫時略過",
+      "except": "加入例外"
+    },
+    "payeeTip": {
+      "name": "來自銀行：{original}。對應：{name}",
+      "alias": "來自銀行：{original}。對應：{name}（別名「{pattern}」）",
+      "aliasNoPattern": "來自銀行：{original}。對應：{name}（別名）",
+      "new": "來自銀行：{original}。對應：{name}（新收款人）",
+      "rule": "來自銀行：{original}。對應：{name}（由規則設定）",
+      "ruleNone": "來自銀行：{original}。對應：無收款人（由規則設定）"
+    },
+    "expand": {
+      "show": "顯示 {payee} 的詳細資料",
+      "hide": "隱藏 {payee} 的詳細資料"
+    },
+    "rules": {
+      "heading": "匯入規則",
+      "none": "沒有匯入規則符合這筆交易。",
+      "skipped": "{action}：已略過（{reason}）",
+      "stopped": "停止其後的規則。",
+      "applied": "已套用：{actions}",
+      "openNewTab": "在新分頁中開啟規則 {name}"
+    },
+    "ruleTest": {
+      "loading": "正在載入規則測試結果",
+      "error": "無法載入規則測試結果。",
+      "retry": "重試",
+      "noRules": "您沒有匯入規則，因此沒有可測試的內容。",
+      "showNotMatched": "顯示未符合的規則（{count}）",
+      "hideNotMatched": "隱藏未符合的規則（{count}）",
+      "noChanges": "已符合，但不會變更這筆交易的任何內容。",
+      "badge": {
+        "matched": "已符合",
+        "notMatched": "未符合",
+        "notEvaluated": "未評估"
+      },
+      "notEvaluated": {
+        "afterStop": "未評估：前面的規則已停止後續規則。",
+        "disabled": "未評估：規則已關閉。",
+        "invalid": "未評估：規則無效。請開啟它進行修復。",
+        "outside_active_window": "未評估：該列的日期不在規則的生效日期內。"
+      },
+      "condition": {
+        "met": "條件已滿足",
+        "notMet": "條件未滿足",
+        "actual": "這筆交易中的值：{value}",
+        "noValue": "無",
+        "noTags": "無標籤",
+        "capture": "{name} = {value}",
+        "omitted": "條件的這一部分的詳細資訊未顯示。"
+      },
+      "skipReasons": {
+        "already_set": "它已有值，而規則只填寫空值",
+        "no_change": "它已是規則要設定的內容",
+        "payee_unresolved": "無法查詢規則產生的收款人"
+      }
+    },
+    "payee": {
+      "heading": "收款人",
+      "unknown": "這筆交易沒有收款人資訊。",
+      "original": "銀行文字：{original}",
+      "name": "與您現有的收款人 {name} 相符。",
+      "alias": "透過別名「{pattern}」對應到 {name}。",
+      "aliasNoPattern": "透過別名對應到 {name}。",
+      "new": "還沒有收款人使用此名稱，因此將建立 {name}。",
+      "rule": "匯入規則設定收款人：{name}。",
+      "ruleNone": "匯入規則清除收款人。",
+      "none": "銀行沒有提供交易對象，因此這筆交易沒有收款人。",
+      "openAliases": "開啟收款人的別名",
+      "openAliasesNewTab": "在新分頁中開啟收款人的別名"
+    }
   }
 }

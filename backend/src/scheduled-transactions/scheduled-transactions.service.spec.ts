@@ -3,14 +3,25 @@ import {
   NotFoundException,
   BadRequestException,
   ConflictException,
+  ForbiddenException,
 } from "@nestjs/common";
 import { DataSource } from "typeorm";
-import { ScheduledTransactionsService } from "./scheduled-transactions.service";
+import {
+  ScheduledTransactionsService,
+  TRADE_SCHEDULE_WINDOW_DAYS,
+  tradeScheduleWindowDays,
+} from "./scheduled-transactions.service";
 import { ScheduledEffectiveAmountService } from "./scheduled-effective-amount.service";
 import { ScheduledOccurrenceService } from "./scheduled-occurrence.service";
+import {
+  ScheduleAmountEstimate,
+  ScheduledAmountEstimateService,
+} from "./scheduled-amount-estimate.service";
+import { buildEstimateProfile } from "./amount-estimate";
 import { ScheduledTransaction } from "./entities/scheduled-transaction.entity";
 import { ScheduledTransactionSplit } from "./entities/scheduled-transaction-split.entity";
 import { ScheduledTransactionOverride } from "./entities/scheduled-transaction-override.entity";
+import { PayrollDeductionRule } from "../payroll-deductions/entities/payroll-deduction-rule.entity";
 import { Account } from "../accounts/entities/account.entity";
 import { LoanRateChange } from "../loan-rate-changes/entities/loan-rate-change.entity";
 import { Tag } from "../tags/entities/tag.entity";
@@ -27,11 +38,18 @@ import { ScheduledTransactionOverrideService } from "./scheduled-transaction-ove
 import { ScheduledTransactionLoanService } from "./scheduled-transaction-loan.service";
 import { ActionHistoryService } from "../action-history/action-history.service";
 import { ExchangeRateService } from "../currencies/exchange-rate.service";
-import { getRequestContext } from "../common/request-context";
+import { SystemAlertService } from "../system-alerts/system-alert.service";
+import {
+  getRequestContext,
+  getRequestTimezone,
+} from "../common/request-context";
+import { addDaysYMD, todayInTimezone } from "../common/date-utils";
 import {
   createScopedDbMocks,
   DataSourceMock,
 } from "../test-helpers/scoped-db-testing";
+import { Currency } from "../currencies/entities/currency.entity";
+import { currencyPlacesRepoMock } from "../test-helpers/currency-places-testing";
 
 jest.mock("../common/db/scoped-db", () =>
   jest.requireActual("../test-helpers/scoped-db-testing").scopedDbMockModule(),
@@ -45,6 +63,7 @@ describe("ScheduledTransactionsService", () => {
   let accountsRepo: Record<string, jest.Mock>;
   let tagRepo: Record<string, jest.Mock>;
   let preferencesRepo: Record<string, jest.Mock>;
+  let payrollRulesRepo: Record<string, jest.Mock>;
   let accountsService: Record<string, jest.Mock>;
   let transactionsService: Record<string, jest.Mock>;
   // The FX trio the effective-amount resolver reads, plus the `create` the
@@ -61,6 +80,8 @@ describe("ScheduledTransactionsService", () => {
   let mockDataSource: DataSourceMock;
   let mockActionHistoryService: Record<string, jest.Mock>;
   let mockExchangeRateService: Record<string, jest.Mock>;
+  let mockSystemAlerts: Record<string, jest.Mock>;
+  let amountEstimates: { estimateMany: jest.Mock; estimateFor: jest.Mock };
 
   const userId = "11111111-1111-1111-1111-111111111111";
   const stId = "st-1";
@@ -131,6 +152,7 @@ describe("ScheduledTransactionsService", () => {
       find: jest.fn().mockResolvedValue([]),
       remove: jest.fn().mockResolvedValue(undefined),
       update: jest.fn().mockResolvedValue({ affected: 1 }),
+      count: jest.fn().mockResolvedValue(1),
       createQueryBuilder: jest.fn(),
     };
 
@@ -169,7 +191,9 @@ describe("ScheduledTransactionsService", () => {
     };
 
     accountsService = {
-      findOne: jest.fn().mockResolvedValue({ id: "acc-1", userId }),
+      findOne: jest
+        .fn()
+        .mockResolvedValue({ id: "acc-1", userId, currencyCode: "USD" }),
     };
 
     // The posting path no longer calls `createTransfer`: authorization has to be
@@ -209,14 +233,22 @@ describe("ScheduledTransactionsService", () => {
       getRateForDate: jest.fn().mockResolvedValue(null),
     };
 
+    mockSystemAlerts = {
+      // The real service never throws; the double keeps that contract.
+      raiseUserAlert: jest.fn().mockResolvedValue({ created: true }),
+      raiseAdminAlert: jest.fn().mockResolvedValue({ created: 1, emailed: 0 }),
+    };
+
     // The reader's reporting currency, which the AI/MCP rollups convert into.
     // USD by default so the fixtures' own USD schedules need no rate at all;
     // a cross-currency test overrides the row or the rate deliberately.
     preferencesRepo = {
       findOne: jest.fn().mockResolvedValue({ defaultCurrency: "USD" }),
     };
+    payrollRulesRepo = { find: jest.fn().mockResolvedValue([]) };
 
     const tenantMocks = createScopedDbMocks([
+      [Currency, currencyPlacesRepoMock({ BTC: 8 })],
       [ScheduledTransaction, scheduledRepo],
       [ScheduledTransactionSplit, splitsRepo],
       [ScheduledTransactionOverride, overridesRepo],
@@ -227,6 +259,9 @@ describe("ScheduledTransactionsService", () => {
       [LoanRateChange, { find: jest.fn().mockResolvedValue([]) }],
       [Tag, tagRepo],
       [UserPreference, preferencesRepo],
+      // No payroll deduction rule on any fixture: the posting cap and the
+      // read model's figures find nothing to apply.
+      [PayrollDeductionRule, payrollRulesRepo],
     ]);
     mockDataSource = tenantMocks.dataSource;
     // The timezone fan-out now runs through withScopedDb too, so its raw SQL
@@ -299,6 +334,15 @@ describe("ScheduledTransactionsService", () => {
         // Likewise real: occurrence selection (which override governs the
         // occurrence that is due) is what these assertions are about.
         ScheduledOccurrenceService,
+        // No estimated schedule unless a test says so (issue #2096); the
+        // estimate's own arithmetic is `amount-estimate.spec.ts`'s.
+        {
+          provide: ScheduledAmountEstimateService,
+          useValue: {
+            estimateMany: jest.fn().mockResolvedValue(new Map()),
+            estimateFor: jest.fn(),
+          },
+        },
         { provide: AccountsService, useValue: accountsService },
         { provide: TransactionsService, useValue: transactionsService },
         {
@@ -316,12 +360,17 @@ describe("ScheduledTransactionsService", () => {
           provide: ExchangeRateService,
           useValue: mockExchangeRateService,
         },
+        {
+          provide: SystemAlertService,
+          useValue: mockSystemAlerts,
+        },
       ],
     }).compile();
 
     service = module.get<ScheduledTransactionsService>(
       ScheduledTransactionsService,
     );
+    amountEstimates = module.get(ScheduledAmountEstimateService);
   });
 
   // Helper: stub findOne to return a scheduled transaction for internal calls
@@ -355,6 +404,161 @@ describe("ScheduledTransactionsService", () => {
       expect(scheduledRepo.create).toHaveBeenCalled();
       expect(scheduledRepo.save).toHaveBeenCalled();
       expect(result).toEqual(saved);
+    });
+
+    it("refuses a currencyCode other than the schedule account's before writing (A26-S15-10)", async () => {
+      accountsService.findOne.mockResolvedValue({
+        id: "acc-1",
+        userId,
+        currencyCode: "PLN",
+      });
+
+      await expect(
+        service.create(userId, { ...baseDto, currencyCode: "EUR" }),
+      ).rejects.toThrow(
+        "Transaction currency EUR must match the account currency PLN.",
+      );
+      expect(scheduledRepo.create).not.toHaveBeenCalled();
+      expect(scheduledRepo.save).not.toHaveBeenCalled();
+    });
+
+    it("stores a BTC schedule's eight-place amount unchanged (INV-MONEY-001)", async () => {
+      accountsService.findOne.mockResolvedValue({
+        id: "acc-1",
+        userId,
+        currencyCode: "BTC",
+      });
+      const saved = makeScheduled({ amount: -0.000025, currencyCode: "BTC" });
+      scheduledRepo.save.mockResolvedValue(saved);
+      stubFindOne(saved);
+
+      await service.create(userId, {
+        ...baseDto,
+        amount: -0.000025,
+        currencyCode: "BTC",
+      });
+
+      expect(scheduledRepo.create.mock.calls[0][0].amount).toBe(-0.000025);
+      expect(scheduledRepo.save).toHaveBeenCalled();
+    });
+
+    it("refuses a CAD amount at five places before writing", async () => {
+      accountsService.findOne.mockResolvedValue({
+        id: "acc-1",
+        userId,
+        currencyCode: "CAD",
+      });
+
+      await expect(
+        service.create(userId, {
+          ...baseDto,
+          amount: -1200.12345,
+          currencyCode: "CAD",
+        }),
+      ).rejects.toThrow(
+        /"amount" has more decimal places than CAD carries \(4\)/,
+      );
+      expect(scheduledRepo.save).not.toHaveBeenCalled();
+    });
+
+    it("refuses a CAD split line at five places before writing", async () => {
+      accountsService.findOne.mockResolvedValue({
+        id: "acc-1",
+        userId,
+        currencyCode: "CAD",
+      });
+
+      await expect(
+        service.create(userId, {
+          ...baseDto,
+          currencyCode: "CAD",
+          amount: -1200,
+          splits: [
+            { categoryId: "cat-a", amount: -700.00005 },
+            { categoryId: "cat-b", amount: -499.99995 },
+          ],
+        }),
+      ).rejects.toThrow(/"splits\[0\]\.amount" has more decimal places/);
+      expect(scheduledRepo.save).not.toHaveBeenCalled();
+    });
+
+    it("sums BTC split lines against the parent at eight places, not four", async () => {
+      accountsService.findOne.mockResolvedValue({
+        id: "acc-1",
+        userId,
+        currencyCode: "BTC",
+      });
+      const saved = makeScheduled({ amount: -0.00008, currencyCode: "BTC" });
+      scheduledRepo.save.mockResolvedValue(saved);
+      stubFindOne(saved);
+
+      // At four places these lines read 0 + 0 against a -0.0001 parent and
+      // the schedule was refused; at the coin's eight they balance.
+      await service.create(userId, {
+        ...baseDto,
+        currencyCode: "BTC",
+        amount: -0.00008,
+        splits: [
+          { categoryId: "cat-a", amount: -0.00004 },
+          { categoryId: "cat-b", amount: -0.00004 },
+        ],
+      });
+      expect(scheduledRepo.save).toHaveBeenCalled();
+    });
+
+    it("refuses BTC split lines that do not sum to the parent at eight places", async () => {
+      accountsService.findOne.mockResolvedValue({
+        id: "acc-1",
+        userId,
+        currencyCode: "BTC",
+      });
+
+      // -0.005 - 0.00002 is -0.00502, not -0.005025: equal at four places.
+      await expect(
+        service.create(userId, {
+          ...baseDto,
+          currencyCode: "BTC",
+          amount: -0.005025,
+          splits: [
+            { categoryId: "cat-a", amount: -0.005 },
+            { categoryId: "cat-fee", amount: -0.00002 },
+          ],
+        }),
+      ).rejects.toThrow(/must equal transaction amount/);
+      expect(scheduledRepo.save).not.toHaveBeenCalled();
+    });
+
+    it("judges a foreign entry's originalAmount against its own currency", async () => {
+      accountsService.findOne.mockResolvedValue({
+        id: "acc-1",
+        userId,
+        currencyCode: "BTC",
+      });
+
+      // An eight-place BTC amount is fine; a five-place USD original is not.
+      await expect(
+        service.create(userId, {
+          ...baseDto,
+          currencyCode: "BTC",
+          amount: -0.0004321,
+          originalAmount: -40.12345,
+          originalCurrencyCode: "USD",
+          exchangeRate: 0.0000107696,
+        }),
+      ).rejects.toThrow(
+        /"originalAmount" has more decimal places than USD carries \(4\)/,
+      );
+      expect(scheduledRepo.save).not.toHaveBeenCalled();
+    });
+
+    it("accepts the account's currency in any letter case", async () => {
+      const saved = makeScheduled();
+      scheduledRepo.save.mockResolvedValue(saved);
+      stubFindOne(saved);
+
+      await service.create(userId, { ...baseDto, currencyCode: "usd" });
+
+      expect(scheduledRepo.save).toHaveBeenCalled();
     });
 
     it("should default startDate to nextDueDate", async () => {
@@ -1118,6 +1322,13 @@ describe("ScheduledTransactionsService", () => {
       expect(result[0].effectiveAmountComplete).toBe(true);
       // The settlement currency, not the brokerage account's.
       expect(result[0].effectiveCurrencyCode).toBe("CAD");
+      // And the account that amount belongs to: the funding account, not the
+      // brokerage the schedule is filed under. A client projecting a running
+      // balance from `accountId` charges an account the trade never moves, which
+      // is how a purchase its funding account covers exactly came to be reported
+      // as an overdraft.
+      expect(result[0].settlementAccountId).toBe("cash-1");
+      expect(result[0].settlementAccountId).not.toBe(st.accountId);
     });
 
     it("reports the effective amount as unknown when the current rate is unavailable", async () => {
@@ -1185,6 +1396,8 @@ describe("ScheduledTransactionsService", () => {
       expect(result[0].effectiveAmount).toBe(-1200);
       expect(result[0].effectiveAmountComplete).toBe(true);
       expect(result[0].effectiveCurrencyCode).toBe("USD");
+      // A schedule that moves no securities settles in its own account.
+      expect(result[0].settlementAccountId).toBe("acc-1");
     });
   });
 
@@ -1228,28 +1441,55 @@ describe("ScheduledTransactionsService", () => {
 
   // ==================== findUpcoming ====================
   describe("findUpcoming", () => {
-    it("should query with default 30 days", async () => {
-      const qb = mockQueryBuilder([]);
+    const occurrenceFor = (id: string) =>
+      ({ scheduledTransactionId: id }) as any;
+
+    it("windows on effective occurrence dates and loads those schedules", async () => {
+      const findOccurrences = jest
+        .spyOn((service as any).occurrences, "findOccurrences")
+        .mockResolvedValue([occurrenceFor("s-b"), occurrenceFor("s-a")]);
+      const qb = mockQueryBuilder([
+        makeScheduled({ id: "s-a" }),
+        makeScheduled({ id: "s-b" }),
+      ]);
       scheduledRepo.createQueryBuilder.mockReturnValue(qb);
 
-      await service.findUpcoming(userId);
+      const result = await service.findUpcoming(userId, 7);
 
-      expect(qb.where).toHaveBeenCalledWith("st.userId = :userId", { userId });
-      expect(qb.andWhere).toHaveBeenCalledWith("st.isActive = :isActive", {
-        isActive: true,
+      expect(findOccurrences).toHaveBeenCalledWith(userId, {
+        through: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+        maxOccurrences: 1,
       });
+      expect(qb.andWhere).toHaveBeenCalledWith("st.id IN (:...ids)", {
+        ids: ["s-b", "s-a"],
+      });
+      // Effective-date order, not the order the database returned.
+      expect(result.map((r) => r.id)).toEqual(["s-b", "s-a"]);
     });
 
-    it("should accept custom days parameter", async () => {
-      const qb = mockQueryBuilder([]);
-      scheduledRepo.createQueryBuilder.mockReturnValue(qb);
-
-      await service.findUpcoming(userId, 7);
-
-      expect(qb.andWhere).toHaveBeenCalledWith(
-        "st.nextDueDate <= :futureDate",
-        expect.objectContaining({ futureDate: expect.any(Date) }),
+    it("includes a bill whose slot is outside the window but whose override moved it in", async () => {
+      // nextDueDate Dec 15 moved to Nov 20: the old slot-date filter lost it.
+      scheduledRepo.createQueryBuilder.mockReturnValue(
+        mockQueryBuilder([
+          makeScheduled({ id: "s-moved", nextDueDate: "2099-12-15" as any }),
+        ]),
       );
+      jest
+        .spyOn((service as any).occurrences, "findOccurrences")
+        .mockResolvedValue([occurrenceFor("s-moved")]);
+
+      const result = await service.findUpcoming(userId);
+
+      expect(result.map((r) => r.id)).toEqual(["s-moved"]);
+    });
+
+    it("returns nothing, and runs no schedule query, when no occurrence falls in the window", async () => {
+      jest
+        .spyOn((service as any).occurrences, "findOccurrences")
+        .mockResolvedValue([]);
+
+      expect(await service.findUpcoming(userId)).toEqual([]);
+      expect(scheduledRepo.createQueryBuilder).not.toHaveBeenCalled();
     });
   });
 
@@ -1981,6 +2221,140 @@ describe("ScheduledTransactionsService", () => {
       expect(accountsService.findOne).toHaveBeenCalledWith(userId, "acc-2");
     });
 
+    it("refuses a currencyCode other than the account's before writing", async () => {
+      stubFindOne(makeScheduled());
+
+      await expect(
+        service.update(userId, stId, { currencyCode: "EUR" }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+    });
+
+    it("re-derives the currency from the new account when accountId changes", async () => {
+      stubFindOne(makeScheduled());
+      accountsService.findOne.mockResolvedValue({
+        id: "acc-2",
+        userId,
+        currencyCode: "PLN",
+      });
+
+      await service.update(userId, stId, { accountId: "acc-2" });
+
+      expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+        ScheduledTransaction,
+        stId,
+        expect.objectContaining({ accountId: "acc-2", currencyCode: "PLN" }),
+      );
+    });
+
+    describe("moving a schedule to an account in another currency (INV-MONEY-001)", () => {
+      const usdAccount = { id: "acc-2", userId, currencyCode: "USD" };
+      const btcSchedule = (
+        amount: number,
+        overrides: Partial<ScheduledTransaction> = {},
+      ) =>
+        makeScheduled({
+          accountId: "wallet-1",
+          amount,
+          currencyCode: "BTC",
+          ...overrides,
+        });
+
+      beforeEach(() => {
+        accountsService.findOne.mockResolvedValue(usdAccount);
+      });
+
+      it("refuses carrying a -0.12345678 BTC amount into a USD account before writing", async () => {
+        stubFindOne(btcSchedule(-0.12345678));
+
+        await expect(
+          service.update(userId, stId, { accountId: "acc-2" }),
+        ).rejects.toThrow(
+          /"amount" has more decimal places than USD carries \(4\)/,
+        );
+        expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+        expect(mockQueryRunner.manager.delete).not.toHaveBeenCalled();
+      });
+
+      it("refuses a moved split schedule whose unsent stored lines do not fit", async () => {
+        stubFindOne(btcSchedule(-0.12, { isSplit: true }));
+        mockQueryRunner.manager.find.mockResolvedValue([
+          { id: "split-1", scheduledTransactionId: stId, amount: -0.11999999 },
+          { id: "split-2", scheduledTransactionId: stId, amount: -0.00000001 },
+        ]);
+
+        await expect(
+          service.update(userId, stId, { accountId: "acc-2" }),
+        ).rejects.toThrow(/"splits\[0\]\.amount" has more decimal places/);
+        expect(mockQueryRunner.manager.find).toHaveBeenCalledWith(
+          ScheduledTransactionSplit,
+          expect.objectContaining({ where: { scheduledTransactionId: stId } }),
+        );
+        expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+        expect(mockQueryRunner.manager.delete).not.toHaveBeenCalled();
+      });
+
+      it("still moves a schedule at four places", async () => {
+        stubFindOne(btcSchedule(-0.1234));
+
+        await service.update(userId, stId, { accountId: "acc-2" });
+
+        expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+          ScheduledTransaction,
+          stId,
+          expect.objectContaining({ accountId: "acc-2", currencyCode: "USD" }),
+        );
+      });
+    });
+
+    it("re-derives a stale stored currency from the account when accountId is unchanged", async () => {
+      stubFindOne(makeScheduled({ currencyCode: "CAD" }));
+      accountsService.findOne.mockResolvedValue({
+        id: "acc-1",
+        userId,
+        currencyCode: "USD",
+      });
+
+      await service.update(userId, stId, { currencyCode: "USD" });
+
+      expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+        ScheduledTransaction,
+        stId,
+        expect.objectContaining({ currencyCode: "USD" }),
+      );
+    });
+
+    it("treats a resent stale stored currencyCode as an echo and re-derives from the account", async () => {
+      stubFindOne(makeScheduled({ currencyCode: "CAD" }));
+      accountsService.findOne.mockResolvedValue({
+        id: "acc-1",
+        userId,
+        currencyCode: "USD",
+      });
+
+      await service.update(userId, stId, { currencyCode: "CAD" });
+
+      expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+        ScheduledTransaction,
+        stId,
+        expect.objectContaining({ currencyCode: "USD" }),
+      );
+    });
+
+    it("still refuses a currencyCode that matches neither the stored value nor the account", async () => {
+      stubFindOne(makeScheduled({ currencyCode: "CAD" }));
+      accountsService.findOne.mockResolvedValue({
+        id: "acc-1",
+        userId,
+        currencyCode: "USD",
+      });
+
+      await expect(
+        service.update(userId, stId, { currencyCode: "EUR" }),
+      ).rejects.toThrow(BadRequestException);
+      expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+    });
+
     it("should throw if transfer account same as source on update", async () => {
       const scheduled = makeScheduled({ accountId: "acc-1" });
       stubFindOne(scheduled);
@@ -2040,6 +2414,32 @@ describe("ScheduledTransactionsService", () => {
       const updateArg = mockQueryRunner.manager.update.mock.calls[0][2];
       expect(updateArg.description).toBeNull();
       expect(updateArg.payeeName).toBeNull();
+    });
+
+    // Issue #1979: the form sends null for a cleared field, and the reference
+    // number is a stored field like the description.
+    it("clears description and referenceNumber sent as null", async () => {
+      const scheduled = makeScheduled({ referenceNumber: "ACCT-42" });
+      stubFindOne(scheduled);
+
+      await service.update(userId, stId, {
+        description: null as any,
+        referenceNumber: null,
+      });
+
+      const updateArg = mockQueryRunner.manager.update.mock.calls[0][2];
+      expect(updateArg.description).toBeNull();
+      expect(updateArg.referenceNumber).toBeNull();
+    });
+
+    it("stores a referenceNumber sent on update", async () => {
+      const scheduled = makeScheduled();
+      stubFindOne(scheduled);
+
+      await service.update(userId, stId, { referenceNumber: "ACCT-42" });
+
+      const updateArg = mockQueryRunner.manager.update.mock.calls[0][2];
+      expect(updateArg.referenceNumber).toBe("ACCT-42");
     });
 
     it("clears splits when switching to transfer but does not force category null (#743)", async () => {
@@ -2130,6 +2530,62 @@ describe("ScheduledTransactionsService", () => {
       });
     });
 
+    it.each(["LINEAR", "INTEREST_ONLY"])(
+      "records no payment amount when the user edits a %s mortgage's schedule",
+      async (mortgageType) => {
+        // docs/specs/mortgage-types.md section 5.6: these methods have no
+        // constant payment (the column's CHECK refuses one). The edit stands
+        // for the template only and the next advancement reprices it; the
+        // standing extra is still the user's configuration.
+        const scheduled = makeScheduled({ amount: -1333.3333 });
+        stubFindOne(scheduled);
+        accountsRepo.findOne.mockResolvedValueOnce({
+          id: "acc-loan",
+          accountType: "MORTGAGE",
+          mortgageType,
+          scheduledTransactionId: stId,
+        });
+
+        await service.update(userId, stId, {
+          amount: -1433.3333,
+          splits: [
+            {
+              transferAccountId: "acc-loan",
+              amount: -833.3333,
+              memo: "Principal",
+            },
+            { categoryId: "cat-interest", amount: -500, memo: "Interest" },
+            {
+              transferAccountId: "acc-loan",
+              amount: -100,
+              memo: "Extra Principal",
+            },
+          ],
+        });
+
+        expect(accountsRepo.update).toHaveBeenCalledWith("acc-loan", {
+          extraPaymentAmount: 100,
+        });
+      },
+    );
+
+    it("still records the payment of an annuity mortgage's edited schedule", async () => {
+      const scheduled = makeScheduled({ amount: -1000 });
+      stubFindOne(scheduled);
+      accountsRepo.findOne.mockResolvedValueOnce({
+        id: "acc-loan",
+        accountType: "MORTGAGE",
+        mortgageType: "ANNUITY",
+        scheduledTransactionId: stId,
+      });
+
+      await service.update(userId, stId, { amount: -1100 });
+
+      expect(accountsRepo.update).toHaveBeenCalledWith("acc-loan", {
+        paymentAmount: 1100,
+      });
+    });
+
     it("does not touch any account when the schedule is not a loan payment", async () => {
       const scheduled = makeScheduled();
       stubFindOne(scheduled);
@@ -2202,6 +2658,11 @@ describe("ScheduledTransactionsService", () => {
     `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
 
   describe("skip", () => {
+    // No claim sits at or after the cursor unless a test says so.
+    beforeEach(() => {
+      mockQueryRunner.manager.query.mockResolvedValue([]);
+    });
+
     it("should advance DAILY by 1 day", async () => {
       const scheduled = makeScheduled({
         frequency: "DAILY",
@@ -2211,7 +2672,7 @@ describe("ScheduledTransactionsService", () => {
 
       await service.skip(userId, stId);
 
-      const updateArg = scheduledRepo.update.mock.calls[0][1];
+      const updateArg = mockQueryRunner.manager.update.mock.calls[0][2];
       expect(toUTCDateStr(new Date(updateArg.nextDueDate))).toBe("2025-03-02");
     });
 
@@ -2224,7 +2685,7 @@ describe("ScheduledTransactionsService", () => {
 
       await service.skip(userId, stId);
 
-      const updateArg = scheduledRepo.update.mock.calls[0][1];
+      const updateArg = mockQueryRunner.manager.update.mock.calls[0][2];
       expect(toUTCDateStr(new Date(updateArg.nextDueDate))).toBe("2025-03-08");
     });
 
@@ -2237,7 +2698,7 @@ describe("ScheduledTransactionsService", () => {
 
       await service.skip(userId, stId);
 
-      const updateArg = scheduledRepo.update.mock.calls[0][1];
+      const updateArg = mockQueryRunner.manager.update.mock.calls[0][2];
       expect(toUTCDateStr(new Date(updateArg.nextDueDate))).toBe("2025-03-15");
     });
 
@@ -2250,7 +2711,7 @@ describe("ScheduledTransactionsService", () => {
 
       await service.skip(userId, stId);
 
-      const updateArg = scheduledRepo.update.mock.calls[0][1];
+      const updateArg = mockQueryRunner.manager.update.mock.calls[0][2];
       expect(toUTCDateStr(new Date(updateArg.nextDueDate))).toBe("2025-03-29");
     });
 
@@ -2263,7 +2724,7 @@ describe("ScheduledTransactionsService", () => {
 
       await service.skip(userId, stId);
 
-      const updateArg = scheduledRepo.update.mock.calls[0][1];
+      const updateArg = mockQueryRunner.manager.update.mock.calls[0][2];
       expect(toUTCDateStr(new Date(updateArg.nextDueDate))).toBe("2025-03-31");
     });
 
@@ -2276,7 +2737,7 @@ describe("ScheduledTransactionsService", () => {
 
       await service.skip(userId, stId);
 
-      const updateArg = scheduledRepo.update.mock.calls[0][1];
+      const updateArg = mockQueryRunner.manager.update.mock.calls[0][2];
       expect(toUTCDateStr(new Date(updateArg.nextDueDate))).toBe("2025-04-15");
     });
 
@@ -2289,7 +2750,7 @@ describe("ScheduledTransactionsService", () => {
 
       await service.skip(userId, stId);
 
-      const updateArg = scheduledRepo.update.mock.calls[0][1];
+      const updateArg = mockQueryRunner.manager.update.mock.calls[0][2];
       expect(toUTCDateStr(new Date(updateArg.nextDueDate))).toBe("2025-02-15");
     });
 
@@ -2302,7 +2763,7 @@ describe("ScheduledTransactionsService", () => {
 
       await service.skip(userId, stId);
 
-      const updateArg = scheduledRepo.update.mock.calls[0][1];
+      const updateArg = mockQueryRunner.manager.update.mock.calls[0][2];
       expect(toUTCDateStr(new Date(updateArg.nextDueDate))).toBe("2025-04-15");
     });
 
@@ -2315,13 +2776,167 @@ describe("ScheduledTransactionsService", () => {
 
       await service.skip(userId, stId);
 
-      const updateArg = scheduledRepo.update.mock.calls[0][1];
+      const updateArg = mockQueryRunner.manager.update.mock.calls[0][2];
       expect(toUTCDateStr(new Date(updateArg.nextDueDate))).toBe("2026-01-15");
     });
 
-    it("should delete override for the skipped date", async () => {
+    it("should prune the override of the skipped date with the advance", async () => {
       const scheduled = makeScheduled({ nextDueDate: "2025-02-15" });
       stubFindOne(scheduled);
+      const qb = {
+        delete: jest.fn().mockReturnThis(),
+        from: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        execute: jest.fn().mockResolvedValue({ affected: 1 }),
+      };
+      mockQueryRunner.manager.createQueryBuilder.mockReturnValue(qb);
+
+      await service.skip(userId, stId);
+
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        "originalDate < :newNextDueDate",
+        { newNextDueDate: "2025-03-15" },
+      );
+    });
+
+    it("should lock the schedule and the occurrence's override before any write", async () => {
+      const scheduled = makeScheduled({ nextDueDate: "2025-02-15" });
+      stubFindOne(scheduled);
+
+      await service.skip(userId, stId);
+
+      expect(mockQueryRunner.manager.findOne).toHaveBeenCalledWith(
+        ScheduledTransaction,
+        { where: { id: stId, userId }, lock: { mode: "pessimistic_write" } },
+      );
+      expect(overridesRepo.findOne).toHaveBeenCalledWith({
+        where: { scheduledTransactionId: stId, originalDate: "2025-02-15" },
+        lock: { mode: "pessimistic_write" },
+      });
+    });
+
+    it("should not stamp last_posted_date: a skip posts nothing", async () => {
+      stubFindOne(makeScheduled({ nextDueDate: "2025-02-15" }));
+
+      await service.skip(userId, stId);
+
+      const updateArg = mockQueryRunner.manager.update.mock.calls[0][2];
+      expect(updateArg).not.toHaveProperty("lastPostedDate");
+    });
+
+    it("should step past a slot a settlement rule claimed ahead (A26-S08-03)", async () => {
+      stubFindOne(
+        makeScheduled({ frequency: "MONTHLY", nextDueDate: "2025-02-15" }),
+      );
+      mockQueryRunner.manager.query.mockResolvedValue([{ d: "2025-03-15" }]);
+
+      await service.skip(userId, stId);
+
+      const updateArg = mockQueryRunner.manager.update.mock.calls[0][2];
+      expect(updateArg.nextDueDate).toBe("2025-04-15");
+    });
+
+    it("should count every stepped slot against occurrencesRemaining", async () => {
+      stubFindOne(
+        makeScheduled({
+          frequency: "MONTHLY",
+          nextDueDate: "2025-02-15",
+          occurrencesRemaining: 5,
+        }),
+      );
+      mockQueryRunner.manager.query.mockResolvedValue([{ d: "2025-03-15" }]);
+
+      await service.skip(userId, stId);
+
+      const updateArg = mockQueryRunner.manager.update.mock.calls[0][2];
+      expect(updateArg.occurrencesRemaining).toBe(3);
+    });
+
+    it("should refuse a stale pin with 409 and write nothing (A26-S08-01 P3)", async () => {
+      stubFindOne(makeScheduled({ nextDueDate: "2025-03-15" }));
+
+      await expect(
+        service.skip(userId, stId, {
+          occurrenceDate: "2025-02-15",
+          overrideId: null,
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
+
+      expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+      expect(scheduledRepo.update).not.toHaveBeenCalled();
+      expect(overridesRepo.delete).not.toHaveBeenCalled();
+    });
+
+    it("should refuse a pin that lacks the override now at the cursor", async () => {
+      stubFindOne(makeScheduled({ nextDueDate: "2025-02-15" }));
+      overridesRepo.findOne.mockResolvedValue({
+        id: "ovr-9",
+        overrideDate: "2025-02-15",
+      });
+
+      await expect(
+        service.skip(userId, stId, {
+          occurrenceDate: "2025-02-15",
+          overrideId: null,
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+    });
+
+    it("should skip when the pin names the override and its date", async () => {
+      stubFindOne(makeScheduled({ nextDueDate: "2025-02-15" }));
+      overridesRepo.findOne.mockResolvedValue({
+        id: "ovr-9",
+        overrideDate: "2025-02-18",
+      });
+
+      await service.skip(userId, stId, {
+        occurrenceDate: "2025-02-18",
+        overrideId: "ovr-9",
+      });
+
+      const updateArg = mockQueryRunner.manager.update.mock.calls[0][2];
+      expect(updateArg.nextDueDate).toBe("2025-03-15");
+    });
+
+    it("should refuse an exhausted schedule", async () => {
+      stubFindOne(
+        makeScheduled({
+          nextDueDate: "2025-03-15",
+          occurrencesRemaining: 0,
+          isActive: false,
+        }),
+      );
+
+      await expect(service.skip(userId, stId)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+    });
+
+    it("should refuse a cursor past end_date", async () => {
+      stubFindOne(
+        makeScheduled({ nextDueDate: "2026-01-15", endDate: "2025-12-31" }),
+      );
+
+      await expect(service.skip(userId, stId)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+    });
+
+    it("should throw NotFound when the locked read finds no schedule", async () => {
+      scheduledRepo.findOne.mockResolvedValue(null);
+
+      await expect(service.skip(userId, stId)).rejects.toBeInstanceOf(
+        NotFoundException,
+      );
+    });
+
+    it("should keep the cursor and delete the override for a cadence that does not step", async () => {
+      stubFindOne(
+        makeScheduled({ frequency: "ONCE", nextDueDate: "2025-02-15" }),
+      );
 
       await service.skip(userId, stId);
 
@@ -2329,6 +2944,10 @@ describe("ScheduledTransactionsService", () => {
         scheduledTransactionId: stId,
         originalDate: "2025-02-15",
       });
+      expect(scheduledRepo.update).toHaveBeenCalledWith(stId, {
+        nextDueDate: "2025-02-15",
+      });
+      expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
     });
 
     it("should decrement occurrencesRemaining", async () => {
@@ -2337,7 +2956,7 @@ describe("ScheduledTransactionsService", () => {
 
       await service.skip(userId, stId);
 
-      const updateArg = scheduledRepo.update.mock.calls[0][1];
+      const updateArg = mockQueryRunner.manager.update.mock.calls[0][2];
       expect(updateArg.occurrencesRemaining).toBe(4);
     });
 
@@ -2347,7 +2966,7 @@ describe("ScheduledTransactionsService", () => {
 
       await service.skip(userId, stId);
 
-      const updateArg = scheduledRepo.update.mock.calls[0][1];
+      const updateArg = mockQueryRunner.manager.update.mock.calls[0][2];
       expect(updateArg.occurrencesRemaining).toBe(0);
       expect(updateArg.isActive).toBe(false);
     });
@@ -2362,7 +2981,7 @@ describe("ScheduledTransactionsService", () => {
 
       await service.skip(userId, stId);
 
-      const updateArg = scheduledRepo.update.mock.calls[0][1];
+      const updateArg = mockQueryRunner.manager.update.mock.calls[0][2];
       expect(updateArg.isActive).toBe(false);
     });
 
@@ -2372,7 +2991,7 @@ describe("ScheduledTransactionsService", () => {
 
       await service.skip(userId, stId);
 
-      const updateArg = scheduledRepo.update.mock.calls[0][1];
+      const updateArg = mockQueryRunner.manager.update.mock.calls[0][2];
       expect(updateArg.occurrencesRemaining).toBeUndefined();
     });
 
@@ -2385,13 +3004,131 @@ describe("ScheduledTransactionsService", () => {
 
       await service.skip(userId, stId);
 
-      const updateArg = scheduledRepo.update.mock.calls[0][1];
+      const updateArg = mockQueryRunner.manager.update.mock.calls[0][2];
       expect(typeof updateArg.nextDueDate).toBe("string");
       expect(updateArg.nextDueDate).toBe("2025-03-15");
     });
   });
 
   // ==================== post ====================
+  describe("findInvestmentOccurrenceForTrade", () => {
+    const trade = {
+      accountId: "acc-1",
+      securityId: "sec-1",
+      action: "BUY" as never,
+      date: "2026-10-15",
+      commission: 0,
+    };
+    const finderQb = (rows: unknown[]) => {
+      const qb = {
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        take: jest.fn().mockReturnThis(),
+        getMany: jest.fn().mockResolvedValue(rows),
+      };
+      scheduledRepo.createQueryBuilder = jest.fn().mockReturnValue(qb);
+      return qb;
+    };
+
+    it("finds the one active scheduled investment of the same account, security and direction due near the trade", async () => {
+      const qb = finderQb([
+        {
+          id: "st-1",
+          name: "Monthly XCNS",
+          nextDueDate: "2026-10-16",
+          frequency: "MONTHLY",
+          investmentFundingAccountId: "chequing-1",
+        },
+      ]);
+      await expect(
+        service.findInvestmentOccurrenceForTrade(userId, trade),
+      ).resolves.toEqual({
+        id: "st-1",
+        name: "Monthly XCNS",
+        dueDate: "2026-10-16",
+        // A BUY settles through the schedule's funding account: the card shows it.
+        fundingAccountId: "chequing-1",
+      });
+      const clauses = qb.andWhere.mock.calls
+        .map((c) => String(c[0]))
+        .join("\n");
+      // A parameter named like its own cast (`:date::date`) is mangled by TypeORM.
+      expect(clauses).not.toMatch(/:(\w+)::\1\b/);
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining(":tradeDate::date"),
+        expect.objectContaining({ tradeDate: "2026-10-15" }),
+      );
+      expect(clauses).toContain("st.isInvestment = true");
+      expect(clauses).toContain("st.isActive = true");
+      expect(clauses).toContain("st.accountId = :accountId");
+      expect(clauses).toContain("st.investmentSecurityId = :securityId");
+      expect(clauses).toContain("st.nextDueDate BETWEEN");
+      expect(qb.where).toHaveBeenCalledWith("st.userId = :userId", { userId });
+    });
+
+    it("never takes the occurrence after the one a trade paid: a weekly buy posted on the 15th is next due on the 22nd", async () => {
+      finderQb([
+        {
+          id: "st-1",
+          name: "Weekly XCNS",
+          nextDueDate: "2026-10-22",
+          frequency: "WEEKLY",
+        },
+      ]);
+      await expect(
+        service.findInvestmentOccurrenceForTrade(userId, trade),
+      ).resolves.toBeNull();
+    });
+
+    it.each([
+      ["DAILY", "2026-10-15", true],
+      ["DAILY", "2026-10-16", false],
+      ["WEEKLY", "2026-10-18", true],
+      ["WEEKLY", "2026-10-19", false],
+      ["BIWEEKLY", "2026-10-21", true],
+      ["MONTHLY", "2026-10-22", true],
+      ["MONTHLY", "2026-10-23", false],
+      ["ONCE", "2026-10-22", true],
+    ])(
+      "a %s schedule due %s is %s the trade's occurrence",
+      async (frequency, nextDueDate, found) => {
+        finderQb([{ id: "st-1", name: "X", nextDueDate, frequency }]);
+        const result = await service.findInvestmentOccurrenceForTrade(
+          userId,
+          trade,
+        );
+        expect(result !== null).toBe(found);
+      },
+    );
+
+    it("refuses to guess between two schedules", async () => {
+      finderQb([
+        {
+          id: "st-1",
+          name: "A",
+          nextDueDate: "2026-10-16",
+          frequency: "MONTHLY",
+        },
+        {
+          id: "st-2",
+          name: "B",
+          nextDueDate: "2026-10-14",
+          frequency: "MONTHLY",
+        },
+      ]);
+      await expect(
+        service.findInvestmentOccurrenceForTrade(userId, trade),
+      ).resolves.toBeNull();
+    });
+
+    it("finds none when nothing is scheduled", async () => {
+      finderQb([]);
+      await expect(
+        service.findInvestmentOccurrenceForTrade(userId, trade),
+      ).resolves.toBeNull();
+    });
+  });
+
   describe("post", () => {
     it("should create a regular transaction from base values", async () => {
       const scheduled = makeScheduled();
@@ -2410,6 +3147,121 @@ describe("ScheduledTransactionsService", () => {
           amount: -1200,
           currencyCode: "USD",
         }),
+        { fromScheduledPosting: true, recordHistory: false },
+      );
+    });
+
+    it("posts a BTC schedule's eight-place amount unchanged (INV-MONEY-001)", async () => {
+      stubFindOne(makeScheduled({ amount: -0.000025, currencyCode: "BTC" }));
+      const overrideQb = mockQueryBuilder(null);
+      overrideQb.getOne.mockResolvedValue(null);
+      overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+      accountsRepo.findOne.mockResolvedValue(null);
+
+      await service.post(userId, stId);
+
+      expect(transactionsService.create).toHaveBeenCalledWith(
+        userId,
+        expect.objectContaining({ amount: -0.000025, currencyCode: "BTC" }),
+        { fromScheduledPosting: true, recordHistory: false },
+      );
+    });
+
+    it("re-sums a BTC split parent at eight places, not four", async () => {
+      // The payroll cap re-sum is the one that reaches a plain split post; it
+      // finds no rule here, so the lines post as stored and the parent with
+      // them.
+      stubFindOne(
+        makeScheduled({
+          amount: -0.005025,
+          currencyCode: "BTC",
+          isSplit: true,
+          categoryId: null,
+          splits: [
+            { id: "s-1", categoryId: "cat-a", amount: -0.005 },
+            { id: "s-2", categoryId: "cat-fee", amount: -0.000025 },
+          ] as any,
+        }),
+      );
+      const overrideQb = mockQueryBuilder(null);
+      overrideQb.getOne.mockResolvedValue(null);
+      overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+      accountsRepo.findOne.mockResolvedValue(null);
+
+      await service.post(userId, stId);
+
+      const payload = transactionsService.create.mock.calls[0][1];
+      expect(payload.amount).toBe(-0.005025);
+      expect(payload.splits.map((x: { amount: number }) => x.amount)).toEqual([
+        -0.005, -0.000025,
+      ]);
+    });
+
+    it("refuses an inline CAD amount at five places before writing", async () => {
+      stubFindOne(makeScheduled({ currencyCode: "CAD" }));
+      const overrideQb = mockQueryBuilder(null);
+      overrideQb.getOne.mockResolvedValue(null);
+      overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+      accountsRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.post(userId, stId, { amount: -1200.12345 } as any),
+      ).rejects.toThrow(
+        /"amount" has more decimal places than CAD carries \(4\)/,
+      );
+      expect(transactionsService.create).not.toHaveBeenCalled();
+    });
+
+    it("runs the caller's beforeWrite inside the posting transaction, before the money is written", async () => {
+      stubFindOne(makeScheduled());
+      const overrideQb = mockQueryBuilder(null);
+      overrideQb.getOne.mockResolvedValue(null);
+      overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+      accountsRepo.findOne.mockResolvedValue(null);
+      const beforeWrite = jest.fn().mockResolvedValue(undefined);
+
+      await service.post(userId, stId, undefined, { beforeWrite });
+
+      expect(beforeWrite).toHaveBeenCalledTimes(1);
+      expect(beforeWrite.mock.invocationCallOrder[0]).toBeLessThan(
+        transactionsService.create.mock.invocationCallOrder[0],
+      );
+    });
+
+    it("writes nothing when the beforeWrite hook refuses", async () => {
+      stubFindOne(makeScheduled());
+      const overrideQb = mockQueryBuilder(null);
+      overrideQb.getOne.mockResolvedValue(null);
+      overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+      accountsRepo.findOne.mockResolvedValue(null);
+
+      await expect(
+        service.post(userId, stId, undefined, {
+          beforeWrite: async () => {
+            throw new Error("no longer open");
+          },
+        }),
+      ).rejects.toThrow("no longer open");
+      expect(transactionsService.create).not.toHaveBeenCalled();
+    });
+
+    it("forwards actorIsNotOwner to the create so an acting delegate's post skips the owner's structural rules", async () => {
+      stubFindOne(makeScheduled());
+      const overrideQb = mockQueryBuilder(null);
+      overrideQb.getOne.mockResolvedValue(null);
+      overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+      accountsRepo.findOne.mockResolvedValue(null);
+
+      await service.post(userId, stId, undefined, { actorIsNotOwner: true });
+
+      expect(transactionsService.create).toHaveBeenCalledWith(
+        userId,
+        expect.objectContaining({ accountId: "acc-1" }),
+        {
+          fromScheduledPosting: true,
+          recordHistory: false,
+          actorIsNotOwner: true,
+        },
       );
     });
 
@@ -2497,6 +3349,37 @@ describe("ScheduledTransactionsService", () => {
       expect(wroteInsideTransaction).toBe(true);
     });
 
+    it("writes a scheduled transfer's legs (and so the create rules) on the posting transaction's manager", async () => {
+      // The rules step lives in writeTransferLegs and runs on the manager it is
+      // handed, so a scheduled transfer gets the rules in the same unit as the
+      // occurrence claim and a rollback drops both.
+      mockDataSource.transaction.mockImplementation(async (...args: any[]) => {
+        const fn = args[args.length - 1] as (m: unknown) => unknown;
+        return fn(mockQueryRunner.manager);
+      });
+      const scheduled = makeScheduled({
+        isTransfer: true,
+        transferAccountId: "acc-2",
+      });
+      stubFindOne(scheduled);
+      const overrideQb = mockQueryBuilder(null);
+      overrideQb.getOne.mockResolvedValue(null);
+      overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+      accountsRepo.findOne.mockResolvedValue(null);
+
+      await service.post(userId, stId);
+
+      expect(transactionsService.writeTransferLegs).toHaveBeenCalledTimes(1);
+      expect(transactionsService.writeTransferLegs.mock.calls[0][1]).toBe(
+        mockQueryRunner.manager,
+      );
+      expect(
+        transactionsService.completeTransfer.mock.invocationCallOrder[0],
+      ).toBeGreaterThan(
+        transactionsService.writeTransferLegs.mock.invocationCallOrder[0],
+      );
+    });
+
     it("completes the transfer only after the posting transaction commits", async () => {
       // `completeTransfer` records action history, and the recorder swallows its
       // own failures by design: inside the caller's transaction that is either a
@@ -2535,6 +3418,33 @@ describe("ScheduledTransactionsService", () => {
 
       expect(transactionsService.completeTransfer).toHaveBeenCalled();
       expect(completedInsideTransaction).toBe(false);
+    });
+
+    // A26-S08-02 / A26-M14: the legs and the claim committed before
+    // completeTransfer ran, so its failure must not be reported as "not posted".
+    it("still resolves, and logs, when completeTransfer fails after the commit", async () => {
+      transactionsService.completeTransfer.mockRejectedValueOnce(
+        new Error("history down"),
+      );
+      const errorSpy = jest
+        .spyOn((service as any).logger, "error")
+        .mockImplementation(() => undefined);
+      const scheduled = makeScheduled({
+        isTransfer: true,
+        transferAccountId: "acc-2",
+      });
+      stubFindOne(scheduled);
+      const overrideQb = mockQueryBuilder(null);
+      overrideQb.getOne.mockResolvedValue(null);
+      overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+      accountsRepo.findOne.mockResolvedValue(null);
+
+      await expect(service.post(userId, stId)).resolves.toBeDefined();
+
+      expect(transactionsService.completeTransfer).toHaveBeenCalledTimes(1);
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      expect(String(errorSpy.mock.calls[0][0])).toContain(stId);
+      expect(String(errorSpy.mock.calls[0][0])).toContain("history down");
     });
 
     it("does not send currency codes, leaving the transfer service to derive them (P5-002)", async () => {
@@ -2810,6 +3720,7 @@ describe("ScheduledTransactionsService", () => {
       expect(transactionsService.create).toHaveBeenCalledWith(
         userId,
         expect.objectContaining({ amount: -500, description: "inline desc" }),
+        { fromScheduledPosting: true, recordHistory: false },
       );
     });
 
@@ -2837,6 +3748,7 @@ describe("ScheduledTransactionsService", () => {
       expect(transactionsService.create).toHaveBeenCalledWith(
         userId,
         expect.objectContaining({ amount: -999, description: "override desc" }),
+        { fromScheduledPosting: true, recordHistory: false },
       );
     });
 
@@ -2904,6 +3816,7 @@ describe("ScheduledTransactionsService", () => {
       expect(transactionsService.create).toHaveBeenCalledWith(
         userId,
         expect.objectContaining({ accountId: "acc-1", amount: -1200 }),
+        { fromScheduledPosting: true, recordHistory: false },
       );
     });
 
@@ -2981,6 +3894,248 @@ describe("ScheduledTransactionsService", () => {
 
       expect(transactionsService.create).not.toHaveBeenCalled();
       expect(scheduledRepo.update).not.toHaveBeenCalled();
+    });
+
+    describe("the claim names the transaction that paid it (docs/specs/loan-installment-settlement.md 5.2)", () => {
+      const recordings = () =>
+        mockQueryRunner.manager.query.mock.calls.filter((c: unknown[]) =>
+          String(c[0]).includes("SET transaction_id"),
+        );
+
+      it("writes transaction_id on its own claim once the create has returned the id, in the posting transaction", async () => {
+        stubFindOne(makeScheduled({ nextDueDate: "2026-02-01" }));
+        const overrideQb = mockQueryBuilder(null);
+        overrideQb.getOne.mockResolvedValue(null);
+        overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+
+        await service.post(userId, stId);
+
+        const [recorded] = recordings();
+        expect(recorded).toBeDefined();
+        expect(String(recorded[0])).toContain(
+          "UPDATE scheduled_transaction_postings",
+        );
+        // The created row, on the claim the INSERT returned.
+        expect(recorded[1]).toEqual(["tx-1", "posting-1"]);
+        expect(
+          mockQueryRunner.manager.query.mock.invocationCallOrder[
+            mockQueryRunner.manager.query.mock.calls.indexOf(recorded)
+          ],
+        ).toBeGreaterThan(
+          transactionsService.create.mock.invocationCallOrder[0],
+        );
+        // The row the create wrote is the one post() claimed for: its rules
+        // refuse to settle it against the same occurrence.
+        expect(transactionsService.create.mock.calls[0][2]).toEqual({
+          fromScheduledPosting: true,
+          recordHistory: false,
+        });
+      });
+
+      it("records the source leg of a transfer post", async () => {
+        stubFindOne(
+          makeScheduled({ isTransfer: true, transferAccountId: "acc-2" }),
+        );
+        const overrideQb = mockQueryBuilder(null);
+        overrideQb.getOne.mockResolvedValue(null);
+        overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+        accountsRepo.findOne.mockResolvedValue(null);
+
+        await service.post(userId, stId);
+
+        expect(recordings().map((c: unknown[]) => c[1])).toEqual([
+          ["tx-1", "posting-1"],
+        ]);
+      });
+
+      it("records nothing for an investment post", async () => {
+        stubFindOne(
+          makeScheduled({
+            isInvestment: true,
+            investmentAction: "BUY" as any,
+            investmentSecurityId: "sec-1",
+            investmentQuantity: 1,
+            investmentPrice: 100,
+          }),
+        );
+        const overrideQb = mockQueryBuilder(null);
+        overrideQb.getOne.mockResolvedValue(null);
+        overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+
+        await service.post(userId, stId);
+
+        expect(investmentTransactionsService.create).toHaveBeenCalledTimes(1);
+        expect(recordings()).toEqual([]);
+      });
+    });
+
+    describe("records the posting as one undoable history entry (issue #2165)", () => {
+      const noOverride = () => {
+        const overrideQb = mockQueryBuilder(null);
+        overrideQb.getOne.mockResolvedValue(null);
+        overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+        accountsRepo.findOne.mockResolvedValue(null);
+      };
+      const postings = () =>
+        mockActionHistoryService.record.mock.calls.filter(
+          (c: any[]) => c[1].entityType === "scheduled_posting",
+        );
+
+      it("records the row, the claim and the cursor advance of a recurring bill", async () => {
+        stubFindOne(makeScheduled({ nextDueDate: "2025-02-15" }));
+        noOverride();
+
+        await service.post(userId, stId);
+
+        expect(postings()).toHaveLength(1);
+        const [recordedFor, entry] = postings()[0];
+        expect(recordedFor).toBe(userId);
+        expect(entry).toMatchObject({
+          entityId: stId,
+          action: "post",
+          descriptionKey: "postedScheduledTransaction",
+          descriptionParams: { name: "Monthly Rent" },
+          afterData: {
+            scheduledTransactionId: stId,
+            claimId: "posting-1",
+            dueDate: "2025-02-15",
+            money: { kind: "transaction", transactionId: "tx-1" },
+            cursor: {
+              before: { nextDueDate: "2025-02-15", lastPostedDate: null },
+              after: { nextDueDate: "2025-03-15" },
+            },
+          },
+        });
+        expect(entry.afterData.removedSchedule).toBeUndefined();
+      });
+
+      it("keeps an estimated schedule's amount before the posting, for the undo", async () => {
+        stubFindOne(
+          makeScheduled({ nextDueDate: "2025-02-15", amountIsEstimated: true }),
+        );
+        noOverride();
+
+        // The person states the amount: no estimate is read for the post.
+        await service.post(userId, stId, { amount: -95 } as never);
+
+        expect(postings()[0][1].afterData.estimatedAmount).toBe(-1200);
+      });
+
+      it("keeps a one-time bill's rows, which the posting deletes, instead of a cursor", async () => {
+        stubFindOne(makeScheduled({ frequency: "ONCE" }));
+        noOverride();
+        mockQueryRunner.manager.delete = jest
+          .fn()
+          .mockResolvedValue({ affected: 1 });
+
+        await service.post(userId, stId);
+
+        const [, entry] = postings()[0];
+        expect(entry.afterData.removedSchedule).toBeDefined();
+        expect(entry.afterData.cursor).toBeUndefined();
+        const snapshotRead = mockQueryRunner.manager.query.mock.calls.findIndex(
+          (c: unknown[]) => String(c[0]).includes("to_jsonb(s) AS schedule"),
+        );
+        expect(snapshotRead).toBeGreaterThanOrEqual(0);
+        // Read before the delete took the rows with it.
+        expect(
+          mockQueryRunner.manager.query.mock.invocationCallOrder[snapshotRead],
+        ).toBeLessThan(
+          (mockQueryRunner.manager.delete as jest.Mock).mock
+            .invocationCallOrder[0],
+        );
+      });
+
+      it("records an investment posting and switches the trade's own entry off", async () => {
+        stubFindOne(
+          makeScheduled({
+            isInvestment: true,
+            investmentAction: "BUY" as any,
+            investmentSecurityId: "sec-1",
+            investmentQuantity: 1,
+            investmentPrice: 100,
+          }),
+        );
+        noOverride();
+
+        await service.post(userId, stId);
+
+        expect(investmentTransactionsService.create.mock.calls[0][2]).toEqual({
+          recordHistory: false,
+        });
+        expect(postings()[0][1].afterData.money).toEqual({
+          kind: "investment",
+          investmentTransactionId: "inv-tx-1",
+          securityId: "sec-1",
+        });
+      });
+
+      it("records a transfer posting and switches the transfer's own entry off", async () => {
+        stubFindOne(
+          makeScheduled({ isTransfer: true, transferAccountId: "acc-2" }),
+        );
+        noOverride();
+        transactionsService.prepareTransfer.mockResolvedValueOnce({
+          effectiveUserId: userId,
+          realUserId: userId,
+          dto: { fromAccountId: "acc-1", toAccountId: "acc-2" },
+          fromOwnerId: userId,
+          toOwnerId: userId,
+          hasForeignLeg: false,
+        });
+
+        await service.post(userId, stId);
+
+        expect(transactionsService.completeTransfer.mock.calls[0][3]).toEqual({
+          recordHistory: false,
+        });
+        expect(postings()[0][1].afterData.money).toEqual({
+          kind: "transfer",
+          fromTransactionId: "tx-1",
+          toTransactionId: "tx-2",
+          fromAccountId: "acc-1",
+          toAccountId: "acc-2",
+        });
+      });
+
+      it("leaves a transfer with a leg in another owner's account to the transfer's own entries", async () => {
+        stubFindOne(
+          makeScheduled({ isTransfer: true, transferAccountId: "acc-2" }),
+        );
+        noOverride();
+        transactionsService.prepareTransfer.mockResolvedValueOnce({
+          effectiveUserId: userId,
+          realUserId: userId,
+          dto: { fromAccountId: "acc-1", toAccountId: "acc-2" },
+          fromOwnerId: userId,
+          toOwnerId: "other-owner",
+          hasForeignLeg: true,
+        });
+
+        await service.post(userId, stId);
+
+        expect(transactionsService.completeTransfer.mock.calls[0][3]).toEqual({
+          recordHistory: true,
+        });
+        expect(postings()).toEqual([]);
+      });
+
+      it("records nothing for a posting that wrote no money", async () => {
+        stubFindOne(
+          makeScheduled({
+            isInvestment: true,
+            investmentAction: "BUY" as any,
+            investmentSecurityId: "sec-1",
+            investmentQuantity: 1,
+            investmentPrice: 100,
+          }),
+        );
+        noOverride();
+
+        await service.post(userId, stId, undefined, { recordOnly: true });
+
+        expect(postings()).toEqual([]);
+      });
     });
 
     it("refuses when the schedule has already been advanced past this occurrence", async () => {
@@ -3120,6 +4275,150 @@ describe("ScheduledTransactionsService", () => {
       expect(payload.splits[0].amount).toBe(-700);
     });
 
+    it("caps a deduction line a payroll rule names and re-sums the parent (INV-PAYROLL-002)", async () => {
+      const scheduled = makeScheduled({
+        isSplit: true,
+        amount: 2436,
+        splits: [
+          {
+            id: "s1",
+            scheduledTransactionId: stId,
+            categoryId: "cat-gross",
+            transferAccountId: null,
+            amount: 2500,
+            memo: null,
+          } as any,
+          {
+            id: "s2",
+            scheduledTransactionId: stId,
+            categoryId: "cat-ei",
+            transferAccountId: null,
+            amount: -64,
+            memo: null,
+          } as any,
+        ],
+      });
+      stubFindOne(scheduled);
+      const overrideQb = mockQueryBuilder(null);
+      overrideQb.getOne.mockResolvedValue(null);
+      overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+      accountsRepo.findOne.mockResolvedValue(null);
+      payrollRulesRepo.find.mockResolvedValue([
+        {
+          id: "rule-1",
+          categoryId: "cat-ei",
+          yearlyMaximum: 1077.48,
+          resetDate: "2025-01-01",
+          expectedPerPaycheque: null,
+        },
+      ]);
+      // The ledger already holds 1,024 of EI in the posting date's period.
+      const base = mockDataSource.query.getMockImplementation()!;
+      mockDataSource.query.mockImplementation(
+        async (sql: string, params?: unknown[]) => {
+          if (String(sql).includes("foreign_rows")) {
+            expect(params).toEqual([
+              userId,
+              "cat-ei",
+              "2025-01-01",
+              "2025-12-31",
+              "USD",
+            ]);
+            return [{ total: "-1024", foreign_rows: "0" }];
+          }
+          if (String(sql).includes("payroll_deduction_rules")) return [];
+          return base(sql, params);
+        },
+      );
+
+      await service.post(userId, stId);
+
+      expect(payrollRulesRepo.find).toHaveBeenCalledWith({
+        where: { scheduledTransactionId: stId, userId },
+        relations: ["periods"],
+      });
+      const payload = transactionsService.create.mock.calls[0][1];
+      expect(payload.splits.map((s: any) => s.amount)).toEqual([2500, -53.48]);
+      expect(payload.amount).toBe(2446.52);
+    });
+
+    it("takes the category lock before the paid read and pools a peer rule's lower cap (INV-PAYROLL-002, INV-PAYROLL-003)", async () => {
+      const scheduled = makeScheduled({
+        isSplit: true,
+        amount: 2436,
+        splits: [
+          {
+            id: "s1",
+            scheduledTransactionId: stId,
+            categoryId: "cat-gross",
+            transferAccountId: null,
+            amount: 2500,
+            memo: null,
+          } as any,
+          {
+            id: "s2",
+            scheduledTransactionId: stId,
+            categoryId: "cat-ei",
+            transferAccountId: null,
+            amount: -64,
+            memo: null,
+          } as any,
+        ],
+      });
+      stubFindOne(scheduled);
+      const overrideQb = mockQueryBuilder(null);
+      overrideQb.getOne.mockResolvedValue(null);
+      overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+      accountsRepo.findOne.mockResolvedValue(null);
+      // This bill allows 5000; another bill on the category allows 4000.
+      payrollRulesRepo.find.mockResolvedValue([
+        {
+          id: "rule-1",
+          categoryId: "cat-ei",
+          yearlyMaximum: 5000,
+          resetDate: "2025-01-01",
+          expectedPerPaycheque: null,
+        },
+      ]);
+      const base = mockDataSource.query.getMockImplementation()!;
+      mockDataSource.query.mockImplementation(
+        async (sql: string, params?: unknown[]) => {
+          if (String(sql).includes("payroll_deduction_rules")) {
+            return [
+              {
+                id: "rule-2",
+                category_id: "cat-ei",
+                yearly_maximum: "4000",
+                reset_date: "2025-01-01",
+              },
+            ];
+          }
+          if (String(sql).includes("foreign_rows")) {
+            return [{ total: "-4000", foreign_rows: "0" }];
+          }
+          return base(sql, params);
+        },
+      );
+
+      await service.post(userId, stId);
+
+      const sqls = mockDataSource.query.mock.calls.map((c: unknown[]) =>
+        String(c[0]),
+      );
+      const lock = sqls.findIndex((q: string) =>
+        q.includes("pg_advisory_xact_lock"),
+      );
+      const paid = sqls.findIndex((q: string) => q.includes("foreign_rows"));
+      expect(lock).toBeGreaterThanOrEqual(0);
+      expect(lock).toBeLessThan(paid);
+      expect(mockDataSource.query.mock.calls[lock][1]).toEqual([
+        9,
+        `${userId}:cat-ei`,
+      ]);
+      const payload = transactionsService.create.mock.calls[0][1];
+      expect(payload.splits.map((s: any) => s.amount)).toEqual([2500, 0]);
+    });
+
     it("should use postDto.transactionDate when provided", async () => {
       const scheduled = makeScheduled();
       stubFindOne(scheduled);
@@ -3133,6 +4432,7 @@ describe("ScheduledTransactionsService", () => {
       expect(transactionsService.create).toHaveBeenCalledWith(
         userId,
         expect.objectContaining({ transactionDate: "2025-03-01" }),
+        { fromScheduledPosting: true, recordHistory: false },
       );
     });
 
@@ -3216,6 +4516,7 @@ describe("ScheduledTransactionsService", () => {
       expect(transactionsService.create).toHaveBeenCalledWith(
         userId,
         expect.objectContaining({ referenceNumber: "CHQ-1234" }),
+        { fromScheduledPosting: true, recordHistory: false },
       );
     });
 
@@ -3235,6 +4536,62 @@ describe("ScheduledTransactionsService", () => {
       expect(transactionsService.prepareTransfer).toHaveBeenCalledWith(
         userId,
         expect.objectContaining({ referenceNumber: "REF-5678" }),
+      );
+    });
+
+    // Issue #1979: the schedule's stored reference is the default for a post
+    // that does not send one, and a post that sends an empty one clears it.
+    it("falls back to the schedule's stored referenceNumber when the post omits it", async () => {
+      const scheduled = makeScheduled({ referenceNumber: "ACCT-42" });
+      stubFindOne(scheduled);
+      const overrideQb = mockQueryBuilder(null);
+      overrideQb.getOne.mockResolvedValue(null);
+      overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+      accountsRepo.findOne.mockResolvedValue(null);
+
+      await service.post(userId, stId);
+
+      expect(transactionsService.create).toHaveBeenCalledWith(
+        userId,
+        expect.objectContaining({ referenceNumber: "ACCT-42" }),
+        { fromScheduledPosting: true, recordHistory: false },
+      );
+    });
+
+    it("posts no referenceNumber when the post sends an empty one", async () => {
+      const scheduled = makeScheduled({ referenceNumber: "ACCT-42" });
+      stubFindOne(scheduled);
+      const overrideQb = mockQueryBuilder(null);
+      overrideQb.getOne.mockResolvedValue(null);
+      overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+      accountsRepo.findOne.mockResolvedValue(null);
+
+      await service.post(userId, stId, { referenceNumber: "" });
+
+      expect(transactionsService.create).toHaveBeenCalledWith(
+        userId,
+        expect.objectContaining({ referenceNumber: undefined }),
+        { fromScheduledPosting: true, recordHistory: false },
+      );
+    });
+
+    it("passes the schedule's stored referenceNumber to a transfer post", async () => {
+      const scheduled = makeScheduled({
+        isTransfer: true,
+        transferAccountId: "acc-2",
+        referenceNumber: "ACCT-42",
+      });
+      stubFindOne(scheduled);
+      const overrideQb = mockQueryBuilder(null);
+      overrideQb.getOne.mockResolvedValue(null);
+      overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+      accountsRepo.findOne.mockResolvedValue(null);
+
+      await service.post(userId, stId);
+
+      expect(transactionsService.prepareTransfer).toHaveBeenCalledWith(
+        userId,
+        expect.objectContaining({ referenceNumber: "ACCT-42" }),
       );
     });
   });
@@ -3258,6 +4615,7 @@ describe("ScheduledTransactionsService", () => {
 
     it("rejects when account is not a brokerage account", async () => {
       accountsService.findOne.mockResolvedValue({
+        currencyCode: "USD",
         id: "acc-inv",
         userId,
         accountType: "INVESTMENT",
@@ -3284,6 +4642,7 @@ describe("ScheduledTransactionsService", () => {
         id: "acc-inv",
         userId,
         accountSubType: "INVESTMENT_BROKERAGE",
+        currencyCode: "USD",
       });
 
       await expect(
@@ -3299,6 +4658,7 @@ describe("ScheduledTransactionsService", () => {
         id: "acc-inv",
         userId,
         accountSubType: "INVESTMENT_BROKERAGE",
+        currencyCode: "USD",
       });
       const saved = makeScheduled({
         isInvestment: true,
@@ -3346,6 +4706,69 @@ describe("ScheduledTransactionsService", () => {
       expect(dto.price).toBe(500);
       expect(transactionsService.create).not.toHaveBeenCalled();
       expect(transactionsService.prepareTransfer).not.toHaveBeenCalled();
+    });
+
+    it("post() with recordOnly claims the occurrence and writes no money (the payment is already in the ledger)", async () => {
+      const scheduled = makeScheduled({
+        isInvestment: true,
+        investmentAction: "BUY" as any,
+        investmentSecurityId: "sec-voo",
+        investmentQuantity: 1,
+        investmentPrice: 500,
+      });
+      stubFindOne(scheduled);
+      const overrideQb = mockQueryBuilder();
+      overrideQb.getOne.mockResolvedValue(null);
+      overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+      await service.post(userId, stId, undefined, { recordOnly: true });
+
+      expect(investmentTransactionsService.create).not.toHaveBeenCalled();
+      expect(transactionsService.create).not.toHaveBeenCalled();
+      expect(transactionsService.prepareTransfer).not.toHaveBeenCalled();
+      // The occurrence is still claimed, so it cannot be posted again.
+      const claim = mockQueryRunner.manager.query.mock.calls.find(
+        (c: unknown[]) =>
+          String(c[0]).includes("INSERT INTO scheduled_transaction_postings"),
+      );
+      expect(claim).toBeDefined();
+    });
+
+    it("post() of a trade email's card writes the card's executed total and rate, and reports the row it created", async () => {
+      const scheduled = makeScheduled({
+        isInvestment: true,
+        investmentAction: "BUY" as any,
+        investmentSecurityId: "sec-voo",
+        investmentQuantity: 1,
+        investmentPrice: 500,
+        investmentCommission: 0,
+        investmentExchangeRate: 1.3,
+      });
+      stubFindOne(scheduled);
+      const overrideQb = mockQueryBuilder();
+      overrideQb.getOne.mockResolvedValue(null);
+      overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+      investmentTransactionsService.create.mockResolvedValueOnce({
+        id: "it-new",
+      });
+      const afterInvestmentWrite = jest.fn().mockResolvedValue(undefined);
+
+      await service.post(
+        userId,
+        stId,
+        { investmentQuantity: 75.9878, investmentPrice: 26.3200087 } as never,
+        {
+          investmentFigures: { totalAmount: 2000, exchangeRate: 1.37 },
+          afterInvestmentWrite,
+        },
+      );
+
+      const dto = investmentTransactionsService.create.mock.calls[0][1];
+      expect(dto.totalAmount).toBe(2000);
+      expect(dto.exchangeRate).toBe(1.37);
+      expect(afterInvestmentWrite).toHaveBeenCalledWith(
+        expect.anything(),
+        "it-new",
+      );
     });
 
     it("post() forwards funding account for contribution+buy", async () => {
@@ -3628,6 +5051,179 @@ describe("ScheduledTransactionsService", () => {
       expect(transactionsService.create).toHaveBeenCalledTimes(1);
     });
 
+    it("post({expectedDueDate}) refuses once the selected occurrence is no longer the due one (issue #1452)", async () => {
+      // The caller selected the 2025-02-15 occurrence; another replica posted
+      // it and advanced the schedule before this post re-read the row.
+      stubFindOne(makeScheduled({ autoPost: true, nextDueDate: "2025-03-15" }));
+      const overrideQb = mockQueryBuilder();
+      overrideQb.getOne.mockResolvedValue(null);
+      overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+
+      await expect(
+        service.post(userId, stId, undefined, {
+          requireActiveAutoPost: true,
+          expectedDueDate: "2025-02-15",
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
+      expect(transactionsService.create).not.toHaveBeenCalled();
+
+      // The occurrence that is still due posts.
+      await service.post(userId, stId, undefined, {
+        requireActiveAutoPost: true,
+        expectedDueDate: "2025-03-15",
+      });
+      expect(transactionsService.create).toHaveBeenCalledTimes(1);
+      expect(transactionsService.create).toHaveBeenCalledWith(
+        userId,
+        expect.objectContaining({ transactionDate: "2025-03-15" }),
+        { fromScheduledPosting: true, recordHistory: false },
+      );
+    });
+
+    describe("occurrence pin (A26-S08-01)", () => {
+      beforeEach(() => {
+        const overrideQb = mockQueryBuilder();
+        overrideQb.getOne.mockResolvedValue(null);
+        overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+      });
+
+      it("refuses a stale pin before any work and writes nothing", async () => {
+        stubFindOne(makeScheduled({ nextDueDate: "2025-03-15" }));
+
+        await expect(
+          service.post(userId, stId, undefined, {
+            occurrencePin: { occurrenceDate: "2025-02-15", overrideId: null },
+          }),
+        ).rejects.toBeInstanceOf(ConflictException);
+
+        expect(transactionsService.create).not.toHaveBeenCalled();
+        expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+      });
+
+      it("posts when the pin is the cursor, including an occurrence not yet due", async () => {
+        stubFindOne(makeScheduled({ nextDueDate: "2099-03-15" }));
+
+        await service.post(userId, stId, undefined, {
+          occurrencePin: { occurrenceDate: "2099-03-15", overrideId: null },
+        });
+
+        expect(transactionsService.create).toHaveBeenCalledTimes(1);
+      });
+
+      it("refuses a pin of no override when an override exists at the cursor", async () => {
+        stubFindOne(makeScheduled({ nextDueDate: "2025-03-15" }));
+        const override = {
+          id: "ovr-7",
+          overrideDate: "2025-03-15",
+          amount: -10,
+          updatedAt: new Date(0),
+        };
+        const overrideQb = mockQueryBuilder();
+        overrideQb.getOne.mockResolvedValue(override);
+        overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+        overridesRepo.findOne.mockResolvedValue(override);
+
+        await expect(
+          service.post(userId, stId, undefined, {
+            occurrencePin: { occurrenceDate: "2025-03-15", overrideId: null },
+          }),
+        ).rejects.toBeInstanceOf(ConflictException);
+        expect(transactionsService.create).not.toHaveBeenCalled();
+      });
+
+      it("refuses under the lock when an override appeared after the pre-lock read", async () => {
+        stubFindOne(makeScheduled({ nextDueDate: "2025-03-15" }));
+        // The pre-lock read (beforeEach) saw no override; the locked read does.
+        overridesRepo.findOne.mockResolvedValue({
+          id: "ovr-7",
+          overrideDate: "2025-03-15",
+          updatedAt: new Date(0),
+        });
+
+        await expect(
+          service.post(userId, stId, undefined, {
+            occurrencePin: { occurrenceDate: "2025-03-15", overrideId: null },
+          }),
+        ).rejects.toBeInstanceOf(ConflictException);
+        expect(transactionsService.create).not.toHaveBeenCalled();
+        expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+      });
+
+      it("accepts a pin naming the override and the date it moved the occurrence to", async () => {
+        stubFindOne(makeScheduled({ nextDueDate: "2025-03-15" }));
+        const override = {
+          id: "ovr-7",
+          overrideDate: "2025-03-18",
+          amount: null,
+          updatedAt: new Date(0),
+        };
+        const overrideQb = mockQueryBuilder();
+        overrideQb.getOne.mockResolvedValue(override);
+        overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+        overridesRepo.findOne.mockResolvedValue(override);
+
+        await service.post(userId, stId, undefined, {
+          occurrencePin: { occurrenceDate: "2025-03-18", overrideId: "ovr-7" },
+        });
+
+        expect(transactionsService.create).toHaveBeenCalledTimes(1);
+      });
+    });
+
+    it("refuses a manual post of a schedule with no occurrences left (A26-S08-01 P7)", async () => {
+      stubFindOne(
+        makeScheduled({
+          nextDueDate: "2025-03-15",
+          occurrencesRemaining: 0,
+          isActive: false,
+        }),
+      );
+      const overrideQb = mockQueryBuilder();
+      overrideQb.getOne.mockResolvedValue(null);
+      overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+
+      await expect(service.post(userId, stId)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+      expect(transactionsService.create).not.toHaveBeenCalled();
+    });
+
+    it("refuses a post whose cursor is past end_date", async () => {
+      stubFindOne(
+        makeScheduled({ nextDueDate: "2026-01-15", endDate: "2025-12-31" }),
+      );
+      const overrideQb = mockQueryBuilder();
+      overrideQb.getOne.mockResolvedValue(null);
+      overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+
+      await expect(service.post(userId, stId)).rejects.toBeInstanceOf(
+        ConflictException,
+      );
+    });
+
+    it("advances the cursor past a slot a settlement rule claimed ahead (A26-S08-03)", async () => {
+      stubFindOne(
+        makeScheduled({ frequency: "MONTHLY", nextDueDate: "2025-02-15" }),
+      );
+      const overrideQb = mockQueryBuilder();
+      overrideQb.getOne.mockResolvedValue(null);
+      overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+      const answer = mockQueryRunner.manager.query.getMockImplementation()!;
+      mockQueryRunner.manager.query.mockImplementation(
+        async (sql: string, params?: unknown[]) =>
+          String(sql).includes("SELECT TO_CHAR(original_due_date")
+            ? [{ d: "2025-03-15" }]
+            : answer(sql, params),
+      );
+
+      await service.post(userId, stId);
+
+      const advance = mockQueryRunner.manager.update.mock.calls.find(
+        (call: unknown[]) => call[0] === ScheduledTransaction,
+      );
+      expect(advance?.[2].nextDueDate).toBe("2025-04-15");
+    });
+
     it("post() honours inline quantity / price overrides", async () => {
       const scheduled = makeScheduled({
         isInvestment: true,
@@ -3735,6 +5331,7 @@ describe("ScheduledTransactionsService", () => {
         id: "acc-inv",
         userId,
         accountSubType: "INVESTMENT_BROKERAGE",
+        currencyCode: "USD",
       });
 
       await expect(
@@ -3750,6 +5347,7 @@ describe("ScheduledTransactionsService", () => {
         id: "acc-inv",
         userId,
         accountSubType: "INVESTMENT_BROKERAGE",
+        currencyCode: "USD",
       });
 
       await expect(
@@ -3762,11 +5360,98 @@ describe("ScheduledTransactionsService", () => {
       ).rejects.toThrow(BadRequestException);
     });
 
+    describe("a bond-linked security", () => {
+      const linkBond = () =>
+        mockDataSource.query.mockImplementation(async (sql: string) =>
+          String(sql).includes("bond_program_id")
+            ? [{ id: "prog-edo", program_code: "EDO" }]
+            : [],
+        );
+
+      beforeEach(() => {
+        accountsService.findOne.mockResolvedValue({
+          id: "acc-inv",
+          userId,
+          accountSubType: "INVESTMENT_BROKERAGE",
+          currencyCode: "USD",
+        });
+      });
+
+      it.each(["ADD_SHARES", "TRANSFER_IN"])(
+        "refuses a scheduled %s on create (a schedule cannot name a series)",
+        async (action) => {
+          linkBond();
+
+          await expect(
+            service.create(userId, {
+              ...investmentBaseDto,
+              investmentAction: action as any,
+            }),
+          ).rejects.toMatchObject({
+            response: expect.objectContaining({
+              errorCode: "SERIES_REQUIRED",
+              message: expect.stringContaining(action),
+            }),
+          });
+          expect(scheduledRepo.save).not.toHaveBeenCalled();
+        },
+      );
+
+      it("refuses an update that turns a schedule into an ADD_SHARES of it", async () => {
+        linkBond();
+        stubFindOne(
+          makeScheduled({
+            isInvestment: true,
+            investmentAction: "BUY" as any,
+            investmentSecurityId: "sec-voo",
+            investmentQuantity: 1,
+            investmentPrice: 500,
+          }),
+        );
+
+        await expect(
+          service.update(userId, stId, {
+            investmentAction: "ADD_SHARES" as any,
+          } as any),
+        ).rejects.toMatchObject({
+          response: expect.objectContaining({ errorCode: "SERIES_REQUIRED" }),
+        });
+      });
+
+      it("allows a scheduled BUY of it (the series is inferred when it posts)", async () => {
+        linkBond();
+        const saved = makeScheduled({ isInvestment: true });
+        scheduledRepo.save.mockResolvedValue(saved);
+        stubFindOne(saved);
+
+        await expect(
+          service.create(userId, investmentBaseDto),
+        ).resolves.toBeDefined();
+      });
+
+      it("leaves a scheduled ADD_SHARES of an unlinked security alone", async () => {
+        mockDataSource.query.mockImplementation(async () => [
+          { id: null, program_code: null },
+        ]);
+        const saved = makeScheduled({ isInvestment: true });
+        scheduledRepo.save.mockResolvedValue(saved);
+        stubFindOne(saved);
+
+        await expect(
+          service.create(userId, {
+            ...investmentBaseDto,
+            investmentAction: "ADD_SHARES" as any,
+          }),
+        ).resolves.toBeDefined();
+      });
+    });
+
     it("validateInvestmentFields rejects DIVIDEND without totalAmount or qty+price", async () => {
       accountsService.findOne.mockResolvedValue({
         id: "acc-inv",
         userId,
         accountSubType: "INVESTMENT_BROKERAGE",
+        currencyCode: "USD",
       });
 
       await expect(
@@ -3785,6 +5470,7 @@ describe("ScheduledTransactionsService", () => {
         id: "acc-inv",
         userId,
         accountSubType: "INVESTMENT_BROKERAGE",
+        currencyCode: "USD",
       });
 
       await expect(
@@ -3800,6 +5486,7 @@ describe("ScheduledTransactionsService", () => {
         id: "acc-inv",
         userId,
         accountSubType: "INVESTMENT_BROKERAGE",
+        currencyCode: "USD",
       });
 
       await expect(
@@ -3819,6 +5506,7 @@ describe("ScheduledTransactionsService", () => {
             id,
             userId: uid,
             accountSubType: "INVESTMENT_BROKERAGE",
+            currencyCode: "USD",
           } as any;
         },
       );
@@ -3875,6 +5563,7 @@ describe("ScheduledTransactionsService", () => {
         }),
       );
       accountsService.findOne.mockResolvedValue({
+        currencyCode: "USD",
         id: "acc-cash",
         userId,
         accountSubType: "INVESTMENT_CASH",
@@ -3896,6 +5585,7 @@ describe("ScheduledTransactionsService", () => {
         }),
       );
       accountsService.findOne.mockResolvedValue({
+        currencyCode: "USD",
         id: "acc-1",
         userId,
         accountSubType: "INVESTMENT_BROKERAGE",
@@ -3931,6 +5621,7 @@ describe("ScheduledTransactionsService", () => {
         }),
       );
       accountsService.findOne.mockResolvedValue({
+        currencyCode: "USD",
         id: "acc-1",
         userId,
         accountSubType: "INVESTMENT_BROKERAGE",
@@ -3963,6 +5654,7 @@ describe("ScheduledTransactionsService", () => {
         }),
       );
       accountsService.findOne.mockResolvedValue({
+        currencyCode: "USD",
         id: "acc-1",
         userId,
         accountSubType: "INVESTMENT_BROKERAGE",
@@ -3992,6 +5684,7 @@ describe("ScheduledTransactionsService", () => {
         }),
       );
       accountsService.findOne.mockResolvedValue({
+        currencyCode: "USD",
         id: "acc-1",
         userId,
         accountSubType: "INVESTMENT_BROKERAGE",
@@ -4030,6 +5723,7 @@ describe("ScheduledTransactionsService", () => {
         }),
       );
       accountsService.findOne.mockResolvedValue({
+        currencyCode: "USD",
         id: "acc-1",
         userId,
         accountSubType: "INVESTMENT_BROKERAGE",
@@ -4061,6 +5755,7 @@ describe("ScheduledTransactionsService", () => {
         }),
       );
       accountsService.findOne.mockResolvedValue({
+        currencyCode: "USD",
         id: "acc-1",
         userId,
         accountSubType: "INVESTMENT_BROKERAGE",
@@ -4094,6 +5789,7 @@ describe("ScheduledTransactionsService", () => {
         }),
       );
       accountsService.findOne.mockResolvedValue({
+        currencyCode: "USD",
         id: "acc-1",
         userId,
         accountSubType: "INVESTMENT_BROKERAGE",
@@ -4124,6 +5820,7 @@ describe("ScheduledTransactionsService", () => {
         }),
       );
       accountsService.findOne.mockResolvedValue({
+        currencyCode: "USD",
         id: "acc-1",
         userId,
         accountSubType: "INVESTMENT_BROKERAGE",
@@ -4148,6 +5845,7 @@ describe("ScheduledTransactionsService", () => {
         }),
       );
       accountsService.findOne.mockResolvedValue({
+        currencyCode: "USD",
         id: "acc-1",
         userId,
         accountSubType: "INVESTMENT_BROKERAGE",
@@ -4171,6 +5869,7 @@ describe("ScheduledTransactionsService", () => {
         }),
       );
       accountsService.findOne.mockResolvedValue({
+        currencyCode: "USD",
         id: "acc-1",
         userId,
         accountSubType: "INVESTMENT_BROKERAGE",
@@ -4203,6 +5902,7 @@ describe("ScheduledTransactionsService", () => {
         }),
       );
       accountsService.findOne.mockResolvedValue({
+        currencyCode: "USD",
         id: "acc-1",
         userId,
         accountSubType: "INVESTMENT_BROKERAGE",
@@ -4227,6 +5927,7 @@ describe("ScheduledTransactionsService", () => {
         }),
       );
       accountsService.findOne.mockResolvedValue({
+        currencyCode: "USD",
         id: "acc-1",
         userId,
         accountSubType: "INVESTMENT_BROKERAGE",
@@ -4249,6 +5950,7 @@ describe("ScheduledTransactionsService", () => {
         id: "acc-inv",
         userId,
         accountSubType: "INVESTMENT_BROKERAGE",
+        currencyCode: "USD",
       });
 
       await expect(
@@ -4282,6 +5984,7 @@ describe("ScheduledTransactionsService", () => {
         .mockResolvedValueOnce(preEdit)
         .mockResolvedValue(lockedDifferent);
       accountsService.findOne.mockResolvedValue({
+        currencyCode: "USD",
         id: "acc-1",
         userId,
         accountSubType: "INVESTMENT_BROKERAGE",
@@ -4302,6 +6005,7 @@ describe("ScheduledTransactionsService", () => {
             id,
             userId: uid,
             accountSubType: "INVESTMENT_BROKERAGE",
+            currencyCode: "USD",
           } as any;
         },
       );
@@ -4330,6 +6034,7 @@ describe("ScheduledTransactionsService", () => {
         }),
       );
       accountsService.findOne.mockResolvedValue({
+        currencyCode: "USD",
         id: "acc-1",
         userId,
         accountSubType: "INVESTMENT_BROKERAGE",
@@ -4559,6 +6264,7 @@ describe("ScheduledTransactionsService", () => {
           originalCurrencyCode: "USD",
           exchangeRate: 1.4,
         }),
+        { fromScheduledPosting: true, recordHistory: false },
       );
     });
 
@@ -4585,6 +6291,7 @@ describe("ScheduledTransactionsService", () => {
       expect(transactionsService.create).toHaveBeenCalledWith(
         userId,
         expect.objectContaining({ amount: -57.4 }),
+        { fromScheduledPosting: true, recordHistory: false },
       );
     });
 
@@ -4649,6 +6356,7 @@ describe("ScheduledTransactionsService", () => {
           originalAmount: -40,
           exchangeRate: 1.5,
         }),
+        { fromScheduledPosting: true, recordHistory: false },
       );
     });
 
@@ -4674,6 +6382,32 @@ describe("ScheduledTransactionsService", () => {
         ScheduledTransaction,
         stId,
         { amount: -56, exchangeRate: 1.4 },
+      );
+    });
+
+    it("converts a BTC account's estimate at the coin's eight places", async () => {
+      scheduledRepo.find.mockResolvedValue([
+        {
+          id: stId,
+          userId,
+          name: "VPN",
+          amount: -0.0001,
+          currencyCode: "BTC",
+          originalAmount: -12,
+          originalCurrencyCode: "USD",
+          exchangeRate: 0.0000083333,
+          account: { fxFeePercent: null },
+        },
+      ]);
+      mockExchangeRateService.getLatestRate.mockResolvedValue(0.0000107696);
+
+      await service.refreshForeignCurrencyEstimates();
+
+      // -12 x 0.0000107696 = -0.0001292352; four places would store -0.0001.
+      expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+        ScheduledTransaction,
+        stId,
+        { amount: -0.00012924, exchangeRate: 0.0000107696 },
       );
     });
 
@@ -4710,6 +6444,59 @@ describe("ScheduledTransactionsService", () => {
       );
       expect(overridesRepo.save).toHaveBeenCalled();
       expect(result).toBeDefined();
+    });
+
+    it("stores a BTC override's eight-place amount (INV-MONEY-001)", async () => {
+      stubFindOne(makeScheduled({ amount: -0.0001, currencyCode: "BTC" }));
+      const existingQb = mockQueryBuilder(null);
+      existingQb.getOne.mockResolvedValue(null);
+      overridesRepo.createQueryBuilder.mockReturnValue(existingQb);
+
+      await service.createOverride(userId, stId, {
+        originalDate: "2025-02-15",
+        overrideDate: "2025-02-15",
+        amount: -0.000025,
+      });
+
+      expect(overridesRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ amount: -0.000025 }),
+      );
+    });
+
+    it("sums a BTC override's split lines at eight places", async () => {
+      stubFindOne(makeScheduled({ amount: -0.00008, currencyCode: "BTC" }));
+      const existingQb = mockQueryBuilder(null);
+      existingQb.getOne.mockResolvedValue(null);
+      overridesRepo.createQueryBuilder.mockReturnValue(existingQb);
+
+      await service.createOverride(userId, stId, {
+        originalDate: "2025-02-15",
+        overrideDate: "2025-02-15",
+        amount: -0.00008,
+        isSplit: true,
+        splits: [
+          { categoryId: "cat-a", amount: -0.00004 },
+          { categoryId: "cat-b", amount: -0.00004 },
+        ],
+      });
+
+      expect(overridesRepo.save).toHaveBeenCalled();
+    });
+
+    it("refuses a CAD override amount at five places before writing", async () => {
+      stubFindOne(makeScheduled({ currencyCode: "CAD" }));
+      const existingQb = mockQueryBuilder(null);
+      existingQb.getOne.mockResolvedValue(null);
+      overridesRepo.createQueryBuilder.mockReturnValue(existingQb);
+
+      await expect(
+        service.createOverride(userId, stId, {
+          originalDate: "2025-02-15",
+          overrideDate: "2025-02-15",
+          amount: -999.12345,
+        }),
+      ).rejects.toThrow(/more decimal places than CAD carries \(4\)/);
+      expect(overridesRepo.save).not.toHaveBeenCalled();
     });
 
     it("should throw if override already exists for date", async () => {
@@ -4867,6 +6654,20 @@ describe("ScheduledTransactionsService", () => {
       );
     });
 
+    it("refuses a CAD override update at five places before writing", async () => {
+      stubFindOne(makeScheduled({ currencyCode: "CAD" }));
+      overridesRepo.findOne.mockResolvedValue({
+        id: "ovr-1",
+        scheduledTransactionId: stId,
+        amount: -1000,
+      });
+
+      await expect(
+        service.updateOverride(userId, stId, "ovr-1", { amount: -1500.00001 }),
+      ).rejects.toThrow(/more decimal places than CAD carries \(4\)/);
+      expect(overridesRepo.save).not.toHaveBeenCalled();
+    });
+
     it("should validate splits on update", async () => {
       const existing = {
         id: "ovr-1",
@@ -4996,7 +6797,29 @@ describe("ScheduledTransactionsService", () => {
       await service.processAutoPostTransactions();
 
       expect(ctxAtFind).toEqual({ system: true });
-      expect(ctxAtPost).toEqual({ userId: st1.userId });
+      expect(ctxAtPost).toEqual({ userId: st1.userId, timezone: "UTC" });
+      postSpy.mockRestore();
+    });
+
+    // todayYMD() / isTransactionInFuture() read the ambient timezone; without it
+    // a UTC+10 user's bill posted at 00:05 local is future-dated by server date.
+    it("runs each post with the user's timezone bucket in context", async () => {
+      const st1 = makeScheduled({ id: "st-1", autoPost: true });
+      mockDataSource.query.mockResolvedValueOnce([
+        { user_id: st1.userId, timezone: "Australia/Brisbane" },
+      ]);
+      scheduledRepo.find.mockResolvedValue([st1]);
+      overridesRepo.createQueryBuilder.mockReturnValue(mockQueryBuilder([]));
+
+      let tzAtPost: string | undefined;
+      const postSpy = jest.spyOn(service, "post").mockImplementation(() => {
+        tzAtPost = getRequestTimezone();
+        return Promise.resolve(undefined as any);
+      });
+
+      await service.processAutoPostTransactions();
+
+      expect(tzAtPost).toBe("Australia/Brisbane");
       postSpy.mockRestore();
     });
 
@@ -5019,6 +6842,274 @@ describe("ScheduledTransactionsService", () => {
 
       // Should not throw
       await service.processAutoPostTransactions();
+    });
+
+    it("raises a SCHEDULED_POST_FAILED alert for the affected user when a post genuinely fails", async () => {
+      const st1 = makeScheduled({ id: "st-fail", autoPost: true });
+      scheduledRepo.find.mockResolvedValue([st1]);
+      const overrideQb = mockQueryBuilder(null);
+      overrideQb.getOne.mockResolvedValue(null);
+      overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+      const postSpy = jest
+        .spyOn(service, "post")
+        .mockRejectedValue(new Error("account is closed"));
+
+      await service.processAutoPostTransactions();
+
+      expect(mockSystemAlerts.raiseUserAlert).toHaveBeenCalledWith(
+        st1.userId,
+        expect.objectContaining({
+          type: "SCHEDULED_POST_FAILED",
+          severity: "warning",
+          dedupeKey: expect.stringMatching(
+            /^SCHEDULED_POST_FAILED:st-fail:\d{4}-\d{2}-\d{2}$/,
+          ),
+          data: expect.objectContaining({
+            system: true,
+            scheduledId: "st-fail",
+            scheduledName: st1.name,
+            dueDate: st1.nextDueDate,
+            error: "account is closed",
+          }),
+        }),
+      );
+      postSpy.mockRestore();
+    });
+
+    describe("a bond purchase waiting for its series", () => {
+      const seriesError = () =>
+        new BadRequestException({
+          message: "The series of this EDO purchase could not be determined",
+          errorCode: "SERIES_NOT_DETERMINED",
+        });
+      const dueAgo = (days: number) =>
+        addDaysYMD(todayInTimezone("UTC") as string, -days);
+      const bondBuy = (daysOverdue: number) =>
+        makeScheduled({
+          id: "st-bond",
+          autoPost: true,
+          nextDueDate: dueAgo(daysOverdue) as any,
+          isInvestment: true,
+          investmentAction: "BUY" as any,
+          investmentSecurityId: "sec-edo",
+          investmentQuantity: 2,
+          investmentPrice: 100,
+        });
+      const arm = (scheduled: ScheduledTransaction) => {
+        scheduledRepo.find.mockResolvedValue([scheduled]);
+        stubFindOne(scheduled);
+        const overrideQb = mockQueryBuilder();
+        overrideQb.getOne.mockResolvedValue(null);
+        overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+      };
+
+      it.each([0, 1, 2])(
+        "retries without an alert on day %i past due",
+        async (days) => {
+          arm(bondBuy(days));
+          investmentTransactionsService.create.mockRejectedValue(seriesError());
+          const errorSpy = jest
+            .spyOn((service as any).logger, "error")
+            .mockImplementation(() => undefined);
+
+          await service.processAutoPostTransactions();
+
+          expect(investmentTransactionsService.create).toHaveBeenCalledTimes(1);
+          expect(mockSystemAlerts.raiseUserAlert).not.toHaveBeenCalled();
+          expect(errorSpy).not.toHaveBeenCalled();
+          errorSpy.mockRestore();
+        },
+      );
+
+      it("raises one alert naming the missing series month on day 3, with a key that does not change by run date", async () => {
+        const scheduled = bondBuy(3);
+        arm(scheduled);
+        investmentTransactionsService.create.mockRejectedValue(seriesError());
+        const errorSpy = jest
+          .spyOn((service as any).logger, "error")
+          .mockImplementation(() => undefined);
+
+        await service.processAutoPostTransactions();
+        await service.processAutoPostTransactions();
+
+        const month = String(scheduled.nextDueDate).slice(0, 7);
+        expect(mockSystemAlerts.raiseUserAlert).toHaveBeenCalledTimes(2);
+        const [, first] = mockSystemAlerts.raiseUserAlert.mock.calls[0];
+        const [, second] = mockSystemAlerts.raiseUserAlert.mock.calls[1];
+        expect(first.type).toBe("SCHEDULED_POST_FAILED");
+        expect(first.message).toContain(month);
+        expect(first.message).toContain("Fetch the series");
+        expect(first.dedupeKey).toBe(
+          `SCHEDULED_POST_FAILED:st-bond:${scheduled.nextDueDate}:series`,
+        );
+        // The alert service dedupes on the key, so repeats of this hourly
+        // retry raise the alert once.
+        expect(second.dedupeKey).toBe(first.dedupeKey);
+        errorSpy.mockRestore();
+      });
+
+      it("posts with the inferred series once it appears, without an alert", async () => {
+        arm(bondBuy(1));
+        investmentTransactionsService.create
+          .mockRejectedValueOnce(seriesError())
+          .mockResolvedValueOnce({ id: "inv-tx-1" });
+
+        await service.processAutoPostTransactions();
+        await service.processAutoPostTransactions();
+
+        expect(investmentTransactionsService.create).toHaveBeenCalledTimes(2);
+        // The schedule names no series: the write infers it from the date.
+        const dto = investmentTransactionsService.create.mock.calls[1][1];
+        expect(dto.bondInstrumentId).toBeUndefined();
+        expect(dto.bondSeriesReference).toBeUndefined();
+        expect(mockSystemAlerts.raiseUserAlert).not.toHaveBeenCalled();
+      });
+
+      it("still alerts at once for any other refusal of a bond purchase", async () => {
+        arm(bondBuy(0));
+        investmentTransactionsService.create.mockRejectedValue(
+          new BadRequestException({
+            message: "Series EDO0136 does not belong",
+            errorCode: "SERIES_NOT_IN_PROGRAM",
+          }),
+        );
+        const errorSpy = jest
+          .spyOn((service as any).logger, "error")
+          .mockImplementation(() => undefined);
+
+        await service.processAutoPostTransactions();
+
+        expect(mockSystemAlerts.raiseUserAlert).toHaveBeenCalledTimes(1);
+        errorSpy.mockRestore();
+      });
+    });
+
+    it("raises nothing for a ConflictException -- losing the claim means the winner posted it", async () => {
+      const st1 = makeScheduled({ id: "st-claimed", autoPost: true });
+      scheduledRepo.find.mockResolvedValue([st1]);
+      const overrideQb = mockQueryBuilder(null);
+      overrideQb.getOne.mockResolvedValue(null);
+      overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+      const postSpy = jest
+        .spyOn(service, "post")
+        .mockRejectedValue(new ConflictException("already posted"));
+
+      await service.processAutoPostTransactions();
+
+      expect(mockSystemAlerts.raiseUserAlert).not.toHaveBeenCalled();
+      postSpy.mockRestore();
+    });
+
+    // Issue #1452: with two replicas, a bill posted twice. This replica
+    // selected the 2025-02-15 occurrence; by the time its post() re-read the
+    // row another replica had posted it and advanced next_due_date to
+    // 2025-03-15. The post used to take the re-read date as the occurrence and
+    // post the next month's bill under a fresh claim key.
+    it("skips a schedule another replica posted after this run selected it, rather than posting the next occurrence", async () => {
+      const selected = makeScheduled({
+        id: stId,
+        autoPost: true,
+        nextDueDate: "2025-02-15",
+      });
+      scheduledRepo.find.mockResolvedValue([selected]);
+      stubFindOne(
+        makeScheduled({
+          id: stId,
+          autoPost: true,
+          nextDueDate: "2025-03-15",
+          lastPostedDate: "2025-02-15",
+        }),
+      );
+      const overrideQb = mockQueryBuilder(null);
+      overrideQb.getOne.mockResolvedValue(null);
+      overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+      const logSpy = jest.spyOn((service as any).logger, "log");
+
+      await service.processAutoPostTransactions();
+
+      expect(transactionsService.create).not.toHaveBeenCalled();
+      expect(mockSystemAlerts.raiseUserAlert).not.toHaveBeenCalled();
+      expect(logSpy).toHaveBeenCalledWith(
+        "Auto-post processing complete: 0 succeeded, " +
+          "1 already claimed elsewhere, 0 failed",
+      );
+      logSpy.mockRestore();
+    });
+
+    // Every replica fires this cron. The winner posts a ONCE schedule and
+    // deletes it inside the posting transaction, so the loser's post() finds
+    // no row and throws NotFoundException, not ConflictException. That is a
+    // posted transaction, never "could not be posted".
+    it("raises nothing for a NotFoundException -- a ONCE schedule posted and deleted by the winner", async () => {
+      const st1 = makeScheduled({
+        id: "st-once-gone",
+        autoPost: true,
+        frequency: "ONCE",
+      });
+      scheduledRepo.find.mockResolvedValue([st1]);
+      // The winner deleted the row: the existence re-read finds nothing.
+      scheduledRepo.count.mockResolvedValue(0);
+      const overrideQb = mockQueryBuilder(null);
+      overrideQb.getOne.mockResolvedValue(null);
+      overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+      const postSpy = jest
+        .spyOn(service, "post")
+        .mockRejectedValue(
+          new NotFoundException(
+            "Scheduled transaction with ID st-once-gone not found",
+          ),
+        );
+      const logSpy = jest.spyOn((service as any).logger, "log");
+      const errorSpy = jest.spyOn((service as any).logger, "error");
+
+      await service.processAutoPostTransactions();
+
+      expect(mockSystemAlerts.raiseUserAlert).not.toHaveBeenCalled();
+      expect(logSpy).toHaveBeenCalledWith(
+        "Auto-post processing complete: 0 succeeded, " +
+          "1 already claimed elsewhere, 0 failed",
+      );
+      expect(errorSpy).not.toHaveBeenCalled();
+      postSpy.mockRestore();
+      logSpy.mockRestore();
+      errorSpy.mockRestore();
+    });
+
+    it("still alerts on a NotFoundException when the schedule itself is still there", async () => {
+      // post() reaches services that throw NotFoundException for a missing
+      // account or security. That schedule is genuinely broken -- it fails
+      // every hour -- so it must reach the user, not be skipped as "posted and
+      // removed elsewhere".
+      const broken = makeScheduled({ id: "st-broken", autoPost: true });
+      scheduledRepo.find.mockResolvedValue([broken]);
+      scheduledRepo.count.mockResolvedValue(1);
+      const overrideQb = mockQueryBuilder(null);
+      overrideQb.getOne.mockResolvedValue(null);
+      overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+      const postSpy = jest
+        .spyOn(service, "post")
+        .mockRejectedValue(new NotFoundException("Account acc-9 not found"));
+      const logSpy = jest.spyOn((service as any).logger, "log");
+      const errorSpy = jest
+        .spyOn((service as any).logger, "error")
+        .mockImplementation(() => undefined);
+
+      await service.processAutoPostTransactions();
+
+      expect(mockSystemAlerts.raiseUserAlert).toHaveBeenCalledTimes(1);
+      expect(mockSystemAlerts.raiseUserAlert).toHaveBeenCalledWith(
+        broken.userId,
+        expect.objectContaining({
+          type: "SCHEDULED_POST_FAILED",
+        }),
+      );
+      expect(logSpy).toHaveBeenCalledWith(
+        "Auto-post processing complete: 0 succeeded, " +
+          "0 already claimed elsewhere, 1 failed",
+      );
+      postSpy.mockRestore();
+      logSpy.mockRestore();
+      errorSpy.mockRestore();
     });
 
     it("should auto-post transfer transactions using prepareTransfer", async () => {
@@ -5220,6 +7311,7 @@ describe("ScheduledTransactionsService", () => {
         expect.objectContaining({
           transactionDate: "2025-03-12",
         }),
+        { fromScheduledPosting: true, recordHistory: false },
       );
     });
   });
@@ -5312,6 +7404,24 @@ describe("ScheduledTransactionsService", () => {
     });
   });
 
+  describe("repriceLoanTemplate", () => {
+    it("reprices through the loan service, which skips an inactive schedule", async () => {
+      scheduledRepo.findOne.mockResolvedValue(
+        makeScheduled({ isActive: false }),
+      );
+
+      await service.repriceLoanTemplate(stId);
+
+      expect(scheduledRepo.findOne).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: stId },
+          lock: { mode: "pessimistic_write" },
+        }),
+      );
+      expect(splitsRepo.save).not.toHaveBeenCalled();
+    });
+  });
+
   describe("getLoanProjectionAnchor", () => {
     it("returns the schedule's due date and the ledger debt through it", async () => {
       accountsRepo.findOne.mockResolvedValue({
@@ -5384,6 +7494,44 @@ describe("ScheduledTransactionsService", () => {
         .mockResolvedValue({ affected: 1 });
       transactionsService.create.mockResolvedValue({ id: "tx-new" });
     };
+
+    // A26-S08-02 / A26-M14: the posting committed before the re-price ran, so a
+    // failure of the re-price must not be reported as "not posted".
+    it("still resolves, and logs, when the post-commit loan re-price fails", async () => {
+      const scheduled = makeScheduled({
+        amount: -1500,
+        isSplit: true,
+        splits: loanTemplateSplits(),
+        frequency: "MONTHLY",
+      });
+      arrangeLoanPost(scheduled);
+      mockDataSource.query.mockImplementation(async (sql: string) => {
+        const text = String(sql);
+        if (text.includes("scheduled_transaction_postings")) {
+          return [[{ id: "posting-1" }], 1];
+        }
+        if (text.includes("opening_balance")) {
+          return [{ balance: "-198500" }];
+        }
+        return [
+          { user_id: "11111111-1111-1111-1111-111111111111", timezone: "UTC" },
+        ];
+      });
+      const recalc = jest
+        .spyOn((service as any).loanService, "recalculateLoanPaymentSplits")
+        .mockRejectedValue(new Error("lock timeout"));
+      const errorSpy = jest
+        .spyOn((service as any).logger, "error")
+        .mockImplementation(() => undefined);
+
+      await expect(service.post(userId, stId)).resolves.toBeDefined();
+
+      expect(transactionsService.create).toHaveBeenCalledTimes(1);
+      expect(recalc).toHaveBeenCalledWith(stId);
+      expect(errorSpy).toHaveBeenCalledTimes(1);
+      expect(String(errorSpy.mock.calls[0][0])).toContain(stId);
+      expect(String(errorSpy.mock.calls[0][0])).toContain("lock timeout");
+    });
 
     it("posts the ledger-derived allocation, not the stale stored split (issue #1253)", async () => {
       // The template was prepared when the previous occurrence posted: 1,000
@@ -5547,6 +7695,163 @@ describe("ScheduledTransactionsService", () => {
         (sp: any) => sp.categoryId === "cat-interest",
       );
       expect(interest.amount).toBe(-1100);
+    });
+
+    describe("a template priced below the cent (issue #1581)", () => {
+      // A LINEAR installment priced at storage precision: 864.5833 principal
+      // + 306.0625 interest (61,212.50 at 6% monthly) = 1,170.6458. The bank
+      // debits 1,170.65.
+      const subCentTemplate = () =>
+        makeScheduled({
+          amount: -1170.6458,
+          isSplit: true,
+          frequency: "ONCE",
+          splits: [
+            { ...loanTemplateSplits()[0], amount: -864.5833 },
+            { ...loanTemplateSplits()[1], amount: -306.0625 },
+          ],
+        });
+
+      const arrangeSubCent = (balance = "-61212.5") => {
+        arrangeLoanPost(subCentTemplate());
+        mockDataSource.query.mockImplementation(async (sql: string) => {
+          const text = String(sql);
+          if (text.includes("scheduled_transaction_postings")) {
+            return [[{ id: "posting-1" }], 1];
+          }
+          if (text.includes("opening_balance")) {
+            return [{ balance }];
+          }
+          return [
+            {
+              user_id: "11111111-1111-1111-1111-111111111111",
+              timezone: "UTC",
+            },
+          ];
+        });
+      };
+
+      const posted = () => {
+        const payload = transactionsService.create.mock.calls[0][1];
+        return {
+          amount: payload.amount,
+          principal: payload.splits.find(
+            (sp: any) => sp.transferAccountId === "loan-1",
+          ).amount,
+          interest: payload.splits.find(
+            (sp: any) => sp.categoryId === "cat-interest",
+          ).amount,
+        };
+      };
+
+      it("books the automatic posting in cents", async () => {
+        arrangeSubCent();
+
+        await service.post(userId, stId);
+
+        expect(posted()).toEqual({
+          amount: -1170.65,
+          principal: -864.59,
+          interest: -306.06,
+        });
+      });
+
+      it("posts the Post dialog's unchanged pre-fill, re-priced and booked in cents", async () => {
+        // What the dialog now sends: the template booked in cents, the
+        // rounding cent on the principal line. Before the fix it sent the
+        // 4dp lines under a 1,170.65 parent and the split validator refused
+        // the post ("Split amounts (-1170.6458) must equal transaction
+        // amount (-1170.65)"). A 212.50 principal payment has landed since
+        // the template was priced, so only a recognised echo re-prices it:
+        // 61,000 at 0.5% is 305.00 of interest.
+        arrangeSubCent("-61000");
+
+        await service.post(userId, stId, {
+          amount: -1170.65,
+          isSplit: true,
+          splits: [
+            {
+              sourceSplitId: "ss-principal",
+              transferAccountId: "loan-1",
+              amount: -864.59,
+            },
+            {
+              sourceSplitId: "ss-interest",
+              categoryId: "cat-interest",
+              amount: -306.06,
+            },
+          ],
+        } as any);
+
+        expect(posted()).toEqual({
+          amount: -1170.65,
+          principal: -865.65,
+          interest: -305,
+        });
+      });
+
+      it("books a split template the loan pricing does not re-divide in cents too", async () => {
+        // No line pays a loan, so `resolvePostingAllocation` is not
+        // applicable; the occurrence is still booked in cents, as the Post
+        // dialog pre-fills it, with the cent on the largest line.
+        const scheduled = makeScheduled({
+          amount: -100,
+          isSplit: true,
+          frequency: "ONCE",
+          splits: [
+            {
+              ...loanTemplateSplits()[1],
+              id: "ss-a",
+              categoryId: "cat-a",
+              amount: -33.335,
+            },
+            {
+              ...loanTemplateSplits()[1],
+              id: "ss-b",
+              categoryId: "cat-b",
+              amount: -66.665,
+            },
+          ],
+        });
+        arrangeLoanPost(scheduled);
+
+        await service.post(userId, stId);
+
+        const payload = transactionsService.create.mock.calls[0][1];
+        expect(payload.amount).toBe(-100);
+        expect(payload.splits.map((sp: any) => sp.amount)).toEqual([
+          -33.34, -66.66,
+        ]);
+      });
+
+      it("honours a cent the user moved between the lines", async () => {
+        // The bank split it 864.58 / 306.07: exact comparison, no tolerance,
+        // so a typed cent is the user's statement and posts as given.
+        arrangeSubCent();
+
+        await service.post(userId, stId, {
+          amount: -1170.65,
+          isSplit: true,
+          splits: [
+            {
+              sourceSplitId: "ss-principal",
+              transferAccountId: "loan-1",
+              amount: -864.58,
+            },
+            {
+              sourceSplitId: "ss-interest",
+              categoryId: "cat-interest",
+              amount: -306.07,
+            },
+          ],
+        } as any);
+
+        expect(posted()).toEqual({
+          amount: -1170.65,
+          principal: -864.58,
+          interest: -306.07,
+        });
+      });
     });
 
     it("prices the occurrence at the date its money moves, not the abandoned slot", async () => {
@@ -6133,6 +8438,7 @@ describe("ScheduledTransactionsService", () => {
         id: "acc-inv",
         userId,
         accountSubType: "INVESTMENT_BROKERAGE",
+        currencyCode: "CAD",
       });
       investmentTransactionsService.resolveSettlementCurrencyPair.mockResolvedValue(
         { from: "USD", to: "CAD" },
@@ -6284,6 +8590,7 @@ describe("ScheduledTransactionsService", () => {
         } as any),
       );
       accountsService.findOne.mockResolvedValue({
+        currencyCode: "USD",
         id: "acc-1",
         userId,
         accountSubType: "INVESTMENT_BROKERAGE",
@@ -6611,6 +8918,7 @@ describe("ScheduledTransactionsService", () => {
         } as any),
       );
       accountsService.findOne.mockResolvedValue({
+        currencyCode: "USD",
         id: "acc-1",
         userId,
         accountSubType: "INVESTMENT_BROKERAGE",
@@ -6655,6 +8963,7 @@ describe("ScheduledTransactionsService", () => {
         } as any),
       );
       accountsService.findOne.mockResolvedValue({
+        currencyCode: "USD",
         id: "acc-1",
         userId,
         accountSubType: "INVESTMENT_BROKERAGE",
@@ -6699,6 +9008,7 @@ describe("ScheduledTransactionsService", () => {
         } as any),
       );
       accountsService.findOne.mockResolvedValue({
+        currencyCode: "USD",
         id: "acc-1",
         userId,
         accountSubType: "INVESTMENT_BROKERAGE",
@@ -6744,6 +9054,7 @@ describe("ScheduledTransactionsService", () => {
         } as any),
       );
       accountsService.findOne.mockResolvedValue({
+        currencyCode: "USD",
         id: "acc-1",
         userId,
         accountSubType: "INVESTMENT_BROKERAGE",
@@ -6788,6 +9099,7 @@ describe("ScheduledTransactionsService", () => {
         } as any),
       );
       accountsService.findOne.mockResolvedValue({
+        currencyCode: "USD",
         id: "acc-1",
         userId,
         accountSubType: "INVESTMENT_BROKERAGE",
@@ -8345,6 +10657,886 @@ describe("ScheduledTransactionsService", () => {
       expect(
         investmentTransactionsService.resolveSettlementCurrencyPair,
       ).not.toHaveBeenCalled();
+    });
+  });
+
+  // ==================== estimated amounts (issue #2096) ====================
+  describe("estimated amounts (issue #2096)", () => {
+    /** Three payments in the year, no pattern: every month is their mean, -110. */
+    const knownEstimate = (): ScheduleAmountEstimate => ({
+      status: "estimated",
+      currencyCode: "USD",
+      missingPair: null,
+      floors: [],
+      profile: buildEstimateProfile(
+        [
+          { date: "2026-08-15", amount: -100 },
+          { date: "2026-09-15", amount: -110 },
+          { date: "2026-10-15", amount: -120 },
+        ],
+        "2026-11-09",
+        2,
+      ),
+    });
+    const unknownEstimate: ScheduleAmountEstimate = {
+      status: "no-history",
+      currencyCode: "USD",
+      missingPair: null,
+      profile: null,
+      floors: [],
+    };
+    const baseDto = {
+      accountId: "acc-1",
+      name: "Hydro",
+      payeeId: "payee-1",
+      categoryId: "cat-1",
+      amount: -1,
+      currencyCode: "USD",
+      frequency: "MONTHLY" as any,
+      nextDueDate: "2026-12-15",
+      amountIsEstimated: true,
+    };
+
+    describe("create", () => {
+      it.each([
+        ["a split", { splits: [{ categoryId: "c", amount: -1 }] as any }],
+        ["a transfer with no destination", { isTransfer: true }],
+        [
+          "an auto-posted transfer",
+          { isTransfer: true, transferAccountId: "acc-2", autoPost: true },
+        ],
+        ["an auto-posted schedule", { autoPost: true }],
+        ["no payee", { payeeId: undefined }],
+        ["no category", { categoryId: undefined }],
+      ])("refuses %s before writing", async (_label, extra) => {
+        await expect(
+          service.create(userId, { ...baseDto, ...extra }),
+        ).rejects.toThrow(BadRequestException);
+        expect(scheduledRepo.save).not.toHaveBeenCalled();
+      });
+
+      it("stores the next occurrence's estimate as the snapshot", async () => {
+        amountEstimates.estimateFor.mockResolvedValue(knownEstimate());
+        const saved = makeScheduled({ amountIsEstimated: true } as never);
+        scheduledRepo.save.mockResolvedValue(saved);
+        stubFindOne(saved);
+
+        await service.create(userId, baseDto);
+
+        expect(amountEstimates.estimateFor).toHaveBeenCalledWith(userId, {
+          payeeId: "payee-1",
+          categoryId: "cat-1",
+          currencyCode: "USD",
+        });
+        expect(scheduledRepo.create).toHaveBeenCalledWith(
+          expect.objectContaining({ amount: -110, amountIsEstimated: true }),
+        );
+      });
+
+      it("estimates a transfer on its two accounts, with no payee or category (issue #2164)", async () => {
+        amountEstimates.estimateFor.mockResolvedValue(knownEstimate());
+        const saved = makeScheduled({ amountIsEstimated: true } as never);
+        scheduledRepo.save.mockResolvedValue(saved);
+        stubFindOne(saved);
+
+        await service.create(userId, {
+          ...baseDto,
+          payeeId: undefined,
+          categoryId: undefined,
+          isTransfer: true,
+          transferAccountId: "acc-2",
+        });
+
+        expect(amountEstimates.estimateFor).toHaveBeenCalledWith(userId, {
+          payeeId: null,
+          categoryId: null,
+          currencyCode: "USD",
+          transfer: {
+            accountId: "acc-1",
+            transferAccountId: "acc-2",
+            frequency: "MONTHLY",
+            nextOccurrenceDueDate: "2026-12-15",
+          },
+        });
+        expect(scheduledRepo.create).toHaveBeenCalledWith(
+          expect.objectContaining({ amount: -110, amountIsEstimated: true }),
+        );
+      });
+
+      it("keeps the sent amount while the estimate is unknown", async () => {
+        amountEstimates.estimateFor.mockResolvedValue(unknownEstimate);
+        const saved = makeScheduled();
+        scheduledRepo.save.mockResolvedValue(saved);
+        stubFindOne(saved);
+
+        await service.create(userId, baseDto);
+
+        expect(scheduledRepo.create).toHaveBeenCalledWith(
+          expect.objectContaining({ amount: -1, amountIsEstimated: true }),
+        );
+      });
+    });
+
+    describe("update", () => {
+      it("refuses turning auto-post on for an estimated schedule", async () => {
+        stubFindOne(makeScheduled({ amountIsEstimated: true } as never));
+
+        await expect(
+          service.update(userId, stId, { autoPost: true }),
+        ).rejects.toThrow(BadRequestException);
+        expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+      });
+
+      it("stays editable when its category went away on its own", async () => {
+        // A deleted category is SET NULL: the schedule is estimated with
+        // status no-basis, and an unrelated edit must still save.
+        stubFindOne(
+          makeScheduled({ amountIsEstimated: true, categoryId: null } as never),
+        );
+        amountEstimates.estimateFor.mockResolvedValue(unknownEstimate);
+
+        await service.update(userId, stId, { name: "Gas" });
+
+        expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+          ScheduledTransaction,
+          stId,
+          expect.objectContaining({ name: "Gas" }),
+        );
+      });
+
+      it("refuses a delegate moving an estimated schedule to another payee", async () => {
+        stubFindOne(makeScheduled({ amountIsEstimated: true } as never));
+
+        await expect(
+          service.update(
+            userId,
+            stId,
+            { payeeId: "22222222-2222-2222-2222-222222222222" },
+            { actorIsDelegate: true },
+          ),
+        ).rejects.toThrow(ForbiddenException);
+        expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+      });
+
+      it("reads no history for an edit that cannot move the snapshot", async () => {
+        stubFindOne(makeScheduled({ amountIsEstimated: true } as never));
+
+        await service.update(userId, stId, { name: "Gas", amount: -1 });
+
+        expect(amountEstimates.estimateFor).not.toHaveBeenCalled();
+        expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+          ScheduledTransaction,
+          stId,
+          expect.not.objectContaining({ amount: -1 }),
+        );
+      });
+
+      it("refuses this request clearing the category of an estimated schedule", async () => {
+        stubFindOne(makeScheduled({ amountIsEstimated: true } as never));
+
+        await expect(
+          service.update(userId, stId, { categoryId: "" }),
+        ).rejects.toThrow(BadRequestException);
+        expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+      });
+
+      it("keeps the flag when the schedule becomes a transfer, matched on its accounts (issue #2164)", async () => {
+        amountEstimates.estimateFor.mockResolvedValue(knownEstimate());
+        stubFindOne(makeScheduled({ amountIsEstimated: true } as never));
+
+        await service.update(userId, stId, {
+          isTransfer: true,
+          transferAccountId: "acc-2",
+        });
+
+        expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+          ScheduledTransaction,
+          stId,
+          expect.not.objectContaining({ amountIsEstimated: false }),
+        );
+        expect(amountEstimates.estimateFor).toHaveBeenCalledWith(
+          userId,
+          expect.objectContaining({
+            transfer: expect.objectContaining({
+              accountId: "acc-1",
+              transferAccountId: "acc-2",
+            }),
+          }),
+        );
+      });
+
+      it("drops the flag when an estimated transfer becomes a split", async () => {
+        stubFindOne(
+          makeScheduled({
+            amountIsEstimated: true,
+            isTransfer: true,
+            transferAccountId: "acc-2",
+          } as never),
+        );
+
+        await service.update(userId, stId, {
+          isTransfer: false,
+          splits: [
+            { categoryId: "cat-1", amount: -600 },
+            { categoryId: "cat-2", amount: -600 },
+          ] as never,
+        });
+
+        expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+          ScheduledTransaction,
+          stId,
+          expect.objectContaining({ amountIsEstimated: false }),
+        );
+      });
+
+      it("refuses a delegate moving an estimated transfer to another account", async () => {
+        stubFindOne(
+          makeScheduled({
+            amountIsEstimated: true,
+            isTransfer: true,
+            transferAccountId: "acc-2",
+          } as never),
+        );
+
+        await expect(
+          service.update(
+            userId,
+            stId,
+            { transferAccountId: "acc-3" },
+            { actorIsDelegate: true },
+          ),
+        ).rejects.toThrow(ForbiddenException);
+        expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+      });
+
+      it("refuses a preview of a transfer into its own source account", async () => {
+        await expect(
+          service.previewAmountEstimate(userId, {
+            accountId: "acc-1",
+            payeeId: null,
+            categoryId: null,
+            transferAccountId: "acc-1",
+          }),
+        ).rejects.toThrow(BadRequestException);
+        expect(amountEstimates.estimateFor).not.toHaveBeenCalled();
+      });
+
+      it("keeps an estimated bill whose category went away editable when the request carries an empty transfer account", async () => {
+        stubFindOne(
+          makeScheduled({ amountIsEstimated: true, categoryId: null } as never),
+        );
+        amountEstimates.estimateFor.mockResolvedValue(unknownEstimate);
+
+        await service.update(userId, stId, {
+          name: "Gas",
+          transferAccountId: null,
+        } as never);
+
+        expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+          ScheduledTransaction,
+          stId,
+          expect.objectContaining({ name: "Gas" }),
+        );
+      });
+
+      it("re-reads an estimated transfer's snapshot when its frequency changes", async () => {
+        amountEstimates.estimateFor.mockResolvedValue(knownEstimate());
+        stubFindOne(
+          makeScheduled({
+            amountIsEstimated: true,
+            isTransfer: true,
+            transferAccountId: "acc-2",
+          } as never),
+        );
+
+        await service.update(userId, stId, { frequency: "WEEKLY" as never });
+
+        expect(amountEstimates.estimateFor).toHaveBeenCalledWith(
+          userId,
+          expect.objectContaining({
+            transfer: expect.objectContaining({ frequency: "WEEKLY" }),
+          }),
+        );
+      });
+
+      it("lets a delegate recategorize an estimated transfer: its basis is the accounts", async () => {
+        stubFindOne(
+          makeScheduled({
+            amountIsEstimated: true,
+            isTransfer: true,
+            transferAccountId: "acc-2",
+          } as never),
+        );
+
+        await service.update(
+          userId,
+          stId,
+          { categoryId: "33333333-3333-3333-3333-333333333333" },
+          { actorIsDelegate: true },
+        );
+
+        expect(mockQueryRunner.manager.update).toHaveBeenCalled();
+      });
+
+      it("turns the estimate on and writes the snapshot", async () => {
+        amountEstimates.estimateFor.mockResolvedValue(knownEstimate());
+        stubFindOne(makeScheduled());
+
+        await service.update(userId, stId, {
+          amountIsEstimated: true,
+          amount: -1200,
+        });
+
+        expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+          ScheduledTransaction,
+          stId,
+          expect.objectContaining({ amountIsEstimated: true, amount: -110 }),
+        );
+      });
+    });
+
+    describe("post", () => {
+      const stubNoOverride = () => {
+        const overrideQb = mockQueryBuilder(null);
+        overrideQb.getOne.mockResolvedValue(null);
+        overridesRepo.createQueryBuilder.mockReturnValue(overrideQb);
+        accountsRepo.findOne.mockResolvedValue(null);
+      };
+
+      it("posts the estimate for the occurrence, never the snapshot", async () => {
+        amountEstimates.estimateFor.mockResolvedValue(knownEstimate());
+        stubFindOne(makeScheduled({ amountIsEstimated: true } as never));
+        stubNoOverride();
+
+        await service.post(userId, stId);
+
+        expect(transactionsService.create).toHaveBeenCalledWith(
+          userId,
+          expect.objectContaining({ amount: -110 }),
+          { fromScheduledPosting: true, recordHistory: false },
+        );
+      });
+
+      it("refreshes the snapshot to the next occurrence's estimate after posting", async () => {
+        amountEstimates.estimateFor.mockResolvedValue(knownEstimate());
+        stubFindOne(makeScheduled({ amountIsEstimated: true } as never));
+        stubNoOverride();
+        scheduledRepo.update = jest.fn().mockResolvedValue({ affected: 1 });
+
+        await service.post(userId, stId);
+
+        expect(scheduledRepo.update).toHaveBeenCalledWith(
+          { id: stId, userId, amountIsEstimated: true },
+          { amount: -110 },
+        );
+      });
+
+      it("posts the amount the person entered", async () => {
+        stubFindOne(makeScheduled({ amountIsEstimated: true } as never));
+        stubNoOverride();
+
+        await service.post(userId, stId, { amount: -133.5 } as never);
+
+        expect(transactionsService.create).toHaveBeenCalledWith(
+          userId,
+          expect.objectContaining({ amount: -133.5 }),
+          { fromScheduledPosting: true, recordHistory: false },
+        );
+      });
+
+      it("refuses an unknown estimate before writing", async () => {
+        amountEstimates.estimateFor.mockResolvedValue(unknownEstimate);
+        stubFindOne(makeScheduled({ amountIsEstimated: true } as never));
+        stubNoOverride();
+
+        await expect(service.post(userId, stId)).rejects.toThrow(
+          BadRequestException,
+        );
+        expect(transactionsService.create).not.toHaveBeenCalled();
+      });
+    });
+
+    describe("findAll", () => {
+      it("publishes the estimate and prices the base and an amountless override", async () => {
+        amountEstimates.estimateMany.mockResolvedValue(
+          new Map([[stId, knownEstimate()]]),
+        );
+        const st = makeScheduled({
+          amountIsEstimated: true,
+          nextDueDate: "2026-12-15",
+        } as never);
+        scheduledRepo.createQueryBuilder.mockReturnValue(
+          mockQueryBuilder([st]),
+        );
+        const nextOverrideQb = mockQueryBuilder(null);
+        nextOverrideQb.getMany.mockResolvedValue([]);
+        const futureOverridesQb = mockQueryBuilder(null);
+        futureOverridesQb.getMany.mockResolvedValue([
+          {
+            id: "ovr-1",
+            scheduledTransactionId: stId,
+            originalDate: "2027-01-15",
+            overrideDate: "2027-01-20",
+            amount: null,
+          },
+        ]);
+        overridesRepo.createQueryBuilder
+          .mockReturnValueOnce(nextOverrideQb)
+          .mockReturnValueOnce(futureOverridesQb);
+
+        const [row] = await service.findAll(userId);
+
+        expect(row.effectiveAmount).toBe(-110);
+        expect(row.effectiveAmountComplete).toBe(true);
+        expect(row.amountEstimate).toMatchObject({
+          status: "estimated",
+          paymentCount: 3,
+        });
+        expect(row.futureOverrides?.[0]).toMatchObject({
+          effectiveAmount: -110,
+          effectiveAmountComplete: true,
+        });
+      });
+
+      it("reports an unknown estimate as unknown, not the snapshot", async () => {
+        amountEstimates.estimateMany.mockResolvedValue(
+          new Map([[stId, unknownEstimate]]),
+        );
+        const st = makeScheduled({ amountIsEstimated: true } as never);
+        scheduledRepo.createQueryBuilder.mockReturnValue(
+          mockQueryBuilder([st]),
+        );
+        const emptyQb = () => {
+          const qb = mockQueryBuilder(null);
+          qb.getMany.mockResolvedValue([]);
+          return qb;
+        };
+        overridesRepo.createQueryBuilder
+          .mockReturnValueOnce(emptyQb())
+          .mockReturnValueOnce(emptyQb());
+
+        const [row] = await service.findAll(userId);
+
+        expect(row.effectiveAmount).toBeNull();
+        expect(row.effectiveAmountComplete).toBe(false);
+        expect(row.amountEstimate?.status).toBe("no-history");
+      });
+    });
+  });
+
+  // ==================== custom recurrence ====================
+
+  describe("custom recurrence (docs/specs/custom-recurrence.md)", () => {
+    const MWF = {
+      unit: "WEEK" as const,
+      interval: 1,
+      weekdays: [1, 3, 5],
+      weekStartsOn: 1,
+    };
+    const customDto = {
+      accountId: "acc-1",
+      name: "Gym",
+      amount: -20,
+      currencyCode: "USD",
+      frequency: "CUSTOM" as any,
+      // A Saturday: off the Monday/Wednesday/Friday pattern.
+      nextDueDate: "2026-11-14",
+      customRecurrence: { unit: "WEEK", weekdays: [5, 1, 3] } as any,
+    };
+    let payrollRuleCount: jest.Mock;
+
+    beforeEach(() => {
+      accountsRepo.count = jest.fn().mockResolvedValue(0);
+      accountsRepo.find = jest.fn().mockResolvedValue([]);
+      payrollRuleCount = jest.fn().mockResolvedValue(0);
+      payrollRulesRepo.count = payrollRuleCount;
+    });
+
+    describe("create", () => {
+      it("stores the canonical rule and snaps the first occurrence onto it", async () => {
+        stubFindOne(makeScheduled());
+
+        await service.create(userId, customDto);
+
+        const created = scheduledRepo.create.mock.calls[0][0];
+        expect(created.customRecurrence).toEqual(MWF);
+        expect(created.startDate).toBe("2026-11-14");
+        expect(created.nextDueDate).toBe("2026-11-16");
+      });
+
+      it("refuses CUSTOM without a rule before writing", async () => {
+        await expect(
+          service.create(userId, { ...customDto, customRecurrence: undefined }),
+        ).rejects.toThrow("A custom frequency needs a recurrence rule");
+        expect(scheduledRepo.save).not.toHaveBeenCalled();
+      });
+
+      it("refuses a rule beside another frequency", async () => {
+        await expect(
+          service.create(userId, { ...customDto, frequency: "MONTHLY" as any }),
+        ).rejects.toThrow(BadRequestException);
+        expect(scheduledRepo.save).not.toHaveBeenCalled();
+      });
+
+      it("stores no rule for a fixed frequency", async () => {
+        stubFindOne(makeScheduled());
+
+        await service.create(userId, {
+          ...customDto,
+          frequency: "MONTHLY" as any,
+          customRecurrence: null,
+        });
+
+        const created = scheduledRepo.create.mock.calls[0][0];
+        expect(created.customRecurrence).toBeNull();
+        expect(created.nextDueDate).toBe("2026-11-14");
+      });
+
+      it("refuses a Custom split that transfers into a mortgage", async () => {
+        accountsRepo.find.mockResolvedValue([
+          { id: "mtg-1", accountType: "MORTGAGE" },
+        ]);
+
+        await expect(
+          service.create(userId, {
+            ...customDto,
+            amount: -1000,
+            splits: [
+              { amount: -800, transferAccountId: "mtg-1" },
+              { amount: -200, categoryId: "cat-interest" },
+            ] as any,
+          }),
+        ).rejects.toThrow(/loan or mortgage payment/);
+        expect(scheduledRepo.save).not.toHaveBeenCalled();
+      });
+    });
+
+    describe("update", () => {
+      it("switching to CUSTOM stores the rule, snaps the cursor and prunes orphaned overrides", async () => {
+        stubFindOne(
+          makeScheduled({
+            frequency: "MONTHLY",
+            startDate: "2026-11-14",
+            nextDueDate: "2026-11-14",
+          }),
+        );
+        mockQueryRunner.manager.find.mockImplementation(
+          async (entity: unknown) =>
+            entity === ScheduledTransactionOverride
+              ? [
+                  { id: "on-pattern", originalDate: "2026-11-18" },
+                  // A Tuesday: off the new pattern.
+                  { id: "tuesday", originalDate: "2026-12-15" },
+                ]
+              : [],
+        );
+
+        await service.update(userId, stId, {
+          frequency: "CUSTOM" as any,
+          customRecurrence: MWF,
+          nextDueDate: "2026-11-14",
+          startDate: "2026-11-14",
+        });
+
+        expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+          ScheduledTransaction,
+          stId,
+          expect.objectContaining({
+            frequency: "CUSTOM",
+            customRecurrence: MWF,
+            nextDueDate: "2026-11-16",
+          }),
+        );
+        const deletes = mockQueryRunner.manager.delete.mock.calls.filter(
+          (call: unknown[]) => call[0] === ScheduledTransactionOverride,
+        );
+        expect(deletes).toHaveLength(1);
+        expect(deletes[0][1].id.value).toEqual(["tuesday"]);
+      });
+
+      it("leaving CUSTOM with the old rule echoed clears it", async () => {
+        stubFindOne(
+          makeScheduled({
+            frequency: "CUSTOM",
+            customRecurrence: MWF,
+            startDate: "2026-11-16",
+            nextDueDate: "2026-11-16",
+          }),
+        );
+
+        await service.update(userId, stId, {
+          frequency: "MONTHLY" as any,
+          customRecurrence: MWF,
+        });
+
+        expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+          ScheduledTransaction,
+          stId,
+          expect.objectContaining({
+            frequency: "MONTHLY",
+            customRecurrence: null,
+          }),
+        );
+      });
+
+      it("a resent rule and dates are not a change", async () => {
+        stubFindOne(
+          makeScheduled({
+            frequency: "CUSTOM",
+            customRecurrence: MWF,
+            startDate: "2026-11-16",
+            // Moved off the pattern by the user: left where it is.
+            nextDueDate: "2026-11-17",
+          }),
+        );
+
+        await service.update(userId, stId, {
+          name: "Gym (new)",
+          frequency: "CUSTOM" as any,
+          customRecurrence: { unit: "WEEK", weekdays: [3, 1, 5] } as any,
+          startDate: "2026-11-16",
+          nextDueDate: "2026-11-17",
+        });
+
+        const fields = mockQueryRunner.manager.update.mock.calls.find(
+          (call: unknown[]) => call[0] === ScheduledTransaction,
+        )[2];
+        // The frequency is written, so its rule is written beside it (the
+        // same canonical rule), never left to whatever the row holds.
+        expect(fields.customRecurrence).toEqual(MWF);
+        expect(fields.nextDueDate).toBe("2026-11-17");
+        expect(mockQueryRunner.manager.find).not.toHaveBeenCalledWith(
+          ScheduledTransactionOverride,
+          expect.anything(),
+        );
+      });
+
+      it("a changed rule re-snaps a running schedule forward, never back to its start", async () => {
+        stubFindOne(
+          makeScheduled({
+            frequency: "CUSTOM",
+            customRecurrence: MWF,
+            startDate: "2025-11-03",
+            nextDueDate: "2026-11-18",
+          }),
+        );
+
+        await service.update(userId, stId, {
+          customRecurrence: { unit: "WEEK", interval: 1, weekdays: [2] },
+          nextDueDate: "2026-11-18",
+        });
+
+        expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+          ScheduledTransaction,
+          stId,
+          expect.objectContaining({ nextDueDate: "2026-11-24" }),
+        );
+      });
+
+      it("a start date change prunes a fixed schedule's orphaned override too", async () => {
+        // A month-based step reads its day from the start date (anchorDayOf):
+        // anchored on the 31st, 30 Nov steps to 31 Dec; on the 30th, to 30 Dec.
+        stubFindOne(
+          makeScheduled({
+            frequency: "MONTHLY",
+            startDate: "2026-01-31",
+            nextDueDate: "2026-11-30",
+          }),
+        );
+        mockQueryRunner.manager.find.mockImplementation(
+          async (entity: unknown) =>
+            entity === ScheduledTransactionOverride
+              ? [{ id: "month-end", originalDate: "2026-12-31" }]
+              : [],
+        );
+
+        await service.update(userId, stId, { startDate: "2026-01-30" });
+
+        const deletes = mockQueryRunner.manager.delete.mock.calls.filter(
+          (call: unknown[]) => call[0] === ScheduledTransactionOverride,
+        );
+        expect(deletes).toHaveLength(1);
+        expect(deletes[0][1].id.value).toEqual(["month-end"]);
+      });
+
+      describe("decided from the row read under the lock", () => {
+        // `findOne` before the transaction reads one row; the locked re-read
+        // returns another, as when a concurrent edit commits in between.
+        function readsThenLocks(
+          before: ScheduledTransaction,
+          locked: ScheduledTransaction,
+        ) {
+          stubFindOne(before);
+          mockQueryRunner.manager.findOne.mockImplementation(
+            async (_entity: unknown, options: { lock?: unknown }) =>
+              options?.lock ? locked : before,
+          );
+        }
+
+        it("clears the rule a concurrent switch to CUSTOM stored when this edit writes MONTHLY", async () => {
+          readsThenLocks(
+            makeScheduled({ frequency: "MONTHLY", nextDueDate: "2026-11-16" }),
+            makeScheduled({
+              frequency: "CUSTOM",
+              customRecurrence: MWF,
+              nextDueDate: "2026-11-16",
+            }),
+          );
+
+          await service.update(userId, stId, {
+            name: "Gym",
+            frequency: "MONTHLY" as any,
+          });
+
+          expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+            ScheduledTransaction,
+            stId,
+            expect.objectContaining({
+              frequency: "MONTHLY",
+              customRecurrence: null,
+            }),
+          );
+        });
+
+        it("refuses CUSTOM, writing nothing, when a concurrent edit cleared the rule", async () => {
+          readsThenLocks(
+            makeScheduled({
+              frequency: "CUSTOM",
+              customRecurrence: MWF,
+              nextDueDate: "2026-11-16",
+            }),
+            makeScheduled({ frequency: "MONTHLY", nextDueDate: "2026-11-16" }),
+          );
+
+          await expect(
+            service.update(userId, stId, {
+              name: "Gym",
+              frequency: "CUSTOM" as any,
+            }),
+          ).rejects.toThrow("A custom frequency needs a recurrence rule");
+          expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+        });
+
+        it("snaps from the locked cursor, never back to the one read before it", async () => {
+          // A post advanced the cursor between the read and the lock.
+          readsThenLocks(
+            makeScheduled({
+              frequency: "CUSTOM",
+              customRecurrence: MWF,
+              startDate: "2026-11-02",
+              nextDueDate: "2026-11-16",
+            }),
+            makeScheduled({
+              frequency: "CUSTOM",
+              customRecurrence: MWF,
+              startDate: "2026-11-02",
+              nextDueDate: "2026-11-23",
+            }),
+          );
+
+          await service.update(userId, stId, {
+            customRecurrence: { unit: "WEEK", interval: 1, weekdays: [2] },
+          });
+
+          expect(mockQueryRunner.manager.update).toHaveBeenCalledWith(
+            ScheduledTransaction,
+            stId,
+            expect.objectContaining({ nextDueDate: "2026-11-24" }),
+          );
+        });
+      });
+
+      it("refuses CUSTOM on a loan payment schedule before writing", async () => {
+        stubFindOne(makeScheduled());
+        accountsRepo.count.mockResolvedValue(1);
+
+        await expect(
+          service.update(userId, stId, {
+            frequency: "CUSTOM" as any,
+            customRecurrence: MWF,
+          }),
+        ).rejects.toThrow(/loan or mortgage payment/);
+        expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+      });
+
+      it("refuses CUSTOM on a payroll bill before writing", async () => {
+        stubFindOne(makeScheduled());
+        payrollRuleCount.mockResolvedValue(1);
+
+        await expect(
+          service.update(userId, stId, {
+            frequency: "CUSTOM" as any,
+            customRecurrence: MWF,
+          }),
+        ).rejects.toThrow(/payroll bill/);
+        expect(mockQueryRunner.manager.update).not.toHaveBeenCalled();
+      });
+    });
+
+    it("skip steps a Custom schedule by its rule", async () => {
+      mockQueryRunner.manager.query.mockResolvedValue([]);
+      stubFindOne(
+        makeScheduled({
+          frequency: "CUSTOM",
+          customRecurrence: MWF,
+          startDate: "2026-11-13",
+          nextDueDate: "2026-11-13",
+        }),
+      );
+
+      await service.skip(userId, stId);
+
+      const updateArg = mockQueryRunner.manager.update.mock.calls[0][2];
+      expect(updateArg.nextDueDate).toBe("2026-11-16");
+    });
+
+    it("tells the model what a Custom schedule repeats on", async () => {
+      const today = todayInTimezone("UTC") as string;
+      const rows = [
+        makeScheduled({
+          id: "s1",
+          frequency: "CUSTOM",
+          customRecurrence: MWF,
+          nextDueDate: today,
+          startDate: today,
+          account: { name: "Checking" } as any,
+        }),
+        makeScheduled({
+          id: "s2",
+          account: { name: "Checking" } as any,
+          nextDueDate: today,
+        }),
+      ];
+      scheduledRepo.createQueryBuilder.mockReturnValue(mockQueryBuilder(rows));
+
+      const result = await service.getLlmUpcomingBillsAndDeposits(userId);
+
+      const byId = new Map(result.items.map((item) => [item.id, item]));
+      expect(byId.get("s1")?.customSchedule).toBe(
+        "every week on Mon, Wed, Fri",
+      );
+      expect(byId.get("s2")).not.toHaveProperty("customSchedule");
+    });
+
+    describe("tradeScheduleWindowDays", () => {
+      it("uses the rule's shortest gap, not a fixed cycle", () => {
+        expect(
+          tradeScheduleWindowDays("CUSTOM", {
+            unit: "WEEK",
+            interval: 1,
+            weekdays: [1, 2],
+          }),
+        ).toBe(0);
+        expect(
+          tradeScheduleWindowDays("CUSTOM", {
+            unit: "MONTH",
+            interval: 1,
+            monthDays: [1],
+          }),
+        ).toBe(TRADE_SCHEDULE_WINDOW_DAYS);
+        expect(tradeScheduleWindowDays("CUSTOM", null)).toBe(0);
+        expect(tradeScheduleWindowDays("WEEKLY")).toBe(3);
+      });
     });
   });
 });

@@ -13,14 +13,18 @@ export const KNOWN_DESCRIPTION_KEYS = new Set<string>([
   'createdInstitution', 'updatedInstitution', 'deletedInstitution',
   'createdInvestmentReport', 'updatedInvestmentReport', 'deletedInvestmentReport',
   'createdPayee', 'updatedPayee', 'deletedPayee',
+  'lookedUpPayeeContact',
   'createdReport', 'updatedReport', 'deletedReport',
   'createdScheduledTransaction', 'updatedScheduledTransaction', 'deletedScheduledTransaction',
+  'postedScheduledTransaction',
   'createdSecurity', 'updatedSecurity', 'deletedSecurity',
   'createdTag', 'updatedTag', 'deletedTag',
   'createdTransaction', 'updatedTransaction', 'deletedTransaction',
   'createdTransfer',
+  'convertedToTransfer', 'convertedToTransaction',
   'createdInvestmentTransaction', 'updatedInvestmentTransaction', 'deletedInvestmentTransaction',
   'transferredSecurity', 'updatedSecurityTransfer',
+  'ranTransactionRule',
 ]);
 
 // Description keys whose `action` param carries an InvestmentAction enum value
@@ -40,7 +44,7 @@ const KNOWN_INVESTMENT_ACTIONS = new Set<string>([
   'TRANSFER_IN', 'TRANSFER_OUT', 'REINVEST', 'ADD_SHARES', 'REMOVE_SHARES',
   'REINVEST_INTEREST', 'REINVEST_CAPITAL_GAIN_SHORT',
   'REINVEST_CAPITAL_GAIN_LONG', 'CAPITAL_GAIN_SHORT', 'CAPITAL_GAIN_LONG',
-  'REDEEM',
+  'REDEEM', 'RETURN_OF_CAPITAL',
 ]);
 
 type LayoutTranslator = ReturnType<typeof useTranslations<'layout'>>;
@@ -54,31 +58,64 @@ type DescribableAction = Pick<
  * Render an action's description in the active locale. Prefers the localizable
  * `descriptionKey` + params; falls back to the stored English `description` for
  * legacy rows or unknown keys so nothing renders blank.
+ *
+ * `formatCurrency` is `useNumberFormat().formatCurrency`. It is optional
+ * because two of the five call sites render into a toast where the money is
+ * incidental, and because a row written before the structured amount landed has
+ * nothing to format -- but supply it wherever you can: without it the money in
+ * the sentence is the server's deterministic `en-US` string sitting inside
+ * translated copy (issue #1316).
  */
 export function renderActionDescription(
   t: LayoutTranslator,
   item: DescribableAction | null | undefined,
+  formatCurrency?: (amount: number, currencyCode?: string) => string,
 ): string {
   if (item?.descriptionKey && KNOWN_DESCRIPTION_KEYS.has(item.descriptionKey)) {
     return t(
       `actionHistory.descriptions.${item.descriptionKey}` as never,
-      localizeParams(t, item.descriptionKey, item.descriptionParams) as never,
+      localizeParams(
+        t,
+        item.descriptionKey,
+        item.descriptionParams,
+        formatCurrency,
+      ) as never,
     );
   }
   return item?.description ?? '';
 }
 
 /**
- * Localize interpolation params that hold enum values rather than free text.
- * Currently only the investment-transaction keys carry an `action` enum value
- * that needs translating; everything else is passed through untouched.
+ * Localize interpolation params that are not free text: an enum value that
+ * needs translating, and a money amount that needs the reader's number locale.
+ *
+ * The money case is structural rather than a re-parse of the stored string: the
+ * server sends `amountValue` (a number) and `amountCurrency` beside the English
+ * `amount`, and only when both are present is `amount` replaced. A row written
+ * by an older backend carries neither, so it keeps the English rendering rather
+ * than losing the figure -- which is also what makes this safe mid-deploy.
  */
 function localizeParams(
   t: LayoutTranslator,
   descriptionKey: string,
   params: DescribableAction['descriptionParams'],
+  formatCurrency?: (amount: number, currencyCode?: string) => string,
 ): Record<string, string | number> {
-  const safeParams = params ?? {};
+  let safeParams = params ?? {};
+  const amountValue = safeParams.amountValue;
+  const amountCurrency = safeParams.amountCurrency;
+  if (
+    formatCurrency &&
+    typeof amountValue === 'number' &&
+    Number.isFinite(amountValue) &&
+    typeof amountCurrency === 'string' &&
+    amountCurrency !== ''
+  ) {
+    safeParams = {
+      ...safeParams,
+      amount: formatCurrency(amountValue, amountCurrency),
+    };
+  }
   if (!ACTION_PARAM_KEYS.has(descriptionKey)) {
     return safeParams;
   }

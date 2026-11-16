@@ -1,0 +1,7 @@
+{
+  "oauthConsent": {
+    "destinationLabel": "If you allow access, Monize will send the authorisation to:",
+    "destinationUnknown": "Monize could not determine where this authorisation would be sent. Do not allow access.",
+    "websiteMismatch": "The application says its website is {{ website }}, but the authorisation will be sent to a different address."
+  }
+}

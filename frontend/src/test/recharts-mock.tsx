@@ -15,6 +15,7 @@ export function rechartsMock() {
       <div data-testid="responsive-container">{children}</div>
     ),
     AreaChart: Pass,
+    ComposedChart: Pass,
     Area: Noop,
     LineChart: Pass,
     Line: Noop,
@@ -29,5 +30,6 @@ export function rechartsMock() {
     Tooltip: Noop,
     Legend: Noop,
     ReferenceLine: Noop,
+    Sankey: ({ data, children }: { data?: { nodes: Array<{ name: string }>; links: unknown[] }; children?: ReactNode }) => <div data-testid="sankey" data-nodes={JSON.stringify(data?.nodes.map((n) => n.name) ?? [])} data-links={data?.links.length ?? 0}>{children}</div>,
   };
 }

@@ -34,6 +34,12 @@
     "dismiss": "Kapat",
     "dismissAriaLabel": "Güncelleme bildirimini kapat"
   },
+  "jwtSecretBanner": {
+    "label": "JWT_SECRET zayıf.",
+    "detail": "Yayımlanmış bir örnek değer ya da fazla tahmin edilebilir; bu nedenle oturum belirteçleri taklit edilebilir. <code>openssl rand -base64 32</code> ile güçlü bir değer oluşturun. Değiştirmek, kimlik doğrulama uygulamalarının kodlarını geçersiz kılar ve güvenilen cihazları unutur: kullanıcılar bir yedek kodla giriş yapıp 2FA'yı yeniden kurar, yedek kodu olmayanlar için 2FA'yı <users>Kullanıcı Yönetimi</users>'nden siz sıfırlarsınız. Önce <code>docs/backend/modules-and-runtime.md</code> (Changing JWT_SECRET) belgesini okuyun.",
+    "dismiss": "Kapat",
+    "dismissAriaLabel": "JWT_SECRET uyarısını kapat"
+  },
   "actionHistory": {
     "title": "İşlem Geçmişi",
     "buttonAriaLabel": "İşlem Geçmişi",
@@ -58,6 +64,7 @@
       "tag": "Etiket",
       "account": "Hesap",
       "scheduled_transaction": "Zamanlanmış",
+      "scheduled_posting": "Zamanlanmış",
       "security": "Menkul Kıymet",
       "budget": "Bütçe",
       "custom_report": "Rapor"
@@ -79,7 +86,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "Uzun Vadeli Kazancı Yeniden Yatır",
       "CAPITAL_GAIN_SHORT": "Kısa Vadeli Sermaye Kazancı",
       "CAPITAL_GAIN_LONG": "Uzun Vadeli Sermaye Kazancı",
-      "REDEEM": "CD/Tahvil İtfası"
+      "REDEEM": "CD/Tahvil İtfası",
+      "RETURN_OF_CAPITAL": "Sermaye İadesi"
     },
     "descriptions": {
       "createdAccount": "\"{name}\" hesabı oluşturuldu",
@@ -99,6 +107,7 @@
       "deletedInvestmentReport": "\"{name}\" yatırım raporu silindi",
       "createdPayee": "\"{name}\" alacaklısı oluşturuldu",
       "updatedPayee": "\"{name}\" alacaklısı güncellendi",
+      "lookedUpPayeeContact": "\"{name}\" alacaklısının iletişim bilgileri arandı",
       "deletedPayee": "\"{name}\" alacaklısı silindi",
       "createdReport": "\"{name}\" raporu oluşturuldu",
       "updatedReport": "\"{name}\" raporu güncellendi",
@@ -106,6 +115,7 @@
       "createdScheduledTransaction": "\"{name}\" zamanlanmış işlemi oluşturuldu",
       "updatedScheduledTransaction": "\"{name}\" zamanlanmış işlemi güncellendi",
       "deletedScheduledTransaction": "\"{name}\" zamanlanmış işlemi silindi",
+      "postedScheduledTransaction": "\"{name}\" zamanlanmış işlemi kaydedildi",
       "createdSecurity": "\"{symbol}\" menkul kıymeti oluşturuldu",
       "updatedSecurity": "\"{symbol}\" menkul kıymeti güncellendi",
       "deletedSecurity": "\"{symbol}\" menkul kıymeti silindi",
@@ -115,26 +125,23 @@
       "createdTransaction": "{payee} {amount} işlemi oluşturuldu",
       "updatedTransaction": "{payee} {amount} işlemi güncellendi",
       "deletedTransaction": "{payee} {amount} işlemi silindi",
+      "convertedToTransfer": "{payee} {amount} işlemi transfere dönüştürüldü",
+      "convertedToTransaction": "{payee} {amount} transferi işleme dönüştürüldü",
       "bulkUpdatedTransactions": "{count, plural, one {# işlem} other {# işlem}} toplu olarak güncellendi",
       "createdTransfer": "{from}'dan {to}'ya {amount} transfer oluşturuldu",
       "createdInvestmentTransaction": "{action} işlemi oluşturuldu",
       "updatedInvestmentTransaction": "{action} işlemi güncellendi",
       "deletedInvestmentTransaction": "{action} işlemi silindi",
       "transferredSecurity": "Menkul kıymet hesaplar arasında transfer edildi",
-      "updatedSecurityTransfer": "Menkul kıymet transferi güncellendi"
-    },
-    "timeAgo": {
-      "justNow": "şimdi",
-      "minutes": "{count} dk önce",
-      "hours": "{count} sa önce",
-      "days": "{count} gün önce"
+      "updatedSecurityTransfer": "Menkul kıymet transferi güncellendi",
+      "ranTransactionRule": "“{name}” kuralı {count, plural, other {# işlemde}} çalıştırıldı"
     },
     "undonePrefix": "Geri Alındı: {description}",
     "redonePrefix": "Yeniden Yapıldı: {description}"
   },
   "pageHeader": {
-    "helpAriaLabel": "Bu bölümde yardım için Monize wiki'yi açın",
-    "helpTooltip": "Bu bölümde yardım için Monize wiki'yi açın"
+    "helpAriaLabel": "Bu sayfa için yardım",
+    "helpTooltip": "Bu sayfa için yardım"
   },
   "bootSplash": {
     "loading": "Monize yükleniyor",
@@ -145,5 +152,17 @@
     "title": "Bağlanılamıyor",
     "message": "Monize sunucuya ulaşamadı. Bağlantınızı kontrol edip yeniden deneyin.",
     "retry": "Yeniden dene"
+  },
+  "pushBanner": {
+    "enableTitle": "Bildirimler açılsın mı?",
+    "enableBody": "Monize bu cihazda faturaları ve bütçe sınırlarını, uygulama kapalıyken de hatırlatabilir. Tarayıcınız izin isteyecek.",
+    "enableButton": "Aç",
+    "enabling": "Açılıyor…",
+    "installIosTitle": "Önce Monize'yi ana ekrana ekleyin.",
+    "installIosBody": "iPhone ve iPad'de bildirimler yalnızca kurulu uygulamadan çalışır. Paylaş'a, sonra Ana Ekrana Ekle'ye dokunun ve Monize'yi oradan açın.",
+    "blockedTitle": "Monize için bildirimler engellenmiş.",
+    "blockedBody": "Bu sayfa için tarayıcınızın site ayarlarından izin verin. Monize kendiliğinden yeniden soramaz.",
+    "blockedIosBody": "iOS Ayarlar'ı açın, sonra Bildirimler, sonra Monize, ve orada izin verin. Monize listede yoksa ana ekrandan kaldırıp yeniden ekleyin.",
+    "dismiss": "Şimdi değil"
   }
 }

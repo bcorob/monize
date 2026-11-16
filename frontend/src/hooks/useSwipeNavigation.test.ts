@@ -19,6 +19,19 @@ vi.mock('next/navigation', () => ({
 
 import { useSwipeNavigation } from './useSwipeNavigation';
 import { useAuthStore } from '@/store/authStore';
+import { NAV_LINKS, AI_LINKS, TOOLS_LINKS, ADMIN_LINKS } from '@/lib/nav-links';
+import { SWIPE_PAGINATE_ATTR } from './swipe-gesture';
+import type { User } from '@/types/auth';
+
+// Swipe is scoped to the current page's drawer group, so the chain a main page
+// offers is the main chain alone: Dashboard plus the main pages. The AI, Tools
+// and Admin groups are their own chains. Derived from the nav arrays so a new
+// route updates the expectation in one place.
+const MAIN_CHAIN_COUNT = 1 + NAV_LINKS.length;
+
+function makeUser(role: 'admin' | 'user'): User {
+  return { id: 'u1', email: 'u@example.com', role } as User;
+}
 
 // Helper to create touch events
 function createTouchEvent(
@@ -60,6 +73,11 @@ describe('useSwipeNavigation', () => {
 
     // Clear sessionStorage
     sessionStorage.clear();
+
+    // Default identity: a signed-in non-admin, non-delegate user, so the swipe
+    // chain is the base set unless a test opts into admin/delegate.
+    useAuthStore.getState().setDelegation(null, [], null, null);
+    useAuthStore.getState().setUser(makeUser('user'));
   });
 
   afterEach(() => {
@@ -118,9 +136,48 @@ describe('useSwipeNavigation', () => {
       expect(result.current.isSwipePage).toBe(true);
     });
 
-    it('returns totalPages as 7', () => {
+    it('returns the main chain (dashboard + main pages)', () => {
       const { result } = renderHook(() => useSwipeNavigation());
-      expect(result.current.totalPages).toBe(7);
+      expect(result.current.totalPages).toBe(MAIN_CHAIN_COUNT);
+    });
+
+    it('scopes an AI page to the AI chain only', () => {
+      mockPathname = '/ai';
+      const { result } = renderHook(() => useSwipeNavigation());
+      expect(result.current.isSwipePage).toBe(true);
+      // The AI chain is exactly the AI pages -- not the main or tools ones.
+      expect(result.current.totalPages).toBe(AI_LINKS.length);
+    });
+
+    it('scopes a Tools page to the Tools chain only', () => {
+      mockPathname = '/securities';
+      const { result } = renderHook(() => useSwipeNavigation());
+      expect(result.current.isSwipePage).toBe(true);
+      expect(result.current.totalPages).toBe(TOOLS_LINKS.length);
+    });
+
+    it('does not cross from the last main page into the AI chain', () => {
+      // The last main page's swipe chain stays the main chain, so its right
+      // edge has nowhere to go -- it never reaches the AI group.
+      mockPathname = NAV_LINKS[NAV_LINKS.length - 1].href;
+      const { result } = renderHook(() => useSwipeNavigation());
+      expect(result.current.totalPages).toBe(MAIN_CHAIN_COUNT);
+      expect(result.current.currentIndex).toBe(MAIN_CHAIN_COUNT - 1);
+    });
+
+    it('includes the admin chain only for a non-delegate admin', () => {
+      mockPathname = '/admin/users';
+      const nonAdmin = renderHook(() => useSwipeNavigation());
+      expect(nonAdmin.result.current.isSwipePage).toBe(false);
+      // Unmount before switching identity so the Zustand write has no mounted
+      // subscriber to re-render outside act().
+      nonAdmin.unmount();
+
+      useAuthStore.getState().setUser(makeUser('admin'));
+      const admin = renderHook(() => useSwipeNavigation());
+      expect(admin.result.current.isSwipePage).toBe(true);
+      // The admin chain is exactly the admin pages, scoped to that group.
+      expect(admin.result.current.totalPages).toBe(ADMIN_LINKS.length);
     });
 
     it('returns -1 and isSwipePage false for non-swipe pages', () => {
@@ -311,7 +368,8 @@ describe('useSwipeNavigation', () => {
     });
 
     it('does not navigate right from the last page', () => {
-      mockPathname = '/reports'; // index 6, last page
+      // Last page of the base chain (last Tools entry) for a non-admin user.
+      mockPathname = TOOLS_LINKS[TOOLS_LINKS.length - 1].href;
       vi.useFakeTimers();
       renderSwipeHook();
 
@@ -389,7 +447,7 @@ describe('useSwipeNavigation', () => {
       });
 
       // Should snap back
-      expect(contentDiv.style.transform).toBe('translateX(0)');
+      expect(contentDiv.style.transform).toBe('translateX(0px)');
       expect(contentDiv.style.opacity).toBe('1');
 
       // Advance past animation
@@ -412,7 +470,7 @@ describe('useSwipeNavigation', () => {
       // The useLayoutEffect should have read and removed the session storage item
       expect(sessionStorage.getItem('swipe-enter')).toBeNull();
       // Content should end up animating to translateX(0)
-      expect(contentDiv.style.transform).toBe('translateX(0)');
+      expect(contentDiv.style.transform).toBe('translateX(0px)');
     });
 
     it('animates from left when sessionStorage has from-left', () => {
@@ -422,7 +480,7 @@ describe('useSwipeNavigation', () => {
       renderSwipeHookWithEnterAnimation('/accounts');
 
       expect(sessionStorage.getItem('swipe-enter')).toBeNull();
-      expect(contentDiv.style.transform).toBe('translateX(0)');
+      expect(contentDiv.style.transform).toBe('translateX(0px)');
     });
 
     it('does nothing when sessionStorage has no swipe-enter', () => {
@@ -490,6 +548,42 @@ describe('useSwipeNavigation', () => {
     });
   });
 
+  describe('pagination zone cedes the view swipe', () => {
+    it('does not navigate when the swipe starts inside a pagination zone', () => {
+      mockPathname = '/transactions'; // a swipe page that can go both ways
+      vi.useFakeTimers();
+      renderSwipeHook();
+
+      // A register that pages itself, marked so the view swipe yields to it.
+      const zone = document.createElement('div');
+      zone.setAttribute(SWIPE_PAGINATE_ATTR, 'true');
+      contentDiv.appendChild(zone);
+
+      const start = new TouchEvent('touchstart', {
+        bubbles: true,
+        touches: [{ clientX: 300, clientY: 200, identifier: 0 } as Touch],
+        changedTouches: [{ clientX: 300, clientY: 200, identifier: 0 } as Touch],
+      });
+      Object.defineProperty(start, 'target', { value: zone });
+
+      act(() => {
+        contentDiv.dispatchEvent(start);
+        // A decisive horizontal move that would otherwise commit a view change.
+        contentDiv.dispatchEvent(createTouchEvent('touchmove', 150, 202));
+        contentDiv.dispatchEvent(createTouchEvent('touchend', 150, 202));
+      });
+      act(() => {
+        vi.advanceTimersByTime(300);
+      });
+
+      // The view swipe ceded, so no view navigation happened.
+      expect(mockPush).not.toHaveBeenCalled();
+      expect(contentDiv.style.willChange).toBe('');
+      contentDiv.removeChild(zone);
+      vi.useRealTimers();
+    });
+  });
+
   describe('delegate (acting-as) view', () => {
     afterEach(() => {
       // The hook is still mounted (RTL cleanup runs after this); resetting
@@ -521,6 +615,7 @@ describe('useSwipeNavigation', () => {
           budgets: true,
           reports: false,
           ai: false,
+          warranties: false,
         });
       });
 
@@ -541,6 +636,7 @@ describe('useSwipeNavigation', () => {
           budgets: false,
           reports: false,
           ai: false,
+          warranties: false,
           accounts: true,
         });
       });
@@ -562,6 +658,7 @@ describe('useSwipeNavigation', () => {
           budgets: false,
           reports: false,
           ai: false,
+          warranties: false,
         });
       });
 
@@ -580,6 +677,7 @@ describe('useSwipeNavigation', () => {
           budgets: false,
           reports: false,
           ai: false,
+          warranties: false,
           transactions: true,
         });
       });
@@ -601,6 +699,7 @@ describe('useSwipeNavigation', () => {
           budgets: false,
           reports: false,
           ai: false,
+          warranties: false,
         });
       });
 
@@ -614,7 +713,7 @@ describe('useSwipeNavigation', () => {
       mockPathname = '/dashboard';
       const { result } = renderHook(() => useSwipeNavigation());
       expect(result.current.isSwipePage).toBe(true);
-      expect(result.current.totalPages).toBe(7);
+      expect(result.current.totalPages).toBe(MAIN_CHAIN_COUNT);
     });
   });
 });

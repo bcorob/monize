@@ -72,6 +72,27 @@ describe("exportJsonChunks", () => {
     return { text: parts.join(""), chunks };
   }
 
+  it("writes the non-table members after the last table and before completeness, read from the same reader", async () => {
+    const reader = readerOver({ accounts: [{ id: "a" }] });
+    const parts: string[] = [];
+    for await (const chunk of exportJsonChunks(reader, [query("accounts")], {
+      exportedAt,
+      completeness: COMPLETE,
+      members: async (r) => ({
+        bondCatalog: { series: await r.read("accounts") },
+      }),
+    })) {
+      parts.push(chunk.text);
+    }
+    const text = parts.join("");
+    expect(text).toBe(
+      `{"version":1,"exportedAt":"${exportedAt}"` +
+        `,"accounts":[{"id":"a"}]` +
+        `,"bondCatalog":{"series":[{"id":"a"}]}` +
+        `,"completeness":${JSON.stringify(COMPLETE)}}`,
+    );
+  });
+
   it("produces the document the whole-table serialisation produced", async () => {
     const accounts = [
       { id: "a", name: 'Quote " and \\ backslash' },

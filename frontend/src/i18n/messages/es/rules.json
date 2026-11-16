@@ -1,0 +1,618 @@
+{
+  "page": {
+    "title": "Reglas",
+    "subtitle": "Completa etiquetas, categorías y beneficiarios automáticamente cuando se crea o se importa una transacción",
+    "createButton": "Crear regla",
+    "loading": "Cargando reglas...",
+    "totalCount": "{count, plural, one {# regla} other {# reglas}}"
+  },
+  "empty": {
+    "title": "Aún no hay reglas",
+    "body": "Una regla vigila las transacciones nuevas e importadas y completa etiquetas, categorías o beneficiarios cuando se cumplen sus condiciones. Crea tu primera regla para empezar.",
+    "createButton": "Crea tu primera regla"
+  },
+  "error": {
+    "title": "No se pudieron cargar tus reglas",
+    "body": "No se muestra nada porque la solicitud falló, no porque no tengas reglas. Comprueba tu conexión e inténtalo de nuevo.",
+    "retry": "Intentar de nuevo"
+  },
+  "list": {
+    "header": {
+      "order": "Orden",
+      "enabled": "Activa",
+      "name": "Regla",
+      "summary": "Resumen",
+      "actions": "Acciones"
+    },
+    "summary": "{trigger, select, create {Al crear} import {Al importar} both {Al crear o importar} other {Sin disparador}} · {conditions, plural, =0 {Sin condiciones} one {# condición} other {# condiciones}} · {actions, plural, =0 {Sin acciones} one {# acción} other {# acciones}}",
+    "enabledLabel": "Activar {name}"
+  },
+  "actions": {
+    "moveUp": "Subir",
+    "moveDown": "Bajar",
+    "run": "Ejecutar en transacciones existentes",
+    "runInvalid": "Repara la regla antes de ejecutarla"
+  },
+  "invalid": {
+    "badge": "No válida",
+    "tooltip": "Se omite hasta que se corrija: {reasons}.",
+    "reasons": {
+      "referenceMissing": "una etiqueta, beneficiario, categoría o cuenta que usa ya no existe",
+      "noActions": "no tiene acciones",
+      "tooLarge": "sus condiciones son demasiado extensas",
+      "duplicateAction": "repite una acción que solo se permite una vez",
+      "unreadable": "no se puede leer su definición guardada",
+      "other": "su definición no es válida"
+    }
+  },
+  "duplicate": {
+    "name": "{name} (copia)"
+  },
+  "delete": {
+    "title": "Eliminar regla",
+    "message": "¿Seguro que quieres eliminar «{name}»? Esta acción no se puede deshacer."
+  },
+  "toasts": {
+    "enabled": "Regla activada",
+    "disabled": "Regla desactivada",
+    "toggleFailed": "No se pudo cambiar la regla",
+    "deleted": "Regla eliminada",
+    "deleteFailed": "No se pudo eliminar la regla",
+    "duplicated": "Regla duplicada. La copia está desactivada hasta que la actives",
+    "duplicateFailed": "No se pudo duplicar la regla",
+    "reorderFailed": "No se pudo cambiar el orden de las reglas",
+    "listChanged": "La lista de reglas cambió en otro lugar y se ha recargado. Inténtalo de nuevo",
+    "loadFailed": "No se pudieron cargar las reglas"
+  },
+  "editor": {
+    "page": {
+      "newTitle": "Nueva regla",
+      "editTitle": "Editar regla",
+      "subtitle": "Elige cuándo se ejecuta la regla, qué transacciones abarca y qué cambia",
+      "backToRules": "Volver a Reglas",
+      "loading": "Cargando la regla..."
+    },
+    "name": {
+      "label": "Nombre",
+      "placeholder": "Por ejemplo: Etiquetar cafeterías"
+    },
+    "enabled": {
+      "label": "Regla activada"
+    },
+    "sections": {
+      "when": "Cuándo",
+      "if": "Si",
+      "then": "Entonces"
+    },
+    "when": {
+      "description": "Elige cuándo la regla examina una transacción",
+      "created": "Se crea una transacción",
+      "imported": "Se importa una transacción",
+      "atLeastOne": "Mantén al menos una opción seleccionada",
+      "stopProcessing": "Dejar de procesar otras reglas",
+      "stopProcessingHelp": "Cuando esta regla coincide con una transacción, las reglas que van después en la lista se omiten para esa transacción.",
+      "window": {
+        "title": "Activa entre",
+        "help": "La regla solo se aplica a las transacciones con fecha dentro de este período: al crearlas o importarlas y al probar o ejecutar la regla. Deja una fecha vacía para no poner límite.",
+        "from": "Primera fecha",
+        "to": "Última fecha",
+        "backwards": "La última fecha no puede ser anterior a la primera",
+        "noLimit": "sin límite",
+        "words": "Solo para transacciones con fecha del {from} al {to}"
+      }
+    },
+    "if": {
+      "description": "Las acciones se ejecutan solo para las transacciones que coinciden",
+      "everyTransaction": "Aún no hay condiciones, así que esta regla se aplica a todas las transacciones."
+    },
+    "then": {
+      "description": "Las acciones se ejecutan en este orden",
+      "empty": "Aún no hay acciones. Añade al menos una.",
+      "limit": "Una regla puede tener como máximo {max} acciones."
+    },
+    "group": {
+      "matchAll": "Todas estas",
+      "matchAny": "Cualquiera de estas",
+      "matchLabel": "Coincidencia",
+      "not": "Negar grupo",
+      "notHelp": "Un grupo negado coincide cuando sus condiciones no se cumplen.",
+      "title": "Grupo",
+      "addCondition": "+ Añadir condición",
+      "addGroup": "+ Añadir grupo",
+      "depthLimit": "Los grupos pueden anidarse como máximo en {max} niveles.",
+      "sizeLimit": "Se alcanzó el límite de condiciones.",
+      "empty": "Este grupo está vacío."
+    },
+    "condition": {
+      "title": "Condición",
+      "field": "Campo",
+      "operator": "Operador",
+      "value": "Valor"
+    },
+    "fields": {
+      "accountId": "Cuenta",
+      "fromAccountId": "Cuenta de origen (transferencias)",
+      "toAccountId": "Cuenta de destino (transferencias)",
+      "type": "Tipo",
+      "payeeId": "Beneficiario",
+      "payeeText": "Texto del beneficiario tal como llegó",
+      "categoryId": "Categoría",
+      "description": "Descripción",
+      "amount": "Importe (con signo)",
+      "absAmount": "Importe (sin signo)",
+      "currencyCode": "Moneda",
+      "tagIds": "Etiquetas",
+      "hasSplits": "Tiene divisiones",
+      "referenceNumber": "Número de referencia",
+      "dayOfMonth": "Día del mes",
+      "weekday": "Día de la semana",
+      "status": "Estado",
+      "hasAttachment": "Tiene un adjunto",
+      "date": "Fecha"
+    },
+    "operators": {
+      "eq": "es",
+      "neq": "no es",
+      "in": "es uno de",
+      "notIn": "no es ninguno de",
+      "isEmpty": "está vacío",
+      "contains": "contiene",
+      "startsWith": "empieza por",
+      "matches": "coincide con el patrón",
+      "lt": "es menor que",
+      "lte": "es como máximo",
+      "gt": "es mayor que",
+      "gte": "es al menos",
+      "between": "está entre",
+      "hasAny": "tiene alguna de",
+      "hasAll": "tiene todas de",
+      "hasNone": "no tiene ninguna de",
+      "inSubtree": "está en o bajo"
+    },
+    "types": {
+      "EXPENSE": "Gasto",
+      "INCOME": "Ingreso",
+      "TRANSFER": "Transferencia"
+    },
+    "value": {
+      "account": "Elige una cuenta",
+      "accounts": "Elige cuentas",
+      "payee": "Elige un beneficiario",
+      "payees": "Elige beneficiarios",
+      "category": "Elige una categoría",
+      "categories": "Elige categorías",
+      "tags": "Elige etiquetas",
+      "currency": "Elige una moneda",
+      "currencies": "Elige monedas",
+      "types": "Elige tipos",
+      "matchesHint": "Usa * para cualquier texto, por ejemplo *café*. Un patrón sin * solo coincide con el texto completo. Usa {capture} para conservar el texto de ese lugar para las acciones de esta regla, por ejemplo {example}. Un nombre son letras minúsculas y dígitos, y un patrón puede conservar hasta {max} textos.",
+      "amount": "Importe",
+      "from": "Desde",
+      "to": "Hasta",
+      "yes": "Sí",
+      "no": "No",
+      "days": "Elegir días",
+      "weekdays": "Elegir días de la semana",
+      "statuses": "Elegir estados"
+    },
+    "action": {
+      "title": "Acción",
+      "type": "Tipo de acción",
+      "tags": "Etiquetas",
+      "category": "Categoría",
+      "payee": "Beneficiario",
+      "instruction": "Instrucciones de revisión",
+      "instructionPlaceholder": "Por ejemplo: dividir esta compra según el recibo",
+      "instructionHelp": "La regla solo pide una revisión. Una persona aprueba cualquier cambio antes de que se realice.",
+      "onlyIfEmpty": "Solo si está vacío",
+      "onlyIfEmptyHelp": "Si está activado, la regla rellena la categoría o el beneficiario solo cuando la transacción no tiene ninguno. No reemplaza uno establecido a mano ni por la categoría predeterminada del beneficiario. Desactívalo para reemplazarlo.",
+      "add": "+ Añadir acción",
+      "reviewInbox": "Ver la bandeja de revisión",
+      "payeeTemplate": "Nombre del beneficiario",
+      "descriptionTemplate": "Texto de la descripción",
+      "templateHelp": "Texto sin formato. Cada marcador entre llaves se sustituye por texto de la transacción. Selecciona un marcador abajo para insertarlo.",
+      "joinHelp": "El texto se une a la descripción actual exactamente como está escrito, así que incluye el espacio o el separador que quieras.",
+      "placeholders": "Marcadores",
+      "placeholdersHelp": "{payeeText} es el texto del beneficiario tal como se recibió. {description} es la descripción tal como está cuando se ejecuta esta acción. Los demás marcadores son las capturas nombradas en los patrones de esta regla.",
+      "insertPlaceholder": "Insertar {name}",
+      "unknownPlaceholders": "Esta regla no define: {names}. Elige un marcador de la lista o captúralo en un patrón anterior.",
+      "invalidPlaceholders": "No es un marcador válido: {names}. Un nombre son letras minúsculas y dígitos.",
+      "createIfMissing": "Crear el beneficiario si no existe",
+      "createIfMissingHelp": "Si está activado y ningún beneficiario coincide con el nombre (por nombre, alias o una coincidencia cercana), se crea un beneficiario nuevo. Un beneficiario creado por una regla se conserva si deshaces la ejecución.",
+      "onlyIfEmptyDescriptionHelp": "Si está activado, la regla escribe la descripción solo si la transacción no tiene ninguna. Desactívalo para escribirla siempre.",
+      "mode": "Modo de descripción",
+      "modes": {
+        "replace": "Reemplazar la descripción",
+        "append": "Añadir después de la descripción",
+        "prepend": "Añadir antes de la descripción"
+      },
+      "convertHelp": "El ingreso o gasto coincidente se convierte en un lado de una transferencia. El otro lado se crea en la cuenta que elijas, que debe usar la misma moneda.",
+      "direction": "Dirección",
+      "directionTo": "Gasto: el dinero va a otra cuenta",
+      "directionFrom": "Ingreso: el dinero viene de otra cuenta",
+      "clearCategory": "Quitar la categoría",
+      "clearCategoryHelp": "Una transferencia no tiene categoría. Desactívalo para conservar la categoría que ya tiene la transacción.",
+      "splitPayee": "Beneficiario de la transacción (opcional)",
+      "splitHint": "Cada parte toma su importe de una captura de los patrones anteriores, o toma el resto. Las partes deben sumar el importe de la transacción; si no, la regla la deja sin tocar.",
+      "splitNoCaptures": "Todavía no hay ninguna captura definida. Pon un nombre entre llaves en un patrón anterior, por ejemplo PRINCIPAL: {example}, para usarlo aquí como importe.",
+      "partAmountPlaceholder": "Elige el importe...",
+      "partRest": "El resto",
+      "partAccount": "Cuenta",
+      "partPayee": "Beneficiario del otro lado (opcional)",
+      "partsLimit": "Una división puede tener como máximo {max} partes.",
+      "guideTitle": "Cómo se usa",
+      "splitGuideHow": "En “Si”, añade una condición sobre el texto del beneficiario o la descripción con el operador “coincide con el patrón” y escribe nombres entre llaves donde estén los importes, por ejemplo {first}. Cada nombre se convierte en un importe que puedes elegir para una parte, o elige “El resto”. Las partes deben sumar el importe de la transacción; de lo contrario, la regla la deja sin cambios. Una parte puede ser una categoría o una transferencia a otra cuenta (una transferencia modifica el saldo de esa cuenta).",
+      "splitGuideExampleTitle": "Ejemplo: una cuota de préstamo",
+      "splitGuideBank": "Texto del banco: CAPITAL: 1200,50 INTERESES: 300,25 MORA: 0,00",
+      "splitGuidePattern": "Patrón: *CAPITAL: {first} INTERESES: {second} MORA*",
+      "splitGuidePart1": "Parte 1: {first} como transferencia a la cuenta del préstamo",
+      "splitGuidePart2": "Parte 2: {second} como categoría “Préstamos: Intereses”",
+      "splitGuideResult": "Resultado para -1500,75: -1200,50 transferidos a la cuenta del préstamo y -300,25 de gasto en intereses.",
+      "splitGuideTip": "Consejo: define una fecha de inicio en “Activa entre” para no cambiar transacciones antiguas ya conciliadas, y usa el panel Prueba antes de guardar.",
+      "convertGuide": "Un gasto se convierte en una transferencia a la cuenta elegida y un ingreso, en una transferencia desde ella. Solo cambia el saldo de la otra cuenta. Consejo: usa “Activa entre” para no cambiar transacciones antiguas.",
+      "splitGuideName1": "capital",
+      "splitGuideName2": "intereses",
+      "loanGuide": "Usa esto para un débito bancario que paga una cuota de hipoteca o préstamo como un solo importe. En “Si”, haz coincidir el débito por su cuenta, el texto del beneficiario o la descripción. La transacción se convierte en una división: el capital se transfiere a la cuenta del préstamo y el interés va a la categoría de interés, ambos calculados para la cuota que paga. Consejo: desactiva el registro automático del pago programado del préstamo para que la cuota no se pague dos veces, y usa el panel Prueba antes de guardar.",
+      "loan": {
+        "help": "El débito coincidente paga la siguiente cuota del préstamo que vence cerca de su fecha. Monize calcula el capital y el interés de esa cuota; nunca escribes un importe.",
+        "account": "Cuenta del préstamo",
+        "accountPlaceholder": "Selecciona una hipoteca o un préstamo...",
+        "noLoans": "No tienes ninguna cuenta de hipoteca o préstamo abierta para liquidar.",
+        "window": "Ventana de la fecha de vencimiento",
+        "windowHelp": "Cuánto se puede alejar el banco de la fecha de vencimiento para cobrar el pago. Un débito hasta esta cantidad de días antes o después de la fecha de vencimiento de una cuota paga esa cuota; uno fuera de la ventana se deja sin tocar.",
+        "daysBefore": "Días antes de la fecha de vencimiento",
+        "daysAfter": "Días después de la fecha de vencimiento",
+        "excess": "Débito superior a la cuota",
+        "excessPolicies": {
+          "extra_principal": "Pagar la diferencia como capital extra",
+          "refuse": "Dejar la transacción sin tocar"
+        },
+        "shortfall": "Débito inferior a la cuota",
+        "shortfallPolicies": {
+          "refuse": "Dejar la transacción sin tocar",
+          "interest_first": "Pagar primero el interés, el resto como capital"
+        },
+        "policyNote": "Una diferencia de unos pocos centavos se absorbe en la línea de interés.",
+        "policyHelp": "Los bancos redondean cada parte por separado, así que un débito a menos de 5 unidades mínimas de la moneda (0,05 en la mayoría de las monedas) se trata como exacto y la línea de interés absorbe la diferencia. Una diferencia mayor sigue las dos opciones anteriores.",
+        "interestCategory": "Categoría de interés (opcional)",
+        "interestCategoryPlaceholder": "La categoría de interés propia del préstamo",
+        "autoPostTitle": "El pago programado del préstamo se registra solo",
+        "autoPostBody": "El registro automático está activado para el pago programado de este préstamo, así que él y el débito bancario que esta regla liquida pagarían la misma cuota. Desactiva el registro automático del pago programado."
+      }
+    },
+    "actionTypes": {
+      "add_tags": "Añadir etiquetas",
+      "remove_tags": "Quitar etiquetas",
+      "set_category": "Establecer la categoría",
+      "set_payee": "Establecer el beneficiario",
+      "request_ai_review": "Pedir una revisión de IA",
+      "set_payee_from_text": "Establecer el beneficiario desde el texto",
+      "set_description": "Establecer la descripción",
+      "convert_to_transfer": "Convertir en transferencia",
+      "split": "Dividir la transacción",
+      "settle_loan_installment": "Liquidar una cuota del préstamo"
+    },
+    "save": {
+      "button": "Guardar regla",
+      "createdToast": "Regla creada",
+      "savedToast": "Regla guardada",
+      "failedToast": "No se pudo guardar la regla",
+      "summary": "La regla no se guardó. Corrige los elementos marcados abajo e inténtalo de nuevo."
+    },
+    "loadError": {
+      "title": "No se pudo cargar la regla",
+      "body": "No se muestra nada porque la solicitud falló, no porque la regla esté vacía. Comprueba tu conexión e inténtalo de nuevo.",
+      "lookupsBody": "No se pudieron cargar las listas de cuentas, beneficiarios, categorías, etiquetas y monedas, así que la regla no puede mostrarse con seguridad. Comprueba tu conexión e inténtalo de nuevo.",
+      "notFound": "Esta regla ya no existe. Puede que se haya eliminado.",
+      "retry": "Intentar de nuevo"
+    },
+    "invalid": {
+      "title": "Esta regla no puede ejecutarse",
+      "repaired": "Algunas partes de la definición guardada no se pudieron leer y aquí se quitaron o se restablecieron. Revisa la regla antes de guardar."
+    },
+    "conflict": {
+      "title": "Esta regla se cambió en otro lugar",
+      "body": "Recárgala para ver la versión más reciente. Tus cambios sin guardar se perderán.",
+      "reload": "Recargar"
+    },
+    "errors": {
+      "codes": {
+        "INVALID_SHAPE": "Esta parte no tiene una forma que el editor entienda.",
+        "UNKNOWN_KEY": "Esta parte tiene un ajuste que no existe.",
+        "UNKNOWN_FIELD": "Elige un campo.",
+        "UNKNOWN_ACTION": "Elige una acción.",
+        "OPERATOR_NOT_ALLOWED": "Este campo no admite ese operador.",
+        "VALUE_REQUIRED": "Introduce o elige un valor.",
+        "VALUE_NOT_ALLOWED": "Este operador no admite un valor.",
+        "VALUE_TYPE": "El valor no es del tipo adecuado para este campo.",
+        "VALUE_OUT_OF_RANGE": "El valor está fuera de rango.",
+        "VALUE_TOO_LONG": "El texto es demasiado largo.",
+        "VALUE_EMPTY": "Introduce algún texto.",
+        "INVALID_UUID": "Elige un elemento de la lista.",
+        "INVALID_ENUM": "Elige uno de los valores de la lista.",
+        "INVALID_CURRENCY": "Elige una moneda.",
+        "ARRAY_EMPTY": "Elige al menos un elemento.",
+        "ARRAY_TOO_LARGE": "Hay demasiados elementos elegidos.",
+        "RANGE_ORDER": "El primer valor no debe ser mayor que el segundo.",
+        "MAX_DEPTH": "Los grupos están anidados demasiado profundo. El límite es de {maxDepth} niveles.",
+        "MAX_LEAVES": "Hay demasiadas condiciones. El límite es {maxLeaves}.",
+        "MAX_NODES": "Hay demasiadas condiciones y grupos. El límite es {maxNodes}.",
+        "NO_ACTIONS": "Añade al menos una acción.",
+        "TOO_MANY_ACTIONS": "Hay demasiadas acciones. El límite es {maxActions}.",
+        "DUPLICATE_ACTION": "Una regla puede tener solo una revisión de IA, una transferencia, división o liquidación de préstamo, y una parte de la división que toma el resto.",
+        "CONFLICTING_ACTIONS": "Una acción de transferencia, de división o de liquidación de préstamo no se puede combinar con «Establecer la categoría», y cada parte de una división tiene una categoría o una cuenta.",
+        "INVALID_CAPTURE": "El nombre de una captura usa letras minúsculas y dígitos, empieza por una letra y tiene como máximo 20 caracteres.",
+        "TOO_MANY_CAPTURES": "Un patrón puede contener como máximo 5 capturas.",
+        "DUPLICATE_CAPTURE": "Cada nombre de captura solo puede usarse una vez en una regla.",
+        "UNKNOWN_CAPTURE": "Esto usa una captura que ninguna condición de esta regla define.",
+        "LOOKS_LIKE_REGEX": "No se admiten las expresiones regulares: | \\ y las clases cortas entre corchetes como [xy] se tratan como caracteres normales, así que un patrón escrito como regex nunca coincide con lo que se pretendía. Para coincidir con uno de varios textos, añade un grupo «Cualquiera de estas» y pon en él una condición para cada texto.",
+        "PATTERN_WITHOUT_WILDCARD": "Sin * este patrón debe ser igual a todo el texto. Usa el operador «es» para el texto completo, «contiene» para una parte, o pon * alrededor del texto, por ejemplo *café*.",
+        "REFERENCE_NOT_FOUND": "Un elemento elegido aquí ya no existe. Elige otro.",
+        "NAME_REQUIRED": "Introduce un nombre para la regla.",
+        "UNKNOWN": "Esta parte no es válida."
+      }
+    },
+    "run": {
+      "button": "Ejecutar en transacciones existentes",
+      "saveFirst": "Guarda tus cambios para ejecutar la regla guardada."
+    },
+    "expression": {
+      "modeLabel": "Vista de condiciones",
+      "visual": "Visual",
+      "expression": "Expresión",
+      "label": "Expresión de la condición",
+      "help": "Escribe las condiciones como texto. Usa && para todas, || para cualquiera y !( ... ) para negar. Indica los elementos por su nombre: account(\"Nombre\"), payee(\"Nombre\"), category(\"Principal: Secundaria\") y tag(\"Nombre\"). Un guion bajo _ representa un valor que aún no se ha elegido. matchesGlob usa * como comodín. Solo se admite la sintaxis que ofrecen las sugerencias.",
+      "blocked": "Corrige la expresión para volver a la vista visual o guardar.",
+      "errorAt": "Línea {line}, columna {column}: {message}",
+      "suggestions": "Sugerencias",
+      "errors": {
+        "tooLong": "La expresión es demasiado larga. El límite es de {max} caracteres.",
+        "unexpectedChar": "El carácter {char} no se admite.",
+        "unterminatedString": "Este texto no tiene comillas de cierre.",
+        "invalidEscape": "Esta secuencia de escape no se admite.",
+        "badNumber": "No es un número válido.",
+        "expectedExpression": "Aquí se espera una condición.",
+        "expectedField": "Aquí se espera el nombre de un campo.",
+        "expectedOperator": "Después del campo se espera un operador o un método.",
+        "expectedValue": "Aquí se espera un valor.",
+        "expectedSymbol": "Aquí se espera {symbol}.",
+        "unexpectedToken": "Inesperado: {token}.",
+        "unsupported": "Esta parte no se admite. Usa solo la sintaxis que ofrecen las sugerencias.",
+        "unknownField": "Campo desconocido: {name}.",
+        "unknownFunction": "Función o método desconocido: {name}.",
+        "operatorNotAllowed": "El campo {field} no se puede usar con {operator}.",
+        "wrongValueType": "{expected, select, text {Se espera texto entre comillas.} number {Se espera un número.} boolean {Se espera true o false.} list {Se espera una lista entre corchetes.} account {Se espera una cuenta, por ejemplo account(\"Nombre\").} payee {Se espera un beneficiario, por ejemplo payee(\"Nombre\").} category {Se espera una categoría, por ejemplo category(\"Principal: Secundaria\").} tag {Se espera una etiqueta, por ejemplo tag(\"Nombre\").} other {Este valor es de un tipo incorrecto.}}",
+        "invalidEnum": "Usa uno de estos: {values}.",
+        "invalidCurrency": "Usa un código de moneda de tres letras entre comillas, por ejemplo \"CAD\".",
+        "valueTooLong": "El texto es demasiado largo. El límite es de {max} caracteres.",
+        "listTooLong": "La lista es demasiado larga. El límite es de {max} elementos.",
+        "unknownEntity": "{kind, select, account {Ninguna cuenta se llama {name}.} payee {Ningún beneficiario se llama {name}.} category {Ninguna categoría se llama {name}.} tag {Ninguna etiqueta se llama {name}.} other {Ningún elemento se llama {name}.}}",
+        "ambiguousEntity": "{count} elementos se llaman {name}. Añade el número del que quieres, por ejemplo {example}.",
+        "entityOrdinal": "El número para {name} debe estar entre 1 y {count}.",
+        "maxDepth": "Los grupos están anidados a demasiada profundidad. El límite es de {max} niveles.",
+        "maxLeaves": "Hay demasiadas condiciones. El límite es {max}.",
+        "maxNodes": "Hay demasiadas condiciones y grupos. El límite es {max}.",
+        "tooNested": "Demasiados paréntesis anidados."
+      }
+    }
+  },
+  "test": {
+    "title": "Prueba",
+    "description": "Prueba la regla en tus transacciones existentes. No se cambia nada.",
+    "button": "Probar regla",
+    "again": "Probar de nuevo",
+    "incomplete": "Completa las condiciones y acciones de arriba para probar la regla.",
+    "idle": "Elige en qué transacciones probar la regla y selecciona Probar regla.",
+    "running": "Probando la regla...",
+    "failed": "No se pudo completar la prueba. {message}",
+    "stale": "La regla o los filtros han cambiado desde este resultado. Prueba de nuevo para ver el resultado actual."
+  },
+  "match": {
+    "button": "Probar regla",
+    "buttonLabel": "Probar regla: condiciones",
+    "incomplete": "Completa las condiciones de arriba para ver con qué transacciones coinciden.",
+    "windowBackwards": "Las fechas activas terminan antes de empezar, así que ninguna transacción puede coincidir.",
+    "summary": "{count, plural, =0 {Ninguna transacción coincide} one {# transacción coincide} other {# transacciones coinciden}}",
+    "summaryPending": "Transacciones que coinciden",
+    "running": "Buscando transacciones que coinciden...",
+    "failed": "No se pudieron cargar las transacciones que coinciden. {message}",
+    "empty": "Ninguna transacción existente coincide con estas condiciones.",
+    "truncated": "Solo se revisaron las {scanned, number} transacciones más recientes.",
+    "stale": "Las condiciones cambiaron desde esta prueba. Selecciona Probar regla de nuevo para ver las coincidencias actuales."
+  },
+  "run": {
+    "title": "Ejecutar «{name}» en transacciones existentes",
+    "description": "Previsualiza lo que cambiaría la regla y luego confirma. Puedes deshacer la ejecución desde el historial de acciones.",
+    "previewButton": "Vista previa",
+    "confirmButton": "Confirmar y ejecutar",
+    "idle": "Elige cuentas y fechas y selecciona Vista previa. No cambia nada hasta que confirmes.",
+    "loadingPreview": "Cargando la vista previa...",
+    "previewFailed": "No se pudo cargar la vista previa, así que no se puede ejecutar nada. {message}",
+    "stale": "Los filtros han cambiado desde esta vista previa. Vuelve a previsualizar antes de ejecutar.",
+    "accountsLoading": "Cargando cuentas...",
+    "accountsFailed": "No se pudieron cargar tus cuentas, así que los filtros no están disponibles.",
+    "retry": "Intentar de nuevo",
+    "summary": "{matched, plural, one {# transacción cambiaría} other {# transacciones cambiarían}} de {scanned, plural, one {# transacción analizada} other {# transacciones analizadas}}.",
+    "matchesNone": "Esta regla no coincide con ninguna de las transacciones analizadas ({scanned}). Revisa las condiciones antes de guardar. Un patrón sin * solo coincide con el texto completo.",
+    "noChange": "{matched} de las {scanned} transacciones examinadas cumplen las condiciones de la regla, pero no cambiaría nada (por ejemplo, porque ya tienen el valor y «solo si está vacío» está activado). No es un error.",
+    "aiReview": "{count, plural, one {# transacción se pondría en cola para revisión por IA} other {# transacciones se pondrían en cola para revisión por IA}}. La solicitud se crea al confirmar.",
+    "truncated": "Coinciden más transacciones de las que permite el límite. Solo se incluyen las más recientes. Sube el límite o acota las fechas para incluir el resto.",
+    "truncatedOldest": "Coincidieron más transacciones de las que permite el límite. Solo se incluyen las más antiguas, porque esta regla liquida las cuotas del préstamo en orden de fecha. Ejecútala de nuevo después de esta ejecución para incluir el resto.",
+    "noMatches": {
+      "title": "Ninguna transacción cambiaría",
+      "body": "Ninguna de las transacciones analizadas coincide con la regla, o la regla no cambiaría nada en ellas."
+    },
+    "table": {
+      "date": "Fecha",
+      "payee": "Beneficiario",
+      "amount": "Importe",
+      "change": "Cambio previsto",
+      "noPayee": "Sin beneficiario"
+    },
+    "skipped": {
+      "title": "{count, plural, one {# transacción se deja sin tocar} other {# transacciones se dejan sin tocar}}",
+      "line": "{count, plural, one {# transacción} other {# transacciones}}: {reason}",
+      "missing": "Falta en el préstamo: {inputs}."
+    },
+    "skipReasons": {
+      "reconciled_locked": "está conciliada y bloqueada",
+      "transfer_leg_category": "es una transferencia, que no tiene categoría",
+      "split_category": "está dividida, así que la categoría pertenece a las divisiones",
+      "cross_owner_transfer_payee": "es una transferencia a otro propietario, cuyo beneficiario esta regla no puede cambiar",
+      "empty_render": "el texto de una acción quedó vacío para ella",
+      "payee_not_found": "ningún beneficiario tiene el nombre que formó la regla, y esta no lo crea",
+      "other": "la regla no puede cambiarla",
+      "row_is_transfer_leg": "ya es una transferencia",
+      "row_has_splits": "ya está dividida",
+      "row_is_void": "está anulada",
+      "zero_amount": "su importe es cero",
+      "transfer_direction_mismatch": "la transferencia va en sentido contrario: un gasto va a una cuenta, un ingreso viene de una",
+      "transfer_same_account": "la cuenta de la transferencia es la propia cuenta de la transacción",
+      "transfer_account_unavailable": "la cuenta de la transferencia no está disponible (se eliminó o no es tuya)",
+      "transfer_currency_mismatch": "la cuenta de la transferencia usa otra moneda",
+      "split_amount_unparseable": "un importe de su texto no se pudo leer como número",
+      "split_sum_mismatch": "las partes no suman su importe",
+      "split_too_few_parts": "quedan menos de dos partes al descartar los importes cero",
+      "row_from_scheduled_posting": "se registró desde el pago programado del préstamo, que ya pagó la cuota",
+      "row_is_income": "es un ingreso, y solo un débito paga una cuota",
+      "loan_account_unavailable": "la cuenta del préstamo no está disponible (se eliminó, está cerrada, no es tuya o no es una hipoteca ni un préstamo)",
+      "loan_interest_booked_separately": "el préstamo registra su interés como transacciones separadas, así que un pago no puede incluirlo",
+      "loan_not_configured": "al préstamo le falta lo necesario para calcular una cuota",
+      "no_installment_in_window": "ninguna cuota del préstamo vence dentro de la ventana alrededor de su fecha",
+      "occurrence_already_posted": "la cuota que vence dentro de la ventana ya está pagada",
+      "loan_debt_retired": "el préstamo ya está saldado",
+      "installment_amount_excess": "es mayor que la cuota, y la regla deja sin tocar los débitos mayores",
+      "installment_amount_shortfall": "es menor que la cuota, y la regla deja sin tocar los débitos menores"
+    },
+    "change": {
+      "category": "Categoría: {before} → {after}",
+      "payee": "Beneficiario: {before} → {after}",
+      "payeeNew": "Beneficiario: {before} → {name} (nuevo)",
+      "tagsAdded": "Etiquetas añadidas: {tags}",
+      "tagsRemoved": "Etiquetas quitadas: {tags}",
+      "none": "ninguna",
+      "unknown": "un elemento eliminado",
+      "payeeCreated": "{done, select, yes {Se creó un beneficiario nuevo: {name}} other {Se creará un beneficiario nuevo: {name}}}",
+      "description": "Descripción: {before} → {after}",
+      "descriptionSet": "Establecer la descripción en {value}",
+      "transfer": "{done, select, yes {Se convirtió en una transferencia con {account}} other {Se convertirá en una transferencia con {account}}}",
+      "split": "{done, select, yes {Se dividió en {count, plural, one {# parte} other {# partes}}} other {Se dividirá en {count, plural, one {# parte} other {# partes}}}}",
+      "splitPart": "Parte {number}: {amount} {target}",
+      "splitPartMemo": ", nota «{memo}»",
+      "splitToTransfer": "a {account}",
+      "splitToTransferPayee": "a {account}, beneficiario {payee}",
+      "splitToCategory": "como {category}",
+      "splitUncategorised": "sin categoría",
+      "loanSettlement": "{done, select, yes {Se liquidó} other {Liquida}} la cuota {number} de {account}, que vence el {dueDate}: capital {principal}, interés {interest}{hasExtra, select, yes {, capital extra {extra}} other {}}. Deuda antes: {debtBefore}"
+    },
+    "filters": {
+      "accounts": "Cuentas",
+      "allAccounts": "Todas las cuentas",
+      "startDate": "Desde",
+      "endDate": "Hasta",
+      "backwards": "La fecha de inicio no puede ser posterior a la fecha de fin.",
+      "limit": "Transacciones más recientes a examinar",
+      "help": "Solo se examinan las transacciones más recientes del rango, hasta {max}."
+    },
+    "errors": {
+      "PREVIEW_CHANGED": "Las transacciones o la regla han cambiado desde la vista previa. Revisa la nueva vista previa y ejecuta de nuevo.",
+      "RUN_TOO_LARGE": "Esta ejecución cambia demasiadas transacciones para deshacerse en un solo paso. Acota las cuentas o las fechas e inténtalo de nuevo.",
+      "INVALID_RULE": "Esta regla no es válida, así que no se puede ejecutar. Ábrela y repárala primero.",
+      "DATE_RANGE_INVALID": "La fecha de inicio no puede ser posterior a la fecha de fin.",
+      "draftInvalid": "La regla está incompleta o no es válida. Revisa las condiciones y acciones de arriba.",
+      "testFailed": "Algo salió mal al probar la regla.",
+      "previewFailed": "Algo salió mal al cargar la vista previa.",
+      "runFailed": "No se pudo completar la ejecución. Revisa el historial de acciones antes de intentarlo de nuevo."
+    },
+    "toast": {
+      "done": "{count, plural, =0 {No se cambió ninguna transacción} one {# transacción cambiada} other {# transacciones cambiadas}}. Puedes deshacerlo desde el historial de acciones.",
+      "changedNoUndo": "{count, plural, one {# transacción cambiada} other {# transacciones cambiadas}}.",
+      "aiReviewsQueued": "{count, plural, one {# transacción en cola para revisión por IA} other {# transacciones en cola para revisión por IA}}.",
+      "aiReviewsAlreadyQueued": "{count, plural, one {# transacción ya tenía una solicitud de revisión por IA abierta, así que no se puso nada nuevo en cola} other {# transacciones ya tenían una solicitud de revisión por IA abierta, así que no se puso nada nuevo en cola}}.",
+      "noChanges": "No se cambió ninguna transacción."
+    },
+    "done": {
+      "summary": "{count, plural, =0 {No se cambió ninguna transacción.} one {Se cambió # transacción.} other {Se cambiaron # transacciones.}}",
+      "aiReviewsQueued": "{count, plural, one {# transacción se puso en cola para revisión por IA.} other {# transacciones se pusieron en cola para revisión por IA.}}",
+      "aiReviewsAlreadyQueued": "{count, plural, one {# transacción ya tenía una solicitud de revisión por IA abierta, así que no se volvió a poner en cola.} other {# transacciones ya tenían una solicitud de revisión por IA abierta, así que no se volvieron a poner en cola.}}",
+      "undo": "Puedes deshacer la ejecución desde el historial de acciones."
+    },
+    "missingInputs": {
+      "scheduledPayment": "un pago programado",
+      "managedTemplate": "un pago dividido en capital e interés",
+      "scheduleCalendar": "un calendario de pagos",
+      "interestCategory": "una categoría de interés",
+      "amortizationMonths": "el período de amortización",
+      "paymentStartDate": "la fecha del primer pago",
+      "paymentFrequency": "la frecuencia de pago",
+      "originalPrincipal": "el capital original del préstamo",
+      "rate": "una tasa de interés para la fecha",
+      "payment": "el importe del pago",
+      "other": "una configuración del préstamo"
+    }
+  },
+  "applications": {
+    "title": "Historial",
+    "description": "Las últimas transacciones que cambió esta regla, las más recientes primero.",
+    "loading": "Cargando el historial...",
+    "error": {
+      "title": "No se pudo cargar el historial",
+      "body": "No se muestra nada porque la solicitud falló, no porque la regla no se haya ejecutado. Comprueba tu conexión e inténtalo de nuevo.",
+      "retry": "Intentar de nuevo"
+    },
+    "empty": {
+      "title": "Esta regla todavía no ha cambiado nada",
+      "body": "Cuando cambie una transacción, el cambio aparecerá aquí."
+    },
+    "source": {
+      "create": "Creada",
+      "import": "Importada",
+      "manual": "Ejecución manual",
+      "other": "Otro"
+    },
+    "table": {
+      "date": "Fecha",
+      "payee": "Beneficiario",
+      "amount": "Importe",
+      "source": "Origen",
+      "change": "Cambio",
+      "appliedAt": "Aplicada",
+      "open": "Abrir transacción",
+      "noPayee": "Sin beneficiario",
+      "view": "Ver"
+    }
+  },
+  "words": {
+    "everyTransaction": "Todas las transacciones",
+    "group": {
+      "all": "Todas estas:",
+      "any": "Cualquiera de estas:",
+      "notAll": "No todas estas:",
+      "notAny": "Ninguna de estas:"
+    },
+    "leaf": "{field} {operator} {value}",
+    "leafNoValue": "{field} {operator}",
+    "range": "{from} y {to}",
+    "text": "«{value}»",
+    "unknownCondition": "Una condición que esta versión no puede mostrar",
+    "unknownAction": "Una acción que esta versión no puede mostrar",
+    "action": {
+      "add_tags": "Añadir etiquetas: {tags}",
+      "remove_tags": "Quitar etiquetas: {tags}",
+      "set_category": "Establecer la categoría en {name}{onlyIfEmpty, select, yes { (solo si está vacía)} other {}}",
+      "set_payee": "Establecer el beneficiario en {name}{onlyIfEmpty, select, yes { (solo si está vacío)} other {}}",
+      "request_ai_review": "Pedir una revisión de IA: {instruction}",
+      "set_payee_from_text": "Establecer el beneficiario desde el texto: «{template}»{createIfMissing, select, yes { (se crea si no existe)} other {}}{onlyIfEmpty, select, yes { (solo si está vacío)} other {}}",
+      "set_description": "Establecer la descripción ({mode, select, append {añadir al final} prepend {añadir al inicio} other {reemplazar}}): «{template}»{onlyIfEmpty, select, yes { (solo si está vacío)} other {}}",
+      "convert_to_transfer": "Convertir en transferencia {direction, select, from {desde} other {a}} {account}",
+      "split": "Dividir en: {parts}",
+      "settle_loan_installment": "Liquidar la cuota de {account} pagada por un débito hasta {before, plural, one {# día} other {# días}} antes o {after, plural, one {# día} other {# días}} después de su fecha de vencimiento; un débito mayor {excess, select, refuse {se deja sin tocar} other {paga capital extra}}, uno menor {shortfall, select, interest_first {paga primero el interés} other {se deja sin tocar}}"
+    },
+    "splitPart": {
+      "transfer": "{amount} a {account}",
+      "category": "{amount} como {category}",
+      "plain": "{amount}",
+      "rest": "el resto"
+    }
+  }
+}

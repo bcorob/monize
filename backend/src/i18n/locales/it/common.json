@@ -5,6 +5,13 @@
     "cash": "Contanti",
     "brokerage": "Intermediazione"
   },
+  "oauthConsent": {
+    "destinationLabel": "Se consenti l'accesso, Monize invierà l'autorizzazione a:",
+    "destinationUnknown": "Monize non è riuscito a determinare dove verrebbe inviata questa autorizzazione. Non consentire l'accesso.",
+    "unverifiedNotice": "Questa applicazione si è registrata autonomamente su questo server Monize e Monize non ha verificato chi la gestisce; il suo nome è quello che ha scelto di darsi. Consenti l'accesso solo se hai avviato tu stesso questa connessione da quell'applicazione e l'indirizzo qui sopra le appartiene.",
+    "claimedWebsite": "Sito web dichiarato dall'applicazione: {{ website }}",
+    "websiteMismatch": "L'applicazione dichiara che il suo sito web è {{ website }}, ma l'autorizzazione verrà inviata a un indirizzo diverso."
+  },
   "import": {
     "voidedTransactionNote": "Annullata nell'origine; l'importo originale è stato omesso dall'esportazione e importato come zero."
   },
@@ -17,5 +24,20 @@
       "stalled": "Ho continuato a dire che avrei proseguito invece di concludere, quindi questa risposta si basa sui dati raccolti prima di fermarmi."
     },
     "synthesisFailed": "Ho raccolto dati per questa domanda, ma non sono riuscito a completare l'analisi, quindi non ho una risposta affidabile. Prova a chiedere qualcosa di più circoscritto."
+  },
+  "bankSync": {
+    "operationTypes": {
+      "cardPayment": "Pagamento con carta",
+      "transferIn": "Bonifico in entrata",
+      "transferOut": "Bonifico in uscita",
+      "mobilePayment": "Pagamento mobile",
+      "cashWithdrawal": "Prelievo di contanti",
+      "cashWithdrawalBlik": "Prelievo di contanti (BLIK)",
+      "mobilePaymentRefund": "Rimborso pagamento mobile",
+      "standingOrder": "Ordine permanente",
+      "cashback": "Cashback",
+      "loanRepayment": "Rimborso del prestito",
+      "creditCardRepayment": "Rimborso carta di credito"
+    }
   }
 }

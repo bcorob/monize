@@ -1,5 +1,12 @@
 import { EntityManager } from "typeorm";
-import { Account } from "../../../accounts/entities/account.entity";
+import {
+  Account,
+  AccountType,
+} from "../../../accounts/entities/account.entity";
+import {
+  mortgageTypeOf,
+  storesConstantPayment,
+} from "../../../accounts/mortgage-type.util";
 import { MappedLoanTerms } from "../model/mny-import-model";
 
 /**
@@ -54,6 +61,8 @@ export async function writeLoans(
         "paymentAmount",
         "paymentFrequency",
         "paymentStartDate",
+        "accountType",
+        "mortgageType",
       ],
     });
     if (!account) {
@@ -87,7 +96,19 @@ export async function writeLoans(
       patch.sourceAccountId = sourceAccountId;
     }
 
-    if (loan.paymentAmount !== null && account.paymentAmount === null) {
+    // A LINEAR or INTEREST_ONLY mortgage has no constant payment: its null is
+    // the method's answer, not a gap to fill, and the column's CHECK refuses
+    // one (docs/specs/mortgage-types.md, decision 11). A re-import into a
+    // profile where the user switched an imported mortgage to one of them
+    // leaves the column alone.
+    const storesPayment =
+      account.accountType !== AccountType.MORTGAGE ||
+      storesConstantPayment(mortgageTypeOf(account));
+    if (
+      storesPayment &&
+      loan.paymentAmount !== null &&
+      account.paymentAmount === null
+    ) {
       patch.paymentAmount = loan.paymentAmount;
     }
     if (loan.paymentFrequency !== null && account.paymentFrequency === null) {

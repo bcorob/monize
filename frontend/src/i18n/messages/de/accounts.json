@@ -1,4 +1,13 @@
 {
+  "paymentMatching": {
+    "toggleLabel": "{kind, select, mortgage {Importierte Bankzahlungen dieser Hypothek zuordnen} other {Importierte Bankzahlungen diesem Kredit zuordnen}}",
+    "toggleHelp": "Wenn eine importierte Banktransaktion zum Empfängermuster passt, verrechnet Monize sie mit der geplanten Zahlung und teilt sie in Tilgung und Zinsen auf, statt eine separate Rechnungsbuchung zu erstellen.",
+    "payeePattern": "Zahlungsempfänger-Muster",
+    "payeePatternPlaceholder": "z. B. *MEINE BANK*",
+    "descriptionPattern": "Beschreibungsmuster (optional)",
+    "descriptionPatternPlaceholder": "z. B. *Kreditrate*",
+    "fromAccount": "Abgeglichen mit Abbuchungen von {account}."
+  },
   "nameSuffix": {
     "cash": "Bargeld",
     "brokerage": "Depot"
@@ -22,9 +31,7 @@
     "noMatch": "Keine Konten entsprechen Ihren Filtern.",
     "clearFilters": "Filter zurücksetzen",
     "filter": {
-      "all": "Alle",
-      "active": "Aktiv",
-      "closed": "Geschlossen",
+      "allCount": "Alle ({count})",
       "netWorthAll": "Reinvermögen: Alle",
       "inNetWorth": "Im Reinvermögen",
       "excludedFromNetWorth": "Vom Reinvermögen ausgeschlossen",
@@ -32,7 +39,10 @@
       "typeAriaLabel": "Nach Kontotyp filtern",
       "searchPlaceholder": "Konten suchen...",
       "searchAriaLabel": "Konten nach Namen suchen",
-      "searchClear": "Suche löschen"
+      "searchClear": "Suche löschen",
+      "activeCount": "Aktiv ({count})",
+      "closedCount": "Geschlossen ({count})",
+      "statusLabel": "Status"
     },
     "accountCount": "{filtered} von {total} Konten",
     "groupCount": "{count, plural, one {# Konto} other {# Konten}}",
@@ -40,6 +50,8 @@
       "accountName": "Kontoname",
       "type": "Typ",
       "status": "Status",
+      "lastReconciled": "Zuletzt abgeglichen",
+      "unreconciled": "Nicht abgeglichen",
       "balance": "Saldo",
       "actions": "Aktionen"
     },
@@ -50,8 +62,11 @@
     "statusClosed": "Geschlossen",
     "marketValue": "Marktwert",
     "combinedBreakdown": "Anlagen {investments} · Bargeld {cash}",
+    "combinedInvestments": "Anlagen {amount}",
+    "combinedCash": "Bargeld {amount}",
     "combinedUnknown": "Gesamtwert nicht verfügbar",
     "combinedUnknownTooltip": "{count, plural, one {# Position hat keinen Kurs, daher lässt sich der Gesamtwert dieses Kontos nicht ermitteln} other {# Positionen haben keinen Kurs, daher lässt sich der Gesamtwert dieses Kontos nicht ermitteln}}",
+    "combinedUnknownValuation": "Einige Positionen in diesem Konto konnten nicht in Ihre Berichtswährung umgerechnet werden, daher lässt sich die Summe nicht ermitteln. Fügen Sie den fehlenden Wechselkurs auf der Seite Währungen hinzu.",
     "combinedUnknownNoPortfolio": "Die Positionen konnten nicht geladen werden, daher lässt sich der Gesamtwert dieses Kontos nicht ermitteln",
     "limit": "Limit: {amount}",
     "pairedWith": "Verknüpft mit {name}",
@@ -81,7 +96,11 @@
     "jointSharedBy": "Geteilt von {owner}",
     "jointSharedWith": "Geteilt mit {count, plural, one {# Person} other {# Personen}}",
     "includeInNetWorth": "In mein Nettovermögen einbeziehen",
-    "excludeFromNetWorth": "Aus meinem Nettovermögen ausschließen"
+    "excludeFromNetWorth": "Aus meinem Nettovermögen ausschließen",
+    "neverReconciled": "Nie",
+    "lastReconciledOn": "Abgeglichen am {date}",
+    "neverReconciledCard": "Nie abgeglichen",
+    "unreconciledCard": "{count, plural, one {{formatted} nicht abgeglichen} other {{formatted} nicht abgeglichen}}"
   },
   "contextMenu": {
     "subtypeBrokerage": "Brokerage",
@@ -117,17 +136,23 @@
     "accountType": "Kontotyp",
     "currency": "Währung",
     "currencyLocked": "Die Währung ist gesperrt, da dieses Konto bereits Buchungen enthält. Eine Änderung würde vorhandene Salden stillschweigend umrechnen.",
+    "accountTypeKindLocked": "Die Währung ist durch die Buchungen dieses Kontos gesperrt, daher kann es nicht zwischen Krypto-Wallet und einer Fiat-Kontoart wechseln.",
+    "currencyPlaceholder": "Währung auswählen ...",
+    "noCryptoCurrencies": "Ein Krypto-Wallet enthält eine Kryptowährung, und es ist noch keine eingerichtet. Fügen Sie eine auf der <currencies>Seite „Währungen“</currencies> hinzu und wählen Sie sie dann hier aus. <guide>So fügen Sie eine Kryptowährung hinzu</guide>",
     "openingBalance": "Anfangsbestand",
     "loanAmount": "Darlehensbetrag",
     "mortgageAmount": "Hypothekenbetrag",
     "accountNumber": "Kontonummer (optional)",
     "institution": "Institut (optional)",
-    "institutionRequired": "Kreditgeber/Institut (erforderlich)",
+    "institutionRequired": "Kreditgeber/Institut",
     "institutionPlaceholder": "Institut auswählen oder erstellen...",
     "newInstitutionTitle": "Neues Institut",
     "creditLimit": "Kreditlimit (optional)",
+    "balanceAlertsHeading": "Kontostandwarnungen",
+    "lowBalanceThreshold": "Benachrichtigen unter (optional)",
+    "highBalanceThreshold": "Benachrichtigen über (optional)",
     "interestRateOptional": "Zinssatz % (optional)",
-    "interestRateRequired": "Zinssatz % (erforderlich)",
+    "interestRateRequired": "Zinssatz %",
     "description": "Beschreibung (optional)",
     "excludeFromNetWorth": "Vom Reinvermögen ausschließen",
     "favourite": "Favorit",
@@ -157,13 +182,12 @@
       "mortgage": "Hypothek",
       "asset": "Aktiva",
       "cash": "Barmittel",
+      "crypto": "Krypto-Wallet",
       "other": "Sonstiges"
     },
     "statementDueDayPlaceholder": "z. B. 15",
     "statementSettlementDayPlaceholder": "z. B. 25",
     "fxFeeTitle": "Fremdwährungsumrechnungsgebühr (optional)",
-    "fxFeePercent": "Gebührensatz",
-    "fxFeePercentPlaceholder": "z. B. 2,5",
     "jointSharedWith": "Gemeinschaftskonto, geteilt mit {count, plural, one {# Person} other {# Personen}}",
     "jointManage": "Freigabe verwalten",
     "cashSection": {
@@ -192,10 +216,10 @@
   },
   "loanFields": {
     "title": "Darlehenszahlungsdetails",
-    "paymentAmount": "Zahlungsbetrag (erforderlich)",
-    "paymentFrequency": "Zahlungsintervall (erforderlich)",
-    "firstPaymentDate": "Datum der ersten Zahlung (erforderlich)",
-    "paymentFromAccount": "Zahlung vom Konto (erforderlich)",
+    "paymentAmount": "Zahlungsbetrag",
+    "paymentFrequency": "Zahlungsintervall",
+    "firstPaymentDate": "Datum der ersten Zahlung",
+    "paymentFromAccount": "Zahlung vom Konto",
     "interestCategory": "Zinskategorie",
     "selectFrequency": "Intervall auswählen...",
     "selectAccount": "Konto auswählen...",
@@ -222,33 +246,32 @@
     "analyzingHistory": "Buchungshistorie wird analysiert...",
     "detectedPayments": "{count} Zahlungen von {from} bis {to} erkannt.",
     "confidence": "Zuverlässigkeit:",
-    "lastSplit": "Letzte Zahlungsaufteilung: {currency}{principal} Tilgung / {currency}{interest} Zinsen",
-    "extraPayments": "{count, plural, one {# zusätzliche Tilgungszahlung} other {# zusätzliche Tilgungszahlungen}} erkannt (Durchschnitt {currency}{avg}/Periode)",
+    "lastSplit": "Letzte Zahlungsaufteilung: {principal} Tilgung / {interest} Zinsen",
+    "extraPayments": "{count, plural, one {# zusätzliche Tilgungszahlung} other {# zusätzliche Tilgungszahlungen}} erkannt (Durchschnitt {avg}/Periode)",
     "reviewValues": "Überprüfen und passen Sie die folgenden Werte vor dem Speichern an.",
-    "regularPaymentAmount": "Regulärer Zahlungsbetrag *",
+    "regularPaymentAmount": "Regulärer Zahlungsbetrag",
     "includeExtraPrincipal": "Zusätzliche Tilgungszahlung einschließen",
     "extraPrincipalPerPayment": "Zusätzliche Tilgung pro Zahlung",
-    "totalPayment": "Gesamtzahlung: {currency}{amount}",
+    "totalPayment": "Gesamtzahlung: {amount}",
     "useDetectedSplit": "Tilgungs-/Zinsaufteilung aus importierten Buchungen verwenden",
-    "useDetectedSplitDesc": "Verwendet {currency}{interest} für Zinsen, Rest zur Tilgung",
+    "useDetectedSplitDesc": "Verwendet {interest} für Zinsen, Rest zur Tilgung",
     "calculateFromRate": "Aufteilung aus Zinssatz und aktuellem Saldo berechnen",
-    "paymentFrequency": "Zahlungsintervall *",
-    "paymentFromAccount": "Zahlung vom Konto *",
+    "paymentFrequency": "Zahlungsintervall",
+    "paymentFromAccount": "Zahlung vom Konto",
     "selectAccount": "Konto auswählen...",
-    "nextPaymentDate": "Nächstes Zahlungsdatum *",
+    "nextPaymentDate": "Nächstes Zahlungsdatum",
     "annualInterestRate": "Jährlicher Zinssatz (%)",
     "interestRatePlaceholder": "z. B. 5,5",
     "estimatedFromHistory": "Aus Buchungshistorie geschätzt: {rate}%",
     "interestExpenseCategory": "Zinsaufwandskategorie",
+    "interestExpenseCategoryRequired": "Zinsaufwandskategorie",
     "detectedCategory": "Erkannt: {name}",
     "selectCategory": "Kategorie auswählen...",
     "payeeLender": "Zahlungsempfänger / Kreditgeber",
     "selectOrCreatePayee": "Zahlungsempfänger auswählen oder erstellen...",
     "mortgageDetails": "Hypothekendetails",
-    "canadianMortgage": "Kanadische Hypothek (halbjährliche Verzinsung)",
-    "variableRate": "Variabler Zinssatz",
     "amortizationMonths": "Tilgungszeitraum (Monate)",
-    "termMonths": "Laufzeit (Monate)",
+    "termMonths": "Zinsbindung (Monate)",
     "autoPost": "Buchungen bei Fälligkeit automatisch buchen",
     "skip": "Überspringen",
     "setUpPayments": "Zahlungen einrichten",
@@ -264,26 +287,46 @@
     },
     "toasts": {
       "setupComplete": "Terminierte Zahlungen für {account} eingerichtet"
+    },
+    "firstInstallment": "Erste Rate",
+    "firstInstallmentHelp": "Diese Hypothek hat keine feste Zahlung: Jede Rate ergibt sich aus dem Saldo, dem Zinssatz und der Tilgungsdauer. Dies ist die am {date} fällige Rate, einschließlich einer eventuellen Sondertilgung.",
+    "firstInstallmentPending": "Gib das nächste Zahlungsdatum ein, um die erste Rate zu berechnen.",
+    "firstInstallmentCalculating": "Die erste Rate wird berechnet...",
+    "firstInstallmentFailed": "Die erste Rate konnte nicht berechnet werden. Prüfe die Angaben unten und versuche es erneut.",
+    "paymentMatching": {
+      "autoPostDisabled": "Automatisch deaktiviert: Der Zahlungsabgleich begleicht diese Rechnung anhand der eigenen Abbuchung der Bank, daher darf sie nicht zusätzlich selbst gebucht werden.",
+      "payeePatternRequired": "Gib ein Zahlungsempfänger-Muster mit einem *-Platzhalter ein"
     }
   },
   "mortgageFields": {
     "title": "Hypothekendetails",
-    "canadianMortgage": "Kanadische Hypothek",
-    "canadianMortgageDesc": "Verwendet halbjährliche Verzinsung für Festzinsen (gesetzlich vorgeschrieben in Kanada)",
-    "variableRate": "Variabler Zinssatz",
-    "variableRateDesc": "Der Zinssatz kann sich während der Laufzeit ändern (verwendet monatliche Verzinsung)",
-    "variableRateLoanDetailsLink": "Zinsänderungen in den <link>Kreditdetails</link> erfassen.",
-    "termLength": "Laufzeit",
-    "termLengthNoTerm": "Bei 0 Jahren und 0 Monaten belassen, wenn keine Laufzeit gilt.",
-    "amortizationPeriod": "Tilgungszeitraum (erforderlich)",
+    "type": {
+      "label": "Hypothekenart",
+      "ANNUITY": "Annuität (gleichbleibende Rate)",
+      "CANADIAN_FIXED": "Kanadischer Festzins",
+      "LINEAR": "Linear (gleichbleibende Tilgung)",
+      "INTEREST_ONLY": "Nur Zinsen (tilgungsfrei)",
+      "help": {
+        "ANNUITY": "Ihre Gesamtrate ist jeden Monat gleich. Wählen Sie dies auch für eine Hypothek mit variablem Zinssatz.",
+        "CANADIAN_FIXED": "Ein kanadischer Festzinsvertrag; die Zinsen werden zweimal im Jahr kapitalisiert.",
+        "LINEAR": "Der Tilgungsanteil ist jeden Monat gleich, und die Gesamtrate sinkt.",
+        "INTEREST_ONLY": "Sie zahlen nur Zinsen, und die Restschuld bleibt unverändert."
+      }
+    },
+    "rateChangesLoanDetailsLink": "Zinsänderungen in den <link>Kreditdetails</link> erfassen.",
+    "termLength": "Zinsbindung",
+    "termLengthHelp": "Wie lange Ihr Zinssatz oder Ihre Vertragslaufzeit gilt, zum Beispiel 5 Jahre Festzins. Monize kann Sie vor dem Ende erinnern. Bei 0 Jahren und 0 Monaten belassen, wenn keine Zinsbindung gilt.",
+    "amortizationPeriod": "Tilgungszeitraum",
     "years": "Jahre",
     "months": "Monate",
-    "paymentFrequency": "Zahlungsintervall (erforderlich)",
-    "firstPaymentDate": "Datum der ersten Zahlung (erforderlich)",
-    "paymentFromAccount": "Zahlung vom Konto (erforderlich)",
-    "interestCategory": "Zinskategorie",
+    "paymentFrequency": "Zahlungsintervall",
+    "firstPaymentDate": "Datum der ersten Zahlung",
+    "paymentFromAccount": "Zahlung vom Konto",
+    "paymentFromAccountEditHelp": "Eine Änderung verschiebt die anstehenden geplanten Zahlungen und die Zahlungsabgleichsregel auf das neue Konto. Bereits gebuchte Zahlungen bleiben unverändert.",
+    "interestCategory": "Zinskategorie (optional)",
+    "interestCategoryRequired": "Zinskategorie",
     "interestBookingMode": {
-      "label": "Wie werden Zinsen erfasst?",
+      "label": "Zinsbuchung",
       "help": "Damit die Zinserkennung korrekt liest. Automatisch passt meistens.",
       "AUTO": "Automatisch (empfohlen)",
       "SPLIT": "Aufgeteilter Zahlungsanteil",
@@ -330,6 +373,72 @@
       "memoLabel": "Sondertilgungs-Notiztext",
       "memoPlaceholder": "z. B. Sondertilgung",
       "memoHelp": "Groß-/Kleinschreibung wird ignoriert; Teilstring-Abgleich mit der Notiz der Zahlung, der Notiz der Quelltransaktion oder einer Split-Notiz."
+    },
+    "prepaymentMode": {
+      "label": "Was eine Sondertilgung bewirkt",
+      "SHORTEN_TERM": "Verkürzt die Laufzeit (gleiche Tilgung jeden Monat)",
+      "LOWER_INSTALLMENT": "Senkt die Rate (gleiches Laufzeitende)",
+      "help": "Frage bei deinem Kreditgeber nach. Bleibt der Tilgungsanteil auf dem Kontoauszug nach einer Sondertilgung gleich, wurde die Laufzeit verkürzt."
+    },
+    "previewFirstInstallment": "Erste Rate:",
+    "detect": {
+      "toggle": "Nicht sicher? Geben Sie einige Raten ein",
+      "title": "Ihre Hypothekenart ermitteln",
+      "intro": "Übernehmen Sie zwei oder drei aufeinanderfolgende Raten von einem Kontoauszug, die älteste zuerst. Die Restschuld ist optional: Mit ihr und dem Zinssatz kann Monize erkennen, ob die Zinsen zweimal im Jahr kapitalisiert werden.",
+      "installment": "Rate {number}",
+      "principal": "Tilgung",
+      "interest": "Zinsen",
+      "balance": "Restschuld davor (optional)",
+      "rowIncomplete": "Geben Sie sowohl die Tilgung als auch die Zinsen ein, oder lassen Sie die Zeile leer.",
+      "rate": "Abgeglichen mit dem oben eingegebenen Zinssatz, {rate}.",
+      "noRate": "Oben ist kein Zinssatz eingegeben, daher kann die Kapitalisierung nicht geprüft werden.",
+      "needsFrequency": "Wählen Sie zuerst unten das Zahlungsintervall: Die Raten werden in diesem Rhythmus gelesen.",
+      "submit": "Art vorschlagen",
+      "close": "Schließen",
+      "suggested": "Vorgeschlagene Art: {type}",
+      "noSuggestion": "Keine Art vorgeschlagen.",
+      "lowConfidence": "Geringe Sicherheit: Prüfen Sie dies anhand Ihres Vertrags oder fragen Sie Ihren Kreditgeber, bevor Sie es verwenden.",
+      "use": "Diese Art verwenden",
+      "failed": "Die Raten konnten nicht geprüft werden, weil die Anfrage fehlgeschlagen ist. Versuchen Sie es erneut.",
+      "reason": {
+        "TOO_FEW_SAMPLES": "Für einen Vergleich sind mindestens zwei aufeinanderfolgende Raten nötig.",
+        "INVALID_SAMPLE": "Eine Rate hat einen negativen oder unlesbaren Betrag.",
+        "NO_PAYMENT": "Die Raten tilgen nichts und berechnen keine Zinsen.",
+        "AMBIGUOUS_CONSTANT_PRINCIPAL_AND_INSTALLMENT": "Tilgung und Gesamtrate sind bei jeder Rate gleich, was zu einer linearen ebenso wie zu einer Annuitätenhypothek passt. Versuchen Sie weiter auseinanderliegende Raten, oder prüfen Sie Ihren Vertrag.",
+        "ACCELERATED_FREQUENCY": "Diese Raten wirken linear oder tilgungsfrei, was bei einem beschleunigten Zahlungsintervall nicht möglich ist. Prüfen Sie das Zahlungsintervall.",
+        "NO_RULE_FITS": "Weder die Tilgung noch die Gesamtrate bleibt über diese Raten gleich. Hat sich der Zinssatz zwischen ihnen geändert, verwenden Sie Raten aus einer Zinsperiode.",
+        "ZERO_PRINCIPAL": "Es wird nichts getilgt, daher bleibt die Restschuld unverändert.",
+        "ZERO_PRINCIPAL_RATE_MISMATCH": "Es wird nichts getilgt, aber die Zinsen entsprechen nicht dem angegebenen Zinssatz auf die Restschuld. Prüfen Sie den Zinssatz.",
+        "CONSTANT_PRINCIPAL": "Der Tilgungsanteil ist jedes Mal gleich, und die Gesamtrate sinkt.",
+        "CONSTANT_PRINCIPAL_RATE_MISMATCH": "Der Tilgungsanteil ist jedes Mal gleich, aber die Zinsen entsprechen nicht dem angegebenen Zinssatz auf die Restschuld. Prüfen Sie den Zinssatz.",
+        "CONSTANT_INSTALLMENT_SEMI_ANNUAL": "Die Gesamtrate ist jedes Mal gleich, und die Zinsen entsprechen dem angegebenen Zinssatz bei zweimal jährlicher Kapitalisierung.",
+        "CONSTANT_INSTALLMENT_NOMINAL": "Die Gesamtrate ist jedes Mal gleich, und die Zinsen entsprechen dem angegebenen Zinssatz ohne zweimal jährliche Kapitalisierung.",
+        "CONSTANT_INSTALLMENT_RATE_UNCHECKED": "Die Gesamtrate ist jedes Mal gleich. Ohne die Restschuld vor jeder Rate und den Zinssatz konnte die zweimal jährliche Kapitalisierung nicht geprüft werden.",
+        "CONSTANT_INSTALLMENT_COMPOUNDING_AMBIGUOUS": "Die Gesamtrate ist jedes Mal gleich, aber die Restschuld ist zu klein, um eine zweimal jährliche Kapitalisierung zu unterscheiden. Ein kanadischer Festzinsvertrag nennt dies in seinen Bedingungen.",
+        "CONSTANT_INSTALLMENT_RATE_MISMATCH": "Die Gesamtrate ist jedes Mal gleich, aber die Zinsen passen beim angegebenen Zinssatz zu keiner der beiden Konventionen. Möglicherweise werden die Zinsen taggenau berechnet; prüfen Sie den Zinssatz."
+      },
+      "history": {
+        "action": "Hypothekenart erkennen",
+        "title": "Hypothekenart aus Ihren Zahlungen",
+        "intro": "Aus den letzten gebuchten Raten zu einem Zinssatz gelesen. Nichts ändert sich, bis Sie das Konto speichern.",
+        "current": "Aktuelle Art: {type}",
+        "alreadySet": "Diese Hypothek hat bereits die vorgeschlagene Art.",
+        "rate": "Geltender Zinssatz: {rate}",
+        "noRate": "Für diese Daten ist kein Zinssatz erfasst, daher wurde die Kapitalisierung nicht geprüft.",
+        "noSamples": "Es wurde keine gebuchte Rate mit sowohl einem Tilgungs- als auch einem Zinsanteil gefunden. Erfassen Sie Ihre Zahlungen aufgeteilt in Tilgung und Zinsen, um dies zu nutzen.",
+        "colDate": "Datum",
+        "colPrincipal": "Tilgung",
+        "colInterest": "Zinsen",
+        "colBalance": "Restschuld davor",
+        "balanceUnknown": "Unbekannt",
+        "failed": "Die Zahlungshistorie konnte nicht gelesen werden, weil die Anfrage fehlgeschlagen ist. Versuchen Sie es erneut.",
+        "cancel": "Abbrechen",
+        "use": "Konto mit dieser Art bearbeiten"
+      }
+    },
+    "originalPrincipal": {
+      "label": "Ursprüngliche Darlehenssumme",
+      "help": "Der ursprünglich geliehene Betrag. Bei einem Konto, dessen erfasste Historie erst nach Beginn der Hypothek einsetzt, ist dies der geliehene Betrag und nicht der Anfangssaldo — das ist die Schuld zu Beginn deiner Historie."
     }
   },
   "assetFields": {
@@ -352,13 +461,19 @@
   "validation": {
     "nameRequired": "Kontoname ist erforderlich",
     "currencyCodeLength": "Währungscode muss 3 Zeichen lang sein",
+    "currencyRequired": "Währung auswählen",
     "institutionRequired": "Bitte wählen oder erstellen Sie ein Institut",
     "interestRateRequired": "Zinssatz ist erforderlich",
     "paymentAmountRequired": "Zahlungsbetrag ist erforderlich",
     "paymentFrequencyRequired": "Zahlungsintervall ist erforderlich",
     "paymentStartDateRequired": "Datum der ersten Zahlung ist erforderlich",
     "paymentAccountRequired": "Zahlungskonto ist erforderlich",
-    "amortizationRequired": "Tilgungszeitraum ist erforderlich"
+    "amortizationRequired": "Tilgungszeitraum ist erforderlich",
+    "interestCategoryRequired": "Wählen Sie die Kategorie, auf die die Zinsen dieses Kredits gebucht werden",
+    "acceleratedNeedsAnnuity": "Diese Hypothek wird nach einem beschleunigten Zahlungsplan bezahlt, den nur eine Annuitätenhypothek hat. Eine lineare oder tilgungsfreie Hypothek braucht eine reguläre Zahlungsfrequenz; behalte daher eine Annuitätenart bei.",
+    "paymentMatchingPayeePatternRequired": "Gib ein Zahlungsempfänger-Muster ein, das die Bankabbuchung erkennt",
+    "paymentMatchingPayeePatternWildcard": "Das Zahlungsempfänger-Muster muss einen *-Platzhalter enthalten",
+    "paymentMatchingDescriptionPatternWildcard": "Das Beschreibungsmuster muss einen *-Platzhalter enthalten"
   },
   "loanDetail": {
     "backToAccounts": "Zurück zu den Konten",
@@ -386,7 +501,12 @@
       "estRemainingInterest": "Voraus. Restzinsen",
       "notSet": "Nicht festgelegt",
       "notAvailable": "N/V",
-      "paidOff": "Getilgt"
+      "paidOff": "Getilgt",
+      "nextInstallment": "Nächste Rate",
+      "dueOn": "Fällig am {date}",
+      "finalPayment": "Schlusszahlung",
+      "nextInstallmentDue": "Nächste Rate (fällig am {date})",
+      "finalPaymentDue": "Schlusszahlung (fällig am {date})"
     },
     "schedule": {
       "title": "Tilgungsplan",
@@ -455,7 +575,19 @@
       "budgetLabel": "Monatliche Gesamtzahlung",
       "budgetHint": "Gib jeden Monat einen festen Gesamtbetrag für den Kredit aus; die Sondertilgung ist der Rest nach der Rate. Sinkt die Rate, wächst die Sondertilgung, damit der Gesamtbetrag gleich bleibt.",
       "budgetBelowInstallment": "Das liegt unter der aktuellen Rate ({amount}); erhöhe den Betrag, um zusätzlich zu tilgen.",
-      "windowInverted": "Das Startdatum liegt nach dem Enddatum, daher wird dieser Plan nie angewendet."
+      "windowInverted": "Das Startdatum liegt nach dem Enddatum, daher wird dieser Plan nie angewendet.",
+      "unavailable": {
+        "title": "Die Sondertilgungs-Simulation kann für diesen Kredit noch nicht berechnet werden.",
+        "reasonPaidOff": "Dieser Kredit hat keinen offenen Saldo, es bleibt also nichts zu tilgen.",
+        "reasonNoFrequency": "Für diesen Kredit ist keine Zahlungshäufigkeit festgelegt. Legen Sie sie in den Kontoeinstellungen fest.",
+        "reasonNoRate": "Für diesen Kredit ist kein Zinssatz gespeichert. Legen Sie den Zinssatz in den Kontoeinstellungen fest oder erfassen Sie eine Zinsänderung mit heutigem oder früherem Datum. Ein je Zeile im Tilgungsplan angezeigter Zinssatz wird aus den berechneten Zinsen rekonstruiert und ist kein gespeicherter Zinssatz.",
+        "reasonNoPayment": "Die Ratenhöhe kann nicht ermittelt werden. Erfassen Sie die regelmäßigen Raten als Überweisungen auf das Kreditkonto (Tilgung, mit Zinsen als Splitzeile oder als separate kategorisierte Ausgabe) oder legen Sie den Zahlungsbetrag in den Kontoeinstellungen fest. Als gewöhnliche Ausgaben auf dem Quellkonto gebuchte Zahlungen erreichen das Kreditkonto nie, daher kann der Tilgungsplan sie nicht sehen.",
+        "reasonNoAmortization": "Für diese Hypothek ist keine Tilgungsdauer hinterlegt, daher lassen sich ihre Raten und ihr Laufzeitende nicht berechnen. Lege die Tilgungsdauer in den Kontoeinstellungen fest.",
+        "reasonNoPaymentStart": "Für diese Hypothek ist kein erstes Zahlungsdatum hinterlegt, daher lassen sich die Zahlungen bis zum Laufzeitende nicht zählen. Richte in den Kontoeinstellungen ihre geplante Zahlung ein; das erste Fälligkeitsdatum, das du angibst, wird Zahlung 1.",
+        "reasonNoPrincipal": "Für diese Hypothek ist kein ursprünglicher Betrag hinterlegt, daher lässt sich ihre gleichbleibende Tilgung nicht berechnen. Lege den Hypothekenbetrag in den Kontoeinstellungen fest."
+      },
+      "budgetBelowNextInstallment": "Das liegt unter der nächsten Rate ({amount}, fällig am {date}); erhöhe den Betrag darüber, um Sondertilgungen zu leisten.",
+      "shortenTermNeedsPrincipal": "Für diese Hypothek ist kein ursprünglicher Betrag hinterlegt, daher lässt sich eine verkürzte Laufzeit nicht simulieren. Wähle, die Rate zu senken, oder lege den Hypothekenbetrag in den Kontoeinstellungen fest."
     },
     "comparison": {
       "newPayoff": "Neues Tilgungsdatum",
@@ -471,7 +603,8 @@
       "newInstallment": "Neue Rate",
       "installmentDrop": "{payment} (−{reduction})",
       "monthlyPayment": "Monatliche Rate",
-      "overpaymentAtFrequency": "{frequency}: +{amount}"
+      "overpaymentAtFrequency": "{frequency}: +{amount}",
+      "firstPayment": "Erste Zahlung"
     },
     "chart": {
       "title": "Tilgungsverlauf",
@@ -538,6 +671,71 @@
       "seriesActual": "Tatsächlicher Saldo",
       "unknown": "Unbekannt"
     },
+    "paymentMatching": {
+      "title": "Zahlungsabgleich",
+      "description": "Erkennt die Abbuchung jeder Rate durch die Bank und verrechnet sie mit dem Zahlungsplan des Darlehens als Tilgung und Zinsen, statt die Rechnung separat zu buchen.",
+      "noSchedule": "Der Zahlungsabgleich verrechnet die Abbuchungen der Bank mit der geplanten Zahlung des Darlehens. Richte zuerst die Zahlungen dieses Darlehens ein.",
+      "noRule": "Mit diesem Darlehen ist keine Zahlungsabgleichsregel verknüpft.",
+      "createOne": "Jetzt erstellen",
+      "ruleLabel": "Regel:",
+      "ruleLoading": "Regel wird geladen",
+      "ruleFailed": "Die Zahlungsabgleichsregel konnte nicht geladen werden.",
+      "scheduleLoading": "Geplante Zahlung wird geladen",
+      "scheduleFailed": "Die geplante Zahlung des Darlehens konnte nicht geladen werden.",
+      "retry": "Erneut versuchen",
+      "autoPost": {
+        "title": "Die geplante Zahlung bucht sich weiterhin selbst",
+        "body": "Für die Rechnung dieses Darlehens ist das automatische Buchen aktiviert, daher würde eine Rate, die die Regel aus der Bankabbuchung verrechnet, zusätzlich von der Rechnung gebucht. Deaktiviere das automatische Buchen der Rechnung unter Rechnungen & Einzahlungen."
+      },
+      "preconditions": {
+        "openingBalance": "Der Anfangssaldo des Darlehens muss die Restschuld zu Beginn der verarbeiteten Historie sein; die Zinsen jeder Rate werden darauf berechnet.",
+        "originalPrincipal": "Der ursprüngliche Darlehensbetrag muss der ursprünglich geliehene Betrag sein, nicht der Anfangssaldo.",
+        "scheduleStart": "Abbuchungen vor dem {date}, dem Beginn der geplanten Zahlung, haben keine Rate, mit der sie abgeglichen werden können."
+      },
+      "process": {
+        "button": "Historie verarbeiten",
+        "scope": "Wendet die Regel auf die Abbuchungen in {account} an, die ältesten zuerst.",
+        "running": "Historie wird verarbeitet: bisher {count, plural, one {# Rate} other {# Raten}} verrechnet.",
+        "done": "{count, plural, =0 {Es wurden keine Raten verrechnet.} one {# Rate wurde verrechnet.} other {# Raten wurden verrechnet.}}",
+        "undo": "Jede Seite des Durchlaufs kann im Aktionsverlauf rückgängig gemacht werden.",
+        "failed": "Verarbeitung der Historie angehalten",
+        "stuckTitle": "Die Verarbeitung der Historie konnte nicht fortgesetzt werden",
+        "stuck": "Mehr als {limit, number} Buchungen sind auf den {date} datiert, daher kann der Durchlauf nicht über diesen Tag hinaus fortfahren. Verrechne den Rest unter Tools > Regeln mit einem engeren Filter.",
+        "stuckUnknown": "Der Server hat nicht mitgeteilt, wie weit der Durchlauf gekommen ist, daher kann er nicht fortgesetzt werden. Lade die Seite neu und versuche es erneut."
+      },
+      "create": {
+        "title": "Zahlungsabgleichsregel erstellen",
+        "description": "Die Regel verrechnet passende Abbuchungen vom Konto der geplanten Darlehenszahlung, und das automatische Buchen der Rechnung wird deaktiviert.",
+        "descriptionWithAccount": "Die Regel verrechnet passende Abbuchungen von {account}, und das automatische Buchen der Rechnung wird deaktiviert.",
+        "submit": "Regel erstellen",
+        "payeePatternRequired": "Gib ein Zahlungsempfänger-Muster mit einem *-Platzhalter ein",
+        "descriptionPatternWildcard": "Ein Beschreibungsmuster muss einen *-Platzhalter enthalten",
+        "failed": "Die Zahlungsabgleichsregel konnte nicht erstellt werden.",
+        "done": "Regel „{name}“ erstellt"
+      },
+      "settled": {
+        "title": "Verrechnete Raten",
+        "titleWithCount": "Verrechnete Raten ({count})",
+        "colDueDate": "Fälligkeitsdatum",
+        "colTransaction": "Buchung",
+        "colPrincipal": "Tilgung",
+        "colInterest": "Zinsen",
+        "colExtra": "Sondertilgung",
+        "colDebtBefore": "Restschuld davor",
+        "openTransaction": "Buchung öffnen",
+        "void": "Storniert",
+        "notRecorded": "Nicht erfasst",
+        "empty": {
+          "title": "Noch keine Raten verrechnet",
+          "body": "Verarbeite die Historie oder importiere die Abbuchungen der Bank, um Raten zu verrechnen."
+        },
+        "error": {
+          "title": "Die verrechneten Raten konnten nicht geladen werden",
+          "body": "Dies ist keine leere Liste. Versuche es erneut, um zu sehen, welche Raten verrechnet wurden.",
+          "retry": "Erneut versuchen"
+        }
+      }
+    },
     "lineOfCredit": {
       "currentBalance": "Aktueller Saldo",
       "creditLimit": "Kreditrahmen",
@@ -549,7 +747,10 @@
     },
     "rateHistory": {
       "scheduledUpdateTitle": "Geplante Zahlung aktualisieren?",
-      "scheduledUpdateMessage": "Die geplante Rechnungszahlung \"{name}\" kann an den neuen Zinssatz angepasst werden: {payment} gesamt, aufgeteilt in {principal} Tilgung und {interest} Zinsen. Jetzt aktualisieren?",
+      "scheduledUpdateNextPaymentUnchanged": "Die geplante Rechnungszahlung \"{name}\" entspricht bereits dem Zinsplan. Nächste Zahlung am {date}: unverändert ({payment}).",
+      "scheduledUpdateNextPaymentChanged": "Die geplante Rechnungszahlung \"{name}\" kann an den Zinsplan angepasst werden. Nächste Zahlung am {date}: {before} → {after}, aufgeteilt in {principal} Tilgung und {interest} Zinsen.",
+      "scheduledUpdateNextPaymentNew": "Die geplante Rechnungszahlung \"{name}\" kann an den Zinsplan angepasst werden. Nächste Zahlung am {date}: {payment}, aufgeteilt in {principal} Tilgung und {interest} Zinsen.",
+      "scheduledUpdateUpcomingChange": "Ab dem {date} beträgt die Zahlung {amount}.",
       "scheduledUpdateDefaultName": "diese Hypothek",
       "scheduledUpdateConfirm": "Zahlung aktualisieren",
       "scheduledUpdateSkip": "Unverändert lassen",
@@ -616,6 +817,54 @@
       "memoLabel": "Sondertilgungs-Memo",
       "memoPlaceholder": "z. B. Zusätzliche Tilgung",
       "memoHelp": "Zahlungen, deren Memo diesen Text enthält, zählen als Sondertilgungen (Groß-/Kleinschreibung wird ignoriert)."
+    },
+    "notAmortizing": {
+      "title": "Dieser Kredit wird nicht getilgt, daher sind das voraussichtliche Tilgungsdatum und die restlichen Zinsen unbekannt.",
+      "paymentBelowInterest": "Die Rate ({payment}) liegt unter den monatlichen Zinsen (etwa {interest}) bei {rate}%, sodass der Saldo nie sinkt. Erfassen Sie die tatsächliche Rate (den Eintrag in der Zinsverlauf-Historie oder den Zahlungsbetrag des Kontos), damit sie die Zinsen deckt.",
+      "beyondHorizon": "Die Rate deckt die Zinsen, aber die Laufzeit reicht über den Prognosehorizont hinaus, daher werden Tilgungsdatum und restliche Zinsen nicht angezeigt."
+    }
+  },
+  "loanFees": {
+    "title": "Hypothekengebühren",
+    "help": "Versicherungen, Steuern oder andere Gebühren, die mit jeder Hypothekenzahlung eingezogen werden. Jede Gebühr wird zu einer eigenen Zeile der geplanten Zahlung und auf die von dir gewählte Kategorie gebucht. Eine Gebühr kann ein fester Betrag, ein Prozentsatz des aktuellen Saldos (bei jeder Zahlung neu berechnet) oder ein Prozentsatz des ursprünglichen Saldos sein und pro Zahlung oder pro Jahr erhoben werden.",
+    "panelDescription": "Gebühren, die mit jeder geplanten Hypothekenzahlung eingezogen werden. Beim Speichern werden die Zeilen der nächsten Zahlung aktualisiert.",
+    "none": "Mit der Zahlung dieser Hypothek werden keine Gebühren eingezogen.",
+    "name": "Name der Gebühr",
+    "category": "Kategorie",
+    "calculation": "Berechnet als",
+    "basis": "Wert gilt",
+    "amount": "Betrag",
+    "rate": "Satz",
+    "add": "Gebühr hinzufügen",
+    "remove": "Gebühr entfernen",
+    "edit": "Gebühren bearbeiten",
+    "editTitle": "Hypothekengebühren",
+    "save": "Gebühren speichern",
+    "cancel": "Abbrechen",
+    "saved": "Die Hypothekengebühren wurden gespeichert.",
+    "saveFailed": "Die Hypothekengebühren konnten nicht gespeichert werden.",
+    "loading": "Gebühren werden geladen...",
+    "loadFailed": "Die Hypothekengebühren konnten nicht geladen werden.",
+    "retry": "Erneut versuchen",
+    "unknownCategory": "Unbekannte Kategorie",
+    "unknownValue": "unbekannt",
+    "summaryPerPayment": "{value} pro Zahlung, {calculation}",
+    "summaryAnnual": "{value} pro Jahr, {calculation}",
+    "paymentMatchingConflict": "Der Zahlungsabgleich kann eine Zahlung mit Gebühren noch nicht verrechnen. Schalte den Zahlungsabgleich aus oder entferne die Gebühren.",
+    "paymentMatchingNote": "Diese Hypothek hat eine Regel für den Zahlungsabgleich. Der Zahlungsabgleich kann eine Zahlung mit Gebühren noch nicht verrechnen, daher können keine Gebühren hinzugefügt werden, solange die Regel besteht.",
+    "calculations": {
+      "fixed": "Fester Betrag",
+      "percentCurrentBalance": "Prozentsatz des aktuellen Saldos",
+      "percentOriginalBalance": "Prozentsatz des ursprünglichen Saldos"
+    },
+    "bases": {
+      "perPayment": "Pro Zahlung",
+      "annual": "Pro Jahr"
+    },
+    "errors": {
+      "required": "Erforderlich",
+      "duplicate": "Jede Gebühr braucht eine eigene Kategorie, die nicht die Zinskategorie ist",
+      "range": "Gib einen Satz von höchstens 100 % ein"
     }
   }
 }

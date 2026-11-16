@@ -1,3 +1,4 @@
+import type { ScheduleAmountEstimateStatus } from "../../scheduled-transactions/scheduled-amount-estimate.service";
 import { Injectable, Logger, BadRequestException } from "@nestjs/common";
 import { tr } from "../../i18n/translate";
 import { DataSource } from "typeorm";
@@ -12,7 +13,12 @@ import {
 import { FORECAST_SYSTEM_PROMPT } from "../context/prompt-templates";
 import { aiLanguageInstruction } from "../context/language-directive";
 import { sanitizePromptValue } from "../../common/sanitization.util";
-import { formatCurrencyAmount } from "../../common/format-currency.util";
+import { recurringChargeAmountForPrompt } from "../context/recurring-charge-prompt";
+import {
+  decimalPlacesFor,
+  formatCurrencyAmount,
+} from "../../common/format-currency.util";
+import { loadCurrencyDecimalPlaces } from "../../currencies/currency-decimal-places";
 import { UserPreference } from "../../users/entities/user-preference.entity";
 import {
   ForecastResponse,
@@ -21,6 +27,21 @@ import {
   ForecastKeyExpense,
 } from "./dto/ai-forecast.dto";
 import { preferredCurrency } from "../../common/default-currency.util";
+
+/**
+ * Why an estimated bill's amount is unknown, as the model is told it (issue
+ * #2096): each names its own repair, and none is a missing exchange rate
+ * unless it is one.
+ */
+const UNKNOWN_ESTIMATE_PROMPT: Record<ScheduleAmountEstimateStatus, string> = {
+  estimated: "unknown (estimated from payment history)",
+  "no-history":
+    "unknown (estimated from payment history, which has no usable payments yet)",
+  "missing-rate":
+    "unknown (estimated from payment history, but a past payment's currency has no current exchange rate)",
+  "no-basis":
+    "unknown (estimated from payment history, but the bill has no payee or category to match payments on)",
+};
 
 const MIN_FORECAST_INTERVAL_HOURS = 6;
 const DEFAULT_FORECAST_MONTHS = 3;
@@ -84,7 +105,14 @@ export class AiForecastService {
     }
 
     const forecastMonths = months ?? DEFAULT_FORECAST_MONTHS;
-    const prompt = this.buildForecastPrompt(aggregates, forecastMonths);
+    // A coin's balance is printed at its own row's places, not Intl's 2.
+    const places = await withScopedDb(this.dataSource, (manager) =>
+      loadCurrencyDecimalPlaces(
+        manager,
+        aggregates.accountBalances.accounts.map((acct) => acct.currencyCode),
+      ),
+    );
+    const prompt = this.buildForecastPrompt(aggregates, forecastMonths, places);
 
     try {
       const response = await this.aiService.complete(
@@ -153,6 +181,7 @@ export class AiForecastService {
   private buildForecastPrompt(
     aggregates: ForecastAggregates,
     forecastMonths: number,
+    places: ReadonlyMap<string, number>,
   ): string {
     const sections: string[] = [];
 
@@ -163,16 +192,24 @@ export class AiForecastService {
     );
 
     sections.push("\n--- CURRENT ACCOUNT BALANCES ---");
+    const { totalBalance, knownBalanceSubtotal } = aggregates.accountBalances;
     sections.push(
-      `Total balance: ${aggregates.accountBalances.totalBalance.toFixed(2)}`,
+      totalBalance === null
+        ? `Total balance: unknown (no exchange rate for ${aggregates.accountBalances.missingRatePairs.join(", ")}); converted part only: ${knownBalanceSubtotal.toFixed(2)} ${aggregates.currency}`
+        : `Total balance: ${totalBalance.toFixed(2)} ${aggregates.currency}`,
     );
     for (const acct of aggregates.accountBalances.accounts) {
       sections.push(
-        `${sanitizePromptValue(acct.name)} (${acct.accountType}): ${formatCurrencyAmount(acct.balance, acct.currencyCode)} ${acct.currencyCode}`,
+        `${sanitizePromptValue(acct.name)} (${acct.accountType}): ${formatCurrencyAmount(acct.balance, acct.currencyCode, decimalPlacesFor(acct.currencyCode, places))} ${acct.currencyCode}`,
       );
     }
 
     sections.push("\n--- MONTHLY TRANSACTION HISTORY (12 months) ---");
+    if (aggregates.fxComplete === false) {
+      sections.push(
+        `NOTE: amounts in currencies with no exchange rate (${aggregates.missingRatePairs.join(", ")}) are left out of the history and income figures; do not treat them as complete.`,
+      );
+    }
     for (const month of aggregates.monthlyHistory) {
       const topExpenses = month.categoryBreakdown
         .filter((c) => !c.isIncome)
@@ -213,10 +250,17 @@ export class AiForecastService {
         // An amount the server could not resolve is stated as unknown rather
         // than quoted from the persisted snapshot, which was calculated at an
         // older exchange rate (issue #1247).
+        // An estimated amount (issue #2096) is labelled as one, and an
+        // unknown estimate is not a missing rate: there is no payment
+        // history to estimate it from yet.
         const amount =
           st.amount === null
-            ? "unknown (no current exchange rate)"
-            : st.amount.toFixed(2);
+            ? st.amountEstimated
+              ? UNKNOWN_ESTIMATE_PROMPT[st.estimateStatus ?? "no-history"]
+              : "unknown (no current exchange rate)"
+            : st.amountEstimated
+              ? `${st.amount.toFixed(2)} (estimated from payment history)`
+              : st.amount.toFixed(2);
         sections.push(
           `${sanitizePromptValue(st.name)}: ${amount} (${st.frequency}, next: ${st.nextDueDate}, ${type}, category: ${sanitizePromptValue(st.categoryName || "unknown")})`,
         );
@@ -227,7 +271,7 @@ export class AiForecastService {
       sections.push("\n--- DETECTED RECURRING CHARGES ---");
       for (const charge of aggregates.recurringCharges.slice(0, 15)) {
         sections.push(
-          `${sanitizePromptValue(charge.payeeName)} (${charge.frequency}): latest=${charge.currentAmount.toFixed(2)}, category=${sanitizePromptValue(charge.categoryName || "unknown")}`,
+          `${sanitizePromptValue(charge.payeeName)} (${charge.frequency}): latest=${recurringChargeAmountForPrompt(charge, "current", aggregates.currency)}, category=${sanitizePromptValue(charge.categoryName || "unknown")}`,
         );
       }
     }
@@ -260,6 +304,10 @@ export class AiForecastService {
         generatedAt: new Date().toISOString(),
         currency,
         currentBalance: aggregates.accountBalances.totalBalance,
+        currentBalanceKnownSubtotal:
+          aggregates.accountBalances.knownBalanceSubtotal,
+        missingRatePairs: aggregates.missingRatePairs,
+        fxComplete: aggregates.fxComplete,
         forecastMonths,
         monthlyProjections: this.validateProjections(parsed.monthlyProjections),
         riskFlags: this.validateRiskFlags(parsed.riskFlags || []),

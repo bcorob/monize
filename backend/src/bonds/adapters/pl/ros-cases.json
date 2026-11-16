@@ -1,0 +1,138 @@
+{
+  "manifest": "ros1032",
+  "cases": [
+    {
+      "id": "ROS-N1",
+      "description": "ROS1032 N1 = 100 (1 + r1) = 105.00 (base of period 2)",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2027-10-20",
+      "announcedRates": {
+        "2": "0.0480",
+        "3": "0.0450",
+        "4": "0.0420",
+        "5": "0.0400",
+        "6": "0.0390"
+      },
+      "expect": {
+        "principal": "105.00"
+      }
+    },
+    {
+      "id": "ROS-E1",
+      "description": "ROS1032 early, period 1, a = 182, ACT = 365: 100.4932 (above floor, fee 2.00)",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2027-04-15",
+      "expect": {
+        "earlyRedemptionValue": "100.49"
+      }
+    },
+    {
+      "id": "ROS-E2",
+      "description": "ROS1032 early, period 1, a = 10, ACT = 365: 98.1370 -> floor 100.00 (below floor -> 100.00)",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2026-10-25",
+      "expect": {
+        "earlyRedemptionValue": "100.00"
+      }
+    },
+    {
+      "id": "ROS-E3",
+      "description": "ROS1032 early, period 2, a = 183, ACT = 366: 105.5200 (r2 = 4.80% hypothetical)",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2028-04-15",
+      "announcedRates": {
+        "2": "0.0480",
+        "3": "0.0450",
+        "4": "0.0420",
+        "5": "0.0400",
+        "6": "0.0390"
+      },
+      "expect": {
+        "earlyRedemptionValue": "105.52"
+      }
+    },
+    {
+      "id": "ROS-Q",
+      "description": "ROS1032 early, period 1, a = 182, ACT = 365: 100.4932 lot of 25",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 25
+      },
+      "asOf": "2027-04-15",
+      "expect": {
+        "earlyRedemptionValue": "2512.25",
+        "quantity": 25
+      }
+    },
+    {
+      "id": "ROS-W",
+      "description": "ROS1032 maturity value, r2..r6 hypothetical: 129.47",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2026-10-20",
+      "announcedRates": {
+        "2": "0.0480",
+        "3": "0.0450",
+        "4": "0.0420",
+        "5": "0.0400",
+        "6": "0.0390"
+      },
+      "expect": {
+        "maturityValueKnown": "129.47"
+      }
+    },
+    {
+      "id": "ROS-A1",
+      "description": "ROS1032 period 1, a = 182, ACT = 365: accrued 2.49, rate 5.00% from the terms",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2027-04-15",
+      "expect": {
+        "accruedInterest": "2.49",
+        "grossValue": "102.49",
+        "currentPeriod": {
+          "index": 1,
+          "annualRate": "0.0500",
+          "rateSource": "TERMS"
+        }
+      }
+    },
+    {
+      "id": "ROS-A2",
+      "description": "ROS1032 period 2, a = 183, ACT = 366 on the base 105.00: accrued 7.52 (r2 = 4.80% hypothetical)",
+      "lot": {
+        "purchaseDate": "2026-10-15",
+        "quantity": 1
+      },
+      "asOf": "2028-04-15",
+      "announcedRates": {
+        "2": "0.0480"
+      },
+      "expect": {
+        "accruedInterest": "7.52",
+        "grossValue": "107.52",
+        "currentPeriod": {
+          "index": 2,
+          "annualRate": "0.0480",
+          "rateSource": "ANNOUNCED"
+        }
+      }
+    }
+  ]
+}

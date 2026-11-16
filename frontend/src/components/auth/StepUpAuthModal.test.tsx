@@ -64,6 +64,13 @@ describe('StepUpAuthModal — TOTP mode (2FA enabled)', () => {
     mockPrefsState.preferences = { twoFactorEnabled: true };
   });
 
+  it('is named by its title and gives the reason in a tooltip', async () => {
+    await renderModal();
+    const dialog = screen.getByRole('dialog', { name: "Confirm it's you" });
+    expect(dialog).toHaveAccessibleDescription('Re-verify');
+    expect(dialog.querySelector('.border-t, .border-b')).toBeNull();
+  });
+
   it('renders the 6-digit input and not a password field', async () => {
     await renderModal();
     expect(screen.getByLabelText(/Authenticator code/i)).toBeInTheDocument();

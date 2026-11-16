@@ -7,10 +7,9 @@ import { join } from "path";
  *
  * `scheduled-loan-pricing-concurrency.integration.spec.ts` proves the protocol
  * works -- two real connections, a real ledger write queueing behind the held
- * lock. It cannot prove the posting *takes* that lock, because the integration
- * harness stubs `ScheduledTransactionsModule` to break a require cycle and the
- * real `post()` cannot be constructed there. This scan is the other half: every
- * pricing call in the posting path is preceded by the lock.
+ * lock. It does not prove the posting *takes* that lock: it drives the protocol,
+ * not `post()`. This scan is the other half: every pricing call in the posting
+ * path is preceded by the lock.
  *
  * A scan rather than a test of one path because there are two doors into the
  * pricing (the base-split path and the Post dialog's echoed splits), and a

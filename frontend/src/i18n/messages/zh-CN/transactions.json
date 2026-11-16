@@ -76,7 +76,10 @@
     "collapseAria": "隐藏账户信息",
     "showAccountNumber": "显示账户号码",
     "hideAccountNumber": "隐藏账户号码",
-    "show": "显示账户信息"
+    "show": "显示账户信息",
+    "nextInstallment": "下期还款",
+    "finalPayment": "最后一期还款",
+    "amountDueOn": "{amount}，到期日 {date}"
   },
   "page": {
     "title": "交易",
@@ -121,13 +124,19 @@
       "balance": "余额",
       "attachments": "附件",
       "status": "状态",
+      "statusHelp": "未对账、已结算或已对账是与银行对账单匹配的几个阶段。作废会取消一笔交易，但保留其记录；它不再影响账户余额。",
       "actions": "操作"
+    },
+    "sort": {
+      "balanceHiddenHint": "按日期排序即可查看余额",
+      "stripLabel": "排序方式"
     },
     "dateDisplay": {
       "toggleLabel": "隐藏年份",
       "toggleTitle": "日期中不显示年份，为收款人留出更多空间"
     },
     "attachmentsCount": "{count, plural, other {# 个附件}}",
+    "warrantiesCount": "{count, plural, other {# 项保修}}",
     "today": "今天",
     "export": {
       "button": "导出",
@@ -165,7 +174,6 @@
     },
     "row": {
       "viewPayeeTitle": "查看 {name} 的详情",
-      "ref": "参考：{number}",
       "investmentLabel": "投资",
       "linkedInvestmentTitle": "在投资中查看",
       "filterByDate": "按日期筛选\"{date}\"",
@@ -212,13 +220,13 @@
       "title": "筛选",
       "clear": "清除",
       "hide": "隐藏",
-      "show": "显示"
+      "show": "显示筛选"
     },
     "accounts": {
-      "label": "显示账户：",
-      "all": "全部",
-      "active": "活跃",
-      "closed": "已关闭"
+      "label": "显示账户",
+      "allCount": "全部 ({count})",
+      "activeCount": "活跃 ({count})",
+      "closedCount": "已关闭 ({count})"
     },
     "fields": {
       "accounts": "账户",
@@ -251,7 +259,7 @@
       "statuses": "所有状态",
       "amountMin": "最小",
       "amountMax": "最大",
-      "search": "搜索收款人、分类、金额、标签、描述、参考编号...",
+      "search": "搜索，或试试 #10 或 payee:costco",
       "tagKeyValue": "例如 usa"
     },
     "tagKeyNone": "任意（无键筛选）",
@@ -312,7 +320,7 @@
     },
     "modal": {
       "title": "批量更新交易",
-      "subtitle": "更新 {count, plural, one {# 笔选中的交易} other {# 笔选中的交易}}。切换要更改的字段。",
+      "help": "切换要更改的字段。",
       "submitLabel": "更新 {count, plural, one {# 笔交易} other {# 笔交易}}",
       "payee": "收款人",
       "category": "分类",
@@ -360,8 +368,9 @@
       "fromAccount": "来源账户",
       "toAccount": "目标账户",
       "transferAmount": "转账金额",
-      "transferAmountWithCurrency": "转账金额（{currency}）",
-      "amountReceived": "收到金额（{currency}）",
+      "amountReceivedLabel": "收到金额",
+      "transferAmountInCurrency": "转账金额 ({currency})",
+      "amountReceivedInCurrency": "收到金额 ({currency})",
       "payeeOptional": "收款人（可选）",
       "categoryOptional": "类别（可选）"
     },
@@ -391,10 +400,16 @@
     "submitCreateAndNewDescription": "保存并开始下一笔，保留账户和日期。",
     "submitOptions": "选择创建后的行为",
     "submitUpdate": "更新{mode}",
+    "submitConvert": "转换为{mode}",
     "reconciledConfirm": {
       "title": "编辑已对账的交易？",
       "message": "此交易已对账。更改它会影响已完成的对账。仍要保存更改吗？",
       "confirm": "保存更改"
+    },
+    "counterpartConfirm": {
+      "title": "转换此转账？",
+      "message": "此转账的另一方已清算或已对账。将其转换为交易会从另一账户中移除该条目，并更改已与对账单核对的余额。是否继续？",
+      "confirm": "仍然转换"
     },
     "modeLabel": {
       "transfer": "转账",
@@ -424,6 +439,8 @@
       "destinationRequired": "请选择目标账户",
       "sameAccount": "来源账户和目标账户必须不同",
       "negativeTransfer": "转账金额不能为负数",
+      "convertedToTransfer": "已转换为转账",
+      "convertedToTransaction": "已转换为交易",
       "payeeCreated": "收款人\"{name}\"已创建",
       "payeeCreateFailed": "创建收款人失败",
       "payeeReactivated": "收款人\"{name}\"已重新激活",
@@ -458,10 +475,20 @@
       },
       "feeCaption": "包含 {percent}% 境外交易手续费（{fee}）。"
     },
-    "jointSplitDisabled": "共享账户中的拆分交易只能由所有者管理"
+    "jointSplitDisabled": "共享账户中的拆分交易只能由所有者管理",
+    "warranties": {
+      "title": "保修",
+      "add": "添加保修",
+      "expires": "{date} 到期",
+      "loading": "正在加载保修",
+      "loadError": "无法加载此交易的保修。",
+      "empty": "还没有保修"
+    },
+    "conversionLockedNote": "此转账属于拆分交易或其他所有者的账户，因此在此只能保留为转账。请从拆分中更改，或删除后新建所需的条目。"
   },
   "splitEditor": {
     "header": "拆分详情",
+    "headerTooltip": "每一行可以是一个分类、转到另一个账户的转账，或一笔投资。各行金额之和必须等于交易总额；均匀分配和按比例分配会为您分配剩余金额。",
     "distributeProportionally": "按比例分配",
     "distributeProportionallyTitle": "根据每个拆分项的金额按比例分配剩余金额",
     "distributeEvenly": "均匀分配",
@@ -521,7 +548,7 @@
     "quantityPlaceholder": "数量",
     "pricePlaceholder": "价格",
     "commissionPlaceholder": "佣金",
-    "amountPlaceholder": "金额（{currency}）",
+    "amountOnlyPlaceholder": "金额",
     "ratePlaceholder": "每 1 {from} 兑 {to}",
     "ariaRate": "汇率（每 1 {from} 兑 {to}）",
     "rateHint": "数量、价格和佣金均以 {from} 计；此汇率将现金影响换算为 {to}。",
@@ -551,6 +578,7 @@
       "total": "合计",
       "transactions": "交易",
       "tooltip": "{count, plural, one {# 笔交易} other {# 笔交易}}",
+      "partialNote": "部分金额没有汇率，未计入这些合计。",
       "quarterLabel": "{year}年Q{quarter}",
       "quarterTick": "{year}年Q{quarter}",
       "granularityLabel": "分组方式",
@@ -575,6 +603,11 @@
       "log": "对数",
       "autoTitle": "自动（{scale}）",
       "scaleTitle": "{label}刻度"
+    },
+    "collapse": {
+      "hide": "隐藏图表",
+      "show": "显示图表",
+      "hidden": "图表已隐藏"
     }
   },
   "toasts": {
@@ -597,5 +630,71 @@
     "title": "按 {key} 的支出",
     "other": "其他",
     "noData": "没有可按此键细分的已标记支出。"
+  },
+  "searchSyntax": {
+    "open": "搜索语法",
+    "title": "搜索语法",
+    "fields": "字段：payee, memo, cat, tag, account, ref, amount, date, status, is, has。选择一个示例即可放入搜索框。",
+    "examples": {
+      "allWords": "每个词都在某处匹配",
+      "phrase": "完全匹配此短语",
+      "exclude": "排除所有匹配 refund 的项",
+      "fieldContains": "收款人包含 costco",
+      "fieldExact": "收款人恰好是 Costco",
+      "reference": "支票号或参考号恰好为 10",
+      "wildcard": "参考号以 10 开头",
+      "amountOver": "金额大于 100",
+      "amountRange": "金额 50 至 100",
+      "datePeriod": "2026 年 3 月的任意一天",
+      "isSplit": "拆分交易",
+      "hasAttachment": "有附件",
+      "hasWarranty": "有保修"
+    }
+  },
+  "searchInterpretation": {
+    "label": "搜索条件：",
+    "negated": "非 {phrase}",
+    "malformed": "{raw}（无法识别，已按文本搜索）",
+    "empty": "{raw}（为空，已忽略）",
+    "status": "状态为 {value}",
+    "any": "任意字段包含“{value}”",
+    "fields": {
+      "payee": "收款人",
+      "memo": "备注",
+      "cat": "类别",
+      "tag": "标签",
+      "account": "账户",
+      "ref": "参考号",
+      "amount": "金额",
+      "date": "日期",
+      "status": "状态",
+      "is": "类型",
+      "has": "有"
+    },
+    "ops": {
+      "contains": "{field}包含“{value}”",
+      "exact": "{field}为“{value}”",
+      "glob": "{field}匹配“{value}”",
+      "eq": "{field}为 {value}",
+      "gt": "{field}大于 {value}",
+      "gte": "{field}不低于 {value}",
+      "lt": "{field}小于 {value}",
+      "lte": "{field}不高于 {value}",
+      "between": "{field} {value} 至 {valueTo}"
+    },
+    "enum": {
+      "is": {
+        "transfer": "转账",
+        "split": "拆分交易",
+        "uncategorized": "未分类"
+      },
+      "has": {
+        "attachment": "有附件",
+        "warranty": "有保修",
+        "ref": "有参考号",
+        "memo": "有备注",
+        "tag": "有标签"
+      }
+    }
   }
 }

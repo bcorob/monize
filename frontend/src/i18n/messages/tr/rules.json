@@ -1,0 +1,618 @@
+{
+  "page": {
+    "title": "Kurallar",
+    "subtitle": "Bir işlem oluşturulduğunda veya içe aktarıldığında etiketleri, kategorileri ve alıcıları otomatik doldurun",
+    "createButton": "Kural oluştur",
+    "loading": "Kurallar yükleniyor...",
+    "totalCount": "{count, plural, one {# kural} other {# kural}}"
+  },
+  "empty": {
+    "title": "Henüz kural yok",
+    "body": "Bir kural, yeni ve içe aktarılan işlemleri izler ve koşulları karşılandığında etiketleri, kategorileri veya alıcıları doldurur. Başlamak için ilk kuralınızı oluşturun.",
+    "createButton": "İlk kuralınızı oluşturun"
+  },
+  "error": {
+    "title": "Kurallarınız yüklenemedi",
+    "body": "Hiçbir şey gösterilmiyor çünkü istek başarısız oldu; kuralınız olmadığı için değil. Bağlantınızı kontrol edip tekrar deneyin.",
+    "retry": "Tekrar dene"
+  },
+  "list": {
+    "header": {
+      "order": "Sıra",
+      "enabled": "Etkin",
+      "name": "Kural",
+      "summary": "Özet",
+      "actions": "İşlemler"
+    },
+    "summary": "{trigger, select, create {Oluşturulduğunda} import {İçe aktarıldığında} both {Oluşturulduğunda veya içe aktarıldığında} other {Tetikleyici yok}} · {conditions, plural, =0 {Koşul yok} one {# koşul} other {# koşul}} · {actions, plural, =0 {Eylem yok} one {# eylem} other {# eylem}}",
+    "enabledLabel": "{name} kuralını etkinleştir"
+  },
+  "actions": {
+    "moveUp": "Yukarı taşı",
+    "moveDown": "Aşağı taşı",
+    "run": "Mevcut işlemlerde çalıştır",
+    "runInvalid": "Kuralı çalıştırmadan önce onarın"
+  },
+  "invalid": {
+    "badge": "Geçersiz",
+    "tooltip": "Düzeltilene kadar atlanır: {reasons}.",
+    "reasons": {
+      "referenceMissing": "kullandığı bir etiket, alıcı, kategori veya hesap artık yok",
+      "noActions": "hiç eylemi yok",
+      "tooLarge": "koşulları çok büyük",
+      "duplicateAction": "yalnızca bir kez izin verilen bir eylemi tekrarlıyor",
+      "unreadable": "kayıtlı tanımı okunamıyor",
+      "other": "tanımı geçerli değil"
+    }
+  },
+  "duplicate": {
+    "name": "{name} (kopya)"
+  },
+  "delete": {
+    "title": "Kuralı sil",
+    "message": "\"{name}\" kuralını silmek istediğinizden emin misiniz? Bu işlem geri alınamaz."
+  },
+  "toasts": {
+    "enabled": "Kural etkinleştirildi",
+    "disabled": "Kural devre dışı bırakıldı",
+    "toggleFailed": "Kural değiştirilemedi",
+    "deleted": "Kural silindi",
+    "deleteFailed": "Kural silinemedi",
+    "duplicated": "Kural çoğaltıldı. Kopya, etkinleştirene kadar kapalıdır",
+    "duplicateFailed": "Kural çoğaltılamadı",
+    "reorderFailed": "Kuralların sırası değiştirilemedi",
+    "listChanged": "Kural listesi başka bir yerde değişti ve yeniden yüklendi. Tekrar deneyin",
+    "loadFailed": "Kurallar yüklenemedi"
+  },
+  "editor": {
+    "page": {
+      "newTitle": "Yeni kural",
+      "editTitle": "Kuralı düzenle",
+      "subtitle": "Kuralın ne zaman çalışacağını, hangi işlemleri kapsayacağını ve neyi değiştireceğini seçin",
+      "backToRules": "Kurallara dön",
+      "loading": "Kural yükleniyor..."
+    },
+    "name": {
+      "label": "Ad",
+      "placeholder": "Örneğin: Kafeleri etiketle"
+    },
+    "enabled": {
+      "label": "Kural etkin"
+    },
+    "sections": {
+      "when": "Ne zaman",
+      "if": "Eğer",
+      "then": "O zaman"
+    },
+    "when": {
+      "description": "Kuralın bir işleme ne zaman bakacağını seçin",
+      "created": "Bir işlem oluşturulduğunda",
+      "imported": "Bir işlem içe aktarıldığında",
+      "atLeastOne": "En az bir seçenek işaretli kalsın",
+      "stopProcessing": "Diğer kuralları işlemeyi durdur",
+      "stopProcessingHelp": "Bu kural bir işlemle eşleştiğinde, listede kendisinden sonra gelen kurallar o işlem için atlanır.",
+      "window": {
+        "title": "Şu tarihler arasında etkin",
+        "help": "Kural yalnızca tarihi bu aralıkta olan işlemlere uygulanır: işlemler oluşturulurken veya içe aktarılırken ve kural test edilirken ya da çalıştırılırken. Sınır koymamak için bir tarihi boş bırakın.",
+        "from": "İlk tarih",
+        "to": "Son tarih",
+        "backwards": "Son tarih ilk tarihten önce olamaz",
+        "noLimit": "sınır yok",
+        "words": "Yalnızca {from} ile {to} arasında tarihli işlemler için"
+      }
+    },
+    "if": {
+      "description": "Eylemler yalnızca eşleşen işlemler için çalışır",
+      "everyTransaction": "Henüz koşul yok, bu nedenle bu kural her işleme uygulanır."
+    },
+    "then": {
+      "description": "Eylemler bu sırayla çalışır",
+      "empty": "Henüz eylem yok. En az bir tane ekleyin.",
+      "limit": "Bir kuralın en fazla {max} eylemi olabilir."
+    },
+    "group": {
+      "matchAll": "Bunların hepsi",
+      "matchAny": "Bunlardan herhangi biri",
+      "matchLabel": "Eşleşme",
+      "not": "Grubu olumsuzla",
+      "notHelp": "Olumsuzlanmış bir grup, koşulları sağlanmadığında eşleşir.",
+      "title": "Grup",
+      "addCondition": "+ Koşul ekle",
+      "addGroup": "+ Grup ekle",
+      "depthLimit": "Gruplar en fazla {max} düzey iç içe olabilir.",
+      "sizeLimit": "Koşul sınırına ulaşıldı.",
+      "empty": "Bu grup boş."
+    },
+    "condition": {
+      "title": "Koşul",
+      "field": "Alan",
+      "operator": "İşleç",
+      "value": "Değer"
+    },
+    "fields": {
+      "accountId": "Hesap",
+      "fromAccountId": "Kaynak hesap (transferler)",
+      "toAccountId": "Hedef hesap (transferler)",
+      "type": "Tür",
+      "payeeId": "Alıcı",
+      "payeeText": "Alıcı metni (alındığı hâliyle)",
+      "categoryId": "Kategori",
+      "description": "Açıklama",
+      "amount": "Tutar (işaretli)",
+      "absAmount": "Tutar (işaretsiz)",
+      "currencyCode": "Para birimi",
+      "tagIds": "Etiketler",
+      "hasSplits": "Bölünmüş kalemleri var",
+      "referenceNumber": "Referans Numarası",
+      "dayOfMonth": "Ayın günü",
+      "weekday": "Haftanın günü",
+      "status": "Durum",
+      "hasAttachment": "Eki var",
+      "date": "Tarih"
+    },
+    "operators": {
+      "eq": "şudur",
+      "neq": "şu değildir",
+      "in": "şunlardan biridir",
+      "notIn": "şunların hiçbiri değildir",
+      "isEmpty": "boştur",
+      "contains": "şunu içerir",
+      "startsWith": "şununla başlar",
+      "matches": "şu kalıba uyar",
+      "lt": "şundan küçüktür",
+      "lte": "en fazla şu kadardır",
+      "gt": "şundan büyüktür",
+      "gte": "en az şu kadardır",
+      "between": "şunların arasındadır",
+      "hasAny": "şunlardan herhangi birine sahiptir",
+      "hasAll": "şunların hepsine sahiptir",
+      "hasNone": "şunların hiçbirine sahip değildir",
+      "inSubtree": "şunun içindedir veya altındadır"
+    },
+    "types": {
+      "EXPENSE": "Gider",
+      "INCOME": "Gelir",
+      "TRANSFER": "Transfer"
+    },
+    "value": {
+      "account": "Bir hesap seçin",
+      "accounts": "Hesapları seçin",
+      "payee": "Bir alıcı seçin",
+      "payees": "Alıcıları seçin",
+      "category": "Bir kategori seçin",
+      "categories": "Kategorileri seçin",
+      "tags": "Etiketleri seçin",
+      "currency": "Bir para birimi seçin",
+      "currencies": "Para birimlerini seçin",
+      "types": "Türleri seçin",
+      "matchesHint": "Herhangi bir metin için * kullanın, örneğin *kahve*. * içermeyen bir desen yalnızca metnin tamamıyla eşleşir. Bu kuralın eylemleri için o konumdaki metni saklamak üzere {capture} kullanın, örneğin {example}. Ad küçük harf ve rakamlardan oluşur; bir desen en fazla {max} metin saklayabilir.",
+      "amount": "Tutar",
+      "from": "Başlangıç",
+      "to": "Bitiş",
+      "yes": "Evet",
+      "no": "Hayır",
+      "days": "Günleri seçin",
+      "weekdays": "Haftanın günlerini seçin",
+      "statuses": "Durumları seçin"
+    },
+    "action": {
+      "title": "Eylem",
+      "type": "Eylem türü",
+      "tags": "Etiketler",
+      "category": "Kategori",
+      "payee": "Alıcı",
+      "instruction": "İnceleme talimatları",
+      "instructionPlaceholder": "Örneğin: bu alışverişi fişe göre böl",
+      "instructionHelp": "Kural yalnızca bir inceleme ister. Yapılacak her değişikliği yapılmadan önce bir kişi onaylar.",
+      "onlyIfEmpty": "Yalnızca boşsa",
+      "onlyIfEmptyHelp": "Açıkken kural, kategoriyi veya alıcıyı yalnızca işlemde yoksa doldurur. Elle ya da alıcının varsayılan kategorisiyle ayarlanmış bir değerin yerine geçmez. Değiştirmek için kapatın.",
+      "add": "+ Eylem ekle",
+      "reviewInbox": "İnceleme kutusunu gör",
+      "payeeTemplate": "Alıcı adı",
+      "descriptionTemplate": "Açıklama metni",
+      "templateHelp": "Düz metin. Süslü parantez içindeki her yer tutucu, işlemdeki metinle değiştirilir. Eklemek için aşağıdan bir yer tutucu seçin.",
+      "joinHelp": "Metin, yazıldığı gibi mevcut açıklamaya eklenir; bu yüzden istediğiniz boşluğu veya ayırıcıyı kendiniz ekleyin.",
+      "placeholders": "Yer tutucular",
+      "placeholdersHelp": "{payeeText}, alındığı haliyle alıcı metnidir. {description}, bu eylem çalıştığı andaki açıklamadır. Diğer yer tutucular, bu kuralın desenlerinde adlandırılan yakalamalardır.",
+      "insertPlaceholder": "{name} ekle",
+      "unknownPlaceholders": "Bu kural tarafından tanımlanmadı: {names}. Listeden bir yer tutucu seçin veya yukarıdaki bir desende yakalayın.",
+      "invalidPlaceholders": "Geçerli bir yer tutucu değil: {names}. Ad küçük harf ve rakamlardan oluşur.",
+      "createIfMissing": "Alıcı yoksa oluştur",
+      "createIfMissingHelp": "Açıkken ve hiçbir alıcı ada uymuyorsa (ad, takma ad veya yakın eşleşme), yeni bir alıcı oluşturulur. Bir kuralın oluşturduğu alıcı, çalıştırmayı geri alsanız da kalır.",
+      "onlyIfEmptyDescriptionHelp": "Açıkken kural, açıklamayı yalnızca işlemin açıklaması yoksa yazar. Her seferinde yazması için kapatın.",
+      "mode": "Açıklama modu",
+      "modes": {
+        "replace": "Açıklamayı değiştir",
+        "append": "Açıklamanın sonuna ekle",
+        "prepend": "Açıklamanın başına ekle"
+      },
+      "convertHelp": "Eşleşen gelir veya gider, bir havalenin bir tarafı olur. Diğer taraf, aynı para birimini kullanan seçtiğiniz hesapta oluşturulur.",
+      "direction": "Yön",
+      "directionTo": "Gider: para başka bir hesaba gider",
+      "directionFrom": "Gelir: para başka bir hesaptan gelir",
+      "clearCategory": "Kategoriyi temizle",
+      "clearCategoryHelp": "Havalenin kategorisi olmaz. İşlemin mevcut kategorisini korumak için kapatın.",
+      "splitPayee": "İşlemin alıcısı (isteğe bağlı)",
+      "splitHint": "Her parça tutarını yukarıdaki desenlerdeki bir yakalamadan alır ya da kalanı alır. Parçaların toplamı işlem tutarına eşit olmalıdır, aksi halde kural işleme dokunmaz.",
+      "splitNoCaptures": "Henüz tanımlı bir yakalama yok. Tutar olarak kullanmak için yukarıdaki bir desende küme parantezi içine bir ad yazın, örneğin PRINCIPAL: {example}.",
+      "partAmountPlaceholder": "Tutarı seçin...",
+      "partRest": "Kalan",
+      "partAccount": "Hesap",
+      "partPayee": "Diğer tarafın alıcısı (isteğe bağlı)",
+      "partsLimit": "Bir bölmede en fazla {max} parça olabilir.",
+      "guideTitle": "Nasıl kullanılır",
+      "splitGuideHow": "“Eğer” bölümünde, alıcı metni veya açıklama için “şu kalıba uyar” işleciyle bir koşul ekleyin ve tutarların bulunduğu yerlere küme parantezi içinde adlar yazın, örneğin {first}. Her ad, bir parça için seçebileceğiniz bir tutar olur; ya da “Kalan”ı seçin. Parçaların toplamı işlem tutarına eşit olmalıdır, aksi halde kural işlemi değiştirmeden bırakır. Bir parça bir kategori ya da başka bir hesaba yapılan transfer olabilir (transfer o hesabın bakiyesini değiştirir).",
+      "splitGuideExampleTitle": "Örnek: bir kredi taksiti",
+      "splitGuideBank": "Banka metni: ANAPARA: 1200,50 FAIZ: 300,25 GECIKME: 0,00",
+      "splitGuidePattern": "Kalıp: *ANAPARA: {first} FAIZ: {second} GECIKME*",
+      "splitGuidePart1": "Parça 1: {first} kredi hesabına transfer olarak",
+      "splitGuidePart2": "Parça 2: {second} “Krediler: Faiz” kategorisi olarak",
+      "splitGuideResult": "-1500,75 için sonuç: kredi hesabına -1200,50 transfer edilir ve -300,25 faiz gideri yazılır.",
+      "splitGuideTip": "İpucu: eski mutabakatı yapılmış işlemler değişmesin diye “Şu tarihler arasında etkin” alanında bir başlangıç tarihi belirleyin ve kaydetmeden önce Test panelini kullanın.",
+      "convertGuide": "Bir gider, seçtiğiniz hesaba transfere; bir gelir ise o hesaptan transfere dönüşür. Yalnızca diğer hesabın bakiyesi değişir. İpucu: eski işlemler değişmesin diye “Şu tarihler arasında etkin” alanını kullanın.",
+      "splitGuideName1": "anapara",
+      "splitGuideName2": "faiz",
+      "loanGuide": "Bir ipotek veya kredi taksitini tek tutar olarak ödeyen bir banka çekimi için bunu kullanın. “Eğer”de çekimi hesabına, alıcı metnine veya açıklamasına göre eşleştirin. İşlem bir bölmeye dönüşür: anapara kredi hesabına transfer edilir, faiz ise faiz kategorisine gider; her ikisi de ödediği taksite göre fiyatlandırılır. İpucu: taksidin iki kez ödenmemesi için bu kredinin zamanlanmış ödemesinde otomatik kaydı kapatın ve kaydetmeden önce Test panelini kullanın.",
+      "loan": {
+        "help": "Eşleşen çekim, tarihine yakın vadesi olan kredinin bir sonraki taksitini öder. Monize bu taksit için anaparayı ve faizi hesaplar; tutarı siz asla yazmazsınız.",
+        "account": "Kredi hesabı",
+        "accountPlaceholder": "Bir ipotek veya kredi seçin...",
+        "noLoans": "Kapatılacak açık bir ipotek veya kredi hesabınız yok.",
+        "window": "Vade penceresi",
+        "windowHelp": "Bankanın ödemeyi vadeden ne kadar önce veya sonra alabileceği. Bir taksidin vadesinden bu kadar gün önceye veya sonrasına kadar yapılan bir çekim o taksidi öder; pencerenin dışında kalan bir çekim olduğu gibi bırakılır.",
+        "daysBefore": "Vadeden önceki gün sayısı",
+        "daysAfter": "Vadeden sonraki gün sayısı",
+        "excess": "Taksitten fazla çekim",
+        "excessPolicies": {
+          "extra_principal": "Farkı ek anapara olarak öde",
+          "refuse": "İşlemi olduğu gibi bırak"
+        },
+        "shortfall": "Taksitten az çekim",
+        "shortfallPolicies": {
+          "refuse": "İşlemi olduğu gibi bırak",
+          "interest_first": "Önce faizi öde, kalanını anapara olarak öde"
+        },
+        "policyNote": "Birkaç kuruşluk bir fark faiz satırına yansıtılır.",
+        "policyHelp": "Bankalar her bölümü ayrı ayrı yuvarlar, bu nedenle para biriminin en küçük biriminin 5 katına kadar olan bir çekim (çoğu para birimi için 0,05) tam kabul edilir ve farkı faiz satırı üstlenir. Daha büyük bir fark yukarıdaki iki seçenekten birini izler.",
+        "interestCategory": "Faiz kategorisi (isteğe bağlı)",
+        "interestCategoryPlaceholder": "Kredinin kendi faiz kategorisi",
+        "autoPostTitle": "Kredinin zamanlanmış ödemesi kendini kaydeder",
+        "autoPostBody": "Bu kredinin zamanlanmış ödemesi için otomatik kayıt açık, bu nedenle o ödeme ile bu kuralın karşıladığı banka çekimi aynı taksidi öder. Zamanlanmış ödemede otomatik kaydı kapatın."
+      }
+    },
+    "actionTypes": {
+      "add_tags": "Etiket ekle",
+      "remove_tags": "Etiketleri kaldır",
+      "set_category": "Kategoriyi ayarla",
+      "set_payee": "Alıcıyı ayarla",
+      "request_ai_review": "Yapay zekâ incelemesi iste",
+      "set_payee_from_text": "Alıcıyı metinden ayarla",
+      "set_description": "Açıklamayı ayarla",
+      "convert_to_transfer": "Havaleye dönüştür",
+      "split": "İşlemi böl",
+      "settle_loan_installment": "Bir kredi taksidini öde"
+    },
+    "save": {
+      "button": "Kuralı kaydet",
+      "createdToast": "Kural oluşturuldu",
+      "savedToast": "Kural kaydedildi",
+      "failedToast": "Kural kaydedilemedi",
+      "summary": "Kural kaydedilmedi. Aşağıda işaretlenen öğeleri düzeltip yeniden deneyin."
+    },
+    "loadError": {
+      "title": "Kural yüklenemedi",
+      "body": "Kural boş olduğu için değil, istek başarısız olduğu için hiçbir şey gösterilmiyor. Bağlantınızı kontrol edip yeniden deneyin.",
+      "lookupsBody": "Hesap, alıcı, kategori, etiket ve para birimi listeleri yüklenemedi, bu nedenle kural güvenli biçimde gösterilemiyor. Bağlantınızı kontrol edip yeniden deneyin.",
+      "notFound": "Bu kural artık yok. Silinmiş olabilir.",
+      "retry": "Yeniden dene"
+    },
+    "invalid": {
+      "title": "Bu kural çalışamaz",
+      "repaired": "Kaydedilmiş tanımın bazı bölümleri okunamadı ve burada kaldırıldı veya sıfırlandı. Kaydetmeden önce kuralı gözden geçirin."
+    },
+    "conflict": {
+      "title": "Bu kural başka bir yerde değiştirildi",
+      "body": "En son sürümü görmek için yeniden yükleyin. Kaydedilmemiş değişiklikleriniz kaybolacak.",
+      "reload": "Yeniden yükle"
+    },
+    "errors": {
+      "codes": {
+        "INVALID_SHAPE": "Bu bölüm, düzenleyicinin anlayacağı bir biçimde değil.",
+        "UNKNOWN_KEY": "Bu bölümde var olmayan bir ayar bulunuyor.",
+        "UNKNOWN_FIELD": "Bir alan seçin.",
+        "UNKNOWN_ACTION": "Bir eylem seçin.",
+        "OPERATOR_NOT_ALLOWED": "Bu alan söz konusu işlece izin vermiyor.",
+        "VALUE_REQUIRED": "Bir değer girin veya seçin.",
+        "VALUE_NOT_ALLOWED": "Bu işleç değer almaz.",
+        "VALUE_TYPE": "Değer, bu alan için yanlış türde.",
+        "VALUE_OUT_OF_RANGE": "Değer aralığın dışında.",
+        "VALUE_TOO_LONG": "Metin çok uzun.",
+        "VALUE_EMPTY": "Bir metin girin.",
+        "INVALID_UUID": "Listeden bir öğe seçin.",
+        "INVALID_ENUM": "Listelenen değerlerden birini seçin.",
+        "INVALID_CURRENCY": "Bir para birimi seçin.",
+        "ARRAY_EMPTY": "En az bir öğe seçin.",
+        "ARRAY_TOO_LARGE": "Çok fazla öğe seçildi.",
+        "RANGE_ORDER": "İlk değer ikinci değerden büyük olmamalı.",
+        "MAX_DEPTH": "Gruplar çok derin iç içe geçmiş. Sınır {maxDepth} düzeydir.",
+        "MAX_LEAVES": "Çok fazla koşul var. Sınır {maxLeaves}.",
+        "MAX_NODES": "Çok fazla koşul ve grup var. Sınır {maxNodes}.",
+        "NO_ACTIONS": "En az bir eylem ekleyin.",
+        "TOO_MANY_ACTIONS": "Çok fazla eylem var. Sınır {maxActions}.",
+        "DUPLICATE_ACTION": "Bir kuralda yalnızca bir yapay zekâ incelemesi, bir havale, bölme veya kredi taksidi ödemesi ve kalanı alan bir bölme parçası olabilir.",
+        "CONFLICTING_ACTIONS": "Bir havale, bölme veya kredi taksidi ödemesi eylemi “Kategoriyi ayarla” ile birleştirilemez ve bölmenin her parçasının bir kategorisi ya da bir hesabı vardır.",
+        "INVALID_CAPTURE": "Yakalama adı küçük harf ve rakamlardan oluşur, harfle başlar ve en fazla 20 karakter uzunluğundadır.",
+        "TOO_MANY_CAPTURES": "Bir desen en fazla 5 yakalama içerebilir.",
+        "DUPLICATE_CAPTURE": "Her yakalama adı bir kuralda yalnızca bir kez kullanılabilir.",
+        "UNKNOWN_CAPTURE": "Bu, bu kuralın hiçbir koşulunun tanımlamadığı bir yakalama kullanıyor.",
+        "LOOKS_LIKE_REGEX": "Düzenli ifadeler desteklenmez: | \\ ve [xy] gibi kısa köşeli parantez sınıfları sıradan karakterler olarak eşleştirilir, bu yüzden regex olarak yazılmış bir desen amaçlananla asla eşleşmez. Birkaç metinden biriyle eşleşmek için “Bunlardan herhangi biri” grubu ekleyin ve her metin için içine bir koşul koyun.",
+        "PATTERN_WITHOUT_WILDCARD": "* olmadan bu desen metnin tamamına eşit olmalıdır. Metnin tamamı için “şudur”, bir parçası için “şunu içerir” işlecini kullanın ya da metnin etrafına * koyun, örneğin *kahve*.",
+        "REFERENCE_NOT_FOUND": "Burada seçilen bir öğe artık yok. Başka bir öğe seçin.",
+        "NAME_REQUIRED": "Kural için bir ad girin.",
+        "UNKNOWN": "Bu bölüm geçersiz."
+      }
+    },
+    "run": {
+      "button": "Mevcut işlemlerde çalıştır",
+      "saveFirst": "Kaydedilmiş kuralı çalıştırmak için değişikliklerinizi kaydedin."
+    },
+    "expression": {
+      "modeLabel": "Koşul görünümü",
+      "visual": "Görsel",
+      "expression": "İfade",
+      "label": "Koşul ifadesi",
+      "help": "Koşulları metin olarak yazın. Hepsi için &&, herhangi biri için || ve olumsuzlama için !( ... ) kullanın. Öğeleri adıyla belirtin: account(\"Ad\"), payee(\"Ad\"), category(\"Üst: Alt\") ve tag(\"Ad\"). Alt çizgi _ henüz seçilmemiş bir değeri gösterir. matchesGlob, * karakterini joker olarak kullanır. Yalnızca önerilerde sunulan söz dizimi desteklenir.",
+      "blocked": "Görsel görünüme dönmek veya kaydetmek için ifadeyi düzeltin.",
+      "errorAt": "Satır {line}, sütun {column}: {message}",
+      "suggestions": "Öneriler",
+      "errors": {
+        "tooLong": "İfade çok uzun. Sınır {max} karakterdir.",
+        "unexpectedChar": "{char} karakteri desteklenmiyor.",
+        "unterminatedString": "Bu metnin kapanış tırnağı yok.",
+        "invalidEscape": "Bu kaçış dizisi desteklenmiyor.",
+        "badNumber": "Bu geçerli bir sayı değil.",
+        "expectedExpression": "Burada bir koşul bekleniyor.",
+        "expectedField": "Burada bir alan adı bekleniyor.",
+        "expectedOperator": "Alandan sonra bir işleç veya yöntem bekleniyor.",
+        "expectedValue": "Burada bir değer bekleniyor.",
+        "expectedSymbol": "Burada {symbol} bekleniyor.",
+        "unexpectedToken": "Beklenmeyen: {token}.",
+        "unsupported": "Bu kısım desteklenmiyor. Yalnızca önerilerde sunulan söz dizimini kullanın.",
+        "unknownField": "Bilinmeyen alan: {name}.",
+        "unknownFunction": "Bilinmeyen işlev veya yöntem: {name}.",
+        "operatorNotAllowed": "{field} alanı {operator} ile kullanılamaz.",
+        "wrongValueType": "{expected, select, text {Tırnak içinde bir metin bekleniyor.} number {Bir sayı bekleniyor.} boolean {true veya false bekleniyor.} list {Köşeli parantez içinde bir liste bekleniyor.} account {Bir hesap bekleniyor, örneğin account(\"Ad\").} payee {Bir alıcı bekleniyor, örneğin payee(\"Ad\").} category {Bir kategori bekleniyor, örneğin category(\"Üst: Alt\").} tag {Bir etiket bekleniyor, örneğin tag(\"Ad\").} other {Bu değer yanlış türde.}}",
+        "invalidEnum": "Şunlardan birini kullanın: {values}.",
+        "invalidCurrency": "Tırnak içinde üç harfli bir para birimi kodu kullanın, örneğin \"CAD\".",
+        "valueTooLong": "Metin çok uzun. Sınır {max} karakterdir.",
+        "listTooLong": "Liste çok uzun. Sınır {max} öğedir.",
+        "unknownEntity": "{kind, select, account {{name} adında bir hesap yok.} payee {{name} adında bir alıcı yok.} category {{name} adında bir kategori yok.} tag {{name} adında bir etiket yok.} other {{name} adında bir öğe yok.}}",
+        "ambiguousEntity": "{count} öğenin adı {name}. Kastettiğiniz öğenin numarasını ekleyin, örneğin {example}.",
+        "entityOrdinal": "{name} için numara 1 ile {count} arasında olmalıdır.",
+        "maxDepth": "Gruplar çok derin iç içe geçmiş. Sınır {max} düzeydir.",
+        "maxLeaves": "Çok fazla koşul var. Sınır {max}.",
+        "maxNodes": "Çok fazla koşul ve grup var. Sınır {max}.",
+        "tooNested": "Çok fazla iç içe parantez var."
+      }
+    }
+  },
+  "test": {
+    "title": "Test",
+    "description": "Kuralı mevcut işlemleriniz üzerinde deneyin. Hiçbir şey değişmez.",
+    "button": "Kuralı test et",
+    "again": "Yeniden test et",
+    "incomplete": "Kuralı test etmek için yukarıdaki koşulları ve eylemleri tamamlayın.",
+    "idle": "Kuralı hangi işlemlerde deneyeceğinizi seçin, ardından Kuralı test et'i seçin.",
+    "running": "Kural test ediliyor...",
+    "failed": "Test tamamlanamadı. {message}",
+    "stale": "Bu sonuçtan sonra kural veya filtreler değişti. Güncel sonucu görmek için yeniden test edin."
+  },
+  "match": {
+    "button": "Kuralı test et",
+    "buttonLabel": "Kuralı test et: koşullar",
+    "incomplete": "Hangi işlemlerle eşleştiklerini görmek için yukarıdaki koşulları tamamlayın.",
+    "windowBackwards": "Etkin tarihler başlamadan bitiyor, bu yüzden hiçbir işlem eşleşemez.",
+    "summary": "{count, plural, =0 {Eşleşen işlem yok} one {# eşleşen işlem} other {# eşleşen işlem}}",
+    "summaryPending": "Eşleşen işlemler",
+    "running": "Eşleşen işlemler aranıyor...",
+    "failed": "Eşleşen işlemler yüklenemedi. {message}",
+    "empty": "Bu koşullarla eşleşen mevcut işlem yok.",
+    "truncated": "Yalnızca en yeni {scanned, number} işlem kontrol edildi.",
+    "stale": "Bu testten sonra koşullar değişti. Güncel eşleşmeleri görmek için Kuralı test et'i yeniden seçin."
+  },
+  "run": {
+    "title": "“{name}” kuralını mevcut işlemlerde çalıştır",
+    "description": "Kuralın nelerin değişeceğini önizleyin, sonra onaylayın. Çalıştırmayı işlem geçmişinden geri alabilirsiniz.",
+    "previewButton": "Önizleme",
+    "confirmButton": "Onayla ve çalıştır",
+    "idle": "Hesapları ve tarihleri seçin, ardından Önizleme'yi seçin. Siz onaylayana kadar hiçbir şey değişmez.",
+    "loadingPreview": "Önizleme yükleniyor...",
+    "previewFailed": "Önizleme yüklenemedi, bu yüzden hiçbir şey çalıştırılamaz. {message}",
+    "stale": "Bu önizlemeden sonra filtreler değişti. Çalıştırmadan önce yeniden önizleyin.",
+    "accountsLoading": "Hesaplar yükleniyor...",
+    "accountsFailed": "Hesaplarınız yüklenemedi, bu yüzden filtreler kullanılamıyor.",
+    "retry": "Tekrar dene",
+    "summary": "{scanned, plural, other {# işlem}} incelendi, {matched, plural, other {# işlem}} değişecek.",
+    "matchesNone": "Bu kural incelenen işlemlerin hiçbiriyle eşleşmiyor ({scanned}). Kaydetmeden önce koşulları kontrol edin. * içermeyen bir desen yalnızca metnin tamamıyla eşleşir.",
+    "noChange": "İncelenen {scanned} işlemden {matched} tanesi kuralın koşullarını karşılıyor, ancak hiçbir şey değişmeyecek (örneğin değer zaten var ve «yalnızca boşsa» açık). Bu bir hata değildir.",
+    "aiReview": "{count, plural, other {# işlem yapay zeka incelemesi için sıraya alınacak}}. İstek, onayladığınızda oluşturulur.",
+    "truncated": "Sınırın izin verdiğinden fazla işlem eşleşti. Yalnızca en yeniler dahil edildi. Kalanı dahil etmek için sınırı artırın veya tarihleri daraltın.",
+    "truncatedOldest": "Sınırın izin verdiğinden daha fazla işlem eşleşti. Bu kural kredi taksitlerini tarih sırasına göre karşıladığından, yalnızca en eskiler dahil edildi. Kalanları dahil etmek için bu çalıştırmadan sonra yeniden çalıştırın.",
+    "noMatches": {
+      "title": "Hiçbir işlem değişmeyecek",
+      "body": "İncelenen işlemlerin hiçbiri kuralla eşleşmiyor veya kural onlarda hiçbir şeyi değiştirmeyecek."
+    },
+    "table": {
+      "date": "Tarih",
+      "payee": "Alıcı",
+      "amount": "Tutar",
+      "change": "Planlanan değişiklik",
+      "noPayee": "Alıcı yok"
+    },
+    "skipped": {
+      "title": "{count, plural, other {# işlem}} olduğu gibi bırakıldı",
+      "line": "{count, plural, other {# işlem}}: {reason}",
+      "missing": "Kredide eksik olan: {inputs}."
+    },
+    "skipReasons": {
+      "reconciled_locked": "mutabık kılınmış ve kilitli",
+      "transfer_leg_category": "bir transfer ve transferlerin kategorisi yok",
+      "split_category": "bölünmüş, bu yüzden kategori bölümlere ait",
+      "cross_owner_transfer_payee": "başka bir sahibe yapılan bir transfer ve bu kural onun alıcısını değiştiremez",
+      "empty_render": "bir eylemin metni bunun için boş çıktı",
+      "payee_not_found": "kuralın oluşturduğu ada sahip bir alıcı yok ve kural da oluşturmuyor",
+      "other": "kural bunu değiştiremez",
+      "row_is_transfer_leg": "zaten bir havale",
+      "row_has_splits": "zaten bölünmüş",
+      "row_is_void": "geçersiz kılınmış",
+      "zero_amount": "tutarı sıfır",
+      "transfer_direction_mismatch": "havale yönü uymuyor: gider bir hesaba gider, gelir bir hesaptan gelir",
+      "transfer_same_account": "havale hesabı işlemin kendi hesabı",
+      "transfer_account_unavailable": "havale hesabı kullanılamıyor (silinmiş ya da size ait değil)",
+      "transfer_currency_mismatch": "havale hesabı başka bir para birimi kullanıyor",
+      "split_amount_unparseable": "metnindeki bir tutar sayı olarak okunamadı",
+      "split_sum_mismatch": "parçaların toplamı tutarına eşit değil",
+      "split_too_few_parts": "sıfır tutarlar çıkarıldığında ikiden az parça kalıyor",
+      "row_from_scheduled_posting": "kredinin taksidi zaten ödeyen zamanlanmış ödemesinden kaydedildi",
+      "row_is_income": "bir gelir ve bir taksidi yalnızca bir çekim öder",
+      "loan_account_unavailable": "kredi hesabı kullanılamıyor (silinmiş, kapalı, size ait değil veya bir ipotek ya da kredi değil)",
+      "loan_interest_booked_separately": "bu kredi faizini ayrı işlemler olarak kaydeder, bu nedenle bir ödeme onu taşıyamaz",
+      "loan_not_configured": "kredide bir taksidi fiyatlandırmak için gereken bilgi eksik",
+      "no_installment_in_window": "kredinin, tarihinin çevresindeki pencere içinde vadesi gelen bir taksidi yok",
+      "occurrence_already_posted": "pencere içinde vadesi gelen taksit zaten ödendi",
+      "loan_debt_retired": "kredi zaten tamamen ödendi",
+      "installment_amount_excess": "taksitten fazla ve kural daha büyük çekimleri olduğu gibi bırakır",
+      "installment_amount_shortfall": "taksitten az ve kural daha küçük çekimleri olduğu gibi bırakır"
+    },
+    "change": {
+      "category": "Kategori: {before} → {after}",
+      "payee": "Alıcı: {before} → {after}",
+      "payeeNew": "Alıcı: {before} → {name} (yeni)",
+      "tagsAdded": "Eklenen etiketler: {tags}",
+      "tagsRemoved": "Kaldırılan etiketler: {tags}",
+      "none": "yok",
+      "unknown": "silinmiş bir öğe",
+      "payeeCreated": "{done, select, yes {Yeni bir alıcı oluşturuldu: {name}} other {Yeni bir alıcı oluşturulacak: {name}}}",
+      "description": "Açıklama: {before} → {after}",
+      "descriptionSet": "Açıklamayı {value} olarak ayarla",
+      "transfer": "{done, select, yes {{account} ile bir havale oldu} other {{account} ile bir havale olacak}}",
+      "split": "{done, select, yes {{count, plural, other {# parçaya}} bölündü} other {{count, plural, other {# parçaya}} bölünecek}}",
+      "splitPart": "Parça {number}: {amount} {target}",
+      "splitPartMemo": ", not “{memo}”",
+      "splitToTransfer": "{account} hesabına",
+      "splitToTransferPayee": "{account} hesabına, alıcı {payee}",
+      "splitToCategory": "{category} olarak",
+      "splitUncategorised": "kategorisiz",
+      "loanSettlement": "{done, select, yes {Karşılandı} other {Karşılanıyor}}: {account} kredisinin {number}. taksidi, vade {dueDate} — anapara {principal}, faiz {interest}{hasExtra, select, yes {, ek anapara {extra}} other {}}. Önceki borç: {debtBefore}"
+    },
+    "filters": {
+      "accounts": "Hesaplar",
+      "allAccounts": "Tüm hesaplar",
+      "startDate": "Başlangıç",
+      "endDate": "Bitiş",
+      "backwards": "Başlangıç tarihi bitiş tarihinden sonra olamaz.",
+      "limit": "İncelenecek en yeni işlemler",
+      "help": "Aralıktaki yalnızca en yeni işlemler incelenir, en fazla {max}."
+    },
+    "errors": {
+      "PREVIEW_CHANGED": "Önizlemeden sonra işlemler veya kural değişti. Yeni önizlemeyi inceleyin ve yeniden çalıştırın.",
+      "RUN_TOO_LARGE": "Bu çalıştırma, tek adımda geri alınamayacak kadar çok işlemi değiştiriyor. Hesapları veya tarihleri daraltıp yeniden deneyin.",
+      "INVALID_RULE": "Bu kural geçerli değil, bu yüzden çalıştırılamaz. Önce kuralı açıp onarın.",
+      "DATE_RANGE_INVALID": "Başlangıç tarihi bitiş tarihinden sonra olamaz.",
+      "draftInvalid": "Kural eksik veya geçersiz. Yukarıdaki koşulları ve eylemleri kontrol edin.",
+      "testFailed": "Kural test edilirken bir şeyler ters gitti.",
+      "previewFailed": "Önizleme yüklenirken bir şeyler ters gitti.",
+      "runFailed": "Çalıştırma tamamlanamadı. Yeniden denemeden önce işlem geçmişini kontrol edin."
+    },
+    "toast": {
+      "done": "{count, plural, =0 {Hiçbir işlem değiştirilmedi} other {# işlem değiştirildi}}. Bunu işlem geçmişinden geri alabilirsiniz.",
+      "changedNoUndo": "{count, plural, other {# işlem değiştirildi}}.",
+      "aiReviewsQueued": "{count, plural, other {# işlem yapay zeka incelemesi için sıraya alındı}}.",
+      "aiReviewsAlreadyQueued": "{count, plural, other {# işlemin zaten açık bir yapay zeka inceleme isteği vardı, bu yüzden sıraya yeni bir şey eklenmedi}}.",
+      "noChanges": "Hiçbir işlem değiştirilmedi."
+    },
+    "done": {
+      "summary": "{count, plural, =0 {Hiçbir işlem değiştirilmedi.} other {# işlem değiştirildi.}}",
+      "aiReviewsQueued": "{count, plural, other {# işlem yapay zeka incelemesi için sıraya alındı.}}",
+      "aiReviewsAlreadyQueued": "{count, plural, other {# işlemin zaten açık bir yapay zeka inceleme isteği vardı, bu yüzden yeniden sıraya alınmadı.}}",
+      "undo": "Çalıştırmayı işlem geçmişinden geri alabilirsiniz."
+    },
+    "missingInputs": {
+      "scheduledPayment": "zamanlanmış bir ödeme",
+      "managedTemplate": "anapara ve faize bölünmüş bir ödeme",
+      "scheduleCalendar": "bir ödeme takvimi",
+      "interestCategory": "bir faiz kategorisi",
+      "amortizationMonths": "amortisman süresi",
+      "paymentStartDate": "ilk ödeme tarihi",
+      "paymentFrequency": "ödeme sıklığı",
+      "originalPrincipal": "orijinal anapara",
+      "rate": "o tarih için bir faiz oranı",
+      "payment": "ödeme tutarı",
+      "other": "bir kredi ayarı"
+    }
+  },
+  "applications": {
+    "title": "Geçmiş",
+    "description": "Bu kuralın değiştirdiği son işlemler, en yeniden başlayarak.",
+    "loading": "Geçmiş yükleniyor...",
+    "error": {
+      "title": "Geçmiş yüklenemedi",
+      "body": "İstek başarısız olduğu için hiçbir şey gösterilmiyor; kuralın çalışmamış olmasından değil. Bağlantınızı kontrol edip yeniden deneyin.",
+      "retry": "Tekrar dene"
+    },
+    "empty": {
+      "title": "Bu kural henüz hiçbir şeyi değiştirmedi",
+      "body": "Bir işlemi değiştirdiğinde değişiklik burada listelenir."
+    },
+    "source": {
+      "create": "Oluşturuldu",
+      "import": "İçe aktarıldı",
+      "manual": "Elle çalıştırma",
+      "other": "Diğer"
+    },
+    "table": {
+      "date": "Tarih",
+      "payee": "Alıcı",
+      "amount": "Tutar",
+      "source": "Kaynak",
+      "change": "Değişiklik",
+      "appliedAt": "Uygulandı",
+      "open": "İşlemi aç",
+      "noPayee": "Alıcı yok",
+      "view": "Görüntüle"
+    }
+  },
+  "words": {
+    "everyTransaction": "Her işlem",
+    "group": {
+      "all": "Bunların hepsi:",
+      "any": "Bunlardan herhangi biri:",
+      "notAll": "Bunların hepsi değil:",
+      "notAny": "Bunlardan hiçbiri:"
+    },
+    "leaf": "{field} {operator} {value}",
+    "leafNoValue": "{field} {operator}",
+    "range": "{from} ve {to}",
+    "text": "“{value}”",
+    "unknownCondition": "Bu sürümün gösteremediği bir koşul",
+    "unknownAction": "Bu sürümün gösteremediği bir eylem",
+    "action": {
+      "add_tags": "Etiket ekle: {tags}",
+      "remove_tags": "Etiketleri kaldır: {tags}",
+      "set_category": "Kategoriyi {name} olarak ayarla{onlyIfEmpty, select, yes { (yalnızca boşsa)} other {}}",
+      "set_payee": "Alıcıyı {name} olarak ayarla{onlyIfEmpty, select, yes { (yalnızca boşsa)} other {}}",
+      "request_ai_review": "Yapay zekâ incelemesi iste: {instruction}",
+      "set_payee_from_text": "Alıcıyı metinden ayarla: “{template}”{createIfMissing, select, yes { (yoksa oluşturulur)} other {}}{onlyIfEmpty, select, yes { (yalnızca boşsa)} other {}}",
+      "set_description": "Açıklamayı ayarla ({mode, select, append {sona ekle} prepend {başa ekle} other {değiştir}}): “{template}”{onlyIfEmpty, select, yes { (yalnızca boşsa)} other {}}",
+      "convert_to_transfer": "{direction, select, from {{account} hesabından} other {{account} hesabına}} havaleye dönüştür",
+      "split": "Şuna böl: {parts}",
+      "settle_loan_installment": "{account} taksidini, vadesinden {before, plural, one {# gün} other {# gün}} önceye veya {after, plural, one {# gün} other {# gün}} sonrasına kadar yapılan bir çekimle karşıla; daha büyük bir çekim {excess, select, refuse {olduğu gibi bırakılır} other {ek anapara olarak öder}}, daha küçük bir çekim {shortfall, select, interest_first {önce faizi öder} other {olduğu gibi bırakılır}}"
+    },
+    "splitPart": {
+      "transfer": "{amount} tutarı {account} hesabına",
+      "category": "{amount} tutarı {category} olarak",
+      "plain": "{amount}",
+      "rest": "kalan"
+    }
+  }
+}

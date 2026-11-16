@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@/test/render';
+import { render, screen, fireEvent, waitFor, act, cleanup } from '@/test/render';
+import { chooseComboboxOption } from '@/test/combobox';
 import { InvestmentTransactionForm } from './InvestmentTransactionForm';
 import { investmentsApi } from '@/lib/investments';
 import { getLocalDateString } from '@/lib/utils';
@@ -8,18 +9,52 @@ import {
   TRANSACTION_SUBMIT_MODE_KEY,
 } from '@/hooks/useTransactionSubmitMode';
 import toast from 'react-hot-toast';
+import { usePreferencesStore } from '@/store/preferencesStore';
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    defaultCurrency: 'CAD',
-    formatCurrency: (n: number, c?: string) =>
-      c ? `${c} $${n.toFixed(2)}` : `$${n.toFixed(2)}`,
-  }),
-}));
+// A case about the reader's own number locale switches this on and sets the
+// preferences store; every other case keeps the deterministic en-US stand-in.
+const realNumberFormat = vi.hoisted(() => ({ on: false }));
 
+vi.mock('@/hooks/useNumberFormat', async (importOriginal) => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  const actual = await importOriginal<typeof import('@/hooks/useNumberFormat')>();
+  return {
+    useNumberFormat: () => {
+      // Called every render either way so the hook order never changes.
+      const real = actual.useNumberFormat();
+      if (realNumberFormat.on) return real;
+      return {
+        ...numberFormatMockDefaults(),
+        defaultCurrency: 'CAD',
+        formatCurrency: (n: number, c?: string) =>
+          c ? `${c} $${n.toFixed(2)}` : `$${n.toFixed(2)}`,
+      };
+    },
+  };
+});
 const getMarketRateMock = vi.fn<(from: string, to: string) => number | null>(
   () => null,
 );
+
+// The dated lookup the form prefills from. By default it answers what
+// `getMarketRateMock` says, so a test about something else needs one mock; a
+// test about the trade date overrides it and leaves `getMarketRateMock` (the
+// latest rate, which the form must not read) pointing somewhere else.
+const getRateForDateMock = vi.fn<(from: string, to: string, date: string) => Promise<number | null>>();
+const delegateToMarketRate = (from: string, to: string) =>
+  Promise.resolve(getMarketRateMock(from, to));
+
+vi.mock('@/lib/exchange-rates', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/exchange-rates')>();
+  return {
+    ...actual,
+    exchangeRatesApi: {
+      ...actual.exchangeRatesApi,
+      getRateForDate: (from: string, to: string, date: string) =>
+        getRateForDateMock(from, to, date),
+    },
+  };
+});
 
 vi.mock('@/hooks/useExchangeRates', () => ({
   useExchangeRates: () => ({
@@ -74,11 +109,12 @@ vi.mock('react-hot-toast', () => ({
 
 vi.mock('@/lib/errors', () => ({
   getErrorMessage: (_e: any, fallback: string) => fallback,
+  getErrorCode: () => undefined,
 }));
 
 vi.mock('@/components/securities/SecurityForm', () => ({
-  SecurityForm: ({ onSubmit, onCancel }: { onSubmit: (data: any) => Promise<void>; onCancel: () => void }) => (
-    <div data-testid="security-form-modal">
+  SecurityForm: ({ defaults, onSubmit, onCancel }: { defaults?: unknown; onSubmit: (data: any) => Promise<void>; onCancel: () => void }) => (
+    <div data-testid="security-form-modal" data-defaults={JSON.stringify(defaults)}>
       <button onClick={() => { onSubmit({ symbol: 'TEST', name: 'Test Corp', securityType: 'STOCK', currencyCode: 'CAD' }).catch(() => {}); }}>
         Create Security
       </button>
@@ -86,6 +122,20 @@ vi.mock('@/components/securities/SecurityForm', () => ({
     </div>
   ),
 }));
+
+/**
+ * Pick a security by id. The Security field lists each one by its symbol, and
+ * the fixtures differ by case, so the symbol is read from what the form was
+ * given: the last list `getSecurities` answered with.
+ */
+async function chooseSecurity(id: string) {
+  await waitFor(() => expect(investmentsApi.getSecurities).toHaveBeenCalled());
+  const { results } = vi.mocked(investmentsApi.getSecurities).mock;
+  const listed = (await results[results.length - 1].value) as { id: string; symbol: string }[];
+  const security = listed.find((s) => s.id === id);
+  if (!security) throw new Error(`No security ${id} in the getSecurities fixture`);
+  await chooseComboboxOption('Security', `${security.symbol} - `);
+}
 
 /** The date the form will submit: DateInput keeps it in a hidden input, while
  *  the visible box renders it in whatever pattern the user prefers. */
@@ -122,8 +172,16 @@ describe('InvestmentTransactionForm', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // A case that lists other securities must not leak them into the next:
+    // the Security field shows what it was given, by symbol.
+    vi.mocked(investmentsApi.getSecurities).mockResolvedValue([
+      { id: 'sec-1', symbol: 'AAPL', name: 'Apple Inc.', securityType: 'STOCK', currencyCode: 'USD' } as any,
+    ]);
+    realNumberFormat.on = false;
     getMarketRateMock.mockReset();
     getMarketRateMock.mockReturnValue(null);
+    getRateForDateMock.mockReset();
+    getRateForDateMock.mockImplementation(delegateToMarketRate);
   });
 
   it('renders form fields', async () => {
@@ -133,6 +191,39 @@ describe('InvestmentTransactionForm', () => {
     });
     expect(screen.getByText('Transaction Type')).toBeInTheDocument();
     expect(screen.getByText('Date')).toBeInTheDocument();
+  });
+
+  describe('defaultDate', () => {
+    it('opens a new trade on the day the caller named', async () => {
+      // The calendar's "New investment transaction on this day" means the day
+      // the reader clicked, not the date the last entry was filed under.
+      render(<InvestmentTransactionForm accounts={accounts} defaultDate="2026-03-07" />);
+
+      await waitFor(() => {
+        // The field shows the reader's own date format; the value it carries
+        // is the day the caller named.
+        expect((screen.getByLabelText('Date') as HTMLInputElement).value).toBe('03/07/2026');
+      });
+    });
+
+    it("leaves an edit on the row's own date", async () => {
+      const transaction = {
+        id: 't1', accountId: 'a1', action: 'BUY' as const, transactionDate: '2024-01-01',
+        quantity: 10, price: 50, commission: 5, totalAmount: 505, description: '',
+      } as any;
+
+      render(
+        <InvestmentTransactionForm
+          accounts={accounts}
+          transaction={transaction}
+          defaultDate="2026-03-07"
+        />,
+      );
+
+      await waitFor(() => {
+        expect((screen.getByLabelText('Date') as HTMLInputElement).value).toBe('01/01/2024');
+      });
+    });
   });
 
   it('shows Create Transaction button for new form', async () => {
@@ -192,7 +283,9 @@ describe('InvestmentTransactionForm', () => {
       expect(optionValues).toContain('CAPITAL_GAIN_SHORT');
       expect(optionValues).toContain('CAPITAL_GAIN_LONG');
       expect(optionValues).toContain('REDEEM');
-      expect(optionValues.length).toBe(16);
+      // Money's Return of Capital activity (issue #1800).
+      expect(optionValues).toContain('RETURN_OF_CAPITAL');
+      expect(optionValues.length).toBe(17);
     });
   });
 
@@ -208,20 +301,36 @@ describe('InvestmentTransactionForm', () => {
     });
   });
 
-  it('shows "+ Add new security" link', async () => {
-    render(<InvestmentTransactionForm accounts={accounts} />);
-    await waitFor(() => {
-      expect(screen.getByText('+ Add new security')).toBeInTheDocument();
+  /** Type into the Security field and pick its "+ Create" row. */
+  async function createSecurityFromField(text: string) {
+    const input = await screen.findByLabelText('Security');
+    await act(async () => {
+      fireEvent.change(input, { target: { value: text } });
     });
+    await act(async () => {
+      fireEvent.click(screen.getByText(`Create "${text}"`));
+    });
+  }
+
+  it('offers "+ Create" inside the Security field, not as a separate link', async () => {
+    render(<InvestmentTransactionForm accounts={accounts} />);
+    const input = await screen.findByLabelText('Security');
+    expect(screen.queryByText('+ Add new security')).not.toBeInTheDocument();
+    expect(input).toHaveAttribute('placeholder', 'Select or create security...');
+    await act(async () => {
+      fireEvent.change(input, { target: { value: 'NEWCO' } });
+    });
+    expect(screen.getByText('Create "NEWCO"')).toBeInTheDocument();
   });
 
-  it('opens security modal when clicking add new security link', async () => {
+  it('opens the new-security form with a typed ticker as its symbol', async () => {
     render(<InvestmentTransactionForm accounts={accounts} />);
+    await createSecurityFromField('newco');
 
-    const addLink = await screen.findByText('+ Add new security');
-    fireEvent.click(addLink);
-
-    expect(screen.getByTestId('security-form-modal')).toBeInTheDocument();
+    expect(screen.getByTestId('security-form-modal')).toHaveAttribute(
+      'data-defaults',
+      JSON.stringify({ symbol: 'NEWCO' }),
+    );
     expect(screen.getByText('New Security')).toBeInTheDocument();
 
     // Close modal via cancel
@@ -231,20 +340,19 @@ describe('InvestmentTransactionForm', () => {
     });
   });
 
-  it('shows modal title when security form is open', async () => {
+  it('opens the new-security form with typed words as its name', async () => {
     render(<InvestmentTransactionForm accounts={accounts} />);
+    await createSecurityFromField('New Fund Co');
 
-    const addLink = await screen.findByText('+ Add new security');
-    fireEvent.click(addLink);
-
-    expect(screen.getByText('New Security')).toBeInTheDocument();
+    expect(screen.getByTestId('security-form-modal')).toHaveAttribute(
+      'data-defaults',
+      JSON.stringify({ name: 'New Fund Co' }),
+    );
   });
 
   it('handles create security success', async () => {
     render(<InvestmentTransactionForm accounts={accounts} />);
-
-    const addLink = await screen.findByText('+ Add new security');
-    fireEvent.click(addLink);
+    await createSecurityFromField('TEST');
 
     // Submit the mocked SecurityForm
     fireEvent.click(screen.getByText('Create Security'));
@@ -256,17 +364,18 @@ describe('InvestmentTransactionForm', () => {
       expect(toast.success).toHaveBeenCalledWith('Security created');
     });
 
-    // Modal should close after success
+    // Modal should close after success, with the new security selected
     expect(screen.queryByTestId('security-form-modal')).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect((screen.getByLabelText('Security') as HTMLInputElement).value).toMatch(/^TEST - Test Corp/);
+    });
   });
 
   it('handles create security failure', async () => {
     vi.mocked(investmentsApi.createSecurity).mockRejectedValueOnce(new Error('API error'));
 
     render(<InvestmentTransactionForm accounts={accounts} />);
-
-    const addLink = await screen.findByText('+ Add new security');
-    fireEvent.click(addLink);
+    await createSecurityFromField('TEST');
 
     // Submit the mocked SecurityForm (will trigger API error)
     fireEvent.click(screen.getByText('Create Security'));
@@ -277,6 +386,22 @@ describe('InvestmentTransactionForm', () => {
 
     // Modal should stay open on failure
     expect(screen.getByTestId('security-form-modal')).toBeInTheDocument();
+  });
+
+  it('puts Quantity, Price per Share and Commission / Fees on one line', async () => {
+    render(<InvestmentTransactionForm accounts={accounts} />);
+    const quantity = await screen.findByLabelText('Quantity (Shares)');
+    const row = quantity.closest('.grid') as HTMLElement;
+    expect(row).toHaveClass('sm:grid-cols-3');
+    expect(row).toContainElement(screen.getByLabelText('Price per Share'));
+    expect(row).toContainElement(screen.getByLabelText('Commission / Fees'));
+  });
+
+  it('keeps the Total Amount summary short: less padding above and below than beside', async () => {
+    render(<InvestmentTransactionForm accounts={accounts} />);
+    const summary = await screen.findByTestId('total-amount-summary');
+    expect(summary).toHaveClass('px-4', 'py-2.5');
+    expect(summary).not.toHaveClass('p-4');
   });
 
   it('shows description field', async () => {
@@ -311,23 +436,28 @@ describe('InvestmentTransactionForm', () => {
     render(<InvestmentTransactionForm accounts={accounts} />);
     await waitFor(() => {
       // Default action is BUY which supports funding account
-      expect(screen.getByText('Funds From (optional)')).toBeInTheDocument();
+      expect(screen.getByText('Funds From')).toBeInTheDocument();
     });
   });
 
-  it('filters out CASH, ASSET, and brokerage accounts from funding accounts', async () => {
+  it('filters out CASH, ASSET, CRYPTO, and brokerage accounts from funding accounts', async () => {
     const investmentCash = {
       id: 'a4', name: 'RRSP Cash', accountType: 'INVESTMENT',
       accountSubType: 'INVESTMENT_CASH', currencyCode: 'CAD',
     } as any;
+    const wallet = {
+      id: 'a5', name: 'Bitcoin Wallet', accountType: 'CRYPTO',
+      accountSubType: null, currencyCode: 'BTC',
+    } as any;
 
-    render(<InvestmentTransactionForm accounts={[...accounts, investmentCash]} />);
+    render(<InvestmentTransactionForm accounts={[...accounts, investmentCash, wallet]} />);
     await waitFor(() => {
-      const fundingSelect = screen.getByLabelText('Funds From (optional)');
+      const fundingSelect = screen.getByLabelText('Funds From');
       const options = fundingSelect.querySelectorAll('option');
       const optionTexts = Array.from(options).map(o => o.textContent);
       expect(optionTexts).not.toContain('Cash Account');
       expect(optionTexts).not.toContain('RRSP Brokerage');
+      expect(optionTexts.some((text) => text?.includes('Bitcoin Wallet'))).toBe(false);
       expect(optionTexts).toContain('Main Chequing');
       expect(optionTexts).toContain('RRSP Cash');
     });
@@ -360,9 +490,9 @@ describe('InvestmentTransactionForm', () => {
       });
     });
     await waitFor(() => {
-      expect(screen.getByLabelText('Deposit To (optional)')).toBeInTheDocument();
+      expect(screen.getByLabelText('Deposit to')).toBeInTheDocument();
     });
-    expect(screen.queryByText('Funds From (optional)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Funds From')).not.toBeInTheDocument();
   });
 
   it('offers accrued interest for REDEEM and for no other action', async () => {
@@ -404,7 +534,7 @@ describe('InvestmentTransactionForm', () => {
       });
     });
     await waitFor(() => {
-      expect(screen.getByLabelText('Deposit To (optional)')).toBeInTheDocument();
+      expect(screen.getByLabelText('Deposit to')).toBeInTheDocument();
     });
 
     await act(async () => {
@@ -413,7 +543,7 @@ describe('InvestmentTransactionForm', () => {
       });
     });
     await waitFor(() => {
-      expect(screen.getByLabelText('Deposit To (optional)')).toBeInTheDocument();
+      expect(screen.getByLabelText('Deposit to')).toBeInTheDocument();
     });
   });
 
@@ -446,10 +576,10 @@ describe('InvestmentTransactionForm', () => {
       });
     });
     await waitFor(() => {
-      expect(screen.getByLabelText('Deposit To (optional)')).toBeInTheDocument();
+      expect(screen.getByLabelText('Deposit to')).toBeInTheDocument();
     });
 
-    const select = screen.getByLabelText('Deposit To (optional)');
+    const select = screen.getByLabelText('Deposit to');
     const optionTexts = Array.from(select.querySelectorAll('option')).map(
       (o) => o.textContent,
     );
@@ -483,13 +613,9 @@ describe('InvestmentTransactionForm', () => {
     await waitFor(() => {
       expect(screen.getByLabelText('Security')).toBeInTheDocument();
     });
+    await chooseSecurity('sec-1');
     await act(async () => {
-      fireEvent.change(screen.getByLabelText('Security'), {
-        target: { value: 'sec-1' },
-      });
-    });
-    await act(async () => {
-      fireEvent.change(screen.getByLabelText('Deposit To (optional)'), {
+      fireEvent.change(screen.getByLabelText('Deposit to'), {
         target: { value: 'a2' },
       });
     });
@@ -509,6 +635,95 @@ describe('InvestmentTransactionForm', () => {
     const payload = vi.mocked(investmentsApi.createTransaction).mock.calls[0][0] as any;
     expect(payload.action).toBe('DIVIDEND');
     expect(payload.fundingAccountId).toBe('a2');
+  });
+
+  describe('RETURN_OF_CAPITAL (issue #1800)', () => {
+    it('asks for a security, an amount and where the cash goes, and says it lowers the cost basis', async () => {
+      render(<InvestmentTransactionForm accounts={accounts} />);
+      await waitFor(() => {
+        expect(screen.getByText('Brokerage Account')).toBeInTheDocument();
+      });
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Transaction Type'), {
+          target: { value: 'RETURN_OF_CAPITAL' },
+        });
+      });
+
+      await waitFor(() => {
+        expect(screen.getByLabelText('Security')).toBeInTheDocument();
+      });
+      expect(screen.getByLabelText('Deposit to')).toBeInTheDocument();
+      expect(screen.getByLabelText(/Amount/)).toBeInTheDocument();
+      expect(screen.getByText(/lowers the cost basis of your holding/)).toBeInTheDocument();
+      // Not a trade: no shares, no per-share price, no commission.
+      expect(screen.queryByLabelText(/Quantity/)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText(/Commission/)).not.toBeInTheDocument();
+      expect(screen.queryByText('Funds From')).not.toBeInTheDocument();
+    });
+
+    it('does not show the cost-basis note for a dividend', async () => {
+      render(<InvestmentTransactionForm accounts={accounts} />);
+      await waitFor(() => {
+        expect(screen.getByText('Brokerage Account')).toBeInTheDocument();
+      });
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Transaction Type'), {
+          target: { value: 'DIVIDEND' },
+        });
+      });
+      await waitFor(() => {
+        expect(screen.getByLabelText('Security')).toBeInTheDocument();
+      });
+      expect(screen.queryByText(/lowers the cost basis of your holding/)).not.toBeInTheDocument();
+    });
+
+    it('sends the security, the amount as the cash total and the destination account', async () => {
+      // sec-1 is USD and a1 is CAD: a cross-currency cash leg needs a rate.
+      getMarketRateMock.mockReturnValue(1.35);
+      render(<InvestmentTransactionForm accounts={accounts} />);
+      await waitFor(() => {
+        expect(screen.getByText('Brokerage Account')).toBeInTheDocument();
+      });
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Brokerage Account'), {
+          target: { value: 'a1' },
+        });
+      });
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Transaction Type'), {
+          target: { value: 'RETURN_OF_CAPITAL' },
+        });
+      });
+      await waitFor(() => {
+        expect(screen.getByLabelText('Security')).toBeInTheDocument();
+      });
+      await chooseSecurity('sec-1');
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Deposit to'), {
+          target: { value: 'a2' },
+        });
+      });
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText(/Amount/), {
+          target: { value: '80' },
+        });
+      });
+
+      await act(async () => {
+        fireEvent.click(screen.getByText('Create Transaction'));
+      });
+
+      await waitFor(() => {
+        expect(investmentsApi.createTransaction).toHaveBeenCalled();
+      });
+      const payload = vi.mocked(investmentsApi.createTransaction).mock.calls[0][0] as any;
+      expect(payload.action).toBe('RETURN_OF_CAPITAL');
+      expect(payload.securityId).toBe('sec-1');
+      expect(payload.fundingAccountId).toBe('a2');
+      expect(payload.price).toBe(80);
+      expect(payload.quantity).toBeUndefined();
+      expect(payload.exchangeRate).toBe(1.35);
+    });
   });
 
   describe('Remembering the last entered date', () => {
@@ -531,11 +746,7 @@ describe('InvestmentTransactionForm', () => {
       await waitFor(() => {
         expect(screen.getByLabelText('Security')).toBeInTheDocument();
       });
-      await act(async () => {
-        fireEvent.change(screen.getByLabelText('Security'), {
-          target: { value: 'sec-1' },
-        });
-      });
+      await chooseSecurity('sec-1');
       await act(async () => {
         fireEvent.click(screen.getByText('Create Transaction'));
       });
@@ -612,11 +823,7 @@ describe('InvestmentTransactionForm', () => {
       await waitFor(() => {
         expect(screen.getByLabelText('Security')).toBeInTheDocument();
       });
-      await act(async () => {
-        fireEvent.change(screen.getByLabelText('Security'), {
-          target: { value: 'sec-1' },
-        });
-      });
+      await chooseSecurity('sec-1');
       const rateField = await screen.findByLabelText(/Exchange rate/i);
       await act(async () => {
         fireEvent.focus(rateField);
@@ -783,16 +990,20 @@ describe('InvestmentTransactionForm', () => {
       await waitFor(() => {
         expect(investmentsApi.getHoldings).toHaveBeenCalledWith('a1');
       });
-      await waitFor(() => {
-        const select = screen.getByLabelText('Security');
-        const values = Array.from(select.querySelectorAll('option'))
-          .map((o) => o.getAttribute('value'))
-          .filter(Boolean);
-        // Only the held security (sec-1) is offered.
-        expect(values).toEqual(['sec-1']);
+      // Only the held security (sec-1) is offered.
+      await act(async () => {
+        fireEvent.click(screen.getByLabelText('Security'));
       });
-      // Transfers cannot create new securities.
-      expect(screen.queryByText('+ Add new security')).not.toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByText('AAPL - Apple Inc. (USD)')).toBeInTheDocument();
+      });
+      expect(screen.queryByText(/^GONE - /)).not.toBeInTheDocument();
+      expect(screen.queryByText(/^DUST - /)).not.toBeInTheDocument();
+      // Transfers cannot create new securities: typed text offers no Create.
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Security'), { target: { value: 'NEWCO' } });
+      });
+      expect(screen.queryByText('Create "NEWCO"')).not.toBeInTheDocument();
     });
 
     it('prefills cost per share from the source holding average cost', async () => {
@@ -805,14 +1016,13 @@ describe('InvestmentTransactionForm', () => {
       await waitFor(() => {
         expect(investmentsApi.getHoldings).toHaveBeenCalledWith('a1');
       });
-      await act(async () => {
-        fireEvent.change(screen.getByLabelText('Security'), {
-          target: { value: 'sec-1' },
-        });
-      });
+      await chooseSecurity('sec-1');
       await waitFor(() => {
         expect(screen.getByLabelText(/Cost per Share/)).toHaveValue('1.670000');
       });
+      // A26-S19-05: the server carries the source's basis, so the field is not
+      // offered as something the person can change.
+      expect(screen.getByLabelText(/Cost per Share/)).toBeDisabled();
     });
 
     it('submits a transfer with the correct payload', async () => {
@@ -830,11 +1040,7 @@ describe('InvestmentTransactionForm', () => {
       await waitFor(() => {
         expect(investmentsApi.getHoldings).toHaveBeenCalledWith('a1');
       });
-      await act(async () => {
-        fireEvent.change(screen.getByLabelText('Security'), {
-          target: { value: 'sec-1' },
-        });
-      });
+      await chooseSecurity('sec-1');
       await act(async () => {
         fireEvent.change(screen.getByLabelText('Quantity (Shares)'), {
           target: { value: '100' },
@@ -868,11 +1074,7 @@ describe('InvestmentTransactionForm', () => {
       await waitFor(() => {
         expect(investmentsApi.getHoldings).toHaveBeenCalledWith('a1');
       });
-      await act(async () => {
-        fireEvent.change(screen.getByLabelText('Security'), {
-          target: { value: 'sec-1' },
-        });
-      });
+      await chooseSecurity('sec-1');
       await act(async () => {
         fireEvent.change(screen.getByLabelText('Quantity (Shares)'), {
           target: { value: '50' },
@@ -1137,7 +1339,7 @@ describe('InvestmentTransactionForm', () => {
       });
     });
     await act(async () => {
-      fireEvent.change(screen.getByLabelText('Funds From (optional)'), {
+      fireEvent.change(screen.getByLabelText('Funds From'), {
         target: { value: 'a2' },
       });
     });
@@ -1150,8 +1352,8 @@ describe('InvestmentTransactionForm', () => {
     });
 
     await waitFor(() => {
-      expect(screen.queryByLabelText('Funds From (optional)')).not.toBeInTheDocument();
-      expect(screen.queryByLabelText('Deposit To (optional)')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Funds From')).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Deposit to')).not.toBeInTheDocument();
     });
 
     // Now switch back to BUY: funding should be empty (default), not stale 'a2'
@@ -1161,7 +1363,7 @@ describe('InvestmentTransactionForm', () => {
       });
     });
     await waitFor(() => {
-      const sel = screen.getByLabelText('Funds From (optional)') as HTMLSelectElement;
+      const sel = screen.getByLabelText('Funds From') as HTMLSelectElement;
       expect(sel.value).toBe('');
     });
   });
@@ -1174,7 +1376,7 @@ describe('InvestmentTransactionForm', () => {
 
     render(<InvestmentTransactionForm accounts={accounts} allAccounts={[...accounts, extraAccount]} />);
     await waitFor(() => {
-      const fundingSelect = screen.getByLabelText('Funds From (optional)');
+      const fundingSelect = screen.getByLabelText('Funds From');
       const options = fundingSelect.querySelectorAll('option');
       const optionTexts = Array.from(options).map(o => o.textContent);
       expect(optionTexts).toContain('Savings');
@@ -1189,8 +1391,9 @@ describe('InvestmentTransactionForm', () => {
   });
 
   it('displays total amount rounded to avoid IEEE 754 drift', async () => {
-    // 3 * 53.245 = 159.73499... in IEEE 754, which should round to 159.73 without fix
-    // but should display as 159.74 after roundToDecimals is applied
+    // 3 * 53.245 = 159.73499999999999 in IEEE 754. The field carries the total
+    // at the money column's four decimals, so it reads 159.735 -- the figure
+    // that will be stored -- and never the drifting tail.
     const transaction = {
       id: 't1', accountId: 'a1', action: 'BUY' as const, transactionDate: '2024-01-01',
       quantity: 3, price: 53.245, commission: 0, totalAmount: 159.74, description: '',
@@ -1198,9 +1401,10 @@ describe('InvestmentTransactionForm', () => {
 
     render(<InvestmentTransactionForm accounts={accounts} transaction={transaction} />);
     await waitFor(() => {
-      // The total display uses formatCurrency which receives the rounded value
-      // formatCurrency mock: $${n.toFixed(2)} => $159.74 not $159.73
-      expect(screen.getByText(/\$159\.74/)).toBeInTheDocument();
+      // The total is an editable field now (it is the authoritative input when
+      // the user types in it), so the figure is its value rather than text.
+      const total = screen.getByLabelText(/Total Amount/) as HTMLInputElement;
+      expect(Number(total.value)).toBe(159.735);
     });
   });
 
@@ -1273,12 +1477,9 @@ describe('InvestmentTransactionForm', () => {
         />,
       );
 
-      await waitFor(() => {
-        expect(screen.getByLabelText('Security')).toBeInTheDocument();
-      });
-
-      const securitySelect = screen.getByLabelText('Security');
-      fireEvent.change(securitySelect, { target: { value: 'sec-usd' } });
+      // The field draws before the securities load; the pick waits for the
+      // option to be listed.
+      await chooseSecurity('sec-usd');
 
       await waitFor(() => {
         expect(
@@ -1287,33 +1488,158 @@ describe('InvestmentTransactionForm', () => {
       });
     });
 
-    it('auto-fills the exchange rate with the latest market rate', async () => {
-      getMarketRateMock.mockReturnValue(1.365);
+    describe('the rate is the one for the trade date (INV-FX-001)', () => {
+      const rateInput = () =>
+        screen.getByLabelText(/Exchange rate \(1 USD =\)/) as HTMLInputElement;
 
-      render(
-        <InvestmentTransactionForm
-          accounts={crossCurrencyAccounts}
-          allAccounts={crossCurrencyAccounts}
-          defaultAccountId="cad-brokerage"
-        />,
-      );
+      const renderUsdBuy = async () => {
+        render(
+          <InvestmentTransactionForm
+            accounts={crossCurrencyAccounts}
+            allAccounts={crossCurrencyAccounts}
+            defaultAccountId="cad-brokerage"
+          />,
+        );
+        // The select draws before the securities load; choosing 'sec-usd'
+        // before its option exists silently keeps the empty value.
+        await chooseSecurity('sec-usd');
+        await waitFor(() => {
+          expect(screen.getByLabelText(/Quantity \(Shares\)/)).toBeInTheDocument();
+        });
+      };
 
-      await waitFor(() => {
-        expect(screen.getByLabelText('Security')).toBeInTheDocument();
+      const setDate = async (value: string) => {
+        await act(async () => {
+          fireEvent.change(screen.getByLabelText('Date'), { target: { value } });
+        });
+      };
+
+      it('fills the exchange rate for the trade date, not the latest', async () => {
+        getMarketRateMock.mockReturnValue(1.365);
+        getRateForDateMock.mockImplementation(async () => 1.4389);
+
+        await renderUsdBuy();
+        await setDate('2025-01-02');
+
+        await waitFor(() => {
+          expect(getRateForDateMock).toHaveBeenCalledWith('USD', 'CAD', '2025-01-02');
+        });
+        await waitFor(() => {
+          expect(Number(rateInput().value)).toBeCloseTo(1.4389, 4);
+        });
+
+        fireEvent.change(screen.getByLabelText(/Quantity \(Shares\)/), {
+          target: { value: '10' },
+        });
+        fireEvent.change(screen.getByLabelText(/Price per Share/), {
+          target: { value: '100' },
+        });
+        fireEvent.click(screen.getByText('Create Transaction'));
+
+        await waitFor(() => {
+          expect(investmentsApi.createTransaction).toHaveBeenCalled();
+        });
+        const payload = vi.mocked(investmentsApi.createTransaction).mock
+          .calls[0][0] as { exchangeRate?: number; transactionDate?: string };
+        expect(payload.transactionDate).toBe('2025-01-02');
+        expect(payload.exchangeRate).toBeCloseTo(1.4389, 4);
       });
 
-      const securitySelect = screen.getByLabelText('Security');
-      fireEvent.change(securitySelect, { target: { value: 'sec-usd' } });
+      it('asks again and refills when the date changes', async () => {
+        getRateForDateMock.mockImplementation(async (_f, _t, date) =>
+          date === '2025-01-02' ? 1.4389 : 1.3,
+        );
 
-      await waitFor(() => {
-        expect(getMarketRateMock).toHaveBeenCalledWith('USD', 'CAD');
+        await renderUsdBuy();
+        await setDate('2025-01-02');
+        await waitFor(() => expect(Number(rateInput().value)).toBeCloseTo(1.4389, 4));
+
+        await setDate('2025-03-03');
+        await waitFor(() => {
+          expect(getRateForDateMock).toHaveBeenCalledWith('USD', 'CAD', '2025-03-03');
+        });
+        await waitFor(() => expect(Number(rateInput().value)).toBeCloseTo(1.3, 4));
       });
 
-      await waitFor(() => {
-        const rateInput = screen.getByLabelText(
-          /Exchange rate \(1 USD =\)/,
-        ) as HTMLInputElement;
-        expect(Number(rateInput.value)).toBeCloseTo(1.365, 3);
+      it('keeps a rate the user typed when the date changes', async () => {
+        getRateForDateMock.mockImplementation(async () => 1.4389);
+
+        await renderUsdBuy();
+        await setDate('2025-01-02');
+        await waitFor(() => expect(Number(rateInput().value)).toBeCloseTo(1.4389, 4));
+
+        fireEvent.focus(rateInput());
+        fireEvent.change(rateInput(), { target: { value: '1.5' } });
+        fireEvent.blur(rateInput());
+        await waitFor(() => expect(Number(rateInput().value)).toBeCloseTo(1.5, 4));
+
+        getRateForDateMock.mockClear();
+        await setDate('2025-03-03');
+
+        await waitFor(() => expect(Number(rateInput().value)).toBeCloseTo(1.5, 4));
+        expect(getRateForDateMock).not.toHaveBeenCalled();
+      });
+
+      it('leaves the rate unresolved when the dated lookup answers null, never the latest', async () => {
+        getMarketRateMock.mockReturnValue(1.365);
+        getRateForDateMock.mockImplementation(async () => null);
+
+        await renderUsdBuy();
+        await setDate('2025-01-02');
+        await waitFor(() => {
+          expect(getRateForDateMock).toHaveBeenCalledWith('USD', 'CAD', '2025-01-02');
+        });
+
+        await waitFor(() => {
+          expect(screen.getByRole('alert')).toHaveTextContent('No USD to CAD rate is available');
+        });
+        expect(rateInput().value).toBe('');
+
+        await act(async () => {
+          fireEvent.change(screen.getByLabelText(/Quantity \(Shares\)/), {
+            target: { value: '10' },
+          });
+          fireEvent.change(screen.getByLabelText(/Price per Share/), {
+            target: { value: '100' },
+          });
+        });
+        expect(screen.getByRole('button', { name: 'Create Transaction' })).toBeDisabled();
+        expect(investmentsApi.createTransaction).not.toHaveBeenCalled();
+      });
+
+      it('leaves the rate unresolved when the dated lookup fails', async () => {
+        getMarketRateMock.mockReturnValue(1.365);
+        getRateForDateMock.mockRejectedValue(new Error('offline'));
+
+        await renderUsdBuy();
+        await setDate('2025-01-02');
+
+        await waitFor(() => {
+          expect(screen.getByRole('alert')).toHaveTextContent('No USD to CAD rate is available');
+        });
+        expect(rateInput().value).toBe('');
+      });
+
+      it('ignores a late answer for a date the user has moved off', async () => {
+        const resolvers = new Map<string, (rate: number | null) => void>();
+        getRateForDateMock.mockImplementation(
+          (_f, _t, date) => new Promise((resolve) => resolvers.set(date, resolve)),
+        );
+
+        await renderUsdBuy();
+        await setDate('2025-01-02');
+        await waitFor(() => expect(resolvers.has('2025-01-02')).toBe(true));
+        await setDate('2025-03-03');
+        await waitFor(() => expect(resolvers.has('2025-03-03')).toBe(true));
+
+        await act(async () => {
+          resolvers.get('2025-03-03')!(1.3);
+        });
+        await waitFor(() => expect(Number(rateInput().value)).toBeCloseTo(1.3, 4));
+        await act(async () => {
+          resolvers.get('2025-01-02')!(1.4389);
+        });
+        expect(Number(rateInput().value)).toBeCloseTo(1.3, 4);
       });
     });
 
@@ -1334,12 +1660,9 @@ describe('InvestmentTransactionForm', () => {
           />,
         );
 
-        await waitFor(() => {
-          expect(screen.getByLabelText('Security')).toBeInTheDocument();
-        });
-        fireEvent.change(screen.getByLabelText('Security'), {
-          target: { value: 'sec-usd' },
-        });
+        // The select draws before the securities load; choosing 'sec-usd'
+        // before its option exists silently keeps the empty value.
+        await chooseSecurity('sec-usd');
         await waitFor(() => {
           expect(screen.getByLabelText(/Quantity \(Shares\)/)).toBeInTheDocument();
         });
@@ -1358,7 +1681,7 @@ describe('InvestmentTransactionForm', () => {
         await renderCrossCurrencyBuy();
 
         const convertedInput = screen.getByLabelText(
-          /Converted total \(CAD\)/,
+          /^Converted Total$/,
         ) as HTMLInputElement;
         expect(convertedInput.value).toBe('');
         // and the figure is not printed anywhere as a complete CAD total
@@ -1389,7 +1712,7 @@ describe('InvestmentTransactionForm', () => {
 
         await waitFor(() => {
           const convertedInput = screen.getByLabelText(
-            /Converted total \(CAD\)/,
+            /^Converted Total$/,
           ) as HTMLInputElement;
           expect(Number(convertedInput.value)).toBeCloseTo(1350, 4);
         });
@@ -1408,13 +1731,9 @@ describe('InvestmentTransactionForm', () => {
         />,
       );
 
-      await waitFor(() => {
-        expect(screen.getByLabelText('Security')).toBeInTheDocument();
-      });
-
-      fireEvent.change(screen.getByLabelText('Security'), {
-        target: { value: 'sec-usd' },
-      });
+      // The select draws before the securities load; choosing 'sec-usd'
+      // before its option exists silently keeps the empty value.
+      await chooseSecurity('sec-usd');
 
       await waitFor(() => {
         expect(screen.getByLabelText(/Quantity \(Shares\)/)).toBeInTheDocument();
@@ -1634,11 +1953,7 @@ describe('InvestmentTransactionForm', () => {
       await waitFor(() => {
         expect(screen.getByLabelText('Security')).toBeInTheDocument();
       });
-      await act(async () => {
-        fireEvent.change(screen.getByLabelText('Security'), {
-          target: { value: 'sec-1' },
-        });
-      });
+      await chooseSecurity('sec-1');
 
       await act(async () => {
         fireEvent.click(screen.getByText('Create Transaction'));
@@ -1725,7 +2040,7 @@ describe('InvestmentTransactionForm', () => {
       await selectSplitAction();
       await waitFor(() => {
         expect(
-          screen.getByText(/New price per share, after split/i),
+          screen.getByText(/New Price per Share After Split/i),
         ).toBeInTheDocument();
       });
     });
@@ -1754,11 +2069,7 @@ describe('InvestmentTransactionForm', () => {
       await waitFor(() => {
         expect(screen.getByLabelText('Security')).toBeInTheDocument();
       });
-      await act(async () => {
-        fireEvent.change(screen.getByLabelText('Security'), {
-          target: { value: 'sec-1' },
-        });
-      });
+      await chooseSecurity('sec-1');
 
       const newShares = screen.getByLabelText('New shares') as HTMLInputElement;
       const oldShares = screen.getByLabelText('Old shares') as HTMLInputElement;
@@ -1795,11 +2106,7 @@ describe('InvestmentTransactionForm', () => {
       await waitFor(() => {
         expect(screen.getByLabelText('Security')).toBeInTheDocument();
       });
-      await act(async () => {
-        fireEvent.change(screen.getByLabelText('Security'), {
-          target: { value: 'sec-1' },
-        });
-      });
+      await chooseSecurity('sec-1');
 
       const newShares = screen.getByLabelText('New shares') as HTMLInputElement;
       const oldShares = screen.getByLabelText('Old shares') as HTMLInputElement;
@@ -1847,6 +2154,7 @@ describe('InvestmentTransactionForm', () => {
         description: '',
       } as any;
 
+      realNumberFormat.on = true;
       try {
         await act(async () => {
           render(
@@ -1877,8 +2185,8 @@ describe('InvestmentTransactionForm', () => {
         );
 
         // 100 shares @ $150 -> 200 shares @ $75 after a 2-for-1 split.
-        expect(screen.getByText(/100\.0000/)).toBeInTheDocument();
-        expect(screen.getByText(/200\.0000/)).toBeInTheDocument();
+        expect(screen.getByText('100')).toBeInTheDocument();
+        expect(screen.getByText('200')).toBeInTheDocument();
         expect(screen.getByText(/75\.0000/)).toBeInTheDocument();
 
         // The unhelpful replay-auto sentence must be gone.
@@ -1891,6 +2199,59 @@ describe('InvestmentTransactionForm', () => {
         expect(screen.queryByText(/as of 2026-01-15/)).not.toBeInTheDocument();
         expect(screen.getByText(/Before \(as of/i)).toBeInTheDocument();
       } finally {
+        asOfMock.mockResolvedValue({ quantity: 0, averageCost: 0 });
+      }
+    });
+
+    it('writes the holding preview in the reader number locale', async () => {
+      const asOfMock = vi.mocked(investmentsApi.getHoldingAt);
+      asOfMock.mockImplementation(() =>
+        Promise.resolve({ quantity: 100.25, averageCost: 150.5 }),
+      );
+      const splitTx = {
+        id: 'tx-split',
+        accountId: 'a1',
+        action: 'SPLIT' as const,
+        transactionDate: '2026-01-15',
+        securityId: 'sec-1',
+        security: {
+          id: 'sec-1',
+          symbol: 'AAPL',
+          name: 'Apple Inc.',
+          securityType: 'STOCK',
+          currencyCode: 'USD',
+        } as any,
+        quantity: 2,
+        price: 0,
+        commission: 0,
+        totalAmount: 0,
+        description: '',
+      } as any;
+
+      realNumberFormat.on = true;
+      usePreferencesStore.setState({
+        preferences: { numberFormat: 'pl-PL', language: 'en' } as any,
+      });
+      try {
+        await act(async () => {
+          render(
+            <InvestmentTransactionForm accounts={accounts} transaction={splitTx} />,
+          );
+        });
+        await waitFor(() => {
+          expect(screen.getByText(/Holding preview/i)).toBeInTheDocument();
+        });
+
+        // 100.25 shares @ 150.50 -> 200.5 shares @ 75.25 after a 2-for-1 split.
+        expect(screen.getByText('100,25')).toBeInTheDocument();
+        expect(screen.getByText('200,5')).toBeInTheDocument();
+        expect(screen.getByText(/75,2500/)).toBeInTheDocument();
+        expect(screen.queryByText(/75\.2500/)).not.toBeInTheDocument();
+        // The currency is formatted once: no hand-written symbol beside it.
+        expect(screen.queryByText(/\$.*75,2500/)).not.toBeInTheDocument();
+      } finally {
+        cleanup();
+        usePreferencesStore.setState({ preferences: null });
         asOfMock.mockResolvedValue({ quantity: 0, averageCost: 0 });
       }
     });
@@ -1923,14 +2284,15 @@ describe('InvestmentTransactionForm', () => {
       <InvestmentTransactionForm accounts={accounts} transaction={editTransaction} />
     );
 
+    // Should include both the active security (AAPL) and the inactive one (OLD)
     await waitFor(() => {
-      const securitySelect = screen.getByLabelText('Security');
-      const options = securitySelect.querySelectorAll('option');
-      const optionTexts = Array.from(options).map(o => o.textContent);
-      // Should include both the active security (AAPL) and the inactive one (OLD)
-      expect(optionTexts).toContain('AAPL - Apple Inc. (USD)');
-      expect(optionTexts).toContain('OLD - Old Corp (CAD)');
+      expect(screen.getByLabelText('Security')).toHaveValue('OLD - Old Corp (CAD)');
     });
+    await act(async () => {
+      fireEvent.click(screen.getByLabelText('Security'));
+    });
+    expect(screen.getByText('AAPL - Apple Inc. (USD)')).toBeInTheDocument();
+    expect(screen.getAllByText('OLD - Old Corp (CAD)').length).toBeGreaterThan(0);
   });
 
   describe('status field', () => {
@@ -2017,11 +2379,7 @@ describe('InvestmentTransactionForm', () => {
       await waitFor(() => {
         expect(screen.getByLabelText('Security')).toBeInTheDocument();
       });
-      await act(async () => {
-        fireEvent.change(screen.getByLabelText('Security'), {
-          target: { value: 'sec-1' },
-        });
-      });
+      await chooseSecurity('sec-1');
       await act(async () => {
         fireEvent.change(screen.getByLabelText('Status'), {
           target: { value: 'CLEARED' },
@@ -2052,11 +2410,7 @@ describe('InvestmentTransactionForm', () => {
       await waitFor(() => {
         expect(screen.getByLabelText('Security')).toBeInTheDocument();
       });
-      await act(async () => {
-        fireEvent.change(screen.getByLabelText('Security'), {
-          target: { value: 'sec-1' },
-        });
-      });
+      await chooseSecurity('sec-1');
       await act(async () => {
         fireEvent.click(screen.getByText('Create Transaction'));
       });
@@ -2096,6 +2450,8 @@ describe('InvestmentTransactionForm - extra coverage', () => {
     vi.clearAllMocks();
     getMarketRateMock.mockReset();
     getMarketRateMock.mockReturnValue(null);
+    getRateForDateMock.mockReset();
+    getRateForDateMock.mockImplementation(delegateToMarketRate);
     vi.mocked(investmentsApi.getHoldings).mockResolvedValue(sourceHoldings);
     vi.mocked(investmentsApi.getSecurities).mockResolvedValue([
       { id: 'sec-1', symbol: 'AAPL', name: 'Apple Inc.', securityType: 'STOCK', currencyCode: 'USD' } as any,
@@ -2115,9 +2471,7 @@ describe('InvestmentTransactionForm - extra coverage', () => {
     await act(async () => {
       fireEvent.change(screen.getByLabelText('To Account'), { target: { value: 'b1' } });
     });
-    await act(async () => {
-      fireEvent.change(screen.getByLabelText('Security'), { target: { value: 'sec-1' } });
-    });
+    await chooseSecurity('sec-1');
     await act(async () => {
       fireEvent.click(screen.getByText('Transfer Securities'));
     });
@@ -2139,9 +2493,7 @@ describe('InvestmentTransactionForm - extra coverage', () => {
     await act(async () => {
       fireEvent.change(screen.getByLabelText('To Account'), { target: { value: 'b1' } });
     });
-    await act(async () => {
-      fireEvent.change(screen.getByLabelText('Security'), { target: { value: 'sec-1' } });
-    });
+    await chooseSecurity('sec-1');
     await act(async () => {
       fireEvent.change(screen.getByLabelText('Quantity (Shares)'), { target: { value: '999' } });
     });
@@ -2162,9 +2514,7 @@ describe('InvestmentTransactionForm - extra coverage', () => {
     await act(async () => {
       fireEvent.change(screen.getByLabelText('Transaction Type'), { target: { value: 'SPLIT' } });
     });
-    await act(async () => {
-      fireEvent.change(screen.getByLabelText('Security'), { target: { value: 'sec-1' } });
-    });
+    await chooseSecurity('sec-1');
     await act(async () => {
       fireEvent.click(screen.getByText('Create Transaction'));
     });
@@ -2186,7 +2536,7 @@ describe('InvestmentTransactionForm - extra coverage', () => {
     });
     await waitFor(() => expect(screen.getByText(/Holding preview/i)).toBeInTheDocument());
     // 100 @ $50 -> 200 @ $25 after a 2-for-1 split.
-    expect(screen.getByText(/200\.0000/)).toBeInTheDocument();
+    expect(screen.getByText('200')).toBeInTheDocument();
   });
 
   it('submits an edited transfer leg via the source (OUT) leg', async () => {
@@ -2209,9 +2559,7 @@ describe('InvestmentTransactionForm - extra coverage', () => {
     await waitFor(() => expect(screen.getByLabelText('To Account')).toHaveValue('b1'));
     // Re-assert the source/security/quantity explicitly so the submit payload
     // is deterministic regardless of async resync timing.
-    await act(async () => {
-      fireEvent.change(screen.getByLabelText('Security'), { target: { value: 'sec-1' } });
-    });
+    await chooseSecurity('sec-1');
     await act(async () => {
       fireEvent.change(screen.getByLabelText('Quantity (Shares)'), { target: { value: '5' } });
     });
@@ -2241,9 +2589,7 @@ describe('InvestmentTransactionForm - extra coverage', () => {
     await act(async () => {
       fireEvent.change(screen.getByLabelText('Brokerage Account'), { target: { value: 'a-cad' } });
     });
-    await act(async () => {
-      fireEvent.change(screen.getByLabelText('Security'), { target: { value: 'sec-usd' } });
-    });
+    await chooseSecurity('sec-usd');
     // The conversion section appears once the USD security is selected.
     await waitFor(() => expect(screen.getByLabelText(/Exchange rate/i)).toBeInTheDocument());
     await act(async () => {
@@ -2294,11 +2640,7 @@ describe('InvestmentTransactionForm - extra coverage', () => {
       await waitFor(() => {
         expect(screen.getByLabelText('Security')).toBeInTheDocument();
       });
-      await act(async () => {
-        fireEvent.change(screen.getByLabelText('Security'), {
-          target: { value: 'sec-1' },
-        });
-      });
+      await chooseSecurity('sec-1');
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: buttonName }));
       });
@@ -2388,6 +2730,31 @@ describe('InvestmentTransactionForm - extra coverage', () => {
       expect(screen.getByLabelText('Security')).toHaveValue('');
     });
 
+    it('keeps the transaction type just saved when Create & New restarts the form', async () => {
+      render(
+        <InvestmentTransactionForm accounts={accounts} onCreateAndNew={vi.fn()} />,
+      );
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: CHEVRON })).toBeInTheDocument();
+      });
+      await chooseCreateAndNew();
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Transaction Type'), { target: { value: 'SELL' } });
+      });
+      await submitBuy(/^Create Transaction & New$/);
+
+      await waitFor(() => {
+        expect(investmentsApi.createTransaction).toHaveBeenCalledTimes(1);
+      });
+      expect(vi.mocked(investmentsApi.createTransaction).mock.calls[0][0]).toMatchObject({ action: 'SELL' });
+      // The restarted form is a fresh SELL, not the BUY a new window opens as.
+      await waitFor(() => {
+        expect(screen.getByLabelText('Transaction Type')).toHaveValue('SELL');
+      });
+      expect(screen.getByLabelText('Funds To')).toBeInTheDocument();
+      expect(screen.getByLabelText('Security')).toHaveValue('');
+    });
+
     it('remembers the choice under the investment key', async () => {
       render(
         <InvestmentTransactionForm accounts={accounts} onCreateAndNew={vi.fn()} />,
@@ -2440,6 +2807,251 @@ describe('InvestmentTransactionForm - extra coverage', () => {
           screen.getByRole('button', { name: 'Transfer Securities & New' }),
         ).toBeInTheDocument();
       });
+    });
+  });
+  describe('total and price', () => {
+    /**
+     * Invariant: the executed total is the fact; the per-share price is derived
+     * from it (INV-TRADE-001).
+     * Canonical adversarial input: a sale of 141 shares for 820.91, which is
+     * not any two-decimal price times 141.
+     * Minimal mutation: make the Total a read-only display again.
+     * Test that fails under it: this one -- the payload carries 820.62 (or no
+     * total at all) and a price of 5.82.
+     */
+    it('derives the price from a typed total, and sends the total as entered', async () => {
+      render(<InvestmentTransactionForm accounts={accounts} />);
+      await waitFor(() => {
+        expect(screen.getByLabelText('Transaction Type')).toBeInTheDocument();
+      });
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Transaction Type'), {
+          target: { value: 'SELL' },
+        });
+      });
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Quantity (Shares)'), {
+          target: { value: '141' },
+        });
+      });
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText(/Price per Share/), {
+          target: { value: '5.82' },
+        });
+      });
+      // What the statement says the sale came to.
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText(/Total Amount/), {
+          target: { value: '820.91' },
+        });
+      });
+
+      const priceInput = screen.getByLabelText(/Price per Share/) as HTMLInputElement;
+      expect(Number(priceInput.value)).toBeCloseTo(5.822057, 6);
+
+      await act(async () => {
+        fireEvent.click(screen.getByText('Create Transaction'));
+      });
+      await waitFor(() => {
+        expect(investmentsApi.createTransaction).toHaveBeenCalled();
+      });
+      const payload = vi.mocked(investmentsApi.createTransaction).mock
+        .calls[0][0] as { totalAmount?: number; price?: number };
+      expect(payload.totalAmount).toBeCloseTo(820.91, 4);
+      expect(payload.price).toBeCloseTo(5.8220567376, 10);
+    });
+
+    it('still derives the total from the price when the price is what changed', async () => {
+      render(<InvestmentTransactionForm accounts={accounts} />);
+      await waitFor(() => {
+        expect(screen.getByLabelText('Transaction Type')).toBeInTheDocument();
+      });
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Quantity (Shares)'), {
+          target: { value: '8' },
+        });
+      });
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText(/Price per Share/), {
+          target: { value: '5.831963' },
+        });
+      });
+
+      const totalInput = screen.getByLabelText(/Total Amount/) as HTMLInputElement;
+      expect(Number(totalInput.value)).toBeCloseTo(46.6557, 4);
+    });
+  });
+
+  describe('Interest on a bond (issue #2112)', () => {
+    const securitiesWithBond = [
+      { id: 'sec-1', symbol: 'AAPL', name: 'Apple Inc.', securityType: 'STOCK', currencyCode: 'USD' },
+      { id: 'sec-bond', symbol: 'BND1', name: 'Example Bond 2030', securityType: 'BOND', currencyCode: 'CAD' },
+    ] as any[];
+
+    async function openInterest() {
+      vi.mocked(investmentsApi.getSecurities).mockResolvedValue(securitiesWithBond);
+      render(<InvestmentTransactionForm accounts={accounts} />);
+      await waitFor(() => {
+        expect(screen.getByText('Brokerage Account')).toBeInTheDocument();
+      });
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Brokerage Account'), { target: { value: 'a1' } });
+      });
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Transaction Type'), { target: { value: 'INTEREST' } });
+      });
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText(/Amount/), { target: { value: '12.5' } });
+      });
+    }
+
+    it('offers only bonds for Interest', async () => {
+      await openInterest();
+      const input = await screen.findByLabelText('Security');
+      await act(async () => {
+        fireEvent.click(input);
+      });
+      expect(await screen.findByText(/^BND1 - /)).toBeInTheDocument();
+      expect(screen.queryByText(/^AAPL - /)).not.toBeInTheDocument();
+    });
+
+    it('sends the bond with the interest', async () => {
+      await openInterest();
+      await chooseComboboxOption('Security', 'BND1 - ');
+      await act(async () => {
+        fireEvent.click(screen.getByText('Create Transaction'));
+      });
+      await waitFor(() => {
+        expect(investmentsApi.createTransaction).toHaveBeenCalled();
+      });
+      const payload = vi.mocked(investmentsApi.createTransaction).mock.calls[0][0] as any;
+      expect(payload.action).toBe('INTEREST');
+      expect(payload.securityId).toBe('sec-bond');
+    });
+
+    it('keeps interest without a security at account level', async () => {
+      await openInterest();
+      await act(async () => {
+        fireEvent.click(screen.getByText('Create Transaction'));
+      });
+      await waitFor(() => {
+        expect(investmentsApi.createTransaction).toHaveBeenCalled();
+      });
+      const payload = vi.mocked(investmentsApi.createTransaction).mock.calls[0][0] as any;
+      expect(payload.action).toBe('INTEREST');
+      expect(payload.securityId).toBeUndefined();
+    });
+
+    it('drops a stock picked under another action when switched to Interest', async () => {
+      vi.mocked(investmentsApi.getSecurities).mockResolvedValue(securitiesWithBond);
+      render(<InvestmentTransactionForm accounts={accounts} />);
+      await waitFor(() => {
+        expect(screen.getByText('Brokerage Account')).toBeInTheDocument();
+      });
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Brokerage Account'), { target: { value: 'a1' } });
+      });
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Transaction Type'), { target: { value: 'DIVIDEND' } });
+      });
+      await chooseComboboxOption('Security', 'AAPL - ');
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Transaction Type'), { target: { value: 'INTEREST' } });
+      });
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText(/Amount/), { target: { value: '5' } });
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByText('Create Transaction'));
+      });
+      await waitFor(() => {
+        expect(investmentsApi.createTransaction).toHaveBeenCalled();
+      });
+      const payload = vi.mocked(investmentsApi.createTransaction).mock.calls[0][0] as any;
+      expect(payload.action).toBe('INTEREST');
+      expect(payload.securityId).toBeUndefined();
+    });
+
+    it('keeps the bond when an existing interest row is edited', async () => {
+      vi.mocked(investmentsApi.getSecurities).mockResolvedValue(securitiesWithBond);
+      const transaction = {
+        id: 't9', accountId: 'a1', action: 'INTEREST' as const, transactionDate: '2024-06-15',
+        quantity: null, price: null, commission: 0, totalAmount: 30, description: 'Coupon',
+        securityId: 'sec-bond',
+      } as any;
+      render(<InvestmentTransactionForm accounts={accounts} transaction={transaction} />);
+      await waitFor(() => {
+        expect(screen.getByText('Update Transaction')).toBeInTheDocument();
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByText('Update Transaction'));
+      });
+      await waitFor(() => {
+        expect(investmentsApi.updateTransaction).toHaveBeenCalled();
+      });
+      const payload = vi.mocked(investmentsApi.updateTransaction).mock.calls[0][1] as any;
+      expect(payload.securityId).toBe('sec-bond');
+    });
+
+    // An omitted securityId means "unchanged" to the server, so clearing the
+    // field has to be sent as null or the bond stays on the row.
+    it('sends null when the bond is cleared from an existing interest row', async () => {
+      vi.mocked(investmentsApi.getSecurities).mockResolvedValue(securitiesWithBond);
+      const transaction = {
+        id: 't9', accountId: 'a1', action: 'INTEREST' as const, transactionDate: '2024-06-15',
+        quantity: null, price: null, commission: 0, totalAmount: 30, description: 'Coupon',
+        securityId: 'sec-bond',
+      } as any;
+      render(<InvestmentTransactionForm accounts={accounts} transaction={transaction} />);
+      await waitFor(() => {
+        expect(screen.getByText('Update Transaction')).toBeInTheDocument();
+      });
+      const input = await screen.findByLabelText('Security');
+      await waitFor(() => {
+        expect((input as HTMLInputElement).value).toMatch(/^BND1 - /);
+      });
+      // The field's clear button, as a person empties it.
+      const clear = input.parentElement!.querySelector('button[type="button"]')!;
+      await act(async () => {
+        fireEvent.mouseDown(clear);
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByText('Update Transaction'));
+      });
+      await waitFor(() => {
+        expect(investmentsApi.updateTransaction).toHaveBeenCalled();
+      });
+      const payload = vi.mocked(investmentsApi.updateTransaction).mock.calls[0][1] as any;
+      expect(payload.action).toBe('INTEREST');
+      expect(payload.securityId).toBeNull();
+    });
+
+    it('sends null when an edited dividend on a stock becomes interest', async () => {
+      vi.mocked(investmentsApi.getSecurities).mockResolvedValue(securitiesWithBond);
+      const transaction = {
+        id: 't10', accountId: 'a1', action: 'DIVIDEND' as const, transactionDate: '2024-06-15',
+        quantity: null, price: null, commission: 0, totalAmount: 8, description: 'Dividend',
+        securityId: 'sec-1',
+      } as any;
+      render(<InvestmentTransactionForm accounts={accounts} transaction={transaction} />);
+      await waitFor(() => {
+        expect(screen.getByText('Update Transaction')).toBeInTheDocument();
+      });
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Transaction Type'), { target: { value: 'INTEREST' } });
+      });
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText(/Amount/), { target: { value: '8' } });
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByText('Update Transaction'));
+      });
+      await waitFor(() => {
+        expect(investmentsApi.updateTransaction).toHaveBeenCalled();
+      });
+      const payload = vi.mocked(investmentsApi.updateTransaction).mock.calls[0][1] as any;
+      expect(payload.action).toBe('INTEREST');
+      expect(payload.securityId).toBeNull();
     });
   });
 });

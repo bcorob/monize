@@ -1,0 +1,120 @@
+{
+  "page": {
+    "title": "AIレビュー受信箱",
+    "subtitle": "ルールがAIにレビューを依頼した取引、アシスタントに下書きが依頼されたプロフィール、アシスタントが承認用に提案した変更です。"
+  },
+  "filter": {
+    "label": "ステータスで絞り込み",
+    "open": "未完了",
+    "pending": "保留中",
+    "claimed": "レビュー中",
+    "proposed": "提案済み",
+    "applied": "適用済み",
+    "rejected": "却下",
+    "expired": "期限切れ"
+  },
+  "kindFilter": {
+    "label": "種類で絞り込み",
+    "all": "すべて",
+    "email_receipt": "メールレシート",
+    "transaction_review": "ルール",
+    "option": "{label} ({count})"
+  },
+  "status": {
+    "pending": "保留中",
+    "claimed": "レビュー中",
+    "proposed": "提案済み",
+    "applied": "適用済み",
+    "rejected": "却下",
+    "expired": "期限切れ"
+  },
+  "columns": {
+    "date": "日付",
+    "request": "依頼",
+    "amount": "金額",
+    "status": "ステータス"
+  },
+  "row": {
+    "noPayee": "支払先なし",
+    "transactionMissing": "この取引は既に存在しません",
+    "rule": "ルール: {name}",
+    "manualRequest": "手動で依頼",
+    "trade": "{action, select, BUY {{symbol} × {quantity} の購入} SELL {{symbol} × {quantity} の売却} DIVIDEND {{symbol} の配当} REINVEST {{symbol} × {quantity} への配当再投資} other {{symbol} の取引}}",
+    "receiptInstruction": {
+      "automatic": "添付の注文メールからこの取引を補完します。品目ごとにカテゴリを付けて分割するか、説明を設定します。",
+      "chat": "添付の注文メールの認識を依頼しました。この取引を商品ごとにカテゴリを付けて分割するか、説明を設定します。",
+      "categorize": "添付の注文メールのうち、どのルールでも分類されなかった各品目にカテゴリを割り当て、この取引の分割を提案するか説明を設定します。",
+      "parsed": "保存済みのパーサーが注文メールを読み取り、この取引にこれらのカテゴリ行と説明を提案しています。",
+      "trade": "保存済みプロフィールが読み取った取引確認メールが、この投資取引を提案しています。承認する前に、口座、銘柄、数量、合計金額を証券会社の記録と照合してください。",
+      "tradeChat": "添付の取引確認の認識を依頼されました:報告されている投資取引 (購入、売却、現金配当、または配当再投資) を提案してください。"
+    },
+    "emailReceipt": "メールレシート: {subject} ({sender})",
+    "emailReceiptForwarded": "メールレシート: {subject} ({sender})、転送した人 {forwarder}",
+    "emailReceiptMissing": "メールレシート (メールは削除されました)",
+    "parserDraft": "{count, plural, one {# 通のメール} other {# 通のメール}}からのプロフィールの下書き ({domain})",
+    "viewEmailReceipts": "メールレシートを表示",
+    "agentNote": "アシスタントからのメモ: {reason}",
+    "dates": "作成日 {created}、期限 {expires}",
+    "viewTransaction": "取引を表示",
+    "waitingForAgent": "AIエージェントを待っています。<link>設定でAIプロバイダーを接続する</link>か、MCPクライアントに引き受けさせてください。",
+    "parserDraftReady": "プロフィールの下書きができました。<link>プロフィールの設定でテストして承認する</link>。",
+    "tradePending": "メールの取引（未読み取り）",
+    "tradeEmail": "取引確認メール",
+    "parserDraftIds": "プロフィール下書きのID: {ids}"
+  },
+  "actions": {
+    "dismiss": "却下する"
+  },
+  "proposal": {
+    "errorTitle": "この提案はもう適用できません"
+  },
+  "bulk": {
+    "selectRow": "{name} を選択",
+    "selectAll": "表示中の承認または送信できるリクエストをすべて選択",
+    "approveSelected": "選択した項目を承認 ({count})",
+    "approveAllShown": "表示中の項目をすべて承認 ({count})",
+    "summary": "{approved, plural, one {# 件の提案} other {# 件の提案}}を適用、{failed, plural, one {# 件は未適用} other {# 件は未適用}}です。",
+    "closeSummary": "閉じる",
+    "failure": "{name}: {reason}",
+    "noReason": "理由は示されませんでした",
+    "unknownRequest": "リクエスト",
+    "failed": "提案を適用できませんでした",
+    "dialog": {
+      "title": "{count, plural, one {# 件の提案を適用しますか?} other {# 件の提案を適用しますか?}}",
+      "message": "各提案は、現在の取引の状態と照らして確認され、個別に適用されます。合わなくなった提案はスキップして報告し、残りは引き続き適用されます。承認する前に提案を確認してください。",
+      "confirm": "{count, plural, one {# 件の提案を適用} other {# 件の提案を適用}}"
+    }
+  },
+  "sendToAssistant": {
+    "button": "保留中のリクエスト {count, plural, other {# 件}}を AI アシスタントに送る",
+    "buttonSelected": "選択したリクエスト {count, plural, other {# 件}}を AI アシスタントに送る",
+    "prompt": "ai_review_requests ツールで保留中の AI レビューリクエストを処理してください。一覧を取得し、各リクエストを取得して指示に従い、提案を送信してください。プロファイル下書きのリクエストは、代わりに email_receipt_parsers ツールでプロファイルを作成してください。AI レビューの受信箱で私が提案を承認するまで何も変更されません。",
+    "promptSelected": "ai_review_requests ツールで {count, plural, other {次の # 件の AI レビューリクエスト}}を処理してください: {ids}。各リクエストを ID で取得し、指示に従って提案を送信してください。プロファイル下書きのリクエストは、代わりに email_receipt_parsers ツールでプロファイルを作成してください。その他のリクエストには触れないでください。AI レビューの受信箱で私が提案を承認するまで何も変更されません。",
+    "opened": "準備したメッセージでチャットを開きました。内容を確認して送信を押してください。",
+    "unavailable": "AI アシスタントは現在応答できません。設定で AI プロバイダーを接続するか、MCP クライアントを接続してください。リクエストはここで待機し続けます。"
+  },
+  "dismissDialog": {
+    "title": "この依頼を却下しますか?",
+    "message": "この依頼への対応は今後依頼されません。依頼の対象は変更されません。",
+    "confirm": "依頼を却下"
+  },
+  "loading": "レビュー依頼を読み込み中...",
+  "error": {
+    "title": "レビュー依頼を読み込めませんでした",
+    "body": "一覧を読み込めなかったため、空ではない可能性があります。接続を確認してもう一度お試しください。",
+    "retry": "再試行"
+  },
+  "empty": {
+    "title": "レビュー依頼はありません",
+    "body": "「AIレビューを依頼」アクションを持つルールが取引に一致すると、ここに依頼が表示されます。AIアシスタント、またはリレーエージェントなどのMCPクライアントがキューを処理し、承認用の変更を提案します。",
+    "filteredTitle": "このステータスの依頼はありません",
+    "filteredBody": "他の依頼を見るには別のステータスを選んでください。"
+  },
+  "toasts": {
+    "approved": "提案を適用しました",
+    "dismissed": "依頼を却下しました",
+    "dismissFailed": "依頼を却下できませんでした",
+    "approveFailed": "提案を適用できませんでした",
+    "changed": "この依頼はその間に変更されました。一覧を再読み込みしました。"
+  }
+}

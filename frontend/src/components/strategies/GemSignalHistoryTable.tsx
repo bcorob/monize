@@ -8,6 +8,7 @@ import {
   ChevronRightIcon,
 } from "@heroicons/react/24/outline";
 import { InfoTooltip } from "@/components/ui/InfoTooltip";
+import { Th } from "@/components/ui/Table";
 import { useDateFormat } from "@/hooks/useDateFormat";
 import { useNumberFormat } from "@/hooks/useNumberFormat";
 import { GemAssetRole, GemHistoryEntry } from "@/types/gem-strategy";
@@ -176,24 +177,25 @@ export function GemSignalHistoryTable({
                 {t("gem.history.caption", { months: lookbackMonths })}
               </caption>
               <thead>
-                <tr className="text-left text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                  <th scope="col" className="px-4 py-2 font-medium">
+                <tr>
+                  <Th scope="col" className="px-4 py-2">
                     {t("gem.history.colEvaluatedOn")}
-                  </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
+                  </Th>
+                  <Th scope="col" className="px-3 py-2">
                     {t("gem.history.colEffectiveFrom")}
-                  </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
+                  </Th>
+                  <Th scope="col" className="px-3 py-2">
                     {t("gem.history.colWinner")}
-                  </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
+                  </Th>
+                  <Th scope="col" className="px-3 py-2">
                     {t("gem.history.colSignal")}
-                  </th>
+                  </Th>
                   {GEM_ROLE_ORDER.map((role) => (
-                    <th
+                    <Th
                       key={role}
                       scope="col"
-                      className="px-3 py-2 text-right font-medium"
+                      align="right"
+                      className="px-3 py-2"
                     >
                       <span className="inline-flex items-center justify-end">
                         {columnLabel(role)}
@@ -208,14 +210,14 @@ export function GemSignalHistoryTable({
                           align="right"
                         />
                       </span>
-                    </th>
+                    </Th>
                   ))}
-                  <th scope="col" className="px-3 py-2 font-medium">
+                  <Th scope="col" className="px-3 py-2">
                     {t("gem.history.colChange")}
-                  </th>
-                  <th scope="col" className="px-3 py-2 font-medium">
+                  </Th>
+                  <Th scope="col" className="px-3 py-2">
                     {t("gem.history.colExecuted")}
-                  </th>
+                  </Th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-gray-700/60">

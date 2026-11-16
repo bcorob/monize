@@ -76,7 +76,10 @@
     "collapseAria": "계정 정보 숨기기",
     "showAccountNumber": "계정 번호 표시",
     "hideAccountNumber": "계정 번호 숨기기",
-    "show": "계정 정보 표시"
+    "show": "계정 정보 표시",
+    "nextInstallment": "다음 할부금",
+    "finalPayment": "최종 납입금",
+    "amountDueOn": "{amount}, 기일 {date}"
   },
   "page": {
     "title": "거래",
@@ -121,13 +124,19 @@
       "balance": "잔액",
       "attachments": "첨부 파일",
       "status": "상태",
+      "statusHelp": "미조정, 정리됨, 조정됨은 은행 명세서와 일치시키는 단계입니다. 무효는 거래를 취소하지만 기록은 유지되며, 더 이상 계정 잔액에 영향을 주지 않습니다.",
       "actions": "작업"
+    },
+    "sort": {
+      "balanceHiddenHint": "잔액을 보려면 날짜순으로 정렬하세요",
+      "stripLabel": "정렬 기준"
     },
     "dateDisplay": {
       "toggleLabel": "연도 숨기기",
       "toggleTitle": "날짜에서 연도를 빼서 수취인 이름이 더 많이 보이도록 합니다"
     },
     "attachmentsCount": "{count, plural, other {# 개의 첨부 파일}}",
+    "warrantiesCount": "{count, plural, other {보증 #건}}",
     "today": "오늘",
     "export": {
       "button": "내보내기",
@@ -165,7 +174,6 @@
     },
     "row": {
       "viewPayeeTitle": "{name} 상세 보기",
-      "ref": "참조: {number}",
       "investmentLabel": "투자",
       "linkedInvestmentTitle": "투자에서 보기",
       "filterByDate": "날짜 \"{date}\"로 필터링",
@@ -212,13 +220,13 @@
       "title": "필터",
       "clear": "초기화",
       "hide": "숨기기",
-      "show": "표시"
+      "show": "필터 표시"
     },
     "accounts": {
-      "label": "계정 표시:",
-      "all": "전체",
-      "active": "활성",
-      "closed": "마감됨"
+      "label": "계정 표시",
+      "allCount": "전체 ({count})",
+      "activeCount": "활성 ({count})",
+      "closedCount": "마감됨 ({count})"
     },
     "fields": {
       "accounts": "계정",
@@ -251,7 +259,7 @@
       "statuses": "모든 상태",
       "amountMin": "최소",
       "amountMax": "최대",
-      "search": "수취인, 카테고리, 금액, 태그, 설명, 참조 번호 검색...",
+      "search": "검색하거나 #10 또는 payee:costco를 입력해 보세요",
       "tagKeyValue": "예: usa"
     },
     "tagKeyNone": "모두(키 필터 없음)",
@@ -312,7 +320,7 @@
     },
     "modal": {
       "title": "거래 일괄 업데이트",
-      "subtitle": "{count, plural, one {# 건의 선택된 거래} other {# 건의 선택된 거래}}를 업데이트합니다. 변경할 필드를 켜세요.",
+      "help": "변경할 필드를 켜세요.",
       "submitLabel": "{count, plural, one {# 건의 거래} other {# 건의 거래}} 업데이트",
       "payee": "수취인",
       "category": "카테고리",
@@ -360,8 +368,9 @@
       "fromAccount": "출금 계정",
       "toAccount": "입금 계정",
       "transferAmount": "이체 금액",
-      "transferAmountWithCurrency": "이체 금액 ({currency})",
-      "amountReceived": "수령 금액 ({currency})",
+      "amountReceivedLabel": "수령 금액",
+      "transferAmountInCurrency": "이체 금액 ({currency})",
+      "amountReceivedInCurrency": "수령 금액 ({currency})",
       "payeeOptional": "수취인 (선택 사항)",
       "categoryOptional": "카테고리(선택사항)"
     },
@@ -391,10 +400,16 @@
     "submitCreateAndNewDescription": "저장하고 같은 계좌와 날짜로 새로 입력합니다.",
     "submitOptions": "만든 후 동작 선택",
     "submitUpdate": "{mode} 업데이트",
+    "submitConvert": "{mode}(으)로 변환",
     "reconciledConfirm": {
       "title": "조정된 거래를 편집하시겠습니까?",
       "message": "이 거래는 조정되었습니다. 변경하면 완료된 조정에 영향을 줍니다. 그래도 변경 사항을 저장하시겠습니까?",
       "confirm": "변경 사항 저장"
+    },
+    "counterpartConfirm": {
+      "title": "이 이체를 변환할까요?",
+      "message": "이 이체의 상대편은 이미 청산 또는 조정되었습니다. 거래로 변환하면 해당 항목이 상대 계좌에서 제거되고 명세서와 대조된 잔액이 변경됩니다. 계속할까요?",
+      "confirm": "그래도 변환"
     },
     "modeLabel": {
       "transfer": "이체",
@@ -424,6 +439,8 @@
       "destinationRequired": "목적 계정을 선택해 주세요",
       "sameAccount": "출금 계정과 입금 계정은 달라야 합니다",
       "negativeTransfer": "이체 금액은 음수일 수 없습니다",
+      "convertedToTransfer": "이체로 변환됨",
+      "convertedToTransaction": "거래로 변환됨",
       "payeeCreated": "수취인 \"{name}\"이(가) 생성되었습니다",
       "payeeCreateFailed": "수취인 생성에 실패했습니다",
       "payeeReactivated": "수취인 \"{name}\"이(가) 다시 활성화되었습니다",
@@ -458,10 +475,20 @@
       },
       "feeCaption": "{percent}% 해외 거래 수수료({fee})가 포함됩니다."
     },
-    "jointSplitDisabled": "공유 계좌의 분할 거래는 소유자만 관리할 수 있습니다"
+    "jointSplitDisabled": "공유 계좌의 분할 거래는 소유자만 관리할 수 있습니다",
+    "warranties": {
+      "title": "보증",
+      "add": "보증 추가",
+      "expires": "{date} 만료",
+      "loading": "보증을 불러오는 중",
+      "loadError": "이 거래의 보증을 불러올 수 없습니다.",
+      "empty": "아직 보증이 없습니다"
+    },
+    "conversionLockedNote": "이 이체는 분할 거래 또는 다른 소유자의 계좌에 속하므로 여기서는 이체로만 유지할 수 있습니다. 분할에서 변경하거나 삭제한 뒤 원하는 항목을 새로 만드세요."
   },
   "splitEditor": {
     "header": "분할 세부 정보",
+    "headerTooltip": "각 행은 분류, 다른 계정으로의 이체, 또는 투자가 될 수 있습니다. 행의 합계는 거래 총액과 일치해야 합니다. 균등 배분과 비례 배분은 나머지 금액을 대신 배분해 줍니다.",
     "distributeProportionally": "비례 배분",
     "distributeProportionallyTitle": "각 분할의 금액에 비례하여 남은 금액을 배분합니다",
     "distributeEvenly": "균등 배분",
@@ -521,7 +548,7 @@
     "quantityPlaceholder": "수량",
     "pricePlaceholder": "가격",
     "commissionPlaceholder": "수수료",
-    "amountPlaceholder": "금액 ({currency})",
+    "amountOnlyPlaceholder": "금액",
     "ratePlaceholder": "1 {from}당 {to}",
     "ariaRate": "환율 (1 {from}당 {to})",
     "rateHint": "수량, 가격, 수수료는 {from} 기준입니다. 이 환율이 현금 영향액을 {to}(으)로 환산합니다.",
@@ -551,6 +578,7 @@
       "total": "합계",
       "transactions": "거래",
       "tooltip": "{count, plural, one {# 건의 거래} other {# 건의 거래}}",
+      "partialNote": "일부 금액은 환율이 없어 이 합계에 포함되지 않았습니다.",
       "quarterLabel": "{year}년 Q{quarter}",
       "quarterTick": "{year}년 Q{quarter}",
       "granularityLabel": "그룹화",
@@ -575,6 +603,11 @@
       "log": "로그",
       "autoTitle": "자동 ({scale})",
       "scaleTitle": "{label} 눈금"
+    },
+    "collapse": {
+      "hide": "차트 숨기기",
+      "show": "차트 표시",
+      "hidden": "차트 숨김"
     }
   },
   "toasts": {
@@ -597,5 +630,71 @@
     "title": "{key}별 지출",
     "other": "기타",
     "noData": "이 키로 분석할 태그된 지출이 없습니다."
+  },
+  "searchSyntax": {
+    "open": "검색 구문",
+    "title": "검색 구문",
+    "fields": "필드: payee, memo, cat, tag, account, ref, amount, date, status, is, has. 예시를 선택하면 검색창에 입력됩니다.",
+    "examples": {
+      "allWords": "모든 단어가 어딘가에 일치",
+      "phrase": "정확히 이 구문",
+      "exclude": "refund와 일치하는 항목 제외",
+      "fieldContains": "수취인에 costco 포함",
+      "fieldExact": "수취인이 정확히 Costco",
+      "reference": "수표 또는 참조 번호가 정확히 10",
+      "wildcard": "참조 번호가 10으로 시작",
+      "amountOver": "금액이 100 초과",
+      "amountRange": "금액 50~100",
+      "datePeriod": "2026년 3월의 모든 날",
+      "isSplit": "분할 거래",
+      "hasAttachment": "첨부 파일 있음",
+      "hasWarranty": "보증 있음"
+    }
+  },
+  "searchInterpretation": {
+    "label": "검색 조건:",
+    "negated": "{phrase} 아님",
+    "malformed": "{raw} (이해할 수 없어 텍스트로 검색함)",
+    "empty": "{raw} (비어 있어 무시함)",
+    "status": "상태가 {value}",
+    "any": "모든 항목에서 “{value}”",
+    "fields": {
+      "payee": "수취인",
+      "memo": "메모",
+      "cat": "카테고리",
+      "tag": "태그",
+      "account": "계좌",
+      "ref": "참조 번호",
+      "amount": "금액",
+      "date": "날짜",
+      "status": "상태",
+      "is": "유형",
+      "has": "포함"
+    },
+    "ops": {
+      "contains": "{field}에 “{value}” 포함",
+      "exact": "{field}이(가) “{value}”",
+      "glob": "{field}이(가) “{value}”와 일치",
+      "eq": "{field}이(가) {value}",
+      "gt": "{field} {value} 초과",
+      "gte": "{field} {value} 이상",
+      "lt": "{field} {value} 미만",
+      "lte": "{field} {value} 이하",
+      "between": "{field} {value}~{valueTo}"
+    },
+    "enum": {
+      "is": {
+        "transfer": "이체",
+        "split": "분할 거래",
+        "uncategorized": "미분류"
+      },
+      "has": {
+        "attachment": "첨부 파일 있음",
+        "warranty": "보증 있음",
+        "ref": "참조 번호 있음",
+        "memo": "메모 있음",
+        "tag": "태그 있음"
+      }
+    }
   }
 }

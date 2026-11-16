@@ -149,4 +149,24 @@ describe('Pagination', () => {
     render(<Pagination {...defaultProps} infoRight={<span>Extra info</span>} />);
     expect(screen.getByText('Extra info')).toBeInTheDocument();
   });
+
+  it('keeps the page stepper and the list buttons in one wrapping row', () => {
+    // They were a column that stacked below a fixed width, which put the list's
+    // buttons on a line of their own while there was still room for both. One
+    // wrapping row splits them only where the row genuinely does not fit.
+    render(<Pagination {...defaultProps} infoRight={<span>Extra info</span>} />);
+    const group = screen.getByText('Extra info').parentElement!;
+    expect(group.className).toContain('flex-wrap');
+    expect(group.className).not.toContain('flex-col');
+    expect(group).toContainElement(screen.getByTitle('Last page'));
+  });
+
+  it('puts infoRight before the page stepper', () => {
+    render(<Pagination {...defaultProps} infoRight={<span>Extra info</span>} />);
+
+    const extra = screen.getByText('Extra info');
+    const firstPage = screen.getByTitle('First page');
+
+    expect(extra.compareDocumentPosition(firstPage)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
 });

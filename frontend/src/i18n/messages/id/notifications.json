@@ -1,0 +1,287 @@
+{
+  "title": "Notifikasi",
+  "unread": "{count} belum dibaca",
+  "markAllRead": "Tandai semua sudah dibaca",
+  "loading": "Memuat notifikasi...",
+  "empty": "Tidak ada notifikasi",
+  "undo": "Batalkan",
+  "buttonTitle": "Notifikasi",
+  "buttonAriaLabel": "Notifikasi",
+  "dismissAriaLabel": "Tutup notifikasi",
+  "closeAriaLabel": "Tutup daftar notifikasi",
+  "emptyFiltered": "Tidak ada notifikasi yang cocok dengan filter saat ini",
+  "deleteAll": "Hapus semua",
+  "deleteAllConfirmTitle": "Hapus notifikasi",
+  "deleteAllConfirmMessageAll": "Hapus semua notifikasi? Tindakan ini tidak dapat dibatalkan.",
+  "deleteAllConfirmMessageFiltered": "Hapus setiap notifikasi yang cocok dengan filter saat ini, termasuk yang tidak ditampilkan? Tindakan ini tidak dapat dibatalkan.",
+  "deleted": "{count, plural, other {# notifikasi dihapus}}",
+  "deleteFailed": "Notifikasi tidak dapat dihapus",
+  "filter": {
+    "financial": "Keuangan",
+    "system": "Sistem"
+  },
+  "severity": {
+    "critical": "Kritis",
+    "warning": "Peringatan",
+    "success": "Kabar Baik",
+    "info": "Info"
+  },
+  "reminder": {
+    "remindAriaLabel": "Ingatkan saya tentang ini",
+    "stopAriaLabel": "Hentikan pengingat ini",
+    "stopped": "Pengingat dihentikan",
+    "stopFailed": "Pengingat tidak dapat dihentikan",
+    "created": "Pengingat diatur",
+    "createFailed": "Pengingat tidak dapat diatur",
+    "dialogTitle": "Ingatkan saya",
+    "dialogDescription": "Dapatkan notifikasi ini lagi nanti hingga Anda menindaklanjutinya.",
+    "modeLabel": "Frekuensi",
+    "modeRepeat": "Ulangi sampai saya hentikan",
+    "modeOnce": "Sekali lagi saja",
+    "intervalLabelRepeat": "Ingatkan saya setiap",
+    "intervalLabelOnce": "Ingatkan saya setelah",
+    "durationMinutes": "{minutes, plural, other {# menit}}",
+    "durationHours": "{hours, plural, other {# jam}}",
+    "cancel": "Batal",
+    "confirm": "Atur pengingat",
+    "pageTitle": "Pengingat aktif",
+    "empty": "Tidak ada pengingat aktif",
+    "loadFailed": "Pengingat tidak dapat dimuat",
+    "retry": "Coba lagi",
+    "nextFire": "Pengingat berikutnya: {date}",
+    "openTarget": "Buka halaman terkait",
+    "delegateUnavailable": "Kembali ke akun Anda sendiri untuk mengelola pengingat."
+  },
+  "billDue": {
+    "titleOverdue": "{payee} terlambat",
+    "titleToday": "{payee} jatuh tempo hari ini",
+    "titleTomorrow": "{payee} jatuh tempo besok",
+    "titleInDays": "{payee} jatuh tempo dalam {days} hari",
+    "amountDue": "{amount} jatuh tempo pada {date}",
+    "amountUnavailable": "Jumlah tidak tersedia (tidak ada kurs saat ini), jatuh tempo pada {date}"
+  },
+  "gemSignal": {
+    "riskTitle": "{strategy} beralih ke {state}",
+    "riskMessage": "Strategi GEM Anda \"{strategy}\" berubah dari {fromState} ke {toState}. Buka untuk meninjau rekomendasinya.",
+    "allocationTitle": "{strategy} mengubah targetnya",
+    "allocationMessage": "Strategi GEM Anda \"{strategy}\" kini menargetkan {target}. Buka untuk meninjau rekomendasinya.",
+    "riskOn": "risk-on",
+    "riskOff": "risk-off"
+  },
+  "bond": {
+    "maturitySoonTitle": "{series} jatuh tempo pada {date}",
+    "maturitySoonMessage": "{quantity} × {series} jatuh tempo pada {date}. {payout}",
+    "interestTitle": "{series}: pembayaran bunga pada {date}",
+    "interestMessage": "{quantity} × {series} membayar bunga {amount} pada {date}. Catat di halaman sekuritas jika belum ada di rekening Anda.",
+    "interestMessageUnknown": "{quantity} × {series} membayar bunga pada {date}. Jumlahnya belum diketahui: suku bunga yang menjadi acuannya belum dipublikasikan.",
+    "rateResetTitle": "{series}: periode bunga baru",
+    "rateResetMessage": "{series} memasuki periode {period} pada {date} dengan suku bunga {rate} per tahun.",
+    "unbookedTitle": "{series}: jatuh tempo, pelunasan belum dicatat",
+    "unbookedMessage": "{quantity} × {series} jatuh tempo pada {date} dan belum ada pelunasan yang dicatat. {payout} Catat pelunasan di halaman sekuritas.",
+    "payoutKnown": "Pembayarannya sebesar {payout}.",
+    "payoutUnknown": "Jumlah pembayaran belum diketahui: {reason}.",
+    "reason": {
+      "RATE_UNKNOWN": "suku bunga yang menjadi acuannya belum dipublikasikan",
+      "TERMS_INCOMPLETE": "ketentuan seri belum lengkap",
+      "PURCHASE_OUTSIDE_SALE_WINDOW": "tanggal pembelian berada di luar masa penjualan seri",
+      "PURCHASE_AFTER_MATURITY": "tanggal pembelian jatuh pada atau setelah jatuh tempo seri",
+      "other": "tidak dapat dihitung dari data yang tersimpan"
+    },
+    "benchmarkTitle": "{benchmark}: observasi baru {observation}",
+    "benchmarkIntro": "{publisher} memublikasikan {benchmark} untuk {observation}: {value}.",
+    "benchmarkSeries": "{series}: periode mulai {date} dengan suku bunga {rate} per tahun.",
+    "benchmarkSeriesProjected": "{series}: periode mulai {date} dengan suku bunga proyeksi {rate} per tahun.",
+    "benchmarkSeriesUnknown": "{series}: periode mulai {date}, suku bunga belum diketahui.",
+    "benchmarkMore": "Dan {more} lainnya.",
+    "missingTitle": "Angka obligasi belum diketahui",
+    "missingMessage": "Sebagian angka obligasi tidak dapat dihitung. {causes}",
+    "cause": {
+      "observation": "Observasi {observation} untuk {benchmark} ({publisher}) belum tersimpan: belum dipublikasikan, atau feed belum diambil sejak itu. Segarkan di halaman obligasi.",
+      "observationNoPublisher": "Observasi {observation} untuk {benchmark} belum tersimpan: belum dipublikasikan, atau feed belum diambil sejak itu. Segarkan di halaman obligasi.",
+      "terms": "Ketentuan {series} belum lengkap. Segarkan seri di halaman obligasi.",
+      "purchase": "Pembelian {series} pada {date} berada di luar masa penjualannya ({from} sampai {to}). Perbaiki tanggal pembelian.",
+      "purchaseAfterMaturity": "Pembelian {series} pada {date} jatuh pada atau setelah jatuh temponya ({maturity}). Perbaiki tanggal pembelian.",
+      "lots": "Lot tidak dapat diturunkan dari buku besar ({code}). Perbaiki buku besar.",
+      "lotsRow": "{action} tanggal {date}: lot tidak dapat diturunkan ({code}). Perbaiki transaksi.",
+      "lotsRowSeries": "{action} tanggal {date}: tidak ditempatkan pada seri ({code}). Pilih seri pada transaksi tersebut.",
+      "lotsRowRemoval": "{action} tanggal {date}: mengurangi lebih banyak daripada yang dimiliki rekening dari seri tersebut ({code}). Perbaiki transaksi."
+    },
+    "action": {
+      "BUY": "Pembelian",
+      "SELL": "Penjualan",
+      "REINVEST": "Reinvestasi",
+      "ADD_SHARES": "Penambahan unit",
+      "REMOVE_SHARES": "Pengurangan unit",
+      "SPLIT": "Split",
+      "TRANSFER_IN": "Transfer masuk",
+      "TRANSFER_OUT": "Transfer keluar",
+      "other": "Transaksi"
+    },
+    "benchmarks": {
+      "PL_CPI_GUS_YOY": "IHK, 12 bulan (GUS)",
+      "PL_NBP_REFERENCE": "Suku bunga acuan NBP",
+      "US_CPI_U_NSA": "CPI-U, semua item, tanpa penyesuaian musiman (BLS)",
+      "US_TBILL_13W_MMY": "Imbal hasil surat utang Treasury 13 minggu"
+    }
+  },
+  "portfolioMovement": {
+    "titleUp": "Investasi naik {percent}%",
+    "titleDown": "Investasi turun {percent}%",
+    "messageUp": "Investasi Anda naik {percent}% dari {from} sampai {to}, tidak termasuk setoran dan penarikan. Buka untuk meninjau.",
+    "messageDown": "Investasi Anda turun {percent}% dari {from} sampai {to}, tidak termasuk setoran dan penarikan. Buka untuk meninjau."
+  },
+  "balanceThreshold": {
+    "titleLow": "{account} di bawah ambang batas Anda",
+    "titleHigh": "{account} di atas ambang batas Anda",
+    "messageLow": "{account} turun menjadi {balance}, di bawah ambang batas {threshold} Anda.",
+    "messageHigh": "{account} naik menjadi {balance}, di atas ambang batas {threshold} Anda."
+  },
+  "system": {
+    "backupFailed": {
+      "title": "Pencadangan otomatis gagal",
+      "message": "Pencadangan otomatis untuk {user} gagal: {error}"
+    },
+    "backupPartial": {
+      "title": "Pencadangan otomatis tidak lengkap",
+      "messageAttachments": "Cadangan untuk {user} berhasil ditulis, tetapi {missing} dari {expected} lampiran tidak dapat disertakan dan {inconsistent} tidak cocok dengan metadatanya. Cadangan lengkap tetap dipertahankan.",
+      "messagePromotion": "Cadangan harian untuk {user} berhasil, tetapi salinan mingguan atau bulanannya tidak dapat ditulis: {error}",
+      "messageRetention": "Cadangan untuk {user} berhasil, tetapi berkas cadangan lama tidak dapat dibersihkan: {error}"
+    },
+    "encryptionKeyMissing": {
+      "title": "Kunci enkripsi belum dikonfigurasi",
+      "message": "ENCRYPTION_KEY belum disetel, sehingga cadangan ditulis tanpa enkripsi dan rahasia tidak dapat disimpan. Versi mendatang tidak akan dapat dijalankan tanpanya."
+    },
+    "jwtSecretWeak": {
+      "title": "JWT_SECRET lemah",
+      "message": "JWT_SECRET adalah nilai contoh yang dipublikasikan atau terlalu mudah ditebak, sehingga token sesi bisa dipalsukan. Buat nilai yang kuat (openssl rand -base64 32). Mengubahnya membuat kode aplikasi autentikator tidak berlaku lagi dan melupakan perangkat tepercaya: pengguna masuk dengan kode cadangan lalu menyiapkan ulang 2FA, dan Anda mereset 2FA di Manajemen Pengguna bagi yang tidak memilikinya. Baca dulu docs/backend/modules-and-runtime.md (Changing JWT_SECRET)."
+    },
+    "smtpFailure": {
+      "title": "Pengiriman email gagal",
+      "message": "Monize tidak dapat mengirim email: {error}. Notifikasi dan pengingat tidak terkirim."
+    },
+    "providerOutage": {
+      "title": "{provider} tidak merespons",
+      "message": "Data pasar dari {provider} tidak tersedia. Harga dan data indeks mungkin usang sampai penyedia merespons kembali."
+    },
+    "providerRecovered": {
+      "title": "{provider} merespons kembali",
+      "message": "Gangguan telah berakhir dan data pasar dari {provider} diperbarui kembali."
+    },
+    "scheduledPostFailed": {
+      "title": "{name} tidak dapat diposting",
+      "message": "Transaksi terjadwal Anda yang jatuh tempo {date} tidak terposting secara otomatis: {error}. Anda dapat mempostingnya secara manual dari Tagihan & Setoran."
+    }
+  },
+  "priceMovement": {
+    "title": "Peringatan perubahan harga: {symbol} ({percent}%)",
+    "message": "{symbol}: {percent}% dibandingkan sesi sebelumnya yang tersedia."
+  },
+  "bankSync": {
+    "expiringTitleToday": "{institution}: akses bank berakhir hari ini",
+    "expiringTitleOneDay": "{institution}: akses bank berakhir dalam 1 hari",
+    "expiringTitleDays": "{institution}: akses bank berakhir dalam {days} hari",
+    "expiringMessage": "Persetujuan Anda agar Monize dapat membaca {institution} berakhir pada {date}. Perbarui koneksi di Monize agar sinkronisasi tetap berjalan.",
+    "expiredTitle": "{institution}: akses bank telah berakhir",
+    "expiredMessage": "Persetujuan Anda agar Monize dapat membaca {institution} telah berakhir. Perbarui koneksi di Monize untuk melanjutkan sinkronisasi.",
+    "failedTitle": "{institution}: sinkronisasi gagal",
+    "failedMessage": "Sinkronisasi harian {institution} gagal untuk: {accounts}. Buka pengaturan sinkronisasi bank untuk melihat penyebabnya.",
+    "failedCredentialsMessage": "Sinkronisasi harian {institution} tidak dapat dimulai karena kredensial sinkronisasi bank tidak ada atau ditolak. Periksa kredensial tersebut di pengaturan sinkronisasi bank.",
+    "unnamedAccount": "sebuah akun",
+    "importedTitle": "{institution}: transaksi baru diimpor",
+    "importedMessage": "Transaksi yang diimpor dari {institution} oleh sinkronisasi harian: {imported}.",
+    "importedNoneTitle": "{institution}: tidak ada transaksi baru",
+    "importedNoneMessage": "Sinkronisasi harian {institution} tidak menemukan transaksi baru."
+  },
+  "emailReceiptsAttention": {
+    "title": "Tanda terima email memerlukan perhatian",
+    "message": "Kotak masuk tanda terima Anda berisi {noParser} tanpa profil dan {parseFailed} yang profilnya tidak dikenali. Buka untuk ditinjau."
+  },
+  "aiReview": {
+    "readyTitle": "Usulan AI menunggu persetujuan Anda",
+    "readyMessage": "{count, plural, other {# usulan AI}} menunggu persetujuan Anda, {added} di antaranya baru. Buka kotak masuk tinjauan AI untuk menyetujui atau menolaknya.",
+    "expiringTitle": "Usulan AI segera kedaluwarsa",
+    "expiringMessage": "{count, plural, other {# usulan AI}} segera kedaluwarsa. Yang pertama kedaluwarsa pada {date}. Buka kotak masuk tinjauan AI untuk menyetujui atau menolaknya."
+  },
+  "warranty": {
+    "expiringTitle": "{name}: garansi berakhir dalam {days, plural, other {# hari}}",
+    "expiringMessage": "Garansi untuk {name} berakhir pada {date}. Buka untuk meninjau dokumennya atau mencatat klaim.",
+    "todayTitle": "{name}: garansi berakhir hari ini",
+    "todayMessage": "Garansi untuk {name} berakhir hari ini, {date}. Buka untuk meninjau dokumennya atau mencatat klaim."
+  },
+  "security": {
+    "oauthTitle": "Aplikasi baru terhubung: {clientName}",
+    "oauthMessage": "Aplikasi {clientName} baru saja diberi akses ke akun Monize Anda. Jika ini bukan Anda, segera ubah kata sandi Anda: tindakan itu mencabut akses semua aplikasi yang terhubung.",
+    "relayTitle": "Koneksi baru menjawab obrolan AI Anda",
+    "relayMessage": "Koneksi yang belum pernah menjawab obrolan AI Monize Anda baru saja mengambil sebuah prompt. Jika Anda tidak menghubungkan asisten ini, ubah kata sandi Anda."
+  },
+  "payrollDeduction": {
+    "resetTitle": "{category}: konfirmasi batas maksimum tahun depan",
+    "resetMessage": "Potongan {category} pada {bill} diatur ulang pada {date}. Perbarui batas maksimum tahunan jika berubah; jika tidak, {amount} berlaku lagi."
+  },
+  "shared": {
+    "title": "Pengeluaran bersama",
+    "message": "Ada pembaruan di grup bersama. Buka Monize untuk meninjaunya."
+  },
+  "native": {
+    "payments": {
+      "title": "Pengingat pembayaran",
+      "body": "Sebuah tagihan atau pembayaran terjadwal memerlukan perhatian Anda. Buka Monize untuk detailnya."
+    },
+    "budgets": {
+      "title": "Peringatan anggaran",
+      "body": "Salah satu anggaran Anda memerlukan perhatian. Buka Monize untuk detailnya."
+    },
+    "system": {
+      "title": "Pemberitahuan sistem",
+      "body": "Monize memiliki pemberitahuan sistem untuk Anda. Buka aplikasi untuk detailnya."
+    },
+    "balances": {
+      "title": "Peringatan saldo",
+      "body": "Saldo sebuah akun melewati ambang batas yang Anda tetapkan. Buka Monize untuk detailnya."
+    },
+    "investments": {
+      "title": "Pergerakan investasi",
+      "body": "Investasi Anda bergerak hari ini. Buka Monize untuk detailnya."
+    },
+    "strategies": {
+      "title": "Sinyal strategi",
+      "body": "Salah satu strategi Anda mengubah rekomendasinya. Buka Monize untuk detailnya."
+    },
+    "bank_sync": {
+      "title": "Koneksi bank",
+      "body": "Sebuah koneksi bank memerlukan perhatian Anda. Buka Monize untuk detailnya."
+    },
+    "bank_sync_activity": {
+      "title": "Sinkronisasi bank",
+      "body": "Sinkronisasi bank Anda memiliki kabar. Buka Monize untuk detailnya."
+    },
+    "email_receipts": {
+      "title": "Tanda terima email memerlukan perhatian",
+      "body": "Beberapa email di kotak masuk tanda terima Anda memerlukan profil atau perbaikan. Buka Monize untuk detailnya."
+    },
+    "bonds": {
+      "title": "Pemberitahuan obligasi",
+      "body": "Salah satu obligasi Anda memiliki kabar baru. Buka Monize untuk melihat detailnya."
+    },
+    "ai_review": {
+      "title": "Usulan tinjauan AI",
+      "body": "Beberapa usulan tinjauan AI menunggu keputusan Anda. Buka Monize untuk melihat detailnya."
+    },
+    "warranties": {
+      "title": "Pengingat garansi",
+      "body": "Salah satu garansi Anda segera berakhir. Buka Monize untuk melihat detailnya."
+    },
+    "shared_expenses": {
+      "title": "Pengeluaran bersama",
+      "body": "Ada pembaruan di grup bersama. Buka Monize untuk meninjaunya."
+    },
+    "security": {
+      "title": "Pemberitahuan keamanan",
+      "body": "Ada perubahan pada siapa yang dapat mengakses akun Monize Anda. Buka Monize untuk melihat detailnya."
+    },
+    "fallback": {
+      "title": "Monize",
+      "body": "Anda punya notifikasi baru di Monize."
+    }
+  }
+}

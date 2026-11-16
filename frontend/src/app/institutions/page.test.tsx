@@ -33,13 +33,6 @@ vi.mock('@/lib/constants', () => ({ PAGE_SIZE: 25 }));
 const mockGetAll = vi.fn();
 const mockCreate = vi.fn();
 const mockUpdate = vi.fn();
-const mockAccountsGetAll = vi.fn();
-
-vi.mock('@/lib/accounts', () => ({
-  accountsApi: {
-    getAll: (...a: any[]) => mockAccountsGetAll(...a),
-  },
-}));
 
 vi.mock('@/lib/institutions', () => ({
   institutionsApi: {
@@ -73,8 +66,13 @@ vi.mock('@/components/layout/PageLayout', () => ({
   PageLayout: ({ children }: any) => <div data-testid="page-layout">{children}</div>,
 }));
 vi.mock('@/components/layout/PageHeader', () => ({
-  PageHeader: ({ title, subtitle, actions }: any) => (
-    <div><h1>{title}</h1>{subtitle && <p>{subtitle}</p>}{actions}</div>
+  PageHeader: ({ title, subtitle, actions, help }: any) => (
+    <div>
+      <h1>{title}</h1>
+      {help && <a data-testid="help-link" data-help={help} href="#help">Help</a>}
+      {subtitle && <p>{subtitle}</p>}
+      {actions}
+    </div>
   ),
 }));
 vi.mock('@/components/ui/Button', () => ({
@@ -144,7 +142,6 @@ describe('InstitutionsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockGetAll.mockResolvedValue(mockInstitutions);
-    mockAccountsGetAll.mockResolvedValue([]);
   });
 
   it('renders the header, subtitle and summary cards', async () => {
@@ -154,6 +151,12 @@ describe('InstitutionsPage', () => {
     expect(screen.getByTestId('summary-Total Institutions')).toHaveTextContent('2');
     expect(screen.getByTestId('summary-With Logo')).toHaveTextContent('1');
     expect(screen.getByTestId('summary-Linked Accounts')).toHaveTextContent('2');
+  });
+
+  it('links the page header to the financial institutions section of the documentation', async () => {
+    render(<InstitutionsPage />);
+    await waitFor(() => expect(screen.getByText('TD')).toBeInTheDocument());
+    expect(screen.getByTestId('help-link')).toHaveAttribute('data-help', 'institutions');
   });
 
   it('filters by search query', async () => {

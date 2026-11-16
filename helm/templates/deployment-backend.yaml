@@ -1,0 +1,240 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: monize-backend
+  namespace: {{ .Values.global.namespace }}
+  labels:
+    {{- include "monize.backend.labels" . | nindent 4 }}
+    {{- with .Values.backend.extraLabels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  {{- with .Values.backend.extraAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- /*
+    A Deployment, not a StatefulSet. Nothing about these pods is ordinal: no
+    per-pod identity, no per-pod claim, no ordered start. What a StatefulSet
+    added was a slower rollout -- one pod at a time, the next waiting on the
+    last -- and an upgrade that cannot be performed in place (see helm/README.md
+    for the one-time recreate step).
+
+    maxUnavailable: 0 with maxSurge: 1 is what makes a rollout zero-downtime at
+    replicas: 1, which is still the default: the new pod must pass its readiness
+    probe before the old one is taken away. Reversing those two is the ordinary
+    way a "rolling" update drops every request for a few seconds.
+
+    Except when a claim this pod mounts is not ReadWriteMany. Surging means two
+    pods exist at once, and a ReadWriteOnce volume attaches to one node: the new
+    pod sits Pending on a Multi-Attach error while the old one holds the volume
+    and is never removed, because maxUnavailable: 0 says it may not be. That is
+    not a slow rollout, it is a stuck one, and it ends with a manual delete of
+    the old pod -- the downtime the surge was meant to avoid, taken by surprise
+    and at an unplanned moment. `Recreate` takes the same downtime on purpose,
+    in seconds, where the operator asked for it.
+  */}}
+  {{- $exclusiveClaim := "" }}
+  {{- range $name, $store := .Values.backend.persistence }}
+  {{- if $store.enabled }}
+  {{- if ne ($store.accessMode | default "ReadWriteOnce") "ReadWriteMany" }}
+  {{- $exclusiveClaim = $name }}
+  {{- end }}
+  {{- end }}
+  {{- end }}
+  strategy:
+    {{- if $exclusiveClaim }}
+    # backend.persistence.{{ $exclusiveClaim }}.accessMode is not ReadWriteMany,
+    # so two pods cannot hold it at once and a surging rollout would deadlock.
+    type: Recreate
+    {{- else }}
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+    {{- end }}
+  {{- if not .Values.backend.autoscaling.enabled }}
+  {{- /*
+    Omitted entirely when an HPA owns the count. A Deployment that keeps
+    `replicas` in its spec fights the autoscaler on every `helm upgrade`,
+    scaling back to the chart's number until the HPA scales it out again.
+  */}}
+  replicas: {{ .Values.backend.replicas }}
+  {{- end }}
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      {{- include "monize.backend.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- /*
+        The pods are rolled when the ConfigMap changes. Kubernetes does not do
+        this for envFrom: an edited ConfigMap leaves the running containers with
+        the environment they started with, so `helm upgrade --set
+        cluster.mode=multi` would report success and change nothing until
+        something else happened to restart the pods. The hash makes the pod
+        template differ, which is the only thing a Deployment rolls on.
+      */}}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap-backend.yaml") . | sha256sum }}
+      labels:
+        {{- include "monize.backend.labels" . | nindent 8 }}
+        {{- with .Values.backend.extraLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- include "monize.assertClusterMode" . }}
+      {{- with .Values.backend.topologySpreadConstraints }}
+      {{- /*
+        Without this, the scheduler is free to put every replica on one node,
+        which makes the replica count look like availability while a single
+        node drain still takes the whole service down.
+
+        The selector is checked against this pod template's own labels, because
+        a constraint that selects nothing is satisfied by every placement and
+        reports no error at any layer.
+      */}}
+      {{- include "monize.assertSpreadSelectors" (dict
+            "constraints" .
+            "podLabels" (merge
+              (deepCopy ($.Values.backend.extraLabels | default dict))
+              (include "monize.backend.labels" $ | fromYaml))
+            "path" "backend") }}
+      topologySpreadConstraints:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      dnsPolicy: ClusterFirstWithHostNet
+      hostNetwork: false
+      restartPolicy: Always
+      automountServiceAccountToken: false
+      affinity: null
+      containers:
+        - name: monize-backend
+          image: "{{ .Values.backend.image.registry }}/{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          {{- with .Values.backend.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "100"
+            - name: TZ
+              value: {{ .Values.global.timezone | quote }}
+            {{- /*
+              Backup memory ceilings, set here rather than left to the backend's
+              own default so they cannot drift away from resources.limits.memory
+              above. A buffered backup holds several copies of its payload at
+              peak, so a ceiling larger than the container's limit is not a
+              ceiling: the pod is OOM-killed before the request is refused. The
+              backend derives a share of the cgroup limit when these are unset,
+              and warns when a configured value cannot protect the process.
+            */ -}}
+            {{- with .Values.backend.backupLimits }}
+            {{- with .exportBuffer }}
+            - name: BACKUP_EXPORT_BUFFER_LIMIT
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .restoreExpanded }}
+            - name: BACKUP_RESTORE_EXPANDED_LIMIT
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .restoreUpload }}
+            - name: BACKUP_RESTORE_LIMIT
+              value: {{ . | quote }}
+            {{- end }}
+            {{- end }}
+            {{- /*
+              The queue behind the restore processing slots. Bounded and
+              deadlined because an unbounded one holds sockets and upload
+              memory reservations open; unset, the backend uses its own
+              defaults (4 waiters, 120s).
+            */ -}}
+            {{- with .Values.backend.restoreQueue }}
+            {{- with .limit }}
+            - name: BACKUP_RESTORE_QUEUE_LIMIT
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .waitMs }}
+            - name: BACKUP_RESTORE_QUEUE_WAIT_MS
+              value: {{ . | quote }}
+            {{- end }}
+            {{- end }}
+            {{- with .Values.backend.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          envFrom:
+            - configMapRef:
+                name: env-vars-backend
+            {{- with .Values.backend.extraEnvFrom }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          resizePolicy:
+            - resourceName: cpu
+              restartPolicy: NotRequired
+            - resourceName: memory
+              restartPolicy: NotRequired
+          {{- with .Values.backend.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          ports:
+            - containerPort: {{ .Values.backend.service.port }}
+              name: http
+              protocol: TCP
+          {{- with .Values.backend.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.backend.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            # readOnlyRootFilesystem: true means the container can only write
+            # where something is mounted, and Node plus the .mny import both need
+            # somewhere to spill. emptyDir, not a claim: nothing here needs to
+            # survive a restart.
+            - name: tmp
+              mountPath: /tmp
+            {{- if .Values.backend.persistence.backups.enabled }}
+            - name: backups
+              mountPath: {{ .Values.backend.backupContainerDir | default "/data/backups" }}
+            {{- end }}
+            {{- if .Values.backend.persistence.attachments.enabled }}
+            - name: attachments
+              mountPath: {{ .Values.backend.attachmentContainerDir | default "/data/attachments" }}
+            {{- end }}
+            {{- with .Values.backend.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+      volumes:
+        - name: tmp
+          emptyDir: {}
+        {{- if .Values.backend.persistence.backups.enabled }}
+        - name: backups
+          persistentVolumeClaim:
+            claimName: {{ .Values.backend.persistence.backups.existingClaim | default "monize-backend-backups" }}
+        {{- end }}
+        {{- if .Values.backend.persistence.attachments.enabled }}
+        - name: attachments
+          persistentVolumeClaim:
+            claimName: {{ .Values.backend.persistence.attachments.existingClaim | default "monize-backend-attachments" }}
+        {{- end }}
+        {{- with .Values.backend.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- if or .Values.backend.persistence.backups.enabled .Values.backend.persistence.attachments.enabled }}
+      # The container runs as 1001:100 and a freshly provisioned volume is
+      # root-owned on most CSI drivers, so without this the first write fails with
+      # EACCES -- the same "feature looks configured and never works" outcome the
+      # missing mount produced.
+      securityContext:
+        fsGroup: {{ .Values.backend.securityContext.runAsGroup | default 100 }}
+      {{- end }}
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "1"

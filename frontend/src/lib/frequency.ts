@@ -1,4 +1,11 @@
 import { FrequencyType } from '@/types/scheduled-transaction';
+import {
+  CustomRecurrence,
+  CustomStepContext,
+  customOccurrencesPerYear,
+  nextCustomDate,
+  normalizeCustomRecurrence,
+} from './custom-recurrence';
 
 /**
  * The one place the frontend knows how a recurrence frequency steps forward.
@@ -27,9 +34,9 @@ function daysInMonth(year: number, monthIndex: number): number {
  * Add `months`, clamping the day to the target month's length: Jan 31 + 1 month
  * is Feb 28 (or Feb 29), not Mar 3 as `setMonth` alone would give.
  */
-function addMonthsClamped(date: Date, months: number): Date {
+function addMonthsClamped(date: Date, months: number, anchorDay?: number): Date {
   const target = new Date(date.getTime());
-  const day = target.getDate();
+  const day = anchorDay ?? target.getDate();
   target.setDate(1);
   target.setMonth(target.getMonth() + months);
   target.setDate(Math.min(day, daysInMonth(target.getFullYear(), target.getMonth())));
@@ -46,8 +53,20 @@ function addDays(date: Date, days: number): Date {
  * The next occurrence after `date` for `frequency`, as a new `Date` (the input
  * is never mutated). `ONCE` returns an equal date -- callers treat that as
  * "no further occurrences" and must stop, rather than looping forever.
+ *
+ * `anchorDay` is the day-of-month of the schedule's `startDate`: month-based
+ * steps clamp to the month length but return to it afterwards (Jan 31, Feb 28,
+ * Mar 31), as `calculateNextDueDate` does. Absent, the previous date's day is kept.
+ *
+ * `CUSTOM` steps by `custom.rule` (docs/specs/custom-recurrence.md) and throws
+ * without a valid one, as the backend does.
  */
-export function advanceByFrequency(date: Date, frequency: FrequencyType): Date {
+export function advanceByFrequency(
+  date: Date,
+  frequency: FrequencyType,
+  anchorDay?: number,
+  custom?: CustomStepContext,
+): Date {
   switch (frequency) {
     case 'DAILY':
       return addDays(date, 1);
@@ -68,27 +87,78 @@ export function advanceByFrequency(date: Date, frequency: FrequencyType): Date {
       return next;
     }
     case 'MONTHLY':
-      return addMonthsClamped(date, 1);
+      return addMonthsClamped(date, 1, anchorDay);
     case 'EVERY2MONTHS':
-      return addMonthsClamped(date, 2);
+      return addMonthsClamped(date, 2, anchorDay);
     case 'QUARTERLY':
-      return addMonthsClamped(date, 3);
+      return addMonthsClamped(date, 3, anchorDay);
     case 'EVERY4MONTHS':
-      return addMonthsClamped(date, 4);
+      return addMonthsClamped(date, 4, anchorDay);
     case 'SEMIANNUAL':
-      return addMonthsClamped(date, 6);
+      return addMonthsClamped(date, 6, anchorDay);
     case 'YEARLY':
-      return addMonthsClamped(date, 12);
+      return addMonthsClamped(date, 12, anchorDay);
     case 'EVERY2YEARS':
-      return addMonthsClamped(date, 24);
+      return addMonthsClamped(date, 24, anchorDay);
+    case 'CUSTOM': {
+      const next = nextCustomDate(localYmd(date), custom?.rule, custom?.startDate?.slice(0, 10) ?? null);
+      const [y, m, d] = next.split('-').map(Number);
+      return new Date(y, m - 1, d, date.getHours(), date.getMinutes(), date.getSeconds(), date.getMilliseconds());
+    }
     case 'ONCE':
       return new Date(date.getTime());
   }
 }
 
-/** True when a frequency produces at most one occurrence. */
-export function isOneTime(frequency: FrequencyType): boolean {
-  return frequency === 'ONCE';
+/** `YYYY-MM-DD` of a local-time Date, the form the custom stepper works in. */
+export function localYmd(date: Date): string {
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+/**
+ * The anchor day for stepping from `current`, mirroring the backend's `anchorDayOf`:
+ * the `startDate`'s day when `current` sits on it (or on it clamped by a short
+ * month), else `current`'s own day because the user moved it.
+ */
+export function anchorDayOf(startDate: string | null | undefined, current: Date): number | undefined {
+  if (!startDate) return undefined;
+  const s = Number(startDate.slice(8, 10));
+  const d = current.getDate();
+  return d === Math.min(s, daysInMonth(current.getFullYear(), current.getMonth())) ? s : d;
+}
+
+/** The fields of a schedule its stepping reads. */
+export interface SteppableSchedule {
+  frequency: FrequencyType;
+  startDate?: string | null;
+  customRecurrence?: CustomRecurrence | null;
+}
+
+/**
+ * The schedule's next slot after `current`: `advanceByFrequency` with the
+ * anchor day and the Custom rule taken from the schedule itself, so a walker
+ * cannot forget either. Ask `isOneTime(schedule)` first: a Custom schedule
+ * without a valid rule cannot step and throws here.
+ */
+export function advanceSchedule(current: Date, schedule: SteppableSchedule): Date {
+  return advanceByFrequency(current, schedule.frequency, anchorDayOf(schedule.startDate, current), {
+    rule: schedule.customRecurrence,
+    startDate: schedule.startDate,
+  });
+}
+
+/**
+ * True when a schedule produces at most one occurrence, its cursor: a `ONCE`
+ * schedule, or a `CUSTOM` one whose rule is missing or invalid (a row from an
+ * older release or a bad restore), which cannot step. Every walker asks this
+ * before `advanceSchedule`, so a broken row shows its one occurrence instead
+ * of throwing out of the page, as the backend's expander treats it.
+ */
+export function isOneTime(schedule: SteppableSchedule): boolean {
+  if (schedule.frequency === 'ONCE') return true;
+  return schedule.frequency === 'CUSTOM' && !normalizeCustomRecurrence(schedule.customRecurrence).ok;
 }
 
 /**
@@ -109,13 +179,20 @@ const OCCURRENCES_PER_YEAR: Record<FrequencyType, number> = {
   SEMIANNUAL: 2,
   YEARLY: 1,
   EVERY2YEARS: 0.5,
+  // No fixed cycle; `monthlyEquivalent` reads the rule instead.
+  CUSTOM: 0,
 };
 
 /**
  * `amount` restated as a monthly figure, for summing schedules of mixed
  * frequencies into one "per month" total.
  */
-export function monthlyEquivalent(amount: number, frequency: FrequencyType): number {
-  const perYear = OCCURRENCES_PER_YEAR[frequency] ?? 0;
+export function monthlyEquivalent(
+  amount: number,
+  frequency: FrequencyType,
+  customRecurrence?: CustomRecurrence | null,
+): number {
+  const perYear =
+    frequency === 'CUSTOM' ? customOccurrencesPerYear(customRecurrence) : (OCCURRENCES_PER_YEAR[frequency] ?? 0);
   return (amount * perYear) / 12;
 }

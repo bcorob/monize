@@ -16,10 +16,7 @@ import {
 } from '@/components/institutions/InstitutionList';
 import { InstitutionAccountsManager } from '@/components/institutions/InstitutionAccountsManager';
 import { institutionsApi } from '@/lib/institutions';
-import { accountsApi } from '@/lib/accounts';
-import { countLogicalAccounts } from '@/lib/account-utils';
 import { Institution } from '@/types/institution';
-import { Account } from '@/types/account';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { SummaryCard, SummaryIcons } from '@/components/ui/SummaryCard';
@@ -30,6 +27,7 @@ import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { createLogger } from '@/lib/logger';
 import { getErrorMessage } from '@/lib/errors';
 import { PAGE_SIZE } from '@/lib/constants';
+import { useMobileAddAction } from '@/store/mobileAddActionStore';
 
 const logger = createLogger('Institutions');
 
@@ -44,10 +42,8 @@ export default function InstitutionsPage() {
 function InstitutionsContent() {
   const t = useTranslations('institutions');
   const [institutions, setInstitutions] = useState<Institution[]>([]);
-  const [accounts, setAccounts] = useState<Account[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterStatus, setFilterStatus] = useState<'active' | 'closed' | ''>('');
   const [sortField, setSortField] = useState<InstitutionSortField>('name');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
   const [currentPage, setCurrentPage] = useState(1);
@@ -65,28 +61,31 @@ function InstitutionsContent() {
     formSubmitRef,
   } = useFormModal<Institution>();
 
-  const loadData = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      // Accounts are loaded to derive each institution's active/closed status
-      // (an institution has no status of its own).
-      const [data, accountsData] = await Promise.all([
-        institutionsApi.getAll(),
-        accountsApi.getAll(true).catch(() => [] as Account[]),
-      ]);
-      setInstitutions(data);
-      setAccounts(accountsData);
-    } catch (error) {
-      toast.error(getErrorMessage(error, t('page.toasts.loadFailed')));
-      logger.error(error);
-    } finally {
-      setIsLoading(false);
-    }
+  // The mount load: the state already says loading.
+  const fetchData = useCallback(() => {
+    // Writes live in `run` so they land after the request, not during the effect.
+    const run = async () => {
+      try {
+        const data = await institutionsApi.getAll();
+        setInstitutions(data);
+      } catch (error) {
+        toast.error(getErrorMessage(error, t('page.toasts.loadFailed')));
+        logger.error(error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    return run();
   }, [t]);
 
+  const loadData = useCallback(() => {
+    setIsLoading(true);
+    return fetchData();
+  }, [fetchData]);
+
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    fetchData();
+  }, [fetchData]);
 
   useOnUndoRedo(loadData);
   // Refresh on AI chat-bubble writes the same way as undo/redo.
@@ -124,42 +123,8 @@ function InstitutionsContent() {
     }
   };
 
-  // Logical (pair-aware) account counts per institution, split by status, so
-  // the Accounts column can reflect the All/Active/Closed filter without
-  // hiding any institution rows.
-  const accountCountByStatus = useMemo(() => {
-    const groups = new Map<string, Account[]>();
-    for (const account of accounts) {
-      if (!account.institutionId) continue;
-      const arr = groups.get(account.institutionId) ?? [];
-      groups.set(account.institutionId, [...arr, account]);
-    }
-    const map = new Map<string, { active: number; closed: number }>();
-    for (const [id, arr] of groups) {
-      map.set(id, {
-        active: countLogicalAccounts(arr.filter((a) => !a.isClosed)),
-        closed: countLogicalAccounts(arr.filter((a) => a.isClosed)),
-      });
-    }
-    return map;
-  }, [accounts]);
-
-  // Apply the status filter to the displayed account count (rows are kept).
-  const decoratedInstitutions = useMemo(() => {
-    if (!filterStatus) return institutions;
-    return institutions.map((i) => {
-      const counts = accountCountByStatus.get(i.id);
-      const accountCount = counts
-        ? filterStatus === 'active'
-          ? counts.active
-          : counts.closed
-        : 0;
-      return { ...i, accountCount };
-    });
-  }, [institutions, filterStatus, accountCountByStatus]);
-
   const filteredInstitutions = useMemo(() => {
-    let result = decoratedInstitutions;
+    let result = institutions;
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       result = result.filter(
@@ -193,7 +158,7 @@ function InstitutionsContent() {
       return sortDirection === 'asc' ? cmp : -cmp;
     });
     return sorted;
-  }, [decoratedInstitutions, searchQuery, sortField, sortDirection]);
+  }, [institutions, searchQuery, sortField, sortDirection]);
 
   const handleSort = (field: InstitutionSortField) => {
     if (sortField === field) {
@@ -210,9 +175,11 @@ function InstitutionsContent() {
     return filteredInstitutions.slice(start, start + PAGE_SIZE);
   }, [filteredInstitutions, currentPage]);
 
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery, filterStatus]);
+  // A new search starts again from the first page.
+  const handleSearchChange = (query: string) => {
+    if (query !== searchQuery) setCurrentPage(1);
+    setSearchQuery(query);
+  };
 
   const goToPage = (page: number) => {
     if (page >= 1 && page <= totalPages) {
@@ -226,16 +193,19 @@ function InstitutionsContent() {
     0,
   );
 
+  useMobileAddAction(t('page.newInstitution'), openCreate);
+
   return (
     <PageLayout>
       <main className="px-4 sm:px-6 lg:px-12 pt-6 pb-8">
         <PageHeader
           title={t('page.title')}
           subtitle={t('page.subtitle')}
+          help='institutions'
           actions={<Button onClick={openCreate}>{t('page.newInstitution')}</Button>}
         />
 
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-6">
           <SummaryCard
             label={t('page.summary.total')}
             value={institutions.length}
@@ -254,49 +224,15 @@ function InstitutionsContent() {
           />
         </div>
 
-        <div className="mb-6 flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="mb-6 flex flex-wrap items-center gap-4">
           <input
             type="text"
             placeholder={t('page.searchPlaceholder')}
+            aria-label={t('page.searchPlaceholder')}
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="block w-full sm:max-w-md rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400"
+            onChange={(e) => handleSearchChange(e.target.value)}
+            className="block w-full sm:w-auto sm:flex-1 sm:max-w-md rounded-md border-gray-300 dark:border-gray-600 shadow-sm focus:border-blue-500 focus:ring-blue-500 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400"
           />
-          <div className="inline-flex rounded-md shadow-sm">
-            <button
-              type="button"
-              onClick={() => setFilterStatus('')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-l-md border ${
-                filterStatus === ''
-                  ? 'bg-blue-600 text-white border-blue-600'
-                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
-              }`}
-            >
-              {t('list.statusFilter.all')}
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterStatus('active')}
-              className={`px-3 py-1.5 text-sm font-medium border-t border-b ${
-                filterStatus === 'active'
-                  ? 'bg-blue-600 text-white border-blue-600'
-                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
-              }`}
-            >
-              {t('list.statusFilter.active')}
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterStatus('closed')}
-              className={`px-3 py-1.5 text-sm font-medium rounded-r-md border ${
-                filterStatus === 'closed'
-                  ? 'bg-blue-600 text-white border-blue-600'
-                  : 'bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
-              }`}
-            >
-              {t('list.statusFilter.closed')}
-            </button>
-          </div>
         </div>
 
         <Modal isOpen={showForm} onClose={close} {...modalProps} maxWidth="lg" className="p-6">

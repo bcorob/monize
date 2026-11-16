@@ -9,7 +9,8 @@
     "stepCounter": "{current} van {total}",
     "skippedTitle": "Rondleiding voltooid",
     "skippedBody": "Sommige stappen zijn overgeslagen omdat het bijbehorende scherm of element niet beschikbaar was. U kunt de rondleiding altijd opnieuw starten via Instellingen.",
-    "move": "Deze kaart verplaatsen — sleep hem of verplaats hem met de pijltoetsen"
+    "move": "Deze kaart verplaatsen — sleep hem of verplaats hem met de pijltoetsen",
+    "readGuide": "Lees de volledige handleiding"
   },
   "offer": {
     "heading": "Volg een korte rondleiding",
@@ -45,7 +46,8 @@
     "requirementsLoading": "Controleren of je deze rondleiding kunt volgen…",
     "requires": {
       "transactionEntry": "Voeg eerst een rekening toe — deze rondleiding laat zien hoe je een transactie vastlegt.",
-      "securitiesExist": "Voeg eerst een waardepapier toe — deze rondleiding opent er een uit je lijst met waardepapieren."
+      "securitiesExist": "Voeg eerst een waardepapier toe — deze rondleiding opent er een uit je lijst met waardepapieren.",
+      "ownerView": "Schakel eerst terug naar je eigen gegevens. Deze rondleiding behandelt functies die niet beschikbaar zijn wanneer je namens iemand anders werkt."
     },
     "start": "Starten",
     "restart": "Opnieuw doen",
@@ -67,7 +69,7 @@
         },
         "dashboard": {
           "title": "Uw dashboard",
-          "body": "Dit is uw dashboard. Gebruik de knop **Aanpassen** rechtsboven om widgets te herschikken of te verbergen, zodat de overzichten die voor u belangrijk zijn bovenaan staan."
+          "body": "Dit is uw dashboard. Kies het tandwiel **Aanpassen** naast de begroeting om het in te delen: verplaats of verwijder widgets waar ze staan, kies **Widget toevoegen** voor meer en **Klaar** om de indeling te bewaren."
         },
         "tools": {
           "title": "Het menu Hulpmiddelen",
@@ -76,6 +78,14 @@
         "accounts": {
           "title": "Uw rekeningen",
           "body": "Voeg hier uw bank-, creditcard-, lening- en beleggingsrekeningen toe met de gemarkeerde knop. Elk saldo en elke transactie hoort bij een rekening."
+        },
+        "openAccountDetail": {
+          "title": "Open de detailweergave van een rekening",
+          "body": "Elke rekening heeft een pagina die bij haar type past. Kies **Details** — het oogpictogram op een rekeningrij — om die te openen. Houd op de telefoon de rekening ingedrukt en kies **Details**."
+        },
+        "accountDetailView": {
+          "title": "Een weergave gemaakt voor deze rekening",
+          "body": "Deze pagina verandert mee met het rekeningtype, dus een bankrekening, creditcard, lening, beleggingsrekening of bezit toont elk de cijfers en hulpmiddelen die daarbij horen. Kom hier altijd terug via **Details** in de rekeningenlijst."
         },
         "transactions": {
           "title": "Transacties",
@@ -303,6 +313,374 @@
             "title": "Kom terug bij de volgende evaluatie",
             "body": "GEM neemt één beslissing per periode, en de datum van de volgende staat boven aan het rapport. Tot die dag hoef je niets te doen. Is het zover, kijk dan of het signaal veranderd is; zo ja, handel via je broker en leg de boekingen vast in Monize, zodat de portefeuillevergelijking blijft kloppen. Je kunt deze rondleiding altijd opnieuw doen via **Begeleide rondleidingen** in **Instellingen**."
           }
+        }
+      }
+    },
+    "v1_16_0": {
+      "notifications": {
+        "title": "Meldingen",
+        "steps": {
+          "welcome": {
+            "title": "Monize kan het je nu laten weten",
+            "body": "Een rekening die vervalt, een budget dat eroverheen gaat, een saldo dat een grens passeert die jij hebt gezet, een mislukte back-up. Deze rondleiding laat zien waar dat binnenkomt en hoe je kiest wat je per e-mail of op je telefoon bereikt."
+          },
+          "bell": {
+            "title": "De bel is het origineel",
+            "body": "Elke melding die Monize maakt, wordt hier vastgelegd — wat je verder ook aan of uit zet. E-mail en push zijn kopieën die daarna verstuurd worden; deze lijst is het origineel, en het getal op de bel telt wat je nog niet gelezen hebt."
+          },
+          "panel": {
+            "title": "Wat een melding meebrengt",
+            "body": "Elke melding zegt wat er gebeurd is en verwijst naar de pagina die het laat zien: de rekening, het budget, de rekening-courant. **Alles markeren als gelezen** zet de teller terug zonder iets te verwijderen. Wil je eraan herinnerd worden, dan heeft elke melding **Herinner mij**: nog één keer na een tijdje, of herhaald tot je het stopt — en stoppen kan ook vanuit de melding zelf op je telefoon."
+          },
+          "filters": {
+            "title": "Eerst de lijst beperken, dan handelen",
+            "body": "De bovenste rij filtert op ernst, de onderste scheidt **Financieel** van **Systeem** — back-ups, mailbezorging en al het andere waar alleen een beheerder iets aan kan doen. **Alles verwijderen** volgt het ingestelde filter en bereikt elke treffer, niet alleen wat op het scherm staat, zodat je een reeks afgehandelde systeemmeldingen kunt opruimen en de rest laat staan."
+          },
+          "settings": {
+            "title": "Waar bezorging wordt bepaald",
+            "body": "**Instellingen → Meldingen** draagt de rest van deze rondleiding. Bovenaan de kaart staan de e-mailschakelaar en het wekelijkse budgetoverzicht; daaronder het raster dat al het andere bepaalt, en dan je pushapparaten."
+          },
+          "matrix": {
+            "title": "Eén rij per soort, één kolom per kanaal",
+            "body": "Kies per soort melding of die uitgaat als **E-mail (rapport)**, **E-mail (waarschuwing)**, **Push** of via **UnifiedPush** naar een distributeur die je zelf draait. Er is geen kolom voor de bel, omdat de bel de rij altijd krijgt. **Wachttijd** is de laatste kolom: sla e-mail en push over als er binnen dat venster al iets uit dezelfde groep is verstuurd — het item in de bel wordt hoe dan ook geschreven. Elke schakelaar slaat meteen op."
+          },
+          "push": {
+            "title": "Je apparaten",
+            "body": "Registreer hier een browser en Monize kan die bereiken terwijl de app dicht is. Monize ondertekent zijn eigen berichten, dus er zit geen Google- of Apple-account tussen. Elk apparaat is apart te testen en te verwijderen, en een apparaat dat niet meer bereikbaar is, zegt waarom. Op een iPhone werkt dit zodra Monize op het beginscherm staat; heeft je beheerder push niet aangezet voor deze installatie, dan staat dat hier in plaats daarvan."
+          },
+          "portfolio": {
+            "title": "Beweging van beleggingen",
+            "body": "Eén keer per dag, wanneer je beleggingsrekeningen meer bewegen dan het bedrag dat je hier instelt. Het meet marktbeweging en dividend: geld dat je inlegt of opneemt is geen beweging."
+          },
+          "finish": {
+            "title": "Nog één plek om te kijken",
+            "body": "Saldowaarschuwingen staan bij de rekening zelf: bewerk een rekening en zet **Waarschuwen onder** of **Waarschuwen boven**. Ze gaan af wanneer het saldo de grens *passeert*, dus je hoort het één keer in plaats van na elke betaling die het daar houdt. Je kunt deze rondleiding altijd opnieuw doen vanuit Instellingen."
+          }
+        }
+      },
+      "reportTagBreakdown": {
+        "title": "Rapport uitsplitsen naar label",
+        "steps": {
+          "welcome": {
+            "title": "Bekijk rapporten per label, niet alleen per categorie",
+            "body": "Inkomsten vs. uitgaven en het kasstroomoverzicht kunnen nu worden uitgesplitst naar de waarde van een label dat u kiest — huishoudelijke uitgaven tegenover een bijverdienste, bijvoorbeeld — en tonen overboekingen ertussen zonder een overboeking ooit als inkomen te tellen."
+          },
+          "breakdown": {
+            "title": "Uitsplitsen naar labelsleutel",
+            "body": "Kies hier een labelsleutel, zoals **scope**, en het rapport splitst zich op in één sectie per waarde die u ermee hebt gebruikt, plus een sectie **Zonder label** voor de rest.",
+            "fallbackBody": "Dit veld verschijnt zodra u een transactie een **sleutel:waarde**-label geeft, zoals **scope:household**. Voeg er een toe, en Uitsplitsen naar labelsleutel verschijnt hier."
+          },
+          "buckets": {
+            "title": "Totalen per waarde, overboekingen apart gehouden",
+            "body": "Een sleutel kiezen opent een tabblad per waarde plus **Zonder label**, elk met eigen inkomsten en uitgaven. Geld dat tussen rekeningen is verplaatst, verschijnt als **Gelabelde instroom** en **Gelabelde uitstroom** — zichtbaar, maar nooit meegeteld als inkomen."
+          },
+          "finish": {
+            "title": "Dat is de labeluitsplitsing",
+            "body": "Geef transacties overal waar u deze weergave wilt een sleutel:waarde-paar zoals scope:household, en bekijk deze rondleiding voortaan altijd opnieuw via Instellingen."
+          }
+        }
+      }
+    },
+    "v1_17_0": {
+      "transactionRules": {
+        "title": "Transactieregels",
+        "steps": {
+          "welcome": {
+            "title": "Regels die je transacties opruimen",
+            "body": "Wanneer een transactie wordt aangemaakt of geïmporteerd en voldoet aan de voorwaarden die je hebt ingesteld, kan een regel de categorie of begunstigde instellen, labels toevoegen, de omschrijving herschrijven of een AI om een controle vragen. Een regel wijzigt nooit een bedrag, rekening of datum."
+          },
+          "tools": {
+            "title": "Regels vind je onder Hulpmiddelen",
+            "body": "Open **Hulpmiddelen** om **Regels** te vinden. De volgende stap toont het menu."
+          },
+          "rulesLink": {
+            "title": "Open Regels",
+            "body": "Kies **Regels**. Daar staan al je regels en maak je een nieuwe."
+          },
+          "list": {
+            "title": "Je regels, op volgorde",
+            "body": "Elke rij is één regel, met een schakelaar om hem aan of uit te zetten en acties om hem te verplaatsen, uit te voeren, te dupliceren of te verwijderen. Regels worden van boven naar beneden gecontroleerd, dus de volgorde telt als twee regels hetzelfde wijzigen. Heb je nog geen regels, dan legt deze kaart uit wat een regel is."
+          },
+          "create": {
+            "title": "Maak een regel",
+            "body": "**Regel maken** opent de editor met een lege regel. Er wordt niets opgeslagen totdat je **Regel opslaan** kiest."
+          },
+          "when": {
+            "title": "Wanneer: naar welke transacties hij kijkt",
+            "body": "Kies of de regel een transactie bekijkt als die wordt **aangemaakt**, als die wordt **geïmporteerd**, of in beide gevallen. **Verwerking van andere regels stoppen** slaat de regels eronder over voor elke transactie waarop deze regel past."
+          },
+          "if": {
+            "title": "Als: welke transacties passen",
+            "body": "Bouw de voorwaarden op uit velden zoals begunstigde, omschrijving, bedrag en categorie. De schakelaar **Visueel** en **Expressie** toont dezelfde voorwaarden als kaarten of als één regel tekst. In een patroon staat * voor willekeurige tekst en houdt '{name}' de tekst op die plek vast, zodat een actie hem kan hergebruiken."
+          },
+          "then": {
+            "title": "Dan: wat er verandert",
+            "body": "Acties worden uitgevoerd in de getoonde volgorde. Een regel kan de categorie of begunstigde instellen, labels toevoegen of verwijderen, de omschrijving instellen of een AI vragen de transactie te controleren. Er is geen actie voor een bedrag, rekening of datum."
+          },
+          "test": {
+            "title": "Testen, uitvoeren en ongedaan maken",
+            "body": "**Regel testen** probeert het concept uit op je bestaande transacties en toont wat er zou veranderen. Er wordt niets gewijzigd. Is de regel opgeslagen, dan toont **Uitvoeren op bestaande transacties** een voorbeeld en past hij toe op wat je al hebt, en je kunt die uitvoering ongedaan maken via de actiegeschiedenis."
+          },
+          "reviews": {
+            "title": "Het AI-controlepostvak",
+            "body": "Een regel met **AI-controle aanvragen** wijzigt de transactie niet, maar zet hem hier neer. Een assistent stelt een wijziging voor en er wordt niets geschreven totdat jij die goedkeurt. Je kunt een verzoek ook afwijzen. Je vindt het onder **AI** als **AI-controlepostvak**."
+          }
+        }
+      }
+    },
+    "v1_20_0": {
+      "warranties": {
+        "title": "Garanties",
+        "steps": {
+          "welcome": {
+            "title": "Houd je garanties bij",
+            "body": "Een garantie legt vast wat je hebt gekocht, wanneer de dekking afloopt en wie het heeft verkocht, met de bon, de handleiding en eventuele claims. Je kunt hem koppelen aan de aankoop in je transactieoverzicht. Een garantie wijzigt nooit een saldo, een rapport of een totaal. Deze rondleiding laat zien hoe je er een toevoegt en waar ze daarna verschijnen."
+          },
+          "warrantiesLink": {
+            "title": "Garanties vind je onder Hulpmiddelen",
+            "body": "Open **Hulpmiddelen** en kies **Garanties** om al je garanties te zien."
+          },
+          "overview": {
+            "title": "De dekking in één oogopslag",
+            "body": "Deze kaarten tellen je garanties per status: **Verloopt binnenkort**, **Actief**, **Verlopen** en **Levenslang**. Kies een kaart om de lijst hieronder te filteren. Je kunt ook zoeken, sorteren en gearchiveerde garanties tonen. Kies een garantie in de lijst om de pagina ervan te openen, met de documenten, de claims en de aankoop waaraan hij gekoppeld is."
+          },
+          "addWarranty": {
+            "title": "Methode 1: hier toevoegen",
+            "body": "**Garantie toevoegen** opent een leeg formulier. Vul het product, de verkoper en de aankoopdatum in, en daarna wanneer de dekking eindigt: **Op een datum**, **Na een looptijd** of **Nooit** voor een levenslange garantie. Je kunt de bon of de handleiding bijvoegen voordat je opslaat."
+          },
+          "importCsv": {
+            "title": "Methode 2: een CSV-bestand importeren",
+            "body": "**CSV importeren** leest een bestand met de kolommen van Warracker, zoals een export uit Warracker of van deze pagina. Je ziet elke rij en eventuele problemen voordat er iets wordt opgeslagen."
+          },
+          "inRegister": {
+            "title": "Garanties in het transactieoverzicht",
+            "body": "Een transactie met een garantie toont een schild in het transactieoverzicht. Zoek op **has:warranty** om al zulke transacties te vinden."
+          },
+          "newTransaction": {
+            "title": "Methode 3: terwijl je een aankoop vastlegt",
+            "body": "Kies **+ Nieuwe transactie** om het formulier te openen."
+          },
+          "warrantiesLine": {
+            "title": "De regel Garanties",
+            "body": "**Garantie toevoegen** slaat hier eerst de nieuwe transactie op en opent daarna het garantieformulier, ingevuld met de gegevens ervan. Bewerk je de transactie later, dan toont deze regel de garanties ervan, en elke garantie opent haar eigen pagina.",
+            "fallbackBody": "De regel Garanties wordt niet getoond bij een gezamenlijke rekening, omdat een garantie alleen van jou is. Kies een van je eigen rekeningen en het formulier toont een regel **Garanties** boven de knoppen. **Garantie toevoegen** slaat daar eerst de nieuwe transactie op en opent daarna het garantieformulier, ingevuld met de gegevens ervan. Bewerk je de transactie later, dan toont de regel de garanties ervan."
+          },
+          "closeForm": {
+            "title": "Sluit het formulier",
+            "body": "Kies **Annuleren** om het te sluiten zonder op te slaan, of sla de transactie op als je een echte hebt ingevoerd."
+          },
+          "dashboardWidget": {
+            "title": "Zie op het dashboard wat er verloopt",
+            "body": "Kies **Aanpassen**, dan **Widget toevoegen**, kies **Garanties die binnenkort verlopen** en kies **Klaar**. Het toont de garanties die als eerste verlopen, en de titel opent de pagina Garanties."
+          },
+          "reminders": {
+            "title": "Herinneringen voordat de dekking afloopt",
+            "body": "Monize herinnert je 30 dagen en 7 dagen voordat een garantie verloopt, en op de dag zelf. De herinneringen komen hier binnen, en je kunt er een uitstellen of de garantie ervan openen. Kies onder **Instellingen**, in **Meldingen**, bij **Garantieherinneringen** hoe ze je bereiken."
+          }
+        }
+      },
+      "payrollDeductions": {
+        "title": "Looninhoudingen",
+        "steps": {
+          "welcome": {
+            "title": "Stop inhoudingen bij hun jaarmaximum",
+            "body": "Sommige inhoudingen op je loon, zoals pensioen of werkloosheidsverzekering, stoppen zodra het jaarmaximum is bereikt en beginnen het volgende jaar opnieuw. Een looninhoudingsregel vertelt Monize dat maximum, zodat je loon de inhouding niet meer inhoudt zodra het is bereikt. **Voordat je begint, heb je een geplande loonrekening nodig:** je loon ingesteld als geplande storting, met de inhoudingen als aparte regels."
+          },
+          "payrollBill": {
+            "title": "Stel eerst je loon in",
+            "body": "Heb je dat nog niet gedaan, kies dan **+ Nieuw schema** en maak je loon aan als storting. Splits het in een regel voor je brutoloon en een negatieve regel per inhouding, elk met een eigen categorie. Wordt een inhouding nu niet ingehouden omdat het maximum van dit jaar al is bereikt, voeg er dan toch een splitsingsregel voor toe, als uitgave met waarde nul, zodat een regel haar kan begrenzen en ze na de reset opnieuw begint. Alleen een actieve storting die meer binnenbrengt dan ze inhoudt kan regels krijgen, en alleen haar inhoudingsregels kunnen worden begrensd."
+          },
+          "taxesLink": {
+            "title": "Looninhoudingen staan onder Belastingen",
+            "body": "Open **Hulpmiddelen** en kies **Belastingen** om de belastinghulpmiddelen te vinden."
+          },
+          "taxesCard": {
+            "title": "Open Looninhoudingen",
+            "body": "Kies deze kaart om de looninhoudingsregels te openen."
+          },
+          "newRule": {
+            "title": "Maak de regels voor een loonstrook",
+            "body": "**+ Nieuwe regel** opent het formulier. Kies je geplande loonrekening en daarna een jaarmaximum voor elke inhoudingscategorie die je wilt begrenzen. Vul de resetdatum in, meestal 1 januari. Heeft de rekening geen inhoudingsregels, dan zegt het formulier dat je die eerst aan de rekening moet toevoegen."
+          },
+          "rulesList": {
+            "title": "Je regels",
+            "body": "Elke regel toont de rekening, de categorie, het jaarmaximum, de resetdatum en wat elke loonbetaling inhoudt. Bewerk een regel om het maximum te wijzigen, of verwijder hem zodat je loon weer de volledige regel inhoudt. Een regel verwijderen wijzigt nooit een geboekte transactie."
+          },
+          "periodTables": {
+            "title": "Wat al is ingehouden",
+            "body": "Zodra je een regel hebt, toont **Jaar tot nu toe tonen** wat elke categorie deze periode heeft ingehouden en hoeveel ruimte er onder het maximum overblijft. **Vorige perioden tonen** toont wat ze in eerdere jaren heeft ingehouden."
+          },
+          "forecast": {
+            "title": "Toegepast wanneer het loon wordt geboekt",
+            "body": "Wanneer het loon wordt geboekt, wordt elke begrensde regel verlaagd tot de ruimte die onder het maximum overblijft, tot nul, en begint ze na de resetdatum opnieuw. De kasstroomprognose hier en op het dashboard toont hetzelfde vooraf, zodat je ziet hoe je nettoloon stijgt zodra een maximum is bereikt."
+          },
+          "reminders": {
+            "title": "Een herinnering voor elke reset",
+            "body": "Twee maanden voordat een regel wordt gereset, vraagt Monize je hier het maximum voor volgend jaar te bevestigen. Doe je niets, dan houdt de regel zijn maximum en wordt hij op zijn datum gereset. Kies onder **Instellingen**, in **Meldingen**, bij **Rekeningen en gepland** hoe de herinneringen je bereiken."
+          }
+        }
+      },
+      "sharedExpenses": {
+        "title": "Gedeelde uitgaven",
+        "steps": {
+          "welcome": {
+            "title": "Samen op reis, met een helder overzicht",
+            "body": "Ontdek hoe je groepsaankopen en terugbetalingen bijhoudt. Deze rondleiding maakt geen boekingen voor je aan."
+          },
+          "tools": {
+            "title": "Gedeelde uitgaven openen",
+            "body": "Je vindt **Gedeelde uitgaven** onder **Hulpmiddelen**. Gebruik op je telefoon het navigatiemenu."
+          },
+          "newGroup": {
+            "title": "Begin met je groep",
+            "body": "Bij **Nieuwe groep** stel je de reisnaam, deelnemers en afrekenvaluta in. Deelnemers hebben geen Monize-account nodig. Bij elke aankoop kunnen andere groepsleden betrokken zijn."
+          },
+          "chooseGroup": {
+            "title": "Verken een groep",
+            "body": "Open een groep om verder te gaan. Heb je er nog geen, kies dan **Deze stap overslaan** en maak er na de rondleiding een aan."
+          },
+          "expenses": {
+            "title": "Wie betaalde, en voor wie?",
+            "body": "Met bewerkingsrechten kies je bij **Uitgave toevoegen** wie betaalde en wie ervan profiteerde. **Verdelen tussen** ondersteunt gelijke delen, exacte bedragen, percentages en een aandeel van nul."
+          },
+          "balances": {
+            "title": "Controleer de saldi en reken af",
+            "body": "**Saldi** laat zien wie aan wie moet betalen en stelt terugbetalingen voor. Leg een terugbetaling vast nadat het geld is overgemaakt of gegeven. **Bestanden** en **Activiteit** bewaren bonnetjes en de geschiedenis."
+          },
+          "done": {
+            "title": "Klaar voor je volgende reis",
+            "body": "Gedeelde boekingen blijven gescheiden van persoonlijke transacties. Herhaal deze rondleiding wanneer je wilt via **Instellingen**, onder **Begeleide rondleidingen**."
+          }
+        }
+      }
+    },
+    "v1_21_0": {
+      "commandPalette": {
+        "title": "Opdrachtenpalet",
+        "steps": {
+          "welcome": {
+            "title": "Vind alles vanuit één vak",
+            "body": "Het opdrachtenpalet doorzoekt in één keer je rekeningen, begunstigden, categorieën, rekeningen om te betalen, effecten, rapporten, instellingen, transacties en de gebruikershandleiding, vanaf elk scherm. Het werkt met het toetsenbord, dus deze rondleiding is voor een computer."
+          },
+          "openPalette": {
+            "title": "Open het palet",
+            "body": "Druk op **Ctrl+K** (**Cmd+K** op een Mac). De rondleiding gaat verder zodra het palet opent."
+          },
+          "searchBox": {
+            "title": "Typ wat je zoekt",
+            "body": "Probeer een begunstigde, een rekening, een rapport zoals **Nettowaarde** of een instelling zoals **Valuta's**. De resultaten worden bijgewerkt terwijl je typt, en ook transacties en onderdelen van de handleiding worden doorzocht."
+          },
+          "results": {
+            "title": "Navigeer en open",
+            "body": "Gebruik de pijltjestoetsen **Omhoog** en **Omlaag** om te navigeren en **Enter** om een resultaat te openen. **Tab** springt naar de acties, en **Ctrl+Enter** (**Cmd+Enter** op een Mac) start een nieuwe transactie voor de best passende begunstigde."
+          },
+          "closePalette": {
+            "title": "Sluit het palet",
+            "body": "Klik op **esc** om het nu te sluiten. Buiten deze rondleiding doet de toets **Esc** hetzelfde."
+          },
+          "done": {
+            "title": "Eén sneltoets om te onthouden",
+            "body": "Druk op **Ctrl+K** wanneer je ergens naartoe wilt springen. Boven een geopend dialoogvenster doorzoekt het in plaats daarvan de handleiding. Gebruik op een telefoon de zoekfunctie in de koptekst. Speel deze rondleiding op elk moment opnieuw af via **Instellingen**, onder **Begeleide rondleidingen**."
+          }
+        }
+      },
+      "inAppHelp": {
+        "title": "Help in de app",
+        "steps": {
+          "welcome": {
+            "title": "De gebruikershandleiding, naast je werk",
+            "body": "De Monize-gebruikershandleiding opent nu in de app, naast de pagina waarop je zit, met schermafbeeldingen in jouw thema. Hij wordt meegeleverd met je Monize en werkt dus offline. Deze rondleiding laat zien waar je hem vindt."
+          },
+          "pageHelp": {
+            "title": "Open de help voor deze pagina",
+            "body": "Klik op het **?** naast de paginatitel. De handleiding opent bij het onderdeel over deze pagina."
+          },
+          "panel": {
+            "title": "Lees naast de pagina",
+            "body": "Het paneel blijft naast de pagina waarop je zat. **Op deze pagina** toont de onderdelen, en koppelingen naar andere pagina's van de handleiding openen hier. Sleep op een computer de linkerrand van het paneel om het breder of smaller te maken."
+          },
+          "panelControls": {
+            "title": "Bediening van het paneel",
+            "body": "Ga met **Terug** en **Vooruit** door de pagina's die je opende, gebruik **Zoeken** in de handleiding, zet het paneel vast met **Vastzetten** zodat het open blijft op andere pagina's, of open de pagina op monize.net. Klik op **Sluiten** (de **X**) om verder te gaan."
+          },
+          "helpMenu": {
+            "title": "Het Help-menu",
+            "body": "De **?** in de koptekst bevat help voor de huidige pagina, zoeken in de handleiding, sneltoetsen, de rondleiding voor deze pagina en Wat is er nieuw. Je kunt ook overal waar je niet typt op **?** drukken om de handleiding te doorzoeken."
+          },
+          "learnMore": {
+            "title": "Meer informatie, waar je het nodig hebt",
+            "body": "Zoek naar **Meer informatie** in tooltips, op lege schermen en naast sommige foutmeldingen. Elk opent het onderdeel van de handleiding dat het uitlegt."
+          },
+          "done": {
+            "title": "Vraag het in je eigen woorden",
+            "body": "De AI-assistent kan ook vragen als “hoe doe ik...” beantwoorden aan de hand van de handleiding en vertellen welke onderdelen hij gebruikte. Speel deze rondleiding op elk moment opnieuw af via **Instellingen**, onder **Begeleide rondleidingen**."
+          }
+        }
+      },
+      "dashboardEdit": {
+        "title": "Het dashboard indelen",
+        "steps": {
+          "welcome": {
+            "title": "Deel je dashboard ter plekke in",
+            "body": "Je verplaatst, vergroot of verkleint, voegt toe en verwijdert widgets nu direct op het dashboard, en er wordt niets opgeslagen tot jij dat aangeeft. Deze rondleiding loopt door de bewerkmodus."
+          },
+          "enterEdit": {
+            "title": "Open de bewerkmodus",
+            "body": "Klik op het tandwiel naast de begroeting. De rondleiding gaat verder zodra de bewerkmodus opent."
+          },
+          "editBar": {
+            "title": "De bewerkbalk",
+            "body": "**Widget toevoegen** toont de widgets die niet op je dashboard staan. **Instellingen dashboardkop** bepaalt wat de kop bovenaan toont, en **Standaardinstellingen herstellen** zet de standaardindeling terug."
+          },
+          "arrange": {
+            "title": "Verplaatsen, formaat wijzigen en verwijderen",
+            "body": "Sleep een widget aan zijn greep (de zes puntjes) of gebruik zijn pijltjes. Op een breed scherm wijzigen **Breedte** en **Hoogte** het formaat, of sleep de hoek rechtsonder. Met de **X** verwijder je hem, en de gestippelde tegel **Widget toevoegen** voegt er een toe. Probeer het gerust."
+          },
+          "finish": {
+            "title": "Bewaren of terugzetten",
+            "body": "Klik op **Klaar** om de indeling op te slaan, of op **Annuleren** om alles terug te zetten zoals het was. Je indeling wordt gesynchroniseerd tussen je apparaten."
+          },
+          "done": {
+            "title": "Maak het van jou",
+            "body": "Zoek je iets nieuws om toe te voegen? De widget **Weetjes** toont elke dag een feit over je geld. Speel deze rondleiding op elk moment opnieuw af via **Instellingen**, onder **Begeleide rondleidingen**."
+          }
+        }
+      }
+    }
+  },
+  "emailReceipts": {
+    "basics": {
+      "title": "Bonnen uit e-mail",
+      "steps": {
+        "welcome": {
+          "title": "Waarom bonnen uit e-mail lezen",
+          "body": "Een banktransactie laat zien hoeveel u betaalde en wanneer. Ze laat niet zien wat u kocht. De orderbevestiging per e-mail wel. Monize leest deze e-mails, vindt de transactie waarvoor elke e-mail de betaling was en stelt een omschrijving, een begunstigde en een splitsing per regel voor, met een categorie voor elke regel. U keurt elk voorstel goed voordat het een transactie wijzigt."
+        },
+        "aiRequired": {
+          "title": "In de praktijk hebt u een AI-aanbieder nodig",
+          "body": "Monize leest een e-mail met een **profiel**: een set patronen voor één afzenderdomein, bijvoorbeeld één winkel. U kunt een profiel met de hand schrijven, maar elk patroon moet precies passen bij de regels in de e-mails van die winkel, dus in de praktijk schrijft een AI het. De AI schrijft het profiel één keer, op basis van een paar voorbeeld-e-mails. Nadat u het hebt goedgekeurd, leest het profiel elke nieuwe e-mail van die winkel zonder de AI."
+        },
+        "aiProviders": {
+          "title": "Stel eerst een AI-aanbieder in",
+          "body": "Voeg hier een aanbieder toe en test de verbinding. Zonder aanbieder kan de profielwizard geen profiel schrijven en blijven e-mails van een winkel zonder profiel ongelezen."
+        },
+        "tabs": {
+          "title": "Vier tabbladen, in de volgorde van gebruik",
+          "body": "**Overzicht** toont wat Monize heeft gelezen. Koppel bij **Mailbox** een mailbox die alleen orderbevestigingen bevat. Monize leest hem alleen: het verplaatst, markeert of verwijdert nooit een bericht. **Profielen** bevat één profiel per winkel. **E-mails** toont elke e-mail en de status ervan."
+        },
+        "uncovered": {
+          "title": "Winkels zonder profiel",
+          "body": "Dit vak toont de afzenderdomeinen die nog geen enkel profiel kan lezen. Kies er een om de wizard te starten. Selecteer maximaal vijf e-mails ervan en koppel elke e-mail aan de banktransactie waarvoor ze de betaling was. De AI schrijft een profiel en test het op deze paren. Daarna ziet u een voorbeeld voor alle e-mails van die winkel en accepteert u het profiel of vraagt u met een korte notitie om een wijziging.",
+          "fallbackBody": "U hebt nog geen e-mails van een winkel zonder profiel. Nadat u de mailbox hebt gekoppeld, verschijnt elk afzenderdomein hier als label, bijvoorbeeld **shop.example (12)**: het domein en het aantal e-mails ervan. Kies het label om de wizard te starten. Selecteer maximaal vijf e-mails ervan en koppel elke e-mail aan de banktransactie waarvoor ze de betaling was. De AI schrijft een profiel en test het op deze paren. Daarna ziet u een voorbeeld voor alle e-mails van die winkel en accepteert u het profiel of vraagt u met een korte notitie om een wijziging."
+        },
+        "profiles": {
+          "title": "Uw profielen",
+          "body": "Elke rij is één profiel, goedgekeurd of concept. **Nieuw profiel handmatig maken** opent de editor voor een met de hand geschreven profiel. Gebruik het om een klein detail in een concept van de AI te corrigeren. Wanneer u een profiel goedkeurt, leest Monize meteen de e-mails van het bijbehorende domein.",
+          "fallbackBody": "U hebt nog geen profielen. Elk profiel dat u accepteert, verschijnt hier als een rij, bijvoorbeeld **Shop Example**, domein **shop.example**, status **Goedgekeurd**. **Nieuw profiel handmatig maken** opent de editor voor een met de hand geschreven profiel. Gebruik het alleen om een klein detail in een concept van de AI te corrigeren. Wanneer u een profiel goedkeurt, leest Monize meteen de e-mails van het bijbehorende domein."
+        },
+        "reviews": {
+          "title": "Keur de voorstellen goed",
+          "body": "Elke e-mail die bij een transactie past, wordt een voorstel in het **AI-controlepostvak**, in het menu **AI**. Een voorstel toont bijvoorbeeld de regels van een bestelling met een categorie voor elke regel. Er verandert niets aan uw transacties totdat u het voorstel daar goedkeurt."
         }
       }
     }

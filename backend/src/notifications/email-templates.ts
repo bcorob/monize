@@ -1,6 +1,6 @@
 import { escapeHtml } from "../common/escape-html.util";
-import { formatCurrency } from "../common/format-currency.util";
 import { EmailT, englishEmailT } from "../i18n/email-translator";
+import { NumberT, defaultNumberT } from "../common/number-locale.util";
 
 export function testEmailTemplate(
   firstName: string,
@@ -13,6 +13,51 @@ export function testEmailTemplate(
       <p style="color: #374151;">${t("emails.test.greeting", `Hi ${safeName},`, { name: safeName })}</p>
       <p style="color: #374151;">${t("emails.test.body", "This is a test email from Monize. If you received this, your email notifications are working correctly.")}</p>
       <p style="color: #6b7280; font-size: 14px; margin-top: 24px;">-- Monize</p>
+    </div>
+  `;
+}
+
+/** The accent colour for a notification-mode email, by severity. */
+function notificationAccentColour(severity: string): string {
+  switch (severity) {
+    case "critical":
+      return "#dc2626";
+    case "warning":
+      return "#d97706";
+    case "success":
+      return "#059669";
+    default:
+      return "#2563eb";
+  }
+}
+
+/**
+ * An immediate, one-per-event notification email (spec section 14.3).
+ *
+ * The frame and the title/message are localized before rendering, using the
+ * recipient's stored language. The shared notification email composer retains
+ * stored English only for legacy rows without sufficient structured facts.
+ * Names and diagnostic errors remain literal data, so both interpolated values
+ * go through `escapeHtml`. The URL is server-built from the application origin
+ * and the validated notification target.
+ */
+export function notificationImmediateTemplate(
+  params: { title: string; message: string; url: string; severity: string },
+  t: EmailT = englishEmailT,
+): string {
+  const safeTitle = escapeHtml(params.title);
+  const safeMessage = escapeHtml(params.message);
+  const safeUrl = escapeHtml(params.url);
+  const accent = notificationAccentColour(params.severity);
+  return `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <p style="color: #6b7280; font-size: 13px; text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 8px;">${t("emails.notificationImmediate.eyebrow", "Monize notification")}</p>
+      <h2 style="color: ${accent}; margin: 0 0 12px;">${safeTitle}</h2>
+      <p style="color: #374151; line-height: 1.5;">${safeMessage}</p>
+      <p style="margin: 24px 0;">
+        <a href="${safeUrl}" style="display: inline-block; padding: 10px 20px; background: ${accent}; color: #ffffff; border-radius: 6px; text-decoration: none; font-weight: 500;">${t("emails.notificationImmediate.button", "Open in Monize")}</a>
+      </p>
+      <p style="color: #9ca3af; font-size: 13px; margin-top: 24px;">${t("emails.notificationImmediate.footer", "You are receiving this because immediate email is on for this notification type. Change it in Settings, Notifications.")}</p>
     </div>
   `;
 }
@@ -34,6 +79,29 @@ interface BillData {
    * would be a guess presented as a fact.
    */
   isIncome: boolean | null;
+  /**
+   * The amount is the schedule's estimate from payment history (issue #2096):
+   * the row says so, and an unknown one says the person enters it on posting.
+   */
+  estimated?: boolean;
+}
+
+/** A bill row's amount cell: the figure, labelled when it is an estimate. */
+function billAmountCell(b: BillData, t: EmailT, n: NumberT): string {
+  if (b.amount === null) {
+    return escapeHtml(
+      b.estimated
+        ? t(
+            "emails.billReminder.estimateUnknown",
+            "Estimate unknown: enter the amount when you post it",
+          )
+        : t("emails.billReminder.amountUnavailable", "Amount unavailable"),
+    );
+  }
+  const amount = n.formatCurrency(Math.abs(b.amount), b.currencyCode);
+  return b.estimated
+    ? `${amount}<br><span style="font-size: 12px; font-weight: 400; color: #6b7280;">${escapeHtml(t("emails.billReminder.estimated", "Estimated"))}</span>`
+    : amount;
 }
 
 /**
@@ -61,6 +129,7 @@ export function billReminderTemplate(
   bills: BillData[],
   appUrl: string,
   t: EmailT = englishEmailT,
+  n: NumberT = defaultNumberT,
 ): string {
   const safeName = escapeHtml(firstName || "there");
   const billRows = bills
@@ -72,7 +141,7 @@ export function billReminderTemplate(
           <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb;">
             <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; color: white; background: ${billTypeColour(b.isIncome)};">${escapeHtml(billTypeLabel(b.isIncome, t))}</span>
           </td>
-          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: right; color: ${billTypeColour(b.isIncome)}; font-weight: 500;">${b.amount === null ? escapeHtml(t("emails.billReminder.amountUnavailable", "Amount unavailable")) : formatCurrency(Math.abs(b.amount), b.currencyCode)}</td>
+          <td style="padding: 10px 12px; border-bottom: 1px solid #e5e7eb; text-align: right; color: ${billTypeColour(b.isIncome)}; font-weight: 500;">${billAmountCell(b, t, n)}</td>
         </tr>`,
     )
     .join("");
@@ -127,9 +196,9 @@ export function mortgageReminderTemplate(
 
   return `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
-      <h2 style="color: #1f2937;">${t("emails.mortgageReminder.heading", "Mortgage Renewal Reminder")}</h2>
+      <h2 style="color: #1f2937;">${t("emails.mortgageReminder.heading", "Mortgage Rate Term Reminder")}</h2>
       <p style="color: #374151;">${t("emails.mortgageReminder.greeting", `Hi ${safeName},`, { name: safeName })}</p>
-      <p style="color: #374151;">${mortgages.length === 1 ? t("emails.mortgageReminder.introOne", "You have 1 mortgage with an upcoming term renewal. Contact your lender to discuss renewal options before the term ends:") : t("emails.mortgageReminder.introMany", `You have ${mortgages.length} mortgages with an upcoming term renewal. Contact your lender to discuss renewal options before the term ends:`, { count: mortgages.length })}</p>
+      <p style="color: #374151;">${mortgages.length === 1 ? t("emails.mortgageReminder.introOne", "You have 1 mortgage whose current rate term ends soon. Contact your lender before it ends to arrange your next rate or renewal:") : t("emails.mortgageReminder.introMany", `You have ${mortgages.length} mortgages whose current rate term ends soon. Contact your lender before each one ends to arrange the next rate or renewal:`, { count: mortgages.length })}</p>
       <table style="width: 100%; border-collapse: collapse; margin: 16px 0; border: 1px solid #e5e7eb; border-radius: 8px;">
         <thead>
           <tr style="background: #f3f4f6;">
@@ -226,6 +295,9 @@ export function budgetAlertImmediateTemplate(
   `;
 }
 
+// No `NumberT` here on purpose: the digest renders each alert's own `title` and
+// `message`, which BudgetAlertService already composed in the recipient's number
+// locale. Formatting them again here would be a second decision about one figure.
 export function budgetWeeklyDigestTemplate(
   firstName: string,
   alerts: BudgetAlertData[],
@@ -333,6 +405,7 @@ export function budgetMonthlySummaryTemplate(
   summaries: MonthlySummaryData[],
   appUrl: string,
   t: EmailT = englishEmailT,
+  n: NumberT = defaultNumberT,
 ): string {
   const safeName = escapeHtml(firstName || "there");
 
@@ -355,8 +428,8 @@ export function budgetMonthlySummaryTemplate(
                 (c) =>
                   `<tr>
                     <td style="padding: 4px 8px; color: #374151; font-size: 14px;">${escapeHtml(c.categoryName)}</td>
-                    <td style="padding: 4px 8px; text-align: right; color: #dc2626; font-size: 14px; font-weight: 600;">${c.percentUsed.toFixed(0)}%</td>
-                    <td style="padding: 4px 8px; text-align: right; color: #6b7280; font-size: 14px;">${formatCurrency(c.actual, s.currencyCode)} / ${formatCurrency(c.budgeted, s.currencyCode)}</td>
+                    <td style="padding: 4px 8px; text-align: right; color: #dc2626; font-size: 14px; font-weight: 600;">${n.formatPercent(c.percentUsed, 0)}</td>
+                    <td style="padding: 4px 8px; text-align: right; color: #6b7280; font-size: 14px;">${n.formatCurrency(c.actual, s.currencyCode)} / ${n.formatCurrency(c.budgeted, s.currencyCode)}</td>
                   </tr>`,
               )
               .join("")}
@@ -369,9 +442,9 @@ export function budgetMonthlySummaryTemplate(
             `<tr>
               <td style="padding: 4px 8px; color: #374151; font-size: 14px;">${escapeHtml(c.categoryName)}</td>
               <td style="padding: 4px 8px; text-align: right; font-size: 14px;">
-                <span style="color: ${c.percentUsed > 100 ? "#dc2626" : c.percentUsed > 80 ? "#d97706" : "#059669"}; font-weight: 600;">${c.percentUsed.toFixed(0)}%</span>
+                <span style="color: ${c.percentUsed > 100 ? "#dc2626" : c.percentUsed > 80 ? "#d97706" : "#059669"}; font-weight: 600;">${n.formatPercent(c.percentUsed, 0)}</span>
               </td>
-              <td style="padding: 4px 8px; text-align: right; color: #6b7280; font-size: 14px;">${formatCurrency(c.actual, s.currencyCode)} / ${formatCurrency(c.budgeted, s.currencyCode)}</td>
+              <td style="padding: 4px 8px; text-align: right; color: #6b7280; font-size: 14px;">${n.formatCurrency(c.actual, s.currencyCode)} / ${n.formatCurrency(c.budgeted, s.currencyCode)}</td>
             </tr>`,
         )
         .join("");
@@ -391,22 +464,22 @@ export function budgetMonthlySummaryTemplate(
           <div style="display: flex; gap: 16px; margin-bottom: 12px;">
             <div>
               <span style="color: #6b7280; font-size: 12px;">${t("emails.budgetMonthlySummary.labelBudgeted", "Budgeted")}</span><br/>
-              <span style="color: #374151; font-weight: 600;">${formatCurrency(s.totalBudgeted, s.currencyCode)}</span>
+              <span style="color: #374151; font-weight: 600;">${n.formatCurrency(s.totalBudgeted, s.currencyCode)}</span>
             </div>
             <div>
               <span style="color: #6b7280; font-size: 12px;">${t("emails.budgetMonthlySummary.labelSpent", "Spent")}</span><br/>
-              <span style="color: ${percentColor}; font-weight: 600;">${formatCurrency(s.totalSpent, s.currencyCode)}</span>
+              <span style="color: ${percentColor}; font-weight: 600;">${n.formatCurrency(s.totalSpent, s.currencyCode)}</span>
             </div>
             <div>
               <span style="color: #6b7280; font-size: 12px;">${t("emails.budgetMonthlySummary.labelRemaining", "Remaining")}</span><br/>
-              <span style="color: ${s.remaining >= 0 ? "#059669" : "#dc2626"}; font-weight: 600;">${formatCurrency(s.remaining, s.currencyCode)}</span>
+              <span style="color: ${s.remaining >= 0 ? "#059669" : "#dc2626"}; font-weight: 600;">${n.formatCurrency(s.remaining, s.currencyCode)}</span>
             </div>
           </div>
 
           <div style="background: #e5e7eb; border-radius: 4px; height: 8px; margin-bottom: 8px;">
             <div style="background: ${percentColor}; border-radius: 4px; height: 8px; width: ${Math.min(s.percentUsed, 100)}%;"></div>
           </div>
-          <p style="margin: 0 0 8px 0; color: ${percentColor}; font-weight: 600; font-size: 14px;">${t("emails.budgetMonthlySummary.percentUsed", `${s.percentUsed.toFixed(1)}% used`, { percent: s.percentUsed.toFixed(1) })}</p>
+          <p style="margin: 0 0 8px 0; color: ${percentColor}; font-weight: 600; font-size: 14px;">${t("emails.budgetMonthlySummary.percentUsed", `${n.formatPercent(s.percentUsed, 1)} used`, { percent: n.formatNumber(s.percentUsed, 1) })}</p>
 
           ${healthSection}
           ${overBudgetRows}
@@ -747,6 +820,47 @@ export function providerRecoveryTemplate(
       <p style="color: #374151;">${t("emails.providerRecovery.greeting", `Hi ${safeName},`, { name: safeName })}</p>
       <p style="color: #374151;">${t("emails.providerRecovery.intro", `<strong>${provider}</strong> answered again at ${restoredAt}. The outage lasted ${duration}.`, { provider, restoredAt, duration })}</p>
       <p style="color: #374151;">${t("emails.providerRecovery.backfill", "Prices and index history missed during the outage are picked up by the next scheduled refresh; no action is needed.")}</p>
+      <p style="color: #6b7280; font-size: 14px; margin-top: 24px;">-- Monize</p>
+    </div>
+  `;
+}
+
+export interface SystemAlertEmailData {
+  severity: string;
+  /** Localized title, or the stored fallback for a legacy row. */
+  title: string;
+  /** Localized message; diagnostic error strings remain literal. */
+  message: string;
+}
+
+/**
+ * The generic admin email behind `SystemAlertService`: a localized severity
+ * badge and frame around copy composed in this administrator's stored language.
+ * Error strings and addresses are facts, preserved verbatim and HTML-escaped
+ * together with the translated title and message.
+ */
+export function systemAlertTemplate(
+  firstName: string,
+  data: SystemAlertEmailData,
+  t: EmailT = englishEmailT,
+): string {
+  const safeName = escapeHtml(firstName || "there");
+  const title = escapeHtml(data.title);
+  const message = escapeHtml(data.message);
+  const badge = escapeHtml(severityLabel(data.severity, t));
+  return `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px;">
+      <h2 style="color: #1f2937;">${t("emails.systemAlert.heading", "System alert")}</h2>
+      <p style="color: #374151;">${t("emails.systemAlert.greeting", `Hi ${safeName},`, { name: safeName })}</p>
+      <p style="color: #374151;">${t("emails.systemAlert.intro", "An issue on your Monize deployment needs an administrator's attention.")}</p>
+      <div style="margin: 16px 0; padding: 14px 16px; border: 1px solid #e5e7eb; border-radius: 8px;">
+        <p style="margin: 0 0 8px 0;">
+          <span style="display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; color: white; background: ${severityColor(data.severity)};">${badge}</span>
+        </p>
+        <p style="margin: 0 0 6px 0; font-weight: 600; color: #1f2937;">${title}</p>
+        <p style="margin: 0; color: #374151;">${message}</p>
+      </div>
+      <p style="color: #6b7280; font-size: 14px;">${t("emails.systemAlert.footer", "This alert is also shown in the app's notification bell. It is raised at most once per occurrence, however many server replicas noticed it.")}</p>
       <p style="color: #6b7280; font-size: 14px; margin-top: 24px;">-- Monize</p>
     </div>
   `;

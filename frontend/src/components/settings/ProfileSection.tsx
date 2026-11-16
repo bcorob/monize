@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
+import { useForm, useWatch } from 'react-hook-form';
 import '@/lib/zodConfig';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -52,7 +52,7 @@ export function ProfileSection({ user, onUserUpdated }: ProfileSectionProps) {
   const {
     register,
     handleSubmit,
-    watch,
+    control,
     setValue,
     formState: { errors },
   } = useForm<ProfileFormData>({
@@ -65,7 +65,7 @@ export function ProfileSection({ user, onUserUpdated }: ProfileSectionProps) {
     },
   });
 
-  const watchedEmail = watch('email');
+  const watchedEmail = useWatch({ control, name: 'email' });
   const isEmailChanged = watchedEmail !== user.email;
 
   const onSubmit = async (formData: ProfileFormData) => {
@@ -92,7 +92,16 @@ export function ProfileSection({ user, onUserUpdated }: ProfileSectionProps) {
       onUserUpdated(updatedUser);
       setUser(updatedUser);
       setValue('currentPassword', '');
-      toast.success(t('toasts.success'));
+      // With email delivery configured the server only stages the change: the
+      // account keeps its current email until the link sent to the new address
+      // is followed, so the field goes back to the live address and the reader
+      // is told where to look.
+      if (data.email !== undefined && updatedUser.pendingEmail && updatedUser.email !== data.email) {
+        setValue('email', updatedUser.email);
+        toast.success(t('toasts.confirmationSent', { email: updatedUser.pendingEmail }));
+      } else {
+        toast.success(t('toasts.success'));
+      }
     } catch (error) {
       toast.error(getErrorMessage(error, t('toasts.updateFailed')));
     } finally {
@@ -126,6 +135,11 @@ export function ProfileSection({ user, onUserUpdated }: ProfileSectionProps) {
             error={errors.email?.message}
             placeholder={t('emailPlaceholder')}
           />
+          {user.pendingEmail && (
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {t('pendingEmailNotice', { email: user.pendingEmail })}
+            </p>
+          )}
         </div>
         {isEmailChanged && (
           <div className="mt-4">
@@ -143,8 +157,8 @@ export function ProfileSection({ user, onUserUpdated }: ProfileSectionProps) {
           </div>
         )}
         <div className="mt-4 flex justify-end">
-          <Button type="submit" disabled={isUpdatingProfile}>
-            {isUpdatingProfile ? t('savingButton') : t('saveButton')}
+          <Button type="submit" isLoading={isUpdatingProfile}>
+            {t('saveButton')}
           </Button>
         </div>
       </form>

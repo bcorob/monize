@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@/test/render';
+import { render, screen, fireEvent, waitFor, act } from '@/test/render';
 import { Combobox } from '@/components/ui/Combobox';
 
 // jsdom does not implement scrollIntoView
@@ -17,6 +17,16 @@ describe('Combobox', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  it('keeps a portalled option list inside the viewport when the input is near the bottom', () => {
+    render(<Combobox options={options} onChange={onChange} usePortal />);
+    const input = screen.getByRole('textbox');
+    vi.spyOn(input, 'getBoundingClientRect').mockReturnValue({ top: 700, bottom: 732, left: 20, right: 220, width: 200, height: 32, x: 20, y: 700, toJSON: () => ({}) });
+    fireEvent.focus(input);
+    const list = screen.getByText('Apple').closest('[data-option-index]')!.parentElement!;
+    expect(Number.parseFloat(list.style.top)).toBeLessThan(700);
+    expect(Number.parseFloat(list.style.top) + 240).toBeLessThanOrEqual(window.innerHeight);
   });
 
   it('renders with label and placeholder', () => {
@@ -970,6 +980,46 @@ describe('Combobox', () => {
     });
   });
 
+  describe('a mouse pick keeps focus in the input', () => {
+    // The rows are not focusable: a mousedown that moved focus would leave it
+    // on the page body once the list closes, and the next Tab would start
+    // from the top of the page instead of the field after this one (#2009).
+    it('does not let a mousedown on an option take focus, and still selects it', () => {
+      render(<Combobox options={options} onChange={onChange} />);
+      const input = screen.getByRole('textbox');
+      act(() => input.focus());
+
+      const row = screen.getByText('Banana');
+      // fireEvent returns false when the handler called preventDefault().
+      expect(fireEvent.mouseDown(row)).toBe(false);
+      fireEvent.click(row);
+
+      expect(onChange).toHaveBeenCalledWith('2', 'Banana');
+      expect(document.activeElement).toBe(input);
+    });
+
+    it('does the same for the Create row', async () => {
+      const onCreateNew = vi.fn();
+      render(
+        <Combobox options={options} onChange={onChange} onCreateNew={onCreateNew} allowCustomValue />,
+      );
+      const input = screen.getByRole('textbox');
+      act(() => input.focus());
+      // Typing straight after the focus opened the list is ignored for 100ms.
+      await act(async () => {
+        await new Promise((r) => setTimeout(r, 150));
+      });
+      fireEvent.change(input, { target: { value: 'Kiwi' } });
+
+      const row = screen.getByText('Create "Kiwi"');
+      expect(fireEvent.mouseDown(row)).toBe(false);
+      fireEvent.click(row);
+
+      expect(onCreateNew).toHaveBeenCalledWith('Kiwi');
+      expect(document.activeElement).toBe(input);
+    });
+  });
+
   describe('create option keyboard navigation', () => {
     it('selects create option via Enter when highlighted at index 0', async () => {
       const onCreateNew = vi.fn();
@@ -1248,6 +1298,23 @@ describe('Combobox', () => {
   });
 
   describe('usePortal', () => {
+    it('keeps options selectable after a delayed focus scroll and follows the input on resize', () => {
+      render(<Combobox options={options} onChange={onChange} usePortal />);
+      const input = screen.getByRole('textbox');
+      const rect = vi.spyOn(input, 'getBoundingClientRect');
+      rect.mockReturnValue({ top: 200, bottom: 240, left: 20, width: 300 } as DOMRect);
+      fireEvent.focus(input);
+      fireEvent.scroll(document.body);
+      expect(screen.getByText('Apple')).toBeVisible();
+      rect.mockReturnValue({ top: 100, bottom: 140, left: 40, width: 280 } as DOMRect);
+      fireEvent(window, new Event('resize'));
+      const list = screen.getByText('Apple').closest('[class*="fixed"]') as HTMLElement;
+      expect(list.style.left).toBe('40px');
+      expect(list.style.width).toBe('280px');
+      fireEvent.click(screen.getByText('Apple'));
+      expect(onChange).toHaveBeenCalledWith('1', 'Apple');
+    });
+
     it('renders dropdown content in a portal', () => {
       render(
         <Combobox options={options} onChange={onChange} usePortal />,

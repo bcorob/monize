@@ -1124,6 +1124,32 @@ describe('EmergencyAccessPage', () => {
     expect(screen.getByText('Carol')).toBeInTheDocument();
   });
 
+  it('refuses an over-long email with the translated validation message', async () => {
+    api.get.mockResolvedValue(makeView());
+    await renderPage();
+    await waitFor(() =>
+      screen.getByRole('button', { name: /Add contact/i }),
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Add contact/i }));
+    });
+    const firstName = screen.getByLabelText(/First name/i);
+    await act(async () => {
+      fireEvent.input(firstName, { target: { value: 'Carol' } });
+      fireEvent.input(screen.getByLabelText(/^Email$/i), {
+        target: { value: `${'a'.repeat(250)}@example.com` },
+      });
+    });
+    await act(async () => {
+      fireEvent.submit(firstName.closest('form')!);
+    });
+    // The catalog's message, with the limit formatted for the reader's locale.
+    expect(
+      await screen.findByText('Email must be 255 characters or less'),
+    ).toBeInTheDocument();
+    expect(api.addContact).not.toHaveBeenCalled();
+  });
+
   it('shows a toast when adding a contact fails', async () => {
     api.get.mockResolvedValue(makeView());
     api.addContact.mockRejectedValue(new Error('duplicate'));

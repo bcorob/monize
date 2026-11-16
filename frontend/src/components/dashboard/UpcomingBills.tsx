@@ -1,9 +1,19 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTranslations } from 'next-intl';
-import { differenceInDays, isPast, isToday, isTomorrow, startOfDay } from 'date-fns';
+import {
+  addMonths,
+  differenceInDays,
+  isPast,
+  isToday,
+  isTomorrow,
+  startOfDay,
+  startOfMonth,
+  subMonths,
+} from 'date-fns';
+import { CalendarDaysIcon, ExclamationTriangleIcon, ListBulletIcon } from '@heroicons/react/24/outline';
 import { ScheduledTransaction } from '@/types/scheduled-transaction';
 import { Account } from '@/types/account';
 import { parseLocalDate } from '@/lib/utils';
@@ -18,9 +28,20 @@ import { UnknownAmount } from '@/components/ui/UnknownAmount';
 import {
   nextOccurrenceDueDate,
   nextOccurrenceEffectiveAmount,
+  occurrenceFollowsEstimate,
+  occurrenceSettlementAccountId,
 } from '@/lib/scheduled-effective-amount';
+import { moneyDecimalsForCurrency, roundMoney } from '@/lib/format';
+import { buildScheduledCalendarDays } from '@/lib/scheduled-calendar';
+import { ScheduledCalendarGrid } from '@/components/bills/ScheduledCalendarGrid';
+import { useWidgetConfig } from '@/hooks/useWidgetConfig';
+import { useChartDateFormat } from '@/hooks/useChartDateFormat';
 import { WidgetHeading } from './widget-meta';
+import { WidgetSegmentedControl } from './WidgetSegmentedControl';
 import { CARD_CLASS } from '@/components/ui/Card';
+import { UPCOMING_BILLS_DEFAULT, UpcomingBillsConfig } from './widget-config';
+
+const WIDGET_ID = 'upcoming-bills';
 
 const LIABILITY_TYPES = new Set(['CREDIT_CARD', 'LOAN', 'MORTGAGE', 'LINE_OF_CREDIT']);
 
@@ -35,13 +56,26 @@ export function UpcomingBills({ scheduledTransactions, accounts, isLoading, maxI
   const t = useTranslations('dashboard');
   const router = useRouter();
   const { formatDate } = useDateFormat();
-  const { formatCurrency: formatCurrencyBase } = useNumberFormat();
+  const { formatCurrency } = useNumberFormat();
+  const formatChartDate = useChartDateFormat();
+  const { config, updateConfig } = useWidgetConfig<UpcomingBillsConfig>(
+    WIDGET_ID,
+    UPCOMING_BILLS_DEFAULT,
+  );
+  // Which month the calendar is showing. A view position rather than a setting:
+  // reopening the dashboard should land on the current month, not on whichever
+  // month was last paged to.
+  const [calendarMonth, setCalendarMonth] = useState(() => startOfMonth(new Date()));
 
-  // Filter to active bills, deposits, and transfers: overdue items + within each item's reminder window
+  // Active bills, deposits, transfers and reminders. Under `dueSoon` the list is
+  // what is overdue plus what has entered its own reminder window; under `all`
+  // it is every active schedule's next occurrence, however far off.
   const today = useMemo(() => startOfDay(new Date()), []);
+  const showAll = config.scope === 'all';
   const upcomingItems = useMemo(() => scheduledTransactions
     .filter((st) => {
       if (!st.isActive) return false;
+      if (showAll) return true;
       const dueDate = parseLocalDate(nextOccurrenceDueDate(st));
       const daysUntil = differenceInDays(dueDate, today);
       // Include overdue items (daysUntil < 0) and items within their reminder window
@@ -56,7 +90,7 @@ export function UpcomingBills({ scheduledTransactions, accounts, isLoading, maxI
       if (!a.autoPost && b.autoPost) return -1;
       if (a.autoPost && !b.autoPost) return 1;
       return 0;
-    }), [scheduledTransactions, today]);
+    }), [scheduledTransactions, today, showAll]);
 
   // Build a map of account ID -> Account for quick lookups
   const accountMap = useMemo(() => {
@@ -71,22 +105,34 @@ export function UpcomingBills({ scheduledTransactions, accounts, isLoading, maxI
   // Uses running balances per account, processing items in date order (which they already are).
   const negativeBalanceItems = useMemo(() => {
     const result = new Set<string>();
-    // Running balance per account: start with currentBalance + futureTransactionsSum
+    // Running balance per settlement account: currentBalance + futureTransactionsSum
     const runningBalances = new Map<string, number>();
     /** Accounts whose projection hit an unknown amount and cannot continue. */
     const unknown = new Set<string>();
 
     for (const item of upcomingItems) {
-      const account = accountMap.get(item.accountId);
+      // The account the cash actually moves through, which for an investment
+      // schedule is the settlement account and not `accountId` (the brokerage).
+      // Charging the brokerage warned that a purchase would overdraw it while
+      // the funding account covering the trade to the cent went unprojected
+      // (issue #1247).
+      const settlementAccountId = occurrenceSettlementAccountId(item, accountMap);
+      if (!settlementAccountId) continue;
+      const account = accountMap.get(settlementAccountId);
       if (!account) continue;
 
       // Skip liability accounts - they normally carry negative balances
       if (LIABILITY_TYPES.has(account.accountType)) continue;
+      // The account currency's money precision: four for fiat, a coin's eight.
+      const decimals = moneyDecimalsForCurrency(account.currencyCode);
 
-      if (!runningBalances.has(item.accountId)) {
+      if (!runningBalances.has(settlementAccountId)) {
         runningBalances.set(
-          item.accountId,
-          (Number(account.currentBalance) || 0) + (Number(account.futureTransactionsSum) || 0),
+          settlementAccountId,
+          roundMoney(
+            (Number(account.currentBalance) || 0) + (Number(account.futureTransactionsSum) || 0),
+            decimals,
+          ),
         );
       }
 
@@ -94,14 +140,25 @@ export function UpcomingBills({ scheduledTransactions, accounts, isLoading, maxI
       // balance, it is an unknown one -- so the projection stops for that
       // account rather than carrying on as if the item cost nothing and
       // flagging (or clearing) the rows after it (issue #1247).
-      const { amount: effectiveAmount } = nextOccurrenceEffectiveAmount(item);
+      const { amount: effectiveAmount, currencyCode } = nextOccurrenceEffectiveAmount(item);
       if (effectiveAmount === null) {
-        unknown.add(item.accountId);
+        unknown.add(settlementAccountId);
         continue;
       }
-      if (unknown.has(item.accountId)) continue;
-      const newBalance = runningBalances.get(item.accountId)! + effectiveAmount;
-      runningBalances.set(item.accountId, newBalance);
+      // An amount and its currency are one value. Converting here would invent a
+      // rate this widget holds no table for, and adding the bare number would
+      // compare foreign units against this balance, so a mismatch is unknown.
+      if (currencyCode !== account.currencyCode) {
+        unknown.add(settlementAccountId);
+        continue;
+      }
+      if (unknown.has(settlementAccountId)) continue;
+      // Money precision, not float precision: a balance and the amount that
+      // empties it are both stored at the currency's money precision, and only
+      // the rounded difference is one. An unrounded sum lands a fraction of a
+      // unit below zero and warns about an account that ends at exactly zero.
+      const newBalance = roundMoney(runningBalances.get(settlementAccountId)! + effectiveAmount, decimals);
+      runningBalances.set(settlementAccountId, newBalance);
 
       if (newBalance < 0) {
         result.add(item.id);
@@ -109,10 +166,6 @@ export function UpcomingBills({ scheduledTransactions, accounts, isLoading, maxI
     }
     return result;
   }, [upcomingItems, accountMap]);
-
-  const formatCurrency = (amount: number, currency: string) => {
-    return formatCurrencyBase(Math.abs(amount), currency);
-  };
 
   const isOverdue = (dateStr: string) => {
     const date = parseLocalDate(dateStr);
@@ -176,7 +229,7 @@ export function UpcomingBills({ scheduledTransactions, accounts, isLoading, maxI
       text:
         effective.amount === null
           ? null
-          : `${sign}${formatCurrency(effective.amount, effective.currencyCode)}`,
+          : `${sign}${formatCurrency(Math.abs(effective.amount), effective.currencyCode)}`,
       className: SCHEDULED_KIND_AMOUNT_CLASSES[type],
     };
   };
@@ -187,13 +240,58 @@ export function UpcomingBills({ scheduledTransactions, accounts, isLoading, maxI
 
   const sectionTitle = t('upcomingBills.title');
 
+  // The calendar draws from the same filtered set as the list, so switching
+  // views never changes which schedules are in scope -- only how they are laid
+  // out. A month with nothing in it is still a month, so the calendar has no
+  // empty state of its own.
+  const calendarDays = buildScheduledCalendarDays(upcomingItems, calendarMonth);
+
+  // Scope and view on one row: the view switch is icons so both fit beside the
+  // heading on a phone instead of the second one wrapping to its own line. The
+  // labels stay as the accessible name and the tooltip.
+  //
+  // On a phone the row takes the header's own line (`w-full sm:w-auto`, the
+  // toolbar convention) and holds its two ends apart: scope against the left
+  // edge, view against the right. Not `sm:ml-auto` on the view switch -- the
+  // two groups are one row here, not a toolbar's leading and trailing groups,
+  // and the scope pair must stay left whichever line the row lands on.
+  const viewControls = (
+    <div className="flex w-full items-center justify-between gap-2 sm:w-auto sm:justify-start">
+      <WidgetSegmentedControl
+        value={config.scope}
+        onChange={(scope) => updateConfig({ scope })}
+        options={[
+          { value: 'dueSoon', label: t('upcomingBills.scope.dueSoon') },
+          { value: 'all', label: t('upcomingBills.scope.all') },
+        ]}
+      />
+      <WidgetSegmentedControl
+        value={config.view}
+        onChange={(view) => updateConfig({ view })}
+        ariaLabel={t('upcomingBills.viewLabel')}
+        options={[
+          {
+            value: 'list',
+            label: t('upcomingBills.viewList'),
+            icon: <ListBulletIcon className="w-4 h-4" aria-hidden="true" />,
+          },
+          {
+            value: 'calendar',
+            label: t('upcomingBills.viewCalendar'),
+            icon: <CalendarDaysIcon className="w-4 h-4" aria-hidden="true" />,
+          },
+        ]}
+      />
+    </div>
+  );
+
   if (isLoading) {
     return (
-      <div className={`${CARD_CLASS} p-3 sm:p-6 lg:self-start`}>
-        <WidgetHeading id="upcoming-bills" onClick={() => router.push('/bills')} className="mb-4">
+      <div className={`${CARD_CLASS} p-3 sm:p-6`}>
+        <WidgetHeading id="upcoming-bills" href="/bills" className="mb-4">
           {sectionTitle}
         </WidgetHeading>
-        <div className="animate-pulse space-y-3">
+        <div className="animate-pulse skeleton-shimmer space-y-3">
           {[1, 2, 3].map((i) => (
             <div key={i} className="h-12 bg-gray-200 dark:bg-gray-700 rounded" />
           ))}
@@ -204,12 +302,17 @@ export function UpcomingBills({ scheduledTransactions, accounts, isLoading, maxI
 
   if (upcomingItems.length === 0) {
     return (
-      <div className={`${CARD_CLASS} p-3 sm:p-6 lg:self-start`}>
-        <WidgetHeading id="upcoming-bills" onClick={() => router.push('/bills')} className="mb-4">
-          {sectionTitle}
-        </WidgetHeading>
+      <div className={`${CARD_CLASS} p-3 sm:p-6`}>
+        {/* The controls stay on screen: a scope that emptied the list is the
+            most likely reason it is empty, and the way back out of it. */}
+        <div className="flex flex-wrap items-start justify-between gap-2 mb-4">
+          <WidgetHeading id="upcoming-bills" href="/bills">
+            {sectionTitle}
+          </WidgetHeading>
+          {viewControls}
+        </div>
         <p className="text-gray-500 dark:text-gray-400 text-sm">
-          {t('upcomingBills.empty')}
+          {showAll ? t('upcomingBills.emptyAll') : t('upcomingBills.empty')}
         </p>
       </div>
     );
@@ -225,13 +328,45 @@ export function UpcomingBills({ scheduledTransactions, accounts, isLoading, maxI
   const hiddenCount = upcomingItems.length - visibleItems.length;
 
   return (
-    <div className={`${CARD_CLASS} p-3 sm:p-6 lg:self-start`}>
-      <div className="flex items-center justify-between mb-4">
-        <WidgetHeading id="upcoming-bills" onClick={() => router.push('/bills')}>
+    <div className={`${CARD_CLASS} p-3 sm:p-6`}>
+      <div className="flex flex-wrap items-start justify-between gap-2 mb-4">
+        <WidgetHeading id="upcoming-bills" href="/bills">
           {sectionTitle}
         </WidgetHeading>
-        <span className="hidden sm:inline text-sm text-gray-500 dark:text-gray-400">{t('upcomingBills.perReminderSettings')}</span>
+        {viewControls}
       </div>
+      {config.view === 'calendar' ? (
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setCalendarMonth((month) => subMonths(month, 1))}
+              aria-label={t('upcomingBills.previousMonth')}
+              className="rounded-md px-2 py-1 text-sm text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+            >
+              {'<'}
+            </button>
+            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
+              {formatChartDate(calendarMonth, 'MMMM yyyy')}
+            </span>
+            <button
+              type="button"
+              onClick={() => setCalendarMonth((month) => addMonths(month, 1))}
+              aria-label={t('upcomingBills.nextMonth')}
+              className="rounded-md px-2 py-1 text-sm text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
+            >
+              {'>'}
+            </button>
+          </div>
+          <ScheduledCalendarGrid
+            days={calendarDays}
+            onSelect={(item) => goToPost(item.id)}
+            maxChipsPerDay={2}
+            dayMinHeightClass="min-h-[64px]"
+          />
+        </div>
+      ) : (
+      <>
       <div className="space-y-2 sm:space-y-3">
         {visibleItems.map((item) => {
           const amountDisplay = getAmountDisplay(item);
@@ -270,7 +405,7 @@ export function UpcomingBills({ scheduledTransactions, accounts, isLoading, maxI
                     </span>
                     <span className="hidden sm:inline">{getTypeBadge(type)}</span>
                     {!item.autoPost && (
-                      <span className="hidden sm:inline px-1.5 py-0.5 bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400 text-xs rounded" title={t('upcomingBills.manualTitle')}>
+                      <span className="hidden sm:inline px-1.5 py-0.5 bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400 text-xs rounded">
                         {t('upcomingBills.manual')}
                       </span>
                     )}
@@ -284,23 +419,38 @@ export function UpcomingBills({ scheduledTransactions, accounts, isLoading, maxI
               </div>
               <div className="flex items-center gap-1 ml-2">
                 {negativeBalanceItems.has(item.id) && (
-                  <span
-                    className="flex-shrink-0 text-amber-500 dark:text-amber-400"
-                    title={t('upcomingBills.negativeBalanceWarning')}
-                  >
-                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.168 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" />
-                    </svg>
-                  </span>
+                  // Named for a screen reader; the legend under the list says
+                  // what the mark means, where a phone can read it too.
+                  <ExclamationTriangleIcon
+                    role="img"
+                    aria-label={t('upcomingBills.negativeBalanceWarning')}
+                    aria-hidden={false}
+                    className="w-4 h-4 flex-shrink-0 text-amber-500 dark:text-amber-400"
+                  />
                 )}
-                <div className={`font-semibold ${amountDisplay.className} whitespace-nowrap`}>
+                <div className={`font-semibold ${amountDisplay.className} whitespace-nowrap text-right`}>
                   {amountDisplay.text ?? <UnknownAmount />}
+                  {/* The history estimate, said as one (issue #2096). */}
+                  {occurrenceFollowsEstimate(item, item.nextOverride) && (
+                    <div className="text-xs font-normal text-gray-500 dark:text-gray-400">
+                      {t('upcomingBills.estimated')}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
           );
         })}
       </div>
+      {visibleItems.some((item) => negativeBalanceItems.has(item.id)) && (
+        <p className="mt-2 flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+          <ExclamationTriangleIcon
+            aria-hidden="true"
+            className="w-4 h-4 flex-shrink-0 text-amber-500 dark:text-amber-400"
+          />
+          {t('upcomingBills.negativeBalanceLegend')}
+        </p>
+      )}
       {hiddenCount > 0 && (
         <button
           onClick={() => router.push('/bills')}
@@ -309,12 +459,8 @@ export function UpcomingBills({ scheduledTransactions, accounts, isLoading, maxI
           {t('upcomingBills.moreItems', { count: hiddenCount })}
         </button>
       )}
-      <button
-        onClick={() => router.push('/bills')}
-        className="mt-3 w-full text-center text-sm text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
-      >
-        {t('upcomingBills.viewAll')}
-      </button>
+      </>
+      )}
     </div>
   );
 }

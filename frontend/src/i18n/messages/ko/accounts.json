@@ -1,4 +1,13 @@
 {
+  "paymentMatching": {
+    "toggleLabel": "{kind, select, mortgage {가져온 은행 결제를 이 주택담보대출과 대조} other {가져온 은행 결제를 이 대출과 대조}}",
+    "toggleHelp": "가져온 은행 거래가 수취인 패턴과 일치하면 Monize는 이를 예정된 결제에 충당하고, 별도의 청구 거래를 기록하는 대신 원금과 이자로 분할합니다.",
+    "payeePattern": "수취인 패턴",
+    "payeePatternPlaceholder": "예: *내 은행*",
+    "descriptionPattern": "설명 패턴(선택 사항)",
+    "descriptionPatternPlaceholder": "예: *대출 상환*",
+    "fromAccount": "{account}의 출금과 대조됩니다."
+  },
   "nameSuffix": {
     "cash": "현금",
     "brokerage": "증권"
@@ -22,9 +31,7 @@
     "noMatch": "필터 조건에 맞는 계정이 없습니다.",
     "clearFilters": "필터 초기화",
     "filter": {
-      "all": "전체",
-      "active": "활성",
-      "closed": "종료",
+      "allCount": "전체 ({count})",
       "netWorthAll": "순자산가액: 전체",
       "inNetWorth": "순자산가액 포함",
       "excludedFromNetWorth": "순자산가액 제외",
@@ -32,7 +39,10 @@
       "typeAriaLabel": "계좌 유형으로 필터링",
       "searchPlaceholder": "계좌 검색...",
       "searchAriaLabel": "이름으로 계좌 검색",
-      "searchClear": "검색 지우기"
+      "searchClear": "검색 지우기",
+      "activeCount": "활성 ({count})",
+      "closedCount": "종료 ({count})",
+      "statusLabel": "상태"
     },
     "accountCount": "{total}개 중 {filtered}개 계정",
     "groupCount": "{count, plural, one {계정 #개} other {계정 #개}}",
@@ -40,6 +50,8 @@
       "accountName": "계정명",
       "type": "유형",
       "status": "상태",
+      "lastReconciled": "마지막 조정",
+      "unreconciled": "미조정",
       "balance": "잔액",
       "actions": "작업"
     },
@@ -50,8 +62,11 @@
     "statusClosed": "종료",
     "marketValue": "시장 가치",
     "combinedBreakdown": "투자 {investments} · 현금 {cash}",
+    "combinedInvestments": "투자 {amount}",
+    "combinedCash": "현금 {amount}",
     "combinedUnknown": "합계를 표시할 수 없음",
     "combinedUnknownTooltip": "{count, plural, other {보유 종목 # 개에 가격이 없어 이 계좌의 합계를 계산할 수 없습니다}}",
+    "combinedUnknownValuation": "이 계좌의 일부 보유 종목을 보고 통화로 환산할 수 없어 합계를 계산할 수 없습니다. 통화 페이지에서 누락된 환율을 추가하세요.",
     "combinedUnknownNoPortfolio": "보유 종목을 불러오지 못해 이 계좌의 합계를 계산할 수 없습니다",
     "limit": "한도: {amount}",
     "pairedWith": "{name}과(와) 연결됨",
@@ -81,7 +96,11 @@
     "jointSharedBy": "{owner} 님이 공유",
     "jointSharedWith": "{count, plural, other {#명}}과 공유됨",
     "includeInNetWorth": "내 순자산에 포함",
-    "excludeFromNetWorth": "내 순자산에서 제외"
+    "excludeFromNetWorth": "내 순자산에서 제외",
+    "neverReconciled": "없음",
+    "lastReconciledOn": "{date} 조정됨",
+    "neverReconciledCard": "조정한 적 없음",
+    "unreconciledCard": "{count, plural, other {미조정 {formatted}건}}"
   },
   "contextMenu": {
     "subtypeBrokerage": "증권사",
@@ -117,17 +136,23 @@
     "accountType": "계정 유형",
     "currency": "통화",
     "currencyLocked": "이 계정에 이미 거래가 있으므로 통화가 잠겨 있습니다. 변경하면 기존 잔액의 단위가 자동으로 변경됩니다.",
+    "accountTypeKindLocked": "이 계정의 거래로 인해 통화가 잠겨 있으므로 암호화폐 지갑과 법정화폐 계정 유형 간에 전환할 수 없습니다.",
+    "currencyPlaceholder": "통화를 선택하세요...",
+    "noCryptoCurrencies": "암호화폐 지갑에는 암호화폐 하나가 들어 있으며, 아직 설정된 암호화폐가 없습니다. <currencies>통화 페이지</currencies>에서 추가한 다음 여기에서 선택하세요. <guide>암호화폐를 추가하는 방법</guide>",
     "openingBalance": "초기 잔액",
     "loanAmount": "대출 금액",
     "mortgageAmount": "담보대출 금액",
     "accountNumber": "계정 번호 (선택)",
     "institution": "기관 (선택)",
-    "institutionRequired": "대출 기관 (필수)",
+    "institutionRequired": "대출 기관",
     "institutionPlaceholder": "기관을 선택하거나 만드세요...",
     "newInstitutionTitle": "새 기관",
     "creditLimit": "신용 한도 (선택)",
+    "balanceAlertsHeading": "잔액 경고",
+    "lowBalanceThreshold": "이 값 아래일 때 알림 (선택)",
+    "highBalanceThreshold": "이 값 위일 때 알림 (선택)",
     "interestRateOptional": "이자율 % (선택)",
-    "interestRateRequired": "이자율 % (필수)",
+    "interestRateRequired": "이자율 %",
     "description": "설명 (선택)",
     "excludeFromNetWorth": "순자산가액에서 제외",
     "favourite": "즐겨찾기",
@@ -157,13 +182,12 @@
       "mortgage": "담보대출",
       "asset": "자산",
       "cash": "현금",
+      "crypto": "암호화폐 지갑",
       "other": "기타"
     },
     "statementDueDayPlaceholder": "예: 15",
     "statementSettlementDayPlaceholder": "예: 25",
     "fxFeeTitle": "외화 환전 수수료 (선택)",
-    "fxFeePercent": "수수료 비율",
-    "fxFeePercentPlaceholder": "예: 2.5",
     "jointSharedWith": "{count, plural, other {#명}}과 공유된 공동 계좌",
     "jointManage": "공유 관리",
     "cashSection": {
@@ -192,10 +216,10 @@
   },
   "loanFields": {
     "title": "대출 납부 세부 정보",
-    "paymentAmount": "납부 금액 (필수)",
-    "paymentFrequency": "납부 주기 (필수)",
-    "firstPaymentDate": "첫 납부일 (필수)",
-    "paymentFromAccount": "납부 출금 계정 (필수)",
+    "paymentAmount": "납부 금액",
+    "paymentFrequency": "납부 주기",
+    "firstPaymentDate": "첫 납부일",
+    "paymentFromAccount": "납부 출금 계정",
     "interestCategory": "이자 카테고리",
     "selectFrequency": "주기 선택...",
     "selectAccount": "계정 선택...",
@@ -222,33 +246,32 @@
     "analyzingHistory": "거래 내역 분석 중...",
     "detectedPayments": "{from}부터 {to}까지 {count}건의 납부가 감지되었습니다.",
     "confidence": "신뢰도:",
-    "lastSplit": "마지막 납부 분할: {currency}{principal} 원금 / {currency}{interest} 이자",
-    "extraPayments": "{count, plural, one {추가 원금 납부 #건} other {추가 원금 납부 #건}} 감지됨 (평균 {currency}{avg}/기간)",
+    "lastSplit": "마지막 납부 분할: {principal} 원금 / {interest} 이자",
+    "extraPayments": "{count, plural, one {추가 원금 납부 #건} other {추가 원금 납부 #건}} 감지됨 (평균 {avg}/기간)",
     "reviewValues": "저장하기 전에 아래 값을 검토하고 조정하세요.",
-    "regularPaymentAmount": "정기 납부 금액 *",
+    "regularPaymentAmount": "정기 납부 금액",
     "includeExtraPrincipal": "원금에 추가 납부 포함",
     "extraPrincipalPerPayment": "납부당 추가 원금",
-    "totalPayment": "총 납부액: {currency}{amount}",
+    "totalPayment": "총 납부액: {amount}",
     "useDetectedSplit": "가져온 거래의 원금/이자 분할 사용",
-    "useDetectedSplitDesc": "이자로 {currency}{interest} 사용, 나머지는 원금으로",
+    "useDetectedSplitDesc": "이자로 {interest} 사용, 나머지는 원금으로",
     "calculateFromRate": "이자율과 현재 잔액으로 분할 계산",
-    "paymentFrequency": "납부 주기 *",
-    "paymentFromAccount": "납부 출금 계정 *",
+    "paymentFrequency": "납부 주기",
+    "paymentFromAccount": "납부 출금 계정",
     "selectAccount": "계정 선택...",
-    "nextPaymentDate": "다음 납부일 *",
+    "nextPaymentDate": "다음 납부일",
     "annualInterestRate": "연이자율 (%)",
     "interestRatePlaceholder": "예: 5.5",
     "estimatedFromHistory": "거래 내역에서 추정: {rate}%",
     "interestExpenseCategory": "이자 지출 카테고리",
+    "interestExpenseCategoryRequired": "이자 지출 카테고리",
     "detectedCategory": "감지됨: {name}",
     "selectCategory": "카테고리 선택...",
     "payeeLender": "수취인 / 대출 기관",
     "selectOrCreatePayee": "수취인 선택 또는 만들기...",
     "mortgageDetails": "담보대출 세부 정보",
-    "canadianMortgage": "캐나다 담보대출 (반기 복리)",
-    "variableRate": "변동 금리",
     "amortizationMonths": "상환 기간 (월)",
-    "termMonths": "기간 (월)",
+    "termMonths": "금리 고정 기간 (월)",
     "autoPost": "만기 시 자동으로 거래 등록",
     "skip": "건너뛰기",
     "setUpPayments": "납부 설정",
@@ -264,26 +287,46 @@
     },
     "toasts": {
       "setupComplete": "{account}의 예약 납부가 설정되었습니다"
+    },
+    "firstInstallment": "첫 할부금",
+    "firstInstallmentHelp": "이 모기지는 고정 납입금이 없습니다. 각 할부금은 잔액, 금리, 상환 기간으로 계산됩니다. {date}에 기일이 돌아오는 할부금이며 추가 원금을 포함합니다.",
+    "firstInstallmentPending": "첫 할부금을 계산하려면 다음 납입일을 입력하세요.",
+    "firstInstallmentCalculating": "첫 할부금을 계산하는 중...",
+    "firstInstallmentFailed": "첫 할부금을 계산할 수 없습니다. 아래 값을 확인하고 다시 시도하세요.",
+    "paymentMatching": {
+      "autoPostDisabled": "자동으로 해제되었습니다. 결제 일치는 은행 자체 출금으로 이 청구서를 정산하므로 청구서가 스스로도 게시되어서는 안 됩니다.",
+      "payeePatternRequired": "* 와일드카드가 포함된 수취인 패턴을 입력하세요"
     }
   },
   "mortgageFields": {
     "title": "담보대출 세부 정보",
-    "canadianMortgage": "캐나다 담보대출",
-    "canadianMortgageDesc": "고정 금리에 반기 복리를 사용합니다 (캐나다 법에 따라 필수)",
-    "variableRate": "변동 금리",
-    "variableRateDesc": "기간 중 금리가 변동될 수 있습니다 (월 복리 사용)",
-    "variableRateLoanDetailsLink": "<link>대출 상세</link>에서 금리 변경을 기록하세요.",
-    "termLength": "기간 길이",
-    "termLengthNoTerm": "기간 없음을 원하면 0년 0개월로 두세요.",
-    "amortizationPeriod": "상환 기간 (필수)",
+    "type": {
+      "label": "담보대출 유형",
+      "ANNUITY": "원리금 균등 상환",
+      "CANADIAN_FIXED": "캐나다 고정 금리",
+      "LINEAR": "원금 균등 상환",
+      "INTEREST_ONLY": "이자만 상환",
+      "help": {
+        "ANNUITY": "매월 총 상환액이 같습니다. 변동 금리 담보대출도 이 유형을 선택하세요.",
+        "CANADIAN_FIXED": "캐나다 고정 금리 계약입니다. 이자는 1년에 두 번 복리로 계산됩니다.",
+        "LINEAR": "매월 원금 부분이 같고 총 상환액은 줄어듭니다.",
+        "INTEREST_ONLY": "이자만 내며 잔액은 변하지 않습니다."
+      }
+    },
+    "rateChangesLoanDetailsLink": "<link>대출 상세</link>에서 금리 변경을 기록하세요.",
+    "termLength": "금리 고정 기간",
+    "termLengthHelp": "금리 또는 계약 기간이 유지되는 기간입니다(예: 5년 고정 금리). 끝나기 전에 Monize가 알려 드릴 수 있습니다. 기간 없음을 원하면 0년 0개월로 두세요.",
+    "amortizationPeriod": "상환 기간",
     "years": "년",
     "months": "월",
-    "paymentFrequency": "납부 주기 (필수)",
-    "firstPaymentDate": "첫 납부일 (필수)",
-    "paymentFromAccount": "납부 출금 계정 (필수)",
-    "interestCategory": "이자 카테고리",
+    "paymentFrequency": "납부 주기",
+    "firstPaymentDate": "첫 납부일",
+    "paymentFromAccount": "납부 출금 계정",
+    "paymentFromAccountEditHelp": "변경하면 예정된 향후 결제와 결제 매칭 규칙이 새 계좌로 이동합니다. 이미 기록된 결제는 변경되지 않습니다.",
+    "interestCategory": "이자 카테고리 (선택)",
+    "interestCategoryRequired": "이자 카테고리",
     "interestBookingMode": {
-      "label": "이자를 어떻게 기록하나요?",
+      "label": "이자 기록 방식",
       "help": "금리 감지가 올바르게 읽도록 합니다. 대부분 자동이면 됩니다.",
       "AUTO": "자동(권장)",
       "SPLIT": "결제의 분할 항목",
@@ -330,6 +373,72 @@
       "memoLabel": "추가 상환 메모 텍스트",
       "memoPlaceholder": "예: 추가 상환",
       "memoHelp": "결제 메모, 원본 거래 메모 또는 분할 메모에 대한 대소문자 구분 없는 부분 문자열 일치."
+    },
+    "prepaymentMode": {
+      "label": "추가 상환의 효과",
+      "SHORTEN_TERM": "기간 단축(매월 같은 원금)",
+      "LOWER_INSTALLMENT": "할부금 감액(같은 만기일)",
+      "help": "대출 기관에 확인하세요. 추가 상환 후 명세서의 원금 부분이 그대로라면 기간이 단축된 것입니다."
+    },
+    "previewFirstInstallment": "첫 할부금:",
+    "detect": {
+      "toggle": "잘 모르시겠나요? 할부금 몇 회분을 입력하세요",
+      "title": "담보대출 유형 찾기",
+      "intro": "명세서에서 연속된 할부금 2~3회분을 오래된 것부터 입력하세요. 잔액은 선택 사항입니다. 잔액과 금리가 있으면 Monize가 이자가 1년에 두 번 복리로 계산되는지 판단할 수 있습니다.",
+      "installment": "{number}회차 할부금",
+      "principal": "원금",
+      "interest": "이자",
+      "balance": "납부 전 잔액(선택)",
+      "rowIncomplete": "원금과 이자를 모두 입력하거나 행을 비워 두세요.",
+      "rate": "위에 입력한 금리 {rate}와 대조했습니다.",
+      "noRate": "위에 입력된 금리가 없어 복리 계산을 확인할 수 없습니다.",
+      "needsFrequency": "먼저 아래에서 납부 주기를 선택하세요. 할부금은 그 주기로 읽힙니다.",
+      "submit": "유형 제안",
+      "close": "닫기",
+      "suggested": "제안된 유형: {type}",
+      "noSuggestion": "제안된 유형이 없습니다.",
+      "lowConfidence": "신뢰도 낮음: 사용하기 전에 계약서를 확인하거나 대출 기관에 문의하세요.",
+      "use": "이 유형 사용",
+      "failed": "요청이 실패하여 할부금을 확인할 수 없습니다. 다시 시도하세요.",
+      "reason": {
+        "TOO_FEW_SAMPLES": "비교하려면 연속된 할부금이 최소 2회분 필요합니다.",
+        "INVALID_SAMPLE": "금액이 음수이거나 읽을 수 없는 할부금이 있습니다.",
+        "NO_PAYMENT": "이 할부금들은 원금을 상환하지 않고 이자도 부과하지 않습니다.",
+        "AMBIGUOUS_CONSTANT_PRINCIPAL_AND_INSTALLMENT": "모든 할부금에서 원금과 총액이 같아 원금 균등 상환과 원리금 균등 상환 모두에 해당합니다. 간격이 더 떨어진 할부금으로 시도하거나 계약서를 확인하세요.",
+        "ACCELERATED_FREQUENCY": "이 할부금들은 원금 균등 상환 또는 이자만 상환으로 보이지만, 가속 납부 주기에서는 그럴 수 없습니다. 납부 주기를 확인하세요.",
+        "NO_RULE_FITS": "이 할부금들에서는 원금도 총액도 일정하지 않습니다. 그 사이에 금리가 바뀌었다면 같은 금리 기간의 할부금을 사용하세요.",
+        "ZERO_PRINCIPAL": "원금이 상환되지 않아 잔액이 변하지 않습니다.",
+        "ZERO_PRINCIPAL_RATE_MISMATCH": "원금은 상환되지 않지만, 이자가 잔액에 대한 제시 금리와 맞지 않습니다. 금리를 확인하세요.",
+        "CONSTANT_PRINCIPAL": "원금 부분이 매번 같고 총액은 줄어듭니다.",
+        "CONSTANT_PRINCIPAL_RATE_MISMATCH": "원금 부분은 매번 같지만, 이자가 잔액에 대한 제시 금리와 맞지 않습니다. 금리를 확인하세요.",
+        "CONSTANT_INSTALLMENT_SEMI_ANNUAL": "총액이 매번 같고, 이자는 제시 금리를 1년에 두 번 복리로 계산한 값과 일치합니다.",
+        "CONSTANT_INSTALLMENT_NOMINAL": "총액이 매번 같고, 이자는 1년 2회 복리 없이 제시 금리와 일치합니다.",
+        "CONSTANT_INSTALLMENT_RATE_UNCHECKED": "총액이 매번 같습니다. 각 할부금 납부 전 잔액과 금리가 없어 1년 2회 복리 여부를 확인할 수 없었습니다.",
+        "CONSTANT_INSTALLMENT_COMPOUNDING_AMBIGUOUS": "총액이 매번 같지만, 잔액이 너무 작아 1년 2회 복리 여부를 구분할 수 없습니다. 캐나다 고정 금리 계약이라면 약관에 그렇게 명시되어 있습니다.",
+        "CONSTANT_INSTALLMENT_RATE_MISMATCH": "총액이 매번 같지만, 이자가 제시 금리에서 어느 계산 방식과도 일치하지 않습니다. 이자가 일할 계산될 수 있으니 금리를 확인하세요."
+      },
+      "history": {
+        "action": "담보대출 유형 검출",
+        "title": "상환 내역으로 본 담보대출 유형",
+        "intro": "같은 금리로 기록된 최근 할부금에서 읽어 옵니다. 계정을 저장하기 전에는 아무것도 변경되지 않습니다.",
+        "current": "현재 유형: {type}",
+        "alreadySet": "이 담보대출은 이미 제안된 유형으로 설정되어 있습니다.",
+        "rate": "적용 중인 금리: {rate}",
+        "noRate": "이 날짜들에 기록된 금리가 없어 복리 계산을 확인하지 않았습니다.",
+        "noSamples": "원금과 이자 부분이 모두 있는 기록된 할부금을 찾지 못했습니다. 이 기능을 사용하려면 상환액을 원금과 이자로 분할하여 기록하세요.",
+        "colDate": "날짜",
+        "colPrincipal": "원금",
+        "colInterest": "이자",
+        "colBalance": "납부 전 잔액",
+        "balanceUnknown": "알 수 없음",
+        "failed": "요청이 실패하여 상환 내역을 읽을 수 없습니다. 다시 시도하세요.",
+        "cancel": "취소",
+        "use": "이 유형으로 계정 수정"
+      }
+    },
+    "originalPrincipal": {
+      "label": "원래 대출 원금",
+      "help": "원래 빌린 금액입니다. 기록된 내역이 대출 시작 이후에 시작되는 계정의 경우, 이는 빌린 금액이며 기초 잔액(내역 시작 시점의 채무)이 아닙니다."
     }
   },
   "assetFields": {
@@ -352,13 +461,19 @@
   "validation": {
     "nameRequired": "계정명은 필수입니다",
     "currencyCodeLength": "통화 코드는 3자여야 합니다",
+    "currencyRequired": "통화를 선택하세요",
     "institutionRequired": "기관을 선택하거나 생성하세요",
     "interestRateRequired": "이자율은 필수입니다",
     "paymentAmountRequired": "납부 금액은 필수입니다",
     "paymentFrequencyRequired": "납부 주기는 필수입니다",
     "paymentStartDateRequired": "첫 납부일은 필수입니다",
     "paymentAccountRequired": "납부 출금 계정은 필수입니다",
-    "amortizationRequired": "상환 기간은 필수입니다"
+    "amortizationRequired": "상환 기간은 필수입니다",
+    "interestCategoryRequired": "이 대출의 이자가 기록될 카테고리를 선택하세요",
+    "acceleratedNeedsAnnuity": "이 모기지는 가속 일정으로 납입되며, 이는 원리금 균등 모기지에만 있습니다. 원금 균등 또는 이자만 내는 모기지에는 일반 납입 주기가 필요하므로 원리금 균등 유형을 유지하세요.",
+    "paymentMatchingPayeePatternRequired": "은행 출금과 일치시킬 수취인 패턴을 입력하세요",
+    "paymentMatchingPayeePatternWildcard": "수취인 패턴에는 * 와일드카드가 포함되어야 합니다",
+    "paymentMatchingDescriptionPatternWildcard": "설명 패턴에는 * 와일드카드가 포함되어야 합니다"
   },
   "loanDetail": {
     "backToAccounts": "계좌 목록으로 돌아가기",
@@ -386,7 +501,12 @@
       "estRemainingInterest": "예상 잔여 이자",
       "notSet": "설정 안 됨",
       "notAvailable": "없음",
-      "paidOff": "완납"
+      "paidOff": "완납",
+      "nextInstallment": "다음 할부금",
+      "dueOn": "기일 {date}",
+      "finalPayment": "최종 납입금",
+      "nextInstallmentDue": "다음 할부금(기일 {date})",
+      "finalPaymentDue": "최종 납입금(기일 {date})"
     },
     "schedule": {
       "title": "상환 일정",
@@ -455,7 +575,19 @@
       "budgetLabel": "월 총 상환액",
       "budgetHint": "매달 대출에 고정된 총액을 지출합니다. 추가 상환액은 상환액을 뺀 나머지입니다. 상환액이 줄면 총액을 유지하도록 추가 상환액이 늘어납니다.",
       "budgetBelowInstallment": "현재 상환액({amount})보다 적습니다. 추가 상환하려면 늘리세요.",
-      "windowInverted": "시작일이 종료일보다 늦어 이 계획은 적용되지 않습니다."
+      "windowInverted": "시작일이 종료일보다 늦어 이 계획은 적용되지 않습니다.",
+      "unavailable": {
+        "title": "이 대출의 추가 상환 시뮬레이션은 아직 계산할 수 없습니다.",
+        "reasonPaidOff": "이 대출은 미상환 잔액이 없으므로 상환할 것이 없습니다.",
+        "reasonNoFrequency": "이 대출에는 결제 주기가 설정되어 있지 않습니다. 계정 설정에서 추가하세요.",
+        "reasonNoRate": "이 대출에는 저장된 이자율이 없습니다. 계정 설정에서 이자율을 설정하거나 오늘 또는 그 이전 날짜의 이자율 변경을 기록하세요. 아래 일정표에 행별로 표시된 이자율은 부과된 이자에서 재구성된 값이며 저장된 이자율이 아닙니다.",
+        "reasonNoPayment": "할부금 금액을 확인할 수 없습니다. 정기 할부금을 대출 계좌로의 이체로 기록하거나(원금, 이자는 분할 항목 또는 별도의 분류된 지출로), 계정 설정에서 결제 금액을 설정하세요. 출금 계좌에 일반 지출로 기록된 결제는 대출 계좌에 도달하지 않으므로 일정표가 이를 볼 수 없습니다.",
+        "reasonNoAmortization": "이 모기지에는 상환 기간이 없어 할부금과 만기를 계산할 수 없습니다. 계좌 설정에서 상환 기간을 설정하세요.",
+        "reasonNoPaymentStart": "이 모기지에는 첫 납입일이 없어 만기까지 남은 납입 횟수를 셀 수 없습니다. 계좌 설정에서 예약 납입을 설정하세요. 입력한 첫 납입 기일이 1회차 납입이 됩니다.",
+        "reasonNoPrincipal": "이 모기지에는 원래 금액이 없어 균등 원금을 계산할 수 없습니다. 계좌 설정에서 모기지 금액을 설정하세요."
+      },
+      "budgetBelowNextInstallment": "다음 할부금({amount}, 기일 {date})보다 적습니다. 추가 상환하려면 그보다 높게 설정하세요.",
+      "shortenTermNeedsPrincipal": "이 모기지에는 원래 금액이 없어 기간 단축을 시뮬레이션할 수 없습니다. 할부금 감액을 선택하거나 계좌 설정에서 모기지 금액을 설정하세요."
     },
     "comparison": {
       "newPayoff": "새 완납일",
@@ -471,7 +603,8 @@
       "newInstallment": "새 상환액",
       "installmentDrop": "{payment} (−{reduction})",
       "monthlyPayment": "월 상환액",
-      "overpaymentAtFrequency": "{frequency}: +{amount}"
+      "overpaymentAtFrequency": "{frequency}: +{amount}",
+      "firstPayment": "첫 납입금"
     },
     "chart": {
       "title": "완납 타임라인",
@@ -538,6 +671,71 @@
       "seriesActual": "실제 잔액",
       "unknown": "알 수 없음"
     },
+    "paymentMatching": {
+      "title": "결제 일치",
+      "description": "은행이 직접 출금한 각 할부금을 인식하여, 청구서를 별도로 게시하는 대신 대출 일정에 따라 원금과 이자로 정산합니다.",
+      "noSchedule": "결제 일치는 은행의 출금을 대출의 예약 결제에 대해 정산합니다. 먼저 이 대출의 결제를 설정하세요.",
+      "noRule": "이 대출에 연결된 결제 일치 규칙이 없습니다.",
+      "createOne": "만들기",
+      "ruleLabel": "규칙:",
+      "ruleLoading": "규칙을 불러오는 중",
+      "ruleFailed": "결제 일치 규칙을 불러오지 못했습니다.",
+      "scheduleLoading": "예약 결제를 불러오는 중",
+      "scheduleFailed": "대출의 예약 결제를 불러오지 못했습니다.",
+      "retry": "다시 시도",
+      "autoPost": {
+        "title": "예약 결제가 여전히 자동으로 게시됩니다",
+        "body": "이 대출의 청구서에 자동 게시가 켜져 있어, 규칙이 은행 출금으로 정산한 할부금이 청구서에 의해서도 게시됩니다. 청구서 및 입금에서 해당 청구서의 자동 게시를 끄세요."
+      },
+      "preconditions": {
+        "openingBalance": "대출의 초기 잔액은 처리할 내역이 시작되는 시점의 부채여야 합니다. 모든 할부금의 이자가 이 금액을 기준으로 계산됩니다.",
+        "originalPrincipal": "최초 원금은 초기 잔액이 아니라 처음 대출받은 금액이어야 합니다.",
+        "scheduleStart": "예약 결제가 시작되는 {date} 이전 날짜의 출금에는 일치시킬 할부금이 없습니다."
+      },
+      "process": {
+        "button": "내역 처리",
+        "scope": "{account}의 출금에 대해 오래된 것부터 규칙을 실행합니다.",
+        "running": "내역 처리 중: 지금까지 {count, plural, one {할부금 #건} other {할부금 #건}}을 정산했습니다.",
+        "done": "{count, plural, =0 {정산된 할부금이 없습니다.} one {할부금 #건을 정산했습니다.} other {할부금 #건을 정산했습니다.}}",
+        "undo": "실행의 각 페이지는 작업 기록에서 실행 취소할 수 있습니다.",
+        "failed": "내역 처리가 중단되었습니다",
+        "stuckTitle": "내역 처리를 계속할 수 없습니다",
+        "stuck": "{date} 날짜의 거래가 {limit, number}건을 초과하여 해당 날짜 이후로 진행할 수 없습니다. 나머지는 도구 > 규칙에서 더 좁은 필터로 정산하세요.",
+        "stuckUnknown": "서버가 실행이 어디까지 진행되었는지 알려 주지 않아 계속할 수 없습니다. 페이지를 새로 고친 후 다시 시도하세요."
+      },
+      "create": {
+        "title": "결제 일치 규칙 만들기",
+        "description": "이 규칙은 대출의 예약 결제 계좌에서 일치하는 출금을 정산하며, 청구서의 자동 게시는 꺼집니다.",
+        "descriptionWithAccount": "이 규칙은 {account}에서 일치하는 출금을 정산하며, 청구서의 자동 게시는 꺼집니다.",
+        "submit": "규칙 만들기",
+        "payeePatternRequired": "* 와일드카드를 포함한 수취인 패턴을 입력하세요",
+        "descriptionPatternWildcard": "설명 패턴에는 * 와일드카드가 포함되어야 합니다",
+        "failed": "결제 일치 규칙을 만들지 못했습니다.",
+        "done": "규칙 \"{name}\"이(가) 생성되었습니다"
+      },
+      "settled": {
+        "title": "정산된 할부금",
+        "titleWithCount": "정산된 할부금 ({count})",
+        "colDueDate": "기일",
+        "colTransaction": "거래",
+        "colPrincipal": "원금",
+        "colInterest": "이자",
+        "colExtra": "추가 원금",
+        "colDebtBefore": "이전 부채",
+        "openTransaction": "거래 열기",
+        "void": "무효",
+        "notRecorded": "기록되지 않음",
+        "empty": {
+          "title": "아직 정산된 할부금이 없습니다",
+          "body": "할부금을 정산하려면 내역을 처리하거나 은행 출금을 가져오세요."
+        },
+        "error": {
+          "title": "정산된 할부금을 불러오지 못했습니다",
+          "body": "빈 목록이 아닙니다. 어떤 할부금이 정산되었는지 보려면 다시 시도하세요.",
+          "retry": "다시 시도"
+        }
+      }
+    },
     "lineOfCredit": {
       "currentBalance": "현재 잔액",
       "creditLimit": "신용 한도",
@@ -549,7 +747,10 @@
     },
     "rateHistory": {
       "scheduledUpdateTitle": "예약된 결제를 업데이트할까요?",
-      "scheduledUpdateMessage": "예약된 청구서 결제 \"{name}\"을(를) 새 금리에 맞게 업데이트할 수 있습니다: 총 {payment}, 원금 {principal} 및 이자 {interest}로 구성. 지금 업데이트할까요?",
+      "scheduledUpdateNextPaymentUnchanged": "예약된 청구서 결제 \"{name}\"은(는) 금리 기록과 일치합니다. 다음 결제일 {date}: 변경 없음 ({payment}).",
+      "scheduledUpdateNextPaymentChanged": "예약된 청구서 결제 \"{name}\"을(를) 금리 기록에 맞게 업데이트할 수 있습니다. 다음 결제일 {date}: {before} → {after}, 원금 {principal} 및 이자 {interest}로 구성.",
+      "scheduledUpdateNextPaymentNew": "예약된 청구서 결제 \"{name}\"을(를) 금리 기록에 맞게 업데이트할 수 있습니다. 다음 결제일 {date}: {payment}, 원금 {principal} 및 이자 {interest}로 구성.",
+      "scheduledUpdateUpcomingChange": "{date}부터 결제 금액이 {amount}로 바뀝니다.",
       "scheduledUpdateDefaultName": "이 대출",
       "scheduledUpdateConfirm": "결제 업데이트",
       "scheduledUpdateSkip": "그대로 두기",
@@ -616,6 +817,54 @@
       "memoLabel": "추가 상환 메모",
       "memoPlaceholder": "예: 추가 원금",
       "memoHelp": "메모에 이 텍스트가 포함된 결제는 추가 상환으로 계산됩니다(대소문자 구분 안 함)."
+    },
+    "notAmortizing": {
+      "title": "이 대출은 상환 완료되지 않으므로 예상 상환일과 남은 이자를 알 수 없습니다.",
+      "paymentBelowInterest": "할부금({payment})이 {rate}%에서의 월 이자(약 {interest})보다 적어 잔액이 줄지 않습니다. 이자를 충당하도록 실제 할부금(이자율 기록 항목 또는 계좌의 결제 금액)을 기록하세요.",
+      "beyondHorizon": "할부금이 이자를 충당하지만 기간이 예측 범위를 넘어서므로 상환일과 남은 이자가 표시되지 않습니다."
+    }
+  },
+  "loanFees": {
+    "title": "담보대출 비용",
+    "help": "담보대출을 납부할 때마다 함께 징수되는 보험료, 세금 또는 기타 비용입니다. 각 비용은 예약 결제의 별도 항목이 되며 선택한 카테고리로 기록됩니다. 비용은 고정 금액, 현재 잔액의 비율(결제할 때마다 다시 계산) 또는 원래 잔액의 비율로 지정할 수 있으며, 결제당 또는 연간으로 부과됩니다.",
+    "panelDescription": "각 담보대출 예약 결제와 함께 징수되는 비용입니다. 저장하면 다음 결제의 항목이 업데이트됩니다.",
+    "none": "이 담보대출의 결제에는 징수되는 비용이 없습니다.",
+    "name": "비용 이름",
+    "category": "카테고리",
+    "calculation": "계산 방식",
+    "basis": "적용 기준",
+    "amount": "금액",
+    "rate": "비율",
+    "add": "비용 추가",
+    "remove": "비용 삭제",
+    "edit": "비용 편집",
+    "editTitle": "담보대출 비용",
+    "save": "비용 저장",
+    "cancel": "취소",
+    "saved": "담보대출 비용을 저장했습니다.",
+    "saveFailed": "담보대출 비용을 저장하지 못했습니다.",
+    "loading": "비용 불러오는 중...",
+    "loadFailed": "담보대출 비용을 불러오지 못했습니다.",
+    "retry": "다시 시도",
+    "unknownCategory": "알 수 없는 카테고리",
+    "unknownValue": "알 수 없음",
+    "summaryPerPayment": "결제당 {value}, {calculation}",
+    "summaryAnnual": "연간 {value}, {calculation}",
+    "paymentMatchingConflict": "결제 일치는 아직 비용이 포함된 결제를 정산할 수 없습니다. 결제 일치를 끄거나 비용을 삭제하세요.",
+    "paymentMatchingNote": "이 담보대출에는 결제 일치 규칙이 있습니다. 결제 일치는 아직 비용이 포함된 결제를 정산할 수 없으므로 규칙이 있는 동안에는 비용을 추가할 수 없습니다.",
+    "calculations": {
+      "fixed": "고정 금액",
+      "percentCurrentBalance": "현재 잔액의 비율",
+      "percentOriginalBalance": "원래 잔액의 비율"
+    },
+    "bases": {
+      "perPayment": "결제당",
+      "annual": "연간"
+    },
+    "errors": {
+      "required": "필수",
+      "duplicate": "각 비용에는 이자 카테고리가 아닌 별도의 카테고리가 필요합니다",
+      "range": "100% 이하의 비율을 입력하세요"
     }
   }
 }

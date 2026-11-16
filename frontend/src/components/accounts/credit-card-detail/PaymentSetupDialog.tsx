@@ -172,11 +172,8 @@ export function PaymentSetupDialog({
   ];
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} maxWidth="md">
-      <div className="p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1">
-          {t('payment.title')}
-        </h2>
+    <Modal isOpen={isOpen} onClose={onClose} maxWidth="md" className="p-6" title={t('payment.title')}>
+      <div>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">{account.name}</p>
 
         {fundingOptions.length === 0 ? (
@@ -260,7 +257,7 @@ export function PaymentSetupDialog({
               </div>
             </fieldset>
 
-            <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex justify-end gap-3 pt-4">
               <Button variant="outline" onClick={onClose} disabled={isSubmitting}>
                 {t('payment.cancel')}
               </Button>

@@ -82,10 +82,14 @@ export function MergePayeeDialog({
   if (!sourcePayee) return null;
 
   return (
-    <Modal isOpen={isOpen} onClose={handleClose} maxWidth="lg" className="p-6" allowOverflow>
-      <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">
-        {t('merge.title')}
-      </h2>
+    <Modal
+      isOpen={isOpen}
+      onClose={handleClose}
+      maxWidth="lg"
+      className="p-6"
+      allowOverflow
+      title={t('merge.title')}
+    >
 
       <div className="space-y-4">
         <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4">

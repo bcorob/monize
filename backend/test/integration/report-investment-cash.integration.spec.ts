@@ -110,7 +110,7 @@ describe("built-in reports and investment cash accounts (integration)", () => {
     // integration harness cannot build. Every fixture is USD, so no exchange
     // rate is ever looked up and an empty rate list is the honest stub.
     const currency = new ReportCurrencyService(dataSource, {
-      getLatestRates: async () => [],
+      getRateIndex: async () => new Map(),
     } as never);
     spending = new SpendingReportsService(dataSource, currency);
     income = new IncomeReportsService(dataSource, currency);
@@ -121,7 +121,12 @@ describe("built-in reports and investment cash accounts (integration)", () => {
     breakdown = new MonthlyCategoryBreakdownService(dataSource, currency);
     // `execute` uses neither the budgets service (only the BUDGET_VARIANCE
     // metric does) nor action history (only the writes do).
-    customReports = new ReportsService(dataSource, {} as never, {} as never);
+    customReports = new ReportsService(
+      dataSource,
+      {} as never,
+      {} as never,
+      currency,
+    );
     analytics = new TransactionAnalyticsService(dataSource);
   });
 
@@ -384,7 +389,14 @@ describe("built-in reports and investment cash accounts (integration)", () => {
       expect(cashFlow.totals.expenses).toBe(0);
       expect(cashFlow.totals.net).toBe(1000);
       expect(cashFlow.data).toEqual([
-        { month: MONTH, income: 1000, expenses: 0, net: 1000 },
+        {
+          period: MONTH,
+          periodStart: `${MONTH}-01`,
+          periodEnd: `${MONTH}-31`,
+          income: 1000,
+          expenses: 0,
+          net: 1000,
+        },
       ]);
     });
 
@@ -919,18 +931,21 @@ describe("built-in reports and investment cash accounts (integration)", () => {
               userId: string,
               startDate: string,
               endDate: string,
-            ) => Promise<
-              Array<{
+              currency: string,
+            ) => Promise<{
+              entries: Array<{
                 month: string;
                 totalIncome: number;
                 totalExpenses: number;
-              }>
-            >;
+              }>;
+              missingPairs: string[];
+            }>;
           }
-        ).getMonthlyHistory(userId, START, END),
+        ).getMonthlyHistory(userId, START, END, "USD"),
       );
 
-      expect(history).toEqual([
+      expect(history.missingPairs).toEqual([]);
+      expect(history.entries).toEqual([
         expect.objectContaining({
           month: MONTH,
           totalIncome: 1000,
@@ -1402,6 +1417,43 @@ describe("built-in reports and investment cash accounts (integration)", () => {
           averageAmount: 60,
         }),
       ]);
+    });
+
+    it("widens the recurring window with the range, and leaves all unbounded", async () => {
+      for (const months of [8, 9, 10]) {
+        await createEmbeddedInvestmentParent({
+          date: monthsBeforeToday(months),
+          ordinaryAmount: -60,
+          investmentAmount: -500,
+          payeeName: "Annual-ish",
+        });
+      }
+
+      const [sixMonths, oneYear, allTime] = [
+        await withUserContext(userId, () =>
+          taxRecurring.getRecurringExpenses(userId, 3),
+        ),
+        await withUserContext(userId, () =>
+          taxRecurring.getRecurringExpenses(userId, 3, "1y"),
+        ),
+        await withUserContext(userId, () =>
+          taxRecurring.getRecurringExpenses(userId, 3, "all"),
+        ),
+      ];
+
+      expect(sixMonths.data).toEqual([]);
+      expect(oneYear.data).toEqual([
+        expect.objectContaining({ payeeName: "Annual-ish", occurrences: 3 }),
+      ]);
+      expect(allTime.data).toEqual([
+        expect.objectContaining({ payeeName: "Annual-ish", occurrences: 3 }),
+      ]);
+      // The user's spending history began ten months back, so neither the
+      // year nor all time spreads the 180 over more months than that.
+      expect(allTime.summary.monthCount).toBe(10);
+      expect(allTime.summary.monthlyEstimate).toBe(18);
+      expect(oneYear.summary.monthCount).toBe(10);
+      expect(oneYear.summary.monthlyEstimate).toBe(18);
     });
 
     /**

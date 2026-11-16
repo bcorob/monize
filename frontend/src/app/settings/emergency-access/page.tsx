@@ -1,9 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
-import Link from 'next/link';
+import { BackToSettingsLink } from '@/components/settings/BackToSettingsLink';
 import { useTranslations } from 'next-intl';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm, useWatch, Controller } from 'react-hook-form';
 import '@/lib/zodConfig';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -13,6 +13,7 @@ import { PageHeader } from '@/components/layout/PageHeader';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
 import { Button } from '@/components/ui/Button';
+import { FormActions } from '@/components/ui/FormActions';
 import { Input } from '@/components/ui/Input';
 import { NumericInput } from '@/components/ui/NumericInput';
 import { ToggleSwitch } from '@/components/ui/ToggleSwitch';
@@ -27,6 +28,7 @@ import {
 } from '@/lib/stepUpToken';
 import apiClient from '@/lib/api';
 import { useDemoMode } from '@/hooks/useDemoMode';
+import { useRelativeTime } from '@/hooks/useRelativeTime';
 import { useAuthStore } from '@/store/authStore';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import { authApi } from '@/lib/auth';
@@ -47,54 +49,54 @@ import type {
 const logger = createLogger('EmergencyAccess');
 const STEP_UP_PURPOSE = 'emergency-access';
 
-const settingsSchema = z
-  .object({
-    enabled: z.boolean(),
-    grantAfterDays: z
-      .number()
-      .int('Whole days only')
-      .min(2, 'Must be at least 2 days')
-      .max(365, 'Must be 365 days or fewer'),
-    reminderAfterDays: z
-      .number()
-      .int('Whole days only')
-      .min(1, 'Must be at least 1 day')
-      .max(364, 'Must be 364 days or fewer'),
-  })
-  .refine((data) => data.reminderAfterDays < data.grantAfterDays, {
-    message: 'Reminder days must be less than grant days',
-    path: ['reminderAfterDays'],
+/** Validation messages come from `settings.emergencyAccess.validation`. */
+type ValidationT = (key: string, values?: Record<string, number>) => string;
+
+const buildSettingsSchema = (t: ValidationT) =>
+  z
+    .object({
+      enabled: z.boolean(),
+      grantAfterDays: z
+        .number()
+        .int(t('wholeDays'))
+        .min(2, t('minDays', { min: 2 }))
+        .max(365, t('maxDays', { max: 365 })),
+      reminderAfterDays: z
+        .number()
+        .int(t('wholeDays'))
+        .min(1, t('minDays', { min: 1 }))
+        .max(364, t('maxDays', { max: 364 })),
+    })
+    .refine((data) => data.reminderAfterDays < data.grantAfterDays, {
+      message: t('reminderBeforeGrant'),
+      path: ['reminderAfterDays'],
+    });
+
+type SettingsFormData = z.infer<ReturnType<typeof buildSettingsSchema>>;
+
+const buildMessageSchema = (t: ValidationT) =>
+  z.object({
+    message: z
+      .string()
+      .max(4000, t('messageMax', { max: 4000 }))
+      .optional(),
   });
 
-type SettingsFormData = z.infer<typeof settingsSchema>;
+type MessageFormData = z.infer<ReturnType<typeof buildMessageSchema>>;
 
-const messageSchema = z.object({
-  message: z
-    .string()
-    .max(4000, 'Message must be 4000 characters or less')
-    .optional(),
-});
+const buildContactSchema = (t: ValidationT) =>
+  z.object({
+    firstName: z
+      .string()
+      .min(1, t('firstNameRequired'))
+      .max(100, t('firstNameMax', { max: 100 })),
+    email: z
+      .string()
+      .email(t('emailInvalid'))
+      .max(255, t('emailMax', { max: 255 })),
+  });
 
-type MessageFormData = z.infer<typeof messageSchema>;
-
-const contactSchema = z.object({
-  firstName: z
-    .string()
-    .min(1, 'First name is required')
-    .max(100, 'First name must be 100 characters or less'),
-  email: z
-    .string()
-    .email('Enter a valid email address')
-    .max(255, 'Email must be 255 characters or less'),
-});
-
-type ContactFormData = z.infer<typeof contactSchema>;
-
-function daysSince(iso: string | null): number | null {
-  if (!iso) return null;
-  const diffMs = Date.now() - new Date(iso).getTime();
-  return Math.max(0, Math.floor(diffMs / (24 * 60 * 60 * 1000)));
-}
+type ContactFormData = z.infer<ReturnType<typeof buildContactSchema>>;
 
 function formatTimestamp(
   iso: string | null,
@@ -127,15 +129,8 @@ function EmergencyAccessContent() {
     return (
       <PageLayout>
         <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-12 pt-6 pb-8">
-          <div className="mb-4">
-            <Link
-              href="/settings"
-              className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-            >
-              &larr; {t('backLink')}
-            </Link>
-          </div>
-          <PageHeader title={t('title')} />
+          <BackToSettingsLink label={t('backLink')} />
+          <PageHeader title={t('title')} help="emergencyAccess" />
           <div className="bg-amber-50 dark:bg-amber-900/30 border border-amber-200 dark:border-amber-800 rounded-lg p-6 mb-6">
             <p className="text-sm text-amber-700 dark:text-amber-300">
               {isDelegateView
@@ -190,7 +185,8 @@ function EmergencyAccessSection() {
   const tMsg = useTranslations('settings.emergencyAccess.message');
   const tContacts = useTranslations('settings.emergencyAccess.contacts');
   const tStatus = useTranslations('settings.emergencyAccess.status');
-  const tc = useTranslations('common');
+  const tValidation = useTranslations('settings.emergencyAccess.validation');
+  const relativeTime = useRelativeTime();
   const preferences = usePreferencesStore((s) => s.preferences);
   const userTimezone = resolveTimezone(preferences?.timezone);
   const dateFormat = preferences?.dateFormat || 'browser';
@@ -232,7 +228,7 @@ function EmergencyAccessSection() {
   const [resetting, setResetting] = useState(false);
 
   const settingsForm = useForm<SettingsFormData>({
-    resolver: zodResolver(settingsSchema),
+    resolver: zodResolver(buildSettingsSchema(tValidation)),
     defaultValues: {
       enabled: false,
       grantAfterDays: 14,
@@ -241,31 +237,37 @@ function EmergencyAccessSection() {
   });
 
   const messageForm = useForm<MessageFormData>({
-    resolver: zodResolver(messageSchema),
+    resolver: zodResolver(buildMessageSchema(tValidation)),
     defaultValues: { message: '' },
   });
 
   const contactForm = useForm<ContactFormData>({
-    resolver: zodResolver(contactSchema),
+    resolver: zodResolver(buildContactSchema(tValidation)),
     defaultValues: { firstName: '', email: '' },
   });
+  // Read above the early returns below: a hook cannot follow them.
+  const enabledNow = useWatch({ control: settingsForm.control, name: 'enabled' });
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    try {
-      const data = await emergencyAccessApi.get();
-      setView(data);
-      settingsForm.reset({
-        enabled: data.enabled,
-        grantAfterDays: data.grantAfterDays,
-        reminderAfterDays: data.reminderAfterDays,
-      });
-    } catch (err) {
-      toast.error(getErrorMessage(err, t('toasts.loadFailed')));
-      logger.error(err);
-    } finally {
-      setLoading(false);
-    }
+  // The only load is the mount one, and the state already says loading.
+  const load = useCallback(() => {
+    // Writes live in `run` so they land after the request, not during the effect.
+    const run = async () => {
+      try {
+        const data = await emergencyAccessApi.get();
+        setView(data);
+        settingsForm.reset({
+          enabled: data.enabled,
+          grantAfterDays: data.grantAfterDays,
+          reminderAfterDays: data.reminderAfterDays,
+        });
+      } catch (err) {
+        toast.error(getErrorMessage(err, t('toasts.loadFailed')));
+        logger.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    return run();
   }, [settingsForm, t]);
 
   useEffect(() => {
@@ -285,13 +287,37 @@ function EmergencyAccessSection() {
 
   // Lock the message view whenever the step-up token disappears (expiry, "Lock now",
   // logout). This prevents stale plaintext from staying on-screen after the
-  // unlock window ends.
+  // unlock window ends. The mode is set during render, so the message is never
+  // painted without a token; the form's copy of it is cleared in the effect.
+  if (!hasStepUpToken && messageMode !== 'hidden') {
+    setMessageMode('hidden');
+  }
   useEffect(() => {
-    if (!hasStepUpToken && messageMode !== 'hidden') {
-      setMessageMode('hidden');
-      messageForm.reset({ message: '' });
-    }
-  }, [hasStepUpToken, messageMode, messageForm]);
+    if (!hasStepUpToken) messageForm.reset({ message: '' });
+  }, [hasStepUpToken, messageForm]);
+
+  const fetchMessageInto = useCallback(
+    async (nextMode: 'view' | 'edit') => {
+      setMessageLoading(true);
+      try {
+        const { message } = await emergencyAccessApi.getMessage();
+        messageForm.reset({ message: message ?? '' });
+        setMessageMode(nextMode);
+      } catch (err) {
+        if (err instanceof StepUpRequiredError) {
+          clearStepUp(STEP_UP_PURPOSE);
+          setPendingMode(nextMode);
+          setStepUpOpen(true);
+          return;
+        }
+        toast.error(getErrorMessage(err, tMsg('toasts.loadFailed')));
+        logger.error(err);
+      } finally {
+        setMessageLoading(false);
+      }
+    },
+    [messageForm, clearStepUp, tMsg, setPendingMode, setStepUpOpen],
+  );
 
   // Finalize step-up after an OIDC roundtrip. The user clicked "Continue to
   // identity provider" in the modal, which stashed the pending purpose +
@@ -334,29 +360,6 @@ function EmergencyAccessSection() {
     // first call, so re-runs would no-op anyway.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const fetchMessageInto = useCallback(
-    async (nextMode: 'view' | 'edit') => {
-      setMessageLoading(true);
-      try {
-        const { message } = await emergencyAccessApi.getMessage();
-        messageForm.reset({ message: message ?? '' });
-        setMessageMode(nextMode);
-      } catch (err) {
-        if (err instanceof StepUpRequiredError) {
-          clearStepUp(STEP_UP_PURPOSE);
-          setPendingMode(nextMode);
-          setStepUpOpen(true);
-          return;
-        }
-        toast.error(getErrorMessage(err, tMsg('toasts.loadFailed')));
-        logger.error(err);
-      } finally {
-        setMessageLoading(false);
-      }
-    },
-    [messageForm, clearStepUp, tMsg],
-  );
 
   const handleReveal = () => {
     if (!hasStepUpToken) {
@@ -515,7 +518,7 @@ function EmergencyAccessSection() {
     return (
       <PageLayout>
         <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-12 pt-6 pb-8">
-          <PageHeader title={t('title')} />
+          <PageHeader title={t('title')} help="emergencyAccess" />
           <p className="text-sm text-gray-600 dark:text-gray-300">
             {t('loadError')}
           </p>
@@ -524,8 +527,6 @@ function EmergencyAccessSection() {
     );
   }
 
-  const inactiveDays = daysSince(view.lastActivityAt);
-  const enabledNow = settingsForm.watch('enabled');
   const { messageMetadata } = view;
 
   // Arming needs both dependencies; disabling needs neither. A feature already
@@ -546,18 +547,12 @@ function EmergencyAccessSection() {
   return (
     <PageLayout>
       <main className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-12 pt-6 pb-8">
-        <div className="mb-4">
-          <Link
-            href="/settings"
-            className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-          >
-            &larr; {t('backLink')}
-          </Link>
-        </div>
+        <BackToSettingsLink label={t('backLink')} />
 
         <PageHeader
           title={t('title')}
           subtitle={t('subtitle')}
+          help="emergencyAccess"
         />
 
         {!view.emailConfigured && (
@@ -679,15 +674,12 @@ function EmergencyAccessSection() {
               />
             </div>
 
-            <div className="flex justify-end">
-              <Button
-                type="submit"
-                isLoading={savingSettings}
-                disabled={!canEditSettings}
-              >
-                {t('settings.saveButton')}
-              </Button>
-            </div>
+            <FormActions
+              submitLabel={t('settings.saveButton')}
+              isSubmitting={savingSettings}
+              submitDisabled={!canEditSettings}
+              className="pt-0"
+            />
           </div>
         </form>
 
@@ -786,28 +778,21 @@ function EmergencyAccessSection() {
               <p className="text-xs text-gray-500 dark:text-gray-400">
                 {tMsg('maxCharsNote')}
               </p>
-              <div className="flex justify-end gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <Button
                   type="button"
-                  size="sm"
                   variant="outline"
                   onClick={handleLockNow}
                   disabled={savingMessage}
                 >
                   {tMsg('lockNowButton')}
                 </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setMessageMode('view')}
-                  disabled={savingMessage}
-                >
-                  {tMsg('cancelButton')}
-                </Button>
-                <Button type="submit" size="sm" isLoading={savingMessage}>
-                  {tMsg('saveButton')}
-                </Button>
+                <FormActions
+                  onCancel={() => setMessageMode('view')}
+                  submitLabel={tMsg('saveButton')}
+                  isSubmitting={savingMessage}
+                  className="pt-0"
+                />
               </div>
             </form>
           )}
@@ -876,7 +861,10 @@ function EmergencyAccessSection() {
               <dt className="inline font-medium">{tStatus('lastAccess')}</dt>
               <dd className="inline">
                 {view.lastActivityAt
-                  ? `${formatTimestamp(view.lastActivityAt, userTimezone, dateFormat, timeFormat)} (${tStatus('daysAgo', { count: inactiveDays ?? 0, plural: inactiveDays === 1 ? '' : 's' })})`
+                  ? tStatus('withRelative', {
+                      timestamp: formatTimestamp(view.lastActivityAt, userTimezone, dateFormat, timeFormat),
+                      relative: relativeTime(view.lastActivityAt),
+                    })
                   : tStatus('unknown')}
               </dd>
             </div>
@@ -915,14 +903,12 @@ function EmergencyAccessSection() {
         >
           <form
             onSubmit={contactForm.handleSubmit(onContactSubmit)}
-            className="flex flex-col"
+            className="p-6"
           >
-            <div className="border-b border-gray-200 dark:border-gray-700 px-6 py-4">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                {editingContact ? tContacts('contactModal.editTitle') : tContacts('contactModal.addTitle')}
-              </h2>
-            </div>
-            <div className="px-6 py-4 space-y-4">
+            <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-4">
+              {editingContact ? tContacts('contactModal.editTitle') : tContacts('contactModal.addTitle')}
+            </h2>
+            <div className="space-y-4">
               <Input
                 label={tContacts('contactModal.firstNameLabel')}
                 error={contactForm.formState.errors.firstName?.message}
@@ -936,19 +922,11 @@ function EmergencyAccessSection() {
                 {...contactForm.register('email')}
               />
             </div>
-            <div className="border-t border-gray-200 dark:border-gray-700 px-6 py-4 flex justify-end gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowContactForm(false)}
-                disabled={submittingContact}
-              >
-                {tc('cancel')}
-              </Button>
-              <Button type="submit" isLoading={submittingContact}>
-                {editingContact ? tContacts('contactModal.saveButton') : tContacts('contactModal.addButton')}
-              </Button>
-            </div>
+            <FormActions
+              onCancel={() => setShowContactForm(false)}
+              submitLabel={editingContact ? tContacts('contactModal.saveButton') : tContacts('contactModal.addButton')}
+              isSubmitting={submittingContact}
+            />
           </form>
         </Modal>
 

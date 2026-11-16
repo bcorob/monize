@@ -1,8 +1,87 @@
 {
   "page": {
-    "welcomePrefix": "ようこそ",
-    "welcomeWithName": "ようこそ、{name}さん！",
-    "subtitle": "財務の概要をご確認ください"
+    "greeting": {
+      "morning": "おはようございます",
+      "morningWithName": "おはようございます、{name}さん",
+      "afternoon": "こんにちは",
+      "afternoonWithName": "こんにちは、{name}さん",
+      "evening": "こんばんは",
+      "eveningWithName": "こんばんは、{name}さん"
+    }
+  },
+  "hero": {
+    "label": "純資産の概要",
+    "netWorth": "純資産",
+    "changeThisMonth": "今月 {amount} <dir>{direction, select, up {増加} other {減少}}</dir>",
+    "changeThisMonthWithPercent": "今月 {amount} · {percent} <dir>{direction, select, up {増加} other {減少}}</dir>",
+    "assets": "資産 <strong><value></value></strong>",
+    "liabilities": "負債 <strong><value></value></strong>",
+    "invested": "投資 <strong><value></value></strong>",
+    "investedUnpriced": "{symbols} の現在価格がないため、これらの保有銘柄は含まれていません。投資ページで価格を更新するか、銘柄の価格履歴に追加してください。",
+    "portfolioLabel": "ポートフォリオの概要",
+    "portfolioValueFor": "ポートフォリオ評価額 <names>({accounts})</names>",
+    "portfolioEmpty": "投資口座がまだありません。追加するとここにポートフォリオが表示されます。",
+    "portfolioLoadFailed": "ポートフォリオを読み込めませんでした。ダッシュボードを再読み込みしてください。",
+    "portfolioChangeFailed": "この期間の変化を読み込めませんでした。ダッシュボードを再読み込みしてください。",
+    "changeOverWindow": "{amount} · {window} <dir>{direction, select, up {増加} other {減少}}</dir>",
+    "holdings": "保有 <strong><value></value></strong>",
+    "cash": "現金 <strong><value></value></strong>",
+    "metricLine": "{metric} <strong><value></value></strong>",
+    "metricNames": {
+      "simpleReturn": "単純リターン",
+      "twr": "TWR",
+      "mwr": "MWR",
+      "cagr": "CAGR"
+    },
+    "showSet": "{name}を表示",
+    "cycleControls": "ヒーローに表示する内容を選択",
+    "cagrUnavailable": "CAGR には、これらの口座で 1 年以上の投資履歴と、引き出しを上回る入金が必要です。",
+    "intradayUnavailable": "一部の保有銘柄に日中価格がないため、1 日のグラフを描けません。カスタマイズで長い期間を選んでください。"
+  },
+  "trivia": {
+    "title": "トリビア",
+    "position": "{index} / {total}",
+    "previous": "前のトリビア",
+    "next": "次のトリビア",
+    "empty": "十分な履歴がたまると、ここにトリビアが表示されます。純資産の 2 か月分、価格のある投資、数か月分の支出と収入、または管理している保証が対象です。リストは毎朝再生成されます。",
+    "off": "AI トリビアはオフです。<link>AI設定</link>でオンにしてください。",
+    "topics": {
+      "netWorth": "純資産",
+      "investments": "投資",
+      "spending": "支出",
+      "income": "収入",
+      "activity": "あなたの記録",
+      "warranties": "保証"
+    },
+    "aiGenerated": "あなたの数字をもとにAIが作成しました",
+    "facts": {
+      "netWorthSinceStart": "{startMonth}の純資産は{startAmount}でした。その後{startGain}増え、約{startMultiple}倍になっています。",
+      "netWorthBiggestJump": "{jumpMonth}が1か月で最も大きく伸びた月でした。純資産は{jumpAmount}増え、{jumpPreviousMonth}の{jumpFrom}から{jumpTo}になりました。",
+      "netWorthHighPoint": "過去最高は{peakMonth}の{peakAmount}でした。現在はそこから{peakBelow}下回っています。",
+      "netWorthAtHighPoint": "今が最高値です。純資産が{currentHigh}を超えたことはありません。",
+      "netWorthBiggestDip": "最大の下落では、純資産が{dipFromMonth}の{dipFromAmount}から{dipToMonth}の{dipToAmount}まで、{dipPercent}減少しました。",
+      "netWorthBiggestDipRecovered": "最大の下落では、純資産が{dipFromMonth}の{dipFromAmount}から{dipToMonth}の{dipToAmount}まで減少しました。{dipRecoveredMonth}までに回復しています。",
+      "netWorthLargestAsset": "{assetName}の評価額は{assetValue}で、資産の{assetPercent}を占めます。",
+      "investmentsShareOfAssets": "投資の評価額は{investmentsValue}で、資産の{investmentsPercent}にあたります。",
+      "investmentsGain": "投資は取得原価{gainCostBasis}に対して{gainAmount}({gainPercent})の増加です。",
+      "investmentsLoss": "投資は取得原価{gainCostBasis}に対して{gainAmount}({gainPercent})の減少です。",
+      "investmentsCagr": "投資の年率リターンは約{cagrPercent}(CAGR)です。",
+      "investmentsBiggestHolding": "最大の保有銘柄は{holdingSymbol}で、ポートフォリオの約{holdingPercent}です({holdingAccounts}で{holdingValue})。",
+      "investmentsBestPerformer": "最も好調な銘柄は{bestSymbol}で、{bestPercent}上昇しました。取得額は{bestCost}で、現在は{bestValue}です。",
+      "investmentsForeignAccount": "{foreignName}口座は{foreignCurrency}で保有されています。保有額{foreignBalance}は、約{foreignRate}のレートで{foreignConverted}に相当します。",
+      "investmentsLargestAccount": "最大の投資口座は{largestName}で、{largestValue}です。",
+      "spendingTopCategory": "過去 12 か月で、支出の最も大きな部分を占めたのは{topCategoryName}で、{topCategoryAmount}、全体の{topCategoryPercent}でした。",
+      "spendingTopPayee": "過去 12 か月で、最も多くお金を使った相手は{topPayeeName}で、{topPayeeAmount}でした。",
+      "spendingBiggestMonth": "{biggestSpendMonth}は過去 12 か月で最も支出が多い月で、{biggestSpendAmount}でした。",
+      "incomeKeptShare": "過去 12 か月で、入ってきたお金のうち{keptAmount}が手元に残り、収入の{keptPercent}にあたります。",
+      "incomeSurplusMonths": "直近{windowMonths}か月のうち、出ていくより入ってくるお金が多かった月:{surplusMonths}。",
+      "incomeTopSource": "過去 12 か月の収入のうち、{topSourcePercent}は{topSourceName}によるものでした。",
+      "activityTransactions": "登録簿にある取引:{transactionCount}件、{firstTransactionMonth}までさかのぼります。",
+      "activityPayees": "Monize に登録している受取人:{payeeCount}件。カテゴリ:{categoryCount}件。",
+      "activityScheduled": "Monize があなたのために管理している定期取引:{scheduledCount}件。",
+      "warrantiesCovered": "管理している保証のうち、まだ有効なもの:{warrantyCount}件。",
+      "warrantiesNextExpiry": "次に期限が切れる保証は{nextWarrantyName}で、{nextWarrantyMonth}です。"
+    }
   },
   "favouriteAccounts": {
     "title": "お気に入りの勘定科目",
@@ -21,12 +100,10 @@
   "upcomingBills": {
     "title": "今後の請求書・入金",
     "empty": "リマインダー期間内に期限超過または予定されている請求書、入金、振替はありません。",
-    "perReminderSettings": "リマインダー設定に従う",
     "postTransaction": "この取引を計上する",
     "manual": "手動",
-    "manualTitle": "手動での計上が必要です",
     "negativeBalanceWarning": "この取引により勘定科目の残高がマイナスになります",
-    "viewAll": "すべての請求書・入金を見る",
+    "negativeBalanceLegend": "口座残高がマイナスになります",
     "moreItems": "+{count} 件",
     "overdue": "期限超過",
     "today": "今日",
@@ -38,7 +115,23 @@
       "transfer": "振替",
       "reminder": "リマインダー",
       "unknown": "不明"
-    }
+    },
+    "scope": {
+      "dueSoon": "期日が近い",
+      "all": "今後すべて"
+    },
+    "viewLabel": "表示形式",
+    "viewList": "リスト",
+    "viewCalendar": "カレンダー",
+    "previousMonth": "前の月",
+    "nextMonth": "次の月",
+    "emptyAll": "予定されている有効な請求、入金、振替はありません。",
+    "estimated": "見積もり"
+  },
+  "cashFlowForecast": {
+    "title": "キャッシュフロー予測",
+    "period": "予測期間",
+    "loadFailed": "今日より後の日付の取引を読み込めなかったため、予測を表示できません。ダッシュボードを再読み込みしてもう一度お試しください。"
   },
   "gettingStarted": {
     "title": "はじめに",
@@ -76,8 +169,12 @@
     "title": "支出インサイト",
     "empty": "インサイトがありません。インサイトページを開いて最初の分析を生成してください。",
     "goToInsights": "インサイトへ",
-    "viewAll": "すべてのインサイトを見る",
     "activeCount": "{count} 件有効"
+  },
+  "warrantiesExpiring": {
+    "title": "まもなく期限切れになる保証",
+    "empty": "今後 30 日以内に期限切れになるものはありません",
+    "loadFailed": "期限切れが近い保証を読み込めませんでした。ダッシュボードを再読み込みして、もう一度お試しください。"
   },
   "topMovers": {
     "title": "値動き上位",
@@ -88,13 +185,20 @@
       "noLosers": "今日の値下がり銘柄はありません。"
     },
     "dailyChange": "日次変動",
+    "dailyChangeOn": "日次変動 · {date}",
     "openPriceHistory": "{symbol} の価格履歴",
     "refreshPrices": "価格を更新",
     "viewPortfolio": "ポートフォリオを見る",
     "filter": {
-      "all": "すべて",
-      "gainers": "値上がり",
-      "losers": "値下がり"
+      "all": "すべて ({count})",
+      "gainers": "値上がり ({count})",
+      "losers": "値下がり ({count})",
+      "label": "方向"
+    },
+    "metric": {
+      "label": "表示",
+      "price": "株価",
+      "holdings": "保有"
     }
   },
   "favouriteSecurities": {
@@ -102,15 +206,17 @@
     "empty": "お気に入りの有価証券がまだありません。<securitiesLink>有価証券ページ</securitiesLink>を開いて追跡したい有価証券をスターしてください。",
     "noPriceYet": "価格未登録",
     "dailyChange": "日次変動",
+    "dailyChangeOn": "日次変動 · {date}",
     "openPriceHistory": "{symbol} の価格履歴",
-    "refreshPrices": "価格を更新",
-    "manage": "有価証券を管理"
+    "refreshPrices": "価格を更新"
   },
   "netWorth": {
     "title": "純資産",
     "empty": "純資産データがまだありません。",
-    "past12Months": "過去12ヶ月",
-    "viewReport": "レポートの全体を見る"
+    "barStyle": "棒の表示",
+    "barStyleNetWorth": "純資産",
+    "barStyleAccountType": "口座の種類別",
+    "loadFailed": "純資産の履歴を読み込めませんでした。ダッシュボードを再読み込みしてもう一度お試しください。"
   },
   "assetsVsLiabilities": {
     "title": "資産 対 負債",
@@ -118,14 +224,22 @@
     "current": "現在",
     "netWorthLabel": "純資産",
     "assets": "資産",
-    "liabilities": "負債"
+    "liabilities": "負債",
+    "partialName": "{name}（部分的）",
+    "viewCallouts": "ラベル",
+    "viewLegend": "凡例"
   },
   "expensesPieChart": {
     "title": "カテゴリ別支出",
     "empty": "この期間の支出データがありません。",
     "total": "合計",
     "uncategorized": "未分類",
-    "other": "その他"
+    "other": "その他",
+    "insideOther": "{count, plural, other {その他に# カテゴリ}}",
+    "topLevelOnly": "最上位カテゴリ",
+    "topLevelOnlyHint": "サブカテゴリを親カテゴリに集計します",
+    "viewCallouts": "ラベル",
+    "viewLegend": "凡例"
   },
   "incomeExpenses": {
     "title": "収入 対 支出",
@@ -135,18 +249,85 @@
   },
   "customize": {
     "button": "カスタマイズ",
-    "title": "ダッシュボードのカスタマイズ",
-    "description": "以下のレイアウトはダッシュボードと同じ配置です。ウィジェットは左から右へ並び、大きい画面では1行に2つ表示されます。",
     "moveEarlier": "{name}を前へ移動",
     "moveLater": "{name}を後ろへ移動",
-    "dragToReorder": "ウィジェットをドラッグして並べ替えるか、矢印ボタンを使用してください。",
-    "hiddenWidgets": "非表示のウィジェット",
-    "hide": "{name}を非表示にする",
-    "show": "{name}を表示する",
     "atLeastOne": "ダッシュボードに表示するウィジェットを少なくとも1つ選択してください。",
     "reset": "デフォルトに戻す",
     "toasts": {
       "saveFailed": "ダッシュボードレイアウトの保存に失敗しました"
+    },
+    "hero": {
+      "title": "ダッシュボードのヒーロー",
+      "description": "あいさつの下に表示される最初の数字とチャート。純資産、ポートフォリオ、または1分ごとに両方を切り替える「自動」から選べます。",
+      "show": "ダッシュボードのヒーローを表示",
+      "range": "グラフ",
+      "set": "表示",
+      "sets": {
+        "auto": "自動",
+        "netWorth": "純資産",
+        "portfolio": "ポートフォリオ評価額"
+      },
+      "metric": "指標",
+      "metrics": {
+        "simpleReturn": "単純リターン",
+        "twr": "TWR",
+        "mwr": "MWR",
+        "cagr": "CAGR"
+      }
+    }
+  },
+  "edit": {
+    "barLabel": "ダッシュボードを並べ替え",
+    "addWidget": "ウィジェットを追加",
+    "heroSettings": "ヒーロー設定",
+    "done": "完了",
+    "phoneNote": "ウィジェットのサイズは幅の広い画面で適用されます。",
+    "remove": "{name}を削除",
+    "grip": "{name}を移動",
+    "gripHint": "ドラッグして{name}を移動するか、矢印キーを押します",
+    "moved": "{name}を{count}件中{position}番目に移動しました",
+    "removed": "{name}を削除しました",
+    "added": "{name}を追加しました",
+    "resized": "{name}は{size}になりました",
+    "resizedBoth": "{name}は{width}、{height}になりました",
+    "twoChanges": "{first}。{second}",
+    "placeholder": "表示できる内容ができると、ダッシュボードに表示されます。",
+    "addTitle": "ウィジェットを追加",
+    "addDescription": "追加したウィジェットはダッシュボードの最後に置かれます。「完了」を選ぶまで何も保存されません。",
+    "addEmpty": "すべてのウィジェットがすでにダッシュボードにあります",
+    "addToSpace": "このスペース（{width}）にウィジェットを追加",
+    "addSlotDescription": "このスペースに収まるウィジェットだけが表示され、選んだウィジェットがスペースを埋めます。「完了」を選ぶまで何も保存されません。",
+    "addSlotEmpty": "このスペースに収まる非表示のウィジェットはありません。ウィジェットをここにドラッグして移動できます。",
+    "resize": "{name}のサイズを変更",
+    "resizeHint": "ドラッグして{name}のサイズを変更するか、矢印キーを押します",
+    "widthLabel": "幅",
+    "heightLabel": "高さ",
+    "presetName": "{short}、{name}",
+    "widthOf": "{name}の幅",
+    "heightOf": "{name}の高さ",
+    "widthShort": {
+      "third": "1/3",
+      "half": "1/2",
+      "twoThirds": "2/3",
+      "full": "全幅"
+    },
+    "widthName": {
+      "third": "3分の1の幅",
+      "half": "半分の幅",
+      "twoThirds": "3分の2の幅",
+      "full": "全幅"
+    },
+    "heightShort": {
+      "auto": "自動",
+      "compact": "小",
+      "standard": "中",
+      "tall": "大"
+    },
+    "heightName": {
+      "auto": "自動の高さ",
+      "compact": "コンパクトな高さ",
+      "standard": "標準の高さ",
+      "tall": "縦長の高さ"
     }
   },
   "favouriteReports": {
@@ -156,22 +337,28 @@
   },
   "widgets": {
     "configure": "{name}を設定",
+    "asOf": "{date}時点",
     "done": "完了",
     "configSaveFailed": "ウィジェット設定を保存できませんでした。もう一度お試しください。",
     "timeframe": "期間",
     "accounts": "口座",
     "chartType": "グラフの種類",
     "view": "表示",
+    "viewCalloutsHint": "ラベルには広い画面が必要です。収まらない場合は凡例が表示されます。",
     "displayName": "表示名",
     "description": "説明",
     "descriptionPlaceholder": "任意の説明を追加",
     "rangeLabels": {
+      "1d": "1D",
+      "1w": "1週",
+      "mtd": "月初来",
       "1m": "1M",
       "3m": "3M",
       "6m": "6M",
       "1y": "1Y",
       "2y": "2Y",
       "5y": "5Y",
+      "10y": "10Y",
       "ytd": "YTD",
       "all": "すべて"
     }
@@ -179,7 +366,10 @@
   "portfolioValue": {
     "title": "ポートフォリオ価値",
     "empty": "表示する投資履歴がまだありません。",
-    "refresh": "現在の価値を更新"
+    "refresh": "現在の価値を更新",
+    "investmentResult": "投資成果",
+    "periodBreakdownInvestedTooltip": "この期間に証券の価値は {valueChange} 変動しました。そのうち {netInvested} は売却を差し引いた投資額で、配当と利息として {income} が支払われました。株式に再投資された分配金は両方に含まれます。上の数値は、投資されていない現金を除いた、投資そのものの成果です。",
+    "notAvailable": "N/A"
   },
   "spendingByPayee": {
     "title": "支払先別支出",
@@ -225,14 +415,19 @@
       "MUTUAL_FUND": "投資信託",
       "BOND": "債券",
       "CASH": "現金"
-    }
+    },
+    "viewType": "証券種別",
+    "viewAssetClass": "資産クラス",
+    "otherAssetClasses": "その他",
+    "emptyAssetClass": "資産クラスの内訳はまだありません。"
   },
   "geographicAllocation": {
     "title": "地域配分",
     "empty": "表示する保有銘柄がありません。",
     "viewRegion": "地域",
     "viewExchange": "取引所",
-    "viewCountry": "国"
+    "viewCountry": "国",
+    "listingBasisNote": "各保有銘柄の上場市場でグループ化しています。ファンドの中身を見るには国に切り替えてください。"
   },
   "recurringExpenses": {
     "title": "上位定期費用",
@@ -240,7 +435,9 @@
     "minOccurrences": "最小発生回数",
     "minOccurrencesOption": "{count} 回以上",
     "occurrences": "{count} 回",
-    "monthlyEstimate": "月次見積もり"
+    "monthlyEstimate": "月次見積もり",
+    "viewCallouts": "ラベル",
+    "viewLegend": "凡例"
   },
   "weekendVsWeekday": {
     "title": "週末 vs 平日の支出",
@@ -249,5 +446,14 @@
     "weekdayLabel": "平日",
     "viewOverview": "概要",
     "viewByDay": "曜日別"
+  },
+  "cashFlowSankey": {
+    "title": "キャッシュフロー サンキー",
+    "empty": "この期間の収入、支出、振替はありません。",
+    "depth": "詳細度",
+    "depthCategories": "カテゴリ",
+    "depthSubcategories": "サブカテゴリ",
+    "viewDiagram": "図",
+    "viewTable": "テーブル"
   }
 }

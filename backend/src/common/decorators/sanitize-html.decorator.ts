@@ -1,5 +1,10 @@
 import { Transform } from "class-transformer";
 
+/** The sanitizer `@SanitizeHtml()` applies to a string; also for values that bypass a DTO. */
+export function sanitizeHtmlString(raw: string): string {
+  return raw.replace(/[<>]/g, "");
+}
+
 /**
  * Strips HTML angle brackets from string values to prevent stored XSS.
  * Also rejects non-string values (objects, arrays) that would otherwise
@@ -11,10 +16,10 @@ export function SanitizeHtml(): PropertyDecorator {
     if (raw === undefined || raw === null) return raw;
     if (Array.isArray(raw)) {
       return raw.map((item) =>
-        typeof item === "string" ? item.replace(/[<>]/g, "") : item,
+        typeof item === "string" ? sanitizeHtmlString(item) : item,
       );
     }
     if (typeof raw !== "string") return raw;
-    return raw.replace(/[<>]/g, "");
+    return sanitizeHtmlString(raw);
   });
 }

@@ -1,30 +1,22 @@
 import { Injectable, Logger } from "@nestjs/common";
 import { Cron } from "@nestjs/schedule";
 import { DataSource } from "typeorm";
+import { applyAccountBalanceDelta } from "../accounts/accounts.service";
 import { withScopedDb } from "../common/db/scoped-db";
+import { accountMoneyDecimals } from "../import/import-context";
 import * as bcrypt from "bcryptjs";
 
 import { DemoModeService } from "../common/demo-mode.service";
 import { DemoSeedService } from "./demo-seed.service";
+import { clearDemoUserData } from "./demo-clear";
 import { INTRADAY_TEMPLATES } from "./demo-seed-data/intraday-templates";
 import { withSystemContext } from "../common/db/with-context";
+import { DEMO_USER_EMAIL, DEMO_USER_PASSWORD } from "./demo-credentials";
 import {
   JobClaimService,
   JobClaimType,
 } from "../common/jobs/job-claim.service";
-
-/**
- * How long one replica may hold the demo reset before another may retake it.
- *
- * A wipe-and-reseed is not idempotent while it is running: a second replica
- * starting halfway through deletes the rows the first is still seeding and both
- * finish with a partial demo. The lease expires so a replica killed mid-reset
- * does not leave the demo un-resettable until someone restarts the cluster.
- */
-export const DEMO_RESET_LEASE_MS = 30 * 60 * 1000;
-
-/** Lease and claim keys; one demo user, so the key names the window instead. */
-export const DEMO_RESET_CLAIM_KEY = "reset";
+import { invalidatePortfolioSummary } from "../securities/portfolio-summary-memo";
 
 @Injectable()
 export class DemoResetService {
@@ -51,7 +43,7 @@ export class DemoResetService {
   /** The demo user's id, or null when the demo user has not been created. */
   private async findDemoUserId(): Promise<string | null> {
     const [demoUser] = await withScopedDb(this.dataSource, (manager) =>
-      manager.query("SELECT id FROM users WHERE email = 'demo@monize.com'"),
+      manager.query("SELECT id FROM users WHERE email = $1", [DEMO_USER_EMAIL]),
     );
     return demoUser?.id ?? null;
   }
@@ -67,37 +59,28 @@ export class DemoResetService {
       }
 
       // Every replica fires this cron. A wipe-and-reseed is the one shape a
-      // duplicate run cannot repair by repeating: the second replica's DELETE
-      // lands in the middle of the first replica's seed and both finish with a
-      // partial demo. The lease is the exclusion; it expires so a killed replica
-      // does not leave the demo un-resettable.
-      const leased = await this.jobClaims.claimLease(
+      // duplicate run cannot repair by repeating: a second replica's DELETE
+      // lands in the middle of the first replica's seed, or -- if its 4 AM tick
+      // arrives after the first has finished -- wipes and reseeds a demo that
+      // was already reset. The claim is keyed by the UTC day and permanent, so
+      // it records "done today", not only "running now"; a permanent claim also
+      // makes overlap impossible, so a lease has nothing left to add. It is not
+      // released on failure: a partial reset beats a doubled one, and
+      // tomorrow's key is fresh.
+      const utcDay = new Date().toISOString().slice(0, 10);
+      const claimed = await this.jobClaims.claimOnce(
         JobClaimType.DemoReset,
         demoUserId,
-        DEMO_RESET_CLAIM_KEY,
-        DEMO_RESET_LEASE_MS,
+        `reset:${utcDay}`,
       );
-      if (!leased) {
+      if (!claimed) {
         this.logger.log(
-          "Another replica is already resetting the demo data; skipping",
+          "Demo data already reset today by another replica; skipping",
         );
         return;
       }
 
-      try {
-        await this.performDemoReset(demoUserId);
-      } finally {
-        await this.jobClaims
-          // By token: a reset that outran its lease must not free the one the
-          // replica now reseeding holds (DR-RRV4-01).
-          .releaseLease(
-            JobClaimType.DemoReset,
-            demoUserId,
-            DEMO_RESET_CLAIM_KEY,
-            leased,
-          )
-          .catch(() => undefined);
-      }
+      await this.performDemoReset(demoUserId);
     } catch (error) {
       this.logger.error(
         "Demo reset failed",
@@ -107,6 +90,11 @@ export class DemoResetService {
   }
 
   private async performDemoReset(demoUserId: string): Promise<void> {
+    // The demo user's whole dataset is about to be replaced, so nothing
+    // memoized about its portfolio survives the wipe. Before and after: a
+    // request arriving mid-reset would otherwise re-memoize the half-emptied
+    // state for a minute.
+    invalidatePortfolioSummary(demoUserId);
     try {
       // The clear runs in one transaction and must COMMIT before the re-seed:
       // seedDemoData opens its own scoped transactions, and the seeded rows
@@ -114,77 +102,13 @@ export class DemoResetService {
       await withScopedDb(this.dataSource, async (manager) => {
         const userId: string = demoUserId;
 
-        // 1. Delete all user data in FK-safe order
-        await manager.query(
-          "DELETE FROM investment_transactions WHERE user_id = $1",
-          [userId],
-        );
-        await manager.query(
-          `DELETE FROM holdings WHERE account_id IN
-         (SELECT id FROM accounts WHERE user_id = $1)`,
-          [userId],
-        );
-        await manager.query(
-          `DELETE FROM security_prices WHERE security_id IN
-         (SELECT id FROM securities WHERE user_id = $1)`,
-          [userId],
-        );
-        await manager.query("DELETE FROM securities WHERE user_id = $1", [
-          userId,
-        ]);
-        await manager.query(
-          `DELETE FROM transaction_splits WHERE transaction_id IN
-         (SELECT id FROM transactions WHERE user_id = $1)`,
-          [userId],
-        );
-        await manager.query("DELETE FROM transactions WHERE user_id = $1", [
-          userId,
-        ]);
-        await manager.query(
-          `DELETE FROM scheduled_transaction_overrides WHERE scheduled_transaction_id IN
-         (SELECT id FROM scheduled_transactions WHERE user_id = $1)`,
-          [userId],
-        );
-        await manager.query(
-          `DELETE FROM scheduled_transaction_splits WHERE scheduled_transaction_id IN
-         (SELECT id FROM scheduled_transactions WHERE user_id = $1)`,
-          [userId],
-        );
-        await manager.query(
-          "DELETE FROM scheduled_transactions WHERE user_id = $1",
-          [userId],
-        );
-        await manager.query(
-          "DELETE FROM monthly_account_balances WHERE user_id = $1",
-          [userId],
-        );
-        await manager.query("DELETE FROM custom_reports WHERE user_id = $1", [
-          userId,
-        ]);
-        await manager.query("DELETE FROM payees WHERE user_id = $1", [userId]);
-        await manager.query("DELETE FROM accounts WHERE user_id = $1", [
-          userId,
-        ]);
-        // Institutions are referenced by accounts (institution_id FK); delete
-        // after accounts so the re-seed recreates them without duplicates.
-        await manager.query("DELETE FROM institutions WHERE user_id = $1", [
-          userId,
-        ]);
-        await manager.query("DELETE FROM categories WHERE user_id = $1", [
-          userId,
-        ]);
-        await manager.query("DELETE FROM refresh_tokens WHERE user_id = $1", [
-          userId,
-        ]);
-        await manager.query("DELETE FROM trusted_devices WHERE user_id = $1", [
-          userId,
-        ]);
-        await manager.query("DELETE FROM user_preferences WHERE user_id = $1", [
-          userId,
-        ]);
+        // 1. Delete everything the demo user owns, in FK-safe order. The
+        // list lives beside a guard test over database/schema.sql, so a table
+        // a later feature adds cannot survive the reset unnoticed.
+        await clearDemoUserData(manager, userId);
 
         // 2. Reset user record
-        const hashedPassword = await bcrypt.hash("Demo123!", 10);
+        const hashedPassword = await bcrypt.hash(DEMO_USER_PASSWORD, 10);
         await manager.query(
           `UPDATE users SET
           password_hash = $1,
@@ -227,6 +151,7 @@ export class DemoResetService {
       if (seeded) {
         this.logger.log("Demo data re-seeded successfully");
       }
+      invalidatePortfolioSummary(demoUserId);
     } catch (error) {
       // withScopedDb has already rolled its transaction back by the time we
       // land here; the reset is best-effort, so log and let the cron continue.
@@ -360,10 +285,12 @@ export class DemoResetService {
               ],
             );
 
-            await manager.query(
-              "UPDATE accounts SET current_balance = ROUND(CAST(current_balance AS numeric) + $1, 4) WHERE id = $2",
-              [amount, account.id],
-            );
+            // The shared atomic delta, rounded at the account currency's
+            // places; no `accounts.current_balance` writer rounds in SQL.
+            await applyAccountBalanceDelta(manager, account.id, amount, {
+              openOnly: false,
+              decimals: await accountMoneyDecimals(manager, account.id),
+            });
 
             return account.id as string;
           },

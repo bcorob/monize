@@ -116,6 +116,40 @@ describe("derived financial state has one set of writers", () => {
   });
 
   /**
+   * The file-level scan above is satisfied by any lock anywhere in the file, so
+   * one branch of a service can derive its deltas from snapshots while a sibling
+   * method's lock keeps the file green. That is how the split-transfer leg edit
+   * reversed the same old amount twice under two concurrent requests while
+   * `updateTransfer`, a few hundred lines up, locked both legs (A26-H03).
+   *
+   * So each edit or removal method that moves a balance takes a lock itself.
+   * The method boundary is the next class member, as in
+   * `transactions/reconciled-lock.guard.spec.ts`.
+   */
+  it("locks inside every edit or removal method that moves a balance", () => {
+    const signature =
+      /\n {2}(?:private |protected |public )?async ((?:update|remove|delete|bulk)\w*)\s*\(/g;
+    const nextMember =
+      /\n {2}(?:\/\*\*|(?:private |protected |public )?(?:readonly |static )?(?:async )?[A-Za-z_$][\w$]*\s*[(<])/;
+    const offenders: string[] = [];
+    for (const file of sourceFiles()) {
+      const source = read(file);
+      for (const match of source.matchAll(signature)) {
+        const rest = source.slice(match.index! + match[0].length);
+        const end = rest.search(nextMember);
+        const body = end === -1 ? rest : rest.slice(0, end);
+        if (
+          /accountsService\.updateBalance\(/.test(body) &&
+          !/lockTransactionRows?\(|lockAccountsForBalanceWrite\(/.test(body)
+        ) {
+          offenders.push(`${relative(file)} ${match[1]}`);
+        }
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  /**
    * A balance reversal must be gated on the row this call actually removed.
    *
    * `manager.remove(entity)` deletes by primary key and reports nothing, so two

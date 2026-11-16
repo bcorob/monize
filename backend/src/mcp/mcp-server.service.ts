@@ -1,8 +1,9 @@
 import { Injectable } from "@nestjs/common";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { UserContextResolver } from "./mcp-context";
+import { McpServer } from "@modelcontextprotocol/server";
 import { AiRelayService } from "../ai/relay/ai-relay.service";
 import { installRelayToolActivity } from "./mcp-relay-tool-activity";
+import { installConfirmSupport } from "./mcp-confirm";
+import { McpRequestStateCodec } from "./mcp-request-state";
 import { McpAccountsTools } from "./tools/accounts.tool";
 import { McpTransactionsTools } from "./tools/transactions.tool";
 import { McpCategoriesTools } from "./tools/categories.tool";
@@ -13,6 +14,13 @@ import { McpScheduledTools } from "./tools/scheduled.tool";
 import { McpCalculateTools } from "./tools/calculate.tool";
 import { McpBudgetsTools } from "./tools/budgets.tool";
 import { McpRelayTools } from "./tools/relay.tool";
+import { McpRulesTools } from "./tools/rules.tool";
+import { McpAiReviewTools } from "./tools/ai-review.tool";
+import { McpEmailReceiptParserTools } from "./tools/email-receipt-parsers.tool";
+import { McpBondSeriesTools } from "./tools/bond-series.tool";
+import { McpWarrantiesTools } from "./tools/warranties.tool";
+import { McpHelpTools } from "./tools/help.tool";
+import { McpTagsTools } from "./tools/tags.tool";
 import { McpAccountListResource } from "./resources/account-list.resource";
 import { McpCategoryTreeResource } from "./resources/category-tree.resource";
 import { McpRecentTransactionsResource } from "./resources/recent-transactions.resource";
@@ -29,6 +37,13 @@ import { McpSpendingAnalysisPrompt } from "./prompts/spending-analysis.prompt";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const backendPkg = require("../../package.json") as { version: string };
 
+/**
+ * How long a client may cache a listing (`tools/list` and its siblings) on the
+ * 2026-07-28 revision. The set of tools, prompts and resources is fixed by the
+ * running image, so the honest lifetime is "until this deployment changes".
+ */
+const LIST_TTL_MS = 60 * 60 * 1000;
+
 @Injectable()
 export class McpServerService {
   constructor(
@@ -41,8 +56,15 @@ export class McpServerService {
     private readonly scheduledTools: McpScheduledTools,
     private readonly calculateTools: McpCalculateTools,
     private readonly budgetsTools: McpBudgetsTools,
+    private readonly rulesTools: McpRulesTools,
+    private readonly aiReviewTools: McpAiReviewTools,
+    private readonly receiptParserTools: McpEmailReceiptParserTools,
+    private readonly bondSeriesTools: McpBondSeriesTools,
+    private readonly warrantiesTools: McpWarrantiesTools,
+    private readonly helpTools: McpHelpTools,
     private readonly relayTools: McpRelayTools,
     private readonly relayService: AiRelayService,
+    private readonly requestStateCodec: McpRequestStateCodec,
     private readonly accountListResource: McpAccountListResource,
     private readonly categoryTreeResource: McpCategoryTreeResource,
     private readonly recentTransactionsResource: McpRecentTransactionsResource,
@@ -52,102 +74,125 @@ export class McpServerService {
     private readonly budgetCheckPrompt: McpBudgetCheckPrompt,
     private readonly transactionLookupPrompt: McpTransactionLookupPrompt,
     private readonly spendingAnalysisPrompt: McpSpendingAnalysisPrompt,
+    private readonly tagsTools: McpTagsTools,
   ) {}
 
-  createServer(resolve: UserContextResolver): McpServer {
+  /**
+   * One factory for both eras, so a 2026-07-28 client and a 2025-era client can
+   * never be served a different set of tools. The modern handler calls it per
+   * request and the sessionful path once per session.
+   *
+   * It takes no era on purpose: a factory that cannot see which revision asked
+   * cannot answer them differently, which is a stronger guarantee than a
+   * parameter every branch is trusted to ignore.
+   */
+  createServer(): McpServer {
     // Surface today's date so the model can resolve relative ranges ("this
-    // month", "last 30 days") into YYYY-MM-DD without an extra round trip. The
-    // server is built per session, so this reflects the connection date.
+    // month", "last 30 days") into YYYY-MM-DD without an extra round trip. A
+    // server is built per 2025-era session and per 2026-07-28 request, so this
+    // is never staler than the connection.
     const today = new Date().toISOString().substring(0, 10);
     const server = new McpServer(
       { name: "monize", version: backendPkg.version },
       {
         instructions: [
-          "Monize is a personal finance management service. You can query accounts, transactions, investments, and generate financial reports.",
+          "Monize is a personal finance management service: accounts, transactions, investments, budgets and reports for one user.",
           "",
-          `Today's date is ${today}. Compute relative date ranges (for example 'this month' or 'last 30 days') from this date and pass them as YYYY-MM-DD.`,
+          `Today is ${today}. Resolve relative ranges ('this month', 'last 30 days') against it and pass YYYY-MM-DD; report months are YYYY-MM.`,
           "",
-          "## General guidelines",
-          "- Prefer summary and report tools over listing raw transactions. Use list_accounts, generate_report, and get_portfolio_summary to answer questions when possible.",
-          "- list_transactions returns summary data by default; only set includeTransactions: true when the user asks about specific transactions (e.g. 'show me my Amazon purchases').",
-          "- Amounts are signed: positive = income/deposit, negative = expense/withdrawal.",
-          "- All dates use YYYY-MM-DD format. Report months use YYYY-MM.",
-          "- Most tools accept names (account/category/payee) and resolve them internally, including list_transactions, list_accounts, the investment query tools (get_portfolio_summary, list_investment_transactions, list_capital_gains), and the manage_* tools. Only fall back to list_accounts or list_categories first when a tool explicitly asks for a UUID.",
-          "- To create, update, categorize, transfer, or delete transactions, use the single manage_transactions tool. It accepts NAMES for account/category/payee and resolves them internally, so you do NOT need to call get_accounts/list_categories first for writes. operation = create/update/delete; items = 1-25 rows; approvalMode defaults to one bulk confirmation at 6 or more items and one per item below that, and individual forces one per item at any count. Set dryRun=true to preview without saving.",
+          "## Conventions",
+          "- Amounts are signed: positive is income or a deposit, negative an expense or withdrawal.",
+          "- Account, category and payee NAMES resolve internally on every tool that takes them, reads and writes alike. Look an id up only where a field asks for one.",
+          '- A category is named "Parent: Child"; a bare child name shared by two parents is rejected rather than guessed.',
+          "- A null total means a component could not be priced or converted, never zero. Any partial sum travels beside it under its own name -- quote that as a subtotal, and say which currency a total is in.",
+          "- Never do arithmetic yourself: use calculate, and present a value a tool already computed as it stands.",
           "",
-          "## Answering common questions",
-          "- 'How much did I spend on X?' → generate_report with type spending_by_category or spending_by_payee, or list_transactions (summary only), not list_transactions with includeTransactions.",
-          "- 'How am I doing this month?' → generate_report with type month_comparison, or the financial-review prompt.",
-          "- 'What's my net worth?' → list_accounts for current balances and the assets/liabilities/net-worth summary, generate_report (type net_worth_history) for trends.",
-          "- 'Any unusual spending?' → generate_report with type spending_anomalies rather than manually scanning transactions.",
-          "- 'What bills are coming up?' → list_upcoming_bills.",
-          "- 'How are my investments doing?' → get_portfolio_summary; it returns both the overall portfolio and a per-account holdings breakdown (holdingsByAccount), so use it for specific-account holdings questions too.",
+          "## Writing",
+          "- manage_transactions, manage_payees, manage_tags, manage_securities and manage_investment_transactions each take operation = create/update/delete and 1-25 items (manage_securities also takes list with an accountName).",
+          "- Every write is confirmed by the user before it is saved. By default 6 or more items are confirmed as one batch and 1-5 one at a time; approvalMode 'individual' forces one each. dryRun previews without saving.",
           "",
-          "## Resources",
-          "- monize://financial-summary provides a quick snapshot (net worth, current month income/expenses) without needing any tool calls.",
-          "- monize://accounts and monize://categories are useful for resolving names to IDs.",
-          "- monize://recent-transactions is a summarized view of the last 30 days.",
+          "## Choosing a tool",
+          "- Spending, income or trends: generate_report. Prefer it over listing transactions.",
+          "- Net worth and balances: list_accounts.",
+          "- Specific transactions: list_transactions, and only then with includeTransactions.",
+          "- Upcoming bills: list_upcoming_bills. Investments: get_portfolio_summary, which includes a per-account breakdown.",
+          "- How to use Monize itself: search_help, citing each section's url.",
+          "- monize://financial-summary answers a snapshot question with no tool call; monize://accounts and monize://categories resolve names to ids.",
           "",
-          "## Entity links in web-chat responses",
-          "When (and only when) you are answering via the web-chat relay (post_response / report_progress), you can make entity mentions clickable: the Monize web chat renders markdown links with these exact URI forms as in-app deep links.",
-          "- [Account Name](monize://account/<id>), [Payee Name](monize://payee/<id>), [Category Name](monize://category/<id>), [short description](monize://transaction/<id>), [Security](monize://security/<securityId>), [Bill or Deposit](monize://scheduled/<id>)",
-          "- For securities use the securityId field from get_portfolio_summary holdings (not the ticker); for scheduled bills/deposits use the id from list_upcoming_bills items.",
-          "- These are singular entity-link URIs carrying a UUID; they are distinct from the plural resource URIs above (monize://accounts etc.), which are for read_resource only and never belong in a reply.",
-          "- Only use ids copied verbatim from tool results in this conversation; never construct or guess an id. If a row has no id (e.g. 'Other (aggregated)', 'Uncategorized', free-text payees), mention it as plain text.",
-          "- Do not link brokerage/investment accounts, and never print a raw monize:// URI -- always give the link a human-readable label.",
-          "- In a normal MCP client (outside the web-chat relay) these links do not render; use plain text there.",
-          "",
-          "## Math accuracy",
-          "- Never perform arithmetic yourself (addition, subtraction, multiplication, division, percentages). Use the calculate tool instead.",
-          "- When tool results already include a computed value (e.g., percentage, netCashFlow), present it as-is rather than recomputing it.",
-          "- If you need to derive a value not in the tool results (e.g., 'What percentage of income goes to rent?'), call the calculate tool with the relevant numbers.",
-          "",
-          "## Tips",
-          "- Combine generate_report (type net_worth_history) + generate_report (type month_comparison) for a comprehensive financial overview in fewer calls.",
-          "- When the user asks about trends, prefer generate_report with type monthly_trend over fetching transactions for each month.",
-          "- Keep transaction searches focused: use date ranges, category/payee filters, and reasonable limits to avoid large result sets.",
-          "- Use the available prompts (financial-review, budget-check, spending-analysis, transaction-lookup) as guides for multi-step workflows.",
-          "",
-          "## Long-running tasks over the web-chat relay (get_next_prompt)",
-          "When you are answering a prompt obtained from get_next_prompt, the web chat needs a steady sign of life: it shows the user a 'your assistant went quiet' message if it hears nothing from you for a few minutes. The quiet gap that triggers this is your own thinking/composition time, during which nothing reaches the chat. Avoid it:",
-          "- Send report_progress IMMEDIATELY after claiming a prompt, before you read attachments or plan. Make this first update a brief PLAN with a rough estimate, e.g. 'Got the CSV -- 84 rows. I'll import them in ~8 batches of 25, roughly 2-3 minutes. Starting now.'",
-          "- Never go silent for long. Send a report_progress at least every minute or two while you read, plan, or compose. You cannot see a countdown or know exactly when the timeout is -- you have no clock during your turn -- so do not try to time it; just keep a steady cadence, one update per batch or step.",
-          "- CRITICAL -- do not reason silently for long. The relay sees ONLY your tool calls, report_progress updates, and final post_response; it CANNOT see your internal reasoning/extended thinking. A long silent think (even a few minutes, let alone many) is indistinguishable from a dead agent: nothing reaches the web chat, the turn times out, and the answer you eventually produce is dropped because the prompt no longer exists. So on a relayed prompt, think BRIEFLY then act -- do not spend minutes deliberating before your first tool call or before answering. Externalise the work: break analysis into small tool calls (each is a liveness signal), narrate decisions with report_progress instead of thinking them through silently, and deliver your answer within a minute or two. If a question genuinely needs deep analysis, do it in steps with progress between them, or post your findings so far with post_response and continue -- never one long silent reasoning block.",
-          "- Make each update INFORMATIVE, not just a heartbeat: say what you just did, what is left, and a rough ETA. E.g. 'Booked batch 3 of 8 (2023 deposits done); 5 batches / ~90s left.' This doubles as the 'I'm still on it, here's progress, I'll report when done' message the user wants.",
-          "- Split big work into small batches and report before each. For an import of many rows, do NOT compose one massive manage_transactions/manage_investment_transactions call: send batches of about 25 items, with a report_progress before each. The smaller calls compose faster and each one is a fresh sign of life.",
-          "- A status-only side channel is NOT possible: a tool call cannot be sent while you are still composing another, so frequent small informative calls -- not a parallel heartbeat -- are how you stay connected.",
-          "- If report_progress or post_response ever returns delivered:false, do NOT abandon the task. Keep going: confirmation cards and your final post_response are buffered and shown to the user the moment the chat reconnects. Always finish and call post_response with a closing summary.",
-          "- ALWAYS send a final post_response after the LAST confirmation card, even when every batch was already shown as a card. A card is a pending approval, not a reply -- without a closing message the user is left staring at cards with no idea whether more are coming. The closing message must explicitly say (a) that all batches have now been sent (e.g. 'That's all 4 batches -- 84 rows total'), (b) ask them to review and approve each card, and (c) tell them to let you know once they have approved them (or that you'll wait), so they have a clear 'done sending, your turn' signal. Send it as one post_response once the last card is out; do not stay silent after the final card.",
+          "## Web-chat relay",
+          "- When get_next_prompt hands you a prompt, its `guidance` field says how to report progress, batch work and finish the turn. Follow it.",
         ].join("\n"),
+        // `logging` is gone: the 2026-07-28 revision removed `logging/setLevel`
+        // and deprecated the logging feature itself (SEP-2577), and nothing
+        // here ever sent a log notification to a client.
         capabilities: {
-          logging: {},
           tools: {},
           resources: {},
           prompts: {},
         },
+        // What a client may cache, and for how long, on the 2026-07-28 wire.
+        // The listings change only when this image does, so they are worth an
+        // hour; `private` because a bearer scopes the response and the
+        // instructions carry today's date. A resource read is live financial
+        // data and is never cached (a resource may still set its own window
+        // with `cacheHint`, and the name-resolving ones do).
+        cacheHints: {
+          "tools/list": { ttlMs: LIST_TTL_MS, cacheScope: "private" },
+          "prompts/list": { ttlMs: LIST_TTL_MS, cacheScope: "private" },
+          "resources/list": { ttlMs: LIST_TTL_MS, cacheScope: "private" },
+          "resources/templates/list": {
+            ttlMs: LIST_TTL_MS,
+            cacheScope: "private",
+          },
+          "server/discover": { ttlMs: LIST_TTL_MS, cacheScope: "private" },
+          "resources/read": { ttlMs: 0, cacheScope: "private" },
+        },
+        // A write is confirmed in two rounds on 2026-07-28: the tool returns
+        // the question and the client calls it again with the answer. Two is
+        // the whole flow, so a third round is a client looping.
+        inputRequired: {
+          maxRounds: 2,
+          // The SDK's shim would answer an `input_required` on a 2025-era
+          // connection with real server-initiated requests -- but our 2025 path
+          // has its own fallback for a client that cannot show a dialog
+          // (mcp-elicitation-support.ts), which a shim cannot reproduce. That
+          // path asks directly instead; see `confirmWriteMany`.
+          legacyShim: false,
+        },
+        // Verified BEFORE any handler runs, so a tampered, expired or replayed
+        // confirmation is refused by the seam rather than read by a tool.
+        requestState: { verify: this.requestStateCodec.verify },
       },
     );
 
     // Stream the agent's tool calls to the web chat as live progress when this
     // session is serving a relayed prompt. Must run before the tools register.
-    installRelayToolActivity(server, resolve, this.relayService);
+    installRelayToolActivity(server, this.relayService);
+    installConfirmSupport(server, this.requestStateCodec);
 
-    this.accountsTools.register(server, resolve);
-    this.transactionsTools.register(server, resolve);
-    this.categoriesTools.register(server, resolve);
-    this.payeesTools.register(server, resolve);
-    this.reportsTools.register(server, resolve);
-    this.investmentsTools.register(server, resolve);
-    this.scheduledTools.register(server, resolve);
+    this.accountsTools.register(server);
+    this.transactionsTools.register(server);
+    this.categoriesTools.register(server);
+    this.payeesTools.register(server);
+    this.reportsTools.register(server);
+    this.investmentsTools.register(server);
+    this.scheduledTools.register(server);
     this.calculateTools.register(server);
-    this.budgetsTools.register(server, resolve);
-    this.relayTools.register(server, resolve);
+    this.budgetsTools.register(server);
+    this.rulesTools.register(server);
+    this.aiReviewTools.register(server);
+    this.receiptParserTools.register(server);
+    this.bondSeriesTools.register(server);
+    this.warrantiesTools.register(server);
+    this.helpTools.register(server);
+    this.tagsTools.register(server);
+    this.relayTools.register(server);
 
-    this.accountListResource.register(server, resolve);
-    this.categoryTreeResource.register(server, resolve);
-    this.recentTransactionsResource.register(server, resolve);
-    this.financialSummaryResource.register(server, resolve);
-    this.relayAttachmentResource.register(server, resolve);
+    this.accountListResource.register(server);
+    this.categoryTreeResource.register(server);
+    this.recentTransactionsResource.register(server);
+    this.financialSummaryResource.register(server);
+    this.relayAttachmentResource.register(server);
 
     this.financialReviewPrompt.register(server);
     this.budgetCheckPrompt.register(server);

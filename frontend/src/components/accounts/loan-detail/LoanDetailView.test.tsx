@@ -9,8 +9,22 @@ import type { OverpaymentPlan } from '@/lib/loan-schedule';
 // Mock the presentational children so this test focuses on LoanDetailView's
 // wiring (history derivation, projection gating, scenario comparison).
 vi.mock('./LoanSummaryCards', () => ({
-  LoanSummaryCards: ({ startingBalance }: { startingBalance: number }) => (
-    <div data-testid="summary">start:{startingBalance}</div>
+  LoanSummaryCards: ({
+    startingBalance,
+    currentInstallment,
+    currentInstallmentDate,
+    finalPayment,
+  }: {
+    startingBalance: number;
+    currentInstallment: number | null;
+    currentInstallmentDate?: string | null;
+    finalPayment?: { amount: number; date: string } | null;
+  }) => (
+    <div data-testid="summary">
+      start:{startingBalance} installment:{String(currentInstallment)}@
+      {String(currentInstallmentDate)} final:
+      {finalPayment ? `${finalPayment.amount}@${finalPayment.date}` : 'none'}
+    </div>
   ),
 }));
 vi.mock('./AmortizationScheduleTable', () => ({
@@ -29,6 +43,23 @@ vi.mock('./ComparisonSummaryCards', () => ({
 }));
 vi.mock('./SavedScenariosPanel', () => ({
   SavedScenariosPanel: () => <div data-testid="scenarios-panel" />,
+}));
+
+vi.mock('./PaymentMatchingPanel', () => ({
+  PaymentMatchingPanel: ({
+    account,
+    settlements,
+  }: {
+    account: Account;
+    settlements: { status: string };
+  }) => (
+    <div data-testid="payment-matching" data-account-id={account.id}>
+      {settlements.status}
+    </div>
+  ),
+}));
+vi.mock('./RateHistorySidebar', () => ({
+  RateHistorySidebar: () => <div data-testid="rate-history" />,
 }));
 
 let capturedOnPlanChange: ((plan: OverpaymentPlan | null) => void) | undefined;
@@ -54,15 +85,17 @@ function makeAccount(overrides: Partial<Account> = {}): Account {
     interestRate: 6,
     paymentAmount: 500,
     paymentFrequency: 'MONTHLY',
-    isCanadianMortgage: false,
-    isVariableRate: false,
+    mortgageType: 'ANNUITY',
     ...overrides,
   } as Account;
 }
 
 const noTransactions: Transaction[] = [];
 
-function renderView(account: Account) {
+function renderView(
+  account: Account,
+  paymentMatching?: Parameters<typeof LoanDetailView>[0]['paymentMatching'],
+) {
   return render(
     <LoanDetailView
       account={account}
@@ -71,6 +104,10 @@ function renderView(account: Account) {
       rateChanges={[]}
       onScenariosChanged={vi.fn()}
       onRateChangesChanged={vi.fn()}
+      // The container owns the export button and takes the handler through
+      // this ref; the view itself renders none.
+      exportPdfRef={{ current: null }}
+      paymentMatching={paymentMatching}
     />,
   );
 }
@@ -87,6 +124,27 @@ describe('LoanDetailView', () => {
     expect(screen.getByTestId('chart')).toBeInTheDocument();
     expect(screen.getByTestId('past-impact')).toBeInTheDocument();
     expect(screen.getByTestId('schedule')).toBeInTheDocument();
+  });
+
+  it('mounts the Payment matching panel beside the Rate History panel when the container loads settlements', () => {
+    renderView(makeAccount(), { settlements: { status: 'error' }, onChanged: vi.fn() });
+    const panel = screen.getByTestId('payment-matching');
+    expect(panel).toHaveAttribute('data-account-id', 'loan-1');
+    expect(panel).toHaveTextContent('error');
+    expect(screen.getByTestId('rate-history').nextElementSibling).toBe(panel);
+  });
+
+  it('mounts the Payment matching panel for a loan that cannot be projected too', () => {
+    renderView(makeAccount({ paymentAmount: null, interestRate: null, paymentFrequency: null }), {
+      settlements: { status: 'ready', rows: [] },
+      onChanged: vi.fn(),
+    });
+    expect(screen.getByTestId('rate-history').nextElementSibling).toBe(screen.getByTestId('payment-matching'));
+  });
+
+  it('leaves the Payment matching panel out for a container without settlements', () => {
+    renderView(makeAccount());
+    expect(screen.queryByTestId('payment-matching')).not.toBeInTheDocument();
   });
 
   it('shows the schedule even when the loan cannot be projected', () => {
@@ -123,5 +181,25 @@ describe('LoanDetailView', () => {
 
     expect(screen.getByTestId('comparison')).toBeInTheDocument();
     expect(screen.getByTestId('chart')).toHaveTextContent('scenario:yes');
+  });
+
+  it('hands the summary a dated installment and the bullet for an interest-only mortgage', () => {
+    renderView(
+      makeAccount({
+        accountType: 'MORTGAGE',
+        mortgageType: 'INTEREST_ONLY',
+        paymentAmount: null,
+        openingBalance: -300000,
+        currentBalance: -300000,
+        interestRate: 2,
+        paymentStartDate: '2024-01-01',
+        amortizationMonths: 360,
+        originalPrincipal: 300000,
+      }),
+    );
+    const summary = screen.getByTestId('summary');
+    expect(summary).toHaveTextContent(/installment:500@\s*\d{4}-\d{2}-\d{2}/);
+    expect(summary).toHaveTextContent('final:300500@2053-12-01');
+    expect(screen.getByTestId('simulator')).toBeInTheDocument();
   });
 });

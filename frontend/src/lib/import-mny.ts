@@ -1,5 +1,5 @@
 import apiClient from './api';
-import { invalidateBalanceCaches } from './apiCache';
+import { clearAllCache } from './apiCache';
 import { AccountType } from '@/types/account';
 
 /**
@@ -28,7 +28,12 @@ const START_TIMEOUT_MS = 120_000;
 /** A poll is a single indexed row read; anything slower is a real problem. */
 const POLL_TIMEOUT_MS = 10_000;
 
-export type MnyEra = 'money2001' | 'money2002' | 'moneyPlus' | 'unknown';
+export type MnyEra =
+  | 'money99'
+  | 'money2001'
+  | 'money2002'
+  | 'moneyPlus'
+  | 'unknown';
 
 export type MnyImportPhase =
   | 'preparing'
@@ -106,6 +111,10 @@ export interface MnyPreviewCounts {
   payeesInFile: number;
   categoriesToCreate: number;
   categoriesInFile: number;
+  /** Tags Money's classification items become; referenced items only. */
+  tagsToCreate: number;
+  /** Classification items in the file; 0 when it has no classifications. */
+  tagsInFile: number;
   transactionsToCreate: number;
   transfersToLink: number;
   transactionsSkipped: number;
@@ -228,11 +237,21 @@ export interface MnyImportResult {
   accountsCreated: number;
   payeesCreated: number;
   categoriesCreated: number;
+  /** Tags created for Money's classification items; a reused tag is not counted. */
+  tagsCreated: number;
+  /** Tag links written onto transactions and split legs, new tags or reused. */
+  tagLinksApplied: number;
   transactionsCreated: number;
   splitsCreated: number;
   transfersLinked: number;
   securitiesCreated: number;
   investmentTransactionsCreated: number;
+  /**
+   * Imported share acquisitions of a bond-program security stored without a
+   * series (the file names none and none was on sale on the date): the bond
+   * lots report such a row until its series is chosen. Absent when zero.
+   */
+  bondRowsWithoutSeries?: number;
   pricesImported: number;
   exchangeRatesImported: number;
   billsCreated: number;
@@ -240,6 +259,8 @@ export interface MnyImportResult {
     accounts: number;
     payees: number;
     categories: number;
+    /** Classification items no imported row references. */
+    tags: number;
     transactions: number;
     /** Bill series with no usable template or date -- not unticked ones. */
     bills: number;
@@ -262,6 +283,12 @@ export interface MnyImportJob {
   result: MnyImportResult | null;
   errorKey: string | null;
   retryable: boolean;
+  /**
+   * True once the import's rows reached the ledger, so a failure after it is
+   * not "nothing saved" and the file must not be imported again. Absent on an
+   * older backend: no information, so read it as `=== true`.
+   */
+  dataCommitted?: boolean;
   startedAt: string | null;
   completedAt: string | null;
 }
@@ -325,9 +352,11 @@ export const mnyImportApi = {
     );
     // The import runs server-side after `start` returns, so the write lands
     // here rather than at a mutation call. A failed job can still have written
-    // rows before it stopped, so both terminal states invalidate.
+    // rows before it stopped, so both terminal states invalidate. An MNY import
+    // writes accounts, categories, payees, tags, securities and schedules, and a
+    // wipe deletes them, so no prefix is narrow enough.
     if (response.data.status === 'completed' || response.data.status === 'failed') {
-      invalidateBalanceCaches();
+      clearAllCache();
     }
     return response.data;
   },

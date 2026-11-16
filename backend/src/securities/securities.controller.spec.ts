@@ -53,6 +53,9 @@ describe("SecuritiesController", () => {
       getCountryOptions: jest.fn(),
       getAssetOptions: jest.fn(),
       deleteAssetOption: jest.fn(),
+      recomputeLinkedPrices: jest
+        .fn()
+        .mockResolvedValue({ results: [], updated: 0, failed: 0 }),
     };
 
     securityPriceService = {
@@ -644,6 +647,64 @@ describe("SecuritiesController", () => {
         securityPriceService.refreshPricesForSecurities,
       ).toHaveBeenCalledWith(dto.securityIds);
       expect(result).toEqual(summary);
+    });
+
+    it("recomputes a bond-linked security's engine prices instead of asking a quote provider (R24)", async () => {
+      const linked = { ...mockSecurity, id: "bond-1", bondProgramId: "i-1" };
+      securitiesService.findOne.mockImplementation(
+        async (_u: string, id: string) =>
+          id === "bond-1" ? linked : { ...mockSecurity, id },
+      );
+      securityPriceService.refreshPricesForSecurities.mockResolvedValue({
+        totalSecurities: 1,
+        updated: 1,
+        failed: 0,
+        skipped: 0,
+        results: [{ symbol: "AAPL", success: true }],
+        lastUpdated: new Date(),
+      });
+      securitiesService.recomputeLinkedPrices.mockResolvedValue({
+        results: [{ symbol: "AAPL", success: true }],
+        updated: 1,
+        failed: 0,
+      });
+
+      const result = await controller.refreshSelectedPrices(req, {
+        securityIds: ["sec-1", "bond-1"],
+      } as any);
+
+      expect(
+        securityPriceService.refreshPricesForSecurities,
+      ).toHaveBeenCalledWith(["sec-1"]);
+      expect(securitiesService.recomputeLinkedPrices).toHaveBeenCalledWith(
+        "user-1",
+        [linked],
+      );
+      expect(result).toMatchObject({
+        totalSecurities: 2,
+        updated: 2,
+        failed: 0,
+      });
+      expect(result.results).toHaveLength(2);
+    });
+
+    it("a selection of only linked securities never reaches a provider and is not '0 updated'", async () => {
+      const linked = { ...mockSecurity, id: "bond-1", bondProgramId: "i-1" };
+      securitiesService.findOne.mockResolvedValue(linked);
+      securitiesService.recomputeLinkedPrices.mockResolvedValue({
+        results: [{ symbol: "EDO1036", success: true }],
+        updated: 1,
+        failed: 0,
+      });
+
+      const result = await controller.refreshSelectedPrices(req, {
+        securityIds: ["bond-1"],
+      } as any);
+
+      expect(
+        securityPriceService.refreshPricesForSecurities,
+      ).not.toHaveBeenCalled();
+      expect(result).toMatchObject({ totalSecurities: 1, updated: 1 });
     });
 
     it("triggers sector data update as fire-and-forget", async () => {

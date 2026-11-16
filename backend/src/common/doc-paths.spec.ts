@@ -14,7 +14,7 @@ import { findRepoRoot, gitListFiles, requireRepoRoot } from "./repo-tree.util";
 /**
  * A doc that names a file is making a claim about the source tree.
  *
- * The rule is already written down in the root `CLAUDE.md` -- rename or delete a
+ * The rule is already written down in `AGENTS.md` -- rename or delete a
  * file and grep `docs/` and every `CLAUDE.md` in the same commit -- and it was
  * still broken: the cross-owner-transfers plan pointed into
  * `backend/src/ai/query/` for a service that lives at
@@ -82,6 +82,14 @@ describe("doc path grammar", () => {
     expect(kinds("133_currency_global_liveness.sql")).toBe("bare");
   });
 
+  it("roots the desktop and mobile layers", () => {
+    expect(classifySpan("desktop/src/version.spec.ts")).toEqual({
+      kind: "rooted",
+      path: "desktop/src/version.spec.ts",
+    });
+    expect(kinds("mobile/package.json")).toBe("rooted");
+  });
+
   it("treats a line reference as a claim about its path", () => {
     expect(classifySpan("database/schema.sql:705-795")).toEqual({
       kind: "rooted",
@@ -94,7 +102,7 @@ describe("doc path grammar", () => {
   });
 
   it("exempts a branch-qualified path explicitly, not by accident", () => {
-    // The escape hatch the root CLAUDE.md prescribes for paths in other
+    // The escape hatch `AGENTS.md` prescribes for paths in other
     // branches. It used to survive only because `:` was missing from a
     // character class; this is the deliberate version.
     expect(
@@ -109,6 +117,7 @@ describe("doc path grammar", () => {
     expect(kinds("messages/{locale}/{namespace}.json")).toBe("not-path");
     expect(kinds("NNN_description.sql")).toBe("not-path");
     expect(kinds("0NN_rls_helpers_and_trigger.sql")).toBe("not-path");
+    expect(kinds("YYYYMMDDHHMMSS_description.sql")).toBe("not-path");
     expect(kinds(".../interceptors/request-context.interceptor.ts")).toBe(
       "not-path",
     );
@@ -181,10 +190,15 @@ describeTree("docs name files that exist", () => {
       gitListFiles(root, "--cached --others --exclude-standard"),
     );
     const tracked = gitListFiles(root);
+    // `docs/frontend/` and `docs/backend/` hold each layer's rules, moved out
+    // of the layer's `CLAUDE.md` so that file could stay an index; they bind
+    // exactly as a CLAUDE.md does and are scanned at the same strength.
     const contractDocs = tracked.filter(
       (f) =>
         basename(f) === "CLAUDE.md" ||
-        (/^docs\/[^/]+\.md$/.test(f) && basename(f) !== "CLAUDE.md"),
+        basename(f) === "AGENTS.md" ||
+        (/^docs\/((frontend|backend)\/)?[^/]+\.md$/.test(f) &&
+          basename(f) !== "CLAUDE.md"),
     );
     const planDocs = tracked.filter((f) =>
       /^docs\/future-plans\/[^/]+\.md$/.test(f),
@@ -214,6 +228,9 @@ describeTree("docs name files that exist", () => {
     const { index, contractDocs, planDocs } = load();
     expect(contractDocs.some((d) => d.endsWith("/CLAUDE.md"))).toBe(true);
     expect(contractDocs).toContain("docs/financial-calculation-contract.md");
+    expect(contractDocs).toContain("docs/frontend/ui-conventions.md");
+    expect(contractDocs).toContain("docs/backend/testing.md");
+    expect(contractDocs).toContain("AGENTS.md");
     expect(contractDocs.length).toBeGreaterThan(5);
     expect(planDocs.length).toBeGreaterThan(5);
     expect(index.list.length).toBeGreaterThan(500);

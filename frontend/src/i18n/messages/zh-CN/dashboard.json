@@ -1,8 +1,87 @@
 {
   "page": {
-    "welcomePrefix": "欢迎",
-    "welcomeWithName": "欢迎，{name}！",
-    "subtitle": "这是您的财务概览"
+    "greeting": {
+      "morning": "早上好",
+      "morningWithName": "早上好，{name}",
+      "afternoon": "下午好",
+      "afternoonWithName": "下午好，{name}",
+      "evening": "晚上好",
+      "eveningWithName": "晚上好，{name}"
+    }
+  },
+  "hero": {
+    "label": "净资产概览",
+    "netWorth": "净资产",
+    "changeThisMonth": "本月<dir>{direction, select, up {增加} other {减少}}</dir> {amount}",
+    "changeThisMonthWithPercent": "本月<dir>{direction, select, up {增加} other {减少}}</dir> {amount} · {percent}",
+    "assets": "资产 <strong><value></value></strong>",
+    "liabilities": "负债 <strong><value></value></strong>",
+    "invested": "投资 <strong><value></value></strong>",
+    "investedUnpriced": "{symbols} 没有当前价格，因此这些持仓未计入。请在“投资”页面刷新价格，或在该证券的价格历史中添加一个价格。",
+    "portfolioLabel": "投资组合概览",
+    "portfolioValueFor": "投资组合价值<names>（{accounts}）</names>",
+    "portfolioEmpty": "还没有投资账户。添加一个即可在此查看您的投资组合。",
+    "portfolioLoadFailed": "无法加载您的投资组合。请重新加载仪表板后重试。",
+    "portfolioChangeFailed": "无法加载此期间的变化。请重新加载仪表板后重试。",
+    "changeOverWindow": "{amount} · {window} <dir>{direction, select, up {增加} other {减少}}</dir>",
+    "holdings": "持仓 <strong><value></value></strong>",
+    "cash": "现金 <strong><value></value></strong>",
+    "metricLine": "{metric} <strong><value></value></strong>",
+    "metricNames": {
+      "simpleReturn": "简单回报率",
+      "twr": "时间加权回报率",
+      "mwr": "MWR",
+      "cagr": "年复合增长率"
+    },
+    "showSet": "显示{name}",
+    "cycleControls": "选择主视图显示的内容",
+    "cagrUnavailable": "CAGR 需要这些账户至少一年的投资历史，且投入多于取出。",
+    "intradayUnavailable": "部分持仓没有日内价格，因此无法绘制一天的图表。请在“自定义”中选择更长的时间范围。"
+  },
+  "trivia": {
+    "title": "趣闻",
+    "position": "第 {index} 条，共 {total} 条",
+    "previous": "上一条趣闻",
+    "next": "下一条趣闻",
+    "empty": "有足够的历史数据后，趣闻会显示在这里：两个月的净资产、有价格的投资、几个月的支出和收入，或您跟踪的保修。列表每天早上重新生成。",
+    "off": "AI 趣闻已关闭。请在<link>AI 设置</link>中开启。",
+    "topics": {
+      "netWorth": "净资产",
+      "investments": "投资",
+      "spending": "支出",
+      "income": "收入",
+      "activity": "您的记录",
+      "warranties": "保修"
+    },
+    "aiGenerated": "由 AI 根据您的数据撰写",
+    "facts": {
+      "netWorthSinceStart": "{startMonth}时您的净资产为{startAmount}。此后增加了{startGain},已是当时的约{startMultiple}倍。",
+      "netWorthBiggestJump": "{jumpMonth}是您单月涨幅最大的一个月。净资产增加{jumpAmount},从{jumpPreviousMonth}的{jumpFrom}升至{jumpTo}。",
+      "netWorthHighPoint": "您的最高点是{peakMonth}的{peakAmount}。目前比该水平低{peakBelow}。",
+      "netWorthAtHighPoint": "您正处于最高点:净资产从未超过{currentHigh}。",
+      "netWorthBiggestDip": "您最大的一次下跌使净资产从{dipFromMonth}的{dipFromAmount}降至{dipToMonth}的{dipToAmount},跌幅为{dipPercent}。",
+      "netWorthBiggestDipRecovered": "您最大的一次下跌使净资产从{dipFromMonth}的{dipFromAmount}降至{dipToMonth}的{dipToAmount}。到{dipRecoveredMonth}已经恢复。",
+      "netWorthLargestAsset": "{assetName}价值{assetValue},占您资产的{assetPercent}。",
+      "investmentsShareOfAssets": "您的投资价值{investmentsValue},占您资产的{investmentsPercent}。",
+      "investmentsGain": "您的投资相对{gainCostBasis}的成本基础增长了{gainAmount}({gainPercent})。",
+      "investmentsLoss": "您的投资相对{gainCostBasis}的成本基础下降了{gainAmount}({gainPercent})。",
+      "investmentsCagr": "您的投资年化收益率约为{cagrPercent}(CAGR)。",
+      "investmentsBiggestHolding": "您最大的持仓是{holdingSymbol},约占投资组合的{holdingPercent}({holdingAccounts}中的{holdingValue})。",
+      "investmentsBestPerformer": "表现最好的是{bestSymbol},上涨{bestPercent}。成本为{bestCost},现在价值{bestValue}。",
+      "investmentsForeignAccount": "您的{foreignName}账户以{foreignCurrency}持有。其{foreignBalance}的持仓按约{foreignRate}的汇率相当于{foreignConverted}。",
+      "investmentsLargestAccount": "您最大的投资账户是{largestName},金额为{largestValue}。",
+      "spendingTopCategory": "过去十二个月中，{topCategoryName}占了您支出的最大部分：{topCategoryAmount}，即{topCategoryPercent}。",
+      "spendingTopPayee": "过去十二个月中，您在{topPayeeName}花得最多：{topPayeeAmount}。",
+      "spendingBiggestMonth": "{biggestSpendMonth}是您过去十二个月中支出最多的月份，共{biggestSpendAmount}。",
+      "incomeKeptShare": "过去十二个月中，您留下了收入款项中的{keptAmount}，占您收入的{keptPercent}。",
+      "incomeSurplusMonths": "最近{windowMonths}个月中，收入多于支出的月份：{surplusMonths}。",
+      "incomeTopSource": "过去十二个月中，{topSourceName}带来了您收入的{topSourcePercent}。",
+      "activityTransactions": "您账簿中的交易：{transactionCount}笔，最早可追溯到{firstTransactionMonth}。",
+      "activityPayees": "您在 Monize 中保存的收款人：{payeeCount}个。类别：{categoryCount}个。",
+      "activityScheduled": "Monize 为您跟踪的计划交易：{scheduledCount}笔。",
+      "warrantiesCovered": "您跟踪的仍在保修期内的保修：{warrantyCount}份。",
+      "warrantiesNextExpiry": "下一个到期的保修是{nextWarrantyName}，时间为{nextWarrantyMonth}。"
+    }
   },
   "favouriteAccounts": {
     "title": "收藏账户",
@@ -21,12 +100,10 @@
   "upcomingBills": {
     "title": "即将到来的账单与存款",
     "empty": "在提醒窗口内没有逾期或即将到来的账单、存款或转账。",
-    "perReminderSettings": "根据提醒设置",
     "postTransaction": "过账此交易",
     "manual": "手动",
-    "manualTitle": "需要手动过账",
     "negativeBalanceWarning": "此交易将导致账户余额低于零",
-    "viewAll": "查看所有账单与存款",
+    "negativeBalanceLegend": "会使账户余额低于零",
     "moreItems": "+{count} 条",
     "overdue": "已逾期",
     "today": "今天",
@@ -38,7 +115,23 @@
       "transfer": "转账",
       "reminder": "提醒",
       "unknown": "未知"
-    }
+    },
+    "scope": {
+      "dueSoon": "即将到期",
+      "all": "全部即将到来"
+    },
+    "viewLabel": "视图",
+    "viewList": "列表",
+    "viewCalendar": "日历",
+    "previousMonth": "上个月",
+    "nextMonth": "下个月",
+    "emptyAll": "没有已安排的有效账单、存入或转账。",
+    "estimated": "估算"
+  },
+  "cashFlowForecast": {
+    "title": "现金流预测",
+    "period": "预测期间",
+    "loadFailed": "无法加载日期晚于今天的交易，因此无法显示预测。请重新加载仪表板后重试。"
   },
   "gettingStarted": {
     "title": "快速入门",
@@ -76,8 +169,12 @@
     "title": "消费洞察",
     "empty": "暂无洞察。请前往洞察页面生成您的第一次分析。",
     "goToInsights": "前往洞察",
-    "viewAll": "查看所有洞察",
     "activeCount": "{count} 条活跃"
+  },
+  "warrantiesExpiring": {
+    "title": "即将到期的保修",
+    "empty": "未来 30 天内没有即将到期的保修",
+    "loadFailed": "无法加载即将到期的保修。请刷新仪表板后重试。"
   },
   "topMovers": {
     "title": "涨跌幅榜",
@@ -88,13 +185,20 @@
       "noLosers": "今日无下跌。"
     },
     "dailyChange": "日涨跌",
+    "dailyChangeOn": "日涨跌 · {date}",
     "openPriceHistory": "{symbol} 的价格历史",
     "refreshPrices": "刷新价格",
     "viewPortfolio": "查看投资组合",
     "filter": {
-      "all": "全部",
-      "gainers": "上涨",
-      "losers": "下跌"
+      "all": "全部 ({count})",
+      "gainers": "上涨 ({count})",
+      "losers": "下跌 ({count})",
+      "label": "方向"
+    },
+    "metric": {
+      "label": "显示",
+      "price": "价格",
+      "holdings": "持仓"
     }
   },
   "favouriteSecurities": {
@@ -102,15 +206,17 @@
     "empty": "暂无收藏证券。前往<securitiesLink>证券页面</securitiesLink>并收藏您想在此跟踪的证券。",
     "noPriceYet": "暂无价格",
     "dailyChange": "日涨跌",
+    "dailyChangeOn": "日涨跌 · {date}",
     "openPriceHistory": "{symbol} 的价格历史",
-    "refreshPrices": "刷新价格",
-    "manage": "管理证券"
+    "refreshPrices": "刷新价格"
   },
   "netWorth": {
     "title": "资产净值",
     "empty": "暂无资产净值数据。",
-    "past12Months": "过去 12 个月",
-    "viewReport": "查看完整报告"
+    "barStyle": "柱形样式",
+    "barStyleNetWorth": "资产净值",
+    "barStyleAccountType": "按账户类型",
+    "loadFailed": "无法加载资产净值历史记录。请重新加载仪表板后重试。"
   },
   "assetsVsLiabilities": {
     "title": "资产与负债",
@@ -118,14 +224,22 @@
     "current": "当前",
     "netWorthLabel": "资产净值",
     "assets": "资产",
-    "liabilities": "负债"
+    "liabilities": "负债",
+    "partialName": "{name}（不完整）",
+    "viewCallouts": "标签",
+    "viewLegend": "图例"
   },
   "expensesPieChart": {
     "title": "按科目划分的支出",
     "empty": "此期间无支出数据。",
     "total": "合计",
     "uncategorized": "未分类",
-    "other": "其他"
+    "other": "其他",
+    "insideOther": "{count, plural, other {其他中有 # 个类别}}",
+    "topLevelOnly": "顶级类别",
+    "topLevelOnlyHint": "将子类别计入其父类别",
+    "viewCallouts": "标签",
+    "viewLegend": "图例"
   },
   "incomeExpenses": {
     "title": "收入与支出",
@@ -135,18 +249,85 @@
   },
   "customize": {
     "button": "自定义",
-    "title": "自定义仪表盘",
-    "description": "下方布局与仪表盘一致：小组件从左到右排列，大屏幕上每行两个。",
     "moveEarlier": "将{name}前移",
     "moveLater": "将{name}后移",
-    "dragToReorder": "拖动小组件以重新排列，或使用箭头按钮。",
-    "hiddenWidgets": "已隐藏的小组件",
-    "hide": "隐藏{name}",
-    "show": "显示{name}",
     "atLeastOne": "请至少选择一个要在仪表盘上显示的小组件。",
     "reset": "恢复默认",
     "toasts": {
       "saveFailed": "保存仪表盘布局失败"
+    },
+    "hero": {
+      "title": "仪表板概览区",
+      "description": "问候语下方的开场数据和图表:显示您的净资产、您的投资组合,或选择“自动”每分钟在两者之间切换。",
+      "show": "显示仪表板概览区",
+      "range": "图表",
+      "set": "显示",
+      "sets": {
+        "auto": "自动",
+        "netWorth": "净资产",
+        "portfolio": "投资组合价值"
+      },
+      "metric": "指标",
+      "metrics": {
+        "simpleReturn": "简单回报率",
+        "twr": "时间加权回报率",
+        "mwr": "MWR",
+        "cagr": "年复合增长率"
+      }
+    }
+  },
+  "edit": {
+    "barLabel": "排列仪表板",
+    "addWidget": "添加小组件",
+    "heroSettings": "概览区设置",
+    "done": "完成",
+    "phoneNote": "小组件尺寸适用于较宽的屏幕。",
+    "remove": "移除{name}",
+    "grip": "移动{name}",
+    "gripHint": "拖动以移动{name}，或按方向键",
+    "moved": "{name}已移至第 {position} 位，共 {count} 个",
+    "removed": "已移除{name}",
+    "added": "已添加{name}",
+    "resized": "{name}现在是{size}",
+    "resizedBoth": "{name}现在是{width}和{height}",
+    "twoChanges": "{first}。{second}",
+    "placeholder": "有内容可显示时，将显示在仪表板上。",
+    "addTitle": "添加小组件",
+    "addDescription": "添加的小组件会放在仪表板末尾。选择“完成”之前不会保存任何更改。",
+    "addEmpty": "所有小组件都已在您的仪表板上",
+    "addToSpace": "添加小组件到此空位（{width}）",
+    "addSlotDescription": "仅列出能放入此空位的小组件，所选的小组件会填满它。选择“完成”之前不会保存任何更改。",
+    "addSlotEmpty": "没有能放入此空位的隐藏小组件。可将小组件拖到此处移入。",
+    "resize": "调整{name}大小",
+    "resizeHint": "拖动以调整{name}大小，或按方向键",
+    "widthLabel": "宽度",
+    "heightLabel": "高度",
+    "presetName": "{short}，{name}",
+    "widthOf": "{name}的宽度",
+    "heightOf": "{name}的高度",
+    "widthShort": {
+      "third": "1/3",
+      "half": "1/2",
+      "twoThirds": "2/3",
+      "full": "整宽"
+    },
+    "widthName": {
+      "third": "三分之一宽度",
+      "half": "一半宽度",
+      "twoThirds": "三分之二宽度",
+      "full": "完整宽度"
+    },
+    "heightShort": {
+      "auto": "自动",
+      "compact": "小",
+      "standard": "中",
+      "tall": "大"
+    },
+    "heightName": {
+      "auto": "自动高度",
+      "compact": "紧凑高度",
+      "standard": "标准高度",
+      "tall": "加高"
     }
   },
   "favouriteReports": {
@@ -156,22 +337,28 @@
   },
   "widgets": {
     "configure": "配置{name}",
+    "asOf": "截至 {date}",
     "done": "完成",
     "configSaveFailed": "无法保存小组件设置。请重试。",
     "timeframe": "时间范围",
     "accounts": "账户",
     "chartType": "图表类型",
     "view": "视图",
+    "viewCalloutsHint": "标签需要更宽的屏幕。放不下时将显示图例。",
     "displayName": "显示名称",
     "description": "描述",
     "descriptionPlaceholder": "添加可选描述",
     "rangeLabels": {
+      "1d": "1D",
+      "1w": "1周",
+      "mtd": "本月至今",
       "1m": "1M",
       "3m": "3M",
       "6m": "6M",
       "1y": "1Y",
       "2y": "2Y",
       "5y": "5Y",
+      "10y": "10Y",
       "ytd": "YTD",
       "all": "全部"
     }
@@ -179,7 +366,10 @@
   "portfolioValue": {
     "title": "投资组合价值",
     "empty": "暂无投资历史可显示。",
-    "refresh": "刷新当前价值"
+    "refresh": "刷新当前价值",
+    "investmentResult": "投资结果",
+    "periodBreakdownInvestedTooltip": "本期证券价值变动了 {valueChange}。其中 {netInvested} 是扣除卖出后的投入资金，证券支付了 {income} 的股息和利息。再投资为股份的分配同时计入这两项。上方数字是投资本身的收益，不含未投资的现金。",
+    "notAvailable": "不适用"
   },
   "spendingByPayee": {
     "title": "按收款人支出",
@@ -225,14 +415,19 @@
       "MUTUAL_FUND": "共同基金",
       "BOND": "债券",
       "CASH": "现金"
-    }
+    },
+    "viewType": "证券类型",
+    "viewAssetClass": "资产类别",
+    "otherAssetClasses": "其他",
+    "emptyAssetClass": "暂无资产类别明细。"
   },
   "geographicAllocation": {
     "title": "地理配置",
     "empty": "无持仓可显示。",
     "viewRegion": "地区",
     "viewExchange": "交易所",
-    "viewCountry": "国家/地区"
+    "viewCountry": "国家/地区",
+    "listingBasisNote": "按每项持仓的上市地分组。切换到国家可查看基金内部构成。"
   },
   "recurringExpenses": {
     "title": "主要定期支出",
@@ -240,7 +435,9 @@
     "minOccurrences": "最少发生次数",
     "minOccurrencesOption": "{count} 次或以上",
     "occurrences": "发生 {count} 次",
-    "monthlyEstimate": "月度估算"
+    "monthlyEstimate": "月度估算",
+    "viewCallouts": "标签",
+    "viewLegend": "图例"
   },
   "weekendVsWeekday": {
     "title": "周末与工作日支出",
@@ -249,5 +446,14 @@
     "weekdayLabel": "工作日",
     "viewOverview": "概览",
     "viewByDay": "按日"
+  },
+  "cashFlowSankey": {
+    "title": "现金流桑基图",
+    "empty": "此期间没有收入、支出或转账。",
+    "depth": "细节",
+    "depthCategories": "类别",
+    "depthSubcategories": "子类别",
+    "viewDiagram": "图表",
+    "viewTable": "表格"
   }
 }

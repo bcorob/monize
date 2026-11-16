@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@/test/render';
+import { render, screen, fireEvent, waitFor, act, within } from '@/test/render';
 import { InsightsList } from './InsightsList';
 
 const mockGetStatus = vi.fn();
@@ -116,7 +116,7 @@ describe('InsightsList', () => {
     });
   });
 
-  it('shows alert and warning counts', async () => {
+  it('counts alerts and warnings in summary cards and on the severity segments', async () => {
     mockGetInsights.mockResolvedValue({
       insights: [
         {
@@ -152,9 +152,42 @@ describe('InsightsList', () => {
     await renderInsights();
 
     await waitFor(() => {
-      expect(screen.getByText('1 alert')).toBeInTheDocument();
-      expect(screen.getByText('1 warning')).toBeInTheDocument();
+      expect(screen.getByText('Active Insights')).toBeInTheDocument();
     });
+    const card = (label: string) => screen.getByText(label, { selector: 'dt' }).nextElementSibling;
+    expect(card('Active Insights')).toHaveTextContent('2');
+    expect(card('Alerts')).toHaveTextContent('1');
+    expect(card('Warnings')).toHaveTextContent('1');
+
+    const severity = screen.getByRole('group', { name: 'Severity' });
+    expect(within(severity).getByRole('button', { name: 'All (2)' })).toHaveAttribute('aria-pressed', 'true');
+    expect(within(severity).getByRole('button', { name: 'Info (0)' })).toBeInTheDocument();
+
+    // A segment filters the list it counts, without another read.
+    const reads = mockGetInsights.mock.calls.length;
+    fireEvent.click(within(severity).getByRole('button', { name: 'Alerts (1)' }));
+    expect(screen.getByText('Alert 1')).toBeInTheDocument();
+    expect(screen.queryByText('Warning 1')).not.toBeInTheDocument();
+
+    // The type filter narrows the counts the segments carry.
+    fireEvent.change(screen.getByRole('combobox', { name: 'Type' }), { target: { value: 'trend' } });
+    expect(within(severity).getByRole('button', { name: 'All (1)' })).toBeInTheDocument();
+    expect(within(severity).getByRole('button', { name: 'Alerts (0)' })).toBeInTheDocument();
+    await act(async () => {});
+    expect(mockGetInsights.mock.calls.length).toBe(reads);
+  });
+
+  it('puts Refresh in the page header, with the age of the last generation', async () => {
+    mockGetInsights.mockResolvedValue({
+      insights: [],
+      total: 0,
+      lastGeneratedAt: new Date(Date.now() - 3 * 3600 * 1000).toISOString(),
+      isGenerating: false,
+    });
+    await renderInsights();
+
+    expect(screen.getByRole('heading', { name: 'Spending Insights' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Refresh Insights/ })).toHaveTextContent('(3 hours ago)');
   });
 
   it('calls generateInsights and polls for results when refresh button clicked', async () => {
@@ -247,11 +280,9 @@ describe('InsightsList', () => {
 
     await renderInsights();
 
-    // Buttons should show "Generating..." after initial load detects isGenerating
+    // The buttons show their progress after the initial load detects isGenerating
     await waitFor(() => {
-      const buttons = screen.getAllByText('Generating...');
-      expect(buttons.length).toBeGreaterThan(0);
-      expect(buttons[0]).toBeDisabled();
+      expect(screen.getByRole('button', { name: /Refresh Insights/ })).toBeDisabled();
     });
   });
 
@@ -288,6 +319,45 @@ describe('InsightsList', () => {
     await waitFor(() => {
       expect(mockDismissInsight).toHaveBeenCalledWith('i1');
     });
+  });
+
+  it('shows an error and keeps the insight when dismiss fails', async () => {
+    mockGetInsights.mockResolvedValue({
+      insights: [
+        {
+          id: 'i1',
+          type: 'anomaly',
+          title: 'Test Insight',
+          description: 'Desc',
+          severity: 'info',
+          data: {},
+          isDismissed: false,
+          generatedAt: '2026-02-18T00:00:00.000Z',
+          expiresAt: '2026-02-25T00:00:00.000Z',
+          createdAt: '2026-02-18T00:00:00.000Z',
+        },
+      ],
+      total: 1,
+      lastGeneratedAt: '2026-02-18T00:00:00.000Z',
+      isGenerating: false,
+    });
+    mockDismissInsight.mockRejectedValue(new Error('Request failed with status code 502'));
+
+    await renderInsights();
+
+    await waitFor(() => {
+      expect(screen.getByText('Test Insight')).toBeInTheDocument();
+    });
+
+    await act(async () => {
+      fireEvent.click(screen.getByText('Dismiss'));
+    });
+
+    expect(
+      screen.getByText('Failed to dismiss the insight. Please try again.'),
+    ).toBeInTheDocument();
+    expect(screen.getByText('Test Insight')).toBeInTheDocument();
+    expect(screen.getByText('Dismiss')).toBeInTheDocument();
   });
 
   it('shows error message on load failure', async () => {
@@ -394,11 +464,8 @@ describe('InsightsList', () => {
     await renderInsights();
 
     await waitFor(() => {
-      expect(mockGetInsights).toHaveBeenCalledWith({
-        type: undefined,
-        severity: undefined,
-        includeDismissed: false,
-      });
+      // Type and severity filter on the client, so the segments can count.
+      expect(mockGetInsights).toHaveBeenCalledWith({ includeDismissed: false });
     });
   });
 });

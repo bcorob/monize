@@ -13,6 +13,7 @@ import { useLocalStorage } from '@/hooks/useLocalStorage';
 import { useFormModal } from '@/hooks/useFormModal';
 import { useBrokerageFilterOptions } from '@/hooks/useBrokerageFilterOptions';
 import { Modal } from '@/components/ui/Modal';
+import { transactionModalProps } from '@/components/transactions/transaction-modal';
 import { UnsavedChangesDialog } from '@/components/ui/UnsavedChangesDialog';
 import {
   InvestmentTransactionList,
@@ -28,6 +29,7 @@ import {
   type CashFilterValues,
 } from '@/components/investments/CashRegisterFilters';
 import { InvestmentTransactionForm } from '@/components/investments/InvestmentTransactionForm';
+import { investmentTransactionModalProps } from '@/components/investments/investment-transaction-modal';
 import { TransactionList } from '@/components/transactions/TransactionList';
 import { TransactionForm } from '@/components/transactions/TransactionForm';
 import {
@@ -418,17 +420,16 @@ export function InvestmentRegisterPanel({
         isOpen={brokerageForm.showForm}
         onClose={closeBrokerageForm}
         {...brokerageForm.modalProps}
-        maxWidth={brokerageFormNeedsConversion ? '3xl' : 'xl'}
-        className="p-6"
-      >
-        {/* The same heading the Investments page's copy of this modal carries,
-            from the same keys: one register drawn on two pages should not
-            announce itself differently on each. */}
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">
-          {brokerageForm.editingItem
+        {...investmentTransactionModalProps(brokerageFormNeedsConversion)}
+        // The same title the Investments page's copy of this modal carries,
+        // from the same keys: one register drawn on two pages should not
+        // announce itself differently on each.
+        title={
+          brokerageForm.editingItem
             ? tInv('page.editTransaction')
-            : tInv('page.newInvestmentTransaction')}
-        </h2>
+            : tInv('page.newInvestmentTransaction')
+        }
+      >
         <InvestmentTransactionForm
           accounts={accountsForForm}
           allAccounts={allAccounts}
@@ -452,14 +453,9 @@ export function InvestmentRegisterPanel({
             isOpen={cashForm.showForm}
             onClose={cashForm.close}
             {...cashForm.modalProps}
-            maxWidth="6xl"
-            className="p-6"
+            {...transactionModalProps}
+            title={cashForm.editingItem ? tInv('page.editTransaction') : tInv('page.newTransaction')}
           >
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">
-              {cashForm.editingItem
-                ? tInv('page.editTransaction')
-                : tInv('page.newTransaction')}
-            </h2>
             <TransactionForm
               transaction={cashForm.editingItem}
               defaultAccountId={cashAccount.id}

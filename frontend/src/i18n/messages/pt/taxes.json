@@ -1,0 +1,113 @@
+{
+  "landing": {
+    "title": "Impostos",
+    "subtitle": "Ferramentas para as deduções e impostos que moldam o seu salário",
+    "tools": {
+      "payrollDeductions": {
+        "title": "Deduções salariais",
+        "description": "Defina máximos anuais para deduções como pensão e seguro de desemprego, e deixe o salário parar de as cobrar quando o máximo for atingido."
+      }
+    }
+  },
+  "payroll": {
+    "title": "Deduções salariais",
+    "subtitle": "Máximos anuais nas linhas de dedução da sua fatura de salário",
+    "backToTaxes": "Voltar a Impostos",
+    "newButton": "+ Nova regra",
+    "loading": "A carregar deduções salariais...",
+    "emptyState": {
+      "title": "Ainda sem regras de dedução",
+      "body": "Escolha a transação agendada que é o seu salário, as suas categorias de dedução e um máximo anual para cada uma. A transação deixa de cobrar uma dedução quando o seu máximo é atingido e recomeça na data de reinício.",
+      "createButton": "Criar a sua primeira regra"
+    },
+    "yearToDate": {
+      "show": "Mostrar acumulado do ano",
+      "hide": "Ocultar acumulado do ano",
+      "title": "Pago neste período",
+      "help": "O que a categoria cobrou no período que contém hoje, em todas as contas, na moeda da fatura.",
+      "foreignRows": "{count, plural, one {# linha} other {# linhas}} noutra moeda não contadas"
+    },
+    "previousPeriods": {
+      "show": "Mostrar períodos anteriores",
+      "hide": "Ocultar períodos anteriores",
+      "title": "Períodos anteriores",
+      "help": "O que cada categoria cobrou nos seus períodos passados, em todas as contas, na moeda da transação. O período atual está na tabela do ano em curso.",
+      "loading": "A carregar períodos anteriores...",
+      "empty": "Ainda nada foi cobrado num período anterior.",
+      "loadFailed": "Não foi possível carregar os períodos anteriores"
+    },
+    "list": {
+      "bill": "Fatura",
+      "category": "Categoria",
+      "yearlyMaximum": "Máximo anual",
+      "nextMaximum": "A partir de {date}: {amount}",
+      "resetsOn": "Reinicia em",
+      "perPaycheque": "Por salário",
+      "period": "Período",
+      "paid": "Pago",
+      "remaining": "Restante",
+      "actions": "Ações",
+      "fromLine": "Da linha da fatura",
+      "entered": "Introduzido",
+      "expectedMissing": "Montante previsto necessário",
+      "periodRange": "{start} a {end}"
+    },
+    "modal": {
+      "newTitle": "Nova regra de dedução",
+      "editTitle": "Editar regra de dedução"
+    },
+    "form": {
+      "billLabel": "Fatura de salário agendada",
+      "billPlaceholder": "Selecione a fatura que é o seu salário",
+      "billHelp": "O depósito agendado cujas linhas contêm as deduções. Só são oferecidas transações que depositam mais do que retiram, e só as suas linhas de dedução podem ser limitadas.",
+      "categoryLabel": "Categoria de dedução {index}",
+      "categoryPlaceholder": "Selecione uma linha de dedução",
+      "yearlyMaximumLabel": "Máximo anual",
+      "yearlyMaximumHelp": "O máximo que esta categoria cobra num período, na moeda da fatura. A linha é reduzida à margem restante, até zero.",
+      "yearlyMaximumSuggested": "Estimado a partir do que esta categoria já cobrou.",
+      "resetPeriodLabel": "Reinicia",
+      "resetDateLabel": "Data de reinício",
+      "resetDateHelp": "A contagem recomeça neste dia todos os anos. Normalmente o primeiro dia do ano.",
+      "expectedLabel": "Previsto por salário",
+      "expectedHelp": "A linha da transação para esta categoria é zero, por isso a previsão precisa do montante que cada salário costuma deduzir.",
+      "expectedFromLine": "A linha da fatura deduz {amount} por salário.",
+      "expectedSuggested": "Sugerido a partir do montante que as suas transações nesta categoria mostram com mais frequência no último ano.",
+      "thisPeriod": "Este período, {start} a {end}",
+      "nextPeriod": "Próximo período, a partir de {date}",
+      "setNextPeriod": "Definir os valores do próximo período, a partir de {date}",
+      "nextYearlyMaximumLabel": "Máximo do próximo período",
+      "nextYearlyMaximumHelp": "O máximo a partir da próxima reposição. Deixe vazio para manter o máximo deste período. A margem e a percentagem deste período não mudam.",
+      "nextExpectedLabel": "Previsto por salário no próximo período",
+      "nextExpectedHelp": "O valor que cada salário desconta a partir da próxima reposição. Deixe vazio para manter o valor deste período.",
+      "sameAsThisPeriod": "Igual a este período",
+      "periods": {
+        "YEARLY": "Anual"
+      },
+      "validation": {
+        "billRequired": "Escolha a fatura de salário",
+        "categoryRequired": "Escolha uma categoria",
+        "yearlyMaximumRequired": "Introduza o máximo anual",
+        "resetDateRequired": "Introduza a data de reinício",
+        "expectedRequired": "Introduza o montante previsto por salário",
+        "categoryDuplicate": "Esta categoria já está na lista"
+      },
+      "categoriesLegend": "Categorias de dedução",
+      "addCategory": "+ Adicionar outra categoria",
+      "removeCategory": "Remover a categoria {index}",
+      "noDeductionLines": "Esta transação não tem linhas de dedução. Adicione primeiro as deduções como linhas divididas negativas na transação."
+    },
+    "delete": {
+      "title": "Eliminar regra de dedução",
+      "message": "Eliminar a regra {category} em {bill}? As transações registadas não mudam; o próximo salário regista a sua linha completa."
+    },
+    "toasts": {
+      "created": "{count, plural, one {Regra de dedução criada} other {# regras de dedução criadas}}",
+      "updated": "Regra de dedução atualizada",
+      "deleted": "Regra de dedução eliminada",
+      "loadFailed": "Não foi possível carregar as deduções salariais",
+      "createFailed": "Não foi possível criar a regra de dedução",
+      "updateFailed": "Não foi possível atualizar a regra de dedução",
+      "deleteFailed": "Não foi possível eliminar a regra de dedução"
+    }
+  }
+}

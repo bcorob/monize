@@ -16,12 +16,13 @@
     "chartUnavailable": "[XX-Chart temporarily unavailable-XX]"
   },
   "viewTabs": {
-    "list": "[XX-List-XX]",
-    "calendar": "[XX-Calendar-XX]",
+    "filterLabel": "[XX-Schedule type-XX]",
     "filterAll": "[XX-All ({count})-XX]",
     "filterBills": "[XX-Bills ({count})-XX]",
     "filterDeposits": "[XX-Deposits ({count})-XX]",
-    "todayButton": "[XX-Today-XX]"
+    "chipBills": "[XX-Bills-XX]",
+    "chipDeposits": "[XX-Deposits-XX]",
+    "clearType": "[XX-Show all schedule types-XX]"
   },
   "form": {
     "titleNew": "[XX-New Scheduled Transaction-XX]",
@@ -53,7 +54,11 @@
     "totalOfAccounts": "[XX-Total of Accounts-XX]",
     "legendAriaLabel": "[XX-Forecast lines-XX]",
     "tooltipTransactionForAccount": "[XX-{name} ({account})-XX]",
-    "unavailableMissingRates": "[XX-This forecast cannot be shown in {displayCurrency}: no exchange rate is available for {currencies}, and a projected balance builds on every day before it. Add a rate, or pick a single-currency account.-XX]"
+    "unavailableMissingRates": "[XX-This forecast cannot be shown in {displayCurrency}: no exchange rate is available for {currencies}, and a projected balance builds on every day before it. Add a rate, or pick a single-currency account.-XX]",
+    "untitledTransaction": "[XX-Transaction-XX]",
+    "tooltipEstimated": "[XX-(estimated)-XX]",
+    "unavailableUnknownEstimates": "[XX-This forecast cannot be shown yet: the estimated amount of a bill in it is unknown, and a projected balance builds on every day before it. Enter that occurrence's amount, or turn off Estimate on the bill.-XX]",
+    "unknownEstimateItem": "[XX-{name}: {reason}-XX]"
   },
   "calendar": {
     "days": {
@@ -72,5 +77,11 @@
     "notFound": "[XX-Scheduled payment not found-XX]",
     "loadFailed": "[XX-Failed to load scheduled transactions-XX]",
     "overridesDeleteFailed": "[XX-Failed to delete overrides-XX]"
+  },
+  "toolbar": {
+    "showing": "[XX-Showing <b>{shown}</b> of <b>{total}</b> bills and deposits-XX]",
+    "exportButton": "[XX-Export-XX]",
+    "exportTitle": "[XX-Export bills and deposits to CSV-XX]",
+    "exported": "[XX-{count, plural, one {Exported # schedule} other {Exported # schedules}}-XX]"
   }
 }

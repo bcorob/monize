@@ -19,7 +19,7 @@ import { Category } from '@/types/category';
  * for either, outside the categories page's own full create form.
  *
  * It lives beside `categories.ts` rather than inside it for two reasons: that
- * module is a typed axios wrapper (`frontend/CLAUDE.md`) and this is
+ * module is a typed axios wrapper (`docs/frontend/api-and-cache.md`) and this is
  * multi-request orchestration over it, and roughly thirty suites replace
  * `@/lib/categories` wholesale with a mock -- a helper defined in the mocked
  * module would vanish with it, while one that *imports* it runs against

@@ -21,12 +21,39 @@ import {
   AI_CHAT_STORAGE_KEY,
 } from '@/store/aiChatStore';
 import Link from 'next/link';
+import { XMarkIcon } from '@heroicons/react/24/outline';
 
 // Re-exported for tests and other call sites that previously imported the key
 // from the component module.
 export { AI_CHAT_STORAGE_KEY };
 
-export function ChatInterface() {
+export function ChatInterface({
+  initialFiles,
+  onInitialFilesStaged,
+  initialDraft,
+}: {
+  /**
+   * Files to stage on the composer as soon as the chat mounts, from a surface
+   * that already holds them (the Web Share Target's review screen). They are
+   * staged, never sent: the user still presses send, so a share cannot ask the
+   * assistant anything on its own.
+   */
+  initialFiles?: File[];
+  /**
+   * Called once the staging pass has finished reading those files, so the
+   * caller can release whatever was holding the bytes. Fires even when the
+   * files were refused, which is the caller's cue too: a second attempt would
+   * be refused the same way.
+   */
+  onInitialFilesStaged?: () => void;
+  /**
+   * Text to put in the composer when the chat mounts, from a surface that
+   * already composed it (the receipts page's "Recognize with AI"). It is staged
+   * for the user to read, edit and send, never sent: only the mount reads it, so
+   * a caller that wants another draft remounts the chat with a new `key`.
+   */
+  initialDraft?: string;
+} = {}) {
   const t = useTranslations('ai');
   const messages = useAiChatStore((s) => s.messages);
   const isLoading = useAiChatStore((s) => s.isLoading);
@@ -35,7 +62,7 @@ export function ChatInterface() {
   const cancel = useAiChatStore((s) => s.cancel);
   const clear = useAiChatStore((s) => s.clear);
 
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState(initialDraft ?? '');
   const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [aiStatus, setAiStatus] = useState<AiStatus | null>(null);
@@ -124,6 +151,29 @@ export function ChatInterface() {
     },
     [attachments, t],
   );
+
+  // Stage a caller's files exactly once. `addFiles` changes identity with the
+  // attachment list, so the ref -- not the dependency list -- is what makes it
+  // once: re-running it would duplicate the share on the composer.
+  const stagedInitialRef = useRef(false);
+  useEffect(() => {
+    if (stagedInitialRef.current) return;
+    if (!initialFiles || initialFiles.length === 0) return;
+    stagedInitialRef.current = true;
+    const files = initialFiles;
+
+    const stage = async () => {
+      try {
+        await addFiles(files);
+      } finally {
+        // Even a refusal is an answer: the caller drops the stash on this, and
+        // a second attempt would be refused the same way.
+        onInitialFilesStaged?.();
+      }
+    };
+
+    void stage();
+  }, [initialFiles, addFiles, onInitialFilesStaged]);
 
   const removeAttachment = useCallback((id: string) => {
     setAttachments((prev) => {
@@ -382,19 +432,7 @@ export function ChatInterface() {
                                 />
                               </svg>
                             ) : tool.isError ? (
-                              <svg
-                                className="w-3 h-3 text-red-500"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                strokeWidth={2}
-                                stroke="currentColor"
-                              >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  d="M6 18L18 6M6 6l12 12"
-                                />
-                              </svg>
+                              <XMarkIcon className="w-3 h-3 text-red-500" aria-hidden="true" />
                             ) : (
                               <svg
                                 className="w-3 h-3 text-green-500"
@@ -494,20 +532,9 @@ export function ChatInterface() {
               onClick={cancel}
               className="flex-shrink-0 p-2.5 rounded-xl bg-red-500 hover:bg-red-600 text-white transition-colors"
               title={t('chat.cancelTitle')}
+              aria-label={t('chat.cancelTitle')}
             >
-              <svg
-                className="w-5 h-5"
-                fill="none"
-                viewBox="0 0 24 24"
-                strokeWidth={2}
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M6 18L18 6M6 6l12 12"
-                />
-              </svg>
+              <XMarkIcon className="w-5 h-5" aria-hidden="true" />
             </button>
           ) : (
             <button
@@ -517,6 +544,7 @@ export function ChatInterface() {
               }
               className="flex-shrink-0 p-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-600 text-white transition-colors disabled:cursor-not-allowed"
               title={t('chat.sendTitle')}
+              aria-label={t('chat.sendTitle')}
             >
               <svg
                 className="w-5 h-5"

@@ -23,7 +23,7 @@ Write an ADR when a decision:
   sites.
 
 Do not write one for a decision a type, a lint rule or a test already enforces
-and explains. Per root `CLAUDE.md`, prefer the highest enforcement the mistake
+and explains. Per `AGENTS.md`, prefer the highest enforcement the mistake
 allows; an ADR is prose, so it is for the part that genuinely needs judgement --
 the reasoning behind the rule the machine checks.
 
@@ -58,8 +58,8 @@ whole value.
 
 A retrospective ADR -- one recording a decision already implemented -- is
 worth writing when the reasoning exists nowhere durable. Mark it as such on the
-`Date` line so nobody reads it as a decision taken that day. 0001 and 0003 below
-are both retrospective.
+`Date` line so nobody reads it as a decision taken that day. 0001, 0003 and 0005
+below are all retrospective.
 
 ## Index
 
@@ -68,3 +68,5 @@ are both retrospective.
 | [0001](0001-scoped-db-single-database-door.md) | `withScopedDb` is the only door to the database | accepted |
 | [0002](0002-invariant-catalog-and-enforcement-ranking.md) | Invariants are catalogued, and enforced as low in the stack as possible | accepted |
 | [0003](0003-filesystem-objects-use-id-sharding.md) | Filesystem objects use the shared ID-sharding scheme | accepted |
+| [0004](0004-mcp-two-eras-request-identity-and-mrtr-confirmation.md) | The MCP server serves two protocol revisions, with identity per request and confirmations that travel | accepted |
+| [0005](0005-cluster-mode-on-postgresql-alone.md) | Horizontal scaling runs on PostgreSQL alone, behind an explicit `CLUSTER_MODE` | accepted |

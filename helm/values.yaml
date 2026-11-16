@@ -21,16 +21,88 @@ backend:
   # -- Image settings
   image:
     registry: ghcr.io
-    repository: kenlasko/monize/backend
+    repository: kenlasko/monize-backend
     tag: latest
     pullPolicy: IfNotPresent
 
   # -- Number of replicas
+  #
+  # More than one requires cluster.mode=multi below: at CLUSTER_MODE=single the
+  # backend keeps rate-limit counters and cross-replica wake-ups in its own
+  # process, which a second replica would neither share nor see. Attachment and backup
+  # storage must be cluster-safe too, which the backend refuses to boot
+  # without: see cluster.mode.
   replicas: 1
 
-  # -- Extra labels to add to the StatefulSet and pod template
+  # -- Voluntary-disruption budget (node drains, cluster upgrades)
+  #
+  # Off by default on purpose: at replicas: 1 a budget of minAvailable: 1 makes
+  # a node drain block indefinitely rather than interrupt the service briefly,
+  # which is the worse surprise. Turn it on with the replica count.
+  podDisruptionBudget:
+    # -- Create a PodDisruptionBudget
+    enabled: false
+    # -- Minimum pods that must stay available (ignored when maxUnavailable is set)
+    #
+    # Must be below the replica count (below autoscaling.minReplicas when the
+    # autoscaler owns it). A budget equal to it admits no eviction at all, so a
+    # node drain or cluster upgrade blocks indefinitely rather than interrupting
+    # the service briefly; the chart refuses to render one.
+    minAvailable: 1
+    # -- Maximum pods that may be unavailable; takes precedence over minAvailable
+    #
+    # Read exactly, so 0 is not mistaken for unset -- and then refused for the
+    # same reason as minAvailable above: it permits no eviction either.
+    maxUnavailable: ""
+
+  # -- Scheduler spread, so replicas do not all land on one node
+  #
+  # Empty by default: it is only meaningful above one replica, and a constraint
+  # a single-node cluster cannot satisfy is a pod that will not schedule.
+  # DoNotSchedule is the strict form; use ScheduleAnyway where capacity is tight.
+  #
+  # The labelSelector must match the labels these pods actually carry --
+  # `app: monize-backend`, which is also the Deployment's own selector. A selector
+  # that matches nothing is not a weaker constraint but no constraint at all:
+  # it is satisfied by every placement, including all replicas on one node, and
+  # neither Kubernetes nor `helm template` reports anything. The chart refuses
+  # to render a matchLabels entry this pod template does not carry.
+  topologySpreadConstraints: []
+  #   - maxSkew: 1
+  #     topologyKey: kubernetes.io/hostname
+  #     whenUnsatisfiable: ScheduleAnyway
+  #     labelSelector:
+  #       matchLabels:
+  #         app: monize-backend
+
+  # -- Horizontal pod autoscaling (CPU only)
+  #
+  # When enabled the Deployment omits its own replica count, so the chart and
+  # the autoscaler do not fight on every upgrade. Needs metrics-server.
+  #
+  # targetCPUUtilizationPercentage is a percentage of the CPU *request* below,
+  # not of a core and not of the limit. With no request set the ratio is
+  # undefined, the HPA reports <unknown>/75% and never scales -- so a chart that
+  # looks autoscaled sits at minReplicas through every load it was installed to
+  # survive. Raising or lowering resources.requests.cpu silently re-tunes every
+  # threshold here; the two are one setting in two places. The request above is
+  # deliberately small so the pod schedules anywhere, which makes 75% of it a
+  # very low bar -- anything past idle scales out to maxReplicas and stays
+  # there. Enabling autoscaling means sizing resources.requests.cpu to what the
+  # process actually uses first.
+  autoscaling:
+    # -- Create a HorizontalPodAutoscaler
+    enabled: false
+    # -- Lower bound on replicas
+    minReplicas: 2
+    # -- Upper bound on replicas
+    maxReplicas: 4
+    # -- Target average CPU utilization, as a percentage of the request
+    targetCPUUtilizationPercentage: 75
+
+  # -- Extra labels to add to the Deployment and pod template
   extraLabels: {}
-  # -- Extra annotations to add to the StatefulSet
+  # -- Extra annotations to add to the Deployment
   extraAnnotations: {}
 
   # -- Service port
@@ -143,7 +215,7 @@ backend:
   # -- Writable durable storage for the data the backend keeps outside Postgres.
   #
   # The backend container runs with readOnlyRootFilesystem: true and, until this
-  # existed, the StatefulSet rendered no volumes at all. So two features that are
+  # existed, the backend workload rendered no volumes at all. So two features that are
   # exposed in the UI could not work in the canonical chart, and both failed at
   # the point of use rather than at install time:
   #
@@ -159,8 +231,10 @@ backend:
   # without saying where the storage comes from.
   #
   # These are plain PVCs mounted as volumes, deliberately not
-  # volumeClaimTemplates: a StatefulSet's volumeClaimTemplates are immutable, so
-  # adding one to an existing release cannot be done by an upgrade.
+  # volumeClaimTemplates: those are a StatefulSet feature and are immutable, so
+  # adding one to an existing release could not be done by an upgrade. Keeping
+  # them as ordinary claims is also what made converting these workloads to
+  # Deployments a rename rather than a data migration.
   persistence:
     # -- Storage for automatic backups (/data/backups).
     backups:
@@ -177,7 +251,10 @@ backend:
       accessMode: ReadWriteOnce
     # -- Storage for locally stored attachment bytes (/data/attachments). Only
     # needed with ATTACHMENT_STORAGE_PROVIDER=local; the default "database"
-    # provider keeps bytes in Postgres and s3 keeps them in a bucket.
+    # provider keeps bytes in Postgres and s3 keeps them in a bucket. Keep it
+    # enabled for as long as any attachment still lives here: after a switch
+    # away from "local" the relocation reads each remaining attachment from this
+    # claim (see backend.attachmentContainerDir).
     attachments:
       enabled: false
       existingClaim: ""
@@ -222,14 +299,20 @@ backend:
   # -- General application settings
   # NOTE: JWT_SECRET and ENCRYPTION_KEY must be provided via a Secret.
   # Use extraEnvFrom with a secretRef, or extraEnv with valueFrom.secretKeyRef.
-  # ENCRYPTION_KEY (minimum 32 characters) encrypts AI provider keys,
-  # emergency-access credentials and the password each user's automatic backups
-  # are encrypted with. It is not enforced at startup yet -- the backend warns on
-  # every boot while it is missing, and a future release will require it -- but
-  # without it backups are written unencrypted. Keep the value stable once set:
-  # rotating it re-encrypts nothing, it makes what is stored unreadable.
-  # AI_ENCRYPTION_KEY is the former name and is still accepted, so an existing
-  # release needs no change.
+  # Both are required: the backend refuses to start (and the pod crash-loops)
+  # without a JWT_SECRET and an ENCRYPTION_KEY of at least 32 characters each.
+  # ENCRYPTION_KEY (`openssl rand -hex 32`) encrypts AI provider keys,
+  # emergency-access credentials and the automatic-backup data keys. Keep it
+  # stable once set: rotating it re-encrypts nothing, it makes what is stored
+  # unreadable. AI_ENCRYPTION_KEY is the former name and is still accepted, so
+  # an existing release that set it needs no change; a release that set
+  # neither must add ENCRYPTION_KEY before upgrading (nothing was encrypted
+  # without one, so adding it is safe).
+  # JWT_SECRET (`openssl rand -base64 32`): a known placeholder or predictable
+  # value starts but raises a log warning, an admin alert and a banner. Keep it
+  # stable: changing it makes stored authenticator (TOTP) secrets unreadable,
+  # so 2FA users must sign in with a backup code or have an admin reset their
+  # 2FA. See docs/backend/modules-and-runtime.md, "Changing JWT_SECRET".
   app:
     NODE_ENV: production
     # -- PUBLIC_APP_URL (defaults to https://<hostname>)
@@ -243,7 +326,7 @@ backend:
     DATABASE_NAME: ""
 
   # -- Row-Level Security (defense-in-depth). Off by default -- leave as-is for
-  # the standard single-role setup. See docs/future-plans/row-level-security.md
+  # the standard single-role setup. See docs/specs/row-level-security.md
   # and the runbook before changing RLS_MODE.
   # RLS_MODE and DATABASE_APP_USER are rendered into the backend ConfigMap.
   # NOTE: DATABASE_APP_PASSWORD is a secret -- supply it alongside
@@ -302,10 +385,29 @@ backend:
   # -- Where automatic backups are written inside the container. Must match
   # BACKUP_CONTAINER_DIR if you override that through extraEnv; the mount for
   # backend.persistence.backups follows this value.
+  #
+  # Read only by the "local" backup store, which is the default. Set
+  # BACKUP_STORAGE_PROVIDER=s3 in extraEnv to keep the artifacts in a bucket
+  # instead, in which case this directory and the claim below are unused.
+  # Switching is forward-only: the previous recovery points stay where they
+  # were, so keep the old claim until the new store has a full retention window.
   backupContainerDir: /data/backups
 
   # -- Where locally stored attachment bytes are written inside the container.
   # Must match ATTACHMENT_CONTAINER_DIR if you override that through extraEnv.
+  #
+  # Changing ATTACHMENT_STORAGE_PROVIDER relocates the attachments already
+  # stored: the backend copies each one into the new backend, verifies the copy
+  # and deletes the original, starting on boot and retrying hourly at :50 until
+  # none are left. Unlike the backup store above, this is not
+  # forward-only -- but it does mean **the backend being moved away from has to
+  # stay configured and mounted until it finishes**, because each attachment is
+  # read through the backend its own row names. Leaving `local` for `s3` is
+  # therefore: set the new variables, keep the claim below, watch for
+  # "Attachment storage relocation" in the backend log, and only then disable
+  # persistence.attachments. Set ATTACHMENT_STORAGE_MIGRATE_ON_SWITCH=false in
+  # extraEnv to leave everything where it is instead; attachments stay readable
+  # either way, from whichever backend holds them.
   attachmentContainerDir: /data/attachments
 
   # -- Additional volumes for the backend pod (beyond /tmp and the persistence
@@ -325,16 +427,91 @@ frontend:
   # -- Image settings
   image:
     registry: ghcr.io
-    repository: kenlasko/monize/frontend
+    repository: kenlasko/monize-frontend
     tag: latest
     pullPolicy: IfNotPresent
 
   # -- Number of replicas
+  #
+  # More than one requires cluster.mode=multi below: at CLUSTER_MODE=single the
+  # backend keeps rate-limit counters and cross-replica wake-ups in its own
+  # process, which a second replica would neither share nor see.
+  #
+  # The frontend is stateless, so its replica count is independent of the
+  # backend's; cluster.mode is about the backend. Large uploads (.mny import,
+  # restore, attachments, AI queries) are streamed through, not buffered, so a
+  # replica's memory does not need to cover the .mny import limit.
   replicas: 1
 
-  # -- Extra labels to add to the StatefulSet and pod template
+  # -- Voluntary-disruption budget (node drains, cluster upgrades)
+  #
+  # Off by default on purpose: at replicas: 1 a budget of minAvailable: 1 makes
+  # a node drain block indefinitely rather than interrupt the service briefly,
+  # which is the worse surprise. Turn it on with the replica count.
+  podDisruptionBudget:
+    # -- Create a PodDisruptionBudget
+    enabled: false
+    # -- Minimum pods that must stay available (ignored when maxUnavailable is set)
+    #
+    # Must be below the replica count (below autoscaling.minReplicas when the
+    # autoscaler owns it). A budget equal to it admits no eviction at all, so a
+    # node drain or cluster upgrade blocks indefinitely rather than interrupting
+    # the service briefly; the chart refuses to render one.
+    minAvailable: 1
+    # -- Maximum pods that may be unavailable; takes precedence over minAvailable
+    #
+    # Read exactly, so 0 is not mistaken for unset -- and then refused for the
+    # same reason as minAvailable above: it permits no eviction either.
+    maxUnavailable: ""
+
+  # -- Scheduler spread, so replicas do not all land on one node
+  #
+  # Empty by default: it is only meaningful above one replica, and a constraint
+  # a single-node cluster cannot satisfy is a pod that will not schedule.
+  # DoNotSchedule is the strict form; use ScheduleAnyway where capacity is tight.
+  #
+  # The labelSelector must match the labels these pods actually carry --
+  # `app: monize-frontend`, which is also the Deployment's own selector. A selector
+  # that matches nothing is not a weaker constraint but no constraint at all:
+  # it is satisfied by every placement, including all replicas on one node, and
+  # neither Kubernetes nor `helm template` reports anything. The chart refuses
+  # to render a matchLabels entry this pod template does not carry.
+  topologySpreadConstraints: []
+  #   - maxSkew: 1
+  #     topologyKey: kubernetes.io/hostname
+  #     whenUnsatisfiable: ScheduleAnyway
+  #     labelSelector:
+  #       matchLabels:
+  #         app: monize-frontend
+
+  # -- Horizontal pod autoscaling (CPU only)
+  #
+  # When enabled the Deployment omits its own replica count, so the chart and
+  # the autoscaler do not fight on every upgrade. Needs metrics-server.
+  #
+  # targetCPUUtilizationPercentage is a percentage of the CPU *request* below,
+  # not of a core and not of the limit. With no request set the ratio is
+  # undefined, the HPA reports <unknown>/75% and never scales -- so a chart that
+  # looks autoscaled sits at minReplicas through every load it was installed to
+  # survive. Raising or lowering resources.requests.cpu silently re-tunes every
+  # threshold here; the two are one setting in two places. The request above is
+  # deliberately small so the pod schedules anywhere, which makes 75% of it a
+  # very low bar -- anything past idle scales out to maxReplicas and stays
+  # there. Enabling autoscaling means sizing resources.requests.cpu to what the
+  # process actually uses first.
+  autoscaling:
+    # -- Create a HorizontalPodAutoscaler
+    enabled: false
+    # -- Lower bound on replicas
+    minReplicas: 2
+    # -- Upper bound on replicas
+    maxReplicas: 4
+    # -- Target average CPU utilization, as a percentage of the request
+    targetCPUUtilizationPercentage: 75
+
+  # -- Extra labels to add to the Deployment and pod template
   extraLabels: {}
-  # -- Extra annotations to add to the StatefulSet
+  # -- Extra annotations to add to the Deployment
   extraAnnotations: {}
 
   # -- Service port
@@ -343,10 +520,9 @@ frontend:
     type: ClusterIP
 
   # -- Resource requests and limits
-  # NOTE: the Next.js proxy buffers each request body before forwarding it, so
-  # a Microsoft Money (.mny) upload is held here as well as in the backend. If
-  # that import is used, raise the limit to at least MNY_IMPORT_LIMIT_MB plus
-  # this baseline -- 400Mi at the default 300. See helm/README.md.
+  # The proxy buffers ordinary request bodies up to 11MB and refuses anything
+  # larger; the large-upload routes (.mny import, restore, attachments, AI
+  # queries) stream to the backend instead, so the default limit covers them.
   resources:
     requests:
       cpu: 10m
@@ -357,9 +533,8 @@ frontend:
   # -- Microsoft Money (.mny) import
   mnyImport:
     # -- Must match backend.mnyImport.MNY_IMPORT_LIMIT_MB. The frontend reads it
-    # to size the proxy's own request-body ceiling; Next caps proxied bodies at
-    # 10MB otherwise, and **truncates** rather than rejecting anything larger,
-    # which surfaces as an aborted upload with no error message anywhere.
+    # to bound the streamed .mny import and restore uploads it forwards; a body
+    # past it is refused with 413.
     MNY_IMPORT_LIMIT_MB: "300"
 
   # -- Security context for the frontend container
@@ -412,6 +587,71 @@ frontend:
   #       name: my-frontend-secrets
   #   - configMapRef:
   #       name: my-frontend-config
+
+# -- MCP (Model Context Protocol) endpoint routing
+#
+# The endpoint serves two protocol revisions. The 2026-07-28 one is stateless per
+# request and needs nothing here. The 2025-era one -- still what Claude Desktop's
+# connector, `claude mcp add` and Codex negotiate -- opens a session that lives in
+# ONE backend process: the SDK gives a session id no way back in, and the live
+# state of an exchange is the open stream and the pending confirmation held by
+# the replica that answered `initialize`. A request that lands elsewhere is
+# answered 404 and the client has to start over.
+#
+# So with backend.replicas > 1, a deployment serving 2025-era clients needs this
+# on. It routes the MCP path straight to the backend Service (bypassing the
+# frontend proxy, which would otherwise spread each request across replicas) and
+# asks the edge for cookie-based session affinity.
+#
+# Affinity is only as good as the client's cookie jar: a client that does not
+# keep cookies is not pinned by this, and for those the working configurations
+# are one backend replica or a 2026-07-28 client. See helm/README.md.
+mcp:
+  stickySessions:
+    # -- Pin 2025-era MCP sessions to one backend replica
+    enabled: false
+    # -- Path prefix routed straight to the backend. Must match the URL clients
+    # are given; the app's own connect instructions hand out /api/v1/mcp.
+    path: /api/v1/mcp
+    # -- Name of the affinity cookie the edge sets
+    cookieName: monize-mcp-affinity
+
+# -- Horizontal scaling
+#
+# What the backend needs before a second replica of it is correct. Everything
+# shared lives in PostgreSQL, so this adds no dependency -- see
+# docs/specs/horizontal-scaling.md.
+cluster:
+  # -- CLUSTER_MODE: single (one backend replica) or multi (several)
+  #
+  # In multi the backend enforces rate limits and single-use claims on rows
+  # rather than in process memory, and replicas wake each other over
+  # LISTEN/NOTIFY. Two things it then requires, both refused at boot if absent:
+  # backend.database.DATABASE_HOST must reach a PostgreSQL session rather than a
+  # transaction-mode pooler (each replica holds one LISTEN), and the storage
+  # assertions below must be true.
+  mode: single
+  # -- Assert that every replica mounts backend.attachmentContainerDir
+  #
+  # Only read when mode=multi with ATTACHMENT_STORAGE_PROVIDER=local, where the
+  # boot refuses without it. The chart's own claim defaults to ReadWriteOnce,
+  # which a second pod on another node cannot attach, so this means switching
+  # backend.persistence.attachments.accessMode to ReadWriteMany as well. The
+  # database and s3 providers need nothing here.
+  attachmentSharedVolume: false
+  # -- Assert that every replica mounts backend.backupContainerDir
+  #
+  # Only read when mode=multi with the "local" backup store, which is the
+  # default: automatic backups are switched on per user rather than by a chart
+  # value, so no setting says whether any exist, and the hourly job writes to
+  # whichever replica runs it. Same ReadWriteMany requirement as above.
+  #
+  # The other way out is BACKUP_STORAGE_PROVIDER=s3 with the BACKUP_STORE_S3_*
+  # variables in backend.extraEnv, which puts the artifacts in a bucket every
+  # replica reaches by construction. Keep that bucket separate from the
+  # off-machine destination's BACKUP_S3_BUCKET: the backend refuses to start
+  # when the two are one location (INV-BACKUP-007).
+  backupSharedVolume: false
 
 # -- Ingress configuration (traditional Kubernetes Ingress)
 ingress:

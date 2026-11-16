@@ -284,7 +284,7 @@ var FAQ = [
  ['Does Monize connect to my bank automatically?','No, and that is deliberate. Monize is import-driven: CSV, OFX/QFX, QIF or a full Microsoft Money file. Nothing hands your banking credentials to a third-party aggregator.'],
  ['Where does my financial data live?','On whatever machine you run it on, in your own PostgreSQL database. There is no Monize cloud and no telemetry.'],
  ['Do I have to use the AI features?','Not at all — they are off until you add a provider. If you do want them, you can point Monize at a local Ollama model so nothing leaves your network, and only the data needed for a specific question is ever sent.'],
- ['Can I really migrate 30 years of Microsoft Money?','That is the reason it exists. The author imported 30+ years of .mny data and reconciled every balance against the original file with no discrepancies. The wiki has a step-by-step guide.'],
+ ['Can I really migrate 30 years of Microsoft Money?','That is the reason it exists. The author imported 30+ years of .mny data and reconciled every balance against the original file with no discrepancies. The documentation has a step-by-step guide.'],
  ['Will it work on my phone?','Yes. The interface is responsive and installable as a Progressive Web App, so it gets its own window and home-screen icon on desktop and mobile.'],
  ['Who wrote it, and should I worry?','It was written almost entirely with AI assistance by a self-described non-programmer — the project says so up front. It has been through repeated security audits, NPM audits and ZAP scans, and supports 2FA and OIDC, but read the caution note in the README and make your own call.'],
  ['Can my partner or accountant see my accounts?','Yes, with scoped shared access. You can also share a single account jointly so it shows up natively in their own account list, and transfer between your accounts and theirs.']
@@ -478,6 +478,25 @@ mtxt.forEach(function(t){ mq.appendChild(el('span',null,t)); });
 /* live star count (best effort, falls back to the baked-in number) */
 fetch('https://api.github.com/repos/kenlasko/monize').then(function(r){ return r.json(); }).then(function(d){
   if(d && d.stargazers_count) $('#stars').textContent='★ '+d.stargazers_count;
+}).catch(function(){});
+
+/* Windows installer links (best effort). Each link starts at the Windows guide's
+   download section and becomes a direct download once GitHub says which file the
+   newest release, and the one Windows beta prerelease, carry. /releases/latest
+   never returns a prerelease, so a beta is never offered as the release. */
+function winAsset(rel){
+  var a=(rel&&rel.assets||[]).filter(function(x){ return /^Monize-Setup-.+\.exe$/.test(x.name); })[0];
+  return a ? {url:a.browser_download_url, version:rel.tag_name.replace(/^v/,'')} : null;
+}
+fetch('https://api.github.com/repos/kenlasko/monize/releases/latest').then(function(r){ return r.ok ? r.json() : null; }).then(function(rel){
+  var w=winAsset(rel); if(!w) return;
+  $$('[data-win-download]').forEach(function(a){ a.href=w.url; a.title='Monize-Setup-'+w.version+'.exe'; });
+  $$('[data-win-version]').forEach(function(s){ s.textContent='Version '+w.version+' · Windows 10/11, 64-bit.'; });
+}).catch(function(){});
+fetch('https://api.github.com/repos/kenlasko/monize/releases?per_page=30').then(function(r){ return r.ok ? r.json() : null; }).then(function(list){
+  var beta=(list||[]).filter(function(rel){ return rel.prerelease && /^v\d+\.\d+\.\d+-beta\.\d+$/.test(rel.tag_name); })[0];
+  var w=winAsset(beta); if(!w) return;
+  $$('[data-win-beta]').forEach(function(a){ a.href=w.url; a.removeAttribute('target'); a.title='Monize-Setup-'+w.version+'.exe: a preview of the next release, less tested'; a.textContent='Windows beta '+w.version; });
 }).catch(function(){});
 
 /* ---------- features ---------- */

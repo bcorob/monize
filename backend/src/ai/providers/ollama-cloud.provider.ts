@@ -1,5 +1,6 @@
 import { ModelVerificationResult } from "./ai-provider.interface";
 import { OllamaProvider } from "./ollama.provider";
+import { unverifiedModelReason } from "./model-verification.util";
 
 /**
  * Ollama Cloud provider.
@@ -29,8 +30,13 @@ export class OllamaCloudProvider extends OllamaProvider {
   // SaaS endpoint, so accepting a user-supplied URL here would be a pure
   // SSRF vector with no upside. Kept in the signature so factory callers
   // don't need a special case.
-  constructor(apiKey: string, _baseUrl?: string, model?: string) {
-    super(OLLAMA_CLOUD_BASE_URL, model);
+  constructor(
+    apiKey: string,
+    _baseUrl?: string,
+    model?: string,
+    fetchImpl?: typeof fetch,
+  ) {
+    super(OLLAMA_CLOUD_BASE_URL, model, fetchImpl);
     this.apiKey = apiKey;
   }
 
@@ -56,7 +62,7 @@ export class OllamaCloudProvider extends OllamaProvider {
     const model = this.modelId;
     const url = this.buildUrl("/api/chat");
     try {
-      const response = await fetch(url, {
+      const response = await this.fetchImpl(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -96,14 +102,18 @@ export class OllamaCloudProvider extends OllamaProvider {
       return {
         ok: false,
         model,
-        reason: `Probe returned ${response.status}: ${bodyText.slice(0, 200) || response.statusText}`,
+        reason: unverifiedModelReason(
+          this.name,
+          model,
+          `Probe returned ${response.status}: ${bodyText.slice(0, 200) || response.statusText}`,
+          response.status,
+        ),
       };
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
       return {
         ok: false,
         model,
-        reason: `Could not reach Ollama Cloud to verify model: ${message}`,
+        reason: unverifiedModelReason(this.name, model, error),
       };
     } finally {
       clearTimeout(timeout);

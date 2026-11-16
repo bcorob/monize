@@ -3,6 +3,7 @@ import { DataSource } from "typeorm";
 import { ScheduledTransactionsService } from "./scheduled-transactions.service";
 import { ScheduledEffectiveAmountService } from "./scheduled-effective-amount.service";
 import { ScheduledOccurrenceService } from "./scheduled-occurrence.service";
+import { ScheduledAmountEstimateService } from "./scheduled-amount-estimate.service";
 import { ScheduledTransaction } from "./entities/scheduled-transaction.entity";
 import { ScheduledTransactionOverride } from "./entities/scheduled-transaction-override.entity";
 import { AccountsService } from "../accounts/accounts.service";
@@ -12,7 +13,10 @@ import { ScheduledTransactionOverrideService } from "./scheduled-transaction-ove
 import { ScheduledTransactionLoanService } from "./scheduled-transaction-loan.service";
 import { ActionHistoryService } from "../action-history/action-history.service";
 import { ExchangeRateService } from "../currencies/exchange-rate.service";
+import { SystemAlertService } from "../system-alerts/system-alert.service";
 import { createScopedDbMocks } from "../test-helpers/scoped-db-testing";
+import { Currency } from "../currencies/entities/currency.entity";
+import { currencyPlacesRepoMock } from "../test-helpers/currency-places-testing";
 
 /**
  * RLS smoke for the scheduled-transactions module's out-of-request entry point
@@ -36,6 +40,7 @@ describe("scheduled-transactions module RLS context smoke (real withScopedDb)", 
     overridesRepo: Record<string, jest.Mock>,
   ) => {
     const { manager, dataSource } = createScopedDbMocks([
+      [Currency, currencyPlacesRepoMock({ BTC: 8 })],
       [ScheduledTransaction, scheduledRepo],
       [ScheduledTransactionOverride, overridesRepo],
     ]);
@@ -58,6 +63,15 @@ describe("scheduled-transactions module RLS context smoke (real withScopedDb)", 
         // are about those decisions, so a double would test nothing.
         ScheduledEffectiveAmountService,
         ScheduledOccurrenceService,
+        // No estimated schedule unless a test says so (issue #2096); the
+        // estimate's own arithmetic is `amount-estimate.spec.ts`'s.
+        {
+          provide: ScheduledAmountEstimateService,
+          useValue: {
+            estimateMany: jest.fn().mockResolvedValue(new Map()),
+            estimateFor: jest.fn(),
+          },
+        },
         { provide: DataSource, useValue: dataSource },
         { provide: AccountsService, useValue: {} },
         { provide: TransactionsService, useValue: transactionsService },
@@ -69,10 +83,23 @@ describe("scheduled-transactions module RLS context smoke (real withScopedDb)", 
             findLoanAccountFromSplits: jest.fn().mockResolvedValue(null),
             recalculateLoanPaymentSplits: jest.fn(),
             resolvePostingAllocation: jest.fn().mockResolvedValue(null),
+            projectLoanOccurrencesMany: jest.fn().mockResolvedValue(new Map()),
           },
         },
         { provide: ActionHistoryService, useValue: { record: jest.fn() } },
         { provide: ExchangeRateService, useValue: exchangeRateService },
+        {
+          provide: SystemAlertService,
+          // The real service never throws and seeds its own context; the
+          // double keeps that contract. Its own identity smoke lives in
+          // src/system-alerts/rls-context-smoke.spec.ts.
+          useValue: {
+            raiseUserAlert: jest.fn().mockResolvedValue({ created: true }),
+            raiseAdminAlert: jest
+              .fn()
+              .mockResolvedValue({ created: 0, emailed: 0 }),
+          },
+        },
       ],
     }).compile();
 
@@ -125,6 +152,8 @@ describe("scheduled-transactions module RLS context smoke (real withScopedDb)", 
       // post() re-reads/locks the occurrence override inside the transaction
       // (issue #1154 re-review); default to no override present.
       findOne: jest.fn().mockResolvedValue(null),
+      // The overrides the posting's undo would put back (issue #2165).
+      find: jest.fn().mockResolvedValue([]),
     };
 
     const { service, manager, transactionsService } = await buildModule(
@@ -163,6 +192,7 @@ describe("scheduled-transactions module RLS context smoke (real withScopedDb)", 
     expect(transactionsService.create).toHaveBeenCalledWith(
       OWNER_ID,
       expect.objectContaining({ accountId: "acc-1" }),
+      { fromScheduledPosting: true, recordHistory: false },
     );
     // The post's bookkeeping write (advance nextDueDate) also ran in context.
     expect(manager.update).toHaveBeenCalledWith(

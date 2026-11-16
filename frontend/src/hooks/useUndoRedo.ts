@@ -5,8 +5,14 @@ import { useTranslations } from 'next-intl';
 import toast from 'react-hot-toast';
 import { actionHistoryApi } from '@/lib/action-history';
 import { renderActionDescription } from '@/lib/action-history-format';
+import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { clearAllCache } from '@/lib/apiCache';
-import { notifyUndoRedo } from '@/lib/undoRedoSignal';
+import {
+  notifyUndoRedo,
+  getUndoRefusal,
+  isUndoRefusal,
+  markUndoRefused,
+} from '@/lib/undoRedoSignal';
 import { createLogger } from '@/lib/logger';
 
 const logger = createLogger('UndoRedo');
@@ -27,16 +33,22 @@ export function useUndoRedo() {
   // Action descriptions live in the `layout` catalog (shared with the panel);
   // render them here so keyboard-driven undo/redo toasts are localized too.
   const tLayout = useTranslations('layout');
+  const { formatCurrency } = useNumberFormat();
   const pendingRef = useRef(false);
 
   const handleUndo = useCallback(async () => {
     if (pendingRef.current) return;
+    const refusal = getUndoRefusal();
+    if (refusal) {
+      toast.error(refusal);
+      return;
+    }
     pendingRef.current = true;
     try {
       const result = await actionHistoryApi.undo();
       toast.success(
         tLayout('actionHistory.undonePrefix', {
-          description: renderActionDescription(tLayout, result.action),
+          description: renderActionDescription(tLayout, result.action, formatCurrency),
         }),
       );
       clearAllCache();
@@ -47,7 +59,9 @@ export function useUndoRedo() {
       if (status === 404) {
         toast.success(t('undoRedo.nothingToUndo'));
       } else if (status === 409) {
-        toast.error(message || t('undoRedo.cannotUndo'));
+        const text = message || t('undoRedo.cannotUndo');
+        if (isUndoRefusal(status, error?.response?.data?.errorCode)) markUndoRefused(text);
+        toast.error(text);
       } else {
         logger.error('Undo failed', error);
         toast.error(t('undoRedo.undoFailed'));
@@ -55,7 +69,7 @@ export function useUndoRedo() {
     } finally {
       pendingRef.current = false;
     }
-  }, [t, tLayout]);
+  }, [t, tLayout, formatCurrency]);
 
   const handleRedo = useCallback(async () => {
     if (pendingRef.current) return;
@@ -64,7 +78,7 @@ export function useUndoRedo() {
       const result = await actionHistoryApi.redo();
       toast.success(
         tLayout('actionHistory.redonePrefix', {
-          description: renderActionDescription(tLayout, result.action),
+          description: renderActionDescription(tLayout, result.action, formatCurrency),
         }),
       );
       clearAllCache();
@@ -83,7 +97,7 @@ export function useUndoRedo() {
     } finally {
       pendingRef.current = false;
     }
-  }, [t, tLayout]);
+  }, [t, tLayout, formatCurrency]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {

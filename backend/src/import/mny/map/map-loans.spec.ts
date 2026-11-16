@@ -87,6 +87,7 @@ function transaction(
     linkedTransactionId: null,
     splits: [],
     collapsedTradeHandle: null,
+    tagHandles: [],
     ...overrides,
   };
 }
@@ -101,6 +102,7 @@ function principalLeg(amount = -1000): MappedSplit {
     investmentHandle: null,
     amount,
     memo: null,
+    tagHandles: [],
   };
 }
 
@@ -114,6 +116,7 @@ function categoryLeg(categoryHandle: number, amount: number): MappedSplit {
     investmentHandle: null,
     amount,
     memo: null,
+    tagHandles: [],
   };
 }
 
@@ -124,6 +127,8 @@ function transactionsFixture(
     transactions,
     referencedPayees: new Set(),
     referencedCategories: new Set(),
+    referencedTags: new Set(),
+    tradeCashLegTagHandles: new Map(),
     transfersLinked: 0,
     skipped: 0,
     deferredInvestments: 0,
@@ -311,6 +316,7 @@ describe("mapLoans", () => {
         amount: split.amount,
         memo: split.memo,
       })),
+      tagHandles: [],
     };
 
     const result = mapLoans(
@@ -347,6 +353,7 @@ describe("mapLoans", () => {
       transferAccountKey: "acct-9",
       investment: null,
       splits: [],
+      tagHandles: [],
     };
 
     const result = mapLoans(input({ bills: [bill] }));

@@ -13,7 +13,8 @@ function createAccount(overrides: Partial<Account> = {}): Account {
     isFavourite: false, favouriteSortOrder: 0, excludeFromNetWorth: false, paymentAmount: null, paymentFrequency: null, paymentStartDate: null,
     sourceAccountId: null, principalCategoryId: null, interestCategoryId: null, overpaymentCategoryId: null, overpaymentMemo: null, overpaymentPayeeId: null, fxFeePercent: null,
     scheduledTransactionId: null, assetCategoryId: null, dateAcquired: null, linkedLoanAccountId: null,
-    isCanadianMortgage: false, isVariableRate: false, termMonths: null, termEndDate: null,
+    mortgageType: 'ANNUITY',
+    termMonths: null, termEndDate: null,
     amortizationMonths: null, originalPrincipal: null,
     statementDueDay: null, statementSettlementDay: null,
     createdAt: '2024-01-01T00:00:00Z', updatedAt: '2024-01-01T00:00:00Z',
@@ -229,6 +230,141 @@ describe('ReviewStep', () => {
     expect(screen.getByText(/checking\.qif/)).toBeInTheDocument();
     expect(screen.getByText(/savings\.qif/)).toBeInTheDocument();
     expect(screen.getByText(/15 transactions/)).toBeInTheDocument();
+  });
+
+  // --- Unreadable CSV dates ---
+
+  describe('unreadable dates', () => {
+    function csvFile(unreadableDates: { count: number; rows: { rowNumber: number; rawDate: string }[] } | undefined, fileName = 'march.csv') {
+      return {
+        fileName,
+        fileContent: '',
+        fileType: 'csv' as const,
+        parsedData: {
+          ...defaultProps.parsedData,
+          detectedDateFormat: 'MM/DD/YYYY' as const,
+          unreadableDates,
+        },
+        selectedAccountId: 'acc-1',
+        matchConfidence: 'exact',
+      };
+    }
+
+    it('counts the rows whose date cannot be read and names each by row and date text', () => {
+      const unreadable = {
+        count: 2,
+        rows: [
+          { rowNumber: 14, rawDate: '13/03/2026' },
+          { rowNumber: 20, rawDate: '' },
+        ],
+      };
+      render(<ReviewStep {...defaultProps} importFiles={[csvFile(unreadable)] as any[]} />);
+
+      expect(
+        screen.getByText('2 rows have dates that cannot be read as MM/DD/YYYY and will not be imported:'),
+      ).toBeInTheDocument();
+      expect(screen.getByText('Row 14: "13/03/2026"')).toBeInTheDocument();
+      expect(screen.getByText('Row 20: no date')).toBeInTheDocument();
+      expect(screen.getByText(/go back to the column mapping step and choose the date format/)).toBeInTheDocument();
+    });
+
+    it('lists the first five and counts the rest', () => {
+      const rows = Array.from({ length: 7 }, (_, i) => ({ rowNumber: i + 2, rawDate: `13/0${i + 1}/2026` }));
+      render(<ReviewStep {...defaultProps} importFiles={[csvFile({ count: 60, rows })] as any[]} />);
+
+      expect(screen.getByText('Row 6: "13/05/2026"')).toBeInTheDocument();
+      expect(screen.queryByText('Row 7: "13/06/2026"')).not.toBeInTheDocument();
+      expect(screen.getByText('...and 55 more')).toBeInTheDocument();
+    });
+
+    it('names the file of each list in a bulk import', () => {
+      const one = { count: 1, rows: [{ rowNumber: 3, rawDate: '31/02/2026' }] };
+      render(
+        <ReviewStep
+          {...defaultProps}
+          isBulkImport={true}
+          importFiles={[csvFile(one, 'a.csv'), csvFile(undefined, 'b.csv')] as any[]}
+        />,
+      );
+
+      expect(
+        screen.getByText('1 row has a date that cannot be read as MM/DD/YYYY and will not be imported:'),
+      ).toBeInTheDocument();
+      // a.csv appears in the file summary and above its list; b.csv only in the summary.
+      expect(screen.getAllByText('a.csv')).toHaveLength(2);
+      expect(screen.getAllByText('b.csv')).toHaveLength(1);
+    });
+
+    it('shows nothing when every date reads', () => {
+      render(<ReviewStep {...defaultProps} importFiles={[csvFile({ count: 0, rows: [] })] as any[]} />);
+
+      expect(screen.queryByText(/cannot be read as/)).not.toBeInTheDocument();
+    });
+  });
+
+  // --- Unreadable CSV amounts ---
+
+  describe('unreadable amounts', () => {
+    function csvFile(unreadableAmounts: { count: number; rows: { rowNumber: number; rawAmount: string }[] } | undefined, fileName = 'march.csv') {
+      return {
+        fileName,
+        fileContent: '',
+        fileType: 'csv' as const,
+        parsedData: { ...defaultProps.parsedData, unreadableAmounts },
+        selectedAccountId: 'acc-1',
+        matchConfidence: 'exact',
+      };
+    }
+
+    it('counts the rows whose amount cannot be read and names each by row and text', () => {
+      const unreadable = {
+        count: 2,
+        rows: [
+          { rowNumber: 4, rawAmount: '12.34 pending' },
+          { rowNumber: 9, rawAmount: 'N/A' },
+        ],
+      };
+      render(<ReviewStep {...defaultProps} importFiles={[csvFile(unreadable)] as any[]} />);
+
+      expect(
+        screen.getByText('2 rows have amounts that cannot be read and will not be imported:'),
+      ).toBeInTheDocument();
+      expect(screen.getByText('Row 4: "12.34 pending"')).toBeInTheDocument();
+      expect(screen.getByText('Row 9: "N/A"')).toBeInTheDocument();
+      expect(screen.getByText(/Check that the amount columns are mapped correctly/)).toBeInTheDocument();
+    });
+
+    it('lists the first five and counts the rest', () => {
+      const rows = Array.from({ length: 7 }, (_, i) => ({ rowNumber: i + 2, rawAmount: `x${i}` }));
+      render(<ReviewStep {...defaultProps} importFiles={[csvFile({ count: 12, rows })] as any[]} />);
+
+      expect(screen.getByText('Row 6: "x4"')).toBeInTheDocument();
+      expect(screen.queryByText('Row 7: "x5"')).not.toBeInTheDocument();
+      expect(screen.getByText('...and 7 more')).toBeInTheDocument();
+    });
+
+    it('names the file of each list in a bulk import', () => {
+      const one = { count: 1, rows: [{ rowNumber: 3, rawAmount: 'oops' }] };
+      render(
+        <ReviewStep
+          {...defaultProps}
+          isBulkImport={true}
+          importFiles={[csvFile(one, 'a.csv'), csvFile(undefined, 'b.csv')] as any[]}
+        />,
+      );
+
+      expect(
+        screen.getByText('1 row has an amount that cannot be read and will not be imported:'),
+      ).toBeInTheDocument();
+      expect(screen.getAllByText('a.csv')).toHaveLength(2);
+      expect(screen.getAllByText('b.csv')).toHaveLength(1);
+    });
+
+    it('shows nothing when every amount reads', () => {
+      render(<ReviewStep {...defaultProps} importFiles={[csvFile({ count: 0, rows: [] })] as any[]} />);
+
+      expect(screen.queryByText(/amounts? that cannot be read/)).not.toBeInTheDocument();
+    });
   });
 
   // --- Investment summary section ---

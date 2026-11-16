@@ -58,10 +58,30 @@ function isServer(): boolean {
  * Flatten an Error into a single line: message plus stack with newlines and
  * their leading indentation collapsed to a literal ` \n ` separator. This keeps
  * the whole error in one log record while staying grep-friendly.
+ *
+ * The `cause` chain follows, because the stack alone often names only the
+ * wrapper: undici's `fetch` throws `TypeError: fetch failed` and carries the
+ * actual reason (a refused header, a reset connection) in `cause`. The chain
+ * is cut at `MAX_CAUSE_DEPTH` so a cyclic one cannot loop.
  */
-function flattenError(error: Error): string {
-  const stack = error.stack ?? `${error.name}: ${error.message}`;
-  return stack.replace(/\n\s*/g, ' \\n ');
+const MAX_CAUSE_DEPTH = 5;
+
+function describeCause(cause: unknown): string {
+  if (typeof cause === 'string') return cause;
+  try {
+    return JSON.stringify(cause) ?? String(cause);
+  } catch {
+    return String(cause);
+  }
+}
+
+function flattenError(error: Error, depth = 0): string {
+  const stack = (error.stack ?? `${error.name}: ${error.message}`).replace(/\n\s*/g, ' \\n ');
+  const { cause } = error;
+  if (cause === undefined) return stack;
+  if (depth >= MAX_CAUSE_DEPTH) return `${stack} \\n [cause chain truncated]`;
+  const described = cause instanceof Error ? flattenError(cause, depth + 1) : describeCause(cause);
+  return `${stack} \\n caused by: ${described}`;
 }
 
 function serializeServerArg(arg: unknown): unknown {

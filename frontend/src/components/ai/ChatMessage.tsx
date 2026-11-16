@@ -6,10 +6,13 @@ import { AssistantMarkdown } from './AssistantMarkdown';
 import { ResultChart } from './ResultChart';
 import { TransactionConfirmationCard } from './TransactionConfirmationCard';
 import { BulkConfirmationCard } from './BulkConfirmationCard';
+import { RuleConfirmationCard } from './RuleConfirmationCard';
+import { aiActionCardKind } from '@/lib/ai-action-card';
 import { MessageAttachmentChips } from './AttachmentChips';
 import { JsonHighlight } from '@/components/ui/JsonHighlight';
 import { useAiChatStore } from '@/store/aiChatStore';
 import type { PendingAction, ChatAttachmentMeta } from '@/types/ai';
+import { XMarkIcon } from '@heroicons/react/24/outline';
 
 interface ToolInfo {
   name: string;
@@ -93,21 +96,12 @@ function ToolDetails({ tool }: { tool: ToolInfo }) {
       >
         <span className="flex items-center gap-1.5 min-w-0">
           {isError ? (
-            <svg
+            <XMarkIcon
               className="w-3 h-3 flex-shrink-0"
-              fill="none"
-              viewBox="0 0 24 24"
-              strokeWidth={2}
-              stroke="currentColor"
               aria-label={t('toolDetails.toolFailedAriaLabel')}
               role="img"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
+              aria-hidden={false}
+            />
           ) : (
             <svg
               className="w-3 h-3 flex-shrink-0"
@@ -247,13 +241,13 @@ export const ChatMessage = memo(function ChatMessage({
         {pendingActions && pendingActions.length > 0 && (
           <div className="mt-2 flex flex-col gap-2">
             {pendingActions.map((action) => {
-              const isBulk =
-                action.type === 'create_transactions' ||
-                action.type === 'create_investment_transactions' ||
-                action.type === 'batch_actions';
-              const Card = isBulk
-                ? BulkConfirmationCard
-                : TransactionConfirmationCard;
+              const kind = aiActionCardKind(action.type);
+              const Card =
+                kind === 'bulk'
+                  ? BulkConfirmationCard
+                  : kind === 'rule'
+                    ? RuleConfirmationCard
+                    : TransactionConfirmationCard;
               return (
                 <Card
                   key={action.actionId}

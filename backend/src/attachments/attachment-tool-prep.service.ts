@@ -18,6 +18,7 @@ import {
   sanitizeFilename,
 } from "./attachments.service";
 import { TransactionAttachment } from "./entities/transaction-attachment.entity";
+import { attachmentParentWhere } from "./attachment-parent";
 
 /** A file offered to the AI/MCP tool layer for attaching to a transaction. */
 export interface AttachmentToolFile {
@@ -63,10 +64,19 @@ export class AttachmentToolPrepService {
       return [];
     }
 
+    // The AI and MCP tools attach to transactions only, so the cap is the
+    // transaction's: the parent is named by kind so a warranty's documents can
+    // never be counted here (WTY-003).
     const existing = existingTransactionId
       ? await withScopedDb(this.dataSource, (m) =>
           m.getRepository(TransactionAttachment).count({
-            where: { transactionId: existingTransactionId, userId },
+            where: {
+              ...attachmentParentWhere({
+                kind: "transaction",
+                id: existingTransactionId,
+              }),
+              userId,
+            },
           }),
         )
       : 0;

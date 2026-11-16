@@ -1,4 +1,9 @@
-import { ConflictException, Injectable, Logger } from "@nestjs/common";
+import {
+  ConflictException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from "@nestjs/common";
 import { randomUUID } from "crypto";
 import { Cron, CronExpression } from "@nestjs/schedule";
 import { DataSource, EntityManager, QueryFailedError } from "typeorm";
@@ -15,8 +20,12 @@ import {
   withSystemContext,
   withUserContext,
 } from "../../common/db/with-context";
-import { ImportJob, ONE_ACTIVE_JOB_INDEX } from "./entities/import-job.entity";
-import { MnyImportError } from "./mny-errors";
+import {
+  COMMITTED_CONTENT_INDEX,
+  ImportJob,
+  ONE_ACTIVE_JOB_INDEX,
+} from "./entities/import-job.entity";
+import { MnyAlreadyImportedError, MnyImportError } from "./mny-errors";
 import { MnyImportProgress, MnyImportResult } from "./model/mny-import-job";
 import { MnyImportOptions } from "./model/mny-import-options";
 
@@ -80,6 +89,17 @@ export const JOB_COMMITTED_STALLED_ERROR_KEY = "mnyJobStalledAfterCommit";
 
 /** i18n key for a failure with no more specific parse error. */
 export const JOB_FAILED_ERROR_KEY = "mnyImportFailed";
+
+/**
+ * i18n key for a job that failed in-process after its rows reached the ledger
+ * (audit A26-H08).
+ *
+ * The in-process twin of `JOB_COMMITTED_STALLED_ERROR_KEY`. Whatever the caller
+ * passes, `fail()` switches to this key once `data_committed` is true: the
+ * generic key's copy says nothing was saved, which is false here, and the user
+ * who believed it re-imported the file and doubled every balance.
+ */
+export const JOB_COMMITTED_FAILED_ERROR_KEY = "mnyImportFailedAfterCommit";
 
 /** PostgreSQL SQLSTATE for a unique violation. */
 const UNIQUE_VIOLATION = "23505";
@@ -178,11 +198,66 @@ export function isActiveJobConflict(error: unknown): boolean {
     return false;
   }
   const driver = error.driverError as
-    | { code?: string; constraint?: string }
-    | undefined;
+    { code?: string; constraint?: string } | undefined;
   return (
     driver?.code === UNIQUE_VIOLATION &&
     driver?.constraint === ONE_ACTIVE_JOB_INDEX
+  );
+}
+
+/** PostgreSQL SQLSTATE for a foreign-key violation. */
+const FOREIGN_KEY_VIOLATION = "23503";
+
+/**
+ * True when a job INSERT was refused because its staged file no longer
+ * exists. The INSERT names two foreign keys, the user and the staged file, and
+ * the user is the authenticated caller, so a 23503 on `import_jobs` here is the
+ * staged file.
+ */
+export function isStagedFileGone(error: unknown): boolean {
+  if (!(error instanceof QueryFailedError)) {
+    return false;
+  }
+  const driver = error.driverError as
+    { code?: string; table?: string } | undefined;
+  return (
+    driver?.code === FOREIGN_KEY_VIOLATION && driver?.table === "import_jobs"
+  );
+}
+
+/**
+ * True when this error is the committed-content index refusing a second commit
+ * of the same bytes for one user (audit A26-H08). Matched on the constraint
+ * name for the same reason as `isActiveJobConflict`.
+ */
+export function isCommittedContentConflict(error: unknown): boolean {
+  if (!(error instanceof QueryFailedError)) {
+    return false;
+  }
+  const driver = error.driverError as
+    { code?: string; constraint?: string } | undefined;
+  return (
+    driver?.code === UNIQUE_VIOLATION &&
+    driver?.constraint === COMMITTED_CONTENT_INDEX
+  );
+}
+
+/**
+ * The 409 for a start over bytes this user's ledger already holds.
+ *
+ * Names the earlier import, by its date and id, so the person can find it, and
+ * says the one way to import the file again without duplicating it.
+ */
+export function alreadyImportedException(
+  earlierJobId: string,
+  importedOn: string,
+): ConflictException {
+  return new ConflictException(
+    tr(
+      "errors.import.mnyAlreadyImported",
+      `This file was already imported on ${importedOn} (import ${earlierJobId}), and its records are still in your account. Importing it again would duplicate them. To replace them, start over and choose to replace your existing data.`,
+      { date: importedOn, jobId: earlierJobId },
+    ),
   );
 }
 
@@ -300,6 +375,37 @@ export class MnyImportJobService {
         }
 
         await this.reapStaleJobsForUser(manager, userId);
+
+        // A26-H08: the same bytes are not imported into one ledger twice --
+        // neither by a second start on a staged id a committed job used, nor by
+        // a re-upload of the same file under a new id. Decided here, under the
+        // `UserImport` lock and before the job row exists, so a refused start
+        // has written nothing; `markDataCommitted` repeats the decision on the
+        // unique index for anything that slips past. A start that replaces the
+        // user's data is exempt: its wipe removes the rows the key vouches for,
+        // and `releaseCommittedContent` then clears the key.
+        if (!options.wipeExistingData) {
+          const earlier = returnedRows<{ id: string; imported_on: string }>(
+            await manager.query(
+              `SELECT j.id,
+                      TO_CHAR(COALESCE(j.completed_at, j.created_at), 'YYYY-MM-DD') AS imported_on
+                 FROM import_jobs j
+                 JOIN import_staged_files f
+                   ON f.id = $2 AND f.user_id = j.user_id
+                WHERE j.user_id = $1
+                  AND j.content_sha256 = f.sha256
+                LIMIT 1`,
+              [userId, stagedFileId],
+            ),
+          );
+          if (earlier.length > 0) {
+            throw alreadyImportedException(
+              earlier[0].id,
+              earlier[0].imported_on,
+            );
+          }
+        }
+
         const repo = manager.getRepository(ImportJob);
         return repo.save(
           repo.create({
@@ -316,6 +422,17 @@ export class MnyImportJobService {
     } catch (error) {
       if (isActiveJobConflict(error)) {
         throw importAlreadyRunningException();
+      }
+      if (isStagedFileGone(error)) {
+        // The staged row was deleted (swept or discarded) while this INSERT
+        // waited on its lock: the foreign key refused the job, so nothing was
+        // written and the bytes are gone (audit A26-L14).
+        throw new NotFoundException(
+          tr(
+            "errors.import.mnyStagedFileMissing",
+            "The uploaded Money file is no longer available. Please upload it again.",
+          ),
+        );
       }
       throw error;
     }
@@ -522,19 +639,37 @@ export class MnyImportJobService {
    * writing anything" from "the ledger is written and only the completion
    * metadata is missing", so both were offered as an ordinary retry and the
    * second one imported the file again (audit P4-002).
+   *
+   * The same statement keys the job on its staged file's digest, so the
+   * committed-content unique index refuses a second commit of the same bytes for
+   * this user; that refusal also throws, and also rolls the rows back
+   * (audit A26-H08).
    */
   async markDataCommitted(
     manager: EntityManager,
     jobId: string,
     attemptToken: string,
   ): Promise<void> {
-    const updated = await manager.query(
-      `UPDATE import_jobs
-          SET data_committed = true
-        WHERE id = $1 AND status = 'running' AND attempt_token = $2
-        RETURNING id`,
-      [jobId, attemptToken],
-    );
+    let updated: unknown;
+    try {
+      updated = await manager.query(
+        `UPDATE import_jobs
+            SET data_committed = true,
+                content_sha256 = (
+                  SELECT f.sha256 FROM import_staged_files f
+                   WHERE f.id = import_jobs.staged_file_id
+                     AND f.user_id = import_jobs.user_id
+                )
+          WHERE id = $1 AND status = 'running' AND attempt_token = $2
+          RETURNING id`,
+        [jobId, attemptToken],
+      );
+    } catch (error) {
+      if (isCommittedContentConflict(error)) {
+        throw new MnyAlreadyImportedError(jobId, error);
+      }
+      throw error;
+    }
     if (returnedRows<{ id: string }>(updated).length === 0) {
       // The fence. The reaper failed this job while this worker was blocked --
       // clearing the token and advertising a retry -- so committing now would put
@@ -543,6 +678,27 @@ export class MnyImportJobService {
       // because this is its last statement.
       throw new MnyJobFencedError(jobId);
     }
+  }
+
+  /**
+   * Releases this user's committed-content keys, once a "start fresh" wipe has
+   * deleted the rows they vouched for (audit A26-H08).
+   *
+   * Called after `deleteData` returned, never before: released first, a wipe
+   * that then failed would leave the rows in place with nothing refusing a
+   * second import of them. A failure between the wipe and this call leaves the
+   * keys held over rows that are gone, which refuses an import the person could
+   * safely run -- the safe direction, and repaired by starting fresh again.
+   */
+  async releaseCommittedContent(userId: string): Promise<void> {
+    await withScopedDb(this.dataSource, (manager) =>
+      manager.query(
+        `UPDATE import_jobs
+            SET content_sha256 = NULL
+          WHERE user_id = $1 AND content_sha256 IS NOT NULL`,
+        [userId],
+      ),
+    );
   }
 
   /**
@@ -595,6 +751,9 @@ export class MnyImportJobService {
    * caller believes, because retrying it inserts every source row a second time
    * under fresh UUIDs. The caller cannot know this -- the checkpoint can be set
    * after the caller's own decision -- so the predicate lives in the statement.
+   * `error_key` and `error_detail` branch on the same column, the way the
+   * reaper's do: the caller's key describes a run that wrote nothing, and its
+   * copy ("Nothing was saved") is false once the rows are in (audit A26-H08).
    *
    * `attemptToken` is optional because two kinds of caller fail a job. A worker
    * inside `runClaimed` passes its token, so a worker whose job the reaper already
@@ -614,8 +773,15 @@ export class MnyImportJobService {
         manager.query(
           `UPDATE import_jobs
               SET status = 'failed',
-                  error_key = $2,
-                  error_detail = $3,
+                  error_key = CASE
+                    WHEN data_committed THEN '${JOB_COMMITTED_FAILED_ERROR_KEY}'
+                    ELSE $2
+                  END,
+                  error_detail = CASE
+                    WHEN data_committed
+                      THEN 'Import failed after its data was written; the import is not safe to repeat: ' || $3
+                    ELSE $3
+                  END,
                   retryable = ($4 AND data_committed = false),
                   progress = NULL,
                   attempt_token = NULL,

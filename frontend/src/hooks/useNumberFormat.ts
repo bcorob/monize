@@ -1,7 +1,11 @@
 import { useCallback } from 'react';
 import { usePreferencesStore } from '@/store/preferencesStore';
-import { roundToDecimals, adaptiveFractionDigits } from '@/lib/format';
+import { roundToDecimals, adaptiveFractionDigits, MONEY_SCALE } from '@/lib/format';
+import { scaleBytes } from '@/lib/bytes';
 import { preferredCurrency } from '@/lib/default-currency';
+import { getNumberSeparators } from '@/lib/number-parse';
+import { decimalPlacesForCurrency, symbolForCurrency } from '@/lib/currency-decimals';
+import { useCurrencyDecimalsVersion } from '@/hooks/useCurrencyDecimalsVersion';
 
 /**
  * Get the effective locale for number formatting.
@@ -25,6 +29,39 @@ export function getEffectiveLocale(
 }
 
 /**
+ * Decimal places a share quantity is displayed at. Deliberately not money's
+ * four and not `formatQuantity`'s four either: fractional-share brokers and
+ * crypto-style units leave residual positions several orders below a cent, and
+ * a holdings column that rounds them away reads as flat zero. Mirrors the
+ * precision of the pure `formatShareQuantity` helper in `@/lib/format`.
+ */
+export const SHARE_QUANTITY_MAX_FRACTION_DIGITS = 8;
+
+/**
+ * The most fraction digits `formatCurrencyPrecise` expands a fiat figure to:
+ * a sub-penny security price (0.000318 GBP) reads to six. A registered coin
+ * expands to `MONEY_SCALE` instead.
+ */
+const PRECISE_MAX_FRACTION_DIGITS = 6;
+
+/**
+ * The formatters a pure (non-React) helper needs to render a figure in the
+ * reader's number locale.
+ *
+ * A module that is not a component cannot call `useNumberFormat()`, and the two
+ * things it would otherwise reach for are both wrong: `toFixed` is a `.` in
+ * every locale, and `toLocaleString()` follows the *browser*, which is exactly
+ * what an explicit `numberFormat` preference exists to override. So the calling
+ * component passes these down. Structurally satisfied by the hook's own return
+ * value, so a caller can hand over what it already destructured.
+ */
+export interface NumberFormatters {
+  formatCurrency: (value: number, currencyCode?: string) => string;
+  formatNumber: (value: number, decimals?: number) => string;
+  formatPercent: (value: number, decimals?: number) => string;
+}
+
+/**
  * Module-level cache for Intl.NumberFormat instances. These objects are
  * relatively expensive to construct (each one builds a locale-specific
  * formatter), and the hook callbacks below are invoked once per cell per
@@ -36,10 +73,44 @@ export function getEffectiveLocale(
  */
 const formatterCache = new Map<string, Intl.NumberFormat>();
 
+/**
+ * Cache of "can `Intl` build a formatter for this tag", so the probe runs once
+ * per distinct preference value rather than once per figure.
+ */
+const localeUsable = new Map<string, boolean>();
+
+/**
+ * The locale itself, or `undefined` (the browser default) when `Intl` cannot use
+ * it.
+ *
+ * `Intl.NumberFormat` throws `RangeError` on a structurally invalid tag, and
+ * `en_US` -- the underscore form half the world writes -- is one. Nothing
+ * validates `numberFormat` on the way in, and this call sits inside render, so
+ * one such stored value took the whole screen down rather than one figure.
+ * Falling back to the browser is the honest answer here: the preference is
+ * unreadable, and the browser is what an absent preference already means.
+ * (The server's counterpart lands on `DEFAULT_LOCALE` instead, because it has no
+ * browser to fall back to.)
+ */
+function usableLocale(locale: string | undefined): string | undefined {
+  if (locale === undefined) return undefined;
+  const cached = localeUsable.get(locale);
+  if (cached !== undefined) return cached ? locale : undefined;
+  let usable = true;
+  try {
+    new Intl.NumberFormat(locale);
+  } catch {
+    usable = false;
+  }
+  localeUsable.set(locale, usable);
+  return usable ? locale : undefined;
+}
+
 function getNumberFormat(
-  locale: string | undefined,
+  rawLocale: string | undefined,
   options: Intl.NumberFormatOptions,
 ): Intl.NumberFormat {
+  const locale = usableLocale(rawLocale);
   const key = `${locale ?? ''}|${JSON.stringify(options)}`;
   let formatter = formatterCache.get(key);
   if (!formatter) {
@@ -47,6 +118,70 @@ function getNumberFormat(
     formatterCache.set(key, formatter);
   }
   return formatter;
+}
+
+/**
+ * The ISO currency a registered symbol is written through. Any currency with a
+ * one-character narrow symbol would do; what matters is that `Intl` lays it out
+ * the way the locale lays out a symbol ("$1.00" in `en`, "1,00 $" in `de-DE`),
+ * not the way it lays out a code it does not know ("BTC 1.00"). It only shapes
+ * the layout and is never a reporting currency, which comes from
+ * `lib/default-currency.ts`.
+ */
+const SYMBOL_LAYOUT_ISO_CODE = 'USD';
+
+const LETTER = /\p{L}/u;
+const NUMBER_PARTS = new Set(['integer', 'group', 'decimal', 'fraction', 'compact']);
+
+/**
+ * A money figure in `options.currency`, with a registered non-ISO currency's
+ * own symbol where `Intl` would write its code.
+ *
+ * `Intl` formats a code it has never heard of (a coin) with the code as its
+ * symbol, "BTC 0.0070", which beside an appended code read "BTC 0.0070 BTC".
+ * When the currency registry (`lib/currency-decimals.ts`) holds a symbol for
+ * the code, the figure is laid out as a symbol currency and that symbol is put
+ * in the symbol's place: "₿0.0070" in `en`, "0,0070 ₿" in `de-DE`. A code the
+ * registry does not hold, or holds without a symbol, and every ISO code, format
+ * exactly as before. A symbol that starts or ends with a letter gets the
+ * no-break space CLDR puts between a letter symbol and a digit.
+ */
+function formatMoneyFigure(
+  locale: string | undefined,
+  options: Intl.NumberFormatOptions,
+  amount: number,
+): string {
+  const symbol = symbolForCurrency(options.currency);
+  if (!symbol) return getNumberFormat(locale, options).format(amount);
+  const parts = getNumberFormat(locale, {
+    ...options,
+    currency: SYMBOL_LAYOUT_ISO_CODE,
+  }).formatToParts(amount);
+  return parts
+    .map((part, i) => {
+      if (part.type !== 'currency') return part.value;
+      const before = parts[i - 1];
+      const after = parts[i + 1];
+      const leading = before && NUMBER_PARTS.has(before.type) && LETTER.test(symbol[0]) ? '\u00a0' : '';
+      const trailing =
+        after && NUMBER_PARTS.has(after.type) && LETTER.test(symbol[symbol.length - 1]) ? '\u00a0' : '';
+      return `${leading}${symbol}${trailing}`;
+    })
+    .join('');
+}
+
+/**
+ * The places a figure below a thousand keeps in a formatter that otherwise
+ * drops fraction digits (`formatCurrencyCompact`, `formatCurrencyTight`): a
+ * registered non-ISO currency's own (`lib/currency-decimals.ts`), so a
+ * 0.0125 BTC wallet does not read "₿0" and a 2.49 BTC one does not read "₿2";
+ * `undefined` for any other code or a figure of a thousand or more, which keep
+ * the formatter's own digits (the compact K/M notation, as for fiat). The rule
+ * `formatCurrencyAxis` applies to a tick is narrower: below one.
+ */
+function coinPlacesBelowThousand(currency: string, amount: number): number | undefined {
+  const registered = decimalPlacesForCurrency(currency);
+  return registered !== undefined && Math.abs(amount) < 1000 ? registered : undefined;
 }
 
 /**
@@ -62,6 +197,17 @@ export function useNumberFormat() {
   );
   const language = usePreferencesStore((state) => state.preferences?.language);
 
+  // The user's effective number locale and its separators, so number INPUT
+  // fields can parse and format in the same convention numbers are displayed
+  // in (a Polish user types and pastes "1200,99", not "1200.99").
+  const numberLocale = getEffectiveLocale(numberFormat, language);
+  const numberSeparators = getNumberSeparators(numberLocale);
+
+  // The currency decimals registry (`lib/currency-decimals.ts`) fills after the
+  // first render; subscribing gives the formatters below a new identity when it
+  // does, so a figure drawn before the list arrived is redrawn at its places.
+  const currencyDecimals = useCurrencyDecimalsVersion();
+
   const formatCurrency = useCallback(
     (amount: number, currencyCode?: string, fractionDigits?: number): string => {
       const currency = currencyCode || defaultCurrency;
@@ -71,18 +217,23 @@ export function useNumberFormat() {
         currency,
         currencyDisplay: 'narrowSymbol',
       };
-      if (fractionDigits !== undefined) {
-        options.minimumFractionDigits = fractionDigits;
-        options.maximumFractionDigits = fractionDigits;
+      // An explicit count wins; then a non-ISO code's own row; then Intl.
+      const digits = fractionDigits ?? decimalPlacesForCurrency(currency);
+      if (digits !== undefined) {
+        options.minimumFractionDigits = digits;
+        options.maximumFractionDigits = digits;
       }
       const formatter = getNumberFormat(locale, options);
       // Pre-round to the target decimal places to avoid IEEE 754
       // midpoint errors (e.g., 159.735 stored as 159.73499... rounding to
       // 159.73 instead of 159.74).
-      const decimals = fractionDigits ?? formatter.resolvedOptions().minimumFractionDigits ?? 2;
-      return formatter.format(roundToDecimals(amount, decimals));
+      const decimals = digits ?? formatter.resolvedOptions().minimumFractionDigits ?? 2;
+      return formatMoneyFigure(locale, options, roundToDecimals(amount, decimals));
     },
-    [numberFormat, defaultCurrency, language]
+    // `currencyDecimals` is read through `decimalPlacesForCurrency`; it is a
+    // dependency so the callback changes identity when the registry does.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [numberFormat, defaultCurrency, language, currencyDecimals]
   );
 
   /**
@@ -101,13 +252,24 @@ export function useNumberFormat() {
       const currency = currencyCode || defaultCurrency;
       const locale = getEffectiveLocale(numberFormat, language);
       const currencyDigits =
+        decimalPlacesForCurrency(currency) ??
         getNumberFormat(locale, {
           style: 'currency',
           currency,
           currencyDisplay: 'narrowSymbol',
-        }).resolvedOptions().minimumFractionDigits ?? 2;
+        }).resolvedOptions().minimumFractionDigits ??
+        2;
       const baseDigits = Math.max(currencyDigits, minFractionDigits ?? 0);
-      return formatCurrency(amount, currency, adaptiveFractionDigits(amount, baseDigits));
+      // A registered non-ISO currency (a coin) may hold money to the column
+      // scale, so its expansion reaches eight places rather than the six a
+      // sub-penny fiat price stops at; one satoshi must not read as zero.
+      const maxDigits =
+        decimalPlacesForCurrency(currency) !== undefined ? MONEY_SCALE : PRECISE_MAX_FRACTION_DIGITS;
+      return formatCurrency(
+        amount,
+        currency,
+        adaptiveFractionDigits(amount, baseDigits, maxDigits),
+      );
     },
     [numberFormat, defaultCurrency, language, formatCurrency]
   );
@@ -116,15 +278,21 @@ export function useNumberFormat() {
     (amount: number, currencyCode?: string): string => {
       const currency = currencyCode || defaultCurrency;
       const locale = getEffectiveLocale(numberFormat, language);
-      return getNumberFormat(locale, {
-        style: 'currency',
-        currency,
-        currencyDisplay: 'narrowSymbol',
-        minimumFractionDigits: 0,
-        maximumFractionDigits: 0,
-      }).format(amount);
+      const coinPlaces = coinPlacesBelowThousand(currency, amount);
+      return formatMoneyFigure(
+        locale,
+        {
+          style: 'currency',
+          currency,
+          currencyDisplay: 'narrowSymbol',
+          minimumFractionDigits: coinPlaces ?? 0,
+          maximumFractionDigits: coinPlaces ?? 0,
+        },
+        amount,
+      );
     },
-    [numberFormat, defaultCurrency, language]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [numberFormat, defaultCurrency, language, currencyDecimals]
   );
 
   /** Compact currency format for chart axis labels (e.g., "$5K", "€1.5M").
@@ -133,22 +301,93 @@ export function useNumberFormat() {
     (value: number, currencyCodeOrIndex?: string | number): string => {
       const currency = typeof currencyCodeOrIndex === 'string' ? currencyCodeOrIndex : defaultCurrency;
       const locale = getEffectiveLocale(numberFormat, language);
-      return getNumberFormat(locale, {
-        style: 'currency',
-        currency,
-        currencyDisplay: 'narrowSymbol',
-        notation: 'compact',
-        compactDisplay: 'short',
-        maximumFractionDigits: 1,
-      }).format(value);
+      // A coin's ticks sit below one: at one fraction digit every tick of a
+      // 0.0070 BTC wallet read "BTC 0". Below one, a registered currency's
+      // ticks keep its own places; every other figure is as before.
+      const registered = decimalPlacesForCurrency(currency);
+      const maximumFractionDigits =
+        registered !== undefined && Math.abs(value) < 1 ? Math.max(1, registered) : 1;
+      return formatMoneyFigure(
+        locale,
+        {
+          style: 'currency',
+          currency,
+          currencyDisplay: 'narrowSymbol',
+          notation: 'compact',
+          compactDisplay: 'short',
+          maximumFractionDigits,
+        },
+        value,
+      );
     },
-    [numberFormat, defaultCurrency, language]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [numberFormat, defaultCurrency, language, currencyDecimals]
+  );
+
+  /**
+   * As much of a money figure as a narrow cell can hold: compact notation, and
+   * no fraction digits at all below the first thousand (a registered coin keeps
+   * its own places there, see `coinPlacesBelowThousand`).
+   *
+   * A calendar day on a phone is a column about fifty pixels wide, and a
+   * balance rendered in full simply does not fit in one -- a figure that
+   * overflows or wraps mid-number is not a figure a reader can use.
+   * `formatCurrencyAxis` is the same compact notation for a chart tick, but it
+   * keeps one fraction digit at every size, which reads as a broken cent on a
+   * three-figure balance ("$344.3"). This is the figure for a cell: "$344",
+   * "$13.3K", "$1.2M".
+   */
+  const formatCurrencyTight = useCallback(
+    (amount: number, currencyCode?: string): string => {
+      const currency = currencyCode || defaultCurrency;
+      const locale = getEffectiveLocale(numberFormat, language);
+      const coinPlaces = coinPlacesBelowThousand(currency, amount);
+      return formatMoneyFigure(
+        locale,
+        {
+          style: 'currency',
+          currency,
+          currencyDisplay: 'narrowSymbol',
+          notation: 'compact',
+          compactDisplay: 'short',
+          ...(coinPlaces !== undefined
+            ? { minimumFractionDigits: coinPlaces, maximumFractionDigits: coinPlaces }
+            : { maximumFractionDigits: Math.abs(amount) < 1000 ? 0 : 1 }),
+        },
+        amount,
+      );
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [numberFormat, defaultCurrency, language, currencyDecimals]
   );
 
   const formatNumber = useCallback(
     (value: number, decimals: number = 2): string => {
       const locale = getEffectiveLocale(numberFormat, language);
       return getNumberFormat(locale, {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals,
+      }).format(value);
+    },
+    [numberFormat, language]
+  );
+
+  /**
+   * A file size, in the reader's locale.
+   *
+   * `Intl`'s `style: 'unit'` localizes the abbreviation as well as the number,
+   * so a French reader gets `1,4 ko` and a Russian one `1,4 кБ` without this
+   * repo translating unit names into twenty-two catalogs. The scaling is
+   * `scaleBytes`; this is only the rendering.
+   */
+  const formatBytes = useCallback(
+    (bytes: number): string => {
+      const { value, unit, decimals } = scaleBytes(bytes);
+      const locale = getEffectiveLocale(numberFormat, language);
+      return getNumberFormat(locale, {
+        style: 'unit',
+        unit,
+        unitDisplay: 'short',
         minimumFractionDigits: decimals,
         maximumFractionDigits: decimals,
       }).format(value);
@@ -164,6 +403,36 @@ export function useNumberFormat() {
         minimumFractionDigits: decimals,
         maximumFractionDigits: decimals,
       }).format(value / 100); // Intl.NumberFormat expects decimal (0.5 = 50%)
+    },
+    [numberFormat, language]
+  );
+
+  /**
+   * Locale-aware percentage that keeps the precision the value already carries:
+   * 0 to `maxDecimals` fraction digits, trailing zeros trimmed. The sibling of
+   * `formatQuantity` and `formatPrice`, for percentages.
+   *
+   * `formatPercent` takes a decimal count and is right where the surface has
+   * decided one (a table column that must line up). This one is for the far
+   * commoner `{value}%` shape, where the value arrives already rounded -- the
+   * server rounds `percentUsed` to 2dp, so the same expression renders "80%",
+   * "80.5%" and "80.55%" -- and pinning a count would either add zeros the
+   * reader has not seen before or silently drop a digit. Migrating those to a
+   * fixed `formatPercent` would have changed the figure, which is the one thing
+   * a localization fix must not do.
+   *
+   * Four decimals because an interest rate is quoted to at most three or four;
+   * a value carrying more than that is a rounding defect upstream, and it is
+   * better to show it trimmed than to let the cap decide the design.
+   */
+  const formatPercentTrimmed = useCallback(
+    (value: number, maxDecimals: number = 4): string => {
+      const locale = getEffectiveLocale(numberFormat, language);
+      return getNumberFormat(locale, {
+        style: 'percent',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: maxDecimals,
+      }).format(value / 100); // Intl takes a fraction; call sites hold percent units
     },
     [numberFormat, language]
   );
@@ -209,6 +478,34 @@ export function useNumberFormat() {
         minimumFractionDigits: 0,
         maximumFractionDigits: 4,
       }).format(value);
+    },
+    [numberFormat, language]
+  );
+
+  /**
+   * Locale-aware share quantity at full precision: up to 8 decimal places with
+   * trailing zeros trimmed (minimumFractionDigits 0). The locale-aware sibling
+   * of `formatShareQuantity` in `@/lib/format` -- and the one React must use,
+   * because that pure helper renders through `toFixed`, which is `.` in every
+   * locale.
+   *
+   * Eight, not `formatQuantity`'s four: a residual position of 0.0003 shares is
+   * exactly the thing this column exists to make visible, and rounding it to
+   * four (let alone two) is how an errant share count hides. Nullish and NaN
+   * render "0" rather than an empty cell or "NaN", and a tiny negative residue
+   * that rounds to zero (e.g. -4e-15) renders "0" rather than the "-0" Intl
+   * produces for a negative zero.
+   */
+  const formatShareQuantity = useCallback(
+    (value: number | undefined | null): string => {
+      if (value === undefined || value === null || isNaN(value)) return '0';
+      const locale = getEffectiveLocale(numberFormat, language);
+      // roundToDecimals normalizes -0 to 0, so the sign never survives a
+      // residue that rounds away.
+      return getNumberFormat(locale, {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: SHARE_QUANTITY_MAX_FRACTION_DIGITS,
+      }).format(roundToDecimals(value, SHARE_QUANTITY_MAX_FRACTION_DIGITS));
     },
     [numberFormat, language]
   );
@@ -266,18 +563,27 @@ export function useNumberFormat() {
     (value: number, currencyCode?: string): string => {
       const currency = currencyCode || defaultCurrency;
       const locale = getEffectiveLocale(numberFormat, language);
-      return getNumberFormat(locale, {
-        style: 'currency',
-        currency,
-        currencyDisplay: 'narrowSymbol',
-        notation: 'compact',
-        compactDisplay: 'short',
-        minimumFractionDigits: 2,
-        maximumFractionDigits: 2,
-      }).format(value);
+      // Below the first thousand (no compact suffix) a registered currency's
+      // bubble keeps its own places, as the footer figures do.
+      const registered = decimalPlacesForCurrency(currency);
+      const digits = registered !== undefined && Math.abs(value) < 1000 ? registered : 2;
+      return formatMoneyFigure(
+        locale,
+        {
+          style: 'currency',
+          currency,
+          currencyDisplay: 'narrowSymbol',
+          notation: 'compact',
+          compactDisplay: 'short',
+          minimumFractionDigits: digits,
+          maximumFractionDigits: digits,
+        },
+        value,
+      );
     },
-    [numberFormat, defaultCurrency, language]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [numberFormat, defaultCurrency, language, currencyDecimals]
   );
 
-  return { formatCurrency, formatCurrencyPrecise, formatCurrencyCompact, formatCurrencyAxis, formatCurrencyFlag, formatCurrencyLabel, formatNumber, formatPercent, formatSignedPercent, formatQuantity, formatPrice, defaultCurrency, numberFormat };
+  return { formatCurrency, formatCurrencyPrecise, formatCurrencyCompact, formatCurrencyAxis, formatCurrencyTight, formatCurrencyFlag, formatCurrencyLabel, formatNumber, formatBytes, formatPercent, formatPercentTrimmed, formatSignedPercent, formatQuantity, formatShareQuantity, formatPrice, defaultCurrency, numberFormat, numberLocale, numberSeparators };
 }

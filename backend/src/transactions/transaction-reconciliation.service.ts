@@ -5,12 +5,13 @@ import {
   NotFoundException,
   forwardRef,
 } from "@nestjs/common";
-import { DataSource } from "typeorm";
+import { DataSource, EntityManager } from "typeorm";
 import { Transaction, TransactionStatus } from "./entities/transaction.entity";
 import { TransactionSplitService } from "./transaction-split.service";
 import {
   assertVoidTransitionAllowedOnRow,
   applyVoidTransitionToMirrorLeg,
+  assertMirrorLegVoidTransitionMutable,
 } from "./void-status-transition.util";
 import { AccountsService } from "../accounts/accounts.service";
 import {
@@ -19,6 +20,7 @@ import {
   todayYMD,
 } from "../common/date-utils";
 import {
+  RECONCILED_THROUGH_SQL,
   STALE_UNRECONCILED_DAYS,
   staleCutoffDate,
   type StaleUnreconciledSummary,
@@ -31,6 +33,11 @@ import {
   isReconciledUndo,
   reconciledLockedError,
 } from "./reconciled-lock.util";
+import { roundMoney } from "../common/round.util";
+import {
+  loadCurrencyPlacesForRead,
+  moneyDecimalsForCode,
+} from "../common/currency-places.util";
 
 /** What a transition resolver returns, or it throws to refuse the transition. */
 interface ResolvedTransition {
@@ -72,13 +79,35 @@ export class TransactionReconciliationService {
     userId: string,
     transactionId: string,
     resolve: (current: TransactionStatus) => ResolvedTransition,
+    /** Inside the transaction, after the row lock, before any write. */
+    beforeWrite?: (m: EntityManager) => Promise<void>,
   ): Promise<{
     accountId: string;
     balanceMoved: boolean;
     /** Accounts a counterpart or split propagation moved besides the row's own. */
     counterpartAccountIds: string[];
   }> {
-    return withScopedDb(this.dataSource, async (m) => {
+    // Securities of embedded investment rows that crossed the VOID boundary
+    // with a split parent, repriced by the bond engine after the commit
+    // (INV-BOND-005, INV-CACHE-001).
+    const touchedSecurityIds = new Set<string>();
+    const result = await withScopedDb(this.dataSource, async (m) => {
+      // First lock of the transaction: advisory before row locks
+      // (`common/db/locks.ts`). If this row is a split parent whose legs carry
+      // embedded investment rows, those rows are rebuilt under the holdings
+      // advisory lock, and `InvestmentTransactionsService.update()` reaches the
+      // same parent the other way round -- advisory lock first, then this
+      // parent's `FOR UPDATE`. Taking the advisory lock after the row lock left
+      // the two paths each holding the other's next lock (40P01).
+      //
+      // Unconditional, and before the row is read: what the row is cannot be
+      // known without locking it, and the ids come from an unlocked `SELECT`
+      // inside the helper, which takes no lock and so may precede the advisory
+      // one. A row with no embedded investment legs locks nothing.
+      await this.splitService.lockEmbeddedInvestmentScopes(m, userId, [
+        transactionId,
+      ]);
+
       const locked = await lockTransactionRow(m, transactionId, userId);
       if (!locked) {
         throw new NotFoundException(
@@ -90,6 +119,7 @@ export class TransactionReconciliationService {
         );
       }
 
+      if (beforeWrite) await beforeWrite(m);
       const oldStatus = locked.status as TransactionStatus;
 
       // Strict reconciled lock. A status change away from RECONCILED is an
@@ -133,6 +163,11 @@ export class TransactionReconciliationService {
       const counterpartAccountIds: string[] = [];
       if (balanceMoved) {
         await assertVoidTransitionAllowedOnRow(m, transactionId);
+        // The mirror leg this transition writes is asked the strict lock too,
+        // before anything is written (issue #2072).
+        if (!locked.isSplit) {
+          await assertMirrorLegVoidTransitionMutable(m, userId, locked, status);
+        }
       }
 
       const fields: Partial<Transaction> = { status };
@@ -175,6 +210,7 @@ export class TransactionReconciliationService {
             transactionId,
             userId,
             status,
+            touchedSecurityIds,
           )) {
             counterpartAccountIds.push(affected);
           }
@@ -197,6 +233,11 @@ export class TransactionReconciliationService {
         counterpartAccountIds,
       };
     });
+    await this.splitService.recomputeBondPricesAfterWrite(
+      userId,
+      touchedSecurityIds,
+    );
+    return result;
   }
 
   async updateStatus(
@@ -227,6 +268,7 @@ export class TransactionReconciliationService {
     isCleared: boolean,
     triggerNetWorthRecalc: (accountId: string, userId: string) => void,
     findOne: (userId: string, id: string) => Promise<Transaction>,
+    beforeWrite?: (m: EntityManager) => Promise<void>,
   ): Promise<Transaction> {
     const { accountId, balanceMoved } = await this.applyStatusTransition(
       userId,
@@ -249,6 +291,7 @@ export class TransactionReconciliationService {
             : TransactionStatus.UNRECONCILED,
         };
       },
+      beforeWrite,
     );
 
     if (balanceMoved) {
@@ -347,7 +390,8 @@ export class TransactionReconciliationService {
     }[] = await withScopedDb(this.dataSource, (m) =>
       m.query(
         `WITH reconciled AS (
-           SELECT account_id, MAX(transaction_date) AS last_reconciled_date
+           SELECT account_id,
+                  MAX(${RECONCILED_THROUGH_SQL}) AS last_reconciled_date
              FROM transactions
             WHERE user_id = $1
               AND status = $2
@@ -422,8 +466,8 @@ export class TransactionReconciliationService {
     clearedBalance: number;
     difference: number;
     /**
-     * The account's most recent reconciled date, or null when it has never
-     * been reconciled. The client classifies each listed row against it with
+     * The account's most recent reconciled date (`RECONCILED_THROUGH_SQL`),
+     * or null when it has never been reconciled. The client classifies each listed row against it with
      * the same `classifyStaleRow` rule the reminder count uses, so the row
      * highlight and the badge cannot disagree about what "overdue" means.
      */
@@ -432,76 +476,97 @@ export class TransactionReconciliationService {
     overdueBefore: string;
   }> {
     const overdueBefore = staleCutoffDate(todayYMD(), STALE_UNRECONCILED_DAYS);
-    const [account, transactions, reconciledResult, clearedResult, lastRow] =
-      await withScopedDb(this.dataSource, (m) =>
-        Promise.all([
-          this.accountsService.findOne(userId, accountId),
-          m
-            .getRepository(Transaction)
-            .createQueryBuilder("transaction")
-            .leftJoinAndSelect("transaction.payee", "payee")
-            .leftJoinAndSelect("transaction.category", "category")
-            .where("transaction.userId = :userId", { userId })
-            .andWhere("transaction.accountId = :accountId", { accountId })
-            .andWhere("transaction.parentTransactionId IS NULL")
-            .andWhere("transaction.status IN (:...statuses)", {
-              statuses: [
-                TransactionStatus.UNRECONCILED,
-                TransactionStatus.CLEARED,
-              ],
-            })
-            .andWhere("transaction.transactionDate <= :statementDate", {
-              statementDate,
-            })
-            .orderBy("transaction.transactionDate", "ASC")
-            .addOrderBy("transaction.createdAt", "ASC")
-            .getMany(),
-          m
-            .getRepository(Transaction)
-            .createQueryBuilder("transaction")
-            .select("SUM(transaction.amount)", "sum")
-            .where("transaction.userId = :userId", { userId })
-            .andWhere("transaction.accountId = :accountId", { accountId })
-            .andWhere("transaction.parentTransactionId IS NULL")
-            .andWhere("transaction.status = :status", {
-              status: TransactionStatus.RECONCILED,
-            })
-            .getRawOne(),
-          m
-            .getRepository(Transaction)
-            .createQueryBuilder("transaction")
-            .select("SUM(transaction.amount)", "sum")
-            .where("transaction.userId = :userId", { userId })
-            .andWhere("transaction.accountId = :accountId", { accountId })
-            .andWhere("transaction.parentTransactionId IS NULL")
-            .andWhere("transaction.status = :status", {
-              status: TransactionStatus.CLEARED,
-            })
-            .andWhere("transaction.transactionDate <= :statementDate", {
-              statementDate,
-            })
-            .getRawOne(),
-          // TO_CHAR rather than the entity's DATE transformer: a raw select
-          // hands back a driver `Date`, which would serialize as an instant.
-          m.query(
-            `SELECT TO_CHAR(MAX(transaction_date), 'YYYY-MM-DD') AS last_reconciled_date
+    const [
+      account,
+      transactions,
+      reconciledResult,
+      clearedResult,
+      lastRow,
+      places,
+    ] = await withScopedDb(this.dataSource, async (m) => {
+      const owned = await this.accountsService.findOne(userId, accountId);
+      // Every outstanding row is listed, including those dated after the
+      // statement date: a row the register dates later than the bank posted
+      // it still has to be reachable to be ticked. Which rows start ticked
+      // is the client's call (`initialReconcileSelection`).
+      const listed = await m
+        .getRepository(Transaction)
+        .createQueryBuilder("transaction")
+        .leftJoinAndSelect("transaction.payee", "payee")
+        .leftJoinAndSelect("transaction.category", "category")
+        .where("transaction.userId = :userId", { userId })
+        .andWhere("transaction.accountId = :accountId", { accountId })
+        .andWhere("transaction.parentTransactionId IS NULL")
+        .andWhere("transaction.status IN (:...statuses)", {
+          statuses: [TransactionStatus.UNRECONCILED, TransactionStatus.CLEARED],
+        })
+        .orderBy("transaction.transactionDate", "ASC")
+        .addOrderBy("transaction.createdAt", "ASC")
+        .getMany();
+      const reconciled = await m
+        .getRepository(Transaction)
+        .createQueryBuilder("transaction")
+        .select("SUM(transaction.amount)", "sum")
+        .where("transaction.userId = :userId", { userId })
+        .andWhere("transaction.accountId = :accountId", { accountId })
+        .andWhere("transaction.parentTransactionId IS NULL")
+        .andWhere("transaction.status = :status", {
+          status: TransactionStatus.RECONCILED,
+        })
+        .getRawOne();
+      const cleared = await m
+        .getRepository(Transaction)
+        .createQueryBuilder("transaction")
+        .select("SUM(transaction.amount)", "sum")
+        .where("transaction.userId = :userId", { userId })
+        .andWhere("transaction.accountId = :accountId", { accountId })
+        .andWhere("transaction.parentTransactionId IS NULL")
+        .andWhere("transaction.status = :status", {
+          status: TransactionStatus.CLEARED,
+        })
+        .andWhere("transaction.transactionDate <= :statementDate", {
+          statementDate,
+        })
+        .getRawOne();
+      // TO_CHAR rather than the entity's DATE transformer: a raw select
+      // hands back a driver `Date`, which would serialize as an instant.
+      const last: { last_reconciled_date: string | null }[] = await m.query(
+        `SELECT TO_CHAR(MAX(${RECONCILED_THROUGH_SQL}), 'YYYY-MM-DD') AS last_reconciled_date
                FROM transactions
               WHERE user_id = $1
                 AND account_id = $2
                 AND status = $3
                 AND parent_transaction_id IS NULL`,
-            [userId, accountId, TransactionStatus.RECONCILED],
-          ) as Promise<{ last_reconciled_date: string | null }[]>,
-        ]),
+        [userId, accountId, TransactionStatus.RECONCILED],
       );
+      // The ledger figures are in the account's currency.
+      const currencyPlaces = await loadCurrencyPlacesForRead(m, [
+        owned.currencyCode,
+      ]);
+      return [
+        owned,
+        listed,
+        reconciled,
+        cleared,
+        last,
+        currencyPlaces,
+      ] as const;
+    });
 
+    // Each figure is in the account's currency and rounded at its precision,
+    // so a coin wallet reconciles to the satoshi and a fiat one to four
+    // places, with no float residue in the difference the reader must zero.
+    const decimals = moneyDecimalsForCode(places, account.currencyCode);
     const reconciledSum = Number(reconciledResult?.sum) || 0;
-    const reconciledBalance = Number(account.openingBalance) + reconciledSum;
+    const reconciledBalance = roundMoney(
+      Number(account.openingBalance) + reconciledSum,
+      decimals,
+    );
 
     const clearedSum = Number(clearedResult?.sum) || 0;
-    const clearedBalance = reconciledBalance + clearedSum;
+    const clearedBalance = roundMoney(reconciledBalance + clearedSum, decimals);
 
-    const difference = statementBalance - clearedBalance;
+    const difference = roundMoney(statementBalance - clearedBalance, decimals);
 
     return {
       transactions,

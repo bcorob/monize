@@ -1,11 +1,16 @@
 import { z } from "zod";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import { Client } from "@modelcontextprotocol/client";
+import { InMemoryTransport } from "@modelcontextprotocol/client";
 import { toolResult } from "./mcp-context";
 import * as schemas from "./tool-output-schemas";
 
-type RawShape = Record<string, z.ZodTypeAny>;
+/**
+ * Every output schema is now a loose `z.object` rather than a raw shape: the
+ * SDK accepts either, and the loose object is what makes the client's ajv
+ * validator admit the row-level fields these schemas no longer enumerate.
+ */
+type OutputSchema = z.ZodObject<any, any>;
 
 const scheduledItemSample = {
   id: "sc1",
@@ -41,7 +46,7 @@ const scheduledItemUnknownAmountSample = {
 // (pre-toolResult) form a tool handler would pass to toolResult. The payloads
 // mirror the documented service return shapes, including null fields and
 // undeclared entity fields (timestamps, relations) that must be tolerated.
-const cases: Array<{ name: string; schema: RawShape; raw: unknown }> = [
+const cases: Array<{ name: string; schema: OutputSchema; raw: unknown }> = [
   {
     name: "listAccountsOutput",
     schema: schemas.listAccountsOutput,
@@ -57,6 +62,9 @@ const cases: Array<{ name: string; schema: RawShape; raw: unknown }> = [
           creditLimit: null,
           interestRate: null,
           currency: "USD",
+          balanceInDefaultCurrency: 100.5,
+          currentBalanceInDefaultCurrency: 100.5,
+          exchangeRate: 1,
           isClosed: false,
           excludeFromNetWorth: false,
           institutionName: null,
@@ -78,7 +86,12 @@ const cases: Array<{ name: string; schema: RawShape; raw: unknown }> = [
           currentBalance: -8000,
           creditLimit: null,
           interestRate: 6,
-          currency: "USD",
+          // A foreign account with no rate into the default currency: the
+          // converted figures are null and the pair is named below.
+          currency: "CAD",
+          balanceInDefaultCurrency: null,
+          currentBalanceInDefaultCurrency: null,
+          exchangeRate: null,
           isClosed: false,
           excludeFromNetWorth: false,
           institutionName: null,
@@ -93,7 +106,13 @@ const cases: Array<{ name: string; schema: RawShape; raw: unknown }> = [
       totalAssets: 100.5,
       totalLiabilities: 0,
       netWorth: 100.5,
+      defaultCurrency: "USD",
+      missingRatePairs: ["CAD->USD"],
       totalAccounts: 1,
+      // The totals are subtotals while any flag is false.
+      fxComplete: false,
+      pricesComplete: true,
+      valuationComplete: false,
     },
   },
   {
@@ -103,6 +122,9 @@ const cases: Array<{ name: string; schema: RawShape; raw: unknown }> = [
       totalIncome: 0,
       totalExpenses: 5,
       netCashFlow: -5,
+      totalsCurrency: "USD",
+      fxComplete: true,
+      missingRatePairs: [],
       transactionCount: 1,
       byCurrency: {
         USD: {
@@ -126,6 +148,9 @@ const cases: Array<{ name: string; schema: RawShape; raw: unknown }> = [
       totalIncome: 0,
       totalExpenses: 0,
       netCashFlow: 0,
+      totalsCurrency: "USD",
+      fxComplete: true,
+      missingRatePairs: [],
       transactionCount: 2,
       groupedBy: "none",
       transfers: {
@@ -153,6 +178,9 @@ const cases: Array<{ name: string; schema: RawShape; raw: unknown }> = [
       totalIncome: 0,
       totalExpenses: 5,
       netCashFlow: -5,
+      totalsCurrency: "USD",
+      fxComplete: true,
+      missingRatePairs: [],
       transactionCount: 1,
       groupedBy: "none",
       transactions: [
@@ -178,6 +206,9 @@ const cases: Array<{ name: string; schema: RawShape; raw: unknown }> = [
       period2: { start: "2026-01-01", end: "2026-01-31", total: 5 },
       totalChange: 5,
       totalChangePercent: NaN,
+      totalsCurrency: "USD",
+      fxComplete: true,
+      missingRatePairs: [],
       comparison: [
         {
           label: "Food",
@@ -187,6 +218,46 @@ const cases: Array<{ name: string; schema: RawShape; raw: unknown }> = [
           changePercent: NaN,
         },
       ],
+    },
+  },
+  {
+    name: "listTransactionsOutput (totals withheld, a pair has no rate)",
+    schema: schemas.listTransactionsOutput,
+    raw: {
+      totalIncome: null,
+      totalExpenses: null,
+      netCashFlow: null,
+      knownIncomeSubtotal: 0,
+      knownExpensesSubtotal: 4000,
+      totalsCurrency: "PLN",
+      fxComplete: false,
+      missingRatePairs: ["USD->PLN"],
+      transactionCount: 2,
+      groupedBy: "none",
+    },
+  },
+  {
+    name: "comparePeriodsOutput (totals withheld, a pair has no rate)",
+    schema: schemas.comparePeriodsOutput,
+    raw: {
+      period1: {
+        start: "2026-08-01",
+        end: "2026-08-31",
+        total: 400,
+        knownSubtotal: 400,
+      },
+      period2: {
+        start: "2026-09-01",
+        end: "2026-09-30",
+        total: null,
+        knownSubtotal: 4000,
+      },
+      totalChange: null,
+      totalChangePercent: null,
+      totalsCurrency: "PLN",
+      fxComplete: false,
+      missingRatePairs: ["USD->PLN"],
+      comparison: [],
     },
   },
   {
@@ -362,28 +433,6 @@ const cases: Array<{ name: string; schema: RawShape; raw: unknown }> = [
     raw: { status: "preview_shown" },
   },
   {
-    name: "createTransactionsOutput (created branch)",
-    schema: schemas.createTransactionsOutput,
-    raw: {
-      created: [{ id: "t1", date: "2026-01-01", amount: -5 }],
-      ids: ["t1"],
-      count: 1,
-      skipped: [{ index: 1, reason: "Unknown account" }],
-    },
-  },
-  {
-    name: "createTransactionsOutput (dry-run branch)",
-    schema: schemas.createTransactionsOutput,
-    raw: {
-      dryRun: true,
-      preview: {
-        rows: [{ status: "ok", amount: -5 }],
-        skipped: [],
-      },
-      message: "preview only",
-    },
-  },
-  {
     name: "getCategoriesOutput",
     schema: schemas.getCategoriesOutput,
     raw: {
@@ -403,32 +452,57 @@ const cases: Array<{ name: string; schema: RawShape; raw: unknown }> = [
   {
     name: "getPayeesOutput",
     schema: schemas.getPayeesOutput,
-    raw: [
-      {
-        id: "p1",
-        name: "Amazon",
-        defaultCategoryId: null,
-        // notes is a nullable column; a payee without notes serializes as null
-        // and must validate (this previously failed the whole tool response).
-        notes: null,
-        isActive: true,
-        transactionCount: 2,
-        lastUsedDate: null,
-        aliasCount: 0,
-        uncategorizedCount: 0,
-      },
-      {
-        id: "p2",
-        name: "Buon Gusto Restaurant",
-        defaultCategoryId: "c1",
-        notes: "Italian place downtown",
-        isActive: true,
-        transactionCount: 36,
-        lastUsedDate: "2026-05-22",
-        aliasCount: 0,
-        uncategorizedCount: 0,
-      },
-    ],
+    // The list is an object, not a bare array: a page of matches has to carry
+    // how many matched and whether it is only a page.
+    raw: {
+      payees: [
+        {
+          id: "p1",
+          name: "Amazon",
+          defaultCategoryId: null,
+          // notes is a nullable column; a payee without notes serializes as
+          // null and must validate (this once failed the whole tool response).
+          notes: null,
+          website: null,
+          address: null,
+          email: null,
+          phone: null,
+          hasLogo: false,
+          isActive: true,
+          transactionCount: 2,
+          lastUsedDate: null,
+          aliasCount: 0,
+          uncategorizedCount: 0,
+        },
+        {
+          id: "p2",
+          name: "Buon Gusto Restaurant",
+          defaultCategoryId: "c1",
+          notes: "Italian place downtown",
+          website: "https://buongusto.test",
+          address: "12 High St",
+          email: "book@buongusto.test",
+          phone: "555-0100",
+          hasLogo: true,
+          isActive: true,
+          transactionCount: 36,
+          lastUsedDate: "2026-05-22",
+          aliasCount: 0,
+          uncategorizedCount: 0,
+        },
+      ],
+      totalCount: 2,
+      truncated: false,
+    },
+  },
+  {
+    name: "getPayeesOutput (truncated page)",
+    schema: schemas.getPayeesOutput,
+    raw: {
+      payees: [{ id: "p1", name: "Amazon" }],
+      totalCount: 87,
+      truncated: true,
+    },
   },
   {
     name: "managePayeesOutput (single created branch)",
@@ -450,6 +524,24 @@ const cases: Array<{ name: string; schema: RawShape; raw: unknown }> = [
     raw: {
       data: [{ categoryId: "c1", categoryName: "Food", color: null, total: 5 }],
       totalSpending: 5,
+    },
+  },
+  {
+    // A total withheld for a missing rate (INV-FX-001): null, with the part that
+    // converted and the gap named beside it, carried by the loose object.
+    name: "generateReportOutput (aggregation type with a withheld total)",
+    schema: schemas.generateReportOutput,
+    raw: {
+      data: [
+        { categoryId: "c1", categoryName: "Food", color: null, total: 50 },
+      ],
+      totalSpending: null,
+      knownSpending: 50,
+      totalIncome: null,
+      knownIncome: 50,
+      currency: "USD",
+      missingCurrencies: ["JPY"],
+      excludedCount: 1,
     },
   },
   {
@@ -514,6 +606,10 @@ const cases: Array<{ name: string; schema: RawShape; raw: unknown }> = [
       totalGainLoss: 20,
       totalGainLossPercent: 25,
       timeWeightedReturn: null,
+      // Not in the schema (see the note beside it) but on every payload, and
+      // the loose object has to keep carrying them.
+      timeWeightedReturnReasons: ["noValueSeries"],
+      timeWeightedReturnSince: null,
       cagr: null,
       holdings: [
         {
@@ -578,6 +674,7 @@ const cases: Array<{ name: string; schema: RawShape; raw: unknown }> = [
       transactionCount: 1,
       totalAmount: 100,
       totalCommission: 0,
+      incomeByCurrency: {},
       totalQuantity: 1,
       actionCounts: { BUY: 1 },
       groupedBy: null,
@@ -593,6 +690,8 @@ const cases: Array<{ name: string; schema: RawShape; raw: unknown }> = [
           price: 100,
           commission: 0,
           totalAmount: 100,
+          incomeAmount: 0,
+          incomeCurrency: "USD",
           currency: "USD",
           description: null,
           status: "CLEARED",
@@ -607,7 +706,14 @@ const cases: Array<{ name: string; schema: RawShape; raw: unknown }> = [
     raw: {
       startDate: "2026-01-01",
       endDate: "2026-12-31",
-      totals: { realizedGain: 0, unrealizedGain: 20, totalCapitalGain: 20 },
+      totals: {
+        realizedGain: 0,
+        unrealizedGain: 20,
+        totalCapitalGain: 20,
+        currency: "CAD",
+        fxComplete: true,
+        missingRatePairs: [],
+      },
       groupedBy: "month",
       entries: [
         {
@@ -669,6 +775,20 @@ const cases: Array<{ name: string; schema: RawShape; raw: unknown }> = [
     },
   },
   {
+    name: "calculateOutput (convert branch)",
+    schema: schemas.calculateOutput,
+    raw: {
+      result: 1098.75,
+      formattedResult: "1098.75 USD",
+      operation: "convert",
+      amount: 1500,
+      fromCurrency: "CAD",
+      toCurrency: "USD",
+      date: "2026-09-01",
+      rate: 0.7325,
+    },
+  },
+  {
     name: "getBudgetStatusOutput (success branch)",
     schema: schemas.getBudgetStatusOutput,
     raw: {
@@ -693,6 +813,20 @@ const cases: Array<{ name: string; schema: RawShape; raw: unknown }> = [
         paceStatus: "under",
       },
       healthScore: { score: 90, label: "Good" },
+      buckets: [
+        {
+          name: "Needs",
+          targetType: "PERCENT",
+          targetValue: 50,
+          allocated: null,
+          carriedIn: 0,
+          spent: 10,
+          available: null,
+          percentUsed: null,
+        },
+      ],
+      bucketIncome: null,
+      unallocated: null,
     },
   },
   {
@@ -739,6 +873,140 @@ const cases: Array<{ name: string; schema: RawShape; raw: unknown }> = [
     schema: schemas.postResponseOutput,
     raw: { delivered: true },
   },
+  // manage_transaction_rules: one result branch per operation.
+  {
+    name: "manageTransactionRulesOutput (list)",
+    schema: schemas.manageTransactionRulesOutput,
+    raw: {
+      rules: [
+        {
+          id: "r1",
+          name: "Biedronka",
+          revision: 3,
+          invalid: false,
+          condition: { field: "payeeText", op: "contains", value: "x" },
+          actions: [{ type: "set_category", categoryName: "Groceries" }],
+        },
+      ],
+      totalCount: 1,
+      truncated: false,
+    },
+  },
+  {
+    name: "manageTransactionRulesOutput (test)",
+    schema: schemas.manageTransactionRulesOutput,
+    raw: {
+      rule: "Biedronka",
+      matchedCount: 3,
+      scanned: 40,
+      truncated: false,
+      rows: [{ transactionId: "t1", changes: {} }],
+      skippedCount: 0,
+      skipped: [],
+    },
+  },
+  {
+    name: "manageTransactionRulesOutput (committed create, delete and run)",
+    schema: schemas.manageTransactionRulesOutput,
+    raw: { id: "r1", deleted: true, ruleRun: { changed: 3, skipped: [] } },
+  },
+  {
+    name: "manageTransactionRulesOutput (relay card shown)",
+    schema: schemas.manageTransactionRulesOutput,
+    raw: { status: "preview_shown", message: "A card was shown." },
+  },
+  // ai_review_requests: list, claim (with and without a request), submit, reject.
+  {
+    name: "aiReviewRequestsOutput (list)",
+    schema: schemas.aiReviewRequestsOutput,
+    raw: {
+      requests: [{ id: "q1", status: "pending", instruction: "look" }],
+      totalCount: 1,
+      truncated: false,
+    },
+  },
+  {
+    name: "aiReviewRequestsOutput (claim)",
+    schema: schemas.aiReviewRequestsOutput,
+    raw: {
+      request: { id: "q1", status: "claimed", claimedByYou: true },
+      transaction: [{ id: "t1", amount: -50, date: "2026-09-01" }],
+      message: "Read the transaction.",
+    },
+  },
+  {
+    name: "aiReviewRequestsOutput (claim, nothing pending)",
+    schema: schemas.aiReviewRequestsOutput,
+    raw: { request: null, message: "No pending AI review requests." },
+  },
+  {
+    name: "aiReviewRequestsOutput (submit)",
+    schema: schemas.aiReviewRequestsOutput,
+    raw: {
+      status: "proposed",
+      request: { id: "q1", status: "proposed" },
+      proposal: { splits: [{ categoryName: "Books", amount: -30 }] },
+      message: "Proposal stored.",
+    },
+  },
+  {
+    name: "aiReviewRequestsOutput (claim of a parser draft request)",
+    schema: schemas.aiReviewRequestsOutput,
+    raw: {
+      request: { id: "q1", status: "claimed", kind: "email_parser_draft" },
+      emailReceipts: [{ id: "r1", subject: "Order", text: "Total 5" }],
+      message: "Use email_receipt_parsers.",
+    },
+  },
+  // email_receipt_parsers: categories, test (valid and invalid), save_draft.
+  {
+    name: "emailReceiptParsersOutput (categories)",
+    schema: schemas.emailReceiptParsersOutput,
+    raw: {
+      categories: [{ id: "c1", name: "Books" }],
+      totalCount: 1,
+      truncated: false,
+    },
+  },
+  {
+    name: "emailReceiptParsersOutput (test)",
+    schema: schemas.emailReceiptParsersOutput,
+    raw: {
+      valid: true,
+      errors: [],
+      unknownCategoryIds: [],
+      emails: [{ receiptId: "r1", parsed: { total: 15, complete: true } }],
+      allComplete: true,
+    },
+  },
+  {
+    name: "emailReceiptParsersOutput (test, invalid definition)",
+    schema: schemas.emailReceiptParsersOutput,
+    raw: {
+      valid: false,
+      errors: [{ path: "total[0]", code: "capture_missing" }],
+      emails: [],
+      allComplete: false,
+    },
+  },
+  {
+    name: "emailReceiptParsersOutput (save_draft)",
+    schema: schemas.emailReceiptParsersOutput,
+    raw: {
+      parserId: "p1",
+      status: "draft",
+      requestProposed: true,
+      message: "Draft saved.",
+    },
+  },
+  {
+    name: "aiReviewRequestsOutput (reject)",
+    schema: schemas.aiReviewRequestsOutput,
+    raw: {
+      request: { id: "q1", status: "pending" },
+      message: "The request was returned to the queue.",
+    },
+  },
 ];
 
 describe("tool-output-schemas", () => {
@@ -750,7 +1018,7 @@ describe("tool-output-schemas", () => {
       "$name validates against its output schema",
       ({ schema, raw }) => {
         const result = toolResult(raw);
-        const parsed = z.object(schema).safeParse(result.structuredContent);
+        const parsed = schema.safeParse(result.structuredContent);
         if (!parsed.success) {
           throw new Error(JSON.stringify(parsed.error.issues, null, 2));
         }
@@ -763,13 +1031,30 @@ describe("tool-output-schemas", () => {
   // and returning toolResult(...) must round-trip without an output-validation
   // error and surface structuredContent to the client.
   describe("end-to-end via InMemoryTransport", () => {
-    const rawFor = (schema: RawShape): unknown => {
+    /** Add fields no schema declares, at the top level and inside a row. */
+    const withUndeclaredFields = (raw: unknown): unknown => {
+      const payload = raw as { accounts?: unknown[] };
+      return {
+        ...payload,
+        undeclaredTopLevel: "kept",
+        accounts: (payload.accounts ?? []).map((account) => ({
+          ...(account as Record<string, unknown>),
+          undeclaredRowField: "kept",
+        })),
+      };
+    };
+
+    const rawFor = (schema: OutputSchema): unknown => {
       const found = cases.find((c) => c.schema === schema);
       if (!found) throw new Error("no sample for schema");
       return found.raw;
     };
 
-    const e2eTools: Array<{ name: string; schema: RawShape; raw: unknown }> = [
+    const e2eTools: Array<{
+      name: string;
+      schema: OutputSchema;
+      raw: unknown;
+    }> = [
       {
         name: "list_accounts",
         schema: schemas.listAccountsOutput,
@@ -806,7 +1091,12 @@ describe("tool-output-schemas", () => {
             inputSchema: {},
             outputSchema: tool.schema,
           },
-          () => toolResult(tool.raw),
+          () =>
+            toolResult(
+              tool.name === "list_accounts"
+                ? withUndeclaredFields(tool.raw)
+                : tool.raw,
+            ),
         );
       }
 
@@ -834,6 +1124,30 @@ describe("tool-output-schemas", () => {
           expect(res.isError).toBeFalsy();
           expect(res.structuredContent).toBeDefined();
         }
+
+        // The property the slimmed schemas depend on. These schemas declare
+        // totals, flags and copy-back ids and leave row columns undeclared, so
+        // an undeclared field -- at the top level or inside a row -- must still
+        // reach the client. Two mechanisms have to hold at once: the server
+        // sends the handler's ORIGINAL object (it parses only to decide
+        // pass/fail, and discards the parsed value), and the loose object
+        // serializes as `additionalProperties: {}` so the client's own
+        // validator admits it. A strip-mode schema would emit
+        // `additionalProperties: false` and the client would reject the call.
+        //
+        // The listTools() above is load-bearing: the client builds its output
+        // validator there, so calling a tool without it would validate nothing
+        // and this assertion would prove nothing.
+        const extras = await client.callTool({
+          name: "list_accounts",
+          arguments: {},
+        });
+        const structured = extras.structuredContent as {
+          undeclaredTopLevel?: unknown;
+          accounts?: Array<{ undeclaredRowField?: unknown }>;
+        };
+        expect(structured.undeclaredTopLevel).toBe("kept");
+        expect(structured.accounts?.[0]?.undeclaredRowField).toBe("kept");
       } finally {
         await client.close();
         await server.close();

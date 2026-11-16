@@ -1,0 +1,1457 @@
+{
+  "settingsPage": {
+    "redirecting": "De pagina E-mailbonnen wordt geopend...",
+    "redirectLink": "Naar de mailboxinstellingen"
+  },
+  "page": {
+    "title": "E-mailbonnen",
+    "subtitle": "Lees bestelbevestigingen uit een mailbox en zet ze om in gespecificeerde transacties: wat is gekoppeld, wat er met elke e-mail is gebeurd en wat op jou wacht"
+  },
+  "mailbox": {
+    "heading": "Mailbox",
+    "description": "Bestelbevestigingen worden via IMAP gelezen uit een speciale mailbox. Monize leest hem alleen: er wordt nooit een bericht gewijzigd, verplaatst of verwijderd.",
+    "loading": "Mailbox laden",
+    "dedicatedWarning": "Gebruik een speciale mailbox. Elk bericht in de map wordt gelezen, dus de map moet alleen bestelbevestigingen bevatten.",
+    "encryptionUnavailable": "Deze server kan geen geheimen versleutelen, dus een mailboxwachtwoord of -verbinding kan niet worden opgeslagen. Vraag de beheerder om versleuteling in te stellen.",
+    "error": {
+      "title": "De mailbox kon niet worden geladen",
+      "body": "Het verzoek is mislukt, dus er is nog niets bekend over je mailbox. Probeer het opnieuw.",
+      "retry": "Opnieuw proberen"
+    },
+    "oauth": {
+      "heading": "Een account koppelen",
+      "explanation": "Google en Microsoft 365 weigeren meestal een gewoon wachtwoord. Log in via de provider: je geeft Monize toegang tot de mailbox en typt het wachtwoord ervan nooit hier in.",
+      "connect": {
+        "google": "Koppelen met Google",
+        "microsoft": "Koppelen met Microsoft"
+      },
+      "providerNames": {
+        "google": "Google",
+        "microsoft": "Microsoft 365"
+      },
+      "providersUnavailable": "Of inloggen met Google of Microsoft beschikbaar is, kon niet worden gecontroleerd. Het handmatige formulier hieronder werkt nog steeds.",
+      "startFailed": "Het inloggen kon niet worden gestart",
+      "badAuthorizationUrl": "De server gaf een inlogadres terug dat geen beveiligde webpagina is, dus het is niet geopend.",
+      "connectedAs": "Gekoppeld aan {provider} als {username}.",
+      "notConnected": "De koppeling met {provider} is niet actief, dus de mailbox wordt niet gelezen. Koppel opnieuw om verder te gaan.",
+      "reconnect": "Opnieuw koppelen",
+      "disconnect": "Ontkoppelen",
+      "disconnectDialog": {
+        "title": "De mailbox ontkoppelen?",
+        "message": "Monize verwijdert de opgeslagen toegang tot {provider} en stopt met het lezen van de mailbox. Al opgeslagen e-mails blijven bewaard."
+      },
+      "disconnected": "Mailbox ontkoppeld",
+      "disconnectFailed": "De mailbox kon niet worden ontkoppeld",
+      "revokeNote": "Ontkoppelen trekt de toestemming die je hebt gegeven niet in. Verwijder Monize op de machtigingenpagina van {provider} om die in te trekken.",
+      "revokeLink": {
+        "google": "Machtigingen van het Google-account openen",
+        "microsoft": "Machtigingen voor Microsoft-apps openen"
+      },
+      "saveButton": "Instellingen opslaan",
+      "saved": "Mailboxinstellingen opgeslagen",
+      "saveFailed": "De mailboxinstellingen konden niet worden opgeslagen"
+    },
+    "form": {
+      "intro": "Of voer de gegevens van een willekeurige IMAP-mailbox in. De meeste providers vereisen een app-wachtwoord in plaats van je accountwachtwoord.",
+      "hostLabel": "IMAP-server",
+      "portLabel": "Poort",
+      "securityLabel": "Verbindingsbeveiliging",
+      "securityOptions": {
+        "tls": "TLS (meestal poort 993)",
+        "starttls": "STARTTLS (meestal poort 143)"
+      },
+      "usernameLabel": "Gebruikersnaam",
+      "passwordLabel": "Wachtwoord",
+      "passwordStoredPlaceholder": "Er is een wachtwoord opgeslagen. Typ om het te vervangen.",
+      "passwordRequiredHelp": "Vereist voor een nieuwe mailbox, of wanneer de server of gebruikersnaam verandert.",
+      "passwordKeepHelp": "Laat leeg om het opgeslagen wachtwoord te behouden. Het wordt nooit meer getoond.",
+      "saveButton": "Mailbox opslaan",
+      "saved": "Mailbox opgeslagen",
+      "saveFailed": "De mailbox kon niet worden opgeslagen",
+      "test": {
+        "button": "Verbinding testen",
+        "ok": "{count, plural, one {De verbinding werkt. De map bevat # bericht.} other {De verbinding werkt. De map bevat # berichten.}}",
+        "error": "De verbinding is mislukt: {error}",
+        "failed": "De verbinding kon niet worden getest"
+      }
+    },
+    "settings": {
+      "folderLabel": "Map",
+      "folderHelp": "De map die wordt gelezen. Hij wordt alleen-lezen geopend.",
+      "enabledLabel": "De mailbox automatisch lezen",
+      "enabledHelp": "Bepaalt alleen het automatisch lezen: als dit aan staat, leest Monize de mailbox elke 15 minuten. Uitzetten koppelt de mailbox niet los, en Nu ophalen leest hem ongeacht of dit aan of uit staat.",
+      "aiModeLabel": "AI-modus",
+      "aiModeHelp": "Of het ophalen de AI-provider mag gebruiken die je voor bonnen hebt ingesteld. Herkennen met AI en Profiel laten opstellen door AI vragen de assistent in de chat, ongeacht de modus, en een AI-antwoord is altijd een voorstel of concept dat jij goedkeurt.",
+      "aiModes": {
+        "off": "Uit",
+        "on_demand": "Op verzoek",
+        "automatic": "Automatisch"
+      },
+      "aiModeDescriptions": {
+        "off": "Het ophalen roept de AI nooit aan voor bonnen.",
+        "on_demand": "Het ophalen roept de AI nooit aan. Je vraagt de assistent zelf met Herkennen met AI of Profiel laten opstellen door AI.",
+        "automatic": "Het ophalen vraagt de AI naar een gekoppelde bon die geen enkel goedgekeurd profiel volledig kon lezen, en stelt een concept van een profiel op voor een afzender die er geen heeft."
+      },
+      "autoApplyLabel": "Voorstellen automatisch toepassen",
+      "autoApplyHelp": "Standaard uit. Een voorstel wordt alleen zonder te vragen toegepast als dit allemaal geldt: een goedgekeurd profiel heeft de hele e-mail gelezen, de transactie is gevonden via een ordernummer of een referentie, of via exact bedrag en begunstigde, met één enkele kandidaat, en het voorstel klopt tot op de cent. Een transactiebevestiging wordt alleen zonder te vragen geboekt als het transactieprofiel is goedgekeurd, het de hele transactie heeft gelezen, de prijs klopt met de aandelen en het totaal (een contant dividend dat alleen zijn bedrag noemt, heeft niets te controleren), en je rekeningen nog geen overeenkomende transactie bevatten. Al het andere wacht op jouw goedkeuring.",
+      "profileLimitLabel": "Voorstellen van profielen meetellen voor de dagelijkse AI-limiet",
+      "profileLimitHelp": "Standaard aan: een wijziging die een profiel uit een e-mail voorstelt, telt mee voor de dagelijkse limiet van door AI voorgestelde wijzigingen, zoals elk ander AI-voorstel. Zet het uit wanneer een grote stapel opgeslagen e-mails de limiet anders zou opmaken. Alleen voorstellen van profielen zijn uitgezonderd; elk voorstel wacht nog steeds op jouw goedkeuring."
+    },
+    "status": {
+      "lastPolled": "Laatst opgehaald",
+      "lastSuccess": "Laatst geslaagd opgehaald",
+      "never": "Nooit",
+      "lastError": "Laatste fout: {error}",
+      "lastErrorAt": "Laatste fout ({at}): {error}",
+      "pollNow": "Nu ophalen",
+      "pollResult": "Ophalen voltooid: {fetched, plural, one {# e-mail opgeslagen} other {# e-mails opgeslagen}}, {skipped} overgeslagen, {processed} verwerkt.",
+      "pollResultLink": "De opgeslagen e-mails bekijken",
+      "pollFailed": "Het ophalen is mislukt",
+      "deleteButton": "Mailbox verwijderen",
+      "deleteDialog": {
+        "title": "De mailbox verwijderen?",
+        "message": "De mailboxinstellingen en alle opgeslagen e-mails worden verwijderd, en openstaande controleverzoeken daarvan worden genegeerd. De e-mails in de mailbox zelf blijven ongemoeid."
+      },
+      "deleted": "Mailbox verwijderd",
+      "deleteFailed": "De mailbox kon niet worden verwijderd"
+    },
+    "import": {
+      "title": "Gearchiveerde e-mails importeren",
+      "description": "Een bestand behoudt de afzender en de aankoopdatum van de winkel, anders dan een doorgestuurde e-mail. Upload geëxporteerde e-mails om oude orderbevestigingen te lezen.",
+      "fileLabel": "E-mailbestanden (.eml, .mbox, .msg of .zip)",
+      "chooseFiles": "Bestanden kiezen",
+      "noFileChosen": "Geen bestanden gekozen",
+      "selected": "Geselecteerd: {count}",
+      "button": "Importeren",
+      "preparing": "Bestanden voorbereiden...",
+      "sending": "Deel {current} van {total} verzenden",
+      "processing": "E-mails verwerken: {done} van {total}",
+      "cancel": "Annuleren",
+      "tooLargeTotal": "De geselecteerde bestanden samen zijn groter dan {max}. Importeer ze in kleinere groepen.",
+      "failed": "De import is mislukt",
+      "result": {
+        "heading": "Importresultaat",
+        "file": "{name}: {stored} opgeslagen, {duplicates} dubbele, {skipped} overgeslagen",
+        "summary": "{processed, plural, one {# wachtende e-mail verwerkt.} other {# wachtende e-mails verwerkt.}}",
+        "pendingLeft": "{count, plural, one {# e-mail wacht nog op verwerking. Monize verwerkt die bij het volgende lezen van de mailbox.} other {# e-mails wachten nog op verwerking. Monize verwerkt ze bij het volgende lezen van de mailbox.}}",
+        "processFailed": "{count, plural, one {# e-mail kon niet worden verwerkt.} other {# e-mails konden niet worden verwerkt.}}",
+        "processingStopped": "Het verwerken van de geïmporteerde e-mails is gestopt. De e-mails blijven bewaard. Monize verwerkt ze bij het volgende lezen van de mailbox.",
+        "truncated": "{count} berichten zijn niet gelezen omdat een import een limiet heeft. Importeer ze opnieuw in een tweede ronde.",
+        "oversized": "{name}: {count} berichten groter dan {max} zijn niet verzonden.",
+        "stopped": "De import is gestopt na {done} van {total} delen. De e-mails die al zijn geïmporteerd, blijven bewaard. Importeer dezelfde bestanden opnieuw om verder te gaan. E-mails die al zijn geïmporteerd, worden niet dubbel opgeslagen.",
+        "cancelled": "De import is geannuleerd na {done} van {total} delen. De e-mails die al zijn geïmporteerd, blijven bewaard.",
+        "errors": {
+          "unsupported_format": "{name}: dit formaat wordt niet ondersteund. Ondersteunde formaten zijn .eml, .mbox, .msg en .zip.",
+          "invalid_archive": "{name}: het ZIP-bestand is beschadigd of kan niet worden gelezen.",
+          "archive_too_large": "{name}: het uitgepakte ZIP-bestand is groter dan de importlimiet. Pak het uit en upload het .mbox-bestand dat erin zit.",
+          "empty": "{name}: het bestand bevat geen e-mails."
+        },
+        "ignored": "{name}: {count} andere bestanden in het archief zijn overgeslagen."
+      },
+      "guide": {
+        "toggle": "E-mails exporteren bij uw provider",
+        "gmailLabel": {
+          "title": "Gmail: alle e-mails met een label",
+          "step1": "Open takeout.google.com en kies \"Deselect all\".",
+          "step2": "Selecteer \"Mail\" en kies \"All Mail data included\".",
+          "step3": "Kies alleen uw label en maak de export.",
+          "step4": "Upload het gedownloade .zip-bestand zoals het is, hoe groot het ook is. U hoeft het niet uit te pakken."
+        },
+        "gmailOne": {
+          "title": "Gmail: één e-mail",
+          "step1": "Open de e-mail.",
+          "step2": "Kies \"Meer\" en dan \"Bericht downloaden\".",
+          "step3": "Upload het .eml-bestand."
+        },
+        "imap": {
+          "title": "Andere providers: Outlook.com, Yahoo, Onet, WP, Interia, o2, iCloud, Zoho",
+          "step1": "Voeg het postvak via IMAP toe aan Thunderbird en installeer de add-on ImportExportTools NG.",
+          "step2": "Selecteer de e-mails of een map en klik met de rechtermuisknop.",
+          "step3": "Kies ImportExportTools NG en exporteer dan als EML of als mbox.",
+          "step4": "Upload de bestanden."
+        },
+        "outlook": {
+          "title": "Outlook voor desktop",
+          "body": "Selecteer de e-mails en sleep ze naar een map op uw schijf. Outlook schrijft .msg-bestanden. Upload ze, meerdere tegelijk of verpakt in één .zip-bestand."
+        },
+        "apple": {
+          "title": "Apple Mail",
+          "step1": "Kies \"Postvak\" en dan \"Exporteer postvak\". Apple Mail schrijft een map.",
+          "step2": "Upload het bestand met de naam mbox in de map, of sleep e-mails naar de Finder om .eml-bestanden te krijgen."
+        },
+        "tip": "Tip: e-mails doorsturen met een script verliest de afzender en de datum van de winkel. Bestanden importeren behoudt ze."
+      }
+    }
+  },
+  "parsers": {
+    "heading": "Profielen",
+    "description": "Een profiel leest de bestelbevestigingen van één afzender met patronen die je schrijft of controleert en bepaalt hoe de banktransactie wordt gevonden. Eenmaal goedgekeurd werkt het zonder de AI.",
+    "newButton": "Nieuw profiel handmatig maken",
+    "loading": "Profielen laden",
+    "error": {
+      "title": "De profielen konden niet worden geladen",
+      "body": "Het verzoek is mislukt. Probeer het opnieuw.",
+      "retry": "Opnieuw proberen"
+    },
+    "empty": {
+      "title": "Nog geen profielen",
+      "body": "Maak er een voor een afzender van bestelbevestigingen, of laat er een opstellen uit een opgeslagen e-mail op de pagina E-mailbonnen."
+    },
+    "columns": {
+      "name": "Profiel",
+      "status": "Status",
+      "payee": "Begunstigde",
+      "actions": "Acties"
+    },
+    "status": {
+      "draft": "Concept",
+      "approved": "Goedgekeurd"
+    },
+    "source": {
+      "manual": "Door jou geschreven",
+      "ai": "Opgesteld door AI"
+    },
+    "invalid": "Ongeldig",
+    "noPayee": "Geen begunstigde",
+    "payeeUnknown": "Begunstigde niet gevonden",
+    "payeeUnavailable": "Lijst met begunstigden niet beschikbaar",
+    "actions": {
+      "approve": "Goedkeuren",
+      "viewJson": "JSON bekijken"
+    },
+    "toasts": {
+      "approved": "Profiel goedgekeurd",
+      "approveFailed": "Het profiel kon niet worden goedgekeurd",
+      "changedElsewhere": "Dit profiel is elders gewijzigd. De lijst is opnieuw geladen.",
+      "deleted": "Profiel verwijderd",
+      "deleteFailed": "Het profiel kon niet worden verwijderd",
+      "emailsIgnored": "{count, plural, one {# e-mail genegeerd} other {# e-mails genegeerd}}",
+      "emailsDeleted": "{count, plural, one {# e-mail verwijderd} other {# e-mails verwijderd}}",
+      "bulkFailed": "De e-mails van dit profiel konden niet allemaal worden verwerkt. Wat al verwerkt is, blijft zo."
+    },
+    "bulk": {
+      "ignoreTitle": "De e-mails van dit profiel negeren?",
+      "ignoreMessage": "{count, plural, one {# e-mail die {name} inleest, wordt} other {# e-mails die {name} inleest, worden}} genegeerd: ze stellen niets meer voor en hun open voorstellen worden gesloten.{kept, plural, =0 {} one { # e-mail die al is toegepast of niet kon worden gelezen, blijft zoals hij is.} other { # e-mails die al zijn toegepast of niet konden worden gelezen, blijven zoals ze zijn.}}",
+      "ignoreConfirm": "E-mails negeren",
+      "deleteTitle": "De e-mails van dit profiel verwijderen?",
+      "deleteMessage": "{count, plural, one {# e-mail die {name} inleest, wordt} other {# e-mails die {name} inleest, worden}} verwijderd, samen met hun open voorstellen. Dit kan niet ongedaan worden gemaakt.{kept, plural, =0 {} one { # e-mail waarvan het voorstel al is toegepast, blijft.} other { # e-mails waarvan het voorstel al is toegepast, blijven.}}",
+      "deleteConfirm": "E-mails verwijderen"
+    },
+    "deleteDialog": {
+      "title": "Het profiel verwijderen?",
+      "message": "Het profiel {name} wordt verwijderd. E-mails die het al las, behouden hun resultaten."
+    },
+    "jsonDialog": {
+      "title": "Definitie van {name}",
+      "help": "De profieldefinitie zoals die is opgeslagen. Het onderdeel voor de koppeling toont de geldende instellingen, inclusief de standaardwaarden. Hier is ze alleen-lezen; gebruik Bewerken om haar te wijzigen.",
+      "contentLabel": "Definitie-JSON",
+      "copy": "Kopiëren",
+      "copied": "JSON gekopieerd",
+      "copyFailed": "De JSON kon niet worden gekopieerd"
+    },
+    "processOffer": {
+      "title": "De opgeslagen e-mails nu verwerken?",
+      "message": "{count, plural, one {# opgeslagen e-mail} other {# opgeslagen e-mails}} van {domains} nu verwerken? Elke e-mail wordt opnieuw met dit profiel gelezen; wat het voorstelt wacht in het AI-controlepostvak, tenzij automatisch toepassen aan staat.",
+      "confirm": "Nu verwerken",
+      "later": "Niet nu"
+    },
+    "reparse": "E-mails opnieuw inlezen ({count})",
+    "kindTrade": "Beurstransacties",
+    "discardIgnore": "Negeert zijn e-mails",
+    "discardDelete": "Verwijdert zijn e-mails"
+  },
+  "editor": {
+    "createTitle": "Nieuw profiel",
+    "editTitle": "Profiel bewerken",
+    "loading": "Begunstigden, categorieën, rekeningen en valuta laden",
+    "lookupsError": {
+      "title": "Begunstigden, categorieën, rekeningen of valuta konden niet worden geladen",
+      "body": "De keuzelijsten hebben ze nodig, dus de editor kan nog niet openen. Probeer het opnieuw.",
+      "retry": "Opnieuw proberen"
+    },
+    "draftNote": "Dit profiel is een concept. Het leest niets totdat je het goedkeurt.",
+    "draftAiNote": "De AI heeft dit profiel opgesteld op basis van je voorbeeld-e-mails. Test het op elk ervan, controleer elk patroon en keur het daarna goed in de lijst. Het leest niets totdat je dat doet.",
+    "identityHeading": "Welke e-mails hij leest",
+    "nameLabel": "Naam",
+    "payeeLabel": "Begunstigde",
+    "payeePlaceholder": "Geen begunstigde",
+    "domainsLabel": "Afzenderdomeinen",
+    "domainsHelp": "Eén per regel, maximaal {max}. Een subdomein van een vermeld domein komt ook overeen.",
+    "subjectLabel": "Onderwerp bevat",
+    "subjectHelp": "Optioneel, één per regel, maximaal {max}. Het onderwerp moet minstens één ervan bevatten, hoofdletters worden genegeerd.",
+    "saveButton": "Profiel opslaan",
+    "created": "Profiel gemaakt",
+    "updated": "Profiel opgeslagen",
+    "saveFailed": "Het profiel kon niet worden opgeslagen",
+    "conflict": "Dit profiel is elders gewijzigd sinds je het hebt geopend. Laad het opnieuw om de huidige versie te zien. Je wijzigingen hier zijn niet opgeslagen.",
+    "conflictReload": "Profiel opnieuw laden",
+    "required": {
+      "heading": "Het profiel kan nog niet worden opgeslagen. Los eerst het volgende op:",
+      "item": "{field}: {problem}",
+      "nameMissing": "Voer een naam voor het profiel in.",
+      "domainsMissing": "Voer ten minste één afzenderdomein in, zoals shop.example.com.",
+      "domainsInvalid": "Geen domeinnaam: {values}. Voer domeinen in zoals shop.example.com, één per regel.",
+      "domainsTooMany": "Voer maximaal {max} afzenderdomeinen in.",
+      "subjectTooMany": "Voer maximaal {max} onderwerpwoorden in.",
+      "subjectTooLong": "Elk onderwerpwoord mag maximaal {max} tekens lang zijn.",
+      "server": "De server heeft dit veld geweigerd. De reden staat onder het formulier."
+    },
+    "patterns": {
+      "sourceLabel": "Bron van de regels",
+      "sourceHint": "Met welke weergave van de e-mail de onderstaande patronen worden vergeleken. Tekst is het tekstdeel van de e-mail, één regel per regeleinde. HTML leest het HTML-deel: elk blok en elke tabelcel wordt een eigen regel, zodat een productnaam die de tekst over meerdere regels verdeelt heel blijft. De weergave Regels van de e-mail toont precies wat elke bron oplevert.",
+      "sourceOptions": {
+        "text": "Tekst",
+        "html": "HTML"
+      },
+      "globHelp": "Elk patroon wordt vergeleken met één hele regel van de e-mail, hoofdletters worden genegeerd. Gebruik {star} voor willekeurige tekst en een naam tussen accolades, zoals {capture}, om een waarde vast te leggen. Elk veld accepteert maximaal {max} patronen, één per regel. Om opeenvolgende regels te vergelijken, verbind je één patroon per regel met {lineBreak}, bijvoorbeeld {example}.",
+      "orderIdLabel": "Patronen voor het ordernummer",
+      "orderIdHint": "Moet {capture} vastleggen. Voorbeeld: Ordernummer: {capture}",
+      "totalLabel": "Patronen voor het totaal",
+      "amountHint": "Moet {capture} vastleggen. Voorbeeld: Totaal van de bestelling {capture}",
+      "shippingLabel": "Patronen voor de verzendkosten",
+      "discountLabel": "Patronen voor de korting",
+      "feesLabel": "Patronen voor de kosten",
+      "itemsHeading": "Artikelregels",
+      "startAfterLabel": "Artikelen beginnen na",
+      "startAfterHint": "Optioneel. Artikelen worden gelezen vanaf de regel na de eerste regel die deze tekst bevat.",
+      "stopAtLabel": "Artikelen stoppen bij",
+      "stopAtHint": "Optioneel. Artikelen eindigen voor de eerste regel die deze tekst bevat.",
+      "itemPatternsLabel": "Artikelpatronen",
+      "itemPatternsHint": "Moet {name} vastleggen en ofwel {amount} (het regeltotaal) ofwel {price} (de stukprijs, eventueel met {qty}), nooit allebei. Voorbeeld: {name} x {qty} {price}"
+    },
+    "categories": {
+      "heading": "Categorieën",
+      "help": "Typ een categorienaam en kies die uit de lijst. De naam wordt in het profiel opgeslagen en de categorie moet bestaan wanneer het profiel wordt opgeslagen.",
+      "categoryPlaceholder": "Geen categorie",
+      "defaultLabel": "Standaardcategorie",
+      "defaultHelp": "Wordt gebruikt voor artikelen waar geen enkele regel bij past.",
+      "shippingLabel": "Verzendcategorie",
+      "shippingHelp": "De categorie van de verzendregel.",
+      "feesLabel": "Kostencategorie",
+      "feesHelp": "De categorie van de kostenregel.",
+      "unknownCategory": "Er is geen categorie met de naam {name}. Kies er een uit de lijst of maak hem eerst aan.",
+      "rulesInJson": "Categorieregels op artikelnaam zijn een geavanceerde optie: voeg ze toe aan de profieldefinitie in de JSON-modus."
+    },
+    "mode": {
+      "label": "Bewerkmodus",
+      "form": "Formulier",
+      "json": "JSON",
+      "formUnavailable": "Deze definitie gebruikt iets wat het formulier niet kan tonen: vermeldingen met een label, artikelen over meerdere regels of sleutels waarvoor het geen veld heeft. Bewerk haar als JSON.",
+      "jsonInvalid": "De JSON is nog niet geldig, dus het formulier kan niet worden getoond. Herstel dit eerst."
+    },
+    "json": {
+      "label": "Profieldefinitie (JSON)",
+      "help": "Dezelfde definitie die het formulier opbouwt. De server controleert haar bij het opslaan en de test hieronder leest haar zoals ze nu is.",
+      "parseError": "Dit is geen geldige JSON of geen JSON-object. Herstel dit om het profiel op te slaan of te testen."
+    },
+    "matching": {
+      "heading": "Koppeling",
+      "help": "Hoe de banktransactie wordt gevonden die een e-mail heeft betaald. De strategieën worden op volgorde geprobeerd: de eerste die precies één transactie overhoudt, beslist, meerdere transacties zijn dubbelzinnig en geen enkele gaat door naar de volgende.",
+      "instruction": "Het best is een referentienummer uit de omschrijving van de bankverrichting. Als er geen is, worden de datum en het bedrag gebruikt. Standaard worden de strategieën in deze volgorde geprobeerd: referentie (wanneer het profiel referentiepatronen heeft), ordernummer, bedrag en begunstigde, bedrag en datum.",
+      "referenceLabel": "Referentiepatronen",
+      "referenceHint": "De identificatie die de webwinkel of betaalprovider in de bankverrichting zet, zoals een afschrifttekst of een omschrijving van de overschrijving. Moet {capture} vastleggen.",
+      "strategiesLabel": "Strategieën, in de volgorde waarin ze worden geprobeerd",
+      "strategiesHelp": "Ordernummer en referentie zoeken de waarde in de omschrijving, de begunstigde of het referentienummer van de transactie. Bedrag en begunstigde heeft het bedrag nodig plus een aanwijzing voor de begunstigde. Bedrag en datum heeft alleen het bedrag nodig, binnen het venster. Minstens één strategie moet aan blijven.",
+      "strategyPosition": "{position}. {name}",
+      "moveUp": "{name} eerder zetten",
+      "moveDown": "{name} later zetten",
+      "strategies": {
+        "reference": "Referentie",
+        "orderId": "Ordernummer",
+        "amount_payee": "Bedrag en begunstigde",
+        "amount_date": "Bedrag en datum"
+      },
+      "referenceNeeded": "De referentiestrategie staat aan, maar er zijn geen referentiepatronen, dus er wordt niets gevonden.",
+      "referenceInLabel": "Zoek de referentie en het ordernummer in",
+      "referenceInHint": "Waarden korter dan 4 tekens worden nooit gezocht.",
+      "referenceIn": {
+        "description": "Omschrijving",
+        "payee": "Naam van de begunstigde",
+        "referenceNumber": "Referentienummer"
+      },
+      "daysBeforeLabel": "Dagen vóór de aankoop",
+      "daysAfterLabel": "Dagen na de aankoop",
+      "daysHint": "Het venster rond de aankoopdatum. Standaard {default}, maximaal {max}.",
+      "toleranceLabel": "Bedragtolerantie",
+      "toleranceHint": "Hoeveel het bankbedrag mag afwijken van het totaal van de e-mail. Standaard 0, maximaal {max}."
+    },
+    "proposal": {
+      "heading": "Voorstel",
+      "tagLabel": "Een tag toevoegen aan de transacties die dit profiel categoriseert",
+      "tagHelp": "Het label wordt aangemaakt als je er geen met die naam hebt. Het staat in het voorstel en er wordt niets geschreven totdat je het goedkeurt.",
+      "tagNameLabel": "Labelnaam",
+      "aiCategoriesLabel": "De AI de categorie laten kiezen van artikelen waar geen regel bij past",
+      "aiCategoriesHelp": "Als een artikel bij geen enkele categorieregel past en er geen standaardcategorie is, wordt de AI om de categorie gevraagd uit je categorielijst. De keuze wordt in het voorstel als die van de AI aangemerkt. Als dit uit staat, wordt de AI nooit gevraagd."
+    },
+    "kind": {
+      "label": "Soort profiel",
+      "receipt": "Bestelbon",
+      "trade": "Beurstransactie",
+      "receiptHelp": "Leest een orderbevestiging en vindt de banktransactie waarmee ze betaald is.",
+      "tradeHelp": "Leest een uitvoeringsbevestiging van de broker en stelt de beleggingstransactie voor die ze meldt: een aankoop, een verkoop, een contant dividend of een herbelegd dividend."
+    },
+    "trade": {
+      "guardsHeading": "Welke e-mails van de afzender het leest",
+      "guardsHelp": "Optioneel. Elk patroon wordt vergeleken met een hele regel van de e-mail, één patroon per regel.",
+      "guards": {
+        "requireLine": "Vereiste regels",
+        "requireLineHint": "Het profiel leest een e-mail alleen als een van deze regels erin staat; anders wordt het volgende profiel van de afzender geprobeerd.",
+        "skipIfLine": "Regels die de e-mail overslaan",
+        "skipIfLineHint": "Een e-mail met een van deze regels wordt opzijgelegd, zoals een geannuleerde order.",
+        "waitIfLine": "Regels die de e-mail vasthouden",
+        "waitIfLineHint": "Een e-mail met een van deze regels wordt vastgehouden en later opnieuw gelezen, zoals een gedeeltelijke uitvoering."
+      },
+      "fieldsHeading": "De transactie",
+      "fieldsHelp": "Het transactietype, de ticker en een totaal of een prijs zijn verplicht, en ook het aantal aandelen behalve bij een contant dividend. Het type wordt uit de tekst gelezen: Dividend of Distribution is een contant dividend, Reinvest of DRIP een herbelegd dividend, anders Buy of Sell. Elk veld neemt patronen, één per regel, op volgorde geprobeerd.",
+      "fields": {
+        "tradeAction": "Patronen voor het transactietype",
+        "tradeSymbol": "Patronen voor de ticker",
+        "tradeQuantity": "Patronen voor het aantal aandelen",
+        "tradeTotal": "Patronen voor het transactietotaal",
+        "tradePrice": "Patronen voor de prijs per aandeel",
+        "tradeCommission": "Patronen voor de commissie",
+        "tradeDate": "Patronen voor de transactiedatum",
+        "tradeAccount": "Patronen voor de rekening"
+      },
+      "fieldHint": "Moet {capture} vastleggen. Voorbeeld: {example}",
+      "amountsHelp": "Het totaal is het uitgevoerde bedrag, bij een aankoop of een herbelegd dividend inclusief commissie; bij een contant dividend is het het uitbetaalde bedrag. De prijs (bij een dividend het bedrag per aandeel) is een controle en geeft met het aantal aandelen het totaal als de e-mail er geen noemt. Een bedrag dat zijn valuta noemt (US$, C$, USD, €) bepaalt ook de valuta van de transactie.",
+      "rulesHeading": "Rekeningregels",
+      "rulesHelp": "Op welke rekening de transactie wordt geboekt. De regels worden op volgorde geprobeerd op de rekeningtekst die de rekeningpatronen lezen, en de eerste die van toepassing is wint; {star} is willekeurige tekst. Een regel met een valuta geldt alleen voor een transactie in die valuta, dus twee rekeningen die de broker hetzelfde schrijft, zoals een RRSP in CAD en een in USD die allebei als RRSP verschijnen, zijn twee regels met dezelfde tekst en verschillende valuta. Als de e-mail geen rekeningtekst toont, kan alleen een regel met de tekst {star} gelden. De standaardrekening neemt de rest.",
+      "currencyOrder": "De valuta van de transactie komt, op volgorde: uit het bedrag zelf als het er een noemt (US$, C$, USD, €), dan uit de eerste valutamarkering hieronder die bij een regel van de e-mail past, dan uit de valuta van je effect voor de ticker. Een regel met een valuta gokt nooit: als geen van de drie de valuta noemt, wacht de e-mail op jou in plaats van op een van de rekeningen te worden geboekt.",
+      "ruleMatchLabel": "Rekeningtekst van regel {rule}",
+      "ruleMatchPlaceholder": "Rekeningtekst, zoals RRSP",
+      "ruleCurrencyLabel": "Valuta van regel {rule}",
+      "ruleAccountLabel": "Rekening van regel {rule}",
+      "ruleMoveUp": "Regel {rule} omhoog",
+      "ruleMoveDown": "Regel {rule} omlaag",
+      "ruleRemove": "Regel {rule} verwijderen",
+      "ruleAdd": "Rekeningregel toevoegen",
+      "rulesMax": "Hooguit {max} regels.",
+      "rulesWithoutAccountText": "Er zijn geen rekeningpatronen, dus de regels worden geprobeerd op lege tekst: alleen een regel met de tekst {star} kan gelden.",
+      "anyCurrency": "Elke valuta",
+      "baseCurrency": "{code} (je basisvaluta)",
+      "currencyPlaceholder": "Kies een valuta",
+      "accountPlaceholder": "Kies een rekening",
+      "accountOption": "{name} ({currency})",
+      "accountNotTradableOption": "{name} (geen open effectenrekening)",
+      "accountUnknownOption": "Een rekening die niet in je lijst staat",
+      "accountNotTradable": "Op deze rekening kan geen transactie worden geboekt: ze is gesloten, een geldrekening of geen beleggingsrekening.",
+      "accountUnknown": "Deze rekening staat niet in je lijst: ze is misschien verwijderd. Kies een andere.",
+      "defaultAccountLabel": "Standaardrekening",
+      "defaultAccountNone": "Geen standaardrekening",
+      "defaultAccountHint": "De rekening als geen regel van toepassing is. Zonder wacht een e-mail waarop geen regel van toepassing is op jou.",
+      "markersHeading": "Valutamarkeringen",
+      "markersHelp": "Tekst die de valuta van de transactie noemt als de bedragen dat niet doen, zoals een regel dat de bedragen in Amerikaanse dollars zijn naast een kale $. Elke markering wordt vergeleken met elke regel van de e-mail ({star} is willekeurige tekst), en de eerste markering, op volgorde, die past noemt de valuta. Markeringen worden alleen gebruikt als het bedrag geen valuta noemt.",
+      "markerMatchLabel": "Tekst van markering {marker}",
+      "markerMatchPlaceholder": "Zoals *U.S. dollars*",
+      "markerCurrencyLabel": "Valuta van markering {marker}",
+      "markerMoveUp": "Markering {marker} omhoog",
+      "markerMoveDown": "Markering {marker} omlaag",
+      "markerRemove": "Markering {marker} verwijderen",
+      "markerAdd": "Valutamarkering toevoegen",
+      "markersMax": "Hooguit {max} markeringen."
+    },
+    "discard": {
+      "label": "Overeenkomende e-mails",
+      "read": "Inlezen",
+      "ignore": "Negeren",
+      "delete": "Verwijderen",
+      "readHelp": "Het profiel leest elke overeenkomende e-mail in met de patronen hieronder.",
+      "ignoreHelp": "Elke e-mail die bij dit profiel past, wordt bij aankomst genegeerd: hij stelt niets voor. Voor afzenders met wier e-mail je nooit iets wilt doen.",
+      "deleteHelp": "Elke e-mail die bij dit profiel past, wordt bij aankomst uit Monize verwijderd (hij blijft in je mailbox). Een verwijderde e-mail kan niet worden teruggehaald.",
+      "noReading": "Dit profiel leest niets in, dus het heeft geen patronen, categorieën of koppeling nodig. De afzenderdomeinen en onderwerpwoorden hierboven bepalen welke e-mails het neemt."
+    }
+  },
+  "problems": {
+    "heading": "De profieldefinitie is niet geldig:",
+    "item": "{where}: {problem}",
+    "paths": {
+      "definition": "De definitie",
+      "line": "{field}, regel {line}",
+      "rule": "Categorieregel {rule}, {part}",
+      "entryPart": "{field}, vermelding {line}, {part}",
+      "skipLine": "Over te slaan regel {line}",
+      "recordStep": "Recordstap {step}",
+      "recordStepPart": "Recordstap {step}, {part}",
+      "recordAlternative": "Recordstap {step}, alternatief {alternative}",
+      "accountRule": "Rekeningregel {rule}",
+      "accountRulePart": "Rekeningregel {rule}, {part}",
+      "currencyMarker": "Valutamarkering {marker}",
+      "currencyMarkerPart": "Valutamarkering {marker}, {part}"
+    },
+    "fields": {
+      "orderId": "Patronen voor het ordernummer",
+      "total": "Patronen voor het totaal",
+      "shipping": "Patronen voor de verzendkosten",
+      "discount": "Patronen voor de korting",
+      "itemPatterns": "Artikelpatronen",
+      "startAfter": "Artikelen beginnen na",
+      "stopAt": "Artikelen stoppen bij",
+      "items": "Artikelregels",
+      "categoryRules": "Categorieregels",
+      "rulePattern": "patroon",
+      "ruleCategory": "categorie",
+      "defaultCategory": "Standaardcategorie",
+      "shippingCategory": "Verzendcategorie",
+      "feesCategory": "Kostencategorie",
+      "balanceTolerance": "Saldotolerantie",
+      "fees": "Patronen voor de kosten",
+      "skipLines": "Over te slaan regels",
+      "record": "Record",
+      "label": "label",
+      "value": "waarde",
+      "within": "binnen",
+      "line": "regel",
+      "optional": "optioneel",
+      "paid": "Patronen voor het betaalde bedrag",
+      "payee": "Patronen voor de verkoper",
+      "requireLine": "Vereiste regels",
+      "skipIfLine": "Regels die de e-mail overslaan",
+      "waitIfLine": "Regels die de e-mail vasthouden",
+      "source": "Bron van de regels",
+      "single": "Enkel artikel",
+      "singleName": "Naam van het enkele artikel",
+      "joinWrapped": "Afgebroken regels samenvoegen",
+      "ruleField": "veld",
+      "reference": "Referentiepatronen",
+      "match": "Het gedeelte Koppeling",
+      "matchBy": "Koppelingsstrategieën",
+      "matchReferenceIn": "Velden waarin naar de referentie wordt gezocht",
+      "matchDaysBefore": "Dagen vóór de aankoop",
+      "matchDaysAfter": "Dagen na de aankoop",
+      "matchTolerance": "Bedragtolerantie",
+      "tag": "Label",
+      "aiCategories": "AI-categorieën",
+      "trade": "Het transactiedeel",
+      "tradeAction": "Patronen voor het transactietype",
+      "tradeSymbol": "Patronen voor de ticker",
+      "tradeQuantity": "Patronen voor het aantal aandelen",
+      "tradeTotal": "Patronen voor het transactietotaal",
+      "tradePrice": "Patronen voor de prijs per aandeel",
+      "tradeCommission": "Patronen voor de commissie",
+      "tradeDate": "Patronen voor de transactiedatum",
+      "tradeAccount": "Patronen voor de rekening",
+      "accountRules": "Rekeningregels",
+      "currencyMarkers": "Valutamarkeringen",
+      "defaultAccount": "Standaardrekening",
+      "ruleAccount": "rekening",
+      "ruleCurrency": "valuta",
+      "role": "Profielrol",
+      "link": "Het onderdeel „link”",
+      "linkDaysBefore": "Dagen vóór de terugbetaling",
+      "linkFromDomains": "Afzenderdomeinen van de aankoopmails",
+      "linkKey": "Patronen voor de koppelsleutel"
+    },
+    "codes": {
+      "not_object": "is geen geldige definitie",
+      "unknown_key": "is niets wat een profiel kan hebben",
+      "unsupported_version": "is een versie die deze server niet leest (gebruik versie 2)",
+      "invalid_type": "heeft het verkeerde soort waarde",
+      "empty": "mag niet leeg zijn",
+      "too_many": "heeft te veel items (maximaal {max})",
+      "too_long": "is te lang (maximaal {max} tekens)",
+      "control_character": "bevat een stuurteken",
+      "malformed_capture": "heeft een vastlegging tussen accolades die niet geldig is",
+      "too_many_captures": "heeft te veel vastleggingen",
+      "duplicate_capture": "gebruikt dezelfde vastleggingsnaam twee keer",
+      "capture_not_allowed": "gebruikt een vastleggingsnaam die dit veld niet accepteert",
+      "capture_missing": "mist een vastlegging die dit veld nodig heeft",
+      "capture_conflict": "legt zowel het regeltotaal als de stukprijs vast. Gebruik er één van.",
+      "invalid_uuid": "is geen geldige categorie",
+      "out_of_range": "moet een geheel getal van 1 tot {max} zijn",
+      "items_patterns_and_record": "heeft zowel patronen als een record. Gebruik er één van.",
+      "items_shape_missing": "heeft patronen of een record nodig",
+      "skip_lines_need_record": "kan alleen samen met een record worden gebruikt",
+      "record_name_missing": "moet {capture} vastleggen in een van zijn stappen",
+      "items_single_conflict": "heeft een enkel artikel naast patronen of een record. Gebruik er één van.",
+      "join_wrapped_needs_patterns": "werkt alleen met artikelpatronen",
+      "invalid_value": "heeft een waarde die dit veld niet accepteert",
+      "duplicate_entry": "noemt hetzelfde item twee keer",
+      "reference_field_missing": "heeft referentiepatronen nodig (de referentiestrategie staat aan)",
+      "out_of_range_days": "moet een geheel getal van 0 tot {max} zijn",
+      "out_of_range_tolerance": "moet een bedrag van 0,00 tot {max} zijn",
+      "trade_conflict": "kan niet in een profiel voor beurstransacties staan, dat alleen de transactie leest",
+      "trade_amount_missing": "heeft patronen voor het totaal of de prijs nodig (minstens een van de twee)",
+      "trade_account_missing": "heeft een standaardrekening of rekeningregels nodig",
+      "invalid_currency": "is geen valutacode van 3 letters, zoals USD",
+      "too_many_lines": "beslaat te veel regels (maximaal {max})",
+      "line_break_not_allowed": "wordt vergeleken met één tekst (een artikelnaam, de verkoper of een rekening) en kan dus niet meerdere regels beslaan",
+      "invalid_uuid_account": "is geen geldige rekening",
+      "role_invalid": "moet standalone, component of settlement zijn",
+      "link_key_requires_component": "kan alleen worden gebruikt als de rol component is",
+      "link_key_missing": "is nodig als de rol component is",
+      "link_capture_requires_settlement": "gebruikt een link- of instalment-capture, die alleen een settlement-profiel accepteert",
+      "link_requires_settlement": "kan alleen worden gebruikt als de rol settlement is",
+      "link_domain_invalid": "is geen geldig afzenderdomein (maximaal {max} domeinen)",
+      "link_days_invalid": "moet een geheel getal van 0 tot {max} zijn",
+      "role_trade_conflict": "mag in een profiel voor effectentransacties, dat alleen de transactie leest, niet component of settlement zijn"
+    }
+  },
+  "test": {
+    "heading": "Testen met een opgeslagen e-mail",
+    "help": "Leest een opgeslagen e-mail met de bovenstaande patronen, opgeslagen of niet, en toont wat er gevonden zou worden en met welke transactie het zou overeenkomen. Er wordt niets geschreven.",
+    "loadFailed": "De opgeslagen e-mails konden niet worden geladen, dus er is nog niets om mee te testen.",
+    "noReceipts": "Er zijn nog geen e-mails opgeslagen. Haal eerst de mailbox op.",
+    "receiptLabel": "E-mail",
+    "choosePlaceholder": "Kies een e-mail",
+    "receiptOption": "{subject} van {sender} ({date})",
+    "button": "Testen",
+    "failed": "De test is mislukt",
+    "matchHeading": "Transactieovereenkomst",
+    "matched": "Zou de transactie van {date} voor {amount} ({payee}) koppelen, gevonden via {how}.",
+    "matchKinds": {
+      "order_id": "ordernummer",
+      "amount_payee": "bedrag en begunstigde",
+      "amount_only": "bedrag",
+      "manual": "jouw keuze",
+      "reference": "referentie",
+      "amount_date": "bedrag en datum"
+    },
+    "noPayee": "geen begunstigde",
+    "ambiguous": "{count, plural, one {# transactie past} other {# transacties passen}} even goed, dus er zou er geen worden gekoppeld totdat je er een kiest.",
+    "unmatched": "Er komt geen transactie overeen, uit {count, plural, one {# kandidaat} other {# kandidaten}}.",
+    "jsonInvalid": "De JSON is niet geldig, dus er is nog niets te testen.",
+    "component": {
+      "heading": "Aankoopmail (component): koppelsleutel {linkKey}",
+      "noLinkKey": "Aankoopmail (component): er is geen koppelsleutel gelezen, dus geen terugbetalingsmail kan hem vinden.",
+      "noneWaiting": "Er wacht geen terugbetalingsmail op deze koppelsleutel.",
+      "waiting": "{count, plural, one {# terugbetalingsmail wacht} other {# terugbetalingsmails wachten}} op deze koppelsleutel:",
+      "settlement": "{subject} ({date})"
+    },
+    "outcome": {
+      "not_applicable": "Dit profiel zou deze e-mail niet lezen: geen van de vereiste regels komt erin voor, dus het volgende profiel voor de afzender zou worden geprobeerd.",
+      "skip_line": "Dit profiel zou deze e-mail terzijde leggen: er staat een regel in waarop het overslaat.",
+      "wait_line": "Dit profiel zou deze e-mail vasthouden: een regel zegt dat de bestelling nog niet definitief is, dus hij wordt later opnieuw gelezen.",
+      "discard_ignore": "Dit profiel zou deze e-mail negeren: het negeert elke overeenkomende e-mail.",
+      "discard_delete": "Dit profiel zou deze e-mail verwijderen: het verwijdert elke overeenkomende e-mail.",
+      "no_html": "Dit profiel leest het HTML-deel van de e-mail en deze e-mail heeft er geen, dus hij zou als onleesbaar (geen HTML) worden gemarkeerd."
+    },
+    "matchedBy": {
+      "heading": "Gevonden via",
+      "none": "Uit deze e-mail is geen waarde gelezen.",
+      "fields": {
+        "orderId": "Ordernummer",
+        "total": "Totaal",
+        "paid": "Betaald",
+        "shipping": "Verzending",
+        "discount": "Korting",
+        "payee": "Verkoper",
+        "requireLine": "Vereiste regel",
+        "skipIfLine": "Overslaanregel",
+        "waitIfLine": "Wachtregel",
+        "reference": "Referentie",
+        "linkKey": "Koppelsleutel",
+        "action": "Transactietype",
+        "symbol": "Ticker",
+        "quantity": "Aandelen",
+        "price": "Prijs",
+        "commission": "Commissie",
+        "date": "Datum",
+        "account": "Rekening",
+        "currency": "Valutamarkering"
+      },
+      "entryLine": "vermelding {entry} ({pattern}), regel {line}: {text}",
+      "entrySubject": "vermelding {entry} ({pattern}), het onderwerp: {text}",
+      "entryLines": "vermelding {entry} ({pattern}), regels {first} tot en met {last}:",
+      "blockLine": "regel {line}: {text}",
+      "labelled": "vermelding {entry}, label {label} op regel {labelLine} ({labelText}), waarde {pattern} op regel {line}: {text}",
+      "item": "Artikel {number}",
+      "itemLine": "{pattern}, regel {line}: {text}"
+    },
+    "trace": {
+      "heading": "Waar de koppelfunctie naar keek",
+      "window": "Transacties van {from} tot {to} ({before} dagen vóór, {after} dagen na de aankoop): {considered, plural, one {# bekeken} other {# bekeken}}.",
+      "tolerance": "Het bedrag mag {amount} afwijken.",
+      "attempt": "{position}. {name}",
+      "kept": "{count, plural, =0 {hield er geen over} one {hield # transactie over} other {hield # transacties over}}",
+      "decided": "Besloten",
+      "transaction": "{date}, {amount}, {payee}",
+      "noPayee": "geen begunstigde",
+      "strategies": {
+        "reference": "Referentie",
+        "orderId": "Ordernummer",
+        "amount_payee": "Bedrag en begunstigde",
+        "amount_date": "Bedrag en datum"
+      }
+    }
+  },
+  "parsed": {
+    "notFound": "Niet gevonden",
+    "noCategory": "Geen categorie",
+    "unknownCategory": "Onbekende categorie",
+    "categoryUnavailable": "Categorieën niet geladen",
+    "noItems": "Er zijn geen artikelregels gelezen.",
+    "orderId": "Ordernummer",
+    "total": "Totaal",
+    "shipping": "Verzending",
+    "discount": "Korting",
+    "columns": {
+      "item": "Artikel",
+      "qty": "Aantal",
+      "amount": "Bedrag",
+      "category": "Categorie"
+    },
+    "complete": "Volledig gelezen",
+    "incomplete": "Niet volledig gelezen",
+    "reasons": {
+      "no_total": "De e-mail vermeldt geen totaal.",
+      "no_items": "Er zijn geen artikelregels gevonden.",
+      "items_unbalanced": "De artikelregels tellen niet op tot het totaal.",
+      "items_uncategorized": "Sommige artikelregels hebben geen categorie.",
+      "shipping_uncategorized": "De verzendregel heeft geen categorie.",
+      "item_amount_missing": "Een artikel heeft geen bedrag en de e-mail heeft geen enkel totaal om het te geven."
+    },
+    "readByAi": "Gelezen door de AI",
+    "readFromStructuredData": "Gelezen uit gestructureerde gegevens",
+    "paid": "Betaald",
+    "payee": "Verkoper",
+    "reference": "Referentie",
+    "categoryByAi": "AI",
+    "linkKey": "Koppelsleutel",
+    "kinds": {
+      "shipping": "Verzending",
+      "fee": "Kosten",
+      "discount": "Korting"
+    },
+    "parts": {
+      "heading": "Delen",
+      "part": "Deel",
+      "link": "Koppeling",
+      "outcome": "Resultaat",
+      "noLink": "Geen koppeling",
+      "component": "Aankoopmail: {subject} ({date}).",
+      "componentProfile": "Profiel: {name}.",
+      "componentNet": "Totaal van de aankoop: {amount}.",
+      "taken": "Al gebruikt: {amount}."
+    },
+    "linkOutcomes": {
+      "no_link": "Het deel heeft geen koppeling, dus het blijft één regel.",
+      "not_found": "Voor deze koppeling is geen aankoopmail gevonden, dus het deel blijft één regel.",
+      "component_incomplete": "De aankoopmail is niet volledig gelezen, dus het deel blijft één regel.",
+      "component_used": "Andere terugbetalingen hebben de hele aankoop al gebruikt, dus het deel blijft één regel.",
+      "joined": "Vervangen door de regels van de aankoopmail.",
+      "scaled": "Vervangen door de regels van de aankoopmail, geschaald naar dit deel.",
+      "amount_exceeds": "Het deel is meer dan wat er van de aankoop over is, dus het blijft één regel."
+    }
+  },
+  "state": {
+    "pending": "Wacht om gelezen te worden",
+    "skipped": "Overgeslagen",
+    "no_parser": "Geen profile",
+    "parse_failed": "Kon niet worden gelezen",
+    "unmatched": "Geen transactie gevonden",
+    "ambiguous": "Meerdere transacties passen",
+    "review_conflict": "Er staat een ander verzoek open",
+    "ignored": "Genegeerd",
+    "proposed": "Wacht op goedkeuring",
+    "applied": "Toegepast",
+    "dismissed": "Verworpen",
+    "expired": "Verlopen",
+    "pending_ai": "Wacht op de AI",
+    "request_missing": "Verzoek ontbreekt",
+    "component": "Wacht op de terugbetaling"
+  },
+  "receipts": {
+    "loading": "E-mails laden",
+    "links": {
+      "reviewInbox": "Het AI-controlepostvak openen",
+      "settings": "Mailboxinstellingen"
+    },
+    "filter": {
+      "label": "Filteren op status",
+      "option": "{label} ({count})",
+      "all": "Alle",
+      "pending": "Wacht om gelezen te worden",
+      "skipped": "Overgeslagen",
+      "no_parser": "Geen profile",
+      "parse_failed": "Kon niet worden gelezen",
+      "unmatched": "Geen transactie gevonden",
+      "ambiguous": "Meerdere transacties passen",
+      "review_conflict": "Er staat een ander verzoek open",
+      "review": "In controle",
+      "ignored": "Genegeerd",
+      "component": "Wacht op terugbetaling"
+    },
+    "search": {
+      "label": "E-mails zoeken",
+      "placeholder": "Zoek op onderwerp, afzender of inhoud...",
+      "in": "Zoeken in",
+      "fields": {
+        "all": "Alle velden",
+        "subject": "Onderwerp",
+        "sender": "Afzender",
+        "body": "Inhoud"
+      },
+      "from": "Vanaf datum",
+      "to": "Tot datum",
+      "rangeBackwards": "De einddatum ligt voor de begindatum. De periode wordt niet toegepast.",
+      "clear": "Zoekopdracht wissen"
+    },
+    "domainFilter": {
+      "label": "Afzenderdomein",
+      "all": "Alle afzenders",
+      "option": "{domain} ({count})",
+      "unknown": "De aantallen per afzender konden niet worden geladen.",
+      "help": "E-mails van {domain} en de subdomeinen worden getoond. Selecteer er meerdere om één profiel voor de afzender op te stellen.",
+      "waitingForAi": "Wacht op AI"
+    },
+    "columns": {
+      "select": "Selecteren",
+      "date": "Datum",
+      "email": "E-mail",
+      "transaction": "Transactie",
+      "state": "Status",
+      "actions": "Acties"
+    },
+    "transactionSummary": "{date}, {amount}, {payee}",
+    "noPayee": "geen begunstigde",
+    "noTransaction": "Nog geen",
+    "error": {
+      "title": "De e-mails konden niet worden geladen",
+      "body": "Het verzoek is mislukt, dus er is nog niets bekend over je e-mails. Probeer het opnieuw.",
+      "retry": "Opnieuw proberen"
+    },
+    "empty": {
+      "title": "Geen e-mails",
+      "body": "Bestelbevestigingen verschijnen hier zodra de mailbox is gelezen.",
+      "filteredTitle": "Geen e-mails met deze status",
+      "filteredBody": "Kies een andere status om de rest te zien.",
+      "searchTitle": "Geen e-mail komt overeen met de zoekopdracht",
+      "searchBody": "Wijzig de woorden of de datums, of wis de zoekopdracht om alle e-mails te zien.",
+      "noMailboxBody": "Er is nog geen mailbox gekoppeld. Koppel er een om bestelbevestigingen te gaan lezen.",
+      "connectButton": "Een mailbox koppelen"
+    },
+    "actions": {
+      "view": "Bekijken",
+      "reprocess": "Opnieuw verwerken",
+      "link": "Transactie kiezen",
+      "recognizeAi": "Herkennen met AI",
+      "recognizeTradeAi": "Herken als transactie met AI",
+      "approve": "Goedkeuren",
+      "draftParser": "Profiel laten opstellen door AI",
+      "createParser": "Profiel maken",
+      "ignore": "Negeren",
+      "reviewTrade": "Beoordelen in inbox"
+    },
+    "toasts": {
+      "approved": "Voorstel goedgekeurd",
+      "approveFailed": "Het voorstel kon niet worden goedgekeurd",
+      "reprocessed": "E-mail opnieuw verwerkt",
+      "reprocessFailed": "De e-mail kon niet opnieuw worden verwerkt",
+      "ignored": "E-mail genegeerd",
+      "ignoreFailed": "De e-mail kon niet worden genegeerd",
+      "deleted": "E-mail verwijderd",
+      "deleteFailed": "De e-mail kon niet worden verwijderd"
+    },
+    "ignoreDialog": {
+      "title": "Deze e-mail negeren?",
+      "message": "De e-mail {subject} stelt niets voor, en het openstaande controleverzoek wordt genegeerd.",
+      "confirm": "Negeren"
+    },
+    "deleteDialog": {
+      "title": "Deze e-mail verwijderen?",
+      "message": "De opgeslagen e-mail {subject} wordt verwijderd en het openstaande controleverzoek genegeerd. Het bericht in de mailbox blijft ongemoeid, en bij een volgende keer ophalen wordt het niet opnieuw opgehaald."
+    },
+    "selection": {
+      "label": "Geselecteerde e-mails",
+      "select": "{subject} selecteren",
+      "selectAll": "Alle e-mails in deze lijst selecteren",
+      "count": "{count, plural, one {# e-mail geselecteerd} other {# e-mails geselecteerd}}",
+      "draftButton": "Profiel laten opstellen door AI ({count})",
+      "clear": "Selectie wissen",
+      "deleteButton": "Verwijderen ({count})",
+      "ignoreButton": "Negeren ({count})",
+      "pageSelected": "Alle {count} e-mails op deze pagina zijn geselecteerd.",
+      "selectAllMatching": "Selecteer alle {total} e-mails die bij dit filter passen.",
+      "allMatchingSelected": "Alle {total} e-mails die bij dit filter passen, zijn geselecteerd.",
+      "hiddenSelected": "{hidden, plural, one {# van de geselecteerde e-mails staat niet in deze lijst.} other {# van de geselecteerde e-mails staan niet in deze lijst.}}",
+      "reprocessButton": "Opnieuw verwerken ({count})",
+      "restoreButton": "Genegeerde herstellen ({count})",
+      "restoreButtonAll": "Genegeerde herstellen",
+      "approveButton": "Voorstellen goedkeuren ({count})",
+      "approveButtonAll": "Voorstellen goedkeuren",
+      "progress": "Verwerkt: {processed}, nog te gaan: {remaining}",
+      "progressStarting": "Starten",
+      "stop": "Stoppen",
+      "narrowedSelected": "{total} e-mails zijn geselecteerd: alle e-mails die bij dit filter passen, behalve de hieronder uitgesloten.",
+      "deselect": {
+        "label": "Deselecteren op",
+        "state": "Status: {state}",
+        "sender": "Afzender: {domain}",
+        "before": "Ontvangen vóór een dag",
+        "after": "Ontvangen na een dag",
+        "beforeLabel": "E-mails deselecteren die vóór deze dag zijn ontvangen",
+        "afterLabel": "E-mails deselecteren die na deze dag zijn ontvangen",
+        "apply": "Deselecteren",
+        "cancel": "Annuleren"
+      },
+      "exclusion": {
+        "label": "Uit de selectie gehaald",
+        "state": "Niet in status {state}",
+        "sender": "Niet van {domain}",
+        "from": "Ontvangen op of na {date}",
+        "to": "Ontvangen op of vóór {date}",
+        "remove": "Terugzetten: {label}"
+      },
+      "draftBlocked": {
+        "skipped": "Een e-mail die niet gelezen kon worden, heeft geen tekst voor een profiel. Haal hem uit de selectie.",
+        "allMatching": "Een profiel wordt voorbereid met e-mails die je zelf selecteert, maximaal {max}. Wis deze selectie en selecteer maximaal {max} e-mails.",
+        "mixedKinds": "De geselecteerde e-mails mengen transactiebevestigingen en bestelmails. Een profiel leest één soort, dus selecteer alleen transactiebevestigingen of alleen bestelmails.",
+        "tooManyPerDomain": "Van één afzender kunnen maximaal {perDomain} e-mails worden gebruikt. Selecteer van elke afzender ({domains}) {perDomain} e-mails of minder.",
+        "tooManyDomains": "Er kunnen samen maximaal {maxDomains} afzenders worden gebruikt ({domains}). Selecteer e-mails van {maxDomains} afzenders of minder.",
+        "tradeOneDomain": "Een handelsprofiel leest de e-mails van één afzender ({domains}). Selecteer handelsbevestigingen van één afzender."
+      }
+    },
+    "pager": {
+      "itemName": "e-mails",
+      "total": "{count, plural, one {# e-mail} other {# e-mails}}",
+      "page": "Pagina {page}"
+    },
+    "draft": {
+      "failed": "Het opstellen van een profiel kon niet worden gestart",
+      "queued": "In de wachtrij: het verzoek wacht in het AI-controlepostvak op een agent. Er is nu geen assistent beschikbaar om te antwoorden.",
+      "handoffFailed": "Het verzoek staat in de wachtrij, maar de e-mails konden niet in de chat worden geopend. Het wacht in het AI-controlepostvak op een agent.",
+      "inboxLink": "Het AI-controlepostvak openen",
+      "opened": "De chat is geopend met de e-mails als bijlage. Lees het bericht en druk op Verzenden.",
+      "chatPrompt": "Maak een profile voor e-mailbonnen voor {count, plural, one {deze bestelmail} other {deze # bestelmails}} van {domain}. Claim AI-beoordelingsverzoek {requestId}, test je profile op elke bijgevoegde e-mail met de tool email_receipt_profiles, verbeter hem totdat elke e-mail volledig wordt gelezen en sla hem daarna op als concept voor verzoek {requestId}.",
+      "mixedKinds": "De geselecteerde e-mails mengen transactiebevestigingen en bestelmails. Een profiel leest één soort, dus selecteer alleen transactiebevestigingen of alleen bestelmails.",
+      "chatPromptTrade": "Maak een transactieprofiel voor {count, plural, one {deze transactiebevestiging} other {deze # transactiebevestigingen}} van {domain}. Claim AI-beoordelingsverzoek {requestId}, test je profiel op elke bijgevoegde e-mail met de tool email_receipt_parsers, verbeter het totdat uit elke e-mail een volledige transactie wordt gelezen en sla het daarna op als concept voor verzoek {requestId}."
+    },
+    "tradeBadge": "Transactie",
+    "bulkDialog": {
+      "delete": {
+        "title": "E-mails verwijderen?",
+        "message": "{count, plural, one {# e-mail verwijderen} other {# e-mails verwijderen}}{scope, select, both { van {domain} met de status {status}} domain { van {domain}} status { met de status {status}} other {}}? Dit kan niet ongedaan worden gemaakt. Kies in plaats daarvan “Negeren” om de e-mails te bewaren en te voorkomen dat ze iets voorstellen. E-mails die aan een transactie zijn gekoppeld, blijven bewaard."
+      },
+      "ignore": {
+        "title": "E-mails negeren?",
+        "message": "{count, plural, one {# e-mail negeren} other {# e-mails negeren}}{scope, select, both { van {domain} met de status {status}} domain { van {domain}} status { met de status {status}} other {}}? Ze stellen dan niets meer voor en hun openstaande beoordelingsverzoeken worden afgewezen. E-mails die aan een transactie zijn gekoppeld, blijven ongewijzigd.",
+        "confirm": "Negeren"
+      },
+      "countChanged": "Het aantal passende e-mails is nu {count}. Er is niets gewijzigd. Controleer het aantal en bevestig opnieuw.",
+      "approve": {
+        "title": "Voorstellen goedkeuren?",
+        "message": "{count, plural, one {# voorstel goedkeuren} other {# voorstellen goedkeuren}}? Elk voorstel wordt toegepast zoals de knop Bevestigen in de AI-beoordelingsinbox.",
+        "trades": "{count, plural, one {# handels-e-mail wordt overgeslagen. Keur hem goed op zijn kaart in de AI-beoordelingsinbox.} other {# handels-e-mails worden overgeslagen. Keur ze goed op hun kaarten in de AI-beoordelingsinbox.}}",
+        "confirm": "Goedkeuren"
+      },
+      "searchNote": "Alleen de e-mails die overeenkomen met de zoekopdracht worden meegenomen.",
+      "narrowedNote": "E-mails die uit de selectie zijn gehaald, blijven ongewijzigd."
+    },
+    "bulk": {
+      "result": {
+        "deleted": "{count, plural, one {# e-mail verwijderd.} other {# e-mails verwijderd.}}",
+        "ignored": "{count, plural, one {# e-mail genegeerd.} other {# e-mails genegeerd.}}",
+        "unchanged": "{count, plural, one {# e-mail was al genegeerd.} other {# e-mails waren al genegeerd.}}",
+        "notIgnorable": "{count, plural, one {# e-mail kon niet worden genegeerd: hij kon niet worden gelezen, of zijn voorstel is al toegepast.} other {# e-mails konden niet worden genegeerd: ze konden niet worden gelezen, of hun voorstellen zijn al toegepast.}}",
+        "skippedLinked": "{count, plural, one {# e-mail die aan een transactie is gekoppeld, is bewaard.} other {# e-mails die aan een transactie zijn gekoppeld, zijn bewaard.}}",
+        "reprocessed": "{count, plural, one {# e-mail opnieuw verwerkt.} other {# e-mails opnieuw verwerkt.}}",
+        "restored": "{count, plural, one {# genegeerde e-mail opnieuw gelezen.} other {# genegeerde e-mails opnieuw gelezen.}}",
+        "reprocessFailed": "{count, plural, one {# e-mail mislukt.} other {# e-mails mislukt.}}",
+        "stopped": "{count, plural, one {Gestopt. # e-mail is niet verwerkt.} other {Gestopt. # e-mails zijn niet verwerkt.}}",
+        "approved": "{count, plural, one {# voorstel goedgekeurd.} other {# voorstellen goedgekeurd.}}",
+        "approveFailed": "{count, plural, one {# voorstel kon niet worden goedgekeurd.} other {# voorstellen konden niet worden goedgekeurd.}}"
+      },
+      "deleteFailed": "De e-mails konden niet worden verwijderd",
+      "ignoreFailed": "De e-mails konden niet worden genegeerd",
+      "noneLeft": "Er zijn geen passende e-mails meer. Er is niets gewijzigd.",
+      "reprocessFailed": "De e-mails konden niet opnieuw worden verwerkt",
+      "approveFailed": "De voorstellen konden niet worden goedgekeurd",
+      "noApprovable": "Geen enkel voorstel in deze selectie kan worden goedgekeurd.",
+      "narrowFailed": "De e-mails konden niet worden geteld. De wijziging is niet toegepast."
+    },
+    "linkedDraftDialog": {
+      "title": "Gekoppelde profielen laten opstellen?",
+      "message": "U hebt e-mails van meerdere afzenders geselecteerd: {domains}. Gebruik dit alleen als de gegevens van één banktransactie verspreid staan over e-mails van meerdere afzenders, bijvoorbeeld een webwinkel en zijn aanbieder van uitgestelde betaling, of een webwinkel en een betaalprovider. Voor webwinkels zonder verband annuleert u en stelt u één domein per keer op. Een verzoek neemt maximaal {perDomain} e-mails per afzender en maximaal {maxDomains} afzenders.",
+      "domainEntry": "{domain} ({count, plural, one {# e-mail} other {# e-mails}})",
+      "confirm": "Gekoppelde profielen laten opstellen"
+    }
+  },
+  "detail": {
+    "title": "E-mailbon",
+    "loading": "E-mail laden",
+    "error": {
+      "title": "De e-mail kon niet worden geladen",
+      "body": "Het verzoek is mislukt. Probeer het opnieuw.",
+      "retry": "Opnieuw proberen"
+    },
+    "from": "Van",
+    "received": "Ontvangen",
+    "forwardedBy": "Doorgestuurd door",
+    "originalSent": "Verzonden door de winkel",
+    "subject": "Onderwerp",
+    "state": "Status",
+    "parser": "Profiel",
+    "noParser": "Geen",
+    "structuredSource": "Gestructureerde gegevens",
+    "matchedBy": "Gekoppeld via",
+    "matchKinds": {
+      "order_id": "Ordernummer",
+      "amount_payee": "Bedrag en begunstigde",
+      "amount_only": "Bedrag",
+      "manual": "Jouw keuze",
+      "reference": "Referentie",
+      "amount_date": "Bedrag en datum"
+    },
+    "transaction": "Transactie",
+    "transactionSummary": "{date}, {amount}, {payee}",
+    "noPayee": "geen begunstigde",
+    "viewTransaction": "Transactie bekijken",
+    "noTransaction": "Nog geen",
+    "reasons": {
+      "too_large": "De e-mail is groter dan de groottelimiet, dus hij is opgeslagen zonder te worden gelezen.",
+      "undecodable": "De e-mail kon niet worden gedecodeerd, dus hij is opgeslagen zonder te worden gelezen.",
+      "draft_failed": "De AI kon geen profiel opstellen voor deze afzender.",
+      "parser_invalid": "Het profiel voor deze afzender is niet geldig. Bewerk het in de profielinstellingen.",
+      "no_total": "Het profiel vond geen totaal in deze e-mail.",
+      "no_items": "Het profiel vond geen artikelregels.",
+      "items_unbalanced": "De artikelregels tellen niet op tot het totaal.",
+      "items_uncategorized": "Sommige artikelregels hebben geen categorie.",
+      "shipping_uncategorized": "De verzendregel heeft geen categorie.",
+      "amount_differs": "Het gelezen totaal wijkt af van het bedrag van de transactie, dus er wordt alleen een omschrijving voorgesteld.",
+      "proposal_fallback": "Het gespecificeerde voorstel is geweigerd, dus er wordt alleen een omschrijving voorgesteld.",
+      "nothing_to_propose": "De e-mail voegt niets toe aan deze transactie.",
+      "proposal_refused": "Het voorstel is geweigerd, dus er is niets voorgesteld.",
+      "skip_line": "Er is een regel gevonden waarop dit profiel overslaat, dus de e-mail is genegeerd.",
+      "wait_line": "Een regel zegt dat de bestelling nog niet definitief is, dus de e-mail wordt later opnieuw gelezen.",
+      "profile_ignore": "Het profiel van deze e-mail negeert elke overeenkomende e-mail.",
+      "no_html": "Dit profiel leest het HTML-deel van de e-mail en deze e-mail heeft er geen.",
+      "schema_org": "Er was geen profiel nodig: de bestelling is gelezen uit de gestructureerde gegevens (schema.org) in de e-mail.",
+      "item_amount_missing": "Een artikel heeft geen bedrag en de e-mail heeft geen enkel totaal om het te geven.",
+      "trade_no_action": "Het profiel vond geen aankoop, verkoop, dividend of herbelegging in deze e-mail.",
+      "trade_no_symbol": "Het profiel vond geen beurssymbool in deze e-mail.",
+      "trade_no_quantity": "Het profiel vond geen aantal aandelen in deze e-mail, dat een aankoop, een verkoop of een herbelegd dividend nodig heeft.",
+      "trade_no_amount": "Het profiel vond in deze e-mail geen totaal en geen prijs.",
+      "trade_no_account": "Het profiel kon niet bepalen voor welke rekening deze transactie is.",
+      "trade_exists": "Je rekeningen bevatten deze transactie al, dus er is niets voorgesteld.",
+      "trade_linked": "Gekoppeld aan de transactie die het meldt, dus er is niets voorgesteld.",
+      "trade_no_currency": "Het profiel kon niet bepalen in welke valuta deze transactie is, dus het kon de rekening niet kiezen.",
+      "awaiting_settlement": "Aankoopmail opgeslagen. Hij wacht op de terugbetalingsmail die hem betaalt.",
+      "settled": "Aankoopmail opgeslagen. De terugbetalingsmails die eraan zijn gekoppeld, betalen het hele bedrag.",
+      "instalment": "Aankoopmail opgeslagen. Terugbetalingen hebben een deel betaald; de rest moet nog worden betaald.",
+      "partially_linked": "Voor sommige delen van deze terugbetaling is nog geen aankoopmail. Ze worden als één regel per deel getoond.",
+      "enriched_by_other": "De gevonden transactie is al aangevuld door een andere e-mail. Open haar en gebruik Koppelen om die aanvulling te vervangen, of negeer deze e-mail.",
+      "no_link_key": "Deze aankoopmail bevat geen koppelsleutel, dus geen terugbetaling kan hem vinden."
+    },
+    "reasonUnknown": "Reden: {reason}",
+    "requestNote": "Controleverzoek ({state}): {note}",
+    "parsedHeading": "Wat het profiel las",
+    "tradeHeading": "Uit de e-mail gelezen transactie",
+    "tradeCandidatesHeading": "Bestaande transacties die deze transactie kunnen zijn",
+    "tradeCandidatesHelp": "Deze beleggingstransacties kunnen de transactie zijn die deze e-mail meldt. Koppel de juiste: er wordt geen nieuwe transactie gemaakt en een geplande rekening of storting die ze betaalt, wordt als betaald gemarkeerd.",
+    "notParsed": "Er is nog niets uit deze e-mail gelezen.",
+    "candidatesHeading": "Transacties die passen",
+    "candidatesHelp": "Meerdere transacties passen even goed bij deze e-mail. Kies de transactie die ermee is betaald.",
+    "linkButton": "Aan deze transactie koppelen",
+    "linked": "E-mail aan de transactie gekoppeld",
+    "linkFailed": "De e-mail kon niet worden gekoppeld",
+    "bodyHeading": "E-mail",
+    "textLabel": "Tekst van de e-mail",
+    "noText": "De e-mail heeft geen tekst.",
+    "bodyView": {
+      "label": "De e-mail weergeven als",
+      "html": "HTML",
+      "text": "Tekst",
+      "lines": "Regels"
+    },
+    "remoteImagesNote": "Externe afbeeldingen worden niet geladen.",
+    "htmlFrameTitle": "De e-mail zoals de afzender hem heeft opgemaakt",
+    "structured": {
+      "heading": "Gestructureerde gegevens (schema.org)",
+      "help": "Een bestelling of factuur die de e-mail meestuurt als markup voor e-mailprogramma's. Ze wordt alleen gelezen als er geen profiel van toepassing is of het profiel geen totaal vindt.",
+      "found": "Gevonden",
+      "notFound": "Niet gevonden",
+      "notFoundHelp": "De e-mail bevat geen bestelmarkup, of die vermeldt geen totaal en geen artikelregels.",
+      "seller": "Verkoper",
+      "currency": "Valuta",
+      "orderDate": "Besteldatum",
+      "unitPrice": "Stuksprijs"
+    },
+    "lines": {
+      "help": "De regels waarmee de patronen van een profiel worden vergeleken, genummerd zoals de lijst Gevonden via van een test ze nummert.",
+      "sourceLabel": "Bron van de regels",
+      "sources": {
+        "text": "Tekst",
+        "html": "HTML"
+      },
+      "noHtml": "Deze e-mail heeft geen HTML-deel, dus een profiel dat HTML leest kan hem niet lezen.",
+      "capped": "Alleen de eerste {max} regels worden gelezen.",
+      "empty": "Geen regels.",
+      "listLabel": "Genummerde regels van de e-mail"
+    },
+    "linkedReceipts": {
+      "componentsHeading": "Gekoppelde aankoopmails",
+      "component": "Deel {part}: {subject} ({date})",
+      "settlementsHeading": "Betaald door",
+      "settlement": "{subject} ({date}), deel {amount}",
+      "enrichedBy": "Al aangevuld door: {subject}",
+      "openButton": "Openen",
+      "open": "De e-mail {subject} openen"
+    },
+    "tradeTransactionSummary": "{action, select, BUY {Gekocht: {quantity} {symbol} voor {total} op {date}.} SELL {Verkocht: {quantity} {symbol} voor {total} op {date}.} DIVIDEND {Dividend van {symbol}: {total} op {date}.} REINVEST {Dividend herbelegd in {quantity} {symbol} voor {total} op {date}.} other {{quantity} {symbol} voor {total} op {date}.}}",
+    "noTradeTransaction": "Nog geen: de transactie wordt geboekt wanneer je het voorstel goedkeurt, of gekoppeld aan een transactie die al in je administratie staat.",
+    "candidateShares": "{quantity} aandelen",
+    "tradeNoCandidates": "Geen beleggingstransactie van deze rekening, transactietype en ticker binnen een week van de transactiedag is vrij om te koppelen. Heb je de transactie zelf ingevoerd, controleer dan de rekening en de datum; keur anders het voorstel goed in de beoordelingsinbox.",
+    "aiTradeHeading": "Transactie die de AI-agent voorstelt",
+    "aiTradeReader": "Geen: de AI-agent leest het als een transactie",
+    "noAiTradeTransaction": "Nog geen: de transactie wordt geboekt zodra je het voorstel van de AI-agent goedkeurt.",
+    "tradeProposalHeading": "Wat het voorstel zou boeken"
+  },
+  "picker": {
+    "heading": "Kies de transactie",
+    "help": "Er is automatisch geen transactie gekoppeld. Dit zijn je transacties in het datumbereik hieronder, dat begint met de dagen rond de aankoop. Kies de transactie die ermee is betaald, of wijzig de datums om verder te zoeken.",
+    "fromLabel": "Van",
+    "toLabel": "Tot",
+    "searchPlaceholder": "Zoek op begunstigde, omschrijving of bedrag...",
+    "loading": "Transacties laden",
+    "error": "De transacties konden niet worden geladen.",
+    "retry": "Opnieuw proberen",
+    "empty": "Je hebt in deze periode geen transacties die kunnen worden gekoppeld. Je kunt de datums hierboven verruimen om verder te zoeken.",
+    "emptySearch": "Geen enkele transactie in deze periode komt overeen met de zoekopdracht. Je kunt de datums hierboven verruimen.",
+    "rangeReversed": "De Van-datum ligt na de Tot-datum.",
+    "rangeIncomplete": "Vul beide datums in om transacties weer te geven.",
+    "row": "{date}, {amount}, {payee}",
+    "noPayee": "geen begunstigde",
+    "linkButton": "Koppelen",
+    "hasMore": "Alleen de eerste {count} worden getoond. Gebruik het zoekveld om de lijst te beperken.",
+    "ai": {
+      "heading": "Kies de transactie voor de AI",
+      "help": "Dit zijn je transacties in het datumbereik hieronder, dat begint met de dagen rond de aankoop. Kies de transactie die de AI moet splitsen op basis van de producten in de e-mail, of wijzig de datums om verder te zoeken.",
+      "linkButton": "Deze transactie gebruiken"
+    },
+    "sample": {
+      "heading": "Kies de transactie die met deze e-mail is betaald",
+      "help": "Dit zijn je transacties in het datumbereik hieronder, dat begint met de dagen rond de aankoop. De keuze wordt in het stappenplan bewaard en gebruikt om het profiel te controleren; er wordt niets aan de e-mail gekoppeld. Wijzig de datums om verder te zoeken.",
+      "linkButton": "Deze transactie gebruiken"
+    }
+  },
+  "callback": {
+    "title": "De mailbox koppelen",
+    "connecting": "De koppeling voltooien",
+    "toasts": {
+      "connected": "Mailbox gekoppeld"
+    },
+    "success": {
+      "title": "Mailbox gekoppeld",
+      "body": "Gekoppeld als {username}. Je gaat terug naar de instellingen."
+    },
+    "providerError": {
+      "title": "Het inloggen is niet voltooid",
+      "withDescription": "De provider meldde: {error}. {description}",
+      "withoutDescription": "De provider meldde: {error}."
+    },
+    "missingParameters": {
+      "title": "Deze pagina is geopend zonder inlogresultaat",
+      "body": "Begin opnieuw vanuit de instellingen voor e-mailbonnen en gebruik een van de koppelknoppen."
+    },
+    "failed": {
+      "title": "De mailbox kon niet worden gekoppeld",
+      "fallback": "De server heeft de verbinding geweigerd. Begin opnieuw vanuit de instellingen voor e-mailbonnen."
+    },
+    "backLink": "Terug naar de instellingen voor e-mailbonnen"
+  },
+  "recognize": {
+    "title": "Herkennen met AI",
+    "tradeTitle": "Herken als transactie met AI",
+    "tradeMessage": "De AI leest deze e-mail als handelsbevestiging van een broker en stelt de beleggingstransactie voor die erin staat (rekening, aankoop, verkoop, contant dividend of herbelegd dividend, symbool, aandelen en totaal). Er wordt niets opgeslagen tot je het goedkeurt.",
+    "tradeConfirm": "Herken als transactie",
+    "transactionSummary": "{date}, {amount}, {payee}",
+    "noPayee": "geen begunstigde",
+    "confirmMessage": "Deze e-mail is gekoppeld aan de transactie {summary}. De AI leest de e-mail en stelt voor hoe deze transactie per product wordt gesplitst. Doorgaan met deze transactie?",
+    "confirm": "Herkennen met AI",
+    "chooseOther": "Een andere transactie kiezen",
+    "candidatesHeading": "Welke transactie is met de e-mail betaald?",
+    "candidatesHelp": "Meerdere transacties passen bij deze e-mail. Kies de transactie die de AI moet gebruiken of zoek een andere.",
+    "candidatesLoading": "Passende transacties laden",
+    "candidatesError": "De passende transacties konden niet worden geladen.",
+    "retry": "Opnieuw proberen",
+    "useButton": "Deze transactie gebruiken",
+    "searchOther": "Andere transacties zoeken",
+    "back": "Terug",
+    "failed": "Kon de herkenning niet starten",
+    "queued": "In de wachtrij: er is nu geen AI-assistent beschikbaar om te antwoorden, dus het verzoek wacht in het AI-controlepostvak op een agent (bijvoorbeeld via MCP).",
+    "handoffFailed": "Het verzoek staat in de wachtrij, maar de e-mail kon niet in de chat worden geopend. Het wacht in het AI-controlepostvak op een agent (bijvoorbeeld via MCP).",
+    "inboxLink": "Het AI-controlepostvak openen",
+    "opened": "De chat is geopend met de e-mail als bijlage. Lees het bericht en druk op Verzenden.",
+    "chatPrompt": "Herken de producten, aantallen en prijzen in de bijgevoegde bestel-e-mail en splits mijn transactie van {date} ({payee}, {amount}) per product, met een categorie voor elk. Neem AI-controleverzoek {requestId} over en dien je voorstel ervoor in.",
+    "tradeChatPrompt": "Herken de transactie in de bijgevoegde bevestigingsmail van de broker: de rekening, of het een aankoop, een verkoop, een contant dividend of een herbelegd dividend is, het symbool, de aandelen (een contant dividend noemt er misschien geen), het uitgevoerde totaal en de datum. Neem AI-beoordelingsverzoek {requestId} aan en dien de transactie ervoor in.",
+    "tradeDetachesTransaction": "Als transactie gelezen hoort deze e-mail niet meer bij {summary}: de transactie maakt een eigen beleggingstransactie aan."
+  },
+  "hub": {
+    "tabs": {
+      "ariaLabel": "Onderdelen van e-mailbonnen",
+      "overview": "Overzicht",
+      "emails": "E-mails",
+      "profiles": "Profielen",
+      "mailbox": "Mailbox"
+    },
+    "demoRestricted": {
+      "heading": "Beperkt in demomodus",
+      "body": "Een mailbox koppelen en profielen schrijven zijn uitgeschakeld in de demomodus."
+    }
+  },
+  "process": {
+    "retryFailed": "Mislukte e-mails opnieuw proberen ({count})",
+    "starting": "Starten...",
+    "progress": "{processed, plural, one {# e-mail verwerkt} other {# e-mails verwerkt}}, nog {remaining} te gaan.",
+    "cancel": "Annuleren",
+    "cancelling": "Annuleren...",
+    "summary": "{count, plural, one {# e-mail verwerkt.} other {# e-mails verwerkt.}}",
+    "cancelledSummary": "Geannuleerd na {count, plural, one {# e-mail.} other {# e-mails.}}",
+    "outcomes": "Ze eindigden als volgt: {outcomes}.",
+    "passedOver": "{count, plural, one {# e-mail gaf een fout en is overgeslagen.} other {# e-mails gaven een fout en zijn overgeslagen.}}",
+    "failed": "De verwerking is gestopt omdat een verzoek is mislukt.",
+    "failedWithReason": "De verwerking is gestopt: {reason}",
+    "outcome": "{count} {state}",
+    "deletedOutcome": "{count} verwijderd",
+    "close": "Sluiten"
+  },
+  "overview": {
+    "loading": "Het overzicht wordt geladen...",
+    "error": {
+      "title": "Het overzicht kon niet worden geladen",
+      "body": "Het verzoek is mislukt, dus niets hier mag als leeg worden beschouwd. Probeer het opnieuw.",
+      "retry": "Opnieuw proberen"
+    },
+    "mailbox": {
+      "title": "Mailbox",
+      "none": "Er is nog geen mailbox gekoppeld.",
+      "connect": "Een mailbox koppelen",
+      "manage": "De mailboxinstellingen openen",
+      "state": {
+        "notConnected": "Niet gekoppeld",
+        "failing": "De laatste poging om op te halen is mislukt",
+        "off": "Ophalen staat uit",
+        "polling": "Wordt opgehaald"
+      },
+      "auth": {
+        "password": "Inloggen met wachtwoord",
+        "oauth2": "Inloggen via een provider"
+      },
+      "lastSuccess": "Laatst succesvol opgehaald {when}",
+      "neverPolled": "Nog niet succesvol opgehaald.",
+      "lastError": "Laatste fout: {error}"
+    },
+    "emails": {
+      "title": "E-mails",
+      "stored": "opgeslagen",
+      "processable": "{count, plural, one {# e-mail kan opnieuw worden verwerkt} other {# e-mails kunnen opnieuw worden verwerkt}}.",
+      "open": "De e-mails openen"
+    },
+    "proposals": {
+      "title": "Voorstellen",
+      "waiting": "wachten op jouw goedkeuring",
+      "review": "De voorstellen bekijken",
+      "open": "Het AI-controlepostvak openen"
+    },
+    "profiles": {
+      "title": "Profielen",
+      "approved": "goedgekeurd",
+      "drafts": "{count, plural, one {# concept wacht op jouw goedkeuring} other {# concepten wachten op jouw goedkeuring}}.",
+      "manage": "De profielen openen"
+    },
+    "uncovered": {
+      "title": "Afzenders zonder profiel",
+      "help": "Deze afzenders stuurden e-mails die geen enkel profiel leest. Maak een profiel voor een van hen: het stappenplan op het tabblad Profielen loopt het met je door.",
+      "none": "Elke afzender van de opgeslagen e-mails wordt door een profiel gedekt.",
+      "row": "{domain} ({count, plural, one {# e-mail} other {# e-mails}})",
+      "create": "Profiel maken"
+    }
+  },
+  "wizard": {
+    "heading": "Aan de slag met e-mailbonnen",
+    "intro": "Vier stappen van niets tot je eerste voorstel.",
+    "done": "(klaar)",
+    "steps": {
+      "mailbox": {
+        "title": "Een mailbox koppelen",
+        "body": "Gebruik een aparte mailbox die je bestelbevestigingen ontvangt. Monize leest hem alleen.",
+        "action": "Een mailbox koppelen"
+      },
+      "emails": {
+        "title": "De e-mails ophalen",
+        "body": "E-mails worden gelezen wanneer de mailbox wordt opgehaald. Haal hem op via de mailboxinstellingen om de eerste te zien.",
+        "action": "De e-mails openen"
+      },
+      "profile": {
+        "title": "Een profiel voor een afzender maken",
+        "body": "Een profiel vertelt Monize hoe de bestelbevestigingen van één afzender moeten worden gelezen. Schrijf er een, of laat een concept opstellen uit een opgeslagen e-mail.",
+        "action": "De profielen openen"
+      },
+      "review": {
+        "title": "De voorstellen bekijken",
+        "body": "Elke e-mail wordt een voorstel voor een transactie. Er wordt niets gewijzigd totdat je het goedkeurt.",
+        "action": "Het AI-controlepostvak openen"
+      }
+    }
+  },
+  "profileWizard": {
+    "heading": "Profiel maken voor {domain}",
+    "stepsLabel": "Stappen van het stappenplan",
+    "stepName": "{number}. {name}",
+    "steps": {
+      "samples": "Voorbeelden",
+      "generate": "Genereren",
+      "preview": "Voorvertoning en accepteren"
+    },
+    "cancel": "Annuleren",
+    "existingDraft": "Dit domein heeft al een conceptprofiel.",
+    "useExistingDraft": "Beginnen bij de voorvertoning met het concept",
+    "uncovered": {
+      "heading": "Profiel maken voor een domein",
+      "help": "Afzenderdomeinen met opgeslagen e-mails en zonder goedgekeurd profiel. Kies er een om het stappenplan te starten.",
+      "loading": "Afzenderdomeinen laden",
+      "error": "De afzenderdomeinen konden niet worden geladen.",
+      "retry": "Opnieuw proberen",
+      "none": "Elke afzender van de opgeslagen e-mails wordt door een profiel gedekt."
+    },
+    "samples": {
+      "loading": "E-mails laden",
+      "error": "De e-mails konden niet worden geladen.",
+      "retry": "Opnieuw proberen",
+      "empty": {
+        "title": "Geen e-mails van dit domein",
+        "body": "Geen enkele opgeslagen e-mail heeft een afzender bij {domain}."
+      },
+      "help": "Klik op een e-mail om hem te lezen en kies de transactie waarmee hij is betaald. Vink daarna maximaal {max} e-mails aan om het profiel uit te schrijven; een e-mail kan pas worden aangevinkt als hij een transactie heeft.",
+      "tradeToggle": "Deze e-mails zijn handelsbevestigingen van een broker (ze maken een beleggingstransactie, dus er wordt geen banktransactie gekoppeld)",
+      "tradeHelp": "Klik op een e-mail om hem te lezen en vink maximaal {max} handelsbevestigingen aan om het profiel van te schrijven. Je hoeft geen transactie te kiezen.",
+      "columns": {
+        "select": "Gebruiken",
+        "date": "Datum",
+        "email": "E-mail",
+        "transaction": "Transactie"
+      },
+      "select": "De e-mail {subject} als voorbeeld gebruiken",
+      "needsTransaction": "Kies eerst een transactie voor deze e-mail.",
+      "limitReached": "Maximaal {max} voorbeelden. Haal bij een het vinkje weg om een ander te kiezen.",
+      "noTransaction": "Geen gekozen",
+      "tradeNoTransaction": "Niet nodig voor een handelsbevestiging",
+      "selectedCount": "{count} van {max} voorbeelden aangevinkt",
+      "continue": "Verder naar de assistent",
+      "emailLoading": "E-mail laden",
+      "emailError": "De e-mail kon niet worden geladen.",
+      "dialogTitle": "E-mail en transactie: {subject}",
+      "emailHeading": "E-mail"
+    },
+    "generate": {
+      "help": "De assistent leest deze e-mails en de transacties waarmee ze zijn betaald en schrijft een conceptprofiel voor {domain}. Er is nog niets goedgekeurd.",
+      "reviseHelp": "Vertel de assistent wat er moet veranderen. Hij werkt hetzelfde concept bij op basis van deze e-mails en transacties.",
+      "tradeHelp": "De assistent leest deze handelsbevestigingen en schrijft een conceptprofiel voor {domain} dat de beleggingstransactie voorstelt die elk meldt. Er is nog niets goedgekeurd.",
+      "tradeSample": "Handelsbevestiging",
+      "feedbackLabel": "Gewenste wijzigingen",
+      "feedbackPlaceholder": "Bijvoorbeeld: het totaal is de regel met Betaald bedrag, niet het subtotaal.",
+      "send": "Naar AI sturen",
+      "sendFeedback": "Notitie naar AI sturen",
+      "retry": "Opnieuw naar AI sturen",
+      "back": "Terug",
+      "running": "De assistent schrijft het profiel...",
+      "runningHint": "Dit kan een minuut duren. Houd deze pagina open.",
+      "noDraft": "De assistent heeft geen concept opgeslagen.",
+      "tryAgain": "Je kunt het opnieuw sturen, of teruggaan en de voorbeelden wijzigen.",
+      "failed": "De assistent was niet bereikbaar.",
+      "sendFailed": "Het verzoek kon niet worden verstuurd."
+    },
+    "waiting": {
+      "heading": "Wachten op je AI-agent",
+      "body": "Verstuurd naar de AI-inbox. Je agent maakt het profiel klaar zodra hij verbinding maakt; je kunt dit sluiten en later terugkomen.",
+      "working": "Je agent heeft het verzoek opgepakt en is ermee bezig.",
+      "polling": "Zolang deze pagina openstaat, controleert ze elke {seconds} seconden.",
+      "checkFailed": "Het verzoek kon niet worden gecontroleerd. Er wordt zo opnieuw geprobeerd.",
+      "ended": "Het verzoek is gesloten zonder nieuw concept (afgewezen of verlopen). Je kunt opnieuw beginnen.",
+      "inboxLink": "AI-inbox openen",
+      "checkNow": "Nu controleren",
+      "startOver": "Opnieuw beginnen"
+    },
+    "preview": {
+      "loading": "E-mails lezen met het concept...",
+      "error": "De voorvertoning kon niet worden uitgevoerd.",
+      "retry": "Opnieuw proberen",
+      "assistantSaid": "De assistent zegt",
+      "help": "Dit is wat het concept met de e-mails van dit domein zou doen. Er is niets opgeslagen of gekoppeld.",
+      "selectedHeading": "Geselecteerde e-mails",
+      "othersHeading": "Andere e-mails van dit domein",
+      "othersCapped": "De nieuwste {shown} van {total} andere e-mails worden getoond.",
+      "columns": {
+        "email": "E-mail",
+        "expected": "Verwachte transactie",
+        "parsed": "Door het concept gelezen",
+        "agrees": "Komt overeen",
+        "outcome": "Uitkomst",
+        "matched": "Gekoppelde transactie"
+      },
+      "nothingRead": "Er kon niets worden gelezen",
+      "notStated": "niet vermeld",
+      "parsedDate": "Datum: {date}",
+      "parsedTotal": "Totaal: {total}",
+      "parsedLines": "{count, plural, one {# regel} other {# regels}}",
+      "parsedTrade": "{action, select, BUY {Koopt {quantity} aandelen {symbol}} SELL {Verkoopt {quantity} aandelen {symbol}} DIVIDEND {Keert een dividend van {symbol} uit} REINVEST {Herbelegt een dividend in {quantity} aandelen {symbol}} other {Handelt in {symbol}}}",
+      "tradeInconsistent": "De prijs komt niet overeen met het totaal, dus dit wordt niet automatisch toegepast",
+      "noExpectation": "Geen",
+      "noMatch": "Geen transactie",
+      "agreesYes": "Ja",
+      "agreesNo": "Nee",
+      "agreesUnknown": "Niet gecontroleerd",
+      "nothingToShow": "Het concept heeft geen e-mails om te tonen.",
+      "backToSamples": "Terug naar de voorbeelden",
+      "backToAi": "Terug naar AI",
+      "accept": "Accepteren en verwerken",
+      "approved": "Profiel goedgekeurd",
+      "changedElsewhere": "Het profiel is elders gewijzigd. Laad de voorvertoning opnieuw.",
+      "approveFailed": "Het profiel kon niet worden goedgekeurd.",
+      "approvedProcessing": "Het profiel is goedgekeurd. De opgeslagen e-mails van {domain} worden ermee gelezen.",
+      "done": "Klaar",
+      "outcomes": {
+        "matched": "Transactie gekoppeld",
+        "ambiguous": "Meerdere transacties komen overeen",
+        "unmatched": "Geen transactie gekoppeld",
+        "parse_failed": "Kon niet worden gelezen",
+        "not_applicable": "Niet gelezen door dit profiel",
+        "skip_line": "Overgeslagen (overslaanregel gevonden)",
+        "wait_line": "In de wacht (bestelling niet definitief)",
+        "discard_ignore": "Genegeerd door dit profiel",
+        "discard_delete": "Verwijderd door dit profiel",
+        "no_html": "Geen HTML-deel",
+        "trade": "Stelt een transactie voor",
+        "trade_exists": "Staat al in je administratie",
+        "component": "Aankoopmail (wacht op terugbetaling)"
+      },
+      "parsedTradeAccount": "Rekening: {account}",
+      "accountWithCurrency": "{name} ({currency})",
+      "accountUnknown": "onbekend",
+      "parsedTradeNoAccount": "Geen rekening gevonden voor deze transactie",
+      "parsedTradeCurrency": "Valuta: {currency}"
+    }
+  },
+  "trade": {
+    "summary": "{action, select, BUY {Aankoop: {quantity} aandelen {symbol} voor {total}, gedateerd {date}.} SELL {Verkoop: {quantity} aandelen {symbol} voor {total}, gedateerd {date}.} DIVIDEND {Dividend van {symbol}: {total}, gedateerd {date}.} REINVEST {Herbelegging van een dividend in {quantity} aandelen {symbol} voor {total}, gedateerd {date}.} other {{symbol} voor {total}, gedateerd {date}.}}",
+    "account": "Rekening genoemd in de e-mail: {account}",
+    "priceMismatch": "De gemiddelde prijs komt niet overeen met de aandelen en het totaal, dus deze transactie wordt niet automatisch toegepast.",
+    "dividendMismatch": "Het bedrag per aandeel komt niet overeen met de aandelen en het totaal, dus dit dividend wordt niet automatisch toegepast.",
+    "dividendShares": "Uitbetaald op {quantity} aandelen",
+    "dividendPerShare": "Bedrag per aandeel in de e-mail: {price}",
+    "incomplete": "Het profiel kon uit deze e-mail geen volledige transactie lezen.",
+    "totalFromPrice": "het uit de prijs afgeleide totaal",
+    "dateUnknown": "de dag waarop de e-mail binnenkwam",
+    "price": "Gemiddelde prijs in de e-mail: {price} per aandeel",
+    "proposalSecurity": "Effect: {name}",
+    "proposalAccount": "Rekening: {account}",
+    "proposalPrice": "Koers: {price} per aandeel",
+    "proposalDividendPerShare": "Bedrag per aandeel: {price}",
+    "proposalCommission": "Provisie: {commission}",
+    "proposalReview": "Er wordt niets geboekt tot je het goedkeurt.",
+    "proposalReviewLink": "Bekijk het in de inbox",
+    "aiWaiting": "De AI-agent heeft de transactie nog niet voorgesteld. Het voorstel verschijnt hier en in de beoordelingsinbox.",
+    "aiBooked": "Geboekt op basis van het voorstel van de AI-agent: zie de transactie hierboven.",
+    "aiNoProposal": "Er wacht geen voorstel van de AI-agent voor deze e-mail.",
+    "currencyFrom": "Valuta: {currency}, {source, select, amount {genoemd door het bedrag} marker {uit een valutamarkering van het profiel} other {uit je effect voor de ticker}}",
+    "bookTo": "Geboekt op: {account}",
+    "bookToNotTradable": "Geboekt op {account}, dat geen open effectenrekening is, dus de transactie kan daar niet worden geboekt.",
+    "bookToUnknown": "Geboekt op een rekening die niet in je lijst staat, dus de transactie kan daar niet worden geboekt."
+  },
+  "linkedHint": {
+    "emails": "Eén banktransactie die in e-mails van meerdere afzenders staat (bijvoorbeeld een webwinkel en zijn aanbieder van uitgestelde betaling)? Selecteer samen maximaal {max} e-mails van elk van die afzenders en laat gekoppelde profielen opstellen.",
+    "profiles": "Het stappenplan hieronder stelt een profiel op voor één afzender. Eén banktransactie die in e-mails van meerdere afzenders staat (bijvoorbeeld een webwinkel en zijn aanbieder van uitgestelde betaling)? Selecteer op het tabblad E-mails maximaal {max} e-mails van elk van die afzenders en laat gekoppelde profielen opstellen.",
+    "openEmails": "Tabblad E-mails openen"
+  }
+}

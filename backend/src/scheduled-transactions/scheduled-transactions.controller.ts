@@ -28,15 +28,23 @@ import { ScheduledTransactionsService } from "./scheduled-transactions.service";
 import { CreateScheduledTransactionDto } from "./dto/create-scheduled-transaction.dto";
 import { UpdateScheduledTransactionDto } from "./dto/update-scheduled-transaction.dto";
 import { PostScheduledTransactionDto } from "./dto/post-scheduled-transaction.dto";
+import { SkipScheduledTransactionDto } from "./dto/skip-scheduled-transaction.dto";
 import { ScheduledOccurrencesQueryDto } from "./dto/scheduled-occurrences-query.dto";
+import { AmountEstimateQueryDto } from "./dto/amount-estimate-query.dto";
+import {
+  LOAN_OCCURRENCES_DEFAULT_COUNT,
+  LoanOccurrencesQueryDto,
+} from "./dto/loan-occurrences-query.dto";
 import {
   CreateScheduledTransactionOverrideDto,
   UpdateScheduledTransactionOverrideDto,
 } from "./dto/scheduled-transaction-override.dto";
 import {
   AllowDelegate,
+  DelegatedBodyAccounts,
   DelegatedTransferBody,
   DelegatedScheduledParam,
+  DelegateReadsEveryScheduledAccount,
   DelegateRequires,
   DelegateRequiresSection,
 } from "../delegation/decorators/delegate-access.decorator";
@@ -44,8 +52,24 @@ import { DelegateScheduledTransferMaskInterceptor } from "../delegation/intercep
 import { DelegationService } from "../delegation/delegation.service";
 import { JointAccountsService } from "../delegation/joint-accounts.service";
 import { tr } from "../i18n/translate";
+import { AllowPat } from "../auth/pat-access/pat-access.decorator";
+
+/**
+ * A delegate does not turn an estimate on or off (issue #2096): the estimate
+ * reads the owner's payments in every account, so a delegate choosing the
+ * payee and category would read history the delegation cannot. The key is
+ * dropped, so an edit keeps the stored flag and a create saves none.
+ */
+function withoutDelegateEstimateToggle<
+  T extends { amountIsEstimated?: boolean },
+>(req: { user: { isActing?: boolean } }, dto: T): T {
+  if (!req.user.isActing || dto.amountIsEstimated === undefined) return dto;
+  const { amountIsEstimated: _dropped, ...rest } = dto;
+  return rest as T;
+}
 
 @ApiTags("Scheduled Transactions")
+@AllowPat()
 @Controller("scheduled-transactions")
 @UseGuards(AuthGuard("jwt"))
 @UseInterceptors(DelegateScheduledTransferMaskInterceptor)
@@ -98,9 +122,16 @@ export class ScheduledTransactionsController {
   @AllowDelegate()
   @DelegateRequiresSection("bills")
   @DelegatedTransferBody("accountId", "transferAccountId")
+  @DelegatedBodyAccounts(
+    "investmentFundingAccountId",
+    "splits[].transferAccountId",
+  )
   @DelegateRequires("create")
   create(@Request() req, @Body() createDto: CreateScheduledTransactionDto) {
-    return this.scheduledTransactionsService.create(req.user.id, createDto);
+    return this.scheduledTransactionsService.create(
+      req.user.id,
+      withoutDelegateEstimateToggle(req, createDto),
+    );
   }
 
   @Get()
@@ -116,7 +147,24 @@ export class ScheduledTransactionsController {
   @DelegateRequiresSection("bills")
   async findAll(@Request() req) {
     const rows = await this.scheduledTransactionsService.findAll(req.user.id);
-    return this.filterForDelegate(req, rows);
+    const visible = await this.filterForDelegate(req, rows);
+    if (!req.user.isActing) return visible;
+    // An estimate reads the owner's payments in every account. A delegate sees
+    // the bill's figures, as they would a typed amount, but not when or how
+    // often the owner paid, which may be in an account they cannot read.
+    return visible.map((row) =>
+      row.amountEstimate
+        ? {
+            ...row,
+            amountEstimate: {
+              ...row.amountEstimate,
+              paymentCount: null,
+              levelPaymentCount: null,
+              latestPaymentDate: null,
+            },
+          }
+        : row,
+    );
   }
 
   @Get("due")
@@ -184,6 +232,40 @@ export class ScheduledTransactionsController {
         { through: query.through, maxPerSchedule: query.maxPerSchedule },
       );
     return this.filterForDelegate(req, rows);
+  }
+
+  // Before `:id` as well: "amount-estimate" is a literal path segment.
+  @Get("amount-estimate/:accountId")
+  @ApiOperation({
+    summary:
+      "Preview the estimated amount a schedule paying this payee in this category would carry",
+    description:
+      "The per-month estimate from the payee and category's payment history " +
+      "over the last 24 months, in the account's currency (issue #2096). The " +
+      "same estimate a saved schedule with the Estimate option reads.",
+  })
+  @ApiParam({ name: "accountId", description: "Account UUID" })
+  @ApiResponse({ status: 200, description: "Estimate preview" })
+  @ApiResponse({ status: 400, description: "Bad request" })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
+  // Not open to a delegate: the history spans every one of the owner's
+  // accounts, including ones the delegation cannot read.
+  previewAmountEstimate(
+    @Request() req,
+    @Param("accountId", ParseUUIDPipe) accountId: string,
+    @Query() query: AmountEstimateQueryDto,
+  ) {
+    return this.scheduledTransactionsService.previewAmountEstimate(
+      req.user.id,
+      {
+        accountId,
+        payeeId: query.payeeId ?? null,
+        categoryId: query.categoryId ?? null,
+        transferAccountId: query.transferAccountId || null,
+        frequency: query.frequency || undefined,
+        nextDueDate: query.nextDueDate || undefined,
+      },
+    );
   }
 
   // Also before `:id`: "loan-anchor" is a literal path segment.
@@ -281,13 +363,23 @@ export class ScheduledTransactionsController {
   @AllowDelegate()
   @DelegateRequiresSection("bills")
   @DelegatedScheduledParam("id")
+  @DelegatedTransferBody("accountId", "transferAccountId")
+  @DelegatedBodyAccounts(
+    "investmentFundingAccountId",
+    "splits[].transferAccountId",
+  )
   @DelegateRequires("edit")
   update(
     @Request() req,
     @Param("id", ParseUUIDPipe) id: string,
     @Body() updateDto: UpdateScheduledTransactionDto,
   ) {
-    return this.scheduledTransactionsService.update(req.user.id, id, updateDto);
+    return this.scheduledTransactionsService.update(
+      req.user.id,
+      id,
+      withoutDelegateEstimateToggle(req, updateDto),
+      { actorIsDelegate: !!req.user.isActing },
+    );
   }
 
   @Delete(":id")
@@ -317,18 +409,32 @@ export class ScheduledTransactionsController {
   })
   @ApiParam({ name: "id", description: "Scheduled transaction UUID" })
   @ApiResponse({ status: 200, description: "Transaction posted successfully" })
+  @ApiResponse({
+    status: 409,
+    description: "The occurrence is no longer the due one",
+  })
   @ApiResponse({ status: 401, description: "Unauthorized" })
   @ApiResponse({ status: 404, description: "Scheduled transaction not found" })
   @AllowDelegate()
   @DelegateRequiresSection("bills")
   @DelegatedScheduledParam("id")
+  @DelegatedBodyAccounts("splits[].transferAccountId")
   @DelegateRequires("edit")
   post(
     @Request() req,
     @Param("id", ParseUUIDPipe) id: string,
     @Body() postDto: PostScheduledTransactionDto,
   ) {
-    return this.scheduledTransactionsService.post(req.user.id, id, postDto);
+    // A delegate acting as the owner posts the owner's bill but is not the
+    // owner: the owner's structural rules must not run on the posted row.
+    return this.scheduledTransactionsService.post(req.user.id, id, postDto, {
+      actorIsNotOwner: req.user.isActing === true,
+      // The occurrence the person was looking at (A26-S08-01); the DTO requires it.
+      occurrencePin: {
+        occurrenceDate: postDto.expectedOccurrenceDate as string,
+        overrideId: postDto.expectedOverrideId || null,
+      },
+    });
   }
 
   @Post(":id/skip")
@@ -337,17 +443,66 @@ export class ScheduledTransactionsController {
   })
   @ApiParam({ name: "id", description: "Scheduled transaction UUID" })
   @ApiResponse({ status: 200, description: "Occurrence skipped successfully" })
+  @ApiResponse({
+    status: 409,
+    description: "The occurrence is no longer the due one",
+  })
   @ApiResponse({ status: 401, description: "Unauthorized" })
   @ApiResponse({ status: 404, description: "Scheduled transaction not found" })
   @AllowDelegate()
   @DelegateRequiresSection("bills")
   @DelegatedScheduledParam("id")
   @DelegateRequires("edit")
-  skip(@Request() req, @Param("id", ParseUUIDPipe) id: string) {
-    return this.scheduledTransactionsService.skip(req.user.id, id);
+  skip(
+    @Request() req,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body() dto: SkipScheduledTransactionDto,
+  ) {
+    return this.scheduledTransactionsService.skip(req.user.id, id, {
+      occurrenceDate: dto.expectedOccurrenceDate,
+      overrideId: dto.expectedOverrideId || null,
+    });
   }
 
   // ==================== Override Endpoints ====================
+
+  @Get(":id/loan-occurrences")
+  @ApiOperation({
+    summary:
+      "Project the next occurrences of a loan bill, each priced at its own due date",
+    description:
+      "Each occurrence is priced through the same path the posting prices " +
+      "it with, on the ledger debt the earlier projected occurrences leave " +
+      "and at the rate and payment the loan's timeline dates to it " +
+      "(INV-LOAN-006, INV-LOAN-009). A bill that transfers to no loan, or " +
+      "whose shape the pricing declines, answers its status and no rows.",
+  })
+  @ApiParam({ name: "id", description: "Scheduled transaction UUID" })
+  @ApiResponse({ status: 200, description: "Projected occurrences" })
+  @ApiResponse({ status: 400, description: "Bad request" })
+  @ApiResponse({ status: 401, description: "Unauthorized" })
+  @ApiResponse({ status: 404, description: "Scheduled transaction not found" })
+  @ApiResponse({
+    status: 503,
+    description: "The loan's ledger balance could not be read",
+  })
+  @AllowDelegate()
+  @DelegateRequiresSection("bills")
+  @DelegatedScheduledParam("id")
+  // The answer is the loan's own dated debt and rate, which the transfer
+  // mask does not hide: READ on the loan, not only on the paying account.
+  @DelegateReadsEveryScheduledAccount()
+  projectLoanOccurrences(
+    @Request() req,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Query() query: LoanOccurrencesQueryDto,
+  ) {
+    return this.scheduledTransactionsService.projectLoanOccurrences(
+      req.user.id,
+      id,
+      query.count ?? LOAN_OCCURRENCES_DEFAULT_COUNT,
+    );
+  }
 
   @Get(":id/overrides")
   @ApiOperation({ summary: "Get all overrides for a scheduled transaction" })
@@ -426,6 +581,7 @@ export class ScheduledTransactionsController {
   @AllowDelegate()
   @DelegateRequiresSection("bills")
   @DelegatedScheduledParam("id")
+  @DelegatedBodyAccounts("splits[].transferAccountId")
   @DelegateRequires("edit")
   createOverride(
     @Request() req,
@@ -471,6 +627,7 @@ export class ScheduledTransactionsController {
   @AllowDelegate()
   @DelegateRequiresSection("bills")
   @DelegatedScheduledParam("id")
+  @DelegatedBodyAccounts("splits[].transferAccountId")
   @DelegateRequires("edit")
   updateOverride(
     @Request() req,

@@ -10,14 +10,55 @@ export class CategorySpendingItem {
   @ApiProperty({ example: "#3b82f6", nullable: true })
   color: string | null;
 
+  /**
+   * Spending in this category, in {@link SpendingByCategoryResponse.currency}.
+   *
+   * Rows whose currency had no rate are left out of every figure in the
+   * response, so when `missingCurrencies` is non-empty this is the part that
+   * converted. The response-level completeness is the one flag every surface
+   * reads; a per-category one would say the same thing many times over.
+   */
   @ApiProperty({ example: 1500.5 })
   total: number;
 }
 
 export class SpendingByCategoryResponse {
+  /**
+   * Every category that was net-spent in over the window, largest first. The
+   * full list, not a top-N: a caller that draws fewer decides its own cut and
+   * can still say what it merged. The Spending by Category report lists them
+   * all and the dashboard widget keeps eleven, folding the tail into Other.
+   */
   @ApiProperty({ type: [CategorySpendingItem] })
   data: CategorySpendingItem[];
 
+  /**
+   * Total spent, or `null` when any row could not be converted into
+   * {@link currency} -- a missing rate makes the total unknowable, never
+   * smaller. `knownSpending` carries the part that did convert.
+   */
+  @ApiProperty({ example: 5000.0, nullable: true })
+  totalSpending: number | null;
+
+  /**
+   * Sum of `data`. Equals `totalSpending` when nothing was excluded; otherwise
+   * it is a subtotal and must be labelled as one, never under "Total".
+   */
   @ApiProperty({ example: 5000.0 })
-  totalSpending: number;
+  knownSpending: number;
+
+  /** Reporting currency every figure above is expressed in. */
+  @ApiProperty({ example: "CAD" })
+  currency: string;
+
+  /**
+   * Source currencies with no usable rate into {@link currency}, so their rows
+   * are in none of the figures above. Empty when the report is complete.
+   */
+  @ApiProperty({ type: [String], example: ["JPY"] })
+  missingCurrencies: string[];
+
+  /** How many aggregate rows were left out, by any cause. */
+  @ApiProperty({ example: 0 })
+  excludedCount: number;
 }

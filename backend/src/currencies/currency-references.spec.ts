@@ -96,6 +96,20 @@ const perUserDataBody = functionBody(
   uncommented,
   "currency_codes_referenced_by_user_data",
 );
+const dataBody = functionBody(uncommented, "currency_code_referenced_by_data");
+const minPlacesBody = functionBody(
+  uncommented,
+  "currency_min_decimal_places_in_use",
+);
+const othersBody = functionBody(
+  uncommented,
+  "currency_code_used_by_other_users",
+);
+
+/** Whether a function body reads `table` and compares `column` with `p_code`. */
+const consults = (fnBody: string, table: string, column: string): boolean =>
+  new RegExp(`FROM\\s+${table}\\b`, "i").test(fnBody) &&
+  new RegExp(`\\b${column}\\s*=\\s*p_code`, "i").test(fnBody);
 
 describe("currency global liveness", () => {
   // Every assertion below depends on the parser. A regex that stops matching
@@ -138,6 +152,137 @@ describe("currency global liveness", () => {
   });
 
   /**
+   * The kind-change gate's question (INV-CRYPTO-001,
+   * `docs/specs/crypto-accounts.md` decision 8): every reference except an
+   * activation. Every creator holds their currency through a
+   * `user_currency_preferences` row, so counting activations made a kind
+   * immutable from birth; leaving out anything else lets a CRYPTO account's
+   * currency turn FIAT under it.
+   */
+  describe("currency_code_referenced_by_data", () => {
+    it("consults every column that references currencies(code) except activations", () => {
+      const notConsulted = references
+        .filter(({ table }) => table !== "user_currency_preferences")
+        .filter(({ table, column }) => !consults(dataBody, table, column));
+
+      expect(
+        notConsulted.map(({ table, column }) => `${table}.${column}`),
+      ).toEqual([]);
+    });
+
+    it("does not count an activation", () => {
+      expect(dataBody).not.toMatch(/user_currency_preferences/i);
+    });
+
+    it("is its sibling's list less activations, so the two cannot drift apart", () => {
+      const columnsOf = (fnBody: string) =>
+        references
+          .filter(({ table, column }) => consults(fnBody, table, column))
+          .map(({ table, column }) => `${table}.${column}`)
+          .sort();
+
+      expect(columnsOf(dataBody)).toEqual(
+        columnsOf(body).filter(
+          (c) => c !== "user_currency_preferences.currency_code",
+        ),
+      );
+    });
+
+    it("is SECURITY DEFINER with a pinned search_path, not executable by PUBLIC", () => {
+      const definition =
+        /CREATE OR REPLACE FUNCTION currency_code_referenced_by_data\([\s\S]*?\nAS \$\$/.exec(
+          uncommented,
+        )![0];
+      expect(definition).toMatch(/SECURITY DEFINER/);
+      expect(definition).toMatch(/SET search_path = public, pg_temp/);
+      expect(uncommented).toMatch(
+        /REVOKE ALL ON FUNCTION currency_code_referenced_by_data\(VARCHAR\) FROM PUBLIC;/,
+      );
+    });
+
+    it("is what the kind-change gate asks, not the sibling", () => {
+      const currenciesService = readFileSync(
+        join(__dirname, "currencies.service.ts"),
+        "utf8",
+      );
+      expect(currenciesService).toContain("currency_code_referenced_by_data");
+    });
+  });
+
+  /**
+   * The first-price-symbol gate (M3): a coin's creator may price a coin only
+   * they use. It must see every owned use of the code by another user --
+   * activations included, since an adopter holds the coin before any account
+   * -- and no global reference data, which is nobody's use.
+   */
+  describe("currency_code_used_by_other_users", () => {
+    const columnsOf = (fnBody: string) =>
+      references
+        .filter(({ table, column }) => consults(fnBody, table, column))
+        .map(({ table, column }) => `${table}.${column}`)
+        .sort();
+
+    it("consults every reference but global reference data, activations included", () => {
+      // Tables with no owner of any kind: rates, coverage, the bond catalog.
+      // The shared tables have none of their own but belong to a group's
+      // owner and members, so they stay in.
+      const global = new Set(
+        tablesWithoutUserId([...new Set(references.map((r) => r.table))]),
+      );
+      global.delete("shared_groups");
+      global.delete("shared_entries");
+      expect(columnsOf(othersBody)).toEqual(
+        references
+          .filter(({ table }) => !global.has(table))
+          .map(({ table, column }) => `${table}.${column}`)
+          .sort(),
+      );
+      expect(columnsOf(othersBody)).toContain(
+        "user_currency_preferences.currency_code",
+      );
+    });
+
+    it("excludes the caller on every owned table it reads", () => {
+      const ownedTables = [
+        ...new Set(
+          references
+            .filter(({ table, column }) => consults(othersBody, table, column))
+            .map(({ table }) => table),
+        ),
+      ].filter((table) => !tablesWithoutUserId([table]).length);
+      for (const table of ownedTables) {
+        const branch = new RegExp(
+          `FROM\\s+${table}\\b[\\s\\S]*?(?=UNION ALL|\\)\\s*$)`,
+        ).exec(othersBody)?.[0];
+        expect([table, branch]).toEqual([
+          table,
+          expect.stringMatching(/user_id\s*<>\s*p_user_id/),
+        ]);
+      }
+    });
+
+    it("is SECURITY DEFINER with a pinned search_path, not executable by PUBLIC", () => {
+      const definition =
+        /CREATE OR REPLACE FUNCTION currency_code_used_by_other_users\([\s\S]*?\nAS \$\$/.exec(
+          uncommented,
+        )![0];
+      expect(definition).toMatch(/SECURITY DEFINER/);
+      expect(definition).toMatch(/SET search_path = public, pg_temp/);
+      expect(uncommented).toMatch(
+        /REVOKE ALL ON FUNCTION currency_code_used_by_other_users\(VARCHAR, uuid\) FROM PUBLIC;/,
+      );
+    });
+
+    it("is what the first-price-symbol gate asks", () => {
+      const currenciesService = readFileSync(
+        join(__dirname, "currencies.service.ts"),
+        "utf8",
+      );
+      expect(currenciesService).toContain("currency_code_used_by_other_users");
+    });
+  });
+
+  /**
    * The per-user companion (migration 137), which the backup export uses to
    * decide which currency definitions to include. Same list of referencing
    * columns, different question -- and the export used to answer it with
@@ -172,7 +317,7 @@ describe("currency global liveness", () => {
       ).toEqual([]);
     });
 
-    it("excludes exactly the ownerless referencing tables", () => {
+    it("classifies direct ownership, group membership and global reference tables", () => {
       // Not an exception list: a referencing table with no `user_id` cannot
       // contribute to a per-user answer. Asserted so the rule stays visible if a
       // future table joins exchange_rates in that category.
@@ -180,9 +325,25 @@ describe("currency global liveness", () => {
         tablesWithoutUserId([
           ...new Set(references.map((r) => r.table)),
         ]).sort(),
-      ).toEqual(["exchange_rates"]);
-      expect(perUserDataBody).not.toMatch(/FROM\s+exchange_rates/i);
-      expect(perUserBody).not.toMatch(/FROM\s+exchange_rates/i);
+      ).toEqual([
+        "bond_instruments",
+        "bond_programs",
+        "exchange_rate_coverage",
+        "exchange_rates",
+        "shared_entries",
+        "shared_groups",
+      ]);
+      for (const table of [
+        "exchange_rates",
+        "exchange_rate_coverage",
+        "bond_instruments",
+        "bond_programs",
+      ]) {
+        expect(perUserDataBody).not.toMatch(
+          new RegExp(`FROM\\s+${table}\\b`, "i"),
+        );
+        expect(perUserBody).not.toMatch(new RegExp(`FROM\\s+${table}\\b`, "i"));
+      }
     });
 
     it("scopes every branch to the requested user", () => {
@@ -194,7 +355,13 @@ describe("currency global liveness", () => {
       // A branch without the predicate would return every user's codes, so a
       // backup would carry currency rows the exporter has nothing to do with.
       for (const branch of branches) {
-        expect(branch).toMatch(/WHERE user_id = p_user_id/);
+        if (/FROM shared_(groups|entries) WHERE/.test(branch)) {
+          expect(branch).toMatch(/WHERE id IN|WHERE group_id IN/);
+          expect(branch).toContain("g.owner_user_id = p_user_id");
+          expect(branch).toContain(
+            "m.group_id = g.id AND m.user_id = p_user_id AND m.revoked_at IS NULL",
+          );
+        } else expect(branch).toMatch(/WHERE user_id = p_user_id/);
       }
     });
 
@@ -259,6 +426,99 @@ describe("currency global liveness", () => {
     });
   });
 
+  /**
+   * The decimal-places lowering gate's question (INV-MONEY-001): the fewest
+   * places every stored amount in the currency fits, across every user. It reads
+   * amount columns rather than reference columns, so it is held to the
+   * referencing tables that carry amounts in the code -- an account, a
+   * transaction, a scheduled transaction -- and to the currency columns it
+   * compares, which must be ones `CURRENCY_REFERENCE_COLUMNS` lists.
+   */
+  describe("currency_min_decimal_places_in_use", () => {
+    /** Referencing tables with amounts in the code, and the amount columns read. */
+    const SCANNED: Readonly<Record<string, readonly string[]>> = {
+      accounts: [
+        "opening_balance",
+        "current_balance",
+        "credit_limit",
+        "low_balance_threshold",
+        "high_balance_threshold",
+      ],
+      transactions: ["amount", "original_amount"],
+      transaction_splits: ["amount"],
+      scheduled_transactions: ["amount", "original_amount"],
+      scheduled_transaction_splits: ["amount"],
+      scheduled_transaction_overrides: ["amount"],
+    };
+
+    /** A table's CREATE TABLE body in schema.sql. */
+    const tableBody = (table: string): string => {
+      const match = new RegExp(
+        `CREATE TABLE(?: IF NOT EXISTS)?\\s+${table}\\s*\\(([\\s\\S]*?)\\n\\);`,
+      ).exec(uncommented);
+      if (!match) throw new Error(`${table} not found in database/schema.sql`);
+      return match[1];
+    };
+
+    it("reads every amount column it is meant to, and each is a NUMERIC(24, 8) column", () => {
+      for (const [table, columns] of Object.entries(SCANNED)) {
+        expect(minPlacesBody).toMatch(new RegExp(`\\b${table}\\b`));
+        for (const column of columns) {
+          expect(tableBody(table)).toMatch(
+            new RegExp(`^\\s*${column}\\s+NUMERIC\\(\\s*24,\\s*8\\)`, "m"),
+          );
+          // Accounts' columns come through the VALUES list as `a.<column>`.
+          expect(minPlacesBody).toMatch(new RegExp(`\\b[a-z]+\\.${column}\\b`));
+        }
+      }
+    });
+
+    it("reads every referencing table that carries amounts, and only currency columns the list names", () => {
+      const roots = ["accounts", "transactions", "scheduled_transactions"];
+      for (const table of roots) {
+        // A referencing table the function omits would leave its rows unseen.
+        expect(Object.keys(CURRENCY_REFERENCE_COLUMNS)).toContain(table);
+        expect(minPlacesBody).toMatch(new RegExp(`FROM\\s+${table}\\b`, "i"));
+      }
+      // Every `<alias>.<currency column> = p_code` comparison names a column that
+      // CURRENCY_REFERENCE_COLUMNS lists for one of the referencing tables.
+      const listed = new Set(Object.values(CURRENCY_REFERENCE_COLUMNS).flat());
+      const compared = [
+        ...minPlacesBody.matchAll(/\b\w+\.(\w+)\s*=\s*p_code/gi),
+      ].map((m) => m[1]);
+      expect(compared.length).toBeGreaterThan(0);
+      for (const column of compared) expect(listed).toContain(column);
+      // And the original-currency columns are consulted for the original amounts.
+      for (const table of ["transactions", "scheduled_transactions"]) {
+        expect(CURRENCY_REFERENCE_COLUMNS[table]).toContain(
+          "original_currency_code",
+        );
+      }
+      expect(minPlacesBody).toMatch(/original_currency_code\s*=\s*p_code/i);
+    });
+
+    it("is SECURITY DEFINER with a pinned search_path, not executable by PUBLIC", () => {
+      const definition =
+        /CREATE OR REPLACE FUNCTION currency_min_decimal_places_in_use\([\s\S]*?\nAS \$\$/.exec(
+          uncommented,
+        )![0];
+      expect(definition).toMatch(/SECURITY DEFINER/);
+      expect(definition).toMatch(/SET search_path = public, pg_temp/);
+      expect(uncommented).toMatch(
+        /REVOKE ALL ON FUNCTION currency_min_decimal_places_in_use\(VARCHAR\) FROM PUBLIC;/,
+      );
+    });
+
+    it("is what the lowering gate asks, not a scan under the caller's RLS", () => {
+      const currenciesService = readFileSync(
+        join(__dirname, "currencies.service.ts"),
+        "utf8",
+      );
+      expect(currenciesService).toContain("currency_min_decimal_places_in_use");
+      expect(currenciesService).not.toMatch(/FROM transaction_splits/);
+    });
+  });
+
   it("is SECURITY DEFINER with a pinned search_path", () => {
     const definition =
       /CREATE OR REPLACE FUNCTION currency_code_in_use_globally\([\s\S]*?\nAS \$\$/.exec(
@@ -290,12 +550,38 @@ describe("currency global liveness", () => {
     const definers = definitions.filter((d) => /SECURITY DEFINER/.test(d));
     const names = definers.map((d) => /FUNCTION\s+(\w+)/.exec(d)?.[1]).sort();
     expect(names).toEqual([
+      // Shared access helpers reviewed in docs/specs/shared-expenses-security.md.
+      "check_attachment_pair_parent",
       // The global currency-liveness answer, evaluated across every tenant.
       "currency_code_in_use_globally",
+      // Its sibling without activations, for the currency kind-change gate
+      // (INV-CRYPTO-001); same shape, one VARCHAR in, one boolean out.
+      "currency_code_referenced_by_data",
+      // Whether any user other than the caller activates or holds a code, for
+      // the first-price-symbol gate (INV-CRYPTO-001, the M3 audit finding);
+      // one VARCHAR and one uuid in, one boolean out, evaluated across every
+      // tenant so a coin's creator cannot price other users' holdings.
+      "currency_code_used_by_other_users",
+      // The fewest decimal places every user's stored amounts in a currency fit,
+      // for the decimal-places lowering gate (INV-MONEY-001); one VARCHAR in,
+      // one smallint out, evaluated across every tenant.
+      "currency_min_decimal_places_in_use",
+      // Whether a grant's account belongs to the delegation's owner, for the
+      // account_delegate_grants WITH CHECK: the policy cannot read accounts
+      // under RLS (the accounts policy reads the grants -- a policy cycle). One
+      // boolean about two ids the caller supplies (A26-M06).
+      "delegation_grant_account_is_owners",
       // Records an attachment-blob tombstone as the table owner, so the deletion
       // is captured under RLS whichever tenant's DELETE fired the trigger
       // (migration 140).
       "record_attachment_blob_tombstone",
+      "shared_document_group",
+      "shared_entry_writable",
+      "shared_group_role",
+      "shared_group_writable",
+      "shared_invitation_allows",
+      "shared_pending_notifications",
+      "shared_validate_entry_allocations",
     ]);
     // Every definer function pins its search_path: without it, a definer can be
     // redirected at objects the caller controls -- the escalation this allowlist
@@ -331,10 +617,11 @@ describe("currency global liveness", () => {
       "utf8",
     );
     // The restore's teardown, which is where the delete this predicate guards
-    // lives -- issue #1092 moved it out of `backup.service.ts`, and a guard left
-    // pointed at the facade would have gone on passing with nothing to find.
+    // lives -- issue #1092 moved it out of `backup.service.ts`, then it moved
+    // again into `restore-wipe.ts`, and a guard left pointed at the old file
+    // would have gone on passing with nothing to find.
     const backupService = readFileSync(
-      join(__dirname, "..", "backup", "backup-restore-database.service.ts"),
+      join(__dirname, "..", "backup", "restore-wipe.ts"),
       "utf8",
     );
     // Re-deriving the predicate at either call site is how it drifted the first
@@ -343,7 +630,7 @@ describe("currency global liveness", () => {
     expect(backupService).toContain("currency_code_in_use_globally");
     for (const [name, source] of [
       ["currencies.service.ts", currenciesService],
-      ["backup-restore-database.service.ts", backupService],
+      ["restore-wipe.ts", backupService],
     ] as const) {
       const spelledOut = /FROM exchange_rates[\s\S]{0,400}?FROM budgets/.test(
         source,

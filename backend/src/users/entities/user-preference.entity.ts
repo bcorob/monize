@@ -46,9 +46,6 @@ export class UserPreference {
   @Column({ name: "notification_email", default: true })
   notificationEmail: boolean;
 
-  @Column({ name: "notification_browser", default: true })
-  notificationBrowser: boolean;
-
   @Column({ name: "two_factor_enabled", default: false })
   twoFactorEnabled: boolean;
 
@@ -98,6 +95,32 @@ export class UserPreference {
     default: {},
   })
   dashboardWidgetConfig: Record<string, any>;
+
+  // Account-level default hidden column ids per table kind (transactions,
+  // investmentHoldings, investmentRegister), merged by kind on update. A
+  // browser that has saved its own choice for a kind keeps it. Empty object =
+  // no columns hidden by default. Typed as
+  // Record<string, any> (matching the other jsonb columns on
+  // relation-reachable entities, e.g. action-history) so TypeORM's DeepPartial
+  // stays satisfiable where UserPreference is reached through the User relation.
+  @Column({
+    name: "hidden_table_columns",
+    type: "jsonb",
+    default: {},
+  })
+  hiddenTableColumns: Record<string, any>;
+
+  // Account-level defaults for the browser-local view settings (density,
+  // hideRegisterYear, widgetsCollapsed, chartCollapsed) and accountOpenTarget;
+  // `src/users/view-defaults.ts` declares the keys and values. A browser that
+  // has saved its own choice keeps it. Empty object = no defaults. Typed as
+  // Record<string, any> for the DeepPartial reason given on hiddenTableColumns.
+  @Column({
+    name: "view_defaults",
+    type: "jsonb",
+    default: {},
+  })
+  viewDefaults: Record<string, any>;
 
   @Column({ name: "show_created_at", default: false })
   showCreatedAt: boolean;
@@ -155,7 +178,28 @@ export class UserPreference {
     length: 20,
     default: "yahoo",
   })
-  defaultQuoteProvider: "yahoo" | "msn";
+  // Written-out literals, not the QuoteProviderName alias, for the same reason
+  // as defaultMapProvider below: entity-varchar-capacity.spec.ts measures them.
+  defaultQuoteProvider: "yahoo" | "msn" | "lse" | "deutsche_boerse";
+
+  /**
+   * Which map service an address link opens. "device" means decide from the
+   * platform, which is what every user got before this column existed.
+   *
+   * The union is written out here rather than imported from MAP_PROVIDERS in
+   * the DTO because `entity-varchar-capacity.spec.ts` reads this annotation to
+   * check the longest allowed literal against the column width; an aliased type
+   * would leave that guard with nothing to measure. The two lists are held
+   * together by `update-preferences.dto.spec.ts`.
+   */
+  @Column({
+    name: "default_map_provider",
+    type: "varchar",
+    length: 20,
+    default: "device",
+  })
+  defaultMapProvider:
+    "device" | "openstreetmap" | "google" | "apple" | "bing" | "waze";
 
   @Column({
     name: "recent_transactions_limit",
@@ -169,6 +213,10 @@ export class UserPreference {
   @Column({ name: "ai_bubble_enabled", default: false })
   aiBubbleEnabled: boolean;
 
+  // Whether the trivia line beside the dashboard greeting is shown and built.
+  @Column({ name: "ai_trivia_enabled", default: true })
+  aiTriviaEnabled: boolean;
+
   // Strict reconciled lock. The transaction form already prompts before an edit
   // that would move a reconciled row's date or amount, which is what Money
   // does; with this on the server refuses the write outright -- an edit, a
@@ -177,6 +225,12 @@ export class UserPreference {
   // hatch reachable from the same screen as the edit is not a lock.
   @Column({ name: "lock_reconciled_transactions", default: false })
   lockReconciledTransactions: boolean;
+
+  // Opt-in: look up a new payee's website, address, email and phone through
+  // the user's configured AI provider. Off by default because every lookup is
+  // a call the user pays for, and the answer is written into their data.
+  @Column({ name: "payee_contact_lookup_enabled", default: false })
+  payeeContactLookupEnabled: boolean;
 
   @Column({ length: 10, default: "en" })
   language: string;

@@ -76,41 +76,191 @@ INV-LOAN-002's entry names the missing source scan while its row said `--`.
 | INV-IMPORT-001 one active import | supporting | -- | required | **required** | required | supporting | -- | optional |
 | INV-IMPORT-002 retry never doubles | supporting | -- | required | required | -- | **required** | -- | required |
 | INV-IMPORT-003 category collision | supporting | -- | required | **required** | -- | -- | -- | -- |
+| INV-BANKSYNC-001 imported at most once | supporting | -- | **required** | required | supporting | -- | -- | -- |
+| INV-BANKSYNC-002 key never leaves the server | **required** | supporting | -- | -- | -- | -- | -- | -- |
+| INV-BANKSYNC-003 account currency or nothing | **required** | -- | required | -- | -- | -- | -- | -- |
+| INV-BANKSYNC-004 no import before the preview | required | -- | **required** | -- | -- | -- | -- | -- |
+| INV-API-001 an externalId makes at most one row | required | -- | required | **required** | -- | -- | -- | -- |
 | INV-BALANCE-001 balance equals ledger | supporting | -- | required | **required** | optional | required | -- | required |
 | INV-HOLDING-001 holding replay | supporting | -- | required | **required** | optional | required | -- | optional |
 | INV-HOLDING-002 one reducer | required | **required** | supporting | -- | -- | -- | -- | required |
 | INV-TRANSFER-001 both legs | required | -- | required | optional | -- | -- | -- | required |
+| INV-ACCOUNTDELETE-001 a delete takes nothing it was not asked to | supporting | -- | **required** | required | -- | -- | -- | -- |
+| INV-SPLITFX-001 a split line credits what arrived | **required** | -- | required | -- | -- | -- | -- | optional |
+| INV-SPLITFX-002 a recorded received amount survives a rewrite | required | -- | **required** | -- | -- | -- | -- | optional |
+| INV-SPLITFX-003 only the owner reads a line's counterpart | required | -- | **required** | -- | -- | -- | -- | -- |
+| INV-REGISTER-001 one balance per row | required | required | **required** | -- | -- | -- | -- | supporting |
 | INV-REDEEM-001 accrued interest | required | **required** | required | -- | -- | -- | -- | optional |
 | INV-RECONCILE-001 reconciled lock | supporting | **required** | required | required | -- | -- | -- | optional |
+| INV-DELEGATION-001 grant re-checked where written | supporting | -- | required | **required** | -- | -- | -- | -- |
 | INV-FX-001 no 1:1 fallback | **required** | **required** | required | -- | -- | required | optional | required |
+| INV-FX-002 a row's own rate on every surface | **required** | -- | required | -- | -- | -- | -- | optional |
+| INV-FX-003 one stored orientation per pair | **required** | **required** | required (owed by the contract release) | -- | -- | -- | -- | -- |
+| INV-FX-004 a user's rate never rewrites the global history | **required** | supporting | optional | -- | -- | -- | -- | -- |
+| INV-FX-005 a stored rate names its provider; outage is not an empty answer | **required** | **required** | -- | -- | -- | -- | optional | -- |
+| INV-CRYPTO-001 an account's type and its currency's kind agree | **required** | -- | required | **required** | -- | -- | -- | -- |
+| INV-CRYPTO-002 a coin is priced only through its pair | **required** | -- | -- | -- | -- | -- | -- | -- |
+| INV-MONEY-001 precision is the currency's | **required** | **required** | **required** (`backend/test/integration/money-precision.integration.spec.ts`) | -- | -- | -- | -- | -- |
+| INV-PRICE-001 price in the security's currency | **required** | supporting | required (not yet met) | -- | -- | -- | **required** | optional |
+| INV-TRADE-001 executed total is the fact | **required** | -- | required | -- | -- | -- | -- | optional |
+| INV-PORTRESULT-001 period change is not a return | **required** | -- | optional | -- | -- | -- | -- | optional |
+| INV-PORTRESULT-002 cash is not an investment | **required** | **required** | **required** | -- | -- | -- | -- | optional |
+| INV-PORTTWR-001 the return line ends where the card ends | **required** | -- | optional | -- | -- | -- | -- | optional |
+| INV-INTRADAY-001 an intraday bar holds what its own day held | **required** | -- | supporting | -- | -- | -- | -- | optional |
+| INV-PORTCHART-001 a portfolio chart opens and closes on its figures' closes | **required** | -- | supporting | -- | -- | -- | -- | optional |
 | INV-REPORT-001 report account scope | supporting | **required** | **required** | -- | -- | -- | -- | optional |
 | INV-REPORT-002 chart reduction | **required** | **required** | -- | -- | -- | -- | -- | -- |
+| INV-REPORT-003 a transfer leg is a named flow | **required** | -- | required | -- | -- | -- | -- | optional |
+| INV-REPORT-004 a category's cost is its signed sum | required | -- | **required** | -- | -- | -- | -- | -- |
+| INV-SANKEY-001 the Sankey closes | **required** | -- | required | -- | -- | -- | -- | -- |
+| INV-SANKEY-002 a leg counts once, by scope and class | required | -- | **required** | -- | -- | -- | -- | -- |
+| INV-SANKEY-003 linkage and VOID out of every branch | supporting | **required** | required | -- | -- | -- | -- | -- |
+| INV-SANKEY-004 a Sankey total is complete or null | **required** | -- | required | -- | -- | -- | -- | -- |
+| INV-SANKEY-005 the Other merge is drawing only | **required** | **required** | -- | -- | -- | -- | -- | -- |
 | INV-LOAN-001 overpayment cadence | **required** | -- | -- | -- | -- | -- | -- | optional |
 | INV-LOAN-002 no truncated total | **required** | **required** (not yet met) | -- | -- | -- | -- | -- | optional |
 | INV-LOAN-003 compounding convention | **required** | **required** | -- | -- | -- | -- | -- | -- |
 | INV-LOAN-004 residual final payment | **required** | -- | -- | -- | -- | -- | -- | -- |
 | INV-LOAN-005 first payment is payment 1 | **required** | **required** | -- | -- | -- | -- | -- | -- |
 | INV-LOAN-006 dated installment pricing | **required** | **required** | required | -- | -- | -- | -- | optional |
+| INV-LOAN-007 one method per mortgage type | **required** | **required** | required | -- | -- | -- | -- | optional |
+| INV-LOAN-008 one settlement per occurrence | **required** | -- | **required** | required | -- | -- | -- | optional |
+| INV-LOAN-009 dated annuity payment | **required** | required | **required** | -- | -- | -- | -- | optional |
+| INV-LOAN-010 interest category and template line move together | **required** | -- | **required** | -- | -- | -- | -- | optional |
+| INV-LOAN-011 a mortgage fee line is priced from its own terms | **required** | -- | required | -- | -- | -- | -- | optional |
 | INV-LOAN-HISTORY-001 ledger-backed loan interest | **required** | required | -- | -- | -- | -- | -- | optional |
+| INV-BOND-001 immutable bond terms | -- | -- | **required** | -- | -- | -- | -- | -- |
+| INV-BOND-002 missing rate is unknown | **required** | -- | supporting | -- | -- | -- | -- | -- |
+| INV-BOND-003 exact bond money | **required** | required | -- | -- | -- | -- | -- | -- |
+| INV-BOND-004 known vs projected | **required** | -- | -- | -- | -- | -- | -- | -- |
+| INV-BOND-005 bond-engine-only prices | required | **required** | **required** | -- | -- | -- | -- | -- |
+| INV-BOND-006 terms only from the official source or an administrator | **required** | required | **required** | **required** | -- | -- | -- | -- |
+| INV-BOND-007 a program-linked security's rows name a series (dated acquisitions inferred, transfers and grants explicit, removals checked at write time, imports may store NULL) | **required** | **required** | **required** | **required** | -- | -- | -- | -- |
+| INV-INTEREST-001 interest paid on a bond is stored on that bond | **required** | -- | -- | -- | -- | -- | -- | -- |
+| INV-BOND-008 no country's bond data is fetched or stored without a person's action | **required** | **required** | **required** | -- | -- | -- | -- | -- |
+| INV-BOND-009 a redemption's cash is returned principal plus interest | **required** | -- | required | -- | -- | -- | -- | -- |
+| INV-BOND-010 a bond holding's current value is its own account's lots | **required** | **required** | -- | -- | -- | -- | -- | -- |
+| INV-BONDNOTIFY-001 the bond notification producer fetches nothing | supporting | -- | **required** | -- | -- | -- | -- | -- |
+| INV-BONDNOTIFY-002 one row per bond event, a state-keyed one while its state lasts | **required** | **required** | -- | -- | -- | -- | -- | -- |
+| INV-BONDNOTIFY-003 a bond notification carries the engine's figures | **required** | -- | -- | -- | -- | -- | -- | -- |
+| INV-BONDNOTIFY-004 an unknown bond amount is null and said so | **required** | -- | -- | -- | -- | -- | -- | -- |
+| INV-BONDNOTIFY-005 the bond notification producer names no country | -- | -- | **required** | -- | -- | -- | -- | -- |
 | INV-OCCURRENCE-001 one effect | supporting | -- | required | required | **required** | required | -- | required |
 | INV-OCCURRENCE-002 override price | required | -- | -- | -- | -- | -- | -- | required |
 | INV-OCCURRENCE-003 one effective occurrence | **required** | **required** | -- | -- | -- | -- | optional | optional |
+| INV-OCCURRENCE-004 an estimated occurrence is its month's estimate | **required** | -- | -- | -- | -- | -- | -- | optional |
 | INV-CLAIM-001 single-use claim | supporting | -- | required | **required** | optional | optional | -- | required |
 | INV-AUTH-001 refresh rotation | supporting | -- | required | **required** | -- | -- | -- | optional |
 | INV-AUTH-002 login counter | supporting | -- | required | **required** | -- | -- | -- | -- |
 | INV-AUTH-003 OIDC round trip | required | -- | required | -- | -- | -- | required | required |
 | INV-AUTH-004 truthful logout | supporting | -- | required | -- | -- | **required** | -- | required |
+| INV-AUTH-005 password replacement revokes credentials | **required** | -- | required | -- | -- | -- | -- | optional |
+| INV-AUTH-006 a personal access token reaches only opted-in routes | **required** | **required** | -- | -- | -- | -- | -- | required |
 | INV-ACTIVITY-001 activity attribution | supporting | -- | **required** | -- | -- | -- | -- | -- |
 | INV-PROFILE-001 allowlist | required | **required** | supporting | -- | -- | -- | -- | -- |
-| INV-MCP-001 credential binding | supporting | -- | required | -- | -- | -- | -- | -- |
+| INV-DISPLAY-001 reader's number locale | **required** | **required** | -- | -- | -- | -- | -- | optional |
+| INV-DISPLAY-002 partial figure relabelled | **required** | **required** | **required** | -- | -- | -- | -- | optional |
+| INV-MCP-001 request identity | **required** | **required** | required | -- | -- | -- | -- | -- |
+| INV-MCP-002 transport answers MCP | **required** | -- | -- | -- | -- | -- | -- | optional |
+| INV-MCP-003 confirmation binding | **required** | **required** | -- | -- | -- | -- | -- | -- |
+| INV-MCP-004 answered before written | **required** | **required** | -- | -- | -- | -- | -- | -- |
+| INV-MCP-005 an unanswered confirmation never deletes or writes in bulk | **required** | **required** | -- | -- | -- | -- | -- | -- |
 | INV-CURRENCY-001 currency delete | supporting | **required** | required | required | -- | -- | -- | optional |
 | INV-ATTACHMENT-001 bytes present | supporting | -- | required | optional | -- | **required** | **required** | required |
+| INV-ATTACHMENT-002 scan pair is one | **required** | **required** | **required** | -- | -- | -- | -- | **required** |
+| INV-ATTACHMENT-003 read the row's backend, and a switch moves it | **required** | -- | required (not yet met) | optional | -- | optional | -- | optional |
+| INV-SHARE-001 existing doors only | **required** | **required** | -- | -- | -- | -- | -- | **required** |
+| INV-SHARE-002 reviewed, never applied | **required** | -- | -- | -- | -- | -- | -- | **required** |
+| INV-SHARE-003 stash bounded and cleared | **required** | **required** | -- | -- | -- | -- | -- | optional |
+| INV-SHARE-004 a share never dead-ends | **required** | -- | -- | -- | -- | -- | -- | supporting |
+| INV-SHARE-005 a share belongs to one account | **required** | -- | -- | -- | -- | -- | -- | -- |
 | INV-BACKUP-001 backup complete | supporting | -- | required | -- | optional | **required** | **required** | required |
+| INV-BACKUP-002 encrypted before egress | required | **required** | -- | -- | -- | -- | -- | -- |
+| INV-BACKUP-003 local copy first | **required** | -- | -- | -- | -- | optional | -- | -- |
+| INV-BACKUP-004 egress adds, never replaces | required | **required** | -- | -- | -- | -- | optional | -- |
+| INV-BACKUP-005 verified, claimed, leased | **required** | -- | required | **required** | optional | required (not yet met) | optional | -- |
+| INV-BACKUP-006 published whole or not at all | **required** | -- | -- | -- | -- | optional | **required** | -- |
+| INV-BACKUP-007 store and egress are two places | **required** | -- | -- | -- | -- | -- | -- | -- |
+| INV-BACKUP-008 no recoverable password stored | **required** | -- | -- | -- | -- | -- | -- | -- |
+| INV-BACKUP-009 restore stays inside the user's rows | **required** | **required** | **required** | -- | -- | -- | -- | -- |
+| INV-PUSH-001 subscription ownership | required | -- | **required** | required (not yet met) | -- | -- | -- | optional |
+| INV-PUSH-002 private key stays server-side | supporting | **required** | -- | -- | -- | -- | -- | -- |
+| INV-PUSH-006 channel offered only while usable | **required** | -- | optional | -- | -- | -- | -- | -- |
+| INV-PUSH-003 rotation retires subscriptions | **required** | -- | required | -- | -- | -- | -- | -- |
+| INV-PUSH-004 push failure is reported | **required** | -- | optional | -- | -- | required | required | -- |
+| INV-PUSH-005 subscription not portable | supporting | -- | **required** | -- | -- | -- | -- | -- |
+| INV-PUSH-007 one push sender | supporting | **required** | -- | -- | -- | -- | -- | -- |
+| INV-PUSH-008 transport gates its wire | **required** | -- | optional | -- | -- | -- | -- | optional |
+| INV-PUSH-009 unsupported channel forced off | **required** | **required** | -- | -- | -- | -- | -- | -- |
+| INV-PUSH-010 endpoint validated, transport list held equal | **required** | **required** | -- | -- | -- | -- | -- | -- |
+| INV-PUSH-011 a held device receives nothing until its own account resumes it | **required** | -- | **required** | -- | -- | -- | -- | optional |
 | INV-CRON-001 one effect per tick | supporting | -- | required | required | **required** | optional | -- | -- |
 | INV-PROVIDER-001 outage reported once | required | **required** | required | optional | required | -- | required | -- |
+| INV-ALERT-001 system alert raised once | required | -- | **required** | optional | required | -- | -- | -- |
+| INV-NOTIFY-001 one notification writer | supporting | **required** | -- | -- | -- | -- | -- | -- |
+| INV-DISPATCH-001 seam never writes | supporting | **required** | -- | -- | -- | -- | -- | -- |
+| INV-DISPATCH-002 in-app row always written | **required** | -- | optional | -- | -- | -- | -- | -- |
+| INV-DISPATCH-003 throttle gates fan-out only | **required** | -- | optional | required (not yet met) | optional | -- | -- | -- |
+| INV-DISPATCH-004 delivery failure never surfaces | **required** | -- | -- | -- | -- | required | -- | -- |
+| INV-PORTMOVE-007 flow priced on its own date | **required** | supporting | **required** | -- | -- | -- | -- | optional |
+| INV-PORTMOVE-008 late close restates the baseline | **required** | supporting | optional | -- | -- | -- | -- | optional |
 | INV-RLS-001 role privilege | supporting | -- | **required** | -- | required | -- | -- | -- |
 | INV-CACHE-001 cache invalidation | required | **required** | -- | -- | -- | -- | -- | required |
+| INV-DAYNOTE-001 one note covering a day | supporting | -- | required | **required** (not yet met) | -- | -- | -- | optional |
+| INV-PAYEE-001 lookup never overwrites | **required** | supporting | optional | optional | -- | -- | -- | -- |
+| INV-PAYEE-002 Google Places monthly cap | optional | supporting | **required** | -- | -- | -- | -- | -- |
+| INV-PAYEE-003 merge moves every payee reference | required | **required** | **required** | -- | -- | -- | -- | -- |
 | INV-RELEASE-001 one revision | required | -- | -- | -- | -- | -- | -- | workflow self-test |
+| INV-MIGRATION-001 numeric prefix order, collision-free prefix | required | **required** | supporting | -- | -- | -- | -- | -- |
+| INV-HA-001 a replica serves only while what it shares is reachable | **required** | -- | -- | -- | optional | -- | -- | required (not yet met) |
+| INV-HA-002 one attempt budget per deployment | supporting | **required** | required | **required** | optional | -- | -- | -- |
+| INV-HA-003 a single-use artifact is spent once | supporting | -- | required | **required** | optional | required | -- | optional |
+| INV-HA-004 one OIDC signing key set | supporting | -- | required | optional | **required** | -- | -- | optional |
+| INV-HA-005 one claimant, one answer | supporting | -- | required | **required** | **required** | -- | -- | optional |
+| INV-RULE-001 a rule moves only a structural action's counterpart | **required** | -- | **required** | -- | -- | -- | -- | -- |
+| INV-RULE-003 a rule run commits only the plan that was previewed | **required** | -- | **required** | -- | -- | -- | -- | -- |
+| INV-RULE-004 a rule runs only inside its active window | **required** | -- | **required** | -- | -- | -- | -- | -- |
+| INV-RULE-005 a settling pass folds chronologically | **required** | -- | required | -- | -- | -- | -- | -- |
+| INV-RULE-002 a rule applies inside the inserting transaction | supporting | **required** | **required** | -- | -- | required | -- | optional |
+| INV-RECEIPT-001 a receipt mailbox is read, never written | required | **required** | -- | -- | -- | -- | optional | optional |
+| INV-RECEIPT-002 a receipt email is stored once | supporting | -- | **required** | optional | -- | optional | -- | -- |
+| INV-RECEIPT-003 a receipt reaches the ledger only through the card | required | -- | **required** | -- | -- | -- | -- | optional |
+| INV-RECEIPT-004 a mailbox reaches only a public address | **required** | -- | -- | -- | -- | -- | -- | -- |
+| INV-RECEIPT-005 a mailbox secret is encrypted and never returned | required | -- | **required** | -- | -- | -- | -- | -- |
+| INV-RECEIPT-006 one poll per mailbox at a time | supporting | -- | required | optional | **required** | -- | -- | -- |
+| INV-RECEIPT-007 an OAuth callback completes its own flow once | **required** | -- | required | -- | -- | -- | -- | -- |
+| INV-RECEIPT-008 a trade confirmation creates a transaction only through the card | required | -- | **required** | -- | -- | -- | -- | optional |
+| INV-SEARCH-001 one search door | supporting | **required** | -- | -- | -- | -- | -- | -- |
+| INV-SEARCH-002 a bare term finds what it found | supporting | -- | **required** | -- | -- | -- | -- | -- |
+| INV-SEARCH-003 terms hold on the counted row | supporting | -- | **required** | -- | -- | -- | -- | optional |
+| INV-SEARCH-004 search never inflates an aggregate | -- | -- | **required** | -- | -- | -- | -- | -- |
+| INV-SEARCH-005 assistant totals and rows agree | -- | required | **required** | -- | -- | -- | -- | -- |
+| INV-WTY-001 a warranty never moves money | -- | **required** | -- | -- | -- | -- | -- | -- |
+| INV-WTY-002 every warranty status is the server's | **required** | required (not yet met) | -- | -- | -- | -- | -- | optional |
+| INV-WTY-003 an attachment has exactly one parent | required | required | **required** | -- | -- | -- | -- | optional |
+| INV-WTY-004 one warranty reminder per threshold | required | -- | required | **required** | -- | -- | -- | -- |
+| INV-WTY-005 a warranty refusal before the write | required | -- | **required** | -- | -- | -- | -- | -- |
+| INV-WTY-006 an import's preview and commit agree | **required** | -- | required | -- | -- | -- | -- | -- |
+| INV-WTY-007 no transaction through a warranty | required | -- | **required** | -- | -- | -- | -- | -- |
+| INV-BUDGET-001 one function for every bucket figure | **required** | -- | -- | -- | -- | -- | -- | -- |
+| INV-BUDGET-002 a line's bucket is its own budget's | required | -- | **required** | -- | -- | -- | -- | -- |
+| INV-BUDGET-003 a closed period's buckets are frozen and carry once | required | -- | **required** | supporting | -- | -- | -- | -- |
+| INV-PAYROLL-001 a deduction rule never writes the ledger | -- | **required** | -- | -- | -- | -- | -- | -- |
+| INV-PAYROLL-002 a post caps a ruled line and re-sums | **required** | -- | required (not yet met) | -- | -- | -- | -- | -- |
+| INV-PAYROLL-003 posting and projection cap alike | **required** | -- | required (not yet met) | -- | -- | -- | -- | optional |
+| INV-PAYROLL-004 one reset reminder per rule and date | required | -- | required (not yet met) | **required (not yet met)** | -- | -- | -- | -- |
+| SE-001 allocation conservation | **required** | -- | **required** | supporting | -- | -- | -- | required |
+| SE-002 participant history and one invitation claimant | required | -- | required | **required** | -- | -- | -- | optional |
+| SE-003 membership is not private access | required | required | **required** | optional | -- | -- | -- | optional |
+| SE-004 one lasting bank effect | required | -- | **required** | **required** | -- | supporting | -- | required |
+| SE-005 consumption differs from repayment | **required** | -- | **required** | -- | -- | -- | -- | required |
+| SE-006 peer edits await private review | **required** | -- | **required** | -- | -- | -- | -- | required |
+| SE-007 unknown inputs withhold settlement | **required** | -- | required | -- | -- | -- | -- | optional |
+| SE-008 refusal leaves no partial writes | required | required | **required** | required | -- | **required** | -- | optional |
+| SE-009 financial edit explanations | required | -- | **required** | supporting | -- | -- | -- | optional |
+| SE-010 detached restore | required | **required** | **required** | -- | -- | supporting | -- | optional |
+| SE-011 published documents and current access | required | required | **required** | supporting | -- | supporting | -- | required |
+| SE-012 preserved accepted pennies | **required** | -- | required | -- | -- | -- | -- | supporting |
 
 Bold marks the kind that is load-bearing -- the one whose absence means the
 invariant is unverified no matter how many others pass. `INV-PROFILE-001`'s is a
@@ -166,6 +316,70 @@ counting tests will not reveal it. The failpoint that would:
 A test that throws *inside* the import transaction passes today and proves
 nothing about this.
 
+The `INV-HA-` rows are the horizontal-scaling set, and their load-bearing kinds
+follow the failure each one actually has. `INV-HA-002`..`-005` are all "does this
+still hold when a second process is doing the same thing", which no mocked
+manager can answer, so the load-bearing kind is two connections or two instances
+-- `INV-HA-004`'s is two *instances* rather than two connections because the race
+is between two processes deciding at startup, not between two statements.
+`INV-HA-002` carries a second load-bearing kind, a source scan, for the reason
+`INV-PROFILE-001` does: the defect arrives from a file nobody is looking at.
+Every attempt budget was a `Map` on a service until it was not, and the next one
+will be written the same way unless something fails --
+`backend/src/common/process-local-state.guard.spec.ts` is what fails it, and it is
+the only kind that can, since a budget kept in memory passes every behavioural
+test on one replica.
+
+`INV-HA-001` is the exception in the set: its mechanism is a refusal rather than
+a race, so its unit matrix is load-bearing, and its E2E is the one
+`required (not yet met)` here. Two replicas do now serve one browser --
+`e2e/tests/cluster.spec.ts` on the cluster shard asserts that each one reports its
+wake-up channel healthy, and that `/health/ready` answers 200 for one of them --
+but that is the positive half. What is still missing is the flip: taking one live replica's
+channel away and watching readiness turn 503 while the other keeps serving.
+Nothing in the E2E stack can sever one replica's `LISTEN` without taking the
+database from both, so the invariant's entry says `partial` rather than claiming
+a proof the suite does not make.
+
+The off-machine backup rows (`INV-BACKUP-002`..`-005`) split along a line worth
+naming, because the obvious reading of their columns is wrong. The S3 semantics
+the copy depends on -- a conditional write refusing a taken key, server-side
+checksum validation, the multipart sequence -- are proven against a local HTTP
+endpoint that implements them (`backup-offsite-s3.uploader.spec.ts`, the pattern
+`s3-storage.provider.deadline.spec.ts` established), so they are **unit** tests
+against a fake destination, not PostgreSQL integration ones, and the provider
+column stays `optional` rather than claiming a round trip nobody makes in CI.
+What genuinely needs the database is the claim: one conditional `UPDATE ...
+RETURNING` deciding which of two replicas uploads, and the backoff arithmetic the
+database evaluates, both in
+`backend/test/integration/backup-offsite-claim.integration.spec.ts`. The one
+`required (not yet met)` is `INV-BACKUP-005`'s failpoint: a crash between the
+verified put and the outcome write is exactly the window the claim lease exists
+for, and nothing yet throws at that boundary.
+
+`INV-BACKUP-006` divides the same way and lands on the opposite side of it. The
+`local` half is a claim about what a directory looks like after an unfinished
+write, so it is a unit test against a real `mkdtemp` and never a mocked `fs` --
+what a mock can report is the call that was made, not the state that was left.
+The `s3` half is a claim about a property of the *service*: that S3 applies an
+object to its key only on a complete, checksum-matching upload. No double can
+demonstrate that, whatever it is told to resolve, so the provider column is
+`required` rather than `optional` and
+`backend/test/integration/backup-store-s3.integration.spec.ts` is where it is
+met, against MinIO. That suite is gated on `BACKUP_STORE_S3_TEST_ENDPOINT` and
+the `backend-integration-tests` job does not yet run a MinIO service, which is
+the outstanding half of the row and is recorded as such in task S2 rather than
+left to read as met. `INV-BACKUP-007` is pure configuration arithmetic --
+endpoint, bucket and normalised prefix -- so it needs nothing but a unit test,
+and the boot-time refusal it also calls for is that task's third stage.
+`INV-BACKUP-009` needs all three of its columns: the unit spec
+(`restore-references.spec.ts`) proves the refusal and the canonicalisation, the
+source scan in the same file proves `RESTORE_REFERENCE_COLUMNS` covers every
+foreign key and UUID column in `database/schema.sql`, and only a real database
+shows that a UUID spelling the remap missed is the same row to PostgreSQL --
+`backup-restore.integration.spec.ts`, "a crafted file naming another user's
+rows".
+
 ## 4. CI ownership
 
 Every required test must be reachable by a named job. The jobs that exist in
@@ -173,10 +387,11 @@ Every required test must be reachable by a named job. The jobs that exist in
 
 | Job | Runs | Owns |
 | --- | --- | --- |
-| `Backend Lint & Type Check` | eslint, tsc | the RLS lint bans, ban lists |
+| `Backend Lint & Type Check` | eslint, tsc, `npm run build` | the RLS lint bans, ban lists, the production build |
 | `Backend Unit Tests` | `npm run test:unit -- --coverage` | unit, source scans in `backend/src` |
-| `Backend Integration Tests` | `npm run test:integration` | PG integration, two-connection, two-instance, failpoint, provider round trip |
-| `Frontend Unit Tests` | `npm run test:cov` | unit, source scans in `frontend/src` |
+| `Backend Integration Tests (shard N/3)` | `npm run test:integration -- --shard=N/3`, 3 shards, each with its own postgres | PG integration, two-connection, two-instance, failpoint, provider round trip |
+| `Frontend Unit Tests (shard N/3)` | `vitest run --coverage --shard=N/3`, thresholds off | unit, source scans in `frontend/src` |
+| `Frontend Unit Tests` | `vitest run --merge-reports --coverage` over the three shards | the frontend coverage thresholds |
 | `Frontend Lint & Type Check` | eslint, tsc | frontend conventions |
 | `Schema vs Migrations Drift` | `scripts/verify-schema.sh` | migration replay is a no-op on `schema.sql` |
 | `E2E Tests (shard N/4)` | Playwright, 4 shards | user-visible outcomes, browser cache state |
@@ -184,7 +399,7 @@ Every required test must be reachable by a named job. The jobs that exist in
 
 Two structural points about this table:
 
-**One job owns six test kinds.** `Backend Integration Tests` is where
+**One job owns six test kinds.** `Backend Integration Tests` (all three shards) is where
 two-connection, two-instance, failpoint and provider round-trip tests all live,
 because they all need a real database. That makes it the single most important
 job in the pipeline and the one whose silent failure is most costly -- which
@@ -200,9 +415,9 @@ exits non-zero and fails the job, and
 any tracked surface that can start a runner -- manifest, runner config,
 workflow, shell script or Dockerfile -- in every spelling the runners accept. What is still owed is the weaker guard against a regex that matches *some*
 suites but silently drops a class: that guard asserts every tracked suite under
-`backend/test/integration/` is discoverable by `test/jest-e2e.json`, but nothing
-asserts what the runner executed, and the CLI `--testPathPatterns` filter is
-outside its model.
+`backend/test/integration/` is discoverable by `test/jest-integration.json`, the
+config `test:integration` selects (no CLI path filter is left outside the
+model), but nothing asserts what the runner executed.
 `docs/release-integrity.md` REL-001 and REL-002 cover the history and the
 consequence, which is a verification one, not merely CI hygiene.
 
@@ -271,7 +486,7 @@ closing INV-FX-001 or INV-OCCURRENCE-002 should search once more before assuming
 no test stands in the way. They are deliberately not in the table above: a
 citation that cannot be checked is the thing this document exists to discourage.
 
-Per root `CLAUDE.md`, each corrected unit test needs a production-boundary
+Per `AGENTS.md`, each corrected unit test needs a production-boundary
 companion wherever the defect depends on PostgreSQL, multiple processes,
 providers or browser state. Correcting the assertion alone leaves the class open.
 
@@ -314,6 +529,33 @@ unfixed code first and confirm it fails for the right reason.
 CI runs in UTC with one Playwright worker; a local run does neither, and both
 differences produce failures that look like regressions and are not.
 
+A container image CI pulls (a workflow's `image:`, the compose file CI runs,
+a script's `*_IMAGE=` default, a Dockerfile's `FROM`) comes from Google's mirror
+of the Docker Official Images, `mirror.gcr.io/library/<name>:<tag>` (the same
+content and digests as Docker Hub), from `ghcr.io`, or -- for an image only
+Microsoft publishes, the Playwright image `scripts/e2e-playwright.sh` runs the E2E
+suites in -- from `mcr.microsoft.com`, which is not Docker Hub and needs no login;
+never from Docker Hub: an
+anonymous Docker Hub pull from a shared runner IP is rate-limited, and the login
+that avoids it needs `DOCKERHUB_*` secrets a fork's repository does not have, so
+the job fails before its own step runs (the schema-drift job did, with "Username
+and password required"). `backend/src/common/ci-images.guard.spec.ts` scans the
+workflows, `docker-compose.e2e.yml`, `scripts/*.sh` and every `FROM` in a
+tracked Dockerfile (CI builds those images for the E2E, Lighthouse and ZAP jobs),
+and fails a workflow that still reads `DOCKERHUB_*` secrets: no job needs that
+login. `.hadolint.yaml` trusts `mirror.gcr.io` and `ghcr.io`, the registries
+the Dockerfiles use. A tag alone is a name, not content, so the same files are
+also scanned by `backend/src/common/image-digest-pin.guard.spec.ts`, which
+fails a `mirror.gcr.io` or `mcr.microsoft.com` reference with no `@sha256:`
+digest and keeps `docs/container-images.md`'s digest map from drifting from
+the references in either direction. Not the ECR Public
+mirror (`public.ecr.aws`): its anonymous pulls carry a data limit per source
+IP, which GitHub's shared runners exhaust, and the E2E build failed with
+"toomanyrequests: Data limit exceeded". A registry can still answer a burst of
+pulls with a 429, so a job
+that starts a compose stack runs `scripts/pull-ci-images.sh` first: one image at
+a time, with a back-off, never compose's parallel pull.
+
 - `TZ=UTC npm run test:unit` matches CI. Some tests read `new Date()` and count
   completed periods against fixtures; under another offset they land on the wrong
   side of a boundary. `insights-aggregator.service.spec.ts` and
@@ -322,9 +564,19 @@ differences produce failures that look like regressions and are not.
   commands above, in that order, never concurrently. The integration suites share
   one `monize_test` and rebuild its schema (`synchronize` + `dropSchema`), so a
   second Jest worker is a race rather than a speedup: the parallel config pins
-  `roots: ["<rootDir>/src"]` and `test/jest-e2e.json` pins `maxWorkers: 1`, both
+  `roots: ["<rootDir>/src"]` and `test/jest-integration.json` pins `maxWorkers: 1`, both
   asserted by `backend/src/common/jest-config.guard.spec.ts`. The default command
   therefore needs a reachable PostgreSQL; `npm run test:unit` is the offline path.
+- `npm run test:changed` (backend and frontend) is the loop for an agent or a
+  developer between commits: the tests related to files changed since
+  `origin/main`, plus every guard test, with only failures printed and no
+  coverage. Guards are always added because they scan source text and so never
+  appear in an import graph. It selects from `git`, so a new file needs
+  `git add -N` first (the backend script; the frontend script also reads
+  untracked files). It does not run the integration specs, and it proves no
+  coverage threshold, because a threshold over a subset means nothing. The full
+  `test:cov` gate stays CI's, which runs it before merge. The rule is held by
+  `backend/src/common/test-changed.guard.spec.ts`.
 - `--workers=1` for the whole E2E suite. `playwright.config.ts` sets one worker
   only when `CI` is set, and `e2e/tests/zz-danger-zone.spec.ts` deletes the
   shared account -- the `zz-` prefix orders it last, which only means anything
@@ -332,8 +584,9 @@ differences produce failures that look like regressions and are not.
 - `scripts/verify-schema.sh` reproduces the drift job locally and needs only
   Docker.
 
-Believing an unqualified local failure means chasing a bug that does not exist;
-root `CLAUDE.md` has the longer form.
+Believing an unqualified local failure means chasing a bug that does not exist.
+A guard that walks the tree with `git ls-files` cannot see an untracked file;
+`docs/guard-tests.md` has that and the other guard-authoring rules.
 
 ## 8. Definition of done
 

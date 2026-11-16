@@ -43,17 +43,80 @@ import {
   promisesPendingAction,
 } from "./continuation";
 
+/** Per-run limits on what the assistant may call. */
+export interface QueryRunOptions {
+  /** Tool names withdrawn from this run: not offered, and refused if called anyway. */
+  excludeTools?: readonly string[];
+  /**
+   * The only tool names this run may use: others are not offered, and refused
+   * if called anyway. Absent means no limit; an empty list means no tools.
+   */
+  allowTools?: readonly string[];
+}
+
+/**
+ * The only tools an acting delegate's run may use. The query routes are
+ * `@AllowDelegate` and read-only for a delegate, and the delegate holds READ on
+ * every account and section (`DelegateRequiresFullScope`), so a tool is listed
+ * here only when it reads what that delegate can already read through REST.
+ * A tool is never listed when it writes, shows a confirm card, reads data
+ * behind an `@OwnerOnly` or non-`@AllowDelegate` route, or is not yet reviewed:
+ * a new tool is withheld from delegates until it is added here on purpose.
+ * `search_help` reads only the public user guide, never a user's data.
+ */
+export const DELEGATE_ALLOWED_AI_TOOLS: readonly string[] = [
+  "list_transactions",
+  "list_accounts",
+  "list_categories",
+  "compare_periods",
+  "get_portfolio_summary",
+  "list_investment_transactions",
+  "list_capital_gains",
+  "list_upcoming_bills",
+  "get_budget_status",
+  "calculate",
+  "render_chart",
+  "list_payees",
+  "generate_report",
+  "list_warranties",
+  "search_help",
+  // `GET /tags` and `GET /tags/usage` are `@AllowDelegate`, and a full-scope
+  // delegate's usage is the owner's (no account narrows it).
+  "list_tags",
+];
+
+/**
+ * Every other tool, each denied to a delegate. Read by the classification test
+ * only (`delegate-ai-tools.guard.spec.ts`); the run decides from the allow-list.
+ * - `manage_*`: prepare a confirm card for a write.
+ * - `email_receipt_parsers`, `ai_review_requests`: write, and read owner-only
+ *   email content.
+ * - `fetch_bond_series`: writes the bond catalog.
+ * - `list_transaction_rules`: the rules controller is owner-only.
+ * - `lookup_securities`: `GET /securities/lookup` is not `@AllowDelegate`, and
+ *   the call uses the owner's quote provider.
+ */
+export const DELEGATE_DENIED_AI_TOOLS: readonly string[] = [
+  "manage_transactions",
+  "manage_payees",
+  "manage_tags",
+  "manage_securities",
+  "manage_investment_transactions",
+  "manage_transaction_rules",
+  "list_transaction_rules",
+  "email_receipt_parsers",
+  "ai_review_requests",
+  "fetch_bond_series",
+  "lookup_securities",
+];
+
 /**
  * Why the tool-calling loop stopped without the model having answered. Four of
  * these are budgets; `stalled` is the model itself, ending turn after turn
  * promising work it cannot do once the turn is over.
  */
 export type QueryCutoffReason =
-  | "iterations"
-  | "toolCalls"
-  | "tokens"
-  | "timeout"
-  | "stalled";
+  "iterations" | "toolCalls" | "tokens" | "timeout" | "stalled";
 
 /**
  * The note prefixed to a synthesized answer, one per budget. Each says which
@@ -157,6 +220,7 @@ export class AiQueryService {
       content: string;
     }>,
     attachments?: AttachmentDto[],
+    options?: QueryRunOptions,
   ): Promise<QueryResult> {
     const events: StreamEvent[] = [];
     for await (const event of this.executeQueryStream(
@@ -164,6 +228,7 @@ export class AiQueryService {
       query,
       conversationHistory,
       attachments,
+      options,
     )) {
       events.push(event);
     }
@@ -215,8 +280,17 @@ export class AiQueryService {
       content: string;
     }>,
     attachments?: AttachmentDto[],
+    options?: QueryRunOptions,
   ): AsyncGenerator<StreamEvent> {
     yield { type: "thinking", message: "Analyzing your question..." };
+
+    const allowed = options?.allowTools ? new Set(options.allowTools) : null;
+    const excluded = new Set(options?.excludeTools ?? []);
+    const isOffered = (name: string): boolean =>
+      excluded.has(name) ? false : !allowed || allowed.has(name);
+    const offeredTools: AiToolDefinition[] = FINANCIAL_TOOLS.filter((t) =>
+      isOffered(t.name),
+    );
 
     const startTime = Date.now();
     this.logger.log(`Query start user=${userId} queryLen=${query.length}`);
@@ -397,7 +471,7 @@ export class AiQueryService {
               maxTokens: 4096,
               temperature: 0.1,
             },
-            FINANCIAL_TOOLS,
+            offeredTools,
           )) {
             if (chunk.type === "text") {
               if (firstChunkAt === null) {
@@ -427,7 +501,7 @@ export class AiQueryService {
               maxTokens: 4096,
               temperature: 0.1,
             },
-            FINANCIAL_TOOLS,
+            offeredTools,
           );
           iterationContent = response.content;
           iterationToolCalls = response.toolCalls;
@@ -609,12 +683,23 @@ export class AiQueryService {
           input: toolCall.input,
         };
 
-        const result = await this.toolExecutor.execute(
-          userId,
-          toolCall.name,
-          toolCall.input,
-          { attachments },
-        );
+        // A tool outside this run's allow-list is refused even when the model
+        // names it anyway (it was never offered, so the call is hallucinated or
+        // injected).
+        const result: Awaited<ReturnType<ToolExecutorService["execute"]>> =
+          !isOffered(toolCall.name)
+            ? {
+                data: { error: "This tool is not available in this run." },
+                summary: `Tool not available: ${toolCall.name}`,
+                sources: [],
+                isError: true,
+              }
+            : await this.toolExecutor.execute(
+                userId,
+                toolCall.name,
+                toolCall.input,
+                { attachments },
+              );
 
         this.logger.log(
           `Tool call done user=${userId} tool=${toolCall.name} ms=${Date.now() - toolStart} sources=${result.sources.length}`,

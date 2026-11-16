@@ -1,0 +1,120 @@
+{
+  "view": {
+    "label": "Tampilan",
+    "table": "Tabel",
+    "calendar": "Kalender"
+  },
+  "grid": {
+    "label": "Bulan"
+  },
+  "toolbar": {
+    "layers": "Lapisan"
+  },
+  "layers": {
+    "transactions": "Transaksi",
+    "balances": "Saldo",
+    "values": "Nilai",
+    "dailyChange": "Perubahan harian"
+  },
+  "legend": {
+    "label": "Keterangan",
+    "scheduled": "Terjadwal"
+  },
+  "chip": {
+    "noPayee": "Tanpa penerima",
+    "overdue": "Terlambat",
+    "scheduled": "Terjadwal",
+    "noSymbol": "Tanpa simbol"
+  },
+  "day": {
+    "itemCount": "{count, plural, other {# entri}}",
+    "moreChips": "+{count} lagi",
+    "newTransaction": "Transaksi baru pada hari ini",
+    "noItems": "Tidak ada apa pun pada hari ini.",
+    "scheduledHint": "Terjadwal. Buka Tagihan & Setoran untuk mengubahnya.",
+    "newInvestmentTransaction": "Transaksi investasi baru pada hari ini"
+  },
+  "banner": {
+    "title": "Beberapa angka tidak ditampilkan",
+    "rowCap": "Bulan ini memuat {count} transaksi, lebih dari {limit} yang dapat ditampilkan kalender. Persempit filter untuk melihatnya.",
+    "scheduledUnavailable": "Item terjadwal untuk bulan ini tidak dapat dimuat. Baris yang ditampilkan lengkap; yang terjadwal hilang.",
+    "scheduledTruncated": "Beberapa item terjadwal tidak ditampilkan sejauh ini ke depan. Mendekatlah ke hari ini untuk melihat semuanya.",
+    "balancesScopeEmpty": "Tidak ada akun dalam cakupan, jadi tidak ada saldo untuk ditampilkan. Pilih akun di filter.",
+    "balancesMissingRates": "Tidak ada kurs untuk {pairs} pada beberapa hari bulan ini, jadi total tersebut tidak ditampilkan. Buka Mata Uang dan perbarui kursnya.",
+    "balancesForecastGaps": "Saldo proyeksi ditahan karena item terjadwal berikut belum dapat dinilai: {schedules}.",
+    "balancesForecastWithheld": "Saldo proyeksi ditahan: setidaknya satu item terjadwal belum dapat dinilai, dan alasannya tidak dilaporkan.",
+    "balancesUnforecastable": "{count, plural, other {# akun dalam cakupan tidak punya proyeksi sendiri, jadi total proyeksi ditahan.}}",
+    "valuesUnpriced": "Tidak ada harga untuk {securities} pada beberapa hari bulan ini, jadi nilai tersebut tidak ditampilkan. Tambahkan harga di riwayat harga efek, atau perbarui harga.",
+    "valuesMissingRates": "Tidak ada kurs untuk {pairs} pada beberapa hari bulan ini, jadi nilai tersebut tidak ditampilkan. Buka Mata Uang dan perbarui kursnya.",
+    "notesUnavailable": "Catatan Anda untuk bulan ini tidak dapat dimuat. Catatan yang sudah Anda tulis tetap tersimpan."
+  },
+  "errors": {
+    "monthFailed": "Bulan ini tidak dapat dimuat.",
+    "balancesFailed": "Saldo bulan ini tidak dapat dimuat.",
+    "valuesFailed": "Nilai portofolio bulan ini tidak dapat dimuat.",
+    "movementsFailed": "Perubahan harian bulan ini tidak dapat dimuat.",
+    "movementDetailFailed": "Rincian hari ini tidak dapat dimuat."
+  },
+  "balance": {
+    "actualTitle": "Saldo akhir hari",
+    "projectedTitle": "Saldo proyeksi",
+    "projected": "Proyeksi",
+    "projectedHint": "Diproyeksikan dari saldo akhir hari ini dan setiap item terjadwal yang jatuh tempo sampai hari ini.",
+    "projectedFromItems": "Diproyeksikan dari saldo akhir hari ini dan setiap item terjadwal yang jatuh tempo sampai hari ini, termasuk yang tercantum di bawah.",
+    "partial": "Sebagian: {amount} dari cakupan dapat dihitung, sisanya tidak, jadi tidak ada total yang ditampilkan.",
+    "missingRates": "Tidak ada kurs untuk {pairs} pada hari yang menjadi acuan angka ini. Buka Mata Uang dan perbarui kursnya.",
+    "unforecastable": "{count, plural, other {# akun dalam cakupan tidak punya proyeksi sendiri, jadi total proyeksi ditahan.}}"
+  },
+  "value": {
+    "title": "Nilai portofolio",
+    "unpriced": "Tidak ada harga untuk {securities} pada hari ini, jadi nilainya tidak ditampilkan. Tambahkan harga di riwayat harga efek, atau perbarui harga.",
+    "missingRates": "Tidak ada kurs untuk {pairs} pada hari ini, jadi nilainya tidak ditampilkan. Buka Mata Uang dan perbarui kursnya."
+  },
+  "change": {
+    "openDetail": "Lihat apa yang bergerak pada hari ini",
+    "detailTitle": "Yang bergerak pada {date}",
+    "headline": "Pergerakan pasar",
+    "headlineValue": "{amount} ({percent})",
+    "gains": "Kenaikan",
+    "losses": "Penurunan",
+    "unchanged": "{count, plural, other {# efek ditutup tanpa perubahan.}}",
+    "remainder": "Kas, distribusi, dan transaksi",
+    "row": "{quantity} unit, {from} ke {to} {currency}",
+    "reasons": {
+      "notTradingDay": "Tidak ada efek yang dimiliki berharga pada hari ini, jadi tidak ada sesi yang dilaporkan.",
+      "unpricedHolding": "Sebuah posisi tidak berharga pada hari ini atau sehari sebelumnya, jadi pergerakannya tidak diketahui.",
+      "missingRate": "Kurs tidak tersedia, jadi pergerakan tidak dapat dikonversi.",
+      "flowIncomplete": "Setoran atau penarikan pada hari ini tidak dapat dikonversi, jadi pergerakan tidak bisa dipisahkan darinya.",
+      "cashIncomplete": "Sebuah akun kas tidak melaporkan saldo untuk hari ini, jadi nilai hari ini tidak lengkap dan pergerakannya tidak diketahui.",
+      "noPriorValue": "Tidak ada nilai sebelumnya untuk membandingkan hari ini.",
+      "zeroBaseline": "Portofolio kosong sehari sebelumnya, jadi tidak ada persentase yang bisa dihitung."
+    }
+  },
+  "notes": {
+    "title": "Catatan",
+    "add": "Tambah catatan",
+    "saveFailed": "Catatan tidak dapat disimpan. Coba lagi.",
+    "deleteFailed": "Catatan tidak dapat dihapus. Coba lagi.",
+    "deleteTitle": "Hapus catatan ini?",
+    "deleteMessage": "Catatan pada hari ini dihapus. Tindakan ini tidak dapat dibatalkan.",
+    "discardTitle": "Buang catatan ini?",
+    "discardMessage": "Catatan yang sedang Anda tulis belum disimpan. Meninggalkan hari ini akan membuangnya.",
+    "discardConfirm": "Buang",
+    "startDate": "Hari pertama",
+    "endDate": "Hari terakhir",
+    "spanRange": "{start} sampai {end}",
+    "spanCount": "{count, plural, other {# hari}}",
+    "spanBackwards": "Hari terakhir tidak boleh sebelum hari pertama.",
+    "spanTooLong": "Sebuah catatan dapat mencakup maksimal {days} hari.",
+    "spanMissesDay": "Hari yang Anda pilih tidak mencakup hari tempat catatan ini ditulis.",
+    "deleteSpanMessage": "{count, plural, other {Catatan ini mencakup # hari, dan semuanya akan dihapus. Tindakan ini tidak dapat dibatalkan.}}"
+  },
+  "monthPicker": {
+    "title": "Buka bulan lain",
+    "typeLabel": "Ketik bulan atau tahun",
+    "placeholder": "mis. Mar 1998, 1998-03, 3/1998",
+    "unreadable": "Kami tidak dapat membaca itu sebagai bulan. Coba tahun, nama bulan, atau 1998-03.",
+    "previousYear": "Tahun sebelumnya",
+    "nextYear": "Tahun berikutnya"
+  }
+}

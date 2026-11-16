@@ -23,6 +23,12 @@ import {
   advancePaymentDates,
   unpayableEndDate,
 } from "./payment-frequency.util";
+import {
+  MortgageType,
+  amortizationMethodFor,
+  compoundingFor,
+} from "./mortgage-type.util";
+import { assertMortgageMethodTerms } from "./mortgage-installment.util";
 
 /**
  * The frequency type, the recurrence table and the domain conversion live in
@@ -41,8 +47,8 @@ export interface MortgageAmortizationInput {
   annualRate: number; // As percentage (e.g., 5.5)
   amortizationMonths: number; // Total amortization period
   paymentFrequency: MortgagePaymentFrequency;
-  isCanadian: boolean;
-  isVariableRate: boolean;
+  /** The account's type, read through `mortgageTypeOf`. */
+  mortgageType: MortgageType;
   startDate: Date;
 }
 
@@ -141,18 +147,17 @@ export function calculateStandardPeriodicRate(
 }
 
 /**
- * Determine the correct periodic rate based on mortgage type
+ * The periodic rate for a mortgage type, by its compounding trait
+ * (`compoundingFor`): `SEMI_ANNUAL` (Canadian fixed-rate, required by law)
+ * converts the semi-annual rate to the payment period; `NOMINAL` divides the
+ * annual rate by the payment frequency -- see calculateStandardPeriodicRate.
  */
 export function getPeriodicRate(
   annualRate: number,
   periodsPerYear: number,
-  isCanadian: boolean,
-  isVariableRate: boolean,
+  type: MortgageType,
 ): number {
-  // Canadian fixed-rate mortgages compound semi-annually (required by law);
-  // every other mortgage uses the nominal-rate convention (annual rate divided
-  // by the payment frequency) -- see calculateStandardPeriodicRate.
-  if (isCanadian && !isVariableRate) {
+  if (compoundingFor(type) === "SEMI_ANNUAL") {
     return calculateCanadianPeriodicRate(annualRate, periodsPerYear);
   }
   return calculateStandardPeriodicRate(annualRate, periodsPerYear);
@@ -192,15 +197,9 @@ function calculateMonthlyPayment(
   principal: number,
   annualRate: number,
   amortizationMonths: number,
-  isCanadian: boolean,
-  isVariableRate: boolean,
+  mortgageType: MortgageType,
 ): number {
-  const periodicRate = getPeriodicRate(
-    annualRate,
-    12,
-    isCanadian,
-    isVariableRate,
-  );
+  const periodicRate = getPeriodicRate(annualRate, 12, mortgageType);
   return calculatePaymentAmount(principal, periodicRate, amortizationMonths);
 }
 
@@ -215,8 +214,7 @@ export function calculateMortgagePayment(
     annualRate,
     amortizationMonths,
     paymentFrequency,
-    isCanadian,
-    isVariableRate,
+    mortgageType,
   } = input;
 
   // For accelerated payments, calculate based on monthly payment
@@ -225,8 +223,7 @@ export function calculateMortgagePayment(
       principal,
       annualRate,
       amortizationMonths,
-      isCanadian,
-      isVariableRate,
+      mortgageType,
     );
     return roundMoney(monthlyPayment / 2);
   }
@@ -236,8 +233,7 @@ export function calculateMortgagePayment(
       principal,
       annualRate,
       amortizationMonths,
-      isCanadian,
-      isVariableRate,
+      mortgageType,
     );
     return roundMoney(monthlyPayment / 4);
   }
@@ -248,8 +244,7 @@ export function calculateMortgagePayment(
   const periodicRate = getPeriodicRate(
     annualRate,
     periodsPerYear,
-    isCanadian,
-    isVariableRate,
+    mortgageType,
   );
 
   return calculatePaymentAmount(principal, periodicRate, totalPayments);
@@ -304,10 +299,11 @@ export function calculateMortgageEndDate(
 
 /**
  * Effective annual rate for display: the rate the mortgage actually costs over
- * a year, compounded the way its own periodic rate is derived.
+ * a year, compounded the way its own periodic rate is derived, by the type's
+ * compounding trait (`compoundingFor`).
  *
- * For Canadian fixed-rate: EAR = (1 + r/2)^2 - 1 (semi-annual, by law).
- * Otherwise the periodic rate is `r / periodsPerYear`
+ * For `SEMI_ANNUAL` (Canadian fixed-rate): EAR = (1 + r/2)^2 - 1 (by law).
+ * For `NOMINAL` the periodic rate is `r / periodsPerYear`
  * (`calculateStandardPeriodicRate`), so the EAR compounds at the *payment*
  * frequency: EAR = (1 + r/n)^n - 1. Compounding at 12 regardless of n
  * described a rate the schedule never used -- a biweekly mortgage charges
@@ -317,11 +313,10 @@ export function calculateMortgageEndDate(
  */
 export function calculateEffectiveAnnualRate(
   annualRate: number,
-  isCanadian: boolean,
-  isVariableRate: boolean,
   periodsPerYear: number,
+  type: MortgageType,
 ): number {
-  if (isCanadian && !isVariableRate) {
+  if (compoundingFor(type) === "SEMI_ANNUAL") {
     // Semi-annual compounding
     const ear = Math.pow(1 + annualRate / 100 / 2, 2) - 1;
     return Math.round(ear * 10000) / 100; // Return as percentage with 2 decimals
@@ -440,7 +435,89 @@ export function calculateResidualPayoff(
 }
 
 /**
- * Calculate full mortgage amortization details
+ * The preview of a LINEAR or INTEREST_ONLY mortgage, by spec section 5.1's
+ * closed forms. There are no events in a preview, so `r` is the scalar rate
+ * throughout and the debt falls by exactly `c` a period:
+ *
+ * - LINEAR: the first installment is `c + roundMoney(P * r)` with
+ *   `c = roundMoney(P / N)`; lifetime interest `roundMoney(P * r * (N + 1) / 2)`;
+ *   the last payment `roundMoney((P - (N - 1) * c) * (1 + r))`, which carries
+ *   the leftover of rounding `c` (decision 8).
+ * - INTEREST_ONLY: every installment `roundMoney(P * r)`, principal 0; lifetime
+ *   interest `roundMoney(P * r * N)`; the last payment is the bullet,
+ *   `roundMoney(P * (1 + r))` (INV-LOAN-004).
+ *
+ * Both run `N` payments, the last on payment `N` (INV-LOAN-005).
+ */
+function calculateNonAnnuityAmortization(
+  input: MortgageAmortizationInput,
+  method: "LINEAR" | "INTEREST_ONLY",
+): MortgageAmortizationResult {
+  const {
+    principal,
+    annualRate,
+    amortizationMonths,
+    paymentFrequency,
+    mortgageType,
+    startDate,
+  } = input;
+  const periodsPerYear = getMortgagePeriodsPerYear(paymentFrequency);
+  const periodicRate = getPeriodicRate(
+    annualRate,
+    periodsPerYear,
+    mortgageType,
+  );
+  const totalPayments = Math.round((amortizationMonths * periodsPerYear) / 12);
+  const interestPayment = roundMoney(principal * periodicRate);
+  const effectiveAnnualRate = calculateEffectiveAnnualRate(
+    annualRate,
+    periodsPerYear,
+    mortgageType,
+  );
+  const endDate = calculateMortgageEndDate(
+    startDate,
+    paymentFrequency,
+    totalPayments,
+  );
+
+  if (method === "INTEREST_ONLY") {
+    return {
+      paymentAmount: interestPayment,
+      principalPayment: 0,
+      interestPayment,
+      totalPayments,
+      residualPayoffAmount: roundMoney(principal * (1 + periodicRate)),
+      endDate,
+      totalInterest: roundMoney(principal * periodicRate * totalPayments),
+      effectiveAnnualRate,
+    };
+  }
+
+  const constantPrincipal = roundMoney(principal / totalPayments);
+  return {
+    paymentAmount: roundMoney(constantPrincipal + interestPayment),
+    principalPayment: constantPrincipal,
+    interestPayment,
+    totalPayments,
+    residualPayoffAmount: roundMoney(
+      Math.max(0, principal - (totalPayments - 1) * constantPrincipal) *
+        (1 + periodicRate),
+    ),
+    endDate,
+    totalInterest: roundMoney(
+      (principal * periodicRate * (totalPayments + 1)) / 2,
+    ),
+    effectiveAnnualRate,
+  };
+}
+
+/**
+ * Calculate full mortgage amortization details.
+ *
+ * Branches on the type's amortization method (`amortizationMethodFor`,
+ * INV-LOAN-007) before anything annuity-shaped is computed: LINEAR and
+ * INTEREST_ONLY have their own closed forms, and refuse an accelerated
+ * cadence or a missing term with a 400 (spec sections 5.1 and 8).
  */
 export function calculateMortgageAmortization(
   input: MortgageAmortizationInput,
@@ -450,10 +527,20 @@ export function calculateMortgageAmortization(
     annualRate,
     amortizationMonths,
     paymentFrequency,
-    isCanadian,
-    isVariableRate,
+    mortgageType,
     startDate,
   } = input;
+
+  const method = amortizationMethodFor(mortgageType);
+  if (method !== "ANNUITY") {
+    assertMortgageMethodTerms(mortgageType, {
+      originalPrincipal: principal,
+      amortizationMonths,
+      paymentStartDate: startDate,
+      paymentFrequency,
+    });
+    return calculateNonAnnuityAmortization(input, method);
+  }
 
   // Calculate payment amount
   const paymentAmount = calculateMortgagePayment(input);
@@ -462,8 +549,7 @@ export function calculateMortgageAmortization(
   const periodicRate = getPeriodicRate(
     annualRate,
     periodsPerYear,
-    isCanadian,
-    isVariableRate,
+    mortgageType,
   );
 
   // An accelerated schedule pays a fraction of the monthly installment on a
@@ -510,9 +596,8 @@ export function calculateMortgageAmortization(
   // Calculate effective annual rate
   const effectiveAnnualRate = calculateEffectiveAnnualRate(
     annualRate,
-    isCanadian,
-    isVariableRate,
     periodsPerYear,
+    mortgageType,
   );
 
   return {
@@ -528,29 +613,47 @@ export function calculateMortgageAmortization(
 }
 
 /**
+ * Hold the routing rule in code: the two helpers below are the annuity
+ * re-levelling and split, and a LINEAR or INTEREST_ONLY caller is priced
+ * through `nonAnnuityInstallment` instead. A misrouted call is a programming
+ * error, so it throws rather than answering with an annuity figure.
+ */
+function assertAnnuityMethod(helper: string, type: MortgageType): void {
+  if (amortizationMethodFor(type) !== "ANNUITY") {
+    throw new Error(
+      `${helper} prices annuity mortgages only; a ${type} mortgage is priced through nonAnnuityInstallment`,
+    );
+  }
+}
+
+/**
  * Recalculate mortgage details after a rate change
  *
- * Uses current balance and remaining amortization to determine new payment
+ * Uses current balance and remaining amortization to determine new payment.
+ * The annuity re-levelling: a LINEAR or INTEREST_ONLY installment is not a
+ * function of the balance and the remaining months alone (SHORTEN_TERM keeps
+ * the original `c`), so the rate-change paths price those through
+ * `nonAnnuityInstallment` on the dated debt instead of calling this
+ * (spec section 5.3).
  */
 export function recalculateMortgageAfterRateChange(
   currentBalance: number,
   newRate: number,
   remainingAmortizationMonths: number,
   paymentFrequency: MortgagePaymentFrequency,
-  isCanadian: boolean,
-  isVariableRate: boolean,
+  mortgageType: MortgageType,
 ): {
   paymentAmount: number;
   principalPayment: number;
   interestPayment: number;
 } {
+  assertAnnuityMethod("recalculateMortgageAfterRateChange", mortgageType);
   const input: MortgageAmortizationInput = {
     principal: currentBalance,
     annualRate: newRate,
     amortizationMonths: remainingAmortizationMonths,
     paymentFrequency,
-    isCanadian,
-    isVariableRate,
+    mortgageType,
     startDate: new Date(),
   };
 
@@ -566,23 +669,29 @@ export function recalculateMortgageAfterRateChange(
 /**
  * Calculate the principal/interest split for a mortgage payment based on remaining balance.
  *
- * Unlike loan payment splits which use simple monthly compounding, this handles
- * Canadian fixed-rate semi-annual compounding and other mortgage-specific rates.
+ * The annuity split: the principal is what is left of a constant payment
+ * after the interest. LINEAR and INTEREST_ONLY have no constant payment, so
+ * payment setup prices their first installment through
+ * `nonAnnuityInstallment` (spec section 5.5).
+ *
+ * The periodic rate follows the type's compounding (`getPeriodicRate`), so a
+ * `CANADIAN_FIXED` mortgage accrues at the semi-annual conversion and every
+ * other type at the nominal rate over `periodsPerYear`. Takes the count rather
+ * than a mortgage cadence so a stored loan-domain spelling (quarterly, yearly)
+ * reaches it through `periodsPerYearForStoredFrequency` instead of a cast.
  */
 export function calculateMortgagePaymentSplit(
   remainingBalance: number,
   annualRate: number,
   paymentAmount: number,
-  frequency: MortgagePaymentFrequency,
-  isCanadian: boolean,
-  isVariableRate: boolean,
+  periodsPerYear: number,
+  mortgageType: MortgageType,
 ): { principal: number; interest: number } {
-  const periodsPerYear = getMortgagePeriodsPerYear(frequency);
+  assertAnnuityMethod("calculateMortgagePaymentSplit", mortgageType);
   const periodicRate = getPeriodicRate(
     annualRate,
     periodsPerYear,
-    isCanadian,
-    isVariableRate,
+    mortgageType,
   );
 
   const interest = remainingBalance * periodicRate;

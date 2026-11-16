@@ -65,6 +65,22 @@ export interface PaymentRecord {
   interestCategoryName: string | null;
 }
 
+/**
+ * A loan's posted installments, each paired with its interest, and the balance
+ * the loan carried before each payment date.
+ */
+export interface InstallmentHistory {
+  /** One record per payment date, oldest first. */
+  payments: PaymentRecord[];
+  /** Balance owed before the first transaction of each date (yyyy-MM-dd). */
+  balanceMap: Map<string, number>;
+  /**
+   * Interest is booked as a separate expense rather than a split leg, so each
+   * record's `amount` is the principal alone, not the installment.
+   */
+  interestBookedSeparately: boolean;
+}
+
 @Injectable()
 export class LoanPaymentDetectorService {
   private readonly logger = new Logger(LoanPaymentDetectorService.name);
@@ -236,6 +252,47 @@ export class LoanPaymentDetectorService {
   }
 
   /**
+   * Pair a loan's posted installments with their interest: payment records
+   * consolidated per date, interest booked as a separate categorized expense
+   * recovered unless the loan books interest only as a split leg, and the
+   * balance before each date. The one pairing rate-change inference and
+   * mortgage-type detection read installments through, so the two never
+   * disagree about which payments a loan made. `transactions` are the loan's
+   * own, oldest first.
+   */
+  async buildInstallmentHistory(
+    userId: string,
+    account: Account,
+    transactions: Transaction[],
+  ): Promise<InstallmentHistory> {
+    const rawPayments = await this.buildPaymentRecords(
+      userId,
+      account.id,
+      transactions,
+    );
+    const consolidated = this.consolidatePaymentsByDate(rawPayments);
+    const hadSplitInterest = consolidated.some((p) => p.interestAmount != null);
+    // Recover interest booked as a separate categorized expense (not a split
+    // leg) so those payments yield an observation instead of being dropped
+    // as "no interest details". Skipped in SPLIT mode, where interest is only
+    // ever a split leg and pairing a separate expense would double-count.
+    const payments =
+      account.interestBookingMode === "SPLIT"
+        ? consolidated
+        : await this.pairSeparateInterest(userId, account, consolidated);
+    // When interest is a separate expense, the payment amounts are principal
+    // only (not the full installment).
+    const interestBookedSeparately =
+      account.interestBookingMode === "SEPARATE" ||
+      (!hadSplitInterest && payments.some((p) => p.interestAmount != null));
+    return {
+      payments,
+      balanceMap: this.buildRunningBalanceMap(account, transactions),
+      interestBookedSeparately,
+    };
+  }
+
+  /**
    * Build payment records by examining transactions and their linked source transfers/splits.
    * The source account transaction represents the true total payment (principal + interest +
    * extra principal). Its splits break down the components clearly:
@@ -264,8 +321,14 @@ export class LoanPaymentDetectorService {
       for (const tx of transactions) {
         const loanSideAmount = Number(tx.amount);
 
-        // Payments to a loan account are positive (reducing the negative liability)
-        if (loanSideAmount <= 0) continue;
+        // Payments to a loan account are positive (reducing the negative
+        // liability). A zero-amount transfer leg is read too: an
+        // INTEREST_ONLY installment posts its 0.00 principal line as one
+        // (docs/specs/mortgage-types.md, section 9), and it is kept below only
+        // when its linked parent carries the interest it paid.
+        if (loanSideAmount < 0) continue;
+        const zeroLeg = loanSideAmount === 0;
+        if (zeroLeg && !(tx.isTransfer && tx.linkedTransactionId)) continue;
 
         // Skip if we already processed another loan-side transaction from the same source
         if (
@@ -288,7 +351,6 @@ export class LoanPaymentDetectorService {
 
         // Check if this is a transfer - find the linked source transaction
         if (tx.isTransfer && tx.linkedTransactionId) {
-          processedLinkedIds.add(tx.linkedTransactionId);
           const linkedTx = await m.findOne(Transaction, {
             where: { id: tx.linkedTransactionId, userId },
             relations: ["account"],
@@ -375,6 +437,14 @@ export class LoanPaymentDetectorService {
               }
             }
           }
+        }
+
+        // A zero leg without an interest line paid nothing: not a payment.
+        // The parent is marked processed only once a record is pushed, so a
+        // positive leg into this loan from the same parent is still read.
+        if (zeroLeg && interestAmount == null) continue;
+        if (tx.isTransfer && tx.linkedTransactionId) {
+          processedLinkedIds.add(tx.linkedTransactionId);
         }
 
         payments.push({
@@ -846,7 +916,7 @@ export class LoanPaymentDetectorService {
 
       // Undo the transaction: payments (positive) had reduced the balance,
       // so add them back; charges/fees (negative) had increased it, so subtract.
-      absBalance += Number(tx.amount);
+      absBalance = roundMoney(absBalance + Number(tx.amount));
 
       // Record the pre-transaction balance for this date.
       // Since we're going backwards, overwrite to get the earliest (pre-first-tx) balance.

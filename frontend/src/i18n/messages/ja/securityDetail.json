@@ -34,7 +34,6 @@
     "units": "口数",
     "avgCostPerUnit": "平均取得単価",
     "heldInAccounts": "保有口座",
-    "openAccount": "{name} を「投資」ページで表示",
     "unitsShare": "{units}（{share}）",
     "valueUnknown": "評価不可",
     "approx": "約 {amount}"
@@ -74,15 +73,20 @@
     "sector": "セクター",
     "industry": "業種",
     "provider": "提供元",
-    "lastPrice": "最終価格"
+    "lastPrice": "最終価格",
+    "bondDescription": "債券の説明"
   },
   "tabs": {
     "ariaLabel": "銘柄のセクション",
     "overview": "概要",
     "transactions": "取引",
     "prices": "価格履歴",
+    "terms": "条件の履歴",
     "documents": "資料",
     "news": "ニュース"
+  },
+  "bondPrices": {
+    "title": "価格履歴"
   },
   "about": {
     "title": "概要説明",
@@ -121,6 +125,8 @@
     "fees": "手数料",
     "realizedPl": "実現損益",
     "realizedMixed": "{currencies} で実現したため合算していません",
+    "realizedUnknownReason": "この損益は算出できません。このポジションには取得原価なしで追加された株式があるため、売却した株式の原価が不明です。それらを追加した取引を開いて、価格を入力してください。",
+    "realizedKnownPart": "判明分: {amount}",
     "totalReturn": "トータルリターン",
     "totalReturnValue": "{amount}（{percent}）",
     "totalReturnTitle": "未実現の利益に、売却で実現した額と受け取った収益を加え、手数料を差し引いたものを、投じた資本に対して示した値です。その資本に対する単純なリターンで、年率換算しておらず、各購入分を保有期間で重み付けしていません。",
@@ -147,6 +153,8 @@
     "title": "ポジション決済済み",
     "description": "この銘柄はもう保有していません。履歴は下に残っています。",
     "realizedPl": "実現損益",
+    "realizedUnknownReason": "この損益は算出できません。このポジションには取得原価なしで追加された株式があったため、売却した株式の原価が不明です。それらを追加した取引を開いて、価格を入力してください。",
+    "realizedKnownPart": "判明分: {amount}",
     "heldFrom": "保有開始",
     "heldRange": "{start} 〜 {end}"
   },
@@ -165,7 +173,24 @@
     "sectorEmpty": "セクター構成は保存されていません。Monize はファンドと ETF について提供元から取り込みます。",
     "countryEmpty": "国別構成は保存されていません。銘柄を編集するときに入力できます。",
     "assetClassEmpty": "資産クラス構成はまだ保存されていません。",
-    "remainder": "{percent} は未分類"
+    "remainder": "{percent} は未分類",
+    "bond": {
+      "seriesTab": "シリーズ",
+      "maturityTab": "満期",
+      "empty": "この種類の債券のシリーズをまだ保有していません。",
+      "someUnknown": "一部の値が不明なため、割合は表示されません。",
+      "issuerCountry": "発行国",
+      "rate": "金利",
+      "interest": "利息",
+      "term": "満期までの期間",
+      "interestValue": "{capitalization}、期間: {period}",
+      "rateType": {
+        "FIXED": "固定",
+        "BENCHMARK_PLUS_SPREAD": "変動(基準 + スプレッド)",
+        "INFLATION_PLUS_MARGIN_AS_RATE": "物価連動(基準 + マージン)",
+        "ZERO_COUPON_DISCOUNT": "ゼロクーポン（割引）"
+      }
+    }
   },
   "documents": {
     "title": "資料",
@@ -225,6 +250,16 @@
       "deleted": "資料を削除しました",
       "saveFailed": "資料を保存できませんでした",
       "deleteFailed": "資料を削除できませんでした"
+    },
+    "issueLetters": {
+      "title": "発行書簡",
+      "loadFailed": "発行書簡を読み込めませんでした。",
+      "empty": "この債券の種類には、まだ発行書簡が保存されていません。",
+      "held": "保有中",
+      "onSale": "販売中",
+      "noLetter": "このシリーズの書簡は記録されていません",
+      "open": "公式PDF",
+      "openNamed": "シリーズ {series} の発行書簡を開く"
     }
   },
   "news": {
@@ -237,6 +272,243 @@
     "empty": {
       "title": "現在、見出しはありません",
       "description": "このシンボルについて最近公開されたものはありません。ここに戻ると一覧が更新されます。"
+    }
+  },
+  "bond": {
+    "loading": "債券評価を読み込み中...",
+    "loadFailed": "債券評価を読み込めませんでした。",
+    "unknown": "不明",
+    "asOf": "評価日",
+    "termsSource": "条件: {document}",
+    "termsManual": "管理者が手動で入力した条件",
+    "noLots": "この日付に未決済のロットはありません。",
+    "totals": {
+      "quantity": "保有債券数",
+      "grossValue": "総額",
+      "earlyRedemptionValue": "中途償還額",
+      "accruedInterest": "経過利息",
+      "unknownLot": "少なくとも1つのロットに数値がないため、合計は表示しません。",
+      "unknownRefusal": "ロットを算出できないため、合計は表示しません。"
+    },
+    "lots": {
+      "purchaseDate": "購入日",
+      "assumed": "仮定",
+      "assumedTitle": "実際の購入日は不明です。このロットは、送信側がリンクされていない振替で入ってきました。",
+      "quantity": "数量",
+      "maturity": "満期",
+      "period": "現在の期間",
+      "periodValue": "{index}：{start} から {end}",
+      "rate": "利率",
+      "principal": "債券1枚あたりの元本",
+      "principalIssuePrice": "コストが未入力です。入札価格を使用します",
+      "accruedInterest": "経過利息",
+      "grossValue": "総額",
+      "earlyRedemption": "中途償還",
+      "nextCashFlow": "次のキャッシュフロー",
+      "cashFlowValue": "{date} に {type} {amount}",
+      "noCashFlow": "なし",
+      "projected": "予測",
+      "maturityValue": "満期時の価値",
+      "maturityKnown": "確定",
+      "maturityProjected": "予測",
+      "matured": "償還済み",
+      "refused": "評価対象外",
+      "amountUnknown": "金額不明"
+    },
+    "rateSource": {
+      "TERMS": "条件",
+      "ANNOUNCED": "発表済み",
+      "DERIVED": "導出",
+      "PROJECTED": "予測"
+    },
+    "cashFlowType": {
+      "INTEREST": "利息",
+      "PRINCIPAL": "元本"
+    },
+    "earlyRefusal": {
+      "NOT_REDEEMABLE": "中途償還不可",
+      "TOO_EARLY": "償還には早すぎます",
+      "TOO_LATE": "償還には遅すぎます",
+      "RECORD_DAY": "基準日には償還できません",
+      "MATURED": "満期到来",
+      "RATE_UNKNOWN": "利率が未確定",
+      "TERMS_INCOMPLETE": "条件が不完全"
+    },
+    "lotsRefusal": {
+      "SPLIT": "ロットを導出できません。債券は分割できません。",
+      "FRACTIONAL_QUANTITY": "ロットを導出できません。数量が債券の整数枚数ではありません。",
+      "OVER_REMOVAL": "ロットを導出できません。保有数を超える債券が除かれています。",
+      "INVALID_QUANTITY": "ロットを導出できません。数量がない、負の値、または大きすぎます。",
+      "REMOVAL_EXCEEDS_SERIES": "ロットを特定できません:あるシリーズの債券が保有数を超えて払い出されました。",
+      "SERIES_NOT_DETERMINED": "ロットを特定できません:購入のシリーズが不明です。"
+    },
+    "lotsRefusalDetail": {
+      "SPLIT": "この銘柄には分割（{date} の {action}）が記録されていますが、債券は分割されません。",
+      "FRACTIONAL_QUANTITY": "{date} の {action} は {quantity} 枚の債券を動かしますが、整数ではありません。",
+      "OVER_REMOVAL": "{date} の {action} は {quantity} 枚の債券を減らしますが、保有数を超えています。",
+      "INVALID_QUANTITY": "{date} の {action} の数量が未入力、負の値、または大きすぎます。",
+      "REMOVAL_EXCEEDS_SERIES": "{date} の {action} はそのシリーズの債券を {quantity} 口払い出しますが、そのシリーズの保有数を超えています。",
+      "SERIES_NOT_DETERMINED": "{date} の {action} はシリーズを指定しておらず、その日に販売中だった債券の種類の保存済みシリーズもありません。シリーズを取得し、取引で選択してください。"
+    },
+    "assumptions": {
+      "title": "予測の前提",
+      "latestObservation": "{benchmark} は、以降のすべての期間について {value} と仮定します(直近に公表された値: {observation})",
+      "supplied": "{benchmark} は、以降のすべての期間について {value} と仮定します",
+      "suppliedSimpleAnnual": "{benchmark} は、以降の各月について年 {value} で上昇すると仮定しています（単純年率、複利なし）"
+    },
+    "missing": {
+      "title": "まだ必要なデータ",
+      "item": "{benchmark} {observation} — 公表元：{publisher}",
+      "itemNoPublisher": "{benchmark} {observation} — 公表元は不明"
+    },
+    "recompute": {
+      "button": "価格を再計算",
+      "done": "価格を再計算しました：書き込み {written} 件、削除 {deleted} 件。",
+      "failed": "価格を再計算できませんでした。"
+    },
+    "rate": {
+      "title": "金利",
+      "rule": {
+        "fixed": "全期間固定 {rate}",
+        "firstThen": "第1期: {firstRate}。以降は {benchmark} + {addend}",
+        "every": "毎期: {benchmark} + {addend}",
+        "floorZero": "{benchmark} がマイナスの場合は 0 として扱います",
+        "dailyFloor": "日次の金利（指数とスプレッドの合計）は {floor} を下回りません",
+        "discount": "額面からの割引",
+        "daily": "毎日: {benchmark} + {addend}、日ごとに合算",
+        "lockout": "期間の終了前 {days, plural, one {#営業日} other {#営業日}}以内の入札は、その期間には使用しません"
+      },
+      "daily": "毎日、{benchmark}",
+      "dailyNoIndex": "毎日、{benchmark}: 指数はまだ保存されていません",
+      "dailyRun": "{from} から: {rate}",
+      "dailyRunUnknown": "{from} から: 指数は保存されていません",
+      "lotHeading": "{date} に購入したロット",
+      "range": "{start} から {end}",
+      "current": "現在",
+      "columns": {
+        "period": "期",
+        "dates": "期間",
+        "rate": "金利",
+        "source": "出所",
+        "how": "決定方法"
+      },
+      "how": {
+        "stated": "約定金利",
+        "observed": "{benchmark} {observation}: {value} + {addend}",
+        "floored": "({floor} に引き上げ)",
+        "missing": "{benchmark} {observation}: 未公表"
+      },
+      "nextRateReset": "次回の金利改定日: {date}",
+      "nextCapitalization": "次回の元加日: {date}"
+    },
+    "indexation": {
+      "inflation": "インフレ連動: {date}（第2期）から、利率は{benchmark} + {addend}となり、期ごとに再計算されます",
+      "floating": "変動金利: {date}（第2期）から、利率は{benchmark} + {addend}となり、期ごとに再計算されます"
+    },
+    "interestParts": {
+      "fixed": "固定利息（第1期）",
+      "margin": "マージンによる利息",
+      "inflation": "インフレによる利息",
+      "benchmark": "基準金利による利息",
+      "announced": "公表済みの利息",
+      "fixedTerm": "固定利率の利息"
+    },
+    "chart": {
+      "title": "各期末までの累計利息",
+      "assumption": "{benchmark} = {value} と仮定した予測",
+      "projectedNote": "薄い棒は予測の期間です",
+      "stoppedAt": "第{period}期以降の利息は不明なため、グラフはその手前で終わります。"
+    },
+    "scenarios": {
+      "title": "インフレシナリオ",
+      "titleBenchmark": "金利シナリオ",
+      "projection": "予測",
+      "caption": "仮定値ごとの予測満期価額と利息",
+      "intro": "これは確定ではなく予測です。まだ始まっていない各期には、最初の列の{benchmark}の値を仮定します。確定済み・公表済みの期は変わりません。行を選ぶと、その利率表とグラフを表示します。",
+      "custom": "独自の{benchmark}（%）",
+      "add": "シナリオを追加",
+      "useDefault": "既定の仮定を使う",
+      "selected": "選択中",
+      "loading": "シナリオを読み込み中...",
+      "loadFailed": "シナリオを読み込めませんでした。",
+      "columns": {
+        "assumed": "仮定: {benchmark}",
+        "maturityValue": "満期価額（予測）",
+        "totalInterest": "利息合計（予測）"
+      },
+      "asOfNote": "上で選択した{date}時点で評価しています。数値はその日に保有していた債券が対象です。"
+    },
+    "benchmarks": {
+      "PL_CPI_GUS_YOY": "消費者物価指数 前年比12か月 (GUS)",
+      "PL_NBP_REFERENCE": "NBP 基準金利",
+      "US_CPI_U_NSA": "CPI-U 全項目、季節調整なし (BLS)",
+      "US_TBILL_13W_MMY": "13週物財務省短期証券の利回り"
+    },
+    "valuationRefusal": {
+      "PURCHASE_OUTSIDE_SALE_WINDOW": "このシリーズは{from}から{to}までの間にのみ購入できます。このロットは{purchaseDate}に購入されたため、評価されません。",
+      "PURCHASE_AFTER_MATURITY": "この銘柄は {maturityDate} に満期を迎えました。この保有分は {purchaseDate}、つまりその日以降に購入されているため、評価されません。"
+    },
+    "marketPriceRequired": "この証券には市場で取引される銘柄が含まれるため、価格は条件から決まりません。Monize はその価格を書き込みません。価格はご自身で入力してください。下の保有分の価値は条件から計算したもので、市場価値ではありません。",
+    "partial": {
+      "title": "この評価は不完全です。数値は一部のみのものとしてご覧ください。",
+      "terms": "債券の条件が不完全です(例: カレンダーがインストールされていません)。",
+      "reference": "参照データが不足しています。まだ必要なデータの一覧は下をご覧ください。",
+      "earlyRedemption": "早期償還の条件が不完全なため、早期償還額が表示されない場合があります。",
+      "other": "少なくとも1つのロットはまだ完全に評価できません(例: 利率が不明です)。"
+    },
+    "projectionMissing": {
+      "title": "以降の期間は予測できません",
+      "item": "{benchmark}: 公表された値がなく、仮定も設定されていないため、以降の期間は予測できません(公表元: {publisher})",
+      "itemNoPublisher": "{benchmark}: 公表された値がなく、仮定も設定されていないため、以降の期間は予測できません(公表元は不明)"
+    },
+    "coverage": {
+      "asOf": "{benchmark}のデータ({date}時点)",
+      "none": "{benchmark}のデータはまだ保存されていません"
+    },
+    "issuers": {
+      "PL_MF": "財務省(PL)",
+      "US_TREASURY": "米国財務省(US)"
+    },
+    "redemption": {
+      "title": "中途換金の条件",
+      "fixedFee": "中途換金手数料: 1枚あたり{amount}。",
+      "forfeitAccrued": "中途換金の場合、当期に発生した利子は支払われません。",
+      "floorAllPeriods": "手数料により、どの期間でも換金額が額面を下回ることはありません。",
+      "floorFirstPeriod": "手数料により換金額が額面を下回らないのは第1期のみで、第2期以降にはこの下限はありません。"
+    },
+    "programs": {
+      "OTS": "OTS: 3か月固定利付貯蓄債",
+      "ROR": "ROR: 1年変動利付貯蓄債",
+      "DOR": "DOR: 2年変動利付貯蓄債",
+      "TOS": "TOS: 3年固定利付貯蓄債",
+      "COI": "COI: 4年物物価連動貯蓄債",
+      "EDO": "EDO: 10年物物価連動貯蓄債",
+      "ROS": "ROS: 6年物物価連動ファミリー貯蓄債",
+      "ROD": "ROD: 12年物物価連動ファミリー貯蓄債",
+      "BILL": "BILL: 財務省短期証券、4～52週、割引販売",
+      "NOTE": "NOTE: 財務省中期証券、2～10年、固定利付き（年2回）",
+      "BOND": "BOND: 財務省長期債、20年・30年、固定利付き（年2回）",
+      "TIPS": "TIPS: 物価連動財務省証券、元本は CPI-U に連動",
+      "FRN": "FRN: 変動利付財務省証券、2年、利払いは四半期ごと"
+    },
+    "series": {
+      "title": "保有シリーズ",
+      "column": "シリーズ",
+      "nextRateChange": "次回の金利変更",
+      "total": "債券の種類の合計",
+      "purchasedRange": "{from}～{to}",
+      "expand": "{series}の詳細を表示",
+      "collapse": "{series}の詳細を隠す",
+      "partial": "一部"
+    },
+    "program": {
+      "title": "債券の種類",
+      "newest": "最新シリーズ{series}の条件。",
+      "noTerms": "条件はまだ分かっていません。この債券の種類のシリーズを保有しておらず、販売中のシリーズもありません。",
+      "autoFetchFailed": "設定を保存できませんでした。"
+    },
+    "onSale": {
+      "title": "現在販売中"
     }
   }
 }

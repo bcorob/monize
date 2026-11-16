@@ -1,3 +1,4 @@
+import { MnyFileFormat } from "../model/mny-money99";
 import { MnyDatabase, MnyRow, MnyTable, MnyValue } from "../msisam/open-mny";
 
 /**
@@ -41,6 +42,7 @@ function fakeTable(name: string, definition: FakeTableDefinition): MnyTable {
  */
 export function fakeMnyDatabase(
   tables: Readonly<Record<string, FakeTableDefinition>>,
+  format: MnyFileFormat = "msisam",
 ): MnyDatabase {
   const names = Object.keys(tables);
   const built = new Map(
@@ -48,6 +50,7 @@ export function fakeMnyDatabase(
   );
 
   return {
+    format,
     scheme: "new-sha1",
     passwordProtected: false,
     tableNames: names,

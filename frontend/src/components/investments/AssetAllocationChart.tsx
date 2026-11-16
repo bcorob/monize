@@ -9,11 +9,19 @@ import {
   AccountHoldings,
   CountryWeightingResult,
   AssetClassWeightingResult,
+  PortfolioTagSummary,
 } from '@/types/investment';
 import { investmentsApi } from '@/lib/investments';
 import { CHART_SERIES, chartColors } from '@/lib/chart-colors';
+import {
+  collapseLookThrough,
+  type LookThroughResult,
+} from '@/lib/look-through-allocation';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useExchangeRates } from '@/hooks/useExchangeRates';
+import { useAssetClassLabel, type AssetClassName } from '@/hooks/useAssetClassLabel';
+import { ChartLegend } from '@/components/ui/ChartLegend';
+import { CHART_TOOLTIP_CLASS } from '@/lib/chart-style';
 
 type GroupBy = 'security' | 'tag' | 'tagKey' | 'country' | 'assetClass';
 
@@ -27,57 +35,28 @@ const EMPTY_LOOK_THROUGH = {
 };
 
 /**
- * Collapse a look-through result (countries or asset classes) into pie slices:
- * the ten largest buckets kept individually, everything else (buckets ranked
- * 11+ plus the backend's unclassified remainder) merged into a single "Other"
- * slice. Colours come from the themed categorical palette since the backend
- * does not assign per-bucket colours.
+ * A look-through result as pie slices. `collapseLookThrough` decides which
+ * buckets stay individual and what merges into Other; colours come from the
+ * themed categorical palette, since the backend assigns none.
  */
 function buildLookThroughAllocation(
-  result: {
-    items: { name: string; totalValue: number; percentage: number }[];
-    totalPortfolioValue: number;
-    unclassifiedValue: number;
-  },
+  result: LookThroughResult,
   otherLabel: string,
   sliceType: AllocationItem['type'],
 ): AssetAllocation {
-  const TOP_N = 10;
-  const total = result.totalPortfolioValue;
-  // Backend already sorts by value descending, but sort defensively.
-  const sorted = [...result.items].sort((a, b) => b.totalValue - a.totalValue);
-  const top = sorted.slice(0, TOP_N);
-  const rest = sorted.slice(TOP_N);
-
-  const pct = (value: number) => (total > 0 ? (value / total) * 100 : 0);
-
-  const allocation: AllocationItem[] = top.map((item, index) => ({
-    name: item.name,
+  const allocation: AllocationItem[] = collapseLookThrough(
+    result,
+    otherLabel,
+  ).map((slice, index) => ({
+    name: slice.name,
     symbol: null,
-    type: sliceType,
-    value: item.totalValue,
-    percentage: item.percentage,
-    color: CHART_SERIES[index % CHART_SERIES.length],
+    type: slice.isOther ? 'other' : sliceType,
+    value: slice.value,
+    percentage: slice.percentage,
+    color: slice.isOther ? chartColors.axis : CHART_SERIES[index % CHART_SERIES.length],
   }));
 
-  // Integer-cents math to avoid floating-point accumulation drift.
-  const otherCents = rest.reduce(
-    (sum, item) => sum + Math.round(item.totalValue * 10000),
-    Math.round(result.unclassifiedValue * 10000),
-  );
-  const otherValue = otherCents / 10000;
-  if (otherValue > 0.0001) {
-    allocation.push({
-      name: otherLabel,
-      symbol: null,
-      type: 'other',
-      value: otherValue,
-      percentage: pct(otherValue),
-      color: chartColors.axis,
-    });
-  }
-
-  return { allocation, totalValue: total };
+  return { allocation, totalValue: result.totalPortfolioValue ?? result.knownSubtotal ?? 0 };
 }
 
 /** Country look-through -> pie slices. */
@@ -95,15 +74,16 @@ function buildCountryAllocation(
   );
 }
 
-/** Asset-class look-through -> pie slices. */
+/** Asset-class look-through -> pie slices, each class named by `labelOf`. */
 function buildAssetClassAllocation(
   result: AssetClassWeightingResult,
   otherClassesLabel: string,
+  labelOf: (item: AssetClassName) => string,
 ): AssetAllocation {
   return buildLookThroughAllocation(
     {
       ...result,
-      items: result.items.map((i) => ({ ...i, name: i.assetClass })),
+      items: result.items.map((i) => ({ ...i, name: labelOf(i) })),
     },
     otherClassesLabel,
     'assetClass',
@@ -125,18 +105,19 @@ function AllocationTooltip({
   foreignCurrency: string | null;
   foreignTotal: number;
 }) {
+  const { formatPercent } = useNumberFormat();
   if (active && payload && payload.length) {
     const data = payload[0].payload;
     const displayValue = foreignCurrency
       ? (data.percentage / 100) * foreignTotal
       : data.value;
     return (
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg p-3">
+      <div className={CHART_TOOLTIP_CLASS}>
         <p className="font-medium text-gray-900 dark:text-gray-100">
           {data.fullName}
         </p>
         <p className="text-gray-600 dark:text-gray-400">
-          {fmtVal(displayValue)} ({data.percentage.toFixed(1)}%)
+          {fmtVal(displayValue)} ({formatPercent(data.percentage, 1)})
         </p>
       </div>
     );
@@ -181,15 +162,19 @@ export function AssetAllocationChart({
   valuationComplete,
 }: AssetAllocationChartProps) {
   const t = useTranslations('investments');
-  const { formatCurrencyCompact: formatCurrency } = useNumberFormat();
+  const { formatCurrencyCompact: formatCurrency, formatPercent } = useNumberFormat();
   const { defaultCurrency } = useExchangeRates();
 
   const [groupBy, setGroupBy] = useState<GroupBy>('security');
   // By-tag, by-country and by-asset-class data cached per account-filter key so
   // toggling back and forth (or re-selecting the same accounts) does not
-  // refetch. All are fetched eagerly so we know which selectors to offer before
-  // the user acts: each toggle only appears once its data confirms the selected
-  // accounts actually carry that dimension.
+  // refetch. The country and asset-class look-throughs are fetched eagerly so
+  // we know which selectors to offer before the user acts. The by-tag
+  // allocation is NOT: it costs a whole portfolio valuation on the server, and
+  // it was paid for on every page open whether or not anyone looked at the tag
+  // view. Whether to offer the tag toggle at all is answered by the cheap tag
+  // summary below instead, and the allocation is fetched the first time the tag
+  // view is actually selected.
   const [tagCache, setTagCache] = useState<Record<string, AssetAllocation>>({});
   const [countryCache, setCountryCache] = useState<
     Record<string, CountryWeightingResult>
@@ -199,7 +184,9 @@ export function AssetAllocationChart({
   >({});
   // KEY:VALUE aggregation: the available keys per account-filter, the key the
   // user picked, and the by-key allocation cached per `accountKey|key`.
-  const [tagKeysCache, setTagKeysCache] = useState<Record<string, string[]>>({});
+  const [tagSummaryCache, setTagSummaryCache] = useState<
+    Record<string, PortfolioTagSummary>
+  >({});
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [tagKeyCache, setTagKeyCache] = useState<Record<string, AssetAllocation>>(
     {},
@@ -217,27 +204,17 @@ export function AssetAllocationChart({
 
     if (enableTagGrouping) {
       investmentsApi
-        .getAllocationByTag(ids)
-        .then((res) => {
-          if (!cancelled) setTagCache((prev) => ({ ...prev, [accountKey]: res }));
+        .getPortfolioTagSummary(ids)
+        .then((summary) => {
+          if (!cancelled)
+            setTagSummaryCache((prev) => ({ ...prev, [accountKey]: summary }));
         })
         .catch(() => {
           if (!cancelled)
-            setTagCache((prev) => ({
+            setTagSummaryCache((prev) => ({
               ...prev,
-              [accountKey]: { allocation: [], totalValue: 0 },
+              [accountKey]: { keys: [], hasTaggedHoldings: false },
             }));
-        });
-
-      investmentsApi
-        .getPortfolioTagKeys(ids)
-        .then((keys) => {
-          if (!cancelled)
-            setTagKeysCache((prev) => ({ ...prev, [accountKey]: keys }));
-        })
-        .catch(() => {
-          if (!cancelled)
-            setTagKeysCache((prev) => ({ ...prev, [accountKey]: [] }));
         });
     }
 
@@ -285,32 +262,61 @@ export function AssetAllocationChart({
   );
 
   const otherClassesLabel = t('assetAllocation.otherAssetClasses');
+  const assetClassLabel = useAssetClassLabel();
   const assetClassResult = assetClassCache[accountKey];
   const assetClassAllocation = useMemo(
     () =>
       assetClassResult
-        ? buildAssetClassAllocation(assetClassResult, otherClassesLabel)
+        ? buildAssetClassAllocation(assetClassResult, otherClassesLabel, assetClassLabel)
         : null,
-    [assetClassResult, otherClassesLabel],
+    [assetClassResult, otherClassesLabel, assetClassLabel],
   );
 
   // A selector is only offered once its data confirms it is meaningful for the
   // currently selected accounts: tags in use, or classified country exposure.
+  // For tags that confirmation comes from the tag summary, which says whether a
+  // held security carries a tag, rather than from an allocation nobody has
+  // asked for yet.
+  const tagSummary = tagSummaryCache[accountKey];
   const tagsAvailable =
-    enableTagGrouping &&
-    (tagCache[accountKey]?.allocation.some((i) => i.type === 'tag') ?? false);
+    enableTagGrouping && (tagSummary?.hasTaggedHoldings ?? false);
   const countryAvailable = (countryResult?.items.length ?? 0) > 0;
   const assetClassAvailable = (assetClassResult?.items.length ?? 0) > 0;
 
   // KEY:VALUE aggregation: keys present for this account filter and the key the
   // chart is currently aggregating by (the user's pick, or the first key).
-  const availableKeys = enableTagGrouping ? (tagKeysCache[accountKey] ?? []) : [];
+  const availableKeys = enableTagGrouping ? (tagSummary?.keys ?? []) : [];
   const keysAvailable = availableKeys.length > 0;
   const resolvedKey =
     selectedKey && availableKeys.includes(selectedKey)
       ? selectedKey
       : (availableKeys[0] ?? null);
   const tagKeyCacheKey = resolvedKey ? `${accountKey}|${resolvedKey}` : null;
+
+  // Fetch the by-tag allocation lazily, the first time the tag view is
+  // selected. It is a whole portfolio valuation on the server, so a reader who
+  // never opens the tag view never pays for one.
+  useEffect(() => {
+    if (!enableTagGrouping || groupBy !== 'tag') return;
+    if (tagCache[accountKey]) return;
+    let cancelled = false;
+    const ids = accountKey === 'all' ? undefined : accountKey.split(',');
+    investmentsApi
+      .getAllocationByTag(ids)
+      .then((res) => {
+        if (!cancelled) setTagCache((prev) => ({ ...prev, [accountKey]: res }));
+      })
+      .catch(() => {
+        if (!cancelled)
+          setTagCache((prev) => ({
+            ...prev,
+            [accountKey]: { allocation: [], totalValue: 0 },
+          }));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [enableTagGrouping, groupBy, accountKey, tagCache]);
 
   // Fetch the by-key allocation lazily, only while the key view is active.
   useEffect(() => {
@@ -520,7 +526,7 @@ export function AssetAllocationChart({
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-3 sm:p-6 lg:min-h-[420px]">
         {heading}
         <div className="h-64 flex items-center justify-center">
-          <div className="animate-pulse w-48 h-48 rounded-full bg-gray-200 dark:bg-gray-700" />
+          <div className="animate-pulse skeleton-shimmer w-48 h-48 rounded-full bg-gray-200 dark:bg-gray-700" />
         </div>
       </div>
     );
@@ -590,28 +596,30 @@ export function AssetAllocationChart({
           </PieChart>
         </ResponsiveContainer>
       </div>
-      <div className="mt-4 grid grid-cols-3 gap-x-6 gap-y-2">
-        {legendData.map((item, index) => {
+      {/* One vertical column on a phone, three from `sm` up -- the desktop
+          density this legend carried before the mobile-first redesign, restored;
+          a three-column legend on a 320px screen wrapped every name onto its own
+          cramped third, which is why the phone stays single-column. */}
+      <ChartLegend
+        className="mt-4"
+        columnsClassName="sm:grid-cols-3"
+        items={legendData.map((item, index) => {
           const isForeign = !foreignCurrency && item.currencyCode && item.currencyCode !== defaultCurrency;
-          return (
-            <div key={index} className="flex items-center gap-2 text-sm">
-              <div
-                className="w-3 h-3 rounded-full flex-shrink-0"
-                style={{ backgroundColor: item.color }}
-              />
-              <span className="text-gray-600 dark:text-gray-400 truncate">
+          return {
+            key: String(index),
+            color: item.color,
+            name: (
+              <>
                 {item.name}
                 {isForeign && (
                   <span className="ml-1 text-xs text-amber-600 dark:text-amber-400">({item.currencyCode})</span>
                 )}
-              </span>
-              <span className="text-gray-900 dark:text-gray-100 ml-auto">
-                {item.percentage.toFixed(1)}%
-              </span>
-            </div>
-          );
+              </>
+            ),
+            trailing: formatPercent(item.percentage, 1),
+          };
         })}
-      </div>
+      />
     </div>
   );
 }

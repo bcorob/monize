@@ -15,6 +15,27 @@ export const PAGE_SIZE = 50;
  */
 export const SECURITY_PRICE_HISTORY_LIMIT = 9999;
 
+/**
+ * Client timeout for the reads that value a portfolio day by day over its whole
+ * history: the portfolio summary (its since-inception return), the daily value
+ * series, the period result and the period results batch, the breakdown.
+ *
+ * Their cost grows with the length of the history, not the size of the page: a
+ * portfolio with decades of multi-currency transactions is thousands of valued
+ * days, and the Investments page asks for several of these at once. The
+ * client's 10 s default cut them off while the server was still answering
+ * (issue #1888), so they get the same generous bound as the other long reads.
+ */
+export const PORTFOLIO_VALUATION_TIMEOUT_MS = 120_000;
+
+/**
+ * The most accounts `investments-twr-series?groupBy=account` accepts: the
+ * backend's `TWR_SERIES_MAX_ACCOUNTS` (net-worth controller). One valuation per
+ * account, so the server bounds the count and answers 400 over it;
+ * `twr-series-limits.contract.test.ts` fails if the two drift apart.
+ */
+export const TWR_SERIES_MAX_ACCOUNTS = 25;
+
 type DateFormatOption = { value: string; label: string };
 
 /**
@@ -50,6 +71,11 @@ export function getExportDateFormatOptions(
   ];
 }
 
+/**
+ * The exchanges the security pickers offer. Mirrors the backend
+ * `SECURITY_EXCHANGES` in `securities/security-enums.ts`, value for value and in
+ * order; `constants.test.ts` fails when the two drift.
+ */
 export const EXCHANGE_OPTIONS = [
   // North America
   { value: 'NYSE', label: 'NYSE', subtitle: 'New York Stock Exchange (US)' },
@@ -80,6 +106,8 @@ export const EXCHANGE_OPTIONS = [
   { value: 'SGX', label: 'SGX', subtitle: 'Singapore Exchange (Singapore)' },
   { value: 'BSE', label: 'BSE', subtitle: 'Bombay Stock Exchange (India)' },
   { value: 'NSE', label: 'NSE', subtitle: 'National Stock Exchange (India)' },
+  // Cryptocurrency
+  { value: 'CRYPTO', label: 'Crypto', subtitle: 'Cryptocurrency (Yahoo)' },
 ];
 
 /**

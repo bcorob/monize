@@ -8,6 +8,7 @@ import {
   QuoteResult,
   SecurityLookupResult,
   HistoricalPrice,
+  HistoricalSeries,
   IntradayInterval,
   IntradayPoint,
   IntradayRange,
@@ -15,6 +16,10 @@ import {
   EtfSectorWeighting,
 } from "./providers/quote-provider.interface";
 import { getTradingDateFromQuote } from "./providers/trading-date.util";
+import {
+  cryptoLookupFields,
+  isCryptoExchange,
+} from "./providers/crypto-pair.util";
 import { barDate } from "./providers/market-session.util";
 import { describeFetchFailure } from "../common/http/fetch-failure.util";
 import { ProviderHealthService } from "../provider-health/provider-health.service";
@@ -38,8 +43,11 @@ export type {
   EtfSectorWeighting,
 } from "./providers/quote-provider.interface";
 
-interface YahooSearchResult {
+/** One item as the search endpoint's `quotes[]` carries it. */
+export interface YahooSearchResult {
   symbol: string;
+  /** `EQUITY`, `ETF`, `CURRENCY`, ...; the machine-readable sibling of `typeDisp`. */
+  quoteType?: string;
   shortname?: string;
   longname?: string;
   exchDisp?: string;
@@ -104,6 +112,26 @@ const SYMBOL_ABSENT_ERROR_CODES: ReadonlySet<string> = new Set([
   "Not Found",
   "Bad Request",
 ]);
+
+/**
+ * The `chart.error.description` of a 400 that is an answer rather than a fault.
+ *
+ * Yahoo refuses a window it has no history for with a 400 whose body reads
+ * `Data doesn't exist for startDate = 1000684800, endDate = 1004486400` -- a
+ * statement about this symbol over this window, in the same class as a 404. A
+ * request this client built wrong is also a 400, and that one says nothing
+ * about the symbol, so the status alone cannot decide: the description does.
+ *
+ * Reading the two as one refusal is issue #1409. `USDCAD=X` has no history
+ * before December 2003, so a since-inception valuation asked for 2000-2003,
+ * got `null` ("the provider declined"), and the empty-window memory that would
+ * have stopped it asking again may only remember an answer -- so every
+ * subsequent portfolio summary re-issued the same 76 doomed calls, forever.
+ */
+const ABSENT_WINDOW_DESCRIPTION = /^data doesn['\u2019]?t exist/i;
+
+/** A quote outcome meaning the chart endpoint answered that the symbol does not exist. */
+const SYMBOL_ABSENT = Symbol("symbol-absent");
 
 const YAHOO_SECTOR_NAMES: Record<string, string> = {
   realestate: "Real Estate",
@@ -522,7 +550,7 @@ export class YahooFinanceService implements QuoteProvider {
     if (quote) return quote;
 
     if (primary === symbol) {
-      for (const altSymbol of this.getAlternateSymbols(symbol)) {
+      for (const altSymbol of this.getAlternateSymbols(symbol, exchange)) {
         const alt = await this.fetchQuoteRaw(altSymbol);
         if (alt) return alt;
       }
@@ -530,9 +558,36 @@ export class YahooFinanceService implements QuoteProvider {
     return null;
   }
 
+  /**
+   * One symbol's latest quote, keeping "Yahoo says there is no such symbol"
+   * apart from "Yahoo did not answer": `{ quote }` with the quote, `{ quote:
+   * null }` when the chart endpoint answered that the symbol does not exist (a
+   * 404 or 422, or a 200 whose `chart.error` is `SYMBOL_ABSENT_ERROR_CODES`),
+   * `null` for anything else -- a throttle, a fault, an open breaker, a body
+   * this client cannot read. The symbol is asked as given, with no exchange
+   * suffix and no alternate listing, through the same throttle and breaker as
+   * every other Yahoo call. For a caller that may remember an absence (the
+   * crypto exchange rate provider, INV-FX-005); `fetchQuote` folds both into
+   * `null` as before.
+   */
+  async fetchQuoteAnswer(
+    yahooSymbol: string,
+  ): Promise<{ quote: QuoteResult | null } | null> {
+    const outcome = await this.fetchQuoteOutcome(yahooSymbol);
+    if (outcome === SYMBOL_ABSENT) return { quote: null };
+    return outcome === null ? null : { quote: outcome };
+  }
+
   private async fetchQuoteRaw(
     yahooSymbol: string,
   ): Promise<QuoteResult | null> {
+    const outcome = await this.fetchQuoteOutcome(yahooSymbol);
+    return outcome === SYMBOL_ABSENT ? null : outcome;
+  }
+
+  private async fetchQuoteOutcome(
+    yahooSymbol: string,
+  ): Promise<QuoteResult | typeof SYMBOL_ABSENT | null> {
     try {
       const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?interval=1d&range=1d`;
 
@@ -547,7 +602,9 @@ export class YahooFinanceService implements QuoteProvider {
         this.logger.warn(
           `Yahoo Finance API returned ${response.status} for ${yahooSymbol}`,
         );
-        return null;
+        return SYMBOL_ABSENT_STATUSES.has(response.status)
+          ? SYMBOL_ABSENT
+          : null;
       }
 
       const data = await this.readBody<any>(response);
@@ -556,15 +613,15 @@ export class YahooFinanceService implements QuoteProvider {
         const result = data.chart.result[0];
         const meta = result.meta;
         const gbx = isGbxCurrency(meta.currency);
-        const convert = (v: number | undefined) =>
-          v !== undefined && gbx ? convertGbxToGbp(v) : v;
+        // null (JSON) must stay "no value": null / 100 is 0, a bogus price.
+        const convert = (v: number | null | undefined) =>
+          v == null ? undefined : gbx ? convertGbxToGbp(v) : v;
 
         // The chart-endpoint meta omits regularMarketOpen, so fall back to
         // the first non-null open in the indicators series (today's open
         // for range=1d&interval=1d).
         const openSeries = result.indicators?.quote?.[0]?.open as
-          | (number | null | undefined)[]
-          | undefined;
+          (number | null | undefined)[] | undefined;
         const openFromSeries = openSeries?.find(
           (v): v is number => v != null && !Number.isNaN(v),
         );
@@ -597,7 +654,11 @@ export class YahooFinanceService implements QuoteProvider {
         };
       }
 
-      return null;
+      return SYMBOL_ABSENT_ERROR_CODES.has(
+        String(data.chart?.error?.code ?? ""),
+      )
+        ? SYMBOL_ABSENT
+        : null;
     } catch (error) {
       this.health.logFailure(
         this.logger,
@@ -622,17 +683,39 @@ export class YahooFinanceService implements QuoteProvider {
     return results;
   }
 
-  async fetchHistorical(
+  async fetchHistoricalSeries(
     symbol: string,
     exchange: string | null = null,
     range: string = "max",
     _opts?: QuoteProviderOptions,
-  ): Promise<HistoricalPrice[] | null> {
+  ): Promise<HistoricalSeries | null> {
     return this.fetchHistoricalQuery(
       symbol,
       exchange,
       `interval=1d&range=${encodeURIComponent(range)}`,
     );
+  }
+
+  /**
+   * The bars only, for the callers that have no security currency to verify
+   * them against: the FX pair series and the market-index series, neither of
+   * which is stored against a `securities` row. Every path that writes into
+   * `security_prices` takes the series instead, so the currency reaches the
+   * acceptance point.
+   */
+  async fetchHistorical(
+    symbol: string,
+    exchange: string | null = null,
+    range: string = "max",
+    opts?: QuoteProviderOptions,
+  ): Promise<HistoricalPrice[] | null> {
+    const series = await this.fetchHistoricalSeries(
+      symbol,
+      exchange,
+      range,
+      opts,
+    );
+    return series ? series.prices : null;
   }
 
   /**
@@ -643,12 +726,12 @@ export class YahooFinanceService implements QuoteProvider {
    * entire multi-year history, which keeps the request fast and the parsed
    * payload small (the "max" range can be thousands of bars / several MB).
    */
-  async fetchHistoricalWindow(
+  async fetchHistoricalWindowSeries(
     symbol: string,
     exchange: string | null,
     fromDate: Date,
     toDate: Date,
-  ): Promise<HistoricalPrice[] | null> {
+  ): Promise<HistoricalSeries | null> {
     const period1 = Math.floor(fromDate.getTime() / 1000);
     const period2 = Math.floor(toDate.getTime() / 1000);
     return this.fetchHistoricalQuery(
@@ -656,6 +739,22 @@ export class YahooFinanceService implements QuoteProvider {
       exchange,
       `period1=${period1}&period2=${period2}&interval=1d`,
     );
+  }
+
+  /** The windowed bars only; see {@link fetchHistorical}. */
+  async fetchHistoricalWindow(
+    symbol: string,
+    exchange: string | null,
+    fromDate: Date,
+    toDate: Date,
+  ): Promise<HistoricalPrice[] | null> {
+    const series = await this.fetchHistoricalWindowSeries(
+      symbol,
+      exchange,
+      fromDate,
+      toDate,
+    );
+    return series ? series.prices : null;
   }
 
   /**
@@ -667,10 +766,10 @@ export class YahooFinanceService implements QuoteProvider {
     symbol: string,
     exchange: string | null,
     query: string,
-  ): Promise<HistoricalPrice[] | null> {
+  ): Promise<HistoricalSeries | null> {
     const primary = this.getYahooSymbol(symbol, exchange);
-    const prices = await this.fetchHistoricalRaw(primary, query);
-    if (prices?.length) return prices;
+    const series = await this.fetchHistoricalRaw(primary, query);
+    if (series?.prices.length) return series;
 
     // Bars, not merely an answer. An empty answer used to be `null` and so fell
     // through to the alternates by accident; now that it is `[]` -- which is
@@ -678,21 +777,47 @@ export class YahooFinanceService implements QuoteProvider {
     // fallback for every windowed fetch (a `.TO` listing asked for a window
     // before it listed on the primary exchange, say).
     if (primary === symbol) {
-      for (const altSymbol of this.getAlternateSymbols(symbol)) {
+      for (const altSymbol of this.getAlternateSymbols(symbol, exchange)) {
         const alt = await this.fetchHistoricalRaw(altSymbol, query);
-        if (alt?.length) return alt;
+        if (alt?.prices.length) return alt;
       }
     }
 
     // No alternate had bars either. The primary's own answer decides what this
-    // was: `[]` if it answered with an empty window, `null` if nothing did.
-    return prices;
+    // was: an empty series if it answered with an empty window, `null` if
+    // nothing did.
+    return series;
+  }
+
+  /**
+   * Whether a non-OK response is Yahoo saying the window holds no history.
+   *
+   * Only a 400 is read: the statuses that already mean "no such series" are
+   * decided by `SYMBOL_ABSENT_STATUSES` before this is called, and a 429, a
+   * 5xx or a 401 is the provider declining to answer -- reading a body for one
+   * of those cannot turn it into an answer. The body is read with `text()`
+   * rather than `readBody`, because `throttledFetch` has already recorded a
+   * non-OK response with the breaker and a second success would count one
+   * answer twice.
+   */
+  private async describesAbsentWindow(response: Response): Promise<boolean> {
+    if (response.status !== 400) return false;
+    try {
+      const body = await response.text();
+      const description = String(
+        (JSON.parse(body) as any)?.chart?.error?.description ?? "",
+      ).trim();
+      return ABSENT_WINDOW_DESCRIPTION.test(description);
+    } catch {
+      // An unparseable body is not a statement about the symbol.
+      return false;
+    }
   }
 
   private async fetchHistoricalRaw(
     yahooSymbol: string,
     query: string,
-  ): Promise<HistoricalPrice[] | null> {
+  ): Promise<HistoricalSeries | null> {
     try {
       const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(yahooSymbol)}?${query}`;
 
@@ -717,7 +842,13 @@ export class YahooFinanceService implements QuoteProvider {
         // a caller may remember the window as empty. Collapsing both into
         // `null` meant a symbol nobody carries was re-asked on every report
         // render, because the negative cache could never be written for it.
-        return SYMBOL_ABSENT_STATUSES.has(response.status) ? [] : null;
+        if (
+          SYMBOL_ABSENT_STATUSES.has(response.status) ||
+          (await this.describesAbsentWindow(response))
+        ) {
+          return { prices: [], currencyCode: null, symbol: yahooSymbol };
+        }
+        return null;
       }
 
       const data = await this.readBody<any>(response);
@@ -732,19 +863,36 @@ export class YahooFinanceService implements QuoteProvider {
       // its turn, because that turns on bars rather than on an answer.
       if (!result) {
         const code = String(data.chart?.error?.code ?? "");
-        return SYMBOL_ABSENT_ERROR_CODES.has(code) ? [] : null;
+        return SYMBOL_ABSENT_ERROR_CODES.has(code)
+          ? { prices: [], currencyCode: null, symbol: yahooSymbol }
+          : null;
       }
       // A result with no timestamps *is* an answer: the window predates the
       // instrument, or it did not trade in it. Returning `null` for that made
       // "answered with nothing" and "no usable answer" indistinguishable, and
       // the market-index chunking read every refused window as "the index did
       // not exist yet" -- storing one year as if it were the whole history.
-      if (!result.timestamp) return [];
+      const gbx = isGbxCurrency(result.meta?.currency);
+      // The currency this whole answer is in, carried on the bundle: the bars
+      // below are already in it (pence divided into pounds where the listing
+      // is quoted in GBX), and the acceptance point needs to know which
+      // listing produced them before it stores the numbers against a security.
+      const seriesMeta = {
+        currencyCode: result.meta?.currency
+          ? gbx
+            ? "GBP"
+            : String(result.meta.currency)
+          : null,
+        symbol: (result.meta?.symbol as string | undefined) ?? yahooSymbol,
+        exchange: (result.meta?.fullExchangeName ??
+          result.meta?.exchangeName ??
+          null) as string | null,
+      };
+      if (!result.timestamp) return { prices: [], ...seriesMeta };
       // Timestamps but no quote series is a malformed answer, not an empty
       // window: null, so the caller can try an alternate symbol.
       if (!result.indicators?.quote?.[0]) return null;
 
-      const gbx = isGbxCurrency(result.meta?.currency);
       const convertPrice = (v: number | null | undefined): number | null => {
         if (v == null) return null;
         return gbx ? convertGbxToGbp(v) : v;
@@ -790,7 +938,7 @@ export class YahooFinanceService implements QuoteProvider {
         });
       }
 
-      return prices;
+      return { prices, ...seriesMeta };
     } catch (error) {
       this.health.logFailure(
         this.logger,
@@ -812,7 +960,7 @@ export class YahooFinanceService implements QuoteProvider {
     if (points) return points;
 
     if (primary === symbol) {
-      for (const altSymbol of this.getAlternateSymbols(symbol)) {
+      for (const altSymbol of this.getAlternateSymbols(symbol, exchange)) {
         const alt = await this.fetchIntradayRaw(altSymbol, opts);
         if (alt) return alt;
       }
@@ -917,6 +1065,47 @@ export class YahooFinanceService implements QuoteProvider {
     return all[0] || null;
   }
 
+  /**
+   * The quotes Yahoo's search endpoint answers for free text, unread beyond
+   * the array, through `throttledFetch` (the breaker, the throttle and the
+   * retry stay in front of it). `null` when Yahoo did not answer: refused by
+   * the breaker, a transport failure, a non-2xx or an unreadable body. `[]`
+   * when it answered with no quotes.
+   */
+  async searchQuotes(
+    query: string,
+    count: number,
+  ): Promise<YahooSearchResult[] | null> {
+    try {
+      const url = `https://query1.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(query)}&quotesCount=${count}&newsCount=0`;
+
+      const response = await this.throttledFetch(url, {
+        headers: {
+          "User-Agent":
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        },
+      });
+
+      if (!response.ok) {
+        this.logger.warn(
+          `Yahoo Finance search API returned ${response.status} for query: ${query}`,
+        );
+        return null;
+      }
+
+      const data = await this.readBody<any>(response);
+      const quotes: unknown = data?.quotes;
+      if (!Array.isArray(quotes)) return [];
+      return quotes.filter(
+        (quote): quote is YahooSearchResult =>
+          typeof quote?.symbol === "string",
+      );
+    } catch (error) {
+      this.health.logFailure(this.logger, HEALTH_PROVIDER_ID, "search", error);
+      return null;
+    }
+  }
+
   async lookupSecurityMany(
     query: string,
     preferredExchanges?: string[],
@@ -970,21 +1159,7 @@ export class YahooFinanceService implements QuoteProvider {
         sortedQuotes.unshift(exact);
       }
 
-      return sortedQuotes.map((q) => {
-        const baseSymbol = this.extractBaseSymbol(q.symbol);
-        const exchange =
-          this.extractExchangeFromSymbol(q.symbol) || q.exchDisp || null;
-        const securityType = this.mapYahooTypeToSecurityType(q.typeDisp);
-        const currencyCode = this.getCurrencyFromExchange(exchange, q.symbol);
-        return {
-          symbol: baseSymbol,
-          name: q.longname || q.shortname || baseSymbol,
-          exchange,
-          securityType,
-          currencyCode,
-          provider: "yahoo" as const,
-        };
-      });
+      return sortedQuotes.map((q) => this.toLookupResult(q));
     } catch (error) {
       this.health.logFailure(
         this.logger,
@@ -994,6 +1169,39 @@ export class YahooFinanceService implements QuoteProvider {
       );
       return [];
     }
+  }
+
+  /**
+   * One search result as a lookup candidate. A coin (`BTC-EUR`) is not a
+   * listing: it keeps its whole symbol, and its exchange and currency are what
+   * `cryptoLookupFields` says for every provider (the canonical `CRYPTO`, not
+   * Yahoo's `CCC`, and the fiat leg of the symbol, never the exchange guess,
+   * which reads every dotless symbol as USD; issue #379).
+   */
+  private toLookupResult(q: YahooSearchResult): SecurityLookupResult {
+    const securityType =
+      this.mapYahooTypeToSecurityType(q.typeDisp) ??
+      (q.quoteType?.toUpperCase() === "CRYPTOCURRENCY" ? "CRYPTO" : null);
+    if (securityType === "CRYPTO") {
+      return {
+        symbol: q.symbol,
+        name: q.longname || q.shortname || q.symbol,
+        securityType,
+        ...cryptoLookupFields(q.symbol),
+        provider: "yahoo",
+      };
+    }
+    const baseSymbol = this.extractBaseSymbol(q.symbol);
+    const exchange =
+      this.extractExchangeFromSymbol(q.symbol) || q.exchDisp || null;
+    return {
+      symbol: baseSymbol,
+      name: q.longname || q.shortname || baseSymbol,
+      exchange,
+      securityType,
+      currencyCode: this.getCurrencyFromExchange(exchange, q.symbol),
+      provider: "yahoo",
+    };
   }
 
   getYahooSymbol(symbol: string, exchange: string | null): string {
@@ -1038,8 +1246,21 @@ export class YahooFinanceService implements QuoteProvider {
     return symbol;
   }
 
-  getAlternateSymbols(symbol: string): string[] {
+  /**
+   * The Canadian listings to try when the primary symbol misses. `exchange` is
+   * the security's own: a coin (`CRYPTO`, or Yahoo's `CCC` on a security created
+   * before the lookup named `CRYPTO`) trades on no exchange, so `BTC-EUR.TO` is
+   * three guaranteed misses on every refresh of a pair Yahoo did not answer.
+   * Keyed on the exchange, never on the symbol's shape: `BTC-USDT` has no ISO
+   * last leg, and a hyphenated listing can have one.
+   */
+  getAlternateSymbols(
+    symbol: string,
+    exchange: string | null = null,
+  ): string[] {
     const alternates: string[] = [];
+
+    if (isCryptoExchange(exchange)) return alternates;
 
     // A caret ticker is an index (^GSPC, ^FTSE), not a listing. Yahoo's exchange
     // suffixes are meaningless on one, so trying `^GSPC.TO` costs three extra

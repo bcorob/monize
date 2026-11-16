@@ -7,7 +7,7 @@ import { useTranslations } from 'next-intl';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { PageHeader } from '@/components/layout/PageHeader';
-import { Button } from '@/components/ui/Button';
+import { buttonClassName } from '@/components/ui/Button';
 import { InvestmentReportForm } from '@/components/reports/InvestmentReportForm';
 import { investmentReportsApi } from '@/lib/investment-reports';
 import { getErrorMessage } from '@/lib/errors';
@@ -42,9 +42,10 @@ function NewInvestmentReportContent() {
         <PageHeader
           title={t('investmentPages.createTitle')}
           subtitle={t('investmentPages.createSubtitle')}
+          help="reports"
           actions={
-            <Link href="/reports">
-              <Button variant="outline">{t('detailHeader.backToReports')}</Button>
+            <Link href="/reports" className={buttonClassName('outline')}>
+              {t('detailHeader.backToReports')}
             </Link>
           }
         />

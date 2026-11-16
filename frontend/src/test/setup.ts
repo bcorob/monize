@@ -3,6 +3,7 @@ import { cleanup } from '@testing-library/react';
 import { afterAll, afterEach, vi } from 'vitest';
 
 import { failOnActWarnings, recordIfActWarning } from './act-guard';
+import { failOnIntlErrors, recordIfIntlError } from './intl-guard';
 
 afterEach(async () => {
   cleanup();
@@ -21,7 +22,7 @@ afterEach(async () => {
   // Row density is one store for every view, so clearing its localStorage
   // entry is not enough -- the module-level state outlives it. Reset after `cleanup()`,
   // never before: writing to a store while the tree is still mounted
-  // re-renders it outside act() (see frontend/CLAUDE.md).
+  // re-renders it outside act() (see docs/frontend/testing.md).
   //
   // Imported here rather than at the top of this file, and that is not a
   // style choice. `createJSONStorage(() => localStorage)` resolves the storage
@@ -31,14 +32,21 @@ afterEach(async () => {
   // assertion read the mock. The two would never see each other's writes.
   const { useDensityStore } = await import('@/store/densityStore');
   useDensityStore.setState({ densities: {} });
+  // Hidden columns are the same shape of store, for the same reason.
+  const { useHiddenColumnsStore } = await import('@/store/hiddenColumnsStore');
+  useHiddenColumnsStore.setState({ columns: {} });
   // Last, so an update React commits during `cleanup()` is counted against the
   // test that mounted the tree rather than the next one.
+  failOnIntlErrors();
   failOnActWarnings();
 });
 
 // `cleanup()` for the file's final test runs inside that test's own afterEach
 // above, but a warning React logs after the last hook has nowhere else to go.
-afterAll(failOnActWarnings);
+afterAll(() => {
+  failOnIntlErrors();
+  failOnActWarnings();
+});
 
 // Suppress known-harmless jsdom warnings for SVG elements used by Recharts.
 // Also suppress tagged output from the project's `createLogger` (e.g.
@@ -53,6 +61,15 @@ console.error = (...args: unknown[]) => {
   // test, which one line on stderr in a 14,000-test run does not. See
   // `act-guard.ts` for why these are failures and not noise.
   if (recordIfActWarning(args)) {
+    return;
+  }
+  // The same treatment for next-intl's message errors, and the reason this is
+  // here as well as on the provider's `onError`: a tree rendered outside
+  // `@/test/render` falls back to next-intl's default handler, which prints the
+  // IntlError object here. Catching it in both places means the guard does not
+  // depend on the test having used the right harness -- which is exactly the
+  // thing it exists to detect. See `intl-guard.ts`.
+  if (args.some(recordIfIntlError)) {
     return;
   }
   if (

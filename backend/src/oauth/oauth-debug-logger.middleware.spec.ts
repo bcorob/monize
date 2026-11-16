@@ -13,6 +13,11 @@ function loadModuleWithEnv(envValue: string | undefined): MwFactory {
   }
   let factory!: MwFactory;
   jest.isolateModules(() => {
+    // The isolated registry loads its own `@nestjs/common`, which the global
+    // setup file never silenced, so the enabled middleware would print.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const nest = require("@nestjs/common") as typeof import("@nestjs/common");
+    nest.Logger.overrideLogger(false);
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const mod = require("./oauth-debug-logger.middleware") as {
       oauthDebugLogger: MwFactory;

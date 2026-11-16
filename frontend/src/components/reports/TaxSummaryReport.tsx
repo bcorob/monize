@@ -6,13 +6,16 @@ import { Skeleton } from '@/components/ui/LoadingSkeleton';
 import { builtInReportsApi } from '@/lib/built-in-reports';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { exportToCsv } from '@/lib/csv-export';
-import { ExportDropdown } from '@/components/ui/ExportDropdown';
+import { ReportToolbarActions } from '@/components/reports/ReportToolbarActions';
 import { useReportData } from '@/hooks/useReportData';
 import { ReportError } from '@/components/reports/ReportError';
+import { PartialTotal } from '@/components/ui/PartialTotal';
+import { isComplete, reportTotal } from '@/lib/currency-total';
 
 export function TaxSummaryReport() {
   const t = useTranslations('reports');
-  const { formatCurrency } = useNumberFormat();
+  const tCommon = useTranslations('common');
+  const { formatCurrency, defaultCurrency } = useNumberFormat();
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
 
   const years = useMemo(() => {
@@ -43,7 +46,26 @@ export function TaxSummaryReport() {
   const incomeBySource = taxData?.incomeBySource ?? [];
   const deductibleExpenses = taxData?.deductibleExpenses ?? [];
   const allExpenses = taxData?.allExpenses ?? [];
-  const totals = taxData?.totals ?? { income: 0, expenses: 0, deductible: 0 };
+  // The server withholds a total (`null`) when a row could not be converted and
+  // sends the part that did as `known*`. What is shown is that part, marked as a
+  // subtotal -- never the smaller figure under a caption saying "Total", and
+  // never a null drawn as 0.
+  const totals = taxData?.totals ?? {
+    income: 0,
+    expenses: 0,
+    deductible: 0,
+    knownIncome: 0,
+    knownExpenses: 0,
+    knownDeductible: 0,
+  };
+  const income = reportTotal(totals.income ?? totals.knownIncome, totals.income === null ? taxData : null);
+  const expenses = reportTotal(totals.expenses ?? totals.knownExpenses, totals.expenses === null ? taxData : null);
+  const deductible = reportTotal(totals.deductible ?? totals.knownDeductible, totals.deductible === null ? taxData : null);
+  const reportingCurrency = taxData?.currency ?? defaultCurrency;
+  // A figure in a file has no tooltip, so the label itself carries the marker.
+  const marker = (total: typeof income) => (isComplete(total) ? '' : ' *');
+  const exportLabel = (label: string, total: typeof income) =>
+    isComplete(total) ? label : `${label} ${tCommon('partialTotal.srSuffix')}`;
 
   const getExportData = () => {
     const headers = [
@@ -66,19 +88,19 @@ export function TaxSummaryReport() {
 
   const handleExportCsv = () => {
     const { headers, rows } = getExportData();
-    rows.push([t('taxSummary.csvSectionTotals'), t('taxSummary.csvTotalIncome'), totals.income]);
-    rows.push([t('taxSummary.csvSectionTotals'), t('taxSummary.csvTotalExpenses'), totals.expenses]);
-    rows.push([t('taxSummary.csvSectionTotals'), t('taxSummary.csvTotalDeductions'), totals.deductible]);
+    rows.push([t('taxSummary.csvSectionTotals'), exportLabel(t('taxSummary.csvTotalIncome'), income), income.value]);
+    rows.push([t('taxSummary.csvSectionTotals'), exportLabel(t('taxSummary.csvTotalExpenses'), expenses), expenses.value]);
+    rows.push([t('taxSummary.csvSectionTotals'), exportLabel(t('taxSummary.csvTotalDeductions'), deductible), deductible.value]);
     exportToCsv(`tax-summary-${selectedYear}`, headers, rows);
   };
 
   const handleExportPdf = async () => {
     const { exportToPdf } = await import('@/lib/pdf-export');
     const { headers, rows } = getExportData();
-    const totalRow: (string | number)[] = [t('taxSummary.csvSectionTotals'), t('taxSummary.pdfTotalsLabel'), `${formatCurrency(totals.income)} / ${formatCurrency(totals.expenses)} / ${formatCurrency(totals.deductible)}`];
+    const totalRow: (string | number)[] = [t('taxSummary.csvSectionTotals'), t('taxSummary.pdfTotalsLabel'), `${formatCurrency(income.value)}${marker(income)} / ${formatCurrency(expenses.value)}${marker(expenses)} / ${formatCurrency(deductible.value)}${marker(deductible)}`];
     await exportToPdf({
       title: t('taxSummary.pdfTitlePrefix') + selectedYear,
-      subtitle: t('taxSummary.pdfIncomeExpensesDeductions', { income: formatCurrency(totals.income), expenses: formatCurrency(totals.expenses), deductions: formatCurrency(totals.deductible) }),
+      subtitle: t('taxSummary.pdfIncomeExpensesDeductions', { income: `${formatCurrency(income.value)}${marker(income)}`, expenses: `${formatCurrency(expenses.value)}${marker(expenses)}`, deductions: `${formatCurrency(deductible.value)}${marker(deductible)}` }),
       tableData: { headers, rows, totalRow },
       filename: `tax-summary-${selectedYear}`,
     });
@@ -88,7 +110,7 @@ export function TaxSummaryReport() {
     <div className="space-y-6">
       {/* Year Selector */}
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-4">
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <label className="text-sm font-medium text-gray-700 dark:text-gray-300 whitespace-nowrap">
               {t('taxSummary.taxYear')}
@@ -103,7 +125,7 @@ export function TaxSummaryReport() {
               ))}
             </select>
           </div>
-          <ExportDropdown onExportCsv={handleExportCsv} onExportPdf={handleExportPdf} />
+          <ReportToolbarActions onExportCsv={handleExportCsv} onExportPdf={handleExportPdf} />
         </div>
       </div>
 
@@ -112,19 +134,19 @@ export function TaxSummaryReport() {
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6">
           <div className="text-sm text-gray-500 dark:text-gray-400">{t('taxSummary.totalIncome')}</div>
           <div className="text-2xl font-bold text-green-600 dark:text-green-400">
-            {formatCurrency(totals.income)}
+            <PartialTotal total={income} displayCurrency={reportingCurrency}>{formatCurrency(income.value)}</PartialTotal>
           </div>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6">
           <div className="text-sm text-gray-500 dark:text-gray-400">{t('taxSummary.totalExpenses')}</div>
           <div className="text-2xl font-bold text-red-600 dark:text-red-400">
-            {formatCurrency(totals.expenses)}
+            <PartialTotal total={expenses} displayCurrency={reportingCurrency}>{formatCurrency(expenses.value)}</PartialTotal>
           </div>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow dark:shadow-gray-700/50 p-6">
           <div className="text-sm text-gray-500 dark:text-gray-400">{t('taxSummary.potentialDeductions')}</div>
           <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
-            {formatCurrency(totals.deductible)}
+            <PartialTotal total={deductible} displayCurrency={reportingCurrency}>{formatCurrency(deductible.value)}</PartialTotal>
           </div>
         </div>
       </div>
@@ -169,7 +191,7 @@ export function TaxSummaryReport() {
           <div className="px-6 py-3 bg-gray-50 dark:bg-gray-900/50 flex items-center justify-between font-semibold">
             <span className="text-gray-900 dark:text-gray-100">{t('taxSummary.totalIncomeLabel')}</span>
             <span className="text-green-600 dark:text-green-400">
-              {formatCurrency(totals.income)}
+              <PartialTotal total={income} displayCurrency={reportingCurrency}>{formatCurrency(income.value)}</PartialTotal>
             </span>
           </div>
         )}
@@ -202,7 +224,7 @@ export function TaxSummaryReport() {
           <div className="px-6 py-3 bg-gray-50 dark:bg-gray-900/50 flex items-center justify-between font-semibold">
             <span className="text-gray-900 dark:text-gray-100">{t('taxSummary.totalPotentialDeductions')}</span>
             <span className="text-blue-600 dark:text-blue-400">
-              {formatCurrency(totals.deductible)}
+              <PartialTotal total={deductible} displayCurrency={reportingCurrency}>{formatCurrency(deductible.value)}</PartialTotal>
             </span>
           </div>
         )}
@@ -228,7 +250,7 @@ export function TaxSummaryReport() {
         <div className="px-6 py-3 bg-gray-50 dark:bg-gray-900/50 flex items-center justify-between font-semibold border-t border-gray-200 dark:border-gray-700">
           <span className="text-gray-900 dark:text-gray-100">{t('taxSummary.totalExpensesLabel')}</span>
           <span className="text-red-600 dark:text-red-400">
-            {formatCurrency(totals.expenses)}
+            <PartialTotal total={expenses} displayCurrency={reportingCurrency}>{formatCurrency(expenses.value)}</PartialTotal>
           </span>
         </div>
       </div>

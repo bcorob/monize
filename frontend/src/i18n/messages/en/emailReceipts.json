@@ -1,0 +1,1457 @@
+{
+  "settingsPage": {
+    "redirecting": "Opening the Email Receipts page...",
+    "redirectLink": "Go to the mailbox settings"
+  },
+  "page": {
+    "title": "Email Receipts",
+    "subtitle": "Read order confirmations from a mailbox and turn them into itemized transactions: what is connected, what became of each email, and what waits for you"
+  },
+  "mailbox": {
+    "heading": "Mailbox",
+    "description": "Order confirmations are read from a dedicated mailbox over IMAP. Monize only reads it: it never changes, moves or deletes a message.",
+    "loading": "Loading the mailbox",
+    "dedicatedWarning": "Use a dedicated mailbox. Every message in the folder is read, so it should hold nothing but order confirmations.",
+    "encryptionUnavailable": "This server cannot encrypt secrets, so a mailbox password or connection cannot be saved. Ask the administrator to set up encryption.",
+    "error": {
+      "title": "The mailbox could not be loaded",
+      "body": "The request failed, so nothing is known about your mailbox yet. Try again.",
+      "retry": "Try again"
+    },
+    "oauth": {
+      "heading": "Connect an account",
+      "explanation": "Google and Microsoft 365 usually refuse a plain password. Sign in with the provider instead: you grant Monize access to the mailbox and never type its password here.",
+      "connect": {
+        "google": "Connect with Google",
+        "microsoft": "Connect with Microsoft"
+      },
+      "providerNames": {
+        "google": "Google",
+        "microsoft": "Microsoft 365"
+      },
+      "providersUnavailable": "Whether Google or Microsoft sign-in is available could not be checked. The manual form below still works.",
+      "startFailed": "Could not start the sign-in",
+      "badAuthorizationUrl": "The server returned a sign-in address that is not a secure web page, so it was not opened.",
+      "connectedAs": "Connected to {provider} as {username}.",
+      "notConnected": "The connection to {provider} is not active, so the mailbox is not being read. Connect again to resume.",
+      "reconnect": "Reconnect",
+      "disconnect": "Disconnect",
+      "disconnectDialog": {
+        "title": "Disconnect the mailbox?",
+        "message": "Monize will delete its stored access to {provider} and stop reading the mailbox. Emails already stored are kept."
+      },
+      "disconnected": "Mailbox disconnected",
+      "disconnectFailed": "Could not disconnect the mailbox",
+      "revokeNote": "Disconnecting does not remove the permission you granted. To withdraw it, remove Monize on the {provider} permissions page.",
+      "revokeLink": {
+        "google": "Open Google account permissions",
+        "microsoft": "Open Microsoft app permissions"
+      },
+      "saveButton": "Save settings",
+      "saved": "Mailbox settings saved",
+      "saveFailed": "Could not save the mailbox settings"
+    },
+    "form": {
+      "intro": "Or enter the details of any IMAP mailbox. Most providers need an app password rather than your account password.",
+      "hostLabel": "IMAP server",
+      "portLabel": "Port",
+      "securityLabel": "Connection security",
+      "securityOptions": {
+        "tls": "TLS (usually port 993)",
+        "starttls": "STARTTLS (usually port 143)"
+      },
+      "usernameLabel": "User name",
+      "passwordLabel": "Password",
+      "passwordStoredPlaceholder": "A password is stored. Type to replace it.",
+      "passwordRequiredHelp": "Required for a new mailbox, or when the server or user name changes.",
+      "passwordKeepHelp": "Leave blank to keep the stored password. It is never shown again.",
+      "saveButton": "Save mailbox",
+      "saved": "Mailbox saved",
+      "saveFailed": "Could not save the mailbox",
+      "test": {
+        "button": "Test connection",
+        "ok": "{count, plural, one {The connection works. The folder holds # message.} other {The connection works. The folder holds # messages.}}",
+        "error": "The connection failed: {error}",
+        "failed": "Could not test the connection"
+      }
+    },
+    "settings": {
+      "folderLabel": "Folder",
+      "folderHelp": "The folder to read. It is opened read-only.",
+      "enabledLabel": "Read the mailbox automatically",
+      "enabledHelp": "Controls only the automatic reading: when on, Monize reads the mailbox every 15 minutes. Turning it off does not disconnect the mailbox, and Poll now reads it whether this is on or off.",
+      "aiModeLabel": "AI mode",
+      "aiModeHelp": "Whether the poll may use the AI provider you configured on receipts. Recognize with AI and Prepare a profile with AI ask the assistant in the chat whatever the mode, and an AI answer is always a proposal or a draft that you approve.",
+      "aiModes": {
+        "off": "Off",
+        "on_demand": "On demand",
+        "automatic": "Automatic"
+      },
+      "aiModeDescriptions": {
+        "off": "The poll never calls the AI for receipts.",
+        "on_demand": "The poll never calls the AI. You ask the assistant yourself with Recognize with AI or Prepare a profile with AI.",
+        "automatic": "The poll asks the AI about a matched receipt that no approved profile could read completely, and drafts a profile for a sender that has none."
+      },
+      "autoApplyLabel": "Apply proposals automatically",
+      "autoApplyHelp": "Off by default. A proposal is applied without asking only when all of these hold: an approved profile read the whole email, the transaction was found by an order number or a reference, or by exact amount and payee, with a single candidate, and the proposal adds up to the cent. A trade confirmation is booked without asking only when its trade profile is approved, it read the whole trade, the price agrees with the shares and the total (a cash dividend that states only its amount has nothing to check), and your ledger does not already hold a matching trade. Everything else waits for your approval.",
+      "profileLimitLabel": "Count profile proposals toward the daily AI limit",
+      "profileLimitHelp": "On by default: an edit a profile proposes from an email is counted in the daily limit of AI-proposed changes, like any other AI proposal. Turn it off when a large batch of stored emails would otherwise use the limit up. Only proposals from profiles are exempt; every proposal still waits for your approval."
+    },
+    "status": {
+      "lastPolled": "Last poll",
+      "lastSuccess": "Last successful poll",
+      "never": "Never",
+      "lastError": "Last error: {error}",
+      "lastErrorAt": "Last error ({at}): {error}",
+      "pollNow": "Poll now",
+      "pollResult": "Poll finished: {fetched, plural, one {# email saved} other {# emails saved}}, {skipped} skipped, {processed} processed.",
+      "pollResultLink": "View the saved emails",
+      "pollFailed": "The poll failed",
+      "deleteButton": "Delete mailbox",
+      "deleteDialog": {
+        "title": "Delete the mailbox?",
+        "message": "The mailbox settings and every stored email will be deleted, and open review requests from them dismissed. The emails in the mailbox itself are not touched."
+      },
+      "deleted": "Mailbox deleted",
+      "deleteFailed": "Could not delete the mailbox"
+    },
+    "import": {
+      "title": "Import archived emails",
+      "description": "A file keeps the sender and the purchase date of the shop, unlike a forwarded email. Upload exported emails to read old order confirmations.",
+      "fileLabel": "Email files (.eml, .mbox, .msg or .zip)",
+      "chooseFiles": "Choose files",
+      "noFileChosen": "No files chosen",
+      "selected": "Selected: {count}",
+      "button": "Import",
+      "preparing": "Preparing files...",
+      "sending": "Sending part {current} of {total}",
+      "processing": "Processing emails: {done} of {total}",
+      "cancel": "Cancel",
+      "tooLargeTotal": "The selected files together are larger than {max}. Import them in smaller groups.",
+      "failed": "The import failed",
+      "result": {
+        "heading": "Import result",
+        "file": "{name}: {stored} stored, {duplicates} duplicates, {skipped} skipped",
+        "summary": "{processed, plural, one {Processed # waiting email.} other {Processed # waiting emails.}}",
+        "pendingLeft": "{count, plural, one {# email still waits to be processed. Monize processes it at the next mailbox read.} other {# emails still wait to be processed. Monize processes them at the next mailbox read.}}",
+        "processFailed": "{count, plural, one {# email could not be processed.} other {# emails could not be processed.}}",
+        "processingStopped": "Processing the imported emails stopped. The emails are kept. Monize processes them at the next mailbox read.",
+        "truncated": "{count} messages were not read because one import has a limit. Import them again in a second run.",
+        "oversized": "{name}: {count} messages larger than {max} were not sent.",
+        "stopped": "The import stopped after {done} of {total} parts. The emails already imported are kept. Import the same files again to continue. Emails already imported are not stored twice.",
+        "cancelled": "The import was cancelled after {done} of {total} parts. The emails already imported are kept.",
+        "errors": {
+          "unsupported_format": "{name}: this format is not supported. Supported formats are .eml, .mbox, .msg and .zip.",
+          "invalid_archive": "{name}: the ZIP file is damaged or cannot be read.",
+          "archive_too_large": "{name}: the ZIP file expands to more than the import limit. Unpack it and upload the .mbox file inside.",
+          "empty": "{name}: the file holds no emails."
+        },
+        "ignored": "{name}: {count} other files in the archive were skipped."
+      },
+      "guide": {
+        "toggle": "How to export emails from your provider",
+        "gmailLabel": {
+          "title": "Gmail: all emails with a label",
+          "step1": "Open takeout.google.com and choose Deselect all.",
+          "step2": "Select Mail and choose All Mail data included.",
+          "step3": "Choose only your label and create the export.",
+          "step4": "Upload the downloaded .zip file as it is, however large. You do not need to unpack it."
+        },
+        "gmailOne": {
+          "title": "Gmail: one email",
+          "step1": "Open the email.",
+          "step2": "Choose More, then Download message.",
+          "step3": "Upload the .eml file."
+        },
+        "imap": {
+          "title": "Other providers: Outlook.com, Yahoo, Onet, WP, Interia, o2, iCloud, Zoho",
+          "step1": "Add the mailbox to Thunderbird over IMAP and install the ImportExportTools NG add-on.",
+          "step2": "Select the emails or a folder and right-click.",
+          "step3": "Choose ImportExportTools NG, then export as EML or as mbox.",
+          "step4": "Upload the files."
+        },
+        "outlook": {
+          "title": "Outlook desktop",
+          "body": "Select the emails and drag them to a folder on your disk. Outlook writes .msg files. Upload them, several at once or packed into one .zip file."
+        },
+        "apple": {
+          "title": "Apple Mail",
+          "step1": "Choose Mailbox, then Export Mailbox. Apple Mail writes a folder.",
+          "step2": "Upload the file named mbox inside the folder, or drag emails to Finder to get .eml files."
+        },
+        "tip": "Tip: forwarding emails with a script loses the sender and the date of the shop. Importing files keeps them."
+      }
+    }
+  },
+  "parsers": {
+    "heading": "Profiles",
+    "description": "A profile reads the order confirmations of one sender with patterns you write or review, and says how the bank transaction is found. Once approved it runs without the AI.",
+    "newButton": "Create a new profile manually",
+    "loading": "Loading profiles",
+    "error": {
+      "title": "The profiles could not be loaded",
+      "body": "The request failed. Try again.",
+      "retry": "Try again"
+    },
+    "empty": {
+      "title": "No profiles yet",
+      "body": "Create one for a sender of order confirmations, or draft one from a stored email on the Email Receipts page."
+    },
+    "columns": {
+      "name": "Profile",
+      "status": "Status",
+      "payee": "Payee",
+      "actions": "Actions"
+    },
+    "status": {
+      "draft": "Draft",
+      "approved": "Approved"
+    },
+    "source": {
+      "manual": "Written by you",
+      "ai": "Drafted by AI"
+    },
+    "invalid": "Invalid",
+    "noPayee": "No payee",
+    "payeeUnknown": "Payee not found",
+    "payeeUnavailable": "Payee list unavailable",
+    "actions": {
+      "approve": "Approve",
+      "viewJson": "View JSON"
+    },
+    "toasts": {
+      "approved": "Profile approved",
+      "approveFailed": "Could not approve the profile",
+      "changedElsewhere": "This profile was changed elsewhere. The list has been reloaded.",
+      "deleted": "Profile deleted",
+      "deleteFailed": "Could not delete the profile",
+      "emailsIgnored": "{count, plural, one {# email ignored} other {# emails ignored}}",
+      "emailsDeleted": "{count, plural, one {# email deleted} other {# emails deleted}}",
+      "bulkFailed": "Could not finish with this profile's emails. The ones already handled stay that way."
+    },
+    "bulk": {
+      "ignoreTitle": "Ignore this profile's emails?",
+      "ignoreMessage": "{count, plural, one {# email} other {# emails}} that {name} reads will be ignored: they propose nothing, and their open proposals are closed.{kept, plural, =0 {} one { # email that was already applied or could not be read stays as it is.} other { # emails that were already applied or could not be read stay as they are.}}",
+      "ignoreConfirm": "Ignore emails",
+      "deleteTitle": "Delete this profile's emails?",
+      "deleteMessage": "{count, plural, one {# email} other {# emails}} that {name} reads will be deleted, with their open proposals. This cannot be undone.{kept, plural, =0 {} one { # email whose proposal was already applied stays.} other { # emails whose proposals were already applied stay.}}",
+      "deleteConfirm": "Delete emails"
+    },
+    "deleteDialog": {
+      "title": "Delete the profile?",
+      "message": "The profile {name} will be deleted. Emails it already read keep their results."
+    },
+    "jsonDialog": {
+      "title": "Definition of {name}",
+      "help": "The profile definition as it is stored. The matching section shows the settings in effect, defaults included. It is read-only here; use Edit to change it.",
+      "contentLabel": "Definition JSON",
+      "copy": "Copy",
+      "copied": "JSON copied",
+      "copyFailed": "Could not copy the JSON"
+    },
+    "processOffer": {
+      "title": "Process the stored emails now?",
+      "message": "{count, plural, one {Process the # stored email} other {Process the # stored emails}} from {domains} now? Each one is read with this profile again; what it proposes waits in the review inbox unless auto-apply is on.",
+      "confirm": "Process now",
+      "later": "Not now"
+    },
+    "reparse": "Re-parse emails ({count})",
+    "kindTrade": "Brokerage trades",
+    "discardIgnore": "Ignores its emails",
+    "discardDelete": "Deletes its emails"
+  },
+  "editor": {
+    "createTitle": "New profile",
+    "editTitle": "Edit profile",
+    "loading": "Loading payees, categories, accounts and currencies",
+    "lookupsError": {
+      "title": "Payees, categories, accounts or currencies could not be loaded",
+      "body": "The pickers need them, so the editor cannot open yet. Try again.",
+      "retry": "Try again"
+    },
+    "draftNote": "This profile is a draft. It reads nothing until you approve it.",
+    "draftAiNote": "The AI drafted this profile from your sample emails. Test it against each of them and check every pattern, then approve it from the list. It reads nothing until you do.",
+    "identityHeading": "Which emails it reads",
+    "nameLabel": "Name",
+    "payeeLabel": "Payee",
+    "payeePlaceholder": "No payee",
+    "domainsLabel": "Sender domains",
+    "domainsHelp": "One per line, up to {max}. A sub-domain of a listed domain also matches.",
+    "subjectLabel": "Subject contains",
+    "subjectHelp": "Optional, one per line, up to {max}. The subject must contain at least one of them, ignoring case.",
+    "saveButton": "Save profile",
+    "created": "Profile created",
+    "updated": "Profile saved",
+    "saveFailed": "Could not save the profile",
+    "conflict": "This profile was changed elsewhere since you opened it. Reload it to see the current version. Your edits here are not saved.",
+    "conflictReload": "Reload the profile",
+    "required": {
+      "heading": "The profile cannot be saved yet. Fix these first:",
+      "item": "{field}: {problem}",
+      "nameMissing": "Enter a name for the profile.",
+      "domainsMissing": "Enter at least one sender domain, such as shop.example.com.",
+      "domainsInvalid": "Not a domain name: {values}. Enter domains such as shop.example.com, one per line.",
+      "domainsTooMany": "Enter at most {max} sender domains.",
+      "subjectTooMany": "Enter at most {max} subject words.",
+      "subjectTooLong": "Each subject word can be at most {max} characters long.",
+      "server": "The server refused this field. The reason is under the form."
+    },
+    "patterns": {
+      "sourceLabel": "Lines source",
+      "sourceHint": "Which rendering of the email the patterns below are matched against. Text is the text part of the email, one line per line break. HTML reads the HTML part: every block and every table cell becomes its own line, so a product name that the text splits over several lines stays whole. The email's Lines view shows exactly what each source gives.",
+      "sourceOptions": {
+        "text": "Text",
+        "html": "HTML"
+      },
+      "globHelp": "Each pattern is matched against one whole line of the email, ignoring case. Use {star} for any text and a name in braces, such as {capture}, to capture a value. Each field takes up to {max} patterns, one per line. To match consecutive lines, join one pattern per line with {lineBreak}, for example {example}.",
+      "orderIdLabel": "Order number patterns",
+      "orderIdHint": "Must capture {capture}. Example: Order number: {capture}",
+      "totalLabel": "Total patterns",
+      "amountHint": "Must capture {capture}. Example: Order total {capture}",
+      "shippingLabel": "Shipping patterns",
+      "discountLabel": "Discount patterns",
+      "feesLabel": "Fees patterns",
+      "itemsHeading": "Line items",
+      "startAfterLabel": "Items start after",
+      "startAfterHint": "Optional. Items are read from the line after the first line containing this text.",
+      "stopAtLabel": "Items stop at",
+      "stopAtHint": "Optional. Items end before the first line containing this text.",
+      "itemPatternsLabel": "Item patterns",
+      "itemPatternsHint": "Must capture {name} and either {amount} (the line total) or {price} (the unit price, optionally with {qty}), never both. Example: {name} x {qty} {price}"
+    },
+    "categories": {
+      "heading": "Categories",
+      "help": "Type a category name and pick it from the list. The name is stored in the profile, and the category must exist when the profile is saved.",
+      "categoryPlaceholder": "No category",
+      "defaultLabel": "Default category",
+      "defaultHelp": "Used for items that get no other category.",
+      "shippingLabel": "Shipping category",
+      "shippingHelp": "The category of the shipping line.",
+      "feesLabel": "Fees category",
+      "feesHelp": "The category of the fees line.",
+      "unknownCategory": "There is no category named {name}. Pick one from the list, or create it first.",
+      "rulesInJson": "Category rules by item name are an advanced option: add them to the profile definition in the JSON mode."
+    },
+    "mode": {
+      "label": "Editing mode",
+      "form": "Form",
+      "json": "JSON",
+      "formUnavailable": "This definition uses something the form cannot show: labelled entries, multi-line items or keys it has no field for. Edit it as JSON.",
+      "jsonInvalid": "The JSON is not valid yet, so the form cannot be shown. Fix it first."
+    },
+    "json": {
+      "label": "Profile definition (JSON)",
+      "help": "The same definition the form builds. The server checks it when you save, and the test below reads it as it is now.",
+      "parseError": "This is not valid JSON, or it is not a JSON object. Fix it to save or test the profile."
+    },
+    "matching": {
+      "heading": "Matching",
+      "help": "How the bank transaction an email paid for is found. The strategies are tried in order; the first that leaves exactly one transaction decides, several are ambiguous, and none passes to the next.",
+      "instruction": "Best is a reference number taken from the bank operation description. If there is none, the date and the amount are used. By default the strategies are tried in this order: reference (when the profile has reference patterns), order number, amount and payee, amount and date.",
+      "referenceLabel": "Reference patterns",
+      "referenceHint": "The identifier the shop or payment gateway puts into the bank operation, such as a statement text or a transfer title. Must capture {capture}.",
+      "strategiesLabel": "Strategies, in the order tried",
+      "strategiesHelp": "Order number and reference look for the value in the transaction's description, payee or reference number. Amount and payee needs the amount plus a payee signal. Amount and date needs the amount alone, within the window. At least one must stay on.",
+      "strategyPosition": "{position}. {name}",
+      "moveUp": "Move {name} earlier",
+      "moveDown": "Move {name} later",
+      "strategies": {
+        "reference": "Reference",
+        "orderId": "Order number",
+        "amount_payee": "Amount and payee",
+        "amount_date": "Amount and date"
+      },
+      "referenceNeeded": "The reference strategy is on but there are no reference patterns, so it will find nothing.",
+      "referenceInLabel": "Look for the reference and the order number in",
+      "referenceInHint": "Values shorter than 4 characters are never looked for.",
+      "referenceIn": {
+        "description": "Description",
+        "payee": "Payee name",
+        "referenceNumber": "Reference number"
+      },
+      "daysBeforeLabel": "Days before the purchase",
+      "daysAfterLabel": "Days after the purchase",
+      "daysHint": "The window around the purchase date. Default {default}, at most {max}.",
+      "toleranceLabel": "Amount tolerance",
+      "toleranceHint": "How far the bank amount may differ from the email's total. Default 0, at most {max}."
+    },
+    "proposal": {
+      "heading": "Proposal",
+      "tagLabel": "Add a tag to the transactions this profile categorizes",
+      "tagHelp": "The tag is created when you have none by that name. It is shown on the proposal, and nothing is written until you approve it.",
+      "tagNameLabel": "Tag name",
+      "aiCategoriesLabel": "Let the AI choose the category of items no rule matches",
+      "aiCategoriesHelp": "When an item matches no category rule and there is no default category, the AI is asked for its category from your category list. The choice is marked as the AI's on the proposal. With this off the AI is never asked."
+    },
+    "kind": {
+      "label": "Profile kind",
+      "receipt": "Order receipt",
+      "trade": "Brokerage trade",
+      "receiptHelp": "Reads an order confirmation and finds the bank transaction that paid for it.",
+      "tradeHelp": "Reads a brokerage trade confirmation and proposes the investment transaction it reports: a buy, a sell, a cash dividend or a reinvested dividend."
+    },
+    "trade": {
+      "guardsHeading": "Which of the sender's emails it reads",
+      "guardsHelp": "Optional. Each pattern is matched against one whole line of the email, one pattern per line.",
+      "guards": {
+        "requireLine": "Required lines",
+        "requireLineHint": "The profile reads an email only when one of these lines is in it; otherwise the next profile for the sender is tried.",
+        "skipIfLine": "Lines that skip the email",
+        "skipIfLineHint": "An email with one of these lines is set aside, such as a cancelled order.",
+        "waitIfLine": "Lines that hold the email",
+        "waitIfLineHint": "An email with one of these lines is held and read again later, such as a partial fill."
+      },
+      "fieldsHeading": "The trade",
+      "fieldsHelp": "The action, the ticker and a total or a price are required, and so is the share count except for a cash dividend. The action is read from its text: Dividend or Distribution is a cash dividend, Reinvest or DRIP a reinvested dividend, otherwise Buy or Sell. Each field takes patterns one per line, tried in order.",
+      "fields": {
+        "tradeAction": "Action patterns",
+        "tradeSymbol": "Ticker patterns",
+        "tradeQuantity": "Share count patterns",
+        "tradeTotal": "Trade total patterns",
+        "tradePrice": "Price per share patterns",
+        "tradeCommission": "Commission patterns",
+        "tradeDate": "Trade date patterns",
+        "tradeAccount": "Account patterns"
+      },
+      "fieldHint": "Must capture {capture}. Example: {example}",
+      "amountsHelp": "The total is the executed amount, commission included for a buy or a reinvested dividend; for a cash dividend it is the amount paid. The price (for a dividend, the amount per share) is a cross-check, and with the share count gives the total when the email states none. An amount that names its currency (US$, C$, USD, €) also sets the currency of the trade.",
+      "rulesHeading": "Account rules",
+      "rulesHelp": "Which account the trade is booked to. The rules are tried in order against the account text the Account patterns read, and the first that applies wins; {star} is any text. A rule with a currency applies only to a trade in that currency, so two accounts the broker prints the same way, such as a CAD and a USD RRSP both shown as RRSP, are two rules with the same text and different currencies. When the email prints no account text, only a rule whose text is {star} can apply. The default account takes the rest.",
+      "currencyOrder": "The currency of the trade is taken from, in order: the amount itself when it names one (US$, C$, USD, €), then the first currency marker below that matches a line of the email, then the currency of your security for the ticker. A rule with a currency never guesses: when none of the three tells the currency, the email waits for you instead of being booked to either account.",
+      "ruleMatchLabel": "Account text of rule {rule}",
+      "ruleMatchPlaceholder": "Account text, such as RRSP",
+      "ruleCurrencyLabel": "Currency of rule {rule}",
+      "ruleAccountLabel": "Account of rule {rule}",
+      "ruleMoveUp": "Move rule {rule} earlier",
+      "ruleMoveDown": "Move rule {rule} later",
+      "ruleRemove": "Remove rule {rule}",
+      "ruleAdd": "Add an account rule",
+      "rulesMax": "At most {max} rules.",
+      "rulesWithoutAccountText": "There are no Account patterns, so the rules are tried against empty text: only a rule whose text is {star} can apply.",
+      "anyCurrency": "Any currency",
+      "baseCurrency": "{code} (your base currency)",
+      "currencyPlaceholder": "Choose a currency",
+      "accountPlaceholder": "Choose an account",
+      "accountOption": "{name} ({currency})",
+      "accountNotTradableOption": "{name} (not an open brokerage account)",
+      "accountUnknownOption": "An account not in your list",
+      "accountNotTradable": "A trade cannot be booked to this account: it is closed, a cash account or not an investment account.",
+      "accountUnknown": "This account is not in your list: it may have been deleted. Pick another one.",
+      "defaultAccountLabel": "Default account",
+      "defaultAccountNone": "No default account",
+      "defaultAccountHint": "The account when no rule applies. Without one, an email no rule applies to waits for you.",
+      "markersHeading": "Currency markers",
+      "markersHelp": "Text that names the currency of the trade when its amounts do not, such as a line saying the amounts are in U.S. dollars beside a bare $. Each marker is matched against every line of the email ({star} is any text), and the first marker, in order, that matches names the currency. Markers are used only when the amount names no currency.",
+      "markerMatchLabel": "Text of marker {marker}",
+      "markerMatchPlaceholder": "Such as *U.S. dollars*",
+      "markerCurrencyLabel": "Currency of marker {marker}",
+      "markerMoveUp": "Move marker {marker} earlier",
+      "markerMoveDown": "Move marker {marker} later",
+      "markerRemove": "Remove marker {marker}",
+      "markerAdd": "Add a currency marker",
+      "markersMax": "At most {max} markers."
+    },
+    "discard": {
+      "label": "Matching emails",
+      "read": "Read them",
+      "ignore": "Ignore them",
+      "delete": "Delete them",
+      "readHelp": "The profile reads each email it matches with the patterns below.",
+      "ignoreHelp": "Every email this profile matches is ignored as it arrives: it proposes nothing. For senders whose mail you never want to deal with.",
+      "deleteHelp": "Every email this profile matches is deleted from Monize as it arrives (it stays in your mailbox). A deleted email cannot be brought back.",
+      "noReading": "This profile reads nothing, so it needs no patterns, categories or matching. The sender domains and subject words above decide which emails it takes."
+    }
+  },
+  "problems": {
+    "heading": "The profile definition is not valid:",
+    "item": "{where}: {problem}",
+    "paths": {
+      "definition": "The definition",
+      "line": "{field}, line {line}",
+      "rule": "Category rule {rule}, {part}",
+      "entryPart": "{field}, entry {line}, {part}",
+      "skipLine": "Line to skip {line}",
+      "recordStep": "Record step {step}",
+      "recordStepPart": "Record step {step}, {part}",
+      "recordAlternative": "Record step {step}, alternative {alternative}",
+      "accountRule": "Account rule {rule}",
+      "accountRulePart": "Account rule {rule}, {part}",
+      "currencyMarker": "Currency marker {marker}",
+      "currencyMarkerPart": "Currency marker {marker}, {part}"
+    },
+    "fields": {
+      "orderId": "Order number patterns",
+      "total": "Total patterns",
+      "shipping": "Shipping patterns",
+      "discount": "Discount patterns",
+      "itemPatterns": "Item patterns",
+      "startAfter": "Items start after",
+      "stopAt": "Items stop at",
+      "items": "Line items",
+      "categoryRules": "Category rules",
+      "rulePattern": "pattern",
+      "ruleCategory": "category",
+      "defaultCategory": "Default category",
+      "shippingCategory": "Shipping category",
+      "feesCategory": "Fees category",
+      "balanceTolerance": "Balance tolerance",
+      "fees": "Fees patterns",
+      "skipLines": "Lines to skip",
+      "record": "Record",
+      "label": "label",
+      "value": "value",
+      "within": "within",
+      "line": "line",
+      "optional": "optional",
+      "paid": "Paid patterns",
+      "payee": "Merchant patterns",
+      "requireLine": "Required lines",
+      "skipIfLine": "Lines that skip the email",
+      "waitIfLine": "Lines that hold the email",
+      "source": "Lines source",
+      "single": "Single item",
+      "singleName": "Single item name",
+      "joinWrapped": "Join wrapped lines",
+      "ruleField": "field",
+      "reference": "Reference patterns",
+      "match": "The matching section",
+      "matchBy": "Matching strategies",
+      "matchReferenceIn": "Fields the reference is looked for in",
+      "matchDaysBefore": "Days before the purchase",
+      "matchDaysAfter": "Days after the purchase",
+      "matchTolerance": "Amount tolerance",
+      "tag": "Tag",
+      "aiCategories": "AI categories",
+      "trade": "The trade section",
+      "tradeAction": "Action patterns",
+      "tradeSymbol": "Ticker patterns",
+      "tradeQuantity": "Share count patterns",
+      "tradeTotal": "Trade total patterns",
+      "tradePrice": "Price per share patterns",
+      "tradeCommission": "Commission patterns",
+      "tradeDate": "Trade date patterns",
+      "tradeAccount": "Account patterns",
+      "accountRules": "Account rules",
+      "currencyMarkers": "Currency markers",
+      "defaultAccount": "Default account",
+      "ruleAccount": "account",
+      "ruleCurrency": "currency",
+      "role": "Profile role",
+      "link": "The link section",
+      "linkDaysBefore": "Days before the repayment",
+      "linkFromDomains": "Sender domains of the purchase emails",
+      "linkKey": "Link key patterns"
+    },
+    "codes": {
+      "not_object": "is not a valid definition",
+      "unknown_key": "is not something a profile can have",
+      "unsupported_version": "is a version this server does not read (use version 2)",
+      "invalid_type": "has the wrong kind of value",
+      "empty": "must not be empty",
+      "too_many": "has too many entries (at most {max})",
+      "too_long": "is too long (at most {max} characters)",
+      "control_character": "contains a control character",
+      "malformed_capture": "has a capture in braces that is not valid",
+      "too_many_captures": "has too many captures",
+      "duplicate_capture": "uses the same capture name twice",
+      "capture_not_allowed": "uses a capture name this field does not accept",
+      "capture_missing": "is missing a capture this field needs",
+      "capture_conflict": "captures both the line total and the unit price. Use one of them.",
+      "invalid_uuid": "is not a valid category",
+      "out_of_range": "must be a whole number from 1 to {max}",
+      "items_patterns_and_record": "has both patterns and a record. Use one of them.",
+      "items_shape_missing": "needs either patterns or a record",
+      "skip_lines_need_record": "can only be used together with a record",
+      "record_name_missing": "must capture {capture} in one of its steps",
+      "items_single_conflict": "has a single item beside patterns or a record. Use one of them.",
+      "join_wrapped_needs_patterns": "only works with item patterns",
+      "invalid_value": "has a value this field does not accept",
+      "duplicate_entry": "lists the same entry twice",
+      "reference_field_missing": "needs reference patterns (the reference strategy is on)",
+      "out_of_range_days": "must be a whole number from 0 to {max}",
+      "out_of_range_tolerance": "must be an amount from 0.00 to {max}",
+      "trade_conflict": "cannot be in a brokerage trade profile, which reads only the trade",
+      "trade_amount_missing": "needs total or price patterns (at least one of the two)",
+      "trade_account_missing": "needs a default account, or account rules",
+      "invalid_currency": "is not a 3-letter currency code, such as USD",
+      "too_many_lines": "spans too many lines (at most {max})",
+      "line_break_not_allowed": "is matched against one text (an item name, the merchant or an account), so it cannot span several lines",
+      "invalid_uuid_account": "is not a valid account",
+      "role_invalid": "must be standalone, component or settlement",
+      "link_key_requires_component": "can only be used when the role is component",
+      "link_key_missing": "is needed when the role is component",
+      "link_capture_requires_settlement": "uses a link or instalment capture, which only a settlement profile accepts",
+      "link_requires_settlement": "can only be used when the role is settlement",
+      "link_domain_invalid": "is not a valid sender domain (at most {max} domains)",
+      "link_days_invalid": "must be a whole number from 0 to {max}",
+      "role_trade_conflict": "cannot be component or settlement in a brokerage trade profile, which reads only the trade"
+    }
+  },
+  "test": {
+    "heading": "Test against a stored email",
+    "help": "Reads a stored email with the patterns above, saved or not, and shows what would be found and which transaction it would match. Nothing is written.",
+    "loadFailed": "The stored emails could not be loaded, so there is nothing to test against yet.",
+    "noReceipts": "No emails are stored yet. Poll the mailbox first.",
+    "receiptLabel": "Email",
+    "choosePlaceholder": "Choose an email",
+    "receiptOption": "{subject} from {sender} ({date})",
+    "button": "Test",
+    "failed": "The test failed",
+    "matchHeading": "Transaction match",
+    "matched": "Would link the transaction of {date} for {amount} ({payee}), found by {how}.",
+    "matchKinds": {
+      "order_id": "order number",
+      "amount_payee": "amount and payee",
+      "amount_only": "amount",
+      "manual": "your choice",
+      "reference": "reference",
+      "amount_date": "amount and date"
+    },
+    "noPayee": "no payee",
+    "ambiguous": "{count, plural, one {# transaction fits} other {# transactions fit}} equally well, so none would be linked until you choose.",
+    "unmatched": "No transaction matches, out of {count, plural, one {# candidate} other {# candidates}}.",
+    "jsonInvalid": "The JSON is not valid, so there is nothing to test yet.",
+    "component": {
+      "heading": "Purchase email (component): link key {linkKey}",
+      "noLinkKey": "Purchase email (component): no link key was read, so no repayment email can find it.",
+      "noneWaiting": "No repayment email is waiting for this link key.",
+      "waiting": "{count, plural, one {# repayment email is} other {# repayment emails are}} waiting for this link key:",
+      "settlement": "{subject} ({date})"
+    },
+    "outcome": {
+      "not_applicable": "This profile would not read this email: none of its required lines is in it, so the next profile for the sender would be tried.",
+      "skip_line": "This profile would set this email aside: a line it skips on is in it.",
+      "wait_line": "This profile would hold this email: a line says the order is not final, so it is read again later.",
+      "discard_ignore": "This profile would ignore this email: it ignores every email it matches.",
+      "discard_delete": "This profile would delete this email: it deletes every email it matches.",
+      "no_html": "This profile reads the HTML part of the email, and this email has none, so it would be marked as unreadable (no HTML)."
+    },
+    "matchedBy": {
+      "heading": "Matched by",
+      "none": "No value was read from this email.",
+      "fields": {
+        "orderId": "Order number",
+        "total": "Total",
+        "paid": "Paid",
+        "shipping": "Shipping",
+        "discount": "Discount",
+        "payee": "Merchant",
+        "requireLine": "Required line",
+        "skipIfLine": "Skip line",
+        "waitIfLine": "Wait line",
+        "reference": "Reference",
+        "linkKey": "Link key",
+        "action": "Action",
+        "symbol": "Ticker",
+        "quantity": "Shares",
+        "price": "Price",
+        "commission": "Commission",
+        "date": "Date",
+        "account": "Account",
+        "currency": "Currency marker"
+      },
+      "entryLine": "entry {entry} ({pattern}), line {line}: {text}",
+      "entrySubject": "entry {entry} ({pattern}), the subject: {text}",
+      "entryLines": "entry {entry} ({pattern}), lines {first} to {last}:",
+      "blockLine": "line {line}: {text}",
+      "labelled": "entry {entry}, label {label} on line {labelLine} ({labelText}), value {pattern} on line {line}: {text}",
+      "item": "Item {number}",
+      "itemLine": "{pattern}, line {line}: {text}"
+    },
+    "trace": {
+      "heading": "What the matcher looked at",
+      "window": "Transactions from {from} to {to} ({before} days before, {after} days after the purchase): {considered, plural, one {# considered} other {# considered}}.",
+      "tolerance": "The amount may differ by {amount}.",
+      "attempt": "{position}. {name}",
+      "kept": "{count, plural, =0 {kept none} one {kept # transaction} other {kept # transactions}}",
+      "decided": "Decided",
+      "transaction": "{date}, {amount}, {payee}",
+      "noPayee": "no payee",
+      "strategies": {
+        "reference": "Reference",
+        "orderId": "Order number",
+        "amount_payee": "Amount and payee",
+        "amount_date": "Amount and date"
+      }
+    }
+  },
+  "parsed": {
+    "notFound": "Not found",
+    "noCategory": "No category",
+    "unknownCategory": "Unknown category",
+    "categoryUnavailable": "Categories not loaded",
+    "noItems": "No line items were read.",
+    "orderId": "Order number",
+    "total": "Total",
+    "shipping": "Shipping",
+    "discount": "Discount",
+    "columns": {
+      "item": "Item",
+      "qty": "Qty",
+      "amount": "Amount",
+      "category": "Category"
+    },
+    "complete": "Read completely",
+    "incomplete": "Not read completely",
+    "reasons": {
+      "no_total": "The email states no total.",
+      "no_items": "No line items were found.",
+      "items_unbalanced": "The line items do not add up to the total.",
+      "items_uncategorized": "Some line items have no category.",
+      "shipping_uncategorized": "The shipping line has no category.",
+      "item_amount_missing": "An item has no amount, and the email has no single total to give it."
+    },
+    "readByAi": "Read by the AI",
+    "readFromStructuredData": "Read from structured data",
+    "paid": "Paid",
+    "payee": "Merchant",
+    "reference": "Reference",
+    "categoryByAi": "AI",
+    "linkKey": "Link key",
+    "kinds": {
+      "shipping": "Shipping",
+      "fee": "Fee",
+      "discount": "Discount"
+    },
+    "parts": {
+      "heading": "Parts",
+      "part": "Part",
+      "link": "Link",
+      "outcome": "Result",
+      "noLink": "No link",
+      "component": "Purchase email: {subject} ({date}).",
+      "componentProfile": "Profile: {name}.",
+      "componentNet": "Purchase total: {amount}.",
+      "taken": "Already used: {amount}."
+    },
+    "linkOutcomes": {
+      "no_link": "The part has no link, so it stays one line.",
+      "not_found": "No purchase email was found for this link, so the part stays one line.",
+      "component_incomplete": "The purchase email was not read completely, so the part stays one line.",
+      "component_used": "Other repayments already used the whole purchase, so the part stays one line.",
+      "joined": "Replaced by the lines of the purchase email.",
+      "scaled": "Replaced by the lines of the purchase email, scaled to this part.",
+      "amount_exceeds": "The part is more than what is left of the purchase, so it stays one line."
+    }
+  },
+  "state": {
+    "pending": "Waiting to be read",
+    "skipped": "Skipped",
+    "no_parser": "No profile",
+    "parse_failed": "Could not be read",
+    "unmatched": "No transaction found",
+    "ambiguous": "Several transactions fit",
+    "review_conflict": "Another request is open",
+    "ignored": "Ignored",
+    "proposed": "Waiting for approval",
+    "applied": "Applied",
+    "dismissed": "Dismissed",
+    "expired": "Expired",
+    "pending_ai": "Waiting for the AI",
+    "request_missing": "Request missing",
+    "component": "Waiting for its repayment"
+  },
+  "receipts": {
+    "loading": "Loading emails",
+    "links": {
+      "reviewInbox": "Open the AI review inbox",
+      "settings": "Mailbox settings"
+    },
+    "filter": {
+      "label": "Filter by state",
+      "option": "{label} ({count})",
+      "all": "All",
+      "pending": "Waiting to be read",
+      "skipped": "Skipped",
+      "no_parser": "No profile",
+      "parse_failed": "Could not be read",
+      "unmatched": "No transaction found",
+      "ambiguous": "Several transactions fit",
+      "review_conflict": "Another request is open",
+      "review": "In review",
+      "ignored": "Ignored",
+      "component": "Waiting for repayment"
+    },
+    "search": {
+      "label": "Search emails",
+      "placeholder": "Search by subject, sender or content...",
+      "in": "Search in",
+      "fields": {
+        "all": "All fields",
+        "subject": "Subject",
+        "sender": "Sender",
+        "body": "Content"
+      },
+      "from": "From date",
+      "to": "To date",
+      "rangeBackwards": "The end date is before the start date. The date range is not applied.",
+      "clear": "Clear search"
+    },
+    "domainFilter": {
+      "label": "Sender domain",
+      "all": "All senders",
+      "option": "{domain} ({count})",
+      "unknown": "The sender counts could not be loaded.",
+      "help": "Showing emails from {domain} and its sub-domains. Select several of them to draft one profile for the sender.",
+      "waitingForAi": "Waiting for AI"
+    },
+    "columns": {
+      "select": "Select",
+      "date": "Date",
+      "email": "Email",
+      "transaction": "Transaction",
+      "state": "State",
+      "actions": "Actions"
+    },
+    "transactionSummary": "{date}, {amount}, {payee}",
+    "noPayee": "no payee",
+    "noTransaction": "None yet",
+    "error": {
+      "title": "The emails could not be loaded",
+      "body": "The request failed, so nothing is known about your emails yet. Try again.",
+      "retry": "Try again"
+    },
+    "empty": {
+      "title": "No emails",
+      "body": "Order confirmations appear here once the mailbox has been read.",
+      "filteredTitle": "No emails in this state",
+      "filteredBody": "Choose another state to see the rest.",
+      "searchTitle": "No email matches the search",
+      "searchBody": "Change the words or the dates, or clear the search to see every email.",
+      "noMailboxBody": "No mailbox is connected yet. Connect one to start reading order confirmations.",
+      "connectButton": "Connect a mailbox"
+    },
+    "actions": {
+      "view": "View",
+      "reprocess": "Reprocess",
+      "link": "Choose transaction",
+      "recognizeAi": "Recognize with AI",
+      "recognizeTradeAi": "Recognize as a trade with AI",
+      "approve": "Approve",
+      "draftParser": "Prepare a profile with AI",
+      "createParser": "Create profile",
+      "ignore": "Ignore",
+      "reviewTrade": "Review in inbox"
+    },
+    "toasts": {
+      "approved": "Proposal approved",
+      "approveFailed": "Could not approve the proposal",
+      "reprocessed": "Email reprocessed",
+      "reprocessFailed": "Could not reprocess the email",
+      "ignored": "Email ignored",
+      "ignoreFailed": "Could not ignore the email",
+      "deleted": "Email deleted",
+      "deleteFailed": "Could not delete the email"
+    },
+    "ignoreDialog": {
+      "title": "Ignore this email?",
+      "message": "The email {subject} will propose nothing, and its open review request will be dismissed.",
+      "confirm": "Ignore"
+    },
+    "deleteDialog": {
+      "title": "Delete this email?",
+      "message": "The stored email {subject} will be deleted and its open review request dismissed. The message in the mailbox is not touched, and a later poll will not fetch it again."
+    },
+    "selection": {
+      "label": "Selected emails",
+      "select": "Select {subject}",
+      "selectAll": "Select all emails on this list",
+      "count": "{count, plural, one {# email selected} other {# emails selected}}",
+      "draftButton": "Prepare a profile with AI ({count})",
+      "clear": "Clear selection",
+      "deleteButton": "Delete ({count})",
+      "ignoreButton": "Ignore ({count})",
+      "pageSelected": "All {count} on this page are selected.",
+      "selectAllMatching": "Select all {total} matching this filter.",
+      "allMatchingSelected": "All {total} emails matching this filter are selected.",
+      "hiddenSelected": "{hidden, plural, one {# of the selected emails is not shown in this list.} other {# of the selected emails are not shown in this list.}}",
+      "reprocessButton": "Reprocess ({count})",
+      "restoreButton": "Restore ignored ({count})",
+      "restoreButtonAll": "Restore ignored",
+      "approveButton": "Approve proposals ({count})",
+      "approveButtonAll": "Approve proposals",
+      "progress": "Processed {processed}, {remaining} left",
+      "progressStarting": "Starting",
+      "stop": "Stop",
+      "narrowedSelected": "{total} emails are selected: every email matching this filter, except those taken out below.",
+      "deselect": {
+        "label": "Deselect by",
+        "state": "State: {state}",
+        "sender": "Sender: {domain}",
+        "before": "Received before a day",
+        "after": "Received after a day",
+        "beforeLabel": "Deselect emails received before",
+        "afterLabel": "Deselect emails received after",
+        "apply": "Deselect",
+        "cancel": "Cancel"
+      },
+      "exclusion": {
+        "label": "Taken out of the selection",
+        "state": "Not in state {state}",
+        "sender": "Not from {domain}",
+        "from": "Received on or after {date}",
+        "to": "Received on or before {date}",
+        "remove": "Put back: {label}"
+      },
+      "draftBlocked": {
+        "skipped": "An email that could not be read has no text to prepare a profile from. Remove it from the selection to use this.",
+        "allMatching": "A profile is prepared from emails you select yourself, at most {max}. Clear this selection and select up to {max} emails.",
+        "mixedKinds": "The selected emails mix trade confirmations and order emails. A profile reads one kind, so select only trade confirmations or only order emails.",
+        "tooManyPerDomain": "At most {perDomain} emails from one sender can be used. Select {perDomain} or fewer emails from each sender ({domains}).",
+        "tooManyDomains": "At most {maxDomains} senders can be used together ({domains}). Select emails from {maxDomains} senders or fewer.",
+        "tradeOneDomain": "A trade profile reads the emails of one sender ({domains}). Select trade confirmations from one sender."
+      }
+    },
+    "pager": {
+      "itemName": "emails",
+      "total": "{count, plural, one {# email} other {# emails}}",
+      "page": "Page {page}"
+    },
+    "draft": {
+      "failed": "Could not start drafting a profile",
+      "queued": "Queued: the request waits in the AI review inbox for an agent. No assistant is available to answer now.",
+      "handoffFailed": "The request is queued, but the emails could not be opened in the chat. It waits in the AI review inbox for an agent.",
+      "inboxLink": "Open the AI review inbox",
+      "opened": "Opened the chat with the emails attached. Read the message and press Send.",
+      "chatPrompt": "Build an email receipt profile for {count, plural, one {this order email} other {these # order emails}} from {domain}. Claim AI review request {requestId}, test your profile on every attached email with the email_receipt_parsers tool, fix it until each one reads completely, then save it as a draft for request {requestId}.",
+      "mixedKinds": "The selected emails mix trade confirmations and order emails. A profile reads one kind, so select only trade confirmations or only order emails.",
+      "chatPromptTrade": "Build a trade profile for {count, plural, one {this trade confirmation email} other {these # trade confirmation emails}} from {domain}. Claim AI review request {requestId}, test your profile on every attached email with the email_receipt_parsers tool, fix it until each one reads a complete trade, then save it as a draft for request {requestId}."
+    },
+    "tradeBadge": "Trade",
+    "bulkDialog": {
+      "delete": {
+        "title": "Delete emails?",
+        "message": "{count, plural, one {Delete # email} other {Delete # emails}}{scope, select, both { from {domain} in the state {status}} domain { from {domain}} status { in the state {status}} other {}}? This cannot be undone. To keep the emails and stop them proposing anything, choose Ignore instead. Emails linked to a transaction are kept."
+      },
+      "ignore": {
+        "title": "Ignore emails?",
+        "message": "{count, plural, one {Ignore # email} other {Ignore # emails}}{scope, select, both { from {domain} in the state {status}} domain { from {domain}} status { in the state {status}} other {}}? They will propose nothing, and their open review requests will be dismissed. Emails linked to a transaction are kept as they are.",
+        "confirm": "Ignore"
+      },
+      "countChanged": "The number of matching emails is now {count}. Nothing was changed. Check the number and confirm again.",
+      "approve": {
+        "title": "Approve proposals?",
+        "message": "{count, plural, one {Approve # proposal} other {Approve # proposals}}? Each one is applied as the Confirm button in the AI review inbox does.",
+        "trades": "{count, plural, one {# trade email is left out. Approve it on its card in the AI review inbox.} other {# trade emails are left out. Approve them on their cards in the AI review inbox.}}",
+        "confirm": "Approve"
+      },
+      "searchNote": "Only the emails that match the search are included.",
+      "narrowedNote": "Emails taken out of the selection are not touched."
+    },
+    "bulk": {
+      "result": {
+        "deleted": "{count, plural, one {# email deleted.} other {# emails deleted.}}",
+        "ignored": "{count, plural, one {# email ignored.} other {# emails ignored.}}",
+        "unchanged": "{count, plural, one {# email was already ignored.} other {# emails were already ignored.}}",
+        "notIgnorable": "{count, plural, one {# email could not be ignored: it could not be read, or its proposal was already applied.} other {# emails could not be ignored: they could not be read, or their proposals were already applied.}}",
+        "skippedLinked": "{count, plural, one {# email linked to a transaction was kept.} other {# emails linked to a transaction were kept.}}",
+        "reprocessed": "{count, plural, one {# email reprocessed.} other {# emails reprocessed.}}",
+        "restored": "{count, plural, one {# ignored email read again.} other {# ignored emails read again.}}",
+        "reprocessFailed": "{count, plural, one {# email failed.} other {# emails failed.}}",
+        "stopped": "Stopped. {count, plural, one {# email was left unprocessed.} other {# emails were left unprocessed.}}",
+        "approved": "{count, plural, one {# proposal approved.} other {# proposals approved.}}",
+        "approveFailed": "{count, plural, one {# proposal could not be approved.} other {# proposals could not be approved.}}"
+      },
+      "deleteFailed": "Could not delete the emails",
+      "ignoreFailed": "Could not ignore the emails",
+      "noneLeft": "No emails match any more. Nothing was changed.",
+      "reprocessFailed": "Could not reprocess the emails",
+      "approveFailed": "Could not approve the proposals",
+      "noApprovable": "No proposals in this selection can be approved.",
+      "narrowFailed": "Could not count the emails. The change was not applied."
+    },
+    "linkedDraftDialog": {
+      "title": "Draft linked profiles?",
+      "message": "You selected emails from several senders: {domains}. Use this only when the facts of one bank transaction are spread over emails of several senders, for example a shop and its deferred-payment provider, or a shop and a payment gateway. To draft profiles for unrelated shops, cancel and draft one domain at a time. A request takes at most {perDomain} emails per sender and at most {maxDomains} senders.",
+      "domainEntry": "{domain} ({count, plural, one {# email} other {# emails}})",
+      "confirm": "Draft linked profiles"
+    }
+  },
+  "detail": {
+    "title": "Email receipt",
+    "loading": "Loading the email",
+    "error": {
+      "title": "The email could not be loaded",
+      "body": "The request failed. Try again.",
+      "retry": "Try again"
+    },
+    "from": "From",
+    "received": "Received",
+    "forwardedBy": "Forwarded by",
+    "originalSent": "Sent by the shop",
+    "subject": "Subject",
+    "state": "State",
+    "parser": "Profile",
+    "noParser": "None",
+    "structuredSource": "Structured data",
+    "matchedBy": "Matched by",
+    "matchKinds": {
+      "order_id": "Order number",
+      "amount_payee": "Amount and payee",
+      "amount_only": "Amount",
+      "manual": "Your choice",
+      "reference": "Reference",
+      "amount_date": "Amount and date"
+    },
+    "transaction": "Transaction",
+    "transactionSummary": "{date}, {amount}, {payee}",
+    "noPayee": "no payee",
+    "viewTransaction": "View transaction",
+    "noTransaction": "None yet",
+    "reasons": {
+      "too_large": "The email is larger than the size limit, so it was stored without being read.",
+      "undecodable": "The email could not be decoded, so it was stored without being read.",
+      "draft_failed": "The AI could not draft a profile for this sender.",
+      "parser_invalid": "The profile for this sender is not valid. Edit it in the profile settings.",
+      "no_total": "The profile found no total in this email.",
+      "no_items": "The profile found no line items.",
+      "items_unbalanced": "The line items do not add up to the total.",
+      "items_uncategorized": "Some line items have no category.",
+      "shipping_uncategorized": "The shipping line has no category.",
+      "amount_differs": "The parsed total differs from the transaction amount, so only a description is proposed.",
+      "proposal_fallback": "The itemized proposal was refused, so only a description is proposed.",
+      "nothing_to_propose": "The email adds nothing to this transaction.",
+      "proposal_refused": "The proposal was refused, so nothing was proposed.",
+      "skip_line": "A line this profile skips on was found, so the email was ignored.",
+      "wait_line": "A line says the order is not final yet, so the email will be read again later.",
+      "profile_ignore": "This email's profile ignores every email it matches.",
+      "no_html": "This profile reads the HTML part of the email, and this email has none.",
+      "schema_org": "No profile was needed: the order was read from the structured data (schema.org) in the email.",
+      "item_amount_missing": "An item has no amount, and the email has no single total to give it.",
+      "trade_no_action": "The profile found no buy, sell, dividend or reinvestment in this email.",
+      "trade_no_symbol": "The profile found no ticker symbol in this email.",
+      "trade_no_quantity": "The profile found no number of shares in this email, which a buy, a sell or a reinvested dividend needs.",
+      "trade_no_amount": "The profile found neither a total nor a price in this email.",
+      "trade_no_account": "The profile could not tell which account this trade is for.",
+      "trade_exists": "Your accounts already hold this trade, so nothing was proposed.",
+      "trade_linked": "Linked to the transaction it reports, so nothing was proposed.",
+      "trade_no_currency": "The profile could not tell which currency this trade is in, so it could not choose its account.",
+      "awaiting_settlement": "Purchase email stored. It waits for the repayment email that pays for it.",
+      "settled": "Purchase email stored. The repayment emails joined with it pay its whole amount.",
+      "instalment": "Purchase email stored. Repayments paid part of it; the rest is still to be paid.",
+      "partially_linked": "Some parts of this repayment have no purchase email yet. They are shown as one line each.",
+      "enriched_by_other": "The matched transaction was already enriched by another email. Open it and use Link to replace that enrichment, or ignore this email.",
+      "no_link_key": "This purchase email holds no link key, so no repayment can find it."
+    },
+    "reasonUnknown": "Reason: {reason}",
+    "requestNote": "Review request ({state}): {note}",
+    "parsedHeading": "What the profile read",
+    "tradeHeading": "Trade read from the email",
+    "tradeCandidatesHeading": "Existing transactions that could be this trade",
+    "tradeCandidatesHelp": "These investment transactions could be the trade this email reports. Link the one it is: no new transaction is created, and a scheduled bill or deposit it pays is marked paid.",
+    "notParsed": "Nothing has been read from this email yet.",
+    "candidatesHeading": "Transactions that fit",
+    "candidatesHelp": "Several transactions fit this email equally well. Choose the one it paid for.",
+    "linkButton": "Link to this transaction",
+    "linked": "Email linked to the transaction",
+    "linkFailed": "Could not link the email",
+    "bodyHeading": "Email",
+    "textLabel": "Text of the email",
+    "noText": "The email has no text.",
+    "bodyView": {
+      "label": "Show the email as",
+      "html": "HTML",
+      "text": "Text",
+      "lines": "Lines"
+    },
+    "remoteImagesNote": "Remote images are not loaded.",
+    "htmlFrameTitle": "The email as its sender formatted it",
+    "structured": {
+      "heading": "Structured data (schema.org)",
+      "help": "An order or invoice that the email carries as markup for mail clients. It is read only when no profile applies or the profile finds no total.",
+      "found": "Found",
+      "notFound": "Not found",
+      "notFoundHelp": "The email carries no order markup, or it states no total and no line items.",
+      "seller": "Seller",
+      "currency": "Currency",
+      "orderDate": "Order date",
+      "unitPrice": "Unit price"
+    },
+    "lines": {
+      "help": "The lines a profile's patterns are matched against, numbered as a test's \"Matched by\" list numbers them.",
+      "sourceLabel": "Lines source",
+      "sources": {
+        "text": "Text",
+        "html": "HTML"
+      },
+      "noHtml": "This email has no HTML part, so a profile that reads HTML cannot read it.",
+      "capped": "Only the first {max} lines are read.",
+      "empty": "No lines.",
+      "listLabel": "Numbered lines of the email"
+    },
+    "linkedReceipts": {
+      "componentsHeading": "Linked purchase emails",
+      "component": "Part {part}: {subject} ({date})",
+      "settlementsHeading": "Paid by",
+      "settlement": "{subject} ({date}), part {amount}",
+      "enrichedBy": "Already enriched by: {subject}",
+      "openButton": "Open",
+      "open": "Open the email {subject}"
+    },
+    "tradeTransactionSummary": "{action, select, BUY {Bought {quantity} {symbol} for {total} on {date}.} SELL {Sold {quantity} {symbol} for {total} on {date}.} DIVIDEND {Dividend from {symbol} of {total} on {date}.} REINVEST {Reinvested a dividend in {quantity} {symbol} for {total} on {date}.} other {{quantity} {symbol} for {total} on {date}.}}",
+    "noTradeTransaction": "None yet: the trade is booked when you approve its proposal, or linked to one already in your ledger.",
+    "candidateShares": "{quantity} shares",
+    "tradeNoCandidates": "No investment transaction of this account, action and ticker within a week of the trade's day is free to link. If you entered the trade yourself, check its account and date; otherwise approve the proposal in the review inbox.",
+    "aiTradeHeading": "Trade the AI agent proposes",
+    "aiTradeReader": "None: the AI agent reads it as a trade",
+    "noAiTradeTransaction": "None yet: the trade is booked when you approve the AI agent's proposal.",
+    "tradeProposalHeading": "What its proposal would book"
+  },
+  "picker": {
+    "heading": "Choose the transaction",
+    "help": "No transaction was matched automatically. These are your transactions in the date range below, which starts as the days around the purchase. Choose the one it paid for, or change the dates to look further.",
+    "fromLabel": "From",
+    "toLabel": "To",
+    "searchPlaceholder": "Search by payee, description or amount...",
+    "loading": "Loading transactions",
+    "error": "The transactions could not be loaded.",
+    "retry": "Try again",
+    "empty": "You have no transactions in this period that can be linked. You can widen the dates above to look further.",
+    "emptySearch": "No transaction in this period matches the search. You can widen the dates above.",
+    "rangeReversed": "The From date is after the To date.",
+    "rangeIncomplete": "Enter both dates to list transactions.",
+    "row": "{date}, {amount}, {payee}",
+    "noPayee": "no payee",
+    "linkButton": "Link",
+    "hasMore": "Only the first {count} are shown. Use the search to narrow the list.",
+    "ai": {
+      "heading": "Choose the transaction for the AI",
+      "help": "These are your transactions in the date range below, which starts as the days around the purchase. Choose the one the AI should split by the products in the email, or change the dates to look further.",
+      "linkButton": "Use this transaction"
+    },
+    "sample": {
+      "heading": "Choose the transaction this email paid for",
+      "help": "These are your transactions in the date range below, which starts as the days around the purchase. The choice is kept in the wizard and is used to check the profile; nothing is linked to the email. Change the dates to look further.",
+      "linkButton": "Use this transaction"
+    }
+  },
+  "callback": {
+    "title": "Connecting the mailbox",
+    "connecting": "Finishing the connection",
+    "toasts": {
+      "connected": "Mailbox connected"
+    },
+    "success": {
+      "title": "Mailbox connected",
+      "body": "Connected as {username}. Returning to the settings."
+    },
+    "providerError": {
+      "title": "The sign-in was not completed",
+      "withDescription": "The provider reported: {error}. {description}",
+      "withoutDescription": "The provider reported: {error}."
+    },
+    "missingParameters": {
+      "title": "This page was opened without a sign-in result",
+      "body": "Start again from the email receipts settings and use one of the Connect buttons."
+    },
+    "failed": {
+      "title": "The mailbox could not be connected",
+      "fallback": "The server refused the connection. Start again from the email receipts settings."
+    },
+    "backLink": "Back to the email receipts settings"
+  },
+  "recognize": {
+    "title": "Recognize with AI",
+    "tradeTitle": "Recognize as a trade with AI",
+    "tradeMessage": "The AI will read this email as a brokerage trade confirmation and propose the investment transaction it reports (account, buy, sell, cash dividend or reinvested dividend, ticker, shares and total). Nothing is saved until you approve it.",
+    "tradeConfirm": "Recognize as a trade",
+    "transactionSummary": "{date}, {amount}, {payee}",
+    "noPayee": "no payee",
+    "confirmMessage": "This email is linked to the transaction {summary}. The AI will read the email and propose how to split this transaction by product. Continue with this transaction?",
+    "confirm": "Recognize with AI",
+    "chooseOther": "Choose another transaction",
+    "candidatesHeading": "Which transaction did the email pay for?",
+    "candidatesHelp": "Several transactions fit this email. Choose the one the AI should use, or search for another.",
+    "candidatesLoading": "Loading the transactions that fit",
+    "candidatesError": "The transactions that fit could not be loaded.",
+    "retry": "Try again",
+    "useButton": "Use this transaction",
+    "searchOther": "Search other transactions",
+    "back": "Back",
+    "failed": "Could not start the recognition",
+    "queued": "Queued: no AI assistant is available to answer now, so the request waits in the AI review inbox for an agent (for example over MCP).",
+    "handoffFailed": "The request is queued, but the email could not be opened in the chat. It waits in the AI review inbox for an agent (for example over MCP).",
+    "inboxLink": "Open the AI review inbox",
+    "opened": "Opened the chat with the email attached. Read the message and press Send.",
+    "chatPrompt": "Recognize the products, quantities and prices in the attached order email and split my transaction of {date} ({payee}, {amount}) by product with a category for each. Claim AI review request {requestId} and submit your proposal for it.",
+    "tradeChatPrompt": "Recognize the trade in the attached brokerage confirmation email: the account, whether it is a buy, a sell, a cash dividend or a reinvested dividend, the ticker, the shares (a cash dividend may state none), the executed total and the date. Claim AI review request {requestId} and submit the trade for it.",
+    "tradeDetachesTransaction": "Read as a trade, this email no longer stands behind {summary}: the trade creates its own investment transaction."
+  },
+  "hub": {
+    "tabs": {
+      "ariaLabel": "Email receipts sections",
+      "overview": "Overview",
+      "emails": "Emails",
+      "profiles": "Profiles",
+      "mailbox": "Mailbox"
+    },
+    "demoRestricted": {
+      "heading": "Restricted in Demo Mode",
+      "body": "Connecting a mailbox and writing profiles are disabled in demo mode."
+    }
+  },
+  "process": {
+    "retryFailed": "Retry failed emails ({count})",
+    "starting": "Starting...",
+    "progress": "{processed, plural, one {# email processed} other {# emails processed}}, {remaining} left.",
+    "cancel": "Cancel",
+    "cancelling": "Cancelling...",
+    "summary": "{count, plural, one {# email processed.} other {# emails processed.}}",
+    "cancelledSummary": "Cancelled after {count, plural, one {# email.} other {# emails.}}",
+    "outcomes": "They ended as: {outcomes}.",
+    "passedOver": "{count, plural, one {# email raised an error and was passed over.} other {# emails raised an error and were passed over.}}",
+    "failed": "Processing stopped because a request failed.",
+    "failedWithReason": "Processing stopped: {reason}",
+    "outcome": "{count} {state}",
+    "deletedOutcome": "{count} deleted",
+    "close": "Close"
+  },
+  "overview": {
+    "loading": "Loading the overview...",
+    "error": {
+      "title": "The overview could not be loaded",
+      "body": "The request failed, so nothing here may be taken as empty. Try again.",
+      "retry": "Try again"
+    },
+    "mailbox": {
+      "title": "Mailbox",
+      "none": "No mailbox is connected yet.",
+      "connect": "Connect a mailbox",
+      "manage": "Open the mailbox settings",
+      "state": {
+        "notConnected": "Not connected",
+        "failing": "Last poll failed",
+        "off": "Polling is off",
+        "polling": "Polling"
+      },
+      "auth": {
+        "password": "Password login",
+        "oauth2": "Sign-in with a provider"
+      },
+      "lastSuccess": "Last successful poll {when}",
+      "neverPolled": "Not polled successfully yet.",
+      "lastError": "Last error: {error}"
+    },
+    "emails": {
+      "title": "Emails",
+      "stored": "stored",
+      "processable": "{count, plural, one {# email can be processed again} other {# emails can be processed again}}.",
+      "open": "Open the emails"
+    },
+    "proposals": {
+      "title": "Proposals",
+      "waiting": "waiting for your approval",
+      "review": "Review the proposals",
+      "open": "Open the review inbox"
+    },
+    "profiles": {
+      "title": "Profiles",
+      "approved": "approved",
+      "drafts": "{count, plural, one {# draft waits for your approval} other {# drafts wait for your approval}}.",
+      "manage": "Open the profiles"
+    },
+    "uncovered": {
+      "title": "Senders without a profile",
+      "help": "These senders sent emails no profile reads. Create a profile for one: the wizard on the Profiles tab walks you through it.",
+      "none": "Every sender of the stored emails is covered by a profile.",
+      "row": "{domain} ({count, plural, one {# email} other {# emails}})",
+      "create": "Create a profile"
+    }
+  },
+  "wizard": {
+    "heading": "Get started with email receipts",
+    "intro": "Four steps from nothing to your first proposal.",
+    "done": "(done)",
+    "steps": {
+      "mailbox": {
+        "title": "Connect a mailbox",
+        "body": "Use a dedicated mailbox that receives your order confirmations. Monize only reads it.",
+        "action": "Connect a mailbox"
+      },
+      "emails": {
+        "title": "Fetch the emails",
+        "body": "Emails are read when the mailbox is polled. Poll it from the mailbox settings to see the first ones.",
+        "action": "Open the emails"
+      },
+      "profile": {
+        "title": "Create a profile for a sender",
+        "body": "A profile tells Monize how to read one sender's order confirmations. Write one, or draft it from a stored email.",
+        "action": "Open the profiles"
+      },
+      "review": {
+        "title": "Review the proposals",
+        "body": "Each email becomes a proposal on a transaction. Nothing is changed until you approve it.",
+        "action": "Open the review inbox"
+      }
+    }
+  },
+  "profileWizard": {
+    "heading": "Create a profile for {domain}",
+    "stepsLabel": "Wizard steps",
+    "stepName": "{number}. {name}",
+    "steps": {
+      "samples": "Samples",
+      "generate": "Generate",
+      "preview": "Preview and accept"
+    },
+    "cancel": "Cancel",
+    "existingDraft": "This domain already has a draft profile.",
+    "useExistingDraft": "Start at the preview with the draft",
+    "uncovered": {
+      "heading": "Create a profile for a domain",
+      "help": "Sender domains with stored emails and no approved profile. Choose one to start the wizard.",
+      "loading": "Loading sender domains",
+      "error": "The sender domains could not be loaded.",
+      "retry": "Try again",
+      "none": "Every sender of the stored emails is covered by a profile."
+    },
+    "samples": {
+      "loading": "Loading the emails",
+      "error": "The emails could not be loaded.",
+      "retry": "Try again",
+      "empty": {
+        "title": "No emails from this domain",
+        "body": "No stored email has a sender at {domain}."
+      },
+      "help": "Click an email to read it, and choose the transaction it paid for. Then tick up to {max} emails to write the profile from; an email can be ticked only once it has a transaction.",
+      "tradeToggle": "These emails are brokerage trade confirmations (they create an investment transaction, so no bank transaction is paired)",
+      "tradeHelp": "Click an email to read it, then tick up to {max} trade confirmations to write the profile from. No transaction needs to be chosen.",
+      "columns": {
+        "select": "Use",
+        "date": "Date",
+        "email": "Email",
+        "transaction": "Transaction"
+      },
+      "select": "Use the email {subject} as a sample",
+      "needsTransaction": "Choose a transaction for this email first.",
+      "limitReached": "At most {max} samples. Untick one to choose another.",
+      "noTransaction": "None chosen",
+      "tradeNoTransaction": "Not needed for a trade confirmation",
+      "selectedCount": "{count} of {max} samples ticked",
+      "continue": "Continue to the assistant",
+      "emailLoading": "Loading the email",
+      "emailError": "The email could not be loaded.",
+      "dialogTitle": "Email and transaction: {subject}",
+      "emailHeading": "Email"
+    },
+    "generate": {
+      "help": "The assistant reads these emails and the transactions they paid for and writes a draft profile for {domain}. Nothing is approved yet.",
+      "reviseHelp": "Tell the assistant what to change. It updates the same draft from these emails and transactions.",
+      "tradeHelp": "The assistant reads these trade confirmations and writes a draft profile for {domain} that proposes the investment transaction each one reports. Nothing is approved yet.",
+      "tradeSample": "Trade confirmation",
+      "feedbackLabel": "Requested Changes",
+      "feedbackPlaceholder": "For example: the total is the line that says Amount paid, not the subtotal.",
+      "send": "Send to AI",
+      "sendFeedback": "Send note to AI",
+      "retry": "Send to AI again",
+      "back": "Back",
+      "running": "The assistant is writing the profile...",
+      "runningHint": "This can take a minute. Keep this page open.",
+      "noDraft": "The assistant did not save a draft.",
+      "tryAgain": "You can send it again, or go back and change the samples.",
+      "failed": "The assistant could not be reached.",
+      "sendFailed": "The request could not be sent."
+    },
+    "waiting": {
+      "heading": "Waiting for your AI agent",
+      "body": "Sent to the AI inbox. Your agent will prepare the profile when it connects; you can close this and come back.",
+      "working": "Your agent has picked up the request and is working on it.",
+      "polling": "While this page is open it checks every {seconds} seconds.",
+      "checkFailed": "The request could not be checked. It will be tried again shortly.",
+      "ended": "The request was closed without a new draft (it was dismissed or expired). You can start over.",
+      "inboxLink": "Open the AI inbox",
+      "checkNow": "Check now",
+      "startOver": "Start over"
+    },
+    "preview": {
+      "loading": "Reading the emails with the draft...",
+      "error": "The preview could not be run.",
+      "retry": "Try again",
+      "assistantSaid": "The assistant says",
+      "help": "This is what the draft would do with the emails of this domain. Nothing has been saved or linked.",
+      "selectedHeading": "Selected emails",
+      "othersHeading": "Other emails from this domain",
+      "othersCapped": "Showing the newest {shown} of {total} other emails.",
+      "columns": {
+        "email": "Email",
+        "expected": "Expected transaction",
+        "parsed": "Read by the draft",
+        "agrees": "Agrees",
+        "outcome": "Outcome",
+        "matched": "Matched transaction"
+      },
+      "nothingRead": "Nothing could be read",
+      "notStated": "not stated",
+      "parsedDate": "Date: {date}",
+      "parsedTotal": "Total: {total}",
+      "parsedLines": "{count, plural, one {# line} other {# lines}}",
+      "parsedTrade": "{action, select, BUY {Buys {quantity} shares of {symbol}} SELL {Sells {quantity} shares of {symbol}} DIVIDEND {Pays a dividend from {symbol}} REINVEST {Reinvests a dividend in {quantity} shares of {symbol}} other {Trades {symbol}}}",
+      "tradeInconsistent": "The price does not match the total, so it will not be applied automatically",
+      "noExpectation": "None",
+      "noMatch": "No transaction",
+      "agreesYes": "Yes",
+      "agreesNo": "No",
+      "agreesUnknown": "Not checked",
+      "nothingToShow": "The draft has no emails to show.",
+      "backToSamples": "Back to samples",
+      "backToAi": "Back to AI",
+      "accept": "Accept and process",
+      "approved": "Profile approved",
+      "changedElsewhere": "The profile changed elsewhere. Reload the preview.",
+      "approveFailed": "The profile could not be approved.",
+      "approvedProcessing": "The profile is approved. The stored emails of {domain} are being read with it.",
+      "done": "Done",
+      "outcomes": {
+        "matched": "Matched a transaction",
+        "ambiguous": "Several transactions match",
+        "unmatched": "No transaction matched",
+        "parse_failed": "Could not be read",
+        "not_applicable": "Not read by this profile",
+        "skip_line": "Skipped (skip line found)",
+        "wait_line": "On hold (order not final)",
+        "discard_ignore": "Ignored by this profile",
+        "discard_delete": "Deleted by this profile",
+        "no_html": "No HTML part",
+        "trade": "Proposes a trade",
+        "trade_exists": "Already in your ledger",
+        "component": "Purchase email (waits for repayment)"
+      },
+      "parsedTradeAccount": "Account: {account}",
+      "accountWithCurrency": "{name} ({currency})",
+      "accountUnknown": "unknown",
+      "parsedTradeNoAccount": "No account found for this trade",
+      "parsedTradeCurrency": "Currency: {currency}"
+    }
+  },
+  "trade": {
+    "summary": "{action, select, BUY {Buy {quantity} shares of {symbol} for {total}, dated {date}.} SELL {Sell {quantity} shares of {symbol} for {total}, dated {date}.} DIVIDEND {Dividend from {symbol} of {total}, dated {date}.} REINVEST {Reinvest a dividend in {quantity} shares of {symbol} for {total}, dated {date}.} other {{symbol} for {total}, dated {date}.}}",
+    "account": "Account named in the email: {account}",
+    "priceMismatch": "The average price does not match the shares and the total, so this trade will not be applied automatically.",
+    "dividendMismatch": "The amount per share does not match the shares and the total, so this dividend will not be applied automatically.",
+    "dividendShares": "Paid on {quantity} shares",
+    "dividendPerShare": "Amount per share in the email: {price}",
+    "incomplete": "The profile could not read a complete trade from this email.",
+    "totalFromPrice": "the total implied by the price",
+    "dateUnknown": "the day the email arrived",
+    "price": "Average price in the email: {price} a share",
+    "proposalSecurity": "Security: {name}",
+    "proposalAccount": "Account: {account}",
+    "proposalPrice": "Price: {price} a share",
+    "proposalDividendPerShare": "Amount per share: {price}",
+    "proposalCommission": "Commission: {commission}",
+    "proposalReview": "Nothing is booked until you approve it.",
+    "proposalReviewLink": "Review it in the inbox",
+    "aiWaiting": "The AI agent has not proposed the trade yet. Its proposal appears here and in the review inbox.",
+    "aiBooked": "Booked from the AI agent's proposal: see the transaction above.",
+    "aiNoProposal": "No proposal from the AI agent is waiting for this email.",
+    "currencyFrom": "Currency: {currency}, {source, select, amount {named by the amount} marker {from a currency marker of the profile} other {from your security for the ticker}}",
+    "bookTo": "Books to: {account}",
+    "bookToNotTradable": "Books to {account}, which is not an open brokerage account, so the trade cannot be booked there.",
+    "bookToUnknown": "Books to an account that is not in your list, so the trade cannot be booked there."
+  },
+  "linkedHint": {
+    "emails": "One bank transaction described by emails from several senders (for example a shop and its deferred-payment provider)? Select up to {max} emails from each of those senders together and draft linked profiles.",
+    "profiles": "The wizard below drafts a profile for one sender. One bank transaction described by emails from several senders (for example a shop and its deferred-payment provider)? Select up to {max} emails from each of those senders on the Emails tab and draft linked profiles.",
+    "openEmails": "Open the Emails tab"
+  }
+}

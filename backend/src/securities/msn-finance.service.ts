@@ -8,11 +8,14 @@ import {
   QuoteProviderOptions,
   QuoteResult,
   HistoricalPrice,
+  HistoricalSeries,
   SecurityLookupResult,
   StockSectorInfo,
   EtfSectorWeighting,
 } from "./providers/quote-provider.interface";
 import { getTradingDateFromQuote } from "./providers/trading-date.util";
+import { normalizeQuoteCurrency } from "./providers/quote-currency.util";
+import { cryptoLookupFields } from "./providers/crypto-pair.util";
 import { ProviderHealthService } from "../provider-health/provider-health.service";
 import { TrackedProviderId } from "../provider-health/providers";
 
@@ -710,23 +713,40 @@ export class MsnFinanceService implements QuoteProvider {
       "os0IT",
     );
 
+    const reportedCurrency = getField(
+      item,
+      "Currency",
+      "currency",
+      "CurrencyCode",
+      "currencyCode",
+      "IsoCurrency",
+      "isoCurrency",
+      "TradingCurrency",
+      "tradingCurrency",
+      "BaseCurrency",
+      "baseCurrency",
+      "CUR",
+      "cur",
+      "OS0AP",
+    );
+    const securityType = this.mapMsnSecurityType(securityTypeRaw);
+
+    // A coin trades on no exchange and in no country: its currency is the one
+    // MSN reported, else the fiat leg of its symbol, else unknown, never the
+    // country or exchange guess below (issue #379).
+    if (securityType === "CRYPTO") {
+      return {
+        symbol,
+        name,
+        securityType,
+        ...cryptoLookupFields(symbol, reportedCurrency),
+        provider: "msn",
+        msnInstrumentId: extractedSecId || null,
+      };
+    }
+
     const currency =
-      getField(
-        item,
-        "Currency",
-        "currency",
-        "CurrencyCode",
-        "currencyCode",
-        "IsoCurrency",
-        "isoCurrency",
-        "TradingCurrency",
-        "tradingCurrency",
-        "BaseCurrency",
-        "baseCurrency",
-        "CUR",
-        "cur",
-        "OS0AP",
-      ) ||
+      reportedCurrency ||
       // Fund entries often lack an explicit currency field but mark the
       // country with RT0EC / LS01Z / ExMicCode / locale. Infer from there.
       this.currencyFromCountryCode(item);
@@ -735,7 +755,7 @@ export class MsnFinanceService implements QuoteProvider {
       symbol,
       name,
       exchange,
-      securityType: this.mapMsnSecurityType(securityTypeRaw),
+      securityType,
       currencyCode: currency || this.currencyFromExchange(exchange),
       provider: "msn",
       msnInstrumentId: extractedSecId || null,
@@ -1032,8 +1052,7 @@ export class MsnFinanceService implements QuoteProvider {
         item.volume,
     );
     const currency = (item.currency ?? item.Currency ?? undefined) as
-      | string
-      | undefined;
+      string | undefined;
     const time =
       typeof item.timeLastTraded === "string"
         ? Math.floor(Date.parse(item.timeLastTraded) / 1000)
@@ -1059,6 +1078,11 @@ export class MsnFinanceService implements QuoteProvider {
       regularMarketDayLow: convert(low),
       regularMarketVolume: volume,
       regularMarketTime: time,
+      // The instrument's own trading currency where MSN names one, normalized
+      // the way the GBX conversion above already treats it. Reported rather
+      // than discarded so the acceptance point can tell a quote about this
+      // listing from a quote about another listing of the same ticker.
+      currencyCode: normalizeQuoteCurrency(currency),
       provider: "msn",
     };
   }
@@ -1073,13 +1097,13 @@ export class MsnFinanceService implements QuoteProvider {
     symbol: string,
     opts: QuoteProviderOptions | undefined,
   ): Promise<QuoteResult | null> {
-    const prices = await this.fetchHistorical(symbol, null, "5d", {
+    const series = await this.fetchHistoricalSeries(symbol, null, "5d", {
       ...opts,
       instrumentId,
     });
-    if (!prices || prices.length === 0) return null;
+    if (!series || series.prices.length === 0) return null;
 
-    const latest = prices[prices.length - 1];
+    const latest = series.prices[series.prices.length - 1];
     if (latest.close == null || Number.isNaN(latest.close)) return null;
 
     this.logger.log(
@@ -1094,18 +1118,39 @@ export class MsnFinanceService implements QuoteProvider {
       regularMarketDayLow: latest.low ?? undefined,
       regularMarketVolume: latest.volume ?? undefined,
       regularMarketTime: Math.floor(latest.date.getTime() / 1000),
+      currencyCode: series.currencyCode,
       provider: "msn",
     };
   }
 
   // ─── Historical fetch ────────────────────────────────────────────────────
 
+  /**
+   * The bars only, for the internal quote-from-chart path. Every path that
+   * writes into `security_prices` takes {@link fetchHistoricalSeries} instead,
+   * so the currency reaches the acceptance point.
+   */
   async fetchHistorical(
     symbol: string,
     exchange: string | null,
     range: string = "max",
     opts?: QuoteProviderOptions,
   ): Promise<HistoricalPrice[] | null> {
+    const series = await this.fetchHistoricalSeries(
+      symbol,
+      exchange,
+      range,
+      opts,
+    );
+    return series ? series.prices : null;
+  }
+
+  async fetchHistoricalSeries(
+    symbol: string,
+    exchange: string | null,
+    range: string = "max",
+    opts?: QuoteProviderOptions,
+  ): Promise<HistoricalSeries | null> {
     const instrumentId =
       opts?.instrumentId ||
       (await this.resolveInstrumentId(
@@ -1158,7 +1203,18 @@ export class MsnFinanceService implements QuoteProvider {
     }
 
     prices.sort((a, b) => a.date.getTime() - b.date.getTime());
-    return prices.length > 0 ? prices : null;
+    if (prices.length === 0) return null;
+    // The currency the chart answer is in, when MSN names one. It is the same
+    // field the GBX conversion above reads, carried on the bundle rather than
+    // discarded, so the acceptance point can refuse a series that belongs to
+    // another listing of this ticker. MSN frequently omits it, which is
+    // "unverifiable" rather than "matching".
+    return {
+      prices,
+      currencyCode: normalizeQuoteCurrency(currency),
+      symbol: symbol.toUpperCase(),
+      exchange,
+    };
   }
 
   // ─── Sector / ETF data (best effort) ─────────────────────────────────────

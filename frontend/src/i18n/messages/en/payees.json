@@ -8,9 +8,11 @@
     "autoMergePayees": "Auto-Merge Payees",
     "newPayee": "+ New Payee",
     "searchPlaceholder": "Search payees...",
+    "statusFilterLabel": "Status",
     "statusAll": "All ({count})",
     "statusActive": "Active ({count})",
     "statusInactive": "Inactive ({count})",
+    "categoryFilterLabel": "Default Category",
     "categoryFilterAll": "All Payees ({count})",
     "categoryFilterNoCategory": "No Default Category ({count})",
     "categoryFilterUncategorized": "Uncategorized Txns ({count})",
@@ -34,7 +36,8 @@
       "inactive": "Inactive",
       "withoutCategory": "Without Category"
     },
-    "applyDefaultCategories": "Apply Default Categories"
+    "applyDefaultCategories": "Apply Default Categories",
+    "lookupSettings": "Payee Lookup settings"
   },
   "list": {
     "columns": {
@@ -82,13 +85,27 @@
     "categoryLabel": "Default Category",
     "notesLabel": "Notes (optional)",
     "websiteLabel": "Website",
+    "addressLabel": "Address",
+    "emailLabel": "Email",
+    "phoneLabel": "Phone",
     "submitCreate": "Create Payee",
     "submitUpdate": "Update Payee",
     "applyCategoryLabel": "Apply this category to existing transactions",
     "applyCategoryNone": "Don't change existing transactions",
     "applyCategoryUncategorized": "Only transactions without a category ({count})",
     "applyCategoryAll": "All transactions ({count})",
-    "applyCategoryHelp": "Transfers and split transactions are never changed."
+    "applyCategoryHelp": "Transfers and split transactions are never changed.",
+    "lookup": {
+      "button": "Look up details",
+      "searching": "Looking up contact details...",
+      "suggested": "Suggested by lookup:",
+      "replaced": "Replaced by lookup:",
+      "clear": "Undo lookup changes",
+      "nothingFound": "No public contact details were found for this name.",
+      "noProvider": "Set up a lookup source in <link>Payee lookup settings</link> to find contact details.",
+      "failed": "The lookup could not be completed. Try again later.",
+      "quotaExceeded": "This month's Google Places lookups are used up. Raise the limit in <link>Payee lookup settings</link>, or wait until next month."
+    }
   },
   "merge": {
     "title": "Merge Payee",
@@ -112,7 +129,6 @@
   },
   "categoryAutoAssign": {
     "title": "Auto-Assign Default Categories",
-    "howItWorksTitle": "How it works",
     "howItWorksBody": "This feature analyzes your transaction history to suggest default categories for payees. It looks at which category is most commonly used for each payee and suggests assigning it as their default category for future transactions. You can always override the default category if needed.",
     "minTransactionsLabel": "Minimum Transactions: {count}",
     "minTransactionsHelp": "Only consider payees with at least this many transactions",
@@ -133,6 +149,7 @@
       "line2": "Try adjusting the settings above."
     },
     "columns": {
+      "assign": "Assign",
       "payee": "Payee",
       "suggestedCategory": "Suggested Category",
       "match": "Match"
@@ -150,7 +167,6 @@
   },
   "autoMerge": {
     "title": "Auto-Merge Payees",
-    "howItWorksTitle": "How it works",
     "howItWorksBody": "This feature scans your payees and groups variants where one name extends another - for example \"Lidl\", \"LIDL sp. z o.o.\" and \"LIDL WARSZAWA 0421\" all build on \"Lidl\". Each group is merged into a single canonical payee, and a wildcard alias (such as \"*LIDL*\") is created so future imports are matched automatically. Payees that merely share a common word (like \"Royal Electric\" and \"Royal City Nursery\") are kept separate. Review and adjust each group before applying.",
     "backupRecommendation": "Recommended: create a <link>backup</link> before making changes.",
     "minGroupSizeLabel": "Minimum Group Size: {count}",
@@ -210,7 +226,6 @@
   },
   "deactivateUnused": {
     "title": "Deactivate Unused Payees",
-    "howItWorksTitle": "How it works",
     "howItWorksBody": "This feature finds payees that are rarely used and deactivates them. Deactivated payees will not appear in payee dropdowns when creating transactions, but their historical transactions are preserved. You can reactivate a payee at any time from the payees list.",
     "maxTransactionsLabel": "{count, plural, one {# or fewer transaction} other {# or fewer transactions}}",
     "maxTransactionsHelp": "Only include payees with this many transactions or fewer",
@@ -228,6 +243,7 @@
       "line2": "Try adjusting the settings above."
     },
     "columns": {
+      "deactivate": "Deactivate",
       "payee": "Payee",
       "transactions": "Transactions",
       "lastUsed": "Last Used"
@@ -243,7 +259,7 @@
     }
   },
   "reactivate": {
-    "title": "Reactivate Payee?",
+    "title": "Reactivate Payee",
     "message": "The payee \"{name}\" was previously deactivated. Would you like to reactivate it so it appears in payee dropdowns again?",
     "keepInactiveButton": "No, Keep Inactive",
     "reactivateButton": "Reactivate",
@@ -252,7 +268,7 @@
   "aliases": {
     "heading": "Aliases",
     "description": "Aliases map imported payee names to this payee. Use * as wildcard (e.g., \"STARBUCKS*\"). Case-insensitive.",
-    "loading": "Loading...",
+    "loading": "Loading aliases...",
     "noAliases": "No aliases configured",
     "removeTitle": "Remove alias",
     "removeButton": "Remove",
@@ -270,7 +286,10 @@
   },
   "selectCategoryPlaceholder": "Select category...",
   "validation": {
-    "nameRequired": "Payee name is required"
+    "nameRequired": "Payee name is required",
+    "emailInvalid": "Enter a valid email address",
+    "phoneInvalid": "Enter a valid phone number",
+    "phoneNeedsCountryCode": "Add the country code, for example +1 206 448 8762"
   },
   "defaultCategoryBackfill": {
     "allConfirmTitle": "Apply default categories?",

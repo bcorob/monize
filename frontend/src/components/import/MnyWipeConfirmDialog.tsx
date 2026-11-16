@@ -45,7 +45,14 @@ export function MnyWipeConfirmDialog({
     confirmText === WIPE_CONFIRM_WORD && (isOidc || password.length > 0);
 
   return (
-    <Modal isOpen={isOpen} onClose={onCancel} maxWidth="md" pushHistory>
+    <Modal
+      isOpen={isOpen}
+      onClose={onCancel}
+      maxWidth="md"
+      pushHistory
+      title={t('mnyWipe.heading')}
+      className="p-6"
+    >
       <form
         onSubmit={(e) => {
           e.preventDefault();
@@ -53,12 +60,10 @@ export function MnyWipeConfirmDialog({
             onConfirm(password);
           }
         }}
-        className="p-6"
       >
-        <h2 className="text-lg font-semibold text-red-600 dark:text-red-400">
-          {t('mnyWipe.heading')}
-        </h2>
-        <p className="mt-1 text-sm text-muted-foreground">
+        {/* A one-time warning about an irreversible delete, not help text, so
+            it stays a paragraph rather than an InfoTooltip. */}
+        <p className="text-sm text-muted-foreground">
           {t('mnyWipe.body')}
         </p>
 

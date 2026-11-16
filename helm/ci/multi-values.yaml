@@ -1,0 +1,48 @@
+# The CLUSTER_MODE=multi render the `Helm Chart Lint & Render` job checks.
+#
+# Not a recommended configuration to copy: it is the combination that exercises
+# every template the mode turns on -- Deployments at more than one replica, both
+# PodDisruptionBudgets, the spread constraints, the backend HPA, CLUSTER_MODE in
+# the configmap and both storage assertions. A real deployment picks among
+# these; this file is here so none of them can silently stop rendering.
+cluster:
+  mode: multi
+  # Asserted here because the backend refuses to boot in multi without them.
+  # The claims below are ReadWriteMany to match, which is what makes the
+  # assertion true rather than merely stated.
+  attachmentSharedVolume: true
+  backupSharedVolume: true
+
+backend:
+  replicas: 2
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1
+  topologySpreadConstraints:
+    # `app: monize-backend` is the label the pod template carries and the
+    # Deployment selects on. A selector naming anything else renders and
+    # schedules cleanly while constraining nothing, so the chart refuses one.
+    - maxSkew: 1
+      topologyKey: kubernetes.io/hostname
+      whenUnsatisfiable: ScheduleAnyway
+      labelSelector:
+        matchLabels:
+          app: monize-backend
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 75
+  persistence:
+    backups:
+      enabled: true
+      accessMode: ReadWriteMany
+    attachments:
+      enabled: true
+      accessMode: ReadWriteMany
+
+frontend:
+  replicas: 2
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 1

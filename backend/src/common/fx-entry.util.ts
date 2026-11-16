@@ -1,5 +1,5 @@
 import { BadRequestException } from "@nestjs/common";
-import { roundMoney, roundToDecimals } from "./round.util";
+import { FIAT_MONEY_DECIMALS, roundMoney, roundToDecimals } from "./round.util";
 import { tr } from "../i18n/translate";
 
 /**
@@ -61,8 +61,9 @@ export function normalizeFxEntry(
   if (hasAmount !== hasCode) {
     throw new BadRequestException(
       tr(
-        "errors.transactions.fxFieldsIncomplete",
-        "originalAmount and originalCurrencyCode must be provided together",
+        "errors.params.requiresOther",
+        'A value for "originalAmount" requires one for "originalCurrencyCode" as well',
+        { param: "originalAmount", other: "originalCurrencyCode" },
       ),
     );
   }
@@ -90,8 +91,9 @@ export function normalizeFxEntry(
   if (original > 0 !== amount > 0 && original !== 0 && amount !== 0) {
     throw new BadRequestException(
       tr(
-        "errors.transactions.fxSignMismatch",
-        "originalAmount and amount must have the same sign",
+        "errors.params.sameSign",
+        'The values of "originalAmount" and "amount" must have the same sign',
+        { param: "originalAmount", other: "amount" },
       ),
     );
   }
@@ -108,6 +110,19 @@ export interface FxConversion {
   amount: number;
 }
 
+/** Options for `applyFxConversion`. */
+export interface FxConversionOptions {
+  /**
+   * The money precision of the currency converted INTO (the account's):
+   * `moneyDecimalsFor(currency.decimalPlaces)`. Defaults to
+   * `FIAT_MONEY_DECIMALS`, so a fiat conversion rounds exactly as before;
+   * converting into a coin passes the coin's eight places, so 1,700 CAD at
+   * 0.0000073529 is 0.01249993 BTC rather than 0.0125
+   * (`docs/specs/money-precision.md` decision 5).
+   */
+  toDecimals?: number;
+}
+
 /**
  * Convert a foreign amount into the account currency at `rate`, folding in the
  * account's foreign-transaction fee the same way the transaction form does:
@@ -115,6 +130,9 @@ export interface FxConversion {
  *   base   = round(originalAmount x rate)
  *   fee    = -round(|base| x feePercent / 100)
  *   amount = base + fee
+ *
+ * All three are in the account currency, so all three round at
+ * `options.toDecimals`; the source amount is used as given, never rounded.
  *
  * No split is created for the fee -- it is part of what the account is charged,
  * and the Foreign Currency Fees report derives it back out of
@@ -125,13 +143,15 @@ export function applyFxConversion(
   originalAmount: number,
   rate: number,
   fxFeePercent?: number | null,
+  options: FxConversionOptions = {},
 ): FxConversion {
-  const base = roundMoney(originalAmount * rate);
+  const decimals = options.toDecimals ?? FIAT_MONEY_DECIMALS;
+  const base = roundMoney(originalAmount * rate, decimals);
   const fee =
     fxFeePercent && fxFeePercent > 0
-      ? -roundMoney((Math.abs(base) * fxFeePercent) / 100)
+      ? -roundMoney((Math.abs(base) * fxFeePercent) / 100, decimals)
       : 0;
-  return { base, fee, amount: roundMoney(base + fee) };
+  return { base, fee, amount: roundMoney(base + fee, decimals) };
 }
 
 /**
@@ -157,11 +177,13 @@ export function applyFxConversion(
  * FX_RATE_DECIMALS, or `null` when no usable rate exists anywhere. Zero and
  * negative rates are absent, not applicable.
  *
- * `ExchangeRateService.getRateForDate` already falls back to the latest stored
- * rate internally (its documented step 3), so callers must not chase a `null`
+ * `ExchangeRateService.getRateForDate` already consults both stored directions
+ * and, failing those, a provider window, so callers must not chase a `null`
  * from this helper with their own `getLatestRate` -- four hand-rolled copies of
- * this sequence existed and three carried exactly that dead trailing call.
- * Copies are how resolvers drift; this is the only one.
+ * this sequence existed and three carried exactly that dead trailing call, and
+ * an unbounded latest-rate chase is what the age policy exists to stop
+ * (`docs/time-series-contract.md` section 2.2). Copies are how resolvers
+ * drift; this is the only one.
  */
 export async function resolveFxRateOrNull(
   rates: {

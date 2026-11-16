@@ -34,19 +34,22 @@
   },
   "page": {
     "title": "[XX-Import Transactions-XX]",
-    "subtitle": "[XX-Import transactions from QIF, OFX/QFX, or CSV files, or bring across a whole Microsoft Money (.mny) file-XX]"
+    "subtitle": "[XX-Import transactions from QIF/QMTF, OFX/QFX, or CSV files, or bring across a whole Microsoft Money (.mny) file-XX]"
   },
   "upload": {
     "heading": "[XX-Upload Transaction Files-XX]",
-    "instructions": "[XX-Select one or more files to import. Supported formats: QIF, OFX/QFX, CSV, and Microsoft Money (.mny).\nYou can select multiple files of the same type for bulk import. Import Microsoft Money files one at a time — a .mny file holds a whole profile.-XX]",
+    "instructions": "[XX-Select one or more files to import. Supported formats: QIF/QMTF, OFX/QFX, CSV, and Microsoft Money (.mny).\nYou can select multiple files of the same type for bulk import. Import Microsoft Money files one at a time — a .mny file holds a whole profile.-XX]",
     "importingTo": "[XX-Importing to:-XX]",
     "clickToSelect": "[XX-Click to select file(s)-XX]",
+    "orDragAndDrop": "[XX-or drag and drop them here-XX]",
+    "dropToImport": "[XX-Drop to import-XX]",
+    "unsupportedDrop": "[XX-These files cannot be imported: {names}. Use QIF/QMTF, OFX, QFX, CSV, or Microsoft Money (.mny) files.-XX]",
     "processing": "[XX-Processing...-XX]",
-    "acceptedFormats": "[XX-QIF, OFX, QFX, CSV, or Microsoft Money (.mny)-XX]",
+    "acceptedFormats": "[XX-QIF/QMTF, OFX, QFX, CSV, or Microsoft Money (.mny)-XX]",
     "mnyFailedHeading": "[XX-That Microsoft Money file could not be opened-XX]",
-    "wikiNotice": {
+    "docsNotice": {
       "title": "[XX-Before you import-XX]",
-      "body": "[XX-Read the <money>Importing from Microsoft Money</money> or <quicken>Importing from Quicken</quicken> section of the wiki before importing anything.-XX]"
+      "body": "[XX-Read the <money>Importing from Microsoft Money</money> or <quicken>Importing from Quicken</quicken> section of the documentation before importing anything. OFX/QFX and QIF files each have their own quirks — see <ofx>Importing OFX/QFX Files</ofx> and <qif>Importing Quicken QIF Files</qif>.-XX]"
     }
   },
   "selectAccount": {
@@ -78,23 +81,25 @@
     "heading": "[XX-CSV Column Mapping-XX]",
     "description": "[XX-Map your CSV columns to transaction fields. Preview the data below and configure the mapping.-XX]",
     "firstRowIsHeader": "[XX-First row is header-XX]",
-    "delimiterLabel": "[XX-Delimiter:-XX]",
-    "dateFormatLabel": "[XX-Date format:-XX]",
+    "delimiterLabel": "[XX-Delimiter-XX]",
+    "dateFormatLabel": "[XX-Date Format-XX]",
     "customOption": "[XX-Custom...-XX]",
     "customPlaceholder": "[XX-e.g. DD.MM.YYYY-XX]",
     "dataPreview": "[XX-Data Preview-XX]",
     "columnMappingTitle": "[XX-Column Mapping-XX]",
-    "dateField": "[XX-Date *-XX]",
+    "columnMappingHelp": "[XX-Map each CSV column to a transaction field. Date, Amount type and either Amount or Debit/Credit are required; the rest are optional.-XX]",
+    "dateField": "[XX-Date-XX]",
     "amountTypeField": "[XX-Amount type-XX]",
     "singleAmountOption": "[XX-Single amount column-XX]",
     "splitAmountOption": "[XX-Separate debit/credit-XX]",
-    "amountField": "[XX-Amount *-XX]",
+    "amountField": "[XX-Amount-XX]",
     "signField": "[XX-Sign-XX]",
+    "signFieldHelp": "[XX-How the amount's sign is read: As-is treats a positive number as a deposit, Reverse treats it as a withdrawal (use this for credit card statements where charges are positive), and a transaction type column decides direction from its own values instead of the sign.-XX]",
     "signNormal": "[XX-As-is (positive = deposit)-XX]",
     "signReverse": "[XX-Reverse (positive = withdrawal)-XX]",
     "signTypeColumn": "[XX-Use transaction type column-XX]",
-    "debitField": "[XX-Debit *-XX]",
-    "creditField": "[XX-Credit *-XX]",
+    "debitField": "[XX-Debit-XX]",
+    "creditField": "[XX-Credit-XX]",
     "typeColumnTitle": "[XX-Transaction type column-XX]",
     "typeColumnDescription": "[XX-Select the column that indicates income, expense, or transfer per row.-XX]",
     "valuesFound": "[XX-Values found: {values}-XX]",
@@ -137,8 +142,8 @@
     "kindBanking": "[XX-Banking transactions-XX]",
     "kindInvestment": "[XX-Investment transactions-XX]",
     "investmentModeHint": "[XX-Rows are classified by the action column. Unmatched action values are imported as cash deposits or withdrawals on the linked cash account.-XX]",
-    "actionField": "[XX-Action *-XX]",
-    "securityField": "[XX-Security (symbol or name) *-XX]",
+    "actionField": "[XX-Action-XX]",
+    "securityField": "[XX-Security (Symbol or Name)-XX]",
     "quantityField": "[XX-Quantity-XX]",
     "priceField": "[XX-Price-XX]",
     "commissionField": "[XX-Commission-XX]",
@@ -278,6 +283,15 @@
       "missingSplitRatio": "[XX-Split without ratio-XX]"
     },
     "rejectedGoBack": "[XX-Go back to the column mapping step to adjust columns or action keywords.-XX]",
+    "unreadableDatesNotice": "[XX-{count, plural, one {# row has a date} other {# rows have dates}} that cannot be read as {format} and will not be imported:-XX]",
+    "unreadableDateRow": "[XX-Row {line}: \"{rawDate}\"-XX]",
+    "missingDateRow": "[XX-Row {line}: no date-XX]",
+    "unreadableDatesMore": "[XX-...and {count} more-XX]",
+    "unreadableDatesGoBack": "[XX-If the file writes its dates in another order, go back to the column mapping step and choose the date format it uses.-XX]",
+    "unreadableAmountsNotice": "[XX-{count, plural, one {# row has an amount} other {# rows have amounts}} that cannot be read and will not be imported:-XX]",
+    "unreadableAmountRow": "[XX-Row {line}: \"{rawAmount}\"-XX]",
+    "unreadableAmountsMore": "[XX-...and {count} more-XX]",
+    "unreadableAmountsGoBack": "[XX-Check that the amount columns are mapped correctly, or correct these rows in the file and import it again.-XX]",
     "importButton": "[XX-Import Transactions-XX]"
   },
   "complete": {
@@ -287,7 +301,7 @@
     "totalImported": "[XX-Total imported:-XX]",
     "totalImportedSuffix": "[XX-transactions-XX]",
     "totalSkipped": "[XX-Total skipped:-XX]",
-    "totalSkippedSuffix": "[XX-duplicate transfers-XX]",
+    "totalSkippedSuffix": "[XX-transactions-XX]",
     "totalErrors": "[XX-Total errors:-XX]",
     "categoriesCreated": "[XX-Categories created:-XX]",
     "accountsCreated": "[XX-Accounts created:-XX]",
@@ -299,17 +313,36 @@
     "imported": "[XX-Imported:-XX]",
     "importedSuffix": "[XX-transactions-XX]",
     "skipped": "[XX-Skipped:-XX]",
-    "skippedSuffix": "[XX-duplicate transfers-XX]",
+    "skippedSuffix": "[XX-transactions-XX]",
     "errors": "[XX-Errors:-XX]",
     "errorsLabel": "[XX-Errors:-XX]",
     "andMoreErrors": "[XX-...and {count} more errors-XX]",
+    "skippedRowsHeading": "[XX-Skipped rows:-XX]",
+    "skippedRow": "[XX-{date}: {amount}, {payee} ({reason})-XX]",
+    "skippedRowNoPayee": "[XX-{date}: {amount} ({reason})-XX]",
+    "skipReasonAlreadyImported": "[XX-already imported-XX]",
+    "skipReasonDuplicateTransfer": "[XX-transfer already recorded-XX]",
+    "skipReasonUnreadableDate": "[XX-date could not be read-XX]",
+    "skipReasonNoDate": "[XX-no date-XX]",
+    "skipReasonUnreadableAmount": "[XX-amount could not be read-XX]",
+    "skippedRowRawAmount": "[XX-\"{rawAmount}\"-XX]",
+    "skipReasonMissingSecurity": "[XX-missing security-XX]",
+    "skipReasonMissingQuantity": "[XX-missing quantity-XX]",
+    "skipReasonMissingAmount": "[XX-missing amount-XX]",
+    "skipReasonMissingProceeds": "[XX-sell without price or proceeds-XX]",
+    "skipReasonMissingSplitRatio": "[XX-split without ratio-XX]",
+    "skippedRowLineDate": "[XX-Row {line}, \"{rawDate}\"-XX]",
+    "skippedRowLine": "[XX-Row {line}-XX]",
+    "skippedRowLineAt": "[XX-Row {line}, {date}-XX]",
+    "andMoreSkipped": "[XX-...and {count} more skipped rows-XX]",
     "loanSetupHeading": "[XX-Set Up Recurring Payments-XX]",
     "loanSetupDescription": "[XX-The following loan/mortgage accounts were imported without scheduled payments. Set up recurring payments to continue tracking your loan progress.-XX]",
     "setUpPayments": "[XX-Set Up Payments-XX]",
     "scheduledPaymentsConfigured": "[XX-Scheduled payments configured for {count} account{plural}.-XX]",
     "viewInvestments": "[XX-View Investments-XX]",
     "viewTransactions": "[XX-View Transactions-XX]",
-    "importMoreFiles": "[XX-Import More Files-XX]"
+    "importMoreFiles": "[XX-Import More Files-XX]",
+    "bondRowsWithoutSeries": "[XX-{count, plural, one {# bond purchase was imported without a series. Choose its series in the security's bond lots.} other {# bond purchases were imported without a series. Choose their series in the security's bond lots.}}-XX]"
   },
   "multiAccountReview": {
     "heading": "[XX-Multi-Account QIF Import-XX]",
@@ -327,7 +360,10 @@
     "securitiesNotice": "[XX-This file contains {count} securit{plural} that need to be mapped before import.-XX]",
     "nextMapSecurities": "[XX-Next: Map Securities-XX]",
     "importAll": "[XX-Import All-XX]",
-    "transactionCount": "[XX-{count} transaction{plural}-XX]"
+    "transactionCount": "[XX-{count} transaction{plural}-XX]",
+    "chooseAccountType": "[XX-Choose a type-XX]",
+    "accountTypeFor": "[XX-Account type for {name}-XX]",
+    "accountTypesNeeded": "[XX-The file does not say what type {count, plural, one {# account is} other {# accounts are}}. Choose a type for each before importing.-XX]"
   },
   "navigation": {
     "back": "[XX-Back-XX]",
@@ -344,6 +380,7 @@
     "heading": "[XX-Review your Microsoft Money file-XX]",
     "fileSummary": "[XX-{filename} -- {era}, base currency {currency}. Balances below are computed from the file itself, so you can check them against Money before importing.-XX]",
     "era": {
+      "money99": "[XX-Money 97-99 format-XX]",
       "money2001": "[XX-Money 2001 format-XX]",
       "money2002": "[XX-Money 2002 format-XX]",
       "moneyPlus": "[XX-Money Plus / Sunset format-XX]",
@@ -355,6 +392,7 @@
       "transfersLinked": "[XX-{count} transfers linked-XX]",
       "payees": "[XX-Payees-XX]",
       "categories": "[XX-Categories-XX]",
+      "tags": "[XX-Tags from classifications-XX]",
       "accounts": "[XX-Accounts-XX]",
       "securities": "[XX-Securities-XX]",
       "investments": "[XX-Investment transactions-XX]",
@@ -395,7 +433,7 @@
       "importPrices": "[XX-Import price history-XX]",
       "importPricesHint": "[XX-Money's own record of what each security was worth, day by day. Turn this off if you would rather start from live quotes.-XX]",
       "importExchangeRates": "[XX-Import exchange rates-XX]",
-      "importExchangeRatesHint": "[XX-Historical rates between the currencies in your file, so past foreign-currency transactions convert the way Money converted them.-XX]",
+      "importExchangeRatesHint": "[XX-Historical rates between the currencies in your file, used only for dates Monize has no rate for. Rates already stored are never replaced.-XX]",
       "wipeExistingData": "[XX-Start fresh: remove my existing Monize data first-XX]",
       "wipeExistingDataHint": "[XX-Runs the same Delete My Data operation as Settings before importing. You will be asked to confirm. Leave this off to add the Money file to what you already have.-XX]"
     },
@@ -424,7 +462,7 @@
     }
   },
   "mnyWipe": {
-    "heading": "[XX-Remove your existing data first?-XX]",
+    "heading": "[XX-Remove Existing Data-XX]",
     "body": "[XX-This runs the same Delete My Data operation as Settings -> Danger Zone, before the import begins. It removes:-XX]",
     "removes": {
       "transactions": "[XX-Every transaction and split-XX]",
@@ -434,8 +472,8 @@
       "budgets": "[XX-Every budget, custom report, tag and import mapping-XX]"
     },
     "irreversible": "[XX-This cannot be undone. If the import then fails, the removed data does not come back.-XX]",
-    "typeToConfirm": "[XX-Type {word} to confirm:-XX]",
-    "passwordLabel": "[XX-Enter your password:-XX]",
+    "typeToConfirm": "[XX-Type {word} to Confirm-XX]",
+    "passwordLabel": "[XX-Password-XX]",
     "oidcNote": "[XX-Your identity provider already confirmed this session, so no password is needed.-XX]",
     "confirm": "[XX-Delete my data and import-XX]"
   },
@@ -454,6 +492,7 @@
       "verifying": "[XX-Verifying-XX]"
     },
     "failedHeading": "[XX-The import did not finish-XX]",
+    "learnMore": "[XX-Learn more-XX]",
     "retry": "[XX-Try again-XX]",
     "startOver": "[XX-Start over-XX]"
   },
@@ -469,6 +508,7 @@
       "splits": "[XX-Split legs-XX]",
       "payees": "[XX-Payees-XX]",
       "categories": "[XX-Categories-XX]",
+      "taggedRows": "[XX-Rows tagged from classifications-XX]",
       "securities": "[XX-Securities-XX]",
       "investments": "[XX-Investment transactions-XX]",
       "prices": "[XX-Prices-XX]",
@@ -492,7 +532,8 @@
     },
     "warningsHeading": "[XX-Notes about this import-XX]",
     "downloadReport": "[XX-Download report-XX]",
-    "done": "[XX-Done-XX]"
+    "done": "[XX-Done-XX]",
+    "bondRowsWithoutSeries": "[XX-{count, plural, one {# bond purchase was imported without a series. Choose its series in the security's bond lots.} other {# bond purchases were imported without a series. Choose their series in the security's bond lots.}}-XX]"
   },
   "mnyWarnings": {
     "missingTable": "[XX-This Money version has no {count, plural, one {# table} other {# tables}} the import uses.-XX]",
@@ -503,6 +544,7 @@
     "categoryFlattened": "[XX-{count, plural, one {# category} other {# categories}} were deeper than two levels and were flattened into their parent.-XX]",
     "categoryTypeInferred": "[XX-Money's income flag was missing for {count, plural, one {# category} other {# categories}}; income or expense came from the category tree.-XX]",
     "degeneratePayeeSkipped": "[XX-{count, plural, one {# placeholder payee} other {# placeholder payees}} Money keeps internally were skipped.-XX]",
+    "unknownClassificationItem": "[XX-{count, plural, one {# transaction named a classification item} other {# transactions named classification items}} the file does not define, and were imported without that tag.-XX]",
     "unusableTransaction": "[XX-{count, plural, one {# transaction} other {# transactions}} had no account or no usable date and were skipped.-XX]",
     "orphanedTransferSide": "[XX-{count, plural, one {# transfer} other {# transfers}} were missing their other side in the file and were skipped.-XX]",
     "orphanedSplit": "[XX-{count, plural, one {# split leg} other {# split legs}} had no parent transaction and were skipped.-XX]",
@@ -512,6 +554,7 @@
     "duplicateSecuritySymbol": "[XX-{count, plural, one {# security shares} other {# securities share}} a symbol with another; the later ones were renamed so they stay separate.-XX]",
     "generatedSecuritySymbol": "[XX-{count, plural, one {# security has} other {# securities have}} no symbol in Money, so a placeholder was generated and price updates left off.-XX]",
     "unknownInvestmentAction": "[XX-{count, plural, one {# investment transaction} other {# investment transactions}} used an action Monize does not recognize and were skipped.-XX]",
+    "stockOptionNotImported": "[XX-{count, plural, one {# employee stock option event} other {# employee stock option events}} (grants, vesting and expiry) moved no cash or shares and were not imported.-XX]",
     "unconfirmedInvestmentAction": "[XX-{count, plural, one {# investment transaction} other {# investment transactions}} used a Money action whose meaning is inferred rather than documented; check them against Money.-XX]",
     "missingInvestmentDetail": "[XX-{count, plural, one {# investment transaction} other {# investment transactions}} had no share detail in the file and were imported for their cash amount only.-XX]",
     "investmentAccountMismatch": "[XX-{count, plural, one {# investment transaction} other {# investment transactions}} sat in an account that is not an investment account and were skipped.-XX]",
@@ -521,6 +564,9 @@
     "unusableBill": "[XX-{count, plural, one {# scheduled bill} other {# scheduled bills}} had no account, no usable date or an unrecognized recurrence, and were skipped.-XX]",
     "billFrequencyApproximated": "[XX-{count, plural, one {# scheduled bill uses} other {# scheduled bills use}} a repeat interval Monize cannot express exactly, so the closest shorter one was used.-XX]",
     "loanInterestCategoryUnclear": "[XX-{count, plural, one {# loan payment} other {# loan payments}} included multiple non-principal categories, so the loan's interest category was left unset. Check whether the payment includes escrow and set the interest category after import.-XX]",
+    "transferAmountMismatch": "[XX-{count, plural, one {# transfer into an investment account recorded} other {# transfers into an investment account recorded}} a different amount on the investment side than on the bank side. The investment side was imported as recorded.-XX]",
+    "crossCurrencyTradeUnconverted": "[XX-{count, plural, one {# trade of a security quoted in another currency was} other {# trades of a security quoted in another currency were}} stored in the account's currency, because neither the file nor the exchange-rate provider had a rate for that currency pair near the trade date. Add the exchange rate, then correct the price of each trade.-XX]",
+    "crossCurrencyTradeMarketRate": "[XX-{count, plural, one {# trade of a security quoted in another currency was} other {# trades of a security quoted in another currency were}} converted at the market exchange rate for the trade date, because the file has no rate near that date. Check the price of each trade against your records.-XX]",
     "showTransactions": "[XX-Show {count, plural, one {the # transaction} other {the # transactions}}-XX]",
     "hideTransactions": "[XX-Hide transactions-XX]",
     "reviewInMoney": "[XX-Open these in Microsoft Money to check or correct them, then export and import again.-XX]",
@@ -539,12 +585,89 @@
     "mnyImportFailed": "[XX-Something went wrong while importing. Nothing was saved -- you can try again.-XX]",
     "mnyJobStalled": "[XX-The import stopped responding, most likely because the server restarted. Your uploaded file is still here, so trying again is safe.-XX]",
     "mnyJobStalledAfterCommit": "[XX-The import stopped responding after it had already saved your data, most likely because the server restarted. The imported records are in your account, so importing the same file again would duplicate them. Check your accounts before importing anything else.-XX]",
+    "mnyImportFailedAfterCommit": "[XX-The import saved your data, but a step after that failed. The imported records are in your account, so importing the same file again would duplicate them. Check your accounts before importing anything else.-XX]",
+    "mnyAlreadyImported": "[XX-This file was already imported into your account, so importing it again would duplicate its records. To replace them, start over and choose to replace your existing data.-XX]",
     "mnyStagedFileMissing": "[XX-The uploaded Money file is no longer available. Please upload it again.-XX]",
     "mnyFileTruncated": "[XX-That Money file looks incomplete. The upload may have been interrupted.-XX]",
     "mnyNotAMoneyFile": "[XX-That file is not a Microsoft Money (.mny) file.-XX]",
-    "mnyUnsupportedVersion": "[XX-That file was written by Money 97 or 98. Open and save it once in the free Money Plus Sunset edition, then import the result.-XX]",
+    "mnyUnsupportedVersion": "[XX-That file was written by a version of Microsoft Money that Monize cannot read. Open and save it once in the free Money Plus Sunset edition, then import the result.-XX]",
     "mnyPasswordRequired": "[XX-That Money file is password protected.-XX]",
     "mnyPasswordIncorrect": "[XX-That password does not open the Money file.-XX]",
     "mnyUnreadableDatabase": "[XX-That Money file was decrypted but its contents could not be read. It may be damaged.-XX]"
+  },
+  "preview": {
+    "choice": {
+      "legend": "[XX-What to do with {payee} if it is not imported-XX]",
+      "skip": "[XX-Skip now-XX]",
+      "except": "[XX-Add to exceptions-XX]"
+    },
+    "payeeTip": {
+      "name": "[XX-From the bank: {original}. Maps to: {name}-XX]",
+      "alias": "[XX-From the bank: {original}. Maps to: {name} (alias \"{pattern}\")-XX]",
+      "aliasNoPattern": "[XX-From the bank: {original}. Maps to: {name} (alias)-XX]",
+      "new": "[XX-From the bank: {original}. Maps to: {name} (new payee)-XX]",
+      "rule": "[XX-From the bank: {original}. Maps to: {name} (set by a rule)-XX]",
+      "ruleNone": "[XX-From the bank: {original}. Maps to: no payee (set by a rule)-XX]"
+    },
+    "expand": {
+      "show": "[XX-Show details of {payee}-XX]",
+      "hide": "[XX-Hide details of {payee}-XX]"
+    },
+    "rules": {
+      "heading": "[XX-Import rules-XX]",
+      "none": "[XX-No import rule matched this transaction.-XX]",
+      "skipped": "[XX-{action}: skipped ({reason})-XX]",
+      "stopped": "[XX-Stops the rules after it.-XX]",
+      "applied": "[XX-Applied: {actions}-XX]",
+      "openNewTab": "[XX-Open the rule {name} in a new tab-XX]"
+    },
+    "ruleTest": {
+      "loading": "[XX-Loading the rule test result-XX]",
+      "error": "[XX-The rule test result could not be loaded.-XX]",
+      "retry": "[XX-Try again-XX]",
+      "noRules": "[XX-You have no import rules, so there was nothing to test.-XX]",
+      "showNotMatched": "[XX-Show rules that did not match ({count})-XX]",
+      "hideNotMatched": "[XX-Hide rules that did not match ({count})-XX]",
+      "noChanges": "[XX-It matched, but it changes nothing in this transaction.-XX]",
+      "badge": {
+        "matched": "[XX-Matched-XX]",
+        "notMatched": "[XX-Not matched-XX]",
+        "notEvaluated": "[XX-Not evaluated-XX]"
+      },
+      "notEvaluated": {
+        "afterStop": "[XX-Not evaluated: a previous rule stopped the rules.-XX]",
+        "disabled": "[XX-Not evaluated: the rule is switched off.-XX]",
+        "invalid": "[XX-Not evaluated: the rule is not valid. Open it to repair it.-XX]",
+        "outside_active_window": "[XX-Not evaluated: the row's date is outside the rule's active dates.-XX]"
+      },
+      "condition": {
+        "met": "[XX-Condition met-XX]",
+        "notMet": "[XX-Condition not met-XX]",
+        "actual": "[XX-Value in this transaction: {value}-XX]",
+        "noValue": "[XX-none-XX]",
+        "noTags": "[XX-no tags-XX]",
+        "capture": "[XX-{name} = {value}-XX]",
+        "omitted": "[XX-The details of this part of the condition are not shown.-XX]"
+      },
+      "skipReasons": {
+        "already_set": "[XX-it already has a value and the rule only fills in an empty one-XX]",
+        "no_change": "[XX-it already has what the rule would set-XX]",
+        "payee_unresolved": "[XX-the payee the rule builds could not be looked up-XX]"
+      }
+    },
+    "payee": {
+      "heading": "[XX-Payee-XX]",
+      "unknown": "[XX-No payee information for this transaction.-XX]",
+      "original": "[XX-The bank's text: {original}-XX]",
+      "name": "[XX-Matches your existing payee {name}.-XX]",
+      "alias": "[XX-Maps to {name} through the alias \"{pattern}\".-XX]",
+      "aliasNoPattern": "[XX-Maps to {name} through an alias.-XX]",
+      "new": "[XX-No payee has this name yet, so {name} would be created.-XX]",
+      "rule": "[XX-An import rule sets the payee: {name}.-XX]",
+      "ruleNone": "[XX-An import rule clears the payee.-XX]",
+      "none": "[XX-The bank gave no counterparty, so the transaction has no payee.-XX]",
+      "openAliases": "[XX-Open the payee's aliases-XX]",
+      "openAliasesNewTab": "[XX-Open the payee's aliases in a new tab-XX]"
+    }
   }
 }

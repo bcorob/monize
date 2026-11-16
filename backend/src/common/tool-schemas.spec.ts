@@ -1,3 +1,4 @@
+import { z } from "zod";
 import {
   DEFAULT_LOOKBACK_DAYS,
   DEFAULT_TOP_N,
@@ -5,6 +6,8 @@ import {
   getDefaultDateRange,
   getDefaultPreviousMonth,
   resolveComparePeriods,
+  numberArg,
+  booleanArg,
 } from "./tool-schemas";
 
 describe("tool-schemas defaults", () => {
@@ -138,5 +141,60 @@ describe("tool-schemas defaults", () => {
       const defaults = getDefaultComparePeriods();
       expect(resolveComparePeriods({})).toEqual(defaults);
     });
+  });
+});
+
+describe("numberArg and booleanArg (what a model actually sends)", () => {
+  // An LLM writes JSON by hand, so a numeric argument arrives as "10" often
+  // enough that refusing it is a defect. list_payees answered
+  // -32602 "expected number, received string" to a limit of "10".
+
+  it("accepts a number written as a string, and the number itself", () => {
+    expect(numberArg().parse("10")).toBe(10);
+    expect(numberArg().parse(10)).toBe(10);
+    expect(numberArg().parse("-2.5")).toBe(-2.5);
+  });
+
+  it("still refuses what is not a number", () => {
+    for (const junk of ["abc", "", "   ", null, undefined, [], {}]) {
+      expect(numberArg().safeParse(junk).success).toBe(false);
+    }
+  });
+
+  it("keeps the bounds the field declares", () => {
+    const limit = numberArg(z.number().int().min(1).max(500));
+    expect(limit.parse("500")).toBe(500);
+    expect(limit.safeParse("501").success).toBe(false);
+    expect(limit.safeParse("0").success).toBe(false);
+  });
+
+  it("reads 'false' as false, which coerce.boolean gets backwards", () => {
+    // Boolean("false") is true, so z.coerce.boolean() would turn
+    // `hasEmail: "false"` -- the way to ask which payees are MISSING an email
+    // -- into a filter for the ones that have one.
+    expect(booleanArg().parse("false")).toBe(false);
+    expect(booleanArg().parse("true")).toBe(true);
+    expect(booleanArg().parse(false)).toBe(false);
+    expect(booleanArg().parse(true)).toBe(true);
+  });
+
+  it("refuses a string that only looks boolean", () => {
+    for (const junk of ["yes", "no", "1", 1, 0, null]) {
+      expect(booleanArg().safeParse(junk).success).toBe(false);
+    }
+  });
+
+  it("costs nothing in the tool list: the JSON Schema is unchanged", () => {
+    // The whole point of coercing rather than accepting a union: a union would
+    // emit an anyOf into every tools/list response.
+    const coerced = z.toJSONSchema(
+      z.object({ limit: numberArg(z.number().int()), flag: booleanArg() }),
+      { io: "input" },
+    );
+    const plain = z.toJSONSchema(
+      z.object({ limit: z.number().int(), flag: z.boolean() }),
+      { io: "input" },
+    );
+    expect(coerced).toEqual(plain);
   });
 });

@@ -8,6 +8,8 @@ import { ImportResult } from '@/lib/import';
 import { Account } from '@/types/account';
 import { ImportFileData, BulkImportResult } from '@/app/import/import-utils';
 import { LoanPaymentSetupDialog } from '@/components/accounts/LoanPaymentSetupDialog';
+import { mortgageTypeOf } from '@/lib/mortgage-type';
+import { SkippedRowsList } from './SkippedRowsList';
 
 interface CompleteStepProps {
   importFiles: ImportFileData[];
@@ -40,19 +42,15 @@ export function CompleteStep({
     accountName: string;
     accountType: string;
     currencyCode?: string;
-    isCanadianMortgage?: boolean;
-    isVariableRate?: boolean;
   } | null>(null);
   const [completedSetups, setCompletedSetups] = useState<Set<string>>(new Set());
 
-  // The two mortgage flags for a matched account, read from the accounts list
-  // rather than from the import summary, which never carried them.
-  const mortgageFlagsOf = (accountId: string) => {
+  // The mortgage type of a matched account, read from the accounts list rather
+  // than from the import summary, which never carried it, through
+  // `mortgageTypeOf`, so the dialog seeds the convention the server prices.
+  const mortgageTypeOfAccount = (accountId: string) => {
     const account = accounts.find((a) => a.id === accountId);
-    return {
-      isCanadianMortgage: account?.isCanadianMortgage,
-      isVariableRate: account?.isVariableRate,
-    };
+    return account ? mortgageTypeOf(account) : undefined;
   };
 
   // Collect loan accounts needing setup from import results
@@ -202,6 +200,7 @@ export function CompleteStep({
                       {'\u2192'} {result.accountName}: {result.imported} {t('complete.importedSuffix')}, {result.skipped} {t('complete.totalSkippedSuffix')}
                       {result.errors > 0 && <span className="text-red-600 dark:text-red-400">, {result.errors} {t('complete.errorsLabel')}</span>}
                     </p>
+                    <SkippedRowsList rows={result.skippedRows} total={result.skipped} limit={3} />
                     {result.errorMessages.length > 0 && (
                       <ul className="text-xs text-red-500 dark:text-red-400 mt-1">
                         {result.errorMessages.slice(0, 3).map((msg, i) => (
@@ -251,6 +250,12 @@ export function CompleteStep({
                 <strong>{t('complete.securitiesCreated')}</strong> {importResult.securitiesCreated}
               </li>
             </ul>
+            <SkippedRowsList rows={importResult.skippedRows} total={importResult.skipped} />
+            {(importResult.bondRowsWithoutSeries ?? 0) > 0 && (
+              <p className="mt-4 text-sm text-amber-800 dark:text-amber-300">
+                {t('complete.bondRowsWithoutSeries', { count: importResult.bondRowsWithoutSeries ?? 0 })}
+              </p>
+            )}
             {importResult.errorMessages.length > 0 && (
               <div className="mt-4">
                 <p className="text-sm font-medium text-red-600 dark:text-red-400 mb-2">
@@ -330,11 +335,12 @@ export function CompleteStep({
           onClose={() => setSetupDialogAccount(null)}
           loanAccount={{
             ...setupDialogAccount,
-            // The dialog submits its own checkboxes, so an unseeded `false` on a
-            // matched existing Canadian mortgage turns semi-annual compounding
-            // off for every future split. The import list carries only what the
-            // import knew, so the flags are read from the account itself.
-            ...mortgageFlagsOf(setupDialogAccount.accountId),
+            // The dialog submits its own type select, so an unseeded `ANNUITY`
+            // on a matched existing Canadian fixed-rate mortgage turns
+            // semi-annual compounding off for every future split. The import
+            // list carries only what the import knew, so the type is read from
+            // the account itself.
+            mortgageType: mortgageTypeOfAccount(setupDialogAccount.accountId),
           }}
           accounts={accounts}
           onSetupComplete={() => {

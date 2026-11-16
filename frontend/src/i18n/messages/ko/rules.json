@@ -1,0 +1,618 @@
+{
+  "page": {
+    "title": "규칙",
+    "subtitle": "거래가 생성되거나 가져올 때 태그, 카테고리, 수취인을 자동으로 채웁니다",
+    "createButton": "규칙 만들기",
+    "loading": "규칙을 불러오는 중...",
+    "totalCount": "{count, plural, other {규칙 #개}}"
+  },
+  "empty": {
+    "title": "아직 규칙이 없습니다",
+    "body": "규칙은 새 거래와 가져온 거래를 감시하다가 조건이 맞으면 태그, 카테고리 또는 수취인을 채웁니다. 첫 번째 규칙을 만들어 시작해 보세요.",
+    "createButton": "첫 번째 규칙 만들기"
+  },
+  "error": {
+    "title": "규칙을 불러오지 못했습니다",
+    "body": "규칙이 없어서가 아니라 요청이 실패해서 아무것도 표시되지 않습니다. 연결을 확인하고 다시 시도하세요.",
+    "retry": "다시 시도"
+  },
+  "list": {
+    "header": {
+      "order": "순서",
+      "enabled": "사용",
+      "name": "규칙",
+      "summary": "요약",
+      "actions": "작업"
+    },
+    "summary": "{trigger, select, create {생성 시} import {가져오기 시} both {생성 또는 가져오기 시} other {트리거 없음}} · {conditions, plural, =0 {조건 없음} other {조건 #개}} · {actions, plural, =0 {동작 없음} other {동작 #개}}",
+    "enabledLabel": "{name} 사용"
+  },
+  "actions": {
+    "moveUp": "위로 이동",
+    "moveDown": "아래로 이동",
+    "run": "기존 거래에 실행",
+    "runInvalid": "실행하기 전에 규칙을 복구하세요"
+  },
+  "invalid": {
+    "badge": "유효하지 않음",
+    "tooltip": "수정될 때까지 건너뜁니다: {reasons}.",
+    "reasons": {
+      "referenceMissing": "사용 중인 태그, 수취인, 카테고리 또는 계좌가 더 이상 없습니다",
+      "noActions": "동작이 없습니다",
+      "tooLarge": "조건이 너무 큽니다",
+      "duplicateAction": "한 번만 허용되는 동작이 반복됩니다",
+      "unreadable": "저장된 정의를 읽을 수 없습니다",
+      "other": "정의가 유효하지 않습니다"
+    }
+  },
+  "duplicate": {
+    "name": "{name} (복사본)"
+  },
+  "delete": {
+    "title": "규칙 삭제",
+    "message": "\"{name}\" 규칙을 삭제하시겠습니까? 이 작업은 되돌릴 수 없습니다."
+  },
+  "toasts": {
+    "enabled": "규칙을 사용 설정했습니다",
+    "disabled": "규칙을 사용 중지했습니다",
+    "toggleFailed": "규칙을 변경하지 못했습니다",
+    "deleted": "규칙을 삭제했습니다",
+    "deleteFailed": "규칙을 삭제하지 못했습니다",
+    "duplicated": "규칙을 복제했습니다. 복사본은 사용 설정하기 전까지 꺼져 있습니다",
+    "duplicateFailed": "규칙을 복제하지 못했습니다",
+    "reorderFailed": "규칙 순서를 변경하지 못했습니다",
+    "listChanged": "규칙 목록이 다른 곳에서 변경되어 다시 불러왔습니다. 다시 시도하세요",
+    "loadFailed": "규칙을 불러오지 못했습니다"
+  },
+  "editor": {
+    "page": {
+      "newTitle": "새 규칙",
+      "editTitle": "규칙 편집",
+      "subtitle": "규칙이 실행되는 시점, 적용되는 거래, 변경할 내용을 선택하세요",
+      "backToRules": "규칙으로 돌아가기",
+      "loading": "규칙을 불러오는 중..."
+    },
+    "name": {
+      "label": "이름",
+      "placeholder": "예: 카페에 태그 지정"
+    },
+    "enabled": {
+      "label": "규칙 사용"
+    },
+    "sections": {
+      "when": "언제",
+      "if": "만약",
+      "then": "그러면"
+    },
+    "when": {
+      "description": "규칙이 거래를 확인하는 시점을 선택하세요",
+      "created": "거래가 생성될 때",
+      "imported": "거래를 가져올 때",
+      "atLeastOne": "하나 이상의 옵션을 선택한 상태로 두세요",
+      "stopProcessing": "다른 규칙 처리 중지",
+      "stopProcessingHelp": "이 규칙이 거래와 일치하면, 목록에서 이 규칙 뒤에 있는 규칙은 해당 거래에 대해 건너뜁니다.",
+      "window": {
+        "title": "적용 기간",
+        "help": "이 규칙은 날짜가 이 기간 안에 있는 거래에만 적용됩니다(거래를 만들거나 가져올 때, 그리고 규칙을 테스트하거나 실행할 때). 날짜를 비워 두면 제한이 없습니다.",
+        "from": "시작일",
+        "to": "종료일",
+        "backwards": "종료일은 시작일보다 앞설 수 없습니다",
+        "noLimit": "제한 없음",
+        "words": "{from}부터 {to}까지 날짜의 거래에만 적용"
+      }
+    },
+    "if": {
+      "description": "일치하는 거래에 대해서만 동작이 실행됩니다",
+      "everyTransaction": "아직 조건이 없으므로 이 규칙은 모든 거래에 적용됩니다."
+    },
+    "then": {
+      "description": "동작은 이 순서대로 실행됩니다",
+      "empty": "아직 동작이 없습니다. 하나 이상 추가하세요.",
+      "limit": "하나의 규칙에는 동작을 최대 {max}개까지 둘 수 있습니다."
+    },
+    "group": {
+      "matchAll": "다음 모두",
+      "matchAny": "다음 중 하나라도",
+      "matchLabel": "일치 방식",
+      "not": "그룹 부정",
+      "notHelp": "부정된 그룹은 그 조건을 만족하지 않을 때 일치합니다.",
+      "title": "그룹",
+      "addCondition": "+ 조건 추가",
+      "addGroup": "+ 그룹 추가",
+      "depthLimit": "그룹은 최대 {max}단계까지 중첩할 수 있습니다.",
+      "sizeLimit": "조건 개수 한도에 도달했습니다.",
+      "empty": "이 그룹은 비어 있습니다."
+    },
+    "condition": {
+      "title": "조건",
+      "field": "필드",
+      "operator": "연산자",
+      "value": "값"
+    },
+    "fields": {
+      "accountId": "계좌",
+      "fromAccountId": "출금 계좌(이체)",
+      "toAccountId": "입금 계좌(이체)",
+      "type": "유형",
+      "payeeId": "수취인",
+      "payeeText": "수신 그대로의 수취인 텍스트",
+      "categoryId": "카테고리",
+      "description": "설명",
+      "amount": "금액(부호 포함)",
+      "absAmount": "금액(부호 제외)",
+      "currencyCode": "통화",
+      "tagIds": "태그",
+      "hasSplits": "분할 있음",
+      "referenceNumber": "참조 번호",
+      "dayOfMonth": "월의 일",
+      "weekday": "요일",
+      "status": "상태",
+      "hasAttachment": "첨부 파일 있음",
+      "date": "날짜"
+    },
+    "operators": {
+      "eq": "다음과 같음",
+      "neq": "다음과 같지 않음",
+      "in": "다음 중 하나임",
+      "notIn": "다음 중 어느 것도 아님",
+      "isEmpty": "비어 있음",
+      "contains": "다음을 포함함",
+      "startsWith": "다음으로 시작함",
+      "matches": "패턴과 일치함",
+      "lt": "다음보다 작음",
+      "lte": "다음 이하임",
+      "gt": "다음보다 큼",
+      "gte": "다음 이상임",
+      "between": "다음 사이임",
+      "hasAny": "다음 중 하나라도 가짐",
+      "hasAll": "다음을 모두 가짐",
+      "hasNone": "다음 중 어느 것도 가지지 않음",
+      "inSubtree": "다음에 속하거나 그 하위임"
+    },
+    "types": {
+      "EXPENSE": "지출",
+      "INCOME": "수입",
+      "TRANSFER": "이체"
+    },
+    "value": {
+      "account": "계좌 선택",
+      "accounts": "계좌 선택",
+      "payee": "수취인 선택",
+      "payees": "수취인 선택",
+      "category": "카테고리 선택",
+      "categories": "카테고리 선택",
+      "tags": "태그 선택",
+      "currency": "통화 선택",
+      "currencies": "통화 선택",
+      "types": "유형 선택",
+      "matchesHint": "모든 텍스트에는 *를 사용하세요. 예: *커피*. *가 없는 패턴은 텍스트 전체와만 일치합니다. 이 규칙의 작업에서 쓸 수 있도록 그 위치의 텍스트를 보관하려면 {capture}를 사용하세요. 예: {example}. 이름은 영문 소문자와 숫자로 이루어지며, 패턴 하나에 최대 {max}개의 텍스트를 보관할 수 있습니다.",
+      "amount": "금액",
+      "from": "시작",
+      "to": "끝",
+      "yes": "예",
+      "no": "아니요",
+      "days": "일 선택",
+      "weekdays": "요일 선택",
+      "statuses": "상태 선택"
+    },
+    "action": {
+      "title": "동작",
+      "type": "동작 유형",
+      "tags": "태그",
+      "category": "카테고리",
+      "payee": "수취인",
+      "instruction": "검토 지침",
+      "instructionPlaceholder": "예: 이 구매를 영수증에 따라 분할",
+      "instructionHelp": "규칙은 검토를 요청할 뿐입니다. 모든 변경은 적용되기 전에 사람이 승인합니다.",
+      "onlyIfEmpty": "비어 있는 경우에만",
+      "onlyIfEmptyHelp": "켜면 거래에 카테고리나 수취인이 없을 때만 규칙이 채웁니다. 직접 지정했거나 수취인의 기본 카테고리로 지정된 값은 바꾸지 않습니다. 바꾸려면 끄세요.",
+      "add": "+ 동작 추가",
+      "reviewInbox": "검토 수신함 보기",
+      "payeeTemplate": "수취인 이름",
+      "descriptionTemplate": "설명 텍스트",
+      "templateHelp": "일반 텍스트입니다. 중괄호 안의 자리 표시자는 거래의 텍스트로 바뀝니다. 삽입하려면 아래에서 자리 표시자를 선택하세요.",
+      "joinHelp": "텍스트는 작성한 그대로 현재 설명에 이어 붙으므로, 필요한 공백이나 구분자를 직접 넣으세요.",
+      "placeholders": "자리 표시자",
+      "placeholdersHelp": "{payeeText}는 받은 그대로의 수취인 텍스트입니다. {description}은 이 작업이 실행될 때의 설명입니다. 나머지 자리 표시자는 이 규칙의 패턴에서 이름을 붙인 캡처입니다.",
+      "insertPlaceholder": "{name} 삽입",
+      "unknownPlaceholders": "이 규칙에 정의되지 않음: {names}. 목록에서 자리 표시자를 고르거나 위의 패턴에서 캡처하세요.",
+      "invalidPlaceholders": "올바른 자리 표시자가 아님: {names}. 이름은 영문 소문자와 숫자로 이루어집니다.",
+      "createIfMissing": "수취인이 없으면 만들기",
+      "createIfMissingHelp": "켜면, 이름(이름, 별칭 또는 유사 일치)에 맞는 수취인이 없을 때 새 수취인을 만듭니다. 규칙이 만든 수취인은 실행을 취소해도 유지됩니다.",
+      "onlyIfEmptyDescriptionHelp": "켜면 거래에 설명이 없을 때만 규칙이 설명을 씁니다. 매번 쓰려면 끄세요.",
+      "mode": "설명 작성 방식",
+      "modes": {
+        "replace": "설명 바꾸기",
+        "append": "설명 뒤에 추가",
+        "prepend": "설명 앞에 추가"
+      },
+      "convertHelp": "일치한 수입 또는 지출이 이체의 한쪽이 됩니다. 다른 쪽은 선택한 계좌(같은 통화여야 함)에 만들어집니다.",
+      "direction": "방향",
+      "directionTo": "지출: 돈이 다른 계좌로 갑니다",
+      "directionFrom": "수입: 돈이 다른 계좌에서 옵니다",
+      "clearCategory": "카테고리 지우기",
+      "clearCategoryHelp": "이체에는 카테고리가 없습니다. 거래가 이미 가진 카테고리를 유지하려면 끄세요.",
+      "splitPayee": "거래의 수취인(선택)",
+      "splitHint": "각 부분은 위 패턴의 캡처에서 금액을 가져오거나 나머지를 가져갑니다. 부분의 합이 거래 금액과 같아야 하며, 그렇지 않으면 규칙이 거래를 그대로 둡니다.",
+      "splitNoCaptures": "아직 정의된 캡처가 없습니다. 위 패턴에서 이름을 중괄호로 묶으면(예: PRINCIPAL: {example}) 여기서 금액으로 사용할 수 있습니다.",
+      "partAmountPlaceholder": "금액 선택...",
+      "partRest": "나머지",
+      "partAccount": "계좌",
+      "partPayee": "다른 쪽의 수취인(선택)",
+      "partsLimit": "분할은 최대 {max}개 부분까지 가능합니다.",
+      "guideTitle": "사용 방법",
+      "splitGuideHow": "“만약”에서 수취인 텍스트 또는 설명에 대한 조건을 “패턴과 일치함” 연산자로 추가하고, 금액이 있는 자리에 중괄호로 이름을 넣으세요. 예: {first}. 각 이름은 부분에 선택할 수 있는 금액이 되며, “나머지”를 선택할 수도 있습니다. 부분의 합은 거래 금액과 같아야 하며, 그렇지 않으면 규칙은 거래를 변경하지 않습니다. 부분은 카테고리이거나 다른 계좌로의 이체일 수 있습니다(이체는 그 계좌의 잔액을 변경합니다).",
+      "splitGuideExampleTitle": "예시: 대출 상환",
+      "splitGuideBank": "은행 텍스트: 원금: 1200.50 이자: 300.25 연체료: 0.00",
+      "splitGuidePattern": "패턴: *원금: {first} 이자: {second} 연체료*",
+      "splitGuidePart1": "부분 1: {first}을(를) 대출 계좌로의 이체로",
+      "splitGuidePart2": "부분 2: {second}을(를) “대출: 이자” 카테고리로",
+      "splitGuideResult": "-1500.75의 결과: -1200.50이 대출 계좌로 이체되고 -300.25는 이자 지출이 됩니다.",
+      "splitGuideTip": "팁: 이미 대조된 예전 거래가 바뀌지 않도록 “적용 기간”에 시작일을 설정하고, 저장하기 전에 테스트 패널을 사용하세요.",
+      "convertGuide": "지출은 선택한 계좌로의 이체가 되고, 수입은 그 계좌에서의 이체가 됩니다. 상대 계좌의 잔액만 변경됩니다. 팁: 예전 거래가 바뀌지 않도록 “적용 기간”을 사용하세요.",
+      "splitGuideName1": "wongeum",
+      "splitGuideName2": "ija",
+      "loanGuide": "모기지 또는 대출 할부금을 한 번에 지불하는 은행 출금에 사용하세요. “만약”에서 계좌, 수취인 텍스트 또는 설명으로 출금을 매칭하세요. 거래는 분할로 바뀝니다: 원금은 대출 계좌로 이체되고 이자는 이자 범주로 들어가며, 둘 다 해당 할부금에 맞게 계산됩니다. 팁: 할부금이 두 번 지불되지 않도록 대출의 예약된 결제에서 자동 등록을 끄고, 저장하기 전에 테스트 패널을 사용하세요.",
+      "loan": {
+        "help": "매칭된 출금은 날짜 근처에 기일이 돌아오는 대출의 다음 할부금을 지불합니다. Monize가 그 할부금의 원금과 이자를 계산하므로 금액을 직접 입력할 필요가 없습니다.",
+        "account": "대출 계좌",
+        "accountPlaceholder": "모기지 또는 대출 선택...",
+        "noLoans": "처리할 수 있는 미결제 모기지 또는 대출 계좌가 없습니다.",
+        "window": "기일 허용 범위",
+        "windowHelp": "은행이 결제를 가져갈 수 있는, 기일로부터의 허용 범위입니다. 할부금 기일 전후로 이 일수 이내의 출금은 그 할부금을 지불합니다. 범위를 벗어난 출금은 그대로 둡니다.",
+        "daysBefore": "기일 이전 일수",
+        "daysAfter": "기일 이후 일수",
+        "excess": "할부금보다 많은 출금",
+        "excessPolicies": {
+          "extra_principal": "차액을 추가 원금으로 지불",
+          "refuse": "거래를 그대로 둠"
+        },
+        "shortfall": "할부금보다 적은 출금",
+        "shortfallPolicies": {
+          "refuse": "거래를 그대로 둠",
+          "interest_first": "이자를 먼저 지불하고 나머지를 원금으로"
+        },
+        "policyNote": "몇 센트의 차액은 이자 항목에서 흡수됩니다.",
+        "policyHelp": "은행은 각 부분을 따로 반올림하므로, 통화 최소 단위의 5배 이내(대부분의 통화에서 0.05)인 출금은 정확한 금액으로 처리되고 차액은 이자 항목에 반영됩니다. 그보다 큰 차액에는 위의 두 선택이 적용됩니다.",
+        "interestCategory": "이자 범주(선택 사항)",
+        "interestCategoryPlaceholder": "대출 자체의 이자 범주",
+        "autoPostTitle": "대출의 예약된 결제가 자동으로 등록됩니다",
+        "autoPostBody": "이 대출의 예약된 결제는 자동 등록이 켜져 있어, 그것과 이 규칙이 처리하는 은행 출금이 같은 할부금을 지불하게 됩니다. 예약된 결제의 자동 등록을 끄세요."
+      }
+    },
+    "actionTypes": {
+      "add_tags": "태그 추가",
+      "remove_tags": "태그 제거",
+      "set_category": "카테고리 지정",
+      "set_payee": "수취인 지정",
+      "request_ai_review": "AI 검토 요청",
+      "set_payee_from_text": "텍스트로 수취인 지정",
+      "set_description": "설명 지정",
+      "convert_to_transfer": "이체로 변환",
+      "split": "거래 분할",
+      "settle_loan_installment": "대출 할부금 처리"
+    },
+    "save": {
+      "button": "규칙 저장",
+      "createdToast": "규칙을 만들었습니다",
+      "savedToast": "규칙을 저장했습니다",
+      "failedToast": "규칙을 저장하지 못했습니다",
+      "summary": "규칙이 저장되지 않았습니다. 아래에 표시된 항목을 수정한 후 다시 시도하세요."
+    },
+    "loadError": {
+      "title": "규칙을 불러오지 못했습니다",
+      "body": "규칙이 비어 있어서가 아니라 요청이 실패했기 때문에 아무것도 표시되지 않습니다. 연결을 확인한 후 다시 시도하세요.",
+      "lookupsBody": "계좌, 수취인, 카테고리, 태그, 통화 목록을 불러오지 못해 규칙을 안전하게 표시할 수 없습니다. 연결을 확인한 후 다시 시도하세요.",
+      "notFound": "이 규칙은 더 이상 존재하지 않습니다. 삭제되었을 수 있습니다.",
+      "retry": "다시 시도"
+    },
+    "invalid": {
+      "title": "이 규칙은 실행할 수 없습니다",
+      "repaired": "저장된 정의의 일부를 읽을 수 없어 여기에서 제거되거나 초기화되었습니다. 저장하기 전에 규칙을 검토하세요."
+    },
+    "conflict": {
+      "title": "이 규칙이 다른 곳에서 변경되었습니다",
+      "body": "최신 버전을 보려면 다시 불러오세요. 저장하지 않은 변경 내용은 사라집니다.",
+      "reload": "다시 불러오기"
+    },
+    "errors": {
+      "codes": {
+        "INVALID_SHAPE": "이 부분은 편집기가 이해할 수 없는 형태입니다.",
+        "UNKNOWN_KEY": "이 부분에 존재하지 않는 설정이 있습니다.",
+        "UNKNOWN_FIELD": "필드를 선택하세요.",
+        "UNKNOWN_ACTION": "동작을 선택하세요.",
+        "OPERATOR_NOT_ALLOWED": "이 필드에서는 해당 연산자를 사용할 수 없습니다.",
+        "VALUE_REQUIRED": "값을 입력하거나 선택하세요.",
+        "VALUE_NOT_ALLOWED": "이 연산자에는 값을 지정할 수 없습니다.",
+        "VALUE_TYPE": "이 필드에 맞지 않는 종류의 값입니다.",
+        "VALUE_OUT_OF_RANGE": "값이 범위를 벗어났습니다.",
+        "VALUE_TOO_LONG": "텍스트가 너무 깁니다.",
+        "VALUE_EMPTY": "텍스트를 입력하세요.",
+        "INVALID_UUID": "목록에서 항목을 선택하세요.",
+        "INVALID_ENUM": "나열된 값 중 하나를 선택하세요.",
+        "INVALID_CURRENCY": "통화를 선택하세요.",
+        "ARRAY_EMPTY": "하나 이상 선택하세요.",
+        "ARRAY_TOO_LARGE": "선택한 항목이 너무 많습니다.",
+        "RANGE_ORDER": "첫 번째 값은 두 번째 값보다 클 수 없습니다.",
+        "MAX_DEPTH": "그룹이 너무 깊게 중첩되었습니다. 한도는 {maxDepth}단계입니다.",
+        "MAX_LEAVES": "조건이 너무 많습니다. 한도는 {maxLeaves}개입니다.",
+        "MAX_NODES": "조건과 그룹이 너무 많습니다. 한도는 {maxNodes}개입니다.",
+        "NO_ACTIONS": "동작을 하나 이상 추가하세요.",
+        "TOO_MANY_ACTIONS": "동작이 너무 많습니다. 한도는 {maxActions}개입니다.",
+        "DUPLICATE_ACTION": "규칙에는 AI 검토 1개, 이체·분할·대출 할부금 처리 중 1개, 나머지를 가져가는 분할 부분 1개만 둘 수 있습니다.",
+        "CONFLICTING_ACTIONS": "이체, 분할 또는 대출 할부금 처리 동작은 ‘카테고리 지정’과 함께 사용할 수 없으며, 분할의 각 부분에는 카테고리 또는 계좌 중 하나가 있습니다.",
+        "INVALID_CAPTURE": "캡처 이름은 영문 소문자와 숫자로 이루어지고 영문자로 시작하며 20자 이하여야 합니다.",
+        "TOO_MANY_CAPTURES": "패턴 하나에는 캡처를 최대 5개까지 넣을 수 있습니다.",
+        "DUPLICATE_CAPTURE": "캡처 이름은 규칙 하나에서 한 번만 사용할 수 있습니다.",
+        "UNKNOWN_CAPTURE": "이 규칙의 어떤 조건도 정의하지 않은 캡처를 사용합니다.",
+        "LOOKS_LIKE_REGEX": "정규식은 지원하지 않습니다. | \\ 및 [xy] 같은 짧은 대괄호 클래스는 일반 문자로 취급되므로 정규식으로 쓴 패턴은 의도한 대상과 일치하지 않습니다. 여러 텍스트 중 하나와 일치시키려면 “다음 중 하나라도” 그룹을 추가하고 텍스트마다 조건을 하나씩 넣으세요.",
+        "PATTERN_WITHOUT_WILDCARD": "*가 없으면 이 패턴은 텍스트 전체와 같아야 합니다. 텍스트 전체에는 “다음과 같음”, 일부에는 “다음을 포함함” 연산자를 쓰거나 텍스트를 *로 감싸세요. 예: *커피*",
+        "REFERENCE_NOT_FOUND": "여기에서 선택한 항목이 더 이상 존재하지 않습니다. 다른 항목을 선택하세요.",
+        "NAME_REQUIRED": "규칙 이름을 입력하세요.",
+        "UNKNOWN": "이 부분은 올바르지 않습니다."
+      }
+    },
+    "run": {
+      "button": "기존 거래에 실행",
+      "saveFirst": "저장된 규칙을 실행하려면 변경 사항을 저장하세요."
+    },
+    "expression": {
+      "modeLabel": "조건 보기",
+      "visual": "시각적",
+      "expression": "표현식",
+      "label": "조건 표현식",
+      "help": "조건을 텍스트로 작성합니다. 모두 만족하려면 &&, 하나라도 만족하려면 ||, 부정에는 !( ... ) 를 사용하세요. 항목은 이름으로 지정합니다: account(\"이름\"), payee(\"이름\"), category(\"상위: 하위\"), tag(\"이름\"). 밑줄 _ 는 아직 선택하지 않은 값을 뜻합니다. matchesGlob는 *를 와일드카드로 사용합니다. 제안에 표시되는 구문만 지원합니다.",
+      "blocked": "시각적 보기로 돌아가거나 저장하려면 표현식을 수정하세요.",
+      "errorAt": "{line}행 {column}열: {message}",
+      "suggestions": "제안",
+      "errors": {
+        "tooLong": "표현식이 너무 깁니다. 최대 {max}자입니다.",
+        "unexpectedChar": "{char} 문자는 지원되지 않습니다.",
+        "unterminatedString": "이 텍스트에 닫는 따옴표가 없습니다.",
+        "invalidEscape": "이 이스케이프 시퀀스는 지원되지 않습니다.",
+        "badNumber": "올바른 숫자가 아닙니다.",
+        "expectedExpression": "여기에는 조건이 필요합니다.",
+        "expectedField": "여기에는 필드 이름이 필요합니다.",
+        "expectedOperator": "필드 뒤에는 연산자 또는 메서드가 필요합니다.",
+        "expectedValue": "여기에는 값이 필요합니다.",
+        "expectedSymbol": "여기에는 {symbol}이(가) 필요합니다.",
+        "unexpectedToken": "예상하지 못한 요소입니다: {token}.",
+        "unsupported": "이 부분은 지원되지 않습니다. 제안에 표시되는 구문만 사용하세요.",
+        "unknownField": "알 수 없는 필드 {name}입니다.",
+        "unknownFunction": "알 수 없는 함수 또는 메서드 {name}입니다.",
+        "operatorNotAllowed": "{field} 필드는 {operator}와(과) 함께 사용할 수 없습니다.",
+        "wrongValueType": "{expected, select, text {따옴표로 묶은 텍스트가 필요합니다.} number {숫자가 필요합니다.} boolean {true 또는 false가 필요합니다.} list {대괄호로 묶은 목록이 필요합니다.} account {계좌가 필요합니다. 예: account(\"이름\").} payee {수취인이 필요합니다. 예: payee(\"이름\").} category {카테고리가 필요합니다. 예: category(\"상위: 하위\").} tag {태그가 필요합니다. 예: tag(\"이름\").} other {이 값의 종류가 올바르지 않습니다.}}",
+        "invalidEnum": "다음 중 하나를 사용하세요: {values}.",
+        "invalidCurrency": "따옴표로 묶은 세 글자 통화 코드를 사용하세요. 예: \"CAD\".",
+        "valueTooLong": "텍스트가 너무 깁니다. 최대 {max}자입니다.",
+        "listTooLong": "목록이 너무 깁니다. 최대 {max}개입니다.",
+        "unknownEntity": "{kind, select, account {이름이 {name}인 계좌가 없습니다.} payee {이름이 {name}인 수취인이 없습니다.} category {이름이 {name}인 카테고리가 없습니다.} tag {이름이 {name}인 태그가 없습니다.} other {이름이 {name}인 항목이 없습니다.}}",
+        "ambiguousEntity": "{count}개 항목의 이름이 {name}입니다. 원하는 항목의 번호를 추가하세요. 예: {example}.",
+        "entityOrdinal": "{name}의 번호는 1에서 {count} 사이여야 합니다.",
+        "maxDepth": "그룹이 너무 깊게 중첩되었습니다. 최대 {max}단계입니다.",
+        "maxLeaves": "조건이 너무 많습니다. 최대 {max}개입니다.",
+        "maxNodes": "조건과 그룹이 너무 많습니다. 최대 {max}개입니다.",
+        "tooNested": "중첩된 괄호가 너무 많습니다."
+      }
+    }
+  },
+  "test": {
+    "title": "테스트",
+    "description": "기존 거래에서 규칙을 시험해 보세요. 아무것도 변경되지 않습니다.",
+    "button": "규칙 테스트",
+    "again": "다시 테스트",
+    "incomplete": "규칙을 테스트하려면 위의 조건과 작업을 완성하세요.",
+    "idle": "규칙을 시험할 거래를 선택한 다음 규칙 테스트를 선택하세요.",
+    "running": "규칙을 테스트하는 중...",
+    "failed": "테스트를 완료하지 못했습니다. {message}",
+    "stale": "이 결과 이후 규칙 또는 필터가 변경되었습니다. 현재 결과를 보려면 다시 테스트하세요."
+  },
+  "match": {
+    "button": "규칙 테스트",
+    "buttonLabel": "규칙 테스트: 조건",
+    "incomplete": "위의 조건을 완성하면 일치하는 거래를 볼 수 있습니다.",
+    "windowBackwards": "활성 날짜가 시작되기 전에 끝나므로 일치하는 거래가 없습니다.",
+    "summary": "{count, plural, =0 {일치하는 거래 없음} other {일치하는 거래 #건}}",
+    "summaryPending": "일치하는 거래",
+    "running": "일치하는 거래를 찾는 중...",
+    "failed": "일치하는 거래를 불러올 수 없습니다. {message}",
+    "empty": "이 조건과 일치하는 기존 거래가 없습니다.",
+    "truncated": "최근 거래 {scanned, number}건만 확인했습니다.",
+    "stale": "이 테스트 이후 조건이 변경되었습니다. 현재 일치 항목을 보려면 규칙 테스트를 다시 선택하세요."
+  },
+  "run": {
+    "title": "“{name}” 규칙을 기존 거래에 실행",
+    "description": "규칙이 변경할 내용을 미리 확인한 다음 확정하세요. 실행은 작업 내역에서 되돌릴 수 있습니다.",
+    "previewButton": "미리보기",
+    "confirmButton": "확정 후 실행",
+    "idle": "계정과 날짜를 선택한 다음 미리보기를 선택하세요. 확정하기 전에는 아무것도 변경되지 않습니다.",
+    "loadingPreview": "미리보기를 불러오는 중...",
+    "previewFailed": "미리보기를 불러오지 못해 아무것도 실행할 수 없습니다. {message}",
+    "stale": "이 미리보기 이후 필터가 변경되었습니다. 실행하기 전에 다시 미리보기를 확인하세요.",
+    "accountsLoading": "계정을 불러오는 중...",
+    "accountsFailed": "계정을 불러오지 못해 필터를 사용할 수 없습니다.",
+    "retry": "다시 시도",
+    "summary": "검사한 {scanned, plural, other {# 건}}의 거래 중 {matched, plural, other {# 건}}이 변경됩니다.",
+    "matchesNone": "이 규칙은 검사한 어떤 거래와도 일치하지 않습니다({scanned}건). 저장하기 전에 조건을 확인하세요. *가 없는 패턴은 텍스트 전체와만 일치합니다.",
+    "noChange": "검토한 거래 {scanned}건 중 {matched}건이 규칙 조건과 일치하지만 변경되는 내용은 없습니다(예: 이미 값이 있고 '비어 있을 때만'이 켜져 있는 경우). 오류가 아닙니다.",
+    "aiReview": "{count, plural, other {거래 #건이 AI 검토 대기열에 추가됩니다}}. 확인하면 요청이 생성됩니다.",
+    "truncated": "한도보다 많은 거래가 일치했습니다. 최신 거래만 포함되었습니다. 나머지를 포함하려면 한도를 올리거나 날짜를 좁히세요.",
+    "truncatedOldest": "한도보다 많은 거래가 일치했습니다. 이 규칙은 대출 할부금을 날짜 순서로 처리하므로 가장 오래된 것만 포함됩니다. 나머지를 포함하려면 이번 실행 후에 다시 실행하세요.",
+    "noMatches": {
+      "title": "변경될 거래가 없습니다",
+      "body": "검사한 거래 중 규칙과 일치하는 것이 없거나, 규칙이 아무것도 변경하지 않습니다."
+    },
+    "table": {
+      "date": "날짜",
+      "payee": "수취인",
+      "amount": "금액",
+      "change": "예정된 변경",
+      "noPayee": "수취인 없음"
+    },
+    "skipped": {
+      "title": "{count, plural, other {# 건}}의 거래는 그대로 둡니다",
+      "line": "{count, plural, other {# 건}}의 거래: {reason}",
+      "missing": "대출에 없는 항목: {inputs}."
+    },
+    "skipReasons": {
+      "reconciled_locked": "조정되어 잠겨 있습니다",
+      "transfer_leg_category": "이체이며 이체에는 카테고리가 없습니다",
+      "split_category": "분할되어 있어 카테고리가 분할 항목에 속합니다",
+      "cross_owner_transfer_payee": "다른 소유자에게 보내는 이체이며, 이 규칙으로 그 수취인을 변경할 수 없습니다",
+      "empty_render": "작업의 텍스트가 비어 버렸기 때문",
+      "payee_not_found": "규칙이 만든 이름의 수취인이 없고 규칙이 만들지도 않기 때문",
+      "other": "규칙으로 변경할 수 없습니다",
+      "row_is_transfer_leg": "이미 이체입니다",
+      "row_has_splits": "이미 분할되어 있습니다",
+      "row_is_void": "무효 처리되었습니다",
+      "zero_amount": "금액이 0입니다",
+      "transfer_direction_mismatch": "이체 방향이 맞지 않습니다: 지출은 계좌로 가고 수입은 계좌에서 옵니다",
+      "transfer_same_account": "이체 계좌가 거래 자신의 계좌입니다",
+      "transfer_account_unavailable": "이체 계좌를 사용할 수 없습니다(삭제되었거나 내 계좌가 아님)",
+      "transfer_currency_mismatch": "이체 계좌의 통화가 다릅니다",
+      "split_amount_unparseable": "텍스트의 금액을 숫자로 읽을 수 없습니다",
+      "split_sum_mismatch": "부분의 합이 금액과 맞지 않습니다",
+      "split_too_few_parts": "0 금액을 제외하면 부분이 2개 미만입니다",
+      "row_from_scheduled_posting": "대출의 예약된 결제에서 등록되어 그 할부금이 이미 지불되었기 때문",
+      "row_is_income": "수입이며, 할부금을 지불할 수 있는 것은 출금뿐이기 때문",
+      "loan_account_unavailable": "대출 계좌를 사용할 수 없기 때문(삭제됨, 닫힘, 내 것이 아님 또는 모기지나 대출이 아님)",
+      "loan_interest_booked_separately": "이 대출은 이자를 별도의 거래로 등록하므로 결제에 이자를 포함할 수 없기 때문",
+      "loan_not_configured": "할부금을 계산하는 데 필요한 설정이 대출에 없기 때문",
+      "no_installment_in_window": "그 날짜 주변 범위 내에 기일이 돌아오는 대출 할부금이 없기 때문",
+      "occurrence_already_posted": "범위 내에 기일이 돌아오는 할부금이 이미 지불되었기 때문",
+      "loan_debt_retired": "대출이 이미 상환 완료되었기 때문",
+      "installment_amount_excess": "할부금보다 많아서 이 규칙이 더 큰 출금을 그대로 두기 때문",
+      "installment_amount_shortfall": "할부금보다 적어서 이 규칙이 더 작은 출금을 그대로 두기 때문"
+    },
+    "change": {
+      "category": "카테고리: {before} → {after}",
+      "payee": "수취인: {before} → {after}",
+      "payeeNew": "수취인: {before} → {name} (신규)",
+      "tagsAdded": "추가된 태그: {tags}",
+      "tagsRemoved": "제거된 태그: {tags}",
+      "none": "없음",
+      "unknown": "삭제된 항목",
+      "payeeCreated": "{done, select, yes {새 수취인을 만들었습니다: {name}} other {새 수취인을 만듭니다: {name}}}",
+      "description": "설명: {before} → {after}",
+      "descriptionSet": "설명을 {value}(으)로 지정",
+      "transfer": "{done, select, yes {{account}와(과)의 이체가 되었습니다} other {{account}와(과)의 이체가 됩니다}}",
+      "split": "{done, select, yes {{count, plural, other {#개}} 부분으로 분할되었습니다} other {{count, plural, other {#개}} 부분으로 분할됩니다}}",
+      "splitPart": "부분 {number}: {amount} {target}",
+      "splitPartMemo": ", 메모 “{memo}”",
+      "splitToTransfer": "{account}(으)로",
+      "splitToTransferPayee": "{account}(으)로, 수취인 {payee}",
+      "splitToCategory": "{category}(으)로",
+      "splitUncategorised": "카테고리 없음",
+      "loanSettlement": "{done, select, yes {{account}의 {number}회차 할부금을 처리했습니다} other {{account}의 {number}회차 할부금을 처리합니다}}(기일 {dueDate}): 원금 {principal}, 이자 {interest}{hasExtra, select, yes {, 추가 원금 {extra}} other {}}. 처리 전 잔액: {debtBefore}"
+    },
+    "filters": {
+      "accounts": "계정",
+      "allAccounts": "모든 계정",
+      "startDate": "시작",
+      "endDate": "종료",
+      "backwards": "시작일은 종료일보다 늦을 수 없습니다.",
+      "limit": "검사할 최신 거래 수",
+      "help": "범위 내 최신 거래만 최대 {max}건까지 검사합니다."
+    },
+    "errors": {
+      "PREVIEW_CHANGED": "미리보기 이후 거래 또는 규칙이 변경되었습니다. 새 미리보기를 확인하고 다시 실행하세요.",
+      "RUN_TOO_LARGE": "이 실행은 변경하는 거래가 너무 많아 한 번에 되돌릴 수 없습니다. 계정이나 날짜를 좁혀서 다시 시도하세요.",
+      "INVALID_RULE": "이 규칙은 유효하지 않아 실행할 수 없습니다. 먼저 규칙을 열어 복구하세요.",
+      "DATE_RANGE_INVALID": "시작일은 종료일보다 늦을 수 없습니다.",
+      "draftInvalid": "규칙이 미완성이거나 유효하지 않습니다. 위의 조건과 작업을 확인하세요.",
+      "testFailed": "규칙을 테스트하는 중 문제가 발생했습니다.",
+      "previewFailed": "미리보기를 불러오는 중 문제가 발생했습니다.",
+      "runFailed": "실행을 완료하지 못했습니다. 다시 시도하기 전에 작업 내역을 확인하세요."
+    },
+    "toast": {
+      "done": "{count, plural, =0 {변경된 거래가 없습니다} other {# 건의 거래가 변경되었습니다}}. 작업 내역에서 되돌릴 수 있습니다.",
+      "changedNoUndo": "{count, plural, other {거래 #건이 변경되었습니다}}.",
+      "aiReviewsQueued": "{count, plural, other {거래 #건을 AI 검토 대기열에 추가했습니다}}.",
+      "aiReviewsAlreadyQueued": "{count, plural, other {거래 #건에 이미 열려 있는 AI 검토 요청이 있어 새로 대기열에 추가된 것은 없습니다}}.",
+      "noChanges": "변경된 거래가 없습니다."
+    },
+    "done": {
+      "summary": "{count, plural, =0 {변경된 거래가 없습니다.} other {# 건의 거래가 변경되었습니다.}}",
+      "aiReviewsQueued": "{count, plural, other {거래 #건을 AI 검토 대기열에 추가했습니다.}}",
+      "aiReviewsAlreadyQueued": "{count, plural, other {거래 #건에는 이미 열려 있는 AI 검토 요청이 있어 다시 추가하지 않았습니다.}}",
+      "undo": "실행은 작업 내역에서 되돌릴 수 있습니다."
+    },
+    "missingInputs": {
+      "scheduledPayment": "예약된 결제",
+      "managedTemplate": "원금과 이자로 나눈 결제",
+      "scheduleCalendar": "결제 일정",
+      "interestCategory": "이자 범주",
+      "amortizationMonths": "상환 기간",
+      "paymentStartDate": "첫 결제일",
+      "paymentFrequency": "결제 주기",
+      "originalPrincipal": "최초 대출금",
+      "rate": "해당 날짜의 금리",
+      "payment": "결제 금액",
+      "other": "대출 설정"
+    }
+  },
+  "applications": {
+    "title": "내역",
+    "description": "이 규칙이 변경한 최근 거래를 최신순으로 표시합니다.",
+    "loading": "내역을 불러오는 중...",
+    "error": {
+      "title": "내역을 불러오지 못했습니다",
+      "body": "요청이 실패하여 아무것도 표시되지 않습니다. 규칙이 실행되지 않아서가 아닙니다. 연결을 확인하고 다시 시도하세요.",
+      "retry": "다시 시도"
+    },
+    "empty": {
+      "title": "이 규칙은 아직 아무것도 변경하지 않았습니다",
+      "body": "거래를 변경하면 그 변경 내용이 여기에 표시됩니다."
+    },
+    "source": {
+      "create": "생성 시",
+      "import": "가져오기 시",
+      "manual": "수동 실행",
+      "other": "기타"
+    },
+    "table": {
+      "date": "날짜",
+      "payee": "수취인",
+      "amount": "금액",
+      "source": "출처",
+      "change": "변경",
+      "appliedAt": "적용 시각",
+      "open": "거래 열기",
+      "noPayee": "수취인 없음",
+      "view": "보기"
+    }
+  },
+  "words": {
+    "everyTransaction": "모든 거래",
+    "group": {
+      "all": "다음 모두:",
+      "any": "다음 중 하나라도:",
+      "notAll": "다음 모두는 아님:",
+      "notAny": "다음 중 어느 것도 아님:"
+    },
+    "leaf": "{field} {operator} {value}",
+    "leafNoValue": "{field} {operator}",
+    "range": "{from} 및 {to}",
+    "text": "“{value}”",
+    "unknownCondition": "이 버전에서 표시할 수 없는 조건",
+    "unknownAction": "이 버전에서 표시할 수 없는 작업",
+    "action": {
+      "add_tags": "태그 추가: {tags}",
+      "remove_tags": "태그 제거: {tags}",
+      "set_category": "카테고리를 {name}(으)로 지정{onlyIfEmpty, select, yes { (비어 있는 경우에만)} other {}}",
+      "set_payee": "수취인을 {name}(으)로 지정{onlyIfEmpty, select, yes { (비어 있는 경우에만)} other {}}",
+      "request_ai_review": "AI 검토 요청: {instruction}",
+      "set_payee_from_text": "텍스트로 수취인 지정: “{template}”{createIfMissing, select, yes { (없으면 생성)} other {}}{onlyIfEmpty, select, yes { (비어 있는 경우에만)} other {}}",
+      "set_description": "설명 지정 ({mode, select, append {뒤에 추가} prepend {앞에 추가} other {바꾸기}}): “{template}”{onlyIfEmpty, select, yes { (비어 있는 경우에만)} other {}}",
+      "convert_to_transfer": "{account}{direction, select, from {에서} other {(으)로}} 이체로 변환",
+      "split": "다음으로 분할: {parts}",
+      "settle_loan_installment": "{account}의 할부금을 처리합니다. 기일 {before, plural, other {#일}} 전 또는 {after, plural, other {#일}} 후까지의 출금으로 지불되며, 더 큰 출금은 {excess, select, refuse {그대로 둡니다} other {차액을 추가 원금으로 지불합니다}}, 더 작은 출금은 {shortfall, select, interest_first {이자를 먼저 지불합니다} other {그대로 둡니다}}"
+    },
+    "splitPart": {
+      "transfer": "{amount}을(를) {account}(으)로",
+      "category": "{amount}을(를) {category}(으)로",
+      "plain": "{amount}",
+      "rest": "나머지"
+    }
+  }
+}

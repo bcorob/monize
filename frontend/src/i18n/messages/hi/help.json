@@ -1,0 +1,81 @@
+{
+  "learnMore": "अधिक जानें",
+  "howThisWorks": "यह कैसे काम करता है",
+  "menu": {
+    "helpForPage": "इस पेज के लिए मदद",
+    "search": "मदद खोजें",
+    "shortcuts": "कीबोर्ड शॉर्टकट",
+    "takeTour": "टूर लें",
+    "whatsNew": "नया क्या है",
+    "shellMenu": "डेस्कटॉप ऐप मेनू",
+    "reportIssue": "समस्या की रिपोर्ट करें",
+    "discussions": "चर्चाएं"
+  },
+  "shortcuts": {
+    "title": "कीबोर्ड शॉर्टकट",
+    "palette": "कमांड पैलेट",
+    "paletteKeys": "Ctrl/Cmd+K",
+    "search": "मदद खोजें",
+    "searchKeys": "?",
+    "undo": "आखिरी बदलाव पूर्ववत करें",
+    "undoKeys": "Ctrl/Cmd+Z",
+    "redo": "फिर से करें",
+    "redoKeys": "Ctrl/Cmd+Shift+Z या Ctrl/Cmd+Y",
+    "closeDialog": "खुला डायलॉग या पैनल बंद करें",
+    "closeDialogKeys": "Esc"
+  },
+  "panel": {
+    "title": "सहायता",
+    "back": "वापस",
+    "forward": "आगे",
+    "openOnline": "monize.net पर खोलें",
+    "pin": "सहायता पैनल को पिन करें, ताकि पेज बदलने पर भी वह खुला रहे",
+    "unpin": "सहायता पैनल को अनपिन करें",
+    "expand": "सहायता पैनल बड़ा करें",
+    "collapse": "सहायता पैनल छोटा करें",
+    "resize": "सहायता पैनल का आकार बदलें",
+    "resizeValue": "{width} पिक्सेल",
+    "close": "सहायता बंद करें",
+    "englishOnly": "यह गाइड अंग्रेज़ी में है।",
+    "loading": "सहायता लोड हो रही है",
+    "toc": {
+      "toggle": "इस पेज पर",
+      "label": "इस पेज के अनुभाग"
+    },
+    "error": {
+      "heading": "सहायता लोड नहीं हो सकी",
+      "body": "गाइड लोड नहीं हुई। फिर कोशिश करें, या इस पेज को monize.net पर पढ़ें।",
+      "retry": "फिर कोशिश करें"
+    },
+    "search": "गाइड खोजें",
+    "tour": {
+      "prompt": "इस पेज में एक गाइडेड टूर है।"
+    },
+    "version": "Monize {version} के लिए गाइड",
+    "latestOnline": "नवीनतम गाइड monize.net पर है"
+  },
+  "search": {
+    "title": "गाइड खोजें",
+    "placeholder": "गाइड खोजें",
+    "ariaLabel": "गाइड खोजें",
+    "contextHeading": "इस स्क्रीन के लिए सहायता",
+    "noResults": "\"{query}\" के लिए कोई परिणाम नहीं",
+    "error": "खोज विफल रही. फिर से प्रयास करें.",
+    "hint": {
+      "navigate": "नेविगेट करने के लिए",
+      "select": "चुनने के लिए",
+      "close": "बंद करने के लिए"
+    }
+  },
+  "markdown": {
+    "screenshot": "स्क्रीनशॉट",
+    "viewScreenshot": "monize.net पर स्क्रीनशॉट देखें",
+    "callout": {
+      "note": "नोट",
+      "tip": "सुझाव",
+      "important": "महत्वपूर्ण",
+      "warning": "चेतावनी",
+      "caution": "सावधानी"
+    }
+  }
+}

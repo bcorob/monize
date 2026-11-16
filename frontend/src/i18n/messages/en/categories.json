@@ -7,6 +7,7 @@
     "filterAll": "All ({count})",
     "filterExpenses": "Expenses ({count})",
     "filterIncome": "Income ({count})",
+    "typeFilterLabel": "Type",
     "modalTitleNew": "New Category",
     "modalTitleEdit": "Edit Category",
     "countSingle": "1 category",
@@ -54,6 +55,12 @@
     "typeExpense": "Expense",
     "typeIncome": "Income",
     "typeInherited": "Type inherited from parent",
+    "autoSignLabel": "Automatic sign",
+    "autoSignOn": "Enabled",
+    "autoSignOff": "Disabled",
+    "autoSignInherit": "Inherit from parent",
+    "autoSignInheritedFrom": "Inherited from parent ({name}): currently {state}",
+    "autoSignHelp": "When enabled, an amount you type is made negative for an expense category and positive for an income category. Turn off to keep the sign exactly as you enter it.",
     "colourLabel": "Colour",
     "colourInherit": "Inherit from parent",
     "colourNone": "No colour",
@@ -65,8 +72,8 @@
     "submitUpdate": "Update Category"
   },
   "list": {
-    "emptyHeading": "No categories",
-    "emptyDescription": "Get started by creating a new category.",
+    "emptyHeading": "No categories found",
+    "emptyDescription": "No categories match your current search or filter.",
     "colName": "Name",
     "colType": "Type",
     "colCount": "Count",
@@ -79,7 +86,7 @@
     "viewTransactionsTitle": "View transactions in this category"
   },
   "deleteDialog": {
-    "title": "Delete \"{name}\"?",
+    "title": "Delete \"{name}\"",
     "checkingUsage": "Checking usage...",
     "usedBy": "This category is used by {count, plural, one {# item} other {# items}} (transactions and/or scheduled bills & deposits).",
     "reassignLabel": "Reassign to:",

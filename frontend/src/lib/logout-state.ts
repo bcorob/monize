@@ -39,3 +39,29 @@ export function clearLogoutIncomplete(): void {
     // Nothing to clear.
   }
 }
+
+/**
+ * A sign-out this tab started and has not yet left behind.
+ *
+ * Revoking the session does not stop the page that is still mounted: its
+ * polls and refetches keep going and now come back 401. The response
+ * interceptor would read each one as an expired session -- try a refresh, post
+ * `/auth/logout` again and hard-replace to `/login` -- and that full-page load
+ * aborts the sign-out's own `router.push('/login')`, losing its toast. While
+ * this is set, those 401s are just rejected and the sign-out does the
+ * navigating. In memory, not storage: a reload has left the signed-in page
+ * already, and the next real sign-in clears it.
+ */
+let signingOut = false;
+
+export function beginSignOut(): void {
+  signingOut = true;
+}
+
+export function endSignOut(): void {
+  signingOut = false;
+}
+
+export function isSigningOut(): boolean {
+  return signingOut;
+}

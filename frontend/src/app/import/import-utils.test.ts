@@ -45,8 +45,7 @@ function createAccount(overrides: Partial<Account> = {}): Account {
     assetCategoryId: null,
     dateAcquired: null,
     linkedLoanAccountId: null,
-    isCanadianMortgage: false,
-    isVariableRate: false,
+    mortgageType: 'ANNUITY',
     termMonths: null,
     termEndDate: null,
     amortizationMonths: null,
@@ -182,6 +181,14 @@ describe('suggestAccountType', () => {
 
     it('returns CHEQUING for empty string', () => {
       expect(suggestAccountType('')).toBe('CHEQUING');
+    });
+
+    // A new account from an import is created in the reader's default (fiat)
+    // currency, which the server refuses for a CRYPTO account
+    // (accountCurrencyKindMismatch), so a wallet-like name is never guessed as one.
+    it('never suggests CRYPTO, whose currency the import cannot supply', () => {
+      expect(suggestAccountType('Bitcoin Wallet')).not.toBe('CRYPTO');
+      expect(suggestAccountType('Crypto')).not.toBe('CRYPTO');
     });
 
     it('is case-insensitive', () => {
@@ -323,11 +330,12 @@ describe('ACCOUNT_TYPE_OPTIONS', () => {
     expect(values).toContain('MORTGAGE');
     expect(values).toContain('CASH');
     expect(values).toContain('ASSET');
+    expect(values).toContain('CRYPTO');
     expect(values).toContain('OTHER');
   });
 
-  it('has 10 account type options', () => {
-    expect(ACCOUNT_TYPE_OPTIONS).toHaveLength(10);
+  it('has 11 account type options', () => {
+    expect(ACCOUNT_TYPE_OPTIONS).toHaveLength(11);
   });
 
   it('has correct labels for each type', () => {
@@ -341,6 +349,7 @@ describe('ACCOUNT_TYPE_OPTIONS', () => {
     expect(map['MORTGAGE']).toBe('Mortgage');
     expect(map['CASH']).toBe('Cash');
     expect(map['ASSET']).toBe('Asset');
+    expect(map['CRYPTO']).toBe('Crypto Wallet');
     expect(map['OTHER']).toBe('Other');
   });
 });

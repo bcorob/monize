@@ -1,16 +1,25 @@
+import { BadRequestException } from "@nestjs/common";
+import { ParseCurrencyCodePipe } from "../common/pipes/parse-currency-code.pipe";
+import { ParseOptionalCalendarDatePipe } from "../common/pipes/parse-calendar-date.pipe";
 import { Test, TestingModule } from "@nestjs/testing";
 import { CurrenciesController } from "./currencies.controller";
 import { ExchangeRateService } from "./exchange-rate.service";
+import { ExchangeRateHistoryService } from "./exchange-rate-history.service";
 import { CurrenciesService } from "./currencies.service";
+import { FxProviderChain } from "./providers/fx-provider-chain";
 
 describe("CurrenciesController", () => {
   let controller: CurrenciesController;
   let mockExchangeRateService: Partial<
     Record<keyof ExchangeRateService, jest.Mock>
   >;
+  let mockExchangeRateHistoryService: Partial<
+    Record<keyof ExchangeRateHistoryService, jest.Mock>
+  >;
   let mockCurrenciesService: Partial<
     Record<keyof CurrenciesService, jest.Mock>
   >;
+  let mockFxProviders: Partial<Record<keyof FxProviderChain, jest.Mock>>;
   const mockReq = { user: { id: "user-1" } };
 
   beforeEach(async () => {
@@ -22,6 +31,12 @@ describe("CurrenciesController", () => {
       getLastUpdateTime: jest.fn(),
       refreshAllRates: jest.fn(),
       backfillHistoricalRates: jest.fn(),
+    };
+
+    mockExchangeRateHistoryService = {
+      getCoverage: jest.fn(),
+      getStoredRates: jest.fn(),
+      fillRateGaps: jest.fn(),
     };
 
     mockCurrenciesService = {
@@ -37,6 +52,10 @@ describe("CurrenciesController", () => {
       getCatalog: jest.fn(),
     };
 
+    mockFxProviders = {
+      describe: jest.fn(),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       controllers: [CurrenciesController],
       providers: [
@@ -45,8 +64,16 @@ describe("CurrenciesController", () => {
           useValue: mockExchangeRateService,
         },
         {
+          provide: ExchangeRateHistoryService,
+          useValue: mockExchangeRateHistoryService,
+        },
+        {
           provide: CurrenciesService,
           useValue: mockCurrenciesService,
+        },
+        {
+          provide: FxProviderChain,
+          useValue: mockFxProviders,
         },
       ],
     }).compile();
@@ -147,6 +174,32 @@ describe("CurrenciesController", () => {
       await expect(
         controller.getRateForDate("EUR", "USD", "07/20/2026"),
       ).rejects.toThrow();
+      expect(mockExchangeRateService.getRateForDate).not.toHaveBeenCalled();
+    });
+
+    /**
+     * Express parses a repeated key into an array, so `date` is only a `string`
+     * by declaration. A regular expression `.test` coerces the array to text
+     * and passes it, after which the resolver sliced an array and compared it
+     * as a date (CodeQL `js/type-confusion-through-parameter-tampering`).
+     */
+    it("refuses a repeated date parameter rather than passing an array on", async () => {
+      for (const tampered of [["2026-07-20"], ["2026-07-20", "2026-07-21"]]) {
+        await expect(
+          controller.getRateForDate(
+            "EUR",
+            "USD",
+            tampered as unknown as string,
+          ),
+        ).rejects.toThrow(BadRequestException);
+      }
+      expect(mockExchangeRateService.getRateForDate).not.toHaveBeenCalled();
+    });
+
+    it("refuses a day that does not exist", async () => {
+      await expect(
+        controller.getRateForDate("EUR", "USD", "2026-02-30"),
+      ).rejects.toThrow(BadRequestException);
       expect(mockExchangeRateService.getRateForDate).not.toHaveBeenCalled();
     });
   });
@@ -298,86 +351,170 @@ describe("CurrenciesController", () => {
         undefined,
       );
     });
+
+    /**
+     * Both bounds reach a `rate_date` comparison, and Express parses a repeated
+     * key into an array, so each is validated by a pipe. Calling the method
+     * directly bypasses every pipe, so the wiring is asserted against the
+     * metadata Nest would hand it -- the pipe's own behaviour is
+     * `parse-calendar-date.pipe.spec.ts`.
+     */
+    it("declares the calendar-date pipe on both bounds", () => {
+      const routeArguments = Reflect.getMetadata(
+        "__routeArguments__",
+        CurrenciesController,
+        "getRateHistory",
+      ) as Record<string, { index: number; pipes?: unknown[] }> | undefined;
+      const boundIndexes = Object.values(routeArguments ?? {})
+        .filter((argument) =>
+          (argument.pipes ?? []).some(
+            (pipe) =>
+              pipe === ParseOptionalCalendarDatePipe ||
+              pipe instanceof ParseOptionalCalendarDatePipe,
+          ),
+        )
+        .map((argument) => argument.index)
+        .sort();
+
+      expect(boundIndexes).toEqual([0, 1]);
+    });
   });
 
-  describe("getRateStatus()", () => {
-    it("delegates to exchangeRateService.getLastUpdateTime and wraps in object", async () => {
-      const lastUpdated = new Date("2024-06-15");
-      mockExchangeRateService.getLastUpdateTime!.mockResolvedValue(lastUpdated);
+  describe("getRateCoverage()", () => {
+    it("delegates to exchangeRateHistoryService.getCoverage with the caller's id", async () => {
+      const coverage = {
+        from: "EUR",
+        to: "PLN",
+        earliestDate: "2026-01-02",
+        latestDate: "2026-09-16",
+        observations: 180,
+      };
+      mockExchangeRateHistoryService.getCoverage!.mockResolvedValue(coverage);
 
-      const result = await controller.getRateStatus();
-
-      expect(result).toEqual({ lastUpdated });
-      expect(mockExchangeRateService.getLastUpdateTime).toHaveBeenCalledWith();
-    });
-
-    it("returns null lastUpdated when no rates exist", async () => {
-      mockExchangeRateService.getLastUpdateTime!.mockResolvedValue(null);
-
-      const result = await controller.getRateStatus();
-
-      expect(result).toEqual({ lastUpdated: null });
+      await expect(controller.getRateCoverage(mockReq, "EUR")).resolves.toEqual(
+        coverage,
+      );
+      expect(mockExchangeRateHistoryService.getCoverage).toHaveBeenCalledWith(
+        "user-1",
+        "EUR",
+      );
     });
   });
 
-  describe("refreshRates()", () => {
-    const summary = {
-      totalPairs: 3,
-      updated: 2,
-      failed: 1,
-      lastUpdated: new Date("2026-08-03T00:00:00Z"),
-      results: [
-        { pair: "USDJPY", success: true, rate: 150 },
-        { pair: "CADNOK", success: false, error: "no quote" },
-      ],
-    };
+  describe("getStoredRates()", () => {
+    it("delegates to exchangeRateHistoryService.getStoredRates with the caller's id", async () => {
+      const listing = {
+        from: "EUR",
+        to: "PLN",
+        rates: [
+          {
+            rateDate: "2026-09-16",
+            rate: 4.3,
+            source: "yahoo_finance",
+            inverted: false,
+          },
+        ],
+        truncated: false,
+        limit: 2000,
+      };
+      mockExchangeRateHistoryService.getStoredRates!.mockResolvedValue(listing);
 
-    it("delegates to exchangeRateService.refreshAllRates", async () => {
-      mockExchangeRateService.refreshAllRates!.mockResolvedValue(summary);
-
-      await controller.refreshRates();
-
-      expect(mockExchangeRateService.refreshAllRates).toHaveBeenCalledWith();
+      await expect(controller.getStoredRates(mockReq, "EUR")).resolves.toEqual(
+        listing,
+      );
+      expect(
+        mockExchangeRateHistoryService.getStoredRates,
+      ).toHaveBeenCalledWith("user-1", "EUR");
     });
 
     /**
-     * The refresh is global -- the pair set is assembled from every user's
-     * accounts, securities and default currency -- and this endpoint is reachable
-     * by any authenticated user, not just an admin. Returning the per-pair results
-     * told the caller which currencies everybody else on the deployment transacts
-     * in, which on a small self-hosted instance is an inference about named
-     * people's finances.
+     * The code reaches a currency comparison, and Express parses a repeated key
+     * into an array, so it is validated by a pipe rather than a bare regular
+     * expression. Calling the method directly bypasses every pipe, so the
+     * wiring is asserted against the metadata Nest would hand it.
      */
-    it("returns counts only, never the per-pair list", async () => {
-      mockExchangeRateService.refreshAllRates!.mockResolvedValue(summary);
+    it("declares the currency-code pipe on the code", () => {
+      const routeArguments = Reflect.getMetadata(
+        "__routeArguments__",
+        CurrenciesController,
+        "getStoredRates",
+      ) as Record<string, { index: number; pipes?: unknown[] }> | undefined;
+      const piped = Object.values(routeArguments ?? {})
+        .filter((argument) =>
+          (argument.pipes ?? []).some(
+            (pipe) =>
+              pipe === ParseCurrencyCodePipe ||
+              pipe instanceof ParseCurrencyCodePipe,
+          ),
+        )
+        .map((argument) => argument.index);
 
-      const result = await controller.refreshRates();
-
-      expect(result).toEqual({
-        totalPairs: 3,
-        updated: 2,
-        failed: 1,
-        lastUpdated: summary.lastUpdated,
-      });
-      expect(result).not.toHaveProperty("results");
-      // Belt and braces: no pair name survives anywhere in the payload, which
-      // also catches one copied into a differently named field.
-      expect(JSON.stringify(result)).not.toContain("CADNOK");
+      expect(piped).toEqual([1]);
     });
   });
 
-  describe("backfillHistoricalRates()", () => {
-    it("delegates to exchangeRateService.backfillHistoricalRates with userId", () => {
-      mockExchangeRateService.backfillHistoricalRates!.mockReturnValue(
-        "backfill",
+  describe("fillRateGaps()", () => {
+    it("delegates to exchangeRateHistoryService.fillRateGaps with the DTO's code", async () => {
+      const fill = {
+        from: "EUR",
+        to: "PLN",
+        usedFrom: "2026-01-01",
+        spanEnd: "2026-09-17",
+        unresolvableDays: 260,
+        windowsPlanned: 1,
+        windowsFetched: 1,
+        windowsSkipped: 0,
+        windowsUnanswered: 0,
+        windowsRemaining: 0,
+        stored: 240,
+        earliestDate: "2025-12-18",
+        providerHasNothingBefore: null,
+      };
+      mockExchangeRateHistoryService.fillRateGaps!.mockResolvedValue(fill);
+
+      await expect(
+        controller.fillRateGaps(mockReq, { code: "EUR" }),
+      ).resolves.toEqual(fill);
+      expect(mockExchangeRateHistoryService.fillRateGaps).toHaveBeenCalledWith(
+        "user-1",
+        "EUR",
       );
+    });
+  });
 
-      const result = controller.backfillHistoricalRates(mockReq);
+  describe("getRateStatus()", () => {
+    it("returns lastUpdated and the configured providers in chain order", async () => {
+      const lastUpdated = new Date("2026-07-20T00:00:00Z");
+      mockExchangeRateService.getLastUpdateTime!.mockResolvedValue(lastUpdated);
+      mockFxProviders.describe!.mockReturnValue([
+        { name: "frankfurter", source: "frankfurter" },
+        { name: "yahoo", source: "yahoo_finance" },
+      ]);
 
-      expect(result).toBe("backfill");
-      expect(
-        mockExchangeRateService.backfillHistoricalRates,
-      ).toHaveBeenCalledWith("user-1");
+      await expect(controller.getRateStatus()).resolves.toEqual({
+        lastUpdated,
+        providers: [
+          { name: "frankfurter", source: "frankfurter" },
+          { name: "yahoo", source: "yahoo_finance" },
+        ],
+      });
+      expect(mockFxProviders.describe).toHaveBeenCalledWith();
+    });
+
+    it("returns providers in whatever order the chain describes them", async () => {
+      mockExchangeRateService.getLastUpdateTime!.mockResolvedValue(null);
+      mockFxProviders.describe!.mockReturnValue([
+        { name: "yahoo", source: "yahoo_finance" },
+        { name: "frankfurter", source: "frankfurter" },
+      ]);
+
+      await expect(controller.getRateStatus()).resolves.toEqual({
+        lastUpdated: null,
+        providers: [
+          { name: "yahoo", source: "yahoo_finance" },
+          { name: "frankfurter", source: "frankfurter" },
+        ],
+      });
     });
   });
 });

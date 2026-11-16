@@ -1,0 +1,113 @@
+{
+  "landing": {
+    "title": "Pajak",
+    "subtitle": "Alat untuk potongan dan pajak yang membentuk gaji Anda",
+    "tools": {
+      "payrollDeductions": {
+        "title": "Potongan Gaji",
+        "description": "Tetapkan batas maksimum tahunan untuk potongan seperti pensiun dan asuransi ketenagakerjaan, dan biarkan gaji berhenti memotongnya setelah batas tercapai."
+      }
+    }
+  },
+  "payroll": {
+    "title": "Potongan Gaji",
+    "subtitle": "Batas maksimum tahunan pada baris potongan tagihan gaji Anda",
+    "backToTaxes": "Kembali ke Pajak",
+    "newButton": "+ Aturan Baru",
+    "loading": "Memuat potongan gaji...",
+    "emptyState": {
+      "title": "Belum ada aturan potongan",
+      "body": "Pilih transaksi terjadwal yang merupakan gaji Anda, pilih kategori potongannya, dan tetapkan maksimum tahunan untuk masing-masing. Transaksi berhenti memungut potongan begitu maksimumnya tercapai dan mulai lagi pada tanggal reset.",
+      "createButton": "Buat Aturan Pertama Anda"
+    },
+    "yearToDate": {
+      "show": "Tampilkan tahun berjalan",
+      "hide": "Sembunyikan tahun berjalan",
+      "title": "Dibayar periode ini",
+      "help": "Jumlah yang telah dipotong kategori ini dalam periode yang memuat hari ini, di semua akun, dalam mata uang tagihan.",
+      "foreignRows": "{count, plural, one {# baris} other {# baris}} dalam mata uang lain tidak dihitung"
+    },
+    "previousPeriods": {
+      "show": "Tampilkan periode sebelumnya",
+      "hide": "Sembunyikan periode sebelumnya",
+      "title": "Periode Sebelumnya",
+      "help": "Yang dipungut setiap kategori pada periode-periode lampaunya, di semua akun, dalam mata uang transaksi. Periode berjalan ada di tabel tahun berjalan.",
+      "loading": "Memuat periode sebelumnya...",
+      "empty": "Belum ada yang dipungut pada periode sebelumnya.",
+      "loadFailed": "Gagal memuat periode sebelumnya"
+    },
+    "list": {
+      "bill": "Tagihan",
+      "category": "Kategori",
+      "yearlyMaximum": "Maksimum tahunan",
+      "nextMaximum": "Mulai {date}: {amount}",
+      "resetsOn": "Diatur ulang pada",
+      "perPaycheque": "Per gaji",
+      "period": "Periode",
+      "paid": "Dibayar",
+      "remaining": "Tersisa",
+      "actions": "Tindakan",
+      "fromLine": "Dari baris tagihan",
+      "entered": "Dimasukkan",
+      "expectedMissing": "Jumlah yang diharapkan diperlukan",
+      "periodRange": "{start} hingga {end}"
+    },
+    "modal": {
+      "newTitle": "Aturan Potongan Baru",
+      "editTitle": "Edit Aturan Potongan"
+    },
+    "form": {
+      "billLabel": "Tagihan gaji terjadwal",
+      "billPlaceholder": "Pilih tagihan yang merupakan gaji Anda",
+      "billHelp": "Setoran terjadwal yang barisnya memuat potongan. Hanya transaksi yang memasukkan lebih banyak daripada yang dipotong yang ditawarkan, dan hanya baris potongannya yang dapat dibatasi.",
+      "categoryLabel": "Kategori potongan {index}",
+      "categoryPlaceholder": "Pilih baris potongan",
+      "yearlyMaximumLabel": "Maksimum tahunan",
+      "yearlyMaximumHelp": "Jumlah terbanyak yang dipotong kategori ini dalam satu periode, dalam mata uang tagihan. Baris dikurangi menjadi sisa ruang yang ada, hingga nol.",
+      "yearlyMaximumSuggested": "Diperkirakan dari yang sudah dipungut kategori ini.",
+      "resetPeriodLabel": "Diatur ulang",
+      "resetDateLabel": "Tanggal pengaturan ulang",
+      "resetDateHelp": "Hitungan dimulai lagi pada hari ini setiap tahun. Biasanya hari pertama tahun.",
+      "expectedLabel": "Diharapkan per gaji",
+      "expectedHelp": "Baris transaksi untuk kategori ini nol, jadi perkiraan memerlukan jumlah yang biasanya dipotong setiap gaji.",
+      "expectedFromLine": "Baris tagihan memotong {amount} per gaji.",
+      "expectedSuggested": "Disarankan dari jumlah yang paling sering muncul pada transaksi Anda di kategori ini selama setahun terakhir.",
+      "thisPeriod": "Periode ini, {start} hingga {end}",
+      "nextPeriod": "Periode berikutnya, mulai {date}",
+      "setNextPeriod": "Tetapkan angka untuk periode berikutnya, mulai {date}",
+      "nextYearlyMaximumLabel": "Maksimum periode berikutnya",
+      "nextYearlyMaximumHelp": "Maksimum mulai reset berikutnya. Biarkan kosong untuk mempertahankan maksimum periode ini. Sisa dan persentase periode ini tidak berubah.",
+      "nextExpectedLabel": "Diharapkan per gaji pada periode berikutnya",
+      "nextExpectedHelp": "Jumlah yang dipotong setiap gaji mulai reset berikutnya. Biarkan kosong untuk mempertahankan jumlah periode ini.",
+      "sameAsThisPeriod": "Sama dengan periode ini",
+      "periods": {
+        "YEARLY": "Tahunan"
+      },
+      "validation": {
+        "billRequired": "Pilih tagihan gaji",
+        "categoryRequired": "Pilih kategori",
+        "yearlyMaximumRequired": "Masukkan batas maksimum tahunan",
+        "resetDateRequired": "Masukkan tanggal pengaturan ulang",
+        "expectedRequired": "Masukkan jumlah yang diharapkan per gaji",
+        "categoryDuplicate": "Kategori ini sudah ada dalam daftar"
+      },
+      "categoriesLegend": "Kategori potongan",
+      "addCategory": "+ Tambah kategori lain",
+      "removeCategory": "Hapus kategori {index}",
+      "noDeductionLines": "Transaksi ini tidak memiliki baris potongan. Tambahkan dahulu potongan sebagai baris pecahan negatif pada transaksi."
+    },
+    "delete": {
+      "title": "Hapus Aturan Potongan",
+      "message": "Hapus aturan {category} pada {bill}? Transaksi yang sudah dicatat tidak berubah; gaji berikutnya mencatat baris penuhnya."
+    },
+    "toasts": {
+      "created": "{count, plural, other {# aturan potongan dibuat}}",
+      "updated": "Aturan potongan diperbarui",
+      "deleted": "Aturan potongan dihapus",
+      "loadFailed": "Gagal memuat potongan gaji",
+      "createFailed": "Gagal membuat aturan potongan",
+      "updateFailed": "Gagal memperbarui aturan potongan",
+      "deleteFailed": "Gagal menghapus aturan potongan"
+    }
+  }
+}

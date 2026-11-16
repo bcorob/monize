@@ -7,11 +7,16 @@ import {
   ApiBearerAuth,
 } from "@nestjs/swagger";
 import { BuiltInReportsService } from "./built-in-reports.service";
+import type { WeekStartsOn } from "./income-expense-buckets";
 import {
+  IncomeVsExpensesQueryDto,
+  CashFlowQueryDto,
   ReportQueryDto,
+  SpendingByCategoryQueryDto,
   SpendingByCategoryResponse,
   SpendingByPayeeResponse,
   IncomeBySourceResponse,
+  IncomeBySourceQueryDto,
   MonthlySpendingTrendResponse,
   IncomeVsExpensesResponse,
   YearOverYearResponse,
@@ -27,9 +32,16 @@ import {
   MonthlyComparisonResponse,
   MonthlyComparisonQueryDto,
   MonthlyCategoryBreakdownResponse,
+  CashFlowSankeyQueryDto,
+  CashFlowSankeyResponse,
+  DEFAULT_RECURRING_EXPENSE_RANGE,
+  isRecurringExpenseRange,
+  MonthlyCategoryBreakdownQueryDto,
 } from "./dto";
+import { AllowPat } from "../auth/pat-access/pat-access.decorator";
 
 @ApiTags("Built-in Reports")
+@AllowPat()
 @Controller("built-in-reports")
 @UseGuards(AuthGuard("jwt"))
 @ApiBearerAuth()
@@ -41,12 +53,18 @@ export class BuiltInReportsController {
   @ApiResponse({ status: 200, type: SpendingByCategoryResponse })
   getSpendingByCategory(
     @Request() req,
-    @Query() query: ReportQueryDto,
+    @Query() query: SpendingByCategoryQueryDto,
   ): Promise<SpendingByCategoryResponse> {
     return this.reportsService.getSpendingByCategory(
       req.user.id,
       query.startDate,
       query.endDate,
+      {
+        rollupToParent: query.rollupToParent,
+        accountIds: query.accountIds,
+        tagKey: query.tagKey,
+        tagValue: query.tagValue,
+      },
     );
   }
 
@@ -69,12 +87,13 @@ export class BuiltInReportsController {
   @ApiResponse({ status: 200, type: IncomeBySourceResponse })
   getIncomeBySource(
     @Request() req,
-    @Query() query: ReportQueryDto,
+    @Query() query: IncomeBySourceQueryDto,
   ): Promise<IncomeBySourceResponse> {
     return this.reportsService.getIncomeBySource(
       req.user.id,
       query.startDate,
       query.endDate,
+      { accountIds: query.accountIds },
     );
   }
 
@@ -93,16 +112,25 @@ export class BuiltInReportsController {
   }
 
   @Get("income-vs-expenses")
-  @ApiOperation({ summary: "Get monthly income vs expenses comparison" })
+  @ApiOperation({
+    summary: "Get income vs expenses, bucketed by month or week",
+  })
   @ApiResponse({ status: 200, type: IncomeVsExpensesResponse })
   getIncomeVsExpenses(
     @Request() req,
-    @Query() query: ReportQueryDto,
+    @Query() query: IncomeVsExpensesQueryDto,
   ): Promise<IncomeVsExpensesResponse> {
     return this.reportsService.getIncomeVsExpenses(
       req.user.id,
       query.startDate,
       query.endDate,
+      {
+        accountIds: query.accountIds,
+        bucket: query.bucket,
+        weekStartsOn: query.weekStartsOn as WeekStartsOn | undefined,
+        tagKey: query.tagKey,
+        transferScopeAccountIds: query.transferScopeAccountIds,
+      },
     );
   }
 
@@ -111,13 +139,36 @@ export class BuiltInReportsController {
   @ApiResponse({ status: 200, type: IncomeVsExpensesResponse })
   getCashFlow(
     @Request() req,
-    @Query() query: ReportQueryDto,
+    @Query() query: CashFlowQueryDto,
   ): Promise<IncomeVsExpensesResponse> {
     // Cash flow uses the same logic as income vs expenses
     return this.reportsService.getIncomeVsExpenses(
       req.user.id,
       query.startDate,
       query.endDate,
+      {
+        tagKey: query.tagKey,
+        accountIds: query.accountIds,
+        transferScopeAccountIds: query.transferScopeAccountIds,
+      },
+    );
+  }
+
+  @Get("cash-flow-sankey")
+  @ApiOperation({
+    summary:
+      "Get where money came from and went over a window, as Sankey nodes and links",
+  })
+  @ApiResponse({ status: 200, type: CashFlowSankeyResponse })
+  getCashFlowSankey(
+    @Request() req,
+    @Query() query: CashFlowSankeyQueryDto,
+  ): Promise<CashFlowSankeyResponse> {
+    return this.reportsService.getCashFlowSankey(
+      req.user.id,
+      query.startDate,
+      query.endDate,
+      { accountIds: query.accountIds, depth: query.depth },
     );
   }
 
@@ -180,14 +231,20 @@ export class BuiltInReportsController {
   getRecurringExpenses(
     @Request() req,
     @Query("minOccurrences") minOccurrences: string = "3",
+    @Query("range") range?: string,
   ): Promise<RecurringExpensesResponse> {
     const safeMinOccurrences = Math.min(
       Math.max(parseInt(minOccurrences, 10) || 3, 1),
       100,
     );
+    // Lenient like minOccurrences: anything but a known preset is the default.
+    const safeRange = isRecurringExpenseRange(range)
+      ? range
+      : DEFAULT_RECURRING_EXPENSE_RANGE;
     return this.reportsService.getRecurringExpenses(
       req.user.id,
       safeMinOccurrences,
+      safeRange,
     );
   }
 
@@ -254,12 +311,13 @@ export class BuiltInReportsController {
   @ApiResponse({ status: 200, type: MonthlyCategoryBreakdownResponse })
   getMonthlyCategoryBreakdown(
     @Request() req,
-    @Query() query: ReportQueryDto,
+    @Query() query: MonthlyCategoryBreakdownQueryDto,
   ): Promise<MonthlyCategoryBreakdownResponse> {
     return this.reportsService.getMonthlyCategoryBreakdown(
       req.user.id,
       query.startDate,
       query.endDate,
+      { accountIds: query.accountIds },
     );
   }
 }

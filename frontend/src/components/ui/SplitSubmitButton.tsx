@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from './Button';
 import { useClickOutside } from '@/hooks/useClickOutside';
+import { CheckIcon, ChevronDownIcon } from '@heroicons/react/24/outline';
 
 /** One selectable behaviour for the form's submit button. */
 export interface SubmitOption {
@@ -39,7 +40,7 @@ interface SplitSubmitButtonProps {
  *
  * The two halves are siblings, not one nested in the other -- a control inside
  * a `<button>` truncates the click target and breaks hydration (see
- * `frontend/CLAUDE.md`). They are joined visually by squaring the facing
+ * `docs/frontend/ui-conventions.md`). They are joined visually by squaring the facing
  * corners.
  */
 export function SplitSubmitButton({
@@ -103,20 +104,7 @@ export function SplitSubmitButton({
         aria-label={optionsLabel}
         className="rounded-l-none border-l border-blue-400 px-2 dark:border-blue-300"
       >
-        <svg
-          className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          aria-hidden="true"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M19 9l-7 7-7-7"
-          />
-        </svg>
+        <ChevronDownIcon className={`h-4 w-4 transition-transform ${isOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
       </Button>
 
       {isOpen && (
@@ -138,22 +126,9 @@ export function SplitSubmitButton({
                 index === 0 ? 'rounded-t-md' : ''
               } ${index === options.length - 1 ? 'rounded-b-md' : ''}`}
             >
-              <svg
-                className={`mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400 ${
+              <CheckIcon className={`mt-0.5 h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400 ${
                   option.id === selected.id ? '' : 'invisible'
-                }`}
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                aria-hidden="true"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M5 13l4 4L19 7"
-                />
-              </svg>
+                }`} aria-hidden="true" />
               <span className="min-w-0">
                 <span className="block text-sm font-medium text-gray-900 dark:text-gray-100">
                   {option.label}

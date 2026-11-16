@@ -99,6 +99,19 @@ export class MonthlyCategoryBreakdownResponse {
   @ApiProperty({ type: [MonthlyBreakdownTransferRow] })
   transfers: MonthlyBreakdownTransferRow[];
 
+  /** Reporting currency every figure above is expressed in. */
   @ApiProperty({ example: "USD" })
   currency: string;
+
+  /**
+   * Source currencies with no usable rate into {@link currency}, so their rows
+   * are in none of the figures above (no category value, deposit or withdrawal
+   * total, transfer row or month). Empty when the report is complete.
+   */
+  @ApiProperty({ type: [String], example: ["JPY"] })
+  missingCurrencies: string[];
+
+  /** How many aggregate rows were left out, by any cause. */
+  @ApiProperty({ example: 0 })
+  excludedCount: number;
 }

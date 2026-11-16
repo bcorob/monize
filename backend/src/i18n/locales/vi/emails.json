@@ -20,15 +20,17 @@
     "typeExpense": "Chi phí",
     "typeUnknown": "Không rõ chiều",
     "amountUnavailable": "Không có số tiền",
+    "estimated": "Ước tính",
+    "estimateUnknown": "Không rõ ước tính: hãy nhập số tiền khi ghi",
     "button": "Xem hóa đơn &amp; tiền gửi"
   },
   "mortgageReminder": {
-    "subject": "Monize: 1 hợp đồng thế chấp sắp gia hạn",
-    "subjectPlural": "Monize: {{ count }} hợp đồng thế chấp sắp gia hạn",
-    "heading": "Nhắc nhở gia hạn thế chấp",
+    "subject": "Monize: 1 kỳ lãi suất thế chấp sắp kết thúc",
+    "subjectPlural": "Monize: {{ count }} kỳ lãi suất thế chấp sắp kết thúc",
+    "heading": "Nhắc nhở kỳ lãi suất thế chấp",
     "greeting": "Xin chào {{ name }},",
-    "introOne": "Bạn có 1 khoản thế chấp sắp gia hạn kỳ hạn. Liên hệ với người cho vay để thảo luận về các lựa chọn gia hạn trước khi kỳ hạn kết thúc:",
-    "introMany": "Bạn có {{ count }} khoản thế chấp sắp gia hạn kỳ hạn. Liên hệ với người cho vay để thảo luận về các lựa chọn gia hạn trước khi kỳ hạn kết thúc:",
+    "introOne": "Bạn có 1 khoản thế chấp có kỳ lãi suất hiện tại sắp kết thúc. Liên hệ với người cho vay trước khi kỳ kết thúc để thỏa thuận lãi suất tiếp theo hoặc gia hạn:",
+    "introMany": "Bạn có {{ count }} khoản thế chấp có kỳ lãi suất hiện tại sắp kết thúc. Liên hệ với người cho vay trước khi mỗi kỳ kết thúc để thỏa thuận lãi suất tiếp theo hoặc gia hạn:",
     "colMortgage": "Thế chấp",
     "colTermEndDate": "Ngày kết thúc kỳ hạn",
     "colTimeRemaining": "Thời gian còn lại",
@@ -117,6 +119,21 @@
     "button": "Xác minh email",
     "disclaimer": "Liên kết này sẽ hết hạn sau 24 giờ. Nếu bạn không tạo tài khoản Monize, bạn có thể bỏ qua email này một cách an toàn."
   },
+  "emailChangeConfirm": {
+    "subject": "Xác nhận email Monize mới của bạn",
+    "heading": "Xác nhận địa chỉ email mới của bạn",
+    "greeting": "Xin chào {{ name }},",
+    "intro": "Đã có yêu cầu sử dụng địa chỉ này cho một tài khoản Monize. Email của bạn sẽ không thay đổi cho đến khi bạn xác nhận bằng cách nhấp vào nút bên dưới:",
+    "button": "Xác nhận thay đổi email",
+    "disclaimer": "Liên kết này sẽ hết hạn sau 24 giờ. Nếu bạn không yêu cầu thay đổi này, bạn có thể bỏ qua email này một cách an toàn."
+  },
+  "emailChangeNotice": {
+    "subject": "Đã yêu cầu thay đổi email Monize",
+    "heading": "Đã yêu cầu thay đổi email",
+    "greeting": "Xin chào {{ name }},",
+    "body1": "Đã có yêu cầu thay đổi địa chỉ email của tài khoản Monize của bạn thành {{ email }}. Thay đổi chỉ có hiệu lực sau khi được xác nhận từ địa chỉ đó.",
+    "body2": "Nếu bạn không thực hiện yêu cầu này, hãy đổi mật khẩu ngay lập tức và kiểm tra các thiết bị đang đăng nhập vào tài khoản của bạn."
+  },
   "accountInvite": {
     "subject": "Tài khoản Monize của bạn đã sẵn sàng",
     "heading": "Tài khoản Monize của bạn đã sẵn sàng",
@@ -186,5 +203,232 @@
     "greeting": "Xin chào {{ name }},",
     "intro": "<strong>{{ provider }}</strong> đã phản hồi lại vào {{ restoredAt }}. Sự cố kéo dài {{ duration }}.",
     "backfill": "Giá và lịch sử chỉ số bị thiếu trong thời gian sự cố sẽ được lấy ở lần làm mới định kỳ tiếp theo; bạn không cần làm gì."
+  },
+  "systemAlert": {
+    "subject": "Monize: {{ title }}",
+    "heading": "Cảnh báo hệ thống",
+    "greeting": "Xin chào {{ name }},",
+    "intro": "Một sự cố trong bản cài đặt Monize của bạn cần quản trị viên xử lý.",
+    "footer": "Cảnh báo này cũng hiển thị ở chuông thông báo của ứng dụng. Nó chỉ được tạo tối đa một lần cho mỗi sự cố, bất kể bao nhiêu bản sao máy chủ phát hiện ra."
+  },
+  "notificationImmediate": {
+    "subject": "Bạn có một thông báo Monize mới",
+    "eyebrow": "Thông báo Monize",
+    "button": "Mở trong Monize",
+    "footer": "Bạn nhận được email này vì email tức thì đang bật cho loại thông báo này. Thay đổi trong Cài đặt, Thông báo."
+  },
+  "notificationCopy": {
+    "billDue": {
+      "titleOverdue": "{{ payee }} đã quá hạn",
+      "titleToday": "{{ payee }} đến hạn hôm nay",
+      "titleTomorrow": "{{ payee }} đến hạn ngày mai",
+      "titleInDays": "{{ payee }} đến hạn sau {{ days }} ngày",
+      "amountDue": "{{ amount }} đến hạn vào {{ date }}",
+      "amountUnavailable": "Không có số tiền (không có tỷ giá hiện tại), đến hạn vào {{ date }}"
+    },
+    "gemSignal": {
+      "riskTitle": "{{ strategy }} đã chuyển sang {{ state }}",
+      "riskMessage": "Chiến lược GEM \"{{ strategy }}\" của bạn đã thay đổi từ {{ fromState }} sang {{ toState }}. Mở để xem lại khuyến nghị.",
+      "allocationTitle": "{{ strategy }} đã thay đổi mục tiêu",
+      "allocationMessage": "Chiến lược GEM \"{{ strategy }}\" của bạn hiện nhắm đến {{ target }}. Mở để xem lại khuyến nghị.",
+      "riskOn": "risk-on",
+      "riskOff": "risk-off",
+      "roles": {
+        "US_EQUITY": "S&P 500",
+        "EX_US_EQUITY": "Thị trường phát triển ngoài Mỹ",
+        "EM_EQUITY": "Thị trường mới nổi",
+        "SAFE": "Tài sản an toàn",
+        "RISK_FREE": "Chuẩn phi rủi ro"
+      },
+      "allocationMessageUnknown": "Chiến lược GEM “{{ strategy }}” của bạn đã thay đổi mục tiêu. Mở để xem lại khuyến nghị."
+    },
+    "portfolioMovement": {
+      "titleUp": "Đầu tư tăng {{ percent }}%",
+      "titleDown": "Đầu tư giảm {{ percent }}%",
+      "messageUp": "Các khoản đầu tư của bạn tăng {{ percent }}% từ {{ from }} đến {{ to }}, không tính nạp và rút tiền. Mở để xem lại.",
+      "messageDown": "Các khoản đầu tư của bạn giảm {{ percent }}% từ {{ from }} đến {{ to }}, không tính nạp và rút tiền. Mở để xem lại."
+    },
+    "balanceThreshold": {
+      "titleLow": "{{ account }} dưới ngưỡng của bạn",
+      "titleHigh": "{{ account }} trên ngưỡng của bạn",
+      "messageLow": "{{ account }} đã giảm xuống {{ balance }}, dưới ngưỡng {{ threshold }} của bạn.",
+      "messageHigh": "{{ account }} đã tăng lên {{ balance }}, trên ngưỡng {{ threshold }} của bạn."
+    },
+    "system": {
+      "backupFailed": {
+        "title": "Sao lưu tự động thất bại",
+        "message": "Sao lưu tự động cho {{ user }} đã thất bại: {{ error }}"
+      },
+      "backupPartial": {
+        "title": "Sao lưu tự động chưa hoàn chỉnh",
+        "messageAttachments": "Bản sao lưu cho {{ user }} đã được ghi, nhưng không thể đưa vào {{ missing }} trong số {{ expected }} tệp đính kèm và {{ inconsistent }} tệp không khớp với siêu dữ liệu của chúng. Các bản sao lưu đầy đủ đã được giữ nguyên.",
+        "messagePromotion": "Bản sao lưu hằng ngày cho {{ user }} đã thành công, nhưng không thể ghi bản sao hằng tuần hoặc hằng tháng: {{ error }}",
+        "messageRetention": "Bản sao lưu cho {{ user }} đã thành công, nhưng không thể dọn dẹp các tệp sao lưu cũ: {{ error }}"
+      },
+      "encryptionKeyMissing": {
+        "title": "Chưa cấu hình khóa mã hóa",
+        "message": "ENCRYPTION_KEY chưa được đặt, nên các bản sao lưu được ghi không mã hóa và không thể lưu trữ thông tin bí mật. Phiên bản tương lai sẽ không khởi động nếu thiếu khóa này."
+      },
+      "jwtSecretWeak": {
+        "title": "JWT_SECRET yếu",
+        "message": "JWT_SECRET là giá trị mẫu đã được công bố hoặc quá dễ đoán, nên token phiên có thể bị giả mạo. Hãy tạo một giá trị mạnh (openssl rand -base64 32). Việc thay đổi sẽ khiến mã từ ứng dụng xác thực không còn dùng được và quên các thiết bị đáng tin cậy: người dùng đăng nhập bằng mã dự phòng rồi thiết lập lại 2FA, còn với những ai không có mã dự phòng, bạn đặt lại 2FA trong Quản lý người dùng. Hãy đọc trước docs/backend/modules-and-runtime.md (Changing JWT_SECRET)."
+      },
+      "smtpFailure": {
+        "title": "Gửi email đang thất bại",
+        "message": "Monize không thể gửi email: {{ error }}. Thông báo và lời nhắc không được gửi đi."
+      },
+      "providerOutage": {
+        "title": "{{ provider }} không phản hồi",
+        "message": "Dữ liệu thị trường từ {{ provider }} hiện không khả dụng. Giá và dữ liệu chỉ số có thể lỗi thời cho đến khi nhà cung cấp phản hồi trở lại."
+      },
+      "providerRecovered": {
+        "title": "{{ provider }} đã phản hồi trở lại",
+        "message": "Sự cố đã kết thúc và dữ liệu thị trường từ {{ provider }} đang được cập nhật trở lại."
+      },
+      "scheduledPostFailed": {
+        "title": "Không thể ghi nhận {{ name }}",
+        "message": "Giao dịch định kỳ của bạn đến hạn {{ date }} đã không được ghi nhận tự động: {{ error }}. Bạn có thể ghi nhận thủ công trong mục Hóa đơn & Tiền gửi."
+      }
+    },
+    "budget": {
+      "overTitle": "{{ category }} đã vượt ngân sách",
+      "overMessage": "Bạn đã chi {{ amount }} trong ngân sách {{ limit }} cho {{ category }} ({{ percent }}%).",
+      "criticalTitle": "{{ category }} sắp đạt giới hạn",
+      "warningTitle": "{{ category }} đang chạm giới hạn ngân sách",
+      "thresholdMessage": "Bạn đã sử dụng {{ percent }}% ngân sách cho {{ category }} ({{ amount }} trên {{ limit }}).",
+      "projectedTitle": "Dự kiến {{ category }} sẽ vượt ngân sách",
+      "projectedMessage": "Với tốc độ hiện tại, chi tiêu cho {{ category }} dự kiến đạt {{ projected }} vào cuối kỳ (ngân sách: {{ budgeted }}).",
+      "flexTitle": "Nhóm linh hoạt “{{ group }}” ở mức {{ percent }}%",
+      "flexMessage": "Nhóm linh hoạt “{{ group }}” đã sử dụng {{ spent }} trong tổng ngân sách {{ budgeted }} ({{ percent }}%).",
+      "incomeTitle": "Thu nhập thấp hơn dự kiến",
+      "incomeMessage": "Thu nhập thực tế của bạn ({{ actual }}) bằng {{ ratio }}% thu nhập dự kiến ({{ expected }}) tại thời điểm này của kỳ.",
+      "milestoneTitle": "Ngân sách đang đúng kế hoạch",
+      "milestoneMessage": "Đã qua {{ progress }}% kỳ và bạn mới sử dụng {{ percent }}% tổng ngân sách. Hãy tiếp tục phát huy!",
+      "seasonalTitle": "Dự kiến chi tiêu cho {{ category }} tăng theo mùa",
+      "seasonalMessage": "Vào {{ month }} lần trước, bạn đã chi cho {{ category }} gấp {{ increase }} lần bình thường. Hãy cân nhắc điều chỉnh ngân sách."
+    },
+    "priceMovement": {
+      "title": "Cảnh báo biến động giá: {{ symbol }} ({{ percent }}%)",
+      "message": "{{ symbol }}: {{ percent }}% so với phiên có dữ liệu trước đó."
+    },
+    "bankSync": {
+      "expiringTitleToday": "{{ institution }}: quyền truy cập ngân hàng kết thúc hôm nay",
+      "expiringTitleOneDay": "{{ institution }}: quyền truy cập ngân hàng kết thúc trong vòng 1 ngày",
+      "expiringTitleDays": "{{ institution }}: quyền truy cập ngân hàng kết thúc trong vòng {{ days }} ngày",
+      "expiringMessage": "Sự đồng ý của bạn cho Monize đọc {{ institution }} sẽ kết thúc vào {{ date }}. Hãy gia hạn kết nối trong Monize để tiếp tục đồng bộ.",
+      "expiredTitle": "{{ institution }}: quyền truy cập ngân hàng đã kết thúc",
+      "expiredMessage": "Sự đồng ý của bạn cho Monize đọc {{ institution }} đã kết thúc. Hãy gia hạn kết nối trong Monize để đồng bộ trở lại.",
+      "failedTitle": "{{ institution }}: đồng bộ thất bại",
+      "failedMessage": "Đồng bộ hằng ngày của {{ institution }} đã thất bại với: {{ accounts }}. Mở cài đặt đồng bộ ngân hàng để xem lý do.",
+      "failedCredentialsMessage": "Không thể bắt đầu đồng bộ hằng ngày của {{ institution }} vì thông tin xác thực đồng bộ ngân hàng bị thiếu hoặc bị từ chối. Hãy kiểm tra chúng trong cài đặt đồng bộ ngân hàng.",
+      "unnamedAccount": "một tài khoản",
+      "importedTitle": "{{ institution }}: đã nhập giao dịch mới",
+      "importedMessage": "Các giao dịch được nhập từ {{ institution }} bởi đồng bộ hằng ngày: {{ imported }}.",
+      "importedNoneTitle": "{{ institution }}: không có giao dịch mới",
+      "importedNoneMessage": "Đồng bộ hằng ngày của {{ institution }} không tìm thấy giao dịch mới."
+    },
+    "bond": {
+      "maturitySoonTitle": "{{ series }} đáo hạn vào {{ date }}",
+      "maturitySoonMessage": "{{ quantity }} × {{ series }} đáo hạn vào {{ date }}. {{ payout }}",
+      "interestTitle": "{{ series }}: trả lãi vào {{ date }}",
+      "interestMessage": "{{ quantity }} × {{ series }} trả {{ amount }} tiền lãi vào {{ date }}. Hãy ghi nhận trên trang chứng khoán nếu khoản này chưa có trong tài khoản của bạn.",
+      "interestMessageUnknown": "{{ quantity }} × {{ series }} trả lãi vào {{ date }}. Số tiền chưa được biết: lãi suất mà nó phụ thuộc chưa được công bố.",
+      "rateResetTitle": "{{ series }}: kỳ tính lãi mới",
+      "rateResetMessage": "{{ series }} bước vào kỳ {{ period }} vào {{ date }} với lãi suất {{ rate }} một năm.",
+      "unbookedTitle": "{{ series }}: đã đáo hạn, chưa ghi nhận thanh toán",
+      "unbookedMessage": "{{ quantity }} × {{ series }} đã đáo hạn vào {{ date }} và chưa có khoản thanh toán nào được ghi nhận. {{ payout }} Hãy ghi nhận khoản thanh toán trên trang chứng khoán.",
+      "payoutKnown": "Số tiền nhận được là {{ payout }}.",
+      "payoutUnknown": "Số tiền nhận được chưa được biết: {{ reason }}.",
+      "reason": {
+        "RATE_UNKNOWN": "lãi suất mà nó phụ thuộc chưa được công bố",
+        "TERMS_INCOMPLETE": "điều khoản của đợt phát hành chưa đầy đủ",
+        "PURCHASE_OUTSIDE_SALE_WINDOW": "ngày mua nằm ngoài thời gian bán của đợt phát hành",
+        "PURCHASE_AFTER_MATURITY": "ngày mua trùng hoặc sau ngày đáo hạn của chuỗi",
+        "other": "không thể tính từ dữ liệu đã lưu"
+      },
+      "benchmarkTitle": "{{ benchmark }}: quan sát mới {{ observation }}",
+      "benchmarkMessage": "{{ publisher }} đã công bố {{ benchmark }} cho {{ observation }}: {{ value }}. Được {{ series }} sử dụng.",
+      "benchmarkMessageMore": "{{ publisher }} đã công bố {{ benchmark }} cho {{ observation }}: {{ value }}. Được {{ series }} và {{ more }} đợt khác sử dụng.",
+      "missingTitle": "Chưa biết các số liệu trái phiếu",
+      "missingMessage": "Một số số liệu trái phiếu không thể tính được: {{ causes }}.",
+      "benchmarks": {
+        "PL_CPI_GUS_YOY": "CPI, 12 tháng (GUS)",
+        "PL_NBP_REFERENCE": "Lãi suất tham chiếu NBP"
+      },
+      "cause": {
+        "observation": "quan sát {{ observation }} của {{ benchmark }} ({{ publisher }}) chưa được lưu: chưa được công bố, hoặc nguồn dữ liệu chưa được tải lại kể từ đó; hãy làm mới trên trang trái phiếu",
+        "observationNoPublisher": "quan sát {{ observation }} của {{ benchmark }} chưa được lưu: chưa được công bố, hoặc nguồn dữ liệu chưa được tải lại kể từ đó; hãy làm mới trên trang trái phiếu",
+        "terms": "điều khoản của {{ series }} chưa đầy đủ; hãy làm mới đợt phát hành trên trang trái phiếu",
+        "purchase": "lần mua {{ series }} vào {{ date }} nằm ngoài thời gian bán ({{ from }} đến {{ to }}); hãy sửa ngày mua",
+        "purchaseAfterMaturity": "việc mua {{ series }} vào {{ date }} trùng hoặc sau ngày đáo hạn ({{ maturity }}); hãy sửa ngày mua",
+        "lots": "không thể suy ra các lô từ sổ cái ({{ code }}); hãy sửa sổ cái",
+        "lotsRow": "{{ action }} ngày {{ date }}: không thể suy ra các lô ({{ code }}); hãy sửa giao dịch",
+        "lotsRowSeries": "{{ action }} ngày {{ date }}: chưa gán series ({{ code }}); hãy chọn series trong giao dịch đó",
+        "lotsRowRemoval": "{{ action }} ngày {{ date }}: rút nhiều hơn số tài khoản đang giữ của series đó ({{ code }}); hãy sửa giao dịch"
+      },
+      "action": {
+        "BUY": "mua",
+        "SELL": "bán",
+        "REINVEST": "tái đầu tư",
+        "ADD_SHARES": "thêm cổ phần",
+        "REMOVE_SHARES": "bớt cổ phần",
+        "SPLIT": "chia tách (split)",
+        "TRANSFER_IN": "chuyển vào",
+        "TRANSFER_OUT": "chuyển ra",
+        "other": "giao dịch"
+      }
+    },
+    "emailReceiptsAttention": {
+      "title": "Biên lai email cần chú ý",
+      "message": "Hộp inbox biên lai của bạn chứa {{ noParser }} không có profil và {{ parseFailed }} mà profil của họ không nhận dạng được. Mở để xem xét."
+    },
+    "aiReview": {
+      "readyTitle": "Đề xuất xem xét của AI đang chờ bạn",
+      "readyMessage": "Số đề xuất đang chờ quyết định của bạn: {{ count }}. Mới kể từ thông báo trước: {{ added }}. Mở để xem xét.",
+      "expiringTitle": "Đề xuất xem xét của AI sắp hết hạn",
+      "expiringMessage": "Số đề xuất hết hạn trong vòng 3 ngày: {{ count }}. Đề xuất đầu tiên hết hạn vào {{ date }}. Mở để xem xét."
+    },
+    "warranty": {
+      "expiringTitle": "{{ name }}: bảo hành sắp hết hạn",
+      "expiringMessage": "Bảo hành của {{ name }} hết hạn vào {{ date }}. Mở để xem tài liệu hoặc ghi lại yêu cầu bảo hành.",
+      "todayTitle": "{{ name }}: bảo hành hết hạn hôm nay",
+      "todayMessage": "Bảo hành của {{ name }} hết hạn hôm nay, {{ date }}. Mở để xem tài liệu hoặc ghi lại yêu cầu bảo hành."
+    },
+    "security": {
+      "oauthTitle": "Ứng dụng mới đã kết nối: {{ clientName }}",
+      "oauthMessage": "Ứng dụng {{ clientName }} vừa được cấp quyền truy cập vào tài khoản Monize của bạn. Nếu không phải bạn, hãy đổi mật khẩu ngay: thao tác này thu hồi quyền truy cập của mọi ứng dụng đã kết nối.",
+      "relayTitle": "Một kết nối mới đã trả lời cuộc trò chuyện AI của bạn",
+      "relayMessage": "Một kết nối chưa từng trả lời cuộc trò chuyện AI Monize của bạn vừa nhận một câu lệnh. Nếu bạn không kết nối trợ lý này, hãy đổi mật khẩu."
+    },
+    "payrollDeduction": {
+      "resetTitle": "{{ category }}: xác nhận mức tối đa cho năm tới",
+      "resetMessage": "Khoản khấu trừ {{ category }} trên {{ bill }} sẽ đặt lại vào {{ date }}. Hãy cập nhật mức tối đa hằng năm nếu thay đổi; nếu không, {{ amount }} sẽ áp dụng lại."
+    },
+    "shared": {
+      "title": "Chi phí chung",
+      "message": "Một nhóm chung có cập nhật. Mở Monize để xem lại."
+    }
+  },
+  "backupOffsite": {
+    "copySubject": "Bản sao lưu Monize {{ filename }}",
+    "copyHeading": "Bản sao lưu Monize của bạn được đính kèm",
+    "copyIntro": "Đây là bản sao lưu tự động {{ tier }} của tài khoản Monize của bạn cho ngày {{ date }}. Tệp được đính kèm trong email này.",
+    "copyEncrypted": "Tệp đính kèm được mã hoá bằng mật khẩu sao lưu Monize của bạn. Không thể mở tệp nếu không có mật khẩu đó, và Monize không thể khôi phục mật khẩu giúp bạn -- hãy giữ mật khẩu ở nơi khác ngoài hộp thư này.",
+    "copyRestore": "Để khôi phục, hãy mở Monize, vào Cài đặt, Sao lưu &amp; Khôi phục, tải tệp này lên và nhập mật khẩu sao lưu của bạn.",
+    "copyVerify": "SHA-256 ở trên là của các byte đính kèm, nên sau này bạn có thể kiểm tra bản sao mình giữ đúng là bản mà email này đã gửi.",
+    "tooLargeSubject": "Bản sao lưu Monize {{ filename }} quá lớn để gửi qua email",
+    "tooLargeHeading": "Bản sao lưu Monize của bạn chưa được gửi qua email",
+    "tooLargeIntro": "Bản sao lưu hôm nay là {{ size }}, vượt quá {{ limit }} mà bản triển khai này cho phép đối với bản sao lưu gửi qua email (BACKUP_EMAIL_MAX_BYTES).",
+    "tooLargeNoBytes": "Không có gì được đính kèm trong email này, và cũng không có liên kết tải xuống -- một liên kết như vậy sẽ cần thông tin xác thực có thể đọc lại các bản sao lưu của bạn từ kho lưu trữ, điều mà tính năng này không có.",
+    "tooLargeUnaffected": "Bản sao lưu vẫn được ghi bình thường. Bản sao trên máy chủ này không bị ảnh hưởng, và bản sao tại đích S3 của bạn cũng vậy nếu bạn đã bật.",
+    "tooLargeWhatToDo": "Để giữ một bản sao ngoài máy cho bản sao lưu cỡ này, hãy tải xuống từ Cài đặt, Sao lưu &amp; Khôi phục, bật đích S3, hoặc đề nghị quản trị viên nâng giới hạn email.",
+    "labelFile": "Tệp",
+    "labelSize": "Kích thước",
+    "labelTier": "Lưu giữ",
+    "labelLimit": "Giới hạn email",
+    "labelDigest": "SHA-256",
+    "tierDaily": "hằng ngày",
+    "tierWeekly": "hằng tuần",
+    "tierMonthly": "hằng tháng"
   }
 }

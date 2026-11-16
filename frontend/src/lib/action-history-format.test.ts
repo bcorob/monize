@@ -46,6 +46,16 @@ describe('renderActionDescription', () => {
     );
   });
 
+  it('renders a manual rule run with its name and count', () => {
+    expect(
+      renderActionDescription(t, {
+        description: 'Ran rule "Coffee" on 3 transactions',
+        descriptionKey: 'ranTransactionRule',
+        descriptionParams: { name: 'Coffee', count: 3 },
+      }),
+    ).toBe('actionHistory.descriptions.ranTransactionRule::{"name":"Coffee","count":3}');
+  });
+
   it('passes an empty params object for keys without params', () => {
     expect(
       renderActionDescription(t, {
@@ -83,6 +93,9 @@ describe('renderActionDescription', () => {
 
   it('covers every description key the backend can emit', () => {
     expect(KNOWN_DESCRIPTION_KEYS.has('createdTransfer')).toBe(true);
-    expect(KNOWN_DESCRIPTION_KEYS.size).toBe(39);
+    expect(KNOWN_DESCRIPTION_KEYS.has('convertedToTransfer')).toBe(true);
+    expect(KNOWN_DESCRIPTION_KEYS.has('convertedToTransaction')).toBe(true);
+    expect(KNOWN_DESCRIPTION_KEYS.has('postedScheduledTransaction')).toBe(true);
+    expect(KNOWN_DESCRIPTION_KEYS.size).toBe(44);
   });
 });

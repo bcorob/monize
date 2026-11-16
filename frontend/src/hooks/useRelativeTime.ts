@@ -19,9 +19,9 @@ const UNITS: [Intl.RelativeTimeFormatUnit, number][] = [
  *
  * `Intl.RelativeTimeFormat` rather than catalog strings: it already knows every
  * locale's wording and plural rules, so a headline list needs no
- * "{n}m ago" key per language and cannot get Polish plurals wrong. The existing
- * `formatRelativeTime` in `lib/format.ts` hardcodes English ("5m ago") -- fine
- * where it already sits, but not something to spread into new UI.
+ * "{n}m ago" key per language and cannot get Polish plurals wrong. It is the
+ * one relative-time formatter: the English-only `formatRelativeTime` that
+ * `lib/format.ts` used to carry was removed.
  *
  * Resolves the locale the same way `useDateFormat` does: an explicit language
  * wins, and the pseudo-locale or "browser" hands off to the runtime default.

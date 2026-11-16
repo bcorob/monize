@@ -14,6 +14,8 @@ import { TransactionAnalyticsService } from "./transaction-analytics.service";
 import { TransactionBulkUpdateService } from "./transaction-bulk-update.service";
 import { TransactionToolPrepService } from "./transaction-tool-prep.service";
 import { JointRegisterService } from "./joint-register.service";
+import { TransactionBulkCreateService } from "./transaction-bulk-create.service";
+import { TransactionConversionService } from "./transaction-conversion.service";
 import { TransactionsController } from "./transactions.controller";
 import { AccountsModule } from "../accounts/accounts.module";
 import { PayeesModule } from "../payees/payees.module";
@@ -22,6 +24,7 @@ import { NetWorthModule } from "../net-worth/net-worth.module";
 import { ActionHistoryModule } from "../action-history/action-history.module";
 import { SecuritiesModule } from "../securities/securities.module";
 import { DelegationModule } from "../delegation/delegation.module";
+import { TransactionRulesModule } from "../transaction-rules/transaction-rules.module";
 import { CurrenciesModule } from "../currencies/currencies.module";
 
 @Module({
@@ -37,8 +40,15 @@ import { CurrenciesModule } from "../currencies/currencies.module";
     forwardRef(() => AccountsModule),
     forwardRef(() => NetWorthModule),
     forwardRef(() => SecuritiesModule),
-    PayeesModule,
-    TagsModule,
+    // PayeesModule reaches DelegationModule (the payee detail page's delegate
+    // scope), which reaches back here -- see `src/module-graph.spec.ts`.
+    forwardRef(() => PayeesModule),
+    // forwardRef: TagsModule reaches back here through DelegationModule.
+    forwardRef(() => TagsModule),
+    // The rules step of create() and previewCreate().
+    // forwardRef: the rules module reaches TransactionsModule back through the
+    // assistant's rule tools (AccountsModule, PayeesModule).
+    forwardRef(() => TransactionRulesModule),
     ActionHistoryModule,
     // forwardRef on both: each lies on a require cycle, so a bare reference is
     // `undefined` here under some load orders -- see `src/module-graph.spec.ts`.
@@ -56,10 +66,13 @@ import { CurrenciesModule } from "../currencies/currencies.module";
     TransactionBulkUpdateService,
     TransactionToolPrepService,
     JointRegisterService,
+    TransactionBulkCreateService,
+    TransactionConversionService,
   ],
   controllers: [TransactionsController],
   exports: [
     TransactionsService,
+    TransactionSplitService,
     TransactionAnalyticsService,
     TransactionTransferService,
     TransactionToolPrepService,

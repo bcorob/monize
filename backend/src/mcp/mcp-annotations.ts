@@ -1,4 +1,4 @@
-import { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
+import { ToolAnnotations } from "@modelcontextprotocol/server";
 
 /**
  * Shared MCP tool annotations.
@@ -10,7 +10,8 @@ import { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
  * (`destructiveHint`/`idempotentHint` default to true/false respectively, which
  * is wrong for our read-only tools). Every Monize tool operates over the
  * authenticated user's own closed financial dataset, so `openWorldHint` is
- * always `false` (no external/open-world interaction).
+ * `false` (no external/open-world interaction), except `FETCH_EXTERNAL`: the one
+ * tool that reads an external site (`fetch_bond_series`).
  *
  * Pick the constant that matches the tool's effect:
  * - `READ_ONLY`  -- queries/aggregations that never mutate state (idempotent,
@@ -18,6 +19,8 @@ import { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
  * - `CREATE`     -- adds a new record (non-idempotent, non-destructive).
  * - `UPDATE`     -- sets fields to given values (idempotent, non-destructive).
  * - `DELETE`     -- removes a record (destructive; idempotent end-state).
+ * - `FETCH_EXTERNAL` -- stores reference data read from an external site; a
+ *                   repeat converges (created=false), so it is idempotent.
  * - `WRITE`      -- a combined create/update/delete tool whose effect varies per
  *                   call (e.g. `manage_transactions`): destructive (can delete),
  *                   non-idempotent (can create).
@@ -29,6 +32,7 @@ import { ToolAnnotations } from "@modelcontextprotocol/sdk/types.js";
  * | UPDATE    | false    | false       | true       | false     |
  * | DELETE    | false    | true        | true       | false     |
  * | WRITE     | false    | true        | false      | false     |
+ * | FETCH_EXTERNAL | false | false       | true       | true      |
  */
 
 // A read-only query never mutates state, so it is non-destructive and
@@ -70,4 +74,14 @@ export const WRITE: ToolAnnotations = {
   destructiveHint: true,
   idempotentHint: false,
   openWorldHint: false,
+};
+
+// Reads one document from an external site and stores it as reference data
+// (never the user's ledger). Open world; a repeat finds the stored row and
+// changes nothing, so it is idempotent.
+export const FETCH_EXTERNAL: ToolAnnotations = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: true,
 };

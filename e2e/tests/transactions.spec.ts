@@ -119,3 +119,155 @@ test.describe('Transactions', () => {
     await expect(dialog.getByText(/amount is required/i)).toBeVisible();
   });
 });
+
+// Sorting the register (issue #521). The account filter is what makes the
+// Balance column appear at all, so these seed one account and reach it through
+// the URL the account page links to, rather than driving the filter panel.
+test.describe('Register sorting', () => {
+  test('sorts by a column, and hides the balance while it is not by date', async ({
+    authedPage: page,
+    api,
+  }) => {
+    const account = await createAccount(api, { name: `Sort Account ${uniqueId()}` });
+    const alpha = `AAA Payee ${uniqueId()}`;
+    const zulu = `ZZZ Payee ${uniqueId()}`;
+    await createTransaction(api, {
+      accountId: account.id,
+      amount: -10,
+      payeeName: zulu,
+      transactionDate: '2026-01-01',
+    });
+    await createTransaction(api, {
+      accountId: account.id,
+      amount: -20,
+      payeeName: alpha,
+      transactionDate: '2026-01-02',
+    });
+
+    await page.goto(`/transactions?accountIds=${account.id}`);
+
+    // Scoped to the register: the page also draws a chart and a filter panel
+    // above it, and a future table mounted between them would silently
+    // redirect a bare `tbody tr`.
+    const registerRows = page.locator('table tbody tr').first();
+
+    // Date order is the default, and it is what a balance means anything in.
+    const balanceHeader = page.getByRole('columnheader', { name: /^balance$/i });
+    await expect(balanceHeader).toBeVisible();
+    const dateHeader = page.getByRole('columnheader', { name: /^date/i });
+    await expect(dateHeader).toHaveAttribute('aria-sort', 'descending');
+
+    // Sorting by payee puts AAA first and takes the balance away, naming the
+    // way back rather than leaving the column silently missing.
+    await page.getByRole('columnheader', { name: /^payee$/i }).click();
+    await expect(page.getByRole('columnheader', { name: /^payee$/i })).toHaveAttribute(
+      'aria-sort',
+      'ascending',
+    );
+    await expect(balanceHeader).toBeHidden();
+    await expect(page.getByText(/sort by date to see the running balance/i)).toBeVisible();
+    await expect(registerRows).toContainText(alpha);
+
+    // The choice survives a reload, like the row density does -- and it is
+    // re-sent to the server, which the rows are what prove.
+    await page.reload();
+    await expect(page.getByRole('columnheader', { name: /^payee$/i })).toHaveAttribute(
+      'aria-sort',
+      'ascending',
+    );
+    await expect(registerRows).toContainText(alpha);
+    await expect(balanceHeader).toBeHidden();
+  });
+
+  test('shows a row the same balance in either date direction', async ({
+    authedPage: page,
+    api,
+  }) => {
+    const account = await createAccount(api, {
+      name: `Balance Order ${uniqueId()}`,
+      openingBalance: 1000,
+    });
+    const older = `Older ${uniqueId()}`;
+    const newer = `Newer ${uniqueId()}`;
+    await createTransaction(api, {
+      accountId: account.id,
+      amount: -10,
+      payeeName: older,
+      transactionDate: '2026-01-01',
+    });
+    await createTransaction(api, {
+      accountId: account.id,
+      amount: -20,
+      payeeName: newer,
+      transactionDate: '2026-01-02',
+    });
+
+    await page.goto(`/transactions?accountIds=${account.id}`);
+
+    // The whole row, which is the balance plus the date, payee and amount that
+    // reversing the register cannot change. Comparing it whole is what makes
+    // this an assertion about the BALANCE: everything else in it is already
+    // known to be identical, so a difference can only be the balance.
+    const rowText = async (payee: string) => {
+      const row = page.locator('tr', { hasText: payee });
+      await expect(row).toBeVisible();
+      return row.innerText();
+    };
+
+    const olderDescending = await rowText(older);
+    const newerDescending = await rowText(newer);
+
+    // Reverse the register from the keyboard, not with a click. The Date
+    // header holds the year toggle, and that control's wrapper stops the event
+    // before it reaches the header -- deliberately, so pressing it does not
+    // also sort -- and the toggle is what Playwright's click lands on, because
+    // a click with no position goes to the centre of the cell. Enter reaches
+    // the header's own handler with no hit-testing at all: the `<th>` carries
+    // tabIndex and an activateOnKey handler for exactly this. The mouse path
+    // is covered by the Payee header above, which holds no control.
+    const dateHeader = page.getByRole('columnheader', { name: /^date/i });
+    await dateHeader.press('Enter');
+    await expect(dateHeader).toHaveAttribute('aria-sort', 'ascending');
+    await expect(page.locator('table tbody tr').first()).toContainText(older);
+
+    expect(await rowText(older)).toBe(olderDescending);
+    expect(await rowText(newer)).toBe(newerDescending);
+  });
+});
+
+// Hideable columns (issue #1708): the register's "Columns" menu hides a
+// column from the DOM at every width and this browser remembers the choice
+// across a reload; the menu is also the one way to bring it back.
+test.describe('Hideable columns', () => {
+  test('hides a register column through the menu, keeps it hidden across a reload, and restores it', async ({
+    authedPage: page,
+    api,
+  }) => {
+    const account = await createAccount(api, { name: `Hideable Register ${uniqueId()}` });
+    await createTransaction(api, {
+      accountId: account.id,
+      payeeName: `Hideable Row ${uniqueId()}`,
+    });
+
+    await page.goto(`/transactions?accountIds=${account.id}`);
+
+    const statusHeader = page.getByRole('columnheader', { name: /^status/i });
+    await expect(statusHeader).toBeVisible();
+
+    await page.getByRole('button', { name: /^columns\b/i }).click();
+    const menu = page.getByRole('menu', { name: /show or hide columns/i });
+    // The choice is saved to this browser's localStorage synchronously
+    // (useHiddenColumnsStore), so the reload below reads it back.
+    await menu.getByRole('menuitemcheckbox', { name: /^status$/i }).click();
+
+    await expect(statusHeader).toHaveCount(0);
+
+    await page.reload();
+    await expect(statusHeader).toHaveCount(0);
+
+    await page.getByRole('button', { name: /^columns\b/i }).click();
+    await menu.getByRole('menuitemcheckbox', { name: /^status$/i }).click();
+
+    await expect(statusHeader).toBeVisible();
+  });
+});

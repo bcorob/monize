@@ -7,12 +7,11 @@ on:
     branches: [main, develop]
   # Two publish paths share this file:
   #
-  #   * Preview (open PR + push to main): builds a lightweight image so work is
-  #     pullable before a formal release (issue #727). A push to main moves a
-  #     single `:beta` tag (multi-arch); an open PR publishes `:pr-<number>`
-  #     (amd64 only -- no emulated arm64 -- to keep PR builds fast). No version
-  #     bump, no GitHub release, no cosign/SBOM. PR builds run only for same-repo
-  #     PRs (fork PRs get a read-only token and cannot push to GHCR).
+  #   * Preview (push to main): builds a lightweight image so merged work is
+  #     pullable before a formal release (issue #727), moving a single
+  #     multi-arch `:beta` tag. No version bump, no GitHub release, no
+  #     cosign/SBOM. Per-PR `:pr-<number>` images were published here too until
+  #     they were retired -- see the preview section below for why.
   #
   #   * Release (workflow_dispatch): the formal release. Trigger from the
   #     Actions tab (or `gh workflow run "CI Pipeline" --ref main`) when you
@@ -63,9 +62,18 @@ jobs:
       - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
           node-version: 24
+          # Test and lint jobs only: nothing they restore reaches an image or a
+          # release, which is what zizmor's cache-poisoning audit is about.
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
       - run: npm ci
       - run: npm run lint
       - run: npx tsc --noEmit
+      # The production build (`nest build`: tsconfig.build.json and the
+      # nest-cli.json asset copies, which `tsc --noEmit` does not exercise).
+      # It used to run in the integration job, where nothing reads `dist/` and
+      # it sat on the pipeline's slowest path.
+      - run: npm run build
       # tsconfig.json excludes test/ (it drives the build and pins rootDir to
       # src/), so `tsc --noEmit` above never type-checked the test tree. Four
       # `test/*.e2e-spec.ts` suites sat uncompilable for over a week as a result
@@ -76,6 +84,8 @@ jobs:
       # Migration idempotency: every migration body must be a no-op when
       # re-applied to an up-to-date database, or a half-applied migration
       # crash-loops the backend at startup (task B1). Self-test first, then lint.
+      - run: npm run push:client:test
+      - run: npm run push:tls:test
       - run: npm run migration:lint:test
       - run: npm run migration:lint
 
@@ -92,8 +102,27 @@ jobs:
       - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
           node-version: 24
+          # Test and lint jobs only: nothing they restore reaches an image or a
+          # release, which is what zizmor's cache-poisoning audit is about.
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
       - run: npm ci
-      - run: npm run test:unit -- --coverage
+      # ts-jest's transform cache. Restored on every run; written only by a
+      # push to main, so a pull request can read it but never write what main
+      # runs. A stale entry is harmless: ts-jest keys each file by its content.
+      - name: Restore the Jest transform cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/jest-cache
+          key: jest-unit-${{ hashFiles('backend/package-lock.json', 'backend/scripts/esm-interop-transformer.cjs') }}-${{ github.run_id }}
+          restore-keys: jest-unit-${{ hashFiles('backend/package-lock.json', 'backend/scripts/esm-interop-transformer.cjs') }}-
+      - run: npm run test:unit -- --coverage --cacheDirectory="$RUNNER_TEMP/jest-cache"
+      - name: Save the Jest transform cache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/jest-cache
+          key: jest-unit-${{ hashFiles('backend/package-lock.json', 'backend/scripts/esm-interop-transformer.cjs') }}-${{ github.run_id }}
       - name: Upload coverage
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
@@ -102,20 +131,40 @@ jobs:
           path: backend/coverage/
 
   backend-integration-tests:
-    name: Backend Integration Tests
+    name: Backend Integration Tests (shard ${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
+    # The pipeline's slowest job when it ran alone (19-27 min). Each shard has
+    # its own runner and its own postgres service, so the one-database,
+    # one-worker rule (jest-config.guard.spec.ts) holds within every shard.
+    # Jest splits the spec files by path; a shard that discovered nothing would
+    # fail (REL-001), never pass.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     services:
       postgres:
         # Pinned by digest to satisfy zizmor's unpinned-images audit. Refresh
         # alongside production postgres bumps so CI matches what we ship.
-        image: postgres:16-alpine@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229
+        # Pulled from Google's mirror of the Docker Hub official image (same
+        # digest):
+        # a service container starts before any login step can run, and an
+        # anonymous Docker Hub pull from a shared runner IP is rate-limited.
+        image: mirror.gcr.io/library/postgres:18-alpine@sha256:b6972e1115a4ff8eba5d7f7d19184926d1e16d7d1136ae1e1a7ebf286da0f015
         env:
           POSTGRES_DB: monize_test
           POSTGRES_USER: monize_test
           POSTGRES_PASSWORD: test_password
         ports:
           - 5432:5432
+        # The data directory in memory: the database is thrown away with the
+        # job, so durability buys nothing here. With fsync off as well (the
+        # step below), a local run of the email-receipts pipeline spec went
+        # from 149s to 112s. From PostgreSQL 18 the image keeps PGDATA at
+        # /var/lib/postgresql/18/docker, so the mount is the parent directory;
+        # a tmpfs on the old /var/lib/postgresql/data would sit unused.
         options: >-
+          --tmpfs /var/lib/postgresql
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
@@ -130,6 +179,12 @@ jobs:
       DATABASE_USER: monize_test
       DATABASE_PASSWORD: test_password
       JWT_SECRET: test-jwt-secret-for-ci-minimum-32-characters-long
+      # CLUSTER_MODE is deliberately NOT set job-wide. Setting it here would put
+      # every integration spec into multi, which is not the mode this suite is
+      # about; the specs that need it set it per test. The multi-replica specs
+      # (horizontal-scaling tasks R6 and T1) need no service of their own: the
+      # event bus is LISTEN/NOTIFY and the throttler's counters are a table, so
+      # both are properties of the postgres service above.
       NODE_ENV: test
     steps:
       - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
@@ -138,9 +193,39 @@ jobs:
       - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
           node-version: 24
+          # Test and lint jobs only: nothing they restore reaches an image or a
+          # release, which is what zizmor's cache-poisoning audit is about.
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
       - run: npm ci
-      - run: npm run build
-      - run: npm run test:integration
+      # Throwaway database: skip the flushes. All three are reloadable without a
+      # restart; the service has no `command:` to pass them as flags.
+      - name: Tune postgres for a throwaway database
+        env:
+          PG_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          docker exec "$PG_CONTAINER" psql -U monize_test -d monize_test -v ON_ERROR_STOP=1 \
+            -c "ALTER SYSTEM SET fsync = off" \
+            -c "ALTER SYSTEM SET synchronous_commit = off" \
+            -c "ALTER SYSTEM SET full_page_writes = off" \
+            -c "SELECT pg_reload_conf()"
+          docker exec "$PG_CONTAINER" psql -U monize_test -d monize_test -tAc "SHOW fsync" | grep -qx off
+      - name: Restore the Jest transform cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/jest-cache
+          key: jest-integration-${{ matrix.shard }}-${{ hashFiles('backend/package-lock.json', 'backend/scripts/esm-interop-transformer.cjs') }}-${{ github.run_id }}
+          restore-keys: jest-integration-${{ matrix.shard }}-${{ hashFiles('backend/package-lock.json', 'backend/scripts/esm-interop-transformer.cjs') }}-
+      - name: Run integration tests
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: npm run test:integration -- --shard="$SHARD/3" --cacheDirectory="$RUNNER_TEMP/jest-cache"
+      - name: Save the Jest transform cache
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ${{ runner.temp }}/jest-cache
+          key: jest-integration-${{ matrix.shard }}-${{ hashFiles('backend/package-lock.json', 'backend/scripts/esm-interop-transformer.cjs') }}-${{ github.run_id }}
 
   frontend-lint:
     name: Frontend Lint & Type Check
@@ -155,6 +240,10 @@ jobs:
       - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
           node-version: 24
+          # Test and lint jobs only: nothing they restore reaches an image or a
+          # release, which is what zizmor's cache-poisoning audit is about.
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run lint
       - run: npm run type-check
@@ -163,8 +252,15 @@ jobs:
       - run: npm run i18n:check
 
   frontend-unit-tests:
-    name: Frontend Unit Tests
+    name: Frontend Unit Tests (shard ${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
+    # Split three ways; the coverage gate runs once, over the merged result,
+    # in frontend-coverage below. A shard's own thresholds are switched off
+    # because a third of the suite covers a third of the code.
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     defaults:
       run:
         working-directory: frontend
@@ -175,8 +271,58 @@ jobs:
       - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
           node-version: 24
+          # Test and lint jobs only: nothing they restore reaches an image or a
+          # release, which is what zizmor's cache-poisoning audit is about.
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
       - run: npm ci
-      - run: npm run test:cov
+      - name: Run unit tests
+        env:
+          SHARD: ${{ matrix.shard }}
+        run: >-
+          npx vitest run --coverage --shard="$SHARD/3"
+          --coverage.thresholds.lines=0 --coverage.thresholds.functions=0
+          --coverage.thresholds.branches=0 --coverage.thresholds.statements=0
+          --reporter=default --reporter=blob
+          --outputFile.blob=".vitest-reports/blob-$SHARD-3.json"
+      - name: Upload shard report
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: frontend-vitest-blob-${{ matrix.shard }}
+          path: frontend/.vitest-reports/
+          include-hidden-files: true
+          retention-days: 1
+
+  frontend-coverage:
+    name: Frontend Unit Tests
+    runs-on: ubuntu-latest
+    needs: frontend-unit-tests
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: 24
+          # Test and lint jobs only: nothing they restore reaches an image or a
+          # release, which is what zizmor's cache-poisoning audit is about.
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - name: Download shard reports
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: frontend-vitest-blob-*
+          path: frontend/.vitest-reports
+          merge-multiple: true
+      # The same gate `npm run test:cov` applies, over all three shards: the
+      # thresholds come from vitest.config.ts.
+      # The directory is named: vitest's default is .vitest/blob, not where
+      # the shards wrote their reports.
+      - run: npx vitest run --merge-reports=.vitest-reports --coverage
       - name: Upload coverage
         if: always()
         uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
@@ -194,12 +340,27 @@ jobs:
       - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
         with:
           node-version: 24
+      # The gate's own logic, before it is trusted to gate anything. It is the
+      # part that decides whether a red X means "you shipped a vulnerability"
+      # or "npmjs is down", and it costs ~100ms.
+      - name: Verify the audit gate
+        run: node --test scripts/npm-audit-gate.test.mjs
       # Blocking gate: what we actually ship. A high-severity advisory in a
       # runtime dependency fails the build.
+      #
+      # Not a bare `npm audit`: that exits 1 both for an advisory and for an
+      # advisories endpoint it could not reach, so an npmjs outage was
+      # indistinguishable from a vulnerability (twice on PR #1308, while
+      # `npm ci` in this same job resolved every package). The gate reads
+      # `--json`, retries ONLY a no-answer, and still fails if the endpoint
+      # never answers -- "we could not verify" is not "verified clean" -- but
+      # now says which of the two happened. See scripts/lib/npm-audit-gate.mjs.
       - name: Audit production dependencies (blocking)
         run: |
-          cd backend && npm ci && npm audit --audit-level=high --omit=dev
-          cd ../frontend && npm ci && npm audit --audit-level=high --omit=dev
+          (cd backend && npm ci)
+          (cd frontend && npm ci)
+          (cd desktop && npm ci)
+          node scripts/npm-audit-gate.mjs backend frontend desktop
       # Visibility only: build tooling (eslint, jest, the Nest CLI) never
       # reaches a user, and its advisories are routinely unfixable for weeks --
       # the current one, brace-expansion GHSA-mh99-v99m-4gvg, has no patched
@@ -211,6 +372,7 @@ jobs:
         run: |
           cd backend && npm audit --audit-level=high
           cd ../frontend && npm audit --audit-level=high
+          cd ../desktop && npm audit --audit-level=high
 
   license-check:
     name: License Compliance (${{ matrix.package }})
@@ -218,7 +380,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        package: [backend, frontend]
+        package: [backend, frontend, desktop]
     defaults:
       run:
         working-directory: ${{ matrix.package }}
@@ -261,6 +423,9 @@ jobs:
       - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
         with:
           persist-credentials: false
+      # No Docker Hub login: verify-schema.sh pulls Postgres from mirror.gcr.io,
+      # Google's mirror of the official image, with no anonymous pull limit, so the
+      # job also runs where DOCKERHUB_* secrets are not set (a fork's own PR).
       - name: Verify schema.sql matches migrations state
         run: scripts/verify-schema.sh
 
@@ -329,13 +494,23 @@ jobs:
       # install command at a chart directory that does not exist.
       - name: Verify documented paths and Helm defaults match the manifests
         run: node scripts/check-docs-manifests.mjs
-      # A migration prefix that collides with, or sorts below, one already on the
-      # base branch is applied out of order on every database that recorded the
-      # newer filename -- and `database/CLAUDE.md` stating the rule in prose did
-      # not stop a branch from taking a prefix main had meanwhile used. The
-      # ordering half needs the base ref, hence fetch-depth 0.
-      - name: Verify migration prefixes are unique and sort last
+      # A migration prefix that collides with one already on the base branch is
+      # applied out of order on every database that recorded the other filename
+      # -- and `database/CLAUDE.md` stating the rule in prose did not stop two
+      # branches from both taking the next counter value (issue #1277). New
+      # migrations therefore carry a UTC timestamp prefix, which cannot collide;
+      # this check refuses a new file named under the retired NNN_ scheme. The
+      # "what did this branch add" half needs the base ref, hence fetch-depth 0.
+      - name: Verify migration prefixes are unique and timestamp-named
         run: node scripts/check-migration-prefixes.mjs
+      # The GHCR prune sweep DELETES package versions, and its predicate is the
+      # only thing standing between "clear the retired per-PR tags" and
+      # unpublishing `:latest`: a version can wear several tags at once, so a
+      # digest tagged both `pr-1290` and `beta` must be kept. Nothing else
+      # exercises that -- the script itself only runs on a schedule, against
+      # the live registry.
+      - name: Verify the GHCR version classifier
+        run: node --test scripts/ghcr-version-class.test.mjs
 
   helm-chart:
     name: Helm Chart Lint & Render
@@ -398,6 +573,123 @@ jobs:
             || { echo "ingress.enabled=true rendered no Ingress -- the value flag is not turning the resource on"; exit 1; }
       - name: Render with HTTPRoute disabled
         run: helm template monize ./helm --set httpRoute.enabled=false > "$RUNNER_TEMP/rendered-minimal.yaml"
+      # CLUSTER_MODE=multi turns on templates the default render never reaches:
+      # both PodDisruptionBudgets, the backend HPA and CLUSTER_MODE in the
+      # configmap. Asserted by presence for the same reason as the Ingress
+      # above -- parsing a doc that never rendered cannot fail.
+      - name: Render with CLUSTER_MODE=multi
+        run: |
+          helm template monize ./helm -f ./helm/ci/multi-values.yaml \
+            > "$RUNNER_TEMP/rendered-multi.yaml"
+          grep -q '^kind: PodDisruptionBudget$' "$RUNNER_TEMP/rendered-multi.yaml" \
+            || { echo "multi values rendered no PodDisruptionBudget"; exit 1; }
+          grep -q '^kind: HorizontalPodAutoscaler$' "$RUNNER_TEMP/rendered-multi.yaml" \
+            || { echo "multi values rendered no HorizontalPodAutoscaler"; exit 1; }
+          grep -q 'CLUSTER_MODE: "multi"' "$RUNNER_TEMP/rendered-multi.yaml" \
+            || { echo "CLUSTER_MODE did not reach the backend configmap"; exit 1; }
+          # The workloads are Deployments now; a StatefulSet in the output means
+          # the conversion was partly reverted, which upgrades in place and then
+          # fails on the first `helm upgrade` against a real cluster.
+          ! grep -q '^kind: StatefulSet$' "$RUNNER_TEMP/rendered-multi.yaml" \
+            || { echo "a StatefulSet is still being rendered"; exit 1; }
+          grep -q '^kind: Deployment$' "$RUNNER_TEMP/rendered-multi.yaml" \
+            || { echo "no Deployment rendered"; exit 1; }
+          # The two assertions the backend refuses to boot in multi without.
+          # They are the operator's word that both replicas mount the same
+          # directories, they are tested for the exact string "true", and a
+          # template edit that stopped emitting them would turn every multi
+          # install into a pod that will not start.
+          grep -q 'BACKUP_SHARED_VOLUME: "true"' "$RUNNER_TEMP/rendered-multi.yaml" \
+            || { echo "cluster.backupSharedVolume did not reach the backend configmap"; exit 1; }
+          grep -q 'ATTACHMENT_SHARED_VOLUME: "true"' "$RUNNER_TEMP/rendered-multi.yaml" \
+            || { echo "cluster.attachmentSharedVolume did not reach the backend configmap"; exit 1; }
+          # Spread is what makes the replica count availability rather than
+          # arithmetic; a values block that stopped reaching the pod spec would
+          # leave both replicas schedulable onto one node.
+          grep -q 'topologySpreadConstraints:' "$RUNNER_TEMP/rendered-multi.yaml" \
+            || { echo "backend.topologySpreadConstraints did not reach the pod spec"; exit 1; }
+          # Both pod templates carry a hash of their ConfigMap. Without it a
+          # `helm upgrade` that changes only a ConfigMap value -- CLUSTER_MODE
+          # among them -- reports success and rolls nothing, because envFrom is
+          # read once at container start.
+          checksums=$(grep -c 'checksum/config:' "$RUNNER_TEMP/rendered-multi.yaml" || true)
+          [ "$checksums" = "2" ] \
+            || { echo "expected a checksum/config annotation on both pod templates, found $checksums"; exit 1; }
+      # Every claim here is ReadWriteMany, so the rollout still surges. The
+      # ReadWriteOnce case is the next step.
+      - name: Render with an exclusive claim
+        # A ReadWriteOnce volume attaches to one node, so maxSurge: 1 would
+        # leave the new pod Pending on a Multi-Attach error while maxUnavailable:
+        # 0 forbids removing the old one -- a rollout that never finishes and
+        # ends in a manual pod delete. The chart switches to Recreate instead,
+        # which takes the same downtime in seconds and at the moment the
+        # operator chose. Nothing else renders this branch: persistence is off
+        # by default and ReadWriteMany in the multi values.
+        run: |
+          helm template monize ./helm \
+            --set backend.persistence.backups.enabled=true \
+            > "$RUNNER_TEMP/rendered-exclusive-claim.yaml"
+          grep -q 'type: Recreate' "$RUNNER_TEMP/rendered-exclusive-claim.yaml" \
+            || { echo "a ReadWriteOnce claim did not switch the backend rollout to Recreate"; exit 1; }
+      # The refusals. Each of these renders, installs and runs while being
+      # wrong: a second replica at CLUSTER_MODE=single enforces every rate limit
+      # twice, a spread constraint that selects no pod is satisfied by every
+      # placement, and a budget of minAvailable equal to the replica count
+      # blocks a node drain forever. Kubernetes reports none of them, so the
+      # chart refuses to render -- and a refusal nothing exercises is a refusal
+      # that quietly stops working.
+      - name: Refuse the configurations that look fine and are not
+        run: |
+          set -uo pipefail
+          refuses() {
+            local why="$1"; shift
+            if helm template monize ./helm "$@" > /dev/null 2>&1; then
+              echo "chart rendered a configuration it must refuse: $why"
+              exit 1
+            fi
+          }
+          refuses "two backend replicas at cluster.mode=single" \
+            --set backend.replicas=2
+          refuses "an autoscaler above one replica at cluster.mode=single" \
+            --set backend.autoscaling.enabled=true \
+            --set backend.autoscaling.maxReplicas=4
+          refuses "a spread constraint whose selector matches no pod" \
+            -f ./helm/ci/multi-values.yaml \
+            --set backend.topologySpreadConstraints[0].maxSkew=1 \
+            --set backend.topologySpreadConstraints[0].topologyKey=kubernetes.io/hostname \
+            --set backend.topologySpreadConstraints[0].whenUnsatisfiable=ScheduleAnyway \
+            --set backend.topologySpreadConstraints[0].labelSelector.matchLabels.app=monize
+          refuses "a disruption budget that permits no disruption" \
+            -f ./helm/ci/multi-values.yaml \
+            --set backend.autoscaling.enabled=false \
+            --set backend.podDisruptionBudget.minAvailable=2
+          refuses "the same budget spelled maxUnavailable: 0" \
+            -f ./helm/ci/multi-values.yaml \
+            --set backend.podDisruptionBudget.maxUnavailable=0
+      # The other half of that: a value the chart must honour rather than
+      # refuse. `maxUnavailable` is read by kind and exact value because 0 is
+      # falsy in a template, and reading it for truthiness would fall through to
+      # `minAvailable` -- giving the operator a budget they did not write.
+      - name: Honour an explicit maxUnavailable
+        run: |
+          helm template monize ./helm -f ./helm/ci/multi-values.yaml \
+            --set backend.podDisruptionBudget.maxUnavailable=1 \
+            > "$RUNNER_TEMP/rendered-maxunavailable.yaml"
+          grep -q '^  maxUnavailable: 1$' "$RUNNER_TEMP/rendered-maxunavailable.yaml" \
+            || { echo "podDisruptionBudget.maxUnavailable did not reach the budget"; exit 1; }
+      # A quoted "false" is truthy in a template, and these two keys are
+      # assertions the backend cannot verify for itself: emitting
+      # BACKUP_SHARED_VOLUME=true because somebody quoted the value would turn a
+      # boot refusal into two replicas writing backups to two different disks.
+      - name: Refuse to assert a shared volume the operator set to a quoted false
+        run: |
+          helm template monize ./helm -f ./helm/ci/multi-values.yaml \
+            --set-string cluster.backupSharedVolume=false \
+            > "$RUNNER_TEMP/rendered-quoted-false.yaml"
+          ! grep -q 'BACKUP_SHARED_VOLUME: "true"' "$RUNNER_TEMP/rendered-quoted-false.yaml" \
+            || { echo 'a quoted "false" was emitted as BACKUP_SHARED_VOLUME=true'; exit 1; }
+          grep -q 'ATTACHMENT_SHARED_VOLUME: "true"' "$RUNNER_TEMP/rendered-quoted-false.yaml" \
+            || { echo "the other assertion stopped rendering, so this proves nothing"; exit 1; }
       # PyYAML happens to be present on the current ubuntu-latest image, which
       # is not the same as this job declaring it. An undeclared dependency that
       # disappears in a runner-image bump turns the check below into an
@@ -496,28 +788,103 @@ jobs:
           # We explicitly don't provide HTTPS out-of-the-box since most users self-host in environments where HTTPS is terminated at a reverse proxy, and we provide guidance on how to securely configure this in our docs. 
           # We also have some known exception messages that contain payee names which would otherwise be flagged as potential secrets, but we have determined that the risk of these being exploited is low and the value of having the full exception message in our logs outweighs the risk.
           skip-rule: "javascript_lang_logger_leak,javascript_express_https_protocol_missing,javascript_lang_exception" 
+          # .trail/ is the Trail tool's own hook and learning notes: developer tooling
+          # that never ships in an image or runs in the app, so its findings are not
+          # Monize's attack surface.
+          # desktop/scripts/ is the desktop package's build and development tooling
+          # (the staging script, the icon generator, dev-boot, the PostgreSQL and
+          # install smoke tests, and their tests). It runs on a developer's machine
+          # or a CI runner and is not packed into the application: electron-builder's
+          # `files` list ships only dist/ and package.json. Its path and SQL inputs
+          # are the caller's own command-line arguments and the committed
+          # desktop/staging-manifest.json, so the path-traversal and query findings
+          # there describe no input an attacker supplies. desktop/src, which does
+          # ship, stays scanned, except desktop/src/test-support: helpers only the
+          # desktop specs import (fakes and temp-directory fixtures), which Bearer
+          # does not recognise as test code the way it does *.spec.ts. They are
+          # left out of the installer too (`!dist/test-support` in
+          # desktop/electron-builder.yml's `files`).
+          skip-path: ".trail,desktop/scripts,desktop/src/test-support"
           # Exclude some false positives and low-risk findings that we are aware of and have accepted for now.
           # Each entry has a "review-by" date; the bearer-exceptions-review workflow
           # opens an issue when any entry is past due, so exceptions don't become permanent debt.
-          # b65bd7b1a0585cd1d0a326cdb09ce40d_0 - Hard-coded secret used for demo site - review-by: 2026-09-04
-          # da119900eefffd8b84e7693e0388568a_0 - Hard-coded secret used for E2E tests - review-by: 2026-09-04
-          # 95857358158e4664c01c05441df9f2a9_0 - Hard-coded secret used for demo site - review-by: 2026-09-04
-          # 842822dd22cd4403ab5800ac89480c0a_0 - Insufficient randomness for inconsequential task - review-by: 2026-09-04
-          # b04cb91b90deb5e16504baa7ab95f678_0 - Unsanitized dynamic input in file path [CWE-22] - review-by: 2026-09-04
-          # b04cb91b90deb5e16504baa7ab95f678_1 - Unsanitized dynamic input in file path [CWE-22] - review-by: 2026-09-04
-          # 30770548d4592a14c9099ac0103a2564_0 - Observable timing discrepancy [CWE-208] comparing payee-name tokens in longestCommonTokenPrefix (no secret involved) - review-by: 2026-09-11
+          #
+          # A fingerprint is md5("<rule id>_<path>") plus an instance index, so an
+          # accepted finding that moves file re-reports under a new id, and a finding
+          # whose code was fixed simply stops being reported. Bearer prints the ids in
+          # the list that it no longer detects; an id it names is dead weight, not an
+          # exception, and belongs deleted (issue #1323 found three).
+          #
+          # The demo login. DEMO_MODE deployments publish their own credentials
+          # (.env.example prints them, the login page pre-fills them), so the literal
+          # is public by design and cannot be moved out of the source. What the
+          # review changed is how many places spell it: the seed, the nightly reset,
+          # the start-up probe and the client each had their own copy, so the value
+          # now lives in one module per layer and a guard fails a second spelling
+          # (backend/src/database/demo-credentials.spec.ts scans backend/src;
+          # frontend/src/lib/demo-credentials.contract.test.ts scans frontend/src and
+          # checks the two layers agree). The two ids below replace
+          # b65bd7b1a0585cd1d0a326cdb09ce40d_0 (seed.service.ts) and
+          # 95857358158e4664c01c05441df9f2a9_0 (login/page.tsx), which no longer hold
+          # the literal.
+          # df1db3090cab23fd55c9a22789aa6b2f_0 - Demo login [CWE-798], backend/src/database/demo-credentials.ts, public by design - review-by: 2026-12-08
+          # 9a51af5fd92c92c4c022addd331ee9c6_0 - Demo login [CWE-798], frontend/src/lib/demo-credentials.ts, public by design and contract-tested against the backend copy - review-by: 2026-12-08
+          # The password the E2E suite registers every throwaway user with. It opens
+          # nothing outside the e2e database the run creates and drops, and the admin
+          # fixture already overrides it from the environment. Eight literal copies
+          # across helpers and specs became one constant in e2e/helpers/credentials.ts;
+          # the id below replaces da119900eefffd8b84e7693e0388568a_0 (e2e/helpers/auth.ts).
+          # 8145f16fcf77da087020769e5609a11b_0 - E2E test password [CWE-798], e2e/helpers/credentials.ts, throwaway database only - review-by: 2026-12-08
+          # Retired by the same review (issue #1323), with no replacement:
+          #   842822dd22cd4403ab5800ac89480c0a_0 (Math.random for a split row's temporary
+          #     id in SplitEditor.tsx) -- fixed: crypto.randomUUID(), and
+          #     frontend/src/test/ui-conventions.test.ts now fails Math.random in any
+          #     production source.
+          #   30770548d4592a14c9099ac0103a2564_0 (CWE-208 in longestCommonTokenPrefix,
+          #     payee-auto-merge.service.ts) -- the compared value was a payee-name word
+          #     held in a local named `token`, which is what the rule keys on; renamed,
+          #     so the rule reads the comparison correctly and no exception is needed.
+          # The two below are safePath() in backend/src/backup/auto-backup.service.ts:
+          # resolve(basePath, filename) and the containment check on its result. The
+          # same shape as the local-storage pair above, and the same false positive:
+          # Bearer's dataflow cannot see that the startsWith() guard constrains the
+          # value, so it reports the resolve() and the guard itself. What reaches it
+          # is the user id turned into shard segments, artifact names the service
+          # composes itself, and directory entries it just listed -- and the guard is
+          # what turns an id that is not a safe path segment into a refusal:
+          # auto-backup.service.spec.ts has runManualBackup("../../etc") rejecting
+          # with nothing written under the root. The folder the segments are joined
+          # to is validated separately by assertAllowedRoot. NOTE: the finding depends on
+          # Bearer's dataflow, and a local binary older than CI's (v2.1.1 at the time
+          # of writing) does not report it -- a scan that says these ids are "no
+          # longer detected" is only evidence if it ran the version CI runs.
+          # b04cb91b90deb5e16504baa7ab95f678_0 - resolve() of the backup filename against its validated base [CWE-22] - review-by: 2026-12-08
+          # b04cb91b90deb5e16504baa7ab95f678_1 - containment check on the resolved backup path [CWE-22] - review-by: 2026-12-08
+          # The two below are readArtifact() in
+          # backend/src/backup/offsite/backup-offsite-dispatch.service.ts, the off-site
+          # copy reading the artifact back to upload it. Same shape and same false
+          # positive as the safePath pair above: what reaches resolve() is the
+          # server-computed user backup folder and a directory entry the service just
+          # listed, the requested name is only matched against that listing
+          # (classifyBackupFileName rejects any separator first), and the startsWith()
+          # guard on the next line is the very check Bearer reports while being what
+          # constrains the path. No request input reaches it. Same NOTE as above: the
+          # finding depends on Bearer's dataflow at CI's version (v2.1.1).
+          # fae1b07dcb3c5444235e7e0b4bcae188_0 - resolve() of an off-site backup artifact against its validated folder [CWE-22] - review-by: 2026-12-08
+          # fae1b07dcb3c5444235e7e0b4bcae188_1 - containment check on the resolved off-site backup path [CWE-22] - review-by: 2026-12-08
           # The five below are in backend/src/updates/release-notes.service.ts, which reads the
           # committed docs/release-notes/<version>.md digest. The version is the trusted
           # package.json value matched against a strict semver regex that forbids path separators,
           # and the directory is a fixed candidate allowlist (the notes are bundled into the image)
           # -- no user input reaches these fs calls, so the CWE-22/CWE-73 findings are false positives.
-          # b6c4552155ecc9b65a9205911f502bf1_0 - Non-literal fs path in release-notes reader [CWE-73] - review-by: 2026-10-23
-          # b6c4552155ecc9b65a9205911f502bf1_1 - Non-literal fs path in release-notes reader [CWE-73] - review-by: 2026-10-23
-          # b6c4552155ecc9b65a9205911f502bf1_2 - Non-literal fs path scanning the release-notes dir allowlist [CWE-73] - review-by: 2026-10-23
-          # b6c4552155ecc9b65a9205911f502bf1_3 - Non-literal fs path scanning the release-notes dir allowlist [CWE-73] - review-by: 2026-10-23
-          # c055716bae113b20589f9ea5c5963e65_0 - path.join of the validated running version [CWE-22] - review-by: 2026-10-23
+          # b6c4552155ecc9b65a9205911f502bf1_0 - Non-literal fs path in release-notes reader [CWE-73] - review-by: 2027-02-02
+          # b6c4552155ecc9b65a9205911f502bf1_1 - Non-literal fs path in release-notes reader [CWE-73] - review-by: 2027-02-02
+          # b6c4552155ecc9b65a9205911f502bf1_2 - Non-literal fs path scanning the release-notes dir allowlist [CWE-73] - review-by: 2027-02-02
+          # b6c4552155ecc9b65a9205911f502bf1_3 - Non-literal fs path scanning the release-notes dir allowlist [CWE-73] - review-by: 2027-02-02
+          # c055716bae113b20589f9ea5c5963e65_0 - path.join of the validated running version [CWE-22] - review-by: 2027-02-02
           # The two below are in backend/src/attachments/storage/local-storage.provider.ts.
-          # The storage key is a server-generated UUID that is passed through basename()
+          # The storage key is a server-generated UUID that assertSafeStorageKey
+          # (attachments/storage/storage-key.util.ts) passes through basename()
           # and then required to match ^[A-Za-z0-9_-]+$ -- an allowlist that cannot express
           # a path separator, a dot, or a NUL, so "..", "." and "a/../b" are all rejected
           # before any fs call. The resolved path is additionally asserted to be contained
@@ -525,22 +892,22 @@ jobs:
           # constrains the value, so it reports the resolve() and the containment check
           # itself; both are false positives. Covered by the traversal cases in
           # local-storage.provider.spec.ts.
-          # f9b26e7d59d0f577ff9a0e93ea4f7b7c_0 - resolve() of the allowlisted attachment key [CWE-22] - review-by: 2026-10-23
-          # f9b26e7d59d0f577ff9a0e93ea4f7b7c_1 - containment check on the resolved path [CWE-22] - review-by: 2026-10-23
+          # f9b26e7d59d0f577ff9a0e93ea4f7b7c_0 - resolve() of the allowlisted attachment key [CWE-22] - review-by: 2027-02-02
+          # f9b26e7d59d0f577ff9a0e93ea4f7b7c_1 - containment check on the resolved path [CWE-22] - review-by: 2027-02-02
           # The one below is in backend/src/import/mny/__fixtures__/mny-fixtures.ts. It is the
           # publicly documented test password for money2008-pwd.mny, a tiny sample file committed
           # from the jackcess-encrypt project (Apache-2.0, see the __fixtures__ README) and used
           # only by unit specs to exercise the MSISAM decryptor. It opens nothing but that file.
-          # f6196720ad017b3d11d24487792c1479_0 - Test fixture password for a sample .mny file [CWE-798] - review-by: 2026-10-23
+          # f6196720ad017b3d11d24487792c1479_0 - Test fixture password for a sample .mny file [CWE-798] - review-by: 2027-02-02
           # The three below are in frontend/src/hooks/useMnyImport.ts. The compared
           # value is an API error code string ("mnyPasswordRequired" /
           # "mnyPasswordIncorrect"), not a password or any part of one -- the
           # identifier names are what Bearer's dataflow keys on. Distinguishing the
           # two codes is the point: one asks for a password, the other says the
           # password was wrong. Same false positive as the payee-token comparison above.
-          # 45093073db7d96d61cd30bceb943f63f_0 - Observable timing discrepancy [CWE-208] comparing .mny error codes - review-by: 2026-10-30
-          # 45093073db7d96d61cd30bceb943f63f_1 - Observable timing discrepancy [CWE-208] comparing .mny error codes - review-by: 2026-10-30
-          # 45093073db7d96d61cd30bceb943f63f_2 - Observable timing discrepancy [CWE-208] comparing .mny error codes - review-by: 2026-10-30
+          # 45093073db7d96d61cd30bceb943f63f_0 - Observable timing discrepancy [CWE-208] comparing .mny error codes - review-by: 2027-02-02
+          # 45093073db7d96d61cd30bceb943f63f_1 - Observable timing discrepancy [CWE-208] comparing .mny error codes - review-by: 2027-02-02
+          # 45093073db7d96d61cd30bceb943f63f_2 - Observable timing discrepancy [CWE-208] comparing .mny error codes - review-by: 2027-02-02
           # The one below is in backend/src/auth/auth.controller.ts, the OIDC callback's
           # re-authentication branch. The redirect TARGET is `FRONTEND_URL` from config, not
           # request input -- the four sibling redirects in the same handler build the same
@@ -551,7 +918,7 @@ jobs:
           # just signed, and both go through encodeURIComponent. An open redirect needs a
           # controllable destination, which this is not. Covered by oidc-reauth.service.spec.ts
           # and the callback cases in auth.controller.spec.ts.
-          # b7502b6ea7c0a272ab08099b55d0392c_0 - Unsanitized user input in redirect [CWE-601], config-supplied target - review-by: 2026-11-06
+          # b7502b6ea7c0a272ab08099b55d0392c_0 - Unsanitized user input in redirect [CWE-601], config-supplied target - review-by: 2027-02-02
           # The two below are the backup module's attachment-integrity checks. The
           # compared value is a SHA-256 digest already stored in transaction_attachments,
           # recomputed from bytes the caller already has in the artifact they uploaded --
@@ -564,13 +931,13 @@ jobs:
           # a finding, so moving accepted code re-reports it under a new id. The
           # acceptance decision has not changed, so the review-by date does not move
           # either -- a refactor must not quietly reset somebody else's review clock.
-          # 4beb484f871a7489b5f5ff2df93f72f1_0 - Observable timing discrepancy [CWE-208] in the shared bytes-vs-metadata check, backend/src/backup/attachment-integrity.util.ts - review-by: 2026-11-05
-          # 0ff64c8083ce01b1e8c867832c0dff85_0 - Observable timing discrepancy [CWE-208] comparing a legacy-staged attachment against its stored checksum, backend/src/backup/backup-attachment-transfer.service.ts - review-by: 2026-11-05
+          # 4beb484f871a7489b5f5ff2df93f72f1_0 - Observable timing discrepancy [CWE-208] in the shared bytes-vs-metadata check, backend/src/backup/attachment-integrity.util.ts - review-by: 2027-02-02
+          # 0ff64c8083ce01b1e8c867832c0dff85_0 - Observable timing discrepancy [CWE-208] comparing a legacy-staged attachment against its stored checksum, backend/src/backup/backup-attachment-transfer.service.ts - review-by: 2027-02-02
           # The one below is in backend/src/backup/support-backup/support-backup.service.ts,
           # the support-backup password gate. It is a typeof/length guard confirming a
           # password was supplied at all, not a comparison against any known value --
           # there is nothing secret on either side for a timing attack to reveal.
-          # 1f87dd3b3950178c2eac383cfcead816_0 - Observable timing discrepancy [CWE-208] on a password-presence guard, no value compared - review-by: 2026-11-05
+          # 1f87dd3b3950178c2eac383cfcead816_0 - Observable timing discrepancy [CWE-208] on a password-presence guard, no value compared - review-by: 2027-02-02
           # The one below is escapeHtml in frontend/public/sw.js, the service worker's
           # offline-fallback page builder. Bearer flags any hand-rolled sanitizer; a DOM
           # or DOMPurify does not exist inside a service worker, so escaping is the only
@@ -593,7 +960,338 @@ jobs:
           # exact line, so hoisting the two `token.trim()` calls into a local will
           # re-report it under a new id.
           # 173289a7a56f6f6b27dc2314746e9451_0 - Observable timing discrepancy [CWE-208] on the ticket presence check, no secret compared - review-by: 2026-11-26
-          exclude-fingerprint: "b65bd7b1a0585cd1d0a326cdb09ce40d_0,da119900eefffd8b84e7693e0388568a_0,95857358158e4664c01c05441df9f2a9_0,842822dd22cd4403ab5800ac89480c0a_0,b04cb91b90deb5e16504baa7ab95f678_0,b04cb91b90deb5e16504baa7ab95f678_1,30770548d4592a14c9099ac0103a2564_0,b6c4552155ecc9b65a9205911f502bf1_0,b6c4552155ecc9b65a9205911f502bf1_1,b6c4552155ecc9b65a9205911f502bf1_2,b6c4552155ecc9b65a9205911f502bf1_3,c055716bae113b20589f9ea5c5963e65_0,f9b26e7d59d0f577ff9a0e93ea4f7b7c_0,f9b26e7d59d0f577ff9a0e93ea4f7b7c_1,f6196720ad017b3d11d24487792c1479_0,45093073db7d96d61cd30bceb943f63f_0,45093073db7d96d61cd30bceb943f63f_1,45093073db7d96d61cd30bceb943f63f_2,b7502b6ea7c0a272ab08099b55d0392c_0,4beb484f871a7489b5f5ff2df93f72f1_0,0ff64c8083ce01b1e8c867832c0dff85_0,1f87dd3b3950178c2eac383cfcead816_0,e717be7fe9c133adba7d48ccb371c6ba_0,173289a7a56f6f6b27dc2314746e9451_0"
+          # The two below arrived with the push notification work.
+          #
+          # The first is the Playwright fixture's stub backend (e2e/push/fixture.ts):
+          # `req.headers['x-csrf-token'] === state.csrfToken`. Both sides are values
+          # the fixture invented for itself a few lines earlier, in the same process,
+          # to make the mock answer 201 or 403 on demand. There is no deployment, no
+          # attacker and nothing behind the token: a constant-time compare here would
+          # be ceremony around a test double, not a mitigation.
+          #
+          # The second is the service worker's CSRF retrieval (frontend/public/sw.js).
+          # Bearer names the line, but nothing on it is COMPARED -- it is
+          # `typeof data.csrfToken !== 'string'` plus two length bounds, answering
+          # "did the CSRF endpoint hand back a usable token at all" before the worker
+          # puts it in a header. Exactly the class of the password-presence and
+          # ticket-presence entries above, and for the same reason: no secret sits on
+          # either side of it. NOTE, as on the ticket entry: the fingerprint covers
+          # that line, so splitting the condition re-reports it under a new id.
+          # 242a05abd45296bc2ba6d9174dc6f3dd_0 - Observable timing discrepancy [CWE-208] in the E2E push fixture's stub backend, e2e/push/fixture.ts, a mock comparing its own invented token - review-by: 2026-12-08
+          # 90aa4e42622acc64795b7d291a5d74f9_0 - Observable timing discrepancy [CWE-208] on the SW CSRF presence guard, frontend/public/sw.js, a typeof/length check with no value compared - review-by: 2026-12-08
+          # The two below are the Deutsche Börse request signature in
+          # backend/src/securities/deutsche-boerse-finance.service.ts. MD5 is not a
+          # security control here: it reproduces, byte for byte, the exact
+          # Client-Date/X-Client-TraceId/X-Security signature Börse Frankfurt's own
+          # public JavaScript computes for every market-data request. The venue's
+          # server validates that md5, so the algorithm is fixed by the external
+          # protocol rather than chosen for its strength, and it hashes no secret --
+          # a request URL, a salt constant lifted from the public site bundle, and
+          # the current minute. Verified against the captured request in
+          # docs/specs/exchange-price-providers.md.
+          # dc1e615df30fcceb5a3cd2fd3ccd4c32_0 - MD5 reproducing the Börse Frankfurt X-Client-TraceId signature [CWE-328], protocol-fixed, hashes no secret - review-by: 2026-12-25
+          # dc1e615df30fcceb5a3cd2fd3ccd4c32_1 - MD5 reproducing the Börse Frankfurt X-Security signature [CWE-328], protocol-fixed, hashes no secret - review-by: 2026-12-25
+          # The two below are in backend/src/help/help.service.ts, which reads the user
+          # guide bundled into the image (website/docs, copied to ./help). Every page is
+          # read once when the bundle loads, by the slugs the bundled nav.json names
+          # (each matched against ^[a-z0-9-]+$, which cannot express a separator or a
+          # dot), inside a directory chosen from a fixed candidate list. A request only
+          # looks its slug up in that in-memory cache and never reaches an fs call, which
+          # help.service.spec.ts asserts for traversal and encoded slugs. Same shape and
+          # same false positive as the release-notes reader above.
+          # 693f53c921285bddc3861f6027338c94_0 - Non-literal fs path reading a bundled help page named by nav.json [CWE-73] - review-by: 2027-02-06
+          # f4213ea85085fdf7e12b1eb1ee903f75_0 - path.join of a bundled help page slug from nav.json [CWE-22] - review-by: 2027-02-06
+          # The one below is in backend/src/help/help-images.ts, which lists the guide's
+          # screenshots bundled into the image (./help/images) once, when the bundle loads,
+          # and opens each listed file to read its width and height from the first 32 bytes.
+          # The path is a directory entry readdirSync just returned (its name matched against
+          # ^[a-z0-9-]+(\.light)?\.(webp|png)$, which cannot express a separator) joined to the
+          # same fixed-candidate directory as the pages. A request for a picture only looks its
+          # name up in that listing and reads the path the listing found, which
+          # help.service.spec.ts asserts for traversal and encoded names. Same shape and same
+          # false positive as the page read above.
+          # cc8be0f09d430af908c2fcbbd4b6de11_0 - Non-literal fs path opening a listed help screenshot for its size [CWE-73] - review-by: 2027-02-06
+          # The four below are in desktop/src/supervisor/postgres-os.ts, the desktop
+          # shell's operating-system layer for the bundled PostgreSQL. Its `run`
+          # spawns initdb and pg_ctl from the application's own resources directory
+          # with an argument array and no shell; the file and the arguments are built
+          # by postgres-context.ts and postgres-args.ts from the shell's own config
+          # (the settings string is refused unless it matches [A-Za-z0-9_.,=-]), and
+          # nothing a page, a request or a user types reaches them. Its `query` is a
+          # pass-through to node-postgres for the runner's three statements in
+          # postgres-ready.ts: two constant SELECTs (one with a bound parameter) and
+          # one CREATE DATABASE whose two identifiers postgres-context.ts refuses
+          # unless they match ^[a-z_][a-z0-9_]{0,62}$, which admits no quote. Bearer cannot see either guard from the sink.
+          # d4f8d392d818168193ab2bb2a7566871_0 - spawn of a bundled PostgreSQL binary with an argument array [CWE-78] - review-by: 2027-02-13
+          # d4f8d392d818168193ab2bb2a7566871_1 - same call, second sink [CWE-78] - review-by: 2027-02-13
+          # 4ec6862f6eb8000234e8fdabf8959e74_0 - node-postgres pass-through for the runner's own statements, with values [CWE-89] - review-by: 2027-02-13
+          # 4ec6862f6eb8000234e8fdabf8959e74_1 - same pass-through, without values [CWE-89] - review-by: 2027-02-13
+          # The two below are in the desktop shell. In desktop/src/electron-main.ts a
+          # click on a native notification loads its row's link in the main window:
+          # the URL comes from notificationUrl() in shell/notification-bridge.ts, which
+          # resolves the link through the shell's navigation policy and returns the
+          # app's own origin or its home page, never a file or another origin.
+          # Renaming the variable did not clear it. In desktop/src/move/target.ts,
+          # relationOf() resolves two folder names only to compare them as strings
+          # for the "Move data folder" refusals; it opens nothing.
+          # 3282e1a4a347b1d24e25476f60c08a82_0 - loadURL of an app-origin notification link [CWE-22] - review-by: 2027-02-14
+          # 7254ad08500a2051f88804ac75b3fb16_0 - path.resolve of two folder names compared as strings [CWE-22] - review-by: 2027-02-14
+          exclude-fingerprint: "3282e1a4a347b1d24e25476f60c08a82_0,7254ad08500a2051f88804ac75b3fb16_0,d4f8d392d818168193ab2bb2a7566871_0,d4f8d392d818168193ab2bb2a7566871_1,4ec6862f6eb8000234e8fdabf8959e74_0,4ec6862f6eb8000234e8fdabf8959e74_1,df1db3090cab23fd55c9a22789aa6b2f_0,9a51af5fd92c92c4c022addd331ee9c6_0,8145f16fcf77da087020769e5609a11b_0,b04cb91b90deb5e16504baa7ab95f678_0,b04cb91b90deb5e16504baa7ab95f678_1,b6c4552155ecc9b65a9205911f502bf1_0,b6c4552155ecc9b65a9205911f502bf1_1,b6c4552155ecc9b65a9205911f502bf1_2,b6c4552155ecc9b65a9205911f502bf1_3,c055716bae113b20589f9ea5c5963e65_0,f9b26e7d59d0f577ff9a0e93ea4f7b7c_0,f9b26e7d59d0f577ff9a0e93ea4f7b7c_1,f6196720ad017b3d11d24487792c1479_0,45093073db7d96d61cd30bceb943f63f_0,45093073db7d96d61cd30bceb943f63f_1,45093073db7d96d61cd30bceb943f63f_2,b7502b6ea7c0a272ab08099b55d0392c_0,4beb484f871a7489b5f5ff2df93f72f1_0,0ff64c8083ce01b1e8c867832c0dff85_0,1f87dd3b3950178c2eac383cfcead816_0,e717be7fe9c133adba7d48ccb371c6ba_0,173289a7a56f6f6b27dc2314746e9451_0,242a05abd45296bc2ba6d9174dc6f3dd_0,90aa4e42622acc64795b7d291a5d74f9_0,fae1b07dcb3c5444235e7e0b4bcae188_0,fae1b07dcb3c5444235e7e0b4bcae188_1,dc1e615df30fcceb5a3cd2fd3ccd4c32_0,dc1e615df30fcceb5a3cd2fd3ccd4c32_1,693f53c921285bddc3861f6027338c94_0,f4213ea85085fdf7e12b1eb1ee903f75_0,cc8be0f09d430af908c2fcbbd4b6de11_0"
+
+  # The desktop package's own checks (desktop/README.md, "CI"). Its jest suite
+  # includes guard specs that read backend/docker-entrypoint.sh, both
+  # Dockerfiles, .env.example and the compose files, so it needs the whole
+  # checkout but neither the backend's nor the frontend's dependencies.
+  # smoke:postgres runs the PostgreSQL runner against the real Linux binaries
+  # of the same package version the installer ships for Windows.
+  desktop:
+    name: Desktop Lint, Tests & PostgreSQL Smoke
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: 24
+          # Test and lint jobs only: nothing they restore reaches an image or a
+          # release, which is what zizmor's cache-poisoning audit is about.
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run smoke:postgres
+
+  # Builds the Windows installer the way desktop/README.md ("The installer")
+  # tells a person to, then installs it, runs it and uninstalls it
+  # (desktop/scripts/smoke-install.ps1). Nothing else exercises the desktop
+  # code on Windows.
+  #
+  # When it runs. About 40 minutes on windows-latest, so not on a PR or a
+  # push to a branch:
+  #
+  #   * a release dispatch on main: after prepare-release, stamped with the
+  #     release version; the release job attaches what it uploads.
+  #   * a push to main (a beta): after prepare-preview, stamped
+  #     <next patch>-beta.<run number>; windows-beta publishes it as the one
+  #     Windows beta prerelease.
+  #   * a manual dispatch on any other branch: at once, with the version in
+  #     package.json, as a 7-day artifact and nothing more. That is how a
+  #     branch's installer is tried before it merges:
+  #     `gh workflow run "CI Pipeline" --ref <branch>`.
+  #
+  # On main, the needs carry the whole gate: prepare-release and
+  # prepare-preview run only once every test, scan and E2E job has passed.
+  # `!cancelled()` is what lets the branch build start with both skipped.
+  #
+  # Shells, deliberately: `pwsh` (the Windows default) for every build step,
+  # because that is how a person builds on Windows, and because Git Bash
+  # rewrites PATH and would hide a `sh` or `cwebp` that the staging step
+  # (which spawns both) cannot find on the real one. `bash` only where the
+  # step is POSIX shell by nature.
+  #
+  # No npm cache: the installer it uploads is a distributable, and
+  # zizmor's cache-poisoning audit is about exactly that.
+  desktop-windows:
+    name: Desktop Windows Installer
+    runs-on: windows-latest
+    needs: [desktop, prepare-release, prepare-preview]
+    if: >-
+      !cancelled() && needs.desktop.result == 'success' && (
+        needs.prepare-release.result == 'success' ||
+        needs.prepare-preview.result == 'success' ||
+        (github.event_name == 'workflow_dispatch' && github.ref != 'refs/heads/main')
+      )
+    timeout-minutes: 75
+    outputs:
+      version: ${{ steps.installer-version.outputs.version }}
+    defaults:
+      run:
+        shell: pwsh
+    steps:
+      # Before the checkout, which uses the git CLI and so reads this config.
+      # Git for Windows on the image sets core.autocrlf=true: every file would arrive
+      # with CRLF, which breaks backend/scripts/convert-help-images.sh under
+      # `sh` (the staging step runs it), fails every line of `npm run lint`
+      # (prettier's endOfLine) and changes what the guard specs read from the
+      # Dockerfiles and backend/docker-entrypoint.sh. The repository has no
+      # .gitattributes; LF everywhere is what every other job checks out.
+      - name: Check out with LF line endings and long paths
+        shell: bash
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+          git config --global core.longpaths true
+      # The revision the images are built from (REL-003): prepare-release and
+      # prepare-preview both record github.sha as git_sha, and this checks out
+      # that commit by name and refuses anything else.
+      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Check the revision
+        env:
+          GATED_SHA: ${{ needs.prepare-release.outputs.git_sha || needs.prepare-preview.outputs.git_sha || github.sha }}
+        run: |
+          $head = (git rev-parse HEAD).Trim()
+          if ($head -ne $env:GATED_SHA) { throw "checked out $head, but the gated revision is $env:GATED_SHA" }
+      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      # The version the installer, the backend and the frontend report, set
+      # before anything is built (the frontend inlines it). The same
+      # `npm version` the image builds run, with no commit: the release job
+      # owns the bump commit. A beta adds the run number to the images'
+      # <next patch>-beta so each beta sorts after the one before it, which is
+      # what lets an installed beta update to the next one. A branch build
+      # keeps package.json's version.
+      - name: Set the installer version
+        id: installer-version
+        env:
+          RELEASE_VERSION: ${{ needs.prepare-release.outputs.version }}
+          PREVIEW_VERSION: ${{ needs.prepare-preview.outputs.version }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          if ($env:RELEASE_VERSION) { $version = $env:RELEASE_VERSION }
+          elseif ($env:PREVIEW_VERSION) { $version = "$($env:PREVIEW_VERSION).$($env:RUN_NUMBER)" }
+          else { $version = (Get-Content -Raw desktop/package.json | ConvertFrom-Json).version }
+          foreach ($dir in 'backend', 'frontend', 'desktop') {
+            Push-Location $dir
+            npm version $version --no-git-tag-version --allow-same-version
+            $code = $LASTEXITCODE
+            Pop-Location
+            if ($code -ne 0) { throw "npm version $version failed in $dir" }
+          }
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          Write-Host "Installer version: $version"
+
+      # cwebp is the only build tool the image lacks (desktop/README.md). From
+      # the libwebp project's own release zip rather than Chocolatey: one
+      # download from the project's bucket, no community package and no
+      # Chocolatey outage in the path, and the version and the bytes are both
+      # pinned here. The SHA-256 is of the zip whose detached signature
+      # (libwebp-1.6.0-windows-x64.zip.asc) verifies against the WebP release
+      # signing key, fingerprint 6B0E 6B70 976D E303 EDF2 F601 F9C3 D6BD B823
+      # 2B5D. To move to a later release, verify its .asc the same way and
+      # replace both values.
+      - name: Install cwebp (libwebp 1.6.0)
+        env:
+          LIBWEBP_VERSION: 1.6.0
+          LIBWEBP_SHA256: 48886f506b21f62e4661f0f4cbfca19800897c385128e8902542d29a950c93f1
+        run: |
+          $name = "libwebp-$env:LIBWEBP_VERSION-windows-x64"
+          $zip = Join-Path $env:RUNNER_TEMP "$name.zip"
+          Invoke-WebRequest -Uri "https://storage.googleapis.com/downloads.webmproject.org/releases/webp/$name.zip" -OutFile $zip -MaximumRetryCount 3 -RetryIntervalSec 10
+          $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $zip).Hash.ToLowerInvariant()
+          if ($actual -ne $env:LIBWEBP_SHA256) {
+            throw "$name.zip has SHA-256 $actual, expected $env:LIBWEBP_SHA256"
+          }
+          Expand-Archive -LiteralPath $zip -DestinationPath $env:RUNNER_TEMP
+          Add-Content -LiteralPath $env:GITHUB_PATH -Value (Join-Path $env:RUNNER_TEMP "$name\bin")
+
+      # What the staging step spawns by name, resolved the way it will be:
+      # cwebp (above), `sh` from Git for Windows (Git\bin, on the image's PATH
+      # already; added here only if a future image drops it) and vswhere, which
+      # finds the Visual C++ runtime the installer carries beside PostgreSQL.
+      - name: Check the build tools
+        run: |
+          if (-not (Get-Command -Name sh -CommandType Application -ErrorAction SilentlyContinue)) {
+            $gitBin = Join-Path $env:ProgramFiles 'Git\bin'
+            if (-not (Test-Path -LiteralPath (Join-Path $gitBin 'sh.exe'))) { throw "no sh.exe on PATH or in $gitBin" }
+            Add-Content -LiteralPath $env:GITHUB_PATH -Value $gitBin
+            $env:PATH = "$gitBin;$env:PATH"
+          }
+          Get-Command -Name sh, cwebp -CommandType Application | Format-Table -Property Name, Source -AutoSize
+          & cwebp -version
+          if ($LASTEXITCODE -ne 0) { throw "cwebp -version exited with $LASTEXITCODE" }
+          $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
+          if (-not (Test-Path -LiteralPath $vswhere)) { throw "vswhere.exe is missing: $vswhere" }
+          & $vswhere -products '*' -property installationPath
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+      - name: Build the backend
+        working-directory: backend
+        # The same heap backend/Dockerfile gives `nest build`.
+        env:
+          NODE_OPTIONS: --max-old-space-size=4096
+        run: npm run build
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+      - name: Build the frontend
+        working-directory: frontend
+        run: npm run build
+
+      - name: Install desktop dependencies
+        working-directory: desktop
+        run: npm ci
+      - name: Lint the desktop package
+        working-directory: desktop
+        run: npm run lint
+      - name: Test the desktop package
+        working-directory: desktop
+        run: npm test
+      # The PostgreSQL runner against the Windows binaries, before they are
+      # packaged: a failure here names the runner, not the installer.
+      - name: Smoke-test the PostgreSQL runner
+        working-directory: desktop
+        run: npm run smoke:postgres
+      # typecheck, build, stage --require-webp, electron-builder --win
+      # --publish never.
+      - name: Build the installer
+        working-directory: desktop
+        run: npm run dist
+
+      # A data directory with a space in its name, as under a profile named
+      # "First Last"; the script removes it after a pass and keeps it, with
+      # its logs, after a failure. It sits under the user's profile, as the
+      # real one does. The first run kept it on the work drive and initdb
+      # exited 1 within 200 ms there; the suspected cause is that the runner
+      # account is an elevated administrator, so initdb re-executes under a
+      # restricted token that cannot write where only Administrators may.
+      - name: Install, run and uninstall the installer
+        timeout-minutes: 30
+        run: |
+          $dataDir = Join-Path $env:USERPROFILE 'monize smoke data'
+          $installer = @(Get-ChildItem -Path desktop/release -Filter 'Monize-Setup-*.exe' -File | Where-Object { $_.Extension -ieq '.exe' })
+          if ($installer.Count -ne 1) { throw "expected one Monize-Setup-*.exe in desktop/release, found $($installer.Count)" }
+          pwsh -NoProfile -File desktop/scripts/smoke-install.ps1 -Installer $installer[0].FullName -DataDir $dataDir
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload the smoke test's logs
+        if: failure()
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: desktop-windows-smoke-logs
+          path: ~/monize smoke data/logs/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      # Only an installer that passed the smoke test. The release job and
+      # windows-beta attach exactly these files. The updater reads
+      # latest.yml for a release and beta.yml for a beta (electron-builder
+      # names the file after the version's prerelease channel), so both
+      # patterns are listed and whichever exists is uploaded.
+      - name: Upload the installer
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: monize-windows-installer
+          path: |
+            desktop/release/Monize-Setup-*.exe
+            desktop/release/Monize-Setup-*.exe.blockmap
+            desktop/release/latest.yml
+            desktop/release/beta.yml
+          if-no-files-found: error
+          retention-days: 7
 
   # Resolve the release version and shared build metadata ONCE, so the parallel
   # backend/frontend build jobs below stamp identical version/date/sha values.
@@ -613,6 +1311,7 @@ jobs:
         backend-integration-tests,
         frontend-lint,
         frontend-unit-tests,
+        frontend-coverage,
         npm-audit,
         bearer-scan,
         dockerfile-lint,
@@ -622,6 +1321,7 @@ jobs:
         env-doc-check,
         e2e-tests,
         helm-chart,
+        desktop,
       ]
     permissions:
       contents: read
@@ -854,7 +1554,23 @@ jobs:
   release:
     name: Commit Version & Release
     runs-on: ubuntu-latest
-    needs: [prepare-release, build-and-push]
+    # desktop-windows too: a release carries its Windows installer, so a
+    # failed Windows build stops the release (no bump commit, no tag) the same
+    # way a failed image leg does.
+    #
+    # The `if:` names every need's result under `!cancelled()`, as
+    # windows-beta does, instead of leaning on the implicit `success()`. That
+    # default also looks past the direct needs to desktop-windows's own:
+    # prepare-preview is skipped on every release dispatch, so the plain
+    # default would skip this job after every leg had passed. A failed or
+    # skipped need still stops the release.
+    needs: [prepare-release, build-and-push, desktop-windows]
+    if: >-
+      !cancelled() &&
+      github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' &&
+      needs.prepare-release.result == 'success' &&
+      needs.build-and-push.result == 'success' &&
+      needs.desktop-windows.result == 'success'
     permissions:
       contents: write # to push the version-bump commit and create the GitHub release
     steps:
@@ -879,7 +1595,7 @@ jobs:
           node-version: 24
           package-manager-cache: false
 
-      # Re-apply the resolved version to both package.json files (kept in
+      # Re-apply the resolved version to all three package.json files (kept in
       # lockstep) and commit it. Deterministic: the version was decided in
       # prepare-release.
       - name: Bump version
@@ -888,6 +1604,7 @@ jobs:
         run: |
           cd backend  && npm version "$VERSION" --no-git-tag-version --allow-same-version && cd ..
           cd frontend && npm version "$VERSION" --no-git-tag-version --allow-same-version && cd ..
+          cd desktop  && npm version "$VERSION" --no-git-tag-version --allow-same-version && cd ..
 
       # Pushes the version bump directly to protected main. The push is
       # authenticated with RELEASE_TOKEN (admin PAT, wired in via the checkout
@@ -898,7 +1615,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add backend/package.json backend/package-lock.json frontend/package.json frontend/package-lock.json
+          git add backend/package.json backend/package-lock.json frontend/package.json frontend/package-lock.json desktop/package.json desktop/package-lock.json
           git commit -m "chore: bump version to ${VERSION} [skip ci]"
           git pull --rebase
           git push
@@ -934,51 +1651,104 @@ jobs:
             echo "Release notes: GitHub auto-generated (no input or notes file found)"
           fi
 
+      # The installer desktop-windows built and smoke-tested from the gated
+      # revision, stamped with this version. electron-updater on an installed
+      # copy reads latest.yml from the newest release and downloads the
+      # installer it names, so all three files go on the release.
+      - name: Download the Windows installer
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: monize-windows-installer
+          path: ${{ runner.temp }}/windows-installer
+
+      - name: Check the Windows installer
+        env:
+          VERSION: ${{ needs.prepare-release.outputs.version }}
+          BUILT_VERSION: ${{ needs.desktop-windows.outputs.version }}
+          DIR: ${{ runner.temp }}/windows-installer
+        run: |
+          if [ "$BUILT_VERSION" != "$VERSION" ]; then
+            echo "::error::The Windows installer is $BUILT_VERSION, the release is $VERSION"
+            exit 1
+          fi
+          for file in "Monize-Setup-${VERSION}.exe" "Monize-Setup-${VERSION}.exe.blockmap" latest.yml; do
+            if [ ! -f "$DIR/$file" ]; then
+              echo "::error::The Windows installer artifact has no $file"
+              exit 1
+            fi
+          done
+          grep -qx "version: ${VERSION}" "$DIR/latest.yml" || { echo "::error::latest.yml does not name ${VERSION}"; exit 1; }
+
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ needs.prepare-release.outputs.version }}
           NOTES_PATH: ${{ steps.notes.outputs.path }}
+          DIR: ${{ runner.temp }}/windows-installer
         run: |
+          ASSETS=(
+            "$DIR/Monize-Setup-${VERSION}.exe"
+            "$DIR/Monize-Setup-${VERSION}.exe.blockmap"
+            "$DIR/latest.yml"
+          )
           if [ -n "$NOTES_PATH" ]; then
             gh release create "v${VERSION}" \
               --title "v${VERSION}" \
-              --notes-file "$NOTES_PATH"
+              --notes-file "$NOTES_PATH" \
+              "${ASSETS[@]}"
           else
             gh release create "v${VERSION}" \
               --title "v${VERSION}" \
-              --generate-notes
+              --generate-notes \
+              "${ASSETS[@]}"
           fi
 
   # ---------------------------------------------------------------------------
-  # Preview publish (open PR + push to main)
+  # Preview publish (push to main)
   #
-  # Publishes a lightweight image so work is pullable before a formal release
-  # (issue #727), in two flavours:
-  #   * push to main  -> moves a single multi-arch `:beta` tag (latest main).
-  #   * open PR        -> publishes `:pr-<number>` (amd64 only) so a PR can be
-  #                       pulled and tested before it merges.
+  # Publishes a lightweight image so merged work is pullable before a formal
+  # release (issue #727): a push to main moves a single multi-arch `:beta` tag.
   # It reuses the same full test/security gate as the release path (those jobs
-  # already run on push and PR), but stays deliberately light on the publish
-  # side: no version-bump commit, no GitHub release, no cosign/SBOM/provenance,
-  # and it never touches `:latest`.
+  # already run on push), but stays deliberately light on the publish side: no
+  # version-bump commit, no GitHub release, no cosign/SBOM/provenance, and it
+  # never touches `:latest`.
+  #
+  # An open PR used to publish `:pr-<number>` alongside this. That is retired,
+  # and the reasoning is worth keeping because it argues against reinstating it:
+  #
+  #   * Nobody was told the images existed. The tag was written only to
+  #     $GITHUB_STEP_SUMMARY -- no PR comment, nothing in README or
+  #     CONTRIBUTING -- so finding one meant opening the Actions run for your
+  #     own PR and scrolling to a job summary.
+  #   * The contributors most likely to want one could never get one. A fork
+  #     PR's GITHUB_TOKEN is read-only, so every fork PR was skipped; across
+  #     the merge history that was 0 of 19 fork PRs against 24 of 26 same-repo
+  #     ones. Both external contributors work from forks, and #714 (Fork
+  #     Images) exists because of it.
+  #   * Ten weeks of per-version download counts showed no one pulling them.
+  #     Every `pr-` tag's count tracked its AGE and nothing else -- about one
+  #     per six days, no tag an outlier among 481 -- which is crawler traffic.
+  #     For comparison, `:latest` took 66 downloads in two days while the
+  #     oldest `pr-` tag managed 13 in seventy-three.
+  #   * They were never cleaned up: prune-ghcr-untagged.sh deleted only
+  #     UNTAGGED versions, so 481 tags accumulated holding ~17.7 GB, about
+  #     three quarters of the registry footprint. That script now sweeps them.
+  #
+  # `:beta` is what issue #727 actually asked for and it stays. If per-PR
+  # images are ever wanted again, advertise them on the PR itself -- shipping
+  # them unannounced is the one arrangement already known not to work.
   # ---------------------------------------------------------------------------
 
-  # Resolve the tag, platforms and stamped version ONCE so the parallel
-  # backend/frontend builds stamp identical values. The version build-arg is the
-  # *next* patch release (off backend/package.json, which holds the last
-  # published version) suffixed with `-beta` or `-pr.<number>`. No commit here.
+  # Resolve the stamped version ONCE so the parallel backend/frontend builds
+  # stamp identical values. The version build-arg is the *next* patch release
+  # (off backend/package.json, which holds the last published version) suffixed
+  # with `-beta`. No commit here.
   prepare-preview:
     name: Prepare Preview
     runs-on: ubuntu-latest
-    # Runs on a push to main (a merge) or on a same-repo PR targeting main.
-    # Fork PRs are excluded: their GITHUB_TOKEN is read-only and cannot push to
-    # GHCR. The manual release dispatch is handled by prepare-release instead.
-    if: >-
-      (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
-      (github.event_name == 'pull_request' &&
-       github.event.pull_request.base.ref == 'main' &&
-       github.event.pull_request.head.repo.full_name == github.repository)
+    # Runs on a push to main (a merge) only. The manual release dispatch is
+    # handled by prepare-release instead, and a PR publishes nothing.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs:
       [
         backend-lint,
@@ -986,6 +1756,7 @@ jobs:
         backend-integration-tests,
         frontend-lint,
         frontend-unit-tests,
+        frontend-coverage,
         npm-audit,
         bearer-scan,
         dockerfile-lint,
@@ -999,10 +1770,7 @@ jobs:
     permissions:
       contents: read
     outputs:
-      tag: ${{ steps.resolve.outputs.tag }}
       version: ${{ steps.resolve.outputs.version }}
-      platforms: ${{ steps.resolve.outputs.platforms }}
-      annotation_level: ${{ steps.resolve.outputs.annotation_level }}
       build_date: ${{ steps.meta.outputs.build_date }}
       git_sha: ${{ steps.meta.outputs.git_sha }}
     steps:
@@ -1015,39 +1783,18 @@ jobs:
           node-version: 24
           package-manager-cache: false
 
-      # Decide the tag, platforms and stamped version from the trigger. A push
-      # to main publishes a multi-arch `:beta`; a PR publishes amd64-only
-      # `:pr-<number>`. The PR number is read via env (never interpolated into
-      # the script) to avoid template injection.
+      # Stamp the *next* patch release suffixed with `-beta`. The tag,
+      # platforms and annotation level are constants now that this job runs
+      # only for a push to main, so they are written at the one place that
+      # consumes them rather than threaded through as single-valued outputs.
       - name: Resolve preview build
         id: resolve
-        env:
-          EVENT: ${{ github.event_name }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           CURRENT=$(node -p "require('./backend/package.json').version")
           IFS='.' read -r MAJOR MINOR PATCH <<< "$CURRENT"
-          NEXT="$MAJOR.$MINOR.$((PATCH + 1))"
-          if [ "$EVENT" = "pull_request" ]; then
-            TAG="pr-${PR_NUMBER}"
-            VERSION="${NEXT}-pr.${PR_NUMBER}"
-            PLATFORMS="linux/amd64"
-            # Single-platform export has no image index, so index-level
-            # annotations are rejected ("index annotations not supported for
-            # single platform export"). Annotate the manifest instead.
-            ANNOTATION_LEVEL="manifest"
-          else
-            TAG="beta"
-            VERSION="${NEXT}-beta"
-            PLATFORMS="linux/amd64,linux/arm64"
-            # Multi-arch export builds an image index; annotate that.
-            ANNOTATION_LEVEL="index"
-          fi
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          VERSION="$MAJOR.$MINOR.$((PATCH + 1))-beta"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "platforms=$PLATFORMS" >> "$GITHUB_OUTPUT"
-          echo "annotation_level=$ANNOTATION_LEVEL" >> "$GITHUB_OUTPUT"
-          echo "Resolved: event=$EVENT tag=$TAG version=$VERSION platforms=$PLATFORMS level=$ANNOTATION_LEVEL"
+          echo "Resolved: tag=beta version=$VERSION"
 
       - name: Set build metadata
         id: meta
@@ -1060,8 +1807,8 @@ jobs:
   # Build + push the two preview images IN PARALLEL (one matrix leg per image).
   # Unlike the release build-and-push, this deliberately skips cosign signing,
   # SBOM/provenance attestation and the Trivy gate: a preview is a convenience
-  # image, not a signed release. It pushes only the single `:beta` / `:pr-<n>`
-  # tag resolved above and never touches `:latest`.
+  # image, not a signed release. It pushes only the single `:beta` tag and
+  # never touches `:latest`.
   build-preview:
     name: Build & Push Preview (${{ matrix.name }})
     runs-on: ubuntu-latest
@@ -1099,8 +1846,8 @@ jobs:
           package-manager-cache: false
 
       # Stamp the resolved version into this image's package.json so the built
-      # artifact reports e.g. 1.11.2-beta or 1.11.2-pr.123. Not committed --
-      # preview never bumps the repo version.
+      # artifact reports e.g. 1.11.2-beta. Not committed -- preview never bumps
+      # the repo version.
       - name: Stamp version
         env:
           VERSION: ${{ needs.prepare-preview.outputs.version }}
@@ -1127,34 +1874,33 @@ jobs:
           file: ${{ matrix.file }}
           target: production
           push: true
-          # amd64-only for PRs, amd64+arm64 for the :beta main build (see
-          # prepare-preview). arm64 is emulated, so dropping it keeps PR builds
-          # fast.
-          platforms: ${{ needs.prepare-preview.outputs.platforms }}
+          platforms: linux/amd64,linux/arm64
           # Plain image: no provenance/SBOM attestation manifest (unlike the
           # signed release), keeping the preview build fast and the registry
           # listing clean.
           provenance: false
           sbom: false
           tags: |
-            ${{ matrix.image }}:${{ needs.prepare-preview.outputs.tag }}
+            ${{ matrix.image }}:beta
           build-args: |
             GIT_SHA=${{ needs.prepare-preview.outputs.git_sha }}
             BUILD_DATE=${{ needs.prepare-preview.outputs.build_date }}
             VERSION=${{ needs.prepare-preview.outputs.version }}
-          # Annotation level matches the export: `index` for the multi-arch
-          # :beta build, `manifest` for the single-arch :pr-<n> build (an index
-          # only exists when multiple platforms are exported).
+          # `index` matches the export: a multi-arch build produces an image
+          # index, and that is the only shape this job builds. (A single
+          # platform has no index, and index-level annotations are rejected
+          # outright for one -- which is why the retired per-PR build had to
+          # annotate the manifest instead.)
           annotations: |
-            ${{ needs.prepare-preview.outputs.annotation_level }}:org.opencontainers.image.title=${{ matrix.title }}
-            ${{ needs.prepare-preview.outputs.annotation_level }}:org.opencontainers.image.description=${{ matrix.description }}
-            ${{ needs.prepare-preview.outputs.annotation_level }}:org.opencontainers.image.source=https://github.com/kenlasko/monize
-            ${{ needs.prepare-preview.outputs.annotation_level }}:org.opencontainers.image.url=https://github.com/kenlasko/monize
-            ${{ needs.prepare-preview.outputs.annotation_level }}:org.opencontainers.image.authors=ken.lasko@gmail.com
-            ${{ needs.prepare-preview.outputs.annotation_level }}:org.opencontainers.image.vendor=Ken Lasko
-            ${{ needs.prepare-preview.outputs.annotation_level }}:org.opencontainers.image.revision=${{ needs.prepare-preview.outputs.git_sha }}
-            ${{ needs.prepare-preview.outputs.annotation_level }}:org.opencontainers.image.created=${{ needs.prepare-preview.outputs.build_date }}
-            ${{ needs.prepare-preview.outputs.annotation_level }}:org.opencontainers.image.version=${{ needs.prepare-preview.outputs.version }}
+            index:org.opencontainers.image.title=${{ matrix.title }}
+            index:org.opencontainers.image.description=${{ matrix.description }}
+            index:org.opencontainers.image.source=https://github.com/kenlasko/monize
+            index:org.opencontainers.image.url=https://github.com/kenlasko/monize
+            index:org.opencontainers.image.authors=ken.lasko@gmail.com
+            index:org.opencontainers.image.vendor=Ken Lasko
+            index:org.opencontainers.image.revision=${{ needs.prepare-preview.outputs.git_sha }}
+            index:org.opencontainers.image.created=${{ needs.prepare-preview.outputs.build_date }}
+            index:org.opencontainers.image.version=${{ needs.prepare-preview.outputs.version }}
           cache-from: type=gha,scope=${{ matrix.name }}
           cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 
@@ -1163,64 +1909,110 @@ jobs:
         env:
           NAME: ${{ matrix.name }}
           IMAGE: ${{ matrix.image }}
-          TAG: ${{ needs.prepare-preview.outputs.tag }}
         run: |
           {
             echo "### ${NAME} preview image pushed"
             echo ""
             echo '```'
-            echo "${IMAGE}:${TAG}"
+            echo "${IMAGE}:beta"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-  # Pre-download and cache the Playwright browsers ONCE, before the sharded
-  # test jobs run. The shards then restore from this cache (guaranteed hit) and
-  # never touch cdn.playwright.dev themselves. This avoids the failure we hit
-  # when four shards raced on a cold cache: the ones that missed downloaded
-  # browsers concurrently and some downloads stalled indefinitely (the Playwright
-  # downloader has no timeout), wedging the whole job. The download timeout below
-  # also caps any future CDN stall so this job fails fast and can be re-run
-  # instead of hanging.
-  e2e-browsers:
-    name: E2E Browser Cache
+  # The Windows beta: the installer desktop-windows built from this push to
+  # main, published as a GitHub prerelease tagged v<next patch>-beta.<run>.
+  # There is one at a time: after the new one is up, every older Windows beta
+  # prerelease and its tag are deleted, so the Releases page and the download
+  # links always lead to the newest. Nothing here touches a full release:
+  # /releases/latest, which the website, the backend's update check and a
+  # stable install's updater read, never returns a prerelease. An installed
+  # beta follows prereleases (desktop/src/shell/version-policy.ts), reads
+  # beta.yml from this release and moves to the next beta or the next full
+  # release, whichever is newer.
+  #
+  # A light publish like build-preview: no version commit, no signing.
+  #
+  # The `if:` names both needs' results under `!cancelled()` instead of
+  # leaning on the implicit `success()`. That default also looks past the
+  # direct needs to desktop-windows's own: prepare-release is skipped on every
+  # push, so the plain condition skipped this job even when the installer
+  # built, and no beta was ever published.
+  windows-beta:
+    name: Publish Windows Beta
     runs-on: ubuntu-latest
-    needs: [backend-unit-tests, frontend-unit-tests]
+    needs: [prepare-preview, desktop-windows]
+    if: >-
+      !cancelled() &&
+      github.event_name == 'push' && github.ref == 'refs/heads/main' &&
+      needs.prepare-preview.result == 'success' &&
+      needs.desktop-windows.result == 'success'
+    permissions:
+      contents: write # to create the beta prerelease and delete the one it replaces
     steps:
-      - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
+      - name: Download the Windows installer
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          persist-credentials: false
-      - uses: actions/setup-node@6044e13b5dc448c55e2357c09f80417699197238 # v6.2.0
-        with:
-          node-version: 24
-      - name: Install E2E dependencies
-        working-directory: e2e
-        run: npm ci
-      - name: Cache Playwright browsers
-        id: pw-cache
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-chromium-firefox-${{ runner.os }}-${{ hashFiles('e2e/package-lock.json') }}
-      - name: Download Playwright browsers
-        if: steps.pw-cache.outputs.cache-hit != 'true'
-        working-directory: e2e
-        timeout-minutes: 15
-        run: npx playwright install chromium firefox
+          name: monize-windows-installer
+          path: ${{ runner.temp }}/windows-installer
+
+      - name: Publish the beta prerelease
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          VERSION: ${{ needs.desktop-windows.outputs.version }}
+          DIR: ${{ runner.temp }}/windows-installer
+        run: |
+          if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$'; then
+            echo "::error::'$VERSION' is not a Windows beta version"
+            exit 1
+          fi
+          TAG="v${VERSION}"
+          shopt -s nullglob
+          ASSETS=("$DIR"/Monize-Setup-*.exe "$DIR"/Monize-Setup-*.exe.blockmap "$DIR"/*.yml)
+          if [ ! -f "$DIR/Monize-Setup-${VERSION}.exe" ]; then
+            echo "::error::The artifact has no Monize-Setup-${VERSION}.exe"
+            exit 1
+          fi
+          {
+            echo "A preview of the next Monize release for Windows, built from ${SHA} on main."
+            echo
+            echo "Betas are not tested as much as releases. Back up first (Settings > Backup) and keep your recovery key. An installed beta updates itself to the next beta or the next release, whichever is newer."
+            echo
+            echo "Download Monize-Setup-${VERSION}.exe below. The installer is unsigned, so Windows SmartScreen warns: choose More info, then Run anyway."
+          } > "$RUNNER_TEMP/beta-notes.md"
+          gh release create "$TAG" \
+            --repo "$REPO" \
+            --prerelease \
+            --target "$SHA" \
+            --title "Windows beta ${VERSION}" \
+            --notes-file "$RUNNER_TEMP/beta-notes.md" \
+            "${ASSETS[@]}"
+          # Only now that the new one is up: one Windows beta at a time. A
+          # failed delete fails the job, so a leftover beta is seen, not kept.
+          OLD_TAGS=$(gh release list --repo "$REPO" --limit 200 --json tagName,isPrerelease \
+            --jq '.[] | select(.isPrerelease) | .tagName' |
+            { grep -E '^v[0-9]+\.[0-9]+\.[0-9]+-beta\.[0-9]+$' || true; })
+          for old in $OLD_TAGS; do
+            if [ "$old" != "$TAG" ]; then
+              gh release delete "$old" --repo "$REPO" --yes --cleanup-tag
+            fi
+          done
 
   # Runs the Playwright suite against a full stack (postgres + backend +
   # frontend) brought up via docker-compose.e2e.yml. Runs chromium + firefox.
   # Gates releases: build-and-push lists this job in its needs, so a red E2E
   # run blocks the container build/push. Retries (2 in CI) absorb flakiness.
   e2e-tests:
-    name: E2E Tests (shard ${{ matrix.shard }}/4)
+    name: E2E Tests (shard ${{ matrix.shard }}/4${{ matrix.cluster == 'true' && ', cluster' || '' }})
     runs-on: ubuntu-latest
-    # Depends on e2e-browsers so the Playwright cache is fully populated before
-    # any shard starts; the backend/frontend unit-test gate is inherited
-    # transitively through e2e-browsers.
-    needs: [e2e-browsers]
+    # The backend/frontend unit-test gate. The browsers come from the pinned
+    # Playwright image (scripts/e2e-playwright.sh), so no job has to warm a
+    # browser cache first.
+    needs: [backend-unit-tests, frontend-unit-tests, frontend-coverage]
     # Shard across 4 runners. Each shard brings up its OWN isolated stack
-    # (postgres + backend + frontend) below, so there is no shared database
-    # state between shards. Within a shard Playwright still runs serially
+    # (postgres + backend + frontend, plus a second backend and a load balancer
+    # on the cluster shard) below, so there is no shared database state between
+    # shards. Within a shard Playwright still runs serially
     # (workers: 1 in playwright.config.ts), preserving the existing ordering
     # guarantees (e.g. zz-danger-zone last). fail-fast: false lets every shard
     # finish so we see all failures, not just the first shard to go red.
@@ -1228,9 +2020,28 @@ jobs:
       fail-fast: false
       matrix:
         shard: [1, 2, 3, 4]
+        include:
+          # One shard runs the SAME suite against two backend replicas behind a
+          # round-robin load balancer with no affinity (docker-compose.e2e.yml,
+          # profile `cluster`). It is the only place the product is exercised as
+          # a cluster, and it also runs tests/cluster.spec.ts (the `cluster`
+          # Playwright project, defined only under E2E_CLUSTER=multi), which no
+          # other run includes because one backend makes it true for the wrong
+          # reason. The other three shards are byte-for-byte what they were.
+          - shard: 4
+            cluster: 'true'
     permissions:
       contents: read
       pull-requests: write # so the failure-diagnostics step can post container logs as a PR comment via the issues/comments API
+    env:
+      # Read by docker compose itself and by docker-compose.e2e.yml's
+      # interpolations. Empty COMPOSE_PROFILES is the default (one backend).
+      COMPOSE_PROFILES: ${{ matrix.cluster == 'true' && 'cluster' || '' }}
+      E2E_CLUSTER_MODE: ${{ matrix.cluster == 'true' && 'multi' || 'single' }}
+      E2E_INTERNAL_API_URL: ${{ matrix.cluster == 'true' && 'http://api-lb' || 'http://backend:3000' }}
+      # The cluster shard compiles the backend in two containers at once, so it
+      # needs longer than the single-backend shards to become healthy.
+      E2E_WAIT_TIMEOUT: ${{ matrix.cluster == 'true' && '900' || '600' }}
     steps:
       - uses: actions/checkout@9f698171ed81b15d1823a05fc7211befd50c8ae0 # v6.0.3
         with:
@@ -1239,41 +2050,63 @@ jobs:
         with:
           node-version: 24
 
+      # No Docker Hub login: the images come from mirror.gcr.io, Google's mirror
+      # of the official images (Dockerfiles, docker-compose.e2e.yml).
       - name: Build application images
         run: docker compose -f docker-compose.e2e.yml build
 
+      - name: Pull third-party images
+        # One image at a time with a back-off: compose pulls in parallel and fails
+        # the job on the first 429 (scripts/pull-ci-images.sh).
+        run: scripts/pull-ci-images.sh -f docker-compose.e2e.yml
+
+      - name: Pull Playwright image
+        # Pinned by digest; retried with a cap per attempt
+        # (scripts/e2e-playwright.sh, docs/container-images.md).
+        run: scripts/e2e-playwright.sh pull
+
       - name: Start application stack
-        run: docker compose -f docker-compose.e2e.yml up -d --wait --wait-timeout 600
+        run: docker compose -f docker-compose.e2e.yml up -d --wait --wait-timeout "$E2E_WAIT_TIMEOUT"
 
       - name: Install E2E dependencies
         working-directory: e2e
         run: npm ci
 
-      - name: Restore Playwright browsers
-        id: pw-cache
-        uses: actions/cache@cdf6c1fa76f9f475f3d7449005a359c84ca0f306 # v5.0.3
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-chromium-firefox-${{ runner.os }}-${{ hashFiles('e2e/package-lock.json') }}
+      # The browsers and their system libraries are in the Playwright image, so
+      # nothing is installed here. The apt install this replaces hung on a
+      # stalled Ubuntu mirror until its 10-minute timeout in about a third of
+      # the shards (scripts/e2e-playwright.sh).
+      - name: Run Chromium push integration
+        if: matrix.shard == 1
+        timeout-minutes: 5
+        run: scripts/e2e-playwright.sh npm run test:push
 
-      # Browsers come from the cache populated by e2e-browsers, so normally only
-      # the apt system deps are installed here (fast, no CDN download). The else
-      # branch is a safety net for the rare case the cache was evicted between
-      # jobs; the timeout caps a stalled download instead of hanging the shard.
-      - name: Install Playwright system dependencies
-        working-directory: e2e
+      - name: Upload Chromium push report
+        if: always() && matrix.shard == 1
+        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: chromium-push-report
+          path: e2e/playwright-push-report/
+          retention-days: 7
+
+      # Before the sharded run: zz-danger-zone.spec.ts deletes the shared admin
+      # account, and a cluster check that ran after it would be asserting
+      # against a stack the suite had already torn down half of.
+      #
+      # The `cluster` project is Chromium only: every test in the file drives
+      # the API directly and never opens a page, so a second browser would
+      # double the run and prove nothing.
+      - name: Run cluster tests (CLUSTER_MODE=multi)
+        if: matrix.cluster == 'true'
         timeout-minutes: 10
         env:
-          PW_CACHE_HIT: ${{ steps.pw-cache.outputs.cache-hit }}
-        run: |
-          if [ "$PW_CACHE_HIT" = "true" ]; then
-            npx playwright install-deps chromium firefox
-          else
-            npx playwright install --with-deps chromium firefox
-          fi
+          BASE_URL: http://localhost:3001
+          E2E_CLUSTER: multi
+          E2E_LB_URL: http://localhost:3002
+          CI: 'true'
+        run: scripts/e2e-playwright.sh npx playwright test --project=cluster
 
       - name: Run E2E tests
-        working-directory: e2e
         timeout-minutes: 30
         env:
           BASE_URL: http://localhost:3001
@@ -1281,7 +2114,7 @@ jobs:
           SHARD: ${{ matrix.shard }}
         run: |
           set -o pipefail
-          npx playwright test --shard="${SHARD}/4" --max-failures=5 2>&1 | tee /tmp/pw-output.txt
+          scripts/e2e-playwright.sh npx playwright test --shard="${SHARD}/4" --max-failures=5 2>&1 | tee /tmp/pw-output.txt
 
       - name: Upload Playwright report
         if: always()
@@ -1314,7 +2147,11 @@ jobs:
             echo '```'
             docker compose -f docker-compose.e2e.yml ps -a 2>&1 || true
             echo '```'
-            for svc in postgres backend frontend; do
+            # The services this shard actually started: the cluster shard has
+            # two backends and a load balancer, the others do not, and asking
+            # compose beats a hardcoded list that goes stale or prints empty
+            # sections for services that were never up.
+            for svc in $(docker compose -f docker-compose.e2e.yml config --services); do
               echo "<details><summary>$svc (last 150 lines)</summary>"
               echo
               echo '```'

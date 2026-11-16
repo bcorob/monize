@@ -15,6 +15,8 @@ export const EMBEDDED_INVESTMENT_SPLIT_ACTIONS: ReadonlyArray<InvestmentAction> 
   'REINVEST_INTEREST',
   'REINVEST_CAPITAL_GAIN_SHORT',
   'REINVEST_CAPITAL_GAIN_LONG',
+  // Cash in like a dividend; the basis reduction is the server's replay.
+  'RETURN_OF_CAPITAL',
 ];
 
 export function isInvestmentActionAllowedInSplit(action: InvestmentAction): boolean {
@@ -42,6 +44,7 @@ export function computeInvestmentCashImpact(
     case 'DIVIDEND':
     case 'INTEREST':
     case 'CAPITAL_GAIN':
+    case 'RETURN_OF_CAPITAL':
       return (q || 1) * p;
     case 'REINVEST':
       return 0;

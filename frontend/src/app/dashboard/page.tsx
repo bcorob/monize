@@ -1,6 +1,7 @@
 'use client';
 
-import { Fragment, useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import { subMonths, format } from 'date-fns';
 import { useOnUndoRedo } from '@/hooks/useOnUndoRedo';
 import { useOnAiAction } from '@/hooks/useOnAiAction';
@@ -8,33 +9,92 @@ import { useTranslations } from 'next-intl';
 import { useAuthStore } from '@/store/authStore';
 import { usePreferencesStore } from '@/store/preferencesStore';
 import { GettingStarted } from '@/components/dashboard/GettingStarted';
-import { CustomizeDashboardModal } from '@/components/dashboard/CustomizeDashboardModal';
 import {
   DashboardWidgetContext,
   delegateDashboardWidgets,
-  resolveDashboardWidgets,
+  type DashboardWidgetId,
 } from '@/components/dashboard/widget-registry';
+import { useWidgetName } from '@/components/dashboard/widget-glyphs';
+import {
+  defaultLayoutItem,
+  fitsWidth,
+  layoutReducer,
+  moveIntoGap,
+  resolveDashboardLayout,
+  type RowGap,
+  type WidgetHeight,
+  type WidgetWidth,
+} from '@/components/dashboard/dashboard-layout';
+import { DashboardGrid, type DashboardGridEditing } from '@/components/dashboard/DashboardGrid';
+import { useDashboardLayoutDraft } from '@/hooks/useDashboardLayoutDraft';
+import { useGridReorder } from '@/hooks/useGridReorder';
 import { accountsApi } from '@/lib/accounts';
-import { categoriesApi } from '@/lib/categories';
+import { institutionsApi } from '@/lib/institutions';
 import { scheduledTransactionsApi } from '@/lib/scheduled-transactions';
 import { investmentsApi } from '@/lib/investments';
 import { netWorthApi } from '@/lib/net-worth';
 import { invalidateCache } from '@/lib/apiCache';
 import { Account } from '@/types/account';
+import type { Institution } from '@/types/institution';
 import { countLogicalAccounts } from '@/lib/account-utils';
-import { Category } from '@/types/category';
 import { ScheduledTransaction } from '@/types/scheduled-transaction';
-import { TopMover, PortfolioSummary, FavouriteSecurityQuote } from '@/types/investment';
+import { TopMover, PortfolioValuation, FavouriteSecurityQuote } from '@/types/investment';
 import { MonthlyNetWorth } from '@/types/net-worth';
 import { PageLayout } from '@/components/layout/PageLayout';
 import { PageHeader } from '@/components/layout/PageHeader';
+import { HOVER_TOOLBAR_BUTTON } from '@/components/ui/Card';
+import { Cog6ToothIcon } from '@heroicons/react/24/outline';
 import { ProtectedRoute } from '@/components/auth/ProtectedRoute';
 import { usePriceRefresh } from '@/hooks/usePriceRefresh';
 import { createLogger } from '@/lib/logger';
+import { incompleteHoldingAccountIds as incompleteHoldingAccountIdsOf } from '@/lib/logical-accounts';
 import { TOUR_ANCHORS, tourAnchor } from '@/lib/tours/anchors';
 import { TourBanner } from '@/components/dashboard/TourBanner';
+import { DashboardHero } from '@/components/dashboard/DashboardHero';
+import { useFinancialToday } from '@/hooks/useFinancialToday';
+import { useChartDateFormat } from '@/hooks/useChartDateFormat';
+import { greetingPeriod } from '@/lib/greeting';
 
 const logger = createLogger('Dashboard');
+
+// Edit mode's parts load on demand, behind `editing` (and the hero dialog
+// behind its own open flag), so the dashboard's first load does not grow.
+const DashboardEditBar = dynamic(
+  () => import('@/components/dashboard/DashboardEditBar').then((m) => m.DashboardEditBar),
+  { ssr: false },
+);
+const WidgetEditOverlay = dynamic(
+  () => import('@/components/dashboard/WidgetEditOverlay').then((m) => m.WidgetEditOverlay),
+  { ssr: false },
+);
+const WidgetPlaceholder = dynamic(
+  () => import('@/components/dashboard/WidgetEditOverlay').then((m) => m.WidgetPlaceholder),
+  { ssr: false },
+);
+const WidgetDragChip = dynamic(
+  () => import('@/components/dashboard/WidgetEditOverlay').then((m) => m.WidgetDragChip),
+  { ssr: false },
+);
+const AddWidgetDialog = dynamic(
+  () => import('@/components/dashboard/AddWidgetDialog').then((m) => m.AddWidgetDialog),
+  { ssr: false },
+);
+const AddWidgetTile = dynamic(
+  () => import('@/components/dashboard/AddWidgetDialog').then((m) => m.AddWidgetTile),
+  { ssr: false },
+);
+const AddWidgetSlot = dynamic(
+  () => import('@/components/dashboard/AddWidgetDialog').then((m) => m.AddWidgetSlot),
+  { ssr: false },
+);
+const DashboardHeroSettingsModal = dynamic(
+  () => import('@/components/dashboard/DashboardHeroSettingsModal').then((m) => m.DashboardHeroSettingsModal),
+  { ssr: false },
+);
+const UnsavedChangesDialog = dynamic(
+  () => import('@/components/ui/UnsavedChangesDialog').then((m) => m.UnsavedChangesDialog),
+  { ssr: false },
+);
 
 export default function DashboardPage() {
   return (
@@ -57,36 +117,71 @@ function DashboardContent() {
   // path), so wait until the store has hydrated before firing.
   const authHydrated = useAuthStore((s) => s._hasHydrated);
   const dashboardWidgets = usePreferencesStore((s) => s.preferences?.dashboardWidgets);
+  const dashboardWidgetConfig = usePreferencesStore((s) => s.preferences?.dashboardWidgetConfig);
+  const timezonePref = usePreferencesStore((s) => s.preferences?.timezone);
+  const today = useFinancialToday();
+  const formatChartDate = useChartDateFormat();
+  // The moment the page opened, read once: the greeting does not change under
+  // the reader while the page stays open.
+  const [openedAt] = useState(() => new Date());
 
   const [accounts, setAccounts] = useState<Account[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [institutions, setInstitutions] = useState<Institution[]>([]);
   const [scheduledTransactions, setScheduledTransactions] = useState<ScheduledTransaction[]>([]);
   const [topMovers, setTopMovers] = useState<TopMover[]>([]);
-  const [portfolioSummary, setPortfolioSummary] = useState<PortfolioSummary | null>(null);
+  const [portfolioValuation, setPortfolioValuation] = useState<PortfolioValuation | null>(null);
   const [hasInvestments, setHasInvestments] = useState(false);
   const [netWorthData, setNetWorthData] = useState<MonthlyNetWorth[]>([]);
+  // The net worth request failed: `netWorthData` is then empty, which is not
+  // the answer "no history yet" and must not be shown as one.
+  const [netWorthFailed, setNetWorthFailed] = useState(false);
   const [favouriteSecurities, setFavouriteSecurities] = useState<FavouriteSecurityQuote[]>([]);
   const [hasSecurities, setHasSecurities] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [showCustomize, setShowCustomize] = useState(false);
+  // The portfolio valuation loads after `isLoading` clears (below). The hero
+  // holds only its "invested" figure on this, and the automatic price refresh
+  // waits for it so the two do not compete for the server.
+  const [investmentSummaryLoading, setInvestmentSummaryLoading] = useState(false);
+  const layoutDraft = useDashboardLayoutDraft();
+  // A delegate never enters edit mode (DASH-9).
+  const editing = layoutDraft.editing && !isDelegateView;
+  const [showAddWidget, setShowAddWidget] = useState(false);
+  // The row gap the Add dialog was opened from; null from the end tile or the bar.
+  const [addGap, setAddGap] = useState<RowGap | null>(null);
+  const [showHeroSettings, setShowHeroSettings] = useState(false);
+  // The latest change (move, add, remove, resize), for the grid's polite live region.
+  const [announcement, setAnnouncement] = useState('');
+  const gearRef = useRef<HTMLButtonElement>(null);
+  // Leaving edit mode, by any way out, hands focus back to the gear that
+  // entered it, rather than to the page body with the bar that held it.
+  const wasEditingRef = useRef(false);
+  useEffect(() => {
+    if (wasEditingRef.current && !editing) gearRef.current?.focus();
+    wasEditingRef.current = editing;
+  }, [editing]);
 
   const brokerageMarketValues = useMemo(() => {
     const map = new Map<string, number>();
-    if (!portfolioSummary) return map;
-    for (const accountHoldings of portfolioSummary.holdingsByAccount) {
+    if (!portfolioValuation) return map;
+    for (const accountHoldings of portfolioValuation.holdingsByAccount) {
       map.set(accountHoldings.accountId, accountHoldings.totalMarketValue);
     }
     return map;
-  }, [portfolioSummary]);
+  }, [portfolioValuation]);
 
   const unpricedHoldingCounts = useMemo(() => {
     const map = new Map<string, number>();
-    if (!portfolioSummary) return map;
-    for (const accountHoldings of portfolioSummary.holdingsByAccount) {
+    if (!portfolioValuation) return map;
+    for (const accountHoldings of portfolioValuation.holdingsByAccount) {
       map.set(accountHoldings.accountId, accountHoldings.unpricedHoldingsCount ?? 0);
     }
     return map;
-  }, [portfolioSummary]);
+  }, [portfolioValuation]);
+
+  const incompleteHoldingAccountIds = useMemo(
+    () => incompleteHoldingAccountIdsOf(portfolioValuation?.holdingsByAccount),
+    [portfolioValuation],
+  );
 
   const reloadInvestmentWidgets = useCallback(async () => {
     // Favourite securities can exist without investment accounts, so always
@@ -100,10 +195,10 @@ function DashboardContent() {
       try {
         const [moversData, portfolio] = await Promise.all([
           investmentsApi.getTopMovers(),
-          investmentsApi.getPortfolioSummary().catch(() => null),
+          investmentsApi.getPortfolioValuation().catch(() => null),
         ]);
         setTopMovers(moversData);
-        setPortfolioSummary(portfolio);
+        setPortfolioValuation(portfolio);
       } catch {
         // Silently fail
       }
@@ -115,81 +210,112 @@ function DashboardContent() {
     onRefreshComplete: reloadInvestmentWidgets,
   });
 
-  const loadDashboardData = useCallback(async () => {
-    if (!authHydrated) return;
-    setIsLoading(true);
-    try {
-      // Phase 1: a delegate only sees the Favourite Accounts widget, and the
-      // other dashboard endpoints are not delegate-accessible. Load just the
-      // (server-filtered) accounts and stop.
-      if (isDelegateView) {
-        const delegateAccounts = await accountsApi.getAll();
-        setAccounts(delegateAccounts);
-        // 3C: when the owner granted the Bills & Deposits section, the
-        // scheduled endpoint is delegate-reachable (server-filtered to the
-        // delegate's readable accounts) so the widget can render.
-        if (delegateBills) {
-          try {
-            const sched = await scheduledTransactionsApi.getAll();
-            setScheduledTransactions(sched);
-          } catch (error) {
-            logger.error('Failed to load delegate scheduled data:', error);
+  // A change of who the dashboard is loaded for shows the spinner again; set
+  // during render rather than in the effect that reloads it.
+  const requestKey = `${authHydrated}|${isDelegateView}|${delegateBills}`;
+  const [loadingKey, setLoadingKey] = useState(requestKey);
+  if (loadingKey !== requestKey) {
+    setLoadingKey(requestKey);
+    if (authHydrated) setIsLoading(true);
+  }
+
+  // The effect's load: the state already says loading.
+  const fetchDashboardData = useCallback(() => {
+    // Writes live in `run` so they land after the request, not during the effect.
+    const run = async () => {
+      if (!authHydrated) return;
+      try {
+        // Phase 1: a delegate only sees the Favourite Accounts widget, and the
+        // other dashboard endpoints are not delegate-accessible. Load just the
+        // (server-filtered) accounts and stop.
+        if (isDelegateView) {
+          const delegateAccounts = await accountsApi.getAll();
+          setAccounts(delegateAccounts);
+          setInstitutions([]);
+          // 3C: when the owner granted the Bills & Deposits section, the
+          // scheduled endpoint is delegate-reachable (server-filtered to the
+          // delegate's readable accounts) so the widget can render.
+          if (delegateBills) {
+            try {
+              const sched = await scheduledTransactionsApi.getAll();
+              setScheduledTransactions(sched);
+            } catch (error) {
+              logger.error('Failed to load delegate scheduled data:', error);
+            }
           }
+          setIsLoading(false);
+          return;
         }
+
+        const now = new Date();
+        const today = format(now, 'yyyy-MM-dd');
+
+        const twelveMonthsAgo = format(subMonths(new Date(), 12), 'yyyy-MM-dd');
+
+        const [accountsData, scheduledData, netWorth, favouriteSecs, securitiesList, institutionsData] = await Promise.all([
+          accountsApi.getAll(),
+          scheduledTransactionsApi.getAll(),
+          netWorthApi.getMonthly({ startDate: twelveMonthsAgo, endDate: today }).catch((error) => {
+            logger.error('Failed to load net worth history:', error);
+            return null;
+          }),
+          investmentsApi.getFavouriteSecurities().catch(() => [] as FavouriteSecurityQuote[]),
+          investmentsApi.getSecurities().catch(() => []),
+          institutionsApi.getAll().catch((error) => {
+            logger.error('Failed to load institutions for their logos:', error);
+            return [] as Institution[];
+          }),
+        ]);
+
+        setAccounts(accountsData);
+        setInstitutions(institutionsData);
+        setScheduledTransactions(scheduledData);
+        setNetWorthData(netWorth ?? []);
+        setNetWorthFailed(netWorth === null);
+        setFavouriteSecurities(favouriteSecs);
+        setHasSecurities(securitiesList.length > 0);
+
+        const investmentAccounts = accountsData.filter(
+          (a: Account) => a.accountType === 'INVESTMENT' && !a.isClosed,
+        );
+        // A linked pair is one investment account, not two.
+        const investmentAccountCount = countLogicalAccounts(investmentAccounts);
+        const hasInvestmentAccounts = investmentAccountCount > 0;
+        setHasInvestments(hasInvestmentAccounts);
+
+        // Load investment data directly so it appears even when price refresh is
+        // skipped (outside market hours, cooldown active, etc.)
+        if (hasInvestmentAccounts) {
+          setInvestmentSummaryLoading(true);
+          Promise.all([
+            investmentsApi.getTopMovers().catch(() => [] as TopMover[]),
+            investmentsApi.getPortfolioValuation().catch(() => null),
+          ])
+            .then(([moversData, portfolio]) => {
+              setTopMovers(moversData);
+              setPortfolioValuation(portfolio);
+            })
+            .finally(() => setInvestmentSummaryLoading(false));
+        } else {
+          setInvestmentSummaryLoading(false);
+        }
+      } catch (error) {
+        logger.error('Failed to load dashboard data:', error);
+      } finally {
         setIsLoading(false);
-        return;
       }
-
-      const now = new Date();
-      const today = format(now, 'yyyy-MM-dd');
-
-      const twelveMonthsAgo = format(subMonths(new Date(), 12), 'yyyy-MM-dd');
-
-      const [accountsData, categoriesData, scheduledData, netWorth, favouriteSecs, securitiesList] = await Promise.all([
-        accountsApi.getAll(),
-        categoriesApi.getAll(),
-        scheduledTransactionsApi.getAll(),
-        netWorthApi.getMonthly({ startDate: twelveMonthsAgo, endDate: today }).catch(() => [] as MonthlyNetWorth[]),
-        investmentsApi.getFavouriteSecurities().catch(() => [] as FavouriteSecurityQuote[]),
-        investmentsApi.getSecurities().catch(() => []),
-      ]);
-
-      setAccounts(accountsData);
-      setCategories(categoriesData);
-      setScheduledTransactions(scheduledData);
-      setNetWorthData(netWorth);
-      setFavouriteSecurities(favouriteSecs);
-      setHasSecurities(securitiesList.length > 0);
-
-      const investmentAccounts = accountsData.filter(
-        (a: Account) => a.accountType === 'INVESTMENT' && !a.isClosed,
-      );
-      // A linked pair is one investment account, not two.
-      const investmentAccountCount = countLogicalAccounts(investmentAccounts);
-      const hasInvestmentAccounts = investmentAccountCount > 0;
-      setHasInvestments(hasInvestmentAccounts);
-
-      // Load investment data directly so it appears even when price refresh is
-      // skipped (outside market hours, cooldown active, etc.)
-      if (hasInvestmentAccounts) {
-        Promise.all([
-          investmentsApi.getTopMovers().catch(() => [] as TopMover[]),
-          investmentsApi.getPortfolioSummary().catch(() => null),
-        ]).then(([moversData, portfolio]) => {
-          setTopMovers(moversData);
-          setPortfolioSummary(portfolio);
-        });
-      }
-    } catch (error) {
-      logger.error('Failed to load dashboard data:', error);
-    } finally {
-      setIsLoading(false);
-    }
+    };
+    return run();
   }, [authHydrated, isDelegateView, delegateBills]);
 
+  const loadDashboardData = useCallback(() => {
+    if (authHydrated) setIsLoading(true);
+    return fetchDashboardData();
+  }, [authHydrated, fetchDashboardData]);
+
   useEffect(() => {
-    loadDashboardData();
-  }, [loadDashboardData]);
+    fetchDashboardData();
+  }, [fetchDashboardData]);
 
   useOnUndoRedo(loadDashboardData);
   // An AI write (e.g. a transaction created from the chat bubble) changes the
@@ -197,20 +323,29 @@ function DashboardContent() {
   useOnAiAction(loadDashboardData);
 
   useEffect(() => {
-    if (hasInvestments && !isLoading) {
+    if (hasInvestments && !isLoading && !investmentSummaryLoading) {
       triggerAutoRefresh();
     }
-  }, [hasInvestments, isLoading, triggerAutoRefresh]);
+  }, [hasInvestments, isLoading, investmentSummaryLoading, triggerAutoRefresh]);
+
+  // The accounts the hero's portfolio set offers, as the Portfolio Value
+  // widget offers them.
+  const portfolioAccounts = useMemo(
+    () => accounts.filter((a) => a.accountType === 'INVESTMENT'),
+    [accounts],
+  );
 
   const widgetContext: DashboardWidgetContext = {
     accounts,
-    categories,
     scheduledTransactions,
     topMovers,
     favouriteSecurities,
     netWorthData,
+    netWorthFailed,
     brokerageMarketValues,
     unpricedHoldingCounts,
+    incompleteHoldingAccountIds,
+    institutions,
     isLoading,
     hasInvestments,
     hasSecurities,
@@ -219,15 +354,209 @@ function DashboardContent() {
     onAccountsChanged: loadDashboardData,
   };
 
-  // Delegates always get the fixed delegate layout (the stored preference is
-  // the owner's); everyone else gets their own configured layout, falling
-  // back to the default when they never customized.
-  const visibleWidgets = useMemo(
+  // Delegates always get the fixed delegate layout at default sizes (the
+  // stored preferences are the owner's); everyone else gets their own
+  // configured layout, falling back to the default when they never customized.
+  const storedLayout = useMemo(
     () =>
       isDelegateView
-        ? delegateDashboardWidgets(delegateSections)
-        : resolveDashboardWidgets(dashboardWidgets),
-    [isDelegateView, delegateSections, dashboardWidgets],
+        ? delegateDashboardWidgets(delegateSections).map((w) => defaultLayoutItem(w.id))
+        : resolveDashboardLayout(dashboardWidgets, dashboardWidgetConfig),
+    [isDelegateView, delegateSections, dashboardWidgets, dashboardWidgetConfig],
+  );
+  // While editing, the grid is drawn from the draft; otherwise from what is stored.
+  const draft = editing ? layoutDraft.draft : null;
+  const layout = draft ?? storedLayout;
+
+  // Each visit to edit mode starts with its dialogs shut and nothing announced.
+  const enterEditMode = () => {
+    setShowAddWidget(false);
+    setAddGap(null);
+    setShowHeroSettings(false);
+    setAnnouncement('');
+    layoutDraft.enter();
+  };
+
+  const { dispatch: dispatchLayout, saving } = layoutDraft;
+  const widgetName = useWidgetName();
+  // One move, from the overlay's buttons or the grip: dispatched, read out,
+  // and focus kept on the control that moved it. A pointer drop moves no
+  // focus: the grip's press never took it.
+  const moveWidget = useCallback(
+    (from: number, to: number, focus: 'button' | 'grip' | 'none' = 'button') => {
+      if (!draft || saving || to < 0 || to >= draft.length || from === to) return;
+      const { id } = draft[from];
+      dispatchLayout({ type: 'move', from, to });
+      setAnnouncement(t('edit.moved', { name: widgetName(id), position: to + 1, count: draft.length }));
+      if (focus === 'none') return;
+      const direction = to < from ? 'earlier' : 'later';
+      requestAnimationFrame(() => {
+        const item = document.querySelector(`[data-widget-id="${id}"]`);
+        if (focus === 'grip') {
+          item?.querySelector<HTMLButtonElement>('[data-edit-slot="grip"] button')?.focus();
+          return;
+        }
+        const button =
+          item?.querySelector<HTMLButtonElement>(`[data-edit-action="${direction}"]:not(:disabled)`) ??
+          item?.querySelector<HTMLButtonElement>('[data-edit-action]:not(:disabled)');
+        button?.focus();
+      });
+    },
+    [draft, saving, dispatchLayout, t, widgetName],
+  );
+
+  const gridRef = useRef<HTMLDivElement>(null);
+
+  // Focus a widget's grip once the grid has drawn the change, or the Add
+  // widget tile when there is no widget to focus.
+  const focusGrip = (id: DashboardWidgetId | undefined) => {
+    requestAnimationFrame(() => {
+      const grid = gridRef.current;
+      const item = id ? grid?.querySelector(`[data-widget-id="${id}"]`) : null;
+      const target =
+        item?.querySelector<HTMLElement>('[data-edit-slot="grip"] button') ??
+        grid?.querySelector<HTMLElement>('[data-edit-slot="add"]');
+      target?.focus();
+    });
+  };
+
+  // Each change is read out, and focus moves to what is left in place of a
+  // removed widget, or onto a widget just added.
+  const removeWidget = (id: DashboardWidgetId) => {
+    if (!draft || saving) return;
+    const index = draft.findIndex((item) => item.id === id);
+    if (index < 0) return;
+    dispatchLayout({ type: 'remove', id });
+    setAnnouncement(t('edit.removed', { name: widgetName(id) }));
+    focusGrip((draft[index + 1] ?? draft[index - 1])?.id);
+  };
+
+  const addWidget = (id: DashboardWidgetId) => {
+    if (!draft || saving || draft.some((item) => item.id === id)) return;
+    dispatchLayout({ type: 'add', id });
+    setAnnouncement(t('edit.added', { name: widgetName(id) }));
+    focusGrip(id);
+  };
+
+  // From a gap slot: the widget goes at the slot's place, filling its space.
+  const insertWidget = (id: DashboardWidgetId, gap: RowGap) => {
+    if (!draft || saving || draft.some((item) => item.id === id)) return;
+    const action = { type: 'insert', id, index: gap.index, width: gap.width } as const;
+    if (layoutReducer(draft, action) === draft) return;
+    dispatchLayout(action);
+    setAnnouncement(t('edit.added', { name: widgetName(id) }));
+    focusGrip(id);
+  };
+
+  const openAddWidget = (gap: RowGap | null) => {
+    setAddGap(gap);
+    setShowAddWidget(true);
+  };
+
+  // A grip dropped on a gap slot: moved there, narrowed to the gap when
+  // wider. A drop that also narrowed reads out both changes.
+  const dropInGap = (from: number, gapIndex: number, width: WidgetWidth) => {
+    if (!draft || saving) return;
+    const action = moveIntoGap(draft, from, gapIndex, width);
+    if (!action || layoutReducer(draft, action) === draft) return;
+    const before = draft[from];
+    dispatchLayout(action);
+    const name = widgetName(before.id);
+    const moved =
+      action.to !== from ? t('edit.moved', { name, position: action.to + 1, count: draft.length }) : null;
+    const resized =
+      action.width !== before.width ? t('edit.resized', { name, size: t(`edit.widthName.${action.width}`) }) : null;
+    setAnnouncement(moved && resized ? t('edit.twoChanges', { first: moved, second: resized }) : (moved ?? resized ?? ''));
+  };
+
+  const resizeWidget = (id: DashboardWidgetId, size: { width?: WidgetWidth; height?: WidgetHeight }) => {
+    if (!draft || saving) return;
+    const action = { type: 'resize', id, ...size } as const;
+    // The reducer refuses a size the widget does not offer; nothing is read out then.
+    const next = layoutReducer(draft, action);
+    const before = draft.find((item) => item.id === id);
+    const after = next.find((item) => item.id === id);
+    if (next === draft || !before || !after) return;
+    dispatchLayout(action);
+    const name = widgetName(id);
+    const width = t(`edit.widthName.${after.width}`);
+    const height = t(`edit.heightName.${after.height}`);
+    const widthChanged = after.width !== before.width;
+    const heightChanged = after.height !== before.height;
+    setAnnouncement(
+      widthChanged && heightChanged
+        ? t('edit.resizedBoth', { name, width, height })
+        : t('edit.resized', { name, size: widthChanged ? width : height }),
+    );
+  };
+  const reorder = useGridReorder({
+    containerRef: gridRef,
+    count: draft?.length ?? 0,
+    enabled: !!draft,
+    onMove: (from, to, via) => moveWidget(from, to, via === 'keyboard' ? 'grip' : 'none'),
+    fitsSlot: (from, width) => !!draft?.[from] && fitsWidth(draft[from].id, width),
+    onSlotDrop: dropInGap,
+  });
+  const draggedItem = draft && reorder.draggingIndex !== null ? draft[reorder.draggingIndex] : undefined;
+
+  const gridEditing: DashboardGridEditing | undefined = draft
+    ? {
+        overlay: (item, index) => (
+          <WidgetEditOverlay
+            item={item}
+            index={index}
+            count={draft.length}
+            onMove={moveWidget}
+            onRemove={(removed) => removeWidget(removed.id)}
+            onResize={resizeWidget}
+            grip={reorder.grip(index)}
+          />
+        ),
+        placeholder: (item) => <WidgetPlaceholder item={item} />,
+        trailing: <AddWidgetTile onClick={() => openAddWidget(null)} empty={draft.length === 0} />,
+        gapSlot: (gap) => (
+          <AddWidgetSlot gap={gap} highlighted={reorder.slotTarget === gap.index} onClick={openAddWidget} />
+        ),
+        announcement,
+        saving,
+        reorder: {
+          draggingIndex: reorder.draggingIndex,
+          axis: reorder.axis,
+          dropIndicator: reorder.dropIndicator,
+          chip: draggedItem ? <WidgetDragChip id={draggedItem.id} positionRef={reorder.chipRef} /> : null,
+        },
+      }
+    : undefined;
+
+  // The greeting for the part of the day, and today's date. They are the
+  // page header whether or not the hero below them is on.
+  const period = greetingPeriod(openedAt, timezonePref);
+  const pageTitle = user?.firstName
+    ? t(`page.greeting.${period}WithName`, { name: user.firstName })
+    : t(`page.greeting.${period}`);
+  const pageSubtitle = formatChartDate(today, 'EEEE MMMM d');
+
+  const header = (
+    <PageHeader
+      title={pageTitle}
+      subtitle={pageSubtitle}
+      help='dashboard'
+      titleAdornment={
+        !isDelegateView ? (
+          <button
+            ref={gearRef}
+            type="button"
+            {...tourAnchor(TOUR_ANCHORS.dashboardCustomize)}
+            onClick={enterEditMode}
+            aria-label={t('customize.button')}
+            title={t('customize.button')}
+            className={`p-1.5 rounded-md text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${HOVER_TOOLBAR_BUTTON}`}
+          >
+            <Cog6ToothIcon className="h-5 w-5" aria-hidden="true" />
+          </button>
+        ) : undefined
+      }
+    />
   );
 
   return (
@@ -235,48 +564,64 @@ function DashboardContent() {
       <main className="px-4 sm:px-6 lg:px-12 pt-6 pb-8">
         <div className="sm:px-0">
           <TourBanner />
-          {/* Welcome section */}
-          <PageHeader
-            title={user?.firstName ? t('page.welcomeWithName', { name: user.firstName }) : `${t('page.welcomePrefix')}!`}
-            subtitle={t('page.subtitle')}
-            helpUrl="https://github.com/kenlasko/monize/wiki/Dashboard"
-            compactMobileActions
-            actions={
-              !isDelegateView ? (
-                <button
-                  {...tourAnchor(TOUR_ANCHORS.dashboardCustomize)}
-                  onClick={() => setShowCustomize(true)}
-                  aria-label={t('customize.button')}
-                  className="inline-flex items-center justify-center gap-2 p-2 sm:px-3 sm:py-1.5 text-sm font-medium text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-md hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
-                >
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                  </svg>
-                  <span className="hidden sm:inline">{t('customize.button')}</span>
-                </button>
-              ) : undefined
-            }
-          />
+          {/* The greeting, with Customize as a gear beside it. The hero holds
+              it in its figures column so the net worth chart can sit beside
+              the greeting. A delegate sees only the sections they were
+              granted; the net worth figures are not one of them, so for a
+              delegate the header stands alone. */}
+          {isDelegateView ? (
+            header
+          ) : (
+            <DashboardHero
+              portfolioValuation={portfolioValuation}
+              hasInvestments={hasInvestments}
+              isLoading={isLoading}
+              investmentSummaryLoading={investmentSummaryLoading}
+              investmentAccounts={portfolioAccounts}
+              header={header}
+            />
+          )}
 
           {!isDelegateView && <GettingStarted />}
 
-          {/* Widget grid: consecutive visible widgets pair up into rows */}
-          <div
-            {...tourAnchor(TOUR_ANCHORS.dashboardWidgets)}
-            className="grid grid-cols-1 lg:grid-cols-2 gap-6"
-          >
-            {visibleWidgets
-              .filter((w) => !w.shouldRender || w.shouldRender(widgetContext))
-              .map((w) => (
-                <Fragment key={w.id}>{w.render(widgetContext)}</Fragment>
-              ))}
-          </div>
+          {draft && (
+            <DashboardEditBar
+              onAddWidget={() => openAddWidget(null)}
+              onHeroSettings={() => setShowHeroSettings(true)}
+              onReset={() => dispatchLayout({ type: 'reset' })}
+              onCancel={layoutDraft.cancel}
+              onDone={layoutDraft.save}
+              doneDisabled={draft.length === 0}
+              saving={layoutDraft.saving}
+            />
+          )}
 
-          {!isDelegateView && (
-            <CustomizeDashboardModal
-              isOpen={showCustomize}
-              onClose={() => setShowCustomize(false)}
+          <DashboardGrid ref={gridRef} layout={layout} context={widgetContext} editing={gridEditing} />
+
+          {draft && (
+            <>
+              <AddWidgetDialog
+                isOpen={showAddWidget}
+                onClose={() => setShowAddWidget(false)}
+                shownIds={draft.map((item) => item.id)}
+                fitWidth={addGap?.width}
+                onAdd={(id) => (addGap ? insertWidget(id, addGap) : addWidget(id))}
+              />
+              <UnsavedChangesDialog
+                isOpen={layoutDraft.confirmingLeave}
+                onSave={layoutDraft.save}
+                // Save of an empty draft would do nothing; say why instead.
+                saveDisabledReason={draft.length === 0 ? t('customize.atLeastOne') : undefined}
+                onDiscard={layoutDraft.discard}
+                onCancel={layoutDraft.keepEditing}
+              />
+            </>
+          )}
+          {draft && showHeroSettings && (
+            <DashboardHeroSettingsModal
+              isOpen
+              onClose={() => setShowHeroSettings(false)}
+              investmentAccounts={portfolioAccounts}
             />
           )}
         </div>

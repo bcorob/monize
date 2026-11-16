@@ -20,6 +20,7 @@ describe('toSafeExternalUrl', () => {
   it('rejects a schemeless address, which an anchor resolves relatively', () => {
     expect(toSafeExternalUrl('example.com')).toBeNull();
     expect(toSafeExternalUrl('/settings')).toBeNull();
+    expect(toSafeExternalUrl('//example.com')).toBeNull();
   });
 
   it('treats absent and empty as nothing to link', () => {

@@ -312,6 +312,23 @@ describe('ProviderConfigForm — provider-specific field rendering', () => {
     expect(screen.getByLabelText(/base url/i)).toBeInTheDocument();
   });
 
+  it.each(['ollama', 'openai-compatible'])(
+    'says under the %s Base URL who may use a private address',
+    (value) => {
+      const { container } = render(<ProviderConfigForm isOpen={true} onClose={noop} onSubmit={noop} />);
+      const providerSelect = container.querySelector('select[name="provider"]') as HTMLSelectElement;
+      fireEvent.change(providerSelect, { target: { value } });
+      expect(
+        screen.getByText(/private or local address .* works only for an administrator/i),
+      ).toBeInTheDocument();
+    },
+  );
+
+  it('does not show the private-address note where there is no Base URL', () => {
+    render(<ProviderConfigForm isOpen={true} onClose={noop} onSubmit={noop} />);
+    expect(screen.queryByText(/works only for an administrator/i)).not.toBeInTheDocument();
+  });
+
   it('hides Base URL field for anthropic provider', () => {
     render(<ProviderConfigForm isOpen={true} onClose={noop} onSubmit={noop} />);
     expect(screen.queryByLabelText(/base url/i)).not.toBeInTheDocument();

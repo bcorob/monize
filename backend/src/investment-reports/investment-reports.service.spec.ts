@@ -7,12 +7,34 @@ import {
 } from "./entities/investment-report.entity";
 import { Account, AccountSubType } from "../accounts/entities/account.entity";
 import { UserPreference } from "../users/entities/user-preference.entity";
-import { ComputedHolding } from "./investment-report-data.service";
+import {
+  ComputedHolding,
+  ComputedHoldings,
+} from "./investment-report-data.service";
 import { createScopedDbMocks } from "../test-helpers/scoped-db-testing";
 
 jest.mock("../common/db/scoped-db", () =>
   jest.requireActual("../test-helpers/scoped-db-testing").scopedDbMockModule(),
 );
+
+/**
+ * What `computeHoldings` returns: the rows plus how complete their conversion
+ * was. The double carries the completeness fields because the real method
+ * always does, and the report's response is built from them.
+ */
+function computed(
+  rows: ComputedHolding[],
+  over: Partial<ComputedHoldings> = {},
+): ComputedHoldings {
+  return {
+    rows,
+    fxComplete: true,
+    missingPairs: [],
+    pricesComplete: true,
+    unpricedSymbols: [],
+    ...over,
+  };
+}
 
 function holding(
   over: Partial<ComputedHolding> & { values?: Record<string, unknown> },
@@ -57,7 +79,7 @@ describe("InvestmentReportsService", () => {
       findOne: jest.fn().mockResolvedValue({ defaultCurrency: "USD" }),
     };
     dataService = {
-      computeHoldings: jest.fn().mockResolvedValue([]),
+      computeHoldings: jest.fn().mockResolvedValue(computed([])),
       getLatestMarketDay: jest.fn().mockResolvedValue("2024-06-10"),
     };
     actionHistoryService = { record: jest.fn() };
@@ -286,16 +308,88 @@ describe("InvestmentReportsService", () => {
       },
     };
 
+    /**
+     * Issue #1390. The gap the data service found used to stop there: the
+     * response carried no completeness, so a reader saw blank percentages with
+     * no way to tell a missing rate from a zero share.
+     */
+    it("carries the conversion gap into the response", async () => {
+      reportsRepository.findOne.mockResolvedValue(baseReport);
+      dataService.computeHoldings.mockResolvedValue(
+        computed(
+          [
+            holding({
+              symbol: "AAA",
+              currencyCode: "SEK",
+              exchangeRate: null,
+              values: { symbol: "AAA", marketValue: 100 },
+            }),
+          ],
+          { fxComplete: false, missingPairs: ["SEK->USD"] },
+        ),
+      );
+
+      const result = await service.execute("u1", "r1");
+
+      expect(result.fxComplete).toBe(false);
+      expect(result.missingPairs).toEqual(["SEK->USD"]);
+    });
+
+    /** The price gap is the other cause and travels as its own pair. */
+    it("carries the price gap into the response, separately from the rate gap", async () => {
+      reportsRepository.findOne.mockResolvedValue(baseReport);
+      dataService.computeHoldings.mockResolvedValue(
+        computed(
+          [
+            holding({
+              symbol: "BBB",
+              values: { symbol: "BBB", marketValue: null },
+            }),
+          ],
+          { pricesComplete: false, unpricedSymbols: ["BBB"] },
+        ),
+      );
+
+      const result = await service.execute("u1", "r1");
+
+      expect(result.pricesComplete).toBe(false);
+      expect(result.unpricedSymbols).toEqual(["BBB"]);
+      expect(result.fxComplete).toBe(true);
+      expect(result.missingPairs).toEqual([]);
+    });
+
+    it("reports a complete conversion as complete", async () => {
+      reportsRepository.findOne.mockResolvedValue(baseReport);
+      dataService.computeHoldings.mockResolvedValue(
+        computed([
+          holding({
+            symbol: "AAA",
+            values: { symbol: "AAA", marketValue: 100 },
+          }),
+        ]),
+      );
+
+      const result = await service.execute("u1", "r1");
+
+      expect(result.fxComplete).toBe(true);
+      expect(result.missingPairs).toEqual([]);
+    });
+
     it("resolves all holdings accounts, defaults the date, sorts and picks columns", async () => {
       reportsRepository.findOne.mockResolvedValue(baseReport);
-      dataService.computeHoldings.mockResolvedValue([
-        holding({ symbol: "AAA", values: { symbol: "AAA", marketValue: 100 } }),
-        holding({
-          symbol: "BBB",
-          securityId: "s2",
-          values: { symbol: "BBB", marketValue: 200 },
-        }),
-      ]);
+      dataService.computeHoldings.mockResolvedValue(
+        computed([
+          holding({
+            symbol: "AAA",
+            values: { symbol: "AAA", marketValue: 100 },
+          }),
+          holding({
+            symbol: "BBB",
+            securityId: "s2",
+            values: { symbol: "BBB", marketValue: 200 },
+          }),
+        ]),
+      );
 
       const result = await service.execute("u1", "r1");
 
@@ -370,9 +464,14 @@ describe("InvestmentReportsService", () => {
         ...baseReport,
         groupBy: InvestmentGroupBy.SYMBOL,
       });
-      dataService.computeHoldings.mockResolvedValue([
-        holding({ symbol: "AAA", values: { symbol: "AAA", marketValue: 100 } }),
-      ]);
+      dataService.computeHoldings.mockResolvedValue(
+        computed([
+          holding({
+            symbol: "AAA",
+            values: { symbol: "AAA", marketValue: 100 },
+          }),
+        ]),
+      );
       const result = await service.execute("u1", "r1");
       expect(result.columns[0]).toBe("account");
       // separated (no merge) -> computeHoldings called with mergeAccounts=false
@@ -391,9 +490,14 @@ describe("InvestmentReportsService", () => {
         groupBy: InvestmentGroupBy.SYMBOL,
         config: { ...baseReport.config, mergeAccounts: true },
       });
-      dataService.computeHoldings.mockResolvedValue([
-        holding({ symbol: "AAA", values: { symbol: "AAA", marketValue: 100 } }),
-      ]);
+      dataService.computeHoldings.mockResolvedValue(
+        computed([
+          holding({
+            symbol: "AAA",
+            values: { symbol: "AAA", marketValue: 100 },
+          }),
+        ]),
+      );
       const result = await service.execute("u1", "r1");
       expect(dataService.computeHoldings).toHaveBeenCalledWith(
         "u1",
@@ -441,41 +545,45 @@ describe("InvestmentReportsService", () => {
         ...baseReport,
         groupBy: InvestmentGroupBy.SYMBOL,
       });
-      dataService.computeHoldings.mockResolvedValue([
-        holding({
-          symbol: "AAA",
-          securityId: "s1",
-          values: { symbol: "AAA", marketValue: 100 },
-        }),
-        holding({
-          symbol: "BBB",
-          securityId: "s2",
-          values: { symbol: "BBB", marketValue: 200 },
-        }),
-      ]);
+      dataService.computeHoldings.mockResolvedValue(
+        computed([
+          holding({
+            symbol: "AAA",
+            securityId: "s1",
+            values: { symbol: "AAA", marketValue: 100 },
+          }),
+          holding({
+            symbol: "BBB",
+            securityId: "s2",
+            values: { symbol: "BBB", marketValue: 200 },
+          }),
+        ]),
+      );
       const result = await service.execute("u1", "r1");
       expect(result.groups).toHaveLength(2);
       expect(result.groups.map((g) => g.label)).toEqual(["AAA", "BBB"]);
     });
 
     it("groups by account and by currency", async () => {
-      dataService.computeHoldings.mockResolvedValue([
-        holding({
-          accountId: "a1",
-          accountName: "Acc One",
-          currencyCode: "USD",
-          symbol: "AAA",
-          values: { symbol: "AAA", marketValue: 100 },
-        }),
-        holding({
-          accountId: "a2",
-          accountName: "Acc Two",
-          currencyCode: "CAD",
-          symbol: "BBB",
-          securityId: "s2",
-          values: { symbol: "BBB", marketValue: 200 },
-        }),
-      ]);
+      dataService.computeHoldings.mockResolvedValue(
+        computed([
+          holding({
+            accountId: "a1",
+            accountName: "Acc One",
+            currencyCode: "USD",
+            symbol: "AAA",
+            values: { symbol: "AAA", marketValue: 100 },
+          }),
+          holding({
+            accountId: "a2",
+            accountName: "Acc Two",
+            currencyCode: "CAD",
+            symbol: "BBB",
+            securityId: "s2",
+            values: { symbol: "BBB", marketValue: 200 },
+          }),
+        ]),
+      );
 
       reportsRepository.findOne.mockResolvedValue({
         ...baseReport,
@@ -507,10 +615,16 @@ describe("InvestmentReportsService", () => {
           sortDirection: InvestmentSortDirection.ASC,
         },
       });
-      dataService.computeHoldings.mockResolvedValue([
-        holding({ symbol: "ZZZ", securityId: "s2", values: { symbol: "ZZZ" } }),
-        holding({ symbol: "AAA", values: { symbol: "AAA" } }),
-      ]);
+      dataService.computeHoldings.mockResolvedValue(
+        computed([
+          holding({
+            symbol: "ZZZ",
+            securityId: "s2",
+            values: { symbol: "ZZZ" },
+          }),
+          holding({ symbol: "AAA", values: { symbol: "AAA" } }),
+        ]),
+      );
       const result = await service.execute("u1", "r1");
       expect(result.groups[0].rows.map((r) => r.values.symbol)).toEqual([
         "AAA",
@@ -527,14 +641,16 @@ describe("InvestmentReportsService", () => {
           sortDirection: InvestmentSortDirection.DESC,
         },
       });
-      dataService.computeHoldings.mockResolvedValue([
-        holding({ symbol: "AAA", values: { symbol: "AAA", gain: null } }),
-        holding({
-          symbol: "BBB",
-          securityId: "s2",
-          values: { symbol: "BBB", gain: 5 },
-        }),
-      ]);
+      dataService.computeHoldings.mockResolvedValue(
+        computed([
+          holding({ symbol: "AAA", values: { symbol: "AAA", gain: null } }),
+          holding({
+            symbol: "BBB",
+            securityId: "s2",
+            values: { symbol: "BBB", gain: 5 },
+          }),
+        ]),
+      );
       const result = await service.execute("u1", "r1");
       expect(result.groups[0].rows[0].values.symbol).toBe("BBB"); // non-null first
       expect(result.groups[0].rows[1].values.symbol).toBe("AAA"); // null last

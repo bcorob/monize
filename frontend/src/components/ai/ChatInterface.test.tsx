@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@/test/render';
 import { ChatInterface, AI_CHAT_STORAGE_KEY } from './ChatInterface';
 import { useAiChatStore, type ChatMessage } from '@/store/aiChatStore';
+import { MAX_ATTACHMENT_BYTES } from '@/lib/ai-attachments';
 import type { StreamCallbacks } from '@/types/ai';
 
 // The Zustand persist middleware wraps state as { state: {...}, version: 0 }.
@@ -786,6 +787,100 @@ describe('ChatInterface', () => {
       );
       // The container is referenced to keep the file-input query consistent.
       expect(fileInputOf(container)).toBeInTheDocument();
+    });
+
+    // The Web Share Target's review screen routes here with the shared files.
+    // They arrive staged on the composer and nothing is sent: a share must not
+    // ask the assistant anything on its own (INV-SHARE-002).
+    it('stages files handed to it, sends nothing, and reports when it holds them', async () => {
+      const { aiApi } = await import('@/lib/ai');
+      const staged = vi.fn();
+      await act(async () => {
+        render(
+          <ChatInterface
+            initialFiles={[pngFile()]}
+            onInitialFilesStaged={staged}
+          />,
+        );
+      });
+
+      await waitFor(() =>
+        expect(screen.getByText('receipt.png')).toBeInTheDocument(),
+      );
+      expect(screen.getByLabelText('Remove attachment')).toBeInTheDocument();
+      expect(aiApi.queryStream).not.toHaveBeenCalled();
+      // Only once the bytes are read: the caller drops the stash on this.
+      await waitFor(() => expect(staged).toHaveBeenCalledTimes(1));
+    });
+
+    // The staging pass runs once. `addFiles` changes identity with the
+    // attachment list, so an effect keyed on it alone would re-stage the share
+    // on the very render its own first file caused.
+    it('stages the handed-over files exactly once across re-renders', async () => {
+      const files = [pngFile()];
+      let rendered: ReturnType<typeof render>;
+      await act(async () => {
+        rendered = render(<ChatInterface initialFiles={files} />);
+      });
+
+      await waitFor(() =>
+        expect(screen.getByText('receipt.png')).toBeInTheDocument(),
+      );
+
+      await act(async () => {
+        rendered!.rerender(<ChatInterface initialFiles={files} />);
+      });
+
+      await waitFor(() =>
+        expect(screen.getAllByLabelText('Remove attachment')).toHaveLength(1),
+      );
+    });
+
+    // A refused file is still an answer: the caller has to be told, or it holds
+    // a stash nothing will ever come back for.
+    it('reports staging as finished even when the files are refused', async () => {
+      const staged = vi.fn();
+      const tooBig = new File(
+        [new Uint8Array(MAX_ATTACHMENT_BYTES + 1)],
+        'huge.png',
+        { type: 'image/png' },
+      );
+      await act(async () => {
+        render(
+          <ChatInterface initialFiles={[tooBig]} onInitialFilesStaged={staged} />,
+        );
+      });
+
+      await waitFor(() => expect(staged).toHaveBeenCalledTimes(1));
+      expect(screen.queryByLabelText('Remove attachment')).not.toBeInTheDocument();
+    });
+
+    // The receipts page's "Recognize with AI" parks a drafted message with the
+    // email file. It is staged for the user to read and send, never sent.
+    it("puts a handed-over draft in the composer, sends nothing, and keeps it editable", async () => {
+      const { aiApi } = await import("@/lib/ai");
+      await act(async () => {
+        render(
+          <ChatInterface
+            initialFiles={[pngFile()]}
+            initialDraft="Recognize the products in the attached order email."
+          />,
+        );
+      });
+
+      const textarea = screen.getByPlaceholderText(
+        "Ask about your finances...",
+      ) as HTMLTextAreaElement;
+      expect(textarea.value).toBe(
+        "Recognize the products in the attached order email.",
+      );
+      await waitFor(() =>
+        expect(screen.getByText("receipt.png")).toBeInTheDocument(),
+      );
+      expect(aiApi.queryStream).not.toHaveBeenCalled();
+
+      fireEvent.change(textarea, { target: { value: "Edited by the user" } });
+      expect(textarea.value).toBe("Edited by the user");
     });
 
     it('allows attachments when relay is active and sends them on the relay path', async () => {

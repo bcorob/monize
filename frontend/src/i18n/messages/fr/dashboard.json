@@ -1,8 +1,87 @@
 {
   "page": {
-    "welcomePrefix": "Bienvenue",
-    "welcomeWithName": "Bienvenue, {name} !",
-    "subtitle": "Voici votre aperçu financier"
+    "greeting": {
+      "morning": "Bonjour",
+      "morningWithName": "Bonjour, {name}",
+      "afternoon": "Bon après-midi",
+      "afternoonWithName": "Bon après-midi, {name}",
+      "evening": "Bonsoir",
+      "eveningWithName": "Bonsoir, {name}"
+    }
+  },
+  "hero": {
+    "label": "Résumé de la valeur nette",
+    "netWorth": "Valeur nette",
+    "changeThisMonth": "<dir>{direction, select, up {En hausse de} other {En baisse de}}</dir> {amount} ce mois-ci",
+    "changeThisMonthWithPercent": "<dir>{direction, select, up {En hausse de} other {En baisse de}}</dir> {amount} · {percent} ce mois-ci",
+    "assets": "<strong><value></value></strong> d’actifs",
+    "liabilities": "<strong><value></value></strong> de passifs",
+    "invested": "<strong><value></value></strong> investis",
+    "investedUnpriced": "Aucun cours actuel pour {symbols} : ces positions ne sont donc pas incluses. Actualisez les cours sur la page Placements, ou ajoutez-en un dans l’historique des cours du titre.",
+    "portfolioLabel": "Résumé du portefeuille",
+    "portfolioValueFor": "Valeur du portefeuille <names>({accounts})</names>",
+    "portfolioEmpty": "Aucun compte de placement pour l’instant. Ajoutez-en un pour voir votre portefeuille ici.",
+    "portfolioLoadFailed": "Impossible de charger votre portefeuille. Rechargez le tableau de bord pour réessayer.",
+    "portfolioChangeFailed": "Impossible de charger la variation sur cette période. Rechargez le tableau de bord pour réessayer.",
+    "changeOverWindow": "<dir>{direction, select, up {En hausse de} other {En baisse de}}</dir> {amount} · {window}",
+    "holdings": "<strong><value></value></strong> en positions",
+    "cash": "<strong><value></value></strong> en trésorerie",
+    "metricLine": "<strong><value></value></strong> {metric}",
+    "metricNames": {
+      "simpleReturn": "Rendement simple",
+      "twr": "RTP",
+      "mwr": "MWR",
+      "cagr": "TCAC"
+    },
+    "showSet": "Afficher {name}",
+    "cycleControls": "Choisir ce qu'affiche l'en-tête",
+    "cagrUnavailable": "Le TCAC nécessite au moins un an d’historique de placement dans ces comptes, avec plus d’apports que de retraits.",
+    "intradayUnavailable": "Certaines de ces positions n’ont pas de cours intrajournaliers : un graphique sur un jour ne peut donc pas être tracé. Choisissez une période plus longue dans Personnaliser."
+  },
+  "trivia": {
+    "title": "Anecdotes",
+    "position": "{index} sur {total}",
+    "previous": "Anecdote précédente",
+    "next": "Anecdote suivante",
+    "empty": "Les anecdotes apparaissent ici dès qu'il y a assez d'historique : deux mois de valeur nette, des investissements avec un cours, quelques mois de dépenses et de revenus, ou des garanties que vous suivez. La liste est reconstruite chaque matin.",
+    "off": "Les anecdotes IA sont désactivées. Activez-les dans <link>Paramètres IA</link>.",
+    "topics": {
+      "netWorth": "Valeur nette",
+      "investments": "Investissements",
+      "spending": "Dépenses",
+      "income": "Revenus",
+      "activity": "Vos données",
+      "warranties": "Garanties"
+    },
+    "aiGenerated": "Rédigé par l'IA à partir de vos chiffres",
+    "facts": {
+      "netWorthSinceStart": "Votre valeur nette était de {startAmount} en {startMonth}. Elle a gagné {startGain} depuis, soit environ {startMultiple} fois plus.",
+      "netWorthBiggestJump": "{jumpMonth} a été votre plus forte hausse en un seul mois. La valeur nette a augmenté de {jumpAmount}, passant de {jumpFrom} en {jumpPreviousMonth} à {jumpTo}.",
+      "netWorthHighPoint": "Votre sommet était de {peakAmount} en {peakMonth}. Vous en êtes actuellement à {peakBelow} en dessous.",
+      "netWorthAtHighPoint": "Vous êtes à votre sommet : la valeur nette n'a jamais dépassé {currentHigh}.",
+      "netWorthBiggestDip": "Votre plus forte baisse a fait passer la valeur nette de {dipFromAmount} en {dipFromMonth} à {dipToAmount} en {dipToMonth}, un recul de {dipPercent}.",
+      "netWorthBiggestDipRecovered": "Votre plus forte baisse a fait passer la valeur nette de {dipFromAmount} en {dipFromMonth} à {dipToAmount} en {dipToMonth}. Vous aviez retrouvé votre niveau en {dipRecoveredMonth}.",
+      "netWorthLargestAsset": "{assetName} vaut {assetValue}, soit {assetPercent} de vos actifs.",
+      "investmentsShareOfAssets": "Vos investissements valent {investmentsValue}, soit {investmentsPercent} de vos actifs.",
+      "investmentsGain": "Vos investissements ont gagné {gainAmount} ({gainPercent}) par rapport à leur coût de base de {gainCostBasis}.",
+      "investmentsLoss": "Vos investissements sont en baisse de {gainAmount} ({gainPercent}) par rapport à leur coût de base de {gainCostBasis}.",
+      "investmentsCagr": "Le rendement annualisé de vos investissements est d'environ {cagrPercent} (CAGR).",
+      "investmentsBiggestHolding": "Votre plus grosse position est {holdingSymbol}, à environ {holdingPercent} du portefeuille ({holdingValue} dans {holdingAccounts}).",
+      "investmentsBestPerformer": "Votre meilleure performance est {bestSymbol}, en hausse de {bestPercent}. Elle a coûté {bestCost} et vaut maintenant {bestValue}.",
+      "investmentsForeignAccount": "Votre compte {foreignName} est détenu en {foreignCurrency}. Ses avoirs de {foreignBalance} équivalent à {foreignConverted} à un taux d'environ {foreignRate}.",
+      "investmentsLargestAccount": "Votre plus grand compte de placement est {largestName}, à {largestValue}.",
+      "spendingTopCategory": "Au cours des douze derniers mois, {topCategoryName} a pris la plus grande part de vos dépenses : {topCategoryAmount}, soit {topCategoryPercent}.",
+      "spendingTopPayee": "Au cours des douze derniers mois, c'est chez {topPayeeName} que vous avez le plus dépensé : {topPayeeAmount}.",
+      "spendingBiggestMonth": "{biggestSpendMonth} a été votre mois le plus dépensier des douze derniers, avec {biggestSpendAmount}.",
+      "incomeKeptShare": "Au cours des douze derniers mois, vous avez gardé {keptAmount} de ce qui est entré, soit {keptPercent} de vos revenus.",
+      "incomeSurplusMonths": "Mois, parmi les {windowMonths} derniers, où il est entré plus d'argent qu'il n'en est sorti : {surplusMonths}.",
+      "incomeTopSource": "{topSourceName} a apporté {topSourcePercent} de vos revenus au cours des douze derniers mois.",
+      "activityTransactions": "Transactions dans vos registres : {transactionCount}, depuis {firstTransactionMonth}.",
+      "activityPayees": "Bénéficiaires que vous gardez dans Monize : {payeeCount}. Catégories : {categoryCount}.",
+      "activityScheduled": "Transactions planifiées que Monize suit pour vous : {scheduledCount}.",
+      "warrantiesCovered": "Garanties que vous suivez et qui sont encore valables : {warrantyCount}.",
+      "warrantiesNextExpiry": "La prochaine garantie à expirer est {nextWarrantyName}, en {nextWarrantyMonth}."
+    }
   },
   "favouriteAccounts": {
     "title": "Comptes favoris",
@@ -21,12 +100,10 @@
   "upcomingBills": {
     "title": "Factures et dépôts à venir",
     "empty": "Aucune facture, aucun dépôt ou virement en retard ou à venir dans les fenêtres de rappel.",
-    "perReminderSettings": "Selon les paramètres de rappel",
     "postTransaction": "Enregistrer cette transaction",
     "manual": "Manuel",
-    "manualTitle": "Nécessite un enregistrement manuel",
     "negativeBalanceWarning": "Cette transaction fera passer le solde du compte en dessous de zéro",
-    "viewAll": "Voir toutes les factures et dépôts",
+    "negativeBalanceLegend": "Fait passer son compte sous zéro",
     "moreItems": "+{count} de plus",
     "overdue": "En retard",
     "today": "Aujourd'hui",
@@ -38,7 +115,23 @@
       "transfer": "Virement",
       "reminder": "Rappel",
       "unknown": "Inconnu"
-    }
+    },
+    "scope": {
+      "dueSoon": "Bientôt dus",
+      "all": "Tous à venir"
+    },
+    "viewLabel": "Affichage",
+    "viewList": "Liste",
+    "viewCalendar": "Calendrier",
+    "previousMonth": "Mois précédent",
+    "nextMonth": "Mois suivant",
+    "emptyAll": "Aucune facture, aucun dépôt ni virement actif planifié.",
+    "estimated": "Estimé"
+  },
+  "cashFlowForecast": {
+    "title": "Prévision de trésorerie",
+    "period": "Période de prévision",
+    "loadFailed": "Impossible de charger les transactions déjà datées après aujourd'hui, la prévision ne peut donc pas être affichée. Rechargez le tableau de bord pour réessayer."
   },
   "gettingStarted": {
     "title": "Démarrage",
@@ -76,8 +169,12 @@
     "title": "Analyse des dépenses",
     "empty": "Aucune analyse disponible. Rendez-vous sur la page Analyses pour générer votre première analyse.",
     "goToInsights": "Accéder aux analyses",
-    "viewAll": "Voir toutes les analyses",
     "activeCount": "{count} actif(s)"
+  },
+  "warrantiesExpiring": {
+    "title": "Garanties bientôt expirées",
+    "empty": "Rien n'expire dans les 30 prochains jours",
+    "loadFailed": "Impossible de charger vos garanties qui expirent. Rechargez le tableau de bord pour réessayer."
   },
   "topMovers": {
     "title": "Plus fortes variations",
@@ -88,13 +185,20 @@
       "noLosers": "Aucun perdant aujourd'hui."
     },
     "dailyChange": "Variation quotidienne",
+    "dailyChangeOn": "Variation quotidienne · {date}",
     "openPriceHistory": "Historique du cours de {symbol}",
     "refreshPrices": "Actualiser les cours",
     "viewPortfolio": "Voir le portefeuille",
     "filter": {
-      "all": "Tous",
-      "gainers": "Gagnants",
-      "losers": "Perdants"
+      "all": "Tous ({count})",
+      "gainers": "Gagnants ({count})",
+      "losers": "Perdants ({count})",
+      "label": "Sens"
+    },
+    "metric": {
+      "label": "Afficher",
+      "price": "Cours",
+      "holdings": "Positions"
     }
   },
   "favouriteSecurities": {
@@ -102,15 +206,17 @@
     "empty": "Aucun titre favori pour l'instant. Rendez-vous sur la <securitiesLink>page Titres</securitiesLink> et mettez en favori les titres que vous souhaitez suivre ici.",
     "noPriceYet": "Aucun cours pour l'instant",
     "dailyChange": "Variation quotidienne",
+    "dailyChangeOn": "Variation quotidienne · {date}",
     "openPriceHistory": "Historique du cours de {symbol}",
-    "refreshPrices": "Actualiser les cours",
-    "manage": "Gérer les titres"
+    "refreshPrices": "Actualiser les cours"
   },
   "netWorth": {
     "title": "Valeur nette",
     "empty": "Aucune donnée de valeur nette disponible pour l'instant.",
-    "past12Months": "12 derniers mois",
-    "viewReport": "Voir le rapport complet"
+    "barStyle": "Style des barres",
+    "barStyleNetWorth": "Valeur nette",
+    "barStyleAccountType": "Par type de compte",
+    "loadFailed": "Impossible de charger l'historique de votre valeur nette. Rechargez le tableau de bord pour réessayer."
   },
   "assetsVsLiabilities": {
     "title": "Actifs et passifs",
@@ -118,14 +224,22 @@
     "current": "Actuel",
     "netWorthLabel": "Valeur nette",
     "assets": "Actifs",
-    "liabilities": "Passifs"
+    "liabilities": "Passifs",
+    "partialName": "{name} (partiel)",
+    "viewCallouts": "Étiquettes",
+    "viewLegend": "Légende"
   },
   "expensesPieChart": {
     "title": "Dépenses par catégorie",
     "empty": "Aucune donnée de dépenses pour cette période.",
     "total": "Total",
     "uncategorized": "Non catégorisé",
-    "other": "Autre"
+    "other": "Autre",
+    "insideOther": "{count, plural, one {# catégorie dans Autres} other {# catégories dans Autres}}",
+    "topLevelOnly": "Catégories de premier niveau",
+    "topLevelOnlyHint": "Compter les sous-catégories dans leur catégorie parente",
+    "viewCallouts": "Étiquettes",
+    "viewLegend": "Légende"
   },
   "incomeExpenses": {
     "title": "Revenus et dépenses",
@@ -135,18 +249,85 @@
   },
   "customize": {
     "button": "Personnaliser",
-    "title": "Personnaliser le tableau de bord",
-    "description": "La disposition ci-dessous reflète votre tableau de bord : les widgets s'enchaînent de gauche à droite, deux par ligne sur les grands écrans.",
     "moveEarlier": "Avancer {name}",
     "moveLater": "Reculer {name}",
-    "dragToReorder": "Faites glisser les widgets pour les réorganiser, ou utilisez les boutons fléchés.",
-    "hiddenWidgets": "Widgets masqués",
-    "hide": "Masquer {name}",
-    "show": "Afficher {name}",
     "atLeastOne": "Sélectionnez au moins un widget à afficher sur le tableau de bord.",
     "reset": "Réinitialiser par défaut",
     "toasts": {
       "saveFailed": "Échec de l'enregistrement de la disposition du tableau de bord"
+    },
+    "hero": {
+      "title": "En-tête du tableau de bord",
+      "description": "Les chiffres d'ouverture et le graphique sous le message d'accueil : votre valeur nette, votre portefeuille, ou Auto pour alterner entre les deux chaque minute.",
+      "show": "Afficher l’en-tête du tableau de bord",
+      "range": "Graphique",
+      "set": "Afficher",
+      "sets": {
+        "auto": "Auto",
+        "netWorth": "Valeur nette",
+        "portfolio": "Valeur du portefeuille"
+      },
+      "metric": "Indicateur",
+      "metrics": {
+        "simpleReturn": "Rendement simple",
+        "twr": "RTP",
+        "mwr": "MWR",
+        "cagr": "TCAC"
+      }
+    }
+  },
+  "edit": {
+    "barLabel": "Organiser le tableau de bord",
+    "addWidget": "Ajouter un widget",
+    "heroSettings": "Réglages de l'en-tête",
+    "done": "Terminé",
+    "phoneNote": "Les tailles des widgets s'appliquent sur les écrans plus larges.",
+    "remove": "Retirer {name}",
+    "grip": "Déplacer {name}",
+    "gripHint": "Faites glisser pour déplacer {name}, ou utilisez les touches fléchées",
+    "moved": "{name} déplacé à la position {position} sur {count}",
+    "removed": "{name} retiré",
+    "added": "{name} ajouté",
+    "resized": "{name} est maintenant {size}",
+    "resizedBoth": "{name} est maintenant {width} et {height}",
+    "twoChanges": "{first}. {second}",
+    "placeholder": "Affiché sur le tableau de bord dès qu'il y aura quelque chose à montrer.",
+    "addTitle": "Ajouter un widget",
+    "addDescription": "Un widget ajouté se place à la fin du tableau de bord. Rien n'est conservé tant que vous n'avez pas choisi Terminé.",
+    "addEmpty": "Tous les widgets sont déjà sur votre tableau de bord",
+    "addToSpace": "Ajouter un widget à cet espace ({width})",
+    "addSlotDescription": "Seuls les widgets qui tiennent dans cet espace sont listés, et celui que vous choisissez le remplit. Rien n'est conservé tant que vous n'avez pas choisi Terminé.",
+    "addSlotEmpty": "Aucun widget masqué ne tient dans cet espace. Faites glisser un widget ici pour l'y déplacer.",
+    "resize": "Redimensionner {name}",
+    "resizeHint": "Faites glisser pour redimensionner {name}, ou utilisez les touches fléchées",
+    "widthLabel": "Largeur",
+    "heightLabel": "Hauteur",
+    "presetName": "{short}, {name}",
+    "widthOf": "Largeur de {name}",
+    "heightOf": "Hauteur de {name}",
+    "widthShort": {
+      "third": "1/3",
+      "half": "1/2",
+      "twoThirds": "2/3",
+      "full": "Pleine"
+    },
+    "widthName": {
+      "third": "Un tiers de la largeur",
+      "half": "Demi-largeur",
+      "twoThirds": "Deux tiers de la largeur",
+      "full": "Pleine largeur"
+    },
+    "heightShort": {
+      "auto": "Auto",
+      "compact": "S",
+      "standard": "M",
+      "tall": "L"
+    },
+    "heightName": {
+      "auto": "Hauteur automatique",
+      "compact": "Hauteur compacte",
+      "standard": "Hauteur standard",
+      "tall": "Hauteur élevée"
     }
   },
   "favouriteReports": {
@@ -156,22 +337,28 @@
   },
   "widgets": {
     "configure": "Configurer {name}",
+    "asOf": "au {date}",
     "done": "Terminé",
     "configSaveFailed": "Impossible d'enregistrer les paramètres du widget. Veuillez réessayer.",
     "timeframe": "Période",
     "accounts": "Comptes",
     "chartType": "Type de graphique",
     "view": "Vue",
+    "viewCalloutsHint": "Les étiquettes nécessitent un écran plus large. Là où elles ne tiennent pas, la légende s'affiche.",
     "displayName": "Nom d'affichage",
     "description": "Description",
     "descriptionPlaceholder": "Ajoutez une description facultative",
     "rangeLabels": {
+      "1d": "1D",
+      "1w": "1S",
+      "mtd": "MTD",
       "1m": "1M",
       "3m": "3M",
       "6m": "6M",
       "1y": "1Y",
       "2y": "2Y",
       "5y": "5Y",
+      "10y": "10Y",
       "ytd": "YTD",
       "all": "Tout"
     }
@@ -179,7 +366,10 @@
   "portfolioValue": {
     "title": "Valeur du portefeuille",
     "empty": "Aucun historique d'investissement à afficher pour l'instant.",
-    "refresh": "Actualiser la valeur actuelle"
+    "refresh": "Actualiser la valeur actuelle",
+    "investmentResult": "Résultat de l'investissement",
+    "periodBreakdownInvestedTooltip": "La valeur des titres a varié de {valueChange} sur cette période. Sur ce montant, {netInvested} a été investi, net des ventes, et ils ont versé {income} en dividendes et intérêts. Une distribution réinvestie en parts compte dans les deux montants. Le montant ci-dessus est ce que les investissements ont rapporté par eux-mêmes, hors liquidités non investies.",
+    "notAvailable": "N/D"
   },
   "spendingByPayee": {
     "title": "Dépenses par bénéficiaire",
@@ -225,14 +415,19 @@
       "MUTUAL_FUND": "Fonds communs de placement",
       "BOND": "Obligations",
       "CASH": "Liquidités"
-    }
+    },
+    "viewType": "Type de titre",
+    "viewAssetClass": "Classe d'actifs",
+    "otherAssetClasses": "Autres",
+    "emptyAssetClass": "Aucune répartition par classe d'actifs disponible pour l'instant."
   },
   "geographicAllocation": {
     "title": "Répartition géographique",
     "empty": "Aucune position à afficher.",
     "viewRegion": "Région",
     "viewExchange": "Bourse",
-    "viewCountry": "Pays"
+    "viewCountry": "Pays",
+    "listingBasisNote": "Regroupé selon la place de cotation de chaque position. Passez à Pays pour voir à l'intérieur des fonds."
   },
   "recurringExpenses": {
     "title": "Principales dépenses récurrentes",
@@ -240,7 +435,9 @@
     "minOccurrences": "Occurrences minimales",
     "minOccurrencesOption": "{count} ou plus",
     "occurrences": "{count} occurrences",
-    "monthlyEstimate": "Estimation mensuelle"
+    "monthlyEstimate": "Estimation mensuelle",
+    "viewCallouts": "Étiquettes",
+    "viewLegend": "Légende"
   },
   "weekendVsWeekday": {
     "title": "Dépenses week-end vs semaine",
@@ -249,5 +446,14 @@
     "weekdayLabel": "Semaine",
     "viewOverview": "Vue d'ensemble",
     "viewByDay": "Par jour"
+  },
+  "cashFlowSankey": {
+    "title": "Sankey des flux de trésorerie",
+    "empty": "Aucun revenu, dépense ni virement pour cette période.",
+    "depth": "Niveau de détail",
+    "depthCategories": "Catégories",
+    "depthSubcategories": "Sous-catégories",
+    "viewDiagram": "Diagramme",
+    "viewTable": "Tableau"
   }
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@/test/render';
+import { render, screen, fireEvent, within } from '@/test/render';
 import { TransactionConfirmationCard } from './TransactionConfirmationCard';
 import type { PendingAction } from '@/types/ai';
 
@@ -38,6 +38,81 @@ describe('TransactionConfirmationCard', () => {
     expect(screen.getByText('Dining')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Approve' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+  });
+
+  it('shows what was paid in the other currency and where the rate came from', () => {
+    render(
+      <TransactionConfirmationCard
+        action={makeAction({
+          preview: {
+            ...makeAction().preview,
+            amount: -110,
+            originalAmount: -100,
+            originalCurrencyCode: 'EUR',
+            exchangeRate: 1.1,
+            exchangeRateSource: 'derived',
+          },
+        })}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Paid')).toBeInTheDocument();
+    expect(screen.getByText('Exchange rate')).toBeInTheDocument();
+    expect(
+      screen.getByText('1 EUR = 1.100000 USD, derived from the two amounts'),
+    ).toBeInTheDocument();
+  });
+
+  it('names the market rate, and says when an edit removes the entry', () => {
+    const { unmount } = render(
+      <TransactionConfirmationCard
+        action={makeAction({
+          preview: {
+            ...makeAction().preview,
+            originalAmount: -100,
+            originalCurrencyCode: 'EUR',
+            exchangeRate: 1.0987,
+            exchangeRateSource: 'market',
+          },
+        })}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByText(/the market rate for the date/)).toBeInTheDocument();
+    unmount();
+    render(
+      <TransactionConfirmationCard
+        action={makeAction({
+          type: 'update_transaction',
+          preview: {
+            ...makeAction().preview,
+            originalAmount: null,
+            originalCurrencyCode: null,
+            exchangeRate: 1,
+          },
+        })}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(
+      screen.getByText("Removed: entered in the account's currency"),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Exchange rate')).not.toBeInTheDocument();
+  });
+
+  it('shows no foreign-currency rows for an ordinary entry', () => {
+    render(
+      <TransactionConfirmationCard
+        action={makeAction()}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText('Paid')).not.toBeInTheDocument();
+    expect(screen.queryByText('Exchange rate')).not.toBeInTheDocument();
   });
 
   it('renders split lines in place of the single category for a split transaction', () => {
@@ -92,7 +167,10 @@ describe('TransactionConfirmationCard', () => {
       />,
     );
     expect(screen.getByText('Attachments')).toBeInTheDocument();
-    expect(screen.getByText('receipt.png (2.0 KB)')).toBeInTheDocument();
+    // `kB` rather than `KB`: sizes go through `useNumberFormat().formatBytes`
+    // now, so the unit abbreviation is CLDR's for the reader's locale, and
+    // English's is the SI-style lowercase prefix. MB and GB are unchanged.
+    expect(screen.getByText('receipt.png (2.0 kB)')).toBeInTheDocument();
     expect(screen.getByText('invoice.pdf (1.0 MB)')).toBeInTheDocument();
   });
 
@@ -128,6 +206,32 @@ describe('TransactionConfirmationCard', () => {
       />,
     );
     expect(screen.getByText(/reconciled/i)).toBeInTheDocument();
+  });
+
+  it('shows the reference number an update sets, and no row when it sets none', () => {
+    const update = (referenceNumber?: string) =>
+      makeAction({
+        type: 'update_transaction',
+        descriptor: { type: 'update_transaction' },
+        preview: {
+          accountName: 'Checking',
+          amount: -12.5,
+          currencyCode: 'USD',
+          transactionDate: '2026-01-15',
+          payeeName: 'Starbucks',
+          categoryName: 'Dining',
+          ...(referenceNumber === undefined ? {} : { referenceNumber }),
+        },
+      });
+    const { unmount } = render(
+      <TransactionConfirmationCard action={update('EX-20931')} onConfirm={vi.fn()} onCancel={vi.fn()} />,
+    );
+    expect(screen.getByText('Ref #')).toBeInTheDocument();
+    expect(screen.getByText('EX-20931')).toBeInTheDocument();
+    unmount();
+
+    render(<TransactionConfirmationCard action={update()} onConfirm={vi.fn()} onCancel={vi.fn()} />);
+    expect(screen.queryByText('Ref #')).not.toBeInTheDocument();
   });
 
   it('does not warn about reconciliation for a create action', () => {
@@ -328,6 +432,109 @@ describe('TransactionConfirmationCard', () => {
     expect(screen.getByText('10')).toBeInTheDocument();
   });
 
+  it('names the scheduled bill or deposit that approving the trade marks as paid', () => {
+    render(
+      <TransactionConfirmationCard
+        action={makeInvestmentAction({ scheduledName: 'Monthly XCNS' })}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Marks as paid').nextElementSibling).toHaveTextContent('Monthly XCNS');
+  });
+
+  it('names the due day of the occurrence it marks paid, in the reader\'s date format', () => {
+    render(
+      <TransactionConfirmationCard
+        action={makeInvestmentAction({ scheduledName: 'Monthly XCNS', scheduledDueDate: '2026-10-15' })}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    const value = screen.getByText('Marks as paid').nextElementSibling;
+    expect(value).toHaveTextContent(/^Monthly XCNS \(due .+\)$/);
+  });
+
+  it('says nothing about a schedule for a trade that pays none', () => {
+    render(<TransactionConfirmationCard action={makeInvestmentAction()} onConfirm={vi.fn()} onCancel={vi.fn()} />);
+    expect(screen.queryByText('Marks as paid')).not.toBeInTheDocument();
+  });
+
+  it('shows the resolved bond series, the accrued interest and the redemption split of a bond redemption', () => {
+    render(
+      <TransactionConfirmationCard
+        action={makeInvestmentAction({
+          investmentAction: 'REDEEM',
+          symbol: 'EDO',
+          securityName: 'EDO bonds',
+          securityCurrency: 'PLN',
+          quantity: 10,
+          price: 100,
+          commission: 0,
+          totalAmount: 1000,
+          cashCurrency: 'PLN',
+          cashAmount: 1470.5,
+          accruedInterest: 470.5,
+          bondSeriesCode: 'EDO0423',
+          bondRedemptionSplit: {
+            principal: 1000,
+            interest: 470.5,
+            deduction: 0,
+            payout: 1470.5,
+            outcome: 'filled',
+          },
+        })}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Series')).toBeInTheDocument();
+    expect(screen.getByText('EDO0423')).toBeInTheDocument();
+    expect(screen.getByText('Accrued interest')).toBeInTheDocument();
+    expect(screen.getByText('Redemption split')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Principal .*1,000\.00.* \+ interest .*470\.50.* = payout .*1,470\.50/),
+    ).toBeInTheDocument();
+    // No fee was taken out, and the figures agree with the split: no warning.
+    expect(screen.queryByText('Early-redemption fee deducted')).toBeNull();
+    expect(screen.queryByText(/Check them before approving/)).toBeNull();
+  });
+
+  it('names the early-redemption fee, and warns when the figures differ from the split', () => {
+    render(
+      <TransactionConfirmationCard
+        action={makeInvestmentAction({
+          investmentAction: 'REDEEM',
+          securityCurrency: 'PLN',
+          bondSeriesCode: 'EDO1036',
+          bondRedemptionSplit: {
+            principal: 100,
+            interest: 7.2,
+            deduction: 3,
+            payout: 107.2,
+            outcome: 'differs',
+          },
+        })}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Early-redemption fee deducted')).toBeInTheDocument();
+    expect(screen.getByText(/Check them before approving/)).toBeInTheDocument();
+  });
+
+  it('shows no series or split row for an ordinary investment transaction', () => {
+    render(
+      <TransactionConfirmationCard
+        action={makeInvestmentAction()}
+        onConfirm={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+    expect(screen.queryByText('Series')).toBeNull();
+    expect(screen.queryByText('Redemption split')).toBeNull();
+  });
+
   it('omits cash and security rows for a share-only action', () => {
     render(
       <TransactionConfirmationCard
@@ -501,6 +708,191 @@ describe('TransactionConfirmationCard', () => {
       ).toBeInTheDocument();
       expect(screen.getByText('Store')).toBeInTheDocument();
       expect(screen.getByText('Groceries')).toBeInTheDocument();
+    });
+
+    it('shows the tags an edit adds (marking new ones) and removes', () => {
+      render(
+        <TransactionConfirmationCard
+          action={makeAction({
+            type: 'update_transaction',
+            descriptor: { type: 'update_transaction' },
+            preview: {
+              accountName: 'Checking',
+              amount: -75,
+              currencyCode: 'USD',
+              transactionDate: '2026-02-01',
+              categoryName: 'Groceries',
+              tagNames: ['Trip', 'Family'],
+              newTagNames: ['Family'],
+              removeTagNames: ['Old'],
+            },
+          })}
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+      expect(screen.getByText('Add tags')).toBeInTheDocument();
+      expect(screen.getByText('Trip, Family (new tag)')).toBeInTheDocument();
+      expect(screen.getByText('Remove tags')).toBeInTheDocument();
+      expect(screen.getByText('Old')).toBeInTheDocument();
+    });
+
+    it('shows the tags a split line keeps', () => {
+      render(
+        <TransactionConfirmationCard
+          action={makeAction({
+            type: 'update_transaction',
+            descriptor: { type: 'update_transaction' },
+            preview: {
+              accountName: 'Checking',
+              amount: -30,
+              currencyCode: 'USD',
+              transactionDate: '2026-02-01',
+              splits: [
+                { categoryName: 'Food', amount: -20, tagNames: ['Trip'] },
+                { categoryName: 'Home', amount: -10 },
+              ],
+            },
+          })}
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+      expect(screen.getByText(/Food: .*20.* · tags: Trip/)).toBeInTheDocument();
+      expect(screen.queryByText(/Home: .*tags/)).toBeNull();
+    });
+
+    it('shows the tags a transfer edit adds and removes', () => {
+      render(
+        <TransactionConfirmationCard
+          action={makeAction({
+            type: 'update_transfer',
+            descriptor: { type: 'update_transfer' },
+            preview: {
+              fromAccountName: 'Checking',
+              toAccountName: 'Savings',
+              amount: 100,
+              currencyCode: 'USD',
+              transactionDate: '2026-02-01',
+              tagNames: ['Trip'],
+              removeTagNames: ['Old'],
+            },
+          })}
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+      expect(screen.getByText('Add tags')).toBeInTheDocument();
+      expect(screen.getByText('Trip')).toBeInTheDocument();
+      expect(screen.getByText('Remove tags')).toBeInTheDocument();
+      expect(screen.getByText('Old')).toBeInTheDocument();
+    });
+
+    it('shows the tags an edit changes on each split line, by the line', () => {
+      render(
+        <TransactionConfirmationCard
+          action={makeAction({
+            type: 'update_transaction',
+            descriptor: { type: 'update_transaction' },
+            preview: {
+              accountName: 'Checking',
+              amount: -30,
+              currencyCode: 'USD',
+              transactionDate: '2026-02-01',
+              splitTagChanges: [
+                {
+                  categoryName: 'Food',
+                  amount: -20,
+                  tagNames: ['Trip', 'Family'],
+                  newTagNames: ['Family'],
+                },
+                { categoryName: 'Soap', amount: -10, memo: 'bulk', removeTagNames: ['Old'] },
+                { categoryName: null, amount: -5, tagNames: ['Trip'], removeTagNames: ['Old'] },
+                { categoryName: 'Savings', amount: -7, legAccountName: 'Savings', tagNames: ['Trip'] },
+              ],
+            },
+          })}
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+      expect(screen.getByText('Split line tags')).toBeInTheDocument();
+      expect(
+        screen.getByText(/^Food .*20\.00: adds tags: Trip, Family \(new tag\)$/),
+      ).toBeInTheDocument();
+      expect(screen.getByText(/^Soap .*10\.00 \(bulk\): removes tags: Old$/)).toBeInTheDocument();
+      expect(
+        screen.getByText(/^Uncategorized .*5\.00: adds tags: Trip; removes tags: Old$/),
+      ).toBeInTheDocument();
+      // A transfer line's approval changes the other account's transaction too.
+      expect(
+        screen.getByText(/^Savings .*7\.00, and its transfer in Savings: adds tags: Trip$/),
+      ).toBeInTheDocument();
+      // The transaction's own tags are not part of this edit.
+      expect(screen.queryByText('Add tags')).not.toBeInTheDocument();
+    });
+
+    it('renders a tag rename with the name it has now and only what changes', () => {
+      render(
+        <TransactionConfirmationCard
+          action={makeAction({
+            type: 'update_tag',
+            descriptor: { type: 'update_tag' },
+            preview: { name: 'Travel', previousName: 'Trip', tagColor: null },
+          })}
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+      expect(screen.getByText('Edit this tag?')).toBeInTheDocument();
+      expect(screen.getByText('Current name')).toBeInTheDocument();
+      expect(screen.getByText('Trip')).toBeInTheDocument();
+      expect(screen.getByText('New name')).toBeInTheDocument();
+      expect(screen.getByText('Travel')).toBeInTheDocument();
+      // A cleared colour says so; an icon the edit leaves alone is not shown.
+      expect(screen.getByText('Colour')).toBeInTheDocument();
+      expect(screen.queryByText('Icon')).toBeNull();
+    });
+
+    it('says how many rows a tag deletion takes the tag off, with no view link', () => {
+      render(
+        <TransactionConfirmationCard
+          action={makeAction({
+            type: 'delete_tag',
+            status: 'confirmed',
+            descriptor: { type: 'delete_tag' },
+            preview: { name: 'Trip', tagCarriedCount: 3 },
+          })}
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+      expect(screen.getByText('Removed from')).toBeInTheDocument();
+      expect(
+        screen.getByText('3 transactions and split lines'),
+      ).toBeInTheDocument();
+      expect(screen.getByText('Tag deleted')).toBeInTheDocument();
+      expect(screen.queryByRole('link')).toBeNull();
+    });
+
+    it('links a created tag to the tags page', () => {
+      render(
+        <TransactionConfirmationCard
+          action={makeAction({
+            type: 'create_tag',
+            status: 'confirmed',
+            descriptor: { type: 'create_tag' },
+            preview: { name: 'Trip', tagColor: '#FF5733', tagIcon: null },
+          })}
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+      expect(screen.getByText('#FF5733')).toBeInTheDocument();
+      expect(screen.getByRole('link', { name: 'View tags' })).toHaveAttribute(
+        'href',
+        '/tags',
+      );
     });
 
     it('shows the updated success message and a view link', () => {
@@ -855,6 +1247,133 @@ describe('TransactionConfirmationCard', () => {
       expect(
         screen.getByRole('link', { name: 'View transaction' }),
       ).toHaveAttribute('href', '/transactions?targetTransactionId=tx-1');
+    });
+  });
+  describe('rule effects', () => {
+    const effects = {
+      changes: {
+        categoryId: 'cat-1',
+        payeeId: 'pay-1',
+        addTagIds: ['tag-1', 'tag-9'],
+        removeTagIds: ['tag-2'],
+      },
+      aiReviewRequests: [{ ruleId: 'r1', instruction: 'Check the receipt' }],
+      labels: {
+        categories: { 'cat-1': 'Food: Coffee' },
+        payees: { 'pay-1': 'Starbucks' },
+        tags: { 'tag-1': 'coffee', 'tag-2': 'treat' },
+        rules: { r1: 'Coffee' },
+      },
+    };
+
+    it('lists what the rules will also do on a created transaction, by name', () => {
+      render(
+        <TransactionConfirmationCard
+          action={makeAction({ preview: { ...makeAction().preview, ruleEffects: effects } })}
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+      const block = screen.getByTestId('rule-effects');
+      expect(within(block).getByText('Your rules will also:')).toBeInTheDocument();
+      expect(within(block).getByText('Set the category to Food: Coffee')).toBeInTheDocument();
+      expect(within(block).getByText('Set the payee to Starbucks')).toBeInTheDocument();
+      // A tag that no longer exists reads as a deleted item, never as its id.
+      expect(within(block).getByText('Tags added: coffee and a deleted item')).toBeInTheDocument();
+      expect(within(block).getByText('Tags removed: treat')).toBeInTheDocument();
+      expect(within(block).getByText('Queue 1 AI review request')).toBeInTheDocument();
+      expect(block.textContent).not.toMatch(/tag-|cat-1|pay-1/);
+    });
+
+    it('lists only the effects that exist', () => {
+      render(
+        <TransactionConfirmationCard
+          action={makeAction({
+            preview: {
+              ...makeAction().preview,
+              ruleEffects: { ...effects, changes: { addTagIds: ['tag-1'], removeTagIds: [] }, aiReviewRequests: [] },
+            },
+          })}
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+      const block = screen.getByTestId('rule-effects');
+      expect(within(block).getAllByRole('listitem')).toHaveLength(1);
+      expect(within(block).getByText('Tags added: coffee')).toBeInTheDocument();
+    });
+
+    it('lists them on a transfer card too', () => {
+      render(
+        <TransactionConfirmationCard
+          action={makeAction({
+            type: 'create_transfer',
+            descriptor: { type: 'create_transfer' },
+            preview: {
+              fromAccountName: 'Checking',
+              toAccountName: 'Savings',
+              amount: 100,
+              currencyCode: 'USD',
+              transactionDate: '2026-01-15',
+              ruleEffects: effects,
+            },
+          })}
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+      expect(within(screen.getByTestId('rule-effects')).getByText('Set the payee to Starbucks')).toBeInTheDocument();
+    });
+
+    it('renders nothing when no rule has an effect', () => {
+      const { container } = render(
+        <TransactionConfirmationCard action={makeAction()} onConfirm={vi.fn()} onCancel={vi.fn()} />,
+      );
+      expect(screen.queryByTestId('rule-effects')).toBeNull();
+      expect(screen.queryByText('Your rules will also:')).toBeNull();
+      expect(container.textContent).not.toContain('Your rules');
+    });
+
+    it('renders nothing for effects that change nothing', () => {
+      render(
+        <TransactionConfirmationCard
+          action={makeAction({
+            preview: {
+              ...makeAction().preview,
+              ruleEffects: { ...effects, changes: { addTagIds: [], removeTagIds: [] }, aiReviewRequests: [] },
+            },
+          })}
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+      expect(screen.queryByTestId('rule-effects')).toBeNull();
+    });
+  });
+
+  describe('an action type this client does not know', () => {
+    it('is titled generically and shows no other action\'s rows', () => {
+      render(
+        <TransactionConfirmationCard
+          action={makeAction({ type: 'archive_everything' as never, preview: {} })}
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+      expect(screen.getByText('Approve this action?')).toBeInTheDocument();
+      expect(screen.queryByText('Create this payee?')).toBeNull();
+      expect(screen.queryByText('Name')).toBeNull();
+    });
+
+    it('confirms it without claiming a payee was created', () => {
+      render(
+        <TransactionConfirmationCard
+          action={makeAction({ type: 'archive_everything' as never, status: 'confirmed' })}
+          onConfirm={vi.fn()}
+          onCancel={vi.fn()}
+        />,
+      );
+      expect(screen.getByText('Action completed')).toBeInTheDocument();
     });
   });
 });

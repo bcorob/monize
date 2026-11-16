@@ -7,7 +7,8 @@ import { CategoryForm } from './CategoryForm';
 Element.prototype.scrollIntoView = vi.fn();
 
 vi.mock('@hookform/resolvers/zod', () => ({
-  zodResolver: () => async () => ({ values: {}, errors: {} }),
+  // Pass values through so a submit test can read what the form sends.
+  zodResolver: () => async (values: any) => ({ values, errors: {} }),
 }));
 
 describe('CategoryForm', () => {
@@ -219,5 +220,102 @@ describe('CategoryForm icon field', () => {
     await act(async () => { fireEvent.click(screen.getByText('No icon')); });
     const hidden = container.querySelector('input[name="icon"]') as HTMLInputElement;
     expect(hidden.value).toBe('');
+  });
+});
+
+describe('CategoryForm automatic sign', () => {
+  const parent = {
+    id: 'p1', name: 'Food', parentId: null, isIncome: false,
+    autoSign: false, effectiveAutoSign: false,
+  };
+  const other = {
+    id: 'p2', name: 'Travel', parentId: null, isIncome: false,
+    autoSign: null, effectiveAutoSign: true,
+  };
+  const categories = [parent, other] as any[];
+  const onCancel = vi.fn();
+
+  const autoSignSelect = () =>
+    screen.getByLabelText('Automatic sign') as HTMLSelectElement;
+  const optionLabels = () =>
+    Array.from(autoSignSelect().options).map((o) => o.textContent);
+
+  const subcategory = (autoSign: boolean | null, parentId = 'p1') => ({
+    id: 'child', name: 'Groceries', parentId, isIncome: false,
+    description: '', color: '', icon: '',
+    autoSign, effectiveAutoSign: autoSign ?? false,
+  }) as any;
+
+  async function pickParent(name: string) {
+    const parentInput = screen.getByPlaceholderText('No parent (top-level)');
+    await act(async () => { fireEvent.focus(parentInput); });
+    await act(async () => { fireEvent.click(screen.getByText(name)); });
+  }
+
+  it('offers only Enabled and Disabled for a root category, defaulting to Enabled', () => {
+    render(<CategoryForm categories={categories} onSubmit={vi.fn()} onCancel={onCancel} />);
+    expect(optionLabels()).toEqual(['Enabled', 'Disabled']);
+    expect(autoSignSelect().value).toBe('true');
+    expect(screen.queryByText(/Inherited from parent/)).not.toBeInTheDocument();
+  });
+
+  it('shows Inherit and the inherited state for a subcategory with no own setting', () => {
+    render(
+      <CategoryForm category={subcategory(null)} categories={categories} onSubmit={vi.fn()} onCancel={onCancel} />,
+    );
+    expect(optionLabels()).toEqual(['Inherit from parent', 'Enabled', 'Disabled']);
+    expect(autoSignSelect().value).toBe('');
+    expect(
+      screen.getByText('Inherited from parent (Food): currently Disabled'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows an explicit Disabled without the inherited hint', () => {
+    render(
+      <CategoryForm category={subcategory(false, 'p2')} categories={categories} onSubmit={vi.fn()} onCancel={onCancel} />,
+    );
+    expect(autoSignSelect().value).toBe('false');
+    expect(screen.queryByText(/Inherited from parent \(/)).not.toBeInTheDocument();
+  });
+
+  it('does not copy the parent setting when the parent changes', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <CategoryForm category={subcategory(null, 'p2')} categories={categories} onSubmit={onSubmit} onCancel={onCancel} />,
+    );
+    await pickParent('Food');
+    // Food is explicitly off; the child still inherits rather than copying it.
+    expect(autoSignSelect().value).toBe('');
+    expect(
+      screen.getByText('Inherited from parent (Food): currently Disabled'),
+    ).toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByText('Update Category')); });
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0][0]).toMatchObject({ parentId: 'p1', autoSign: null });
+  });
+
+  it('keeps an explicit Enabled when moved under a parent that is off', async () => {
+    render(
+      <CategoryForm category={subcategory(true, 'p2')} categories={categories} onSubmit={vi.fn()} onCancel={onCancel} />,
+    );
+    await pickParent('Food');
+    expect(autoSignSelect().value).toBe('true');
+  });
+
+  it.each([
+    ['false', false],
+    ['true', true],
+    ['', null],
+  ] as const)('submits autoSign for option "%s" as %s', async (option, expected) => {
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(
+      <CategoryForm category={subcategory(true)} categories={categories} onSubmit={onSubmit} onCancel={onCancel} />,
+    );
+    await act(async () => {
+      fireEvent.change(autoSignSelect(), { target: { value: option } });
+    });
+    await act(async () => { fireEvent.click(screen.getByText('Update Category')); });
+    expect(onSubmit).toHaveBeenCalledTimes(1);
+    expect(onSubmit.mock.calls[0][0].autoSign).toBe(expected);
   });
 });

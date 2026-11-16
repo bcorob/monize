@@ -126,10 +126,14 @@ export function createScenarioLabels({
     mode?: OverpaymentMode | null,
   ): string => {
     if (!comparison) return '—';
+    // A schedule without a level installment (LINEAR, INTEREST_ONLY) has no
+    // "new installment" to report, so its outcome is the time saved -- none,
+    // when the overpayment holds the term end -- whatever the mode.
     const isLowerInstallment =
-      mode != null
+      comparison.scenario.levelInstallment !== false &&
+      (mode != null
         ? mode === 'LOWER_INSTALLMENT'
-        : (comparison.installmentReduction ?? 0) > 0.005;
+        : (comparison.installmentReduction ?? 0) > 0.005);
     if (isLowerInstallment) {
       if (comparison.installmentReduction == null) return '—';
       return t('loanDetail.comparison.installmentDrop', {

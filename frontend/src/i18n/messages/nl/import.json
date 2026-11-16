@@ -34,19 +34,22 @@
   },
   "page": {
     "title": "Transacties importeren",
-    "subtitle": "Importeer transacties vanuit QIF-, OFX/QFX- of CSV-bestanden, of neem een volledig Microsoft Money-bestand (.mny) over"
+    "subtitle": "Importeer transacties vanuit QIF/QMTF-, OFX/QFX- of CSV-bestanden, of neem een volledig Microsoft Money-bestand (.mny) over"
   },
   "upload": {
     "heading": "Transactiebestanden uploaden",
-    "instructions": "Selecteer een of meer bestanden om te importeren. Ondersteunde indelingen: QIF, OFX/QFX, CSV en Microsoft Money (.mny).\nJe kunt meerdere bestanden van hetzelfde type selecteren voor bulkimport. Importeer Microsoft Money-bestanden één voor één — een .mny-bestand bevat een volledig profiel.",
+    "instructions": "Selecteer een of meer bestanden om te importeren. Ondersteunde indelingen: QIF/QMTF, OFX/QFX, CSV en Microsoft Money (.mny).\nJe kunt meerdere bestanden van hetzelfde type selecteren voor bulkimport. Importeer Microsoft Money-bestanden één voor één — een .mny-bestand bevat een volledig profiel.",
     "importingTo": "Importeren naar:",
     "clickToSelect": "Klik om bestand(en) te selecteren",
+    "orDragAndDrop": "of sleep ze hierheen",
+    "dropToImport": "Loslaten om te importeren",
+    "unsupportedDrop": "Deze bestanden kunnen niet worden geïmporteerd: {names}. Gebruik QIF/QMTF-, OFX-, QFX-, CSV- of Microsoft Money-bestanden (.mny).",
     "processing": "Verwerken...",
-    "acceptedFormats": "QIF, OFX, QFX, CSV of Microsoft Money (.mny)",
+    "acceptedFormats": "QIF/QMTF, OFX, QFX, CSV of Microsoft Money (.mny)",
     "mnyFailedHeading": "Dit Microsoft Money-bestand kon niet worden geopend",
-    "wikiNotice": {
+    "docsNotice": {
       "title": "Voordat u importeert",
-      "body": "Lees het wiki-gedeelte <money>Importing from Microsoft Money</money> of <quicken>Importing from Quicken</quicken> voordat u iets importeert."
+      "body": "Lees het gedeelte <money>Importing from Microsoft Money</money> of <quicken>Importing from Quicken</quicken> in de documentatie voordat u iets importeert. OFX/QFX- en QIF-bestanden hebben elk hun eigen eigenaardigheden — zie <ofx>Importing OFX/QFX Files</ofx> en <qif>Importing Quicken QIF Files</qif>."
     }
   },
   "selectAccount": {
@@ -78,23 +81,25 @@
     "heading": "CSV-kolomkoppeling",
     "description": "Koppel jouw CSV-kolommen aan transactievelden. Bekijk de gegevens hieronder en configureer de koppeling.",
     "firstRowIsHeader": "Eerste rij is koptekst",
-    "delimiterLabel": "Scheidingsteken:",
-    "dateFormatLabel": "Datumnotatie:",
+    "delimiterLabel": "Scheidingsteken",
+    "dateFormatLabel": "Datumnotatie",
     "customOption": "Aangepast...",
     "customPlaceholder": "bijv. DD.MM.JJJJ",
     "dataPreview": "Gegevensvoorbeeld",
     "columnMappingTitle": "Kolomkoppeling",
-    "dateField": "Datum *",
+    "columnMappingHelp": "Koppel elke CSV-kolom aan een transactieveld. Datum, Bedragtype en ofwel Bedrag ofwel Debet/Credit zijn verplicht; de rest is optioneel.",
+    "dateField": "Datum",
     "amountTypeField": "Bedragtype",
     "singleAmountOption": "Enkele bedragkolom",
     "splitAmountOption": "Aparte debet/credit",
-    "amountField": "Bedrag *",
+    "amountField": "Bedrag",
     "signField": "Teken",
+    "signFieldHelp": "Hoe het teken van het bedrag wordt gelezen: 'Zoals het is' behandelt een positief getal als een storting, 'Omkeren' behandelt het als een opname (handig voor creditcardafschriften waarbij kosten positief worden weergegeven), en een transactietype-kolom bepaalt de richting op basis van zijn eigen waarden in plaats van het teken.",
     "signNormal": "Zoals opgegeven (positief = storting)",
     "signReverse": "Omgekeerd (positief = opname)",
     "signTypeColumn": "Gebruik transactietypekolom",
-    "debitField": "Debet *",
-    "creditField": "Credit *",
+    "debitField": "Debet",
+    "creditField": "Credit",
     "typeColumnTitle": "Transactietypekolom",
     "typeColumnDescription": "Selecteer de kolom die per rij inkomsten, uitgaven of overboeking aangeeft.",
     "valuesFound": "Gevonden waarden: {values}",
@@ -137,8 +142,8 @@
     "kindBanking": "Banktransacties",
     "kindInvestment": "Beleggingstransacties",
     "investmentModeHint": "Rijen worden geclassificeerd op basis van de actiekolom. Actiewaarden zonder overeenkomst worden geïmporteerd als stortingen of opnames op de gekoppelde geldrekening.",
-    "actionField": "Actie *",
-    "securityField": "Waardepapier (symbool of naam) *",
+    "actionField": "Actie",
+    "securityField": "Waardepapier (symbool of naam)",
     "quantityField": "Aantal",
     "priceField": "Koers",
     "commissionField": "Provisie",
@@ -278,6 +283,15 @@
       "missingSplitRatio": "Splitsing zonder verhouding"
     },
     "rejectedGoBack": "Ga terug naar de stap kolomkoppeling om kolommen of actiesleutelwoorden aan te passen.",
+    "unreadableDatesNotice": "{count, plural, one {# rij heeft een datum die} other {# rijen hebben datums die}} niet als {format} gelezen {count, plural, one {kan} other {kunnen}} worden en niet {count, plural, one {wordt} other {worden}} geïmporteerd:",
+    "unreadableDateRow": "Rij {line}: \"{rawDate}\"",
+    "missingDateRow": "Rij {line}: geen datum",
+    "unreadableDatesMore": "...en nog {count}",
+    "unreadableDatesGoBack": "Als het bestand de datums in een andere volgorde schrijft, ga dan terug naar de stap kolomkoppeling en kies de datumnotatie die het gebruikt.",
+    "unreadableAmountsNotice": "{count, plural, one {# rij heeft een bedrag dat} other {# rijen hebben bedragen die}} niet gelezen {count, plural, one {kan} other {kunnen}} worden en niet {count, plural, one {wordt} other {worden}} geïmporteerd:",
+    "unreadableAmountRow": "Rij {line}: \"{rawAmount}\"",
+    "unreadableAmountsMore": "...en nog {count}",
+    "unreadableAmountsGoBack": "Controleer of de bedragkolommen goed zijn toegewezen, of corrigeer deze rijen in het bestand en importeer het opnieuw.",
     "importButton": "Transacties importeren"
   },
   "complete": {
@@ -287,7 +301,7 @@
     "totalImported": "Totaal geïmporteerd:",
     "totalImportedSuffix": "transacties",
     "totalSkipped": "Totaal overgeslagen:",
-    "totalSkippedSuffix": "dubbele overboekingen",
+    "totalSkippedSuffix": "transacties",
     "totalErrors": "Totaal fouten:",
     "categoriesCreated": "Categorieën aangemaakt:",
     "accountsCreated": "Rekeningen aangemaakt:",
@@ -299,17 +313,36 @@
     "imported": "Geïmporteerd:",
     "importedSuffix": "transacties",
     "skipped": "Overgeslagen:",
-    "skippedSuffix": "dubbele overboekingen",
+    "skippedSuffix": "transacties",
     "errors": "Fouten:",
     "errorsLabel": "Fouten:",
     "andMoreErrors": "...en nog {count} fouten",
+    "skippedRowsHeading": "Overgeslagen regels:",
+    "skippedRow": "{date}: {amount}, {payee} ({reason})",
+    "skippedRowNoPayee": "{date}: {amount} ({reason})",
+    "skipReasonAlreadyImported": "al geïmporteerd",
+    "skipReasonDuplicateTransfer": "overboeking al vastgelegd",
+    "skipReasonUnreadableDate": "datum onleesbaar",
+    "skipReasonNoDate": "geen datum",
+    "skipReasonUnreadableAmount": "bedrag onleesbaar",
+    "skippedRowRawAmount": "\"{rawAmount}\"",
+    "skipReasonMissingSecurity": "waardepapier ontbreekt",
+    "skipReasonMissingQuantity": "aantal ontbreekt",
+    "skipReasonMissingAmount": "bedrag ontbreekt",
+    "skipReasonMissingProceeds": "verkoop zonder koers of opbrengst",
+    "skipReasonMissingSplitRatio": "splitsing zonder verhouding",
+    "skippedRowLineDate": "Rij {line}, \"{rawDate}\"",
+    "skippedRowLine": "Rij {line}",
+    "skippedRowLineAt": "Rij {line}, {date}",
+    "andMoreSkipped": "...en nog {count} overgeslagen regels",
     "loanSetupHeading": "Terugkerende betalingen instellen",
     "loanSetupDescription": "De volgende lening-/hypotheekrekeningen zijn geïmporteerd zonder geplande betalingen. Stel terugkerende betalingen in om jouw leningvoortgang bij te houden.",
     "setUpPayments": "Betalingen instellen",
     "scheduledPaymentsConfigured": "Geplande betalingen ingesteld voor {count} rekening{plural}.",
     "viewInvestments": "Beleggingen bekijken",
     "viewTransactions": "Transacties bekijken",
-    "importMoreFiles": "Meer bestanden importeren"
+    "importMoreFiles": "Meer bestanden importeren",
+    "bondRowsWithoutSeries": "{count, plural, one {# obligatieaankoop is zonder serie geïmporteerd. Kies de serie in de obligatieposten van het effect.} other {# obligatieaankopen zijn zonder serie geïmporteerd. Kies de series in de obligatieposten van het effect.}}"
   },
   "multiAccountReview": {
     "heading": "QIF-import voor meerdere rekeningen",
@@ -327,7 +360,10 @@
     "securitiesNotice": "Dit bestand bevat {count} waardepapier{plural} die voor de import gekoppeld moeten worden.",
     "nextMapSecurities": "Volgende: waardepapieren koppelen",
     "importAll": "Alles importeren",
-    "transactionCount": "{count} transactie{plural}"
+    "transactionCount": "{count} transactie{plural}",
+    "chooseAccountType": "Kies een type",
+    "accountTypeFor": "Rekeningtype voor {name}",
+    "accountTypesNeeded": "Het bestand vermeldt niet welk type {count, plural, one {# rekening is} other {# rekeningen zijn}}. Kies voor elke rekening een type voordat u importeert."
   },
   "navigation": {
     "back": "Terug",
@@ -344,6 +380,7 @@
     "heading": "Controleer uw Microsoft Money-bestand",
     "fileSummary": "{filename} -- {era}, basisvaluta {currency}. De saldi hieronder zijn uit het bestand zelf berekend, zodat u ze vóór het importeren met Money kunt vergelijken.",
     "era": {
+      "money99": "Money 97-99-indeling",
       "money2001": "Money 2001-indeling",
       "money2002": "Money 2002-indeling",
       "moneyPlus": "Money Plus-/Sunset-indeling",
@@ -355,6 +392,7 @@
       "transfersLinked": "{count} overboekingen gekoppeld",
       "payees": "Begunstigden",
       "categories": "Categorieën",
+      "tags": "Tags uit classificaties",
       "accounts": "Rekeningen",
       "securities": "Effecten",
       "investments": "Beleggingstransacties",
@@ -395,7 +433,7 @@
       "importPrices": "Koersgeschiedenis importeren",
       "importPricesHint": "De eigen registratie van Money van wat elk effect dag na dag waard was. Zet dit uit als u liever met actuele koersen begint.",
       "importExchangeRates": "Wisselkoersen importeren",
-      "importExchangeRatesHint": "Historische koersen tussen de valuta's in uw bestand, zodat oude transacties in vreemde valuta net zo worden omgerekend als Money ze omrekende.",
+      "importExchangeRatesHint": "Historische koersen tussen de valuta's in uw bestand, alleen gebruikt voor datums waarvoor Monize geen koers heeft. Reeds opgeslagen koersen worden nooit vervangen.",
       "wipeExistingData": "Opnieuw beginnen: verwijder eerst mijn bestaande Monize-gegevens",
       "wipeExistingDataHint": "Voert vóór het importeren dezelfde bewerking Mijn gegevens verwijderen uit als in Instellingen. Er wordt om bevestiging gevraagd. Laat dit uit om het Money-bestand toe te voegen aan wat u al hebt."
     },
@@ -424,7 +462,7 @@
     }
   },
   "mnyWipe": {
-    "heading": "Eerst uw bestaande gegevens verwijderen?",
+    "heading": "Bestaande gegevens verwijderen",
     "body": "Dit voert dezelfde bewerking Mijn gegevens verwijderen uit als in Instellingen -> Gevarenzone, vóór het importeren begint. Het verwijdert:",
     "removes": {
       "transactions": "Elke transactie en splitsing",
@@ -434,8 +472,8 @@
       "budgets": "Elk budget, aangepast rapport, label en importtoewijzing"
     },
     "irreversible": "Dit kan niet ongedaan worden gemaakt. Als het importeren daarna mislukt, komen de verwijderde gegevens niet terug.",
-    "typeToConfirm": "Typ {word} om te bevestigen:",
-    "passwordLabel": "Voer uw wachtwoord in:",
+    "typeToConfirm": "Typ {word} om te bevestigen",
+    "passwordLabel": "Wachtwoord",
     "oidcNote": "Uw identiteitsprovider heeft deze sessie al bevestigd, dus er is geen wachtwoord nodig.",
     "confirm": "Mijn gegevens verwijderen en importeren"
   },
@@ -455,7 +493,8 @@
     },
     "failedHeading": "De import is niet voltooid",
     "retry": "Opnieuw proberen",
-    "startOver": "Opnieuw beginnen"
+    "startOver": "Opnieuw beginnen",
+    "learnMore": "Meer informatie"
   },
   "mnyComplete": {
     "heading": "Import voltooid",
@@ -469,6 +508,7 @@
       "splits": "Splitsingsregels",
       "payees": "Begunstigden",
       "categories": "Categorieën",
+      "taggedRows": "Regels getagd vanuit classificaties",
       "securities": "Effecten",
       "investments": "Beleggingstransacties",
       "prices": "Koersen",
@@ -492,7 +532,8 @@
     },
     "warningsHeading": "Opmerkingen over deze import",
     "downloadReport": "Rapport downloaden",
-    "done": "Klaar"
+    "done": "Klaar",
+    "bondRowsWithoutSeries": "{count, plural, one {# obligatieaankoop is zonder serie geïmporteerd. Kies de serie in de obligatieposten van het effect.} other {# obligatieaankopen zijn zonder serie geïmporteerd. Kies de series in de obligatieposten van het effect.}}"
   },
   "mnyWarnings": {
     "missingTable": "Deze Money-versie heeft {count, plural, one {# tabel} other {# tabellen}} niet die de import gebruikt.",
@@ -503,6 +544,7 @@
     "categoryFlattened": "{count, plural, one {# categorie was} other {# categorieën waren}} dieper dan twee niveaus en zijn samengevoegd in hun hoofdcategorie.",
     "categoryTypeInferred": "De inkomstenmarkering van Money ontbrak bij {count, plural, one {# categorie} other {# categorieën}}; inkomsten of uitgaven is uit de categoriestructuur afgeleid.",
     "degeneratePayeeSkipped": "{count, plural, one {# tijdelijke begunstigde} other {# tijdelijke begunstigden}} die Money intern bewaart zijn overgeslagen.",
+    "unknownClassificationItem": "{count, plural, one {# transactie verwees naar een classificatie-item} other {# transacties verwezen naar classificatie-items}} dat het bestand niet definieert en is zonder die tag geïmporteerd.",
     "unusableTransaction": "{count, plural, one {# transactie had} other {# transacties hadden}} geen rekening of geen bruikbare datum en zijn overgeslagen.",
     "orphanedTransferSide": "{count, plural, one {# overboeking miste} other {# overboekingen misten}} hun tegenkant in het bestand en zijn overgeslagen.",
     "orphanedSplit": "{count, plural, one {# splitsingsregel had} other {# splitsingsregels hadden}} geen bovenliggende transactie en zijn overgeslagen.",
@@ -512,6 +554,7 @@
     "duplicateSecuritySymbol": "{count, plural, one {# effect deelt} other {# effecten delen}} een symbool met een ander; de latere zijn hernoemd zodat ze gescheiden blijven.",
     "generatedSecuritySymbol": "{count, plural, one {# effect heeft} other {# effecten hebben}} geen symbool in Money, dus is er een tijdelijk symbool gemaakt en zijn koersupdates uit gelaten.",
     "unknownInvestmentAction": "{count, plural, one {# beleggingstransactie gebruikte} other {# beleggingstransacties gebruikten}} een actie die Monize niet herkent en zijn overgeslagen.",
+    "stockOptionNotImported": "{count, plural, one {# gebeurtenis rond werknemersaandelenopties} other {# gebeurtenissen rond werknemersaandelenopties}} (toekenning, vesting en vervaldatum) verplaatsten geen geld of aandelen en zijn niet geïmporteerd.",
     "unconfirmedInvestmentAction": "{count, plural, one {# beleggingstransactie gebruikte} other {# beleggingstransacties gebruikten}} een Money-actie waarvan de betekenis is afgeleid en niet gedocumenteerd; controleer ze tegen Money.",
     "missingInvestmentDetail": "{count, plural, one {# beleggingstransactie had} other {# beleggingstransacties hadden}} geen aandelengegevens in het bestand en zijn alleen op hun geldbedrag geïmporteerd.",
     "investmentAccountMismatch": "{count, plural, one {# beleggingstransactie stond} other {# beleggingstransacties stonden}} op een rekening die geen beleggingsrekening is en zijn overgeslagen.",
@@ -521,6 +564,9 @@
     "unusableBill": "{count, plural, one {# geplande rekening had} other {# geplande rekeningen hadden}} geen rekening, geen bruikbare datum of een onbekende herhaling en zijn overgeslagen.",
     "billFrequencyApproximated": "{count, plural, one {# geplande rekening gebruikt} other {# geplande rekeningen gebruiken}} een herhalingsinterval dat Monize niet exact kan weergeven, dus het dichtstbijzijnde kortere interval is gebruikt.",
     "loanInterestCategoryUnclear": "{count, plural, one {# leningbetaling bevatte} other {# leningbetalingen bevatten}} meerdere categorieën naast de aflossing, dus de rentecategorie van de lening is niet ingesteld. Controleer of de betaling escrow bevat en stel de rentecategorie na het importeren in.",
+    "transferAmountMismatch": "{count, plural, one {# overboeking naar een beleggingsrekening heeft} other {# overboekingen naar een beleggingsrekening hebben}} aan de beleggingskant een ander bedrag vastgelegd dan aan de bankkant. De beleggingskant is geïmporteerd zoals vastgelegd.",
+    "crossCurrencyTradeUnconverted": "{count, plural, one {# transactie met een effect in een andere valuta is} other {# transacties met een effect in een andere valuta zijn}} opgeslagen in de valuta van de rekening, omdat noch het bestand noch de wisselkoersaanbieder een wisselkoers voor dat valutapaar rond de transactiedatum heeft. Voeg de wisselkoers toe en corrigeer daarna de prijs van elke transactie.",
+    "crossCurrencyTradeMarketRate": "{count, plural, one {# transactie met een effect in een andere valuta is} other {# transacties met een effect in een andere valuta zijn}} omgerekend tegen de marktwisselkoers van de transactiedatum, omdat het bestand rond die datum geen wisselkoers heeft. Controleer de prijs van elke transactie met je eigen administratie.",
     "showTransactions": "{count, plural, one {De # transactie tonen} other {De # transacties tonen}}",
     "hideTransactions": "Transacties verbergen",
     "reviewInMoney": "Open deze in Microsoft Money om ze te controleren of te corrigeren en exporteer en importeer daarna opnieuw.",
@@ -539,12 +585,89 @@
     "mnyImportFailed": "Er is iets misgegaan tijdens de import. Er is niets opgeslagen -- u kunt het opnieuw proberen.",
     "mnyJobStalled": "De import reageert niet meer, waarschijnlijk omdat de server opnieuw is opgestart. Uw geüploade bestand is er nog, dus opnieuw proberen is veilig.",
     "mnyJobStalledAfterCommit": "De import reageert niet meer nadat uw gegevens al waren opgeslagen, waarschijnlijk omdat de server opnieuw is opgestart. De geïmporteerde records staan in uw account, dus hetzelfde bestand nogmaals importeren zou ze dupliceren. Controleer uw rekeningen voordat u iets anders importeert.",
+    "mnyImportFailedAfterCommit": "De import heeft uw gegevens opgeslagen, maar een stap daarna is mislukt. De geïmporteerde records staan in uw account, dus hetzelfde bestand opnieuw importeren zou ze dupliceren. Controleer uw rekeningen voordat u iets anders importeert.",
+    "mnyAlreadyImported": "Dit bestand is al in uw account geïmporteerd, dus opnieuw importeren zou de records dupliceren. Begin opnieuw en kies ervoor uw bestaande gegevens te vervangen om ze te vervangen.",
     "mnyStagedFileMissing": "Het geüploade Money-bestand is niet langer beschikbaar. Upload het opnieuw.",
     "mnyFileTruncated": "Dit Money-bestand lijkt onvolledig. De upload is mogelijk onderbroken.",
     "mnyNotAMoneyFile": "Dit bestand is geen Microsoft Money-bestand (.mny).",
-    "mnyUnsupportedVersion": "Dit bestand is gemaakt met Money 97 of 98. Open en bewaar het één keer in de gratis Money Plus Sunset-editie en importeer daarna het resultaat.",
+    "mnyUnsupportedVersion": "Dit bestand is gemaakt met een versie van Microsoft Money die Monize niet kan lezen. Open en bewaar het één keer in de gratis Money Plus Sunset-editie en importeer daarna het resultaat.",
     "mnyPasswordRequired": "Dit Money-bestand is met een wachtwoord beveiligd.",
     "mnyPasswordIncorrect": "Met dit wachtwoord kan het Money-bestand niet worden geopend.",
     "mnyUnreadableDatabase": "Dit Money-bestand is ontsleuteld, maar de inhoud kon niet worden gelezen. Het is mogelijk beschadigd."
+  },
+  "preview": {
+    "choice": {
+      "legend": "Wat te doen met {payee} als het niet wordt geïmporteerd",
+      "skip": "Nu overslaan",
+      "except": "Toevoegen aan uitzonderingen"
+    },
+    "payeeTip": {
+      "name": "Van de bank: {original}. Gekoppeld aan: {name}",
+      "alias": "Van de bank: {original}. Gekoppeld aan: {name} (alias \"{pattern}\")",
+      "aliasNoPattern": "Van de bank: {original}. Gekoppeld aan: {name} (alias)",
+      "new": "Van de bank: {original}. Gekoppeld aan: {name} (nieuwe begunstigde)",
+      "rule": "Van de bank: {original}. Gekoppeld aan: {name} (ingesteld door een regel)",
+      "ruleNone": "Van de bank: {original}. Gekoppeld aan: geen begunstigde (ingesteld door een regel)"
+    },
+    "expand": {
+      "show": "Details van {payee} tonen",
+      "hide": "Details van {payee} verbergen"
+    },
+    "rules": {
+      "heading": "Importregels",
+      "none": "Geen importregel kwam overeen met deze transactie.",
+      "skipped": "{action}: overgeslagen ({reason})",
+      "stopped": "Stopt de regels daarna.",
+      "applied": "Toegepast: {actions}",
+      "openNewTab": "Regel {name} in een nieuw tabblad openen"
+    },
+    "ruleTest": {
+      "loading": "Het resultaat van de regeltest wordt geladen",
+      "error": "Het resultaat van de regeltest kon niet worden geladen.",
+      "retry": "Opnieuw proberen",
+      "noRules": "Je hebt geen importregels, dus er was niets te testen.",
+      "showNotMatched": "Regels tonen die niet overeenkwamen ({count})",
+      "hideNotMatched": "Regels verbergen die niet overeenkwamen ({count})",
+      "noChanges": "Komt overeen, maar verandert niets aan deze transactie.",
+      "badge": {
+        "matched": "Komt overeen",
+        "notMatched": "Komt niet overeen",
+        "notEvaluated": "Niet beoordeeld"
+      },
+      "notEvaluated": {
+        "afterStop": "Niet beoordeeld: een eerdere regel heeft de regels gestopt.",
+        "disabled": "Niet beoordeeld: de regel staat uit.",
+        "invalid": "Niet beoordeeld: de regel is ongeldig. Open hem om hem te herstellen.",
+        "outside_active_window": "Niet beoordeeld: de datum van de rij valt buiten de actieve datums van de regel."
+      },
+      "condition": {
+        "met": "Voorwaarde voldaan",
+        "notMet": "Voorwaarde niet voldaan",
+        "actual": "Waarde in deze transactie: {value}",
+        "noValue": "geen",
+        "noTags": "geen tags",
+        "capture": "{name} = {value}",
+        "omitted": "De details van dit deel van de voorwaarde worden niet getoond."
+      },
+      "skipReasons": {
+        "already_set": "ze heeft al een waarde en de regel vult alleen lege in",
+        "no_change": "ze heeft al wat de regel zou instellen",
+        "payee_unresolved": "de begunstigde die de regel bouwt kon niet worden opgezocht"
+      }
+    },
+    "payee": {
+      "heading": "Begunstigde",
+      "unknown": "Geen begunstigdegegevens voor deze transactie.",
+      "original": "Tekst van de bank: {original}",
+      "name": "Komt overeen met je bestaande begunstigde {name}.",
+      "alias": "Gekoppeld aan {name} via de alias \"{pattern}\".",
+      "aliasNoPattern": "Gekoppeld aan {name} via een alias.",
+      "new": "Geen enkele begunstigde heeft deze naam al, dus {name} zou worden aangemaakt.",
+      "rule": "Een importregel stelt de begunstigde in: {name}.",
+      "ruleNone": "Een importregel wist de begunstigde.",
+      "none": "De bank gaf geen tegenpartij op, dus de transactie heeft geen begunstigde.",
+      "openAliases": "Aliassen van de begunstigde openen",
+      "openAliasesNewTab": "Aliassen van de begunstigde in een nieuw tabblad openen"
+    }
   }
 }

@@ -1,5 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor, act } from '@/test/render';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, act, cleanup, within } from '@/test/render';
 import { TransactionForm } from './TransactionForm';
 import { TransactionStatus } from '@/types/transaction';
 import { getLocalDateString } from '@/lib/utils';
@@ -8,6 +8,9 @@ import {
   TRANSACTION_SUBMIT_MODE_KEY,
 } from '@/hooks/useTransactionSubmitMode';
 import toast from 'react-hot-toast';
+import { clearCurrencyDecimals, registerCurrencyDecimals } from '@/lib/currency-decimals';
+import { usePreferencesStore } from '@/store/preferencesStore';
+import { useAuthStore } from '@/store/authStore';
 
 // ---- Mock data ----
 
@@ -39,8 +42,7 @@ const mockAccounts = [
     scheduledTransactionId: null,
     assetCategoryId: null,
     dateAcquired: null,
-    isCanadianMortgage: false,
-    isVariableRate: false,
+    mortgageType: 'ANNUITY',
     termMonths: null,
     termEndDate: null,
     amortizationMonths: null,
@@ -75,8 +77,7 @@ const mockAccounts = [
     scheduledTransactionId: null,
     assetCategoryId: null,
     dateAcquired: null,
-    isCanadianMortgage: false,
-    isVariableRate: false,
+    mortgageType: 'ANNUITY',
     termMonths: null,
     termEndDate: null,
     amortizationMonths: null,
@@ -111,8 +112,7 @@ const mockAccounts = [
     scheduledTransactionId: null,
     assetCategoryId: null,
     dateAcquired: null,
-    isCanadianMortgage: false,
-    isVariableRate: false,
+    mortgageType: 'ANNUITY',
     termMonths: null,
     termEndDate: null,
     amortizationMonths: null,
@@ -133,7 +133,7 @@ const mockCategories = [
     description: null,
     icon: null,
     color: null,
-    effectiveColor: null, effectiveIcon: null,
+    effectiveColor: null, effectiveIcon: null, autoSign: null, effectiveAutoSign: true,
     isIncome: false,
     isSystem: false,
     createdAt: '2024-01-01T00:00:00Z',
@@ -148,7 +148,7 @@ const mockCategories = [
     description: null,
     icon: null,
     color: null,
-    effectiveColor: null, effectiveIcon: null,
+    effectiveColor: null, effectiveIcon: null, autoSign: null, effectiveAutoSign: true,
     isIncome: true,
     isSystem: false,
     createdAt: '2024-01-01T00:00:00Z',
@@ -161,7 +161,7 @@ const mockPayees = [
     userId: 'user-1',
     name: 'Grocery Store',
     defaultCategoryId: 'cat-1',
-    defaultCategory: { id: 'cat-1', name: 'Groceries', userId: 'user-1', parentId: null, parent: null, children: [], description: null, icon: null, color: null, effectiveColor: null, effectiveIcon: null, isIncome: false, isSystem: false, createdAt: '2024-01-01T00:00:00Z' },
+    defaultCategory: { id: 'cat-1', name: 'Groceries', userId: 'user-1', parentId: null, parent: null, children: [], description: null, icon: null, color: null, effectiveColor: null, effectiveIcon: null, autoSign: null, effectiveAutoSign: true, isIncome: false, isSystem: false, createdAt: '2024-01-01T00:00:00Z' },
     notes: null,
     createdAt: '2024-01-01T00:00:00Z',
   },
@@ -182,7 +182,43 @@ const mockCreate = vi.fn().mockResolvedValue({});
 const mockUpdate = vi.fn().mockResolvedValue({});
 const mockCreateTransfer = vi.fn().mockResolvedValue({});
 const mockUpdateTransfer = vi.fn().mockResolvedValue({});
+const mockConvertToTransfer = vi.fn().mockResolvedValue({});
+const mockConvertToTransaction = vi.fn().mockResolvedValue({});
 const mockGetRecent = vi.fn().mockResolvedValue([]);
+
+const mockAttachmentUpload = vi.fn().mockResolvedValue({});
+// Spread the original: AttachmentsSection also imports `attachmentDownloadUrl`
+// from here, and a bare factory would blank it for the whole module graph.
+vi.mock('@/lib/attachments', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/attachments')>()),
+  attachmentsApi: {
+    list: vi.fn().mockResolvedValue([]),
+    upload: (...args: any[]) => mockAttachmentUpload(...args),
+    delete: vi.fn().mockResolvedValue(undefined),
+  },
+}));
+
+// The Warranties line has its own suite; here it only matters where it renders.
+vi.mock('./TransactionWarrantiesLine', () => ({
+  TransactionWarrantiesLine: ({
+    transaction,
+    onAddWarranty,
+    isAdding,
+  }: {
+    transaction?: { id: string };
+    onAddWarranty?: () => void;
+    isAdding?: boolean;
+  }) => (
+    <div data-testid="warranties-line" data-adding={String(Boolean(isAdding))}>
+      {transaction?.id ?? 'new'}
+      {onAddWarranty && (
+        <button type="button" onClick={onAddWarranty}>
+          Add warranty
+        </button>
+      )}
+    </div>
+  ),
+}));
 
 vi.mock('@/lib/transactions', () => ({
   transactionsApi: {
@@ -190,6 +226,8 @@ vi.mock('@/lib/transactions', () => ({
     update: (...args: any[]) => mockUpdate(...args),
     createTransfer: (...args: any[]) => mockCreateTransfer(...args),
     updateTransfer: (...args: any[]) => mockUpdateTransfer(...args),
+    convertToTransfer: (...args: any[]) => mockConvertToTransfer(...args),
+    convertToTransaction: (...args: any[]) => mockConvertToTransaction(...args),
     getRecent: (...args: any[]) => mockGetRecent(...args),
   },
 }));
@@ -203,6 +241,12 @@ const mockGetAllAliases = vi.fn().mockResolvedValue([]);
 const mockReactivatePayee = vi.fn();
 const mockPayeesGetById = vi.fn();
 
+const mockLookupContactForPayee = vi.fn().mockResolvedValue({
+  reason: 'none',
+  suggestions: [],
+});
+const mockPayeeUpdate = vi.fn();
+
 vi.mock('@/lib/payees', () => ({
   payeesApi: {
     getAll: (...args: any[]) => mockPayeesGetAll(...args),
@@ -211,7 +255,24 @@ vi.mock('@/lib/payees', () => ({
     getAllAliases: (...args: any[]) => mockGetAllAliases(...args),
     reactivatePayee: (...args: any[]) => mockReactivatePayee(...args),
     getById: (...args: any[]) => mockPayeesGetById(...args),
+    lookupContactForPayee: (...args: any[]) => mockLookupContactForPayee(...args),
+    update: (...args: any[]) => mockPayeeUpdate(...args),
   },
+}));
+
+// Whether a payee created here gets its contact details looked up turns on two
+// facts the form cannot control: the opt-in preference and whether ANY lookup
+// source exists -- Google Places or an AI provider. Both are mocked so each
+// test says which world it is in; both default to off, which is what an
+// untouched account has.
+let mockLookupAvailable = false;
+
+vi.mock('@/hooks/useContactLookupAvailable', () => ({
+  useContactLookupAvailable: () => ({
+    available: mockLookupAvailable,
+    resolved: true,
+    source: mockLookupAvailable ? 'ai' : null,
+  }),
 }));
 
 const mockCategoriesGetAll = vi.fn().mockResolvedValue(mockCategories);
@@ -244,11 +305,13 @@ vi.mock('@/lib/accounts', () => ({
 }));
 
 const mockTagsGetAll = vi.fn().mockResolvedValue([]);
+const mockTagsGetUsage = vi.fn().mockResolvedValue({});
 const mockTagCreate = vi.fn();
 
 vi.mock('@/lib/tags', () => ({
   tagsApi: {
     getAll: (...args: any[]) => mockTagsGetAll(...args),
+    getUsage: (...args: any[]) => mockTagsGetUsage(...args),
     create: (...args: any[]) => mockTagCreate(...args),
   },
 }));
@@ -265,20 +328,34 @@ vi.mock('@/lib/exchange-rates', () => ({
   CreateCurrencyData: {},
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    defaultCurrency: 'CAD',
-    formatCurrency: (amount: number, currency: string) =>
-      `${currency} ${(Math.round(amount * 100) / 100).toFixed(2)}`,
-    formatNumber: (value: number, decimals: number = 2) => value.toFixed(decimals),
-  }),
-}));
-
-vi.mock('@/lib/format', () => ({
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      defaultCurrency: 'CAD',
+      formatCurrency: (amount: number, currency: string) =>
+        `${currency} ${(Math.round(amount * 100) / 100).toFixed(2)}`,
+      formatNumber: (value: number, decimals: number = 2) => value.toFixed(decimals),
+      numberLocale: 'en-US',
+      numberSeparators: { decimal: '.', group: ',' },
+    }),
+  };
+});
+vi.mock('@/lib/format', async (importOriginal) => {
+  // The real registry, so a case that registers a coin rounds at its places.
+  const { decimalPlacesForCurrency } = await import('@/lib/currency-decimals');
+  return {
+  ...(await importOriginal<typeof import('@/lib/format')>()),
   FX_RATE_DISPLAY_DECIMALS: 6,
   getCurrencySymbol: () => '$',
   getDecimalPlacesForCurrency: () => 2,
   roundToCents: (v: number) => Math.round(v * 100) / 100,
+  roundToEntryPlaces: (v: number, code?: string) => {
+    const f = Math.pow(10, decimalPlacesForCurrency(code) ?? 2);
+    return Math.round(v * f) / f;
+  },
+  roundMoney: (v: number, d = 4) => { const f = Math.pow(10, d); return Math.round(v * f) / f; },
   roundToDecimals: (v: number, d: number) => { const f = Math.pow(10, d); return Math.round(v * f) / f; },
   formatAmount: (v: number | undefined | null) => (v === undefined || v === null || isNaN(v)) ? '' : (Math.round(v * 100) / 100).toFixed(2),
   formatAmountWithCommas: (v: number | undefined | null) => (v === undefined || v === null || isNaN(v)) ? '' : (Math.round(v * 100) / 100).toFixed(2),
@@ -288,9 +365,11 @@ vi.mock('@/lib/format', () => ({
   hasCalculatorOperators: (input: string) => /[+*/()]/.test(input.replace(/^-/, '')) || /(?!^)-/.test(input),
   evaluateExpression: vi.fn().mockImplementation(() => undefined),
   formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
-}));
+  };
+});
 
-vi.mock('@/lib/categoryUtils', () => ({
+vi.mock('@/lib/categoryUtils', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/categoryUtils')>()),
   buildCategoryTree: (cats: any[]) => cats.map((c: any) => ({ category: c, children: [] })),
 }));
 
@@ -313,9 +392,11 @@ vi.mock('@hookform/resolvers/zod', () => ({
   },
 }));
 
+const mockToCreateSplitDataOptions = vi.fn();
+const mockToSplitRowsOptions = vi.fn();
 vi.mock('./SplitEditor', () => ({
-  SplitEditor: ({ categories, onCreateCategory }: any) => (
-    <div data-testid="split-editor">
+  SplitEditor: ({ categories, onCreateCategory, crossCurrencyTransfers }: any) => (
+    <div data-testid="split-editor" data-cross-currency-transfers={String(!!crossCurrencyTransfers)}>
       Split Editor
       <span data-testid="split-editor-categories">
         {(categories || []).map((c: any) => c.name).join(',')}
@@ -337,23 +418,32 @@ vi.mock('./SplitEditor', () => ({
     { id: 'split-1', splitType: 'category', amount: 0, categoryId: undefined, memo: '' },
     { id: 'split-2', splitType: 'category', amount: 0, categoryId: undefined, memo: '' },
   ],
-  toSplitRows: (splits: any[]) => splits.map((s: any, i: number) => ({
-    id: `split-${i}`,
-    splitType: 'category',
-    amount: s.amount,
-    categoryId: s.categoryId,
-    memo: s.memo || '',
-  })),
-  toCreateSplitData: (rows: any[]) => rows.map((r: any) => ({
+  toSplitRows: (splits: any[], options?: unknown) => {
+    mockToSplitRowsOptions(options);
+    return splits.map((s: any, i: number) => ({
+      id: `split-${i}`,
+      splitType: 'category',
+      amount: s.amount,
+      categoryId: s.categoryId,
+      memo: s.memo || '',
+    }));
+  },
+  toCreateSplitData: (rows: any[], options?: unknown) => {
+    mockToCreateSplitDataOptions(options);
+    return rows.map((r: any) => ({
     categoryId: r.categoryId,
     amount: r.amount,
     memo: r.memo,
-  })),
+    }));
+  },
 }));
 
 vi.mock('@/components/ui/Combobox', () => ({
   Combobox: ({ label, placeholder, options, value, onChange, onCreateNew, allowCustomValue }: any) => (
-    <div data-testid={`combobox-${label}`}>
+    <div
+      data-testid={`combobox-${label}`}
+      data-options={options?.map((o: any) => o.label).join('\n')}
+    >
       {label && <label>{label}</label>}
       <span data-testid={`combobox-value-${label}`}>{value ?? ''}</span>
       <input
@@ -382,6 +472,16 @@ vi.mock('@/components/ui/Combobox', () => ({
 
 // ---- Helpers ----
 
+/**
+ * Waits until the category picker lists `label`. Categories load after the
+ * picker renders, and a pick made before they arrive selects nothing.
+ */
+async function categoryOffered(label: string) {
+  await waitFor(() =>
+    expect(screen.getByTestId('combobox-Category').dataset.options?.split('\n')).toContain(label),
+  );
+}
+
 function createExistingTransaction(overrides = {}) {
   return {
     id: '123e4567-e89b-12d3-a456-426614174000',
@@ -393,7 +493,7 @@ function createExistingTransaction(overrides = {}) {
     payeeName: 'Grocery Store',
     payee: null,
     categoryId: 'cat-1',
-    category: { id: 'cat-1', name: 'Groceries', userId: 'user-1', parentId: null, parent: null, children: [], description: null, icon: null, color: null, effectiveColor: null, effectiveIcon: null, isIncome: false, isSystem: false, createdAt: '2024-01-01T00:00:00Z' },
+    category: { id: 'cat-1', name: 'Groceries', userId: 'user-1', parentId: null, parent: null, children: [], description: null, icon: null, color: null, effectiveColor: null, effectiveIcon: null, autoSign: null, effectiveAutoSign: true, isIncome: false, isSystem: false, createdAt: '2024-01-01T00:00:00Z' },
     amount: -50.0,
     currencyCode: 'CAD',
     exchangeRate: 1,
@@ -503,6 +603,253 @@ describe('TransactionForm', () => {
   // Joint accounts: a joint row belongs to the sharing owner, so every category
   // picker on the form offers the OWNER's list -- the split lines included.
   // =========================================================================
+  describe('continuing a saved payment into shared expenses', () => {
+    let priorIdentity: Pick<ReturnType<typeof useAuthStore.getState>, 'user' | 'actingAsUserId'>;
+    beforeEach(() => {
+      const { user, actingAsUserId } = useAuthStore.getState();
+      priorIdentity = { user, actingAsUserId };
+    });
+    afterEach(() => {
+      cleanup();
+      act(() => useAuthStore.setState(priorIdentity));
+    });
+    async function openSharedCreate(onShareAfterCreate = vi.fn()) {
+      useAuthStore.setState({ user: { id: 'user-1' } as never, actingAsUserId: null });
+      await act(async () => render(<TransactionForm defaultAccountId="acc-1" onSuccess={mockOnSuccess} onCancel={mockOnCancel} onShareAfterCreate={onShareAfterCreate} />));
+      fireEvent.change(screen.getByLabelText('Amount'), { target: { value: '-150' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Choose what happens after creating' }));
+      fireEvent.click(screen.getByRole('menuitemradio', { name: /Save & Share/ }));
+      return onShareAfterCreate;
+    }
+    it('saves once before handing the same transaction to the sharing flow', async () => {
+      const created = createExistingTransaction();
+      mockCreate.mockResolvedValueOnce(created);
+      const savedPreference = localStorage.getItem(TRANSACTION_SUBMIT_MODE_KEY);
+      const onShare = await openSharedCreate();
+      expect(mockCreate).not.toHaveBeenCalled();
+      expect(onShare).not.toHaveBeenCalled();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Save & Share' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Save & Share' }));
+      });
+      expect(mockCreate).toHaveBeenCalledOnce();
+      expect(onShare).toHaveBeenCalledExactlyOnceWith(created);
+      expect(mockOnSuccess).not.toHaveBeenCalled();
+      expect(localStorage.getItem(TRANSACTION_SUBMIT_MODE_KEY)).toBe(savedPreference);
+    });
+    it('keeps the form on a failed save and does not begin sharing', async () => {
+      mockCreate.mockRejectedValueOnce(new Error('Offline'));
+      const onShare = await openSharedCreate();
+      await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Save & Share' })));
+      expect(onShare).not.toHaveBeenCalled();
+      expect(mockOnSuccess).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Save & Share' })).toBeEnabled();
+    });
+    it('does not offer sharing in an acting profile', async () => {
+      useAuthStore.setState({ user: { id: 'user-1' } as never, actingAsUserId: 'owner' });
+      await act(async () => render(<TransactionForm defaultAccountId="acc-1" onSuccess={mockOnSuccess} onShareAfterCreate={vi.fn()} />));
+      expect(screen.queryByRole('button', { name: 'Choose what happens after creating' })).not.toBeInTheDocument();
+    });
+  });
+  describe('the Warranties line', () => {
+    it('renders for a saved transaction', async () => {
+      render(
+        <TransactionForm
+          transaction={createExistingTransaction({ warrantyCount: 1 }) as any}
+          onSuccess={mockOnSuccess}
+          onCancel={mockOnCancel}
+        />
+      );
+      await waitFor(() => {
+        expect(screen.getByTestId('warranties-line')).toHaveTextContent('123e4567-e89b-12d3-a456-426614174000');
+      });
+    });
+
+    it("hands Add warranty to the host with the form's transaction", async () => {
+      const onAddWarranty = vi.fn();
+      const existing = createExistingTransaction();
+      render(
+        <TransactionForm
+          transaction={existing as any}
+          onSuccess={mockOnSuccess}
+          onCancel={mockOnCancel}
+          onAddWarranty={onAddWarranty}
+        />
+      );
+      await waitFor(() => expect(screen.getByTestId('warranties-line')).toBeInTheDocument());
+      fireEvent.click(screen.getByRole('button', { name: 'Add warranty' }));
+      expect(onAddWarranty).toHaveBeenCalledWith(existing);
+    });
+
+    it('lists without an Add warranty when the host supplies no handler', async () => {
+      render(
+        <TransactionForm
+          transaction={createExistingTransaction({ warrantyCount: 1 }) as any}
+          onSuccess={mockOnSuccess}
+          onCancel={mockOnCancel}
+        />
+      );
+      await waitFor(() => expect(screen.getByTestId('warranties-line')).toBeInTheDocument());
+      expect(screen.queryByRole('button', { name: 'Add warranty' })).not.toBeInTheDocument();
+    });
+
+    // Nothing to list and nothing to do would be a dead end in the window.
+    it('is absent when the row has no warranties and the host cannot add one', async () => {
+      render(
+        <TransactionForm
+          transaction={createExistingTransaction({ warrantyCount: 0 }) as any}
+          onSuccess={mockOnSuccess}
+          onCancel={mockOnCancel}
+        />
+      );
+      await waitFor(() => expect(mockAccountsGetAll).toHaveBeenCalled());
+      await act(async () => {});
+      expect(screen.queryByTestId('warranties-line')).not.toBeInTheDocument();
+    });
+
+    it('is absent for an acting delegate, as the Warranties page is read-only to one', async () => {
+      useAuthStore.setState({ actingAsUserId: 'owner-1' });
+      try {
+        render(
+          <TransactionForm
+            transaction={createExistingTransaction() as any}
+            onSuccess={mockOnSuccess}
+            onCancel={mockOnCancel}
+            onAddWarranty={vi.fn()}
+          />
+        );
+        await waitFor(() => expect(mockAccountsGetAll).toHaveBeenCalled());
+        await act(async () => {});
+        expect(screen.queryByTestId('warranties-line')).not.toBeInTheDocument();
+      } finally {
+        act(() => {
+          useAuthStore.setState({ actingAsUserId: null });
+        });
+      }
+    });
+
+    it('is absent from a new transaction when the host cannot add one after creating it', async () => {
+      // The edit handler alone does not count: it navigates, it does not save.
+      render(<TransactionForm onSuccess={mockOnSuccess} onCancel={mockOnCancel} onAddWarranty={vi.fn()} />);
+      await waitFor(() => expect(mockAccountsGetAll).toHaveBeenCalled());
+      expect(screen.queryByTestId('warranties-line')).not.toBeInTheDocument();
+    });
+
+    describe('on a new transaction', () => {
+      async function renderNew(onAddWarrantyAfterCreate: (created: any) => void) {
+        render(
+          <TransactionForm
+            onSuccess={mockOnSuccess}
+            onCancel={mockOnCancel}
+            defaultAccountId="acc-1"
+            onAddWarranty={vi.fn()}
+            onAddWarrantyAfterCreate={onAddWarrantyAfterCreate}
+          />
+        );
+        await waitFor(() => expect(screen.getByTestId('combobox-input-Payee')).toBeInTheDocument());
+        fireEvent.change(screen.getByTestId('combobox-input-Payee'), { target: { value: 'Employer Inc' } });
+      }
+
+      it('saves it first, then hands Add warranty the row it created instead of closing', async () => {
+        const created = { id: 'tx-new' };
+        mockCreate.mockResolvedValueOnce(created);
+        const onAddWarranty = vi.fn();
+        await renderNew(onAddWarranty);
+        expect(screen.getByTestId('warranties-line')).toHaveTextContent('new');
+        fireEvent.click(screen.getByRole('button', { name: 'Add warranty' }));
+        await waitFor(() => expect(onAddWarranty).toHaveBeenCalledWith(created));
+        expect(mockCreate).toHaveBeenCalledTimes(1);
+        expect(mockOnSuccess).not.toHaveBeenCalled();
+      });
+
+      it('does not hand Add on when the save fails', async () => {
+        mockCreate.mockRejectedValueOnce(new Error('Network error'));
+        const onAddWarranty = vi.fn();
+        await renderNew(onAddWarranty);
+        fireEvent.click(screen.getByRole('button', { name: 'Add warranty' }));
+        await waitFor(() => expect(mockCreate).toHaveBeenCalled());
+        await act(async () => {});
+        expect(onAddWarranty).not.toHaveBeenCalled();
+        expect(mockOnSuccess).not.toHaveBeenCalled();
+      });
+
+      it('leaves a plain Save to close as it always did', async () => {
+        const onAddWarranty = vi.fn();
+        await renderNew(onAddWarranty);
+        fireEvent.click(screen.getByRole('button', { name: /Create Transaction/i }));
+        await waitFor(() => expect(mockOnSuccess).toHaveBeenCalled());
+        expect(onAddWarranty).not.toHaveBeenCalled();
+      });
+
+      // The busy flag is set only after validation resolves, so a second click
+      // before then must be refused by the click guard, not by a disabled button.
+      it('creates the row once when Add is clicked twice', async () => {
+        const created = { id: 'tx-new' };
+        mockCreate.mockResolvedValueOnce(created);
+        const onAddWarranty = vi.fn();
+        await renderNew(onAddWarranty);
+        const add = screen.getByRole('button', { name: 'Add warranty' });
+        fireEvent.click(add);
+        fireEvent.click(add);
+        await waitFor(() => expect(onAddWarranty).toHaveBeenCalledTimes(1));
+        expect(mockCreate).toHaveBeenCalledTimes(1);
+      });
+
+      it('creates the row once when Add is followed by Create', async () => {
+        mockCreate.mockResolvedValueOnce({ id: 'tx-new' });
+        const onAddWarranty = vi.fn();
+        await renderNew(onAddWarranty);
+        fireEvent.click(screen.getByRole('button', { name: 'Add warranty' }));
+        fireEvent.click(screen.getByRole('button', { name: /Create Transaction/i }));
+        await waitFor(() => expect(onAddWarranty).toHaveBeenCalledTimes(1));
+        expect(mockCreate).toHaveBeenCalledTimes(1);
+        expect(mockOnSuccess).not.toHaveBeenCalled();
+      });
+
+      it('shows Add as busy only while Add is saving, not during a plain Create', async () => {
+        let resolveCreate: (value: unknown) => void = () => {};
+        mockCreate.mockReturnValueOnce(new Promise((r) => { resolveCreate = r; }));
+        await renderNew(vi.fn());
+        fireEvent.click(screen.getByRole('button', { name: /Create Transaction/i }));
+        await waitFor(() => expect(mockCreate).toHaveBeenCalled());
+        expect(screen.getByTestId('warranties-line')).toHaveAttribute('data-adding', 'false');
+        await act(async () => {
+          resolveCreate({ id: 'tx-new' });
+        });
+      });
+
+      it('shows Add as busy while it saves', async () => {
+        let resolveCreate: (value: unknown) => void = () => {};
+        mockCreate.mockReturnValueOnce(new Promise((r) => { resolveCreate = r; }));
+        const onAddWarranty = vi.fn();
+        await renderNew(onAddWarranty);
+        fireEvent.click(screen.getByRole('button', { name: 'Add warranty' }));
+        await waitFor(() => expect(mockCreate).toHaveBeenCalled());
+        expect(screen.getByTestId('warranties-line')).toHaveAttribute('data-adding', 'true');
+        await act(async () => {
+          resolveCreate({ id: 'tx-new' });
+        });
+        expect(onAddWarranty).toHaveBeenCalledWith({ id: 'tx-new' });
+      });
+    });
+
+    it("is absent from a joint account's row, as attachments are", async () => {
+      mockAccountsGetAll.mockResolvedValue([
+        ...mockAccounts,
+        { ...mockAccounts[0], id: 'acc-joint', name: 'Shared Chequing', isJoint: true, ownerLabel: 'Sam' },
+      ]);
+      render(
+        <TransactionForm
+          transaction={createExistingTransaction({ accountId: 'acc-joint' }) as any}
+          onSuccess={mockOnSuccess}
+          onCancel={mockOnCancel}
+        />
+      );
+      await waitFor(() => expect(mockGetJointReferenceData).toHaveBeenCalledWith('acc-joint'));
+      expect(screen.queryByTestId('warranties-line')).not.toBeInTheDocument();
+    });
+  });
+
   describe('joint accounts', () => {
     const jointAccount = {
       ...mockAccounts[0],
@@ -606,7 +953,7 @@ describe('TransactionForm', () => {
         description: null,
         icon: null,
         color: null,
-        effectiveColor: null, effectiveIcon: null,
+        effectiveColor: null, effectiveIcon: null, autoSign: null, effectiveAutoSign: true,
         isIncome: false,
         isSystem: false,
         createdAt: '2024-01-01T00:00:00Z',
@@ -821,6 +1168,7 @@ describe('TransactionForm', () => {
 
       // The sign lookup used the caller's own list, which cannot resolve an
       // owner category id, so an income category never flipped the amount.
+      await categoryOffered('Owner Salary');
       await act(async () => {
         fireEvent.change(screen.getByTestId('combobox-input-Category'), {
           target: { value: 'Owner Salary' },
@@ -829,6 +1177,41 @@ describe('TransactionForm', () => {
 
       await waitFor(() => {
         expect(Number(amountInput.value)).toBeGreaterThan(0);
+      });
+    });
+  });
+
+  describe('defaultDate', () => {
+    it('opens a new entry on the day the caller named', async () => {
+      // The calendar's "New transaction on this day" means the day the reader
+      // clicked, not the date the last entry happened to be filed under.
+      render(
+        <TransactionForm
+          defaultDate="2026-03-07"
+          onSuccess={mockOnSuccess}
+          onCancel={mockOnCancel}
+        />,
+      );
+
+      await waitFor(() => {
+        expect((screen.getByLabelText('Date') as HTMLInputElement).value).toBe('2026-03-07');
+      });
+    });
+
+    it('leaves an edit on the row\'s own date', async () => {
+      const existing = createExistingTransaction({ transactionDate: '2024-01-15' });
+
+      render(
+        <TransactionForm
+          transaction={existing}
+          defaultDate="2026-03-07"
+          onSuccess={mockOnSuccess}
+          onCancel={mockOnCancel}
+        />,
+      );
+
+      await waitFor(() => {
+        expect((screen.getByLabelText('Date') as HTMLInputElement).value).toBe('2024-01-15');
       });
     });
   });
@@ -1001,7 +1384,7 @@ describe('TransactionForm', () => {
       // transfer category field is available (lets the transfer surface in the
       // monthly category breakdown).
       expect(screen.queryByText('Category')).not.toBeInTheDocument();
-      expect(screen.getByText('Category (Optional)')).toBeInTheDocument();
+      expect(screen.getByText('Category (optional)')).toBeInTheDocument();
 
       // Switch back to normal
       fireEvent.click(screen.getByText('Transaction'));
@@ -1299,6 +1682,71 @@ describe('TransactionForm', () => {
       expect(mockOnSuccess).toHaveBeenCalledTimes(1);
     });
 
+    it('offers cross-currency transfer lines and sends the received amount only for them', async () => {
+      mockAccountsGetAll.mockResolvedValue([
+        ...mockAccounts,
+        { ...mockAccounts[1], id: 'acc-usd', name: 'US Savings', currencyCode: 'USD' },
+      ]);
+      const splitTransaction = createSplitTransaction();
+
+      render(
+        <TransactionForm
+          transaction={splitTransaction}
+          onSuccess={mockOnSuccess}
+          onCancel={mockOnCancel}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTestId('split-editor')).toHaveAttribute(
+          'data-cross-currency-transfers',
+          'true',
+        );
+      });
+      fireEvent.click(screen.getByRole('button', { name: /Update Transaction/i }));
+      await waitFor(() => {
+        expect(mockUpdate).toHaveBeenCalled();
+      });
+
+      const { transferTargetAmountOf } = mockToCreateSplitDataOptions.mock.calls.at(-1)?.[0];
+      const transferTo = (transferAccountId: string) => ({
+        id: 'x',
+        splitType: 'transfer',
+        transferAccountId,
+        amount: -10,
+        transferTargetAmount: 7.3,
+        transferTargetFromCurrency: 'CAD',
+      });
+      expect(transferTargetAmountOf(transferTo('acc-usd'))).toBe(7.3);
+      expect(transferTargetAmountOf(transferTo('acc-2'))).toBeUndefined();
+    });
+
+    it('loads received amounts for the split being edited, not for a duplicate of it', async () => {
+      const splitTransaction = createSplitTransaction();
+      const { unmount } = render(
+        <TransactionForm transaction={splitTransaction} onSuccess={mockOnSuccess} onCancel={mockOnCancel} />
+      );
+      await waitFor(() => {
+        expect(screen.getByTestId('split-editor')).toBeInTheDocument();
+      });
+      expect(mockToSplitRowsOptions).toHaveBeenCalledWith({
+        receivedAmountsIn: splitTransaction.currencyCode,
+      });
+      unmount();
+
+      mockToSplitRowsOptions.mockClear();
+      render(
+        <TransactionForm duplicateFrom={splitTransaction} onSuccess={mockOnSuccess} onCancel={mockOnCancel} />
+      );
+      await waitFor(() => {
+        expect(screen.getByTestId('split-editor')).toBeInTheDocument();
+      });
+      expect(mockToSplitRowsOptions).toHaveBeenCalled();
+      for (const [options] of mockToSplitRowsOptions.mock.calls) {
+        expect(options?.receivedAmountsIn).toBeUndefined();
+      }
+    });
+
     it('sends splits: [] when converting an existing split transaction back to regular', async () => {
       const splitTransaction = createSplitTransaction();
 
@@ -1488,7 +1936,9 @@ describe('TransactionForm', () => {
       });
     });
 
-    it('shows transfer indicator when editing existing transfer', async () => {
+    // An existing transfer opens on its Transfer tab with the other two offered
+    // (issue #1937); the badge is kept for a leg the form cannot convert.
+    it('opens an existing transfer on the Transfer tab with the other modes offered', async () => {
       const transferTx = createTransferTransaction();
 
       render(
@@ -1500,31 +1950,12 @@ describe('TransactionForm', () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByText('This is a linked transfer transaction')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^Transfer$/ })).toBeInTheDocument();
       });
-    });
-
-    it('hides mode selector when editing an existing transfer', async () => {
-      const transferTx = createTransferTransaction();
-
-      render(
-        <TransactionForm
-          transaction={transferTx}
-          onSuccess={mockOnSuccess}
-          onCancel={mockOnCancel}
-        />
-      );
-
-      await waitFor(() => {
-        expect(screen.getByText('This is a linked transfer transaction')).toBeInTheDocument();
-      });
-
-      // The mode tab buttons (Transaction/Split/Transfer tabs) should not be shown
-      // when editing an existing transfer; instead a badge is shown
-      const transferBadges = screen.getAllByText('Transfer');
-      // The badge text in the indicator area should be present,
-      // but there should be no clickable tab buttons
-      expect(transferBadges.length).toBeGreaterThanOrEqual(1);
+      expect(screen.getByRole('button', { name: /^Transaction$/ })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /^Split$/ })).toBeInTheDocument();
+      expect(screen.queryByText('This is a linked transfer transaction')).not.toBeInTheDocument();
+      expect(screen.getByLabelText('To Account')).toBeInTheDocument();
     });
   });
 
@@ -1763,8 +2194,8 @@ describe('TransactionForm', () => {
       await waitFor(() => {
         expect(screen.getByText('From Account')).toBeInTheDocument();
         expect(screen.getByText('To Account')).toBeInTheDocument();
-        // Transfer mode shows Payee (Optional) label
-        expect(screen.getByText('Payee (Optional)')).toBeInTheDocument();
+        // Transfer mode shows Payee (optional) label
+        expect(screen.getByText('Payee (optional)')).toBeInTheDocument();
       });
     });
 
@@ -1874,6 +2305,170 @@ describe('TransactionForm', () => {
   });
 
   // =========================================================================
+  // Contact lookup for a payee created here
+  // =========================================================================
+
+  describe('new payee contact lookup', () => {
+    const suggestion = {
+      label: null,
+      website: 'https://acme.example',
+      address: null,
+      email: null,
+      phone: '+1 555 010 2000',
+      source: 'ai-web-search' as const,
+      confidence: 'high' as const,
+      notes: null,
+      refined: [],
+    };
+
+    const created = {
+      id: 'new-payee-1',
+      userId: 'user-1',
+      name: 'New Item',
+      defaultCategoryId: null,
+      defaultCategory: null,
+      notes: null,
+      website: null,
+      address: null,
+      email: null,
+      phone: null,
+      hasLogo: false,
+      logoFetchedAt: null,
+      contactLookupAt: null,
+      contactLookupSource: null,
+      isActive: true,
+      createdAt: '2024-01-01T00:00:00Z',
+    };
+
+    beforeEach(() => {
+      mockPayeeCreate.mockResolvedValue(created);
+      mockLookupContactForPayee.mockReset();
+      mockLookupContactForPayee.mockResolvedValue({ reason: 'none', suggestions: [] });
+      mockPayeeUpdate.mockReset();
+      mockPayeeUpdate.mockResolvedValue({ ...created, website: suggestion.website });
+      mockLookupAvailable = true;
+      usePreferencesStore.setState({
+        preferences: { payeeContactLookupEnabled: true } as any,
+      });
+    });
+
+    afterEach(() => {
+      // The tree is still mounted when a file's own after-hook runs, and a
+      // Zustand write re-renders it outside act -- so unmount first.
+      cleanup();
+      mockLookupAvailable = false;
+      usePreferencesStore.setState({ preferences: null });
+    });
+
+    async function createPayee() {
+      render(<TransactionForm onSuccess={mockOnSuccess} onCancel={mockOnCancel} />);
+      await waitFor(() => {
+        expect(screen.getByTestId('combobox-create-Payee')).toBeInTheDocument();
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByTestId('combobox-create-Payee'));
+      });
+      // The create resolves, then the lookup it dispatched resolves after it:
+      // drain both so the assertions run against a settled tree.
+      await act(async () => {});
+    }
+
+    it('offers what the lookup found, and saves only after the user confirms', async () => {
+      mockLookupContactForPayee.mockResolvedValue({
+        reason: 'ok',
+        suggestions: [suggestion],
+      });
+
+      await createPayee();
+
+      await waitFor(() => {
+        expect(mockLookupContactForPayee).toHaveBeenCalledWith('new-payee-1');
+      });
+      // The lookup itself stores nothing: until the user confirms, the payee
+      // is still the name-only row that was created.
+      expect(mockPayeeUpdate).not.toHaveBeenCalled();
+
+      expect(await screen.findByText('Confirm contact details')).toBeInTheDocument();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Save 2 changes/ }));
+      });
+
+      await waitFor(() => {
+        expect(mockPayeeUpdate).toHaveBeenCalledWith('new-payee-1', {
+          website: 'https://acme.example',
+          phone: '+1 555 010 2000',
+        });
+      });
+    });
+
+    it('tells the server not to run its own lookup for that payee', async () => {
+      // Two lookups would be two paid calls, and the background one writes --
+      // storing values before the user has seen the dialogue offering them.
+      await createPayee();
+
+      await waitFor(() => {
+        expect(mockPayeeCreate).toHaveBeenCalledWith({
+          name: 'New Item',
+          deferContactLookup: true,
+        });
+      });
+    });
+
+    it('leaves the lookup to the server when no AI provider is configured', async () => {
+      mockLookupAvailable = false;
+
+      await createPayee();
+
+      await waitFor(() => {
+        expect(mockPayeeCreate).toHaveBeenCalledWith({ name: 'New Item' });
+      });
+      expect(mockLookupContactForPayee).not.toHaveBeenCalled();
+    });
+
+    it('does not look up when the preference is off', async () => {
+      usePreferencesStore.setState({
+        preferences: { payeeContactLookupEnabled: false } as any,
+      });
+
+      await createPayee();
+
+      await waitFor(() => {
+        expect(mockPayeeCreate).toHaveBeenCalledWith({ name: 'New Item' });
+      });
+      expect(mockLookupContactForPayee).not.toHaveBeenCalled();
+    });
+
+    it('says nothing when the lookup finds nothing', async () => {
+      // The user asked for a payee, not for a lookup, so a lookup with nothing
+      // to offer stays out of the way: no dialogue and no message.
+      await createPayee();
+
+      await waitFor(() => {
+        expect(mockLookupContactForPayee).toHaveBeenCalled();
+      });
+      expect(screen.queryByText('Confirm contact details')).not.toBeInTheDocument();
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+
+    it('says nothing when the lookup could not run', async () => {
+      mockLookupContactForPayee.mockResolvedValue({
+        reason: 'failed',
+        suggestions: [],
+        detail: 'Your relay agent is offline',
+      });
+
+      await createPayee();
+
+      await waitFor(() => {
+        expect(mockLookupContactForPayee).toHaveBeenCalled();
+      });
+      expect(screen.queryByText('Confirm contact details')).not.toBeInTheDocument();
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+  });
+
+  // =========================================================================
   // onCreateCategory callback
   // =========================================================================
 
@@ -1897,7 +2492,7 @@ describe('TransactionForm', () => {
         description: null,
         icon: null,
         color: null,
-        effectiveColor: null, effectiveIcon: null,
+        effectiveColor: null, effectiveIcon: null, autoSign: null, effectiveAutoSign: true,
         isIncome: false,
         isSystem: false,
         createdAt: '2024-01-01T00:00:00Z',
@@ -1927,7 +2522,7 @@ describe('TransactionForm', () => {
         description: null,
         icon: null,
         color: null,
-        effectiveColor: null, effectiveIcon: null,
+        effectiveColor: null, effectiveIcon: null, autoSign: null, effectiveAutoSign: true,
         isIncome: false,
         isSystem: false,
         createdAt: '2024-01-01T00:00:00Z',
@@ -2267,43 +2862,266 @@ describe('TransactionForm', () => {
       });
     });
 
-    it('shows mode selector tabs for non-transfer existing transactions', async () => {
-      const existingTransaction = createExistingTransaction({ isTransfer: false });
+    // Every mode is offered on an edit (issue #1937). Saving in the other
+    // family converts the row in place through its own route; the create and
+    // update routes are never what a conversion calls, because creating a
+    // transfer beside the edited row booked the money twice (A26-H14).
+    it('converts an existing expense to a transfer through the conversion route', async () => {
+      const existingTransaction = createExistingTransaction({ amount: -50, accountId: 'acc-1' });
 
-      render(
-        <TransactionForm
-          transaction={existingTransaction}
-          onSuccess={mockOnSuccess}
-          onCancel={mockOnCancel}
-        />
-      );
+      await act(async () => {
+        render(
+          <TransactionForm
+            transaction={existingTransaction}
+            onSuccess={mockOnSuccess}
+            onCancel={mockOnCancel}
+          />
+        );
+      });
 
       await waitFor(() => {
-        expect(screen.getByText('Transaction')).toBeInTheDocument();
-        expect(screen.getByText('Split')).toBeInTheDocument();
-        // The "Transfer" button in mode selector is still present for non-transfer transactions
-        expect(screen.getByText('Transfer')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^Transaction$/ })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^Split$/ })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /^Transfer$/ })).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByRole('button', { name: /^Transfer$/ }));
+      await waitFor(() => expect(screen.getByLabelText('To Account')).toBeInTheDocument());
+      fireEvent.change(screen.getByLabelText('To Account'), { target: { value: 'acc-2' } });
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Convert to Transfer/i }));
+      });
+
+      await waitFor(() => expect(mockConvertToTransfer).toHaveBeenCalledTimes(1));
+      expect(mockConvertToTransfer).toHaveBeenCalledWith(
+        existingTransaction.id,
+        expect.objectContaining({ fromAccountId: 'acc-1', toAccountId: 'acc-2', amount: 50 }),
+      );
+      expect(mockCreateTransfer).not.toHaveBeenCalled();
+      expect(mockUpdateTransfer).not.toHaveBeenCalled();
+      expect(mockUpdate).not.toHaveBeenCalled();
+      expect(toast.success).toHaveBeenCalledWith('Converted to a transfer');
+      expect(mockOnSuccess).toHaveBeenCalledTimes(1);
+    });
+
+    it('still updates an existing expense in place when its mode is unchanged', async () => {
+      await act(async () => {
+        render(
+          <TransactionForm
+            transaction={createExistingTransaction({ amount: -50, accountId: 'acc-1' })}
+            onSuccess={mockOnSuccess}
+            onCancel={mockOnCancel}
+          />
+        );
+      });
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Update Transaction/i })).toBeInTheDocument();
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Update Transaction/i }));
+      });
+      await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
+      expect(mockConvertToTransfer).not.toHaveBeenCalled();
+      expect(mockConvertToTransaction).not.toHaveBeenCalled();
+    });
+
+    it('offers Transfer mode when editing an existing split', async () => {
+      await act(async () => {
+        render(
+          <TransactionForm
+            transaction={createSplitTransaction()}
+            onSuccess={mockOnSuccess}
+            onCancel={mockOnCancel}
+          />
+        );
+      });
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /^Split$/ })).toBeInTheDocument();
+      });
+      expect(screen.getByRole('button', { name: /^Transfer$/ })).toBeInTheDocument();
+    });
+
+    it('keeps Transfer mode when duplicating an expense into a new entry', async () => {
+      await act(async () => {
+        render(
+          <TransactionForm
+            duplicateFrom={createExistingTransaction({ amount: -50 })}
+            onSuccess={mockOnSuccess}
+            onCancel={mockOnCancel}
+          />
+        );
+      });
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /^Transfer$/ })).toBeInTheDocument();
       });
     });
 
-    it('hides mode selector tabs for existing transfer transactions and shows indicator', async () => {
+    it('converts an existing transfer to a transaction in its own account, with its own signed amount', async () => {
       const transferTx = createTransferTransaction();
 
-      render(
-        <TransactionForm
-          transaction={transferTx}
-          onSuccess={mockOnSuccess}
-          onCancel={mockOnCancel}
-        />
+      await act(async () => {
+        render(
+          <TransactionForm
+            transaction={transferTx}
+            onSuccess={mockOnSuccess}
+            onCancel={mockOnCancel}
+          />
+        );
+      });
+
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /^Transaction$/ })).toBeInTheDocument();
+      });
+      expect(screen.queryByText('This is a linked transfer transaction')).not.toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: /^Transaction$/ }));
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /Convert to Transaction/i })).toBeInTheDocument();
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Convert to Transaction/i }));
+      });
+
+      await waitFor(() => expect(mockConvertToTransaction).toHaveBeenCalledTimes(1));
+      expect(mockConvertToTransaction).toHaveBeenCalledWith(
+        transferTx.id,
+        expect.objectContaining({ accountId: 'acc-1', amount: -200 }),
       );
+      expect(mockUpdate).not.toHaveBeenCalled();
+      expect(mockUpdateTransfer).not.toHaveBeenCalled();
+      expect(toast.success).toHaveBeenCalledWith('Converted to a transaction');
+    });
+
+    it('converts the receiving leg of a transfer into a transaction of its own account', async () => {
+      // Opened from the receiving side: the form shows the pair (from acc-1 to
+      // acc-2, amount 200); leaving Transfer mode must hand back acc-2 and +200.
+      const transferTx = createTransferTransaction();
+      const incoming = {
+        ...transferTx,
+        id: 'linked-tx-1',
+        accountId: 'acc-2',
+        amount: 200,
+        linkedTransactionId: transferTx.id,
+        linkedTransaction: { ...transferTx, linkedTransaction: undefined },
+      };
+
+      await act(async () => {
+        render(
+          <TransactionForm transaction={incoming as any} onSuccess={mockOnSuccess} onCancel={mockOnCancel} />
+        );
+      });
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /^Transaction$/ })).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByRole('button', { name: /^Transaction$/ }));
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Convert to Transaction/i }));
+      });
+
+      await waitFor(() => expect(mockConvertToTransaction).toHaveBeenCalledTimes(1));
+      expect(mockConvertToTransaction).toHaveBeenCalledWith(
+        'linked-tx-1',
+        expect.objectContaining({ accountId: 'acc-2', amount: 200 }),
+      );
+    });
+
+    it('warns before converting a transfer whose other leg was cleared, and converts on confirm', async () => {
+      const transferTx: any = createTransferTransaction();
+      transferTx.linkedTransaction.status = TransactionStatus.CLEARED;
+
+      await act(async () => {
+        render(
+          <TransactionForm transaction={transferTx} onSuccess={mockOnSuccess} onCancel={mockOnCancel} />
+        );
+      });
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /^Transaction$/ })).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByRole('button', { name: /^Transaction$/ }));
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Convert to Transaction/i }));
+      });
+
+      await waitFor(() => expect(screen.getByText('Convert this transfer?')).toBeInTheDocument());
+      expect(mockConvertToTransaction).not.toHaveBeenCalled();
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Convert anyway/i }));
+      });
+      await waitFor(() => expect(mockConvertToTransaction).toHaveBeenCalledTimes(1));
+    });
+
+    it('does not warn when the other leg is unreconciled', async () => {
+      await act(async () => {
+        render(
+          <TransactionForm
+            transaction={createTransferTransaction()}
+            onSuccess={mockOnSuccess}
+            onCancel={mockOnCancel}
+          />
+        );
+      });
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /^Transaction$/ })).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByRole('button', { name: /^Transaction$/ }));
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Convert to Transaction/i }));
+      });
+      await waitFor(() => expect(mockConvertToTransaction).toHaveBeenCalledTimes(1));
+      expect(screen.queryByText('Convert this transfer?')).not.toBeInTheDocument();
+    });
+
+    it('offers no other mode for a split-transfer leg, whose pairing belongs to the parent', async () => {
+      const leg: any = createTransferTransaction();
+      leg.linkedTransaction.isSplit = true;
+
+      await act(async () => {
+        render(<TransactionForm transaction={leg} onSuccess={mockOnSuccess} onCancel={mockOnCancel} />);
+      });
 
       await waitFor(() => {
         expect(screen.getByText('This is a linked transfer transaction')).toBeInTheDocument();
       });
+      expect(screen.queryByRole('button', { name: /^Transaction$/ })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Split$/ })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /Update Transfer/i })).toBeInTheDocument();
+    });
 
-      // The "Transaction" and "Split" tab buttons should not be present
-      expect(screen.queryByText('Transaction')).not.toBeInTheDocument();
-      expect(screen.queryByText('Split')).not.toBeInTheDocument();
+    it('offers no other mode for a leg whose counterpart sits in an account the user cannot see', async () => {
+      const leg: any = createTransferTransaction();
+      leg.linkedTransaction.accountId = 'acc-foreign';
+
+      await act(async () => {
+        render(<TransactionForm transaction={leg} onSuccess={mockOnSuccess} onCancel={mockOnCancel} />);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('This is a linked transfer transaction')).toBeInTheDocument();
+      });
+      expect(screen.queryByRole('button', { name: /^Transaction$/ })).not.toBeInTheDocument();
+    });
+
+    it('offers no other mode for a leg whose counterpart is another owner\'s', async () => {
+      const leg = createExistingTransaction({
+        amount: -200,
+        isTransfer: true,
+        linkedTransactionId: 'foreign-leg',
+        linkedTransaction: null,
+      });
+
+      await act(async () => {
+        render(<TransactionForm transaction={leg} onSuccess={mockOnSuccess} onCancel={mockOnCancel} />);
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText('This is a linked transfer transaction')).toBeInTheDocument();
+      });
+      expect(screen.queryByRole('button', { name: /^Transaction$/ })).not.toBeInTheDocument();
     });
   });
 
@@ -2338,6 +3156,53 @@ describe('TransactionForm', () => {
       await waitFor(() => {
         expect(mockCreate).toHaveBeenCalled();
       });
+    });
+
+    it('starts a new entry from defaultPayee, and keeps its category on a non-asset account', async () => {
+      render(
+        <TransactionForm
+          onSuccess={mockOnSuccess}
+          onCancel={mockOnCancel}
+          defaultAccountId="acc-1"
+          defaultPayee={{ id: 'payee-1', name: 'Grocery Store', defaultCategoryId: 'cat-1' }}
+        />
+      );
+      await waitFor(() => {
+        expect(screen.getByTestId('combobox-value-Payee')).not.toHaveTextContent(/^$/);
+      });
+      // Accounts have loaded and the account effect has run by now.
+      await waitFor(() => expect(screen.getByLabelText('Account')).toHaveValue('acc-1'));
+      expect(screen.getByTestId('combobox-value-Category')).toHaveTextContent('cat-1');
+    });
+
+    it('prefers defaultPayee\'s category over the host\'s asset default', async () => {
+      render(
+        <TransactionForm
+          onSuccess={mockOnSuccess}
+          onCancel={mockOnCancel}
+          defaultAccountId="acc-1"
+          defaultCategoryId="cat-2"
+          defaultPayee={{ id: 'payee-1', name: 'Grocery Store', defaultCategoryId: 'cat-1' }}
+        />
+      );
+      await waitFor(() => expect(screen.getByLabelText('Account')).toHaveValue('acc-1'));
+      expect(screen.getByTestId('combobox-value-Category')).toHaveTextContent('cat-1');
+    });
+
+    it('ignores defaultPayee when editing a transaction with no payee', async () => {
+      render(
+        <TransactionForm
+          transaction={createExistingTransaction({ payeeId: null, payeeName: null }) as any}
+          onSuccess={mockOnSuccess}
+          onCancel={mockOnCancel}
+          defaultPayee={{ id: 'payee-1', name: 'Grocery Store', defaultCategoryId: 'cat-1' }}
+        />
+      );
+      await waitFor(() => {
+        expect(screen.getByTestId('combobox-input-Payee')).toBeInTheDocument();
+      });
+      expect(screen.getByTestId('combobox-value-Payee')).not.toHaveTextContent('payee-1');
+      expect(screen.getByTestId('combobox-value-Payee')).not.toHaveTextContent('Grocery Store');
     });
 
     it('does not auto-fill category when payee has no default category', async () => {
@@ -2446,6 +3311,7 @@ describe('TransactionForm', () => {
       });
 
       // Select "Groceries" category
+      await categoryOffered('Groceries');
       fireEvent.change(screen.getByTestId('combobox-input-Category'), {
         target: { value: 'Groceries' },
       });
@@ -2531,7 +3397,7 @@ describe('TransactionForm', () => {
           description: null,
           icon: null,
           color: null,
-          effectiveColor: null, effectiveIcon: null,
+          effectiveColor: null, effectiveIcon: null, autoSign: null, effectiveAutoSign: true,
           isIncome: false,
           isSystem: false,
           createdAt: '2024-01-01T00:00:00Z',
@@ -2546,7 +3412,7 @@ describe('TransactionForm', () => {
           description: null,
           icon: null,
           color: null,
-          effectiveColor: null, effectiveIcon: null,
+          effectiveColor: null, effectiveIcon: null, autoSign: null, effectiveAutoSign: true,
           isIncome: false,
           isSystem: false,
           createdAt: '2024-01-01T00:00:00Z',
@@ -2623,6 +3489,92 @@ describe('TransactionForm', () => {
           })
         );
       });
+    });
+  });
+
+  describe('layout of the lower fields', () => {
+    const precedes = (a: Element, b: Element) =>
+      Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+    it('puts a one-line Description above Tags', async () => {
+      render(<TransactionForm onSuccess={mockOnSuccess} onCancel={mockOnCancel} />);
+      const description = await screen.findByLabelText('Description');
+      expect(description.tagName).toBe('TEXTAREA');
+      expect(description).toHaveAttribute('rows', '1');
+      expect(precedes(description, screen.getByText('Tags'))).toBe(true);
+    });
+
+    describe('auto-expanding Description', () => {
+      // jsdom has no layout: a line is 20px of content here, a browser's own.
+      let scrollHeight: ReturnType<typeof vi.spyOn>;
+      beforeEach(() => {
+        scrollHeight = vi
+          .spyOn(HTMLTextAreaElement.prototype, 'scrollHeight', 'get')
+          .mockImplementation(function (this: HTMLTextAreaElement) {
+            return this.value.split('\n').length * 20;
+          });
+      });
+      afterEach(() => scrollHeight.mockRestore());
+
+      it('opens a saved multi-line description expanded to show every line', async () => {
+        render(
+          <TransactionForm
+            transaction={createExistingTransaction({ description: 'first\nsecond\nthird' }) as any}
+            onSuccess={mockOnSuccess}
+            onCancel={mockOnCancel}
+          />,
+        );
+        const description = (await screen.findByLabelText('Description')) as HTMLTextAreaElement;
+        await waitFor(() => expect(description.value).toBe('first\nsecond\nthird'));
+        expect(description.style.height).toBe('60px');
+      });
+
+      it('grows when a second line is typed', async () => {
+        render(<TransactionForm onSuccess={mockOnSuccess} onCancel={mockOnCancel} />);
+        const description = (await screen.findByLabelText('Description')) as HTMLTextAreaElement;
+        expect(description.style.height).toBe('20px');
+        await act(async () => {
+          fireEvent.change(description, { target: { value: 'one\ntwo' } });
+        });
+        expect(description.style.height).toBe('40px');
+      });
+    });
+
+    it('puts Tags and Status on one line, Tags on the left', async () => {
+      render(<TransactionForm onSuccess={mockOnSuccess} onCancel={mockOnCancel} />);
+      const status = await screen.findByLabelText('Status');
+      const row = status.closest('.grid') as HTMLElement;
+      expect(row).toHaveClass('md:grid-cols-2');
+      const tags = within(row).getByText('Tags');
+      expect(precedes(tags, status)).toBe(true);
+    });
+
+    it('puts Attachments and Warranties on one line', async () => {
+      render(
+        <TransactionForm
+          transaction={createExistingTransaction({ warrantyCount: 1 }) as any}
+          onSuccess={mockOnSuccess}
+          onCancel={mockOnCancel}
+        />,
+      );
+      const warranties = await screen.findByTestId('warranties-line');
+      const row = warranties.closest('.grid') as HTMLElement;
+      expect(row).toHaveClass('md:grid-cols-2');
+      expect(within(row).getByTestId('attachments-header')).toBeInTheDocument();
+    });
+
+    it('draws a dividing line between Attachments and Warranties', async () => {
+      render(
+        <TransactionForm
+          transaction={createExistingTransaction({ warrantyCount: 1 }) as any}
+          onSuccess={mockOnSuccess}
+          onCancel={mockOnCancel}
+        />,
+      );
+      const divider = (await screen.findByTestId('warranties-line')).parentElement as HTMLElement;
+      expect(divider).toHaveAttribute('data-testid', 'warranties-divider');
+      // A rule above Warranties when stacked, beside it when side by side.
+      expect(divider).toHaveClass('border-t', 'md:border-t-0', 'md:border-l');
     });
   });
 
@@ -2727,17 +3679,17 @@ describe('TransactionForm', () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTestId('combobox-input-Payee (Optional)')).toBeInTheDocument();
+        expect(screen.getByTestId('combobox-input-Payee (optional)')).toBeInTheDocument();
       });
 
       // Clear the payee field — the mocked Combobox forwards the empty string
       // via onChange('', '') because allowCustomValue=true. We change to a
       // non-empty value first so React registers a different value on the
       // second change to ''.
-      fireEvent.change(screen.getByTestId('combobox-input-Payee (Optional)'), {
+      fireEvent.change(screen.getByTestId('combobox-input-Payee (optional)'), {
         target: { value: 'x' },
       });
-      fireEvent.change(screen.getByTestId('combobox-input-Payee (Optional)'), {
+      fireEvent.change(screen.getByTestId('combobox-input-Payee (optional)'), {
         target: { value: '' },
       });
 
@@ -2912,6 +3864,389 @@ describe('TransactionForm', () => {
   // =========================================================================
   // Form initial empty state
   // =========================================================================
+
+  // =========================================================================
+  // A cross-currency transfer opened from its receiving leg (A26-H13): the
+  // "Transfer Amount" field is the SOURCE amount, so it loads the FROM leg's
+  // figure whichever leg the form was opened on, and an unedited save re-sends
+  // exactly what was loaded.
+  // =========================================================================
+  describe('a cross-currency transfer opened from its receiving leg', () => {
+    // USD 100.00 from acc-3 arrived as CAD 135.00 in acc-1; the form is opened
+    // on the CAD (positive, receiving) leg.
+    function createIncomingCadLeg(overrides = {}) {
+      return createExistingTransaction({
+        accountId: 'acc-1',
+        amount: 135,
+        currencyCode: 'CAD',
+        isTransfer: true,
+        linkedTransactionId: 'linked-usd',
+        linkedTransaction: {
+          ...createExistingTransaction({
+            id: 'linked-usd',
+            accountId: 'acc-3',
+            amount: -100,
+            currencyCode: 'USD',
+            isTransfer: true,
+            linkedTransactionId: '123e4567-e89b-12d3-a456-426614174000',
+            payeeId: null,
+            payeeName: null,
+            categoryId: null,
+            category: null,
+          }),
+          account: { id: 'acc-3', name: 'USD Account' },
+        },
+        payeeId: null,
+        payeeName: null,
+        categoryId: null,
+        category: null,
+        ...overrides,
+      });
+    }
+
+    it('loads and re-sends the source amount on an unedited save', async () => {
+      const incoming = createIncomingCadLeg();
+      await act(async () => {
+        render(
+          <TransactionForm transaction={incoming} onSuccess={mockOnSuccess} onCancel={mockOnCancel} />,
+        );
+      });
+      await waitFor(() => expect(screen.getByLabelText('Transfer Amount (USD)')).toBeInTheDocument());
+      expect((screen.getByLabelText('Transfer Amount (USD)') as HTMLInputElement).value).toBe('100.00');
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Update Transfer/i }));
+      });
+
+      await waitFor(() => expect(mockUpdateTransfer).toHaveBeenCalledTimes(1));
+      expect(mockUpdateTransfer.mock.calls[0][1]).toEqual(
+        expect.objectContaining({ fromAccountId: 'acc-3', toAccountId: 'acc-1', amount: 100, toAmount: 135 }),
+      );
+    });
+
+    it('duplicates the transfer with the source amount', async () => {
+      const incoming = createIncomingCadLeg();
+      await act(async () => {
+        render(
+          <TransactionForm duplicateFrom={incoming} onSuccess={mockOnSuccess} onCancel={mockOnCancel} />,
+        );
+      });
+      await waitFor(() => expect(screen.getByLabelText('Transfer Amount (USD)')).toBeInTheDocument());
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Create Transfer/i }));
+      });
+
+      await waitFor(() => expect(mockCreateTransfer).toHaveBeenCalledTimes(1));
+      expect(mockCreateTransfer.mock.calls[0][0]).toEqual(
+        expect.objectContaining({ fromAccountId: 'acc-3', toAccountId: 'acc-1', amount: 100, toAmount: 135 }),
+      );
+    });
+
+    it('saves a reconciled receiving leg unedited without the reconciliation warning', async () => {
+      const incoming = createIncomingCadLeg({ status: TransactionStatus.RECONCILED, isReconciled: true });
+      await act(async () => {
+        render(
+          <TransactionForm transaction={incoming} onSuccess={mockOnSuccess} onCancel={mockOnCancel} />,
+        );
+      });
+      await waitFor(() => expect(screen.getByLabelText('Transfer Amount (USD)')).toBeInTheDocument());
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Update Transfer/i }));
+      });
+
+      await waitFor(() => expect(mockUpdateTransfer).toHaveBeenCalledTimes(1));
+      expect(screen.queryByText('Edit reconciled transaction?')).not.toBeInTheDocument();
+      expect(mockUpdateTransfer.mock.calls[0][1]).toEqual(expect.objectContaining({ amount: 100 }));
+    });
+
+    it('asks before saving a reconciled receiving leg whose source amount was edited', async () => {
+      const incoming = createIncomingCadLeg({ status: TransactionStatus.RECONCILED, isReconciled: true });
+      await act(async () => {
+        render(
+          <TransactionForm transaction={incoming} onSuccess={mockOnSuccess} onCancel={mockOnCancel} />,
+        );
+      });
+      await waitFor(() => expect(screen.getByLabelText('Transfer Amount (USD)')).toBeInTheDocument());
+
+      // 135 is the received figure; as a SOURCE amount it is an edit of 100.
+      const source = screen.getByLabelText('Transfer Amount (USD)');
+      fireEvent.focus(source);
+      fireEvent.change(source, { target: { value: '135.00' } });
+      fireEvent.blur(source);
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Update Transfer/i }));
+      });
+
+      await waitFor(() => expect(screen.getByText('Edit reconciled transaction?')).toBeInTheDocument());
+      expect(mockUpdateTransfer).not.toHaveBeenCalled();
+    });
+  });
+
+  // =========================================================================
+  // Four-decimal amounts (A26-M37): the server stores decimal(20,4) and writes
+  // sub-cent figures itself (FX conversions, a transfer's implied destination).
+  // The form loads them as stored, so an unedited save re-sends them, and its
+  // split check compares at the server's precision.
+  // =========================================================================
+  describe('four-decimal amounts round-trip', () => {
+    it('re-sends a four-decimal amount after a description-only edit', async () => {
+      const tx = createExistingTransaction({ amount: -3.3333 });
+      await act(async () => {
+        render(<TransactionForm transaction={tx} onSuccess={mockOnSuccess} onCancel={mockOnCancel} />);
+      });
+      await waitFor(() => expect(screen.getByLabelText('Amount')).toBeInTheDocument());
+
+      // Tab through the amount (the field shows -3.33), then edit the note.
+      const amount = screen.getByLabelText('Amount');
+      fireEvent.focus(amount);
+      fireEvent.blur(amount);
+      fireEvent.change(screen.getByLabelText('Reference Number'), { target: { value: 'REF-EDITED' } });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Update Transaction/i }));
+      });
+
+      await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
+      expect(mockUpdate.mock.calls[0][1]).toEqual(expect.objectContaining({ amount: -3.3333 }));
+    });
+
+    it('saves a four-decimal split parent unedited', async () => {
+      const tx = createExistingTransaction({
+        amount: -12.3457,
+        isSplit: true,
+        categoryId: null,
+        category: null,
+        splits: [
+          { id: 'sp-1', transactionId: '123e4567-e89b-12d3-a456-426614174000', categoryId: 'cat-1', category: null, transferAccountId: null, transferAccount: null, linkedTransactionId: null, amount: -6.1728, memo: '', createdAt: '2024-01-15T00:00:00Z' },
+          { id: 'sp-2', transactionId: '123e4567-e89b-12d3-a456-426614174000', categoryId: 'cat-2', category: null, transferAccountId: null, transferAccount: null, linkedTransactionId: null, amount: -6.1729, memo: '', createdAt: '2024-01-15T00:00:00Z' },
+        ],
+      });
+      await act(async () => {
+        render(<TransactionForm transaction={tx} onSuccess={mockOnSuccess} onCancel={mockOnCancel} />);
+      });
+      await waitFor(() => expect(screen.getByTestId('split-editor')).toBeInTheDocument());
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Update Transaction/i }));
+      });
+
+      await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
+      expect(toast.error).not.toHaveBeenCalled();
+      const payload = mockUpdate.mock.calls[0][1];
+      expect(payload.amount).toBe(-12.3457);
+      expect(payload.splits.map((s: { amount: number }) => s.amount)).toEqual([-6.1728, -6.1729]);
+    });
+
+    it('refuses a split set that misses its parent by less than a cent', async () => {
+      const tx = createExistingTransaction({
+        amount: -12.3457,
+        isSplit: true,
+        categoryId: null,
+        category: null,
+        splits: [
+          { id: 'sp-1', transactionId: '123e4567-e89b-12d3-a456-426614174000', categoryId: 'cat-1', category: null, transferAccountId: null, transferAccount: null, linkedTransactionId: null, amount: -6.17, memo: '', createdAt: '2024-01-15T00:00:00Z' },
+          { id: 'sp-2', transactionId: '123e4567-e89b-12d3-a456-426614174000', categoryId: 'cat-2', category: null, transferAccountId: null, transferAccount: null, linkedTransactionId: null, amount: -6.18, memo: '', createdAt: '2024-01-15T00:00:00Z' },
+        ],
+      });
+      await act(async () => {
+        render(<TransactionForm transaction={tx} onSuccess={mockOnSuccess} onCancel={mockOnCancel} />);
+      });
+      await waitFor(() => expect(screen.getByTestId('split-editor')).toBeInTheDocument());
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Update Transaction/i }));
+      });
+
+      // -12.35 against -12.3457: the server refuses it, so the form says so
+      // first instead of sending a request it knows will fail.
+      await waitFor(() => expect(toast.error).toHaveBeenCalled());
+      expect(mockUpdate).not.toHaveBeenCalled();
+    });
+
+    describe('in a coin wallet at eight places', () => {
+      const walletTx = (overrides: Record<string, unknown>) =>
+        createExistingTransaction({ currencyCode: 'BTC', ...overrides });
+      const splitLine = (id: string, categoryId: string, amount: number) => ({
+        id, transactionId: '123e4567-e89b-12d3-a456-426614174000', categoryId, category: null,
+        transferAccountId: null, transferAccount: null, linkedTransactionId: null, amount, memo: '',
+        createdAt: '2024-01-15T00:00:00Z',
+      });
+
+      beforeEach(() => {
+        registerCurrencyDecimals([{ code: 'BTC', decimalPlaces: 8, symbol: '₿' }]);
+        mockAccountsGetAll.mockResolvedValue([
+          { ...mockAccounts[0], name: 'Wallet', accountType: 'CRYPTO', currencyCode: 'BTC' },
+          ...mockAccounts.slice(1),
+        ]);
+      });
+
+      afterEach(async () => {
+        await act(async () => clearCurrencyDecimals());
+      });
+
+      const submit = async (tx: unknown) => {
+        await act(async () => {
+          render(<TransactionForm transaction={tx as never} onSuccess={mockOnSuccess} onCancel={mockOnCancel} />);
+        });
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: /Update Transaction/i }));
+        });
+      };
+
+      it('re-sends a 2,500-satoshi amount unedited', async () => {
+        await submit(walletTx({ amount: -0.000025 }));
+        await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
+        expect(mockUpdate.mock.calls[0][1]).toEqual(expect.objectContaining({ amount: -0.000025 }));
+      });
+
+      it('saves -0.00502500 split into -0.00500000 and a -0.00002500 fee', async () => {
+        await submit(walletTx({
+          amount: -0.005025,
+          isSplit: true,
+          categoryId: null,
+          category: null,
+          splits: [splitLine('sp-1', 'cat-1', -0.005), splitLine('sp-2', 'cat-2', -0.000025)],
+        }));
+        await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
+        expect(toast.error).not.toHaveBeenCalled();
+        const payload = mockUpdate.mock.calls[0][1];
+        expect(payload.amount).toBe(-0.005025);
+        expect(payload.splits.map((s: { amount: number }) => s.amount)).toEqual([-0.005, -0.000025]);
+      });
+
+      it('refuses a split set that misses its parent by one satoshi', async () => {
+        await submit(walletTx({
+          amount: -0.005025,
+          isSplit: true,
+          categoryId: null,
+          category: null,
+          splits: [splitLine('sp-1', 'cat-1', -0.005), splitLine('sp-2', 'cat-2', -0.00002499)],
+        }));
+        // At four places both read -0.0050 and this was sent; the server refuses it.
+        await waitFor(() => expect(toast.error).toHaveBeenCalled());
+        expect(mockUpdate).not.toHaveBeenCalled();
+      });
+    });
+
+    it('re-sends a four-decimal transfer amount unedited', async () => {
+      const transferTx = createTransferTransaction() as any;
+      const fourDp = {
+        ...transferTx,
+        amount: -100.1234,
+        linkedTransaction: { ...transferTx.linkedTransaction, amount: 100.1234 },
+      };
+      await act(async () => {
+        render(<TransactionForm transaction={fourDp} onSuccess={mockOnSuccess} onCancel={mockOnCancel} />);
+      });
+      await waitFor(() => expect(screen.getByText('From Account')).toBeInTheDocument());
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Update Transfer/i }));
+      });
+
+      await waitFor(() => expect(mockUpdateTransfer).toHaveBeenCalledTimes(1));
+      expect(mockUpdateTransfer.mock.calls[0][1]).toEqual(expect.objectContaining({ amount: 100.1234 }));
+    });
+
+    it('saves a reconciled four-decimal row unedited without the reconciliation warning', async () => {
+      const tx = createExistingTransaction({
+        amount: -3.3333,
+        status: TransactionStatus.RECONCILED,
+        isReconciled: true,
+      });
+      await act(async () => {
+        render(<TransactionForm transaction={tx} onSuccess={mockOnSuccess} onCancel={mockOnCancel} />);
+      });
+      await waitFor(() => expect(screen.getByLabelText('Amount')).toBeInTheDocument());
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Update Transaction/i }));
+      });
+
+      await waitFor(() => expect(mockUpdate).toHaveBeenCalledTimes(1));
+      expect(screen.queryByText('Edit reconciled transaction?')).not.toBeInTheDocument();
+      expect(mockUpdate.mock.calls[0][1]).toEqual(expect.objectContaining({ amount: -3.3333 }));
+    });
+  });
+
+  describe('a web address in the description field', () => {
+    /**
+     * The register makes the address in a saved description clickable, but the
+     * form that OWNS the text could not: a `<textarea>` renders no elements, so
+     * reaching a link in a draft meant saving, finding the row, and clicking it
+     * there. `NoteLinks` offers the addresses under the field instead.
+     */
+    async function renderAndType(description: string) {
+      render(<TransactionForm onSuccess={mockOnSuccess} onCancel={mockOnCancel} />);
+      await waitFor(() => {
+        expect(screen.getByText('Account')).toBeInTheDocument();
+      });
+      const textarea = document.querySelector('textarea') as HTMLTextAreaElement;
+      fireEvent.change(textarea, { target: { value: description } });
+      return textarea;
+    }
+
+    it('offers the address as it is typed, before anything is saved', async () => {
+      await renderAndType('Concert tickets https://tix.test/a8Fq2');
+
+      const link = await screen.findByRole('link', { name: 'https://tix.test/a8Fq2' });
+      expect(link.getAttribute('href')).toBe('https://tix.test/a8Fq2');
+      expect(link.getAttribute('target')).toBe('_blank');
+      expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+      expect(mockCreate).not.toHaveBeenCalled();
+    });
+
+    it('leaves the typed text in the field exactly as entered', async () => {
+      // The links are an addition beside the field, never an edit to it: the
+      // draft is the user's text and nothing here may rewrite it.
+      const typed = 'Concert tickets https://tix.test/a8Fq2 for two';
+      const textarea = await renderAndType(typed);
+      await screen.findByRole('link');
+      expect(textarea.value).toBe(typed);
+    });
+
+    it('offers nothing while the description has no address in it', async () => {
+      await renderAndType('Coffee with Sam');
+      await waitFor(() => {
+        expect((document.querySelector('textarea') as HTMLTextAreaElement).value).toBe(
+          'Coffee with Sam',
+        );
+      });
+      expect(screen.queryByRole('link', { name: /https?:/ })).toBeNull();
+    });
+
+    it('tracks the field, so correcting the address corrects the link', async () => {
+      const textarea = await renderAndType('https://tix.test/wrong');
+      expect(await screen.findByRole('link', { name: 'https://tix.test/wrong' })).toBeTruthy();
+
+      fireEvent.change(textarea, { target: { value: 'https://tix.test/right' } });
+      expect(await screen.findByRole('link', { name: 'https://tix.test/right' })).toBeTruthy();
+      expect(screen.queryByRole('link', { name: 'https://tix.test/wrong' })).toBeNull();
+    });
+
+    it('offers a link on an existing transaction being edited', async () => {
+      render(
+        <TransactionForm
+          transaction={createExistingTransaction({ description: 'Tickets https://tix.test/a8Fq2' })}
+          onSuccess={mockOnSuccess}
+          onCancel={mockOnCancel}
+        />,
+      );
+      const link = await screen.findByRole('link', { name: 'https://tix.test/a8Fq2' });
+      expect(link.getAttribute('href')).toBe('https://tix.test/a8Fq2');
+    });
+
+    it('draws no link for a scheme that would run something on click', async () => {
+      await renderAndType('javascript:alert(1)');
+      await waitFor(() => {
+        expect((document.querySelector('textarea') as HTMLTextAreaElement).value).toBe(
+          'javascript:alert(1)',
+        );
+      });
+      expect(screen.queryByRole('link', { name: /javascript:/ })).toBeNull();
+    });
+  });
 
   describe('form initial empty state', () => {
     it('renders all fields with empty/default values for new transaction', async () => {
@@ -3658,6 +4993,26 @@ describe('TransactionForm', () => {
       fireEvent.click(screen.getByText('Transfer'));
       await waitFor(() => expect(screen.getByText('From Account')).toBeInTheDocument());
     });
+
+    it('restores the negative sign when switching back from transfer to transaction', async () => {
+      render(<TransactionForm onSuccess={mockOnSuccess} onCancel={mockOnCancel} defaultAccountId="acc-1" />);
+
+      const amountInput = await screen.findByLabelText('Amount') as HTMLInputElement;
+      fireEvent.change(amountInput, { target: { value: '-50' } });
+      fireEvent.blur(amountInput);
+      await waitFor(() => expect(Number(amountInput.value)).toBe(-50));
+
+      // Switch to Transfer: amount is forced positive for display.
+      fireEvent.click(screen.getByText('Transfer'));
+      const transferAmountInput = await screen.findByLabelText('Transfer Amount') as HTMLInputElement;
+      await waitFor(() => expect(Number(transferAmountInput.value)).toBe(50));
+
+      // Switch back to Transaction: the original negative sign must come back,
+      // not the positive value Transfer displayed.
+      fireEvent.click(screen.getByText('Transaction'));
+      const amountInputAgain = await screen.findByLabelText('Amount') as HTMLInputElement;
+      await waitFor(() => expect(Number(amountInputAgain.value)).toBe(-50));
+    });
   });
 
   // =========================================================================
@@ -3673,6 +5028,7 @@ describe('TransactionForm', () => {
       fireEvent.change(amountInput, { target: { value: '50' } });
 
       // Select expense category "Groceries" (cat-1, isIncome=false) via mock combobox
+      await categoryOffered('Groceries');
       fireEvent.change(screen.getByTestId('combobox-input-Category'), { target: { value: 'Groceries' } });
 
       fireEvent.click(screen.getByRole('button', { name: /Create Transaction/i }));
@@ -3690,6 +5046,7 @@ describe('TransactionForm', () => {
       fireEvent.change(amountInput, { target: { value: '-50' } });
 
       // Select income category "Salary" (cat-2, isIncome=true)
+      await categoryOffered('Salary');
       fireEvent.change(screen.getByTestId('combobox-input-Category'), { target: { value: 'Salary' } });
 
       fireEvent.click(screen.getByRole('button', { name: /Create Transaction/i }));
@@ -3699,11 +5056,52 @@ describe('TransactionForm', () => {
       expect(payload.amount).toBe(50);
     });
 
+    it('keeps the typed sign when the chosen category has automatic sign off', async () => {
+      // Groceries (expense) with automatic sign turned off: selecting it must
+      // not negate the amount the way an auto-sign expense category does.
+      mockCategoriesGetAll.mockResolvedValue(
+        mockCategories.map((c) => (c.id === 'cat-1' ? { ...c, autoSign: false, effectiveAutoSign: false } : c)),
+      );
+      render(<TransactionForm onSuccess={mockOnSuccess} onCancel={mockOnCancel} defaultAccountId="acc-1" />);
+      await waitFor(() => expect(screen.getByTestId('combobox-Category')).toBeInTheDocument());
+      await waitFor(() => expect(mockCategoriesGetAll).toHaveBeenCalled());
+
+      const amountInput = screen.getByPlaceholderText('0.00');
+      fireEvent.change(amountInput, { target: { value: '50' } });
+
+      await categoryOffered('Groceries');
+      fireEvent.change(screen.getByTestId('combobox-input-Category'), { target: { value: 'Groceries' } });
+
+      fireEvent.click(screen.getByRole('button', { name: /Create Transaction/i }));
+      await waitFor(() => expect(mockCreate).toHaveBeenCalled());
+      const payload = mockCreate.mock.calls[0][0];
+      expect(payload.categoryId).toBe('cat-1');
+      expect(payload.amount).toBe(50);
+    });
+
+    it('keeps a newly typed amount positive under an expense category with automatic sign off', async () => {
+      mockCategoriesGetAll.mockResolvedValue(
+        mockCategories.map((c) => (c.id === 'cat-1' ? { ...c, autoSign: false, effectiveAutoSign: false } : c)),
+      );
+      render(<TransactionForm onSuccess={mockOnSuccess} onCancel={mockOnCancel} defaultAccountId="acc-1" />);
+      await waitFor(() => expect(screen.getByTestId('combobox-Category')).toBeInTheDocument());
+      await waitFor(() => expect(mockCategoriesGetAll).toHaveBeenCalled());
+
+      await categoryOffered('Groceries');
+      fireEvent.change(screen.getByTestId('combobox-input-Category'), { target: { value: 'Groceries' } });
+      fireEvent.change(screen.getByPlaceholderText('0.00'), { target: { value: '75' } });
+
+      fireEvent.click(screen.getByRole('button', { name: /Create Transaction/i }));
+      await waitFor(() => expect(mockCreate).toHaveBeenCalled());
+      expect(mockCreate.mock.calls[0][0].amount).toBe(75);
+    });
+
     it('clears categoryId when a custom (non-matching) category value is typed', async () => {
       render(<TransactionForm onSuccess={mockOnSuccess} onCancel={mockOnCancel} defaultAccountId="acc-1" />);
       await waitFor(() => expect(screen.getByTestId('combobox-Category')).toBeInTheDocument());
 
       // First select a category, then type a custom value to clear it
+      await categoryOffered('Groceries');
       fireEvent.change(screen.getByTestId('combobox-input-Category'), { target: { value: 'Groceries' } });
       fireEvent.change(screen.getByTestId('combobox-input-Category'), { target: { value: 'Totally Custom Thing' } });
 
@@ -3755,6 +5153,7 @@ describe('TransactionForm', () => {
       await waitFor(() => expect(screen.getByTestId('combobox-Category')).toBeInTheDocument());
 
       // Expense category selected => amounts normally become negative
+      await categoryOffered('Groceries');
       fireEvent.change(screen.getByTestId('combobox-input-Category'), { target: { value: 'Groceries' } });
 
       const amountInput = screen.getByPlaceholderText('0.00');
@@ -3932,6 +5331,48 @@ describe('TransactionForm', () => {
     });
   });
 
+  describe('tag picker order', () => {
+    const tagFixture = (id: string, name: string) =>
+      ({ id, name, userId: 'user-1', color: null, icon: null, createdAt: '', updatedAt: '' });
+
+    afterEach(() => {
+      mockTagsGetAll.mockResolvedValue([]);
+      mockTagsGetUsage.mockResolvedValue({});
+    });
+
+    const openPicker = async () => {
+      render(<TransactionForm onSuccess={mockOnSuccess} onCancel={mockOnCancel} />);
+      await waitFor(() => expect(mockTagsGetUsage).toHaveBeenCalled());
+      fireEvent.click(screen.getByText('Select tags...'));
+      await waitFor(() => expect(screen.getByText('Holiday 2026')).toBeInTheDocument());
+    };
+
+    const precedes = (first: string, second: string) =>
+      Boolean(
+        screen.getByText(first).compareDocumentPosition(screen.getByText(second)) &
+          Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+
+    it('lists a recently used tag above an alphabetically earlier one', async () => {
+      mockTagsGetAll.mockResolvedValue([tagFixture('t-art', 'Art'), tagFixture('t-h26', 'Holiday 2026')]);
+      mockTagsGetUsage.mockResolvedValue({ 't-h26': { lastUsed: '2026-10-01', count: 2 } });
+
+      await openPicker();
+
+      expect(precedes('Holiday 2026', 'Art')).toBe(true);
+    });
+
+    it('stays A-Z when the usage lookup fails', async () => {
+      mockTagsGetAll.mockResolvedValue([tagFixture('t-art', 'Art'), tagFixture('t-h26', 'Holiday 2026')]);
+      mockTagsGetUsage.mockRejectedValue(new Error('network'));
+
+      await openPicker();
+
+      expect(precedes('Art', 'Holiday 2026')).toBe(true);
+      expect(toast.error).not.toHaveBeenCalled();
+    });
+  });
+
   describe('tag creation modal (coverage)', () => {
     it('opens the tag creation modal, creates a tag, and selects it', async () => {
       mockTagCreate.mockResolvedValueOnce({ id: 'tag-new', name: 'Vacation' });
@@ -4009,6 +5450,80 @@ describe('TransactionForm', () => {
       expect(payload.toAmount).toBeUndefined();
     });
 
+    it('fills the received amount of a cross-currency transfer from the day\'s rate', async () => {
+      mockGetRateForDate.mockResolvedValue(0.73);
+      render(<TransactionForm onSuccess={mockOnSuccess} onCancel={mockOnCancel} defaultAccountId="acc-1" />);
+      await waitFor(() => expect(screen.getByText('Transfer')).toBeInTheDocument());
+      fireEvent.click(screen.getByText('Transfer'));
+      await waitFor(() => expect(screen.getByText('To Account')).toBeInTheDocument());
+
+      // CAD acc-1 -> USD acc-3.
+      const selects = document.querySelectorAll('select');
+      const toAccountSelect = Array.from(selects).find((s) =>
+        Array.from(s.options).some((o) => o.value === 'acc-3') && s.name !== 'accountId',
+      );
+      await act(async () => {
+        if (toAccountSelect) fireEvent.change(toAccountSelect, { target: { value: 'acc-3' } });
+      });
+      await waitFor(() => expect(screen.getByLabelText('Amount Received (USD)')).toBeInTheDocument());
+      await waitFor(() =>
+        expect(mockGetRateForDate).toHaveBeenCalledWith('CAD', 'USD', expect.any(String)),
+      );
+      // Let the rate response land before typing.
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Transfer Amount (CAD)'), { target: { value: '100' } });
+      });
+      await waitFor(() =>
+        expect((screen.getByLabelText('Amount Received (USD)') as HTMLInputElement).value).toBe('73.00'),
+      );
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Create Transfer/i }));
+      });
+      await waitFor(() => expect(mockCreateTransfer).toHaveBeenCalled());
+      expect(mockCreateTransfer.mock.calls[0][0]).toEqual(
+        expect.objectContaining({ fromAccountId: 'acc-1', toAccountId: 'acc-3', amount: 100, toAmount: 73 }),
+      );
+    });
+
+    it('takes the sending account\'s FX fee out of the filled received amount', async () => {
+      mockAccountsGetAll.mockResolvedValue([
+        { ...mockAccounts[0], fxFeePercent: 2.5 },
+        ...mockAccounts.slice(1),
+      ]);
+      mockGetRateForDate.mockResolvedValue(0.73);
+      render(<TransactionForm onSuccess={mockOnSuccess} onCancel={mockOnCancel} defaultAccountId="acc-1" />);
+      await waitFor(() => expect(screen.getByText('Transfer')).toBeInTheDocument());
+      fireEvent.click(screen.getByText('Transfer'));
+      await waitFor(() => expect(screen.getByText('To Account')).toBeInTheDocument());
+
+      const selects = document.querySelectorAll('select');
+      const toAccountSelect = Array.from(selects).find((s) =>
+        Array.from(s.options).some((o) => o.value === 'acc-3') && s.name !== 'accountId',
+      );
+      await act(async () => {
+        if (toAccountSelect) fireEvent.change(toAccountSelect, { target: { value: 'acc-3' } });
+      });
+      await waitFor(() =>
+        expect(mockGetRateForDate).toHaveBeenCalledWith('CAD', 'USD', expect.any(String)),
+      );
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      await act(async () => {
+        fireEvent.change(screen.getByLabelText('Transfer Amount (CAD)'), { target: { value: '100' } });
+      });
+      // 73.00 at the market rate, less the 2.5% fee of 1.83.
+      await waitFor(() =>
+        expect((screen.getByLabelText('Amount Received (USD)') as HTMLInputElement).value).toBe('71.17'),
+      );
+    });
+
     it('keeps the amount positive when an expense category is chosen on a transfer', async () => {
       // Regression for the transfer category sign bug: selecting an expense
       // category in transfer mode must NOT flip the amount negative, or the
@@ -4037,7 +5552,7 @@ describe('TransactionForm', () => {
       // Choose the expense category "Groceries" (cat-1, isIncome=false) on the
       // optional transfer category field.
       await act(async () => {
-        fireEvent.change(screen.getByTestId('combobox-input-Category (Optional)'), {
+        fireEvent.change(screen.getByTestId('combobox-input-Category (optional)'), {
           target: { value: 'Groceries' },
         });
       });
@@ -4073,8 +5588,8 @@ describe('TransactionForm', () => {
         if (toAccountSelect) fireEvent.change(toAccountSelect, { target: { value: 'acc-3' } });
       });
 
-      // Cross-currency reveals the "Payee (Optional)" combobox and a second amount input
-      await waitFor(() => expect(screen.getByTestId('combobox-Payee (Optional)')).toBeInTheDocument());
+      // Cross-currency reveals the "Payee (optional)" combobox and a second amount input
+      await waitFor(() => expect(screen.getByTestId('combobox-Payee (optional)')).toBeInTheDocument());
 
       const refreshedInputs = screen.getAllByPlaceholderText('0.00');
       expect(refreshedInputs.length).toBeGreaterThan(1);
@@ -4084,7 +5599,7 @@ describe('TransactionForm', () => {
 
       // Choose a transfer payee via the mocked combobox
       await act(async () => {
-        fireEvent.change(screen.getByTestId('combobox-input-Payee (Optional)'), { target: { value: 'Grocery Store' } });
+        fireEvent.change(screen.getByTestId('combobox-input-Payee (optional)'), { target: { value: 'Grocery Store' } });
       });
 
       await act(async () => {
@@ -4276,6 +5791,48 @@ describe('TransactionForm', () => {
       expect(screen.queryByTestId('split-editor')).not.toBeInTheDocument();
     });
 
+    it('backs the fee out of a typed total at a coin account\'s places, not cents', async () => {
+      // A BTC wallet with a 2.5% fee. Typing a total of 0.0052 BTC backs the
+      // fee out to a 0.00533333 BTC base (0.0052 / 0.975). At cents the base
+      // read 0.01, and the derived rate nearly doubled.
+      registerCurrencyDecimals([{ code: 'BTC', decimalPlaces: 8, symbol: '₿' }]);
+      try {
+        const wallet = {
+          ...mockAccounts[0],
+          id: 'acc-btc',
+          name: 'Wallet',
+          accountType: 'CRYPTO',
+          currencyCode: 'BTC',
+          fxFeePercent: 2.5,
+        };
+        mockAccountsGetAll.mockResolvedValue([wallet, ...mockAccounts]);
+        mockGetRateForDate.mockResolvedValue(0.0001);
+        render(
+          <TransactionForm onSuccess={mockOnSuccess} onCancel={mockOnCancel} defaultAccountId="acc-btc" />,
+        );
+        await waitFor(() => expect(mockAccountsGetAll).toHaveBeenCalled());
+        await pickEuro();
+        await waitFor(() => expect(mockGetRateForDate).toHaveBeenCalledWith('EUR', 'BTC', expect.any(String)));
+
+        const amountInput = screen.getAllByPlaceholderText('0.00')[0];
+        await act(async () => {
+          fireEvent.change(amountInput, { target: { value: '50' } });
+          fireEvent.blur(amountInput);
+        });
+        await waitFor(() => expect(screen.getByText(/1 EUR = 0\.000100 BTC/)).toBeInTheDocument());
+
+        const convertedTotal = screen.getByLabelText('Total in BTC');
+        await act(async () => {
+          fireEvent.change(convertedTotal, { target: { value: '0.0052' } });
+          fireEvent.blur(convertedTotal);
+        });
+        // 0.00533333 / 50 = 0.000107; a cents base gave 0.01 / 50 = 0.0002.
+        await waitFor(() => expect(screen.getByText(/1 EUR = 0\.000107 BTC/)).toBeInTheDocument());
+      } finally {
+        await act(async () => clearCurrencyDecimals());
+      }
+    });
+
     it('signs the foreign amount by the selected expense category, like account-currency entry', async () => {
       render(
         <TransactionForm
@@ -4287,6 +5844,7 @@ describe('TransactionForm', () => {
       await waitFor(() => expect(screen.getByTestId('combobox-Category')).toBeInTheDocument());
 
       // Choose the expense category "Groceries" (cat-1, isIncome=false) first.
+      await categoryOffered('Groceries');
       fireEvent.change(screen.getByTestId('combobox-input-Category'), { target: { value: 'Groceries' } });
 
       // Pick EUR and type a positive foreign amount.
@@ -4317,6 +5875,39 @@ describe('TransactionForm', () => {
       expect(payload.amount).toBe(-150);
     });
 
+    it('converts a foreign amount at the stored four decimals, not cents', async () => {
+      render(
+        <TransactionForm
+          onSuccess={mockOnSuccess}
+          onCancel={mockOnCancel}
+          defaultAccountId="acc-1"
+        />,
+      );
+      await waitFor(() => expect(screen.getByTestId('combobox-Category')).toBeInTheDocument());
+      await categoryOffered('Groceries');
+      fireEvent.change(screen.getByTestId('combobox-input-Category'), { target: { value: 'Groceries' } });
+      await act(async () => {
+        fireEvent.click(screen.getByLabelText('Change entry currency'));
+      });
+      await waitFor(() => expect(screen.getByText(/Euro \(EUR\)/)).toBeInTheDocument());
+      await act(async () => {
+        fireEvent.click(screen.getByText(/Euro \(EUR\)/));
+      });
+      await waitFor(() => expect(mockGetRateForDate).toHaveBeenCalled());
+
+      const amountInput = screen.getAllByPlaceholderText('0.00')[0];
+      await act(async () => {
+        fireEvent.change(amountInput, { target: { value: '33.33' } });
+        fireEvent.blur(amountInput);
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Create Transaction/i }));
+      });
+      await waitFor(() => expect(mockCreate).toHaveBeenCalled());
+      // 33.33 EUR x 1.5 = 49.995, which the server stores; cents would send 50.
+      expect(mockCreate.mock.calls[0][0].amount).toBe(-49.995);
+    });
+
     it('re-signs the foreign amount when an expense category is chosen after entry', async () => {
       render(
         <TransactionForm
@@ -4344,6 +5935,7 @@ describe('TransactionForm', () => {
       });
 
       // Now choose the expense category -> the foreign amount flips negative.
+      await categoryOffered('Groceries');
       await act(async () => {
         fireEvent.change(screen.getByTestId('combobox-input-Category'), { target: { value: 'Groceries' } });
       });
@@ -4629,5 +6221,92 @@ describe('TransactionForm', () => {
       expect(onCreateAndNew).toHaveBeenCalledTimes(1);
       expect(mockOnSuccess).not.toHaveBeenCalled();
     });
+  });
+});
+
+// =========================================================================
+// Web Share Target: the review screen opens this form with the shared files
+// already staged. They travel the same path as files picked in this window --
+// held client-side while the transaction does not exist, uploaded once it does.
+// =========================================================================
+describe('TransactionForm initialStagedFiles', () => {
+  const mockOnSuccess = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockAccountsGetAll.mockResolvedValue(mockAccounts);
+    mockGetJointReferenceData.mockResolvedValue({
+      categories: [],
+      payees: [],
+      payeesCanCreate: false,
+      categoriesCanCreate: false,
+    });
+    mockPayeesGetAll.mockResolvedValue(mockPayees);
+    mockCategoriesGetAll.mockResolvedValue(mockCategories);
+    mockGetRecent.mockResolvedValue([]);
+    mockGetCurrencies.mockResolvedValue([
+      { code: 'CAD', name: 'Canadian Dollar', symbol: 'CA$', decimalPlaces: 2, isActive: true },
+    ]);
+    mockCreate.mockResolvedValue({ id: 'tx-created' });
+  });
+
+  it('seeds the staged attachment list from the shared files', async () => {
+    render(
+      <TransactionForm
+        onSuccess={mockOnSuccess}
+        defaultAccountId="acc-1"
+        initialStagedFiles={[
+          new File(['a'], 'receipt.png', { type: 'image/png' }),
+          new File(['b'], 'invoice.pdf', { type: 'application/pdf' }),
+        ]}
+      />
+    );
+
+    expect(await screen.findByText('receipt.png')).toBeInTheDocument();
+    expect(screen.getByText('invoice.pdf')).toBeInTheDocument();
+    // Staged, not uploaded: there is no transaction to attach them to yet.
+    expect(mockAttachmentUpload).not.toHaveBeenCalled();
+  });
+
+  it('uploads each shared file to the transaction once it has been created', async () => {
+    render(
+      <TransactionForm
+        onSuccess={mockOnSuccess}
+        defaultAccountId="acc-1"
+        initialStagedFiles={[
+          new File(['a'], 'receipt.png', { type: 'image/png' }),
+          new File(['b'], 'invoice.pdf', { type: 'application/pdf' }),
+        ]}
+      />
+    );
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Create Transaction/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Create Transaction/i }));
+
+    await waitFor(() => expect(mockCreate).toHaveBeenCalled());
+    await waitFor(() => expect(mockAttachmentUpload).toHaveBeenCalledTimes(2));
+
+    // Addressed to the created transaction, with no scan original beside them:
+    // a shared file is one file, not half of a scan pair.
+    expect(mockAttachmentUpload.mock.calls[0][0]).toEqual({ transactionId: 'tx-created' });
+    expect(mockAttachmentUpload.mock.calls[0][1].name).toBe('receipt.png');
+    expect(mockAttachmentUpload.mock.calls[0][2]).toBeUndefined();
+    expect(mockAttachmentUpload.mock.calls[1][1].name).toBe('invoice.pdf');
+    expect(mockOnSuccess).toHaveBeenCalled();
+  });
+
+  it('stages nothing when no shared files are handed over', async () => {
+    render(<TransactionForm onSuccess={mockOnSuccess} defaultAccountId="acc-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Create Transaction/i })).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByRole('button', { name: /Create Transaction/i }));
+
+    await waitFor(() => expect(mockCreate).toHaveBeenCalled());
+    expect(mockAttachmentUpload).not.toHaveBeenCalled();
   });
 });

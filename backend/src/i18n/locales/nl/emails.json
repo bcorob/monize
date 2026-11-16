@@ -20,15 +20,17 @@
     "typeExpense": "Uitgaven",
     "typeUnknown": "Richting onbekend",
     "amountUnavailable": "Bedrag niet beschikbaar",
+    "estimated": "Geschat",
+    "estimateUnknown": "Schatting onbekend: voer het bedrag in bij het boeken",
     "button": "Facturen &amp; Stortingen bekijken"
   },
   "mortgageReminder": {
-    "subject": "Monize: 1 aankomende hypotheekverlenging",
-    "subjectPlural": "Monize: {{ count }} aankomende hypotheekverlengingen",
-    "heading": "Herinnering hypotheekverlenging",
+    "subject": "Monize: 1 rentevaste periode loopt binnenkort af",
+    "subjectPlural": "Monize: {{ count }} rentevaste periodes lopen binnenkort af",
+    "heading": "Herinnering einde rentevaste periode",
     "greeting": "Hoi {{ name }},",
-    "introOne": "Je hebt 1 hypotheek met een aankomende termijnverlenging. Neem contact op met je geldverstrekker om verlengingsopties te bespreken voordat de termijn afloopt:",
-    "introMany": "Je hebt {{ count }} hypotheken met een aankomende termijnverlenging. Neem contact op met je geldverstrekker om verlengingsopties te bespreken voordat de termijn afloopt:",
+    "introOne": "Je hebt 1 hypotheek waarvan de huidige rentevaste periode binnenkort afloopt. Neem voor het einde contact op met je geldverstrekker om je volgende rente of verlenging te regelen:",
+    "introMany": "Je hebt {{ count }} hypotheken waarvan de huidige rentevaste periode binnenkort afloopt. Neem voor elk einde contact op met je geldverstrekker om de volgende rente of verlenging te regelen:",
     "colMortgage": "Hypotheek",
     "colTermEndDate": "Einddatum looptijd",
     "colTimeRemaining": "Resterende tijd",
@@ -117,6 +119,21 @@
     "button": "E-mail bevestigen",
     "disclaimer": "Deze koppeling verloopt over 24 uur. Als je geen Monize-account hebt aangemaakt, kun je deze e-mail veilig negeren."
   },
+  "emailChangeConfirm": {
+    "subject": "Bevestig je nieuwe Monize-e-mailadres",
+    "heading": "Bevestig je nieuwe e-mailadres",
+    "greeting": "Hoi {{ name }},",
+    "intro": "Er is gevraagd om dit adres te gebruiken voor een Monize-account. Je e-mailadres verandert pas wanneer je dit bevestigt door op de knop hieronder te klikken:",
+    "button": "E-mailwijziging bevestigen",
+    "disclaimer": "Deze koppeling verloopt over 24 uur. Als je deze wijziging niet hebt aangevraagd, kun je deze e-mail veilig negeren."
+  },
+  "emailChangeNotice": {
+    "subject": "Wijziging van je Monize-e-mailadres aangevraagd",
+    "heading": "E-mailwijziging aangevraagd",
+    "greeting": "Hoi {{ name }},",
+    "body1": "Er is gevraagd om het e-mailadres van je Monize-account te wijzigen in {{ email }}. De wijziging gaat pas in zodra deze vanaf dat adres is bevestigd.",
+    "body2": "Als je dit verzoek niet hebt gedaan, wijzig dan direct je wachtwoord en controleer de apparaten die bij je account zijn ingelogd."
+  },
   "accountInvite": {
     "subject": "Je Monize-account is klaar",
     "heading": "Je Monize-account is klaar",
@@ -186,5 +203,232 @@
     "greeting": "Hoi {{ name }},",
     "intro": "<strong>{{ provider }}</strong> reageerde weer om {{ restoredAt }}. De storing duurde {{ duration }}.",
     "backfill": "Koersen en indexhistorie die tijdens de storing zijn gemist, worden bij de volgende geplande verversing opgehaald; je hoeft niets te doen."
+  },
+  "systemAlert": {
+    "subject": "Monize: {{ title }}",
+    "heading": "Systeemwaarschuwing",
+    "greeting": "Hoi {{ name }},",
+    "intro": "Een probleem in je Monize-installatie vraagt om de aandacht van een beheerder.",
+    "footer": "Deze waarschuwing wordt ook getoond in de notificatiebel van de app. Ze wordt hoogstens één keer per voorval aangemaakt, ongeacht het aantal serverreplica's dat het opmerkte."
+  },
+  "notificationImmediate": {
+    "subject": "U hebt een nieuwe Monize-melding",
+    "eyebrow": "Monize-melding",
+    "button": "Openen in Monize",
+    "footer": "U ontvangt dit omdat directe e-mail aan staat voor dit meldingstype. Wijzig dit in Instellingen, Meldingen."
+  },
+  "notificationCopy": {
+    "billDue": {
+      "titleOverdue": "{{ payee }} achterstallig",
+      "titleToday": "{{ payee }} vandaag verschuldigd",
+      "titleTomorrow": "{{ payee }} morgen verschuldigd",
+      "titleInDays": "{{ payee }} over {{ days }} dagen verschuldigd",
+      "amountDue": "{{ amount }} te betalen op {{ date }}",
+      "amountUnavailable": "Bedrag niet beschikbaar (geen actuele wisselkoers), te betalen op {{ date }}"
+    },
+    "gemSignal": {
+      "riskTitle": "{{ strategy }} overgeschakeld naar {{ state }}",
+      "riskMessage": "Uw GEM-strategie \"{{ strategy }}\" is gewijzigd van {{ fromState }} naar {{ toState }}. Open om de aanbeveling te bekijken.",
+      "allocationTitle": "{{ strategy }} heeft het doel gewijzigd",
+      "allocationMessage": "Uw GEM-strategie \"{{ strategy }}\" richt zich nu op {{ target }}. Open om de aanbeveling te bekijken.",
+      "riskOn": "risk-on",
+      "riskOff": "risk-off",
+      "roles": {
+        "US_EQUITY": "S&P 500",
+        "EX_US_EQUITY": "Ontwikkelde markten ex-VS",
+        "EM_EQUITY": "Opkomende markten",
+        "SAFE": "Veilige belegging",
+        "RISK_FREE": "Risicovrije maatstaf"
+      },
+      "allocationMessageUnknown": "Je GEM-strategie ‘{{ strategy }}’ heeft het doel gewijzigd. Open deze om de aanbeveling te bekijken."
+    },
+    "portfolioMovement": {
+      "titleUp": "Beleggingen {{ percent }}% hoger",
+      "titleDown": "Beleggingen {{ percent }}% lager",
+      "messageUp": "Uw beleggingen staan van {{ from }} tot {{ to }} {{ percent }}% hoger, exclusief stortingen en opnames. Open om te bekijken.",
+      "messageDown": "Uw beleggingen staan van {{ from }} tot {{ to }} {{ percent }}% lager, exclusief stortingen en opnames. Open om te bekijken."
+    },
+    "balanceThreshold": {
+      "titleLow": "{{ account }} ligt onder uw drempel",
+      "titleHigh": "{{ account }} ligt boven uw drempel",
+      "messageLow": "{{ account }} is gedaald naar {{ balance }}, onder uw drempel van {{ threshold }}.",
+      "messageHigh": "{{ account }} is gestegen naar {{ balance }}, boven uw drempel van {{ threshold }}."
+    },
+    "system": {
+      "backupFailed": {
+        "title": "Automatische back-up mislukt",
+        "message": "De automatische back-up voor {{ user }} is mislukt: {{ error }}"
+      },
+      "backupPartial": {
+        "title": "Automatische back-up onvolledig",
+        "messageAttachments": "De back-up voor {{ user }} is weggeschreven, maar {{ missing }} van {{ expected }} bijlagen konden niet worden opgenomen en {{ inconsistent }} kwamen niet overeen met hun metagegevens. Volledige back-ups zijn bewaard.",
+        "messagePromotion": "De dagelijkse back-up voor {{ user }} is gelukt, maar de wekelijkse of maandelijkse kopie kon niet worden weggeschreven: {{ error }}",
+        "messageRetention": "De back-up voor {{ user }} is gelukt, maar oude back-upbestanden konden niet worden opgeruimd: {{ error }}"
+      },
+      "encryptionKeyMissing": {
+        "title": "Encryptiesleutel niet geconfigureerd",
+        "message": "ENCRYPTION_KEY is niet ingesteld, dus back-ups worden onversleuteld weggeschreven en geheimen kunnen niet worden opgeslagen. Een toekomstige versie start niet meer zonder deze sleutel."
+      },
+      "jwtSecretWeak": {
+        "title": "JWT_SECRET is zwak",
+        "message": "JWT_SECRET is een gepubliceerde voorbeeldwaarde of te voorspelbaar, waardoor sessietokens kunnen worden vervalst. Genereer een sterke waarde (openssl rand -base64 32). Wijzigen zorgt ervoor dat codes uit authenticator-apps niet meer werken en vertrouwde apparaten worden vergeten: gebruikers loggen in met een back-upcode en stellen 2FA opnieuw in, en voor wie er geen heeft stel je de 2FA opnieuw in via Gebruikersbeheer. Lees eerst docs/backend/modules-and-runtime.md (Changing JWT_SECRET)."
+      },
+      "smtpFailure": {
+        "title": "E-mailbezorging mislukt",
+        "message": "Monize kon geen e-mail verzenden: {{ error }}. Meldingen en herinneringen worden niet bezorgd."
+      },
+      "providerOutage": {
+        "title": "{{ provider }} reageert niet",
+        "message": "Marktgegevens van {{ provider }} zijn niet beschikbaar. Koersen en indexgegevens kunnen verouderd zijn totdat de provider weer reageert."
+      },
+      "providerRecovered": {
+        "title": "{{ provider }} reageert weer",
+        "message": "De storing is voorbij en marktgegevens van {{ provider }} worden weer bijgewerkt."
+      },
+      "scheduledPostFailed": {
+        "title": "{{ name }} kon niet worden geboekt",
+        "message": "Je geplande transactie met vervaldatum {{ date }} is niet automatisch geboekt: {{ error }}. Je kunt deze handmatig boeken via Facturen & stortingen."
+      }
+    },
+    "budget": {
+      "overTitle": "{{ category }} overschrijdt het budget",
+      "overMessage": "Je hebt {{ amount }} van je budget van {{ limit }} voor {{ category }} uitgegeven ({{ percent }}%).",
+      "criticalTitle": "{{ category }} nadert de limiet",
+      "warningTitle": "{{ category }} bereikt de budgetlimiet",
+      "thresholdMessage": "Je hebt {{ percent }}% van je budget voor {{ category }} gebruikt ({{ amount }} van {{ limit }}).",
+      "projectedTitle": "{{ category }} zal naar verwachting het budget overschrijden",
+      "projectedMessage": "In je huidige tempo zullen de uitgaven voor {{ category }} aan het einde van de periode naar verwachting {{ projected }} bedragen (budget: {{ budgeted }}).",
+      "flexTitle": "Flexgroep ‘{{ group }}’ op {{ percent }}%",
+      "flexMessage": "De flexgroep ‘{{ group }}’ heeft {{ spent }} van het gezamenlijke budget van {{ budgeted }} gebruikt ({{ percent }}%).",
+      "incomeTitle": "Inkomen lager dan verwacht",
+      "incomeMessage": "Je werkelijke inkomen ({{ actual }}) bedraagt {{ ratio }}% van het verwachte inkomen ({{ expected }}) op dit moment in de periode.",
+      "milestoneTitle": "Budget op schema",
+      "milestoneMessage": "{{ progress }}% van de periode is verstreken en je hebt pas {{ percent }}% van je totale budget gebruikt. Ga zo door!",
+      "seasonalTitle": "Seizoenspiek verwacht voor {{ category }}",
+      "seasonalMessage": "Afgelopen {{ month }} gaf je {{ increase }} keer zoveel als gebruikelijk uit aan {{ category }}. Overweeg je budget aan te passen."
+    },
+    "priceMovement": {
+      "title": "Melding bij koerswijziging: {{ symbol }} ({{ percent }}%)",
+      "message": "{{ symbol }}: {{ percent }}% ten opzichte van de vorige beschikbare sessie."
+    },
+    "bankSync": {
+      "expiringTitleToday": "{{ institution }}: toegang tot de bank eindigt vandaag",
+      "expiringTitleOneDay": "{{ institution }}: toegang tot de bank eindigt binnen 1 dag",
+      "expiringTitleDays": "{{ institution }}: toegang tot de bank eindigt binnen {{ days }} dagen",
+      "expiringMessage": "Uw toestemming voor Monize om {{ institution }} te lezen eindigt op {{ date }}. Verleng de koppeling in Monize om te blijven synchroniseren.",
+      "expiredTitle": "{{ institution }}: toegang tot de bank is beëindigd",
+      "expiredMessage": "Uw toestemming voor Monize om {{ institution }} te lezen is beëindigd. Verleng de koppeling in Monize om de synchronisatie te hervatten.",
+      "failedTitle": "{{ institution }}: synchronisatie mislukt",
+      "failedMessage": "De dagelijkse synchronisatie van {{ institution }} is mislukt voor: {{ accounts }}. Open de instellingen voor banksynchronisatie om te zien waarom.",
+      "failedCredentialsMessage": "De dagelijkse synchronisatie van {{ institution }} kon niet starten omdat de inloggegevens voor banksynchronisatie ontbreken of zijn geweigerd. Controleer ze in de instellingen voor banksynchronisatie.",
+      "unnamedAccount": "een rekening",
+      "importedTitle": "{{ institution }}: nieuwe transacties geïmporteerd",
+      "importedMessage": "Door de dagelijkse synchronisatie uit {{ institution }} geïmporteerde transacties: {{ imported }}.",
+      "importedNoneTitle": "{{ institution }}: geen nieuwe transacties",
+      "importedNoneMessage": "De dagelijkse synchronisatie van {{ institution }} vond geen nieuwe transacties."
+    },
+    "bond": {
+      "maturitySoonTitle": "{{ series }} loopt af op {{ date }}",
+      "maturitySoonMessage": "{{ quantity }} × {{ series }} lopen af op {{ date }}. {{ payout }}",
+      "interestTitle": "{{ series }}: rentebetaling op {{ date }}",
+      "interestMessage": "{{ quantity }} × {{ series }} keren op {{ date }} {{ amount }} rente uit. Boek de rente op de effectenpagina als die nog niet op je rekening staat.",
+      "interestMessageUnknown": "{{ quantity }} × {{ series }} keren op {{ date }} rente uit. Het bedrag is nog niet bekend: een rente waarvan het afhangt is niet gepubliceerd.",
+      "rateResetTitle": "{{ series }}: nieuwe renteperiode",
+      "rateResetMessage": "{{ series }} is op {{ date }} gestart met periode {{ period }} tegen {{ rate }} per jaar.",
+      "unbookedTitle": "{{ series }}: afgelopen, aflossing niet geboekt",
+      "unbookedMessage": "{{ quantity }} × {{ series }} zijn op {{ date }} afgelopen en er is geen aflossing geboekt. {{ payout }} Boek de aflossing op de effectenpagina.",
+      "payoutKnown": "De uitbetaling is {{ payout }}.",
+      "payoutUnknown": "De uitbetaling is nog niet bekend: {{ reason }}.",
+      "reason": {
+        "RATE_UNKNOWN": "een rente waarvan ze afhangt is nog niet gepubliceerd",
+        "TERMS_INCOMPLETE": "de voorwaarden van de serie zijn onvolledig",
+        "PURCHASE_OUTSIDE_SALE_WINDOW": "een aankoopdatum valt buiten de verkoopperiode van de serie",
+        "PURCHASE_AFTER_MATURITY": "een aankoopdatum ligt op of na de einddatum van de serie",
+        "other": "ze kan niet worden berekend uit de opgeslagen gegevens"
+      },
+      "benchmarkTitle": "{{ benchmark }}: nieuwe waarneming {{ observation }}",
+      "benchmarkMessage": "{{ publisher }} publiceerde {{ benchmark }} voor {{ observation }}: {{ value }}. Wordt gebruikt door {{ series }}.",
+      "benchmarkMessageMore": "{{ publisher }} publiceerde {{ benchmark }} voor {{ observation }}: {{ value }}. Wordt gebruikt door {{ series }} en {{ more }} andere.",
+      "missingTitle": "Obligatiecijfers nog niet bekend",
+      "missingMessage": "Sommige obligatiecijfers kunnen niet worden berekend: {{ causes }}.",
+      "benchmarks": {
+        "PL_CPI_GUS_YOY": "CPI, 12 maanden (GUS)",
+        "PL_NBP_REFERENCE": "NBP-referentierente"
+      },
+      "cause": {
+        "observation": "de waarneming {{ observation }} van {{ benchmark }} ({{ publisher }}) is niet opgeslagen: ze is nog niet gepubliceerd of de feed is sindsdien niet opgehaald; vernieuw op de obligatiepagina",
+        "observationNoPublisher": "de waarneming {{ observation }} van {{ benchmark }} is niet opgeslagen: ze is nog niet gepubliceerd of de feed is sindsdien niet opgehaald; vernieuw op de obligatiepagina",
+        "terms": "de voorwaarden van {{ series }} zijn onvolledig; vernieuw de serie op de obligatiepagina",
+        "purchase": "een aankoop van {{ series }} op {{ date }} valt buiten de verkoopperiode ({{ from }} tot {{ to }}); corrigeer de aankoopdatum",
+        "purchaseAfterMaturity": "een aankoop van {{ series }} op {{ date }} ligt op of na de einddatum ({{ maturity }}); corrigeer de aankoopdatum",
+        "lots": "de partijen kunnen niet uit het grootboek worden afgeleid ({{ code }}); corrigeer het grootboek",
+        "lotsRow": "{{ action }} van {{ date }}: de partijen kunnen niet worden afgeleid ({{ code }}); corrigeer de transactie",
+        "lotsRowSeries": "{{ action }} van {{ date }}: geen serie toegewezen ({{ code }}); kies de serie bij die transactie",
+        "lotsRowRemoval": "{{ action }} van {{ date }}: haalt meer weg dan de rekening van die serie bezit ({{ code }}); corrigeer de transactie"
+      },
+      "action": {
+        "BUY": "aankoop",
+        "SELL": "verkoop",
+        "REINVEST": "herbelegging",
+        "ADD_SHARES": "toevoeging van stukken",
+        "REMOVE_SHARES": "verwijdering van stukken",
+        "SPLIT": "split",
+        "TRANSFER_IN": "inkomende overboeking",
+        "TRANSFER_OUT": "uitgaande overboeking",
+        "other": "transactie"
+      }
+    },
+    "emailReceiptsAttention": {
+      "title": "E-mailkwitanties vereisen aandacht",
+      "message": "Uw kwitantiemap bevat {{ noParser }} zonder profiel en {{ parseFailed }} die het profiel niet herkende. Open om te controleren."
+    },
+    "aiReview": {
+      "readyTitle": "AI-beoordelingsvoorstellen wachten op je",
+      "readyMessage": "Voorstellen die op je beslissing wachten: {{ count }}. Nieuw sinds de laatste melding: {{ added }}. Open om te beoordelen.",
+      "expiringTitle": "AI-beoordelingsvoorstellen verlopen binnenkort",
+      "expiringMessage": "Voorstellen die binnen 3 dagen verlopen: {{ count }}. Het eerste verloopt op {{ date }}. Open om te beoordelen."
+    },
+    "warranty": {
+      "expiringTitle": "{{ name }}: garantie verloopt binnenkort",
+      "expiringMessage": "De garantie voor {{ name }} verloopt op {{ date }}. Open hem om de documenten te bekijken of een claim vast te leggen.",
+      "todayTitle": "{{ name }}: garantie verloopt vandaag",
+      "todayMessage": "De garantie voor {{ name }} verloopt vandaag, {{ date }}. Open hem om de documenten te bekijken of een claim vast te leggen."
+    },
+    "security": {
+      "oauthTitle": "Nieuwe app gekoppeld: {{ clientName }}",
+      "oauthMessage": "De applicatie {{ clientName }} heeft zojuist toegang gekregen tot je Monize-account. Was jij dit niet, wijzig dan nu je wachtwoord: daarmee wordt de toegang van alle gekoppelde applicaties ingetrokken.",
+      "relayTitle": "Een nieuwe verbinding heeft je AI-chat beantwoord",
+      "relayMessage": "Een verbinding die je Monize AI-chat nog niet eerder had beantwoord, heeft zojuist een prompt opgehaald. Heb je deze assistent niet gekoppeld, wijzig dan je wachtwoord."
+    },
+    "payrollDeduction": {
+      "resetTitle": "{{ category }}: bevestig het maximum voor volgend jaar",
+      "resetMessage": "De inhouding {{ category }} op {{ bill }} wordt op {{ date }} opnieuw ingesteld. Werk het jaarmaximum bij als het verandert; anders geldt {{ amount }} opnieuw."
+    },
+    "shared": {
+      "title": "Gedeelde uitgaven",
+      "message": "Een gedeelde groep is bijgewerkt. Open Monize om de wijziging te bekijken."
+    }
+  },
+  "backupOffsite": {
+    "copySubject": "Monize-back-up {{ filename }}",
+    "copyHeading": "Je Monize-back-up zit als bijlage bij deze e-mail",
+    "copyIntro": "Dit is de automatische back-up ({{ tier }}) van je Monize-account van {{ date }}. Het bestand zit als bijlage bij deze e-mail.",
+    "copyEncrypted": "De bijlage is versleuteld met je Monize-back-upwachtwoord. Zonder dat wachtwoord kan hij niet worden geopend, en Monize kan het niet voor je herstellen -- bewaar het wachtwoord ergens anders dan in deze mailbox.",
+    "copyRestore": "Om hem te herstellen open je Monize, ga je naar Instellingen, Back-up en herstel, upload je dit bestand en voer je je back-upwachtwoord in.",
+    "copyVerify": "De SHA-256 hierboven hoort bij de bijgevoegde bytes, zodat je later kunt controleren of de kopie die je bewaarde dezelfde is als die deze e-mail heeft bezorgd.",
+    "tooLargeSubject": "Monize-back-up {{ filename }} was te groot om te mailen",
+    "tooLargeHeading": "Je Monize-back-up is niet gemaild",
+    "tooLargeIntro": "De back-up van vandaag is {{ size }} en dat is meer dan de {{ limit }} die deze installatie toestaat voor een gemailde back-up (BACKUP_EMAIL_MAX_BYTES).",
+    "tooLargeNoBytes": "Er is niets aan deze e-mail toegevoegd en er wordt geen downloadlink aangeboden -- zo'n link zou inloggegevens nodig hebben waarmee je back-ups weer uit de opslag gelezen kunnen worden, en die heeft deze functie niet.",
+    "tooLargeUnaffected": "De back-up zelf is normaal weggeschreven. De kopie op deze server is ongewijzigd, en dat geldt ook voor de kopie op je S3-bestemming als je die hebt ingeschakeld.",
+    "tooLargeWhatToDo": "Wil je van een back-up van dit formaat een kopie buiten deze machine bewaren, download hem dan via Instellingen, Back-up en herstel, schakel de S3-bestemming in, of vraag je beheerder om de e-maillimiet te verhogen.",
+    "labelFile": "Bestand",
+    "labelSize": "Grootte",
+    "labelTier": "Bewaartermijn",
+    "labelLimit": "E-maillimiet",
+    "labelDigest": "SHA-256",
+    "tierDaily": "dagelijks",
+    "tierWeekly": "wekelijks",
+    "tierMonthly": "maandelijks"
   }
 }

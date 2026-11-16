@@ -61,6 +61,36 @@ const ENFORCEMENT_SITES: {
     fn: "async updateTransfer(",
     why: "PATCH /transactions/:id/transfer",
   },
+  // The branches the two transfer routes hand off to. Scanning only the
+  // public methods let an assertion in one branch satisfy the whole route
+  // while the split-leg and cross-owner branches asked nothing (A26-M11).
+  {
+    file: "transaction-transfer.service.ts",
+    fn: "private async updateSplitTransferLeg(",
+    why: "PATCH .../transfer on a split-transfer leg: the leg, its split row and the parent's total",
+  },
+  {
+    file: "transaction-transfer.service.ts",
+    fn: "private async updateConnectedCrossOwnerTransfer(",
+    why: "PATCH .../transfer on a connected cross-owner pair: both owners' legs",
+  },
+  {
+    file: "transaction-transfer.service.ts",
+    fn: "private async updateFrozenTransferLeg(",
+    why: "PATCH .../transfer on a frozen cross-owner leg: the own leg",
+  },
+  {
+    file: "transaction-transfer.service.ts",
+    fn: "private async removeCrossOwnerTransfer(",
+    why: "DELETE .../transfer on a cross-owner pair",
+    beforeWrite: "removeLockedTransactionLeg(",
+  },
+  {
+    file: "transaction-transfer.service.ts",
+    fn: "private async removeTransferFromSplitInTransaction(",
+    why: "DELETE .../transfer on a split-transfer leg: the parent and every leg",
+    beforeWrite: "removeLockedTransactionLeg(",
+  },
   {
     file: "transaction-bulk-update.service.ts",
     fn: "async bulkUpdate(",
@@ -86,10 +116,25 @@ const ENFORCEMENT_SITES: {
     fn: "async removeSplit(",
     why: "DELETE /transactions/:id/splits/:splitId",
   },
+  // The legs in other accounts that a split parent's replacement, edit with
+  // splits, delete and conversion all remove through this cleanup; asked
+  // before its first write, the reversal of an embedded row (issue #2039).
+  {
+    file: "transaction-split.service.ts",
+    fn: "async deleteSplitSideEffects(",
+    why: "the transfer legs every whole-set writer and delete of a split parent removes",
+    beforeWrite: "reverseAndRemoveEmbedded(",
+  },
   {
     file: "../action-history/action-history.service.ts",
     fn: "private async undoTransactionUpdate(",
     why: "undo/redo of a transaction edit restores prior field values onto the row",
+    beforeWrite: "manager.update(Transaction",
+  },
+  {
+    file: "../action-history/action-history.service.ts",
+    fn: "private async undoBulkUpdate(",
+    why: "undo/redo of a bulk update restores prior status and fields onto every row of the batch",
     beforeWrite: "manager.update(Transaction",
   },
   {

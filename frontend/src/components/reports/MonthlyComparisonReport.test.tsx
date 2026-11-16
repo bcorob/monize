@@ -1,20 +1,25 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent, act } from '@/test/render';
+import { render, screen, waitFor, fireEvent, act, within } from '@/test/render';
 import { MonthlyComparisonReport } from './MonthlyComparisonReport';
 
 vi.mock('@/lib/pdf-export', () => ({
   exportToPdf: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatSignedPercent: (n: number, decimals = 2) => `${n >= 0 ? '+' : ''}${n.toFixed(decimals)}%`,
-    formatCurrency: (n: number) => `$${n.toFixed(2)}`,
-    formatCurrencyCompact: (n: number) => `$${Math.round(n)}`,
-    formatCurrencyAxis: (n: number) => `$${n}`,
-    defaultCurrency: 'CAD',
-  }),
-}));
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatSignedPercent: (n: number, decimals = 2) => `${n >= 0 ? '+' : ''}${n.toFixed(decimals)}%`,
+      formatPercent: (n: number, decimals = 2) => `${n.toFixed(decimals)}%`,
+      formatCurrency: (n: number) => `$${n.toFixed(2)}`,
+      formatCurrencyCompact: (n: number) => `$${Math.round(n)}`,
+      formatCurrencyAxis: (n: number) => `$${n}`,
+      defaultCurrency: 'CAD',
+    }),
+  };
+});
 
 vi.mock('@/lib/chart-colours', () => ({
   CHART_COLOURS: ['#3b82f6', '#ef4444', '#22c55e', '#f97316'],
@@ -31,7 +36,7 @@ vi.mock('recharts', () => ({
     }
     return null;
   },
-  BarChart: ({ children }: any) => <div data-testid="bar-chart">{children}</div>,
+  BarChart: ({ children, data }: any) => <div data-testid="bar-chart" data-points={JSON.stringify(data)}>{children}</div>,
   Bar: ({ children }: any) => <div>{children}</div>,
   XAxis: ({ tickFormatter }: any) => <div>{tickFormatter ? tickFormatter(50) : ''}</div>,
   YAxis: ({ tickFormatter }: any) => <div>{tickFormatter ? tickFormatter(1000) : ''}</div>,
@@ -137,7 +142,11 @@ const mockResponse = {
         accountName: 'My Brokerage',
         currentValue: 12000,
         startValue: 10000,
-        annualizedReturn: 20,
+        investmentPnl: 1500,
+        returnPercent: 12.5,
+        returnReasons: [],
+        periodStart: '2025-01-31',
+        periodEnd: '2026-01-31',
       },
     ],
     topMovers: [
@@ -193,8 +202,65 @@ describe('MonthlyComparisonReport', () => {
     await waitFor(() => {
       expect(screen.getByText('Summary')).toBeInTheDocument();
     });
-    expect(screen.getByText(mockResponse.notes.savingsNote)).toBeInTheDocument();
-    expect(screen.getByText(mockResponse.notes.incomeNote)).toBeInTheDocument();
+    // The summary notes are computed client-side (locale-aware month labels
+    // and currency formatting), not read verbatim from the backend's English
+    // notes.savingsNote/incomeNote -- those exist only for the AI/MCP payload.
+    expect(screen.getByText(
+      'In January 2026, you saved 100.0% more than December 2025 for a total of $2000.00',
+    )).toBeInTheDocument();
+    expect(screen.getByText(
+      'Your total income in January 2026 was $5000.00, which is $500.00 more than December 2025',
+    )).toBeInTheDocument();
+  });
+
+  it('renders the "less" wording when savings and income fell', async () => {
+    mockGetMonthlyComparison.mockResolvedValue({
+      ...mockResponse,
+      incomeExpenses: {
+        ...mockResponse.incomeExpenses,
+        currentIncome: 4000,
+        incomeChange: -500,
+        incomeChangePercent: -11.11,
+        currentSavings: 500,
+        savingsChange: -500,
+        savingsChangePercent: -50,
+      },
+    });
+    render(<MonthlyComparisonReport />);
+    await waitFor(() => {
+      expect(screen.getByText('Summary')).toBeInTheDocument();
+    });
+    expect(screen.getByText(
+      'In January 2026, you saved 50.0% less than December 2025 for a total of $500.00',
+    )).toBeInTheDocument();
+    expect(screen.getByText(
+      'Your total income in January 2026 was $4000.00, which is $500.00 less than December 2025',
+    )).toBeInTheDocument();
+  });
+
+  // percentChange() answers a flat +100 whenever the previous period was 0, so
+  // the badge takes its sign from the amount: a fall from zero is a red "-100.0%",
+  // never a red "+100.0%".
+  it('signs the delta badge from the amount, not the percentage', async () => {
+    mockGetMonthlyComparison.mockResolvedValue({
+      ...mockResponse,
+      incomeExpenses: {
+        ...mockResponse.incomeExpenses,
+        previousSavings: 0,
+        currentSavings: -500,
+        savingsChange: -500,
+        savingsChangePercent: 100,
+      },
+    });
+    render(<MonthlyComparisonReport />);
+    await waitFor(() => {
+      expect(screen.getByText('Income vs Expenses')).toBeInTheDocument();
+    });
+    // Scoped to the Savings card: a legitimate "+100.0%" also appears in the
+    // expense comparison table, where the percentage really did rise.
+    const savingsCard = screen.getByText('Savings').parentElement as HTMLElement;
+    expect(within(savingsCard).getByText('-100.0%')).toBeInTheDocument();
+    expect(within(savingsCard).queryByText('+100.0%')).not.toBeInTheDocument();
   });
 
   it('renders expense comparison table with category names', async () => {
@@ -236,6 +302,57 @@ describe('MonthlyComparisonReport', () => {
     expect(screen.getByText('Top Movers')).toBeInTheDocument();
     expect(screen.getByText('AAPL')).toBeInTheDocument();
     expect(screen.getByText('Apple Inc.')).toBeInTheDocument();
+  });
+
+  it('captions the account returns as the trailing year, net of deposits and cash', async () => {
+    mockGetMonthlyComparison.mockResolvedValue(mockResponse);
+    render(<MonthlyComparisonReport />);
+    await waitFor(() => {
+      expect(screen.getByText(/over the 12 months to Jan 31, 2026/)).toBeInTheDocument();
+    });
+    expect(screen.getByText(/Deposits, purchases and uninvested cash are not counted as gains/)).toBeInTheDocument();
+    expect(screen.queryByTestId('withheld-returns')).not.toBeInTheDocument();
+  });
+
+  it('lists a withheld return as unknown with its cause instead of drawing a bar', async () => {
+    const withheld = {
+      ...mockResponse,
+      investments: {
+        accountPerformance: [
+          {
+            accountId: 'w',
+            accountName: 'Unpriced RRSP',
+            currentValue: null,
+            startValue: 1000,
+            investmentPnl: null,
+            returnPercent: null,
+            returnReasons: ['incompletePrices'],
+            periodStart: '2025-01-31',
+            periodEnd: '2026-01-31',
+          },
+        ],
+        topMovers: [],
+      },
+    };
+    // The same report with a known return draws one more bar chart than this
+    // one: a withheld return must not become a zero-length bar.
+    mockGetMonthlyComparison.mockResolvedValue(mockResponse);
+    const known = render(<MonthlyComparisonReport />);
+    await waitFor(() => {
+      expect(screen.getByText('Investment Performance')).toBeInTheDocument();
+    });
+    const chartsWithKnownReturn = screen.getAllByTestId('bar-chart').length;
+    known.unmount();
+
+    mockGetMonthlyComparison.mockResolvedValue(withheld);
+    render(<MonthlyComparisonReport />);
+    await waitFor(() => {
+      expect(screen.getByTestId('withheld-returns')).toBeInTheDocument();
+    });
+    const list = screen.getByTestId('withheld-returns');
+    expect(within(list).getByText('Unpriced RRSP: return not available')).toBeInTheDocument();
+    expect(within(list).getByTestId('unknown-amount')).toBeInTheDocument();
+    expect(screen.getAllByTestId('bar-chart')).toHaveLength(chartsWithKnownReturn - 1);
   });
 
   it('hides investment section when no data', async () => {
@@ -438,7 +555,17 @@ describe('MonthlyComparisonReport', () => {
       ...mockResponse,
       investments: {
         accountPerformance: [
-          { accountId: 'a', accountName: 'A', currentValue: 100, startValue: 90, annualizedReturn: -5 },
+          {
+            accountId: 'a',
+            accountName: 'A',
+            currentValue: 100,
+            startValue: 90,
+            investmentPnl: -5,
+            returnPercent: -5,
+            returnReasons: [],
+            periodStart: '2025-01-31',
+            periodEnd: '2026-01-31',
+          },
         ],
         topMovers: [],
       },
@@ -482,5 +609,87 @@ describe('MonthlyComparisonReport', () => {
         await act(async () => { fireEvent.click(ths[i]); });
       }
     }
+  });
+
+  describe('a net worth the server could not fully convert', () => {
+    const partialResponse = {
+      ...mockResponse,
+      netWorth: {
+        monthlyHistory: [
+          { month: '2025-12', netWorth: 50000, fxComplete: true, missingRatePairs: [] },
+          { month: '2026-01', netWorth: 50000, fxComplete: false, missingRatePairs: ['ZZZ->CAD'] },
+        ],
+        currentNetWorth: null,
+        previousNetWorth: 50000,
+        netWorthChange: null,
+        netWorthChangePercent: null,
+        knownCurrentNetWorth: 50000,
+        knownPreviousNetWorth: 50000,
+        fxComplete: false,
+        missingRatePairs: ['ZZZ->CAD'],
+      },
+    };
+
+    async function renderPartial() {
+      mockGetMonthlyComparison.mockResolvedValue(partialResponse);
+      await act(async () => {
+        render(<MonthlyComparisonReport />);
+      });
+      await waitFor(() => expect(screen.getByText('Your Net Worth')).toBeInTheDocument());
+    }
+
+    it('shows the known subtotal as partial and does not print a change', async () => {
+      await renderPartial();
+      const section = screen.getByText('Your Net Worth').parentElement as HTMLElement;
+      const marker = within(section).getByTestId('partial-total');
+      expect(marker).toHaveTextContent('$50000.00');
+      expect(within(marker).getByRole('button').getAttribute('aria-label')).toContain('ZZZ');
+      expect(section).not.toHaveTextContent('+$0.00');
+      expect(section).not.toHaveTextContent('NaN');
+      expect(section).not.toHaveTextContent(/\d%/);
+      expect(section).toHaveTextContent('ZZZ');
+    });
+
+    it('draws the partial month as null, never as a measured dip', async () => {
+      await renderPartial();
+      const points = JSON.parse(
+        screen.getAllByTestId('bar-chart')
+          .map((el) => el.getAttribute('data-points')!)
+          .find((p) => p.includes('"netWorth"'))!,
+      );
+      expect(points.map((p: { netWorth: number | null }) => p.netWorth)).toEqual([50000, null]);
+    });
+
+    it('labels the partial figure in the PDF and withholds the change', async () => {
+      const { exportToPdf } = await import('@/lib/pdf-export');
+      await renderPartial();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /export/i }));
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByText(/PDF/i));
+      });
+      const options = (exportToPdf as any).mock.calls[0][0];
+      const table = options.additionalTables.find(
+        (tbl: { title: string }) => tbl.title === 'Net Worth',
+      );
+      const flat = JSON.stringify(table.rows);
+      expect(flat).toContain('50000.00');
+      expect(flat).toMatch(/partial/i);
+      expect(flat).toContain('ZZZ');
+      expect(flat).not.toContain('NaN');
+      expect(flat).not.toContain('+$0.00');
+    });
+
+    it('marks nothing and prints the change for a complete net worth', async () => {
+      mockGetMonthlyComparison.mockResolvedValue(mockResponse);
+      await act(async () => {
+        render(<MonthlyComparisonReport />);
+      });
+      await waitFor(() => expect(screen.getByText('Your Net Worth')).toBeInTheDocument());
+      const section = screen.getByText('Your Net Worth').parentElement as HTMLElement;
+      expect(within(section).queryByTestId('partial-total')).not.toBeInTheDocument();
+      expect(section).toHaveTextContent('+$2000.00');
+    });
   });
 });

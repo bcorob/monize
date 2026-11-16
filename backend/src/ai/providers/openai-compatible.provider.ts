@@ -8,6 +8,7 @@ import {
   ModelVerificationResult,
 } from "./ai-provider.interface";
 import { OpenAiProvider } from "./openai.provider";
+import { unverifiedModelReason } from "./model-verification.util";
 
 /**
  * Attempt to extract structured tool calls from assistant text content.
@@ -189,9 +190,17 @@ function looksLikeToolCallPrefix(text: string): boolean {
 
 export class OpenAiCompatibleProvider extends OpenAiProvider {
   override readonly name = "openai-compatible";
+  // The Responses API and its web_search tool are OpenAI's own; a compatible
+  // server (vLLM, LM Studio, LiteLLM...) is chat.completions only.
+  override readonly supportsWebSearch = false;
 
-  constructor(apiKey: string, baseUrl: string, model: string) {
-    super(apiKey, model, baseUrl);
+  constructor(
+    apiKey: string,
+    baseUrl: string,
+    model: string,
+    fetchImpl?: typeof fetch,
+  ) {
+    super(apiKey, model, baseUrl, fetchImpl);
   }
 
   override async completeWithTools(
@@ -360,7 +369,7 @@ export class OpenAiCompatibleProvider extends OpenAiProvider {
       return {
         ok: false,
         model: this.modelId,
-        reason: `Could not verify model: ${raw}`,
+        reason: unverifiedModelReason(this.name, this.modelId, error, status),
       };
     } finally {
       clearTimeout(timeout);

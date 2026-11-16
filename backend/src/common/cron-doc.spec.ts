@@ -5,7 +5,7 @@ import { basename, join } from "path";
 import { findRepoRoot, gitListFiles, requireRepoRoot } from "./repo-tree.util";
 
 /**
- * `docs/cron-jobs.md` is where `backend/CLAUDE.md` sends anyone asking what runs
+ * `docs/cron-jobs.md` is where `backend/CLAUDE.md` and `docs/backend/cron-and-background-work.md` send anyone asking what runs
  * on a schedule. It was missing six of them -- including `auto-backup.service`,
  * the subject of the very audit phase that led here -- and listed one
  * (`auth.service`) whose `@Cron` had moved to `token.service`.
@@ -105,22 +105,107 @@ export function aggregateByStem(
   return byStem;
 }
 
+export interface CronDocEntry {
+  stem: string;
+  schedule: string;
+  /** The Purpose cell, trimmed; empty when the row has none. */
+  purpose: string;
+}
+
 /**
- * Rows of the schedule table: first column the stem, second the expression --
- * any stem, not just `*.service`, so nothing representable in the source is
- * unrepresentable in the doc.
+ * Rows of the schedule table, every cell the suite reads: first column the
+ * stem, second the expression, fourth the Purpose. Any stem, not just
+ * `*.service`, so nothing representable in the source is unrepresentable in
+ * the doc.
+ *
+ * One regex decides what a row is for both the schedule and the Purpose
+ * checks, so a row cannot be counted by one and missed by the other. The
+ * Purpose is everything after the Schedule cell up to the closing pipe; a row
+ * that has no fourth cell yields an empty Purpose, which the vocabulary check
+ * then fails by name rather than skipping.
  */
+export function parseCronDocEntries(markdown: string): CronDocEntry[] {
+  return [
+    ...markdown.matchAll(
+      /^\|\s*`([a-z0-9][a-z0-9.-]*)`\s*\|\s*`([^`\n]+)`(?:\s*\(([^)\n]+)\))?\s*\|([^\n]*)$/gm,
+    ),
+  ].map(([, stem, expression, timeZone, rest]) => {
+    const afterSchedule = rest.indexOf("|");
+    const purpose =
+      afterSchedule === -1
+        ? ""
+        : rest
+            .slice(afterSchedule + 1)
+            .replace(/\|\s*$/, "")
+            .trim();
+    return { stem, schedule: renderSchedule(expression, timeZone), purpose };
+  });
+}
+
+/** The stem and expression of each row, for the schedule comparison. */
 export function parseCronDocRows(
   markdown: string,
 ): { stem: string; schedule: string }[] {
-  return [
-    ...markdown.matchAll(
-      /^\|\s*`([a-z0-9][a-z0-9.-]*)`\s*\|\s*`([^`\n]+)`(?:\s*\(([^)\n]+)\))?\s*\|/gm,
-    ),
-  ].map(([, stem, expression, timeZone]) => ({
+  return parseCronDocEntries(markdown).map(({ stem, schedule }) => ({
     stem,
-    schedule: renderSchedule(expression, timeZone),
+    schedule,
   }));
+}
+
+/**
+ * What a Purpose cell has to say: the mechanism that stops a second replica
+ * repeating the handler's effect (`backend/CLAUDE.md`: "A new cron fills in
+ * that column"). Every replica fires every cron, so each handler has an
+ * answer, even if the answer is that the effect is idempotent.
+ *
+ * This is a vocabulary check, not a length check: the row must NAME the
+ * mechanism -- a claim, a lease, a dedupe key, a conditional `UPDATE`, a lock,
+ * an idempotent predicate -- and a long description of what the job does
+ * without one still fails. The stems are mechanism words only; a filler word
+ * added here to let a row through would turn the check back into prose.
+ * A row that said only "Weekly budget digest" hid a cron that emailed every
+ * user once per replica, and nothing noticed until a human did.
+ */
+export const REPLICA_MECHANISM_VOCABULARY = new RegExp(
+  [
+    // Claim rows and leases (`claimOnce`, `claimLease`, `withLease`, a
+    // conditional claim).
+    String.raw`\bclaim(?:ed|s|Once|Lease)?\b`,
+    String.raw`\b(?:with)?lease[ds]?\b`,
+    // Dedupe keys and unique indexes that make the second insert a no-op.
+    String.raw`\bdedupe(?:d|_key)?\b`,
+    String.raw`\bunique index\b`,
+    String.raw`\binsert[- ]winner\b`,
+    String.raw`\bON CONFLICT\b`,
+    String.raw`\bupsert(?:s|ed)?\b`,
+    // Conditional writes that re-evaluate their predicate under the row lock.
+    String.raw`\bRETURNING\b`,
+    String.raw`\bcompare-and-set\b`,
+    String.raw`\bconditional \x60?UPDATE\b`,
+    String.raw`\bSKIP LOCKED\b`,
+    String.raw`\bFOR UPDATE\b`,
+    String.raw`\block(?:ed|s)?\b`,
+    String.raw`\badvisory\b`,
+    // Effects a second run cannot repeat because they converge.
+    String.raw`\bidempotent\b`,
+    String.raw`\bpredicate\b`,
+    String.raw`\bat most once\b`,
+    String.raw`\bexactly once\b`,
+  ].join("|"),
+  "i",
+);
+
+/**
+ * Rows whose Purpose names no mechanism, as `stem (schedule): <first 60
+ * chars>` so the failure says which row to fix without opening the file.
+ */
+export function rowsWithoutReplicaMechanism(entries: CronDocEntry[]): string[] {
+  return entries
+    .filter(({ purpose }) => !REPLICA_MECHANISM_VOCABULARY.test(purpose))
+    .map(
+      ({ stem, schedule, purpose }) =>
+        `${stem} (${schedule}): ${purpose.slice(0, 60) || "<no Purpose cell>"}`,
+    );
 }
 
 /**
@@ -221,6 +306,55 @@ describe("cron doc grammar", () => {
     expect(rows[0].schedule).toBe("5 17 * * 1-5 (America/New_York)");
   });
 
+  it("reads the Purpose cell, pipes inside it included", () => {
+    const [entry] = parseCronDocEntries(
+      "| `a.service` | `0 1 * * *` | Daily 1 AM | Purge rows \\| by predicate |",
+    );
+    expect(entry).toEqual({
+      stem: "a.service",
+      schedule: "0 1 * * *",
+      purpose: "Purge rows \\| by predicate",
+    });
+    // A row with no fourth cell is read, with an empty Purpose, so the
+    // vocabulary check fails it by name instead of never seeing it.
+    expect(
+      parseCronDocEntries("| `a.service` | `0 1 * * *` | Daily 1 AM |"),
+    ).toEqual([{ stem: "a.service", schedule: "0 1 * * *", purpose: "" }]);
+  });
+
+  it("fails a Purpose that describes the job without naming a mechanism", () => {
+    // The row that hid a cron emailing every user once per replica.
+    const entries = parseCronDocEntries(
+      [
+        "| `budget-alert.service` | `0 7 * * 1` | Mondays 7 AM | Weekly budget digest |",
+        "| `budget-alert.service` | `0 7 * * *` | Daily 7 AM | Budget threshold alerts; the fingerprint unique index picks the insert-winner, which alone emails |",
+        "| `token.service` | `0 03 * * *` | Daily 3 AM | Expired refresh-token purge, a very long sentence that explains at length what the job does for whom and why it matters |",
+        "| `x.service` | `0 1 * * *` | Daily 1 AM | Delete expired rows by predicate |",
+      ].join("\n"),
+    );
+    expect(rowsWithoutReplicaMechanism(entries)).toEqual([
+      "budget-alert.service (0 7 * * 1): Weekly budget digest",
+      "token.service (0 03 * * *): Expired refresh-token purge, a very long sentence that expla",
+    ]);
+    // Word stems, not substrings: "blocks" is not a lock, "reclaimed" is
+    // not a claim.
+    expect(
+      REPLICA_MECHANISM_VOCABULARY.test("blocks until reclaimed later"),
+    ).toBe(false);
+    for (const phrase of [
+      "claimOnce(DemoReset, ...)",
+      "FetchSyncService.withLease(...) -- the lease",
+      "via the dedupe key",
+      "a conditional `UPDATE ... RETURNING`",
+      "compare-and-set latch",
+      "FOR UPDATE SKIP LOCKED",
+      "held by one replica per batch with `withLease(...)`",
+      "Idempotent across replicas",
+    ]) {
+      expect(REPLICA_MECHANISM_VOCABULARY.test(phrase)).toBe(true);
+    }
+  });
+
   it("reports a documented schedule that contradicts the decorator", () => {
     // The regression this suite exists to catch: the table said midnight
     // daily, the decorator said hourly, and a membership-only check was happy.
@@ -259,6 +393,7 @@ describeTree(
       unparseable: string[];
       documented: Map<string, string[]>;
       rowCount: number;
+      entries: CronDocEntry[];
     }
     let cached: TreeData | undefined;
 
@@ -286,14 +421,21 @@ describeTree(
         return { path, schedules: parsed.schedules };
       });
       const declared = aggregateByStem(parsedFiles);
-      const rows = parseCronDocRows(
+      const entries = parseCronDocEntries(
         readFileSync(join(root, "docs", "cron-jobs.md"), "utf8"),
       );
+      const rows = entries.map(({ stem, schedule }) => ({ stem, schedule }));
       const documented = new Map<string, string[]>();
       for (const { stem, schedule } of rows) {
         documented.set(stem, [...(documented.get(stem) ?? []), schedule]);
       }
-      cached = { declared, unparseable, documented, rowCount: rows.length };
+      cached = {
+        declared,
+        unparseable,
+        documented,
+        rowCount: rows.length,
+        entries,
+      };
       return cached;
     };
 
@@ -338,6 +480,17 @@ describeTree(
       // a service quietly grew a second schedule.
       const { declared, documented } = load();
       expect(scheduleDiscrepancies(declared, documented)).toEqual([]);
+    });
+
+    it("names, for every handler, what stops a second replica repeating its effect", () => {
+      // Every replica fires every cron, so every row has an answer to give --
+      // a claim, a lease, a dedupe key, a conditional write, or an idempotent
+      // predicate. No allowlist: a row that names none is fixed, not excused.
+      const { entries } = load();
+      // Vacuity anchor: an empty or misparsed table would pass the filter.
+      expect(entries.length).toBeGreaterThanOrEqual(20);
+      expect(entries.every(({ purpose }) => purpose.length > 0)).toBe(true);
+      expect(rowsWithoutReplicaMechanism(entries)).toEqual([]);
     });
   },
 );

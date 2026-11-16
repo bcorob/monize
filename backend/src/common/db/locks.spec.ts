@@ -8,6 +8,7 @@ import {
   lockTokenFamily,
   lockTransactionRow,
   lockTransactionRows,
+  lockWarrantyRow,
 } from "./locks";
 import { locksMockModule } from "../../test-helpers/locks-testing";
 
@@ -148,7 +149,7 @@ describe("common/db/locks", () => {
     it("selects the date as text, not as a Date", async () => {
       // A raw select bypasses the entity transformer, so a DATE column comes back
       // as a JS Date parsed in UTC -- and reading it can shift the day. See the
-      // raw-select rule in backend/CLAUDE.md.
+      // raw-select rule in docs/backend/entities-and-dtos.md.
       await lockTransactionRow(asManager(), "tx-1", "user-1");
 
       expect(manager.query.mock.calls[0][0]).toContain(
@@ -162,6 +163,27 @@ describe("common/db/locks", () => {
       expect(
         await lockTransactionRow(asManager(), "tx-1", "user-1"),
       ).toBeNull();
+    });
+  });
+
+  describe("lockWarrantyRow", () => {
+    it("selects FOR UPDATE, scoped to the owner", async () => {
+      manager.query.mockResolvedValue([{ id: "wty-1" }]);
+
+      const row = await lockWarrantyRow(asManager(), "wty-1", "user-1");
+
+      const [sql, params] = manager.query.mock.calls[0];
+      expect(sql).toContain("FROM warranties");
+      expect(sql).toContain("FOR UPDATE");
+      expect(sql).toContain("user_id = $2");
+      expect(params).toEqual(["wty-1", "user-1"]);
+      expect(row).toEqual({ id: "wty-1" });
+    });
+
+    it("returns null when no row matched", async () => {
+      manager.query.mockResolvedValue([]);
+
+      expect(await lockWarrantyRow(asManager(), "wty-1", "user-1")).toBeNull();
     });
   });
 

@@ -59,6 +59,13 @@ export interface ExportJsonOptions {
    * only the first of them is evidence (`parseArtifactCompleteness`).
    */
   completeness: BackupCompletenessReport;
+  /**
+   * Document members that are not tables, read from the same snapshot after the
+   * last table and written before `completeness`. Bounded reads only: each
+   * member is held whole (today the identity of the bond series the rows
+   * reference, `bondCatalog`).
+   */
+  members?: (reader: ExportReader) => Promise<Record<string, unknown>>;
   /** Overridable for tests that need to observe flush behaviour cheaply. */
   chunkBytes?: number;
 }
@@ -135,6 +142,12 @@ export async function* exportJsonChunks(
     }
 
     yield* emit("]", entry.key);
+  }
+
+  if (options.members) {
+    for (const [key, value] of Object.entries(await options.members(reader))) {
+      yield* emit(`,${JSON.stringify(key)}:${JSON.stringify(value)}`, null);
+    }
   }
 
   yield* emit(`,"completeness":${JSON.stringify(options.completeness)}}`, null);

@@ -1,0 +1,321 @@
+{
+  "page": {
+    "title": "Garanties",
+    "subtitle": "Wat je hebt gekocht, wanneer de garantie afloopt en wie het heeft verkocht",
+    "newButton": "Garantie toevoegen",
+    "exportButton": "CSV exporteren",
+    "importButton": "CSV importeren",
+    "loading": "Garanties laden...",
+    "loadFailed": "Je garanties konden niet worden geladen.",
+    "retry": "Opnieuw proberen",
+    "summary": {
+      "active": "Actief",
+      "expiring": "Verloopt binnenkort",
+      "expired": "Verlopen",
+      "lifetime": "Levenslang",
+      "unavailable": "Niet geladen",
+      "expiringHint": "Binnen {days} dagen"
+    },
+    "filters": {
+      "label": "Filteren op status",
+      "all": "Alle",
+      "expiring": "Verloopt",
+      "active": "Actief",
+      "expired": "Verlopen",
+      "lifetime": "Levenslang",
+      "counted": {
+        "all": "Alle ({count})",
+        "expiring": "Verloopt ({count})",
+        "active": "Actief ({count})",
+        "expired": "Verlopen ({count})",
+        "lifetime": "Levenslang ({count})"
+      }
+    },
+    "search": {
+      "label": "Garanties zoeken",
+      "placeholder": "Zoek op naam, verkoper, model of serienummer"
+    },
+    "archivedToggle": "Gearchiveerde tonen",
+    "transactionChip": {
+      "label": "Garanties van één transactie",
+      "clear": "Alle garanties tonen"
+    },
+    "pager": {
+      "itemName": "garanties",
+      "total": "{count, plural, one {{total} garantie} other {{total} garanties}}"
+    },
+    "empty": {
+      "title": "Nog geen garanties",
+      "description": "Voeg een garantie toe om bij te houden wanneer die afloopt.",
+      "filteredTitle": "Geen garanties gevonden",
+      "filteredDescription": "Probeer een andere status of wis de zoekopdracht.",
+      "archivedTitle": "Geen gearchiveerde garanties"
+    },
+    "modal": {
+      "newTitle": "Nieuwe garantie",
+      "editTitle": "Garantie bewerken"
+    },
+    "delete": {
+      "title": "Garantie verwijderen",
+      "message": "\"{name}\" verwijderen? De claims en documenten worden mee verwijderd. Dit kan niet ongedaan worden gemaakt."
+    },
+    "toasts": {
+      "created": "Garantie toegevoegd",
+      "updated": "Garantie bijgewerkt",
+      "deleted": "Garantie verwijderd",
+      "archived": "Garantie gearchiveerd",
+      "unarchived": "Garantie hersteld",
+      "createFailed": "De garantie kon niet worden toegevoegd",
+      "updateFailed": "De garantie kon niet worden bijgewerkt",
+      "deleteFailed": "De garantie kon niet worden verwijderd",
+      "archiveFailed": "De garantie kon niet worden gearchiveerd",
+      "unarchiveFailed": "De garantie kon niet worden hersteld",
+      "prefillFailed": "Die transactie kon niet worden geladen, dus de garantie begint leeg",
+      "exported": "{count, plural, one {{shown} garantie geëxporteerd} other {{shown} garanties geëxporteerd}}",
+      "exportFailed": "De garanties konden niet worden geëxporteerd"
+    }
+  },
+  "status": {
+    "lifetime": "Levenslang",
+    "active": "Actief",
+    "expiring": "Verloopt binnenkort",
+    "expired": "Verlopen"
+  },
+  "daysLeft": {
+    "left": "{count, plural, one {Nog {days} dag} other {Nog {days} dagen}}",
+    "today": "Verloopt vandaag",
+    "ago": "{count, plural, one {{days} dag geleden verlopen} other {{days} dagen geleden verlopen}}",
+    "leftYears": "Nog {yearsCount, plural, one {{years} jaar} other {{years} jaar}}, {daysCount, plural, one {{days} dag} other {{days} dagen}}",
+    "agoYears": "{yearsCount, plural, one {{years} jaar} other {{years} jaar}}, {daysCount, plural, one {{days} dag} other {{days} dagen}} geleden verlopen"
+  },
+  "kind": {
+    "manufacturer": "Fabrikant",
+    "extended": "Verlengd",
+    "store": "Winkel",
+    "other": "Overig"
+  },
+  "list": {
+    "columns": {
+      "name": "Naam",
+      "status": "Status",
+      "expiresOn": "Verloopt",
+      "purchaseDate": "Gekocht",
+      "price": "Prijs",
+      "documents": "Documenten",
+      "claims": "Openstaande claims",
+      "actions": "Acties"
+    },
+    "sortLabel": "Sorteren op",
+    "lifetime": "Levenslang",
+    "noPrice": "Geen",
+    "actions": {
+      "archive": "Archiveren",
+      "unarchive": "Dearchiveren"
+    }
+  },
+  "form": {
+    "nameLabel": "Naam",
+    "namePlaceholder": "Wat je hebt gekocht",
+    "vendorLabel": "Verkoper",
+    "vendorPlaceholder": "Kies of typ een verkoper",
+    "modelLabel": "Modelnummer",
+    "serialsLabel": "Serienummers",
+    "serialLabel": "Serienummer {index}",
+    "addSerial": "Serienummer toevoegen",
+    "removeSerial": "Serienummer {index} verwijderen",
+    "serialsLimit": "Maximaal {max} serienummers",
+    "kindLabel": "Soort garantie",
+    "purchaseDateLabel": "Aankoopdatum",
+    "expiry": {
+      "label": "Garantie eindigt",
+      "date": "Op een datum",
+      "duration": "Na een looptijd",
+      "lifetime": "Nooit",
+      "expiresOnLabel": "Verloopt op",
+      "years": "Jaren",
+      "months": "Maanden",
+      "days": "Dagen",
+      "computed": "Verloopt op {date}",
+      "needsPurchaseDate": "Vul de aankoopdatum in om te berekenen wanneer de garantie eindigt",
+      "lifetimeHint": "Een levenslange garantie heeft geen einddatum en geen herinnering"
+    },
+    "priceLabel": "Aankoopprijs",
+    "productUrlLabel": "Productpagina",
+    "productUrlPlaceholder": "https://",
+    "notesLabel": "Notities",
+    "submitCreate": "Garantie toevoegen",
+    "submitUpdate": "Wijzigingen opslaan"
+  },
+  "validation": {
+    "nameRequired": "Vul een naam in",
+    "nameTooLong": "Gebruik maximaal 200 tekens",
+    "vendorTooLong": "Gebruik maximaal 200 tekens",
+    "modelTooLong": "Gebruik maximaal 100 tekens",
+    "serialTooLong": "Gebruik maximaal 100 tekens per serienummer",
+    "serialsTooMany": "Maximaal 10 serienummers",
+    "purchaseDateRequired": "Vul de aankoopdatum in",
+    "expiresOnRequired": "Vul de datum in waarop de garantie eindigt",
+    "expiresBeforePurchase": "De garantie kan niet eindigen vóór de aankoopdatum",
+    "durationRequired": "Vul een looptijd groter dan nul in",
+    "priceNegative": "De prijs kan niet negatief zijn",
+    "priceNeedsCurrency": "Kies de valuta van de prijs",
+    "urlInvalid": "Vul een webadres in dat begint met http:// of https://",
+    "urlTooLong": "Gebruik maximaal 500 tekens",
+    "notesTooLong": "Gebruik maximaal 2000 tekens"
+  },
+  "detail": {
+    "back": "Terug naar Garanties",
+    "loading": "Garantie laden...",
+    "loadFailed": "Deze garantie kon niet worden geladen.",
+    "notFound": "Deze garantie is niet gevonden.",
+    "retry": "Opnieuw proberen",
+    "archivedBadge": "Gearchiveerd",
+    "switcher": {
+      "trigger": "Andere garantie kiezen",
+      "placeholder": "Garanties filteren...",
+      "noMatches": "Geen garanties gevonden"
+    },
+    "summary": {
+      "expires": "Verloopt",
+      "purchased": "Gekocht",
+      "price": "Aankoopprijs",
+      "openClaims": "Openstaande claims"
+    },
+    "card": {
+      "title": "Details",
+      "kind": "Soort garantie",
+      "vendor": "Verkoper",
+      "serialNumbers": "Serienummers",
+      "model": "Modelnummer",
+      "productUrl": "Productpagina",
+      "notes": "Notities",
+      "none": "Geen",
+      "lifetime": "Levenslang"
+    },
+    "transaction": {
+      "title": "Aankoop",
+      "edit": "Aankoop van {date} bewerken: {payee}, {amount}",
+      "viewInRegister": "Bekijken in het overzicht",
+      "loadFailed": "De aankoop kon niet worden geladen",
+      "dateInAccount": "{date} · {account}",
+      "none": "Geen gekoppelde transactie",
+      "unreadable": "De aankoop staat op een rekening die je niet mag lezen.",
+      "noPayee": "Geen begunstigde"
+    }
+  },
+  "documents": {
+    "title": "Documenten",
+    "empty": "Nog geen documenten",
+    "pendingHint": "Documenten worden geüpload wanneer u de garantie opslaat.",
+    "tooMany": "Maximaal {max} documenten per garantie",
+    "uploadFailedAfterCreate": "Garantie toegevoegd, maar {count, plural, one {dit document kon} other {deze documenten konden}} niet worden geüpload: {names}. Voeg {count, plural, one {het} other {ze}} toe via de sectie Documenten van de garantie.",
+    "kindFor": "Soort document voor {name}",
+    "kindUpdateFailed": "Soort document wijzigen mislukt",
+    "addExisting": "Bestaande toevoegen",
+    "addExistingTitle": "Een bestaand document toevoegen",
+    "addExistingHelp": "Kies een bestand dat je al hebt geüpload bij een transactie of een andere garantie. Er wordt een kopie aan deze garantie toegevoegd; het origineel blijft waar het is.",
+    "addExistingFrom": "Waar het document nu staat",
+    "fromTransaction": "Een transactie",
+    "fromWarranty": "Een andere garantie",
+    "addExistingDocument": "Document",
+    "addExistingKind": "Documenttype bij deze garantie",
+    "addExistingNone": "Er zijn hier geen documenten om toe te voegen.",
+    "addExistingLoadFailed": "De documenten konden niet worden geladen. Probeer het opnieuw.",
+    "addExistingFailed": "Het document toevoegen is mislukt",
+    "addExistingSubmit": "Document toevoegen",
+    "choose": "Kiezen…",
+    "preview": "Voorbeeld",
+    "kinds": {
+      "receipt": "Bon",
+      "manual": "Handleiding",
+      "photo": "Foto",
+      "warranty": "Garantie",
+      "other": "Overig"
+    }
+  },
+  "claims": {
+    "title": "Claims",
+    "add": "Claim toevoegen",
+    "empty": "Nog geen claims",
+    "loading": "Claims laden...",
+    "loadFailed": "De claims konden niet worden geladen.",
+    "retry": "Opnieuw proberen",
+    "statuses": {
+      "open": "Open",
+      "approved": "Goedgekeurd",
+      "denied": "Afgewezen",
+      "resolved": "Afgehandeld"
+    },
+    "claimedOn": "Ingediend op {date}",
+    "resolvedOnLine": "Gesloten op {date}",
+    "resolutionLine": "Afhandeling: {text}",
+    "modal": {
+      "newTitle": "Nieuwe claim",
+      "editTitle": "Claim bewerken"
+    },
+    "form": {
+      "claimDateLabel": "Claimdatum",
+      "statusLabel": "Status",
+      "descriptionLabel": "Beschrijving",
+      "resolutionLabel": "Afhandeling",
+      "resolvedOnLabel": "Gesloten op",
+      "resolvedOnHint": "Alleen voor een afgehandelde of afgewezen claim",
+      "submitCreate": "Claim toevoegen",
+      "submitUpdate": "Wijzigingen opslaan"
+    },
+    "validation": {
+      "claimDateRequired": "Vul de claimdatum in",
+      "resolvedOnBeforeClaim": "Een claim kan niet worden gesloten voordat hij is ingediend",
+      "textTooLong": "Gebruik maximaal 2000 tekens"
+    },
+    "delete": {
+      "title": "Claim verwijderen",
+      "message": "De claim van {date} verwijderen? Dit kan niet ongedaan worden gemaakt."
+    },
+    "toasts": {
+      "created": "Claim toegevoegd",
+      "updated": "Claim bijgewerkt",
+      "deleted": "Claim verwijderd",
+      "createFailed": "De claim kon niet worden toegevoegd",
+      "updateFailed": "De claim kon niet worden bijgewerkt",
+      "deleteFailed": "De claim kon niet worden verwijderd"
+    }
+  },
+  "import": {
+    "title": "Garanties importeren uit CSV",
+    "description": "Een CSV-bestand met de kolommen van Warracker, zoals een export uit Warracker of van deze pagina. Je ziet elke rij voordat er iets wordt opgeslagen.",
+    "fileLabel": "CSV-bestand",
+    "chooseFile": "Bestand kiezen",
+    "noFileChosen": "Geen bestand gekozen",
+    "checking": "Bestand controleren...",
+    "previewFailed": "Het bestand kon niet worden gecontroleerd",
+    "summary": "{count, plural, one {{valid} van {total} rij kan worden geïmporteerd.} other {{valid} van {total} rijen kunnen worden geïmporteerd.}}",
+    "invalidSummary": "{count, plural, one {{shown} rij is ongeldig en kan niet zo worden geïmporteerd.} other {{shown} rijen zijn ongeldig en kunnen niet zo worden geïmporteerd.}}",
+    "skipInvalid": "Ongeldige rijen overslaan en de rest importeren",
+    "nothingToImport": "Corrigeer het bestand en kies het opnieuw.",
+    "skippedColumns": "Niet geïmporteerde kolommen:",
+    "columns": {
+      "line": "Regel",
+      "name": "Naam",
+      "expires": "Verloopt",
+      "outcome": "Resultaat",
+      "problems": "Problemen"
+    },
+    "outcome": {
+      "valid": "Klaar",
+      "invalid": "Ongeldig",
+      "created": "Geïmporteerd"
+    },
+    "unnamed": "(geen naam)",
+    "noExpiry": "Niet ingesteld",
+    "lifetime": "Levenslang",
+    "errorItem": "Fout: {message}",
+    "warningItem": "Let op: {message}",
+    "submit": "Importeren",
+    "submitCount": "{count, plural, one {{shown} garantie importeren} other {{shown} garanties importeren}}",
+    "toasts": {
+      "imported": "{count, plural, one {{shown} garantie geïmporteerd} other {{shown} garanties geïmporteerd}}",
+      "failed": "De garanties konden niet worden geïmporteerd"
+    }
+  }
+}

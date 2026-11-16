@@ -48,6 +48,7 @@ export interface DelegateSectionGrants {
   budgets: boolean;
   reports: boolean;
   ai: boolean;
+  warranties: boolean;
   /**
    * Derived (not a stored section): true when the delegate can read any
    * non-investment account, so the Transactions section/nav is reachable.
@@ -69,6 +70,7 @@ export interface DelegateSectionFlags {
   budgetsCanRead?: boolean;
   reportsCanRead?: boolean;
   aiCanRead?: boolean;
+  warrantiesCanRead?: boolean;
 }
 
 /** Owner reference data served for a joint account's transaction form. */

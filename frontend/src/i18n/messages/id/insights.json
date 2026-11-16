@@ -4,19 +4,29 @@
     "subtitle": "Analisis bertenaga AI tentang pola dan anomali pengeluaran Anda"
   },
   "list": {
-    "lastUpdated": "Terakhir diperbarui: {date} {time}",
     "refreshButton": "Perbarui Wawasan",
-    "generating": "Membuat...",
+    "refreshAge": "({time})",
+    "summary": {
+      "active": "Wawasan Aktif",
+      "alerts": "Peringatan Kritis",
+      "warnings": "Peringatan"
+    },
     "allTypes": "Semua Jenis",
-    "allSeverities": "Semua Tingkat Keparahan",
+    "typeFilterLabel": "Jenis",
+    "severityFilterLabel": "Tingkat Keparahan",
+    "severityFilter": {
+      "all": "Semua ({count})",
+      "alert": "Peringatan Kritis ({count})",
+      "warning": "Peringatan ({count})",
+      "info": "Info ({count})"
+    },
     "showDismissed": "Tampilkan yang ditutup",
     "emptyNoInsights": "Belum ada wawasan yang dibuat. Klik \"Perbarui Wawasan\" untuk menganalisis pola pengeluaran Anda.",
     "emptyFiltered": "Tidak ada wawasan yang cocok dengan filter Anda saat ini.",
     "generateButton": "Buat Wawasan",
-    "alertCount": "{count, plural, one {# peringatan} other {# peringatan}}",
-    "warningCount": "{count, plural, one {# pemberitahuan} other {# pemberitahuan}}",
     "errorLoadFailed": "Gagal memuat wawasan. Silakan coba lagi.",
     "errorGenerateFailed": "Gagal membuat wawasan. Pastikan Anda telah mengonfigurasi penyedia AI.",
+    "errorDismissFailed": "Gagal menutup wawasan. Silakan coba lagi.",
     "errorTimeout": "Pembuatan wawasan memakan waktu lebih lama dari yang diharapkan. Harap tunggu atau muat ulang halaman."
   },
   "card": {

@@ -3,10 +3,12 @@ import { render, screen, fireEvent } from '@/test/render';
 import { TopGroupsPanel } from './TopGroupsPanel';
 import type { GroupedTotal } from '@/types/transaction';
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({ formatCurrency: (a: number) => `$${a.toFixed(2)}` }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({ ...numberFormatMockDefaults(), formatCurrency: (a: number) => `$${a.toFixed(2)}` }),
+  };
+});
 const totals: GroupedTotal[] = [
   { id: 'c1', name: 'Rent', currencyCode: 'CAD', total: -1200, count: 1 },
   { id: 'c2', name: 'Salary', currencyCode: 'CAD', total: 3000, count: 1 },

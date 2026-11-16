@@ -117,6 +117,7 @@ create matching JSON files for every locale.
 | `scheduledTransactions` | Scheduled transaction forms and occurrence overrides      |
 | `budgets`               | Budget dashboard, wizard, categories, strategies          |
 | `investments`           | Investment transactions and holdings                      |
+| `bonds`                 | Treasury bonds page (on sale, history) and its entry links |
 | `securities`            | Securities list, forms, price/transaction history         |
 | `reports`               | All report views (net worth, cash flow, investments, ...) |
 | `insights`              | Insights list and detail                                  |

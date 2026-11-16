@@ -16,6 +16,10 @@ vi.mock('@/lib/backupApi', () => ({
     enableWithLoginPassword: vi.fn(),
     setBackupPassword: vi.fn(),
     disableEncryption: vi.fn(),
+    listStoredBackups: vi.fn(),
+    downloadStoredBackup: vi.fn(),
+    getOffsiteSettings: vi.fn(),
+    updateOffsiteSettings: vi.fn(),
   },
   BACKUP_PASSWORD_REQUIRED_CODE: 'BACKUP_PASSWORD_REQUIRED',
   // Mirror the real magic-byte sniffing so the restore form shows the
@@ -92,6 +96,33 @@ describe('BackupRestoreSection', () => {
       method: 'login-password',
       available: true,
     });
+    // No automatic-backup schedule and nothing on disk: the stored-backups
+    // subsection renders nothing, which is the state every test below that is
+    // not about it expects.
+    (backupApi.listStoredBackups as ReturnType<typeof vi.fn>).mockResolvedValue({
+      enabled: false,
+      backups: [],
+    });
+    // Off-site destinations are off: the folded destinations form renders its
+    // own controls, which no test below is about. It only mounts when the
+    // stored-backups sub-section itself renders (schedule armed or artifacts on
+    // disk), so most tests below never reach it.
+    (backupApi.getOffsiteSettings as ReturnType<typeof vi.fn>).mockResolvedValue(
+      {
+        s3Mode: 'off',
+        s3Bucket: null,
+        s3Region: null,
+        s3Prefix: null,
+        s3Endpoint: null,
+        s3ForcePathStyle: false,
+        s3AccessKeyIdSet: false,
+        s3SecretAccessKeySet: false,
+        emailEnabled: false,
+        emailTo: null,
+        deploymentS3Available: true,
+        encryptionConfigured: true,
+      },
+    );
   });
 
   it('renders backup and restore sections', async () => {
@@ -354,7 +385,7 @@ describe('BackupRestoreSection', () => {
   it('restores backup successfully and shows summary modal', async () => {
     (backupApi.restoreBackup as ReturnType<typeof vi.fn>).mockResolvedValue({
       message: 'Backup restored successfully',
-      restored: { categories: 5, accounts: 3 },
+      restored: { categories: 5, accounts: 3, sharedGroups: 2 },
     });
 
     await renderSection(localUser);
@@ -390,7 +421,10 @@ describe('BackupRestoreSection', () => {
     expect(screen.getByText('5')).toBeInTheDocument();
     expect(screen.getByText('Accounts')).toBeInTheDocument();
     expect(screen.getByText('3')).toBeInTheDocument();
-    expect(screen.getByText('8')).toBeInTheDocument(); // Total
+    expect(screen.getByText('Shared groups')).toBeInTheDocument();
+    expect(screen.queryByText('sharedGroups')).not.toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
+    expect(screen.getByText('10')).toBeInTheDocument(); // Total, including shared groups
     expect(screen.getByText('Done')).toBeInTheDocument();
 
     // Clicking Done closes the modal
@@ -487,6 +521,190 @@ describe('BackupRestoreSection', () => {
       expect(
         screen.getByText(/1 AI provider was restored without a usable API key/),
       ).toBeInTheDocument();
+    });
+
+    it('says when restored securities were left unlinked from their bond instrument', async () => {
+      await restoreWith({
+        message: 'Backup restored successfully',
+        restored: { accounts: 4 },
+        unlinkedBondSecurities: { count: 2, symbols: ['EDO0936', 'TOS1029'] },
+      });
+
+      expect(
+        screen.getByText(/2 bond securities were restored unlinked/),
+      ).toBeInTheDocument();
+      // Each one is named, so the reader knows which to relink; nothing is hidden.
+      expect(screen.getByText('Affected securities: EDO0936, TOS1029.')).toBeInTheDocument();
+      expect(screen.queryByText(/and \d+ more/)).not.toBeInTheDocument();
+      // Not part of the record total.
+      expect(screen.queryByText('6')).not.toBeInTheDocument();
+    });
+
+    it('says how many symbols are not listed when the server capped the list', async () => {
+      await restoreWith({
+        message: 'Backup restored successfully',
+        restored: { accounts: 4 },
+        unlinkedBondSecurities: { count: 53, symbols: ['A', 'B', 'C'] },
+      });
+      expect(screen.getByText(/Affected securities: A, B, C\./)).toHaveTextContent('and 50 more');
+    });
+
+    it('says how many bond transactions lost their series and what to do', async () => {
+      await restoreWith({
+        message: 'Backup restored successfully',
+        restored: { accounts: 4 },
+        unlinkedBondSeries: { count: 7 },
+      });
+      expect(
+        screen.getByText(/7 bond transactions lost their series/),
+      ).toHaveTextContent('keep none until you fetch it');
+      // Not part of the record total.
+      expect(screen.queryByText('11')).not.toBeInTheDocument();
+    });
+
+    it('lists the series the restore could not fetch with a reason each and what to do', async () => {
+      await restoreWith({
+        message: 'Backup restored successfully',
+        restored: { accounts: 4 },
+        unrecoveredBondSeries: {
+          count: 4,
+          series: [
+            { issuerCountryCode: 'PL', seriesCode: 'EDO1036', reason: 'not-published' },
+            { issuerCountryCode: 'PL', seriesCode: 'TOS1029', reason: 'source-unavailable' },
+            { issuerCountryCode: 'PL', seriesCode: 'COI0128', reason: 'rate-limited' },
+          ],
+        },
+      });
+      expect(screen.getByText(/4 bond series named in the backup could not be fetched/)).toBeInTheDocument();
+      expect(screen.getByText(/EDO1036 \(PL\): the issuer has not published/)).toBeInTheDocument();
+      expect(screen.getByText(/TOS1029 \(PL\): the official source did not answer/)).toBeInTheDocument();
+      expect(screen.getByText(/COI0128 \(PL\): the official source asked to slow down/)).toBeInTheDocument();
+      expect(screen.getByText(/and 1 more/)).toBeInTheDocument();
+      expect(screen.getByText(/fetch the series on its page \(Refresh\)/)).toBeInTheDocument();
+    });
+
+    it('explains an unknown reason generically and says nothing when none were unrecovered', async () => {
+      await restoreWith({
+        message: 'Backup restored successfully',
+        restored: { accounts: 1 },
+        unrecoveredBondSeries: {
+          count: 1,
+          series: [{ issuerCountryCode: 'PL', seriesCode: 'EDO1036', reason: 'mystery' }],
+        },
+      });
+      expect(screen.getByText(/EDO1036 \(PL\): unknown reason/)).toBeInTheDocument();
+    });
+
+    it('says nothing about unrecovered series when there are none', async () => {
+      await restoreWith({
+        message: 'Backup restored successfully',
+        restored: { accounts: 1 },
+      });
+      expect(screen.queryByText(/could not be fetched/)).not.toBeInTheDocument();
+    });
+
+    it('says nothing about lost series when none were', async () => {
+      await restoreWith({
+        message: 'Backup restored successfully',
+        restored: { accounts: 1 },
+        unlinkedBondSeries: { count: 0 },
+      });
+      expect(screen.queryByText(/lost their series/)).not.toBeInTheDocument();
+    });
+
+    it('names the accounts whose currency kind disagrees with their type and how to repair them', async () => {
+      await restoreWith({
+        message: 'Backup restored successfully',
+        restored: { accounts: 4 },
+        currencyKindMismatches: {
+          accounts: ['Cold wallet', 'Chequing'],
+          accountCount: 2,
+          securities: [],
+          securityCount: 0,
+          defaultCurrency: null,
+        },
+      });
+      expect(
+        screen.getByText(/2 accounts came back with a currency whose kind does not match their type/),
+      ).toHaveTextContent("Edit the account's currency, or the currency's kind on the Currencies page.");
+      expect(screen.getByText('Affected accounts: Cold wallet, Chequing.')).toBeInTheDocument();
+      expect(screen.queryByText(/priced in a cryptocurrency/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/default currency/)).not.toBeInTheDocument();
+      // Not part of the record total.
+      expect(screen.queryByText('6')).not.toBeInTheDocument();
+    });
+
+    it('uses the singular form for one mismatched account', async () => {
+      await restoreWith({
+        message: 'Backup restored successfully',
+        restored: { accounts: 1 },
+        currencyKindMismatches: {
+          accounts: ['Cold wallet'],
+          accountCount: 1,
+          securities: [],
+          securityCount: 0,
+          defaultCurrency: null,
+        },
+      });
+      expect(
+        screen.getByText(/1 account came back with a currency whose kind does not match its type/),
+      ).toBeInTheDocument();
+    });
+
+    it('names the securities priced in a cryptocurrency and says how many the server left out', async () => {
+      await restoreWith({
+        message: 'Backup restored successfully',
+        restored: { accounts: 4 },
+        currencyKindMismatches: {
+          accounts: ['Cold wallet'],
+          accountCount: 53,
+          securities: ['GBTC', 'IBIT'],
+          securityCount: 52,
+          defaultCurrency: null,
+        },
+      });
+      expect(
+        screen.getByText(/52 securities are priced in a cryptocurrency/),
+      ).toHaveTextContent("Edit the security's currency, or the currency's kind on the Currencies page.");
+      expect(screen.getByText(/Affected securities: GBTC, IBIT\./)).toHaveTextContent('and 50 more');
+      expect(screen.getByText(/Affected accounts: Cold wallet\./)).toHaveTextContent('and 52 more');
+    });
+
+    it('says the default currency is a cryptocurrency and to choose a fiat one', async () => {
+      await restoreWith({
+        message: 'Backup restored successfully',
+        restored: { accounts: 1 },
+        currencyKindMismatches: {
+          accounts: [],
+          accountCount: 0,
+          securities: [],
+          securityCount: 0,
+          defaultCurrency: 'BTC',
+        },
+      });
+      expect(
+        screen.getByText(/Your default currency, BTC, is a cryptocurrency on this server/),
+      ).toHaveTextContent('Choose a fiat Default Currency in Settings → Preferences.');
+      expect(screen.queryByText(/came back with a currency/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/Affected accounts/)).not.toBeInTheDocument();
+    });
+
+    it('says nothing about currency kinds when nothing disagrees', async () => {
+      await restoreWith({
+        message: 'Backup restored successfully',
+        restored: { accounts: 1 },
+      });
+      expect(screen.queryByText(/came back with a currency/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/priced in a cryptocurrency/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/is a cryptocurrency on this server/)).not.toBeInTheDocument();
+    });
+
+    it('says nothing about bond links when none were dropped', async () => {
+      await restoreWith({
+        message: 'Backup restored successfully',
+        restored: { accounts: 1 },
+      });
+      expect(screen.queryByText(/restored unlinked/)).not.toBeInTheDocument();
     });
 
     it('says nothing when every provider key came back', async () => {
@@ -946,6 +1164,72 @@ describe('BackupRestoreSection', () => {
     });
   });
 
+  describe('restore: interrupted before the server replied', () => {
+    const INTERRUPTED =
+      'The restore was interrupted before the server replied. A restore is all-or-nothing, so your data is either fully restored or unchanged. Reload the page to see which before trying again.';
+
+    function axiosFailure(response?: { status: number; data: unknown }) {
+      const err = new Error('request failed') as Error & {
+        isAxiosError: boolean;
+        response?: { status: number; data: unknown };
+      };
+      err.isAxiosError = true;
+      err.response = response;
+      return err;
+    }
+
+    async function submitRestoreRejectedWith(error: Error) {
+      (backupApi.restoreBackup as ReturnType<typeof vi.fn>).mockRejectedValue(error);
+      await renderSection(localUser);
+      fireEvent.click(screen.getByText('Restore from Backup...'));
+      await act(async () => {
+        fireEvent.change(
+          screen.getByLabelText('Select backup file') as HTMLInputElement,
+          { target: { files: [new File(['{}'], 'b.json.gz')] } },
+        );
+      });
+      fireEvent.change(screen.getByPlaceholderText('Enter your password'), {
+        target: { value: 'pw' },
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByText('Confirm Restore'));
+      });
+    }
+
+    it('says the outcome is unknown when the backend went away mid-restore', async () => {
+      // What the large-upload proxy answers when the backend restarts under it.
+      await submitRestoreRejectedWith(
+        axiosFailure({ status: 502, data: { error: 'Backend unavailable' } }),
+      );
+
+      await waitFor(() =>
+        expect(toast.error).toHaveBeenCalledWith(INTERRUPTED, { duration: 12000 }),
+      );
+    });
+
+    it('says the outcome is unknown when no response arrived at all', async () => {
+      await submitRestoreRejectedWith(axiosFailure());
+
+      await waitFor(() =>
+        expect(toast.error).toHaveBeenCalledWith(INTERRUPTED, { duration: 12000 }),
+      );
+    });
+
+    it("keeps the backend's own message on a 503 the restore queue answered", async () => {
+      // The queue refuses with a 503 and a message before anything is written;
+      // calling that an interruption would send the user to check for a restore
+      // that never started.
+      await submitRestoreRejectedWith(
+        axiosFailure({ status: 503, data: { message: 'Restore queue is full' } }),
+      );
+
+      await waitFor(() =>
+        expect(toast.error).toHaveBeenCalledWith('Failed to restore backup'),
+      );
+      expect(toast.error).not.toHaveBeenCalledWith(INTERRUPTED, expect.anything());
+    });
+  });
+
   describe('OIDC restore', () => {
     it('passes the OIDC token instead of a password', async () => {
       (backupApi.restoreBackup as ReturnType<typeof vi.fn>).mockResolvedValue({
@@ -1073,6 +1357,90 @@ describe('BackupRestoreSection', () => {
           backupPassword: 'backup-pw',
         }),
       );
+    });
+  });
+
+  describe('restoring from the automatic backups on the server', () => {
+    const storedBackup = {
+      filename: 'monize-backup-daily-2026-04-15.mzbe',
+      modifiedAt: '2026-04-15T02:00:00.000Z',
+      size: 2048,
+      encrypted: true,
+    };
+
+    async function openServerList() {
+      (backupApi.listStoredBackups as ReturnType<typeof vi.fn>).mockResolvedValue({
+        enabled: true,
+        backups: [storedBackup],
+      });
+      await renderSection(localUser);
+      await act(async () => {
+        fireEvent.click(screen.getByText('Automatic Backups'));
+      });
+    }
+
+    beforeEach(async () => {
+      await openServerList();
+    });
+
+    it('hands the downloaded artifact to the one restore workflow', async () => {
+      // The bytes carry the encrypted-envelope magic, so the form must ask for
+      // the backup password exactly as it would for a file picked from disk --
+      // that is the whole claim: nothing downstream can tell where the file
+      // came from.
+      (backupApi.downloadStoredBackup as ReturnType<typeof vi.fn>).mockResolvedValue(
+        new File(
+          [new Uint8Array([0x4d, 0x5a, 0x42, 0x45])],
+          storedBackup.filename,
+        ),
+      );
+      const restoreMock = backupApi.restoreBackup as ReturnType<typeof vi.fn>;
+      restoreMock.mockResolvedValue({ message: 'ok', restored: {} });
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
+      });
+
+      expect(backupApi.downloadStoredBackup).toHaveBeenCalledWith(
+        storedBackup.filename,
+      );
+      // The restore form is open, names the artifact, and is asking for the
+      // encrypted backup's own password.
+      expect(
+        screen.getByText(`Selected: ${storedBackup.filename}`),
+      ).toBeInTheDocument();
+      const backupPw = screen.getByPlaceholderText('Backup password');
+
+      fireEvent.change(screen.getByPlaceholderText('Enter your password'), {
+        target: { value: 'account-pw' },
+      });
+      fireEvent.change(backupPw, { target: { value: 'backup-pw' } });
+      await act(async () => {
+        fireEvent.click(screen.getByText('Confirm Restore'));
+      });
+
+      expect(restoreMock).toHaveBeenCalledWith({
+        file: expect.objectContaining({ name: storedBackup.filename }),
+        password: 'account-pw',
+        backupPassword: 'backup-pw',
+      });
+      // The same summary dialogue a file restore ends in.
+      expect(screen.getByText('Restore Complete')).toBeInTheDocument();
+    });
+
+    it('does not open the restore form when the download fails', async () => {
+      (backupApi.downloadStoredBackup as ReturnType<typeof vi.fn>).mockRejectedValue(
+        new Error('gone'),
+      );
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
+      });
+
+      expect(toast.error).toHaveBeenCalled();
+      // Nothing was selected, so the destructive form stays shut.
+      expect(screen.queryByText('Confirm Restore')).toBeNull();
+      expect(backupApi.restoreBackup).not.toHaveBeenCalled();
     });
   });
 

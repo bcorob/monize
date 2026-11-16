@@ -11,9 +11,76 @@
   "uploaded": "Đã thêm tệp đính kèm",
   "deleted": "Đã xóa tệp đính kèm",
   "loadFailed": "Không tải được tệp đính kèm",
+  "retry": "Thử lại",
   "uploadFailed": "Không tải lên được tệp đính kèm",
   "deleteFailed": "Không xóa được tệp đính kèm",
   "tooLarge": "Tệp quá lớn (tối đa {max})",
   "unsupported": "Loại tệp không được hỗ trợ. Cho phép: hình ảnh hoặc PDF",
-  "tooMany": "Tối đa {max} tệp đính kèm cho mỗi giao tác"
+  "tooMany": "Tối đa {max} tệp đính kèm cho mỗi giao tác",
+  "fromWarranty": "Từ bảo hành: {name}",
+  "fromLinkedWarranty": "Từ một bảo hành được liên kết",
+  "scan": {
+    "button": "Quét tài liệu",
+    "title": "Quét tài liệu",
+    "description": "Làm thẳng và làm sạch ảnh chụp tài liệu trước khi đính kèm.",
+    "analysing": "Đang tìm tài liệu trong ảnh…",
+    "failed": "Không thể quét tài liệu. Bạn vẫn có thể đính kèm ảnh như hiện tại.",
+    "viewEnhanced": "Đã cải thiện",
+    "viewOriginal": "Ảnh gốc",
+    "rotate": "Xoay",
+    "styleLabel": "Kiểu hoàn thiện",
+    "styles": {
+      "colour": "Màu",
+      "grayscale": "Thang xám",
+      "blackAndWhite": "Đen trắng",
+      "none": "Không xử lý"
+    },
+    "styleHints": {
+      "colour": "Làm đều ánh sáng, tăng độ tương phản và làm rõ chữ.",
+      "grayscale": "Vẫn xử lý như vậy nhưng bỏ màu. Nhẹ hơn và không bị ám màu như giấy dưới ánh đèn.",
+      "blackAndWhite": "Chỉ còn mực và giấy. Tốt nhất cho chữ in; ảnh và logo sẽ bị bẹt.",
+      "none": "Chỉ nắn thẳng và cắt gọn, còn lại đúng như đã chụp. Dùng khi việc xử lý làm hỏng nội dung."
+    },
+    "adjustments": {
+      "brightness": "Độ sáng ({value})",
+      "contrast": "Độ tương phản ({value})"
+    },
+    "resetAdjustments": "Đặt lại độ sáng và độ tương phản",
+    "adjustHint": "Chuyển sang “Ảnh gốc” để kéo các góc nếu đường viền chưa đúng.",
+    "updating": "Đang cập nhật bản xem trước…",
+    "noDocumentFound": "Không tìm thấy đường viền tài liệu nên toàn bộ ảnh được sử dụng. Chuyển sang “Ảnh gốc” và tự đặt các góc.",
+    "previewEnhancedAlt": "Xem trước bản quét đã cải thiện",
+    "previewOriginalAlt": "Xem trước ảnh gốc",
+    "useEnhanced": "Dùng bản đã cải thiện",
+    "keepOriginal": "Chỉ giữ ảnh gốc",
+    "retake": "Chụp lại",
+    "cancel": "Hủy",
+    "originalTooLarge": "Ảnh gốc lớn hơn {max} nên chỉ bản quét đã cải thiện được đính kèm.",
+    "warnings": {
+      "blurry": "Ảnh có vẻ bị nhòe. Chụp lại sẽ cho bản quét sắc nét hơn.",
+      "edgesOutsideFrame": "Tài liệu chạm đến mép ảnh nên một cạnh có thể bị cắt mất. Hãy chụp lại và chừa lề xung quanh toàn bộ trang, sao cho không cạnh nào chạm vào viền ảnh.",
+      "lowResolution": "Bản quét khá nhỏ, chữ nhỏ có thể khó đọc."
+    },
+    "corners": {
+      "label": "Các góc tài liệu",
+      "topLeft": "Góc trên bên trái",
+      "topRight": "Góc trên bên phải",
+      "bottomRight": "Góc dưới bên phải",
+      "bottomLeft": "Góc dưới bên trái"
+    },
+    "originalKept": "đã giữ ảnh gốc"
+  },
+  "preview": {
+    "loading": "Đang tải bản xem trước…",
+    "failed": "Không thể tải bản xem trước. Bạn vẫn có thể tải tệp xuống.",
+    "storeUnavailable": "Tệp này nằm trong bộ lưu trữ mà máy chủ hiện không thể truy cập, nên không thể xem trước hay tải xuống. Không có gì bị mất: hãy nhờ quản trị viên khôi phục cài đặt lưu trữ tệp đính kèm.",
+    "unsupported": "Không thể xem trước loại tệp này. Bạn vẫn có thể tải nó xuống.",
+    "fit": "Vừa màn hình",
+    "actualSize": "Kích thước thật",
+    "versionLabel": "Phiên bản",
+    "zoomLabel": "Thu phóng",
+    "pageCount": "{count, plural, other {# trang}}",
+    "page": "Trang {page} / {total}",
+    "open": "Xem trước {name}"
+  }
 }

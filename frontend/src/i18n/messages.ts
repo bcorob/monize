@@ -1,4 +1,5 @@
 import { DEFAULT_LOCALE, localeBase } from "./config";
+import { withReportNames } from "./client-messages";
 import { deepMerge } from "./deep-merge";
 
 /**
@@ -16,6 +17,7 @@ const NAMESPACES = [
   "settings",
   "auth",
   "navigation",
+  "notifications",
   "accounts",
   "accountDetail",
   "accountDetail-creditCard",
@@ -25,13 +27,18 @@ const NAMESPACES = [
   "accountDetail-fxFees",
   "admin",
   "ai",
+  "aiReview",
   "bills",
+  "bonds",
   "budgets",
+  "calendar",
   "categories",
   "categoryDetail",
   "currencies",
   "dashboard",
+  "emailReceipts",
   "emergencyAccess",
+  "help",
   "import",
   "insights",
   "institutions",
@@ -42,13 +49,18 @@ const NAMESPACES = [
   "payees",
   "reconcile",
   "reports",
+  "rules",
   "scheduledTransactions",
   "securities",
   "securityDetail",
+  "share",
+  "sharedExpenses",
   "strategies",
   "tags",
+  "taxes",
   "tours",
   "transactions",
+  "warranties",
 ] as const;
 
 type Namespace = (typeof NAMESPACES)[number];
@@ -93,7 +105,7 @@ export async function loadMessages(locale: string): Promise<Messages> {
   const entries = await Promise.all(
     NAMESPACES.map(async (ns) => [ns, await loadNamespace(locale, ns)] as const),
   );
-  return Object.fromEntries(entries);
+  return withReportNames(Object.fromEntries(entries));
 }
 
 /**

@@ -1,24 +1,23 @@
 'use client';
 
-import { useState, memo, type JSX } from 'react';
+import { useState, memo, type JSX, type ReactNode } from 'react';
 import { useTranslations } from 'next-intl';
-import { isPast, isToday, addDays, isBefore } from 'date-fns';
-import toast from 'react-hot-toast';
+import { useFrequencyLabel } from './useFrequencyLabel';
 import { ScheduledTransaction } from '@/types/scheduled-transaction';
-import { scheduledTransactionsApi } from '@/lib/scheduled-transactions';
-import { parseLocalDate } from '@/lib/utils';
-import { getErrorMessage } from '@/lib/errors';
 import { useDateFormat } from '@/hooks/useDateFormat';
-import { useNumberFormat } from '@/hooks/useNumberFormat';
-import { formatAmountWithCommas, getDecimalPlacesForCurrency } from '@/lib/format';
+import { useLocalizedAmount } from '@/hooks/useLocalizedAmount';
+import { getDecimalPlacesForCurrency } from '@/lib/format';
 import {
+  nextOccurrenceDueDate,
+  occurrenceFollowsEstimate,
   overrideEffectiveAmount,
   scheduleEffectiveAmount,
 } from '@/lib/scheduled-effective-amount';
+import { estimateSubjectOf, useAmountEstimateText } from './useAmountEstimateText';
 import { useLongPress, type LongPressRowHandlers } from '@/hooks/useLongPress';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { RowActions } from '@/components/ui/row-actions/RowActions';
 import { RowActionSheet } from '@/components/ui/row-actions/RowActionSheet';
-import type { RowAction } from '@/components/ui/row-actions/rowAction';
 import {
   HIGHLIGHT_FLASH,
   HIGHLIGHT_FLASH_CELL,
@@ -26,90 +25,30 @@ import {
 } from '@/hooks/useHighlightTarget';
 import { useTableDensity, type DensityLevel } from '@/hooks/useTableDensity';
 import { useDensityPreference } from '@/store/densityStore';
-
-interface ScheduledActionLabels {
-  post: string;
-  skip: string;
-  editOccurrence: string;
-  editSchedule: string;
-  delete: string;
-}
-
-interface ScheduledActionHandlers {
-  onPost?: (transaction: ScheduledTransaction) => void;
-  onOpenConfirm: (action: 'post' | 'skip' | 'delete', transaction: ScheduledTransaction) => void;
-  onEdit?: (transaction: ScheduledTransaction) => void;
-  onEditOccurrence?: (transaction: ScheduledTransaction) => void;
-}
-
-/**
- * Builds the standard row actions for a scheduled transaction. Shared by the
- * desktop `RowActions` cell and the mobile `RowActionSheet`.
- */
-function buildScheduledActions(
-  transaction: ScheduledTransaction,
-  isProcessing: boolean,
-  labels: ScheduledActionLabels,
-  handlers: ScheduledActionHandlers,
-): RowAction[] {
-  return [
-    {
-      key: 'post',
-      label: labels.post,
-      icon: 'post',
-      tone: 'success',
-      disabled: isProcessing,
-      onClick: () => (handlers.onPost ? handlers.onPost(transaction) : handlers.onOpenConfirm('post', transaction)),
-      hidden: !transaction.isActive,
-    },
-    {
-      key: 'skip',
-      label: labels.skip,
-      icon: 'skip',
-      tone: 'warning',
-      disabled: isProcessing,
-      onClick: () => handlers.onOpenConfirm('skip', transaction),
-      hidden: !transaction.isActive || transaction.frequency === 'ONCE',
-    },
-    {
-      key: 'editOccurrence',
-      label: labels.editOccurrence,
-      icon: 'schedule',
-      tone: 'accent',
-      onClick: () => handlers.onEditOccurrence?.(transaction),
-      hidden: !handlers.onEditOccurrence || !transaction.isActive,
-    },
-    {
-      key: 'editSchedule',
-      label: labels.editSchedule,
-      icon: 'edit',
-      tone: 'primary',
-      onClick: () => handlers.onEdit?.(transaction),
-      hidden: !handlers.onEdit,
-    },
-    {
-      key: 'delete',
-      label: labels.delete,
-      icon: 'delete',
-      tone: 'delete',
-      destructive: true,
-      disabled: isProcessing,
-      onClick: () => handlers.onOpenConfirm('delete', transaction),
-    },
-  ];
-}
+import { useIsMobile } from '@/hooks/useIsMobile';
+import { CellLabel } from '@/components/ui/Table';
+import { InfoTooltip } from '@/components/ui/InfoTooltip';
+import {
+  buildScheduledActions,
+  runScheduledAction,
+  scheduledConfirmConfig,
+  ScheduledEmptyState,
+  useDueDateStatus,
+  useScheduledAmountFormatter,
+  type ConfirmAction,
+  type ConfirmState,
+  type DueDateStatus,
+} from '@/components/scheduled-transactions/ScheduledTransactionListParts';
 
 /**
  * Cash impact of a scheduled transaction occurrence, taking nextOverride into
- * account when `useOverride` is true.
- *
- * This is the server's effective amount -- what the occurrence would post
- * *today* -- not the persisted `amount` and not a locally recomputed one (issue
- * #1247). A scheduled investment's stored `amount` is its security-currency cash
- * impact, and it is converted at the *current* settlement rate; recomputing the
- * pre-FX figure here (which this list used to do) showed a number in one currency
- * under another currency's code, and disagreed with both the cash-flow forecast
- * and the posting. `null` means the current amount is unknown.
+ * account when `useOverride` is true. This is the server's effective amount --
+ * what the occurrence would post *today* -- not the persisted `amount` and not a
+ * locally recomputed one (issue #1247). A scheduled investment's stored `amount`
+ * is its security-currency cash impact, converted at the *current* settlement
+ * rate; recomputing the pre-FX figure here (which this list used to do) showed a
+ * number in one currency under another currency's code, and disagreed with both
+ * the cash-flow forecast and the posting. `null` means the amount is unknown.
  */
 function scheduledOccurrenceAmount(
   transaction: ScheduledTransaction,
@@ -121,15 +60,320 @@ function scheduledOccurrenceAmount(
     : scheduleEffectiveAmount(transaction).amount;
 }
 
-import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { EmptyState } from '@/components/ui/EmptyState';
+/**
+ * A scheduled transfer's `transferAccount` is its DESTINATION -- the account the
+ * money lands in when the occurrence posts -- so the tooltip's direction is
+ * fixed here rather than read off the amount's sign with `transferDirection`.
+ * That helper answers a different question: which way a POSTED leg moved, asked
+ * with that leg's own amount, and a schedule has one row rather than two.
+ * Changing this to derive from the sign would be a behaviour change, not a
+ * localization, and needs its own decision.
+ */
+const SCHEDULED_TRANSFER_DIRECTION = 'to';
 
-type ConfirmAction = 'post' | 'skip' | 'delete';
+/**
+ * What the Category column shows, in BOTH of this row's layouts: a five-way
+ * decision -- an investment chip naming the action and the security, a transfer
+ * chip, a split chip counting its lines, the category's own colour-mixed pill,
+ * or the muted em dash for a row with no category at all -- so it lives in one
+ * place rather than being re-decided by a layout mode. It stays in THIS file
+ * rather than beside the other shared pieces because these chips spell the
+ * recorded pill fingerprint, and that baseline is keyed per file.
+ *
+ * `bounded` is the one thing a caller may vary, and it is layout, not meaning:
+ * the tier cell has a column to sit in, while the card's chip shares a grid
+ * track with a caption, so there it takes `max-w-full` and truncates its label
+ * inside the chip the way `CategoryPill` does -- `title` included, since a
+ * label a track cut has to stay recoverable.
+ */
+function ScheduledCategoryMarker({
+  transaction,
+  badgePadding,
+  categoryColor,
+  bounded = false,
+}: {
+  transaction: ScheduledTransaction;
+  badgePadding: string;
+  categoryColor: string | null;
+  bounded?: boolean;
+}) {
+  const t = useTranslations('scheduledTransactions');
+  // Both tooltips below reuse a string another surface already owns rather than
+  // adding a second spelling of it: `common.transferPayee` is the same
+  // "Transfer to <account>" the register resolves for a blank transfer payee,
+  // and `transactions.list.row.uncategorized` is what a register row calls a
+  // line filed nowhere.
+  const tCommon = useTranslations('common');
+  const tTransactions = useTranslations('transactions');
+  const cap = bounded ? ' max-w-full' : '';
+  const bound = (n: ReactNode) => (bounded ? <span className="truncate">{n}</span> : n);
+  const investmentLabel = t('form.tabs.investment');
+  const transferAccountName = transaction.transferAccount?.name;
+  return transaction.isInvestment ? (
+    <span
+      className={`inline-flex text-xs font-medium rounded-full ${badgePadding}${cap} bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200`}
+      title={
+        transaction.investmentSecurity
+          ? `${transaction.investmentAction || ''} ${transaction.investmentSecurity.symbol || transaction.investmentSecurity.name}`.trim()
+          : transaction.investmentAction || investmentLabel
+      }
+    >
+      {bound(transaction.investmentSecurity?.symbol
+        ? `${transaction.investmentAction || investmentLabel}: ${transaction.investmentSecurity.symbol}`
+        : transaction.investmentAction || investmentLabel)}
+    </span>
+  ) : transaction.isTransfer ? (
+    <span
+      className={`inline-flex text-xs font-medium rounded-full ${badgePadding}${cap} bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200`}
+      // No counterpart name means no label, exactly as `transferPayeeParams`
+      // decides it for the register: the filler word it used to interpolate
+      // ("Transfer to account") named nothing the reader could act on.
+      title={
+        transferAccountName
+          ? tCommon('transferPayee', {
+              direction: SCHEDULED_TRANSFER_DIRECTION,
+              name: transferAccountName,
+            })
+          : undefined
+      }
+    >
+      {bound(t('form.tabs.transfer'))}
+    </span>
+  ) : transaction.isSplit ? (
+    <span
+      className={`inline-flex text-xs font-medium rounded-full ${badgePadding}${cap} bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200`}
+      title={transaction.splits
+        ?.map((s) => s.category?.name || tTransactions('list.row.uncategorized'))
+        .join(', ')}
+    >
+      {bound(t('list.splitBadge', { count: transaction.splits?.length || 0 }))}
+    </span>
+  ) : transaction.category ? (
+    <span
+      className={`inline-flex text-xs font-medium rounded-full ${badgePadding}${cap}`}
+      // Only where the label can be cut: `CategoryPill` pairs its inner
+      // `truncate` with a `title`, and copying the truncation without the
+      // recovery leaves the one surface that shows a category unable to
+      // read it. The tier chip is uncut, so it keeps no attribute at all.
+      title={bounded ? transaction.category.name : undefined}
+      style={{
+        backgroundColor: categoryColor
+          ? `color-mix(in srgb, ${categoryColor} 15%, var(--category-bg-base, #e5e7eb))`
+          : 'var(--category-bg-base, #e5e7eb)',
+        color: categoryColor
+          ? `color-mix(in srgb, ${categoryColor} 85%, var(--category-text-mix, #000))`
+          : 'var(--category-text-base, #6b7280)',
+      }}
+    >
+      {bound(transaction.category.name)}
+    </span>
+  ) : (
+    <span className="text-xs text-gray-400 dark:text-gray-500">{'\u2014'}</span>
+  );
+}
 
-interface ConfirmState {
-  isOpen: boolean;
-  action: ConfirmAction | null;
-  transaction: ScheduledTransaction | null;
+/**
+ * What the Auto column shows, in BOTH layouts: the auto-post chip, or the muted
+ * em dash for a schedule the user posts by hand -- a decision, not a label, so a
+ * layout mode never re-makes it. It is a READ-ONLY marker of `autoPost`, never a
+ * toggle: the flag is set on the schedule's own form.
+ */
+function ScheduledAutoMarker({
+  transaction,
+  badgePadding,
+}: {
+  transaction: ScheduledTransaction;
+  badgePadding: string;
+}) {
+  const t = useTranslations('scheduledTransactions');
+  return transaction.autoPost ? (
+    <span
+      className={`inline-flex items-center text-xs font-medium rounded-full ${badgePadding} bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200`}
+    >
+      {t('list.autoPostBadge')}
+    </span>
+  ) : (
+    <span className="text-xs text-gray-400 dark:text-gray-500">{'\u2014'}</span>
+  );
+}
+
+/**
+ * What the Schedule column shows, in BOTH layouts: the next due date (with the
+ * slot's own date struck through when an override moved the occurrence), then
+ * the frequency, the occurrences remaining and the "N modified" chip.
+ *
+ * `dueDateStatus` is passed rather than derived so the CARD can pass `null`:
+ * there the overdue chip sits beside the name on line 1, exactly where the tier
+ * row's own phone sub-line puts it, and drawing it here too would print it
+ * twice on one card.
+ */
+function ScheduledScheduleDetails({
+  transaction,
+  formatDate,
+  dueDateStatus,
+  stackedLines,
+}: {
+  transaction: ScheduledTransaction;
+  formatDate: (date: string) => string;
+  dueDateStatus: DueDateStatus | null;
+  stackedLines: string;
+}) {
+  const t = useTranslations('scheduledTransactions');
+  const frequencyLabel = useFrequencyLabel();
+  return (
+    <div className={stackedLines}>
+      <div className="text-sm text-gray-900 dark:text-gray-100">
+        {/* Show override date if it differs from the original next due date */}
+        {transaction.nextOverride?.overrideDate &&
+         transaction.nextDueDate &&
+         transaction.nextOverride.overrideDate !== String(transaction.nextDueDate).split('T')[0] ? (
+          <span className="inline-flex flex-col align-middle">
+            <span className="text-xs text-gray-400 dark:text-gray-500 line-through leading-tight">
+              {formatDate(transaction.nextDueDate)}
+            </span>
+            {/* What the struck-through pair means is an InfoTooltip, not a
+                hover-only `title`: a phone and a keyboard reach it too. */}
+            <span className="inline-flex items-center gap-1 leading-tight">
+              <span>{formatDate(transaction.nextOverride.overrideDate)}</span>
+              <InfoTooltip
+                text={t('list.modifiedDateTitle')}
+                iconClassName="h-3.5 w-3.5"
+                usePortal
+              />
+            </span>
+          </span>
+        ) : (
+          transaction.nextDueDate ? formatDate(transaction.nextDueDate) : '\u2014'
+        )}
+        {dueDateStatus && (
+          <span
+            className={`ml-1.5 inline-flex text-xs font-medium rounded-full px-1.5 py-0.5 ${dueDateStatus.className}`}
+          >
+            {dueDateStatus.label}
+          </span>
+        )}
+      </div>
+      <div className="text-xs text-gray-500 dark:text-gray-400">
+        {frequencyLabel(transaction)}
+        {transaction.occurrencesRemaining !== null && (
+          <span className="ml-1">{'\u00b7'} {t('list.occurrencesRemaining', { count: transaction.occurrencesRemaining })}</span>
+        )}
+        {transaction.overrideCount !== undefined && transaction.overrideCount > 0 && (
+          <span className="ml-1.5 inline-flex items-center gap-1 align-middle">
+            <span className="inline-flex text-xs font-medium rounded-full px-1.5 py-0.5 bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+              {t('list.modifiedBadge', { count: transaction.overrideCount })}
+            </span>
+            <InfoTooltip
+              text={t('list.modifiedTitle', { count: transaction.overrideCount })}
+              iconClassName="h-3.5 w-3.5"
+              usePortal
+            />
+          </span>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * The Amount column's figure, in BOTH layouts: the occurrence's EFFECTIVE
+ * amount and its settlement currency -- what it would post today -- never the
+ * persisted snapshot (issue #1247). Nothing here is re-decided by a layout
+ * mode: the struck-through base beside an overridden amount, the foreign-
+ * currency line under a converted estimate and the muted placeholder a null
+ * amount falls to are one implementation, called twice.
+ */
+function ScheduledAmountValue({
+  transaction,
+  formatAmount,
+}: {
+  transaction: ScheduledTransaction;
+  formatAmount: (amount: number | null | undefined, currencyCode?: string) => JSX.Element;
+}) {
+  const t = useTranslations('scheduledTransactions');
+  const formatAmountLocal = useLocalizedAmount();
+  const estimateText = useAmountEstimateText();
+  const baseAmount = scheduledOccurrenceAmount(transaction, false);
+  // The currency the effective amount is expressed in -- the settlement
+  // account's for an investment schedule, not the brokerage's `currencyCode`
+  // (issue #1247).
+  const amountCurrency = scheduleEffectiveAmount(transaction).currencyCode;
+  const overrideAmount = transaction.nextOverride
+    ? scheduledOccurrenceAmount(transaction, true)
+    : null;
+  // An occurrence that follows the estimate is priced at its own month's
+  // figure, which an override moving it into another month changes without
+  // anyone changing the amount (issue #2096): only a stated amount is a
+  // modification.
+  const followsEstimate = occurrenceFollowsEstimate(transaction, transaction.nextOverride);
+  const isModified =
+    !followsEstimate &&
+    overrideAmount != null &&
+    baseAmount != null &&
+    Number(overrideAmount) !== Number(baseAmount);
+  // A foreign-currency schedule shows the fixed amount the biller charges
+  // under the converted estimate, as a foreign-entered transaction row does.
+  const foreignLine =
+    transaction.originalCurrencyCode && transaction.originalAmount != null ? (
+      <div className="flex items-center justify-end gap-1 text-xs font-normal text-gray-500 dark:text-gray-400">
+        <span>
+          {transaction.originalCurrencyCode}{' '}
+          {formatAmountLocal(
+            Math.abs(Number(transaction.originalAmount)),
+            getDecimalPlacesForCurrency(transaction.originalCurrencyCode),
+          )}
+        </span>
+        <InfoTooltip
+          text={t('list.foreignAmountTitle')}
+          iconClassName="h-3.5 w-3.5"
+          align="right"
+          usePortal
+        />
+      </div>
+    ) : null;
+  // The next occurrence's amount is the history estimate (issue #2096): say
+  // so, and where it comes from or why it is unknown.
+  const estimatedLine = followsEstimate ? (
+    <div className="flex items-center justify-end gap-1 text-xs font-normal text-gray-500 dark:text-gray-400">
+      <span>{t('list.estimatedLabel')}</span>
+      <InfoTooltip
+        text={estimateText(
+          transaction.amountEstimate,
+          estimateSubjectOf(transaction),
+          nextOccurrenceDueDate(transaction),
+        )}
+        iconClassName="h-3.5 w-3.5"
+        align="right"
+        usePortal
+      />
+    </div>
+  ) : null;
+  if (isModified) {
+    return (
+      <div className="flex flex-col items-end">
+        <span className="text-xs text-gray-400 dark:text-gray-500 line-through">
+          {formatAmount(baseAmount, amountCurrency)}
+        </span>
+        <span className="inline-flex items-center gap-1">
+          <span>{formatAmount(overrideAmount, amountCurrency)}</span>
+          <InfoTooltip
+            text={t('list.modifiedAmountTitle')}
+            iconClassName="h-3.5 w-3.5"
+            align="right"
+            usePortal
+          />
+        </span>
+        {foreignLine}
+      </div>
+    );
+  }
+  return (
+    <>
+      {formatAmount(followsEstimate && transaction.nextOverride ? overrideAmount : baseAmount, amountCurrency)}
+      {foreignLine}
+      {estimatedLine}
+    </>
+  );
 }
 
 interface ScheduledTransactionRowProps {
@@ -141,7 +385,7 @@ interface ScheduledTransactionRowProps {
   index: number;
   formatDate: (date: string) => string;
   formatAmount: (amount: number | null | undefined, currencyCode?: string) => JSX.Element;
-  getDueDateStatus: (nextDueDate: string | undefined | null) => { label: string; className: string } | null;
+  getDueDateStatus: (nextDueDate: string | undefined | null) => DueDateStatus | null;
   getRowHandlers: (transaction: ScheduledTransaction) => LongPressRowHandlers;
   onPost?: (transaction: ScheduledTransaction) => void;
   onOpenConfirm: (action: 'post' | 'skip' | 'delete', transaction: ScheduledTransaction) => void;
@@ -149,6 +393,41 @@ interface ScheduledTransactionRowProps {
   onEditOccurrence?: (transaction: ScheduledTransaction) => void;
   categoryColorMap?: Map<string, string | null>;
   isHighlighted?: boolean;
+  /**
+   * Render the row as a wrapped card instead of the tier table's cells. The
+   * list sets it for phones at Normal density only (Model B: on a phone the
+   * density toggle picks the layout); every other width and density renders
+   * the tier row below, unchanged.
+   *
+   * The card carries SIX of this table's seven columns: Name / Payee, Amount,
+   * Schedule, Account, Category and Auto. FOUR of them a phone-width tier row
+   * does not show at all -- Account and Schedule are `hidden sm:table-cell`,
+   * Category and Auto `hidden md:table-cell` -- so the card is how they get
+   * back on screen; Name / Payee and Amount are the two a phone already shows.
+   *
+   * ONE column is left out: **Actions**, because the long-press (and
+   * right-click) sheet these same row handlers open already carries all five of
+   * its verbs. Nothing else is dropped -- everything hanging under a cell rides
+   * along: the payee sub-line, the struck-through original date of a moved
+   * occurrence, the occurrences-remaining count, the "N modified" chip, the
+   * struck-through base beside an overridden amount and the foreign-currency
+   * line under a converted estimate. The tier's own `sm:hidden` sub-line is not
+   * an omission either -- it restates the due date and frequency that line 2
+   * carries captioned and in full, and its overdue chip survives on line 1
+   * beside the name, where that sub-line puts it.
+   *
+   * The three lines are: Name (with the payee sub-line and the due-status chip)
+   * and Amount; Schedule and Account; Category and Auto.
+   *
+   * The two breakpoints are not the same one. The tier row's Actions cell is
+   * `min-[480px]` and `wrapped` covers everything below 640px, so between 480px
+   * and 639px at Normal density the actions move from inline buttons to that
+   * sheet -- and stop being tab-reachable there. It is the price of the card,
+   * paid for the four columns above; the register, accounts, payees and
+   * securities lists make the same trade at the same two widths, and Compact
+   * density is the way back to inline actions.
+   */
+  wrapped?: boolean;
 }
 
 const ScheduledTransactionRow = memo(function ScheduledTransactionRow({
@@ -167,21 +446,11 @@ const ScheduledTransactionRow = memo(function ScheduledTransactionRow({
   onEditOccurrence,
   categoryColorMap,
   isHighlighted,
+  wrapped = false,
 }: ScheduledTransactionRowProps) {
   const rowRef = useScrollIntoViewWhen<HTMLTableRowElement>(!!isHighlighted);
   const t = useTranslations('scheduledTransactions');
-  const actions = buildScheduledActions(
-    transaction,
-    isProcessing,
-    {
-      post: t('list.contextMenu.postTransaction'),
-      skip: t('list.contextMenu.skipOccurrence'),
-      editOccurrence: t('list.contextMenu.editOccurrence'),
-      editSchedule: t('list.contextMenu.editSchedule'),
-      delete: t('list.contextMenu.delete'),
-    },
-    { onPost, onOpenConfirm, onEdit, onEditOccurrence },
-  );
+  const frequencyLabel = useFrequencyLabel();
   const categoryColor = transaction.category
     ? (categoryColorMap?.get(transaction.category.id) ?? transaction.category.color)
     : null;
@@ -202,6 +471,168 @@ const ScheduledTransactionRow = memo(function ScheduledTransactionRow({
   // payee, the frequency and the occurrence count are all still on screen.
   const stackedLines = density === 'dense' ? 'flex items-baseline gap-1.5 flex-wrap' : '';
 
+  // Phone + Normal density: one wrapped card per row instead of the tier
+  // table's cells (see the `wrapped` prop). It is a LAYOUT mode, not a different
+  // set of facts -- the amount, the schedule details, the category chip and the
+  // auto-post marker are the same components the tier renders, so the two cannot
+  // disagree about what an occurrence costs, when it falls due or what an absent
+  // category looks like. Nothing in the card is interactive (the row's handlers
+  // own the click and the long press, and the tier's only control, the Actions
+  // cell, is the column the card drops), so nothing here needs `stopPropagation`.
+  if (wrapped) {
+    return (
+      <tr
+        ref={rowRef}
+        className={`group hover:bg-gray-100 dark:hover:bg-gray-800 cursor-pointer select-none ${!transaction.isActive ? 'opacity-50' : ''} ${rowBackground} ${isHighlighted ? HIGHLIGHT_FLASH : ''}`}
+        {...getRowHandlers(transaction)}
+      >
+        <td className="p-0">
+          {/* The inset is the density table's, not a hand-picked one. */}
+          <div className={cellPadding}>
+            {/* A grid, not a flex row, and `minmax(0,1fr)` rather than a plain
+                `1fr`: a track that may be zero lets the name and the account
+                shrink, where a flex item's `min-w-0` still contributes its
+                nowrap text's full width to the table's minimum -- and on a phone
+                that is not merely a scrollbar, since mobile Chrome sizes the
+                `position: fixed` viewport from the page's widest content. */}
+            <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1.5 items-start">
+              {/* Line 1, left: the row's identity. The tier cell lets the name
+                  WRAP, so `truncate` would cut it to one line; `line-clamp-2`
+                  keeps two, and a wrapping box adds no minimum width, so
+                  containment is identical to `truncate`. What that costs: a name
+                  past two lines IS shortened here where the tier wrapped it
+                  whole, recoverable through `title` for a pointer and for
+                  assistive technology but not for a tap. Two lines is the bound
+                  the register, securities and payees cards use -- unclamped, one
+                  name pushes the amount and the schedule down a screen.
+                  `flex-wrap` then keeps the name the IDENTITY of the card: it is
+                  the only shrinkable item here, while the overdue chip cannot
+                  shrink below its own words ("Yakında Vadesi Doluyor" in `tr`)
+                  and would otherwise take its width out of the name's. Wrapping
+                  drops the chip to its own line instead; a short name keeps it
+                  inline. The chip describes itself, so no caption. */}
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <div
+                    className="min-w-0 text-sm font-medium text-gray-900 dark:text-gray-100 line-clamp-2"
+                    title={transaction.name}
+                  >
+                    {transaction.name}
+                  </div>
+                  {dueDateStatus && (
+                    <span className={`inline-flex text-xs font-medium rounded-full px-1.5 py-0.5 ${dueDateStatus.className}`}>
+                      {dueDateStatus.label}
+                    </span>
+                  )}
+                </div>
+                {payee && payee !== transaction.name && (
+                  <div className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2" title={payee}>
+                    {payee}
+                  </div>
+                )}
+              </div>
+              {/* Line 1, right: the key figure, under the header label the card
+                  dropped. The caption is its own node above the value's, so a
+                  test still matches the amount alone. `whitespace-nowrap` goes
+                  on the VALUE, never the wrapper: this is an `auto` track whose
+                  minimum is its item's min-content, so a nowrap wrapper would
+                  size it from whichever is wider, the figure or the CAPTION. The
+                  figure must not wrap (a locale grouping thousands with a thin
+                  space breaks it in two) and is never truncated. */}
+              <div className="text-right">
+                <CellLabel>{t('list.columns.amount')}</CellLabel>
+                <div className="text-sm font-medium whitespace-nowrap">
+                  <ScheduledAmountValue transaction={transaction} formatAmount={formatAmount} />
+                </div>
+              </div>
+              {/* Line 2: two EQUAL zero-minimum tracks (`grid-cols-2` is
+                  `repeat(2, minmax(0,1fr))`), never an `auto` beside a `1fr`.
+                  An `auto` track takes its item's MAX-content when there is any
+                  room, so a captioned value in one starves the `1fr` beside it
+                  -- and a caption is a locale-sized width input
+                  ("Pianificazione" in `it`), while the frequency runs to
+                  "Toutes les 4 semaines" in `fr`. Equal tracks let a long
+                  caption buy a second line of height instead of the column
+                  beside it. The schedule slot's values are deliberately NOT
+                  nowrap: it holds a sentence-like frequency line, and a wrapped
+                  date is untidy where a wrapped money figure is unreadable. The
+                  account NAME is the one thing here that may truncate. */}
+              <div className="col-span-2 grid grid-cols-2 items-start gap-x-4">
+                <div className="min-w-0">
+                  <CellLabel>{t('list.columns.schedule')}</CellLabel>
+                  <ScheduledScheduleDetails
+                    transaction={transaction}
+                    formatDate={formatDate}
+                    dueDateStatus={null}
+                    stackedLines=""
+                  />
+                </div>
+                <div className="min-w-0">
+                  <CellLabel>{t('list.columns.account')}</CellLabel>
+                  <div
+                    className="text-sm text-gray-900 dark:text-gray-100 truncate"
+                    title={transaction.account?.name}
+                  >
+                    {transaction.account?.name}
+                  </div>
+                </div>
+              </div>
+              {/* Line 3: the category chip in a zero-minimum track, the
+                  auto-post marker in an `auto` one. `auto` is safe for the
+                  second slot alone because BOTH its caption and its value are
+                  bounded and short in every locale (longest caption "Otomatis",
+                  longest chip "Увімк."), while the chip beside it carries a
+                  category name of any length -- and a chip does not shrink
+                  inside a squeezed track, it overflows into its neighbour, so
+                  here it takes `max-w-full` and truncates.
+
+                  Both slots are captioned even though a chip normally describes
+                  itself, because each has a branch that does not: a schedule
+                  with no category and one that does not auto-post both render a
+                  bare em dash, which uncaptioned says nothing about what it is
+                  of -- the job the column header used to do. The caption sits on
+                  the slot rather than the dash branch, so the line keeps its
+                  shape row to row. */}
+              <div className="col-span-2 grid grid-cols-[minmax(0,1fr)_auto] items-end gap-x-3">
+                <div className="min-w-0">
+                  <CellLabel>{t('list.columns.category')}</CellLabel>
+                  <ScheduledCategoryMarker
+                    transaction={transaction}
+                    badgePadding={badgePadding}
+                    categoryColor={categoryColor}
+                    bounded
+                  />
+                </div>
+                <div className="text-right">
+                  <CellLabel>{t('list.columns.auto')}</CellLabel>
+                  <ScheduledAutoMarker transaction={transaction} badgePadding={badgePadding} />
+                </div>
+              </div>
+            </div>
+          </div>
+        </td>
+      </tr>
+    );
+  }
+
+  // Built below the card branch, not above it: the row actions are consumed by
+  // the tier `RowActions` cell alone -- the card sends them to the long-press
+  // sheet the list mounts -- so building them for a wrapped row would be five
+  // objects and five catalog lookups per row, per render, on the one surface
+  // that never uses them (the same reason `SecurityList` builds them here).
+  const actions = buildScheduledActions(
+    transaction,
+    isProcessing,
+    {
+      post: t('list.contextMenu.postTransaction'),
+      skip: t('list.contextMenu.skipOccurrence'),
+      editOccurrence: t('list.contextMenu.editOccurrence'),
+      editSchedule: t('list.contextMenu.editSchedule'),
+      delete: t('list.contextMenu.delete'),
+    },
+    { onPost, onOpenConfirm, onEdit, onEditOccurrence },
+  );
+
   return (
     <tr
       ref={rowRef}
@@ -220,7 +651,7 @@ const ScheduledTransactionRow = memo(function ScheduledTransactionRow({
         <div className="sm:hidden mt-0.5">
           <div className="text-xs text-gray-500 dark:text-gray-400">
             {effectiveDueDate ? formatDate(effectiveDueDate) : '\u2014'}
-            {' \u00b7 '}{t(`frequency.${transaction.frequency}`)}
+            {' \u00b7 '}{frequencyLabel(transaction)}
           </div>
           {dueDateStatus && (
             <span className={`inline-flex text-xs font-medium rounded-full px-1.5 py-0.5 mt-0.5 ${dueDateStatus.className}`}>
@@ -237,162 +668,31 @@ const ScheduledTransactionRow = memo(function ScheduledTransactionRow({
 
       {/* Category */}
       <td className={`${cellPadding} hidden md:table-cell`}>
-        {transaction.isInvestment ? (
-          <span
-            className={`inline-flex text-xs font-medium rounded-full ${badgePadding} bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-200`}
-            title={
-              transaction.investmentSecurity
-                ? `${transaction.investmentAction || ''} ${transaction.investmentSecurity.symbol || transaction.investmentSecurity.name}`.trim()
-                : transaction.investmentAction || 'Investment'
-            }
-          >
-            {transaction.investmentSecurity?.symbol
-              ? `${transaction.investmentAction || 'Investment'}: ${transaction.investmentSecurity.symbol}`
-              : transaction.investmentAction || 'Investment'}
-          </span>
-        ) : transaction.isTransfer ? (
-          <span
-            className={`inline-flex text-xs font-medium rounded-full ${badgePadding} bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200`}
-            title={`Transfer to ${transaction.transferAccount?.name || 'account'}`}
-          >
-            Transfer
-          </span>
-        ) : transaction.isSplit ? (
-          <span
-            className={`inline-flex text-xs font-medium rounded-full ${badgePadding} bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200`}
-            title={transaction.splits?.map(s => s.category?.name || 'Uncategorized').join(', ')}
-          >
-            Split ({transaction.splits?.length || 0})
-          </span>
-        ) : transaction.category ? (
-          <span
-            className={`inline-flex text-xs font-medium rounded-full ${badgePadding}`}
-            style={{
-              backgroundColor: categoryColor
-                ? `color-mix(in srgb, ${categoryColor} 15%, var(--category-bg-base, #e5e7eb))`
-                : 'var(--category-bg-base, #e5e7eb)',
-              color: categoryColor
-                ? `color-mix(in srgb, ${categoryColor} 85%, var(--category-text-mix, #000))`
-                : 'var(--category-text-base, #6b7280)',
-            }}
-          >
-            {transaction.category.name}
-          </span>
-        ) : (
-          <span className="text-xs text-gray-400 dark:text-gray-500">{'\u2014'}</span>
-        )}
+        <ScheduledCategoryMarker
+          transaction={transaction}
+          badgePadding={badgePadding}
+          categoryColor={categoryColor}
+        />
       </td>
 
       {/* Amount */}
       <td className={`${cellPadding} whitespace-nowrap text-sm font-medium text-right`}>
-        {(() => {
-          const baseAmount = scheduledOccurrenceAmount(transaction, false);
-          // The currency the effective amount is expressed in -- the settlement
-          // account's for an investment schedule, which is not the brokerage's
-          // `currencyCode` (issue #1247).
-          const amountCurrency =
-            scheduleEffectiveAmount(transaction).currencyCode;
-          const overrideAmount = transaction.nextOverride
-            ? scheduledOccurrenceAmount(transaction, true)
-            : null;
-          const isModified =
-            overrideAmount != null &&
-            baseAmount != null &&
-            Number(overrideAmount) !== Number(baseAmount);
-          // A foreign-currency schedule shows the fixed amount the biller
-          // charges under the converted estimate, the same way a
-          // foreign-entered transaction row does.
-          const foreignLine =
-            transaction.originalCurrencyCode && transaction.originalAmount != null ? (
-              <div
-                className="text-xs font-normal text-gray-500 dark:text-gray-400"
-                title={t('list.foreignAmountTitle')}
-              >
-                {transaction.originalCurrencyCode}{' '}
-                {formatAmountWithCommas(
-                  Math.abs(Number(transaction.originalAmount)),
-                  getDecimalPlacesForCurrency(transaction.originalCurrencyCode),
-                )}
-              </div>
-            ) : null;
-          if (isModified) {
-            return (
-              <div className="flex flex-col items-end">
-                <span className="text-xs text-gray-400 dark:text-gray-500 line-through">
-                  {formatAmount(baseAmount, amountCurrency)}
-                </span>
-                <span title={t('list.modifiedAmountTitle')}>
-                  {formatAmount(overrideAmount, amountCurrency)}
-                </span>
-                {foreignLine}
-              </div>
-            );
-          }
-          return (
-            <>
-              {formatAmount(baseAmount, amountCurrency)}
-              {foreignLine}
-            </>
-          );
-        })()}
+        <ScheduledAmountValue transaction={transaction} formatAmount={formatAmount} />
       </td>
 
       {/* Schedule (Frequency + Next Due + Remaining) */}
       <td className={`${cellPadding} hidden sm:table-cell`}>
-        <div className={stackedLines}>
-          <div className="text-sm text-gray-900 dark:text-gray-100">
-            {/* Show override date if it differs from the original next due date */}
-            {transaction.nextOverride?.overrideDate &&
-             transaction.nextDueDate &&
-             transaction.nextOverride.overrideDate !== String(transaction.nextDueDate).split('T')[0] ? (
-              <span className="inline-flex flex-col align-middle">
-                <span className="text-xs text-gray-400 dark:text-gray-500 line-through leading-tight">
-                  {formatDate(transaction.nextDueDate)}
-                </span>
-                <span className="leading-tight" title="Date modified for this occurrence">
-                  {formatDate(transaction.nextOverride.overrideDate)}
-                </span>
-              </span>
-            ) : (
-              transaction.nextDueDate ? formatDate(transaction.nextDueDate) : '\u2014'
-            )}
-            {dueDateStatus && (
-              <span
-                className={`ml-1.5 inline-flex text-xs font-medium rounded-full px-1.5 py-0.5 ${dueDateStatus.className}`}
-              >
-                {dueDateStatus.label}
-              </span>
-            )}
-          </div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">
-            {t(`frequency.${transaction.frequency}`)}
-            {transaction.occurrencesRemaining !== null && (
-              <span className="ml-1">{'\u00b7'} {t('list.occurrencesRemaining', { count: transaction.occurrencesRemaining })}</span>
-            )}
-            {transaction.overrideCount !== undefined && transaction.overrideCount > 0 && (
-              <span
-                className="ml-1.5 inline-flex text-xs font-medium rounded-full px-1.5 py-0.5 bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200"
-                title={t('list.modifiedTitle', { count: transaction.overrideCount })}
-              >
-                {t('list.modifiedBadge', { count: transaction.overrideCount })}
-              </span>
-            )}
-          </div>
-        </div>
+        <ScheduledScheduleDetails
+          transaction={transaction}
+          formatDate={formatDate}
+          dueDateStatus={dueDateStatus}
+          stackedLines={stackedLines}
+        />
       </td>
 
       {/* Auto-post */}
       <td className={`${cellPadding} text-center hidden md:table-cell`}>
-        {transaction.autoPost ? (
-          <span
-            className={`inline-flex items-center text-xs font-medium rounded-full ${badgePadding} bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200`}
-            title={t('list.autoPostTitle')}
-          >
-            {t('list.autoPostBadge')}
-          </span>
-        ) : (
-          <span className="text-xs text-gray-400 dark:text-gray-500">{'\u2014'}</span>
-        )}
+        <ScheduledAutoMarker transaction={transaction} badgePadding={badgePadding} />
       </td>
 
       {/* Actions */}
@@ -426,10 +726,21 @@ export function ScheduledTransactionList({
   highlightId,
 }: ScheduledTransactionListProps) {
   const t = useTranslations('scheduledTransactions');
+  const frequencyLabel = useFrequencyLabel();
   const { formatDate } = useDateFormat();
-  const { formatCurrency } = useNumberFormat();
+  const formatAmount = useScheduledAmountFormatter();
+  const getDueDateStatus = useDueDateStatus();
   const { density } = useDensityPreference('bills');
   const { cellPadding, headerPadding } = useTableDensity(density);
+  // Model B: on a phone, density picks the LAYOUT rather than only the row
+  // height. At Normal each schedule is a wrapped card carrying the Account and
+  // Schedule this table hides below `sm` and the Category and Auto it hides
+  // below `md`; Compact and Dense keep the tier table, unchanged, as does every
+  // non-phone width. Exactly one branch renders per row, chosen here. This list
+  // has one mounting surface (`app/bills/page.tsx`), so there is no caller
+  // whose columns the card cannot carry to exclude from wrapping.
+  const isMobile = useIsMobile();
+  const wrapped = isMobile && density === 'normal';
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
   const [confirmState, setConfirmState] = useState<ConfirmState>({
     isOpen: false,
@@ -461,124 +772,32 @@ export function ScheduledTransactionList({
     setActionInProgress(transaction.id);
 
     try {
-      switch (action) {
-        case 'post':
-          await scheduledTransactionsApi.post(transaction.id);
-          toast.success(t('list.toasts.posted'));
-          break;
-        case 'skip':
-          await scheduledTransactionsApi.skip(transaction.id);
-          toast.success(t('list.toasts.skipped'));
-          break;
-        case 'delete':
-          await scheduledTransactionsApi.delete(transaction.id);
-          toast.success(t('list.toasts.deleted'));
-          break;
+      // A failed action refreshes nothing: a refetch claims the ledger moved.
+      // A 409 is the exception: the row was stale, so the list is refetched.
+      if (await runScheduledAction(action, transaction, t)) {
+        onRefresh?.();
       }
-      onRefresh?.();
-    } catch (error) {
-      const messages = {
-        post: t('list.toasts.postFailed'),
-        skip: t('list.toasts.skipFailed'),
-        delete: t('list.toasts.deleteFailed'),
-      };
-      toast.error(getErrorMessage(error, messages[action]));
     } finally {
       setActionInProgress(null);
     }
   };
 
-  const getConfirmConfig = () => {
-    const { action, transaction } = confirmState;
-    if (!action || !transaction) {
-      return { title: '', message: '', confirmLabel: '', variant: 'info' as const };
-    }
-
-    switch (action) {
-      case 'post':
-        return {
-          title: t('list.confirmPost.title'),
-          message: t('list.confirmPost.message', { name: transaction.name, account: transaction.account?.name || 'account' }),
-          confirmLabel: t('list.confirmPost.confirmLabel'),
-          variant: 'info' as const,
-        };
-      case 'skip':
-        return {
-          title: t('list.confirmSkip.title'),
-          message: t('list.confirmSkip.message', { name: transaction.name }),
-          confirmLabel: t('list.confirmSkip.confirmLabel'),
-          variant: 'warning' as const,
-        };
-      case 'delete':
-        return {
-          title: t('list.confirmDelete.title'),
-          message: t('list.confirmDelete.message', { name: transaction.name }),
-          confirmLabel: t('list.confirmDelete.confirmLabel'),
-          variant: 'danger' as const,
-        };
-    }
-  };
-
-  const formatAmount = (amount: number | null | undefined, currencyCode?: string) => {
-    if (amount == null) return <span className="text-gray-400">—</span>;
-    const numAmount = Number(amount);
-    if (isNaN(numAmount)) return <span className="text-gray-400">—</span>;
-
-    const isNegative = numAmount < 0;
-    const absAmount = Math.abs(numAmount);
-    const formatted = formatCurrency(absAmount, currencyCode);
-
-    return (
-      <span className={isNegative ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>
-        {isNegative ? '-' : '+'}
-        {formatted}
-      </span>
-    );
-  };
-
-  const getDueDateStatus = (nextDueDate: string | undefined | null) => {
-    if (!nextDueDate) return null;
-
-    try {
-      const date = parseLocalDate(nextDueDate);
-      if (!date || isNaN(date.getTime())) return null;
-
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      if (isPast(date) && !isToday(date)) {
-        return { label: t('list.dueDateStatus.overdue'), className: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' };
-      }
-      if (isToday(date)) {
-        return { label: t('list.dueDateStatus.dueToday'), className: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' };
-      }
-      if (isBefore(date, addDays(today, 7))) {
-        return { label: t('list.dueDateStatus.dueSoon'), className: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' };
-      }
-      return null;
-    } catch {
-      return null;
-    }
-  };
-
   if (transactions.length === 0) {
-    return (
-      <EmptyState
-        className="bg-gray-50 dark:bg-gray-800 rounded-lg"
-        icon={
-          <svg fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-          </svg>
-        }
-        title={t('list.empty.title')}
-        description={t('list.empty.subtitle')}
-      />
-    );
+    return <ScheduledEmptyState />;
   }
 
   return (
     <div className="overflow-x-auto">
       <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
+        {/* On a phone at Normal density the card labels its own values, so the
+            column header is dropped outright rather than replaced by a slim
+            one. This header holds NOTHING interactive: these `<th>`s are plain
+            labels, the list has no sort control and no `SortField` of its own
+            (the Bills page owns ordering and filtering), and the density toggle
+            lives on the page above -- so a slim header would have no control to
+            carry, and a column label over one cell holding every column at once
+            would misdescribe it to a screen reader. */}
+        {!wrapped && (
         <thead className="bg-gray-50 dark:bg-gray-800">
           <tr>
             <th className={`${headerPadding} text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider`}>
@@ -604,6 +823,7 @@ export function ScheduledTransactionList({
             </th>
           </tr>
         </thead>
+        )}
         <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
           {transactions.map((transaction, index) => (
             <ScheduledTransactionRow
@@ -623,6 +843,7 @@ export function ScheduledTransactionList({
               onEditOccurrence={onEditOccurrence}
               categoryColorMap={categoryColorMap}
               isHighlighted={!!highlightId && transaction.id === highlightId}
+              wrapped={wrapped}
             />
           ))}
         </tbody>
@@ -633,7 +854,7 @@ export function ScheduledTransactionList({
         isOpen={!!contextTransaction}
         title={contextTransaction?.name ?? ''}
         subtitle={contextTransaction
-          ? `${t(`frequency.${contextTransaction.frequency}`)}${!contextTransaction.isActive ? t('list.inactiveSuffix') : ''}`
+          ? `${frequencyLabel(contextTransaction)}${!contextTransaction.isActive ? t('list.inactiveSuffix') : ''}`
           : undefined}
         actions={contextTransaction
           ? buildScheduledActions(
@@ -656,7 +877,7 @@ export function ScheduledTransactionList({
         isOpen={confirmState.isOpen}
         onConfirm={handleConfirm}
         onCancel={closeConfirm}
-        {...getConfirmConfig()}
+        {...scheduledConfirmConfig(confirmState.action, confirmState.transaction, t)}
       />
     </div>
   );

@@ -6,7 +6,7 @@
       "category": "카테고리",
       "amount": "금액",
       "schedule": "일정",
-      "auto": "자동",
+      "auto": "자동 게시",
       "actions": "작업"
     },
     "empty": {
@@ -22,8 +22,9 @@
     "modifiedBadge": "{count}개 수정됨",
     "modifiedTitle": "{count, plural, one {# 건의 예정 발생이 수정됨} other {# 건의 예정 발생이 수정됨}}",
     "modifiedAmountTitle": "다음 발생에 대해 수정됨",
+    "modifiedDateTitle": "이 일정의 날짜가 변경됨",
+    "splitBadge": "분할 ({count})",
     "autoPostBadge": "켜짐",
-    "autoPostTitle": "만기 시 자동 게시",
     "inactiveSuffix": " — 비활성",
     "actionTitles": {
       "post": "거래 게시",
@@ -62,7 +63,8 @@
       "skipFailed": "발생 건너뛰기에 실패했습니다",
       "deleteFailed": "삭제에 실패했습니다"
     },
-    "foreignAmountTitle": "수취인이 청구하는 금액(수취인 통화 기준)"
+    "foreignAmountTitle": "수취인이 청구하는 금액(수취인 통화 기준)",
+    "estimatedLabel": "예상"
   },
   "filters": {
     "label": "필터",
@@ -74,9 +76,7 @@
     "accountsLabel": "계정",
     "accountsPlaceholder": "모든 계정",
     "categoriesLabel": "카테고리",
-    "categoriesPlaceholder": "모든 카테고리",
-    "collapseAriaLabel": "필터 접기",
-    "expandAriaLabel": "필터 펼치기"
+    "categoriesPlaceholder": "모든 카테고리"
   },
   "postDialog": {
     "title": "거래 게시",
@@ -114,7 +114,8 @@
       "totalAmountRequired": "총 금액이 필요합니다",
       "splitsMinimum": "분할 거래에는 최소 2개의 분할이 필요합니다",
       "splitsTotal": "분할 금액의 합계가 거래 금액과 같아야 합니다",
-      "fxRateUnavailable": "이 날짜에는 {from}에서 {to}로의 환율을 사용할 수 없습니다."
+      "fxRateUnavailable": "이 날짜에는 {from}에서 {to}로의 환율을 사용할 수 없습니다.",
+      "estimateUnknown": "이 회차의 예상 금액을 알 수 없습니다. 게시하려면 금액을 입력하세요."
     },
     "latestPlaceholder": "최신: {price}",
     "descriptionPlaceholder": "설명...",
@@ -127,18 +128,40 @@
       "noRateWarning": "{date}에 {from}에서 {to}로의 환율을 찾을 수 없습니다. 다른 날짜를 선택하거나 환율을 새로 고치세요.",
       "feeCaption": "{percent}% 해외 거래 수수료({fee})가 포함됩니다.",
       "totalInCurrency": "{currency} 기준 총액"
-    }
+    },
+    "estimatedHint": "이 금액은 예상치입니다. 실제로 지불한 금액으로 바꾸세요. {detail}"
   },
   "occurrencePicker": {
     "title": "발생 날짜 선택",
-    "description": "수정할 \"{name}\"의 발생을 선택하세요:",
+    "description": "수정할 \"{name}\"의 발생을 선택하세요. 여기서 하나를 변경하면 해당 날짜만 재정의되며, 다른 모든 발생은 계속 일정을 따릅니다. <guide>자세히 알아보기</guide>.",
     "modifiedBadge": "수정됨",
     "nextDueBadge": "다음 만기",
     "dateMoved": "날짜가 {date}에서 이동됨",
     "amountChange": "금액: {amount}",
     "categoryChange": "카테고리: {category}",
     "noteChange": "메모: {note}",
-    "splitModified": "분할 수정됨"
+    "splitModified": "분할 수정됨",
+    "estimatedAmount": "예상: {amount}",
+    "estimateUnknown": "예상 금액 알 수 없음"
+  },
+  "loanOccurrence": {
+    "loading": "각 회차의 납부액을 계산하고 있습니다.",
+    "loadFailed": "각 회차의 납부액을 불러오지 못했습니다.",
+    "retry": "다시 시도",
+    "amountUnknown": "납부액 알 수 없음",
+    "notProjected": "이후의 납부액은 계산되지 않았습니다",
+    "paymentChangesBadge": "납부액 변경",
+    "editorUnknown": "이 회차의 납부액을 계산할 수 없어 금액이 비어 있습니다. {reason}",
+    "editorLinesUnknown": "이 회차의 원금과 이자 구분을 계산할 수 없어 항목이 일정의 항목으로 시작됩니다. {reason}",
+    "amountRequired": "저장하기 전에 이 회차의 금액을 입력하세요.",
+    "missing": {
+      "rate": "{date}에 기록된 이자율이 없습니다. 대출의 이자율 기록에 추가하세요.",
+      "cadence": "대출의 납부 주기({frequency})로는 계산할 수 없습니다. 대출의 납부 주기를 확인하세요.",
+      "overrideLines": "이 회차의 항목이 원금, 이자, 추가 원금이 아닙니다. 항목을 편집하세요.",
+      "overrideOnSettledDebt": "이 날짜까지 대출이 상환되어 이 회차의 금액을 원금과 이자로 나눌 수 없습니다. 이 회차를 편집하거나 초기화하세요.",
+      "earlierOccurrence": "납부액을 계산할 수 없는 {date} 회차에 따라 달라집니다.",
+      "unknown": "이유가 제공되지 않았습니다."
+    }
   },
   "overrideEditor": {
     "title": "발생 편집",
@@ -179,7 +202,9 @@
       "quantityRequired": "수량은 0보다 커야 합니다",
       "priceRequired": "가격은 0보다 커야 합니다",
       "totalAmountRequired": "총 금액이 필요합니다"
-    }
+    },
+    "estimatedHint": "이 금액은 이 회차의 예상치입니다. 그대로 두면 새 결제가 들어올 때마다 이 회차는 계속 예상치를 따릅니다. {detail}",
+    "keepEstimate": "새 결제로 예상이 바뀌어도 이 금액 유지"
   },
   "form": {
     "tabs": {
@@ -205,7 +230,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "장기 자본이득 재투자",
       "CAPITAL_GAIN_SHORT": "단기 자본이득",
       "CAPITAL_GAIN_LONG": "장기 자본이득",
-      "REDEEM": "CD/채권 상환"
+      "REDEEM": "CD/채권 상환",
+      "RETURN_OF_CAPITAL": "자본 환급"
     },
     "submitCreate": "생성",
     "submitUpdate": "업데이트",
@@ -248,6 +274,7 @@
     "commissionLabel": "수수료",
     "totalValueLabel": "총 가치",
     "fundingAccountLabel": "자금 계정 (선택사항)",
+    "fundingAccountTooltip": "이 일정의 현금이 실제로 정산되는 계정으로, 위의 중개 계정이 아닙니다: 현금 흐름 예측이 차감하거나 적립하는 계정입니다. 비워두면 중개 계정 자체의 현금 계정을 사용합니다.",
     "fundingAccountPlaceholder": "증권사 현금 사용 (기본값)",
     "fundingAccountHelp": "기본값은 투자 계정의 현금입니다. 다른 계정을 선택하면 기여금+매수를 모델링할 수 있습니다.",
     "endConditionTitle": "종료 조건 (선택사항)",
@@ -282,14 +309,21 @@
       "quantityRequired": "수량은 0보다 커야 합니다",
       "priceRequired": "가격은 0보다 커야 합니다",
       "totalAmountRequired": "이 작업에는 총 금액이 필요합니다",
-      "fxRateRequired": "저장하기 전에 선택한 통화로 금액을 입력하세요. 아직 사용할 수 있는 환율이 없습니다."
+      "fxRateRequired": "저장하기 전에 선택한 통화로 금액을 입력하세요. 아직 사용할 수 있는 환율이 없습니다.",
+      "estimateNeedsPayeeAndCategory": "금액을 예상할 수취인과 카테고리를 선택하세요."
     },
     "fx": {
       "amountInCurrency": "{currency} 기준 금액",
       "estimateCaption": "약 {total}(1 {from} = {rate} {to}).",
       "noRateWarning": "{from}에서 {to}로의 환율을 찾을 수 없습니다. 다른 통화를 선택하거나 금액을 {to}로 입력하세요.",
       "feeCaption": "{percent}% 해외 거래 수수료({fee})가 포함됩니다."
-    }
+    },
+    "estimateLabel": "예상",
+    "estimateTooltip": "이 카테고리에서 이 수취인에게 지난 24개월 동안 결제한 내역으로 각 회차의 금액을 월별로 계산하여, 특정 달에 더 많이 드는 청구서를 그대로 예측합니다. 어느 회차든 계속 변경할 수 있으며, 게시할 때 금액을 확인합니다.",
+    "estimateTooltipTransfer": "지난 24개월 동안 이 계정으로 이체한 내역으로 각 회차의 금액을 계산합니다. 계정의 미결제액이 더 많으면 그만큼 결제를 올립니다. 명세서 마감일과 납부일이 설정된 신용카드는 마감된 명세서의 결제와 진행 중인 주기의 결제를, 그 외에는 다음 결제를 올립니다. 어느 회차든 계속 변경할 수 있으며, 게시할 때 금액을 확인합니다.",
+    "estimateDelegateDisabled": "예상은 소유자만 켜거나 끌 수 있습니다. 소유자의 모든 계좌에 있는 결제를 읽기 때문입니다.",
+    "estimatedAmountNote": "결제 내역으로 자동 계산됩니다. {detail}",
+    "autoPostDisabledEstimate": "예상 금액은 게시할 때 확인하므로 자동으로 게시되지 않습니다."
   },
   "postTransaction": {
     "minSplits": "분할 거래에는 최소 2개의 분할이 필요합니다",
@@ -308,10 +342,83 @@
     "EVERY4MONTHS": "4개월마다",
     "SEMIANNUAL": "연 2회",
     "YEARLY": "매년",
-    "EVERY2YEARS": "2년마다"
+    "EVERY2YEARS": "2년마다",
+    "CUSTOM": "사용자 지정"
+  },
+  "customRecurrence": {
+    "title": "반복",
+    "unitLabel": "반복 단위",
+    "units": {
+      "WEEK": "매주",
+      "MONTH": "매월",
+      "YEAR": "매년"
+    },
+    "every": "매",
+    "intervalLabel": "반복 간격",
+    "unitSuffix": {
+      "WEEK": "{interval, plural, other {주마다, 요일:}}",
+      "MONTH": "{interval, plural, other {개월마다, 날짜:}}",
+      "YEAR": "{interval, plural, other {년마다, 날짜:}}"
+    },
+    "weekdaysLabel": "요일",
+    "monthDaysLabel": "날짜",
+    "lastDayChip": "마지막 날",
+    "lastDay": "마지막 날",
+    "dayOfMonth": "{day, selectordinal, other {#일}}",
+    "monthHint": "짧은 달의 끝을 넘어가는 날짜는 그 달의 마지막 날로 처리되며, 같은 날짜에 겹치는 두 날은 한 번만 등록됩니다.",
+    "datesLabel": "연중 날짜",
+    "monthLabel": "월",
+    "dayLabel": "일",
+    "addDate": "날짜 추가",
+    "removeDate": "{date} 제거",
+    "yearHint": "2월 29일은 해당 날짜가 없는 해에는 2월 28일로 처리됩니다.",
+    "summary": {
+      "WEEK": "{interval, plural, other {# 주마다 {days}}}",
+      "MONTH": "{interval, plural, other {# 개월마다 {days}}}",
+      "YEAR": "{interval, plural, other {# 년마다 {days}}}"
+    },
+    "errors": {
+      "noDays": {
+        "WEEK": "요일을 하나 이상 선택하세요.",
+        "MONTH": "날짜를 하나 이상 선택하세요.",
+        "YEAR": "날짜를 하나 이상 추가하세요."
+      },
+      "interval": "1에서 12 사이의 숫자를 입력하세요.",
+      "invalid": "이 패턴은 저장할 수 없습니다. 날짜를 다시 선택하세요."
+    },
+    "firstOccurrence": "첫 번째 발생: {date}",
+    "nextOccurrence": "다음 발생: {date}",
+    "nextOccurrenceOffPattern": "다음 발생: {date}. 이 날짜는 패턴에서 벗어나 있으며, 이후 발생은 패턴을 따릅니다.",
+    "orphanWarning": "{count, plural, other {수정된 발생 #건({dates})이 더 이상 이 패턴에 해당하지 않아 저장 시 삭제됩니다.}}",
+    "notForLoan": "대출 또는 모기지 상환은 사용자 지정 빈도를 사용할 수 없습니다. 고정 빈도를 선택하세요.",
+    "notForPayroll": "공제 한도가 있는 급여 청구서는 사용자 지정 빈도를 사용할 수 없습니다. 고정 빈도를 선택하세요."
   },
   "validation": {
     "nameRequired": "이름은 필수입니다",
     "dueDateRequired": "만기일은 필수입니다"
+  },
+  "estimate": {
+    "thePayee": "이 수취인",
+    "theAccount": "해당 계정",
+    "theCategory": "이 카테고리",
+    "basis": "{count, plural, other {#건의 결제}}을 기준으로 예상했으며, 가장 최근은 {date}입니다.",
+    "basisWithGrowth": "{count, plural, other {#건의 결제}}을 기준으로 예상했으며, 가장 최근은 {date}이고 전년 대비 {growth} 변화를 반영했습니다.",
+    "basisYear": "최근 12개월 동안의 {count, plural, other {#건의 결제}} 평균이며, 가장 최근은 {date}입니다.",
+    "basisRecent": "가장 최근 {count, plural, other {#건의 결제}} 평균이며, 가장 최근은 {date}입니다.",
+    "basisRecentWithGrowth": "가장 최근 {count, plural, other {#건의 결제}} 평균이며, 가장 최근은 {date}이고 전년 대비 {growth} 변화를 반영했습니다.",
+    "basisSeasonal": "가장 최근 {count, plural, other {#건의 결제}} 평균을 월별 계절성에 맞춰 조정했으며, 가장 최근은 {date}입니다.",
+    "basisSeasonalWithGrowth": "가장 최근 {count, plural, other {#건의 결제}} 평균을 월별 계절성에 맞춰 조정했으며, 가장 최근은 {date}이고 전년 대비 {growth} 변화를 반영했습니다.",
+    "basisWithheld": "수취인과 카테고리의 결제 내역을 기준으로 예상했습니다.",
+    "basisWithheldTransfer": "{account}(으)로의 이체 내역을 기준으로 예상했습니다.",
+    "raisedToBalance": "이번 결제에서 {account}의 미결제액을 충당하도록 올렸습니다.",
+    "basisAndRaise": "{basis} {raised}",
+    "noHistoryTransfer": "지난 {months}개월 동안 이 계정에서 {account}(으)로 이체가 없어 금액을 알 수 없습니다. 각 회차의 금액을 입력하거나 이체를 기록하세요.",
+    "missingRateTransfer": "이전 이체나 {account}의 미결제액을 환산할 {from}에서 {to}로의 환율이 없어 금액을 알 수 없습니다. 통화 페이지에서 환율을 추가하세요.",
+    "noBasisTransfer": "입금 계정을 선택하면 그 계정으로의 이체를 기준으로 금액을 예상합니다.",
+    "pendingTransfer": "금액은 이 계정으로의 이체와 미결제액을 기준으로 계산됩니다.",
+    "noHistory": "지난 {months}개월 동안 {category}에서 {payee}에 대한 결제가 없어 금액을 알 수 없습니다. 각 회차의 금액을 입력하거나 결제를 기록하세요.",
+    "missingRate": "이전 결제를 환산할 {from}에서 {to}로의 환율이 없어 금액을 알 수 없습니다. 통화 페이지에서 환율을 추가하세요.",
+    "noBasis": "수취인과 카테고리를 선택하면 그 결제 내역으로 금액을 예상합니다.",
+    "pending": "금액은 수취인과 카테고리의 결제 내역으로 계산됩니다."
   }
 }

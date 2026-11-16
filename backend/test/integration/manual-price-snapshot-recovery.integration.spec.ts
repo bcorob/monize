@@ -13,6 +13,7 @@ import {
   withPreserveTimestamps,
 } from "@/common/db/with-context";
 import { withScopedDb } from "@/common/db/scoped-db";
+import { createFetchSyncMock } from "@/test-helpers/job-claim-testing";
 
 /**
  * MZ-1242-R5 / R9 -- crash recovery for a manual-price snapshot invalidation,
@@ -57,7 +58,12 @@ describe("manual-price crash recovery (integration, MZ-1242-R5/R9)", () => {
     dataSource = module.get(DataSource);
     // createManualPrice uses only the DataSource and NetWorthService; the quote
     // provider registry it also takes is never touched on this path.
-    priceService = new SecurityPriceService(dataSource, netWorth, {} as never);
+    priceService = new SecurityPriceService(
+      dataSource,
+      netWorth,
+      {} as never,
+      createFetchSyncMock() as never,
+    );
   });
 
   afterAll(async () => {

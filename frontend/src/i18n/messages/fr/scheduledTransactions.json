@@ -6,7 +6,7 @@
       "category": "Catégorie",
       "amount": "Montant",
       "schedule": "Planification",
-      "auto": "Auto",
+      "auto": "Enregistrement automatique",
       "actions": "Actions"
     },
     "empty": {
@@ -22,8 +22,9 @@
     "modifiedBadge": "{count} modifiée(s)",
     "modifiedTitle": "{count, plural, one {# occurrence à venir modifiée} other {# occurrences à venir modifiées}}",
     "modifiedAmountTitle": "Modifié pour la prochaine occurrence",
+    "modifiedDateTitle": "Date modifiée pour cette occurrence",
+    "splitBadge": "Répartition ({count})",
     "autoPostBadge": "Activé",
-    "autoPostTitle": "Enregistrement automatique à l'échéance",
     "inactiveSuffix": " — Inactif",
     "actionTitles": {
       "post": "Enregistrer la transaction",
@@ -62,7 +63,8 @@
       "skipFailed": "Échec de l'omission de l'occurrence",
       "deleteFailed": "Échec de la suppression"
     },
-    "foreignAmountTitle": "Le montant facturé par le bénéficiaire, dans sa propre devise"
+    "foreignAmountTitle": "Le montant facturé par le bénéficiaire, dans sa propre devise",
+    "estimatedLabel": "Estimé"
   },
   "filters": {
     "label": "Filtres",
@@ -74,9 +76,7 @@
     "accountsLabel": "Comptes",
     "accountsPlaceholder": "Tous les comptes",
     "categoriesLabel": "Catégories",
-    "categoriesPlaceholder": "Toutes les catégories",
-    "collapseAriaLabel": "Réduire les filtres",
-    "expandAriaLabel": "Développer les filtres"
+    "categoriesPlaceholder": "Toutes les catégories"
   },
   "postDialog": {
     "title": "Enregistrer la transaction",
@@ -114,7 +114,8 @@
       "totalAmountRequired": "Le montant total est requis",
       "splitsMinimum": "Les transactions réparties nécessitent au moins 2 répartitions",
       "splitsTotal": "Le total des répartitions doit être égal au montant de la transaction",
-      "fxRateUnavailable": "Aucun taux de change n'est disponible de {from} vers {to} à cette date."
+      "fxRateUnavailable": "Aucun taux de change n'est disponible de {from} vers {to} à cette date.",
+      "estimateUnknown": "Le montant estimé de cette occurrence est inconnu. Saisissez le montant pour l'enregistrer."
     },
     "latestPlaceholder": "Dernier : {price}",
     "descriptionPlaceholder": "Description…",
@@ -127,18 +128,40 @@
       "noRateWarning": "Aucun taux de change trouvé de {from} vers {to} le {date}. Choisissez une autre date ou actualisez les taux.",
       "feeCaption": "Comprend des frais de transaction à l'étranger de {percent}% ({fee}).",
       "totalInCurrency": "Total en {currency}"
-    }
+    },
+    "estimatedHint": "Ce montant est une estimation ; remplacez-le par ce que vous avez réellement payé. {detail}"
   },
   "occurrencePicker": {
     "title": "Sélectionner la date d'occurrence",
-    "description": "Choisissez l'occurrence de « {name} » à modifier :",
+    "description": "Choisissez l'occurrence de « {name} » à modifier. Modifier une occurrence ici ne remplace que cette date ; chaque autre occurrence continue de suivre la planification. <guide>En savoir plus</guide>.",
     "modifiedBadge": "Modifiée",
     "nextDueBadge": "Prochaine échéance",
     "dateMoved": "Date déplacée depuis {date}",
     "amountChange": "Montant : {amount}",
     "categoryChange": "Catégorie : {category}",
     "noteChange": "Note : {note}",
-    "splitModified": "Répartition modifiée"
+    "splitModified": "Répartition modifiée",
+    "estimatedAmount": "Estimé : {amount}",
+    "estimateUnknown": "Estimation inconnue"
+  },
+  "loanOccurrence": {
+    "loading": "Calcul du paiement de chaque échéance.",
+    "loadFailed": "Le paiement de chaque échéance n'a pas pu être chargé.",
+    "retry": "Réessayer",
+    "amountUnknown": "Paiement inconnu",
+    "notProjected": "Paiement non calculé aussi loin",
+    "paymentChangesBadge": "Le paiement change",
+    "editorUnknown": "Le paiement de cette échéance ne peut pas être calculé, le montant est donc vide. {reason}",
+    "editorLinesUnknown": "La répartition de cette échéance entre capital et intérêts ne peut pas être calculée, les lignes reprennent donc celles de la planification. {reason}",
+    "amountRequired": "Saisissez le montant de cette échéance avant d'enregistrer.",
+    "missing": {
+      "rate": "Aucun taux d'intérêt n'est enregistré pour le {date}. Ajoutez-le à l'historique des taux du prêt.",
+      "cadence": "La fréquence de paiement du prêt ({frequency}) ne peut pas être calculée. Vérifiez la fréquence de paiement du prêt.",
+      "overrideLines": "Les lignes de cette échéance ne sont pas capital, intérêts et capital supplémentaire. Modifiez ses lignes.",
+      "overrideOnSettledDebt": "Le prêt est remboursé à cette date, le montant de cette échéance ne peut donc pas être réparti entre capital et intérêts. Modifiez ou réinitialisez l'échéance.",
+      "earlierOccurrence": "Il dépend de l'échéance du {date}, dont le paiement ne peut pas être calculé.",
+      "unknown": "Aucune raison n'a été donnée."
+    }
   },
   "overrideEditor": {
     "title": "Modifier l'occurrence",
@@ -179,7 +202,9 @@
       "quantityRequired": "La quantité doit être supérieure à zéro",
       "priceRequired": "Le prix doit être supérieur à zéro",
       "totalAmountRequired": "Le montant total est requis"
-    }
+    },
+    "estimatedHint": "Ce montant est l'estimation de cette occurrence. Laissez-le tel quel et l'occurrence continuera de suivre l'estimation à mesure que de nouveaux paiements arrivent. {detail}",
+    "keepEstimate": "Garder ce montant, même si de nouveaux paiements modifient l'estimation"
   },
   "form": {
     "tabs": {
@@ -205,7 +230,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "Réinvestissement de plus-value à long terme",
       "CAPITAL_GAIN_SHORT": "Plus-value à court terme",
       "CAPITAL_GAIN_LONG": "Plus-value à long terme",
-      "REDEEM": "Remboursement CD/obligation"
+      "REDEEM": "Remboursement CD/obligation",
+      "RETURN_OF_CAPITAL": "Remboursement de capital"
     },
     "submitCreate": "Créer",
     "submitUpdate": "Mettre à jour",
@@ -248,6 +274,7 @@
     "commissionLabel": "Commission",
     "totalValueLabel": "Valeur totale",
     "fundingAccountLabel": "Compte de financement (facultatif)",
+    "fundingAccountTooltip": "Le compte où la trésorerie de cette planification se règle réellement, et non le compte de courtage ci-dessus : celui que la prévision de trésorerie débite ou crédite. Laissez vide pour utiliser la trésorerie propre du compte de courtage.",
     "fundingAccountPlaceholder": "Utiliser la trésorerie du courtage (défaut)",
     "fundingAccountHelp": "Par défaut, la trésorerie du compte d'investissement. Choisissez un autre compte pour modéliser une contribution + achat.",
     "endConditionTitle": "Condition de fin (facultatif)",
@@ -282,14 +309,21 @@
       "quantityRequired": "La quantité doit être supérieure à zéro",
       "priceRequired": "Le prix doit être supérieur à zéro",
       "totalAmountRequired": "Le montant total est requis pour cette action",
-      "fxRateRequired": "Saisissez un montant dans la devise choisie avant d'enregistrer. Aucun taux de change n'est encore disponible."
+      "fxRateRequired": "Saisissez un montant dans la devise choisie avant d'enregistrer. Aucun taux de change n'est encore disponible.",
+      "estimateNeedsPayeeAndCategory": "Choisissez un bénéficiaire et une catégorie à partir desquels estimer le montant."
     },
     "fx": {
       "amountInCurrency": "Montant en {currency}",
       "estimateCaption": "Environ {total} au taux 1 {from} = {rate} {to}.",
       "noRateWarning": "Aucun taux de change trouvé de {from} vers {to}. Choisissez une autre devise ou saisissez le montant en {to}.",
       "feeCaption": "Comprend des frais de transaction à l'étranger de {percent}% ({fee})."
-    }
+    },
+    "estimateLabel": "Estimer",
+    "estimateTooltip": "Calculer le montant de chaque occurrence à partir des paiements des 24 derniers mois à ce bénéficiaire dans cette catégorie, mois par mois, afin qu'une facture qui coûte plus certains mois soit prévue ainsi. Vous pouvez toujours modifier chaque occurrence, et vous confirmez le montant lors de l'enregistrement.",
+    "estimateTooltipTransfer": "Calculer le montant de chaque occurrence à partir des virements des 24 derniers mois vers ce compte. Lorsque le compte doit davantage, le paiement est augmenté en conséquence : pour une carte de crédit avec des jours d'arrêté et d'échéance, le paiement du relevé clôturé et celui du cycle en cours ; sinon, le prochain paiement. Vous pouvez toujours modifier chaque occurrence, et vous confirmez le montant lors de l'enregistrement.",
+    "estimateDelegateDisabled": "Seul le propriétaire peut activer ou désactiver l'estimation : elle lit les paiements de tous les comptes du propriétaire.",
+    "estimatedAmountNote": "Calculé automatiquement à partir de l'historique des paiements. {detail}",
+    "autoPostDisabledEstimate": "Un montant estimé est confirmé lors de l'enregistrement, il n'est donc pas enregistré automatiquement."
   },
   "postTransaction": {
     "minSplits": "Les transactions réparties nécessitent au moins 2 répartitions",
@@ -308,10 +342,83 @@
     "EVERY4MONTHS": "Tous les 4 mois",
     "SEMIANNUAL": "Deux fois par an",
     "YEARLY": "Annuel",
-    "EVERY2YEARS": "Tous les 2 ans"
+    "EVERY2YEARS": "Tous les 2 ans",
+    "CUSTOM": "Personnalisée"
+  },
+  "customRecurrence": {
+    "title": "Se répète",
+    "unitLabel": "Répéter par",
+    "units": {
+      "WEEK": "Hebdomadaire",
+      "MONTH": "Mensuelle",
+      "YEAR": "Annuelle"
+    },
+    "every": "Tous les",
+    "intervalLabel": "Répéter tous les",
+    "unitSuffix": {
+      "WEEK": "{interval, plural, one {semaine le} other {semaines le}}",
+      "MONTH": "{interval, plural, one {mois le} other {mois le}}",
+      "YEAR": "{interval, plural, one {an le} other {ans le}}"
+    },
+    "weekdaysLabel": "Jours de la semaine",
+    "monthDaysLabel": "Jours du mois",
+    "lastDayChip": "Dernier jour",
+    "lastDay": "dernier jour",
+    "dayOfMonth": "{day, selectordinal, one {#er} other {#}}",
+    "monthHint": "Un jour situé après la fin d'un mois court tombe sur son dernier jour, et deux jours qui tombent à la même date ne sont comptabilisés qu'une fois.",
+    "datesLabel": "Dates de l'année",
+    "monthLabel": "Mois",
+    "dayLabel": "Jour",
+    "addDate": "Ajouter une date",
+    "removeDate": "Supprimer {date}",
+    "yearHint": "Le 29 février tombe le 28 février les années qui n'en ont pas.",
+    "summary": {
+      "WEEK": "{interval, plural, one {Chaque semaine le {days}} other {Toutes les # semaines le {days}}}",
+      "MONTH": "{interval, plural, one {Chaque mois le {days}} other {Tous les # mois le {days}}}",
+      "YEAR": "{interval, plural, one {Chaque année le {days}} other {Tous les # ans le {days}}}"
+    },
+    "errors": {
+      "noDays": {
+        "WEEK": "Choisissez au moins un jour de la semaine.",
+        "MONTH": "Choisissez au moins un jour du mois.",
+        "YEAR": "Ajoutez au moins une date."
+      },
+      "interval": "Saisissez un nombre de 1 à 12.",
+      "invalid": "Ce motif ne peut pas être enregistré. Choisissez à nouveau les jours."
+    },
+    "firstOccurrence": "Première occurrence : {date}",
+    "nextOccurrence": "Prochaine occurrence : {date}",
+    "nextOccurrenceOffPattern": "Prochaine occurrence : {date}. Cette date est hors du modèle ; les occurrences suivantes le respectent.",
+    "orphanWarning": "{count, plural, one {# occurrence modifiée ({dates}) ne correspond plus à ce motif et sera supprimée à l'enregistrement.} other {# occurrences modifiées ({dates}) ne correspondent plus à ce motif et seront supprimées à l'enregistrement.}}",
+    "notForLoan": "Un paiement de prêt ou de prêt hypothécaire ne peut pas utiliser une fréquence personnalisée ; choisissez une fréquence fixe.",
+    "notForPayroll": "Une facture de paie avec des limites de retenue ne peut pas utiliser une fréquence personnalisée ; choisissez une fréquence fixe."
   },
   "validation": {
     "nameRequired": "Le nom est requis",
     "dueDateRequired": "La date d'échéance est requise"
+  },
+  "estimate": {
+    "thePayee": "ce bénéficiaire",
+    "theAccount": "le compte",
+    "theCategory": "cette catégorie",
+    "basis": "Estimé à partir de {count, plural, one {# paiement} other {# paiements}}, le dernier le {date}.",
+    "basisWithGrowth": "Estimé à partir de {count, plural, one {# paiement} other {# paiements}}, le dernier le {date}, avec une variation de {growth} d'une année sur l'autre.",
+    "basisYear": "Moyenne de {count, plural, one {# paiement} other {# paiements}} sur les 12 derniers mois, le dernier le {date}.",
+    "basisRecent": "Moyenne {count, plural, one {du dernier paiement} other {des # derniers paiements}}, le dernier le {date}.",
+    "basisRecentWithGrowth": "Moyenne {count, plural, one {du dernier paiement} other {des # derniers paiements}}, le dernier le {date}, avec une variation de {growth} d'une année sur l'autre.",
+    "basisSeasonal": "Moyenne {count, plural, one {du dernier paiement} other {des # derniers paiements}}, ajustée selon la saison de chaque mois, le dernier le {date}.",
+    "basisSeasonalWithGrowth": "Moyenne {count, plural, one {du dernier paiement} other {des # derniers paiements}}, ajustée selon la saison de chaque mois, le dernier le {date}, avec une variation de {growth} d'une année sur l'autre.",
+    "basisWithheld": "Estimé à partir de l'historique des paiements du bénéficiaire et de la catégorie.",
+    "basisWithheldTransfer": "Estimé à partir de l'historique des virements vers {account}.",
+    "raisedToBalance": "Augmenté pour couvrir ce que {account} doit pour ce paiement.",
+    "basisAndRaise": "{basis} {raised}",
+    "noHistoryTransfer": "Aucun virement de ce compte vers {account} au cours des {months} derniers mois, le montant est donc inconnu. Saisissez le montant de chaque occurrence, ou enregistrez un virement.",
+    "missingRateTransfer": "Aucun taux de change de {from} vers {to} pour convertir un virement passé ou ce que doit {account}, le montant est donc inconnu. Ajoutez le taux sur la page Devises.",
+    "noBasisTransfer": "Choisissez le compte de destination pour estimer le montant à partir des virements vers celui-ci.",
+    "pendingTransfer": "Le montant est calculé à partir des virements vers ce compte et de ce qu'il doit.",
+    "noHistory": "Aucun paiement à {payee} dans {category} au cours des {months} derniers mois, le montant est donc inconnu. Saisissez le montant de chaque occurrence, ou enregistrez un paiement.",
+    "missingRate": "Aucun taux de change de {from} vers {to} pour convertir un paiement passé, le montant est donc inconnu. Ajoutez le taux sur la page Devises.",
+    "noBasis": "Choisissez un bénéficiaire et une catégorie pour estimer le montant à partir de leur historique de paiements.",
+    "pending": "Le montant est calculé à partir de l'historique des paiements du bénéficiaire et de la catégorie."
   }
 }

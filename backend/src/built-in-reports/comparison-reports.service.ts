@@ -2,8 +2,21 @@ import { Injectable } from "@nestjs/common";
 import { DataSource } from "typeorm";
 import { withScopedDb } from "../common/db/scoped-db";
 import { Category } from "../categories/entities/category.entity";
-import { ReportCurrencyService } from "./report-currency.service";
-import { roundMoney, sumMoney, toMoneyNumber } from "../common/round.util";
+import {
+  ConversionGaps,
+  RATE_BASIS_GROUP_BY,
+  RawRateBasis,
+  ReportCurrencyService,
+  wholeGroups,
+  rateBasisColumnsSql,
+} from "./report-currency.service";
+import { FxAggregate } from "../common/fx-aggregate";
+import {
+  MONEY_SCALE,
+  roundMoney,
+  sumMoney,
+  toMoneyNumber,
+} from "../common/round.util";
 import {
   YearOverYearResponse,
   YearData,
@@ -12,6 +25,7 @@ import {
   CategoryWeekendWeekday,
 } from "./dto";
 import { investmentExclusionSql } from "../common/investment-filter.util";
+import { isNetSpending, NET_SPEND_AMOUNT } from "./spending-reports.service";
 
 /**
  * Investment scope is LINKAGE, never account type (INV-REPORT-001, issue #1257):
@@ -39,7 +53,6 @@ export class ComparisonReportsService {
   ): Promise<YearOverYearResponse> {
     const defaultCurrency =
       await this.currencyService.getDefaultCurrency(userId);
-    const rateMap = await this.currencyService.buildRateMap(defaultCurrency);
 
     const currentYear = new Date().getFullYear();
     const oldestYear = currentYear - yearsToCompare + 1;
@@ -49,10 +62,22 @@ export class ComparisonReportsService {
         EXTRACT(YEAR FROM t.transaction_date)::int as year,
         EXTRACT(MONTH FROM t.transaction_date)::int as month,
         t.currency_code,
-        SUM(CASE WHEN COALESCE(ts.amount, t.amount) > 0 THEN COALESCE(ts.amount, t.amount) ELSE 0 END) as income,
-        SUM(CASE WHEN COALESCE(ts.amount, t.amount) < 0 THEN ABS(COALESCE(ts.amount, t.amount)) ELSE 0 END) as expenses
+        ${rateBasisColumnsSql("$4")},
+        SUM(CASE
+          WHEN c.is_income = true THEN COALESCE(ts.amount, t.amount)
+          WHEN c.is_income = false THEN 0
+          WHEN COALESCE(ts.amount, t.amount) > 0 THEN COALESCE(ts.amount, t.amount)
+          ELSE 0
+        END) as income,
+        SUM(CASE
+          WHEN c.is_income = false THEN -1 * COALESCE(ts.amount, t.amount)
+          WHEN c.is_income = true THEN 0
+          WHEN COALESCE(ts.amount, t.amount) < 0 THEN ABS(COALESCE(ts.amount, t.amount))
+          ELSE 0
+        END) as expenses
       FROM transactions t
       LEFT JOIN transaction_splits ts ON ts.transaction_id = t.id
+      LEFT JOIN categories c ON c.id = COALESCE(ts.category_id, t.category_id)
       LEFT JOIN accounts a ON a.id = t.account_id
       WHERE t.user_id = $1
         AND EXTRACT(YEAR FROM t.transaction_date) >= $2
@@ -62,24 +87,39 @@ export class ComparisonReportsService {
         AND t.parent_transaction_id IS NULL
         AND ${INVESTMENT_EXCLUSION}
         AND (ts.transfer_account_id IS NULL OR ts.id IS NULL)
-      GROUP BY EXTRACT(YEAR FROM t.transaction_date), EXTRACT(MONTH FROM t.transaction_date), t.currency_code
+      GROUP BY EXTRACT(YEAR FROM t.transaction_date), EXTRACT(MONTH FROM t.transaction_date), t.currency_code, ${RATE_BASIS_GROUP_BY}
       ORDER BY year, month
     `;
 
-    interface RawYearMonth {
+    interface RawYearMonth extends RawRateBasis {
       year: number;
       month: number;
-      currency_code: string;
       income: string;
       expenses: string;
     }
 
     const rawResults: RawYearMonth[] = await withScopedDb(
       this.dataSource,
-      (m) => m.query(query, [userId, oldestYear, currentYear]),
+      (m) => m.query(query, [userId, oldestYear, currentYear, defaultCurrency]),
+    );
+    const convert = wholeGroups(
+      rawResults,
+      await this.currencyService.buildConverter(rawResults, defaultCurrency),
+      (row) => `${row.year}|${row.month}|${row.currency_code}`,
+      (row) => [
+        toMoneyNumber(row.income, MONEY_SCALE),
+        toMoneyNumber(row.expenses, MONEY_SCALE),
+      ],
     );
 
     const yearMap = new Map<number, YearData>();
+    // Per year: what converted, and whether anything of THAT year did not. A
+    // year's total is withheld on its own gap only; another year's JPY row does
+    // not blank it.
+    const yearAggregates = new Map<
+      number,
+      { income: FxAggregate; expenses: FxAggregate; complete: boolean }
+    >();
     for (let year = oldestYear; year <= currentYear; year++) {
       yearMap.set(year, {
         year,
@@ -89,44 +129,80 @@ export class ComparisonReportsService {
           expenses: 0,
           savings: 0,
         })),
-        totals: { income: 0, expenses: 0, savings: 0 },
+        totals: {
+          income: 0,
+          expenses: 0,
+          savings: 0,
+          knownIncome: 0,
+          knownExpenses: 0,
+          knownSavings: 0,
+        },
+      });
+      yearAggregates.set(year, {
+        income: new FxAggregate(),
+        expenses: new FxAggregate(),
+        complete: true,
       });
     }
 
+    // A row with no rate into the reporting currency is unknown, never its
+    // unconverted figure (INV-FX-001): it is in no month and no year total, and
+    // its currency is named.
+    const gaps = new ConversionGaps();
+
     rawResults.forEach((row) => {
       const yearData = yearMap.get(row.year);
-      if (yearData) {
+      const aggregate = yearAggregates.get(row.year);
+      if (yearData && aggregate) {
         const monthData = yearData.months[row.month - 1];
-        const income = this.currencyService.convertAmount(
-          toMoneyNumber(row.income),
-          row.currency_code,
-          defaultCurrency,
-          rateMap,
+        const income = convert(
+          // An aggregate in the row's own currency, read before conversion: a coin's
+          // sum keeps its stored 8 places (MONEY_SCALE, lossless; a fiat figure reads
+          // the same), so a 2,500-sat total is not rounded to zero before it is
+          // converted (INV-MONEY-001).
+          toMoneyNumber(row.income, MONEY_SCALE),
+          row,
         );
-        const expenses = this.currencyService.convertAmount(
-          toMoneyNumber(row.expenses),
-          row.currency_code,
-          defaultCurrency,
-          rateMap,
-        );
+        const expenses = convert(toMoneyNumber(row.expenses, MONEY_SCALE), row);
+        if (income === null || expenses === null) {
+          gaps.record(
+            row.currency_code,
+            `${row.year}|${row.month}|${row.currency_code}`,
+          );
+          aggregate.complete = false;
+          return;
+        }
         monthData.income = roundMoney(monthData.income + income);
         monthData.expenses = roundMoney(monthData.expenses + expenses);
         monthData.savings = roundMoney(monthData.income - monthData.expenses);
 
-        yearData.totals.income += income;
-        yearData.totals.expenses += expenses;
-        yearData.totals.savings += income - expenses;
+        aggregate.income.addConverted(income);
+        aggregate.expenses.addConverted(expenses);
       }
     });
 
-    yearMap.forEach((yearData) => {
-      yearData.totals.income = roundMoney(yearData.totals.income);
-      yearData.totals.expenses = roundMoney(yearData.totals.expenses);
-      yearData.totals.savings = roundMoney(yearData.totals.savings);
+    yearMap.forEach((yearData, year) => {
+      const aggregate = yearAggregates.get(year)!;
+      const knownIncome = roundMoney(aggregate.income.knownSubtotal);
+      const knownExpenses = roundMoney(aggregate.expenses.knownSubtotal);
+      const knownSavings = roundMoney(
+        aggregate.income.knownSubtotal - aggregate.expenses.knownSubtotal,
+      );
+      yearData.totals = {
+        income: aggregate.complete ? knownIncome : null,
+        expenses: aggregate.complete ? knownExpenses : null,
+        savings: aggregate.complete ? knownSavings : null,
+        knownIncome,
+        knownExpenses,
+        knownSavings,
+      };
     });
 
     return {
       data: Array.from(yearMap.values()).sort((a, b) => a.year - b.year),
+      currency: defaultCurrency,
+      missingCurrencies: gaps.missingCurrencies,
+      excludedCount: gaps.excludedCount,
     };
   }
 
@@ -137,21 +213,21 @@ export class ComparisonReportsService {
   ): Promise<WeekendVsWeekdayResponse> {
     const defaultCurrency =
       await this.currencyService.getDefaultCurrency(userId);
-    const rateMap = await this.currencyService.buildRateMap(defaultCurrency);
 
     let query = `
       SELECT
         EXTRACT(DOW FROM t.transaction_date)::int as day_of_week,
         COALESCE(ts.category_id, t.category_id) as category_id,
         t.currency_code,
+        ${rateBasisColumnsSql("$3")},
         COUNT(*)::int as tx_count,
-        SUM(ABS(COALESCE(ts.amount, t.amount))) as total
+        SUM(${NET_SPEND_AMOUNT}) as total
       FROM transactions t
       LEFT JOIN transaction_splits ts ON ts.transaction_id = t.id
       LEFT JOIN accounts a ON a.id = t.account_id
       WHERE t.user_id = $1
         AND t.transaction_date <= $2
-        AND COALESCE(ts.amount, t.amount) < 0
+        AND COALESCE(ts.amount, t.amount) <> 0
         AND t.is_transfer = false
         AND (t.status IS NULL OR t.status != 'VOID')
         AND t.parent_transaction_id IS NULL
@@ -159,19 +235,18 @@ export class ComparisonReportsService {
         AND (ts.transfer_account_id IS NULL OR ts.id IS NULL)
     `;
 
-    const params: (string | undefined)[] = [userId, endDate];
+    const params: (string | undefined)[] = [userId, endDate, defaultCurrency];
 
     if (startDate) {
-      query += ` AND t.transaction_date >= $3`;
+      query += ` AND t.transaction_date >= $4`;
       params.push(startDate);
     }
 
-    query += ` GROUP BY EXTRACT(DOW FROM t.transaction_date), COALESCE(ts.category_id, t.category_id), t.currency_code`;
+    query += ` GROUP BY EXTRACT(DOW FROM t.transaction_date), COALESCE(ts.category_id, t.category_id), t.currency_code, ${RATE_BASIS_GROUP_BY}`;
 
-    interface RawDayCategory {
+    interface RawDayCategory extends RawRateBasis {
       day_of_week: number;
       category_id: string | null;
-      currency_code: string;
       tx_count: number;
       total: string;
     }
@@ -200,13 +275,61 @@ export class ComparisonReportsService {
       { name: string; total: number }
     >();
 
+    // A row with no rate into the reporting currency is unknown, never its
+    // unconverted figure (INV-FX-001): it is in no day, no category, no count and
+    // no total, and its currency is named.
+    const gaps = new ConversionGaps();
+    const convert = await this.currencyService.buildConverter(
+      rawResults,
+      defaultCurrency,
+    );
+
+    // A foreign row arrives once per day it was struck on, so it converts at
+    // that day's rate; the converted parts are folded back into their (day,
+    // category, currency) group before the group is judged, so a refund still
+    // nets against the debits it always did.
+    // A group with a part no rate reaches is left out whole, as the group was
+    // before it was split: judging the parts that converted could keep a
+    // debit whose refund is the part that did not.
+    const groups = new Map<
+      string,
+      {
+        day_of_week: number;
+        category_id: string | null;
+        tx_count: number;
+        totals: number[];
+        failed: boolean;
+      }
+    >();
     rawResults.forEach((row) => {
-      const total = this.currencyService.convertAmount(
-        toMoneyNumber(row.total),
-        row.currency_code,
-        defaultCurrency,
-        rateMap,
-      );
+      const key = `${row.day_of_week}|${row.category_id ?? ""}|${row.currency_code}`;
+      const converted = convert(toMoneyNumber(row.total, MONEY_SCALE), row);
+      let group = groups.get(key);
+      if (!group) {
+        group = {
+          day_of_week: row.day_of_week,
+          category_id: row.category_id,
+          tx_count: 0,
+          totals: [],
+          failed: false,
+        };
+        groups.set(key, group);
+      }
+      if (converted === null) {
+        gaps.record(row.currency_code, key);
+        group.failed = true;
+        return;
+      }
+      group.tx_count += row.tx_count;
+      group.totals.push(converted);
+    });
+
+    groups.forEach((row) => {
+      if (row.failed) return;
+      const total = sumMoney(row.totals);
+      // A refund nets against the debits of its own (day, category); a group
+      // whose credits meet its debits was not spent in (INV-REPORT-004).
+      if (!isNetSpending(total)) return;
       const count = row.tx_count;
       const isWeekend = row.day_of_week === 0 || row.day_of_week === 6;
 
@@ -236,8 +359,8 @@ export class ComparisonReportsService {
       }
     });
 
-    const weekendTotal = sumMoney([dayTotals[0], dayTotals[6]]);
-    const weekdayTotal = sumMoney([
+    const knownWeekendTotal = sumMoney([dayTotals[0], dayTotals[6]]);
+    const knownWeekdayTotal = sumMoney([
       dayTotals[1],
       dayTotals[2],
       dayTotals[3],
@@ -277,13 +400,18 @@ export class ComparisonReportsService {
 
     return {
       summary: {
-        weekendTotal,
-        weekdayTotal,
+        weekendTotal: gaps.headline(knownWeekendTotal),
+        weekdayTotal: gaps.headline(knownWeekdayTotal),
+        knownWeekendTotal,
+        knownWeekdayTotal,
         weekendCount,
         weekdayCount,
       },
       byDay,
       byCategory,
+      currency: defaultCurrency,
+      missingCurrencies: gaps.missingCurrencies,
+      excludedCount: gaps.excludedCount,
     };
   }
 }

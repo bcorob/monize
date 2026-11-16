@@ -1,7 +1,17 @@
 import { Test, TestingModule } from "@nestjs/testing";
 import { DataSource } from "typeorm";
 import { ScheduledOccurrenceService } from "./scheduled-occurrence.service";
+import {
+  ScheduleAmountEstimate,
+  ScheduledAmountEstimateService,
+} from "./scheduled-amount-estimate.service";
+import { buildEstimateProfile } from "./amount-estimate";
 import { ScheduledEffectiveAmountService } from "./scheduled-effective-amount.service";
+import {
+  LoanOccurrencesProjection,
+  ScheduledTransactionLoanService,
+} from "./scheduled-transaction-loan.service";
+import { LoanOccurrence } from "../loan-installments/project-loan-occurrences";
 import { ScheduledTransaction } from "./entities/scheduled-transaction.entity";
 import { ScheduledTransactionOverride } from "./entities/scheduled-transaction-override.entity";
 import { InvestmentTransactionsService } from "../securities/investment-transactions.service";
@@ -60,6 +70,8 @@ describe("ScheduledOccurrenceService", () => {
   let overridesRepo: Record<string, jest.Mock>;
   let dataSource: DataSourceMock;
   let fx: InvestmentFxMock;
+  let loanService: { projectLoanOccurrencesMany: jest.Mock };
+  let estimates: { estimateMany: jest.Mock };
 
   const userId = "user-1";
 
@@ -95,19 +107,36 @@ describe("ScheduledOccurrenceService", () => {
     });
     fx.resolveCashExchangeRateOrNull.mockResolvedValue(1.35);
     fx.resolveSettlementAccountId.mockResolvedValue("cash-1");
+    loanService = {
+      projectLoanOccurrencesMany: jest.fn().mockResolvedValue(new Map()),
+    };
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         ScheduledOccurrenceService,
+        // No estimated schedule unless a test says so (issue #2096); the
+        // estimate's own arithmetic is `amount-estimate.spec.ts`'s.
+        {
+          provide: ScheduledAmountEstimateService,
+          useValue: {
+            estimateMany: jest.fn().mockResolvedValue(new Map()),
+            estimateFor: jest.fn(),
+          },
+        },
         // The real resolver over a stubbed FX source: the amounts asserted here
         // ARE its output, so a double of it would test nothing.
         ScheduledEffectiveAmountService,
         { provide: InvestmentTransactionsService, useValue: fx },
+        // The projection's own figures are `project-loan-occurrences.spec.ts`
+        // and the loan service's spec; this one asserts what the occurrence
+        // contract does with them.
+        { provide: ScheduledTransactionLoanService, useValue: loanService },
         { provide: DataSource, useValue: dataSource },
       ],
     }).compile();
 
     service = module.get(ScheduledOccurrenceService);
+    estimates = module.get(ScheduledAmountEstimateService);
   });
 
   it("prices every occurrence at the current rate, never the persisted snapshot", async () => {
@@ -656,6 +685,550 @@ describe("ScheduledOccurrenceService", () => {
       );
 
       expect(occurrences).toEqual([]);
+    });
+  });
+
+  /**
+   * A loan bill's occurrences after the next (spec 8.7). Timeline A of spec
+   * 5.2: a mortgage billing 584.59 whose rate change states 560.00 from
+   * 2023-04-15, nothing posted, the cursor at 2023-02-03.
+   */
+  describe("loan bill occurrences after the next", () => {
+    const mortgageBill = (
+      overrides: Partial<ScheduledTransaction> = {},
+    ): ScheduledTransaction =>
+      investmentSchedule({
+        id: "st-mortgage",
+        name: "Mortgage",
+        accountId: "chequing-1",
+        amount: -584.59,
+        nextDueDate: "2023-02-03",
+        isInvestment: false,
+        investmentAction: null,
+        investmentSecurityId: null,
+        isSplit: true,
+        splits: [
+          {
+            transferAccountId: "mortgage-1",
+            categoryId: null,
+            amount: -167.92,
+          },
+          { transferAccountId: null, categoryId: "cat-int", amount: -416.67 },
+        ],
+        ...overrides,
+      } as Partial<ScheduledTransaction>);
+
+    const row = (
+      originalDate: string,
+      amount: number | null,
+      over: Partial<LoanOccurrence> = {},
+    ): LoanOccurrence => ({
+      originalDate,
+      dueDate: originalDate,
+      overrideId: null,
+      amount,
+      principal: null,
+      interest: null,
+      extraPrincipal: null,
+      fees: null,
+      unpaidInterest: null,
+      annualRate: null,
+      debtBefore: null,
+      complete: amount !== null,
+      missing: null,
+      ...over,
+    });
+
+    const projection = (
+      occurrences: LoanOccurrence[],
+      status: LoanOccurrencesProjection["status"] = "priced",
+    ): Map<string, LoanOccurrencesProjection | null> =>
+      new Map([
+        [
+          "st-mortgage",
+          {
+            scheduledTransactionId: "st-mortgage",
+            loanAccountId: "mortgage-1",
+            status,
+            currencyCode: "CAD",
+            occurrences,
+          },
+        ],
+      ]);
+
+    const timelineA = [
+      row("2023-02-03", 584.59),
+      row("2023-03-03", 584.59),
+      row("2023-04-03", 584.59),
+      row("2023-05-03", 560),
+      row("2023-06-03", 560),
+    ];
+
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
+    it("prices each occurrence at its own due date, the stated payment from the installment it applies to", async () => {
+      loanService.projectLoanOccurrencesMany.mockResolvedValue(
+        projection(timelineA),
+      );
+
+      const occurrences = await service.expand(userId, [mortgageBill()], {
+        through: "2023-06-30",
+      });
+
+      expect(occurrences.map((o) => [o.dueDate, o.amount])).toEqual([
+        ["2023-02-03", -584.59],
+        ["2023-03-03", -584.59],
+        ["2023-04-03", -584.59],
+        ["2023-05-03", -560],
+        ["2023-06-03", -560],
+      ]);
+      expect(occurrences.every((o) => o.complete)).toBe(true);
+      expect(occurrences.map((o) => o.directionAmount)).toEqual(
+        occurrences.map((o) => o.amount),
+      );
+      // Asked once, from the cursor, for every occurrence the window prices.
+      expect(loanService.projectLoanOccurrencesMany).toHaveBeenCalledWith(
+        userId,
+        [{ scheduledTransactionId: "st-mortgage", count: 5 }],
+      );
+    });
+
+    it("keeps the cursor's answer, which is what posting it today moves", async () => {
+      // A projection disagreeing at the cursor (it never does on one ledger)
+      // would not move the occurrence the template prices.
+      loanService.projectLoanOccurrencesMany.mockResolvedValue(
+        projection([row("2023-02-03", 999), ...timelineA.slice(1)]),
+      );
+
+      const occurrences = await service.expand(userId, [mortgageBill()], {
+        through: "2023-03-31",
+      });
+
+      expect(occurrences.map((o) => o.amount)).toEqual([-584.59, -584.59]);
+    });
+
+    it("asks from the cursor even when the window starts later", async () => {
+      loanService.projectLoanOccurrencesMany.mockResolvedValue(
+        projection(timelineA),
+      );
+
+      const occurrences = await service.expand(userId, [mortgageBill()], {
+        from: "2023-05-01",
+        through: "2023-06-30",
+      });
+
+      expect(occurrences.map((o) => [o.dueDate, o.amount])).toEqual([
+        ["2023-05-03", -560],
+        ["2023-06-03", -560],
+      ]);
+      expect(loanService.projectLoanOccurrencesMany).toHaveBeenCalledWith(
+        userId,
+        [{ scheduledTransactionId: "st-mortgage", count: 5 }],
+      );
+    });
+
+    it("does not ask when only the next occurrence is listed", async () => {
+      const occurrences = await service.expand(userId, [mortgageBill()], {
+        through: "2023-06-30",
+        maxOccurrences: 1,
+      });
+
+      expect(occurrences.map((o) => o.amount)).toEqual([-584.59]);
+      expect(loanService.projectLoanOccurrencesMany).not.toHaveBeenCalled();
+    });
+
+    it("does not ask for a schedule with no transfer line", async () => {
+      const occurrences = await service.expand(
+        userId,
+        [mortgageBill({ isSplit: false, splits: [] })],
+        { through: "2023-04-30" },
+      );
+
+      expect(occurrences.map((o) => o.amount)).toEqual([
+        -584.59, -584.59, -584.59,
+      ]);
+      expect(loanService.projectLoanOccurrencesMany).not.toHaveBeenCalled();
+    });
+
+    it("projects one year ahead, and an occurrence due later keeps the template", async () => {
+      jest.useFakeTimers({
+        now: new Date(2023, 1, 1, 12),
+        doNotFake: [
+          "nextTick",
+          "setImmediate",
+          "queueMicrotask",
+          "setTimeout",
+          "setInterval",
+          "clearTimeout",
+          "clearInterval",
+        ],
+      });
+      // 2023-02-01 + 366 days = 2024-02-02: twelve slots through 2024-01-03.
+      const slots = Array.from({ length: 12 }, (_, i) => {
+        const month = new Date(2023, 1 + i, 3);
+        return `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, "0")}-03`;
+      });
+      loanService.projectLoanOccurrencesMany.mockResolvedValue(
+        projection(slots.map((d, i) => row(d, i < 3 ? 584.59 : 560))),
+      );
+
+      const occurrences = await service.expand(userId, [mortgageBill()], {
+        through: "2024-03-31",
+      });
+
+      expect(loanService.projectLoanOccurrencesMany).toHaveBeenCalledWith(
+        userId,
+        [{ scheduledTransactionId: "st-mortgage", count: 12 }],
+      );
+      expect(occurrences.map((o) => [o.dueDate, o.amount]).slice(-4)).toEqual([
+        ["2023-12-03", -560],
+        ["2024-01-03", -560],
+        ["2024-02-03", -584.59],
+        ["2024-03-03", -584.59],
+      ]);
+    });
+
+    it("reports an occurrence the projection cannot price as unknown, never as the template", async () => {
+      loanService.projectLoanOccurrencesMany.mockResolvedValue(
+        projection([
+          timelineA[0],
+          row("2023-03-03", null, {
+            missing: { kind: "rate", date: "2023-03-03" },
+          }),
+          row("2023-04-03", null, {
+            missing: { kind: "earlier-occurrence", originalDate: "2023-03-03" },
+          }),
+        ]),
+      );
+
+      const occurrences = await service.expand(userId, [mortgageBill()], {
+        through: "2023-04-30",
+      });
+
+      expect(occurrences[0]).toMatchObject({ amount: -584.59, complete: true });
+      for (const later of occurrences.slice(1)) {
+        expect(later).toMatchObject({
+          amount: null,
+          complete: false,
+          // A loan payment's direction is the template's whatever its amount.
+          directionAmount: -584.59,
+        });
+      }
+    });
+
+    it("keeps an amount the projection states without lines", async () => {
+      // An override amount on a settled debt: the amount posts, its division
+      // into lines is what is unknown.
+      loanService.projectLoanOccurrencesMany.mockResolvedValue(
+        projection([
+          timelineA[0],
+          row("2023-03-03", 610, {
+            complete: false,
+            overrideId: "ovr-1",
+            missing: { kind: "override-on-settled-debt", overrideId: "ovr-1" },
+          }),
+        ]),
+      );
+
+      const occurrences = await service.expand(userId, [mortgageBill()], {
+        through: "2023-03-31",
+      });
+
+      expect(occurrences[1]).toMatchObject({ amount: -610, complete: true });
+    });
+
+    it("reports every projected occurrence unknown when the loan's ledger cannot be read", async () => {
+      loanService.projectLoanOccurrencesMany.mockResolvedValue(
+        new Map([["st-mortgage", null]]),
+      );
+
+      const occurrences = await service.expand(userId, [mortgageBill()], {
+        through: "2023-04-30",
+      });
+
+      expect(occurrences.map((o) => o.amount)).toEqual([-584.59, null, null]);
+      expect(occurrences.map((o) => o.complete)).toEqual([true, false, false]);
+    });
+
+    it.each(["not-a-loan", "declined"] as const)(
+      "leaves a %s schedule's occurrences as the effective-amount service answers them",
+      async (status) => {
+        loanService.projectLoanOccurrencesMany.mockResolvedValue(
+          projection([], status),
+        );
+
+        const occurrences = await service.expand(userId, [mortgageBill()], {
+          through: "2023-04-30",
+        });
+
+        expect(occurrences.map((o) => o.amount)).toEqual([
+          -584.59, -584.59, -584.59,
+        ]);
+        expect(occurrences.every((o) => o.complete)).toBe(true);
+      },
+    );
+
+    it("lists no occurrence after the slot by which the loan is settled", async () => {
+      // The final installment clears the debt; the advancement deactivates
+      // the schedule before the next slot, so it never posts.
+      loanService.projectLoanOccurrencesMany.mockResolvedValue(
+        projection([timelineA[0], row("2023-03-03", 212.4)]),
+      );
+
+      const occurrences = await service.expand(userId, [mortgageBill()], {
+        through: "2023-05-31",
+      });
+
+      expect(occurrences.map((o) => [o.dueDate, o.amount])).toEqual([
+        ["2023-02-03", -584.59],
+        ["2023-03-03", -212.4],
+      ]);
+    });
+  });
+
+  describe("an estimated schedule (issue #2096)", () => {
+    const today = "2026-11-09";
+    /** A heating bill whose January costs 220 and whose July costs 55. */
+    const seasonalEstimate = (): ScheduleAmountEstimate => ({
+      status: "estimated",
+      currencyCode: "CAD",
+      missingPair: null,
+      floors: [],
+      profile: buildEstimateProfile(
+        [
+          { date: "2025-12-15", amount: -180 },
+          { date: "2026-01-15", amount: -220 },
+          { date: "2026-07-15", amount: -55 },
+        ],
+        today,
+        2,
+      ),
+    });
+    const heatingBill = (
+      overrides: Partial<ScheduledTransaction> = {},
+    ): ScheduledTransaction =>
+      ({
+        id: "st-heat",
+        userId: "user-1",
+        accountId: "chequing-1",
+        name: "Heating",
+        payeeId: "payee-1",
+        categoryId: "cat-1",
+        // The stored snapshot, which no occurrence may show.
+        amount: -999,
+        currencyCode: "CAD",
+        frequency: "MONTHLY",
+        nextDueDate: "2026-12-15",
+        endDate: null,
+        occurrencesRemaining: null,
+        isActive: true,
+        isSplit: false,
+        isTransfer: false,
+        isInvestment: false,
+        amountIsEstimated: true,
+        splits: [],
+        ...overrides,
+      }) as unknown as ScheduledTransaction;
+
+    it("prices each occurrence at its own month's estimate", async () => {
+      estimates.estimateMany.mockResolvedValue(
+        new Map([["st-heat", seasonalEstimate()]]),
+      );
+
+      const occurrences = await service.expand(userId, [heatingBill()], {
+        through: "2027-01-31",
+      });
+
+      // One year of history is neither seasonal nor trending, so every month
+      // is the latest year's mean: (-180 - 220 - 55) / 3 = -151.67.
+      expect(occurrences.map((o) => [o.dueDate, o.amount])).toEqual([
+        ["2026-12-15", -151.67],
+        ["2027-01-15", -151.67],
+      ]);
+      expect(occurrences.every((o) => o.estimated && o.complete)).toBe(true);
+      expect(occurrences[0].estimateStatus).toBe("estimated");
+      expect(estimates.estimateMany).toHaveBeenCalledWith(
+        userId,
+        new Map([
+          [
+            "st-heat",
+            { payeeId: "payee-1", categoryId: "cat-1", currencyCode: "CAD" },
+          ],
+        ]),
+      );
+    });
+
+    it("varies by month once the history is seasonal", async () => {
+      const seasonal: ScheduleAmountEstimate = {
+        ...seasonalEstimate(),
+        // A quarterly bill both years bill the same way: January dear,
+        // July cheap.
+        profile: buildEstimateProfile(
+          ["2025", "2026"].flatMap((year) => [
+            { date: `${year}-01-15`, amount: -200 },
+            { date: `${year}-04-15`, amount: -120 },
+            { date: `${year}-07-15`, amount: -50 },
+            { date: `${year}-10-15`, amount: -130 },
+          ]),
+          today,
+          2,
+        ),
+      };
+      estimates.estimateMany.mockResolvedValue(
+        new Map([["st-heat", seasonal]]),
+      );
+
+      const occurrences = await service.expand(
+        userId,
+        [heatingBill({ nextDueDate: "2027-01-15" } as never)],
+        { through: "2027-07-31" },
+      );
+
+      const byMonth = new Map(
+        occurrences.map((o) => [o.dueDate.slice(0, 7), o.amount]),
+      );
+      expect(byMonth.get("2027-01")).toBe(-200);
+      expect(byMonth.get("2027-07")).toBe(-50);
+    });
+
+    it("keeps an override's stated amount and estimates an amountless one", async () => {
+      estimates.estimateMany.mockResolvedValue(
+        new Map([["st-heat", seasonalEstimate()]]),
+      );
+      overridesRepo.find.mockResolvedValue([
+        {
+          id: "ovr-stated",
+          scheduledTransactionId: "st-heat",
+          originalDate: "2026-12-15",
+          overrideDate: "2026-12-15",
+          amount: -175,
+        },
+        {
+          id: "ovr-moved",
+          scheduledTransactionId: "st-heat",
+          originalDate: "2027-01-15",
+          overrideDate: "2027-01-20",
+          amount: null,
+        },
+      ]);
+
+      const occurrences = await service.expand(userId, [heatingBill()], {
+        through: "2027-01-31",
+      });
+
+      expect(occurrences[0]).toMatchObject({
+        overrideId: "ovr-stated",
+        amount: -175,
+        estimated: false,
+      });
+      expect(occurrences[1]).toMatchObject({
+        overrideId: "ovr-moved",
+        dueDate: "2027-01-20",
+        amount: -151.67,
+        estimated: true,
+      });
+    });
+
+    it("prices an estimated transfer's next occurrence through its balance floor, wherever an override moved it (issue #2164)", async () => {
+      estimates.estimateMany.mockResolvedValue(
+        new Map([
+          [
+            "st-heat",
+            {
+              ...seasonalEstimate(),
+              // The card owes 2,000 for the occurrence moved to Dec 18.
+              floors: [
+                { after: "2026-12-17", through: "2026-12-18", owed: 2000 },
+              ],
+            },
+          ],
+        ]),
+      );
+      overridesRepo.find.mockResolvedValue([
+        {
+          id: "ovr-moved",
+          scheduledTransactionId: "st-heat",
+          originalDate: "2026-12-15",
+          overrideDate: "2026-12-18",
+          amount: null,
+        },
+      ]);
+
+      const occurrences = await service.expand(
+        userId,
+        [
+          heatingBill({
+            isTransfer: true,
+            transferAccountId: "card-1",
+          } as never),
+        ],
+        { through: "2027-01-31" },
+      );
+
+      expect(occurrences.map((o) => [o.dueDate, o.amount])).toEqual([
+        ["2026-12-18", -2000],
+        ["2027-01-15", -151.67],
+      ]);
+      expect(estimates.estimateMany).toHaveBeenCalledWith(
+        userId,
+        new Map([
+          [
+            "st-heat",
+            {
+              payeeId: "payee-1",
+              categoryId: "cat-1",
+              currencyCode: "CAD",
+              transfer: {
+                accountId: "chequing-1",
+                transferAccountId: "card-1",
+                frequency: "MONTHLY",
+                nextOccurrenceDueDate: "2026-12-18",
+              },
+            },
+          ],
+        ]),
+      );
+    });
+
+    it("reports an unknown estimate as unknown, never the snapshot", async () => {
+      estimates.estimateMany.mockResolvedValue(
+        new Map([
+          [
+            "st-heat",
+            {
+              status: "missing-rate",
+              currencyCode: "CAD",
+              profile: null,
+              missingPair: { from: "USD", to: "CAD" },
+            },
+          ],
+        ]),
+      );
+
+      const [occurrence] = await service.expand(userId, [heatingBill()], {
+        through: "2026-12-31",
+      });
+
+      expect(occurrence).toMatchObject({
+        amount: null,
+        directionAmount: null,
+        complete: false,
+        estimated: true,
+        estimateStatus: "missing-rate",
+      });
+    });
+
+    it("asks for no estimate when no schedule is estimated", async () => {
+      await service.expand(
+        userId,
+        [heatingBill({ amountIsEstimated: false })],
+        {
+          through: "2026-12-31",
+        },
+      );
+      expect(estimates.estimateMany).not.toHaveBeenCalled();
     });
   });
 });

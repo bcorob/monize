@@ -39,11 +39,10 @@ import { createTestAccount } from "../helpers/test-factories";
  *
  *   - the two racing trades are real `InvestmentTransactionsService.create`
  *     BUYs, which persist an `investment_transactions` row and drive the holding
- *     through the production path (processTransactionEffects -> updateHolding ->
- *     createOrUpdate -> lockHoldingScope -> read-modify-write);
+ *     through the production path (the ledger write, then
+ *     rebuildScopesFromTransactions -> lockHoldingScope -> replay the scope);
  *   - after both commit, the expected quantity and average cost are computed by
- *     replaying the *persisted* rows with the same blend `createOrUpdate` uses,
- *     and compared against the stored `Holding`.
+ *     replaying the *persisted* rows, and compared against the stored `Holding`.
  *
  * That makes the test bite on more than a lost update. If the ledger->holding
  * propagation were removed, or a BUY's quantity sign inverted, or its cost passed
@@ -51,11 +50,11 @@ import { createTestAccount } from "../helpers/test-factories";
  * holding would not -- and the assertion is holding-vs-replay, so it fails.
  *
  * Mechanism under test: `lockHoldingScope` (`backend/src/common/db/locks.ts`), an
- * advisory lock keyed by account that createOrUpdate takes before reading the
- * quantity it will write back. The unique key on (account_id, security_id) blocks
- * a second insert and the row lock serializes the physical writes, but neither
- * stops the second request writing a quantity it derived from the value it read
- * *before* waiting.
+ * advisory lock keyed by account that the rebuild takes before reading the ledger
+ * it will project. The unique key on (account_id, security_id) blocks a second
+ * insert and the row lock serializes the physical writes, but neither stops the
+ * second request writing a position it derived from a ledger read taken *before*
+ * waiting -- one that never saw the other trade's row.
  *
  * ---------------------------------------------------------------------------
  * The interleaving is forced, not hoped for. A plain `Promise.all` loses an
@@ -71,8 +70,9 @@ import { createTestAccount } from "../helpers/test-factories";
  *     commit and the other overwrite with a stale-derived total -- a lost update.
  *   - WITH the mechanism: the first trade takes the advisory lock, reads, and
  *     parks on the barrier; the second blocks at `lockHoldingScope` *before it can
- *     read*. Releasing the barrier lets the first commit and release the advisory
- *     lock; only then does the second read the fresh quantity and add its delta.
+ *     read the ledger*. Releasing the barrier lets the first commit and release
+ *     the advisory lock; only then does the second replay a ledger holding both
+ *     rows.
  *
  * The two BUYs fund from different cash accounts and settle on different dates, so
  * the only row they contend on is the holding -- no funding-account balance row and
@@ -231,10 +231,9 @@ describe("concurrent trades on one holding (integration, INV-HOLDING-001)", () =
   }
 
   /**
-   * Replay the persisted investment ledger for this holding with the same blend
-   * `HoldingsService.createOrUpdate` applies to a BUY. Independent of the stored
-   * holding and of the test's own constants: it reads back whatever `create`
-   * actually wrote to `investment_transactions`.
+   * Replay the persisted investment ledger for this holding. Independent of the
+   * stored holding and of the test's own constants: it reads back whatever
+   * `create` actually wrote to `investment_transactions`.
    */
   async function replayLedger(): Promise<{
     quantity: number;

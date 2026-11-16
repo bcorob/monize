@@ -76,7 +76,10 @@
     "collapseAria": "Приховати інформацію про рахунок",
     "showAccountNumber": "Показати номер рахунку",
     "hideAccountNumber": "Приховати номер рахунку",
-    "show": "Показати інформацію про рахунок"
+    "show": "Показати інформацію про рахунок",
+    "nextInstallment": "Наступний платіж",
+    "finalPayment": "Останній платіж",
+    "amountDueOn": "{amount}, строк {date}"
   },
   "page": {
     "title": "Транзакції",
@@ -121,13 +124,19 @@
       "balance": "Баланс",
       "attachments": "Вкладення",
       "status": "Статус",
+      "statusHelp": "Не звірено, Проведено або Звірено — це етапи узгодження з банківською випискою. Анульовано скасовує транзакцію, але зберігає її запис; вона більше не змінює залишок рахунку.",
       "actions": "Дії"
+    },
+    "sort": {
+      "balanceHiddenHint": "Відсортуйте за датою, щоб побачити поточний баланс",
+      "stripLabel": "Сортувати за"
     },
     "dateDisplay": {
       "toggleLabel": "Приховати рік",
       "toggleTitle": "Прибрати рік із дат, щоб вмістилося більше імені одержувача"
     },
     "attachmentsCount": "{count, plural, one {# вкладення} few {# вкладення} many {# вкладень} other {# вкладення}}",
+    "warrantiesCount": "{count, plural, one {# гарантія} few {# гарантії} many {# гарантій} other {# гарантії}}",
     "today": "Сьогодні",
     "export": {
       "button": "Експорт",
@@ -165,7 +174,6 @@
     },
     "row": {
       "viewPayeeTitle": "Показати відомості про {name}",
-      "ref": "Реф: {number}",
       "investmentLabel": "Інвестиція",
       "linkedInvestmentTitle": "Переглянути в Інвестиціях",
       "filterByDate": "Фільтрувати за датою «{date}»",
@@ -212,13 +220,13 @@
       "title": "Фільтри",
       "clear": "Очистити",
       "hide": "Приховати",
-      "show": "Показати"
+      "show": "Показати фільтри"
     },
     "accounts": {
-      "label": "Показати рахунки:",
-      "all": "Всі",
-      "active": "Активні",
-      "closed": "Закриті"
+      "label": "Показати рахунки",
+      "allCount": "Всі ({count})",
+      "activeCount": "Активні ({count})",
+      "closedCount": "Закриті ({count})"
     },
     "fields": {
       "accounts": "Рахунки",
@@ -251,7 +259,7 @@
       "statuses": "Всі статуси",
       "amountMin": "Мін",
       "amountMax": "Макс",
-      "search": "Пошук за одержувачем, категорією, сумою, тегом, описом, реф. №...",
+      "search": "Пошук, або спробуйте #10 чи payee:costco",
       "tagKeyValue": "напр. usa"
     },
     "tagKeyNone": "Будь-який (без фільтра за ключем)",
@@ -312,7 +320,7 @@
     },
     "modal": {
       "title": "Масове оновлення транзакцій",
-      "subtitle": "Оновити {count, plural, one {# вибрану транзакцію} other {# вибраних транзакцій}}. Увімкніть поля, які хочете змінити.",
+      "help": "Увімкніть поля, які хочете змінити.",
       "submitLabel": "Оновити {count, plural, one {# транзакцію} other {# транзакцій}}",
       "payee": "Одержувач платежу",
       "category": "Категорія",
@@ -360,8 +368,9 @@
       "fromAccount": "Рахунок-джерело",
       "toAccount": "Рахунок-отримувач",
       "transferAmount": "Сума переказу",
-      "transferAmountWithCurrency": "Сума переказу ({currency})",
-      "amountReceived": "Отримана сума ({currency})",
+      "amountReceivedLabel": "Отримана сума",
+      "transferAmountInCurrency": "Сума переказу ({currency})",
+      "amountReceivedInCurrency": "Отримана сума ({currency})",
       "payeeOptional": "Одержувач платежу (необов'язково)",
       "categoryOptional": "Категорія (необов'язково)"
     },
@@ -391,10 +400,16 @@
     "submitCreateAndNewDescription": "Зберегти й почати наступну з тим самим рахунком і датою.",
     "submitOptions": "Виберіть, що станеться після створення",
     "submitUpdate": "Оновити {mode}",
+    "submitConvert": "Перетворити на {mode}",
     "reconciledConfirm": {
       "title": "Редагувати звірену транзакцію?",
       "message": "Цю транзакцію звірено. Її зміна вплине на завершену звірку. Усе одно зберегти зміни?",
       "confirm": "Зберегти зміни"
+    },
+    "counterpartConfirm": {
+      "title": "Перетворити цей переказ?",
+      "message": "Інша сторона цього переказу вже проведена або звірена. Перетворення на транзакцію видалить цей запис з іншого рахунку та змінить баланс, звірений з випискою. Продовжити?",
+      "confirm": "Усе одно перетворити"
     },
     "modeLabel": {
       "transfer": "Переказ",
@@ -424,6 +439,8 @@
       "destinationRequired": "Оберіть рахунок-отримувач",
       "sameAccount": "Рахунок-джерело та рахунок-отримувач мають бути різними",
       "negativeTransfer": "Сума переказу не може бути від'ємною",
+      "convertedToTransfer": "Перетворено на переказ",
+      "convertedToTransaction": "Перетворено на транзакцію",
       "payeeCreated": "Одержувача платежу «{name}» створено",
       "payeeCreateFailed": "Не вдалося створити одержувача платежу",
       "payeeReactivated": "Одержувача платежу «{name}» реактивовано",
@@ -458,10 +475,20 @@
       },
       "feeCaption": "Включає комісію за закордонну операцію {percent}% ({fee})."
     },
-    "jointSplitDisabled": "Розділеними транзакціями на спільному рахунку може керувати лише власник"
+    "jointSplitDisabled": "Розділеними транзакціями на спільному рахунку може керувати лише власник",
+    "warranties": {
+      "title": "Гарантії",
+      "add": "Додати гарантію",
+      "expires": "Закінчується {date}",
+      "loading": "Завантаження гарантій",
+      "loadError": "Не вдалося завантажити гарантії для цієї транзакції.",
+      "empty": "Гарантій ще немає"
+    },
+    "conversionLockedNote": "Цей переказ належить до розділеної транзакції або до рахунку іншого власника, тому тут він може лишатися лише переказом. Змініть його через розділення або видаліть і створіть потрібний запис."
   },
   "splitEditor": {
     "header": "Деталі розподілу",
+    "headerTooltip": "Кожен рядок може бути категорією, переказом на інший рахунок або інвестицією. Сума рядків має дорівнювати загальній сумі транзакції; «Розподілити рівномірно» та «Розподілити пропорційно» розподіляють залишок за вас.",
     "distributeProportionally": "Розподілити пропорційно",
     "distributeProportionallyTitle": "Розподілити залишок пропорційно на основі суми кожного розподілу",
     "distributeEvenly": "Розподілити рівномірно",
@@ -521,7 +548,7 @@
     "quantityPlaceholder": "Кількість",
     "pricePlaceholder": "Ціна",
     "commissionPlaceholder": "Комісія",
-    "amountPlaceholder": "Сума ({currency})",
+    "amountOnlyPlaceholder": "Сума",
     "ratePlaceholder": "{to} за 1 {from}",
     "ariaRate": "Курс обміну ({to} за 1 {from})",
     "rateHint": "Кількість, ціна та комісія вказані у {from}; цей курс переводить грошовий результат у {to}.",
@@ -551,6 +578,7 @@
       "total": "Разом",
       "transactions": "Транзакції",
       "tooltip": "{count, plural, one {# транзакція} other {# транзакцій}}",
+      "partialNote": "Для деяких сум немає обмінного курсу, і їх не включено до цих підсумків.",
       "quarterLabel": "{quarter} кв. {year}",
       "quarterTick": "{quarter} кв. {year}",
       "granularityLabel": "Групування",
@@ -575,6 +603,11 @@
       "log": "Логарифмічний",
       "autoTitle": "Авто ({scale})",
       "scaleTitle": "Масштаб {label}"
+    },
+    "collapse": {
+      "hide": "Приховати графік",
+      "show": "Показати графік",
+      "hidden": "Графік приховано"
     }
   },
   "toasts": {
@@ -597,5 +630,71 @@
     "title": "Витрати за {key}",
     "other": "Інше",
     "noData": "Немає позначених тегами витрат для розподілу за цим ключем."
+  },
+  "searchSyntax": {
+    "open": "Синтаксис пошуку",
+    "title": "Синтаксис пошуку",
+    "fields": "Поля: payee, memo, cat, tag, account, ref, amount, date, status, is, has. Виберіть приклад, щоб вставити його в поле пошуку.",
+    "examples": {
+      "allWords": "Кожне слово десь трапляється",
+      "phrase": "Саме ця фраза",
+      "exclude": "Виключити все, що збігається з refund",
+      "fieldContains": "Отримувач містить costco",
+      "fieldExact": "Отримувач точно Costco",
+      "reference": "Номер чека або посилання рівно 10",
+      "wildcard": "Посилання починається з 10",
+      "amountOver": "Сума понад 100",
+      "amountRange": "Сума від 50 до 100",
+      "datePeriod": "Будь-який день березня 2026",
+      "isSplit": "Розділені операції",
+      "hasAttachment": "Має вкладення",
+      "hasWarranty": "Має гарантію"
+    }
+  },
+  "searchInterpretation": {
+    "label": "Пошук:",
+    "negated": "не {phrase}",
+    "malformed": "{raw} (не розпізнано, шукали як текст)",
+    "empty": "{raw} (порожньо, пропущено)",
+    "status": "Статус: {value}",
+    "any": "«{value}» у будь-якому полі",
+    "fields": {
+      "payee": "Отримувач",
+      "memo": "Нотатка",
+      "cat": "Категорія",
+      "tag": "Мітка",
+      "account": "Рахунок",
+      "ref": "Посилання",
+      "amount": "Сума",
+      "date": "Дата",
+      "status": "Статус",
+      "is": "Тип",
+      "has": "Має"
+    },
+    "ops": {
+      "contains": "{field} містить «{value}»",
+      "exact": "{field}: «{value}»",
+      "glob": "{field} відповідає «{value}»",
+      "eq": "{field}: {value}",
+      "gt": "{field} понад {value}",
+      "gte": "{field} від {value}",
+      "lt": "{field} менше {value}",
+      "lte": "{field} до {value}",
+      "between": "{field} від {value} до {valueTo}"
+    },
+    "enum": {
+      "is": {
+        "transfer": "Перекази",
+        "split": "Розділені операції",
+        "uncategorized": "Без категорії"
+      },
+      "has": {
+        "attachment": "Має вкладення",
+        "warranty": "Має гарантію",
+        "ref": "Має номер посилання",
+        "memo": "Має нотатку",
+        "tag": "Має мітку"
+      }
+    }
   }
 }

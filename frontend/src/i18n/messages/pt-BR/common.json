@@ -10,6 +10,8 @@
     "versionLabel": "Versão {version}",
     "expandAll": "Expandir tudo",
     "collapseAll": "Recolher tudo",
+    "changeCount": "{count, plural, one {# alteração} other {# alterações}}",
+    "otherSections": "Correções e detalhes",
     "viewFullNotes": "Ver as notas de versão completas",
     "dontShowAgain": "Não mostrar novamente",
     "showNextLogin": "Mostrar no próximo login",
@@ -38,6 +40,14 @@
     "scheduleRecurring": "Tornar recorrente",
     "more": "Mais ações"
   },
+  "columns": {
+    "button": "Colunas",
+    "buttonWithHidden": "Colunas, ocultas: {count}",
+    "menuLabel": "Mostrar ou ocultar colunas",
+    "showAll": "Mostrar todas",
+    "hideColumn": "Ocultar coluna",
+    "sheetSubtitle": "Volte a exibi-la pelo menu Colunas."
+  },
   "loading": "Carregando...",
   "pagination": {
     "showing": "Exibindo",
@@ -60,6 +70,7 @@
   },
   "exportDropdown": {
     "export": "Exportar",
+    "exportCsv": "Exportar CSV",
     "exporting": "Exportando...",
     "exportPdf": "Exportar PDF",
     "exportReport": "Exportar relatório",
@@ -88,6 +99,7 @@
     "stackedChart": "Gráfico de barras empilhadas 100%",
     "lineChart": "Gráfico de linhas",
     "areaChart": "Gráfico de área",
+    "sankeyChart": "Diagrama de fluxo",
     "table": "Tabela"
   },
   "formActions": {
@@ -118,8 +130,15 @@
     "search": "Pesquisar...",
     "selectAll": "Selecionar tudo",
     "clear": "Limpar",
+    "clearSearch": "Limpar busca",
     "noOptions": "Sem opções disponíveis",
     "selectedCount": "{count} selecionados"
+  },
+  "categoryFilter": {
+    "uncategorized": "Não Categorizado",
+    "transfers": "Transferências",
+    "allIncome": "Todas as categorias de receitas",
+    "allExpenses": "Todas as categorias de despesas"
   },
   "combobox": {
     "createOption": "Criar \"{value}\"",
@@ -137,6 +156,7 @@
   },
   "dateInput": {
     "shortcutsTitle": "Atalhos de teclado",
+    "openPicker": "Abrir seletor de data",
     "today": "Hoje",
     "firstDayOfYear": "Primeiro dia do ano",
     "lastDayOfYear": "Último dia do ano",
@@ -158,6 +178,7 @@
     "CASH": "Dinheiro",
     "LINE_OF_CREDIT": "Linha de crédito",
     "ASSET": "Ativo",
+    "CRYPTO": "Carteira cripto",
     "OTHER": "Outro"
   },
   "accountFilter": {
@@ -241,12 +262,20 @@
     "marker": "—",
     "srLabel": "Valor não disponível",
     "scheduledFx": "Não é possível determinar o valor atual: não há taxa de câmbio disponível para o par de moedas de liquidação deste item agendado. O valor salvo foi calculado com uma taxa anterior, por isso não é exibido.",
-    "displayFx": "Este valor não pode ser exibido aqui: o montante é conhecido, mas não há taxa de câmbio disponível para convertê-lo na moeda deste total. Atualize as taxas na página Moedas."
+    "displayFx": "Este valor não pode ser exibido aqui: o montante é conhecido, mas não há taxa de câmbio disponível para convertê-lo na moeda deste total. Atualize as taxas na página Moedas.",
+    "noCashBalance": "Este valor não pode ser calculado: uma conta de caixa nesta visão não informou saldo para este dia, então o que ela continha é desconhecido, não zero. Recarregue o relatório; se persistir, os saldos do dia não puderam ser calculados e vale a pena relatar.",
+    "noPrice": "Este valor não pode ser calculado: as ações mantidas são conhecidas, mas o ativo não tem preço para avaliá-las. Atualize os preços ou adicione um manualmente no histórico de preços do ativo.",
+    "noBaseline": "Este valor não pode ser calculado: é uma comparação e não existe um valor anterior para comparar. Não falta nada, então não há nada a acrescentar.",
+    "staleQuote": "A variação do dia não pode ser calculada: o preço mais recente do ativo é anterior ao último pregão, portanto qualquer variação a partir dele seria a de um dia anterior. Atualize as cotações ou verifique o provedor de cotações do ativo.",
+    "unknownCurrency": "Este valor não pode ser exibido: o registro não indica nenhum título, então a moeda do número é desconhecida. Abra a transação e atribua a ela um título para que seus valores possam ser rotulados."
   },
   "density": {
     "title": "Alternar densidade das linhas",
     "normal": "Normal",
     "compact": "Compacto",
     "dense": "Denso"
+  },
+  "scheduledOverdue": {
+    "included": "Inclui {count, plural, one {# transação agendada em atraso} other {# transações agendadas em atraso}}"
   }
 }

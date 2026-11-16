@@ -5,6 +5,8 @@
     "dividendsInterest": "Dividendi e interessi",
     "realizedGains": "Plusvalenze realizzate",
     "ytd": "Da inizio anno",
+    "realizedKnownPart": "Parte nota: {amount}",
+    "realizedUnknownReason": "Questo utile non può essere calcolato: la posizione contiene azioni aggiunte senza costo, quindi il costo delle azioni vendute è sconosciuto. Apri la transazione che le ha aggiunte e inserisci il loro prezzo.",
     "empty": "Nessun reddito da investimenti quest'anno"
   },
   "register": {

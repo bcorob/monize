@@ -3,10 +3,12 @@ import { render, screen, act, fireEvent } from '@/test/render';
 import { EquityPanel } from './EquityPanel';
 import type { Account } from '@/types/account';
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({ formatCurrency: (a: number) => `$${a.toFixed(2)}` }),
-}));
-vi.mock('@/components/transactions/BalanceHistoryChart', () => ({
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({ ...numberFormatMockDefaults(), formatCurrency: (a: number) => `$${a.toFixed(2)}` }),
+  };
+});vi.mock('@/components/transactions/BalanceHistoryChart', () => ({
   BalanceHistoryChart: () => <div data-testid="equity-chart" />,
 }));
 

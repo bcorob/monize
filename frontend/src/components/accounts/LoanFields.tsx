@@ -197,6 +197,7 @@ export function LoanFields({
         categories={categories}
         selectedInterestCategoryId={selectedInterestCategoryId}
         onInterestCategoryChange={handleInterestCategoryChange}
+        interestCategoryRequired
         interestBookingMode={interestBookingMode}
         onInterestBookingModeChange={handleInterestBookingModeChange}
         selectedOverpaymentCategoryId={selectedOverpaymentCategoryId}

@@ -1,19 +1,27 @@
-import { DataSource } from "typeorm";
+import { DataSource, In } from "typeorm";
 import { Test, TestingModule } from "@nestjs/testing";
 import { getRepositoryToken } from "@nestjs/typeorm";
 import { ConfigService } from "@nestjs/config";
 import { I18nService } from "nestjs-i18n";
-import { BudgetAlertService } from "./budget-alert.service";
+import {
+  BudgetAlertService,
+  DIGEST_LEASE_MS,
+  DIGEST_TYPES,
+} from "./budget-alert.service";
+import { JobClaimType } from "../common/jobs/job-claim.service";
+import { NotificationService } from "../notification-center/notification.service";
+import { NotificationDispatchService } from "../notifications/notification-dispatch.service";
+import { NotificationPreferenceService } from "../notification-center/notification-preference.service";
 import { Budget, BudgetType, BudgetStrategy } from "./entities/budget.entity";
 import {
   BudgetCategory,
   RolloverType,
 } from "./entities/budget-category.entity";
 import {
-  BudgetAlert,
-  AlertType,
-  AlertSeverity,
-} from "./entities/budget-alert.entity";
+  Notification,
+  NotificationType,
+  NotificationSeverity,
+} from "../notification-center/entities/notification.entity";
 import { Transaction } from "../transactions/entities/transaction.entity";
 import { TransactionSplit } from "../transactions/entities/transaction-split.entity";
 import { User } from "../users/entities/user.entity";
@@ -21,13 +29,61 @@ import { UserPreference } from "../users/entities/user-preference.entity";
 import { ScheduledTransaction } from "../scheduled-transactions/entities/scheduled-transaction.entity";
 import { EmailService } from "../notifications/email.service";
 import {
+  CategorySpending,
+  queryCategorySpendingBuckets,
+} from "./budget-spending.util";
+import { monthBuckets } from "../test-helpers/budget-spending-buckets";
+import {
   createScopedDbMocks,
   DataSourceMock,
 } from "../test-helpers/scoped-db-testing";
+import {
+  createJobClaimMock,
+  jobClaimProvider,
+  JobClaimMock,
+  TEST_LEASE_TOKEN,
+} from "../test-helpers/job-claim-testing";
 
 jest.mock("../common/db/scoped-db", () =>
   jest.requireActual("../test-helpers/scoped-db-testing").scopedDbMockModule(),
 );
+
+// The real implementation by default; the seasonal-profile tests script it.
+jest.mock("./budget-spending.util", () => {
+  const actual = jest.requireActual("./budget-spending.util");
+  return {
+    ...actual,
+    queryCategorySpending: jest.fn(actual.queryCategorySpending),
+    queryCategorySpendingBuckets: jest.fn(),
+  };
+});
+
+const mockedBuckets = queryCategorySpendingBuckets as jest.MockedFunction<
+  typeof queryCategorySpendingBuckets
+>;
+
+/** What `queryCategorySpending` returns for the given net sums (expenses negative). */
+function spending(
+  categories: Record<string, number>,
+  incomplete: string[] = [],
+): CategorySpending {
+  return {
+    spendingMap: new Map(Object.entries(categories)),
+    transferSpendingMap: new Map(),
+    currency: "USD",
+    incompleteCategoryIds: new Set(incomplete),
+    incompleteTransferAccountIds: new Set(),
+    transferIncomeMap: new Map(),
+    incompleteTransferIncomeAccountIds: new Set(),
+    outsideTransferIncome: 0,
+    outsideTransferIncomeComplete: true,
+    missingRatePairs: incomplete.length > 0 ? ["JPY->USD"] : [],
+  };
+}
+
+/** Scripts the 12-month sweep by calendar month. */
+const scriptMonths = (perMonth: (month: number) => CategorySpending) =>
+  monthBuckets((key) => perMonth(Number(key.slice(5, 7))));
 
 function makeCategory(overrides: Partial<BudgetCategory> = {}): BudgetCategory {
   return {
@@ -45,6 +101,7 @@ function makeCategory(overrides: Partial<BudgetCategory> = {}): BudgetCategory {
     rolloverType: RolloverType.NONE,
     rolloverCap: null,
     flexGroup: null,
+    bucketId: null,
     alertWarnPercent: 80,
     alertCriticalPercent: 95,
     notes: null,
@@ -78,7 +135,7 @@ function makeBudget(overrides: Partial<Budget> = {}): Budget {
   };
 }
 
-function makeAlert(overrides: Partial<BudgetAlert> = {}): BudgetAlert {
+function makeAlert(overrides: Partial<Notification> = {}): Notification {
   return {
     id: "alert-1",
     userId: "11111111-1111-1111-1111-111111111111",
@@ -86,8 +143,9 @@ function makeAlert(overrides: Partial<BudgetAlert> = {}): BudgetAlert {
     budget: {} as Budget,
     budgetCategoryId: "bc-1",
     budgetCategory: null,
-    alertType: AlertType.THRESHOLD_WARNING,
-    severity: AlertSeverity.WARNING,
+    type: NotificationType.THRESHOLD_WARNING,
+    severity: NotificationSeverity.WARNING,
+    target: null,
     title: "Test alert",
     message: "Test message",
     data: {},
@@ -96,9 +154,35 @@ function makeAlert(overrides: Partial<BudgetAlert> = {}): BudgetAlert {
     periodStart: "2026-02-01",
     createdAt: new Date(),
     dismissedAt: null,
+    dedupeKey: null,
     ...overrides,
   };
 }
+
+/**
+ * The actuals query converts every row into the budget's currency, so a mock
+ * repository must answer the budget lookup and hand back raw rows that carry a
+ * currency and a date. Every row here is in the budget's currency, which needs
+ * no rate: each existing number is the one the unconverted query returned.
+ */
+const TEST_BUDGET_CURRENCY = "USD";
+const spendingRow = (key: string, total: string) => ({
+  key,
+  currencyCode: TEST_BUDGET_CURRENCY,
+  txDate: "2026-01-10",
+  total,
+});
+// A Mock carrying `query`, so it fits the specs' `Record<string, jest.Mock>`.
+const spendingManager = () =>
+  Object.assign(jest.fn(), {
+    query: jest
+      .fn()
+      .mockImplementation(async (sql: string) =>
+        sql.includes("FROM budgets")
+          ? [{ currency_code: TEST_BUDGET_CURRENCY }]
+          : [],
+      ),
+  });
 
 describe("BudgetAlertService", () => {
   let scopedDataSource: DataSourceMock;
@@ -114,6 +198,7 @@ describe("BudgetAlertService", () => {
   let scheduledTransactionsRepository: Record<string, jest.Mock>;
   let emailService: Record<string, jest.Mock>;
   let configService: Record<string, jest.Mock>;
+  let jobClaims: JobClaimMock;
 
   const mockQueryBuilder = {
     select: jest.fn().mockReturnThis(),
@@ -122,10 +207,16 @@ describe("BudgetAlertService", () => {
     andWhere: jest.fn().mockReturnThis(),
     innerJoin: jest.fn().mockReturnThis(),
     groupBy: jest.fn().mockReturnThis(),
+    addGroupBy: jest.fn().mockReturnThis(),
+    setParameter: jest.fn().mockReturnThis(),
     getRawMany: jest.fn().mockResolvedValue([]),
   };
 
   beforeEach(async () => {
+    // Wins the lease and reports "not yet delivered" by default, so every test
+    // written before the digest took a lease still exercises the send.
+    jobClaims = createJobClaimMock();
+
     budgetsRepository = {
       find: jest.fn().mockResolvedValue([]),
     };
@@ -146,6 +237,7 @@ describe("BudgetAlertService", () => {
     };
 
     transactionsRepository = {
+      manager: spendingManager(),
       createQueryBuilder: jest.fn().mockReturnValue({ ...mockQueryBuilder }),
     };
 
@@ -193,7 +285,7 @@ describe("BudgetAlertService", () => {
     ({ manager: scopedManager, dataSource: scopedDataSource } =
       createScopedDbMocks([
         [Budget, budgetsRepository as never],
-        [BudgetAlert, alertsRepository as never],
+        [Notification, alertsRepository as never],
         [Transaction, transactionsRepository as never],
         [TransactionSplit, splitsRepository as never],
         [User, usersRepository as never],
@@ -207,21 +299,33 @@ describe("BudgetAlertService", () => {
     // the in-memory comparison (audit P4-015). So the double has to behave like
     // the real insert: record the row, hand back an id, and let the follow-up
     // read find it.
+    //
+    // Parameters are read by the column the statement names rather than by
+    // position: by index this double silently mapped `target` onto `periodStart`
+    // the moment the INSERT moved behind one write door, which is a fact about
+    // that writer's column order and not about the row.
     insertedAlerts = [];
     scopedManager.query.mockImplementation(
       async (sql: string, params: unknown[]) => {
-        if (!sql.includes("INSERT INTO budget_alerts")) return [];
+        if (!sql.includes("INSERT INTO notifications")) return [];
+        const columns = /INSERT INTO notifications\s*\(([^)]*)\)/.exec(sql);
+        if (!columns) throw new Error(`no column list in: ${sql}`);
+        const byColumn = Object.fromEntries(
+          columns[1]
+            .split(",")
+            .map((name, i) => [name.trim(), params[i]] as const),
+        );
         const row = {
           id: `alert-${insertedAlerts.length + 1}`,
-          userId: params[0],
-          budgetId: params[1],
-          budgetCategoryId: params[2],
-          alertType: params[3],
-          severity: params[4],
-          title: params[5],
-          message: params[6],
-          data: JSON.parse(String(params[7])),
-          periodStart: params[8],
+          userId: byColumn.user_id,
+          budgetId: byColumn.budget_id,
+          budgetCategoryId: byColumn.budget_category_id,
+          type: byColumn.alert_type,
+          severity: byColumn.severity,
+          title: byColumn.title,
+          message: byColumn.message,
+          data: JSON.parse(String(byColumn.data)),
+          periodStart: byColumn.period_start,
         };
         insertedAlerts.push(row);
         return [[{ id: row.id }], 1];
@@ -235,9 +339,27 @@ describe("BudgetAlertService", () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BudgetAlertService,
+        // The real write door on the same mocked connection: these tests are
+        // about the statement that lands and which alerts email, so a double
+        // standing in for the writer would assert the call instead of the row.
+        {
+          provide: NotificationService,
+          useFactory: () => new NotificationService(scopedDataSource as never),
+        },
+        {
+          // The fan-out seam forwards to the real write door here, so the
+          // existing "which statement lands / which alerts email" assertions
+          // hold unchanged; the push/email fan-out has its own dedicated spec.
+          provide: NotificationDispatchService,
+          useFactory: (notifications: NotificationService) => ({
+            notify: (userId: string, input: unknown) =>
+              notifications.create(userId, input as never),
+          }),
+          inject: [NotificationService],
+        },
         { provide: getRepositoryToken(Budget), useValue: budgetsRepository },
         {
-          provide: getRepositoryToken(BudgetAlert),
+          provide: getRepositoryToken(Notification),
           useValue: alertsRepository,
         },
         {
@@ -267,10 +389,72 @@ describe("BudgetAlertService", () => {
           },
         },
         { provide: DataSource, useValue: scopedDataSource },
+        jobClaimProvider(jobClaims),
+        {
+          // Mirror the real resolver's master-gate: with no per-category row,
+          // resolveEmail == the user's notification_email. So the existing
+          // notificationEmail fixtures keep controlling the email path.
+          provide: NotificationPreferenceService,
+          useValue: {
+            resolveEmail: jest.fn(async (userId: string) => {
+              const prefs = await preferencesRepository.findOne({
+                where: { userId },
+              });
+              return prefs ? prefs.notificationEmail !== false : true;
+            }),
+          },
+        },
       ],
     }).compile();
 
     service = module.get<BudgetAlertService>(BudgetAlertService);
+  });
+
+  describe("localized alert emails", () => {
+    beforeEach(() => {
+      preferencesRepository.findOne.mockResolvedValue({
+        language: "pl",
+        notificationEmail: true,
+        budgetDigestEnabled: true,
+      });
+      jest
+        .spyOn(service["i18n"], "translate")
+        .mockImplementation((key, options) => {
+          expect(options?.lang).toBe("pl");
+          if (key === "emails.notificationCopy.budget.overTitle")
+            return "Jedzenie: limit przekroczony";
+          if (key === "emails.notificationCopy.budget.overMessage")
+            return `Wydano ${(options?.args as Record<string, unknown>)?.amount}`;
+          return options?.defaultValue ?? key;
+        });
+    });
+    const alert = () =>
+      makeAlert({
+        type: NotificationType.OVER_BUDGET,
+        title: "Stored title",
+        message: "Stored message",
+        data: {
+          categoryName: "Food",
+          amount: 120,
+          limit: 100,
+          percent: 120,
+          currencyCode: "PLN",
+        },
+      });
+    it("uses localized copy in the critical email body and single-alert subject", async () => {
+      await service["sendImmediateAlertEmail"]("u1", [alert()]);
+      const [, subject, html] = emailService.sendMail.mock.calls[0];
+      expect(subject).toContain("Jedzenie: limit przekroczony");
+      expect(html).toContain("Wydano 120,00");
+      expect(html).not.toContain("Stored title");
+    });
+    it("uses the same localized copy in the weekly digest", async () => {
+      alertsRepository.find.mockResolvedValue([alert()]);
+      await service["sendDigestForUser"]("u1", [makeBudget()], "2026-02-16");
+      const html = emailService.sendMail.mock.calls[0][2];
+      expect(html).toContain("Jedzenie: limit przekroczony");
+      expect(html).not.toContain("Stored title");
+    });
   });
 
   describe("checkThresholdAlerts", () => {
@@ -290,8 +474,8 @@ describe("BudgetAlertService", () => {
       });
 
       expect(alerts).toHaveLength(1);
-      expect(alerts[0].alertType).toBe(AlertType.OVER_BUDGET);
-      expect(alerts[0].severity).toBe(AlertSeverity.CRITICAL);
+      expect(alerts[0].type).toBe(NotificationType.OVER_BUDGET);
+      expect(alerts[0].severity).toBe(NotificationSeverity.CRITICAL);
       expect(alerts[0].title).toContain("Groceries");
       expect(alerts[0].title).toContain("over budget");
     });
@@ -312,8 +496,8 @@ describe("BudgetAlertService", () => {
       });
 
       expect(alerts).toHaveLength(1);
-      expect(alerts[0].alertType).toBe(AlertType.THRESHOLD_CRITICAL);
-      expect(alerts[0].severity).toBe(AlertSeverity.WARNING);
+      expect(alerts[0].type).toBe(NotificationType.THRESHOLD_CRITICAL);
+      expect(alerts[0].severity).toBe(NotificationSeverity.WARNING);
     });
 
     it("returns THRESHOLD_WARNING alert when at warn threshold", () => {
@@ -332,8 +516,8 @@ describe("BudgetAlertService", () => {
       });
 
       expect(alerts).toHaveLength(1);
-      expect(alerts[0].alertType).toBe(AlertType.THRESHOLD_WARNING);
-      expect(alerts[0].severity).toBe(AlertSeverity.WARNING);
+      expect(alerts[0].type).toBe(NotificationType.THRESHOLD_WARNING);
+      expect(alerts[0].severity).toBe(NotificationSeverity.WARNING);
     });
 
     it("returns no alerts when spending is below warn threshold", () => {
@@ -370,7 +554,7 @@ describe("BudgetAlertService", () => {
       });
 
       expect(alerts).toHaveLength(1);
-      expect(alerts[0].alertType).toBe(AlertType.THRESHOLD_WARNING);
+      expect(alerts[0].type).toBe(NotificationType.THRESHOLD_WARNING);
     });
 
     it("includes data fields in alert", () => {
@@ -412,8 +596,8 @@ describe("BudgetAlertService", () => {
       });
 
       expect(alerts).toHaveLength(1);
-      expect(alerts[0].alertType).toBe(AlertType.THRESHOLD_CRITICAL);
-      expect(alerts[0].severity).toBe(AlertSeverity.WARNING);
+      expect(alerts[0].type).toBe(NotificationType.THRESHOLD_CRITICAL);
+      expect(alerts[0].severity).toBe(NotificationSeverity.WARNING);
     });
   });
 
@@ -439,8 +623,8 @@ describe("BudgetAlertService", () => {
 
       // dailyRate = 200/10 = 20, projected = 20*30 = 600, 600/300 = 200%
       expect(alert).not.toBeNull();
-      expect(alert!.alertType).toBe(AlertType.PROJECTED_OVERSPEND);
-      expect(alert!.severity).toBe(AlertSeverity.WARNING);
+      expect(alert!.type).toBe(NotificationType.PROJECTED_OVERSPEND);
+      expect(alert!.severity).toBe(NotificationSeverity.WARNING);
       expect(alert!.data.projectedTotal).toBe(600);
     });
 
@@ -549,7 +733,7 @@ describe("BudgetAlertService", () => {
 
       // Total: 460/500 = 92%
       expect(alerts).toHaveLength(1);
-      expect(alerts[0].alertType).toBe(AlertType.FLEX_GROUP_WARNING);
+      expect(alerts[0].type).toBe(NotificationType.FLEX_GROUP_WARNING);
       expect(alerts[0].data.flexGroup).toBe("Fun Money");
       expect(alerts[0].data.percent).toBe(92);
     });
@@ -659,6 +843,36 @@ describe("BudgetAlertService", () => {
   });
 
   describe("checkIncomeShortfall", () => {
+    it("counts transfers in no line carries toward income (issue #2141)", () => {
+      const salary = {
+        budgetCategoryId: "bc-inc-1",
+        categoryId: "cat-inc-1",
+        categoryName: "Salary",
+        currencyCode: "USD",
+        budgeted: 5000,
+        spent: 1500,
+        percentUsed: 30,
+        isIncome: true,
+        alertWarnPercent: 80,
+        alertCriticalPercent: 95,
+        flexGroup: null,
+      };
+      // Expected at 60%: 3,000; 1,500 + 1,500 transferred in is on track.
+      expect(
+        service.checkIncomeShortfall([salary], 5000, 0.6, undefined, {
+          outsideTransferIncome: 1500,
+          currencyCode: "USD",
+        }),
+      ).toBeNull();
+      // With no income line the budget's own currency names the figure.
+      const alert = service.checkIncomeShortfall([], 5000, 0.6, undefined, {
+        outsideTransferIncome: 1000,
+        currencyCode: "EUR",
+      });
+      expect(alert!.data).toMatchObject({ actualIncome: 1000 });
+      expect(alert!.message).toContain("€");
+    });
+
     it("returns INCOME_SHORTFALL when income is < 80% of expected at 50%+ progress", () => {
       const alert = service.checkIncomeShortfall(
         [
@@ -682,8 +896,8 @@ describe("BudgetAlertService", () => {
 
       // Expected at 60%: 5000 * 0.6 = 3000, actual: 1500, ratio = 0.5 < 0.8
       expect(alert).not.toBeNull();
-      expect(alert!.alertType).toBe(AlertType.INCOME_SHORTFALL);
-      expect(alert!.severity).toBe(AlertSeverity.CRITICAL);
+      expect(alert!.type).toBe(NotificationType.INCOME_SHORTFALL);
+      expect(alert!.severity).toBe(NotificationSeverity.CRITICAL);
     });
 
     it("returns null when income is on track", () => {
@@ -773,8 +987,8 @@ describe("BudgetAlertService", () => {
 
       // Total: 300/800 = 37.5%
       expect(alerts).toHaveLength(1);
-      expect(alerts[0].alertType).toBe(AlertType.POSITIVE_MILESTONE);
-      expect(alerts[0].severity).toBe(AlertSeverity.SUCCESS);
+      expect(alerts[0].type).toBe(NotificationType.POSITIVE_MILESTONE);
+      expect(alerts[0].severity).toBe(NotificationSeverity.SUCCESS);
     });
 
     it("returns no milestone when spending is >= 60%", () => {
@@ -856,8 +1070,8 @@ describe("BudgetAlertService", () => {
         {
           budgetId: "budget-1",
           budgetCategoryId: "bc-1",
-          alertType: AlertType.THRESHOLD_WARNING,
-          severity: AlertSeverity.WARNING,
+          type: NotificationType.THRESHOLD_WARNING,
+          severity: NotificationSeverity.WARNING,
           title: "Warning",
           message: "Warning message",
           data: {},
@@ -865,8 +1079,8 @@ describe("BudgetAlertService", () => {
         {
           budgetId: "budget-1",
           budgetCategoryId: "bc-2",
-          alertType: AlertType.OVER_BUDGET,
-          severity: AlertSeverity.CRITICAL,
+          type: NotificationType.OVER_BUDGET,
+          severity: NotificationSeverity.CRITICAL,
           title: "Over budget",
           message: "Over budget message",
           data: {},
@@ -875,7 +1089,7 @@ describe("BudgetAlertService", () => {
 
       const existing = [
         makeAlert({
-          alertType: AlertType.THRESHOLD_WARNING,
+          type: NotificationType.THRESHOLD_WARNING,
           budgetCategoryId: "bc-1",
         }),
       ];
@@ -883,7 +1097,7 @@ describe("BudgetAlertService", () => {
       const result = service.deduplicateAlerts(candidates, existing);
 
       expect(result).toHaveLength(1);
-      expect(result[0].alertType).toBe(AlertType.OVER_BUDGET);
+      expect(result[0].type).toBe(NotificationType.OVER_BUDGET);
       expect(result[0].budgetCategoryId).toBe("bc-2");
     });
 
@@ -892,8 +1106,8 @@ describe("BudgetAlertService", () => {
         {
           budgetId: "budget-1",
           budgetCategoryId: "bc-1",
-          alertType: AlertType.THRESHOLD_WARNING,
-          severity: AlertSeverity.WARNING,
+          type: NotificationType.THRESHOLD_WARNING,
+          severity: NotificationSeverity.WARNING,
           title: "Warning",
           message: "Warning message",
           data: {},
@@ -901,8 +1115,8 @@ describe("BudgetAlertService", () => {
         {
           budgetId: "budget-1",
           budgetCategoryId: "bc-1",
-          alertType: AlertType.PROJECTED_OVERSPEND,
-          severity: AlertSeverity.WARNING,
+          type: NotificationType.PROJECTED_OVERSPEND,
+          severity: NotificationSeverity.WARNING,
           title: "Projected overspend",
           message: "Projected message",
           data: {},
@@ -911,7 +1125,7 @@ describe("BudgetAlertService", () => {
 
       const existing = [
         makeAlert({
-          alertType: AlertType.THRESHOLD_WARNING,
+          type: NotificationType.THRESHOLD_WARNING,
           budgetCategoryId: "bc-1",
         }),
       ];
@@ -919,7 +1133,7 @@ describe("BudgetAlertService", () => {
       const result = service.deduplicateAlerts(candidates, existing);
 
       expect(result).toHaveLength(1);
-      expect(result[0].alertType).toBe(AlertType.PROJECTED_OVERSPEND);
+      expect(result[0].type).toBe(NotificationType.PROJECTED_OVERSPEND);
     });
 
     it("returns all candidates when no existing alerts", () => {
@@ -927,8 +1141,8 @@ describe("BudgetAlertService", () => {
         {
           budgetId: "budget-1",
           budgetCategoryId: "bc-1",
-          alertType: AlertType.THRESHOLD_WARNING,
-          severity: AlertSeverity.WARNING,
+          type: NotificationType.THRESHOLD_WARNING,
+          severity: NotificationSeverity.WARNING,
           title: "Warning",
           message: "Warning message",
           data: {},
@@ -945,8 +1159,8 @@ describe("BudgetAlertService", () => {
         {
           budgetId: "budget-1",
           budgetCategoryId: null,
-          alertType: AlertType.POSITIVE_MILESTONE,
-          severity: AlertSeverity.SUCCESS,
+          type: NotificationType.POSITIVE_MILESTONE,
+          severity: NotificationSeverity.SUCCESS,
           title: "On track",
           message: "On track message",
           data: {},
@@ -955,7 +1169,7 @@ describe("BudgetAlertService", () => {
 
       const existing = [
         makeAlert({
-          alertType: AlertType.POSITIVE_MILESTONE,
+          type: NotificationType.POSITIVE_MILESTONE,
           budgetCategoryId: null,
         }),
       ];
@@ -963,6 +1177,37 @@ describe("BudgetAlertService", () => {
       const result = service.deduplicateAlerts(candidates, existing);
 
       expect(result).toHaveLength(0);
+    });
+  });
+
+  describe("deduplicateAlerts -- flex groups", () => {
+    const flexCandidate = (group: string) => ({
+      budgetId: "budget-1",
+      budgetCategoryId: null,
+      type: NotificationType.FLEX_GROUP_WARNING,
+      severity: NotificationSeverity.WARNING,
+      title: `${group} group warning`,
+      message: `${group} group message`,
+      data: { flexGroup: group },
+    });
+
+    it("keeps a flex-group warning for another group and drops one for the same group", () => {
+      const existing = [
+        makeAlert({
+          type: NotificationType.FLEX_GROUP_WARNING,
+          severity: NotificationSeverity.WARNING,
+          budgetCategoryId: null,
+          data: { flexGroup: "Fun" },
+        }),
+      ];
+
+      const result = service.deduplicateAlerts(
+        [flexCandidate("Dining"), flexCandidate("Fun")],
+        existing,
+      );
+
+      expect(result).toHaveLength(1);
+      expect(result[0].data).toEqual({ flexGroup: "Dining" });
     });
   });
 
@@ -974,6 +1219,67 @@ describe("BudgetAlertService", () => {
 
       expect(result.alertsCreated).toBe(0);
       expect(result.emailsSent).toBe(0);
+    });
+
+    describe("period day count", () => {
+      const milestoneArgsAt = async (iso: string) => {
+        jest.useFakeTimers({
+          now: new Date(iso),
+          doNotFake: ["nextTick", "setImmediate", "queueMicrotask"],
+        });
+        const spy = jest.spyOn(service, "checkPositiveMilestones");
+        try {
+          const qb = {
+            select: jest.fn().mockReturnThis(),
+            addSelect: jest.fn().mockReturnThis(),
+            where: jest.fn().mockReturnThis(),
+            andWhere: jest.fn().mockReturnThis(),
+            innerJoin: jest.fn().mockReturnThis(),
+            groupBy: jest.fn().mockReturnThis(),
+            addGroupBy: jest.fn().mockReturnThis(),
+            setParameter: jest.fn().mockReturnThis(),
+            getRawMany: jest.fn().mockResolvedValue([]),
+          };
+          transactionsRepository.createQueryBuilder.mockReturnValue(qb);
+          splitsRepository.createQueryBuilder.mockReturnValue(qb);
+          alertsRepository.find.mockResolvedValue([]);
+          await service.processAlerts(
+            makeBudget({
+              categories: [
+                makeCategory({
+                  id: "bc-1",
+                  categoryId: "cat-1",
+                  category: {
+                    id: "cat-1",
+                    name: "Groceries",
+                    isIncome: false,
+                  } as any,
+                  amount: 500,
+                }),
+              ],
+            }),
+          );
+          return spy.mock.calls[0];
+        } finally {
+          spy.mockRestore();
+          jest.useRealTimers();
+        }
+      };
+
+      it("keeps periodProgress at 1 on the last day of the period", async () => {
+        const [, periodProgress, daysRemaining] = await milestoneArgsAt(
+          "2026-10-31T12:00:00",
+        );
+        expect(periodProgress).toBe(1);
+        expect(daysRemaining).toBe(0);
+      });
+
+      it("leaves one day remaining on the 30th of a 31-day month", async () => {
+        const [, , daysRemaining] = await milestoneArgsAt(
+          "2026-10-30T12:00:00",
+        );
+        expect(daysRemaining).toBe(1);
+      });
     });
 
     it("creates threshold alerts for over-budget categories", async () => {
@@ -999,9 +1305,9 @@ describe("BudgetAlertService", () => {
         andWhere: jest.fn().mockReturnThis(),
         innerJoin: jest.fn().mockReturnThis(),
         groupBy: jest.fn().mockReturnThis(),
-        getRawMany: jest
-          .fn()
-          .mockResolvedValue([{ categoryId: "cat-1", total: "-550" }]),
+        addGroupBy: jest.fn().mockReturnThis(),
+        setParameter: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([spendingRow("cat-1", "-550")]),
       };
 
       transactionsRepository.createQueryBuilder.mockReturnValue(qb);
@@ -1016,7 +1322,10 @@ describe("BudgetAlertService", () => {
 
       expect(result.alertsCreated).toBeGreaterThan(0);
       expect(insertedAlerts.length).toBeGreaterThan(0);
-      expect(insertedAlerts[0].alertType).toBe(AlertType.OVER_BUDGET);
+      expect(insertedAlerts[0].type).toBe(NotificationType.OVER_BUDGET);
+      expect(insertedAlerts[0].data).toEqual(
+        expect.objectContaining({ currencyCode: budget.currencyCode }),
+      );
     });
 
     it("sends immediate email for critical alerts", async () => {
@@ -1043,9 +1352,9 @@ describe("BudgetAlertService", () => {
         andWhere: jest.fn().mockReturnThis(),
         innerJoin: jest.fn().mockReturnThis(),
         groupBy: jest.fn().mockReturnThis(),
-        getRawMany: jest
-          .fn()
-          .mockResolvedValue([{ categoryId: "cat-1", total: "-600" }]),
+        addGroupBy: jest.fn().mockReturnThis(),
+        setParameter: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([spendingRow("cat-1", "-600")]),
       };
 
       transactionsRepository.createQueryBuilder.mockReturnValue(qb);
@@ -1089,9 +1398,9 @@ describe("BudgetAlertService", () => {
         andWhere: jest.fn().mockReturnThis(),
         innerJoin: jest.fn().mockReturnThis(),
         groupBy: jest.fn().mockReturnThis(),
-        getRawMany: jest
-          .fn()
-          .mockResolvedValue([{ categoryId: "cat-1", total: "-600" }]),
+        addGroupBy: jest.fn().mockReturnThis(),
+        setParameter: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([spendingRow("cat-1", "-600")]),
       };
 
       transactionsRepository.createQueryBuilder.mockReturnValue(qb);
@@ -1130,9 +1439,9 @@ describe("BudgetAlertService", () => {
         andWhere: jest.fn().mockReturnThis(),
         innerJoin: jest.fn().mockReturnThis(),
         groupBy: jest.fn().mockReturnThis(),
-        getRawMany: jest
-          .fn()
-          .mockResolvedValue([{ categoryId: "cat-1", total: "-600" }]),
+        addGroupBy: jest.fn().mockReturnThis(),
+        setParameter: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([spendingRow("cat-1", "-600")]),
       };
 
       transactionsRepository.createQueryBuilder.mockReturnValue(qb);
@@ -1145,9 +1454,9 @@ describe("BudgetAlertService", () => {
       // (M25: dedup now allows severity escalation, so CRITICAL candidate passes through)
       alertsRepository.find.mockResolvedValue([
         makeAlert({
-          alertType: AlertType.OVER_BUDGET,
+          type: NotificationType.OVER_BUDGET,
           budgetCategoryId: "bc-1",
-          severity: AlertSeverity.WARNING,
+          severity: NotificationSeverity.WARNING,
         }),
       ]);
 
@@ -1156,8 +1465,8 @@ describe("BudgetAlertService", () => {
       // The OVER_BUDGET candidate has CRITICAL severity which is higher than the
       // existing WARNING, so severity escalation allows it through -- and the
       // unique fingerprint includes severity precisely so that it can.
-      expect(insertedAlerts.map((row) => row.alertType)).toContain(
-        AlertType.OVER_BUDGET,
+      expect(insertedAlerts.map((row) => row.type)).toContain(
+        NotificationType.OVER_BUDGET,
       );
     });
 
@@ -1184,9 +1493,9 @@ describe("BudgetAlertService", () => {
         andWhere: jest.fn().mockReturnThis(),
         innerJoin: jest.fn().mockReturnThis(),
         groupBy: jest.fn().mockReturnThis(),
-        getRawMany: jest
-          .fn()
-          .mockResolvedValue([{ categoryId: "cat-1", total: "-600" }]),
+        addGroupBy: jest.fn().mockReturnThis(),
+        setParameter: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([spendingRow("cat-1", "-600")]),
       };
 
       transactionsRepository.createQueryBuilder.mockReturnValue(qb);
@@ -1199,9 +1508,9 @@ describe("BudgetAlertService", () => {
       // (M25: same-or-higher severity still suppresses the candidate)
       alertsRepository.find.mockResolvedValue([
         makeAlert({
-          alertType: AlertType.OVER_BUDGET,
+          type: NotificationType.OVER_BUDGET,
           budgetCategoryId: "bc-1",
-          severity: AlertSeverity.CRITICAL,
+          severity: NotificationSeverity.CRITICAL,
         }),
       ]);
 
@@ -1210,9 +1519,9 @@ describe("BudgetAlertService", () => {
       // The OVER_BUDGET candidate has CRITICAL severity which equals the existing
       // CRITICAL, so no escalation -- the candidate is suppressed
       const createdAlerts = alertsRepository.create.mock.calls.map(
-        (call: any[]) => call[0].alertType,
+        (call: any[]) => call[0].type,
       );
-      expect(createdAlerts).not.toContain(AlertType.OVER_BUDGET);
+      expect(createdAlerts).not.toContain(NotificationType.OVER_BUDGET);
     });
   });
 
@@ -1275,6 +1584,49 @@ describe("BudgetAlertService", () => {
 
       await expect(service.checkBudgetAlerts()).resolves.not.toThrow();
     });
+
+    it("resolves each budget owner's own current period, not the server's UTC day", async () => {
+      // 01:00 UTC on 1 November is still 18:00 on 31 October in Los Angeles.
+      jest.useFakeTimers({ now: new Date("2026-11-01T01:00:00.000Z") });
+      try {
+        const budget1 = makeBudget({ id: "budget-1", categories: [] });
+        const budget2 = makeBudget({
+          id: "budget-2",
+          userId: "22222222-2222-2222-2222-222222222222",
+          categories: [],
+        });
+        budgetsRepository.find.mockResolvedValue([budget1, budget2]);
+
+        // budget1's owner has no stored timezone, so resolves to UTC; budget2's
+        // owner has one on file, the shape `getUsersByEffectiveTimezone` reads.
+        scopedDataSource.manager.query.mockImplementation(
+          async (sql: string) =>
+            sql.includes("FROM users u")
+              ? [
+                  {
+                    user_id: "22222222-2222-2222-2222-222222222222",
+                    timezone: "America/Los_Angeles",
+                    last_client_timezone: null,
+                  },
+                ]
+              : [],
+        );
+
+        const spy = jest.spyOn(service, "getCurrentPeriodDates");
+        await service.checkBudgetAlerts();
+
+        expect(spy.mock.results[0].value).toEqual({
+          periodStart: "2026-11-01",
+          periodEnd: "2026-11-30",
+        });
+        expect(spy.mock.results[1].value).toEqual({
+          periodStart: "2026-10-01",
+          periodEnd: "2026-10-31",
+        });
+      } finally {
+        jest.useRealTimers();
+      }
+    });
   });
 
   describe("sendWeeklyDigest", () => {
@@ -1325,7 +1677,7 @@ describe("BudgetAlertService", () => {
       budgetsRepository.find.mockResolvedValue([makeBudget()]);
 
       alertsRepository.find.mockResolvedValue([
-        makeAlert({ alertType: AlertType.THRESHOLD_WARNING }),
+        makeAlert({ type: NotificationType.THRESHOLD_WARNING }),
       ]);
 
       await service.sendWeeklyDigest();
@@ -1335,6 +1687,48 @@ describe("BudgetAlertService", () => {
         "Monize: Your weekly budget summary",
         expect.any(String),
       );
+    });
+
+    it("asks the database only for budget alerts, never for system alerts", async () => {
+      // Both live in `notifications`, and a system alert raised on the FIRST
+      // of a month carries that day as its `period_start` -- which is also the
+      // month's budget period start. Without the `dedupe_key IS NULL` filter
+      // it matched this query and was rendered inside the budget digest for
+      // the rest of the month, and could produce a digest for a user with no
+      // budget news at all.
+      budgetsRepository.find.mockResolvedValue([makeBudget()]);
+      alertsRepository.find.mockResolvedValue([
+        makeAlert({ type: NotificationType.THRESHOLD_WARNING }),
+      ]);
+
+      await service.sendWeeklyDigest();
+
+      const digestQuery = alertsRepository.find.mock.calls
+        .map(([options]) => options)
+        .find((options) => options?.where?.periodStart !== undefined);
+      // Selected POSITIVELY -- the budget types plus BILL_DUE -- never by an
+      // exclusion. `dedupeKey IS NULL` dropped every BILL_DUE row once they
+      // carried an occurrence key; `NOT IN the system set` let a first-of-month
+      // SCHEDULED_POST_FAILED (PAYMENTS, not system) into the budget digest.
+      expect(digestQuery.where).toEqual(
+        expect.objectContaining({ type: In(DIGEST_TYPES) }),
+      );
+      expect(DIGEST_TYPES).toContain(NotificationType.BILL_DUE);
+      expect(DIGEST_TYPES).not.toContain(
+        NotificationType.SCHEDULED_POST_FAILED,
+      );
+      expect(DIGEST_TYPES).not.toContain(NotificationType.SMTP_FAILURE);
+      expect(digestQuery.where.dedupeKey).toBeUndefined();
+    });
+
+    it("sends no digest when the period's only alerts are system alerts", async () => {
+      budgetsRepository.find.mockResolvedValue([makeBudget()]);
+      // The filtered query is what the repository answers: no budget alerts.
+      alertsRepository.find.mockResolvedValue([]);
+
+      await service.sendWeeklyDigest();
+
+      expect(emailService.sendMail).not.toHaveBeenCalled();
     });
 
     /**
@@ -1348,7 +1742,7 @@ describe("BudgetAlertService", () => {
       budgetsRepository.find.mockResolvedValue([makeBudget()]);
       alertsRepository.find.mockResolvedValue([
         makeAlert({
-          alertType: AlertType.BILL_DUE,
+          type: NotificationType.BILL_DUE,
           data: {
             billId: "st-1",
             // Announced for the 20th; its recurrence slot is the 1st of March.
@@ -1373,7 +1767,7 @@ describe("BudgetAlertService", () => {
       budgetsRepository.find.mockResolvedValue([makeBudget()]);
       alertsRepository.find.mockResolvedValue([
         makeAlert({
-          alertType: AlertType.BILL_DUE,
+          type: NotificationType.BILL_DUE,
           data: {
             billId: "st-1",
             dueDate: "2026-02-20",
@@ -1398,7 +1792,7 @@ describe("BudgetAlertService", () => {
       budgetsRepository.find.mockResolvedValue([makeBudget()]);
       alertsRepository.find.mockResolvedValue([
         makeAlert({
-          alertType: AlertType.BILL_DUE,
+          type: NotificationType.BILL_DUE,
           data: { billId: "st-1", dueDate: "2026-02-20" },
         }),
       ]);
@@ -1428,15 +1822,130 @@ describe("BudgetAlertService", () => {
 
       await expect(service.sendWeeklyDigest()).resolves.not.toThrow();
     });
+
+    /**
+     * Every backend replica fires this cron. Before the lease, nothing claimed or
+     * recorded the send, so with N replicas each user got N copies of the Monday
+     * digest. A single-replica suite never asked who else was sending; these do.
+     */
+    describe("across replicas", () => {
+      const userId = "11111111-1111-1111-1111-111111111111";
+
+      beforeEach(() => {
+        budgetsRepository.find.mockResolvedValue([makeBudget()]);
+        alertsRepository.find.mockResolvedValue([
+          makeAlert({ type: NotificationType.THRESHOLD_WARNING }),
+        ]);
+      });
+
+      it("leases the user's digest for the run date and records delivery after the send", async () => {
+        await service.sendWeeklyDigest();
+
+        expect(jobClaims.claimLease).toHaveBeenCalledWith(
+          JobClaimType.BudgetWeeklyDigest,
+          userId,
+          expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
+          DIGEST_LEASE_MS,
+        );
+        const runDate = jobClaims.claimLease.mock.calls[0][2];
+        expect(emailService.sendMail).toHaveBeenCalledTimes(1);
+        expect(jobClaims.markDelivered).toHaveBeenCalledWith(
+          JobClaimType.BudgetWeeklyDigest,
+          userId,
+          runDate,
+          TEST_LEASE_TOKEN,
+        );
+        // The delivery record follows the side effect, never precedes it: a
+        // record written first would make a failed send permanent.
+        expect(
+          jobClaims.markDelivered.mock.invocationCallOrder[0],
+        ).toBeGreaterThan(emailService.sendMail.mock.invocationCallOrder[0]);
+        expect(jobClaims.releaseLease).not.toHaveBeenCalled();
+      });
+
+      it("keys the lease by the UTC day, whatever this replica's TZ says", async () => {
+        // Two replicas with different TZ settings must spell one Monday the
+        // same way, or each wins its own lease and the user gets two digests.
+        // At 20:00Z on the 15th it is already the 16th in Auckland. Jest
+        // sandboxes process.env, so TZ cannot be changed from here; the local
+        // calendar getters are what a far-east replica's clock would answer,
+        // and they are what a server-local date is built from.
+        jest.useFakeTimers({
+          now: new Date("2026-03-15T20:00:00.000Z"),
+          doNotFake: ["nextTick", "setImmediate", "queueMicrotask"],
+        });
+        const local = [
+          jest.spyOn(Date.prototype, "getFullYear").mockReturnValue(2026),
+          jest.spyOn(Date.prototype, "getMonth").mockReturnValue(2),
+          jest.spyOn(Date.prototype, "getDate").mockReturnValue(16),
+        ];
+        try {
+          await service.sendWeeklyDigest();
+        } finally {
+          local.forEach((spy) => spy.mockRestore());
+          jest.useRealTimers();
+        }
+
+        expect(jobClaims.claimLease).toHaveBeenCalledWith(
+          JobClaimType.BudgetWeeklyDigest,
+          userId,
+          "2026-03-15",
+          DIGEST_LEASE_MS,
+        );
+      });
+
+      it("sends nothing when another replica holds this user's lease", async () => {
+        jobClaims.claimLease.mockResolvedValue(null);
+
+        await service.sendWeeklyDigest();
+
+        expect(emailService.sendMail).not.toHaveBeenCalled();
+        expect(jobClaims.markDelivered).not.toHaveBeenCalled();
+      });
+
+      it("sends nothing and hands the lease back when the digest was already delivered", async () => {
+        jobClaims.wasDelivered.mockResolvedValue(true);
+
+        await service.sendWeeklyDigest();
+
+        expect(emailService.sendMail).not.toHaveBeenCalled();
+        expect(jobClaims.markDelivered).not.toHaveBeenCalled();
+        expect(jobClaims.releaseLease).toHaveBeenCalledWith(
+          JobClaimType.BudgetWeeklyDigest,
+          userId,
+          expect.any(String),
+          TEST_LEASE_TOKEN,
+        );
+      });
+
+      it("releases the lease without a delivery record when the send fails", async () => {
+        emailService.sendMail.mockRejectedValue(new Error("SMTP down"));
+
+        await expect(service.sendWeeklyDigest()).resolves.toBeUndefined();
+
+        expect(jobClaims.markDelivered).not.toHaveBeenCalled();
+        expect(jobClaims.releaseLease).toHaveBeenCalledWith(
+          JobClaimType.BudgetWeeklyDigest,
+          userId,
+          expect.any(String),
+          TEST_LEASE_TOKEN,
+        );
+      });
+
+      it("takes no lease for a user with no budget news", async () => {
+        alertsRepository.find.mockResolvedValue([]);
+
+        await service.sendWeeklyDigest();
+
+        expect(jobClaims.claimLease).not.toHaveBeenCalled();
+        expect(emailService.sendMail).not.toHaveBeenCalled();
+      });
+    });
   });
 
   describe("checkSeasonalSpikes", () => {
-    it("returns SEASONAL_SPIKE alert when next month is historically expensive", async () => {
-      const nextMonth = new Date();
-      nextMonth.setMonth(nextMonth.getMonth() + 1);
-      const nextMonthNum = nextMonth.getMonth() + 1;
-
-      const budget = makeBudget({
+    const giftsBudget = () =>
+      makeBudget({
         categories: [
           makeCategory({
             id: "bc-1",
@@ -1451,94 +1960,76 @@ describe("BudgetAlertService", () => {
         ],
       });
 
-      // Build monthly spending data where the next month is 2.5x above average
-      const monthlyData: Array<{
-        categoryId: string;
-        month: number;
-        total: string;
-      }> = [];
-      for (let m = 1; m <= 12; m++) {
-        const amount = m === nextMonthNum ? "500" : "200";
-        monthlyData.push({ categoryId: "cat-1", month: m, total: amount });
-      }
+    beforeEach(() => {
+      mockedBuckets.mockReset();
+    });
 
-      const qb = {
-        select: jest.fn().mockReturnThis(),
-        addSelect: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        andWhere: jest.fn().mockReturnThis(),
-        innerJoin: jest.fn().mockReturnThis(),
-        groupBy: jest.fn().mockReturnThis(),
-        addGroupBy: jest.fn().mockReturnThis(),
-        getRawMany: jest.fn().mockResolvedValue(monthlyData),
-      };
-
-      transactionsRepository.createQueryBuilder.mockReturnValue(qb);
-      splitsRepository.createQueryBuilder.mockReturnValue({
-        ...qb,
-        getRawMany: jest.fn().mockResolvedValue([]),
-      });
+    it("returns SEASONAL_SPIKE alert when next month is historically expensive", async () => {
+      const nextMonth = new Date();
+      nextMonth.setMonth(nextMonth.getMonth() + 1);
+      const nextMonthNum = nextMonth.getMonth() + 1;
+      mockedBuckets.mockImplementation(
+        scriptMonths((m) =>
+          spending({ "cat-1": m === nextMonthNum ? -500 : -200 }),
+        ),
+      );
 
       const alerts = await service.checkSeasonalSpikes(
         "11111111-1111-1111-1111-111111111111",
-        budget,
+        giftsBudget(),
       );
 
-      expect(alerts.length).toBeGreaterThanOrEqual(1);
       const spikeAlert = alerts.find(
-        (a) => a.alertType === AlertType.SEASONAL_SPIKE,
+        (a) => a.type === NotificationType.SEASONAL_SPIKE,
       );
       expect(spikeAlert).toBeDefined();
-      expect(spikeAlert!.severity).toBe(AlertSeverity.INFO);
+      expect(spikeAlert!.severity).toBe(NotificationSeverity.INFO);
       expect(spikeAlert!.data.typicalIncrease).toBeGreaterThanOrEqual(1.5);
       expect(spikeAlert!.data.highMonth).toBe(nextMonthNum);
+      expect(spikeAlert!.data.suggestedBudget).toBeGreaterThan(0);
+      expect(spikeAlert!.data.categoryName).toBe("Gifts");
+    });
+
+    it("profiles the net month, so a refund cancels a spike the gross would show", async () => {
+      // 500 spent and 300 refunded in the next month nets to the usual 200.
+      mockedBuckets.mockImplementation(
+        scriptMonths(() => spending({ "cat-1": -200 })),
+      );
+
+      const alerts = await service.checkSeasonalSpikes(
+        "11111111-1111-1111-1111-111111111111",
+        giftsBudget(),
+      );
+
+      expect(alerts).toHaveLength(0);
+    });
+
+    it("makes no spike claim from a profile with an unconvertible row", async () => {
+      const nextMonth = new Date();
+      nextMonth.setMonth(nextMonth.getMonth() + 1);
+      const nextMonthNum = nextMonth.getMonth() + 1;
+      mockedBuckets.mockImplementation(
+        scriptMonths((m) =>
+          spending({ "cat-1": m === nextMonthNum ? -500 : -200 }, ["cat-1"]),
+        ),
+      );
+
+      const alerts = await service.checkSeasonalSpikes(
+        "11111111-1111-1111-1111-111111111111",
+        giftsBudget(),
+      );
+
+      expect(alerts).toHaveLength(0);
     });
 
     it("returns no alerts when no categories have seasonal spikes", async () => {
-      const budget = makeBudget({
-        categories: [
-          makeCategory({
-            id: "bc-1",
-            categoryId: "cat-1",
-            category: {
-              id: "cat-1",
-              name: "Groceries",
-              isIncome: false,
-            } as any,
-          }),
-        ],
-      });
-
-      // Flat spending across all months
-      const monthlyData: Array<{
-        categoryId: string;
-        month: number;
-        total: string;
-      }> = [];
-      for (let m = 1; m <= 12; m++) {
-        monthlyData.push({ categoryId: "cat-1", month: m, total: "200" });
-      }
-
-      const qb = {
-        select: jest.fn().mockReturnThis(),
-        addSelect: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        andWhere: jest.fn().mockReturnThis(),
-        innerJoin: jest.fn().mockReturnThis(),
-        groupBy: jest.fn().mockReturnThis(),
-        addGroupBy: jest.fn().mockReturnThis(),
-        getRawMany: jest.fn().mockResolvedValue(monthlyData),
-      };
-
-      transactionsRepository.createQueryBuilder.mockReturnValue(qb);
-      splitsRepository.createQueryBuilder.mockReturnValue({
-        ...qb,
-        getRawMany: jest.fn().mockResolvedValue([]),
-      });
+      mockedBuckets.mockImplementation(
+        scriptMonths(() => spending({ "cat-1": -200 })),
+      );
 
       const alerts = await service.checkSeasonalSpikes(
         "11111111-1111-1111-1111-111111111111",
-        budget,
+        giftsBudget(),
       );
 
       expect(alerts).toHaveLength(0);
@@ -1566,114 +2057,23 @@ describe("BudgetAlertService", () => {
       );
 
       expect(alerts).toHaveLength(0);
+      expect(mockedBuckets).not.toHaveBeenCalled();
     });
 
     it("returns no alerts when insufficient data for analysis", async () => {
-      const budget = makeBudget({
-        categories: [
-          makeCategory({
-            id: "bc-1",
-            categoryId: "cat-1",
-            category: {
-              id: "cat-1",
-              name: "Groceries",
-              isIncome: false,
-            } as any,
-          }),
-        ],
-      });
-
       // Only 2 months of data (below minimum of 3)
-      const monthlyData = [
-        { categoryId: "cat-1", month: 1, total: "200" },
-        { categoryId: "cat-1", month: 2, total: "300" },
-      ];
-
-      const qb = {
-        select: jest.fn().mockReturnThis(),
-        addSelect: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        andWhere: jest.fn().mockReturnThis(),
-        innerJoin: jest.fn().mockReturnThis(),
-        groupBy: jest.fn().mockReturnThis(),
-        addGroupBy: jest.fn().mockReturnThis(),
-        getRawMany: jest.fn().mockResolvedValue(monthlyData),
-      };
-
-      transactionsRepository.createQueryBuilder.mockReturnValue(qb);
-      splitsRepository.createQueryBuilder.mockReturnValue({
-        ...qb,
-        getRawMany: jest.fn().mockResolvedValue([]),
-      });
+      mockedBuckets.mockImplementation(
+        scriptMonths((m) =>
+          m === 1 || m === 2 ? spending({ "cat-1": -200 }) : spending({}),
+        ),
+      );
 
       const alerts = await service.checkSeasonalSpikes(
         "11111111-1111-1111-1111-111111111111",
-        budget,
+        giftsBudget(),
       );
 
       expect(alerts).toHaveLength(0);
-    });
-
-    it("includes suggested budget amount in alert data", async () => {
-      const nextMonth = new Date();
-      nextMonth.setMonth(nextMonth.getMonth() + 1);
-      const nextMonthNum = nextMonth.getMonth() + 1;
-
-      const budget = makeBudget({
-        categories: [
-          makeCategory({
-            id: "bc-1",
-            categoryId: "cat-1",
-            category: {
-              id: "cat-1",
-              name: "Gifts",
-              isIncome: false,
-            } as any,
-            amount: 100,
-          }),
-        ],
-      });
-
-      const monthlyData: Array<{
-        categoryId: string;
-        month: number;
-        total: string;
-      }> = [];
-      for (let m = 1; m <= 12; m++) {
-        const amount = m === nextMonthNum ? "600" : "200";
-        monthlyData.push({ categoryId: "cat-1", month: m, total: amount });
-      }
-
-      const qb = {
-        select: jest.fn().mockReturnThis(),
-        addSelect: jest.fn().mockReturnThis(),
-        where: jest.fn().mockReturnThis(),
-        andWhere: jest.fn().mockReturnThis(),
-        innerJoin: jest.fn().mockReturnThis(),
-        groupBy: jest.fn().mockReturnThis(),
-        addGroupBy: jest.fn().mockReturnThis(),
-        getRawMany: jest.fn().mockResolvedValue(monthlyData),
-      };
-
-      transactionsRepository.createQueryBuilder.mockReturnValue(qb);
-      splitsRepository.createQueryBuilder.mockReturnValue({
-        ...qb,
-        getRawMany: jest.fn().mockResolvedValue([]),
-      });
-
-      const alerts = await service.checkSeasonalSpikes(
-        "11111111-1111-1111-1111-111111111111",
-        budget,
-      );
-
-      if (alerts.length > 0) {
-        const alert = alerts[0];
-        expect(alert.data.suggestedBudget).toBeDefined();
-        expect(alert.data.typicalMonthlySpend).toBeDefined();
-        expect(alert.data.categoryName).toBe("Gifts");
-        expect(typeof alert.data.suggestedBudget).toBe("number");
-        expect(alert.data.suggestedBudget).toBeGreaterThan(0);
-      }
     });
   });
 
@@ -1693,37 +2093,6 @@ describe("BudgetAlertService", () => {
       expect(periodEnd).toBe(
         `${year}-${month}-${String(lastDay).padStart(2, "0")}`,
       );
-    });
-  });
-
-  describe("purgeOldAlerts", () => {
-    it("deletes dismissed alerts older than 30 days", async () => {
-      alertsRepository.delete.mockResolvedValue({ affected: 5 });
-
-      await service.purgeOldAlerts();
-
-      expect(alertsRepository.delete).toHaveBeenCalledWith(
-        expect.objectContaining({ dismissedAt: expect.anything() }),
-      );
-    });
-
-    it("deletes read alerts older than 30 days", async () => {
-      alertsRepository.delete
-        .mockResolvedValueOnce({ affected: 0 })
-        .mockResolvedValueOnce({ affected: 3 });
-
-      await service.purgeOldAlerts();
-
-      expect(alertsRepository.delete).toHaveBeenCalledTimes(2);
-      expect(alertsRepository.delete).toHaveBeenCalledWith(
-        expect.objectContaining({ isRead: true }),
-      );
-    });
-
-    it("handles errors gracefully", async () => {
-      alertsRepository.delete.mockRejectedValue(new Error("DB error"));
-
-      await expect(service.purgeOldAlerts()).resolves.not.toThrow();
     });
   });
 });

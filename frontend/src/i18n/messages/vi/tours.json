@@ -9,7 +9,8 @@
     "stepCounter": "{current} / {total}",
     "skippedTitle": "Đã hoàn tất hướng dẫn",
     "skippedBody": "Một số bước đã bị bỏ qua vì màn hình hoặc điều khiển tương ứng không khả dụng. Bạn có thể xem lại hướng dẫn bất cứ lúc nào từ Cài đặt.",
-    "move": "Di chuyển thẻ này — kéo thẻ, hoặc dịch bằng các phím mũi tên"
+    "move": "Di chuyển thẻ này — kéo thẻ, hoặc dịch bằng các phím mũi tên",
+    "readGuide": "Đọc hướng dẫn đầy đủ"
   },
   "offer": {
     "heading": "Xem hướng dẫn nhanh",
@@ -45,7 +46,8 @@
     "requirementsLoading": "Đang kiểm tra xem bạn có thể xem hướng dẫn này không…",
     "requires": {
       "transactionEntry": "Hãy thêm một tài khoản trước — hướng dẫn này chỉ cách ghi lại một giao dịch.",
-      "securitiesExist": "Hãy thêm một chứng khoán trước — hướng dẫn này mở một mục từ danh sách chứng khoán của bạn."
+      "securitiesExist": "Hãy thêm một chứng khoán trước — hướng dẫn này mở một mục từ danh sách chứng khoán của bạn.",
+      "ownerView": "Trước tiên hãy quay lại dữ liệu của bạn. Hướng dẫn này giới thiệu các tính năng không khả dụng khi bạn thao tác thay người khác."
     },
     "start": "Bắt đầu",
     "restart": "Xem lại",
@@ -67,7 +69,7 @@
         },
         "dashboard": {
           "title": "Bảng điều khiển của bạn",
-          "body": "Đây là bảng điều khiển của bạn. Dùng nút **Tùy chỉnh** ở góc trên bên phải để sắp xếp lại hoặc ẩn các tiện ích, giúp những tóm tắt bạn quan tâm nằm ngay ở trên cùng."
+          "body": "Đây là bảng điều khiển của bạn. Chọn biểu tượng bánh răng **Tùy chỉnh** cạnh lời chào để sắp xếp: di chuyển hoặc xóa tiện ích ngay tại chỗ, chọn **Thêm tiện ích** để thêm nữa, và **Xong** để giữ bố cục."
         },
         "tools": {
           "title": "Menu Công cụ",
@@ -76,6 +78,14 @@
         "accounts": {
           "title": "Tài khoản của bạn",
           "body": "Thêm tài khoản ngân hàng, thẻ tín dụng, khoản vay và đầu tư của bạn tại đây bằng nút được làm nổi bật. Mọi số dư và giao dịch đều thuộc về một tài khoản."
+        },
+        "openAccountDetail": {
+          "title": "Mở trang chi tiết của một tài khoản",
+          "body": "Mỗi tài khoản có một trang riêng theo loại của nó. Chọn **Chi tiết** — biểu tượng con mắt trên dòng tài khoản — để mở trang đó. Trên điện thoại, nhấn giữ tài khoản rồi chọn **Chi tiết**."
+        },
+        "accountDetailView": {
+          "title": "Một trang dành riêng cho tài khoản này",
+          "body": "Trang này thay đổi theo loại tài khoản, nên tài khoản ngân hàng, thẻ tín dụng, khoản vay, tài khoản đầu tư hay tài sản đều hiển thị những con số và công cụ phù hợp nhất với nó. Bạn có thể quay lại bất cứ lúc nào bằng **Chi tiết** trong danh sách tài khoản."
         },
         "transactions": {
           "title": "Giao dịch",
@@ -303,6 +313,374 @@
             "title": "Hãy trở lại vào lần đánh giá tới",
             "body": "GEM ra một quyết định cho mỗi kỳ, và ngày đánh giá kế tiếp nằm ở đầu báo cáo. Cho tới ngày đó bạn không cần làm gì. Khi đến hạn, hãy xem tín hiệu có đổi không; nếu có, hãy đặt lệnh qua công ty chứng khoán và ghi các giao dịch đó vào Monize để phần so sánh danh mục vẫn khớp. Bạn có thể chạy lại phần hướng dẫn này bất cứ lúc nào từ **Hướng dẫn sử dụng** trong **Cài đặt**."
           }
+        }
+      }
+    },
+    "v1_16_0": {
+      "notifications": {
+        "title": "Thông báo",
+        "steps": {
+          "welcome": {
+            "title": "Monize giờ có thể báo cho bạn",
+            "body": "Một hóa đơn đến hạn, một ngân sách vượt mức, một số dư vượt qua ngưỡng bạn đặt, một bản sao lưu thất bại. Phần hướng dẫn này cho thấy những thứ đó đến đâu, và cách bạn chọn thứ nào sẽ tới bạn qua email hay trên điện thoại."
+          },
+          "bell": {
+            "title": "Chuông là bản ghi gốc",
+            "body": "Mọi thông báo Monize tạo ra đều được ghi ở đây, bất kể bạn bật hay tắt thứ gì khác. Email và push là bản sao gửi đi sau; danh sách này là bản gốc, và con số trên chuông đếm những gì bạn chưa đọc."
+          },
+          "panel": {
+            "title": "Một thông báo mang theo những gì",
+            "body": "Mỗi thông báo cho biết chuyện gì đã xảy ra và dẫn tới trang hiển thị nó: hóa đơn, ngân sách, tài khoản. **Đánh dấu tất cả đã đọc** đưa bộ đếm về không mà không xóa gì. Nếu muốn được nhắc lại, mỗi thông báo có **Nhắc tôi**: một lần nữa sau một khoảng, hoặc lặp lại cho tới khi bạn dừng — và bạn có thể dừng ngay từ chính thông báo khi nó tới điện thoại."
+          },
+          "filters": {
+            "title": "Thu hẹp danh sách rồi mới xử lý",
+            "body": "Hàng trên lọc theo mức nghiêm trọng, hàng dưới tách **Tài chính** khỏi **Hệ thống** — sao lưu, gửi thư và những việc chỉ quản trị viên xử lý được. **Xóa tất cả** đi theo bộ lọc đang bật và chạm tới mọi mục khớp, không chỉ những mục trên màn hình, nên bạn có thể dọn một loạt cảnh báo hệ thống đã xử lý xong và giữ lại phần còn lại."
+          },
+          "settings": {
+            "title": "Nơi quyết định việc gửi đi",
+            "body": "**Cài đặt → Thông báo** chứa phần còn lại của hướng dẫn này. Đầu thẻ là công tắc email và bản tóm tắt ngân sách hằng tuần; bên dưới là lưới quyết định mọi thứ còn lại, rồi tới các thiết bị push của bạn."
+          },
+          "matrix": {
+            "title": "Mỗi loại một hàng, mỗi kênh một cột",
+            "body": "Với từng loại thông báo, chọn xem nó đi ra dưới dạng **Email (báo cáo)**, **Email (cảnh báo)**, **Push**, hay qua **UnifiedPush** tới một bộ phân phối do chính bạn vận hành. Không có cột cho chuông, vì chuông luôn nhận được hàng đó. **Giãn cách** là cột cuối: bỏ qua email và push khi có thứ cùng nhóm đã gửi đi trong khoảng thời gian ấy — mục trong chuông vẫn được ghi. Mỗi công tắc lưu ngay khi bạn gạt."
+          },
+          "push": {
+            "title": "Thiết bị của bạn",
+            "body": "Đăng ký một trình duyệt ở đây và Monize có thể tới được nó ngay cả khi ứng dụng đã đóng. Monize tự ký các thông điệp của mình, nên không có tài khoản Google hay Apple nào ở giữa. Mỗi thiết bị có thể thử và gỡ riêng, và thiết bị không còn liên lạc được sẽ nói rõ lý do. Trên iPhone, việc này chạy được sau khi thêm Monize vào Màn hình chính; nếu quản trị viên chưa bật push cho bản cài đặt này, phần này sẽ ghi rõ như vậy."
+          },
+          "portfolio": {
+            "title": "Biến động giá trị đầu tư",
+            "body": "Mỗi ngày một lần, khi các tài khoản đầu tư của bạn biến động quá mức bạn đặt ở đây. Nó đo biến động thị trường và cổ tức — tiền bạn nạp vào hay rút ra không phải là biến động."
+          },
+          "finish": {
+            "title": "Còn một chỗ nữa",
+            "body": "Cảnh báo số dư nằm ngay trên tài khoản: sửa bất kỳ tài khoản nào và đặt **Thông báo khi dưới** hoặc **Thông báo khi trên**. Chúng kích hoạt khi số dư *vượt qua* ngưỡng, nên bạn được báo một lần thay vì sau mỗi khoản chi giữ nó ở đó. Bạn có thể xem lại hướng dẫn này bất cứ lúc nào trong Cài đặt."
+          }
+        }
+      },
+      "reportTagBreakdown": {
+        "title": "Phân tách báo cáo theo thẻ",
+        "steps": {
+          "welcome": {
+            "title": "Xem báo cáo theo thẻ, không chỉ theo danh mục",
+            "body": "Thu nhập so với chi phí và Bảng lưu chuyển tiền tệ giờ đây có thể phân tách theo giá trị của một thẻ bạn chọn — chẳng hạn chi tiêu gia đình so với một sạp hàng phụ — và hiển thị các khoản chuyển tiền giữa chúng mà không bao giờ tính khoản chuyển tiền là thu nhập."
+          },
+          "breakdown": {
+            "title": "Phân tách theo khóa thẻ",
+            "body": "Chọn một khóa thẻ ở đây, chẳng hạn **scope**, báo cáo sẽ chia thành một phần cho mỗi giá trị đã dùng với khóa đó, cộng thêm phần **Không gắn thẻ** cho phần còn lại.",
+            "fallbackBody": "Tùy chọn này xuất hiện ngay khi bạn gắn cho một giao dịch một thẻ **khóa:giá trị**, chẳng hạn **scope:household**. Hãy thêm một thẻ, Phân tách theo khóa thẻ sẽ hiện ra ở đây."
+          },
+          "buckets": {
+            "title": "Tổng theo từng giá trị, các khoản chuyển tiền tách riêng",
+            "body": "Chọn một khóa sẽ mở một thẻ tab cho mỗi giá trị cộng thêm **Không gắn thẻ**, mỗi thẻ có thu nhập và chi phí riêng. Tiền chuyển giữa các tài khoản hiển thị là **Dòng vào có gắn thẻ** và **Dòng ra có gắn thẻ** — có thể thấy được, nhưng không bao giờ được tính là thu nhập."
+          },
+          "finish": {
+            "title": "Đó là phần phân tách theo thẻ",
+            "body": "Hãy gắn thẻ cho giao dịch bằng một cặp khóa:giá trị như scope:household ở bất cứ đâu bạn muốn xem này, và xem lại hướng dẫn này bất cứ lúc nào từ Cài đặt."
+          }
+        }
+      }
+    },
+    "v1_17_0": {
+      "transactionRules": {
+        "title": "Quy tắc giao dịch",
+        "steps": {
+          "welcome": {
+            "title": "Quy tắc giúp bạn sắp xếp giao dịch",
+            "body": "Khi một giao dịch được tạo hoặc nhập và khớp các điều kiện bạn đặt, quy tắc có thể đặt danh mục hoặc người nhận, thêm thẻ nhãn, viết lại mô tả hoặc nhờ AI xem xét giao dịch đó. Quy tắc không bao giờ thay đổi số tiền, tài khoản hay ngày."
+          },
+          "tools": {
+            "title": "Quy tắc nằm trong menu Công cụ",
+            "body": "Mở **Công cụ** để tìm **Quy tắc**. Bước tiếp theo sẽ hiển thị menu."
+          },
+          "rulesLink": {
+            "title": "Mở Quy tắc",
+            "body": "Chọn **Quy tắc**. Trang này liệt kê mọi quy tắc của bạn và bạn tạo quy tắc mới từ đây."
+          },
+          "list": {
+            "title": "Các quy tắc của bạn, theo thứ tự",
+            "body": "Mỗi hàng là một quy tắc, có công tắc để bật hoặc tắt và các thao tác để di chuyển, chạy, nhân đôi hoặc xóa. Quy tắc được kiểm tra từ trên xuống dưới, nên thứ tự quan trọng khi hai quy tắc thay đổi cùng một thứ. Khi chưa có quy tắc nào, thẻ này giải thích quy tắc là gì."
+          },
+          "create": {
+            "title": "Tạo một quy tắc",
+            "body": "**Tạo quy tắc** mở trình chỉnh sửa với một quy tắc trống. Sẽ không có gì được lưu cho đến khi bạn chọn **Lưu quy tắc**."
+          },
+          "when": {
+            "title": "Khi nào: xét những giao dịch nào",
+            "body": "Chọn xem quy tắc xét một giao dịch khi nó được **tạo**, khi nó được **nhập**, hay cả hai. **Dừng xử lý các quy tắc khác** bỏ qua các quy tắc bên dưới đối với mọi giao dịch khớp quy tắc này."
+          },
+          "if": {
+            "title": "Nếu: giao dịch nào khớp",
+            "body": "Tạo điều kiện từ các trường như người nhận, mô tả, số tiền và danh mục. Công tắc **Trực quan** và **Biểu thức** hiển thị cùng các điều kiện đó dưới dạng thẻ hoặc một dòng văn bản. Trong một mẫu, * đại diện cho văn bản bất kỳ và '{name}' giữ lại văn bản tại vị trí đó để một thao tác có thể dùng lại."
+          },
+          "then": {
+            "title": "Thì: thay đổi gì",
+            "body": "Các thao tác chạy theo thứ tự đã liệt kê. Một quy tắc có thể đặt danh mục hoặc người nhận, thêm hoặc bỏ thẻ nhãn, đặt mô tả hoặc nhờ AI xem xét giao dịch. Không có thao tác nào dành cho số tiền, tài khoản hay ngày."
+          },
+          "test": {
+            "title": "Kiểm tra, chạy và hoàn tác",
+            "body": "**Kiểm tra quy tắc** thử bản nháp trên các giao dịch hiện có của bạn và cho thấy điều sẽ thay đổi. Không có gì bị thay đổi. Sau khi quy tắc được lưu, **Chạy trên các giao dịch hiện có** hiển thị bản xem trước và áp dụng cho những gì bạn đã có, và bạn có thể hoàn tác lần chạy đó từ lịch sử thao tác."
+          },
+          "reviews": {
+            "title": "Hộp thư xem xét của AI",
+            "body": "Quy tắc có thao tác **Yêu cầu AI xem xét** không thay đổi giao dịch mà đưa nó vào đây. Một trợ lý đề xuất chỉnh sửa, và không có gì được ghi cho đến khi bạn phê duyệt. Bạn cũng có thể bỏ qua một yêu cầu. Bạn tìm thấy nó trong **AI** với tên **Hộp thư xem xét của AI**."
+          }
+        }
+      }
+    },
+    "v1_20_0": {
+      "warranties": {
+        "title": "Bảo hành",
+        "steps": {
+          "welcome": {
+            "title": "Theo dõi các bảo hành của bạn",
+            "body": "Một bảo hành ghi lại bạn đã mua gì, khi nào hết thời hạn bảo hành và ai đã bán, kèm theo biên lai, sách hướng dẫn và mọi yêu cầu bảo hành. Bảo hành có thể được liên kết với giao dịch mua trong sổ giao dịch của bạn. Bảo hành không bao giờ thay đổi số dư, báo cáo hay tổng số. Phần hướng dẫn này cho bạn thấy các cách thêm bảo hành và nơi chúng xuất hiện sau đó."
+          },
+          "warrantiesLink": {
+            "title": "Bảo hành nằm trong menu Công cụ",
+            "body": "Mở **Công cụ** và chọn **Bảo hành** để xem mọi bảo hành của bạn."
+          },
+          "overview": {
+            "title": "Thời hạn bảo hành trong nháy mắt",
+            "body": "Các thẻ này đếm số bảo hành của bạn đang ở trạng thái **Sắp hết hạn**, **Còn hiệu lực**, **Đã hết hạn** và **Trọn đời**. Chọn một thẻ để lọc danh sách bên dưới. Bạn cũng có thể tìm kiếm, sắp xếp và hiển thị các bảo hành đã lưu trữ. Chọn một bảo hành trong danh sách để mở trang của nó, với tài liệu, các yêu cầu bảo hành và giao dịch mua được liên kết."
+          },
+          "addWarranty": {
+            "title": "Phương pháp 1: thêm tại đây",
+            "body": "**Thêm bảo hành** mở một biểu mẫu trống. Nhập sản phẩm, người bán và ngày mua, rồi chọn khi nào bảo hành kết thúc: **Vào một ngày**, **Sau một khoảng thời gian**, hoặc **Không bao giờ** cho bảo hành trọn đời. Bạn có thể đính kèm biên lai hoặc sách hướng dẫn trước khi lưu."
+          },
+          "importCsv": {
+            "title": "Phương pháp 2: nhập tệp CSV",
+            "body": "**Nhập CSV** đọc một tệp theo các cột của Warracker, chẳng hạn tệp xuất từ Warracker hoặc từ trang này. Bạn sẽ thấy mọi dòng và mọi vấn đề trước khi có gì được lưu."
+          },
+          "inRegister": {
+            "title": "Bảo hành trong sổ giao dịch",
+            "body": "Giao dịch có bảo hành hiển thị biểu tượng chiếc khiên trong sổ giao dịch. Tìm **has:warranty** để thấy mọi giao dịch như vậy."
+          },
+          "newTransaction": {
+            "title": "Phương pháp 3: khi bạn ghi một giao dịch mua",
+            "body": "Chọn **+ Giao tác mới** để mở biểu mẫu."
+          },
+          "warrantiesLine": {
+            "title": "Dòng Bảo hành",
+            "body": "**Thêm bảo hành** ở đây sẽ lưu giao dịch mới trước, rồi mở biểu mẫu bảo hành được điền sẵn từ giao dịch đó. Khi bạn sửa giao dịch sau này, dòng này liệt kê các bảo hành của giao dịch, và mỗi mục mở trang của nó.",
+            "fallbackBody": "Dòng Bảo hành không hiển thị với tài khoản chung, vì bảo hành là của riêng bạn. Hãy chọn một tài khoản của riêng bạn, biểu mẫu sẽ hiển thị dòng **Bảo hành** phía trên các nút. **Thêm bảo hành** ở đó sẽ lưu giao dịch mới trước, rồi mở biểu mẫu bảo hành được điền sẵn từ giao dịch đó. Khi bạn sửa giao dịch sau này, dòng này liệt kê các bảo hành của giao dịch."
+          },
+          "closeForm": {
+            "title": "Đóng biểu mẫu",
+            "body": "Chọn **Hủy** để đóng mà không lưu, hoặc lưu giao dịch nếu bạn đã nhập một giao dịch thật."
+          },
+          "dashboardWidget": {
+            "title": "Xem bảo hành sắp hết hạn trên trang Tổng quan",
+            "body": "Chọn **Tùy chỉnh**, rồi **Thêm tiện ích**, chọn **Bảo hành sắp hết hạn** và chọn **Xong**. Tiện ích này liệt kê các bảo hành sắp hết hạn tiếp theo, và tiêu đề của nó mở trang Bảo hành."
+          },
+          "reminders": {
+            "title": "Nhắc nhở trước khi hết bảo hành",
+            "body": "Monize nhắc bạn 30 ngày và 7 ngày trước khi bảo hành hết hạn, và vào đúng ngày hết hạn. Các lời nhắc đến đây, và bạn có thể tạm hoãn một lời nhắc hoặc mở bảo hành từ đó. Chọn cách chúng đến với bạn trong **Cài đặt**, mục **Thông báo**, tại **Nhắc nhở bảo hành**."
+          }
+        }
+      },
+      "payrollDeductions": {
+        "title": "Khấu trừ lương",
+        "steps": {
+          "welcome": {
+            "title": "Dừng khấu trừ khi đạt mức tối đa hằng năm",
+            "body": "Một số khoản khấu trừ lương, như lương hưu hoặc bảo hiểm thất nghiệp, sẽ dừng khi đạt mức tối đa của năm và bắt đầu lại vào năm sau. Quy tắc khấu trừ lương cho Monize biết mức tối đa đó, để phiếu lương ngừng thu khoản khấu trừ khi đã đạt mức. **Trước khi bắt đầu, bạn cần một hóa đơn lương định kỳ:** khoản lương của bạn được thiết lập như một khoản tiền gửi định kỳ, với các khoản khấu trừ là các dòng riêng."
+          },
+          "payrollBill": {
+            "title": "Trước tiên, thiết lập khoản lương",
+            "body": "Nếu chưa làm, hãy chọn **+ Lịch mới** và tạo khoản lương của bạn như một khoản tiền gửi. Chia nó thành một dòng cho lương gộp và một dòng âm cho mỗi khoản khấu trừ, mỗi dòng có danh mục riêng. Nếu một khoản khấu trừ hiện không bị trừ vì đã đạt mức tối đa của năm nay, bạn vẫn hãy thêm một dòng chia cho nó, dưới dạng khoản chi có giá trị bằng 0, để quy tắc có thể giới hạn nó và nó bắt đầu lại sau ngày đặt lại. Chỉ khoản tiền gửi đang hoạt động có số tiền vào lớn hơn số tiền trừ mới có thể có quy tắc, và chỉ các dòng khấu trừ của nó mới có thể bị giới hạn."
+          },
+          "taxesLink": {
+            "title": "Khấu trừ lương nằm trong Thuế",
+            "body": "Mở **Công cụ** và chọn **Thuế** để tìm các công cụ thuế."
+          },
+          "taxesCard": {
+            "title": "Mở Khấu trừ lương",
+            "body": "Chọn thẻ này để mở các quy tắc khấu trừ lương."
+          },
+          "newRule": {
+            "title": "Tạo quy tắc cho một khoản lương",
+            "body": "**+ Quy tắc mới** mở biểu mẫu. Chọn hóa đơn lương định kỳ của bạn, rồi đặt mức tối đa hằng năm cho từng danh mục khấu trừ bạn muốn giới hạn. Thêm ngày đặt lại, thường là ngày 1 tháng 1. Nếu hóa đơn không có dòng khấu trừ nào, biểu mẫu sẽ yêu cầu bạn thêm chúng vào hóa đơn trước."
+          },
+          "rulesList": {
+            "title": "Các quy tắc của bạn",
+            "body": "Mỗi quy tắc hiển thị hóa đơn, danh mục, mức tối đa hằng năm, ngày đặt lại và số tiền mỗi kỳ lương khấu trừ. Sửa quy tắc để thay đổi mức tối đa, hoặc xóa nó để khoản lương thu lại toàn bộ dòng. Xóa quy tắc không bao giờ thay đổi giao dịch đã ghi sổ."
+          },
+          "periodTables": {
+            "title": "Những gì đã thu",
+            "body": "Khi bạn có quy tắc, **Hiện lũy kế từ đầu năm** cho biết mỗi danh mục đã thu bao nhiêu trong kỳ này và còn bao nhiêu dư địa dưới mức tối đa. **Hiện các kỳ trước** cho biết số đã thu trong các năm trước."
+          },
+          "forecast": {
+            "title": "Áp dụng khi khoản lương được ghi sổ",
+            "body": "Khi khoản lương được ghi sổ, mỗi dòng bị giới hạn được giảm xuống phần dư địa còn lại dưới mức tối đa, cho đến 0, và bắt đầu lại sau ngày đặt lại. Dự báo dòng tiền ở đây và trên bảng điều khiển hiển thị điều tương tự từ trước, để bạn thấy lương thực nhận tăng lên khi đạt mức tối đa."
+          },
+          "reminders": {
+            "title": "Lời nhắc trước mỗi lần đặt lại",
+            "body": "Hai tháng trước khi một quy tắc được đặt lại, Monize sẽ nhờ bạn xác nhận tại đây mức tối đa của năm sau. Nếu bạn không làm gì, quy tắc giữ nguyên mức tối đa và đặt lại vào ngày của nó. Chọn cách lời nhắc đến với bạn trong **Cài đặt**, mục **Thông báo**, tại **Hóa đơn và đã lên lịch**."
+          }
+        }
+      },
+      "sharedExpenses": {
+        "title": "Chi phí chung",
+        "steps": {
+          "welcome": {
+            "title": "Đi cùng nhau, tính toán rõ ràng",
+            "body": "Tìm hiểu cách ghi lại khoản mua chung và khoản hoàn trả. Hướng dẫn này không tự tạo bản ghi thay bạn."
+          },
+          "tools": {
+            "title": "Mở chi phí chung",
+            "body": "Tìm **Chi phí chung** trong **Công cụ**. Trên điện thoại, hãy dùng menu điều hướng."
+          },
+          "newGroup": {
+            "title": "Bắt đầu với nhóm của bạn",
+            "body": "Trong **Nhóm mới**, đặt tên chuyến đi, thêm người tham gia và chọn loại tiền quyết toán. Người tham gia không cần tài khoản Monize. Mỗi lần mua có thể liên quan đến những thành viên khác nhau."
+          },
+          "chooseGroup": {
+            "title": "Khám phá một nhóm",
+            "body": "Mở một nhóm để tiếp tục. Nếu chưa có nhóm, chọn **Bỏ qua bước này** rồi tạo nhóm sau khi xem hướng dẫn."
+          },
+          "expenses": {
+            "title": "Ai đã trả và trả cho ai?",
+            "body": "Khi có quyền chỉnh sửa, dùng **Cộng chi phí** để chọn người trả tiền và người hưởng lợi. **Chia cho** hỗ trợ chia đều, số tiền cụ thể, tỷ lệ phần trăm và phần bằng không."
+          },
+          "balances": {
+            "title": "Kiểm tra số dư và thanh toán",
+            "body": "**Số dư** cho biết ai nợ ai và đề xuất khoản hoàn trả. Ghi lại khoản hoàn trả sau khi tiền đã được trao. **Hồ sơ** và **Hoạt động** lưu chứng từ và lịch sử."
+          },
+          "done": {
+            "title": "Sẵn sàng cho chuyến đi tiếp theo",
+            "body": "Bản ghi chung được tách khỏi giao dịch cá nhân. Xem lại hướng dẫn bất cứ lúc nào từ **Cài đặt**, trong **Hướng dẫn sử dụng**."
+          }
+        }
+      }
+    },
+    "v1_21_0": {
+      "commandPalette": {
+        "title": "Bảng lệnh",
+        "steps": {
+          "welcome": {
+            "title": "Tìm mọi thứ từ một ô duy nhất",
+            "body": "Bảng lệnh tìm cùng lúc trong tài khoản, người nhận, danh mục, hóa đơn, chứng khoán, báo cáo, cài đặt, giao dịch của bạn và cả hướng dẫn sử dụng, từ bất kỳ màn hình nào. Bảng lệnh hoạt động bằng bàn phím, nên tour này dành cho máy tính."
+          },
+          "openPalette": {
+            "title": "Mở bảng lệnh",
+            "body": "Nhấn **Ctrl+K** (**Cmd+K** trên máy Mac). Tour sẽ tiếp tục khi bảng lệnh mở ra."
+          },
+          "searchBox": {
+            "title": "Nhập nội dung bạn cần tìm",
+            "body": "Hãy thử một người nhận, một tài khoản, một báo cáo như **Giá trị ròng** hoặc một cài đặt như **Tiền tệ**. Kết quả cập nhật khi bạn gõ, và các giao dịch cùng các mục của hướng dẫn cũng được tìm."
+          },
+          "results": {
+            "title": "Di chuyển và mở",
+            "body": "Dùng phím mũi tên **Lên** và **Xuống** để di chuyển và **Enter** để mở một kết quả. **Tab** nhảy tới các thao tác, còn **Ctrl+Enter** (**Cmd+Enter** trên máy Mac) bắt đầu một giao dịch mới cho người nhận khớp nhất."
+          },
+          "closePalette": {
+            "title": "Đóng bảng lệnh",
+            "body": "Nhấp **esc** để đóng bảng lệnh lúc này. Ngoài tour này, phím **Esc** cũng làm như vậy."
+          },
+          "done": {
+            "title": "Một phím tắt cần nhớ",
+            "body": "Nhấn **Ctrl+K** bất cứ khi nào bạn muốn chuyển đến đâu đó. Khi đang mở một hộp thoại, phím này sẽ tìm trong hướng dẫn. Trên điện thoại, hãy dùng ô tìm kiếm ở phần đầu trang. Bạn có thể xem lại tour này bất cứ lúc nào từ **Cài đặt**, trong mục **Hướng dẫn sử dụng**."
+          }
+        }
+      },
+      "inAppHelp": {
+        "title": "Trợ giúp ngay trong ứng dụng",
+        "steps": {
+          "welcome": {
+            "title": "Hướng dẫn sử dụng, ngay cạnh công việc của bạn",
+            "body": "Hướng dẫn sử dụng Monize giờ mở ngay trong ứng dụng, bên cạnh trang bạn đang xem, kèm ảnh chụp màn hình theo giao diện của bạn. Hướng dẫn đi kèm với Monize của bạn nên dùng được khi không có mạng. Tour này chỉ cho bạn nơi tìm thấy nó."
+          },
+          "pageHelp": {
+            "title": "Mở trợ giúp cho trang này",
+            "body": "Nhấp vào **?** bên cạnh tiêu đề trang. Hướng dẫn mở ra ở mục nói về trang này."
+          },
+          "panel": {
+            "title": "Đọc song song với trang",
+            "body": "Bảng này nằm cạnh trang bạn đang xem. **Trên trang này** liệt kê các mục, và các liên kết đến những trang khác của hướng dẫn sẽ mở tại đây. Trên máy tính, hãy kéo mép trái của bảng để làm rộng hoặc hẹp hơn."
+          },
+          "panelControls": {
+            "title": "Các nút điều khiển của bảng",
+            "body": "Dùng **Quay lại** và **Tiến tới** để chuyển qua các trang đã mở, **Tìm kiếm** trong hướng dẫn, **Ghim** bảng để bảng luôn mở trên các trang khác, hoặc mở trang trên monize.net. Nhấp **Đóng** (nút **X**) để tiếp tục."
+          },
+          "helpMenu": {
+            "title": "Menu Trợ giúp",
+            "body": "Dấu **?** ở phần đầu trang chứa trợ giúp cho trang hiện tại, tìm kiếm trong hướng dẫn, phím tắt, tour của trang này và mục Có gì mới. Bạn cũng có thể nhấn **?** ở bất kỳ nơi nào bạn không đang gõ để tìm trong hướng dẫn."
+          },
+          "learnMore": {
+            "title": "Tìm hiểu thêm, ngay khi bạn cần",
+            "body": "Hãy tìm **Tìm hiểu thêm** trong các chú giải, trên các màn hình trống và bên cạnh một số thông báo lỗi. Mỗi liên kết mở ra mục của hướng dẫn giải thích vấn đề đó."
+          },
+          "done": {
+            "title": "Hỏi bằng lời của bạn",
+            "body": "Trợ lý AI cũng có thể trả lời các câu hỏi dạng \"làm thế nào để...\" dựa trên hướng dẫn và cho bạn biết nó đã dùng những mục nào. Bạn có thể xem lại tour này bất cứ lúc nào từ **Cài đặt**, trong mục **Hướng dẫn sử dụng**."
+          }
+        }
+      },
+      "dashboardEdit": {
+        "title": "Sắp xếp bảng điều khiển",
+        "steps": {
+          "welcome": {
+            "title": "Sắp xếp bảng điều khiển ngay tại chỗ",
+            "body": "Giờ bạn di chuyển, đổi kích thước, thêm và xóa tiện ích ngay trên bảng điều khiển, và không có gì được lưu cho đến khi bạn đồng ý. Tour này hướng dẫn chế độ chỉnh sửa."
+          },
+          "enterEdit": {
+            "title": "Vào chế độ chỉnh sửa",
+            "body": "Nhấp vào biểu tượng bánh răng bên cạnh lời chào. Tour sẽ tiếp tục khi chế độ chỉnh sửa mở ra."
+          },
+          "editBar": {
+            "title": "Thanh chỉnh sửa",
+            "body": "**Thêm tiện ích** liệt kê các tiện ích chưa có trên bảng điều khiển của bạn. **Cài đặt phần đầu** chọn nội dung phần đầu ở trên cùng hiển thị, và **Đặt lại mặc định** khôi phục bố cục tiêu chuẩn."
+          },
+          "arrange": {
+            "title": "Di chuyển, đổi kích thước và xóa",
+            "body": "Kéo một tiện ích bằng tay nắm (sáu dấu chấm) hoặc dùng các mũi tên của nó. Trên màn hình rộng, **Chiều rộng** và **Chiều cao** thay đổi kích thước của tiện ích, hoặc kéo góc dưới bên phải của nó. Nút **X** xóa tiện ích, còn ô viền nét đứt **Thêm tiện ích** sẽ thêm một tiện ích. Cứ thử xem."
+          },
+          "finish": {
+            "title": "Giữ lại hoặc hoàn tác",
+            "body": "Nhấp **Xong** để lưu bố cục, hoặc **Hủy** để trả về như cũ. Bố cục của bạn được đồng bộ trên các thiết bị của bạn."
+          },
+          "done": {
+            "title": "Biến nó thành của bạn",
+            "body": "Đang tìm thứ gì mới để thêm? Tiện ích **Thông tin thú vị** hiển thị mỗi ngày một sự thật về tiền của bạn. Bạn có thể xem lại tour này bất cứ lúc nào từ **Cài đặt**, trong mục **Hướng dẫn sử dụng**."
+          }
+        }
+      }
+    }
+  },
+  "emailReceipts": {
+    "basics": {
+      "title": "Hóa đơn từ email",
+      "steps": {
+        "welcome": {
+          "title": "Vì sao đọc hóa đơn từ email",
+          "body": "Một giao dịch ngân hàng cho bạn biết bạn đã trả bao nhiêu và khi nào. Nó không cho biết bạn đã mua gì. Email xác nhận đơn hàng thì có. Monize đọc các email này, tìm giao dịch mà mỗi email đã thanh toán và đề xuất mô tả, người nhận thanh toán và cách tách theo từng mục, kèm một danh mục cho mỗi dòng. Bạn phê duyệt từng đề xuất trước khi nó thay đổi một giao dịch."
+        },
+        "aiRequired": {
+          "title": "Trên thực tế, bạn cần một nhà cung cấp AI",
+          "body": "Monize đọc email bằng một **hồ sơ**: một bộ mẫu cho một tên miền người gửi, ví dụ một cửa hàng. Bạn có thể viết hồ sơ bằng tay, nhưng mỗi mẫu phải khớp đúng các dòng trong email của cửa hàng đó, nên trên thực tế AI sẽ viết nó. AI viết hồ sơ một lần, từ vài email mẫu. Sau khi bạn phê duyệt, hồ sơ đọc mọi email mới của cửa hàng đó mà không cần AI."
+        },
+        "aiProviders": {
+          "title": "Hãy thiết lập nhà cung cấp AI trước",
+          "body": "Thêm một nhà cung cấp tại đây và kiểm tra kết nối. Nếu không có nhà cung cấp, trình hướng dẫn hồ sơ không thể viết hồ sơ, và email của cửa hàng chưa có hồ sơ vẫn chưa được đọc."
+        },
+        "tabs": {
+          "title": "Bốn thẻ, theo thứ tự sử dụng",
+          "body": "**Tổng quan** cho thấy những gì Monize đã đọc. Trong **Hộp thư**, hãy kết nối một hộp thư chỉ chứa các xác nhận đơn hàng. Monize chỉ đọc hộp thư: nó không bao giờ di chuyển, gắn cờ hay xóa thư. **Hồ sơ** chứa một hồ sơ cho mỗi cửa hàng. **Email** liệt kê từng email và trạng thái của nó."
+        },
+        "uncovered": {
+          "title": "Cửa hàng chưa có hồ sơ",
+          "body": "Khung này liệt kê các tên miền người gửi mà chưa hồ sơ nào đọc được. Chọn một tên miền để bắt đầu trình hướng dẫn. Chọn tối đa năm email của nó và ghép mỗi email với giao dịch ngân hàng mà nó đã thanh toán. AI viết một hồ sơ và kiểm thử trên các cặp này. Sau đó bạn xem bản xem trước cho tất cả email của cửa hàng đó, rồi chấp nhận hồ sơ hoặc yêu cầu thay đổi bằng một ghi chú ngắn.",
+          "fallbackBody": "Bạn chưa có email nào từ cửa hàng chưa có hồ sơ. Sau khi bạn kết nối hộp thư, mỗi tên miền người gửi xuất hiện ở đây dưới dạng một thẻ, ví dụ **shop.example (12)**: tên miền và số email của nó. Chọn thẻ để bắt đầu trình hướng dẫn. Chọn tối đa năm email của nó và ghép mỗi email với giao dịch ngân hàng mà nó đã thanh toán. AI viết một hồ sơ và kiểm thử trên các cặp này. Sau đó bạn xem bản xem trước cho tất cả email của cửa hàng đó, rồi chấp nhận hồ sơ hoặc yêu cầu thay đổi bằng một ghi chú ngắn."
+        },
+        "profiles": {
+          "title": "Hồ sơ của bạn",
+          "body": "Mỗi dòng là một hồ sơ, đã duyệt hoặc bản nháp. **Tạo hồ sơ mới thủ công** mở trình chỉnh sửa cho hồ sơ viết bằng tay. Hãy dùng nó để sửa một chi tiết nhỏ trong bản nháp của AI. Khi bạn phê duyệt một hồ sơ, Monize đọc ngay các email từ tên miền của nó.",
+          "fallbackBody": "Bạn chưa có hồ sơ nào. Mỗi hồ sơ bạn chấp nhận xuất hiện ở đây dưới dạng một dòng, ví dụ **Shop Example**, tên miền **shop.example**, trạng thái **Đã duyệt**. **Tạo hồ sơ mới thủ công** mở trình chỉnh sửa cho hồ sơ viết bằng tay. Chỉ dùng nó để sửa một chi tiết nhỏ trong bản nháp của AI. Khi bạn phê duyệt một hồ sơ, Monize đọc ngay các email từ tên miền của nó."
+        },
+        "reviews": {
+          "title": "Phê duyệt các đề xuất",
+          "body": "Mỗi email khớp với một giao dịch trở thành một đề xuất trong **Hộp thư xem xét của AI**, trong menu **AI**. Một đề xuất cho thấy, ví dụ, các dòng của một đơn hàng kèm một danh mục cho mỗi dòng. Không có gì thay đổi trong giao dịch của bạn cho đến khi bạn phê duyệt đề xuất tại đó."
         }
       }
     }

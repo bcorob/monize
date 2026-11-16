@@ -6,6 +6,7 @@ import { PlusIcon, XMarkIcon } from '@heroicons/react/24/outline';
 import { Combobox } from '@/components/ui/Combobox';
 import { NumericInput } from '@/components/ui/NumericInput';
 
+import { useNumberFormat } from '@/hooks/useNumberFormat';
 /** A single editable allocation row. `weight` is a percentage string (0-100). */
 export interface AllocationRow {
   name: string;
@@ -59,6 +60,7 @@ export function AllocationEditor({
   deleteOptionAriaLabel,
 }: AllocationEditorProps) {
   const t = useTranslations('securities');
+  const { formatNumber, formatPercent } = useNumberFormat();
 
   const total = useMemo(
     () => value.reduce((sum, row) => sum + parseWeight(row.weight), 0),
@@ -97,7 +99,7 @@ export function AllocationEditor({
           }`}
           data-testid="allocation-total"
         >
-          {t('form.allocation.total', { total: total.toFixed(2) })}
+          {t('form.allocation.total', { total: formatNumber(total, 2) })}
         </span>
       </div>
 
@@ -152,7 +154,7 @@ export function AllocationEditor({
       {!overAllocated && remainder > 0.0001 && (
         <div className="flex justify-between mt-2 px-1 text-sm text-gray-500 dark:text-gray-400">
           <span>{t('form.allocation.other')}</span>
-          <span data-testid="allocation-other">{remainder.toFixed(2)}%</span>
+          <span data-testid="allocation-other">{formatPercent(remainder, 2)}</span>
         </div>
       )}
 

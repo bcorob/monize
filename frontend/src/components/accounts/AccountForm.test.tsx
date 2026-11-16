@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act } from '@testing-library/react';
 import { render, screen, fireEvent, waitFor } from '@/test/render';
 import { AccountForm } from './AccountForm';
@@ -7,6 +7,7 @@ import { exchangeRatesApi } from '@/lib/exchange-rates';
 import { accountsApi } from '@/lib/accounts';
 import { categoriesApi } from '@/lib/categories';
 import { institutionsApi } from '@/lib/institutions';
+import { clearCurrencyDecimals, registerCurrencyDecimals } from '@/lib/currency-decimals';
 
 vi.mock('@/lib/accounts', () => ({
   accountsApi: {
@@ -50,12 +51,15 @@ vi.mock('@/lib/exchange-rates', () => ({
   CurrencyInfo: {},
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (n: number) => `$${n.toFixed(2)}`,
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (n: number) => `$${n.toFixed(2)}`,
+    }),
+  };
+});
 vi.mock('@/hooks/useExchangeRates', () => ({
   useExchangeRates: () => ({
     defaultCurrency: 'CAD',
@@ -63,23 +67,35 @@ vi.mock('@/hooks/useExchangeRates', () => ({
   }),
 }));
 
-vi.mock('@/lib/format', () => ({
-  getCurrencySymbol: () => '$',
-  getDecimalPlacesForCurrency: () => 2,
-  roundToCents: (v: number) => Math.round(v * 100) / 100,
-  roundToDecimals: (v: number, d: number) => { const f = Math.pow(10, d); return Math.round(v * f) / f; },
-  formatAmount: (v: number | undefined | null) => (v === undefined || v === null || isNaN(v)) ? '' : (Math.round(v * 100) / 100).toFixed(2),
-  formatAmountWithCommas: (v: number | undefined | null) => (v === undefined || v === null || isNaN(v)) ? '' : (Math.round(v * 100) / 100).toFixed(2),
-  parseAmount: (input: string) => { const n = parseFloat(input.replace(/[^0-9.-]/g, '')); return isNaN(n) ? undefined : Math.round(n * 100) / 100; },
-  filterCurrencyInput: (input: string) => input.replace(/[^0-9.-]/g, ''),
-  filterCalculatorInput: (input: string) => input.replace(/[^0-9.+\-*/() ]/g, ''),
-  hasCalculatorOperators: (input: string) => /[+*/()]/.test(input.replace(/^-/, '')) || /(?!^)-/.test(input),
-  evaluateExpression: vi.fn().mockImplementation(() => undefined),
-  formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
-}));
+vi.mock('@/lib/format', async (importOriginal) => {
+  // The opening balance loads and is entered at its currency's entry places,
+  // through the registry, exactly as the app rounds it.
+  const { entryDecimalPlaces, roundToEntryPlaces, roundMoney, loadedEntryAmount } =
+    await importOriginal<typeof import('@/lib/format')>();
+  return {
+    entryDecimalPlaces,
+    roundToEntryPlaces,
+    roundMoney,
+    loadedEntryAmount,
+    getCurrencySymbol: () => '$',
+    getDecimalPlacesForCurrency: () => 2,
+    roundToCents: (v: number) => Math.round(v * 100) / 100,
+    roundToDecimals: (v: number, d: number) => { const f = Math.pow(10, d); return Math.round(v * f) / f; },
+    formatAmount: (v: number | undefined | null) => (v === undefined || v === null || isNaN(v)) ? '' : (Math.round(v * 100) / 100).toFixed(2),
+    // At the places the input asks for, so a coin's field shows its four.
+    formatAmountWithCommas: (v: number | undefined | null, d: number = 2) => (v === undefined || v === null || isNaN(v)) ? '' : (Math.round(v * 10 ** d) / 10 ** d).toFixed(d),
+    parseAmount: (input: string) => { const n = parseFloat(input.replace(/[^0-9.-]/g, '')); return isNaN(n) ? undefined : Math.round(n * 100) / 100; },
+    filterCurrencyInput: (input: string) => input.replace(/[^0-9.-]/g, ''),
+    filterCalculatorInput: (input: string) => input.replace(/[^0-9.+\-*/() ]/g, ''),
+    hasCalculatorOperators: (input: string) => /[+*/()]/.test(input.replace(/^-/, '')) || /(?!^)-/.test(input),
+    evaluateExpression: vi.fn().mockImplementation(() => undefined),
+    formatCurrency: (amount: number) => `$${amount.toFixed(2)}`,
+  };
+});
 
 vi.mock('@/lib/categoryUtils', () => ({
   buildCategoryTree: (cats: any[]) => cats.map((c: any) => ({ category: c, children: [] })),
+  buildCategoryLabelMap: (cats: any[]) => new Map((cats || []).map((c: any) => [c.id, c.name])),
   getCategorySelectOptions: (cats: any[]) => (cats || []).map((c: any) => ({ value: c.id, label: c.name })),
   buildCategoryColorMap: () => new Map(),
 }));
@@ -160,11 +176,13 @@ vi.mock('./AssetFields', () => ({
 let capturedOnSetupComplete: (() => void) | null = null;
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 let capturedOnClose: (() => void) | null = null;
+let capturedLoanAccount: { mortgageType?: string } | null = null;
 
 vi.mock('./LoanPaymentSetupDialog', () => ({
   LoanPaymentSetupDialog: (props: any) => {
     capturedOnSetupComplete = props.onSetupComplete;
     capturedOnClose = props.onClose;
+    capturedLoanAccount = props.loanAccount;
     if (!props.isOpen) return null;
     return (
       <div data-testid="loan-setup-dialog">
@@ -222,8 +240,7 @@ function createExistingAccount(overrides: Partial<Account> = {}): Account {
     assetCategoryId: null,
     dateAcquired: null,
     linkedLoanAccountId: null,
-    isCanadianMortgage: false,
-    isVariableRate: false,
+    mortgageType: 'ANNUITY',
     termMonths: null,
     termEndDate: null,
     amortizationMonths: null,
@@ -511,7 +528,7 @@ describe('AccountForm', () => {
     });
   });
 
-  it('shows "Interest Rate % (required)" label for LOAN type', async () => {
+  it('shows "Interest Rate %" label for LOAN type', async () => {
     render(
       <AccountForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
     );
@@ -520,11 +537,11 @@ describe('AccountForm', () => {
     fireEvent.change(typeSelect, { target: { value: 'LOAN' } });
 
     await waitFor(() => {
-      expect(screen.getByText('Interest Rate % (required)')).toBeInTheDocument();
+      expect(screen.getByText('Interest Rate %')).toBeInTheDocument();
     });
   });
 
-  it('shows "Interest Rate % (required)" label for MORTGAGE type', async () => {
+  it('shows "Interest Rate %" label for MORTGAGE type', async () => {
     render(
       <AccountForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
     );
@@ -533,7 +550,7 @@ describe('AccountForm', () => {
     fireEvent.change(typeSelect, { target: { value: 'MORTGAGE' } });
 
     await waitFor(() => {
-      expect(screen.getByText('Interest Rate % (required)')).toBeInTheDocument();
+      expect(screen.getByText('Interest Rate %')).toBeInTheDocument();
     });
   });
 
@@ -575,7 +592,7 @@ describe('AccountForm', () => {
     fireEvent.change(typeSelect, { target: { value: 'LOAN' } });
 
     await waitFor(() => {
-      expect(screen.getByText('Lender/Institution (required)')).toBeInTheDocument();
+      expect(screen.getByText('Lender/Institution')).toBeInTheDocument();
     });
     expect(screen.queryByText('Institution (optional)')).not.toBeInTheDocument();
   });
@@ -589,7 +606,7 @@ describe('AccountForm', () => {
     fireEvent.change(typeSelect, { target: { value: 'MORTGAGE' } });
 
     await waitFor(() => {
-      expect(screen.getByText('Lender/Institution (required)')).toBeInTheDocument();
+      expect(screen.getByText('Lender/Institution')).toBeInTheDocument();
     });
     expect(screen.queryByText('Institution (optional)')).not.toBeInTheDocument();
   });
@@ -769,6 +786,7 @@ describe('AccountForm', () => {
       expect(screen.getByText('Please select or create an institution')).toBeInTheDocument();
     });
     expect(screen.getByText('Payment frequency is required')).toBeInTheDocument();
+    expect(screen.getByText("Choose the category this loan's interest is booked to")).toBeInTheDocument();
     expect(screen.queryByText(/Invalid option/i)).not.toBeInTheDocument();
     expect(mockOnSubmit).not.toHaveBeenCalled();
   });
@@ -793,6 +811,72 @@ describe('AccountForm', () => {
       expect(screen.getByText('Please select or create an institution')).toBeInTheDocument();
     });
     expect(mockOnSubmit).not.toHaveBeenCalled();
+  });
+
+  // No category is picked by name (#1750): even with a "Loan > Loan Interest"
+  // category present, a create without a chosen interest category is refused.
+  it.each([
+    ['LOAN', 'Car Loan', 'Loan Payment Details'],
+    ['MORTGAGE', 'Home Mortgage', 'Mortgage Details'],
+  ])('blocks new %s submit until an interest category is chosen, with no default picked', async (type, name, heading) => {
+    (categoriesApi.getAll as any).mockResolvedValue([
+      { id: 'loan-parent', userId: 'u1', name: 'Loan', parentId: null, parent: null, children: [], description: null, icon: null, color: null, effectiveColor: null, isIncome: false, isSystem: true, createdAt: '' },
+      { id: 'loan-int', userId: 'u1', name: 'Loan Interest', parentId: 'loan-parent', parent: null, children: [], description: null, icon: null, color: null, effectiveColor: null, isIncome: false, isSystem: true, createdAt: '' },
+    ]);
+    render(<AccountForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
+    const typeSelect = screen.getByLabelText('Account Type') as HTMLSelectElement;
+    await act(async () => { fireEvent.change(typeSelect, { target: { value: type } }); });
+    await act(async () => { fireEvent.change(screen.getByLabelText('Account Name'), { target: { value: name } }); });
+    await waitFor(() => {
+      expect(screen.getByText(heading)).toBeInTheDocument();
+    });
+    expect(screen.getByText('Interest Category')).toBeInTheDocument();
+
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: /Create Account/i })); });
+
+    await waitFor(() => {
+      expect(screen.getByText("Choose the category this loan's interest is booked to")).toBeInTheDocument();
+    });
+    expect(mockOnSubmit).not.toHaveBeenCalled();
+  });
+
+  it('saves a stored 0% LOAN rate as 0 instead of treating it as empty', async () => {
+    const loanAccount = createExistingAccount({
+      accountType: 'LOAN',
+      name: 'Interest-free Loan',
+      interestRate: 0,
+      institutionId: 'inst-1',
+      paymentAmount: 200,
+      paymentFrequency: 'MONTHLY',
+      paymentStartDate: '2024-01-01',
+      sourceAccountId: 'chq-1',
+      interestCategoryId: 'cat-1',
+      openingBalance: -5000,
+    });
+
+    render(
+      <AccountForm account={loanAccount} onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
+    );
+
+    const rate = (await screen.findByLabelText(/^Interest Rate/)) as HTMLInputElement;
+    expect(Number(rate.value)).toBe(0);
+    expect(rate.value).not.toBe('');
+
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Account Name'), {
+        target: { value: 'Interest-free Loan 2' },
+      });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Update Account/i }));
+    });
+
+    await waitFor(() => {
+      expect(mockOnSubmit).toHaveBeenCalledWith(
+        expect.objectContaining({ interestRate: 0 }),
+      );
+    });
   });
 
   it('does not show loan fields when editing existing LOAN account', async () => {
@@ -835,7 +919,7 @@ describe('AccountForm', () => {
       interestRate: 3.5,
       termMonths: 60,
       amortizationMonths: 300,
-      isCanadianMortgage: true,
+      mortgageType: 'CANADIAN_FIXED',
     });
 
     render(
@@ -850,12 +934,256 @@ describe('AccountForm', () => {
     await waitFor(() => {
       expect(screen.getByText('Mortgage Details')).toBeInTheDocument();
     });
-    expect(screen.getByText('Term Length')).toBeInTheDocument();
-    expect(screen.getByText('Amortization Period (required)')).toBeInTheDocument();
-    expect(screen.getByText('Canadian Mortgage')).toBeInTheDocument();
+    expect(screen.getByText('Rate-Fixed Term')).toBeInTheDocument();
+    expect(screen.getByText('Amortization Period')).toBeInTheDocument();
+    expect(screen.getByLabelText('Mortgage Type')).toBeInTheDocument();
     // Payment fields should be hidden during editing
-    expect(screen.queryByText('Payment Frequency (required)')).not.toBeInTheDocument();
-    expect(screen.queryByText('First Payment Date (required)')).not.toBeInTheDocument();
+    expect(screen.queryByText('Payment Frequency')).not.toBeInTheDocument();
+    expect(screen.queryByText('First Payment Date')).not.toBeInTheDocument();
+  });
+
+  it('shows the saved payment source account when editing a mortgage', async () => {
+    // The source-account options load after the uncontrolled select mounts,
+    // so the browser would otherwise fall back to the placeholder.
+    vi.mocked(accountsApi.getAll).mockResolvedValueOnce([
+      createExistingAccount({ id: 'chq-1', name: 'Chequing' }),
+      createExistingAccount({ id: 'chq-2', name: 'Savings' }),
+    ]);
+    const mortgageAccount = createExistingAccount({
+      id: 'mortgage-1',
+      accountType: 'MORTGAGE',
+      interestRate: 3.5,
+      amortizationMonths: 300,
+      sourceAccountId: 'chq-2',
+    });
+
+    await act(async () => {
+      render(
+        <AccountForm account={mortgageAccount} onSubmit={mockOnSubmit} onCancel={mockOnCancel} />
+      );
+    });
+
+    const select = screen.getByLabelText(/^Payment From Account/) as HTMLSelectElement;
+    await waitFor(() => {
+      expect(select.value).toBe('chq-2');
+    });
+  });
+
+  describe('mortgage type', () => {
+    const submitEdit = async (account: Account) => {
+      render(<AccountForm account={account} onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+      await waitFor(() => {
+        expect(screen.getByText('Mortgage Details')).toBeInTheDocument();
+      });
+      return screen.getByLabelText('Mortgage Type') as HTMLSelectElement;
+    };
+    const clickUpdate = async () => {
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Update Account/i }));
+      });
+      await waitFor(() => {
+        expect(mockOnSubmit).toHaveBeenCalled();
+      });
+      return mockOnSubmit.mock.calls[0][0];
+    };
+    const mortgage = (overrides: Partial<Account>) =>
+      createExistingAccount({
+        accountType: 'MORTGAGE',
+        interestRate: 4.5,
+        termMonths: 60,
+        amortizationMonths: 300,
+        ...overrides,
+      });
+
+    it('edits a Canadian fixed-rate mortgage as CANADIAN_FIXED and saves the row unchanged', async () => {
+      const select = await submitEdit(
+        mortgage({ mortgageType: 'CANADIAN_FIXED' }),
+      );
+      expect(select.value).toBe('CANADIAN_FIXED');
+      expect(
+        screen.getByText('A Canadian fixed-rate contract; interest compounds twice a year.'),
+      ).toBeInTheDocument();
+
+      const payload = await clickUpdate();
+      expect(payload).toMatchObject({
+        mortgageType: 'CANADIAN_FIXED',
+        termMonths: 60,
+        amortizationMonths: 300,
+      });
+    });
+
+    it('edits an ANNUITY mortgage and keeps its term editable', async () => {
+      const select = await submitEdit(mortgage({ mortgageType: 'ANNUITY' }));
+      expect(select.value).toBe('ANNUITY');
+      expect(screen.getByText('Rate-Fixed Term')).toBeInTheDocument();
+      const termYears = screen.getAllByLabelText('Years')[0];
+      expect(termYears).toHaveValue('5');
+
+      await act(async () => {
+        fireEvent.change(termYears, { target: { value: '3' } });
+      });
+
+      const payload = await clickUpdate();
+      expect(payload).toMatchObject({
+        mortgageType: 'ANNUITY',
+        termMonths: 36,
+      });
+    });
+
+    it('sends the chosen type', async () => {
+      const select = await submitEdit(mortgage({ mortgageType: 'ANNUITY' }));
+      await act(async () => {
+        fireEvent.change(select, { target: { value: 'CANADIAN_FIXED' } });
+      });
+
+      const payload = await clickUpdate();
+      expect(payload).toMatchObject({
+        mortgageType: 'CANADIAN_FIXED',
+      });
+    });
+
+    it('opens dirty with a detected type preselected and saves it only on Update', async () => {
+      const onDirtyChange = vi.fn();
+      render(
+        <AccountForm
+          account={mortgage({ mortgageType: 'ANNUITY' })}
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+          onDirtyChange={onDirtyChange}
+          preselectedMortgageType="CANADIAN_FIXED"
+        />,
+      );
+      await waitFor(() => {
+        expect((screen.getByLabelText('Mortgage Type') as HTMLSelectElement).value).toBe(
+          'CANADIAN_FIXED',
+        );
+      });
+      // An unsaved change, so the unsaved-changes prompt guards it.
+      await waitFor(() => {
+        expect(onDirtyChange).toHaveBeenCalledWith(true);
+      });
+      expect(mockOnSubmit).not.toHaveBeenCalled();
+
+      const payload = await clickUpdate();
+      expect(payload).toMatchObject({
+        mortgageType: 'CANADIAN_FIXED',
+      });
+    });
+
+    it('sends a LINEAR mortgage with its stored prepayment mode', async () => {
+      const select = await submitEdit(
+        mortgage({ mortgageType: 'LINEAR', prepaymentMode: 'LOWER_INSTALLMENT' }),
+      );
+      expect(select.value).toBe('LINEAR');
+      expect(
+        (screen.getByLabelText('What an Extra Repayment Does') as HTMLSelectElement).value,
+      ).toBe('LOWER_INSTALLMENT');
+
+      const payload = await clickUpdate();
+      expect(payload).toMatchObject({
+        mortgageType: 'LINEAR',
+        prepaymentMode: 'LOWER_INSTALLMENT',
+      });
+    });
+
+    it('reads a LINEAR mortgage with no stored mode as SHORTEN_TERM', async () => {
+      await submitEdit(mortgage({ mortgageType: 'LINEAR', prepaymentMode: null }));
+      const payload = await clickUpdate();
+      expect(payload).toMatchObject({ mortgageType: 'LINEAR', prepaymentMode: 'SHORTEN_TERM' });
+    });
+
+    it('sends an edited original principal on an edit', async () => {
+      await submitEdit(mortgage({ originalPrincipal: 300000, openingBalance: -280000 }));
+      fireEvent.change(screen.getByLabelText('Original Principal'), {
+        target: { value: '295000' },
+      });
+      const payload = await clickUpdate();
+      expect(payload.originalPrincipal).toBe(295000);
+    });
+
+    it('round-trips the stored original principal on an edit that never touched it', async () => {
+      await submitEdit(mortgage({ originalPrincipal: 300000, openingBalance: -280000 }));
+      const payload = await clickUpdate();
+      expect(payload.originalPrincipal).toBe(300000);
+    });
+
+    it('sends an explicit null when original principal is cleared on an edit', async () => {
+      await submitEdit(mortgage({ originalPrincipal: 300000, openingBalance: -280000 }));
+      fireEvent.change(screen.getByLabelText('Original Principal'), {
+        target: { value: '' },
+      });
+      const payload = await clickUpdate();
+      // Omitting the field would leave the backend's stored 300000 untouched
+      // (it reads an absent key as "no change"); null is this DTO's own
+      // meaning for "fall back to the opening balance".
+      expect(payload.originalPrincipal).toBeNull();
+    });
+
+    it.each(['LINEAR', 'INTEREST_ONLY'] as const)(
+      'refuses %s inline for a mortgage paid on an accelerated cadence',
+      async (type) => {
+        const select = await submitEdit(
+          mortgage({ mortgageType: 'ANNUITY', paymentFrequency: 'ACCELERATED_BIWEEKLY' }),
+        );
+        await act(async () => {
+          fireEvent.change(select, { target: { value: type } });
+        });
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: /Update Account/i }));
+        });
+        expect(
+          await screen.findByText(/This mortgage is paid on an accelerated schedule/),
+        ).toBeInTheDocument();
+        expect(mockOnSubmit).not.toHaveBeenCalled();
+      },
+    );
+
+    it('lets a mortgage on a regular cadence become LINEAR', async () => {
+      const select = await submitEdit(
+        mortgage({ mortgageType: 'ANNUITY', paymentFrequency: 'MONTHLY' }),
+      );
+      await act(async () => {
+        fireEvent.change(select, { target: { value: 'LINEAR' } });
+      });
+      const payload = await clickUpdate();
+      expect(payload).toMatchObject({ mortgageType: 'LINEAR' });
+    });
+
+    it('sends a null prepayment mode when the mortgage leaves LINEAR', async () => {
+      const select = await submitEdit(
+        mortgage({ mortgageType: 'LINEAR', prepaymentMode: 'LOWER_INSTALLMENT' }),
+      );
+      await act(async () => {
+        fireEvent.change(select, { target: { value: 'INTEREST_ONLY' } });
+      });
+      expect(screen.queryByLabelText('What an Extra Repayment Does')).not.toBeInTheDocument();
+
+      const payload = await clickUpdate();
+      expect(payload).toMatchObject({ mortgageType: 'INTEREST_ONLY', prepaymentMode: null });
+    });
+
+    it('sends no mortgage type for another account type', async () => {
+      render(
+        <AccountForm account={createExistingAccount()} onSubmit={mockOnSubmit} onCancel={mockOnCancel} />,
+      );
+      await waitFor(() => {
+        expect(screen.getByDisplayValue('My Chequing')).toBeInTheDocument();
+      });
+
+      const payload = await clickUpdate();
+      expect(payload).not.toHaveProperty('mortgageType');
+      expect(payload).not.toHaveProperty('prepaymentMode');
+    });
+
+    it('starts a new mortgage as ANNUITY', async () => {
+      render(<AccountForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+      fireEvent.change(screen.getByLabelText('Account Type'), { target: { value: 'MORTGAGE' } });
+      await waitFor(() => {
+        expect(screen.getByText('Mortgage Details')).toBeInTheDocument();
+      });
+      expect((screen.getByLabelText('Mortgage Type') as HTMLSelectElement).value).toBe('ANNUITY');
+      expect(screen.getByText('Rate-Fixed Term')).toBeInTheDocument();
+    });
   });
 
   it('shows asset fields when ASSET type is selected', async () => {
@@ -1205,50 +1533,6 @@ describe('AccountForm', () => {
     });
   });
 
-  it('auto-selects default loan interest category when LOAN type is selected', async () => {
-    (categoriesApi.getAll as any).mockResolvedValue([
-      { id: 'loan-parent', userId: 'u1', name: 'Loan', parentId: null, parent: null, children: [], description: null, icon: null, color: null, effectiveColor: null, isIncome: false, isSystem: true, createdAt: '' },
-      { id: 'loan-int', userId: 'u1', name: 'Loan Interest', parentId: 'loan-parent', parent: null, children: [], description: null, icon: null, color: null, effectiveColor: null, isIncome: false, isSystem: true, createdAt: '' },
-    ]);
-    render(<AccountForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
-
-    const typeSelect = screen.getByLabelText('Account Type') as HTMLSelectElement;
-    fireEvent.change(typeSelect, { target: { value: 'LOAN' } });
-
-    await waitFor(() => {
-      expect(categoriesApi.getAll).toHaveBeenCalled();
-    });
-  });
-
-  it('auto-selects default mortgage interest category when MORTGAGE type is selected', async () => {
-    (categoriesApi.getAll as any).mockResolvedValue([
-      { id: 'mortgage-parent', userId: 'u1', name: 'Mortgage', parentId: null, parent: null, children: [], description: null, icon: null, color: null, effectiveColor: null, isIncome: false, isSystem: true, createdAt: '' },
-      { id: 'mortgage-int', userId: 'u1', name: 'Mortgage Interest', parentId: 'mortgage-parent', parent: null, children: [], description: null, icon: null, color: null, effectiveColor: null, isIncome: false, isSystem: true, createdAt: '' },
-    ]);
-    render(<AccountForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
-
-    const typeSelect = screen.getByLabelText('Account Type') as HTMLSelectElement;
-    fireEvent.change(typeSelect, { target: { value: 'MORTGAGE' } });
-
-    await waitFor(() => {
-      expect(categoriesApi.getAll).toHaveBeenCalled();
-    });
-  });
-
-  it('falls back to Loan Interest category when MORTGAGE has no Mortgage parent category', async () => {
-    (categoriesApi.getAll as any).mockResolvedValue([
-      { id: 'loan-parent', userId: 'u1', name: 'Loan', parentId: null, parent: null, children: [], description: null, icon: null, color: null, effectiveColor: null, isIncome: false, isSystem: true, createdAt: '' },
-      { id: 'loan-int', userId: 'u1', name: 'Loan Interest', parentId: 'loan-parent', parent: null, children: [], description: null, icon: null, color: null, effectiveColor: null, isIncome: false, isSystem: true, createdAt: '' },
-    ]);
-    render(<AccountForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
-
-    const typeSelect = screen.getByLabelText('Account Type') as HTMLSelectElement;
-    fireEvent.change(typeSelect, { target: { value: 'MORTGAGE' } });
-    await waitFor(() => {
-      expect(categoriesApi.getAll).toHaveBeenCalled();
-    });
-  });
-
   it('handles accountsApi/categoriesApi failure gracefully when LOAN selected', async () => {
     (accountsApi.getAll as any).mockRejectedValue(new Error('boom'));
     render(<AccountForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
@@ -1488,30 +1772,6 @@ describe('AccountForm', () => {
     });
   });
 
-  it('handles categories with no Loan parent when LOAN type selected', async () => {
-    (categoriesApi.getAll as any).mockResolvedValue([
-      { id: 'other-cat', userId: 'u1', name: 'Other', parentId: null, parent: null, children: [], description: null, icon: null, color: null, effectiveColor: null, isIncome: false, isSystem: false, createdAt: '' },
-    ]);
-    render(<AccountForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
-    const typeSelect = screen.getByLabelText('Account Type') as HTMLSelectElement;
-    fireEvent.change(typeSelect, { target: { value: 'LOAN' } });
-    await waitFor(() => {
-      expect(categoriesApi.getAll).toHaveBeenCalled();
-    });
-  });
-
-  it('handles categories with no Mortgage or Loan parent when MORTGAGE selected', async () => {
-    (categoriesApi.getAll as any).mockResolvedValue([
-      { id: 'other-cat', userId: 'u1', name: 'Other', parentId: null, parent: null, children: [], description: null, icon: null, color: null, effectiveColor: null, isIncome: false, isSystem: false, createdAt: '' },
-    ]);
-    render(<AccountForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
-    const typeSelect = screen.getByLabelText('Account Type') as HTMLSelectElement;
-    fireEvent.change(typeSelect, { target: { value: 'MORTGAGE' } });
-    await waitFor(() => {
-      expect(categoriesApi.getAll).toHaveBeenCalled();
-    });
-  });
-
   it('re-syncs currency select after currencies load', async () => {
     render(<AccountForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
     await waitFor(() => {
@@ -1532,6 +1792,104 @@ describe('AccountForm', () => {
     render(<AccountForm account={account} onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
     await waitFor(() => {
       expect(screen.getByText('Mortgage Details')).toBeInTheDocument();
+    });
+  });
+
+  describe('initialValues (a new account created from a bank account)', () => {
+    it('starts the create form on the given name, type, currency and number', async () => {
+      render(
+        <AccountForm
+          initialValues={{
+            name: 'Card **** 2743',
+            accountType: 'CREDIT_CARD',
+            currencyCode: 'EUR',
+            accountNumber: '5276000000002743',
+          }}
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+        />,
+      );
+      await waitFor(() => {
+        expect(screen.getByLabelText('Account Name')).toHaveValue('Card **** 2743');
+      });
+      expect(screen.getByLabelText('Account Type')).toHaveValue('CREDIT_CARD');
+      expect(screen.getByLabelText('Account Number (optional)')).toHaveValue('5276000000002743');
+      // The options load after mount; the select settles on the prefilled code.
+      await waitFor(() => {
+        expect(screen.getByLabelText('Currency')).toHaveValue('EUR');
+      });
+    });
+
+    it('leaves the opening balance empty for null, and keeps 0 when the key is absent', async () => {
+      const { unmount } = render(
+        <AccountForm
+          initialValues={{ name: 'A', openingBalance: null }}
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+        />,
+      );
+      await waitFor(() => {
+        expect(screen.getByLabelText('Opening Balance')).toBeInTheDocument();
+      });
+      expect((screen.getByLabelText('Opening Balance') as HTMLInputElement).value).toBe('');
+      unmount();
+
+      render(
+        <AccountForm
+          initialValues={{ name: 'A' }}
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+        />,
+      );
+      await waitFor(() => {
+        expect((screen.getByLabelText('Opening Balance') as HTMLInputElement).value).toBe('0.00');
+      });
+    });
+
+    it('submits what was prefilled, with nothing invented for the opening balance', async () => {
+      render(
+        <AccountForm
+          initialValues={{
+            name: 'Savings **** 1111',
+            accountType: 'SAVINGS',
+            currencyCode: 'USD',
+            accountNumber: 'DE89370400440532013000',
+            openingBalance: null,
+          }}
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+        />,
+      );
+      await waitFor(() => {
+        expect(screen.getByLabelText('Account Name')).toHaveValue('Savings **** 1111');
+      });
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /Create Account/i }));
+      });
+      await waitFor(() => expect(mockOnSubmit).toHaveBeenCalled());
+      const submitted = mockOnSubmit.mock.calls[0][0];
+      expect(submitted).toMatchObject({
+        name: 'Savings **** 1111',
+        accountType: 'SAVINGS',
+        currencyCode: 'USD',
+        accountNumber: 'DE89370400440532013000',
+      });
+      expect(submitted.openingBalance).toBeUndefined();
+    });
+
+    it('is ignored when editing: an account starts from itself', async () => {
+      render(
+        <AccountForm
+          account={createExistingAccount({ name: 'My Chequing' })}
+          initialValues={{ name: 'Ignored', accountType: 'CREDIT_CARD' }}
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+        />,
+      );
+      await waitFor(() => {
+        expect(screen.getByLabelText('Account Name')).toHaveValue('My Chequing');
+      });
+      expect(screen.getByLabelText('Account Type')).toHaveValue('CHEQUING');
     });
   });
 
@@ -1696,6 +2054,25 @@ describe('AccountForm', () => {
         // because hasScheduledPayment is now true
         expect(screen.queryByText('Set Up Recurring Payments')).not.toBeInTheDocument();
       });
+    });
+
+    it('seeds the dialog with the mortgage type the account carries', async () => {
+      const mortgageAccount = createExistingAccount({
+        accountType: 'MORTGAGE',
+        mortgageType: 'CANADIAN_FIXED',
+        scheduledTransactionId: null,
+      });
+      render(<AccountForm account={mortgageAccount} onSubmit={mockOnSubmit} onCancel={mockOnCancel} />);
+
+      await waitFor(() => {
+        expect(screen.getByText('Set Up Recurring Payments')).toBeInTheDocument();
+      });
+      fireEvent.click(screen.getByText('Set Up Recurring Payments'));
+      await waitFor(() => {
+        expect(screen.getByTestId('loan-setup-dialog')).toBeInTheDocument();
+      });
+
+      expect(capturedLoanAccount?.mortgageType).toBe('CANADIAN_FIXED');
     });
 
     it('onClose callback closes the dialog', async () => {
@@ -2053,6 +2430,378 @@ describe('AccountForm', () => {
 
       expect(screen.queryByText('Cash account')).not.toBeInTheDocument();
       expect(screen.getByDisplayValue('Self-directed')).toBeInTheDocument();
+    });
+  });
+  it("labels the retained shared-account toggle visibly and keeps finance navigation secondary", async () => {
+    const account = createExistingAccount({
+      managedPurpose: "SHARED_SETTLEMENT",
+      sharedExpenseGroupId: "group",
+    });
+    await act(async () =>
+      render(
+        <AccountForm
+          account={account}
+          onSubmit={mockOnSubmit}
+          onCancel={mockOnCancel}
+        />,
+      ),
+    );
+    const toggle = screen.getByRole("switch", {
+      name: "Exclude from Net Worth",
+    });
+    expect(toggle.closest("label")).toHaveTextContent("Exclude from Net Worth");
+    expect(screen.getByRole("link", { name: "My Finances" })).toHaveAttribute(
+      "href",
+      "/shared-expenses/private-finances/group",
+    );
+    expect(screen.getByRole("link", { name: "My Finances" })).not.toHaveClass(
+      "bg-blue-600",
+    );
+    expect(
+      screen.getByRole("button", { name: "Save Changes" }),
+    ).toHaveAttribute("type", "submit");
+    expect(screen.queryByLabelText("Account Type")).not.toBeInTheDocument();
+  });
+});
+
+describe('AccountForm: a crypto wallet (docs/specs/crypto-accounts.md)', () => {
+  const mockOnSubmit = vi.fn().mockResolvedValue(undefined);
+  const mockOnCancel = vi.fn();
+  const fiat = [
+    { code: 'CAD', name: 'Canadian Dollar', symbol: 'CA$', decimalPlaces: 2, isActive: true, kind: 'FIAT' },
+    // No kind: an older API, read as fiat.
+    { code: 'USD', name: 'US Dollar', symbol: '$', decimalPlaces: 2, isActive: true },
+  ];
+  const btc = { code: 'BTC', name: 'Bitcoin', symbol: 'B', decimalPlaces: 8, isActive: true, kind: 'CRYPTO', quoteSymbol: 'BTC-CAD' };
+  const getCurrencies = () => exchangeRatesApi.getCurrencies as ReturnType<typeof vi.fn>;
+
+  async function renderForm(props: Partial<Parameters<typeof AccountForm>[0]> = {}) {
+    await act(async () => {
+      render(<AccountForm onSubmit={mockOnSubmit} onCancel={mockOnCancel} {...props} />);
+    });
+  }
+
+  const currencySelect = () => screen.getByLabelText('Currency') as HTMLSelectElement;
+  const currencyValues = () => Array.from(currencySelect().querySelectorAll('option')).map((o) => o.value);
+
+  async function chooseType(value: string) {
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Account Type'), { target: { value } });
+    });
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    getCurrencies().mockResolvedValue([...fiat, btc]);
+    // An earlier suite leaves the lookup rejecting; an unanswered lock holds
+    // the saved kind, so these start from an account without transactions.
+    (accountsApi.canDelete as ReturnType<typeof vi.fn>).mockResolvedValue({
+      transactionCount: 0,
+      investmentTransactionCount: 0,
+      canDelete: true,
+    });
+  });
+
+  afterEach(() => {
+    // The form subscribes to the registry, so emptying it re-renders a mounted form.
+    act(() => clearCurrencyDecimals());
+    getCurrencies().mockResolvedValue(fiat);
+  });
+
+  it('offers Crypto Wallet as an account type', async () => {
+    await renderForm();
+    const option = Array.from(
+      (screen.getByLabelText('Account Type') as HTMLSelectElement).querySelectorAll('option'),
+    ).find((o) => o.value === 'CRYPTO');
+    expect(option?.textContent).toBe('Crypto Wallet');
+  });
+
+  it('lists only fiat currencies for a bank account and only crypto currencies for a wallet', async () => {
+    await renderForm();
+    await waitFor(() => expect(currencyValues()).toContain('CAD'));
+    expect(currencyValues()).toEqual(['CAD', 'USD']);
+
+    await chooseType('CRYPTO');
+    // CAD no longer fits, so it is cleared and the placeholder shows.
+    expect(currencySelect().value).toBe('');
+    expect(currencyValues()).toEqual(['', 'BTC']);
+  });
+
+  it('clears a currency of the other kind on a type switch, and keeps one that still fits', async () => {
+    await renderForm();
+    await waitFor(() => expect(currencyValues()).toContain('CAD'));
+
+    await chooseType('SAVINGS');
+    expect(currencySelect().value).toBe('CAD');
+
+    await chooseType('CRYPTO');
+    await act(async () => {
+      fireEvent.change(currencySelect(), { target: { value: 'BTC' } });
+    });
+    expect(currencySelect().value).toBe('BTC');
+
+    await chooseType('CHEQUING');
+    expect(currencySelect().value).toBe('');
+    expect(currencyValues()).toEqual(['', 'CAD', 'USD']);
+  });
+
+  it('refuses to submit a wallet without a currency, with its own message', async () => {
+    await renderForm();
+    await waitFor(() => expect(currencyValues()).toContain('CAD'));
+    await chooseType('CRYPTO');
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Account Name'), { target: { value: 'Wallet' } });
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Create Account/i }));
+    });
+    expect(await screen.findByText('Select a currency')).toBeInTheDocument();
+    expect(mockOnSubmit).not.toHaveBeenCalled();
+  });
+
+  it('says where to add a cryptocurrency when none exists', async () => {
+    getCurrencies().mockResolvedValue(fiat);
+    await renderForm();
+    await waitFor(() => expect(currencyValues()).toContain('CAD'));
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+
+    await chooseType('CRYPTO');
+    expect(currencyValues()).toEqual(['']);
+    const note = screen.getByRole('note');
+    expect(note).toHaveTextContent(/none is set up yet/);
+    expect(screen.getByRole('link', { name: 'Currencies page' })).toHaveAttribute('href', '/currencies');
+    expect(screen.getByRole('link', { name: 'How to add a cryptocurrency' }).getAttribute('href')).toMatch(
+      /currency-management.*#cryptocurrencies$/,
+    );
+  });
+
+  it('does not claim no cryptocurrency exists when the currency list failed to load', async () => {
+    getCurrencies().mockRejectedValue(new Error('offline'));
+    await renderForm();
+    await chooseType('CRYPTO');
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+  });
+
+  it('asks for no credit limit, interest rate or institution, and takes a positive opening balance', async () => {
+    await renderForm();
+    await chooseType('CRYPTO');
+    expect(screen.queryByText('Credit Limit (optional)')).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Interest Rate/)).not.toBeInTheDocument();
+    expect(screen.getByText('Institution (optional)')).toBeInTheDocument();
+    expect(screen.queryByText('Lender/Institution')).not.toBeInTheDocument();
+    expect(screen.getByText('Opening Balance')).toBeInTheDocument();
+    expect(screen.queryByText('Statement Dates (optional)')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('asset-fields')).not.toBeInTheDocument();
+  });
+
+  it('enters a new wallet\'s opening balance at the coin\'s eight places', async () => {
+    registerCurrencyDecimals([btc]);
+    await renderForm();
+    await waitFor(() => expect(currencyValues()).toContain('CAD'));
+    await chooseType('CRYPTO');
+    await act(async () => {
+      fireEvent.change(currencySelect(), { target: { value: 'BTC' } });
+      fireEvent.change(screen.getByLabelText('Account Name'), { target: { value: 'Bitcoin Wallet' } });
+    });
+    const balance = screen.getByLabelText('Opening Balance') as HTMLInputElement;
+    await act(async () => {
+      fireEvent.focus(balance);
+      fireEvent.change(balance, { target: { value: '0.01249993' } });
+      fireEvent.blur(balance);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Create Account/i }));
+    });
+
+    await waitFor(() => expect(mockOnSubmit).toHaveBeenCalled());
+    const payload = mockOnSubmit.mock.calls[0][0];
+    expect(payload).toMatchObject({ accountType: 'CRYPTO', currencyCode: 'BTC', openingBalance: 0.01249993 });
+  });
+
+  it('keeps a bank account\'s opening balance at two places', async () => {
+    registerCurrencyDecimals([btc]);
+    await renderForm();
+    await waitFor(() => expect(currencyValues()).toContain('CAD'));
+    await act(async () => {
+      fireEvent.change(screen.getByLabelText('Account Name'), { target: { value: 'Chequing' } });
+    });
+    const balance = screen.getByLabelText('Opening Balance') as HTMLInputElement;
+    await act(async () => {
+      fireEvent.focus(balance);
+      fireEvent.change(balance, { target: { value: '0.0125' } });
+      fireEvent.blur(balance);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Create Account/i }));
+    });
+
+    await waitFor(() => expect(mockOnSubmit).toHaveBeenCalled());
+    expect(mockOnSubmit.mock.calls[0][0].openingBalance).toBe(0.01);
+  });
+
+  it.each([
+    ['with the registry loaded', true],
+    ['before the registry has loaded', false],
+  ])('round-trips a 0.01249993 BTC opening balance on an unedited save, %s', async (_label, registered) => {
+    if (registered) registerCurrencyDecimals([btc]);
+    const wallet = createExistingAccount({
+      accountType: 'CRYPTO',
+      name: 'Bitcoin Wallet',
+      currencyCode: 'BTC',
+      openingBalance: 0.01249993,
+      currentBalance: 0.01249993,
+    });
+    await renderForm({ account: wallet });
+    await waitFor(() => expect(currencyValues()).toEqual(['BTC']));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Update Account/i }));
+    });
+
+    await waitFor(() => expect(mockOnSubmit).toHaveBeenCalled());
+    expect(mockOnSubmit.mock.calls[0][0]).toMatchObject({
+      accountType: 'CRYPTO',
+      currencyCode: 'BTC',
+      openingBalance: 0.01249993,
+    });
+  });
+
+  it('redraws an edited wallet\'s opening balance at the coin\'s places when the registry loads late', async () => {
+    const wallet = createExistingAccount({
+      accountType: 'CRYPTO',
+      name: 'Bitcoin Wallet',
+      currencyCode: 'BTC',
+      openingBalance: 0.01249993,
+      currentBalance: 0.01249993,
+    });
+    await renderForm({ account: wallet });
+    await waitFor(() => expect(currencyValues()).toEqual(['BTC']));
+    const balance = screen.getByLabelText('Opening Balance') as HTMLInputElement;
+    // Before `GET /currencies` answers the coin is drawn at the column scale,
+    // never rounded to cents...
+    expect(balance.value).toBe('0.01249993');
+
+    // ...and a late load redraws it at the coin's registered places.
+    act(() => registerCurrencyDecimals([{ ...btc, decimalPlaces: 3 }]));
+    await waitFor(() => expect(balance.value).toBe('0.012'));
+  });
+
+  it.each([
+    ['with the registry loaded', true],
+    ['before the registry has loaded', false],
+  ])('saves a 0.00002500 BTC balance alert threshold at the coin\'s places, %s', async (_label, registered) => {
+    if (registered) registerCurrencyDecimals([btc]);
+    const wallet = createExistingAccount({
+      accountType: 'CRYPTO',
+      name: 'Bitcoin Wallet',
+      currencyCode: 'BTC',
+      openingBalance: 0.01249993,
+      currentBalance: 0.01249993,
+    });
+    await renderForm({ account: wallet });
+    await waitFor(() => expect(currencyValues()).toEqual(['BTC']));
+    const low = screen.getByLabelText('Notify below (optional)') as HTMLInputElement;
+    await act(async () => {
+      fireEvent.focus(low);
+      fireEvent.change(low, { target: { value: '0.00002500' } });
+      fireEvent.blur(low);
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: /Update Account/i }));
+    });
+
+    await waitFor(() => expect(mockOnSubmit).toHaveBeenCalled());
+    expect(mockOnSubmit.mock.calls[0][0].lowBalanceThreshold).toBe(0.000025);
+  });
+
+  describe('a currency locked by the account\'s transactions', () => {
+    const typeSelect = () => screen.getByLabelText('Account Type') as HTMLSelectElement;
+    const disabledTypes = () =>
+      Array.from(typeSelect().querySelectorAll('option'))
+        .filter((o) => o.disabled)
+        .map((o) => o.value);
+    const lockHint = /lock its currency, so it cannot switch between a Crypto Wallet and a fiat account type/;
+
+    function lockCurrency() {
+      (accountsApi.canDelete as ReturnType<typeof vi.fn>).mockResolvedValueOnce({
+        transactionCount: 4,
+        investmentTransactionCount: 0,
+        canDelete: false,
+      });
+    }
+
+    it('keeps a fiat account from becoming a Crypto Wallet, and keeps its currency', async () => {
+      lockCurrency();
+      await renderForm({ account: createExistingAccount() });
+      await waitFor(() => expect(currencySelect().disabled).toBe(true));
+
+      expect(disabledTypes()).toEqual(['CRYPTO']);
+      expect(screen.getByLabelText(lockHint)).toBeInTheDocument();
+
+      await chooseType('SAVINGS');
+      expect(currencySelect().value).toBe('CAD');
+      expect(screen.queryByText('Select a currency')).not.toBeInTheDocument();
+    });
+
+    it('keeps a wallet from becoming a fiat type, and keeps its coin', async () => {
+      lockCurrency();
+      await renderForm({
+        account: createExistingAccount({
+          accountType: 'CRYPTO',
+          name: 'Bitcoin Wallet',
+          currencyCode: 'BTC',
+          openingBalance: 0.0125,
+          currentBalance: 0.0125,
+        }),
+      });
+      await waitFor(() => expect(currencySelect().disabled).toBe(true));
+
+      const types = Array.from(typeSelect().querySelectorAll('option')).map((o) => o.value);
+      expect(disabledTypes()).toEqual(types.filter((v) => v !== 'CRYPTO'));
+      expect(screen.getByLabelText(lockHint)).toBeInTheDocument();
+      expect(currencySelect().value).toBe('BTC');
+    });
+
+    it('never clears a locked currency on a type switch', async () => {
+      lockCurrency();
+      await renderForm({ account: createExistingAccount() });
+      await waitFor(() => expect(currencySelect().disabled).toBe(true));
+
+      // The option is disabled in the picker; a change that reaches the
+      // handler anyway must still leave the currency alone.
+      await chooseType('CRYPTO');
+      await chooseType('CHEQUING');
+      expect(currencySelect().value).toBe('CAD');
+    });
+
+    it('keeps the saved kind, with no hint, while the lock lookup has not answered', async () => {
+      let answer: (value: unknown) => void = () => {};
+      (accountsApi.canDelete as ReturnType<typeof vi.fn>).mockReturnValueOnce(
+        new Promise((resolve) => { answer = resolve; }),
+      );
+      await renderForm({ account: createExistingAccount() });
+      await waitFor(() => expect(currencyValues()).toContain('CAD'));
+
+      expect(disabledTypes()).toEqual(['CRYPTO']);
+      expect(screen.queryByLabelText(lockHint)).not.toBeInTheDocument();
+      // A switch that reaches the handler before the answer keeps the currency.
+      await chooseType('CRYPTO');
+      await chooseType('CHEQUING');
+      expect(currencySelect().value).toBe('CAD');
+
+      // Unlocked once it answers: every type is offered again.
+      await act(async () => {
+        answer({ transactionCount: 0, investmentTransactionCount: 0, canDelete: true });
+      });
+      expect(disabledTypes()).toEqual([]);
+    });
+
+    it('offers every type, with no hint, while the currency is unlocked', async () => {
+      await renderForm({ account: createExistingAccount() });
+      await waitFor(() => expect(accountsApi.canDelete).toHaveBeenCalled());
+      await waitFor(() => expect(currencyValues()).toContain('CAD'));
+
+      expect(disabledTypes()).toEqual([]);
+      expect(screen.queryByLabelText(lockHint)).not.toBeInTheDocument();
     });
   });
 });

@@ -1,0 +1,321 @@
+{
+  "page": {
+    "title": "Garantías",
+    "subtitle": "Qué compraste, cuándo termina su cobertura y quién te lo vendió",
+    "newButton": "Añadir garantía",
+    "exportButton": "Exportar CSV",
+    "importButton": "Importar CSV",
+    "loading": "Cargando garantías...",
+    "loadFailed": "No se pudieron cargar tus garantías.",
+    "retry": "Reintentar",
+    "summary": {
+      "active": "Activas",
+      "expiring": "Vencen pronto",
+      "expired": "Vencidas",
+      "lifetime": "De por vida",
+      "unavailable": "Sin cargar",
+      "expiringHint": "En {days} días o menos"
+    },
+    "filters": {
+      "label": "Filtrar por estado",
+      "all": "Todas",
+      "expiring": "Por vencer",
+      "active": "Activas",
+      "expired": "Vencidas",
+      "lifetime": "De por vida",
+      "counted": {
+        "all": "Todas ({count})",
+        "expiring": "Por vencer ({count})",
+        "active": "Activas ({count})",
+        "expired": "Vencidas ({count})",
+        "lifetime": "De por vida ({count})"
+      }
+    },
+    "search": {
+      "label": "Buscar garantías",
+      "placeholder": "Busca por nombre, vendedor, modelo o número de serie"
+    },
+    "archivedToggle": "Mostrar archivadas",
+    "transactionChip": {
+      "label": "Garantías de una transacción",
+      "clear": "Mostrar todas las garantías"
+    },
+    "pager": {
+      "itemName": "garantías",
+      "total": "{count, plural, one {{total} garantía} other {{total} garantías}}"
+    },
+    "empty": {
+      "title": "Aún no hay garantías",
+      "description": "Añade una garantía para saber cuándo termina su cobertura.",
+      "filteredTitle": "Ninguna garantía coincide",
+      "filteredDescription": "Prueba con otro estado o borra la búsqueda.",
+      "archivedTitle": "No hay garantías archivadas"
+    },
+    "modal": {
+      "newTitle": "Nueva garantía",
+      "editTitle": "Editar garantía"
+    },
+    "delete": {
+      "title": "Eliminar garantía",
+      "message": "¿Eliminar \"{name}\"? Sus reclamaciones y documentos se eliminarán con ella, y esto no se puede deshacer."
+    },
+    "toasts": {
+      "created": "Garantía añadida",
+      "updated": "Garantía actualizada",
+      "deleted": "Garantía eliminada",
+      "archived": "Garantía archivada",
+      "unarchived": "Garantía restaurada",
+      "createFailed": "No se pudo añadir la garantía",
+      "updateFailed": "No se pudo actualizar la garantía",
+      "deleteFailed": "No se pudo eliminar la garantía",
+      "archiveFailed": "No se pudo archivar la garantía",
+      "unarchiveFailed": "No se pudo restaurar la garantía",
+      "prefillFailed": "No se pudo cargar esa transacción, así que la garantía empieza en blanco",
+      "exported": "{count, plural, one {{shown} garantía exportada} other {{shown} garantías exportadas}}",
+      "exportFailed": "No se pudieron exportar las garantías"
+    }
+  },
+  "status": {
+    "lifetime": "De por vida",
+    "active": "Activa",
+    "expiring": "Vence pronto",
+    "expired": "Vencida"
+  },
+  "daysLeft": {
+    "left": "{count, plural, one {Queda {days} día} other {Quedan {days} días}}",
+    "today": "Vence hoy",
+    "ago": "{count, plural, one {Venció hace {days} día} other {Venció hace {days} días}}",
+    "leftYears": "Quedan {yearsCount, plural, one {{years} año} other {{years} años}}, {daysCount, plural, one {{days} día} other {{days} días}}",
+    "agoYears": "Venció hace {yearsCount, plural, one {{years} año} other {{years} años}}, {daysCount, plural, one {{days} día} other {{days} días}}"
+  },
+  "kind": {
+    "manufacturer": "Fabricante",
+    "extended": "Extendida",
+    "store": "Tienda",
+    "other": "Otra"
+  },
+  "list": {
+    "columns": {
+      "name": "Nombre",
+      "status": "Estado",
+      "expiresOn": "Vence",
+      "purchaseDate": "Comprada",
+      "price": "Precio",
+      "documents": "Documentos",
+      "claims": "Reclamaciones abiertas",
+      "actions": "Acciones"
+    },
+    "sortLabel": "Ordenar por",
+    "lifetime": "De por vida",
+    "noPrice": "Ninguno",
+    "actions": {
+      "archive": "Archivar",
+      "unarchive": "Desarchivar"
+    }
+  },
+  "form": {
+    "nameLabel": "Nombre",
+    "namePlaceholder": "Qué compraste",
+    "vendorLabel": "Vendedor",
+    "vendorPlaceholder": "Selecciona o escribe un vendedor",
+    "modelLabel": "Número de modelo",
+    "serialsLabel": "Números de serie",
+    "serialLabel": "Número de serie {index}",
+    "addSerial": "Añadir número de serie",
+    "removeSerial": "Quitar el número de serie {index}",
+    "serialsLimit": "Hasta {max} números de serie",
+    "kindLabel": "Tipo de garantía",
+    "purchaseDateLabel": "Fecha de compra",
+    "expiry": {
+      "label": "Fin de la cobertura",
+      "date": "En una fecha",
+      "duration": "Tras un plazo",
+      "lifetime": "Nunca",
+      "expiresOnLabel": "Vence el",
+      "years": "Años",
+      "months": "Meses",
+      "days": "Días",
+      "computed": "Vence el {date}",
+      "needsPurchaseDate": "Introduce la fecha de compra para calcular cuándo termina",
+      "lifetimeHint": "Una garantía de por vida no tiene fecha de fin ni recordatorio"
+    },
+    "priceLabel": "Precio de compra",
+    "productUrlLabel": "Página del producto",
+    "productUrlPlaceholder": "https://",
+    "notesLabel": "Notas",
+    "submitCreate": "Añadir garantía",
+    "submitUpdate": "Guardar cambios"
+  },
+  "validation": {
+    "nameRequired": "Introduce un nombre",
+    "nameTooLong": "Usa 200 caracteres como máximo",
+    "vendorTooLong": "Usa 200 caracteres como máximo",
+    "modelTooLong": "Usa 100 caracteres como máximo",
+    "serialTooLong": "Usa 100 caracteres como máximo en cada número de serie",
+    "serialsTooMany": "Hasta 10 números de serie",
+    "purchaseDateRequired": "Introduce la fecha de compra",
+    "expiresOnRequired": "Introduce la fecha en que termina la garantía",
+    "expiresBeforePurchase": "La garantía no puede terminar antes de la fecha de compra",
+    "durationRequired": "Introduce un plazo mayor que cero",
+    "priceNegative": "El precio no puede ser negativo",
+    "priceNeedsCurrency": "Elige la moneda del precio",
+    "urlInvalid": "Introduce una dirección web que empiece por http:// o https://",
+    "urlTooLong": "Usa 500 caracteres como máximo",
+    "notesTooLong": "Usa 2000 caracteres como máximo"
+  },
+  "detail": {
+    "back": "Volver a Garantías",
+    "loading": "Cargando garantía...",
+    "loadFailed": "No se pudo cargar esta garantía.",
+    "notFound": "No se encontró esta garantía.",
+    "retry": "Reintentar",
+    "archivedBadge": "Archivada",
+    "switcher": {
+      "trigger": "Cambiar de garantía",
+      "placeholder": "Filtrar garantías...",
+      "noMatches": "Ninguna garantía coincide"
+    },
+    "summary": {
+      "expires": "Vence",
+      "purchased": "Comprada",
+      "price": "Precio de compra",
+      "openClaims": "Reclamaciones abiertas"
+    },
+    "card": {
+      "title": "Detalles",
+      "kind": "Tipo de garantía",
+      "vendor": "Vendedor",
+      "serialNumbers": "Números de serie",
+      "model": "Número de modelo",
+      "productUrl": "Página del producto",
+      "notes": "Notas",
+      "none": "Ninguno",
+      "lifetime": "De por vida"
+    },
+    "transaction": {
+      "title": "Compra",
+      "edit": "Editar la compra del {date}: {payee}, {amount}",
+      "viewInRegister": "Ver en el registro",
+      "loadFailed": "No se pudo cargar la compra",
+      "dateInAccount": "{date} · {account}",
+      "none": "Sin transacción vinculada",
+      "unreadable": "La compra está en una cuenta que no puedes leer.",
+      "noPayee": "Sin beneficiario"
+    }
+  },
+  "documents": {
+    "title": "Documentos",
+    "empty": "Aún no hay documentos",
+    "pendingHint": "Los documentos se subirán al guardar la garantía.",
+    "tooMany": "Máximo {max} documentos por garantía",
+    "uploadFailedAfterCreate": "Garantía añadida, pero no se {count, plural, one {pudo subir este documento} other {pudieron subir estos documentos}}: {names}. {count, plural, one {Añádelo} other {Añádelos}} desde la sección Documentos de la garantía.",
+    "kindFor": "Tipo de documento de {name}",
+    "kindUpdateFailed": "No se pudo cambiar el tipo de documento",
+    "addExisting": "Añadir existente",
+    "addExistingTitle": "Añadir un documento existente",
+    "addExistingHelp": "Elige un archivo que ya subiste a una transacción o a otra garantía. Se añade una copia a esta garantía; el original se queda donde está.",
+    "addExistingFrom": "Dónde está ahora el documento",
+    "fromTransaction": "Una transacción",
+    "fromWarranty": "Otra garantía",
+    "addExistingDocument": "Documento",
+    "addExistingKind": "Tipo de documento en esta garantía",
+    "addExistingNone": "No hay documentos que añadir aquí.",
+    "addExistingLoadFailed": "No se pudieron cargar los documentos. Inténtalo de nuevo.",
+    "addExistingFailed": "No se pudo añadir el documento",
+    "addExistingSubmit": "Añadir documento",
+    "choose": "Elegir…",
+    "preview": "Vista previa",
+    "kinds": {
+      "receipt": "Recibo",
+      "manual": "Manual",
+      "photo": "Foto",
+      "warranty": "Garantía",
+      "other": "Otro"
+    }
+  },
+  "claims": {
+    "title": "Reclamaciones",
+    "add": "Añadir reclamación",
+    "empty": "Aún no hay reclamaciones",
+    "loading": "Cargando reclamaciones...",
+    "loadFailed": "No se pudieron cargar las reclamaciones.",
+    "retry": "Reintentar",
+    "statuses": {
+      "open": "Abierta",
+      "approved": "Aprobada",
+      "denied": "Denegada",
+      "resolved": "Resuelta"
+    },
+    "claimedOn": "Reclamada el {date}",
+    "resolvedOnLine": "Cerrada el {date}",
+    "resolutionLine": "Resolución: {text}",
+    "modal": {
+      "newTitle": "Nueva reclamación",
+      "editTitle": "Editar reclamación"
+    },
+    "form": {
+      "claimDateLabel": "Fecha de la reclamación",
+      "statusLabel": "Estado",
+      "descriptionLabel": "Descripción",
+      "resolutionLabel": "Resolución",
+      "resolvedOnLabel": "Cerrada el",
+      "resolvedOnHint": "Solo para una reclamación resuelta o denegada",
+      "submitCreate": "Añadir reclamación",
+      "submitUpdate": "Guardar cambios"
+    },
+    "validation": {
+      "claimDateRequired": "Introduce la fecha de la reclamación",
+      "resolvedOnBeforeClaim": "Una reclamación no puede cerrarse antes de presentarse",
+      "textTooLong": "Usa 2000 caracteres como máximo"
+    },
+    "delete": {
+      "title": "Eliminar reclamación",
+      "message": "¿Eliminar la reclamación del {date}? Esto no se puede deshacer."
+    },
+    "toasts": {
+      "created": "Reclamación añadida",
+      "updated": "Reclamación actualizada",
+      "deleted": "Reclamación eliminada",
+      "createFailed": "No se pudo añadir la reclamación",
+      "updateFailed": "No se pudo actualizar la reclamación",
+      "deleteFailed": "No se pudo eliminar la reclamación"
+    }
+  },
+  "import": {
+    "title": "Importar garantías desde CSV",
+    "description": "Un archivo CSV con las columnas de Warracker, como uno exportado desde Warracker o desde esta página. Verás cada fila antes de que se guarde nada.",
+    "fileLabel": "Archivo CSV",
+    "chooseFile": "Elegir archivo",
+    "noFileChosen": "Ningún archivo elegido",
+    "checking": "Comprobando el archivo...",
+    "previewFailed": "No se pudo comprobar el archivo",
+    "summary": "{count, plural, one {Se puede importar {valid} de {total} fila.} other {Se pueden importar {valid} de {total} filas.}}",
+    "invalidSummary": "{count, plural, one {{shown} fila no es válida y no se puede importar tal como está.} other {{shown} filas no son válidas y no se pueden importar tal como están.}}",
+    "skipInvalid": "Omitir las filas no válidas e importar el resto",
+    "nothingToImport": "Corrige el archivo y vuelve a elegirlo.",
+    "skippedColumns": "Columnas no importadas:",
+    "columns": {
+      "line": "Línea",
+      "name": "Nombre",
+      "expires": "Vence",
+      "outcome": "Resultado",
+      "problems": "Problemas"
+    },
+    "outcome": {
+      "valid": "Lista",
+      "invalid": "No válida",
+      "created": "Importada"
+    },
+    "unnamed": "(sin nombre)",
+    "noExpiry": "Sin definir",
+    "lifetime": "De por vida",
+    "errorItem": "Error: {message}",
+    "warningItem": "Nota: {message}",
+    "submit": "Importar",
+    "submitCount": "{count, plural, one {Importar {shown} garantía} other {Importar {shown} garantías}}",
+    "toasts": {
+      "imported": "{count, plural, one {{shown} garantía importada} other {{shown} garantías importadas}}",
+      "failed": "No se pudieron importar las garantías"
+    }
+  }
+}

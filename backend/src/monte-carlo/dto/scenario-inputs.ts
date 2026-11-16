@@ -1,4 +1,5 @@
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsInt,
@@ -12,7 +13,8 @@ import {
   ValidateNested,
 } from "class-validator";
 import { Type } from "class-transformer";
-import { CashFlowDto } from "./cash-flow.dto";
+import { CashFlowDto, MAX_SCENARIO_CASH_FLOWS } from "./cash-flow.dto";
+import { IsMoneyAmount } from "../../common/validators/is-money-amount.validator";
 
 /**
  * Shared input fields used by both `CreateScenarioDto` and the ad-hoc
@@ -23,7 +25,7 @@ export class ScenarioInputs {
   @IsUUID("4", { each: true })
   accountIds: string[];
 
-  @IsNumber({ maxDecimalPlaces: 4 })
+  @IsMoneyAmount(4)
   @Min(0)
   @Max(999999999999)
   startingValue: number;
@@ -36,7 +38,7 @@ export class ScenarioInputs {
   @Max(100)
   yearsToRetirement: number;
 
-  @IsNumber({ maxDecimalPlaces: 4 })
+  @IsMoneyAmount(4)
   @Min(-999999999)
   @Max(999999999)
   annualContribution: number;
@@ -51,7 +53,7 @@ export class ScenarioInputs {
   @Max(100)
   yearsInRetirement: number;
 
-  @IsNumber({ maxDecimalPlaces: 4 })
+  @IsMoneyAmount(4)
   @Min(0)
   @Max(999999999)
   annualWithdrawal: number;
@@ -88,7 +90,7 @@ export class ScenarioInputs {
   simulationCount: number;
 
   @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 4 })
+  @IsMoneyAmount(4)
   @Min(0)
   @Max(999999999999)
   targetValue?: number | null;
@@ -102,6 +104,7 @@ export class ScenarioInputs {
    * base contribution/withdrawal phases. */
   @IsOptional()
   @IsArray()
+  @ArrayMaxSize(MAX_SCENARIO_CASH_FLOWS)
   @ValidateNested({ each: true })
   @Type(() => CashFlowDto)
   cashFlows?: CashFlowDto[];

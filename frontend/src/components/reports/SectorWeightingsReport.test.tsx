@@ -6,13 +6,16 @@ vi.mock('@/lib/pdf-export', () => ({
   exportToPdf: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
-    formatCurrency: (n: number) => `$${n.toFixed(2)}`,
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrencyCompact: (n: number) => `$${n.toFixed(0)}`,
+      formatCurrency: (n: number) => `$${n.toFixed(2)}`,
+    }),
+  };
+});
 vi.mock('@/hooks/useExchangeRates', () => ({
   useExchangeRates: () => ({ defaultCurrency: 'CAD' }),
 }));
@@ -126,6 +129,27 @@ describe('SectorWeightingsReport', () => {
     expect(screen.getByText('ETF Exposure')).toBeInTheDocument();
     expect(screen.getByText('Sectors')).toBeInTheDocument();
     expect(screen.getByText('2')).toBeInTheDocument(); // 2 sector items
+  });
+
+  it('shows the known value, not a total, while the server says the valuation is partial', async () => {
+    mockGetSectorWeightings.mockResolvedValue({
+      ...mockWeightingsData,
+      totalPortfolioValue: null,
+      knownSubtotal: 1234,
+      valuationComplete: false,
+      unpricedSymbols: ['NOP'],
+      missingRatePairs: ['JPY->USD'],
+    });
+    mockGetInvestmentAccounts.mockResolvedValue(mockAccounts);
+    mockGetSecurities.mockResolvedValue(mockSecurities);
+    render(<SectorWeightingsReport />);
+    await waitFor(() => {
+      expect(screen.getAllByText('Known Value')).toHaveLength(2);
+    });
+    expect(screen.queryByText('Total Portfolio')).not.toBeInTheDocument();
+    const note = screen.getByTestId('weighting-partial-note');
+    expect(note.textContent).toContain('NOP');
+    expect(note.textContent).toContain('JPY->USD');
   });
 
   it('renders the chart container', async () => {
@@ -243,7 +267,7 @@ describe('SectorWeightingsReport', () => {
     await waitFor(() => {
       expect(screen.getByText(/Failed to load report data/)).toBeInTheDocument();
     });
-    expect(screen.getByRole('button', { name: /Try again/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Try Again/ })).toBeInTheDocument();
   });
 
   it('clears filters', async () => {

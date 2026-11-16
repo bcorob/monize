@@ -8,11 +8,14 @@
  * key lives on the server in this mode.
  */
 
+import { AttachmentDto } from "../query/dto/ai-query.dto";
+
 /**
  * A lightweight reference to an attachment the user uploaded with a relayed
- * prompt. The bytes themselves are held in the in-memory RelayAttachmentStore;
- * the agent fetches them by reading `uri` as an MCP resource. Carries no base64
- * data, so it stays small when passed through the prompt queue and tool result.
+ * prompt. The bytes themselves are rows (`ai_relay_attachments` and its blob),
+ * and the agent fetches them by reading `uri` as an MCP resource. The ref
+ * carries no base64 data, so it stays small riding in the queued prompt's JSONB
+ * and in the tool result.
  */
 export interface RelayAttachmentRef {
   /** Opaque per-user attachment id; the lookup key within the owning user's bucket. */
@@ -36,6 +39,36 @@ export interface RelayClaimedPrompt {
    * text/CSV is additionally inlined into `prompt` so it works without a read.
    */
   attachments?: RelayAttachmentRef[];
+}
+
+/**
+ * What the browser's side of a turn brings with it beyond the prompt itself.
+ *
+ * Grouped rather than positional because every field is optional and the
+ * non-streaming caller (`AiService.completeViaRelay`) passes none of them.
+ */
+export interface RelayStreamOptions {
+  /**
+   * Pushes an intermediate SSE event to the browser stream parked on this
+   * prompt -- a progress line, a tool chip, a write-confirmation card. Absent
+   * for callers that do not stream.
+   */
+  emit?: (event: RelayServerEvent) => void;
+  /**
+   * Called with the row's id as soon as it exists, so the client learns its
+   * promptId up front and can poll the pickup endpoint if the stream dies
+   * before the answer arrives.
+   */
+  onEnqueued?: (promptId: string) => void;
+  /** Files uploaded with the prompt. Validated before the row is written. */
+  attachments?: AttachmentDto[];
+  /**
+   * Aborted when the browser's socket closes. The waiter stops immediately
+   * rather than holding a connection for a socket that is gone; the row is left
+   * alone, so the agent may still answer it and the pickup endpoint serves that
+   * answer when the browser returns.
+   */
+  signal?: AbortSignal;
 }
 
 /** The agent's answer to a claimed prompt. */

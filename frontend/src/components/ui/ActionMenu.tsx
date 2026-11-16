@@ -3,6 +3,8 @@
 import { useCallback, useRef, useState } from 'react';
 import { Button } from '@/components/ui/Button';
 import { useClickOutside } from '@/hooks/useClickOutside';
+import { ChevronDownIcon } from '@heroicons/react/24/outline';
+import { MENU_ENTER_CLASS, MENU_ORIGIN_RIGHT } from '@/components/ui/menu-motion';
 
 /** One row in the menu. A disabled item stays listed but cannot be chosen. */
 export interface ActionMenuItem {
@@ -80,27 +82,14 @@ export function ActionMenu({
         className={`w-full whitespace-nowrap sm:w-auto inline-flex items-center justify-center gap-1.5 ${className}`}
       >
         {label}
-        <svg
-          className={`h-3 w-3 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-          fill="none"
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          aria-hidden="true"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2}
-            d="M19 9l-7 7-7-7"
-          />
-        </svg>
+        <ChevronDownIcon className={`h-3 w-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} aria-hidden="true" />
       </Button>
 
       {isOpen && (
         <div
           role="menu"
           aria-label={label}
-          className="absolute right-0 mt-1 w-full sm:w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-50"
+          className={`absolute right-0 mt-1 w-full sm:w-64 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-md shadow-lg z-50 ${MENU_ENTER_CLASS} ${MENU_ORIGIN_RIGHT}`}
         >
           {items.map((item, index) => (
             <button

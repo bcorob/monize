@@ -1,3 +1,4 @@
+import { SHARED_EXPORT_GROUPS, exportedAttachment } from "./shared-backup";
 /**
  * What a backup reads, in the order it is read, plus the tables it deliberately
  * does not read.
@@ -49,10 +50,14 @@ export interface ExportTableQuery {
   trailingRows?: ExportRowSource;
   /**
    * Rewrites one row on its way into the document, row at a time so the memory
-   * ceiling is unchanged. There is exactly one: `ai_provider_configs` swaps its
-   * instance-key ciphertext for the plaintext key
-   * (`ai-provider-key-transport.ts`), because `ENCRYPTION_KEY` is server
-   * configuration and never travels in the file.
+   * ceiling is unchanged. Two tables use it, for one reason:
+   * `ai_provider_configs` and `payee_lookup_settings` each hold an
+   * `api_key_enc` under this instance's `ENCRYPTION_KEY`, which is server
+   * configuration and never travels in the file, so the key is swapped for its
+   * plaintext here (`ai-provider-key-transport.ts`) and re-encrypted by the
+   * restore. Both columns are named `api_key_enc` deliberately: the transport
+   * is keyed on that name, so a third such table gets this treatment by
+   * spelling its column the same way.
    *
    * Applied by both `exportJsonChunks` and `collectExportTables`, so the
    * streamed artifact and the support backup's in-memory map cannot disagree
@@ -62,17 +67,62 @@ export interface ExportTableQuery {
 }
 
 /**
+ * Every exported table whose rows carry an `api_key_enc`, derived from the
+ * export itself rather than restated.
+ *
+ * A table gets the key transport by carrying `transformRow`, so asking which
+ * queries carry it *is* the question -- and the restore, which has to
+ * re-encrypt exactly those tables, can no longer disagree with the export
+ * about which they are. Restated as a literal it silently could:
+ * `payee_lookup_settings` was added to the export and to the restore's list by
+ * hand, and deleting it from either one broke nothing that any test could see.
+ *
+ * The marker is identity-compared, so this reports the tables that *would*
+ * receive the transform, independently of what any real one does.
+ */
+export function keyBearingExportTables(): readonly string[] {
+  const marker = (row: Record<string, unknown>) => row;
+  return buildExportTableQueries(async function* () {}, marker)
+    .filter((query) => query.transformRow === marker)
+    .map((query) => query.key);
+}
+
+/**
  * User-owned tables that are deliberately NOT part of a backup, each with the
  * reason. The coverage guard test asserts every table in the database is either
  * exported (see `BackupExportService.getBackedUpTableNames`) or listed here, so adding a new entity
  * forces an explicit decision instead of silently dropping data on restore.
  */
 export const INTENTIONALLY_EXCLUDED_TABLES: ReadonlySet<string> = new Set([
+  "shared_memberships", // Live grants; restored snapshots get one new owner on a new group.
+  "shared_invitations", // Bearer capabilities never travel.
+  "shared_delivery_receipts", // Delivery acknowledgements for this live installation, not journal content.
+  "shared_commands", // Deployment-local command receipts are not replayed.
   "users", // the account row itself; a restore targets an existing user
   "action_history", // undo/redo log, wiped on restore (not undoable to prior state)
   "ai_insights", // regenerable AI cache
+  "dashboard_trivia", // rebuilt daily from the ledger
   "ai_usage_logs", // usage telemetry, not user content
+  // The OPERATOR's Google Places counter. Deliberately not exported while
+  // `payee_lookup_usage` beside it is: this row has no `user_id`, it counts a
+  // key configured by GOOGLE_PLACES_API_KEY (deployment configuration, which
+  // no backup carries either), and every user on the instance spends it. A
+  // per-user archive writing it would let one user's restore overwrite a
+  // counter another user's lookups are still spending.
+  "google_places_instance_usage",
+  // The DEPLOYMENT's backup policy: one schedule, folder and retention for the
+  // whole instance, with no user_id to export it under. Excluding it is also
+  // what stops a restore replaying a months-old policy over every account --
+  // the defect that moved this off an administrator's own settings row.
+  "auto_backup_policy",
   "exchange_rates", // global shared reference data, not per-user
+  "exchange_rate_coverage", // provider coverage bookkeeping for the above
+  "bond_programs", // global bond reference data, refetched by the deployment
+  "bond_instruments", // global bond reference data, refetched by the deployment
+  "bond_terms_versions", // global bond reference data, refetched by the deployment
+  "bond_period_rates", // global bond reference data, refetched by the deployment
+  "benchmark_series", // global benchmark series metadata and fetch bookkeeping, refetched by the deployment
+  "benchmark_values", // global benchmark observations (policy rates, CPI), refetched by the deployment
   "market_index_prices", // global market reference data, refetched from the provider
   "market_index_sync", // provider fetch bookkeeping for the above
   "provider_health", // deployment-wide provider availability + alert bookkeeping
@@ -100,11 +150,128 @@ export const INTENTIONALLY_EXCLUDED_TABLES: ReadonlySet<string> = new Set([
   // suppress a reminder that was never sent to that account, which is the one
   // failure this table exists to prevent.
   "job_claims",
+  // Bank sync (docs/specs/bank-sync.md section 4). Credentials hold the user's
+  // provider application key encrypted under THIS instance's ENCRYPTION_KEY, so
+  // a restore elsewhere could not read it and a backup must never carry it
+  // (INV-BANKSYNC-002); connections are provider sessions bound to this
+  // instance's redirect URL and consent; bank accounts are re-created by a new
+  // connection. The ledger is excluded in the first release too (task BS11
+  // exports it): after a restore the link form defaults the cut-off date to the
+  // day after the newest transaction so history is not re-imported.
+  "bank_sync_credentials",
+  // Provider request reservations are instance-local quota state, not portable financial data.
+  "bank_sync_provider_requests",
+  "bank_sync_connections",
+  "bank_sync_accounts",
+  "bank_sync_imported_transactions",
   // Reclamation bookkeeping for objects in *this* instance's storage provider,
   // keyed by (provider, storage_key). Those keys name nothing on the machine a
   // backup is restored onto, and a future sweeper reading a restored row could
   // delete a live object whose key happens to collide.
   "attachment_blob_tombstones",
+  // Push transport state for *this* instance, and the one table pair where
+  // exporting it would be actively dangerous. A subscription names a browser on
+  // one machine talking to one origin, encrypted under this deployment's VAPID
+  // key pair -- restored elsewhere it either cannot be delivered to at all or,
+  // worse, can: a production backup restored into a test instance would hand
+  // that instance the right to push to real phones. Devices re-subscribe, which
+  // costs one click and is the only way the new instance gets a key the push
+  // service will accept.
+  "push_subscriptions",
+  // The key pair itself: an installation secret, not user content. It shares
+  // the backup/restore lifecycle of ENCRYPTION_KEY rather than of a ledger.
+  "push_instance_config",
+  "push_chart_artifacts",
+  // The deployment's OIDC signing identity: the same installation-secret
+  // category as the VAPID pair above. Restoring a production backup onto a test
+  // instance must not hand it the keys that sign for the real issuer, and the
+  // ciphertext would be unreadable there anyway without the same ENCRYPTION_KEY.
+  "oauth_instance_config",
+  // Deployment-wide leases naming which replica of THIS installation fetched
+  // market data. Coordination state for one deployment; restored elsewhere it
+  // would say a fetch happened that the new instance never made.
+  "fetch_sync",
+  // What THIS installation last learned about the upstream release, and when it
+  // last asked. Installation state, not user content: restored elsewhere it
+  // would hold a window the new instance never spent.
+  "update_check_state",
+  // Instance-bound delivery ledger for this deployment's egress; not portable
+  // user data. Same category as push_subscriptions above: a row names an object
+  // key in a bucket this instance uploads to, and restored elsewhere it would
+  // claim a copy the new instance never made.
+  "backup_offsite_uploads",
+  // Egress destination credentials encrypted under this instance's
+  // ENCRYPTION_KEY; re-entered on a new instance, never carried in an artifact.
+  // Unlike ai_provider_configs, these are not decrypted into the file: an
+  // artifact that can be mailed to its own destination must not carry the
+  // credential for that destination.
+  "backup_offsite_settings",
+  // The HTTP throttler's counters for this deployment. A cache on an UNLOGGED
+  // table that its own database truncates on crash recovery, so carrying it in
+  // an artifact would be exporting state PostgreSQL itself does not promise to
+  // keep. Same category as the auth counters below, one layer up.
+  "http_throttle_counters",
+  // Authentication rate-limit and lockout counters for this deployment. A
+  // restore carrying them would either resurrect a lockout the user has since
+  // waited out or, worse, hand a fresh instance a spent window that lets the
+  // next attacker start from a clean count. Neither is user content, and both
+  // rows are keyed by an opaque hash with no owner column to restore them under.
+  "auth_attempt_counters",
+  // Spent one-shot claims: a TOTP code inside its 90-second reuse window, a
+  // confirmed AI action descriptor. Every row is dead within minutes of being
+  // written, and restoring one would refuse a code the user is entitled to use.
+  "single_use_tokens",
+  // The AI relay's live handshake between a browser stream and an MCP agent
+  // running on the user's own machine. A queued prompt describes a socket that
+  // closed when the backup was taken; a claim names an MCP session that no
+  // longer exists; a liveness row would tell the restored instance an agent is
+  // connected when none is. Restoring any of the three makes the tunnel
+  // indicator lie and could hand a stale write-confirmation card to a user who
+  // never asked for it. The attachments are the same handshake's scratch: the
+  // file was uploaded for a prompt whose stream is gone, it expires twenty
+  // minutes after upload, and nothing in the restored dataset refers to it.
+  "ai_relay_prompts",
+  "ai_relay_agents",
+  "ai_relay_actions",
+  "ai_relay_attachments",
+  "ai_relay_attachment_blobs",
+  // The rule trace: what each rule changed on which transaction, trimmed by a
+  // retention cron. A log of what already happened to rows the restore is
+  // replacing, keyed to transaction ids that a restore re-mints, so a restored
+  // row would describe an edit of a transaction that no longer exists under
+  // that id. The rules themselves (`transaction_rules`) are exported; the trace
+  // rebuilds as they run. It cascades from the rule and the transaction, so a
+  // restore's deletes clear it.
+  "transaction_rule_applications",
+  // The AI review queue: pending work with a 30-day life, each row naming a
+  // transaction id that a restore re-mints, and a claim naming an MCP session
+  // that no longer exists. A restored request would point at a transaction that
+  // is gone under that id, and a stored proposal is a signed action built
+  // against the old ids. The rules that produce requests
+  // (`transaction_rules`) are exported and ask again as they run. It cascades
+  // from the user and the transaction, so a restore's deletes clear it.
+  "ai_review_requests",
+  // The user's IMAP mailbox login: host, username and a password encrypted
+  // under THIS instance's ENCRYPTION_KEY, so restored elsewhere it is an
+  // unreadable ciphertext, and decrypted into the file it would be a mailbox
+  // credential in an artifact that can be mailed around. Same category as
+  // `backup_offsite_settings`: re-entered on the new instance, never carried.
+  // Its cursor (uid_validity, last_uid) names messages in a mailbox that the new
+  // instance has not read, so it is meaningless there too. The parsers that read
+  // the mail (`email_receipt_parsers`) are exported.
+  "email_receipt_mailboxes",
+  // A stored copy of mail the user can re-read from their own mailbox: subject,
+  // sender and body text of order confirmations, which a backup of the ledger
+  // has no business multiplying. Each row also names a transaction id that a
+  // restore re-mints and a mailbox row this table cascades from, so a restored
+  // receipt would point at rows that no longer exist under those ids. The
+  // receipts rebuild from the mailbox on the next poll.
+  "email_receipts",
+  // One row per part of a settlement email (a repayment), naming the purchase
+  // email it joined. It cascades from `email_receipts`, which is not exported,
+  // and both of its receipt ids would name rows that a restore never brings
+  // back; the rows rebuild when the receipts are read again.
+  "email_receipt_links",
 ]);
 
 export function buildExportTableQueries(
@@ -120,6 +287,57 @@ export function buildExportTableQueries(
   ) => Record<string, unknown>,
 ): ExportTableQuery[] {
   return [
+    {
+      key: "shared_groups",
+      sql: `SELECT g.*, (SELECT m.participant_id FROM shared_memberships m
+        WHERE m.group_id = g.id AND m.user_id = $1 AND m.revoked_at IS NULL) AS _snapshot_participant_id
+        FROM shared_groups g WHERE g.id IN (${SHARED_EXPORT_GROUPS})`,
+      transformRow: (row) => ({
+        ...row,
+        owner_user_id: null,
+        ownership_request_id: null,
+        ownership_candidate_id: null,
+      }),
+    },
+    {
+      key: "shared_participants",
+      sql: `SELECT * FROM shared_participants WHERE group_id IN (${SHARED_EXPORT_GROUPS})`,
+    },
+    {
+      key: "shared_entries",
+      sql: `SELECT * FROM shared_entries WHERE group_id IN (${SHARED_EXPORT_GROUPS})`,
+      transformRow: (row) => ({ ...row, created_by_user_id: null }),
+    },
+    {
+      key: "shared_allocations",
+      sql: `SELECT * FROM shared_allocations WHERE group_id IN (${SHARED_EXPORT_GROUPS})`,
+    },
+    {
+      key: "shared_activity",
+      sql: `SELECT * FROM shared_activity WHERE group_id IN (${SHARED_EXPORT_GROUPS})`,
+      transformRow: (row) => ({ ...row, actor_user_id: null }),
+    },
+    {
+      key: "shared_people",
+      sql: "SELECT * FROM shared_people WHERE user_id = $1",
+    },
+    {
+      key: "shared_person_links",
+      sql: `SELECT * FROM shared_person_links WHERE user_id = $1 AND group_id IN (${SHARED_EXPORT_GROUPS})`,
+    },
+    {
+      key: "shared_integrations",
+      sql: `SELECT * FROM shared_integrations WHERE user_id = $1 AND group_id IN (${SHARED_EXPORT_GROUPS})`,
+    },
+    {
+      key: "shared_postings",
+      sql: `SELECT * FROM shared_postings WHERE user_id = $1 AND group_id IN (${SHARED_EXPORT_GROUPS})`,
+    },
+    {
+      key: "shared_ledger_links",
+      sql: `SELECT * FROM shared_ledger_links WHERE user_id = $1 AND posting_id IN
+        (SELECT id FROM shared_postings WHERE user_id = $1 AND group_id IN (${SHARED_EXPORT_GROUPS}))`,
+    },
     {
       // Every currency this user's data depends on, not just the ones they
       // created. Currencies are shared: any user may activate a code another
@@ -156,6 +374,10 @@ export function buildExportTableQueries(
       sql: "SELECT * FROM user_currency_preferences WHERE user_id = $1",
     },
     {
+      key: "calendar_day_notes",
+      sql: "SELECT * FROM calendar_day_notes WHERE user_id = $1 ORDER BY note_date",
+    },
+    {
       key: "categories",
       sql: "SELECT * FROM categories WHERE user_id = $1 ORDER BY parent_id NULLS FIRST, name",
     },
@@ -167,6 +389,8 @@ export function buildExportTableQueries(
       // exactly as for institutions below.
       key: "payees",
       sql: `SELECT id, user_id, name, default_category_id, notes, website,
+                   address, email, phone,
+                   contact_lookup_at, contact_lookup_source,
                    encode(logo_data, 'base64') AS logo_data,
                    logo_content_type, has_logo, logo_fetched_at,
                    is_active, created_at
@@ -190,15 +414,39 @@ export function buildExportTableQueries(
     },
     {
       key: "accounts",
-      sql: "SELECT * FROM accounts WHERE user_id = $1 ORDER BY name",
+      sql: `SELECT a.*, a.shared_expense_group_id IN (${SHARED_EXPORT_GROUPS}) AS _shared_visible FROM accounts a WHERE a.user_id = $1 ORDER BY a.name`,
+      transformRow: ({ _shared_visible, ...row }) =>
+        _shared_visible
+          ? row
+          : { ...row, managed_purpose: null, shared_expense_group_id: null },
     },
     {
       key: "tags",
       sql: "SELECT * FROM tags WHERE user_id = $1 ORDER BY name",
     },
     {
+      // The user's rules. Their account, payee, category and tag ids live in
+      // the condition/actions JSONB rather than in foreign keys, and the
+      // restore's id remap rewrites ids nested inside JSONB, so the rules keep
+      // pointing at the restored rows. Ordered by position so the file reads in
+      // evaluation order.
+      key: "transaction_rules",
+      sql: "SELECT * FROM transaction_rules WHERE user_id = $1 ORDER BY position",
+    },
+    {
+      // The user's email-receipt parsers (their own work, or an AI draft they
+      // approved). The payee is a real foreign key, remapped like every other
+      // reference; the category ids a definition names are inside its JSONB,
+      // which the restore's id remap rewrites, so the parsers keep pointing at
+      // the restored rows. Ordered by creation so the file reads stably.
+      key: "email_receipt_parsers",
+      sql: "SELECT * FROM email_receipt_parsers WHERE user_id = $1 ORDER BY created_at, id",
+    },
+    {
       key: "transactions",
-      sql: "SELECT * FROM transactions WHERE user_id = $1 ORDER BY transaction_date, created_at",
+      sql: `SELECT t.*, t.shared_expense_posting_id IN (SELECT id FROM shared_postings WHERE user_id = $1 AND group_id IN (${SHARED_EXPORT_GROUPS})) AS _shared_visible FROM transactions t WHERE t.user_id = $1 ORDER BY t.transaction_date, t.created_at`,
+      transformRow: ({ _shared_visible, ...row }) =>
+        _shared_visible ? row : { ...row, shared_expense_posting_id: null },
     },
     {
       key: "transaction_splits",
@@ -207,10 +455,21 @@ export function buildExportTableQueries(
             WHERE t.user_id = $1`,
     },
     {
+      // Warranties link to a transaction and a payee (both ON DELETE SET NULL)
+      // and never move money. Restored after both, and before
+      // transaction_attachments, whose rows can name a warranty as their parent.
+      key: "warranties",
+      sql: "SELECT * FROM warranties WHERE user_id = $1 ORDER BY purchase_date, created_at, id",
+    },
+    {
+      key: "warranty_claims",
+      sql: "SELECT * FROM warranty_claims WHERE user_id = $1 ORDER BY claim_date, created_at, id",
+    },
+    {
       // Attachment metadata. Restored after transactions (FK) and before
       // attachment_blobs (which references transaction_attachments).
       key: "transaction_attachments",
-      sql: "SELECT * FROM transaction_attachments WHERE user_id = $1",
+      sql: `SELECT * FROM transaction_attachments WHERE ${exportedAttachment()}`,
     },
     {
       // Attachment bytes, base64-encoded so they survive JSON; insertRows
@@ -228,7 +487,7 @@ export function buildExportTableQueries(
       sql: `SELECT ab.attachment_id, encode(ab.data, 'base64') AS data
             FROM attachment_blobs ab
             JOIN transaction_attachments ta ON ab.attachment_id = ta.id
-            WHERE ta.user_id = $1`,
+            WHERE ${exportedAttachment("ta")}`,
       batchRows: BLOB_EXPORT_BATCH_ROWS,
       trailingRows: externalAttachmentRows,
     },
@@ -280,6 +539,16 @@ export function buildExportTableQueries(
             JOIN scheduled_transactions st ON sts.scheduled_transaction_id = st.id
             WHERE st.user_id = $1`,
     },
+    {
+      // After the scheduled tables and categories it references.
+      key: "payroll_deduction_rules",
+      sql: "SELECT * FROM payroll_deduction_rules WHERE user_id = $1 ORDER BY created_at, id",
+    },
+    {
+      // After the rules it references.
+      key: "payroll_deduction_rule_periods",
+      sql: "SELECT * FROM payroll_deduction_rule_periods WHERE user_id = $1 ORDER BY rule_id, period_start",
+    },
     { key: "securities", sql: "SELECT * FROM securities WHERE user_id = $1" },
     {
       key: "security_prices",
@@ -315,10 +584,22 @@ export function buildExportTableQueries(
       sql: "SELECT * FROM loan_rate_changes WHERE user_id = $1",
     },
     {
+      // After the accounts and categories it references.
+      key: "loan_fees",
+      sql: "SELECT * FROM loan_fees WHERE user_id = $1 ORDER BY created_at, id",
+    },
+    {
       key: "loan_scenarios",
       sql: "SELECT * FROM loan_scenarios WHERE user_id = $1",
     },
     { key: "budgets", sql: "SELECT * FROM budgets WHERE user_id = $1" },
+    {
+      // Before budget_categories, whose bucket_id references it.
+      key: "budget_buckets",
+      sql: `SELECT bb.* FROM budget_buckets bb
+            JOIN budgets b ON bb.budget_id = b.id
+            WHERE b.user_id = $1`,
+    },
     {
       key: "budget_categories",
       sql: `SELECT bc.* FROM budget_categories bc
@@ -339,8 +620,27 @@ export function buildExportTableQueries(
             WHERE b.user_id = $1`,
     },
     {
-      key: "budget_alerts",
-      sql: "SELECT * FROM budget_alerts WHERE user_id = $1",
+      key: "budget_period_buckets",
+      sql: `SELECT bpb.* FROM budget_period_buckets bpb
+            JOIN budget_periods bp ON bpb.budget_period_id = bp.id
+            JOIN budgets b ON bp.budget_id = b.id
+            WHERE b.user_id = $1`,
+    },
+    {
+      key: "notifications",
+      sql: "SELECT * FROM notifications WHERE user_id = $1",
+    },
+    {
+      key: "notification_preferences",
+      sql: "SELECT * FROM notification_preferences WHERE user_id = $1",
+    },
+    {
+      key: "notification_reminders",
+      sql: "SELECT * FROM notification_reminders WHERE user_id = $1",
+    },
+    {
+      key: "notification_portfolio_state",
+      sql: "SELECT * FROM notification_portfolio_state WHERE user_id = $1",
     },
     {
       key: "custom_reports",
@@ -371,6 +671,30 @@ export function buildExportTableQueries(
       // re-encrypted by the restore. See ai-provider-key-transport.ts for the
       // contract, including what the artifact then contains in plaintext.
       transformRow: aiProviderKeyTransform,
+    },
+    {
+      key: "payee_lookup_settings",
+      sql: "SELECT * FROM payee_lookup_settings WHERE user_id = $1",
+      // Same contract as ai_provider_configs above, and the same column name:
+      // api_key_enc is ciphertext under this instance's ENCRYPTION_KEY, so it
+      // travels decrypted and is re-encrypted by the restore.
+      transformRow: aiProviderKeyTransform,
+    },
+    {
+      // The user's own Google Places counter, so a month's spend survives a
+      // move to another machine -- the key is the same key, and Google's
+      // free allowance is counted against it, not against the server.
+      //
+      // The restore deliberately does NOT clear this table first, and the
+      // insert's ON CONFLICT DO NOTHING is what makes that correct: a machine
+      // with no row (the migration this exists for) takes the archive's count,
+      // while a machine that already has one keeps its own. The live count is
+      // never lowered, because under-counting a quota is the direction that
+      // reaches a bill -- and the only way an archive's count can be the
+      // higher of the two is that the live one was lost, which is the case
+      // where there is no row to conflict with.
+      key: "payee_lookup_usage",
+      sql: "SELECT * FROM payee_lookup_usage WHERE user_id = $1",
     },
     {
       key: "monte_carlo_scenarios",

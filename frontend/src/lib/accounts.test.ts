@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import apiClient from './api';
 import { accountsApi } from './accounts';
 import { scheduledTransactionsApi } from './scheduled-transactions';
-import { invalidateCache } from './apiCache';
+import { getCached, invalidateCache, setCache } from './apiCache';
 
 vi.mock('./api', () => ({
   default: {
@@ -48,6 +48,21 @@ describe('accountsApi', () => {
     vi.mocked(apiClient.get).mockResolvedValue({ data: [] });
     await accountsApi.getAll();
     expect(apiClient.get).toHaveBeenCalledWith('/accounts', { params: { includeInactive: false } });
+  });
+
+  it('getAllFresh re-reads the list a cached getAll would have served', async () => {
+    invalidateCache('accounts:');
+    vi.mocked(apiClient.get).mockResolvedValueOnce({ data: [{ id: 'stale' }] });
+    await accountsApi.getAll(true);
+    expect(await accountsApi.getAll(true)).toEqual([{ id: 'stale' }]);
+    expect(apiClient.get).toHaveBeenCalledTimes(1);
+
+    vi.mocked(apiClient.get).mockResolvedValueOnce({ data: [{ id: 'fresh' }] });
+    expect(await accountsApi.getAllFresh(true)).toEqual([{ id: 'fresh' }]);
+    expect(apiClient.get).toHaveBeenCalledTimes(2);
+    // And the fresh answer is what later readers are served.
+    expect(await accountsApi.getAll(true)).toEqual([{ id: 'fresh' }]);
+    expect(apiClient.get).toHaveBeenCalledTimes(2);
   });
 
   it('getById fetches /accounts/:id', async () => {
@@ -124,6 +139,27 @@ describe('accountsApi', () => {
     expect(apiClient.delete).toHaveBeenCalledWith('/accounts/acc-1');
   });
 
+  // The Investments page lists accounts from `investments:accounts`, so a write
+  // that changes the account list must drop it too; otherwise a just-created
+  // investment pair is missing from that page's selector for up to 30 seconds.
+  it.each([
+    ['create', () => accountsApi.create({ name: 'Checking' } as any)],
+    ['createInvestmentPair', () => accountsApi.createInvestmentPair({ name: 'Investment' } as any)],
+    ['update', () => accountsApi.update('acc-1', { name: 'Renamed' } as any)],
+    ['close', () => accountsApi.close('acc-1')],
+    ['reopen', () => accountsApi.reopen('acc-1')],
+    ['delete', () => accountsApi.delete('acc-1')],
+  ])('%s drops the cached investment account list', async (_name, write) => {
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { id: 'acc-1' } });
+    vi.mocked(apiClient.patch).mockResolvedValue({ data: { id: 'acc-1' } });
+    vi.mocked(apiClient.delete).mockResolvedValue({});
+    setCache('investments:accounts', [{ id: 'old' }]);
+    setCache('accounts:all:false', [{ id: 'old' }]);
+    await write();
+    expect(getCached('investments:accounts')).toBeUndefined();
+    expect(getCached('accounts:all:false')).toBeUndefined();
+  });
+
   it('canDelete fetches /accounts/:id/can-delete', async () => {
     vi.mocked(apiClient.get).mockResolvedValue({ data: { canDelete: true, transactionCount: 0, investmentTransactionCount: 0 } });
     const result = await accountsApi.canDelete('acc-1');
@@ -165,6 +201,83 @@ describe('accountsApi', () => {
     expect(apiClient.post).toHaveBeenCalledWith('/accounts/acc-1/setup-loan-payments', {
       paymentAmount: 100,
     });
+  });
+
+  it('createPaymentMatchingRule posts the patterns and drops the account, bill and rule lists', async () => {
+    const { dedupe } = await import('./apiCache');
+    invalidateCache('accounts:');
+    const stale = vi.fn().mockResolvedValue(['stale']);
+    await dedupe('accounts:all:false', stale, 60_000);
+    vi.mocked(apiClient.post).mockResolvedValue({ data: { id: 'rule-1' } });
+    const data = { payeePattern: '*ING*' };
+    await expect(accountsApi.createPaymentMatchingRule('acc-1', data)).resolves.toEqual({ id: 'rule-1' });
+    expect(apiClient.post).toHaveBeenCalledWith('/accounts/acc-1/payment-matching-rule', data);
+    await dedupe('accounts:all:false', stale, 60_000);
+    expect(stale).toHaveBeenCalledTimes(2);
+  });
+
+  it('createPaymentMatchingRule drops the lists on a refusal too', async () => {
+    const { dedupe } = await import('./apiCache');
+    invalidateCache('accounts:');
+    const stale = vi.fn().mockResolvedValue(['stale']);
+    await dedupe('accounts:all:false', stale, 60_000);
+    vi.mocked(apiClient.post).mockRejectedValue(new Error('409'));
+    await expect(accountsApi.createPaymentMatchingRule('acc-1', { payeePattern: '*ING*' })).rejects.toThrow('409');
+    await dedupe('accounts:all:false', stale, 60_000);
+    expect(stale).toHaveBeenCalledTimes(2);
+  });
+
+  it('getLoanSettlements reads the loan settlements, uncached', async () => {
+    vi.mocked(apiClient.get).mockResolvedValue({ data: [{ claimId: 'c-1' }] });
+    await expect(accountsApi.getLoanSettlements('acc-1')).resolves.toEqual([{ claimId: 'c-1' }]);
+    await accountsApi.getLoanSettlements('acc-1');
+    expect(apiClient.get).toHaveBeenCalledTimes(2);
+    expect(apiClient.get).toHaveBeenCalledWith('/accounts/acc-1/loan-settlements');
+  });
+
+  it('previewLoanPaymentSetup posts to the setup preview and returns its answer', async () => {
+    const preview = {
+      derivesInstallment: true,
+      principalPayment: 833.3333,
+      interestPayment: 500,
+      paymentAmount: 1333.3333,
+    };
+    vi.mocked(apiClient.post).mockResolvedValue({ data: preview });
+    const data = { paymentFrequency: 'MONTHLY', nextDueDate: '2024-01-01' };
+    await expect(accountsApi.previewLoanPaymentSetup('acc-1', data)).resolves.toEqual(preview);
+    expect(apiClient.post).toHaveBeenCalledWith(
+      '/accounts/acc-1/setup-loan-payments/preview',
+      data,
+    );
+  });
+
+  it('detectMortgageType posts the typed installments and returns the suggestion', async () => {
+    const detection = { type: 'LINEAR', confidence: 'high', reason: 'CONSTANT_PRINCIPAL' };
+    vi.mocked(apiClient.post).mockResolvedValue({ data: detection });
+    const data = {
+      samples: [
+        { principal: 833.33, interest: 500 },
+        { principal: 833.33, interest: 498.61 },
+      ],
+      interestRate: 2,
+      paymentFrequency: 'MONTHLY' as const,
+    };
+    await expect(accountsApi.detectMortgageType(data)).resolves.toEqual(detection);
+    expect(apiClient.post).toHaveBeenCalledWith('/accounts/mortgage-type/detect', data);
+  });
+
+  it('detectMortgageTypeFromHistory posts to the account route and returns the suggestion', async () => {
+    const detection = {
+      type: 'CANADIAN_FIXED',
+      confidence: 'high',
+      reason: 'CONSTANT_INSTALLMENT_SEMI_ANNUAL',
+      quotedAnnualRate: 5.24,
+      paymentFrequency: 'MONTHLY',
+      samples: [],
+    };
+    vi.mocked(apiClient.post).mockResolvedValue({ data: detection });
+    await expect(accountsApi.detectMortgageTypeFromHistory('acc-1')).resolves.toEqual(detection);
+    expect(apiClient.post).toHaveBeenCalledWith('/accounts/acc-1/mortgage-type/detect');
   });
 
   it('reorderFavourites patches order', async () => {

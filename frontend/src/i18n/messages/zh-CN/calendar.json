@@ -1,0 +1,120 @@
+{
+  "view": {
+    "label": "视图",
+    "table": "表格",
+    "calendar": "日历"
+  },
+  "grid": {
+    "label": "月份"
+  },
+  "toolbar": {
+    "layers": "图层"
+  },
+  "layers": {
+    "transactions": "交易",
+    "balances": "余额",
+    "values": "市值",
+    "dailyChange": "当日变动"
+  },
+  "legend": {
+    "label": "图例",
+    "scheduled": "已排期"
+  },
+  "chip": {
+    "noPayee": "无收款人",
+    "overdue": "已逾期",
+    "scheduled": "已排期",
+    "noSymbol": "无代码"
+  },
+  "day": {
+    "itemCount": "{count, plural, other {#项}}",
+    "moreChips": "另有 {count} 项",
+    "newTransaction": "在这一天新建交易",
+    "noItems": "这一天没有任何内容。",
+    "scheduledHint": "已排期。请打开账单与存款进行修改。",
+    "newInvestmentTransaction": "在这一天新建投资交易"
+  },
+  "banner": {
+    "title": "部分数字未显示",
+    "rowCap": "本月有 {count} 笔交易，超过日历可显示的 {limit} 笔。请缩小筛选范围以查看。",
+    "scheduledUnavailable": "无法加载本月的计划项目。显示的条目是完整的，但缺少计划项目。",
+    "scheduledTruncated": "这么远的未来不会显示部分计划项目。请靠近今天以查看全部。",
+    "balancesScopeEmpty": "没有选中任何账户，因此没有可显示的余额。请在筛选条件中选择账户。",
+    "balancesMissingRates": "本月部分日期缺少 {pairs} 的汇率，因此这些合计不予显示。请打开“货币”并刷新汇率。",
+    "balancesForecastGaps": "以下计划项目暂时无法定价，因此预测余额不予显示：{schedules}。",
+    "balancesForecastWithheld": "预测余额不予显示：至少有一个计划项目暂时无法定价，且未报告原因。",
+    "balancesUnforecastable": "{count, plural, other {选中的 # 个账户没有自己的预测，因此预测合计不予显示。}}",
+    "valuesUnpriced": "本月部分日期缺少 {securities} 的价格，因此这些市值不予显示。请在该证券的价格历史中添加价格，或刷新价格。",
+    "valuesMissingRates": "本月部分日期缺少 {pairs} 的汇率，因此这些市值不予显示。请打开“货币”并刷新汇率。",
+    "notesUnavailable": "无法加载本月的备注。您写过的备注仍然保存着。"
+  },
+  "errors": {
+    "monthFailed": "无法加载本月。",
+    "balancesFailed": "无法加载本月的余额。",
+    "valuesFailed": "无法加载本月的投资组合市值。",
+    "movementsFailed": "无法加载本月的每日变动。",
+    "movementDetailFailed": "无法加载这一天的明细。"
+  },
+  "balance": {
+    "actualTitle": "当日结束余额",
+    "projectedTitle": "预测余额",
+    "projected": "预测",
+    "projectedHint": "根据今天结束时的余额以及到这一天为止的所有计划项目推算。",
+    "projectedFromItems": "根据今天结束时的余额以及到这一天为止的所有计划项目推算，包括下方列出的项目。",
+    "partial": "部分：所选范围中有 {amount} 可以算出，其余无法算出，因此不显示合计。",
+    "missingRates": "该金额所对应日期缺少 {pairs} 的汇率。请打开“货币”并刷新汇率。",
+    "unforecastable": "{count, plural, other {选中的 # 个账户没有自己的预测，因此预测合计不予显示。}}"
+  },
+  "value": {
+    "title": "投资组合市值",
+    "unpriced": "这一天缺少 {securities} 的价格，因此不显示市值。请在该证券的价格历史中添加价格，或刷新价格。",
+    "missingRates": "这一天缺少 {pairs} 的汇率，因此不显示市值。请打开“货币”并刷新汇率。"
+  },
+  "change": {
+    "openDetail": "查看这一天的变动明细",
+    "detailTitle": "{date} 的变动",
+    "headline": "市场变动",
+    "headlineValue": "{amount}（{percent}）",
+    "gains": "上涨",
+    "losses": "下跌",
+    "unchanged": "{count, plural, other {# 只证券收平。}}",
+    "remainder": "现金、分红与交易",
+    "row": "{quantity} 份，从 {from} 到 {to} {currency}",
+    "reasons": {
+      "notTradingDay": "这一天持有的证券都没有价格，因此没有可报告的交易日。",
+      "unpricedHolding": "某个持仓在这一天或前一天没有价格，因此变动未知。",
+      "missingRate": "缺少汇率，因此无法换算变动。",
+      "flowIncomplete": "这一天的存入或取出无法换算，因此无法把变动与其区分开。",
+      "cashIncomplete": "某个现金账户在这一天没有报告余额，因此当天的价值不完整，变动未知。",
+      "noPriorValue": "没有更早的市值可用于对比这一天。",
+      "zeroBaseline": "前一天投资组合为空，因此没有可计算的百分比。"
+    }
+  },
+  "notes": {
+    "title": "备注",
+    "add": "添加备注",
+    "saveFailed": "备注保存失败，请重试。",
+    "deleteFailed": "备注删除失败，请重试。",
+    "deleteTitle": "删除这条备注？",
+    "deleteMessage": "这一天的备注将被删除，且无法撤销。",
+    "discardTitle": "放弃这条备注？",
+    "discardMessage": "您正在写的备注尚未保存。离开这一天会放弃它。",
+    "discardConfirm": "放弃",
+    "startDate": "开始日",
+    "endDate": "结束日",
+    "spanRange": "{start} 至 {end}",
+    "spanCount": "{count, plural, other {# 天}}",
+    "spanBackwards": "结束日不能早于开始日。",
+    "spanTooLong": "一条备注最多可覆盖 {days} 天。",
+    "spanMissesDay": "所选的日期不包含您正在为其撰写备注的那一天。",
+    "deleteSpanMessage": "{count, plural, other {此备注覆盖 # 天，全部都会被清除。此操作无法撤消。}}"
+  },
+  "monthPicker": {
+    "title": "跳转到其他月份",
+    "typeLabel": "输入月份或年份",
+    "placeholder": "例如 3月 1998、1998-03、3/1998",
+    "unreadable": "无法将其识别为月份。请尝试年份、月份名称或 1998-03。",
+    "previousYear": "上一年",
+    "nextYear": "下一年"
+  }
+}

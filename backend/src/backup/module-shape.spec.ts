@@ -13,7 +13,7 @@ import { join, relative } from "path";
  * crosses the ceiling, and a facade that starts making decisions again.
  */
 
-/** Repository ceiling from the root `CLAUDE.md`: 200-400 typical, 800 max. */
+/** Repository ceiling from `AGENTS.md`: 200-400 typical, 800 max. */
 const MAX_LINES = 800;
 
 /**
@@ -28,11 +28,17 @@ const GRANDFATHERED: Record<string, string> = {
   // the per-user enrollment reconciliation. Not touched by #1092; splitting it
   // is its own change with its own test-migration cost.
   "auto-backup.service.ts": "issue #1092 scoped the split to backup.service.ts",
+  // Restore orchestration, from decrypt through reference checking and id
+  // remap to the transactional write. Kept whole by the maintainer's decision
+  // when the cross-user reference check took it just past the ceiling.
+  "backup-restore.service.ts":
+    "maintainer decision: restore flow kept in one file",
   // Specs are exempt in spirit -- they are enumerations of cases, and a long one
   // is not the same hazard as a long implementation -- but they are listed
   // rather than pattern-skipped so the count stays visible.
   "backup.service.spec.ts": "case enumeration, not implementation",
   "auto-backup.service.spec.ts": "case enumeration, not implementation",
+  "backup-encryption.service.spec.ts": "case enumeration, not implementation",
   "support-backup/support-backup.service.spec.ts":
     "case enumeration, not implementation",
 };

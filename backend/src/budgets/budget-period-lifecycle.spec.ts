@@ -4,6 +4,7 @@ import { ConfigService } from "@nestjs/config";
 import { DataSource } from "typeorm";
 import { BudgetPeriodService } from "./budget-period.service";
 import { BudgetPeriodCronService } from "./budget-period-cron.service";
+import { NotificationPreferenceService } from "../notification-center/notification-preference.service";
 import { BudgetReportsService } from "./budget-reports.service";
 import { BudgetsService } from "./budgets.service";
 import { Budget, BudgetType, BudgetStrategy } from "./entities/budget.entity";
@@ -13,6 +14,12 @@ import {
 } from "./entities/budget-category.entity";
 import { BudgetPeriod, PeriodStatus } from "./entities/budget-period.entity";
 import { BudgetPeriodCategory } from "./entities/budget-period-category.entity";
+import { BudgetPeriodBucket } from "./entities/budget-period-bucket.entity";
+import {
+  BudgetBucket,
+  BudgetBucketTargetType,
+} from "./entities/budget-bucket.entity";
+import { Currency } from "../currencies/entities/currency.entity";
 import { Transaction } from "../transactions/entities/transaction.entity";
 import { TransactionSplit } from "../transactions/entities/transaction-split.entity";
 import { User } from "../users/entities/user.entity";
@@ -24,10 +31,23 @@ import {
   DataSourceMock,
   ManagerMock,
 } from "../test-helpers/scoped-db-testing";
+import { jobClaimProvider } from "../test-helpers/job-claim-testing";
 
 jest.mock("../common/db/scoped-db", () =>
   jest.requireActual("../test-helpers/scoped-db-testing").scopedDbMockModule(),
 );
+
+/**
+ * `queryCategorySpending` reads raw rows that carry a currency and a date. Every
+ * row here is in the budget's currency, which needs no rate, so each number is
+ * the one the unconverted query returned.
+ */
+const spendingRow = (key: string, total: string) => ({
+  key,
+  currencyCode: "USD",
+  txDate: "2026-01-10",
+  total,
+});
 
 describe("Budget Period Lifecycle Integration", () => {
   let scopedManager: ManagerMock;
@@ -38,6 +58,11 @@ describe("Budget Period Lifecycle Integration", () => {
   /** Period rows the guarded insert created, in order. */
   let insertedPeriodRows: BudgetPeriod[];
   let periodCategoriesRepository: Record<string, jest.Mock>;
+  /** budget_period_buckets as the mocked repository holds them. */
+  let periodBucketRows: Array<Partial<BudgetPeriodBucket>>;
+  /** The buckets the close's own transaction reads. */
+  let currentBucketsForClose: BudgetBucket[] = [];
+  let periodBucketsRepository: Record<string, jest.Mock>;
   let transactionsRepository: Record<string, jest.Mock>;
   let splitsRepository: Record<string, jest.Mock>;
   let budgetsService: Record<string, jest.Mock>;
@@ -58,6 +83,7 @@ describe("Budget Period Lifecycle Integration", () => {
     rolloverType: RolloverType.MONTHLY,
     rolloverCap: 200,
     flexGroup: null,
+    bucketId: null,
     alertWarnPercent: 80,
     alertCriticalPercent: 95,
     notes: null,
@@ -128,6 +154,8 @@ describe("Budget Period Lifecycle Integration", () => {
     select: jest.fn().mockReturnThis(),
     addSelect: jest.fn().mockReturnThis(),
     groupBy: jest.fn().mockReturnThis(),
+    addGroupBy: jest.fn().mockReturnThis(),
+    setParameter: jest.fn().mockReturnThis(),
     getMany: jest.fn().mockResolvedValue([]),
     getRawMany: jest.fn().mockResolvedValue([]),
     ...overrides,
@@ -167,9 +195,48 @@ describe("Budget Period Lifecycle Integration", () => {
       })),
     };
 
-    transactionsRepository = {
-      createQueryBuilder: jest.fn(() => createMockQueryBuilder()),
+    // A small in-memory table, so a second close reads the carry_in the first
+    // close's next-period creation wrote.
+    periodBucketRows = [];
+    periodBucketsRepository = {
+      find: jest.fn(async (opts: { where: { budgetPeriodId: string } }) =>
+        periodBucketRows
+          .filter((r) => r.budgetPeriodId === opts.where.budgetPeriodId)
+          .map((r) => ({ ...r })),
+      ),
+      insert: jest.fn(
+        async (
+          rows: Partial<BudgetPeriodBucket> | Partial<BudgetPeriodBucket>[],
+        ) => {
+          for (const row of [rows].flat()) {
+            periodBucketRows.push({
+              id: `bpb-${periodBucketRows.length + 1}`,
+              ...row,
+            });
+          }
+          return { identifiers: [] };
+        },
+      ),
+      update: jest.fn(
+        async (
+          criteria: { id: string; bucketId: string },
+          values: Partial<BudgetPeriodBucket>,
+        ) => {
+          const row = periodBucketRows.find(
+            (r) => r.id === criteria.id && r.bucketId === criteria.bucketId,
+          );
+          if (row) Object.assign(row, values);
+          return { affected: row ? 1 : 0 };
+        },
+      ),
     };
+
+    // `queryCategorySpending` reads the budget's currency and config, and the
+    // rate index, through the repository's own manager: the close transaction's.
+    transactionsRepository = {
+      manager: undefined,
+      createQueryBuilder: jest.fn(() => createMockQueryBuilder()),
+    } as unknown as Record<string, jest.Mock>;
 
     splitsRepository = {
       createQueryBuilder: jest.fn(() => createMockQueryBuilder()),
@@ -187,6 +254,24 @@ describe("Budget Period Lifecycle Integration", () => {
       createScopedDbMocks([
         [BudgetPeriod, periodsRepository as never],
         [BudgetPeriodCategory, periodCategoriesRepository as never],
+        [BudgetPeriodBucket, periodBucketsRepository as never],
+        [
+          BudgetBucket,
+          {
+            // The close re-reads the budget's buckets in its transaction.
+            find: jest
+              .fn()
+              .mockImplementation(async () => currentBucketsForClose),
+          } as never,
+        ],
+        [
+          Currency,
+          {
+            query: jest
+              .fn()
+              .mockResolvedValue([{ code: "USD", decimal_places: 2 }]),
+          } as never,
+        ],
         [Transaction, transactionsRepository as never],
         [TransactionSplit, splitsRepository as never],
         [Budget, budgetsRepository as never],
@@ -224,17 +309,23 @@ describe("Budget Period Lifecycle Integration", () => {
           insertedPeriodRows.push(lastInserted);
           return [{ id: lastInserted.id }];
         }
+        // The actuals query names the budget's currency; every row is in it.
+        if (typeof sql === "string" && sql.includes("FROM budgets")) {
+          return [{ currency_code: "USD", config: {} }];
+        }
         return [];
       },
     );
     periodsRepository.findOneOrFail.mockImplementation(
       async () => lastInserted,
     );
+    (transactionsRepository as { manager?: unknown }).manager = scopedManager;
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BudgetPeriodService,
         BudgetPeriodCronService,
+        jobClaimProvider(),
         {
           provide: getRepositoryToken(BudgetPeriod),
           useValue: periodsRepository,
@@ -287,6 +378,11 @@ describe("Budget Period Lifecycle Integration", () => {
             translate: (key: string, opts?: { defaultValue?: string }) =>
               opts?.defaultValue ?? key,
           },
+        },
+        {
+          // The monthly summary email is gated by the BUDGETS channel matrix.
+          provide: NotificationPreferenceService,
+          useValue: { resolveEmail: jest.fn().mockResolvedValue(true) },
         },
       ],
     }).compile();
@@ -463,12 +559,14 @@ describe("Budget Period Lifecycle Integration", () => {
       periodsRepository.save.mockImplementation((data) => data);
 
       const directQb = createMockQueryBuilder({
-        getRawMany: jest.fn().mockResolvedValue([
-          { categoryId: "cat-groceries", total: "-450" },
-          { categoryId: "cat-rent", total: "-1500" },
-          { categoryId: "cat-travel", total: "-50" },
-          { categoryId: "cat-income", total: "5200" },
-        ]),
+        getRawMany: jest
+          .fn()
+          .mockResolvedValue([
+            spendingRow("cat-groceries", "-450"),
+            spendingRow("cat-rent", "-1500"),
+            spendingRow("cat-travel", "-50"),
+            spendingRow("cat-income", "5200"),
+          ]),
       });
       transactionsRepository.createQueryBuilder.mockReturnValue(directQb);
       splitsRepository.createQueryBuilder.mockReturnValue(
@@ -510,6 +608,19 @@ describe("Budget Period Lifecycle Integration", () => {
       // insert for the period plus one batch save for its categories.
       expect(insertedPeriodRows).toHaveLength(1);
       expect(periodCategoriesRepository.save).toHaveBeenCalledTimes(1);
+      // The period categories are loaded with their budget line, which carries
+      // the rollover type `computeRollover` reads.
+      expect(periodsRepository.findOne.mock.calls[1][0].relations).toContain(
+        "periodCategories.budgetCategory",
+      );
+      // The next period is the month after the closed one (this one ends on
+      // 2026-01-31), not the current calendar month.
+      expect(insertedPeriodRows[0]).toEqual(
+        expect.objectContaining({
+          periodStart: "2026-02-01",
+          periodEnd: "2026-02-28",
+        }),
+      );
     });
 
     it("respects rollover cap when computing rollover", () => {
@@ -617,6 +728,118 @@ describe("Budget Period Lifecycle Integration", () => {
     });
   });
 
+  describe("Bucket carry across two closes (INV-BUDGET-003)", () => {
+    // Design section 8's Savings bucket: PERCENT 20 of base income 5000,
+    // carry on, no cap; the groceries line is its only member.
+    const savings: BudgetBucket = {
+      id: "b-save",
+      budgetId: "budget-1",
+      name: "Savings",
+      targetType: BudgetBucketTargetType.PERCENT,
+      targetValue: 20,
+      carryOver: true,
+      carryCap: null,
+      sortOrder: 0,
+      createdAt: new Date("2026-01-01"),
+      updatedAt: new Date("2026-01-01"),
+    };
+    const bucketBudget: Budget = {
+      ...mockBudget,
+      categories: [
+        { ...mockBudgetCategory, bucketId: "b-save" },
+        mockIncomeCategory,
+      ],
+      buckets: [savings],
+    };
+    beforeEach(() => {
+      currentBucketsForClose = bucketBudget.buckets ?? [];
+    });
+
+    const openPeriodFor = (
+      id: string,
+      periodStart: string,
+      periodEnd: string,
+    ): BudgetPeriod => ({
+      id,
+      budgetId: "budget-1",
+      budget: bucketBudget,
+      periodStart,
+      periodEnd,
+      actualIncome: 0,
+      actualExpenses: 0,
+      totalBudgeted: 2300,
+      status: PeriodStatus.OPEN,
+      periodCategories: [],
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+
+    const spend = (groceries: number) =>
+      transactionsRepository.createQueryBuilder.mockReturnValue(
+        createMockQueryBuilder({
+          getRawMany: jest
+            .fn()
+            .mockResolvedValue([
+              spendingRow("cat-groceries", String(-groceries)),
+            ]),
+        }),
+      );
+
+    it("opens each period with the carry_out the previous close froze", async () => {
+      budgetsService.findOne.mockResolvedValue(bucketBudget);
+      periodsRepository.save.mockImplementation((data) => data);
+      // January received 250 when it was created.
+      periodBucketRows.push({
+        id: "bpb-jan",
+        budgetPeriodId: "period-jan",
+        bucketId: "b-save",
+        bucketName: "Savings",
+        carryIn: 250,
+      });
+
+      // Close January: 1000 + 250 - 400 = 850.
+      periodsRepository.findOne.mockResolvedValue(
+        openPeriodFor("period-jan", "2026-01-01", "2026-01-31"),
+      );
+      spend(400);
+      await periodService.closePeriod(mockBudget.userId, "budget-1");
+
+      const jan = periodBucketRows.find(
+        (r) => r.budgetPeriodId === "period-jan",
+      );
+      expect(jan).toMatchObject({
+        carryIn: 250,
+        allocatedAmount: 1000,
+        actualAmount: 400,
+        carryOut: 850,
+      });
+      const feb = periodBucketRows.find((r) => r.budgetPeriodId === "period-1");
+      expect(insertedPeriodRows[0].periodStart).toBe("2026-02-01");
+      expect(feb).toMatchObject({ bucketId: "b-save", carryIn: 850 });
+
+      // Close February: 1000 + 850 - 1500 = 350.
+      periodsRepository.findOne.mockResolvedValue(
+        openPeriodFor("period-1", "2026-02-01", "2026-02-28"),
+      );
+      spend(1500);
+      await periodService.closePeriod(mockBudget.userId, "budget-1");
+
+      expect(
+        periodBucketRows.find((r) => r.budgetPeriodId === "period-1"),
+      ).toMatchObject({
+        carryIn: 850,
+        allocatedAmount: 1000,
+        actualAmount: 1500,
+        carryOut: 350,
+      });
+      expect(
+        periodBucketRows.find((r) => r.budgetPeriodId === "period-2"),
+      ).toMatchObject({ bucketId: "b-save", carryIn: 350 });
+      // One row per period: the close updated the creation's row by id.
+      expect(periodBucketRows).toHaveLength(3);
+    });
+  });
+
   describe("Cron Service Period Lifecycle", () => {
     it("cron closes expired periods and creates next ones", async () => {
       budgetsRepository.find.mockResolvedValue([mockBudget]);
@@ -662,7 +885,7 @@ describe("Budget Period Lifecycle Integration", () => {
       const directQb = createMockQueryBuilder({
         getRawMany: jest
           .fn()
-          .mockResolvedValue([{ categoryId: "cat-groceries", total: "-400" }]),
+          .mockResolvedValue([spendingRow("cat-groceries", "-400")]),
       });
       transactionsRepository.createQueryBuilder.mockReturnValue(directQb);
       splitsRepository.createQueryBuilder.mockReturnValue(
@@ -916,12 +1139,12 @@ describe("Budget Period Lifecycle Integration", () => {
       const directQb = createMockQueryBuilder({
         getRawMany: jest
           .fn()
-          .mockResolvedValue([{ categoryId: "cat-groceries", total: "-300" }]),
+          .mockResolvedValue([spendingRow("cat-groceries", "-300")]),
       });
       const splitQb = createMockQueryBuilder({
         getRawMany: jest
           .fn()
-          .mockResolvedValue([{ categoryId: "cat-groceries", total: "-100" }]),
+          .mockResolvedValue([spendingRow("cat-groceries", "-100")]),
       });
 
       transactionsRepository.createQueryBuilder.mockReturnValue(directQb);

@@ -1,15 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, act, waitFor } from '@/test/render';
+import { render, screen, fireEvent, act, waitFor, within } from '@/test/render';
 import { AccountInfoWidget } from './AccountInfoWidget';
 import { Account } from '@/types/account';
 import type { Transaction } from '@/types/transaction';
 
-vi.mock('@/hooks/useNumberFormat', () => ({
-  useNumberFormat: () => ({
-    formatCurrency: (val: number, currency: string) => `${currency} ${val.toFixed(2)}`,
-    formatNumber: (val: number) => String(val),
-  }),
-}));
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrency: (val: number, currency: string) => `${currency} ${val.toFixed(2)}`,
+      formatNumber: (val: number) => String(val),
+    }),
+  };
+});
 
 // The loan/mortgage rows derive from the account's payment history, so the two
 // APIs that supply it are stubbed here; non-debt accounts never reach them.
@@ -60,6 +64,8 @@ const makeAccount = (overrides: Partial<Account> = {}): Account =>
     creditLimit: null,
     interestRate: null,
     isClosed: false,
+    // The column default every account carries.
+    mortgageType: 'ANNUITY',
     ...overrides,
   }) as Account;
 
@@ -461,8 +467,7 @@ describe('AccountInfoWidget', () => {
         interestRate: 4.5,
         paymentAmount: 1800,
         paymentFrequency: 'MONTHLY',
-        isCanadianMortgage: false,
-        isVariableRate: false,
+        mortgageType: 'ANNUITY',
         ...overrides,
       });
 
@@ -524,6 +529,30 @@ describe('AccountInfoWidget', () => {
       await waitFor(() => expect(screen.queryByText('N/A')).not.toBeInTheDocument());
     });
 
+    it('shows an interest-only mortgage\'s next installment and bullet, each dated', async () => {
+      // docs/specs/mortgage-types.md section 5.6: no constant payment is
+      // stored for the method; the installment is a dated answer, and the
+      // bullet stands beside it.
+      getAllTransactions.mockResolvedValue({ data: [], pagination: { hasMore: false } });
+      await renderMortgage(
+        makeMortgage({
+          mortgageType: 'INTEREST_ONLY',
+          paymentAmount: null,
+          openingBalance: -300000,
+          currentBalance: -300000,
+          interestRate: 2,
+          paymentStartDate: '2024-01-01',
+          amortizationMonths: 360,
+          originalPrincipal: 300000,
+        }),
+      );
+
+      await waitFor(() => expect(screen.getByText('Next Installment')).toBeInTheDocument());
+      expect(screen.queryByText('Current Payment')).not.toBeInTheDocument();
+      expect(detailValue('Next Installment')).toMatch(/^CAD 500\.00, due /);
+      expect(detailValue('Final Payment')).toMatch(/^CAD 300,?500\.00, due .*2053/);
+    });
+
     it('leaves the loan rows off an account type that does not amortize', async () => {
       await renderMortgage(makeMortgage({ accountType: 'CHEQUING', currentBalance: 500 }));
 
@@ -559,6 +588,243 @@ describe('AccountInfoWidget', () => {
 
       expect(screen.getAllByLabelText('Loading...')).toHaveLength(3);
       expect(screen.queryByText('N/A')).not.toBeInTheDocument();
+    });
+  });
+
+  describe('account switcher', () => {
+    const others = [
+      makeAccount({ id: 'a-2', name: 'Savings', accountType: 'SAVINGS' }),
+      makeAccount({ id: 'a-3', name: 'Old Chequing', isClosed: true }),
+    ];
+
+    it('hides the caret when no switch handler is supplied', () => {
+      render(
+        <AccountInfoWidget
+          account={makeAccount()}
+          switchableAccounts={[makeAccount(), ...others]}
+          onEdit={vi.fn()}
+          onCollapse={vi.fn()}
+        />,
+      );
+      expect(
+        screen.queryByRole('button', { name: 'Switch to another account' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('hides the caret when the filter offers no other account', () => {
+      render(
+        <AccountInfoWidget
+          account={makeAccount()}
+          switchableAccounts={[makeAccount()]}
+          onSwitchAccount={vi.fn()}
+          onEdit={vi.fn()}
+          onCollapse={vi.fn()}
+        />,
+      );
+      expect(
+        screen.queryByRole('button', { name: 'Switch to another account' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('offers exactly the accounts the filter offers, minus the current one', () => {
+      render(
+        <AccountInfoWidget
+          account={makeAccount()}
+          switchableAccounts={[makeAccount(), ...others]}
+          onSwitchAccount={vi.fn()}
+          onEdit={vi.fn()}
+          onCollapse={vi.fn()}
+        />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Switch to another account' }));
+      const names = screen.getAllByRole('menuitem').map((item) => item.textContent);
+      // Sorted by name like the Accounts filter, each qualified by its type;
+      // a closed account offered by the filter is offered here too.
+      expect(names).toEqual(['Old ChequingChequing', 'SavingsSavings']);
+    });
+
+    it('does not offer an account the filter has narrowed away', () => {
+      render(
+        <AccountInfoWidget
+          account={makeAccount()}
+          switchableAccounts={[makeAccount(), others[0]]}
+          onSwitchAccount={vi.fn()}
+          onEdit={vi.fn()}
+          onCollapse={vi.fn()}
+        />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Switch to another account' }));
+      expect(screen.queryByRole('menuitem', { name: /Old Chequing/ })).not.toBeInTheDocument();
+      expect(screen.getByRole('menuitem', { name: /Savings/ })).toBeInTheDocument();
+    });
+
+    it('lifts the starred accounts into their own section, above the rest', () => {
+      render(
+        <AccountInfoWidget
+          account={makeAccount()}
+          switchableAccounts={[
+            makeAccount(),
+            ...others,
+            makeAccount({
+              id: 'a-4',
+              name: 'Zephyr Savings',
+              accountType: 'SAVINGS',
+              isFavourite: true,
+              favouriteSortOrder: 1,
+            }),
+          ]}
+          onSwitchAccount={vi.fn()}
+          onEdit={vi.fn()}
+          onCollapse={vi.fn()}
+        />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Switch to another account' }));
+
+      // Last alphabetically, first in the menu: the section decides, not the name.
+      const names = screen.getAllByRole('menuitem').map((item) => item.textContent);
+      expect(names).toEqual([
+        'Zephyr SavingsSavings',
+        'Old ChequingChequing',
+        'SavingsSavings',
+      ]);
+      expect(
+        within(screen.getByRole('group', { name: 'Favourites' }))
+          .getAllByRole('menuitem')
+          .map((item) => item.textContent),
+      ).toEqual(['Zephyr SavingsSavings']);
+      expect(
+        within(screen.getByRole('group', { name: 'Other accounts' }))
+          .getAllByRole('menuitem'),
+      ).toHaveLength(2);
+    });
+
+    it('orders the starred accounts the way the user arranged them', () => {
+      // `favouriteSortOrder`, not the name -- the same order the Accounts page
+      // and every account `<select>` put them in.
+      render(
+        <AccountInfoWidget
+          account={makeAccount()}
+          switchableAccounts={[
+            makeAccount(),
+            makeAccount({
+              id: 'a-4',
+              name: 'Alpha',
+              isFavourite: true,
+              favouriteSortOrder: 2,
+            }),
+            makeAccount({
+              id: 'a-5',
+              name: 'Beta',
+              isFavourite: true,
+              favouriteSortOrder: 1,
+            }),
+          ]}
+          onSwitchAccount={vi.fn()}
+          onEdit={vi.fn()}
+          onCollapse={vi.fn()}
+        />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Switch to another account' }));
+
+      expect(
+        within(screen.getByRole('group', { name: 'Favourites' }))
+          .getAllByRole('menuitem')
+          .map((item) => item.textContent),
+      ).toEqual(['BetaChequing', 'AlphaChequing']);
+    });
+
+    it('leaves the menu unsectioned when nothing is starred', () => {
+      render(
+        <AccountInfoWidget
+          account={makeAccount()}
+          switchableAccounts={[makeAccount(), ...others]}
+          onSwitchAccount={vi.fn()}
+          onEdit={vi.fn()}
+          onCollapse={vi.fn()}
+        />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Switch to another account' }));
+
+      expect(screen.queryAllByRole('group')).toHaveLength(0);
+    });
+
+    it('leaves the menu unsectioned when the only starred account is this one', () => {
+      // The switcher never offers the account already on screen, so a
+      // "Favourites" heading would have nothing under it -- and an "Other
+      // accounts" heading over the whole list says nothing.
+      render(
+        <AccountInfoWidget
+          account={makeAccount({ isFavourite: true, favouriteSortOrder: 1 })}
+          switchableAccounts={[
+            makeAccount({ isFavourite: true, favouriteSortOrder: 1 }),
+            ...others,
+          ]}
+          onSwitchAccount={vi.fn()}
+          onEdit={vi.fn()}
+          onCollapse={vi.fn()}
+        />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Switch to another account' }));
+
+      expect(screen.queryAllByRole('group')).toHaveLength(0);
+      expect(screen.getAllByRole('menuitem')).toHaveLength(2);
+    });
+
+    it('finds a starred account by typing its name', () => {
+      // The filter only appears past `EntitySwitcher`'s threshold, which is
+      // also the only size at which the sections earn their keep.
+      const many = Array.from({ length: 10 }, (_, index) =>
+        makeAccount({ id: `filler-${index}`, name: `Filler ${index}` }),
+      );
+      render(
+        <AccountInfoWidget
+          account={makeAccount()}
+          switchableAccounts={[
+            makeAccount(),
+            ...many,
+            makeAccount({
+              id: 'a-4',
+              name: 'Zephyr Savings',
+              accountType: 'SAVINGS',
+              isFavourite: true,
+              favouriteSortOrder: 1,
+            }),
+          ]}
+          onSwitchAccount={vi.fn()}
+          onEdit={vi.fn()}
+          onCollapse={vi.fn()}
+        />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Switch to another account' }));
+      fireEvent.change(screen.getByPlaceholderText('Filter accounts...'), {
+        target: { value: 'zephyr' },
+      });
+
+      // The section it sits in does not narrow what the filter can reach, and
+      // the now-empty "Other accounts" heading goes with its rows.
+      expect(
+        screen.getAllByRole('menuitem').map((item) => item.textContent),
+      ).toEqual(['Zephyr SavingsSavings']);
+      expect(
+        screen.queryByRole('group', { name: 'Other accounts' }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('reports the chosen account id and closes the menu', () => {
+      const onSwitchAccount = vi.fn();
+      render(
+        <AccountInfoWidget
+          account={makeAccount()}
+          switchableAccounts={[makeAccount(), ...others]}
+          onSwitchAccount={onSwitchAccount}
+          onEdit={vi.fn()}
+          onCollapse={vi.fn()}
+        />,
+      );
+      fireEvent.click(screen.getByRole('button', { name: 'Switch to another account' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: /Savings/ }));
+      expect(onSwitchAccount).toHaveBeenCalledWith('a-2');
+      expect(screen.queryByRole('menu')).not.toBeInTheDocument();
     });
   });
 

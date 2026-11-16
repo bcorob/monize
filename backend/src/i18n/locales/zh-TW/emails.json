@@ -20,15 +20,17 @@
     "typeExpense": "支出",
     "typeUnknown": "方向未知",
     "amountUnavailable": "金額不可用",
+    "estimated": "估算",
+    "estimateUnknown": "估算未知：入帳時請輸入金額",
     "button": "查看帳單與存款"
   },
   "mortgageReminder": {
-    "subject": "Monize：1 筆即將到期的抵押貸款續約",
-    "subjectPlural": "Monize：{{ count }} 筆即將到期的抵押貸款續約",
-    "heading": "抵押貸款續約提醒",
+    "subject": "Monize：1 筆抵押貸款的利率期限即將結束",
+    "subjectPlural": "Monize：{{ count }} 筆抵押貸款的利率期限即將結束",
+    "heading": "抵押貸款利率期限提醒",
     "greeting": "您好，{{ name }}，",
-    "introOne": "您有 1 筆抵押貸款即將到期需要續約。請在期限結束前聯絡您的貸款機構討論續約選項：",
-    "introMany": "您有 {{ count }} 筆抵押貸款即將到期需要續約。請在期限結束前聯絡您的貸款機構討論續約選項：",
+    "introOne": "您有 1 筆抵押貸款的目前利率期限即將結束。請在結束前聯絡您的貸款機構，安排下一期利率或續約：",
+    "introMany": "您有 {{ count }} 筆抵押貸款的目前利率期限即將結束。請在每筆結束前聯絡您的貸款機構，安排下一期利率或續約：",
     "colMortgage": "抵押貸款",
     "colTermEndDate": "期限結束日期",
     "colTimeRemaining": "剩餘時間",
@@ -117,6 +119,21 @@
     "button": "驗證電子郵件",
     "disclaimer": "此連結將在 24 小時後過期。如果您未建立 Monize 帳戶，可以安全地忽略此電子郵件。"
   },
+  "emailChangeConfirm": {
+    "subject": "確認您的 Monize 新電子郵件",
+    "heading": "確認您的新電子郵件地址",
+    "greeting": "您好，{{ name }}，",
+    "intro": "有人要求將此地址用於 Monize 帳戶。在您點擊下方按鈕確認之前，您的電子郵件不會變更：",
+    "button": "確認變更電子郵件",
+    "disclaimer": "此連結將在 24 小時後過期。如果您未要求此變更，可以安全地忽略此電子郵件。"
+  },
+  "emailChangeNotice": {
+    "subject": "已要求變更 Monize 電子郵件",
+    "heading": "已要求變更電子郵件",
+    "greeting": "您好，{{ name }}，",
+    "body1": "有人要求將您的 Monize 帳戶電子郵件地址變更為 {{ email }}。只有從該地址確認後，變更才會生效。",
+    "body2": "如果這不是您提出的要求，請立即變更密碼，並檢查已登入您帳戶的裝置。"
+  },
   "accountInvite": {
     "subject": "您的 Monize 帳戶已準備就緒",
     "heading": "您的 Monize 帳戶已準備就緒",
@@ -186,5 +203,232 @@
     "greeting": "您好，{{ name }}，",
     "intro": "<strong>{{ provider }}</strong> 已於 {{ restoredAt }} 恢復回應，本次中斷持續了 {{ duration }}。",
     "backfill": "中斷期間缺失的價格與指數歷史會在下一次排定的更新時補齊，無需採取任何行動。"
+  },
+  "systemAlert": {
+    "subject": "Monize: {{ title }}",
+    "heading": "系統警示",
+    "greeting": "您好，{{ name }}，",
+    "intro": "您的 Monize 部署發生需要管理員處理的問題。",
+    "footer": "此警示也會顯示在應用程式的通知鈴鐺中。無論有多少個伺服器副本發現該問題，每次事件最多只會產生一則警示。"
+  },
+  "notificationImmediate": {
+    "subject": "您有一則新的 Monize 通知",
+    "eyebrow": "Monize 通知",
+    "button": "在 Monize 中開啟",
+    "footer": "您收到此郵件是因為此通知類型已開啟即時郵件。可在設定、通知中變更。"
+  },
+  "notificationCopy": {
+    "billDue": {
+      "titleOverdue": "{{ payee }} 已逾期",
+      "titleToday": "{{ payee }} 今天到期",
+      "titleTomorrow": "{{ payee }} 明天到期",
+      "titleInDays": "{{ payee }} 將在 {{ days }} 天後到期",
+      "amountDue": "{{ date }} 應付 {{ amount }}",
+      "amountUnavailable": "金額無法取得（無目前匯率），到期日 {{ date }}"
+    },
+    "gemSignal": {
+      "riskTitle": "{{ strategy }} 已切換為{{ state }}",
+      "riskMessage": "您的 GEM 策略「{{ strategy }}」已從{{ fromState }}變為{{ toState }}。開啟以查看建議。",
+      "allocationTitle": "{{ strategy }} 變更了目標",
+      "allocationMessage": "您的 GEM 策略「{{ strategy }}」現在的目標是 {{ target }}。開啟以查看建議。",
+      "riskOn": "風險偏好",
+      "riskOff": "避險",
+      "roles": {
+        "US_EQUITY": "標普 500",
+        "EX_US_EQUITY": "除美國外的已開發市場",
+        "EM_EQUITY": "新興市場",
+        "SAFE": "避險資產",
+        "RISK_FREE": "無風險基準"
+      },
+      "allocationMessageUnknown": "您的GEM策略「{{ strategy }}」已變更目標。開啟以查看建議。"
+    },
+    "portfolioMovement": {
+      "titleUp": "投資上漲 {{ percent }}%",
+      "titleDown": "投資下跌 {{ percent }}%",
+      "messageUp": "從 {{ from }} 到 {{ to }}，您的投資上漲了 {{ percent }}%（不含存入與提出）。開啟以查看。",
+      "messageDown": "從 {{ from }} 到 {{ to }}，您的投資下跌了 {{ percent }}%（不含存入與提出）。開啟以查看。"
+    },
+    "balanceThreshold": {
+      "titleLow": "{{ account }} 低於您的閾值",
+      "titleHigh": "{{ account }} 高於您的閾值",
+      "messageLow": "{{ account }} 降至 {{ balance }}，低於您的閾值 {{ threshold }}。",
+      "messageHigh": "{{ account }} 升至 {{ balance }}，高於您的閾值 {{ threshold }}。"
+    },
+    "system": {
+      "backupFailed": {
+        "title": "自動備份失敗",
+        "message": "{{ user }} 的自動備份失敗：{{ error }}"
+      },
+      "backupPartial": {
+        "title": "自動備份不完整",
+        "messageAttachments": "{{ user }} 的備份已寫入，但 {{ expected }} 個附件中有 {{ missing }} 個無法納入，另有 {{ inconsistent }} 個與其中繼資料不符。完整備份已保留。",
+        "messagePromotion": "{{ user }} 的每日備份成功，但其每週或每月副本無法寫入：{{ error }}",
+        "messageRetention": "{{ user }} 的備份成功，但舊的備份檔案無法清理：{{ error }}"
+      },
+      "encryptionKeyMissing": {
+        "title": "尚未設定加密金鑰",
+        "message": "未設定 ENCRYPTION_KEY，備份將以未加密方式寫入，且無法儲存機密資訊。未來版本將在缺少該金鑰時拒絕啟動。"
+      },
+      "jwtSecretWeak": {
+        "title": "JWT_SECRET 強度不足",
+        "message": "JWT_SECRET 是公開的範例值或過於容易猜測，工作階段權杖可能遭到偽造。請產生一個強金鑰（openssl rand -base64 32）。變更後，驗證器 App 的驗證碼將失效，受信任的裝置也會被清除：使用者以備份驗證碼登入後重新設定 2FA，對於沒有備份驗證碼的使用者，請在使用者管理中重設其 2FA。請先閱讀 docs/backend/modules-and-runtime.md（Changing JWT_SECRET）。"
+      },
+      "smtpFailure": {
+        "title": "郵件傳送失敗",
+        "message": "Monize 無法傳送郵件：{{ error }}。通知與提醒未能送達。"
+      },
+      "providerOutage": {
+        "title": "{{ provider }} 沒有回應",
+        "message": "無法取得 {{ provider }} 的市場資料。在其恢復回應之前，價格與指數資料可能已過時。"
+      },
+      "providerRecovered": {
+        "title": "{{ provider }} 已恢復回應",
+        "message": "故障已結束，{{ provider }} 的市場資料正在重新更新。"
+      },
+      "scheduledPostFailed": {
+        "title": "無法登錄 {{ name }}",
+        "message": "您到期日為 {{ date }} 的定期交易未能自動登錄：{{ error }}。您可以在「帳單與存款」中手動登錄。"
+      }
+    },
+    "budget": {
+      "overTitle": "{{ category }}已超出預算",
+      "overMessage": "您已在{{ category }}上支出{{ amount }}，預算為{{ limit }}（{{ percent }}%）。",
+      "criticalTitle": "{{ category }}接近限額",
+      "warningTitle": "{{ category }}即將達到預算限額",
+      "thresholdMessage": "您已使用{{ category }}預算的{{ percent }}%（{{ amount }}，總預算{{ limit }}）。",
+      "projectedTitle": "預計{{ category }}將超出預算",
+      "projectedMessage": "按目前的支出速度，預計{{ category }}在本期結束時將達到{{ projected }}（預算：{{ budgeted }}）。",
+      "flexTitle": "彈性群組「{{ group }}」已達{{ percent }}%",
+      "flexMessage": "彈性群組「{{ group }}」已使用{{ spent }}，總預算為{{ budgeted }}（{{ percent }}%）。",
+      "incomeTitle": "收入低於預期",
+      "incomeMessage": "在本期的這個階段，您的實際收入（{{ actual }}）為預期收入（{{ expected }}）的{{ ratio }}%。",
+      "milestoneTitle": "預算執行良好",
+      "milestoneMessage": "本期已過去{{ progress }}%，而您僅使用了總預算的{{ percent }}%。繼續保持！",
+      "seasonalTitle": "預計{{ category }}將出現季節性支出高峰",
+      "seasonalMessage": "上一個{{ month }}，您在{{ category }}上的支出是平時的{{ increase }}倍。請考慮調整預算。"
+    },
+    "priceMovement": {
+      "title": "價格變動提醒: {{ symbol }} ({{ percent }}%)",
+      "message": "{{ symbol }}：相對於上一個有資料的交易日變動 {{ percent }}%。"
+    },
+    "bankSync": {
+      "expiringTitleToday": "{{ institution }}：銀行存取權限今天到期",
+      "expiringTitleOneDay": "{{ institution }}：銀行存取權限將在 1 天內到期",
+      "expiringTitleDays": "{{ institution }}：銀行存取權限將在 {{ days }} 天內到期",
+      "expiringMessage": "您授權 Monize 讀取 {{ institution }} 的有效期至 {{ date }} 結束。請在 Monize 中續期連線以繼續同步。",
+      "expiredTitle": "{{ institution }}：銀行存取權限已到期",
+      "expiredMessage": "您授權 Monize 讀取 {{ institution }} 的有效期已結束。請在 Monize 中續期連線以恢復同步。",
+      "failedTitle": "{{ institution }}：同步失敗",
+      "failedMessage": "{{ institution }} 的每日同步在以下科目失敗：{{ accounts }}。請開啟銀行同步設定查看原因。",
+      "failedCredentialsMessage": "由於銀行同步憑證遺失或被拒絕，{{ institution }} 的每日同步無法啟動。請在銀行同步設定中檢查憑證。",
+      "unnamedAccount": "一個科目",
+      "importedTitle": "{{ institution }}：已匯入新交易",
+      "importedMessage": "每日同步從 {{ institution }} 匯入的交易：{{ imported }} 筆。",
+      "importedNoneTitle": "{{ institution }}：沒有新交易",
+      "importedNoneMessage": "{{ institution }} 的每日同步沒有發現新交易。"
+    },
+    "bond": {
+      "maturitySoonTitle": "{{ series }} 將於 {{ date }} 到期",
+      "maturitySoonMessage": "{{ quantity }} × {{ series }} 將於 {{ date }} 到期。{{ payout }}",
+      "interestTitle": "{{ series }}：{{ date }} 支付利息",
+      "interestMessage": "{{ quantity }} × {{ series }} 將於 {{ date }} 支付利息 {{ amount }}。若帳戶中尚未入帳，請在證券頁面記錄。",
+      "interestMessageUnknown": "{{ quantity }} × {{ series }} 將於 {{ date }} 付息。金額尚未確定：所依據的利率尚未公布。",
+      "rateResetTitle": "{{ series }}：新的計息期",
+      "rateResetMessage": "{{ series }} 已於 {{ date }} 進入第 {{ period }} 期，年利率 {{ rate }}。",
+      "unbookedTitle": "{{ series }}：已到期，兌付未記錄",
+      "unbookedMessage": "{{ quantity }} × {{ series }} 已於 {{ date }} 到期，但尚未記錄兌付。{{ payout }}請在證券頁面記錄兌付。",
+      "payoutKnown": "兌付金額為 {{ payout }}。",
+      "payoutUnknown": "兌付金額尚未確定：{{ reason }}。",
+      "reason": {
+        "RATE_UNKNOWN": "所依據的利率尚未公布",
+        "TERMS_INCOMPLETE": "該系列的條款不完整",
+        "PURCHASE_OUTSIDE_SALE_WINDOW": "購買日期不在該系列的發售期內",
+        "PURCHASE_AFTER_MATURITY": "買入日期在該系列到期日當天或之後",
+        "other": "無法根據已儲存的資料計算"
+      },
+      "benchmarkTitle": "{{ benchmark }}：新數據 {{ observation }}",
+      "benchmarkMessage": "{{ publisher }} 已公布 {{ observation }} 的 {{ benchmark }}：{{ value }}。使用此指標的系列：{{ series }}。",
+      "benchmarkMessageMore": "{{ publisher }} 已公布 {{ observation }} 的 {{ benchmark }}：{{ value }}。使用此指標的系列：{{ series }}，以及另外 {{ more }} 個。",
+      "missingTitle": "債券數據尚未確定",
+      "missingMessage": "部分債券數據無法計算：{{ causes }}。",
+      "benchmarks": {
+        "PL_CPI_GUS_YOY": "消費者物價指數，12 個月 (GUS)",
+        "PL_NBP_REFERENCE": "NBP 基準利率"
+      },
+      "cause": {
+        "observation": "{{ benchmark }}（{{ publisher }}）{{ observation }} 的數據未儲存：尚未公布，或此後未擷取資料來源；請在債券頁面重新整理",
+        "observationNoPublisher": "{{ benchmark }} {{ observation }} 的數據未儲存：尚未公布，或此後未擷取資料來源；請在債券頁面重新整理",
+        "terms": "{{ series }} 的條款不完整；請在債券頁面重新整理該系列",
+        "purchase": "{{ series }} 於 {{ date }} 的購買不在其發售期（{{ from }} 至 {{ to }}）內；請更正購買日期",
+        "purchaseAfterMaturity": "{{ series }} 於 {{ date }} 的買入在其到期日（{{ maturity }}）當天或之後；請更正買入日期",
+        "lots": "無法從帳本推導出持有批次（{{ code }}）；請更正帳本",
+        "lotsRow": "{{ date }} 的{{ action }}：無法推導出持有批次（{{ code }}）；請更正該交易",
+        "lotsRowSeries": "{{ date }} 的{{ action }}：未歸入任何系列（{{ code }}）；請在該交易中選擇系列",
+        "lotsRowRemoval": "{{ date }} 的{{ action }}：減少的數量超過帳戶持有的該系列數量（{{ code }}）；請更正該交易"
+      },
+      "action": {
+        "BUY": "買入",
+        "SELL": "賣出",
+        "REINVEST": "再投資",
+        "ADD_SHARES": "增加份額",
+        "REMOVE_SHARES": "減少份額",
+        "SPLIT": "分割",
+        "TRANSFER_IN": "轉入",
+        "TRANSFER_OUT": "轉出",
+        "other": "交易"
+      }
+    },
+    "emailReceiptsAttention": {
+      "title": "電子郵件收據需要關注",
+      "message": "您的收據收件箱包含 {{ noParser }} 個沒有個人檔案的郵件和 {{ parseFailed }} 個其個人檔案未識別的郵件。打開以查閱。"
+    },
+    "aiReview": {
+      "readyTitle": "AI 審核提案正在等待您",
+      "readyMessage": "等待您決定的提案：{{ count }} 項。自上次通知以來新增：{{ added }} 項。開啟以審核。",
+      "expiringTitle": "AI 審核提案即將到期",
+      "expiringMessage": "3 天內到期的提案：{{ count }} 項。最早的一項於 {{ date }} 到期。開啟以審核。"
+    },
+    "warranty": {
+      "expiringTitle": "{{ name }}：保固即將到期",
+      "expiringMessage": "{{ name }} 的保固將於 {{ date }} 到期。開啟即可檢視其文件或記錄保固申請。",
+      "todayTitle": "{{ name }}：保固今天到期",
+      "todayMessage": "{{ name }} 的保固於今天（{{ date }}）到期。開啟即可檢視其文件或記錄保固申請。"
+    },
+    "security": {
+      "oauthTitle": "新應用程式已連線：{{ clientName }}",
+      "oauthMessage": "應用程式 {{ clientName }} 剛剛獲得存取您 Monize 帳戶的權限。如果不是您本人操作，請立即變更密碼：這會撤銷所有已連線應用程式的存取權限。",
+      "relayTitle": "新連線已回應您的 AI 聊天",
+      "relayMessage": "一個先前從未回應過您 Monize AI 聊天的連線剛剛取得了一則提示。如果您沒有連線此助理，請變更密碼。"
+    },
+    "payrollDeduction": {
+      "resetTitle": "{{ category }}：請確認明年的上限",
+      "resetMessage": "{{ bill }} 上的 {{ category }} 扣款將於 {{ date }} 重設。若年度上限有變請更新；否則 {{ amount }} 將再次適用。"
+    },
+    "shared": {
+      "title": "共同支出",
+      "message": "共享群組有更新。開啟 Monize 查看。"
+    }
+  },
+  "backupOffsite": {
+    "copySubject": "Monize 備份 {{ filename }}",
+    "copyHeading": "您的 Monize 備份已隨信附上",
+    "copyIntro": "這是您 Monize 帳戶 {{ date }} 的自動{{ tier }}備份。檔案已附在這封郵件中。",
+    "copyEncrypted": "附件已使用您的 Monize 備份密碼加密。沒有該密碼就無法開啟，Monize 也無法為您找回，請將密碼保存在這個信箱以外的地方。",
+    "copyRestore": "若要還原，請開啟 Monize，前往 設定、備份與還原，上傳此檔案並輸入您的備份密碼。",
+    "copyVerify": "上方的 SHA-256 是附件位元組的雜湊值，日後您可以核對保留的副本是否就是這封郵件送達的那一份。",
+    "tooLargeSubject": "Monize 備份 {{ filename }} 太大，無法以郵件寄送",
+    "tooLargeHeading": "您的 Monize 備份未以郵件寄送",
+    "tooLargeIntro": "今天的備份為 {{ size }}，超過此部署對以郵件寄送的備份所允許的 {{ limit }}（BACKUP_EMAIL_MAX_BYTES）。",
+    "tooLargeNoBytes": "這封郵件未附上任何內容，也不提供下載連結：下載連結需要一組能從儲存空間讀回您備份的認證資訊，而此功能並未持有。",
+    "tooLargeUnaffected": "備份本身已正常寫入。此伺服器上的副本不受影響；若您已啟用 S3 目的地，該處的副本同樣不受影響。",
+    "tooLargeWhatToDo": "若要在本機之外保留這種大小的備份副本，請在 設定、備份與還原 中下載，啟用 S3 目的地，或請管理員提高郵件大小上限。",
+    "labelFile": "檔案",
+    "labelSize": "大小",
+    "labelTier": "保留週期",
+    "labelLimit": "郵件上限",
+    "labelDigest": "SHA-256",
+    "tierDaily": "每日",
+    "tierWeekly": "每週",
+    "tierMonthly": "每月"
   }
 }

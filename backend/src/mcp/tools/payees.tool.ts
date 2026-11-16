@@ -1,8 +1,14 @@
 import { Injectable } from "@nestjs/common";
 import { describeSkippedRows } from "../../common/bulk-create.types";
 import { z } from "zod";
-import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { McpServer } from "@modelcontextprotocol/server";
+import type {
+  InputRequiredResult,
+  ServerContext,
+} from "@modelcontextprotocol/server";
 import { PayeesService } from "../../payees/payees.service";
+import { formatPhoneForDisplay } from "../../common/phone-number.util";
+import { contactLookupOptions } from "../../ai/actions/ai-actions.service";
 import {
   PayeeToolPrepService,
   ManageCreatePayeeRow,
@@ -11,22 +17,32 @@ import {
 } from "../../payees/payee-tool-prep.service";
 import { AiRelayService } from "../../ai/relay/ai-relay.service";
 import { AiActionBuilderService } from "../../ai/actions/ai-action-builder.service";
-import {
-  PendingAiAction,
-  MAX_BULK_ACTION_ROWS,
-} from "../../ai/actions/ai-action.types";
+import { PendingAiAction } from "../../ai/actions/ai-action.types";
 import { RELAY_PREVIEW_SHOWN, emitRelayCard } from "../mcp-relay-confirm";
 import {
-  UserContextResolver,
+  resolveUserContext,
   requireScope,
   toolResult,
   toolError,
   safeToolError,
-  confirmWrite,
 } from "../mcp-context";
+import {
+  cardKey,
+  confirmItemsForCards,
+  confirmWrite,
+  confirmWriteMany,
+  isAsk,
+} from "../mcp-confirm";
 import { McpWriteLimiter } from "../mcp-write-limiter";
 import { getPayeesOutput, managePayeesOutput } from "../tool-output-schemas";
 import { READ_ONLY, WRITE } from "../mcp-annotations";
+import {
+  manageOperation,
+  approvalMode,
+  dryRun,
+  itemsArray,
+} from "./schema-fragments";
+import { numberArg, booleanArg } from "../../common/tool-schemas";
 
 type ManagePayeeOperation = "create" | "update" | "delete";
 type ApprovalMode = "bulk" | "individual";
@@ -38,6 +54,41 @@ interface ManagePayeeItem {
   // update (name identifies the payee; the rest are the changes)
   newName?: string;
   website?: string;
+  address?: string;
+  email?: string;
+  phone?: string;
+}
+
+/**
+ * The contact lines on a payee confirmation card.
+ *
+ * A field the request did not mention is omitted; one being cleared says so
+ * explicitly, because a card that silently drops "address" for both cases would
+ * have the user approve an edit whose effect they cannot see.
+ */
+function contactCardLines(preview: {
+  address?: string | null;
+  email?: string | null;
+  phone?: string | null;
+}): string {
+  const rows: string[] = [];
+  for (const [label, value] of [
+    ["Address", preview.address],
+    ["Email", preview.email],
+    // A phone is shown the way a person reads one, never the stored E.164:
+    // the human approving this card has to recognise the number.
+    [
+      "Phone",
+      preview.phone === undefined
+        ? undefined
+        : preview.phone === null
+          ? null
+          : formatPhoneForDisplay(preview.phone),
+    ],
+  ] as const) {
+    if (value !== undefined) rows.push(`\n${label}: ${value ?? "(cleared)"}`);
+  }
+  return rows.join("");
 }
 
 @Injectable()
@@ -50,40 +101,63 @@ export class McpPayeesTools {
     private readonly writeLimiter: McpWriteLimiter,
   ) {}
 
-  register(server: McpServer, resolve: UserContextResolver) {
+  register(server: McpServer) {
     server.registerTool(
       "list_payees",
       {
         title: "List payees",
         annotations: READ_ONLY,
         description:
-          "List payees, optionally filtered by search query. Each payee carries its default category and its website (null when unset), so this is how to find payees whose website is missing before filling them in with manage_payees.",
-        inputSchema: {
+          "The user's payees with their default category, contact details and " +
+          "usage. `search` is a case-insensitive substring of the name. A has* " +
+          "filter true keeps payees with that detail, false those without it " +
+          "(hasEmail:false finds payees still needing one). `totalCount` counts " +
+          "matches; when `truncated`, `payees` is only the first `limit`, so " +
+          "never call it all of the user's payees.",
+        inputSchema: z.object({
           search: z
             .string()
             .max(200)
             .optional()
-            .describe("Search query to filter payees"),
-        },
+            .describe("Case-insensitive substring of the payee name."),
+          status: z
+            .enum(["active", "inactive", "all"])
+            .optional()
+            .describe("Defaults to 'all'."),
+          sortBy: z
+            .enum(["name", "lastUsed", "transactionCount"])
+            .optional()
+            .describe(
+              "name (A-Z, default), lastUsed (most recent first, never-used last), or transactionCount (busiest first).",
+            ),
+          limit: numberArg(z.number().int().min(1).max(500))
+            .optional()
+            .describe("Return only the first N rows after sorting."),
+          hasWebsite: booleanArg().optional().describe("Filter on a website."),
+          hasLogo: booleanArg()
+            .optional()
+            .describe("Filter on a resolved brand icon."),
+          hasAddress: booleanArg().optional().describe("Filter on an address."),
+          hasEmail: booleanArg().optional().describe("Filter on an email."),
+          hasPhone: booleanArg()
+            .optional()
+            .describe("Filter on a phone number."),
+          hasDefaultCategory: booleanArg()
+            .optional()
+            .describe("Filter on a default category."),
+        }),
         outputSchema: getPayeesOutput,
       },
-      async (args, extra) => {
-        const ctx = resolve(extra.sessionId);
-        if (!ctx) return toolError("No user context");
-        const check = requireScope(ctx.scopes, "read");
+      async (args, ctx) => {
+        const user = resolveUserContext(ctx);
+        if (!user) return toolError("No user context");
+        const check = requireScope(user.scopes, "read");
         if (check.error) return check.result;
 
         try {
-          if (args.search) {
-            const payees = await this.payeesService.search(
-              ctx.userId,
-              args.search,
-              50,
-            );
-            return toolResult(payees);
-          }
-          const payees = await this.payeesService.findAll(ctx.userId);
-          return toolResult(payees);
+          return toolResult(
+            await this.payeesService.getLlmPayees(user.userId, args),
+          );
         } catch (err: unknown) {
           return safeToolError(err);
         }
@@ -96,68 +170,66 @@ export class McpPayeesTools {
         title: "Manage payees",
         annotations: WRITE,
         description:
-          "Create, edit, or delete the user's payees. Accepts NAMES -- the payee and its default category are resolved internally, so you do NOT need to call list_payees/list_categories first. operation = 'create' | 'update' | 'delete' with an items array (1-25 rows). " +
-          "create: { name, categoryName?, website? } -- categoryName optionally sets the payee's default category ('Parent: Child' for a subcategory); website accepts a bare domain ('acme.com') and is stored as an absolute https URL. " +
-          "update: { name, newName?, categoryName?, website? } -- name identifies the existing payee; provide newName to rename, categoryName to set the default category, and/or website to set the web address (pass an empty string to clear either). At least one of newName/categoryName/website is required. Setting a website also resolves that site's icon for the payee; to find payees that need one, call list_payees and look for a null or missing website. " +
-          "delete: { name } -- removes the payee (its transactions keep their stored payee name). " +
-          "approvalMode = 'bulk' (default; one confirmation for the whole batch) or 'individual' (one confirmation per item); ignored for a single item. Set dryRun=true to preview every item without saving. The user is asked to confirm before anything is saved (web chat card via relay, or an MCP confirmation dialog).",
-        inputSchema: {
-          operation: z
-            .enum(["create", "update", "delete"])
-            .describe("The operation to perform on every item."),
-          items: z
-            .array(
-              z.object({
-                name: z
-                  .string()
-                  .max(100)
-                  .describe(
-                    "create: the new payee name. update/delete: the existing payee's current name.",
-                  ),
-                newName: z
-                  .string()
-                  .max(100)
-                  .optional()
-                  .describe("update: the payee's new name."),
-                categoryName: z
-                  .string()
-                  .max(100)
-                  .optional()
-                  .describe(
-                    'create/update: default category name ("Parent: Child" for a subcategory). update: empty string clears it.',
-                  ),
-                website: z
-                  .string()
-                  .max(2048)
-                  .optional()
-                  .describe(
-                    'create/update: the payee\'s web address. A bare domain ("acme.com") is stored as "https://acme.com". update: empty string clears it.',
-                  ),
-              }),
-            )
-            .min(1)
-            .max(MAX_BULK_ACTION_ROWS)
-            .describe("The rows to act on (1-25)."),
-          approvalMode: z
-            .enum(["bulk", "individual"])
-            .optional()
-            .describe(
-              "How multi-item batches are approved: 'bulk' (default) one card for all; 'individual' one card per item. Ignored for a single item.",
-            ),
-          dryRun: z
-            .boolean()
-            .optional()
-            .default(false)
-            .describe(
-              "If true, validate and return a per-item preview without saving anything.",
-            ),
-        },
+          "Create, rename, edit or delete payees. An update identifies the " +
+          "payee by `name` and needs at least one change; an empty string " +
+          "clears a contact field. A website also resolves its icon. Deleting " +
+          "a payee leaves its transactions their stored payee name. With " +
+          "automatic contact lookup on, a single new payee with no contact " +
+          "details is looked up before its card, which may carry suggestions; " +
+          "a batch is looked up after approval.",
+        inputSchema: z.object({
+          operation: manageOperation(),
+          items: itemsArray(
+            z.object({
+              name: z
+                .string()
+                .max(100)
+                .describe(
+                  "create: the new name. update/delete: the payee's current name.",
+                ),
+              newName: z
+                .string()
+                .max(100)
+                .optional()
+                .describe("update: rename to this."),
+              categoryName: z
+                .string()
+                .max(100)
+                .optional()
+                .describe("The payee's default category."),
+              website: z
+                .string()
+                .max(2048)
+                .optional()
+                .describe("Web address. A bare domain is stored as https."),
+              address: z
+                .string()
+                .max(500)
+                .optional()
+                .describe("Postal address, free text."),
+              email: z
+                .string()
+                .max(255)
+                .optional()
+                .describe("Contact email address."),
+              phone: z
+                .string()
+                .max(50)
+                .optional()
+                .describe(
+                  "Contact phone number, any format with country code.",
+                ),
+            }),
+          ),
+          approvalMode: approvalMode(),
+          dryRun: dryRun(),
+        }),
         outputSchema: managePayeesOutput,
       },
-      async (args, extra) => {
-        const ctx = resolve(extra.sessionId);
-        if (!ctx) return toolError("No user context");
-        const check = requireScope(ctx.scopes, "write");
+      async (args, ctx) => {
+        const user = resolveUserContext(ctx);
+        if (!user) return toolError("No user context");
+        const check = requireScope(user.scopes, "write");
         if (check.error) return check.result;
 
         const operation = args.operation as ManagePayeeOperation;
@@ -166,32 +238,32 @@ export class McpPayeesTools {
 
         try {
           if (args.dryRun) {
-            return this.manageDryRun(ctx.userId, operation, items);
+            return this.manageDryRun(user.userId, operation, items);
           }
           if (operation === "create") {
             return await this.manageCreate(
               server,
-              ctx.userId,
+              ctx,
+              user.userId,
               items,
               approvalMode,
-              extra.requestId,
             );
           }
           if (operation === "update") {
             return await this.manageUpdate(
               server,
-              ctx.userId,
+              ctx,
+              user.userId,
               items,
               approvalMode,
-              extra.requestId,
             );
           }
           return await this.manageDelete(
             server,
-            ctx.userId,
+            ctx,
+            user.userId,
             items,
             approvalMode,
-            extra.requestId,
           );
         } catch (err: unknown) {
           return safeToolError(err);
@@ -209,6 +281,9 @@ export class McpPayeesTools {
       name: item.name as string,
       categoryName: item.categoryName,
       website: item.website,
+      address: item.address,
+      email: item.email,
+      phone: item.phone,
     };
   }
 
@@ -218,6 +293,9 @@ export class McpPayeesTools {
       newName: item.newName,
       categoryName: item.categoryName,
       website: item.website,
+      address: item.address,
+      email: item.email,
+      phone: item.phone,
     };
   }
 
@@ -257,55 +335,72 @@ export class McpPayeesTools {
 
   private async emitOrConfirm(
     server: McpServer,
+    ctx: ServerContext,
     userId: string,
     pendingAction: PendingAiAction,
     confirmMessage: string,
-    requestId: unknown,
-  ): Promise<"relay" | "accepted" | "declined"> {
-    if (emitRelayCard(this.relayService, userId, pendingAction)) {
+  ): Promise<"relay" | "accepted" | "declined" | { ask: InputRequiredResult }> {
+    // Only the round that ASKS may hand the confirmation to the web chat. On a
+    // retry the human has already answered in their own client, and a relay
+    // turn that began in between would swallow that answer.
+    if (
+      !ctx.mcpReq.requestState() &&
+      (await emitRelayCard(this.relayService, userId, pendingAction))
+    ) {
       return "relay";
     }
     const confirmation = await confirmWrite(
       server,
+      ctx,
       confirmMessage,
-      requestId as never,
+      pendingAction.descriptor,
     );
+    if (isAsk(confirmation)) return confirmation;
     return confirmation === "declined" ? "declined" : "accepted";
   }
 
   private async manageCreate(
     server: McpServer,
+    ctx: ServerContext,
     userId: string,
     items: ManagePayeeItem[],
     approvalMode: ApprovalMode,
-    requestId: unknown,
   ) {
     if (items.length === 1) {
       const preview = await this.prepService.prepareCreatePayeeSingle(
         userId,
         this.toCreateRow(items[0]),
+        { lookupContact: true },
       );
-      const budget = this.writeLimiter.reserve(userId, 1);
+      const budget = await this.writeLimiter.reserve(userId, 1);
       if (budget) return budget;
       const action = this.actionBuilder.buildCreatePayee(userId, preview);
       const outcome = await this.emitOrConfirm(
         server,
+        ctx,
         userId,
         action,
-        `Create this payee?\nName: ${preview.name}${preview.defaultCategoryName ? `\nDefault category: ${preview.defaultCategoryName}` : ""}${preview.website ? `\nWebsite: ${preview.website}` : ""}`,
-        requestId,
+        `Create this payee?\nName: ${preview.name}${preview.defaultCategoryName ? `\nDefault category: ${preview.defaultCategoryName}` : ""}${preview.website ? `\nWebsite: ${preview.website}` : ""}${contactCardLines(preview)}`,
       );
+      if (isAsk(outcome)) return outcome.ask;
       if (outcome === "relay") return toolResult(RELAY_PREVIEW_SHOWN);
       if (outcome === "declined")
         return toolError(
           "Cancelled: the confirmation was declined, so no payee was created.",
         );
-      const payee = await this.payeesService.create(userId, {
-        name: preview.name,
-        defaultCategoryId: preview.defaultCategoryId ?? undefined,
-        website: preview.website,
-      });
-      this.writeLimiter.record(userId, "create_payee");
+      const payee = await this.payeesService.create(
+        userId,
+        {
+          name: preview.name,
+          defaultCategoryId: preview.defaultCategoryId ?? undefined,
+          website: preview.website,
+          address: preview.address,
+          email: preview.email,
+          phone: preview.phone,
+        },
+        preview.contactLookup ? { contactLookup: preview.contactLookup } : {},
+      );
+      await this.writeLimiter.record(userId, "create_payee");
       return toolResult({ id: payee.id, name: payee.name, count: 1 });
     }
 
@@ -318,14 +413,17 @@ export class McpPayeesTools {
         `None of the payees could be prepared.${describeSkippedRows(prep.skipped, items.length)}`,
       );
     }
-    const budget = this.writeLimiter.reserve(userId, prep.okPreviews.length);
+    const budget = await this.writeLimiter.reserve(
+      userId,
+      prep.okPreviews.length,
+    );
     if (budget) return budget;
 
     if (approvalMode === "individual") {
       const cards = prep.okPreviews.map((p) =>
         this.actionBuilder.buildCreatePayee(userId, p),
       );
-      return this.runIndividual(server, userId, cards, requestId, prep.skipped);
+      return this.runIndividual(server, ctx, userId, cards, prep.skipped);
     }
 
     const action = this.actionBuilder.buildBatchActions(
@@ -334,53 +432,66 @@ export class McpPayeesTools {
       prep.okRows,
       prep.previewRows,
     );
-    if (emitRelayCard(this.relayService, userId, action)) {
+    if (
+      !ctx.mcpReq.requestState() &&
+      (await emitRelayCard(this.relayService, userId, action))
+    ) {
       return toolResult(RELAY_PREVIEW_SHOWN);
     }
     const confirmation = await confirmWrite(
       server,
+      ctx,
       `Create ${prep.okPreviews.length} payee(s)?${prep.skipped.length ? ` (${prep.skipped.length} skipped)` : ""}`,
-      requestId as never,
+      action.descriptor,
     );
+    if (isAsk(confirmation)) return confirmation.ask;
     if (confirmation === "declined")
       return toolError(
         "Cancelled: the confirmation was declined, so nothing was created.",
       );
     const ids: string[] = [];
     for (const preview of prep.okPreviews) {
-      const payee = await this.payeesService.create(userId, {
-        name: preview.name,
-        defaultCategoryId: preview.defaultCategoryId ?? undefined,
-        website: preview.website,
-      });
+      const payee = await this.payeesService.create(
+        userId,
+        {
+          name: preview.name,
+          defaultCategoryId: preview.defaultCategoryId ?? undefined,
+          website: preview.website,
+          address: preview.address,
+          email: preview.email,
+          phone: preview.phone,
+        },
+        preview.contactLookup ? { contactLookup: preview.contactLookup } : {},
+      );
       ids.push(payee.id);
-      this.writeLimiter.record(userId, "create_payee");
+      await this.writeLimiter.record(userId, "create_payee");
     }
     return toolResult({ ids, count: ids.length, skipped: prep.skipped });
   }
 
   private async manageUpdate(
     server: McpServer,
+    ctx: ServerContext,
     userId: string,
     items: ManagePayeeItem[],
     approvalMode: ApprovalMode,
-    requestId: unknown,
   ) {
     if (items.length === 1) {
       const preview = await this.prepService.prepareUpdatePayeeSingle(
         userId,
         this.toUpdateRow(items[0]),
       );
-      const budget = this.writeLimiter.reserve(userId, 1);
+      const budget = await this.writeLimiter.reserve(userId, 1);
       if (budget) return budget;
       const action = this.actionBuilder.buildUpdatePayee(userId, preview);
       const outcome = await this.emitOrConfirm(
         server,
+        ctx,
         userId,
         action,
-        `Apply this payee edit?\nName: ${preview.name}\nDefault category: ${preview.defaultCategoryName ?? "(none)"}${preview.website !== undefined ? `\nWebsite: ${preview.website ?? "(cleared)"}` : ""}`,
-        requestId,
+        `Apply this payee edit?\nName: ${preview.name}\nDefault category: ${preview.defaultCategoryName ?? "(none)"}${preview.website !== undefined ? `\nWebsite: ${preview.website ?? "(cleared)"}` : ""}${contactCardLines(preview)}`,
       );
+      if (isAsk(outcome)) return outcome.ask;
       if (outcome === "relay") return toolResult(RELAY_PREVIEW_SHOWN);
       if (outcome === "declined")
         return toolError(
@@ -390,8 +501,11 @@ export class McpPayeesTools {
         name: preview.name,
         defaultCategoryId: preview.defaultCategoryId,
         website: preview.website,
+        address: preview.address,
+        email: preview.email,
+        phone: preview.phone,
       });
-      this.writeLimiter.record(userId, "update_payee");
+      await this.writeLimiter.record(userId, "update_payee");
       return toolResult({ id: payee.id, name: payee.name, count: 1 });
     }
 
@@ -404,14 +518,17 @@ export class McpPayeesTools {
         `None of the payee edits could be prepared.${describeSkippedRows(prep.skipped, items.length)}`,
       );
     }
-    const budget = this.writeLimiter.reserve(userId, prep.okPreviews.length);
+    const budget = await this.writeLimiter.reserve(
+      userId,
+      prep.okPreviews.length,
+    );
     if (budget) return budget;
 
     if (approvalMode === "individual") {
       const cards = prep.okPreviews.map((p) =>
         this.actionBuilder.buildUpdatePayee(userId, p),
       );
-      return this.runIndividual(server, userId, cards, requestId, prep.skipped);
+      return this.runIndividual(server, ctx, userId, cards, prep.skipped);
     }
 
     const action = this.actionBuilder.buildBatchActions(
@@ -420,14 +537,19 @@ export class McpPayeesTools {
       prep.okRows,
       prep.previewRows,
     );
-    if (emitRelayCard(this.relayService, userId, action)) {
+    if (
+      !ctx.mcpReq.requestState() &&
+      (await emitRelayCard(this.relayService, userId, action))
+    ) {
       return toolResult(RELAY_PREVIEW_SHOWN);
     }
     const confirmation = await confirmWrite(
       server,
+      ctx,
       `Apply ${prep.okPreviews.length} payee edit(s)?${prep.skipped.length ? ` (${prep.skipped.length} skipped)` : ""}`,
-      requestId as never,
+      action.descriptor,
     );
+    if (isAsk(confirmation)) return confirmation.ask;
     if (confirmation === "declined")
       return toolError(
         "Cancelled: the confirmation was declined, so nothing was changed.",
@@ -438,42 +560,46 @@ export class McpPayeesTools {
         name: preview.name,
         defaultCategoryId: preview.defaultCategoryId,
         website: preview.website,
+        address: preview.address,
+        email: preview.email,
+        phone: preview.phone,
       });
       ids.push(payee.id);
-      this.writeLimiter.record(userId, "update_payee");
+      await this.writeLimiter.record(userId, "update_payee");
     }
     return toolResult({ ids, count: ids.length, skipped: prep.skipped });
   }
 
   private async manageDelete(
     server: McpServer,
+    ctx: ServerContext,
     userId: string,
     items: ManagePayeeItem[],
     approvalMode: ApprovalMode,
-    requestId: unknown,
   ) {
     if (items.length === 1) {
       const preview = await this.prepService.prepareDeletePayeeSingle(
         userId,
         this.toDeleteRow(items[0]),
       );
-      const budget = this.writeLimiter.reserve(userId, 1);
+      const budget = await this.writeLimiter.reserve(userId, 1);
       if (budget) return budget;
       const action = this.actionBuilder.buildDeletePayee(userId, preview);
       const outcome = await this.emitOrConfirm(
         server,
+        ctx,
         userId,
         action,
         `Delete this payee?\nName: ${preview.name}`,
-        requestId,
       );
+      if (isAsk(outcome)) return outcome.ask;
       if (outcome === "relay") return toolResult(RELAY_PREVIEW_SHOWN);
       if (outcome === "declined")
         return toolError(
           "Cancelled: the confirmation was declined, so the payee was not deleted.",
         );
       await this.payeesService.remove(userId, preview.payeeId);
-      this.writeLimiter.record(userId, "delete_payee");
+      await this.writeLimiter.record(userId, "delete_payee");
       return toolResult({ id: preview.payeeId, deleted: true, count: 1 });
     }
 
@@ -486,14 +612,17 @@ export class McpPayeesTools {
         `None of the payees could be prepared.${describeSkippedRows(prep.skipped, items.length)}`,
       );
     }
-    const budget = this.writeLimiter.reserve(userId, prep.okPreviews.length);
+    const budget = await this.writeLimiter.reserve(
+      userId,
+      prep.okPreviews.length,
+    );
     if (budget) return budget;
 
     if (approvalMode === "individual") {
       const cards = prep.okPreviews.map((p) =>
         this.actionBuilder.buildDeletePayee(userId, p),
       );
-      return this.runIndividual(server, userId, cards, requestId, prep.skipped);
+      return this.runIndividual(server, ctx, userId, cards, prep.skipped);
     }
 
     const action = this.actionBuilder.buildBatchActions(
@@ -502,14 +631,19 @@ export class McpPayeesTools {
       prep.okRows,
       prep.previewRows,
     );
-    if (emitRelayCard(this.relayService, userId, action)) {
+    if (
+      !ctx.mcpReq.requestState() &&
+      (await emitRelayCard(this.relayService, userId, action))
+    ) {
       return toolResult(RELAY_PREVIEW_SHOWN);
     }
     const confirmation = await confirmWrite(
       server,
+      ctx,
       `Delete ${prep.okPreviews.length} payee(s)?${prep.skipped.length ? ` (${prep.skipped.length} skipped)` : ""}`,
-      requestId as never,
+      action.descriptor,
     );
+    if (isAsk(confirmation)) return confirmation.ask;
     if (confirmation === "declined")
       return toolError(
         "Cancelled: the confirmation was declined, so nothing was deleted.",
@@ -518,7 +652,7 @@ export class McpPayeesTools {
     for (const preview of prep.okPreviews) {
       await this.payeesService.remove(userId, preview.payeeId);
       ids.push(preview.payeeId);
-      this.writeLimiter.record(userId, "delete_payee");
+      await this.writeLimiter.record(userId, "delete_payee");
     }
     return toolResult({ ids, count: ids.length, skipped: prep.skipped });
   }
@@ -529,25 +663,33 @@ export class McpPayeesTools {
    */
   private async runIndividual(
     server: McpServer,
+    ctx: ServerContext,
     userId: string,
     cards: PendingAiAction[],
-    requestId: unknown,
     skipped: { index: number; reason: string }[],
   ) {
-    if (emitRelayCard(this.relayService, userId, cards[0])) {
+    // Only the round that asks may hand the cards to the web chat; on a retry
+    // the human has already answered in their own client.
+    if (
+      !ctx.mcpReq.requestState() &&
+      (await emitRelayCard(this.relayService, userId, cards[0]))
+    ) {
       for (let i = 1; i < cards.length; i++) {
-        emitRelayCard(this.relayService, userId, cards[i]);
+        await emitRelayCard(this.relayService, userId, cards[i]);
       }
       return toolResult(RELAY_PREVIEW_SHOWN);
     }
+    // Every card is asked in ONE round: a round per card would be 25 rounds on
+    // a full batch, and a multi-round-trip flow is two.
+    const answers = await confirmWriteMany(
+      server,
+      ctx,
+      confirmItemsForCards(cards, (card) => this.confirmLineFor(card)),
+    );
+    if (!(answers instanceof Map)) return answers.ask;
     const ids: string[] = [];
-    for (const card of cards) {
-      const confirmation = await confirmWrite(
-        server,
-        this.confirmLineFor(card),
-        requestId as never,
-      );
-      if (confirmation === "declined") continue;
+    for (const [index, card] of cards.entries()) {
+      if (answers.get(cardKey(index)) === "declined") continue;
       const id = await this.commitCard(userId, card);
       if (id) ids.push(id);
     }
@@ -560,9 +702,9 @@ export class McpPayeesTools {
       case "delete_payee":
         return `Delete this payee?\nName: ${p.name}`;
       case "update_payee":
-        return `Apply this payee edit?\nName: ${p.name}\nDefault category: ${p.categoryName ?? "(none)"}${p.website !== undefined ? `\nWebsite: ${p.website ?? "(cleared)"}` : ""}`;
+        return `Apply this payee edit?\nName: ${p.name}\nDefault category: ${p.categoryName ?? "(none)"}${p.website !== undefined ? `\nWebsite: ${p.website ?? "(cleared)"}` : ""}${contactCardLines(p)}`;
       default:
-        return `Create this payee?\nName: ${p.name}${p.categoryName ? `\nDefault category: ${p.categoryName}` : ""}${p.website ? `\nWebsite: ${p.website}` : ""}`;
+        return `Create this payee?\nName: ${p.name}${p.categoryName ? `\nDefault category: ${p.categoryName}` : ""}${p.website ? `\nWebsite: ${p.website}` : ""}${contactCardLines(p)}`;
     }
   }
 
@@ -574,12 +716,19 @@ export class McpPayeesTools {
     const d = card.descriptor;
     switch (d.type) {
       case "create_payee": {
-        const payee = await this.payeesService.create(userId, {
-          name: d.name,
-          defaultCategoryId: d.defaultCategoryId ?? undefined,
-          website: d.website,
-        });
-        this.writeLimiter.record(userId, "create_payee");
+        const payee = await this.payeesService.create(
+          userId,
+          {
+            name: d.name,
+            defaultCategoryId: d.defaultCategoryId ?? undefined,
+            website: d.website,
+            address: d.address,
+            email: d.email,
+            phone: d.phone,
+          },
+          contactLookupOptions(d),
+        );
+        await this.writeLimiter.record(userId, "create_payee");
         return payee.id;
       }
       case "update_payee": {
@@ -587,13 +736,16 @@ export class McpPayeesTools {
           name: d.name,
           defaultCategoryId: d.defaultCategoryId,
           website: d.website,
+          address: d.address,
+          email: d.email,
+          phone: d.phone,
         });
-        this.writeLimiter.record(userId, "update_payee");
+        await this.writeLimiter.record(userId, "update_payee");
         return payee.id;
       }
       case "delete_payee": {
         await this.payeesService.remove(userId, d.payeeId);
-        this.writeLimiter.record(userId, "delete_payee");
+        await this.writeLimiter.record(userId, "delete_payee");
         return d.payeeId;
       }
       default:

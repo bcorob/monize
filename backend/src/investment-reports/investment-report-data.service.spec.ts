@@ -61,7 +61,7 @@ describe("InvestmentReportDataService", () => {
   let holdingsRepository: { find: jest.Mock };
   let securitiesRepository: { find: jest.Mock };
   let accountsRepository: { find: jest.Mock };
-  let exchangeRateService: { getLatestRate: jest.Mock };
+  let exchangeRateService: { getRateForDate: jest.Mock };
   let manager: ManagerMock;
 
   beforeEach(() => {
@@ -71,7 +71,9 @@ describe("InvestmentReportDataService", () => {
     accountsRepository = {
       find: jest.fn().mockResolvedValue([{ id: "acc1", name: "Brokerage" }]),
     };
-    exchangeRateService = { getLatestRate: jest.fn().mockResolvedValue(null) };
+    exchangeRateService = {
+      getRateForDate: jest.fn().mockResolvedValue(null),
+    };
     const { manager: managerMock, dataSource } = createScopedDbMocks([
       [InvestmentTransaction, txRepository as never],
       [Holding, holdingsRepository as never],
@@ -86,7 +88,12 @@ describe("InvestmentReportDataService", () => {
   });
 
   it("returns no rows when there are no accounts", async () => {
-    const rows = await service.computeHoldings("u1", [], "2024-06-10", "USD");
+    const { rows } = await service.computeHoldings(
+      "u1",
+      [],
+      "2024-06-10",
+      "USD",
+    );
     expect(rows).toEqual([]);
   });
 
@@ -154,7 +161,7 @@ describe("InvestmentReportDataService", () => {
       }),
     ]);
 
-    const rows = await service.computeHoldings(
+    const { rows } = await service.computeHoldings(
       "u1",
       ["acc1"],
       "2024-06-10",
@@ -196,6 +203,120 @@ describe("InvestmentReportDataService", () => {
     expect(v.totalReturn1Week).toBeCloseTo(1.6949, 3);
   });
 
+  describe("daily change needs adjacent, current closes", () => {
+    const changeFor = async (closes: Record<string, string>) => {
+      securitiesRepository.find.mockResolvedValue([
+        {
+          id: "sec1",
+          symbol: "AAA",
+          name: "Alpha",
+          securityType: "STOCK",
+          currencyCode: "USD",
+        },
+      ]);
+      holdingsRepository.find.mockResolvedValue([holding({ quantity: 10 })]);
+      txRepository.find.mockResolvedValue([
+        makeTx({
+          transactionDate: "2024-01-10",
+          quantity: 10,
+          price: 100,
+          totalAmount: 1000,
+        }),
+      ]);
+      manager.query.mockResolvedValue(
+        Object.entries(closes).map(([price_date, close_price]) =>
+          priceRow({ price_date, close_price }),
+        ),
+      );
+      const { rows } = await service.computeHoldings(
+        "u1",
+        ["acc1"],
+        "2024-06-10",
+        "USD",
+      );
+      return rows[0].values;
+    };
+
+    it("is null when the two closes are weeks apart", async () => {
+      const v = await changeFor({ "2024-05-01": "100", "2024-06-10": "120" });
+      expect(v.change).toBeNull();
+      expect(v.changePercent).toBeNull();
+      expect(v.todaysTotalChange).toBeNull();
+    });
+
+    it("is null when the newer close is stale against the as-of date", async () => {
+      const v = await changeFor({ "2024-05-30": "100", "2024-05-31": "120" });
+      expect(v.change).toBeNull();
+      expect(v.todaysTotalChange).toBeNull();
+    });
+
+    it("keeps the figures for adjacent, current closes", async () => {
+      const v = await changeFor({ "2024-06-07": "119", "2024-06-10": "120" });
+      expect(v.change).toBe(1);
+      expect(v.changePercent).toBe(0.8403);
+      expect(v.todaysTotalChange).toBe(10);
+    });
+  });
+
+  describe("period starts at month ends", () => {
+    const returnFor = async (
+      asOf: string,
+      closes: Record<string, string>,
+      key: "totalReturn3Month" | "totalReturn1Year",
+    ) => {
+      securitiesRepository.find.mockResolvedValue([
+        {
+          id: "sec1",
+          symbol: "AAA",
+          name: "Alpha",
+          securityType: "STOCK",
+          currencyCode: "USD",
+        },
+      ]);
+      holdingsRepository.find.mockResolvedValue([holding({ quantity: 10 })]);
+      txRepository.find.mockResolvedValue([
+        makeTx({
+          transactionDate: "2020-01-10",
+          quantity: 10,
+          price: 100,
+          totalAmount: 1000,
+        }),
+      ]);
+      manager.query.mockResolvedValue(
+        Object.entries(closes).map(([price_date, close_price]) =>
+          priceRow({ price_date, close_price }),
+        ),
+      );
+      const { rows } = await service.computeHoldings(
+        "u1",
+        ["acc1"],
+        asOf,
+        "USD",
+      );
+      return rows[0].values[key];
+    };
+
+    it("clamps 3 months before May 31 to Feb 28, not Mar 3", async () => {
+      expect(
+        await returnFor(
+          "2026-05-31",
+          { "2026-02-28": "100", "2026-03-03": "200", "2026-05-31": "220" },
+          "totalReturn3Month",
+        ),
+      ).toBe(120);
+    });
+
+    it("clamps 1 year before Feb 29 to Feb 28, not Mar 1", async () => {
+      expect(
+        await returnFor(
+          "2024-02-29",
+          { "2023-02-28": "100", "2023-03-01": "200", "2024-02-29": "110" },
+          "totalReturn1Year",
+        ),
+      ).toBe(10);
+    });
+  });
+
   it("drops fully-sold positions (not in the holdings table)", async () => {
     securitiesRepository.find.mockResolvedValue([
       {
@@ -227,7 +348,7 @@ describe("InvestmentReportDataService", () => {
       priceRow({ price_date: "2024-02-10", close_price: "130" }),
     ]);
 
-    const rows = await service.computeHoldings(
+    const { rows } = await service.computeHoldings(
       "u1",
       ["acc1"],
       "2024-06-10",
@@ -262,7 +383,7 @@ describe("InvestmentReportDataService", () => {
     ]);
     manager.query.mockResolvedValue([priceRow({ close_price: "120" })]);
 
-    const rows = await service.computeHoldings(
+    const { rows } = await service.computeHoldings(
       "u1",
       ["acc1"],
       "2024-06-10",
@@ -296,7 +417,7 @@ describe("InvestmentReportDataService", () => {
     ]);
     manager.query.mockResolvedValue([priceRow({ close_price: "120" })]);
 
-    const rows = await service.computeHoldings(
+    const { rows } = await service.computeHoldings(
       "u1",
       ["acc1"],
       "2024-06-10",
@@ -339,7 +460,7 @@ describe("InvestmentReportDataService", () => {
       priceRow({ price_date: "2024-05-01", close_price: "110" }),
     ]);
 
-    const rows = await service.computeHoldings(
+    const { rows } = await service.computeHoldings(
       "u1",
       ["acc1"],
       "2024-06-10",
@@ -387,7 +508,7 @@ describe("InvestmentReportDataService", () => {
     ]);
     manager.query.mockResolvedValue([priceRow({ close_price: "130" })]);
 
-    const rows = await service.computeHoldings(
+    const { rows } = await service.computeHoldings(
       "u1",
       ["acc1", "acc2"],
       "2024-06-10",
@@ -439,7 +560,7 @@ describe("InvestmentReportDataService", () => {
     ]);
     manager.query.mockResolvedValue([priceRow({ close_price: "130" })]);
 
-    const rows = await service.computeHoldings(
+    const { rows } = await service.computeHoldings(
       "u1",
       ["acc1", "acc2"],
       "2024-06-10",
@@ -477,7 +598,7 @@ describe("InvestmentReportDataService", () => {
       },
     ]);
 
-    const rows = await service.computeHoldings(
+    const { rows } = await service.computeHoldings(
       "u1",
       ["acc1"],
       "2024-06-10",
@@ -521,9 +642,9 @@ describe("InvestmentReportDataService", () => {
         volume: "1000",
       }),
     ]);
-    exchangeRateService.getLatestRate.mockResolvedValue(0.75); // CAD -> USD
+    exchangeRateService.getRateForDate.mockResolvedValue(0.75); // CAD -> USD
 
-    const rows = await service.computeHoldings(
+    const { rows } = await service.computeHoldings(
       "u1",
       ["acc1"],
       "2024-06-10",
@@ -535,6 +656,61 @@ describe("InvestmentReportDataService", () => {
     expect(rows[0].values.portfolioPercent).toBe(100);
     // Monetary values stay in the holding's native (CAD) currency.
     expect(rows[0].values.marketValue).toBe(1200);
+  });
+
+  it("marks the basis unknown when a sale exceeds what was held", async () => {
+    securitiesRepository.find.mockResolvedValue([
+      {
+        id: "sec1",
+        symbol: "AAA",
+        name: "Alpha",
+        securityType: "STOCK",
+        currencyCode: "USD",
+      },
+    ]);
+    holdingsRepository.find.mockResolvedValue([
+      holding({ quantity: 7, averageCost: 10 }),
+    ]);
+    txRepository.find.mockResolvedValue([
+      makeTx({
+        action: InvestmentAction.BUY,
+        transactionDate: "2024-01-04",
+        quantity: 5,
+        price: 10,
+        totalAmount: 50,
+      }),
+      makeTx({
+        action: InvestmentAction.SELL,
+        transactionDate: "2024-02-04",
+        quantity: 8,
+        price: 10,
+        totalAmount: 80,
+      }),
+      makeTx({
+        action: InvestmentAction.BUY,
+        transactionDate: "2024-03-04",
+        quantity: 10,
+        price: 10,
+        totalAmount: 100,
+      }),
+    ]);
+    manager.query.mockResolvedValue([
+      priceRow({ price_date: "2024-01-04", close_price: "10", volume: "10" }),
+      priceRow({ price_date: "2024-06-10", close_price: "12", volume: "10" }),
+    ]);
+
+    const { rows } = await service.computeHoldings(
+      "u1",
+      ["acc1"],
+      "2024-06-10",
+      "USD",
+    );
+    const v = rows[0].values;
+    // 5 - 8 + 10: the full sale comes off the quantity.
+    expect(v.quantity).toBe(7);
+    expect(v.costBasis).toBeNull();
+    expect(v.gain).toBeNull();
+    expect(v.realizedGains).toBeNull();
   });
 
   it("handles reinvest/interest/capital-gain/split/add actions and annualized return", async () => {
@@ -601,7 +777,7 @@ describe("InvestmentReportDataService", () => {
       }),
     ]);
 
-    const rows = await service.computeHoldings(
+    const { rows } = await service.computeHoldings(
       "u1",
       ["acc1"],
       "2024-06-10",
@@ -610,13 +786,621 @@ describe("InvestmentReportDataService", () => {
     const v = rows[0].values;
     expect(v.quantity).toBe(26); // from the holdings table
     expect(v.reinvestments).toBe(110);
-    expect(v.income).toBe(12); // interest 5 + capital gain 7
-    // Held > 0.5 years -> annualized return is computed (not null)
-    expect(v.totalAnnualizedReturn).not.toBeNull();
+    // The reinvested dividend 110 + interest 5 + capital gain 7.
+    expect(v.income).toBe(122);
+    // ADD_SHARES joined shares of unknown cost: nothing measured against the
+    // basis is stated, but the window return needs no basis.
+    expect(v.costBasis).toBeNull();
+    expect(v.averageCost).toBeNull();
+    expect(v.gain).toBeNull();
+    expect(v.gainPercent).toBeNull();
+    expect(v.priceAppreciation).toBeNull();
+    expect(v.totalReturnAllDates).toBeNull();
+    expect(v.totalAnnualizedReturn).toBeNull();
     expect(v.totalReturn3Year).not.toBeNull();
   });
 
-  it("uses the reverse FX rate when only the inverse pair exists", async () => {
+  /**
+   * Discussion #1670. A reinvested dividend is income, but a reinvest created
+   * in the app stores no total, and the Income column read only cash rows: the
+   * distribution sat in the cost basis with nothing to offset it, so the gain
+   * understated it by exactly its value.
+   */
+  it("counts a reinvested dividend as income at its shares' cost, without counting it twice in a period return", async () => {
+    securitiesRepository.find.mockResolvedValue([
+      {
+        id: "sec1",
+        symbol: "AAA",
+        name: "Alpha",
+        securityType: "STOCK",
+        currencyCode: "USD",
+      },
+    ]);
+    holdingsRepository.find.mockResolvedValue([
+      holding({ quantity: 10, averageCost: 100 }),
+    ]);
+    txRepository.find.mockResolvedValue([
+      makeTx({
+        action: InvestmentAction.BUY,
+        transactionDate: "2024-01-10",
+        quantity: 9,
+        price: 100,
+        totalAmount: 900,
+      }),
+      // As the app writes one: quantity and price, no total.
+      makeTx({
+        action: InvestmentAction.REINVEST,
+        transactionDate: "2024-06-05",
+        quantity: 1,
+        price: 100,
+        totalAmount: 0,
+      }),
+    ]);
+    manager.query.mockResolvedValue([
+      priceRow({ price_date: "2024-06-01", close_price: "100" }),
+      priceRow({ price_date: "2024-06-10", close_price: "110" }),
+    ]);
+
+    const { rows } = await service.computeHoldings(
+      "u1",
+      ["acc1"],
+      "2024-06-10",
+      "USD",
+    );
+    const v = rows[0].values;
+    expect(v.reinvestments).toBe(100);
+    expect(v.income).toBe(100);
+    // 900 of cash bought what is now 1,100: market value 1,100 plus the
+    // reinvested 100 of income, less the 1,000 basis that includes it.
+    expect(v.gain).toBe(200);
+    // 9 shares worth 900 at the window's start became 10 worth 1,100. The
+    // reinvested shares are already in the market value, so the period return
+    // reads cash income only: 22.22%, not 33.33%.
+    expect(v.totalReturn1Week).toBeCloseTo(22.2222, 4);
+  });
+
+  describe("period returns with share flows inside the window", () => {
+    // The 1-week window opens on 2024-06-03; the report is as of 2024-06-10.
+    const returnWeek = async (
+      txs: Record<string, unknown>[],
+      closes: Record<string, string>,
+      // The maintained holdings row is the position the report values.
+      quantityNow = 10,
+    ) => {
+      securitiesRepository.find.mockResolvedValue([
+        {
+          id: "sec1",
+          symbol: "AAA",
+          name: "Alpha",
+          securityType: "STOCK",
+          currencyCode: "USD",
+        },
+      ]);
+      holdingsRepository.find.mockResolvedValue([
+        holding({ quantity: quantityNow }),
+      ]);
+      txRepository.find.mockResolvedValue(txs.map((t) => makeTx(t)));
+      manager.query.mockResolvedValue(
+        Object.entries(closes).map(([price_date, close_price]) =>
+          priceRow({ price_date, close_price }),
+        ),
+      );
+      const { rows } = await service.computeHoldings(
+        "u1",
+        ["acc1"],
+        "2024-06-10",
+        "USD",
+      );
+      return rows[0].values.totalReturn1Week;
+    };
+    const held10 = {
+      action: InvestmentAction.BUY,
+      transactionDate: "2024-01-10",
+      quantity: 10,
+      price: 100,
+      totalAmount: 1000,
+    };
+
+    it("measures a price rise with no flows unchanged", async () => {
+      expect(
+        await returnWeek([held10], {
+          "2024-06-01": "100",
+          "2024-06-10": "110",
+        }),
+      ).toBe(10);
+    });
+
+    it("does not read shares bought inside the window as gain", async () => {
+      // 10 held, 90 bought at a flat 100: nothing was earned.
+      expect(
+        await returnWeek(
+          [
+            held10,
+            {
+              action: InvestmentAction.BUY,
+              transactionDate: "2024-06-05",
+              quantity: 90,
+              price: 100,
+              totalAmount: 9000,
+            },
+          ],
+          { "2024-06-01": "100", "2024-06-10": "100" },
+          100,
+        ),
+      ).toBe(0);
+    });
+
+    it("does not read shares sold inside the window as loss", async () => {
+      expect(
+        await returnWeek(
+          [
+            held10,
+            {
+              action: InvestmentAction.SELL,
+              transactionDate: "2024-06-05",
+              quantity: 9,
+              price: 100,
+              totalAmount: 900,
+            },
+          ],
+          { "2024-06-01": "100", "2024-06-10": "100" },
+          1,
+        ),
+      ).toBe(0);
+    });
+
+    it("values a transfer in at the price on its date", async () => {
+      // 5 shares enter at 100 (500), 10 and 5 are worth 110 each at the end:
+      // Modified Dietz, start of day: 150 / (1000 + 500 * 6/7) = 10.5%.
+      expect(
+        await returnWeek(
+          [
+            held10,
+            {
+              action: InvestmentAction.TRANSFER_IN,
+              transactionDate: "2024-06-05",
+              quantity: 5,
+              price: null,
+              totalAmount: 0,
+            },
+          ],
+          {
+            "2024-06-01": "100",
+            "2024-06-05": "100",
+            "2024-06-10": "110",
+          },
+          15,
+        ),
+      ).toBeCloseTo(10.5, 4);
+    });
+
+    it("weights a mid-window purchase by the days it was held", async () => {
+      // 10 held at 100, 90 bought on 06-05 at 100, 100 worth 110 on 06-10:
+      // invested 6 of the window's 7 days (06-05..06-10, its own day counted):
+      // 1000 / (1000 + 9000 * 6/7) = 1000 / 8714.2857 = 11.4754%. The old
+      // start-of-window denominator (10000) read 10%.
+      expect(
+        await returnWeek(
+          [
+            held10,
+            {
+              action: InvestmentAction.BUY,
+              transactionDate: "2024-06-05",
+              quantity: 90,
+              price: 100,
+              totalAmount: 9000,
+            },
+          ],
+          { "2024-06-01": "100", "2024-06-10": "110" },
+          100,
+        ),
+      ).toBeCloseTo(11.4754, 4);
+    });
+
+    it("weights a sale out of the denominator", async () => {
+      // 10 held at 100, 9 sold on 06-04 for 900, 1 worth 110 on 06-10:
+      // the sale on the window's first day weighs 1, so the 1 share still held
+      // carries the whole base: (110 + 900 - 1000) / (1000 - 900) = 10%, the
+      // price move.
+      expect(
+        await returnWeek(
+          [
+            held10,
+            {
+              action: InvestmentAction.SELL,
+              transactionDate: "2024-06-04",
+              quantity: 9,
+              price: 100,
+              totalAmount: 900,
+            },
+          ],
+          { "2024-06-01": "100", "2024-06-10": "110" },
+          1,
+        ),
+      ).toBeCloseTo(10, 4);
+    });
+
+    it("reports no return when the weighted denominator is not positive", async () => {
+      // 9 sold on 06-04 for 1,200: 1000 - 1200 * 7/7 = -200.
+      expect(
+        await returnWeek(
+          [
+            held10,
+            {
+              action: InvestmentAction.SELL,
+              transactionDate: "2024-06-04",
+              quantity: 9,
+              price: 133.33,
+              totalAmount: 1200,
+            },
+          ],
+          { "2024-06-01": "100", "2024-06-10": "110" },
+          1,
+        ),
+      ).toBeNull();
+    });
+
+    it("weights a flow on the as-of date by its own day", async () => {
+      // 90 bought on 06-10 at 100 and closing at 110: the 900 earned that day
+      // is over 9000 invested for 1 of 7 days, not over nothing, so the
+      // column does not read 100%: 1000 / (1000 + 9000 / 7) = 43.75%.
+      expect(
+        await returnWeek(
+          [
+            held10,
+            {
+              action: InvestmentAction.BUY,
+              transactionDate: "2024-06-10",
+              quantity: 90,
+              price: 100,
+              totalAmount: 9000,
+            },
+          ],
+          { "2024-06-01": "100", "2024-06-10": "110" },
+          100,
+        ),
+      ).toBeCloseTo(43.75, 4);
+    });
+
+    it("equals the plain return when a dividend is reinvested", async () => {
+      // 1 share bought with the distribution at a flat 100: 1,000 became
+      // 1,100, which is the 10% a cash dividend of 100 would have earned.
+      expect(
+        await returnWeek(
+          [
+            held10,
+            {
+              action: InvestmentAction.REINVEST,
+              transactionDate: "2024-06-05",
+              quantity: 1,
+              price: 100,
+              totalAmount: 0,
+            },
+          ],
+          { "2024-06-01": "100", "2024-06-10": "100" },
+          11,
+        ),
+      ).toBe(10);
+    });
+
+    it("reports no return when a flow in the window cannot be valued", async () => {
+      // A BUY with no price is an unknown cost, not a free purchase.
+      expect(
+        await returnWeek(
+          [
+            held10,
+            {
+              action: InvestmentAction.BUY,
+              transactionDate: "2024-06-05",
+              quantity: 90,
+              price: 0,
+              totalAmount: 0,
+            },
+          ],
+          { "2024-06-01": "100", "2024-06-10": "100" },
+          100,
+        ),
+      ).toBeNull();
+    });
+  });
+
+  it("reports realized gains as unknown once a sale draws on shares added with no cost (#1859)", async () => {
+    securitiesRepository.find.mockResolvedValue([
+      {
+        id: "sec1",
+        symbol: "AAA",
+        name: "Alpha",
+        securityType: "STOCK",
+        currencyCode: "USD",
+      },
+    ]);
+    holdingsRepository.find.mockResolvedValue([
+      holding({ quantity: 100, averageCost: 0 }),
+    ]);
+    txRepository.find.mockResolvedValue([
+      makeTx({
+        action: InvestmentAction.ADD_SHARES,
+        transactionDate: "2024-01-05",
+        quantity: 100,
+        price: null,
+        totalAmount: 0,
+      }),
+      makeTx({
+        action: InvestmentAction.BUY,
+        transactionDate: "2024-01-10",
+        quantity: 100,
+        price: 50,
+        totalAmount: 5000,
+      }),
+      makeTx({
+        action: InvestmentAction.SELL,
+        transactionDate: "2024-06-05",
+        quantity: 100,
+        price: 60,
+        totalAmount: 6000,
+      }),
+    ]);
+    manager.query.mockResolvedValue([
+      priceRow({ price_date: "2024-06-10", close_price: "60" }),
+    ]);
+
+    const { rows } = await service.computeHoldings(
+      "u1",
+      ["acc1"],
+      "2024-06-10",
+      "USD",
+    );
+
+    // The average over 200 shares is 25, which read as a gain of 3,500.
+    expect(rows[0].values.realizedGains).toBeNull();
+    expect(rows[0].values.sales).toBe(6000);
+  });
+
+  it("treats a return of capital as capital paid back, not income (#1800)", async () => {
+    securitiesRepository.find.mockResolvedValue([
+      {
+        id: "sec1",
+        symbol: "AAA",
+        name: "Alpha",
+        securityType: "STOCK",
+        currencyCode: "USD",
+      },
+    ]);
+    holdingsRepository.find.mockResolvedValue([
+      holding({ quantity: 10, averageCost: 0 }),
+    ]);
+    txRepository.find.mockResolvedValue([
+      makeTx({
+        action: InvestmentAction.BUY,
+        transactionDate: "2024-01-10",
+        quantity: 10,
+        price: 100,
+        totalAmount: 1000,
+      }),
+      // 120 a share paid back on 100 a share of cost: 1,000 comes off the
+      // basis and the 200 beyond it is realized.
+      makeTx({
+        action: InvestmentAction.RETURN_OF_CAPITAL,
+        transactionDate: "2024-06-05",
+        quantity: null,
+        price: null,
+        totalAmount: 1200,
+      }),
+    ]);
+    manager.query.mockResolvedValue([
+      priceRow({ price_date: "2024-06-01", close_price: "200" }),
+      priceRow({ price_date: "2024-06-10", close_price: "80" }),
+    ]);
+
+    const { rows } = await service.computeHoldings(
+      "u1",
+      ["acc1"],
+      "2024-06-10",
+      "USD",
+    );
+    const v = rows[0].values;
+    expect(v.income).toBe(0);
+    expect(v.realizedGains).toBe(200);
+    // 2,000 at the window's start became 800 of shares plus 1,200 of cash
+    // paid back: no return, where leaving the cash out read it as -60%.
+    expect(v.totalReturn1Week).toBe(0);
+  });
+
+  it("keeps an imported reinvest that carries a total but no price in Reinvestments and Income", async () => {
+    // A QIF ReinvDiv with no price line: the basis cannot price it, but the
+    // distribution itself is the file's total.
+    securitiesRepository.find.mockResolvedValue([
+      {
+        id: "sec1",
+        symbol: "AAA",
+        name: "Alpha",
+        securityType: "STOCK",
+        currencyCode: "USD",
+      },
+    ]);
+    holdingsRepository.find.mockResolvedValue([
+      holding({ quantity: 20, averageCost: 50 }),
+    ]);
+    txRepository.find.mockResolvedValue([
+      makeTx({
+        action: InvestmentAction.BUY,
+        transactionDate: "2024-01-10",
+        quantity: 10,
+        price: 50,
+        totalAmount: 500,
+      }),
+      makeTx({
+        action: InvestmentAction.REINVEST,
+        transactionDate: "2024-03-01",
+        quantity: 10,
+        price: null,
+        totalAmount: 500,
+      }),
+    ]);
+    manager.query.mockResolvedValue([
+      priceRow({ price_date: "2024-06-10", close_price: "50" }),
+    ]);
+
+    const { rows } = await service.computeHoldings(
+      "u1",
+      ["acc1"],
+      "2024-06-10",
+      "USD",
+    );
+    expect(rows[0].values.reinvestments).toBe(500);
+    expect(rows[0].values.income).toBe(500);
+  });
+
+  /**
+   * Issue #1390. One unresolvable pair blanks every row's % of portfolio --
+   * the denominator is withheld, correctly -- but the response said nothing
+   * about why, so the blanks read as zero and only a server log named the
+   * pair. The completeness now travels with the rows.
+   */
+  it("reports the pair it could not resolve instead of only logging it", async () => {
+    securitiesRepository.find.mockResolvedValue([
+      {
+        id: "sec1",
+        symbol: "AAA",
+        name: "Alpha",
+        securityType: "STOCK",
+        currencyCode: "SEK",
+      },
+    ]);
+    holdingsRepository.find.mockResolvedValue([
+      holding({ quantity: 10, averageCost: 100 }),
+    ]);
+    txRepository.find.mockResolvedValue([
+      makeTx({
+        action: InvestmentAction.BUY,
+        transactionDate: "2024-01-10",
+        quantity: 10,
+        price: 100,
+        totalAmount: 1000,
+      }),
+    ]);
+    manager.query.mockResolvedValue([priceRow({ close_price: "120" })]);
+    exchangeRateService.getRateForDate.mockResolvedValue(null);
+
+    const result = await service.computeHoldings(
+      "u1",
+      ["acc1"],
+      "2024-06-10",
+      "USD",
+    );
+
+    expect(result.fxComplete).toBe(false);
+    expect(result.missingPairs).toEqual(["SEK->USD"]);
+    // The withheld figures stay withheld: the flag explains them, it does not
+    // replace them with a number.
+    expect(result.rows[0].values.portfolioPercent).toBeNull();
+    expect(result.rows[0].exchangeRate).toBeNull();
+  });
+
+  it("reports a fully converted run as complete", async () => {
+    securitiesRepository.find.mockResolvedValue([
+      {
+        id: "sec1",
+        symbol: "AAA",
+        name: "Alpha",
+        securityType: "STOCK",
+        currencyCode: "USD",
+      },
+    ]);
+    holdingsRepository.find.mockResolvedValue([
+      holding({ quantity: 10, averageCost: 100 }),
+    ]);
+    txRepository.find.mockResolvedValue([
+      makeTx({
+        action: InvestmentAction.BUY,
+        transactionDate: "2024-01-10",
+        quantity: 10,
+        price: 100,
+        totalAmount: 1000,
+      }),
+    ]);
+    manager.query.mockResolvedValue([priceRow({ close_price: "120" })]);
+
+    const result = await service.computeHoldings(
+      "u1",
+      ["acc1"],
+      "2024-06-10",
+      "USD",
+    );
+
+    expect(result.fxComplete).toBe(true);
+    expect(result.missingPairs).toEqual([]);
+    expect(result.pricesComplete).toBe(true);
+    expect(result.unpricedSymbols).toEqual([]);
+  });
+
+  /**
+   * Issue #1390, the other cause. An unpriced holding withholds the same
+   * denominator by the same arithmetic, but `fxComplete` stayed true and
+   * `missingPairs` empty, so the blank "% of portfolio" column carried no
+   * explanation at all and the rate table was the wrong thing to go and check.
+   */
+  it("reports an unpriced holding as its own cause, not as a rate gap", async () => {
+    securitiesRepository.find.mockResolvedValue([
+      {
+        id: "sec1",
+        symbol: "AAA",
+        name: "Alpha",
+        securityType: "STOCK",
+        currencyCode: "USD",
+      },
+      {
+        id: "sec2",
+        symbol: "BBB",
+        name: "Beta",
+        securityType: "STOCK",
+        currencyCode: "USD",
+      },
+    ]);
+    holdingsRepository.find.mockResolvedValue([
+      holding({ quantity: 10, averageCost: 100 }),
+      holding({ securityId: "sec2", quantity: 5, averageCost: 40 }),
+    ]);
+    txRepository.find.mockResolvedValue([
+      makeTx({
+        action: InvestmentAction.BUY,
+        transactionDate: "2024-01-10",
+        quantity: 10,
+        price: 100,
+        totalAmount: 1000,
+      }),
+      makeTx({
+        securityId: "sec2",
+        action: InvestmentAction.BUY,
+        transactionDate: "2024-01-10",
+        quantity: 5,
+        price: 40,
+        totalAmount: 200,
+      }),
+    ]);
+    // Only the first security has a close on or before the as-of date.
+    manager.query.mockResolvedValue([priceRow({ close_price: "120" })]);
+
+    const result = await service.computeHoldings(
+      "u1",
+      ["acc1"],
+      "2024-06-10",
+      "USD",
+    );
+
+    expect(result.pricesComplete).toBe(false);
+    expect(result.unpricedSymbols).toEqual(["BBB"]);
+    // The rate table is not the thing to go and fix.
+    expect(result.fxComplete).toBe(true);
+    expect(result.missingPairs).toEqual([]);
+    // The denominator is still withheld, on every row.
+    expect(result.rows.map((r) => r.values.portfolioPercent)).toEqual([
+      null,
+      null,
+    ]);
+  });
+
+  it("leaves the direct/inverse decision to the one ladder and converts at the as-of date", async () => {
     securitiesRepository.find.mockResolvedValue([
       {
         id: "sec1",
@@ -639,18 +1423,27 @@ describe("InvestmentReportDataService", () => {
       }),
     ]);
     manager.query.mockResolvedValue([priceRow({ close_price: "120" })]);
-    // EUR->USD missing, USD->EUR = 0.8 -> rate = 1/0.8 = 1.25
-    exchangeRateService.getLatestRate.mockImplementation((from: string) =>
-      from === "EUR" ? Promise.resolve(null) : Promise.resolve(0.8),
-    );
+    // Only EUR->USD is asked for: `getRateForDate` already consults both
+    // stored directions, so a caller-side reverse chase would be a second
+    // resolver (issue #1390). 1/0.8 = 1.25 is what the ladder hands back.
+    exchangeRateService.getRateForDate.mockResolvedValue(1.25);
 
-    const rows = await service.computeHoldings(
+    const { rows } = await service.computeHoldings(
       "u1",
       ["acc1"],
       "2024-06-10",
       "USD",
     );
     expect(rows[0].values.exchangeRate).toBe(1.25);
+    // The report's as-of date, not today; and `fetchMissing: false`, because
+    // running a report is a read: the provider fan-out it used to trigger
+    // wrote rate rows from a GET and repeated on every refresh.
+    expect(exchangeRateService.getRateForDate).toHaveBeenCalledWith(
+      "EUR",
+      "USD",
+      "2024-06-10",
+      { fetchMissing: false },
+    );
   });
 
   it("returns null valuation columns when no price is available", async () => {
@@ -677,7 +1470,7 @@ describe("InvestmentReportDataService", () => {
     ]);
     manager.query.mockResolvedValue([]); // no stored prices
 
-    const rows = await service.computeHoldings(
+    const { rows } = await service.computeHoldings(
       "u1",
       ["acc1"],
       "2024-06-10",
@@ -767,7 +1560,7 @@ describe("InvestmentReportDataService", () => {
       }),
     ]);
 
-    const rows = await service.computeHoldings(
+    const { rows } = await service.computeHoldings(
       "u1",
       ["acc1"],
       "2024-06-10",
@@ -797,7 +1590,7 @@ describe("InvestmentReportDataService", () => {
       }),
     ]);
     manager.query.mockResolvedValue([]);
-    const rows = await service.computeHoldings(
+    const { rows } = await service.computeHoldings(
       "u1",
       ["acc1"],
       "2024-06-10",
@@ -849,7 +1642,7 @@ describe("InvestmentReportDataService", () => {
       priceRow({ security_id: "sec1", close_price: "100" }),
       priceRow({ security_id: "sec2", close_price: "50" }),
     ]);
-    const rows = await service.computeHoldings(
+    const { rows } = await service.computeHoldings(
       "u1",
       ["acc1"],
       "2024-06-10",

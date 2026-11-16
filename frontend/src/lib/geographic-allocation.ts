@@ -22,6 +22,12 @@ export interface RegionAllocation {
  * Maps a security's listing exchange to a country and broad geographic region.
  * Shared by the Geographic Allocation report and its dashboard widget so both
  * classify holdings identically.
+ *
+ * **This is where a security is listed, not where its business is.** A globally
+ * diversified fund bought on the NYSE is North America here, because that is
+ * what its listing says; the country look-through
+ * (`investmentsApi.getCountryWeightings`) is the view that sees inside it. Both
+ * are offered, and the region view says which question it answers.
  */
 export const EXCHANGE_TO_REGION: Record<string, { country: string; region: string }> = {
   NYSE: { country: 'United States', region: 'North America' },
@@ -53,12 +59,84 @@ export const EXCHANGE_TO_REGION: Record<string, { country: string; region: strin
   SGX: { country: 'Singapore', region: 'Asia-Pacific' },
   BSE: { country: 'India', region: 'Asia-Pacific' },
   NSE: { country: 'India', region: 'Asia-Pacific' },
+  // Further listing venues, so a holding outside the handful of majors is
+  // placed on its own continent rather than falling into Other.
+  OTC: { country: 'United States', region: 'North America' },
+  PNK: { country: 'United States', region: 'North America' },
+  IEX: { country: 'United States', region: 'North America' },
+  CBOE: { country: 'United States', region: 'North America' },
+  TSE: { country: 'Canada', region: 'North America' },
+  CSE: { country: 'Canada', region: 'North America' },
+  CNQ: { country: 'Canada', region: 'North America' },
+  MEX: { country: 'Mexico', region: 'North America' },
+  BMV: { country: 'Mexico', region: 'North America' },
+  AIM: { country: 'United Kingdom', region: 'Europe' },
+  GER: { country: 'Germany', region: 'Europe' },
+  BER: { country: 'Germany', region: 'Europe' },
+  MUN: { country: 'Germany', region: 'Europe' },
+  STU: { country: 'Germany', region: 'Europe' },
+  HAM: { country: 'Germany', region: 'Europe' },
+  DUS: { country: 'Germany', region: 'Europe' },
+  EBS: { country: 'Switzerland', region: 'Europe' },
+  SIX: { country: 'Switzerland', region: 'Europe' },
+  SWX: { country: 'Switzerland', region: 'Europe' },
+  VIE: { country: 'Austria', region: 'Europe' },
+  BRU: { country: 'Belgium', region: 'Europe' },
+  LIS: { country: 'Portugal', region: 'Europe' },
+  MCE: { country: 'Spain', region: 'Europe' },
+  BME: { country: 'Spain', region: 'Europe' },
+  ATH: { country: 'Greece', region: 'Europe' },
+  DUB: { country: 'Ireland', region: 'Europe' },
+  ISE: { country: 'Ireland', region: 'Europe' },
+  HEL: { country: 'Finland', region: 'Europe' },
+  CPH: { country: 'Denmark', region: 'Europe' },
+  OSL: { country: 'Norway', region: 'Europe' },
+  ICE: { country: 'Iceland', region: 'Europe' },
+  WSE: { country: 'Poland', region: 'Europe' },
+  GPW: { country: 'Poland', region: 'Europe' },
+  PRA: { country: 'Czechia', region: 'Europe' },
+  BUD: { country: 'Hungary', region: 'Europe' },
+  IST: { country: 'Turkey', region: 'Europe' },
+  MOEX: { country: 'Russia', region: 'Europe' },
+  OSE: { country: 'Japan', region: 'Asia-Pacific' },
+  JPX: { country: 'Japan', region: 'Asia-Pacific' },
+  SHG: { country: 'China', region: 'Asia-Pacific' },
+  SZ: { country: 'China', region: 'Asia-Pacific' },
+  KOSDAQ: { country: 'South Korea', region: 'Asia-Pacific' },
+  TWO: { country: 'Taiwan', region: 'Asia-Pacific' },
+  NZE: { country: 'New Zealand', region: 'Asia-Pacific' },
+  NZX: { country: 'New Zealand', region: 'Asia-Pacific' },
+  IDX: { country: 'Indonesia', region: 'Asia-Pacific' },
+  JKT: { country: 'Indonesia', region: 'Asia-Pacific' },
+  SET: { country: 'Thailand', region: 'Asia-Pacific' },
+  KLS: { country: 'Malaysia', region: 'Asia-Pacific' },
+  HOSE: { country: 'Vietnam', region: 'Asia-Pacific' },
+  PSE: { country: 'Philippines', region: 'Asia-Pacific' },
+  KAR: { country: 'Pakistan', region: 'Asia-Pacific' },
+  CSE_LK: { country: 'Sri Lanka', region: 'Asia-Pacific' },
+  SAO: { country: 'Brazil', region: 'Latin America' },
+  BVMF: { country: 'Brazil', region: 'Latin America' },
+  BUE: { country: 'Argentina', region: 'Latin America' },
+  SGO: { country: 'Chile', region: 'Latin America' },
+  BVC: { country: 'Colombia', region: 'Latin America' },
+  LIM: { country: 'Peru', region: 'Latin America' },
+  JSE: { country: 'South Africa', region: 'Africa & Middle East' },
+  CAI: { country: 'Egypt', region: 'Africa & Middle East' },
+  TASE: { country: 'Israel', region: 'Africa & Middle East' },
+  TLV: { country: 'Israel', region: 'Africa & Middle East' },
+  SAU: { country: 'Saudi Arabia', region: 'Africa & Middle East' },
+  TADAWUL: { country: 'Saudi Arabia', region: 'Africa & Middle East' },
+  ADX: { country: 'United Arab Emirates', region: 'Africa & Middle East' },
+  DFM: { country: 'United Arab Emirates', region: 'Africa & Middle East' },
+  QSE: { country: 'Qatar', region: 'Africa & Middle East' },
 };
 
 export const REGION_COLOURS: Record<string, string> = {
   'North America': CHART_SERIES[0],
   Europe: CHART_SERIES[1],
   'Asia-Pacific': CHART_SERIES[2],
+  'Latin America': CHART_SERIES[4],
+  'Africa & Middle East': CHART_SERIES[5],
   Other: CHART_SERIES[3],
 };
 

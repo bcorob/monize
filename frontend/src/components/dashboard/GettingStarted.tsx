@@ -9,6 +9,7 @@ import { useDemoStore } from '@/store/demoStore';
 import { useTourStore } from '@/store/tourStore';
 import { INTRO_TOUR } from '@/lib/tours/registry';
 import { CARD_CLASS } from '@/components/ui/Card';
+import { XMarkIcon } from '@heroicons/react/24/outline';
 
 export function GettingStarted() {
   const t = useTranslations('dashboard');
@@ -106,10 +107,9 @@ export function GettingStarted() {
           onClick={handleDismiss}
           className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
           title={t('gettingStarted.dismiss')}
+          aria-label={t('gettingStarted.dismiss')}
         >
-          <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
+          <XMarkIcon className="h-5 w-5" aria-hidden="true" />
         </button>
       </div>
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">

@@ -94,6 +94,9 @@
     "largestValue": "{amount} dnia {date}",
     "overpaymentFor": "Odbiorca nadpłat dla",
     "website": "Strona internetowa",
+    "address": "Adres",
+    "phone": "Telefon",
+    "email": "E-mail",
     "notes": "Notatki"
   },
   "tabs": {
@@ -127,5 +130,23 @@
     "needsMoreHistory": "Potrzeba co najmniej {years} lat historii, aby odróżnić wzorzec sezonowy od przypadku.",
     "empty": "Brak wydatków do podziału na miesiące",
     "monthTooltip": "{month}: średnio {amount} z {years, plural, one {# roku} few {# lat} many {# lat} other {# lat}}"
+  },
+  "contactLookup": {
+    "button": "Wyszukaj dane kontaktowe",
+    "inProgress": "Wyszukiwanie...",
+    "nothingNew": "Nie znaleziono nowych danych kontaktowych.",
+    "noProvider": "Skonfiguruj źródło w ustawieniach wyszukiwania odbiorców, aby znaleźć dane kontaktowe.",
+    "failed": "Nie udało się ukończyć wyszukiwania. Spróbuj ponownie później.",
+    "dialogTitle": "Potwierdź dane kontaktowe",
+    "dialogSubtitle": "Nic nie zostanie zapisane dla {name}, dopóki nie potwierdzisz.",
+    "pickMatch": "Ta nazwa pasuje do {count, plural, one {# firmy} few {# firm} many {# firm} other {# firmy}}. Wybierz tę, której płacisz:",
+    "unlabelledMatch": "Dopasowanie bez nazwy",
+    "willAdd": "Dodaj",
+    "willReplace": "Zastąp",
+    "cancel": "Anuluj",
+    "confirm": "{count, plural, one {Zapisz # zmianę} few {Zapisz # zmiany} many {Zapisz # zmian} other {Zapisz # zmiany}}",
+    "applied": "{count, plural, one {Zapisano # dane kontaktowe} few {Zapisano # dane kontaktowe} many {Zapisano # danych kontaktowych} other {Zapisano # danych kontaktowych}}",
+    "applyFailed": "Nie udało się zapisać danych kontaktowych",
+    "quotaExceeded": "Wyczerpano tegomiesięczne zapytania Google Places. Zwiększ limit w ustawieniach wyszukiwania odbiorców lub poczekaj do przyszłego miesiąca."
   }
 }

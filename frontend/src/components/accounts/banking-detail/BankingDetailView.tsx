@@ -6,7 +6,9 @@ import { useTranslations } from 'next-intl';
 import { format, startOfMonth, subMonths } from 'date-fns';
 import { accountsApi } from '@/lib/accounts';
 import { transactionsApi } from '@/lib/transactions';
-import { DailyBalancePoint } from '@/lib/balance-history';
+import { DailyBalancePoint, averageDailyBalance } from '@/lib/balance-history';
+import { getDecimalPlacesForCurrency } from '@/lib/format';
+import { useCurrencyDecimalsVersion } from '@/hooks/useCurrencyDecimalsVersion';
 import { createLogger } from '@/lib/logger';
 import { BalanceHistoryChart } from '@/components/transactions/BalanceHistoryChart';
 import { RecurringChargesPanel } from '@/components/accounts/shared/RecurringChargesPanel';
@@ -21,6 +23,7 @@ import {
   type BalanceForecastState,
 } from '../shared/balance-forecast-state';
 import { BalanceForecastUnavailable } from '@/components/accounts/shared/BalanceForecastUnavailable';
+import { useOverdueForecastMarkers } from '@/components/accounts/shared/useOverdueForecastMarkers';
 import type { GroupedTotal, MonthlyTotal } from '@/types/transaction';
 
 const logger = createLogger('BankingDetailView');
@@ -170,6 +173,10 @@ export function BankingDetailView({ account }: BankingDetailViewProps) {
     [historicalBalances, forecast.points],
   );
 
+  // The overdue occurrences the projection applies on its first day, marked on the
+  // line so that day's drop has a cause (discussion #1784).
+  const overdueMarkers = useOverdueForecastMarkers(forecast);
+
   // Both from the same `withheld`, so the panel and the figure cannot disagree.
   const projectedBalance = projectedBalanceFrom(
     forecast,
@@ -178,25 +185,21 @@ export function BankingDetailView({ account }: BankingDetailViewProps) {
 
   // An average over a series with a gap is not the average: it is the mean of
   // the days that happen to be known, presented as the mean of all of them. Fall
-  // back to the account's own balance rather than reporting that.
-  const knownHistoricalBalances = historicalBalances.filter(
-    (p): p is typeof p & { balance: number } => p.balance !== null,
-  );
+  // back to the account's own balance rather than reporting that. Rounded to
+  // the account currency's own places: at cents a 0.0049 BTC mean read 0.0000.
+  // Read from the registry during render, so the view subscribes to it: a
+  // mean drawn at `Intl`'s two before `GET /currencies` answers is redrawn.
+  useCurrencyDecimalsVersion();
   const averageBalance =
-    knownHistoricalBalances.length === historicalBalances.length &&
-    knownHistoricalBalances.length > 0
-      ? Math.round(
-          (knownHistoricalBalances.reduce((sum, p) => sum + p.balance, 0) /
-            knownHistoricalBalances.length) *
-            100,
-        ) / 100
-      : Number(account.currentBalance) || 0;
+    averageDailyBalance(historicalBalances, getDecimalPlacesForCurrency(currency)) ??
+    (Number(account.currentBalance) || 0);
 
   return (
     <div className="space-y-6">
       <BankingSummaryCards
         account={account}
         projectedBalance={projectedBalance}
+        overdue={forecast.overdue}
         moneyIn={moneyIn}
         moneyOut={moneyOut}
         interestEarnedYtd={interestEarnedYtd}
@@ -242,6 +245,8 @@ export function BankingDetailView({ account }: BankingDetailViewProps) {
               currencyCode={currency}
               accountName={account.name}
               hideTitle
+              markers={overdueMarkers}
+              markerSnap="later"
             />
           )}
         </div>

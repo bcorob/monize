@@ -34,6 +34,12 @@
     "dismiss": "Tutup",
     "dismissAriaLabel": "Tutup notifikasi pembaruan"
   },
+  "jwtSecretBanner": {
+    "label": "JWT_SECRET lemah.",
+    "detail": "Nilainya adalah contoh yang dipublikasikan atau terlalu mudah ditebak, sehingga token sesi bisa dipalsukan. Buat nilai yang kuat dengan <code>openssl rand -base64 32</code>. Mengubahnya membuat kode aplikasi autentikator tidak berlaku lagi dan melupakan perangkat tepercaya: pengguna masuk dengan kode cadangan lalu menyiapkan ulang 2FA, dan Anda mereset 2FA di <users>Manajemen Pengguna</users> bagi yang tidak memilikinya. Baca dulu <code>docs/backend/modules-and-runtime.md</code> (Changing JWT_SECRET).",
+    "dismiss": "Tutup",
+    "dismissAriaLabel": "Tutup peringatan JWT_SECRET"
+  },
   "actionHistory": {
     "title": "Riwayat Tindakan",
     "buttonAriaLabel": "Riwayat Tindakan",
@@ -58,6 +64,7 @@
       "tag": "Tag",
       "account": "Akun",
       "scheduled_transaction": "Terjadwal",
+      "scheduled_posting": "Terjadwal",
       "security": "Sekuritas",
       "budget": "Anggaran",
       "custom_report": "Laporan"
@@ -79,7 +86,8 @@
       "REINVEST_CAPITAL_GAIN_LONG": "Reinvestasi Keuntungan Modal Jangka Panjang",
       "CAPITAL_GAIN_SHORT": "Keuntungan Modal Jangka Pendek",
       "CAPITAL_GAIN_LONG": "Keuntungan Modal Jangka Panjang",
-      "REDEEM": "Pencairan CD/Obligasi"
+      "REDEEM": "Pencairan CD/Obligasi",
+      "RETURN_OF_CAPITAL": "Pengembalian Modal"
     },
     "descriptions": {
       "createdAccount": "Akun \"{name}\" dibuat",
@@ -99,6 +107,7 @@
       "deletedInvestmentReport": "Laporan investasi \"{name}\" dihapus",
       "createdPayee": "Penerima \"{name}\" dibuat",
       "updatedPayee": "Penerima \"{name}\" diperbarui",
+      "lookedUpPayeeContact": "Mencari detail kontak penerima \"{name}\"",
       "deletedPayee": "Penerima \"{name}\" dihapus",
       "createdReport": "Laporan \"{name}\" dibuat",
       "updatedReport": "Laporan \"{name}\" diperbarui",
@@ -106,6 +115,7 @@
       "createdScheduledTransaction": "Transaksi terjadwal \"{name}\" dibuat",
       "updatedScheduledTransaction": "Transaksi terjadwal \"{name}\" diperbarui",
       "deletedScheduledTransaction": "Transaksi terjadwal \"{name}\" dihapus",
+      "postedScheduledTransaction": "Transaksi terjadwal \"{name}\" diposting",
       "createdSecurity": "Sekuritas \"{symbol}\" dibuat",
       "updatedSecurity": "Sekuritas \"{symbol}\" diperbarui",
       "deletedSecurity": "Sekuritas \"{symbol}\" dihapus",
@@ -115,26 +125,23 @@
       "createdTransaction": "Transaksi {payee} {amount} dibuat",
       "updatedTransaction": "Transaksi {payee} {amount} diperbarui",
       "deletedTransaction": "Transaksi {payee} {amount} dihapus",
+      "convertedToTransfer": "Transaksi {payee} {amount} dikonversi menjadi transfer",
+      "convertedToTransaction": "Transfer {payee} {amount} dikonversi menjadi transaksi",
       "bulkUpdatedTransactions": "{count, plural, one {# transaksi} other {# transaksi}} diperbarui secara massal",
       "createdTransfer": "Transfer {amount} dari {from} ke {to} dibuat",
       "createdInvestmentTransaction": "Transaksi {action} dibuat",
       "updatedInvestmentTransaction": "Transaksi {action} diperbarui",
       "deletedInvestmentTransaction": "Transaksi {action} dihapus",
       "transferredSecurity": "Sekuritas dipindahkan antar akun",
-      "updatedSecurityTransfer": "Transfer sekuritas diperbarui"
-    },
-    "timeAgo": {
-      "justNow": "baru saja",
-      "minutes": "{count} menit lalu",
-      "hours": "{count} jam lalu",
-      "days": "{count} hari lalu"
+      "updatedSecurityTransfer": "Transfer sekuritas diperbarui",
+      "ranTransactionRule": "Aturan “{name}” dijalankan pada {count, plural, other {# transaksi}}"
     },
     "undonePrefix": "Dibatalkan: {description}",
     "redonePrefix": "Diulangi: {description}"
   },
   "pageHeader": {
-    "helpAriaLabel": "Buka wiki Monize untuk bantuan dengan bagian ini",
-    "helpTooltip": "Buka wiki Monize untuk bantuan dengan bagian ini"
+    "helpAriaLabel": "Bantuan untuk halaman ini",
+    "helpTooltip": "Bantuan untuk halaman ini"
   },
   "bootSplash": {
     "loading": "Memuat Monize",
@@ -145,5 +152,17 @@
     "title": "Tidak dapat terhubung",
     "message": "Monize tidak dapat menjangkau server. Periksa koneksi Anda dan coba lagi.",
     "retry": "Coba lagi"
+  },
+  "pushBanner": {
+    "enableTitle": "Aktifkan notifikasi?",
+    "enableBody": "Monize dapat mengingatkan tagihan dan batas anggaran di perangkat ini, bahkan saat aplikasi tertutup. Peramban akan meminta izin Anda.",
+    "enableButton": "Aktifkan",
+    "enabling": "Mengaktifkan…",
+    "installIosTitle": "Tambahkan Monize ke Layar Utama terlebih dahulu.",
+    "installIosBody": "Di iPhone dan iPad, notifikasi hanya berfungsi dari aplikasi yang terpasang. Ketuk Bagikan, lalu Tambah ke Layar Utama, dan buka Monize dari sana.",
+    "blockedTitle": "Notifikasi diblokir untuk Monize.",
+    "blockedBody": "Izinkan di pengaturan situs peramban Anda untuk halaman ini. Monize tidak dapat bertanya lagi dengan sendirinya.",
+    "blockedIosBody": "Buka Pengaturan iOS, lalu Notifikasi, lalu Monize, dan izinkan di sana. Jika Monize tidak ada dalam daftar, hapus dari Layar Utama lalu tambahkan kembali.",
+    "dismiss": "Nanti saja"
   }
 }

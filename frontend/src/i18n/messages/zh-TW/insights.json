@@ -4,19 +4,29 @@
     "subtitle": "AI 驅動的消費模式與異常分析"
   },
   "list": {
-    "lastUpdated": "最後更新：{date} {time}",
     "refreshButton": "重新整理洞察",
-    "generating": "生成中...",
+    "refreshAge": "({time})",
+    "summary": {
+      "active": "有效洞察",
+      "alerts": "警示",
+      "warnings": "警告"
+    },
     "allTypes": "所有類型",
-    "allSeverities": "所有嚴重程度",
+    "typeFilterLabel": "類型",
+    "severityFilterLabel": "嚴重程度",
+    "severityFilter": {
+      "all": "全部 ({count})",
+      "alert": "警示 ({count})",
+      "warning": "警告 ({count})",
+      "info": "資訊 ({count})"
+    },
     "showDismissed": "顯示已關閉",
     "emptyNoInsights": "尚未生成任何洞察。點擊「重新整理洞察」以分析您的消費模式。",
     "emptyFiltered": "沒有符合目前篩選條件的洞察。",
     "generateButton": "生成洞察",
-    "alertCount": "{count, plural, one {# 個警示} other {# 個警示}}",
-    "warningCount": "{count, plural, one {# 個警告} other {# 個警告}}",
     "errorLoadFailed": "載入洞察失敗，請重試。",
     "errorGenerateFailed": "生成洞察失敗。請確認您已設定 AI 提供者。",
+    "errorDismissFailed": "關閉洞察失敗，請重試。",
     "errorTimeout": "洞察生成時間超出預期，請稍候或重新整理頁面。"
   },
   "card": {

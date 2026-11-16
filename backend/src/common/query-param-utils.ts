@@ -1,4 +1,5 @@
 import { BadRequestException } from "@nestjs/common";
+import { CATEGORY_TYPE_FILTER_IDS } from "./category-tree.util";
 import { tr } from "../i18n/translate";
 
 export const UUID_REGEX =
@@ -85,11 +86,15 @@ export function parseUuids(value?: string): string[] | undefined {
 }
 
 /**
- * Parse comma-separated category IDs that may include special values
- * like 'uncategorized' and 'transfer' in addition to UUIDs.
+ * Parse comma-separated category IDs that may include the pseudo-ids
+ * 'uncategorized', 'transfer', 'income' and 'expense' in addition to UUIDs.
  */
 export function parseCategoryIds(value?: string): string[] | undefined {
-  const specialCategoryIds = new Set(["uncategorized", "transfer"]);
+  const specialCategoryIds = new Set<string>([
+    "uncategorized",
+    "transfer",
+    ...CATEGORY_TYPE_FILTER_IDS,
+  ]);
   if (!value) return undefined;
   const ids = value
     .split(",")

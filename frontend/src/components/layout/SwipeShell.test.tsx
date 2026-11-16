@@ -1,6 +1,12 @@
 import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@/test/render';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import { act, render, screen } from '@/test/render';
 import { SwipeShell } from './SwipeShell';
+import { sharedExpensesApi } from '@/lib/shared-expenses';
+import { useHelpStore } from '@/store/helpStore';
+
+vi.mock('@/lib/shared-expenses', () => ({ sharedExpensesApi: { review: vi.fn() } }));
 
 // Mock next/navigation
 let mockPathname = '/dashboard';
@@ -44,7 +50,36 @@ vi.mock('./UpdateAvailableBanner', () => ({
   ),
 }));
 
+vi.mock('./WeakJwtSecretBanner', () => ({
+  WeakJwtSecretBanner: () => (
+    <div data-testid="weak-jwt-secret-banner">WeakJwtSecretBanner</div>
+  ),
+}));
+
 describe('SwipeShell', () => {
+  it.each(['/dashboard', '/accounts', '/transactions', '/budgets', '/reports', '/net-worth'])(
+    'does not fetch private review data or add a review notice on %s', async (pathname) => {
+      vi.mocked(sharedExpensesApi.review).mockClear();
+      mockPathname = pathname;
+      await act(async () => render(<SwipeShell><p>Content</p></SwipeShell>));
+      expect(sharedExpensesApi.review).not.toHaveBeenCalled();
+      expect(screen.queryByText('No changes to accepted entries need review.')).not.toBeInTheDocument();
+    },
+  );
+
+  it('mounts the weak JWT_SECRET banner on app pages but not on auth routes', () => {
+    mockPathname = '/dashboard';
+    const { unmount } = render(<SwipeShell><p>Content</p></SwipeShell>);
+    expect(screen.getByTestId('weak-jwt-secret-banner')).toBeInTheDocument();
+    expect(screen.queryByText('No changes to accepted entries need review.')).not.toBeInTheDocument();
+    unmount();
+
+    mockPathname = '/login';
+    render(<SwipeShell><p>Content</p></SwipeShell>);
+    expect(screen.queryByTestId('weak-jwt-secret-banner')).not.toBeInTheDocument();
+    expect(screen.queryByText('No changes to accepted entries need review.')).not.toBeInTheDocument();
+  });
+
   it('renders AppHeader and children on app pages', () => {
     mockPathname = '/dashboard';
     render(<SwipeShell><p>Dashboard content</p></SwipeShell>);
@@ -78,6 +113,35 @@ describe('SwipeShell', () => {
     expect(screen.queryByTestId('app-header')).not.toBeInTheDocument();
   });
 
+  it('makes room beside the page for the docked help panel on a wide screen, as wide as the variable says', () => {
+    mockPathname = '/budgets';
+    useHelpStore.setState(useHelpStore.getInitialState(), true);
+    const { container, unmount } = render(<SwipeShell><p>Content</p></SwipeShell>);
+    const wrapper = container.firstChild as HTMLElement;
+    expect(wrapper.className).not.toContain('xl:pr-');
+
+    act(() => useHelpStore.getState().openAt({ page: 'budgets' }));
+    // The class is a literal so Tailwind can see it; the width it reads is the
+    // panel's own variable (HelpPanel.test.tsx covers what writes it), and the
+    // shell measures and sets nothing itself.
+    expect(wrapper.className).toContain('xl:pr-(--help-panel-width)');
+    expect(wrapper.getAttribute('style')).toBeNull();
+
+    act(() => useHelpStore.getState().setExpanded(true));
+    expect(wrapper.className).not.toContain('xl:pr-');
+    unmount();
+    act(() => useHelpStore.getState().close());
+  });
+
+  it('drops an open help panel on the sign-in screens', () => {
+    mockPathname = '/login';
+    useHelpStore.setState(useHelpStore.getInitialState(), true);
+    useHelpStore.getState().openAt({ page: 'budgets' });
+    useHelpStore.getState().setPinned(true);
+    render(<SwipeShell><p>Login form</p></SwipeShell>);
+    expect(useHelpStore.getState().open).toBe(false);
+  });
+
   it('wraps content in overflow-x-clip container on app pages', () => {
     mockPathname = '/accounts';
     const { container } = render(<SwipeShell><p>Content</p></SwipeShell>);
@@ -86,6 +150,25 @@ describe('SwipeShell', () => {
     // position:sticky and IntersectionObserver viewport behavior
     expect(wrapper.className).toContain('overflow-x-clip');
     expect(wrapper.className).not.toContain('overflow-x-hidden');
+  });
+
+  it('spells overflow-x-clip as a token Tailwind can find in the source', () => {
+    // Tailwind generates a utility only for a class it finds as a whole token
+    // in the source. Glued to a template expression (`overflow-x-clip${...}`)
+    // it is never generated: the element carries the class name, the test
+    // above still passes, and the header's overflow scrolls the page sideways.
+    const source = readFileSync(join(__dirname, 'SwipeShell.tsx'), 'utf-8');
+    expect(source).toMatch(/overflow-x-clip(?=['"`\s])/);
+    expect(source).not.toMatch(/overflow-x-clip\$\{/);
+  });
+
+  it('spells the help panel push as a whole token Tailwind can find in the source', () => {
+    // The className assertion above cannot tell a class Tailwind generated from
+    // one it never saw; the E2E resize step reads the computed padding. This is
+    // the cheap half: the token is whole, and no template expression touches it.
+    const source = readFileSync(join(__dirname, 'SwipeShell.tsx'), 'utf-8');
+    expect(source).toMatch(/'xl:pr-\(--help-panel-width\)'/);
+    expect(source).not.toMatch(/xl:pr-\(--help-panel-width\)\$\{/);
   });
 
   it('renders BackendDownBanner on app pages', () => {

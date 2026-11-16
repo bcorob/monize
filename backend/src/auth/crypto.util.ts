@@ -26,8 +26,24 @@ export function derivePurposeKey(
 /**
  * Hash a token (refresh token, reset token, device token, PAT) using SHA-256.
  * Shared utility to eliminate duplication across auth.service.ts and pat.service.ts.
+ *
+ * Every argument is a high-entropy value from `crypto.randomBytes` (or an
+ * OIDC/device identifier of comparable size), never a password a person
+ * chose, so a slow password hash buys nothing against brute force here and
+ * would break the only thing this function is for: a deterministic digest a
+ * later call can look up by equality. bcrypt/scrypt/Argon2 salt randomly per
+ * call, so two hashes of the same token would differ and the stored row could
+ * never be found again. CodeQL reports js/insufficient-password-hash on the
+ * `.update(...)` call below when a value whose producer's name its heuristic
+ * reads as a password (anything containing "oauth", "password", "apiKey")
+ * reaches it; such an alert is a false positive, closed by naming the producer
+ * for what it is or dismissed on the Security tab with its reason
+ * (docs/backend/modules-and-runtime.md, CodeQL suppressions). The annotation is
+ * placed where it takes effect the day the suppression query is added to
+ * default setup.
  */
 export function hashToken(token: string): string {
+  // codeql[js/insufficient-password-hash]
   return crypto.createHash("sha256").update(token).digest("hex");
 }
 

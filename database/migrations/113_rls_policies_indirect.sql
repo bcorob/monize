@@ -21,7 +21,7 @@
 -- the tag side would double the per-row cost to close a gap that leaks nothing
 -- readable (the tag row itself is protected by the tags policy).
 --
--- See docs/future-plans/row-level-security.md (Phase 3).
+-- See docs/specs/row-level-security.md (Phase 3).
 
 -- ---------------------------------------------------------------------------
 -- Transactions family

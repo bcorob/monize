@@ -1,0 +1,81 @@
+{
+  "learnMore": "瞭解更多",
+  "howThisWorks": "運作方式",
+  "menu": {
+    "helpForPage": "此頁面的說明",
+    "search": "搜尋說明",
+    "shortcuts": "鍵盤快速鍵",
+    "takeTour": "開始導覽",
+    "whatsNew": "新功能",
+    "shellMenu": "桌面應用程式選單",
+    "reportIssue": "回報問題",
+    "discussions": "討論"
+  },
+  "shortcuts": {
+    "title": "鍵盤快速鍵",
+    "palette": "命令面板",
+    "paletteKeys": "Ctrl/Cmd+K",
+    "search": "搜尋說明",
+    "searchKeys": "?",
+    "undo": "復原上一次變更",
+    "undoKeys": "Ctrl/Cmd+Z",
+    "redo": "重做",
+    "redoKeys": "Ctrl/Cmd+Shift+Z 或 Ctrl/Cmd+Y",
+    "closeDialog": "關閉開啟的對話框或面板",
+    "closeDialogKeys": "Esc"
+  },
+  "panel": {
+    "title": "說明",
+    "back": "返回",
+    "forward": "前進",
+    "openOnline": "在 monize.net 上開啟",
+    "pin": "固定說明面板，在頁面之間切換時保持開啟",
+    "unpin": "取消固定說明面板",
+    "expand": "展開說明面板",
+    "collapse": "收合說明面板",
+    "resize": "調整說明面板大小",
+    "resizeValue": "{width} 像素",
+    "close": "關閉說明",
+    "englishOnly": "本指南為英文版。",
+    "loading": "正在載入說明",
+    "toc": {
+      "toggle": "本頁內容",
+      "label": "本頁的各個區段"
+    },
+    "error": {
+      "heading": "無法載入說明",
+      "body": "指南未能載入。請重試，或在 monize.net 上閱讀本頁。",
+      "retry": "重試"
+    },
+    "search": "搜尋指南",
+    "tour": {
+      "prompt": "此頁面有導覽教學。"
+    },
+    "version": "Monize {version} 指南",
+    "latestOnline": "最新指南位於 monize.net"
+  },
+  "search": {
+    "title": "搜尋指南",
+    "placeholder": "搜尋指南",
+    "ariaLabel": "搜尋指南",
+    "contextHeading": "此畫面的說明",
+    "noResults": "找不到「{query}」的結果",
+    "error": "搜尋失敗,請再試一次。",
+    "hint": {
+      "navigate": "導覽",
+      "select": "選取",
+      "close": "關閉"
+    }
+  },
+  "markdown": {
+    "screenshot": "螢幕截圖",
+    "viewScreenshot": "在 monize.net 上檢視螢幕截圖",
+    "callout": {
+      "note": "備註",
+      "tip": "提示",
+      "important": "重要",
+      "warning": "警告",
+      "caution": "注意"
+    }
+  }
+}

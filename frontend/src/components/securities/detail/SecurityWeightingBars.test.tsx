@@ -150,6 +150,45 @@ describe('SecurityWeightingBars', () => {
     });
   });
 
+  describe('phone tiles vs desktop bars', () => {
+    it('draws each row as a bordered tile on a phone and drops the bar there', () => {
+      const { container } = renderCard([
+        { name: 'Technology', weight: 0.32 },
+        { name: 'Financials', weight: 0.16 },
+      ]);
+      // One `<li>` per share at every width -- the name and its percentage each
+      // appear exactly once, whichever presentation the width chooses.
+      const rows = Array.from(container.querySelectorAll('li'));
+      expect(rows).toHaveLength(2);
+      for (const row of rows) {
+        // A bordered card below `sm`, stripped back to a plain list row from
+        // `sm` up.
+        expect(row.className).toContain('border');
+        expect(row.className).toContain('sm:border-0');
+        expect(row.className).toContain('rounded-lg');
+        expect(row.className).toContain('sm:p-0');
+        // The full-width horizontal bar is hidden on the phone tile and returns
+        // from `sm` up -- a bar per share is the vertical space this capped card
+        // is trying to save.
+        const bar = row.querySelector('div[role="img"]')!;
+        expect(bar.className).toContain('hidden');
+        expect(bar.className).toContain('sm:block');
+      }
+    });
+
+    it('lays the tiles out in a grid on a phone and a list from sm up', () => {
+      const { container } = renderCard([{ name: 'Technology', weight: 0.5 }]);
+      const list = container.querySelector('ul')!;
+      // Two columns of tiles below `sm`, the single-column bar list from `sm`.
+      expect(list.className).toContain('grid-cols-2');
+      expect(list.className).toContain('sm:block');
+      // The height cap and scroll are unchanged, so the card still cannot grow
+      // with the number of sectors a fund reports.
+      expect(list.className).toContain('overflow-y-auto');
+      expect(list.className).toMatch(/max-h-/);
+    });
+  });
+
   describe('unclassified remainder', () => {
     it('names the gap when the shares do not reach 100%', () => {
       renderCard(

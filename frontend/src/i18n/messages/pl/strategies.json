@@ -330,14 +330,13 @@
       "fillMissingDone": "{count, plural, one {Dodano # instrument} few {Dodano # instrumenty} many {Dodano # instrumentów} other {Dodano # instrumentu}}. Zapisz konfigurację, aby wczytać ceny i wyliczyć pierwszy sygnał.",
       "fillMissingError": "Nie udało się dodać proponowanych instrumentów.",
       "lookbackMonths": "Okno momentum (miesiące)",
-      "taxRatePercent": "Stawka podatku (%)",
-      "commissionAmount": "Prowizja za transakcję",
+      "taxRatePercent": "Stawka podatku (opcjonalnie)",
+      "commissionAmount": "Prowizja za transakcję (opcjonalnie)",
       "rulesSourceUrl": "Link do reguł, których się trzymasz",
       "rulesSourceUrlPlaceholder": "https://example.com/dual-momentum",
       "rulesSourceLabel": "Tekst do pokazania zamiast linku",
       "rulesSourceLabelPlaceholder": "example.com",
       "rulesSourceHint": "Oba pola są opcjonalne i nie wpływają na żadne obliczenia. Umieszczają w stopce raportu link do miejsca, w którym opisane są reguły tej strategii — artykułu, strony książki, własnych notatek — żebyś mógł później sprawdzić, według której wersji ją ustawiłeś.",
-      "optional": "Opcjonalne",
       "save": "Zapisz konfigurację",
       "saved": "Konfiguracja strategii zapisana.",
       "saveError": "Nie udało się zapisać konfiguracji strategii.",
@@ -358,7 +357,9 @@
       "NO_POSITION": "Konta strategii nie posiadają żadnych instrumentów.",
       "FIRST_RUN": "Ta strategia nie została jeszcze oceniona – pierwszy sygnał pojawi się po najbliższej zaplanowanej ocenie.",
       "STALE_PRICES": "Część cen stojących za tym raportem nie jest aktualna, więc sygnał może się zmienić po ich odświeżeniu. Najstarsze lub całkowicie brakujące dotyczą:",
-      "CALCULATION_FAILED": "Nie udało się obliczyć sygnału z dostępnych danych."
+      "CALCULATION_FAILED": "Nie udało się obliczyć sygnału z dostępnych danych.",
+      "SHORT_HISTORY": "Za mało historii cen, aby policzyć bieżący okres. Te role potrzebują cen od {from}:",
+      "shortHistoryFix": "Otwórz każdy z tych instrumentów i użyj przycisku „Dodaj kolejny rok historii cen”, a następnie otwórz raport ponownie."
     },
     "footer": {
       "pastResults": "Wyniki historyczne nie gwarantują przyszłych zwrotów.",

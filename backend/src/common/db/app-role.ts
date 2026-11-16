@@ -118,6 +118,35 @@ END $$;
 `.trim();
 
 /**
+ * Session defaults for the runtime role, applied whenever the role exists.
+ *
+ * `jit = off`: every table the register joins carries an RLS policy whose
+ * delegate-read arm adds subplans, which lifts a register count over an
+ * 800-row account to a planner cost near 720k -- past the 500k JIT inline and
+ * optimise thresholds -- so a server built with LLVM compiled ~2,700 functions
+ * on every call: ~15 s of CPU for a query that executes in ~25 ms. These are
+ * short OLTP queries that JIT never repays. Images without LLVM (CNPG
+ * `-minimal`) never compile, so there it changes nothing.
+ *
+ * A separate block from the grants on purpose: an `insufficient_privilege`
+ * here (no CREATEROLE / ADMIN on the role, as under CNPG `managed.roles`) must
+ * not roll back the grants with it. A role default reaches new sessions only,
+ * so it takes effect for connections opened after this runs.
+ */
+export const APP_ROLE_SETTINGS_SQL = `
+DO $$
+DECLARE
+  role_name text := current_setting('${APP_ROLE_NAME_GUC}');
+BEGIN
+  IF EXISTS (SELECT FROM pg_roles WHERE rolname = role_name) THEN
+    EXECUTE format('ALTER ROLE %I SET jit = off', role_name);
+  END IF;
+EXCEPTION WHEN insufficient_privilege THEN
+  RAISE WARNING 'Insufficient privilege to set session defaults on role %; set jit = off on it manually or via the DB owner.', role_name;
+END $$;
+`.trim();
+
+/**
  * Apply DML grants + default privileges whenever the role exists (however it
  * was provisioned). No `FOR ROLE` clause: `ALTER DEFAULT PRIVILEGES` then
  * applies to the current role -- the actual owner, whatever its operator-chosen
@@ -170,6 +199,22 @@ BEGIN
     -- run (or a downgrade) does not fail on a missing function.
     IF to_regprocedure('public.currency_code_in_use_globally(varchar)') IS NOT NULL THEN
       EXECUTE format('GRANT EXECUTE ON FUNCTION public.currency_code_in_use_globally(varchar) TO %I', role_name);
+    END IF;
+    -- Its sibling currency_code_referenced_by_data (the kind-change gate) has
+    -- the same shape and needs the same grant.
+    IF to_regprocedure('public.currency_code_referenced_by_data(varchar)') IS NOT NULL THEN
+      EXECUTE format('GRANT EXECUTE ON FUNCTION public.currency_code_referenced_by_data(varchar) TO %I', role_name);
+    END IF;
+    -- currency_min_decimal_places_in_use (the decimal-places lowering gate) is
+    -- SECURITY DEFINER with EXECUTE revoked from PUBLIC too, and needs the same
+    -- grant under the same guard.
+    IF to_regprocedure('public.currency_min_decimal_places_in_use(varchar)') IS NOT NULL THEN
+      EXECUTE format('GRANT EXECUTE ON FUNCTION public.currency_min_decimal_places_in_use(varchar) TO %I', role_name);
+    END IF;
+    -- currency_code_used_by_other_users (the first-price-symbol gate) has the
+    -- same shape and needs the same grant under the same guard.
+    IF to_regprocedure('public.currency_code_used_by_other_users(varchar,uuid)') IS NOT NULL THEN
+      EXECUTE format('GRANT EXECUTE ON FUNCTION public.currency_code_used_by_other_users(varchar,uuid) TO %I', role_name);
     END IF;
   END IF;
 EXCEPTION WHEN insufficient_privilege THEN
@@ -262,7 +307,9 @@ export async function provisionAppRole(
     );
   }
 
-  // Grants run whenever the role exists, regardless of how it was provisioned.
-  // db-migrate re-applies them after its DDL -- see applyAppRoleGrants.
+  // Session defaults and grants run whenever the role exists, regardless of
+  // how it was provisioned. db-migrate re-applies the grants after its DDL --
+  // see applyAppRoleGrants.
+  await client.query(APP_ROLE_SETTINGS_SQL);
   await client.query(APP_ROLE_GRANTS_SQL);
 }

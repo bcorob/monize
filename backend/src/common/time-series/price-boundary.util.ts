@@ -44,6 +44,21 @@ export function daysBetween(from: string, to: string): number {
 export const BOUNDARY_LAG_DAYS = 14;
 
 /**
+ * How far one role's exit close may trail the newest exit close of the other
+ * roles in the same evaluation and still count as the same session.
+ *
+ * `BOUNDARY_LAG_DAYS` answers "is this close recent enough to stand for the
+ * boundary at all"; it cannot tell a market shut on the boundary from a feed
+ * that stopped twelve days before it. Across roles priced for one decision the
+ * question is narrower: did they all close at the boundary's session? A long
+ * weekend plus a holiday is four days; a gap wider than that while another
+ * role holds the boundary's close is a feed gap, and a ranking that compares
+ * one role's 30th with another's 18th compares two different sessions
+ * (A26-M27).
+ */
+export const BOUNDARY_HOLIDAY_DAYS = 4;
+
+/**
  * Days of prices to load *before* a window opens.
  *
  * The same span a boundary close may be old and still count, and necessarily

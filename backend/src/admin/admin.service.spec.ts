@@ -13,9 +13,12 @@ import { User } from "../users/entities/user.entity";
 import { UserPreference } from "../users/entities/user-preference.entity";
 import { RefreshToken } from "../auth/entities/refresh-token.entity";
 import { PersonalAccessToken } from "../auth/entities/personal-access-token.entity";
+import { TrustedDevice } from "../users/entities/trusted-device.entity";
 import { OAuthProviderService } from "../oauth/oauth-provider.service";
 import { UsersService } from "../users/users.service";
 import { EmailService } from "../notifications/email.service";
+import { AttachmentsService } from "../attachments/attachments.service";
+import { AutoBackupService } from "../backup/auto-backup.service";
 import { createScopedDbMocks } from "../test-helpers/scoped-db-testing";
 
 jest.mock("../common/db/scoped-db", () =>
@@ -28,10 +31,13 @@ describe("AdminService", () => {
   let preferencesRepository: Record<string, jest.Mock>;
   let refreshTokensRepository: Record<string, jest.Mock>;
   let patRepository: Record<string, jest.Mock>;
+  let trustedDevicesRepository: Record<string, jest.Mock>;
   let oauthProviderService: Record<string, jest.Mock>;
   let usersService: Record<string, jest.Mock>;
   let emailService: Record<string, jest.Mock>;
   let configService: Record<string, jest.Mock>;
+  let attachmentsService: Record<string, jest.Mock>;
+  let autoBackupService: Record<string, jest.Mock>;
   let transactionManager: Record<string, jest.Mock>;
   let dataSource: Record<string, jest.Mock>;
 
@@ -47,6 +53,42 @@ describe("AdminService", () => {
         /FOR UPDATE/.test(String(sql)) ? ids.map((id) => ({ id })) : [],
       ),
     );
+  };
+
+  /**
+   * Record the transaction boundaries and the credential writes in order, so a
+   * test can tell "PATs revoked in the password's commit" from "in the next one"
+   * and see the converging refresh revoke run after the commit (A26-L07,
+   * A26-M02).
+   */
+  const recordCredentialOrder = (): string[] => {
+    const order: string[] = [];
+    const run = dataSource.transaction.getMockImplementation()!;
+    dataSource.transaction.mockImplementation(async (...args: any[]) => {
+      order.push("begin");
+      const result = await run(...args);
+      order.push("commit");
+      return result;
+    });
+    usersRepository.save.mockImplementation(async (u: unknown) => {
+      order.push("save");
+      return u;
+    });
+    patRepository.update.mockImplementation(async () => {
+      order.push("pats");
+      return { affected: 0 };
+    });
+    transactionManager.query.mockImplementation(async (sql: unknown) => {
+      if (String(sql).includes("SELECT DISTINCT family_id")) {
+        order.push("converge");
+      }
+      return [];
+    });
+    oauthProviderService.revokeAllForUser.mockImplementation(async () => {
+      order.push("oauth");
+      return 0;
+    });
+    return order;
   };
 
   const mockAdmin = {
@@ -110,6 +152,8 @@ describe("AdminService", () => {
       revokeAllForUser: jest.fn().mockResolvedValue(0),
     };
 
+    trustedDevicesRepository = { delete: jest.fn() };
+
     usersService = {
       isActingDelegate: jest.fn().mockResolvedValue(false),
       purgeForDowngrade: jest.fn().mockResolvedValue(undefined),
@@ -122,6 +166,16 @@ describe("AdminService", () => {
 
     configService = {
       get: jest.fn().mockReturnValue("http://localhost:3000"),
+    };
+
+    attachmentsService = {
+      summarizeUsageByUser: jest.fn().mockResolvedValue(new Map()),
+    };
+
+    autoBackupService = {
+      summarizeStoredBackups: jest
+        .fn()
+        .mockResolvedValue({ enabled: false, artifacts: 0, bytes: 0 }),
     };
 
     transactionManager = {
@@ -141,6 +195,7 @@ describe("AdminService", () => {
       [UserPreference, preferencesRepository as never],
       [RefreshToken, refreshTokensRepository as never],
       [PersonalAccessToken, patRepository as never],
+      [TrustedDevice, trustedDevicesRepository as never],
     ]);
     Object.assign(scoped.manager, transactionManager);
     transactionManager = scoped.manager;
@@ -180,10 +235,111 @@ describe("AdminService", () => {
               opts?.defaultValue ?? key,
           },
         },
+        {
+          provide: AttachmentsService,
+          useValue: attachmentsService,
+        },
+        {
+          provide: AutoBackupService,
+          useValue: autoBackupService,
+        },
       ],
     }).compile();
 
     service = module.get<AdminService>(AdminService);
+  });
+
+  describe("getUserStorageUsage", () => {
+    it("pairs each managed user with their backup and attachment usage", async () => {
+      usersRepository.find.mockResolvedValue([
+        { id: "admin-1" },
+        { id: "user-2" },
+      ]);
+      attachmentsService.summarizeUsageByUser.mockResolvedValue(
+        new Map([
+          ["admin-1", { files: 3, bytes: 2048 }],
+          ["user-2", { files: 1, bytes: 512 }],
+        ]),
+      );
+      autoBackupService.summarizeStoredBackups.mockImplementation(
+        (userId: string) =>
+          Promise.resolve(
+            userId === "admin-1"
+              ? { enabled: true, artifacts: 7, bytes: 70_000 }
+              : { enabled: false, artifacts: 1, bytes: 900 },
+          ),
+      );
+
+      const result = await service.getUserStorageUsage();
+
+      expect(result).toEqual([
+        {
+          userId: "admin-1",
+          backups: { enabled: true, artifacts: 7, bytes: 70_000 },
+          attachments: { files: 3, bytes: 2048 },
+        },
+        {
+          userId: "user-2",
+          backups: { enabled: false, artifacts: 1, bytes: 900 },
+          attachments: { files: 1, bytes: 512 },
+        },
+      ]);
+    });
+
+    it("enumerates the same users the admin list does, so a delegate-only row has no storage line", async () => {
+      usersRepository.find.mockResolvedValue([]);
+
+      await service.getUserStorageUsage();
+
+      expect(usersRepository.find).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { isDelegateOnly: false } }),
+      );
+    });
+
+    it("reports zero -- not unknown -- for a user with no attachments", async () => {
+      usersRepository.find.mockResolvedValue([{ id: "user-2" }]);
+      attachmentsService.summarizeUsageByUser.mockResolvedValue(new Map());
+
+      const [row] = await service.getUserStorageUsage();
+
+      expect(row.attachments).toEqual({ files: 0, bytes: 0 });
+    });
+
+    it("keeps an unreadable backup store unknown rather than turning it into zero", async () => {
+      usersRepository.find.mockResolvedValue([{ id: "user-2" }]);
+      autoBackupService.summarizeStoredBackups.mockResolvedValue({
+        enabled: true,
+        artifacts: null,
+        bytes: null,
+      });
+
+      const [row] = await service.getUserStorageUsage();
+
+      expect(row.backups).toEqual({
+        enabled: true,
+        artifacts: null,
+        bytes: null,
+      });
+    });
+
+    it("asks the store once per user rather than once for the deployment", async () => {
+      usersRepository.find.mockResolvedValue([
+        { id: "admin-1" },
+        { id: "user-2" },
+      ]);
+
+      await service.getUserStorageUsage();
+
+      expect(autoBackupService.summarizeStoredBackups).toHaveBeenCalledTimes(2);
+      expect(autoBackupService.summarizeStoredBackups).toHaveBeenCalledWith(
+        "admin-1",
+      );
+      expect(autoBackupService.summarizeStoredBackups).toHaveBeenCalledWith(
+        "user-2",
+      );
+      // One grouped aggregate covers every user's attachments.
+      expect(attachmentsService.summarizeUsageByUser).toHaveBeenCalledTimes(1);
+    });
   });
 
   describe("findAllUsers", () => {
@@ -466,6 +622,25 @@ describe("AdminService", () => {
       expect(refreshTokensRepository.update).not.toHaveBeenCalled();
     });
 
+    it("disables and revokes PATs in one commit, then converges the refresh sessions", async () => {
+      usersRepository.findOne.mockResolvedValue({ ...mockTargetUser });
+      const order = recordCredentialOrder();
+
+      await service.updateUserStatus("admin-1", "user-2", false);
+
+      const write = order.lastIndexOf("save");
+      expect(order.slice(write - 1)).toEqual([
+        "begin",
+        "save",
+        "pats",
+        "commit",
+        "begin",
+        "converge",
+        "commit",
+        "oauth",
+      ]);
+    });
+
     it("revokes all PATs when deactivating a user", async () => {
       usersRepository.findOne.mockResolvedValue({ ...mockTargetUser });
 
@@ -682,6 +857,20 @@ describe("AdminService", () => {
       expect(savedUser.passwordHash).not.toBe(result.temporaryPassword);
     });
 
+    it("clears a login lockout so the temporary password works", async () => {
+      usersRepository.findOne.mockResolvedValue({
+        ...mockTargetUser,
+        failedLoginAttempts: 25,
+        lockedUntil: new Date(Date.now() + 4 * 60 * 60 * 1000),
+      });
+
+      await service.resetUserPassword("admin-1", "user-2");
+
+      const savedUser = usersRepository.save.mock.calls[0][0];
+      expect(savedUser.failedLoginAttempts).toBe(0);
+      expect(savedUser.lockedUntil).toBeNull();
+    });
+
     it("revokes all refresh tokens after password reset", async () => {
       usersRepository.findOne.mockResolvedValue({ ...mockTargetUser });
 
@@ -693,6 +882,25 @@ describe("AdminService", () => {
       );
     });
 
+    it("revokes PATs in the password's own commit and converges the refresh sessions after it", async () => {
+      usersRepository.findOne.mockResolvedValue({ ...mockTargetUser });
+      const order = recordCredentialOrder();
+
+      await service.resetUserPassword("admin-1", "user-2");
+
+      const write = order.lastIndexOf("save");
+      expect(order.slice(write - 1)).toEqual([
+        "begin",
+        "save",
+        "pats",
+        "commit",
+        "begin",
+        "converge",
+        "commit",
+        "oauth",
+      ]);
+    });
+
     it("revokes all PATs on password reset", async () => {
       usersRepository.findOne.mockResolvedValue({ ...mockTargetUser });
 
@@ -702,6 +910,18 @@ describe("AdminService", () => {
         { userId: "user-2", isRevoked: false },
         { isRevoked: true },
       );
+    });
+
+    it("revokes trusted devices on password reset", async () => {
+      // A trusted-device cookie skips 2FA; it must not outlive the password an
+      // administrator just replaced.
+      usersRepository.findOne.mockResolvedValue({ ...mockTargetUser });
+
+      await service.resetUserPassword("admin-1", "user-2");
+
+      expect(trustedDevicesRepository.delete).toHaveBeenCalledWith({
+        userId: "user-2",
+      });
     });
 
     it("revokes all OIDC artifacts on password reset", async () => {
@@ -738,6 +958,161 @@ describe("AdminService", () => {
       await expect(
         service.resetUserPassword("admin-1", "user-2"),
       ).rejects.toThrow(BadRequestException);
+    });
+
+    it("refuses an SSO account when local auth is off", async () => {
+      configService.get.mockImplementation((key: string, def?: string) =>
+        key === "LOCAL_AUTH_ENABLED" ? "false" : def,
+      );
+      usersRepository.findOne.mockResolvedValue({
+        ...mockTargetUser,
+        authProvider: "oidc",
+      });
+
+      await expect(
+        service.resetUserPassword("admin-1", "user-2"),
+      ).rejects.toThrow("Password sign-in is turned off on this server");
+      expect(usersRepository.save).not.toHaveBeenCalled();
+    });
+
+    it("refuses an SSO account while password sign-in is off for SSO accounts", async () => {
+      usersRepository.findOne.mockResolvedValue({
+        ...mockTargetUser,
+        authProvider: "oidc",
+      });
+
+      await expect(
+        service.resetUserPassword("admin-1", "user-2"),
+      ).rejects.toThrow("Password sign-in is turned off for SSO accounts");
+      expect(usersRepository.save).not.toHaveBeenCalled();
+    });
+
+    it("resets an SSO account's password when the flag allows it", async () => {
+      configService.get.mockImplementation((key: string, def?: string) =>
+        key === "OIDC_ALLOW_PASSWORD_LOGIN" ? "true" : def,
+      );
+      usersRepository.findOne.mockResolvedValue({
+        ...mockTargetUser,
+        authProvider: "oidc",
+      });
+
+      await service.resetUserPassword("admin-1", "user-2");
+
+      expect(usersRepository.save).toHaveBeenCalled();
+    });
+  });
+
+  describe("unlinkUserSso", () => {
+    const ssoUser = () => ({
+      ...mockTargetUser,
+      authProvider: "oidc",
+      passwordHash: null,
+      oidcSubject: "sub-1",
+      pendingOidcSubject: "sub-2",
+      oidcLinkPending: true,
+      oidcLinkToken: "tok",
+      oidcLinkExpiresAt: new Date(),
+    });
+
+    it("converts to a local account with a temporary password and revokes like reset", async () => {
+      usersRepository.findOne.mockResolvedValue(ssoUser());
+
+      const result = await service.unlinkUserSso("admin-1", "user-2");
+
+      expect(result.temporaryPassword.length).toBeGreaterThan(8);
+      const saved = usersRepository.save.mock.calls[0][0];
+      expect(saved.authProvider).toBe("local");
+      expect(saved.oidcSubject).toBeNull();
+      expect(saved.pendingOidcSubject).toBeNull();
+      expect(saved.oidcLinkPending).toBe(false);
+      expect(saved.oidcLinkToken).toBeNull();
+      expect(saved.oidcLinkExpiresAt).toBeNull();
+      expect(saved.mustChangePassword).toBe(true);
+      expect(saved.passwordHash).not.toBe(result.temporaryPassword);
+      expect(patRepository.update).toHaveBeenCalledWith(
+        { userId: "user-2", isRevoked: false },
+        { isRevoked: true },
+      );
+      expect(trustedDevicesRepository.delete).toHaveBeenCalledWith({
+        userId: "user-2",
+      });
+      expect(refreshTokensRepository.update).toHaveBeenCalledWith(
+        { userId: "user-2", isRevoked: false },
+        { isRevoked: true },
+      );
+      expect(oauthProviderService.revokeAllForUser).toHaveBeenCalledWith(
+        "user-2",
+      );
+    });
+
+    it("reads the row under a write lock", async () => {
+      usersRepository.findOne.mockResolvedValue(ssoUser());
+
+      await service.unlinkUserSso("admin-1", "user-2");
+
+      expect(usersRepository.findOne).toHaveBeenCalledWith({
+        where: { id: "user-2" },
+        lock: { mode: "pessimistic_write" },
+      });
+    });
+
+    it("clears a backup key held under a dedicated backup password", async () => {
+      usersRepository.findOne.mockResolvedValue({
+        ...ssoUser(),
+        backupEncryptionEnabled: true,
+        backupKeyEnc: "enc:key",
+        backupKeyWrap: "wrap",
+        backupKeyPasswordRef: null,
+      });
+
+      await service.unlinkUserSso("admin-1", "user-2");
+
+      const saved = usersRepository.save.mock.calls[0][0];
+      expect(saved).toMatchObject({
+        backupEncryptionEnabled: false,
+        backupKeyEnc: null,
+        backupKeyWrap: null,
+        backupKeyPasswordRef: null,
+      });
+    });
+
+    it("refuses an account with no email address and writes nothing", async () => {
+      usersRepository.findOne.mockResolvedValue({ ...ssoUser(), email: null });
+      await expect(service.unlinkUserSso("admin-1", "user-2")).rejects.toThrow(
+        "no email address",
+      );
+      expect(usersRepository.save).not.toHaveBeenCalled();
+    });
+
+    it("refuses when local auth is turned off, before any read", async () => {
+      configService.get.mockImplementation((key: string, def?: string) =>
+        key === "LOCAL_AUTH_ENABLED" ? "false" : def,
+      );
+      await expect(service.unlinkUserSso("admin-1", "user-2")).rejects.toThrow(
+        "Password sign-in is turned off on this server",
+      );
+      expect(usersRepository.findOne).not.toHaveBeenCalled();
+    });
+
+    it("refuses to unlink the caller's own account", async () => {
+      await expect(service.unlinkUserSso("admin-1", "admin-1")).rejects.toThrow(
+        ForbiddenException,
+      );
+    });
+
+    it("throws NotFoundException when user not found", async () => {
+      usersRepository.findOne.mockResolvedValue(null);
+      await expect(
+        service.unlinkUserSso("admin-1", "nonexistent"),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it("throws BadRequestException for a non-SSO account and writes nothing", async () => {
+      usersRepository.findOne.mockResolvedValue({ ...mockTargetUser });
+      await expect(service.unlinkUserSso("admin-1", "user-2")).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(usersRepository.save).not.toHaveBeenCalled();
     });
   });
 });

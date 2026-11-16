@@ -34,19 +34,22 @@
   },
   "page": {
     "title": "Impor Transaksi",
-    "subtitle": "Impor transaksi dari file QIF, OFX/QFX, atau CSV, atau bawa satu berkas Microsoft Money (.mny) utuh"
+    "subtitle": "Impor transaksi dari file QIF/QMTF, OFX/QFX, atau CSV, atau bawa satu berkas Microsoft Money (.mny) utuh"
   },
   "upload": {
     "heading": "Unggah File Transaksi",
-    "instructions": "Pilih satu atau lebih file untuk diimpor. Format yang didukung: QIF, OFX/QFX, CSV, dan Microsoft Money (.mny).\nAnda dapat memilih beberapa file dengan tipe yang sama untuk impor massal. Impor berkas Microsoft Money satu per satu — berkas .mny memuat satu profil utuh.",
+    "instructions": "Pilih satu atau lebih file untuk diimpor. Format yang didukung: QIF/QMTF, OFX/QFX, CSV, dan Microsoft Money (.mny).\nAnda dapat memilih beberapa file dengan tipe yang sama untuk impor massal. Impor berkas Microsoft Money satu per satu — berkas .mny memuat satu profil utuh.",
     "importingTo": "Mengimpor ke:",
     "clickToSelect": "Klik untuk memilih file",
+    "orDragAndDrop": "atau seret dan lepas di sini",
+    "dropToImport": "Lepas untuk mengimpor",
+    "unsupportedDrop": "File ini tidak dapat diimpor: {names}. Gunakan file QIF/QMTF, OFX, QFX, CSV, atau Microsoft Money (.mny).",
     "processing": "Memproses...",
-    "acceptedFormats": "QIF, OFX, QFX, CSV, atau Microsoft Money (.mny)",
+    "acceptedFormats": "QIF/QMTF, OFX, QFX, CSV, atau Microsoft Money (.mny)",
     "mnyFailedHeading": "Berkas Microsoft Money itu tidak dapat dibuka",
-    "wikiNotice": {
+    "docsNotice": {
       "title": "Sebelum Anda mengimpor",
-      "body": "Baca bagian <money>Importing from Microsoft Money</money> atau <quicken>Importing from Quicken</quicken> di wiki sebelum mengimpor apa pun."
+      "body": "Baca bagian <money>Importing from Microsoft Money</money> atau <quicken>Importing from Quicken</quicken> di dokumentasi sebelum mengimpor apa pun. File OFX/QFX dan QIF masing-masing memiliki keunikan tersendiri — lihat <ofx>Importing OFX/QFX Files</ofx> dan <qif>Importing Quicken QIF Files</qif>."
     }
   },
   "selectAccount": {
@@ -78,23 +81,25 @@
     "heading": "Pemetaan Kolom CSV",
     "description": "Petakan kolom CSV Anda ke bidang transaksi. Pratinjau data di bawah dan konfigurasi pemetaannya.",
     "firstRowIsHeader": "Baris pertama adalah header",
-    "delimiterLabel": "Pemisah:",
-    "dateFormatLabel": "Format tanggal:",
+    "delimiterLabel": "Pemisah",
+    "dateFormatLabel": "Format tanggal",
     "customOption": "Kustom...",
     "customPlaceholder": "mis. DD.MM.YYYY",
     "dataPreview": "Pratinjau Data",
     "columnMappingTitle": "Pemetaan Kolom",
-    "dateField": "Tanggal *",
+    "columnMappingHelp": "Petakan setiap kolom CSV ke bidang transaksi. Tanggal, Jenis jumlah, dan salah satu dari Jumlah atau Debit/Kredit wajib diisi; sisanya opsional.",
+    "dateField": "Tanggal",
     "amountTypeField": "Jenis jumlah",
     "singleAmountOption": "Satu kolom jumlah",
     "splitAmountOption": "Debit/kredit terpisah",
-    "amountField": "Jumlah *",
+    "amountField": "Jumlah",
     "signField": "Tanda",
+    "signFieldHelp": "Cara tanda jumlah dibaca: 'Apa adanya' memperlakukan angka positif sebagai setoran, 'Balik' memperlakukannya sebagai penarikan (gunakan untuk laporan kartu kredit di mana tagihan muncul sebagai positif), dan kolom jenis transaksi menentukan arah dari nilainya sendiri, bukan dari tandanya.",
     "signNormal": "Apa adanya (positif = setoran)",
     "signReverse": "Dibalik (positif = penarikan)",
     "signTypeColumn": "Gunakan kolom jenis transaksi",
-    "debitField": "Debit *",
-    "creditField": "Kredit *",
+    "debitField": "Debit",
+    "creditField": "Kredit",
     "typeColumnTitle": "Kolom jenis transaksi",
     "typeColumnDescription": "Pilih kolom yang menunjukkan pendapatan, pengeluaran, atau transfer per baris.",
     "valuesFound": "Nilai ditemukan: {values}",
@@ -137,8 +142,8 @@
     "kindBanking": "Transaksi perbankan",
     "kindInvestment": "Transaksi investasi",
     "investmentModeHint": "Baris diklasifikasikan berdasarkan kolom tindakan. Nilai tindakan yang tidak cocok diimpor sebagai setoran atau penarikan tunai pada akun tunai yang terhubung.",
-    "actionField": "Tindakan *",
-    "securityField": "Sekuritas (simbol atau nama) *",
+    "actionField": "Tindakan",
+    "securityField": "Sekuritas (simbol atau nama)",
     "quantityField": "Kuantitas",
     "priceField": "Harga",
     "commissionField": "Komisi",
@@ -278,6 +283,15 @@
       "missingSplitRatio": "Pemecahan tanpa rasio"
     },
     "rejectedGoBack": "Kembali ke langkah pemetaan kolom untuk menyesuaikan kolom atau kata kunci tindakan.",
+    "unreadableDatesNotice": "{count, plural, other {# baris}} memiliki tanggal yang tidak dapat dibaca sebagai {format} dan tidak akan diimpor:",
+    "unreadableDateRow": "Baris {line}: \"{rawDate}\"",
+    "missingDateRow": "Baris {line}: tanpa tanggal",
+    "unreadableDatesMore": "...dan {count} lainnya",
+    "unreadableDatesGoBack": "Jika file menulis tanggal dalam urutan lain, kembali ke langkah pemetaan kolom dan pilih format tanggal yang digunakannya.",
+    "unreadableAmountsNotice": "{count, plural, other {# baris}} memiliki jumlah yang tidak dapat dibaca dan tidak akan diimpor:",
+    "unreadableAmountRow": "Baris {line}: \"{rawAmount}\"",
+    "unreadableAmountsMore": "...dan {count} lainnya",
+    "unreadableAmountsGoBack": "Periksa apakah kolom jumlah sudah dipetakan dengan benar, atau perbaiki baris-baris ini di file lalu impor lagi.",
     "importButton": "Impor Transaksi"
   },
   "complete": {
@@ -287,7 +301,7 @@
     "totalImported": "Total diimpor:",
     "totalImportedSuffix": "transaksi",
     "totalSkipped": "Total dilewati:",
-    "totalSkippedSuffix": "transfer duplikat",
+    "totalSkippedSuffix": "transaksi",
     "totalErrors": "Total kesalahan:",
     "categoriesCreated": "Kategori dibuat:",
     "accountsCreated": "Akun dibuat:",
@@ -299,17 +313,36 @@
     "imported": "Diimpor:",
     "importedSuffix": "transaksi",
     "skipped": "Dilewati:",
-    "skippedSuffix": "transfer duplikat",
+    "skippedSuffix": "transaksi",
     "errors": "Kesalahan:",
     "errorsLabel": "Kesalahan:",
     "andMoreErrors": "...dan {count} kesalahan lainnya",
+    "skippedRowsHeading": "Baris yang dilewati:",
+    "skippedRow": "{date}: {amount}, {payee} ({reason})",
+    "skippedRowNoPayee": "{date}: {amount} ({reason})",
+    "skipReasonAlreadyImported": "sudah diimpor",
+    "skipReasonDuplicateTransfer": "transfer sudah tercatat",
+    "skipReasonUnreadableDate": "tanggal tidak dapat dibaca",
+    "skipReasonNoDate": "tanpa tanggal",
+    "skipReasonUnreadableAmount": "jumlah tidak dapat dibaca",
+    "skippedRowRawAmount": "\"{rawAmount}\"",
+    "skipReasonMissingSecurity": "sekuritas tidak ada",
+    "skipReasonMissingQuantity": "kuantitas tidak ada",
+    "skipReasonMissingAmount": "jumlah tidak ada",
+    "skipReasonMissingProceeds": "penjualan tanpa harga atau hasil penjualan",
+    "skipReasonMissingSplitRatio": "pemecahan tanpa rasio",
+    "skippedRowLineDate": "Baris {line}, \"{rawDate}\"",
+    "skippedRowLine": "Baris {line}",
+    "skippedRowLineAt": "Baris {line}, {date}",
+    "andMoreSkipped": "...dan {count} baris lain yang dilewati",
     "loanSetupHeading": "Siapkan Pembayaran Berulang",
     "loanSetupDescription": "Akun pinjaman/KPR berikut diimpor tanpa pembayaran terjadwal. Siapkan pembayaran berulang untuk terus melacak kemajuan pinjaman Anda.",
     "setUpPayments": "Siapkan Pembayaran",
     "scheduledPaymentsConfigured": "Pembayaran terjadwal dikonfigurasi untuk {count} akun.",
     "viewInvestments": "Lihat Investasi",
     "viewTransactions": "Lihat Transaksi",
-    "importMoreFiles": "Impor File Lainnya"
+    "importMoreFiles": "Impor File Lainnya",
+    "bondRowsWithoutSeries": "{count, plural, other {# pembelian obligasi diimpor tanpa seri. Pilih serinya di lot obligasi sekuritas.}}"
   },
   "multiAccountReview": {
     "heading": "Impor QIF Multi-Akun",
@@ -327,7 +360,10 @@
     "securitiesNotice": "File ini berisi {count} sekuritas yang perlu dipetakan sebelum impor.",
     "nextMapSecurities": "Berikutnya: Petakan Sekuritas",
     "importAll": "Impor Semua",
-    "transactionCount": "{count} transaksi"
+    "transactionCount": "{count} transaksi",
+    "chooseAccountType": "Pilih jenis",
+    "accountTypeFor": "Jenis akun untuk {name}",
+    "accountTypesNeeded": "File tidak menyebutkan jenis {count, plural, other {# akun}}. Pilih jenis untuk masing-masing sebelum mengimpor."
   },
   "navigation": {
     "back": "Kembali",
@@ -344,6 +380,7 @@
     "heading": "Periksa berkas Microsoft Money Anda",
     "fileSummary": "{filename} -- {era}, mata uang dasar {currency}. Saldo di bawah dihitung dari berkas itu sendiri, jadi Anda dapat membandingkannya dengan Money sebelum mengimpor.",
     "era": {
+      "money99": "format Money 97-99",
       "money2001": "format Money 2001",
       "money2002": "format Money 2002",
       "moneyPlus": "format Money Plus / Sunset",
@@ -355,6 +392,7 @@
       "transfersLinked": "{count} transfer tertaut",
       "payees": "Penerima",
       "categories": "Kategori",
+      "tags": "Tag dari klasifikasi",
       "accounts": "Akun",
       "securities": "Efek",
       "investments": "Transaksi investasi",
@@ -395,7 +433,7 @@
       "importPrices": "Impor riwayat harga",
       "importPricesHint": "Catatan Money sendiri tentang nilai setiap efek dari hari ke hari. Matikan jika Anda lebih suka mulai dari kuotasi terkini.",
       "importExchangeRates": "Impor kurs tukar",
-      "importExchangeRatesHint": "Kurs historis antar mata uang di berkas Anda, agar transaksi valuta asing lama dikonversi seperti yang dilakukan Money.",
+      "importExchangeRatesHint": "Kurs historis antar mata uang di berkas Anda, hanya dipakai untuk tanggal yang belum memiliki kurs di Monize. Kurs yang sudah tersimpan tidak pernah diganti.",
       "wipeExistingData": "Mulai dari awal: hapus dulu data Monize saya yang ada",
       "wipeExistingDataHint": "Menjalankan operasi Hapus Data Saya yang sama seperti di Pengaturan sebelum mengimpor. Anda akan diminta konfirmasi. Biarkan mati untuk menambahkan berkas Money ke data yang sudah ada."
     },
@@ -424,7 +462,7 @@
     }
   },
   "mnyWipe": {
-    "heading": "Hapus dulu data Anda yang ada?",
+    "heading": "Hapus Data yang Ada",
     "body": "Ini menjalankan operasi Hapus Data Saya yang sama seperti di Pengaturan -> Zona Berbahaya, sebelum impor dimulai. Ini menghapus:",
     "removes": {
       "transactions": "Setiap transaksi dan pemecahannya",
@@ -434,8 +472,8 @@
       "budgets": "Setiap anggaran, laporan khusus, tag, dan pemetaan impor"
     },
     "irreversible": "Ini tidak bisa dibatalkan. Jika impor kemudian gagal, data yang dihapus tidak kembali.",
-    "typeToConfirm": "Ketik {word} untuk mengonfirmasi:",
-    "passwordLabel": "Masukkan kata sandi Anda:",
+    "typeToConfirm": "Ketik {word} untuk mengonfirmasi",
+    "passwordLabel": "Kata Sandi",
     "oidcNote": "Penyedia identitas Anda sudah mengonfirmasi sesi ini, jadi kata sandi tidak diperlukan.",
     "confirm": "Hapus data saya dan impor"
   },
@@ -455,7 +493,8 @@
     },
     "failedHeading": "Impor tidak selesai",
     "retry": "Coba lagi",
-    "startOver": "Mulai dari awal"
+    "startOver": "Mulai dari awal",
+    "learnMore": "Pelajari lebih lanjut"
   },
   "mnyComplete": {
     "heading": "Impor selesai",
@@ -469,6 +508,7 @@
       "splits": "Baris pemecahan",
       "payees": "Penerima",
       "categories": "Kategori",
+      "taggedRows": "Baris yang diberi tag dari klasifikasi",
       "securities": "Efek",
       "investments": "Transaksi investasi",
       "prices": "Harga",
@@ -492,7 +532,8 @@
     },
     "warningsHeading": "Catatan tentang impor ini",
     "downloadReport": "Unduh laporan",
-    "done": "Selesai"
+    "done": "Selesai",
+    "bondRowsWithoutSeries": "{count, plural, other {# pembelian obligasi diimpor tanpa seri. Pilih serinya di lot obligasi sekuritas.}}"
   },
   "mnyWarnings": {
     "missingTable": "Versi Money ini tidak memiliki {count, plural, other {# tabel}} yang dipakai impor.",
@@ -503,6 +544,7 @@
     "categoryFlattened": "{count, plural, other {# kategori}} lebih dalam dari dua tingkat dan diratakan ke kategori induknya.",
     "categoryTypeInferred": "Penanda pemasukan dari Money tidak ada pada {count, plural, other {# kategori}}; pemasukan atau pengeluaran disimpulkan dari pohon kategori.",
     "degeneratePayeeSkipped": "{count, plural, other {# penerima pengganti}} yang disimpan Money secara internal dilewati.",
+    "unknownClassificationItem": "{count, plural, one {# transaksi menyebut item klasifikasi} other {# transaksi menyebut item klasifikasi}} yang tidak didefinisikan dalam berkas, dan diimpor tanpa tag tersebut.",
     "unusableTransaction": "{count, plural, other {# transaksi}} tidak memiliki akun atau tanggal yang dapat dipakai dan dilewati.",
     "orphanedTransferSide": "{count, plural, other {# transfer}} kehilangan sisi lainnya di berkas dan dilewati.",
     "orphanedSplit": "{count, plural, other {# baris pemecahan}} tidak memiliki transaksi induk dan dilewati.",
@@ -512,6 +554,7 @@
     "duplicateSecuritySymbol": "{count, plural, other {# efek}} berbagi simbol dengan efek lain; yang berikutnya diganti namanya agar tetap terpisah.",
     "generatedSecuritySymbol": "{count, plural, other {# efek}} tidak memiliki simbol di Money, jadi simbol sementara dibuat dan pembaruan harga dibiarkan mati.",
     "unknownInvestmentAction": "{count, plural, other {# transaksi investasi}} memakai aksi yang tidak dikenali Monize dan dilewati.",
+    "stockOptionNotImported": "{count, plural, other {# peristiwa opsi saham karyawan}} (pemberian, vesting, dan kedaluwarsa) tidak memindahkan kas maupun saham dan tidak diimpor.",
     "unconfirmedInvestmentAction": "{count, plural, other {# transaksi investasi}} memakai aksi Money yang artinya disimpulkan, bukan terdokumentasi; periksa terhadap Money.",
     "missingInvestmentDetail": "{count, plural, other {# transaksi investasi}} tidak memiliki rincian lembar di berkas dan hanya diimpor sebesar jumlah tunainya.",
     "investmentAccountMismatch": "{count, plural, other {# transaksi investasi}} berada di akun yang bukan akun investasi dan dilewati.",
@@ -521,6 +564,9 @@
     "unusableBill": "{count, plural, other {# tagihan terjadwal}} tidak memiliki akun, tanggal yang bisa dipakai, atau pengulangan yang dikenali, sehingga dilewati.",
     "billFrequencyApproximated": "{count, plural, other {# tagihan terjadwal}} memakai interval pengulangan yang tidak bisa dinyatakan persis oleh Monize, jadi dipakai interval terpendek terdekat.",
     "loanInterestCategoryUnclear": "{count, plural, other {# pembayaran pinjaman}} menyertakan beberapa kategori selain pokok, sehingga kategori bunga pinjaman dibiarkan kosong. Periksa apakah pembayaran mencakup escrow dan atur kategori bunga setelah impor.",
+    "transferAmountMismatch": "{count, plural, other {# transfer ke rekening investasi}} mencatat jumlah yang berbeda di sisi investasi dibandingkan sisi bank. Sisi investasi diimpor sesuai catatan.",
+    "crossCurrencyTradeUnconverted": "{count, plural, other {# transaksi sekuritas yang dikutip dalam mata uang lain}} disimpan dalam mata uang rekening, karena baik file maupun penyedia kurs tidak memiliki kurs untuk pasangan mata uang itu di sekitar tanggal transaksi. Tambahkan kurs, lalu koreksi harga setiap transaksi.",
+    "crossCurrencyTradeMarketRate": "{count, plural, other {# transaksi sekuritas yang dikutip dalam mata uang lain}} dikonversi dengan kurs pasar pada tanggal transaksi, karena file tidak memiliki kurs di sekitar tanggal itu. Periksa harga setiap transaksi dengan catatan Anda.",
     "showTransactions": "Tampilkan {count, plural, other {# transaksi}}",
     "hideTransactions": "Sembunyikan transaksi",
     "reviewInMoney": "Buka transaksi ini di Microsoft Money untuk memeriksa atau memperbaikinya, lalu ekspor dan impor ulang.",
@@ -539,12 +585,89 @@
     "mnyImportFailed": "Terjadi kesalahan saat mengimpor. Tidak ada yang disimpan -- Anda dapat mencoba lagi.",
     "mnyJobStalled": "Impor berhenti merespons, kemungkinan besar karena server dimulai ulang. Berkas yang Anda unggah masih ada, jadi mencoba lagi aman.",
     "mnyJobStalledAfterCommit": "Impor berhenti merespons setelah data Anda tersimpan, kemungkinan besar karena server dimulai ulang. Catatan yang diimpor sudah ada di akun Anda, jadi mengimpor berkas yang sama lagi akan menggandakannya. Periksa akun Anda sebelum mengimpor yang lain.",
+    "mnyImportFailedAfterCommit": "Impor telah menyimpan data Anda, tetapi langkah setelahnya gagal. Catatan yang diimpor ada di akun Anda, jadi mengimpor file yang sama lagi akan menggandakannya. Periksa akun Anda sebelum mengimpor hal lain.",
+    "mnyAlreadyImported": "File ini sudah diimpor ke akun Anda, jadi mengimpornya lagi akan menggandakan catatannya. Untuk menggantinya, mulai ulang dan pilih untuk mengganti data Anda yang ada.",
     "mnyStagedFileMissing": "Berkas Money yang diunggah sudah tidak tersedia. Silakan unggah kembali.",
     "mnyFileTruncated": "Berkas Money ini tampak tidak lengkap. Unggahan mungkin terputus.",
     "mnyNotAMoneyFile": "Berkas itu bukan berkas Microsoft Money (.mny).",
-    "mnyUnsupportedVersion": "Berkas itu dibuat oleh Money 97 atau 98. Buka dan simpan sekali di edisi gratis Money Plus Sunset, lalu impor hasilnya.",
+    "mnyUnsupportedVersion": "Berkas itu dibuat oleh versi Microsoft Money yang tidak dapat dibaca Monize. Buka dan simpan sekali di edisi gratis Money Plus Sunset, lalu impor hasilnya.",
     "mnyPasswordRequired": "Berkas Money itu dilindungi kata sandi.",
     "mnyPasswordIncorrect": "Kata sandi itu tidak membuka berkas Money.",
     "mnyUnreadableDatabase": "Berkas Money itu berhasil didekripsi, tetapi isinya tidak dapat dibaca. Mungkin rusak."
+  },
+  "preview": {
+    "choice": {
+      "legend": "Apa yang dilakukan dengan {payee} jika tidak diimpor",
+      "skip": "Lewati sekarang",
+      "except": "Tambahkan ke pengecualian"
+    },
+    "payeeTip": {
+      "name": "Dari bank: {original}. Dipetakan ke: {name}",
+      "alias": "Dari bank: {original}. Dipetakan ke: {name} (alias \"{pattern}\")",
+      "aliasNoPattern": "Dari bank: {original}. Dipetakan ke: {name} (alias)",
+      "new": "Dari bank: {original}. Dipetakan ke: {name} (penerima baru)",
+      "rule": "Dari bank: {original}. Dipetakan ke: {name} (ditetapkan oleh aturan)",
+      "ruleNone": "Dari bank: {original}. Dipetakan ke: tanpa penerima (ditetapkan oleh aturan)"
+    },
+    "expand": {
+      "show": "Tampilkan rincian {payee}",
+      "hide": "Sembunyikan rincian {payee}"
+    },
+    "rules": {
+      "heading": "Aturan impor",
+      "none": "Tidak ada aturan impor yang cocok dengan transaksi ini.",
+      "skipped": "{action}: dilewati ({reason})",
+      "stopped": "Menghentikan aturan setelahnya.",
+      "applied": "Diterapkan: {actions}",
+      "openNewTab": "Buka aturan {name} di tab baru"
+    },
+    "ruleTest": {
+      "loading": "Memuat hasil uji aturan",
+      "error": "Hasil uji aturan tidak dapat dimuat.",
+      "retry": "Coba lagi",
+      "noRules": "Anda tidak punya aturan impor, jadi tidak ada yang diuji.",
+      "showNotMatched": "Tampilkan aturan yang tidak cocok ({count})",
+      "hideNotMatched": "Sembunyikan aturan yang tidak cocok ({count})",
+      "noChanges": "Aturan ini cocok, tetapi tidak mengubah apa pun pada transaksi ini.",
+      "badge": {
+        "matched": "Cocok",
+        "notMatched": "Tidak cocok",
+        "notEvaluated": "Tidak dievaluasi"
+      },
+      "notEvaluated": {
+        "afterStop": "Tidak dievaluasi: aturan sebelumnya menghentikan aturan.",
+        "disabled": "Tidak dievaluasi: aturan dimatikan.",
+        "invalid": "Tidak dievaluasi: aturan tidak valid. Buka untuk memperbaikinya.",
+        "outside_active_window": "Tidak dievaluasi: tanggal baris berada di luar tanggal aktif aturan."
+      },
+      "condition": {
+        "met": "Kondisi terpenuhi",
+        "notMet": "Kondisi tidak terpenuhi",
+        "actual": "Nilai pada transaksi ini: {value}",
+        "noValue": "tidak ada",
+        "noTags": "tanpa tag",
+        "capture": "{name} = {value}",
+        "omitted": "Rincian bagian kondisi ini tidak ditampilkan."
+      },
+      "skipReasons": {
+        "already_set": "sudah memiliki nilai dan aturan hanya mengisi yang kosong",
+        "no_change": "sudah memiliki apa yang akan ditetapkan aturan",
+        "payee_unresolved": "penerima yang dibuat aturan tidak dapat dicari"
+      }
+    },
+    "payee": {
+      "heading": "Penerima",
+      "unknown": "Tidak ada informasi penerima untuk transaksi ini.",
+      "original": "Teks dari bank: {original}",
+      "name": "Cocok dengan penerima Anda yang sudah ada, {name}.",
+      "alias": "Dipetakan ke {name} melalui alias \"{pattern}\".",
+      "aliasNoPattern": "Dipetakan ke {name} melalui sebuah alias.",
+      "new": "Belum ada penerima dengan nama ini, sehingga {name} akan dibuat.",
+      "rule": "Aturan impor menetapkan penerima: {name}.",
+      "ruleNone": "Aturan impor menghapus penerima.",
+      "none": "Bank tidak menyebutkan pihak lawan, sehingga transaksi tidak memiliki penerima.",
+      "openAliases": "Buka alias penerima",
+      "openAliasesNewTab": "Buka alias penerima di tab baru"
+    }
   }
 }

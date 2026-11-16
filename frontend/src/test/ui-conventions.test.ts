@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import { describe, it, expect } from "vitest";
 
 /**
- * Guard tests for the UI conventions in `frontend/CLAUDE.md`.
+ * Guard tests for the UI conventions in `docs/frontend/ui-conventions.md`.
  *
  * These exist because a documented rule is only as good as its enforcement. Each
  * one was added after an agent reached for the generic solution, a human spotted
@@ -29,6 +29,23 @@ function productionSources(): [string, string][] {
   return Object.entries(sources).filter(
     ([path]) => !/\.test\.tsx?$/.test(path),
   );
+}
+
+/**
+ * Blank out comment bodies, keeping the file's length and line breaks so
+ * reported line numbers still point at the source. Prose in this repo discusses
+ * the very patterns these scans ban -- `<button>`, `role="switch"` -- and a scan
+ * that reads its own explanation as a violation is worse than no scan, because
+ * the cheap way out of it is a weaker comment.
+ */
+function withoutComments(source: string): string {
+  return source
+    .replace(/\/\*[\s\S]*?\*\//g, (match) => match.replace(/[^\n]/g, " "))
+    .replace(
+      /(^|[^:])\/\/[^\n]*/g,
+      (match, before: string) =>
+        before + " ".repeat(match.length - before.length),
+    );
 }
 
 describe("date entry goes through DateInput", () => {
@@ -212,6 +229,98 @@ describe('every password field says what may be autofilled into it', () => {
   });
 });
 
+describe("a platform capability is not decided by the window's width", () => {
+  /**
+   * `useIsMobile` is a 639px media query, so a narrow desktop window answers
+   * yes to it. That is fine for choosing a LAYOUT -- the register's card rows
+   * show the same figures either way -- and wrong for anything that changes
+   * what a control can do, which is what `isTouchDevice` (`lib/touch-device.ts`)
+   * is for.
+   *
+   * `capture` is the case that made this a scan: on a browser that honours it
+   * the OS file picker is replaced by the camera, so keyed off the viewport it
+   * took "choose an existing photo" away from anyone with a narrow window and
+   * handed it back when they widened it.
+   */
+  function filesUsing(pattern: RegExp): string[] {
+    return productionSources()
+      .filter(([, source]) => pattern.test(withoutComments(source)))
+      .map(([path]) => path);
+  }
+
+  it("keeps the camera handoff off the viewport hook", () => {
+    const offenders = productionSources()
+      .filter(([, source]) => {
+        const code = withoutComments(source);
+        return /\bcapture\s*[:=]/.test(code) && /useIsMobile/.test(code);
+      })
+      .map(([path]) => path);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("asks the pointer through one helper", () => {
+    // A third hand-rolled copy is how the two existing ones came to be worth
+    // extracting; the media query belongs in `lib/touch-device.ts` alone.
+    const offenders = filesUsing(/pointer:\s*coarse/).filter(
+      (path) => path !== "/src/lib/touch-device.ts",
+    );
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("catches the pattern it bans", () => {
+    const bad = 'const m = useIsMobile();\n<input capture="environment" />';
+    expect(/\bcapture\s*[:=]/.test(withoutComments(bad))).toBe(true);
+    expect(/useIsMobile/.test(withoutComments(bad))).toBe(true);
+    // ...and reads its own explanation as prose, not as a violation.
+    expect(
+      /pointer:\s*coarse/.test(withoutComments("// never (pointer: coarse)")),
+    ).toBe(false);
+  });
+});
+
+describe("contextual help opens on a touch device", () => {
+  /**
+   * `InfoTooltip` is the one help popover: hover and keyboard focus on a
+   * desktop, a tap on a phone, the same `text` either way. A help popover
+   * written anywhere else was, every time, hover-only -- so the explanation
+   * of TWR, MWR or an incomplete valuation existed on a desktop and not on a
+   * phone. `InfoTooltip.touch.test.tsx` holds the tap behaviour; this holds
+   * that nothing routes around it.
+   */
+  const SHARED = "/src/components/ui/InfoTooltip.tsx";
+  const TOOLTIP_ROLE = /role=\{?["']tooltip["']\}?/;
+  /**
+   * Shrink-only. Each is hover-only on purpose and loses nothing on a phone:
+   * the date shortcuts are keystrokes, which a touch screen has no keyboard
+   * for; the page-header icon is a link that opens the help page on a tap,
+   * and its popover only names that link.
+   */
+  const HOVER_ONLY = new Set([
+    "/src/components/ui/DateInput.tsx",
+    "/src/components/layout/PageHeader.tsx",
+  ]);
+
+  it("has no hand-rolled help popover outside InfoTooltip", () => {
+    const offenders = productionSources()
+      .filter(([path]) => path !== SHARED && !HOVER_ONLY.has(path))
+      .filter(([, raw]) => TOOLTIP_ROLE.test(withoutComments(raw)))
+      .map(([path]) => `${path}: use InfoTooltip, which opens on a tap as well as a hover`);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("still finds the shared component, so the rule cannot pass by accident", () => {
+    const shared = sources[SHARED];
+    expect(shared, `${SHARED} not found -- update SHARED in this test`).toBeTruthy();
+    expect(TOOLTIP_ROLE.test(shared)).toBe(true);
+    for (const path of HOVER_ONLY) {
+      expect(sources[path], `${path} is gone -- remove it from HOVER_ONLY`).toBeTruthy();
+    }
+  });
+});
+
 describe("a scrollbar you need is not hidden", () => {
   /**
    * `scrollbar-hide` is for a horizontal strip of chips, where the content being
@@ -239,6 +348,288 @@ describe("a scrollbar you need is not hidden", () => {
       }
     }
     expect(offenders).toEqual([]);
+  });
+});
+
+describe("the mobile-table chrome constants live once in Table.tsx", () => {
+  /**
+   * `PHONE_HEADER_CLASS` (the phone sort strip's control) and `CAPTION_CLASS`
+   * (the phone-only cell caption) are one class list each, worn by two dozen
+   * wrapped tables, so they are exported from `components/ui/Table.tsx` and
+   * imported.
+   *
+   * The reason is REACH, not repair. All fourteen of the local declarations
+   * this replaced were byte-identical on `origin/main`: nothing had drifted.
+   * What one home buys is that the next change to the caption's breakpoint or
+   * the strip's padding lands in every table at once, instead of in whichever
+   * files somebody remembered -- twenty-odd call sites is well past the number
+   * a person edits reliably. (An earlier version of this comment justified the
+   * scan with three copies that had already drifted by a lost tracking token.
+   * That never happened, and a future reader must not reason from it. The
+   * constant that genuinely differs per report is `HEADER_CLASS`, whose
+   * `tracking-wider` this guard deliberately does not police, because those
+   * track budgets are a per-report decision.)
+   *
+   * Two shapes break the rule and both are scanned, because closing one leaves
+   * the other doing the same damage: re-declaring the constant locally, and
+   * inlining its VALUE at a call site. `<CellLabel className="sm:hidden">` IS
+   * `CAPTION_CLASS`, spelled out and importing nothing, so a change to the
+   * constant skips it in silence.
+   */
+  const LOCAL_DECL = /\bconst\s+(PHONE_HEADER_CLASS|CAPTION_CLASS)\s*=/;
+  const HOME = "/src/components/ui/Table.tsx";
+  /** `CAPTION_CLASS`'s value written out on a `CellLabel` instead of imported. */
+  const INLINE_CAPTION = /<CellLabel[^>]*className=\{?["'`][^"'`]*\bsm:hidden\b/;
+
+  /**
+   * Call sites that still inline it, with the reason each is here. Shrink-only:
+   * fixing one means DELETING its line, and the second test below fails while a
+   * listed file no longer offends, so the register cannot outlive its subjects.
+   */
+  const INLINE_CAPTION_BASELINE: ReadonlyArray<{ file: string; reason: string }> = [];
+
+  const inliningFiles = () => {
+    const found = new Set<string>();
+    for (const [path, content] of productionSources()) {
+      if (path === HOME) continue;
+      for (const line of withoutComments(content).split("\n")) {
+        if (INLINE_CAPTION.test(line)) found.add(path);
+      }
+    }
+    return found;
+  };
+
+  it("no file re-declares the shared chrome classes locally", () => {
+    const offenders: string[] = [];
+    for (const [path, content] of productionSources()) {
+      if (path === HOME) continue;
+      withoutComments(content)
+        .split("\n")
+        .forEach((line, i) => {
+          const match = line.match(LOCAL_DECL);
+          if (match) offenders.push(`${path}:${i + 1} re-declares ${match[1]}`);
+        });
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("no new call site inlines the caption class instead of importing it", () => {
+    const allowed = new Set(INLINE_CAPTION_BASELINE.map((entry) => entry.file));
+    const offenders: string[] = [];
+    for (const [path, content] of productionSources()) {
+      if (path === HOME || allowed.has(path)) continue;
+      withoutComments(content)
+        .split("\n")
+        .forEach((line, i) => {
+          if (INLINE_CAPTION.test(line)) {
+            offenders.push(`${path}:${i + 1} inlines CAPTION_CLASS`);
+          }
+        });
+    }
+
+    expect(
+      offenders,
+      'Pass CAPTION_CLASS from @/components/ui/Table, not the literal "sm:hidden".',
+    ).toEqual([]);
+  });
+
+  it("keeps the inline-caption baseline shrink-only", () => {
+    const offending = inliningFiles();
+    expect(
+      INLINE_CAPTION_BASELINE.map((entry) => entry.file).filter(
+        (file) => !offending.has(file),
+      ),
+      "This file no longer inlines the caption class -- delete its baseline line.",
+    ).toEqual([]);
+  });
+
+  it("reads an inlined caption in markup but not one named in a comment", () => {
+    // Both directions: the shape the scan exists for is caught, and this
+    // block's own prose -- which has to name `className="sm:hidden"` to explain
+    // itself -- is not a violation.
+    expect(INLINE_CAPTION.test('<CellLabel className="sm:hidden">Total</CellLabel>')).toBe(
+      true,
+    );
+    expect(INLINE_CAPTION.test("<CellLabel className={CAPTION_CLASS}>Total</CellLabel>")).toBe(
+      false,
+    );
+    expect(
+      INLINE_CAPTION.test(
+        withoutComments('// never write <CellLabel className="sm:hidden">'),
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("a phone-wrapped cell restores the desktop font size it had", () => {
+  /**
+   * A cell converted for the phone card zeroes its padding at base and hands it
+   * back at `sm` (`p-0 ... sm:px-4 sm:py-3`), and the claim that comes with that
+   * is "from `sm` up this resolves identically to today". The font size is part
+   * of the claim, and it is one token wide: `PortfolioValueReport`'s account
+   * cell shipped `sm:text-sm` where the unwrapped cell had carried no size class
+   * at all, so an inherited 16px became 14px on every desktop. It was corrected
+   * by hand to `sm:text-base` and the suite never noticed either state -- of the
+   * 27 `*.mobileWrapped` specs only seven assert any `sm:text-*`.
+   *
+   * The class string cannot tell you WHICH size is right: that is a fact about
+   * the table before the conversion, and it differs. Every wrapped table in the
+   * tree gave its cells `text-sm` (so `text-xs` on the phone restores
+   * `sm:text-sm`), and exactly one cell inherited the page's 16px instead. So
+   * the convention is what is scanned, and the exception is declared below with
+   * the reason it is one -- which is what fails when that cell's `sm:text-base`
+   * turns back into `sm:text-sm`.
+   *
+   * What this scan CANNOT see, so nobody over-trusts it:
+   *
+   *  - A size set once on the `<table>` and inherited by every cell. The three
+   *    MonteCarlo tables legitimately do that (`text-xs` on the table element),
+   *    and their cells name no size for this to read.
+   *  - A size composed on another line -- through a module constant like
+   *    `MONEY_CELL` or a helper like `cellPadding(columns.x)`. Matching is per
+   *    line, so a base size in one place and its `sm:` restoration in another
+   *    are invisible as a pair. (A constant that declares both on its own
+   *    declaration line, as most do, IS covered.)
+   *  - Whether the restored size is what the reader actually gets. jsdom
+   *    applies no Tailwind stylesheet, so no test here can assert a computed
+   *    font size; this is a claim about the class list.
+   */
+  const PADDING_RESTORED = /\bsm:p[xy]?-/;
+  const BASE_TEXT = /(?:^|[\s"'`])text-(xs|sm|base|lg|xl)\b/g;
+  const SM_TEXT = /\bsm:text-(xs|sm|base|lg|xl)\b/g;
+  /** What a wrapped cell restores unless its table says otherwise. */
+  const CONVENTION = "text-sm";
+
+  /**
+   * The cells whose desktop size is NOT the convention, each with the fact about
+   * the pre-conversion table that decides it. Adding an entry is a decision:
+   * check what the unwrapped cell rendered at before writing one.
+   */
+  const INHERITED_DESKTOP_SIZE: ReadonlyArray<{
+    file: string;
+    restores: string;
+    count: number;
+    reason: string;
+  }> = [
+    {
+      file: "/src/components/reports/PortfolioValueReport.tsx",
+      restores: "text-base",
+      count: 1,
+      reason:
+        "The breakdown's account cell was `px-4 py-3 font-medium ...` with no " +
+        "size class, so it inherited 16px while the four figure cells beside " +
+        "it were `text-sm`. `text-base` is that inherited size written down; " +
+        "`sm:text-sm` shrinks the row identity on every desktop.",
+    },
+  ];
+
+  /** `{ file -> { restoredSize -> [line, ...] } }` for every shrink-and-restore cell. */
+  function restorations(): Map<string, Map<string, number[]>> {
+    const found = new Map<string, Map<string, number[]>>();
+    for (const [path, content] of productionSources()) {
+      withoutComments(content)
+        .split("\n")
+        .forEach((line, i) => {
+          if (!PADDING_RESTORED.test(line)) return;
+          BASE_TEXT.lastIndex = 0;
+          SM_TEXT.lastIndex = 0;
+          const base = new Set(
+            [...line.matchAll(BASE_TEXT)].map((m) => `text-${m[1]}`),
+          );
+          const restored = [...line.matchAll(SM_TEXT)].map((m) => `text-${m[1]}`);
+          // No base size, or no `sm:` size, is not a restoration: the cell's
+          // size does not change across the breakpoint and this rule has
+          // nothing to say about it.
+          for (const size of restored) {
+            if (base.size === 0 || base.has(size)) continue;
+            const perFile = found.get(path) ?? new Map<string, number[]>();
+            perFile.set(size, [...(perFile.get(size) ?? []), i + 1]);
+            found.set(path, perFile);
+          }
+        });
+    }
+    return found;
+  }
+
+  it("finds the wrapped cells, so the checks below are not vacuous", () => {
+    // Two dozen tables were converted; were the class shape to change, every
+    // check here would pass over an empty set.
+    const total = [...restorations().values()].flatMap((sizes) =>
+      [...sizes.values()].flat(),
+    ).length;
+    expect(total).toBeGreaterThan(20);
+  });
+
+  it("restores the convention everywhere it is not declared otherwise", () => {
+    const declared = new Map(
+      INHERITED_DESKTOP_SIZE.map((entry) => [entry.file, entry.restores]),
+    );
+    const offenders: string[] = [];
+    for (const [path, sizes] of restorations()) {
+      for (const [size, lines] of sizes) {
+        if (size === CONVENTION || declared.get(path) === size) continue;
+        for (const line of lines) {
+          offenders.push(`${path}:${line} restores sm:${size}`);
+        }
+      }
+    }
+
+    expect(
+      offenders,
+      `A phone-shrunk cell restores sm:${CONVENTION} unless its unwrapped table ` +
+        "gave it another size -- if it did, add it to INHERITED_DESKTOP_SIZE " +
+        "with that fact as the reason.",
+    ).toEqual([]);
+  });
+
+  it("keeps every declared exception present, at its own size", () => {
+    // The half that catches the regression: the account cell going back to
+    // `sm:text-sm` leaves this expecting one `text-base` site and finding none.
+    // Both directions, because a stale entry is a rule protecting nothing.
+    const found = restorations();
+    const actual = INHERITED_DESKTOP_SIZE.map((entry) => ({
+      file: entry.file,
+      restores: entry.restores,
+      count: (found.get(entry.file)?.get(entry.restores) ?? []).length,
+    }));
+
+    expect(
+      actual,
+      "A declared exception must still be in the source at the size it declares.",
+    ).toEqual(
+      INHERITED_DESKTOP_SIZE.map((entry) => ({
+        file: entry.file,
+        restores: entry.restores,
+        count: entry.count,
+      })),
+    );
+  });
+
+  it("reads a restoration, and reads no restoration where the size is unchanged", () => {
+    const restored = (line: string) => {
+      BASE_TEXT.lastIndex = 0;
+      SM_TEXT.lastIndex = 0;
+      const base = new Set(
+        [...line.matchAll(BASE_TEXT)].map((m) => `text-${m[1]}`),
+      );
+      return [...line.matchAll(SM_TEXT)]
+        .map((m) => `text-${m[1]}`)
+        .filter((size) => base.size > 0 && !base.has(size));
+    };
+
+    // The corrected cell, and the mutation this guard exists to fail.
+    expect(
+      restored('className="p-0 text-xs break-words sm:px-4 sm:py-3 sm:text-base"'),
+    ).toEqual(["text-base"]);
+    expect(
+      restored('className="p-0 text-xs break-words sm:px-4 sm:py-3 sm:text-sm"'),
+    ).toEqual(["text-sm"]);
+    // A cell that keeps one size at every width restores nothing...
+    expect(restored('className="p-0 text-sm sm:px-4 sm:py-3 sm:text-sm"')).toEqual([]);
+    // ...and neither does one that names no size of its own.
+    expect(restored('className="min-w-0 p-0 sm:px-4 sm:py-3 sm:break-normal"')).toEqual([]);
+    // `sm:text-sm` must not be read as a base size by the base matcher.
+    expect(restored('className="p-0 sm:px-4 sm:text-sm"')).toEqual([]);
   });
 });
 
@@ -388,12 +779,23 @@ describe("a tab bar is the shared Tabs component", () => {
   const TABLIST = /role=["']tablist["']/;
 
   it("declares role=tablist in exactly one place", () => {
+    // Comments stripped, like the other scans whose banned pattern has to be
+    // NAMED to explain itself: a call site that deliberately uses two buttons
+    // instead says so, and quoting the role it avoided is not a violation.
     const offenders = productionSources()
       .filter(([path]) => path !== SHARED)
-      .filter(([, source]) => TABLIST.test(source))
+      .filter(([, source]) => TABLIST.test(withoutComments(source)))
       .map(([path]) => path);
 
     expect(offenders).toEqual([]);
+  });
+
+  it("reads a tablist in code but not one named in a comment", () => {
+    // Both directions, so the stripping cannot quietly disarm the rule.
+    expect(TABLIST.test(withoutComments('<div role="tablist">'))).toBe(true);
+    expect(
+      TABLIST.test(withoutComments('// never hand-roll role="tablist"')),
+    ).toBe(false);
   });
 
   it("still finds the shared tablist, so the rule cannot pass by accident", () => {
@@ -461,22 +863,6 @@ describe("nothing interactive is nested inside a button", () => {
    * nothing is how `InfoTooltip` got here in the first place.
    */
   const INTERACTIVE = /<(button|a|select|textarea|input|InfoTooltip)[\s/>]/g;
-
-  /**
-   * Blank out comment bodies, keeping the file's length and line breaks so
-   * reported line numbers still point at the source. Prose in this repo
-   * discusses `<button>` constantly, and a scan that reads its own
-   * explanation as a violation is worse than no scan.
-   */
-  function withoutComments(source: string): string {
-    return source
-      .replace(/\/\*[\s\S]*?\*\//g, (match) => match.replace(/[^\n]/g, " "))
-      .replace(
-        /(^|[^:])\/\/[^\n]*/g,
-        (match, before: string) =>
-          before + " ".repeat(match.length - before.length),
-      );
-  }
 
   /** [start, end) of every non-self-closing `<button>` element's children. */
   function buttonBodies(source: string): Array<[number, number]> {
@@ -552,7 +938,7 @@ describe("an unknown value is not drawn as measured data", () => {
    * `connectNulls` draws a straight segment across a gap. It is
    * indistinguishable from measured data, and a tooltip saying "unknown" under
    * the cursor does not undo it -- so the server's careful `null` is thrown away
-   * in the last hundred pixels (`frontend/CLAUDE.md`,
+   * in the last hundred pixels (`docs/frontend/financial-figures.md`,
    * `docs/time-series-contract.md` rule 3).
    *
    * The rule is `connectNulls={false}`. This scan is what tells you which files
@@ -841,6 +1227,26 @@ describe("a register that draws a Balance column is given the balance", () => {
     expect(/isSingleAccountView \|\| startingBalance !== undefined/.test(list)).toBe(
       true,
     );
+  });
+
+  it("draws the column only while the register is in date order", () => {
+    // A running balance is a figure about the row above it, so beside rows
+    // ordered by payee or amount it is arithmetic nobody can read -- and the
+    // server withholds the seed there, so the column would render "-" on every
+    // row. The two conditions are one expression rather than two branches
+    // because dropping either one silently brings the column back.
+    // INV-REGISTER-001.
+    const list = sources[LIST];
+    expect(
+      /\(isSingleAccountView \|\| startingBalance !== undefined\) && sortedByDate/.test(
+        list,
+      ),
+      `${LIST} must gate the Balance column on the register being date-sorted`,
+    ).toBe(true);
+    // And the walk it feeds is the shared one, not a second copy in the
+    // component: the two directions have to agree on one arithmetic.
+    expect(/walkRunningBalances\(/.test(list)).toBe(true);
+    expect(/let cumulativeCents/.test(list)).toBe(false);
   });
 });
 
@@ -1168,16 +1574,13 @@ describe("a panel card is the shared Card surface", () => {
     "/src/components/accounts/loan-detail/OverpaymentSimulator.tsx",
     "/src/components/accounts/loan-detail/PayoffComparisonChart.tsx",
     "/src/components/accounts/loan-detail/RateHistorySidebar.tsx",
-    "/src/components/accounts/loan-detail/ScenarioComparisonChart.tsx",
-    "/src/components/accounts/shared/ForeignCurrencyFeeChart.tsx",
     "/src/components/accounts/shared/ForeignCurrencyFeesSection.tsx",
     "/src/components/accounts/shared/RecurringChargesPanel.tsx",
     "/src/components/accounts/shared/SummaryCardGrid.tsx",
     "/src/components/accounts/shared/TopGroupsPanel.tsx",
-    "/src/components/ai/ResultChart.tsx",
     "/src/components/bills/CashFlowForecastChart.tsx",
     "/src/components/budgets/Budget503020Summary.tsx",
-    "/src/components/budgets/BudgetAlertList.tsx",
+    "/src/components/notifications/NotificationList.tsx",
     "/src/components/budgets/BudgetCategoryList.tsx",
     "/src/components/budgets/BudgetCategoryTrend.tsx",
     "/src/components/budgets/BudgetFlexGroupCard.tsx",
@@ -1192,8 +1595,6 @@ describe("a panel card is the shared Card surface", () => {
     "/src/components/budgets/BudgetWizardReview.tsx",
     "/src/components/budgets/BudgetWizardStrategy.tsx",
     "/src/components/budgets/BudgetZeroBasedBar.tsx",
-        "/src/components/dashboard/ExpensesPieChart.tsx",
-            "/src/components/dashboard/IncomeExpensesBarChart.tsx",
             "/src/components/import/CompleteStep.tsx",
     "/src/components/import/CsvColumnMappingStep.tsx",
     "/src/components/import/MapAccountsStep.tsx",
@@ -1212,12 +1613,10 @@ describe("a panel card is the shared Card surface", () => {
     "/src/components/layout/ActionHistoryPanel.tsx",
     "/src/components/payees/detail/PayeeRecurringPanel.tsx",
     "/src/components/reconcile/ReconciliationReminderBadge.tsx",
-    // Both keep an inline surface for their chart TOOLTIP -- a floating panel
-    // with its own stronger shadow, not the widget card. Their widget
-    // surfaces now come from CARD_CLASS; the tooltip shape is hand-rolled in
-    // ~44 files and is a separate drift from this one.
-    "/src/components/dashboard/AssetsVsLiabilities.tsx",
-    "/src/components/dashboard/NetWorthChart.tsx",
+    // Keeps an inline surface for its chart TOOLTIP -- a floating panel with
+    // its own stronger shadow, not the widget card. Its widget surface now
+    // comes from CARD_CLASS; the tooltip shape is hand-rolled in ~44 files
+    // and is a separate drift from this one.
     "/src/components/reports/AccountBalancesReport.tsx",
     "/src/components/reports/BillPaymentHistoryReport.tsx",
     "/src/components/reports/BudgetHealthScoreReport.tsx",
@@ -1247,7 +1646,6 @@ describe("a panel card is the shared Card surface", () => {
     "/src/components/reports/InvestmentTransactionHistoryReport.tsx",
     "/src/components/reports/LoanAmortizationReport.tsx",
     "/src/components/reports/LoanOverpaymentSimulatorReport.tsx",
-    "/src/components/reports/MonteCarloChartParts.tsx",
     "/src/components/reports/MonteCarloReport.tsx",
     "/src/components/reports/MonteCarloResultsTable.tsx",
     "/src/components/reports/MonthlyCategoryBreakdownReport.tsx",
@@ -1257,7 +1655,6 @@ describe("a panel card is the shared Card surface", () => {
     "/src/components/reports/PortfolioValueReport.tsx",
     "/src/components/reports/RealizedGainsReport.tsx",
     "/src/components/reports/RecurringExpensesReport.tsx",
-    "/src/components/reports/ReportChart.tsx",
     "/src/components/reports/ReportError.tsx",
     "/src/components/reports/SavingsRateReport.tsx",
     "/src/components/reports/SeasonalSpendingMapReport.tsx",
@@ -1331,6 +1728,73 @@ describe("a panel card is the shared Card surface", () => {
   });
 });
 
+describe("a toggle is ToggleSwitch", () => {
+  /**
+   * `components/ui/ToggleSwitch.tsx` is the project's one on/off control, and a
+   * hand-rolled one is not merely duplicated markup: the admin push panel's came
+   * out 44px wide against the shared 36, with its own focus-ring offset colour,
+   * so one switch in Settings was visibly a different control from every other.
+   *
+   * The scan keys on `role="switch"` on an element that is not the shared
+   * component -- the attribute a hand-rolled toggle cannot omit without losing
+   * the accessibility the shared one provides.
+   *
+   * The baseline is **shrink-only**: each entry predates this rule. Converting a
+   * file to `ToggleSwitch` means deleting its line here; new code takes the
+   * shared component from the start.
+   */
+  const TOGGLE = "/src/components/ui/ToggleSwitch.tsx";
+  const HAND_ROLLED = /role=["']switch["']/;
+
+  const BASELINE: ReadonlyArray<string> = [
+    "/src/components/reports/DividendIncomeReport.tsx",
+    "/src/components/settings/NotificationsSection.tsx",
+  ];
+
+  function filesWithHandRolledToggle(): string[] {
+    return productionSources()
+      .filter(([path]) => path !== TOGGLE)
+      .filter(([, source]) => HAND_ROLLED.test(withoutComments(source)))
+      .map(([path]) => path)
+      .sort();
+  }
+
+  it("has no hand-rolled switch outside the recorded baseline", () => {
+    const allowed = new Set(BASELINE);
+    const offenders = filesWithHandRolledToggle().filter(
+      (path) => !allowed.has(path),
+    );
+    expect(offenders).toEqual([]);
+  });
+
+  // A scan that reads prose is a scan whose cheapest fix is a weaker comment,
+  // so it reads code only -- and that has to hold in BOTH directions, or the
+  // stripper silently blinds the rule it protects.
+  it("ignores the attribute in a comment and still catches it in markup", () => {
+    const explained = [
+      "/**",
+      ' * A second tree would double every role="switch" in the a11y tree.',
+      " */",
+      "export const x = 1;",
+    ].join("\n");
+    expect(HAND_ROLLED.test(withoutComments(explained))).toBe(false);
+    expect(
+      HAND_ROLLED.test(withoutComments('<button role="switch" />')),
+    ).toBe(true);
+  });
+
+  it("keeps the baseline shrink-only", () => {
+    const offending = new Set(filesWithHandRolledToggle());
+    expect(BASELINE.filter((file) => !offending.has(file))).toEqual([]);
+  });
+
+  it("still finds the shared component, so the rule cannot pass by accident", () => {
+    const toggle = sources[TOGGLE];
+    expect(toggle, `${TOGGLE} not found -- update TOGGLE in this test`).toBeTruthy();
+    expect(HAND_ROLLED.test(toggle)).toBe(true);
+  });
+});
+
 describe("an auth page renders inside AuthShell", () => {
   /**
    * The centered logo-plus-form shell used to be duplicated across every auth
@@ -1349,6 +1813,7 @@ describe("an auth page renders inside AuthShell", () => {
     "/src/app/reset-password/page.tsx",
     "/src/app/change-password/page.tsx",
     "/src/app/verify-email/page.tsx",
+    "/src/app/confirm-email-change/page.tsx",
     "/src/app/setup-2fa/page.tsx",
   ];
   const HAND_ROLLED_SHELL = "min-h-screen flex items-center justify-center";
@@ -1450,6 +1915,32 @@ describe("an empty state is the shared EmptyState", () => {
       .filter(([, content]) => content.includes(FINGERPRINT))
       .map(([path]) => path);
     expect(offenders).toEqual([]);
+  });
+
+  /**
+   * The reports grew their own variant: a bare grey paragraph with
+   * `text-center py-8`, in some thirty report components. Scoped to the
+   * report directories, where every one of them was converted; the same class
+   * pair elsewhere in the tree is tracked by the other UI consistency issues.
+   */
+  const REPORT_DIRS = ["/src/components/reports/", "/src/app/reports/"];
+  const REPORT_FINGERPRINT = /\btext-center py-8\b/;
+
+  it("has no hand-rolled empty-state paragraph in a report", () => {
+    const offenders = productionSources()
+      .filter(([path]) => REPORT_DIRS.some((dir) => path.startsWith(dir)))
+      .filter(([, content]) => REPORT_FINGERPRINT.test(withoutComments(content)))
+      .map(([path]) => path);
+    expect(offenders, "Render EmptyState from @/components/ui/EmptyState.").toEqual([]);
+  });
+
+  it("still scans the reports, so the rule cannot pass by accident", () => {
+    expect(
+      productionSources().filter(([path]) => path.startsWith(REPORT_DIRS[0])).length,
+    ).toBeGreaterThan(0);
+    expect(
+      REPORT_FINGERPRINT.test('<p className="text-gray-500 text-center py-8">'),
+    ).toBe(true);
   });
 
   it("still finds the shared component, so the rule cannot pass by accident", () => {
@@ -1646,7 +2137,6 @@ describe("a keyboard focus ring is focus-visible, never focus", () => {
     "/src/app/tags/page.tsx",
     "/src/components/accounts/AccountForm.tsx",
     "/src/components/accounts/LoanPaymentSetupDialog.tsx",
-    "/src/components/accounts/MortgageFields.tsx",
     "/src/components/accounts/credit-card-detail/PaymentSetupDialog.tsx",
     "/src/components/accounts/loan-detail/OverpaymentSimulator.tsx",
     "/src/components/admin/UserManagementTable.tsx",
@@ -1673,7 +2163,6 @@ describe("a keyboard focus ring is focus-visible, never focus", () => {
     "/src/components/reports/FilterBuilder.tsx",
     "/src/components/reports/MonteCarloReport.tsx",
     "/src/components/reports/MonteCarloSaveAsDialog.tsx",
-    "/src/components/reports/ReportError.tsx",
     "/src/components/scheduled-transactions/PostTransactionDialog.tsx",
     "/src/components/scheduled-transactions/ScheduledTransactionForm.tsx",
     "/src/components/securities/SecurityForm.tsx",
@@ -1694,14 +2183,12 @@ describe("a keyboard focus ring is focus-visible, never focus", () => {
     "/src/components/transactions/TransactionList.tsx",
     "/src/components/transactions/TransactionRow.tsx",
     "/src/components/ui/ColorPicker.tsx",
-    "/src/components/ui/ConfirmDialog.tsx",
     "/src/components/ui/DragHandle.tsx",
     "/src/components/ui/IconPicker.tsx",
     "/src/components/ui/MultiSelect.tsx",
     "/src/components/ui/Pagination.tsx",
     "/src/components/ui/Select.tsx",
     "/src/components/ui/ThemeToggle.tsx",
-    "/src/components/ui/UnsavedChangesDialog.tsx",
   ];
 
   function filesWithFocusRing(): string[] {
@@ -1773,16 +2260,10 @@ describe("row hover comes from the shared pair, not a hand-picked grey", () => {
   const HOVER_FINGERPRINT = /hover:bg-gray-(50|100)[^"'`]*dark:hover:bg-gray-/;
 
   const BASELINE: ReadonlyArray<string> = [
-    "/src/app/bills/page.tsx",
     "/src/app/budgets/[id]/edit/page.tsx",
-    "/src/app/categories/page.tsx",
-    "/src/app/currencies/page.tsx",
     "/src/app/error.tsx",
-    "/src/app/institutions/page.tsx",
     "/src/app/not-found.tsx",
-    "/src/app/payees/page.tsx",
     "/src/app/reports/page.tsx",
-    "/src/app/securities/page.tsx",
     "/src/app/settings/page.tsx",
     "/src/components/accounts/AccountForm.tsx",
     "/src/components/accounts/AccountList.tsx",
@@ -1797,8 +2278,8 @@ describe("row hover comes from the shared pair, not a hand-picked grey", () => {
     "/src/components/ai/AiChatBubble.tsx",
     "/src/components/ai/AssistantTable.tsx",
     "/src/components/ai/ResultChart.tsx",
-    "/src/components/budgets/BudgetAlertBadge.tsx",
-    "/src/components/budgets/BudgetAlertList.tsx",
+    "/src/components/notifications/NotificationBell.tsx",
+    "/src/components/notifications/NotificationList.tsx",
     "/src/components/budgets/BudgetCategoryList.tsx",
     "/src/components/budgets/BudgetCategoryRow.tsx",
     "/src/components/budgets/BudgetWizardCategories.tsx",
@@ -1806,7 +2287,6 @@ describe("row hover comes from the shared pair, not a hand-picked grey", () => {
     "/src/components/categories/CategoryList.tsx",
     "/src/components/categories/detail/CategorySubcategoriesTab.tsx",
     "/src/components/currencies/CurrencyList.tsx",
-    "/src/components/dashboard/CustomizeDashboardModal.tsx",
     "/src/components/dashboard/FavouriteAccounts.tsx",
     "/src/components/dashboard/FavouriteReportsWidget.tsx",
     "/src/components/dashboard/FavouriteSecurities.tsx",
@@ -1843,8 +2323,6 @@ describe("row hover comes from the shared pair, not a hand-picked grey", () => {
     "/src/components/reports/DividendYieldGrowthReport.tsx",
     "/src/components/reports/GeographicAllocationReport.tsx",
     "/src/components/reports/IncomeBySourceReport.tsx",
-    "/src/components/reports/IncomeVsExpensesReport.tsx",
-    "/src/components/reports/InvestmentPerformanceReport.tsx",
     "/src/components/reports/InvestmentReportViewer.tsx",
     "/src/components/reports/InvestmentTransactionHistoryReport.tsx",
     "/src/components/reports/LoanAmortizationReport.tsx",
@@ -1898,9 +2376,7 @@ describe("row hover comes from the shared pair, not a hand-picked grey", () => {
     "/src/components/transactions/SplitTransactionFields.tsx",
     "/src/components/transactions/StatusCellButton.tsx",
     "/src/components/transactions/TransactionActionSheet.tsx",
-    "/src/components/transactions/TransactionFilterPanel.tsx",
     "/src/components/transactions/TransactionForm.tsx",
-    "/src/components/transactions/TransactionList.tsx",
     "/src/components/transactions/TransactionRow.tsx",
     "/src/components/ui/ActionMenu.tsx",
     "/src/components/ui/Button.tsx",
@@ -1975,79 +2451,31 @@ describe("a dialog is titled through Modal, not by a hand-rolled heading", () =>
   const MODAL = "/src/components/ui/Modal.tsx";
 
   const BASELINE: ReadonlyArray<string> = [
-    "/src/app/bills/page.tsx",
     "/src/app/budgets/[id]/edit/page.tsx",
     "/src/app/categories/[id]/page.tsx",
     "/src/app/categories/page.tsx",
-    "/src/app/currencies/page.tsx",
     "/src/app/institutions/page.tsx",
-    "/src/app/investments/page.tsx",
     "/src/app/payees/[id]/page.tsx",
     "/src/app/payees/page.tsx",
-    "/src/app/reconcile/page.tsx",
-    "/src/app/reports/custom/[id]/edit/page.tsx",
-    "/src/app/reports/investment/[id]/edit/page.tsx",
-    "/src/app/securities/[id]/page.tsx",
-    "/src/app/securities/page.tsx",
     "/src/app/settings/emergency-access/page.tsx",
     "/src/app/tags/page.tsx",
-    "/src/app/transactions/page.tsx",
-    "/src/components/accounts/AccountExportModal.tsx",
-    "/src/components/accounts/AccountForm.tsx",
     "/src/components/accounts/AccountFormModal.tsx",
-    "/src/components/accounts/LoanPaymentSetupDialog.tsx",
-    "/src/components/accounts/asset-detail/UpdateValueDialog.tsx",
-    "/src/components/accounts/credit-card-detail/PaymentSetupDialog.tsx",
-    "/src/components/accounts/loan-detail/LoanRateControls.tsx",
-    "/src/components/accounts/loan-detail/SavedScenariosPanel.tsx",
-    "/src/components/accounts/shared/ForeignCurrencyFeesSection.tsx",
     "/src/components/accounts/shared/RecurringChargesPanel.tsx",
-    "/src/components/admin/CreateUserModal.tsx",
-    "/src/components/admin/ResetPasswordModal.tsx",
-    "/src/components/auth/StepUpAuthModal.tsx",
-    "/src/components/categories/DeleteCategoryDialog.tsx",
-    "/src/components/categories/ImportDefaultCategoriesDialog.tsx",
-    "/src/components/categories/detail/CategoryTransactionsTab.tsx",
-    "/src/components/dashboard/CustomizeDashboardModal.tsx",
-    "/src/components/dashboard/WidgetCard.tsx",
-    "/src/components/import/MnyPasswordDialog.tsx",
-    "/src/components/import/MnyWipeConfirmDialog.tsx",
-    "/src/components/institutions/InstitutionAccountsManager.tsx",
-    "/src/components/investments/InvestmentRegisterPanel.tsx",
-    "/src/components/investments/InvestmentTransactionForm.tsx",
     "/src/components/layout/MobileNavDrawer.tsx",
-    "/src/components/payees/AutoMergePayeesDialog.tsx",
-    "/src/components/payees/CategoryAutoAssignDialog.tsx",
-    "/src/components/payees/DeactivateUnusedPayeesDialog.tsx",
-    "/src/components/payees/MergePayeeDialog.tsx",
-    "/src/components/payees/ReactivatePayeeDialog.tsx",
-    "/src/components/payees/detail/PayeeTransactionsTab.tsx",
-    "/src/components/reports/ForeignCurrencyFeesReport.tsx",
-    "/src/components/reports/MonteCarloSaveAsDialog.tsx",
-    "/src/components/scheduled-transactions/OccurrenceDatePicker.tsx",
-    "/src/components/scheduled-transactions/OverrideEditorDialog.tsx",
-    "/src/components/scheduled-transactions/PostTransactionDialog.tsx",
     "/src/components/scheduled-transactions/ScheduledTransactionForm.tsx",
     "/src/components/securities/SecurityForm.tsx",
-    "/src/components/securities/SecurityLookupPicker.tsx",
-    "/src/components/securities/SecurityTransactionHistory.tsx",
-    "/src/components/securities/detail/SecurityDocumentsTab.tsx",
     "/src/components/settings/ApiAccessSection.tsx",
     "/src/components/settings/BackupRestoreSection.tsx",
     "/src/components/settings/SecuritySection.tsx",
     "/src/components/settings/SharedAccessSection.tsx",
     "/src/components/settings/SupportBackupModal.tsx",
     "/src/components/settings/ai/ProviderConfigForm.tsx",
-    "/src/components/strategies/GemScenarioSwitcher.tsx",
-    "/src/components/strategies/GemSettingsForm.tsx",
-    "/src/components/transactions/BulkUpdateModal.tsx",
     "/src/components/transactions/CurrencyPickerButton.tsx",
     "/src/components/transactions/TransactionActionSheet.tsx",
     "/src/components/transactions/TransactionForm.tsx",
     "/src/components/ui/ConfirmDialog.tsx",
     "/src/components/ui/UnsavedChangesDialog.tsx",
     "/src/components/ui/row-actions/RowActionSheet.tsx",
-    "/src/components/whats-new/WhatsNewModal.tsx",
     "/src/hooks/useFormModal.ts",
   ];
 
@@ -2121,12 +2549,10 @@ describe("a status pill is Badge, not a hand-rolled rounded-full", () => {
     /rounded-full[^"'`]*(?:text-xs|text-\[10px\])[^"'`]*font-medium|(?:text-xs|text-\[10px\])[^"'`]*font-medium[^"'`]*rounded-full|rounded-full[^"'`]*font-medium[^"'`]*(?:text-xs|text-\[10px\])/;
 
   const BASELINE: ReadonlyArray<string> = [
-    "/src/app/budgets/page.tsx",
     "/src/components/budgets/BudgetCategoryTrend.tsx",
     "/src/components/budgets/BudgetPeriodDetail.tsx",
     "/src/components/budgets/BudgetWizard.tsx",
     "/src/components/categories/detail/CategoryDetailHeader.tsx",
-    "/src/components/insights/InsightsList.tsx",
     "/src/components/payees/AutoMergePayeesDialog.tsx",
     "/src/components/payees/CategoryAutoAssignDialog.tsx",
     "/src/components/payees/detail/PayeeDetailHeader.tsx",
@@ -2135,9 +2561,7 @@ describe("a status pill is Badge, not a hand-rolled rounded-full", () => {
     "/src/components/reports/FilterBuilder.tsx",
     "/src/components/reports/RecurringExpensesReport.tsx",
     "/src/components/reports/SpendingAnomaliesReport.tsx",
-    "/src/components/scheduled-transactions/BillsFilterPanel.tsx",
     "/src/components/scheduled-transactions/ScheduledTransactionList.tsx",
-    "/src/components/securities/SecurityList.tsx",
     "/src/components/securities/detail/SecurityDetailHeader.tsx",
     "/src/components/securities/detail/SecurityPositionInfoCard.tsx",
     "/src/components/securities/detail/SecurityPositionState.tsx",
@@ -2148,7 +2572,6 @@ describe("a status pill is Badge, not a hand-rolled rounded-full", () => {
     "/src/components/transactions/PayeeInfoWidget.tsx",
     "/src/components/transactions/TransactionFilterPanel.tsx",
     "/src/components/transactions/TransactionForm.tsx",
-    "/src/components/transactions/TransactionRow.tsx",
   ];
 
   function filesWithInlinePill(): string[] {
@@ -2210,7 +2633,6 @@ describe("table chrome comes from Table.tsx, not a repeated divide string", () =
     "/src/components/accounts/AccountList.tsx",
     "/src/components/accounts/loan-detail/AmortizationScheduleTable.tsx",
     "/src/components/accounts/loan-detail/SavedScenariosPanel.tsx",
-    "/src/components/admin/UserManagementTable.tsx",
     "/src/components/budgets/BudgetPeriodDetail.tsx",
     "/src/components/categories/CategoryList.tsx",
     "/src/components/categories/detail/CategorySubcategoriesTab.tsx",
@@ -2235,8 +2657,6 @@ describe("table chrome comes from Table.tsx, not a repeated divide string", () =
     "/src/components/reports/DuplicateTransactionReport.tsx",
     "/src/components/reports/GeographicAllocationReport.tsx",
     "/src/components/reports/IncomeBySourceReport.tsx",
-    "/src/components/reports/IncomeVsExpensesReport.tsx",
-    "/src/components/reports/InvestmentPerformanceReport.tsx",
     "/src/components/reports/InvestmentReportColumnChooser.tsx",
     "/src/components/reports/InvestmentReportViewer.tsx",
     "/src/components/reports/InvestmentTransactionHistoryReport.tsx",
@@ -2377,5 +2797,926 @@ describe("a date-only string reaches formatDate unwrapped", () => {
     // rule holds rather than that the regex stopped working.
     expect(WRAPPED.test("{formatDate(new Date(preview.endDate))}")).toBe(true);
     expect(WRAPPED.test("{formatDate(preview.endDate)}")).toBe(false);
+  });
+});
+
+describe("a payee contact lookup surface asks whether a lookup can run", () => {
+  /**
+   * `useAiConfigured` answers "does this user have an AI provider", which was
+   * the whole question while AI was the only lookup source. Google Places now
+   * answers the same lookup, so a surface gated on the AI hook hides its
+   * button from exactly the user this feature exists for -- one who configured
+   * Places and no AI. `useContactLookupAvailable` is the question those
+   * surfaces have to ask.
+   *
+   * The assistant is deliberately unaffected: a chat genuinely needs a model,
+   * so `AiChatBubble` and `AiBubbleToggle` keep the AI hook.
+   */
+  const LOOKUP_CALLERS =
+    /payeesApi\.lookupContact|usePayeeContactLookup|ContactLookupDialog/;
+  const AI_HOOK = /useAiConfigured/;
+
+  function lookupSurfaces(): [string, string][] {
+    return productionSources()
+      .map(([path, content]) => [path, withoutComments(content)] as [string, string])
+      .filter(([path, content]) => {
+        // The hook and the dialog's own module define these names rather than
+        // consuming them.
+        if (path.endsWith("/useContactLookupAvailable.ts")) return false;
+        if (path.endsWith("/ContactLookupDialog.tsx")) return false;
+        return LOOKUP_CALLERS.test(content);
+      });
+  }
+
+  it("finds the lookup surfaces, so the rule below is not vacuous", () => {
+    // A scan that silently matched nothing is the failure mode of every guard
+    // here, so it asserts its own subject first.
+    expect(lookupSurfaces().length).toBeGreaterThan(1);
+  });
+
+  it("gates no lookup surface on the AI-only hook", () => {
+    const offenders = lookupSurfaces()
+      .filter(([, content]) => AI_HOOK.test(content))
+      .map(([path]) => path);
+    expect(offenders).toEqual([]);
+  });
+
+  it("still recognises the pattern it bans", () => {
+    // Comments are stripped first, so the paragraph above -- which has to name
+    // the banned hook to explain itself -- cannot fail its own rule.
+    const offending = `import { useAiConfigured } from '@/hooks/useAiConfigured';
+      const x = usePayeeContactLookup();`;
+    expect(LOOKUP_CALLERS.test(offending)).toBe(true);
+    expect(AI_HOOK.test(withoutComments(offending))).toBe(true);
+    expect(AI_HOOK.test(withoutComments("// useAiConfigured is banned here"))).toBe(
+      false,
+    );
+  });
+});
+
+describe("a random id comes from newClientId, never a bare crypto.randomUUID", () => {
+  /**
+   * `crypto.randomUUID()` exists only in a secure context, and Monize is
+   * routinely served over plain HTTP on a LAN address, where a bare call
+   * throws: the split editor's "Add Split" did nothing there (issue #2077).
+   * `newClientId()` (`lib/client-id.ts`) calls it when it exists and builds the
+   * same v4 UUID from `getRandomValues` when it does not. `proxy.ts` runs on
+   * the server, where it is always present.
+   */
+  it("never calls crypto.randomUUID outside lib/client-id.ts and proxy.ts", () => {
+    const offenders = productionSources()
+      .filter(([path]) => !/(^|\/)(lib\/client-id\.ts|proxy\.ts)$/.test(path))
+      .filter(([, source]) => /\brandomUUID\s*\(/.test(withoutComments(source)))
+      .map(([path]) => path);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("catches the pattern it bans", () => {
+    expect(/\brandomUUID\s*\(/.test(withoutComments("id: `temp-${crypto.randomUUID()}`"))).toBe(true);
+    expect(/\brandomUUID\s*\(/.test(withoutComments("// not crypto.randomUUID()"))).toBe(false);
+  });
+});
+
+describe("a random value comes from the Web Crypto API", () => {
+  /**
+   * `Math.random()` is not a security primitive, and every use of it in the
+   * client so far has been an id: a list key, a removal handle, a temporary
+   * split row. Those want uniqueness, which `crypto.randomUUID()` gives with
+   * no argument about strength -- and Bearer flags the alternative as
+   * CWE-330, which cost an exception with a review date rather than a fix
+   * (issue #1323). `lib/ai-attachments.ts` is the pattern; `SplitEditor` was
+   * the last holdout.
+   */
+  const WEAK_RANDOM = /\bMath\.random\b/;
+
+  it("never calls Math.random in a production source", () => {
+    const offenders = productionSources()
+      .filter(([, source]) => WEAK_RANDOM.test(withoutComments(source)))
+      .map(([path]) => path);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("still finds the sanctioned helper, so the rule cannot pass by accident", () => {
+    const users = productionSources().filter(([, source]) =>
+      /newClientId\(\)/.test(withoutComments(source)),
+    );
+    expect(users.length).toBeGreaterThan(0);
+  });
+
+  it("catches the pattern it bans", () => {
+    expect(
+      WEAK_RANDOM.test(withoutComments("id: `temp-${Date.now()}-${Math.random()}`")),
+    ).toBe(true);
+    // ...and reads its own explanation as prose, not as a violation.
+    expect(WEAK_RANDOM.test(withoutComments("// not Math.random"))).toBe(false);
+  });
+});
+
+describe("a report's export and refresh are one actions row", () => {
+  /**
+   * Every report toolbar laid its trailing buttons out for itself, and a dozen
+   * of them got it wrong the same way: an unwrapped row carried the export off
+   * the right of a phone. `ReportToolbarActions` is the one answer -- a
+   * full-width row below every selector on a phone, two equal halves when the
+   * report also refreshes prices, the toolbar's trailing group from `sm` up.
+   * A report that renders `ExportDropdown` or `RefreshPricesButton` itself is
+   * writing that layout a second time. `ExportDropdown` draws all three shapes
+   * -- CSV and PDF, PDF alone, CSV alone -- so a report exporting one format is
+   * not a reason to hand-roll a button either.
+   *
+   * The rule is about REPORTS. `components/ui/ExportDropdown.tsx` is the button
+   * itself, `RefreshPricesButton.tsx` wraps the refresh hook for callers
+   * outside this tree (an account detail header), and `ReportToolbarActions`
+   * composes both -- those three are the mechanism, not instances of it.
+   */
+  const ACTIONS_OWNER = "/src/components/reports/ReportToolbarActions.tsx";
+  const MECHANISM = new Set([
+    ACTIONS_OWNER,
+    "/src/components/ui/ExportDropdown.tsx",
+    "/src/components/reports/RefreshPricesButton.tsx",
+  ]);
+  const RENDERS_ACTION = /<(ExportDropdown|RefreshPricesButton)\b/;
+
+  function reportsRenderingTheirOwn(): string[] {
+    return productionSources()
+      .filter(([path]) => path.startsWith("/src/components/reports/"))
+      .filter(([path]) => !MECHANISM.has(path))
+      .filter(([, source]) => RENDERS_ACTION.test(withoutComments(source)))
+      .map(([path]) => path);
+  }
+
+  it("has no report laying out its own export or refresh button", () => {
+    expect(reportsRenderingTheirOwn()).toEqual([]);
+  });
+
+  it("still finds the shared row in use, so the rule cannot pass by accident", () => {
+    const users = productionSources().filter(([path, source]) =>
+      path.startsWith("/src/components/reports/") &&
+      path !== ACTIONS_OWNER &&
+      /<ReportToolbarActions\b/.test(withoutComments(source)),
+    );
+    expect(users.length).toBeGreaterThan(20);
+  });
+
+  it("catches the pattern it bans", () => {
+    expect(RENDERS_ACTION.test(withoutComments("<ExportDropdown onExportPdf={x} />"))).toBe(
+      true,
+    );
+    expect(RENDERS_ACTION.test(withoutComments("<RefreshPricesButton />"))).toBe(true);
+    // ...and reads its own explanation as prose, not as a violation.
+    expect(
+      RENDERS_ACTION.test(withoutComments("// wired to the <ExportDropdown /> above")),
+    ).toBe(false);
+  });
+});
+
+/**
+ * A dashboard widget shows the same figures a report does, so it asks the
+ * report rather than aggregating the ledger beside it.
+ *
+ * Expenses by Category summed paged transactions in the browser under its own
+ * rules: no VOID check, no asset-category exclusion, and investment rows decided
+ * by the account TYPE, which is INV-REPORT-001's exact failure. It disagreed
+ * with the Spending by Category report about the same period, and every guard
+ * that holds those rules scans the server, where the widget's arithmetic was
+ * not. The server-side answer is now the only one.
+ */
+describe("a dashboard widget reads a report rather than re-deriving it", () => {
+  /**
+   * Widgets that still aggregate the transaction ledger themselves, each one a
+   * breakdown that can drift from the report it sits beside. Empty, and
+   * SHRINK-ONLY: the fix is to read the report's endpoint, never to add a name
+   * here.
+   */
+  const BASELINE: ReadonlyArray<string> = [];
+  const READS_LEDGER = /from\s+["']@\/lib\/transactions["']/;
+
+  function widgetsAggregatingTheLedger(): string[] {
+    return productionSources()
+      .filter(([path]) => path.startsWith("/src/components/dashboard/"))
+      .filter(([, source]) => READS_LEDGER.test(withoutComments(source)))
+      .map(([path]) => path);
+  }
+
+  it("has no widget aggregating transactions outside the recorded baseline", () => {
+    const allowed = new Set(BASELINE);
+    expect(
+      widgetsAggregatingTheLedger().filter((path) => !allowed.has(path)),
+    ).toEqual([]);
+  });
+
+  it("keeps the baseline shrink-only", () => {
+    const offending = new Set(widgetsAggregatingTheLedger());
+    expect(BASELINE.filter((file) => !offending.has(file))).toEqual([]);
+  });
+
+  it("still reads the widgets, so an empty baseline is not an empty scan", () => {
+    // With nothing left on the baseline the rule passes trivially if the sweep
+    // finds no files at all, so the sweep itself is checked.
+    const widgets = productionSources().filter(([path]) =>
+      path.startsWith("/src/components/dashboard/"),
+    );
+    expect(widgets.length).toBeGreaterThan(15);
+  });
+
+  it("catches the import it bans, and reads a mention of it as prose", () => {
+    expect(
+      READS_LEDGER.test(
+        withoutComments("import { transactionsApi } from '@/lib/transactions';"),
+      ),
+    ).toBe(true);
+    expect(
+      READS_LEDGER.test(
+        withoutComments("// it used to import from '@/lib/transactions'"),
+      ),
+    ).toBe(false);
+  });
+});
+
+/**
+ * The Cash Flow Sankey draws a merged "Other" node, and that merge is drawing
+ * only (SANKEY-005, INV-REPORT-002): the table and the summary cards read the
+ * server's unmerged response. A report component that imported a sum helper
+ * could build a figure from the merged drawing; the merge itself lives in
+ * `sankey-layout.ts`, which returns new arrays and never touches the response.
+ */
+describe("the Cash Flow Sankey sums nothing beside the server", () => {
+  // The report, the diagram it shares with the dashboard widget, and the widget.
+  const SANKEY_COMPONENT =
+    /^\/src\/components\/(?:reports\/CashFlowSankey[^/]*|dashboard\/CashFlowSankeyWidget)\.tsx$/;
+  const LAYOUT = "/src/components/reports/sankey-layout.ts";
+  const AGGREGATES =
+    /from\s+["']@\/components\/transactions\/widget-shared["']|\b(?:sumMoney|sumConverted|sumEffectiveOccurrences|netEntityTotal|summarizeInDisplayCurrency)\b|\.reduce\(/;
+
+  function offenders(): string[] {
+    return productionSources()
+      .filter(([path]) => SANKEY_COMPONENT.test(path))
+      .filter(([, source]) => AGGREGATES.test(withoutComments(source)))
+      .map(([path]) => path);
+  }
+
+  it("imports no aggregation helper into the report component", () => {
+    expect(offenders()).toEqual([]);
+  });
+
+  it("still finds the Sankey components, so the rule cannot pass by accident", () => {
+    expect(
+      productionSources()
+        .filter(([path]) => SANKEY_COMPONENT.test(path))
+        .map(([path]) => path)
+        .sort(),
+    ).toEqual([
+      "/src/components/dashboard/CashFlowSankeyWidget.tsx",
+      "/src/components/reports/CashFlowSankeyDiagram.tsx",
+      "/src/components/reports/CashFlowSankeyReport.tsx",
+    ]);
+  });
+
+  it("never assigns into the response it lays out", () => {
+    const source = withoutComments(sources[LAYOUT] ?? "");
+    expect(source.length).toBeGreaterThan(0);
+    expect(/response\.(?:nodes|links)\.(?:push|splice|sort|reverse)\(/.test(source)).toBe(false);
+    expect(/response\.[\w.[\]]+\s*=[^=]/.test(source)).toBe(false);
+  });
+
+  it("catches the shapes it bans, and reads a mention of them as prose", () => {
+    expect(AGGREGATES.test(withoutComments("const t = sumMoney(values);"))).toBe(true);
+    expect(AGGREGATES.test(withoutComments("const t = links.reduce((a, l) => a + l.value, 0);"))).toBe(true);
+    expect(
+      AGGREGATES.test(withoutComments("import { netEntityTotal } from '@/components/transactions/widget-shared';")),
+    ).toBe(true);
+    expect(AGGREGATES.test(withoutComments("// it must not call sumMoney here"))).toBe(false);
+  });
+});
+
+describe("a dashboard card stretches to its row, never `h-full`", () => {
+  /**
+   * A widget card is an item of the dashboard's auto-sized grid rows, and a
+   * grid item with `height: 100%` is asking for a percentage of a track whose
+   * size it is itself supposed to decide. Chromium and Gecko resolve the cycle
+   * by measuring the item's content first, so the row grows and nothing shows;
+   * WebKit -- every browser on iPad, whatever its badge says -- takes the row
+   * from the item's SIBLING instead. One widget per row is the same answer
+   * either way, which is why a phone and a portrait tablet look right and a
+   * landscape tablet does not: the card keeps its neighbour's height while its
+   * own content, the Expense by Category chart with its Other list opened,
+   * spills out of the box it is drawn in.
+   *
+   * `align-items: stretch` is the grid's default, so the card fills its row
+   * with `h-full` deleted rather than in spite of it. The scan keys on the card
+   * shell specifically -- a class list that carries the card surface or a
+   * min-height, or a `<Card>` / `<WidgetCard>` tag -- so an `h-full` on
+   * something inside a widget, which is not a grid item, is not the subject.
+   *
+   * The card is now the child of `DashboardGridItem`, a one-cell grid that
+   * stretches it the same way, and the item carries the height floor from the
+   * layout. So the item is held to the same rule (no height of any kind), and
+   * a card that brings its own `lg:min-h-` is a second floor that the
+   * reader's height preset cannot lower.
+   */
+  const CARD_SHELL = /CARD_CLASS|minHeightClass|min-h-\[/;
+  const FULL_HEIGHT = /(?<![\w:-])h-full\b/;
+  /**
+   * The card surface itself, for the floor rule, or a floor handed to one (a
+   * `minHeight` prop, the lazy skeleton's argument): `min-h-[` alone is not a
+   * card (a chart's inner `flex-1 min-h-[260px]` is content, not a floor).
+   */
+  const CARD_SURFACE = /CARD_CLASS|<(?:Widget)?Card\b|bg-white dark:bg-gray-800|(?<![A-Za-z])[mM]inHeight|[sS]keleton\(/;
+  /**
+   * A min-height on a card at any breakpoint, or none: `lg:` (the grid item's
+   * floor from there up), `md:`, `xl:` and the rest, and the unprefixed
+   * `min-h-[...]`. `min-h-0` / `min-h-auto` / `min-h-full` are not floors.
+   */
+  const OWN_FLOOR = /(?<![\w-])(?:(?:sm|md|lg|xl|2xl):)?min-h-(?!0(?![\w-])|auto(?![\w-])|full(?![\w-]))/;
+  /**
+   * A self-alignment on a card root: `self-start` and friends stop the card
+   * filling its grid slot by stretch (and the row's height with it).
+   */
+  const OWN_ALIGN = /(?<![\w-])(?:\w+:)?self-(?:start|center|end)(?![\w-])/;
+  /**
+   * A local that holds a card's class list (\`const cardClass = `${CARD_CLASS}
+   * ...`\`), possibly over several lines. Its statement is a card shell, and
+   * so is every line that names it.
+   */
+  const CARD_CONST = /\bconst\s+(\w+)\s*=\s*([`'"])\s*\$\{CARD_CLASS\}[\s\S]*?\2\s*;?/g;
+  /**
+   * A `<Card>` or `<WidgetCard>` opening tag, whose class list is usually on
+   * a later line than the tag name; `=>` inside an attribute is not its end.
+   */
+  const CARD_TAG = /<(?:Widget)?Card\b(?:=>|[^>])*>/g;
+  const GRID_ITEM = "/src/components/dashboard/DashboardGridItem.tsx";
+  /** A height, max-height or `h-full` in any form: utility, arbitrary property or style. */
+  const ITEM_HEIGHT =
+    /(?<![\w-])(?:max-)?h-[\w[\]./%()-]+|\[(?:max-)?height:|style=\{\{[^}]*\b(?:height|maxHeight)\b/;
+
+  function dashboardSources(): [string, string][] {
+    return productionSources()
+      .filter(([path]) => path.startsWith("/src/components/dashboard/"))
+      .map(([path, content]) => [path, withoutComments(content)]);
+  }
+
+  function cardTags(source: string): { line: number; tag: string }[] {
+    return [...source.matchAll(CARD_TAG)].map((m) => ({
+      line: source.slice(0, m.index).split("\n").length,
+      tag: m[0],
+    }));
+  }
+
+  function widgetShellsPinningTheirHeight(): string[] {
+    const offenders: string[] = [];
+    for (const [path, source] of dashboardSources()) {
+      source.split("\n").forEach((line, i) => {
+        if (CARD_SHELL.test(line) && FULL_HEIGHT.test(line)) {
+          offenders.push(`${path}:${i + 1}`);
+        }
+      });
+      for (const { line, tag } of cardTags(source)) {
+        if (FULL_HEIGHT.test(tag)) offenders.push(`${path}:${line}`);
+      }
+    }
+    return [...new Set(offenders)];
+  }
+
+  /** Lines of a source that are, or belong to, a card shell, with their text. */
+  function cardShellLines(source: string): { line: number; text: string }[] {
+    const lines = source.split("\n");
+    const shell = new Set<number>();
+    lines.forEach((l, i) => {
+      if (CARD_SURFACE.test(l)) shell.add(i);
+    });
+    for (const m of source.matchAll(CARD_CONST)) {
+      const start = source.slice(0, m.index).split("\n").length - 1;
+      const end = start + m[0].split("\n").length - 1;
+      for (let i = start; i <= end; i++) shell.add(i);
+      const uses = new RegExp(`(?<![\\w$])${m[1]}(?![\\w$])`);
+      lines.forEach((l, i) => {
+        if (uses.test(l)) shell.add(i);
+      });
+    }
+    return [...shell].sort((x, y) => x - y).map((i) => ({ line: i + 1, text: lines[i] }));
+  }
+
+  function cardShellsMatching(pattern: RegExp): string[] {
+    const offenders: string[] = [];
+    for (const [path, source] of dashboardSources()) {
+      for (const { line, text } of cardShellLines(source)) {
+        if (pattern.test(text)) offenders.push(`${path}:${line}`);
+      }
+      for (const { line, tag } of cardTags(source)) {
+        if (pattern.test(tag)) offenders.push(`${path}:${line}`);
+      }
+    }
+    return [...new Set(offenders)];
+  }
+
+  const widgetCardsWithTheirOwnFloor = () => cardShellsMatching(OWN_FLOOR);
+  const widgetCardsAligningThemselves = () => cardShellsMatching(OWN_ALIGN);
+
+  it("has no widget card shell setting h-full", () => {
+    expect(
+      widgetShellsPinningTheirHeight(),
+      "Delete `h-full`: the grid stretches the card to its row already, and a percentage height there is read from the neighbouring widget on WebKit.",
+    ).toEqual([]);
+  });
+
+  it("has no widget card aligning itself out of its slot", () => {
+    expect(
+      widgetCardsAligningThemselves(),
+      "Delete `self-start` / `self-center` / `self-end` from the card: the grid stretches it to fill its slot, and a self-alignment shrinks it to its content so it no longer fills the row.",
+    ).toEqual([]);
+  });
+
+  it("has no widget card carrying its own min-height floor", () => {
+    expect(
+      widgetCardsWithTheirOwnFloor(),
+      "Delete the card's `min-h-` (at any breakpoint, or none): from `lg` up the floor is the grid item's (`DashboardGridItem`, from the widget's `defaultHeight` in widget-registry.tsx and `HEIGHT_CLASSES` in dashboard-layout.ts). A floor a widget needs below `lg` goes on its content area, not its card.",
+    ).toEqual([]);
+  });
+
+  it("keeps height off the grid item, whose floor is the layout's min-height", () => {
+    const source = withoutComments(sources[GRID_ITEM] ?? "");
+    expect(source.length, `${GRID_ITEM} was not found`).toBeGreaterThan(0);
+    expect(source).toContain("HEIGHT_CLASSES");
+    const pinned = source
+      .split("\n")
+      .map((line, i) => (ITEM_HEIGHT.test(line) ? `${GRID_ITEM}:${i + 1}` : null))
+      .filter((hit): hit is string => hit !== null);
+    expect(
+      pinned,
+      "Remove the height from DashboardGridItem: its floor is the min-height from `HEIGHT_CLASSES` and the card fills it by grid stretch; a height, max-height or `h-full` there clips content or is read from the neighbouring widget on WebKit (DASH-7).",
+    ).toEqual([]);
+  });
+
+  it("still reads the widgets, so the rule cannot pass over an empty sweep", () => {
+    const shells = productionSources().filter(
+      ([path, content]) =>
+        path.startsWith("/src/components/dashboard/") &&
+        CARD_SHELL.test(withoutComments(content)),
+    );
+    expect(shells.length).toBeGreaterThan(5);
+  });
+
+  it("catches a planted shell and ignores an inner fill or a prose mention", () => {
+    expect(
+      CARD_SHELL.test("`${CARD_CLASS} lg:min-h-[500px] flex flex-col h-full`") &&
+        FULL_HEIGHT.test("`${CARD_CLASS} lg:min-h-[500px] flex flex-col h-full`"),
+    ).toBe(true);
+    expect(
+      CARD_SHELL.test('<div className="flex-1 min-h-0 h-full">'),
+    ).toBe(false);
+    expect(FULL_HEIGHT.test('<div className="lg:h-full">')).toBe(false);
+    expect(
+      FULL_HEIGHT.test(withoutComments("// the shell used to carry h-full")),
+    ).toBe(false);
+  });
+
+  it("catches a planted card floor and a pinned item, and passes their legitimate neighbours", () => {
+    const shellLines = (src: string) => cardShellLines(src).map((l) => l.line);
+    const floored = (line: string) => CARD_SURFACE.test(line) && OWN_FLOOR.test(line);
+    expect(floored("<div className={`${CARD_CLASS} p-3 sm:p-6 lg:min-h-[500px]`}>")).toBe(true);
+    expect(floored('<Card padding="md" className="lg:min-h-[540px]" />')).toBe(true);
+    expect(floored('      minHeightClass="lg:min-h-[500px]"')).toBe(true);
+    expect(floored("loading: widgetSkeleton('lg:min-h-[390px]') });")).toBe(true);
+    // Any other breakpoint prefix, or none, is a floor too.
+    expect(floored("<div className={`${CARD_CLASS} xl:min-h-[390px]`}>")).toBe(true);
+    expect(floored("<div className={`${CARD_CLASS} md:min-h-[390px]`}>")).toBe(true);
+    expect(floored("<div className={`${CARD_CLASS} min-h-[390px]`}>")).toBe(true);
+    expect(floored('<Card className="min-h-40" />')).toBe(true);
+    // A chart's inner floor, the layout's own class map, a card that only
+    // lets itself shrink, and the content area's floor are not a card's floor.
+    expect(floored('<div className="flex-1 min-h-[260px]">')).toBe(false);
+    expect(floored("  standard: 'lg:min-h-[540px]',")).toBe(false);
+    expect(floored("<div className={`${CARD_CLASS} min-h-0 flex-col`}>")).toBe(false);
+    expect(OWN_FLOOR.test("lg:min-h-auto")).toBe(false);
+
+    // A card class held in a local is a shell, on its line and where it is used.
+    const held = [
+      "const cardClass = `${CARD_CLASS} p-3 sm:p-6 lg:min-h-[390px]`;",
+      "<div className={cardClass}>",
+    ].join("\n");
+    expect(shellLines(held)).toEqual([1, 2]);
+    const heldOverLines = [
+      "const cardClass = `",
+      "  ${CARD_CLASS}",
+      "`;",
+    ].join("\n");
+    expect(shellLines(heldOverLines)).toEqual([1, 2, 3]);
+    const heldStart = "const cardClass = `${CARD_CLASS} p-3\n  md:min-h-[390px]`;\nconst other = 1;";
+    expect(shellLines(heldStart)).toEqual([1, 2]);
+    // A calendar day cell's floor is not a card's.
+    expect(CARD_SURFACE.test('dayMinHeightClass="min-h-[64px]"')).toBe(false);
+    expect(shellLines("const cardClass = `${CARD_CLASS} p-3`;\n<div className={`${cardClass} self-start`}>")).toEqual([1, 2]);
+    // TriviaWidget's body box: a floor on the content area, not a card.
+    expect(
+      shellLines("const BODY = 'flex flex-1 flex-col min-h-[calc(390px_-_1.5rem)] lg:min-h-auto';"),
+    ).toEqual([]);
+
+    expect(OWN_ALIGN.test("<div className={`${CARD_CLASS} self-start p-3`}>")).toBe(true);
+    expect(OWN_ALIGN.test('<Card className="lg:self-center" />')).toBe(true);
+    expect(OWN_ALIGN.test('<Card className="self-end" />')).toBe(true);
+    expect(OWN_ALIGN.test('<button className="self-start p-1.5">')).toBe(true);
+    expect(OWN_ALIGN.test('<div className="items-start justify-self-start">')).toBe(false);
+
+    const tag = cardTags(
+      '<WidgetCard\n  title={t("x")}\n  onOpen={() => go()}\n  className="lg:min-h-[500px] h-full"\n>',
+    );
+    expect(tag).toHaveLength(1);
+    expect(tag[0].line).toBe(1);
+    expect(OWN_FLOOR.test(tag[0].tag) && FULL_HEIGHT.test(tag[0].tag)).toBe(true);
+    expect(cardTags("<CardHeader className=\"h-full\">")).toEqual([]);
+
+    for (const pinned of [
+      'className="grid h-full"',
+      'className="lg:h-[540px]"',
+      'className="max-h-96"',
+      'className="[height:540px]"',
+      "style={{ maxHeight: 9 }}",
+    ]) {
+      expect(ITEM_HEIGHT.test(pinned), pinned).toBe(true);
+    }
+    for (const fine of ["lg:min-h-[540px]", "grid grid-cols-1 [grid-template-areas:'cell'] *:[grid-area:cell]", "HEIGHT_CLASSES[item.height]"]) {
+      expect(ITEM_HEIGHT.test(fine), fine).toBe(false);
+    }
+  });
+});
+
+describe("a segmented control wears the chrome in segmented-control.ts", () => {
+  /**
+   * A pill holding two or more buttons where exactly one is pressed is one
+   * appearance, and `components/ui/segmented-control.ts` is where it is
+   * written. The reason here IS repair, not only reach: `ViewModeToggle` was
+   * added as a copy of `InvestmentViewToggle`'s three class constants and had
+   * already drifted by a `motion-reduce:transition-none` before either shipped,
+   * so the Investments toolbar would have carried two switches side by side and
+   * animated only one of them for a reader who asked for reduced motion.
+   *
+   * Two shapes break the rule and both are scanned: re-declaring a constant
+   * locally, and inlining the pressed segment's VALUE at a call site, which
+   * imports nothing and so silently skips the next change to it.
+   */
+  const HOME = "/src/components/ui/segmented-control.ts";
+  const LOCAL_DECL =
+    /\bconst\s+(BUTTON_BASE|BUTTON_ACTIVE|BUTTON_INACTIVE|SEGMENT_BASE_CLASS|SEGMENT_ACTIVE_CLASS|SEGMENT_INACTIVE_CLASS|SEGMENTED_GROUP_CLASS)\s*=/;
+  /** `SEGMENT_ACTIVE_CLASS`'s value spelled out instead of imported. */
+  const INLINE_ACTIVE =
+    /["'`]bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100 shadow-sm/;
+
+  /**
+   * Call sites that still inline it, with the reason each is here. Shrink-only:
+   * fixing one means DELETING its line, and the third test fails while a listed
+   * file no longer offends, so the register cannot outlive its subjects.
+   */
+  const INLINE_ACTIVE_BASELINE: ReadonlyArray<{ file: string; reason: string }> = [
+    {
+      file: "/src/components/bills/CashFlowForecastChart.tsx",
+      reason:
+        "predates the shared chrome: a range switcher built before segmented-control.ts existed.",
+    },
+  ];
+
+  const inliningFiles = () => {
+    const found = new Set<string>();
+    for (const [path, content] of productionSources()) {
+      if (path === HOME) continue;
+      for (const line of withoutComments(content).split("\n")) {
+        if (INLINE_ACTIVE.test(line)) found.add(path);
+      }
+    }
+    return found;
+  };
+
+  it("no file re-declares the segmented-control classes locally", () => {
+    const offenders: string[] = [];
+    for (const [path, content] of productionSources()) {
+      if (path === HOME) continue;
+      withoutComments(content)
+        .split("\n")
+        .forEach((line, i) => {
+          const match = line.match(LOCAL_DECL);
+          if (match) offenders.push(`${path}:${i + 1} re-declares ${match[1]}`);
+        });
+    }
+
+    expect(
+      offenders,
+      "Import segmentClass and SEGMENTED_GROUP_CLASS from @/components/ui/segmented-control.",
+    ).toEqual([]);
+  });
+
+  it("no new call site inlines the pressed segment's classes", () => {
+    const allowed = new Set(INLINE_ACTIVE_BASELINE.map((entry) => entry.file));
+    const offenders: string[] = [];
+    for (const [path, content] of productionSources()) {
+      if (path === HOME || allowed.has(path)) continue;
+      withoutComments(content)
+        .split("\n")
+        .forEach((line, i) => {
+          if (INLINE_ACTIVE.test(line)) {
+            offenders.push(`${path}:${i + 1} inlines SEGMENT_ACTIVE_CLASS`);
+          }
+        });
+    }
+
+    expect(
+      offenders,
+      "Call segmentClass(isActive) from @/components/ui/segmented-control.",
+    ).toEqual([]);
+  });
+
+  it("keeps the inlined-segment baseline shrink-only", () => {
+    const offending = inliningFiles();
+    expect(
+      INLINE_ACTIVE_BASELINE.map((entry) => entry.file).filter(
+        (file) => !offending.has(file),
+      ),
+      "This file no longer inlines the pressed segment -- delete its baseline line.",
+    ).toEqual([]);
+  });
+
+  it("reads the inlined classes in markup but not a mention of them in prose", () => {
+    // Both directions: this block's own explanation names the constants it
+    // bans re-declaring, and must not itself be a violation.
+    expect(
+      INLINE_ACTIVE.test(
+        "className={active ? 'bg-white dark:bg-gray-600 text-gray-900 dark:text-gray-100 shadow-sm' : ''}",
+      ),
+    ).toBe(true);
+    expect(
+      LOCAL_DECL.test(withoutComments("// const BUTTON_BASE = 'px-3 py-1';")),
+    ).toBe(false);
+    expect(LOCAL_DECL.test("const BUTTON_BASE = 'px-3 py-1';")).toBe(true);
+  });
+});
+
+describe("a month grid is MonthGrid", () => {
+  /**
+   * `components/ui/MonthGrid.tsx` is the month layout: whole weeks from
+   * `monthGridDays`, `common.weekdaysMin` rotated to the reader's
+   * `weekStartsOn`, `role="grid"` with one roving tab stop, arrow keys,
+   * `aria-current="date"` on the day the SERVER calls today.
+   *
+   * A hand-rolled copy is not merely duplicated markup. The two that predate
+   * it hardcode Sunday as the week start, key their cells by a `Date` built
+   * from a calendar string (the last day of the previous month west of UTC),
+   * and expose no grid semantics at all, so a keyboard reader tabs through
+   * every day of the month one stop at a time. Each of those is invisible in
+   * the one timezone and the one locale CI runs in.
+   *
+   * The scan keys on an unprefixed `grid-cols-7`: seven columns with no
+   * responsive prefix is a week, and a week laid out outside `MonthGrid` is a
+   * second month grid being born. A responsive `lg:grid-cols-7` is a card
+   * shelf that happens to hold seven cards and is not caught.
+   */
+  const GRID = "/src/components/ui/MonthGrid.tsx";
+  const SEVEN_COLUMNS = /(?<![\w:-])grid-cols-7\b/;
+
+  /**
+   * The month grids that predate `MonthGrid`. Shrink-only: task M1 migrates
+   * both onto the shared grid, and migrating one means DELETING its line --
+   * the third test fails while a listed file no longer offends, so the list
+   * cannot outlive its subjects.
+   */
+  const BASELINE: ReadonlyArray<{ file: string; reason: string }> = [
+    {
+      file: "/src/components/bills/ScheduledCalendarGrid.tsx",
+      reason:
+        "the Bills & Deposits calendar and the Upcoming Bills widget; migrates in M1, which is also what retires its browser-side recurrence walk.",
+    },
+    {
+      file: "/src/components/reports/UpcomingBillsReport.tsx",
+      reason:
+        "the report's own calendar view, a third copy of the same markup; migrates in M1 onto ScheduledCalendarGrid's replacement.",
+    },
+  ];
+
+  /**
+   * Seven columns that are not a month, recorded as decisions rather than as
+   * debt: neither draws weeks of a month, so neither is the thing the rule is
+   * about.
+   */
+  const NOT_A_MONTH: ReadonlyArray<{ file: string; reason: string }> = [
+    {
+      file: "/src/components/ui/CalendarPopover.tsx",
+      reason:
+        "the date-entry popover behind DateInput. It picks one day rather than displaying a month of content, and it is the one grid a MonthGrid cell may itself sit beside.",
+    },
+    {
+      file: "/src/components/reports/WeekendVsWeekdayReport.tsx",
+      reason:
+        "seven weekday tiles under the chart -- one per day of the week, no month, no dates.",
+    },
+  ];
+
+  function filesWithSevenColumns(): string[] {
+    return productionSources()
+      .filter(([path]) => path !== GRID)
+      .filter(([, source]) => SEVEN_COLUMNS.test(withoutComments(source)))
+      .map(([path]) => path)
+      .sort();
+  }
+
+  it("has no second month grid outside the recorded baseline", () => {
+    const allowed = new Set([
+      ...BASELINE.map((entry) => entry.file),
+      ...NOT_A_MONTH.map((entry) => entry.file),
+    ]);
+
+    expect(
+      filesWithSevenColumns().filter((path) => !allowed.has(path)),
+      "Render the month through <MonthGrid> (components/ui/MonthGrid.tsx) and pass a renderDay.",
+    ).toEqual([]);
+  });
+
+  it("keeps the baseline shrink-only", () => {
+    const offending = new Set(filesWithSevenColumns());
+    expect(
+      [...BASELINE, ...NOT_A_MONTH]
+        .map((entry) => entry.file)
+        .filter((file) => !offending.has(file)),
+      "This file no longer lays out seven columns -- delete its line here.",
+    ).toEqual([]);
+  });
+
+  it("still finds the shared grid, so the rule cannot pass by accident", () => {
+    const grid = sources[GRID];
+    expect(grid, `${GRID} not found -- update GRID in this test`).toBeTruthy();
+    expect(SEVEN_COLUMNS.test(grid)).toBe(true);
+  });
+
+  it("catches a planted week and ignores a responsive seven-card shelf", () => {
+    expect(SEVEN_COLUMNS.test('<div className="grid grid-cols-7">')).toBe(true);
+    expect(SEVEN_COLUMNS.test("'lg:grid-cols-7',")).toBe(false);
+    expect(SEVEN_COLUMNS.test('<div className="md:grid-cols-7">')).toBe(false);
+    expect(
+      SEVEN_COLUMNS.test(withoutComments("// a second grid-cols-7 is the defect")),
+    ).toBe(false);
+  });
+});
+
+/**
+ * An investment transaction's `price`, `commission` and `totalAmount` are in the
+ * SECURITY's currency, and `formatCurrency(value)` with no second argument
+ * formats in the READER's. One-argument formatting of those three fields is
+ * therefore a mislabel every time, and it is a mechanical one: the call names
+ * the field it is about. Issue #1394 shipped exactly this, twice, in one file.
+ *
+ * `docs/frontend/financial-figures.md` ("An investment row's money is in the
+ * row's own currency") has the rule and what to pass instead.
+ */
+describe("an investment amount is formatted with its own currency", () => {
+  /**
+   * A `formatCurrency*` call whose single argument mentions one of the three
+   * fields. The argument list is matched up to the first top-level `)` or `,`
+   * (one level of nesting is allowed, for `Math.abs(tx.totalAmount)`), so a
+   * call that DOES pass a currency has a comma and does not match.
+   */
+  const SINGLE_ARGUMENT_FORMAT_CALL =
+    /\b(?:formatCurrency\w*|fmtValue)\(\s*((?:[^,()]|\([^()]*\))*)\)/g;
+  const INVESTMENT_MONEY_FIELD = /\b(?:totalAmount|\.price|\.commission)\b/;
+  const UNLABELLED_INVESTMENT_MONEY = {
+    test(line: string): boolean {
+      for (const match of line.matchAll(SINGLE_ARGUMENT_FORMAT_CALL)) {
+        if (INVESTMENT_MONEY_FIELD.test(match[1])) return true;
+      }
+      return false;
+    },
+  };
+
+  /**
+   * Only a file that handles investment rows is in scope: `totalAmount` is
+   * also the name of an ordinary transaction aggregate (the recurring-expense
+   * surfaces), which is in the account's currency and is not this rule's.
+   */
+  const INVESTMENT_ROW_TYPES = /\b(?:InvestmentTransaction|RealizedGain)\w*\b/;
+
+  function offendingLines(): string[] {
+    const found: string[] = [];
+    for (const [path, content] of productionSources()) {
+      if (!INVESTMENT_ROW_TYPES.test(content)) continue;
+      withoutComments(content)
+        .split("\n")
+        .forEach((line, index) => {
+          if (UNLABELLED_INVESTMENT_MONEY.test(line)) {
+            found.push(`${path}:${index + 1}`);
+          }
+        });
+    }
+    return found;
+  }
+
+  it("never formats a price, commission or total amount in the reader's currency", () => {
+    expect(
+      offendingLines(),
+      "Pass the row's own currency: formatCurrency(value, tx.amountCurrencyCode ?? tx.security?.currencyCode), and render UnknownAmount when it is null.",
+    ).toEqual([]);
+  });
+
+  it("catches the mislabel and passes a labelled call", () => {
+    expect(
+      UNLABELLED_INVESTMENT_MONEY.test("formatCurrency(Math.abs(tx.totalAmount))"),
+    ).toBe(true);
+    expect(UNLABELLED_INVESTMENT_MONEY.test("formatCurrencyFull(tx.price)")).toBe(
+      true,
+    );
+    // The wrapper shape, which is how the defect actually shipped: a local
+    // `fmtValue` that formats in one report-wide display currency.
+    expect(UNLABELLED_INVESTMENT_MONEY.test("fmtValue(entry.price)")).toBe(true);
+    expect(
+      UNLABELLED_INVESTMENT_MONEY.test(
+        "formatCurrency(tx.totalAmount, tx.amountCurrencyCode)",
+      ),
+    ).toBe(false);
+    expect(
+      UNLABELLED_INVESTMENT_MONEY.test(
+        withoutComments("// formatCurrency(tx.totalAmount) is the defect"),
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("a relative time is read through useRelativeTime", () => {
+  /**
+   * `formatRelativeTime` in `lib/format.ts` hardcoded English ("5m ago",
+   * "Yesterday") and a browser-locale date, so a Polish reader got English
+   * beside a translated page. It had no caller left and was removed;
+   * `useRelativeTime()` goes through `Intl.RelativeTimeFormat` in the reader's
+   * language.
+   */
+  const RAW_RELATIVE_TIME_IMPORT =
+    /import\s*\{[^}]*\bformatRelativeTime\b[^}]*\}\s*from\s*["']@\/lib\/format["']/;
+  const UI_FILE = /^\/src\/(components|app|hooks)\//;
+
+  it("has no UI file importing formatRelativeTime from @/lib/format", () => {
+    const offenders = productionSources()
+      .filter(([path]) => UI_FILE.test(path))
+      .filter(([, content]) => RAW_RELATIVE_TIME_IMPORT.test(withoutComments(content)))
+      .map(([path]) => path);
+
+    // Use `useRelativeTime()` (hooks/useRelativeTime.ts).
+    expect(offenders).toEqual([]);
+  });
+
+  it("still recognises the import it bans", () => {
+    expect(
+      RAW_RELATIVE_TIME_IMPORT.test(
+        "import { formatDate, formatRelativeTime } from '@/lib/format';",
+      ),
+    ).toBe(true);
+    expect(
+      RAW_RELATIVE_TIME_IMPORT.test("import { useRelativeTime } from '@/hooks/useRelativeTime';"),
+    ).toBe(false);
+  });
+
+  it("has no English-only relative-time helper in lib/format.ts to import", () => {
+    expect(sources["/src/lib/format.ts"]).not.toContain("formatRelativeTime");
+  });
+});
+
+describe("a documentation URL is built in one place", () => {
+  /**
+   * `docsUrl` / `DOCS_BASE_URL` (`lib/docs-links.ts`) construct the one
+   * monize.net URL for a `DOCS_LINKS` key. A call site building its own `<a
+   * href={docsUrl(...)}>` reaches the website every time, never the bundled
+   * guide, and the "Learn more" copy and the `onHelpLinkClick` interception
+   * drift with each one hand-rolled. `HelpLink` is the inline link,
+   * `PageHeader`'s `help` prop the page icon, `HelpSection` the settings
+   * tiles -- the only three places a URL built from one is allowed to land in
+   * JSX. `HelpMarkdown` resolves a relative link inside the guide's own
+   * Markdown, a different job (the guide is already open; the link is part
+   * of its content, not an invitation to open it).
+   */
+  const ALLOWED = new Set([
+    "/src/lib/docs-links.ts",
+    "/src/components/help/HelpLink.tsx",
+    "/src/components/layout/PageHeader.tsx",
+    "/src/components/settings/HelpSection.tsx",
+    "/src/components/help/HelpMarkdown.tsx",
+  ]);
+  const DOCS_URL_USE = /\bdocsUrl\s*\(|\bDOCS_BASE_URL\b/;
+
+  it("calls docsUrl or reads DOCS_BASE_URL only from the allowed call sites", () => {
+    const offenders = productionSources()
+      .filter(([path]) => !ALLOWED.has(path))
+      .filter(([, source]) => DOCS_URL_USE.test(withoutComments(source)))
+      .map((
+        [path],
+      ) => `${path}: use HelpLink (components/help/HelpLink.tsx), never docsUrl/DOCS_BASE_URL directly`);
+
+    expect(offenders).toEqual([]);
+  });
+
+  it("still finds every allowed call site, so the allowlist cannot pass by accident", () => {
+    for (const path of ALLOWED) {
+      expect(sources[path], `${path} is gone -- remove it from ALLOWED`).toBeTruthy();
+    }
+  });
+
+  it("still recognises the pattern it bans", () => {
+    expect(DOCS_URL_USE.test("const href = docsUrl('budgets');")).toBe(true);
+    expect(DOCS_URL_USE.test("return `${DOCS_BASE_URL}/${page}`;")).toBe(true);
+    expect(DOCS_URL_USE.test(withoutComments("// never call docsUrl() here"))).toBe(false);
+    expect(DOCS_URL_USE.test("<HelpLink link=\"budgets\">Learn more</HelpLink>")).toBe(false);
   });
 });

@@ -21,6 +21,7 @@ vi.mock('@/lib/errors', () => ({
 describe('CurrencyList', () => {
   const onEdit = vi.fn();
   const onToggleActive = vi.fn();
+  const onRateHistory = vi.fn();
   const onRefresh = vi.fn();
   const getRate = vi.fn().mockReturnValue(null);
 
@@ -30,6 +31,7 @@ describe('CurrencyList', () => {
     getRate,
     onEdit,
     onToggleActive,
+    onRateHistory,
     onRefresh,
   };
 
@@ -64,6 +66,48 @@ describe('CurrencyList', () => {
     expect(screen.getByText('USD')).toBeInTheDocument();
     expect(screen.getByText('Active')).toBeInTheDocument();
     expect(screen.getByText('Inactive')).toBeInTheDocument();
+  });
+
+  it('marks a cryptocurrency with a pill and its price symbol beside the code', () => {
+    const currencies = [
+      makeCurrency({ code: 'BTC', name: 'Bitcoin', kind: 'CRYPTO', quoteSymbol: 'BTC-EUR' }),
+      makeCurrency({ code: 'EUR', name: 'Euro', kind: 'FIAT', quoteSymbol: null }),
+    ];
+
+    const { container } = render(<CurrencyList currencies={currencies} {...defaultProps} />);
+    const [btcCode, eurCode] = Array.from(container.querySelectorAll('tbody tr')).map(
+      (row) => row.querySelector('td'),
+    );
+    expect(btcCode?.textContent).toContain('Crypto');
+    expect(btcCode?.textContent).toContain('BTC-EUR');
+    expect(eurCode?.textContent).not.toContain('Crypto');
+  });
+
+  it('says a coin without a price symbol has none', () => {
+    const currencies = [makeCurrency({ code: 'XYZ', name: 'Unpriced', kind: 'CRYPTO', quoteSymbol: null })];
+    render(<CurrencyList currencies={currencies} {...defaultProps} />);
+    expect(screen.getByText('No price symbol')).toBeInTheDocument();
+  });
+
+  it('shows the stored currency symbol in the Symbol column', () => {
+    const currencies = [
+      makeCurrency({ code: 'CAD', name: 'Canadian Dollar', symbol: 'CA$' }),
+      makeCurrency({ code: 'EUR', name: 'Euro', symbol: '€' }),
+    ];
+
+    render(<CurrencyList currencies={currencies} {...defaultProps} />);
+    expect(screen.getByText('CA$')).toBeInTheDocument();
+    expect(screen.getByText('€')).toBeInTheDocument();
+  });
+
+  it('falls back to a derived symbol when the stored symbol is blank', () => {
+    // A blank stored symbol must not leave the Symbol column empty: it falls
+    // back to the Intl-derived symbol for the code (USD -> $).
+    const currencies = [makeCurrency({ code: 'USD', name: 'US Dollar', symbol: '' })];
+
+    const { container } = render(<CurrencyList currencies={currencies} {...defaultProps} />);
+    const symbolCell = container.querySelectorAll('tbody tr td')[2];
+    expect(symbolCell?.textContent).toBe('$');
   });
 
   it('calls onEdit when edit button is clicked', () => {
@@ -104,6 +148,28 @@ describe('CurrencyList', () => {
     render(<CurrencyList currencies={currencies} {...defaultProps} usage={usage} />);
     expect(screen.queryByText('Deactivate')).not.toBeInTheDocument();
     expect(screen.getByText('Edit')).toBeInTheDocument();
+  });
+
+  describe('rate history action', () => {
+    // The regression: the "add another year of rate history" section lived
+    // only in the edit dialog, and the built-in currencies -- the ones whose
+    // history usually needs extending -- have no edit action, so it could not
+    // be reached for EUR, USD or any other system currency.
+    it('offers Rate history for a system currency that is not the default', () => {
+      const currencies = [makeCurrency({ code: 'USD', isSystem: true })];
+
+      render(<CurrencyList currencies={currencies} {...defaultProps} />);
+      expect(screen.queryByText('Edit')).not.toBeInTheDocument();
+      fireEvent.click(screen.getByText('Rate history'));
+      expect(onRateHistory).toHaveBeenCalledWith(expect.objectContaining({ code: 'USD' }));
+    });
+
+    it('hides Rate history for the reporting currency itself', () => {
+      const currencies = [makeCurrency({ code: 'CAD', isSystem: true })];
+
+      render(<CurrencyList currencies={currencies} {...defaultProps} />);
+      expect(screen.queryByText('Rate history')).not.toBeInTheDocument();
+    });
   });
 
   describe('isSystem flag', () => {
@@ -256,6 +322,27 @@ describe('CurrencyList', () => {
       render(<CurrencyList currencies={currencies} {...defaultProps} onSort={onSort} sortField="code" sortDirection="asc" />);
       fireEvent.click(screen.getByText('Code'));
       expect(onSort).toHaveBeenCalledWith('code');
+    });
+
+    it('sorts from a button inside each sortable th, which announces the direction', () => {
+      // A <th onClick> is not reachable from the keyboard; a button is.
+      const onSort = vi.fn();
+      const currencies = [makeCurrency({ code: 'CAD', name: 'Canadian Dollar' })];
+
+      render(<CurrencyList currencies={currencies} {...defaultProps} onSort={onSort} sortField="code" sortDirection="desc" />);
+      const codeButton = screen.getByRole('button', { name: /^Code/ });
+      expect(codeButton.closest('th')).toHaveAttribute('aria-sort', 'descending');
+      expect(screen.getByRole('button', { name: /^Name/ }).closest('th')).toHaveAttribute('aria-sort', 'none');
+      expect(codeButton.closest('th')!.className).toContain('tracking-wider');
+      fireEvent.click(screen.getByRole('button', { name: /^Name/ }));
+      expect(onSort).toHaveBeenCalledWith('name');
+    });
+
+    it('explains the rate column in a tooltip rather than a title on every value', () => {
+      const currencies = [makeCurrency({ code: 'USD', name: 'US Dollar' })];
+      render(<CurrencyList currencies={currencies} {...defaultProps} />);
+      expect(screen.getByRole('button', { name: /What one unit of each currency is worth in/ })).toBeInTheDocument();
+      expect(document.querySelector('tbody [title]')).toBeNull();
     });
 
     it('uses local sort state when no onSort prop is provided', () => {

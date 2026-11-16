@@ -1,3 +1,8 @@
+import { CustomStepContext, nextCustomDate } from "./custom-recurrence";
+import { daysInMonth, formatYMD, parseYMD } from "./ymd-calendar";
+
+export { daysInMonth };
+
 export type FrequencyType =
   | "ONCE"
   | "DAILY"
@@ -11,7 +16,8 @@ export type FrequencyType =
   | "EVERY4MONTHS"
   | "SEMIANNUAL"
   | "YEARLY"
-  | "EVERY2YEARS";
+  | "EVERY2YEARS"
+  | "CUSTOM";
 
 /**
  * Mean length of one cycle of each frequency, in days. `ONCE` is 0 -- it has no
@@ -43,29 +49,12 @@ export const FREQUENCY_CYCLE_DAYS: Record<FrequencyType, number> = {
   SEMIANNUAL: 365.25 / 2,
   YEARLY: 365.25,
   EVERY2YEARS: 365.25 * 2,
+  // No fixed cycle: `customOccurrencesPerYear` / `customMinGapDays` answer
+  // from the rule (docs/specs/custom-recurrence.md section 4).
+  CUSTOM: 0,
 };
 
 const YMD_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
-
-function parseYMD(ymd: string): { y: number; m: number; d: number } {
-  const match = YMD_PATTERN.exec(ymd);
-  if (!match) {
-    throw new Error(`Invalid YYYY-MM-DD date string: ${ymd}`);
-  }
-  return {
-    y: Number(match[1]),
-    m: Number(match[2]),
-    d: Number(match[3]),
-  };
-}
-
-function formatYMD(y: number, m: number, d: number): string {
-  return `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-}
-
-function daysInMonth(year: number, month: number): number {
-  return new Date(Date.UTC(year, month, 0)).getUTCDate();
-}
 
 function addDays(ymd: string, days: number): string {
   const { y, m, d } = parseYMD(ymd);
@@ -87,8 +76,13 @@ function addDays(ymd: string, days: number): string {
  * stored term_end_date skipped February and differed by a day between
  * deployments.
  */
-export function addMonthsClamped(ymd: string, months: number): string {
-  const { y, m, d } = parseYMD(ymd);
+export function addMonthsClamped(
+  ymd: string,
+  months: number,
+  anchorDay?: number,
+): string {
+  const { y, m, d: prevDay } = parseYMD(ymd);
+  const d = anchorDay ?? prevDay;
   const total = y * 12 + (m - 1) + months;
   const ny = Math.floor(total / 12);
   const nm = (total % 12) + 1;
@@ -96,16 +90,32 @@ export function addMonthsClamped(ymd: string, months: number): string {
   return formatYMD(ny, nm, nd);
 }
 
-function addYearsClamped(ymd: string, years: number): string {
-  const { y, m, d } = parseYMD(ymd);
+function addYearsClamped(
+  ymd: string,
+  years: number,
+  anchorDay?: number,
+): string {
+  const { y, m, d: prevDay } = parseYMD(ymd);
+  const d = anchorDay ?? prevDay;
   const ny = y + years;
   const nd = Math.min(d, daysInMonth(ny, m));
   return formatYMD(ny, m, nd);
 }
 
+/**
+ * The date after `ymd`. `anchorDay` is the day-of-month of the schedule's
+ * `start_date`: a month-based step clamps to the month length but returns to
+ * the anchor day afterwards (31 Jan -> 28 Feb -> 31 Mar). Without it the step
+ * keeps the previous date's day, which drifts after a short month.
+ *
+ * `CUSTOM` steps by `custom.rule`, its periods counted from `custom.startDate`,
+ * and throws without a valid rule (docs/specs/custom-recurrence.md section 3).
+ */
 export function calculateNextDueDate(
   ymd: string,
   frequency: FrequencyType,
+  anchorDay?: number,
+  custom?: CustomStepContext,
 ): string {
   switch (frequency) {
     case "ONCE":
@@ -129,22 +139,61 @@ export function calculateNextDueDate(
       return formatYMD(ny, nm, 15);
     }
     case "MONTHLY":
-      return addMonthsClamped(ymd, 1);
+      return addMonthsClamped(ymd, 1, anchorDay);
     case "EVERY2MONTHS":
-      return addMonthsClamped(ymd, 2);
+      return addMonthsClamped(ymd, 2, anchorDay);
     case "QUARTERLY":
-      return addMonthsClamped(ymd, 3);
+      return addMonthsClamped(ymd, 3, anchorDay);
     case "EVERY4MONTHS":
-      return addMonthsClamped(ymd, 4);
+      return addMonthsClamped(ymd, 4, anchorDay);
     case "SEMIANNUAL":
-      return addMonthsClamped(ymd, 6);
+      return addMonthsClamped(ymd, 6, anchorDay);
     case "YEARLY":
-      return addYearsClamped(ymd, 1);
+      return addYearsClamped(ymd, 1, anchorDay);
     case "EVERY2YEARS":
-      return addYearsClamped(ymd, 2);
+      return addYearsClamped(ymd, 2, anchorDay);
+    case "CUSTOM":
+      return nextCustomDate(
+        ymd,
+        custom?.rule,
+        custom?.startDate ? ensureYMD(custom.startDate) : null,
+      );
     default:
       return ymd;
   }
+}
+
+/**
+ * Throw when a `CUSTOM` schedule reaches code that assumes a fixed cadence: the
+ * loan-installment calendar, its pricing and its fees count periods per year
+ * and step without a rule. The write path refuses Custom on a loan payment
+ * (docs/specs/custom-recurrence.md section 5), so reaching this is a defect,
+ * and an error beats a silent monthly default or a calendar of one slot.
+ */
+export function assertFixedCadence(
+  frequency: string | null | undefined,
+  where: string,
+): void {
+  if (frequency === "CUSTOM") {
+    throw new Error(
+      `${where}: a CUSTOM schedule has no fixed cadence and is never a loan installment schedule`,
+    );
+  }
+}
+
+/**
+ * The anchor day for stepping from `current`: the `start_date`'s day when
+ * `current` sits on it (or on it clamped by a short month), else `current`'s own
+ * day because the user moved it. Undefined without a `start_date`.
+ */
+export function anchorDayOf(
+  startDate: string | Date | null | undefined,
+  current: string | Date,
+): number | undefined {
+  if (!startDate) return undefined;
+  const { d: s } = parseYMD(ensureYMD(startDate));
+  const { y, m, d } = parseYMD(ensureYMD(current));
+  return d === Math.min(s, daysInMonth(y, m)) ? s : d;
 }
 
 export function ensureYMD(value: string | Date): string {

@@ -1,24 +1,33 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, waitFor, fireEvent, act } from "@/test/render";
 import { SpendingByCategoryReport } from "./SpendingByCategoryReport";
+import type { SpendingByCategoryResponse } from '@/types/built-in-reports';
 
 const mockPush = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: mockPush }),
 }));
 
-vi.mock("@/hooks/useNumberFormat", () => ({
-  useNumberFormat: () => ({
-    formatCurrencyCompact: (n: number) => `$${n.toFixed(2)}`,
-    formatCurrency: (n: number) => `$${n.toFixed(2)}`,
-    formatCurrencyAxis: (n: number) => `$${n}`,
-    defaultCurrency: "CAD",
-  }),
-}));
-
+vi.mock('@/hooks/useNumberFormat', async () => {
+  const { numberFormatMockDefaults } = await import('@/test/number-format-mock');
+  return {
+    useNumberFormat: () => ({
+      ...numberFormatMockDefaults(),
+      formatCurrencyCompact: (n: number) => `$${n.toFixed(2)}`,
+      formatCurrency: (n: number) => `$${n.toFixed(2)}`,
+      formatCurrencyAxis: (n: number) => `$${n}`,
+      defaultCurrency: "CAD",
+    }),
+};
+});
 let mockIsValid = true;
+// The selection the mocked range hook reports; a test moves it and re-renders.
+const mockRange = { end: "2025-03-31" };
 vi.mock("@/hooks/useDateRange", () => {
-  const resolvedRange = { start: "2025-01-01", end: "2025-03-31" };
+  const resolvedRange = {
+    start: "2025-01-01",
+    get end() { return mockRange.end; },
+  };
   return {
     useDateRange: () => ({
       dateRange: "3m",
@@ -52,11 +61,11 @@ vi.mock("@/components/ui/ChartViewToggle", () => ({
 }));
 
 vi.mock("@/components/ui/ExportDropdown", () => ({
-  ExportDropdown: ({ onExportPdf, onExportCsv }: any) => (
+  ExportDropdown: ({ onExportPdf, onExportCsv, disabled }: any) => (
     <div data-testid="export-dropdown">
-      <button data-testid="export-pdf" onClick={onExportPdf}>PDF</button>
+      <button data-testid="export-pdf" onClick={onExportPdf} data-disabled={String(disabled === true)}>PDF</button>
       {onExportCsv && (
-        <button data-testid="export-csv" onClick={onExportCsv}>CSV</button>
+        <button data-testid="export-csv" onClick={onExportCsv} data-disabled={String(disabled === true)}>CSV</button>
       )}
     </div>
   ),
@@ -104,11 +113,39 @@ vi.mock("@/lib/logger", () => ({
   }),
 }));
 
+/**
+ * A report answer with nothing left out: `knownSpending` equals the total and
+ * no currency was dropped, so every figure is complete.
+ */
+function completeReport(
+  data: SpendingByCategoryResponse['data'],
+  totalSpending: number,
+): SpendingByCategoryResponse {
+  return {
+    data,
+    totalSpending,
+    knownSpending: totalSpending,
+    currency: 'CAD',
+    missingCurrencies: [],
+    excludedCount: 0,
+  };
+}
+
+// The account filter and the tag controls read these on mount; the report is
+// the unchanged one while no key is chosen.
+vi.mock("@/lib/accounts", () => ({
+  accountsApi: { getAll: () => Promise.resolve([]) },
+}));
+vi.mock("@/lib/tags", () => ({
+  tagsApi: { getAll: () => Promise.resolve([]) },
+}));
+
 describe("SpendingByCategoryReport", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPush.mockClear();
     mockIsValid = true;
+    mockRange.end = "2025-03-31";
   });
 
   it("shows loading state initially", async () => {
@@ -123,6 +160,10 @@ describe("SpendingByCategoryReport", () => {
     mockGetSpendingByCategory.mockResolvedValue({
       data: [],
       totalSpending: 0,
+      knownSpending: 0,
+      currency: 'CAD',
+      missingCurrencies: [],
+      excludedCount: 0,
     });
     render(<SpendingByCategoryReport />);
     await waitFor(() => {
@@ -149,6 +190,10 @@ describe("SpendingByCategoryReport", () => {
         },
       ],
       totalSpending: 700,
+      knownSpending: 700,
+      currency: 'CAD',
+      missingCurrencies: [],
+      excludedCount: 0,
     });
     render(<SpendingByCategoryReport />);
     await waitFor(() => {
@@ -165,6 +210,10 @@ describe("SpendingByCategoryReport", () => {
         { categoryId: "cat-1", categoryName: "Food", total: 100, color: "" },
       ],
       totalSpending: 100,
+      knownSpending: 100,
+      currency: 'CAD',
+      missingCurrencies: [],
+      excludedCount: 0,
     });
     render(<SpendingByCategoryReport />);
     await waitFor(() => {
@@ -185,6 +234,10 @@ describe("SpendingByCategoryReport", () => {
         { categoryId: "cat-2", categoryName: "Rent", total: 700, color: "" },
       ],
       totalSpending: 1000,
+      knownSpending: 1000,
+      currency: 'CAD',
+      missingCurrencies: [],
+      excludedCount: 0,
     });
     render(<SpendingByCategoryReport />);
     await waitFor(() => {
@@ -207,6 +260,10 @@ describe("SpendingByCategoryReport", () => {
         },
       ],
       totalSpending: 100,
+      knownSpending: 100,
+      currency: 'CAD',
+      missingCurrencies: [],
+      excludedCount: 0,
     });
     render(<SpendingByCategoryReport />);
     await waitFor(() => {
@@ -239,6 +296,10 @@ describe("SpendingByCategoryReport", () => {
         },
       ],
       totalSpending: 500,
+      knownSpending: 500,
+      currency: 'CAD',
+      missingCurrencies: [],
+      excludedCount: 0,
     });
     render(<SpendingByCategoryReport />);
     await waitFor(() => {
@@ -256,6 +317,10 @@ describe("SpendingByCategoryReport", () => {
         { categoryId: "", categoryName: "Uncategorized2", total: 50, color: "" },
       ],
       totalSpending: 50,
+      knownSpending: 50,
+      currency: 'CAD',
+      missingCurrencies: [],
+      excludedCount: 0,
     });
     render(<SpendingByCategoryReport />);
     await waitFor(() => {
@@ -272,6 +337,10 @@ describe("SpendingByCategoryReport", () => {
         { categoryId: "cat-1", categoryName: "Food", total: 300, color: "" },
       ],
       totalSpending: 300,
+      knownSpending: 300,
+      currency: 'CAD',
+      missingCurrencies: [],
+      excludedCount: 0,
     });
     render(<SpendingByCategoryReport />);
     await waitFor(() => {
@@ -293,6 +362,10 @@ describe("SpendingByCategoryReport", () => {
         { categoryId: "cat-1", categoryName: "Food", total: 300, color: "" },
       ],
       totalSpending: 300,
+      knownSpending: 300,
+      currency: 'CAD',
+      missingCurrencies: [],
+      excludedCount: 0,
     });
     render(<SpendingByCategoryReport />);
     await waitFor(() => {
@@ -316,6 +389,10 @@ describe("SpendingByCategoryReport", () => {
         { categoryId: "cat-2", categoryName: "Rent", total: 700, color: "" },
       ],
       totalSpending: 1000,
+      knownSpending: 1000,
+      currency: 'CAD',
+      missingCurrencies: [],
+      excludedCount: 0,
     });
     render(<SpendingByCategoryReport />);
     await waitFor(() => {
@@ -337,7 +414,7 @@ describe("SpendingByCategoryReport", () => {
 
   it("calls exportToPdf with undefined chartLegend when chart data is empty", async () => {
     mockExportToPdf.mockResolvedValue(undefined);
-    mockGetSpendingByCategory.mockResolvedValue({ data: [], totalSpending: 0 });
+    mockGetSpendingByCategory.mockResolvedValue(completeReport([], 0));
     render(<SpendingByCategoryReport />);
     await waitFor(() => {
       expect(
@@ -354,24 +431,32 @@ describe("SpendingByCategoryReport", () => {
     });
   });
 
-  it("shows 0% percentage in legend when totalExpenses is zero", async () => {
+  it("shows a zero percentage in the legend when totalExpenses is zero", async () => {
+    // "0.0%", not "0%": the share is rendered at one decimal like every
+    // other row in this legend. The old code took a shortcut in this branch
+    // -- a literal `'0'` beside `.toFixed(1)` for the computed one -- so the
+    // no-data case was the only row that disagreed with its neighbours.
     mockGetSpendingByCategory.mockResolvedValue({
       data: [
         { categoryId: "cat-1", categoryName: "Food", total: 0, color: "" },
       ],
       totalSpending: 0,
+      knownSpending: 0,
+      currency: 'CAD',
+      missingCurrencies: [],
+      excludedCount: 0,
     });
     render(<SpendingByCategoryReport />);
     await waitFor(() => {
       expect(screen.getByText("Food")).toBeInTheDocument();
     });
     // When totalExpenses is 0, percentage should display as '0'
-    expect(screen.getByText("$0.00 (0%)")).toBeInTheDocument();
+    expect(screen.getByText("$0.00 (0.0%)")).toBeInTheDocument();
   });
 
   it("does not load data when isValid is false", async () => {
     mockIsValid = false;
-    mockGetSpendingByCategory.mockResolvedValue({ data: [], totalSpending: 0 });
+    mockGetSpendingByCategory.mockResolvedValue(completeReport([], 0));
     render(<SpendingByCategoryReport />);
     // loadData is gated on isValid, so the API should not be called
     expect(mockGetSpendingByCategory).not.toHaveBeenCalled();
@@ -387,6 +472,10 @@ describe("SpendingByCategoryReport", () => {
         { categoryId: "c2", categoryName: "B", total: 0, color: "" },
       ],
       totalSpending: 0,
+      knownSpending: 0,
+      currency: 'CAD',
+      missingCurrencies: [],
+      excludedCount: 0,
     });
     const { container } = render(<SpendingByCategoryReport />);
     await waitFor(() => expect(screen.getByTestId("toggle-table")).toBeInTheDocument());
@@ -404,16 +493,23 @@ describe("SpendingByCategoryReport", () => {
         { categoryId: "", categoryName: "Uncategorized", total: 50, color: "" },
       ],
       totalSpending: 1050,
+      knownSpending: 1050,
+      currency: 'CAD',
+      missingCurrencies: [],
+      excludedCount: 0,
     });
     render(<SpendingByCategoryReport />);
     await waitFor(() => {
       expect(screen.getByTestId("toggle-table")).toBeInTheDocument();
     });
     fireEvent.click(screen.getByTestId("toggle-table"));
-    // Click each sort header to exercise comparators (default desc by value).
-    const categoryHeader = screen.getByText("Category");
-    const amountHeader = screen.getByText("Amount");
-    const pctHeader = screen.getByText("% of Total");
+    // Each header label now appears in three places (the phone sort strip, the
+    // column header row and the cell captions), so address the column header
+    // row by position rather than by label.
+    const columnHeader = document.querySelectorAll("table thead tr")[1];
+    const [categoryHeader, amountHeader, pctHeader] = Array.from(
+      columnHeader.querySelectorAll("th"),
+    );
     fireEvent.click(categoryHeader); // sort by name
     fireEvent.click(categoryHeader); // toggle desc
     fireEvent.click(pctHeader);
@@ -431,6 +527,10 @@ describe("SpendingByCategoryReport", () => {
         { categoryId: "cat-1", categoryName: "Food", total: 300, color: "" },
       ],
       totalSpending: 300,
+      knownSpending: 300,
+      currency: 'CAD',
+      missingCurrencies: [],
+      excludedCount: 0,
     });
     render(<SpendingByCategoryReport />);
     await waitFor(() => {
@@ -439,5 +539,176 @@ describe("SpendingByCategoryReport", () => {
     fireEvent.click(screen.getByTestId("toggle-table"));
     // CSV button should appear; it just needs to fire without throwing.
     fireEvent.click(screen.getByTestId("export-csv"));
+  });
+
+  // A category row is the click target where it names a category, so it has to
+  // be reachable and operable from the keyboard there as well (WCAG 2.1.1).
+  // Before the fix this row was a `cursor-pointer` `<tr>` with an `onClick` and
+  // no `tabIndex` and no `onKeyDown` -- the whole suite was green over a row no
+  // keyboard user could use, so this case is what fails on that shape.
+  it("activates a category row from the keyboard, and only where it is clickable", async () => {
+    mockGetSpendingByCategory.mockResolvedValue({
+      data: [
+        { categoryId: "cat-1", categoryName: "Food", total: 300, color: "" },
+        { categoryId: "", categoryName: "Uncategorized", total: 50, color: "" },
+      ],
+      totalSpending: 350,
+      knownSpending: 350,
+      currency: 'CAD',
+      missingCurrencies: [],
+      excludedCount: 0,
+    });
+    const { container } = render(<SpendingByCategoryReport />);
+    await waitFor(() => {
+      expect(screen.getByTestId("toggle-table")).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId("toggle-table"));
+    await waitFor(() => expect(container.querySelector("table")).toBeInTheDocument());
+
+    const rows = Array.from(container.querySelectorAll("tbody tr"));
+    const clickable = rows.find((r) => r.textContent?.includes("Food")) as HTMLElement;
+    const inert = rows.find((r) => r.textContent?.includes("Uncategorized")) as HTMLElement;
+    expect(clickable).toHaveAttribute("tabindex", "0");
+    // A row whose click does nothing is not a tab stop either: a focus stop
+    // that does nothing on Enter is one the reader has to escape.
+    expect(inert).not.toHaveAttribute("tabindex");
+
+    const expected =
+      "/transactions?categoryId=cat-1&startDate=2025-01-01&endDate=2025-03-31";
+    fireEvent.keyDown(clickable, { key: "Enter" });
+    expect(mockPush).toHaveBeenCalledWith(expected);
+
+    mockPush.mockClear();
+    fireEvent.keyDown(clickable, { key: " " });
+    expect(mockPush).toHaveBeenCalledWith(expected);
+
+    // A key the row does not claim stays the browser's, and the inert row
+    // answers no key at all.
+    mockPush.mockClear();
+    fireEvent.keyDown(clickable, { key: "a" });
+    fireEvent.keyDown(inert, { key: "Enter" });
+    expect(mockPush).not.toHaveBeenCalled();
+  });
+
+  it('marks the total a subtotal when the server left a row out', async () => {
+    // The server withholds `totalSpending` when a row could not be converted.
+    // What is shown is the part that did convert, marked -- never the smaller
+    // figure presented as the whole.
+    mockGetSpendingByCategory.mockResolvedValue({
+      data: [{ categoryId: 'c1', categoryName: 'Food', color: null, total: 100 }],
+      totalSpending: null,
+      knownSpending: 100,
+      currency: 'CAD',
+      missingCurrencies: ['JPY'],
+      excludedCount: 1,
+    } satisfies SpendingByCategoryResponse);
+
+    await act(async () => {
+      render(<SpendingByCategoryReport />);
+    });
+
+    expect(await screen.findByTestId('partial-total')).toBeInTheDocument();
+  });
+
+  it('carries the partial note onto the PDF card the screen marks', async () => {
+    mockExportToPdf.mockResolvedValue(undefined);
+    mockGetSpendingByCategory.mockResolvedValue({
+      data: [{ categoryId: 'c1', categoryName: 'Food', color: null, total: 100 }],
+      totalSpending: null,
+      knownSpending: 100,
+      currency: 'CAD',
+      missingCurrencies: ['JPY'],
+      excludedCount: 1,
+    } satisfies SpendingByCategoryResponse);
+
+    await act(async () => {
+      render(<SpendingByCategoryReport />);
+    });
+    await screen.findByText('Food');
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('export-pdf'));
+    });
+
+    const cards = mockExportToPdf.mock.calls[0][0].summaryCards as Array<{ note?: string }>;
+    expect(cards[0].note).toEqual(expect.stringContaining('JPY'));
+  });
+
+  it('writes no note on the PDF card of a complete report', async () => {
+    mockExportToPdf.mockResolvedValue(undefined);
+    mockGetSpendingByCategory.mockResolvedValue(
+      completeReport(
+        [{ categoryId: 'c1', categoryName: 'Food', color: null, total: 100 }],
+        100,
+      ),
+    );
+    await act(async () => {
+      render(<SpendingByCategoryReport />);
+    });
+    await screen.findByText('Food');
+    await act(async () => {
+      fireEvent.click(screen.getByTestId('export-pdf'));
+    });
+    const cards = mockExportToPdf.mock.calls[0][0].summaryCards as Array<{ note?: string }>;
+    expect(cards[0].note).toBeUndefined();
+  });
+
+  it('leaves a complete total unmarked', async () => {
+    mockGetSpendingByCategory.mockResolvedValue(
+      completeReport(
+        [{ categoryId: 'c1', categoryName: 'Food', color: null, total: 100 }],
+        100,
+      ),
+    );
+
+    await act(async () => {
+      render(<SpendingByCategoryReport />);
+    });
+
+    expect(screen.queryByTestId('partial-total')).toBeNull();
+  });
+});
+
+describe("SpendingByCategoryReport: a reload is not the previous answer", () => {
+  const answer = completeReport(
+    [{ categoryId: "cat-1", categoryName: "Groceries", total: 500, color: "#ff0000" }],
+    500,
+  );
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockIsValid = true;
+    mockRange.end = "2025-03-31";
+  });
+
+  async function loadThenChangeRange(next: () => unknown) {
+    mockGetSpendingByCategory.mockResolvedValue(answer);
+    let view!: ReturnType<typeof render>;
+    await act(async () => {
+      view = render(<SpendingByCategoryReport />);
+    });
+    expect(screen.getByTestId("export-pdf")).toHaveAttribute("data-disabled", "false");
+
+    mockGetSpendingByCategory.mockImplementation(next);
+    mockRange.end = "2025-04-30";
+    await act(async () => {
+      view.rerender(<SpendingByCategoryReport />);
+    });
+    await waitFor(() =>
+      expect(mockGetSpendingByCategory).toHaveBeenLastCalledWith(
+        expect.objectContaining({ endDate: "2025-04-30" }),
+      ),
+    );
+  }
+
+  it("disables the export while the next request has failed", async () => {
+    await loadThenChangeRange(() => Promise.reject(new Error("500")));
+    expect(screen.getByTestId("export-pdf")).toHaveAttribute("data-disabled", "true");
+    expect(screen.getByTestId("export-csv")).toHaveAttribute("data-disabled", "true");
+  });
+
+  it("disables the export while the next request is pending", async () => {
+    await loadThenChangeRange(() => new Promise(() => {}));
+    expect(screen.getByTestId("export-pdf")).toHaveAttribute("data-disabled", "true");
+    expect(screen.getByTestId("export-csv")).toHaveAttribute("data-disabled", "true");
   });
 });

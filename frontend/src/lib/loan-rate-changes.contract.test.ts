@@ -5,6 +5,7 @@ import {
   RATE_CHANGE_ACCOUNT_TYPES,
   supportsRateChanges,
 } from './loan-rate-changes';
+import { ACCOUNT_DETAIL_VIEWS } from './account-detail-views';
 
 /**
  * Globbed rather than listed with `git ls-files`, so a brand-new caller is
@@ -26,8 +27,8 @@ const sources = import.meta.glob('/src/**/*.{ts,tsx}', {
  *    across the two packages, so this parses its source);
  *  - `useLoanProjection`'s "amortizing debt" set, which fetches rate history
  *    unconditionally for every type in it;
- *  - the account detail page's view registry, whose `loan` arm is the branch
- *    that fetches rate history;
+ *  - the shared account detail-view registry, whose `loan` arm is the branch
+ *    the account page fetches rate history in;
  *  - the overpayment simulator's debt-account list, whose "not revolving" gate
  *    coincides with the precondition only while the list has three members.
  *
@@ -98,19 +99,19 @@ describe('RATE_CHANGE_ACCOUNT_TYPES is the one spelling of the precondition', ()
     expect(source).not.toMatch(/AMORTIZING_DEBT_TYPES[\s\S]{0,200}'MORTGAGE'/);
   });
 
-  it('matches the account page detail-view registry arm that fetches it', () => {
-    const source = readSource('app/accounts/[id]/page.tsx');
-    const registry = matchOrThrow(
-      source,
-      /DETAIL_VIEW_REGISTRY[^=]*=\s*\{([\s\S]*?)\n\};/,
-      'DETAIL_VIEW_REGISTRY',
-    );
-    const loanArm = [...registry.matchAll(/([A-Z_]+):\s*'loan'/g)]
-      .map((m) => m[1])
+  it('matches the detail-view registry arm that fetches it', () => {
+    const loanArm = Object.entries(ACCOUNT_DETAIL_VIEWS)
+      .filter(([, kind]) => kind === 'loan')
+      .map(([type]) => type)
       .sort();
-    // The page fetches rate history inside `resolveDetailView(...) === 'loan'`
-    // with no further gate, so that arm IS the precondition on this surface.
     expect(loanArm).toEqual(EXPECTED);
+    // The page fetches rate history inside `resolveAccountDetailView(...) ===
+    // 'loan'` with no further gate, so that arm IS the precondition on this
+    // surface. Asserting the branch too, because the registry proves the arm
+    // and only the page proves it is what the fetch is gated on.
+    expect(readSource('app/accounts/[id]/page.tsx')).toContain(
+      "resolveAccountDetailView(accountData.accountType) !== 'loan'",
+    );
   });
 
   it('matches the overpayment simulator, whose gate is "not revolving"', () => {

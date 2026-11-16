@@ -19,6 +19,7 @@ import {
   SIZE_SALT,
   readMnyFileHeader,
 } from "./jet-header";
+import { MnyFileFormat } from "../model/mny-money99";
 import { rc4, rc4InPlace } from "./rc4";
 
 /**
@@ -48,6 +49,8 @@ const TRAILING_PWD_LEN = 20;
 export interface MsisamDecryptResult {
   /** The same buffer that was passed in, now holding plaintext pages. */
   readonly buffer: Buffer;
+  /** `jet3` for Money 97-99, which this function leaves untouched. */
+  readonly format: MnyFileFormat;
   /** Key-derivation scheme the file uses. */
   readonly scheme: MsisamEncryptionScheme;
   /** True when a non-blank password was needed to open the file. */
@@ -220,16 +223,23 @@ function resolveNewSchemeKey(
 export function readMsisamMetadata(buffer: Buffer): {
   scheme: MsisamEncryptionScheme;
   passwordProtected: boolean;
+  format: MnyFileFormat;
 } {
   const header = readMnyFileHeader(buffer);
-  if (header.scheme === "old") {
+  if (header.scheme === "old" || header.scheme === "none") {
     // The pre-2002 scheme derives its key from the header and uses no password
-    // at all, so no file written by it is ever password protected.
-    return { scheme: header.scheme, passwordProtected: false };
+    // at all, and a Money 97-99 file is not MSISAM-encrypted, so neither is
+    // ever password protected.
+    return {
+      scheme: header.scheme,
+      passwordProtected: false,
+      format: header.format,
+    };
   }
 
   const hasCheckBytes = cryptCheckBytes(header.page).some((byte) => byte !== 0);
   return {
+    format: header.format,
     scheme: header.scheme,
     passwordProtected:
       hasCheckBytes && !verifyPassword(header.page, header.scheme, ""),
@@ -258,6 +268,16 @@ export function decryptMsisamInPlace(
   password?: string,
 ): MsisamDecryptResult {
   const header: MnyFileHeader = readMnyFileHeader(buffer);
+  if (header.format === "jet3") {
+    // Money 97-99 write a plain Jet 3 database: there is nothing to decrypt,
+    // and a supplied password is ignored rather than rejected.
+    return {
+      buffer,
+      format: header.format,
+      scheme: header.scheme,
+      passwordProtected: false,
+    };
+  }
 
   let keyFor: (pageNumber: number) => Buffer;
   let passwordProtected = false;
@@ -285,5 +305,10 @@ export function decryptMsisamInPlace(
     );
   }
 
-  return { buffer, scheme: header.scheme, passwordProtected };
+  return {
+    buffer,
+    format: header.format,
+    scheme: header.scheme,
+    passwordProtected,
+  };
 }

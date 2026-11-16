@@ -11,7 +11,8 @@ import {
   importAlreadyRunningException,
 } from "./mny-import-job.service";
 import { MnyImportService } from "./mny-import.service";
-import { MnyParsedFile, MnyParserService } from "./mny-parser.service";
+import { MnyParsedFile } from "./mny-parser.service";
+import { MnyMarketRateService } from "./mny-market-rates.service";
 import { MnyStagingService } from "./mny-staging.service";
 import { DEFAULT_MNY_IMPORT_OPTIONS } from "./model/mny-import-options";
 import {
@@ -32,6 +33,9 @@ import {
 import { writeBills } from "./writers/write-bills";
 import { writeLoans } from "./writers/write-loans";
 import { HoldingsService } from "../../securities/holdings.service";
+import { TransactionRulesApplierService } from "../../transaction-rules/transaction-rules-applier.service";
+import { TagsService } from "../../tags/tags.service";
+import { writeTags } from "./writers/write-tags";
 
 jest.mock("../../common/db/scoped-db", () => ({
   withScopedDb: jest.fn(),
@@ -73,6 +77,10 @@ jest.mock("./writers/write-loans", () => ({
   writeLoans: jest.fn(),
 }));
 
+jest.mock("./writers/write-tags", () => ({
+  writeTags: jest.fn(),
+}));
+
 const mockedScopedDb = withScopedDb as jest.MockedFunction<typeof withScopedDb>;
 const mockedWriteAccounts = writeAccounts as jest.MockedFunction<
   typeof writeAccounts
@@ -106,6 +114,7 @@ const mockedWriteRates = writeExchangeRates as jest.MockedFunction<
 >;
 const mockedWriteBills = writeBills as jest.MockedFunction<typeof writeBills>;
 const mockedWriteLoans = writeLoans as jest.MockedFunction<typeof writeLoans>;
+const mockedWriteTags = writeTags as jest.MockedFunction<typeof writeTags>;
 
 /**
  * The orchestration around the writers: what runs before the job row exists,
@@ -149,9 +158,12 @@ function parsedFile(overrides: Partial<MnyParsedFile> = {}): MnyParsedFile {
       transactions: [],
       referencedPayees: new Set(),
       referencedCategories: new Set(),
+      referencedTags: new Set([552]),
+      tradeCashLegTagHandles: new Map(),
       transfersLinked: 4,
       skipped: 1,
       deferredInvestments: 2,
+      investmentCashSources: new Map(),
       warnings: [],
     },
     categories: {
@@ -185,6 +197,15 @@ function parsedFile(overrides: Partial<MnyParsedFile> = {}): MnyParsedFile {
       skipped: 0,
       warnings: [],
     },
+    tags: {
+      tags: [{ handle: 552, name: "Properties:20 Spring Apartment" }],
+      byHandle: new Map([
+        [552, { handle: 552, name: "Properties:20 Spring Apartment" }],
+      ]),
+      inFile: 2,
+      skipped: 1,
+      warnings: [],
+    },
     securities: {
       securities: [
         {
@@ -206,6 +227,7 @@ function parsedFile(overrides: Partial<MnyParsedFile> = {}): MnyParsedFile {
       referencedPayees: new Set(),
       referencedCategories: new Set(),
       transfersPaired: 0,
+      rateGaps: [],
       skipped: 0,
       warnings: [],
     },
@@ -250,6 +272,8 @@ describe("MnyImportService", () => {
   let usersService: Record<string, jest.Mock>;
   let currencies: Record<string, jest.Mock>;
   let holdingsService: Record<string, jest.Mock>;
+  let rulesApplier: Record<string, jest.Mock>;
+  let tagsService: Record<string, jest.Mock>;
   let accountRepo: Record<string, jest.Mock>;
   let preferenceRepo: Record<string, jest.Mock>;
   let service: MnyImportService;
@@ -268,13 +292,14 @@ describe("MnyImportService", () => {
     staging = {
       findInfo: jest.fn().mockResolvedValue({ id: "staged-1" }),
       loadBytes: jest.fn().mockResolvedValue(Buffer.from("bytes")),
-      remove: jest.fn().mockResolvedValue(true),
+      removeConsumed: jest.fn().mockResolvedValue(undefined),
     };
     parser = { parse: jest.fn().mockReturnValue(parsedFile()) };
     jobs = {
       hasActiveJob: jest.fn().mockResolvedValue(false),
       create: jest.fn().mockResolvedValue({ id: "job-1" }),
       discard: jest.fn().mockResolvedValue(undefined),
+      releaseCommittedContent: jest.fn().mockResolvedValue(undefined),
       runClaimed: jest.fn().mockResolvedValue(true),
       fail: jest.fn().mockResolvedValue(undefined),
       // Written INSIDE the import transaction, so it commits with the rows it
@@ -288,7 +313,7 @@ describe("MnyImportService", () => {
     postProcessing = { run: jest.fn().mockResolvedValue(undefined) };
     usersService = { deleteData: jest.fn().mockResolvedValue(undefined) };
     currencies = {
-      ensureSystemCurrency: jest.fn().mockResolvedValue(undefined),
+      ensureCurrencyForUser: jest.fn().mockResolvedValue(undefined),
     };
 
     accountRepo = {
@@ -311,6 +336,7 @@ describe("MnyImportService", () => {
       idByKey: new Map([["acct-1", "account-1"]]),
       created: 1,
       reused: 0,
+      reusedIds: new Set<string>(),
     });
     mockedWriteCategories.mockResolvedValue({
       idByFullName: new Map([["Groceries", "category-1"]]),
@@ -324,9 +350,14 @@ describe("MnyImportService", () => {
       transactionsCreated: 7,
       splitsCreated: 2,
       linksApplied: 4,
+      tagLinksApplied: 0,
       affectedAccountIds: new Set(["account-1"]),
       writtenTransactionIds: new Set<string>(),
       writtenSplitIds: new Set<string>(),
+    });
+    mockedWriteTags.mockResolvedValue({
+      idByHandle: new Map([[552, "tag-1"]]),
+      created: 1,
     });
     mockedWriteBalances.mockResolvedValue(1);
     mockedClosures.mockResolvedValue(0);
@@ -339,6 +370,8 @@ describe("MnyImportService", () => {
       investmentTransactionsCreated: 3,
       cashTransactionsCreated: 2,
       linksApplied: 1,
+      tagLinksApplied: 1,
+      bondRowsWithoutSeries: 0,
       affectedAccountIds: new Set(["account-1"]),
       brokerageAccountIds: new Set(["account-1"]),
     });
@@ -351,15 +384,26 @@ describe("MnyImportService", () => {
       rebuildAccountsFromTransactions: jest.fn().mockResolvedValue(undefined),
     };
 
+    rulesApplier = {
+      loadRulesFor: jest.fn().mockResolvedValue([]),
+      applyToNew: jest.fn().mockResolvedValue([]),
+    };
+    tagsService = {
+      findByNames: jest.fn().mockResolvedValue([]),
+      findOrCreateByNames: jest.fn().mockResolvedValue([]),
+    };
+
     service = new MnyImportService(
       {} as DataSource,
       staging as unknown as MnyStagingService,
-      parser as unknown as MnyParserService,
+      parser as unknown as MnyMarketRateService,
       jobs as unknown as MnyImportJobService,
       postProcessing as unknown as ImportPostProcessingService,
       usersService as unknown as UsersService,
       currencies as unknown as CurrenciesService,
       holdingsService as unknown as HoldingsService,
+      rulesApplier as unknown as TransactionRulesApplierService,
+      tagsService as unknown as TagsService,
     );
     jest.spyOn(service["logger"], "log").mockImplementation(() => undefined);
     jest.spyOn(service["logger"], "error").mockImplementation(() => undefined);
@@ -475,6 +519,29 @@ describe("MnyImportService", () => {
       expect(usersService.deleteData.mock.invocationCallOrder[0]).toBeLessThan(
         jobs.runClaimed.mock.invocationCallOrder[0],
       );
+      // The wipe removed the rows an earlier import's content key vouched
+      // for, so the key is released -- after the wipe, never before (A26-H08).
+      expect(jobs.releaseCommittedContent).toHaveBeenCalledWith("user-1");
+      expect(usersService.deleteData.mock.invocationCallOrder[0]).toBeLessThan(
+        jobs.releaseCommittedContent.mock.invocationCallOrder[0],
+      );
+    });
+
+    it("keeps the content keys when the wipe is refused", async () => {
+      usersService.deleteData.mockRejectedValue(new Error("bad password"));
+
+      await expect(
+        service.start("user-1", {
+          stagedFileId: "staged-1",
+          options: { wipeExistingData: true },
+        }),
+      ).rejects.toThrow("bad password");
+      expect(jobs.releaseCommittedContent).not.toHaveBeenCalled();
+    });
+
+    it("does not release the content keys for an import that keeps existing data", async () => {
+      await service.start("user-1", { stagedFileId: "staged-1" });
+      expect(jobs.releaseCommittedContent).not.toHaveBeenCalled();
     });
 
     it("fails the request, not a background job, when re-authentication fails", async () => {
@@ -665,8 +732,14 @@ describe("MnyImportService", () => {
 
       await run();
 
-      expect(currencies.ensureSystemCurrency).toHaveBeenCalledWith("CAD");
-      expect(currencies.ensureSystemCurrency).toHaveBeenCalledWith("USD");
+      expect(currencies.ensureCurrencyForUser).toHaveBeenCalledWith(
+        context.userId,
+        "CAD",
+      );
+      expect(currencies.ensureCurrencyForUser).toHaveBeenCalledWith(
+        context.userId,
+        "USD",
+      );
     });
 
     it("writes reference data, then transactions, then balances, then closures", async () => {
@@ -723,6 +796,37 @@ describe("MnyImportService", () => {
       expect([...balances]).toEqual([["account-1", 120.5]]);
     });
 
+    it("leaves a reused account's balance to the ledger and recomputes it", async () => {
+      mockedWriteAccounts.mockResolvedValue({
+        idByKey: new Map([
+          ["acct-1", "account-1"],
+          ["acct-2", "account-reused"],
+        ]),
+        created: 1,
+        reused: 1,
+        reusedIds: new Set(["account-reused"]),
+      });
+      parser.parse.mockReturnValue(
+        parsedFile({
+          expectedBalances: new Map([
+            ["acct-1", 120.5],
+            ["acct-2", 1000],
+          ]),
+        }),
+      );
+
+      await run();
+
+      const [, balances] = mockedWriteBalances.mock.calls[0];
+      expect([...balances]).toEqual([["account-1", 120.5]]);
+      expect(postProcessing.run).toHaveBeenCalledWith(
+        "user-1",
+        false,
+        new Set(["account-reused", "account-1"]),
+        new Set(),
+      );
+    });
+
     it("hands post-processing only the accounts that were touched", async () => {
       await run();
 
@@ -730,13 +834,14 @@ describe("MnyImportService", () => {
         "user-1",
         false,
         new Set(["account-1"]),
+        new Set(),
       );
     });
 
     it("deletes the staged bytes once the import succeeds", async () => {
       await run();
 
-      expect(staging.remove).toHaveBeenCalledWith("user-1", "staged-1");
+      expect(staging.removeConsumed).toHaveBeenCalledWith("user-1", "staged-1");
     });
 
     it("checkpoints data_committed on the write transaction's own manager, under this attempt's token", async () => {
@@ -800,9 +905,39 @@ describe("MnyImportService", () => {
         exchangeRatesImported: 5,
         // Phase 3 fills this; reported as zero so the shape does not change.
         billsCreated: 0,
+        tagsCreated: 1,
+        // The transaction writer's links plus the investment writer's.
+        tagLinksApplied: 1,
         existingDataRemoved: false,
-        skipped: { accounts: 0, payees: 0, categories: 0, transactions: 1 },
+        skipped: {
+          accounts: 0,
+          payees: 0,
+          categories: 0,
+          tags: 1,
+          transactions: 1,
+        },
       });
+    });
+
+    it("writes the classification tags once and hands their ids to every writer that links them", async () => {
+      await run();
+
+      expect(mockedWriteTags).toHaveBeenCalledWith(
+        mockedWriteAccounts.mock.calls[0][0],
+        tagsService,
+        "user-1",
+        [{ handle: 552, name: "Properties:20 Spring Apartment" }],
+      );
+      const idByHandle = new Map([[552, "tag-1"]]);
+      expect(mockedWriteTransactions.mock.calls[0][2].tagIdByHandle).toEqual(
+        idByHandle,
+      );
+      expect(mockedWriteBills.mock.calls[0][2].tagIdByHandle).toEqual(
+        idByHandle,
+      );
+      expect(mockedWriteInvestments.mock.calls[0][2].tagIdByHandle).toEqual(
+        idByHandle,
+      );
     });
 
     it("verifies each account's balance against the file", async () => {
@@ -879,6 +1014,7 @@ describe("MnyImportService", () => {
         idByKey: new Map(),
         created: 0,
         reused: 0,
+        reusedIds: new Set<string>(),
       });
 
       const result = await run();
@@ -910,6 +1046,144 @@ describe("MnyImportService", () => {
       );
 
       expect(result.existingDataRemoved).toBe(true);
+    });
+  });
+
+  describe("transaction rules", () => {
+    const mapped = (id: string, over: Record<string, unknown> = {}) => ({
+      id,
+      handle: 1,
+      accountKey: "acct-1",
+      transactionDate: "2025-01-15",
+      amount: -10,
+      currencyCode: "CAD",
+      status: "UNRECONCILED",
+      payeeHandle: 5,
+      categoryHandle: null,
+      description: null,
+      referenceNumber: null,
+      isTransfer: false,
+      linkedTransactionId: null,
+      splits: [],
+      collapsedTradeHandle: null,
+      ...over,
+    });
+
+    it("runs one bulk pass over the regular rows, after writeTransactions and before the investments", async () => {
+      const rules = [{ id: "rule-1" }];
+      rulesApplier.loadRulesFor.mockResolvedValue(rules);
+      const base = parsedFile();
+      parser.parse.mockReturnValue({
+        ...base,
+        transactions: {
+          ...base.transactions,
+          transactions: [
+            mapped("tx-1"),
+            mapped("tx-2", { payeeHandle: null }),
+            mapped("tx-transfer", { isTransfer: true }),
+            mapped("tx-cash", {}),
+          ],
+          investmentCashSources: new Map([
+            [
+              9,
+              {
+                transactionId: "tx-cash",
+                splitId: null,
+              },
+            ],
+          ]),
+        },
+      });
+      mockedWriteTransactions.mockResolvedValue({
+        transactionsCreated: 4,
+        splitsCreated: 0,
+        linksApplied: 0,
+        tagLinksApplied: 0,
+        affectedAccountIds: new Set(["account-1"]),
+        writtenTransactionIds: new Set([
+          "tx-1",
+          "tx-2",
+          "tx-transfer",
+          "tx-cash",
+        ]),
+        writtenSplitIds: new Set<string>(),
+      });
+
+      await service.runImport(
+        "user-1",
+        "staged-1",
+        DEFAULT_MNY_IMPORT_OPTIONS,
+        context,
+      );
+
+      expect(rulesApplier.loadRulesFor).toHaveBeenCalledTimes(1);
+      expect(rulesApplier.applyToNew).toHaveBeenCalledTimes(1);
+      const [manager, userId, ids, source, options] =
+        rulesApplier.applyToNew.mock.calls[0];
+      expect(manager).toBeDefined();
+      expect(userId).toBe("user-1");
+      expect(ids).toEqual(["tx-1", "tx-2"]);
+      expect(source).toBe("import");
+      expect(options.rules).toBe(rules);
+      expect(options.payeeTextById.get("tx-1")).toBe("Loblaws");
+      expect(options.payeeTextById.get("tx-2")).toBeNull();
+      expect(
+        rulesApplier.applyToNew.mock.invocationCallOrder[0],
+      ).toBeGreaterThan(mockedWriteTransactions.mock.invocationCallOrder[0]);
+      expect(rulesApplier.applyToNew.mock.invocationCallOrder[0]).toBeLessThan(
+        mockedWriteInvestments.mock.invocationCallOrder[0],
+      );
+    });
+
+    it("hands the accounts a structural rule action moved to the post-commit recompute", async () => {
+      rulesApplier.loadRulesFor.mockResolvedValue([{ id: "rule-1" }]);
+      const base = parsedFile();
+      parser.parse.mockReturnValue({
+        ...base,
+        transactions: {
+          ...base.transactions,
+          transactions: [mapped("tx-1")],
+        },
+      });
+      rulesApplier.applyToNew.mockResolvedValue([
+        {
+          transactionId: "tx-1",
+          effects: { trace: [] },
+          affectedAccountIds: ["loan-account"],
+          settledScheduleIds: [],
+        },
+      ]);
+      mockedWriteTransactions.mockResolvedValue({
+        transactionsCreated: 1,
+        splitsCreated: 0,
+        linksApplied: 0,
+        tagLinksApplied: 0,
+        affectedAccountIds: new Set(["account-1"]),
+        writtenTransactionIds: new Set(["tx-1"]),
+        writtenSplitIds: new Set<string>(),
+      });
+
+      await service.runImport(
+        "user-1",
+        "staged-1",
+        DEFAULT_MNY_IMPORT_OPTIONS,
+        context,
+      );
+
+      const affected = postProcessing.run.mock.calls[0][2] as Set<string>;
+      expect(affected.has("loan-account")).toBe(true);
+      expect(affected.has("account-1")).toBe(true);
+    });
+
+    it("does nothing when no row was written", async () => {
+      await service.runImport(
+        "user-1",
+        "staged-1",
+        DEFAULT_MNY_IMPORT_OPTIONS,
+        context,
+      );
+      expect(rulesApplier.loadRulesFor).not.toHaveBeenCalled();
+      expect(rulesApplier.applyToNew).not.toHaveBeenCalled();
     });
   });
 
@@ -970,6 +1244,8 @@ describe("MnyImportService", () => {
         investmentTransactionsCreated: 0,
         cashTransactionsCreated: 0,
         linksApplied: 0,
+        tagLinksApplied: 0,
+        bondRowsWithoutSeries: 0,
         affectedAccountIds: new Set<string>(),
         brokerageAccountIds: new Set<string>(),
       });
@@ -1021,6 +1297,7 @@ describe("MnyImportService", () => {
         "user-1",
         true,
         expect.any(Set),
+        new Set(),
       );
     });
 
@@ -1143,6 +1420,7 @@ describe("MnyImportService", () => {
         transferAccountKey: null,
         investment: null,
         splits: [],
+        tagHandles: [],
       });
 
       parser.parse.mockReturnValue(

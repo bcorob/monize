@@ -17,6 +17,14 @@ const mockLongRunningFetch = jest.fn(
 );
 jest.mock("./long-running-fetch", () => ({
   longRunningAgent: { __mock: "agent" },
+  providerFetch: jest.fn(
+    () =>
+      (
+        input: Parameters<typeof fetch>[0],
+        init?: Parameters<typeof fetch>[1],
+      ) =>
+        mockLongRunningFetch(input, init),
+  ),
   longRunningFetch: (
     input: Parameters<typeof fetch>[0],
     init?: Parameters<typeof fetch>[1],
@@ -885,7 +893,8 @@ describe("OllamaProvider", () => {
       const result = await provider.verifyModel();
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.reason).toContain("ECONNREFUSED");
+        expect(result.reason).not.toContain("ECONNREFUSED");
+        expect(result.reason).toMatch(/could not verify the configured model/i);
       }
     });
 
@@ -903,7 +912,8 @@ describe("OllamaProvider", () => {
       const result = await provider.verifyModel();
       expect(result.ok).toBe(false);
       if (!result.ok) {
-        expect(result.reason).toContain("plain-string-error");
+        expect(result.reason).not.toContain("plain-string-error");
+        expect(result.reason).toMatch(/could not verify the configured model/i);
       }
     });
   });

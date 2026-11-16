@@ -20,15 +20,17 @@
     "typeExpense": "Despesa",
     "typeUnknown": "Sentido desconhecido",
     "amountUnavailable": "Valor não disponível",
+    "estimated": "Estimado",
+    "estimateUnknown": "Estimativa desconhecida: informe o valor ao lançar",
     "button": "Ver Faturas &amp; Depósitos"
   },
   "mortgageReminder": {
-    "subject": "Monize: 1 renovação de hipoteca próxima",
-    "subjectPlural": "Monize: {{ count }} renovações de hipoteca próximas",
-    "heading": "Lembrete de renovação de hipoteca",
+    "subject": "Monize: 1 prazo de taxa de hipoteca termina em breve",
+    "subjectPlural": "Monize: {{ count }} prazos de taxa de hipoteca terminam em breve",
+    "heading": "Lembrete de fim do prazo de taxa da hipoteca",
     "greeting": "Olá {{ name }},",
-    "introOne": "Você tem 1 hipoteca com uma renovação de prazo próxima. Entre em contato com seu banco para discutir as opções de renovação antes do fim do prazo:",
-    "introMany": "Você tem {{ count }} hipotecas com uma renovação de prazo próxima. Entre em contato com seu banco para discutir as opções de renovação antes do fim do prazo:",
+    "introOne": "Você tem 1 hipoteca cujo prazo de taxa atual termina em breve. Entre em contato com seu banco antes do fim para combinar a próxima taxa ou a renovação:",
+    "introMany": "Você tem {{ count }} hipotecas cujo prazo de taxa atual termina em breve. Entre em contato com seu banco antes do fim de cada uma para combinar a próxima taxa ou a renovação:",
     "colMortgage": "Hipoteca",
     "colTermEndDate": "Data de fim do prazo",
     "colTimeRemaining": "Tempo restante",
@@ -117,6 +119,21 @@
     "button": "Verificar e-mail",
     "disclaimer": "Este link expira em 24 horas. Se você não criou uma conta Monize, pode ignorar este e-mail com segurança."
   },
+  "emailChangeConfirm": {
+    "subject": "Confirme o seu novo e-mail do Monize",
+    "heading": "Confirme o seu novo endereço de e-mail",
+    "greeting": "Olá {{ name }},",
+    "intro": "Foi feita uma solicitação para usar este endereço em uma conta Monize. Seu e-mail não será alterado até que você confirme clicando no botão abaixo:",
+    "button": "Confirmar alteração de e-mail",
+    "disclaimer": "Este link expira em 24 horas. Se você não solicitou esta alteração, pode ignorar este e-mail com segurança."
+  },
+  "emailChangeNotice": {
+    "subject": "Alteração de e-mail do Monize solicitada",
+    "heading": "Alteração de e-mail solicitada",
+    "greeting": "Olá {{ name }},",
+    "body1": "Foi feita uma solicitação para alterar o endereço de e-mail da sua conta Monize para {{ email }}. A alteração só entra em vigor depois de ser confirmada a partir desse endereço.",
+    "body2": "Se você não fez esta solicitação, altere sua senha imediatamente e revise os dispositivos conectados à sua conta."
+  },
   "accountInvite": {
     "subject": "Sua conta Monize está pronta",
     "heading": "Sua conta Monize está pronta",
@@ -186,5 +203,232 @@
     "greeting": "Olá {{ name }},",
     "intro": "<strong>{{ provider }}</strong> voltou a responder às {{ restoredAt }}. A interrupção durou {{ duration }}.",
     "backfill": "Cotações e histórico de índices perdidos durante a interrupção são recuperados na próxima atualização agendada; nenhuma ação é necessária."
+  },
+  "systemAlert": {
+    "subject": "Monize: {{ title }}",
+    "heading": "Alerta de sistema",
+    "greeting": "Olá {{ name }},",
+    "intro": "Um problema na sua instalação do Monize requer a atenção de um administrador.",
+    "footer": "Este alerta também é exibido no sino de notificações do aplicativo. Ele é gerado no máximo uma vez por ocorrência, independentemente de quantas réplicas do servidor a detectaram."
+  },
+  "notificationImmediate": {
+    "subject": "Você tem uma nova notificação do Monize",
+    "eyebrow": "Notificação do Monize",
+    "button": "Abrir no Monize",
+    "footer": "Você recebeu isto porque o e-mail imediato está ativado para este tipo de notificação. Altere em Configurações, Notificações."
+  },
+  "notificationCopy": {
+    "billDue": {
+      "titleOverdue": "{{ payee }} em atraso",
+      "titleToday": "{{ payee }} vence hoje",
+      "titleTomorrow": "{{ payee }} vence amanhã",
+      "titleInDays": "{{ payee }} vence em {{ days }} dias",
+      "amountDue": "{{ amount }} a pagar em {{ date }}",
+      "amountUnavailable": "Valor indisponível (sem taxa de câmbio atual), vence em {{ date }}"
+    },
+    "gemSignal": {
+      "riskTitle": "{{ strategy }} mudou para {{ state }}",
+      "riskMessage": "Sua estratégia GEM «{{ strategy }}» mudou de {{ fromState }} para {{ toState }}. Abra para revisar a recomendação.",
+      "allocationTitle": "{{ strategy }} alterou o alvo",
+      "allocationMessage": "Sua estratégia GEM «{{ strategy }}» agora tem como alvo {{ target }}. Abra para revisar a recomendação.",
+      "riskOn": "risk-on",
+      "riskOff": "risk-off",
+      "roles": {
+        "US_EQUITY": "S&P 500",
+        "EX_US_EQUITY": "Mercados desenvolvidos ex-EUA",
+        "EM_EQUITY": "Mercados emergentes",
+        "SAFE": "Ativo seguro",
+        "RISK_FREE": "Referência sem risco"
+      },
+      "allocationMessageUnknown": "Sua estratégia GEM “{{ strategy }}” mudou de alvo. Abra para revisar a recomendação."
+    },
+    "portfolioMovement": {
+      "titleUp": "Investimentos em alta de {{ percent }}%",
+      "titleDown": "Investimentos em baixa de {{ percent }}%",
+      "messageUp": "Seus investimentos subiram {{ percent }}% de {{ from }} a {{ to }}, excluindo depósitos e saques. Abra para revisar.",
+      "messageDown": "Seus investimentos caíram {{ percent }}% de {{ from }} a {{ to }}, excluindo depósitos e saques. Abra para revisar."
+    },
+    "balanceThreshold": {
+      "titleLow": "{{ account }} está abaixo do seu limite",
+      "titleHigh": "{{ account }} está acima do seu limite",
+      "messageLow": "{{ account }} caiu para {{ balance }}, abaixo do seu limite de {{ threshold }}.",
+      "messageHigh": "{{ account }} subiu para {{ balance }}, acima do seu limite de {{ threshold }}."
+    },
+    "system": {
+      "backupFailed": {
+        "title": "Falha no backup automático",
+        "message": "O backup automático de {{ user }} falhou: {{ error }}"
+      },
+      "backupPartial": {
+        "title": "Backup automático incompleto",
+        "messageAttachments": "O backup de {{ user }} foi gravado, mas não foi possível incluir {{ missing }} de {{ expected }} anexos e {{ inconsistent }} não correspondiam aos seus metadados. Os backups completos foram preservados.",
+        "messagePromotion": "O backup diário de {{ user }} foi concluído, mas sua cópia semanal ou mensal não pôde ser gravada: {{ error }}",
+        "messageRetention": "O backup de {{ user }} foi concluído, mas os arquivos de backups antigos não puderam ser removidos: {{ error }}"
+      },
+      "encryptionKeyMissing": {
+        "title": "Chave de criptografia não configurada",
+        "message": "A ENCRYPTION_KEY não está definida, então os backups são gravados sem criptografia e segredos não podem ser armazenados. Uma versão futura não iniciará sem ela."
+      },
+      "jwtSecretWeak": {
+        "title": "O JWT_SECRET é fraco",
+        "message": "O JWT_SECRET é um valor de exemplo publicado ou previsível demais, então tokens de sessão podem ser falsificados. Gere um valor forte (openssl rand -base64 32). Alterá-lo faz os códigos dos aplicativos autenticadores pararem de funcionar e esquece os dispositivos confiáveis: os usuários entram com um código de recuperação e configuram o 2FA de novo, e você redefine o 2FA em Gerenciamento de Usuários para quem não tiver um. Leia antes docs/backend/modules-and-runtime.md (Changing JWT_SECRET)."
+      },
+      "smtpFailure": {
+        "title": "O envio de email está falhando",
+        "message": "O Monize não conseguiu enviar email: {{ error }}. Notificações e lembretes não estão sendo entregues."
+      },
+      "providerOutage": {
+        "title": "{{ provider }} não está respondendo",
+        "message": "Os dados de mercado de {{ provider }} estão indisponíveis. Preços e dados de índices podem ficar desatualizados até que ele volte a responder."
+      },
+      "providerRecovered": {
+        "title": "{{ provider }} está respondendo novamente",
+        "message": "A interrupção terminou e os dados de mercado de {{ provider }} estão sendo atualizados novamente."
+      },
+      "scheduledPostFailed": {
+        "title": "Não foi possível lançar {{ name }}",
+        "message": "Sua transação agendada com vencimento em {{ date }} não foi lançada automaticamente: {{ error }}. Você pode lançá-la manualmente em Faturas e depósitos."
+      }
+    },
+    "budget": {
+      "overTitle": "{{ category }} ultrapassou o orçamento",
+      "overMessage": "Você gastou {{ amount }} do orçamento de {{ limit }} para {{ category }} ({{ percent }}%).",
+      "criticalTitle": "{{ category }} está se aproximando do limite",
+      "warningTitle": "{{ category }} está atingindo o limite do orçamento",
+      "thresholdMessage": "Você utilizou {{ percent }}% do orçamento de {{ category }} ({{ amount }} de {{ limit }}).",
+      "projectedTitle": "A previsão é que {{ category }} ultrapasse o orçamento",
+      "projectedMessage": "No ritmo atual, a previsão é que os gastos de {{ category }} atinjam {{ projected }} até o fim do período (orçamento: {{ budgeted }}).",
+      "flexTitle": "Grupo flexível “{{ group }}” em {{ percent }}%",
+      "flexMessage": "O grupo flexível “{{ group }}” utilizou {{ spent }} do orçamento combinado de {{ budgeted }} ({{ percent }}%).",
+      "incomeTitle": "Renda abaixo do esperado",
+      "incomeMessage": "Sua renda real ({{ actual }}) corresponde a {{ ratio }}% da renda esperada ({{ expected }}) neste ponto do período.",
+      "milestoneTitle": "Orçamento dentro do planejado",
+      "milestoneMessage": "Já passou {{ progress }}% do período e você utilizou apenas {{ percent }}% do orçamento total. Continue assim!",
+      "seasonalTitle": "Aumento sazonal esperado em {{ category }}",
+      "seasonalMessage": "No último mês de {{ month }}, você gastou {{ increase }} vezes o habitual em {{ category }}. Considere ajustar seu orçamento."
+    },
+    "priceMovement": {
+      "title": "Alerta de variação do preço: {{ symbol }} ({{ percent }}%)",
+      "message": "{{ symbol }}: {{ percent }}% em relação à sessão anterior disponível."
+    },
+    "bankSync": {
+      "expiringTitleToday": "{{ institution }}: o acesso bancário termina hoje",
+      "expiringTitleOneDay": "{{ institution }}: o acesso bancário termina em até 1 dia",
+      "expiringTitleDays": "{{ institution }}: o acesso bancário termina em até {{ days }} dias",
+      "expiringMessage": "Seu consentimento para o Monize ler {{ institution }} termina em {{ date }}. Renove a conexão no Monize para continuar sincronizando.",
+      "expiredTitle": "{{ institution }}: o acesso bancário terminou",
+      "expiredMessage": "Seu consentimento para o Monize ler {{ institution }} terminou. Renove a conexão no Monize para retomar a sincronização.",
+      "failedTitle": "{{ institution }}: falha na sincronização",
+      "failedMessage": "A sincronização diária de {{ institution }} falhou para: {{ accounts }}. Abra as configurações da sincronização bancária para ver o motivo.",
+      "failedCredentialsMessage": "A sincronização diária de {{ institution }} não pôde começar porque as credenciais da sincronização bancária estão ausentes ou foram rejeitadas. Verifique-as nas configurações da sincronização bancária.",
+      "unnamedAccount": "uma conta",
+      "importedTitle": "{{ institution }}: novas transações importadas",
+      "importedMessage": "Transações importadas de {{ institution }} pela sincronização diária: {{ imported }}.",
+      "importedNoneTitle": "{{ institution }}: nenhuma transação nova",
+      "importedNoneMessage": "A sincronização diária de {{ institution }} não encontrou transações novas."
+    },
+    "bond": {
+      "maturitySoonTitle": "{{ series }} vence em {{ date }}",
+      "maturitySoonMessage": "{{ quantity }} × {{ series }} vencem em {{ date }}. {{ payout }}",
+      "interestTitle": "{{ series }}: pagamento de juros em {{ date }}",
+      "interestMessage": "{{ quantity }} × {{ series }} pagam {{ amount }} de juros em {{ date }}. Registre na página do título se ainda não estiver na sua conta.",
+      "interestMessageUnknown": "{{ quantity }} × {{ series }} pagam juros em {{ date }}. O valor ainda não é conhecido: uma taxa da qual ele depende não foi publicada.",
+      "rateResetTitle": "{{ series }}: novo período de juros",
+      "rateResetMessage": "{{ series }} entrou no período {{ period }} em {{ date }} com taxa de {{ rate }} ao ano.",
+      "unbookedTitle": "{{ series }}: vencida, resgate não registrado",
+      "unbookedMessage": "{{ quantity }} × {{ series }} venceram em {{ date }} e nenhum resgate está registrado. {{ payout }} Registre o resgate na página do título.",
+      "payoutKnown": "O valor a receber é {{ payout }}.",
+      "payoutUnknown": "O valor a receber ainda não é conhecido: {{ reason }}.",
+      "reason": {
+        "RATE_UNKNOWN": "uma taxa da qual ele depende ainda não foi publicada",
+        "TERMS_INCOMPLETE": "as condições da série estão incompletas",
+        "PURCHASE_OUTSIDE_SALE_WINDOW": "uma data de compra está fora do período de venda da série",
+        "PURCHASE_AFTER_MATURITY": "uma data de compra é igual ou posterior ao vencimento da série",
+        "other": "não é possível calculá-lo com os dados armazenados"
+      },
+      "benchmarkTitle": "{{ benchmark }}: nova observação {{ observation }}",
+      "benchmarkMessage": "{{ publisher }} publicou {{ benchmark }} para {{ observation }}: {{ value }}. É usado por {{ series }}.",
+      "benchmarkMessageMore": "{{ publisher }} publicou {{ benchmark }} para {{ observation }}: {{ value }}. É usado por {{ series }} e mais {{ more }}.",
+      "missingTitle": "Valores das obrigações ainda não conhecidos",
+      "missingMessage": "Alguns valores das obrigações não podem ser calculados: {{ causes }}.",
+      "benchmarks": {
+        "PL_CPI_GUS_YOY": "IPCA, 12 meses (GUS)",
+        "PL_NBP_REFERENCE": "Taxa de referência do NBP"
+      },
+      "cause": {
+        "observation": "a observação {{ observation }} de {{ benchmark }} ({{ publisher }}) não está armazenada: ainda não foi publicada ou o feed não foi obtido desde então; atualize na página da obrigação",
+        "observationNoPublisher": "a observação {{ observation }} de {{ benchmark }} não está armazenada: ainda não foi publicada ou o feed não foi obtido desde então; atualize na página da obrigação",
+        "terms": "as condições de {{ series }} estão incompletas; atualize a série na página da obrigação",
+        "purchase": "uma compra de {{ series }} em {{ date }} está fora do período de venda ({{ from }} a {{ to }}); corrija a data da compra",
+        "purchaseAfterMaturity": "uma compra de {{ series }} em {{ date }} é igual ou posterior ao seu vencimento ({{ maturity }}); corrija a data de compra",
+        "lots": "não é possível derivar os lotes do livro-razão ({{ code }}); corrija o livro-razão",
+        "lotsRow": "{{ action }} de {{ date }}: não é possível derivar os lotes ({{ code }}); corrija a transação",
+        "lotsRowSeries": "{{ action }} de {{ date }}: sem série atribuída ({{ code }}); escolha a série nessa transação",
+        "lotsRowRemoval": "{{ action }} de {{ date }}: retira mais do que a conta possui dessa série ({{ code }}); corrija a transação"
+      },
+      "action": {
+        "BUY": "compra",
+        "SELL": "venda",
+        "REINVEST": "reinvestimento",
+        "ADD_SHARES": "adição de cotas",
+        "REMOVE_SHARES": "remoção de cotas",
+        "SPLIT": "split",
+        "TRANSFER_IN": "transferência de entrada",
+        "TRANSFER_OUT": "transferência de saída",
+        "other": "transação"
+      }
+    },
+    "emailReceiptsAttention": {
+      "title": "Recibos de e-mail precisam de atenção",
+      "message": "Sua caixa de entrada de recibos contém {{ noParser }} sem perfil e {{ parseFailed }} que seu perfil não reconheceu. Abra para revisar."
+    },
+    "aiReview": {
+      "readyTitle": "Propostas de revisão de IA aguardam você",
+      "readyMessage": "Propostas aguardando sua decisão: {{ count }}. Novas desde o último aviso: {{ added }}. Abra para revisar.",
+      "expiringTitle": "Propostas de revisão de IA expiram em breve",
+      "expiringMessage": "Propostas que expiram em 3 dias: {{ count }}. A primeira expira em {{ date }}. Abra para revisar."
+    },
+    "warranty": {
+      "expiringTitle": "{{ name }}: a garantia expira em breve",
+      "expiringMessage": "A garantia de {{ name }} expira em {{ date }}. Abra a garantia para revisar os documentos ou registrar uma reclamação.",
+      "todayTitle": "{{ name }}: a garantia expira hoje",
+      "todayMessage": "A garantia de {{ name }} expira hoje, {{ date }}. Abra a garantia para revisar os documentos ou registrar uma reclamação."
+    },
+    "security": {
+      "oauthTitle": "Novo aplicativo conectado: {{ clientName }}",
+      "oauthMessage": "O aplicativo {{ clientName }} acabou de receber acesso à sua conta do Monize. Se não foi você, altere sua senha agora: isso revoga o acesso de todos os aplicativos conectados.",
+      "relayTitle": "Uma nova conexão respondeu ao seu chat de IA",
+      "relayMessage": "Uma conexão que nunca tinha respondido ao seu chat de IA do Monize acabou de buscar um prompt. Se você não conectou este assistente, altere sua senha."
+    },
+    "payrollDeduction": {
+      "resetTitle": "{{ category }}: confirme o máximo do próximo ano",
+      "resetMessage": "A dedução {{ category }} em {{ bill }} é reiniciada em {{ date }}. Atualize o máximo anual se mudar; caso contrário, {{ amount }} aplica-se de novo."
+    },
+    "shared": {
+      "title": "Despesas compartilhadas",
+      "message": "Há novidades em um grupo compartilhado. Abra o Monize para conferir."
+    }
+  },
+  "backupOffsite": {
+    "copySubject": "Backup do Monize {{ filename }}",
+    "copyHeading": "O seu backup do Monize está em anexo",
+    "copyIntro": "Este é o backup automático {{ tier }} da sua conta Monize de {{ date }}. O arquivo está anexado a este e-mail.",
+    "copyEncrypted": "O anexo está criptografado com a sua senha de backup do Monize. Ele não pode ser aberto sem essa senha, e o Monize não consegue recuperá-la para você -- guarde a senha em um lugar diferente desta caixa de entrada.",
+    "copyRestore": "Para restaurá-lo, abra o Monize, vá em Configurações, Backup e Restauração, envie este arquivo e informe a sua senha de backup.",
+    "copyVerify": "O SHA-256 acima é dos bytes anexados, assim você pode conferir mais tarde se a cópia que guardou é a que este e-mail entregou.",
+    "tooLargeSubject": "O backup do Monize {{ filename }} era grande demais para ser enviado por e-mail",
+    "tooLargeHeading": "O seu backup do Monize não foi enviado por e-mail",
+    "tooLargeIntro": "O backup de hoje tem {{ size }}, acima dos {{ limit }} que esta instalação permite para um backup enviado por e-mail (BACKUP_EMAIL_MAX_BYTES).",
+    "tooLargeNoBytes": "Nada foi anexado a este e-mail e nenhum link de download é oferecido -- um link exigiria uma credencial capaz de ler os seus backups de volta do armazenamento, e este recurso não a possui.",
+    "tooLargeUnaffected": "O backup em si foi gravado normalmente. A cópia neste servidor não foi afetada, assim como a cópia no seu destino S3, se você tiver um habilitado.",
+    "tooLargeWhatToDo": "Para manter fora desta máquina uma cópia de um backup deste tamanho, baixe-o em Configurações, Backup e Restauração, habilite o destino S3 ou peça ao seu administrador para aumentar o limite de e-mail.",
+    "labelFile": "Arquivo",
+    "labelSize": "Tamanho",
+    "labelTier": "Retenção",
+    "labelLimit": "Limite de e-mail",
+    "labelDigest": "SHA-256",
+    "tierDaily": "diário",
+    "tierWeekly": "semanal",
+    "tierMonthly": "mensal"
   }
 }

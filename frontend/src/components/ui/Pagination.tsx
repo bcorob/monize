@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useTranslations } from 'next-intl';
 
 interface PaginationProps {
@@ -11,7 +11,8 @@ interface PaginationProps {
   onPageChange: (page: number) => void;
   itemName?: string; // e.g., "transactions", "securities"
   minimal?: boolean; // Remove shadow and rounded styling for inline use
-  infoRight?: React.ReactNode; // Optional content to render right of "Showing X-Y of Z"
+  infoRight?: React.ReactNode; // Optional content to render left of the page stepper
+  infoBefore?: React.ReactNode; // Optional content to render immediately left of "Showing X-Y of Z"
 }
 
 export function Pagination({
@@ -23,14 +24,18 @@ export function Pagination({
   itemName = 'items',
   minimal = false,
   infoRight,
+  infoBefore,
 }: PaginationProps) {
   const t = useTranslations('common');
   const [inputPage, setInputPage] = useState(currentPage.toString());
 
-  // Keep input in sync with current page
-  useEffect(() => {
+  // Keep input in sync with current page (the "info from previous render"
+  // pattern rather than a setState in an effect)
+  const [syncedPage, setSyncedPage] = useState(currentPage);
+  if (syncedPage !== currentPage) {
+    setSyncedPage(currentPage);
     setInputPage(currentPage.toString());
-  }, [currentPage]);
+  }
 
   const goToPage = (page: number) => {
     const validPage = Math.max(1, Math.min(page, totalPages));
@@ -74,19 +79,33 @@ export function Pagination({
 
   return (
     <div className={`flex flex-col min-[820px]:flex-row items-center justify-between gap-3 ${minimal ? 'bg-transparent' : 'bg-white dark:bg-gray-800 px-4 py-3 shadow dark:shadow-gray-700/50 rounded-lg'}`}>
-      {/* Showing X-Y of Z */}
-      <div className="text-sm text-gray-700 dark:text-gray-300">
-        {t('pagination.showing')}{' '}
-        <span className="font-medium">{startItem}</span>
-        {' '}-{' '}
-        <span className="font-medium">{endItem}</span>
-        {' '}{t('pagination.of')}{' '}
-        <span className="font-medium">{totalItems}</span>
-        {' '}{itemName}
+      {/* Showing X-Y of Z, and whatever the caller wants read as part of that
+          line rather than as part of the paging controls. */}
+      {/* Once the row stacks, a leading control (the Table / Calendar
+          switch) holds the left-hand edge, as it does on the calendar's own
+          toolbar, rather than being centred with the line beside it. */}
+      <div className={`flex items-center gap-2 ${infoBefore ? 'self-start min-[820px]:self-auto' : ''}`}>
+        {infoBefore}
+        <div className="text-sm text-gray-700 dark:text-gray-300">
+          {t('pagination.showing')}{' '}
+          <span className="font-medium">{startItem}</span>
+          {' '}-{' '}
+          <span className="font-medium">{endItem}</span>
+          {' '}{t('pagination.of')}{' '}
+          <span className="font-medium">{totalItems}</span>
+          {' '}{itemName}
+        </div>
       </div>
 
-      {/* Navigation controls + optional right content */}
-      <div className="flex items-center gap-2">
+      {/* Whatever the caller puts beside the paging controls, then the
+          controls.
+
+          One row that wraps rather than a column that stacks at a fixed width:
+          the stepper is seven controls wide and the buttons beside it are two
+          more, so a breakpoint guess puts them on a line of their own while
+          there is still room for both. Wrapping only splits them where the row
+          genuinely does not fit. */}
+      <div className="flex flex-wrap items-center justify-end gap-2">
         {infoRight}
         <div className="flex items-center space-x-1">
         {/* First page */}
@@ -122,7 +141,7 @@ export function Pagination({
         </button>
 
         {/* Page input */}
-        <div className="inline-flex items-center gap-1 px-1 whitespace-nowrap flex-shrink-0">
+        <div className="inline-flex items-center gap-1 px-0.5 whitespace-nowrap flex-shrink-0">
           <input
             type="text"
             inputMode="numeric"
@@ -132,7 +151,7 @@ export function Pagination({
             onBlur={handleInputBlur}
             maxLength={4}
             size={4}
-            className="w-10 h-[26px] px-1 py-0 text-xs text-center font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-16! h-[26px] px-0! py-0! text-xs! text-center font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
             title={t('pagination.enterPageNumber')}
           />
           <span className="text-sm text-gray-500 dark:text-gray-400">

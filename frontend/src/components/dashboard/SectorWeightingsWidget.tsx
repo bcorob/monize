@@ -20,9 +20,11 @@ import { useReportData } from '@/hooks/useReportData';
 import { useWidgetConfig } from '@/hooks/useWidgetConfig';
 import { chartColors } from '@/lib/chart-colors';
 import { ChartTooltipPanel } from '@/components/reports/ChartTooltip';
+import { WeightingPartialNote } from '@/components/reports/WeightingPartialNote';
 import { ReportAccountMultiSelect } from '@/components/reports/ReportAccountMultiSelect';
 import { WidgetCard, WidgetConfigRow, WidgetMessage } from './WidgetCard';
 import { SECTOR_WEIGHTINGS_DEFAULT, AccountsConfig } from './widget-config';
+import { CHART_GRID_PROPS_HORIZONTAL_BARS } from '@/lib/chart-style';
 
 const WIDGET_ID = 'sector-weightings';
 
@@ -35,7 +37,7 @@ interface SectorWeightingsWidgetProps {
 
 export function SectorWeightingsWidget({ accounts, isLoading }: SectorWeightingsWidgetProps) {
   const t = useTranslations('dashboard');
-  const { formatCurrency, formatCurrencyAxis } = useNumberFormat();
+  const { formatCurrency, formatCurrencyAxis, formatPercent } = useNumberFormat();
   const { defaultCurrency } = useExchangeRates();
   const { config, updateConfig } = useWidgetConfig<AccountsConfig>(
     WIDGET_ID,
@@ -89,17 +91,19 @@ export function SectorWeightingsWidget({ accounts, isLoading }: SectorWeightings
       configTitle={t('sectorWeightings.title')}
     >
       {loading ? (
-        <div className="flex-1 min-h-[260px] animate-pulse rounded-md bg-gray-100 dark:bg-gray-700/50" />
+        <div className="flex-1 min-h-[260px] animate-pulse skeleton-shimmer rounded-md bg-gray-100 dark:bg-gray-700/50" />
       ) : chartData.length === 0 ? (
         <WidgetMessage>{t('sectorWeightings.empty')}</WidgetMessage>
       ) : (
+        <>
+        <WeightingPartialNote result={data} />
         <div
           className="flex-1"
           style={{ minHeight: Math.min(Math.max(240, chartData.length * 38 + 40), 420) }}
         >
           <ResponsiveContainer width="100%" height="100%" minWidth={0}>
             <BarChart data={chartData} layout="vertical" margin={{ top: 4, right: 10, left: 0, bottom: 4 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke={chartColors.grid} horizontal={false} />
+              <CartesianGrid {...CHART_GRID_PROPS_HORIZONTAL_BARS} />
               <XAxis type="number" tickFormatter={formatCurrencyAxis} tick={{ fontSize: 11 }} />
               <YAxis type="category" dataKey="sector" width={100} tick={{ fontSize: 11 }} />
               <Tooltip
@@ -116,7 +120,7 @@ export function SectorWeightingsWidget({ accounts, isLoading }: SectorWeightings
                         {t('sectorWeightings.etf')}: {formatCurrency(d.etf, defaultCurrency)}
                       </p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {d.percentage.toFixed(1)}%
+                        {formatPercent(d.percentage, 1)}
                       </p>
                     </ChartTooltipPanel>
                   );
@@ -132,6 +136,7 @@ export function SectorWeightingsWidget({ accounts, isLoading }: SectorWeightings
             </BarChart>
           </ResponsiveContainer>
         </div>
+        </>
       )}
     </WidgetCard>
   );

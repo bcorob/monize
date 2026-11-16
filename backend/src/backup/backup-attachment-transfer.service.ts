@@ -1,13 +1,34 @@
 import { Inject, Injectable, Logger } from "@nestjs/common";
-import { DataSource } from "typeorm";
+import { DataSource, EntityManager } from "typeorm";
 import { createHash } from "crypto";
 import { withScopedDb } from "../common/db/scoped-db";
 import {
   ATTACHMENT_STORAGE_PROVIDER,
   AttachmentStorageProvider,
 } from "../attachments/storage/attachment-storage.interface";
+import {
+  clearObjectIntent,
+  dropCommittedObjectIntent,
+  recordObjectIntent,
+} from "../attachments/storage/object-intent";
 import { attachmentBytesConsistent } from "./attachment-integrity.util";
 import { BackupData } from "./backup-format";
+
+/**
+ * How long a restore owns an object it is staging.
+ *
+ * Covers the whole window between the intent and the restore commit: staging the
+ * remaining objects of a large artifact (one put per attachment, each a network
+ * call on an object store), the maintenance lease the transaction runs under
+ * (`USER_MAINTENANCE_LEASE_MS`, 15 minutes) and the transaction itself. The 15
+ * minute upload lease of `AttachmentsService.create` covers one put and is too
+ * short for that. Two hours keeps the sweeper away from a restore that is still
+ * running; the price is that bytes left by a dead process are reclaimed two
+ * hours (plus up to one hourly sweep) later. Correctness does not depend on the
+ * value: `clearObjectIntent` refuses, and the restore rolls back, if the sweeper
+ * claimed a key first.
+ */
+export const RESTORE_STAGING_INTENT_LEASE_MS = 2 * 60 * 60 * 1000;
 
 /** What staging left behind for the restore's two cleanup paths to reason about. */
 export interface StagedAttachments {
@@ -41,6 +62,23 @@ export class BackupAttachmentTransferService {
   ) {}
 
   /**
+   * Drop the upload intent of every staged key, inside the restore transaction,
+   * so the intents commit away with the rows that now own the bytes.
+   *
+   * Fenced on `swept_at IS NULL`: if the sweeper claimed a key before the commit
+   * this throws and the restore rolls back (its `.catch` then discards the rest).
+   * One statement after another on the transaction's manager, never in parallel.
+   */
+  async clearStagingIntents(
+    manager: EntityManager,
+    stagedKeys: string[],
+  ): Promise<void> {
+    for (const key of stagedKeys) {
+      await clearObjectIntent(manager, this.attachmentStorage.name, key);
+    }
+  }
+
+  /**
    * Every external object key this user's attachments currently occupy.
    *
    * Empty for the `database` provider: its bytes live in `attachment_blobs` and
@@ -53,7 +91,7 @@ export class BackupAttachmentTransferService {
       (manager) =>
         manager.query(
           `SELECT storage_key FROM transaction_attachments
-            WHERE user_id = $1 AND storage_provider = $2`,
+            WHERE user_id = $1 AND shared_group_id IS NULL AND shared_entry_id IS NULL AND storage_provider = $2`,
           [userId, this.attachmentStorage.name],
         ),
     );
@@ -306,7 +344,9 @@ export class BackupAttachmentTransferService {
           // The blob row stays and is inserted with everything else.
           continue;
         }
-        if (!(await this.tryStageAttachmentObject(attachmentId, carried))) {
+        if (
+          !(await this.tryStageAttachmentObject(userId, attachmentId, carried))
+        ) {
           // The write failed: drop the row rather than halt the whole restore,
           // and leave the objects already staged this run untouched -- they are
           // referenced by attachments that are still coming back.
@@ -393,7 +433,7 @@ export class BackupAttachmentTransferService {
       // is what already happened here.
       sourceKeys.push(oldKey);
 
-      if (!(await this.tryStageAttachmentObject(attachmentId, bytes))) {
+      if (!(await this.tryStageAttachmentObject(userId, attachmentId, bytes))) {
         unrestorable.add(attachmentId);
         continue;
       }
@@ -501,9 +541,32 @@ export class BackupAttachmentTransferService {
    * Returns whether the bytes are now reachable under `key`.
    */
   private async tryStageAttachmentObject(
+    userId: string,
     key: string,
     bytes: Buffer,
   ): Promise<boolean> {
+    // The intent is committed before the put (the protocol of
+    // `AttachmentsService.create`), so a process that dies before the restore
+    // commits leaves a row the orphan sweeper can find. When it cannot be
+    // recorded the bytes are not written: an object nothing can enumerate is the
+    // leak this exists to prevent.
+    try {
+      await recordObjectIntent(
+        this.dataSource,
+        this.attachmentStorage.name,
+        key,
+        userId,
+        RESTORE_STAGING_INTENT_LEASE_MS,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `Could not record the staging intent for attachment object ${key} during ` +
+          `restore; dropping the attachment: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+      );
+      return false;
+    }
     try {
       await this.attachmentStorage.save(key, bytes);
       return true;
@@ -512,31 +575,51 @@ export class BackupAttachmentTransferService {
         `Could not stage attachment object ${key} during restore; dropping the ` +
           `attachment: ${error instanceof Error ? error.message : String(error)}`,
       );
-      try {
-        await this.attachmentStorage.delete(key);
-      } catch (deleteError) {
-        this.logger.warn(
-          `Could not remove partially staged attachment object ${key} after a ` +
-            `failed write: ${
-              deleteError instanceof Error
-                ? deleteError.message
-                : String(deleteError)
-            }`,
-        );
+      if (await this.deleteStagedObject(key)) {
+        await this.dropStagingIntent(key);
       }
       return false;
     }
   }
 
-  /** Best-effort removal of objects staged for a restore that then failed. */
+  /** Best-effort delete of one staged object; `true` when the object is gone. */
+  private async deleteStagedObject(key: string): Promise<boolean> {
+    try {
+      await this.attachmentStorage.delete(key);
+      return true;
+    } catch (error) {
+      this.logger.warn(
+        `Could not remove staged attachment object ${key}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+      return false;
+    }
+  }
+
+  /** Best-effort: the bytes are gone, so the intent that guarded them goes too. */
+  private dropStagingIntent(key: string): Promise<void> {
+    return dropCommittedObjectIntent(
+      this.dataSource,
+      this.attachmentStorage.name,
+      key,
+      (message) =>
+        this.logger.warn(
+          `Could not drop the staging intent of attachment object ${key}: ${message}`,
+        ),
+    );
+  }
+
+  /**
+   * Best-effort removal of objects staged for a restore that then failed.
+   *
+   * The intent goes only after a successful delete. When the delete fails the
+   * intent stays, and the sweeper removes the bytes once its lease expires.
+   */
   async discardStagedAttachmentObjects(stagedKeys: string[]): Promise<void> {
     for (const key of stagedKeys) {
-      try {
-        await this.attachmentStorage.delete(key);
-      } catch (error) {
-        this.logger.warn(
-          `Could not remove staged attachment object ${key} after a failed restore: ${error.message}`,
-        );
+      if (await this.deleteStagedObject(key)) {
+        await this.dropStagingIntent(key);
       }
     }
   }

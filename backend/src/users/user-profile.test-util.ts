@@ -59,6 +59,9 @@ export function fullyPopulatedUser(overrides: Partial<User> = {}): User {
     emailVerified: true,
     emailVerificationToken: leak("email-verification-token"),
     emailVerificationTokenExpiry: new Date("2026-04-02T00:00:00Z"),
+    pendingEmail: "owner-new@example.com",
+    emailChangeToken: leak("email-change-token"),
+    emailChangeTokenExpiry: new Date("2026-04-02T00:00:00Z"),
     role: "user",
     mustChangePassword: false,
     twoFactorSecret: leak("totp-secret"),
@@ -73,6 +76,9 @@ export function fullyPopulatedUser(overrides: Partial<User> = {}): User {
     isDelegateOnly: false,
     backupEncryptionEnabled: true,
     backupPasswordEnc: leak("encrypted-backup-password"),
+    backupKeyEnc: leak("encrypted-backup-data-key"),
+    backupKeyWrap: leak("wrapped-backup-data-key"),
+    backupKeyPasswordRef: leak("backup-key-password-ref"),
   });
   return Object.assign(user, overrides);
 }

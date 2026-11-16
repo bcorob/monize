@@ -1,0 +1,228 @@
+'use client';
+
+import { type ReactNode, useMemo } from 'react';
+import { useTranslations } from 'next-intl';
+import { netWorthApi } from '@/lib/net-worth';
+import { resolveRangePreset } from '@/lib/date-range';
+import { partialTotalFor } from '@/lib/net-worth-completeness';
+import { isComplete } from '@/lib/currency-total';
+import { moneyDecimalsForCurrency } from '@/lib/format';
+import { useNumberFormat } from '@/hooks/useNumberFormat';
+import { useChartDateFormat } from '@/hooks/useChartDateFormat';
+import { useReportData } from '@/hooks/useReportData';
+import { PartialTotal } from '@/components/ui/PartialTotal';
+import { UnknownAmount } from '@/components/ui/UnknownAmount';
+import type { PortfolioValuation } from '@/types/investment';
+import type { DashboardHeroConfig } from './widget-config';
+import { heroMonthChange, heroSnapshot } from './dashboard-hero-figures';
+import {
+  HeroAreaChart,
+  HeroCaption,
+  HeroFigureSkeleton,
+  HeroHeadline,
+  HeroLayout,
+  HeroMessage,
+  HeroPill,
+  HeroPillUnknown,
+  HeroSkeleton,
+  HeroSubFigures,
+  heroStrong,
+} from './hero-parts';
+
+interface NetWorthHeroProps {
+  config: DashboardHeroConfig;
+  /** The dashboard's portfolio valuation; `null` until loaded or when it failed. */
+  portfolioValuation: PortfolioValuation | null;
+  hasInvestments: boolean;
+  isLoading: boolean;
+  /** Whether `portfolioValuation` is still on its way: "invested" keeps a
+   *  placeholder meanwhile, and nothing else in the hero waits for it. */
+  investmentSummaryLoading: boolean;
+}
+
+/**
+ * The net worth set: net worth with its change this month, assets,
+ * liabilities and invested under it, and a net worth chart over the chosen
+ * window. The newest month is the current one (`dashboard-hero-figures.ts`).
+ */
+export function NetWorthHero({
+  config,
+  portfolioValuation,
+  hasInvestments,
+  isLoading,
+  investmentSummaryLoading,
+}: NetWorthHeroProps) {
+  const t = useTranslations('dashboard');
+  const { formatCurrency, formatPercent, defaultCurrency } = useNumberFormat();
+  const formatChartDate = useChartDateFormat();
+
+  // The hero's own window, so a 10-year chart does not hold up the widgets.
+  const { data, isLoading: dataLoading, error } = useReportData(
+    () => {
+      const { start, end } = resolveRangePreset(config.range, { alignment: 'month' });
+      return netWorthApi.getMonthly({ startDate: start || undefined, endDate: end });
+    },
+    [config.range],
+  );
+
+  const snapshot = useMemo(() => heroSnapshot(data ?? []), [data]);
+  const change = useMemo(
+    () => heroMonthChange(data ?? [], moneyDecimalsForCurrency(defaultCurrency)),
+    [data, defaultCurrency],
+  );
+  // A month that did not fully convert is a gap, never a measured dip.
+  const points = useMemo(
+    () =>
+      (data ?? []).map((d) => ({
+        key: d.month,
+        value: d.fxComplete === false ? null : d.netWorth,
+      })),
+    [data],
+  );
+
+  const label = t('hero.label');
+  // The valuation behind "invested" is deliberately not part of this: it is
+  // the slowest request here and one figure needs it, so that figure alone
+  // keeps a placeholder below.
+  if (isLoading || dataLoading || (data === null && !error)) {
+    return <HeroSkeleton label={label} />;
+  }
+  if (error) return <HeroMessage>{t('netWorth.loadFailed')}</HeroMessage>;
+  if (!snapshot) return null;
+
+  // The securities alone: the cash beside them is not invested.
+  const invested =
+    hasInvestments && portfolioValuation
+      ? {
+          value: portfolioValuation.totalHoldingsValue,
+          total: partialTotalFor(
+            portfolioValuation.totalHoldingsValue,
+            portfolioValuation.valuationComplete,
+            portfolioValuation.missingRatePairs,
+          ),
+          // A gap from an unpriced holding is not a missing rate, so it says so
+          // and names the holdings, with where a price comes from.
+          explanation:
+            portfolioValuation.pricesComplete === false
+              ? t('hero.investedUnpriced', {
+                  symbols: (portfolioValuation.unpricedSecurityIds ?? [])
+                    .map(
+                      (id) =>
+                        portfolioValuation.holdings.find((h) => h.securityId === id)?.symbol ?? id,
+                    )
+                    .join(', '),
+                })
+              : undefined,
+        }
+      : null;
+
+  const changeUp = change !== null && change.amount >= 0;
+  const dir = (chunks: ReactNode) => <span className="sr-only">{chunks}</span>;
+  const pill =
+    change === null ? null : change.known ? (
+      <HeroPill up={changeUp}>
+        {/* The arrow is decoration; the direction is said in words to a
+            screen reader, inside the catalog's own sentence. */}
+        {change.percent === null
+          ? t.rich('hero.changeThisMonth', {
+              direction: changeUp ? 'up' : 'down',
+              amount: formatCurrency(Math.abs(change.amount)),
+              dir,
+            })
+          : t.rich('hero.changeThisMonthWithPercent', {
+              direction: changeUp ? 'up' : 'down',
+              amount: formatCurrency(Math.abs(change.amount)),
+              percent: formatPercent(Math.abs(change.percent), 1),
+              dir,
+            })}
+      </HeroPill>
+    ) : (
+      <HeroPillUnknown>
+        <UnknownAmount reason="displayFx" />
+      </HeroPillUnknown>
+    );
+
+  return (
+    <HeroLayout
+      label={label}
+      figures={
+        <>
+          <HeroCaption>{t('hero.netWorth')}</HeroCaption>
+          <div className="flex flex-wrap items-baseline gap-x-4 gap-y-2">
+            <HeroHeadline
+              negative={snapshot.netWorth.value < 0}
+              collapsed={{
+                title: t('hero.netWorth'),
+                figure: formatCurrency(snapshot.netWorth.value),
+                figurePartial: !isComplete(snapshot.netWorth),
+                change:
+                  change !== null && change.known
+                    ? {
+                        up: changeUp,
+                        text:
+                          change.percent === null
+                            ? formatCurrency(Math.abs(change.amount))
+                            : formatPercent(Math.abs(change.percent), 1),
+                      }
+                    : undefined,
+              }}
+            >
+              <PartialTotal total={snapshot.netWorth} displayCurrency={defaultCurrency}>
+                {formatCurrency(snapshot.netWorth.value)}
+              </PartialTotal>
+            </HeroHeadline>
+            {pill}
+          </div>
+          <HeroSubFigures>
+            <span>
+              {t.rich('hero.assets', {
+                value: () => (
+                  <PartialTotal total={snapshot.assets} displayCurrency={defaultCurrency}>
+                    {formatCurrency(snapshot.assets.value)}
+                  </PartialTotal>
+                ),
+                strong: heroStrong,
+              })}
+            </span>
+            <span>
+              {t.rich('hero.liabilities', {
+                value: () => (
+                  <PartialTotal total={snapshot.liabilities} displayCurrency={defaultCurrency}>
+                    {formatCurrency(snapshot.liabilities.value)}
+                  </PartialTotal>
+                ),
+                strong: heroStrong,
+              })}
+            </span>
+            {hasInvestments && investmentSummaryLoading && <HeroFigureSkeleton />}
+            {!investmentSummaryLoading && invested && (
+              <span>
+                {t.rich('hero.invested', {
+                  value: () => (
+                    <PartialTotal
+                      total={invested.total}
+                      displayCurrency={defaultCurrency}
+                      explanation={invested.explanation}
+                    >
+                      {formatCurrency(invested.value)}
+                    </PartialTotal>
+                  ),
+                  strong: heroStrong,
+                })}
+              </span>
+            )}
+          </HeroSubFigures>
+        </>
+      }
+      chart={
+        <HeroAreaChart
+          points={points}
+          currency={defaultCurrency}
+          gradientId="dashboardHeroNetWorth"
+          formatTick={(m) => formatChartDate(`${m}-01`, points.length > 18 ? 'MMM yy' : 'MMM')}
+          formatTooltipKey={(m) => formatChartDate(`${m}-01`, 'MMMM yyyy')}
+        />
+      }
+    />
+  );
+}

@@ -1,0 +1,618 @@
+{
+  "page": {
+    "title": "Rules",
+    "subtitle": "Fill in tags, categories and payees automatically when a transaction is created or imported",
+    "createButton": "Create rule",
+    "loading": "Loading rules...",
+    "totalCount": "{count, plural, one {# rule} other {# rules}}"
+  },
+  "empty": {
+    "title": "No rules yet",
+    "body": "A rule watches new and imported transactions and fills in tags, categories or payees when its conditions match. Create your first rule to get started.",
+    "createButton": "Create your first rule"
+  },
+  "error": {
+    "title": "Your rules could not be loaded",
+    "body": "Nothing is shown because the request failed, not because you have no rules. Check your connection and try again.",
+    "retry": "Try again"
+  },
+  "list": {
+    "header": {
+      "order": "Order",
+      "enabled": "Enabled",
+      "name": "Rule",
+      "summary": "Summary",
+      "actions": "Actions"
+    },
+    "summary": "{trigger, select, create {When created} import {When imported} both {When created or imported} other {No trigger}} · {conditions, plural, =0 {No conditions} one {# condition} other {# conditions}} · {actions, plural, =0 {No actions} one {# action} other {# actions}}",
+    "enabledLabel": "Enable {name}"
+  },
+  "actions": {
+    "moveUp": "Move up",
+    "moveDown": "Move down",
+    "run": "Run on existing transactions",
+    "runInvalid": "Repair the rule before running it"
+  },
+  "invalid": {
+    "badge": "Invalid",
+    "tooltip": "Skipped until fixed: {reasons}.",
+    "reasons": {
+      "referenceMissing": "a tag, payee, category or account it uses no longer exists",
+      "noActions": "it has no actions",
+      "tooLarge": "its conditions are too large",
+      "duplicateAction": "it repeats an action that is allowed only once",
+      "unreadable": "its saved definition cannot be read",
+      "other": "its definition is not valid"
+    }
+  },
+  "duplicate": {
+    "name": "{name} (copy)"
+  },
+  "delete": {
+    "title": "Delete rule",
+    "message": "Are you sure you want to delete \"{name}\"? This action cannot be undone."
+  },
+  "toasts": {
+    "enabled": "Rule enabled",
+    "disabled": "Rule disabled",
+    "toggleFailed": "Failed to change the rule",
+    "deleted": "Rule deleted",
+    "deleteFailed": "Failed to delete the rule",
+    "duplicated": "Rule duplicated. The copy is switched off until you enable it",
+    "duplicateFailed": "Failed to duplicate the rule",
+    "reorderFailed": "Failed to change the order of the rules",
+    "listChanged": "The list of rules changed elsewhere and has been reloaded. Try again",
+    "loadFailed": "Failed to load rules"
+  },
+  "editor": {
+    "page": {
+      "newTitle": "New rule",
+      "editTitle": "Edit rule",
+      "subtitle": "Choose when the rule runs, which transactions it matches and what it changes",
+      "backToRules": "Back to Rules",
+      "loading": "Loading the rule..."
+    },
+    "name": {
+      "label": "Name",
+      "placeholder": "For example, Tag coffee shops"
+    },
+    "enabled": {
+      "label": "Rule enabled"
+    },
+    "sections": {
+      "when": "When",
+      "if": "If",
+      "then": "Then"
+    },
+    "when": {
+      "description": "Choose when the rule looks at a transaction",
+      "created": "A transaction is created",
+      "imported": "A transaction is imported",
+      "atLeastOne": "Keep at least one option selected",
+      "stopProcessing": "Stop processing other rules",
+      "stopProcessingHelp": "When this rule matches a transaction, the rules after it in the list are skipped for that transaction.",
+      "window": {
+        "title": "Active between",
+        "help": "The rule only applies to transactions dated inside this window, when they are created or imported and when the rule is tested or run. Leave a date empty for no limit.",
+        "from": "First date",
+        "to": "Last date",
+        "backwards": "The last date must not be before the first date",
+        "noLimit": "no limit",
+        "words": "Only for transactions dated from {from} to {to}"
+      }
+    },
+    "if": {
+      "description": "The actions run only for transactions that match",
+      "everyTransaction": "No conditions yet, so this rule applies to every transaction."
+    },
+    "then": {
+      "description": "Actions run in this order",
+      "empty": "No actions yet. Add at least one.",
+      "limit": "A rule can have at most {max} actions."
+    },
+    "group": {
+      "matchAll": "All of these",
+      "matchAny": "Any of these",
+      "matchLabel": "Match",
+      "not": "Negate Group",
+      "notHelp": "A negated group matches when its conditions do not.",
+      "title": "Group",
+      "addCondition": "+ Add condition",
+      "addGroup": "+ Add group",
+      "depthLimit": "Groups can be nested at most {max} levels deep.",
+      "sizeLimit": "The condition limit has been reached.",
+      "empty": "This group is empty."
+    },
+    "condition": {
+      "title": "Condition",
+      "field": "Field",
+      "operator": "Operator",
+      "value": "Value"
+    },
+    "fields": {
+      "accountId": "Account",
+      "fromAccountId": "From account (transfers)",
+      "toAccountId": "To account (transfers)",
+      "type": "Type",
+      "payeeId": "Payee",
+      "payeeText": "Payee text as received",
+      "categoryId": "Category",
+      "description": "Description",
+      "amount": "Amount (with sign)",
+      "absAmount": "Amount (ignoring sign)",
+      "currencyCode": "Currency",
+      "tagIds": "Tags",
+      "hasSplits": "Has splits",
+      "referenceNumber": "Reference number",
+      "dayOfMonth": "Day of the month",
+      "weekday": "Day of the week",
+      "status": "Status",
+      "hasAttachment": "Has an attachment",
+      "date": "Date"
+    },
+    "operators": {
+      "eq": "is",
+      "neq": "is not",
+      "in": "is any of",
+      "notIn": "is none of",
+      "isEmpty": "is empty",
+      "contains": "contains",
+      "startsWith": "starts with",
+      "matches": "matches the pattern",
+      "lt": "is less than",
+      "lte": "is at most",
+      "gt": "is greater than",
+      "gte": "is at least",
+      "between": "is between",
+      "hasAny": "has any of",
+      "hasAll": "has all of",
+      "hasNone": "has none of",
+      "inSubtree": "is in, or under"
+    },
+    "types": {
+      "EXPENSE": "Expense",
+      "INCOME": "Income",
+      "TRANSFER": "Transfer"
+    },
+    "value": {
+      "account": "Choose an account",
+      "accounts": "Choose accounts",
+      "payee": "Choose a payee",
+      "payees": "Choose payees",
+      "category": "Choose a category",
+      "categories": "Choose categories",
+      "tags": "Choose tags",
+      "currency": "Choose a currency",
+      "currencies": "Choose currencies",
+      "types": "Choose types",
+      "matchesHint": "Use * for any text, for example *coffee*. A pattern without * matches only the whole text. Use {capture} to keep the text at that spot for the actions of this rule, for example {example}. A name is lowercase letters and digits, and a pattern can keep up to {max} texts.",
+      "amount": "Amount",
+      "from": "From",
+      "to": "To",
+      "yes": "Yes",
+      "no": "No",
+      "days": "Choose days",
+      "weekdays": "Choose days of the week",
+      "statuses": "Choose statuses"
+    },
+    "action": {
+      "title": "Action",
+      "type": "Action type",
+      "tags": "Tags",
+      "category": "Category",
+      "payee": "Payee",
+      "instruction": "Review Instructions",
+      "instructionPlaceholder": "For example, split this purchase by the receipt",
+      "instructionHelp": "The rule only asks for a review. A person approves any change before it is made.",
+      "onlyIfEmpty": "Only if empty",
+      "onlyIfEmptyHelp": "When on, the rule fills in the category or payee only if the transaction has none. It does not replace one set by hand or by the payee's default category. Turn it off to replace it.",
+      "add": "+ Add action",
+      "reviewInbox": "See the review inbox",
+      "payeeTemplate": "Payee name",
+      "descriptionTemplate": "Description text",
+      "templateHelp": "Plain text. Each placeholder in braces is replaced with text from the transaction. Select a placeholder below to insert it.",
+      "joinHelp": "The text is joined to the current description exactly as written, so include any space or separator you want.",
+      "placeholders": "Placeholders",
+      "placeholdersHelp": "{payeeText} is the payee text as received. {description} is the description as it stands when this action runs. The other placeholders are the captures named in the patterns of this rule.",
+      "insertPlaceholder": "Insert {name}",
+      "unknownPlaceholders": "Not defined by this rule: {names}. Choose a placeholder from the list, or capture it in a pattern above.",
+      "invalidPlaceholders": "Not a valid placeholder: {names}. A name is lowercase letters and digits.",
+      "createIfMissing": "Create the payee if it does not exist",
+      "createIfMissingHelp": "When on, and no payee matches the name (by name, alias or a close match), a new payee is created with it. A payee created by a rule is kept if you undo the run.",
+      "onlyIfEmptyDescriptionHelp": "When on, the rule writes the description only if the transaction has none. Turn it off to write it every time.",
+      "mode": "Description Mode",
+      "modes": {
+        "replace": "Replace the description",
+        "append": "Add after the description",
+        "prepend": "Add before the description"
+      },
+      "convertHelp": "The matched income or expense becomes one leg of a transfer. The other leg is created in the account you choose, which must use the same currency.",
+      "direction": "Direction",
+      "directionTo": "Expense: the money goes to another account",
+      "directionFrom": "Income: the money comes from another account",
+      "clearCategory": "Clear the category",
+      "clearCategoryHelp": "A transfer has no category. Turn this off to keep the category the transaction already has.",
+      "splitPayee": "Payee of the transaction (optional)",
+      "splitHint": "Each part takes its amount from a capture in the patterns above, or takes the rest. The parts must add up to the amount of the transaction, otherwise the rule leaves it alone.",
+      "splitNoCaptures": "No capture is defined yet. Put a name in braces in a pattern above, for example PRINCIPAL: {example}, to use it as an amount here.",
+      "partAmountPlaceholder": "Choose the amount...",
+      "partRest": "The rest",
+      "partAccount": "Account",
+      "partPayee": "Payee of the other leg (optional)",
+      "partsLimit": "A split can have at most {max} parts.",
+      "guideTitle": "How to use this",
+      "splitGuideHow": "In “If”, add a condition on the payee text or description with the operator “matches the pattern”, and put names in curly braces where the amounts are, for example {first}. Each name becomes an amount you can pick for a part, or choose “The rest”. The parts must add up to the transaction amount, otherwise the rule leaves the transaction unchanged. A part can be a category or a transfer to another account (a transfer moves the balance of that account).",
+      "splitGuideExampleTitle": "Example: a loan payment",
+      "splitGuideBank": "Bank text: PRINCIPAL: 1200,50 INTEREST: 300,25 PENALTY: 0,00",
+      "splitGuidePattern": "Pattern: *PRINCIPAL: {first} INTEREST: {second} PENALTY*",
+      "splitGuidePart1": "Part 1: {first} as a transfer to the loan account",
+      "splitGuidePart2": "Part 2: {second} as the category “Loans: Interest”",
+      "splitGuideResult": "Result for -1500,75: -1200,50 transferred to the loan account and -300,25 of interest expense.",
+      "splitGuideTip": "Tip: set a start date under “Active between” so older reconciled transactions are not changed, and use the Test panel before saving.",
+      "convertGuide": "An expense becomes a transfer to the account you choose, and an income becomes a transfer from it. Only the balance of the other account changes. Tip: use “Active between” so older transactions are not changed.",
+      "splitGuideName1": "principal",
+      "splitGuideName2": "interest",
+      "loanGuide": "Use this for a bank debit that pays a mortgage or loan installment as one amount. In “If”, match the debit by its account, payee text or description. The transaction becomes a split: the principal is transferred to the loan account and the interest goes to the interest category, both priced for the installment it pays. Tip: turn off automatic posting on the loan's scheduled payment so the installment is not paid twice, and use the Test panel before saving.",
+      "loan": {
+        "help": "The matched debit pays the next installment of the loan due near its date. Monize works out the principal and interest for that installment; you never type an amount.",
+        "account": "Loan account",
+        "accountPlaceholder": "Select a mortgage or loan...",
+        "noLoans": "You have no open mortgage or loan account to settle.",
+        "window": "Due date window",
+        "windowHelp": "How far from the due date the bank may take the payment. A debit up to this many days before or after an installment's due date pays that installment; one outside the window is left alone.",
+        "daysBefore": "Days before the due date",
+        "daysAfter": "Days after the due date",
+        "excess": "Debit Above the Installment",
+        "excessPolicies": {
+          "extra_principal": "Pay the difference as extra principal",
+          "refuse": "Leave the transaction alone"
+        },
+        "shortfall": "Debit Below the Installment",
+        "shortfallPolicies": {
+          "refuse": "Leave the transaction alone",
+          "interest_first": "Pay the interest first, the rest as principal"
+        },
+        "policyNote": "A difference of a few cents is absorbed by the interest line.",
+        "policyHelp": "Banks round each part separately, so a debit within 5 of the smallest unit of the currency (0.05 for most currencies) is treated as exact and the interest line takes the difference. A larger difference follows the two choices above.",
+        "interestCategory": "Interest category (optional)",
+        "interestCategoryPlaceholder": "The loan's own interest category",
+        "autoPostTitle": "The loan's scheduled payment posts itself",
+        "autoPostBody": "Automatic posting is on for this loan's scheduled payment, so it and the bank debit this rule settles would both pay the same installment. Turn off automatic posting on the scheduled payment."
+      }
+    },
+    "actionTypes": {
+      "add_tags": "Add tags",
+      "remove_tags": "Remove tags",
+      "set_category": "Set the category",
+      "set_payee": "Set the payee",
+      "request_ai_review": "Ask for an AI review",
+      "set_payee_from_text": "Set the payee from text",
+      "set_description": "Set the description",
+      "convert_to_transfer": "Convert to transfer",
+      "split": "Split transaction",
+      "settle_loan_installment": "Settle a loan installment"
+    },
+    "save": {
+      "button": "Save rule",
+      "createdToast": "Rule created",
+      "savedToast": "Rule saved",
+      "failedToast": "Failed to save the rule",
+      "summary": "The rule was not saved. Fix the items marked below and try again."
+    },
+    "loadError": {
+      "title": "The rule could not be loaded",
+      "body": "Nothing is shown because the request failed, not because the rule is empty. Check your connection and try again.",
+      "lookupsBody": "The lists of accounts, payees, categories, tags and currencies could not be loaded, so the rule cannot be shown safely. Check your connection and try again.",
+      "notFound": "This rule no longer exists. It may have been deleted.",
+      "retry": "Try again"
+    },
+    "invalid": {
+      "title": "This rule cannot run",
+      "repaired": "Some parts of the saved definition could not be read and were removed or reset here. Review the rule before saving."
+    },
+    "conflict": {
+      "title": "This rule was changed elsewhere",
+      "body": "Reload it to see the latest version. Your unsaved edits will be lost.",
+      "reload": "Reload"
+    },
+    "errors": {
+      "codes": {
+        "INVALID_SHAPE": "This part is not in a form the editor understands.",
+        "UNKNOWN_KEY": "This part has a setting that does not exist.",
+        "UNKNOWN_FIELD": "Choose a field.",
+        "UNKNOWN_ACTION": "Choose an action.",
+        "OPERATOR_NOT_ALLOWED": "This field does not allow that operator.",
+        "VALUE_REQUIRED": "Enter or choose a value.",
+        "VALUE_NOT_ALLOWED": "This operator takes no value.",
+        "VALUE_TYPE": "The value is of the wrong kind for this field.",
+        "VALUE_OUT_OF_RANGE": "The value is out of range.",
+        "VALUE_TOO_LONG": "The text is too long.",
+        "VALUE_EMPTY": "Enter some text.",
+        "INVALID_UUID": "Choose an item from the list.",
+        "INVALID_ENUM": "Choose one of the listed values.",
+        "INVALID_CURRENCY": "Choose a currency.",
+        "ARRAY_EMPTY": "Choose at least one item.",
+        "ARRAY_TOO_LARGE": "Too many items are chosen.",
+        "RANGE_ORDER": "The first value must not be greater than the second.",
+        "MAX_DEPTH": "Groups are nested too deeply. The limit is {maxDepth} levels.",
+        "MAX_LEAVES": "There are too many conditions. The limit is {maxLeaves}.",
+        "MAX_NODES": "There are too many conditions and groups. The limit is {maxNodes}.",
+        "NO_ACTIONS": "Add at least one action.",
+        "TOO_MANY_ACTIONS": "There are too many actions. The limit is {maxActions}.",
+        "DUPLICATE_ACTION": "A rule can have only one AI review, one transfer, split or loan settlement, and one split part that takes the rest.",
+        "CONFLICTING_ACTIONS": "A transfer, split or loan settlement action cannot be combined with “Set the category”, and each part of a split has either a category or an account.",
+        "INVALID_CAPTURE": "A capture name must be lowercase letters and digits, starting with a letter, and up to 20 long.",
+        "TOO_MANY_CAPTURES": "A pattern can hold at most 5 captures.",
+        "DUPLICATE_CAPTURE": "Each capture name can be used once in a rule.",
+        "UNKNOWN_CAPTURE": "This uses a capture that no condition of this rule defines.",
+        "LOOKS_LIKE_REGEX": "Regular expressions are not supported: | \\ and short bracket classes like [xy] are matched as plain characters, so a pattern written as a regex never matches what was meant. To match one of several texts, add a group of “Any of these” and put one condition in it for each text.",
+        "PATTERN_WITHOUT_WILDCARD": "Without a * this pattern must equal the whole text. Use the operator “is” for the whole text, “contains” for a part of it, or put * around the text, for example *coffee*.",
+        "REFERENCE_NOT_FOUND": "An item chosen here no longer exists. Choose another.",
+        "NAME_REQUIRED": "Enter a name for the rule.",
+        "UNKNOWN": "This part is not valid."
+      }
+    },
+    "run": {
+      "button": "Run on existing transactions",
+      "saveFirst": "Save your changes to run the saved rule."
+    },
+    "expression": {
+      "modeLabel": "Condition view",
+      "visual": "Visual",
+      "expression": "Expression",
+      "label": "Condition expression",
+      "help": "Write the conditions as text. Use && for all of these, || for any of these and !( ... ) for not. Refer to items by name: account(\"Name\"), payee(\"Name\"), category(\"Parent: Child\") and tag(\"Name\"). An underscore _ stands for a value you have not chosen yet. matchesGlob uses * as a wildcard. Only the syntax offered in the suggestions is supported.",
+      "blocked": "Fix the expression to switch back to Visual or to save.",
+      "errorAt": "Line {line}, column {column}: {message}",
+      "suggestions": "Suggestions",
+      "errors": {
+        "tooLong": "The expression is too long. The limit is {max} characters.",
+        "unexpectedChar": "The character {char} is not supported.",
+        "unterminatedString": "This text has no closing quote.",
+        "invalidEscape": "This escape sequence is not supported.",
+        "badNumber": "This is not a valid number.",
+        "expectedExpression": "A condition is expected here.",
+        "expectedField": "A field name is expected here.",
+        "expectedOperator": "An operator or a method is expected after the field.",
+        "expectedValue": "A value is expected here.",
+        "expectedSymbol": "Expected {symbol} here.",
+        "unexpectedToken": "Unexpected {token}.",
+        "unsupported": "This part is not supported. Use only the syntax offered in the suggestions.",
+        "unknownField": "Unknown field {name}.",
+        "unknownFunction": "Unknown function or method {name}.",
+        "operatorNotAllowed": "The field {field} cannot be used with {operator}.",
+        "wrongValueType": "{expected, select, text {Expected text in quotes.} number {Expected a number.} boolean {Expected true or false.} list {Expected a list in square brackets.} account {Expected an account, for example account(\"Name\").} payee {Expected a payee, for example payee(\"Name\").} category {Expected a category, for example category(\"Parent: Child\").} tag {Expected a tag, for example tag(\"Name\").} other {This value is of the wrong kind.}}",
+        "invalidEnum": "Use one of: {values}.",
+        "invalidCurrency": "Use a three letter currency code in quotes, for example \"CAD\".",
+        "valueTooLong": "The text is too long. The limit is {max} characters.",
+        "listTooLong": "The list is too long. The limit is {max} items.",
+        "unknownEntity": "{kind, select, account {No account is named {name}.} payee {No payee is named {name}.} category {No category is named {name}.} tag {No tag is named {name}.} other {No item is named {name}.}}",
+        "ambiguousEntity": "{count} items are named {name}. Add the number of the one you mean, for example {example}.",
+        "entityOrdinal": "The number for {name} must be from 1 to {count}.",
+        "maxDepth": "Groups are nested too deeply. The limit is {max} levels.",
+        "maxLeaves": "There are too many conditions. The limit is {max}.",
+        "maxNodes": "There are too many conditions and groups. The limit is {max}.",
+        "tooNested": "Too many nested parentheses."
+      }
+    }
+  },
+  "test": {
+    "title": "Test",
+    "description": "Try the rule on your existing transactions. Nothing is changed.",
+    "button": "Test rule",
+    "again": "Test again",
+    "incomplete": "Complete the conditions and actions above to test the rule.",
+    "idle": "Choose which transactions to try the rule on, then select Test rule.",
+    "running": "Testing the rule...",
+    "failed": "The test could not be completed. {message}",
+    "stale": "The rule or the filters changed since this result. Test again to see the current result."
+  },
+  "match": {
+    "button": "Test rule",
+    "buttonLabel": "Test rule conditions",
+    "incomplete": "Complete the conditions above to see which transactions they match.",
+    "windowBackwards": "The active dates end before they start, so no transaction can match.",
+    "summary": "{count, plural, =0 {No matching transactions} one {# matching transaction} other {# matching transactions}}",
+    "summaryPending": "Matching transactions",
+    "running": "Finding matching transactions...",
+    "failed": "The matching transactions could not be loaded. {message}",
+    "empty": "No existing transactions match these conditions.",
+    "truncated": "Only the newest {scanned, number} transactions were checked.",
+    "stale": "The conditions changed since this test. Select Test rule again to see the current matches."
+  },
+  "run": {
+    "title": "Run \"{name}\" on existing transactions",
+    "description": "Preview what the rule would change, then confirm. You can undo the run from the action history.",
+    "previewButton": "Preview",
+    "confirmButton": "Confirm and run",
+    "idle": "Choose accounts and dates, then select Preview. Nothing changes until you confirm.",
+    "loadingPreview": "Loading the preview...",
+    "previewFailed": "The preview could not be loaded, so nothing can be run. {message}",
+    "stale": "The filters changed since this preview. Preview again before you run.",
+    "accountsLoading": "Loading accounts...",
+    "accountsFailed": "Your accounts could not be loaded, so the filters are unavailable.",
+    "retry": "Try again",
+    "summary": "{matched, plural, one {# transaction would change} other {# transactions would change}} out of {scanned, plural, one {# transaction} other {# transactions}} scanned.",
+    "matchesNone": "This rule matches none of the transactions examined ({scanned}). Check the conditions before saving. A pattern without * matches only the whole text.",
+    "noChange": "{matched} of the {scanned} transactions examined match the rule's conditions, but nothing would change (for example, they already have the value and only-if-empty is on). This is not an error.",
+    "aiReview": "{count, plural, one {# transaction would be queued for AI review} other {# transactions would be queued for AI review}}. The request is created when you confirm.",
+    "truncated": "More transactions matched than the limit allows. Only the newest are included. Raise the limit or narrow the dates to include the rest.",
+    "truncatedOldest": "More transactions matched than the limit allows. Only the oldest are included, because this rule settles loan installments in date order. Run it again after this run to include the rest.",
+    "noMatches": {
+      "title": "No transactions would change",
+      "body": "None of the scanned transactions match the rule, or the rule would change nothing on them."
+    },
+    "table": {
+      "date": "Date",
+      "payee": "Payee",
+      "amount": "Amount",
+      "change": "Planned change",
+      "noPayee": "No payee"
+    },
+    "skipped": {
+      "title": "{count, plural, one {# transaction is left alone} other {# transactions are left alone}}",
+      "line": "{count, plural, one {# transaction} other {# transactions}}: {reason}",
+      "missing": "Missing on the loan: {inputs}."
+    },
+    "skipReasons": {
+      "reconciled_locked": "it is reconciled and locked",
+      "transfer_leg_category": "it is a transfer, which has no category",
+      "split_category": "it is split, so the category belongs to the splits",
+      "cross_owner_transfer_payee": "it is a transfer to another owner, whose payee this rule may not change",
+      "empty_render": "the text of an action came out empty for it",
+      "payee_not_found": "no payee has the name the rule built, and it does not create one",
+      "other": "the rule cannot change it",
+      "row_is_transfer_leg": "it is already a transfer",
+      "row_has_splits": "it is already split",
+      "row_is_void": "it is void",
+      "zero_amount": "its amount is zero",
+      "transfer_direction_mismatch": "the transfer goes the wrong way for it: an expense goes to an account, an income comes from one",
+      "transfer_same_account": "the transfer account is the account of the transaction itself",
+      "transfer_account_unavailable": "the transfer account is not available (it was deleted or is not yours)",
+      "transfer_currency_mismatch": "the transfer account uses another currency",
+      "split_amount_unparseable": "an amount in its text could not be read as a number",
+      "split_sum_mismatch": "the parts do not add up to its amount",
+      "split_too_few_parts": "fewer than two parts are left once zero amounts are dropped",
+      "row_from_scheduled_posting": "it was posted from the loan's scheduled payment, which already paid the installment",
+      "row_is_income": "it is an income, and only a debit pays an installment",
+      "loan_account_unavailable": "the loan account is not available (it was deleted, is closed, is not yours or is not a mortgage or loan)",
+      "loan_interest_booked_separately": "the loan books its interest as separate transactions, so a payment cannot carry it",
+      "loan_not_configured": "the loan is missing what is needed to price an installment",
+      "no_installment_in_window": "no installment of the loan is due within the window around its date",
+      "occurrence_already_posted": "the installment due in the window is already paid",
+      "loan_debt_retired": "the loan is already paid off",
+      "installment_amount_excess": "it is more than the installment and the rule leaves larger debits alone",
+      "installment_amount_shortfall": "it is less than the installment and the rule leaves smaller debits alone"
+    },
+    "change": {
+      "category": "Category: {before} → {after}",
+      "payee": "Payee: {before} → {after}",
+      "payeeNew": "Payee: {before} → {name} (new)",
+      "tagsAdded": "Tags added: {tags}",
+      "tagsRemoved": "Tags removed: {tags}",
+      "none": "none",
+      "unknown": "a deleted item",
+      "payeeCreated": "{done, select, yes {A new payee was created: {name}} other {A new payee will be created: {name}}}",
+      "description": "Description: {before} → {after}",
+      "descriptionSet": "Set the description to {value}",
+      "transfer": "{done, select, yes {Became a transfer with {account}} other {Becomes a transfer with {account}}}",
+      "split": "{done, select, yes {Was split into {count, plural, one {# part} other {# parts}}} other {Will be split into {count, plural, one {# part} other {# parts}}}}",
+      "splitPart": "Part {number}: {amount} {target}",
+      "splitPartMemo": ", memo “{memo}”",
+      "splitToTransfer": "to {account}",
+      "splitToTransferPayee": "to {account}, payee {payee}",
+      "splitToCategory": "as {category}",
+      "splitUncategorised": "uncategorised",
+      "loanSettlement": "{done, select, yes {Settled} other {Settles}} installment {number} of {account}, due {dueDate}: principal {principal}, interest {interest}{hasExtra, select, yes {, extra principal {extra}} other {}}. Debt before: {debtBefore}"
+    },
+    "filters": {
+      "accounts": "Accounts",
+      "allAccounts": "All accounts",
+      "startDate": "From",
+      "endDate": "To",
+      "backwards": "The start date must not be after the end date.",
+      "limit": "Newest transactions to examine",
+      "help": "Only the newest transactions in the range are examined, up to {max}."
+    },
+    "errors": {
+      "PREVIEW_CHANGED": "The transactions or the rule changed since the preview. Review the new preview and run again.",
+      "RUN_TOO_LARGE": "This run changes too many transactions to be undone in one step. Narrow the accounts or the dates and try again.",
+      "INVALID_RULE": "This rule is not valid, so it cannot be run. Open it and repair it first.",
+      "DATE_RANGE_INVALID": "The start date must not be after the end date.",
+      "draftInvalid": "The rule is incomplete or not valid. Check the conditions and actions above.",
+      "testFailed": "Something went wrong while testing the rule.",
+      "previewFailed": "Something went wrong while loading the preview.",
+      "runFailed": "The run could not be completed. Check the action history before you try again."
+    },
+    "toast": {
+      "done": "{count, plural, =0 {No transactions were changed} one {# transaction changed} other {# transactions changed}}. You can undo this from the action history.",
+      "changedNoUndo": "{count, plural, one {# transaction changed} other {# transactions changed}}.",
+      "aiReviewsQueued": "{count, plural, one {# transaction queued for AI review} other {# transactions queued for AI review}}.",
+      "aiReviewsAlreadyQueued": "{count, plural, one {# transaction already had an open AI review request, so nothing new was queued} other {# transactions already had an open AI review request, so nothing new was queued}}.",
+      "noChanges": "No transactions were changed."
+    },
+    "done": {
+      "summary": "{count, plural, =0 {No transactions were changed.} one {# transaction was changed.} other {# transactions were changed.}}",
+      "aiReviewsQueued": "{count, plural, one {# transaction was queued for AI review.} other {# transactions were queued for AI review.}}",
+      "aiReviewsAlreadyQueued": "{count, plural, one {# transaction already had an open AI review request, so it was not queued again.} other {# transactions already had an open AI review request, so they were not queued again.}}",
+      "undo": "You can undo the run from the action history."
+    },
+    "missingInputs": {
+      "scheduledPayment": "a scheduled payment",
+      "managedTemplate": "a payment split into principal and interest",
+      "scheduleCalendar": "a payment schedule",
+      "interestCategory": "an interest category",
+      "amortizationMonths": "the amortization period",
+      "paymentStartDate": "the first payment date",
+      "paymentFrequency": "the payment frequency",
+      "originalPrincipal": "the original principal",
+      "rate": "an interest rate for the date",
+      "payment": "the payment amount",
+      "other": "a loan setting"
+    }
+  },
+  "applications": {
+    "title": "History",
+    "description": "The latest transactions this rule changed, newest first.",
+    "loading": "Loading the history...",
+    "error": {
+      "title": "The history could not be loaded",
+      "body": "Nothing is shown because the request failed, not because the rule has not run. Check your connection and try again.",
+      "retry": "Try again"
+    },
+    "empty": {
+      "title": "This rule has not changed anything yet",
+      "body": "When it changes a transaction, the change is listed here."
+    },
+    "source": {
+      "create": "Created",
+      "import": "Imported",
+      "manual": "Manual run",
+      "other": "Other"
+    },
+    "table": {
+      "date": "Date",
+      "payee": "Payee",
+      "amount": "Amount",
+      "source": "Source",
+      "change": "Change",
+      "appliedAt": "Applied",
+      "open": "Open transaction",
+      "noPayee": "No payee",
+      "view": "View"
+    }
+  },
+  "words": {
+    "everyTransaction": "Every transaction",
+    "group": {
+      "all": "All of these:",
+      "any": "Any of these:",
+      "notAll": "Not all of these:",
+      "notAny": "None of these:"
+    },
+    "leaf": "{field} {operator} {value}",
+    "leafNoValue": "{field} {operator}",
+    "range": "{from} and {to}",
+    "text": "\"{value}\"",
+    "unknownCondition": "A condition this version cannot show",
+    "unknownAction": "An action this version cannot show",
+    "action": {
+      "add_tags": "Add tags: {tags}",
+      "remove_tags": "Remove tags: {tags}",
+      "set_category": "Set the category to {name}{onlyIfEmpty, select, yes { (only if empty)} other {}}",
+      "set_payee": "Set the payee to {name}{onlyIfEmpty, select, yes { (only if empty)} other {}}",
+      "request_ai_review": "Ask for an AI review: {instruction}",
+      "set_payee_from_text": "Set the payee from text: \"{template}\"{createIfMissing, select, yes { (created if missing)} other {}}{onlyIfEmpty, select, yes { (only if empty)} other {}}",
+      "set_description": "Set the description ({mode, select, append {append} prepend {prepend} other {replace}}): \"{template}\"{onlyIfEmpty, select, yes { (only if empty)} other {}}",
+      "convert_to_transfer": "Turn into a transfer {direction, select, from {from} other {to}} {account}",
+      "split": "Split into: {parts}",
+      "settle_loan_installment": "Settle the installment of {account} paid by a debit up to {before, plural, one {# day} other {# days}} before or {after, plural, one {# day} other {# days}} after its due date; a larger debit {excess, select, refuse {is left alone} other {pays extra principal}}, a smaller one {shortfall, select, interest_first {pays the interest first} other {is left alone}}"
+    },
+    "splitPart": {
+      "transfer": "{amount} to {account}",
+      "category": "{amount} as {category}",
+      "plain": "{amount}",
+      "rest": "the rest"
+    }
+  }
+}

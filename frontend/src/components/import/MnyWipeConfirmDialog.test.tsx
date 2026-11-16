@@ -29,7 +29,7 @@ describe('MnyWipeConfirmDialog', () => {
   }
 
   function typePassword(password: string) {
-    fireEvent.change(screen.getByLabelText('Enter your password:'), {
+    fireEvent.change(screen.getByLabelText('Password'), {
       target: { value: password },
     });
   }
@@ -37,6 +37,7 @@ describe('MnyWipeConfirmDialog', () => {
   it('names the operation it runs and what that removes', () => {
     render(<MnyWipeConfirmDialog {...defaultProps} />);
 
+    expect(screen.getByRole('dialog', { name: 'Remove Existing Data' })).toBeInTheDocument();
     expect(screen.getByText(/Delete My Data operation/)).toBeInTheDocument();
     expect(screen.getByText('Every transaction and split')).toBeInTheDocument();
     expect(screen.getByText(/cannot be undone/)).toBeInTheDocument();
@@ -88,7 +89,7 @@ describe('MnyWipeConfirmDialog', () => {
     );
 
     expect(
-      screen.queryByLabelText('Enter your password:'),
+      screen.queryByLabelText('Password'),
     ).not.toBeInTheDocument();
 
     typeConfirmation(WIPE_CONFIRM_WORD);

@@ -9,8 +9,7 @@ import { useDateFormat } from '@/hooks/useDateFormat';
 import { useNumberFormat } from '@/hooks/useNumberFormat';
 import { useNow } from '@/hooks/useNow';
 import { getMarketState } from '@/lib/market-hours';
-import { withCurrencyCode } from '@/lib/security-detail';
-import { gainLossColor } from '@/lib/format';
+import { gainLossColor, withCurrencyCode } from '@/lib/format';
 import type { Security } from '@/types/investment';
 import { SecuritySwitcher } from './SecuritySwitcher';
 
@@ -124,7 +123,18 @@ export function SecurityDetailHeader({
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-2">
           <div className="flex min-w-0 items-center gap-1">
-            <h1 className="truncate text-2xl font-bold text-gray-900 dark:text-gray-100">
+            {/* While the header is stacked (below `lg`) a long name wraps to as
+                many lines as it needs (`break-words`, no clamp) so the whole
+                security is readable; on desktop (`lg` and up), where the layout
+                flips to a row, the name keeps the single-line ellipsis
+                (`lg:truncate`) -- the truncate breakpoint matches the row
+                breakpoint so the name only clamps once it shares its line. The
+                caret stays beside it either way -- same treatment as the
+                mobile-table identity cells. */}
+            <h1
+              className="break-words text-2xl font-bold text-gray-900 lg:truncate dark:text-gray-100"
+              title={security.name}
+            >
               {security.name}
             </h1>
             {/* Jump straight to another security instead of going back to the

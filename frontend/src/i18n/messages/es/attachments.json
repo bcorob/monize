@@ -11,9 +11,76 @@
   "uploaded": "Adjunto añadido",
   "deleted": "Adjunto eliminado",
   "loadFailed": "No se pudieron cargar los adjuntos",
+  "retry": "Reintentar",
   "uploadFailed": "No se pudo subir el adjunto",
   "deleteFailed": "No se pudo eliminar el adjunto",
   "tooLarge": "El archivo es demasiado grande (máximo {max})",
   "unsupported": "Tipo de archivo no admitido. Se permiten: imágenes o PDF",
-  "tooMany": "Máximo {max} adjuntos por transacción"
+  "tooMany": "Máximo {max} adjuntos por transacción",
+  "fromWarranty": "De la garantía: {name}",
+  "fromLinkedWarranty": "De una garantía vinculada",
+  "scan": {
+    "button": "Escanear documento",
+    "title": "Escanear documento",
+    "description": "Endereza y limpia la foto de un documento antes de adjuntarla.",
+    "analysing": "Buscando un documento en la foto…",
+    "failed": "No se pudo escanear el documento. Aun así puede adjuntar la foto tal cual.",
+    "viewEnhanced": "Mejorada",
+    "viewOriginal": "Original",
+    "rotate": "Girar",
+    "styleLabel": "Acabado",
+    "styles": {
+      "colour": "Color",
+      "grayscale": "Escala de grises",
+      "blackAndWhite": "Blanco y negro",
+      "none": "Sin mejora"
+    },
+    "styleHints": {
+      "colour": "Uniforma la iluminación, realza el contraste y afina el texto.",
+      "grayscale": "La misma limpieza sin color. Más ligero y sin el tono que el papel toma con luz artificial.",
+      "blackAndWhite": "Solo tinta y papel. Ideal para texto impreso; aplanará fotos y logotipos.",
+      "none": "Enderezado y recortado, por lo demás tal como se fotografió. Úselo cuando la mejora estropee el original."
+    },
+    "adjustments": {
+      "brightness": "Brillo ({value})",
+      "contrast": "Contraste ({value})"
+    },
+    "resetAdjustments": "Restablecer brillo y contraste",
+    "adjustHint": "Cambie a «Original» para arrastrar las esquinas si los bordes no son correctos.",
+    "updating": "Actualizando la vista previa…",
+    "noDocumentFound": "No se encontraron los bordes del documento, así que se usó la foto completa. Cambie a «Original» y arrastre las esquinas usted mismo.",
+    "previewEnhancedAlt": "Vista previa del escaneo mejorado",
+    "previewOriginalAlt": "Vista previa de la foto original",
+    "useEnhanced": "Usar la mejorada",
+    "keepOriginal": "Conservar solo el original",
+    "retake": "Repetir foto",
+    "cancel": "Cancelar",
+    "originalTooLarge": "La foto original supera {max}, así que solo se adjuntará el escaneo mejorado.",
+    "warnings": {
+      "blurry": "La foto parece borrosa. Repetirla dará un escaneo más nítido.",
+      "edgesOutsideFrame": "El documento llega al borde de la foto, por lo que un lado puede quedar cortado. Vuelve a hacer la foto dejando un margen alrededor de toda la página, sin que ningún lado toque el borde.",
+      "lowResolution": "El escaneo es bastante pequeño, la letra pequeña puede costar de leer."
+    },
+    "corners": {
+      "label": "Esquinas del documento",
+      "topLeft": "Esquina superior izquierda",
+      "topRight": "Esquina superior derecha",
+      "bottomRight": "Esquina inferior derecha",
+      "bottomLeft": "Esquina inferior izquierda"
+    },
+    "originalKept": "original conservado"
+  },
+  "preview": {
+    "loading": "Cargando la vista previa…",
+    "failed": "No se pudo cargar la vista previa. Aún puedes descargar el archivo.",
+    "storeUnavailable": "Este archivo está en un almacenamiento al que este servidor no puede acceder ahora mismo, por lo que no se puede previsualizar ni descargar. No se ha perdido nada: pide a tu administración que restaure la configuración de almacenamiento de adjuntos.",
+    "unsupported": "Este tipo de archivo no se puede previsualizar. Aún puedes descargarlo.",
+    "fit": "Ajustar a la pantalla",
+    "actualSize": "Tamaño real",
+    "versionLabel": "Versión",
+    "zoomLabel": "Zoom",
+    "pageCount": "{count, plural, one {# página} other {# páginas}}",
+    "page": "Página {page} de {total}",
+    "open": "Vista previa de {name}"
+  }
 }
